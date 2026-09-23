@@ -138,11 +138,22 @@ test/
 - Een rack bewaart per macro alleen de `default`. De live knopstand is
   sessietoestand en gaat nergens heen — anders is elk rack na drie seconden
   spelen "gewijzigd" en verdrink je in opslaan-vragen.
-- De rack-editor maakt twee soorten wijzigingen verschillend door: aan de KETEN
-  (effect erbij, weg, volgorde, aan/uit) bouwt opnieuw via `zetRack(..., {
-  behoudStanden: true })` met kruisfade; aan de MACRO'S (bereik, venster, curve)
-  gaat via `bewerkMacros()` en raakt geen node aan. Schuiven tekent het paneel
-  niet opnieuw, anders verlies je de schuif halverwege het slepen.
+- De rack-editor toont eerst de acht KNOPPEN, dan de keten als effecten met
+  draaiknoppen in echte eenheden (`eenheid` per effect in `fx.js`, dezelfde
+  formule als `zet()` — wijkt er één af, dan liegt het scherm). Drie soorten
+  wijzigingen: KETEN (erbij, weg, volgorde, aan/uit) bouwt opnieuw via
+  `zetRack(..., { behoudStanden: true })` met kruisfade; een PARAMETER gaat via
+  `zetParam()` zonder nieuwe keten; MACRO'S (bereik, venster, curve) via
+  `bewerkMacros()`, geen node. Een parameter die door een knop gestuurd wordt
+  is op het scherm niet te draaien: de knop wint, dus draaien zou liegen.
+  Tijdens het slepen wordt niets opnieuw getekend.
+- Een knop instellen gaat op het gehoor: DICHT zet hem op 0, OPEN op 1, en elke
+  draai aan een effect wordt die kant (`neemOp()` in `rack.js`: `from` = dicht,
+  `to` = open, wat venster en curve ook zijn). Een parameter die de knop nog
+  niet stuurde komt erbij met zijn huidige stand als andere kant; worden beide
+  kanten gelijk, dan verdwijnt de koppeling. Draai je aan de knop zelf (scherm,
+  FX-rij, APC), dan stopt het instellen — gecontroleerd op een timer, niet in
+  de animatielus, want die staat stil als het venster achter iets anders zit.
 - `fx.herkomst` zegt uit welk bewaard rack wat er klinkt komt (library-id), of
   null. Bewerken in de editor houdt hem; elk ander rack (volgend effect, los
   effect) wist hem. Bewaren schrijft ALLEEN over een rack heen als de herkomst

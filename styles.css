@@ -306,7 +306,7 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .fx-bewaar{color:var(--dim)}
 
 /* ---- rack-editor ---- */
-.rack-editor{position:fixed;left:0;right:0;bottom:0;z-index:45;height:46vh;min-height:300px;
+.rack-editor{position:fixed;left:0;right:0;bottom:0;z-index:45;height:58vh;min-height:360px;
   background:var(--panel);border-top:1px solid var(--line);
   display:flex;flex-direction:column;box-shadow:0 -12px 30px rgba(0,0,0,.45)}
 .rack-editor.hidden{display:none}
@@ -319,30 +319,78 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .re-tools{display:flex;gap:4px;margin-left:auto}
 .re-status{padding:5px 12px;font-size:11px;color:var(--dim);border-bottom:1px solid var(--line)}
 .re-status .goed{color:var(--a)} .re-status .bad{color:var(--red)}
-.re-body{flex:1;display:grid;grid-template-columns:260px 1fr;min-height:0}
-.re-keten,.re-macros{overflow:auto;padding:8px 12px}
-.re-keten{border-right:1px solid var(--line)}
+.re-status .btn{margin-left:8px}
 .re-kop{font-size:10px;letter-spacing:.12em;color:var(--text);text-transform:uppercase;margin:0 0 8px}
 .re-kop i{color:var(--dim);text-transform:none;letter-spacing:0;font-style:normal}
-.re-node{display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--line)}
-.re-node.uit .re-effect{color:var(--dim);text-decoration:line-through}
-.re-slot{font-family:ui-monospace,monospace;color:var(--dim);width:14px}
-.re-effect{flex:1;font-size:12px}
-.re-keten select,.re-link select{background:var(--panel2);color:var(--text);border:1px solid var(--line);
-  border-radius:4px;padding:3px 5px;font:inherit;font-size:11px}
-.re-keten select{margin-top:8px;width:100%}
+.re-leeg{color:var(--dim);font-size:11px;margin:4px 0}
 .re-weg{color:var(--dim)} .re-weg:hover{color:var(--red)}
-.re-leeg{color:var(--dim);font-size:11px;padding:4px 0}
-.re-plek{border-bottom:1px solid var(--line);padding:6px 0}
-.re-plek.leeg{display:flex;align-items:center;gap:8px;padding:4px 0}
-.re-plek-kop{display:flex;align-items:center;gap:8px}
-.re-nr{font-family:ui-monospace,monospace;color:var(--warn);width:14px;text-align:right}
-.re-label{width:140px}
-.re-link{display:flex;align-items:center;gap:8px;padding:4px 0 0 22px;flex-wrap:wrap}
-.re-link select[data-doe="doel"]{width:150px}
-.re-schuif{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dim)}
-.re-schuif input{width:70px;accent-color:var(--a)}
-.re-schuif output{font-family:ui-monospace,monospace;width:28px;color:var(--text)}
+.rack-editor select{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+  border-radius:4px;padding:3px 5px;font:inherit;font-size:11px}
+
+/* de acht knoppen */
+.re-plekken{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;padding:8px 12px;
+  border-bottom:1px solid var(--line)}
+.re-tegel{display:flex;align-items:center;gap:6px;min-width:0;padding:5px 6px;border:1px solid var(--line);
+  border-radius:6px;cursor:pointer;background:var(--panel2)}
+.re-tegel.gekozen{border-color:var(--a);box-shadow:0 0 0 1px var(--a) inset}
+.re-tegel.leeg{background:none;border-style:dashed;color:var(--dim);justify-content:center}
+.re-tegel .knob{flex:0 0 auto}
+.re-tegel-tekst{display:flex;flex-direction:column;min-width:0;flex:1}
+.re-tegel-naam{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.re-tegel-nr{font-family:ui-monospace,monospace;color:var(--warn);font-weight:700}
+.re-wat{font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.re-live{font-family:ui-monospace,monospace;font-size:10px;color:var(--text);flex:0 0 auto}
+
+.re-body{flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0}
+.re-keten,.re-macros{overflow:auto;padding:8px 12px}
+.re-macros{border-left:1px solid var(--line)}
+
+/* de keten: effecten als kaarten met echte knoppen */
+.re-kaarten{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px}
+.re-pijl{align-self:center;color:var(--dim)}
+.re-kaart{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--panel2)}
+.re-kaart.uit{opacity:.45}
+.re-kaart-kop{display:flex;align-items:center;gap:3px;margin-bottom:6px}
+.re-effect{flex:1;font-size:12px;font-weight:600;margin-right:6px}
+.re-params{display:flex;gap:10px}
+.re-param{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:58px;position:relative}
+.re-param.gestuurd .knob-dial{box-shadow:0 0 0 2px var(--a)}
+.re-pnaam{font-size:10px;color:var(--dim)}
+.re-pwaarde{font-family:ui-monospace,monospace;font-size:10px;color:var(--text);white-space:nowrap}
+.re-badges{display:flex;gap:2px;min-height:14px}
+.re-badge{font:700 9px ui-monospace,monospace;background:var(--a);color:#03100e;border-radius:3px;padding:1px 4px}
+.re-badge.verliest{background:var(--line);color:var(--dim);text-decoration:line-through}
+.re-kaarten select{align-self:center}
+
+/* DICHT / OPEN */
+.re-scene{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0}
+.re-kant{border:1px solid var(--line);border-radius:5px;padding:8px 0;font-weight:700;letter-spacing:.12em;
+  font-size:12px;color:var(--dim);background:var(--panel2)}
+.re-kant:hover{color:var(--text)}
+.re-kant.aan{background:var(--warn);border-color:var(--warn);color:#1a1200}
+.re-uitleg{font-size:11px;color:var(--dim);margin:4px 0 8px;line-height:1.4}
+.re-uitleg.actief{color:var(--warn)}
+.re-keten.neemt-op{background:rgba(255,190,60,.04)}
+.re-neemop{color:var(--warn);text-transform:none;letter-spacing:0;font-weight:600}
+.re-param.neemt-op .knob-dial{box-shadow:0 0 0 2px var(--warn)}
+.re-param.vast{opacity:.55}
+.re-param.vast .knob{pointer-events:none}
+.re-kantwaarde{font-family:ui-monospace,monospace;font-size:11px;color:var(--text);padding:1px 4px;border-radius:3px}
+.re-kantwaarde.actief{background:var(--warn);color:#1a1200}
+.re-verandert{margin-top:10px}
+
+/* de gekozen knop in detail */
+.re-plek-kop{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.re-plek-kop .re-kop{margin:0}
+.re-label{flex:1;min-width:0}
+.re-link{border-top:1px solid var(--line);padding:6px 0}
+.re-link-kop{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);margin-bottom:4px}
+.re-link-kop select{flex:1}
+.re-schuif{display:grid;grid-template-columns:120px 1fr 72px;align-items:center;gap:6px;font-size:11px;color:var(--dim);margin:2px 0}
+.re-schuif input{width:100%;accent-color:var(--a)}
+.re-schuif output{font-family:ui-monospace,monospace;color:var(--text);text-align:right}
+.re-meer{font-size:11px;margin:2px 0}
+.re-meer-vak{padding:4px 0 2px 10px;border-left:2px solid var(--line)}
 
 /* ---- acht tracks ---- */
 .tracks{flex:0 0 auto;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;padding:0 10px 10px}

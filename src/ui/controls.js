@@ -40,7 +40,11 @@ export class Knob {
   set(v, silent = false) {
     this.value = clamp(v);
     this.render();
-    if (!silent && this.action) invoke(this.action, this.value);
+    if (silent) return;
+    if (this.action) invoke(this.action, this.value);
+    // Voor knoppen die niet op de bus zitten, zoals de parameters in de
+    // rack-editor: die zijn van het rack, niet van een MIDI-mapping.
+    this.onChange?.(this.value);
   }
   render() {
     const deg = -140 + this.value * 280;

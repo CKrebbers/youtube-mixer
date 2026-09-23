@@ -201,3 +201,41 @@ export function rackVanEffect(effect) {
     })),
   };
 }
+
+// ---- instellen door te doen: DICHT en OPEN ---------------------------------
+
+/** Zo dicht bij elkaar dat een koppeling niets meer doet. */
+const GELIJK = 0.005;
+
+/**
+ * Wat er gebeurt als je, met een knop op DICHT of OPEN, aan een parameter draait.
+ *
+ * DICHT is de stand bij knop 0, OPEN bij knop 1: dat zijn `from` en `to` van
+ * de koppeling, wat het venster en de curve ook zijn. Zo kun je een knop
+ * instellen op het gehoor in plaats van met getallen — het Octatrack-idee van
+ * twee scènes, maar in het datamodel dat er al lag.
+ *
+ *   - bestaat de koppeling nog niet, dan komt hij erbij, met `basis` (wat de
+ *     parameter nu doet) als de andere kant: de andere stand blijft klinken
+ *     zoals hij klonk;
+ *   - worden beide kanten gelijk, dan verdwijnt hij: een koppeling die niets
+ *     verandert is ruis in de lijst. De parameter houdt dan die waarde als
+ *     eigen stand (`basis` in het resultaat), zodat er niets verspringt.
+ *
+ * Puur: past `macro.links` aan en zegt wat er gebeurde.
+ * @returns {{ link: object|null, weg: boolean, basis: number|null }}
+ */
+export function neemOp(macro, target, kant, v, basis) {
+  const waarde = clamp(v);
+  let link = macro.links.find((l) => l.target === target);
+  if (!link) {
+    link = { target, from: clamp(basis), to: clamp(basis) };
+    macro.links.push(link);
+  }
+  link[kant === 'dicht' ? 'from' : 'to'] = waarde;
+  if (Math.abs((link.from ?? 0) - (link.to ?? 1)) < GELIJK) {
+    macro.links.splice(macro.links.indexOf(link), 1);
+    return { link: null, weg: true, basis: waarde };
+  }
+  return { link, weg: false, basis: null };
+}

@@ -46,6 +46,19 @@ export const delingVan = (t) => DELINGEN[Math.min(DELINGEN.length - 1,
  * dat is net zo waardeloos als helemaal niet synchroon.
  */
 export const GEEN_KLOK = () => null;
+
+// ---- eenheden --------------------------------------------------------------
+// Wat een 0..1-waarde in het echt IS. Rekent met precies dezelfde formule als
+// zet() hieronder; wijkt een van de twee af, dan liegt het scherm.
+
+const hz = (f) => (f >= 1000 ? `${(f / 1000).toFixed(f >= 10000 ? 0 : 1).replace('.', ',')} kHz` : `${Math.round(f)} Hz`);
+const pct = (v) => `${Math.round(v * 100)}%`;
+const filterStand = (t) => {
+  const d = t * 2 - 1;
+  if (Math.abs(d) < 0.02) return 'open';
+  return d < 0 ? `LP ${hz(expMap(1 + d, 200, 22050))}` : `HP ${hz(expMap(d, 20, 9000))}`;
+};
+const crushStappen = (t) => Math.max(1, Math.round(Math.pow(2, 1 + (1 - t) * 6)));
 const CURVE_N = 33;
 
 /** Equal-power curve van a naar b. */
@@ -103,6 +116,11 @@ export const EFFECTEN = [
     naam: 'Delay',
     params: ['tijd', 'feedback', 'toon'],
     standaard: { tijd: 0.35, feedback: 0.45, toon: 0.6 },
+    eenheid: {
+      tijd: (t) => `${Math.round(expMap(t, 0.02, 1.2) * 1000)} ms`,
+      feedback: (t) => pct(t * 0.92),
+      toon: (t) => hz(expMap(t, 300, 16000)),
+    },
     /*
      * Twee leeskoppen op hetzelfde signaal, in plaats van één delay waarvan
      * je de tijd verschuift.
@@ -207,20 +225,25 @@ export const EFFECTEN = [
     naam: 'Filter',
     params: ['freq', 'reso'],
     standaard: { freq: 0.5, reso: 0.2 },
+    eenheid: { freq: filterStand, reso: (t) => `Q ${(0.7 + t * 12).toFixed(1).replace('.', ',')}` },
+    bipolair: ['freq'],
     bouw(ctx) {
       const ingang = ctx.createGain();
       const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 20;
       const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 22050;
       const uitgang = ctx.createGain();
       ingang.connect(hp).connect(lp).connect(uitgang);
-      let reso = 0.2;
+      // Beide onthouden: resonantie verzetten mag de frequentie niet terug
+      // naar het midden gooien (dat deed hij tot 23 september 2026).
+      let reso = 0.2, freq = 0.5;
       return {
         in: ingang, out: uitgang,
         zet(naam, v, now) {
           const t = clamp(v);
-          if (naam === 'reso') { reso = t; }
+          if (naam === 'reso') reso = t;
+          if (naam === 'freq') freq = t;
           if (naam === 'freq' || naam === 'reso') {
-            const d = (naam === 'freq' ? t : 0.5) * 2 - 1;
+            const d = freq * 2 - 1;
             const q = 0.7 + reso * 12;
             if (d < 0) {
               lp.frequency.setTargetAtTime(expMap(1 + d, 200, 22050), now, 0.01);
@@ -242,6 +265,10 @@ export const EFFECTEN = [
     naam: 'Bitcrush',
     params: ['bits', 'toon'],
     standaard: { bits: 0.6, toon: 1 },
+    eenheid: {
+      bits: (t) => `${Math.log2(2 * crushStappen(t) + 1).toFixed(1).replace('.', ',')} bit`,
+      toon: (t) => hz(expMap(t, 600, 20000)),
+    },
     bouw(ctx) {
       const ingang = ctx.createGain();
       const vorm = ctx.createWaveShaper();
@@ -262,7 +289,7 @@ export const EFFECTEN = [
         in: ingang, out: uitgang,
         zet(naam, v, now) {
           const t = clamp(v);
-          if (naam === 'bits') vorm.curve = trap(Math.max(1, Math.round(Math.pow(2, 1 + (1 - t) * 6))));
+          if (naam === 'bits') vorm.curve = trap(crushStappen(t));
           else if (naam === 'toon') toon.frequency.setTargetAtTime(expMap(t, 600, 20000), now, 0.02);
         },
         staart: () => 0,
@@ -274,6 +301,12 @@ export const EFFECTEN = [
     naam: 'Gate',
     params: ['deling', 'vorm', 'diepte'],
     standaard: { deling: 0.6, vorm: 0.5, diepte: 1 },
+    eenheid: {
+      deling: (t) => delingVan(t).id,
+      vorm: (t) => `${Math.round((0.1 + t * 0.8) * 100)}% open`,
+      diepte: pct,
+    },
+    trappen: { deling: DELINGEN.length },
     /**
      * Ritmische gate op het beatgrid.
      *
@@ -352,6 +385,11 @@ export const EFFECTEN = [
     naam: 'Phaser',
     params: ['snelheid', 'diepte', 'feedback'],
     standaard: { snelheid: 0.35, diepte: 0.6, feedback: 0.3 },
+    eenheid: {
+      snelheid: (t) => `${expMap(t, 0.03, 6).toFixed(2).replace('.', ',')} Hz`,
+      diepte: pct,
+      feedback: (t) => pct(t * 0.75),
+    },
     bouw(ctx) {
       const ingang = ctx.createGain();
       const uitgang = ctx.createGain();
@@ -399,6 +437,7 @@ export const EFFECTEN = [
     naam: 'Ringmod',
     params: ['toon', 'meng'],
     standaard: { toon: 0.3, meng: 0.5 },
+    eenheid: { toon: (t) => hz(expMap(t, 20, 3000)), meng: pct },
     bouw(ctx) {
       const ingang = ctx.createGain();
       const uitgang = ctx.createGain();
@@ -434,6 +473,12 @@ export const EFFECTEN = [
 ];
 
 export const effectVan = (id) => EFFECTEN.find((e) => e.id === id) || null;
+
+/** Een parameterwaarde zoals een mens hem leest: "350 ms", "LP 2,1 kHz", "45%". */
+export function toonWaarde(type, param, v) {
+  const f = effectVan(type)?.eenheid?.[param];
+  return f ? f(clamp(v)) : `${Math.round(clamp(v) * 100)}%`;
+}
 
 // ---- ketens ----------------------------------------------------------------
 
@@ -656,6 +701,44 @@ export class InsertSlot {
 
   /** Het rack zoals het opgeslagen moet worden — zonder de live standen. */
   naarJSON() { return schrijfRack(this.rack); }
+
+  /**
+   * De eigen stand van een parameter zetten, zonder de keten opnieuw te bouwen.
+   * Stuurt een knop deze parameter, dan wint de knop en verandert er hoorbaar
+   * niets — de stand is dan alleen wat hij doet als je die koppeling weghaalt.
+   */
+  zetParam(slot, param, v) {
+    const node = this.rack.chain?.find((n) => n.slot === slot);
+    if (!node) return false;
+    node.params = { ...(node.params || {}), [param]: clamp(v) };
+    const target = `${slot}.${param}`;
+    if (this.keten && !resolveMacros(this.rack, this.standen).has(target)) {
+      this.keten.node.zet(target, clamp(v), this.ctx.currentTime);
+    }
+    return true;
+  }
+
+  /** Wat de parameter NU doet: de knop die hem stuurt, anders zijn eigen stand. */
+  paramWaarde(slot, param) {
+    const target = `${slot}.${param}`;
+    const gestuurd = resolveMacros(this.rack, this.standen);
+    if (gestuurd.has(target)) return gestuurd.get(target);
+    const node = this.rack.chain?.find((n) => n.slot === slot);
+    return node?.params?.[param] ?? effectVan(node?.type)?.standaard?.[param] ?? 0.5;
+  }
+
+  /**
+   * Welke plekken sturen deze parameter, en welke wint? Twee plekken op één
+   * parameter mag; de hoogste wint. Dat moet je kunnen ZIEN, anders lijkt
+   * de lagere knop kapot.
+   */
+  stuurders(slot, param) {
+    const target = `${slot}.${param}`;
+    const plekken = (this.rack.macros || [])
+      .filter((m) => (m.links || []).some((l) => l.target === target))
+      .map((m) => m.place).sort((a, b) => a - b);
+    return { plekken, wint: plekken.length ? plekken[plekken.length - 1] : null };
+  }
 
   /** Alleen de naam: geen nieuwe keten, geen kruisfade. */
   hernoem(naam) { this.rack.name = String(naam || '').trim() || this.rack.name; }

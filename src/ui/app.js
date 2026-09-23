@@ -414,6 +414,7 @@ const rackEditor = new RackEditor({
   root: document.getElementById('rack-editor'),
   engine,
   naamVan: (id) => `track ${trackVanDeck(id)}`,
+  trackVan: trackVanDeck,
   effecten: EFFECTEN,
   kanBewaren: (id) => !!deckTrack[id],
   onBewaar: async ({ deckId, naam, alsNieuw }) => bewaarRack(deckId, { naam, alsNieuw }),

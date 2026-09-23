@@ -166,5 +166,27 @@ ok('met de parameternaam als label', uitEffect.macros[0].label === 'tijd');
 ok('en de standaardwaarde als default', bij(uitEffect.macros[1].default, 0.5));
 ok('dat rack is zelf geldig', R.leesRack(uitEffect, { bekendType: bekend }).fouten.length === 0);
 
+// ---- DICHT/OPEN: instellen door te doen -------------------------------------
+
+console.log('\nDICHT en OPEN');
+{
+  const m = { place: 1, label: 'x', default: 0, links: [] };
+  let r = R.neemOp(m, 'a.feedback', 'open', 0.8, 0.3);
+  ok('nieuwe parameter: koppeling erbij, huidige stand is de andere kant',
+    m.links.length === 1 && m.links[0].from === 0.3 && m.links[0].to === 0.8 && !r.weg);
+  R.neemOp(m, 'a.feedback', 'dicht', 0.1, 0.5);
+  ok('bestaande koppeling: alleen die kant verandert, basis telt niet', m.links[0].from === 0.1 && m.links[0].to === 0.8);
+  ok('dicht = knop 0, open = knop 1, ook met een venster en curve', (() => {
+    m.links[0].in = [0.5, 1]; m.links[0].curve = 'exp';
+    return R.resolveLink(0, m.links[0]) === 0.1 && bij(R.resolveLink(1, m.links[0]), 0.8);
+  })());
+  r = R.neemOp(m, 'a.feedback', 'dicht', 0.8, 0);
+  ok('beide kanten gelijk: koppeling weg, en de parameter houdt die waarde', r.weg && m.links.length === 0 && r.basis === 0.8);
+  R.neemOp(m, 'b.freq', 'dicht', 0.2, 0.5);
+  R.neemOp(m, 'a.tijd', 'dicht', 0.6, 0.35);
+  ok('meerdere parameters op één knop', m.links.map((l) => l.target).join() === 'b.freq,a.tijd');
+  ok('waarden worden geklemd', (R.neemOp(m, 'b.freq', 'open', 7, 0), m.links[0].to === 1));
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

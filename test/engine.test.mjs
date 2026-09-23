@@ -534,6 +534,49 @@ console.log('\nherkomst van een rack');
   ok('lege naam laat de oude staan', hf.rackNaam === 'y');
 }
 
+// ---- editor: echte eenheden en parameters zonder nieuwe keten ------------
+
+console.log('\nparameters en eenheden');
+{
+  const { toonWaarde, effectVan } = await import('../src/engine/fx.js');
+  ok('delay-tijd in ms', toonWaarde('delay', 'tijd', 0) === '20 ms' && toonWaarde('delay', 'tijd', 1) === '1200 ms');
+  ok('filter in het midden is open', toonWaarde('filter', 'freq', 0.5) === 'open');
+  ok('filter links is lowpass, rechts highpass',
+    toonWaarde('filter', 'freq', 0) === 'LP 200 Hz' && toonWaarde('filter', 'freq', 1).startsWith('HP 9'));
+  ok('gate-deling als maat', toonWaarde('gate', 'deling', 0) === '1/1');
+  ok('onbekend effect: gewoon procent', toonWaarde('bestaatniet', 'x', 0.25) === '25%');
+
+  // Het filter vergat zijn frequentie als je aan de resonantie draaide.
+  const ctx = new AudioContext();
+  const biquads = [];
+  const maak = ctx.createBiquadFilter.bind(ctx);
+  ctx.createBiquadFilter = () => { const b = maak(); biquads.push(b); return b; };
+  const f = effectVan('filter').bouw(ctx);
+  const lp = biquads.find((b) => b.type === 'lowpass');
+  f.zet('freq', 0.2, 0);
+  const lpFreq = lp.frequency.value;
+  f.zet('reso', 0.8, 0);
+  ok('resonantie verzetten laat de frequentie staan', lp.frequency.value === lpFreq && lpFreq < 5000);
+
+  const pf = eng.deck('F').fx;
+  pf.zetRack({ name: 'p', chain: [{ slot: 'a', type: 'delay', params: { tijd: 0.3 } }, { slot: 'b', type: 'filter', params: {} }],
+    macros: [{ place: 2, label: 'dik', default: 0, links: [{ target: 'a.feedback', from: 0.2, to: 0.8 }] },
+             { place: 5, label: 'ook', default: 1, links: [{ target: 'a.feedback', from: 0, to: 0.1 }] }] });
+  const voor = pf.nodeAantal;
+  pf.zetParam('a', 'tijd', 0.6);
+  ok('parameter zetten bouwt geen nieuwe keten', pf.nodeAantal === voor);
+  ok('en komt in het rack (dus ook in wat je bewaart)', pf.naarJSON().chain[0].params.tijd === 0.6);
+  ok('paramWaarde van een vrije parameter is zijn eigen stand', pf.paramWaarde('a', 'tijd') === 0.6);
+  ok('standaard als er niets staat', pf.paramWaarde('b', 'reso') === effectVan('filter').standaard.reso);
+  const st = pf.stuurders('a', 'feedback');
+  ok('twee knoppen op één parameter: de hoogste wint', st.plekken.join() === '2,5' && st.wint === 5);
+  ok('paramWaarde van een gestuurde parameter volgt de winnende knop', Math.abs(pf.paramWaarde('a', 'feedback') - 0.1) < 1e-9);
+  pf.setPlek(5, 0);
+  ok('en beweegt mee als je aan die knop draait', pf.paramWaarde('a', 'feedback') === 0);
+  ok('niemand stuurt een vrije parameter', pf.stuurders('a', 'tijd').wint === null);
+  ok('onbekend slot: zetParam weigert', pf.zetParam('z', 'tijd', 1) === false);
+}
+
 // ---- delaytijd: kruisfaden in plaats van doppler-gejank --------------------
 // Delaytijd verschuiven liet de toonhoogte van de echo glijden. Nu gaat een
 // nieuwe tijd op de stille leeskop en wordt er naartoe gefaded.
