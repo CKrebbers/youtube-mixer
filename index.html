@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VARVE DJ — fase 1</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">VARVE<span>DJ</span> <em>fase 1 — audio-engine</em></div>
+  <div class="topbar-right">
+    <div class="meter master-meter"><i></i></div>
+    <label class="master-knob"><span>MASTER</span>
+      <input type="range" class="hfader" min="0" max="1" step="0.001" value="0.8" data-action="mixer.master">
+    </label>
+    <button id="lib-btn" class="ghost">library</button>
+    <button id="leer-btn" class="ghost">koppelen</button>
+    <button id="midi-btn" class="ghost">MIDI</button>
+    <button id="help-btn" class="ghost">? toetsen</button>
+    <button id="audio-btn" class="primary">audio starten</button>
+  </div>
+</header>
+
+<main>
+  <!-- ================= DECK A ================= -->
+  <section class="deck" id="deck-A" data-deck="A">
+    <div class="deck-head">
+      <span class="deck-id">A</span>
+      <span class="deck-title">— leeg —</span>
+      <span class="deck-time"><b class="t-pos">0:00.00</b> <i class="t-rem">-0:00.00</i></span>
+    </div>
+    <canvas class="wave-zoom"></canvas>
+    <canvas class="wave-overview"></canvas>
+    <div class="deck-transport">
+      <button data-kind="button" data-action="deck.A.cue" class="btn cue">CUE</button>
+      <button data-kind="button" data-action="deck.A.play" class="btn play">PLAY</button>
+      <div class="hotcues">
+        <button data-kind="button" data-action="deck.A.hotcue.1" data-action-shift="deck.A.hotcue.1.delete" class="hc hc1">1</button>
+        <button data-kind="button" data-action="deck.A.hotcue.2" data-action-shift="deck.A.hotcue.2.delete" class="hc hc2">2</button>
+        <button data-kind="button" data-action="deck.A.hotcue.3" data-action-shift="deck.A.hotcue.3.delete" class="hc hc3">3</button>
+        <button data-kind="button" data-action="deck.A.hotcue.4" data-action-shift="deck.A.hotcue.4.delete" class="hc hc4">4</button>
+      </div>
+      <div class="loops">
+        <span class="loop-kop">tellen</span>
+        <button data-kind="button" data-action="deck.A.beatloop.1" class="btn sm bl">1</button>
+        <button data-kind="button" data-action="deck.A.beatloop.2" class="btn sm bl">2</button>
+        <button data-kind="button" data-action="deck.A.beatloop.4" class="btn sm bl">4</button>
+        <button data-kind="button" data-action="deck.A.beatloop.8" class="btn sm bl">8</button>
+        <span class="loop-kop">sec</span>
+        <button data-kind="button" data-action="deck.A.loop.1" class="btn sm">1</button>
+        <button data-kind="button" data-action="deck.A.loop.2" class="btn sm">2</button>
+        <button data-kind="button" data-action="deck.A.loop.4" class="btn sm">4</button>
+        <button data-kind="button" data-action="deck.A.loop.halve" class="btn sm">/2</button>
+        <button data-kind="button" data-action="deck.A.loop.double" class="btn sm">x2</button>
+        <button data-kind="button" data-action="deck.A.loop.exit" class="btn sm warn">uit</button>
+      </div>
+      <div class="grid-tools">
+        <button data-kind="button" data-action="deck.A.tap" class="btn sm tap">TAP</button>
+        <span class="bpm-val" title="bpm van het beatgrid, meegerekend met de pitch">—</span>
+        <button data-kind="button" data-action="deck.A.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
+        <button data-kind="button" data-action="deck.A.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
+        <button data-kind="button" data-action="deck.A.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
+        <button data-kind="button" data-action="deck.A.grid.halve" class="btn sm" title="bpm halveren">/2</button>
+        <button data-kind="button" data-action="deck.A.grid.double" class="btn sm" title="bpm verdubbelen">x2</button>
+        <button data-kind="button" data-action="deck.A.sync" class="btn sm sync" title="tempo en fase gelijk aan het andere deck">SYNC</button>
+        <span class="fase" title="hoe ver dit deck voor of achter loopt"><b></b><i></i></span>
+      </div>
+      <div class="fx-row">
+        <span class="fx-kop">FX</span>
+        <select class="fx-rack" title="rack van dit nummer"></select>
+        <button data-kind="button" data-action="deck.A.fx.next" class="btn sm fx-naam" title="volgend effect">Delay</button>
+        <button class="btn sm fx-bewaar" title="dit rack bij dit nummer bewaren">bewaar</button>
+        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.1" data-label="1" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.2" data-label="2" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.3" data-label="3" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.4" data-label="4" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.5" data-label="5" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.6" data-label="6" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.7" data-label="7" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.8" data-label="8" data-value="0.5"></div>
+        <div class="knob sm fx-mix" data-action="deck.A.fx.mix" data-label="MIX" data-value="0"></div>
+        <button data-kind="button" data-action="deck.A.fx.bypass" class="btn sm fx-bypass" title="effect uit">uit</button>
+      </div>
+      <label class="pitch">PITCH <span class="pitch-val">0.0%</span>
+        <input type="range" class="hfader" min="0" max="1" step="0.0005" value="0.5" data-action="deck.A.pitch">
+      </label>
+    </div>
+    <div class="dropzone">sleep een audiobestand hierheen &nbsp;·&nbsp; <button class="link demo-btn">of laad demotrack</button></div>
+  </section>
+
+  <!-- ================= MIXER ================= -->
+  <section class="mixer">
+    <div class="strips">
+      <div class="strip" data-deck="A">
+        <div class="knob" data-action="deck.A.trim" data-label="TRIM" data-value="0.5"></div>
+        <div class="knob" data-action="deck.A.high" data-label="HIGH" data-value="0.5" data-bipolar="true"></div>
+        <div class="knob" data-action="deck.A.mid"  data-label="MID"  data-value="0.5" data-bipolar="true"></div>
+        <div class="knob" data-action="deck.A.low"  data-label="LOW"  data-value="0.5" data-bipolar="true"></div>
+        <div class="knob filter" data-action="deck.A.filter" data-label="FILTER" data-value="0.5" data-bipolar="true"></div>
+        <div class="meter ch-meter"><i></i></div>
+        <input type="range" class="vfader" orient="vertical" min="0" max="1" step="0.001" value="1" data-action="deck.A.fader">
+      </div>
+      <div class="strip" data-deck="B">
+        <div class="knob" data-action="deck.B.trim" data-label="TRIM" data-value="0.5"></div>
+        <div class="knob" data-action="deck.B.high" data-label="HIGH" data-value="0.5" data-bipolar="true"></div>
+        <div class="knob" data-action="deck.B.mid"  data-label="MID"  data-value="0.5" data-bipolar="true"></div>
+        <div class="knob" data-action="deck.B.low"  data-label="LOW"  data-value="0.5" data-bipolar="true"></div>
+        <div class="knob filter" data-action="deck.B.filter" data-label="FILTER" data-value="0.5" data-bipolar="true"></div>
+        <div class="meter ch-meter"><i></i></div>
+        <input type="range" class="vfader" orient="vertical" min="0" max="1" step="0.001" value="1" data-action="deck.B.fader">
+      </div>
+    </div>
+    <div class="xfader-row">
+      <span>A</span>
+      <input type="range" class="xfader" min="0" max="1" step="0.001" value="0.5" data-action="mixer.xfader">
+      <span>B</span>
+    </div>
+    <button data-kind="button" data-action="mixer.xfader.curve" class="btn sm curve">curve: smooth</button>
+  </section>
+
+  <!-- ================= DECK B ================= -->
+  <section class="deck" id="deck-B" data-deck="B">
+    <div class="deck-head">
+      <span class="deck-id">B</span>
+      <span class="deck-title">— leeg —</span>
+      <span class="deck-time"><b class="t-pos">0:00.00</b> <i class="t-rem">-0:00.00</i></span>
+    </div>
+    <canvas class="wave-zoom"></canvas>
+    <canvas class="wave-overview"></canvas>
+    <div class="deck-transport">
+      <button data-kind="button" data-action="deck.B.cue" class="btn cue">CUE</button>
+      <button data-kind="button" data-action="deck.B.play" class="btn play">PLAY</button>
+      <div class="hotcues">
+        <button data-kind="button" data-action="deck.B.hotcue.1" data-action-shift="deck.B.hotcue.1.delete" class="hc hc1">1</button>
+        <button data-kind="button" data-action="deck.B.hotcue.2" data-action-shift="deck.B.hotcue.2.delete" class="hc hc2">2</button>
+        <button data-kind="button" data-action="deck.B.hotcue.3" data-action-shift="deck.B.hotcue.3.delete" class="hc hc3">3</button>
+        <button data-kind="button" data-action="deck.B.hotcue.4" data-action-shift="deck.B.hotcue.4.delete" class="hc hc4">4</button>
+      </div>
+      <div class="loops">
+        <span class="loop-kop">tellen</span>
+        <button data-kind="button" data-action="deck.B.beatloop.1" class="btn sm bl">1</button>
+        <button data-kind="button" data-action="deck.B.beatloop.2" class="btn sm bl">2</button>
+        <button data-kind="button" data-action="deck.B.beatloop.4" class="btn sm bl">4</button>
+        <button data-kind="button" data-action="deck.B.beatloop.8" class="btn sm bl">8</button>
+        <span class="loop-kop">sec</span>
+        <button data-kind="button" data-action="deck.B.loop.1" class="btn sm">1</button>
+        <button data-kind="button" data-action="deck.B.loop.2" class="btn sm">2</button>
+        <button data-kind="button" data-action="deck.B.loop.4" class="btn sm">4</button>
+        <button data-kind="button" data-action="deck.B.loop.halve" class="btn sm">/2</button>
+        <button data-kind="button" data-action="deck.B.loop.double" class="btn sm">x2</button>
+        <button data-kind="button" data-action="deck.B.loop.exit" class="btn sm warn">uit</button>
+      </div>
+      <div class="grid-tools">
+        <button data-kind="button" data-action="deck.B.tap" class="btn sm tap">TAP</button>
+        <span class="bpm-val" title="bpm van het beatgrid, meegerekend met de pitch">—</span>
+        <button data-kind="button" data-action="deck.B.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
+        <button data-kind="button" data-action="deck.B.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
+        <button data-kind="button" data-action="deck.B.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
+        <button data-kind="button" data-action="deck.B.grid.halve" class="btn sm" title="bpm halveren">/2</button>
+        <button data-kind="button" data-action="deck.B.grid.double" class="btn sm" title="bpm verdubbelen">x2</button>
+        <button data-kind="button" data-action="deck.B.sync" class="btn sm sync" title="tempo en fase gelijk aan het andere deck">SYNC</button>
+        <span class="fase" title="hoe ver dit deck voor of achter loopt"><b></b><i></i></span>
+      </div>
+      <div class="fx-row">
+        <span class="fx-kop">FX</span>
+        <select class="fx-rack" title="rack van dit nummer"></select>
+        <button data-kind="button" data-action="deck.B.fx.next" class="btn sm fx-naam" title="volgend effect">Delay</button>
+        <button class="btn sm fx-bewaar" title="dit rack bij dit nummer bewaren">bewaar</button>
+        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.1" data-label="1" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.2" data-label="2" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.3" data-label="3" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.4" data-label="4" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.5" data-label="5" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.6" data-label="6" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.7" data-label="7" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.8" data-label="8" data-value="0.5"></div>
+        <div class="knob sm fx-mix" data-action="deck.B.fx.mix" data-label="MIX" data-value="0"></div>
+        <button data-kind="button" data-action="deck.B.fx.bypass" class="btn sm fx-bypass" title="effect uit">uit</button>
+      </div>
+      <label class="pitch">PITCH <span class="pitch-val">0.0%</span>
+        <input type="range" class="hfader" min="0" max="1" step="0.0005" value="0.5" data-action="deck.B.pitch">
+      </label>
+    </div>
+    <div class="dropzone">sleep een audiobestand hierheen &nbsp;·&nbsp; <button class="link demo-btn">of laad demotrack</button></div>
+  </section>
+</main>
+
+<!-- ================= LIBRARY ================= -->
+<section id="lib-panel" class="lib-panel hidden">
+  <div class="lib-head">
+    <span class="lib-titelbalk">LIBRARY</span>
+    <input class="lib-url" type="text" placeholder="plak een YouTube-URL en druk op enter…">
+    <button class="btn sm lib-haal">haal binnen</button>
+    <input class="lib-zoek" type="text" placeholder="zoeken…">
+    <button class="btn sm lib-close">sluit</button>
+  </div>
+  <div class="lib-status"></div>
+  <div class="lib-jobs hidden"></div>
+  <div class="lib-rijen"></div>
+</section>
+
+<!-- ================= MIDI-MONITOR ================= -->
+<section id="midi-panel" class="midi-panel hidden">
+  <div class="mon-head">
+    <span class="mon-title">MIDI-MONITOR</span>
+    <label class="mon-pick">in <select class="mon-in"></select></label>
+    <label class="mon-pick">uit <select class="mon-out"></select></label>
+    <span class="mon-tools">
+      <button class="btn sm mon-connect">verbind</button>
+      <button class="btn sm mon-pause">pauze</button>
+      <button class="btn sm mon-noise">clock: uit</button>
+      <button class="btn sm mon-group">groepeer</button>
+      <button class="btn sm mon-pal">paletproef</button>
+      <button class="btn sm mon-map-knop">lijst</button>
+      <button class="btn sm mon-clear">wis</button>
+      <button class="btn sm mon-close">sluit</button>
+    </span>
+  </div>
+  <div class="mon-status"></div>
+  <div class="mon-palette hidden">
+    <div class="pal-head">
+      <span>Paletproef — vergelijk het grid met deze kleuren</span>
+      <span class="pal-pages"></span>
+      <button class="btn sm pal-stop">stoppen</button>
+    </div>
+    <div class="pal-grid"></div>
+  </div>
+  <div class="mon-map hidden">
+    <div class="map-head">
+      <input class="map-filter" type="text" placeholder="filter op action, knop of naam…">
+      <button class="btn sm map-export">exporteren</button>
+      <label class="btn sm map-import">importeren<input type="file" accept="application/json,.json" hidden></label>
+      <button class="btn sm map-reset">standaard herstellen</button>
+    </div>
+    <div class="map-status"></div>
+    <div class="map-rows"></div>
+  </div>
+  <div class="mon-rows"></div>
+</section>
+
+<div id="leer-balk" class="leer-balk hidden"></div>
+
+<div id="help" class="overlay hidden">
+  <div class="help-card">
+    <h2>Toetsen</h2>
+    <div class="help-cols">
+      <div>
+        <h3>Deck A</h3>
+        <table>
+          <tr><td>Q</td><td>play / pause</td></tr>
+          <tr><td>W</td><td>cue</td></tr>
+          <tr><td>A S D F</td><td>hotcue 1–4 (shift = wissen)</td></tr>
+          <tr><td>1 2 3 4</td><td>loop 1 / 2 / 4 / 8 sec</td></tr>
+          <tr><td>5</td><td>loop uit</td></tr>
+          <tr><td>Z X</td><td>nudge −/+ 50 ms</td></tr>
+          <tr><td>E</td><td>focus op deck A</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3>Deck B</h3>
+        <table>
+          <tr><td>P</td><td>play / pause</td></tr>
+          <tr><td>O</td><td>cue</td></tr>
+          <tr><td>J K L ;</td><td>hotcue 1–4 (shift = wissen)</td></tr>
+          <tr><td>7 8 9 0</td><td>loop 1 / 2 / 4 / 8 sec</td></tr>
+          <tr><td>-</td><td>loop uit</td></tr>
+          <tr><td>, .</td><td>nudge −/+ 50 ms</td></tr>
+          <tr><td>I</td><td>focus op deck B</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3>Algemeen</h3>
+        <table>
+          <tr><td>Spatie</td><td>play/pause op focus-deck</td></tr>
+          <tr><td>[ ]</td><td>crossfader naar A / B</td></tr>
+          <tr><td>/</td><td>dit scherm</td></tr>
+          <tr><td>M</td><td>MIDI-monitor</td></tr>
+          <tr><td>koppelen</td><td>klik een knop, beweeg de controller</td></tr>
+          <tr><td>shift-klik</td><td>koppeling weghalen (in koppelmodus)</td></tr>
+          <tr><td>sleep op knop</td><td>waarde (shift = fijn)</td></tr>
+          <tr><td>dubbelklik knop</td><td>terug naar midden</td></tr>
+        </table>
+      </div>
+    </div>
+    <p class="hint">Sluiten met Esc of klik buiten dit venster.</p>
+  </div>
+</div>
+
+<script type="module" src="src/ui/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,427 @@
+{
+  "name": "APC40 mkII — standaard",
+  "device": "apc40mk2",
+  "version": 1,
+  "rules": [
+    {
+      "in": "note:0:32",
+      "action": "deck.A.hotcue.1",
+      "mode": "trigger",
+      "label": "pad 1/1"
+    },
+    {
+      "in": "note:0:24",
+      "action": "deck.B.hotcue.1",
+      "mode": "trigger",
+      "label": "pad 1/2"
+    },
+    {
+      "in": "note:0:33",
+      "action": "deck.A.hotcue.2",
+      "mode": "trigger",
+      "label": "pad 2/1"
+    },
+    {
+      "in": "note:0:25",
+      "action": "deck.B.hotcue.2",
+      "mode": "trigger",
+      "label": "pad 2/2"
+    },
+    {
+      "in": "note:0:34",
+      "action": "deck.A.hotcue.3",
+      "mode": "trigger",
+      "label": "pad 3/1"
+    },
+    {
+      "in": "note:0:26",
+      "action": "deck.B.hotcue.3",
+      "mode": "trigger",
+      "label": "pad 3/2"
+    },
+    {
+      "in": "note:0:35",
+      "action": "deck.A.hotcue.4",
+      "mode": "trigger",
+      "label": "pad 4/1"
+    },
+    {
+      "in": "note:0:27",
+      "action": "deck.B.hotcue.4",
+      "mode": "trigger",
+      "label": "pad 4/2"
+    },
+    {
+      "in": "note:0:16",
+      "action": "deck.A.loop.1",
+      "mode": "trigger",
+      "label": "pad 1/3"
+    },
+    {
+      "in": "note:0:20",
+      "action": "deck.B.loop.1",
+      "mode": "trigger",
+      "label": "pad 5/3"
+    },
+    {
+      "in": "note:0:17",
+      "action": "deck.A.loop.2",
+      "mode": "trigger",
+      "label": "pad 2/3"
+    },
+    {
+      "in": "note:0:21",
+      "action": "deck.B.loop.2",
+      "mode": "trigger",
+      "label": "pad 6/3"
+    },
+    {
+      "in": "note:0:18",
+      "action": "deck.A.loop.4",
+      "mode": "trigger",
+      "label": "pad 3/3"
+    },
+    {
+      "in": "note:0:22",
+      "action": "deck.B.loop.4",
+      "mode": "trigger",
+      "label": "pad 7/3"
+    },
+    {
+      "in": "note:0:19",
+      "action": "deck.A.loop.8",
+      "mode": "trigger",
+      "label": "pad 4/3"
+    },
+    {
+      "in": "note:0:23",
+      "action": "deck.B.loop.8",
+      "mode": "trigger",
+      "label": "pad 8/3"
+    },
+    {
+      "in": "cc:0:7",
+      "action": "deck.A.fader",
+      "mode": "absolute",
+      "label": "fader 1"
+    },
+    {
+      "in": "cc:1:7",
+      "action": "deck.B.fader",
+      "mode": "absolute",
+      "label": "fader 2"
+    },
+    {
+      "in": "cc:0:14",
+      "action": "mixer.master",
+      "mode": "absolute",
+      "label": "master fader"
+    },
+    {
+      "in": "cc:0:15",
+      "action": "mixer.xfader",
+      "mode": "absolute",
+      "label": "crossfader"
+    },
+    {
+      "in": "note:0:50",
+      "action": "deck.A.play",
+      "mode": "trigger",
+      "label": "activator 1"
+    },
+    {
+      "in": "note:1:50",
+      "action": "deck.B.play",
+      "mode": "trigger",
+      "label": "activator 2"
+    },
+    {
+      "in": "note:0:52",
+      "action": "deck.A.cue",
+      "mode": "trigger",
+      "label": "clip stop 1"
+    },
+    {
+      "in": "note:1:52",
+      "action": "deck.B.cue",
+      "mode": "trigger",
+      "label": "clip stop 2"
+    },
+    {
+      "in": "note:0:91",
+      "action": "deck.{focus}.play",
+      "mode": "trigger",
+      "label": "play"
+    },
+    {
+      "in": "note:0:100",
+      "action": "deck.{focus}.nudge.back",
+      "mode": "trigger",
+      "label": "nudge -"
+    },
+    {
+      "in": "note:0:101",
+      "action": "deck.{focus}.nudge.fwd",
+      "mode": "trigger",
+      "label": "nudge +"
+    },
+    {
+      "in": "note:0:51",
+      "action": "deck.A.focus",
+      "mode": "trigger",
+      "label": "track select 1"
+    },
+    {
+      "in": "note:1:51",
+      "action": "deck.B.focus",
+      "mode": "trigger",
+      "label": "track select 2"
+    },
+    {
+      "in": "note:*:60",
+      "action": "deck.A.focus",
+      "mode": "trigger",
+      "label": "bank left"
+    },
+    {
+      "in": "note:*:61",
+      "action": "deck.B.focus",
+      "mode": "trigger",
+      "label": "bank right"
+    },
+    {
+      "in": "note:0:82",
+      "action": "deck.{focus}.loop.0.5",
+      "mode": "trigger",
+      "label": "scene launch 1"
+    },
+    {
+      "in": "note:0:83",
+      "action": "deck.{focus}.loop.halve",
+      "mode": "trigger",
+      "label": "scene launch 2"
+    },
+    {
+      "in": "note:0:84",
+      "action": "deck.{focus}.loop.double",
+      "mode": "trigger",
+      "label": "scene launch 3"
+    },
+    {
+      "in": "note:0:85",
+      "action": "deck.{focus}.loop.exit",
+      "mode": "trigger",
+      "label": "scene launch 4"
+    },
+    {
+      "in": "note:0:86",
+      "action": "mixer.xfader.curve",
+      "mode": "trigger",
+      "label": "scene launch 5"
+    },
+    {
+      "in": "cc:0:16",
+      "action": "deck.A.high",
+      "mode": "absolute",
+      "label": "device knob 1 (bank 1)"
+    },
+    {
+      "in": "cc:0:17",
+      "action": "deck.A.mid",
+      "mode": "absolute",
+      "label": "device knob 2 (bank 1)"
+    },
+    {
+      "in": "cc:0:18",
+      "action": "deck.A.low",
+      "mode": "absolute",
+      "label": "device knob 3 (bank 1)"
+    },
+    {
+      "in": "cc:0:19",
+      "action": "deck.A.filter",
+      "mode": "absolute",
+      "label": "device knob 4 (bank 1)"
+    },
+    {
+      "in": "cc:0:20",
+      "action": "deck.A.trim",
+      "mode": "absolute",
+      "label": "device knob 5 (bank 1)"
+    },
+    {
+      "in": "cc:0:23",
+      "action": "deck.A.pitch",
+      "mode": "absolute",
+      "label": "device knob 8 (bank 1)"
+    },
+    {
+      "in": "cc:1:16",
+      "action": "deck.B.high",
+      "mode": "absolute",
+      "label": "device knob 1 (bank 2)"
+    },
+    {
+      "in": "cc:1:17",
+      "action": "deck.B.mid",
+      "mode": "absolute",
+      "label": "device knob 2 (bank 2)"
+    },
+    {
+      "in": "cc:1:18",
+      "action": "deck.B.low",
+      "mode": "absolute",
+      "label": "device knob 3 (bank 2)"
+    },
+    {
+      "in": "cc:1:19",
+      "action": "deck.B.filter",
+      "mode": "absolute",
+      "label": "device knob 4 (bank 2)"
+    },
+    {
+      "in": "cc:1:20",
+      "action": "deck.B.trim",
+      "mode": "absolute",
+      "label": "device knob 5 (bank 2)"
+    },
+    {
+      "in": "cc:1:23",
+      "action": "deck.B.pitch",
+      "mode": "absolute",
+      "label": "device knob 8 (bank 2)"
+    },
+    {
+      "in": "note:0:49",
+      "action": "deck.A.sync",
+      "mode": "trigger",
+      "label": "solo 1"
+    },
+    {
+      "in": "note:1:49",
+      "action": "deck.B.sync",
+      "mode": "trigger",
+      "label": "solo 2"
+    },
+    {
+      "in": "cc:0:48",
+      "action": "deck.A.fx.mix",
+      "mode": "absolute",
+      "label": "track knob 1"
+    },
+    {
+      "in": "cc:0:49",
+      "action": "deck.B.fx.mix",
+      "mode": "absolute",
+      "label": "track knob 2"
+    },
+    {
+      "in": "note:0:87",
+      "action": "deck.{focus}.fx.next",
+      "mode": "trigger",
+      "label": "pan"
+    },
+    {
+      "in": "note:0:89",
+      "action": "deck.{focus}.fx.bypass",
+      "mode": "trigger",
+      "label": "user"
+    },
+    {
+      "in": "cc:2:16",
+      "action": "deck.A.fx.knop.1",
+      "mode": "absolute",
+      "label": "device knob 1 (bank 3)"
+    },
+    {
+      "in": "cc:2:17",
+      "action": "deck.A.fx.knop.2",
+      "mode": "absolute",
+      "label": "device knob 2 (bank 3)"
+    },
+    {
+      "in": "cc:2:18",
+      "action": "deck.A.fx.knop.3",
+      "mode": "absolute",
+      "label": "device knob 3 (bank 3)"
+    },
+    {
+      "in": "cc:2:19",
+      "action": "deck.A.fx.knop.4",
+      "mode": "absolute",
+      "label": "device knob 4 (bank 3)"
+    },
+    {
+      "in": "cc:2:20",
+      "action": "deck.A.fx.knop.5",
+      "mode": "absolute",
+      "label": "device knob 5 (bank 3)"
+    },
+    {
+      "in": "cc:2:21",
+      "action": "deck.A.fx.knop.6",
+      "mode": "absolute",
+      "label": "device knob 6 (bank 3)"
+    },
+    {
+      "in": "cc:2:22",
+      "action": "deck.A.fx.knop.7",
+      "mode": "absolute",
+      "label": "device knob 7 (bank 3)"
+    },
+    {
+      "in": "cc:2:23",
+      "action": "deck.A.fx.knop.8",
+      "mode": "absolute",
+      "label": "device knob 8 (bank 3)"
+    },
+    {
+      "in": "cc:3:16",
+      "action": "deck.B.fx.knop.1",
+      "mode": "absolute",
+      "label": "device knob 1 (bank 4)"
+    },
+    {
+      "in": "cc:3:17",
+      "action": "deck.B.fx.knop.2",
+      "mode": "absolute",
+      "label": "device knob 2 (bank 4)"
+    },
+    {
+      "in": "cc:3:18",
+      "action": "deck.B.fx.knop.3",
+      "mode": "absolute",
+      "label": "device knob 3 (bank 4)"
+    },
+    {
+      "in": "cc:3:19",
+      "action": "deck.B.fx.knop.4",
+      "mode": "absolute",
+      "label": "device knob 4 (bank 4)"
+    },
+    {
+      "in": "cc:3:20",
+      "action": "deck.B.fx.knop.5",
+      "mode": "absolute",
+      "label": "device knob 5 (bank 4)"
+    },
+    {
+      "in": "cc:3:21",
+      "action": "deck.B.fx.knop.6",
+      "mode": "absolute",
+      "label": "device knob 6 (bank 4)"
+    },
+    {
+      "in": "cc:3:22",
+      "action": "deck.B.fx.knop.7",
+      "mode": "absolute",
+      "label": "device knob 7 (bank 4)"
+    },
+    {
+      "in": "cc:3:23",
+      "action": "deck.B.fx.knop.8",
+      "mode": "absolute",
+      "label": "device knob 8 (bank 4)"
+    }
+  ]
+}

@@ -1,0 +1,251 @@
+import { Emitter, clamp } from '../lib/emitter.js';
+import { createDeckChain, setEqBand, setBipolarFilter, faderGain } from './audio-graph.js';
+import { Beatgrid } from './beatgrid.js';
+import { BufferBron } from './bron.js';
+import { InsertSlot } from './fx.js';
+
+/**
+ * Eén deck: transport, cues, loops, beatgrid, kanaalstrip.
+ *
+ * HOE er geluid uit een track komt weet dit deck niet — dat staat in `bron.js`.
+ * Daardoor is de bron inwisselbaar: een AudioBufferSourceNode nu, een
+ * time-stretcher voor keylock, of een streamende leeslus voor acht tracks.
+ * Alles hieronder is muzikaal, niet technisch.
+ *
+ * Positie wordt NIET bijgehouden met een teller, maar afgeleid van de
+ * AudioContext-klok. Dat is de enige klok die niet wegloopt als de UI hapert.
+ */
+export class Deck extends Emitter {
+  constructor(ctx, id) {
+    super();
+    this.ctx = ctx;
+    this.id = id;               // 'A' | 'B'
+    this.chain = createDeckChain(ctx);
+
+    /*
+     * Insert-slot tussen EQ en het kanaalfilter:
+     *   trim -> EQ -> [FX] -> filter -> fader
+     * Dit is de plek waar straks het effect-rack van de link komt te hangen.
+     * Omhangen kan hier veilig: er loopt nog geen signaal.
+     */
+    this.fx = new InsertSlot(ctx);
+    this.chain.eqHigh.disconnect();
+    this.chain.eqHigh.connect(this.fx.in);
+    this.fx.out.connect(this.chain.hpf);
+    this.fx.zetEffect('delay');          // mix staat op 0, dus nog niet hoorbaar
+    this.fx.setKlok(() => this.fxKlok());
+
+    this.bron = new BufferBron(ctx, this.chain.input);
+    this.bron.onEinde = () => this.emit('change', this);
+    this.title = '— leeg —';
+
+    this.rate = 1;              // playbackRate (pitch schuift mee — keylock = fase 3)
+    this.cuePoint = 0;
+    this.hotcues = [null, null, null, null];
+    this.loop = null;           // {start, end}
+
+    this.grid = null;           // Beatgrid, of null als de track nog niet uitgemeten is
+    this.peaks = null;          // Float32Array, [min,max] per bucket
+    this.samplesPerBucket = 256;
+
+    // UI-state, genormaliseerd 0..1 — precies wat MIDI later ook levert.
+    this.ui = { trim: 0.5, low: 0.5, mid: 0.5, high: 0.5, filter: 0.5, fader: 1 };
+    this.applyUi();
+  }
+
+  // Doorgeefluiken naar de bron. Bestaande code en tests blijven werken.
+  get buffer() { return this.bron.buffer; }
+  get playing() { return this.bron.speelt; }
+  get duration() { return this.bron.duur; }
+  get position() { return this.bron.positie; }
+  get loop() { return this.bron.loop; }
+  set loop(v) { if (v) this.bron.setLoop(v.start, v.end); else this.bron.clearLoop(); }
+
+  // ---- laden -------------------------------------------------------------
+
+  load(buffer, title) {
+    this.bron.laad(buffer);
+    this.title = title || 'untitled';
+    this.cuePoint = 0;
+    this.hotcues = [null, null, null, null];
+    this.grid = null;
+    this.peaks = null;
+    this.loopBeats = null;
+    this.emit('load', this);
+  }
+
+  // ---- transport ---------------------------------------------------------
+
+  stop() { this.bron.stop(); }
+
+  play() {
+    if (!this.buffer || this.playing) return;
+    let at = this.position;
+    if (at >= this.duration - 0.01) at = 0;
+    this.bron.start(at);
+    this.fx.heranker();
+    this.emit('change', this);
+  }
+
+  pause() {
+    if (!this.playing) return;
+    this.bron.pauzeer();
+    this.emit('change', this);
+  }
+
+  togglePlay() { this.playing ? this.pause() : this.play(); }
+
+  seek(pos) {
+    if (!this.buffer) return;
+    const p = clamp(pos, 0, this.duration);
+    if (this.playing) this.bron.start(p);
+    else this.bron._offset = p;
+    this.fx.heranker();
+    this.emit('change', this);
+  }
+
+  nudge(seconds) { this.seek(this.position + seconds); }
+
+  setRate(r) {
+    const nr = clamp(r, 0.5, 2);
+    this.bron.setRate(nr);
+    this.rate = nr;
+    this.fx.heranker();
+    this.emit('change', this);
+  }
+
+  /**
+   * Wat een tempo-gesynchroniseerd effect nodig heeft: de HOORBARE tellengte
+   * en het moment waarop de eerstvolgende tel valt, op de audioklok.
+   *
+   * Null als er geen grid is of het deck stilstaat — dan loopt een gate gewoon
+   * niet, en dat is eerlijker dan hem op een verzonnen tempo laten draaien.
+   */
+  fxKlok() {
+    if (!this.grid || !this.playing) return null;
+    const volgende = this.grid.timeOf(Math.ceil(this.grid.beatAt(this.position) - 1e-9));
+    return {
+      beatLengte: this.grid.beatLength / this.rate,
+      ankerCtx: this.ctxTimeOf(volgende),
+    };
+  }
+
+  /**
+   * Wanneer passeert dit deck deze TRACKTIJD, gemeten op de audioklok?
+   * Null als hij stilstaat. Dit is de brug die je nodig hebt om iets
+   * sample-accuraat op de tel te starten — een gate, een stutter, een LFO.
+   */
+  ctxTimeOf(trackTijd) { return this.bron.ctxTimeOf(trackTijd); }
+
+  /** CDJ-logica: spelend -> terug naar cue en pauzeren. Gepauzeerd -> cue hier zetten. */
+  cue() {
+    if (!this.buffer) return;
+    if (this.playing) { this.stop(); this.bron._offset = this.cuePoint; }
+    else if (Math.abs(this.position - this.cuePoint) < 0.005) { this.play(); }
+    else { this.cuePoint = this.position; }
+    this.emit('change', this);
+  }
+
+  // ---- hotcues & loops ---------------------------------------------------
+
+  hotcue(i, { del = false } = {}) {
+    if (!this.buffer) return;
+    if (del) { this.hotcues[i] = null; this.emit('change', this); return; }
+    if (this.hotcues[i] === null) this.hotcues[i] = this.position;
+    else this.seek(this.hotcues[i]);
+    this.emit('change', this);
+  }
+
+  // ---- beatgrid ----------------------------------------------------------
+
+  setGrid(grid) {
+    this.grid = grid instanceof Beatgrid ? grid : Beatgrid.van(grid);
+    this.fx.heranker();
+    this.emit('change', this);
+    return this.grid;
+  }
+
+  /** Hoorbare bpm: het grid staat in tracktijd, de rate rekt dat op. */
+  get bpm() { return this.grid ? this.grid.bpm * this.rate : null; }
+
+  /**
+   * Loop van een aantal tellen, ingeklikt op het grid.
+   *
+   * Het inklikken is het hele punt: een loop die een fractie naast de tel
+   * begint hoor je meteen. Valt het einde achter de speelkop, dan pakken we de
+   * eerstvolgende beat — anders loopt de bron buiten zijn eigen loop.
+   */
+  setBeatLoop(beats) {
+    if (!this.buffer || !this.grid) return false;
+    const lengte = beats * this.grid.beatLength;
+    const p = this.position;
+    let start = this.grid.nearest(p);
+    if (start + lengte <= p) start = this.grid.next(p);
+    this.setLoopRange(start, Math.min(start + lengte, this.duration));
+    this.loopBeats = beats;
+    return true;
+  }
+
+  /** Zonder beatgrid loopen we in seconden. */
+  setLoop(seconds) {
+    if (!this.buffer) return;
+    const start = this.position;
+    this.bron.setLoop(start, Math.min(start + seconds, this.duration));
+    this.loopBeats = null;
+    this.emit('change', this);
+  }
+
+  clearLoop() {
+    this.loopBeats = null;
+    if (!this.loop) return;
+    this.bron.clearLoop();
+    this.emit('change', this);
+  }
+
+  halveLoop() {
+    if (!this.loop) return;
+    const len = (this.loop.end - this.loop.start) / 2;
+    if (len < 0.02) return;
+    this.setLoopRange(this.loop.start, this.loop.start + len);
+  }
+
+  doubleLoop() {
+    if (!this.loop) return;
+    const len = (this.loop.end - this.loop.start) * 2;
+    this.setLoopRange(this.loop.start, Math.min(this.loop.start + len, this.duration));
+  }
+
+  setLoopRange(start, end) {
+    this.bron.setLoop(start, end);
+    this.emit('change', this);
+  }
+
+  // ---- mixer-parameters (alles genormaliseerd 0..1) ----------------------
+
+  set(param, norm) {
+    if (!(param in this.ui)) return;
+    this.ui[param] = clamp(norm);
+    this.applyUi(param);
+    this.emit('change', this);
+  }
+
+  applyUi(only) {
+    const now = this.ctx.currentTime;
+    const c = this.chain, u = this.ui;
+    if (!only || only === 'trim')   c.trim.gain.setTargetAtTime(u.trim * 2, now, 0.01);
+    if (!only || only === 'low')    setEqBand(c.eqLow.gain, u.low, now);
+    if (!only || only === 'mid')    setEqBand(c.eqMid.gain, u.mid, now);
+    if (!only || only === 'high')   setEqBand(c.eqHigh.gain, u.high, now);
+    if (!only || only === 'filter') setBipolarFilter(c.hpf, c.lpf, u.filter, now);
+    if (!only || only === 'fader')  c.fader.gain.setTargetAtTime(faderGain(u.fader), now, 0.008);
+  }
+
+  level() {
+    const a = this.chain.analyser;
+    const buf = new Uint8Array(a.fftSize);
+    a.getByteTimeDomainData(buf);
+    let peak = 0;
+    for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128) / 128);
+    return peak;
+  }
+}

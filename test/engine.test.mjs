@@ -1,0 +1,463 @@
+// Minimale Web Audio-mock om de engine-logica te testen zonder browser.
+let NOW = 0;
+const LIVE = new Set();   // bronnen die nu geluid maken
+const param = (v=0) => ({ value:v,
+  setTargetAtTime(x){ this.value=x; },
+  setValueAtTime(x){ this.value=x; },
+  linearRampToValueAtTime(x){ this.value=x; },
+  // De echte API kent deze twee ook; zonder hen kan de kruisfade niet getest.
+  setValueCurveAtTime(c){ this.value = c[c.length-1]; },
+  cancelScheduledValues(){},
+});
+const node = (type) => ({
+  type, gain:param(1), frequency:param(1000), Q:param(1), detune:param(0),
+  threshold:param(0), knee:param(0), ratio:param(1), attack:param(0), release:param(0),
+  fftSize:1024, smoothingTimeConstant:0,
+  connect(n){ return n; }, disconnect(){},
+  getByteTimeDomainData(b){ b.fill(128); },
+});
+globalThis.AudioContext = class {
+  constructor(){ this.sampleRate=48000; this.state='running'; this.baseLatency=0.005; this.destination=node('dest'); }
+  get currentTime(){ return NOW; }
+  createGain(){ return node('gain'); }
+  createBiquadFilter(){ return node('biquad'); }
+  createDynamicsCompressor(){ return node('comp'); }
+  createAnalyser(){ return node('analyser'); }
+  createDelay(){ const n = node('delay'); n.delayTime = param(0); return n; }
+  createWaveShaper(){ const n = node('shaper'); n.curve = null; n.oversample = 'none'; return n; }
+  createOscillator(){ const n = node('osc'); n.type='sine'; n.start=()=>{}; n.stop=()=>{}; return n; }
+  createBufferSource(){ const s = node('src'); s.playbackRate=param(1); s.loop=false; s.loopStart=0; s.loopEnd=0;
+    // De echte API vuurt onended ASYNCHROON na stop(), en houdt een bron in
+    // leven tot dat gebeurt. De oude mock deed geen van beide en hield daarmee
+    // een bug uit fase 1 uit het zicht: een afgedankte bron die 'einde track'
+    // meldde terwijl zijn opvolger al speelde.
+    s.start=()=>{ LIVE.add(s); };
+    s.stop=()=>{ if(!LIVE.has(s)) return; LIVE.delete(s); queueMicrotask(()=>s.onended?.()); };
+    return s; }
+  createBuffer(ch,len,sr){ const d=[...Array(ch)].map(()=>new Float32Array(len));
+    return { numberOfChannels:ch, length:len, sampleRate:sr, duration:len/sr, getChannelData:(i)=>d[i] }; }
+  resume(){ return Promise.resolve(); }
+};
+
+const { Engine } = await import('../src/engine/engine.js');
+const { bindEngine, invoke, list } = await import('../src/control/actions.js');
+const { computePeaks } = await import('../src/analysis/peaks.js');
+const { renderDemoTrack } = await import('../src/analysis/demo-track.js');
+const { xfaderGains } = await import('../src/engine/audio-graph.js');
+
+const eng = new Engine();
+bindEngine(eng);
+const fails = [];
+const ok = (name, cond) => { if(!cond) fails.push(name); console.log((cond?'  ok  ':'FAIL  ')+name); };
+
+ok('actions geregistreerd (>60)', list().length > 60);
+
+const buf = renderDemoTrack(eng.ctx, { bars: 2 });
+ok('demotrack duurt ~3.87s', Math.abs(buf.duration - 8*60/124) < 0.01);
+const an = computePeaks(buf);
+ok('peaks berekend', an.count > 100 && an.peaks.length === an.count*2);
+ok('demotrack heeft signaal', Math.max(...buf.getChannelData(0).slice(0,5000)) > 0.2);
+
+eng.deck('A').load(buf, 'demo');
+invoke('deck.A.play', true);
+ok('deck A speelt', eng.deck('A').playing);
+
+NOW += 1.0;
+ok('positie volgt de klok (1.0s)', Math.abs(eng.deck('A').position - 1.0) < 0.001);
+
+eng.deck('A').setRate(2);
+NOW += 1.0;
+ok('positie schaalt met playbackRate (3.0s)', Math.abs(eng.deck('A').position - 3.0) < 0.001);
+
+eng.deck('A').setRate(1);
+invoke('deck.A.hotcue.1', true);
+ok('hotcue 1 gezet op 3.0s', Math.abs(eng.deck('A').hotcues[0] - 3.0) < 0.001);
+
+eng.deck('A').seek(0.5);
+invoke('deck.A.hotcue.1', true);
+ok('hotcue 1 springt terug naar 3.0s', Math.abs(eng.deck('A').position - 3.0) < 0.001);
+
+invoke('deck.A.loop.1', true);
+NOW += 2.5;
+const p = eng.deck('A').position;
+ok('loop wrapt binnen [3.0,3.87)', p >= 3.0 && p < 3.87);
+const lenBefore = eng.deck('A').loop.end - eng.deck('A').loop.start;
+ok('loop geklemd op trackeinde', Math.abs(lenBefore - (buf.duration - 3.0)) < 1e-6);
+invoke('deck.A.loop.halve', true);
+ok('loop gehalveerd', Math.abs((eng.deck('A').loop.end - eng.deck('A').loop.start) - lenBefore/2) < 1e-6);
+invoke('deck.A.loop.double', true);
+ok('loop verdubbeld terug', Math.abs((eng.deck('A').loop.end - eng.deck('A').loop.start) - lenBefore) < 1e-6);
+invoke('deck.A.loop.exit', true);
+ok('loop weg', eng.deck('A').loop === null);
+
+invoke('deck.A.play', true);
+ok('play toggelt naar pauze', !eng.deck('A').playing);
+
+const g = xfaderGains(0.5);
+ok('xfader equal-power in midden (~0.707)', Math.abs(g.a-0.7071)<0.001 && Math.abs(g.b-0.7071)<0.001);
+ok('xfader links = A vol open', xfaderGains(0).a === 1 && Math.abs(xfaderGains(0).b) < 1e-9);
+
+invoke('deck.A.low', 0);
+ok('EQ kill onder 3%', eng.deck('A').chain.eqLow.gain.value === -70);
+invoke('deck.A.low', 0.5);
+ok('EQ midden = 0 dB', Math.abs(eng.deck('A').chain.eqLow.gain.value) < 1e-9);
+
+invoke('deck.A.filter', 0);
+ok('filter links = LPF laag', eng.deck('A').chain.lpf.frequency.value < 300);
+invoke('deck.A.filter', 1);
+ok('filter rechts = HPF hoog', eng.deck('A').chain.hpf.frequency.value > 8000);
+invoke('deck.A.filter', 0.5);
+ok('filter midden = bypass', eng.deck('A').chain.lpf.frequency.value > 20000 && eng.deck('A').chain.hpf.frequency.value < 25);
+
+invoke('deck.A.pitch', 1);
+ok('pitch +8%', Math.abs(eng.deck('A').rate - 1.08) < 1e-9);
+
+const snap = eng.snapshot();
+// ---- regressie: een afgedankte bron mag niets meer melden ----------------
+// Symptoom was: loop uit -> deck 'stopt' in beeld maar speelt door, en de
+// volgende play() legde er een tweede bron overheen.
+const tik = () => Promise.resolve();
+
+const b = eng.deck('B');
+b.load(buf, 'demo');
+b.seek(1); b.play();
+NOW += 0.5;
+b.setLoop(1);
+NOW += 0.7;
+const posVoorUit = b.position;
+b.clearLoop();
+await tik();
+ok('loop uit: deck speelt door', b.playing);
+ok('loop uit: positie blijft staan', Math.abs(b.position - posVoorUit) < 0.001);
+ok('loop uit: geen klik (bron blijft dezelfde)', LIVE.size === 1);
+
+b.pause();
+await tik();
+const posNaPauze = b.position;
+ok('pauze houdt de positie vast', posNaPauze > 1 && posNaPauze < 3);
+ok('pauze laat geen bron achter', LIVE.size === 0);
+
+b.play();
+await tik();
+ok('play hervat waar je pauzeerde', Math.abs(b.position - posNaPauze) < 0.001);
+ok('play start precies een bron', LIVE.size === 1);
+
+b.seek(2.5);            // binnen de demotrack van 3,87 s
+await tik();
+ok('seek tijdens spelen speelt door', b.playing && Math.abs(b.position - 2.5) < 0.001);
+ok('seek laat geen dubbele bron achter', LIVE.size === 1);
+
+b.cuePoint = 2;
+b.cue();
+await tik();
+ok('cue springt naar het cuepunt, niet naar het einde', Math.abs(b.position - 2) < 0.001);
+
+NOW += 0.5;
+b.play();
+// De AudioBufferSourceNode zit nu achter de bron; het deck kent hem niet meer.
+const bron = b.bron.source;
+bron.onended?.();          // echt trackeinde, zoals de browser hem stuurt
+ok('echt trackeinde stopt het deck wel', !b.playing && Math.abs(b.position - b.duration) < 0.001);
+b.stop();
+
+// ---- beatgrid en beat-loops ----------------------------------------------
+// Een loop die een fractie naast de tel begint hoor je meteen; het inklikken
+// op het grid is het hele punt van een beat-loop.
+
+const { Beatgrid } = await import('../src/engine/beatgrid.js');
+const dA = eng.deck('A');
+dA.stop();
+dA.load(buf, 'demo');
+dA.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0.1 }));   // beat elke 0,5 s
+ok('grid hangt aan het deck', dA.grid.bpm === 120);
+ok('hoorbare bpm volgt de rate', (dA.setRate(1.1), Math.abs(dA.bpm - 132) < 1e-6));
+dA.setRate(1);
+
+dA.seek(1.12);                      // dichtstbijzijnde beat ligt op 1.10
+ok('beat-loop klikt in op de tel', dA.setBeatLoop(4) && Math.abs(dA.loop.start - 1.1) < 1e-9);
+ok('en is precies vier tellen lang', Math.abs((dA.loop.end - dA.loop.start) - 2) < 1e-9);
+ok('het aantal tellen wordt onthouden', dA.loopBeats === 4);
+
+dA.seek(1.34);                      // dichtstbij is 1.35, maar een kwarttel duurt 0,125 s
+const kort = dA.setBeatLoop(0.25);
+ok('een korte loop eindigt nooit vóór de speelkop', kort && dA.loop.end > dA.position - 1e-9);
+
+dA.clearLoop();
+ok('loop uit wist ook het aantal tellen', dA.loopBeats === null);
+
+const zonder = eng.deck('B');
+zonder.load(buf, 'demo');
+ok('zonder grid gebeurt er niets', zonder.setBeatLoop(4) === false && zonder.loop === null);
+
+invoke('deck.A.grid.double', true);
+ok('bpm verdubbelen via de bus', dA.grid.bpm === 240);
+invoke('deck.A.grid.halve', true);
+ok('en weer halveren', dA.grid.bpm === 120);
+
+const voorSchuif = dA.grid.firstBeat;
+invoke('deck.A.grid.fwd', true);
+ok('grid opschuiven via de bus', Math.abs(dA.grid.firstBeat - (voorSchuif + 0.005)) < 1e-9);
+
+dA.seek(3.3);
+invoke('deck.A.grid.here', true);
+ok('beat 1 hier leggen', Math.abs(dA.grid.firstBeat - 3.3) < 1e-9);
+
+invoke('deck.A.grid.clear', true);
+ok('grid wissen', dA.grid === null);
+ok('en dan doet een beat-loop niets meer', dA.setBeatLoop(4) === false);
+
+const snap2 = eng.snapshot();
+ok('snapshot draagt het grid', snap2.decks.A.grid === null && 'bpm' in snap2.decks.A);
+dA.setGrid(new Beatgrid({ bpm: 124 }));
+ok('en vult het zodra er een grid is', eng.snapshot().decks.A.grid.bpm === 124);
+dA.stop();
+
+// ---- sync: tempo en fase --------------------------------------------------
+
+const sA = eng.deck('A'), sB = eng.deck('B');
+sA.stop(); sB.stop();
+sA.load(buf, 'master'); sB.load(buf, 'slave');
+
+ok('zonder grid weigert sync met een reden',
+  (() => { const r = eng.sync('B'); return !r.ok && r.reden.includes('beatgrid'); })());
+
+sA.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+sB.setGrid(new Beatgrid({ bpm: 128, firstBeat: 0 }));
+sA.setRate(1);
+
+let r = eng.sync('B');
+ok('tempo gelijkgezet', r.ok && Math.abs(sB.rate - 120 / 128) < 1e-9);
+ok('en de hoorbare bpm klopt', Math.abs(sB.bpm - 120) < 1e-6);
+ok('het grid van de slave blijft ongemoeid', sB.grid.bpm === 128);
+ok('zonder spelen wordt de fase nog niet gezet', r.fase === false);
+
+// master met pitch: de slave moet dat volgen
+sA.setRate(1.05);
+r = eng.sync('B');
+ok('sync volgt de pitch van de master', Math.abs(sB.bpm - 126) < 1e-6);
+sA.setRate(1);
+eng.sync('B');
+
+// fase: beide spelend, slave bewust een stukje ernaast
+sA.seek(1.0); sA.play();
+sB.seek(1.0 + 0.12); sB.play();
+const voorFase = Math.abs(eng.faseVerschil('B'));
+r = eng.sync('B');
+ok('met beide spelend wordt ook de fase gezet', r.fase === true);
+ok('de fase staat daarna vrijwel gelijk', Math.abs(eng.faseVerschil('B')) < 1e-6);
+ok('en dat was ervoor niet zo', voorFase > 0.01);
+ok('de verschuiving blijft binnen een halve tel',
+  Math.abs(r.verschoven) <= sB.grid.beatLength / 2 + 1e-9);
+
+// een te groot tempoverschil weigert hij, met een bruikbare hint
+sB.setGrid(new Beatgrid({ bpm: 40 }));
+const te = eng.sync('B');
+ok('te groot tempoverschil wordt geweigerd', !te.ok && te.reden.includes('x2'));
+ok('en de rate blijft dan staan', sB.rate > 0.5);
+
+// faseverschil is symmetrisch van teken
+sB.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+sB.setRate(1);
+sA.seek(2.0); sB.seek(2.06);
+const fa = eng.faseVerschil('A'), fb = eng.faseVerschil('B');
+ok('faseverschil kijkt van beide kanten', fa !== null && fb !== null && Math.abs(fa + fb) < 1e-9);
+
+const leeg = eng.snapshot();
+ok('snapshot draagt het faseverschil', 'fase' in leeg && typeof leeg.fase.A === 'number');
+
+sA.stop(); sB.stop();
+sB.setRate(1);
+
+// ---- de bron is inwisselbaar ----------------------------------------------
+// Het deck weet niet HOE er geluid uit een track komt. Dat staat in bron.js,
+// zodat er straks een time-stretcher of een streamende leeslus voor in de
+// plaats kan zonder dat transport, cues of loops iets merken.
+
+const { BufferBron } = await import('../src/engine/bron.js');
+const bd = eng.deck('A');
+ok('het deck heeft een bron', bd.bron instanceof BufferBron);
+ok('die zichzelf benoemt', bd.bron.naam === 'buffer');
+ok('en weet dat hij geen keylock heeft', bd.bron.keylock === false);
+
+ok('het deck heeft zelf geen AudioBufferSourceNode meer', bd.source === undefined);
+ok('buffer loopt via de bron', bd.buffer === bd.bron.buffer);
+ok('speelt loopt via de bron', bd.playing === bd.bron.speelt);
+ok('duur loopt via de bron', bd.duration === bd.bron.duur);
+ok('positie loopt via de bron', Math.abs(bd.position - bd.bron.positie) < 1e-9);
+
+bd.stop();
+bd.load(buf, 'bronproef');
+bd.seek(1.0);
+bd.play();
+ok('ctxTimeOf komt van de bron', bd.ctxTimeOf(2.0) === bd.bron.ctxTimeOf(2.0));
+ok('en ligt een seconde verder bij rate 1',
+  Math.abs(bd.ctxTimeOf(2.0) - (eng.ctx.currentTime + 1.0)) < 1e-9);
+bd.setRate(2);
+ok('ctxTimeOf rekent de rate mee',
+  Math.abs(bd.ctxTimeOf(bd.position + 2.0) - (eng.ctx.currentTime + 1.0)) < 1e-9);
+bd.setRate(1);
+bd.stop();
+ok('stilstaand deck geeft geen ctx-tijd', bd.ctxTimeOf(5) === null);
+
+// Een zelfgebouwde bron moet het deck net zo goed bedienen: dat is het bewijs
+// dat de scheiding echt is en niet alleen op papier staat.
+class TestBron extends BufferBron {
+  get naam() { return 'test'; }
+  get keylock() { return true; }
+}
+const eigen = new TestBron(eng.ctx, bd.chain.input);
+bd.bron = eigen;
+bd.bron.onEinde = () => bd.emit('change', bd);
+bd.load(buf, 'eigen bron');
+bd.seek(0.5); bd.play();
+ok('deck speelt met een andere bron', bd.playing && bd.bron.naam === 'test');
+ok('en meldt dat die keylock heeft', bd.bron.keylock === true);
+NOW += 0.25;
+ok('positie loopt door op de vervangen bron', Math.abs(bd.position - 0.75) < 1e-9);
+bd.setBeatLoop ? null : null;
+bd.stop();
+bd.bron = new BufferBron(eng.ctx, bd.chain.input);
+bd.bron.onEinde = () => bd.emit('change', bd);
+
+// ---- insert-slot: klikvrij wisselen ---------------------------------------
+// Het spannende aan effecten is niet het effect maar het WISSELEN. Nooit de
+// bedrading veranderen waar signaal doorheen loopt; twee complete ketens
+// kruisfaden en de oude pas opruimen na fade plus staarttijd.
+
+const { InsertSlot, EFFECTEN, effectVan, FADE } = await import('../src/engine/fx.js');
+const fx = eng.deck('A').fx;
+
+ok('elk deck heeft een insert-slot', fx instanceof InsertSlot);
+ok('er staat een effect in', fx.effectId === 'delay');
+ok('en hij begint droog', fx.mix === 0);
+ok('er zijn meerdere effecten', EFFECTEN.length >= 3);
+ok('met unieke ids', new Set(EFFECTEN.map((e) => e.id)).size === EFFECTEN.length);
+ok('elk met minstens één parameter', EFFECTEN.every((e) => e.params.length > 0));
+ok('en een standaardwaarde per parameter',
+  EFFECTEN.every((e) => e.params.every((p2) => typeof e.standaard?.[p2] === 'number')));
+ok('een onbekend effect wordt geweigerd', fx.zetEffect('bestaat-niet') === false);
+ok('en laat het huidige staan', fx.effectId === 'delay');
+
+// plekken, niet parameters
+ok('plek 1 heeft een naam', fx.plekNaam(1) === 'tijd');
+ok('plek 4 bestaat niet bij dit effect', fx.plekNaam(4) === null);
+fx.setPlek(2, 0.8);
+ok('plek zetten werkt', Math.abs(fx.leesPlek(2) - 0.8) < 1e-9);
+ok('buiten bereik zetten faalt netjes', fx.setPlek(9, 0.5) === false);
+
+// wisselen
+const voor = fx.keten;
+ok('wisselen lukt', fx.zetEffect('filter') === true);
+ok('er staat een nieuw effect', fx.effectId === 'filter');
+ok('de oude keten is NIET meteen weg', fx.oud.includes(voor));
+ok('er lopen dus twee ketens', fx.nodeAantal === 2);
+ok('de nieuwe keten is een andere node', fx.keten !== voor);
+ok('en plek 1 betekent nu iets anders', fx.plekNaam(1) === 'freq');
+
+ok('hetzelfde effect nog eens zetten doet niets', (() => {
+  const k = fx.keten; fx.zetEffect('filter'); return fx.keten === k;
+})());
+
+// staarttijden bepalen wanneer opruimen mag
+const delay = effectVan('delay').bouw(eng.ctx);
+delay.zet('tijd', 0.5, 0); delay.zet('feedback', 0.6, 0);
+ok('een delay meldt een staarttijd', delay.staart() > 0.1);
+ok('die begrensd is', delay.staart() <= 8);
+ok('een filter heeft geen staart', effectVan('filter').bouw(eng.ctx).staart() === 0);
+
+// dry/wet equal power
+fx.setMix(0.5);
+const n = fx._niveaus();
+ok('equal power op halve mix', Math.abs(n.dry - Math.SQRT1_2) < 1e-9 && Math.abs(n.wet - Math.SQRT1_2) < 1e-9);
+ok('en niet lineair opgeteld', Math.abs(n.dry + n.wet - 1) > 0.4);
+fx.setMix(1);
+ok('volledig nat', Math.abs(fx._niveaus().dry) < 1e-9);
+fx.setBypass(true);
+ok('bypass maakt hem droog', Math.abs(fx._niveaus().dry - 1) < 1e-9 && Math.abs(fx._niveaus().wet) < 1e-9);
+fx.setBypass(false);
+ok('bypass uit herstelt de mix', Math.abs(fx._niveaus().wet - 1) < 1e-9);
+fx.setMix(0);
+
+// via de bus
+const beginEffect = fx.effectId;
+invoke('deck.A.fx.next', true);
+ok('volgend effect via de bus', fx.effectId !== beginEffect);
+for (let i = 1; i < EFFECTEN.length; i++) invoke('deck.A.fx.next', true);
+ok('en na een rondje sta je weer waar je begon', fx.effectId === beginEffect);
+invoke('deck.A.fx.mix', 0.3);
+ok('mix via de bus', Math.abs(fx.mix - 0.3) < 1e-9);
+invoke('deck.A.fx.knop.1', 0.7);
+ok('plek via de bus', Math.abs(fx.leesPlek(1) - 0.7) < 1e-9);
+invoke('deck.A.fx.bypass', true);
+ok('bypass via de bus', fx.bypass === true);
+invoke('deck.A.fx.bypass', true);
+ok('en is een schakelaar', fx.bypass === false);
+fx.setMix(0);
+
+fx.zetEffect('delay');
+const snapFx = eng.snapshot().decks.A.fx;
+ok('snapshot draagt de fx-staat', snapFx.effect === 'delay' && snapFx.plekken.length === 3);
+ok('met de naam van elke plek', snapFx.plekken[0].naam === 'tijd');
+ok('en alleen plekken die bestaan', snapFx.plekken.every((p2) => p2.naam));
+
+// ---- tempo-gesynchroniseerde effecten -------------------------------------
+// Een gate die op tempo loopt maar op de verkeerde tel begint is net zo
+// waardeloos als helemaal niet synchroon. Daarom levert het deck niet alleen
+// de tellengte maar ook het ANKER: wanneer de volgende tel valt op de audioklok.
+
+const { DELINGEN, delingVan, GEEN_KLOK } = await import('../src/engine/fx.js');
+const kd = eng.deck('A');
+kd.stop();
+kd.load(buf, 'klokproef');
+kd.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+
+ok('een stilstaand deck levert geen klok', kd.fxKlok() === null);
+kd.seek(1.1); kd.play();
+const klok = kd.fxKlok();
+ok('een spelend deck levert er wel een', klok !== null);
+ok('tellengte is de HOORBARE lengte', Math.abs(klok.beatLengte - 0.5) < 1e-9);
+ok('het anker ligt op de eerstvolgende tel',
+  Math.abs(klok.ankerCtx - kd.ctxTimeOf(1.5)) < 1e-9);
+ok('en dus in de toekomst', klok.ankerCtx > eng.ctx.currentTime - 1e-9);
+
+kd.setRate(2);
+ok('bij dubbele snelheid is de tel half zo lang', Math.abs(kd.fxKlok().beatLengte - 0.25) < 1e-9);
+ok('maar het grid verandert niet', kd.grid.bpm === 120);
+kd.setRate(1);
+
+kd.setGrid(null);
+ok('zonder grid geen klok', kd.fxKlok() === null);
+kd.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+
+ok('delingen lopen van heel naar zestiende', DELINGEN[0].tellen === 4 && DELINGEN.at(-1).tellen === 0.25);
+ok('een knopstand kiest een deling', delingVan(0).id === '1/1' && delingVan(1).id === '1/16');
+ok('en blijft binnen de lijst', delingVan(-5).tellen === 4 && delingVan(9).tellen === 0.25);
+
+// De gate mag zonder klok niet omvallen: dan staat hij gewoon open.
+const losseGate = effectVan('gate').bouw(eng.ctx, { klok: GEEN_KLOK });
+ok('een gate zonder klok bouwt gewoon', !!losseGate.in && !!losseGate.out);
+losseGate.zet('deling', 0.3, 0);
+ok('en laat zich instellen zonder te klagen', true);
+ok('een gate heeft geen staart', losseGate.staart() === 0);
+
+kd.fx.zetEffect('gate');
+ok('gate in de slot', kd.fx.effectId === 'gate');
+ok('met deling, vorm en diepte', kd.fx.plekNaam(1) === 'deling' && kd.fx.plekNaam(3) === 'diepte');
+let herankerd = 0;
+const echteHeranker = kd.fx.heranker.bind(kd.fx);
+kd.fx.heranker = () => { herankerd++; echteHeranker(); };
+kd.seek(5);
+ok('seeken zet de gate opnieuw op de tel', herankerd === 1);
+kd.setRate(1.05);
+ok('een tempowijziging ook', herankerd === 2);
+kd.setGrid(new Beatgrid({ bpm: 128 }));
+ok('en het verzetten van het grid ook', herankerd === 3);
+kd.fx.heranker = echteHeranker;
+kd.setRate(1);
+kd.stop();
+kd.fx.zetEffect('delay');
+
+ok('snapshot compleet', snap.decks.A.loaded && snap.decks.B && typeof snap.xfader === 'number');
+
+console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
+process.exit(fails.length ? 1 : 0);

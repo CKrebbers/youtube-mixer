@@ -1,0 +1,293 @@
+import { createServer } from 'node:http';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { join, extname, normalize, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
+import { ingest, controleerTooling, YTDLP_GETEST_OP } from './ingest.js';
+import { Library } from './library.js';
+import { maakOnset } from './analyze.js';
+import { verfijnTempoFase } from './detect.js';
+import { readFile } from 'node:fs/promises';
+
+/**
+ * Kleine server, geen framework. Doet drie dingen: statische bestanden
+ * serveren, ingest-opdrachten aannemen, en vertellen hoe ze aflopen.
+ *
+ * Hij serveert met `no-store`. Chrome houdt ES-modules anders hardnekkig vast
+ * en dan debug je een versie die niet meer bestaat.
+ */
+
+const WORTEL = fileURLToPath(new URL('..', import.meta.url));
+const POORT = Number(process.env.PORT) || 8777;
+
+const TYPES = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8', '.wav': 'audio/wav',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.png': 'image/png',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml',
+  '.woff2': 'font/woff2', '.ico': 'image/x-icon',
+};
+
+/** Opdrachten leven in het geheugen. Wat af is, gaat de database in. */
+const opdrachten = new Map();
+const lib = new Library(join(WORTEL, 'media', 'library.db'));
+
+/**
+ * Cross-origin isolation. Nodig zodra de decks via een AudioWorklet met
+ * SharedArrayBuffer gaan draaien; nu alvast aan, want vandaag breekt het niets
+ * (de pagina heeft geen enkele cross-origin verwijzing) en straks zou je moeten
+ * zoeken naar wat er stuk ging. localhost is een secure context, dus dit werkt
+ * zonder HTTPS.
+ *
+ * Let op als de thumbnail ooit in beeld komt: die staat als i.ytimg.com-URL in
+ * de database en wordt dan geblokkeerd. Oplossing is hem bij de ingest
+ * binnenhalen, net als audio en video.
+ */
+const ISOLATIE = {
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Embedder-Policy': 'require-corp',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+};
+
+const json = (res, code, data) => {
+  const body = JSON.stringify(data);
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...ISOLATIE });
+  res.end(body);
+};
+
+async function leesJson(req, max = 64 * 1024) {
+  return new Promise((klaar) => {
+    let data = '';
+    req.on('data', (d) => {
+      data += d;
+      if (data.length > max) { req.destroy(); klaar(null); }
+    });
+    req.on('end', () => { try { klaar(JSON.parse(data || '{}')); } catch { klaar(null); } });
+    req.on('error', () => klaar(null));
+  });
+}
+
+/** Start een ingest en laat hem op de achtergrond lopen. */
+function startIngest(url) {
+  const id = randomUUID().slice(0, 8);
+  const opdracht = {
+    id, url, status: 'bezig', stap: 'wachten', tekst: 'in de wachtrij',
+    pct: null, begonnen: Date.now(), klaar: null, fout: null, track: null,
+  };
+  opdrachten.set(id, opdracht);
+
+  ingest(url, {
+    mediaDir: join(WORTEL, 'media'),
+    onStap: (s) => { Object.assign(opdracht, s); },
+  }).then((r) => {
+    opdracht.klaar = Date.now();
+    if (r.ok) {
+      opdracht.status = 'klaar';
+      opdracht.tekst = r.track.videoFout
+        ? `klaar (zonder video: ${r.track.videoFout}) — ${r.track.titel}`
+        : `klaar — ${r.track.titel}`;
+      // Paden relatief maken: de browser vraagt ze straks op via deze server.
+      opdracht.track = { ...r.track,
+        audio: r.track.audio.replace(WORTEL, '').split(sep).join('/'),
+        video: r.track.video ? r.track.video.replace(WORTEL, '').split(sep).join('/') : null };
+      if (r.track.peaks) {
+        opdracht.track.peaks = { ...r.track.peaks,
+          bestand: r.track.peaks.bestand.replace(WORTEL, '').split(sep).join('/') };
+      }
+      try {
+        lib.bewaarTrack(opdracht.track);
+        if (opdracht.track.peaks) lib.bewaarPeaks(opdracht.track.id, opdracht.track.peaks);
+      } catch (err) {
+        // De ingest is gelukt; dat mag niet alsnog omvallen op de database.
+        console.error('[server] track niet in library gekregen:', err?.message || err);
+      }
+    } else {
+      opdracht.status = 'mislukt';
+      opdracht.fout = r.fout;
+      opdracht.tekst = `mislukt — ${r.fout}`;
+    }
+  }).catch((err) => {
+    // Hier mag niets doorheen glippen: een kapotte ingest is normaal bedrijf.
+    opdracht.status = 'mislukt';
+    opdracht.fout = String(err?.message || err);
+    opdracht.tekst = `mislukt — ${opdracht.fout}`;
+    opdracht.klaar = Date.now();
+  });
+
+  return opdracht;
+}
+
+async function statisch(req, res, pad) {
+  // Geen uitstapjes buiten de projectmap.
+  const veilig = normalize(join(WORTEL, decodeURIComponent(pad))).replace(/\0/g, '');
+  if (!veilig.startsWith(WORTEL)) { json(res, 403, { fout: 'buiten de projectmap' }); return; }
+
+  let info;
+  try { info = await stat(veilig); } catch { json(res, 404, { fout: 'niet gevonden', pad }); return; }
+  const bestand = info.isDirectory() ? join(veilig, 'index.html') : veilig;
+  try { info = await stat(bestand); } catch { json(res, 404, { fout: 'niet gevonden', pad }); return; }
+
+  const type = TYPES[extname(bestand).toLowerCase()] || 'application/octet-stream';
+  const kop = { 'Content-Type': type, 'Cache-Control': 'no-store', 'Accept-Ranges': 'bytes', ...ISOLATIE };
+
+  // Range-verzoeken: nodig zodra de browser video gaat scrubben.
+  const range = req.headers.range;
+  if (range) {
+    const m = /bytes=(\d*)-(\d*)/.exec(range);
+    if (m) {
+      const start = m[1] ? parseInt(m[1], 10) : 0;
+      const eind = m[2] ? parseInt(m[2], 10) : info.size - 1;
+      if (start < info.size) {
+        res.writeHead(206, { ...kop, 'Content-Range': `bytes ${start}-${eind}/${info.size}`,
+          'Content-Length': eind - start + 1 });
+        createReadStream(bestand, { start, end: eind }).pipe(res);
+        return;
+      }
+    }
+  }
+  res.writeHead(200, { ...kop, 'Content-Length': info.size });
+  createReadStream(bestand).pipe(res);
+}
+
+const server = createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url, 'http://localhost');
+    const pad = url.pathname;
+
+    if (pad === '/api/tooling') return json(res, 200, await controleerTooling());
+
+    if (pad === '/api/ingest' && req.method === 'POST') {
+      const body = await leesJson(req);
+      const link = body?.url?.trim();
+      if (!link || !/^https?:\/\//i.test(link)) return json(res, 400, { fout: 'geef een geldige http(s)-URL' });
+      return json(res, 202, startIngest(link));
+    }
+
+    if (pad === '/api/ingest' && req.method === 'GET') {
+      return json(res, 200, { opdrachten: [...opdrachten.values()].sort((a, b) => b.begonnen - a.begonnen) });
+    }
+
+    // ---- library ---------------------------------------------------------
+
+    if (pad === '/api/library' && req.method === 'GET') {
+      return json(res, 200, { tracks: lib.tracks({ zoek: url.searchParams.get('zoek') || '' }) });
+    }
+
+    const mTrack = /^\/api\/library\/([\w-]+)$/.exec(pad);
+    if (mTrack) {
+      if (req.method === 'GET') {
+        const t = lib.track(mTrack[1]);
+        return t ? json(res, 200, { track: t, racks: lib.racks(t.id) }) : json(res, 404, { fout: 'niet in de library' });
+      }
+      if (req.method === 'DELETE') {
+        return json(res, 200, { weg: lib.verwijderTrack(mTrack[1]) });
+      }
+    }
+
+    const mGrid = /^\/api\/library\/([\w-]+)\/grid$/.exec(pad);
+    if (mGrid && req.method === 'POST') {
+      const body = await leesJson(req);
+      if (!lib.track(mGrid[1])) return json(res, 404, { fout: 'onbekend nummer' });
+      return json(res, 200, { grid: lib.bewaarGrid(mGrid[1], body?.grid ?? null) });
+    }
+
+    /*
+     * De tap-hybride.
+     *
+     * Jij tikt een paar tellen mee; dat geeft het OCTAAF en de grove fase, en
+     * juist dat is wat een machine op ambient niet betrouwbaar vindt. De server
+     * pakt de bewaarde onset-envelope erbij en verfijnt jouw schatting binnen
+     * een paar procent marge tot op honderdsten van een bpm en ~10 ms fase.
+     * Samen zijn ze beter dan allebei apart.
+     */
+    const mVerfijn = /^\/api\/library\/([\w-]+)\/grid\/verfijn$/.exec(pad);
+    if (mVerfijn && req.method === 'POST') {
+      const id = mVerfijn[1];
+      const track = lib.track(id);
+      if (!track) return json(res, 404, { fout: 'onbekend nummer' });
+      const body = await leesJson(req);
+      const bpm = Number(body?.bpm);
+      if (!isFinite(bpm) || bpm < 40 || bpm > 300) return json(res, 400, { fout: 'geef een bpm tussen 40 en 300' });
+
+      let onset = track.onset;
+      if (!onset) {
+        // Nog geen envelope (track van vóór deze functie): nu uitrekenen en
+        // bewaren, dan is het de volgende keer meteen klaar.
+        const doel = join(WORTEL, 'media', id, 'onset.bin');
+        const r = await maakOnset(join(WORTEL, track.audio), doel);
+        if (!r.ok) return json(res, 500, { fout: r.fout });
+        onset = lib.bewaarOnset(id, { ...r,
+          bestand: doel.replace(WORTEL, '').split(sep).join('/') });
+      }
+
+      let env;
+      try {
+        const b = await readFile(join(WORTEL, onset.bestand));
+        env = new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4);
+      } catch (err) {
+        return json(res, 500, { fout: `onset-bestand onleesbaar: ${err.message}` });
+      }
+
+      const marge = Number(body?.marge) || 0.03;
+      const r = verfijnTempoFase(env, onset.envRate, bpm, onset.tijdOffset, { marge });
+      return json(res, 200, {
+        getikt: bpm,
+        bpm: r.bpm,
+        firstBeat: r.firstBeat,
+        verschuiving: r.bpm - bpm,
+        marge,
+      });
+    }
+
+    const mGeladen = /^\/api\/library\/([\w-]+)\/geladen$/.exec(pad);
+    if (mGeladen && req.method === 'POST') { lib.geladen(mGeladen[1]); return json(res, 200, { ok: true }); }
+
+    // ---- effect-racks: horen bij de link, niet bij een fader --------------
+
+    const mRacks = /^\/api\/library\/([\w-]+)\/racks$/.exec(pad);
+    if (mRacks) {
+      const trackId = mRacks[1];
+      if (req.method === 'GET') return json(res, 200, { racks: lib.racks(trackId) });
+      if (req.method === 'POST') {
+        const body = await leesJson(req);
+        if (!body?.naam) return json(res, 400, { fout: 'een rack heeft een naam nodig' });
+        if (!lib.track(trackId)) return json(res, 404, { fout: 'onbekend nummer' });
+        return json(res, 200, { rack: lib.bewaarRack({
+          id: body.id ?? null, trackId, naam: body.naam, data: body.data, actief: !!body.actief }) });
+      }
+    }
+
+    const mRack = /^\/api\/library\/([\w-]+)\/racks\/(\d+)$/.exec(pad);
+    if (mRack) {
+      const [, trackId, rackId] = mRack;
+      if (req.method === 'DELETE') return json(res, 200, { weg: lib.verwijderRack(Number(rackId)) });
+      if (req.method === 'POST') {
+        return json(res, 200, { rack: lib.zetActiefRack(trackId, Number(rackId)) });
+      }
+    }
+
+    if (pad.startsWith('/api/')) return json(res, 404, { fout: 'onbekend eindpunt' });
+
+    await statisch(req, res, pad === '/' ? 'index.html' : pad);
+  } catch (err) {
+    // Eén kapot verzoek mag de server niet meenemen.
+    try { json(res, 500, { fout: String(err?.message || err) }); } catch {}
+  }
+});
+
+// Laatste vangnet. Zonder dit legt één losse promise de hele server om.
+process.on('unhandledRejection', (r) => console.error('[server] losse promise:', r));
+process.on('uncaughtException', (e) => console.error('[server] onafgevangen:', e?.message || e));
+
+const tooling = await controleerTooling();
+if (!tooling.ok) console.warn(`[server] LET OP: ${tooling.ontbreekt.join(', ')} ontbreekt — ingest werkt niet`);
+if (tooling.versieWijkt) console.warn(`[server] yt-dlp is ${tooling.ytdlp}, getest op ${YTDLP_GETEST_OP}`);
+if (tooling.verouderd) console.warn(`[server] yt-dlp is verouderd (nieuwste ${tooling.nieuwsteYtdlp}) — ${tooling.bijwerken}`);
+
+server.listen(POORT, '127.0.0.1', () => {
+  console.log(`VARVE DJ  ·  http://localhost:${POORT}`);
+  console.log(`library: ${lib.tracks().length} nummers  ·  schema v${lib.versie}`);
+  console.log(`yt-dlp ${tooling.ytdlp}  ·  ffmpeg ${tooling.ffmpeg ? 'ok' : 'ONTBREEKT'}`);
+});
