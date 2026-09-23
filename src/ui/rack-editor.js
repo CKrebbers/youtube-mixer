@@ -25,12 +25,13 @@ const PLEKKEN = [1, 2, 3, 4, 5, 6, 7, 8];
 const CURVENAAM = { lin: 'lineair', exp: 'traag → snel', log: 'snel → traag', s: 'zacht' };
 
 export class RackEditor {
-  constructor({ root, engine, effecten, onBewaar, naamVan = (id) => `deck ${id}` }) {
+  constructor({ root, engine, effecten, onBewaar, naamVan = (id) => `deck ${id}`, kanBewaren = () => true }) {
     this.root = root;
     this.engine = engine;
     this.effecten = effecten;
     this.onBewaar = onBewaar;
     this.naamVan = naamVan;
+    this.kanBewaren = kanBewaren;
     this.deckId = null;
     this.kopie = null;
     this.melding = null;
@@ -45,8 +46,20 @@ export class RackEditor {
 
     root.querySelector('.re-sluit').addEventListener('click', () => this.sluit());
     root.querySelector('.re-bewaar').addEventListener('click', () => this.bewaar(false));
+    root.querySelector('.re-status').addEventListener('click', (e) => {
+      const k = e.target.closest('[data-hoorbaar]');
+      if (!k || !this.fx) return;
+      if (k.dataset.hoorbaar === 'aan') this.fx.setBypass(false);
+      else this.fx.setMix(0.5);
+      this.melding = null;
+      this._tekenStatus();
+    });
     root.querySelector('.re-nieuw').addEventListener('click', () => this.bewaar(true));
-    this.el.naam.addEventListener('input', () => { if (this.kopie) this.kopie.name = this.el.naam.value; });
+    this.el.naam.addEventListener('input', () => {
+      if (!this.kopie) return;
+      this.kopie.name = this.el.naam.value;
+      this.fx.hernoem(this.el.naam.value);      // de FX-rij toont meteen de nieuwe naam
+    });
 
     // Alles via delegatie: de inhoud wordt opnieuw getekend, de luisteraars niet.
     root.addEventListener('click', (e) => this._klik(e));
@@ -75,8 +88,29 @@ export class RackEditor {
     this.el.deck.textContent = this.naamVan(deckId);
     this.el.naam.value = this.kopie.name || '';
     this._rackRef = this.fx.rack;
+    this.melding = this._stilteMelding();
+    const bewaarbaar = this.kanBewaren(deckId);
+    for (const k of this.root.querySelectorAll('.re-bewaar, .re-nieuw')) {
+      k.disabled = !bewaarbaar;
+      k.dataset.titel ??= k.title;
+      k.title = bewaarbaar ? k.dataset.titel : 'bewaren kan alleen met een nummer uit de library';
+    }
     this.root.classList.remove('hidden');
     this.teken();
+  }
+
+  /**
+   * Hoor je straks iets van wat je hier doet? Met MIX op 0 of het effect uit
+   * niet — en dan lijkt de editor kapot. Staat de track stil, dan zetten we
+   * de MIX zelf op de helft: er klinkt toch niets. Speelt hij, dan draaien
+   * we niet ongevraagd aan wat de zaal hoort, maar zeggen we het.
+   */
+  _stilteMelding({ zelfZetten = true } = {}) {
+    const fx = this.fx, deck = this.engine.deck(this.deckId);
+    if (fx.bypass) return { tekst: 'het effect staat UIT (knop "uit" in de FX-rij) — je hoort je wijzigingen niet', goed: false, knop: 'aan' };
+    if (fx.mix >= 0.05) return null;
+    if (!deck.playing && zelfZetten) { fx.setMix(0.5); return { tekst: 'MIX op 50% gezet, zodat je hoort wat je doet', goed: true }; }
+    return { tekst: 'MIX staat op 0 — je hoort je wijzigingen niet', goed: false, knop: 'mix' };
   }
 
   sluit() {
@@ -102,8 +136,9 @@ export class RackEditor {
     else this._tekenStatus();
   }
 
+  /** Fouten gaan voor; anders blijft staan dat je niets hoort, zolang dat zo is. */
   _fouten(fouten) {
-    this.melding = fouten.length ? { tekst: fouten.join(' · '), goed: false } : null;
+    this.melding = fouten.length ? { tekst: fouten.join(' · '), goed: false } : this._stilteMelding({ zelfZetten: false });
   }
 
   // ---- gebeurtenissen ----------------------------------------------------
@@ -205,8 +240,9 @@ export class RackEditor {
     if (!this.kopie) return;
     this.kopie.name = this.el.naam.value.trim() || this.kopie.name || 'rack';
     try {
-      await this.onBewaar({ deckId: this.deckId, naam: this.kopie.name, data: this.fx.naarJSON(), alsNieuw });
-      this.melding = { tekst: `"${this.kopie.name}" bewaard bij dit nummer`, goed: true };
+      const { nieuw } = await this.onBewaar({ deckId: this.deckId, naam: this.kopie.name, alsNieuw });
+      this._rackRef = this.fx.rack;
+      this.melding = { tekst: `"${this.kopie.name}" ${nieuw ? 'als nieuw rack bewaard' : 'bijgewerkt'} bij dit nummer`, goed: true };
     } catch (err) {
       this.melding = { tekst: `bewaren mislukt: ${err.message}`, goed: false };
     }
@@ -229,7 +265,9 @@ export class RackEditor {
         + ` · ${n} ${n === 1 ? 'plek' : 'plekken'} in gebruik · wijzigingen hoor je meteen`;
       return;
     }
-    this.el.status.innerHTML = `<b class="${this.melding.goed ? 'goed' : 'bad'}">${esc(this.melding.tekst)}</b>`;
+    const knop = this.melding.knop === 'mix' ? ' <button class="btn sm" data-hoorbaar="mix">MIX naar 50%</button>'
+      : this.melding.knop === 'aan' ? ' <button class="btn sm" data-hoorbaar="aan">effect aan</button>' : '';
+    this.el.status.innerHTML = `<b class="${this.melding.goed ? 'goed' : 'bad'}">${esc(this.melding.tekst)}</b>${knop}`;
   }
 
   _tekenKeten() {

@@ -363,3 +363,8 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .trk-toon{width:24px}
 .trk-toon.on[data-toon="L"]{background:var(--a);color:#03100e}
 .trk-toon.on[data-toon="R"]{background:var(--b);color:#12081c}
+
+/* kort op de knop zelf: bewaard of mislukt */
+.btn.gelukt{color:var(--a);border-color:var(--a)}
+.btn.mislukt{color:var(--red);border-color:var(--red)}
+.re-status .btn{margin-left:8px}

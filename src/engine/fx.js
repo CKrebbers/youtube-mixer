@@ -443,6 +443,11 @@ export class InsertSlot {
     this.opgeruimd = 0;
     this.fouten = [];
     this.klok = GEEN_KLOK;
+    // Waar dit rack vandaan komt, bijvoorbeeld zijn id in de library. De
+    // engine kijkt er niet naar; hij bewaart het alleen, en vergeet het zodra
+    // er een ANDER rack in komt. Zo weet de buitenwereld of "bewaar" over een
+    // bestaand rack heen mag, of dat er intussen iets anders klinkt.
+    this.herkomst = null;
   }
 
   /**
@@ -479,9 +484,12 @@ export class InsertSlot {
    * Nieuwe keten volledig opbouwen terwijl de oude speelt, equal-power
    * kruisfaden, en de oude pas opruimen na fade plus staarttijd.
    */
-  zetRack(data, { behoudStanden = false } = {}) {
+  zetRack(data, { behoudStanden = false, herkomst } = {}) {
     const { rack, fouten } = leesRack(data, { bekendType: (t) => !!effectVan(t) });
     this.rack = rack;
+    // Bewerken (behoudStanden) is hetzelfde rack, dus dezelfde herkomst.
+    // Al het andere is een ander rack: dan weten we niet meer waar het vandaan komt.
+    this.herkomst = herkomst !== undefined ? herkomst : (behoudStanden ? this.herkomst : null);
     this.fouten = fouten;
 
     // Standen terug naar de defaults van dit rack. De live stand is
@@ -585,6 +593,9 @@ export class InsertSlot {
 
   /** Het rack zoals het opgeslagen moet worden — zonder de live standen. */
   naarJSON() { return schrijfRack(this.rack); }
+
+  /** Alleen de naam: geen nieuwe keten, geen kruisfade. */
+  hernoem(naam) { this.rack.name = String(naam || '').trim() || this.rack.name; }
 
   /**
    * Alle doelen die een macro kan aansturen, voor de keuzelijst in de editor.

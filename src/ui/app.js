@@ -279,6 +279,8 @@ window.addEventListener('keydown', (e) => {
 
 const rackCache = perDeck(() => []);
 
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
 /** Rechtstreeks uit de DOM: `els` wordt pas verderop aangemaakt. Null als de track niet in beeld is. */
 const fxEl = (deckId, klasse) => {
   const v = vensterVan(deckId);
@@ -302,19 +304,74 @@ async function haalRacks(deckId) {
   }
   const actief = rackCache[deckId].find((x) => x.actief);
   if (actief) {
-    const fouten = engine.deck(deckId).fx.zetRack(actief.data).fouten;
+    const fouten = engine.deck(deckId).fx.zetRack(actief.data, { herkomst: actief.id }).fouten;
     fouten.forEach((f) => console.warn(`[rack ${deckId}]`, f));
   }
   vulRackKiezer(deckId);
 }
 
+/**
+ * De kiezer toont wat er KLINKT, niet wat er ooit gekozen is. Dat staat in
+ * `fx.herkomst`: het library-id van het rack, of null als er intussen iets
+ * anders in zit (volgend effect, een los effect). Dan staat er "niet bewaard"
+ * en kan "bewaar" niet stilletjes over een bewaard rack heen schrijven.
+ */
 function vulRackKiezer(deckId) {
   const sel = fxEl(deckId, '.fx-rack');
   if (!sel) return;
   if (!deckTrack[deckId]) { sel.innerHTML = '<option value="">— geen nummer —</option>'; return; }
-  sel.innerHTML = '<option value="">— los effect —</option>'
-    + rackCache[deckId].map((x) =>
-        `<option value="${x.id}"${x.actief ? ' selected' : ''}>${x.naam}</option>`).join('');
+  sel.innerHTML = '<option value="" disabled>— niet bewaard —</option>'
+    + rackCache[deckId].map((x) => `<option value="${x.id}">${esc(x.naam)}</option>`).join('');
+  volgRackKiezer(deckId);
+}
+
+function volgRackKiezer(deckId) {
+  const sel = fxEl(deckId, '.fx-rack');
+  if (!sel || document.activeElement === sel) return;
+  const waarde = String(engine.deck(deckId).fx.herkomst ?? '');
+  if (sel.value !== waarde) sel.value = waarde;
+}
+
+
+/**
+ * Eén manier van bewaren, voor de FX-rij én de editor.
+ *
+ * Komt wat er klinkt uit een bewaard rack, dan gaat het daaroverheen. Anders
+ * (of met alsNieuw) wordt het een nieuw rack. Daarna is het nieuwe of
+ * bijgewerkte rack het actieve, en staat de kiezer erop.
+ */
+async function bewaarRack(deckId, { naam, alsNieuw = false } = {}) {
+  const trackId = deckTrack[deckId];
+  if (!trackId) throw new Error('alleen een nummer uit de library kan een rack bewaren');
+  const fx = engine.deck(deckId).fx;
+  if (naam) fx.hernoem(naam);
+  const id = alsNieuw ? null : fx.herkomst;
+  const res = await fetch(`/api/library/${trackId}/racks`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, naam: fx.rackNaam, data: fx.naarJSON(), actief: true }),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  const { rack } = await res.json();
+  fx.herkomst = rack.id;
+  // Niet haalRacks(): die zet het actieve rack opnieuw, en dan hoor je een
+  // kruisfade op iets wat al klinkt. Alleen de lijst bijwerken.
+  const lijst = rackCache[deckId].filter((x) => x.id !== rack.id).map((x) => ({ ...x, actief: false }));
+  rackCache[deckId] = [...lijst, rack].sort((a, b) => a.gemaakt - b.gemaakt);
+  vulRackKiezer(deckId);
+  return { rack, nieuw: id === null };
+}
+
+/** Kort op de knop zelf laten zien wat er gebeurde; de console leest niemand. */
+function meldOpKnop(knop, tekst, goed) {
+  clearTimeout(knop._melding);
+  knop.dataset.tekst ??= knop.textContent;
+  knop.textContent = tekst;
+  knop.classList.toggle('gelukt', goed);
+  knop.classList.toggle('mislukt', !goed);
+  knop._melding = setTimeout(() => {
+    knop.textContent = knop.dataset.tekst;
+    knop.classList.remove('gelukt', 'mislukt');
+  }, goed ? 1500 : 4000);
 }
 
 for (const v of VENSTERS) {
@@ -322,63 +379,44 @@ for (const v of VENSTERS) {
   kiezer.addEventListener('change', () => {
     const id = venster[v];
     const rack = rackCache[id].find((x) => String(x.id) === kiezer.value);
+    if (!rack) return;
     rackCache[id].forEach((x) => { x.actief = x === rack; });
-    if (rack) {
-      engine.deck(id).fx.zetRack(rack.data).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
-      fetch(`/api/library/${deckTrack[id]}/racks/${rack.id}`, { method: 'POST' }).catch(() => {});
-    }
+    engine.deck(id).fx.zetRack(rack.data, { herkomst: rack.id }).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
+    fetch(`/api/library/${deckTrack[id]}/racks/${rack.id}`, { method: 'POST' }).catch(() => {});
+    kiezer.blur();
   });
 
-  document.querySelector(`#venster-${v} .fx-bewaar`).addEventListener('click', async () => {
+  const knop = document.querySelector(`#venster-${v} .fx-bewaar`);
+  knop.addEventListener('click', async () => {
     const id = venster[v];
-    const trackId = deckTrack[id];
-    if (!trackId) { console.warn('[rack] geen nummer op deze track'); return; }
     const fx = engine.deck(id).fx;
-    const voorstel = fx.rackNaam === 'nieuw rack' ? fx.effectId || 'rack' : fx.rackNaam;
-    const naam = prompt('Naam voor dit rack:', voorstel);
-    if (!naam) return;
+    if (!deckTrack[id]) { meldOpKnop(knop, 'geen library-nummer', false); return; }
+    // Een nieuw rack heeft een naam nodig; een bestaand houdt de zijne.
+    let naam = null;
+    if (fx.herkomst === null) {
+      const voorstel = fx.rackNaam === 'nieuw rack' ? fx.effectId || 'rack' : fx.rackNaam;
+      naam = prompt('Naam voor dit nieuwe rack:', voorstel);
+      if (!naam) return;
+    }
     try {
-      const res = await fetch(`/api/library/${trackId}/racks`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ naam, data: fx.naarJSON(), actief: true }),
-      });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      console.log(`[rack ${id}] "${naam}" bewaard bij dit nummer`);
-      await haalRacks(id);
+      const { nieuw } = await bewaarRack(id, { naam });
+      meldOpKnop(knop, nieuw ? 'nieuw ✓' : 'bewaard ✓', true);
     } catch (err) {
-      console.warn('[rack] bewaren mislukt:', err.message);
+      meldOpKnop(knop, 'mislukt', false);
+      knop.title = err.message;
     }
   });
 }
 
 // ---- rack-editor ----------------------------------------------------------
-// "bewaar" schrijft over het rack dat in de kiezer staat; zonder gekozen rack
-// wordt het vanzelf een nieuw. Daarna de kiezer verversen, zodat de naam klopt.
 
 const rackEditor = new RackEditor({
   root: document.getElementById('rack-editor'),
   engine,
   naamVan: (id) => `track ${trackVanDeck(id)}`,
   effecten: EFFECTEN,
-  onBewaar: async ({ deckId, naam, data, alsNieuw }) => {
-    const trackId = deckTrack[deckId];
-    if (!trackId) throw new Error('geen nummer uit de library op dit deck');
-    // Het gekozen rack uit de cache, niet uit de kiezer: de track kan intussen
-    // uit beeld zijn en dan is er geen kiezer.
-    const gekozen = rackCache[deckId].find((x) => x.actief);
-    const id = !alsNieuw && gekozen ? gekozen.id : null;
-    const res = await fetch(`/api/library/${trackId}/racks`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, naam, data, actief: true }),
-    });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    const { rack } = await res.json();
-    // Niet haalRacks(): die zet het actieve rack opnieuw, en dan hoor je een
-    // kruisfade op iets wat al klinkt. Alleen de kiezer bijwerken.
-    const lijst = rackCache[deckId].filter((x) => x.id !== rack.id).map((x) => ({ ...x, actief: false }));
-    rackCache[deckId] = [...lijst, rack].sort((a, b) => a.gemaakt - b.gemaakt);
-    vulRackKiezer(deckId);
-  },
+  kanBewaren: (id) => !!deckTrack[id],
+  onBewaar: async ({ deckId, naam, alsNieuw }) => bewaarRack(deckId, { naam, alsNieuw }),
 });
 
 for (const v of VENSTERS) {
@@ -756,6 +794,7 @@ function tekenFrame() {
     d.hotcues.forEach((t, i) => e.hotcues[i].classList.toggle('set', t !== null));
     e.loopBtns.forEach((b) => b.classList.toggle('on', !!d.loop && !b.classList.contains('warn')));
     views[v].root.classList.toggle('focused', s.focus === id);
+    volgRackKiezer(id);
   }
 
   mapPanel.tick();

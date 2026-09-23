@@ -143,6 +143,11 @@ test/
   behoudStanden: true })` met kruisfade; aan de MACRO'S (bereik, venster, curve)
   gaat via `bewerkMacros()` en raakt geen node aan. Schuiven tekent het paneel
   niet opnieuw, anders verlies je de schuif halverwege het slepen.
+- `fx.herkomst` zegt uit welk bewaard rack wat er klinkt komt (library-id), of
+  null. Bewerken in de editor houdt hem; elk ander rack (volgend effect, los
+  effect) wist hem. Bewaren schrijft ALLEEN over een rack heen als de herkomst
+  klopt, anders wordt het een nieuw rack. Zonder die regel overschreef
+  "volgend effect + bewaar" een bewaard rack met één los effect.
 - Botsen twee macro's op dezelfde parameter, dan wint de HOOGSTE plek. Saai en
   voorspelbaar; "laatste in de lijst wint" hangt van de volgorde af.
 - Een onbekend effecttype in een rack wordt NIET weggegooid: het blijft als ruwe

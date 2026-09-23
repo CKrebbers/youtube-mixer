@@ -509,6 +509,31 @@ ef.zetEffect('delay');
 
 ok('snapshot compleet', snap.decks.A.loaded && snap.decks.B && typeof snap.xfader === 'number');
 
+// ---- herkomst: bewaren mag niet over het verkeerde rack heen -------------
+// "Volgend effect" verving het rack, maar bewaren schreef daarna over het
+// bewaarde rack heen met dat ene losse effect. Nu weet de engine het.
+
+console.log('\nherkomst van een rack');
+{
+  const hf = eng.deck('G').fx;
+  hf.zetRack({ name: 'Dub', chain: [{ slot: 'a', type: 'delay', params: {} }], macros: [] }, { herkomst: 7 });
+  ok('geladen uit de library: herkomst onthouden', hf.herkomst === 7);
+  hf.zetRack({ name: 'Dub', chain: [{ slot: 'a', type: 'delay', params: {} }, { slot: 'b', type: 'filter', params: {} }], macros: [] },
+    { behoudStanden: true });
+  ok('bewerken in de editor: nog steeds hetzelfde rack', hf.herkomst === 7);
+  hf.bewerkMacros([]);
+  ok('macro\'s bewerken ook', hf.herkomst === 7);
+  hf.hernoem('Dub lang');
+  ok('hernoemen: naam anders, herkomst blijft, geen nieuwe keten', hf.rackNaam === 'Dub lang' && hf.herkomst === 7);
+  hf.zetEffect('phaser');
+  ok('volgend effect: herkomst weg, dus bewaren wordt een NIEUW rack', hf.herkomst === null);
+  hf.zetRack({ name: 'x', chain: [], macros: [] }, { herkomst: 3 });
+  hf.zetRack({ name: 'y', chain: [], macros: [] });
+  ok('een ander rack zonder herkomst: weg', hf.herkomst === null);
+  hf.hernoem('   ');
+  ok('lege naam laat de oude staan', hf.rackNaam === 'y');
+}
+
 // ---- acht tracks ------------------------------------------------------------
 // Eén per fader. Wat voor twee werkte moet precies zo blijven klinken.
 
