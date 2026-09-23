@@ -455,6 +455,39 @@ export function bindVideo(mixer) {
 }
 
 /**
+ * De vormlagen (Vormmachines, src/vormen/): generatief beeld over de video.
+ * Alleen met ?vormen=1; zonder dat worden deze actions nooit gedefinieerd.
+ *
+ * Net als de FX-knoppen wijzen de knoppen naar een PLEK (`video.layer.knob.3`),
+ * niet naar een parameter: wissel je van vorm, dan betekent plek 3 iets
+ * anders en hoef je niets opnieuw te koppelen. Ze werken op de GEKOZEN laag
+ * (Bank ◀ ▶ in het mapje "vorm"), zoals de device knobs op de track met focus.
+ */
+export const VORM_KNOPPEN = 6;
+
+export function bindVormen(vormen) {
+  const laag = () => vormen.laag;
+  for (let k = 1; k <= VORM_KNOPPEN; k++) {
+    define(`video.layer.knob.${k}`, 'value', (v) => laag().zetKnop(k - 1, v),
+      { label: `Vormlaag: knop ${k}`, read: () => laag().leesKnop(k - 1) });
+  }
+  define('video.layer.opacity', 'value', (v) => vormen.zetDekking(v),
+    { label: 'Vormlaag: dekking', read: () => laag().dekking });
+  define('video.layer.on', 'trigger', (on) => { if (on) vormen.wisselAan(); },
+    { label: 'Vormlaag aan/uit', read: () => (laag().aan ? 1 : 0) });
+  define('video.layer.next', 'trigger', (on) => { if (on) vormen.stapSysteem(1); }, { label: 'Vormlaag: volgende vorm' });
+  define('video.layer.prev', 'trigger', (on) => { if (on) vormen.stapSysteem(-1); }, { label: 'Vormlaag: vorige vorm' });
+  define('video.layer.blend', 'trigger', (on) => { if (on) vormen.volgendeMengvorm(); },
+    { label: 'Vormlaag: mengvorm (screen · add · multiply)' });
+  define('video.layer.select.next', 'trigger', (on) => { if (on) vormen.kies(vormen.gekozen + 1); }, { label: 'Volgende vormlaag kiezen' });
+  define('video.layer.select.prev', 'trigger', (on) => { if (on) vormen.kies(vormen.gekozen - 1); }, { label: 'Vorige vormlaag kiezen' });
+  vormen.lagen.forEach((_, i) => {
+    define(`video.layer.select.${i + 1}`, 'trigger', (on) => { if (on) vormen.kies(i); },
+      { label: `Vormlaag ${i + 1} kiezen`, read: () => (vormen.gekozen === i ? 1 : 0) });
+  });
+}
+
+/**
  * Wat de schermlaag doet maar op de bus hoort, zodat een APC-knop het kan:
  * een track in een venster zetten (L = focus, R = de tweede), opnemen, door
  * racks bladeren. De functies

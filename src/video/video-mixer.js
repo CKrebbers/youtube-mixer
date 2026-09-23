@@ -2,6 +2,7 @@ import { synchroniseer, zichtbaarheid } from './volg.js';
 import { VIDEO_FX, MODI } from './instellingen.js';
 import { PULS_DOELEN, pulsVorm, klokTrack, metPuls } from './puls.js';
 import { FITS, schaalVoor, maatVan } from './passen.js';
+import { actieveLagen, lagenUniforms, MAX_BEELDLAGEN } from './lagen.js';
 
 /**
  * De video-mixer: per track een gedempte <video>, samen gemengd op een canvas
@@ -20,6 +21,10 @@ import { FITS, schaalVoor, maatVan } from './passen.js';
  *
  * Drie stappen per beeld, elk in een eigen shader:
  *   mengen    acht video's -> één beeld, volgens de mengvorm
+ *   lagen     ALLEEN als er een beeldlaag aan staat (lagen.js, de
+ *             Vormmachines): generatief beeld over het gemengde beeld.
+ *             Staat er niets aan, dan slaat hij over en is het beeld
+ *             bit voor bit wat het zonder lagen was.
  *   effecten  pixel, spiegel, RGB, kleur, sporen, korrel. Sporen heeft het
  *             VORIGE eindbeeld nodig, dus dit schrijft naar een van twee
  *             buffers die om de beurt wisselen (ping-pong).
@@ -128,6 +133,35 @@ void main() {
   kleur = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
 
+// Twee beeldlagen over het gemengde beeld. Een laag is een canvas dat als
+// texture binnenkomt zoals een video (zelfde oriëntatie), passend op het
+// doek; buiten zijn beeld telt hij niet mee. De achtergrond van een vorm is
+// bijna-zwart (#07090c): die trekken we eraf, anders licht screen/add het hele
+// vierkant een tikje op.
+const LAGEN = `#version 300 es
+precision mediump float;
+in vec2 uv;
+out vec4 kleur;
+uniform sampler2D basis, l0, l1;
+uniform float a[2];
+uniform int m[2];
+uniform vec2 s[2];
+float binnen(vec2 q) { return step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0); }
+vec3 schoon(vec3 l) { return clamp((l - vec3(0.028)) / 0.972, 0.0, 1.0); }
+vec3 leg(vec3 c, vec3 l, float d, int vorm) {
+  if (vorm == 1) return c + l * d;                  // add
+  if (vorm == 2) return mix(c, c * l, d);           // multiply
+  return vec3(1.0) - (vec3(1.0) - c) * (vec3(1.0) - l * d);   // screen
+}
+void main() {
+  vec3 c = texture(basis, uv).rgb;
+  vec2 q = (uv - 0.5) * s[0] + 0.5;
+  if (a[0] > 0.0) c = leg(c, schoon(texture(l0, q).rgb), a[0] * binnen(q), m[0]);
+  q = (uv - 0.5) * s[1] + 0.5;
+  if (a[1] > 0.0) c = leg(c, schoon(texture(l1, q).rgb), a[1] * binnen(q), m[1]);
+  kleur = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+
 const TOON = `#version 300 es
 precision mediump float;
 in vec2 uv;
@@ -159,16 +193,18 @@ export class VideoMixer {
     this.pulsDoel = PULS_DOELEN[0];
     this.fit = FITS[0];              // passend: zwarte randen, niets valt weg
 
+    this.beeldlagen = [];             // generatief beeld erover: voegBeeldlaagToe()
     this.meng = this._programma(VERTEX, MENG);
     this.effect = this._programma(VERTEX, EFFECT);
     this.toon = this._programma(VERTEX, TOON);
-    this.prog = this.meng && this.effect && this.toon;
+    this.lagenProg = this._programma(VERTEX, LAGEN);
+    this.prog = this.meng && this.effect && this.toon && this.lagenProg;
     if (!this.prog) return;
 
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-    for (const prog of [this.meng, this.effect, this.toon]) {
+    for (const prog of [this.meng, this.effect, this.toon, this.lagenProg]) {
       const loc = gl.getAttribLocation(prog, 'p');
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
@@ -182,11 +218,16 @@ export class VideoMixer {
     gl.uniform1i(this.loc(this.effect, 'vorig'), 1);
     gl.useProgram(this.toon);
     gl.uniform1i(this.loc(this.toon, 'beeld'), 0);
+    gl.useProgram(this.lagenProg);
+    gl.uniform1i(this.loc(this.lagenProg, 'basis'), 0);
+    for (let i = 0; i < MAX_BEELDLAGEN; i++) gl.uniform1i(this.loc(this.lagenProg, `l${i}`), 1 + i);
 
     // Eén zwart pixel voor lege plekken: een sampler zonder texture is ongeldig.
     this.zwart = this._texture();
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
     this.gemengd = this._doek();
+    this.gelaagd = null;             // pas bij de eerste beeldlaag: zonder lagen geen extra geheugen
+    this.laagTex = [];
     this.eind = [this._doek(), this._doek()];
     this.beurt = 0;
   }
@@ -201,6 +242,15 @@ export class VideoMixer {
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     return { tex, fb };
+  }
+
+  /**
+   * Een beeldlaag toevoegen: { aan, dekking, mengvorm, frame(t) -> canvas }.
+   * Geeft een functie terug die hem weer weghaalt.
+   */
+  voegBeeldlaagToe(laag) {
+    this.beeldlagen.push(laag);
+    return () => { this.beeldlagen = this.beeldlagen.filter((l) => l !== laag); };
   }
 
   zetFx(id, v) { if (id in this.fx) this.fx[id] = Math.max(0, Math.min(1, v)); }
@@ -328,11 +378,14 @@ export class VideoMixer {
     gl.uniform1i(this.loc(this.meng, 'modus'), MODI.indexOf(this.modus));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
+    // 1b. beeldlagen -> gelaagd (alleen als er een aan staat)
+    const bron = this._lagen(vertraging) ?? this.gemengd;
+
     // 2. effecten -> eind[nu], met eind[vorige] voor de sporen
     const nu = this.eind[this.beurt], vorige = this.eind[1 - this.beurt];
     gl.useProgram(this.effect);
     gl.bindFramebuffer(gl.FRAMEBUFFER, nu.fb);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.gemengd.tex);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, bron.tex);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, vorige.tex);
     const { fx: f, flits } = metPuls(this.fx, this.pulsDoel, this.puls, this._pulsNu(vertraging));
     gl.uniform1f(this.loc(this.effect, 'flits'), flits);
@@ -351,6 +404,40 @@ export class VideoMixer {
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, nu.tex);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     this.beurt = 1 - this.beurt;
+  }
+
+  /**
+   * De beeldlagen over het gemengde beeld leggen. Geeft het doek met het
+   * resultaat, of null als er geen laag aan staat (dan blijft alles zoals
+   * het was). De tijd is die van de audioklok op wat je HOORT (regel 3).
+   */
+  _lagen(vertraging) {
+    const actief = actieveLagen(this.beeldlagen);
+    if (!actief.length) return null;
+    const gl = this.gl;
+    if (!this.gelaagd) this.gelaagd = this._doek();
+    const t = Math.max(0, this.engine.ctx.currentTime - vertraging);
+    const maten = [];
+    actief.forEach((laag, i) => {
+      const beeld = laag.frame(t);
+      if (!this.laagTex[i]) this.laagTex[i] = this._texture();
+      gl.activeTexture(gl.TEXTURE1 + i);
+      gl.bindTexture(gl.TEXTURE_2D, this.laagTex[i]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, beeld);
+      maten.push(maatVan(beeld));
+    });
+    for (let i = actief.length; i < MAX_BEELDLAGEN; i++) {
+      gl.activeTexture(gl.TEXTURE1 + i); gl.bindTexture(gl.TEXTURE_2D, this.zwart);
+    }
+    const { a, m, s } = lagenUniforms(actief, maten, BREEDTE, HOOGTE);
+    gl.useProgram(this.lagenProg);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.gelaagd.fb);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.gemengd.tex);
+    gl.uniform1fv(this.loc(this.lagenProg, 'a'), a);
+    gl.uniform1iv(this.loc(this.lagenProg, 'm'), m);
+    gl.uniform2fv(this.loc(this.lagenProg, 's'), s);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    return this.gelaagd;
   }
 
   _volg(laag, deck, vertraging) {

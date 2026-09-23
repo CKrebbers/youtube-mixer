@@ -15,6 +15,7 @@ import { opzetOnderpanelen } from './onderpanelen.js';
 import { opzetMidi } from './midi-opzet.js';
 import { startRenderloop } from './renderloop.js';
 import { tabblad } from './tabblad.js';
+import { vormenAan, opzetVormen } from './vorm-paneel.js';
 
 /**
  * Het instappunt van de schermlaag: maakt de engine en zet de modules in
@@ -70,6 +71,10 @@ const video = opzetVideo({ engine });
 const { videoMixer } = video;
 window.videoMixer = videoMixer;
 bindVideo(videoMixer);
+// Vormlagen (Vormmachines) over de video: alleen met ?vormen=1 (docs/plugins/01-plan.md).
+// Vóór opzetVensters, die bindt alle knoppen die er dan staan.
+const vormen = vormenAan() ? opzetVormen({ videoMixer }) : null;
+window.vormen = vormen?.vormen;
 
 // ---- opnemen --------------------------------------------------------------
 const opname = opzetOpname({ engine, videoMixer });
@@ -129,6 +134,13 @@ window.lagen = lagen;
 const midiDelen = opzetMidi({ engine, sluitOnderpanelen: onderpanelen.sluitOnderpanelen, lagen,
   geraakt: (sig, regelSig) => spiegel.markeer(sig, regelSig) });
 spiegel.koppel({ mapping: midiDelen.mapping, lagen });
+// Het mapje "vorm" op de APC komt als fragment BIJ de mapping, niet erin:
+// je eigen bewaarde mapping blijft zoals hij is (Mapping.voegToe).
+if (vormen) {
+  fetch('mappings/apc40mk2-vormen.json').then((r) => r.json())
+    .then((doc) => midiDelen.mapping.voegToe('vormen', doc))
+    .catch((err) => meld(`vormlagen: APC-indeling niet geladen (${err.message})`, 'fout'));
+}
 opzetMapjeBalk({ lagen, mapping: midiDelen.mapping, vars: () => midiDelen.mapping.vars() });
 window.midi = midiDelen.midi;         // handig in de console tijdens bouwen
 window.mapping = midiDelen.mapping;

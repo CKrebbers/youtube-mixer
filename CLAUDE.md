@@ -81,11 +81,14 @@ src/
                     tabblad.js      Web Lock 'varve-mixer': maar één tabblad praat met de APC
                     apc-kaart.js    apc.html: de APC met knoppen op hun echte plek, klik = uitleg
                     apc-beschrijf.js elke action in gewone taal (de test eist er een voor de hele standaardmapping)
+  vormen/           systemen.js     de Vormmachines (Clay's artifact): geen DOM, toeval met zaad, tijd van buiten
+                    laag.js         een vorm als beeldlaag: stappen van 1/60 s op de audioklok, knoppen 0..1
   video/            volg.js         hoe een video de audio volgt. Puur rekenwerk.
                     video-mixer.js  <video> per track, gemengd met WebGL2. Leest de engine alleen uit.
                     instellingen.js welke video-effecten en mengvormen er zijn (data)
                     puls.js         effecten op de tel: vorm, welke track de maat geeft
                     passen.js       beeldverhouding per laag: passend (randen) of vullen. Puur.
+                    lagen.js        beeldlagen over de mix: welke tellen mee, uniforms. Puur.
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
                     opnemer-worklet.js  telt frames, zet om naar 16-bit, geeft per seconde door
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
@@ -103,6 +106,7 @@ Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie do
 mappings/
   apc40mk2.json     standaardmapping (data, geen code)
   generic.json      leeg startpunt
+  apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
 racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 media/              binnengehaalde bestanden + library.db (niet in git)
@@ -129,6 +133,7 @@ test/
   opnemer.test.mjs  opnemer tegen de echte opname.js met een haperend netwerk: geen dubbel, gat = stilte
   bronnen.test.mjs  TikTok-links zonder netwerk, ffprobe-controle, eigen staande video door de pijplijn
   upload.test.mjs   upload-route op een eigen server: grens, geen media, hash-id, streamen i.p.v. geheugen
+  vormen.test.mjs   vormlagen: elk systeem, zaad, 1/60 s-stappen, knoppen, bus, fragment, mixer (nep-WebGL)
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -136,6 +141,7 @@ docs/
   VERBETERINGEN.md  verbeterlijst uit de reviewagenten, in rondes
   APC40.md          wat het apparaat kan en de indeling zoals gebouwd
   APC40-onderzoek.md DJ-conventies, bestaande mappings, fysieke indeling (bron van de indeling)
+  plugins/          AV-kern × Varve: inventaris, plan (01-plan.md), negen analyses
 ```
 
 ## Conventies
@@ -590,7 +596,7 @@ docs/
   dat open staat, en met shift vast in de shift-laag. De LED's volgen
   `mapping.actieveRegels()`; wat bij een dicht mapje hoort gaat uit, en het
   ringtype wisselt mee. `mapje-balk.js` toont bij elke wissel wat de knoppen
-  doen. De standaardmapping (269 regels) is gegenereerd volgens de tabel in
+  doen. De standaardmapping (291 regels) is gegenereerd volgens de tabel in
   `docs/APC40.md`; aanpassen mag gewoon in de JSON of met koppelen.
   `apc.html` is een interactieve kaart: één APC met de knoppen op hun ECHTE
   plek (uitgemeten op de Features-tekening, User Guide p4: apparaat x 70–1040,
@@ -632,6 +638,39 @@ docs/
   In generic mode verhuisde de device-sectie mee met de geselecteerde strip
   (bank 1-8 = kanaal 0-7) en stuurde Track Select niets; daar rekende de oude
   standaardmapping mee, en dat klopte in 0x41/0x42 niet.
+
+- VORMLAGEN (24 september 2026, docs/plugins/01-plan.md, stap 1): de
+  Vormmachines uit Clay's artifact als generatief beeld over de video. Alleen
+  met `?vormen=1` (onthouden in localStorage, `?vormen=0` = uit); zonder vlag
+  wordt er niets gemaakt, gebonden of geladen. Clay koos: eerst Varve stap 1,
+  dan AV-kern (publicatie 25 okt); lagen tussen mengen en effecten. Op zijn
+  vraag "wat denk jij?" was het advies, waarop hij stap 1 liet bouwen: GEEN
+  tweede MIDI-driver (de AV-kern-driver zet 0x41, stuurt zonder wachtrij en
+  herkent 5 van de 83 blauwdrukfuncties), en de bron van de vormen staat HIER
+  (`src/vormen/systemen.js`, AV-kern kopieert). Regels:
+  - "Video is slaaf van de positie, beeldlagen zijn slaaf van de maat." Een laag
+    krijgt `ctx.currentTime` min uitgangsvertraging en doet stappen van 1/60 s
+    (hooguit 3 per beeld, niet inhalen). Stille audioklok = stil beeld.
+  - `systemen.js` kent geen DOM, geen `Math.random` (zaad: `g.r()`), geen
+    `performance.now`; de test controleert dat. Zo kan hij later in een Worker.
+  - De mixer kent geen vormen: `voegBeeldlaagToe({ aan, dekking, mengvorm,
+    frame(t) })`. Geen laag aan = de oude drie stappen, bit voor bit; het doek
+    `gelaagd` bestaat pas na de eerste laag. De bijna-zwarte achtergrond van
+    een vorm (#07090c) wordt in de shader afgetrokken.
+  - Knoppen wijzen naar een PLEK (`video.layer.knob.1–6`), op de GEKOZEN laag,
+    zoals de FX-knoppen: een andere vorm vraagt geen nieuwe koppeling. Alleen
+    knoppen zonder `sel`/`re` (keuzelijsten en herstart-knoppen niet).
+  - APC: Detail View opent het mapje `device.vorm` (derde mapje van de
+    device-groep). Daarin device knobs 1–6 = vorm, 7 = dekking (8 vrij voor
+    "reageren op de mix", stap 2), Device ◀ ▶ = vorm, On/Off = laag aan/uit,
+    Bank ◀ ▶ = laag 1/2. De videomodus op scene 4 is NIET veranderd.
+  - Die regels staan in een FRAGMENT (`mappings/apc40mk2-vormen.json`) dat
+    `Mapping.voegToe()` erbij zet: het gaat niet mee in `toJSON()`, dus niet in
+    Clay's bewaarde mapping, en overleeft het laden van een andere mapping.
+    Een eigen regel op dezelfde plek wint.
+  - Nu tien lichte/middelzware systemen op de hoofdthread (lz, hg, bd, fl, sf,
+    ec, cc, km, dp, fy). De zware (cl, ln, gs, sp, wv, if; sp piekt tot 82 ms)
+    komen pas met een Worker (stap 3). Twee lagen tegelijk, niet meer.
 
 ## Onderzochte keuzes
 

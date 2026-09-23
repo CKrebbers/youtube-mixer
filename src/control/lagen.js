@@ -10,7 +10,9 @@ import { Emitter } from '../lib/emitter.js';
  * EQ — zit NOOIT in een mapje; alleen wat je niet bij elke overgang nodig hebt):
  *   device  de acht device knobs rechts, voor de track met focus: de strip
  *           (trim · high · mid · low / sends · fx) of het rack. Eén
- *           oplichtende knop wisselt; twee standen, niet meer.
+ *           oplichtende knop wisselt; twee standen, niet meer. Detail View
+ *           opent een derde: de gekozen VORMLAAG (Vormmachines, alleen met
+ *           ?vormen=1; zonder dat staan er geen regels in en doet hij niets).
  *   grid    het 5×8-grid: hotcues · loops · sampler · video, gekozen met de
  *           scene-knoppen ernaast, elk in een eigen kleur.
  *
@@ -42,7 +44,7 @@ export const GROEPEN = {
   },
   device: {
     naam: 'device knobs', standaard: 'strip',
-    knoppen: { view: ['strip', 'rack'] },
+    knoppen: { view: ['strip', 'rack'], detail: ['vorm'] },
   },
   grid: {
     naam: 'grid', standaard: 'hotcues',
@@ -54,6 +56,7 @@ export const GROEPEN = {
 /** Hoe een mapje op het scherm heet. */
 export const LAAGNAAM = {
   'device.strip': 'strip (trim · high · mid · low / echo · galm · fx)', 'device.rack': 'rack (fx 1–8)',
+  'device.vorm': 'vormlaag (knoppen 1–6 · dekking)',
   'edit.aan': 'grid-modus (beatgrid bewerken)', 'edit.uit': 'uit',
   'grid.hotcues': 'hotcues', 'grid.loops': 'loops', 'grid.sampler': 'sampler', 'grid.video': 'video',
 };

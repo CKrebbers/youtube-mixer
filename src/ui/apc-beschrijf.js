@@ -70,6 +70,17 @@ export function beschrijf(action) {
   if ((m = /^sampler\.(\d)\.clear$/.exec(action))) return { kort: `leeg ${m[1]}`, lang: `sampler-pad ${m[1]} leegmaken (bewaard blijft bewaard)` };
   if ((m = /^send\.a\.knob\.(\d)$/.exec(action))) return { kort: `echo ${SEND_A[m[1] - 1] ?? m[1]}`, lang: `echo-bus: ${SEND_A[m[1] - 1] ?? `knop ${m[1]}`}` };
   if ((m = /^send\.b\.knob\.(\d)$/.exec(action))) return { kort: `galm ${SEND_B[m[1] - 1] ?? m[1]}`, lang: `galm-bus: ${SEND_B[m[1] - 1] ?? `knop ${m[1]}`}` };
+  // Vormlagen (alleen met ?vormen=1). Wat een knop doet hangt van de vorm af;
+  // de namen staan in de VORM-rij van het videopaneel.
+  if ((m = /^video\.layer\.knob\.(\d)$/.exec(action))) return { kort: `vorm ${m[1]}`, lang: `vormlaag: knop ${m[1]} van de gekozen vorm (welke, staat in het videopaneel)` };
+  if ((m = /^video\.layer\.select\.(\d)$/.exec(action))) return { kort: `laag ${m[1]}`, lang: `vormlaag ${m[1]} kiezen` };
+  if ((m = /^video\.layer\.(\w+(?:\.\w+)?)$/.exec(action))) {
+    const v = { opacity: ['dekking', 'vormlaag: dekking'], on: ['laag aan', 'vormlaag aan/uit'],
+      next: ['vorm ▶', 'vormlaag: volgende vorm'], prev: ['◀ vorm', 'vormlaag: vorige vorm'],
+      blend: ['mengvorm', 'vormlaag: screen · add · multiply'],
+      'select.next': ['laag ▶', 'volgende vormlaag kiezen'], 'select.prev': ['◀ laag', 'vorige vormlaag kiezen'] }[m[1]];
+    if (v) return { kort: v[0], lang: v[1] };
+  }
   if ((m = /^video\.fx\.(\w+)\.hold$/.exec(action))) return { kort: `${VIDEO[m[1]] ?? m[1]}!`, lang: `video ${VIDEO[m[1]] ?? m[1]} vol aan zolang je drukt` };
   if ((m = /^video\.fx\.(\w+)$/.exec(action))) return { kort: VIDEO[m[1]] ?? m[1], lang: `video-effect ${VIDEO[m[1]] ?? m[1]}` };
   if ((m = /^layer\.(\w+)\.(\w+)$/.exec(action))) {

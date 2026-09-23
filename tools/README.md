@@ -27,3 +27,18 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   werk in meerdere commits.
 - `hunks.py` — `list <bestand>` toont de hunks van een bestand; `stage <bestand> '[0,2]'`
   zet alleen die hunks klaar; `strip <bestand> 'a-b,c-d'` zet de werkversie min die regels klaar.
+
+## bench/
+- `vm-bench.cjs [id] [N]` — rekentijd per stap van de Vormmachines in Node (nep-canvas,
+  tekenen telt niet mee: een ondergrens). Een kopie van de systemen uit Clay's
+  `vormmachines.html`. De cijfers staan in `docs/plugins/02-analyses.md` (risico's).
+
+## headless/
+- `kijk.mjs` — de app in een headless Chromium (uit de Playwright-cache, geen npm-pakket;
+  het DevTools-protocol over Node's eigen WebSocket). Eigen server op poort 8791 met een
+  tijdelijke database. **Veilig met de APC aangesloten:** `navigator.requestMIDIAccess`
+  wordt weggehaald vóór de pagina laadt, dus er komt geen tweede MIDI-client. Test de app
+  met en zonder `?vormen=1`, stuurt APC-bytes door de mapping (`parseMessage` →
+  `mapping.handle`), tekent 60 beelden en zet schermafdrukken in `tools/headless/uit/`
+  (niet in git). Let op: in headless rekent WebGL in software (swiftshader); snelheid
+  zegt hier niets.

@@ -4,6 +4,64 @@ Lees in deze volgorde: `CLAUDE.md` (architectuur, regels, valkuilen), dan dit
 bestand, dan `docs/VERBETERINGEN.md` (rondes 1–3), `docs/VRAGEN.md` (open
 vragen voor Clay) en `docs/APC40.md` (de indeling zoals gebouwd).
 
+## Nieuw (24 september 2026, nacht): vormlagen, stap 1 van het AV-kern-plan
+
+Clay gaf `Input/` plus twee artifacts (Vormmachines, APC40 ontleed) en twee
+plannen (Totaalplan AV-kern, projectplan AV-kern × Varve). Tien agenten
+bekeken het vanuit negen invalshoeken, met één synthese. Het resultaat staat in
+`docs/plugins/`: `00-inventaris.md`, `01-plan.md` (plan en besluiten) en
+`02-analyses.md`.
+
+Wat eruit kwam: het projectplan ging uit van een Varve dat nog "alleen plan" was.
+Dat klopt niet meer. De AV-kern-ideeën landen daarom als gewone modules in Varve.
+Er komt geen pluginsysteem, geen tweede MIDI-driver en geen TypeScript-build.
+
+**Gebouwd (stap 1):**
+- Vormmachines als beeldlaag, alleen met `?vormen=1`.
+- Tien systemen in `src/vormen/systemen.js`.
+- De laag in `laag.js`.
+- De mixerhaak in `video-mixer.js` en `video/lagen.js`.
+- De actions `video.layer.*`.
+- Het mapje "vorm" achter Detail View, als fragment (`mappings/apc40mk2-vormen.json`,
+  `Mapping.voegToe`).
+- De rij VORM in het videopaneel.
+
+De details staan in CLAUDE.md (VORMLAGEN).
+
+Getest:
+- `node test/alles.mjs`: 24 bestanden, 1555 checks, groen. Nieuw is
+  `vormen.test.mjs`. `mapping.test.mjs` test nu ook fragmenten.
+- `node tools/headless/kijk.mjs`: headless Chromium zonder Web MIDI, eigen server
+  op :8791. De app start met en zonder vlag.
+- Zonder vlag: geen rij, geen lagen, geen regels.
+- Met vlag, via APC-bytes door de mapping: Detail View, On/Off, device knob 1
+  (endless), Device ▶ en Bank ▶ werken.
+- 60 beelden zonder fouten.
+- Er is een schermafdruk: twee vormen over het (lege) videobeeld, en het
+  focusdeel toont "vorm 1–6 · dekking".
+
+### Wat hiervan NIET getest is
+- Op de echte APC in Clay's tabblad: de lampjes (Detail View licht op, On/Off),
+  de ringen van de device knobs in het mapje vorm, en gluren (vasthouden).
+- Met echte video eronder: de mengvormen (screen, add, multiply) op beeld, de
+  beamer (los venster) en de mp4-opname met lagen.
+- De snelheid in echte Chrome op de M1. In headless rekent WebGL in software,
+  dus daar zegt het niets. Let op fl (2200 deeltjes) en bd (170² paren) met
+  twee lagen plus 8 video's.
+- Het mapje vorm met een eigen mapping van Clay (fragmentregels plus zijn
+  eigen regels). Getest in Node, niet op zijn echte kopie.
+
+### Volgende stap
+Clay opent `http://localhost:8777/?vormen=1` in zijn eigen tabblad. Een
+herlaadbeurt is genoeg; de server hoeft niet opnieuw te starten, want er zijn
+alleen statische bestanden bij gekomen. Daarna:
+1. Videopaneel open (V) en een track met video.
+2. Op de APC: Detail View, On/Off, draaien, Device ◀ ▶.
+3. Kijken of het beeld hapert.
+
+Daarna stap 2 uit `01-plan.md`: beeld dat de mix hoort (analyse plus router,
+knob 8 = reageren). Of eerst de beslissingen 9–12.
+
 ## Nieuw (24 september 2026): eigen bestanden, TikTok, staande video
 
 Nog NIET gecommit (de hoofdsessie reviewt). Server moet HERSTART worden

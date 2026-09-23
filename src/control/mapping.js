@@ -110,6 +110,46 @@ export const NIEUWE_NAMEN = [
   [/^video\.fx\.korrel$/, 'video.fx.grain'],
 ];
 
+/**
+ * De regels uit een mapping-document, gecontroleerd en zo nodig gemigreerd.
+ * Wat niet klopt gaat naar `fouten` en wordt overgeslagen, niet geraden.
+ */
+function leesRegels(doc) {
+  if (!doc || !Array.isArray(doc.rules)) throw new Error('mapping: "rules" ontbreekt of is geen lijst');
+  const rules = new Map();
+  const fouten = [];
+  let gemigreerd = 0;
+  doc.rules.forEach((r, i) => {
+    if (!r || typeof r.in !== 'string' || typeof r.action !== 'string') {
+      fouten.push(`regel ${i}: "in" en "action" zijn verplicht`); return;
+    }
+    const mode = r.mode || 'trigger';
+    if (!MODES.includes(mode)) { fouten.push(`regel ${i}: onbekende modus "${mode}"`); return; }
+    if (!/^[a-z]+:(\*|\d+):\d+$/.test(r.in) && !/^[a-z-]+$/.test(r.in)) {
+      fouten.push(`regel ${i}: "${r.in}" is geen geldige signature (type:kanaal:nummer)`); return;
+    }
+    const action = migreerAction(r.action, doc.version ?? 1);
+    if (action !== r.action) gemigreerd++;
+    const regel = {
+      in: r.in, action, mode,
+      invert: !!r.invert,
+      step: typeof r.step === 'number' ? r.step : undefined,
+      takeover: typeof r.takeover === 'number' ? r.takeover : undefined,
+      label: r.label,
+      shift: r.shift ? true : undefined,
+      laag: typeof r.laag === 'string' ? r.laag : undefined,
+      // Hoe de LED onder deze knop oplicht, bovenop het kleurschema in
+      // feedback.js: { aan, half, uit, invert, tel }. Data, dus hij hoort mee
+      // bij exporteren — anders ben je hem kwijt na één keer opslaan.
+      led: r.led && typeof r.led === 'object' && !Array.isArray(r.led) ? { ...r.led } : undefined,
+    };
+    const k = sleutelVan(regel);
+    if (rules.has(k)) fouten.push(`regel ${i}: "${k}" staat al gekoppeld, laatste wint`);
+    rules.set(k, regel);
+  });
+  return { rules, fouten, gemigreerd };
+}
+
 /** Een action uit een mapping van `versie` naar de huidige naam. */
 export function migreerAction(action, versie = 1) {
   let a = action;
@@ -142,45 +182,15 @@ export class Mapping extends Emitter {
     this.shiftSig = null;       // welke knop shift is, uit de mapping
     this.shift = false;
     this.vast = new Map();      // sig -> { rule, target } van een ingedrukte knop
+    this.extra = new Map();     // bron -> regels die erbij komen maar niet van jou zijn (voegToe)
   }
 
   // ---- laden en opslaan --------------------------------------------------
 
   load(data) {
     const doc = typeof data === 'string' ? JSON.parse(data) : data;
-    if (!doc || !Array.isArray(doc.rules)) throw new Error('mapping: "rules" ontbreekt of is geen lijst');
-
-    const rules = new Map();
-    const fouten = [];
-    let gemigreerd = 0;
-    doc.rules.forEach((r, i) => {
-      if (!r || typeof r.in !== 'string' || typeof r.action !== 'string') {
-        fouten.push(`regel ${i}: "in" en "action" zijn verplicht`); return;
-      }
-      const mode = r.mode || 'trigger';
-      if (!MODES.includes(mode)) { fouten.push(`regel ${i}: onbekende modus "${mode}"`); return; }
-      if (!/^[a-z]+:(\*|\d+):\d+$/.test(r.in) && !/^[a-z-]+$/.test(r.in)) {
-        fouten.push(`regel ${i}: "${r.in}" is geen geldige signature (type:kanaal:nummer)`); return;
-      }
-      const action = migreerAction(r.action, doc.version ?? 1);
-      if (action !== r.action) gemigreerd++;
-      const regel = {
-        in: r.in, action, mode,
-        invert: !!r.invert,
-        step: typeof r.step === 'number' ? r.step : undefined,
-        takeover: typeof r.takeover === 'number' ? r.takeover : undefined,
-        label: r.label,
-        shift: r.shift ? true : undefined,
-        laag: typeof r.laag === 'string' ? r.laag : undefined,
-        // Hoe de LED onder deze knop oplicht, bovenop het kleurschema in
-        // feedback.js: { aan, half, uit, invert, tel }. Data, dus hij hoort mee
-        // bij exporteren — anders ben je hem kwijt na één keer opslaan.
-        led: r.led && typeof r.led === 'object' && !Array.isArray(r.led) ? { ...r.led } : undefined,
-      };
-      const k = sleutelVan(regel);
-      if (rules.has(k)) fouten.push(`regel ${i}: "${k}" staat al gekoppeld, laatste wint`);
-      rules.set(k, regel);
-    });
+    const { rules, fouten, gemigreerd } = leesRegels(doc);
+    this._pasExtraToe(rules);
     this.shiftSig = typeof doc.shift === 'string' ? doc.shift : null;
     this.shift = false;
     this.vast.clear();
@@ -193,13 +203,39 @@ export class Mapping extends Emitter {
     return { aantal: rules.size, fouten, gemigreerd };
   }
 
+  /**
+   * Regels die er BIJ komen zonder van jou te worden: een fragment van een
+   * onderdeel dat aan staat (de vormlagen: `mappings/apc40mk2-vormen.json`).
+   * Ze gaan niet mee in toJSON, dus niet in je eigen bewaarde mapping, en ze
+   * blijven staan als er een andere mapping geladen wordt. Heb jij zelf al
+   * een regel op dezelfde plek (knop, shift, mapje), dan wint die: een
+   * fragment vult alleen aan. Koppel je er iets overheen, dan wordt het de
+   * jouwe en gaat hij wel mee.
+   */
+  voegToe(bron, data) {
+    const doc = typeof data === 'string' ? JSON.parse(data) : data;
+    const { rules, fouten } = leesRegels(doc);
+    const lijst = [...rules.values()].map((r) => ({ ...r, bron }));
+    this.extra.set(bron, lijst);
+    const voor = this.rules.size;
+    this._pasExtraToe(this.rules);
+    this.emit('change', this);
+    return { aantal: this.rules.size - voor, fouten };
+  }
+
+  _pasExtraToe(rules) {
+    for (const lijst of this.extra.values()) {
+      for (const r of lijst) { const k = sleutelVan(r); if (!rules.has(k)) rules.set(k, r); }
+    }
+  }
+
   toJSON() {
     return {
       name: this.name,
       device: this.device,
       version: MAPPING_VERSIE,
       ...(this.shiftSig ? { shift: this.shiftSig } : {}),
-      rules: [...this.rules.values()].map((r) => {
+      rules: [...this.rules.values()].filter((r) => !r.bron).map((r) => {
         const o = { in: r.in, action: r.action, mode: r.mode };
         if (r.shift) o.shift = true;
         if (r.laag) o.laag = r.laag;

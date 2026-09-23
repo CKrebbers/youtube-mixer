@@ -682,3 +682,10 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
   .sampler-rij{padding-bottom:6px}
   .pad{height:26px}
 }
+
+/* vormlagen (alleen met ?vormen=1) */
+.vid-vorm{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:0 10px 8px}
+.vid-vorm-kop{font-size:10px;letter-spacing:.16em;font-weight:700;color:var(--a);margin-right:2px}
+.vid-vorm select{font:inherit;font-size:11px;background:var(--bg,#000);color:inherit;border:1px solid var(--line);border-radius:4px;padding:3px 4px;max-width:150px}
+.vorm-aan,.vorm-meng{min-width:52px;text-transform:uppercase;letter-spacing:.08em}
+.vorm-knop.leeg{visibility:hidden}

@@ -1,0 +1,98 @@
+{
+  "name": "APC40 mkII — vormlagen (fragment)",
+  "device": "apc40mk2",
+  "version": 3,
+  "_uitleg": "Alleen met ?vormen=1. Komt BIJ de mapping (Mapping.voegToe), wordt nooit deel van je eigen bewaarde mapping. Eigen regels op dezelfde plek winnen. Zie docs/plugins/01-plan.md.",
+  "rules": [
+    {
+      "in": "note:0:65",
+      "action": "layer.device.detail",
+      "mode": "trigger",
+      "label": "detail view: mapje vorm"
+    },
+    {
+      "in": "cc:0:16",
+      "action": "video.layer.knob.1",
+      "mode": "endless",
+      "label": "device knob 1",
+      "laag": "device.vorm"
+    },
+    {
+      "in": "cc:0:17",
+      "action": "video.layer.knob.2",
+      "mode": "endless",
+      "label": "device knob 2",
+      "laag": "device.vorm"
+    },
+    {
+      "in": "cc:0:18",
+      "action": "video.layer.knob.3",
+      "mode": "endless",
+      "label": "device knob 3",
+      "laag": "device.vorm"
+    },
+    {
+      "in": "cc:0:19",
+      "action": "video.layer.knob.4",
+      "mode": "endless",
+      "label": "device knob 4",
+      "laag": "device.vorm"
+    },
+    {
+      "in": "cc:0:20",
+      "action": "video.layer.knob.5",
+      "mode": "endless",
+      "label": "device knob 5",
+      "laag": "device.vorm"
+    },
+    {
+      "in": "cc:0:21",
+      "action": "video.layer.knob.6",
+      "mode": "endless",
+      "label": "device knob 6",
+      "laag": "device.vorm"
+    },
+    {
+      "in": "cc:0:22",
+      "action": "video.layer.opacity",
+      "mode": "endless",
+      "label": "device knob 7",
+      "laag": "device.vorm"
+    },
+    {
+      "in": "note:0:58",
+      "action": "video.layer.prev",
+      "mode": "trigger",
+      "label": "device left: vorige vorm",
+      "laag": "device.vorm"
+    },
+    {
+      "in": "note:0:59",
+      "action": "video.layer.next",
+      "mode": "trigger",
+      "label": "device right: volgende vorm",
+      "laag": "device.vorm"
+    },
+    {
+      "in": "note:0:62",
+      "action": "video.layer.on",
+      "mode": "trigger",
+      "label": "device on/off: laag aan/uit",
+      "laag": "device.vorm"
+    },
+    {
+      "in": "note:0:60",
+      "action": "video.layer.select.prev",
+      "mode": "trigger",
+      "label": "bank left: vorige laag",
+      "laag": "device.vorm"
+    },
+    {
+      "in": "note:0:61",
+      "action": "video.layer.select.next",
+      "mode": "trigger",
+      "label": "bank right: volgende laag",
+      "laag": "device.vorm"
+    }
+  ]
+}

@@ -272,8 +272,14 @@ ok('geen dubbele sleutels (knop + shift + mapje) in de mapping', dubbel.length =
 const { GROEPEN } = await import('../src/control/lagen.js');
 const bestaat = (l) => { const [g, n] = l.split('.'); return Object.values(GROEPEN[g]?.knoppen || {}).flat().includes(n); };
 ok('elk mapje uit de mapping bestaat in lagen.js', doc.rules.every((r) => !r.laag || bestaat(r.laag)));
-ok('elk mapje in lagen.js heeft regels in de mapping', Object.entries(GROEPEN).every(([g, d]) =>
-  Object.values(d.knoppen).flat().every((n) => doc.rules.some((r) => r.laag === `${g}.${n}`))));
+// Een mapje mag ook zijn regels uit een fragment halen (apc40mk2-vormen.json:
+// het mapje "vorm", alleen met ?vormen=1).
+const fragment = JSON.parse(readFileSync(new URL('../mappings/apc40mk2-vormen.json', import.meta.url), 'utf8'));
+const metFragment = [...doc.rules, ...fragment.rules];
+ok('elk mapje in lagen.js heeft regels in de mapping of een fragment', Object.entries(GROEPEN).every(([g, d]) =>
+  Object.values(d.knoppen).flat().every((n) => metFragment.some((r) => r.laag === `${g}.${n}`))));
+ok('ook het fragment gebruikt alleen bestaande mapjes en signatures',
+  fragment.rules.every((r) => (!r.laag || bestaat(r.laag)) && apc.controls.has(r.in)));
 
 // Een wildcard-kanaal controleren we op kanaal 0: bestaat die control daar,
 // dan bestaat hij ook op de andere kanalen die het apparaat gebruikt.
@@ -666,6 +672,24 @@ console.log('\ngrid-modus');
   const kaal = doc.rules.filter((r) => { const b = beschrijf(r.action); return b.lang === r.action || b.lang.startsWith('?') || !b.kort; }).map((r) => r.action);
   if (kaal.length) console.log('   zonder uitleg:', [...new Set(kaal)]);
   ok('APC-kaarten: elke action in de standaardmapping heeft een uitleg in gewone taal', kaal.length === 0);
+}
+
+console.log('fragmenten: regels die erbij komen maar niet van jou worden');
+{
+  const gedaan = [];
+  const m = new Mapping({ invoke: (a, v) => gedaan.push([a, v]), read: () => 0, lagen: () => ['device.vorm'] });
+  m.load({ name: 'eigen', version: 3, rules: [{ in: 'note:0:10', action: 'eigen.knop', mode: 'trigger' }, { in: 'note:0:60', action: 'mijn.bank', mode: 'trigger', laag: 'device.vorm' }] });
+  const r = m.voegToe('vormen', { version: 3, rules: [
+    { in: 'note:0:65', action: 'layer.device.detail', mode: 'trigger' },
+    { in: 'note:0:60', action: 'video.layer.select.prev', mode: 'trigger', laag: 'device.vorm' },
+  ] });
+  ok('een fragment vult aan', r.aantal === 1 && m.kies('note:0:65')?.action === 'layer.device.detail');
+  ok('een eigen regel op dezelfde plek wint', m.kies('note:0:60')?.action === 'mijn.bank');
+  ok('het fragment gaat NIET mee in je bewaarde mapping', m.toJSON().rules.every((x) => x.action !== 'layer.device.detail') && m.toJSON().rules.length === 2);
+  m.load({ name: 'andere', version: 3, rules: [{ in: 'note:0:11', action: 'x', mode: 'trigger' }] });
+  ok('en blijft staan als er een andere mapping geladen wordt', m.kies('note:0:65')?.action === 'layer.device.detail' && m.kies('note:0:60')?.action === 'video.layer.select.prev');
+  m.set('note:0:65', 'zelf.gekoppeld', { mode: 'trigger' });
+  ok('koppel je er zelf iets overheen, dan is het de jouwe en gaat hij wel mee', m.toJSON().rules.some((x) => x.in === 'note:0:65' && x.action === 'zelf.gekoppeld'));
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
