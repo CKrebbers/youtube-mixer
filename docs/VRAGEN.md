@@ -88,8 +88,9 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   kleine segmenten op het scherm; op de APC blijft het één knop.
   — Clay: drie segmenten (gebouwd 23 sep).
 
-- [ ] **C4. Klik op het tracknummer in de trackrij = play?** Je verwacht
+- [x] **C4. Klik op het tracknummer in de trackrij = play?** Je verwacht
   eerder "selecteren". **Advies:** nummer = focus, play op een eigen knopje.
+  — Clay: zo doen (gebouwd 23 sep: nummer = `track.N.focus`, ▶ = play).
 
 - [ ] **C5. Sends: vóór of na de crossfader?** Nu na de fader, vóór de
   crossfader: een track die je met de crossfader wegdraait, blijft insturen.

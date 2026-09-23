@@ -118,7 +118,8 @@ tracksEl.innerHTML = DECK_IDS.map((id) => {
   const nr = trackVanDeck(id);
   return `<div class="trk" data-deck="${id}">
     <div class="trk-kop">
-      <button data-kind="button" data-action="track.${nr}.play" class="trk-nr" title="play/pause">${nr}</button>
+      <button data-kind="button" data-action="track.${nr}.focus" class="trk-nr" title="focus op deze track (spatie, sampler en de APC volgen hem)">${nr}</button>
+      <button data-kind="button" data-action="track.${nr}.play" class="trk-play" title="play/pauze">▶</button>
       <span class="trk-titel">— leeg —</span>
     </div>
     <div class="meter trk-meter"><i></i></div>
