@@ -1,5 +1,5 @@
 // Het beatgrid: puur rekenwerk, dus volledig in Node te testen.
-const { Beatgrid, TapTempo, MIN_BPM, MAX_BPM } = await import('../src/engine/beatgrid.js');
+const { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, rechteLijn } = await import('../src/engine/beatgrid.js');
 
 const fails = [];
 const ok = (naam, cond) => { if (!cond) fails.push(naam); console.log((cond ? '  ok  ' : 'FAIL  ') + naam); };
@@ -106,7 +106,8 @@ let r = tt.tap(500, 0.5);
 ok('twee tikken geven al een tempo', r && Math.abs(r.bpm - 120) < 0.01);
 r = tt.tap(1000, 1.0); r = tt.tap(1500, 1.5);
 ok('vier tikken van 500 ms is 120 bpm', Math.abs(r.bpm - 120) < 0.01);
-ok('het anker is de eerste tik van de reeks', bij(r.firstBeat, 0));
+ok('het anker is de tel bij de laatste tik, op de lijn', bij(r.anker, 1.5, 1e-9));
+ok('met lopende track: tempo in tracktijd', bij(r.bpmTrack, 120, 1e-6) && r.tijden.length === 4);
 ok('het aantal tikken wordt meegeteld', r.taps === 4);
 
 // Eén keer te laat tikken mag het tempo niet omgooien: daarom de mediaan.
@@ -125,6 +126,112 @@ const tt4 = new TapTempo();
 for (let i = 0; i <= 30; i++) tt4.tap(i * 480, i * 0.48);
 ok('de reeks blijft begrensd', tt4.count <= 16);
 ok('en het tempo klopt nog steeds', Math.abs(tt4.tap(31 * 480, 0).bpm - 125) < 0.5);
+
+
+// ---- tap: rechte lijn door de tikken -----------------------------------------
+
+{
+  // Track op 1,05x: kloktijden 1/1,05 × tracktijden. Tracktijd-lijn geeft het
+  // grid-tempo direct, de klok het hoorbare.
+  const tr = new TapTempo();
+  let x;
+  const L = 0.5;                                        // 120 bpm in tracktijd
+  for (let i = 0; i < 8; i++) x = tr.tap((i * L / 1.05) * 1000, 10 + i * L + (i % 2 ? 0.012 : -0.012));
+  ok('tap op +5%: tracktijd-lijn geeft 120', Math.abs(x.bpmTrack - 120) < 0.3);
+  ok('en de klok het hoorbare tempo 126', Math.abs(x.bpm - 126) < 0.01);
+  ok('anker ligt op de lijn, niet op de laatste (rammelende) tik', Math.abs(x.anker - (10 + 7 * L)) < 0.01);
+
+  // Eén overgeslagen tel: tussenpoos 2 tellen, de lijn telt door.
+  const l = rechteLijn([0, 0.5, 1.5, 2.0, 2.5]);
+  ok('een overgeslagen tel wordt geteld als twee', l.k.join(',') === '0,1,3,4,5' && bij(l.L, 0.5, 1e-9));
+  // Een uitschieter valt weg in plaats van de lijn scheef te trekken.
+  const u2 = rechteLijn([0, 0.5, 1.0, 1.5, 2.15, 2.5]);
+  ok('een tik 150 ms te laat telt niet mee', u2.gebruikt === 5 && bij(u2.L, 0.5, 1e-9));
+  // Zonder lopende track (stilstaand): geen bpmTrack, anker = de positie.
+  const st = new TapTempo();
+  st.tap(0, 7); st.tap(500, 7); const r3 = st.tap(1000, 7);
+  ok('stilstaande track: geen tracktijd-tempo', r3.bpmTrack === null && r3.anker === 7 && r3.tijden.length === 0);
+}
+
+// ---- tempokaart: stukken --------------------------------------------------------
+
+{
+  // 120 bpm tot 10 s, daarna 150 bpm met een tel op 10,1.
+  const k = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 10, bpm: 150, anker: 10.1 }] });
+  ok('twee stukken', k.aantalStukken === 2);
+  ok('tempo per plek', k.bpmAt(5) === 120 && k.bpmAt(12) === 150 && bij(k.beatLengthAt(12), 0.4));
+  ok('vóór het eerste stuk geldt het eerste', k.bpmAt(-3) === 120);
+  // Laatste tel van stuk 1 vóór 10,1: 9,5 (10,0 ligt maar 0,1 s voor 10,1: korter
+  // dan een halve tel, die vervalt). 9,5 = tel 19, 10,1 = tel 20.
+  ok('tellen lopen door over de grens', bij(k.timeOf(19), 9.5) && bij(k.timeOf(20), 10.1) && bij(k.timeOf(21), 10.5));
+  ok('te korte overgangstel vervalt', !k.beatsBetween(9, 11).some((b) => bij(b.tijd, 10)));
+  let mono = true, cont = true, vorige = -Infinity;
+  for (let t = 0; t < 20; t += 0.001) {
+    const b = k.beatAt(t);
+    if (b < vorige - 1e-12) mono = false;
+    if (vorige > -Infinity && b - vorige > 0.01) cont = false;
+    vorige = b;
+  }
+  ok('beatAt is monotoon', mono);
+  ok('en continu (geen sprongen)', cont);
+  let inv = true;
+  for (let b = -10; b < 60; b += 0.37) if (!bij(k.beatAt(k.timeOf(b)), b, 1e-9)) inv = false;
+  ok('timeOf en beatAt zijn elkaars inverse, ook over de grens', inv);
+  ok('fase 0 op een tel van het tweede stuk', bij(k.phase(10.9), 0, 1e-9));
+  ok('volgende tel na 10,2 is 10,5', bij(k.next(10.2), 10.5));
+  ok('dichtstbij in stuk 2', bij(k.nearest(11.25), 11.3));
+  ok('wissels: begin overgangstel en begin nieuw stuk', k.wissels().length === 2 && bij(k.volgendeWissel(5), 9.5) && bij(k.volgendeWissel(9.7), 10.1));
+  ok('na de laatste wissel: null', k.volgendeWissel(11) === null);
+
+  // Oud formaat en nieuw formaat
+  const oud = Beatgrid.van({ bpm: 124, firstBeat: 0.3, beatsPerBar: 4 });
+  ok('oud formaat = één stuk', oud.aantalStukken === 1 && oud.bpmAt(100) === 124 && bij(oud.firstBeat, 0.3));
+  const j = JSON.parse(JSON.stringify({ ...k.toJSON(), slot: true }));
+  ok('nieuw formaat bewaart stukken', Array.isArray(j.stukken) && j.stukken.length === 2 && j.stukken[1].anker === 10.1);
+  const k2 = Beatgrid.van(j);
+  ok('en leest ze terug, met slot', k2.aantalStukken === 2 && k2.slot === true && bij(k2.timeOf(21), 10.5));
+  ok('onzin geeft null', Beatgrid.van({ iets: 1 }) === null);
+  const z = Beatgrid.van({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.7 }], zeker: false });
+  ok('zekerheid per stuk en zeker gaan mee', z.stukken[0].zekerheid === 0.7 && z.toJSON().zeker === false);
+  const ongesorteerd = Beatgrid.van({ stukken: [{ van: 30, bpm: 100, anker: 30 }, { van: 0, bpm: 120, anker: 0 }] });
+  ok('stukken worden gesorteerd', ongesorteerd.stukken[0].van === 0 && ongesorteerd.bpmAt(40) === 100);
+}
+
+// ---- bewerken vanaf hier ----------------------------------------------------
+
+{
+  const k = new Beatgrid({ bpm: 120, firstBeat: 0 });
+  ok('splitsen op 20 s', k.splits(20) === true && k.aantalStukken === 2);
+  ok('splitsen verandert niets hoorbaars', bij(k.timeOf(40), 20) && bij(k.timeOf(41), 20.5) && bij(k.phase(33.3), new Beatgrid({ bpm: 120 }).phase(33.3), 1e-9));
+  ok('twee keer op dezelfde plek splitsen kan niet', k.splits(20) === false);
+
+  k.verdubbel(25);
+  ok('×2 raakt alleen het stuk waar je bent', k.bpmAt(25) === 240 && k.bpmAt(5) === 120);
+  ok('en de tel bij 25 s blijft liggen', bij(k.nearest(25), 25, 1e-9));
+  k.halveer(25);
+  k.schuif(0.01, 25);
+  ok('schuiven: alleen het tweede stuk', bij(k.nearest(25.02), 25.01, 1e-9) && bij(k.nearest(5.02), 5, 1e-9));
+  k.ankerHier(30.2);
+  ok('tel hier: alleen het tweede stuk', bij(k.nearest(30.25), 30.2, 1e-9) && bij(k.nearest(5.02), 5, 1e-9));
+  k.setBpm(125, { bij: 30.2 });
+  ok('tempo zetten vanaf hier', k.bpmAt(30) === 125 && k.bpmAt(10) === 120 && bij(k.nearest(30.2), 30.2, 1e-9));
+  k.zetStuk(3, { bpm: 118, anker: 1.1 });
+  ok('zetStuk raakt het eerste stuk', k.bpmAt(3) === 118 && bij(k.nearest(1.2), 1.1, 1e-9) && k.bpmAt(30) === 125);
+  let mono = true, vorige = -Infinity;
+  for (let t = 0; t < 40; t += 0.003) { const b = k.beatAt(t); if (b < vorige) mono = false; vorige = b; }
+  ok('na al dat bewerken nog steeds monotoon', mono);
+
+  ok('samenvoegen op het eerste stuk kan niet', k.voegSamen(5) === false);
+  ok('samenvoegen van het tweede stuk', k.voegSamen(30) === true && k.aantalStukken === 1 && k.bpmAt(30) === 118);
+
+  // Een heel kort stuk zonder eigen tel valt weg in de telling, maar breekt niets.
+  const kort = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 10, bpm: 120, anker: 10.25 }, { van: 10.3, bpm: 100, anker: 10.4 }] });
+  let inv = true;
+  for (let b = 0; b < 40; b += 0.5) if (!bij(kort.beatAt(kort.timeOf(b)), b, 1e-9)) inv = false;
+  ok('stuk zonder eigen tel: telling blijft inverse', inv);
+  const oplopend = kort.beatsBetween(8, 14).every((x, i, l) => i === 0 || x.tijd > l[i - 1].tijd);
+  ok('en de tellen blijven oplopen', oplopend);
+}
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

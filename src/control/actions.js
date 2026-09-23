@@ -140,7 +140,7 @@ export function bindEngine(engine) {
          read: () => {
            const d2 = engine.syncMaster(id);
            if (!d.grid || !d2?.grid) return 0;
-           return Math.abs(d.grid.bpm * d.rate - d2.grid.bpm * d2.rate) < 0.05 ? 1 : 0;
+           return Math.abs(d.bpm - d2.bpm) < 0.05 ? 1 : 0;   // hoorbaar, op de plek waar ze nu zijn
          } });
 
     // ---- beatgrid ---------------------------------------------------------
@@ -151,34 +151,39 @@ export function bindEngine(engine) {
       if (!on || !d.buffer) return;
       const r = tap.tap(performance.now(), d.position);
       if (!r) return;
-      // Je tikt mee met wat je HOORT (grid × rate), maar het grid staat in
-      // TRACKTIJD. Zonder deze deling stond het grid op +5% pitch 5% fout,
-      // en de verfijning op de server zoekt maar binnen 3% en kon het niet
-      // meer rechtzetten.
-      const bpm = r.bpm / (d.rate || 1);
-      if (d.grid) d.grid.setBpm(bpm, { ankerTijd: r.firstBeat ?? d.position });
-      else d.setGrid(new Beatgrid({ bpm, firstBeat: r.firstBeat ?? d.position }));
-      d.emit('change', d);
+      // Speelt de track, dan gaat de lijn door de TRACKTIJDEN van de tikken en
+      // is het tempo meteen in tracktijd. Staat hij stil, dan door de klok:
+      // je tikt mee met wat je HOORT (grid × rate), dus delen door de rate.
+      // Zonder die deling stond het grid op +5% pitch 5% fout.
+      const bpm = r.bpmTrack ?? r.bpm / (d.rate || 1);
+      const anker = r.anker ?? d.position;
+      // Alleen het stuk waar je tikte; zonder grid een nieuw grid van één stuk.
+      if (d.grid) d.grid.zetStuk(anker, { bpm, anker });
+      else d.setGrid(new Beatgrid({ bpm, firstBeat: anker }));
+      // Vier tikken is een meting met de hand: op slot, zodat een automatisch
+      // voorstel (stap C) hem nooit overschrijft. Minder is nog zoeken.
+      if (r.taps >= 4) d.grid.slot = true;
+      d.gridGewijzigd();
       // De UI mag dit door de server laten verfijnen: jouw tap geeft het
-      // octaaf, de analyse haalt er honderdsten van een bpm van.
-      engine.emit('tap', { deck: id, bpm, taps: r.taps });
+      // octaaf en de fase, de analyse haalt er honderdsten van een bpm van.
+      engine.emit('tap', { deck: id, bpm, taps: r.taps, anker, tijden: r.tijden, positie: anker });
     }, { label: `Track ${nr} tap tempo`, read: () => (d.grid ? 1 : 0) });
 
-    define(`${n}.grid.here`, 'trigger', (on) => {
-      if (!on || !d.grid) return;
-      d.grid.ankerHier(d.position);
-      d.emit('change', d);
-    }, { label: `Track ${nr} beat 1 hier` });
-
-    define(`${n}.grid.back`, 'trigger', (on) => { if (on && d.grid) { d.grid.schuif(-0.005); d.emit('change', d); } },
-      { label: `Track ${nr} grid 5 ms terug` });
-    define(`${n}.grid.fwd`, 'trigger', (on) => { if (on && d.grid) { d.grid.schuif(0.005); d.emit('change', d); } },
-      { label: `Track ${nr} grid 5 ms vooruit` });
-    define(`${n}.grid.double`, 'trigger', (on) => { if (on && d.grid) { d.grid.verdubbel(); d.emit('change', d); } },
-      { label: `Track ${nr} bpm x2` });
-    define(`${n}.grid.halve`, 'trigger', (on) => { if (on && d.grid) { d.grid.halveer(); d.emit('change', d); } },
-      { label: `Track ${nr} bpm /2` });
-    define(`${n}.grid.clear`, 'trigger', (on) => { if (on) { d.grid = null; tap.reset(); d.emit('change', d); } },
+    // Grid bewerken "vanaf hier": alles raakt alleen het STUK waar de speelkop
+    // staat. Met één stuk is dat het hele grid, zoals vroeger.
+    const bewerk = (fn) => (on) => { if (on && d.grid) { fn(d.grid, d.position); d.gridGewijzigd(); } };
+    define(`${n}.grid.here`, 'trigger', bewerk((g, p) => g.ankerHier(p)), { label: `Track ${nr} beat 1 hier` });
+    define(`${n}.grid.back`, 'trigger', bewerk((g, p) => g.schuif(-0.005, p)), { label: `Track ${nr} grid 5 ms terug` });
+    define(`${n}.grid.fwd`, 'trigger', bewerk((g, p) => g.schuif(0.005, p)), { label: `Track ${nr} grid 5 ms vooruit` });
+    define(`${n}.grid.double`, 'trigger', bewerk((g, p) => g.verdubbel(p)), { label: `Track ${nr} bpm x2` });
+    define(`${n}.grid.halve`, 'trigger', bewerk((g, p) => g.halveer(p)), { label: `Track ${nr} bpm /2` });
+    define(`${n}.grid.split`, 'trigger', bewerk((g, p) => g.splits(p)),
+      { label: `Track ${nr} nieuw gridstuk hier`, read: () => (!d.grid ? null : d.grid.aantalStukken > 1 ? 0.5 : 0) });
+    define(`${n}.grid.merge`, 'trigger', bewerk((g, p) => g.voegSamen(p)),
+      { label: `Track ${nr} gridstuk samenvoegen met het vorige` });
+    define(`${n}.grid.lock`, 'trigger', bewerk((g) => { g.slot = !g.slot; }),
+      { label: `Track ${nr} grid op slot`, read: () => (!d.grid ? null : d.grid.slot ? 1 : 0) });
+    define(`${n}.grid.clear`, 'trigger', (on) => { if (on) { tap.reset(); d.setGrid(null); } },
       { label: `Track ${nr} grid wissen`, read: () => (d.grid ? 1 : 0) });
 
     // Reads voor de LED's (VRAGEN B4): null = niets te doen (lege track, geen

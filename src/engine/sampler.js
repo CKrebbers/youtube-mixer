@@ -27,14 +27,24 @@ const FADE_UIT = 0.02;
  */
 export function knipBereik(grid, positie, tellen) {
   if (!grid) return { van: Math.max(0, positie - tellen * 0.5), tot: positie, bpm: null, tellen };
-  const laatsteTel = grid.timeOf(Math.floor(grid.beatAt(positie) + 1e-9));
+  // In TELLEN rekenen: met een tempokaart is een tel niet overal even lang,
+  // dus van en tot komen allebei van timeOf.
+  const laatste = Math.floor(grid.beatAt(positie) + 1e-9);
+  const laatsteTel = grid.timeOf(laatste);
   const tot = laatsteTel > 0 ? laatsteTel : positie;
   // Vlak na het begin passen er geen N tellen in. Dan minder HELE tellen
   // nemen, niet een afgekapt stuk dat als N tellen gaat loopen en uit de
   // maat loopt.
-  const passen = Math.max(0, Math.floor(tot / grid.beatLength + 1e-9));
-  const n = Math.min(tellen, passen);
-  return { van: tot - n * grid.beatLength, tot, bpm: grid.bpm, tellen: n };
+  const eersteNaNul = Math.ceil(grid.beatAt(0) - 1e-9);
+  const passen = Math.max(0, laatste - eersteNaNul);
+  const n = laatsteTel > 0 ? Math.min(tellen, passen) : 0;
+  const van = n > 0 ? grid.timeOf(laatste - n) : tot;
+  // Het tempo van de sample zelf: dat van het stuk, of — ligt er een
+  // tempowissel in — gemiddeld over wat er geknipt is.
+  const wissel = grid.volgendeWissel(van);
+  const eenStuk = n === 0 || wissel === null || wissel >= tot - 1e-9;
+  const bpm = eenStuk ? grid.bpmAt(tot) : (60 * n) / (tot - van);
+  return { van, tot, bpm, tellen: n };
 }
 
 /**

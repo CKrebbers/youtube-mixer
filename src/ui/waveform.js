@@ -1,3 +1,5 @@
+import { Beatgrid } from '../engine/beatgrid.js';
+
 /**
  * De golfvorm zelf: per pixel het minimum en maximum van de peaks eronder.
  * Los van de klasse, zodat de baan hem één keer in een cache kan tekenen.
@@ -84,28 +86,54 @@ export class WaveformView {
   }
 
   /**
+   * De snapshot geeft het grid als JSON; rekenen doet de Beatgrid-klasse.
+   * Eén keer per wijziging opbouwen, niet elke frame.
+   */
+  _grid(json) {
+    const sleutel = JSON.stringify(json);
+    if (sleutel !== this._gridSleutel) { this._gridSleutel = sleutel; this._gridObj = Beatgrid.van(json); }
+    return this._gridObj;
+  }
+
+  /**
    * Beatlijnen. De eerste tel van elke maat krijgt een vollere lijn: zonder dat
-   * onderscheid zie je wel een raster maar niet wáár je bent.
+   * onderscheid zie je wel een raster maar niet wáár je bent. Met een
+   * tempokaart rekent elke lijn met het stuk waar hij in valt.
    */
   tekenGrid(grid, range, span, w, h) {
     const g = this.ctx;
-    const beatLengte = 60 / grid.bpm;
-    const perBar = grid.beatsPerBar || 4;
     // Bij heel snel uitzoomen lijnen overslaan in plaats van dichtsmeren.
-    const pxPerBeat = (beatLengte / span) * w;
-    const stap = pxPerBeat < 6 ? perBar : 1;
+    const pxPerBeat = (grid.beatLengthAt((range.t0 + range.t1) / 2) / span) * w;
     if (pxPerBeat < 1.5) return;
-
-    let beat = Math.ceil((range.t0 - grid.firstBeat) / beatLengte);
-    beat -= ((beat % stap) + stap) % stap;
-    for (let i = 0; i < 2048; i++, beat += stap) {
-      const t = grid.firstBeat + beat * beatLengte;
-      if (t > range.t1) break;
-      const x = Math.round(((t - range.t0) / span) * w) + 0.5;
-      const maatbegin = ((beat % perBar) + perBar) % perBar === 0;
-      g.fillStyle = maatbegin ? 'rgba(255,190,60,0.55)' : 'rgba(255,255,255,0.13)';
-      g.fillRect(x, maatbegin ? 0 : h * 0.18, 1, maatbegin ? h : h * 0.64);
+    const stap = pxPerBeat < 6 ? grid.beatsPerBar : 1;
+    for (const b of grid.beatsBetween(range.t0, range.t1, 2048, stap)) {
+      const x = Math.round(((b.tijd - range.t0) / span) * w) + 0.5;
+      g.fillStyle = b.maatbegin ? 'rgba(255,190,60,0.55)' : 'rgba(255,255,255,0.13)';
+      g.fillRect(x, b.maatbegin ? 0 : h * 0.18, 1, b.maatbegin ? h : h * 0.64);
     }
+  }
+
+  /**
+   * Waar een nieuw gridstuk begint: een cyaan lijn met een driehoekje boven,
+   * en het tempo erbij in de zoom. Zo zie je waar "vanaf hier" begint.
+   */
+  tekenStukken(grid, range, span, w, h) {
+    if (grid.aantalStukken < 2) return;
+    const g = this.ctx;
+    const zoom = this.mode === 'zoom';
+    grid.stukken.forEach((s, i) => {
+      if (i === 0 || s.van < range.t0 || s.van > range.t1) return;
+      const x = Math.round(((s.van - range.t0) / span) * w) + 0.5;
+      g.fillStyle = 'rgba(80,220,255,0.8)';
+      g.fillRect(x, 0, 1, zoom ? h : h * 0.3);
+      g.beginPath();
+      g.moveTo(x - 4, 0); g.lineTo(x + 5, 0); g.lineTo(x + 0.5, 6);
+      g.fill();
+      if (zoom) {
+        g.font = '10px system-ui, sans-serif';
+        g.fillText(s.bpm.toFixed(2), x + 4, 16);
+      }
+    });
   }
 
   draw(deckState, analysis) {
@@ -138,7 +166,8 @@ export class WaveformView {
 
     // beatgrid: alleen in de zoomweergave, want in het overzicht van een half
     // uur vallen 9000 lijnen samen tot een grijze soep.
-    if (deckState.grid && this.mode === 'zoom') this.tekenGrid(deckState.grid, range, span, w, h);
+    const grid = deckState.grid ? this._grid(deckState.grid) : null;
+    if (grid && this.mode === 'zoom') this.tekenGrid(grid, range, span, w, h);
 
     // golfvorm: het overzicht uit de cache, de zoom scrolt en tekent elke frame
     if (this.mode === 'overview') g.drawImage(this.golfCache(analysis, deckState.duration, w, h), 0, 0, w, h);
@@ -149,6 +178,10 @@ export class WaveformView {
       g.fillStyle = 'rgba(0,0,0,0.5)';
       g.fillRect(0, 0, (pos / deckState.duration) * w, h);
     }
+
+    // Stukgrenzen in beide weergaven, bovenop de golf: in het overzicht zie
+    // je zo waar het tempo wisselt.
+    if (grid) this.tekenStukken(grid, range, span, w, h);
 
     // hotcues
     deckState.hotcues.forEach((t, i) => {

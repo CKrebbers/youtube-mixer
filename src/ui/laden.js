@@ -103,13 +103,19 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
   /**
    * De tap-hybride.
    *
-   * Vier keer meetikken geeft het octaaf en de grove fase — precies wat een
-   * machine op ambient niet betrouwbaar vindt. De server pakt daarna de bewaarde
-   * onset-envelope erbij en verfijnt binnen 3% marge tot op honderdsten van een
-   * bpm. Samen beter dan allebei apart.
+   * Vier keer meetikken geeft het octaaf en de fase — precies wat een machine
+   * op ambient niet betrouwbaar vindt. De actie heeft al een rechte lijn door
+   * de tikken gelegd en het stuk rond de tap gezet. De server pakt daarna de
+   * bewaarde onset-envelope erbij en verfijnt dat tot op honderdsten van een
+   * bpm, met de fase van jouw tap als voorwaarde. Vindt hij geen puls
+   * (zeker: false), dan blijft jouw tap staan en zeggen we dat.
+   *
+   * Contract met de server: { bpm, positie, anker, taps } — anker = tracktijd
+   * van een getikte tel, taps = tracktijden van de tikken. Antwoord:
+   * { bpm, firstBeat, zeker, score, reden? }.
    */
   let verfijnBezig = false;
-  engine.on('tap', async ({ deck, bpm, taps }) => {
+  engine.on('tap', async ({ deck, bpm, taps, anker, tijden, positie }) => {
     if (taps < 4 || verfijnBezig) return;
     const trackId = deckTrack[deck];
     if (!trackId) return;                       // demotrack of losgesleept bestand
@@ -117,13 +123,10 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
     // De TAP-knop staat alleen op het scherm voor de track met focus.
     const knop = deck === engine.focus ? document.querySelector('#focus-deck .tap') : null;
     knop?.classList.add('bezig');
-    // Waar je tikte, in tracktijd: de server scoort dan ±45 s rond die plek,
-    // zodat een lang album met tempowissels het tempo van HIER krijgt.
-    const positie = engine.deck(deck).position;
     try {
       const res = await fetch(`/api/library/${trackId}/grid/verfijn`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bpm, positie }),
+        body: JSON.stringify({ bpm, positie, anker, taps: tijden || [] }),
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const r = await res.json();
@@ -131,11 +134,18 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
       // Gooien in plaats van return: dan loopt het opruimen hieronder gewoon.
       if (deckTrack[deck] !== trackId) throw new Error('intussen een ander nummer op deze track');
       const d = engine.deck(deck);
-      d.setGrid(new Beatgrid({ bpm: r.bpm, firstBeat: r.firstBeat }));
-      console.log(`[tap] deck ${deck}: ${bpm.toFixed(1)} getikt -> ${r.bpm.toFixed(2)} bpm`
-        + ` (${r.verschuiving >= 0 ? '+' : ''}${r.verschuiving.toFixed(2)}), tel 1 op ${r.firstBeat.toFixed(3)}s`);
-      knop?.classList.add('verfijnd');
-      setTimeout(() => knop?.classList.remove('verfijnd'), 1200);
+      if (r.zeker === false || !Number.isFinite(r.bpm) || !Number.isFinite(r.firstBeat)) {
+        meld(`geen puls gevonden — je tap blijft staan${r.reden ? ` (${r.reden})` : ''}`, 'info');
+      } else {
+        // Alleen het stuk rond de plek waar je tikte; de rest van de kaart blijft.
+        if (d.grid) d.grid.zetStuk(positie, { bpm: r.bpm, anker: r.firstBeat });
+        else d.setGrid(new Beatgrid({ bpm: r.bpm, firstBeat: r.firstBeat, slot: true }));
+        d.gridGewijzigd();
+        console.log(`[tap] deck ${deck}: ${bpm.toFixed(2)} getikt -> ${r.bpm.toFixed(2)} bpm,`
+          + ` tel op ${r.firstBeat.toFixed(3)}s${r.score != null ? `, score ${Number(r.score).toFixed(2)}` : ''}`);
+        knop?.classList.add('verfijnd');
+        setTimeout(() => knop?.classList.remove('verfijnd'), 1200);
+      }
     } catch (err) {
       console.warn('[tap] verfijnen mislukt, jouw tap blijft staan:', err.message);
     }

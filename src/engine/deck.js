@@ -161,7 +161,7 @@ export class Deck extends Emitter {
     let at = this.position;
     if (at >= this.duration - 0.01) at = 0;
     this.bron.start(at);
-    this.fx.heranker();
+    this._heranker();
     this.emit('change', this);
   }
 
@@ -196,7 +196,7 @@ export class Deck extends Emitter {
     }
     if (this.playing) this.bron.start(p);
     else this.bron.plaats(p);
-    this.fx.heranker();
+    this._heranker();
     this.emit('change', this);
   }
 
@@ -234,14 +234,14 @@ export class Deck extends Emitter {
   bend(richting) {
     this.bron.setRate(richting ? this.rate * (1 + BEND * Math.sign(richting)) : this.rate);
     this.buigt = richting ? Math.sign(richting) : 0;
-    this.fx.heranker();
+    this._heranker();
   }
 
   setRate(r) {
     const nr = clamp(r, 0.5, 2);
     this.rate = nr;
     this.bron.setRate(this.buigt ? nr * (1 + BEND * this.buigt) : nr);
-    this.fx.heranker();
+    this._heranker();
     this.emit('change', this);
   }
 
@@ -254,11 +254,39 @@ export class Deck extends Emitter {
    */
   fxKlok() {
     if (!this.grid || !this.playing) return null;
-    const volgende = this.grid.timeOf(Math.ceil(this.grid.beatAt(this.position) - 1e-9));
+    // De tel die komt, en hoe lang DIE duurt (tot de tel erna): met een
+    // tempokaart is dat het tempo van het stuk waar je naartoe gaat.
+    const n = Math.ceil(this.grid.beatAt(this.position) - 1e-9);
+    const volgende = this.grid.timeOf(n);
     return {
-      beatLengte: this.grid.beatLength / this.rate,
+      beatLengte: (this.grid.timeOf(n + 1) - volgende) / this.rate,
       ankerCtx: this.ctxTimeOf(volgende),
     };
+  }
+
+  /**
+   * Effecten op de tel opnieuw laten aanhaken, en — als het grid uit stukken
+   * bestaat — dat nog een keer doen zodra de speelkop een tempowissel passeert.
+   * Die timer bepaalt alleen WANNEER er herankerd wordt; waar de tel ligt komt
+   * van de audioklok (regel 3). Zonder dit liep een gate na een stukgrens door
+   * op het tempo van het vorige stuk.
+   */
+  _heranker() {
+    this.fx.heranker();
+    clearTimeout(this._wisselTimer);
+    this._wisselTimer = null;
+    if (!this.grid || !this.playing || this.grid.aantalStukken < 2) return;
+    const wissel = this.grid.volgendeWissel(this.position);
+    const op = wissel === null ? null : this.ctxTimeOf(wissel);
+    if (op === null || !Number.isFinite(op)) return;
+    const ms = Math.max(0, (op - this.ctx.currentTime) * 1000) + 5;
+    this._wisselTimer = setTimeout(() => {
+      this._wisselTimer = null;
+      if (!this.playing) return;
+      this._heranker();
+      this.emit('change', this);            // bussen en sampler volgen de maat
+    }, ms);
+    this._wisselTimer?.unref?.();
   }
 
   /**
@@ -298,13 +326,23 @@ export class Deck extends Emitter {
 
   setGrid(grid) {
     this.grid = grid instanceof Beatgrid ? grid : Beatgrid.van(grid);
-    this.fx.heranker();
+    this._heranker();
     this.emit('change', this);
     return this.grid;
   }
 
-  /** Hoorbare bpm: het grid staat in tracktijd, de rate rekt dat op. */
-  get bpm() { return this.grid ? this.grid.bpm * this.rate : null; }
+  /**
+   * Na een bewerking van het grid zelf (tel hier, schuiven, ×2, stuk erbij):
+   * effecten op de tel moeten opnieuw aanhaken, anders lopen ze door op het
+   * oude grid.
+   */
+  gridGewijzigd() {
+    this._heranker();
+    this.emit('change', this);
+  }
+
+  /** Hoorbare bpm op de huidige plek: het grid staat in tracktijd, de rate rekt dat op. */
+  get bpm() { return this.grid ? this.grid.bpmAt(this.position) * this.rate : null; }
 
   /**
    * Loop van een aantal tellen, ingeklikt op het grid.
@@ -315,13 +353,17 @@ export class Deck extends Emitter {
    */
   setBeatLoop(beats) {
     if (!this.buffer || !this.grid) return false;
-    const lengte = beats * this.grid.beatLength;
+    // In TELLEN rekenen, niet in seconden: over een stukgrens heen is een
+    // tel niet overal even lang, dus het einde komt van timeOf.
+    const g = this.grid;
     const p = this.position;
-    let start = this.grid.nearest(p);
-    if (start + lengte <= p) start = this.grid.next(p);
-    const eind = Math.min(start + lengte, this.duration);
+    let b = Math.round(g.beatAt(p));
+    if (g.timeOf(b + beats) <= p) b = Math.ceil(g.beatAt(p) - 1e-9);
+    const start = g.timeOf(b);
+    const vol = g.timeOf(b + beats);
+    const eind = Math.min(vol, this.duration);
     // Geklemd op het trackeinde is het geen `beats` tellen meer: dan geen LED.
-    return this._zetLoop(start, eind, eind - start > lengte - 1e-6 ? beats : null);
+    return this._zetLoop(start, eind, eind > vol - 1e-6 ? beats : null);
   }
 
   /** Zonder beatgrid loopen we in seconden. */

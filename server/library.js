@@ -16,7 +16,7 @@ import { dirname } from 'node:path';
  * met elk nieuw effect.
  */
 
-const SCHEMA = [
+export const SCHEMA = [
   // versie 1
   `
   CREATE TABLE tracks (
@@ -90,7 +90,50 @@ const SCHEMA = [
     PRIMARY KEY (track_id, pad)
   );
   `,
+  // versie 5 — het grid als TEMPOKAART: een lijst stukken { van, bpm, anker }
+  // als JSON, zoals de racks. Een bestaand grid wordt één stuk. De oude
+  // kolommen blijven bestaan en krijgen het eerste stuk, zodat een oudere
+  // versie nog iets zinnigs ziet.
+  `
+  ALTER TABLE tracks ADD COLUMN grid_json TEXT;
+  UPDATE tracks SET grid_json = json_object(
+      'stukken', json_array(json_object('van', 0, 'bpm', grid_bpm, 'anker', COALESCE(grid_first_beat, 0))),
+      'beatsPerBar', COALESCE(grid_beats_per_bar, 4))
+    WHERE grid_bpm IS NOT NULL;
+  `,
 ];
+
+/** Hooguit zoveel stukken per grid: een tempokaart, geen beat-voor-beat-lijst. */
+export const MAX_STUKKEN = 4096;
+
+/**
+ * Een grid uit de buitenwereld netjes maken: het nieuwe formaat
+ * { stukken: [{ van, bpm, anker, zekerheid? }], beatsPerBar?, zeker?, slot? }
+ * of het oude { bpm, firstBeat, beatsPerBar } (= één stuk). Null als het
+ * geen bruikbaar grid is. Dezelfde regels als `Beatgrid` in de engine, maar
+ * de library kent de engine niet.
+ */
+export function normaliseerGrid(g) {
+  if (!g || typeof g !== 'object') return null;
+  const getal = (x) => (typeof x === 'number' || typeof x === 'string') && x !== '' && Number.isFinite(Number(x));
+  const bron = Array.isArray(g.stukken) ? g.stukken : [{ van: 0, bpm: g.bpm, anker: g.firstBeat ?? 0 }];
+  if (bron.length > MAX_STUKKEN) return null;
+  const stukken = [];
+  for (const s of bron) {
+    if (!s || !getal(s.bpm) || !getal(s.anker ?? 0) || !getal(s.van ?? 0)) return null;
+    const bpm = Number(s.bpm);
+    if (bpm < 40 || bpm > 300) return null;
+    const stuk = { van: Number(s.van ?? 0), bpm, anker: Number(s.anker ?? 0) };
+    if (getal(s.zekerheid)) stuk.zekerheid = Math.max(0, Math.min(1, Number(s.zekerheid)));
+    stukken.push(stuk);
+  }
+  if (!stukken.length) return null;
+  stukken.sort((a, b) => a.van - b.van);
+  const uit = { stukken, beatsPerBar: Number.isInteger(g.beatsPerBar) && g.beatsPerBar > 0 && g.beatsPerBar <= 16 ? g.beatsPerBar : 4 };
+  if (g.slot === true) uit.slot = true;
+  if (typeof g.zeker === 'boolean') uit.zeker = g.zeker;
+  return uit;
+}
 
 export class Library {
   constructor(pad) {
@@ -169,9 +212,10 @@ export class Library {
   _verrijk(r) {
     const n = this.db.prepare('SELECT COUNT(*) AS n FROM racks WHERE track_id = ?').get(r.id).n;
     const p = this.peaks(r.id);
-    const grid = r.grid_bpm != null
-      ? { bpm: r.grid_bpm, firstBeat: r.grid_first_beat ?? 0, beatsPerBar: r.grid_beats_per_bar ?? 4 }
-      : null;
+    const grid = r.grid_json != null
+      ? normaliseerGrid(veiligJson(r.grid_json, null))
+      : normaliseerGrid(r.grid_bpm != null
+        ? { bpm: r.grid_bpm, firstBeat: r.grid_first_beat ?? 0, beatsPerBar: r.grid_beats_per_bar ?? 4 } : null);
     const onset = r.onset_bestand
       ? { bestand: r.onset_bestand, frames: r.onset_frames, envRate: r.onset_rate, tijdOffset: r.onset_offset }
       : null;
@@ -190,13 +234,21 @@ export class Library {
 
   // ---- beatgrid ----------------------------------------------------------
 
-  /** null wist het grid. */
+  /**
+   * null wist het grid. Neemt het nieuwe én het oude formaat; bewaart altijd
+   * het nieuwe. Een onbruikbaar grid gooit, zodat de route 400 kan zeggen in
+   * plaats van stilletjes het bewaarde grid te wissen.
+   */
   bewaarGrid(trackId, grid) {
-    this.db.prepare(`UPDATE tracks SET grid_bpm = ?, grid_first_beat = ?, grid_beats_per_bar = ?
+    const g = grid == null ? null : normaliseerGrid(grid);
+    if (grid != null && !g) throw new Error('ongeldig grid');
+    const eerste = g?.stukken[0];
+    this.db.prepare(`UPDATE tracks SET grid_json = ?, grid_bpm = ?, grid_first_beat = ?, grid_beats_per_bar = ?
       WHERE id = ?`).run(
-      grid ? grid.bpm : null,
-      grid ? grid.firstBeat : null,
-      grid ? (grid.beatsPerBar ?? 4) : null,
+      g ? JSON.stringify(g) : null,
+      eerste ? eerste.bpm : null,
+      eerste ? eerste.anker : null,
+      g ? g.beatsPerBar : null,
       trackId,
     );
     return this.track(trackId)?.grid ?? null;

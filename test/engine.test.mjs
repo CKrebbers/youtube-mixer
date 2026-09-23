@@ -256,7 +256,7 @@ ok('en dan doet een beat-loop niets meer', dA.setBeatLoop(4) === false);
 const snap2 = eng.snapshot();
 ok('snapshot draagt het grid', snap2.decks.A.grid === null && 'bpm' in snap2.decks.A);
 dA.setGrid(new Beatgrid({ bpm: 124 }));
-ok('en vult het zodra er een grid is', eng.snapshot().decks.A.grid.bpm === 124);
+ok('en vult het zodra er een grid is', eng.snapshot().decks.A.grid.stukken[0].bpm === 124);
 dA.stop();
 
 // ---- sync: tempo en fase --------------------------------------------------
@@ -1329,6 +1329,120 @@ console.log('\ntoetsenbord');
   ok(`snel wisselen midden in een kruisfade gooit niet${gegooid ? ': ' + gegooid.message : ''}`, gegooid === null);
   NOW = 0;
 }
+
+// ---- tempokaart: grid in stukken (stap B) -----------------------------------
+// Alles wat met het grid rekent, moet dat doen op de plek waar het deck NU is.
+
+console.log('\ntempokaart');
+{
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  NOW = 200;
+  const et = new Engine();
+  const A = et.deck('A'), B = et.deck('B');
+  A.load(buf, 'kaart'); B.load(buf, 'vast');
+  // 120 bpm, vanaf 2,0 s 150 bpm met een tel op 2,1. Tellen: … 1,0 · 1,5 · 2,1 · 2,5 · 2,9 …
+  const kaart = () => new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 2.0, bpm: 150, anker: 2.1 }] });
+  A.setGrid(kaart());
+  B.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+
+  A.seek(1.0);
+  ok('deck.bpm in het eerste stuk', Math.abs(A.bpm - 120) < 1e-9);
+  A.seek(2.6);
+  ok('deck.bpm in het tweede stuk', Math.abs(A.bpm - 150) < 1e-9);
+
+  // Sync naar een master die in het tweede stuk staat: 150, niet 120.
+  let r = et.sync('B');
+  ok('sync neemt het tempo van waar de master NU is', r.ok && Math.abs(B.rate - 150 / 120) < 1e-9);
+  // Fase over de grens: beide spelend, daarna geen faseverschil.
+  A.seek(2.2); B.setRate(1); B.seek(1.07);
+  A.play(); B.play();
+  r = et.sync('B');
+  ok('fase gezet met de tellengte van hier', r.fase === true && Math.abs(et.faseVerschil('B')) < 1e-6);
+  ok('verschoven binnen een halve tel van B', Math.abs(r.verschoven) <= 0.25 + 1e-9);
+  B.stop();
+
+  // fxKlok vlak voor de grens: de volgende tel is 2,1 en DIE duurt 0,4 s.
+  A.seek(1.6);
+  let k = A.fxKlok();
+  ok('fxKlok: volgende tel ligt in het nieuwe stuk', Math.abs(k.ankerCtx - A.ctxTimeOf(2.1)) < 1e-9);
+  ok('fxKlok: tellengte van het stuk waar je heen gaat', Math.abs(k.beatLengte - 0.4) < 1e-9);
+  A.seek(1.2);
+  k = A.fxKlok();
+  ok('fxKlok: de overgangstel (1,5 → 2,1) is 0,6 lang', Math.abs(k.beatLengte - 0.6) < 1e-9);
+  ok('herankeren bij de tempowissel staat klaar', A._wisselTimer != null);
+  A.setGrid(new Beatgrid({ bpm: 120 }));
+  ok('met één stuk geen wisseltimer', A._wisselTimer == null);
+  A.setGrid(kaart());
+  A.stop();
+
+  // Beat-loop over de grens: 4 tellen vanaf 1,0 = 1,0 · 1,5 · 2,1 · 2,5 → einde 2,9.
+  A.seek(1.0);
+  ok('beat-loop over een stukgrens telt tellen, geen seconden',
+    A.setBeatLoop(4) && Math.abs(A.loop.start - 1.0) < 1e-9 && Math.abs(A.loop.end - 2.9) < 1e-9 && A.loopBeats === 4);
+  A.clearLoop();
+
+  // Sampler: 2 tellen eindigend op 2,5 → van 1,5 (overgangstel erin), tempo gemiddeld.
+  const { knipBereik } = await import('../src/engine/sampler.js');
+  const kb = knipBereik(A.grid, 2.6, 2);
+  ok('knippen over een grens: van en tot op tellen', Math.abs(kb.van - 1.5) < 1e-9 && Math.abs(kb.tot - 2.5) < 1e-9 && kb.tellen === 2);
+  ok('en het tempo is wat de sample echt doet', Math.abs(kb.bpm - 120) < 1e-9);
+  const kb2 = knipBereik(A.grid, 3.5, 2);
+  ok('binnen één stuk: het tempo van dat stuk', kb2.bpm === 150);
+  NOW = 0;
+}
+
+// Bewerken via de bus: alleen het stuk waar de speelkop staat.
+{
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  const dE = eng.deck('E');
+  dE.load(buf, 'bewerk');
+  dE.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+  dE.seek(2.0);
+  invoke('track.5.grid.split', true);
+  ok('grid.split maakt een stuk vanaf hier', dE.grid.aantalStukken === 2 && dE.grid.stukken[1].van === 2.0);
+  ok('en dat verandert niets hoorbaars', Math.abs(dE.grid.nearest(3.01) - 3.0) < 1e-9);
+  dE.seek(3.0);
+  invoke('track.5.grid.double', true);
+  ok('×2 raakt alleen het stuk waar je bent', dE.grid.bpmAt(3) === 240 && dE.grid.bpmAt(1) === 120);
+  invoke('track.5.grid.fwd', true);
+  ok('schuiven ook', Math.abs(dE.grid.nearest(3.01) - 3.005) < 1e-9 && Math.abs(dE.grid.nearest(1.01) - 1.0) < 1e-9);
+  dE.seek(0.5);
+  invoke('track.5.grid.here', true);
+  ok('tel hier in het eerste stuk laat het tweede staan', dE.grid.bpmAt(3) === 240 && Math.abs(dE.grid.nearest(3.01) - 3.005) < 1e-9);
+  ok('slot staat nog uit na bewerken', dE.grid.slot === false && read('track.5.grid.lock') === 0);
+  invoke('track.5.grid.lock', true);
+  ok('grid.lock zet hem op slot', dE.grid.slot === true && read('track.5.grid.lock') === 1);
+  invoke('track.5.grid.lock', true);
+  ok('en weer eraf', dE.grid.slot === false);
+  dE.seek(3.0);
+  invoke('track.5.grid.merge', true);
+  ok('grid.merge voegt samen met het vorige', dE.grid.aantalStukken === 1 && dE.grid.bpmAt(3) === 120);
+  invoke('track.5.grid.merge', true);
+  ok('het eerste stuk samenvoegen doet niets', dE.grid.aantalStukken === 1);
+
+  // Tap op een lopende track met twee stukken: alleen het stuk waar je tikt.
+  dE.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 1.5, bpm: 120, anker: 0 }] }));
+  NOW = 300;
+  dE.seek(1.6); dE.play();
+  let tapInfo = null;
+  const opTap = (x) => { tapInfo = x; };
+  eng.on('tap', opTap);
+  const echtNu = performance.now;
+  for (let i = 0; i < 5; i++) {
+    performance.now = () => (NOW - 300) * 1000;
+    invoke('track.5.tap', true); invoke('track.5.tap', false);
+    NOW += 0.4;                                  // 150 bpm, track op 1x
+  }
+  performance.now = echtNu;
+  eng.off?.('tap', opTap);
+  ok('tap zet het stuk waar je tikte', Math.abs(dE.grid.bpmAt(2.5) - 150) < 0.01);
+  ok('en laat het stuk ervoor staan', dE.grid.bpmAt(1) === 120);
+  ok('vier of meer tikken: op slot', dE.grid.slot === true);
+  ok('tap-event draagt anker en tracktijden', tapInfo && tapInfo.tijden.length === 5 && Math.abs(tapInfo.anker - 3.2) < 1e-6);
+  dE.stop();
+  NOW = 0;
+}
+
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

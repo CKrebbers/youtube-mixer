@@ -185,8 +185,9 @@ export class Engine extends Emitter {
     const master = this.syncMaster(id);
     if (!master) return { ok: false, reden: 'geen andere track met een beatgrid om naar te syncen' };
 
-    const doelBpm = master.grid.bpm * master.rate;
-    const rate = doelBpm / slave.grid.bpm;
+    // Tempo op de plek waar beide NU zijn: met een tempokaart verschilt dat per stuk.
+    const doelBpm = master.bpm;
+    const rate = doelBpm / slave.grid.bpmAt(slave.position);
     if (rate < 0.5 || rate > 2) {
       return { ok: false, reden: `tempoverschil te groot (${rate.toFixed(2)}x) — probeer bpm x2 of /2` };
     }
@@ -197,7 +198,7 @@ export class Engine extends Emitter {
         reden: 'tempo gelijk; de fase pas als beide tracks spelen' };
     }
 
-    const beat = slave.grid.beatLength;
+    const beat = slave.grid.beatLengthAt(slave.position);
     let delta = (master.grid.phase(master.position) - slave.grid.phase(slave.position)) * beat;
     if (delta > beat / 2) delta -= beat;
     if (delta < -beat / 2) delta += beat;
@@ -216,7 +217,7 @@ export class Engine extends Emitter {
   faseVerschil(id) {
     const a = this.decks[id], b = this.syncMaster(id);
     if (!a?.grid || !b?.grid || !a.buffer || !b.buffer) return null;
-    const beat = a.grid.beatLength / a.rate;        // hoorbare tellengte (sneller = korter)
+    const beat = a.grid.beatLengthAt(a.position) / a.rate;   // hoorbare tellengte hier (sneller = korter)
     let d = (a.grid.phase(a.position) - b.grid.phase(b.position)) * beat;
     if (d > beat / 2) d -= beat;
     if (d < -beat / 2) d += beat;

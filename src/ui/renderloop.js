@@ -141,8 +141,8 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       // Handig bij handmatig beatmatchen én als controle op de sync.
       const f = s.fase?.[id];
       klasse(e.fase, 'leeg', f === null || f === undefined);
-      if (f !== null && f !== undefined && d.grid) {
-        const halveTel = (60 / d.grid.bpm) / d.rate / 2;   // hoorbare tel: sneller = korter
+      if (f !== null && f !== undefined && d.grid && d.bpm) {
+        const halveTel = 60 / d.bpm / 2;   // hoorbare tel HIER (d.bpm = grid op deze plek × rate)
         const uit = Math.max(-1, Math.min(1, f / halveTel));
         stijl(e.faseWijzer, 'left', `${(50 + uit * 46).toFixed(1)}%`);
         klasse(e.faseWijzer, 'strak', Math.abs(f) < 0.006);
