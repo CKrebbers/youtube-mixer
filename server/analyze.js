@@ -53,7 +53,9 @@ export const maakOnset = (audioBestand, doel, opties = {}) => inWerker('onset', 
 /**
  * Tap-verfijning op een bewaarde onset-envelope. Leest het bestand in de
  * worker: 3 uur envelope is 16 MB, die hoeft niet over de draadgrens.
- * Geeft { ok, bpm, firstBeat, score } of { ok: false, fout }.
+ * `opties`: { rond, anker, taps, marge, audio } — zie verfijnTap in detect.js;
+ * met `audio` (pad) wordt de fase op de voorflank bijgesteld.
+ * Geeft { ok, bpm, firstBeat, anker, zeker, score, reden?, fijn } of { ok: false, fout }.
  */
 export const verfijnUitBestand = (bestand, envRate, bpm, tijdOffset, opties = {}) =>
   inWerker('verfijn', [bestand, envRate, bpm, tijdOffset, opties]);
@@ -138,13 +140,20 @@ function maakPeaksHier(audioBestand, doel, { perBucket = PER_BUCKET } = {}) {
  * lezen: jij tikt acht tellen, de server pakt deze envelope erbij en verfijnt
  * jouw bpm tot op honderdsten. Zelfde patroon als de peaks-cache, zelfde reden.
  */
-async function maakOnsetHier(audioBestand, doel, { sampleRate = 11025 } = {}) {
-  const { onsetEnvelope, normaliseerEnvelope } = await import('./detect.js');
+/*
+ * Waarmee de onset-envelope gemaakt wordt. De tijdcorrectie hangt hiervan af
+ * (onsetVertraging), dus verfijnen rekent hem met dezelfde getallen opnieuw
+ * uit in plaats van het getal uit de database te vertrouwen.
+ */
+const ONSET_RATE = 11025, ONSET_WIN = 1024, ONSET_HOP = 128;
 
-  const pcm = await new Promise((klaar) => {
+/** Mono floats op `sampleRate` uit ffmpeg, eventueel vanaf `van` s voor `duur` s. */
+function leesPcm(audioBestand, sampleRate, { van = null, duur = null } = {}) {
+  return new Promise((klaar) => {
     let kind;
+    const stuk = van === null ? [] : ['-ss', String(Math.max(0, van)), '-t', String(duur)];
     try {
-      kind = spawn('ffmpeg', ['-hide_banner', '-nostats', '-loglevel', 'error', '-i', audioBestand,
+      kind = spawn('ffmpeg', ['-hide_banner', '-nostats', '-loglevel', 'error', ...stuk, '-i', audioBestand,
         '-f', 'f32le', '-acodec', 'pcm_f32le', '-ac', '1', '-ar', String(sampleRate), '-'],
         { stdio: ['ignore', 'pipe', 'pipe'] });
     } catch { klaar(null); return; }
@@ -157,9 +166,15 @@ async function maakOnsetHier(audioBestand, doel, { sampleRate = 11025 } = {}) {
       klaar(new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4));
     });
   });
+}
+
+async function maakOnsetHier(audioBestand, doel, { sampleRate = ONSET_RATE } = {}) {
+  const { onsetEnvelope, normaliseerEnvelope } = await import('./detect.js');
+
+  const pcm = await leesPcm(audioBestand, sampleRate);
   if (!pcm || !pcm.length) return { ok: false, fout: 'kon de audio niet lezen voor onset-analyse' };
 
-  const { env, envRate, tijdOffset } = onsetEnvelope(pcm, sampleRate);
+  const { env, envRate, tijdOffset } = onsetEnvelope(pcm, sampleRate, { win: ONSET_WIN, hop: ONSET_HOP });
   const schoon = normaliseerEnvelope(env, envRate);
   try {
     await writeFile(doel, Buffer.from(schoon.buffer, schoon.byteOffset, schoon.byteLength));
@@ -177,8 +192,35 @@ async function verfijnHier(bestand, envRate, bpm, tijdOffset, opties) {
   } catch (err) {
     return { ok: false, fout: `onset-bestand onleesbaar: ${err?.message || err}` };
   }
-  const { verfijnTempoFase } = await import('./detect.js');
-  return { ok: true, ...verfijnTempoFase(env, envRate, bpm, tijdOffset, opties) };
+  const { verfijnTap, onsetVertraging, fijneFase } = await import('./detect.js');
+  /*
+   * De tijdcorrectie opnieuw uitrekenen: in de database staat wat hij was
+   * toen de envelope gemaakt werd, en de ijking is sindsdien verbeterd (23
+   * september 2026: van één tik naar een reeks klanken). De envelope zelf
+   * verandert daar niet door, alleen welke tijd bij een frame hoort.
+   */
+  if (Math.abs(envRate - ONSET_RATE / ONSET_HOP) < 1e-6) tijdOffset = onsetVertraging(ONSET_RATE, ONSET_WIN, ONSET_HOP);
+  const { rond = null, anker = null, taps = null, marge = null, audio = null } = opties;
+  const r = verfijnTap(env, envRate, tijdOffset, { bpm, positie: rond, anker, taps, marge });
+
+  /*
+   * De fijne fase: 24 s audio rond de tel, voorflank op een kort venster.
+   * Alleen als er een puls is, en alleen een kleine bijstelling (< 30 ms):
+   * de grove fase zit er hooguit ~15 ms naast, meer is een meetfout.
+   */
+  let fijn = null;
+  if (r.zeker && audio && Number.isFinite(r.anker)) {
+    const van = Math.max(0, r.anker - 12);
+    const pcm = await leesPcm(audio, ONSET_RATE, { van, duur: 24 });
+    const f = pcm && pcm.length ? fijneFase(pcm, ONSET_RATE, r.bpm, r.anker, { t0: van }) : null;
+    if (f !== null && Math.abs(f - r.anker) < 0.03) {
+      fijn = f - r.anker;
+      const p = 60 / r.bpm;
+      r.anker = f;
+      r.firstBeat = ((f % p) + p) % p;
+    }
+  }
+  return { ok: true, ...r, fijn };
 }
 
 /** Voor de worker. Niet rechtstreeks aanroepen vanuit de server. */

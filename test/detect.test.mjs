@@ -77,8 +77,13 @@ for (const [bpm, start] of [[120, 0], [128, 0.25], [95, 0.1], [140, 0.37], [160,
 // Toleranties aangescherpt nadat de envelope naar banden + superflux ging:
 // tempo ging van 0,20 naar 0,01 bpm, fase van 12,9 naar 3,4 ms. Blijft dit
 // niet gehaald worden, dan is er iets in de envelope verslechterd.
+// Fase: 25 ms sinds 23 september 2026. De tijdcorrectie is toen geijkt op een
+// reeks klanken in plaats van op precies deze tik; zachte aanzetten landden
+// eerder 10-33 ms te laat, nu ligt de reeks rond nul. Deze klik (4 ms
+// uitsterven) is de scherpste klank die er is en valt aan de vroege rand
+// (~-20 ms). De fijne fase op de audio haalt hem wel binnen 7 ms (zie onder).
 ok(`tempo binnen 0,1 bpm (slechtste ${ergsteBpm.toFixed(3)})`, ergsteBpm < 0.1);
-ok(`fase binnen 15 ms (slechtste ${ergsteFase.toFixed(1)} ms)`, ergsteFase < 15);
+ok(`fase binnen 25 ms (slechtste ${ergsteFase.toFixed(1)} ms)`, ergsteFase < 25);
 
 // ---- octaaffout ------------------------------------------------------------
 // 174 bpm mag geen 87 worden: dat is de klassieke misser bij snelle muziek.
@@ -160,13 +165,264 @@ ok('en staat ver van een strak ritme af', ritme.zekerheid - opRuis.zekerheid > 0
   // Fase meten waar je tikte: de tel van het gevonden grid die daar het dichtst
   // bij ligt. Bij tracktijd 0 meten telt een fractie bpm 240 s lang op.
   const telBij = (r, P) => { const p = 60 / r.bpm; return r.firstBeat + Math.round((P - r.firstBeat) / p) * p; };
-  ok(`fase op 60 s klopt (${fasefout(telBij(vroeg, 60), 0, 120).toFixed(1)} ms)`, fasefout(telBij(vroeg, 60), 0, 120) < 15);
-  ok(`fase op 240 s klopt (${fasefout(telBij(laat, 240), 150.2, 126).toFixed(1)} ms)`, fasefout(telBij(laat, 240), 150.2, 126) < 15);
+  // 25 ms: zie de fase-tolerantie hierboven (ijking op een reeks klanken).
+  ok(`fase op 60 s klopt (${fasefout(telBij(vroeg, 60), 0, 120).toFixed(1)} ms)`, fasefout(telBij(vroeg, 60), 0, 120) < 25);
+  ok(`fase op 240 s klopt (${fasefout(telBij(laat, 240), 150.2, 126).toFixed(1)} ms)`, fasefout(telBij(laat, 240), 150.2, 126) < 25);
   const heel = d.verfijnTempoFase(n, envRate, 123, tijdOffset);
   const zonder = d.verfijnTempoFase(n, envRate, 123, tijdOffset, { rond: null });
   ok('zonder positie: de hele track, als vroeger', heel.bpm === zonder.bpm && heel.firstBeat === zonder.firstBeat);
   const eind = d.verfijnTempoFase(n, envRate, 123, tijdOffset, { rond: 299 });
   ok(`tap vlak voor het einde: venster schuift terug (${eind.bpm.toFixed(2)})`, Math.abs(eind.bpm - 126) < 0.1);
+}
+
+// ---- STAP A (23 september 2026): tap, puls, 3:2, stukken, ijking ----------
+// Alles op synthetisch materiaal waarvan het antwoord vastligt. Deterministisch
+// (vaste zaden), zodat een rode test een echte verandering is en geen toeval.
+
+function prng(seed) {
+  let s = seed >>> 0;
+  return () => ((s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 2147483648 - 1);
+}
+/** Klanken op tijden [t, sterkte, soort]; soort 'kick' (laag) of 'hat' (ruisslag). */
+function spoorVan(duur, events, { vloer = 0.01, seed = 5 } = {}) {
+  const rnd = prng(seed);
+  const x = new Float32Array(Math.round(SR * duur));
+  for (let i = 0; i < x.length; i++) x[i] = vloer * rnd();
+  for (const [t, a, soort] of events) {
+    const s0 = Math.round(t * SR);
+    const lang = soort === 'hat' ? 600 : 2500;
+    for (let i = 0; i < lang && s0 + i < x.length; i++) {
+      x[s0 + i] += soort === 'hat'
+        ? a * rnd() * Math.exp(-i / 150)
+        : a * Math.exp(-i / 600) * Math.sin(2 * Math.PI * (55 * i / SR + 1.8 * (1 - Math.exp(-i / 330))));
+    }
+  }
+  return x;
+}
+const envVan = (x) => { const { env, envRate, tijdOffset } = d.onsetEnvelope(x, SR); return { env: d.normaliseerEnvelope(env, envRate), envRate, tijdOffset }; };
+/** Tikken rond `P` op een grid (bpm, eerste tel), met vaste menselijke fouten. */
+function tikken(bpm, eerste, P, n, { jitter = 0.02, tempo = 0, seed = 9 } = {}) {
+  const rnd = prng(seed), p = 60 / bpm;
+  const k0 = Math.round((P - eerste) / p) - n + 1;
+  // Het tempo-foutje loopt op vanaf de eerste tik, zoals bij iemand die iets te snel meetikt.
+  return Array.from({ length: n }, (_, i) => eerste + k0 * p + i * p * (1 + tempo) - 0.015 + jitter * rnd());
+}
+
+console.log('\nrechte lijn door de tikken');
+{
+  const t = [10, 10.5, 11, 11.5, 12, 12.5];
+  const f = d.fitTaps(t);
+  ok(`schone tikken: 120 bpm (${f?.bpm.toFixed(3)}), anker op een tik`, Math.abs(f.bpm - 120) < 1e-9 && t.some((x) => Math.abs(x - f.anker) < 1e-9));
+  const gemist = d.fitTaps([10, 10.5, 11.5, 12, 12.5], 118);
+  ok(`een gemiste tik telt als overgeslagen tel (${gemist?.bpm.toFixed(2)})`, Math.abs(gemist.bpm - 120) < 1e-9);
+  const dubbel = d.fitTaps([10, 10.5, 10.52, 11, 11.5], 120);
+  ok('een dubbele tik valt weg', dubbel.n === 4 && Math.abs(dubbel.bpm - 120) < 0.5);
+  const slordig = d.fitTaps(tikken(120, 0, 30, 4, { jitter: 0.04 }));
+  const netjes = d.fitTaps(tikken(120, 0, 30, 8, { jitter: 0.005 }));
+  ok(`onzekerheid schaalt mee: 4 slordige ${(slordig.seRel * 100).toFixed(2)}% > 8 nette ${(netjes.seRel * 100).toFixed(2)}%`, slordig.seRel > 2 * netjes.seRel);
+  ok('minder dan twee tikken: geen lijn', d.fitTaps([3]) === null && d.fitTaps(null) === null);
+}
+
+console.log('\nverfijnen houdt de fase van de tap vast');
+{
+  // House-achtig: kick op de tel, een HARDERE hihat op de offbeat. De envelope
+  // klapt het hardst op de offbeat; wie op de kick tikt, wil de kick.
+  const bpm = 124, eerste = 0.25, p = 60 / bpm, ev = [];
+  for (let t = eerste; t < 60; t += p) { ev.push([t, 0.5, 'kick'], [t + p / 2, 0.9, 'hat']); }
+  const m = envVan(spoorVan(60, ev));
+  const taps = tikken(bpm, eerste, 30, 4, { jitter: 0.03, tempo: 0.008 });
+  const vrij = d.verfijnTempoFase(m.env, m.envRate, d.fitTaps(taps).bpm, m.tijdOffset, { rond: 30 });
+  ok(`zonder voorwaarde kiest de envelope de offbeat (${fasefout(vrij.firstBeat, eerste, bpm).toFixed(0)} ms naast de kick)`,
+    fasefout(vrij.firstBeat, eerste, bpm) > 0.4 * p * 1000);
+  const r = d.verfijnTap(m.env, m.envRate, m.tijdOffset, { bpm: 120, positie: 30, taps });
+  ok(`met de tikken als voorwaarde: de kick (${fasefout(r.firstBeat, eerste, bpm).toFixed(1)} ms), ${r.bpm.toFixed(3)} bpm`,
+    r.zeker && fasefout(r.firstBeat, eerste, bpm) < 25 && Math.abs(r.bpm - bpm) < 0.1);
+  ok('en het anker ligt bij de tikken', Math.abs(r.anker - 30) < 3 * p);
+  const alleenAnker = d.verfijnTap(m.env, m.envRate, m.tijdOffset, { bpm: 124.5, positie: 30, anker: taps[1] });
+  ok(`alleen een getikte tel (anker) volstaat ook (${fasefout(alleenAnker.firstBeat, eerste, bpm).toFixed(1)} ms)`,
+    fasefout(alleenAnker.firstBeat, eerste, bpm) < 25);
+  // Vier slordige tikken: marge breder dan acht nette, en toch het goede tempo.
+  const r4 = d.verfijnTap(m.env, m.envRate, m.tijdOffset, { bpm: 120, positie: 30, taps: tikken(bpm, eerste, 30, 4, { jitter: 0.04, tempo: -0.012, seed: 3 }) });
+  const r8 = d.verfijnTap(m.env, m.envRate, m.tijdOffset, { bpm: 120, positie: 30, taps: tikken(bpm, eerste, 30, 8, { jitter: 0.005, seed: 3 }) });
+  ok(`marge schaalt mee: 4 slordig ${(r4.marge * 100).toFixed(1)}%, 8 netjes ${(r8.marge * 100).toFixed(1)}%`, r4.marge > r8.marge && r8.marge < 0.035);
+  ok(`beide vinden ${bpm} (${r4.bpm.toFixed(2)} / ${r8.bpm.toFixed(2)})`, Math.abs(r4.bpm - bpm) < 0.1 && Math.abs(r8.bpm - bpm) < 0.1);
+}
+
+console.log('\ngeen puls: zeggen, niet gokken');
+{
+  const rnd = prng(21);
+  // Ruis met klappen op willekeurige momenten.
+  const ev = []; for (let k = 0; k < 120; k++) ev.push([1 + 58 * (rnd() * 0.5 + 0.5), 0.3 + 0.3 * (rnd() * 0.5 + 0.5), rnd() > 0 ? 'hat' : 'kick']);
+  const ruis = spoorVan(60, ev, { vloer: 0.1, seed: 22 });
+  // Ambient-achtig: aanzwellende akkoorden op willekeurige momenten, geen tel.
+  const amb = new Float32Array(SR * 60);
+  const r2 = prng(23);
+  for (let i = 0; i < amb.length; i++) amb[i] = 0.01 * r2();
+  for (let k = 0; k < 25; k++) {
+    const s0 = Math.round((r2() * 0.5 + 0.5) * 55 * SR), f = 110 * 2 ** Math.floor((r2() * 0.5 + 0.5) * 24 / 12);
+    for (let i = 0; i < 4 * SR && s0 + i < amb.length; i++) {
+      const omh = Math.min(1, i / (1.2 * SR)) * Math.exp(-i / (2 * SR));
+      amb[s0 + i] += 0.2 * omh * (Math.sin(2 * Math.PI * f * i / SR) + 0.5 * Math.sin(2 * Math.PI * 1.5 * f * i / SR));
+    }
+  }
+  for (const [naam, x] of [['ruis met losse klappen', ruis], ['ambient zonder tel', amb]]) {
+    const m = envVan(x);
+    const taps = tikken(120, 0.1, 30, 8);
+    const r = d.verfijnTap(m.env, m.envRate, m.tijdOffset, { bpm: 120, positie: 30, taps });
+    const fit = d.fitTaps(taps);
+    ok(`${naam}: zeker=false, "${r.reden}" (puls ${r.puls.toFixed(2)})`, r.zeker === false && r.reden === 'geen puls');
+    ok('  en de tap zelf komt terug', Math.abs(r.bpm - fit.bpm) < 1e-9 && Math.abs(r.anker - fit.anker) < 1e-9
+      && Math.abs(r.firstBeat - (((fit.anker % (60 / fit.bpm)) + 60 / fit.bpm) % (60 / fit.bpm))) < 1e-9);
+  }
+  const klik = envVan(klikspoor(60, 120, 0.1));
+  const rk = d.verfijnTap(klik.env, klik.envRate, klik.tijdOffset, { bpm: 121, positie: 30, taps: tikken(120, 0.1, 30, 4) });
+  ok(`een klikspoor heeft wel een puls (${rk.puls.toFixed(2)})`, rk.zeker === true);
+  const zacht = [];
+  for (let t = 0.3; t < 60; t += 60 / 96) zacht.push([t, 0.15, 'kick']);
+  const rz = envVan(spoorVan(60, zacht, { vloer: 0.03, seed: 8 }));
+  const rzr = d.verfijnTap(rz.env, rz.envRate, rz.tijdOffset, { bpm: 97, positie: 30, taps: tikken(96, 0.3, 30, 4) });
+  ok(`een zachte kick in ruis ook (${rzr.puls.toFixed(2)}, ${rzr.bpm.toFixed(2)} bpm)`, rzr.zeker === true && Math.abs(rzr.bpm - 96) < 0.1);
+}
+
+console.log('\noctaafkeuze 3:2');
+{
+  // Tresillo op 153 (3+3+2 achtsten in een lage toon) met een zachte hoge tik op
+  // elke tel: de autocorrelatie ziet de anderhalve tel (102); de maat zegt 153.
+  // Toonstootjes [tel in de maat, sterkte, frequentie], vier tellen per maat.
+  const maat = (bpm, patroon, duur = 24) => {
+    const rnd = prng(5), p = 60 / bpm;
+    const x = new Float32Array(SR * duur);
+    for (let i = 0; i < x.length; i++) x[i] = 0.01 * rnd();
+    for (let m = 0; m * 4 * p < duur; m++) for (const [tel, a, f] of patroon) {
+      const s0 = Math.round((m * 4 + tel) * p * SR);
+      for (let i = 0; i < 300 && s0 + i < x.length; i++) x[s0 + i] += a * Math.exp(-i / 50) * Math.sin(2 * Math.PI * f * i / SR);
+    }
+    return envVan(x);
+  };
+  const tellen = (a) => [0, 1, 2, 3].map((t) => [t, a, 3000]);
+  const tres = maat(153, [[0, 1, 80], [1.5, 1, 80], [3, 1, 80], ...tellen(0.25)]);
+  const rt = d.tempoUitEnvelope(tres.env, tres.envRate);
+  ok(`tresillo op 153 wordt 153, niet 102 (${rt.bpm.toFixed(1)})`, Math.abs(rt.bpm - 153) < 2);
+  const rock = maat(102, [[0, 1, 80], [2, 1, 80], [1, 0.8, 300], [3, 0.8, 300], ...[0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5].map((t) => [t, 0.3, 3000])]);
+  const rr = d.tempoUitEnvelope(rock.env, rock.envRate);
+  ok(`recht op 102 blijft 102 (${rr.bpm.toFixed(1)})`, Math.abs(rr.bpm - 102) < 2);
+  const triool = maat(102, [[0, 1, 80], [2, 1, 80], [1, 0.8, 300], [3, 0.8, 300], ...[0, 1, 2, 3].flatMap((t) => [[t, 0.3, 3000], [t + 1 / 3, 0.3, 3000], [t + 2 / 3, 0.3, 3000]])]);
+  const rtr = d.tempoUitEnvelope(triool.env, triool.envRate);
+  ok(`triolen op 102 blijven 102 (${rtr.bpm.toFixed(1)})`, Math.abs(rtr.bpm - 102) < 2);
+  // Dezelfde triolen met kick en hihat (ander klankmateriaal): ook 102.
+  const tk = [], p102 = 60 / 102;
+  for (let m = 0; m * 4 * p102 < 24; m++) for (const [tel, a, soort] of [[0, 1, 'kick'], [2, 1, 'kick'], [1, 0.8, 'hat'], [3, 0.8, 'hat'],
+    ...[0, 1, 2, 3].flatMap((t) => [[t + 1 / 3, 0.3, 'hat'], [t + 2 / 3, 0.3, 'hat']])]) tk.push([(m * 4 + tel) * p102 + 0.05, a, soort]);
+  const tkm = envVan(spoorVan(24, tk.filter(([t]) => t < 23.7)));
+  const rtk = d.tempoUitEnvelope(tkm.env, tkm.envRate);
+  ok(`en met kick en hihat (${rtk.bpm.toFixed(1)})`, Math.abs(rtk.bpm - 102) < 2);
+  ok('klikspoor 174 en 85 blijven zoals ze waren', Math.abs(meet(klikspoor(20, 174)).bpm - 174) < 1 && Math.abs(meet(klikspoor(20, 85)).bpm - 85) < 1);
+  // Tik je 153 op wat de detectie 102 noemt: de tap beslist het octaaf.
+  const rv = d.verfijnTap(tres.env, tres.envRate, tres.tijdOffset, { bpm: 150, positie: 12, taps: tikken(153, 0, 12, 6) });
+  ok(`tap op 153 over de tresillo: ${rv.bpm.toFixed(2)} bpm, zeker`, rv.zeker && Math.abs(rv.bpm - 153) < 0.2);
+}
+
+console.log('\nsegmenteren: gaten, korte stukken, midden van het venster');
+{
+  const v = (tijd, bpm, zekerheid = 0.9) => ({ tijd, bpm, zekerheid });
+  const curve = [];
+  for (let t = 6; t <= 40; t += 4) curve.push(v(t, 120));
+  for (let t = 44; t <= 80; t += 4) curve.push(v(t, 90, 0.05));      // pulsloos
+  for (let t = 84; t <= 130; t += 4) curve.push(v(t, 120.5));
+  const seg = d.segmenteer(curve, { minSec: 15 });
+  ok(`een gat knipt, ook bij hetzelfde tempo (${seg.length} stukken)`, seg.length === 2 && seg[0].tot <= 44 && seg[1].van >= 80);
+  const kort = [v(6, 140), v(10, 140), ...Array.from({ length: 15 }, (_, i) => v(14 + 4 * i, 120))];
+  const sk = d.segmenteer(kort, { minSec: 20 });
+  ok(`een te kort EERSTE stuk wordt opgeslokt (${sk.length} stuk, ${sk[0]?.bpm} bpm vanaf ${sk[0]?.van})`, sk.length === 1 && sk[0].bpm === 120 && sk[0].van <= 6);
+  const eiland = [...Array.from({ length: 10 }, (_, i) => v(6 + 4 * i, 120)), v(80, 150), ...Array.from({ length: 10 }, (_, i) => v(120 + 4 * i, 120))];
+  ok('een los kort stuk tussen twee gaten vervalt', d.segmenteer(eiland, { minSec: 20 }).length === 2);
+  // Tijd = midden van het venster: de grens ligt nu bij de overgang, niet 6 s ervoor.
+  const stukken = [[120, 40], [128, 40], [95, 40]];
+  const x = new Float32Array(Math.round(SR * 120));
+  let t0 = 0;
+  for (const [bpm, duur] of stukken) { const deel = klikspoor(duur, bpm); x.set(deel.subarray(0, Math.min(deel.length, x.length - Math.round(t0 * SR))), Math.round(t0 * SR)); t0 += duur; }
+  const m = envVan(x);
+  const s3 = d.segmenteer(d.tempoCurve(m.env, m.envRate, { tijdOffset: m.tijdOffset }), { tolerantie: 0.04, minSec: 15 });
+  // Met het BEGIN van het venster als tijd lagen ze op 36,1 en 76,2.
+  ok(`grenzen binnen 2,5 s van de overgang (${s3.map((s) => s.van.toFixed(1)).join(', ')})`,
+    s3.length === 3 && Math.abs(s3[1].van - 40) < 2.5 && Math.abs(s3[2].van - 80) < 2.5);
+}
+
+console.log('\nfase-stabiliteit en analyseerGrid');
+{
+  const klik = envVan(klikspoor(40, 120, 0.1));
+  const rnd = prng(31);
+  const ruis = new Float32Array(SR * 40); for (let i = 0; i < ruis.length; i++) ruis[i] = 0.3 * rnd();
+  const rm = envVan(ruis);
+  const stKlik = d.faseStabiliteit(klik.env, klik.envRate, klik.tijdOffset, 120, 5, 35);
+  const stRuis = d.faseStabiliteit(rm.env, rm.envRate, rm.tijdOffset, 120, 5, 35);
+  ok(`fase-stabiliteit: klikspoor ${stKlik.toFixed(2)}, ruis ${stRuis.toFixed(2)}`, stKlik > 0.9 && stRuis < 0.6);
+  ok('een fractie naast in tempo blijft stabiel (drift is geen ruis)', d.faseStabiliteit(klik.env, klik.envRate, klik.tijdOffset, 121, 5, 35) > 0.9);
+
+  // 60 s op 120 (eerste tel 0,10), 40 s zonder puls, 60 s op 128 met een andere fase.
+  const x = new Float32Array(SR * 160);
+  const r = prng(41);
+  for (let i = 0; i < x.length; i++) x[i] = 0.01 * r();
+  const ev = [];
+  for (let t = 0.10; t < 60; t += 0.5) ev.push([t, 0.5, 'kick']);
+  for (let t = 100.33; t < 160; t += 60 / 128) ev.push([t, 0.5, 'kick']);
+  for (let k = 0; k < 60; k++) ev.push([60 + 40 * (r() * 0.5 + 0.5), 0.4, 'hat']);
+  const bron = spoorVan(160, ev, { vloer: 0.01, seed: 42 });
+  for (let i = 60 * SR; i < 100 * SR; i++) bron[i] += 0.1 * r();
+  const m = envVan(bron);
+  const st = d.analyseerGrid(m.env, m.envRate, m.tijdOffset);
+  ok(`drie stukken (${st.map((s) => `${s.van.toFixed(0)}-${s.tot.toFixed(0)} ${s.bpm?.toFixed(1)} z${s.zekerheid.toFixed(2)}`).join(' | ')})`, st.length === 3);
+  ok('aaneengesloten van 0 tot het einde', st[0].van === 0 && Math.abs(st.at(-1).tot - 160) < 0.5 && st.every((s, i) => i === 0 || s.van === st[i - 1].tot));
+  ok('tempo per stuk klopt', Math.abs(st[0].bpm - 120) < 0.1 && Math.abs(st[2].bpm - 128) < 0.1);
+  ok(`de fase per stuk klopt (${fasefout(st[0].anker, 0.1, 120).toFixed(1)} / ${fasefout(st[2].anker, 100.33, 128).toFixed(1)} ms)`,
+    fasefout(st[0].anker, 0.1, 120) < 25 && fasefout(st[2].anker, 100.33, 128) < 25);
+  ok('het anker is de eerste tel IN het stuk', st.every((s) => s.anker >= s.van - 1e-9 && s.anker < s.van + 60 / s.bpm));
+  ok('het stuk zonder puls is onzeker, de andere zeker', st[1].zekerheid < 0.2 && st[0].zekerheid > 0.6 && st[2].zekerheid > 0.6);
+  const metAudio = d.analyseerGrid(m.env, m.envRate, m.tijdOffset, { pcm: bron, sampleRate: SR });
+  ok(`met de audio erbij: fase op de voorflank (${fasefout(metAudio[0].anker, 0.1, 120).toFixed(1)} / ${fasefout(metAudio[2].anker, 100.33, 128).toFixed(1)} ms)`,
+    fasefout(metAudio[0].anker, 0.1, 120) < 8 && fasefout(metAudio[2].anker, 100.33, 128) < 8);
+  const leeg = d.analyseerGrid(rm.env, rm.envRate, rm.tijdOffset);
+  ok('alleen ruis: één stuk, onzeker', leeg.length === 1 && leeg[0].zekerheid < 0.2);
+}
+
+console.log('\nfase-ijking: niet op één tik, maar op een reeks klanken');
+{
+  ok('de vastgelegde vertraging is wat de meting nu geeft',
+    Math.abs(d.onsetVertraging(SR) - d.onsetVertraging(SR, 1024, 128, { meet: true })) < 0.001);
+  ok('en die van de voorflank ook', Math.abs(d.flankVertraging(SR) - d.flankVertraging(SR, { meet: true })) < 0.001);
+  // Controle op klanken BUITEN de ijkreeks: ander tempo, andere zaden, andere aanzetten en ruisvloeren.
+  const grof = [], fijn = [];
+  // Aanzet 5 ms zit niet in de ijkreeks, 30 ms is het uiterste. (Met 0, 5, 15
+  // en 30 ms en 40 s per spoor gemeten: grof -17,8…+18,7, fijn -4,9…+6,0 ms.)
+  for (const vloer of [0.005, 0.02, 0.08]) for (const klank of ['tik', 'kick', 'ruis', 'hihat', 'akkoord']) for (const aanzet of [5, 30]) {
+    const BPM = 118, T0 = 0.41;
+    const x = d.ijkSpoor(SR, klank, aanzet, vloer, { duur: 20, bpm: BPM, T0, seed: 11 });
+    const m = envVan(x);
+    const r = d.verfijnTempoFase(m.env, m.envRate, BPM, m.tijdOffset, { marge: 0.01, rond: 10, straal: 8 });
+    // Meten OP een echte tel (niet op een rond getal: dat kan een halve tel
+    // naast het grid liggen, en dan rondt 10 ms fout af naar de verkeerde tel).
+    const echt = T0 + 19 * (60 / BPM);
+    const p = 60 / r.bpm, tel = r.firstBeat + Math.round((echt - r.firstBeat) / p) * p;
+    grof.push((tel - echt) * 1000);
+    const f = d.fijneFase(x.subarray(3 * SR, 17 * SR), SR, r.bpm, tel, { t0: 3 });
+    if (f !== null) fijn.push({ ms: (f - echt) * 1000, vloer });
+  }
+  const bereik = (a) => `${Math.min(...a).toFixed(1)}…${Math.max(...a).toFixed(1)} ms`;
+  // Gemeten: -17,8…+18,7 ms; met de oude ijking (één tik) +2,5…+39,0. Het
+  // venster van 93 ms laat niet minder spreiding toe; daarom de fijne fase.
+  ok(`grove fase (envelope) binnen ±20 ms: ${bereik(grof)} (oude ijking: +2,5…+39,0)`, grof.every((x) => Math.abs(x) < 20));
+  const gewoon = fijn.filter((f) => f.vloer <= 0.02).map((f) => f.ms), alles = fijn.map((f) => f.ms);
+  ok(`fijne fase (voorflank op de audio) binnen ±5 ms tot ruisvloer 0,02: ${bereik(gewoon)}`, gewoon.every((x) => Math.abs(x) <= 5));
+  // Ruisvloer 0,08 (-22 dB) met een ruisslag van 30 ms aanzet is het uiterste: 6,0 ms.
+  ok(`en binnen ±6,5 ms met een ruisvloer van 0,08 erbij: ${bereik(alles)}, ${alles.length}/${grof.length} gemeten`,
+    alles.every((x) => Math.abs(x) <= 6.5) && alles.length >= grof.length - 2);
+  const k = klikspoor(30, 120, 0.1);
+  const km = envVan(k);
+  const kr = d.verfijnTempoFase(km.env, km.envRate, 120, km.tijdOffset, { marge: 0.01 });
+  const kt = kr.firstBeat + Math.round((15 - kr.firstBeat) / 0.5) * 0.5;
+  const kf = d.fijneFase(k.subarray(3 * SR, 27 * SR), SR, kr.bpm, kt, { t0: 3 });
+  // Een klik van 4 ms uitsterven is scherper dan alles in de ijkreeks: gemeten 6,0 ms.
+  ok(`klikspoor: fijne fase ${fasefout(kf, 0.1, 120).toFixed(1)} ms`, fasefout(kf, 0.1, 120) <= 7);
 }
 
 // ---- randgevallen ----------------------------------------------------------

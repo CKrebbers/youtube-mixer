@@ -5,7 +5,7 @@ import { join, extname, resolve, relative, isAbsolute, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { ingest, controleerTooling, YTDLP_GETEST_OP } from './ingest.js';
-import { Library } from './library.js';
+import { Library, normaliseerGrid } from './library.js';
 import { maakOnset, verfijnUitBestand } from './analyze.js';
 import * as opname from './opname.js';
 
@@ -299,11 +299,21 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // Het grid van een nummer: een tempokaart { stukken: [{ van, bpm, anker }] }.
+    // POST neemt ook het oude { bpm, firstBeat } aan (= één stuk).
     const mGrid = /^\/api\/library\/([\w-]+)\/grid$/.exec(pad);
+    if (mGrid && req.method === 'GET') {
+      const t = lib.track(mGrid[1]);
+      return t ? json(res, 200, { grid: t.grid }) : json(res, 404, { fout: 'onbekend nummer' });
+    }
     if (mGrid && req.method === 'POST') {
       const body = await leesJson(req);
       if (!lib.track(mGrid[1])) return json(res, 404, { fout: 'onbekend nummer' });
-      return json(res, 200, { grid: lib.bewaarGrid(mGrid[1], body?.grid ?? null) });
+      const grid = body?.grid ?? null;
+      if (grid !== null && !normaliseerGrid(grid)) {
+        return json(res, 400, { fout: 'ongeldig grid: stukken met van, bpm (40-300) en anker, of { bpm, firstBeat }' });
+      }
+      return json(res, 200, { grid: lib.bewaarGrid(mGrid[1], grid) });
     }
 
     /*
@@ -311,9 +321,11 @@ const server = createServer(async (req, res) => {
      *
      * Jij tikt een paar tellen mee; dat geeft het OCTAAF en de grove fase, en
      * juist dat is wat een machine op ambient niet betrouwbaar vindt. De server
-     * pakt de bewaarde onset-envelope erbij en verfijnt jouw schatting binnen
-     * een paar procent marge tot op honderdsten van een bpm en ~10 ms fase.
-     * Samen zijn ze beter dan allebei apart.
+     * legt een rechte lijn door je tikken, pakt de bewaarde onset-envelope
+     * erbij en verfijnt binnen een marge die meeschaalt met hoe netjes je
+     * tikte — de fase alleen binnen een kwart tel van jouw tap, dus nooit op
+     * de offbeat. Daarna de voorflank op de audio zelf (±5 ms). Is er rond de
+     * tap geen puls, dan zegt hij dat en blijft jouw tap staan.
      */
     const mVerfijn = /^\/api\/library\/([\w-]+)\/grid\/verfijn$/.exec(pad);
     if (mVerfijn && req.method === 'POST') {
@@ -336,23 +348,47 @@ const server = createServer(async (req, res) => {
 
       // Waar je tikte (tracktijd, seconden). Dan telt alleen ±45 s daaromheen:
       // op een album met tempowissels wint anders het tempo van een ander stuk.
-      // Zonder positie: de hele track.
-      const positie = body?.positie == null ? null : Number(body.positie);
-      if (positie !== null && !(Number.isFinite(positie) && positie >= 0)) {
-        return json(res, 400, { fout: 'positie moet een tijd in seconden zijn' });
+      // Zonder positie: rond de tikken, of anders de hele track.
+      const tijd = (x) => x == null ? null : Number(x);
+      const geldigeTijd = (x) => x === null || (Number.isFinite(x) && x >= 0);
+      const positie = tijd(body?.positie);
+      if (!geldigeTijd(positie)) return json(res, 400, { fout: 'positie moet een tijd in seconden zijn' });
+      // De fase van de tap: één getikte tel (anker) en/of de tikken zelf.
+      const anker = tijd(body?.anker);
+      if (!geldigeTijd(anker)) return json(res, 400, { fout: 'anker moet een tijd in seconden zijn' });
+      let taps = null;
+      if (body?.taps != null) {
+        if (!Array.isArray(body.taps) || body.taps.length > 64) return json(res, 400, { fout: 'taps moet een lijst van hooguit 64 tijden zijn' });
+        taps = body.taps.map(Number);
+        if (!taps.every((t) => Number.isFinite(t) && t >= 0)) return json(res, 400, { fout: 'taps moeten tijden in seconden zijn' });
       }
-      const marge = Number(body?.marge) || 0.03;
+      // Marge: meegegeven, of anders beslist de verfijning (met tikken: naar
+      // hoe netjes je tikte; zonder: 3%).
+      const marge = body?.marge == null ? null : Number(body.marge);
+      if (marge !== null && !(marge > 0 && marge <= 0.2)) return json(res, 400, { fout: 'marge moet tussen 0 en 0,2 liggen' });
       // In een worker: 3 uur envelope scoren kostte 7,9 s op de hoofdthread.
       const r = await verfijnUitBestand(opSchijf(onset.bestand), onset.envRate, bpm, onset.tijdOffset,
-        { marge, rond: positie });
+        { marge, rond: positie, anker, taps, audio: opSchijf(track.audio) });
       if (!r.ok) return json(res, 500, { fout: r.fout });
+      /*
+       * zeker: false = geen puls rond de tap (de score komt niet boven wat
+       * dezelfde zoektocht op door elkaar geschudde envelope haalt). Dan is
+       * bpm/firstBeat de tap zelf, en laat de browser zijn tap staan.
+       */
       return json(res, 200, {
         getikt: bpm,
         bpm: r.bpm,
         firstBeat: r.firstBeat,
+        anker: r.anker,
+        zeker: r.zeker,
+        ...(r.reden ? { reden: r.reden } : {}),
+        score: r.score,
+        puls: r.puls,
         verschuiving: r.bpm - bpm,
-        marge,
-        positie,
+        marge: r.marge,
+        tikken: r.tikken,
+        fijn: r.fijn,
+        positie: r.positie ?? positie,
       });
     }
 

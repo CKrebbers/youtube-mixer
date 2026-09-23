@@ -36,6 +36,10 @@ function klikWav(delen) {
     }
     t0 += dd;
   }
+  return wavVan(x);
+}
+/** Mono 16-bit WAV op SR. */
+function wavVan(x) {
   const kop = Buffer.alloc(44);
   kop.write('RIFF', 0); kop.writeUInt32LE(36 + x.byteLength, 4); kop.write('WAVE', 8);
   kop.write('fmt ', 12); kop.writeUInt32LE(16, 16); kop.writeUInt16LE(1, 20); kop.writeUInt16LE(1, 22);
@@ -45,9 +49,25 @@ function klikWav(delen) {
 }
 mkdirSync(join(media, 'nummerZ'), { recursive: true });
 writeFileSync(join(media, 'nummerZ', 'audio.wav'), klikWav([{ duur: 360, bpm: 120 }, { duur: 360, bpm: 126 }]));
+/*
+ * En een nummer ZONDER puls: ruis met klappen op willekeurige momenten (vast
+ * zaad). Hierop moet de verfijning zeggen dat er niets te verfijnen valt.
+ */
+{
+  const x = new Int16Array(SR * 90);
+  let z = 77;
+  const rnd = () => ((z = (Math.imul(z, 1103515245) + 12345) >>> 0) / 2147483648 - 1);
+  for (let i = 0; i < x.length; i++) x[i] = Math.round(3000 * rnd());
+  for (let k = 0; k < 150; k++) {
+    const s0 = Math.floor((rnd() * 0.5 + 0.5) * (x.length - 1000));
+    for (let i = 0; i < 600; i++) x[s0 + i] = Math.max(-32767, Math.min(32767, x[s0 + i] + Math.round(12000 * rnd() * Math.exp(-i / 150))));
+  }
+  mkdirSync(join(media, 'nummerR'), { recursive: true });
+  writeFileSync(join(media, 'nummerR', 'audio.wav'), wavVan(x));
+}
 // Twee nummers in de testdatabase, om racks tussen nummers te kunnen proberen.
 const lib = new Library(db);
-for (const id of ['nummerX', 'nummerY', 'nummerZ']) {
+for (const id of ['nummerX', 'nummerY', 'nummerZ', 'nummerR']) {
   lib.bewaarTrack({ id, url: `https://example.com/${id}`, titel: id, uploader: 't', duur: 10,
     audio: `media/${id}/audio.wav`, video: null, thumbnail: null, loudness: {}, doelLoudness: -14, ytdlp: 'x' });
 }
@@ -158,6 +178,28 @@ try {
   ok('standaard herstellen: weer geen eigen mapping', (await (await fetch(`${B}/api/mapping`)).json()).mapping === null);
   ok('zonder rules geweigerd', (await status('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mapping: {} }) })) === 400);
 
+  console.log('\ngrid-route (tempokaart)');
+  const postGrid = (id, body) => fetch(`${B}/api/library/${id}/grid`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const leeg = await (await fetch(`${B}/api/library/nummerX/grid`)).json();
+  ok('GET grid van een nummer zonder grid: null', leeg.grid === null);
+  const oud = await (await postGrid('nummerX', { grid: { bpm: 124, firstBeat: 0.3 } })).json();
+  ok('POST oud formaat wordt één stuk', oud.grid?.stukken?.length === 1 && oud.grid.stukken[0].bpm === 124 && oud.grid.stukken[0].anker === 0.3);
+  const kaart = { stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 60, bpm: 126, anker: 60.2 }], beatsPerBar: 4, slot: true };
+  const nieuw = await (await postGrid('nummerX', { grid: kaart })).json();
+  ok('POST nieuw formaat: stukken en slot', nieuw.grid?.stukken?.length === 2 && nieuw.grid.stukken[1].anker === 60.2 && nieuw.grid.slot === true);
+  const terug = await (await fetch(`${B}/api/library/nummerX/grid`)).json();
+  ok('GET geeft de tempokaart terug', JSON.stringify(terug.grid) === JSON.stringify(nieuw.grid));
+  const inLijst = (await (await fetch(`${B}/api/library`)).json()).tracks.find((t) => t.id === 'nummerX');
+  ok('en de library-lijst draagt hem mee', inLijst.grid.stukken.length === 2);
+  const fout = await postGrid('nummerX', { grid: { stukken: [{ van: 0, bpm: 9000, anker: 0 }] } });
+  ok('onzin-grid: 400, en het bewaarde grid blijft', fout.status === 400
+    && (await (await fetch(`${B}/api/library/nummerX/grid`)).json()).grid.stukken.length === 2);
+  ok('grid van een onbekend nummer: 404', (await postGrid('bestaatNiet', { grid: null })).status === 404
+    && (await fetch(`${B}/api/library/bestaatNiet/grid`)).status === 404);
+  const weg = await (await postGrid('nummerX', { grid: null })).json();
+  ok('null wist het grid', weg.grid === null);
+
   console.log('\nopnames');
   const s = await (await fetch(`${B}/api/opname/start`, { method: 'POST' })).json();
   const stuk = new Uint8Array(48000 * 4);
@@ -205,6 +247,28 @@ try {
   const fase = (tel % 0.5 + 0.5) % 0.5;
   ok(`en de tel valt op het grid (${(Math.min(fase, 0.5 - fase) * 1000).toFixed(1)} ms naast)`, Math.min(fase, 0.5 - fase) < 0.015);
   ok('onset.bin is in de testmap gezet, niet in media/ van Clay', (await import('node:fs')).existsSync(join(media, 'nummerZ', 'onset.bin')));
+
+  console.log('\nverfijnen met de tikken (contract met de browser)');
+  const vraagVerfijn = (id, body) => fetch(`${B}/api/library/${id}/grid/verfijn`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  // Acht tikken op het 120-deel rond 200 s: iets te snel, iets vroeg, met spreiding.
+  const tikTijden = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => 196.5 + k * 0.5 * 1.006 - 0.015 + [0.012, -0.018, 0.02, -0.005, 0.009, -0.014, 0.003, 0.016][k]);
+  const mt = await (await vraagVerfijn('nummerZ', { bpm: 119, positie: 200, anker: tikTijden[3], taps: tikTijden })).json();
+  ok(`zeker, 120 bpm (${mt.bpm?.toFixed(3)}), ${mt.tikken} tikken gebruikt`, mt.zeker === true && Math.abs(mt.bpm - 120) < 0.05 && mt.tikken === 8);
+  const telMt = mt.firstBeat + Math.round((200 - mt.firstBeat) / (60 / mt.bpm)) * (60 / mt.bpm);
+  const faseMt = Math.abs(telMt - Math.round(telMt * 2) / 2) * 1000;
+  // De klik in dit spoor sterft in 4 ms uit: scherper dan de ijkreeks, gemeten ~6 ms.
+  ok(`fase op de voorflank van de audio: ${faseMt.toFixed(1)} ms naast (fijn ${mt.fijn == null ? '-' : (mt.fijn * 1000).toFixed(1) + ' ms'})`,
+    faseMt < 7 && mt.fijn != null);
+  ok('anker ligt bij de tikken, firstBeat is een tel van hetzelfde grid',
+    Math.abs(mt.anker - 198) < 1.5 && Math.abs(((mt.anker - mt.firstBeat) / (60 / mt.bpm)) - Math.round((mt.anker - mt.firstBeat) / (60 / mt.bpm))) < 1e-6);
+  const rTap = await (await vraagVerfijn('nummerR', { bpm: 121, positie: 45, taps: [40, 40.5, 41, 41.5, 42, 42.5] })).json();
+  ok(`zonder puls: zeker=false, "${rTap.reden}", de tap zelf terug (${rTap.bpm} bpm)`,
+    rTap.zeker === false && rTap.reden === 'geen puls' && Math.abs(rTap.bpm - 120) < 1e-6 && Math.abs(rTap.firstBeat % 0.5) < 1e-6);
+  ok('taps geen lijst: 400', (await vraagVerfijn('nummerZ', { bpm: 120, taps: 'x' })).status === 400);
+  ok('een negatieve tik: 400', (await vraagVerfijn('nummerZ', { bpm: 120, taps: [1, -2, 3] })).status === 400);
+  ok('anker geen tijd: 400', (await vraagVerfijn('nummerZ', { bpm: 120, anker: 'gisteren' })).status === 400);
+  ok('marge onzin: 400', (await vraagVerfijn('nummerZ', { bpm: 120, marge: 5 })).status === 400);
 } finally {
   server.kill();
   rmSync(map, { recursive: true, force: true });
