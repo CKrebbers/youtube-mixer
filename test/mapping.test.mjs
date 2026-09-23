@@ -431,5 +431,13 @@ console.log('\nmapjes en shift');
     && terug.rules.get('note:0:32#shift@grid.hotcues').action === 'track.1.hotcue.1.delete');
 }
 
+// ---- apc.html: elke knop een uitleg ---------------------------------------
+{
+  const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+  const kaal = doc.rules.filter((r) => { const b = beschrijf(r.action); return b.lang === r.action || !b.kort; }).map((r) => r.action);
+  if (kaal.length) console.log('   zonder uitleg:', [...new Set(kaal)]);
+  ok('APC-kaarten: elke action in de standaardmapping heeft een uitleg in gewone taal', kaal.length === 0);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

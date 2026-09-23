@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>APC-kaarten — VARVE DJ</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="apc-pagina">
+<header class="apc-kop">
+  <div class="brand">VARVE<span>DJ</span> <em>APC40 mkII — wat elke knop doet</em></div>
+  <a class="ghost" href="/">terug naar de mixer</a>
+</header>
+<main class="apc-main">
+  <section class="apc-intro">
+    <p><b>Zo werkt het.</b> Een deel van de knoppen doet altijd hetzelfde: de <b>vaste kern</b>. De rest werkt in
+      <b>mapjes</b>: dezelfde knoppen doen iets anders naargelang het mapje dat open staat. Er zijn drie groepen, elk met
+      één open mapje:</p>
+    <ul>
+      <li><b>Track knobs</b> (bovenste rij, één per track): kies met <b>Pan</b>, <b>Sends</b> (nog eens: galm) of <b>User</b>.</li>
+      <li><b>Device knobs</b> (rechts, altijd de track met focus — kies die met <b>Track Select</b>): kies met
+        <b>Clip/Device View</b>, <b>Detail View</b>, <b>Bank ◀</b> of <b>Bank ▶</b>.</li>
+      <li><b>Grid</b>: kies met <b>Shift + scene launch 1–4</b>, of blader met pijl <b>▲ ▼</b>.</li>
+    </ul>
+    <p><b>Kort drukken</b> op een kiesknop zet het mapje vast; het knopje brandt. <b>Vasthouden</b> is even gluren:
+      loslaten brengt je terug. Bij elke wissel verschijnt in de mixer bovenin kort wat de knoppen nu doen.
+      <b>Shift</b> geeft sommige knoppen een tweede functie (zie de kaart "Met shift").</p>
+    <p class="dim">De tekening is een schema: de plaats van de knoppen is bij benadering. Wat een knop doet, komt
+      rechtstreeks uit de mapping en klopt precies. <span id="bron"></span></p>
+    <nav id="inhoud" class="apc-inhoud"></nav>
+  </section>
+  <div id="kaarten"></div>
+</main>
+<script type="module" src="src/ui/apc-kaart.js"></script>
+</body>
+</html>

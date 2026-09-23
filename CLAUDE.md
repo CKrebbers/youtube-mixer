@@ -44,6 +44,7 @@ als een feature erom lijkt te vragen, is dat bijna altijd een ontwerpfout elders
 
 ```
 index.html          geen build-stap, plain ES-modules
+apc.html            de APC-kaarten: per mapje wat elke knop doet (src/ui/apc-kaart.js)
 styles.css
 src/
   engine/           audio-graph.js  kanaalstrip, EQ, bipolair filter, master, xfader
@@ -441,6 +442,11 @@ test/
   ringtype wisselt mee. `mapje-balk.js` toont bij elke wissel wat de knoppen
   doen. De standaardmapping (333 regels) is gegenereerd volgens de tabel in
   `docs/APC40.md`; aanpassen mag gewoon in de JSON of met koppelen.
+  `apc.html` tekent per mapje de APC met wat elke knop doet. Hij leest dezelfde
+  mapping (eigen versie van de server, anders de standaard) en vraagt aan
+  `Mapping.kies()` wat geldt, dus hij klopt vanzelf. Voeg je een action toe aan
+  de mapping, geef hem dan een uitleg in `apc-beschrijf.js`; de test eist dat.
+  De tekening is een schema, de plaats van knoppen bij benadering.
 - De LED-laag leest de MAPPING, niet de engine. Koppel je een pad aan iets
   anders, dan verhuist zijn lampje vanzelf mee. Er is bewust geen tweede tabel.
 - LED's lopen op een eigen `setInterval`, niet op de renderloop: `requestAnimationFrame`
