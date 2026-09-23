@@ -128,7 +128,11 @@ tracksEl.innerHTML = DECK_IDS.map((id) => {
       <div class="knob sm" data-action="track.${nr}.send.b" data-label="GALM" data-value="0" data-default="0" title="send naar de gedeelde galm"></div>
     </div>
     <div class="trk-knoppen">
-      <button data-kind="button" data-action="track.${nr}.xfade.kant" class="btn sm trk-kant" title="crossfader: A, B of thru">thru</button>
+      <div class="trk-kanten" title="crossfader: kant A, thru (altijd hoorbaar) of kant B">
+        <button data-kind="button" data-action="track.${nr}.xfade.a" class="btn sm trk-kant" data-kant="A">A</button>
+        <button data-kind="button" data-action="track.${nr}.xfade.thru" class="btn sm trk-kant" data-kant="thru">thru</button>
+        <button data-kind="button" data-action="track.${nr}.xfade.b" class="btn sm trk-kant" data-kant="B">B</button>
+      </div>
       <button class="btn sm trk-toon" data-toon="L" title="toon in het linkervenster">L</button>
       <button class="btn sm trk-toon" data-toon="R" title="toon in het rechtervenster">R</button>
     </div>
@@ -899,7 +903,7 @@ for (const v of VENSTERS) {
 const trkEls = perDeck((id) => {
   const r = tracksEl.querySelector(`.trk[data-deck="${id}"]`);
   return { root: r, titel: r.querySelector('.trk-titel'), meter: r.querySelector('.trk-meter i'),
-    kant: r.querySelector('.trk-kant'), toon: [...r.querySelectorAll('.trk-toon')] };
+    kanten: [...r.querySelectorAll('.trk-kant')], toon: [...r.querySelectorAll('.trk-toon')] };
 });
 const padEls = [...document.querySelectorAll('.pad')];
 const masterMeter = document.querySelector('.master-meter i');
@@ -974,8 +978,7 @@ function tekenFrame() {
       t.root.classList.toggle('leeg', !d.loaded);
       t.root.classList.toggle('focused', s.focus === id);
     t.root.classList.toggle('maat', s.maat === id);
-      if (t.kant.textContent !== d.kant) t.kant.textContent = d.kant;
-      t.kant.dataset.kant = d.kant;
+      t.kanten.forEach((b) => b.classList.toggle('on', b.dataset.kant === d.kant));
       t.toon.forEach((b) => b.classList.toggle('on', venster[b.dataset.toon] === id));
     }
   });

@@ -249,6 +249,12 @@ export function bindEngine(engine) {
       engine.setKant(id, XFADE_KANTEN[(i + 1) % XFADE_KANTEN.length]);
     }, { label: `Track ${nr} crossfader A/B/thru`,
          read: () => ({ A: 0, B: 1, thru: 0.5 })[engine.kant[id]] });
+    // En per kant een eigen knop: op het scherm één klik naar de juiste kant,
+    // zonder langs een kant te komen die de track stilzet.
+    for (const kant of XFADE_KANTEN) {
+      define(`${n}.xfade.${kant.toLowerCase()}`, 'trigger', (on) => { if (on) engine.setKant(id, kant); },
+        { label: `Track ${nr} crossfader ${kant}`, read: bool(() => engine.kant[id] === kant) });
+    }
   }
 
   // De knoppen van de twee bussen: plekken, net als bij de tracks.

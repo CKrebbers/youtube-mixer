@@ -408,8 +408,12 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .trk-meter{height:4px}
 .trk-fader{width:100%}
 .trk-knoppen{display:flex;gap:3px}
-.trk-kant{flex:1;text-transform:uppercase;font-size:10px}
-.trk-kant[data-kant="A"]{color:var(--a)} .trk-kant[data-kant="B"]{color:var(--b)}
+.trk-kanten{flex:1;display:flex}
+.trk-kant{flex:1;font-size:9px;padding-left:0;padding-right:0;border-radius:0;margin-left:-1px}
+.trk-kant:first-child{border-radius:4px 0 0 4px;margin-left:0} .trk-kant:last-child{border-radius:0 4px 4px 0}
+.trk-kant.on[data-kant="A"]{background:var(--a);color:#03100e;border-color:var(--a)}
+.trk-kant.on[data-kant="B"]{background:var(--b);color:#12081c;border-color:var(--b)}
+.trk-kant.on[data-kant="thru"]{background:var(--panel2);color:var(--text);border-color:var(--dim)}
 .trk-toon{width:24px}
 .trk-toon.on[data-toon="L"]{background:var(--a);color:#03100e}
 .trk-toon.on[data-toon="R"]{background:var(--b);color:#12081c}

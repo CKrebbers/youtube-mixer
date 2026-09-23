@@ -214,6 +214,8 @@ test/
   de vensters (`{L}`/`{R}` in `KEYMAP`), spatie volgt de focus.
 - Crossfader-toewijzing per track: A, B of thru. Standaard 1 op A, 2 op B, de
   rest thru — zo klinkt een set voor twee als vroeger.
+  Op het scherm drie segmenten (`track.N.xfade.a/.thru/.b`): rondlopen kon een
+  hoorbare track stilzetten. `track.N.xfade.kant` (rondlopen) blijft voor de APC.
 - Sync kent geen "het andere deck" meer: een track synct naar de track die je
   het hardst hoort (fader × crossfader, spelend, met grid). Speelt er niets,
   dan de eerste geladen track met grid.

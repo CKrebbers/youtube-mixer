@@ -83,9 +83,10 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 - [x] **C2. Pitch terug op 0 bij een nieuw nummer?** — Clay: ja (gebouwd 23 sep). Nu houdt een track de
   pitch van het vorige nummer. **Advies:** ja, terug naar 0.
 
-- [ ] **C3. Crossfaderkant: één knop die rondloopt (A→B→thru) of drie aparte?**
+- [x] **C3. Crossfaderkant: één knop die rondloopt (A→B→thru) of drie aparte?**
   Rondlopen kan een hoorbare track per ongeluk stil zetten. **Advies:** drie
   kleine segmenten op het scherm; op de APC blijft het één knop.
+  — Clay: drie segmenten (gebouwd 23 sep).
 
 - [ ] **C4. Klik op het tracknummer in de trackrij = play?** Je verwacht
   eerder "selecteren". **Advies:** nummer = focus, play op een eigen knopje.

@@ -958,6 +958,12 @@ console.log('\nacht tracks');
   ok('kant-knop loopt rond: thru -> A -> B -> thru', naEen === 'A' && eng.kant.C === 'thru');
   ok('read geeft drie standen', leesAction('track.1.xfade.kant') === 0
     && leesAction('track.2.xfade.kant') === 1 && leesAction('track.3.xfade.kant') === 0.5);
+  invoke('track.3.xfade.b', true);
+  ok('losse kant-knop: meteen naar B, niet rondlopen', eng.kant.C === 'B' && leesAction('track.3.xfade.b') === 1 && leesAction('track.3.xfade.a') === 0);
+  invoke('track.3.xfade.b', true);
+  ok('nog eens B blijft B', eng.kant.C === 'B');
+  invoke('track.3.xfade.thru', true);
+  ok('thru-knop', eng.kant.C === 'thru' && leesAction('track.3.xfade.thru') === 1);
 }
 
 // ---- toetsenbord ------------------------------------------------------------
