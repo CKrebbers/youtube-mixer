@@ -206,7 +206,7 @@ export function bindEngine(engine) {
     // is geklemd: sync mag verder dan het bereik, en dan staat hij tegen de aanslag.
     define(`${n}.pitch`, 'value', (v) => d.setPitch(v),
       { label: `Track ${nr} pitch`, bipolar: true, read: () => d.pitch });
-    define(`${n}.pitch.bereik`, 'trigger', (on) => { if (on) d.volgendBereik(); },
+    define(`${n}.pitch.range`, 'trigger', (on) => { if (on) d.volgendBereik(); },
       { label: `Track ${nr} pitchbereik ±8 / ±16 / ±50%`, read: () => PITCH_BEREIKEN.indexOf(d.pitchBereik) / (PITCH_BEREIKEN.length - 1) });
     define(`${n}.seek`, 'value', (v) => d.seek(v * d.duration),
       { label: `Track ${nr} scrub`, read: () => (d.duration ? d.position / d.duration : 0) });
@@ -236,12 +236,12 @@ export function bindEngine(engine) {
       { label: `Track ${nr} FX uit`, read: () => (d.fx.bypass ? 1 : 0) });
     // Acht plekken: precies de acht device knobs van één bank.
     for (let k = 1; k <= 8; k++) {
-      define(`${n}.fx.knop.${k}`, 'value', (v) => d.fx.setPlek(k, v),
+      define(`${n}.fx.knob.${k}`, 'value', (v) => d.fx.setPlek(k, v),
         { label: `Track ${nr} FX plek ${k}`,
           bipolar: false,
           read: () => d.fx.leesPlek(k) });
       const druk = drukknop(() => d.fx, k);
-      define(`${n}.fx.knop.${k}.druk`, 'trigger', druk.fn,
+      define(`${n}.fx.knob.${k}.hold`, 'trigger', druk.fn,
         { label: `Track ${nr} FX plek ${k} vasthouden (open zolang ingedrukt)`, read: druk.ingedrukt });
     }
     define(`${n}.fx.next`, 'trigger', (on) => {
@@ -256,7 +256,7 @@ export function bindEngine(engine) {
       { label: `Focus track ${nr}`, read: bool(() => engine.focus === id) });
 
     // Eén knop voor loop aan/uit (Clip stop op de APC): 8 tellen met grid, anders 4 s.
-    define(`${n}.loop.wissel`, 'trigger', (on) => {
+    define(`${n}.loop.toggle`, 'trigger', (on) => {
       if (!on || !d.buffer) return;
       if (d.loop) d.clearLoop();
       else if (d.grid) d.setBeatLoop(8);
@@ -265,14 +265,14 @@ export function bindEngine(engine) {
 
     // Alleen om uit te lezen, voor LED's: geeft deze track de maat, en valt nu
     // de tel? Afgeleid van positie en grid (regel 3), geen eigen teller.
-    define(`${n}.maat`, 'trigger', () => {}, { label: `Track ${nr} geeft de maat (alleen lezen)`,
+    define(`${n}.leads`, 'trigger', () => {}, { label: `Track ${nr} geeft de maat (alleen lezen)`,
       read: bool(() => engine.syncMaster()?.id === id) });
-    define(`${n}.tel`, 'trigger', () => {}, { label: `Track ${nr} op de tel (alleen lezen)`,
+    define(`${n}.beat`, 'trigger', () => {}, { label: `Track ${nr} op de tel (alleen lezen)`,
       read: bool(() => d.playing && d.grid && d.grid.phase(d.position) < 0.15) });
 
     // Crossfader-toewijzing: A -> B -> thru -> A, zoals de knop op de APC.
     // read() geeft 0 / 0.5 / 1 zodat een LED er drie standen van kan maken.
-    define(`${n}.xfade.kant`, 'trigger', (on) => {
+    define(`${n}.xfade.side`, 'trigger', (on) => {
       if (!on) return;
       const i = XFADE_KANTEN.indexOf(engine.kant[id]);
       engine.setKant(id, XFADE_KANTEN[(i + 1) % XFADE_KANTEN.length]);
@@ -289,10 +289,10 @@ export function bindEngine(engine) {
   // De knoppen van de twee bussen: plekken, net als bij de tracks.
   for (const [bus, slot] of Object.entries(engine.sends || {})) {
     for (let k = 1; k <= 8; k++) {
-      define(`send.${bus.toLowerCase()}.knop.${k}`, 'value', (v) => slot.setPlek(k, v),
+      define(`send.${bus.toLowerCase()}.knob.${k}`, 'value', (v) => slot.setPlek(k, v),
         { label: `Send ${bus} knop ${k}`, read: () => slot.leesPlek(k) });
       const druk = drukknop(() => slot, k);
-      define(`send.${bus.toLowerCase()}.knop.${k}.druk`, 'trigger', druk.fn,
+      define(`send.${bus.toLowerCase()}.knob.${k}.hold`, 'trigger', druk.fn,
         { label: `Send ${bus} knop ${k} vasthouden (open zolang ingedrukt)`, read: druk.ingedrukt });
     }
   }
@@ -300,7 +300,7 @@ export function bindEngine(engine) {
   // ---- sampler: acht pads -------------------------------------------------
   // Leeg: pak de laatste tellen van de track met focus — of, als er een
   // bewaard stuk op deze pad wacht, knip dat opnieuw. Gevuld: start op de
-  // volgende tel, of stop. Shift (de .wis-variant): een gevulde pad leeg
+  // volgende tel, of stop. Shift (de .clear-variant): een gevulde pad leeg
   // maken (bewaard blijft bewaard); een lege, bewaarde pad vergeten.
   const sampler = engine.sampler;
   if (sampler) {
@@ -315,13 +315,13 @@ export function bindEngine(engine) {
         sampler.neem(i, deck, { bron: trackVanDeck(deck.id) }).catch(fout);
       }, { label: `Sampler pad ${i + 1}`,
            read: () => (sampler.pads[i]?.speelt ? 1 : sampler.pads[i] ? 0.5 : 0) });
-      define(`sampler.${i + 1}.wis`, 'trigger', (on) => {
+      define(`sampler.${i + 1}.clear`, 'trigger', (on) => {
         if (!on) return;
         if (sampler.pads[i]) sampler.wis(i);
         else sampler.vergeet(i);
       }, { label: `Sampler pad ${i + 1} leegmaken (leeg + bewaard: vergeten)` });
     }
-    define('sampler.lengte', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },
+    define('sampler.length', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },
       { label: 'Sampler: hoeveel tellen', read: () => [1, 2, 4, 8].indexOf(sampler.tellen) / 3 });
     define('sampler.volume', 'value', (v) => sampler.setVolume(v),
       { label: 'Sampler volume', read: () => sampler.volume });
@@ -332,8 +332,8 @@ export function bindEngine(engine) {
     const i = DECK_IDS.indexOf(engine.focus);
     engine.setFocus(DECK_IDS[(i + stap + DECK_IDS.length) % DECK_IDS.length]);
   };
-  define('focus.vorige', 'trigger', (on) => { if (on) focusStap(-1); }, { label: 'Focus: vorige track' });
-  define('focus.volgende', 'trigger', (on) => { if (on) focusStap(1); }, { label: 'Focus: volgende track' });
+  define('focus.prev', 'trigger', (on) => { if (on) focusStap(-1); }, { label: 'Focus: vorige track' });
+  define('focus.next', 'trigger', (on) => { if (on) focusStap(1); }, { label: 'Focus: volgende track' });
 
   define('mixer.xfader', 'value', (v) => engine.setXfader(v),
     { label: 'Crossfader', bipolar: true, read: () => engine.xfader });
@@ -349,16 +349,19 @@ export function bindEngine(engine) {
  * maar wat je eraan draait hoort wél op de bus — dan kan een APC-knop het
  * net zo goed als de muis, en volgen de knoppen op het scherm vanzelf.
  */
+/** Action-namen van de video-effecten: Engels, net als de rest van de bus. Intern heten ze nog Nederlands. */
+export const VIDEO_FX_ACTIE = { spiegel: 'mirror', kleur: 'color', sporen: 'trails', korrel: 'grain' };
+
 export function bindVideo(mixer) {
   for (const fx of VIDEO_FX) {
-    define(`video.fx.${fx.id}`, 'value', (v) => mixer.zetFx(fx.id, v),
+    define(`video.fx.${VIDEO_FX_ACTIE[fx.id] ?? fx.id}`, 'value', (v) => mixer.zetFx(fx.id, v),
       { label: `Video ${fx.naam}`, bipolar: !!fx.bipolair, read: () => mixer.fx[fx.id] });
   }
-  define('video.modus', 'trigger', (on) => { if (on) mixer.volgendeModus(); },
+  define('video.mode', 'trigger', (on) => { if (on) mixer.volgendeModus(); },
     { label: 'Video: volgende mengvorm', read: () => MODI.indexOf(mixer.modus) / (MODI.length - 1) });
-  define('video.puls', 'value', (v) => mixer.zetPuls(v),
+  define('video.pulse', 'value', (v) => mixer.zetPuls(v),
     { label: 'Video: puls op de tel', read: () => mixer.puls });
-  define('video.puls.doel', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
+  define('video.pulse.target', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
     { label: 'Video: wat er pulst', read: () => PULS_DOELEN.indexOf(mixer.pulsDoel) / (PULS_DOELEN.length - 1) });
 }
 
@@ -370,16 +373,16 @@ export function bindVideo(mixer) {
 export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnameSoort, rackStap }) {
   for (const [nr, id] of TRACKS) {
     for (const v of ['L', 'R']) {
-      define(`venster.${v}.toon.${nr}`, 'trigger', (on) => { if (on) toon(v, id); },
+      define(`window.${v}.show.${nr}`, 'trigger', (on) => { if (on) toon(v, id); },
         { label: `Track ${nr} in het ${v === 'L' ? 'linker' : 'rechter'}venster`, read: () => (venster()[v] === id ? 1 : 0) });
     }
-    define(`track.${nr}.rack.volgend`, 'trigger', (on) => { if (on) rackStap(id, 1); }, { label: `Track ${nr} volgend rack` });
-    define(`track.${nr}.rack.vorig`, 'trigger', (on) => { if (on) rackStap(id, -1); }, { label: `Track ${nr} vorig rack` });
+    define(`track.${nr}.rack.next`, 'trigger', (on) => { if (on) rackStap(id, 1); }, { label: `Track ${nr} volgend rack` });
+    define(`track.${nr}.rack.prev`, 'trigger', (on) => { if (on) rackStap(id, -1); }, { label: `Track ${nr} vorig rack` });
   }
-  define('opname.start', 'trigger', (on) => { if (on && !opnemer.bezig) opnameStart(); },
+  define('record.start', 'trigger', (on) => { if (on && !opnemer.bezig) opnameStart(); },
     { label: 'Opname starten', read: () => (opnemer.bezig ? 1 : 0) });
-  define('opname.stop', 'trigger', (on) => { if (on && opnemer.bezig) opnameStop(); },
+  define('record.stop', 'trigger', (on) => { if (on && opnemer.bezig) opnameStop(); },
     { label: 'Opname stoppen (zet hem achter shift)', read: () => (opnemer.bezig ? 1 : 0) });
-  define('opname.soort', 'trigger', (on) => { if (on && !opnemer.bezig) opnameSoort(); },
+  define('record.mode', 'trigger', (on) => { if (on && !opnemer.bezig) opnameSoort(); },
     { label: 'Opname: audio of audio + video', read: () => (opnemer.metVideo ? 1 : 0) });
 }

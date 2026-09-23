@@ -38,7 +38,7 @@ ok('buiten 0..1 wordt geklemd', zichtbaarheid(2, 1) === 1 && zichtbaarheid(-1, 1
 
 console.log('\nvideo op de action-bus');
 {
-  const { bindVideo, invoke, read, list } = await import('../src/control/actions.js');
+  const { bindVideo, invoke, read, list, VIDEO_FX_ACTIE } = await import('../src/control/actions.js');
   const { VIDEO_FX, MODI } = await import('../src/video/instellingen.js');
   const nep = {
     fx: Object.fromEntries(VIDEO_FX.map((f) => [f.id, f.standaard])), modus: MODI[0],
@@ -49,18 +49,18 @@ console.log('\nvideo op de action-bus');
     volgendPulsDoel() { this.pulsDoel = this.pulsDoel === 'rgb' ? 'pixel' : 'rgb'; },
   };
   bindVideo(nep);
-  ok('elk effect staat op de bus', VIDEO_FX.every((f) => list().some((a) => a.id === `video.fx.${f.id}`)));
+  ok('elk effect staat op de bus', VIDEO_FX.every((f) => list().some((a) => a.id === `video.fx.${VIDEO_FX_ACTIE[f.id] ?? f.id}`)));
   invoke('video.fx.pixel', 0.7);
   ok('een knop zet het effect', nep.fx.pixel === 0.7 && read('video.fx.pixel') === 0.7);
   ok('kleur begint in het midden (normaal) en is bipolair',
-    read('video.fx.kleur') === 0.5 && list().find((a) => a.id === 'video.fx.kleur').meta.bipolar === true);
-  invoke('video.modus', true); invoke('video.modus', false);
+    read('video.fx.color') === 0.5 && list().find((a) => a.id === 'video.fx.color').meta.bipolar === true);
+  invoke('video.mode', true); invoke('video.mode', false);
   ok('mengvorm-knop gaat naar de volgende', nep.modus === 'licht');
-  for (let i = 0; i < MODI.length - 1; i++) invoke('video.modus', true);
-  ok('en rond', nep.modus === 'mix' && read('video.modus') === 0);
-  invoke('video.puls', 0.6);
-  ok('puls-knop op de bus', nep.puls === 0.6 && read('video.puls') === 0.6);
-  invoke('video.puls.doel', true);
+  for (let i = 0; i < MODI.length - 1; i++) invoke('video.mode', true);
+  ok('en rond', nep.modus === 'mix' && read('video.mode') === 0);
+  invoke('video.pulse', 0.6);
+  ok('puls-knop op de bus', nep.puls === 0.6 && read('video.pulse') === 0.6);
+  invoke('video.pulse.target', true);
   ok('puls-doel wisselt', nep.pulsDoel === 'pixel');
 }
 

@@ -948,7 +948,7 @@ export class InsertSlot {
   }
 
   /**
-   * Knop op plek n. Dit is waar `track.1.fx.knop.n` op uitkomt.
+   * Knop op plek n. Dit is waar `track.1.fx.knob.n` op uitkomt.
    *
    * Heeft de knop een glijtijd, dan staat de KNOP meteen op v (soft-takeover
    * moet weten waar je hand is), maar het geluid glijdt er vanaf zijn huidige

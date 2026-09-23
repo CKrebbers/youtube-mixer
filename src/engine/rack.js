@@ -7,7 +7,7 @@ import { clamp } from '../lib/emitter.js';
  * een PLEK (1..8) waar één knop op zit; die knop kan meerdere parameters
  * tegelijk bewegen, elk met een eigen venster, bereik en curve.
  *
- * Waarom dat het hele punt is: de MIDI-mapping wijst naar `track.1.fx.knop.1`.
+ * Waarom dat het hele punt is: de MIDI-mapping wijst naar `track.1.fx.knob.1`.
  * Wat die knop doet, bepaalt het rack. Laad je een ander rack, dan doet dezelfde
  * knop iets anders en hoef je nooit opnieuw te koppelen.
  *

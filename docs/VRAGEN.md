@@ -126,9 +126,10 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   Verandert niets aan wat je ziet. **Advies:** ja, na de commit.
   — Clay: ja (gedaan 23 sep: app.js 1183 → 128 regels, tien modules).
 
-- [ ] **E2. Action-namen gelijktrekken** (nu Engels en Nederlands door elkaar:
+- [x] **E2. Action-namen gelijktrekken** (nu Engels en Nederlands door elkaar:
   `hotcue.1.delete` naast `sampler.1.wis`). Kan zonder dat je mappings breken
   (de omzetting bestaat al). **Advies:** ja, vóór de APC-indeling definitief wordt.
+  — Clay: alles Engels (gedaan 23 sep: mapping versie 3, `NIEUWE_NAMEN` zet oude namen om).
 
 - [x] **E3. Mappings ook op de server bewaren** in plaats van alleen in de
   browser (localStorage). Dan overleven ze een andere browser of gewiste data.

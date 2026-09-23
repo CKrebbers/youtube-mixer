@@ -300,17 +300,37 @@ console.log('\nmigratie van versie 1');
     { in: 'cc:0:14', action: 'mixer.master', mode: 'absolute' },
   ] });
   ok('deck.A wordt track.1', oud.rules.get('cc:0:48').action === 'track.1.filter');
-  ok('deck.B wordt track.2', oud.rules.get('cc:1:48').action === 'track.2.fx.knop.3');
+  ok('deck.B.fx.knop wordt in één keer track.2.fx.knob (v1 -> v3)', oud.rules.get('cc:1:48').action === 'track.2.fx.knob.3');
   ok('deck.{focus} wordt track.{focus}', oud.rules.get('note:0:91').action === 'track.{focus}.play');
   ok('mixer blijft staan', oud.rules.get('cc:0:14').action === 'mixer.master');
   ok('er wordt geteld wat er omgezet is', r.gemigreerd === 3);
   ok('zonder versienummer telt als 1',
     oud.load({ rules: [{ in: 'cc:0:48', action: 'deck.A.low', mode: 'absolute' }] }).gemigreerd === 1);
-  ok('opnieuw exporteren geeft versie 2', oud.toJSON().version === 2);
+  ok('opnieuw exporteren geeft versie 3', oud.toJSON().version === 3);
+
+  // Versie 2 -> 3: alle namen Engels. Elke oude naam die ooit bestond.
+  const v2 = new Mapping({ read: () => 0, invoke: () => {} });
+  const paren = [
+    ['track.1.fx.knop.4', 'track.1.fx.knob.4'], ['track.{focus}.fx.knop.1.druk', 'track.{focus}.fx.knob.1.hold'],
+    ['send.a.knop.2', 'send.a.knob.2'], ['send.b.knop.3.druk', 'send.b.knob.3.hold'],
+    ['track.2.loop.wissel', 'track.2.loop.toggle'], ['track.3.maat', 'track.3.leads'], ['track.3.tel', 'track.3.beat'],
+    ['track.1.pitch.bereik', 'track.1.pitch.range'], ['track.4.xfade.kant', 'track.4.xfade.side'],
+    ['track.5.rack.volgend', 'track.5.rack.next'], ['track.5.rack.vorig', 'track.5.rack.prev'],
+    ['sampler.7.wis', 'sampler.7.clear'], ['sampler.lengte', 'sampler.length'],
+    ['focus.vorige', 'focus.prev'], ['focus.volgende', 'focus.next'], ['venster.R.toon.6', 'window.R.show.6'],
+    ['opname.start', 'record.start'], ['opname.stop', 'record.stop'], ['opname.soort', 'record.mode'],
+    ['video.modus', 'video.mode'], ['video.puls', 'video.pulse'], ['video.puls.doel', 'video.pulse.target'],
+    ['video.fx.spiegel', 'video.fx.mirror'], ['video.fx.kleur', 'video.fx.color'], ['video.fx.sporen', 'video.fx.trails'],
+    ['video.fx.korrel', 'video.fx.grain'],
+  ];
+  const r3 = v2.load({ version: 2, rules: paren.map(([a], i) => ({ in: `note:0:${i}`, action: a, mode: 'trigger' })) });
+  const fout = paren.filter(([, b], i) => v2.rules.get(`note:0:${i}`).action !== b);
+  ok(`versie 2 -> 3: alle ${paren.length} oude namen omgezet${fout.length ? ' — fout: ' + fout.map((x) => x[0]).join(', ') : ''}`,
+    fout.length === 0 && r3.gemigreerd === paren.length);
 
   const nieuw = new Mapping({ read: () => 0, invoke: () => {} });
-  const r2 = nieuw.load({ version: 2, rules: [{ in: 'cc:0:48', action: 'deck.A.filter', mode: 'absolute' }] });
-  ok('versie 2 wordt niet aangeraakt', r2.gemigreerd === 0 && nieuw.rules.get('cc:0:48').action === 'deck.A.filter');
+  const r2 = nieuw.load({ version: 3, rules: [{ in: 'cc:0:48', action: 'deck.A.filter', mode: 'absolute' }] });
+  ok('versie 3 wordt niet aangeraakt', r2.gemigreerd === 0 && nieuw.rules.get('cc:0:48').action === 'deck.A.filter');
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

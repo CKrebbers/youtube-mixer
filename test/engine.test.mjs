@@ -123,14 +123,14 @@ ok('filter midden = bypass', eng.deck('A').chain.lpf.frequency.value > 20000 && 
 
 invoke('track.1.pitch', 1);
 ok('pitch standaard ±16%: fader rechts = +16%', Math.abs(eng.deck('A').rate - 1.16) < 1e-9);
-invoke('track.1.pitch.bereik', true);            // 16 -> 50
+invoke('track.1.pitch.range', true);            // 16 -> 50
 ok('bereik wisselen laat het tempo staan', Math.abs(eng.deck('A').rate - 1.16) < 1e-9 && eng.deck('A').pitchBereik === 0.5);
 ok('... en verschuift alleen de faderstand', Math.abs(read('track.1.pitch') - 0.66) < 1e-9);
-invoke('track.1.pitch.bereik', true);            // 50 -> 8
+invoke('track.1.pitch.range', true);            // 50 -> 8
 ok('op ±8% staat +16% tegen de aanslag (read geklemd)', eng.deck('A').pitchBereik === 0.08 && read('track.1.pitch') === 1);
 invoke('track.1.pitch', 0);
 ok('±8%: fader links = -8%', Math.abs(eng.deck('A').rate - 0.92) < 1e-9);
-invoke('track.1.pitch.bereik', true);            // 8 -> 16, terug naar standaard
+invoke('track.1.pitch.range', true);            // 8 -> 16, terug naar standaard
 invoke('track.1.pitch', 0.5);
 ok('fader midden = 0%', eng.deck('A').rate === 1);
 invoke('track.1.pitch', 1);
@@ -419,7 +419,7 @@ for (let i = 1; i < EFFECTEN.length; i++) invoke('track.1.fx.next', true);
 ok('en na een rondje sta je weer waar je begon', fx.effectId === beginEffect);
 invoke('track.1.fx.mix', 0.3);
 ok('mix via de bus', Math.abs(fx.mix - 0.3) < 1e-9);
-invoke('track.1.fx.knop.1', 0.7);
+invoke('track.1.fx.knob.1', 0.7);
 ok('plek via de bus', Math.abs(fx.leesPlek(1) - 0.7) < 1e-9);
 invoke('track.1.fx.bypass', true);
 ok('bypass via de bus', fx.bypass === true);
@@ -743,10 +743,10 @@ console.log('\nsends');
   invoke('track.4.send.a', 0.5);
   ok('send-knop op de bus, kwadratisch (0,5 -> 0,25)', d.ui.sendA === 0.5 && Math.abs(d.sendA.gain.value - 0.25) < 1e-9);
   invoke('track.4.send.a', 0);
-  invoke('send.b.knop.3', 1);
+  invoke('send.b.knob.3', 1);
   ok('busknop: galm vasthouden', eng.sends.B.paramWaarde('a', 'freeze') === 1);
-  invoke('send.b.knop.3', 0);
-  invoke('send.a.knop.1', 0.3);
+  invoke('send.b.knob.3', 0);
+  invoke('send.a.knob.1', 0.3);
   ok('busknop: echotijd', Math.abs(eng.sends.A.paramWaarde('a', 'tijd') - 0.3) < 1e-9);
   // Echo op de maat (C6): standaard 1/4 tel van de maat-track, knop 4 = vrij.
   // De klok ver vooruit: eerdere tests lieten fades achter op hun eigen tijd.
@@ -754,7 +754,7 @@ console.log('\nsends');
   const kop = () => eng.sends.A.keten.node.slots.get('a').inst;
   ok('echo-bus staat standaard op de maat', eng.sends.A.paramWaarde('a', 'sync') === 1);
   NOW += 1;
-  invoke('send.a.knop.1', 3 / 7);
+  invoke('send.a.knob.1', 3 / 7);
   const dM = eng.deck('D');
   const { Beatgrid: BG } = await import('../src/engine/beatgrid.js');
   dM.load(buf, 'maat'); dM.setGrid(new BG({ bpm: 120, firstBeat: 0 })); dM.play();
@@ -764,7 +764,7 @@ console.log('\nsends');
   dM.emit('change', dM);
   ok(`op de maat: 1/4 tel = ${tel.toFixed(3)} s`, Math.abs(kop()._kop().tijden[kop()._kop().actief] - tel) < 1e-6);
   NOW += 1;
-  invoke('send.a.knop.1', 1 / 7);
+  invoke('send.a.knob.1', 1 / 7);
   ok('knop 1 kiest de deling: 1/8 tel', Math.abs(kop()._kop().tijden[kop()._kop().actief] - tel / 2) < 1e-6);
   NOW += 1;
   meester.setRate(meester.rate * 1.1);
@@ -775,35 +775,35 @@ console.log('\nsends');
   ok('eenheid volgt de schakelaar', tw('delay', 'tijd', 1 / 7, (q) => eng.sends.A.paramWaarde('a', q)) === '1/8 tel'
     && tw('delay', 'tijd', 0) === '20 ms');
   NOW += 1;
-  invoke('send.a.knop.4', 0);
+  invoke('send.a.knob.4', 0);
   ok('knop 4 naar vrij: weer milliseconden', Math.abs(kop()._kop().tijden[kop()._kop().actief] - 0.02 * Math.pow(60, 1 / 7)) < 1e-6);
   NOW += 1;
-  invoke('send.a.knop.4', 1);
+  invoke('send.a.knob.4', 1);
   dM.stop();
   ok('maat-track stopt: de echo houdt de laatste tel', Math.abs(kop()._kop().tijden[kop()._kop().actief] - tel / 2) < 1e-6);
   dM.setGrid(null);
   NOW = 0;
   // Drukknop (D3): vol open zolang ingedrukt, daarna terug.
-  invoke('send.b.knop.3', 0.2);
-  invoke('send.b.knop.3.druk', true);
+  invoke('send.b.knob.3', 0.2);
+  invoke('send.b.knob.3.hold', true);
   ok('drukknop: galm vasthouden zolang ingedrukt', eng.sends.B.leesPlek(3) === 1 && eng.sends.B.paramWaarde('a', 'freeze') === 1);
-  invoke('send.b.knop.3.druk', true);             // tweede bron tegelijk
-  invoke('send.b.knop.3.druk', false);
+  invoke('send.b.knob.3.hold', true);             // tweede bron tegelijk
+  invoke('send.b.knob.3.hold', false);
   ok('loslaten: terug naar waar hij stond', Math.abs(eng.sends.B.leesPlek(3) - 0.2) < 1e-9);
-  invoke('send.b.knop.3.druk', false);
+  invoke('send.b.knob.3.hold', false);
   ok('nog eens loslaten doet niets', Math.abs(eng.sends.B.leesPlek(3) - 0.2) < 1e-9);
-  invoke('send.b.knop.3', 0);
+  invoke('send.b.knob.3', 0);
   const fxD = eng.deck('D').fx;
   fxD.zetEffect('delay');
-  invoke('track.4.fx.knop.2', 0.3);
-  invoke('track.4.fx.knop.2.druk', true);
+  invoke('track.4.fx.knob.2', 0.3);
+  invoke('track.4.fx.knob.2.hold', true);
   ok('drukknop op een trackplek: vol open', fxD.leesPlek(2) === 1);
   fxD.zetEffect('filter');
-  invoke('track.4.fx.knop.2.druk', false);
+  invoke('track.4.fx.knob.2.hold', false);
   ok('rack gewisseld tijdens het drukken: niet terugzetten in het nieuwe rack', fxD.leesPlek(2) !== 0.3);
-  invoke('track.4.fx.knop.8.druk', true);
+  invoke('track.4.fx.knob.8.hold', true);
   ok('plek die niet bestaat: niets', fxD.leesPlek(8) === null);
-  invoke('track.4.fx.knop.8.druk', false);
+  invoke('track.4.fx.knob.8.hold', false);
   ok('elke track heeft beide sends op de bus', list().filter((a) => /^track\.\d\.send\.[ab]$/.test(a.id)).length === 16);
 }
 
@@ -928,12 +928,12 @@ console.log('\nsampler');
   await new Promise((r) => setTimeout(r, 0));
   ok('klik op de bewaarde pad knipt hetzelfde stuk opnieuw', sm.pads[4]?.van === stuk.van && sm.pads[4].tot === stuk.tot);
   ok('... en meldt het niet opnieuw als nieuw', gemeld === null);
-  invoke('sampler.5.wis', true);
+  invoke('sampler.5.clear', true);
   ok('shift op een gevulde pad: leeg, maar nog bewaard', sm.pads[4] === null && sm.stand()[4].bewaard && vergeten === null);
-  invoke('sampler.5.wis', true);
+  invoke('sampler.5.clear', true);
   ok('shift op een lege, bewaarde pad: vergeten', !sm.stand()[4].bewaard && vergeten?.n === 4);
   sm.onGevuld = sm.onVergeet = null;
-  invoke('sampler.lengte', true);
+  invoke('sampler.length', true);
   ok('lengte-knop loopt rond', [1, 2, 4, 8].includes(sm.tellen));
 }
 
@@ -1008,25 +1008,25 @@ console.log('\nAPC-actions');
   const { Beatgrid } = await import('../src/engine/beatgrid.js');
   const dL = eng.deck('E');
   dL.load(buf, 'loop'); dL.setGrid(null);
-  invoke('track.5.loop.wissel', true);
-  ok('loop.wissel zonder grid: 4 seconden', dL.loop && Math.abs(dL.loop.end - dL.loop.start - Math.min(4, dL.duration)) < 1e-6);
-  invoke('track.5.loop.wissel', true);
-  ok('nog eens: loop uit', !dL.loop && leesA('track.5.loop.wissel') === 0);
+  invoke('track.5.loop.toggle', true);
+  ok('loop.toggle zonder grid: 4 seconden', dL.loop && Math.abs(dL.loop.end - dL.loop.start - Math.min(4, dL.duration)) < 1e-6);
+  invoke('track.5.loop.toggle', true);
+  ok('nog eens: loop uit', !dL.loop && leesA('track.5.loop.toggle') === 0);
   dL.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
   dL.seek(0.2);
-  invoke('track.5.loop.wissel', true);
+  invoke('track.5.loop.toggle', true);
   ok('met grid: 8 tellen (of wat er past)', dL.loop && dL.loopBeats === 8 || (dL.loop && dL.loop.end <= dL.duration));
   dL.clearLoop();
   const oudeFocus = eng.focus;
-  eng.setFocus('H'); invoke('focus.volgende', true);
-  ok('focus.volgende loopt rond: 8 -> 1', eng.focus === 'A');
-  invoke('focus.vorige', true);
-  ok('focus.vorige: 1 -> 8', eng.focus === 'H');
+  eng.setFocus('H'); invoke('focus.next', true);
+  ok('focus.next loopt rond: 8 -> 1', eng.focus === 'A');
+  invoke('focus.prev', true);
+  ok('focus.prev: 1 -> 8', eng.focus === 'H');
   eng.setFocus(oudeFocus);
   const maatId = eng.syncMaster()?.id;
-  ok('maat-read wijst precies één track aan', maatId && leesA(`track.${'ABCDEFGH'.indexOf(maatId) + 1}.maat`) === 1
-    && ['A','B','C','D','E','F','G','H'].filter((x) => leesA(`track.${'ABCDEFGH'.indexOf(x) + 1}.maat`) === 1).length === 1);
-  ok('tel-read is 0 als de track stilstaat', leesA('track.5.tel') === 0);
+  ok('maat-read wijst precies één track aan', maatId && leesA(`track.${'ABCDEFGH'.indexOf(maatId) + 1}.leads`) === 1
+    && ['A','B','C','D','E','F','G','H'].filter((x) => leesA(`track.${'ABCDEFGH'.indexOf(x) + 1}.leads`) === 1).length === 1);
+  ok('tel-read is 0 als de track stilstaat', leesA('track.5.beat') === 0);
 }
 
 // ---- acht tracks ------------------------------------------------------------
@@ -1077,13 +1077,13 @@ console.log('\nacht tracks');
   // De action op de gedeelde bus (eng): A -> B -> thru -> A.
   const { read: leesAction } = await import('../src/control/actions.js');
   ok('track 8 bestaat op de bus', list().some((a) => a.id === 'track.8.play'));
-  invoke('track.3.xfade.kant', true);
+  invoke('track.3.xfade.side', true);
   const naEen = eng.kant.C;
-  invoke('track.3.xfade.kant', true);
-  invoke('track.3.xfade.kant', true);
+  invoke('track.3.xfade.side', true);
+  invoke('track.3.xfade.side', true);
   ok('kant-knop loopt rond: thru -> A -> B -> thru', naEen === 'A' && eng.kant.C === 'thru');
-  ok('read geeft drie standen', leesAction('track.1.xfade.kant') === 0
-    && leesAction('track.2.xfade.kant') === 1 && leesAction('track.3.xfade.kant') === 0.5);
+  ok('read geeft drie standen', leesAction('track.1.xfade.side') === 0
+    && leesAction('track.2.xfade.side') === 1 && leesAction('track.3.xfade.side') === 0.5);
   invoke('track.3.xfade.b', true);
   ok('losse kant-knop: meteen naar B, niet rondlopen', eng.kant.C === 'B' && leesAction('track.3.xfade.b') === 1 && leesAction('track.3.xfade.a') === 0);
   invoke('track.3.xfade.b', true);

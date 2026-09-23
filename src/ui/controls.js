@@ -30,10 +30,10 @@ export class Knob {
     const onUp = () => { this.dragging = false; window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
     el.addEventListener('pointerdown', (e) => {
       // Alt/option + ingedrukt houden: de knop als drukknop (vol open zolang je
-      // vasthoudt). Alleen waar de bus een .druk-variant kent. Niet shift:
+      // vasthoudt). Alleen waar de bus een .hold-variant kent. Niet shift:
       // shift is al fijn slepen. Loslaten gaat naar dezelfde action als het
       // indrukken, ook als het venster intussen een andere track toont.
-      const druk = this.action && `${this.action}.druk`;
+      const druk = this.action && `${this.action}.hold`;
       if (e.altKey && druk && metaOf(druk)) {
         invoke(druk, true);
         el.classList.add('gedrukt');

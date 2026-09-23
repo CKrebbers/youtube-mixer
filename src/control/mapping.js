@@ -56,10 +56,47 @@ export function resolveTarget(action, vars) {
  * bestand wordt bij het inlezen omgezet; weggooien zou je eigen koppelingen
  * kosten.
  */
-export const MAPPING_VERSIE = 2;
+export const MAPPING_VERSIE = 3;
 const OUDE_DECKS = { A: '1', B: '2' };
-export function migreerAction(action) {
-  return action.replace(/^deck\.([AB]|\{focus\})\./, (m, d) => `track.${OUDE_DECKS[d] ?? d}.`);
+
+/**
+ * Versie 3 (23 september 2026): alle action-namen Engels, zoals de rest van
+ * de code-identifiers. Wat je op het scherm leest blijft Nederlands.
+ */
+export const NIEUWE_NAMEN = [
+  [/\.fx\.knop\./, '.fx.knob.'],
+  [/^(send\.[ab])\.knop\./, '$1.knob.'],
+  [/\.druk$/, '.hold'],
+  [/\.loop\.wissel$/, '.loop.toggle'],
+  [/^(track\.[^.]+)\.maat$/, '$1.leads'],
+  [/^(track\.[^.]+)\.tel$/, '$1.beat'],
+  [/\.pitch\.bereik$/, '.pitch.range'],
+  [/\.xfade\.kant$/, '.xfade.side'],
+  [/\.rack\.volgend$/, '.rack.next'],
+  [/\.rack\.vorig$/, '.rack.prev'],
+  [/^(sampler\.\d)\.wis$/, '$1.clear'],
+  [/^sampler\.lengte$/, 'sampler.length'],
+  [/^focus\.vorige$/, 'focus.prev'],
+  [/^focus\.volgende$/, 'focus.next'],
+  [/^venster\.([LR])\.toon\./, 'window.$1.show.'],
+  [/^opname\.start$/, 'record.start'],
+  [/^opname\.stop$/, 'record.stop'],
+  [/^opname\.soort$/, 'record.mode'],
+  [/^video\.modus$/, 'video.mode'],
+  [/^video\.puls\.doel$/, 'video.pulse.target'],
+  [/^video\.puls$/, 'video.pulse'],
+  [/^video\.fx\.spiegel$/, 'video.fx.mirror'],
+  [/^video\.fx\.kleur$/, 'video.fx.color'],
+  [/^video\.fx\.sporen$/, 'video.fx.trails'],
+  [/^video\.fx\.korrel$/, 'video.fx.grain'],
+];
+
+/** Een action uit een mapping van `versie` naar de huidige naam. */
+export function migreerAction(action, versie = 1) {
+  let a = action;
+  if (versie < 2) a = a.replace(/^deck\.([AB]|\{focus\})\./, (m, d) => `track.${OUDE_DECKS[d] ?? d}.`);
+  if (versie < 3) for (const [van, naar] of NIEUWE_NAMEN) a = a.replace(van, naar);
+  return a;
 }
 
 export class Mapping extends Emitter {
@@ -100,7 +137,7 @@ export class Mapping extends Emitter {
         fouten.push(`regel ${i}: "${r.in}" is geen geldige signature (type:kanaal:nummer)`); return;
       }
       if (rules.has(r.in)) fouten.push(`regel ${i}: "${r.in}" staat al gekoppeld, laatste wint`);
-      const action = (doc.version ?? 1) < 2 ? migreerAction(r.action) : r.action;
+      const action = migreerAction(r.action, doc.version ?? 1);
       if (action !== r.action) gemigreerd++;
       rules.set(r.in, {
         in: r.in, action, mode,

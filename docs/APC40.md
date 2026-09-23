@@ -56,19 +56,19 @@ direct aansluiten, niet via een zwakke hub. Onze wachtrij (16 berichten / 4 ms) 
 | Fader / master / crossfader | `track.N.fader` / `mixer.master` / `mixer.xfader` | – |
 | Activator | `track.N.play` | `track.N.cue` |
 | Solo | `track.N.sync` (LED: aan = in sync, knippert = geeft de maat) | `track.N.tap` |
-| Record arm | `venster.R.toon.N` | `venster.L.toon.N` |
+| Record arm | `window.R.show.N` | `window.L.show.N` |
 | Track select | `track.N.focus` | – |
-| Clip stop | `track.N.loop.wissel` | `track.N.loop.exit` |
-| A/B | `track.N.xfade.kant` (uit=A, geel=B, oranje=thru — feedback.js moet 3 standen leren) | – |
-| Device knobs | `track.{focus}.fx.knop.1–8`; Clip/Device view wisselt naar strip (high/mid/low/trim/fx.mix/send.a/send.b/pitch); Master-knop → video.fx.* | shift+Master: `send.a/b.knop.1–8` |
-| Track knobs | laag via Pan/Sends/User: **Pan = `track.N.filter`**, Sends = `track.N.send.a` (shift: `.send.b`), User = `track.{R}.fx.knop.1–8` (rack van het rechtervenster) | |
+| Clip stop | `track.N.loop.toggle` | `track.N.loop.exit` |
+| A/B | `track.N.xfade.side` (uit=A, geel=B, oranje=thru — feedback.js moet 3 standen leren) | – |
+| Device knobs | `track.{focus}.fx.knob.1–8`; Clip/Device view wisselt naar strip (high/mid/low/trim/fx.mix/send.a/send.b/pitch); Master-knop → video.fx.* | shift+Master: `send.a/b.knop.1–8` |
+| Track knobs | laag via Pan/Sends/User: **Pan = `track.N.filter`**, Sends = `track.N.send.a` (shift: `.send.b`), User = `track.{R}.fx.knob.1–8` (rack van het rechtervenster) | |
 | Grid rij 1–4 | `track.N.hotcue.1–4` | `.hotcue.K.delete` |
-| Grid rij 5 | `sampler.1–8` | `sampler.K.wis` |
+| Grid rij 5 | `sampler.1–8` | `sampler.K.clear` |
 | Scene 1–5 | beatloop 4 · 8 · 16 · loop ½ · loop ×2 (focus-track) | loop 2/4/8 s · beatloop 1/2 |
 | Device-knoppen | on/off = `fx.bypass`, device L/R = `grid.halve/double`, bank L/R = `grid.back/fwd`, detail = `grid.here` | shift+device lock = `rack.volgend`, shift+Pan = `fx.next`, shift+bank lock = `grid.clear` |
-| Transport | Play = `track.{focus}.play`, Record = `opname.start`, Session = `sampler.lengte`, Tap, Nudge ± | Record = `opname.stop`, Session = `opname.soort` |
-| Encoders | tempo = `track.{focus}.pitch`, cue = `sampler.volume` | cue = `video.puls` |
-| Pijlen | links/rechts = `focus.vorige/volgende`, op/neer = `video.modus` / `video.puls.doel` | |
+| Transport | Play = `track.{focus}.play`, Record = `record.start`, Session = `sampler.length`, Tap, Nudge ± | Record = `record.stop`, Session = `record.mode` |
+| Encoders | tempo = `track.{focus}.pitch`, cue = `sampler.volume` | cue = `video.pulse` |
+| Pijlen | links/rechts = `focus.prev/next`, op/neer = `video.mode` / `video.pulse.target` | |
 | Metronome | `mixer.xfader.curve` | |
 | Stop all clips | bewust leeg | |
 
@@ -76,9 +76,9 @@ direct aansluiten, niet via een zwakke hub. Onze wachtrij (16 berichten / 4 ms) 
 gevuld · volle tint = actief · knipperen = loopt in de tijd · rood = opname/wissen.
 Hotcues geel, loops cyaan, sampler violet→magenta, video blauw, sync groen.
 
-**Al gebouwd (23 sep, zonder hardware):** `venster.L/R.toon.N`, `opname.start/stop/soort`,
-`track.N.loop.wissel`, `track.N.maat`, `track.N.tel` (alleen lezen, voor LED's),
-`focus.vorige/volgende`, `track.N.rack.volgend/vorig`.
+**Al gebouwd (23 sep, zonder hardware):** `window.L/R.show.N`, `record.start/stop/mode`,
+`track.N.loop.toggle`, `track.N.leads`, `track.N.beat` (alleen lezen, voor LED's),
+`focus.prev/next`, `track.N.rack.next/prev`.
 
 **Nog te bouwen voor deze indeling:**
 - `"shift": true` op een mappingregel (mapping.js houdt bij of noot 0x62 ingedrukt is)

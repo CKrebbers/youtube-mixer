@@ -522,7 +522,7 @@ export class RackEditor {
         </div>`;
       }
       return `<div class="re-tegel${gekozen}" data-doe="kies" data-plek="${plek}">
-        <div class="knob sm" data-action="track.${nr}.fx.knop.${plek}" data-value="${this.fx.leesPlek(plek) ?? 0}"></div>
+        <div class="knob sm" data-action="track.${nr}.fx.knob.${plek}" data-value="${this.fx.leesPlek(plek) ?? 0}"></div>
         <div class="re-tegel-tekst">
           <span class="re-tegel-naam"><span class="re-tegel-nr">${plek}</span> ${esc(m.label || `knop ${plek}`)}</span>
           <span class="re-wat" data-wat="${plek}">${esc(this._beschrijf(m))}</span>

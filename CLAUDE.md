@@ -158,7 +158,7 @@ test/
   bericht dat laat aankomt rekent vanaf T door. Regel 3 over een draadgrens.
 - Pitch schuift mee met tempo. Dat is `playbackRate`. Keylock hoort bij fase 3.
 - Pitchbereik per track: ±8, ±16 (standaard) of ±50% (`PITCH_BEREIKEN` in
-  `deck.js`, action `track.N.pitch.bereik`). De fader blijft 0..1, de engine
+  `deck.js`, action `track.N.pitch.range`). De fader blijft 0..1, de engine
   schaalt. Bereik wisselen laat het tempo staan; alleen de faderstand verschuift.
   Sync mag verder (0,5–2): dan staat de fader tegen de aanslag (read geklemd).
   Een nieuw nummer begint op 0% pitch (`_naLaden`); het bereik blijft staan.
@@ -211,8 +211,8 @@ test/
   effect) wist hem. Bewaren schrijft ALLEEN over een rack heen als de herkomst
   klopt, anders wordt het een nieuw rack. Zonder die regel overschreef
   "volgend effect + bewaar" een bewaard rack met één los effect.
-- Elke knopplek heeft een DRUKvariant (Clay 23 sep): `track.N.fx.knop.K.druk`
-  en `send.a/b.knop.K.druk`. Indrukken = vol open (direct, geen glijden),
+- Elke knopplek heeft een DRUKvariant (Clay 23 sep): `track.N.fx.knob.K.hold`
+  en `send.a/b.knob.K.hold`. Indrukken = vol open (direct, geen glijden),
   loslaten = terug naar de stand van vóór het drukken. Wisselt het rack tijdens
   het drukken, dan niet terugzetten. Op het scherm: alt + vasthouden (shift is
   al fijn slepen). Welke APC-knoppen dit worden, beslist B3.
@@ -230,16 +230,18 @@ test/
 - Crossfader-toewijzing per track: A, B of thru. Standaard 1 op A, 2 op B, de
   rest thru — zo klinkt een set voor twee als vroeger.
   Op het scherm drie segmenten (`track.N.xfade.a/.thru/.b`): rondlopen kon een
-  hoorbare track stilzetten. `track.N.xfade.kant` (rondlopen) blijft voor de APC.
+  hoorbare track stilzetten. `track.N.xfade.side` (rondlopen) blijft voor de APC.
 - Sync kent geen "het andere deck" meer: een track synct naar de track die je
   het hardst hoort (fader × crossfader, spelend, met grid). Speelt er niets,
   dan de eerste geladen track met grid.
 - De action-bus spreekt in TRACKS (`track.1.filter`), de engine in decks (A, B).
   De vertaling staat op één plek: `TRACKS` in `actions.js`. `{focus}` in een
-  mapping wordt een tracknummer. Mappings van versie 1 (`deck.A.…`) worden bij
-  het laden omgezet door `migreerAction()`; niet weghalen, er kunnen nog
-  geëxporteerde bestanden rondslingeren.
-- De FX-knoppen wijzen naar een PLEK (`track.1.fx.knop.1`), niet naar een
+  mapping wordt een tracknummer. Mappings van versie 1 (`deck.A.…`) en 2
+  (Nederlandse namen: `fx.knop`, `sampler.1.wis`, `venster.L.toon.3`…) worden bij
+  het laden omgezet door `migreerAction()` (`NIEUWE_NAMEN`); niet weghalen, er
+  kunnen nog geëxporteerde bestanden rondslingeren. Sinds versie 3 (23 sep) zijn
+  ALLE action-namen Engels; labels op het scherm blijven Nederlands.
+- De FX-knoppen wijzen naar een PLEK (`track.1.fx.knob.1`), niet naar een
   parameter. Wissel je van effect, dan betekent plek 1 iets anders en hoef je
   niets opnieuw te koppelen. Dat is de opzet waar de effect-racks op verder
   bouwen: het rack bepaalt wat een plek doet, de mapping blijft staan.
@@ -314,8 +316,8 @@ test/
   (met het VORIGE eindbeeld voor sporen, twee buffers om de beurt) -> tonen.
   Vast op 1280×720. Het paneel is een inklapbare VIERDE KOLOM in `main` (niet
   meer over het rechtervenster; CSS `main:has(> .video-panel:not(.hidden))`). Effecten en mengvorm staan op de action-bus
-  (`video.fx.*`, `video.modus`, via `bindVideo`), dus ze zijn te koppelen.
-  Effecten op de tel (`video.puls`, `video.puls.doel`): de maat komt van de
+  (`video.fx.*`, `video.mode`, via `bindVideo`), dus ze zijn te koppelen.
+  Effecten op de tel (`video.pulse`, `video.pulse.target`): de maat komt van de
   track die het hardst klinkt, speelt en een grid heeft, op het moment dat je
   hem HOORT. De puls komt bovenop de knopstand en dooft binnen een halve tel.
   Meet je dit, meet dan NIET precies op de tel: door afronding val je dan op
