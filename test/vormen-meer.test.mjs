@@ -66,8 +66,7 @@ console.log('de lijst');
 {
   const ids = ['ch', 'jl', 'ls', 'dl', 'lg', 'wv', 'if'];
   ok(`zeven systemen: ${ids.join(', ')}`, SYSTEMEN_MEER.length === 7 && ids.every((id, i) => SYSTEMEN_MEER[i].id === id));
-  const bestaand = new Set(SYSTEMEN.map((s) => s.id));
-  ok('geen id botst met systemen.js', SYSTEMEN_MEER.every((s) => !bestaand.has(s.id)));
+  ok('ze staan in SYSTEMEN, en geen id komt twee keer voor', SYSTEMEN_MEER.every((s) => SYSTEMEN.includes(s)) && new Set(SYSTEMEN.map((s) => s.id)).size === SYSTEMEN.length);
   ok('elk systeem heeft naam, categorie, palet en knoppen', SYSTEMEN_MEER.every((s) => s.naam && s.cat && LUTS[s.pal] && s.knobs.length));
   ok('draaiknoppen: minstens één, hooguit zes', SYSTEMEN_MEER.every((s) => { const n = draaiKnoppen(s).length; return n >= 1 && n <= 6; }));
   const bron = readFileSync(new URL('../src/vormen/systemen-meer.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');

@@ -64,8 +64,7 @@ console.log('de bestanden');
   const imports = [...bron.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]);
   ok('importeert alleen uit ./hulp.js', imports.length >= 1 && imports.every((i) => i === './hulp.js'));
   ok('vijf systemen: gs, cl, ln, ph, sp', SYSTEMEN_ZWAAR.map((s) => s.id).sort().join() === 'cl,gs,ln,ph,sp');
-  const alle = [...SYSTEMEN, ...SYSTEMEN_ZWAAR].map((s) => s.id);
-  ok('geen id botst met de lichte systemen', new Set(alle).size === alle.length);
+  ok('ze staan in SYSTEMEN, en geen id komt twee keer voor', SYSTEMEN_ZWAAR.every((s) => SYSTEMEN.includes(s)) && new Set(SYSTEMEN.map((s) => s.id)).size === SYSTEMEN.length);
   ok('elk systeem heeft naam, palet, knoppen, init en step', SYSTEMEN_ZWAAR.every((s) => s.naam && LUTS[s.pal] && s.knobs.length && typeof s.init === 'function' && typeof s.step === 'function'));
 }
 

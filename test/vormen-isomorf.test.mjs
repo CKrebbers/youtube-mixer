@@ -130,7 +130,7 @@ console.log('de vier isomorfe systemen');
   const imports = [...bron.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]);
   ok('importeert alleen uit ./hulp.js', imports.length > 0 && imports.every((i) => i === './hulp.js'));
   ok('sn, tv, ep, dw, in die volgorde', SYSTEMEN_ISOMORF.map((s) => s.id).join() === 'sn,tv,ep,dw');
-  ok('geen id botst met de systemen in systemen.js', SYSTEMEN_ISOMORF.every((s) => !SYSTEMEN.some((t) => t.id === s.id)));
+  ok('ze staan in SYSTEMEN, en geen id komt twee keer voor', SYSTEMEN_ISOMORF.every((s) => SYSTEMEN.includes(s)) && new Set(SYSTEMEN.map((s) => s.id)).size === SYSTEMEN.length);
   ok('elk systeem heeft naam, sub, cat Isomorf, een palet dat bestaat', SYSTEMEN_ISOMORF.every((s) => s.naam && s.sub && s.cat === 'Isomorf' && LUTS[s.pal]));
 
   const echt = Math.random;
@@ -191,8 +191,8 @@ console.log('knoppen');
   }
   const vol = SYSTEMEN_ISOMORF.map((s) => s.knobs.find((k) => k.k === 'vol'));
   ok('elke vol-knop is fix en gemarkeerd als geluid, en staat achteraan', vol.every((k, i) => k && k.fix && k.geluid && SYSTEMEN_ISOMORF[i].knobs.at(-1) === k));
-  ok('zonder sink geen vol-knop op een draaiknop; met sink gelijk aan draaiKnoppen',
-    SYSTEMEN_ISOMORF.every((s) => !beeldKnoppen(s).some((k) => k.geluid) && beeldKnoppen(s, true).map((k) => k.k).join() === draaiKnoppen(s).map((k) => k.k).join()));
+  ok('zonder sink geen vol-knop op een draaiknop (draaiKnoppen slaat geluid-knoppen over)',
+    SYSTEMEN_ISOMORF.every((s) => !draaiKnoppen(s).some((k) => k.geluid) && beeldKnoppen(s).map((k) => k.k).join() === draaiKnoppen(s).map((k) => k.k).join()));
   ok('ep: de vormkeuze is een keuzelijst die opnieuw begint, geen draaiknop', !draaiKnoppen(SYSTEMEN_ISOMORF[2]).some((k) => k.k === 'f'));
 }
 

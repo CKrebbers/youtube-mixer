@@ -27,11 +27,15 @@ import {
   PI, TAU, ACHTERGROND, PALETTEN, LUTS, maakRng, gauss, noise, pcol, rooster, blit, clear, fade, K, SEL,
 } from './hulp.js';
 
+import { SYSTEMEN_ZWAAR } from './systemen-zwaar.js';
+import { SYSTEMEN_MEER } from './systemen-meer.js';
+import { SYSTEMEN_ISOMORF } from './systemen-isomorf.js';
+
 export { ACHTERGROND, PALETTEN, LUTS, maakRng, noise };
 
 // ---- de systemen -----------------------------------------------------------
 
-export const SYSTEMEN = [
+const EIGEN = [
 
   { id: 'lz', naam: 'Lorenz-attractor', sub: 'het vlindereffect', cat: 'Chaos', pal: 'gloed',
     knobs: [K('s', 'σ (sigma)', 1, 20, 0.1, 10), K('r', 'ρ (rho)', 1, 120, 0.5, 28), K('b', 'β (beta)', 0.5, 5, 0.01, 2.667),
@@ -265,13 +269,23 @@ export const SYSTEMEN = [
     } },
 ];
 
+/**
+ * Alle 26, in de volgorde waarin Device ◀ ▶ ze afloopt: eerst de lichte
+ * (hierboven), dan de zware (systemen-zwaar.js: gs, cl, ln, ph, sp), de
+ * middelzware (systemen-meer.js) en de vier waarin beeld = geluid
+ * (systemen-isomorf.js; hun geluid zit achter een sink die in Varve nog
+ * nergens op aangesloten is, dus ze zijn hier alleen beeld).
+ */
+export const SYSTEMEN = [...EIGEN, ...SYSTEMEN_ZWAAR, ...SYSTEMEN_MEER, ...SYSTEMEN_ISOMORF];
+
 export const SYSTEEM = Object.fromEntries(SYSTEMEN.map((s) => [s.id, s]));
 
 /**
- * De knoppen die op een draaiknop mogen: geen keuzelijst (sel) en geen knop
- * die een nieuwe init vraagt (re). Hooguit `max`, in de volgorde van het
+ * De knoppen die op een draaiknop mogen: geen keuzelijst (sel), geen knop
+ * die een nieuwe init vraagt (re), en geen knop die alleen het geluid raakt
+ * (geluid: de volumeknop van de isomorfe systemen; er is nog geen sink). Hooguit `max`, in de volgorde van het
  * systeem — daar staan de knoppen die het verschil maken vooraan.
  */
 export function draaiKnoppen(sys, max = 6) {
-  return sys.knobs.filter((k) => !k.sel && !k.re).slice(0, max);
+  return sys.knobs.filter((k) => !k.sel && !k.re && !k.geluid).slice(0, max);
 }
