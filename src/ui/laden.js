@@ -13,7 +13,7 @@ import { meld } from './meldingen.js';
  * Hier wordt ook de golfvorm-analyse (`staat.analysis`) bijgehouden en welk
  * library-nummer er op welke track staat (`staat.deckTrack`).
  */
-export function opzetLaden({ engine, staat, videoMixer, vensterVan, racks, haalSamples }) {
+export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
   const { deckTrack, analysis } = staat;
   const perDeck = (maak) => Object.fromEntries(DECK_IDS.map((id) => [id, maak(id)]));
 
@@ -114,7 +114,8 @@ export function opzetLaden({ engine, staat, videoMixer, vensterVan, racks, haalS
     const trackId = deckTrack[deck];
     if (!trackId) return;                       // demotrack of losgesleept bestand
     verfijnBezig = true;
-    const knop = vensterVan(deck) ? document.querySelector(`#venster-${vensterVan(deck)} .tap`) : null;
+    // De TAP-knop staat alleen op het scherm voor de track met focus.
+    const knop = deck === engine.focus ? document.querySelector('#focus-deck .tap') : null;
     knop?.classList.add('bezig');
     try {
       const res = await fetch(`/api/library/${trackId}/grid/verfijn`, {

@@ -1,51 +1,37 @@
-import { DECK_IDS } from '../engine/engine.js';
 import { read as readAction, trackVanDeck } from '../control/actions.js';
 import { fmtTime } from '../lib/emitter.js';
-import { VENSTERS } from './vensters.js';
 
 /**
  * De renderloop: één rAF voor de hele UI. De engine wordt alleen uitgelezen,
  * nooit aangestuurd.
  *
- * Wat een eigen module is (video, opnameknop, koppelpaneel, rackkiezer) geeft
- * zijn eigen tekenstap mee; de rest staat hier. Elke stap heeft zijn eigen
- * vangnet (`veilig`).
+ * Wat een eigen module is (de APC-spiegel, video, opnameknop, koppelpaneel,
+ * rackkiezer) geeft zijn eigen tekenstap mee; de rest staat hier. Elke stap
+ * heeft zijn eigen vangnet (`veilig`).
  */
-export function startRenderloop({ engine, staat, views, knobs, faders, tracksEl, stappen }) {
+export function startRenderloop({ engine, staat, views, knobs, faders, stappen }) {
   const { venster, analysis } = staat;
-  const perDeck = (maak) => Object.fromEntries(DECK_IDS.map((id) => [id, maak(id)]));
 
-  const els = {};
-  for (const v of VENSTERS) {
-    const r = views[v].root;
-    els[v] = {
-      title: r.querySelector('.deck-title'),
-      pos: r.querySelector('.t-pos'),
-      rem: r.querySelector('.t-rem'),
-      play: r.querySelector('.play'),
-      pitch: r.querySelector('.pitch-val'),
-      pitchBereik: r.querySelector('.pitch-bereik'),
-      meter: document.querySelector(`.strip[data-venster="${v}"] .ch-meter i`),
-      hotcues: [...r.querySelectorAll('.hc')],
-      loopBtns: [...r.querySelectorAll('.loops .btn:not(.bl)')],
-      beatBtns: [...r.querySelectorAll('.loops .btn.bl')],
-      bpm: r.querySelector('.bpm-val'),
-      tap: r.querySelector('.tap'),
-      sync: r.querySelector('.sync'),
-      fxNaam: r.querySelector('.fx-naam'),
-      fxBypass: r.querySelector('.fx-bypass'),
-      fxPlekken: [...r.querySelectorAll('.fx-row .knob.fx-plek')],
-      fxRack: r.querySelector('.fx-rack'),
-      fxBewaar: r.querySelector('.fx-bewaar'),
-      fase: r.querySelector('.fase'),
-      faseWijzer: r.querySelector('.fase i'),
-    };
-  }
-  const trkEls = perDeck((id) => {
-    const r = tracksEl.querySelector(`.trk[data-deck="${id}"]`);
-    return { root: r, titel: r.querySelector('.trk-titel'), meter: r.querySelector('.trk-meter i'),
-      kanten: [...r.querySelectorAll('.trk-kant')], toon: [...r.querySelectorAll('.trk-toon')] };
-  });
+  const r = views.root;
+  const e = {
+    title: r.querySelector('.deck-title'),
+    pos: r.querySelector('.t-pos'),
+    rem: r.querySelector('.t-rem'),
+    play: r.querySelector('.play'),
+    pitch: r.querySelector('.pitch-val'),
+    pitchBereik: r.querySelector('.pitch-bereik'),
+    hotcues: [...r.querySelectorAll('.hc')],
+    loopBtns: [...r.querySelectorAll('.loops .btn:not(.bl)')],
+    beatBtns: [...r.querySelectorAll('.loops .btn.bl')],
+    bpm: r.querySelector('.bpm-val'),
+    tap: r.querySelector('.tap'),
+    sync: r.querySelector('.sync'),
+    maat: r.querySelector('.maat-badge'),
+    fase: r.querySelector('.fase'),
+    faseWijzer: r.querySelector('.fase i'),
+  };
+  const fxRij = document.querySelector('#focusdeel .fx-row');
+  const fxNaam = fxRij.querySelector('.fx-naam');
   const padEls = [...document.querySelectorAll('.pad')];
   const masterMeter = document.querySelector('.master-meter i');
   const curveBtn = document.querySelector('.curve');
@@ -110,76 +96,54 @@ export function startRenderloop({ engine, staat, views, knobs, faders, tracksEl,
     veilig('volgen', () => {
       volgEngine();
     });
-    veilig('trackrij', () => {
-      for (const id of DECK_IDS) {
-        const d = s.decks[id], t = trkEls[id];
-        if (t.titel.textContent !== (d.title || '— leeg —')) t.titel.textContent = d.title || '— leeg —';
-        t.meter.style.width = (d.level * 100).toFixed(1) + '%';
-        t.root.classList.toggle('speelt', d.playing);
-        t.root.classList.toggle('leeg', !d.loaded);
-        t.root.classList.toggle('focused', s.focus === id);
-        t.root.classList.toggle('maat', s.maat === id);
-        t.kanten.forEach((b) => b.classList.toggle('on', b.dataset.kant === d.kant));
-        t.toon.forEach((b) => b.classList.toggle('on', venster[b.dataset.toon] === id));
-      }
+    veilig('spiegel', () => {
+      stappen.spiegel(s);
     });
-    veilig('vensters', () => {
-      for (const v of VENSTERS) {
-        const id = venster[v];
-        const d = s.decks[id], e = els[v];
-        views[v].zoom.draw(d, analysis[id]);
-        views[v].overview.draw(d, analysis[id]);
+    veilig('focus', () => {
+      const id = venster.L;
+      const d = s.decks[id];
+      views.zoom.draw(d, analysis[id]);
+      views.overview.draw(d, analysis[id]);
 
-        e.title.textContent = d.title;
-        e.pos.textContent = fmtTime(d.position);
-        e.rem.textContent = '-' + fmtTime(Math.max(0, d.duration - d.position));
-        e.play.classList.toggle('on', d.playing);
-        e.pitch.textContent = ((d.rate - 1) * 100).toFixed(1) + '%';
-        const bereik = `±${Math.round(engine.deck(id).pitchBereik * 100)}`;
-        if (e.pitchBereik.textContent !== bereik) e.pitchBereik.textContent = bereik;
-        e.meter.style.width = (d.level * 100).toFixed(1) + '%';
-        // bpm: wat je HOORT, dus inclusief pitch.
-        e.bpm.textContent = d.bpm ? d.bpm.toFixed(1) : '—';
-        e.bpm.classList.toggle('leeg', !d.bpm);
-        e.tap.classList.toggle('actief', !!d.grid);
+      if (e.title.textContent !== (d.title || '— leeg —')) e.title.textContent = d.title || '— leeg —';
+      e.pos.textContent = fmtTime(d.position);
+      e.rem.textContent = '-' + fmtTime(Math.max(0, d.duration - d.position));
+      e.play.classList.toggle('on', d.playing);
+      e.pitch.textContent = ((d.rate - 1) * 100).toFixed(1) + '%';
+      const bereik = `±${Math.round(engine.deck(id).pitchBereik * 100)}`;
+      if (e.pitchBereik.textContent !== bereik) e.pitchBereik.textContent = bereik;
+      // bpm: wat je HOORT, dus inclusief pitch.
+      e.bpm.textContent = d.bpm ? d.bpm.toFixed(1) : '—';
+      e.bpm.classList.toggle('leeg', !d.bpm);
+      e.tap.classList.toggle('actief', !!d.grid);
+      e.maat.classList.toggle('hidden', s.maat !== id);
+      views.root.classList.toggle('leeg', !d.loaded);
 
-        // Fasemeter: hoe ver dit deck voor of achter loopt, over een halve tel.
-        // Handig bij handmatig beatmatchen én als controle op de sync.
-        const f = s.fase?.[id];
-        e.fase.classList.toggle('leeg', f === null || f === undefined);
-        if (f !== null && f !== undefined && d.grid) {
-          const halveTel = (60 / d.grid.bpm) / d.rate / 2;   // hoorbare tel: sneller = korter
-          const uit = Math.max(-1, Math.min(1, f / halveTel));
-          e.faseWijzer.style.left = `${50 + uit * 46}%`;
-          e.faseWijzer.classList.toggle('strak', Math.abs(f) < 0.006);
-          e.fase.title = `${f >= 0 ? '+' : ''}${(f * 1000).toFixed(0)} ms`;
-        }
-        // De knoppen wijzen naar een PLEK; wissel je van effect, dan verandert
-        // alleen wat er onder die plek zit. Daarom lopen de labels mee.
-        e.fxNaam.textContent = d.fx.naam || '—';
-        e.fxBypass.classList.toggle('on', d.fx.bypass);
-        // Een plek zonder macro staat er wel, maar dof en dood: zo zie je in één
-        // oogopslag hoeveel knoppen dit rack gebruikt.
-        e.fxPlekken.forEach((el, i) => {
-          const p = d.fx.plekken.find((x) => x.plek === i + 1);
-          const label = el.querySelector('.knob-label');
-          const tekst = p?.naam || String(i + 1);
-          if (label && label.textContent !== tekst) label.textContent = tekst;
-          el.classList.toggle('leeg', !p);
-        });
-
-        e.sync.classList.toggle('gelijk', readAction(`track.${trackVanDeck(id)}.sync`) === 1);
-        e.beatBtns.forEach((b) => {
-          b.classList.toggle('dood', !d.grid);
-          const n = parseFloat(b.dataset.action.split('.').pop());
-          b.classList.toggle('on', d.loopBeats === n);
-        });
-
-        d.hotcues.forEach((t, i) => e.hotcues[i].classList.toggle('set', t !== null));
-        e.loopBtns.forEach((b) => b.classList.toggle('on', !!d.loop && !b.classList.contains('warn')));
-        views[v].root.classList.toggle('focused', s.focus === id);
-        stappen.volgRackKiezer(id);
+      // Fasemeter: hoe ver deze track voor of achter loopt, over een halve tel.
+      // Handig bij handmatig beatmatchen én als controle op de sync.
+      const f = s.fase?.[id];
+      e.fase.classList.toggle('leeg', f === null || f === undefined);
+      if (f !== null && f !== undefined && d.grid) {
+        const halveTel = (60 / d.grid.bpm) / d.rate / 2;   // hoorbare tel: sneller = korter
+        const uit = Math.max(-1, Math.min(1, f / halveTel));
+        e.faseWijzer.style.left = `${50 + uit * 46}%`;
+        e.faseWijzer.classList.toggle('strak', Math.abs(f) < 0.006);
+        e.fase.title = `${f >= 0 ? '+' : ''}${(f * 1000).toFixed(0)} ms`;
       }
+      // Wat er klinkt: het rack wijst naar PLEKKEN; de namen staan op de device knobs.
+      const naam = d.fx.naam || '—';
+      if (fxNaam.textContent !== naam) fxNaam.textContent = naam;
+
+      e.sync.classList.toggle('gelijk', readAction(`track.${trackVanDeck(id)}.sync`) === 1);
+      e.beatBtns.forEach((b) => {
+        b.classList.toggle('dood', !d.grid);
+        const n = parseFloat(b.dataset.action.split('.').pop());
+        b.classList.toggle('on', d.loopBeats === n);
+      });
+
+      d.hotcues.forEach((t, i) => e.hotcues[i].classList.toggle('set', t !== null));
+      e.loopBtns.forEach((b) => b.classList.toggle('on', !!d.loop && !b.classList.contains('warn')));
+      stappen.volgRackKiezer(id);
     });
     veilig('koppelpaneel', () => {
       stappen.koppelpaneel();
@@ -206,7 +170,7 @@ export function startRenderloop({ engine, staat, views, knobs, faders, tracksEl,
       stappen.video();
     });
     veilig('master', () => {
-      masterMeter.style.width = (s.masterPeak * 100).toFixed(1) + '%';
+      masterMeter.style.height = (s.masterPeak * 100).toFixed(1) + '%';
       masterMeter.classList.toggle('clip', s.masterPeak > 0.98);
       curveBtn.textContent = 'curve: ' + s.xfaderCurve;
     });

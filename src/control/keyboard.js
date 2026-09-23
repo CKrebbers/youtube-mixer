@@ -4,11 +4,13 @@ import { invoke, trackVanDeck } from './actions.js';
  * Toetsenbord is gewoon de eerste controller. Dezelfde mapping-vorm als MIDI
  * straks: een tabel van fysieke input -> action-id. Niets meer.
  *
- * `{L}` en `{R}` zijn de tracks in het linker- en rechtervenster. De handen
- * bedienen wat je ziet; zet je track 5 links, dan is Q play op track 5.
+ * `{L}` en `{R}` zijn de "vensters" van de schermlaag: L = de track met focus,
+ * R = de track waar je daarvoor op zat (sinds het scherm de APC spiegelt, zie
+ * src/ui/vensters.js). Geef je track 5 focus, dan is Q play op track 5 en P
+ * play op de track waar je vandaan kwam. I zet de focus daarheen: wisselen.
  */
 export const KEYMAP = {
-  // linkervenster
+  // linkerhand: de track met focus
   KeyQ: 'track.{L}.play',      KeyW: 'track.{L}.cue',
   KeyA: 'track.{L}.hotcue.1',  KeyS: 'track.{L}.hotcue.2',
   KeyD: 'track.{L}.hotcue.3',  KeyF: 'track.{L}.hotcue.4',
@@ -18,7 +20,7 @@ export const KEYMAP = {
   KeyZ: 'track.{L}.nudge.back', KeyX: 'track.{L}.nudge.fwd',
   KeyE: 'track.{L}.focus',
 
-  // rechtervenster
+  // rechterhand: de vorige focus
   KeyP: 'track.{R}.play',       KeyO: 'track.{R}.cue',
   KeyJ: 'track.{R}.hotcue.1',   KeyK: 'track.{R}.hotcue.2',
   KeyL: 'track.{R}.hotcue.3',   Semicolon: 'track.{R}.hotcue.4',

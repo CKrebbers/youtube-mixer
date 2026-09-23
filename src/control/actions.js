@@ -380,14 +380,15 @@ export function bindVideo(mixer) {
 
 /**
  * Wat de schermlaag doet maar op de bus hoort, zodat een APC-knop het kan:
- * een track in een venster zetten, opnemen, door racks bladeren. De functies
+ * een track in een venster zetten (L = focus, R = de tweede), opnemen, door
+ * racks bladeren. De functies
  * komen van app.js; hier alleen de namen en de read.
  */
 export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnameSoort, rackStap }) {
   for (const [nr, id] of TRACKS) {
     for (const v of ['L', 'R']) {
       define(`window.${v}.show.${nr}`, 'trigger', (on) => { if (on) toon(v, id); },
-        { label: `Track ${nr} in het ${v === 'L' ? 'linker' : 'rechter'}venster`, read: () => (venster()[v] === id ? 1 : 0) });
+        { label: v === 'L' ? `Focus op track ${nr}` : `Track ${nr} als tweede (rechterhand)`, read: () => (venster()[v] === id ? 1 : 0) });
     }
     define(`track.${nr}.rack.next`, 'trigger', (on) => { if (on) rackStap(id, 1); }, { label: `Track ${nr} volgend rack` });
     define(`track.${nr}.rack.prev`, 'trigger', (on) => { if (on) rackStap(id, -1); }, { label: `Track ${nr} vorig rack` });
@@ -410,7 +411,11 @@ export function bindLagen(lagen) {
     for (const knop of Object.keys(g.knoppen)) {
       define(`layer.${groep}.${knop}`, 'trigger', (on) => lagen.druk(groep, knop, on),
         { label: `Mapje ${g.naam}: ${g.knoppen[knop].map((l) => LAAGNAAM[`${groep}.${l}`] ?? l).join(' / ')}`,
-          read: () => (lagen.isOpen(groep, knop) ? 1 : 0) });
+          // Een kiesknop met meer mapjes onder zich (Clip/Device View: strip,
+          // dan rack) licht alleen op buiten het standaardmapje. Anders
+          // brandde hij altijd en zag je niet of je in het rack zat.
+          read: () => (lagen.isOpen(groep, knop)
+            && (g.knoppen[knop].length === 1 || lagen.stand[groep] !== g.standaard) ? 1 : 0) });
     }
     if (g.volgorde) {
       define(`layer.${groep}.next`, 'trigger', (on) => { if (on) lagen.stap(groep, 1); }, { label: `Mapje ${g.naam}: volgende` });

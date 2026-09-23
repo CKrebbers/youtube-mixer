@@ -5,9 +5,17 @@ import { clamp } from '../lib/emitter.js';
  * Knoppen en faders sturen GEEN engine-methodes aan. Ze sturen actions, net als
  * de APC40 straks. Zo blijft er maar één weg naar binnen.
  */
+/**
+ * Welke Knob bij welk element hoort. De spiegel van de APC herschrijft de
+ * action van een knop als de mapping, het mapje of de focus verandert, en
+ * moet daarvoor bij de Knob kunnen.
+ */
+export const knobVan = new WeakMap();
+
 export class Knob {
   constructor(el) {
     this.el = el;
+    knobVan.set(el, this);
     this.action = el.dataset.action;
     this.value = parseFloat(el.dataset.value ?? '0.5');
     this.bipolar = el.dataset.bipolar === 'true';
@@ -76,8 +84,13 @@ export function bindButtons(root) {
     let ingedrukt = null;
     btn.addEventListener('pointerdown', (e) => {
       const alt = btn.dataset.actionShift;
-      ingedrukt = btn.dataset.action;
-      invoke(e.shiftKey && alt ? alt : ingedrukt, true);
+      const a = e.shiftKey && alt ? alt : btn.dataset.action;
+      // Een gespiegelde APC-knop zonder functie heeft geen action; een knop
+      // die (via je eigen mapping) naar een draaiknop-action wijst, kan daar
+      // met een klik niets zinnigs mee.
+      if (!a || metaOf(a)?.type === 'value') return;
+      ingedrukt = a;
+      invoke(a, true);
     });
     const los = () => { if (ingedrukt) { invoke(ingedrukt, false); ingedrukt = null; } };
     btn.addEventListener('pointerup', los);

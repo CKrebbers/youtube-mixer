@@ -48,7 +48,10 @@ export function beschrijf(action) {
     if ((m = /^beatloop\.([\d.]+)$/.exec(rest))) return { kort: `${k}·${m[1]}t`, lang: `loop van ${m[1]} ${m[1] === '1' ? 'tel' : 'tellen'} — ${w}` };
     return r(rest, `?${rest}`);   // onbekend: de test vangt dit
   }
-  if ((m = /^window\.([LR])\.show\.(\d)$/.exec(action))) return { kort: `→ ${m[1]}`, lang: `track ${m[2]} in het ${m[1] === 'L' ? 'linker' : 'rechter'}venster` };
+  // Sinds het scherm de APC spiegelt: L = de track met focus, R = de tweede
+  // (de vorige focus, of wat je hiermee kiest). Zie src/ui/vensters.js.
+  if ((m = /^window\.L\.show\.(\d)$/.exec(action))) return { kort: `focus ${m[1]}`, lang: `focus op track ${m[1]}` };
+  if ((m = /^window\.R\.show\.(\d)$/.exec(action))) return { kort: `2e: ${m[1]}`, lang: `track ${m[1]} als tweede (rechterhand op het toetsenbord)` };
   if ((m = /^sampler\.(\d)$/.exec(action))) return { kort: `pad ${m[1]}`, lang: `sampler-pad ${m[1]}: leeg = pak de laatste tellen van de focus-track, gevuld = start/stop op de tel` };
   if ((m = /^sampler\.(\d)\.clear$/.exec(action))) return { kort: `leeg ${m[1]}`, lang: `sampler-pad ${m[1]} leegmaken (bewaard blijft bewaard)` };
   if ((m = /^send\.a\.knob\.(\d)$/.exec(action))) return { kort: `echo ${SEND_A[m[1] - 1] ?? m[1]}`, lang: `echo-bus: ${SEND_A[m[1] - 1] ?? `knop ${m[1]}`}` };

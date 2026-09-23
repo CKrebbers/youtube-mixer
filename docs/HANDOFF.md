@@ -15,6 +15,18 @@ sectie "Verbeterronde 23 september"), dan dit bestand, dan `docs/VRAGEN.md`
   Opstarten duurt ~2 s (tooling-check).
 - De app laadt in Chrome zonder consolefouten (laatst gecontroleerd na alle wijzigingen).
 
+## Hoofdscherm = spiegel van de APC (23 september 2026, NIET gecommit)
+
+- Nieuw: `src/ui/spiegel-plan.js` (puur), `src/ui/spiegel.js`, `test/spiegel.test.mjs`.
+  Herschreven: `index.html` (main), `vensters.js`, `renderloop.js`, `racks.js`
+  (rack-rij volgt focus), CSS. De twee vensters, de mixerstrook en de trackrij
+  zijn weg; zie CLAUDE.md "Het scherm spiegelt de APC40 mkII".
+- Getest in Chrome (eigen tabblad, master op 0): kolommen, actions uit de
+  mapping, mapjes, shift, focuswissel, strip/rack, oplichten, panelen,
+  sneltoetsen, koppelmodus. Niet getest: de APC zelf aanraken (oplichten
+  alleen gesimuleerd), bestanden slepen op banen/kolommen, schermen smaller
+  dan ~1500 px.
+
 ## Wat NIET getest is (vraagt Clay)
 
 - Luisteren: streamen, loops, seek/hotcue na de declick-wijzigingen (VRAGEN A2).

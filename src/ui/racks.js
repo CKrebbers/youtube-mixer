@@ -4,28 +4,29 @@ import { trackVanDeck } from '../control/actions.js';
 import { esc } from './dom.js';
 import { meld, meldOpKnop } from './meldingen.js';
 import { RackEditor } from './rack-editor.js';
-import { VENSTERS } from './vensters.js';
 
 /**
- * Effect-racks per link: ophalen, de kiezer in de FX-rij, bewaren, bladeren
- * (APC) en de rack-editor.
+ * Effect-racks per link: ophalen, de kiezer in de RACK-rij van het focusdeel,
+ * bewaren, bladeren (APC) en de rack-editor.
+ *
+ * Er is één RACK-rij op het scherm, en die hoort bij de track met FOCUS —
+ * net als de device knobs op de APC. Een rack van een track zonder focus
+ * klinkt gewoon door; alleen de kiezer toont hem niet.
  *
  * Een rack hoort bij het NUMMER, niet bij het deck. Laad je hetzelfde nummer
  * morgen op een ander deck, dan komen zijn racks mee.
  */
-export function opzetRacks({ engine, staat, vensterVan }) {
-  const { venster, deckTrack } = staat;
+export function opzetRacks({ engine, staat }) {
+  const { deckTrack } = staat;
   const rackCache = Object.fromEntries(DECK_IDS.map((id) => [id, []]));
 
-  /** Rechtstreeks uit de DOM, niet uit de renderloop. Null als de track niet in beeld is. */
-  const fxEl = (deckId, klasse) => {
-    const v = vensterVan(deckId);
-    return v ? document.querySelector(`#venster-${v} ${klasse}`) : null;
-  };
+  const rij = document.querySelector('#focusdeel .fx-row');
+  /** Rechtstreeks uit de DOM, niet uit de renderloop. Null als de track geen focus heeft. */
+  const fxEl = (deckId, klasse) => (deckId === engine.focus ? rij.querySelector(klasse) : null);
 
   /**
    * Racks van het nummer ophalen en het actieve laden. Dat laatste gebeurt ook
-   * als de track niet in een venster staat: een rack klinkt, of je hem nu ziet
+   * als de track geen focus heeft: een rack klinkt, of je hem nu ziet
    * of niet.
    */
   async function haalRacks(deckId) {
@@ -89,7 +90,7 @@ export function opzetRacks({ engine, staat, vensterVan }) {
   let sjablonen = [];
   fetch('racks/sjablonen.json')
     .then((r) => (r.ok ? r.json() : { racks: [] }))
-    .then((d) => { sjablonen = d.racks || []; for (const v of VENSTERS) vulRackKiezer(venster[v]); })
+    .then((d) => { sjablonen = d.racks || []; vulRackKiezer(engine.focus); })
     .catch((err) => console.warn('[rack] sjablonen niet geladen:', err.message));
 
   function volgRackKiezer(deckId) {
@@ -128,10 +129,10 @@ export function opzetRacks({ engine, staat, vensterVan }) {
     return { rack, nieuw: id === null };
   }
 
-  for (const v of VENSTERS) {
-    const kiezer = document.querySelector(`#venster-${v} .fx-rack`);
+  {
+    const kiezer = rij.querySelector('.fx-rack');
     kiezer.addEventListener('change', () => {
-      const id = venster[v];
+      const id = engine.focus;
       if (kiezer.value.startsWith('s:')) {
         const sjabloon = sjablonen[Number(kiezer.value.slice(2))];
         if (sjabloon) engine.deck(id).fx.zetRack(sjabloon, { herkomst: kiezer.value }).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
@@ -144,9 +145,9 @@ export function opzetRacks({ engine, staat, vensterVan }) {
       kiezer.blur();
     });
 
-    const knop = document.querySelector(`#venster-${v} .fx-bewaar`);
+    const knop = rij.querySelector('.fx-bewaar');
     knop.addEventListener('click', async () => {
-      const id = venster[v];
+      const id = engine.focus;
       const fx = engine.deck(id).fx;
       if (!deckTrack[id]) { meldOpKnop(knop, 'geen library-nummer', false); return; }
       // Een nieuw rack heeft een naam nodig. Geen prompt(): zo'n venster legt
@@ -182,14 +183,12 @@ export function opzetRacks({ engine, staat, vensterVan }) {
     onBewaar: async ({ deckId, naam, alsNieuw }) => bewaarRack(deckId, { naam, alsNieuw }),
   });
 
-  for (const v of VENSTERS) {
-    document.querySelector(`#venster-${v} .fx-bewerk`).addEventListener('click', () => {
-      const id = venster[v];
-      if (rackEditor.open && rackEditor.deckId === id) rackEditor.sluit();
-      else rackEditor.openVoor(id);
-    });
-  }
-  for (const v of VENSTERS) vulRackKiezer(venster[v]);
+  rij.querySelector('.fx-bewerk').addEventListener('click', () => {
+    const id = engine.focus;
+    if (rackEditor.open && rackEditor.deckId === id) rackEditor.sluit();
+    else rackEditor.openVoor(id);
+  });
+  vulRackKiezer(engine.focus);
 
   /** Een rack van een nummer aanzetten, zoals de kiezer het doet. */
   function zetRackVan(id, rack) {
@@ -209,14 +208,13 @@ export function opzetRacks({ engine, staat, vensterVan }) {
   }
 
   /**
-   * Een venster toont een andere track: de kiezer vult zich opnieuw. De editor
-   * hoort bij wat je ziet. Toonde hij de track die hier wegging, dan gaat hij
-   * mee naar de nieuwe.
+   * De focus ging naar een andere track: de kiezer vult zich opnieuw. De
+   * editor hoort bij wat je ziet en gaat mee naar de nieuwe focus.
    */
-  function volgVenster(deckId) {
+  function volgFocus(deckId) {
     vulRackKiezer(deckId);
-    if (rackEditor.open && !vensterVan(rackEditor.deckId)) rackEditor.openVoor(deckId);
+    if (rackEditor.open && rackEditor.deckId !== deckId) rackEditor.openVoor(deckId);
   }
 
-  return { haalRacks, losVanNummer, volgRackKiezer, rackStap, rackEditor, volgVenster };
+  return { haalRacks, losVanNummer, volgRackKiezer, rackStap, rackEditor, volgFocus };
 }

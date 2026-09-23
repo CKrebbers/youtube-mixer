@@ -74,6 +74,9 @@ src/
                     waveform.js, controls.js, midi-monitor.js,
                     mapping-panel.js (de lijst), learn-mode.js (aanwijzen op het scherm),
                     rack-editor.js (racks bouwen met de muis, werkt op een kopie)
+                    spiegel-plan.js het scherm als APC: welke control waar, wat hij doet. Puur.
+                    spiegel.js      acht kolommen, focusdeel, acht banen; data-actions uit de mapping
+                    vensters.js     de track met focus bovenaan + vensters als model (L/R)
   video/            volg.js         hoe een video de audio volgt. Puur rekenwerk.
                     video-mixer.js  <video> per track, gemengd met WebGL2. Leest de engine alleen uit.
                     instellingen.js welke video-effecten en mengvormen er zijn (data)
@@ -111,6 +114,7 @@ test/
   video.test.mjs    video volgt audio: bijsturen, springen, zichtbaarheid
   server.test.mjs   eigen server op eigen poort + tijdelijke db: witte lijst, Range, racks per nummer
   regels.test.mjs   regel 1 als test: engine importeert niets uit ui/control/server, geen DOM
+  spiegel.test.mjs  scherm-als-APC: actions uit de mapping, mapjes, shift, venster volgt focus
   alles.mjs         alle tests in één keer met overzicht
   opname.test.mjs   opname-WAV: stukken, kop, herstel na crash, geen ../
 ```
@@ -227,12 +231,26 @@ test/
 - Een onbekend effecttype in een rack wordt NIET weggegooid: het blijft als ruwe
   JSON bewaard, staat uit, en komt er bij het opslaan ongeschonden weer uit.
   Eén keer openen in een oudere versie mag geen rack slopen.
-- Er zijn ACHT tracks (engine: decks A-H) maar twee VENSTERS op het scherm.
-  Een venster is een grote weergave plus zijn mixerstrook en toont één track
-  naar keuze; wisselen herschrijft alleen de `data-action`-attributen. Knoppen
-  lezen hun action daarom bij het INDRUKKEN, niet bij het opstarten, en het
-  loslaten gaat naar dezelfde action als het indrukken. Het toetsenbord volgt
-  de vensters (`{L}`/`{R}` in `KEYMAP`), spatie volgt de focus.
+- **Het scherm spiegelt de APC40 mkII** (sinds 23 september 2026): onder links
+  acht kolommen precies zoals een APC-kolom (track knob · 5 pads · Clip Stop ·
+  Track Select · 2×2 · fader), rechts het focusdeel (scene launch, transport,
+  device knobs 2×4, pijlen/shift, masterfader, crossfader), boven de track met
+  focus groot plus acht dunne banen. Wat een knop doet komt UIT DE MAPPING:
+  elk element heeft een `data-sig`, en `leesControl()` (spiegel-plan.js) vraagt
+  `mapping.kies(sig)` + `resolveTarget` — shift, open mapje en focus tellen mee.
+  Herberekend bij mapping-`change`, `shift`, lagen-`change` en focuswissel. Is
+  de geladen mapping niet voor een APC, dan leest het scherm een eigen
+  exemplaar van `mappings/apc40mk2.json`. Raak je de APC aan, dan licht het
+  element 300 ms op (`geraakt` uit midi-opzet.js -> `spiegel.markeer`). Knoppen
+  lezen hun action bij het INDRUKKEN, en loslaten gaat naar dezelfde action.
+- Vensters bestaan nog, maar als MODEL (`staat.venster`), niet als UI:
+  L = de track met focus (volgt engine.focus), R = de VORIGE focus-track
+  (`volgFocus`/`zetTweede` in spiegel-plan.js). Het toetsenbord volgt dat
+  (`{L}`/`{R}`): linkerhand = focus, rechterhand = waar je vandaan kwam, I =
+  wisselen. `window.L.show.N` = focus op N, `window.R.show.N` = N als tweede.
+  De RACK-rij en de rack-editor horen bij de track met focus.
+- Clip/Device View (`layer.device.view`) licht alleen op in het RACK: een
+  kiesknop met meer mapjes brandt niet in zijn standaardmapje.
 - Crossfader-toewijzing per track: A, B of thru. Standaard 1 op A, 2 op B, de
   rest thru — zo klinkt een set voor twee als vroeger.
   Op het scherm drie segmenten (`track.N.xfade.a/.thru/.b`): rondlopen kon een

@@ -11,10 +11,6 @@
 <header class="topbar">
   <div class="brand">VARVE<span>DJ</span></div>
   <div class="topbar-right">
-    <div class="meter master-meter"><i></i></div>
-    <label class="master-knob"><span>MASTER</span>
-      <input type="range" class="hfader" min="0" max="1" step="0.001" value="0.8" data-action="mixer.master">
-    </label>
     <button id="lib-btn" class="ghost">library</button>
     <button id="leer-btn" class="ghost">koppelen</button>
     <span class="opname-groep">
@@ -32,19 +28,34 @@
   </div>
 </header>
 
-<main>
-  <!-- ================= VENSTER LINKS (standaard track 1) ================= -->
-  <section class="deck" id="venster-L" data-venster="L">
+<main class="spiegel">
+  <!-- ================= BOVEN: DE TRACK MET FOCUS ================= -->
+  <!-- De actions staan hier op track 1; spiegel.js schrijft ze om naar de
+       track met focus. Knoppen lezen hun action bij het indrukken. -->
+  <section class="deck focus-deck" id="focus-deck">
     <div class="deck-head">
-      <span class="deck-id">1</span>
+      <span class="deck-id" title="de track met focus: device knobs, spatie, sampler en het linkerhandtoetsenbord volgen hem">1</span>
       <span class="deck-title">— leeg —</span>
+      <span class="maat-badge hidden" title="deze track geeft de maat (sync, sampler, video-puls)">MAAT</span>
+      <span class="bpm-val" title="bpm van het beatgrid, meegerekend met de pitch">—</span>
+      <span class="fase" title="hoe ver deze track voor of achter loopt"><b></b><i></i></span>
       <span class="deck-time"><b class="t-pos">0:00.00</b> <i class="t-rem">-0:00.00</i></span>
+      <button class="link demo-btn" title="een synthetische testtrack van 124 bpm op deze track">demo</button>
     </div>
     <canvas class="wave-zoom"></canvas>
     <canvas class="wave-overview"></canvas>
     <div class="deck-transport">
       <button data-kind="button" data-action="track.1.cue" class="btn cue">CUE</button>
       <button data-kind="button" data-action="track.1.play" class="btn play">PLAY</button>
+      <button data-kind="button" data-action="track.1.sync" class="btn sm sync" title="tempo en fase gelijk aan de track die je het hardst hoort">SYNC</button>
+      <div class="grid-tools">
+        <button data-kind="button" data-action="track.1.tap" class="btn sm tap">TAP</button>
+        <button data-kind="button" data-action="track.1.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
+        <button data-kind="button" data-action="track.1.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
+        <button data-kind="button" data-action="track.1.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
+        <button data-kind="button" data-action="track.1.grid.halve" class="btn sm" title="bpm van het grid halveren">bpm½</button>
+        <button data-kind="button" data-action="track.1.grid.double" class="btn sm" title="bpm van het grid verdubbelen">bpm×2</button>
+      </div>
       <div class="hotcues">
         <button data-kind="button" data-action="track.1.hotcue.1" data-action-shift="track.1.hotcue.1.delete" class="hc hc1">1</button>
         <button data-kind="button" data-action="track.1.hotcue.2" data-action-shift="track.1.hotcue.2.delete" class="hc hc2">2</button>
@@ -65,155 +76,64 @@
         <button data-kind="button" data-action="track.1.loop.double" class="btn sm">x2</button>
         <button data-kind="button" data-action="track.1.loop.exit" class="btn sm warn">uit</button>
       </div>
-      <div class="grid-tools">
-        <button data-kind="button" data-action="track.1.tap" class="btn sm tap">TAP</button>
-        <span class="bpm-val" title="bpm van het beatgrid, meegerekend met de pitch">—</span>
-        <button data-kind="button" data-action="track.1.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
-        <button data-kind="button" data-action="track.1.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
-        <button data-kind="button" data-action="track.1.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
-        <button data-kind="button" data-action="track.1.grid.halve" class="btn sm" title="bpm van het grid halveren">bpm½</button>
-        <button data-kind="button" data-action="track.1.grid.double" class="btn sm" title="bpm van het grid verdubbelen">bpm×2</button>
-        <button data-kind="button" data-action="track.1.sync" class="btn sm sync" title="tempo en fase gelijk aan de track die je het hardst hoort">SYNC</button>
-        <span class="fase" title="hoe ver dit deck voor of achter loopt"><b></b><i></i></span>
-      </div>
-      <div class="fx-row">
-        <span class="fx-kop">FX</span>
-        <select class="fx-rack" title="rack van dit nummer"></select>
-        <span class="fx-naam" title="wat er nu klinkt">Delay</span>
-        <button data-kind="button" data-action="track.1.fx.next" class="btn sm fx-volgend" title="volgend los effect — vervangt wat er nu klinkt">›</button>
-        <button class="btn sm fx-bewaar" title="dit rack bij dit nummer bewaren">bewaar</button>
-        <button class="btn sm fx-bewerk" title="rack bewerken: effecten, knoppen, bereiken">bewerk</button>
-        <div class="knob sm fx-plek" data-action="track.1.fx.knob.1" data-label="1" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.1.fx.knob.2" data-label="2" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.1.fx.knob.3" data-label="3" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.1.fx.knob.4" data-label="4" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.1.fx.knob.5" data-label="5" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.1.fx.knob.6" data-label="6" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.1.fx.knob.7" data-label="7" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.1.fx.knob.8" data-label="8" data-value="0.5"></div>
-        <div class="knob sm fx-mix" data-action="track.1.fx.mix" data-label="MIX" data-value="0"></div>
-        <button data-kind="button" data-action="track.1.fx.bypass" class="btn sm fx-bypass" title="effect uit">uit</button>
-      </div>
       <label class="pitch">PITCH <span class="pitch-val">0.0%</span>
         <button data-kind="button" data-action="track.1.pitch.range" class="btn sm pitch-bereik" title="bereik van de pitchfader: ±8, ±16 of ±50% (het tempo blijft staan)">±16</button>
         <input type="range" class="hfader" min="0" max="1" step="0.0005" value="0.5" data-action="track.1.pitch">
       </label>
     </div>
-    <div class="dropzone">sleep een audiobestand hierheen &nbsp;·&nbsp; <button class="link demo-btn">of laad demotrack</button></div>
+    <!-- Acht dunne banen, één per track, in kolomvolgorde. Gevuld door spiegel.js. -->
+    <div class="banen" id="banen" title="klik = focus op die track en springen · sleep een audiobestand op een baan om daar te laden"></div>
   </section>
 
-  <!-- ================= MIXER ================= -->
-  <section class="mixer">
-    <div class="strips">
-      <div class="strip" data-venster="L">
-        <div class="knob" data-action="track.1.trim" data-label="TRIM" data-value="0.5"></div>
-        <div class="knob" data-action="track.1.high" data-label="HIGH" data-value="0.5" data-bipolar="true"></div>
-        <div class="knob" data-action="track.1.mid"  data-label="MID"  data-value="0.5" data-bipolar="true"></div>
-        <div class="knob" data-action="track.1.low"  data-label="LOW"  data-value="0.5" data-bipolar="true"></div>
-        <div class="knob filter" data-action="track.1.filter" data-label="FILTER" data-value="0.5" data-bipolar="true"></div>
-        <div class="meter ch-meter"><i></i></div>
-        <input type="range" class="vfader" orient="vertical" min="0" max="1" step="0.001" value="1" data-action="track.1.fader">
-      </div>
-      <div class="strip" data-venster="R">
-        <div class="knob" data-action="track.2.trim" data-label="TRIM" data-value="0.5"></div>
-        <div class="knob" data-action="track.2.high" data-label="HIGH" data-value="0.5" data-bipolar="true"></div>
-        <div class="knob" data-action="track.2.mid"  data-label="MID"  data-value="0.5" data-bipolar="true"></div>
-        <div class="knob" data-action="track.2.low"  data-label="LOW"  data-value="0.5" data-bipolar="true"></div>
-        <div class="knob filter" data-action="track.2.filter" data-label="FILTER" data-value="0.5" data-bipolar="true"></div>
-        <div class="meter ch-meter"><i></i></div>
-        <input type="range" class="vfader" orient="vertical" min="0" max="1" step="0.001" value="1" data-action="track.2.fader">
-      </div>
-    </div>
-    <div class="xfader-row">
-      <span>A</span>
-      <input type="range" class="xfader" min="0" max="1" step="0.001" value="0.5" data-action="mixer.xfader">
-      <span>B</span>
-    </div>
-    <button data-kind="button" data-action="mixer.xfader.curve" class="btn sm curve">curve: smooth</button>
-    <div class="sends" title="gedeelde echo en galm, na de fader: fader dicht en de staart loopt door">
-      <div class="send-bus">
-        <span class="send-kop">A · ECHO</span>
-        <div class="knob sm" data-action="send.a.knob.1" data-label="TIJD" data-value="0.4286" title="op de maat: 1/16 … 1/1 tel · vrij: 20 ms … 1,2 s"></div>
-        <div class="knob sm" data-action="send.a.knob.2" data-label="HERH" data-value="0.5"></div>
-        <div class="knob sm" data-action="send.a.knob.3" data-label="TOON" data-value="0.5"></div>
-        <div class="knob sm" data-action="send.a.knob.4" data-label="MAAT" data-value="1" title="rechts: op de maat van de track die de maat geeft · links: vrij in ms"></div>
-      </div>
-      <div class="send-bus">
-        <span class="send-kop">B · GALM</span>
-        <div class="knob sm" data-action="send.b.knob.1" data-label="GROOT" data-value="0.7"></div>
-        <div class="knob sm" data-action="send.b.knob.2" data-label="TOON" data-value="0.5"></div>
-        <div class="knob sm" data-action="send.b.knob.3" data-label="VAST" data-value="0"></div>
-      </div>
-    </div>
-  </section>
+  <!-- ================= ONDER LINKS: DE ACHT KOLOMMEN VAN DE APC ================= -->
+  <!-- Gevuld door spiegel.js: elke knop krijgt zijn functie uit de mapping. -->
+  <section class="kolommen" id="kolommen"></section>
 
-  <!-- ================= VENSTER RECHTS (standaard track 2) ================= -->
-  <section class="deck" id="venster-R" data-venster="R">
-    <div class="deck-head">
-      <span class="deck-id">2</span>
-      <span class="deck-title">— leeg —</span>
-      <span class="deck-time"><b class="t-pos">0:00.00</b> <i class="t-rem">-0:00.00</i></span>
+  <!-- ================= RECHTS: HET FOCUSDEEL (rechterhelft van de APC) ================= -->
+  <section class="focusdeel" id="focusdeel">
+    <div class="fd-kop">FOCUS: <b class="fd-track">track 1</b> <span class="fd-titel">— leeg —</span></div>
+    <div class="fd-body">
+      <!-- de kolom tussen grid en rechterdeel: scene launch, stop all, master, cue level, masterfader -->
+      <div class="fd-scenes" id="fd-scenes"></div>
+      <div class="fd-rechts">
+        <div class="fd-transport" id="fd-transport"></div>
+        <div class="fd-device">
+          <div class="fd-device-kop"><span>DEVICE</span> <b class="fd-laag">STRIP</b> <span class="fd-laag-uitleg">trim · high · mid · low / echo · galm · fx</span></div>
+          <div class="fd-knobs" id="fd-knobs"></div>
+          <div class="fd-devknoppen" id="fd-devknoppen"></div>
+        </div>
+        <div class="fd-pijlen" id="fd-pijlen"></div>
+        <div class="fx-row">
+          <span class="fx-kop">RACK</span>
+          <select class="fx-rack" title="rack van dit nummer"></select>
+          <span class="fx-naam" title="wat er nu klinkt">Delay</span>
+          <button data-kind="button" data-action="track.1.fx.next" class="btn sm fx-volgend" title="volgend los effect — vervangt wat er nu klinkt">›</button>
+          <button class="btn sm fx-bewaar" title="dit rack bij dit nummer bewaren">bewaar</button>
+          <button class="btn sm fx-bewerk" title="rack bewerken: effecten, knoppen, bereiken">bewerk</button>
+        </div>
+        <div class="sends" title="gedeelde echo en galm, na de fader: fader dicht en de staart loopt door">
+          <div class="send-bus">
+            <span class="send-kop">A · ECHO</span>
+            <div class="knob sm" data-action="send.a.knob.1" data-label="TIJD" data-value="0.4286" title="op de maat: 1/16 … 1/1 tel · vrij: 20 ms … 1,2 s"></div>
+            <div class="knob sm" data-action="send.a.knob.2" data-label="HERH" data-value="0.5"></div>
+            <div class="knob sm" data-action="send.a.knob.3" data-label="TOON" data-value="0.5"></div>
+            <div class="knob sm" data-action="send.a.knob.4" data-label="MAAT" data-value="1" title="rechts: op de maat van de track die de maat geeft · links: vrij in ms"></div>
+          </div>
+          <div class="send-bus">
+            <span class="send-kop">B · GALM</span>
+            <div class="knob sm" data-action="send.b.knob.1" data-label="GROOT" data-value="0.7"></div>
+            <div class="knob sm" data-action="send.b.knob.2" data-label="TOON" data-value="0.5"></div>
+            <div class="knob sm" data-action="send.b.knob.3" data-label="VAST" data-value="0"></div>
+          </div>
+        </div>
+        <div class="xfader-row" id="fd-xfader">
+          <span>A</span>
+          <!-- de crossfader zelf zet spiegel.js hier neer (cc:0:15) -->
+          <span>B</span>
+          <button data-kind="button" data-action="mixer.xfader.curve" class="btn sm curve">curve: smooth</button>
+        </div>
+      </div>
     </div>
-    <canvas class="wave-zoom"></canvas>
-    <canvas class="wave-overview"></canvas>
-    <div class="deck-transport">
-      <button data-kind="button" data-action="track.2.cue" class="btn cue">CUE</button>
-      <button data-kind="button" data-action="track.2.play" class="btn play">PLAY</button>
-      <div class="hotcues">
-        <button data-kind="button" data-action="track.2.hotcue.1" data-action-shift="track.2.hotcue.1.delete" class="hc hc1">1</button>
-        <button data-kind="button" data-action="track.2.hotcue.2" data-action-shift="track.2.hotcue.2.delete" class="hc hc2">2</button>
-        <button data-kind="button" data-action="track.2.hotcue.3" data-action-shift="track.2.hotcue.3.delete" class="hc hc3">3</button>
-        <button data-kind="button" data-action="track.2.hotcue.4" data-action-shift="track.2.hotcue.4.delete" class="hc hc4">4</button>
-      </div>
-      <div class="loops">
-        <span class="loop-kop">tellen</span>
-        <button data-kind="button" data-action="track.2.beatloop.1" class="btn sm bl">1</button>
-        <button data-kind="button" data-action="track.2.beatloop.2" class="btn sm bl">2</button>
-        <button data-kind="button" data-action="track.2.beatloop.4" class="btn sm bl">4</button>
-        <button data-kind="button" data-action="track.2.beatloop.8" class="btn sm bl">8</button>
-        <span class="loop-kop">sec</span>
-        <button data-kind="button" data-action="track.2.loop.1" class="btn sm">1</button>
-        <button data-kind="button" data-action="track.2.loop.2" class="btn sm">2</button>
-        <button data-kind="button" data-action="track.2.loop.4" class="btn sm">4</button>
-        <button data-kind="button" data-action="track.2.loop.halve" class="btn sm">/2</button>
-        <button data-kind="button" data-action="track.2.loop.double" class="btn sm">x2</button>
-        <button data-kind="button" data-action="track.2.loop.exit" class="btn sm warn">uit</button>
-      </div>
-      <div class="grid-tools">
-        <button data-kind="button" data-action="track.2.tap" class="btn sm tap">TAP</button>
-        <span class="bpm-val" title="bpm van het beatgrid, meegerekend met de pitch">—</span>
-        <button data-kind="button" data-action="track.2.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
-        <button data-kind="button" data-action="track.2.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
-        <button data-kind="button" data-action="track.2.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
-        <button data-kind="button" data-action="track.2.grid.halve" class="btn sm" title="bpm van het grid halveren">bpm½</button>
-        <button data-kind="button" data-action="track.2.grid.double" class="btn sm" title="bpm van het grid verdubbelen">bpm×2</button>
-        <button data-kind="button" data-action="track.2.sync" class="btn sm sync" title="tempo en fase gelijk aan de track die je het hardst hoort">SYNC</button>
-        <span class="fase" title="hoe ver dit deck voor of achter loopt"><b></b><i></i></span>
-      </div>
-      <div class="fx-row">
-        <span class="fx-kop">FX</span>
-        <select class="fx-rack" title="rack van dit nummer"></select>
-        <span class="fx-naam" title="wat er nu klinkt">Delay</span>
-        <button data-kind="button" data-action="track.2.fx.next" class="btn sm fx-volgend" title="volgend los effect — vervangt wat er nu klinkt">›</button>
-        <button class="btn sm fx-bewaar" title="dit rack bij dit nummer bewaren">bewaar</button>
-        <button class="btn sm fx-bewerk" title="rack bewerken: effecten, knoppen, bereiken">bewerk</button>
-        <div class="knob sm fx-plek" data-action="track.2.fx.knob.1" data-label="1" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.2.fx.knob.2" data-label="2" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.2.fx.knob.3" data-label="3" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.2.fx.knob.4" data-label="4" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.2.fx.knob.5" data-label="5" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.2.fx.knob.6" data-label="6" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.2.fx.knob.7" data-label="7" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="track.2.fx.knob.8" data-label="8" data-value="0.5"></div>
-        <div class="knob sm fx-mix" data-action="track.2.fx.mix" data-label="MIX" data-value="0"></div>
-        <button data-kind="button" data-action="track.2.fx.bypass" class="btn sm fx-bypass" title="effect uit">uit</button>
-      </div>
-      <label class="pitch">PITCH <span class="pitch-val">0.0%</span>
-        <button data-kind="button" data-action="track.2.pitch.range" class="btn sm pitch-bereik" title="bereik van de pitchfader: ±8, ±16 of ±50% (het tempo blijft staan)">±16</button>
-        <input type="range" class="hfader" min="0" max="1" step="0.0005" value="0.5" data-action="track.2.pitch">
-      </label>
-    </div>
-    <div class="dropzone">sleep een audiobestand hierheen &nbsp;·&nbsp; <button class="link demo-btn">of laad demotrack</button></div>
   </section>
   <!-- ================= VIDEO: inklapbare kolom rechts ================= -->
   <section id="video-panel" class="video-panel hidden">
@@ -240,10 +160,6 @@
     </div>
   </section>
 </main>
-
-<!-- ================= ACHT TRACKS ================= -->
-<!-- Gevuld door app.js: acht keer hetzelfde, dat hoort niet met de hand. -->
-<section id="tracks" class="tracks"></section>
 
 <!-- ================= SAMPLER ================= -->
 <section id="sampler" class="sampler-rij">
@@ -344,25 +260,25 @@
     <h2>Toetsen</h2>
     <div class="help-cols">
       <div>
-        <h3>Linkervenster</h3>
+        <h3>Linkerhand: track met focus</h3>
         <table>
           <tr><td>Q / W</td><td>play · cue</td></tr>
           <tr><td>A S D F</td><td>hotcue 1–4 (shift: wissen)</td></tr>
           <tr><td>1 2 3 4</td><td>loop 1 · 2 · 4 · 8 s</td></tr>
           <tr><td>5</td><td>loop uit</td></tr>
           <tr><td>Z / X</td><td>nudge − / +</td></tr>
-          <tr><td>E</td><td>focus hierop</td></tr>
+          <tr><td>E</td><td>(focus blijft hier)</td></tr>
         </table>
       </div>
       <div>
-        <h3>Rechtervenster</h3>
+        <h3>Rechterhand: vorige focus</h3>
         <table>
           <tr><td>P / O</td><td>play · cue</td></tr>
           <tr><td>J K L ;</td><td>hotcue 1–4 (shift: wissen)</td></tr>
           <tr><td>7 8 9 0</td><td>loop 1 · 2 · 4 · 8 s</td></tr>
           <tr><td>-</td><td>loop uit</td></tr>
           <tr><td>, / .</td><td>nudge − / +</td></tr>
-          <tr><td>I</td><td>focus hierop</td></tr>
+          <tr><td>I</td><td>focus hierop (wisselen)</td></tr>
         </table>
       </div>
       <div>
@@ -378,10 +294,11 @@
         </table>
       </div>
     </div>
-    <p class="hint">De toetsen van een venster bedienen de track die daar staat. Zet een track in een venster met L of R in de trackrij.
+    <p class="hint">Het scherm is een spiegel van de APC40: onderaan de acht kolommen, rechts het focusdeel — op dezelfde plek als op de controller, met wat elke knop NU doet (uit je mapping). Wijs een knop aan voor de naam op de APC.
+      De linkerhand bedient de track met focus (klik een kolom, een baan of Track Select), de rechterhand de track waar je daarvoor op zat. Shift + Track Select zet een track als die tweede.
       Shift+klik op een hotcue of sampler-pad maakt hem leeg. Dubbelklik op een knop zet hem terug.
       Alt (option) + vasthouden op een effect- of sendknop: vol open zolang je vasthoudt (dub-worp, galm vasthouden).
-      <b>MAAT</b> in de trackrij = de track waar sync, sampler en video-puls op lopen.</p>
+      <b>MAAT</b> bij een kolom = de track waar sync, sampler en video-puls op lopen.</p>
     <p class="hint">Sluiten met Esc of klik buiten dit venster.</p>
   </div>
 </div>

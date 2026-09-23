@@ -20,7 +20,12 @@ import { meld } from './meldingen.js';
  * binnenkant niet kennen: de hub weet van geen actions, de mapping van geen
  * hardware, en de engine van geen van beide.
  */
-export function opzetMidi({ engine, sluitOnderpanelen, lagen }) {
+/**
+ * @param geraakt  (sig, regelSig) -> void: een control op de controller is
+ *                 aangeraakt en deed iets. De spiegel op het scherm licht dan
+ *                 het bijbehorende element even op.
+ */
+export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) {
   const DEVICES = [apc40mk2, generic];   // generic matcht alles, dus als laatste
   const pickDevice = (naam) => DEVICES.find((d) => d.match.test(naam || '')) || generic;
 
@@ -113,6 +118,7 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen }) {
     // je een shift-regel koppelen door shift vast te houden.
     if (learn.busy && msg.sig !== mapping.shiftSig) { msg.leer = learn.feed(msg); return; }
     msg.hit = mapping.handle(msg);
+    if (msg.hit && geraakt) { try { geraakt(msg.sig, msg.hit.rule?.in); } catch (_) {} }
     if (msg.hit?.taken && msg.lag != null) latency.voeg(msg.lag);
   });
 

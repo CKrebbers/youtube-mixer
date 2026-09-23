@@ -7,6 +7,7 @@ import { meld, koppelMeldingen } from './meldingen.js';
 import { opzetVideo } from './video-paneel.js';
 import { opzetOpname } from './opname-knop.js';
 import { opzetVensters } from './vensters.js';
+import { opzetSpiegel } from './spiegel.js';
 import { opzetRacks } from './racks.js';
 import { opzetSamplerOpslag } from './sampler-opslag.js';
 import { opzetLaden } from './laden.js';
@@ -38,7 +39,7 @@ window.meld = meld;
 
 /** Wat meerdere modules lezen én schrijven. */
 const staat = {
-  venster: { L: 'A', R: 'B' },          // venster -> deck-id
+  venster: { L: 'A', R: 'B' },          // L = track met focus, R = de vorige focus (zie vensters.js)
   deckTrack: perDeck(() => null),       // welk library-nummer op welke track (null = los bestand, demo, leeg)
   analysis: perDeck(() => null),        // golfvorm-peaks per track
 };
@@ -53,20 +54,24 @@ bindVideo(videoMixer);
 const opname = opzetOpname({ engine, videoMixer });
 window.opnemer = opname.opnemer;
 
-// ---- vensters en tracks ---------------------------------------------------
+// ---- het scherm als spiegel van de APC, en de track met focus -------------
+// Eerst de spiegel: die zet de kolommen en het focusdeel neer, en pas daarna
+// kan opzetVensters alle knoppen en faders binden.
+const spiegel = opzetSpiegel({ engine, staat, loadFile: (...a) => laden.loadFile(...a) });
+window.spiegel = spiegel;
 const vensters = opzetVensters({
   engine,
   venster: staat.venster,
   laadBuffer: (...a) => laden.laadBuffer(...a),
   loadFile: (...a) => laden.loadFile(...a),
-  naWissel: (deckId) => racks.volgVenster(deckId),
+  naFocus: (deckId) => racks.volgFocus(deckId),
 });
 
 // ---- effect-racks, sampler-pads, laden en library -------------------------
-const racks = opzetRacks({ engine, staat, vensterVan: vensters.vensterVan });
+const racks = opzetRacks({ engine, staat });
 const samplerOpslag = opzetSamplerOpslag({ engine, staat });
 const laden = opzetLaden({
-  engine, staat, videoMixer, vensterVan: vensters.vensterVan,
+  engine, staat, videoMixer,
   racks, haalSamples: samplerOpslag.haalSamples,
 });
 window.library = laden.library;
@@ -100,7 +105,9 @@ attachKeyboard(engine, { onHelp: toggleHelp, venster: (v) => staat.venster[v] })
 const lagen = new Lagen();
 bindLagen(lagen);
 window.lagen = lagen;
-const midiDelen = opzetMidi({ engine, sluitOnderpanelen: onderpanelen.sluitOnderpanelen, lagen });
+const midiDelen = opzetMidi({ engine, sluitOnderpanelen: onderpanelen.sluitOnderpanelen, lagen,
+  geraakt: (sig, regelSig) => spiegel.markeer(sig, regelSig) });
+spiegel.koppel({ mapping: midiDelen.mapping, lagen });
 opzetMapjeBalk({ lagen, mapping: midiDelen.mapping, vars: () => midiDelen.mapping.vars() });
 window.midi = midiDelen.midi;         // handig in de console tijdens bouwen
 window.mapping = midiDelen.mapping;
@@ -114,8 +121,9 @@ window.mapPanel = midiDelen.mapPanel;
 // ---- renderloop -----------------------------------------------------------
 startRenderloop({
   engine, staat,
-  views: vensters.views, knobs: vensters.knobs, faders: vensters.faders, tracksEl: vensters.tracksEl,
+  views: vensters.views, knobs: vensters.knobs, faders: vensters.faders,
   stappen: {
+    spiegel: spiegel.teken,
     volgRackKiezer: racks.volgRackKiezer,
     koppelpaneel: () => midiDelen.mapPanel.tick(),
     opnemen: opname.teken,
