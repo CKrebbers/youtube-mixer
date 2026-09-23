@@ -10,7 +10,7 @@ Vink af in dit bestand zodra een fase draait.
 | 0 | **klaar** | Ingest: yt-dlp + ffmpeg + library |
 | 3 | **volgende** | Beatgrid, BPM, sync, keylock, beat-loops |
 | 4 | **begonnen** | Video volgt audio per track, WebGL-mix op fader × crossfader, los venster, vier mengvormen, zes effecten en een puls op de tel, alles op de action-bus; nog: effecten op de APC |
-| 5 | **begonnen** | FX-racks per link draaien met zes effecten incl. tempo-gesynchroniseerde gate, en zijn op het gehoor te bouwen in de rack-editor (knoppen bovenaan, echte eenheden, DICHT/OPEN), met drie kant-en-klare racks; acht tracks in engine en scherm (twee vensters + trackrij, crossfader A/B/thru, sync naar de luidste); streamen vanaf schijf (acht albums ~30 MB); je set opnemen naar WAV; nog: APC-mapping voor tracks 3-8, sends, sampler |
+| 5 | **begonnen** | FX-racks per link draaien met zes effecten incl. tempo-gesynchroniseerde gate, en zijn op het gehoor te bouwen in de rack-editor (knoppen bovenaan, echte eenheden, DICHT/OPEN), met drie kant-en-klare racks; acht tracks in engine en scherm (twee vensters + trackrij, crossfader A/B/thru, sync naar de luidste); streamen vanaf schijf (acht albums ~30 MB); je set opnemen (WAV, of WAV + 720p-video); sends naar gedeelde echo en galm; sampler met acht pads op het grid; nog: APC-mapping voor tracks 3-8, de sends en de pads |
 
 
 ---

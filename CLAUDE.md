@@ -3,6 +3,10 @@
 Lees dit voordat je iets wijzigt. Dit bestand is de bron van waarheid voor
 architectuurbeslissingen; `ROADMAP.md` is de bron van waarheid voor de volgorde.
 
+Hervatten na een pauze: `docs/HANDOFF.md` (stand, wat ongecommit is, wat
+niet getest is), `docs/VRAGEN.md` (open vragen voor Clay), `docs/APC40.md`
+(wat de controller kan en de voorgestelde indeling).
+
 ## Wat dit is
 
 Een DJ-programma dat YouTube-audio en -video als bron gebruikt, bediend met een
@@ -50,6 +54,7 @@ src/
                     fx.js           insert-slot: ketens bouwen, klikvrij wisselen
                     rack.js         racks als data: macro's, curves, migratie
                     deck.js         transport, cues, loops, beatgrid (geluid zit in bron.js)
+                    sampler.js      acht pads: knippen op het grid, loopen op de maat van wat je hoort
                     engine.js       decks + mixer + snapshot()
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
                     keyboard.js     toetsen -> actions
@@ -98,6 +103,9 @@ test/
   rack.test.mjs     macro-resolutie met een gouden bestand, migratie, onbekende effecten
   stream.test.mjs   streamkern tegen ffmpeg (bit voor bit), pagina-plan, StreamBron
   video.test.mjs    video volgt audio: bijsturen, springen, zichtbaarheid
+  server.test.mjs   eigen server op eigen poort + tijdelijke db: witte lijst, Range, racks per nummer
+  regels.test.mjs   regel 1 als test: engine importeert niets uit ui/control/server, geen DOM
+  alles.mjs         alle tests in één keer met overzicht
   opname.test.mjs   opname-WAV: stukken, kop, herstel na crash, geen ../
 ```
 
@@ -111,7 +119,7 @@ test/
 | Dependencies | Nul in de frontend. Elke toevoeging eerst voorleggen met reden. |
 | Nieuwe functie | Eerst `define()` in `actions.js`, daarna pas UI en mapping. |
 | Formatting | 2 spaties, single quotes, semicolons. Volg de bestaande stijl. |
-| Tests | Alle bestanden in `test/` moeten groen blijven. Bij wijzigingen: check toevoegen. |
+| Tests | Alle bestanden in `test/` moeten groen blijven: `node test/alles.mjs`. Bij wijzigingen: check toevoegen. |
 | Mocks | Een mock die makkelijker is dan de echte API verbergt bugs. De Web Audio-mock vuurt `onended` asynchroon omdat de browser dat ook doet. |
 | Browser | Chrome. Web MIDI bestaat niet in Safari — geen polyfill-pogingen. |
 
@@ -309,6 +317,44 @@ test/
   paneel dicht is, anders neem je zwart op. Het beeld loopt een paar ms
   achter op het geluid in de video (de mixer mikt op wat je HOORT, de
   opname-tap zit vóór de uitgangsvertraging): minder dan één beeld.
+- Sends: per track A (echo) en B (galm), getapt NA de fader en vóór de
+  crossfader, naar twee gedeelde bussen in de engine (`engine.sends`). Een bus
+  is een gewone InsertSlot met een rack (`SEND_RACKS`), maar helemaal nat: het
+  droge signaal komt al via de track. Fader dicht = niets meer insturen, de
+  staart sterft vanzelf uit (echo-out). Het insert-effect per track zit
+  daarentegen VÓÓR de fader en wordt dus mee dichtgedraaid. Sendknop is
+  kwadratisch: het eerste stuk subtiel, het laatste gooit.
+- Sampler: een lege pad knipt de laatste N tellen van de track met FOCUS, in
+  tracktijd, eindigend op de laatste tel vóór de positie (`knipBereik`). Een
+  streamende track wordt daarvoor opnieuw van schijf gelezen (`bron.knip`),
+  want de pagina's zitten in de worklet. Afspelen: loop, gestart op de
+  volgende tel van de klok die sync ook gebruikt, op diens tempo
+  (playbackRate = hoorbare bpm / sample-bpm). De naad wordt bij het knippen
+  al naadloos gemaakt (`naadloos`). Samples leven alleen deze sessie.
+- Verbeterronde 23 september 2026 (vier auditagenten). Wat daaruit vastligt:
+  - Tap tempo deelt door `d.rate`: je tikt wat je HOORT, het grid staat in tracktijd.
+  - Transport is klikvrij: BufferBron vloeit 4 ms in/uit per start (`DECLICK`);
+    de streamkern vloeit bij elke segmentwissel 4 ms over (`vorig`/`wisselT`)
+    en ziet een gat 3 ms vooruit aankomen (`GAT_FADE`, `staat.env`).
+  - De gate laat de oude puls doorlopen tot de nieuwe op de tel begint.
+  - `ctxTimeOf`/`ctxTijdVan` houden rekening met een loop die al rondging.
+  - Elk effect heeft `vernietig()` (oscillatoren en bronnen stoppen); `_ruimOp`
+    roept die aan. Losmaken alleen lekte complete ketens.
+  - `zetCurve` breekt een lopende curve eerst af (`cancelAndHoldAtTime`): twee
+    rackwissels binnen 40 ms gooiden anders NotSupportedError. De mock in
+    engine.test is daarom net zo streng als Chrome over overlappende automatisering.
+  - StreamBron.laad nummert elke laad en controleert na elke await; de app doet
+    hetzelfde (`nieuweLaad`/`nogDeLaatste`). Opnemer: start en stop na elkaar.
+  - Server: witte lijst voor statische bestanden, Range geklemd, POST-routes
+    alleen JSON, racks bijwerken/wissen alleen binnen het eigen nummer, ingest
+    in een werkmap (`media/.bezig-*`) en pas bij succes verhuizen, video-id
+    gecontroleerd, migraties in een transactie. `VARVE_DB`/`VARVE_OPNAMES` voor tests.
+  - UI: fouten naar `meld()` (strook onderaan), nooit alleen console. Geen
+    `prompt()` (legt de pagina stil). Library = toets B (L is hotcue 3 rechts).
+    Sneltoetsen alleen uit tijdens TYPEN (`isTypen`). Destructief = tweede klik
+    binnen 3 s (laden over een spelende track, nummer weghalen, opname stoppen,
+    mapping resetten, DICHT/OPEN op een hoorbare track). Eigen MIDI-mapping in
+    localStorage. MAAT-badge toont wie de maat geeft.
 - Een effect-rack hangt aan een LINK (`tracks.id`), niet aan een fader. Laad je
   hetzelfde nummer op een andere track, dan komen zijn racks mee. Meerdere per
   nummer, één actief. De inhoud is JSON: wat er ín een rack staat is een zaak
