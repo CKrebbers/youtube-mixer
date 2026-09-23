@@ -102,6 +102,9 @@ try {
   await wacht(2500);
   ok('de vormrij staat in het videopaneel', await evalueer("!!document.querySelector('#video-panel .vid-vorm')"));
   ok('twee lagen aan de mixer gehangen', await evalueer('window.videoMixer.beeldlagen.length === 2'));
+  ok('de vormen draaien in een Worker (werker-modus, budget 12 ms)',
+    await evalueer("window.vormen.lagen.every((l) => l.modus === 'werker' && !!l.werker && l.budgetMs === 12)"),
+    await evalueer("window.vormen.lagen.map((l) => l.modus).join(',')"));
   ok('Detail View opent het mapje vorm (fragment geladen)', await evalueer("window.mapping.kies('note:0:65')?.action === 'layer.device.detail'"));
   ok('en het fragment staat niet in je bewaarde mapping', await evalueer("window.mapping.toJSON().rules.every((r) => !r.action.startsWith('video.layer.'))"));
 
@@ -135,6 +138,45 @@ try {
   ok('60 beelden getekend zonder fouten', meldingen.length === 0, meldingen.join(' | '));
   ok('de audioklok loopt, dus de vormen bewegen', t1 > t0, `${(t1 - t0).toFixed(2)} s`);
   ok('de mixer heeft de lagenstap gebouwd', await evalueer('!!window.videoMixer.gelaagd && !window.videoMixer.fout'), await evalueer('window.videoMixer.fout || ""'));
+  ok('nog steeds in de Worker na 60 beelden (geen terugval)', await evalueer("window.vormen.lagen.every((l) => l.modus === 'werker')"));
+  ok('de Worker stuurde ImageBitmaps terug, en frame() geeft het laatste',
+    await evalueer("window.vormen.lagen.every((l) => l.beeld instanceof ImageBitmap && l.beeld.width === 512 && l.versie > 3)"),
+    await evalueer("window.vormen.lagen.map((l) => `v${l.versie} ${l.ms?.toFixed(1)} ms ${Math.round(l.kwaliteit * 100)}%`).join(' | ')"));
+  ok('het bitmap is niet leeg (createImageBitmap kopieert; transferToImageBitmap liet het canvas leeg)', await evalueer(`(() => {
+    const c = new OffscreenCanvas(512, 512), x = c.getContext('2d');
+    x.drawImage(window.vormen.lagen[0].beeld, 0, 0);
+    const d = x.getImageData(0, 0, 512, 512).data;
+    let licht = 0;
+    for (let i = 0; i < d.length; i += 4 * 97) if (d[i] + d[i + 1] + d[i + 2] > 60) licht++;
+    return licht > 5;
+  })()`));
+  ok('rekentijd en kwaliteit per laag op het scherm (≥ 11 px)', await evalueer(`(() => {
+    const m = [...document.querySelectorAll('.vorm-meting')];
+    return m.length === 2 && m.every((el) => /[0-9]+([.][0-9])? ms · [0-9]+%/.test(el.textContent)) && parseFloat(getComputedStyle(m[0]).fontSize) >= 11;
+  })()`), await evalueer("[...document.querySelectorAll('.vorm-meting')].map((e) => e.textContent).join(' | ')"));
+  // Oriëntatie: een ImageBitmap negeert UNPACK_FLIP_Y; de mixer zet het nergens,
+  // dus canvas en bitmap moeten als texture precies gelijk staan. Gemeten met
+  // een ASYMMETRISCH testbeeld (vier verschillende kwarten, zie CLAUDE.md).
+  ok('ImageBitmap staat als texture precies zoals het canvas (vier kwarten)', await evalueer(`(async () => {
+    const bron = new OffscreenCanvas(64, 64), x = bron.getContext('2d');
+    [['#f00', 0, 0], ['#0f0', 32, 0], ['#00f', 0, 32], ['#ff0', 32, 32]].forEach(([k, a, b]) => { x.fillStyle = k; x.fillRect(a, b, 32, 32); });
+    const bm = await createImageBitmap(bron);
+    const gl = new OffscreenCanvas(64, 64).getContext('webgl2');
+    const lees = (beeld) => {
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, beeld);
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      const px = new Uint8Array(64 * 64 * 4);
+      gl.readPixels(0, 0, 64, 64, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      return [0, 40, 64 * 40, 64 * 40 + 40].map((i) => px.slice(i * 4, i * 4 + 3).join(',')).join(' ');
+    };
+    const a = lees(bron), b = lees(bm);
+    bm.close();
+    return a === b && new Set(a.split(' ')).size === 4;
+  })()`));
   await foto('met-vormen.png');
   await evalueer("window.vormen.lagen.forEach((l) => { l.aan = false; })");
   await wacht(300);
