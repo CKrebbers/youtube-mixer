@@ -182,6 +182,6 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   een fout naspelen. Willen?
 - [ ] **G4. Bedienplan blijven gebruiken?** Pas dan loont een import naar de VARVE-mapping.
 - [ ] **G5. Wat is een "Vormmachine"** (26 in de blauwdruk, nergens gevonden)?
-- [ ] **G6. `Input/` in git of in .gitignore?** Advies: .gitignore (zips + een complete
+- [x] **G6. `Input/` in git of in .gitignore?** — Clay: .gitignore (e285371). Open: waar is `modules/` voor? Advies: .gitignore (zips + een complete
   .git van AV-kern); alleen de blauwdruk eventueel naar docs/. En waar is de lege map
   `modules/` voor?
