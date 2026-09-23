@@ -15,6 +15,7 @@
  */
 import { Beatgrid, TapTempo } from '../engine/beatgrid.js';
 import { EFFECTEN } from '../engine/fx.js';
+import { DECK_IDS, XFADE_KANTEN } from '../engine/engine.js';
 
 const registry = new Map();
 
@@ -67,7 +68,7 @@ export function list() {
 }
 
 /** Welke track op welk engine-deck zit. Eén plek, zodat acht er later bij passen. */
-export const TRACKS = [[1, 'A'], [2, 'B']];
+export const TRACKS = DECK_IDS.map((id, i) => [i + 1, id]);
 export const trackVanDeck = (id) => TRACKS.find(([, d]) => d === id)?.[0] ?? null;
 
 /** Registreert de complete standaardset voor een engine. */
@@ -89,10 +90,10 @@ export function bindEngine(engine) {
       const r = engine.sync(id);
       if (!r.ok) console.warn(`[sync] deck ${id}: ${r.reden}`);
       engine.emit('sync', { id, ...r });
-    }, { label: `Track ${nr} sync naar het andere deck`,
+    }, { label: `Track ${nr} sync naar de luidste track`,
          read: () => {
-           const d2 = engine.ander(id);
-           if (!d.grid || !d2.grid) return 0;
+           const d2 = engine.syncMaster(id);
+           if (!d.grid || !d2?.grid) return 0;
            return Math.abs(d.grid.bpm * d.rate - d2.grid.bpm * d2.rate) < 0.05 ? 1 : 0;
          } });
 
@@ -193,7 +194,16 @@ export function bindEngine(engine) {
     }, { label: `Track ${nr} volgend effect` });
 
     define(`${n}.focus`, 'trigger', (on) => { if (on) engine.setFocus(id); },
-      { label: `Focus deck ${id}`, read: bool(() => engine.focus === id) });
+      { label: `Focus track ${nr}`, read: bool(() => engine.focus === id) });
+
+    // Crossfader-toewijzing: A -> B -> thru -> A, zoals de knop op de APC.
+    // read() geeft 0 / 0.5 / 1 zodat een LED er drie standen van kan maken.
+    define(`${n}.xfade.kant`, 'trigger', (on) => {
+      if (!on) return;
+      const i = XFADE_KANTEN.indexOf(engine.kant[id]);
+      engine.setKant(id, XFADE_KANTEN[(i + 1) % XFADE_KANTEN.length]);
+    }, { label: `Track ${nr} crossfader A/B/thru`,
+         read: () => ({ A: 0, B: 1, thru: 0.5 })[engine.kant[id]] });
   }
 
   define('mixer.xfader', 'value', (v) => engine.setXfader(v),

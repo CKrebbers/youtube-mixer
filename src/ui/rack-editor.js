@@ -25,11 +25,12 @@ const PLEKKEN = [1, 2, 3, 4, 5, 6, 7, 8];
 const CURVENAAM = { lin: 'lineair', exp: 'traag → snel', log: 'snel → traag', s: 'zacht' };
 
 export class RackEditor {
-  constructor({ root, engine, effecten, onBewaar }) {
+  constructor({ root, engine, effecten, onBewaar, naamVan = (id) => `deck ${id}` }) {
     this.root = root;
     this.engine = engine;
     this.effecten = effecten;
     this.onBewaar = onBewaar;
+    this.naamVan = naamVan;
     this.deckId = null;
     this.kopie = null;
     this.melding = null;
@@ -71,7 +72,7 @@ export class RackEditor {
     this.deckId = deckId;
     this.kopie = JSON.parse(JSON.stringify(this.fx.naarJSON()));
     this.melding = null;
-    this.el.deck.textContent = `deck ${deckId}`;
+    this.el.deck.textContent = this.naamVan(deckId);
     this.el.naam.value = this.kopie.name || '';
     this._rackRef = this.fx.rack;
     this.root.classList.remove('hidden');

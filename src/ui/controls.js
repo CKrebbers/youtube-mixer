@@ -61,10 +61,18 @@ export class Fader {
 
 export function bindButtons(root) {
   root.querySelectorAll('[data-action][data-kind="button"]').forEach((btn) => {
-    const id = btn.dataset.action;
-    const alt = btn.dataset.actionShift;
-    btn.addEventListener('pointerdown', (e) => { invoke(e.shiftKey && alt ? alt : id, true); });
-    btn.addEventListener('pointerup', () => invoke(id, false));
-    btn.addEventListener('pointerleave', () => invoke(id, false));
+    // De action wordt gelezen op het moment van indrukken, niet bij het
+    // opstarten: een venster kan intussen een andere track tonen. Loslaten
+    // gaat naar dezelfde action als indrukken, ook als het venster tussendoor
+    // wisselde — anders blijft er ergens een knop "ingedrukt" hangen.
+    let ingedrukt = null;
+    btn.addEventListener('pointerdown', (e) => {
+      const alt = btn.dataset.actionShift;
+      ingedrukt = btn.dataset.action;
+      invoke(e.shiftKey && alt ? alt : ingedrukt, true);
+    });
+    const los = () => { if (ingedrukt) { invoke(ingedrukt, false); ingedrukt = null; } };
+    btn.addEventListener('pointerup', los);
+    btn.addEventListener('pointerleave', los);
   });
 }

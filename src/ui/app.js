@@ -1,4 +1,4 @@
-import { Engine } from '../engine/engine.js';
+import { Engine, DECK_IDS } from '../engine/engine.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { bindEngine, invoke, read as readAction, metaOf, trackVanDeck } from '../control/actions.js';
 import { attachKeyboard } from '../control/keyboard.js';
@@ -24,11 +24,42 @@ const engine = new Engine();
 bindEngine(engine);
 window.engine = engine;   // handig in de console tijdens bouwen
 
-const analysis = { A: null, B: null };
+const perDeck = (maak) => Object.fromEntries(DECK_IDS.map((id) => [id, maak(id)]));
+const analysis = perDeck(() => null);
 const views = {};
 const knobs = [];
 
-// ---- UI opbouwen ----------------------------------------------------------
+// ---- vensters en tracks ---------------------------------------------------
+// Acht tracks, twee vensters. Een venster is een grote weergave (golfvorm,
+// transport, FX) plus zijn mixerstrook, en toont één track naar keuze. Het
+// venster weet dat alleen via zijn data-action-attributen: wisselen is die
+// omschrijven. Knoppen lezen hun action bij het indrukken, de renderloop leest
+// ze elke frame — er hoeft niets opnieuw gebonden te worden.
+
+const VENSTERS = ['L', 'R'];
+const venster = { L: 'A', R: 'B' };                       // venster -> deck-id
+const vensterVan = (deckId) => VENSTERS.find((v) => venster[v] === deckId) || null;
+const vensterRoots = (v) => [document.getElementById(`venster-${v}`),
+  document.querySelector(`.strip[data-venster="${v}"]`)];
+
+/** De rij met acht smalle tracks. Eerst bouwen: daarna worden alle knoppen gebonden. */
+const tracksEl = document.getElementById('tracks');
+tracksEl.innerHTML = DECK_IDS.map((id) => {
+  const nr = trackVanDeck(id);
+  return `<div class="trk" data-deck="${id}">
+    <div class="trk-kop">
+      <button data-kind="button" data-action="track.${nr}.play" class="trk-nr" title="play/pause">${nr}</button>
+      <span class="trk-titel">— leeg —</span>
+    </div>
+    <div class="meter trk-meter"><i></i></div>
+    <input type="range" class="hfader trk-fader" min="0" max="1" step="0.001" value="1" data-action="track.${nr}.fader" title="fader">
+    <div class="trk-knoppen">
+      <button data-kind="button" data-action="track.${nr}.xfade.kant" class="btn sm trk-kant" title="crossfader: A, B of thru">thru</button>
+      <button class="btn sm trk-toon" data-toon="L" title="toon in het linkervenster">L</button>
+      <button class="btn sm trk-toon" data-toon="R" title="toon in het rechtervenster">R</button>
+    </div>
+  </div>`;
+}).join('');
 
 document.querySelectorAll('.knob').forEach((el) => knobs.push(new Knob(el)));
 bindButtons(document.body);
@@ -38,24 +69,60 @@ faders.forEach((el) => {
   el.addEventListener('input', () => invoke(el.dataset.action, parseFloat(el.value)));
 });
 
-for (const id of ['A', 'B']) {
-  const root = document.getElementById(`deck-${id}`);
-  views[id] = {
-    zoom: new WaveformView(root.querySelector('.wave-zoom'), { mode: 'zoom', color: id === 'A' ? '#4ad9c4' : '#c48cff' }),
-    overview: new WaveformView(root.querySelector('.wave-overview'), { mode: 'overview', color: id === 'A' ? '#2f8e81' : '#7d5aa8' }),
+tracksEl.addEventListener('click', (e) => {
+  const knop = e.target.closest('.trk-toon');
+  if (knop) toonInVenster(knop.dataset.toon, knop.closest('.trk').dataset.deck);
+});
+
+/**
+ * Zet een track in een venster. Staat hij al in het andere, dan ruilen ze:
+ * twee vensters op dezelfde track is alleen verwarrend.
+ */
+function toonInVenster(v, deckId) {
+  const ander = VENSTERS.find((x) => x !== v && venster[x] === deckId);
+  if (ander) { venster[ander] = venster[v]; herschrijfVenster(ander); }
+  venster[v] = deckId;
+  herschrijfVenster(v);
+  engine.setFocus(deckId);
+}
+
+function herschrijfVenster(v) {
+  const deckId = venster[v];
+  const nr = trackVanDeck(deckId);
+  const naarTrack = (a) => a.replace(/^track\.\d+\./, `track.${nr}.`);
+  for (const root of vensterRoots(v)) {
+    root.dataset.deck = deckId;
+    root.querySelectorAll('[data-action]').forEach((el) => {
+      el.dataset.action = naarTrack(el.dataset.action);
+      if (el.dataset.actionShift) el.dataset.actionShift = naarTrack(el.dataset.actionShift);
+    });
+  }
+  for (const k of knobs) if (vensterRoots(v).some((r) => r.contains(k.el))) k.action = k.el.dataset.action;
+  document.querySelector(`#venster-${v} .deck-id`).textContent = nr;
+  vulRackKiezer(deckId);
+  // De editor hoort bij wat je ziet. Toonde hij de track die hier wegging,
+  // dan gaat hij mee naar de nieuwe.
+  if (rackEditor.open && !vensterVan(rackEditor.deckId)) rackEditor.openVoor(deckId);
+}
+
+for (const v of VENSTERS) {
+  const root = document.getElementById(`venster-${v}`);
+  views[v] = {
+    zoom: new WaveformView(root.querySelector('.wave-zoom'), { mode: 'zoom', color: v === 'L' ? '#4ad9c4' : '#c48cff' }),
+    overview: new WaveformView(root.querySelector('.wave-overview'), { mode: 'overview', color: v === 'L' ? '#2f8e81' : '#7d5aa8' }),
     root,
   };
 
   // klikken op overview = springen
   root.querySelector('.wave-overview').addEventListener('pointerdown', (e) => {
-    const d = engine.deck(id);
+    const d = engine.deck(venster[v]);
     if (!d.buffer) return;
     const r = e.currentTarget.getBoundingClientRect();
     d.seek(((e.clientX - r.left) / r.width) * d.duration);
   });
 
   // focus volgt de klik
-  root.addEventListener('pointerdown', () => engine.setFocus(id));
+  root.addEventListener('pointerdown', () => engine.setFocus(venster[v]));
 
   // drop
   root.addEventListener('dragover', (e) => { e.preventDefault(); root.classList.add('drag'); });
@@ -63,13 +130,14 @@ for (const id of ['A', 'B']) {
   root.addEventListener('drop', async (e) => {
     e.preventDefault(); root.classList.remove('drag');
     const file = e.dataTransfer.files[0];
-    if (file) await loadFile(id, file);
+    if (file) await loadFile(venster[v], file);
   });
 
   root.querySelector('.demo-btn').addEventListener('click', async () => {
     await engine.resume();
-    const buf = renderDemoTrack(engine.ctx, { seed: id === 'A' ? 0 : 1, bars: 16 });
-    engine.deck(id).load(buf, `demo ${id} — 124 bpm`);
+    const id = venster[v];
+    const buf = renderDemoTrack(engine.ctx, { seed: DECK_IDS.indexOf(id), bars: 16 });
+    engine.deck(id).load(buf, `demo ${trackVanDeck(id)} — 124 bpm`);
     analysis[id] = computePeaks(buf);
   });
 }
@@ -88,8 +156,8 @@ async function loadFile(id, file) {
 // hier wordt ook de golfvorm-analyse bijgehouden.
 
 /** Welk nummer staat op welk deck — nodig om het grid bij de juiste link te bewaren. */
-const deckTrack = { A: null, B: null };
-const gridBewaard = { A: null, B: null };
+const deckTrack = perDeck(() => null);
+const gridBewaard = perDeck(() => null);
 
 /**
  * Het beatgrid hoort bij de link, dus het wordt daar bewaard.
@@ -99,7 +167,7 @@ const gridBewaard = { A: null, B: null };
  */
 async function bewaarGrid() {
   {
-    for (const id of ['A', 'B']) {
+    for (const id of DECK_IDS) {
       const trackId = deckTrack[id];
       if (!trackId) continue;
       const grid = engine.deck(id).grid;
@@ -137,7 +205,7 @@ engine.on('tap', async ({ deck, bpm, taps }) => {
   const trackId = deckTrack[deck];
   if (!trackId) return;                       // demotrack of losgesleept bestand
   verfijnBezig = true;
-  const knop = els[deck]?.tap;
+  const knop = vensterVan(deck) ? els[vensterVan(deck)].tap : null;
   knop?.classList.add('bezig');
   try {
     const res = await fetch(`/api/library/${trackId}/grid/verfijn`, {
@@ -162,6 +230,8 @@ engine.on('tap', async ({ deck, bpm, taps }) => {
 const libPaneel = document.getElementById('lib-panel');
 const library = new LibraryPanel({
   root: libPaneel,
+  decks: DECK_IDS,
+  label: (id) => String(trackVanDeck(id)),
   onLaad: async (deckId, track) => {
     // NIET wachten op engine.resume(): zonder gebruikersgebaar lost die belofte
     // nooit in en blijft het laden eeuwig hangen. Decoderen kan prima op een
@@ -208,49 +278,62 @@ window.addEventListener('keydown', (e) => {
 // Een rack hoort bij het NUMMER, niet bij het deck. Laad je hetzelfde nummer
 // morgen op een ander deck, dan komen zijn racks mee.
 
-const rackCache = { A: [], B: [] };
+const rackCache = perDeck(() => []);
 
-/** Rechtstreeks uit de DOM: `els` wordt pas verderop aangemaakt. */
-const fxEl = (deckId, klasse) => document.querySelector(`#deck-${deckId} ${klasse}`);
+/** Rechtstreeks uit de DOM: `els` wordt pas verderop aangemaakt. Null als de track niet in beeld is. */
+const fxEl = (deckId, klasse) => {
+  const v = vensterVan(deckId);
+  return v ? document.querySelector(`#venster-${v} ${klasse}`) : null;
+};
 
+/**
+ * Racks van het nummer ophalen en het actieve laden. Dat laatste gebeurt ook
+ * als de track niet in een venster staat: een rack klinkt, of je hem nu ziet
+ * of niet.
+ */
 async function haalRacks(deckId) {
   const trackId = deckTrack[deckId];
-  const sel = fxEl(deckId, '.fx-rack');
-  if (!sel) return;
-  if (!trackId) {
-    rackCache[deckId] = [];
-    sel.innerHTML = '<option value="">— geen nummer —</option>';
-    return;
+  rackCache[deckId] = [];
+  if (trackId) {
+    try {
+      const r = await fetch(`/api/library/${trackId}/racks`);
+      const j = await r.json();
+      rackCache[deckId] = j.racks || [];
+    } catch (_) {}
   }
-  try {
-    const r = await fetch(`/api/library/${trackId}/racks`);
-    const j = await r.json();
-    rackCache[deckId] = j.racks || [];
-  } catch (_) { rackCache[deckId] = []; }
   const actief = rackCache[deckId].find((x) => x.actief);
-  sel.innerHTML = '<option value="">— los effect —</option>'
-    + rackCache[deckId].map((x) =>
-        `<option value="${x.id}"${x.actief ? ' selected' : ''}>${x.naam}</option>`).join('');
   if (actief) {
     const fouten = engine.deck(deckId).fx.zetRack(actief.data).fouten;
     fouten.forEach((f) => console.warn(`[rack ${deckId}]`, f));
   }
+  vulRackKiezer(deckId);
 }
 
-for (const id of ['A', 'B']) {
-  fxEl(id, '.fx-rack').addEventListener('change', () => {
-    const keuze = fxEl(id, '.fx-rack').value;
-    const rack = rackCache[id].find((x) => String(x.id) === keuze);
-    const fx = engine.deck(id).fx;
+function vulRackKiezer(deckId) {
+  const sel = fxEl(deckId, '.fx-rack');
+  if (!sel) return;
+  if (!deckTrack[deckId]) { sel.innerHTML = '<option value="">— geen nummer —</option>'; return; }
+  sel.innerHTML = '<option value="">— los effect —</option>'
+    + rackCache[deckId].map((x) =>
+        `<option value="${x.id}"${x.actief ? ' selected' : ''}>${x.naam}</option>`).join('');
+}
+
+for (const v of VENSTERS) {
+  const kiezer = document.querySelector(`#venster-${v} .fx-rack`);
+  kiezer.addEventListener('change', () => {
+    const id = venster[v];
+    const rack = rackCache[id].find((x) => String(x.id) === kiezer.value);
+    rackCache[id].forEach((x) => { x.actief = x === rack; });
     if (rack) {
-      fx.zetRack(rack.data).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
+      engine.deck(id).fx.zetRack(rack.data).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
       fetch(`/api/library/${deckTrack[id]}/racks/${rack.id}`, { method: 'POST' }).catch(() => {});
     }
   });
 
-  fxEl(id, '.fx-bewaar').addEventListener('click', async () => {
+  document.querySelector(`#venster-${v} .fx-bewaar`).addEventListener('click', async () => {
+    const id = venster[v];
     const trackId = deckTrack[id];
-    if (!trackId) { console.warn('[rack] geen nummer op dit deck'); return; }
+    if (!trackId) { console.warn('[rack] geen nummer op deze track'); return; }
     const fx = engine.deck(id).fx;
     const voorstel = fx.rackNaam === 'nieuw rack' ? fx.effectId || 'rack' : fx.rackNaam;
     const naam = prompt('Naam voor dit rack:', voorstel);
@@ -276,12 +359,15 @@ for (const id of ['A', 'B']) {
 const rackEditor = new RackEditor({
   root: document.getElementById('rack-editor'),
   engine,
+  naamVan: (id) => `track ${trackVanDeck(id)}`,
   effecten: EFFECTEN,
   onBewaar: async ({ deckId, naam, data, alsNieuw }) => {
     const trackId = deckTrack[deckId];
     if (!trackId) throw new Error('geen nummer uit de library op dit deck');
-    const gekozen = fxEl(deckId, '.fx-rack').value;
-    const id = !alsNieuw && gekozen ? Number(gekozen) : null;
+    // Het gekozen rack uit de cache, niet uit de kiezer: de track kan intussen
+    // uit beeld zijn en dan is er geen kiezer.
+    const gekozen = rackCache[deckId].find((x) => x.actief);
+    const id = !alsNieuw && gekozen ? gekozen.id : null;
     const res = await fetch(`/api/library/${trackId}/racks`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, naam, data, actief: true }),
@@ -292,18 +378,18 @@ const rackEditor = new RackEditor({
     // kruisfade op iets wat al klinkt. Alleen de kiezer bijwerken.
     const lijst = rackCache[deckId].filter((x) => x.id !== rack.id).map((x) => ({ ...x, actief: false }));
     rackCache[deckId] = [...lijst, rack].sort((a, b) => a.gemaakt - b.gemaakt);
-    fxEl(deckId, '.fx-rack').innerHTML = '<option value="">— los effect —</option>'
-      + rackCache[deckId].map((x) =>
-          `<option value="${x.id}"${x.id === rack.id ? ' selected' : ''}>${x.naam}</option>`).join('');
+    vulRackKiezer(deckId);
   },
 });
 
-for (const id of ['A', 'B']) {
-  fxEl(id, '.fx-bewerk').addEventListener('click', () => {
+for (const v of VENSTERS) {
+  document.querySelector(`#venster-${v} .fx-bewerk`).addEventListener('click', () => {
+    const id = venster[v];
     if (rackEditor.open && rackEditor.deckId === id) rackEditor.sluit();
     else rackEditor.openVoor(id);
   });
 }
+for (const v of VENSTERS) vulRackKiezer(venster[v]);
 
 // ---- audio unlock + help --------------------------------------------------
 
@@ -321,7 +407,7 @@ document.getElementById('help-btn').addEventListener('click', toggleHelp);
 help.addEventListener('click', (e) => { if (e.target === help) toggleHelp(); });
 window.addEventListener('keydown', (e) => { if (e.code === 'Escape') help.classList.add('hidden'); });
 
-attachKeyboard(engine, { onHelp: toggleHelp });
+attachKeyboard(engine, { onHelp: toggleHelp, venster: (v) => venster[v] });
 
 // ---- MIDI -----------------------------------------------------------------
 // hub (bytes) -> mapping (betekenis) -> action-bus. Drie lagen die elkaars
@@ -533,15 +619,15 @@ midi.init();
 // Eén rAF voor de hele UI. De engine wordt alleen uitgelezen, nooit aangestuurd.
 
 const els = {};
-for (const id of ['A', 'B']) {
-  const r = views[id].root;
-  els[id] = {
+for (const v of VENSTERS) {
+  const r = views[v].root;
+  els[v] = {
     title: r.querySelector('.deck-title'),
     pos: r.querySelector('.t-pos'),
     rem: r.querySelector('.t-rem'),
     play: r.querySelector('.play'),
     pitch: r.querySelector('.pitch-val'),
-    meter: document.querySelector(`.strip[data-deck="${id}"] .ch-meter i`),
+    meter: document.querySelector(`.strip[data-venster="${v}"] .ch-meter i`),
     hotcues: [...r.querySelectorAll('.hc')],
     loopBtns: [...r.querySelectorAll('.loops .btn:not(.bl)')],
     beatBtns: [...r.querySelectorAll('.loops .btn.bl')],
@@ -557,6 +643,11 @@ for (const id of ['A', 'B']) {
     faseWijzer: r.querySelector('.fase i'),
   };
 }
+const trkEls = perDeck((id) => {
+  const r = tracksEl.querySelector(`.trk[data-deck="${id}"]`);
+  return { root: r, titel: r.querySelector('.trk-titel'), meter: r.querySelector('.trk-meter i'),
+    kant: r.querySelector('.trk-kant'), toon: [...r.querySelectorAll('.trk-toon')] };
+});
 const masterMeter = document.querySelector('.master-meter i');
 const curveBtn = document.querySelector('.curve');
 
@@ -602,10 +693,23 @@ function tekenFrame() {
   const s = engine.snapshot();
   volgEngine();
 
-  for (const id of ['A', 'B']) {
-    const d = s.decks[id], e = els[id];
-    views[id].zoom.draw(d, analysis[id]);
-    views[id].overview.draw(d, analysis[id]);
+  for (const id of DECK_IDS) {
+    const d = s.decks[id], t = trkEls[id];
+    if (t.titel.textContent !== (d.title || '— leeg —')) t.titel.textContent = d.title || '— leeg —';
+    t.meter.style.width = (d.level * 100).toFixed(1) + '%';
+    t.root.classList.toggle('speelt', d.playing);
+    t.root.classList.toggle('leeg', !d.loaded);
+    t.root.classList.toggle('focused', s.focus === id);
+    if (t.kant.textContent !== d.kant) t.kant.textContent = d.kant;
+    t.kant.dataset.kant = d.kant;
+    t.toon.forEach((b) => b.classList.toggle('on', venster[b.dataset.toon] === id));
+  }
+
+  for (const v of VENSTERS) {
+    const id = venster[v];
+    const d = s.decks[id], e = els[v];
+    views[v].zoom.draw(d, analysis[id]);
+    views[v].overview.draw(d, analysis[id]);
 
     e.title.textContent = d.title;
     e.pos.textContent = fmtTime(d.position);
@@ -643,8 +747,7 @@ function tekenFrame() {
       el.classList.toggle('leeg', !p);
     });
 
-    const ander = s.decks[id === 'A' ? 'B' : 'A'];
-    e.sync.classList.toggle('gelijk', !!(d.bpm && ander.bpm && Math.abs(d.bpm - ander.bpm) < 0.05));
+    e.sync.classList.toggle('gelijk', readAction(`track.${trackVanDeck(id)}.sync`) === 1);
     e.beatBtns.forEach((b) => {
       b.classList.toggle('dood', !d.grid);
       const n = parseFloat(b.dataset.action.split('.').pop());
@@ -653,7 +756,7 @@ function tekenFrame() {
 
     d.hotcues.forEach((t, i) => e.hotcues[i].classList.toggle('set', t !== null));
     e.loopBtns.forEach((b) => b.classList.toggle('on', !!d.loop && !b.classList.contains('warn')));
-    views[id].root.classList.toggle('focused', s.focus === id);
+    views[v].root.classList.toggle('focused', s.focus === id);
   }
 
   mapPanel.tick();

@@ -132,6 +132,19 @@ test/
 - Een onbekend effecttype in een rack wordt NIET weggegooid: het blijft als ruwe
   JSON bewaard, staat uit, en komt er bij het opslaan ongeschonden weer uit.
   Eén keer openen in een oudere versie mag geen rack slopen.
+- Er zijn ACHT tracks (engine: decks A-H) maar twee VENSTERS op het scherm.
+  Een venster is een grote weergave plus zijn mixerstrook en toont één track
+  naar keuze; wisselen herschrijft alleen de `data-action`-attributen. Knoppen
+  lezen hun action daarom bij het INDRUKKEN, niet bij het opstarten, en het
+  loslaten gaat naar dezelfde action als het indrukken. Het toetsenbord volgt
+  de vensters (`{L}`/`{R}` in `KEYMAP`), spatie volgt de focus.
+- Crossfader-toewijzing per track: A, B of thru. Standaard 1 op A, 2 op B, de
+  rest thru — zo klinkt een set voor twee als vroeger.
+- Sync kent geen "het andere deck" meer: een track synct naar de track die je
+  het hardst hoort (fader × crossfader, spelend, met grid). Speelt er niets,
+  dan de eerste geladen track met grid.
+- Acht lange albums tegelijk laden past niet in het geheugen (31 minuten is al
+  ~700 MB). Dat is de streaming-grens van hierboven, nu met acht vermenigvuldigd.
 - De action-bus spreekt in TRACKS (`track.1.filter`), de engine in decks (A, B).
   De vertaling staat op één plek: `TRACKS` in `actions.js`. `{focus}` in een
   mapping wordt een tracknummer. Mappings van versie 1 (`deck.A.…`) worden bij

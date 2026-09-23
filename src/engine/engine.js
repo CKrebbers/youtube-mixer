@@ -3,6 +3,20 @@ import { Deck } from './deck.js';
 import { createMasterChain, xfaderGains, faderGain } from './audio-graph.js';
 
 /**
+ * Acht tracks, één per fader van de APC40 mkII. De engine noemt ze A t/m H;
+ * dat track 1 = A is een afspraak van de action-bus, niet van de engine.
+ */
+export const DECK_IDS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
+/**
+ * Crossfader-toewijzing per track, zoals de A|B-knoppen op de APC. Standaard
+ * alleen de eerste twee aan een kant: zo klinkt een set voor twee precies als
+ * vroeger, en doen de andere zes niets met de crossfader tot je het vraagt.
+ */
+export const XFADE_KANTEN = ['A', 'B', 'thru'];
+const STANDAARD_KANT = { A: 'A', B: 'B' };
+
+/**
  * De engine kent GEEN MIDI, GEEN DOM en GEEN YouTube.
  * Hij kent decks, een mixer en een klok. Alles daarbuiten praat via actions.js.
  */
@@ -24,11 +38,13 @@ export class Engine extends Emitter {
       this.ctx = new AudioContext({ latencyHint: 'interactive' });
     }
     this.master = createMasterChain(this.ctx);
-    this.decks = {
-      A: new Deck(this.ctx, 'A'),
-      B: new Deck(this.ctx, 'B'),
-    };
-    for (const d of Object.values(this.decks)) d.chain.output.connect(this.master.input);
+    this.decks = {};
+    this.kant = {};
+    for (const id of DECK_IDS) {
+      this.decks[id] = new Deck(this.ctx, id);
+      this.decks[id].chain.output.connect(this.master.input);
+      this.kant[id] = STANDAARD_KANT[id] || 'thru';
+    }
 
     this.xfader = 0.5;
     this.xfaderCurve = 'smooth';
@@ -48,11 +64,24 @@ export class Engine extends Emitter {
   setXfader(norm) { this.xfader = clamp(norm); this.applyXfader(); this.emit('change'); }
   setXfaderCurve(c) { this.xfaderCurve = c; this.applyXfader(); this.emit('change'); }
 
-  applyXfader() {
+  /** 'A', 'B' of 'thru'. Iets anders wordt genegeerd, niet half toegepast. */
+  setKant(id, kant) {
+    if (!this.decks[id] || !XFADE_KANTEN.includes(kant)) return;
+    this.kant[id] = kant;
+    this.applyXfader();
+    this.emit('change');
+  }
+
+  /** Wat de crossfader nu met deze track doet, 0..1. */
+  xfadeGain(id) {
     const { a, b } = xfaderGains(this.xfader, this.xfaderCurve);
+    const k = this.kant[id];
+    return k === 'A' ? a : k === 'B' ? b : 1;
+  }
+
+  applyXfader() {
     const now = this.ctx.currentTime;
-    this.decks.A.chain.xfade.gain.setTargetAtTime(a, now, 0.008);
-    this.decks.B.chain.xfade.gain.setTargetAtTime(b, now, 0.008);
+    for (const id of DECK_IDS) this.decks[id].chain.xfade.gain.setTargetAtTime(this.xfadeGain(id), now, 0.008);
   }
 
   setMaster(norm) {
@@ -61,8 +90,25 @@ export class Engine extends Emitter {
     this.emit('change');
   }
 
-  /** Het andere deck. Met acht tracks wordt dit een aangewezen master. */
-  ander(id) { return this.decks[id === 'A' ? 'B' : 'A']; }
+  /**
+   * Naar wie synct deze track? Er is geen "het andere deck" meer.
+   *
+   * De track die je het HARDST hoort: fader maal crossfader, en hij moet
+   * spelen en een grid hebben. Speelt er niets, dan de eerste geladen track
+   * met een grid. Gelijke stand: het laagste nummer. Saai en voorspelbaar,
+   * en in de praktijk precies de track waar je op wilt landen.
+   */
+  syncMaster(id) {
+    let beste = null, besteGain = -1;
+    for (const k of DECK_IDS) {
+      const d = this.decks[k];
+      if (k === id || !d.buffer || !d.grid || !d.playing) continue;
+      const g = faderGain(d.ui.fader) * this.xfadeGain(k);
+      if (g > besteGain + 1e-9) { beste = d; besteGain = g; }
+    }
+    if (beste) return beste;
+    return DECK_IDS.map((k) => this.decks[k]).find((d) => d.id !== id && d.buffer && d.grid) || null;
+  }
 
   /**
    * Tempo en fase van één deck gelijkzetten aan het andere.
@@ -78,11 +124,10 @@ export class Engine extends Emitter {
    */
   sync(id) {
     const slave = this.decks[id];
-    const master = this.ander(id);
     if (!slave?.buffer) return { ok: false, reden: `deck ${id} is leeg` };
-    if (!master.buffer) return { ok: false, reden: `deck ${master.id} is leeg` };
     if (!slave.grid) return { ok: false, reden: `deck ${id} heeft nog geen beatgrid` };
-    if (!master.grid) return { ok: false, reden: `deck ${master.id} heeft nog geen beatgrid` };
+    const master = this.syncMaster(id);
+    if (!master) return { ok: false, reden: 'geen andere track met een beatgrid om naar te syncen' };
 
     const doelBpm = master.grid.bpm * master.rate;
     const rate = doelBpm / slave.grid.bpm;
@@ -92,7 +137,7 @@ export class Engine extends Emitter {
     slave.setRate(rate);
 
     if (!master.playing || !slave.playing) {
-      return { ok: true, tempo: true, fase: false, rate, bpm: doelBpm,
+      return { ok: true, tempo: true, fase: false, rate, bpm: doelBpm, master: master.id,
         reden: 'tempo gelijk; fase pas als beide decks spelen' };
     }
 
@@ -103,15 +148,15 @@ export class Engine extends Emitter {
     slave.seek(slave.position + delta);
 
     this.emit('change');
-    return { ok: true, tempo: true, fase: true, rate, bpm: doelBpm, verschoven: delta };
+    return { ok: true, tempo: true, fase: true, rate, bpm: doelBpm, verschoven: delta, master: master.id };
   }
 
   /**
-   * Hoe ver lopen de twee decks uit de pas, in seconden?
-   * Positief = dit deck loopt vóór. Null als het niet te zeggen is.
+   * Hoe ver loopt deze track uit de pas met zijn syncmaster, in seconden?
+   * Positief = deze track loopt vóór. Null als het niet te zeggen is.
    */
   faseVerschil(id) {
-    const a = this.decks[id], b = this.ander(id);
+    const a = this.decks[id], b = this.syncMaster(id);
     if (!a?.grid || !b?.grid || !a.buffer || !b.buffer) return null;
     const beat = a.grid.beatLength * a.rate;        // hoorbare tellengte
     let d = (a.grid.phase(a.position) - b.grid.phase(b.position)) * beat;
@@ -147,14 +192,15 @@ export class Engine extends Emitter {
               .filter((p) => p.naam !== null),
             ketens: d.fx.nodeAantal },
       hotcues: d.hotcues.slice(), loop: d.loop ? { ...d.loop } : null,
-      ui: { ...d.ui }, level: d.level(),
+      ui: { ...d.ui }, level: d.level(), kant: this.kant[d.id],
     });
+    const decks = {}, fase = {};
+    for (const id of DECK_IDS) { decks[id] = deckState(this.decks[id]); fase[id] = this.faseVerschil(id); }
     return {
       focus: this.focus,
       xfader: this.xfader, xfaderCurve: this.xfaderCurve,
       master: this.masterLevel, masterPeak: this.masterPeak(),
-      fase: { A: this.faseVerschil('A'), B: this.faseVerschil('B') },
-      decks: { A: deckState(this.decks.A), B: deckState(this.decks.B) },
+      fase, decks,
     };
   }
 }

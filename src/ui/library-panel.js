@@ -11,10 +11,11 @@ import { fmtTime } from '../lib/emitter.js';
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class LibraryPanel {
-  constructor({ root, onLaad, decks = ['A', 'B'] }) {
+  constructor({ root, onLaad, decks = ['A', 'B'], label = (d) => d }) {
     this.root = root;
     this.onLaad = onLaad;
     this.decks = decks;
+    this.label = label;
     this.tracks = [];
     this.opdrachten = [];
     this.bezig = new Set();     // tracks die nu geladen worden
@@ -160,7 +161,7 @@ export class LibraryPanel {
         <span class="lib-lufs">${esc(lufs)}</span>
         <span class="lib-racks">${t.racks ? `${t.racks} rack${t.racks === 1 ? '' : 's'}` : '—'}</span>
         <span class="lib-knoppen">
-          ${this.decks.map((d) => `<button class="btn sm" data-deck="${d}" data-id="${esc(t.id)}"${laadt ? ' disabled' : ''}>${laadt ? '…' : d}</button>`).join('')}
+          ${this.decks.map((d) => `<button class="btn sm lib-trk" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)}"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}
           <button class="btn sm lib-weg" data-weg="${esc(t.id)}" title="uit de lijst halen">×</button>
         </span>
       </div>`;

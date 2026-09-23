@@ -35,7 +35,7 @@ main{flex:1;display:grid;grid-template-columns:1fr 250px 1fr;gap:10px;padding:10
   display:flex;flex-direction:column;min-height:0;padding:10px;gap:8px;transition:border-color .15s}
 .deck.focused{border-color:#37505f}
 .deck.drag{border-color:var(--a);background:#0e1a1a}
-#deck-A .deck-id{color:var(--a)} #deck-B .deck-id{color:var(--b)}
+#venster-L .deck-id{color:var(--a)} #venster-R .deck-id{color:var(--b)}
 .deck-head{display:flex;align-items:baseline;gap:10px}
 .deck-id{font-size:20px;font-weight:800;letter-spacing:.05em}
 .deck-title{flex:1;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -343,3 +343,23 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .re-schuif{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dim)}
 .re-schuif input{width:70px;accent-color:var(--a)}
 .re-schuif output{font-family:ui-monospace,monospace;width:28px;color:var(--text)}
+
+/* ---- acht tracks ---- */
+.tracks{flex:0 0 auto;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;padding:0 10px 10px}
+.trk{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 7px;
+  display:flex;flex-direction:column;gap:5px;min-width:0}
+.trk.focused{border-color:#37505f}
+.trk.leeg{opacity:.55}
+.trk-kop{display:flex;align-items:center;gap:6px;min-width:0}
+.trk-nr{font-weight:800;font-size:13px;width:22px;height:22px;border-radius:4px;
+  border:1px solid var(--line);color:var(--dim);flex:0 0 auto}
+.trk.speelt .trk-nr{background:var(--a);color:#03100e;border-color:var(--a)}
+.trk-titel{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.trk-meter{height:4px}
+.trk-fader{width:100%}
+.trk-knoppen{display:flex;gap:3px}
+.trk-kant{flex:1;text-transform:uppercase;font-size:10px}
+.trk-kant[data-kant="A"]{color:var(--a)} .trk-kant[data-kant="B"]{color:var(--b)}
+.trk-toon{width:24px}
+.trk-toon.on[data-toon="L"]{background:var(--a);color:#03100e}
+.trk-toon.on[data-toon="R"]{background:var(--b);color:#12081c}

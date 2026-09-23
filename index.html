@@ -24,10 +24,10 @@
 </header>
 
 <main>
-  <!-- ================= DECK A ================= -->
-  <section class="deck" id="deck-A" data-deck="A">
+  <!-- ================= VENSTER LINKS (standaard track 1) ================= -->
+  <section class="deck" id="venster-L" data-venster="L">
     <div class="deck-head">
-      <span class="deck-id">A</span>
+      <span class="deck-id">1</span>
       <span class="deck-title">— leeg —</span>
       <span class="deck-time"><b class="t-pos">0:00.00</b> <i class="t-rem">-0:00.00</i></span>
     </div>
@@ -64,7 +64,7 @@
         <button data-kind="button" data-action="track.1.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
         <button data-kind="button" data-action="track.1.grid.halve" class="btn sm" title="bpm halveren">/2</button>
         <button data-kind="button" data-action="track.1.grid.double" class="btn sm" title="bpm verdubbelen">x2</button>
-        <button data-kind="button" data-action="track.1.sync" class="btn sm sync" title="tempo en fase gelijk aan het andere deck">SYNC</button>
+        <button data-kind="button" data-action="track.1.sync" class="btn sm sync" title="tempo en fase gelijk aan de luidste track">SYNC</button>
         <span class="fase" title="hoe ver dit deck voor of achter loopt"><b></b><i></i></span>
       </div>
       <div class="fx-row">
@@ -94,7 +94,7 @@
   <!-- ================= MIXER ================= -->
   <section class="mixer">
     <div class="strips">
-      <div class="strip" data-deck="A">
+      <div class="strip" data-venster="L">
         <div class="knob" data-action="track.1.trim" data-label="TRIM" data-value="0.5"></div>
         <div class="knob" data-action="track.1.high" data-label="HIGH" data-value="0.5" data-bipolar="true"></div>
         <div class="knob" data-action="track.1.mid"  data-label="MID"  data-value="0.5" data-bipolar="true"></div>
@@ -103,7 +103,7 @@
         <div class="meter ch-meter"><i></i></div>
         <input type="range" class="vfader" orient="vertical" min="0" max="1" step="0.001" value="1" data-action="track.1.fader">
       </div>
-      <div class="strip" data-deck="B">
+      <div class="strip" data-venster="R">
         <div class="knob" data-action="track.2.trim" data-label="TRIM" data-value="0.5"></div>
         <div class="knob" data-action="track.2.high" data-label="HIGH" data-value="0.5" data-bipolar="true"></div>
         <div class="knob" data-action="track.2.mid"  data-label="MID"  data-value="0.5" data-bipolar="true"></div>
@@ -121,10 +121,10 @@
     <button data-kind="button" data-action="mixer.xfader.curve" class="btn sm curve">curve: smooth</button>
   </section>
 
-  <!-- ================= DECK B ================= -->
-  <section class="deck" id="deck-B" data-deck="B">
+  <!-- ================= VENSTER RECHTS (standaard track 2) ================= -->
+  <section class="deck" id="venster-R" data-venster="R">
     <div class="deck-head">
-      <span class="deck-id">B</span>
+      <span class="deck-id">2</span>
       <span class="deck-title">— leeg —</span>
       <span class="deck-time"><b class="t-pos">0:00.00</b> <i class="t-rem">-0:00.00</i></span>
     </div>
@@ -161,7 +161,7 @@
         <button data-kind="button" data-action="track.2.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
         <button data-kind="button" data-action="track.2.grid.halve" class="btn sm" title="bpm halveren">/2</button>
         <button data-kind="button" data-action="track.2.grid.double" class="btn sm" title="bpm verdubbelen">x2</button>
-        <button data-kind="button" data-action="track.2.sync" class="btn sm sync" title="tempo en fase gelijk aan het andere deck">SYNC</button>
+        <button data-kind="button" data-action="track.2.sync" class="btn sm sync" title="tempo en fase gelijk aan de luidste track">SYNC</button>
         <span class="fase" title="hoe ver dit deck voor of achter loopt"><b></b><i></i></span>
       </div>
       <div class="fx-row">
@@ -188,6 +188,10 @@
     <div class="dropzone">sleep een audiobestand hierheen &nbsp;·&nbsp; <button class="link demo-btn">of laad demotrack</button></div>
   </section>
 </main>
+
+<!-- ================= ACHT TRACKS ================= -->
+<!-- Gevuld door app.js: acht keer hetzelfde, dat hoort niet met de hand. -->
+<section id="tracks" class="tracks"></section>
 
 <!-- ================= LIBRARY ================= -->
 <section id="lib-panel" class="lib-panel hidden">
@@ -268,7 +272,7 @@
     <h2>Toetsen</h2>
     <div class="help-cols">
       <div>
-        <h3>Deck A</h3>
+        <h3>Linkervenster</h3>
         <table>
           <tr><td>Q</td><td>play / pause</td></tr>
           <tr><td>W</td><td>cue</td></tr>
@@ -280,7 +284,7 @@
         </table>
       </div>
       <div>
-        <h3>Deck B</h3>
+        <h3>Rechtervenster</h3>
         <table>
           <tr><td>P</td><td>play / pause</td></tr>
           <tr><td>O</td><td>cue</td></tr>

@@ -509,5 +509,99 @@ ef.zetEffect('delay');
 
 ok('snapshot compleet', snap.decks.A.loaded && snap.decks.B && typeof snap.xfader === 'number');
 
+// ---- acht tracks ------------------------------------------------------------
+// Eén per fader. Wat voor twee werkte moet precies zo blijven klinken.
+
+console.log('\nacht tracks');
+{
+  const { DECK_IDS } = await import('../src/engine/engine.js');
+  const e8 = new Engine();
+  ok('acht decks', DECK_IDS.length === 8 && DECK_IDS.every((id) => e8.deck(id)));
+  ok('standaard: 1 op A, 2 op B, de rest thru',
+    e8.kant.A === 'A' && e8.kant.B === 'B' && ['C', 'D', 'E', 'F', 'G', 'H'].every((id) => e8.kant[id] === 'thru'));
+
+  e8.setXfader(0);
+  ok('crossfader links: kant B stil, thru onaangetast',
+    e8.xfadeGain('B') < 1e-9 && e8.xfadeGain('C') === 1 && e8.xfadeGain('A') > 0.999);
+  e8.setKant('C', 'B');
+  ok('track 3 op B volgt de crossfader', e8.xfadeGain('C') < 1e-9);
+  e8.setKant('C', 'onzin');
+  ok('onbekende kant wordt genegeerd', e8.kant.C === 'B');
+  e8.setXfader(0.5);
+
+  // Syncmaster: wie je het hardst hoort, niet "het andere deck".
+  for (const id of ['A', 'C', 'D']) {
+    e8.deck(id).load(buf, id);
+    e8.deck(id).setGrid(new Beatgrid({ bpm: { A: 120, C: 124, D: 130 }[id], firstBeat: 0 }));
+  }
+  ok('niets speelt: eerste geladen track met grid', e8.syncMaster('D').id === 'A');
+  e8.deck('C').togglePlay();
+  e8.deck('D').togglePlay();
+  e8.deck('C').set('fader', 0.6);
+  ok('speelt er iets: de luidste die speelt', e8.syncMaster('A').id === 'D');
+  e8.deck('D').set('fader', 0.3);
+  ok('fader omlaag: de ander wordt master', e8.syncMaster('A').id === 'C');
+  e8.setXfader(1);              // C staat op kant B: nu vol open
+  e8.deck('D').set('fader', 1);
+  e8.setKant('D', 'A');         // en D gaat dicht door de crossfader
+  ok('crossfader telt mee', e8.syncMaster('A').id === 'C');
+  const rs = e8.sync('A');
+  ok('sync meldt naar wie', rs.ok && rs.master === 'C' && Math.abs(e8.deck('A').bpm - 124) < 1e-6);
+  ok('een track synct nooit naar zichzelf', e8.syncMaster('C').id !== 'C');
+  ok('lege track kan niet syncen', !e8.sync('H').ok);
+
+  const s8 = e8.snapshot();
+  ok('snapshot heeft alle acht, met kant', Object.keys(s8.decks).length === 8 && s8.decks.C.kant === 'B');
+  ok('fase per track in de snapshot', Object.keys(s8.fase).length === 8);
+
+  // De action op de gedeelde bus (eng): A -> B -> thru -> A.
+  const { read: leesAction } = await import('../src/control/actions.js');
+  ok('track 8 bestaat op de bus', list().some((a) => a.id === 'track.8.play'));
+  invoke('track.3.xfade.kant', true);
+  const naEen = eng.kant.C;
+  invoke('track.3.xfade.kant', true);
+  invoke('track.3.xfade.kant', true);
+  ok('kant-knop loopt rond: thru -> A -> B -> thru', naEen === 'A' && eng.kant.C === 'thru');
+  ok('read geeft drie standen', leesAction('track.1.xfade.kant') === 0
+    && leesAction('track.2.xfade.kant') === 1 && leesAction('track.3.xfade.kant') === 0.5);
+}
+
+// ---- toetsenbord ------------------------------------------------------------
+// Spatie wees na de hernoeming naar deck.* nog naar een naam die niet meer
+// bestond, en niemand merkte het. Nu staat het vast.
+
+console.log('\ntoetsenbord');
+{
+  const { attachKeyboard, KEYMAP } = await import('../src/control/keyboard.js');
+  const handlers = {};
+  const oudWindow = globalThis.window;
+  globalThis.window = { addEventListener: (t, f) => { handlers[t] = f; } };
+  const toets = (code, type = 'keydown') => handlers[type]({
+    code, shiftKey: false, target: { matches: () => false }, preventDefault() {} });
+
+  const vensters = { L: 'C', R: 'B' };
+  attachKeyboard(eng, { venster: (v) => vensters[v] });
+  globalThis.window = oudWindow;
+
+  const ids = new Set(list().map((a) => a.id));
+  const onbekend = Object.values(KEYMAP)
+    .map((id) => id.replace('{L}', '3').replace('{R}', '2'))
+    .filter((id) => !ids.has(id));
+  ok('elke toets wijst naar een bestaande action', onbekend.length === 0);
+
+  const dC = eng.deck('C');
+  dC.load(buf, 'toets');
+  const voor = dC.playing;
+  toets('KeyQ'); toets('KeyQ', 'keyup');
+  ok('Q speelt de track in het linkervenster', dC.playing !== voor);
+  toets('KeyQ'); toets('KeyQ', 'keyup');
+
+  eng.setFocus('C');
+  const voorSpatie = dC.playing;
+  toets('Space');
+  ok('spatie speelt de track met focus', dC.playing !== voorSpatie);
+  if (dC.playing) toets('Space');
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
