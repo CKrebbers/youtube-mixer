@@ -1,7 +1,8 @@
 import { Emitter, clamp, piek } from '../lib/emitter.js';
 import { createDeckChain, setEqBand, setBipolarFilter, faderGain } from './audio-graph.js';
 import { Beatgrid } from './beatgrid.js';
-import { BufferBron, StreamBron } from './bron.js';
+import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
+import { maakWav } from './stream-kern.js';
 import { InsertSlot } from './fx.js';
 
 /**
@@ -109,13 +110,26 @@ export class Deck extends Emitter {
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     try {
-      await this.bron.laad({ url });
+      await this.bron.laad({ url, haal: opties?.haal });
     } catch (err) {
       if (err.vervangen) return false;      // er kwam een nieuwere laad overheen: die wint
       throw err;
     }
     this._naLaden(title);
     return true;
+  }
+
+  /**
+   * Een AudioBuffer (los bestand, demotrack) via de streamkern: eerst naar
+   * het formaat van de ingest, dan door dezelfde StreamBron als de library.
+   * Loop-naad, declick en knippen werken daardoor overal hetzelfde.
+   * Geeft false als er intussen een nieuwere laad overheen kwam.
+   */
+  async laadGeheugen(buffer, title) {
+    const kanalen = [buffer.getChannelData(0), buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : buffer.getChannelData(0)];
+    const wav = maakWav(kanalen, buffer.sampleRate);
+    this._geheugenNr = (this._geheugenNr || 0) + 1;
+    return this.laadStream(`geheugen:${this.id}:${this._geheugenNr}`, title, { haal: geheugenHaal(wav) });
   }
 
   _naLaden(title) {

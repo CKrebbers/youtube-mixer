@@ -223,11 +223,29 @@ for (const v of VENSTERS) {
     await engine.resume();
     const id = venster[v];
     const buf = renderDemoTrack(engine.ctx, { seed: DECK_IDS.indexOf(id), bars: 16 });
-    engine.deck(id).load(buf, `demo ${trackVanDeck(id)} — 124 bpm`);
-    videoMixer.zetBron(id, null);
-    losVanLibrary(id);
-    analysis[id] = computePeaks(buf);
+    await laadBuffer(id, buf, `demo ${trackVanDeck(id)} — 124 bpm`);
   });
+}
+
+/**
+ * Een AudioBuffer op een track, via de streamkern (één afspeelmotor): loops
+ * zonder tik, declick en knippen zoals bij de library. False als er intussen
+ * iets anders op deze track geladen werd.
+ */
+async function laadBuffer(id, buf, titel) {
+  losVanLibrary(id);
+  const mijnLaad = laadTeller[id];
+  let gelukt;
+  try {
+    gelukt = await engine.deck(id).laadGeheugen(buf, titel);
+  } catch (err) {
+    meld(`laden mislukt: ${err.message}`, 'fout');
+    return false;
+  }
+  if (!gelukt || !nogDeLaatste(id, mijnLaad)) return false;
+  videoMixer.zetBron(id, null);
+  analysis[id] = computePeaks(buf);
+  return true;
 }
 
 async function loadFile(id, file) {
@@ -239,10 +257,7 @@ async function loadFile(id, file) {
     meld(`"${file.name}" is geen audio die de browser kan lezen`, 'fout');
     return;
   }
-  engine.deck(id).load(buf, file.name.replace(/\.[^.]+$/, ''));
-  videoMixer.zetBron(id, null);
-  losVanLibrary(id);
-  analysis[id] = computePeaks(buf);
+  if (!(await laadBuffer(id, buf, file.name.replace(/\.[^.]+$/, '')))) return;
   console.log(`[deck ${id}] ${file.name} — ${buf.duration.toFixed(1)}s — RMS ${rmsDb(buf).toFixed(1)} dBFS`);
 }
 

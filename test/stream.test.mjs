@@ -284,5 +284,47 @@ console.log('\nStreamBron');
   ok('vernietigd tijdens het laden: geeft op, bouwt niets meer op', (await halfweg) === 'vervangen' && opgeruimd._timer === null);
 }
 
+// ---- één motor: losse bestanden via de streamkern -------------------------
+
+console.log('\nlos bestand via de streamkern');
+{
+  const { maakWav } = K;
+  const { StreamBron, geheugenHaal } = await import('../src/engine/bron.js');
+  const n = 48000 * 3;
+  const L = new Float32Array(n).map((_, i) => Math.sin(i / 20) * 0.5);
+  const R = new Float32Array(n).map((_, i) => (i % 100) / 100 - 0.5);
+  const wav = maakWav([L, R], 48000);
+  const kop = leesWavKop(wav);
+  ok('maakWav: het formaat van de ingest', controleerWav(kop) === null && kop.sampleRate === 48000 && kop.dataLengte === n * 4 && kop.dataStart === 44);
+  const pcm = new Int16Array(wav, 44);
+  ok('samples kloppen op 16 bit', Math.abs(pcm[2000] / 32768 - L[1000]) < 1 / 16000 && Math.abs(pcm[2001] / 32768 - R[1000]) < 1 / 16000);
+  ok('mono komt op beide kanalen', (() => { const m = new Int16Array(maakWav([L], 48000), 44); return m[10] === m[11]; })());
+  ok('buiten -1..1 wordt geklemd, niet omgeslagen', new Int16Array(maakWav([Float32Array.of(1.5, -1.5)], 48000), 44)[0] === 32767
+    && new Int16Array(maakWav([Float32Array.of(1.5, -1.5)], 48000), 44)[2] === -32768);
+
+  const haal = geheugenHaal(wav);
+  const deel = await haal('x', { headers: { Range: 'bytes=44-51' } });
+  ok('geheugenHaal: Range geeft 206 en precies die bytes', deel.status === 206 && (await deel.arrayBuffer()).byteLength === 8);
+  ok('voorbij het einde: 416', (await haal('x', { headers: { Range: `bytes=${wav.byteLength}-` } })).status === 416);
+
+  const berichten = [];
+  globalThis.AudioWorkletNode = class {
+    constructor() { this.port = { postMessage: (m) => berichten.push(m), onmessage: null }; }
+    connect() {} disconnect() {}
+  };
+  const ctx = {
+    currentTime: 0, audioWorklet: { addModule: async () => {} },
+    createBuffer: (k, len, sr) => { const d = Array.from({ length: k }, () => new Float32Array(len)); return { length: len, sampleRate: sr, duration: len / sr, getChannelData: (c) => d[c] }; },
+  };
+  const bron = new StreamBron(ctx, {}, { interval: 1e9, haal: async () => { throw new Error('mag niet naar het netwerk'); } });
+  await bron.laad({ url: 'geheugen:A:1', haal });
+  ok('StreamBron laadt uit het geheugen, niet van het netwerk', Math.abs(bron.duur - 3) < 1e-9 && berichten.some((m) => m.type === 'pagina'));
+  const stuk = await bron.knip(1, 1.5);
+  ok('knippen werkt ook (de sampler)', stuk.length === 24000 && Math.abs(stuk.getChannelData(0)[0] - L[48000]) < 1 / 16000);
+  await bron.laad({ url: '/media/x/audio.wav' }).catch(() => {});
+  ok('een volgende laad zonder haal gebruikt weer de standaard (netwerk)', bron.haal === bron.standaardHaal);
+  bron.vernietig();
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

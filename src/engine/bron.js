@@ -193,6 +193,23 @@ export class BufferBron {
 
 // ---- streamen -------------------------------------------------------------
 
+/**
+ * Een `haal` die Range-verzoeken beantwoordt uit een WAV in het geheugen, zoals
+ * de server dat met audio.wav doet. Zo speelt een los bestand door precies
+ * dezelfde StreamBron als de library: één afspeelmotor.
+ */
+export function geheugenHaal(wav) {
+  const bytes = new Uint8Array(wav);
+  return async (_url, init = {}) => {
+    const m = /bytes=(\d+)-(\d*)/.exec(init.headers?.Range || '');
+    if (!m) return new Response(bytes.slice(), { status: 200 });
+    const a = Number(m[1]);
+    const b = m[2] ? Math.min(Number(m[2]), bytes.length - 1) : bytes.length - 1;
+    if (a >= bytes.length || b < a) return new Response(null, { status: 416 });
+    return new Response(bytes.slice(a, b + 1), { status: 206 });
+  };
+}
+
 /** De worklet-module één keer per AudioContext laden. */
 const modules = new WeakMap();
 export function laadStreamModule(ctx) {
@@ -218,6 +235,7 @@ export class StreamBron {
     this.ctx = ctx;
     this.uitgang = uitgang;
     this.haal = haal;
+    this.standaardHaal = haal;      // per laad te vervangen (geheugenHaal voor losse bestanden)
     this.interval = interval;
     this.node = null;
     this.seg = STIL;
@@ -253,8 +271,9 @@ export class StreamBron {
    * pagina's en de vaste punten op voordat hij teruggeeft: zo speelt play
    * direct na het laden meteen.
    */
-  async laad({ url }) {
+  async laad({ url, haal = null }) {
     this.stop();
+    this.haal = haal || this.standaardHaal;
     this.fouten = 0;
     // Elke laad krijgt een nummer; na elke await kijken of hij nog de
     // laatste is. Twee keer snel laden mengde anders pagina's van twee

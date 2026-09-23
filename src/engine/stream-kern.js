@@ -83,6 +83,29 @@ export function leesWavKop(buf) {
   throw new Error('WAV: geen data-chunk in de eerste kilobytes');
 }
 
+/**
+ * Een WAV in precies het formaat van de ingest (16-bit PCM stereo), uit
+ * Float32-kanalen. Voor losse bestanden en de demotrack: die gaan zo door
+ * dezelfde streamkern als de library. Mono wordt op beide kanalen gezet.
+ * @returns ArrayBuffer met een kop van 44 bytes
+ */
+export function maakWav(kanalen, sampleRate) {
+  const L = kanalen[0], R = kanalen[1] ?? kanalen[0];
+  const n = L.length;
+  const buf = new ArrayBuffer(44 + n * BYTES_PER_FRAME);
+  const v = new DataView(buf);
+  const schrijf = (o, t) => { for (let i = 0; i < 4; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  schrijf(0, 'RIFF'); v.setUint32(4, 36 + n * BYTES_PER_FRAME, true); schrijf(8, 'WAVE');
+  schrijf(12, 'fmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 2, true); v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * BYTES_PER_FRAME, true); v.setUint16(32, BYTES_PER_FRAME, true); v.setUint16(34, 16, true);
+  schrijf(36, 'data'); v.setUint32(40, n * BYTES_PER_FRAME, true);
+  const pcm = new Int16Array(buf, 44);
+  const naar16 = (x) => { const c = Math.max(-1, Math.min(1, x)); return Math.round(c < 0 ? c * 32768 : c * 32767); };
+  for (let i = 0; i < n; i++) { pcm[i * 2] = naar16(L[i]); pcm[i * 2 + 1] = naar16(R[i]); }
+  return buf;
+}
+
 /** Alleen wat de worklet kan lezen. Liever nu een duidelijke fout dan straks ruis. */
 export function controleerWav(kop) {
   if (kop.formaat !== 1 && kop.formaat !== 0xfffe) return `WAV-formaat ${kop.formaat} wordt niet ondersteund (alleen PCM)`;

@@ -128,8 +128,14 @@ test/
 - Wat uit de library komt STREAMT (`StreamBron`, sinds 23 september 2026): alleen
   pagina's van ~1,4 s rond de positie, de loop, het cuepunt en de hotcues staan
   in het geheugen, ~4-6 MB per track, hoe lang hij ook is. Gemeten: acht keer
-  een album van 31 minuten ~30 MB, waar het uitgepakt 5,7 GB was. Losgesleepte
-  bestanden en de demotrack gebruiken nog `BufferBron` (hele track in RAM).
+  een album van 31 minuten ~30 MB, waar het uitgepakt 5,7 GB was.
+- ÉÉN afspeelmotor (Clay 23 sep): losgesleepte bestanden en de demotrack gaan
+  ook door de StreamBron. `deck.laadGeheugen(buffer)` zet de AudioBuffer om
+  naar het formaat van de ingest (`maakWav`, 16-bit stereo) en geeft de
+  StreamBron een `geheugenHaal` die Range-verzoeken uit dat geheugen
+  beantwoordt. Kost ~11 MB per minuut (de hele WAV staat in RAM, maar als
+  16-bit: de helft van een AudioBuffer). `deck.load()` met de BufferBron
+  bestaat nog als reserve, voor de engine-tests en straks keylock.
 - Streamen leest `audio.wav` rechtstreeks met Range-verzoeken, en kan daarom
   alleen 16-bit PCM stereo. De ingest zet dat formaat expliciet. Verander je
   het formaat van `audio.wav`, dan weigert de StreamBron het met een reden.
@@ -140,8 +146,8 @@ test/
   nooit op dezelfde hoogte: een tik. De streamkern vloeit daarom de laatste
   5 ms (`LOOP_NAAD`) equal-power over naar wat er vlak vóór het loop-BEGIN
   staat. Gemeten op het ADRIANA-album: sprongen tot 0,147 werden niet groter
-  dan een gewone stap in de muziek. Alleen voor de StreamBron; BufferBron
-  (losgesleepte bestanden, demotrack) loopt via de native loop en tikt nog.
+  dan een gewone stap in de muziek. Alleen voor de StreamBron (dus alles in de
+  app); de BufferBron (reserve) loopt via de native loop en tikt nog.
 - Hoofdthread en worklet delen GEEN teller: ze rekenen allebei met dezelfde
   formule uit `stream-kern.js` op dezelfde audioklok ("vanaf T staat de
   positie op P met snelheid R"). Elke wijziging is een nieuw segment; een
