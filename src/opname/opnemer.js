@@ -49,7 +49,20 @@ export class Opnemer {
   /**
    * @param video  een canvas om mee op te nemen, of niets voor alleen audio
    */
-  async start({ video = null } = {}) {
+  /**
+   * Start en stop lopen achter elkaar, nooit door elkaar: twee keer snel op
+   * start gaf twee opnames met stukken door elkaar in één bestand, en starten
+   * tijdens een lopende stop sloot de NIEUWE opname af.
+   */
+  start(opties) { return this._naElkaar(() => this._start(opties)); }
+  stop() { return this._naElkaar(() => this._stop()); }
+  _naElkaar(fn) {
+    const r = (this._slot || Promise.resolve()).then(fn, fn);
+    this._slot = r.catch(() => {});
+    return r;
+  }
+
+  async _start({ video = null } = {}) {
     if (this.node) return { ok: true };
     const soort = video ? kiesVideoType() : null;
     if (video && !soort) return this._mislukt('deze browser kan geen video opnemen');
@@ -131,22 +144,31 @@ export class Opnemer {
     this.frames += frames;
     const id = this.id;
     this._rij = this._rij.then(async () => {
-      try {
-        const res = await this.haal(`/api/opname/${id}/stuk`, {
-          method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: data,
-        });
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).fout || `${res.status}`);
-        this.bytes += data.byteLength;
-      } catch (err) {
-        this.fout = `stuk kwijt: ${err.message}`;
-        console.warn('[opname]', this.fout);
+      // Drie pogingen: een stuk dat stil wegvalt verschuift de hele WAV ten
+      // opzichte van de video. Lukt het echt niet, dan melden.
+      let laatste = null;
+      for (let poging = 0; poging < 3; poging++) {
+        try {
+          const res = await this.haal(`/api/opname/${id}/stuk`, {
+            method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: data,
+          });
+          if (res.ok) { this.bytes += data.byteLength; return; }
+          const j = await res.json().catch(() => ({}));
+          laatste = j.fout || `${res.status}`;
+          if (j.vol) break;                 // opnieuw proberen helpt niet bij een volle schijf
+        } catch (err) { laatste = err.message; }
+        await new Promise((r) => setTimeout(r, 250 * (poging + 1)));
       }
+      this.fout = `stuk kwijt: ${laatste}`;
+      this.onFout?.(this.fout);
+      console.warn('[opname]', this.fout);
     });
   }
 
-  async stop() {
+  async _stop() {
     if (!this.node) return { ok: false, fout: 'er loopt geen opname' };
     const node = this.node;
+    const id = this.id;                    // vastpakken: straks kan er al een nieuwe lopen
     await new Promise((klaar) => {
       this._klaar = klaar;
       node.port.postMessage({ type: 'stop' });
@@ -159,7 +181,7 @@ export class Opnemer {
     await this._stopVideo();
     await this._rij;                       // alles wat onderweg was, eerst binnen
     try {
-      const res = await this.haal(`/api/opname/${this.id}/klaar`, { method: 'POST' });
+      const res = await this.haal(`/api/opname/${id}/klaar`, { method: 'POST' });
       const j = await res.json();
       if (!j.ok) return this._mislukt(j.fout);
       return { ok: true, bestand: j.bestand, duur: j.duur, bytes: j.bytes, video: j.video ?? null, videoBytes: j.videoBytes ?? 0, waarschuwing: this.fout };
