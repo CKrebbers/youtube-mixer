@@ -167,3 +167,21 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 - [ ] **F1. Koptelefoon-cue (PFL).** De op vier na meest gebruikte DJ-functie,
   maar VARVE heeft één audio-uitgang. Vraagt een tweede uitgang (tweede
   geluidskaart, of kanaal 3/4 van een interface). Eerst bespreken, niet bouwen.
+
+---
+
+## G. Clay's map `Input/` (23 sep, zie docs/INPUT.md)
+
+- [ ] **G1. Wat wil je met `Input/`?** Naslag, ideeënbak, of iets waarin VARVE en AV-kern
+  samenkomen? (fase1-zip = oude versie van dit project; av-kern = eigen project met eigen
+  .git, Vite/TS; blueprint-varvedj.json = Bedienplan-export: twee decks, vier beeldlagen.)
+- [ ] **G2. Is de blauwdruk een nieuwe wens?** Hij botst met vastgelegde keuzes (acht
+  tracks / één kolom = één track, beeld = video van de track, fader = volume). Heropenen
+  of alleen losse functies plukken (hotcues 5–8, loop in/out, brake/slip/kill, tempo-master)?
+- [ ] **G3. Actielog met terugspelen** (idee uit AV-kern, ~1 dag): set opnieuw renderen of
+  een fout naspelen. Willen?
+- [ ] **G4. Bedienplan blijven gebruiken?** Pas dan loont een import naar de VARVE-mapping.
+- [ ] **G5. Wat is een "Vormmachine"** (26 in de blauwdruk, nergens gevonden)?
+- [ ] **G6. `Input/` in git of in .gitignore?** Advies: .gitignore (zips + een complete
+  .git van AV-kern); alleen de blauwdruk eventueel naar docs/. En waar is de lege map
+  `modules/` voor?
