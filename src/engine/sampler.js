@@ -74,6 +74,15 @@ export class Sampler {
     this.tellen = 4;
     this.pads = Array.from({ length: AANTAL }, () => null);
     this.bezig = new Set();
+    /*
+     * Wat een lege pad terug kan halen: { deckId, van, tot, bpm, tellen, bron }.
+     * Pure data; wie ze vult (de app, uit de library) weet de sampler niet.
+     * Een pad die gevuld wordt meldt dat via onGevuld, een herinnering die
+     * vergeten wordt via onVergeet.
+     */
+    this.herinneringen = Array.from({ length: AANTAL }, () => null);
+    this.onGevuld = null;
+    this.onVergeet = null;
   }
 
   setVolume(v) {
@@ -86,10 +95,32 @@ export class Sampler {
   /** De laatste `tellen` van een deck in pad n. */
   async neem(n, deck, { bron = null } = {}) {
     if (!deck?.buffer) throw new Error('er staat niets op deze track');
-    if (this.bezig.has(n)) return;
+    const bereik = knipBereik(deck.grid, deck.position, this.tellen);
+    if (!(await this._vul(n, deck, { ...bereik, bron }))) return;
+    this.onGevuld?.(n, { deckId: deck.id, van: bereik.van, tot: bereik.tot, bpm: bereik.bpm, tellen: bereik.tellen, bron });
+  }
+
+  /** Een bewaarde pad opnieuw knippen, van het deck waar zijn nummer op staat. */
+  async herstel(n, deck) {
+    const h = this.herinneringen[n];
+    if (!h) return false;
+    if (!deck?.buffer) throw new Error('het nummer van deze pad staat niet meer op een track');
+    return this._vul(n, deck, h);
+  }
+
+  /** Een herinnering vergeten (shift op een lege, bewaarde pad). */
+  vergeet(n) {
+    const h = this.herinneringen[n];
+    if (!h) return false;
+    this.herinneringen[n] = null;
+    this.onVergeet?.(n, h);
+    return true;
+  }
+
+  async _vul(n, deck, { van, tot, bpm, tellen, bron = null }) {
+    if (this.bezig.has(n)) return false;
     this.bezig.add(n);
     try {
-      const { van, tot, bpm, tellen } = knipBereik(deck.grid, deck.position, this.tellen);
       if (tot - van < 0.05) throw new Error('te kort: speel eerst een stukje');
       const voorSec = Math.min(NAAD, van);
       const ruw = await deck.bron.knip(van - voorSec, tot);
@@ -99,7 +130,8 @@ export class Sampler {
       buf.getChannelData(0).set(kanalen[0]);
       buf.getChannelData(1).set(kanalen[1]);
       this.stop(n);
-      this.pads[n] = { buffer: buf, bpm, bron, tellen, speelt: false, src: null, g: null };
+      this.pads[n] = { buffer: buf, bpm, bron, tellen, van, tot, deckId: deck.id, speelt: false, src: null, g: null };
+      return true;
     } finally {
       this.bezig.delete(n);
     }
@@ -147,6 +179,9 @@ export class Sampler {
     return this.pads.map((p, i) => ({
       pad: i + 1, gevuld: !!p, speelt: !!p?.speelt, bezig: this.bezig.has(i),
       bron: p?.bron ?? null, tellen: p?.tellen ?? null,
+      // Leeg, maar terug te halen: van welke track en hoeveel tellen.
+      bewaard: !p && !!this.herinneringen[i],
+      bewaardBron: this.herinneringen[i]?.bron ?? null, bewaardTellen: this.herinneringen[i]?.tellen ?? null,
     }));
   }
 }

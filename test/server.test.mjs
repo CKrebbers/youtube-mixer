@@ -64,6 +64,17 @@ try {
   await fetch(`${B}/api/library/nummerY/racks/${x.id}`, { method: 'DELETE' });
   ok('verwijderen via een ander nummer lukt niet', (await (await fetch(`${B}/api/library/nummerX/racks`)).json()).racks.length === 1);
 
+  console.log('\nsampler-pads per nummer');
+  const sp = await post('/api/library/nummerX/samples', { pad: 2, van: 4, tot: 6, tellen: 4, bpm: 120 });
+  ok('pad bewaren', sp.sample?.pad === 2 && sp.sample.van === 4);
+  ok('ophalen', (await (await fetch(`${B}/api/library/nummerX/samples`)).json()).samples.length === 1);
+  ok('pad 9 bestaat niet', (await status('/api/library/nummerX/samples', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pad: 9, van: 0, tot: 1 }) })) === 400);
+  ok('tot vóór van wordt geweigerd', (await status('/api/library/nummerX/samples', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pad: 1, van: 2, tot: 1 }) })) === 400);
+  ok('onbekend nummer: 404', (await status('/api/library/bestaatniet/samples', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pad: 1, van: 0, tot: 1 }) })) === 404);
+  ok('niet als formulier', (await status('/api/library/nummerX/samples', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{}' })) === 415);
+  await fetch(`${B}/api/library/nummerX/samples/2`, { method: 'DELETE' });
+  ok('vergeten', (await (await fetch(`${B}/api/library/nummerX/samples`)).json()).samples.length === 0);
+
   console.log('\nopnames');
   const s = await (await fetch(`${B}/api/opname/start`, { method: 'POST' })).json();
   const stuk = new Uint8Array(48000 * 4);

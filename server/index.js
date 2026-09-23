@@ -329,6 +329,23 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ---- sampler-pads: horen bij het nummer, net als racks en grid ---------
+    const mSamples = /^\/api\/library\/([\w-]+)\/samples(?:\/(\d+))?$/.exec(pad);
+    if (mSamples) {
+      const [, trackId, padNr] = mSamples;
+      if (!padNr && req.method === 'GET') return json(res, 200, { samples: lib.samples(trackId) });
+      if (!padNr && req.method === 'POST') {
+        const b = await leesJson(req);
+        const n = Number(b?.pad), van = Number(b?.van), tot = Number(b?.tot);
+        if (!(n >= 1 && n <= 8 && Number.isInteger(n))) return json(res, 400, { fout: 'pad moet 1..8 zijn' });
+        if (!(Number.isFinite(van) && Number.isFinite(tot) && van >= 0 && tot > van)) return json(res, 400, { fout: 'ongeldig stuk' });
+        if (!lib.track(trackId)) return json(res, 404, { fout: 'onbekend nummer' });
+        const getal = (x) => (Number.isFinite(Number(x)) && x !== null ? Number(x) : null);
+        return json(res, 200, { sample: lib.bewaarSample(trackId, { pad: n, van, tot, tellen: getal(b.tellen), bpm: getal(b.bpm) }) });
+      }
+      if (padNr && req.method === 'DELETE') return json(res, 200, { weg: lib.verwijderSample(trackId, Number(padNr)) });
+    }
+
     const mRack = /^\/api\/library\/([\w-]+)\/racks\/(\d+)$/.exec(pad);
     if (mRack) {
       const [, trackId, rackId] = mRack;

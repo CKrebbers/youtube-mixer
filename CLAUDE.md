@@ -347,7 +347,16 @@ test/
   want de pagina's zitten in de worklet. Afspelen: loop, gestart op de
   volgende tel van de klok die sync ook gebruikt, op diens tempo
   (playbackRate = hoorbare bpm / sample-bpm). De naad wordt bij het knippen
-  al naadloos gemaakt (`naadloos`). Samples leven alleen deze sessie.
+  al naadloos gemaakt (`naadloos`).
+- Sampler-pads horen bij het NUMMER (schema v4, tabel `samples`; Clay 23 sep).
+  Bewaard wordt alleen WAAR het stuk zit (van/tot in tracktijd, tellen, bpm),
+  geen audio: herstellen knipt opnieuw van schijf. De engine kent geen library:
+  de sampler heeft `herinneringen` (pure data) en meldt `onGevuld`/`onVergeet`;
+  de app vult en bewaart. Laad je het nummer, dan staan zijn pads als "bewaard"
+  (↺) op lege pads; klik = terughalen, ongeacht focus of positie. Shift op een
+  gevulde pad = leeg (blijft bewaard); shift op een lege, bewaarde pad = vergeten.
+  Een track die iets anders laadt neemt zijn herinneringen mee weg. Pads van een
+  los bestand of de demo worden niet bewaard.
 - Verbeterronde 23 september 2026 (vier auditagenten). Wat daaruit vastligt:
   - Tap tempo deelt door `d.rate`: je tikt wat je HOORT, het grid staat in tracktijd.
   - Transport is klikvrij: BufferBron vloeit 4 ms in/uit per start (`DECLICK`);

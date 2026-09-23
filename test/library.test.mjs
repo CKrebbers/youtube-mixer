@@ -107,12 +107,25 @@ lib.zet('laatste-deck', { A: 'abc123' });
 ok('instelling bewaard', lib.haal('laatste-deck').A === 'abc123');
 ok('onbekende instelling geeft de standaard', lib.haal('bestaat-niet', 'leeg') === 'leeg');
 
+// ---- sampler-pads ---------------------------------------------------------
+
+lib.bewaarSample('abc123', { pad: 3, van: 10, tot: 12, tellen: 4, bpm: 120 });
+ok('pad bewaard bij het nummer', lib.samples('abc123').length === 1 && lib.samples('abc123')[0].van === 10);
+lib.bewaarSample('abc123', { pad: 3, van: 20, tot: 21, tellen: 2, bpm: null });
+ok('dezelfde pad opnieuw: overschrijven, niet verdubbelen', lib.samples('abc123').length === 1
+  && lib.samples('abc123')[0].van === 20 && lib.samples('abc123')[0].bpm === null);
+lib.bewaarSample('def456', { pad: 3, van: 1, tot: 2 });
+ok('pad 3 van een ander nummer staat los', lib.samples('def456').length === 1 && lib.samples('abc123')[0].van === 20);
+ok('vergeten', lib.verwijderSample('def456', 3) && lib.samples('def456').length === 0);
+ok('vergeten wat er niet is: false', lib.verwijderSample('def456', 3) === false);
+
 // ---- opruimen -------------------------------------------------------------
 
 lib.verwijderTrack('abc123');
 ok('track weg', lib.track('abc123') === null);
 ok('zijn racks gaan mee', lib.racks('abc123').length === 0);
 ok('zijn peaks ook', lib.peaks('abc123') === null);
+ok('en zijn sampler-pads', lib.samples('abc123').length === 0);
 ok('het andere nummer blijft staan', lib.track('def456') !== null && lib.racks('def456').length === 1);
 
 lib.sluit();

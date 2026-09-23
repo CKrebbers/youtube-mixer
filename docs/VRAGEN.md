@@ -105,7 +105,8 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 
 ## D. Nieuwe onderdelen — ja of nee? 💬
 
-- [ ] **D1. Samples bewaren bij een nummer** (nu alleen deze sessie).
+- [x] **D1. Samples bewaren bij een nummer** (nu alleen deze sessie).
+  — Clay: ja, bij het nummer (gebouwd 23 sep: plek bewaren, opnieuw knippen, ↺ op de pad).
 - [ ] **D2. Pads die meelopen met tempowijzigingen** van de maat-track.
 - [ ] **D3. Dub-worp en Vasthouden als drukknop** (werkt zolang je vasthoudt) — hoort bij B3.
 - [ ] **D4. Losse bestanden ook via de streamkern** (geen tik bij loops, één afspeelmotor).

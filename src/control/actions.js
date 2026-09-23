@@ -266,21 +266,28 @@ export function bindEngine(engine) {
   }
 
   // ---- sampler: acht pads -------------------------------------------------
-  // Leeg: pak de laatste tellen van de track met focus. Gevuld: start op de
-  // volgende tel, of stop. Shift (de .wis-variant) maakt hem leeg.
+  // Leeg: pak de laatste tellen van de track met focus — of, als er een
+  // bewaard stuk op deze pad wacht, knip dat opnieuw. Gevuld: start op de
+  // volgende tel, of stop. Shift (de .wis-variant): een gevulde pad leeg
+  // maken (bewaard blijft bewaard); een lege, bewaarde pad vergeten.
   const sampler = engine.sampler;
   if (sampler) {
     for (let i = 0; i < 8; i++) {
       define(`sampler.${i + 1}`, 'trigger', (on) => {
         if (!on) return;
         if (sampler.pads[i]) { sampler.wissel(i); return; }
+        const fout = (err) => engine.emit('melding', { tekst: `sampler pad ${i + 1}: ${err.message}`, soort: 'fout' });
+        const h = sampler.herinneringen[i];
+        if (h) { sampler.herstel(i, engine.deck(h.deckId)).catch(fout); return; }
         const deck = engine.focused();
-        sampler.neem(i, deck, { bron: trackVanDeck(deck.id) })
-          .catch((err) => engine.emit('melding', { tekst: `sampler pad ${i + 1}: ${err.message}`, soort: 'fout' }));
+        sampler.neem(i, deck, { bron: trackVanDeck(deck.id) }).catch(fout);
       }, { label: `Sampler pad ${i + 1}`,
            read: () => (sampler.pads[i]?.speelt ? 1 : sampler.pads[i] ? 0.5 : 0) });
-      define(`sampler.${i + 1}.wis`, 'trigger', (on) => { if (on) sampler.wis(i); },
-        { label: `Sampler pad ${i + 1} leegmaken` });
+      define(`sampler.${i + 1}.wis`, 'trigger', (on) => {
+        if (!on) return;
+        if (sampler.pads[i]) sampler.wis(i);
+        else sampler.vergeet(i);
+      }, { label: `Sampler pad ${i + 1} leegmaken (leeg + bewaard: vergeten)` });
     }
     define('sampler.lengte', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },
       { label: 'Sampler: hoeveel tellen', read: () => [1, 2, 4, 8].indexOf(sampler.tellen) / 3 });

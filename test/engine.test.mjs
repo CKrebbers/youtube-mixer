@@ -842,6 +842,29 @@ console.log('\nsampler');
   let fout = null;
   await sm.neem(1, eng.deck('H')).catch((e) => { fout = e.message; });
   ok('lege track: een duidelijke reden, geen halve pad', fout && sm.pads[1] === null);
+  // Bewaren bij het nummer (D1): de sampler meldt wat hij vulde, en haalt
+  // een herinnering terug zonder focus of positie.
+  let gemeld = null, vergeten = null;
+  sm.onGevuld = (n, info) => { gemeld = { n, ...info }; };
+  sm.onVergeet = (n, h) => { vergeten = { n, h }; };
+  dS.seek(2.1);
+  await sm.neem(4, dS, { bron: 6 });
+  ok('vullen meldt pad, deck en stuk (tracktijd)', gemeld?.n === 4 && gemeld.deckId === 'F' && gemeld.tot > gemeld.van && gemeld.bpm === 124);
+  const stuk = { van: gemeld.van, tot: gemeld.tot };
+  sm.wis(4);
+  sm.herinneringen[4] = { deckId: 'F', van: stuk.van, tot: stuk.tot, bpm: 124, tellen: 2, bron: 6 };
+  ok('leeg met herinnering: bewaard in de stand', sm.stand()[4].bewaard && !sm.stand()[4].gevuld && sm.stand()[4].bewaardBron === 6);
+  dS.seek(0.3);                                    // positie en focus doen er niet toe
+  gemeld = null;
+  invoke('sampler.5', true);
+  await new Promise((r) => setTimeout(r, 0));
+  ok('klik op de bewaarde pad knipt hetzelfde stuk opnieuw', sm.pads[4]?.van === stuk.van && sm.pads[4].tot === stuk.tot);
+  ok('... en meldt het niet opnieuw als nieuw', gemeld === null);
+  invoke('sampler.5.wis', true);
+  ok('shift op een gevulde pad: leeg, maar nog bewaard', sm.pads[4] === null && sm.stand()[4].bewaard && vergeten === null);
+  invoke('sampler.5.wis', true);
+  ok('shift op een lege, bewaarde pad: vergeten', !sm.stand()[4].bewaard && vergeten?.n === 4);
+  sm.onGevuld = sm.onVergeet = null;
   invoke('sampler.lengte', true);
   ok('lengte-knop loopt rond', [1, 2, 4, 8].includes(sm.tellen));
 }

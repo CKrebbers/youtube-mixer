@@ -76,6 +76,20 @@ const SCHEMA = [
   ALTER TABLE tracks ADD COLUMN onset_rate REAL;
   ALTER TABLE tracks ADD COLUMN onset_offset REAL;
   `,
+  // versie 4 — sampler-pads bij het nummer. Geen audio: alleen WAAR het stuk
+  // zit, in tracktijd. Het knippen gebeurt opnieuw van schijf.
+  `
+  CREATE TABLE samples (
+    track_id      TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    pad           INTEGER NOT NULL,      -- 1..8
+    van           REAL NOT NULL,         -- seconden tracktijd
+    tot           REAL NOT NULL,
+    tellen        INTEGER,
+    bpm           REAL,                  -- null = zonder grid geknipt
+    gemaakt       INTEGER NOT NULL,
+    PRIMARY KEY (track_id, pad)
+  );
+  `,
 ];
 
 export class Library {
@@ -242,6 +256,25 @@ export class Library {
   verwijderRack(id, trackId = null) {
     if (trackId !== null) return this.db.prepare('DELETE FROM racks WHERE id = ? AND track_id = ?').run(id, trackId).changes > 0;
     return this.db.prepare('DELETE FROM racks WHERE id = ?').run(id).changes > 0;
+  }
+
+  // ---- sampler-pads ------------------------------------------------------
+  // Eén stuk per pad per nummer; opnieuw vullen overschrijft.
+
+  samples(trackId) {
+    return this.db.prepare('SELECT pad, van, tot, tellen, bpm FROM samples WHERE track_id = ? ORDER BY pad').all(trackId);
+  }
+
+  bewaarSample(trackId, { pad, van, tot, tellen = null, bpm = null }) {
+    this.db.prepare(`INSERT INTO samples (track_id, pad, van, tot, tellen, bpm, gemaakt) VALUES (?,?,?,?,?,?,?)
+      ON CONFLICT (track_id, pad) DO UPDATE SET van = excluded.van, tot = excluded.tot,
+        tellen = excluded.tellen, bpm = excluded.bpm, gemaakt = excluded.gemaakt`)
+      .run(trackId, pad, van, tot, tellen, bpm, Date.now());
+    return this.samples(trackId).find((x) => x.pad === pad) ?? null;
+  }
+
+  verwijderSample(trackId, pad) {
+    return this.db.prepare('DELETE FROM samples WHERE track_id = ? AND pad = ?').run(trackId, pad).changes > 0;
   }
 
   // ---- peaks -------------------------------------------------------------

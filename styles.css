@@ -469,6 +469,7 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .pad.speelt{background:var(--warn);border-color:var(--warn);color:#1a1200}
 .pad.speelt b{color:#1a1200}
 .pad.bezig{animation:knipper .4s steps(2) infinite}
+.pad.bewaard{border-style:dashed;border-color:var(--warn);color:var(--dim)}
 @keyframes knipper{50%{opacity:.4}}
 
 /* ---- meldingen ---- */
