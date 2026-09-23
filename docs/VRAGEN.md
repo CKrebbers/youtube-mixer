@@ -47,7 +47,15 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   clock sturen (onbevestigd). Zelf knipperen via `track.N.tel` kan altijd.
   **Advies:** zelf (klokvast volgens regel 3); MIDI clock proberen als extra.
 
-- [ ] **B3. De indeling.** Voorstel uit het onderzoek (volledig: `docs/APC40.md`; samengevat):
+- [ ] **B3. De indeling.** Richting gekozen door Clay (23 sep): **mapjes (lagen)**.
+  Vaste kern die nooit wisselt (faders, crossfader, master, play/cue/sync,
+  tempo, Track Select); drie soorten mapjes met een oplichtende kiesknop —
+  track knobs (Pan/Sends/User), device knobs (rack / EQ-strip / send-bussen /
+  video), grid (Shift + scene launch: hotcues / loops / sampler / video);
+  kort drukken = vast, vasthouden = even gluren; een balkje op het scherm zegt
+  wat de knoppen nu doen; mapjes zijn data in de mapping en zelf te vullen.
+  Eerst meten wat 0x42 stuurt, dan het volledige voorstel.
+  Oorspronkelijk voorstel: Voorstel uit het onderzoek (volledig: `docs/APC40.md`; samengevat):
   - kolom = track 1–8, fader = volume, **Activator** = play (shift: cue),
     **Solo** = sync (shift: tap), **Track select** = focus,
     **Clip stop** = loop aan/uit, **A/B** = crossfaderkant
