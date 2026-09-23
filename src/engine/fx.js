@@ -675,6 +675,9 @@ export class InsertSlot {
 
     this.rack = LEEG_RACK();
     this.standen = {};        // plek -> 0..1. SESSIETOESTAND, gaat nergens heen.
+    this.glijden = {};        // plek -> { van, naar, t0, duur } zolang het geluid nog onderweg is
+    this._glijTimer = null;
+    this._toegepast = new Map();   // target -> laatst doorgegeven waarde
     this.keten = null;        // { node, gain }
     this.oud = [];
     this.mix = 0;
@@ -736,6 +739,10 @@ export class InsertSlot {
     // juist wél: daar pas je de keten aan terwijl je aan een knop zit.
     const vorigeStanden = this.standen;
     this.standen = {};
+    // Nieuwe keten: alles opnieuw doorgeven, en een glijbeweging van het
+    // vorige rack hoort daar niet meer bij.
+    this.glijden = {};
+    this._toegepast.clear();
     for (const m of rack.macros) {
       this.standen[m.place] = behoudStanden && m.place in vorigeStanden
         ? vorigeStanden[m.place] : (m.default ?? 0);
@@ -798,28 +805,93 @@ export class InsertSlot {
     this.fouten = fouten;
     for (const m of rack.macros) if (!(m.place in this.standen)) this.standen[m.place] = m.default ?? 0;
     for (const k of Object.keys(this.standen)) {
-      if (!rack.macros.some((m) => m.place === Number(k))) delete this.standen[k];
+      if (!rack.macros.some((m) => m.place === Number(k))) { delete this.standen[k]; delete this.glijden[k]; }
     }
+    // Koppelingen veranderd: wat we eerder doorgaven zegt niets meer over
+    // wat de effecten nu hebben. Alles opnieuw.
+    this._toegepast.clear();
     this._pasMacrosToe();
     return { fouten };
   }
 
-  /** Alle macro's opnieuw doorrekenen naar parameterwaarden. */
-  _pasMacrosToe() {
-    if (!this.keten) return;
-    const waarden = resolveMacros(this.rack, this.standen);
-    const now = this.ctx.currentTime;
-    for (const [target, v] of waarden) this.keten.node.zet(target, v, now);
+  /**
+   * Waar het GELUID van plek n nu is. Zonder glijden is dat de knopstand;
+   * met glijden ligt het ergens tussen waar hij vandaan kwam en de knop.
+   * Afgeleid van de audioklok (regel 3), niet van een teller.
+   */
+  plekEffectief(n) {
+    const g = this.glijden[n];
+    if (!g) return this.leesPlek(n);
+    const t = (this.ctx.currentTime - g.t0) / g.duur;
+    return t >= 1 ? g.naar : g.van + (g.naar - g.van) * Math.max(0, t);
   }
 
-  /** Knop op plek n. Dit is waar `track.1.fx.knop.n` op uitkomt. */
-  setPlek(n, v) {
+  _effectieveStanden() {
+    const uit = {};
+    for (const m of this.rack.macros || []) uit[m.place] = this.plekEffectief(m.place);
+    return uit;
+  }
+
+  /**
+   * Alle macro's opnieuw doorrekenen naar parameterwaarden.
+   *
+   * Alleen wat veranderd is gaat naar de effecten. Tijdens glijden komt dit
+   * dertig keer per seconde langs, en een gate die bij elke aanroep zijn
+   * buffer opnieuw bouwt of een delay die bij elke aanroep kruisfadet,
+   * wil je alleen als er echt iets verschoof.
+   */
+  _pasMacrosToe() {
+    if (!this.keten) return;
+    const waarden = resolveMacros(this.rack, this._effectieveStanden());
+    const now = this.ctx.currentTime;
+    for (const [target, v] of waarden) {
+      const vorig = this._toegepast.get(target);
+      if (vorig !== undefined && Math.abs(vorig - v) < 0.0005) continue;
+      this._toegepast.set(target, v);
+      this.keten.node.zet(target, v, now);
+    }
+  }
+
+  /**
+   * Knop op plek n. Dit is waar `track.1.fx.knop.n` op uitkomt.
+   *
+   * Heeft de knop een glijtijd, dan staat de KNOP meteen op v (soft-takeover
+   * moet weten waar je hand is), maar het geluid glijdt er vanaf zijn huidige
+   * plek naartoe. `direct` slaat dat over: de editor wil bij DICHT/OPEN
+   * meteen horen wat hij instelt.
+   */
+  setPlek(n, v, { direct = false } = {}) {
     const macro = this.rack.macros?.find((m) => m.place === n);
     if (!macro) return false;
-    this.standen[n] = clamp(v);
+    const naar = clamp(v);
+    if (macro.glide > 0 && !direct) {
+      this.glijden[n] = { van: this.plekEffectief(n), naar, t0: this.ctx.currentTime, duur: macro.glide };
+      this._startGlijden();
+    } else {
+      delete this.glijden[n];
+    }
+    this.standen[n] = naar;
     this._pasMacrosToe();
     return true;
   }
+
+  /**
+   * De tussenstanden doorgeven zolang er iets glijdt. De timer bepaalt alleen
+   * HOE VAAK er doorgegeven wordt; WAAR het geluid is komt van de audioklok.
+   * Loopt de audio niet, dan staat die klok stil en glijdt er dus ook niets.
+   */
+  _startGlijden() {
+    if (this._glijTimer) return;
+    this._glijTimer = setInterval(() => {
+      const nu = this.ctx.currentTime;
+      for (const [n, g] of Object.entries(this.glijden)) if (nu - g.t0 >= g.duur) delete this.glijden[n];
+      this._pasMacrosToe();
+      if (!Object.keys(this.glijden).length) { clearInterval(this._glijTimer); this._glijTimer = null; }
+    }, 33);
+  }
+
+  /** Glijdt plek n nog? Voor het scherm en straks de LED-ring. */
+  glijdt(n) { return !!this.glijden[n]; }
 
   leesPlek(n) {
     const macro = this.rack.macros?.find((m) => m.place === n);
@@ -843,7 +915,8 @@ export class InsertSlot {
     if (!node) return false;
     node.params = { ...(node.params || {}), [param]: clamp(v) };
     const target = `${slot}.${param}`;
-    if (this.keten && !resolveMacros(this.rack, this.standen).has(target)) {
+    this._toegepast.delete(target);
+    if (this.keten && !resolveMacros(this.rack, this._effectieveStanden()).has(target)) {
       this.keten.node.zet(target, clamp(v), this.ctx.currentTime);
     }
     return true;
@@ -852,7 +925,7 @@ export class InsertSlot {
   /** Wat de parameter NU doet: de knop die hem stuurt, anders zijn eigen stand. */
   paramWaarde(slot, param) {
     const target = `${slot}.${param}`;
-    const gestuurd = resolveMacros(this.rack, this.standen);
+    const gestuurd = resolveMacros(this.rack, this._effectieveStanden());
     if (gestuurd.has(target)) return gestuurd.get(target);
     const node = this.rack.chain?.find((n) => n.slot === slot);
     return node?.params?.[param] ?? effectVan(node?.type)?.standaard?.[param] ?? 0.5;

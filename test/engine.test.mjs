@@ -654,6 +654,51 @@ console.log('\nreverb en freeze');
   }
 }
 
+// ---- glijden: de knop staat meteen, het geluid volgt in zijn eigen tijd ------
+
+console.log('\nglijden');
+{
+  const { leesRack, schrijfRack } = await import('../src/engine/rack.js');
+  const gf = eng.deck('E').fx;
+  NOW = 1000;
+  gf.zetRack({ name: 'g', chain: [{ slot: 'a', type: 'filter', params: {} }],
+    macros: [{ place: 1, label: 'getij', default: 0, glide: 10, links: [{ target: 'a.freq', from: 0, to: 1 }] },
+             { place: 2, label: 'direct', default: 0, links: [{ target: 'a.reso', from: 0, to: 1 }] }] });
+  gf.setPlek(1, 1);
+  ok('de KNOP staat meteen waar je hem zet (soft-takeover leest dit)', gf.leesPlek(1) === 1);
+  ok('het GELUID begint waar het was', gf.plekEffectief(1) === 0 && gf.glijdt(1));
+  NOW += 5;
+  ok('halverwege de glijtijd: halverwege', Math.abs(gf.plekEffectief(1) - 0.5) < 1e-9 && Math.abs(gf.paramWaarde('a', 'freq') - 0.5) < 1e-9);
+  gf.setPlek(1, 0);
+  ok('omdraaien onderweg: vanaf waar het geluid nu is', Math.abs(gf.glijden[1].van - 0.5) < 1e-9);
+  NOW += 10;
+  ok('na de glijtijd: aangekomen', gf.plekEffectief(1) === 0);
+  gf.setPlek(2, 0.7);
+  ok('knop zonder glijtijd: direct', gf.plekEffectief(2) === 0.7 && !gf.glijdt(2));
+  gf.setPlek(1, 0.9, { direct: true });
+  ok('direct (editor, DICHT/OPEN) slaat het glijden over', gf.plekEffectief(1) === 0.9 && !gf.glijdt(1));
+
+  // Alleen doorgeven wat veranderd is: tijdens glijden komt dit 30x per seconde langs.
+  let aanroepen = 0;
+  const echt = gf.keten.node.zet;
+  gf.keten.node.zet = (...a) => { aanroepen++; return echt(...a); };
+  gf.setPlek(2, 0.7);
+  ok('dezelfde stand nog eens: niets naar de effecten', aanroepen === 0);
+  gf.setPlek(2, 0.2);
+  ok('andere stand: alleen die ene parameter', aanroepen === 1);
+  gf.keten.node.zet = echt;
+
+  gf.setPlek(1, 0.1);
+  NOW += 20;
+  await new Promise((r) => setTimeout(r, 80));
+  ok('klaar met glijden: de timer stopt vanzelf', gf._glijTimer === null && !gf.glijdt(1));
+
+  const rond = leesRack(schrijfRack(leesRack({ chain: [], macros: [{ place: 1, glide: 90, links: [] }, { place: 2, glide: -3, links: [] },
+    { place: 3, glide: 9999, links: [] }] }).rack)).rack.macros.map((m) => m.glide);
+  ok('glijtijd reist mee bij bewaren; negatief = 0; hooguit 10 minuten', rond.join() === '90,0,600');
+  NOW = 0;
+}
+
 // ---- acht tracks ------------------------------------------------------------
 // Eén per fader. Wat voor twee werkte moet precies zo blijven klinken.
 

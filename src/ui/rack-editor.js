@@ -37,6 +37,14 @@ import { Knob } from './controls.js';
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pct = (v) => `${Math.round((typeof v === 'number' ? v : 0) * 100)}%`;
 const KNOPPEN = [1, 2, 3, 4, 5, 6, 7, 8];
+
+// Glijtijd op een schuif: het eerste stukje is "direct", daarna 1 s tot 5 min
+// exponentieel — het verschil tussen 1 en 5 s voel je, tussen 4:00 en 4:04 niet.
+const GLIJ_MAX = 300;
+const schuifNaarGlide = (v) => (v < 0.02 ? 0 : Math.pow(GLIJ_MAX, (v - 0.02) / 0.98));
+const glideNaarSchuif = (sec) => (sec > 0 ? 0.02 + 0.98 * Math.log(Math.max(1, sec)) / Math.log(GLIJ_MAX) : 0);
+const glideTekst = (sec) => (!sec ? 'direct' : sec < 60 ? `${Math.round(sec)} s`
+  : `${(sec / 60).toFixed(sec < 600 ? 1 : 0).replace('.', ',').replace(',0', '')} min`);
 const CURVENAAM = { lin: 'gelijkmatig', exp: 'traag → snel', log: 'snel → traag', s: 'zacht in en uit' };
 
 export class RackEditor {
@@ -167,7 +175,7 @@ export class RackEditor {
     const vorige = this.modus?.plek === plek ? this.modus.vorige : this.fx.leesPlek(plek);
     if (this.modus && this.modus.plek !== plek) this._uitModus({ tekenen: false });
     this.modus = { plek, kant, vorige };
-    this.fx.setPlek(plek, kant === 'dicht' ? 0 : 1);
+    this.fx.setPlek(plek, kant === 'dicht' ? 0 : 1, { direct: true });
     this._tekenKeten();
     this._tekenMacros();
   }
@@ -177,7 +185,7 @@ export class RackEditor {
     if (!this.modus) return;
     const { plek, vorige } = this.modus;
     this.modus = null;
-    if (this.fx && vorige !== null && vorige !== undefined) this.fx.setPlek(plek, vorige);
+    if (this.fx && vorige !== null && vorige !== undefined) this.fx.setPlek(plek, vorige, { direct: true });
     if (tekenen && this.kopie) { this._tekenKeten(); this._tekenMacros(); }
   }
 
@@ -240,8 +248,11 @@ export class RackEditor {
         const v = fx.leesPlek(p.plek);
         if (v === null) continue;
         if (!p.knob.dragging && Math.abs(v - p.knob.value) > 0.0005) p.knob.set(v, true);
-        const t = pct(v);
+        // Glijdt het geluid nog, dan zie je waar het IS en waar het heen gaat.
+        const glijdt = fx.glijdt(p.plek);
+        const t = glijdt ? `${pct(fx.plekEffectief(p.plek))}→${pct(v)}` : pct(v);
         if (p.uit.textContent !== t) p.uit.textContent = t;
+        p.uit.classList.toggle('glijdt', glijdt);
       }
       for (const p of this.paramKnoppen) {
         const v = fx.paramWaarde(p.slot, p.param);
@@ -301,7 +312,7 @@ export class RackEditor {
   /** In één regel wat een knop doet: "Delay feedback ↑ · Filter freq ↓". */
   _beschrijf(m) {
     if (!m.links.length) return 'doet nog niets';
-    return m.links.map((l) => `${this._doelNaam(l.target)} ${(l.to ?? 1) >= (l.from ?? 0) ? '↑' : '↓'}`).join(' · ');
+    return (m.glide > 0 ? `⟿ ${glideTekst(m.glide)} · ` : '') + m.links.map((l) => `${this._doelNaam(l.target)} ${(l.to ?? 1) >= (l.from ?? 0) ? '↑' : '↓'}`).join(' · ');
   }
 
   // ---- gebeurtenissen ----------------------------------------------------
@@ -411,10 +422,13 @@ export class RackEditor {
     const doe = k.dataset.doe;
     let tekst = pct(v);
 
-    if (doe === 'default') {
+    if (doe === 'glide') {
+      m.glide = schuifNaarGlide(v);
+      tekst = glideTekst(m.glide);
+    } else if (doe === 'default') {
       m.default = v;
       // De startstand is ook waar de knop nu heen gaat: dan hoor je wat je bewaart.
-      this.fx.setPlek(m.place, v);
+      this.fx.setPlek(m.place, v, { direct: true });
     } else {
       const link = m.links[l];
       if (doe === 'van' || doe === 'tot') {
@@ -628,6 +642,7 @@ export class RackEditor {
       </div>
       <p class="re-uitleg${mod ? ' actief' : ''}">${uitleg}</p>
       ${schuif('default', -1, m.default ?? 0, 'startstand', pct(m.default ?? 0))}
+      ${schuif('glide', -1, glideNaarSchuif(m.glide || 0), 'glijden', glideTekst(m.glide || 0))}
       <div class="re-kop re-verandert">Wat knop ${plek} verandert</div>
       ${links || '<p class="re-leeg">Nog niets. Klik DICHT of OPEN en draai aan een effect.</p>'}`;
   }

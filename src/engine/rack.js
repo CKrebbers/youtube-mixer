@@ -143,6 +143,9 @@ export function leesRack(data, { bekendType = () => true } = {}) {
     label: m.label || `plek ${m.place}`,
     default: typeof m.default === 'number' ? clamp(m.default) : 0,
     bipolar: !!m.bipolar,
+    // Glijtijd in seconden: zo lang doet het GELUID erover om de knop te
+    // volgen. 0 = direct. Hooguit tien minuten; langer is een vergissing.
+    glide: typeof m.glide === 'number' && m.glide > 0 ? Math.min(m.glide, 600) : 0,
     links: (Array.isArray(m.links) ? m.links : []).filter((l) => {
       if (!l?.target || typeof l.target !== 'string') { fouten.push(`macro ${m.place}: link zonder doel`); return false; }
       const [slot] = l.target.split('.');
@@ -174,6 +177,7 @@ export function schrijfRack(rack) {
     macros: (rack.macros || []).map((m) => ({
       place: m.place, label: m.label, default: m.default,
       ...(m.bipolar ? { bipolar: true } : {}),
+      ...(m.glide > 0 ? { glide: m.glide } : {}),
       links: (m.links || []).map((l) => ({
         target: l.target,
         ...(l.in ? { in: l.in } : {}),

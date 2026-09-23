@@ -340,6 +340,7 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .re-tegel-nr{font-family:ui-monospace,monospace;color:var(--warn);font-weight:700}
 .re-wat{font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .re-live{font-family:ui-monospace,monospace;font-size:10px;color:var(--text);flex:0 0 auto}
+.re-live.glijdt{color:var(--warn)}
 
 .re-body{flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0}
 .re-keten,.re-macros{overflow:auto;padding:8px 12px}

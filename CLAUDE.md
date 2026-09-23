@@ -156,6 +156,12 @@ test/
   kanten gelijk, dan verdwijnt de koppeling. Draai je aan de knop zelf (scherm,
   FX-rij, APC), dan stopt het instellen — gecontroleerd op een timer, niet in
   de animatielus, want die staat stil als het venster achter iets anders zit.
+- Glijden per knop (`macro.glide`, seconden, hooguit 600): de KNOP staat meteen
+  waar je hem zet (`leesPlek`, dat leest soft-takeover), het GELUID glijdt
+  (`plekEffectief`, afgeleid van de audioklok). Een timer van 33 ms geeft de
+  tussenstanden alleen door; `_pasMacrosToe` stuurt alleen wat echt veranderd
+  is, anders bouwt een gate 30x per seconde zijn buffer opnieuw. De editor
+  zet bij DICHT/OPEN en startstand `direct: true`: instellen wacht niet.
 - Kant-en-klare racks staan in `racks/sjablonen.json` en zijn voor elk nummer
   te kiezen. Laden geeft herkomst `"s:<nr>"`; bewaren overschrijft alleen een
   GETAL (library-id), dus een sjabloon wordt altijd een nieuw rack van het
