@@ -14,43 +14,50 @@ import { beschrijf } from './apc-beschrijf.js';
  * De tekening is een schema: de plaats van de knoppen is bij benadering.
  */
 
-// ---- het apparaat, schematisch (x, y in procenten) ------------------------
+// ---- het apparaat (x, y in procenten) -------------------------------------
+// Volgens de Features-tekening in de User Guide v1.0 (p4); zie
+// docs/APC40-onderzoek.md. Verhoudingen bij benadering, plaatsing juist.
 
 const K = (sig, x, y, soort) => ({ sig, x, y, soort });
-const kolX = (i) => 5 + i * 7;
+const kolX = (i) => 5 + i * 6.6;
+const MASTER = 58.5;
 const PLAAT = [];
 for (let i = 0; i < 8; i++) {
-  PLAAT.push(K(`cc:0:${48 + i}`, kolX(i), 5, 'knop-rond'));                       // track knobs
-  for (let rij = 1; rij <= 5; rij++) PLAAT.push(K(`note:0:${apc.gridNote(i + 1, rij)}`, kolX(i), 9 + rij * 6.2, 'pad'));
-  PLAAT.push(K(`note:${i}:52`, kolX(i), 47, 'knop'));                              // clip stop
-  PLAAT.push(K(`note:${i}:51`, kolX(i), 52, 'knop'));                              // track select
-  PLAAT.push(K(`note:${i}:50`, kolX(i), 57, 'knop'));                              // activator
-  PLAAT.push(K(`note:${i}:49`, kolX(i), 62, 'knop'));                              // solo
-  PLAAT.push(K(`note:${i}:48`, kolX(i), 67, 'knop'));                              // record arm
-  PLAAT.push(K(`note:${i}:66`, kolX(i), 72, 'knop'));                              // A/B
-  PLAAT.push(K(`cc:${i}:7`, kolX(i), 84, 'fader'));
+  const x = kolX(i);
+  PLAAT.push(K(`cc:0:${48 + i}`, x, 5, 'knop-rond'));                                 // track knob
+  for (let rij = 1; rij <= 5; rij++) PLAAT.push(K(`note:0:${apc.gridNote(i + 1, rij)}`, x, 10 + rij * 5.8, 'pad'));
+  PLAAT.push(K(`note:${i}:52`, x, 46, 'knop'));                                       // clip stop
+  PLAAT.push(K(`note:${i}:51`, x, 51, 'knop'));                                       // track select
+  // 2×2 per track: [activator | A/B] boven [solo | record arm]
+  PLAAT.push(K(`note:${i}:50`, x - 1.6, 56.5, 'mini'));
+  PLAAT.push(K(`note:${i}:66`, x + 1.6, 56.5, 'mini'));
+  PLAAT.push(K(`note:${i}:49`, x - 1.6, 61.5, 'mini'));
+  PLAAT.push(K(`note:${i}:48`, x + 1.6, 61.5, 'mini'));
+  PLAAT.push(K(`cc:${i}:7`, x, 82, 'fader'));
 }
-for (let s = 1; s <= 5; s++) PLAAT.push(K(`note:0:${81 + s}`, 62, 9 + s * 6.2, 'scene'));
-PLAAT.push(K('note:0:81', 62, 47, 'knop'));            // stop all clips
-PLAAT.push(K('cc:0:14', 62, 84, 'fader'));             // master
-PLAAT.push(K('cc:0:15', 30, 96, 'xfader'));            // crossfader
-// rechts: kiesknoppen, device-sectie, transport
-[['note:0:87', 72], ['note:0:88', 79], ['note:0:89', 86]].forEach(([s, x]) => PLAAT.push(K(s, x, 5, 'knop')));
-PLAAT.push(K('cc:0:13', 94, 5, 'encoder'));
-for (let i = 0; i < 8; i++) PLAAT.push(K(`cc:0:${16 + i}`, 72 + (i % 4) * 7.3, i < 4 ? 15 : 24, 'knop-rond'));
-[['note:0:58', 72, 33], ['note:0:59', 79.3, 33], ['note:0:60', 86.6, 33], ['note:0:61', 93.9, 33],
-  ['note:0:62', 72, 38], ['note:0:63', 79.3, 38], ['note:0:64', 86.6, 38], ['note:0:65', 93.9, 38]]
+for (let s = 1; s <= 5; s++) PLAAT.push(K(`note:0:${81 + s}`, MASTER, 10 + s * 5.8, 'scene'));
+PLAAT.push(K('note:0:81', MASTER, 46, 'knop'));          // stop all clips
+PLAAT.push(K('note:0:80', MASTER, 51, 'knop'));          // master (track select van de master)
+PLAAT.push(K('cc:0:47', MASTER, 59, 'encoder'));         // cue level
+PLAAT.push(K('cc:0:14', MASTER, 82, 'fader'));           // masterfader
+// rechterdeel: drie rijen bovenin, tempo rechts ervan
+[['note:0:87', 72, 11], ['note:0:91', 79, 11], ['note:0:93', 86, 11], ['note:0:102', 93, 11],
+  ['note:0:88', 72, 17], ['note:0:90', 79, 17], ['note:0:99', 86, 17],
+  ['note:0:89', 72, 23], ['note:0:100', 79, 23], ['note:0:101', 86, 23]]
   .forEach(([s, x, y]) => PLAAT.push(K(s, x, y, 'knop')));
-PLAAT.push(K('note:0:98', 72, 47, 'knop'));            // shift
-PLAAT.push(K('note:0:103', 79.3, 47, 'knop'));         // bank lock
-PLAAT.push(K('note:0:94', 90, 45, 'pijl'));
-PLAAT.push(K('note:0:97', 86, 50, 'pijl'));
-PLAAT.push(K('note:0:96', 94, 50, 'pijl'));
-PLAAT.push(K('note:0:95', 90, 55, 'pijl'));
-[['note:0:99', 72, 63], ['note:0:100', 79.3, 63], ['note:0:101', 86.6, 63]].forEach(([s, x, y]) => PLAAT.push(K(s, x, y, 'knop')));
-PLAAT.push(K('cc:0:47', 94, 63, 'encoder'));
-[['note:0:91', 72, 72], ['note:0:93', 79.3, 72], ['note:0:102', 86.6, 72], ['note:0:90', 93.9, 72]]
+PLAAT.push(K('cc:0:13', 94, 20, 'encoder'));             // tempo, twee rijen hoog
+for (let i = 0; i < 8; i++) PLAAT.push(K(`cc:0:${16 + i}`, 72 + (i % 4) * 7.3, i < 4 ? 32 : 40, 'knop-rond'));
+[['note:0:58', 72, 48], ['note:0:59', 79.3, 48], ['note:0:60', 86.6, 48], ['note:0:61', 93.9, 48],
+  ['note:0:62', 72, 53], ['note:0:63', 79.3, 53], ['note:0:64', 86.6, 53], ['note:0:65', 93.9, 53]]
   .forEach(([s, x, y]) => PLAAT.push(K(s, x, y, 'knop')));
+// linksonder de vier pijlen, rechts daarvan Shift en Bank
+PLAAT.push(K('note:0:94', 75.5, 60, 'pijl'));
+PLAAT.push(K('note:0:97', 71, 65, 'pijl'));
+PLAAT.push(K('note:0:96', 80, 65, 'pijl'));
+PLAAT.push(K('note:0:95', 75.5, 70, 'pijl'));
+PLAAT.push(K('note:0:98', 86.6, 62, 'knop'));            // shift
+PLAAT.push(K('note:0:103', 93.9, 62, 'knop'));           // bank
+PLAAT.push(K('cc:0:15', 86, 88, 'xfader'));              // crossfader rechtsonder
 
 const naamVan = (sig) => apc.label(sig) ?? sig;
 

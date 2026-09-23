@@ -5,61 +5,16 @@
   "shift": "note:0:98",
   "rules": [
     {
+      "in": "cc:0:48",
+      "action": "track.1.filter",
+      "mode": "absolute",
+      "label": "track knob 1"
+    },
+    {
       "in": "cc:0:7",
       "action": "track.1.fader",
       "mode": "absolute",
       "label": "fader 1"
-    },
-    {
-      "in": "note:0:50",
-      "action": "track.1.play",
-      "mode": "trigger",
-      "label": "activator 1"
-    },
-    {
-      "in": "note:0:50",
-      "action": "track.1.cue",
-      "mode": "trigger",
-      "label": "activator 1 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:0:49",
-      "action": "track.1.sync",
-      "mode": "trigger",
-      "label": "solo 1"
-    },
-    {
-      "in": "note:0:49",
-      "action": "track.1.tap",
-      "mode": "trigger",
-      "label": "solo 1 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:0:66",
-      "action": "track.1.xfade.side",
-      "mode": "trigger",
-      "label": "crossfader A/B 1"
-    },
-    {
-      "in": "note:0:51",
-      "action": "track.1.focus",
-      "mode": "trigger",
-      "label": "track select 1"
-    },
-    {
-      "in": "note:0:48",
-      "action": "window.R.show.1",
-      "mode": "trigger",
-      "label": "record arm 1"
-    },
-    {
-      "in": "note:0:48",
-      "action": "window.L.show.1",
-      "mode": "trigger",
-      "label": "record arm 1 + shift",
-      "shift": true
     },
     {
       "in": "note:0:52",
@@ -75,61 +30,60 @@
       "shift": true
     },
     {
+      "in": "note:0:51",
+      "action": "track.1.focus",
+      "mode": "trigger",
+      "label": "track select 1"
+    },
+    {
+      "in": "note:0:51",
+      "action": "window.R.show.1",
+      "mode": "trigger",
+      "label": "track select 1 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:0:50",
+      "action": "track.1.play",
+      "mode": "trigger",
+      "label": "activator 1"
+    },
+    {
+      "in": "note:0:66",
+      "action": "track.1.cue",
+      "mode": "trigger",
+      "label": "crossfader A/B 1"
+    },
+    {
+      "in": "note:0:49",
+      "action": "track.1.sync",
+      "mode": "trigger",
+      "label": "solo 1"
+    },
+    {
+      "in": "note:0:49",
+      "action": "track.1.tap",
+      "mode": "trigger",
+      "label": "solo 1 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:0:48",
+      "action": "track.1.xfade.side",
+      "mode": "trigger",
+      "label": "record arm 1"
+    },
+    {
+      "in": "cc:0:49",
+      "action": "track.2.filter",
+      "mode": "absolute",
+      "label": "track knob 2"
+    },
+    {
       "in": "cc:1:7",
       "action": "track.2.fader",
       "mode": "absolute",
       "label": "fader 2"
-    },
-    {
-      "in": "note:1:50",
-      "action": "track.2.play",
-      "mode": "trigger",
-      "label": "activator 2"
-    },
-    {
-      "in": "note:1:50",
-      "action": "track.2.cue",
-      "mode": "trigger",
-      "label": "activator 2 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:1:49",
-      "action": "track.2.sync",
-      "mode": "trigger",
-      "label": "solo 2"
-    },
-    {
-      "in": "note:1:49",
-      "action": "track.2.tap",
-      "mode": "trigger",
-      "label": "solo 2 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:1:66",
-      "action": "track.2.xfade.side",
-      "mode": "trigger",
-      "label": "crossfader A/B 2"
-    },
-    {
-      "in": "note:1:51",
-      "action": "track.2.focus",
-      "mode": "trigger",
-      "label": "track select 2"
-    },
-    {
-      "in": "note:1:48",
-      "action": "window.R.show.2",
-      "mode": "trigger",
-      "label": "record arm 2"
-    },
-    {
-      "in": "note:1:48",
-      "action": "window.L.show.2",
-      "mode": "trigger",
-      "label": "record arm 2 + shift",
-      "shift": true
     },
     {
       "in": "note:1:52",
@@ -145,61 +99,60 @@
       "shift": true
     },
     {
+      "in": "note:1:51",
+      "action": "track.2.focus",
+      "mode": "trigger",
+      "label": "track select 2"
+    },
+    {
+      "in": "note:1:51",
+      "action": "window.R.show.2",
+      "mode": "trigger",
+      "label": "track select 2 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:1:50",
+      "action": "track.2.play",
+      "mode": "trigger",
+      "label": "activator 2"
+    },
+    {
+      "in": "note:1:66",
+      "action": "track.2.cue",
+      "mode": "trigger",
+      "label": "crossfader A/B 2"
+    },
+    {
+      "in": "note:1:49",
+      "action": "track.2.sync",
+      "mode": "trigger",
+      "label": "solo 2"
+    },
+    {
+      "in": "note:1:49",
+      "action": "track.2.tap",
+      "mode": "trigger",
+      "label": "solo 2 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:1:48",
+      "action": "track.2.xfade.side",
+      "mode": "trigger",
+      "label": "record arm 2"
+    },
+    {
+      "in": "cc:0:50",
+      "action": "track.3.filter",
+      "mode": "absolute",
+      "label": "track knob 3"
+    },
+    {
       "in": "cc:2:7",
       "action": "track.3.fader",
       "mode": "absolute",
       "label": "fader 3"
-    },
-    {
-      "in": "note:2:50",
-      "action": "track.3.play",
-      "mode": "trigger",
-      "label": "activator 3"
-    },
-    {
-      "in": "note:2:50",
-      "action": "track.3.cue",
-      "mode": "trigger",
-      "label": "activator 3 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:2:49",
-      "action": "track.3.sync",
-      "mode": "trigger",
-      "label": "solo 3"
-    },
-    {
-      "in": "note:2:49",
-      "action": "track.3.tap",
-      "mode": "trigger",
-      "label": "solo 3 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:2:66",
-      "action": "track.3.xfade.side",
-      "mode": "trigger",
-      "label": "crossfader A/B 3"
-    },
-    {
-      "in": "note:2:51",
-      "action": "track.3.focus",
-      "mode": "trigger",
-      "label": "track select 3"
-    },
-    {
-      "in": "note:2:48",
-      "action": "window.R.show.3",
-      "mode": "trigger",
-      "label": "record arm 3"
-    },
-    {
-      "in": "note:2:48",
-      "action": "window.L.show.3",
-      "mode": "trigger",
-      "label": "record arm 3 + shift",
-      "shift": true
     },
     {
       "in": "note:2:52",
@@ -215,61 +168,60 @@
       "shift": true
     },
     {
+      "in": "note:2:51",
+      "action": "track.3.focus",
+      "mode": "trigger",
+      "label": "track select 3"
+    },
+    {
+      "in": "note:2:51",
+      "action": "window.R.show.3",
+      "mode": "trigger",
+      "label": "track select 3 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:2:50",
+      "action": "track.3.play",
+      "mode": "trigger",
+      "label": "activator 3"
+    },
+    {
+      "in": "note:2:66",
+      "action": "track.3.cue",
+      "mode": "trigger",
+      "label": "crossfader A/B 3"
+    },
+    {
+      "in": "note:2:49",
+      "action": "track.3.sync",
+      "mode": "trigger",
+      "label": "solo 3"
+    },
+    {
+      "in": "note:2:49",
+      "action": "track.3.tap",
+      "mode": "trigger",
+      "label": "solo 3 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:2:48",
+      "action": "track.3.xfade.side",
+      "mode": "trigger",
+      "label": "record arm 3"
+    },
+    {
+      "in": "cc:0:51",
+      "action": "track.4.filter",
+      "mode": "absolute",
+      "label": "track knob 4"
+    },
+    {
       "in": "cc:3:7",
       "action": "track.4.fader",
       "mode": "absolute",
       "label": "fader 4"
-    },
-    {
-      "in": "note:3:50",
-      "action": "track.4.play",
-      "mode": "trigger",
-      "label": "activator 4"
-    },
-    {
-      "in": "note:3:50",
-      "action": "track.4.cue",
-      "mode": "trigger",
-      "label": "activator 4 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:3:49",
-      "action": "track.4.sync",
-      "mode": "trigger",
-      "label": "solo 4"
-    },
-    {
-      "in": "note:3:49",
-      "action": "track.4.tap",
-      "mode": "trigger",
-      "label": "solo 4 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:3:66",
-      "action": "track.4.xfade.side",
-      "mode": "trigger",
-      "label": "crossfader A/B 4"
-    },
-    {
-      "in": "note:3:51",
-      "action": "track.4.focus",
-      "mode": "trigger",
-      "label": "track select 4"
-    },
-    {
-      "in": "note:3:48",
-      "action": "window.R.show.4",
-      "mode": "trigger",
-      "label": "record arm 4"
-    },
-    {
-      "in": "note:3:48",
-      "action": "window.L.show.4",
-      "mode": "trigger",
-      "label": "record arm 4 + shift",
-      "shift": true
     },
     {
       "in": "note:3:52",
@@ -285,61 +237,60 @@
       "shift": true
     },
     {
+      "in": "note:3:51",
+      "action": "track.4.focus",
+      "mode": "trigger",
+      "label": "track select 4"
+    },
+    {
+      "in": "note:3:51",
+      "action": "window.R.show.4",
+      "mode": "trigger",
+      "label": "track select 4 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:3:50",
+      "action": "track.4.play",
+      "mode": "trigger",
+      "label": "activator 4"
+    },
+    {
+      "in": "note:3:66",
+      "action": "track.4.cue",
+      "mode": "trigger",
+      "label": "crossfader A/B 4"
+    },
+    {
+      "in": "note:3:49",
+      "action": "track.4.sync",
+      "mode": "trigger",
+      "label": "solo 4"
+    },
+    {
+      "in": "note:3:49",
+      "action": "track.4.tap",
+      "mode": "trigger",
+      "label": "solo 4 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:3:48",
+      "action": "track.4.xfade.side",
+      "mode": "trigger",
+      "label": "record arm 4"
+    },
+    {
+      "in": "cc:0:52",
+      "action": "track.5.filter",
+      "mode": "absolute",
+      "label": "track knob 5"
+    },
+    {
       "in": "cc:4:7",
       "action": "track.5.fader",
       "mode": "absolute",
       "label": "fader 5"
-    },
-    {
-      "in": "note:4:50",
-      "action": "track.5.play",
-      "mode": "trigger",
-      "label": "activator 5"
-    },
-    {
-      "in": "note:4:50",
-      "action": "track.5.cue",
-      "mode": "trigger",
-      "label": "activator 5 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:4:49",
-      "action": "track.5.sync",
-      "mode": "trigger",
-      "label": "solo 5"
-    },
-    {
-      "in": "note:4:49",
-      "action": "track.5.tap",
-      "mode": "trigger",
-      "label": "solo 5 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:4:66",
-      "action": "track.5.xfade.side",
-      "mode": "trigger",
-      "label": "crossfader A/B 5"
-    },
-    {
-      "in": "note:4:51",
-      "action": "track.5.focus",
-      "mode": "trigger",
-      "label": "track select 5"
-    },
-    {
-      "in": "note:4:48",
-      "action": "window.R.show.5",
-      "mode": "trigger",
-      "label": "record arm 5"
-    },
-    {
-      "in": "note:4:48",
-      "action": "window.L.show.5",
-      "mode": "trigger",
-      "label": "record arm 5 + shift",
-      "shift": true
     },
     {
       "in": "note:4:52",
@@ -355,61 +306,60 @@
       "shift": true
     },
     {
+      "in": "note:4:51",
+      "action": "track.5.focus",
+      "mode": "trigger",
+      "label": "track select 5"
+    },
+    {
+      "in": "note:4:51",
+      "action": "window.R.show.5",
+      "mode": "trigger",
+      "label": "track select 5 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:4:50",
+      "action": "track.5.play",
+      "mode": "trigger",
+      "label": "activator 5"
+    },
+    {
+      "in": "note:4:66",
+      "action": "track.5.cue",
+      "mode": "trigger",
+      "label": "crossfader A/B 5"
+    },
+    {
+      "in": "note:4:49",
+      "action": "track.5.sync",
+      "mode": "trigger",
+      "label": "solo 5"
+    },
+    {
+      "in": "note:4:49",
+      "action": "track.5.tap",
+      "mode": "trigger",
+      "label": "solo 5 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:4:48",
+      "action": "track.5.xfade.side",
+      "mode": "trigger",
+      "label": "record arm 5"
+    },
+    {
+      "in": "cc:0:53",
+      "action": "track.6.filter",
+      "mode": "absolute",
+      "label": "track knob 6"
+    },
+    {
       "in": "cc:5:7",
       "action": "track.6.fader",
       "mode": "absolute",
       "label": "fader 6"
-    },
-    {
-      "in": "note:5:50",
-      "action": "track.6.play",
-      "mode": "trigger",
-      "label": "activator 6"
-    },
-    {
-      "in": "note:5:50",
-      "action": "track.6.cue",
-      "mode": "trigger",
-      "label": "activator 6 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:5:49",
-      "action": "track.6.sync",
-      "mode": "trigger",
-      "label": "solo 6"
-    },
-    {
-      "in": "note:5:49",
-      "action": "track.6.tap",
-      "mode": "trigger",
-      "label": "solo 6 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:5:66",
-      "action": "track.6.xfade.side",
-      "mode": "trigger",
-      "label": "crossfader A/B 6"
-    },
-    {
-      "in": "note:5:51",
-      "action": "track.6.focus",
-      "mode": "trigger",
-      "label": "track select 6"
-    },
-    {
-      "in": "note:5:48",
-      "action": "window.R.show.6",
-      "mode": "trigger",
-      "label": "record arm 6"
-    },
-    {
-      "in": "note:5:48",
-      "action": "window.L.show.6",
-      "mode": "trigger",
-      "label": "record arm 6 + shift",
-      "shift": true
     },
     {
       "in": "note:5:52",
@@ -425,61 +375,60 @@
       "shift": true
     },
     {
+      "in": "note:5:51",
+      "action": "track.6.focus",
+      "mode": "trigger",
+      "label": "track select 6"
+    },
+    {
+      "in": "note:5:51",
+      "action": "window.R.show.6",
+      "mode": "trigger",
+      "label": "track select 6 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:5:50",
+      "action": "track.6.play",
+      "mode": "trigger",
+      "label": "activator 6"
+    },
+    {
+      "in": "note:5:66",
+      "action": "track.6.cue",
+      "mode": "trigger",
+      "label": "crossfader A/B 6"
+    },
+    {
+      "in": "note:5:49",
+      "action": "track.6.sync",
+      "mode": "trigger",
+      "label": "solo 6"
+    },
+    {
+      "in": "note:5:49",
+      "action": "track.6.tap",
+      "mode": "trigger",
+      "label": "solo 6 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:5:48",
+      "action": "track.6.xfade.side",
+      "mode": "trigger",
+      "label": "record arm 6"
+    },
+    {
+      "in": "cc:0:54",
+      "action": "track.7.filter",
+      "mode": "absolute",
+      "label": "track knob 7"
+    },
+    {
       "in": "cc:6:7",
       "action": "track.7.fader",
       "mode": "absolute",
       "label": "fader 7"
-    },
-    {
-      "in": "note:6:50",
-      "action": "track.7.play",
-      "mode": "trigger",
-      "label": "activator 7"
-    },
-    {
-      "in": "note:6:50",
-      "action": "track.7.cue",
-      "mode": "trigger",
-      "label": "activator 7 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:6:49",
-      "action": "track.7.sync",
-      "mode": "trigger",
-      "label": "solo 7"
-    },
-    {
-      "in": "note:6:49",
-      "action": "track.7.tap",
-      "mode": "trigger",
-      "label": "solo 7 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:6:66",
-      "action": "track.7.xfade.side",
-      "mode": "trigger",
-      "label": "crossfader A/B 7"
-    },
-    {
-      "in": "note:6:51",
-      "action": "track.7.focus",
-      "mode": "trigger",
-      "label": "track select 7"
-    },
-    {
-      "in": "note:6:48",
-      "action": "window.R.show.7",
-      "mode": "trigger",
-      "label": "record arm 7"
-    },
-    {
-      "in": "note:6:48",
-      "action": "window.L.show.7",
-      "mode": "trigger",
-      "label": "record arm 7 + shift",
-      "shift": true
     },
     {
       "in": "note:6:52",
@@ -495,10 +444,86 @@
       "shift": true
     },
     {
+      "in": "note:6:51",
+      "action": "track.7.focus",
+      "mode": "trigger",
+      "label": "track select 7"
+    },
+    {
+      "in": "note:6:51",
+      "action": "window.R.show.7",
+      "mode": "trigger",
+      "label": "track select 7 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:6:50",
+      "action": "track.7.play",
+      "mode": "trigger",
+      "label": "activator 7"
+    },
+    {
+      "in": "note:6:66",
+      "action": "track.7.cue",
+      "mode": "trigger",
+      "label": "crossfader A/B 7"
+    },
+    {
+      "in": "note:6:49",
+      "action": "track.7.sync",
+      "mode": "trigger",
+      "label": "solo 7"
+    },
+    {
+      "in": "note:6:49",
+      "action": "track.7.tap",
+      "mode": "trigger",
+      "label": "solo 7 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:6:48",
+      "action": "track.7.xfade.side",
+      "mode": "trigger",
+      "label": "record arm 7"
+    },
+    {
+      "in": "cc:0:55",
+      "action": "track.8.filter",
+      "mode": "absolute",
+      "label": "track knob 8"
+    },
+    {
       "in": "cc:7:7",
       "action": "track.8.fader",
       "mode": "absolute",
       "label": "fader 8"
+    },
+    {
+      "in": "note:7:52",
+      "action": "track.8.loop.toggle",
+      "mode": "trigger",
+      "label": "clip stop 8"
+    },
+    {
+      "in": "note:7:52",
+      "action": "track.8.loop.exit",
+      "mode": "trigger",
+      "label": "clip stop 8 + shift",
+      "shift": true
+    },
+    {
+      "in": "note:7:51",
+      "action": "track.8.focus",
+      "mode": "trigger",
+      "label": "track select 8"
+    },
+    {
+      "in": "note:7:51",
+      "action": "window.R.show.8",
+      "mode": "trigger",
+      "label": "track select 8 + shift",
+      "shift": true
     },
     {
       "in": "note:7:50",
@@ -507,11 +532,10 @@
       "label": "activator 8"
     },
     {
-      "in": "note:7:50",
+      "in": "note:7:66",
       "action": "track.8.cue",
       "mode": "trigger",
-      "label": "activator 8 + shift",
-      "shift": true
+      "label": "crossfader A/B 8"
     },
     {
       "in": "note:7:49",
@@ -527,42 +551,10 @@
       "shift": true
     },
     {
-      "in": "note:7:66",
+      "in": "note:7:48",
       "action": "track.8.xfade.side",
       "mode": "trigger",
-      "label": "crossfader A/B 8"
-    },
-    {
-      "in": "note:7:51",
-      "action": "track.8.focus",
-      "mode": "trigger",
-      "label": "track select 8"
-    },
-    {
-      "in": "note:7:48",
-      "action": "window.R.show.8",
-      "mode": "trigger",
       "label": "record arm 8"
-    },
-    {
-      "in": "note:7:48",
-      "action": "window.L.show.8",
-      "mode": "trigger",
-      "label": "record arm 8 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:7:52",
-      "action": "track.8.loop.toggle",
-      "mode": "trigger",
-      "label": "clip stop 8"
-    },
-    {
-      "in": "note:7:52",
-      "action": "track.8.loop.exit",
-      "mode": "trigger",
-      "label": "clip stop 8 + shift",
-      "shift": true
     },
     {
       "in": "cc:0:14",
@@ -584,14 +576,22 @@
       "step": 0.0025
     },
     {
+      "in": "cc:0:13",
+      "action": "track.{focus}.pitch",
+      "mode": "relative-2c",
+      "label": "tempo + shift (fijn)",
+      "step": 0.0003333333333333333,
+      "shift": true
+    },
+    {
       "in": "note:0:100",
-      "action": "track.{focus}.nudge.back",
+      "action": "track.{focus}.bend.back",
       "mode": "trigger",
       "label": "nudge -"
     },
     {
       "in": "note:0:101",
-      "action": "track.{focus}.nudge.fwd",
+      "action": "track.{focus}.bend.fwd",
       "mode": "trigger",
       "label": "nudge +"
     },
@@ -677,104 +677,10 @@
       "shift": true
     },
     {
-      "in": "note:0:82",
-      "action": "track.{focus}.beatloop.4",
-      "mode": "trigger",
-      "label": "scene launch 1"
-    },
-    {
-      "in": "note:0:82",
-      "action": "layer.grid.hotcues",
-      "mode": "trigger",
-      "label": "scene launch 1 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:0:83",
-      "action": "track.{focus}.beatloop.8",
-      "mode": "trigger",
-      "label": "scene launch 2"
-    },
-    {
-      "in": "note:0:83",
-      "action": "layer.grid.loops",
-      "mode": "trigger",
-      "label": "scene launch 2 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:0:84",
-      "action": "track.{focus}.beatloop.16",
-      "mode": "trigger",
-      "label": "scene launch 3"
-    },
-    {
-      "in": "note:0:84",
-      "action": "layer.grid.sampler",
-      "mode": "trigger",
-      "label": "scene launch 3 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:0:85",
-      "action": "track.{focus}.loop.halve",
-      "mode": "trigger",
-      "label": "scene launch 4"
-    },
-    {
-      "in": "note:0:85",
-      "action": "layer.grid.video",
-      "mode": "trigger",
-      "label": "scene launch 4 + shift",
-      "shift": true
-    },
-    {
-      "in": "note:0:86",
-      "action": "track.{focus}.loop.double",
-      "mode": "trigger",
-      "label": "scene launch 5"
-    },
-    {
-      "in": "note:0:87",
-      "action": "layer.top.pan",
-      "mode": "trigger",
-      "label": "pan"
-    },
-    {
-      "in": "note:0:88",
-      "action": "layer.top.sends",
-      "mode": "trigger",
-      "label": "sends"
-    },
-    {
-      "in": "note:0:89",
-      "action": "layer.top.user",
-      "mode": "trigger",
-      "label": "user"
-    },
-    {
       "in": "note:0:64",
-      "action": "layer.device.rack",
+      "action": "layer.device.view",
       "mode": "trigger",
       "label": "clip/device view"
-    },
-    {
-      "in": "note:0:65",
-      "action": "layer.device.strip",
-      "mode": "trigger",
-      "label": "detail view"
-    },
-    {
-      "in": "note:0:60",
-      "action": "layer.device.sends",
-      "mode": "trigger",
-      "label": "bank left"
-    },
-    {
-      "in": "note:0:61",
-      "action": "layer.device.video",
-      "mode": "trigger",
-      "label": "bank right"
     },
     {
       "in": "note:0:58",
@@ -795,228 +701,60 @@
       "label": "device on/off"
     },
     {
-      "in": "cc:0:48",
-      "action": "track.1.filter",
+      "in": "cc:0:16",
+      "action": "track.{focus}.trim",
       "mode": "absolute",
-      "label": "track knob 1",
-      "laag": "top.filter"
+      "label": "device knob 1",
+      "laag": "device.strip"
     },
     {
-      "in": "cc:0:49",
-      "action": "track.2.filter",
+      "in": "cc:0:17",
+      "action": "track.{focus}.high",
       "mode": "absolute",
-      "label": "track knob 2",
-      "laag": "top.filter"
+      "label": "device knob 2",
+      "laag": "device.strip"
     },
     {
-      "in": "cc:0:50",
-      "action": "track.3.filter",
+      "in": "cc:0:18",
+      "action": "track.{focus}.mid",
       "mode": "absolute",
-      "label": "track knob 3",
-      "laag": "top.filter"
+      "label": "device knob 3",
+      "laag": "device.strip"
     },
     {
-      "in": "cc:0:51",
-      "action": "track.4.filter",
+      "in": "cc:0:19",
+      "action": "track.{focus}.low",
       "mode": "absolute",
-      "label": "track knob 4",
-      "laag": "top.filter"
+      "label": "device knob 4",
+      "laag": "device.strip"
     },
     {
-      "in": "cc:0:52",
-      "action": "track.5.filter",
+      "in": "cc:0:20",
+      "action": "track.{focus}.send.a",
       "mode": "absolute",
-      "label": "track knob 5",
-      "laag": "top.filter"
+      "label": "device knob 5",
+      "laag": "device.strip"
     },
     {
-      "in": "cc:0:53",
-      "action": "track.6.filter",
+      "in": "cc:0:21",
+      "action": "track.{focus}.send.b",
       "mode": "absolute",
-      "label": "track knob 6",
-      "laag": "top.filter"
+      "label": "device knob 6",
+      "laag": "device.strip"
     },
     {
-      "in": "cc:0:54",
-      "action": "track.7.filter",
+      "in": "cc:0:22",
+      "action": "track.{focus}.fx.mix",
       "mode": "absolute",
-      "label": "track knob 7",
-      "laag": "top.filter"
+      "label": "device knob 7",
+      "laag": "device.strip"
     },
     {
-      "in": "cc:0:55",
-      "action": "track.8.filter",
+      "in": "cc:0:23",
+      "action": "track.{focus}.fx.knob.1",
       "mode": "absolute",
-      "label": "track knob 8",
-      "laag": "top.filter"
-    },
-    {
-      "in": "cc:0:48",
-      "action": "track.1.send.a",
-      "mode": "absolute",
-      "label": "track knob 1",
-      "laag": "top.echo"
-    },
-    {
-      "in": "cc:0:49",
-      "action": "track.2.send.a",
-      "mode": "absolute",
-      "label": "track knob 2",
-      "laag": "top.echo"
-    },
-    {
-      "in": "cc:0:50",
-      "action": "track.3.send.a",
-      "mode": "absolute",
-      "label": "track knob 3",
-      "laag": "top.echo"
-    },
-    {
-      "in": "cc:0:51",
-      "action": "track.4.send.a",
-      "mode": "absolute",
-      "label": "track knob 4",
-      "laag": "top.echo"
-    },
-    {
-      "in": "cc:0:52",
-      "action": "track.5.send.a",
-      "mode": "absolute",
-      "label": "track knob 5",
-      "laag": "top.echo"
-    },
-    {
-      "in": "cc:0:53",
-      "action": "track.6.send.a",
-      "mode": "absolute",
-      "label": "track knob 6",
-      "laag": "top.echo"
-    },
-    {
-      "in": "cc:0:54",
-      "action": "track.7.send.a",
-      "mode": "absolute",
-      "label": "track knob 7",
-      "laag": "top.echo"
-    },
-    {
-      "in": "cc:0:55",
-      "action": "track.8.send.a",
-      "mode": "absolute",
-      "label": "track knob 8",
-      "laag": "top.echo"
-    },
-    {
-      "in": "cc:0:48",
-      "action": "track.1.send.b",
-      "mode": "absolute",
-      "label": "track knob 1",
-      "laag": "top.reverb"
-    },
-    {
-      "in": "cc:0:49",
-      "action": "track.2.send.b",
-      "mode": "absolute",
-      "label": "track knob 2",
-      "laag": "top.reverb"
-    },
-    {
-      "in": "cc:0:50",
-      "action": "track.3.send.b",
-      "mode": "absolute",
-      "label": "track knob 3",
-      "laag": "top.reverb"
-    },
-    {
-      "in": "cc:0:51",
-      "action": "track.4.send.b",
-      "mode": "absolute",
-      "label": "track knob 4",
-      "laag": "top.reverb"
-    },
-    {
-      "in": "cc:0:52",
-      "action": "track.5.send.b",
-      "mode": "absolute",
-      "label": "track knob 5",
-      "laag": "top.reverb"
-    },
-    {
-      "in": "cc:0:53",
-      "action": "track.6.send.b",
-      "mode": "absolute",
-      "label": "track knob 6",
-      "laag": "top.reverb"
-    },
-    {
-      "in": "cc:0:54",
-      "action": "track.7.send.b",
-      "mode": "absolute",
-      "label": "track knob 7",
-      "laag": "top.reverb"
-    },
-    {
-      "in": "cc:0:55",
-      "action": "track.8.send.b",
-      "mode": "absolute",
-      "label": "track knob 8",
-      "laag": "top.reverb"
-    },
-    {
-      "in": "cc:0:48",
-      "action": "track.1.low",
-      "mode": "absolute",
-      "label": "track knob 1",
-      "laag": "top.low"
-    },
-    {
-      "in": "cc:0:49",
-      "action": "track.2.low",
-      "mode": "absolute",
-      "label": "track knob 2",
-      "laag": "top.low"
-    },
-    {
-      "in": "cc:0:50",
-      "action": "track.3.low",
-      "mode": "absolute",
-      "label": "track knob 3",
-      "laag": "top.low"
-    },
-    {
-      "in": "cc:0:51",
-      "action": "track.4.low",
-      "mode": "absolute",
-      "label": "track knob 4",
-      "laag": "top.low"
-    },
-    {
-      "in": "cc:0:52",
-      "action": "track.5.low",
-      "mode": "absolute",
-      "label": "track knob 5",
-      "laag": "top.low"
-    },
-    {
-      "in": "cc:0:53",
-      "action": "track.6.low",
-      "mode": "absolute",
-      "label": "track knob 6",
-      "laag": "top.low"
-    },
-    {
-      "in": "cc:0:54",
-      "action": "track.7.low",
-      "mode": "absolute",
-      "label": "track knob 7",
-      "laag": "top.low"
-    },
-    {
-      "in": "cc:0:55",
-      "action": "track.8.low",
-      "mode": "absolute",
-      "label": "track knob 8",
-      "laag": "top.low"
+      "label": "device knob 8",
+      "laag": "device.strip"
     },
     {
       "in": "cc:0:16",
@@ -1075,165 +813,34 @@
       "laag": "device.rack"
     },
     {
-      "in": "cc:0:16",
-      "action": "track.{focus}.trim",
-      "mode": "absolute",
-      "label": "device knob 1",
-      "laag": "device.strip"
+      "in": "note:0:82",
+      "action": "layer.grid.hotcues",
+      "mode": "trigger",
+      "label": "scene launch 1"
     },
     {
-      "in": "cc:0:17",
-      "action": "track.{focus}.high",
-      "mode": "absolute",
-      "label": "device knob 2",
-      "laag": "device.strip"
+      "in": "note:0:83",
+      "action": "layer.grid.loops",
+      "mode": "trigger",
+      "label": "scene launch 2"
     },
     {
-      "in": "cc:0:18",
-      "action": "track.{focus}.mid",
-      "mode": "absolute",
-      "label": "device knob 3",
-      "laag": "device.strip"
+      "in": "note:0:84",
+      "action": "layer.grid.sampler",
+      "mode": "trigger",
+      "label": "scene launch 3"
     },
     {
-      "in": "cc:0:19",
-      "action": "track.{focus}.low",
-      "mode": "absolute",
-      "label": "device knob 4",
-      "laag": "device.strip"
+      "in": "note:0:85",
+      "action": "layer.grid.video",
+      "mode": "trigger",
+      "label": "scene launch 4"
     },
     {
-      "in": "cc:0:20",
-      "action": "track.{focus}.filter",
-      "mode": "absolute",
-      "label": "device knob 5",
-      "laag": "device.strip"
-    },
-    {
-      "in": "cc:0:21",
-      "action": "track.{focus}.fx.mix",
-      "mode": "absolute",
-      "label": "device knob 6",
-      "laag": "device.strip"
-    },
-    {
-      "in": "cc:0:22",
-      "action": "track.{focus}.send.a",
-      "mode": "absolute",
-      "label": "device knob 7",
-      "laag": "device.strip"
-    },
-    {
-      "in": "cc:0:23",
-      "action": "track.{focus}.send.b",
-      "mode": "absolute",
-      "label": "device knob 8",
-      "laag": "device.strip"
-    },
-    {
-      "in": "cc:0:16",
-      "action": "send.a.knob.1",
-      "mode": "absolute",
-      "label": "device knob 1",
-      "laag": "device.sends"
-    },
-    {
-      "in": "cc:0:17",
-      "action": "send.a.knob.2",
-      "mode": "absolute",
-      "label": "device knob 2",
-      "laag": "device.sends"
-    },
-    {
-      "in": "cc:0:18",
-      "action": "send.a.knob.3",
-      "mode": "absolute",
-      "label": "device knob 3",
-      "laag": "device.sends"
-    },
-    {
-      "in": "cc:0:19",
-      "action": "send.a.knob.4",
-      "mode": "absolute",
-      "label": "device knob 4",
-      "laag": "device.sends"
-    },
-    {
-      "in": "cc:0:20",
-      "action": "send.b.knob.1",
-      "mode": "absolute",
-      "label": "device knob 5",
-      "laag": "device.sends"
-    },
-    {
-      "in": "cc:0:21",
-      "action": "send.b.knob.2",
-      "mode": "absolute",
-      "label": "device knob 6",
-      "laag": "device.sends"
-    },
-    {
-      "in": "cc:0:22",
-      "action": "send.b.knob.3",
-      "mode": "absolute",
-      "label": "device knob 7",
-      "laag": "device.sends"
-    },
-    {
-      "in": "cc:0:23",
-      "action": "sampler.volume",
-      "mode": "absolute",
-      "label": "device knob 8",
-      "laag": "device.sends"
-    },
-    {
-      "in": "cc:0:16",
-      "action": "video.fx.pixel",
-      "mode": "absolute",
-      "label": "device knob 1",
-      "laag": "device.video"
-    },
-    {
-      "in": "cc:0:17",
-      "action": "video.fx.mirror",
-      "mode": "absolute",
-      "label": "device knob 2",
-      "laag": "device.video"
-    },
-    {
-      "in": "cc:0:18",
-      "action": "video.fx.rgb",
-      "mode": "absolute",
-      "label": "device knob 3",
-      "laag": "device.video"
-    },
-    {
-      "in": "cc:0:19",
-      "action": "video.fx.color",
-      "mode": "absolute",
-      "label": "device knob 4",
-      "laag": "device.video"
-    },
-    {
-      "in": "cc:0:20",
-      "action": "video.fx.trails",
-      "mode": "absolute",
-      "label": "device knob 5",
-      "laag": "device.video"
-    },
-    {
-      "in": "cc:0:21",
-      "action": "video.fx.grain",
-      "mode": "absolute",
-      "label": "device knob 6",
-      "laag": "device.video"
-    },
-    {
-      "in": "cc:0:22",
-      "action": "video.pulse",
-      "mode": "absolute",
-      "label": "device knob 7",
-      "laag": "device.video"
+      "in": "note:0:86",
+      "action": "track.{focus}.loop.exit",
+      "mode": "trigger",
+      "label": "scene launch 5"
     },
     {
       "in": "note:0:32",
@@ -1297,18 +904,10 @@
     },
     {
       "in": "note:0:0",
-      "action": "sampler.1",
+      "action": "track.1.loop.toggle",
       "mode": "trigger",
       "label": "pad 1/5",
       "laag": "grid.hotcues"
-    },
-    {
-      "in": "note:0:0",
-      "action": "sampler.1.clear",
-      "mode": "trigger",
-      "label": "pad 1/5 + shift",
-      "laag": "grid.hotcues",
-      "shift": true
     },
     {
       "in": "note:0:32",
@@ -1421,18 +1020,10 @@
     },
     {
       "in": "note:0:1",
-      "action": "sampler.2",
+      "action": "track.2.loop.toggle",
       "mode": "trigger",
       "label": "pad 2/5",
       "laag": "grid.hotcues"
-    },
-    {
-      "in": "note:0:1",
-      "action": "sampler.2.clear",
-      "mode": "trigger",
-      "label": "pad 2/5 + shift",
-      "laag": "grid.hotcues",
-      "shift": true
     },
     {
       "in": "note:0:33",
@@ -1545,18 +1136,10 @@
     },
     {
       "in": "note:0:2",
-      "action": "sampler.3",
+      "action": "track.3.loop.toggle",
       "mode": "trigger",
       "label": "pad 3/5",
       "laag": "grid.hotcues"
-    },
-    {
-      "in": "note:0:2",
-      "action": "sampler.3.clear",
-      "mode": "trigger",
-      "label": "pad 3/5 + shift",
-      "laag": "grid.hotcues",
-      "shift": true
     },
     {
       "in": "note:0:34",
@@ -1669,18 +1252,10 @@
     },
     {
       "in": "note:0:3",
-      "action": "sampler.4",
+      "action": "track.4.loop.toggle",
       "mode": "trigger",
       "label": "pad 4/5",
       "laag": "grid.hotcues"
-    },
-    {
-      "in": "note:0:3",
-      "action": "sampler.4.clear",
-      "mode": "trigger",
-      "label": "pad 4/5 + shift",
-      "laag": "grid.hotcues",
-      "shift": true
     },
     {
       "in": "note:0:35",
@@ -1793,18 +1368,10 @@
     },
     {
       "in": "note:0:4",
-      "action": "sampler.5",
+      "action": "track.5.loop.toggle",
       "mode": "trigger",
       "label": "pad 5/5",
       "laag": "grid.hotcues"
-    },
-    {
-      "in": "note:0:4",
-      "action": "sampler.5.clear",
-      "mode": "trigger",
-      "label": "pad 5/5 + shift",
-      "laag": "grid.hotcues",
-      "shift": true
     },
     {
       "in": "note:0:36",
@@ -1917,18 +1484,10 @@
     },
     {
       "in": "note:0:5",
-      "action": "sampler.6",
+      "action": "track.6.loop.toggle",
       "mode": "trigger",
       "label": "pad 6/5",
       "laag": "grid.hotcues"
-    },
-    {
-      "in": "note:0:5",
-      "action": "sampler.6.clear",
-      "mode": "trigger",
-      "label": "pad 6/5 + shift",
-      "laag": "grid.hotcues",
-      "shift": true
     },
     {
       "in": "note:0:37",
@@ -2041,18 +1600,10 @@
     },
     {
       "in": "note:0:6",
-      "action": "sampler.7",
+      "action": "track.7.loop.toggle",
       "mode": "trigger",
       "label": "pad 7/5",
       "laag": "grid.hotcues"
-    },
-    {
-      "in": "note:0:6",
-      "action": "sampler.7.clear",
-      "mode": "trigger",
-      "label": "pad 7/5 + shift",
-      "laag": "grid.hotcues",
-      "shift": true
     },
     {
       "in": "note:0:38",
@@ -2165,18 +1716,10 @@
     },
     {
       "in": "note:0:7",
-      "action": "sampler.8",
+      "action": "track.8.loop.toggle",
       "mode": "trigger",
       "label": "pad 8/5",
       "laag": "grid.hotcues"
-    },
-    {
-      "in": "note:0:7",
-      "action": "sampler.8.clear",
-      "mode": "trigger",
-      "label": "pad 8/5 + shift",
-      "laag": "grid.hotcues",
-      "shift": true
     },
     {
       "in": "note:0:39",

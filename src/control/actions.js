@@ -202,6 +202,10 @@ export function bindEngine(engine) {
 
     define(`${n}.nudge.back`, 'trigger', (on) => { if (on) d.nudge(-0.05); }, { label: `Track ${nr} nudge -` });
     define(`${n}.nudge.fwd`, 'trigger', (on) => { if (on) d.nudge(0.05); }, { label: `Track ${nr} nudge +` });
+    // Bend: zolang je drukt 4% trager of sneller, loslaten = terug. Zo werkt
+    // nudge op elke DJ-controller; nudge.back/fwd hierboven springt 50 ms.
+    define(`${n}.bend.back`, 'trigger', (on) => d.bend(on ? -1 : 0), { label: `Track ${nr} even trager (zolang je drukt)`, read: () => (d.buigt < 0 ? 1 : 0) });
+    define(`${n}.bend.fwd`, 'trigger', (on) => d.bend(on ? 1 : 0), { label: `Track ${nr} even sneller (zolang je drukt)`, read: () => (d.buigt > 0 ? 1 : 0) });
 
     // Het bereik (±8/16/50%) zit in het deck; de fader blijft 0..1. De read
     // is geklemd: sync mag verder dan het bereik, en dan staat hij tegen de aanslag.

@@ -135,6 +135,20 @@ invoke('track.1.pitch', 0.5);
 ok('fader midden = 0%', eng.deck('A').rate === 1);
 invoke('track.1.pitch', 1);
 {
+  // Bend (nudge op de APC): zolang je drukt 4% sneller/trager, rate blijft.
+  const dB = eng.deck('A');
+  dB.setRate(1.02);
+  invoke('track.1.bend.fwd', true);
+  ok('bend +: de bron loopt 4% sneller, de rate (pitch, bpm) blijft', Math.abs(dB.bron.rate - 1.02 * 1.04) < 1e-9 && dB.rate === 1.02);
+  dB.setRate(1.0);
+  ok('pitch verzetten tijdens een bend: bend blijft erop', Math.abs(dB.bron.rate - 1.04) < 1e-9);
+  invoke('track.1.bend.fwd', false);
+  ok('loslaten: precies terug', dB.bron.rate === 1 && dB.buigt === 0);
+  invoke('track.1.bend.back', true);
+  ok('bend −: 4% trager', Math.abs(dB.bron.rate - 0.96) < 1e-9 && read('track.1.bend.back') === 1);
+  invoke('track.1.bend.back', false);
+}
+{
   // Nieuw nummer: pitch terug op 0, bereik blijft.
   const dP = eng.deck('A');
   dP.pitchBereik = 0.5;

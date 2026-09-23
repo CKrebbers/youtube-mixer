@@ -24,7 +24,7 @@ import { Emitter, clamp } from '../lib/emitter.js';
  *
  * Shift en mapjes (sinds 23 september 2026):
  *   { "in": "note:0:52", "action": "track.1.loop.exit", "shift": true }
- *   { "in": "cc:0:48", "action": "track.1.send.a", "laag": "top.echo" }
+ *   { "in": "cc:0:16", "action": "track.{focus}.fx.knob.1", "laag": "device.rack" }
  * Een regel met `shift` geldt alleen zolang de shiftknop (`"shift": "note:0:98"`
  * bovenaan de mapping) ingedrukt is; zonder shift-variant valt shift terug op
  * de gewone regel, zodat een fader gewoon blijft werken. Een regel met `laag`
@@ -120,7 +120,7 @@ export class Mapping extends Emitter {
    * @param vars   () -> { focus: 1 } (tracknummer). Wordt per bericht opnieuw gevraagd.
    */
   /**
-   * @param lagen  () -> ['top.filter', 'device.rack', …]: de open mapjes.
+   * @param lagen  () -> ['device.strip', 'grid.hotcues', …]: de open mapjes.
    */
   constructor({ read, invoke, vars = () => ({}), lagen = () => [], now = () => (globalThis.performance?.now() ?? Date.now()) } = {}) {
     super();

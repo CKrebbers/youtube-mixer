@@ -47,7 +47,7 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   clock sturen (onbevestigd). Zelf knipperen via `track.N.tel` kan altijd.
   **Advies:** zelf (klokvast volgens regel 3); MIDI clock proberen als extra.
 
-- [x] **B3. De indeling.** GEBOUWD 23 sep (tabel in `docs/APC40.md`). Richting gekozen door Clay: **mapjes (lagen)**.
+- [x] **B3. De indeling.** GEBOUWD 23 sep, daarna HERZIEN na onderzoek (`docs/APC40-onderzoek.md`): controller eerst, één kolom = één track, filter boven elke kolom (Clay), grid-modi op de scene-knoppen. Tabel in `docs/APC40.md`, alles op `apc.html`. Eerste versie: Richting gekozen door Clay: **mapjes (lagen)**.
   Vaste kern die nooit wisselt (faders, crossfader, master, play/cue/sync,
   tempo, Track Select); drie soorten mapjes met een oplichtende kiesknop —
   track knobs (Pan/Sends/User), device knobs (rack / EQ-strip / send-bussen /
@@ -142,3 +142,11 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 - [x] **E3. Mappings ook op de server bewaren** in plaats van alleen in de
   browser (localStorage). Dan overleven ze een andere browser of gewiste data.
   — Clay: ja (gebouwd 23 sep: server eerst, localStorage reserve; herstellen wist beide).
+
+---
+
+## F. Nieuw uit het APC-onderzoek
+
+- [ ] **F1. Koptelefoon-cue (PFL).** De op vier na meest gebruikte DJ-functie,
+  maar VARVE heeft één audio-uitgang. Vraagt een tweede uitgang (tweede
+  geluidskaart, of kanaal 3/4 van een interface). Eerst bespreken, niet bouwen.

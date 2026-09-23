@@ -159,6 +159,10 @@ test/
   positie op P met snelheid R"). Elke wijziging is een nieuw segment; een
   bericht dat laat aankomt rekent vanaf T door. Regel 3 over een draadgrens.
 - Pitch schuift mee met tempo. Dat is `playbackRate`. Keylock hoort bij fase 3.
+- Nudge op de APC = BEND (`deck.bend`, actions `track.N.bend.back/fwd`): zolang
+  je drukt draait alleen de BRON 4% trager/sneller; `deck.rate` (pitchfader,
+  bpm, sync) blijft staan, dus loslaten is precies terug. `nudge.back/fwd`
+  (50 ms springen) bestaat nog voor het toetsenbord.
 - Pitchbereik per track: ±8, ±16 (standaard) of ±50% (`PITCH_BEREIKEN` in
   `deck.js`, action `track.N.pitch.range`). De fader blijft 0..1, de engine
   schaalt. Bereik wisselen laat het tempo staan; alleen de faderstand verschuift.
@@ -432,15 +436,18 @@ test/
   shift vast); binnen elk eerst het open mapje, dan zonder mapje. Loslaten gaat
   ALTIJD naar de action van het indrukken (`mapping.vast`), ook als shift of het
   mapje intussen wisselde. De shiftknop staat bovenaan de mapping (`"shift"`)
-  en gaat nooit de bus op. Groepen en mapjes staan in `lagen.js` (top = track
-  knobs, device = device knobs, grid); kort drukken = vast, vasthouden ≥ 400 ms
-  vanuit een ander mapje = gluren (loslaten = terug), nog eens drukken = het
-  volgende mapje onder dezelfde kiesknop. Kiesknoppen zijn actions
-  (`layer.<groep>.<knop>`, `layer.grid.next/prev`). Koppelen komt in het mapje
+  en gaat nooit de bus op. Groepen en mapjes staan in `lagen.js`. HERZIEN na
+  het onderzoek (`docs/APC40-onderzoek.md`, Clay 23 sep): de KERN zit nooit in
+  een mapje — één kolom = één track (filter boven, fader onder, play/cue/sync/
+  A-B in het 2×2-blok), rechts de strip van de focus-track in DJ-mixervolgorde.
+  Alleen twee groepen: `device` (strip ↔ rack, één oplichtende knop) en `grid`
+  (hotcues/loops/sampler/video op de scene-knoppen, elk een eigen kleur).
+  Kort drukken = vast, vasthouden ≥ 400 ms vanuit een ander mapje = gluren.
+  Kiesknoppen zijn actions (`layer.<groep>.<knop>`, `layer.grid.next/prev`). Koppelen komt in het mapje
   dat open staat, en met shift vast in de shift-laag. De LED's volgen
   `mapping.actieveRegels()`; wat bij een dicht mapje hoort gaat uit, en het
   ringtype wisselt mee. `mapje-balk.js` toont bij elke wissel wat de knoppen
-  doen. De standaardmapping (333 regels) is gegenereerd volgens de tabel in
+  doen. De standaardmapping (269 regels) is gegenereerd volgens de tabel in
   `docs/APC40.md`; aanpassen mag gewoon in de JSON of met koppelen.
   `apc.html` tekent per mapje de APC met wat elke knop doet. Hij leest dezelfde
   mapping (eigen versie van de server, anders de standaard) en vraagt aan

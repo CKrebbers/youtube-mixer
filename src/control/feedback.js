@@ -25,6 +25,13 @@ const KLEURSCHEMA = [
   [/^sampler\.\d+$/,  { aan: 'violet', uit: 'donkergrijs' }],
   [/\.clear$|\.delete$/, { aan: 'rood', uit: 'donkergrijs' }],
   [/^video\./,        { aan: 'blauw', uit: 'donkergrijs' }],
+  // Grid-modi op de scene-knoppen: elke modus zijn eigen kleur, gedimd als hij
+  // uit staat — zo zie je altijd welke er zijn én welke open is (velocity =
+  // de donkere variant uit het palet, p18-22).
+  [/^layer\.grid\.hotcues$/, { aan: 'geel', uit: 14 }],
+  [/^layer\.grid\.loops$/,   { aan: 'cyaan', uit: 38 }],
+  [/^layer\.grid\.sampler$/, { aan: 'violet', uit: 50 }],
+  [/^layer\.grid\.video$/,   { aan: 'blauw', uit: 46 }],
   [/^layer\./,        { aan: 'wit', uit: 'donkergrijs' }],
 ];
 

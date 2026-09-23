@@ -355,16 +355,18 @@ console.log('\nmapjes en shift');
   const { Lagen, GLUREN } = await import('../src/control/lagen.js');
   let t = 0;
   const lg = new Lagen({ now: () => t });
-  ok('begint op de standaard-mapjes', lg.actief().join() === 'top.filter,device.rack,grid.hotcues');
-  lg.druk('top', 'sends', true); t += 100; lg.druk('top', 'sends', false);
-  ok('kort drukken zet het mapje vast', lg.stand.top === 'echo');
-  lg.druk('top', 'sends', true); t += 100; lg.druk('top', 'sends', false);
-  ok('nog eens op dezelfde kiesknop: het volgende mapje eronder (galm)', lg.stand.top === 'reverb');
-  lg.druk('top', 'pan', true); t += 50; lg.druk('top', 'pan', false);
-  lg.druk('top', 'user', true); t += GLUREN + 10;
-  ok('vasthouden: het mapje is open zolang je vasthoudt', lg.stand.top === 'low');
-  lg.druk('top', 'user', false);
-  ok('loslaten na gluren: terug naar waar je was', lg.stand.top === 'filter');
+  ok('begint op de standaard-mapjes: strip en hotcues', lg.actief().join() === 'device.strip,grid.hotcues');
+  lg.druk('device', 'view', true); t += 100; lg.druk('device', 'view', false);
+  ok('Clip/Device View: strip -> rack', lg.stand.device === 'rack');
+  lg.druk('device', 'view', true); t += 100; lg.druk('device', 'view', false);
+  ok('nog eens: terug naar de strip (twee standen)', lg.stand.device === 'strip');
+  lg.druk('grid', 'loops', true); t += 50; lg.druk('grid', 'loops', false);
+  ok('kort drukken zet de grid-modus vast', lg.stand.grid === 'loops');
+  lg.druk('grid', 'sampler', true); t += GLUREN + 10;
+  ok('vasthouden: de modus is open zolang je vasthoudt', lg.stand.grid === 'sampler');
+  lg.druk('grid', 'sampler', false);
+  ok('loslaten na gluren: terug naar waar je was', lg.stand.grid === 'loops');
+  lg.zet('grid', 'hotcues');
   lg.stap('grid', 1);
   ok('bladeren door het grid', lg.stand.grid === 'loops');
   lg.stap('grid', -2);
@@ -377,8 +379,8 @@ console.log('\nmapjes en shift');
     { in: 'note:0:52', action: 'track.1.loop.toggle', mode: 'trigger' },
     { in: 'note:0:52', action: 'track.1.loop.exit', mode: 'trigger', shift: true },
     { in: 'cc:0:7', action: 'track.1.fader', mode: 'absolute' },
-    { in: 'cc:0:48', action: 'track.1.filter', mode: 'absolute', laag: 'top.filter' },
-    { in: 'cc:0:48', action: 'track.1.send.a', mode: 'absolute', laag: 'top.echo' },
+    { in: 'cc:0:16', action: 'track.{focus}.trim', mode: 'absolute', laag: 'device.strip' },
+    { in: 'cc:0:16', action: 'track.{focus}.fx.knob.1', mode: 'absolute', laag: 'device.rack' },
     { in: 'note:0:32', action: 'track.1.hotcue.1', mode: 'trigger', laag: 'grid.hotcues' },
     { in: 'note:0:32', action: 'track.1.hotcue.1.delete', mode: 'trigger', laag: 'grid.hotcues', shift: true },
     { in: 'note:0:32', action: 'track.1.beatloop.1', mode: 'trigger', laag: 'grid.loops' },
@@ -401,11 +403,11 @@ console.log('\nmapjes en shift');
   ok('shift vast en geen shift-regel: de fader werkt gewoon', gestuurd.at(-1)[0] === 'track.1.fader');
   m.handle(noot(98, false));
 
-  m.handle(cc(48, 64));
-  ok('track knob in mapje filter', gestuurd.at(-1)[0] === 'track.1.filter');
-  lg.zet('top', 'echo');
-  m.handle(cc(48, 64));
-  ok('zelfde knop in mapje echo', gestuurd.at(-1)[0] === 'track.1.send.a');
+  m.handle(cc(16, 64));
+  ok('device knob 1 in de strip: trim van de focus-track', gestuurd.at(-1)[0] === 'track.3.trim');
+  lg.zet('device', 'rack');
+  m.handle(cc(16, 64));
+  ok('zelfde knop in het rack: fx-knop 1', gestuurd.at(-1)[0] === 'track.3.fx.knob.1');
   m.handle(noot(32, true));
   lg.zet('grid', 'loops');                 // mapje wisselt terwijl de pad ingedrukt is
   m.handle(noot(32, false));
@@ -413,12 +415,12 @@ console.log('\nmapjes en shift');
   m.handle(noot(32, true)); m.handle(noot(32, false));
   ok('daarna: de pad van het loops-mapje', gestuurd.at(-1)[0] === 'track.1.beatloop.1');
   ok('actieveRegels: per knop de regel van nu', m.actieveRegels().get('note:0:32').action === 'track.1.beatloop.1'
-    && m.actieveRegels().get('cc:0:48').action === 'track.1.send.a');
+    && m.actieveRegels().get('cc:0:16').action === 'track.{focus}.fx.knob.1');
 
   // Koppelen in een mapje: de nieuwe regel komt in het open mapje.
-  const regel = m.set('cc:0:48', 'track.1.low', { mode: 'absolute' });
-  ok('koppelen komt in het open mapje, de andere blijven', regel.laag === 'top.echo'
-    && m.rules.get('cc:0:48@top.filter').action === 'track.1.filter' && m.rules.get('cc:0:48@top.echo').action === 'track.1.low');
+  const regel = m.set('cc:0:16', 'track.{focus}.low', { mode: 'absolute' });
+  ok('koppelen komt in het open mapje, de andere blijven', regel.laag === 'device.rack'
+    && m.rules.get('cc:0:16@device.strip').action === 'track.{focus}.trim' && m.rules.get('cc:0:16@device.rack').action === 'track.{focus}.low');
   m.handle(noot(98, true));
   const sr = m.set('note:0:52', 'track.1.cue', { mode: 'trigger' });
   m.handle(noot(98, false));
@@ -434,7 +436,7 @@ console.log('\nmapjes en shift');
 // ---- apc.html: elke knop een uitleg ---------------------------------------
 {
   const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
-  const kaal = doc.rules.filter((r) => { const b = beschrijf(r.action); return b.lang === r.action || !b.kort; }).map((r) => r.action);
+  const kaal = doc.rules.filter((r) => { const b = beschrijf(r.action); return b.lang === r.action || b.lang.startsWith('?') || !b.kort; }).map((r) => r.action);
   if (kaal.length) console.log('   zonder uitleg:', [...new Set(kaal)]);
   ok('APC-kaarten: elke action in de standaardmapping heeft een uitleg in gewone taal', kaal.length === 0);
 }

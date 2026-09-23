@@ -5,14 +5,18 @@ import { Emitter } from '../lib/emitter.js';
  * mapje dat open staat. Er zijn meer functies dan knoppen op een controller;
  * zo passen ze toch, zonder dat je hoeft te zoeken.
  *
- * Drie groepen, elk met één actief mapje:
- *   top     de acht track knobs (bovenste rij), één per track
- *   device  de acht device knobs (rechts), voor de track met focus
- *   grid    het 5×8-grid
+ * Twee groepen, elk met één actief mapje (herzien 23 september 2026 na het
+ * onderzoek in docs/APC40-onderzoek.md: de kern — fader, play/cue, filter,
+ * EQ — zit NOOIT in een mapje; alleen wat je niet bij elke overgang nodig hebt):
+ *   device  de acht device knobs rechts, voor de track met focus: de strip
+ *           (trim · high · mid · low / sends · fx) of het rack. Eén
+ *           oplichtende knop wisselt; twee standen, niet meer.
+ *   grid    het 5×8-grid: hotcues · loops · sampler · video, gekozen met de
+ *           scene-knoppen ernaast, elk in een eigen kleur.
  *
  * Een KIESKNOP opent een mapje. Kort drukken zet het vast. Vasthouden is
  * "even gluren": laat je los, dan ben je terug waar je was. Zit er meer dan
- * één mapje onder dezelfde kiesknop (Sends: echo, dan galm), dan loopt nog
+ * één mapje onder dezelfde kiesknop (Clip/Device View: strip, dan rack), dan loopt nog
  * eens drukken erdoorheen.
  *
  * Deze laag kent geen MIDI en geen DOM. De mapping vraagt `actief()` om te
@@ -23,13 +27,9 @@ import { Emitter } from '../lib/emitter.js';
 export const GLUREN = 400;   // ms: langer vasthouden = even gluren, loslaten = terug
 
 export const GROEPEN = {
-  top: {
-    naam: 'track knobs', standaard: 'filter',
-    knoppen: { pan: ['filter'], sends: ['echo', 'reverb'], user: ['low'] },
-  },
   device: {
-    naam: 'device knobs', standaard: 'rack',
-    knoppen: { rack: ['rack'], strip: ['strip'], sends: ['sends'], video: ['video'] },
+    naam: 'device knobs', standaard: 'strip',
+    knoppen: { view: ['strip', 'rack'] },
   },
   grid: {
     naam: 'grid', standaard: 'hotcues',
@@ -40,9 +40,8 @@ export const GROEPEN = {
 
 /** Hoe een mapje op het scherm heet. */
 export const LAAGNAAM = {
-  'top.filter': 'filter', 'top.echo': 'echo-send', 'top.reverb': 'galm-send', 'top.low': 'low (bass-swap)',
-  'device.rack': 'rack', 'device.strip': 'strip (EQ, sends)', 'device.sends': 'send-bussen', 'device.video': 'video',
-  'grid.hotcues': 'hotcues + sampler', 'grid.loops': 'loops', 'grid.sampler': 'sampler', 'grid.video': 'video',
+  'device.strip': 'strip (trim · high · mid · low / echo · galm · fx)', 'device.rack': 'rack (fx 1–8)',
+  'grid.hotcues': 'hotcues', 'grid.loops': 'loops', 'grid.sampler': 'sampler', 'grid.video': 'video',
 };
 
 export class Lagen extends Emitter {

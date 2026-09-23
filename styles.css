@@ -539,10 +539,11 @@ body.apc-pagina{display:block;overflow:auto;user-select:text;-webkit-user-select
 .apc-c.scene i{width:40%;aspect-ratio:1.6;border-radius:50%/40%;flex:0 0 auto}
 .apc-c.scene span{text-align:left}
 .apc-c.knop i,.apc-c.pijl i{width:55%;aspect-ratio:2.2;border-radius:2px}
+.apc-c.mini{width:3.3%} .apc-c.mini i{width:80%;aspect-ratio:1.3;border-radius:2px} .apc-c.mini span{font-size:clamp(6px,.6vw,8px)}
 .apc-c.knop-rond i,.apc-c.encoder i{width:44%;aspect-ratio:1;border-radius:50%}
 .apc-c.encoder i{border-width:2px}
 .apc-c.fader i{width:18%;height:clamp(36px,9vw,95px);border-radius:3px}
-.apc-c.xfader{width:24%} .apc-c.xfader i{width:100%;height:10px;border-radius:3px}
+.apc-c.xfader{width:20%} .apc-c.xfader i{width:100%;height:10px;border-radius:3px}
 .apc-c.dof{opacity:.35} .apc-c.dof span{display:none}
 .apc-c.leeg{opacity:.18}
 .apc-c.aan i{border-color:var(--a);background:rgba(74,217,196,.22)}

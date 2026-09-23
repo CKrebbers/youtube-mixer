@@ -11,6 +11,8 @@ import { InsertSlot } from './fx.js';
  * tegen de aanslag staan.
  */
 export const PITCH_BEREIKEN = [0.08, 0.16, 0.5];
+/** Hoeveel een nudge (bend) versnelt of vertraagt zolang je drukt. */
+export const BEND = 0.04;
 
 /**
  * Eén deck: transport, cues, loops, beatgrid, kanaalstrip.
@@ -49,6 +51,7 @@ export class Deck extends Emitter {
 
     this.rate = 1;              // playbackRate (pitch schuift mee — keylock = fase 3)
     this.pitchBereik = 0.16;    // zie PITCH_BEREIKEN
+    this.buigt = 0;             // -1/0/+1: nudge (bend) ingedrukt
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.loop = null;           // {start, end}
@@ -192,10 +195,23 @@ export class Deck extends Emitter {
     this.emit('change', this);
   }
 
+  /**
+   * Tijdelijk trager of sneller zolang je drukt (nudge op een DJ-controller):
+   * richting -1 of +1, en 0 = loslaten. Alleen de BRON draait anders; `rate`
+   * (en dus pitchfader, bpm en sync) blijft staan, zodat loslaten precies
+   * terug is waar je was. 4% is genoeg om een tel in te halen zonder dat het
+   * als een pitchsprong klinkt.
+   */
+  bend(richting) {
+    this.bron.setRate(richting ? this.rate * (1 + BEND * Math.sign(richting)) : this.rate);
+    this.buigt = richting ? Math.sign(richting) : 0;
+    this.fx.heranker();
+  }
+
   setRate(r) {
     const nr = clamp(r, 0.5, 2);
-    this.bron.setRate(nr);
     this.rate = nr;
+    this.bron.setRate(this.buigt ? nr * (1 + BEND * this.buigt) : nr);
     this.fx.heranker();
     this.emit('change', this);
   }

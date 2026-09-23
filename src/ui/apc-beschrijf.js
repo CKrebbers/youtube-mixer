@@ -37,13 +37,16 @@ export function beschrijf(action) {
     if (rest === 'fx.bypass') return r('fx uit', 'effect aan/uit');
     if (rest === 'rack.next') return r('rack ▶', 'volgend rack');
     if (rest === 'rack.prev') return r('◀ rack', 'vorig rack');
+    if (rest === 'bend.back') return r('trager', 'even trager zolang je drukt (bend −4%)');
+    if (rest === 'bend.fwd') return r('sneller', 'even sneller zolang je drukt (bend +4%)');
+    if (rest === 'pitch.range') return r('bereik', 'pitchbereik ±8 / ±16 / ±50%');
     if (rest === 'nudge.back') return r('nudge −', 'even terugduwen');
     if (rest === 'nudge.fwd') return r('nudge +', 'even vooruitduwen');
     if ((m = /^fx\.knob\.(\d)$/.exec(rest))) return r(`rack ${m[1]}`, `rack-knop ${m[1]} (wat die doet hangt van het rack af)`);
     if ((m = /^hotcue\.(\d)$/.exec(rest))) return { kort: `${k}·cue ${m[1]}`, lang: `hotcue ${m[1]} — ${w}` };
     if ((m = /^hotcue\.(\d)\.delete$/.exec(rest))) return { kort: `wis ${m[1]}`, lang: `hotcue ${m[1]} wissen — ${w}` };
     if ((m = /^beatloop\.([\d.]+)$/.exec(rest))) return { kort: `${k}·${m[1]}t`, lang: `loop van ${m[1]} ${m[1] === '1' ? 'tel' : 'tellen'} — ${w}` };
-    return r(rest, rest);
+    return r(rest, `?${rest}`);   // onbekend: de test vangt dit
   }
   if ((m = /^window\.([LR])\.show\.(\d)$/.exec(action))) return { kort: `→ ${m[1]}`, lang: `track ${m[2]} in het ${m[1] === 'L' ? 'linker' : 'rechter'}venster` };
   if ((m = /^sampler\.(\d)$/.exec(action))) return { kort: `pad ${m[1]}`, lang: `sampler-pad ${m[1]}: leeg = pak de laatste tellen van de focus-track, gevuld = start/stop op de tel` };
