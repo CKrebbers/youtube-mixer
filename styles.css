@@ -304,3 +304,42 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .fx-rack:focus{outline:none;border-color:var(--b)}
 .knob.sm.fx-plek.leeg{opacity:.22;pointer-events:none}
 .fx-bewaar{color:var(--dim)}
+
+/* ---- rack-editor ---- */
+.rack-editor{position:fixed;left:0;right:0;bottom:0;z-index:45;height:46vh;min-height:300px;
+  background:var(--panel);border-top:1px solid var(--line);
+  display:flex;flex-direction:column;box-shadow:0 -12px 30px rgba(0,0,0,.45)}
+.rack-editor.hidden{display:none}
+.re-head{display:flex;align-items:center;gap:12px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.re-titel{font-size:10px;letter-spacing:.16em;font-weight:700;color:var(--a)}
+.re-deck{font-size:10px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase}
+.re-naam,.re-label{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+  border-radius:4px;padding:4px 6px;font:inherit;font-size:12px}
+.re-naam{width:220px}
+.re-tools{display:flex;gap:4px;margin-left:auto}
+.re-status{padding:5px 12px;font-size:11px;color:var(--dim);border-bottom:1px solid var(--line)}
+.re-status .goed{color:var(--a)} .re-status .bad{color:var(--red)}
+.re-body{flex:1;display:grid;grid-template-columns:260px 1fr;min-height:0}
+.re-keten,.re-macros{overflow:auto;padding:8px 12px}
+.re-keten{border-right:1px solid var(--line)}
+.re-kop{font-size:10px;letter-spacing:.12em;color:var(--text);text-transform:uppercase;margin:0 0 8px}
+.re-kop i{color:var(--dim);text-transform:none;letter-spacing:0;font-style:normal}
+.re-node{display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--line)}
+.re-node.uit .re-effect{color:var(--dim);text-decoration:line-through}
+.re-slot{font-family:ui-monospace,monospace;color:var(--dim);width:14px}
+.re-effect{flex:1;font-size:12px}
+.re-keten select,.re-link select{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+  border-radius:4px;padding:3px 5px;font:inherit;font-size:11px}
+.re-keten select{margin-top:8px;width:100%}
+.re-weg{color:var(--dim)} .re-weg:hover{color:var(--red)}
+.re-leeg{color:var(--dim);font-size:11px;padding:4px 0}
+.re-plek{border-bottom:1px solid var(--line);padding:6px 0}
+.re-plek.leeg{display:flex;align-items:center;gap:8px;padding:4px 0}
+.re-plek-kop{display:flex;align-items:center;gap:8px}
+.re-nr{font-family:ui-monospace,monospace;color:var(--warn);width:14px;text-align:right}
+.re-label{width:140px}
+.re-link{display:flex;align-items:center;gap:8px;padding:4px 0 0 22px;flex-wrap:wrap}
+.re-link select[data-doe="doel"]{width:150px}
+.re-schuif{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dim)}
+.re-schuif input{width:70px;accent-color:var(--a)}
+.re-schuif output{font-family:ui-monospace,monospace;width:28px;color:var(--text)}

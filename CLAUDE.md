@@ -59,7 +59,8 @@ src/
   analysis/         peaks.js        golfvorm-peaks + ruwe RMS
                     demo-track.js   synthetische 124-bpm testtrack
   ui/               app.js, waveform.js, controls.js, midi-monitor.js,
-                    mapping-panel.js (de lijst), learn-mode.js (aanwijzen op het scherm)
+                    mapping-panel.js (de lijst), learn-mode.js (aanwijzen op het scherm),
+                    rack-editor.js (racks bouwen met de muis, werkt op een kopie)
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
 server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
@@ -121,6 +122,11 @@ test/
 - Een rack bewaart per macro alleen de `default`. De live knopstand is
   sessietoestand en gaat nergens heen — anders is elk rack na drie seconden
   spelen "gewijzigd" en verdrink je in opslaan-vragen.
+- De rack-editor maakt twee soorten wijzigingen verschillend door: aan de KETEN
+  (effect erbij, weg, volgorde, aan/uit) bouwt opnieuw via `zetRack(..., {
+  behoudStanden: true })` met kruisfade; aan de MACRO'S (bereik, venster, curve)
+  gaat via `bewerkMacros()` en raakt geen node aan. Schuiven tekent het paneel
+  niet opnieuw, anders verlies je de schuif halverwege het slepen.
 - Botsen twee macro's op dezelfde parameter, dan wint de HOOGSTE plek. Saai en
   voorspelbaar; "laatste in de lijst wint" hangt van de volgorde af.
 - Een onbekend effecttype in een rack wordt NIET weggegooid: het blijft als ruwe

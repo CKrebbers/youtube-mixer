@@ -1,4 +1,5 @@
 import { Engine } from '../engine/engine.js';
+import { EFFECTEN } from '../engine/fx.js';
 import { bindEngine, invoke, read as readAction, metaOf } from '../control/actions.js';
 import { attachKeyboard } from '../control/keyboard.js';
 import { MidiHub } from '../control/midi.js';
@@ -8,6 +9,7 @@ import { MidiLearn } from '../control/midi-learn.js';
 import { MappingPanel } from './mapping-panel.js';
 import { LearnMode } from './learn-mode.js';
 import { LibraryPanel } from './library-panel.js';
+import { RackEditor } from './rack-editor.js';
 import apc40mk2 from '../control/devices/apc40mk2.js';
 import generic from '../control/devices/generic.js';
 import { MidiMonitor } from './midi-monitor.js';
@@ -264,6 +266,42 @@ for (const id of ['A', 'B']) {
     } catch (err) {
       console.warn('[rack] bewaren mislukt:', err.message);
     }
+  });
+}
+
+// ---- rack-editor ----------------------------------------------------------
+// "bewaar" schrijft over het rack dat in de kiezer staat; zonder gekozen rack
+// wordt het vanzelf een nieuw. Daarna de kiezer verversen, zodat de naam klopt.
+
+const rackEditor = new RackEditor({
+  root: document.getElementById('rack-editor'),
+  engine,
+  effecten: EFFECTEN,
+  onBewaar: async ({ deckId, naam, data, alsNieuw }) => {
+    const trackId = deckTrack[deckId];
+    if (!trackId) throw new Error('geen nummer uit de library op dit deck');
+    const gekozen = fxEl(deckId, '.fx-rack').value;
+    const id = !alsNieuw && gekozen ? Number(gekozen) : null;
+    const res = await fetch(`/api/library/${trackId}/racks`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, naam, data, actief: true }),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const { rack } = await res.json();
+    // Niet haalRacks(): die zet het actieve rack opnieuw, en dan hoor je een
+    // kruisfade op iets wat al klinkt. Alleen de kiezer bijwerken.
+    const lijst = rackCache[deckId].filter((x) => x.id !== rack.id).map((x) => ({ ...x, actief: false }));
+    rackCache[deckId] = [...lijst, rack].sort((a, b) => a.gemaakt - b.gemaakt);
+    fxEl(deckId, '.fx-rack').innerHTML = '<option value="">— los effect —</option>'
+      + rackCache[deckId].map((x) =>
+          `<option value="${x.id}"${x.id === rack.id ? ' selected' : ''}>${x.naam}</option>`).join('');
+  },
+});
+
+for (const id of ['A', 'B']) {
+  fxEl(id, '.fx-bewerk').addEventListener('click', () => {
+    if (rackEditor.open && rackEditor.deckId === id) rackEditor.sluit();
+    else rackEditor.openVoor(id);
   });
 }
 

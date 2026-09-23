@@ -72,6 +72,7 @@
         <select class="fx-rack" title="rack van dit nummer"></select>
         <button data-kind="button" data-action="deck.A.fx.next" class="btn sm fx-naam" title="volgend effect">Delay</button>
         <button class="btn sm fx-bewaar" title="dit rack bij dit nummer bewaren">bewaar</button>
+        <button class="btn sm fx-bewerk" title="rack bewerken: effecten, knoppen, bereiken">bewerk</button>
         <div class="knob sm fx-plek" data-action="deck.A.fx.knop.1" data-label="1" data-value="0.5"></div>
         <div class="knob sm fx-plek" data-action="deck.A.fx.knop.2" data-label="2" data-value="0.5"></div>
         <div class="knob sm fx-plek" data-action="deck.A.fx.knop.3" data-label="3" data-value="0.5"></div>
@@ -168,6 +169,7 @@
         <select class="fx-rack" title="rack van dit nummer"></select>
         <button data-kind="button" data-action="deck.B.fx.next" class="btn sm fx-naam" title="volgend effect">Delay</button>
         <button class="btn sm fx-bewaar" title="dit rack bij dit nummer bewaren">bewaar</button>
+        <button class="btn sm fx-bewerk" title="rack bewerken: effecten, knoppen, bereiken">bewerk</button>
         <div class="knob sm fx-plek" data-action="deck.B.fx.knop.1" data-label="1" data-value="0.5"></div>
         <div class="knob sm fx-plek" data-action="deck.B.fx.knop.2" data-label="2" data-value="0.5"></div>
         <div class="knob sm fx-plek" data-action="deck.B.fx.knop.3" data-label="3" data-value="0.5"></div>
@@ -238,6 +240,25 @@
     <div class="map-rows"></div>
   </div>
   <div class="mon-rows"></div>
+</section>
+
+<!-- ================= RACK-EDITOR ================= -->
+<section id="rack-editor" class="rack-editor hidden">
+  <div class="re-head">
+    <span class="re-titel">RACK</span>
+    <span class="re-deck"></span>
+    <input class="re-naam" type="text" placeholder="naam van dit rack">
+    <span class="re-tools">
+      <button class="btn sm re-bewaar" title="over het gekozen rack heen bewaren">bewaar</button>
+      <button class="btn sm re-nieuw" title="als nieuw rack bij dit nummer bewaren">bewaar als nieuw</button>
+      <button class="btn sm re-sluit">sluit</button>
+    </span>
+  </div>
+  <div class="re-status"></div>
+  <div class="re-body">
+    <div class="re-keten"></div>
+    <div class="re-macros"></div>
+  </div>
 </section>
 
 <div id="leer-balk" class="leer-balk hidden"></div>

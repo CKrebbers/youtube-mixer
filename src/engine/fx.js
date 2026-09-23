@@ -479,15 +479,20 @@ export class InsertSlot {
    * Nieuwe keten volledig opbouwen terwijl de oude speelt, equal-power
    * kruisfaden, en de oude pas opruimen na fade plus staarttijd.
    */
-  zetRack(data) {
+  zetRack(data, { behoudStanden = false } = {}) {
     const { rack, fouten } = leesRack(data, { bekendType: (t) => !!effectVan(t) });
     this.rack = rack;
     this.fouten = fouten;
 
     // Standen terug naar de defaults van dit rack. De live stand is
-    // sessietoestand en reist niet mee met het rack.
+    // sessietoestand en reist niet mee met het rack. In de editor wil je dat
+    // juist wél: daar pas je de keten aan terwijl je aan een knop zit.
+    const vorigeStanden = this.standen;
     this.standen = {};
-    for (const m of rack.macros) this.standen[m.place] = m.default ?? 0;
+    for (const m of rack.macros) {
+      this.standen[m.place] = behoudStanden && m.place in vorigeStanden
+        ? vorigeStanden[m.place] : (m.default ?? 0);
+    }
 
     const nieuw = bouwKeten(this.ctx, rack.chain, () => this.klok());
     const gain = this.ctx.createGain();
@@ -532,6 +537,26 @@ export class InsertSlot {
     this.opgeruimd++;
   }
 
+  /**
+   * Alleen de macro's vervangen, de keten laten staan.
+   *
+   * Voor de editor: schuif je aan een bereik of een curve, dan hoeft er geen
+   * enkele node opnieuw gebouwd te worden. Alleen de getallen veranderen, en
+   * je hoort het meteen zonder kruisfade.
+   */
+  bewerkMacros(macros) {
+    const { rack, fouten } = leesRack({ ...schrijfRack(this.rack), macros },
+      { bekendType: (t) => !!effectVan(t) });
+    this.rack.macros = rack.macros;
+    this.fouten = fouten;
+    for (const m of rack.macros) if (!(m.place in this.standen)) this.standen[m.place] = m.default ?? 0;
+    for (const k of Object.keys(this.standen)) {
+      if (!rack.macros.some((m) => m.place === Number(k))) delete this.standen[k];
+    }
+    this._pasMacrosToe();
+    return { fouten };
+  }
+
   /** Alle macro's opnieuw doorrekenen naar parameterwaarden. */
   _pasMacrosToe() {
     if (!this.keten) return;
@@ -560,4 +585,22 @@ export class InsertSlot {
 
   /** Het rack zoals het opgeslagen moet worden — zonder de live standen. */
   naarJSON() { return schrijfRack(this.rack); }
+
+  /**
+   * Alle doelen die een macro kan aansturen, voor de keuzelijst in de editor.
+   * Onbekende of uitgeschakelde slots staan er ook in: je mag er alvast naar
+   * wijzen, ze doen pas iets als het slot aan staat.
+   */
+  doelen() {
+    const uit = [];
+    for (const node of this.rack.chain || []) {
+      const effect = effectVan(node.type);
+      const params = effect ? effect.params : Object.keys(node.params || {});
+      for (const p of params) {
+        uit.push({ target: `${node.slot}.${p}`, slot: node.slot, param: p,
+          effect: effect?.naam ?? node.type, uit: !!node.bypass });
+      }
+    }
+    return uit;
+  }
 }

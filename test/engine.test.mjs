@@ -457,6 +457,56 @@ kd.setRate(1);
 kd.stop();
 kd.fx.zetEffect('delay');
 
+// ---- editor-ondersteuning -------------------------------------------------
+// Schuif je in de editor aan een bereik, dan mag er geen enkele node opnieuw
+// gebouwd worden: dat zou elke tik je knoppen terugzetten en een kruisfade
+// kosten. Alleen de keten zelf aanpassen bouwt opnieuw op.
+
+const ef = eng.deck('B').fx;
+ef.zetRack({
+  schema: 1, name: 'editorproef',
+  chain: [{ slot: 'a', type: 'filter' }, { slot: 'b', type: 'delay' }],
+  macros: [
+    { place: 1, label: 'Een', default: 0.2, links: [{ target: 'b.feedback', from: 0, to: 1 }] },
+    { place: 2, label: 'Twee', default: 0.5, links: [{ target: 'a.freq', from: 0, to: 1 }] },
+  ],
+});
+ef.setPlek(1, 0.8);
+const ketenVoor = ef.keten;
+const aantalVoor = ef.nodeAantal;     // de vorige keten kan nog uitsterven
+
+const doelen = ef.doelen();
+ok('de editor krijgt alle doelen', doelen.some((d2) => d2.target === 'b.feedback') && doelen.some((d2) => d2.target === 'a.freq'));
+ok('met het effect erbij', doelen.find((d2) => d2.target === 'b.tijd').effect === 'Delay');
+
+ef.bewerkMacros([
+  { place: 1, label: 'Een (nieuw)', default: 0.2, links: [{ target: 'b.feedback', from: 0.3, to: 0.6 }] },
+  { place: 3, label: 'Drie', default: 0.7, links: [{ target: 'b.toon', from: 0, to: 1 }] },
+]);
+ok('macro bewerken bouwt de keten NIET opnieuw', ef.keten === ketenVoor);
+ok('en er komt geen keten bij', ef.nodeAantal === aantalVoor);
+ok('het nieuwe label staat erin', ef.plekNaam(1) === 'Een (nieuw)');
+ok('de knopstand van een blijvende plek blijft staan', Math.abs(ef.leesPlek(1) - 0.8) < 1e-9);
+ok('een nieuwe plek begint op zijn default', Math.abs(ef.leesPlek(3) - 0.7) < 1e-9);
+ok('een verdwenen plek is echt weg', ef.plekNaam(2) === null && ef.leesPlek(2) === null);
+
+ef.setPlek(3, 0.4);
+ef.zetRack({ ...ef.naarJSON(), chain: [...ef.naarJSON().chain, { slot: 'c', type: 'crush' }] },
+  { behoudStanden: true });
+ok('keten uitbreiden bouwt wel opnieuw', ef.keten !== ketenVoor);
+ok('maar met behoudStanden blijven je knoppen staan',
+  Math.abs(ef.leesPlek(1) - 0.8) < 1e-9 && Math.abs(ef.leesPlek(3) - 0.4) < 1e-9);
+ok('en het nieuwe slot is een doel geworden', ef.doelen().some((d2) => d2.target === 'c.bits'));
+
+ef.zetRack(ef.naarJSON());
+ok('zonder behoudStanden gaan ze terug naar hun default',
+  Math.abs(ef.leesPlek(1) - 0.2) < 1e-9 && Math.abs(ef.leesPlek(3) - 0.7) < 1e-9);
+
+const kapotBewerkt = ef.bewerkMacros([{ place: 1, links: [{ target: 'z.niets', from: 0, to: 1 }] }]);
+ok('een link naar een onbestaand slot wordt gemeld', kapotBewerkt.fouten.length > 0);
+ok('en niet uitgevoerd', ef.rack.macros[0].links.length === 0);
+ef.zetEffect('delay');
+
 ok('snapshot compleet', snap.decks.A.loaded && snap.decks.B && typeof snap.xfader === 'number');
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

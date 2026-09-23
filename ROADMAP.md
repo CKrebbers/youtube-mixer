@@ -10,7 +10,7 @@ Vink af in dit bestand zodra een fase draait.
 | 0 | **klaar** | Ingest: yt-dlp + ffmpeg + library |
 | 3 | **volgende** | Beatgrid, BPM, sync, keylock, beat-loops |
 | 4 | | Video-mixer (WebGL) |
-| 5 | **begonnen** | FX-racks per link draaien met zes effecten incl. tempo-gesynchroniseerde gate; nog: sends, 4 decks, sampler, recording |
+| 5 | **begonnen** | FX-racks per link draaien met zes effecten incl. tempo-gesynchroniseerde gate, en zijn met de muis te bouwen in de rack-editor; nog: sends, 4 decks, sampler, recording |
 
 
 ---
