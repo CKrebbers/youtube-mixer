@@ -144,33 +144,96 @@ export class Sampler {
     if (pad.speelt) { this.stop(n); return true; }
     const nu = this.ctx.currentTime;
     const k = this.klok();
+    // Op het tempo dat je hoort; zonder tempo van één van beide: gewoon zoals hij is.
+    const rate = k?.beatLengte && pad.bpm ? (60 / k.beatLengte) / pad.bpm : 1;
+    const start = k?.ankerCtx && k.ankerCtx > nu ? k.ankerCtx : nu;
+    this._startBron(pad, start, 0, rate);
+    pad.speelt = true;
+    pad.start = start;
+    return true;
+  }
+
+  /**
+   * Een bron voor deze pad, vanaf `offset` (seconden in het sample) op `wanneer`.
+   * Het segment { T, P, R } is waar de positie van de pad uit volgt (regel 3):
+   * geen teller, alleen de audioklok.
+   */
+  _startBron(pad, wanneer, offset, rate) {
     const src = this.ctx.createBufferSource();
     src.buffer = pad.buffer;
     src.loop = true;
-    // Op het tempo dat je hoort; zonder tempo van één van beide: gewoon zoals hij is.
-    if (k?.beatLengte && pad.bpm) src.playbackRate.value = (60 / k.beatLengte) / pad.bpm;
-    const start = k?.ankerCtx && k.ankerCtx > nu ? k.ankerCtx : nu;
+    src.playbackRate.value = rate;
     const g = this.ctx.createGain();
     g.gain.value = 0;
-    g.gain.setValueAtTime(0, start);
-    g.gain.linearRampToValueAtTime(1, start + 0.005);
+    g.gain.setValueAtTime(0, wanneer);
+    g.gain.linearRampToValueAtTime(1, wanneer + 0.005);
     src.connect(g).connect(this.uit);
-    src.start(start);
-    Object.assign(pad, { speelt: true, src, g, start });
-    return true;
+    src.start(wanneer, offset);
+    Object.assign(pad, { src, g, seg: { T: wanneer, P: offset, R: rate } });
+  }
+
+  /** Waar in het sample is deze pad op audiokloktijd t? */
+  _positie(pad, t) {
+    const { T, P, R } = pad.seg;
+    const duur = pad.buffer.duration;
+    const p = t <= T ? P : P + (t - T) * R;
+    return ((p % duur) + duur) % duur;
+  }
+
+  /**
+   * Tempo of tel van de maat veranderd (pitch, sync, seek, andere maat-track):
+   * spelende pads lopen mee. De oude bron speelt door tot de volgende tel van
+   * de maat; daar begint een nieuwe op het nieuwe tempo, op de dichtstbijzijnde
+   * tel van het sample, en de oude vloeit er in 5 ms in over. Klopt alles al,
+   * dan gebeurt er niets — dit wordt bij elke deckwijziging aangeroepen.
+   */
+  heranker() {
+    const k = this.klok();
+    if (!k?.beatLengte) return;
+    const nu = this.ctx.currentTime;
+    const A = k.ankerCtx && k.ankerCtx > nu ? k.ankerCtx : nu;
+    for (const pad of this.pads) {
+      if (!pad?.speelt || !pad.bpm || !pad.seg) continue;
+      const rate = (60 / k.beatLengte) / pad.bpm;
+      const tel = 60 / pad.bpm;                              // een tel in het sample
+      const daar = this._positie(pad, A);
+      const doel = (Math.round(daar / tel) * tel) % pad.buffer.duration;
+      const faseGoed = Math.abs(daar - doel) < 0.001 || Math.abs(daar - doel) > pad.buffer.duration - 0.001;
+      if (Math.abs(rate - pad.seg.R) < 1e-6 && faseGoed) continue;
+      this._ruimOud(pad);
+      const oud = { src: pad.src, g: pad.g };
+      try {
+        oud.g.gain.cancelScheduledValues?.(A);
+        oud.g.gain.setValueAtTime(1, A);
+        oud.g.gain.linearRampToValueAtTime(0, A + 0.005);
+        oud.src.stop(A + 0.006);
+      } catch (_) {}
+      pad.oud = oud;
+      this._startBron(pad, A, doel, rate);
+    }
+  }
+
+  /** Een eerdere overgang die nog loopt: meteen weg, anders stapelen ze. */
+  _ruimOud(pad) {
+    if (!pad.oud) return;
+    try { pad.oud.src.stop(); } catch (_) {}
+    pad.oud = null;
   }
 
   stop(n) {
     const pad = this.pads[n];
     if (!pad?.speelt) return;
     const nu = this.ctx.currentTime;
-    try {
-      pad.g.gain.cancelScheduledValues?.(nu);
-      pad.g.gain.setValueAtTime(pad.g.gain.value, nu);
-      pad.g.gain.linearRampToValueAtTime(0, nu + FADE_UIT);
-      pad.src.stop(nu + FADE_UIT + 0.01);
-    } catch (_) {}
-    Object.assign(pad, { speelt: false, src: null, g: null });
+    // Ook een oude bron die nog tot de volgende tel doorspeelt (heranker).
+    for (const b of [pad, pad.oud].filter(Boolean)) {
+      try {
+        b.g.gain.cancelScheduledValues?.(nu);
+        b.g.gain.setValueAtTime(b.g.gain.value, nu);
+        b.g.gain.linearRampToValueAtTime(0, nu + FADE_UIT);
+        b.src.stop(nu + FADE_UIT + 0.01);
+      } catch (_) {}
+    }
+    Object.assign(pad, { speelt: false, src: null, g: null, oud: null, seg: null });
   }
 
   wis(n) { this.stop(n); this.pads[n] = null; }

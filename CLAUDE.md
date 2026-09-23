@@ -357,6 +357,13 @@ test/
   gevulde pad = leeg (blijft bewaard); shift op een lege, bewaarde pad = vergeten.
   Een track die iets anders laadt neemt zijn herinneringen mee weg. Pads van een
   los bestand of de demo worden niet bewaard.
+- Spelende pads lopen mee met de maat (Clay 23 sep): tempo én tel. Elke pad
+  houdt een segment { T, P, R } bij (regel 3). `heranker()` rekent uit waar de
+  pad op de volgende tel van de maat is; daar start een nieuwe bron op het
+  nieuwe tempo, op de dichtstbijzijnde hele tel van het sample, en de oude
+  vloeit er 5 ms in over. Klopt tempo en fase al, dan gebeurt er niets. De
+  engine roept dit (en `heranker` van de bussen) aan bij elke 'change' van een
+  deck of van de mixer: niemand anders weet wanneer de maat verandert.
 - Verbeterronde 23 september 2026 (vier auditagenten). Wat daaruit vastligt:
   - Tap tempo deelt door `d.rate`: je tikt wat je HOORT, het grid staat in tracktijd.
   - Transport is klikvrij: BufferBron vloeit 4 ms in/uit per start (`DECLICK`);

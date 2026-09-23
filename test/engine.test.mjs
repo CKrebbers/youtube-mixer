@@ -842,6 +842,53 @@ console.log('\nsampler');
   let fout = null;
   await sm.neem(1, eng.deck('H')).catch((e) => { fout = e.message; });
   ok('lege track: een duidelijke reden, geen halve pad', fout && sm.pads[1] === null);
+  // Meelopen met de maat (D2): tempo én tel.
+  {
+    const bronnen = [];
+    const maak = sm.ctx.createBufferSource.bind(sm.ctx);
+    sm.ctx.createBufferSource = () => {
+      const b = maak(); const st = b.start, sp = b.stop;
+      b.start = (t, o) => { b.op = t; b.offset = o; st.call(b, t, o); };
+      b.stop = (t) => { b.gestopt = t ?? 'nu'; sp.call(b, t); };
+      bronnen.push(b); return b;
+    };
+    NOW = 2000;
+    let klokNu = { beatLengte: 0.5, ankerCtx: 2000.2 };     // 120 bpm
+    sm.klok = () => klokNu;
+    await sm.neem(6, dS, { bron: 6 });
+    sm.wissel(6);
+    const pad = sm.pads[6];
+    const eerste = bronnen.at(-1);
+    sm.heranker();
+    ok('herankeren zonder verandering: geen nieuwe bron', bronnen.at(-1) === eerste && !pad.oud);
+    // 1,3 s later: het sample loopt sinds 2000,2 op 120/124. Het tempo gaat naar 126.
+    NOW = 2001.5;
+    klokNu = { beatLengte: 60 / 126, ankerCtx: 2001.7 };
+    sm.heranker();
+    const nieuw = bronnen.at(-1);
+    const tel = 60 / 124;
+    ok('nieuw tempo: nieuwe bron op het tempo van de maat', nieuw !== eerste && Math.abs(nieuw.playbackRate.value - 126 / 124) < 1e-9);
+    ok('... die start op de volgende tel van de maat', nieuw.op === 2001.7);
+    ok('... op een hele tel in het sample', Math.abs(nieuw.offset / tel - Math.round(nieuw.offset / tel)) < 1e-9);
+    ok('... dichtbij waar de oude op dat moment was', Math.abs(nieuw.offset - ((1.5 * 120 / 124) % pad.buffer.duration)) < tel / 2 + 1e-9);
+    ok('de oude speelt door tot die tel en vloeit dan uit', Math.abs(eerste.gestopt - 2001.706) < 1e-9);
+    // Seek van de maat-track: zelfde tempo, andere tel.
+    NOW = 2003;
+    klokNu = { beatLengte: 60 / 126, ankerCtx: 2001.7 + 3 * 60 / 126 };   // drie tellen later
+    const voor = bronnen.length;
+    sm.heranker();
+    ok('zelfde tempo, anker op de tel: niets te doen', bronnen.length === voor);
+    klokNu = { beatLengte: 60 / 126, ankerCtx: 2001.7 + 3 * 60 / 126 + 0.21 };  // de tel ligt ineens 0,21 s verder
+    sm.heranker();
+    ok('tel verschoven: opnieuw op de tel gezet', bronnen.length === voor + 1 && Math.abs(bronnen.at(-1).op - (2001.7 + 3 * 60 / 126 + 0.21)) < 1e-9);
+    sm.stop(6);
+    ok('stop ruimt ook een overgang op', !pad.speelt && !pad.oud && bronnen.at(-1).gestopt !== undefined);
+    sm.wis(6);
+    sm.ctx.createBufferSource = maak;
+    sm.klok = oudeKlok;
+    NOW = 0;
+  }
+
   // Bewaren bij het nummer (D1): de sampler meldt wat hij vulde, en haalt
   // een herinnering terug zonder focus of positie.
   let gemeld = null, vergeten = null;

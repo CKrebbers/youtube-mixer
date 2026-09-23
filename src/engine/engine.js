@@ -85,14 +85,22 @@ export class Engine extends Emitter {
       for (const id of DECK_IDS) this.decks[id][`send${bus}`].connect(slot.in);
       this.sends[bus] = slot;
     }
-    // Een bus hoort bij geen enkel deck, dus niemand herankert hem vanzelf.
-    // Elke wijziging aan een deck (tempo, grid, play, seek) kan de maat
-    // veranderen; de delay rekent alleen opnieuw als hij op de maat staat en
-    // wisselt alleen als de tijd echt anders is.
-    for (const id of DECK_IDS) this.decks[id].on('change', () => { for (const s of Object.values(this.sends)) s.heranker(); });
 
     // De sampler speelt op de maat van wat je hoort: dezelfde klok als sync.
     this.sampler = new Sampler(this.ctx, this.master.input, { klok: maatKlok });
+
+    /*
+     * Bussen en sampler horen bij geen enkel deck, dus niemand herankert ze
+     * vanzelf. Elke wijziging aan een deck (tempo, grid, play, seek, fader)
+     * of aan de mixer (crossfader) kan de maat veranderen. Ze rekenen zelf
+     * uit of er echt iets anders is; meestal gebeurt er niets.
+     */
+    const volgMaat = () => {
+      for (const s of Object.values(this.sends)) s.heranker();
+      this.sampler.heranker();
+    };
+    for (const id of DECK_IDS) this.decks[id].on('change', volgMaat);
+    this.on('change', volgMaat);
 
     this.xfader = 0.5;
     this.xfaderCurve = 'smooth';
