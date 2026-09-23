@@ -319,11 +319,28 @@ async function haalRacks(deckId) {
 function vulRackKiezer(deckId) {
   const sel = fxEl(deckId, '.fx-rack');
   if (!sel) return;
-  if (!deckTrack[deckId]) { sel.innerHTML = '<option value="">— geen nummer —</option>'; return; }
-  sel.innerHTML = '<option value="" disabled>— niet bewaard —</option>'
-    + rackCache[deckId].map((x) => `<option value="${x.id}">${esc(x.naam)}</option>`).join('');
+  const eigen = deckTrack[deckId]
+    ? `<optgroup label="van dit nummer">${rackCache[deckId].map((x) => `<option value="${x.id}">${esc(x.naam)}</option>`).join('')
+      || '<option disabled>nog geen</option>'}</optgroup>`
+    : '';
+  const kant = sjablonen.length
+    ? `<optgroup label="kant-en-klaar">${sjablonen.map((r, i) => `<option value="s:${i}">${esc(r.name)}</option>`).join('')}</optgroup>`
+    : '';
+  sel.innerHTML = '<option value="" disabled>— niet bewaard —</option>' + eigen + kant;
   volgRackKiezer(deckId);
 }
+
+/**
+ * Kant-en-klare racks, uit `racks/sjablonen.json`. Data, geen code. Een
+ * sjabloon laden geeft herkomst "s:<nr>": de kiezer weet dan wat er klinkt,
+ * en bewaren maakt er een eigen rack van het nummer van — het sjabloon zelf
+ * wordt nooit overschreven.
+ */
+let sjablonen = [];
+fetch('racks/sjablonen.json')
+  .then((r) => (r.ok ? r.json() : { racks: [] }))
+  .then((d) => { sjablonen = d.racks || []; for (const v of VENSTERS) vulRackKiezer(venster[v]); })
+  .catch((err) => console.warn('[rack] sjablonen niet geladen:', err.message));
 
 function volgRackKiezer(deckId) {
   const sel = fxEl(deckId, '.fx-rack');
@@ -345,7 +362,8 @@ async function bewaarRack(deckId, { naam, alsNieuw = false } = {}) {
   if (!trackId) throw new Error('alleen een nummer uit de library kan een rack bewaren');
   const fx = engine.deck(deckId).fx;
   if (naam) fx.hernoem(naam);
-  const id = alsNieuw ? null : fx.herkomst;
+  // Alleen een echt library-id mag overschreven worden; een sjabloon niet.
+  const id = alsNieuw || typeof fx.herkomst !== 'number' ? null : fx.herkomst;
   const res = await fetch(`/api/library/${trackId}/racks`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, naam: fx.rackNaam, data: fx.naarJSON(), actief: true }),
@@ -378,6 +396,12 @@ for (const v of VENSTERS) {
   const kiezer = document.querySelector(`#venster-${v} .fx-rack`);
   kiezer.addEventListener('change', () => {
     const id = venster[v];
+    if (kiezer.value.startsWith('s:')) {
+      const sjabloon = sjablonen[Number(kiezer.value.slice(2))];
+      if (sjabloon) engine.deck(id).fx.zetRack(sjabloon, { herkomst: kiezer.value }).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
+      kiezer.blur();
+      return;
+    }
     const rack = rackCache[id].find((x) => String(x.id) === kiezer.value);
     if (!rack) return;
     rackCache[id].forEach((x) => { x.actief = x === rack; });
@@ -393,7 +417,7 @@ for (const v of VENSTERS) {
     if (!deckTrack[id]) { meldOpKnop(knop, 'geen library-nummer', false); return; }
     // Een nieuw rack heeft een naam nodig; een bestaand houdt de zijne.
     let naam = null;
-    if (fx.herkomst === null) {
+    if (typeof fx.herkomst !== 'number') {
       const voorstel = fx.rackNaam === 'nieuw rack' ? fx.effectId || 'rack' : fx.rackNaam;
       naam = prompt('Naam voor dit nieuwe rack:', voorstel);
       if (!naam) return;

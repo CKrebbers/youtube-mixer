@@ -73,6 +73,8 @@ server/             draait apart: `node server/index.js`
 mappings/
   apc40mk2.json     standaardmapping (data, geen code)
   generic.json      leeg startpunt
+racks/
+  sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 media/              binnengehaalde bestanden + library.db (niet in git)
 test/
   engine.test.mjs   engine tegen gemockte Web Audio API, draait in Node
@@ -154,6 +156,11 @@ test/
   kanten gelijk, dan verdwijnt de koppeling. Draai je aan de knop zelf (scherm,
   FX-rij, APC), dan stopt het instellen — gecontroleerd op een timer, niet in
   de animatielus, want die staat stil als het venster achter iets anders zit.
+- Kant-en-klare racks staan in `racks/sjablonen.json` en zijn voor elk nummer
+  te kiezen. Laden geeft herkomst `"s:<nr>"`; bewaren overschrijft alleen een
+  GETAL (library-id), dus een sjabloon wordt altijd een nieuw rack van het
+  nummer. `rack.test.mjs` loopt elk sjabloon na: bestaat elke parameter, staat
+  geen parameter op twee knoppen, staat het filter open bij de beginstand.
 - `fx.herkomst` zegt uit welk bewaard rack wat er klinkt komt (library-id), of
   null. Bewerken in de editor houdt hem; elk ander rack (volgend effect, los
   effect) wist hem. Bewaren schrijft ALLEEN over een rack heen als de herkomst

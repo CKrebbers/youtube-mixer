@@ -188,5 +188,34 @@ console.log('\nDICHT en OPEN');
   ok('waarden worden geklemd', (R.neemOp(m, 'b.freq', 'open', 7, 0), m.links[0].to === 1));
 }
 
+// ---- kant-en-klare racks: het databestand ----------------------------------
+// Een sjabloon met een tikfout klinkt gewoon anders, zonder foutmelding. Dus
+// hier nalopen wat er aan zo'n bestand mis kan gaan.
+
+console.log('\nkant-en-klare racks');
+{
+  const { readFileSync } = await import('node:fs');
+  const { EFFECTEN, effectVan } = await import('../src/engine/fx.js');
+  const doc = JSON.parse(readFileSync(new URL('../racks/sjablonen.json', import.meta.url), 'utf8'));
+  ok('er zijn sjablonen', Array.isArray(doc.racks) && doc.racks.length >= 3);
+  for (const data of doc.racks) {
+    const { rack, fouten } = R.leesRack(data, { bekendType: (t) => !!effectVan(t) });
+    ok(`${data.name}: leest zonder fouten`, fouten.length === 0);
+    const paramsBestaan = rack.chain.every((n) => Object.keys(n.params).every((p) => effectVan(n.type).params.includes(p)))
+      && rack.macros.every((m) => m.links.every((l) => {
+        const [slot, p] = l.target.split('.');
+        return effectVan(rack.chain.find((n) => n.slot === slot).type).params.includes(p);
+      }));
+    ok(`${data.name}: elke parameter bestaat echt`, paramsBestaan);
+    const doelen = rack.macros.flatMap((m) => m.links.map((l) => l.target));
+    ok(`${data.name}: geen parameter op twee knoppen (dan wint er stil één)`, new Set(doelen).size === doelen.length);
+    const bijStart = R.resolveMacros(rack, {});
+    const filters = rack.chain.filter((n) => n.type === 'filter').map((n) => `${n.slot}.freq`);
+    ok(`${data.name}: filter staat open bij de beginstand`, filters.every((t) => Math.abs((bijStart.get(t) ?? 0.5) - 0.5) < 1e-9));
+    ok(`${data.name}: elke knop doet iets`, rack.macros.every((m) => m.links.some((l) => l.from !== l.to)));
+  }
+  ok('alle effecttypen bestaan', doc.racks.every((r) => r.chain.every((n) => EFFECTEN.some((e) => e.id === n.type))));
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
