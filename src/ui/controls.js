@@ -1,4 +1,4 @@
-import { invoke } from '../control/actions.js';
+import { invoke, metaOf } from '../control/actions.js';
 import { clamp } from '../lib/emitter.js';
 
 /**
@@ -29,6 +29,19 @@ export class Knob {
     };
     const onUp = () => { this.dragging = false; window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
     el.addEventListener('pointerdown', (e) => {
+      // Alt/option + ingedrukt houden: de knop als drukknop (vol open zolang je
+      // vasthoudt). Alleen waar de bus een .druk-variant kent. Niet shift:
+      // shift is al fijn slepen. Loslaten gaat naar dezelfde action als het
+      // indrukken, ook als het venster intussen een andere track toont.
+      const druk = this.action && `${this.action}.druk`;
+      if (e.altKey && druk && metaOf(druk)) {
+        invoke(druk, true);
+        el.classList.add('gedrukt');
+        const los = () => { invoke(druk, false); el.classList.remove('gedrukt'); window.removeEventListener('pointerup', los); };
+        window.addEventListener('pointerup', los);
+        e.preventDefault();
+        return;
+      }
       this.dragging = true; startY = e.clientY; startV = this.value;
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);

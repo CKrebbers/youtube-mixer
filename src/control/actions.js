@@ -26,6 +26,32 @@ export function define(id, type, fn, meta = {}) {
   registry.set(id, { id, type, fn, meta });
 }
 
+/**
+ * Een knopplek als drukknop: indrukken = vol open, loslaten = terug waar hij
+ * stond. Voor een dub-worp of een galm vasthouden, zolang je de knop vasthoudt.
+ * Direct, zonder glijden: een worp moet op het moment van drukken klinken.
+ * Wisselt het rack terwijl je drukt, dan niet terugzetten: de oude stand
+ * betekent in het nieuwe rack iets anders.
+ */
+function drukknop(slotVan, k) {
+  let vast = null;                 // { stand, rack } zolang ingedrukt
+  const fn = (on) => {
+    const slot = slotVan();
+    if (!slot) return;
+    if (on) {
+      if (vast) return;              // twee bronnen tegelijk: de eerste stand telt
+      const stand = slot.leesPlek(k);
+      if (stand === null) return;    // deze plek bestaat niet in dit rack
+      vast = { stand, rack: slot.rack };
+      slot.setPlek(k, 1, { direct: true });
+    } else if (vast) {
+      if (slot.rack === vast.rack) slot.setPlek(k, vast.stand, { direct: true });
+      vast = null;
+    }
+  };
+  return { fn, ingedrukt: () => (vast ? 1 : 0) };
+}
+
 export function invoke(id, value) {
   const a = registry.get(id);
   if (!a) { console.warn('[actions] onbekend:', id); return false; }
@@ -214,6 +240,9 @@ export function bindEngine(engine) {
         { label: `Track ${nr} FX plek ${k}`,
           bipolar: false,
           read: () => d.fx.leesPlek(k) });
+      const druk = drukknop(() => d.fx, k);
+      define(`${n}.fx.knop.${k}.druk`, 'trigger', druk.fn,
+        { label: `Track ${nr} FX plek ${k} vasthouden (open zolang ingedrukt)`, read: druk.ingedrukt });
     }
     define(`${n}.fx.next`, 'trigger', (on) => {
       if (!on) return;
@@ -262,6 +291,9 @@ export function bindEngine(engine) {
     for (let k = 1; k <= 8; k++) {
       define(`send.${bus.toLowerCase()}.knop.${k}`, 'value', (v) => slot.setPlek(k, v),
         { label: `Send ${bus} knop ${k}`, read: () => slot.leesPlek(k) });
+      const druk = drukknop(() => slot, k);
+      define(`send.${bus.toLowerCase()}.knop.${k}.druk`, 'trigger', druk.fn,
+        { label: `Send ${bus} knop ${k} vasthouden (open zolang ingedrukt)`, read: druk.ingedrukt });
     }
   }
 

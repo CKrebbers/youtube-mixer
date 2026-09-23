@@ -783,6 +783,27 @@ console.log('\nsends');
   ok('maat-track stopt: de echo houdt de laatste tel', Math.abs(kop()._kop().tijden[kop()._kop().actief] - tel / 2) < 1e-6);
   dM.setGrid(null);
   NOW = 0;
+  // Drukknop (D3): vol open zolang ingedrukt, daarna terug.
+  invoke('send.b.knop.3', 0.2);
+  invoke('send.b.knop.3.druk', true);
+  ok('drukknop: galm vasthouden zolang ingedrukt', eng.sends.B.leesPlek(3) === 1 && eng.sends.B.paramWaarde('a', 'freeze') === 1);
+  invoke('send.b.knop.3.druk', true);             // tweede bron tegelijk
+  invoke('send.b.knop.3.druk', false);
+  ok('loslaten: terug naar waar hij stond', Math.abs(eng.sends.B.leesPlek(3) - 0.2) < 1e-9);
+  invoke('send.b.knop.3.druk', false);
+  ok('nog eens loslaten doet niets', Math.abs(eng.sends.B.leesPlek(3) - 0.2) < 1e-9);
+  invoke('send.b.knop.3', 0);
+  const fxD = eng.deck('D').fx;
+  fxD.zetEffect('delay');
+  invoke('track.4.fx.knop.2', 0.3);
+  invoke('track.4.fx.knop.2.druk', true);
+  ok('drukknop op een trackplek: vol open', fxD.leesPlek(2) === 1);
+  fxD.zetEffect('filter');
+  invoke('track.4.fx.knop.2.druk', false);
+  ok('rack gewisseld tijdens het drukken: niet terugzetten in het nieuwe rack', fxD.leesPlek(2) !== 0.3);
+  invoke('track.4.fx.knop.8.druk', true);
+  ok('plek die niet bestaat: niets', fxD.leesPlek(8) === null);
+  invoke('track.4.fx.knop.8.druk', false);
   ok('elke track heeft beide sends op de bus', list().filter((a) => /^track\.\d\.send\.[ab]$/.test(a.id)).length === 16);
 }
 

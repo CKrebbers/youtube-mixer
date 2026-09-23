@@ -109,7 +109,8 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   — Clay: ja, bij het nummer (gebouwd 23 sep: plek bewaren, opnieuw knippen, ↺ op de pad).
 - [x] **D2. Pads die meelopen met tempowijzigingen** van de maat-track.
   — Clay: ja, tempo én tel (gebouwd 23 sep: `Sampler.heranker`).
-- [ ] **D3. Dub-worp en Vasthouden als drukknop** (werkt zolang je vasthoudt) — hoort bij B3.
+- [x] **D3. Dub-worp en Vasthouden als drukknop** (werkt zolang je vasthoudt) — hoort bij B3.
+  — Clay: elke knopplek (gebouwd 23 sep: `.druk`-actions, alt+vasthouden op het scherm; APC-knoppen bij B3).
 - [ ] **D4. Losse bestanden ook via de streamkern** (geen tik bij loops, één afspeelmotor).
 - [ ] **D5. Eén paneel tegelijk onderin** (library, rack-editor, MIDI overlappen nu),
   en video als inklapbare kolom in plaats van over het rechtervenster.

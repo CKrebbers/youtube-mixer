@@ -201,6 +201,11 @@ test/
   effect) wist hem. Bewaren schrijft ALLEEN over een rack heen als de herkomst
   klopt, anders wordt het een nieuw rack. Zonder die regel overschreef
   "volgend effect + bewaar" een bewaard rack met één los effect.
+- Elke knopplek heeft een DRUKvariant (Clay 23 sep): `track.N.fx.knop.K.druk`
+  en `send.a/b.knop.K.druk`. Indrukken = vol open (direct, geen glijden),
+  loslaten = terug naar de stand van vóór het drukken. Wisselt het rack tijdens
+  het drukken, dan niet terugzetten. Op het scherm: alt + vasthouden (shift is
+  al fijn slepen). Welke APC-knoppen dit worden, beslist B3.
 - Botsen twee macro's op dezelfde parameter, dan wint de HOOGSTE plek. Saai en
   voorspelbaar; "laatste in de lijst wint" hangt van de volgorde af.
 - Een onbekend effecttype in een rack wordt NIET weggegooid: het blijft als ruwe

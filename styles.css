@@ -494,3 +494,6 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .trk.maat::after{content:"MAAT";position:absolute;top:5px;right:6px;font:700 8px/1 ui-monospace,monospace;
   letter-spacing:.1em;color:#03100e;background:var(--warn);padding:2px 4px;border-radius:3px}
 .deck.focused{border-color:var(--a)}
+
+/* knop als drukknop (alt + vasthouden) */
+.knob.gedrukt .knob-dial{box-shadow:0 0 0 2px var(--warn)}
