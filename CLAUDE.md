@@ -308,7 +308,8 @@ test/
   (-g 30), niet slimmer springen.
 - Het videobeeld gaat in drie shaderstappen: mengen (mengvorm) -> effecten
   (met het VORIGE eindbeeld voor sporen, twee buffers om de beurt) -> tonen.
-  Vast op 1280×720. Effecten en mengvorm staan op de action-bus
+  Vast op 1280×720. Het paneel is een inklapbare VIERDE KOLOM in `main` (niet
+  meer over het rechtervenster; CSS `main:has(> .video-panel:not(.hidden))`). Effecten en mengvorm staan op de action-bus
   (`video.fx.*`, `video.modus`, via `bindVideo`), dus ze zijn te koppelen.
   Effecten op de tel (`video.puls`, `video.puls.doel`): de maat komt van de
   track die het hardst klinkt, speelt en een grid heeft, op het moment dat je
@@ -395,7 +396,8 @@ test/
     gecontroleerd, migraties in een transactie. `VARVE_DB`/`VARVE_OPNAMES` voor tests.
   - UI: fouten naar `meld()` (strook onderaan), nooit alleen console. Geen
     `prompt()` (legt de pagina stil). Library = toets B (L is hotcue 3 rechts).
-    Sneltoetsen alleen uit tijdens TYPEN (`isTypen`). Destructief = tweede klik
+    Sneltoetsen alleen uit tijdens TYPEN (`isTypen`). Eén onderpaneel tegelijk
+    (library, MIDI, rack-editor: `sluitOnderpanelen`), Esc sluit. Destructief = tweede klik
     binnen 3 s (laden over een spelende track, nummer weghalen, opname stoppen,
     mapping resetten, DICHT/OPEN op een hoorbare track). Eigen MIDI-mapping in
     localStorage. MAAT-badge toont wie de maat geeft.

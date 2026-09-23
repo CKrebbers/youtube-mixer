@@ -113,8 +113,9 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   — Clay: elke knopplek (gebouwd 23 sep: `.druk`-actions, alt+vasthouden op het scherm; APC-knoppen bij B3).
 - [x] **D4. Losse bestanden ook via de streamkern** (geen tik bij loops, één afspeelmotor).
   — Clay: ja (gebouwd 23 sep: `laadGeheugen`, `maakWav`, `geheugenHaal`).
-- [ ] **D5. Eén paneel tegelijk onderin** (library, rack-editor, MIDI overlappen nu),
+- [x] **D5. Eén paneel tegelijk onderin** (library, rack-editor, MIDI overlappen nu),
   en video als inklapbare kolom in plaats van over het rechtervenster.
+  — Clay: beide (gebouwd 23 sep).
 
 ---
 

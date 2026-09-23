@@ -444,9 +444,24 @@ const library = new LibraryPanel({
 window.library = library;
 
 const toggleLib = () => {
+  if (libPaneel.classList.contains('hidden')) sluitOnderpanelen('lib');
   libPaneel.classList.toggle('hidden');
   if (!libPaneel.classList.contains('hidden')) library.ververs();
 };
+
+/*
+ * Eén paneel tegelijk onderin: library, rack-editor en MIDI lagen over
+ * elkaar, en dan zag je niet welke bovenop lag. Openen sluit de andere;
+ * Esc sluit wat er open is.
+ */
+function sluitOnderpanelen(behalve = null) {
+  if (behalve !== 'lib') libPaneel.classList.add('hidden');
+  if (behalve !== 'midi') midiPanel.classList.add('hidden');
+  if (behalve !== 'rack' && rackEditor.open) rackEditor.sluit();
+}
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && !isTypen(e.target)) { libPaneel.classList.add('hidden'); midiPanel.classList.add('hidden'); }
+});
 document.getElementById('lib-btn').addEventListener('click', toggleLib);
 libPaneel.querySelector('.lib-close').addEventListener('click', toggleLib);
 window.addEventListener('keydown', (e) => {
@@ -655,6 +670,7 @@ const rackEditor = new RackEditor({
   kanBewaren: (id) => !!deckTrack[id],
   onBewaar: async ({ deckId, naam, alsNieuw }) => bewaarRack(deckId, { naam, alsNieuw }),
 });
+rackEditor.onOpen = () => sluitOnderpanelen('rack');
 
 for (const v of VENSTERS) {
   document.querySelector(`#venster-${v} .fx-bewerk`).addEventListener('click', () => {
@@ -918,6 +934,7 @@ mapping.on('change', bewaarEigenMapping);
 })();
 
 const toggleMidi = () => {
+  if (midiPanel.classList.contains('hidden')) sluitOnderpanelen('midi');
   midiPanel.classList.toggle('hidden');
   if (!midiPanel.classList.contains('hidden')) { monitor.dirty = true; midi.init(); }
 };

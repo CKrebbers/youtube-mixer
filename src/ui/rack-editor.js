@@ -118,6 +118,7 @@ export class RackEditor {
   get fx() { return this.deckId ? this.engine.deck(this.deckId).fx : null; }
 
   openVoor(deckId) {
+    this.onOpen?.();                 // de app sluit dan de andere onderpanelen
     const zelfde = deckId === this.deckId;
     // Naar een andere track: de knop die op de oude op 0 of 1 stond, eerst
     // terug. Anders bleef die track op DICHT of OPEN hangen. Zelfde track met
