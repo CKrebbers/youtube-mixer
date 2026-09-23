@@ -1,6 +1,7 @@
 import { Emitter, clamp, piek } from '../lib/emitter.js';
 import { Deck } from './deck.js';
 import { createMasterChain, xfaderGains, faderGain } from './audio-graph.js';
+import { InsertSlot } from './fx.js';
 
 /**
  * Acht tracks, één per fader van de APC40 mkII. De engine noemt ze A t/m H;
@@ -17,6 +18,25 @@ export const XFADE_KANTEN = ['A', 'B', 'thru'];
 /** Tracknummer van een deck, voor meldingen: A = 1, B = 2, … */
 const nrVan = (id) => DECK_IDS.indexOf(id) + 1;
 
+/**
+ * De twee send-bussen. Gewone racks in een gewone insert-slot, maar dan
+ * helemaal nat: er zit geen droog signaal op een bus, dat komt al via de
+ * track zelf. Knop 1..3 per bus zijn plekken, net als bij de tracks.
+ */
+export const SEND_RACKS = {
+  A: { schema: 1, name: 'Echo', chain: [{ slot: 'a', type: 'delay', params: { tijd: 0.62, feedback: 0.5, toon: 0.5 } }],
+    macros: [
+      { place: 1, label: 'tijd', default: 0.62, links: [{ target: 'a.tijd', from: 0, to: 1 }] },
+      { place: 2, label: 'herhaling', default: 0.5, links: [{ target: 'a.feedback', from: 0, to: 1 }] },
+      { place: 3, label: 'toon', default: 0.5, links: [{ target: 'a.toon', from: 0, to: 1 }] },
+    ] },
+  B: { schema: 1, name: 'Galm', chain: [{ slot: 'a', type: 'reverb', params: { grootte: 0.7, toon: 0.5, meng: 1, freeze: 0 } }],
+    macros: [
+      { place: 1, label: 'grootte', default: 0.7, links: [{ target: 'a.grootte', from: 0, to: 1 }] },
+      { place: 2, label: 'toon', default: 0.5, links: [{ target: 'a.toon', from: 0, to: 1 }] },
+      { place: 3, label: 'vasthouden', default: 0, links: [{ target: 'a.freeze', from: 0, to: 1 }] },
+    ] },
+};
 const STANDAARD_KANT = { A: 'A', B: 'B' };
 
 /**
@@ -47,6 +67,16 @@ export class Engine extends Emitter {
       this.decks[id] = new Deck(this.ctx, id);
       this.decks[id].chain.output.connect(this.master.input);
       this.kant[id] = STANDAARD_KANT[id] || 'thru';
+    }
+
+    this.sends = {};
+    for (const [bus, rack] of Object.entries(SEND_RACKS)) {
+      const slot = new InsertSlot(this.ctx);
+      slot.setMix(1);                        // helemaal nat
+      slot.zetRack(rack);
+      slot.out.connect(this.master.input);
+      for (const id of DECK_IDS) this.decks[id][`send${bus}`].connect(slot.in);
+      this.sends[bus] = slot;
     }
 
     this.xfader = 0.5;

@@ -710,6 +710,26 @@ console.log('\nglijden');
   NOW = 0;
 }
 
+// ---- sends: de staart loopt door als de fader dicht gaat ---------------------
+
+console.log('\nsends');
+{
+  ok('twee bussen: echo en galm', eng.sends.A.rackNaam === 'Echo' && eng.sends.B.rackNaam === 'Galm');
+  ok('een bus is helemaal nat (geen dubbel droog signaal)', eng.sends.A.mix === 1 && eng.sends.A.dry.gain.value < 1e-9);
+  ok('galm op de bus: meng op vol', eng.sends.B.paramWaarde('a', 'meng') === 1);
+  const d = eng.deck('D');
+  ok('sends staan standaard dicht', d.sendA.gain.value === 0 && d.sendB.gain.value === 0);
+  invoke('track.4.send.a', 0.5);
+  ok('send-knop op de bus, kwadratisch (0,5 -> 0,25)', d.ui.sendA === 0.5 && Math.abs(d.sendA.gain.value - 0.25) < 1e-9);
+  invoke('track.4.send.a', 0);
+  invoke('send.b.knop.3', 1);
+  ok('busknop: galm vasthouden', eng.sends.B.paramWaarde('a', 'freeze') === 1);
+  invoke('send.b.knop.3', 0);
+  invoke('send.a.knop.1', 0.3);
+  ok('busknop: echotijd', Math.abs(eng.sends.A.paramWaarde('a', 'tijd') - 0.3) < 1e-9);
+  ok('elke track heeft beide sends op de bus', list().filter((a) => /^track\.\d\.send\.[ab]$/.test(a.id)).length === 16);
+}
+
 // ---- ronde 1 van de verbeteringen (23 sep): engine-correctheid -------------
 
 console.log('\nengine-correctheid');

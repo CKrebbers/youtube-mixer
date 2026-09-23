@@ -45,11 +45,21 @@ export class Deck extends Emitter {
     this.loop = null;           // {start, end}
 
     this.grid = null;           // Beatgrid, of null als de track nog niet uitgemeten is
-    this.peaks = null;          // Float32Array, [min,max] per bucket
-    this.samplesPerBucket = 256;
+
+    /*
+     * Sends: na de fader, vóór de crossfader. Fader dicht = er gaat niets
+     * meer naar de bus, maar wat daar al in de echo of galm zit sterft
+     * vanzelf uit. Dat is de echo-out: het effect zit NA de fader, niet ervoor.
+     */
+    this.sendA = ctx.createGain();
+    this.sendB = ctx.createGain();
+    this.sendA.gain.value = 0;
+    this.sendB.gain.value = 0;
+    this.chain.fader.connect(this.sendA);
+    this.chain.fader.connect(this.sendB);
 
     // UI-state, genormaliseerd 0..1 — precies wat MIDI later ook levert.
-    this.ui = { trim: 0.5, low: 0.5, mid: 0.5, high: 0.5, filter: 0.5, fader: 1 };
+    this.ui = { trim: 0.5, low: 0.5, mid: 0.5, high: 0.5, filter: 0.5, fader: 1, sendA: 0, sendB: 0 };
     this.applyUi();
   }
 
@@ -282,6 +292,9 @@ export class Deck extends Emitter {
     if (!only || only === 'high')   setEqBand(c.eqHigh.gain, u.high, now);
     if (!only || only === 'filter') setBipolarFilter(c.hpf, c.lpf, u.filter, now);
     if (!only || only === 'fader')  c.fader.gain.setTargetAtTime(faderGain(u.fader), now, 0.008);
+    // Kwadratisch: het eerste stuk van de knop is subtiel, het laatste gooit.
+    if (!only || only === 'sendA')  this.sendA.gain.setTargetAtTime(u.sendA * u.sendA, now, 0.01);
+    if (!only || only === 'sendB')  this.sendB.gain.setTargetAtTime(u.sendB * u.sendB, now, 0.01);
   }
 
   level() { return piek(this.chain.analyser); }

@@ -192,6 +192,12 @@ export function bindEngine(engine) {
           read: () => d.ui[p] });
     }
 
+    // Sends: na de fader naar de gedeelde echo (A) en galm (B).
+    for (const bus of ['A', 'B']) {
+      define(`${n}.send.${bus.toLowerCase()}`, 'value', (v) => d.set(`send${bus}`, v),
+        { label: `Track ${nr} send ${bus} (${bus === 'A' ? 'echo' : 'galm'})`, read: () => d.ui[`send${bus}`] });
+    }
+
     // ---- effecten ---------------------------------------------------------
     // De knoppen wijzen naar een PLEK, niet naar een parameter. Wissel je van
     // effect, dan doet plek 1 iets anders en hoef je niets opnieuw te koppelen.
@@ -226,6 +232,14 @@ export function bindEngine(engine) {
       engine.setKant(id, XFADE_KANTEN[(i + 1) % XFADE_KANTEN.length]);
     }, { label: `Track ${nr} crossfader A/B/thru`,
          read: () => ({ A: 0, B: 1, thru: 0.5 })[engine.kant[id]] });
+  }
+
+  // De knoppen van de twee bussen: plekken, net als bij de tracks.
+  for (const [bus, slot] of Object.entries(engine.sends || {})) {
+    for (let k = 1; k <= 8; k++) {
+      define(`send.${bus.toLowerCase()}.knop.${k}`, 'value', (v) => slot.setPlek(k, v),
+        { label: `Send ${bus} knop ${k}`, read: () => slot.leesPlek(k) });
+    }
   }
 
   define('mixer.xfader', 'value', (v) => engine.setXfader(v),
