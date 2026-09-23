@@ -121,9 +121,10 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 
 ## E. Techniek — mag ik dit gewoon doen? 💬
 
-- [ ] **E1. app.js opsplitsen** (± 1000 regels) in modules: vensters, racks,
+- [x] **E1. app.js opsplitsen** (± 1000 regels) in modules: vensters, racks,
   sessie/laden, MIDI-opzet, opname-knop, video-paneel, renderloop.
   Verandert niets aan wat je ziet. **Advies:** ja, na de commit.
+  — Clay: ja (gedaan 23 sep: app.js 1183 → 128 regels, tien modules).
 
 - [ ] **E2. Action-namen gelijktrekken** (nu Engels en Nederlands door elkaar:
   `hotcue.1.delete` naast `sampler.1.wis`). Kan zonder dat je mappings breken

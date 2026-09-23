@@ -65,7 +65,11 @@ src/
                     devices/        apc40mk2.js, generic.js — wat er op het apparaat zit
   analysis/         peaks.js        golfvorm-peaks + ruwe RMS
                     demo-track.js   synthetische 124-bpm testtrack
-  ui/               app.js, waveform.js, controls.js, midi-monitor.js,
+  ui/               app.js (instappunt: engine + modules in volgorde opzetten)
+                    vensters, laden, racks, sampler-opslag, meldingen,
+                    onderpanelen, midi-opzet, opname-knop, video-paneel,
+                    renderloop — elk een opzet…()-functie
+                    waveform.js, controls.js, midi-monitor.js,
                     mapping-panel.js (de lijst), learn-mode.js (aanwijzen op het scherm),
                     rack-editor.js (racks bouwen met de muis, werkt op een kopie)
   video/            volg.js         hoe een video de audio volgt. Puur rekenwerk.
