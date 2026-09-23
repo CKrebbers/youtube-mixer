@@ -864,7 +864,11 @@ console.log('\nsampler');
   sm.klok = () => ({ beatLengte: 0.5, ankerCtx: NOW + 0.3 });
   sm.wissel(0);
   ok('start op de volgende tel, niet nu', Math.abs(sm.pads[0].start - (NOW + 0.3)) < 1e-9);
-  ok('op het tempo dat je hoort (120/124)', Math.abs(sm.pads[0].src.playbackRate.value - 120 / 124) < 1e-9);
+  // Exact: één rondgang = 2 tellen van 0,5 s. Dat is ~120/124, maar uit de
+  // echte bufferlengte (hele samples), anders loopt de pad uit de maat.
+  ok('op het tempo dat je hoort (~120/124, exact uit de bufferlengte)',
+    Math.abs(sm.pads[0].src.playbackRate.value - pad.buffer.duration / (2 * 0.5)) < 1e-12
+    && Math.abs(sm.pads[0].src.playbackRate.value - 120 / 124) < 1e-4);
   ok('als loop', sm.pads[0].src.loop === true);
   sm.wissel(0);
   ok('nog eens: stop', !sm.pads[0].speelt);
@@ -901,8 +905,10 @@ console.log('\nsampler');
     klokNu = { beatLengte: 60 / 126, ankerCtx: 2001.7 };
     sm.heranker();
     const nieuw = bronnen.at(-1);
-    const tel = 60 / 124;
-    ok('nieuw tempo: nieuwe bron op het tempo van de maat', nieuw !== eerste && Math.abs(nieuw.playbackRate.value - 126 / 124) < 1e-9);
+    const tel = pad.buffer.duration / pad.tellen;              // een tel in het sample (~60/124)
+    ok('nieuw tempo: nieuwe bron op het tempo van de maat', nieuw !== eerste
+      && Math.abs(nieuw.playbackRate.value - pad.buffer.duration / (pad.tellen * 60 / 126)) < 1e-12
+      && Math.abs(nieuw.playbackRate.value - 126 / 124) < 1e-4);
     ok('... die start op de volgende tel van de maat', nieuw.op === 2001.7);
     ok('... op een hele tel in het sample', Math.abs(nieuw.offset / tel - Math.round(nieuw.offset / tel)) < 1e-9);
     ok('... dichtbij waar de oude op dat moment was', Math.abs(nieuw.offset - ((1.5 * 120 / 124) % pad.buffer.duration)) < tel / 2 + 1e-9);
@@ -1011,6 +1017,172 @@ console.log('\nengine-correctheid');
   gate.heranker();
   ok('gate: nieuwe puls start op de volgende tel', bronnen[1]?.gestartOp === 10.9);
   ok('gate: de oude puls loopt door tot precies dat moment (geen gat)', bronnen[0]?.gestoptOp === 10.9);
+  NOW = 0;
+}
+
+// ---- ronde 1, deel 2 (23 sep): loops, tellen, laden ------------------------
+
+console.log('\nloops, tellen en laden');
+{
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  const { effectVan } = await import('../src/engine/fx.js');
+  const tik0 = () => new Promise((r) => setTimeout(r, 0));
+
+  // 1. Springen naar een plek BUITEN de loop verlaat de loop; erbinnen blijft hij.
+  NOW = 100;
+  const dL = eng.deck('D');
+  dL.load(buf, 'loop-sprong');
+  dL.seek(0.5); dL.play();
+  dL.setLoopRange(1, 2);
+  dL.hotcues[0] = 3.0;
+  dL.seek(1.5);
+  ok('buffer: seek binnen de loop houdt de loop', dL.loop && dL.loop.start === 1 && Math.abs(dL.position - 1.5) < 1e-9);
+  invoke('track.4.hotcue.1', true);
+  NOW += 0.5;
+  ok('buffer: hotcue buiten de loop verlaat de loop', dL.loop === null && Math.abs(dL.position - 3.5) < 1e-9);
+  dL.setLoopRange(1, 2);
+  dL.seek(0.2);
+  NOW += 1.5;
+  ok('buffer: seek vóór de loop speelt er gewoon doorheen', dL.loop === null && Math.abs(dL.position - 1.7) < 1e-9);
+  dL.setLoopRange(1, 2);
+  dL.seek(1.9);
+  dL.nudge(0.2);
+  ok('buffer: nudge over de loopgrens vouwt terug in de loop', dL.loop && Math.abs(dL.position - 1.1) < 1e-9);
+  dL.pause();
+  dL.clearLoop();
+
+  // Sync binnen een loop: de fasecorrectie blijft in de loop (vouwt terug).
+  const eS = new Engine();
+  const mS = eS.deck('A'), sS = eS.deck('B');
+  for (const d of [mS, sS]) { d.load(buf, d.id); d.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 })); }
+  mS.seek(0.05); mS.play();                    // fase 0,1
+  sS.play(); sS.setLoopRange(1, 2); sS.seek(1.95); // fase 0,9 -> +0,1 s = 2,05: voorbij het loopeinde
+  const rS = eS.sync('B');
+  ok('sync binnen een loop: blijft in de loop, teruggevouwen', rS.ok && rS.fase && sS.loop && Math.abs(sS.position - 1.05) < 1e-9);
+
+  // Hetzelfde voor de streamende bron.
+  const oudCtxWorklet = eng.ctx.audioWorklet;
+  eng.ctx.audioWorklet = { addModule: async () => {} };
+  globalThis.AudioWorkletNode = class {
+    constructor() { this.port = { postMessage: () => {}, onmessage: null }; }
+    connect() {} disconnect() {}
+  };
+  const dSt = eng.deck('G');
+  await dSt.laadGeheugen(buf, 'stream-loop');
+  dSt.seek(0.5); dSt.play();
+  dSt.setLoopRange(1, 2);
+  dSt.hotcues[1] = 3.0;
+  dSt.seek(1.5);
+  ok('stream: seek binnen de loop houdt de loop', dSt.loop && dSt.bron.seg.loop && Math.abs(dSt.position - 1.5) < 1e-9);
+  invoke('track.7.hotcue.2', true);
+  NOW += 0.5;
+  ok('stream: hotcue buiten de loop verlaat de loop', dSt.loop === null && dSt.bron.seg.loop === null && Math.abs(dSt.position - 3.5) < 1e-9);
+  dSt.setLoopRange(1, 2);
+  dSt.seek(0.2);
+  NOW += 1.5;
+  ok('stream: seek vóór de loop speelt er gewoon doorheen', dSt.loop === null && Math.abs(dSt.position - 1.7) < 1e-9);
+
+  // 6. Een mislukte laad laat cue en hotcues van de oude track staan.
+  dSt.pause();
+  dSt.cuePoint = 1.25;
+  dSt.hotcues = [0.5, 1.0, null, 2.0];
+  let laadFout = null;
+  await dSt.laadStream('/media/bestaat-niet/audio.wav', 'kapot',
+    { haal: async () => ({ ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) }) }).catch((e) => { laadFout = e.message; });
+  ok('mislukte laad: een fout, geen stille mislukking', /404/.test(laadFout || ''));
+  ok('mislukte laad: cue en hotcues van de oude track blijven', dSt.cuePoint === 1.25 && dSt.hotcues[0] === 0.5 && dSt.hotcues[3] === 2.0);
+  let tijdensLaden = null;
+  const laadPlekken = dSt.laadGeheugen(buf, 'volgende');
+  tijdensLaden = dSt.bron.vastpunten();
+  await laadPlekken;
+  ok('tijdens het laden pint de nieuwe track geen hotcues van de oude', tijdensLaden.every((x) => x === null || x === 0) || tijdensLaden.length === 0);
+  ok('geslaagde laad wist ze wel', dSt.cuePoint === 0 && dSt.hotcues.every((h) => h === null));
+  dSt.bron.vernietig();
+  dSt.load(buf, 'terug naar buffer');
+  eng.ctx.audioWorklet = oudCtxWorklet;
+  await tik0();
+
+  // 5. Loop-LED: loopBeats blijft kloppen na halveren en verdubbelen.
+  const dB = eng.deck('E');
+  dB.load(buf, 'loopbeats');
+  dB.setGrid(new Beatgrid({ bpm: 124, firstBeat: 0 }));
+  dB.seek(0.1);
+  dB.setBeatLoop(2);
+  ok('beatloop 2: loopBeats 2', dB.loopBeats === 2);
+  dB.halveLoop();
+  ok('halveren: loopBeats 1 (LED volgt)', dB.loopBeats === 1);
+  dB.doubleLoop(); dB.doubleLoop();
+  ok('twee keer verdubbelen: loopBeats 4', dB.loopBeats === 4);
+  dB.doubleLoop();                           // 8 tellen = 3,87 s: past nét, 16 niet
+  dB.doubleLoop();
+  ok('verdubbelen tegen het trackeinde (geklemd): loopBeats null', dB.loopBeats === null);
+  dB.setBeatLoop(1);
+  dB.setLoopRange(0.2, 0.9);
+  ok('een vrije loop: loopBeats null', dB.loopBeats === null);
+  dB.clearLoop();
+
+  // 2. Gate: de periode is exact, ook als hij niet op een hele sample valt.
+  const gctx = new AudioContext();
+  const gb = [];
+  const maakG = gctx.createBufferSource.bind(gctx);
+  gctx.createBufferSource = () => { const b = maakG(); const st = b.start; b.start = (t) => { b.op = t; st(t); }; gb.push(b); return b; };
+  NOW = 500;
+  let gk = { beatLengte: 60 / 124, ankerCtx: 500.3 };
+  const gate = effectVan('gate').bouw(gctx, { klok: () => gk });
+  gate.zet('deling', 1, NOW);                // 1/16
+  const periodeVan = (b) => b.buffer.length / gctx.sampleRate / Math.fround(b.playbackRate.value);
+  const drift = (b, bl) => { const p = bl * 0.25; return Math.abs(periodeVan(b) - p) * (600 / p); };
+  const d16 = drift(gb.at(-1), 60 / 124);
+  ok(`gate 1/16 op 124 bpm: over 10 minuten ${(d16 * 1000).toFixed(3)} ms uit de maat (≤ 1 ms)`, d16 <= 0.001);
+  const eersteBuf = gb.at(-1).buffer;
+  gk = { beatLengte: 60 / 124.6, ankerCtx: 500.8 };
+  gate.heranker();
+  ok('kleine tempowijziging: dezelfde buffer, alleen een andere snelheid', gb.at(-1).buffer === eersteBuf && gb.length === 2);
+  ok(`... en nog steeds exact (${(drift(gb.at(-1), 60 / 124.6) * 1000).toFixed(3)} ms per 10 min)`, drift(gb.at(-1), 60 / 124.6) <= 0.001);
+  gate.zet('vorm', 0.2, NOW);
+  ok('vorm veranderen bouwt wel een nieuwe buffer', gb.at(-1).buffer !== eersteBuf);
+
+  // 4. Een tel die al binnen de uitgangsbuffer valt: de tel erna.
+  gk = { beatLengte: 0.5, ankerCtx: NOW + 0.002 };
+  gate.heranker();
+  ok('gate: tel binnen de uitgangsbuffer -> de tel erna', Math.abs(gb.at(-1).op - (NOW + 0.502)) < 1e-9);
+  gk = { beatLengte: 0.5, ankerCtx: NOW + 0.05 };
+  gate.heranker();
+  ok('gate: tel ruim vooruit -> gewoon die tel', Math.abs(gb.at(-1).op - (NOW + 0.05)) < 1e-9);
+  gate.vernietig();
+
+  // 3 + 4. Sampler: exact rond, en niet te laat starten.
+  const sm = eng.sampler;
+  const dSm = eng.deck('F');
+  dSm.load(buf, 'sampler-drift');
+  dSm.setGrid(new Beatgrid({ bpm: 124, firstBeat: 0 }));
+  dSm.seek(1.31);
+  const oudeTellen = sm.tellen;
+  sm.tellen = 2;
+  await sm.neem(7, dSm);
+  const oudeKlokS = sm.klok;
+  let sk = { beatLengte: 0.5, ankerCtx: NOW + 0.3 };      // 120 bpm hoorbaar
+  sm.klok = () => sk;
+  sm.wissel(7);
+  const sp = sm.pads[7];
+  const lusDuur = (src) => sp.buffer.length / sp.buffer.sampleRate / Math.fround(src.playbackRate.value);
+  const sDrift = Math.abs(lusDuur(sp.src) - 2 * 0.5) * (600 / (2 * 0.5));
+  ok(`sampler: 2 tellen op 120 bpm, over 10 minuten ${(sDrift * 1000).toFixed(3)} ms uit de maat (≤ 1 ms)`, sDrift <= 0.001);
+  sk = { beatLengte: 60 / 126, ankerCtx: NOW + 0.4 };
+  sm.heranker();
+  const hDrift = Math.abs(lusDuur(sp.src) - 2 * 60 / 126) * (600 / (2 * 60 / 126));
+  ok(`sampler na tempowissel: ${(hDrift * 1000).toFixed(3)} ms per 10 min (≤ 1 ms)`, hDrift <= 0.001);
+  sm.stop(7);
+  sk = { beatLengte: 0.5, ankerCtx: NOW + 0.002 };
+  sm.wissel(7);
+  ok('sampler: tel binnen de uitgangsbuffer -> de tel erna', Math.abs(sm.pads[7].start - (NOW + 0.502)) < 1e-9);
+  sm.stop(7);
+  sk = { beatLengte: 0.5, ankerCtx: NOW + 0.05 };
+  sm.wissel(7);
+  ok('sampler: tel ruim vooruit -> gewoon die tel', Math.abs(sm.pads[7].start - (NOW + 0.05)) < 1e-9);
+  sm.wis(7);
+  sm.klok = oudeKlokS;
+  sm.tellen = oudeTellen;
   NOW = 0;
 }
 

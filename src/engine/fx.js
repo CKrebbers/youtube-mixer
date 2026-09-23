@@ -48,6 +48,27 @@ export const delingVan = (t) => DELINGEN[Math.min(DELINGEN.length - 1,
 export const GEEN_KLOK = () => null;
 
 /**
+ * Hoe dicht bij `nu` een start op de audioklok nog op tijd komt. Wat binnen
+ * de uitgangsbuffer valt (of binnen het blok dat de audiothread al rendert)
+ * start te laat, en dan hoor je hem naast de tel. Plus 3 ms marge voor het
+ * bericht naar de audiothread.
+ */
+export const startDrempel = (ctx) => Math.max(ctx.baseLatency ?? 0, 128 / ctx.sampleRate) + 0.003;
+
+/**
+ * Het moment om op de tel te starten: het anker van de klok, of — als dat al
+ * binnen de drempel ligt — de eerstvolgende tel daarna. Zonder klok: nu.
+ */
+export function startOpDeTel(ctx, k) {
+  const nu = ctx.currentTime;
+  if (!k || !Number.isFinite(k.ankerCtx)) return nu;
+  let t = k.ankerCtx;
+  const grens = nu + startDrempel(ctx);
+  if (t < grens) t = k.beatLengte > 0 ? t + Math.ceil((grens - t) / k.beatLengte) * k.beatLengte : nu;
+  return t;
+}
+
+/**
  * Echotijden op de maat, van kort naar lang: knop rechts = langer, net als in
  * milliseconden. Los van DELINGEN (gate), die van lang naar kort loopt.
  */
@@ -380,12 +401,12 @@ export const EFFECTEN = [
       poort.gain.value = 1;
 
       let bron = null;
+      let cyclus = null;        // { buf, n, vorm, diepte }: de laatst gebouwde buffer
       const staat = { deling: 0.6, vorm: 0.5, diepte: 1 };
 
-      /** Eén cyclus: open, dan dicht. `vorm` verschuift de verhouding. */
-      const maakBuffer = (periode) => {
+      /** Eén cyclus van n samples: open, dan dicht. `vorm` verschuift de verhouding. */
+      const maakBuffer = (n) => {
         const sr = ctx.sampleRate;
-        const n = Math.max(64, Math.round(periode * sr));
         const buf = ctx.createBuffer(1, n, sr);
         const d = buf.getChannelData(0);
         const open = Math.max(1, Math.round(n * (0.1 + staat.vorm * 0.8)));
@@ -429,9 +450,24 @@ export const EFFECTEN = [
         }
         const periode = k.beatLengte * delingVan(staat.deling).tellen;
         if (!(periode > 0.005)) return;
-        const start = Math.max(k.ankerCtx ?? nu, nu);
+        const start = startOpDeTel(ctx, k);
+        /*
+         * Een periode valt bijna nooit op een hele sample (1/16 op 124 bpm is
+         * 5806,45 samples). Afronden liet de gate 4,7 ms per minuut uit de
+         * maat lopen. Daarom speelt de buffer met een snelheid die de
+         * periode EXACT maakt: n samples in `periode` seconden. Diezelfde
+         * snelheid maakt de buffer herbruikbaar bij een kleine tempowijziging
+         * (tot 10%); alleen deling, vorm en diepte bouwen hem opnieuw.
+         */
+        const exact = periode * ctx.sampleRate;
+        if (!cyclus || cyclus.vorm !== staat.vorm || cyclus.diepte !== staat.diepte
+          || Math.abs(exact / cyclus.n - 1) > 0.1) {
+          const n = Math.max(64, Math.round(exact));
+          cyclus = { buf: maakBuffer(n), n, vorm: staat.vorm, diepte: staat.diepte };
+        }
         const src = ctx.createBufferSource();
-        src.buffer = maakBuffer(periode);
+        src.buffer = cyclus.buf;
+        src.playbackRate.value = cyclus.n / exact;
         src.loop = true;
         src.connect(poort.gain);
         // De gain van de poort wordt volledig door de buffer bepaald — vanaf

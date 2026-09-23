@@ -124,6 +124,21 @@ try {
   const midden = blok({ T: 0, P: lusStart, R: 1, loop: { start: lusStart, end: lusEind }, speelt: true }, 0, 4800).uit[0];
   ok('buiten de naad nog steeds exact de samples', midden[100] === vanKop[(48000 + 100) * 2] / 32768);
 
+  // Een loop die op (bijna) 0 s begint heeft niets vóór zijn begin om naar
+  // over te vloeien. De naad mengde daar naar stilte: een dip vlak voor elke
+  // herhaling. Nu: geen naad (op 0) of een naad zo lang als er ruimte is.
+  const nulEind = 0.3017, nulN = Math.round(nulEind * 48000);
+  const vanNul = blok({ T: 0, P: 0, R: 1, loop: { start: 0, end: nulEind }, speelt: true }, 0, nulN).uit[0];
+  let dip = 0;
+  for (let i = nulN - 240; i < nulN; i++) dip = Math.max(dip, Math.abs(vanNul[i] - vanKop[i * 2] / 32768));
+  ok(`loop vanaf 0 s: de laatste 5 ms zijn de gewone samples (afwijking ${dip.toExponential(1)})`, dip < 1e-9);
+  const bijna = 0.002;                    // 96 frames ruimte vóór het begin
+  const eindN = Math.round((bijna + nulEind) * 48000);
+  const vanBijna = blok({ T: 0, P: bijna, R: 1, loop: { start: bijna, end: bijna + nulEind }, speelt: true }, 0, eindN - 96).uit[0];
+  const iBuiten = eindN - 96 - 150 - 1;    // 150 frames vóór het einde: buiten een naad van 96
+  ok('loop vanaf 2 ms: de naad is geklemd op wat er vóór het begin staat',
+    Math.abs(vanBijna[iBuiten] - vanKop[(96 + iBuiten) * 2] / 32768) < 1e-9);
+
   // Seek midden in de toon: zonder overgang een sprong in de golfvorm (tik).
   const maxStap = (x) => { let m = 0; for (let i = 1; i < x.length; i++) m = Math.max(m, Math.abs(x[i] - x[i - 1])); return m; };
   const oudSeg = { T: 0, P: 1.0, R: 1, loop: null, speelt: true };

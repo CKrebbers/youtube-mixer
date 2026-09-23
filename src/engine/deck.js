@@ -94,7 +94,9 @@ export class Deck extends Emitter {
     bron.onFout = (tekst) => this.emit('fout', tekst);
     // Vaste punten: hier springt de DJ heen, dus daar mag een streamende bron
     // geen gat hebben. Een BufferBron negeert het, die heeft alles al.
-    bron.vastpunten = () => [this.cuePoint, ...this.hotcues, this.loop?.start ?? null];
+    // Tijdens het laden horen cue en hotcues nog bij de OUDE track (ze worden
+    // pas gewist als de laad slaagt): dan niets vastpinnen in het nieuwe bestand.
+    bron.vastpunten = () => (this._laadt ? [] : [this.cuePoint, ...this.hotcues, this.loop?.start ?? null]);
   }
 
   /** Een heel bestand, uitgepakt in het geheugen: losgesleepte bestanden en de demotrack. */
@@ -110,13 +112,16 @@ export class Deck extends Emitter {
    */
   async laadStream(url, title, opties) {
     if (!(this.bron instanceof StreamBron)) this._zetBron(new StreamBron(this.ctx, this.chain.input, opties));
-    this.cuePoint = 0;
-    this.hotcues = [null, null, null, null];
+    // Cue en hotcues NIET hier wissen maar pas in _naLaden: mislukt de laad
+    // (404, verkeerd formaat), dan staat de oude track er nog, met zijn punten.
+    this._laadt = (this._laadt || 0) + 1;
     try {
       await this.bron.laad({ url, haal: opties?.haal });
     } catch (err) {
       if (err.vervangen) return false;      // er kwam een nieuwere laad overheen: die wint
       throw err;
+    } finally {
+      this._laadt--;
     }
     this._naLaden(title);
     return true;
@@ -168,16 +173,40 @@ export class Deck extends Emitter {
 
   togglePlay() { this.playing ? this.pause() : this.play(); }
 
-  seek(pos) {
+  /**
+   * Naar tracktijd `pos` springen.
+   *
+   * Ligt die plek BUITEN de loop, dan verlaat je de loop, zoals op elke
+   * DJ-speler: een hotcue verderop moet daar landen, niet teruggevouwen in de
+   * loop (de BufferBron wrapte naar loopStart, de streamkern vouwde terug).
+   * Erbinnen blijft de loop staan.
+   *
+   * `binnenLoop` is voor fasecorrectie (sync, nudge): een verschuiving van een
+   * fractie van een tel die over de loopgrens valt, wordt teruggevouwen in de
+   * loop in plaats van hem te verlaten.
+   */
+  seek(pos, { binnenLoop = false } = {}) {
     if (!this.buffer) return;
-    const p = clamp(pos, 0, this.duration);
+    let p = clamp(pos, 0, this.duration);
+    const l = this.loop;
+    if (l && (p < l.start || p >= l.end)) {
+      const len = l.end - l.start;
+      if (binnenLoop && len > 0) p = l.start + ((((p - l.start) % len) + len) % len);
+      else this._verlaatLoop();
+    }
     if (this.playing) this.bron.start(p);
     else this.bron.plaats(p);
     this.fx.heranker();
     this.emit('change', this);
   }
 
-  nudge(seconds) { this.seek(this.position + seconds); }
+  nudge(seconds) { this.seek(this.position + seconds, { binnenLoop: true }); }
+
+  /** Loop eraf zonder 'change' te melden: de aanroeper meldt zelf. */
+  _verlaatLoop() {
+    this.loopBeats = null;
+    if (this.loop) this.bron.clearLoop();
+  }
 
   /** Pitchfader 0..1 (midden = 0%), geschaald op het bereik van deze track. */
   setPitch(v) { this.setRate(1 + (clamp(v) * 2 - 1) * this.pitchBereik); }
@@ -242,7 +271,14 @@ export class Deck extends Emitter {
   /** CDJ-logica: spelend -> terug naar cue en pauzeren. Gepauzeerd -> cue hier zetten. */
   cue() {
     if (!this.buffer) return;
-    if (this.playing) { this.stop(); this.bron.plaats(this.cuePoint); }
+    if (this.playing) {
+      this.stop();
+      // Zelfde regel als seek: een cuepunt buiten de loop verlaat de loop,
+      // anders vouwt de volgende play hem er weer in.
+      const l = this.loop;
+      if (l && (this.cuePoint < l.start || this.cuePoint >= l.end)) this._verlaatLoop();
+      this.bron.plaats(this.cuePoint);
+    }
     else if (Math.abs(this.position - this.cuePoint) < 0.005) { this.play(); }
     else { this.cuePoint = this.position; }
     this.emit('change', this);
@@ -283,9 +319,9 @@ export class Deck extends Emitter {
     const p = this.position;
     let start = this.grid.nearest(p);
     if (start + lengte <= p) start = this.grid.next(p);
-    this.setLoopRange(start, Math.min(start + lengte, this.duration));
-    this.loopBeats = beats;
-    return true;
+    const eind = Math.min(start + lengte, this.duration);
+    // Geklemd op het trackeinde is het geen `beats` tellen meer: dan geen LED.
+    return this._zetLoop(start, eind, eind - start > lengte - 1e-6 ? beats : null);
   }
 
   /** Zonder beatgrid loopen we in seconden. */
@@ -305,17 +341,24 @@ export class Deck extends Emitter {
     this.emit('change', this);
   }
 
+  /*
+   * Halveren en verdubbelen houden `loopBeats` bij: de LED van "loop 4"
+   * brandde anders nog na halveren naar 2 tellen. Een loop die tegen het
+   * trackeinde geklemd wordt is geen heel aantal tellen meer: null.
+   */
   halveLoop() {
     if (!this.loop) return;
     const len = (this.loop.end - this.loop.start) / 2;
     if (len < 0.02) return;
-    this.setLoopRange(this.loop.start, this.loop.start + len);
+    this._zetLoop(this.loop.start, this.loop.start + len, this.loopBeats ? this.loopBeats / 2 : null);
   }
 
   doubleLoop() {
     if (!this.loop) return;
     const len = (this.loop.end - this.loop.start) * 2;
-    this.setLoopRange(this.loop.start, Math.min(this.loop.start + len, this.duration));
+    const eind = Math.min(this.loop.start + len, this.duration);
+    const heel = eind - this.loop.start > len - 1e-6;
+    this._zetLoop(this.loop.start, eind, heel && this.loopBeats ? this.loopBeats * 2 : null);
   }
 
   /**
@@ -325,10 +368,15 @@ export class Deck extends Emitter {
    */
   _loopMag(start, end) { return Number.isFinite(start) && Number.isFinite(end) && end - start >= 0.02; }
 
-  setLoopRange(start, end) {
+  /** Een vrije loop (geen aantal tellen). */
+  setLoopRange(start, end) { return this._zetLoop(start, end, null); }
+
+  _zetLoop(start, end, beats) {
     if (!this._loopMag(start, end)) return false;
     this.bron.setLoop(start, end);
+    this.loopBeats = beats;
     this.emit('change', this);
+    return true;
   }
 
   // ---- mixer-parameters (alles genormaliseerd 0..1) ----------------------

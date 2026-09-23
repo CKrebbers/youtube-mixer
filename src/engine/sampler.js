@@ -1,4 +1,5 @@
 import { clamp } from '../lib/emitter.js';
+import { startOpDeTel } from './fx.js';
 
 /**
  * De sampler: acht pads die een stukje van een track vasthouden en het als
@@ -142,16 +143,31 @@ export class Sampler {
     const pad = this.pads[n];
     if (!pad) return false;
     if (pad.speelt) { this.stop(n); return true; }
-    const nu = this.ctx.currentTime;
     const k = this.klok();
     // Op het tempo dat je hoort; zonder tempo van één van beide: gewoon zoals hij is.
-    const rate = k?.beatLengte && pad.bpm ? (60 / k.beatLengte) / pad.bpm : 1;
-    const start = k?.ankerCtx && k.ankerCtx > nu ? k.ankerCtx : nu;
+    const rate = this._rate(pad, k);
+    // Op de volgende tel; ligt die al binnen de uitgangsbuffer, de tel erna.
+    const start = startOpDeTel(this.ctx, k);
     this._startBron(pad, start, 0, rate);
     pad.speelt = true;
     pad.start = start;
     return true;
   }
+
+  /**
+   * De afspeelsnelheid die de pad precies `tellen` tellen van de maat lang
+   * maakt. Uit de BUFFERLENGTE, niet uit de bpm: de buffer is op hele
+   * samples geknipt en dus een fractie te lang of te kort, en dat liep op tot
+   * ~5 ms per 10 minuten. Zo is één rondgang exact tellen × tellengte.
+   */
+  _rate(pad, k) {
+    if (!k?.beatLengte || !pad.bpm) return 1;
+    if (pad.tellen > 0) return pad.buffer.duration / (pad.tellen * k.beatLengte);
+    return (60 / k.beatLengte) / pad.bpm;
+  }
+
+  /** Een tel in het sample, in seconden: de buffer gedeeld door zijn tellen. */
+  _tel(pad) { return pad.tellen > 0 ? pad.buffer.duration / pad.tellen : 60 / pad.bpm; }
 
   /**
    * Een bron voor deze pad, vanaf `offset` (seconden in het sample) op `wanneer`.
@@ -190,12 +206,11 @@ export class Sampler {
   heranker() {
     const k = this.klok();
     if (!k?.beatLengte) return;
-    const nu = this.ctx.currentTime;
-    const A = k.ankerCtx && k.ankerCtx > nu ? k.ankerCtx : nu;
+    const A = startOpDeTel(this.ctx, k);
     for (const pad of this.pads) {
       if (!pad?.speelt || !pad.bpm || !pad.seg) continue;
-      const rate = (60 / k.beatLengte) / pad.bpm;
-      const tel = 60 / pad.bpm;                              // een tel in het sample
+      const rate = this._rate(pad, k);
+      const tel = this._tel(pad);                            // een tel in het sample
       const daar = this._positie(pad, A);
       const doel = (Math.round(daar / tel) * tel) % pad.buffer.duration;
       const faseGoed = Math.abs(daar - doel) < 0.001 || Math.abs(daar - doel) > pad.buffer.duration - 0.001;

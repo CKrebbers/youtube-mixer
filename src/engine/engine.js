@@ -201,7 +201,9 @@ export class Engine extends Emitter {
     let delta = (master.grid.phase(master.position) - slave.grid.phase(slave.position)) * beat;
     if (delta > beat / 2) delta -= beat;
     if (delta < -beat / 2) delta += beat;
-    slave.seek(slave.position + delta);
+    // Fasecorrectie binnen een loop blijft in de loop: een halve tel over de
+    // grens wordt teruggevouwen. Een gewone seek daar zou de loop verlaten.
+    slave.seek(slave.position + delta, { binnenLoop: true });
 
     this.emit('change');
     return { ok: true, tempo: true, fase: true, rate, bpm: doelBpm, verschoven: delta, master: master.id };

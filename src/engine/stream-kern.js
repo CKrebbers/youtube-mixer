@@ -226,7 +226,14 @@ function leesSegment(seg, t, paginas, trackRate, duur, naad) {
   return [lees(paginas, f, 0), lees(paginas, f, 1)];
 }
 
-const naadVan = (seg) => (seg?.loop ? Math.min(LOOP_NAAD, (seg.loop.end - seg.loop.start) / 4) : 0);
+/*
+ * Hooguit een kwart van de loop, en nooit langer dan er vóór het loopbegin
+ * staat: een loop die op 0 s begint heeft daar niets, en de naad vloeide dan
+ * naar stilte (een dip vlak voor elke herhaling). Liever dan geen naad.
+ */
+const naadVan = (seg) => (seg?.loop
+  ? Math.max(0, Math.min(LOOP_NAAD, (seg.loop.end - seg.loop.start) / 4, seg.loop.start))
+  : 0);
 
 /**
  * Een blok audio renderen. Dit is wat de worklet per 128 frames aanroept.
