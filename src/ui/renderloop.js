@@ -1,6 +1,7 @@
 import { read as readAction, trackVanDeck } from '../control/actions.js';
 import { fmtTime } from '../lib/emitter.js';
 import { BIJNA_EINDE } from './spiegel-plan.js';
+import { bpmTekst } from './grid-strook.js';
 
 /**
  * De renderloop: één rAF voor de hele UI. De engine wordt alleen uitgelezen,
@@ -10,6 +11,8 @@ import { BIJNA_EINDE } from './spiegel-plan.js';
  * rackkiezer) geeft zijn eigen tekenstap mee; de rest staat hier. Elke stap
  * heeft zijn eigen vangnet (`veilig`).
  */
+const ONZEKER_TITEL = 'grid hier onzeker — tik het tempo of zet het grid op slot';
+
 export function startRenderloop({ engine, staat, views, knobs, faders, stappen }) {
   const { venster, analysis } = staat;
 
@@ -113,7 +116,7 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     veilig('focus', () => {
       const id = venster.L;
       const d = s.decks[id];
-      views.zoom.draw(d, analysis[id]);
+      views.zoom.draw(d, analysis[id], engine.deck(id).onsets);
       views.overview.draw(d, analysis[id]);
 
       tekst(e.title, d.title || '— leeg —');
@@ -125,8 +128,12 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       tekst(e.pitch, ((d.rate - 1) * 100).toFixed(1) + '%');
       tekst(e.pitchBereik, `±${Math.round(engine.deck(id).pitchBereik * 100)}`);
       // bpm: wat je HOORT, dus inclusief pitch.
-      tekst(e.bpm, d.bpm ? d.bpm.toFixed(1) : '—');
+      tekst(e.bpm, bpmTekst(d.bpm, d.gridZeker));
       klasse(e.bpm, 'leeg', !d.bpm);
+      // Onzeker stuk: gedimd met "?", sync en beat-loops weigeren hier.
+      klasse(e.bpm, 'onzeker', !!d.bpm && d.gridZeker === false);
+      if (d.bpm && d.gridZeker === false) { if (e.bpm.title !== ONZEKER_TITEL) e.bpm.title = ONZEKER_TITEL; }
+      else if (e.bpm.title) e.bpm.title = '';
       // TAP met een grid: "grid bekend", een rustige stijl — niet "actief",
       // want er gebeurt niets zolang je niet tikt.
       klasse(e.tap, 'grid-bekend', !!d.grid);
@@ -154,7 +161,7 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
 
       klasse(e.sync, 'gelijk', readAction(`track.${trackVanDeck(id)}.sync`) === 1);
       for (const b of e.beatBtns) {
-        klasse(b, 'dood', !d.grid);
+        klasse(b, 'dood', !d.grid || d.gridZeker === false);
         klasse(b, 'on', d.loopBeats === b._tellen);
       }
 

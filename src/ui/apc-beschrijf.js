@@ -43,6 +43,19 @@ export function beschrijf(action) {
     if (rest === 'pitch.range') return r('bereik', 'pitchbereik ±8 / ±16 / ±50%');
     if (rest === 'nudge.back') return r('nudge −', 'even terugduwen');
     if (rest === 'nudge.fwd') return r('nudge +', 'even vooruitduwen');
+    if (rest === 'grid.here') return r('tel 1 hier', 'tel 1 hier: de tel komt op wat je hoort, gesnapt naar een klap binnen 30 ms');
+    if (rest === 'grid.double') return r('bpm ×2', 'bpm ×2 van het gridstuk hier');
+    if (rest === 'grid.halve') return r('bpm ½', 'bpm ½ van het gridstuk hier');
+    if (rest === 'grid.halfbeat') return r('½ tel', 'grid een halve tel verschuiven (tel op de offbeat)');
+    if (rest === 'grid.split') return r('nieuw stuk', 'nieuw gridstuk vanaf hier (eigen tempo en tel)');
+    if (rest === 'grid.merge') return r('stuk weg', 'gridstuk samenvoegen met het vorige');
+    if (rest === 'grid.back') return r('grid −5ms', 'grid 5 ms eerder');
+    if (rest === 'grid.fwd') return r('grid +5ms', 'grid 5 ms later');
+    if (rest === 'grid.back.fine') return r('grid −1ms', 'grid 1 ms eerder');
+    if (rest === 'grid.fwd.fine') return r('grid +1ms', 'grid 1 ms later');
+    if (rest === 'grid.bpm') return r('grid bpm', 'bpm van het gridstuk hier: 0,01 per tik, met shift 0,1');
+    if (rest === 'grid.lock') return r('slot', 'grid op slot (lampje = op slot; de automatische analyse blijft er dan af)');
+    if (rest === 'grid.clear') return r('grid weg', 'grid wissen');
     if ((m = /^fx\.knob\.(\d)$/.exec(rest))) return r(`rack ${m[1]}`, `rack-knop ${m[1]} (wat die doet hangt van het rack af)`);
     if ((m = /^hotcue\.(\d)$/.exec(rest))) return { kort: `${k}·cue ${m[1]}`, lang: `hotcue ${m[1]} — ${w}` };
     if ((m = /^hotcue\.(\d)\.delete$/.exec(rest))) return { kort: `wis ${m[1]}`, lang: `hotcue ${m[1]} wissen — ${w}` };
@@ -61,6 +74,7 @@ export function beschrijf(action) {
   if ((m = /^video\.fx\.(\w+)$/.exec(action))) return { kort: VIDEO[m[1]] ?? m[1], lang: `video-effect ${VIDEO[m[1]] ?? m[1]}` };
   if ((m = /^layer\.(\w+)\.(\w+)$/.exec(action))) {
     const [, g, knop] = m;
+    if (GROEPEN[g]?.schakel) return { kort: GROEPEN[g].naam, lang: `${GROEPEN[g].naam} aan/uit: scene 1–5, nudge, cue level en Lock bewerken dan het beatgrid van de focus-track` };
     if (knop === 'next') return { kort: 'mapje ▼', lang: `${GROEPEN[g]?.naam}: volgend mapje` };
     if (knop === 'prev') return { kort: 'mapje ▲', lang: `${GROEPEN[g]?.naam}: vorig mapje` };
     const lagen = GROEPEN[g]?.knoppen[knop] ?? [];

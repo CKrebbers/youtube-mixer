@@ -1443,6 +1443,113 @@ console.log('\ntempokaart');
   NOW = 0;
 }
 
+// Stap D: grid-modus op de APC. Tel 1 hier snapt naar een klap, halve tel,
+// fijn schuiven en bpm per stuk — via de echte mapping, shift en mapjes.
+{
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  const { Mapping } = await import('../src/control/mapping.js');
+  const { Lagen } = await import('../src/control/lagen.js');
+  const { bindLagen } = await import('../src/control/actions.js');
+  const { readFileSync } = await import('node:fs');
+  const dE = eng.deck('E');
+  dE.load(buf, 'gridmodus');
+  dE.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 2, bpm: 120, anker: 0 }] }));
+  dE.onsets = new Float64Array([0.49, 3.012, 3.6]);   // de demotrack duurt 3,9 s
+  dE.seek(3.0);
+  invoke('track.5.grid.here', true);
+  ok('grid.here snapt naar de klap binnen 30 ms (3,012)', Math.abs(dE.grid.stukken[1].anker - 3.012) < 1e-9);
+  ok('en laat het andere stuk staan', dE.grid.stukken[0].anker === 0);
+  dE.seek(3.65);
+  invoke('track.5.grid.here', true);
+  ok('grid.here: klap 50 ms eerder telt niet, de positie wordt de tel', Math.abs(dE.grid.stukken[1].anker - 3.65) < 1e-9);
+  dE.onsets = null;
+  dE.seek(3.1);
+  invoke('track.5.grid.here', true);
+  ok('grid.here zonder onsets: de positie zelf', Math.abs(dE.grid.stukken[1].anker - 3.1) < 1e-9);
+
+  // Speelt hij, dan is "hier" wat je HOORT: positie min uitgangsvertraging × rate.
+  NOW = 500;
+  dE.seek(3.2); dE.setRate(1.25); dE.play();
+  const hoor = dE.position - eng.ctx.baseLatency * 1.25;
+  invoke('track.5.grid.here', true);
+  ok('grid.here tijdens spelen: de hoorbare positie, niet de deckpositie',
+    Math.abs(dE.grid.stukken[1].anker - hoor) < 1e-9 && eng.ctx.baseLatency > 0);
+  dE.stop(); dE.setRate(1); NOW = 0;
+
+  dE.seek(3.1);
+  const a0 = dE.grid.stukken[1].anker;
+  invoke('track.5.grid.halfbeat', true);
+  ok('halve tel: +0,25 s op 120 bpm, alleen dit stuk', Math.abs(dE.grid.stukken[1].anker - (a0 + 0.25)) < 1e-9 && dE.grid.stukken[0].anker === 0);
+  invoke('track.5.grid.fwd.fine', true);
+  ok('fijn vooruit: +1 ms', Math.abs(dE.grid.stukken[1].anker - (a0 + 0.251)) < 1e-9);
+  invoke('track.5.grid.back.fine', true); invoke('track.5.grid.back.fine', true);
+  ok('fijn terug: −1 ms', Math.abs(dE.grid.stukken[1].anker - (a0 + 0.249)) < 1e-9);
+
+  // bpm per stuk, als value 0..1 over 40–300 bpm (regel 2).
+  const r0 = read('track.5.grid.bpm');
+  ok('grid.bpm-read: 120 bpm = (120 − 40) / 260', Math.abs(r0 - 80 / 260) < 1e-12);
+  const telVoor = dE.grid.nearest(3.1);
+  invoke('track.5.grid.bpm', r0 + 0.01 / 260);
+  ok('grid.bpm: +0,01 bpm op het stuk rond de positie', Math.abs(dE.grid.bpmAt(3.1) - 120.01) < 1e-9);
+  ok('... niet op het stuk ervoor', dE.grid.bpmAt(1) === 120);
+  ok('... en de tel bij de positie blijft liggen', Math.abs(dE.grid.nearest(3.1) - telVoor) < 1e-9);
+  dE.setGrid(null);
+  invoke('track.5.grid.bpm', 0.9);
+  ok('grid.bpm zonder grid doet niets (en read = null)', dE.grid === null && read('track.5.grid.bpm') === null);
+
+  // De hele keten: APC-mapping, shift, mapje edit.aan, focus op track 5.
+  dE.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 2, bpm: 128, anker: 2 }] }));
+  const lg = new Lagen();
+  bindLagen(lg);
+  const m = new Mapping({ read, invoke, vars: () => ({ focus: 5 }), lagen: () => lg.actief() });
+  m.load(JSON.parse(readFileSync(new URL('../mappings/apc40mk2.json', import.meta.url), 'utf8')));
+  const nt = (n, on) => m.handle({ type: 'note', channel: 0, number: n, sig: `note:0:${n}`, on, value: on ? 127 : 0, norm: on ? 1 : 0 });
+  const enc = (v) => m.handle({ type: 'cc', channel: 0, number: 47, sig: 'cc:0:47', value: v, norm: v / 127 });
+  const curve0 = eng.xfaderCurve;
+  nt(90, true); nt(90, false);
+  ok('Metronome zonder shift: crossfadercurve, geen grid-modus', eng.xfaderCurve !== curve0 && lg.stand.edit === 'uit');
+  nt(98, true); nt(90, true); nt(90, false); nt(98, false);
+  ok('Shift + Metronome: grid-modus aan', lg.stand.edit === 'aan' && read('layer.edit.toggle') === 1);
+  dE.seek(3.0);
+  enc(1);
+  ok('cue level in grid-modus: +0,01 bpm op het stuk', Math.abs(dE.grid.bpmAt(3) - 128.01) < 1e-9 && dE.grid.bpmAt(1) === 120);
+  nt(98, true); enc(127); nt(98, false);
+  ok('cue level + shift: −0,1 bpm', Math.abs(dE.grid.bpmAt(3) - 127.91) < 1e-9);
+  const b0 = dE.grid.bpmAt(3);
+  nt(83, true); nt(83, false);
+  ok('scene 2 in grid-modus: ×2', Math.abs(dE.grid.bpmAt(3) - b0 * 2) < 1e-9);
+  nt(84, true); nt(84, false);
+  ok('scene 3: ½', Math.abs(dE.grid.bpmAt(3) - b0) < 1e-9);
+  const a1 = dE.grid.stukken[1].anker;
+  nt(101, true); nt(101, false);
+  ok('nudge + in grid-modus: grid +5 ms (geen bend)', Math.abs(dE.grid.stukken[1].anker - (a1 + 0.005)) < 1e-9 && !dE.buigt);
+  nt(98, true); nt(100, true); nt(100, false); nt(98, false);
+  ok('shift + nudge −: grid −1 ms', Math.abs(dE.grid.stukken[1].anker - (a1 + 0.004)) < 1e-9);
+  nt(86, true); nt(86, false);
+  ok('scene 5: nieuw stuk hier', dE.grid.aantalStukken === 3);
+  nt(63, true); nt(63, false);
+  ok('Device Lock in grid-modus: grid op slot', dE.grid.slot === true);
+  dE.onsets = new Float64Array([3.52]);
+  dE.seek(3.5);
+  nt(82, true); nt(82, false);
+  ok('scene 1: tel 1 hier, gesnapt', Math.abs(dE.grid.stukken[2].anker - 3.52) < 1e-9);
+  dE.onsets = null;
+
+  nt(98, true); nt(90, true); nt(90, false); nt(98, false);
+  ok('Shift + Metronome nog eens: grid-modus uit', lg.stand.edit === 'uit');
+  const g0 = JSON.stringify(dE.grid.toJSON());
+  const bpmVol = read('sampler.volume');
+  enc(1);
+  nt(101, true);
+  ok('buiten grid-modus: nudge + is weer bend', dE.buigt > 0);
+  nt(101, false);
+  nt(82, true); nt(82, false); nt(63, true); nt(63, false);
+  ok('buiten grid-modus: scene 1 kiest hotcues, lock doet niets aan het grid',
+    lg.stand.grid === 'hotcues' && JSON.stringify(dE.grid.toJSON()) === g0);
+  ok('buiten grid-modus: cue level is weer sampler-volume', bpmVol === null || read('sampler.volume') !== bpmVol);
+  dE.setGrid(null);
+}
+
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

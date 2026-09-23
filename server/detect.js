@@ -689,15 +689,31 @@ export function fitTaps(taps, bpmHint = null, { tapSigma = 0.02, gewicht = 2 } =
   };
 }
 
-/** Deterministische schudder (LCG): dezelfde nul bij elke aanroep. */
-function schudBlokken(deel, blok, seed) {
+/**
+ * Deterministische schudder (LCG): dezelfde nul bij elke aanroep.
+ *
+ * `draai`: elk blok ook nog een willekeurig stuk rondschuiven. Zonder dat
+ * houdt de nul zijn fase vast zodra een blok een geheel aantal (halve) tellen
+ * lang is — bij 1 s blokken: 120, 90, 60, 180 bpm. Gemeten 23 september 2026:
+ * een schone klik op 120 bpm kreeg zekerheid 0 (de nul hield net zo goed vast
+ * als het echte spoor), op 124 bpm 1,00. Voor faseStabiliteit is dat fataal,
+ * daarom draait analyseerGrid; pulsToets scoort op tempo én fase over het
+ * hele venster en is op de oude manier geijkt.
+ */
+function schudBlokken(deel, blok, seed, { draai = false } = {}) {
   const n = Math.floor(deel.length / blok);
   const idx = Array.from({ length: n }, (_, i) => i);
   let s = seed >>> 0 || 1;
   const rnd = () => ((s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 4294967296);
   for (let i = n - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
   const uit = new Float32Array(deel.length);
-  for (let i = 0; i < n; i++) uit.set(deel.subarray(idx[i] * blok, idx[i] * blok + blok), i * blok);
+  for (let i = 0; i < n; i++) {
+    const bron = deel.subarray(idx[i] * blok, idx[i] * blok + blok);
+    if (!draai) { uit.set(bron, i * blok); continue; }
+    const k = Math.floor(rnd() * blok);
+    uit.set(bron.subarray(k), i * blok);
+    uit.set(bron.subarray(0, k), i * blok + blok - k);
+  }
   uit.set(deel.subarray(n * blok), n * blok);
   return uit;
 }
@@ -974,7 +990,14 @@ export function analyseerGrid(env, envRate, tijdOffset = 0, opties = {}) {
     omgeving = 20, pcm = null, sampleRate = 11025 } = opties;
   const duur = env.length / envRate + tijdOffset;
   const curve = tempoCurve(env, envRate, { vensterSec, stapSec, tijdOffset });
-  const nulEnv = schudBlokken(env, Math.max(1, Math.round(envRate)), 4242);
+  /*
+   * Drie nullen (drie zaden), hun vensters samen in één pot. faseStabiliteit
+   * is getrapt (1/22 per stap), en de p97 van één nul viel per zaad een trap
+   * hoger of lager (0,727 of 0,773 op hetzelfde album): dat schoof elke
+   * zekerheid 0,1-0,2 op. Een kort nummer krijgt de nul op elk venster, niet
+   * op elk derde: van drie getallen is "p97" gewoon de mediaan.
+   */
+  const nulEnvs = [4242, 1234, 99].map((z) => schudBlokken(env, Math.max(1, Math.round(envRate)), z, { draai: true }));
 
   /*
    * Zekerheid per venster: stabiliteit boven wat de nul haalt. Per venster
@@ -998,13 +1021,14 @@ export function analyseerGrid(env, envRate, tijdOffset = 0, opties = {}) {
     return { st: Math.max(eigen, st), bpm: keus };
   };
   const echt = new Float64Array(curve.length), nul = [];
+  const nulStap = curve.length < 90 ? 1 : 3;
   curve.forEach((c, i) => {
     if (!c.bpm) return;
     const a = Math.max(0, c.tijd - omgeving), b = Math.min(duur, c.tijd + omgeving);
     const r = beste(env, c.bpm, a, b);
     echt[i] = r.st;
-    // De nul op elk derde venster: genoeg voor een percentiel, een derde van het werk.
-    if (i % 3 === 0) nul.push(beste(nulEnv, c.bpm, a, b).st);
+    // De nul op elk derde venster (lange tracks): genoeg voor een percentiel, een derde van het werk.
+    if (i % nulStap === 0) for (const e of nulEnvs) nul.push(beste(e, c.bpm, a, b).st);
     c.bpm = r.bpm;
   });
   // De 97e percentiel van de nul: daarboven is het geen toeval meer.

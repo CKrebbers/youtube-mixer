@@ -61,6 +61,44 @@ export const verfijnUitBestand = (bestand, envRate, bpm, tijdOffset, opties = {}
   inWerker('verfijn', [bestand, envRate, bpm, tijdOffset, opties]);
 
 /**
+ * Een grid-voorstel voor een hele track (stap C): analyseerGrid op de
+ * bewaarde envelope, de fase per stuk op de voorflank van de audio.
+ * Geeft { ok, grid } met grid = tempokaart met `bron: 'auto'`, `slot: false`
+ * en per stuk een `zekerheid`; of { ok: false, fout }.
+ */
+export const maakGrid = (onsetBestand, envRate, tijdOffset, audio = null) =>
+  inWerker('grid', [onsetBestand, envRate, tijdOffset, audio]);
+
+/**
+ * De onset-PIEKEN als tijden (tracktijd, s), gesorteerd. Voor "tel 1 hier"
+ * dat naar de dichtstbijzijnde klap snapt, en voor de streepjes in de zoom.
+ */
+export const maakOnsets = (onsetBestand, envRate, tijdOffset) =>
+  inWerker('onsets', [onsetBestand, envRate, tijdOffset]);
+
+/**
+ * Zekerheid vanaf waar een stuk ZEKER heet: sync en beat-loops mogen daar,
+ * het grid wordt vol getekend. Zelfde getal als ZEKER_VANAF in de engine
+ * (beatgrid.js); de server kent de engine niet, server.test vergelijkt ze.
+ *
+ * Gekozen uit de verdeling van analyseerGrid op Clay's library (23 september
+ * 2026, 57 stukken in 4 tracks, na de reparatie van de nul). Drie groepen:
+ *   0,00-0,06  geen puls (zoned out, pauzes, pianostukken zonder maat);
+ *   0,20-0,62  wel een puls, maar één tempo houdt niet: rubato piano, Bay
+ *              Ledges (demo zonder klik, ±1%), een octaaffout (76 i.p.v. 153
+ *              op 0,48), de albumnummers op 140 en 150 (0,50-0,62);
+ *   0,69-0,94  een vaste klik (de elektronische stukken in de Sakamoto-lijst).
+ * De drempels liggen in de twee gaten: 0,65 en 0,15. Het bovenste gat is
+ * smal (0,62-0,69), dus een stuk op de rand kan per analyseversie wisselen;
+ * dan liever onzeker: een melding ("tik eerst") is beter dan een sync die na
+ * zestien maten een tel wegloopt. Tikken zet het grid op slot.
+ */
+export const ZEKER_VANAF = 0.65;
+
+/** Onder deze zekerheid: geen puls (de strook wordt rood/gestreept). */
+export const GEEN_PULS = 0.15;
+
+/**
  * Leest de audio als ruwe floats uit ffmpeg en rekent al lezend de peaks uit.
  * Streamend, want een halfuur stereo is 712 MB aan ruwe floats — dat wil je
  * niet in één keer in het geheugen hebben staan.
@@ -223,5 +261,130 @@ async function verfijnHier(bestand, envRate, bpm, tijdOffset, opties) {
   return { ok: true, ...r, fijn };
 }
 
+async function leesEnvelope(bestand) {
+  const b = await readFile(bestand);
+  return new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4);
+}
+
+/** De tijdcorrectie opnieuw uitrekenen als de envelope met de standaardgetallen gemaakt is (zie verfijnHier). */
+async function juisteOffset(envRate, tijdOffset) {
+  const { onsetVertraging } = await import('./detect.js');
+  return Math.abs(envRate - ONSET_RATE / ONSET_HOP) < 1e-6 ? onsetVertraging(ONSET_RATE, ONSET_WIN, ONSET_HOP) : tijdOffset;
+}
+
+async function maakGridHier(onsetBestand, envRate, tijdOffset, audio) {
+  let env;
+  try { env = await leesEnvelope(onsetBestand); } catch (err) {
+    return { ok: false, fout: `onset-bestand onleesbaar: ${err?.message || err}` };
+  }
+  if (env.length < envRate * 15) return { ok: false, fout: 'te kort voor een grid-analyse' };
+  const { analyseerGrid, fijneFase } = await import('./detect.js');
+  const offset = await juisteOffset(envRate, tijdOffset);
+  // Zonder pcm: een uur audio op 11025 Hz is 160 MB. De fijne fase doen we
+  // hieronder per stuk, met alleen de 40 s audio die hij nodig heeft.
+  const stukken = analyseerGrid(env, envRate, offset);
+  if (audio) {
+    for (const sk of stukken) {
+      // Waar een puls is; fijneFase zegt zelf null als het profiel te vaag is.
+      if (!(sk.zekerheid >= GEEN_PULS) || !sk.bpm || sk.anker === null) continue;
+      const p = 60 / sk.bpm;
+      const midden = (sk.van + sk.tot) / 2;
+      const telMidden = sk.anker + Math.round((midden - sk.anker) / p) * p;
+      const van = Math.max(0, telMidden - 20);
+      const pcm = await leesPcm(audio, ONSET_RATE, { van, duur: 40 });
+      const f = pcm && pcm.length ? fijneFase(pcm, ONSET_RATE, sk.bpm, telMidden, { t0: van }) : null;
+      if (f !== null && Math.abs(f - telMidden) < 0.03) {
+        sk.anker += f - telMidden;
+        // Anker = eerste tel in het stuk, ook na het bijstellen.
+        sk.anker += Math.ceil((sk.van - sk.anker) / p - 1e-9) * p;
+      }
+    }
+  }
+  const grid = {
+    stukken: stukken.filter((sk) => sk.bpm > 0 && Number.isFinite(sk.anker))
+      .map((sk) => ({ van: sk.van, bpm: sk.bpm, anker: sk.anker, zekerheid: sk.zekerheid })),
+    beatsPerBar: 4,
+    bron: 'auto',
+    slot: false,
+  };
+  if (!grid.stukken.length) return { ok: false, fout: 'geen tempo gevonden' };
+  // Het eerste stuk begint op 0: de kaart geldt vanaf het begin.
+  grid.stukken[0].van = 0;
+  grid.zeker = grid.stukken.some((sk) => sk.zekerheid >= ZEKER_VANAF);
+  return { ok: true, grid };
+}
+
+/**
+ * Pieken in de genormaliseerde envelope: lokale maxima boven een drempel.
+ *
+ * De envelope is al lokaal genormaliseerd (normaliseerEnvelope: mediaan eraf,
+ * gedeeld door het lopende gemiddelde), dus een vaste drempel betekent overal
+ * "zoveel keer boven wat hier gewoon is": een zachte passage krijgt ook zijn
+ * klappen. `minAfstand` (s) houdt een roffel of een galmstaart bij één
+ * streepje per aanzet; binnen die afstand wint de hoogste.
+ *
+ * Tijd van frame f = f / envRate + tijdOffset. Voor de envelope van de
+ * ingest is dat PIEK_GEIJKT (zie piekVertraging), niet de 61 ms van de
+ * tempo-analyse — zonder correctie snapt "tel 1 hier" 68 ms te vroeg.
+ */
+export function onsetPieken(env, envRate, tijdOffset = 0, { drempel = 2, minAfstand = 0.07 } = {}) {
+  const r = Math.max(1, Math.round(minAfstand * envRate));
+  const uit = [];
+  let laatste = -Infinity, laatsteW = 0;
+  for (let i = 1; i < env.length - 1; i++) {
+    const v = env[i];
+    if (v < drempel || v < env[i - 1] || v < env[i + 1]) continue;
+    if (i - laatste < r) {
+      // Te dicht op de vorige: de hoogste van de twee blijft.
+      if (v > laatsteW) { uit[uit.length - 1] = i; laatste = i; laatsteW = v; }
+      continue;
+    }
+    uit.push(i); laatste = i; laatsteW = v;
+  }
+  const tijden = new Float64Array(uit.length);
+  for (let k = 0; k < uit.length; k++) tijden[k] = uit[k] / envRate + tijdOffset;
+  return tijden;
+}
+
+/*
+ * Waar ligt de piek van de envelope t.o.v. de echte aanzet? Niet op dezelfde
+ * plek als de top van het gemiddelde telprofiel (onsetVertraging, 61 ms): een
+ * losse piek valt op een frame (11,6 ms) en schuift met de klank mee. Gemeten
+ * op de ijkreeks van detect.js (vijf klanken × drie aanzetten × twee
+ * ruisvloeren): mediaan 68,5 ms, p10-p90 53-76 ms. Een scherpe klik valt
+ * daardoor ~15 ms te vroeg, een zachte aanzet ~10 ms te laat — goed genoeg om
+ * te zien waar de klappen zitten en om binnen ±30 ms naar de goede te
+ * snappen; de fase daarna op de voorflank zetten doet de verfijning (±5 ms).
+ * analyze.test meet opnieuw ({ meet: true }) en faalt als dit niet meer klopt.
+ */
+const PIEK_GEIJKT = 0.0685;
+export async function piekVertraging({ meet = false } = {}) {
+  if (!meet) return PIEK_GEIJKT;
+  const { ijkKlanken, onsetEnvelope, normaliseerEnvelope } = await import('./detect.js');
+  const medianen = [];
+  for (const { x, bpm, T0 } of ijkKlanken(ONSET_RATE)) {
+    const { env, envRate } = onsetEnvelope(x, ONSET_RATE, { win: ONSET_WIN, hop: ONSET_HOP, ruw: true });
+    const P = 60 / bpm;
+    const af = [...onsetPieken(normaliseerEnvelope(env, envRate), envRate, 0)]
+      .map((t) => t - (T0 + Math.round((t - T0) / P) * P)).filter((v) => Math.abs(v) < 0.15).sort((a, b) => a - b);
+    if (af.length) medianen.push(af[af.length >> 1]);
+  }
+  medianen.sort((a, b) => a - b);
+  return -medianen[medianen.length >> 1];
+}
+
+async function maakOnsetsHier(onsetBestand, envRate, tijdOffset) {
+  let env;
+  try { env = await leesEnvelope(onsetBestand); } catch (err) {
+    return { ok: false, fout: `onset-bestand onleesbaar: ${err?.message || err}` };
+  }
+  // Met de standaardgetallen gemaakt: de piekijking; anders de tijdcorrectie van het bestand.
+  const standaard = Math.abs(envRate - ONSET_RATE / ONSET_HOP) < 1e-6;
+  const tijden = onsetPieken(env, envRate, standaard ? PIEK_GEIJKT : tijdOffset);
+  // Op de milliseconde: meer zegt een envelope van 86 frames per seconde niet.
+  return { ok: true, tijden: Array.from(tijden, (t) => Math.round(t * 1000) / 1000) };
+}
+
 /** Voor de worker. Niet rechtstreeks aanroepen vanuit de server. */
-export const hier = { peaks: maakPeaksHier, onset: maakOnsetHier, verfijn: verfijnHier };
+export const hier = { peaks: maakPeaksHier, onset: maakOnsetHier, verfijn: verfijnHier,
+  grid: maakGridHier, onsets: maakOnsetsHier };

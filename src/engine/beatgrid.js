@@ -27,12 +27,33 @@
  * Deze module kent geen engine, geen deck en geen DOM: alleen rekenwerk.
  */
 
+const EPS = 1e-9;
+const eindig = (x) => typeof x === 'number' && Number.isFinite(x);
+
 export const MIN_BPM = 40;
 export const MAX_BPM = 300;
 
+/**
+ * Zekerheid per stuk (0..1, van de automatische analyse): vanaf ZEKER_VANAF
+ * mag je erop syncen en beat-loopen, onder GEEN_PULS is er geen puls. De
+ * getallen komen uit de verdeling op Clay's library; zie server/analyze.js,
+ * waar dezelfde twee staan (server.test controleert dat ze gelijk zijn).
+ */
+export const ZEKER_VANAF = 0.65;
+export const GEEN_PULS = 0.15;
+
+/**
+ * Wat een zekerheid betekent: 'zeker', 'onzeker' of 'geenpuls'. Een stuk
+ * zonder zekerheid is met de hand gezet (tap, of van vóór de analyse) en
+ * telt als zeker; een grid op slot is overal zeker.
+ */
+export function soortZekerheid(zekerheid, slot = false) {
+  if (slot || !eindig(zekerheid)) return 'zeker';
+  if (zekerheid >= ZEKER_VANAF) return 'zeker';
+  return zekerheid < GEEN_PULS ? 'geenpuls' : 'onzeker';
+}
+
 const klem = (bpm) => Math.min(MAX_BPM, Math.max(MIN_BPM, bpm));
-const EPS = 1e-9;
-const eindig = (x) => typeof x === 'number' && Number.isFinite(x);
 
 /** Een stuk netjes maken; null als het onbruikbaar is. */
 function stukVan(s) {
@@ -61,6 +82,10 @@ export class Beatgrid {
     // dit grid nooit overschrijven. `zeker`: wat de analyse ervan vond.
     this.slot = !!d.slot;
     this.zeker = typeof d.zeker === 'boolean' ? d.zeker : null;
+    // `bron`: 'auto' = voorstel van de analyse, 'hand' = daarna met de hand
+    // bewerkt (het deck zet dat bij elke bewerking), null = van vóór stap C.
+    // De server analyseert bij het opstarten alleen null opnieuw.
+    this.bron = d.bron === 'auto' || d.bron === 'hand' ? d.bron : null;
     this._bouw();
   }
 
@@ -133,6 +158,32 @@ export class Beatgrid {
 
   /** Het stuk rond t, als kopie, met zijn index. */
   stukBij(t) { const i = this.stukIndex(t); return { index: i, ...this._stukken[i] }; }
+
+  /** 'zeker', 'onzeker' of 'geenpuls' op tracktijd t (zie soortZekerheid). */
+  zekerheidBij(t) { return soortZekerheid(this._stukken[this.stukIndex(t)].zekerheid, this.slot); }
+
+  /**
+   * Mag je op t syncen en beat-loopen? Op slot altijd; anders alleen in een
+   * stuk dat zeker is. Een onzeker grid gebruiken is erger dan niets doen: de
+   * sync loopt dan na een paar maten een tel weg zonder dat je weet waarom.
+   */
+  zekerBij(t) { return this.zekerheidBij(t) === 'zeker'; }
+
+  /**
+   * De zekerheidsstrook onder de golfvorm: per stuk { van, tot, soort },
+   * aaneengesloten van 0 tot `duur`. Buren met dezelfde soort blijven
+   * aparte stukken: de grens is ook informatie.
+   */
+  strook(duur) {
+    const s = this._stukken;
+    const uit = [];
+    for (let i = 0; i < s.length; i++) {
+      const van = i === 0 ? 0 : Math.max(0, s[i].van);
+      const tot = i + 1 < s.length ? Math.min(duur, s[i + 1].van) : duur;
+      if (tot > van) uit.push({ van, tot, soort: soortZekerheid(s[i].zekerheid, this.slot) });
+    }
+    return uit;
+  }
 
   /** Tempo (tracktijd) op t. */
   bpmAt(t) { return this._stukken[this.stukIndex(t)].bpm; }
@@ -267,6 +318,15 @@ export class Beatgrid {
   /** Het stuk rond `bij` opschuiven, in seconden. */
   schuif(seconden, bij = null) { return this._pas(this._i(bij), (s) => { s.anker += seconden; }); }
 
+  /**
+   * Het stuk rond `bij` een deel van ZIJN tel opschuiven: 0,5 = een halve tel.
+   * Voor een grid dat op de offbeat staat (tel op de hi-hat in plaats van de
+   * kick); voor- of achteruit is bij een halve tel hetzelfde rooster.
+   */
+  schuifTel(fractie, bij = null) {
+    return this._pas(this._i(bij), (s) => { s.anker += fractie * 60 / s.bpm; });
+  }
+
   /** Leg een tel precies hier (in het stuk rond t). Gebruik je als je op de "1" tikt. */
   ankerHier(t) { return this._pas(this._i(t), (s) => { s.anker = t; }); }
 
@@ -304,6 +364,7 @@ export class Beatgrid {
     const uit = { stukken: this.stukken, beatsPerBar: this.beatsPerBar };
     if (this.slot) uit.slot = true;
     if (this.zeker !== null) uit.zeker = this.zeker;
+    if (this.bron) uit.bron = this.bron;
     return uit;
   }
 
@@ -315,6 +376,24 @@ export class Beatgrid {
   }
 
   kopie() { return new Beatgrid(this.toJSON()); }
+}
+
+/**
+ * Snappen naar een klap: de onset-piek die het dichtst bij t ligt, als die
+ * binnen `venster` seconden valt; anders t zelf. `onsets` is een gesorteerde
+ * lijst tracktijden (Float64Array of array) of null — dan wordt er niet
+ * gesnapt. Voor "tel 1 hier": je drukt altijd een fractie naast de klap,
+ * de analyse weet waar hij echt zit.
+ */
+export const SNAP_VENSTER = 0.03;
+export function snapNaarOnset(onsets, t, venster = SNAP_VENSTER) {
+  if (!onsets || !onsets.length || !eindig(t)) return t;
+  let lo = 0, hi = onsets.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (onsets[m] < t) lo = m + 1; else hi = m; }
+  // lo = eerste onset >= t (of de laatste); zijn buur ervoor kan dichterbij liggen.
+  let beste = onsets[lo];
+  if (lo > 0 && Math.abs(onsets[lo - 1] - t) < Math.abs(beste - t)) beste = onsets[lo - 1];
+  return Math.abs(beste - t) <= venster + EPS ? beste : t;
 }
 
 /**

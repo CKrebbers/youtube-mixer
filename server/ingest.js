@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, rm, stat, rename } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { maakPeaks, maakOnset } from './analyze.js';
+import { maakPeaks, maakOnset, maakGrid } from './analyze.js';
 
 /**
  * De ingest-pipeline: URL erin, genormaliseerd bestand plus metadata eruit.
@@ -303,6 +303,17 @@ export async function ingest(url, { mediaDir = 'media', video = true, onStap = (
       ? { bestand: onsetBestand, frames: on.frames, envRate: on.envRate, tijdOffset: on.tijdOffset }
       : null;
 
+    // ---- beatgrid-voorstel -------------------------------------------------
+    // Een tempokaart met zekerheid per stuk. Kost een paar seconden per half
+    // uur (in een worker). Mislukt dit, dan is er gewoon geen grid: de tap
+    // werkt nog steeds, en de server probeert het bij het opstarten opnieuw.
+    let grid = null;
+    if (onset) {
+      onStap({ stap: 'grid', tekst: 'beatgrid zoeken' });
+      const g = await maakGrid(onsetBestand, on.envRate, on.tijdOffset, audio);
+      if (g.ok) grid = g.grid;
+    }
+
     // ---- video, met constante framerate -----------------------------------
     let videoBestand = null;
     let videoFout = null;
@@ -359,7 +370,7 @@ export async function ingest(url, { mediaDir = 'media', video = true, onStap = (
       ok: true,
       track: {
         id, url: meta.info.url, titel: meta.info.titel, uploader: meta.info.uploader,
-        duur, audio: audioDef, video: videoDef, videoFout, peaks, onset, thumbnail: meta.info.thumbnail,
+        duur, audio: audioDef, video: videoDef, videoFout, peaks, onset, grid, thumbnail: meta.info.thumbnail,
         loudness: meting.gemeten, doelLoudness: LOUDNESS.I,
         ytdlp: await ytdlpVersie(),
       },

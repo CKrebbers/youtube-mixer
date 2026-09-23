@@ -124,6 +124,7 @@ function tekenPlaat() {
     el.classList.toggle('aan', lagen.stand[g] === l);
   });
   document.getElementById('shift').classList.toggle('aan', shift);
+  document.getElementById('gridmodus').classList.toggle('aan', lagen.stand.edit === 'aan');
 }
 
 function tekenDetail() {
@@ -138,7 +139,8 @@ function tekenDetail() {
   const metShift = regelVan(gekozen, { metShift: true });
   const rijen = [];
   for (const [g, d] of Object.entries(GROEPEN)) {
-    const perLaag = Object.values(d.knoppen).flat()
+    // Een schakelaar (grid-modus) heeft ook zijn standaardstand ('uit') als laag.
+    const perLaag = [...new Set([...(d.schakel ? [d.standaard] : []), ...Object.values(d.knoppen).flat()])]
       .map((l) => ({ l, r: regelVan(gekozen, { metShift: false, stand: { ...lagen.stand, [g]: l } }) }));
     if (new Set(perLaag.map((x) => x.r?.action ?? '')).size > 1) {
       for (const { l, r } of perLaag) {
@@ -207,6 +209,7 @@ document.querySelectorAll('[data-modus]').forEach((el) => el.addEventListener('c
   lagen.zet(g, l);
 }));
 document.getElementById('shift').addEventListener('click', () => { shift = !shift; alles(); });
+document.getElementById('gridmodus').addEventListener('click', () => lagen.zet('edit', lagen.stand.edit === 'aan' ? 'uit' : 'aan'));
 document.getElementById('zoek').addEventListener('input', (e) => { zoek = e.target.value.trim().toLowerCase(); tekenPlaat(); });
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { gekozen = null; zoek = ''; document.getElementById('zoek').value = ''; tekenPlaat(); tekenDetail(); }

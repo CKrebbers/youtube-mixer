@@ -19,6 +19,10 @@ export const XFADE_KANTEN = ['A', 'B', 'thru'];
 /** Tracknummer van een deck, voor meldingen: A = 1, B = 2, … */
 const nrVan = (id) => DECK_IDS.indexOf(id) + 1;
 
+/** De melding als sync of een beat-loop weigert omdat het grid daar onzeker is. */
+export const ONZEKER_WAT = 'tik eerst het tempo of zet het grid op slot';
+export const ONZEKER = `grid hier onzeker — ${ONZEKER_WAT}`;
+
 /**
  * De twee send-bussen. Gewone racks in een gewone insert-slot, maar dan
  * helemaal nat: er zit geen droog signaal op een bus, dat komt al via de
@@ -184,6 +188,10 @@ export class Engine extends Emitter {
     if (!slave.grid) return { ok: false, reden: `track ${nrVan(id)} heeft nog geen beatgrid — tik eerst het tempo (TAP)` };
     const master = this.syncMaster(id);
     if (!master) return { ok: false, reden: 'geen andere track met een beatgrid om naar te syncen' };
+    // Een onzeker grid (van de analyse, niet op slot) is erger dan geen grid:
+    // de sync lijkt te lukken en loopt na een paar maten een tel weg.
+    if (!slave.gridZekerHier) return { ok: false, reden: ONZEKER };
+    if (!master.gridZekerHier) return { ok: false, reden: `grid van track ${nrVan(master.id)} is daar onzeker — ${ONZEKER_WAT}` };
 
     // Tempo op de plek waar beide NU zijn: met een tempokaart verschilt dat per stuk.
     const doelBpm = master.bpm;
@@ -235,7 +243,7 @@ export class Engine extends Emitter {
       id: d.id, title: d.title, loaded: !!d.buffer,
       playing: d.playing, position: d.position, duration: d.duration,
       rate: d.rate, cuePoint: d.cuePoint,
-      grid: d.grid ? d.grid.toJSON() : null, bpm: d.bpm, loopBeats: d.loopBeats ?? null,
+      grid: d.grid ? d.grid.toJSON() : null, gridZeker: d.gridZekerHier, bpm: d.bpm, loopBeats: d.loopBeats ?? null,
       fx: { effect: d.fx.effectId, naam: d.fx.rackNaam ?? null,
             mix: d.fx.mix, bypass: d.fx.bypass,
             plekken: [1, 2, 3, 4, 5, 6, 7, 8]

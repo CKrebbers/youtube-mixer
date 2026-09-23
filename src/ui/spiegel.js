@@ -4,6 +4,7 @@ import { Mapping } from '../control/mapping.js';
 import { knobVan } from './controls.js';
 import { BaanView } from './waveform.js';
 import { esc } from './dom.js';
+import { bpmTekst } from './grid-strook.js';
 import {
   kolomControls, SCENES, MASTERKOLOM, TRANSPORT, TEMPO, DEVICE_KNOBS, DEVICE_KNOPPEN,
   PIJLEN, SHIFT, BANK, CROSSFADER, leesControl, kortInKolom, lichtVan, naamVan,
@@ -264,7 +265,9 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
       tekst(k.maat, stil ? 'MAAT (stil)' : 'MAAT');
       const info = kolomInfo(d);
       tekst(k.rest, info.rest);
-      tekst(k.bpm, info.bpm);
+      // "?" en gedimd in een onzeker gridstuk: daar weigeren sync en beat-loops.
+      tekst(k.bpm, d.loaded && d.bpm ? bpmTekst(d.bpm, d.gridZeker) : info.bpm);
+      klasse(k.bpm, 'onzeker', !!d.bpm && d.gridZeker === false);
       klasse(k.rest, 'bijna', info.bijna);
       b.view.draw(d, analysis[id]);
     }

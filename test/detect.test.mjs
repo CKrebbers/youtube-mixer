@@ -382,7 +382,18 @@ console.log('\nfase-stabiliteit en analyseerGrid');
   ok(`met de audio erbij: fase op de voorflank (${fasefout(metAudio[0].anker, 0.1, 120).toFixed(1)} / ${fasefout(metAudio[2].anker, 100.33, 128).toFixed(1)} ms)`,
     fasefout(metAudio[0].anker, 0.1, 120) < 8 && fasefout(metAudio[2].anker, 100.33, 128) < 8);
   const leeg = d.analyseerGrid(rm.env, rm.envRate, rm.tijdOffset);
-  ok('alleen ruis: één stuk, onzeker', leeg.length === 1 && leeg[0].zekerheid < 0.2);
+  ok(`alleen ruis: één stuk, onzeker (${leeg.map((s) => `${s.van.toFixed(0)}-${s.tot.toFixed(0)} ${s.bpm?.toFixed(1)} z${s.zekerheid.toFixed(2)}`).join(' | ')})`, leeg.length === 1 && leeg[0].zekerheid < 0.2);
+
+  /*
+   * De nul mag zijn fase niet vasthouden op tempo's waar een blok van 1 s een
+   * geheel aantal (halve) tellen is. Met alleen geschudde blokken kreeg een
+   * schone klik op 120 en 90 bpm zekerheid 0 ("geen puls") en op 124 1,00.
+   */
+  const { ZEKER_VANAF } = await import('../src/engine/beatgrid.js');
+  const z = (bpm) => { const e = envVan(klikspoor(90, bpm, 0.25)); return d.analyseerGrid(e.env, e.envRate, e.tijdOffset); };
+  const uitslag = [120, 90, 60, 124].map((bpm) => [bpm, z(bpm)]);
+  ok(`schone klik op 120/90/60/124 bpm is overal zeker (${uitslag.map(([b, st]) => `${b}: ${st.map((s) => s.zekerheid.toFixed(2)).join('/')}`).join(', ')})`,
+    uitslag.every(([b, st]) => st.every((s) => s.zekerheid >= ZEKER_VANAF) && st.every((s) => Math.abs(s.bpm / b - 1) < 0.002)));
 }
 
 console.log('\nfase-ijking: niet op één tik, maar op een reeks klanken');

@@ -274,7 +274,7 @@ body.leermodus .loops .btn::after{bottom:-12px}
 
 .lib-rijen{flex:1;overflow:auto;font-size:11px}
 .lib-leeg{padding:24px;text-align:center;color:var(--dim)}
-.lib-rij{display:grid;grid-template-columns:1fr 160px 60px 130px 70px 96px;gap:10px;
+.lib-rij{display:grid;grid-template-columns:1fr 140px 60px 64px 92px 110px 60px auto;gap:10px;
   align-items:center;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.03)}
 .lib-rij:hover{background:rgba(255,255,255,.03)}
 .lib-titel{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -284,6 +284,17 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .lib-knoppen{display:flex;gap:3px;justify-content:flex-end}
 .lib-weg{color:var(--dim)}
 .lib-weg:hover{color:var(--red);border-color:var(--red)}
+/* Grid per nummer: bpm (of "wisselend") en hoe zeker. Zelfde kleuren als de strook onder de golfvorm. */
+.lib-bpm{font-family:ui-monospace,monospace;color:var(--dim);white-space:nowrap}
+.lib-grid{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+.lib-grid.slot{color:var(--a)}
+.lib-grid.zeker{color:#50dcff}
+.lib-grid.onzeker{color:rgba(80,220,255,.55)}
+.lib-grid.geenpuls{color:#ff6a5f}
+.lib-her{color:var(--dim)}
+.lib-her.bezig{opacity:.5;pointer-events:none}
+/* bpm in een onzeker gridstuk: gedimd, met "?" (sync en beat-loops weigeren daar) */
+.bpm-val.onzeker,.kol-bpm.onzeker{color:rgba(80,220,255,.55);font-style:italic}
 
 /* ---- beatgrid-gereedschap ---- */
 .loop-kop{font-size:11px;letter-spacing:.06em;color:var(--klein);text-transform:uppercase;margin:0 2px 0 4px}

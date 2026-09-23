@@ -1,4 +1,5 @@
 import { Beatgrid } from '../engine/beatgrid.js';
+import { strookPixels } from './grid-strook.js';
 
 /**
  * De golfvorm zelf: per pixel het minimum en maximum van de peaks eronder.
@@ -35,6 +36,55 @@ function tekenGolf(g, analysis, range, w, h, color) {
  * mapjekleuren van het grid (cyaan = loops, violet = sampler).
  */
 export const HOTCUE_KLEUR = '#ffd23c';
+
+/**
+ * De zekerheidsstrook: een dunne balk per gridstuk onderaan (zie
+ * grid-strook.js). Vol = zeker, gedimd = onzeker (sync en beat-loops weigeren
+ * daar), rood gestreept = geen puls.
+ */
+export const STROOK_KLEUR = { zeker: 'rgba(80,220,255,0.85)', onzeker: 'rgba(80,220,255,0.28)', geenpuls: 'rgba(255,70,60,0.75)' };
+function tekenStrook(g, pixels, y, h) {
+  for (const p of pixels) {
+    if (p.soort !== 'geenpuls') {
+      g.fillStyle = STROOK_KLEUR[p.soort];
+      g.fillRect(p.x0, y, p.x1 - p.x0, h);
+      continue;
+    }
+    // Gestreept: 3 px aan, 3 px uit. Zo is het ook zonder kleurzien anders dan "gedimd".
+    g.fillStyle = STROOK_KLEUR.geenpuls;
+    for (let x = p.x0; x < p.x1; x += 6) g.fillRect(x, y, Math.min(3, p.x1 - x), h);
+  }
+}
+
+/**
+ * Onset-pieken (de klappen) als korte streepjes onderin de zoom: zo zie je of
+ * de gridlijnen op de klappen vallen. Neutraal grijs en klein; in grid-modus
+ * (`body.gridmodus`, gezet door de grid-modus op de APC) groter en helderder,
+ * want dan ben je juist aan het uitlijnen.
+ */
+function tekenOnsets(g, onsets, range, span, w, h) {
+  if (!onsets?.length) return;
+  // Binair zoeken naar de eerste klap in beeld: een uur zijn er 18.000.
+  let lo = 0, hi = onsets.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (onsets[m] < range.t0) lo = m + 1; else hi = m; }
+  const grid = typeof document !== 'undefined' && document.body?.classList.contains('gridmodus');
+  const lengte = grid ? Math.round(h * 0.22) : 5;
+  g.fillStyle = grid ? 'rgba(230,235,240,0.8)' : 'rgba(200,205,210,0.35)';
+  for (let i = lo; i < onsets.length && onsets[i] <= range.t1; i++) {
+    const x = Math.round(((onsets[i] - range.t0) / span) * w);
+    g.fillRect(x, h - lengte, 1, lengte);
+  }
+}
+
+/** De strook onder een overzicht, in de cache per grid en maat. */
+function strookVan(view, grid, duur, w) {
+  const k = view._strookSleutel;
+  if (k?.grid !== grid || k.duur !== duur || k.w !== w) {
+    view._strookSleutel = { grid, duur, w };
+    view._strookPx = grid ? strookPixels(grid.strook(duur), duur, w) : [];
+  }
+  return view._strookPx;
+}
 
 /**
  * Twee weergaven uit dezelfde peaks-array:
@@ -136,7 +186,8 @@ export class WaveformView {
     });
   }
 
-  draw(deckState, analysis) {
+  /** `onsets`: de klappen van het deck (deck.onsets), alleen voor de zoom. */
+  draw(deckState, analysis, onsets = null) {
     const g = this.ctx, w = this.w, h = this.h, mid = h / 2;
     g.clearRect(0, 0, w, h);
     g.fillStyle = '#0b0e11';
@@ -182,6 +233,10 @@ export class WaveformView {
     // Stukgrenzen in beide weergaven, bovenop de golf: in het overzicht zie
     // je zo waar het tempo wisselt.
     if (grid) this.tekenStukken(grid, range, span, w, h);
+
+    // Klappen in de zoom; de zekerheidsstrook onder het overzicht.
+    if (this.mode === 'zoom') tekenOnsets(g, onsets, range, span, w, h);
+    else if (grid) tekenStrook(g, strookVan(this, grid, deckState.duration, w), h - 3, 3);
 
     // hotcues
     deckState.hotcues.forEach((t, i) => {
@@ -246,6 +301,9 @@ export class BaanView extends WaveformView {
       g.fillStyle = HOTCUE_KLEUR;
       g.fillRect(x(t) - 0.5, 0, 1, h);
     });
+    // Zekerheid van het grid, per stuk: onderste twee pixels.
+    const grid = d.grid ? this._grid(d.grid) : null;
+    if (grid) tekenStrook(g, strookVan(this, grid, d.duration, w), h - 2, 2);
     g.fillStyle = '#ff3b30';
     g.fillRect(x(d.position) - 1, 0, 2, h);
   }

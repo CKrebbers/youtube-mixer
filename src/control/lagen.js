@@ -14,6 +14,15 @@ import { Emitter } from '../lib/emitter.js';
  *   grid    het 5×8-grid: hotcues · loops · sampler · video, gekozen met de
  *           scene-knoppen ernaast, elk in een eigen kleur.
  *
+ *   edit    de grid-modus (stap D, docs/BEATGRID.md): Shift + Metronome zet
+ *           hem aan of uit. Aan = scene-knoppen, nudge, cue level en Lock
+ *           bewerken het beatgrid van de focus-track; alles wat de grid-modus
+ *           niet definieert (faders, play, filter, pads) doet gewoon zijn werk.
+ *           Een SCHAKELAAR, geen kiesknop: drukken wisselt, vasthouden is
+ *           geen gluren. Staat vooraan in GROEPEN: bij twee mapjes op
+ *           dezelfde knop wint de grid-modus, want de mapping zoekt in de
+ *           volgorde van `actief()`.
+ *
  * Een KIESKNOP opent een mapje. Kort drukken zet het vast. Vasthouden is
  * "even gluren": laat je los, dan ben je terug waar je was. Zit er meer dan
  * één mapje onder dezelfde kiesknop (Clip/Device View: strip, dan rack), dan loopt nog
@@ -27,6 +36,10 @@ import { Emitter } from '../lib/emitter.js';
 export const GLUREN = 400;   // ms: langer vasthouden = even gluren, loslaten = terug
 
 export const GROEPEN = {
+  edit: {
+    naam: 'grid-modus', standaard: 'uit', schakel: true,
+    knoppen: { toggle: ['aan'] },
+  },
   device: {
     naam: 'device knobs', standaard: 'strip',
     knoppen: { view: ['strip', 'rack'] },
@@ -41,6 +54,7 @@ export const GROEPEN = {
 /** Hoe een mapje op het scherm heet. */
 export const LAAGNAAM = {
   'device.strip': 'strip (trim · high · mid · low / echo · galm · fx)', 'device.rack': 'rack (fx 1–8)',
+  'edit.aan': 'grid-modus (beatgrid bewerken)', 'edit.uit': 'uit',
   'grid.hotcues': 'hotcues', 'grid.loops': 'loops', 'grid.sampler': 'sampler', 'grid.video': 'video',
 };
 
@@ -69,6 +83,11 @@ export class Lagen extends Emitter {
     const g = GROEPEN[groep];
     const lijst = g?.knoppen[knop];
     if (!lijst) return;
+    if (g.schakel) {
+      // Schakelaar: bij het indrukken om, loslaten doet niets.
+      if (on) this.zet(groep, this.stand[groep] === lijst[0] ? g.standaard : lijst[0]);
+      return;
+    }
     if (on) {
       const vorige = this.stand[groep];
       const i = lijst.indexOf(vorige);

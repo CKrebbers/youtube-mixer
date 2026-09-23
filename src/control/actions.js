@@ -13,9 +13,9 @@
  * soft-takeover niet weten wanneer een fysieke knop door de softwarewaarde heen
  * beweegt, en kan de LED-laag niet weten wat hij moet laten branden.
  */
-import { Beatgrid, TapTempo } from '../engine/beatgrid.js';
+import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/beatgrid.js';
 import { EFFECTEN } from '../engine/fx.js';
-import { DECK_IDS, XFADE_KANTEN } from '../engine/engine.js';
+import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
 import { PITCH_BEREIKEN } from '../engine/deck.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
@@ -126,6 +126,14 @@ export function bindEngine(engine) {
     const d = engine.deck(id);
     const n = `track.${nr}`;
     const bool = (fn) => () => (fn() ? 1 : 0);
+    // Wat je NU hoort, in tracktijd: tijdens spelen de positie min de
+    // uitgangsvertraging (× rate, want de positie loopt in tracktijd), net als
+    // de video-puls. Stilstaand is de positie zelf wat je hoort en ziet.
+    const hoorbaar = () => {
+      if (!d.playing) return d.position;
+      const c = engine.ctx;
+      return d.position - ((c?.outputLatency || 0) + (c?.baseLatency || 0)) * (d.rate || 1);
+    };
 
     define(`${n}.play`, 'trigger', (on) => { if (on) d.togglePlay(); },
       { label: `Track ${nr} play/pause`, read: bool(() => d.playing) });
@@ -169,16 +177,40 @@ export function bindEngine(engine) {
       engine.emit('tap', { deck: id, bpm, taps: r.taps, anker, tijden: r.tijden, positie: anker });
     }, { label: `Track ${nr} tap tempo`, read: () => (d.grid ? 1 : 0) });
 
-    // Grid bewerken "vanaf hier": alles raakt alleen het STUK waar de speelkop
-    // staat. Met één stuk is dat het hele grid, zoals vroeger.
-    const bewerk = (fn) => (on) => { if (on && d.grid) { fn(d.grid, d.position); d.gridGewijzigd(); } };
-    define(`${n}.grid.here`, 'trigger', bewerk((g, p) => g.ankerHier(p)), { label: `Track ${nr} beat 1 hier` });
+    // Grid bewerken "vanaf hier": alles raakt alleen het STUK waar je bent.
+    // "Hier" is wat je HOORT (hoorbaar()), anders zet je een tel een
+    // uitgangsvertraging te laat. Met één stuk is dat het hele grid.
+    const bewerk = (fn) => (on) => { if (on && d.grid) { fn(d.grid, hoorbaar()); d.gridGewijzigd(); } };
+    // Voor de scene-knoppen in de grid-modus: read null zonder grid (niets te
+    // doen), 1 zolang ingedrukt (je ziet dat hij het deed), anders `rust()`.
+    const gridKnop = (id, fn, label, rust = () => 0) => {
+      let ingedrukt = false;
+      const doe = bewerk(fn);
+      define(`${n}.grid.${id}`, 'trigger', (on) => { ingedrukt = !!on; doe(on); },
+        { label, read: () => (!d.grid ? null : ingedrukt ? 1 : rust()) });
+    };
+    // Tel 1 hier SNAPT naar de dichtstbijzijnde klap binnen 30 ms (de onsets
+    // van de analyse, stap C); geen klap of geen analyse: de positie zelf.
+    gridKnop('here', (g, p) => g.ankerHier(snapNaarOnset(d.onsets, p)), `Track ${nr} beat 1 hier (snapt naar een klap)`);
     define(`${n}.grid.back`, 'trigger', bewerk((g, p) => g.schuif(-0.005, p)), { label: `Track ${nr} grid 5 ms terug` });
     define(`${n}.grid.fwd`, 'trigger', bewerk((g, p) => g.schuif(0.005, p)), { label: `Track ${nr} grid 5 ms vooruit` });
-    define(`${n}.grid.double`, 'trigger', bewerk((g, p) => g.verdubbel(p)), { label: `Track ${nr} bpm x2` });
-    define(`${n}.grid.halve`, 'trigger', bewerk((g, p) => g.halveer(p)), { label: `Track ${nr} bpm /2` });
-    define(`${n}.grid.split`, 'trigger', bewerk((g, p) => g.splits(p)),
-      { label: `Track ${nr} nieuw gridstuk hier`, read: () => (!d.grid ? null : d.grid.aantalStukken > 1 ? 0.5 : 0) });
+    define(`${n}.grid.back.fine`, 'trigger', bewerk((g, p) => g.schuif(-0.001, p)), { label: `Track ${nr} grid 1 ms terug` });
+    define(`${n}.grid.fwd.fine`, 'trigger', bewerk((g, p) => g.schuif(0.001, p)), { label: `Track ${nr} grid 1 ms vooruit` });
+    gridKnop('double', (g, p) => g.verdubbel(p), `Track ${nr} bpm x2`);
+    gridKnop('halve', (g, p) => g.halveer(p), `Track ${nr} bpm /2`);
+    gridKnop('halfbeat', (g, p) => g.schuifTel(0.5, p), `Track ${nr} grid een halve tel verschuiven`);
+    gridKnop('split', (g, p) => g.splits(p), `Track ${nr} nieuw gridstuk hier`,
+      () => (d.grid.aantalStukken > 1 ? 0.5 : 0));
+    // Tempo van het stuk waar je bent, als value 0..1 over het hele bpm-bereik
+    // (regel 2: de mapping weet niets van bpm). Lineair, zodat een encoder-tik
+    // overal even groot is: 0,01 bpm = step 0,01 / 260. De tel die het dichtst
+    // bij wat je hoort ligt blijft liggen (setBpm met `bij`).
+    define(`${n}.grid.bpm`, 'value', (v) => {
+      if (!d.grid) return;
+      d.grid.setBpm(MIN_BPM + Math.min(1, Math.max(0, v)) * (MAX_BPM - MIN_BPM), { bij: hoorbaar() });
+      d.gridGewijzigd();
+    }, { label: `Track ${nr} bpm van het gridstuk hier (${MIN_BPM}–${MAX_BPM}, voor een encoder)`,
+         read: () => (!d.grid ? null : (d.grid.bpmAt(hoorbaar()) - MIN_BPM) / (MAX_BPM - MIN_BPM)) });
     define(`${n}.grid.merge`, 'trigger', bewerk((g, p) => g.voegSamen(p)),
       { label: `Track ${nr} gridstuk samenvoegen met het vorige` });
     define(`${n}.grid.lock`, 'trigger', bewerk((g) => { g.slot = !g.slot; }),
@@ -189,9 +221,13 @@ export function bindEngine(engine) {
     // Reads voor de LED's (VRAGEN B4): null = niets te doen (lege track, geen
     // grid), 0 = leeg maar bruikbaar, 0,5 = gevuld, 1 = actief.
     for (const beats of [0.25, 0.5, 1, 2, 4, 8, 16]) {
-      define(`${n}.beatloop.${beats}`, 'trigger', (on) => { if (on) d.setBeatLoop(beats); },
-        { label: `Track ${nr} loop ${beats} ${beats === 1 ? 'tel' : 'tellen'}`,
-          read: () => (!d.buffer || !d.grid ? null : d.loopBeats === beats ? 1 : 0) });
+      define(`${n}.beatloop.${beats}`, 'trigger', (on) => {
+        if (!on) return;
+        // In een onzeker stuk niet stil verkeerd loopen, maar zeggen waarom.
+        if (d.grid && d.gridZekerHier === false) engine.emit('melding', { tekst: `track ${nr}: ${ONZEKER}`, soort: 'fout' });
+        else d.setBeatLoop(beats);
+      }, { label: `Track ${nr} loop ${beats} ${beats === 1 ? 'tel' : 'tellen'}`,
+          read: () => (!d.buffer || !d.grid || d.gridZekerHier === false ? null : d.loopBeats === beats ? 1 : 0) });
     }
 
     for (let i = 0; i < 4; i++) {
@@ -304,9 +340,7 @@ export function bindEngine(engine) {
     define(`${n}.phase`, 'trigger', () => {}, { label: `Track ${nr} fase binnen de tel (alleen lezen)`,
       read: () => {
         if (!d.playing || !d.grid) return null;
-        const c = engine.ctx;
-        const vertraging = (c?.outputLatency || 0) + (c?.baseLatency || 0);
-        return d.grid.phase(d.position - vertraging * (d.rate || 1));
+        return d.grid.phase(hoorbaar());
       } });
 
     // Crossfader-toewijzing: A -> B -> thru -> A, zoals de knop op de APC.
@@ -447,7 +481,8 @@ export function bindLagen(lagen) {
   for (const [groep, g] of Object.entries(GROEPEN)) {
     for (const knop of Object.keys(g.knoppen)) {
       define(`layer.${groep}.${knop}`, 'trigger', (on) => lagen.druk(groep, knop, on),
-        { label: `Mapje ${g.naam}: ${g.knoppen[knop].map((l) => LAAGNAAM[`${groep}.${l}`] ?? l).join(' / ')}`,
+        { label: g.schakel ? `${g.naam[0].toUpperCase()}${g.naam.slice(1)} aan/uit`
+            : `Mapje ${g.naam}: ${g.knoppen[knop].map((l) => LAAGNAAM[`${groep}.${l}`] ?? l).join(' / ')}`,
           // Een kiesknop met meer mapjes onder zich (Clip/Device View: strip,
           // dan rack) licht alleen op buiten het standaardmapje. Anders
           // brandde hij altijd en zag je niet of je in het rack zat.

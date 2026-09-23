@@ -355,7 +355,7 @@ console.log('\nmapjes en shift');
   const { Lagen, GLUREN } = await import('../src/control/lagen.js');
   let t = 0;
   const lg = new Lagen({ now: () => t });
-  ok('begint op de standaard-mapjes: strip en hotcues', lg.actief().join() === 'device.strip,grid.hotcues');
+  ok('begint op de standaard-mapjes: grid-modus uit, strip en hotcues', lg.actief().join() === 'edit.uit,device.strip,grid.hotcues');
   lg.druk('device', 'view', true); t += 100; lg.druk('device', 'view', false);
   ok('Clip/Device View: strip -> rack', lg.stand.device === 'rack');
   lg.druk('device', 'view', true); t += 100; lg.druk('device', 'view', false);
@@ -606,6 +606,50 @@ console.log('\nendless');
       && st.kies(`note:${ch}:48`, { shift: false }) === null && st.kies(`note:${ch}:48`, { shift: true })?.action === `track.${ch + 1}.cue`));
   ok('actieveRegels volgt shift', st.actieveRegels({ shift: true }).get('note:0:48')?.action === 'track.1.cue'
     && !st.actieveRegels({ shift: false }).has('note:0:48'));
+}
+
+// ---- grid-modus (stap D) ------------------------------------------------------
+console.log('\ngrid-modus');
+{
+  const { Lagen } = await import('../src/control/lagen.js');
+  let t = 0;
+  const lg = new Lagen({ now: () => t });
+  lg.druk('edit', 'toggle', true); t += 1000; lg.druk('edit', 'toggle', false);
+  ok('grid-modus is een schakelaar: lang vasthouden = gewoon aan (geen gluren)', lg.stand.edit === 'aan');
+  lg.druk('edit', 'toggle', true); lg.druk('edit', 'toggle', false);
+  ok('nog eens drukken = uit', lg.stand.edit === 'uit');
+
+  const gm = new Mapping({ read: () => 0.5, invoke: () => {}, lagen: () => lg.actief() });
+  gm.load(doc);
+  const actie = (sig, shift = false) => gm.kies(sig, { shift })?.action ?? null;
+  ok('Metronome zonder shift = crossfadercurve, met shift = grid-modus', actie('note:0:90') === 'mixer.xfader.curve' && actie('note:0:90', true) === 'layer.edit.toggle');
+  lg.zet('edit', 'aan');
+  const verwacht = {
+    'note:0:82': 'grid.here', 'note:0:83': 'grid.double', 'note:0:84': 'grid.halve', 'note:0:85': 'grid.halfbeat',
+    'note:0:86': 'grid.split', 'note:0:100': 'grid.back', 'note:0:101': 'grid.fwd', 'cc:0:47': 'grid.bpm', 'note:0:63': 'grid.lock',
+  };
+  const mis = Object.entries(verwacht).filter(([sig, a]) => actie(sig) !== `track.{focus}.${a}`);
+  ok(`grid-modus: scene 1–5, nudge, cue level en Lock bewerken het grid${mis.length ? ' — mis: ' + mis.map((x) => x[0]).join() : ''}`, mis.length === 0);
+  ok('grid-modus + shift: nudge ±1 ms, cue level ±0,1, Metronome zet hem uit',
+    actie('note:0:100', true) === 'track.{focus}.grid.back.fine' && actie('note:0:101', true) === 'track.{focus}.grid.fwd.fine'
+    && actie('cc:0:47', true) === 'track.{focus}.grid.bpm' && actie('note:0:90', true) === 'layer.edit.toggle');
+  const stap = (sh) => gm.kies('cc:0:47', { shift: sh }).step * 260;
+  ok('cue level: 0,01 bpm per tik, met shift 0,1', Math.abs(stap(false) - 0.01) < 1e-12 && Math.abs(stap(true) - 0.1) < 1e-12);
+  ok('grid-modus: Tap blijft tap, Metronome zonder shift blijft de curve',
+    actie('note:0:99') === 'track.{focus}.tap' && actie('note:0:90') === 'mixer.xfader.curve');
+  ok('grid-modus: wat hij niet definieert werkt gewoon (fader, play, filter, hotcue-pad)',
+    actie('cc:0:7') === 'track.1.fader' && actie('note:0:91') === 'track.{focus}.play'
+    && actie('cc:0:48') === 'track.1.filter' && actie('note:0:32') === 'track.1.hotcue.1');
+  ok('grid-modus wint van een grid-mapje op dezelfde knop (edit staat vooraan)', lg.actief()[0] === 'edit.aan');
+
+  // Buiten de grid-modus: precies wat de mapping zonder grid-modus zou doen.
+  lg.zet('edit', 'uit');
+  const zonder = new Mapping({ read: () => 0.5, invoke: () => {}, lagen: () => lg.actief() });
+  zonder.load({ ...doc, rules: doc.rules.filter((r) => r.laag !== 'edit.aan' && r.action !== 'layer.edit.toggle') });
+  const sigs = [...new Set(doc.rules.map((r) => r.in))];
+  const anders = sigs.filter((sig) => [false, true].some((sh) => gm.kies(sig, { shift: sh }) !== null
+    && gm.kies(sig, { shift: sh })?.action !== zonder.kies(sig, { shift: sh })?.action && !(sh && sig === 'note:0:90')));
+  ok(`buiten grid-modus doet elke knop wat hij deed (behalve Shift + Metronome)${anders.length ? ' — anders: ' + anders.join() : ''}`, anders.length === 0);
 }
 
 // ---- LED-instellingen in een regel overleven laden en exporteren -------------

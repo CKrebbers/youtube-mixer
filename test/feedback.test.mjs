@@ -327,6 +327,43 @@ ok('blackout zet alles op nul', bus.every((b) => b[2] === 0));
   lgR.zet('grid', 'hotcues');
 }
 
+// ---- grid-modus (stap D): LED's -------------------------------------------------
+{
+  const standen = {};
+  const lees = (a) => (a in standen ? standen[a] : null);
+  const lg = new Lagen();
+  const m = new Mapping({ read: lees, invoke: () => {}, vars: () => ({ focus: 2 }), lagen: () => lg.actief() });
+  m.load(standaard);
+  const fbG = new Feedback({ device: apc, mapping: m, read: lees, meta: () => null, send: () => true });
+  fbG.klaar = true;
+  const led = (sig) => fbG.desired().get(sig)?.[2] ?? null;
+  standen['layer.grid.hotcues'] = 1; standen['layer.grid.loops'] = 0;
+  standen['mixer.xfader.curve'] = 0; standen['layer.edit.toggle'] = 0;
+  standen['track.2.grid.here'] = 0; standen['track.2.grid.lock'] = 1;
+  standen['track.2.focus'] = 1; standen['track.2.leads'] = 0; standen['track.2.phase'] = 0.1;
+
+  ok('buiten grid-modus: scene 1 = geel (hotcues open)', led('note:0:82') === apc.palette.geel);
+  ok('buiten grid-modus: Metronome-lampje = curve (smooth = uit)', led('note:0:90') === 0);
+  ok('buiten grid-modus: Lock brandt niet', led('note:0:63') === null);
+  ok('buiten grid-modus: focus zonder maat knippert niet', led('note:1:51') === 127);
+
+  lg.zet('edit', 'aan'); standen['layer.edit.toggle'] = 1;
+  ok('grid-modus: scene 1 = WIT (niet de kleur van een grid-mapje)', led('note:0:82') === apc.palette.wit);
+  standen['track.2.grid.here'] = 1;
+  ok('grid-modus: scene 1 ingedrukt = cyaan', led('note:0:82') === apc.palette.cyaan);
+  delete standen['track.2.grid.here'];
+  ok('grid-modus zonder grid: scene 1 uit (niets te doen)', led('note:0:82') === null);
+  ok('grid-modus: Metronome-lampje aan, ook met de curve op smooth', led('note:0:90') === 127);
+  ok('grid-modus: Lock = slot van de focus-track', led('note:0:63') === 127);
+  standen['track.2.grid.lock'] = 0;
+  ok('... en uit als hij niet op slot staat', led('note:0:63') === 0);
+  ok('grid-modus: Track Select van de focus knippert op de tel (uit op de tel)', led('note:1:51') === 0);
+  standen['track.2.phase'] = 0.6;
+  ok('... en aan ertussen', led('note:1:51') === 127);
+  standen['track.1.focus'] = 0; standen['track.1.leads'] = 1; standen['track.1.phase'] = 0.1;
+  ok('grid-modus: een andere track zonder focus blijft donker', led('note:0:51') === 0);
+}
+
 // ---- de reads achter de B4-kleuren (echte action-bus) -----------------------
 {
   const A = engine.decks.A;

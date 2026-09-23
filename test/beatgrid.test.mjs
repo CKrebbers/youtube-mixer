@@ -233,5 +233,23 @@ ok('en het tempo klopt nog steeds', Math.abs(tt4.tap(31 * 480, 0).bpm - 125) < 0
   ok('en de tellen blijven oplopen', oplopend);
 }
 
+// ---- stap D: halve tel en snappen naar een klap -------------------------------
+{
+  const { Beatgrid: BG, snapNaarOnset } = await import('../src/engine/beatgrid.js');
+  const g = new BG({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 4, bpm: 100, anker: 4 }] });
+  g.schuifTel(0.5, 5);
+  ok('halve tel: het stuk rond de positie schuift een halve tel van ZIJN tempo (0,3 s)',
+    Math.abs(g.stukken[1].anker - 4.3) < 1e-9 && g.stukken[0].anker === 0);
+  g.schuifTel(0.5, 1);
+  ok('halve tel in het eerste stuk: 0,25 s op 120 bpm, het tweede blijft staan',
+    Math.abs(g.stukken[0].anker - 0.25) < 1e-9 && Math.abs(g.stukken[1].anker - 4.3) < 1e-9);
+  const on = new Float64Array([0.5, 1.02, 1.9, 2.5]);
+  ok('snap: de klap binnen 30 ms wordt de tel', snapNaarOnset(on, 1.0) === 1.02);
+  ok('snap: de dichtstbijzijnde van twee buren', snapNaarOnset(on, 1.905) === 1.9);
+  ok('snap: net buiten 30 ms = de positie zelf', snapNaarOnset(on, 1.055) === 1.055);
+  ok('snap: vóór de eerste en na de laatste klap', snapNaarOnset(on, 0.48) === 0.5 && snapNaarOnset(on, 2.52) === 2.5 && snapNaarOnset(on, 3) === 3);
+  ok('snap: zonder onsets (null of leeg) niet snappen', snapNaarOnset(null, 1.0) === 1.0 && snapNaarOnset(new Float64Array(0), 1.0) === 1.0);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

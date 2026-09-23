@@ -648,6 +648,192 @@
       "label": "metronome"
     },
     {
+      "in": "note:0:90",
+      "action": "layer.edit.toggle",
+      "mode": "trigger",
+      "label": "metronome + shift",
+      "shift": true
+    },
+    {
+      "in": "note:0:90",
+      "action": "mixer.xfader.curve",
+      "mode": "trigger",
+      "label": "metronome (grid-modus: lampje = grid-modus aan)",
+      "laag": "edit.aan",
+      "led": {
+        "lees": "layer.edit.toggle"
+      }
+    },
+    {
+      "in": "note:0:82",
+      "action": "track.{focus}.grid.here",
+      "mode": "trigger",
+      "label": "scene launch 1 (grid-modus)",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:83",
+      "action": "track.{focus}.grid.double",
+      "mode": "trigger",
+      "label": "scene launch 2 (grid-modus)",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:84",
+      "action": "track.{focus}.grid.halve",
+      "mode": "trigger",
+      "label": "scene launch 3 (grid-modus)",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:85",
+      "action": "track.{focus}.grid.halfbeat",
+      "mode": "trigger",
+      "label": "scene launch 4 (grid-modus)",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:86",
+      "action": "track.{focus}.grid.split",
+      "mode": "trigger",
+      "label": "scene launch 5 (grid-modus)",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:100",
+      "action": "track.{focus}.grid.back",
+      "mode": "trigger",
+      "label": "nudge - (grid-modus)",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:101",
+      "action": "track.{focus}.grid.fwd",
+      "mode": "trigger",
+      "label": "nudge + (grid-modus)",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:100",
+      "action": "track.{focus}.grid.back.fine",
+      "mode": "trigger",
+      "label": "nudge - + shift (grid-modus)",
+      "shift": true,
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:101",
+      "action": "track.{focus}.grid.fwd.fine",
+      "mode": "trigger",
+      "label": "nudge + + shift (grid-modus)",
+      "shift": true,
+      "laag": "edit.aan"
+    },
+    {
+      "in": "cc:0:47",
+      "action": "track.{focus}.grid.bpm",
+      "mode": "relative-2c",
+      "step": 0.00003846153846153846,
+      "label": "cue level (grid-modus): bpm ±0,01",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "cc:0:47",
+      "action": "track.{focus}.grid.bpm",
+      "mode": "relative-2c",
+      "step": 0.0003846153846153846,
+      "label": "cue level + shift (grid-modus): bpm ±0,1",
+      "shift": true,
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:63",
+      "action": "track.{focus}.grid.lock",
+      "mode": "trigger",
+      "label": "device lock (grid-modus)",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:51",
+      "action": "track.1.focus",
+      "mode": "trigger",
+      "label": "track select 1 (grid-modus: focus knippert op de tel)",
+      "laag": "edit.aan",
+      "led": {
+        "tel": "aan"
+      }
+    },
+    {
+      "in": "note:1:51",
+      "action": "track.2.focus",
+      "mode": "trigger",
+      "label": "track select 2 (grid-modus: focus knippert op de tel)",
+      "laag": "edit.aan",
+      "led": {
+        "tel": "aan"
+      }
+    },
+    {
+      "in": "note:2:51",
+      "action": "track.3.focus",
+      "mode": "trigger",
+      "label": "track select 3 (grid-modus: focus knippert op de tel)",
+      "laag": "edit.aan",
+      "led": {
+        "tel": "aan"
+      }
+    },
+    {
+      "in": "note:3:51",
+      "action": "track.4.focus",
+      "mode": "trigger",
+      "label": "track select 4 (grid-modus: focus knippert op de tel)",
+      "laag": "edit.aan",
+      "led": {
+        "tel": "aan"
+      }
+    },
+    {
+      "in": "note:4:51",
+      "action": "track.5.focus",
+      "mode": "trigger",
+      "label": "track select 5 (grid-modus: focus knippert op de tel)",
+      "laag": "edit.aan",
+      "led": {
+        "tel": "aan"
+      }
+    },
+    {
+      "in": "note:5:51",
+      "action": "track.6.focus",
+      "mode": "trigger",
+      "label": "track select 6 (grid-modus: focus knippert op de tel)",
+      "laag": "edit.aan",
+      "led": {
+        "tel": "aan"
+      }
+    },
+    {
+      "in": "note:6:51",
+      "action": "track.7.focus",
+      "mode": "trigger",
+      "label": "track select 7 (grid-modus: focus knippert op de tel)",
+      "laag": "edit.aan",
+      "led": {
+        "tel": "aan"
+      }
+    },
+    {
+      "in": "note:7:51",
+      "action": "track.8.focus",
+      "mode": "trigger",
+      "label": "track select 8 (grid-modus: focus knippert op de tel)",
+      "laag": "edit.aan",
+      "led": {
+        "tel": "aan"
+      }
+    },
+    {
       "in": "note:0:96",
       "action": "focus.next",
       "mode": "trigger",

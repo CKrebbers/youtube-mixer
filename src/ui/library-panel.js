@@ -1,5 +1,6 @@
 import { fmtTime } from '../lib/emitter.js';
 import { esc } from './dom.js';
+import { gridStatus, libraryBpm, STATUS_TEKST } from './grid-strook.js';
 
 /**
  * Het library-paneel: URL erin, track eruit, één klik op een deck.
@@ -11,9 +12,10 @@ import { esc } from './dom.js';
 
 
 export class LibraryPanel {
-  constructor({ root, onLaad, decks = ['A', 'B'], label = (d) => d, stand = () => 'leeg' }) {
+  constructor({ root, onLaad, onGrid = () => {}, decks = ['A', 'B'], label = (d) => d, stand = () => 'leeg' }) {
     this.root = root;
     this.onLaad = onLaad;
+    this.onGrid = onGrid;        // (trackId, grid) na "opnieuw analyseren": op de decks zetten
     this.decks = decks;
     this.label = label;
     this.stand = stand;          // (deck) => 'leeg' | 'geladen' | 'speelt'
@@ -21,6 +23,7 @@ export class LibraryPanel {
     this.tracks = [];
     this.opdrachten = [];
     this.bezig = new Set();     // tracks die nu geladen worden
+    this.analyseert = new Set(); // tracks waarvan het grid nu opnieuw geanalyseerd wordt
     this.melding = null;
     this.zoek = '';
 
@@ -47,6 +50,16 @@ export class LibraryPanel {
           return this.tekenStatus();
         }
         return this.laad(knop.dataset.id, knop.dataset.deck);
+      }
+      const her = e.target.closest('button[data-her]');
+      if (her) {
+        // Over een grid op SLOT (door jou bevestigd) alleen na een tweede klik.
+        const t = this.tracks.find((x) => x.id === her.dataset.her);
+        if (t?.grid?.slot && !this._bevestigd('her', t.id)) {
+          this.melding = { tekst: `het grid van "${t.titel}" staat op slot — klik nog eens op ↻ om het toch te vervangen`, goed: false };
+          return this.tekenStatus();
+        }
+        return this.heranalyseer(her.dataset.her, !!t?.grid?.slot);
       }
       const weg = e.target.closest('button[data-weg]');
       if (weg) {
@@ -111,6 +124,37 @@ export class LibraryPanel {
       this.melding = { tekst: `laden mislukt: ${err.message}`, goed: false };
     }
     this.bezig.delete(id);
+    this.tekenStatus();
+    this.tekenRijen();
+  }
+
+  /** Het grid opnieuw laten voorstellen door de server (in een worker, een paar seconden). */
+  async heranalyseer(id, forceer = false) {
+    const track = this.tracks.find((t) => t.id === id);
+    if (!track || this.analyseert.has(id)) return;
+    this.analyseert.add(id);
+    this.melding = { tekst: `grid van "${track.titel}" wordt opnieuw geanalyseerd…`, goed: true };
+    this.tekenStatus();
+    this.tekenRijen();
+    try {
+      const r = await fetch(`/api/library/${id}/grid/analyseer`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ forceer }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.fout || `${r.status}`);
+      if (j.bewaard) {
+        track.grid = j.grid;
+        this.onGrid(id, j.grid);
+        const st = gridStatus(j.grid, track.duur);
+        this.melding = { tekst: `${track.titel}: ${j.grid.stukken.length} stuk${j.grid.stukken.length === 1 ? '' : 'ken'}, `
+          + `${Math.round((st.aandeel ?? 0) * 100)}% zeker`, goed: true };
+      } else {
+        this.melding = { tekst: `${track.titel}: niet vervangen (${j.reden})`, goed: false };
+      }
+    } catch (err) {
+      this.melding = { tekst: `analyseren mislukt: ${err.message}`, goed: false };
+    }
+    this.analyseert.delete(id);
     this.tekenStatus();
     this.tekenRijen();
   }
@@ -183,14 +227,22 @@ export class LibraryPanel {
     this.el.rijen.innerHTML = this.tracks.map((t) => {
       const lufs = t.loudness_i != null ? `${t.loudness_i.toFixed(1)} → ${t.doel_loudness} LUFS` : '—';
       const laadt = this.bezig.has(t.id);
+      const gs = gridStatus(t.grid, t.duur);
+      const n = t.grid?.stukken?.length ?? 0;
+      const gridTitel = gs.status === 'geen' ? 'nog geen grid — wordt op de achtergrond geanalyseerd, of tik het tempo'
+        : `${n} stuk${n === 1 ? '' : 'ken'}${gs.aandeel !== null && gs.status !== 'slot' && gs.status !== 'hand' ? `, ${Math.round(gs.aandeel * 100)}% van de tijd zeker` : ''}`;
+      const her = this.analyseert.has(t.id);
       return `<div class="lib-rij">
         <span class="lib-titel" title="${esc(t.url)}">${esc(t.titel)}</span>
         <span class="lib-uploader">${esc(t.uploader || '')}</span>
         <span class="lib-duur">${fmtTime(t.duur || 0).replace(/\.\d+$/, '')}</span>
+        <span class="lib-bpm" title="tempo van het grid bij het begin">${esc(libraryBpm(t.grid))}</span>
+        <span class="lib-grid ${gs.status}" title="${esc(gridTitel)}">${esc(STATUS_TEKST[gs.status])}</span>
         <span class="lib-lufs">${esc(lufs)}</span>
         <span class="lib-racks">${t.racks ? `${t.racks} rack${t.racks === 1 ? '' : 's'}` : '—'}</span>
         <span class="lib-knoppen">
           ${this.decks.map((d) => `<button class="btn sm lib-trk ${this.stand(d)}" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)} (${this.stand(d)})"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}
+          <button class="btn sm lib-her${her ? ' bezig' : ''}" data-her="${esc(t.id)}" title="grid opnieuw analyseren${t.grid?.slot ? ' (staat op slot: tweede klik)' : ''}">${her ? '…' : '↻'}</button>
           <button class="btn sm lib-weg" data-weg="${esc(t.id)}" title="uit de lijst halen">×</button>
         </span>
       </div>`;

@@ -162,6 +162,42 @@ ok('pad 3 van een ander nummer staat los', lib.samples('def456').length === 1 &&
 ok('vergeten', lib.verwijderSample('def456', 3) && lib.samples('def456').length === 0);
 ok('vergeten wat er niet is: false', lib.verwijderSample('def456', 3) === false);
 
+// ---- automatisch grid (stap C) ---------------------------------------------
+// Een voorstel van de analyse mag nooit over een grid op slot, en niet over
+// een met de hand bewerkt grid tenzij je er zelf om vraagt.
+
+const auto = { stukken: [{ van: 0, bpm: 150, anker: 0.4, zekerheid: 0.8 }, { van: 60, bpm: 140, anker: 60.1, zekerheid: 0.3 }] };
+for (const id of ['gLeeg', 'gOud', 'gSlot', 'gHand', 'gAuto']) lib.bewaarTrack(nummer(id, id));
+lib.bewaarGrid('gOud', { bpm: 61.9, firstBeat: 2333.8 });
+lib.bewaarGrid('gSlot', { stukken: [{ van: 0, bpm: 124, anker: 0.1 }], slot: true });
+lib.bewaarGrid('gHand', { stukken: [{ van: 0, bpm: 128, anker: 0.2, zekerheid: 0.4 }], bron: 'hand' });
+lib.bewaarGrid('gAuto', { ...auto, bron: 'auto' });
+ok('normaliseerGrid bewaart bron auto/hand, niet onzin',
+  normaliseerGrid({ bpm: 120, bron: 'auto' }).bron === 'auto' && normaliseerGrid({ bpm: 120, bron: 'x' }).bron === undefined);
+const teDoen = lib.teAnalyseren();
+ok(`bij het opstarten: leeg en oud, niet slot/hand/auto (${teDoen.filter((x) => x.startsWith('g')).join(',')})`,
+  teDoen.includes('gLeeg') && teDoen.includes('gOud') && !teDoen.includes('gSlot') && !teDoen.includes('gHand') && !teDoen.includes('gAuto'));
+
+const rOud = lib.bewaarAutoGrid('gOud', auto);
+ok('oud grid (zonder bron, zonder slot) wordt vervangen', rOud.bewaard && rOud.grid.bron === 'auto' && rOud.grid.stukken.length === 2);
+ok('met zekerheid per stuk, en niet op slot', rOud.grid.stukken[0].zekerheid === 0.8 && rOud.grid.stukken[1].zekerheid === 0.3 && !rOud.grid.slot);
+ok('leeg krijgt het voorstel', lib.bewaarAutoGrid('gLeeg', auto).bewaard);
+
+const slotVoor = JSON.stringify(lib.track('gSlot').grid);
+const rSlot = lib.bewaarAutoGrid('gSlot', auto);
+ok('SLOT wordt nooit overschreven', !rSlot.bewaard && /slot/.test(rSlot.reden) && JSON.stringify(lib.track('gSlot').grid) === slotVoor);
+ok('ook niet met overHand', !lib.bewaarAutoGrid('gSlot', auto, { overHand: true }).bewaard);
+ok('ook niet door de achtergrond', !lib.bewaarAutoGrid('gSlot', auto, { alleenOud: true }).bewaard);
+
+ok('met de hand bewerkt: niet zonder overHand', !lib.bewaarAutoGrid('gHand', auto).bewaard && lib.track('gHand').grid.bron === 'hand');
+ok('de achtergrond laat een auto-grid staan (intussen al een grid)', !lib.bewaarAutoGrid('gAuto', auto, { alleenOud: true }).bewaard);
+ok('"opnieuw analyseren" (overHand) mag over hand', lib.bewaarAutoGrid('gHand', auto, { overHand: true }).bewaard
+  && lib.track('gHand').grid.bron === 'auto');
+const rForceer = lib.bewaarAutoGrid('gSlot', auto, { overHand: true, overSlot: true });
+ok('alleen met overSlot (tweede klik) over een slot heen, en dan niet meer op slot', rForceer.bewaard && !rForceer.grid.slot);
+ok('onbekend nummer: niet bewaard', !lib.bewaarAutoGrid('bestaatniet', auto).bewaard);
+ok('na afloop hoeft niets meer', !lib.teAnalyseren().some((x) => x.startsWith('g')));
+
 // ---- opruimen -------------------------------------------------------------
 
 lib.verwijderTrack('abc123');

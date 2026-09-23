@@ -621,3 +621,28 @@ De uitkomsten van het onderzoek van 22 september 2026 staan in ROADMAP.md onder
 - Bij een keuze met gevolgen: benoem de trade-off en kies, wacht niet op goedkeuring.
 - Meld het expliciet als iets een aanname is die verkeerd kan zijn.
 - Geen features bouwen die niet gevraagd zijn, ook niet als ze voor de hand liggen.
+
+## Beatgrid (23 sep 2026, docs/BEATGRID.md)
+- Het grid is een TEMPOKAART: stukken {van, bpm, anker, zekerheid?} in tracktijd; tellen lopen
+  door over de grenzen. Reken in tellen (timeOf/beatAt) en met bpmAt/beatLengthAt(pos) — nooit
+  grid.bpm/beatLength (alleen het eerste stuk). Bewerken raakt alleen het stuk rond de positie
+  en loopt via deck.gridGewijzigd() (herankert, zet bron:'hand'). slot = met de hand bevestigd
+  (Lock of een tap van ≥ 4 tikken).
+- Tap: rechte lijn door de tikken; de server verfijnt alleen ±25% rond de getikte fase; geen
+  puls (score niet boven een geschudde nul) → zeker:false en de tap blijft staan.
+- Bij binnenhalen automatisch analyseGrid (bron:'auto', zekerheid per stuk = fase-stabiliteit
+  boven een geschudde nul; blokken worden ook rondgedraaid, anders kreeg een schone 120 bpm
+  "geen puls"). Bij opstarten heranalyseert de server op de achtergrond (één tegelijk, worker)
+  alleen lege of oude grids (geen slot, geen bron). Slot wordt nooit overschreven, bron:'hand'
+  alleen via ↻ in de library. VARVE_HERANALYSE=uit voor tests.
+- Zeker ≥ 0,65, geen puls < 0,15 (gemeten op Clay's library: drie groepen 0–0,06 / 0,20–0,62 /
+  0,69–0,94). In een onzeker stuk weigeren sync en beat-loops met een melding; op slot geldt
+  het hele grid als zeker. Strook onder overzicht en banen; onset-streepjes in de zoom.
+- deck.onsets = klappen in tracktijd (GET /api/library/<id>/onsets, eigen ijking 68,5 ms, ±15 ms):
+  goed om te snappen, niet om een fase op te zetten.
+- Grid-modus op de APC: Shift + Metronome (mapje `edit`, een schakelaar, vooraan in GROEPEN).
+  Scene 1 tel 1 hier (snapt ±30 ms naar een onset, vanaf wat je HOORT: positie min
+  uitgangsvertraging × rate) · 2 ×2 · 3 ½ · 4 halve tel · 5 nieuw stuk · Nudge ±5 ms (shift ±1) ·
+  Cue level bpm ±0,01 (shift ±0,1; track.N.grid.bpm lineair over 40–300) · Lock = slot (alleen in
+  grid-modus: erbuiten zou een losse druk ongemerkt het slot eraf halen). Wat de grid-modus niet
+  definieert blijft werken. regel.led.lees laat een lampje de stand van een andere action tonen.

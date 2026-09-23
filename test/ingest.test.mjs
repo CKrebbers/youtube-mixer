@@ -87,6 +87,57 @@ const convStuk = await ing.cfrTranscode(join(map, 'niets.mp4'), join(map, 'uit.m
 ok('een kapotte bron meldt de fout in plaats van stil te falen',
   convStuk.ok === false && convStuk.fout.length > 0);
 
+// ---- de hele pipeline, zonder internet ------------------------------------
+// yt-dlp haalt ook een los mediabestand van een gewone URL (de generic
+// extractor). Een eigen HTTP-server op 127.0.0.1 met een klikspoor: zo loopt
+// de echte ingest, inclusief het grid-voorstel, zonder YouTube.
+
+{
+  const { createServer } = await import('node:http');
+  const SR = 44100, duur = 60, bpm = 124, T0 = 0.25;
+  const x = new Int16Array(SR * duur * 2);
+  for (let t = T0; t < duur; t += 60 / bpm) {
+    const s0 = Math.round(t * SR);
+    for (let i = 0; i < 400 && s0 + i < SR * duur; i++) {
+      const v = Math.round(20000 * Math.exp(-i / 60) * Math.sin((2 * Math.PI * 900 * i) / SR));
+      x[(s0 + i) * 2] = v; x[(s0 + i) * 2 + 1] = v;
+    }
+  }
+  const kop = Buffer.alloc(44);
+  kop.write('RIFF', 0); kop.writeUInt32LE(36 + x.byteLength, 4); kop.write('WAVE', 8); kop.write('fmt ', 12);
+  kop.writeUInt32LE(16, 16); kop.writeUInt16LE(1, 20); kop.writeUInt16LE(2, 22); kop.writeUInt32LE(SR, 24);
+  kop.writeUInt32LE(SR * 4, 28); kop.writeUInt16LE(4, 32); kop.writeUInt16LE(16, 34); kop.write('data', 36);
+  kop.writeUInt32LE(x.byteLength, 40);
+  const wav = Buffer.concat([kop, Buffer.from(x.buffer)]);
+  const srv = createServer((q, r) => {
+    r.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': wav.length });
+    r.end(q.method === 'HEAD' ? undefined : wav);
+  });
+  await new Promise((k) => srv.listen(0, '127.0.0.1', k));
+  const stappen = [];
+  const r = await ing.ingest(`http://127.0.0.1:${srv.address().port}/klik124.wav`,
+    { mediaDir: map, video: false, onStap: (s) => stappen.push(s.stap) });
+  srv.close();
+  ok(`ingest van een lokaal klikspoor lukt${r.ok ? '' : ` (${r.fout})`}`, r.ok === true);
+  const g = r.track?.grid;
+  ok('de ingest zoekt een beatgrid (stap "grid")', stappen.includes('grid'));
+  ok('en levert een automatisch grid: bron auto, niet op slot', g?.bron === 'auto' && g.slot === false);
+  ok(`met zekerheid per stuk (${g?.stukken.map((s) => `${s.bpm.toFixed(2)} z${s.zekerheid.toFixed(2)}`).join(' | ')})`,
+    !!g && g.stukken.every((s) => typeof s.zekerheid === 'number'));
+  const P = 60 / bpm;
+  const naast = g ? Math.abs(g.stukken[0].anker - (T0 + Math.round((g.stukken[0].anker - T0) / P) * P)) : 1;
+  ok(`124 bpm, zeker, tel op de klik (${(naast * 1000).toFixed(1)} ms)`,
+    !!g && g.zeker === true && Math.abs(g.stukken[0].bpm - 124) < 0.1 && naast < 0.012);
+  // Wat de server ermee doet: bewaren, maar nooit over een grid op slot.
+  const { Library } = await import('../server/library.js');
+  const lib = new Library(join(map, 'lib.db'));
+  lib.bewaarTrack({ ...r.track, audio: 'media/klik124/audio.wav' });
+  lib.bewaarGrid(r.track.id, { stukken: [{ van: 0, bpm: 62, anker: 0 }], slot: true });
+  ok('een grid op slot blijft staan als het nummer opnieuw binnenkomt', !lib.bewaarAutoGrid(r.track.id, g).bewaard
+    && lib.track(r.track.id).grid.stukken[0].bpm === 62);
+  lib.sluit();
+}
+
 rmSync(map, { recursive: true, force: true });
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

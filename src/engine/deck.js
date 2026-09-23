@@ -57,6 +57,10 @@ export class Deck extends Emitter {
     this.loop = null;           // {start, end}
 
     this.grid = null;           // Beatgrid, of null als de track nog niet uitgemeten is
+    // Onset-pieken (tracktijd, s), gesorteerde Float64Array, of null. Alleen
+    // data: de UI zet ze na het laden van een library-nummer, "tel 1 hier"
+    // snapt ernaar en de zoom tekent ze. Het deck rekent er zelf niet mee.
+    this.onsets = null;
 
     /*
      * Sends: na de fader, vóór de crossfader. Fader dicht = er gaat niets
@@ -145,6 +149,7 @@ export class Deck extends Emitter {
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.grid = null;
+    this.onsets = null;
     this.loopBeats = null;
     // Een nieuw nummer begint op 0%: de pitch van het vorige zegt niets over
     // dit nummer. Het bereik blijft staan, dat is een keuze van de DJ.
@@ -337,9 +342,18 @@ export class Deck extends Emitter {
    * oude grid.
    */
   gridGewijzigd() {
+    // Met de hand bewerkt: geen automatisch voorstel meer, dus de server
+    // analyseert hem bij het opstarten niet opnieuw (zie Beatgrid.bron).
+    if (this.grid) this.grid.bron = 'hand';
     this._heranker();
     this.emit('change', this);
   }
+
+  /**
+   * Is het grid HIER te vertrouwen voor sync en beat-loops? Null zonder grid.
+   * Zie Beatgrid.zekerBij: op slot altijd, anders alleen een zeker stuk.
+   */
+  get gridZekerHier() { return this.grid ? this.grid.zekerBij(this.position) : null; }
 
   /** Hoorbare bpm op de huidige plek: het grid staat in tracktijd, de rate rekt dat op. */
   get bpm() { return this.grid ? this.grid.bpmAt(this.position) * this.rate : null; }
@@ -353,6 +367,9 @@ export class Deck extends Emitter {
    */
   setBeatLoop(beats) {
     if (!this.buffer || !this.grid) return false;
+    // In een onzeker stuk niet: een loop die naast de tel valt hoor je meteen.
+    // De action meldt waarom (gridZekerHier), hier alleen de regel zelf.
+    if (!this.gridZekerHier) return false;
     // In TELLEN rekenen, niet in seconden: over een stukgrens heen is een
     // tel niet overal even lang, dus het einde komt van timeOf.
     const g = this.grid;

@@ -94,6 +94,52 @@ ok('een korte track werkt net zo goed',
   Math.abs(effectieveSampleRate(Math.ceil((3.3 * 48000) / 256), 256, 3.3) - 48000) < 40);
 ok('zonder duur geen gok', effectieveSampleRate(1000, 256, 0) === 0);
 
+// ---- onset-pieken en grid-voorstel (stap C) --------------------------------
+
+console.log('\nonset-pieken en grid-voorstel');
+const { onsetPieken, maakOnset, maakOnsets, maakGrid, ZEKER_VANAF, GEEN_PULS } = await import('../server/analyze.js');
+{
+  // Puur: pieken boven de drempel, één per aanzet, de hoogste wint binnen de minimumafstand.
+  const env = new Float32Array(200);
+  env[10] = 5; env[12] = 3; env[13] = 7; env[50] = 1.5; env[80] = 4; env[81] = 4;
+  const t = onsetPieken(env, 100, 0.061, { drempel: 2, minAfstand: 0.05 });
+  ok(`lokale maxima boven de drempel, 13 wint van 10 (${[...t].map((x) => x.toFixed(3)).join(' ')})`,
+    t.length === 2 && Math.abs(t[0] - (0.13 + 0.061)) < 1e-9 && Math.abs(t[1] - (0.80 + 0.061)) < 1e-9);
+  ok('gesorteerd, Float64Array', t instanceof Float64Array && t[0] < t[1]);
+}
+{
+  // Klikspoor op 126 bpm, eerste klik op 0,30 s: 40 s, 48 kHz stereo zoals de ingest levert.
+  const wav = join(map, 'klik.wav');
+  await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi',
+    '-i', `aevalsrc='if(lt(mod(t-0.3\\,60/126)\\,0.005)*gte(t\\,0.3)\\,0.8*sin(2*PI*900*t)*exp(-mod(t-0.3\\,60/126)*400)\\,0)':s=48000:d=40`,
+    '-ac', '2', '-c:a', 'pcm_s16le', wav]);
+  const onsetBin = join(map, 'onset.bin');
+  const on = await maakOnset(wav, onsetBin);
+  ok('envelope gemaakt', on.ok && existsSync(onsetBin));
+  const o = await maakOnsets(onsetBin, on.envRate, on.tijdOffset);
+  const P = 60 / 126;
+  const naast = o.tijden.map((x) => { const k = Math.round((x - 0.3) / P); return x - (0.3 + k * P); }).sort((a, b) => a - b);
+  const med = naast[naast.length >> 1], spreid = naast[Math.floor(naast.length * 0.9)] - naast[Math.floor(naast.length * 0.1)];
+  // Een scherpe klik valt ~15 ms vroeg (zie piekVertraging); ruim binnen de ±30 ms van "tel 1 hier".
+  ok(`klappen op de kliks: ${o.tijden.length} pieken (verwacht ~84), mediaan ${(med * 1000).toFixed(1)} ms, spreiding p10-p90 ${(spreid * 1000).toFixed(1)} ms`,
+    o.ok && o.tijden.length >= 78 && o.tijden.length <= 90 && Math.abs(med) < 0.02 && spreid < 0.015);
+  const { piekVertraging } = await import('../server/analyze.js');
+  const gemeten = await piekVertraging({ meet: true });
+  ok(`piekijking klopt nog (vast ${((await piekVertraging()) * 1000).toFixed(1)} ms, gemeten ${(gemeten * 1000).toFixed(1)} ms)`,
+    Math.abs(gemeten - await piekVertraging()) < 0.002);
+  ok('de tijden zijn gesorteerd', o.tijden.every((x, i) => i === 0 || x > o.tijden[i - 1]));
+  const g = await maakGrid(onsetBin, on.envRate, on.tijdOffset, wav);
+  const st = g.grid?.stukken ?? [];
+  ok(`grid-voorstel: bron auto, niet op slot, zekerheid per stuk (${st.map((x) => `${x.bpm.toFixed(2)} z${x.zekerheid.toFixed(2)}`).join(' | ')})`,
+    g.ok && g.grid.bron === 'auto' && g.grid.slot === false && st.length >= 1 && st.every((x) => Number.isFinite(x.zekerheid)));
+  const tel = st[0] ? st[0].anker - Math.round((st[0].anker - 0.3) / P) * P : NaN;
+  ok(`126 bpm, zeker, de tel op de klik (${((tel - 0.3) * 1000).toFixed(1)} ms)`,
+    st.every((x) => Math.abs(x.bpm - 126) < 0.1 && x.zekerheid >= ZEKER_VANAF) && Math.abs(tel - 0.3) < 0.012 && g.grid.zeker === true);
+  ok('drempels: zeker boven geen puls, allebei tussen 0 en 1', GEEN_PULS > 0 && GEEN_PULS < ZEKER_VANAF && ZEKER_VANAF < 1);
+  const kort = await maakGrid(join(map, 'bestaat-niet.bin'), 86, 0.061, null);
+  ok('onleesbare envelope: een fout, geen crash', kort.ok === false && /onleesbaar/.test(kort.fout));
+}
+
 // ---- foutpad ---------------------------------------------------------------
 
 const stuk = await maakPeaks(join(map, 'bestaat-niet.wav'), join(map, 'x.bin'));

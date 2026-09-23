@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { ingest, controleerTooling, YTDLP_GETEST_OP } from './ingest.js';
 import { Library, normaliseerGrid } from './library.js';
-import { maakOnset, verfijnUitBestand } from './analyze.js';
+import { ZEKER_VANAF } from './analyze.js';
+import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets } from './analyze.js';
 import * as opname from './opname.js';
 
 /**
@@ -136,6 +137,13 @@ function startIngest(url) {
         // De ingest rekende de envelope al uit; zonder dit deed de eerste tap
         // het hele werk nog een keer.
         if (opdracht.track.onset) lib.bewaarOnset(opdracht.track.id, opdracht.track.onset);
+        // Het grid-voorstel van de ingest. Nooit over een grid op slot, en bij
+        // opnieuw binnenhalen ook niet over een grid dat je met de hand bewerkte.
+        if (opdracht.track.grid) {
+          const g = lib.bewaarAutoGrid(opdracht.track.id, opdracht.track.grid);
+          console.log(`[grid] ${opdracht.track.titel}: ${g.bewaard ? gridSamenvatting(g.grid) : `voorstel niet bewaard (${g.reden})`}`);
+        }
+        onsetCache.delete(opdracht.track.id);
       } catch (err) {
         // De ingest is gelukt; dat mag niet alsnog omvallen op de database.
         console.error('[server] track niet in library gekregen:', err?.message || err);
@@ -154,6 +162,73 @@ function startIngest(url) {
   });
 
   return opdracht;
+}
+
+/** Eén regel voor de serverlog: hoeveel stukken, hoeveel ervan zeker. */
+function gridSamenvatting(g) {
+  if (!g) return 'geen grid';
+  const zeker = g.stukken.filter((s) => s.zekerheid === undefined || s.zekerheid >= ZEKER_VANAF).length;
+  const tempi = [...new Set(g.stukken.map((s) => s.bpm.toFixed(1)))].slice(0, 6).join('/');
+  return `${g.stukken.length} stuk${g.stukken.length === 1 ? '' : 'ken'}, ${zeker} zeker, ${tempi} bpm`;
+}
+
+/**
+ * De onset-envelope van een nummer, en maak hem als hij er nog niet is
+ * (nummers van vóór die functie). Eén tegelijk per nummer: de verfijning,
+ * "opnieuw analyseren" en de achtergrond wilden hem anders alle drie maken.
+ */
+const onsetBezig = new Map();
+async function zorgVoorOnset(track) {
+  if (track.onset) return { ok: true, onset: track.onset };
+  if (!onsetBezig.has(track.id)) {
+    const doel = join(MEDIA, track.id, 'onset.bin');
+    onsetBezig.set(track.id, maakOnset(opSchijf(track.audio), doel).then((r) => (r.ok
+      ? { ok: true, onset: lib.bewaarOnset(track.id, { ...r, bestand: alsPad(doel) }) }
+      : { ok: false, fout: r.fout })).finally(() => onsetBezig.delete(track.id)));
+  }
+  return onsetBezig.get(track.id);
+}
+
+/** Het grid-voorstel voor een nummer uit de library (in een worker). */
+async function analyseer(track) {
+  const o = await zorgVoorOnset(track);
+  if (!o.ok) return o;
+  return maakGrid(opSchijf(o.onset.bestand), o.onset.envRate, o.onset.tijdOffset, opSchijf(track.audio));
+}
+
+/*
+ * Onset-pieken per nummer, in het geheugen: ze veranderen alleen als de
+ * envelope verandert (opnieuw binnenhalen). Een uur is ~18.000 tijden.
+ */
+const onsetCache = new Map();
+
+/**
+ * Op de achtergrond: elk nummer zonder grid, of met een grid van vóór de
+ * automatische analyse (geen slot, geen bron), krijgt een voorstel. Eén
+ * tegelijk, pas na het opstarten, en niet terwijl er binnengehaald wordt:
+ * dit is het minst belangrijke werk van de server. Het rekenwerk zit in een
+ * worker, dus de decks merken er niets van (server.test meet dat).
+ *
+ * VARVE_HERANALYSE: 'uit' = niet doen (tests die het niet meten), een getal =
+ * zoveel ms wachten na het opstarten (standaard 5000).
+ */
+async function heranalyseOpAchtergrond() {
+  const ids = lib.teAnalyseren();
+  if (!ids.length) return;
+  console.log(`[grid] ${ids.length} nummer${ids.length === 1 ? '' : 's'} zonder automatisch grid — analyse op de achtergrond, één tegelijk`);
+  for (const id of ids) {
+    while ([...opdrachten.values()].some((o) => o.status === 'bezig')) await new Promise((z) => setTimeout(z, 2000));
+    const track = lib.track(id);
+    // Intussen getikt, op slot gezet of weggehaald? Dan niet meer.
+    if (!track || !lib.teAnalyseren().includes(id)) continue;
+    const t0 = Date.now();
+    const r = await analyseer(track);
+    if (!r.ok) { console.log(`[grid] ${track.titel}: overgeslagen (${r.fout})`); continue; }
+    const b = lib.bewaarAutoGrid(id, r.grid, { alleenOud: true });
+    console.log(`[grid] ${track.titel}: ${b.bewaard ? gridSamenvatting(b.grid) : `niet bewaard (${b.reden})`}`
+      + ` — ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  }
+  console.log('[grid] achtergrondanalyse klaar');
 }
 
 /**
@@ -327,6 +402,45 @@ const server = createServer(async (req, res) => {
      * de offbeat. Daarna de voorflank op de audio zelf (±5 ms). Is er rond de
      * tap geen puls, dan zegt hij dat en blijft jouw tap staan.
      */
+    /*
+     * Opnieuw analyseren (de knop in de library). Geeft het voorstel terug en
+     * bewaart het, ook over een met de hand bewerkt grid — daar vroeg je om.
+     * Over een grid op SLOT alleen met { forceer: true } (de browser vraagt
+     * dan eerst een tweede klik); anders { bewaard: false, reden }.
+     */
+    const mAnalyseer = /^\/api\/library\/([\w-]+)\/grid\/analyseer$/.exec(pad);
+    if (mAnalyseer && req.method === 'POST') {
+      const track = lib.track(mAnalyseer[1]);
+      if (!track) return json(res, 404, { fout: 'onbekend nummer' });
+      const body = await leesJson(req);
+      const r = await analyseer(track);
+      if (!r.ok) return json(res, 500, { fout: r.fout });
+      const b = lib.bewaarAutoGrid(track.id, r.grid, { overHand: true, overSlot: body?.forceer === true });
+      console.log(`[grid] opnieuw: ${track.titel}: ${b.bewaard ? gridSamenvatting(b.grid) : `niet bewaard (${b.reden})`}`);
+      return json(res, 200, { voorstel: r.grid, bewaard: b.bewaard, grid: b.grid, ...(b.reden ? { reden: b.reden } : {}) });
+    }
+
+    /*
+     * De onset-pieken van een nummer: { tijden: [s, ...] } gesorteerd, of
+     * { tijden: null } zonder envelope. Voor "tel 1 hier" (snapt ±30 ms naar
+     * een klap) en de streepjes in de zoom.
+     */
+    const mOnsets = /^\/api\/library\/([\w-]+)\/onsets$/.exec(pad);
+    if (mOnsets && req.method === 'GET') {
+      const track = lib.track(mOnsets[1]);
+      if (!track) return json(res, 404, { fout: 'onbekend nummer' });
+      if (!track.onset) return json(res, 200, { tijden: null });
+      const sleutel = track.onset.bestand;
+      let c = onsetCache.get(track.id);
+      if (!c || c.sleutel !== sleutel) {
+        const r = await maakOnsets(opSchijf(track.onset.bestand), track.onset.envRate, track.onset.tijdOffset);
+        if (!r.ok) return json(res, 500, { fout: r.fout });
+        c = { sleutel, tijden: r.tijden };
+        onsetCache.set(track.id, c);
+      }
+      return json(res, 200, { tijden: c.tijden });
+    }
+
     const mVerfijn = /^\/api\/library\/([\w-]+)\/grid\/verfijn$/.exec(pad);
     if (mVerfijn && req.method === 'POST') {
       const id = mVerfijn[1];
@@ -336,15 +450,11 @@ const server = createServer(async (req, res) => {
       const bpm = Number(body?.bpm);
       if (!isFinite(bpm) || bpm < 40 || bpm > 300) return json(res, 400, { fout: 'geef een bpm tussen 40 en 300' });
 
-      let onset = track.onset;
-      if (!onset) {
-        // Nog geen envelope (track van vóór deze functie): nu uitrekenen en
-        // bewaren, dan is het de volgende keer meteen klaar.
-        const doel = join(MEDIA, id, 'onset.bin');
-        const r = await maakOnset(opSchijf(track.audio), doel);
-        if (!r.ok) return json(res, 500, { fout: r.fout });
-        onset = lib.bewaarOnset(id, { ...r, bestand: alsPad(doel) });
-      }
+      // Nog geen envelope (track van vóór deze functie): nu uitrekenen en
+      // bewaren, dan is het de volgende keer meteen klaar.
+      const o = await zorgVoorOnset(track);
+      if (!o.ok) return json(res, 500, { fout: o.fout });
+      const onset = o.onset;
 
       // Waar je tikte (tracktijd, seconden). Dan telt alleen ±45 s daaromheen:
       // op een album met tempowissels wint anders het tempo van een ander stuk.
@@ -506,4 +616,9 @@ server.listen(POORT, '127.0.0.1', () => {
   console.log(`VARVE DJ  ·  http://localhost:${POORT}`);
   console.log(`library: ${lib.tracks().length} nummers  ·  schema v${lib.versie}`);
   console.log(`yt-dlp ${tooling.ytdlp}  ·  ffmpeg ${tooling.ffmpeg ? 'ok' : 'ONTBREEKT'}`);
+  const her = process.env.VARVE_HERANALYSE;
+  if (her !== 'uit') {
+    setTimeout(() => heranalyseOpAchtergrond().catch((err) => console.error('[grid] achtergrond:', err?.message || err)),
+      Number.isFinite(Number(her)) && her !== '' && her !== undefined ? Number(her) : 5000);
+  }
 });

@@ -132,8 +132,31 @@ export function normaliseerGrid(g) {
   const uit = { stukken, beatsPerBar: Number.isInteger(g.beatsPerBar) && g.beatsPerBar > 0 && g.beatsPerBar <= 16 ? g.beatsPerBar : 4 };
   if (g.slot === true) uit.slot = true;
   if (typeof g.zeker === 'boolean') uit.zeker = g.zeker;
+  // 'auto' = voorstel van de analyse, 'hand' = daarna met de hand bewerkt.
+  // Zonder: van vóór stap C (of gemigreerd) — die mag opnieuw geanalyseerd.
+  if (g.bron === 'auto' || g.bron === 'hand') uit.bron = g.bron;
   return uit;
 }
+
+/**
+ * Mag een automatisch voorstel over dit grid heen? Nooit over een grid op
+ * slot (met de hand bevestigd), tenzij `overSlot`; over een met de hand
+ * bewerkt grid alleen als je er zelf om vraagt (`overHand`: de knop
+ * "opnieuw analyseren"). Leeg, auto en oud (zonder bron) mogen altijd;
+ * met `alleenOud` (de achtergrond) alleen leeg en oud.
+ * Geeft null als het mag, anders de reden.
+ */
+export function autoGridWeigert(huidig, { overHand = false, overSlot = false, alleenOud = false } = {}) {
+  if (!huidig) return null;
+  // De achtergrond: alleen wat nog geanalyseerd MOET (intussen iets gezet? dan niet).
+  if (alleenOud && !moetAnalyse(huidig)) return 'intussen al een grid';
+  if (huidig.slot && !overSlot) return 'het grid staat op slot';
+  if (huidig.bron === 'hand' && !overHand && !huidig.slot) return 'het grid is met de hand bewerkt';
+  return null;
+}
+
+/** Moet dit grid bij het opstarten (opnieuw) geanalyseerd worden? Leeg of oud, niet op slot. */
+export const moetAnalyse = (grid) => !grid || (!grid.slot && grid.bron !== 'auto' && grid.bron !== 'hand');
 
 export class Library {
   constructor(pad) {
@@ -212,15 +235,19 @@ export class Library {
   _verrijk(r) {
     const n = this.db.prepare('SELECT COUNT(*) AS n FROM racks WHERE track_id = ?').get(r.id).n;
     const p = this.peaks(r.id);
-    const grid = r.grid_json != null
-      ? normaliseerGrid(veiligJson(r.grid_json, null))
-      : normaliseerGrid(r.grid_bpm != null
-        ? { bpm: r.grid_bpm, firstBeat: r.grid_first_beat ?? 0, beatsPerBar: r.grid_beats_per_bar ?? 4 } : null);
+    const grid = this._grid(r);
     const onset = r.onset_bestand
       ? { bestand: r.onset_bestand, frames: r.onset_frames, envRate: r.onset_rate, tijdOffset: r.onset_offset }
       : null;
     return { ...r, racks: n, grid, onset,
       peaks: p ? { bestand: p.bestand, buckets: p.buckets, perBucket: p.per_bucket } : null };
+  }
+
+  _grid(r) {
+    return r.grid_json != null
+      ? normaliseerGrid(veiligJson(r.grid_json, null))
+      : normaliseerGrid(r.grid_bpm != null
+        ? { bpm: r.grid_bpm, firstBeat: r.grid_first_beat ?? 0, beatsPerBar: r.grid_beats_per_bar ?? 4 } : null);
   }
 
   geladen(id) {
@@ -252,6 +279,37 @@ export class Library {
       trackId,
     );
     return this.track(trackId)?.grid ?? null;
+  }
+
+  /**
+   * Een automatisch voorstel bewaren, maar alleen als het mag (autoGridWeigert).
+   * Lezen en schrijven in één transactie: een tap die net binnenkwam wordt
+   * niet alsnog overschreven. Geeft { bewaard, grid, reden? }.
+   */
+  bewaarAutoGrid(trackId, grid, opties = {}) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const huidig = this.track(trackId);
+      if (!huidig) { this.db.exec('ROLLBACK'); return { bewaard: false, grid: null, reden: 'onbekend nummer' }; }
+      const reden = autoGridWeigert(huidig.grid, opties);
+      if (reden) { this.db.exec('ROLLBACK'); return { bewaard: false, grid: huidig.grid, reden }; }
+      const g = this.bewaarGrid(trackId, { ...grid, bron: 'auto', slot: false });
+      this.db.exec('COMMIT');
+      return { bewaard: true, grid: g };
+    } catch (err) {
+      try { this.db.exec('ROLLBACK'); } catch {}
+      throw err;
+    }
+  }
+
+  /**
+   * Nummers waarvan het grid (opnieuw) geanalyseerd moet worden: leeg, of
+   * oud (geen slot, geen bron). Oudste eerst. Zonder onset-envelope ook:
+   * die wordt dan eerst gemaakt.
+   */
+  teAnalyseren() {
+    return this.db.prepare('SELECT id, grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar FROM tracks ORDER BY toegevoegd')
+      .all().filter((r) => moetAnalyse(this._grid(r))).map((r) => r.id);
   }
 
   bewaarOnset(trackId, onset) {

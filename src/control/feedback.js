@@ -22,11 +22,18 @@ import { resolveTarget } from './mapping.js';
  * rood = wissen, en dat staat achter shift, dus alleen zichtbaar met shift.
  *
  *   invert  LED brandt als read 0 is (On/Off: read = bypass, lampje = effect aan)
+ *   lees    action waarvan de LED de stand toont, in plaats van die van de
+ *           knop zelf. Metronome doet in de grid-modus nog steeds de
+ *           crossfadercurve, maar zijn lampje zegt dan "grid-modus aan".
  *   tel     knipperen op de tel, zelf gerekend (zie TEL_VENSTER):
  *           'aan'  zolang de stand `aan` is: fel op de tel, gedimd ertussen
  *           'maat' alleen als deze track de maat geeft: op de tel omgekeerd
  */
 const KLEURSCHEMA = [
+  // Grid-modus (stap D): de scene-knoppen WIT, zodat je de grid-modus niet
+  // voor een grid-mapje aanziet (die zijn geel/cyaan/violet/blauw). Cyaan
+  // zolang je drukt: je ziet dat hij het deed.
+  [/\.grid\.(here|double|halve|halfbeat|split)$/, { aan: 'cyaan', half: 'wit', uit: 'wit' }],
   [/\.hotcue\.\d+$/, { aan: 'geel', half: 'geeldonker', uit: 'donkergrijs' }],
   [/\.loop\.exit$/,  { aan: 'rood', uit: 'uit' }],
   [/\.loop\./,       { aan: 'cyaan', half: 'cyaandonker', uit: 'donkergrijs', tel: 'aan' }],
@@ -160,7 +167,8 @@ export class Feedback {
       if (!control) continue;
 
       const doel = resolveTarget(regel.action, vars);
-      const waarde = this.read ? this.read(doel) : null;
+      const bron = regel.led?.lees ? resolveTarget(regel.led.lees, vars) : doel;
+      const waarde = this.read ? this.read(bron) : null;
       if (waarde === null) continue;
       const p = ontleed(sig);
       if (!p) continue;

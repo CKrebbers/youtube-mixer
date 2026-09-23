@@ -20,6 +20,7 @@
   .k-knop[data-modus="grid.sampler"].aan{background:#a57cff;border-color:#a57cff}
   .k-knop[data-modus="grid.video"].aan{background:#4c7dff;border-color:#4c7dff;color:#fff}
   #shift.aan{background:var(--warn);border-color:var(--warn)}
+  #gridmodus.aan{background:#e6edf3;border-color:#e6edf3}
   #zoek{background:var(--panel2);border:1px solid var(--line);border-radius:5px;color:var(--text);padding:5px 10px;font:inherit;width:190px}
   #live{font-size:11px;color:var(--dim)} #live.aan{color:var(--a)} #live.aan::before{content:"● "}
   #live.klikbaar{cursor:pointer;border:1px solid var(--line);border-radius:5px;padding:4px 10px;color:var(--text)}
@@ -105,6 +106,7 @@
     <button class="k-knop" data-modus="device.strip">strip</button>
     <button class="k-knop" data-modus="device.rack">rack</button>
   </div>
+  <button class="k-knop" id="gridmodus" title="Shift + Metronome op de APC">grid-modus</button>
   <button class="k-knop" id="shift" title="of houd Shift op je toetsenbord vast">⇧ shift</button>
   <input id="zoek" type="search" placeholder="zoek: loop, filter, cue…" autocomplete="off">
   <span id="live">…</span>

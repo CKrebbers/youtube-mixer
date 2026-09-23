@@ -153,6 +153,25 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
     verfijnBezig = false;
   });
 
+  /**
+   * De klappen van het nummer (onset-pieken, tracktijd) op het deck zetten:
+   * "tel 1 hier" snapt ernaar, de zoom tekent ze. De server rekent ze uit
+   * onset.bin met dezelfde tijdcorrectie als de tempo-analyse; een uur is
+   * ~18.000 getallen, ~150 kB JSON. Mislukt het, dan blijft het null en snapt
+   * er niets — geen reden om het laden te laten mislukken.
+   */
+  async function haalOnsets(deckId, trackId, mijnLaad) {
+    try {
+      const r = await fetch(`/api/library/${trackId}/onsets`);
+      if (!r.ok) throw new Error(`${r.status}`);
+      const { tijden } = await r.json();
+      if (!nogDeLaatste(deckId, mijnLaad)) return;
+      engine.deck(deckId).onsets = Array.isArray(tijden) ? Float64Array.from(tijden) : null;
+    } catch (err) {
+      console.warn(`[deck ${deckId}] klappen niet opgehaald:`, err.message);
+    }
+  }
+
   // ---- library --------------------------------------------------------------
   // Het paneel praat met de server; het laden op een deck loopt hierlangs, want
   // hier wordt ook de golfvorm-analyse bijgehouden.
@@ -163,6 +182,15 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
     decks: DECK_IDS,
     label: (id) => String(trackVanDeck(id)),
     stand: (id) => { const d = engine.deck(id); return !d.buffer ? 'leeg' : d.playing ? 'speelt' : 'geladen'; },
+    // "Opnieuw analyseren" in de lijst: staat dat nummer op een track, dan
+    // krijgt die het nieuwe grid meteen (en de bewaarlus ziet het als bewaard).
+    onGrid: (trackId, grid) => {
+      for (const id of DECK_IDS) {
+        if (deckTrack[id] !== trackId) continue;
+        engine.deck(id).setGrid(grid);
+        gridBewaard[id] = grid ? JSON.stringify(engine.deck(id).grid?.toJSON() ?? null) : 'null';
+      }
+    },
     onLaad: async (deckId, track) => {
       // NIET wachten op engine.resume(): zonder gebruikersgebaar lost die belofte
       // nooit in en blijft het laden eeuwig hangen. Laden kan prima op een
@@ -189,6 +217,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
       racks.haalRacks(deckId);
       haalSamples(deckId, track.id);
       gridBewaard[deckId] = track.grid ? JSON.stringify(track.grid) : 'null';
+      haalOnsets(deckId, track.id, mijnLaad);
       console.log(`[deck ${deckId}] ${track.titel} — ${duur.toFixed(1)}s — streamt`
         + (uitCache ? '' : ' — LET OP: geen peaks.bin, dus geen golfvorm'));
 
