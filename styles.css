@@ -427,4 +427,6 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .vid-titel{font-size:10px;letter-spacing:.16em;font-weight:700;color:var(--a)}
 .vid-status{font-size:11px;color:var(--dim);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vid-tools{display:flex;gap:4px}
-.vid-canvas{width:100%;aspect-ratio:16/9;background:#000;display:block;border-radius:0 0 8px 8px}
+.vid-canvas{width:100%;aspect-ratio:16/9;background:#000;display:block}
+.vid-fx{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px}
+.vid-modus{min-width:72px;text-transform:uppercase;letter-spacing:.08em}

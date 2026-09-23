@@ -16,6 +16,7 @@
 import { Beatgrid, TapTempo } from '../engine/beatgrid.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN } from '../engine/engine.js';
+import { VIDEO_FX, MODI } from '../video/instellingen.js';
 
 const registry = new Map();
 
@@ -213,4 +214,18 @@ export function bindEngine(engine) {
   define('mixer.xfader.curve', 'trigger', (on) => {
     if (on) engine.setXfaderCurve(engine.xfaderCurve === 'smooth' ? 'sharp' : 'smooth');
   }, { label: 'Crossfader-curve wisselen', read: () => (engine.xfaderCurve === 'sharp' ? 1 : 0) });
+}
+
+/**
+ * De video-actions. Apart van bindEngine: de video is geen engine (regel 1),
+ * maar wat je eraan draait hoort wél op de bus — dan kan een APC-knop het
+ * net zo goed als de muis, en volgen de knoppen op het scherm vanzelf.
+ */
+export function bindVideo(mixer) {
+  for (const fx of VIDEO_FX) {
+    define(`video.fx.${fx.id}`, 'value', (v) => mixer.zetFx(fx.id, v),
+      { label: `Video ${fx.naam}`, bipolar: !!fx.bipolair, read: () => mixer.fx[fx.id] });
+  }
+  define('video.modus', 'trigger', (on) => { if (on) mixer.volgendeModus(); },
+    { label: 'Video: volgende mengvorm', read: () => MODI.indexOf(mixer.modus) / (MODI.length - 1) });
 }

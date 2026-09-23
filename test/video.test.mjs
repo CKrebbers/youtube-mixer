@@ -36,5 +36,26 @@ ok('crossfader weg: onzichtbaar', zichtbaarheid(1, 0) === 0);
 ok('beide open: volledig', zichtbaarheid(1, 1) === 1);
 ok('buiten 0..1 wordt geklemd', zichtbaarheid(2, 1) === 1 && zichtbaarheid(-1, 1) === 0);
 
+console.log('\nvideo op de action-bus');
+{
+  const { bindVideo, invoke, read, list } = await import('../src/control/actions.js');
+  const { VIDEO_FX, MODI } = await import('../src/video/instellingen.js');
+  const nep = {
+    fx: Object.fromEntries(VIDEO_FX.map((f) => [f.id, f.standaard])), modus: MODI[0],
+    zetFx(id, v) { if (id in this.fx) this.fx[id] = Math.max(0, Math.min(1, v)); },
+    volgendeModus() { this.modus = MODI[(MODI.indexOf(this.modus) + 1) % MODI.length]; },
+  };
+  bindVideo(nep);
+  ok('elk effect staat op de bus', VIDEO_FX.every((f) => list().some((a) => a.id === `video.fx.${f.id}`)));
+  invoke('video.fx.pixel', 0.7);
+  ok('een knop zet het effect', nep.fx.pixel === 0.7 && read('video.fx.pixel') === 0.7);
+  ok('kleur begint in het midden (normaal) en is bipolair',
+    read('video.fx.kleur') === 0.5 && list().find((a) => a.id === 'video.fx.kleur').meta.bipolar === true);
+  invoke('video.modus', true); invoke('video.modus', false);
+  ok('mengvorm-knop gaat naar de volgende', nep.modus === 'licht');
+  for (let i = 0; i < MODI.length - 1; i++) invoke('video.modus', true);
+  ok('en rond', nep.modus === 'mix' && read('video.modus') === 0);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

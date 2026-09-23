@@ -65,6 +65,7 @@ src/
                     rack-editor.js (racks bouwen met de muis, werkt op een kopie)
   video/            volg.js         hoe een video de audio volgt. Puur rekenwerk.
                     video-mixer.js  <video> per track, gemengd met WebGL2. Leest de engine alleen uit.
+                    instellingen.js welke video-effecten en mengvormen er zijn (data)
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
 server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
@@ -270,8 +271,17 @@ test/
   captureStream: er wordt één keer gemengd.
 - De video's hebben een sleutelbeeld per 8,3 s (zoals YouTube ze levert).
   Springen midden in zo'n stuk laat de decoder tot 8 s beeld doorrekenen.
-  Nog niet gemeten in een zichtbaar venster; hapert het bij loops, dan is de
-  oplossing een kortere GOP bij de ingest (-g 30), niet slimmer springen.
+  Clay zag loops en sprongen op 23 september 2026 netjes meelopen, dus de GOP
+  blijft zoals hij is. Hapert het ooit alsnog: kortere GOP bij de ingest
+  (-g 30), niet slimmer springen.
+- Het videobeeld gaat in drie shaderstappen: mengen (mengvorm) -> effecten
+  (met het VORIGE eindbeeld voor sporen, twee buffers om de beurt) -> tonen.
+  Vast op 1280×720. Effecten en mengvorm staan op de action-bus
+  (`video.fx.*`, `video.modus`, via `bindVideo`), dus ze zijn te koppelen.
+  Testen zonder zichtbaar venster: geef de mixer een canvas als nep-video,
+  en maak dat testbeeld ASYMMETRISCH (vier verschillende kwarten). Een beeld
+  dat alleen links-rechts verschilt verstopte dat sporen ondersteboven stond:
+  een buffer-texture staat omgekeerd t.o.v. een video-texture.
 - Chrome laadt en decodeert geen media in een tabblad dat niet zichtbaar is,
   en pauzeert daar de animatielus. Video-gedrag test je dus met het venster
   vooraan; in een achtergrondtab meet je niets.

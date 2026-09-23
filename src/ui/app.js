@@ -1,6 +1,6 @@
 import { Engine, DECK_IDS } from '../engine/engine.js';
 import { EFFECTEN } from '../engine/fx.js';
-import { bindEngine, invoke, read as readAction, metaOf, trackVanDeck } from '../control/actions.js';
+import { bindEngine, bindVideo, invoke, read as readAction, metaOf, trackVanDeck } from '../control/actions.js';
 import { attachKeyboard } from '../control/keyboard.js';
 import { MidiHub } from '../control/midi.js';
 import { Mapping } from '../control/mapping.js';
@@ -34,6 +34,7 @@ const perDeck = (maak) => Object.fromEntries(DECK_IDS.map((id) => [id, maak(id)]
 const videoPaneel = document.getElementById('video-panel');
 const videoMixer = new VideoMixer({ canvas: videoPaneel.querySelector('.vid-canvas'), engine, decks: DECK_IDS });
 window.videoMixer = videoMixer;
+bindVideo(videoMixer);
 let losVenster = null;
 const videoAan = () => !videoPaneel.classList.contains('hidden') || (losVenster && !losVenster.closed);
 const toggleVideo = () => {
@@ -855,6 +856,8 @@ function tekenFrame() {
     videoMixer.teken();
     const st = videoMixer.stand().filter((l) => l.video && l.speelt);
     const tekst = videoMixer.fout || (st.length ? st.map((l) => `${trackVanDeck(l.id)}: ${Math.round(l.verschil * 1000)} ms`).join(' · ') : 'geen zichtbare video');
+    const modusEl = videoPaneel.querySelector('.vid-modus');
+    if (modusEl.textContent !== videoMixer.modus) modusEl.textContent = videoMixer.modus;
     const statusEl = videoPaneel.querySelector('.vid-status');
     if (statusEl.textContent !== tekst) statusEl.textContent = tekst;
   }

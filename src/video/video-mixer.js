@@ -1,4 +1,5 @@
 import { synchroniseer, zichtbaarheid } from './volg.js';
+import { VIDEO_FX, MODI } from './instellingen.js';
 
 /**
  * De video-mixer: per track een gedempte <video>, samen gemengd op een canvas
@@ -14,6 +15,13 @@ import { synchroniseer, zichtbaarheid } from './volg.js';
  *
  * Zuinig: acht 720p-video's tegelijk decoderen is zwaar. Een track die niet
  * te zien is, wordt gepauzeerd en niet geüpload.
+ *
+ * Drie stappen per beeld, elk in een eigen shader:
+ *   mengen    acht video's -> één beeld, volgens de mengvorm
+ *   effecten  pixel, spiegel, RGB, kleur, sporen, korrel. Sporen heeft het
+ *             VORIGE eindbeeld nodig, dus dit schrijft naar een van twee
+ *             buffers die om de beurt wisselen (ping-pong).
+ *   tonen     het eindbeeld op het canvas
  */
 
 const MAX = 8;
@@ -33,22 +41,81 @@ void main() {
 
 // Acht texturen uitgeschreven: in GLSL ES 3.00 mag je een sampler-array
 // alleen met een constante index aanspreken, ook niet met een lusteller.
-const FRAGMENT = `#version 300 es
+const MENG = `#version 300 es
 precision mediump float;
 in vec2 uv;
 out vec4 kleur;
 uniform sampler2D t0, t1, t2, t3, t4, t5, t6, t7;
 uniform float w[8];
+uniform int modus;
 void main() {
-  vec3 som = texture(t0, uv).rgb * w[0] + texture(t1, uv).rgb * w[1]
-           + texture(t2, uv).rgb * w[2] + texture(t3, uv).rgb * w[3]
-           + texture(t4, uv).rgb * w[4] + texture(t5, uv).rgb * w[5]
-           + texture(t6, uv).rgb * w[6] + texture(t7, uv).rgb * w[7];
-  float totaal = w[0] + w[1] + w[2] + w[3] + w[4] + w[5] + w[6] + w[7];
-  // Gewogen gemiddelde, maar een enkele track op halve fader wordt wél
-  // donkerder: delen door minstens 1, niet door het totaal zelf.
-  kleur = vec4(som / max(totaal, 1.0), 1.0);
+  vec3 l[8];
+  l[0] = texture(t0, uv).rgb; l[1] = texture(t1, uv).rgb; l[2] = texture(t2, uv).rgb; l[3] = texture(t3, uv).rgb;
+  l[4] = texture(t4, uv).rgb; l[5] = texture(t5, uv).rgb; l[6] = texture(t6, uv).rgb; l[7] = texture(t7, uv).rgb;
+  vec3 c = vec3(0.0);
+  float totaal = 0.0;
+  if (modus == 1) {                        // licht (screen)
+    vec3 donker = vec3(1.0);
+    for (int i = 0; i < 8; i++) donker *= vec3(1.0) - l[i] * w[i];
+    c = vec3(1.0) - donker;
+  } else if (modus == 3) {                 // verschil
+    for (int i = 0; i < 8; i++) if (w[i] > 0.0) c = abs(c - l[i] * w[i]);
+  } else {                                 // mix en optellen
+    for (int i = 0; i < 8; i++) { c += l[i] * w[i]; totaal += w[i]; }
+    // mix: gemiddelde, maar een enkele track op halve fader wordt wél
+    // donkerder — delen door minstens 1, niet door het totaal zelf.
+    if (modus == 0) c /= max(totaal, 1.0);
+  }
+  kleur = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
+
+const EFFECT = `#version 300 es
+precision mediump float;
+in vec2 uv;
+out vec4 kleur;
+uniform sampler2D beeld, vorig;
+uniform float pixel, spiegel, rgb, verz, sporen, korrel, tijd;
+float ruis(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+vec3 lees(vec2 p) {
+  // spiegel: eerst links-rechts, voorbij de helft ook boven-onder
+  vec2 m = vec2(p.x > 0.5 ? 1.0 - p.x : p.x, p.y);
+  vec2 mm = vec2(m.x, p.y > 0.5 ? 1.0 - p.y : p.y);
+  float a = clamp(spiegel * 2.0, 0.0, 1.0), b = clamp(spiegel * 2.0 - 1.0, 0.0, 1.0);
+  vec3 c = mix(texture(beeld, p).rgb, texture(beeld, m).rgb, a);
+  return mix(c, texture(beeld, mm).rgb, b);
+}
+void main() {
+  vec2 p = uv;
+  if (pixel > 0.001) {                     // blokken: van fijn naar grof
+    float rijen = mix(360.0, 9.0, pow(pixel, 0.6));
+    vec2 n = vec2(rijen * 16.0 / 9.0, rijen);
+    p = (floor(p * n) + 0.5) / n;
+  }
+  vec3 c;
+  if (rgb > 0.001) {                       // kleurkanalen uit elkaar
+    vec2 d = vec2(rgb * 0.03, 0.0);
+    c = vec3(lees(p + d).r, lees(p).g, lees(p - d).b);
+  } else {
+    c = lees(p);
+  }
+  float lum = dot(c, vec3(0.299, 0.587, 0.114));
+  c = mix(vec3(lum), c, verz * 2.0);       // 0 = zwart-wit, 0,5 = normaal, 1 = dubbel verzadigd
+  c = clamp(c, 0.0, 1.0);
+  // Het vorige beeld gloeit na. Let op de y: een beeld dat in een buffer
+  // getekend is staat ondersteboven ten opzichte van een video-texture. Bij
+  // de gewone weg vallen twee keer omkeren tegen elkaar weg; het vorige
+  // EINDbeeld lezen we één keer extra, dus hier moet hij terug.
+  c = mix(c, texture(vorig, vec2(uv.x, 1.0 - uv.y)).rgb, sporen * 0.92);
+  c += (ruis(uv * 1280.0 + tijd) - 0.5) * korrel * 0.35;
+  kleur = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+
+const TOON = `#version 300 es
+precision mediump float;
+in vec2 uv;
+out vec4 kleur;
+uniform sampler2D beeld;
+void main() { kleur = vec4(texture(beeld, uv).rgb, 1.0); }`;
 
 export class VideoMixer {
   /**
@@ -68,23 +135,55 @@ export class VideoMixer {
     const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, preserveDrawingBuffer: false });
     if (!gl) { this.fout = 'WebGL2 is niet beschikbaar in deze browser'; return; }
     this.gl = gl;
-    this.prog = this._programma(VERTEX, FRAGMENT);
+    this.fx = Object.fromEntries(VIDEO_FX.map((f) => [f.id, f.standaard]));
+    this.modus = MODI[0];
+
+    this.meng = this._programma(VERTEX, MENG);
+    this.effect = this._programma(VERTEX, EFFECT);
+    this.toon = this._programma(VERTEX, TOON);
+    this.prog = this.meng && this.effect && this.toon;
     if (!this.prog) return;
 
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-    const loc = gl.getAttribLocation(this.prog, 'p');
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    for (const prog of [this.meng, this.effect, this.toon]) {
+      const loc = gl.getAttribLocation(prog, 'p');
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    }
+    this.loc = (prog, naam) => gl.getUniformLocation(prog, naam);
 
-    gl.useProgram(this.prog);
-    this.wLoc = gl.getUniformLocation(this.prog, 'w');
+    gl.useProgram(this.meng);
+    for (let i = 0; i < MAX; i++) gl.uniform1i(this.loc(this.meng, `t${i}`), i);
+    gl.useProgram(this.effect);
+    gl.uniform1i(this.loc(this.effect, 'beeld'), 0);
+    gl.uniform1i(this.loc(this.effect, 'vorig'), 1);
+    gl.useProgram(this.toon);
+    gl.uniform1i(this.loc(this.toon, 'beeld'), 0);
+
     // Eén zwart pixel voor lege plekken: een sampler zonder texture is ongeldig.
     this.zwart = this._texture();
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
-    for (let i = 0; i < MAX; i++) gl.uniform1i(gl.getUniformLocation(this.prog, `t${i}`), i);
+    this.gemengd = this._doek();
+    this.eind = [this._doek(), this._doek()];
+    this.beurt = 0;
   }
+
+  /** Een texture van 1280×720 waar een shader naartoe kan schrijven. */
+  _doek() {
+    const gl = this.gl;
+    const tex = this._texture();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, BREEDTE, HOOGTE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { tex, fb };
+  }
+
+  zetFx(id, v) { if (id in this.fx) this.fx[id] = Math.max(0, Math.min(1, v)); }
+  volgendeModus() { this.modus = MODI[(MODI.indexOf(this.modus) + 1) % MODI.length]; }
 
   _programma(vs, fs) {
     const gl = this.gl;
@@ -155,6 +254,7 @@ export class VideoMixer {
   teken() {
     const gl = this.gl;
     if (!gl || !this.prog) return;
+    gl.useProgram(this.meng);
     const w = new Float32Array(MAX);
     const vertraging = this._vertraging();
 
@@ -177,8 +277,35 @@ export class VideoMixer {
     });
 
     gl.viewport(0, 0, BREEDTE, HOOGTE);
-    gl.uniform1fv(this.wLoc, w);
+
+    // 1. mengen -> gemengd
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.gemengd.fb);
+    gl.uniform1fv(this.loc(this.meng, 'w'), w);
+    gl.uniform1i(this.loc(this.meng, 'modus'), MODI.indexOf(this.modus));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    // 2. effecten -> eind[nu], met eind[vorige] voor de sporen
+    const nu = this.eind[this.beurt], vorige = this.eind[1 - this.beurt];
+    gl.useProgram(this.effect);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, nu.fb);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.gemengd.tex);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, vorige.tex);
+    const f = this.fx;
+    gl.uniform1f(this.loc(this.effect, 'pixel'), f.pixel);
+    gl.uniform1f(this.loc(this.effect, 'spiegel'), f.spiegel);
+    gl.uniform1f(this.loc(this.effect, 'rgb'), f.rgb);
+    gl.uniform1f(this.loc(this.effect, 'verz'), f.kleur);
+    gl.uniform1f(this.loc(this.effect, 'sporen'), f.sporen);
+    gl.uniform1f(this.loc(this.effect, 'korrel'), f.korrel);
+    gl.uniform1f(this.loc(this.effect, 'tijd'), (performance.now() / 1000) % 1000);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    // 3. tonen
+    gl.useProgram(this.toon);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, nu.tex);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    this.beurt = 1 - this.beurt;
   }
 
   _volg(laag, deck, vertraging) {
