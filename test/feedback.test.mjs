@@ -33,7 +33,23 @@ bindEngine(engine);
 const bus = [];
 const send = (b) => { bus.push([...b]); return true; };
 const mapping = new Mapping({ read, invoke: () => {}, vars: () => ({ focus: trackVanDeck(engine.focus) }) });
-mapping.load(JSON.parse(readFileSync(new URL('../mappings/apc40mk2.json', import.meta.url), 'utf8')));
+const standaard = JSON.parse(readFileSync(new URL('../mappings/apc40mk2.json', import.meta.url), 'utf8'));
+/*
+ * De ringtests draaien op een mapping MET banken, zoals in generic mode: EQ op
+ * bank 1/2 (kanaal 0/1), FX op bank 3/4. Dat is het mechanisme (ring per
+ * kanaal, ringtype per soort knop). De standaardmapping zelf draait sinds B1
+ * in 0x42 zonder banken; die wordt onderaan apart nagelopen.
+ */
+const EQ = ['high', 'mid', 'low', 'filter', 'trim', null, null, 'pitch'];
+const metBanken = {
+  ...standaard,
+  rules: [
+    ...standaard.rules.filter((r) => !/^cc:0:(1[6-9]|2[0-3])$/.test(r.in)),
+    ...[0, 1].flatMap((ch) => EQ.map((p, k) => p && { in: `cc:${ch}:${16 + k}`, action: `track.${ch + 1}.${p}`, mode: 'absolute' }).filter(Boolean)),
+    ...[2, 3].flatMap((ch) => Array.from({ length: 8 }, (_, k) => ({ in: `cc:${ch}:${16 + k}`, action: `track.${ch - 1}.fx.knob.${k + 1}`, mode: 'absolute' }))),
+  ],
+};
+mapping.load(metBanken);
 
 const fb = new Feedback({ device: apc, mapping, read, meta: metaOf, send });
 
@@ -42,7 +58,7 @@ const fb = new Feedback({ device: apc, mapping, read, meta: metaOf, send });
 fb.init();
 const sysex = bus[0];
 ok('init stuurt de sysex als eerste', sysex[0] === 0xf0 && sysex[1] === 0x47 && sysex.at(-1) === 0xf7);
-ok('init-sysex vraagt Ableton Live mode (0x41)', sysex[7] === 0x41);
+ok('init-sysex vraagt Alternate Ableton Live mode (0x42)', sysex[7] === 0x42);
 
 // Het oppervlak schoon overnemen: ook lampjes die wij niet gebruiken.
 const nullen = bus.filter((b) => (b[0] & 0xf0) === 0x90 && b[2] === 0);
@@ -159,6 +175,16 @@ bus.length = 0;
 fb.blackout();
 ok('blackout dekt elke LED op het apparaat', bus.length === apc.allLeds().length);
 ok('blackout zet alles op nul', bus.every((b) => b[2] === 0));
+
+// ---- de standaardmapping (0x42, geen banken) ------------------------------
+{
+  const m = new Mapping({ read, invoke: () => {}, vars: () => ({ focus: 1 }) });
+  m.load(standaard);
+  const dk = [...m.rules.values()].filter((r) => /^cc:\d+:(1[6-9]|2[0-3])$/.test(r.in));
+  ok('standaard: device knobs alleen op kanaal 0 (0x42 bankt niet)', dk.length === 8 && dk.every((r) => r.in.startsWith('cc:0:')));
+  ok('standaard: device knobs bedienen het rack van de track met focus',
+    dk.every((r, i) => r.action === `track.{focus}.fx.knob.${Number(r.in.split(':')[2]) - 15}`));
+}
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

@@ -13,9 +13,13 @@
 
 /**
  * Introduction message. Zonder dit blijven de LED's grotendeels dood.
- * Mode 0x41 = Ableton Live: pas dan heb je volledige RGB-controle over het grid.
+ * Mode 0x42 = Alternate Ableton Live (Clay, 23 september 2026, VRAGEN B1):
+ * alles momentary, ÁLLE LED's inclusief de ringen van ons, en de device-sectie
+ * niet gebankt (alles op kanaal 0). Gemeten in 0x41: device knob 1 kwam op
+ * cc:0:16 ongeacht de geselecteerde track, dus banken bestaan hier niet —
+ * welke track de device knobs bedienen bepaalt {focus} in de mapping.
  */
-export const INIT_SYSEX = [0xf0, 0x47, 0x7f, 0x29, 0x60, 0x00, 0x04, 0x41, 0x00, 0x00, 0x00, 0xf7];
+export const INIT_SYSEX = [0xf0, 0x47, 0x7f, 0x29, 0x60, 0x00, 0x04, 0x42, 0x00, 0x00, 0x00, 0xf7];
 
 export const GRID = { cols: 8, rows: 5, first: 0x00 };
 

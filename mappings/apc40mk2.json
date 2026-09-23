@@ -221,75 +221,51 @@
     },
     {
       "in": "cc:0:16",
-      "action": "track.1.high",
+      "action": "track.{focus}.fx.knob.1",
       "mode": "absolute",
-      "label": "device knob 1 (bank 1)"
+      "label": "device knob 1"
     },
     {
       "in": "cc:0:17",
-      "action": "track.1.mid",
+      "action": "track.{focus}.fx.knob.2",
       "mode": "absolute",
-      "label": "device knob 2 (bank 1)"
+      "label": "device knob 2"
     },
     {
       "in": "cc:0:18",
-      "action": "track.1.low",
+      "action": "track.{focus}.fx.knob.3",
       "mode": "absolute",
-      "label": "device knob 3 (bank 1)"
+      "label": "device knob 3"
     },
     {
       "in": "cc:0:19",
-      "action": "track.1.filter",
+      "action": "track.{focus}.fx.knob.4",
       "mode": "absolute",
-      "label": "device knob 4 (bank 1)"
+      "label": "device knob 4"
     },
     {
       "in": "cc:0:20",
-      "action": "track.1.trim",
+      "action": "track.{focus}.fx.knob.5",
       "mode": "absolute",
-      "label": "device knob 5 (bank 1)"
+      "label": "device knob 5"
+    },
+    {
+      "in": "cc:0:21",
+      "action": "track.{focus}.fx.knob.6",
+      "mode": "absolute",
+      "label": "device knob 6"
+    },
+    {
+      "in": "cc:0:22",
+      "action": "track.{focus}.fx.knob.7",
+      "mode": "absolute",
+      "label": "device knob 7"
     },
     {
       "in": "cc:0:23",
-      "action": "track.1.pitch",
+      "action": "track.{focus}.fx.knob.8",
       "mode": "absolute",
-      "label": "device knob 8 (bank 1)"
-    },
-    {
-      "in": "cc:1:16",
-      "action": "track.2.high",
-      "mode": "absolute",
-      "label": "device knob 1 (bank 2)"
-    },
-    {
-      "in": "cc:1:17",
-      "action": "track.2.mid",
-      "mode": "absolute",
-      "label": "device knob 2 (bank 2)"
-    },
-    {
-      "in": "cc:1:18",
-      "action": "track.2.low",
-      "mode": "absolute",
-      "label": "device knob 3 (bank 2)"
-    },
-    {
-      "in": "cc:1:19",
-      "action": "track.2.filter",
-      "mode": "absolute",
-      "label": "device knob 4 (bank 2)"
-    },
-    {
-      "in": "cc:1:20",
-      "action": "track.2.trim",
-      "mode": "absolute",
-      "label": "device knob 5 (bank 2)"
-    },
-    {
-      "in": "cc:1:23",
-      "action": "track.2.pitch",
-      "mode": "absolute",
-      "label": "device knob 8 (bank 2)"
+      "label": "device knob 8"
     },
     {
       "in": "note:0:49",
@@ -326,102 +302,6 @@
       "action": "track.{focus}.fx.bypass",
       "mode": "trigger",
       "label": "user"
-    },
-    {
-      "in": "cc:2:16",
-      "action": "track.1.fx.knob.1",
-      "mode": "absolute",
-      "label": "device knob 1 (bank 3)"
-    },
-    {
-      "in": "cc:2:17",
-      "action": "track.1.fx.knob.2",
-      "mode": "absolute",
-      "label": "device knob 2 (bank 3)"
-    },
-    {
-      "in": "cc:2:18",
-      "action": "track.1.fx.knob.3",
-      "mode": "absolute",
-      "label": "device knob 3 (bank 3)"
-    },
-    {
-      "in": "cc:2:19",
-      "action": "track.1.fx.knob.4",
-      "mode": "absolute",
-      "label": "device knob 4 (bank 3)"
-    },
-    {
-      "in": "cc:2:20",
-      "action": "track.1.fx.knob.5",
-      "mode": "absolute",
-      "label": "device knob 5 (bank 3)"
-    },
-    {
-      "in": "cc:2:21",
-      "action": "track.1.fx.knob.6",
-      "mode": "absolute",
-      "label": "device knob 6 (bank 3)"
-    },
-    {
-      "in": "cc:2:22",
-      "action": "track.1.fx.knob.7",
-      "mode": "absolute",
-      "label": "device knob 7 (bank 3)"
-    },
-    {
-      "in": "cc:2:23",
-      "action": "track.1.fx.knob.8",
-      "mode": "absolute",
-      "label": "device knob 8 (bank 3)"
-    },
-    {
-      "in": "cc:3:16",
-      "action": "track.2.fx.knob.1",
-      "mode": "absolute",
-      "label": "device knob 1 (bank 4)"
-    },
-    {
-      "in": "cc:3:17",
-      "action": "track.2.fx.knob.2",
-      "mode": "absolute",
-      "label": "device knob 2 (bank 4)"
-    },
-    {
-      "in": "cc:3:18",
-      "action": "track.2.fx.knob.3",
-      "mode": "absolute",
-      "label": "device knob 3 (bank 4)"
-    },
-    {
-      "in": "cc:3:19",
-      "action": "track.2.fx.knob.4",
-      "mode": "absolute",
-      "label": "device knob 4 (bank 4)"
-    },
-    {
-      "in": "cc:3:20",
-      "action": "track.2.fx.knob.5",
-      "mode": "absolute",
-      "label": "device knob 5 (bank 4)"
-    },
-    {
-      "in": "cc:3:21",
-      "action": "track.2.fx.knob.6",
-      "mode": "absolute",
-      "label": "device knob 6 (bank 4)"
-    },
-    {
-      "in": "cc:3:22",
-      "action": "track.2.fx.knob.7",
-      "mode": "absolute",
-      "label": "device knob 7 (bank 4)"
-    },
-    {
-      "in": "cc:3:23",
-      "action": "track.2.fx.knob.8",
-      "mode": "absolute",
-      "label": "device knob 8 (bank 4)"
     }
   ]
 }

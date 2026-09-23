@@ -170,9 +170,9 @@ test/
 - De nummers in `devices/apc40mk2.js` komen uit Akai's protocoldocument v1.2
   (tabellen op p13-17 en p23-26), niet uit herinnering. Wijk er niet van af
   zonder het document erbij. Twee dingen die makkelijk misgaan: de grid-noten
-  lopen van ONDER naar boven (0x00 is linksonder), en de device knobs melden in
-  mode 0 via het MIDI-kanaal bij welke trackstrip ze horen — vandaar de
-  wildcard-regels `cc:*:16` in de standaardmapping.
+  lopen van ONDER naar boven (0x00 is linksonder), en de device knobs melden
+  alleen in generic mode (0x40) via het MIDI-kanaal bij welke trackstrip ze
+  horen. Wij draaien in 0x42 (zie hieronder): daar staan ze op kanaal 0.
 - De UI stuurt de engine aan via actions, maar VOLGT hem ook: knoppen en faders
   op het scherm lezen elke frame hun stand terug via `read()`. Zonder dat loopt
   het scherm achter zodra er een tweede bron is (MIDI, en straks automatisering).
@@ -428,17 +428,16 @@ test/
 - LED's lopen op een eigen `setInterval`, niet op de renderloop: `requestAnimationFrame`
   staat stil zodra het venster naar de achtergrond gaat, en dan zouden de lampjes
   bevriezen terwijl de muziek doorspeelt.
-- De acht device knobs van de APC40 mkII verhuizen van MIDI-kanaal zodra je een
-  andere bank kiest (bank 1-8 = kanaal 1-8, master = kanaal 9). Omdat een
-  mappingregel de vorm `type:kanaal:nummer` heeft, is de bank al onderdeel van
-  de sleutel: acht fysieke knoppen zijn negen keer te koppelen, 72 posities.
-  Bank 1 = deck A, bank 2 = deck B, de rest is vrij (FX in fase 5).
-- Zolang de init-sysex niet verstuurd is staat het apparaat in generic mode.
-  Daar geldt: de TRACK SELECT-knoppen sturen helemaal niets (ze kiezen intern
-  alleen de bank), en de hele device-sectie — knobs én de acht schakelaars
-  eronder — verhuist mee van MIDI-kanaal met de geselecteerde strip. In Ableton
-  Live mode vervalt dat banken en komt alles op kanaal 1. De mapping dekt beide
-  met wildcards; het profiel kent beide vormen.
+- De APC draait in mode 0x42, Alternate Ableton Live (Clay, 23 sep, VRAGEN
+  B1). Alles momentary, ALLE LED's en ringen van ons, Track Select stuurt MIDI,
+  de device-sectie is NIET gebankt: device knobs op kanaal 0 (`cc:0:16-23`),
+  gemeten. Welke track ze bedienen bepaalt de mapping met `{focus}`
+  (`track.{focus}.fx.knob.1-8`). Controls per trackstrip (fader, activator,
+  solo, clip stop, track select) melden via het KANAAL welke strip.
+  Na loskoppelen staat hij weer in generic (0x40): init opnieuw bij elke hotplug.
+  In generic mode verhuisde de device-sectie mee met de geselecteerde strip
+  (bank 1-8 = kanaal 0-7) en stuurde Track Select niets; daar rekende de oude
+  standaardmapping mee, en dat klopte in 0x41/0x42 niet.
 
 ## Onderzochte keuzes
 

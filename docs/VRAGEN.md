@@ -31,7 +31,7 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 
 ## B. De APC40 mkII — eerst testen, dan kiezen 🎛
 
-- [ ] **B1. In welke modus zetten we het apparaat?**
+- [x] **B1. In welke modus zetten we het apparaat?** — Clay: 0x42 (23 sep). Gemeten in 0x41: device knob 1 op cc:0:16 ongeacht de track; device knobs nu `track.{focus}.fx.knob.1-8`.
   Het onderzoek vond een tegenstrijdigheid: we sturen de init voor modus 0x41
   (Ableton), maar de mapping rekent met banken op aparte MIDI-kanalen — en die
   bestaan alleen in generic mode. Een van de twee klopt nu niet.
