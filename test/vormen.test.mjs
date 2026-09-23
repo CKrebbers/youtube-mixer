@@ -37,9 +37,12 @@ function getallen(s, uit = [], diep = 0) {
 
 console.log('de systemen');
 {
-  const bron = readFileSync(new URL('../src/vormen/systemen.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
-  ok('systemen.js kent geen DOM, geen eigen klok en geen Math.random',
-    !/\bdocument\b|\bwindow\b|performance\.now|Math\.random|Path2D/.test(bron));
+  const { readdirSync } = await import('node:fs');
+  const bestanden = readdirSync(new URL('../src/vormen/', import.meta.url)).filter((f) => /^(hulp|systemen.*)\.js$/.test(f));
+  const vies = bestanden.filter((f) => /\bdocument\b|\bwindow\b|performance\.now|Math\.random|Path2D/.test(
+    readFileSync(new URL(`../src/vormen/${f}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
+  ok(`hulp.js en systemen*.js (${bestanden.length}) kennen geen DOM, geen eigen klok en geen Math.random`, bestanden.length >= 2 && vies.length === 0);
+  if (vies.length) console.log('      vies:', vies.join(', '));
   ok(`${SYSTEMEN.length} systemen, elk met een uniek id`, SYSTEMEN.length >= 8 && new Set(SYSTEMEN.map((s) => s.id)).size === SYSTEMEN.length);
 
   const echt = Math.random;

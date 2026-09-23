@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
 const UIT = process.argv[2] || join(WORTEL, 'tools/headless/uit');
-const POORT = 8791, DEBUG = 9337;
+const POORT = Number(process.env.VARVE_KIJK_POORT) || 8791, DEBUG = Number(process.env.VARVE_KIJK_DEBUG) || 9337;
 const tmp = mkdtempSync(join(tmpdir(), 'varve-kijk-'));
 
 function zoekChrome() {
