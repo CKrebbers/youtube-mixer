@@ -118,6 +118,12 @@ test/
 - Springen naar een plek die nog niet binnen is, geeft een paar tientallen ms
   stilte (een gat is stilte, nooit een herhaling). Hotcues en cuepunt zijn
   vastgepind en klinken direct.
+- Een loop springt van einde naar begin, en die twee samples liggen bijna
+  nooit op dezelfde hoogte: een tik. De streamkern vloeit daarom de laatste
+  5 ms (`LOOP_NAAD`) equal-power over naar wat er vlak vóór het loop-BEGIN
+  staat. Gemeten op het ADRIANA-album: sprongen tot 0,147 werden niet groter
+  dan een gewone stap in de muziek. Alleen voor de StreamBron; BufferBron
+  (losgesleepte bestanden, demotrack) loopt via de native loop en tikt nog.
 - Hoofdthread en worklet delen GEEN teller: ze rekenen allebei met dezelfde
   formule uit `stream-kern.js` op dezelfde audioklok ("vanaf T staat de
   positie op P met snelheid R"). Elke wijziging is een nieuw segment; een

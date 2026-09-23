@@ -104,7 +104,7 @@ export function plan({ positie, rate = 1, duur, sr, vastpunten = [], loop = null
   };
   const r = Math.max(0.5, Math.abs(rate));
   voeg(positie, positie + 2 * r);                          // wat nu klinkt
-  if (loop) voeg(loop.start, loop.end);                     // een loop moet heel zijn
+  if (loop) voeg(loop.start - 0.05, loop.end);              // een loop moet heel zijn, plus zijn naad
   voeg(positie, positie + vooruit * r);
   for (const t of vastpunten) if (t !== null && t !== undefined && t >= 0) voeg(t, t + rondPunt);
   voeg(positie - achteruit, positie);
@@ -138,37 +138,66 @@ function sample(paginas, n, k) {
   return i < p.length ? p[i] * (1 / 32768) : 0;
 }
 
+/** Eén kanaal op een fractionele framepositie: exact op een heel frame, anders cubisch. */
+function lees(paginas, f, k) {
+  const n = Math.floor(f);
+  const x = f - n;
+  // Afrondruis van de klokrekening: 12,9999999 is gewoon sample 13.
+  if (x < 1e-7) return sample(paginas, n, k);
+  if (x > 1 - 1e-7) return sample(paginas, n + 1, k);
+  const y0 = sample(paginas, n - 1, k), y1 = sample(paginas, n, k);
+  const y2 = sample(paginas, n + 1, k), y3 = sample(paginas, n + 2, k);
+  return y1 + 0.5 * x * (y2 - y0 + x * (2 * y0 - 5 * y1 + 4 * y2 - y3 + x * (3 * (y1 - y2) + y3 - y0)));
+}
+
+/**
+ * Hoe lang de naad van een loop wordt overgevloeid, in seconden.
+ *
+ * Springt een loop van zijn einde terug naar zijn begin, dan liggen die twee
+ * samples bijna nooit op dezelfde hoogte: een sprong in de golfvorm, en die
+ * hoor je als een tik. In de laatste 5 ms vóór het einde mengen we daarom
+ * over naar wat er vlak vóór het BEGIN staat; op het moment van terugspringen
+ * sluit het dan naadloos aan. Te kort om als fade te horen.
+ */
+export const LOOP_NAAD = 0.005;
+
 /**
  * Een blok audio renderen. Dit is wat de worklet per 128 frames aanroept.
  *
  * Bij rate 1 en een geheel startpunt komt het exacte sample eruit: de
  * interpolatie valt dan weg (frac = 0). Anders cubisch (Catmull-Rom): lineair
  * dempt de hoge tonen hoorbaar bij een paar procent pitch, en ambient is hoog.
+ * Alleen in de laatste LOOP_NAAD van een loop wordt er gemengd.
  *
  * @returns 'einde' als het trackeinde binnen dit blok viel, anders null.
  */
 export function renderBlok({ seg, paginas, uit, frames, t0, ctxRate, trackRate, duur }) {
   const [L, R] = uit;
   if (!seg.speelt) { L.fill(0, 0, frames); R.fill(0, 0, frames); return null; }
+  const loop = seg.loop;
+  // Een heel korte loop krijgt een kortere naad, anders is hij alleen nog naad.
+  const naad = loop ? Math.min(LOOP_NAAD, (loop.end - loop.start) / 4) : 0;
   let einde = null;
   for (let i = 0; i < frames; i++) {
     const p = positieOp(seg, t0 + i / ctxRate);
-    if (!seg.loop && p >= duur) {
+    if (!loop && p >= duur) {
       L.fill(0, i, frames); R.fill(0, i, frames);
       einde = 'einde';
       break;
     }
     const f = p * trackRate;
-    const n = Math.floor(f);
-    const x = f - n;
-    // Afrondruis van de klokrekening: 12,9999999 is gewoon sample 13.
-    if (x < 1e-7) { L[i] = sample(paginas, n, 0); R[i] = sample(paginas, n, 1); continue; }
-    if (x > 1 - 1e-7) { L[i] = sample(paginas, n + 1, 0); R[i] = sample(paginas, n + 1, 1); continue; }
-    for (let k = 0; k < 2; k++) {
-      const y0 = sample(paginas, n - 1, k), y1 = sample(paginas, n, k);
-      const y2 = sample(paginas, n + 1, k), y3 = sample(paginas, n + 2, k);
-      const v = y1 + 0.5 * x * (y2 - y0 + x * (2 * y0 - 5 * y1 + 4 * y2 - y3 + x * (3 * (y1 - y2) + y3 - y0)));
-      (k === 0 ? L : R)[i] = v;
+    const rest = loop ? loop.end - p : Infinity;
+    if (rest < naad && rest > 0) {
+      // Equal-power: de twee stukken zijn niet gelijk, dus een lineaire fade
+      // zou in het midden een dipje geven.
+      const w = 1 - rest / naad;
+      const a = Math.cos(w * Math.PI / 2), b = Math.sin(w * Math.PI / 2);
+      const g = (loop.start - rest) * trackRate;
+      L[i] = lees(paginas, f, 0) * a + lees(paginas, g, 0) * b;
+      R[i] = lees(paginas, f, 1) * a + lees(paginas, g, 1) * b;
+    } else {
+      L[i] = lees(paginas, f, 0);
+      R[i] = lees(paginas, f, 1);
     }
   }
   return einde;

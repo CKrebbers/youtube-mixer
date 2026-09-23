@@ -107,6 +107,22 @@ try {
   const lusUit = blok(lusSeg, 0, 256).uit[0];
   ok('loop herhaalt precies', lusUit[5] === lusUit[105] && lusUit[5] === vanKop[(48000 + 5) * 2] / 32768);
   ok('stilstaan geeft stilte', blok({ ...lusSeg, speelt: false }, 0).uit[0].every((v) => v === 0));
+
+  // De tik op de naad. Een loop die niet op een hele golf eindigt heeft een
+  // sprong van einde naar begin. Met de naad-fade mag geen stap tussen twee
+  // samples groter zijn dan wat de toon zelf maximaal doet.
+  const lusStart = 1.0, lusEind = 1.0 + 0.3017;
+  const ruw = Math.abs(vanKop[Math.round(lusEind * 48000 - 1) * 2] - vanKop[Math.round(lusStart * 48000) * 2]) / 32768;
+  const toonStap = 0.125 * 2 * Math.PI * 331 / 48000;
+  const lang = blok({ T: 0, P: lusStart, R: 1, loop: { start: lusStart, end: lusEind }, speelt: true }, 0, 48000).uit[0];
+  let grootste = 0;
+  for (let i = 1; i < lang.length; i++) grootste = Math.max(grootste, Math.abs(lang[i] - lang[i - 1]));
+  ok(`zonder naad zou de sprong ${(ruw / toonStap).toFixed(0)}x een normale stap zijn`, ruw > 5 * toonStap);
+  // Tijdens een equal-power fade tellen twee niet-gelijke stukken op tot
+  // hooguit √2 (1,41x); daarboven is het een sprong, en een sprong is een tik.
+  ok(`met naad: grootste stap ${(grootste / toonStap).toFixed(2)}x een normale stap (geen tik)`, grootste < 1.5 * toonStap);
+  const midden = blok({ T: 0, P: lusStart, R: 1, loop: { start: lusStart, end: lusEind }, speelt: true }, 0, 4800).uit[0];
+  ok('buiten de naad nog steeds exact de samples', midden[100] === vanKop[(48000 + 100) * 2] / 32768);
 } finally {
   rmSync(map, { recursive: true, force: true });
 }
