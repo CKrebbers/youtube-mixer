@@ -1,39 +1,55 @@
-# Overdracht — waar we staan (23 september 2026, einde sessie)
+# Overdracht — waar we staan (23 september 2026, avond)
 
-Lees in deze volgorde: `CLAUDE.md` (architectuur, regels, valkuilen — ook de
-sectie "Verbeterronde 23 september"), dan dit bestand, dan `docs/VRAGEN.md`
-(de open vragen voor Clay, één voor één afwerken), dan `docs/APC40.md`.
+Lees in deze volgorde: `CLAUDE.md` (architectuur, regels, valkuilen), dan dit
+bestand, dan `docs/VERBETERINGEN.md` (rondes 1–3), `docs/VRAGEN.md` (open
+vragen voor Clay) en `docs/APC40.md` (de indeling zoals gebouwd).
 
 ## Stand
 
-- Alles is gecommit (23 september 2026) in tien commits: server · klikvrij
-  transport · engine-correctheid · opnemer · sends · sampler · APC-actions ·
-  interface · tests · docs. Elke commit apart getest.
-- Tests: `node test/alles.mjs` → 16 bestanden, 792 checks, alles groen.
-- Server: `node server/index.js` (poort 8777). Draait al op de achtergrond;
-  na serverwijzigingen herstarten (`pkill -f "node server/index.js"` en opnieuw).
-  Opstarten duurt ~2 s (tooling-check).
-- De app laadt in Chrome zonder consolefouten (laatst gecontroleerd na alle wijzigingen).
+- Alles is gecommit; laatste commit `c2d580f` (scherm op een laptop, één
+  tabblad op de APC). Alleen deze docs-bijwerking staat nog open.
+- Vandaag gebouwd: het hoofdscherm spiegelt de APC (`119d4df`, `c2d580f`),
+  interactieve APC-kaart `apc.html` (`a96a596`), APC-indeling herzien na
+  onderzoek (`53e8551`, `docs/APC40-onderzoek.md`), mode 0x42 (`08e9a86`),
+  mapjes en shift (`ed0540a`), spiegel-CSS hersteld met een test (`9afd29c`).
+  Verbeterronde 1 (`7555b8a` controllaag, `0b28833` opname, `d509ed3` engine,
+  `d2f6844` server) en ronde 2 (`5e297f4` APC-lampjes, `c2d580f` scherm) uit
+  `docs/VERBETERINGEN.md`.
+- Tests: `node test/alles.mjs` → 19 bestanden, 1125 checks, alles groen.
+- Server: `node server/index.js` (poort 8777). Na elke serverwijziging
+  herstarten (`pkill -f "node server/index.js"` en opnieuw), anders draait de
+  oude code: de witte lijst, Host/Origin-controle en de analyse-worker van
+  `d2f6844` zitten pas na een herstart in de lucht. Opstarten duurt ~2 s.
 
-## Hoofdscherm = spiegel van de APC (23 september 2026, NIET gecommit)
+## Chrome-crash van 20:27 — en de regel die eruit volgt
 
-- Nieuw: `src/ui/spiegel-plan.js` (puur), `src/ui/spiegel.js`, `test/spiegel.test.mjs`.
-  Herschreven: `index.html` (main), `vensters.js`, `renderloop.js`, `racks.js`
-  (rack-rij volgt focus), CSS. De twee vensters, de mixerstrook en de trackrij
-  zijn weg; zie CLAUDE.md "Het scherm spiegelt de APC40 mkII".
-- Getest in Chrome (eigen tabblad, master op 0): kolommen, actions uit de
-  mapping, mapjes, shift, focuswissel, strip/rack, oplichten, panelen,
-  sneltoetsen, koppelmodus. Niet getest: de APC zelf aanraken (oplichten
-  alleen gesimuleerd), bestanden slepen op banen/kolommen, schermen smaller
-  dan ~1500 px.
+Chrome crashte om 20:27 in `MidiService_TaskService_Thread`, op dezelfde plek
+als de vier crashes van 22 september. Vermoedelijke oorzaak: vier
+VARVE-tabbladen tegelijk (twee testtabbladen van de sessie, een agent-tabblad
+en dat van Clay) die allemaal init en LED's naar de APC stuurden.
+Maatregel (`c2d580f`): `src/ui/tabblad.js`, Web Lock `varve-mixer`. Een tweede
+tabblad vraagt geen MIDI-toegang aan (`midi-opzet.js` wrapt `midi.init`) en
+neemt pas over als het eerste sluit.
 
-## Wat NIET getest is (vraagt Clay)
+**REGEL:** open NOOIT een extra VARVE-tabblad terwijl de APC aangesloten is en
+Clay's tabblad open staat. Vraag Clay eerst de APC los te koppelen, of test met
+zijn toestemming in zijn tabblad. Let op: `apc.html` leest de APC zelf mee
+(zonder sysex, stuurt niets) en valt buiten de lock.
 
-- Luisteren: streamen, loops, seek/hotcue na de declick-wijzigingen (VRAGEN A2).
-- Keylock-demo (VRAGEN A3).
-- Alles met de APC (VRAGEN B): eerst de modus/kanalen controleren.
-- Video-opname: geluidsspoor en vloeiende 30 fps (alleen in een zichtbaar venster te zien).
-- Sends (echo-out) en sampler op het gehoor.
+## Wat NIET getest is
+
+- Visueel na ronde 2: het scherm op 1440×900 en op 1920×1080 (de
+  laptop-indeling is gebouwd op een meting, niet daarna opnieuw bekeken).
+- De APC opnieuw aansluiten in echte Chrome (init en LED's na hotplug; de
+  hubfix is alleen in een nagebouwde hub bewezen).
+- Op het apparaat: knipperen op de tel (loop-pads, Track Select van de
+  maatgever), de endless-ringknoppen, de drie LED-standen en de A|B-kleuren.
+- Echofilter voor de APC: staat nog aan; na een sessie `hub.status().echoes`
+  bekijken — nog 0, dan mag hij uit.
+- Een RF64-opname (> 6,2 uur) afspelen in de browser (ffmpeg leest hem wel).
+- Video-opname: geluidsspoor en vloeiende 30 fps (alleen in een zichtbaar venster).
+- Uit eerdere rondes nog open: luistertest streamen/loops/seek (VRAGEN A2),
+  keylock-demo (A3), sends en sampler op het gehoor.
 
 ## Bekende valkuilen bij testen in Chrome (via de extensie)
 
@@ -45,12 +61,14 @@ sectie "Verbeterronde 23 september"), dan dit bestand, dan `docs/VRAGEN.md`
 - Een nep-video voor de videomixer: een canvas met readyState/currentTime/play/pause
   erop geplakt. Testbeelden ASYMMETRISCH maken (vier kwarten).
 - Meet een beat-puls nooit precies óp de tel (afronding valt op de vorige tel).
-- Clay speelt soms tegelijk in zijn eigen tabblad: open voor tests altijd een
-  EIGEN tabblad, en ruim testracks/opnames in zijn library weer op.
+- Clay speelt soms tegelijk in zijn eigen tabblad. Een eigen testtabblad mag
+  ALLEEN als de APC niet aangesloten is (zie de regel hierboven); ruim
+  testracks/opnames in zijn library weer op.
 
 ## Volgende stap
 
-Clay vroeg: "alle vragen in kaart brengen zodat we die een voor een op de
-juiste manier kunnen behandelen" en "grote stappen maken". Begin met
-`docs/VRAGEN.md` A1 (committen) en loop de lijst af. E1 (app.js opsplitsen,
-± 1100 regels) mag zonder hem, maar pas na de commit.
+1. Clay test op de APC, in zijn eigen tabblad (zie de regel hierboven): de
+   indeling (`apc.html` ernaast), lampjes, knipperen, ringknoppen, opnieuw
+   aansluiten. Wat niet klopt eerst repareren.
+2. Daarna ronde 3 uit `docs/VERBETERINGEN.md`, punt voor punt met Clay
+   kiezen — dat zijn functies, geen reparaties, dus niets bouwen zonder zijn ja.

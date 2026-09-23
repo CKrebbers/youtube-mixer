@@ -4,8 +4,9 @@ Lees dit voordat je iets wijzigt. Dit bestand is de bron van waarheid voor
 architectuurbeslissingen; `ROADMAP.md` is de bron van waarheid voor de volgorde.
 
 Hervatten na een pauze: `docs/HANDOFF.md` (stand, wat ongecommit is, wat
-niet getest is), `docs/VRAGEN.md` (open vragen voor Clay), `docs/APC40.md`
-(wat de controller kan en de voorgestelde indeling).
+niet getest is), `docs/VRAGEN.md` (open vragen voor Clay),
+`docs/VERBETERINGEN.md` (verbeterlijst in rondes), `docs/APC40.md` (wat de
+controller kan en de indeling zoals gebouwd).
 
 ## Wat dit is
 
@@ -77,6 +78,9 @@ src/
                     spiegel-plan.js het scherm als APC: welke control waar, wat hij doet. Puur.
                     spiegel.js      acht kolommen, focusdeel, acht banen; data-actions uit de mapping
                     vensters.js     de track met focus bovenaan + vensters als model (L/R)
+                    tabblad.js      Web Lock 'varve-mixer': maar één tabblad praat met de APC
+                    apc-kaart.js    apc.html: de APC met knoppen op hun echte plek, klik = uitleg
+                    apc-beschrijf.js elke action in gewone taal (de test eist er een voor de hele standaardmapping)
   video/            volg.js         hoe een video de audio volgt. Puur rekenwerk.
                     video-mixer.js  <video> per track, gemengd met WebGL2. Leest de engine alleen uit.
                     instellingen.js welke video-effecten en mengvormen er zijn (data)
@@ -89,6 +93,7 @@ server/             draait apart: `node server/index.js`
   ingest.js         yt-dlp -> ffmpeg -> media/<id>/. Gooit nooit; geeft resultaat terug.
   library.js        SQLite via node:sqlite. Tracks, peaks, effect-racks.
   analyze.js        golfvorm-peaks én onset-envelope vooraf, streamend uit ffmpeg
+  analyse-werker.js peaks, onset en tap-verfijning in een worker_thread (server blijft vrij)
   detect.js         FFT, onset-envelope, tempo, segmentatie. Geen dependencies.
   opname.js         opnames: WAV dat groeit, kop herstellen na een crash
 mappings/
@@ -115,8 +120,16 @@ test/
   server.test.mjs   eigen server op eigen poort + tijdelijke db: witte lijst, Range, racks per nummer
   regels.test.mjs   regel 1 als test: engine importeert niets uit ui/control/server, geen DOM
   spiegel.test.mjs  scherm-als-APC: actions uit de mapping, mapjes, shift, venster volgt focus
+  tabblad.test.mjs  Web Lock met een nagebouwde navigator.locks: eerste, tweede, overnemen
+  opname.test.mjs   opname-WAV: stukken op ?frame=N, kop, RF64, herstel na crash, geen ../
+  opnemer.test.mjs  opnemer tegen de echte opname.js met een haperend netwerk: geen dubbel, gat = stilte
   alles.mjs         alle tests in één keer met overzicht
-  opname.test.mjs   opname-WAV: stukken, kop, herstel na crash, geen ../
+docs/
+  HANDOFF.md        stand, wat niet getest is, volgende stap
+  VRAGEN.md         open vragen voor Clay
+  VERBETERINGEN.md  verbeterlijst uit de reviewagenten, in rondes
+  APC40.md          wat het apparaat kan en de indeling zoals gebouwd
+  APC40-onderzoek.md DJ-conventies, bestaande mappings, fysieke indeling (bron van de indeling)
 ```
 
 ## Conventies
@@ -172,11 +185,21 @@ test/
   schaalt. Bereik wisselen laat het tempo staan; alleen de faderstand verschuift.
   Sync mag verder (0,5–2): dan staat de fader tegen de aanslag (read geklemd).
   Een nieuw nummer begint op 0% pitch (`_naLaden`); het bereik blijft staan.
+- De tempo-encoder van de APC stuurt `track.N.tempo`, NIET de pitchfader:
+  lineair over de hele rate (0,5–2×), 0,1% per tik (shift 0,01%), read niet
+  geklemd. Via de geklemde pitch-read sprong één tik na een sync buiten het
+  bereik van 1,30 naar 1,16.
 - De master-"limiter" is een `DynamicsCompressor`, geen look-ahead limiter.
 - Er zijn twee soorten loops naast elkaar: in seconden en in tellen. De
   beat-loops klikken in op het grid; zonder grid doen ze niets.
 - Een loop wordt geklemd op het trackeinde, dus `loop 4s` vlak voor het eind geeft
   een kortere loop. Correct gedrag.
+- Springen (seek, hotcue, cue) naar een plek BUITEN de loop verlaat hem; binnen
+  blijft hij staan. Fasecorrectie (sync, nudge) vouwt terug in de loop via
+  `seek(p, { binnenLoop: true })`: een verschuiving van een paar ms mag de loop
+  niet opheffen. Vroeger landde een hotcue tijdens een loop ergens ín de loop.
+- Een mislukte laad laat cue en hotcues van de track staan; een loop vanaf 0 s
+  vloeit bij de naad niet meer naar stilte (er staat niets vóór 0).
 - De nummers in `devices/apc40mk2.js` komen uit Akai's protocoldocument v1.2
   (tabellen op p13-17 en p23-26), niet uit herinnering. Wijk er niet van af
   zonder het document erbij. Twee dingen die makkelijk misgaan: de grid-noten
@@ -225,7 +248,8 @@ test/
   en `send.a/b.knob.K.hold`. Indrukken = vol open (direct, geen glijden),
   loslaten = terug naar de stand van vóór het drukken. Wisselt het rack tijdens
   het drukken, dan niet terugzetten. Op het scherm: alt + vasthouden (shift is
-  al fijn slepen). Welke APC-knoppen dit worden, beslist B3.
+  al fijn slepen). Op de APC nog geen knop toegewezen; voorstel voor vrije
+  knoppen (Lock, Detail View) in `docs/VERBETERINGEN.md` ronde 3.
 - Botsen twee macro's op dezelfde parameter, dan wint de HOOGSTE plek. Saai en
   voorspelbaar; "laatste in de lijst wint" hangt van de volgorde af.
 - Een onbekend effecttype in een rack wordt NIET weggegooid: het blijft als ruwe
@@ -243,6 +267,14 @@ test/
   exemplaar van `mappings/apc40mk2.json`. Raak je de APC aan, dan licht het
   element 300 ms op (`geraakt` uit midi-opzet.js -> `spiegel.markeer`). Knoppen
   lezen hun action bij het INDRUKKEN, en loslaten gaat naar dezelfde action.
+  Maat: past op 1440×900 (daar verdwenen eerst de banen achter de kolommen):
+  het focusdeck houdt zijn hoogte, de banen staan in twee kolommen, faders
+  krimpen mee, onder 900 px hoogte compacter. Per kolom bovenaan resterende
+  tijd (14 px, rood onder 30 s als hij speelt) en BPM, groot genoeg voor de
+  zaal. Labels ≥ 11 px. APC-knopnamen alleen in de KOPPELMODUS (anders ruis).
+  MAAT-badge zegt "(stil)" als de maatgever stilstaat; hotcues overal geel met
+  nummer; foutmeldingen blijven staan tot je ze wegklikt. De renderloop leest
+  het focusoverzicht uit een cache en schrijft alleen wat verandert.
 - Vensters bestaan nog, maar als MODEL (`staat.venster`), niet als UI:
   L = de track met focus (volgt engine.focus), R = de VORIGE focus-track
   (`volgFocus`/`zetTweede` in spiegel-plan.js). Het toetsenbord volgt dat
@@ -253,8 +285,11 @@ test/
   kiesknop met meer mapjes brandt niet in zijn standaardmapje.
 - Crossfader-toewijzing per track: A, B of thru. Standaard 1 op A, 2 op B, de
   rest thru — zo klinkt een set voor twee als vroeger.
-  Op het scherm drie segmenten (`track.N.xfade.a/.thru/.b`): rondlopen kon een
-  hoorbare track stilzetten. `track.N.xfade.side` (rondlopen) blijft voor de APC.
+  Eén plek voor de kant, op scherm én APC: de A|B-knop in het 2×2-blok
+  (`track.N.xfade.side`, rondlopen A → B → thru). Op de APC de tweekleurige
+  LED (geel = A, oranje = B, uit = thru), op het scherm de letter in die
+  kleur. De drie segmenten van C3 zijn weg van het scherm; de actions
+  `track.N.xfade.a/.thru/.b` bestaan nog om te koppelen.
 - Sync kent geen "het andere deck" meer: een track synct naar de track die je
   het hardst hoort (fader × crossfader, spelend, met grid). Speelt er niets,
   dan de eerste geladen track met grid.
@@ -279,6 +314,14 @@ test/
   moment waarop de volgende tel valt op de audioklok. Herankeren is verplicht
   bij seek, hotcue, tempowijziging en gridbewerking — vergeet er één en je gate
   loopt na twintig minuten een zestiende naast.
+- Gate en sampler lopen EXACT op de maat via `playbackRate`, niet via de
+  bufferlengte: een buffer heeft hele samples, dus een periode die een fractie
+  van een sample afwijkt loopt weg (gemeten ~1/16 naast na 26 min). Gate: buffer op
+  hele samples, rate maakt de periode exact, buffer hergebruikt bij kleine
+  tempowissels. Sampler: rate = duur / (tellen × tellengte).
+- Starten op de tel gaat via `startOpDeTel()` (fx.js): valt de volgende tel
+  binnen de uitgangsbuffer, dan wordt het de tel erna. Anders start het
+  blijvend een paar ms te laat (Web Audio begint een bron in het verleden gewoon nu).
 - **Q van een Web Audio-lowpass is een piek in DECIBEL, geen factor.** De
   standaard (1 dB) is al 12% boven 1 bij de afsnijfrequentie. In een
   feedbacklus groeit dat: de reverb zwol aan in plaats van uit te sterven, en
@@ -338,8 +381,9 @@ test/
   (-g 30), niet slimmer springen.
 - Het videobeeld gaat in drie shaderstappen: mengen (mengvorm) -> effecten
   (met het VORIGE eindbeeld voor sporen, twee buffers om de beurt) -> tonen.
-  Vast op 1280×720. Het paneel is een inklapbare VIERDE KOLOM in `main` (niet
-  meer over het rechtervenster; CSS `main:has(> .video-panel:not(.hidden))`). Effecten en mengvorm staan op de action-bus
+  Vast op 1280×720. Het paneel is een inklapbare kolom rechts in `main`, naast
+  kolommen en focusdeel (CSS `main:has(> .video-panel:not(.hidden))`), nooit
+  een laag over de bediening. Effecten en mengvorm staan op de action-bus
   (`video.fx.*`, `video.mode`, via `bindVideo`), dus ze zijn te koppelen.
   Effecten op de tel (`video.pulse`, `video.pulse.target`): de maat komt van de
   track die het hardst klinkt, speelt en een grid heeft, op het moment dat je
@@ -354,16 +398,26 @@ test/
   en pauzeert daar de animatielus. Video-gedrag test je dus met het venster
   vooraan; in een achtergrondtab meet je niets.
 - Opnemen tapt de master NA de limiter: wat de zaal hoort. De worklet geeft
-  per seconde een stuk; de server plakt het meteen achter het bestand, dus
-  een crash kost hooguit een seconde. De WAV-kop krijgt zijn lengte pas bij
-  "klaar"; is dat nooit gebeurd, dan herstelt `lijst()` hem bij het opstarten
-  uit de bestandsgrootte. De lengte komt van getelde frames (audioklok), niet
-  van een timer. Alleen op 48 kHz: de kop zegt 48000.
+  per seconde een stuk; elk stuk gaat met `?frame=N` (frames van de audioklok)
+  en de server schrijft het OP DIE PLEK, niet erachter. Daardoor is herhalen
+  na een verloren antwoord veilig (geen dubbel stuk), en wordt een weggevallen
+  stuk stilte op zijn plek in plaats van dat alles erna t.o.v. de video
+  verschuift. `klaar?frames=N` vult een weggevallen staart aan. Een crash kost
+  hooguit een seconde. De WAV-kop krijgt zijn lengte pas bij "klaar" (alleen
+  hele frames); is dat nooit gebeurd, dan herstelt `lijst()` hem bij het
+  opstarten uit de bestandsgrootte. Alleen op 48 kHz: de kop zegt 48000.
+  Nieuwe opnames hebben een kop van 80 bytes met een JUNK-chunk die boven
+  4 GB (~6,2 uur) `ds64` wordt: RF64 (ffmpeg las 7 uur volledig). Oude koppen
+  worden geklemd met een waarschuwing. Starten via de APC zet de AudioContext
+  aan of weigert duidelijk; verloren videostukken gaan naar `onFout` (scherm).
 - Met video erbij: naast de WAV een set-<id>.mp4 (H.264, 1280×720, 30 fps,
   8 Mbit/s — ~3,6 GB per uur) met eigen geluidsspoor, via MediaRecorder op
   het mixer-canvas. mp4 als Chrome het kan, anders webm. Ook per seconde
   weggeschreven. Tijdens een video-opname rendert de mixer door, ook als het
-  paneel dicht is, anders neem je zwart op. Het beeld loopt een paar ms
+  paneel dicht is, anders neem je zwart op. Maar NIET in een achtergrondtab:
+  dan staat `requestAnimationFrame` stil en bevriezen zowel de beamer (het
+  losse venster toont het canvas van het hoofdtabblad) als de video-opname.
+  Hoofdtabblad dus zichtbaar houden (ronde 3: mengen naar het losse venster). Het beeld loopt een paar ms
   achter op het geluid in de video (de mixer mikt op wat je HOORT, de
   opname-tap zit vóór de uitgangsvertraging): minder dan één beeld.
 - Sends: per track A (echo) en B (galm), getapt NA de fader en vóór de
@@ -423,10 +477,26 @@ test/
   - Server: witte lijst voor statische bestanden, Range geklemd, POST-routes
     alleen JSON, racks bijwerken/wissen alleen binnen het eigen nummer, ingest
     in een werkmap (`media/.bezig-*`) en pas bij succes verhuizen, video-id
-    gecontroleerd, migraties in een transactie. `VARVE_DB`/`VARVE_OPNAMES` voor tests.
+    gecontroleerd, migraties in een transactie. `VARVE_DB`/`VARVE_OPNAMES`/
+    `VARVE_MEDIA` voor tests (een testserver ruimde anders `.bezig-*` op in de
+    echte media/).
+  - Server, tweede ronde (d2f6844): de witte lijst kijkt naar het pad NÁ
+    decoderen en normaliseren; `%2f`, `%5c`, `..`-segmenten en backslashes
+    worden geweigerd (`/src/..%2fmedia%2flibrary.db` gaf 200). Mediatype exact
+    `application/json`; Host alleen localhost/127.0.0.1/[::1] met de eigen poort
+    (DNS-rebinding); Origin moet gelijk zijn bij alles behalve GET/HEAD
+    (zonder Origin mag het, voor curl). Peaks, onset en tap-verfijning draaien
+    in een `worker_thread` (`analyse-werker.js`), bit-identiek: de langste
+    blokkade was 2,6 s bij verfijnen, nu enkele ms — anders gaten in spelende
+    decks, want de server levert ook hun pagina's. Tap-verfijning scoort
+    ±45 s rond `positie` (tracktijd) als die meekomt: lange albums hebben
+    tempowissels. Na een serverwijziging: server herstarten.
   - UI: fouten naar `meld()` (strook onderaan), nooit alleen console. Geen
-    `prompt()` (legt de pagina stil). Library = toets B (L is hotcue 3 rechts).
-    Sneltoetsen alleen uit tijdens TYPEN (`isTypen`). Eén onderpaneel tegelijk
+    `prompt()` (legt de pagina stil). Library = toets B (L is hotcue 3 van de
+    vorige focus, `{R}`). Sneltoetsen alleen uit tijdens TYPEN (`isTypen`).
+    Het toetsenbord negeert alles met Cmd/Ctrl/Alt (Cmd+F startte een hotcue)
+    en laat alles los bij blur of een verborgen tabblad; loslaten gaat naar
+    de action van het indrukken, ook met shift. Eén onderpaneel tegelijk
     (library, MIDI, rack-editor: `sluitOnderpanelen`), Esc sluit. Destructief = tweede klik
     binnen 3 s (laden over een spelende track, nummer weghalen, opname stoppen,
     mapping resetten, DICHT/OPEN op een hoorbare track). Eigen MIDI-mapping op de
@@ -443,12 +513,33 @@ test/
   op dezelfde codeplek. Dat is hun bug, maar honderd berichten in één synchrone
   lus is sowieso geen net gedrag. Alleen bij het sluiten van de pagina mag het
   direct, want dan is er geen volgende tik meer.
+- ÉÉN VARVE-tabblad praat met de APC (`tabblad.js`, Web Lock `varve-mixer`).
+  Op 23 september 2026 om 20:27 crashte Chrome in `MidiService_TaskService_Thread`,
+  op dezelfde plek als de vier crashes van 22 sep; vermoedelijk omdat vier
+  VARVE-tabbladen tegelijk init en LED's naar de APC stuurden (twee
+  testtabbladen, een agent-tabblad en dat van Clay). Wie de lock heeft is het
+  tabblad; een tweede tabblad vraagt helemaal GEEN MIDI-toegang aan
+  (`midi-opzet.js` wrapt `midi.init`) en neemt het pas over als het eerste
+  sluit. Een lock verdwijnt ook bij een crash, dus er blijft geen spook hangen.
+  Uitzondering: `apc.html` vraagt zelf MIDI-toegang aan, zonder sysex en zonder
+  iets te sturen (alleen meelezen), en doet niet mee aan de lock.
+  **Regel voor sessies:** open NOOIT een extra VARVE-tabblad terwijl de APC
+  aangesloten is en Clay's tabblad open staat. Vraag Clay eerst de APC los te
+  koppelen, of test met zijn toestemming in zijn tabblad. De lock beschermt
+  pas vanaf deze versie; een tabblad met oude code in het geheugen doet niet mee.
+- De hub telt alleen poorten met state `connected`: Chrome laat een
+  losgetrokken poort staan (`disconnected`), dus opnieuw aansluiten gaf eerst
+  geen init en dode LED's. Valt de invoer weg, dan laat `mapping.losgekoppeld()`
+  shift en ingedrukte knoppen los.
 - De hub negeert echo's: een bericht dat identiek is aan wat wij net stuurden en
   binnen 60 ms terugkomt, bereikt de mapping niet. Zonder die rem maken de
   LED-ringen een lus — wij zetten een ring, het apparaat meldt de stand terug,
-  wij verwerken dat als een knopdraai — en loopt de bus vol.
+  wij verwerken dat als een knopdraai — en loopt de bus vol. Het filter is per
+  apparaat uit te zetten (`echoFilter` in het profiel); voor de APC staat het
+  nog AAN tot gemeten is dat hij in 0x42 niets terugkaatst (`hub.status().echoes`
+  na een sessie nog 0 → mag uit).
 - MAPJES (lagen) en SHIFT op de controller (Clay, 23 sep, VRAGEN B3). Een regel
-  kan `"shift": true` en/of `"laag": "top.echo"` hebben; de sleutel is
+  kan `"shift": true` en/of `"laag": "device.rack"` hebben; de sleutel is
   `sig[#shift][@laag]`, dus één knop heeft meerdere regels. `mapping.kies()`
   zoekt: met shift eerst shift-regels, dan gewone (een fader blijft werken met
   shift vast); binnen elk eerst het open mapje, dan zonder mapje. Loslaten gaat
@@ -456,8 +547,8 @@ test/
   mapje intussen wisselde. De shiftknop staat bovenaan de mapping (`"shift"`)
   en gaat nooit de bus op. Groepen en mapjes staan in `lagen.js`. HERZIEN na
   het onderzoek (`docs/APC40-onderzoek.md`, Clay 23 sep): de KERN zit nooit in
-  een mapje — één kolom = één track (filter boven, fader onder, play/cue/sync/
-  A-B in het 2×2-blok), rechts de strip van de focus-track in DJ-mixervolgorde.
+  een mapje — één kolom = één track (filter boven, fader onder, play/sync/A-B
+  in het 2×2-blok, cue onder shift), rechts de strip van de focus-track in DJ-mixervolgorde.
   Alleen twee groepen: `device` (strip ↔ rack, één oplichtende knop) en `grid`
   (hotcues/loops/sampler/video op de scene-knoppen, elk een eigen kleur).
   Kort drukken = vast, vasthouden ≥ 400 ms vanuit een ander mapje = gluren.
@@ -477,6 +568,23 @@ test/
   een nieuwe action een uitleg in `apc-beschrijf.js` (de test eist dat).
 - De LED-laag leest de MAPPING, niet de engine. Koppel je een pad aan iets
   anders, dan verhuist zijn lampje vanzelf mee. Er is bewust geen tweede tabel.
+- LED's in drie standen uit `read()` (VRAGEN B4): `null` = UIT (niets te doen,
+  bv. hotcue op een lege track), donkergrijs = leeg maar bruikbaar, DONKERE
+  kleur = gevuld/dicht, volle kleur = actief. Donker is paletindex n+1 (de
+  #59xxxx-tinten), NIET de "zacht"-pastels (12/36/44/48): die zijn op het
+  apparaat even fel als de volle kleur, dus gedimd zou niet te zien zijn. Zo zijn een
+  gevulde en een spelende sampler-pad te onderscheiden. De LED's volgen shift
+  (wis-regels rood zolang shift vastzit); On/Off brandt als het effect AAN staat.
+- Knipperen op de tel rekenen we ZELF (B2), niet met het knipperkanaal van de
+  APC (dat vraagt MIDI clock): `track.N.phase` = gridfase op positie min
+  uitgangsvertraging, dus op wat je hoort. Loop-pads knipperen zolang ze aan
+  staan; de Track Select van de maatgever knippert omgekeerd. Een kwart tel
+  fel, twee berichten per LED per tel.
+- De 16 ringknoppen (track knobs en device knobs) staan in modus `endless`:
+  de knop stuurt absolute waarden, maar we gebruiken alleen het verschil met
+  zijn vorige waarde, opgeteld bij de softwarestand. De ring toont al die
+  stand, dus na een focus- of mapjewissel draai je meteen door vanaf wat je
+  ziet, zonder overpakken. Faders (geen ring) houden absolute + soft-takeover.
 - LED's lopen op een eigen `setInterval`, niet op de renderloop: `requestAnimationFrame`
   staat stil zodra het venster naar de achtergrond gaat, en dan zouden de lampjes
   bevriezen terwijl de muziek doorspeelt.

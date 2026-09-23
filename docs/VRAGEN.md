@@ -1,7 +1,7 @@
 # Open vragen voor Clay
 
-Stand: 23 september 2026, na de verbeterronde met vier auditagenten en het
-APC40-onderzoek. Per vraag: wat er speelt, de opties, mijn advies, en wat er
+Stand: 23 september 2026 (avond), na verbeterronde 1 en 2 uit
+`docs/VERBETERINGEN.md`. Open: A2, A3, F1; de rest is beslist en gebouwd. Per vraag: wat er speelt, de opties, mijn advies, en wat er
 nodig is om hem te beantwoorden. Afvinken zodra beslist; het besluit komt
 daarna in CLAUDE.md of ROADMAP.md.
 
@@ -31,10 +31,13 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 
 ## B. De APC40 mkII — eerst testen, dan kiezen 🎛
 
-- [x] **B1. In welke modus zetten we het apparaat?** — Clay: 0x42 (23 sep). Gemeten in 0x41: device knob 1 op cc:0:16 ongeacht de track; device knobs nu `track.{focus}.fx.knob.1-8`.
-  Het onderzoek vond een tegenstrijdigheid: we sturen de init voor modus 0x41
-  (Ableton), maar de mapping rekent met banken op aparte MIDI-kanalen — en die
-  bestaan alleen in generic mode. Een van de twee klopt nu niet.
+- [x] **B1. In welke modus zetten we het apparaat?** — OPGELOST: Clay koos
+  0x42 (23 sep, `08e9a86`). Gemeten in 0x41: device knob 1 op `cc:0:16`, welke
+  track je ook selecteerde. Init stuurt nu 0x42; device knobs
+  `cc:0:16-23` → `track.{focus}.…`, Track Select → focus. De tegenstrijdigheid
+  (init 0x41, mapping met generic-banken) bestaat niet meer.
+  Oorspronkelijke vraag: we stuurden de init voor 0x41, maar de mapping rekende
+  met banken op aparte MIDI-kanalen die alleen in generic mode bestaan.
   - **0x42 (Alternate Ableton):** alles momentary, álle LED's en ringen van
     ons, track select stuurt MIDI. Banken doen we zelf met `{focus}`.
   - 0x40 (generic): het apparaat doet banken zelf, maar track select stuurt
@@ -42,7 +45,10 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   **Advies:** 0x42, en de device knobs via `{focus}` (werkt in elke modus).
   **Eerst:** met de MIDI-monitor kijken welke kanalen er nu echt binnenkomen.
 
-- [ ] **B2. Knipperen op de tel: door de APC of door ons?**
+- [x] **B2. Knipperen op de tel: door de APC of door ons?** — gebouwd
+  (`5e297f4`): zelf gerekend uit `track.N.phase` (positie min
+  uitgangsvertraging); loop-pads en de Track Select van de maatgever. MIDI
+  clock niet geprobeerd.
   Het grid kan zelf pulseren/knipperen, maar alleen synchroon als wij MIDI
   clock sturen (onbevestigd). Zelf knipperen via `track.N.tel` kan altijd.
   **Advies:** zelf (klokvast volgens regel 3); MIDI clock proberen als extra.
@@ -67,15 +73,21 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
     **scene launch** = beatloops van de focus-track
   - **Record** = opname start (shift: stop), tempo-encoder = pitch,
     cue-encoder = sampler-volume, pijlen = focus / video
-  Deelkeuzes:
-  - [ ] **B3a. Volgt het linkervenster de focus?** Advies: ja; Arm zet een track rechts.
-  - [ ] **B3b. Standaardlaag van de track knobs: filter of sends?** Advies: filter.
-  - [ ] **B3c. Een tweede gridpagina** (loops per track, video-toggles)? Advies: nog niet.
-  - [ ] **B3d. Opname stoppen op de APC:** shift+Record of dubbel drukken? Advies: shift.
-  - [ ] **B3e. Cue alleen onder shift?** Advies: ja; bij lange stukken wil je zelden live terug.
-  - [ ] **B3f. Stop All Clips** bewust leeg laten? Advies: ja.
+  Deelkeuzes (VERVALLEN door de herziene indeling van `53e8551`; wat er nu
+  staat: Track Select = focus, shift = tweede track; filter vast boven elke
+  kolom, geen lagen voor de track knobs; grid-modi op de scene-knoppen;
+  opname stoppen = shift + Record; cue alleen met shift + ●; Stop All vrij):
+  - [-] **B3a. Volgt het linkervenster de focus?** Advies: ja; Arm zet een track rechts.
+  - [-] **B3b. Standaardlaag van de track knobs: filter of sends?** Advies: filter.
+  - [-] **B3c. Een tweede gridpagina** (loops per track, video-toggles)? Advies: nog niet.
+  - [-] **B3d. Opname stoppen op de APC:** shift+Record of dubbel drukken? Advies: shift.
+  - [-] **B3e. Cue alleen onder shift?** Advies: ja; bij lange stukken wil je zelden live terug.
+  - [-] **B3f. Stop All Clips** bewust leeg laten? Advies: ja.
 
-- [ ] **B4. Kleurbetekenis op het grid** — voorstel: uit = niets te doen,
+- [x] **B4. Kleurbetekenis op het grid** — gebouwd (`5e297f4`): "zachte tint"
+  werd de DONKERE variant (paletindex n+1, #59xxxx), niet de pastels; drie
+  standen uit `read()`, wis-regels rood zolang shift vastzit.
+  Voorstel was: uit = niets te doen,
   donkergrijs = leeg, zachte tint = gevuld, volle tint = actief, knipperen =
   loopt in de tijd, rood = opname/wissen. Akkoord of eigen kleuren?
 
@@ -94,7 +106,10 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 - [x] **C3. Crossfaderkant: één knop die rondloopt (A→B→thru) of drie aparte?**
   Rondlopen kan een hoorbare track per ongeluk stil zetten. **Advies:** drie
   kleine segmenten op het scherm; op de APC blijft het één knop.
-  — Clay: drie segmenten (gebouwd 23 sep).
+  — Clay: drie segmenten (gebouwd 23 sep). Later vervangen (`5e297f4`,
+  `c2d580f`): één A|B-knop op scherm én APC met de kant als kleur (geel A,
+  oranje B, uit thru): je ziet waar je naartoe loopt. Cue kwam achter
+  shift + ●, want een per ongeluk ingedrukte cue zette een hoorbare track stil.
 
 - [x] **C4. Klik op het tracknummer in de trackrij = play?** Je verwacht
   eerder "selecteren". **Advies:** nummer = focus, play op een eigen knopje.
@@ -118,7 +133,9 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 - [x] **D2. Pads die meelopen met tempowijzigingen** van de maat-track.
   — Clay: ja, tempo én tel (gebouwd 23 sep: `Sampler.heranker`).
 - [x] **D3. Dub-worp en Vasthouden als drukknop** (werkt zolang je vasthoudt) — hoort bij B3.
-  — Clay: elke knopplek (gebouwd 23 sep: `.druk`-actions, alt+vasthouden op het scherm; APC-knoppen bij B3).
+  — Clay: elke knopplek (gebouwd 23 sep: `.hold`-actions, alt+vasthouden op het scherm).
+  Op de APC nog NIET toegewezen: voorstel (Lock = dub-worp, Detail View = galm
+  vasthouden) staat in `docs/VERBETERINGEN.md` ronde 3.
 - [x] **D4. Losse bestanden ook via de streamkern** (geen tik bij loops, één afspeelmotor).
   — Clay: ja (gebouwd 23 sep: `laadGeheugen`, `maakWav`, `geheugenHaal`).
 - [x] **D5. Eén paneel tegelijk onderin** (library, rack-editor, MIDI overlappen nu),

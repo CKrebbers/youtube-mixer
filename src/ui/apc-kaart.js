@@ -286,4 +286,9 @@ mapping = new Mapping({
 mapping.load(doc);
 document.getElementById('bron').textContent = `Uit ${bron} (${mapping.rules.size} regels).`;
 alles();
-luisterMee();
+// Meekijken met de APC pas na een klik: dan opent deze pagina nooit
+// ongevraagd MIDI naast de mixer (zie CLAUDE.md, Chrome-crash 23 sep).
+const live = document.getElementById('live');
+live.textContent = 'live meekijken met de APC';
+live.classList.add('klikbaar');
+live.addEventListener('click', () => { live.classList.remove('klikbaar'); live.textContent = '…'; luisterMee(); }, { once: true });

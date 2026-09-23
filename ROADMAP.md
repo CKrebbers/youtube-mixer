@@ -8,9 +8,9 @@ Vink af in dit bestand zodra een fase draait.
 | 1 | **klaar** | Audio-engine, 2 decks, EQ/filter/xfader, waveform, toetsenbord |
 | 2 | **klaar** | MIDI-laag, MIDI-learn, APC40 mkII-mapping, LED-feedback |
 | 0 | **klaar** | Ingest: yt-dlp + ffmpeg + library |
-| 3 | **volgende** | Beatgrid, BPM, sync, keylock, beat-loops |
-| 4 | **begonnen** | Video volgt audio per track, WebGL-mix op fader × crossfader, los venster, vier mengvormen, zes effecten en een puls op de tel, alles op de action-bus; nog: effecten op de APC |
-| 5 | **begonnen** | FX-racks per link draaien met zes effecten incl. tempo-gesynchroniseerde gate, en zijn op het gehoor te bouwen in de rack-editor (knoppen bovenaan, echte eenheden, DICHT/OPEN), met drie kant-en-klare racks; acht tracks in engine en scherm (twee vensters + trackrij, crossfader A/B/thru, sync naar de luidste); streamen vanaf schijf (acht albums ~30 MB); je set opnemen (WAV, of WAV + 720p-video); sends naar gedeelde echo en galm; sampler met acht pads op het grid; nog: APC-mapping voor tracks 3-8, de sends en de pads |
+| 3 | **bijna klaar** | Beatgrid, BPM (tap-hybride), sync, beat-loops draaien; open: keylock (wacht op luistertest, VRAGEN A3) en key-detectie |
+| 4 | **klaar** | Video volgt audio per track, WebGL-mix op fader × crossfader, los venster, vier mengvormen, zes effecten en een puls op de tel, alles op de action-bus en op het APC-grid (grid-modus video: effect vasthouden, mengvorm, puls-doel). Verbeteringen (mengen in het losse venster) in `docs/VERBETERINGEN.md` ronde 3 |
+| 5 | **begonnen** | FX-racks per link draaien met zes effecten incl. tempo-gesynchroniseerde gate, en zijn op het gehoor te bouwen in de rack-editor (knoppen bovenaan, echte eenheden, DICHT/OPEN), met drie kant-en-klare racks; acht tracks in engine en scherm (het scherm spiegelt de APC: acht kolommen + focusdeel, crossfader A/B/thru, sync naar de luidste); streamen vanaf schijf (acht albums ~30 MB); je set opnemen (WAV, of WAV + 720p-video); sends naar gedeelde echo en galm; sampler met acht pads op het grid; APC-indeling voor alle acht tracks, sends en pads gebouwd (mode 0x42, `docs/APC40.md`); nog: testen op het apparaat, daarna ronde 3 uit `docs/VERBETERINGEN.md` |
 
 
 ---
@@ -28,9 +28,10 @@ kunnen meerdere voorgeprogrammeerde racks bestaan, opgeslagen bij die link.
 Laad je dat nummer op track 3, dan komen zijn racks mee. Nieuwe racks maken en
 ertussen wisselen hoort erbij.
 
-**Track select 1-8 kiest wiens knoppen je vasthoudt.** Dat werkt al: de acht
-device knobs verhuizen van MIDI-kanaal met de bankkeuze, en de mapping matcht
-op `type:kanaal:nummer`. Bank N wordt track N.
+**Track select 1-8 kiest wiens knoppen je vasthoudt.** ~~De device knobs
+verhuizen van MIDI-kanaal met de bankkeuze.~~ Dat gold alleen in generic mode.
+Sinds 23 september 2026 draait de APC in 0x42: device knobs altijd op kanaal 0,
+Track Select zet de focus, en de mapping stuurt `track.{focus}.…`.
 
 ### Drie beslissingen die vóór fase 0 op tafel moeten
 
@@ -51,7 +52,8 @@ Ze zijn later allemaal duurder dan nu.
    belangrijkste. Wijst `cc:2:16` rechtstreeks naar "delay feedback", dan moet je
    bij elk nieuw rack opnieuw koppelen. Wijst hij naar `track.3.fx.knop.1` en
    bepaalt het rack wat die plek doet, dan hoef je nooit meer te koppelen.
-   Het rack wordt dan data, net als de mapping.
+   Het rack wordt dan data, net als de mapping. **Gebouwd:** plekken, nu
+   `track.N.fx.knob.K` (sinds mapping versie 3 Engels).
 
 ### Twee gevolgen die niet weg te wensen zijn
 
@@ -71,6 +73,12 @@ verhuizen met de bank mee — die volgen de geselecteerde track. De acht *track
 knobs* (CC 0x30-0x37) worden **niet** gebankt; die staan altijd op hetzelfde
 kanaal. Eén rij voor de track die je vasthoudt, één rij vastgezet op een tweede
 track, is dus met de hardware zelf te doen zonder modustoestanden te verzinnen.
+
+**Stand 23 september 2026:** anders opgelost. Na het APC-onderzoek zijn de
+track knobs het filter van hun eigen kolom (één kolom = één track), de device
+knobs de strip of het rack van de track met focus. "De tweede track" is de
+VORIGE focus: Shift + Track Select zet een track daar, het toetsenbord
+bedient hem met de rechterhand.
 
 
 ---
@@ -265,7 +273,9 @@ F0 47 7F 29 60 00 04 <mode> <v1> <v2> <v3> F7
 ```
 
 Modes: `0x40` generic · `0x41` Ableton Live · `0x42` alternate Ableton Live.
-Gebruik **0x41**: pas dan heb je volledige RGB-controle over het grid.
+~~Gebruik 0x41.~~ **Wij gebruiken 0x42** (sinds 23 september 2026, VRAGEN B1):
+alle LED's én ringen van ons, device-sectie niet gebankt. Gemeten in 0x41:
+device knob 1 kwam op `cc:0:16`, welke track je ook selecteerde.
 Web MIDI vereist hiervoor `navigator.requestMIDIAccess({ sysex: true })`.
 
 **Clip-grid:** 8×5 pads, note `0x00`–`0x27`. De **velocity** kiest de kleur uit een
@@ -276,7 +286,10 @@ oneshot, of knipperen/pulseren in verschillende tempo's). Note On met velocity 0
 Waarde: `0` = uit, `1` = single, `2` = volume-stijl, `3` = pan-stijl, `4`–`127` = single.
 Zet de EQ-knoppen op pan-stijl (bipolair) en trim/fader op volume-stijl.
 
-### Voorgestelde mapping
+### Voorgestelde mapping (22 september, VERVANGEN)
+
+Historisch. De indeling zoals gebouwd staat in `docs/APC40.md` en op `apc.html`;
+de banken hieronder bestaan in 0x42 niet.
 
 | Control | Action |
 |---|---|
@@ -392,6 +405,11 @@ met duur, loudness en golfvorm, en laadt met één klik op een deck.
 
 ## Fase 4 — Video-mixer
 
+**Stand (23 september 2026): klaar.** Gebouwd zoals in CLAUDE.md onder "Video
+is SLAAF van de audio" (springen boven 150 ms, niet 40 ms zoals hieronder
+gepland; audio komt uit de streamkern, niet uit een AudioBuffer). Het ontwerp
+hieronder is het oorspronkelijke plan.
+
 - Eén `<video>` per deck, muted, als WebGL-texture.
 - Audio blijft uit de AudioBuffer komen; video is **slave**: per frame corrigeren op
   `deckTime`. Drift > 40 ms → `currentTime` bijzetten, anders `playbackRate` micro-nudgen.
@@ -405,3 +423,9 @@ met duur, loudness en golfvorm, en laadt met één klik op een deck.
 
 FX-sends (delay, reverb, bitcrush, filter-sweep), 4 decks, sampler op het grid,
 master recording naar bestand.
+
+**Stand (23 september 2026):** gebouwd, verder dan gepland: acht tracks,
+insert-racks per nummer plus twee send-bussen (echo op de maat, galm), sampler
+met acht pads die meelopen met de maat, opname (WAV, RF64 boven 4 GB, of WAV +
+720p-video), en de volledige APC-indeling. Open: testen op het apparaat en de
+keuzes uit `docs/VERBETERINGEN.md` ronde 3.
