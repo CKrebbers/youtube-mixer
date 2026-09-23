@@ -17,6 +17,7 @@ import { Beatgrid, TapTempo } from '../engine/beatgrid.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN } from '../engine/engine.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
+import { PULS_DOELEN } from '../video/puls.js';
 
 const registry = new Map();
 
@@ -228,4 +229,8 @@ export function bindVideo(mixer) {
   }
   define('video.modus', 'trigger', (on) => { if (on) mixer.volgendeModus(); },
     { label: 'Video: volgende mengvorm', read: () => MODI.indexOf(mixer.modus) / (MODI.length - 1) });
+  define('video.puls', 'value', (v) => mixer.zetPuls(v),
+    { label: 'Video: puls op de tel', read: () => mixer.puls });
+  define('video.puls.doel', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
+    { label: 'Video: wat er pulst', read: () => PULS_DOELEN.indexOf(mixer.pulsDoel) / (PULS_DOELEN.length - 1) });
 }

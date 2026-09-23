@@ -66,6 +66,7 @@ src/
   video/            volg.js         hoe een video de audio volgt. Puur rekenwerk.
                     video-mixer.js  <video> per track, gemengd met WebGL2. Leest de engine alleen uit.
                     instellingen.js welke video-effecten en mengvormen er zijn (data)
+                    puls.js         effecten op de tel: vorm, welke track de maat geeft
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
 server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
@@ -278,6 +279,11 @@ test/
   (met het VORIGE eindbeeld voor sporen, twee buffers om de beurt) -> tonen.
   Vast op 1280×720. Effecten en mengvorm staan op de action-bus
   (`video.fx.*`, `video.modus`, via `bindVideo`), dus ze zijn te koppelen.
+  Effecten op de tel (`video.puls`, `video.puls.doel`): de maat komt van de
+  track die het hardst klinkt, speelt en een grid heeft, op het moment dat je
+  hem HOORT. De puls komt bovenop de knopstand en dooft binnen een halve tel.
+  Meet je dit, meet dan NIET precies op de tel: door afronding val je dan op
+  het einde van de vorige tel en zie je niets.
   Testen zonder zichtbaar venster: geef de mixer een canvas als nep-video,
   en maak dat testbeeld ASYMMETRISCH (vier verschillende kwarten). Een beeld
   dat alleen links-rechts verschilt verstopte dat sporen ondersteboven stond:

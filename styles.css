@@ -429,4 +429,5 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .vid-tools{display:flex;gap:4px}
 .vid-canvas{width:100%;aspect-ratio:16/9;background:#000;display:block}
 .vid-fx{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px}
-.vid-modus{min-width:72px;text-transform:uppercase;letter-spacing:.08em}
+.vid-modus,.vid-pulsdoel{min-width:64px;text-transform:uppercase;letter-spacing:.08em}
+.vid-sep{width:1px;align-self:stretch;background:var(--line)}

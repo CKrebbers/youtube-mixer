@@ -1,5 +1,6 @@
 import { synchroniseer, zichtbaarheid } from './volg.js';
 import { VIDEO_FX, MODI } from './instellingen.js';
+import { PULS_DOELEN, pulsVorm, klokTrack, metPuls } from './puls.js';
 
 /**
  * De video-mixer: per track een gedempte <video>, samen gemengd op een canvas
@@ -74,7 +75,7 @@ precision mediump float;
 in vec2 uv;
 out vec4 kleur;
 uniform sampler2D beeld, vorig;
-uniform float pixel, spiegel, rgb, verz, sporen, korrel, tijd;
+uniform float pixel, spiegel, rgb, verz, sporen, korrel, tijd, flits;
 float ruis(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 vec3 lees(vec2 p) {
   // spiegel: eerst links-rechts, voorbij de helft ook boven-onder
@@ -107,6 +108,7 @@ void main() {
   // EINDbeeld lezen we één keer extra, dus hier moet hij terug.
   c = mix(c, texture(vorig, vec2(uv.x, 1.0 - uv.y)).rgb, sporen * 0.92);
   c += (ruis(uv * 1280.0 + tijd) - 0.5) * korrel * 0.35;
+  c += flits * 0.6;                        // lichtflits op de tel
   kleur = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
 
@@ -137,6 +139,8 @@ export class VideoMixer {
     this.gl = gl;
     this.fx = Object.fromEntries(VIDEO_FX.map((f) => [f.id, f.standaard]));
     this.modus = MODI[0];
+    this.puls = 0;                   // hoe hard er op de tel gepulst wordt
+    this.pulsDoel = PULS_DOELEN[0];
 
     this.meng = this._programma(VERTEX, MENG);
     this.effect = this._programma(VERTEX, EFFECT);
@@ -184,6 +188,24 @@ export class VideoMixer {
 
   zetFx(id, v) { if (id in this.fx) this.fx[id] = Math.max(0, Math.min(1, v)); }
   volgendeModus() { this.modus = MODI[(MODI.indexOf(this.modus) + 1) % MODI.length]; }
+  zetPuls(v) { this.puls = Math.max(0, Math.min(1, v)); }
+  volgendPulsDoel() { this.pulsDoel = PULS_DOELEN[(PULS_DOELEN.indexOf(this.pulsDoel) + 1) % PULS_DOELEN.length]; }
+
+  /**
+   * Waar in de tel we nu zijn, als vorm 0..1 — van de track die het hardst
+   * klinkt, op het moment dat je hem HOORT. 0 als er geen maat is.
+   */
+  _pulsNu(vertraging) {
+    if (this.puls <= 0) return 0;
+    const id = klokTrack(this.decks.map((d) => {
+      const deck = this.engine.deck(d);
+      return { id: d, speelt: deck.playing, heeftGrid: !!deck.grid,
+        zicht: deck.buffer ? zichtbaarheid(deck.ui.fader, this.engine.xfadeGain(d)) : 0 };
+    }));
+    if (!id) return 0;
+    const deck = this.engine.deck(id);
+    return pulsVorm(deck.grid.phase(deck.position - vertraging * deck.rate));
+  }
 
   _programma(vs, fs) {
     const gl = this.gl;
@@ -290,7 +312,8 @@ export class VideoMixer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, nu.fb);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.gemengd.tex);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, vorige.tex);
-    const f = this.fx;
+    const { fx: f, flits } = metPuls(this.fx, this.pulsDoel, this.puls, this._pulsNu(vertraging));
+    gl.uniform1f(this.loc(this.effect, 'flits'), flits);
     gl.uniform1f(this.loc(this.effect, 'pixel'), f.pixel);
     gl.uniform1f(this.loc(this.effect, 'spiegel'), f.spiegel);
     gl.uniform1f(this.loc(this.effect, 'rgb'), f.rgb);
