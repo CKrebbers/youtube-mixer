@@ -2,8 +2,18 @@ import { fmtTime } from '../lib/emitter.js';
 import { esc } from './dom.js';
 import { gridStatus, libraryBpm, STATUS_TEKST } from './grid-strook.js';
 
+/** Het label per bron (server/links.js: bronVan). */
+const BRON_LABEL = { youtube: 'YT', tiktok: 'TikTok', bestand: 'bestand', web: 'web' };
+
+/** Wat de upload aanneemt; gelijk aan BESTAND_EXT in server/links.js. */
+export const BESTAND_EXT = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'wav', 'mp3', 'flac', 'm4a', 'aiff', 'aif', 'ogg', 'opus'];
+const extVan = (naam) => (/\.([A-Za-z0-9]{1,5})$/.exec(naam || '')?.[1] || '').toLowerCase();
+export const isMediaBestand = (file) => BESTAND_EXT.includes(extVan(file?.name));
+/** Een videobestand: aan het type of, als de browser dat niet weet (mkv), aan de naam. */
+export const isVideoBestand = (file) => /^video\//.test(file?.type || '') || ['mp4', 'mov', 'm4v', 'webm', 'mkv'].includes(extVan(file?.name));
+
 /**
- * Het library-paneel: URL erin, track eruit, één klik op een deck.
+ * Het library-paneel: link of eigen bestand erin, track eruit, één klik op een deck.
  *
  * Praat alleen met de server via fetch. Het laden op een deck is een callback,
  * want de UI hoort de engine niet zelf aan te sturen — dat loopt via app.js,
@@ -27,9 +37,14 @@ export class LibraryPanel {
     this.melding = null;
     this.zoek = '';
 
+    this.uploads = [];          // { sleutel, naam, pct, fout } — lokaal, tot de server een opdracht heeft
+    this.naLaden = new Map();   // opdracht-id -> deck: na de ingest op die track laden (gesleept op een track)
+
     this.el = {
       url: root.querySelector('.lib-url'),
       haal: root.querySelector('.lib-haal'),
+      bestand: root.querySelector('.lib-bestand'),
+      bestanden: root.querySelector('.lib-bestanden'),
       zoek: root.querySelector('.lib-zoek'),
       status: root.querySelector('.lib-status'),
       jobs: root.querySelector('.lib-jobs'),
@@ -38,6 +53,20 @@ export class LibraryPanel {
 
     this.el.haal.addEventListener('click', () => this.haalBinnen());
     this.el.url.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.haalBinnen(); });
+    // Eigen bestanden: de knop opent de kiezer, of sleep ze op het paneel.
+    this.el.bestand?.addEventListener('click', () => this.el.bestanden.click());
+    this.el.bestanden?.addEventListener('change', () => {
+      this.uploadBestanden([...this.el.bestanden.files]);
+      this.el.bestanden.value = '';
+    });
+    root.addEventListener('dragover', (e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); root.classList.add('drag'); } });
+    root.addEventListener('dragleave', (e) => { if (!root.contains(e.relatedTarget)) root.classList.remove('drag'); });
+    root.addEventListener('drop', (e) => {
+      if (!e.dataTransfer?.files?.length) return;
+      e.preventDefault();
+      root.classList.remove('drag');
+      this.uploadBestanden([...e.dataTransfer.files]);
+    });
     this.el.zoek.addEventListener('input', () => { this.zoek = this.el.zoek.value.trim(); this.ververs(); });
 
     this.el.rijen.addEventListener('click', (e) => {
@@ -108,6 +137,76 @@ export class LibraryPanel {
     this.el.haal.disabled = false;
     this.tekenStatus();
     this.pollJobs();
+  }
+
+  /** Meerdere bestanden: één voor één uploaden (de ingest loopt daarna op de server). */
+  async uploadBestanden(files) {
+    const goed = files.filter(isMediaBestand);
+    const fout = files.filter((f) => !isMediaBestand(f));
+    if (fout.length) {
+      this.melding = { tekst: `overgeslagen: ${fout.map((f) => f.name).join(', ')} — ik neem ${BESTAND_EXT.join(', ')}`, goed: false };
+      this.tekenStatus();
+    }
+    for (const f of goed) await this.uploadBestand(f);
+  }
+
+  /**
+   * Eén eigen bestand naar de server: /api/upload, daarna dezelfde pijplijn
+   * als een link (loudness, golfvorm, grid, video). Met XMLHttpRequest en
+   * niet fetch: alleen die meldt hoe ver de upload is.
+   *
+   * naDeck: na de ingest meteen op die track laden (het bestand werd op een
+   * track gesleept). Speelt die track dan, dan NIET eroverheen: dat zou de
+   * zaal stilleggen zonder dat je nog iets deed.
+   * Geeft de opdracht van de server terug, of null.
+   */
+  uploadBestand(file, { naDeck = null } = {}) {
+    const up = { sleutel: `${file.name}:${file.size}:${Date.now()}`, naam: file.name, pct: 0, fout: null };
+    this.uploads.push(up);
+    this.tekenJobs();
+    return new Promise((klaar) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `/api/upload?naam=${encodeURIComponent(file.name)}`);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) { up.pct = (e.loaded / e.total) * 100; this.tekenJobs(); }
+      };
+      const klaarMet = (opdracht, fout) => {
+        this.uploads = this.uploads.filter((u) => u !== up);
+        if (fout) this.melding = { tekst: `${file.name}: ${fout}`, goed: false };
+        else if (opdracht) {
+          this.melding = { tekst: opdracht.bestond ? `${file.name} staat al in de library` : `${file.name} geüpload — wordt verwerkt`, goed: true };
+          if (naDeck) this.naLaden.set(opdracht.id, naDeck);
+        }
+        this.tekenStatus();
+        this.pollJobs();
+        klaar(opdracht ?? null);
+      };
+      xhr.onload = () => {
+        let j = null;
+        try { j = JSON.parse(xhr.responseText); } catch {}
+        if (xhr.status >= 200 && xhr.status < 300 && j) klaarMet(j, null);
+        else klaarMet(null, j?.fout || `upload mislukt (${xhr.status})`);
+      };
+      // Een verbroken verbinding: de server sluit bij een te groot bestand, of hij draait niet.
+      xhr.onerror = () => klaarMet(null, 'upload afgebroken — te groot (grens 8 GB), of de server is weg');
+      xhr.send(file);
+    });
+  }
+
+  /** Klaar met een opdracht die op een track moest? Dan nu laden — als dat mag. */
+  _laadNaIngest(o) {
+    const deck = this.naLaden.get(o.id);
+    if (!deck || o.status === 'bezig') return;
+    this.naLaden.delete(o.id);
+    if (o.status !== 'klaar' || !o.track) return;
+    if (this.stand(deck) === 'speelt') {
+      this.melding = { tekst: `${o.track.titel} is binnen, maar track ${this.label(deck)} speelt — laad hem hier in de lijst`, goed: false };
+      this.tekenStatus();
+      return;
+    }
+    if (!this.tracks.some((t) => t.id === o.track.id)) this.tracks.unshift(o.track);
+    this.laad(o.track.id, deck);
   }
 
   async laad(id, deck) {
@@ -186,7 +285,8 @@ export class LibraryPanel {
       const vorigeKlaar = this.opdrachten.filter((o) => o.status === 'klaar').length;
       this.opdrachten = j.opdrachten || [];
       const nuKlaar = this.opdrachten.filter((o) => o.status === 'klaar').length;
-      if (nuKlaar > vorigeKlaar) this.ververs();
+      if (nuKlaar > vorigeKlaar) await this.ververs();
+      for (const o of this.opdrachten) if (this.naLaden.has(o.id)) this._laadNaIngest(o);
       this.tekenJobs();
     } catch {}
   }
@@ -194,7 +294,7 @@ export class LibraryPanel {
   /** Alleen kijken zolang er iets loopt of het paneel open staat. */
   pollen() {
     setInterval(() => {
-      const loopt = this.opdrachten.some((o) => o.status === 'bezig');
+      const loopt = this.opdrachten.some((o) => o.status === 'bezig') || this.naLaden.size > 0;
       if (loopt || this.open) this.pollJobs();
     }, 1200);
   }
@@ -208,7 +308,8 @@ export class LibraryPanel {
 
   tekenJobs() {
     const lopend = this.opdrachten.filter((o) => o.status === 'bezig' || Date.now() - (o.klaar || 0) < 20000);
-    this.el.jobs.innerHTML = lopend.map((o) => {
+    const ups = this.uploads.map((u) => ({ status: 'bezig', stap: 'upload', tekst: `uploaden — ${u.naam}`, pct: u.pct }));
+    this.el.jobs.innerHTML = [...ups, ...lopend].map((o) => {
       const kl = o.status === 'mislukt' ? 'mislukt' : (o.status === 'klaar' ? 'klaar' : 'bezig');
       return `<div class="lib-job ${kl}">
         <span class="lib-job-stap">${esc(o.stap || o.status)}</span>
@@ -216,12 +317,12 @@ export class LibraryPanel {
         ${o.pct != null ? `<span class="lib-job-balk"><i style="width:${o.pct}%"></i></span>` : ''}
       </div>`;
     }).join('');
-    this.el.jobs.classList.toggle('hidden', lopend.length === 0);
+    this.el.jobs.classList.toggle('hidden', lopend.length + ups.length === 0);
   }
 
   tekenRijen() {
     if (!this.tracks.length) {
-      this.el.rijen.innerHTML = `<div class="lib-leeg">nog niets binnengehaald — plak hierboven een YouTube-URL</div>`;
+      this.el.rijen.innerHTML = `<div class="lib-leeg">nog niets binnengehaald — plak hierboven een YouTube- of TikTok-link, of sleep je eigen audio en video hierheen</div>`;
       return;
     }
     this.el.rijen.innerHTML = this.tracks.map((t) => {
@@ -233,7 +334,7 @@ export class LibraryPanel {
         : `${n} stuk${n === 1 ? '' : 'ken'}${gs.aandeel !== null && gs.status !== 'slot' && gs.status !== 'hand' ? `, ${Math.round(gs.aandeel * 100)}% van de tijd zeker` : ''}`;
       const her = this.analyseert.has(t.id);
       return `<div class="lib-rij">
-        <span class="lib-titel" title="${esc(t.url)}">${esc(t.titel)}</span>
+        <span class="lib-titel" title="${esc(t.url)}"><i class="lib-bron ${esc(t.bron || 'web')}">${esc(BRON_LABEL[t.bron] || 'web')}</i>${esc(t.titel)}</span>
         <span class="lib-uploader">${esc(t.uploader || '')}</span>
         <span class="lib-duur">${fmtTime(t.duur || 0).replace(/\.\d+$/, '')}</span>
         <span class="lib-bpm" title="tempo van het grid bij het begin">${esc(libraryBpm(t.grid))}</span>

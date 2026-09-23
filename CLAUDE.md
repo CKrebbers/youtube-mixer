@@ -85,12 +85,14 @@ src/
                     video-mixer.js  <video> per track, gemengd met WebGL2. Leest de engine alleen uit.
                     instellingen.js welke video-effecten en mengvormen er zijn (data)
                     puls.js         effecten op de tel: vorm, welke track de maat geeft
+                    passen.js       beeldverhouding per laag: passend (randen) of vullen. Puur.
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
                     opnemer-worklet.js  telt frames, zet om naar 16-bit, geeft per seconde door
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
 server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
-  ingest.js         yt-dlp -> ffmpeg -> media/<id>/. Gooit nooit; geeft resultaat terug.
+  ingest.js         yt-dlp (of een eigen bestand) -> ffmpeg -> media/<id>/. Gooit nooit.
+  links.js          links netjes maken (TikTok), bron van een nummer, id's, bestandsnamen
   library.js        SQLite via node:sqlite. Tracks, peaks, effect-racks.
   analyze.js        golfvorm-peaks én onset-envelope vooraf, streamend uit ffmpeg
   analyse-werker.js peaks, onset en tap-verfijning in een worker_thread (server blijft vrij)
@@ -125,6 +127,8 @@ test/
   tabblad.test.mjs  Web Lock met een nagebouwde navigator.locks: eerste, tweede, overnemen
   opname.test.mjs   opname-WAV: stukken op ?frame=N, kop, RF64, herstel na crash, geen ../
   opnemer.test.mjs  opnemer tegen de echte opname.js met een haperend netwerk: geen dubbel, gat = stilte
+  bronnen.test.mjs  TikTok-links zonder netwerk, ffprobe-controle, eigen staande video door de pijplijn
+  upload.test.mjs   upload-route op een eigen server: grens, geen media, hash-id, streamen i.p.v. geheugen
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -505,6 +509,34 @@ docs/
     server (`/api/mapping`, instellingen-tabel) en in localStorage als reserve;
     bij opstarten gaat de server voor. "Standaard herstellen" wist beide, zodat
     de app daarna weer `mappings/apc40mk2.json` volgt (Clay 23 sep, E3). MAAT-badge toont wie de maat geeft.
+- Eigen bestanden (24 september 2026): `POST /api/upload?naam=…` met het
+  bestand als body (application/octet-stream, audio/* of video/*; de enige
+  uitzondering op de JSON-regel, Host/Origin blijft). GESTREAMD naar een
+  werkmap `media/.bezig-upload-*`, onderweg geteld en gehasht; boven
+  `VARVE_UPLOAD_MAX` (standaard 8 GB) 413. Dan ffprobe (`onderzoek()`): zonder
+  geluidsspoor of geen media = 415 met reden; een hoesje in een mp3 telt NIET
+  als beeld. Id `lokaal-<12 hex van de SHA-256>`, url `bestand:<hash>:<naam>`:
+  hetzelfde bestand nog eens = hetzelfde nummer, niets opnieuw. De naam is
+  alleen titel (tags gaan voor), nooit een pad. Daarna DEZELFDE pijplijn als
+  een link (`ingest` en `ingestBestand` delen `verwerk()`). Slepen op een
+  track: audio speelt direct zoals altijd; VIDEO (en audio die de browser niet
+  leest) gaat via de library en komt daarna op die track — niet als die track
+  dan speelt. Het origineel wordt niet bewaard, alleen wat de pijplijn maakt.
+- TikTok (en wat yt-dlp verder kent) werkt; gemeten met yt-dlp 2026.08.19 op
+  Clay's link (79 s nummer, 57 s ingest, video 720×1280). TikTok vraagt
+  browser-imitatie; yt-dlp doet dat zelf zolang `curl_cffi` geïnstalleerd is
+  (hier 0.13.0). Zonder curl_cffi, of bij een video die inloggen vraagt, zegt
+  de ingest wat er nodig is (`tiktokHint`). Cookies uit de browser lezen zit
+  er bewust NIET in. Links worden `https://www.tiktok.com/@naam/video/<id>`
+  (zonder "www." herkent yt-dlp ze niet; parameters eraf, zodat dezelfde
+  video hetzelfde nummer is). Id's van andere sites dan YouTube krijgen de
+  extractor ervoor (`tiktok-<getal>`). Beeld met `-S res:720` (720 op de
+  KORTE kant): `[height<=720]` gaf op een staande TikTok niets. De transcode
+  schaalt naar hooguit 720 op de korte kant (4K eigen video's ook).
+- Beeldverhouding: elke videolaag houdt zijn eigen verhouding
+  (`videoWidth/videoHeight`, `passen.js`). `video.fit`: passend (standaard,
+  zwarte randen) of vullen (bijsnijden). Buiten zijn beeld is een laag
+  DOORZICHTIG, niet zwart: naast een liggende video zie je die in de randen.
 - Een effect-rack hangt aan een LINK (`tracks.id`), niet aan een fader. Laad je
   hetzelfde nummer op een andere track, dan komen zijn racks mee. Meerdere per
   nummer, één actief. De inhoud is JSON: wat er ín een rack staat is een zaak

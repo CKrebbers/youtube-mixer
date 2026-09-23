@@ -278,6 +278,13 @@ body.leermodus .loops .btn::after{bottom:-12px}
   align-items:center;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.03)}
 .lib-rij:hover{background:rgba(255,255,255,.03)}
 .lib-titel{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Waar een nummer vandaan komt: YT / TikTok / bestand / web. */
+.lib-bron{display:inline-block;font-style:normal;font-size:8px;letter-spacing:.06em;text-transform:uppercase;
+  padding:1px 4px;margin-right:6px;border:1px solid var(--line);border-radius:3px;color:var(--dim);vertical-align:1px}
+.lib-bron.tiktok{color:#ff5c8a;border-color:rgba(255,92,138,.45)}
+.lib-bron.bestand{color:var(--a);border-color:var(--a)}
+/* Bestanden boven het paneel: laat zien dat loslaten hier kan. */
+.lib-panel.drag{outline:2px dashed var(--a);outline-offset:-4px}
 .lib-uploader,.lib-lufs,.lib-racks{color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lib-duur{font-family:ui-monospace,monospace;color:var(--dim)}
 .lib-lufs{font-family:ui-monospace,monospace;font-size:10px}

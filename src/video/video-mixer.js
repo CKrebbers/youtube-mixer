@@ -1,6 +1,7 @@
 import { synchroniseer, zichtbaarheid } from './volg.js';
 import { VIDEO_FX, MODI } from './instellingen.js';
 import { PULS_DOELEN, pulsVorm, klokTrack, metPuls } from './puls.js';
+import { FITS, schaalVoor, maatVan } from './passen.js';
 
 /**
  * De video-mixer: per track een gedempte <video>, samen gemengd op een canvas
@@ -42,27 +43,42 @@ void main() {
 
 // Acht texturen uitgeschreven: in GLSL ES 3.00 mag je een sampler-array
 // alleen met een constante index aanspreken, ook niet met een lusteller.
+//
+// Elke laag heeft zijn eigen beeldverhouding (passen.js): s[i] schaalt de
+// doekcoördinaat naar de beeldcoördinaat, en buiten het beeld is de laag
+// doorzichtig (m = 0) — niet zwart, zodat een staande video naast een
+// liggende de liggende in zijn randen laat zien.
 const MENG = `#version 300 es
 precision mediump float;
 in vec2 uv;
 out vec4 kleur;
 uniform sampler2D t0, t1, t2, t3, t4, t5, t6, t7;
 uniform float w[8];
+uniform vec2 s[8];
 uniform int modus;
+float binnen(vec2 q) { return step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0); }
 void main() {
   vec3 l[8];
-  l[0] = texture(t0, uv).rgb; l[1] = texture(t1, uv).rgb; l[2] = texture(t2, uv).rgb; l[3] = texture(t3, uv).rgb;
-  l[4] = texture(t4, uv).rgb; l[5] = texture(t5, uv).rgb; l[6] = texture(t6, uv).rgb; l[7] = texture(t7, uv).rgb;
+  float g[8];
+  vec2 q;
+  q = (uv - 0.5) * s[0] + 0.5; l[0] = texture(t0, q).rgb; g[0] = w[0] * binnen(q);
+  q = (uv - 0.5) * s[1] + 0.5; l[1] = texture(t1, q).rgb; g[1] = w[1] * binnen(q);
+  q = (uv - 0.5) * s[2] + 0.5; l[2] = texture(t2, q).rgb; g[2] = w[2] * binnen(q);
+  q = (uv - 0.5) * s[3] + 0.5; l[3] = texture(t3, q).rgb; g[3] = w[3] * binnen(q);
+  q = (uv - 0.5) * s[4] + 0.5; l[4] = texture(t4, q).rgb; g[4] = w[4] * binnen(q);
+  q = (uv - 0.5) * s[5] + 0.5; l[5] = texture(t5, q).rgb; g[5] = w[5] * binnen(q);
+  q = (uv - 0.5) * s[6] + 0.5; l[6] = texture(t6, q).rgb; g[6] = w[6] * binnen(q);
+  q = (uv - 0.5) * s[7] + 0.5; l[7] = texture(t7, q).rgb; g[7] = w[7] * binnen(q);
   vec3 c = vec3(0.0);
   float totaal = 0.0;
   if (modus == 1) {                        // licht (screen)
     vec3 donker = vec3(1.0);
-    for (int i = 0; i < 8; i++) donker *= vec3(1.0) - l[i] * w[i];
+    for (int i = 0; i < 8; i++) donker *= vec3(1.0) - l[i] * g[i];
     c = vec3(1.0) - donker;
   } else if (modus == 3) {                 // verschil
-    for (int i = 0; i < 8; i++) if (w[i] > 0.0) c = abs(c - l[i] * w[i]);
+    for (int i = 0; i < 8; i++) if (g[i] > 0.0) c = abs(c - l[i] * g[i]);
   } else {                                 // mix en optellen
-    for (int i = 0; i < 8; i++) { c += l[i] * w[i]; totaal += w[i]; }
+    for (int i = 0; i < 8; i++) { c += l[i] * g[i]; totaal += g[i]; }
     // mix: gemiddelde, maar een enkele track op halve fader wordt wél
     // donkerder — delen door minstens 1, niet door het totaal zelf.
     if (modus == 0) c /= max(totaal, 1.0);
@@ -141,6 +157,7 @@ export class VideoMixer {
     this.modus = MODI[0];
     this.puls = 0;                   // hoe hard er op de tel gepulst wordt
     this.pulsDoel = PULS_DOELEN[0];
+    this.fit = FITS[0];              // passend: zwarte randen, niets valt weg
 
     this.meng = this._programma(VERTEX, MENG);
     this.effect = this._programma(VERTEX, EFFECT);
@@ -189,6 +206,7 @@ export class VideoMixer {
   zetFx(id, v) { if (id in this.fx) this.fx[id] = Math.max(0, Math.min(1, v)); }
   volgendeModus() { this.modus = MODI[(MODI.indexOf(this.modus) + 1) % MODI.length]; }
   zetPuls(v) { this.puls = Math.max(0, Math.min(1, v)); }
+  volgendeFit() { this.fit = FITS[(FITS.indexOf(this.fit) + 1) % FITS.length]; }
   volgendPulsDoel() { this.pulsDoel = PULS_DOELEN[(PULS_DOELEN.indexOf(this.pulsDoel) + 1) % PULS_DOELEN.length]; }
 
   /**
@@ -278,6 +296,7 @@ export class VideoMixer {
     if (!gl || !this.prog) return;
     gl.useProgram(this.meng);
     const w = new Float32Array(MAX);
+    const schaal = new Float32Array(MAX * 2).fill(1);
     const vertraging = this._vertraging();
 
     this.decks.forEach((id, i) => {
@@ -295,6 +314,8 @@ export class VideoMixer {
       if (laag.klaar && laag.video.readyState >= 2) {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, laag.video);
         w[i] = zicht;
+        const [sx, sy] = schaalVoor(...maatVan(laag.video), this.fit, BREEDTE, HOOGTE);
+        schaal[i * 2] = sx; schaal[i * 2 + 1] = sy;
       }
     });
 
@@ -303,6 +324,7 @@ export class VideoMixer {
     // 1. mengen -> gemengd
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.gemengd.fb);
     gl.uniform1fv(this.loc(this.meng, 'w'), w);
+    gl.uniform2fv(this.loc(this.meng, 's'), schaal);
     gl.uniform1i(this.loc(this.meng, 'modus'), MODI.indexOf(this.modus));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 

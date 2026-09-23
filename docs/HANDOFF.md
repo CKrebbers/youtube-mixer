@@ -4,6 +4,46 @@ Lees in deze volgorde: `CLAUDE.md` (architectuur, regels, valkuilen), dan dit
 bestand, dan `docs/VERBETERINGEN.md` (rondes 1–3), `docs/VRAGEN.md` (open
 vragen voor Clay) en `docs/APC40.md` (de indeling zoals gebouwd).
 
+## Nieuw (24 september 2026): eigen bestanden, TikTok, staande video
+
+Nog NIET gecommit (de hoofdsessie reviewt). Server moet HERSTART worden
+(nieuwe route `/api/upload`, `server/links.js`, nieuwe ingest).
+
+- **Eigen bestanden**: knop "bestand…" in de library (meerdere tegelijk) en
+  bestanden slepen op het library-paneel → upload (gestreamd, grens 8 GB,
+  `VARVE_UPLOAD_MAX`) → ffprobe → dezelfde pijplijn als een link. Id
+  `lokaal-<hash>`: hetzelfde bestand twee keer = hetzelfde nummer. Slepen op
+  een baan/kolom/focusdeck: audio speelt direct zoals altijd, een VIDEO (of
+  audio die de browser niet leest, bv. aiff) gaat via de library en komt
+  daarna op die track, met een melding dat het even duurt. Speelt die track
+  tegen die tijd, dan laadt hij niet (melding: laad hem via de lijst).
+- **TikTok**: werkt zonder extra software, want `curl_cffi` 0.13.0 is er (yt-dlp
+  imiteert daarmee Chrome). Proef op Clay's link (lennonstella, "no surprises -
+  Radiohead"): metadata ok, volledige ingest naar een tijdelijke map in 57 s,
+  video 720×1280, grid 86,2 bpm (onzeker). Links zonder `?is_copy_url…` en met
+  `www.`; korte links (vm./vt./`/t/`) volgt yt-dlp zelf (niet gemeten).
+  Beeldformaat nu `-S res:720` — met het oude `[height<=720]` kwam er bij
+  staande TikToks geen video (hun formaten zijn 576×1024 en hoger).
+- **Library-label** per nummer: YT / TikTok / bestand / web.
+- **Staande video**: elke laag houdt zijn beeldverhouding; knop "passend/vullen"
+  in het videopaneel (`video.fit`, te koppelen). Randen zijn doorzichtig.
+- Tests: `node test/alles.mjs` → 23 bestanden, alles groen (nieuw:
+  `bronnen.test.mjs`, `upload.test.mjs`, beeldverhouding in `video.test.mjs`).
+
+### Wat hiervan NIET getest is
+- Niets in de browser (geen Chrome gebruikt, APC hing eraan): de knop
+  "bestand…", slepen op het paneel en op een track, de uploadbalk (XHR-voortgang),
+  het laden na de ingest, de labels, de knop passend/vullen.
+- De meng-shader zelf: de rekenregel is getest in JS (`leesLaag`), de GLSL niet
+  in een echte WebGL-context. Eerste keer kijken: staande TikTok naast een
+  liggende YouTube, beide modi, en het losse venster.
+- Echte grote bestanden (GB's) van Clay, mkv/mov van een telefoon (rotatie),
+  mp3 met hoesje uit de praktijk; de upload-grens is getest met 768 MB.
+- TikTok-korte links, TikTok-video's met inlogplicht of regioblokkade (de
+  meldingen daarvoor zijn alleen op tekst getest).
+- YouTube met `-S res:720`: niet opnieuw tegen YouTube gedraaid (hoort dezelfde
+  720p te kiezen als `[height<=720]`, want res = de kleinste kant).
+
 ## Stand (einde sessie 23 september 2026, ~23:45)
 
 - Alles is gecommit behalve `Input/` (Clay's nieuwe map, zie `docs/INPUT.md`) en deze

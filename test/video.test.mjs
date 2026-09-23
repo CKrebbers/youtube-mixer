@@ -89,5 +89,65 @@ console.log('\neffecten op de tel');
   ok('elk doel behalve flits is een echt effect', PULS_DOELEN.filter((d) => d !== 'flits').every((d) => d in { rgb: 0, pixel: 0, spiegel: 0, korrel: 0 }));
 }
 
+console.log('\nbeeldverhouding per laag (staande video)');
+{
+  const { schaalVoor, maatVan, leesLaag, FITS } = await import('../src/video/passen.js');
+  const { bindVideo, invoke, read } = await import('../src/control/actions.js');
+  /*
+   * Een nep-video zoals een canvas: 720×1280 (9:16, TikTok), en het beeld
+   * ASYMMETRISCH — vier verschillende kwarten. Een beeld dat alleen links en
+   * rechts verschilt verstopt een omgekeerde y (zie CLAUDE.md, sporen).
+   */
+  const nep = { width: 720, height: 1280 };
+  const kwart = (x, y) => (y < 0.5 ? (x < 0.5 ? 'rood' : 'groen') : (x < 0.5 ? 'blauw' : 'geel'));
+  // Het doek van 1280×720 bemonsteren zoals de meng-shader dat doet.
+  const doek = (schaal, u, v) => { const p = leesLaag(u, v, schaal); return p.binnen ? kwart(p.x, p.y) : 'zwart'; };
+
+  ok('maat van een canvas (width/height) en van een <video> (videoWidth)',
+    maatVan(nep).join('x') === '720x1280' && maatVan({ videoWidth: 1920, videoHeight: 1080, width: 300, height: 150 }).join('x') === '1920x1080');
+  const passend = schaalVoor(...maatVan(nep), 'passend');
+  ok(`9:16 passend: breder lezen, hoogte gelijk (${passend.map((x) => x.toFixed(3)).join(', ')})`,
+    Math.abs(passend[0] - (16 / 9) / (9 / 16)) < 1e-9 && passend[1] === 1);
+  ok('balken links en rechts zijn zwart', doek(passend, 0.05, 0.5) === 'zwart' && doek(passend, 0.95, 0.5) === 'zwart'
+    && doek(passend, 0.05, 0.1) === 'zwart' && doek(passend, 0.95, 0.9) === 'zwart');
+  // Het beeld beslaat 720/1280 × (9/16) = 31,6% van de breedte, in het midden.
+  const rand = (1 - (9 / 16) / (16 / 9)) / 2;
+  ok(`het beeld zelf: van ${(rand * 100).toFixed(1)}% tot ${((1 - rand) * 100).toFixed(1)}% van de breedte`,
+    doek(passend, rand - 0.001, 0.5) === 'zwart' && doek(passend, rand + 0.001, 0.5) !== 'zwart'
+    && doek(passend, 1 - rand + 0.001, 0.5) === 'zwart' && doek(passend, 1 - rand - 0.001, 0.5) !== 'zwart');
+  ok('de vier kwarten staan goed: niet gespiegeld, niet ondersteboven',
+    doek(passend, 0.45, 0.25) === 'rood' && doek(passend, 0.55, 0.25) === 'groen'
+    && doek(passend, 0.45, 0.75) === 'blauw' && doek(passend, 0.55, 0.75) === 'geel');
+  ok('van boven tot onder zichtbaar (niets afgesneden)', doek(passend, 0.5, 0.001) !== 'zwart' && doek(passend, 0.5, 0.999) !== 'zwart');
+
+  const vullen = schaalVoor(720, 1280, 'vullen');
+  ok('9:16 vullen: overal beeld, geen balken', [0.01, 0.5, 0.99].every((u) => [0.01, 0.5, 0.99].every((v) => doek(vullen, u, v) !== 'zwart')));
+  ok('en de kwarten staan nog goed', doek(vullen, 0.2, 0.2) === 'rood' && doek(vullen, 0.8, 0.2) === 'groen'
+    && doek(vullen, 0.2, 0.8) === 'blauw' && doek(vullen, 0.8, 0.8) === 'geel');
+  const boven = leesLaag(0.5, 0, vullen).y;
+  ok(`boven en onder valt weg (doekrand leest op ${(boven * 100).toFixed(1)}% van het beeld)`, boven > 0.3 && boven < 0.35);
+
+  ok('16:9 blijft zoals het was', schaalVoor(1280, 720, 'passend').join() === '1,1' && schaalVoor(1920, 1080, 'vullen').join() === '1,1');
+  const breed = schaalVoor(2560, 1080, 'passend');
+  ok('21:9 passend: balken boven en onder', breed[0] === 1 && breed[1] > 1 && doek(breed, 0.5, 0.02) === 'zwart' && doek(breed, 0.02, 0.5) !== 'zwart');
+  const oud = schaalVoor(640, 480, 'passend');
+  ok('4:3 passend: smalle balken opzij', oud[0] > 1 && oud[1] === 1 && doek(oud, 0.05, 0.5) === 'zwart' && doek(oud, 0.2, 0.5) !== 'zwart');
+  ok('maat nog onbekend (video laadt): uitrekken zoals vroeger, niet verdwijnen', schaalVoor(0, 0).join() === '1,1' && schaalVoor(...maatVan(null)).join() === '1,1');
+
+  const mixer = { fit: FITS[0], volgendeFit() { this.fit = FITS[(FITS.indexOf(this.fit) + 1) % FITS.length]; },
+    fx: {}, zetFx() {}, volgendeModus() {}, zetPuls() {}, volgendPulsDoel() {}, modus: 'mix', puls: 0, pulsDoel: 'rgb' };
+  bindVideo(mixer);
+  ok('video.fit staat op de bus, begint op passend', read('video.fit') === 0 && mixer.fit === 'passend');
+  invoke('video.fit', true); invoke('video.fit', false);
+  ok('één druk: vullen', mixer.fit === 'vullen' && read('video.fit') === 1);
+  invoke('video.fit', true);
+  ok('nog een: terug naar passend', mixer.fit === 'passend');
+  // De shader moet hetzelfde doen als leesLaag: controleer dat hij de schaal per laag leest.
+  const bron = (await import('node:fs')).readFileSync(new URL('../src/video/video-mixer.js', import.meta.url), 'utf8');
+  ok('de meng-shader schaalt elke laag (s[0..7]) en is buiten het beeld doorzichtig',
+    [0, 1, 2, 3, 4, 5, 6, 7].every((i) => bron.includes(`q = (uv - 0.5) * s[${i}] + 0.5; l[${i}] = texture(t${i}, q).rgb; g[${i}] = w[${i}] * binnen(q);`))
+    && !/l\[i\] \* w\[i\]/.test(bron));
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { bronVan } from './links.js';
 
 /**
  * De library: wat er binnengehaald is, en wat erbij hoort.
@@ -239,7 +240,8 @@ export class Library {
     const onset = r.onset_bestand
       ? { bestand: r.onset_bestand, frames: r.onset_frames, envRate: r.onset_rate, tijdOffset: r.onset_offset }
       : null;
-    return { ...r, racks: n, grid, onset,
+    // bron: 'youtube' | 'tiktok' | 'bestand' | 'web' — het label in de lijst.
+    return { ...r, racks: n, grid, onset, bron: bronVan(r.url),
       peaks: p ? { bestand: p.bestand, buckets: p.buckets, perBucket: p.per_bucket } : null };
   }
 

@@ -41,6 +41,8 @@ export function opzetVideo({ engine }) {
       const tekst = videoMixer.fout || (st.length ? st.map((l) => `${trackVanDeck(l.id)}: ${Math.round(l.verschil * 1000)} ms`).join(' · ') : 'geen zichtbare video');
       const modusEl = videoPaneel.querySelector('.vid-modus');
       if (modusEl.textContent !== videoMixer.modus) modusEl.textContent = videoMixer.modus;
+      const fitEl = videoPaneel.querySelector('.vid-fit');
+      if (fitEl && fitEl.textContent !== videoMixer.fit) fitEl.textContent = videoMixer.fit;
       const doelEl = videoPaneel.querySelector('.vid-pulsdoel');
       if (doelEl.textContent !== videoMixer.pulsDoel) doelEl.textContent = videoMixer.pulsDoel;
       const statusEl = videoPaneel.querySelector('.vid-status');

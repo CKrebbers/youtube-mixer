@@ -90,6 +90,7 @@ export function beschrijf(action) {
     'focus.next': ['focus ▶', 'focus naar de volgende track'], 'focus.prev': ['◀ focus', 'focus naar de vorige track'],
     'video.mode': ['mengvorm', 'video: volgende mengvorm'], 'video.pulse': ['puls', 'video: puls op de tel'],
     'video.pulse.target': ['puls-doel', 'video: wat er op de tel pulst'],
+    'video.fit': ['passend', 'video: passend (randen) of vullen (bijsnijden)'],
   };
   if (vast[action]) return { kort: vast[action][0], lang: vast[action][1] };
   return { kort: action, lang: action };

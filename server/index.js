@@ -1,10 +1,11 @@
 import { createServer } from 'node:http';
-import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { stat, rm } from 'node:fs/promises';
 import { join, extname, resolve, relative, isAbsolute, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomUUID } from 'node:crypto';
-import { ingest, controleerTooling, YTDLP_GETEST_OP } from './ingest.js';
+import { randomUUID, createHash } from 'node:crypto';
+import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, YTDLP_GETEST_OP } from './ingest.js';
+import { normaliseerLink, ontsmetNaam, BESTAND_EXT } from './links.js';
 import { Library, normaliseerGrid } from './library.js';
 import { ZEKER_VANAF } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets } from './analyze.js';
@@ -99,25 +100,31 @@ async function leesRuw(req, max = 4 * 1024 * 1024) {
   });
 }
 
-/** Start een ingest en laat hem op de achtergrond lopen. */
+/** Start een ingest van een link en laat hem op de achtergrond lopen. */
 function startIngest(url) {
-  // Dezelfde URL twee keer plakken terwijl de eerste nog loopt: de lopende
-  // teruggeven in plaats van een tweede ernaast te starten.
-  for (const o of opdrachten.values()) if (o.url === url && o.status === 'bezig') return o;
+  return startOpdracht(url, url, (onStap) => ingest(url, { mediaDir: MEDIA, onStap }));
+}
+
+/**
+ * Een opdracht op de achtergrond: `werk(onStap)` geeft wat ingest() geeft.
+ * `sleutel` voorkomt dubbel werk: dezelfde link (of hetzelfde bestand) twee
+ * keer terwijl de eerste nog loopt geeft de lopende terug.
+ */
+function startOpdracht(sleutel, url, werk) {
+  for (const o of opdrachten.values()) if (o.sleutel === sleutel && o.status === 'bezig') return o;
   const id = randomUUID().slice(0, 8);
   const opdracht = {
-    id, url, status: 'bezig', stap: 'wachten', tekst: 'in de wachtrij',
+    id, sleutel, url, status: 'bezig', stap: 'wachten', tekst: 'in de wachtrij',
     pct: null, begonnen: Date.now(), klaar: null, fout: null, track: null,
   };
   opdrachten.set(id, opdracht);
 
-  ingest(url, {
-    mediaDir: MEDIA,
-    onStap: (s) => { Object.assign(opdracht, s); },
-  }).then((r) => {
+  werk((s) => { Object.assign(opdracht, s); }).then((r) => {
     opdracht.klaar = Date.now();
     if (r.ok) {
       opdracht.status = 'klaar';
+      opdracht.stap = 'klaar';
+      opdracht.pct = null;
       opdracht.tekst = r.track.videoFout
         ? `klaar (zonder video: ${r.track.videoFout}) — ${r.track.titel}`
         : `klaar — ${r.track.titel}`;
@@ -163,6 +170,124 @@ function startIngest(url) {
 
   return opdracht;
 }
+
+/**
+ * Hoe groot een eigen bestand mag zijn. Standaard 8 GB (een uur 4K past
+ * erin); VARVE_UPLOAD_MAX in bytes zet het anders — de tests doen dat.
+ */
+const UPLOAD_MAX = Number(process.env.VARVE_UPLOAD_MAX) > 0 ? Number(process.env.VARVE_UPLOAD_MAX) : 8 * 1024 ** 3;
+
+/**
+ * Een eigen bestand binnenhalen: POST /api/upload?naam=<bestandsnaam>, de
+ * body is het bestand zelf (application/octet-stream, audio/* of video/*).
+ *
+ * - GESTREAMD naar een werkmap (media/.bezig-upload-*), nooit in het geheugen:
+ *   een video kan gigabytes zijn. Onderweg wordt geteld en gehasht.
+ * - Boven UPLOAD_MAX: 413, en wat er al stond gaat weg.
+ * - Daarna ffprobe: geen geluidsspoor of geen media = een nette 415.
+ * - De id is `lokaal-` + de eerste 12 tekens van de SHA-256 van de inhoud.
+ *   Hetzelfde bestand nog eens = hetzelfde nummer; dan wordt er niets
+ *   opnieuw gedaan.
+ * - De naam is alleen een TITEL (ontsmet), nooit een pad.
+ */
+async function upload(req, res, url) {
+  const naam = ontsmetNaam(url.searchParams.get('naam'));
+  if (!naam) return weigerUpload(req, res, 415, { fout: `geen audio- of videobestand — ik neem ${BESTAND_EXT.join(', ')}` });
+  const lengte = Number(req.headers['content-length']);
+  if (Number.isFinite(lengte) && lengte > UPLOAD_MAX) {
+    return weigerUpload(req, res, 413, { fout: `te groot: ${gb(lengte)}, de grens is ${gb(UPLOAD_MAX)}` });
+  }
+
+  const map = await werkmap(MEDIA, 'upload');
+  const bron = join(map, `bron.${naam.ext}`);
+  const hash = createHash('sha256');
+  let n = 0;
+  const schrijf = createWriteStream(bron);
+  /*
+   * Met de hand in plaats van pipeline(): bij "te groot" moet het antwoord
+   * 413 nog ÉRGENS heen. pipeline() vernietigt bij een fout ook `req`, en
+   * daarmee de verbinding — dan zag de browser alleen "verbinding verbroken".
+   * Tegendruk: schrijft de schijf trager dan het netwerk, dan wacht req.
+   */
+  const uitkomst = await new Promise((klaar) => {
+    let gemeld = false;
+    const eind = (x) => { if (!gemeld) { gemeld = true; klaar(x); } };
+    req.on('data', (stuk) => {
+      if (gemeld) return;
+      n += stuk.length;
+      if (n > UPLOAD_MAX) { req.pause(); eind('te groot'); return; }
+      hash.update(stuk);
+      if (!schrijf.write(stuk)) { req.pause(); schrijf.once('drain', () => { if (!gemeld) req.resume(); }); }
+    });
+    req.on('end', () => schrijf.end(() => eind('ok')));
+    req.on('error', () => eind('afgebroken'));
+    req.on('close', () => { if (!req.complete) eind('afgebroken'); });
+    schrijf.on('error', (err) => eind(`schrijven mislukt: ${err.message}`));
+  });
+  if (uitkomst !== 'ok') {
+    schrijf.destroy();
+    await rm(map, { recursive: true, force: true }).catch(() => {});
+    // Na het antwoord de verbinding dicht: de rest van de upload willen we niet.
+    res.setHeader('Connection', 'close');
+    res.on('finish', () => req.destroy());
+    if (uitkomst === 'te groot') return json(res, 413, { fout: `te groot: meer dan ${gb(UPLOAD_MAX)}` });
+    return json(res, 400, { fout: `upload ${uitkomst}` });
+  }
+  if (n === 0) {
+    await rm(map, { recursive: true, force: true }).catch(() => {});
+    return json(res, 400, { fout: 'leeg bestand' });
+  }
+
+  const info = await onderzoek(bron);
+  if (!info.ok) {
+    await rm(map, { recursive: true, force: true }).catch(() => {});
+    return json(res, 415, { fout: `"${naam.naam}": ${info.fout}` });
+  }
+
+  const id = `lokaal-${hash.digest('hex').slice(0, 12)}`;
+  // Al in de library (en de audio staat er nog)? Dan is er niets te doen.
+  const al = lib.track(id);
+  if (al && await stat(opSchijf(al.audio)).then(() => true, () => false)) {
+    await rm(map, { recursive: true, force: true }).catch(() => {});
+    const opdracht = {
+      id: randomUUID().slice(0, 8), sleutel: id, url: al.url, status: 'klaar', stap: 'klaar',
+      tekst: `al in de library — ${al.titel}`, pct: null, begonnen: Date.now(), klaar: Date.now(),
+      fout: null, track: al, bestond: true,
+    };
+    opdrachten.set(opdracht.id, opdracht);
+    return json(res, 200, opdracht);
+  }
+
+  // Loopt hetzelfde bestand al (twee keer gesleept)? Dan die, en deze kopie weg.
+  const loopt = [...opdrachten.values()].find((o) => o.sleutel === id && o.status === 'bezig');
+  if (loopt) {
+    await rm(map, { recursive: true, force: true }).catch(() => {});
+    return json(res, 202, loopt);
+  }
+  const titel = info.tags.titel || naam.titel;
+  return json(res, 202, startOpdracht(id, `bestand:${naam.naam}`, (onStap) => ingestBestand(bron, {
+    id, map, mediaDir: MEDIA, onStap, heeftVideo: info.video,
+    info: { url: `bestand:${id.slice('lokaal-'.length)}:${naam.naam}`, titel, uploader: info.tags.artiest },
+  })));
+}
+
+/**
+ * Een upload weigeren voordat hij gelezen is. Klein (≤ 64 MB): de rest nog
+ * leeglezen, anders ziet de browser "verbinding verbroken" in plaats van de
+ * reden. Groot of onbekend: antwoorden en de verbinding dichtdoen.
+ */
+function weigerUpload(req, res, code, data) {
+  const lengte = Number(req.headers['content-length']);
+  if (Number.isFinite(lengte) && lengte <= 64 * 1024 ** 2) {
+    req.resume();
+    return json(res, code, data);
+  }
+  res.setHeader('Connection', 'close');
+  res.on('finish', () => req.destroy());
+  return json(res, code, data);
+}
+
+const gb = (n) => `${(n / 1024 ** 3).toFixed(n < 1024 ** 3 ? 3 : 1)} GB`;
 
 /** Eén regel voor de serverlog: hoeveel stukken, hoeveel ervan zeker. */
 function gridSamenvatting(g) {
@@ -340,6 +465,15 @@ const server = createServer(async (req, res) => {
     // website komt zo niet zonder CORS-vraag binnen. Het mediatype zelf moet
     // application/json ZIJN; `text/plain;x=application/json` is text/plain.
     const mediatype = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+    // Uitzondering: een eigen bestand is binair. Alleen application/octet-stream,
+    // audio/* of video/* — geen van drieën mag een website zonder CORS-vraag
+    // sturen, dus de bescherming van de JSON-regel blijft. Host/Origin hierboven ook.
+    if (pad === '/api/upload' && req.method === 'POST') {
+      if (mediatype !== 'application/octet-stream' && !/^(audio|video)\/[\w.+-]+$/.test(mediatype)) {
+        return weigerUpload(req, res, 415, { fout: 'stuur het bestand als application/octet-stream' });
+      }
+      return upload(req, res, url);
+    }
     if (req.method === 'POST' && pad !== '/api/opname/start' && !/^\/api\/opname\/[\w-]+\/(stuk|klaar|video\.\w+)$/.test(pad)
       && pad.startsWith('/api/') && mediatype !== 'application/json'
       && !/^\/api\/library\/[\w-]+\/(racks\/\d+|geladen)$/.test(pad)) {
@@ -348,8 +482,9 @@ const server = createServer(async (req, res) => {
 
     if (pad === '/api/ingest' && req.method === 'POST') {
       const body = await leesJson(req);
-      const link = body?.url?.trim();
-      if (!link || !/^https?:\/\//i.test(link)) return json(res, 400, { fout: 'geef een geldige http(s)-URL' });
+      // YouTube, TikTok of wat yt-dlp verder kent; zie links.js.
+      const link = normaliseerLink(body?.url);
+      if (!link) return json(res, 400, { fout: 'geef een geldige http(s)-URL' });
       return json(res, 202, startIngest(link));
     }
 
@@ -595,6 +730,10 @@ const server = createServer(async (req, res) => {
 });
 
 // Laatste vangnet. Zonder dit legt één losse promise de hele server om.
+// Een upload van gigabytes duurt langer dan de standaard 5 minuten die Node
+// een verzoek geeft. Dit is een server op 127.0.0.1 voor één gebruiker.
+server.requestTimeout = 60 * 60 * 1000;
+
 process.on('unhandledRejection', (r) => console.error('[server] losse promise:', r));
 process.on('uncaughtException', (e) => console.error('[server] onafgevangen:', e?.message || e));
 

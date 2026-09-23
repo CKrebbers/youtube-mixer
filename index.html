@@ -149,6 +149,7 @@
     <canvas class="vid-canvas"></canvas>
     <div class="vid-fx">
       <button data-kind="button" data-action="video.mode" class="btn sm vid-modus" title="hoe de tracks over elkaar vallen">mix</button>
+      <button data-kind="button" data-action="video.fit" class="btn sm vid-fit" title="passend: het hele beeld met zwarte randen · vullen: doek vol, wat uitsteekt valt weg (staande video)">passend</button>
       <div class="knob sm" data-action="video.fx.pixel" data-label="PIXEL" data-value="0" data-default="0"></div>
       <div class="knob sm" data-action="video.fx.mirror" data-label="SPIEGEL" data-value="0" data-default="0"></div>
       <div class="knob sm" data-action="video.fx.rgb" data-label="RGB" data-value="0" data-default="0"></div>
@@ -183,8 +184,10 @@
 <section id="lib-panel" class="lib-panel hidden">
   <div class="lib-head">
     <span class="lib-titelbalk">LIBRARY</span>
-    <input class="lib-url" type="text" placeholder="plak een YouTube-URL en druk op enter…">
+    <input class="lib-url" type="text" placeholder="plak een YouTube- of TikTok-link en druk op enter…">
     <button class="btn sm lib-haal">haal binnen</button>
+    <button class="btn sm lib-bestand" title="eigen audio of video (ook meerdere) — of sleep bestanden op dit paneel">bestand…</button>
+    <input class="lib-bestanden" type="file" hidden multiple accept="audio/*,video/*,.mkv,.mov,.m4v,.flac,.aiff,.aif,.ogg,.opus">
     <input class="lib-zoek" type="text" placeholder="zoeken…">
     <button class="btn sm lib-close">sluit</button>
   </div>

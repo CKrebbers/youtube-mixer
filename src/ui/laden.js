@@ -1,7 +1,7 @@
 import { DECK_IDS } from '../engine/engine.js';
 import { Beatgrid } from '../engine/beatgrid.js';
 import { trackVanDeck } from '../control/actions.js';
-import { LibraryPanel } from './library-panel.js';
+import { LibraryPanel, isVideoBestand, isMediaBestand } from './library-panel.js';
 import { computePeaks, rmsDb, laadPeaks } from '../analysis/peaks.js';
 import { meld } from './meldingen.js';
 
@@ -55,13 +55,37 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
     return true;
   }
 
+  /**
+   * Een bestand op een track gesleept.
+   *
+   * Audio: direct in het geheugen en spelen, zonder library — zo was het, en
+   * voor een los mp3'tje is dat het snelst.
+   * VIDEO: via de library (upload + ingest, daarna op deze track). Een video
+   * direct spelen kan wel (blob-URL + decodeAudioData), maar dan zonder
+   * loudness, golfvorm uit de cache, grid, en met de hele audio in het RAM;
+   * mov/mkv speelt Chrome vaak niet eens. De ingest duurt even (een minuut
+   * voor een uur video), dus dat zeggen we.
+   * Audio die de browser niet kan lezen (aiff bijvoorbeeld): ook via de
+   * library — ffmpeg kan het wel.
+   */
   async function loadFile(id, file) {
+    const nr = trackVanDeck(id);
+    if (isVideoBestand(file)) {
+      meld(`video "${file.name}" gaat via de library (uploaden en verwerken, dat duurt even) — daarna staat hij op track ${nr}`, 'info', 8000);
+      await library.uploadBestand(file, { naDeck: id });
+      return;
+    }
     await engine.resume();
     let buf;
     try {
       buf = await engine.ctx.decodeAudioData(await file.arrayBuffer());
     } catch (err) {
-      meld(`"${file.name}" is geen audio die de browser kan lezen`, 'fout');
+      if (isMediaBestand(file)) {
+        meld(`"${file.name}" kan de browser niet lezen — ffmpeg wel: hij gaat via de library naar track ${nr}`, 'info', 8000);
+        await library.uploadBestand(file, { naDeck: id });
+      } else {
+        meld(`"${file.name}" is geen audio die de browser kan lezen`, 'fout');
+      }
       return;
     }
     if (!(await laadBuffer(id, buf, file.name.replace(/\.[^.]+$/, '')))) return;

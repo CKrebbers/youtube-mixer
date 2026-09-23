@@ -3,6 +3,7 @@ import { mkdir, rm, stat, rename } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { maakPeaks, maakOnset, maakGrid } from './analyze.js';
+import { normaliseerLink, bronVan, trackIdVoor, tiktokHint } from './links.js';
 
 /**
  * De ingest-pipeline: URL erin, genormaliseerd bestand plus metadata eruit.
@@ -131,10 +132,14 @@ export async function metadata(url) {
   if (!r.ok) return { ok: false, fout: kortefout(r.stderr) || `yt-dlp gaf code ${r.code}` };
   try {
     const j = JSON.parse(r.stdout);
+    // TikTok geeft als titel "TikTok video #<id>"; de beschrijving zegt meer.
+    const kaal = /^TikTok video #\d+$/.test(j.title || '');
+    const beschrijving = String(j.description || '').replace(/\s+/g, ' ').trim().slice(0, 120);
     return {
       ok: true,
       info: {
-        id: j.id, titel: j.title || j.id, uploader: j.uploader || j.channel || '',
+        id: j.id, extractor: j.extractor_key || j.extractor || '',
+        titel: (kaal && beschrijving) || j.title || j.id, uploader: j.uploader || j.channel || '',
         duur: Math.round(j.duration || 0), url: j.webpage_url || url,
         thumbnail: j.thumbnail || '', upload_datum: j.upload_date || '',
       },
@@ -153,7 +158,9 @@ function kortefout(stderr) {
 /** Meet loudness (pass 1 van twee). Levert de waarden die pass 2 nodig heeft. */
 export async function meetLoudness(bestand) {
   const r = await run('ffmpeg', [
-    '-hide_banner', '-nostats', '-i', bestand,
+    // -vn: bij een eigen videobestand decodeerde de null-uitvoer anders ook
+    // het hele beeld, twee keer (per pass) — voor een 4K-video minuten werk.
+    '-hide_banner', '-nostats', '-i', bestand, '-vn', '-sn', '-dn',
     '-af', `loudnorm=I=${LOUDNESS.I}:TP=${LOUDNESS.TP}:LRA=${LOUDNESS.LRA}:print_format=json`,
     '-f', 'null', '-',
   ]);
@@ -188,7 +195,7 @@ export async function normaliseer(bron, gemeten, doel) {
     '-hide_banner', '-nostats', '-y', '-i', bron,
     // pcm_s16le expliciet: de streamende bron leest dit formaat rechtstreeks
     // van schijf, met Range-verzoeken. Een ander formaat zou hij weigeren.
-    '-af', filter, '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', doel,
+    '-vn', '-sn', '-dn', '-af', filter, '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', doel,
   ]);
   return r.ok ? { ok: true } : { ok: false, fout: `normaliseren mislukt (code ${r.code})` };
 }
@@ -201,8 +208,13 @@ export async function normaliseer(bron, gemeten, doel) {
  * oude, zodat dit op beide werkt zonder versiedetectie.
  */
 export async function cfrTranscode(bron, doel, { fps = 30 } = {}) {
-  const basis = ['-hide_banner', '-nostats', '-y', '-i', bron, '-an'];
-  const staart = ['-r', String(fps), '-c:v', 'libx264', '-preset', 'veryfast',
+  const basis = ['-hide_banner', '-nostats', '-y', '-i', bron, '-an', '-sn', '-dn'];
+  // Hooguit 720 op de KORTE kant (1280×720 liggend, 720×1280 staand), even
+  // afmetingen (yuv420p eist dat). YouTube levert al ≤720, daar verandert
+  // niets; een eigen 4K-video of een staande 1080×1920 wordt kleiner, zodat
+  // acht lagen tegelijk te decoderen blijven.
+  const schaal = "scale=w='if(gte(iw,ih),-2,2*trunc(min(720,iw)/2))':h='if(gte(iw,ih),2*trunc(min(720,ih)/2),-2)'";
+  const staart = ['-vf', schaal, '-r', String(fps), '-c:v', 'libx264', '-preset', 'veryfast',
     '-crf', '20', '-pix_fmt', 'yuv420p', doel];
 
   let r = await run('ffmpeg', [...basis, '-fps_mode', 'cfr', ...staart]);
@@ -225,37 +237,56 @@ export async function duurVan(bestand) {
 const bestaat = async (p) => { try { await stat(p); return true; } catch { return false; } };
 
 /**
- * De hele pipeline. Meldt elke stap via `onStap` zodat de UI kan meekijken, en
- * ruimt bij een mislukking zijn eigen rommel op.
+ * yt-dlp-formaat voor het beeld. `-S res:720` sorteert op de KLEINSTE kant:
+ * 1280×720 liggend, maar ook 720×1280 staand. `[height<=720]` gaf op een
+ * staande TikTok (576×1024 of groter) niets, en dan kwam er geen video.
+ */
+export const VIDEO_FORMAAT = ['-f', 'bv/b', '-S', 'res:720'];
+
+/**
+ * Een werkmap voor één ingest. Pas bij succes gaat het naar media/<id>/:
+ * een mislukte HERHAALDE download gooide anders de goede, al bestaande
+ * track weg, en twee ingests van hetzelfde nummer schreven door elkaar.
+ */
+export async function werkmap(mediaDir, id) {
+  const map = join(mediaDir, `.bezig-${id}-${randomBytes(4).toString('hex')}`);
+  await mkdir(map, { recursive: true });
+  return map;
+}
+
+/**
+ * De hele pipeline voor een link. Meldt elke stap via `onStap` zodat de UI
+ * kan meekijken, en ruimt bij een mislukking zijn eigen rommel op.
  *
  * @returns {{ok:boolean, track?:object, fout?:string}}
  */
 export async function ingest(url, { mediaDir = 'media', video = true, onStap = () => {} } = {}) {
-  onStap({ stap: 'metadata', tekst: 'metadata ophalen' });
-  const meta = await metadata(url);
-  if (!meta.ok) return { ok: false, fout: meta.fout };
+  const link = normaliseerLink(url) ?? url;
+  const tiktok = bronVan(link) === 'tiktok';
+  const metHint = (fout) => {
+    const hint = tiktok ? tiktokHint(fout) : null;
+    return hint ? `${hint} (${fout})` : fout;
+  };
 
-  const id = meta.info.id;
+  onStap({ stap: 'metadata', tekst: 'metadata ophalen' });
+  const meta = await metadata(link);
+  if (!meta.ok) return { ok: false, fout: metHint(meta.fout) };
+
   // De id wordt een mapnaam. yt-dlp maakt hem bij sommige sites uit de URL
   // (de generic extractor: unquote(basename)), dus "../../x" is mogelijk —
   // en bij een mislukking volgde dan een rm -rf buiten media/. Alleen veilige ids.
-  if (typeof id !== 'string' || !/^[\w-]{1,64}$/.test(id)) {
-    return { ok: false, fout: `onbruikbare video-id ${JSON.stringify(id)} — alleen letters, cijfers, - en _` };
+  const id = trackIdVoor(meta.info);
+  if (!id) {
+    return { ok: false, fout: `onbruikbare video-id ${JSON.stringify(meta.info.id)} — alleen letters, cijfers, - en _` };
   }
-  // In een eigen werkmap, pas bij succes naar media/<id>/. Een mislukte
-  // HERHAALDE download gooide anders de goede, al bestaande track weg, en
-  // twee ingests van hetzelfde nummer schreven door elkaar in dezelfde map.
-  const doel = join(mediaDir, id);
-  const map = join(mediaDir, `.bezig-${id}-${randomBytes(4).toString('hex')}`);
+  const map = await werkmap(mediaDir, id);
   const tijdelijk = join(map, 'rauw');
-  await mkdir(map, { recursive: true });
 
-  try {
-    // ---- audio binnenhalen -------------------------------------------------
+  const haalAudio = async () => {
     onStap({ stap: 'audio', tekst: `audio downloaden — ${meta.info.titel}` });
     const dl = await run('yt-dlp', [
       '-f', 'bestaudio/best', '--no-playlist', '--no-warnings',
-      '-o', `${tijdelijk}.%(ext)s`, url,
+      '-o', `${tijdelijk}.%(ext)s`, link,
     ], { onLijn: (l) => { const p = l.match(/\[download\]\s+([\d.]+)%/); if (p) onStap({ stap: 'audio', tekst: `audio downloaden ${p[1]}%`, pct: parseFloat(p[1]) }); } });
     if (!dl.ok) {
       let fout = kortefout(dl.stderr) || `download mislukt (code ${dl.code})`;
@@ -267,15 +298,104 @@ export async function ingest(url, { mediaDir = 'media', video = true, onStap = (
                 + ` Werk hem bij met: ${t.bijwerken}`;
         }
       }
-      return mislukt(map, fout);
+      return { ok: false, fout: metHint(fout) };
     }
-
     // yt-dlp kiest zelf de extensie; zoek op welke het geworden is.
-    let rauw = null;
     for (const ext of ['webm', 'm4a', 'opus', 'mp3', 'mp4', 'ogg', 'wav']) {
-      if (await bestaat(`${tijdelijk}.${ext}`)) { rauw = `${tijdelijk}.${ext}`; break; }
+      if (await bestaat(`${tijdelijk}.${ext}`)) return { ok: true, pad: `${tijdelijk}.${ext}` };
     }
-    if (!rauw) return mislukt(map, 'download gaf geen bestand dat ik terugvind');
+    return { ok: false, fout: 'download gaf geen bestand dat ik terugvind' };
+  };
+
+  const haalVideo = async () => {
+    onStap({ stap: 'video', tekst: 'video downloaden' });
+    const vd = await run('yt-dlp', [
+      ...VIDEO_FORMAAT, '--no-playlist', '--no-warnings',
+      '-o', `${tijdelijk}-v.%(ext)s`, link,
+    ]);
+    if (!vd.ok) return { fout: kortefout(vd.stderr) || `videodownload mislukt (code ${vd.code})` };
+    for (const ext of ['mp4', 'webm', 'mkv']) {
+      if (await bestaat(`${tijdelijk}-v.${ext}`)) return { pad: `${tijdelijk}-v.${ext}` };
+    }
+    return { fout: 'videodownload gaf geen bestand dat ik terugvind' };
+  };
+
+  return verwerk({
+    id, map, onStap, haalAudio, haalVideo: video ? haalVideo : null,
+    info: { url: meta.info.url, titel: meta.info.titel, uploader: meta.info.uploader, thumbnail: meta.info.thumbnail },
+    ytdlp: true,
+  }, mediaDir);
+}
+
+/**
+ * Een eigen bestand (de upload) door DEZELFDE pipeline: loudness, audio.wav,
+ * peaks, onset, grid en — als er beeld in zit — video.mp4. `bron` staat al in
+ * de werkmap `map` (de upload schreef hem daar), en verdwijnt met de werkmap.
+ *
+ * @param bron  pad naar het bestand, binnen `map`
+ * @param opties.info  { url, titel, uploader } — url is "bestand:…", geen pad
+ * @param opties.heeftVideo  uit `onderzoek()`: een echt videospoor, geen hoesje
+ */
+export async function ingestBestand(bron, { id, map, info, heeftVideo = false, video = true, mediaDir = 'media', onStap = () => {} }) {
+  if (typeof id !== 'string' || !/^[\w-]{1,64}$/.test(id)) {
+    await rm(map, { recursive: true, force: true }).catch(() => {});
+    return { ok: false, fout: `onbruikbare id ${JSON.stringify(id)}` };
+  }
+  return verwerk({
+    id, map, onStap,
+    haalAudio: async () => ({ ok: true, pad: bron }),
+    haalVideo: video && heeftVideo ? async () => ({ pad: bron }) : null,
+    info: { thumbnail: '', uploader: '', ...info },
+    ytdlp: false,
+  }, mediaDir);
+}
+
+/**
+ * Wat er in een bestand zit, volgens ffprobe. Zo weet de upload dat het echt
+ * media is voordat de ingest begint, en of er beeld in zit.
+ *
+ * Een hoesje in een mp3 of m4a is voor ffprobe ook een "video"-spoor (met
+ * disposition attached_pic). Dat telt hier NIET als beeld: anders werd één
+ * plaatje een video van een uur.
+ *
+ * @returns {{ok:true, audio:boolean, video:boolean, duur:number, breedte, hoogte, tags}|{ok:false, fout:string}}
+ */
+export async function onderzoek(bestand) {
+  const r = await run('ffprobe', [
+    '-v', 'error', '-show_entries',
+    'format=duration,format_name:format_tags=title,artist:stream=codec_type,codec_name,width,height:stream_disposition=attached_pic',
+    '-of', 'json', bestand,
+  ], { timeout: 60000 });
+  let j = null;
+  try { j = JSON.parse(r.stdout || 'null'); } catch {}
+  if (!r.ok || !j) return { ok: false, fout: 'dit is geen audio of video die ffmpeg kan lezen' };
+  const sporen = Array.isArray(j.streams) ? j.streams : [];
+  const audio = sporen.some((s) => s.codec_type === 'audio' && s.codec_name);
+  const beeld = sporen.find((s) => s.codec_type === 'video' && !s.disposition?.attached_pic && s.width > 0 && s.height > 0);
+  const duur = parseFloat(j.format?.duration);
+  if (!audio) return { ok: false, fout: beeld ? 'deze video heeft geen geluidsspoor — een DJ-deck heeft geluid nodig' : 'dit is geen audio of video die ffmpeg kan lezen' };
+  if (!(duur > 0.5)) return { ok: false, fout: 'dit bestand is korter dan een halve seconde of heeft geen leesbare duur' };
+  const tags = j.format?.tags || {};
+  const tag = (k) => String(tags[k] ?? tags[k.toUpperCase()] ?? '').trim().slice(0, 200);
+  return {
+    ok: true, audio, video: !!beeld, duur,
+    breedte: beeld?.width ?? null, hoogte: beeld?.height ?? null,
+    tags: { titel: tag('title'), artiest: tag('artist') },
+  };
+}
+
+/**
+ * Het gedeelde deel: van ruwe audio (en eventueel ruwe video) in de werkmap
+ * naar media/<id>/. haalAudio() geeft { ok, pad | fout }, haalVideo() geeft
+ * { pad } of { fout } — video is bonus, die laat de audio nooit vallen.
+ */
+async function verwerk({ id, map, onStap, haalAudio, haalVideo, info, ytdlp }, mediaDir) {
+  const doel = join(mediaDir, id);
+  try {
+    // ---- audio -------------------------------------------------------------
+    const a = await haalAudio();
+    if (!a.ok) return mislukt(map, a.fout);
+    const rauw = a.pad;
 
     // ---- loudness in twee passes ------------------------------------------
     onStap({ stap: 'meten', tekst: 'loudness meten (pass 1 van 2)' });
@@ -317,32 +437,23 @@ export async function ingest(url, { mediaDir = 'media', video = true, onStap = (
     // ---- video, met constante framerate -----------------------------------
     let videoBestand = null;
     let videoFout = null;
-    if (video) {
-      onStap({ stap: 'video', tekst: 'video downloaden' });
-      const vd = await run('yt-dlp', [
-        '-f', 'bestvideo[height<=720]/best[height<=720]', '--no-playlist', '--no-warnings',
-        '-o', `${tijdelijk}-v.%(ext)s`, url,
-      ]);
-      let rauwV = null;
-      for (const ext of ['mp4', 'webm', 'mkv']) {
-        if (await bestaat(`${tijdelijk}-v.${ext}`)) { rauwV = `${tijdelijk}-v.${ext}`; break; }
-      }
-      if (!vd.ok) videoFout = kortefout(vd.stderr) || `videodownload mislukt (code ${vd.code})`;
-      else if (!rauwV) videoFout = 'videodownload gaf geen bestand dat ik terugvind';
+    if (haalVideo) {
+      const v = await haalVideo();
+      if (v.fout) videoFout = v.fout;
       else {
         // Constante framerate is geen franje: zonder dit loopt de A/V-sync in
         // fase 4 langzaam weg en is hij niet meer bij te sturen.
         onStap({ stap: 'video', tekst: 'video naar constante framerate' });
         videoBestand = join(map, 'video.mp4');
-        const conv = await cfrTranscode(rauwV, videoBestand);
+        const conv = await cfrTranscode(v.pad, videoBestand);
         if (!conv.ok) {
           // Video is bonus: de audio staat er al en die laten we niet vallen.
           // Maar stil falen is erger dan de fout zelf, dus hij wordt gemeld.
           videoFout = conv.fout;
+          await rm(videoBestand, { force: true }).catch(() => {});
           videoBestand = null;
-          await rm(videoBestand ?? join(map, 'video.mp4'), { force: true }).catch(() => {});
         }
-        await rm(rauwV, { force: true });
+        if (v.pad !== rauw) await rm(v.pad, { force: true });
       }
       if (videoFout) onStap({ stap: 'video', tekst: `video overgeslagen — ${videoFout}` });
     }
@@ -369,10 +480,10 @@ export async function ingest(url, { mediaDir = 'media', video = true, onStap = (
     return {
       ok: true,
       track: {
-        id, url: meta.info.url, titel: meta.info.titel, uploader: meta.info.uploader,
-        duur, audio: audioDef, video: videoDef, videoFout, peaks, onset, grid, thumbnail: meta.info.thumbnail,
+        id, url: info.url, titel: info.titel, uploader: info.uploader,
+        duur, audio: audioDef, video: videoDef, videoFout, peaks, onset, grid, thumbnail: info.thumbnail,
         loudness: meting.gemeten, doelLoudness: LOUDNESS.I,
-        ytdlp: await ytdlpVersie(),
+        ytdlp: ytdlp ? await ytdlpVersie() : null,
       },
     };
   } catch (err) {

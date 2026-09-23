@@ -19,6 +19,7 @@ import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
 import { PITCH_BEREIKEN } from '../engine/deck.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
+import { FITS } from '../video/passen.js';
 import { GROEPEN, LAAGNAAM } from './lagen.js';
 
 const registry = new Map();
@@ -443,6 +444,10 @@ export function bindVideo(mixer) {
   }
   define('video.mode', 'trigger', (on) => { if (on) mixer.volgendeModus(); },
     { label: 'Video: volgende mengvorm', read: () => MODI.indexOf(mixer.modus) / (MODI.length - 1) });
+  // Passend (zwarte randen, alles zichtbaar) of vullen (doek vol, randen
+  // vallen weg). Voor staande video: TikTok is 9:16, het doek 16:9.
+  define('video.fit', 'trigger', (on) => { if (on) mixer.volgendeFit(); },
+    { label: 'Video: passend of vullen', read: () => FITS.indexOf(mixer.fit) / (FITS.length - 1) });
   define('video.pulse', 'value', (v) => mixer.zetPuls(v),
     { label: 'Video: puls op de tel', read: () => mixer.puls });
   define('video.pulse.target', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
