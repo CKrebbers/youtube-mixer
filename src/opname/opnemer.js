@@ -3,8 +3,12 @@
  *
  * Een eigen laag, net als de video: de engine weet er niets van (regel 1).
  * De worklet geeft per seconde een stuk door; dat gaat op volgorde naar de
- * server, die het meteen achter het bestand plakt. Crasht de browser, dan
- * ben je hooguit de laatste seconde kwijt.
+ * server, met de frame-positie erbij (`?frame=N`), en de server zet het op
+ * precies die plek. Daardoor is een stuk idempotent: opnieuw proberen na een
+ * verloren antwoord schrijft dezelfde bytes op dezelfde plek, en een stuk dat
+ * helemaal wegvalt wordt stilte in plaats van dat alles erna naar voren
+ * schuift (en uit de pas raakt met de video). Crasht de browser, dan ben je
+ * hooguit de laatste seconde kwijt.
  *
  * Niets gaat naar buiten: de server schrijft naar opnames/ op deze schijf.
  *
@@ -29,9 +33,15 @@ export function kiesVideoType(kan = (t) => globalThis.MediaRecorder?.isTypeSuppo
   return type ? { type, ext: type.startsWith('video/mp4') ? 'mp4' : 'webm' } : null;
 }
 export class Opnemer {
-  constructor({ engine, haal = (url, init) => fetch(url, init) }) {
+  /**
+   * @param wacht      pauze tussen pogingen (ms -> Promise); de tests geven er een zonder pauze
+   * @param hervatTijd hoe lang we wachten tot een stilstaande AudioContext aangaat
+   */
+  constructor({ engine, haal = (url, init) => fetch(url, init), wacht = (ms) => new Promise((r) => setTimeout(r, ms)), hervatTijd = 1500 }) {
     this.engine = engine;
     this.haal = haal;
+    this.wacht = wacht;
+    this.hervatTijd = hervatTijd;
     this.node = null;
     this.id = null;
     this.bestand = null;
@@ -70,6 +80,14 @@ export class Opnemer {
     // De server schrijft 48 kHz in de kop. Draait de context anders, dan zou
     // de opname op de verkeerde snelheid afspelen: liever weigeren.
     if (ctx.sampleRate !== 48000) return this._mislukt(`de audio draait op ${ctx.sampleRate} Hz, opnemen kan alleen op 48000`);
+    // Via de bus (record.start op de APC) is er geen klik geweest die de
+    // AudioContext aanzette. Staat hij stil, dan draait de worklet niet en
+    // neem je niets op. Chrome laat hem zonder eerdere klik op de pagina niet
+    // aan (de belofte blijft dan hangen): niet eeuwig wachten, wel zeggen.
+    if (ctx.state !== 'running') {
+      await Promise.race([Promise.resolve(this.engine.resume?.()).catch(() => {}), this.wacht(this.hervatTijd)]);
+      if (ctx.state !== 'running') return this._mislukt('de audio staat nog stil — klik eerst één keer ergens op de pagina');
+    }
     try {
       await ctx.audioWorklet.addModule(new URL('./opnemer-worklet.js', import.meta.url));
       const res = await this.haal('/api/opname/start', { method: 'POST' });
@@ -119,6 +137,7 @@ export class Opnemer {
           this.videoBytes += data.size;
         } catch (err) {
           this.fout = `videostuk kwijt: ${err.message}`;
+          this.onFout?.(this.fout);
           console.warn('[opname]', this.fout);
         }
       });
@@ -139,8 +158,13 @@ export class Opnemer {
     this._geluid = null;
   }
 
-  /** Stukken strikt op volgorde: de volgende pas als de vorige binnen is. */
+  /**
+   * Stukken strikt op volgorde: de volgende pas als de vorige binnen is. Elk
+   * stuk draagt zijn eigen plek (frames vanaf het begin, van de audioklok):
+   * de server schrijft daar, dus herhalen is veilig en een gat blijft een gat.
+   */
   _verstuur(data, frames) {
+    const frame = this.frames;
     this.frames += frames;
     const id = this.id;
     this._rij = this._rij.then(async () => {
@@ -149,7 +173,7 @@ export class Opnemer {
       let laatste = null;
       for (let poging = 0; poging < 3; poging++) {
         try {
-          const res = await this.haal(`/api/opname/${id}/stuk`, {
+          const res = await this.haal(`/api/opname/${id}/stuk?frame=${frame}`, {
             method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: data,
           });
           if (res.ok) { this.bytes += data.byteLength; return; }
@@ -157,9 +181,9 @@ export class Opnemer {
           laatste = j.fout || `${res.status}`;
           if (j.vol) break;                 // opnieuw proberen helpt niet bij een volle schijf
         } catch (err) { laatste = err.message; }
-        await new Promise((r) => setTimeout(r, 250 * (poging + 1)));
+        await this.wacht(250 * (poging + 1));
       }
-      this.fout = `stuk kwijt: ${laatste}`;
+      this.fout = `stuk kwijt (${(frame / 48000).toFixed(0)} s, wordt stilte): ${laatste}`;
       this.onFout?.(this.fout);
       console.warn('[opname]', this.fout);
     });
@@ -181,10 +205,13 @@ export class Opnemer {
     await this._stopVideo();
     await this._rij;                       // alles wat onderweg was, eerst binnen
     try {
-      const res = await this.haal(`/api/opname/${id}/klaar`, { method: 'POST' });
+      // Het aantal frames erbij: viel het laatste stuk weg, dan vult de server
+      // de staart met stilte en is de WAV even lang als de opname.
+      const res = await this.haal(`/api/opname/${id}/klaar?frames=${this.frames}`, { method: 'POST' });
       const j = await res.json();
       if (!j.ok) return this._mislukt(j.fout);
-      return { ok: true, bestand: j.bestand, duur: j.duur, bytes: j.bytes, video: j.video ?? null, videoBytes: j.videoBytes ?? 0, waarschuwing: this.fout };
+      const waarschuwing = [this.fout, j.waarschuwing].filter(Boolean).join(' — ') || null;
+      return { ok: true, bestand: j.bestand, duur: j.duur, bytes: j.bytes, video: j.video ?? null, videoBytes: j.videoBytes ?? 0, waarschuwing };
     } catch (err) {
       return this._mislukt(`afsluiten mislukt: ${err.message} — het bestand staat er wel, de kop wordt bij de volgende start hersteld`);
     }

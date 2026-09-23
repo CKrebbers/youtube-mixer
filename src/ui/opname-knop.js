@@ -41,6 +41,8 @@ export function opzetOpname({ engine, videoMixer }) {
     delete opnameKnop.dataset.zeker;
     opnameKnop.textContent = 'afronden…';
     const r = await opnemer.stop();
+    // Iets kwijt (stilte), of te lang voor een gewone WAV: niet alleen in een tooltip.
+    if (r.ok && r.waarschuwing) meld(`opname bewaard, let op: ${r.waarschuwing}`, 'fout', 12000);
     opnameKnop.classList.add(r.ok ? 'gelukt' : 'mislukt');
     opnameKnop.textContent = r.ok ? `✓ ${mmss(r.duur)} bewaard` : 'afronden mislukt';
     opnameKnop.title = r.ok
@@ -67,7 +69,9 @@ export function opzetOpname({ engine, videoMixer }) {
   };
   const opnameStop = async () => {
     const r = await opnemer.stop();
-    meld(r.ok ? `opname bewaard: opnames/${r.bestand}` : `afronden mislukt: ${r.fout}`, r.ok ? 'info' : 'fout');
+    if (!r.ok) return meld(`afronden mislukt: ${r.fout}`, 'fout');
+    if (r.waarschuwing) meld(`opname bewaard: opnames/${r.bestand} — let op: ${r.waarschuwing}`, 'fout', 12000);
+    else meld(`opname bewaard: opnames/${r.bestand}`, 'info');
   };
   const wisselSoort = () => { opnameSoort.value = opnameSoort.value === 'video' ? 'audio' : 'video'; opnameSoort.dispatchEvent(new Event('change')); };
 
