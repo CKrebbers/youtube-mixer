@@ -1,6 +1,8 @@
 import { VormLagen } from '../vormen/laag.js';
 import { SYSTEMEN } from '../vormen/systemen.js';
 import { bindVormen, VORM_KNOPPEN } from '../control/actions.js';
+import { Luisteraar } from '../analysis/luisteraar.js';
+import { Router, BRONNEN, BRON_NAAM, DOEL_PLEKKEN } from '../analysis/router.js';
 
 /**
  * De vormlagen op het scherm: een rij onder de video-effecten, alleen als de
@@ -34,7 +36,28 @@ const maakCanvas = (w, h) => (typeof OffscreenCanvas !== 'undefined'
 export function opzetVormen({ videoMixer }) {
   const vormen = new VormLagen({ maakCanvas });
   vormen.lagen.forEach((laag) => videoMixer.voegBeeldlaagToe(laag));
-  bindVormen(vormen);
+
+  // Reageren op de mix. De analyse loopt MEE met het tekenen: vlak voor een
+  // laag zijn beeld maakt, met dezelfde tijd (audioklok min uitgangsvertraging).
+  // Geen eigen timer: een vorm die niet getekend wordt (paneel dicht, laag uit)
+  // hoeft ook niet te reageren, en een timer zou in een achtergrondtab toch
+  // stilstaan net als het beeld. Twee lagen in één beeld = één keer uitlezen
+  // (de luisteraar kijkt naar t). Alle sterktes dicht = de analyser wordt niet
+  // eens gelezen.
+  const engine = videoMixer.engine;
+  const luisteraar = new Luisteraar({ analyser: () => engine.master?.analyser, sampleRate: () => engine.ctx.sampleRate });
+  const router = new Router(vormen.lagen.length);
+  let wasActief = false;
+  for (const laag of vormen.lagen) {
+    const teken = laag.frame.bind(laag);
+    laag.frame = (t) => {
+      const actief = router.actief();
+      if (actief || wasActief) router.pasToe(actief ? luisteraar.lees(t) : null, vormen.lagen);
+      wasActief = actief;
+      return teken(t);
+    };
+  }
+  bindVormen(vormen, router);
 
   const rij = document.createElement('div');
   rij.className = 'vid-vorm';
@@ -49,11 +72,22 @@ export function opzetVormen({ videoMixer }) {
     <span class="vid-sep"></span>
     <div class="knob sm" data-action="video.layer.opacity" data-label="DEKKING" data-value="0.8" data-default="0.8"></div>
     ${Array.from({ length: VORM_KNOPPEN }, (_, k) => `<div class="knob sm vorm-knop" data-action="video.layer.knob.${k + 1}" data-label="" data-value="0.5"></div>`).join('')}
+    <span class="vid-sep"></span>
+    <span class="vorm-reageer">
+    <div class="knob sm" data-action="video.layer.react" data-label="REAGEER" data-value="0" data-default="0" title="hoe sterk de vorm op de mix reageert (APC: device knob 8 in het mapje vorm)"></div>
+    <select class="vorm-reageer-bron" title="waarop: wat de zaal hoort (master)">${BRONNEN.map((b) => `<option value="${b}">${BRON_NAAM[b]}</option>`).join('')}</select>
+    <span class="vorm-pijl">→</span>
+    <select class="vorm-reageer-doel" title="welke knop reageert">${Array.from({ length: DOEL_PLEKKEN }, (_, k) => `<option value="${k + 1}">${k + 1}</option>`).join('')}</select>
+    </span>
   `;
   document.querySelector('#video-panel .vid-fx').after(rij);
 
   const kiezer = rij.querySelector('.vorm-kies-systeem');
   kiezer.addEventListener('change', () => vormen.zetSysteem(kiezer.value));
+  const bron = rij.querySelector('.vorm-reageer-bron');
+  const doel = rij.querySelector('.vorm-reageer-doel');
+  bron.addEventListener('change', () => router.zetBron(vormen.gekozen, bron.value));
+  doel.addEventListener('change', () => router.zetDoel(vormen.gekozen, Number(doel.value)));
 
   /** Wat niet via read() terugkomt: namen, welke laag, aan/uit, mengvorm. */
   function volg() {
@@ -71,10 +105,16 @@ export function opzetVormen({ videoMixer }) {
       if (label) label.textContent = kn ? kn.l.toUpperCase() : '';
       el.title = kn ? `${kn.l} (${kn.min}–${kn.max})` : '';
     });
+    // Route van de gekozen laag; het doel heet naar de knop van deze vorm.
+    const r = router.route(vormen.gekozen);
+    bron.value = r.bron;
+    [...doel.options].forEach((o, k) => { o.textContent = laag.knoppen[k] ? `${k + 1} ${laag.knoppen[k].l}` : `${k + 1} (—)`; });
+    doel.value = String(r.doel);
   }
   vormen.on('change', volg);
+  router.on('change', volg);
   // De Knob-elementen worden pas in opzetVensters opgebouwd: dan pas labels zetten.
   queueMicrotask(volg);
 
-  return { vormen };
+  return { vormen, router, luisteraar };
 }

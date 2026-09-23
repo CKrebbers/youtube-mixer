@@ -689,3 +689,4 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
 .vid-vorm select{font:inherit;font-size:11px;background:var(--bg,#000);color:inherit;border:1px solid var(--line);border-radius:4px;padding:3px 4px;max-width:150px}
 .vorm-aan,.vorm-meng{min-width:52px;text-transform:uppercase;letter-spacing:.08em}
 .vorm-knop.leeg{visibility:hidden}
+.vorm-reageer{display:inline-flex;align-items:center;gap:6px}

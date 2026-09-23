@@ -57,6 +57,7 @@ export class VormLaag {
     this.knoppen = draaiKnoppen(sys);
     this.p = Object.fromEntries(sys.knobs.map((k) => [k.k, k.v]));
     this.stand = this.knoppen.map((k) => naar01(k, k.v));
+    this.mod = this.knoppen.map(() => 0);
     this.s = { o: {}, e: {} };
     this.g = {
       ctx: this.ctx, S: this.maat, D: this.maat / 320, t: 0,
@@ -72,7 +73,18 @@ export class VormLaag {
     const k = this.knoppen[i];
     if (!k) return;
     this.stand[i] = clamp01(v);
-    this.p[k.k] = vanaf01(k, v);
+    this.p[k.k] = vanaf01(k, this.stand[i] + this.mod[i]);
+  }
+  /**
+   * Modulatie (src/analysis/router.js): een offset BOVENOP de knopstand. De
+   * stand (leesKnop, dus scherm, LED-ring en soft-takeover) blijft staan; het
+   * systeem rekent vanaf de volgende stap met stand + offset.
+   */
+  zetModulatie(i, offset) {
+    const k = this.knoppen[i];
+    if (!k || this.mod[i] === offset) return;
+    this.mod[i] = offset;
+    this.p[k.k] = vanaf01(k, this.stand[i] + offset);
   }
   /** De echte waarde, in de eenheid van het systeem: voor het scherm. */
   waarde(i) { const k = this.knoppen[i]; return k ? this.p[k.k] : null; }
