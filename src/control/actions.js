@@ -23,6 +23,10 @@ import { GROEPEN, LAAGNAAM } from './lagen.js';
 
 const registry = new Map();
 
+/** Het rate-bereik van `track.N.tempo`; gelijk aan de klem in deck.setRate. */
+const RATE_MIN = 0.5;
+const RATE_MAX = 2;
+
 export function define(id, type, fn, meta = {}) {
   registry.set(id, { id, type, fn, meta });
 }
@@ -211,6 +215,13 @@ export function bindEngine(engine) {
     // is geklemd: sync mag verder dan het bereik, en dan staat hij tegen de aanslag.
     define(`${n}.pitch`, 'value', (v) => d.setPitch(v),
       { label: `Track ${nr} pitch`, bipolar: true, read: () => d.pitch });
+    // Tempo over het HELE rate-bereik (0,5–2x), lineair: voor een encoder.
+    // Op `pitch` rekent een encoder vanaf de geklemde read, en na een sync
+    // buiten het bereik sprong één tik dan van 1,30 naar 1,16. Deze read is
+    // niet geklemd, dus een tik verzet de rate met step × 1,5, waar hij ook
+    // staat (0,1% = step 0,001/1,5). Het klemmen op 0,5–2 doet setRate.
+    define(`${n}.tempo`, 'value', (v) => d.setRate(RATE_MIN + Math.min(1, Math.max(0, v)) * (RATE_MAX - RATE_MIN)),
+      { label: `Track ${nr} tempo (0,5–2x, voor een encoder)`, read: () => (d.rate - RATE_MIN) / (RATE_MAX - RATE_MIN) });
     define(`${n}.pitch.range`, 'trigger', (on) => { if (on) d.volgendBereik(); },
       { label: `Track ${nr} pitchbereik ±8 / ±16 / ±50%`, read: () => PITCH_BEREIKEN.indexOf(d.pitchBereik) / (PITCH_BEREIKEN.length - 1) });
     define(`${n}.seek`, 'value', (v) => d.seek(v * d.duration),

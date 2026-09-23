@@ -77,6 +77,9 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
 
   const learn = new MidiLearn({ mapping, device });
   midi.on('input', () => { learn.device = device; });
+  // Controller weg (losgetrokken): shift en ingedrukte knoppen loslaten, anders
+  // blijft na terugkomen shift hangen of een bend doorlopen.
+  midi.on('input', (port) => { if (!port) mapping.losgekoppeld(); });
 
   /**
    * Ronde MIDI->audio-latency.

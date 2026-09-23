@@ -56,6 +56,9 @@ export function attachKeyboard(engine, opts = {}) {
     // kreeg door een klik, zette eerder álle toetsen stil tot je ergens
     // anders klikte.
     if (isTypen(e.target)) return;
+    // Cmd/Ctrl/Alt horen bij de browser en het systeem (Cmd+W, Ctrl+Tab),
+    // niet bij de decks. Shift wel: dat is de wis-variant.
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
 
     if (e.code === 'BracketLeft')  { xfadeStep(-1); e.preventDefault(); return; }
     if (e.code === 'BracketRight') { xfadeStep(1);  e.preventDefault(); return; }
@@ -65,14 +68,31 @@ export function attachKeyboard(engine, opts = {}) {
     if (!KEYMAP[e.code]) return;
     e.preventDefault();
     if (held.has(e.code)) return;      // geen auto-repeat op triggers
-    const id = vul(KEYMAP[e.code]);
+    // Onthoud wat er echt ingedrukt is (met shift de wis-variant): loslaten
+    // gaat naar dezelfde action, ook als shift intussen los is.
+    const basis = vul(KEYMAP[e.code]);
+    const id = e.shiftKey ? SHIFT_ALIAS(basis) : basis;
     held.set(e.code, id);
-    invoke(e.shiftKey ? SHIFT_ALIAS(id) : id, true);
+    invoke(id, true);
   });
 
   window.addEventListener('keyup', (e) => {
     const id = held.get(e.code);
     held.delete(e.code);
     if (id) invoke(id, false);
+  });
+
+  // Onder Cmd, bij Cmd+Tab of als het venster zijn focus verliest komt er
+  // geen keyup. Dan bleef de toets in `held` hangen: hij deed daarna niets
+  // meer, en wat hij vasthield werd nooit losgelaten. Dus alles loslaten.
+  const laatAllesLos = () => {
+    const ingedrukt = [...held.values()];
+    held.clear();
+    for (const id of ingedrukt) invoke(id, false);
+  };
+  window.addEventListener('blur', laatAllesLos);
+  const pagina = globalThis.document;
+  pagina?.addEventListener('visibilitychange', () => {
+    if (pagina.visibilityState === 'hidden') laatAllesLos();
   });
 }

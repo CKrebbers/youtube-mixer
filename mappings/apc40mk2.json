@@ -570,17 +570,17 @@
     },
     {
       "in": "cc:0:13",
-      "action": "track.{focus}.pitch",
+      "action": "track.{focus}.tempo",
       "mode": "relative-2c",
-      "label": "tempo",
-      "step": 0.0025
+      "label": "tempo (0,1% per tik)",
+      "step": 0.0006666666666666666
     },
     {
       "in": "cc:0:13",
-      "action": "track.{focus}.pitch",
+      "action": "track.{focus}.tempo",
       "mode": "relative-2c",
-      "label": "tempo + shift (fijn)",
-      "step": 0.0003333333333333333,
+      "label": "tempo + shift (fijn, 0,01% per tik)",
+      "step": 0.00006666666666666667,
       "shift": true
     },
     {

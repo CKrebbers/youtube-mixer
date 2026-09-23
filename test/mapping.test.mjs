@@ -433,6 +433,117 @@ console.log('\nmapjes en shift');
     && terug.rules.get('note:0:32#shift@grid.hotcues').action === 'track.1.hotcue.1.delete');
 }
 
+// ---- tempo-encoder na een sync buiten het pitchbereik ----------------------
+// Sync mag verder dan het bereik (±16%): dan staat de pitch-read tegen de
+// aanslag. Een relatieve encoder op `pitch` rekende vanaf die GEKLEMDE stand
+// en sprong bij één tik van 1,30 naar ~1,16. De encoder moet de RATE een
+// klein vast stapje verzetten, wat het bereik ook is.
+{
+  const bus = await import('../src/control/actions.js');
+  const { clamp } = await import('../src/lib/emitter.js');
+  // Nepdeck met dezelfde formules als deck.js (setRate klemt 0,5–2).
+  const nep = { rate: 1, pitchBereik: 0.16, buigt: 0,
+    setRate(r) { this.rate = clamp(r, 0.5, 2); },
+    setPitch(v) { this.setRate(1 + (clamp(v) * 2 - 1) * this.pitchBereik); },
+    get pitch() { return clamp(0.5 + (this.rate - 1) / (2 * this.pitchBereik)); } };
+  bus.bindEngine({ deck: () => nep, kant: {}, syncMaster: () => null });
+  const tm = new Mapping({ read: bus.read, invoke: bus.invoke, vars: () => ({ focus: 1 }) });
+  tm.load(doc);
+  const tik = (val) => tm.handle(cc(13, val));
+
+  nep.rate = 1.30;
+  tik(1);
+  ok('tempo-encoder: één tik na sync naar 1,30 blijft bij 1,30 (+0,1%)', Math.abs(nep.rate - 1.301) < 1e-6);
+  tik(127);
+  ok('tempo-encoder: één tik terug is weer 1,30', Math.abs(nep.rate - 1.30) < 1e-6);
+  tm.handle(note(98, true));
+  tik(1);
+  tm.handle(note(98, false));
+  ok('tempo-encoder met shift: fijner (+0,01%)', Math.abs(nep.rate - 1.3001) < 1e-6);
+  nep.rate = 1;
+  for (let i = 0; i < 20; i++) tik(1);
+  ok('tempo-encoder: twintig tikken vanaf 1 = +2%', Math.abs(nep.rate - 1.02) < 1e-6);
+  nep.rate = 1.999;
+  tik(5);
+  ok('tempo-encoder klemt op 2x', nep.rate === 2);
+  nep.rate = 0.501;
+  tik(123);
+  ok('tempo-encoder klemt op 0,5x', nep.rate === 0.5);
+}
+
+// ---- controller losgekoppeld -------------------------------------------------
+// Trek je de APC eruit terwijl je shift of een bend vasthoudt, dan komt het
+// loslaten nooit. Zonder opruimen bleef shift aan (elke knop deed daarna de
+// shift-variant) en bleef de track trager lopen.
+{
+  const lm = maak();
+  lm.load({ name: 't', shift: 'note:0:98', rules: [
+    { in: 'note:0:100', action: 'track.1.bend.back' },
+    { in: 'note:0:52', action: 'track.1.loop.toggle' },
+    { in: 'note:0:52', action: 'track.1.loop.exit', shift: true },
+  ] });
+  lm.handle(note(98, true));
+  lm.handle(note(100, true));
+  geraakt.length = 0;
+  let shiftEv = null;
+  lm.on('shift', (a) => { shiftEv = a; });
+  lm.losgekoppeld();
+  ok('losgekoppeld: shift staat uit (en dat wordt gemeld)', lm.shift === false && shiftEv === false);
+  ok('losgekoppeld: niets meer vastgehouden', lm.vast.size === 0);
+  ok('losgekoppeld: een vastgehouden knop wordt losgelaten', geraakt.some(([id, v]) => id === 'track.1.bend.back' && v === false));
+  geraakt.length = 0;
+  lm.handle(note(52, true));
+  ok('na opnieuw aansluiten doet een knop weer het gewone', geraakt[0]?.[0] === 'track.1.loop.toggle');
+}
+
+// ---- toetsenbord: modifiers en hangende toetsen -------------------------------
+// Cmd+Q, Cmd+W, Ctrl+Tab… bedienden de decks (Cmd+W = cue op links). En onder
+// Cmd of Cmd+Tab komt er geen keyup: de toets bleef in `held` hangen, zodat
+// hij daarna niets meer deed (geen auto-repeat) en nooit losgelaten werd.
+{
+  const bus = await import('../src/control/actions.js');
+  const { attachKeyboard } = await import('../src/control/keyboard.js');
+  const log = [];
+  for (const id of ['track.1.play', 'track.1.cue', 'track.1.hotcue.1', 'track.1.hotcue.1.delete']) {
+    bus.define(id, 'trigger', (on) => log.push(`${id}=${on}`));
+  }
+  const win = {}, doc = { visibilityState: 'visible' };
+  const oudW = globalThis.window, oudD = globalThis.document;
+  globalThis.window = { addEventListener: (t, f) => { win[t] = f; } };
+  globalThis.document = { addEventListener: (t, f) => { doc[t] = f; }, get visibilityState() { return doc.visibilityState; } };
+  attachKeyboard({ focus: 'A', xfader: 0.5 }, { venster: (v) => (v === 'L' ? 'A' : 'B') });
+  globalThis.window = oudW; globalThis.document = oudD;
+  const toets = (code, type = 'keydown', mods = {}) => (win[type] || (() => {}))({
+    code, shiftKey: false, metaKey: false, ctrlKey: false, altKey: false, ...mods,
+    target: { matches: () => false }, preventDefault() {} });
+
+  toets('KeyW', 'keydown', { metaKey: true });
+  toets('KeyQ', 'keydown', { ctrlKey: true });
+  toets('KeyA', 'keydown', { altKey: true });
+  ok('toetsenbord: Cmd/Ctrl/Alt + toets bedient geen deck', log.length === 0);
+  toets('KeyW', 'keyup', { metaKey: true });
+
+  toets('KeyA', 'keydown', { shiftKey: true });
+  toets('KeyA', 'keyup');
+  ok('toetsenbord: shift blijft de wis-variant, loslaten naar dezelfde action',
+    log.join() === 'track.1.hotcue.1.delete=true,track.1.hotcue.1.delete=false');
+
+  log.length = 0;
+  toets('KeyQ');
+  ok('toetsenbord: blur-luisteraar bestaat', typeof win.blur === 'function');
+  win.blur?.();
+  ok('toetsenbord: blur laat een ingedrukte toets los', log.join() === 'track.1.play=true,track.1.play=false');
+  toets('KeyQ');
+  ok('toetsenbord: na blur werkt dezelfde toets weer', log.at(-1) === 'track.1.play=true');
+
+  log.length = 0;
+  doc.visibilityState = 'hidden';
+  doc.visibilitychange?.();
+  ok('toetsenbord: tabblad verborgen laat los', log.join() === 'track.1.play=false');
+  toets('KeyQ', 'keyup');
+  ok('toetsenbord: een late keyup stuurt niets dubbel', log.length === 1);
+}
+
 // ---- apc.html: elke knop een uitleg ---------------------------------------
 {
   const { beschrijf } = await import('../src/ui/apc-beschrijf.js');

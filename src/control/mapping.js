@@ -295,6 +295,24 @@ export class Mapping extends Emitter {
     return los;
   }
 
+  /**
+   * De controller is weg (uitgetrokken, poort 'disconnected'). Wat je op dat
+   * moment vasthield krijgt nooit meer een loslaten: shift bleef aan, zodat
+   * elke knop daarna de shift-variant deed, en een bend liet de track trager
+   * lopen. Dus: shift uit, elke ingedrukte drukknop loslaten, en soft-takeover
+   * opnieuw — de knoppen kunnen intussen verdraaid zijn.
+   */
+  losgekoppeld() {
+    if (this.shift) { this.shift = false; this.emit('shift', false); }
+    const vast = [...this.vast.values()];
+    this.vast.clear();
+    for (const { rule, target } of vast) {
+      if (rule.mode === 'trigger' || !rule.mode) this.invoke(target, false);
+    }
+    for (const st of this.state.values()) st.last = null;
+    this.resetTakeover();
+  }
+
   // ---- het echte werk ----------------------------------------------------
 
   /**

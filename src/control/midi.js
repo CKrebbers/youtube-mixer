@@ -83,6 +83,14 @@ export function describe(m) {
   }
 }
 
+/**
+ * Is deze poort er echt? Chrome haalt een losgekoppelde poort NIET uit
+ * inputs/outputs: hij blijft staan met state 'disconnected' en komt later
+ * terug met hetzelfde id. Wie alleen naar `has(id)` kijkt, ziet dan nooit dat
+ * hij weg was — en stuurt bij terugkomst geen init, dus blijven de LED's dood.
+ */
+const aanwezig = (p) => !!p && p.state === 'connected';
+
 const portInfo = (p) => ({
   id: p.id, name: p.name || '(naamloos)',
   manufacturer: p.manufacturer || '', state: p.state, connection: p.connection,
@@ -206,8 +214,9 @@ export class MidiHub extends Emitter {
     };
   }
 
-  input() { return this.access?.inputs.get(this.inputId) ?? null; }
-  output() { return this.access?.outputs.get(this.outputId) ?? null; }
+  /** De gekozen poorten, alleen als ze aangesloten zijn (zie `aanwezig`). */
+  input() { const p = this.access?.inputs.get(this.inputId); return aanwezig(p) ? p : null; }
+  output() { const p = this.access?.outputs.get(this.outputId); return aanwezig(p) ? p : null; }
 
   selectInput(id) {
     this.inputId = id || null;
@@ -230,8 +239,10 @@ export class MidiHub extends Emitter {
     }
     this._autoPick();
 
-    const inNow = this.inputId && this.access.inputs.has(this.inputId) ? this.inputId : null;
-    const outNow = this.outputId && this.access.outputs.has(this.outputId) ? this.outputId : null;
+    // Losgekoppeld telt als weg, ook al staat de poort nog in de lijst: dan
+    // geeft terugkomen (zelfde id) wél een nieuw 'output'-event, dus init.
+    const inNow = this.input() ? this.inputId : null;
+    const outNow = this.output() ? this.outputId : null;
 
     this.emit('ports', this.ports());
     if (inNow !== this._lastIn) { this._lastIn = inNow; this.emit('input', this.input()); }
@@ -251,8 +262,8 @@ export class MidiHub extends Emitter {
    */
   _autoPick() {
     const kies = (map, id, naam) => {
-      if (id && map.has(id)) return null;                  // keuze staat goed
-      const list = [...map.values()];
+      if (id && aanwezig(map.get(id))) return null;        // keuze staat goed
+      const list = [...map.values()].filter(aanwezig);
       if (naam) return list.find((p) => p.name === naam) || null;
       return list.find((p) => this.preferred.test(p.name || ''))
           || list.find((p) => !isThrough(p.name))

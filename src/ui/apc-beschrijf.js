@@ -39,6 +39,7 @@ export function beschrijf(action) {
     if (rest === 'rack.prev') return r('◀ rack', 'vorig rack');
     if (rest === 'bend.back') return r('trager', 'even trager zolang je drukt (bend −4%)');
     if (rest === 'bend.fwd') return r('sneller', 'even sneller zolang je drukt (bend +4%)');
+    if (rest === 'tempo') return r('tempo', 'tempo: 0,1% per tik, met shift 0,01% (ook buiten het pitchbereik)');
     if (rest === 'pitch.range') return r('bereik', 'pitchbereik ±8 / ±16 / ±50%');
     if (rest === 'nudge.back') return r('nudge −', 'even terugduwen');
     if (rest === 'nudge.fwd') return r('nudge +', 'even vooruitduwen');

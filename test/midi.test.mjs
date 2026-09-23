@@ -119,6 +119,43 @@ await new Promise((r) => setTimeout(r, 10));
 inn3.onmidimessage({ data: new Uint8Array([0xb0, 0x13, 44]), timeStamp: performance.now() });
 ok('een echo van een bericht uit de wachtrij wordt nog steeds herkend', gehoord3.length === 0);
 
+// ---- opnieuw aansluiten -----------------------------------------------------
+// Chrome haalt een losgekoppelde poort NIET uit inputs/outputs: hij blijft
+// staan met state 'disconnected', en komt terug met hetzelfde id. Zag de hub
+// dat niet als weg, dan kwam er bij terugkomst geen 'output'-event, geen
+// init-sysex, en bleven de LED's dood.
+{
+  const inn4 = poort('apc-in', 'APC40 mkII'), uit4 = poort('apc-uit', 'APC40 mkII');
+  const access = { inputs: new Map([[inn4.id, inn4]]), outputs: new Map([[uit4.id, uit4]]), onstatechange: null };
+  const oud = navigator.requestMIDIAccess;
+  navigator.requestMIDIAccess = async () => access;
+  const hub4 = new MidiHub();
+  const inEv = [], uitEv = [];
+  hub4.on('input', (p) => inEv.push(p ? p.state : null));
+  hub4.on('output', (p) => uitEv.push(p ? p.state : null));
+  await hub4.init();
+  navigator.requestMIDIAccess = oud;
+  ok('aansluiten: invoer en uitvoer gemeld', inEv.join() === 'connected' && uitEv.join() === 'connected');
+
+  inn4.state = 'disconnected'; uit4.state = 'disconnected';
+  access.onstatechange({ port: uit4 });
+  ok('losgekoppeld (poort blijft in de lijst): invoer en uitvoer weg gemeld', inEv.at(-1) === null && uitEv.at(-1) === null);
+  ok('... en input()/output() geven niets', hub4.input() === null && hub4.output() === null);
+  ok('... en de keuze blijft staan voor als hij terugkomt', hub4.inputId === 'apc-in' && hub4.outputId === 'apc-uit');
+
+  inn4.state = 'connected'; uit4.state = 'connected';
+  access.onstatechange({ port: uit4 });
+  ok('terug met hetzelfde id: opnieuw een output-event (dus init + LED\'s)', uitEv.length === 3 && uitEv.at(-1) === 'connected');
+  ok('... en een input-event', inEv.length === 3 && inEv.at(-1) === 'connected');
+
+  // Een losgekoppelde poort is ook geen kandidaat bij de eerste keuze.
+  const dood = poort('d', 'APC40 mkII'); dood.state = 'disconnected';
+  const levend = poort('l', 'Andere controller');
+  const hub5 = maakHub([dood, levend], []);
+  hub5._sync();
+  ok('een losgekoppelde poort wordt niet automatisch gekozen', hub5.inputId === 'l');
+}
+
 // ---- sysex ----------------------------------------------------------------
 
 hub2.sysex = false;
