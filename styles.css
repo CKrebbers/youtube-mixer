@@ -484,3 +484,127 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .mapje-knoppen{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:11px;color:var(--text)}
 .mapje-knoppen b{font-family:ui-monospace,monospace;color:var(--warn);margin-right:3px}
 
+/* ================= DE SPIEGEL VAN DE APC40 mkII ================= */
+
+/* de track met focus: kop met MAAT, en de acht banen */
+.focus-deck .deck-head{align-items:center}
+.focus-deck.leeg .deck-title{color:var(--dim)}
+.focus-deck .demo-btn{font-size:11px}
+.maat-badge{font:700 8px/1 ui-monospace,monospace;letter-spacing:.1em;color:#03100e;background:var(--warn);
+  padding:3px 5px;border-radius:3px}
+.maat-badge.hidden{display:none}
+.focus-deck .deck-transport{gap:6px}
+.banen{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line);padding-top:6px}
+.baan{display:grid;grid-template-columns:18px minmax(80px,170px) minmax(0,1fr);align-items:center;gap:6px;
+  height:17px;padding:0 4px;border-radius:3px;cursor:pointer;position:relative}
+.baan:hover{background:rgba(255,255,255,.03)}
+.baan canvas{width:100%;height:14px;border-radius:2px;display:block}
+.baan-nr{font:700 11px ui-monospace,monospace;color:var(--dim);text-align:center}
+.baan-titel{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.baan.leeg .baan-titel,.baan.leeg .baan-nr{color:#4a5661}
+.baan.leeg canvas{opacity:.5}
+.baan.focused{background:rgba(74,217,196,.12)}
+.baan.focused .baan-nr{color:var(--a)}
+.baan.tweede .baan-nr{color:var(--b)}
+.baan.speelt .baan-nr::before{content:"▶";position:absolute;left:-2px;font-size:7px;color:var(--a)}
+.baan.maat .baan-titel::after{content:" MAAT";font:700 8px ui-monospace,monospace;color:var(--warn)}
+.baan.drag,.kol.drag,.focus-deck.drag{outline:1px solid var(--a);outline-offset:-1px}
+
+/* gespiegelde knoppen: kleur uit het grid-mapje, licht uit read() */
+button.spg{--kleur:var(--a);position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-width:0;border:1px solid var(--line);border-radius:4px;background:var(--panel2);color:var(--dim);
+  font-size:9px;line-height:1.1;padding:2px 3px;overflow:hidden;transition:background .08s,border-color .08s}
+button.spg:hover{border-color:var(--dim)}
+.spg-t{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spg-naam{display:block;max-width:100%;font-size:7px;letter-spacing:.04em;color:#4f5b66;text-transform:uppercase;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spg[data-modus="hotcues"]{--kleur:var(--m-hotcues)}
+.spg[data-modus="loops"]{--kleur:var(--m-loops)}
+.spg[data-modus="sampler"]{--kleur:var(--m-sampler)}
+.spg[data-modus="video"]{--kleur:var(--m-video)}
+button.spg[data-modus]{border-color:color-mix(in srgb,var(--kleur) 30%,var(--line));
+  color:color-mix(in srgb,var(--kleur) 55%,var(--dim))}
+button.spg[data-licht="half"]{border-color:var(--kleur);color:var(--text);
+  background:color-mix(in srgb,var(--kleur) 22%,var(--panel2))}
+button.spg[data-licht="aan"]{background:var(--kleur);border-color:var(--kleur);color:#061014}
+button.spg[data-licht="aan"] .spg-naam{color:rgba(0,0,0,.55)}
+button.spg.leeg{opacity:.28}
+button.spg.leeg .spg-t{display:none}
+.spg.stuurt-niet{opacity:.55;cursor:not-allowed}
+.knob.spg.leeg,.knob.spg.dof{opacity:.28}
+.spg-knob .knob-label{max-width:72px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* raak je de APC aan, dan licht het element hier even op */
+button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kleur,var(--a))}
+.knob.spg.geraakt .knob-dial{box-shadow:0 0 0 2px #fff,0 0 12px var(--a)}
+
+/* de acht kolommen */
+.kolommen{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+.kol{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px;
+  display:flex;flex-direction:column;gap:3px;min-width:0}
+.kol.focused{border-color:var(--a);box-shadow:0 0 0 1px var(--a) inset}
+.kol.tweede{border-color:#5a4880}
+.kol-kop{display:flex;align-items:center;gap:5px;min-width:0;height:16px}
+.kol-nr{font-weight:800;font-size:13px;color:var(--dim)}
+.kol.focused .kol-nr{color:var(--a)}
+.kol.tweede .kol-nr{color:var(--b)}
+.kol-titel{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);flex:1}
+.kol.leeg .kol-titel{color:#4a5661}
+.kol.maat::after{content:"MAAT";position:absolute;top:5px;right:5px;font:700 8px/1 ui-monospace,monospace;
+  letter-spacing:.1em;color:#03100e;background:var(--warn);padding:2px 4px;border-radius:3px}
+.kol > .spg-knob{align-self:center}
+.kol-pads{display:flex;flex-direction:column;gap:3px}
+.spg-pad{height:22px}
+.spg-knop{min-height:26px}
+.spg-select[data-licht="aan"]{--kleur:var(--a)}
+.kol-2x2{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.spg-mini{height:20px}
+.kol-kanten{display:flex}
+.kol-kant{flex:1;font-size:8px;padding:1px 0;border:1px solid var(--line);color:#4f5b66;margin-left:-1px;background:none}
+.kol-kant:first-child{border-radius:3px 0 0 3px;margin-left:0}.kol-kant:last-child{border-radius:0 3px 3px 0}
+.kol-kant.on[data-kant="A"]{color:var(--a);border-color:var(--a)}
+.kol-kant.on[data-kant="B"]{color:var(--b);border-color:var(--b)}
+.kol-kant.on[data-kant="thru"]{color:var(--text);border-color:var(--dim)}
+.kol-onder{display:flex;justify-content:center;align-items:stretch;gap:6px;height:118px}
+.kol-onder .vfader{flex:0 0 26px;height:100%;min-height:0}
+.meter.vmeter{width:6px;height:100%;display:flex;align-items:flex-end}
+.meter.vmeter i{width:100%;height:0;transition:height .04s linear;
+  background:linear-gradient(0deg,var(--a),#8ee06a 70%,var(--warn) 88%,var(--red))}
+.kol-voet{text-align:center;font-size:10px;color:var(--dim)}
+.kol.focused .kol-voet b{color:var(--a)}
+
+/* het focusdeel: de rechterhelft van de APC */
+.focusdeel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;
+  display:flex;flex-direction:column;gap:6px;min-width:0}
+.fd-kop{font-size:10px;letter-spacing:.12em;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fd-track{color:var(--a)}
+.fd-titel{color:var(--text);letter-spacing:0}
+.fd-body{display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px}
+.fd-scenes{display:flex;flex-direction:column;gap:4px;border-right:1px dashed var(--line);padding-right:6px}
+.fd-scene-knoppen{display:flex;flex-direction:column;gap:3px}
+.spg-scene{height:24px;border-radius:12px !important}
+.fd-scenes > .spg-knob{align-self:center}
+.fd-scenes .kol-onder{height:150px}
+.fd-rechts{display:flex;flex-direction:column;gap:8px;min-width:0}
+.fd-transport{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}
+.fd-tempo{grid-column:4;grid-row:2 / 4;display:flex;align-items:center;justify-content:center}
+.fd-device{border:1px solid var(--line);border-radius:6px;padding:6px}
+.focusdeel[data-laag="rack"] .fd-device{border-color:var(--b)}
+.fd-device-kop{display:flex;align-items:baseline;gap:6px;font-size:9px;letter-spacing:.12em;color:var(--dim);min-width:0}
+.fd-laag{color:var(--a)}
+.focusdeel[data-laag="rack"] .fd-laag{color:var(--b)}
+.fd-laag-uitleg{letter-spacing:0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fd-knobs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 6px;margin:6px 0;justify-items:center}
+.fd-devknoppen{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}
+.fd-pijlen{display:flex;align-items:center;gap:6px}
+.fd-pijlen > .spg{flex:1}
+.fd-kruis{display:grid;grid-template-columns:repeat(3,24px);grid-template-rows:repeat(3,18px);gap:1px}
+.fd-kruis .spg{padding:0}
+.pijl-op{grid-column:2;grid-row:1}.pijl-links{grid-column:1;grid-row:2}
+.pijl-rechts{grid-column:3;grid-row:2}.pijl-neer{grid-column:2;grid-row:3}
+.spg-pijl .spg-t{display:none}
+.spg-teken{font-style:normal;font-size:9px}
+.spg-shift[data-licht="aan"]{--kleur:#fff}
+.focusdeel .fx-row{margin:0;gap:5px}
+.focusdeel .fx-rack{max-width:150px}
+.focusdeel .sends{margin-top:0}
+.focusdeel .xfader-row .xfader{flex:1}
