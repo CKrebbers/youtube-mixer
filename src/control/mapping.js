@@ -199,7 +199,7 @@ export class Mapping extends Emitter {
 
     switch (rule.mode) {
       case 'absolute':   return this._absolute(rule, msg, target);
-      case 'relative-2c':  return this._relative(rule, msg, target, (v) => (v > 64 ? v - 128 : v));
+      case 'relative-2c':  return this._relative(rule, msg, target, (v) => (v >= 64 ? v - 128 : v));   // 64 = -64 (protocol v1.2 p37)
       case 'relative-bin': return this._relative(rule, msg, target, (v) => v - 64);
       default:           return this._trigger(rule, msg, target);
     }

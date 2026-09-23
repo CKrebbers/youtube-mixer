@@ -1,4 +1,4 @@
-import { Emitter, clamp } from '../lib/emitter.js';
+import { Emitter, clamp, piek } from '../lib/emitter.js';
 import { Deck } from './deck.js';
 import { createMasterChain, xfaderGains, faderGain } from './audio-graph.js';
 
@@ -14,6 +14,9 @@ export const DECK_IDS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
  * vroeger, en doen de andere zes niets met de crossfader tot je het vraagt.
  */
 export const XFADE_KANTEN = ['A', 'B', 'thru'];
+/** Tracknummer van een deck, voor meldingen: A = 1, B = 2, … */
+const nrVan = (id) => DECK_IDS.indexOf(id) + 1;
+
 const STANDAARD_KANT = { A: 'A', B: 'B' };
 
 /**
@@ -124,8 +127,8 @@ export class Engine extends Emitter {
    */
   sync(id) {
     const slave = this.decks[id];
-    if (!slave?.buffer) return { ok: false, reden: `deck ${id} is leeg` };
-    if (!slave.grid) return { ok: false, reden: `deck ${id} heeft nog geen beatgrid` };
+    if (!slave?.buffer) return { ok: false, reden: `track ${nrVan(id)} is leeg` };
+    if (!slave.grid) return { ok: false, reden: `track ${nrVan(id)} heeft nog geen beatgrid — tik eerst het tempo (TAP)` };
     const master = this.syncMaster(id);
     if (!master) return { ok: false, reden: 'geen andere track met een beatgrid om naar te syncen' };
 
@@ -138,7 +141,7 @@ export class Engine extends Emitter {
 
     if (!master.playing || !slave.playing) {
       return { ok: true, tempo: true, fase: false, rate, bpm: doelBpm, master: master.id,
-        reden: 'tempo gelijk; fase pas als beide decks spelen' };
+        reden: 'tempo gelijk; de fase pas als beide tracks spelen' };
     }
 
     const beat = slave.grid.beatLength;
@@ -158,21 +161,14 @@ export class Engine extends Emitter {
   faseVerschil(id) {
     const a = this.decks[id], b = this.syncMaster(id);
     if (!a?.grid || !b?.grid || !a.buffer || !b.buffer) return null;
-    const beat = a.grid.beatLength * a.rate;        // hoorbare tellengte
+    const beat = a.grid.beatLength / a.rate;        // hoorbare tellengte (sneller = korter)
     let d = (a.grid.phase(a.position) - b.grid.phase(b.position)) * beat;
     if (d > beat / 2) d -= beat;
     if (d < -beat / 2) d += beat;
     return d;
   }
 
-  masterPeak() {
-    const a = this.master.analyser;
-    const buf = new Uint8Array(a.fftSize);
-    a.getByteTimeDomainData(buf);
-    let peak = 0;
-    for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128) / 128);
-    return peak;
-  }
+  masterPeak() { return piek(this.master.analyser); }
 
   /**
    * Platte state-snapshot. De UI leest hem per frame; in fase 2 leest de

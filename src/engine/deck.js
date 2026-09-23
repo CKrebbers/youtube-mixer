@@ -1,4 +1,4 @@
-import { Emitter, clamp } from '../lib/emitter.js';
+import { Emitter, clamp, piek } from '../lib/emitter.js';
 import { createDeckChain, setEqBand, setBipolarFilter, faderGain } from './audio-graph.js';
 import { Beatgrid } from './beatgrid.js';
 import { BufferBron, StreamBron } from './bron.js';
@@ -69,6 +69,7 @@ export class Deck extends Emitter {
     this.bron?.vernietig();
     this.bron = bron;
     bron.onEinde = () => this.emit('change', this);
+    bron.onFout = (tekst) => this.emit('fout', tekst);
     // Vaste punten: hier springt de DJ heen, dus daar mag een streamende bron
     // geen gat hebben. Een BufferBron negeert het, die heeft alles al.
     bron.vastpunten = () => [this.cuePoint, ...this.hotcues, this.loop?.start ?? null];
@@ -89,8 +90,14 @@ export class Deck extends Emitter {
     if (!(this.bron instanceof StreamBron)) this._zetBron(new StreamBron(this.ctx, this.chain.input, opties));
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
-    await this.bron.laad({ url });
+    try {
+      await this.bron.laad({ url });
+    } catch (err) {
+      if (err.vervangen) return false;      // er kwam een nieuwere laad overheen: die wint
+      throw err;
+    }
     this._naLaden(title);
+    return true;
   }
 
   _naLaden(title) {
@@ -98,7 +105,6 @@ export class Deck extends Emitter {
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.grid = null;
-    this.peaks = null;
     this.loopBeats = null;
     this.emit('load', this);
   }
@@ -219,6 +225,7 @@ export class Deck extends Emitter {
   setLoop(seconds) {
     if (!this.buffer) return;
     const start = this.position;
+    if (!this._loopMag(start, Math.min(start + seconds, this.duration))) return;
     this.bron.setLoop(start, Math.min(start + seconds, this.duration));
     this.loopBeats = null;
     this.emit('change', this);
@@ -244,7 +251,15 @@ export class Deck extends Emitter {
     this.setLoopRange(this.loop.start, Math.min(this.loop.start + len, this.duration));
   }
 
+  /**
+   * Een loop korter dan 20 ms is geen loop maar een fout: aan het trackeinde
+   * geeft "loop 4s" start == einde, en een AudioBufferSourceNode speelt dan
+   * volgens de spec de HELE buffer eindeloos. Weigeren.
+   */
+  _loopMag(start, end) { return Number.isFinite(start) && Number.isFinite(end) && end - start >= 0.02; }
+
   setLoopRange(start, end) {
+    if (!this._loopMag(start, end)) return false;
     this.bron.setLoop(start, end);
     this.emit('change', this);
   }
@@ -269,12 +284,5 @@ export class Deck extends Emitter {
     if (!only || only === 'fader')  c.fader.gain.setTargetAtTime(faderGain(u.fader), now, 0.008);
   }
 
-  level() {
-    const a = this.chain.analyser;
-    const buf = new Uint8Array(a.fftSize);
-    a.getByteTimeDomainData(buf);
-    let peak = 0;
-    for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128) / 128);
-    return peak;
-  }
+  level() { return piek(this.chain.analyser); }
 }

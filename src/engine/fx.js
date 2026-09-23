@@ -96,13 +96,24 @@ export function zetDoel(param, waarde, ctx, tau = 0.01) {
   }
 }
 
+/**
+ * Een equal-power curve van `van` naar `naar`, ook als er nog een loopt.
+ *
+ * cancelScheduledValues haalt alleen weg wat op of na `nu` BEGINT; een curve
+ * die al loopt blijft staan, en een nieuwe erbovenop gooit NotSupportedError.
+ * Twee keer snel van rack wisselen (binnen de 40 ms van een kruisfade) deed
+ * precies dat — en het oude vangnet gooide dezelfde fout nog eens. Nu eerst
+ * de lopende curve afbreken op zijn huidige waarde, en vanaf daar verder.
+ */
 function zetCurve(param, van, naar, ctx, duur = FADE) {
   const nu = ctx.currentTime;
   try {
-    param.cancelScheduledValues?.(nu);
+    if (param.cancelAndHoldAtTime) { param.cancelAndHoldAtTime(nu); van = param.value; }
+    else param.cancelScheduledValues?.(nu);
     param.setValueCurveAtTime(fadeCurve(van, naar), nu, duur);
   } catch (_) {
-    param.setTargetAtTime(naar, nu, duur / 3);   // vangnet
+    // Laatste vangnet: nooit de aanroeper laten struikelen.
+    try { param.setTargetAtTime(naar, nu, duur / 3); } catch (__) { try { param.value = naar; } catch (___) {} }
   }
 }
 
@@ -219,6 +230,7 @@ export const EFFECTEN = [
         // Hoe lang blijft er nog iets klinken als de invoer stopt?
         staart: () => Math.min(8, staat.tijd * (staat.feedback > 0.05
           ? Math.log(0.001) / Math.log(staat.feedback) : 1)),
+        vernietig: () => { clearTimeout(timer); timer = null; wachtend = null; },
         // Voor de tests: welke kop klinkt en op welke tijd.
         _kop: () => ({ actief, tijden: koppen.map((k) => k.delayTime.value), gains: gains.map((g) => g.gain.value) }),
       };
@@ -351,20 +363,43 @@ export const EFFECTEN = [
         return buf;
       };
 
+      /*
+       * Opnieuw op de tel zetten — bij seek, hotcue, sync, tempo, grid.
+       *
+       * Tot 23 september 2026 stopte dit de oude puls meteen en zette het de
+       * poort hard op 0 tot de nieuwe op de volgende tel begon: een klik en
+       * tot een tel stilte, bij elke beweging van de tempofader opnieuw. Nu
+       * loopt de oude puls door TOT het moment dat de nieuwe begint, en
+       * wordt alles op de audioklok ingepland in plaats van nu gezet.
+       */
       const herstart = () => {
         const k = klok();
-        if (bron) { try { bron.stop(); } catch (_) {} bron.disconnect(); bron = null; }
-        if (!k || !k.beatLengte) { poort.gain.value = 1; return; }
+        const nu = ctx.currentTime;
+        const oud = bron;
+        bron = null;
+        if (!k || !k.beatLengte) {
+          // Geen maat: poort open. De oude puls pas stoppen als de poort
+          // weer 1 is, anders klikt het.
+          poort.gain.cancelScheduledValues?.(nu);
+          poort.gain.setValueAtTime(oud ? 0 : poort.gain.value, nu);
+          poort.gain.linearRampToValueAtTime(1, nu + 0.005);
+          if (oud) { try { oud.stop(nu + 0.006); } catch (_) {} }
+          return;
+        }
         const periode = k.beatLengte * delingVan(staat.deling).tellen;
         if (!(periode > 0.005)) return;
+        const start = Math.max(k.ankerCtx ?? nu, nu);
         const src = ctx.createBufferSource();
         src.buffer = maakBuffer(periode);
         src.loop = true;
-        // De gain van de poort wordt volledig door de buffer bepaald.
-        poort.gain.value = 0;
         src.connect(poort.gain);
-        const start = k.ankerCtx ?? ctx.currentTime;
-        try { src.start(Math.max(start, ctx.currentTime)); } catch (_) { src.start(); }
+        // De gain van de poort wordt volledig door de buffer bepaald — vanaf
+        // `start`. Tot dan draait de oude puls, of (eerste keer) staat hij open.
+        poort.gain.cancelScheduledValues?.(nu);
+        poort.gain.setValueAtTime(oud ? 0 : 1, nu);
+        poort.gain.setValueAtTime(0, start);
+        try { src.start(start); } catch (_) { src.start(); }
+        if (oud) { try { oud.stop(start); } catch (_) {} }
         bron = src;
       };
 
@@ -381,6 +416,7 @@ export const EFFECTEN = [
         },
         heranker: herstart,
         staart: () => 0,
+        vernietig: () => { if (bron) { try { bron.stop(); } catch (_) {} bron = null; } },
       };
     },
   },
@@ -433,6 +469,7 @@ export const EFFECTEN = [
           else if (naam === 'feedback') fb.gain.setTargetAtTime(t * 0.75, now, 0.02);
         },
         staart: () => 0.05,
+        vernietig: () => { try { lfo.stop(); } catch (_) {} },
       };
     },
   },
@@ -471,6 +508,7 @@ export const EFFECTEN = [
           }
         },
         staart: () => 0,
+        vernietig: () => { try { osc.stop(); } catch (_) {} },
       };
     },
   },
@@ -559,8 +597,10 @@ export const EFFECTEN = [
       });
 
       // Modulatie: vier trage oscillatoren, elk op twee lijnen in tegenfase.
+      const lfos = [];
       for (let k = 0; k < 4; k++) {
         const lfo = ctx.createOscillator();
+        lfos.push(lfo);
         lfo.frequency.value = 0.11 + k * 0.07;
         const diep = ctx.createGain(); diep.gain.value = 0.00035;
         const tegen = ctx.createGain(); tegen.gain.value = -0.00035;
@@ -597,6 +637,7 @@ export const EFFECTEN = [
         },
         // Bevroren houdt hij oneindig vast; de opruiming wacht dan niet eeuwig.
         staart: () => (staat.vast ? 1 : Math.min(30, staat.rt60)),
+        vernietig: () => { for (const o of lfos) { try { o.stop(); } catch (_) {} } },
         _staat: () => ({ ...staat, gains: lijnen.map((l) => l.g.gain.value), invoer: invoer.gain.value }),
       };
     },
@@ -659,6 +700,14 @@ export function bouwKeten(ctx, chain, klok = GEEN_KLOK) {
     /** Opnieuw op de tel zetten: na seek, hotcue, loop, tempo- of gridwijziging. */
     heranker() {
       for (const s of slots.values()) s.inst.heranker?.();
+    },
+    /**
+     * Echt opruimen. Losmaken is niet genoeg: een oscillator of lopende bron
+     * houdt zijn hele eiland aan nodes in leven, en elke rackwissel of
+     * ketenwijziging in de editor lekte zo een complete keten.
+     */
+    vernietig() {
+      for (const s of slots.values()) s.inst.vernietig?.();
     },
   };
 }
@@ -768,6 +817,9 @@ export class InsertSlot {
     return { fouten };
   }
 
+  /** Terug naar het standaardrack (één delay), altijd opnieuw — ook als er al een delay staat. */
+  standaard() { this.zetRack(rackVanEffect(effectVan('delay'))); }
+
   /** Eén effect erin, als rack met één macro per parameter. */
   zetEffect(id, { params = null } = {}) {
     const effect = effectVan(id);
@@ -783,6 +835,7 @@ export class InsertSlot {
     const i = this.oud.indexOf(keten);
     if (i < 0) return;
     this.oud.splice(i, 1);
+    keten.node.vernietig?.();
     try {
       this.in.disconnect(keten.node.in);
       keten.node.out.disconnect();

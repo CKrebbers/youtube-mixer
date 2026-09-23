@@ -1,13 +1,24 @@
 // Minimale Web Audio-mock om de engine-logica te testen zonder browser.
 let NOW = 0;
 const LIVE = new Set();   // bronnen die nu geluid maken
-const param = (v=0) => ({ value:v,
-  setTargetAtTime(x){ this.value=x; },
-  setValueAtTime(x){ this.value=x; },
-  linearRampToValueAtTime(x){ this.value=x; },
-  // De echte API kent deze twee ook; zonder hen kan de kruisfade niet getest.
-  setValueCurveAtTime(c){ this.value = c[c.length-1]; },
-  cancelScheduledValues(){},
+// Net zo streng als Chrome: automatisering die overlapt met een lopende
+// setValueCurveAtTime gooit een NotSupportedError. De oude mock slikte dat,
+// en verborg zo precies de fout die live je hele aanroepketen meenam.
+const overlapFout = () => Object.assign(new Error('NotSupportedError: overlapt met een lopende setValueCurveAtTime'), { name: 'NotSupportedError' });
+let OVERLAP_FOUTEN = 0;
+const param = (v=0) => ({ value:v, _curves:[],
+  _check(t){ const tt = t ?? NOW; for (const c of this._curves) if (tt >= c.a && tt < c.b) { OVERLAP_FOUTEN++; throw overlapFout(); } },
+  setTargetAtTime(x,t){ this._check(t); this.value=x; },
+  setValueAtTime(x,t){ this._check(t); this.value=x; },
+  linearRampToValueAtTime(x,t){ this._check(t); this.value=x; },
+  setValueCurveAtTime(c,t=NOW,d=0){
+    for (const k of this._curves) if (t < k.b && t + d > k.a) { OVERLAP_FOUTEN++; throw overlapFout(); }
+    this._curves.push({ a:t, b:t+d }); this.value = c[c.length-1];
+  },
+  // Volgens de spec: alleen wat op of na t BEGINT verdwijnt. Een curve die al
+  // loopt blijft staan — daarom bestaat cancelAndHoldAtTime.
+  cancelScheduledValues(t=NOW){ this._curves = this._curves.filter((c) => c.a < t); },
+  cancelAndHoldAtTime(t=NOW){ this._curves = this._curves.filter((c) => c.a < t).map((c) => ({ a:c.a, b:Math.min(c.b, t) })); },
 });
 const node = (type) => ({
   type, gain:param(1), frequency:param(1000), Q:param(1), detune:param(0),
@@ -699,6 +710,69 @@ console.log('\nglijden');
   NOW = 0;
 }
 
+// ---- ronde 1 van de verbeteringen (23 sep): engine-correctheid -------------
+
+console.log('\nengine-correctheid');
+{
+  const { Beatgrid, TapTempo } = await import('../src/engine/beatgrid.js');
+  // Tap op +5% pitch: je tikt wat je HOORT, het grid staat in tracktijd.
+  const dT = eng.deck('G');
+  dT.load(buf, 'tap');
+  dT.setRate(1.05);
+  let ms = 0;
+  const echtNu = performance.now;
+  performance.now = () => ms;
+  for (let i = 0; i < 6; i++) { invoke('track.7.tap', true); invoke('track.7.tap', false); ms += 60000 / 126; }
+  performance.now = echtNu;
+  ok('tap op +5%: 126 gehoord wordt 120 op het grid', dT.grid && Math.abs(dT.grid.bpm - 120) < 0.01);
+  dT.setRate(1);
+
+  // Loop korter dan 20 ms wordt geweigerd (aan het einde gaf dat een eindeloze track).
+  ok('loop van 0 lang wordt geweigerd', dT.setLoopRange(2, 2) === false && !dT.loop);
+
+  // ctxTimeOf binnen een loop die al rondging: niet in het verleden.
+  const { ctxTijdVan } = await import('../src/engine/stream-kern.js');
+  const seg = { T: 0, P: 1, R: 1, loop: { start: 1, end: 3 }, speelt: true };
+  const t = ctxTijdVan(seg, 1.5, 4.9);            // positie nu 1,9 (derde rondgang): 1,5 is net voorbij
+  ok('volgende keer tracktijd 1,5 in een loop: in de toekomst, na het vouwen', Math.abs(t - 6.5) < 1e-9);
+  ok('nog vóór ons in deze rondgang: gewoon het verschil', Math.abs(ctxTijdVan(seg, 2.5, 4.9) - 5.5) < 1e-9);
+
+  const { clamp } = await import('../src/lib/emitter.js');
+  ok('clamp(NaN) is de ondergrens, geen NaN', clamp(NaN) === 0 && clamp(Infinity) === 1);
+
+  // Oude ketens worden echt opgeruimd: oscillatoren stoppen.
+  const vf = eng.deck('H').fx;
+  let gestopt = 0;
+  vf.zetRack({ name: 'r', chain: [{ slot: 'a', type: 'phaser', params: {} }], macros: [] });
+  for (const s of vf.keten.node.slots.values()) { const e = s.inst.vernietig; s.inst.vernietig = () => { gestopt++; e(); }; }
+  const oudeKeten = vf.keten;
+  vf.zetRack({ name: 's', chain: [], macros: [] });
+  vf._ruimOp(oudeKeten);
+  ok('rackwissel stopt de oscillator van de oude keten', gestopt === 1);
+
+  // Gate: bij heranker loopt de oude puls door tot de nieuwe op de tel begint.
+  const { effectVan } = await import('../src/engine/fx.js');
+  const gctx = new AudioContext();
+  const bronnen = [];
+  const maakBron = gctx.createBufferSource.bind(gctx);
+  gctx.createBufferSource = () => {
+    const b = maakBron(); b.gestartOp = null; b.gestoptOp = null;
+    const st = b.start, sp = b.stop;
+    b.start = (t) => { b.gestartOp = t; st(t); };
+    b.stop = (t) => { b.gestoptOp = t ?? 'nu'; sp(t); };
+    bronnen.push(b); return b;
+  };
+  let anker = 10.4;
+  NOW = 10;
+  const gate = effectVan('gate').bouw(gctx, { klok: () => ({ beatLengte: 0.5, ankerCtx: anker }) });
+  gate.zet('deling', 0.4, NOW);
+  anker = 10.9;
+  gate.heranker();
+  ok('gate: nieuwe puls start op de volgende tel', bronnen[1]?.gestartOp === 10.9);
+  ok('gate: de oude puls loopt door tot precies dat moment (geen gat)', bronnen[0]?.gestoptOp === 10.9);
+  NOW = 0;
+}
+
 // ---- acht tracks ------------------------------------------------------------
 // Eén per fader. Wat voor twee werkte moet precies zo blijven klinken.
 
@@ -792,6 +866,22 @@ console.log('\ntoetsenbord');
   ok('spatie speelt de track met focus', dC.playing !== voorSpatie);
   if (dC.playing) toets('Space');
 }
+
+{
+  // Twee keer snel wisselen, 10 ms na elkaar, zoals live: de eerste kruisfade
+  // (40 ms) loopt dan nog. In Chrome gooit dat als de code het niet opvangt.
+  const sf = eng.deck('C').fx;
+  let gegooid = null;
+  try {
+    NOW = 50; sf.zetEffect('filter');
+    NOW = 50.01; sf.zetEffect('phaser');
+    NOW = 50.02; sf.setMix(0.7); sf.setBypass(true); sf.setBypass(false);
+    NOW = 50.025; sf.zetEffect('crush');
+  } catch (e) { gegooid = e; }
+  ok(`snel wisselen midden in een kruisfade gooit niet${gegooid ? ': ' + gegooid.message : ''}`, gegooid === null);
+  NOW = 0;
+}
+ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

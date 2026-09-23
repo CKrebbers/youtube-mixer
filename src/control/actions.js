@@ -15,6 +15,7 @@
  */
 import { Beatgrid, TapTempo } from '../engine/beatgrid.js';
 import { EFFECTEN } from '../engine/fx.js';
+import { clamp } from '../lib/emitter.js';
 import { DECK_IDS, XFADE_KANTEN } from '../engine/engine.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
@@ -28,9 +29,21 @@ export function define(id, type, fn, meta = {}) {
 export function invoke(id, value) {
   const a = registry.get(id);
   if (!a) { console.warn('[actions] onbekend:', id); return false; }
-  a.fn(value);
+  // Een action die gooit mag de aanroeper niet meenemen: de MIDI-hub stuurt
+  // het bericht daarna nog naar de monitor, en juist dán wil je het zien.
+  try {
+    a.fn(value);
+  } catch (err) {
+    console.error(`[actions] ${id} faalde:`, err);
+    for (const f of foutLuisteraars) { try { f(id, err); } catch (_) {} }
+    return false;
+  }
   return true;
 }
+
+const foutLuisteraars = new Set();
+/** Laat weten als een action faalt, om het op het scherm te zetten. */
+export function bijFout(fn) { foutLuisteraars.add(fn); return () => foutLuisteraars.delete(fn); }
 
 /**
  * Huidige stand van een action, 0..1. Null als die er niet is.
@@ -90,7 +103,7 @@ export function bindEngine(engine) {
     define(`${n}.sync`, 'trigger', (on) => {
       if (!on) return;
       const r = engine.sync(id);
-      if (!r.ok) console.warn(`[sync] deck ${id}: ${r.reden}`);
+      if (!r.ok) engine.emit('melding', { tekst: `sync track ${nr}: ${r.reden}`, soort: 'fout' });
       engine.emit('sync', { id, ...r });
     }, { label: `Track ${nr} sync naar de luidste track`,
          read: () => {
@@ -107,12 +120,17 @@ export function bindEngine(engine) {
       if (!on || !d.buffer) return;
       const r = tap.tap(performance.now(), d.position);
       if (!r) return;
-      if (d.grid) d.grid.setBpm(r.bpm, { ankerTijd: r.firstBeat ?? d.position });
-      else d.setGrid(new Beatgrid({ bpm: r.bpm, firstBeat: r.firstBeat ?? d.position }));
+      // Je tikt mee met wat je HOORT (grid × rate), maar het grid staat in
+      // TRACKTIJD. Zonder deze deling stond het grid op +5% pitch 5% fout,
+      // en de verfijning op de server zoekt maar binnen 3% en kon het niet
+      // meer rechtzetten.
+      const bpm = r.bpm / (d.rate || 1);
+      if (d.grid) d.grid.setBpm(bpm, { ankerTijd: r.firstBeat ?? d.position });
+      else d.setGrid(new Beatgrid({ bpm, firstBeat: r.firstBeat ?? d.position }));
       d.emit('change', d);
       // De UI mag dit door de server laten verfijnen: jouw tap geeft het
       // octaaf, de analyse haalt er honderdsten van een bpm van.
-      engine.emit('tap', { deck: id, bpm: r.bpm, taps: r.taps });
+      engine.emit('tap', { deck: id, bpm, taps: r.taps });
     }, { label: `Track ${nr} tap tempo`, read: () => (d.grid ? 1 : 0) });
 
     define(`${n}.grid.here`, 'trigger', (on) => {
@@ -159,7 +177,9 @@ export function bindEngine(engine) {
     define(`${n}.nudge.fwd`, 'trigger', (on) => { if (on) d.nudge(0.05); }, { label: `Track ${nr} nudge +` });
 
     define(`${n}.pitch`, 'value', (v) => d.setRate(0.92 + v * 0.16),
-      { label: `Track ${nr} pitch ±8%`, bipolar: true, read: () => (d.rate - 0.92) / 0.16 });
+      // Sync mag verder dan ±8% (0,5–2); de read blijft binnen 0..1, anders
+      // raken fader en soft-takeover van slag.
+      { label: `Track ${nr} pitch ±8%`, bipolar: true, read: () => clamp((d.rate - 0.92) / 0.16) });
     define(`${n}.seek`, 'value', (v) => d.seek(v * d.duration),
       { label: `Track ${nr} scrub`, read: () => (d.duration ? d.position / d.duration : 0) });
 
