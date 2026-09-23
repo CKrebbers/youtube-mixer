@@ -1,6 +1,7 @@
 // Mapping-laag zonder browser: geen Web MIDI, geen DOM, geen engine nodig.
 // Precies dat is de winst van de scheiding — dit is allemaal pure logica.
 import { readFileSync } from 'node:fs';
+import { trackVanDeck } from '../src/control/actions.js';
 
 const { Mapping, resolveTarget } = await import('../src/control/mapping.js');
 const apc = (await import('../src/control/devices/apc40mk2.js')).default;
@@ -15,7 +16,7 @@ const maak = (focus = 'A') => {
   const m = new Mapping({
     read: (id) => (id in stand ? stand[id] : null),
     invoke: (id, v) => { geraakt.push([id, v]); if (typeof v === 'number') stand[id] = v; },
-    vars: () => ({ focus: m._focus }),
+    vars: () => ({ focus: trackVanDeck(m._focus) }),
   });
   m._focus = focus;
   return m;
@@ -30,11 +31,11 @@ const res = m.load({
   name: 'test', device: 'apc40mk2',
   rules: [
     { in: 'cc:0:15', action: 'mixer.xfader', mode: 'absolute' },
-    { in: 'cc:0:16', action: 'deck.{focus}.filter', mode: 'absolute' },
-    { in: 'cc:0:17', action: 'deck.{focus}.low', mode: 'relative-2c' },
-    { in: 'cc:0:18', action: 'deck.A.high', mode: 'relative-bin' },
-    { in: 'cc:0:19', action: 'deck.A.fader', mode: 'absolute', invert: true },
-    { in: 'note:0:91', action: 'deck.{focus}.play' },
+    { in: 'cc:0:16', action: 'track.{focus}.filter', mode: 'absolute' },
+    { in: 'cc:0:17', action: 'track.{focus}.low', mode: 'relative-2c' },
+    { in: 'cc:0:18', action: 'track.1.high', mode: 'relative-bin' },
+    { in: 'cc:0:19', action: 'track.1.fader', mode: 'absolute', invert: true },
+    { in: 'note:0:91', action: 'track.{focus}.play' },
     { in: 'rommel', action: 'x', mode: 'bestaat-niet' },
     { in: 'cc:0:20' },
   ],
@@ -46,7 +47,7 @@ ok('onbekende signature doet niets', m.handle(cc(99, 64)) === null);
 
 // ---- {focus} --------------------------------------------------------------
 
-ok('resolveTarget vult focus in', resolveTarget('deck.{focus}.filter', { focus: 'B' }) === 'deck.B.filter');
+ok('resolveTarget vult focus in', resolveTarget('track.{focus}.filter', { focus: 2 }) === 'track.2.filter');
 ok('resolveTarget laat onbekende variabele staan', resolveTarget('deck.{xyz}.a', { focus: 'B' }) === 'deck.{xyz}.a');
 
 // ---- trigger --------------------------------------------------------------
@@ -55,12 +56,12 @@ geraakt.length = 0;
 m.handle(note(91, true));
 m.handle(note(91, false));
 ok('note on -> true, note off -> false',
-  geraakt.length === 2 && geraakt[0][0] === 'deck.A.play' && geraakt[0][1] === true && geraakt[1][1] === false);
+  geraakt.length === 2 && geraakt[0][0] === 'track.1.play' && geraakt[0][1] === true && geraakt[1][1] === false);
 
 m._focus = 'B';
 geraakt.length = 0;
 m.handle(note(91, true));
-ok('trigger volgt de focus', geraakt[0][0] === 'deck.B.play');
+ok('trigger volgt de focus', geraakt[0][0] === 'track.2.play');
 m._focus = 'A';
 
 // ---- wildcard-kanaal ------------------------------------------------------
@@ -69,16 +70,16 @@ m._focus = 'A';
 
 const mW = maak();
 mW.load({ rules: [
-  { in: 'cc:*:16', action: 'deck.A.trim', mode: 'absolute', takeover: 1 },
-  { in: 'cc:0:16', action: 'deck.A.high', mode: 'absolute', takeover: 1 },
+  { in: 'cc:*:16', action: 'track.1.trim', mode: 'absolute', takeover: 1 },
+  { in: 'cc:0:16', action: 'track.1.high', mode: 'absolute', takeover: 1 },
 ] });
 geraakt.length = 0;
 mW.handle(cc(16, 100, 0));
-ok('exacte regel gaat voor de wildcard', geraakt.at(-1)[0] === 'deck.A.high');
+ok('exacte regel gaat voor de wildcard', geraakt.at(-1)[0] === 'track.1.high');
 mW.handle(cc(16, 100, 8));
-ok('wildcard vangt kanaal 9', geraakt.at(-1)[0] === 'deck.A.trim');
+ok('wildcard vangt kanaal 9', geraakt.at(-1)[0] === 'track.1.trim');
 mW.handle(cc(16, 100, 3));
-ok('wildcard vangt ook kanaal 4', geraakt.at(-1)[0] === 'deck.A.trim');
+ok('wildcard vangt ook kanaal 4', geraakt.at(-1)[0] === 'track.1.trim');
 ok('ongeldige signature wordt geweigerd',
   maak().load({ rules: [{ in: 'cc:16', action: 'x' }] }).fouten.length === 1);
 
@@ -128,47 +129,47 @@ ok('takeover:1 zet de hele beveiliging uit', mT.handle(cc(15, 127)).taken === tr
 // ---- deck-switch: dit is waarom soft-takeover bestaat ---------------------
 
 const m3 = maak('A');
-m3.load({ rules: [{ in: 'cc:0:16', action: 'deck.{focus}.filter', mode: 'absolute' }] });
-stand['deck.A.filter'] = 0.5;
-stand['deck.B.filter'] = 0.1;
+m3.load({ rules: [{ in: 'cc:0:16', action: 'track.{focus}.filter', mode: 'absolute' }] });
+stand['track.1.filter'] = 0.5;
+stand['track.2.filter'] = 0.1;
 m3.handle(cc(16, 64));
 m3.handle(cc(16, 90));
-ok('knop staat vast op deck A', Math.abs(stand['deck.A.filter'] - 90 / 127) < 0.001);
+ok('knop staat vast op deck A', Math.abs(stand['track.1.filter'] - 90 / 127) < 0.001);
 
 m3._focus = 'B';                          // deck-switch, knop blijft fysiek op 0.71
-const voor = stand['deck.B.filter'];
+const voor = stand['track.2.filter'];
 const rb = m3.handle(cc(16, 90));
-ok('na deck-switch staat de knop weer los', rb.taken === false && stand['deck.B.filter'] === voor);
-ok('deck B springt dus niet', Math.abs(stand['deck.B.filter'] - 0.1) < 0.001);
+ok('na deck-switch staat de knop weer los', rb.taken === false && stand['track.2.filter'] === voor);
+ok('deck B springt dus niet', Math.abs(stand['track.2.filter'] - 0.1) < 0.001);
 m3.handle(cc(16, 5));                     // door 0.1 heen
-ok('pas als je er doorheen beweegt pakt hij deck B', Math.abs(stand['deck.B.filter'] - 5 / 127) < 0.001);
+ok('pas als je er doorheen beweegt pakt hij deck B', Math.abs(stand['track.2.filter'] - 5 / 127) < 0.001);
 
 // ---- relatieve encoders ---------------------------------------------------
 
-stand['deck.A.low'] = 0.5;
+stand['track.1.low'] = 0.5;
 m.handle(cc(17, 1));                      // +1
-ok('relative-2c telt op', Math.abs(stand['deck.A.low'] - (0.5 + 1 / 127)) < 1e-9);
+ok('relative-2c telt op', Math.abs(stand['track.1.low'] - (0.5 + 1 / 127)) < 1e-9);
 m.handle(cc(17, 127));                    // -1
-ok('relative-2c trekt af', Math.abs(stand['deck.A.low'] - 0.5) < 1e-9);
+ok('relative-2c trekt af', Math.abs(stand['track.1.low'] - 0.5) < 1e-9);
 m.handle(cc(17, 0));                      // geen stap
-ok('relative-2c: 0 doet niets', Math.abs(stand['deck.A.low'] - 0.5) < 1e-9);
-stand['deck.A.low'] = 1;
+ok('relative-2c: 0 doet niets', Math.abs(stand['track.1.low'] - 0.5) < 1e-9);
+stand['track.1.low'] = 1;
 m.handle(cc(17, 5));
-ok('relatief klemt op 1', stand['deck.A.low'] === 1);
+ok('relatief klemt op 1', stand['track.1.low'] === 1);
 
-stand['deck.A.high'] = 0.5;
+stand['track.1.high'] = 0.5;
 m.handle(cc(18, 68));                     // 68 - 64 = +4
-ok('relative-bin telt op', Math.abs(stand['deck.A.high'] - (0.5 + 4 / 127)) < 1e-9);
+ok('relative-bin telt op', Math.abs(stand['track.1.high'] - (0.5 + 4 / 127)) < 1e-9);
 m.handle(cc(18, 60));                     // -4
-ok('relative-bin trekt af', Math.abs(stand['deck.A.high'] - 0.5) < 1e-9);
+ok('relative-bin trekt af', Math.abs(stand['track.1.high'] - 0.5) < 1e-9);
 
 // ---- invert ---------------------------------------------------------------
 
-stand['deck.A.fader'] = 1;
+stand['track.1.fader'] = 1;
 m.handle(cc(19, 0));
-ok('invert draait de fader om', Math.abs(stand['deck.A.fader'] - 1) < 0.001);
+ok('invert draait de fader om', Math.abs(stand['track.1.fader'] - 1) < 0.001);
 m.handle(cc(19, 127));
-ok('invert: 127 wordt 0', Math.abs(stand['deck.A.fader'] - 0) < 0.001);
+ok('invert: 127 wordt 0', Math.abs(stand['track.1.fader'] - 0) < 0.001);
 
 // ---- banken: dezelfde knop, ander kanaal, andere bestemming ---------------
 // De APC40 mkII verhuist zijn acht device knobs van MIDI-kanaal zodra je een
@@ -176,16 +177,16 @@ ok('invert: 127 wordt 0', Math.abs(stand['deck.A.fader'] - 0) < 0.001);
 
 const mB = maak();
 mB.load({ rules: [
-  { in: 'cc:0:16', action: 'deck.A.high', mode: 'absolute' },
-  { in: 'cc:1:16', action: 'deck.B.high', mode: 'absolute' },
+  { in: 'cc:0:16', action: 'track.1.high', mode: 'absolute' },
+  { in: 'cc:1:16', action: 'track.2.high', mode: 'absolute' },
 ] });
-stand['deck.A.high'] = 0.5; stand['deck.B.high'] = 0.5;
+stand['track.1.high'] = 0.5; stand['track.2.high'] = 0.5;
 mB.handle(cc(16, 64, 0)); mB.handle(cc(16, 127, 0));
-ok('bank 1 stuurt deck A', Math.abs(stand['deck.A.high'] - 1) < 0.01);
-ok('en laat deck B met rust', Math.abs(stand['deck.B.high'] - 0.5) < 1e-9);
+ok('bank 1 stuurt deck A', Math.abs(stand['track.1.high'] - 1) < 0.01);
+ok('en laat deck B met rust', Math.abs(stand['track.2.high'] - 0.5) < 1e-9);
 mB.handle(cc(16, 64, 1)); mB.handle(cc(16, 0, 1));
-ok('bank 2 stuurt deck B', Math.abs(stand['deck.B.high'] - 0) < 0.01);
-ok('en laat deck A met rust', Math.abs(stand['deck.A.high'] - 1) < 1e-9);
+ok('bank 2 stuurt deck B', Math.abs(stand['track.2.high'] - 0) < 0.01);
+ok('en laat deck A met rust', Math.abs(stand['track.1.high'] - 1) < 1e-9);
 
 // ---- een oude knopstand is geen bewijs meer -------------------------------
 // Na een bankwissel wijst dezelfde knop ergens anders heen terwijl hij fysiek
@@ -249,7 +250,7 @@ ok('actions geregistreerd voor deze controle', acties.size > 60);
 const onbekend = [];
 for (const regel of doc.rules) {
   for (const f of ['A', 'B']) {
-    const t = resolveTarget(regel.action, { focus: f });
+    const t = resolveTarget(regel.action, { focus: trackVanDeck(f) });
     if (!acties.has(t)) onbekend.push(t);
   }
 }
@@ -268,23 +269,49 @@ ok('elke signature bestaat op het apparaat', buitenProfiel.length === 0);
 // ---- read(): de uitbreiding waar soft-takeover op leunt -------------------
 
 nepEngine.decks.A.ui.filter = 0.25;
-ok('read geeft de stand van een value-action', Math.abs(read('deck.A.filter') - 0.25) < 1e-9);
+ok('read geeft de stand van een value-action', Math.abs(read('track.1.filter') - 0.25) < 1e-9);
 nepEngine.decks.A.playing = true;
-ok('read geeft 1 voor een ingedrukte trigger', read('deck.A.play') === 1);
+ok('read geeft 1 voor een ingedrukte trigger', read('track.1.play') === 1);
 nepEngine.decks.A.playing = false;
-ok('read geeft 0 voor een losse trigger', read('deck.A.play') === 0);
-ok('read geeft null als een action niets terug te lezen heeft', read('deck.A.loop.halve') === null);
+ok('read geeft 0 voor een losse trigger', read('track.1.play') === 0);
+ok('read geeft null als een action niets terug te lezen heeft', read('track.1.loop.halve') === null);
 ok('read geeft null voor onbekende action', read('bestaat.niet') === null);
 
 // Een echte soft-takeover tegen de echte action-bus, niet tegen een tabel.
 const { invoke } = await import('../src/control/actions.js');
-const echt = new Mapping({ read, invoke, vars: () => ({ focus: nepEngine.focus }) });
-echt.load({ rules: [{ in: 'cc:0:16', action: 'deck.{focus}.filter', mode: 'absolute' }] });
+const echt = new Mapping({ read, invoke, vars: () => ({ focus: trackVanDeck(nepEngine.focus) }) });
+echt.load({ rules: [{ in: 'cc:0:16', action: 'track.{focus}.filter', mode: 'absolute' }] });
 nepEngine.decks.A.ui.filter = 0.5;
 echt.handle(cc(16, 10));
 ok('echte bus: fader pakt niet over', Math.abs(nepEngine.decks.A.ui.filter - 0.5) < 1e-9);
 echt.handle(cc(16, 120));
 ok('echte bus: doorheen bewegen pakt wel over', nepEngine.decks.A.ui.filter > 0.9);
+
+// ---- migratie: deck.A wordt track.1 ---------------------------------------
+// Een mapping die je vóór 23 september exporteerde mag niet stil stukgaan.
+
+console.log('\nmigratie van versie 1');
+{
+  const oud = new Mapping({ read: () => 0, invoke: () => {} });
+  const r = oud.load({ version: 1, rules: [
+    { in: 'cc:0:48', action: 'deck.A.filter', mode: 'absolute' },
+    { in: 'cc:1:48', action: 'deck.B.fx.knop.3', mode: 'absolute' },
+    { in: 'note:0:91', action: 'deck.{focus}.play' },
+    { in: 'cc:0:14', action: 'mixer.master', mode: 'absolute' },
+  ] });
+  ok('deck.A wordt track.1', oud.rules.get('cc:0:48').action === 'track.1.filter');
+  ok('deck.B wordt track.2', oud.rules.get('cc:1:48').action === 'track.2.fx.knop.3');
+  ok('deck.{focus} wordt track.{focus}', oud.rules.get('note:0:91').action === 'track.{focus}.play');
+  ok('mixer blijft staan', oud.rules.get('cc:0:14').action === 'mixer.master');
+  ok('er wordt geteld wat er omgezet is', r.gemigreerd === 3);
+  ok('zonder versienummer telt als 1',
+    oud.load({ rules: [{ in: 'cc:0:48', action: 'deck.A.low', mode: 'absolute' }] }).gemigreerd === 1);
+  ok('opnieuw exporteren geeft versie 2', oud.toJSON().version === 2);
+
+  const nieuw = new Mapping({ read: () => 0, invoke: () => {} });
+  const r2 = nieuw.load({ version: 2, rules: [{ in: 'cc:0:48', action: 'deck.A.filter', mode: 'absolute' }] });
+  ok('versie 2 wordt niet aangeraakt', r2.gemigreerd === 0 && nieuw.rules.get('cc:0:48').action === 'deck.A.filter');
+}
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

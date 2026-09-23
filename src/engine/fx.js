@@ -565,7 +565,7 @@ export class InsertSlot {
     for (const [target, v] of waarden) this.keten.node.zet(target, v, now);
   }
 
-  /** Knop op plek n. Dit is waar `deck.A.fx.knop.n` op uitkomt. */
+  /** Knop op plek n. Dit is waar `track.1.fx.knop.n` op uitkomt. */
   setPlek(n, v) {
     const macro = this.rack.macros?.find((m) => m.place === n);
     if (!macro) return false;

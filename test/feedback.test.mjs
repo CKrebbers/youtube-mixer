@@ -1,5 +1,6 @@
 // LED-feedback zonder browser en zonder hardware: we vangen de bytes op.
 import { readFileSync } from 'node:fs';
+import { trackVanDeck } from '../src/control/actions.js';
 
 const { Mapping } = await import('../src/control/mapping.js');
 const { Feedback } = await import('../src/control/feedback.js');
@@ -31,7 +32,7 @@ bindEngine(engine);
 
 const bus = [];
 const send = (b) => { bus.push([...b]); return true; };
-const mapping = new Mapping({ read, invoke: () => {}, vars: () => ({ focus: engine.focus }) });
+const mapping = new Mapping({ read, invoke: () => {}, vars: () => ({ focus: trackVanDeck(engine.focus) }) });
 mapping.load(JSON.parse(readFileSync(new URL('../mappings/apc40mk2.json', import.meta.url), 'utf8')));
 
 const fb = new Feedback({ device: apc, mapping, read, meta: metaOf, send });

@@ -36,9 +36,12 @@ op `type:kanaal:nummer`. Bank N wordt track N.
 
 Ze zijn later allemaal duurder dan nu.
 
-1. **Hoe heten de actions?** Nu `deck.A.filter`. Bij acht tracks wordt dat
-   `track.3.filter`. Elke mapping, de LED-laag en de UI hangen aan die namen.
-   Er is nu één mapping in omloop; straks heeft Clay er zelf een paar.
+1. **Hoe heten de actions?** ~~Nu `deck.A.filter`.~~ **Besloten en gebouwd op
+   23 september 2026:** de bus spreekt in tracks, `track.1.filter`. De engine
+   heeft intern nog decks A en B; `TRACKS` in `actions.js` koppelt ze (track 1 =
+   A, 2 = B). Acht tracks is die lijst verlengen, niet opnieuw hernoemen.
+   Oude mappings (versie 1) worden bij het inlezen omgezet; `{focus}` is nu een
+   tracknummer.
 
 2. **Waar staan de racks?** In de library van fase 0, aan de link gekoppeld, met
    meerdere racks per link en een aanwijzing welke actief is. Als het schema daar
@@ -229,7 +232,7 @@ mappings/
 1. **`midi.js` kent geen actions, `mapping.js` kent geen MIDI-hardware.**
    Een device-profiel beschrijft alleen wát er op het apparaat zit, niet wat het doet.
 2. **Mapping is data, geen code.** JSON, exporteerbaar en importeerbaar via de UI.
-   Vorm per regel: `{ "in": "cc:0:48", "action": "deck.A.filter", "mode": "absolute" }`
+   Vorm per regel: `{ "in": "cc:0:48", "action": "track.1.filter", "mode": "absolute" }`
    waarbij `in` = `type:channel:number`.
 3. **Feedback diffen.** Stuur alleen LED's die veranderd zijn. De hele grid elke
    frame verversen spamt de MIDI-bus en geeft zichtbare lag.
@@ -271,18 +274,18 @@ Zet de EQ-knoppen op pan-stijl (bipolair) en trim/fader op volume-stijl.
 
 | Control | Action |
 |---|---|
-| Grid rij 1–2 | `deck.{A,B}.hotcue.1-4` + ruimte voor 8 straks |
-| Grid rij 3 | `deck.{A,B}.loop.{0.5,1,2,4,8}` |
+| Grid rij 1–2 | `track.{1,2}.hotcue.1-4` + ruimte voor 8 straks |
+| Grid rij 3 | `track.{1,2}.loop.{0.5,1,2,4,8}` |
 | Grid rij 4–5 | vrij — video-scenes in fase 4 |
-| Faders 1–2 | `deck.{A,B}.fader` |
+| Faders 1–2 | `track.{1,2}.fader` |
 | Master fader | `mixer.master` |
 | Crossfader | `mixer.xfader` |
-| Device knobs, bank 1 | `deck.A.high / mid / low / filter / trim / pitch` |
-| Device knobs, bank 2 | `deck.B.` idem — de bank zit in het MIDI-kanaal |
+| Device knobs, bank 1 | `track.1.high / mid / low / filter / trim / pitch` |
+| Device knobs, bank 2 | `track.2.` idem — de bank zit in het MIDI-kanaal |
 | Device knobs, bank 3–9 | vrij: 48 posities over voor FX in fase 5 |
 | Track knobs | vrij — FX in fase 5 |
-| Play / Cue | `deck.{focus}.play` / `.cue` |
-| Bank select | `deck.{A,B}.focus` |
+| Play / Cue | `track.{focus}.play` / `.cue` |
+| Bank select | `track.{1,2}.focus` |
 
 ### Klaar wanneer
 

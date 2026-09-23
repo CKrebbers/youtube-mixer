@@ -23,11 +23,11 @@ ok('een fader die toevallig bij 64 begint blijft absoluut',
 // ---- leren ----------------------------------------------------------------
 
 const geraakt = [];
-const stand = { 'deck.A.filter': 0.5, 'deck.A.play': 0, 'deck.B.low': 0.5 };
+const stand = { 'track.1.filter': 0.5, 'track.1.play': 0, 'track.2.low': 0.5 };
 const maak = () => new Mapping({
   read: (id) => stand[id] ?? null,
   invoke: (id, v) => { geraakt.push([id, v]); if (typeof v === 'number') stand[id] = v; },
-  vars: () => ({ focus: 'A' }),
+  vars: () => ({ focus: 1 }),
 });
 
 let klok = 0;
@@ -36,29 +36,29 @@ const leer = new MidiLearn({ mapping: m, device: apc, now: () => klok });
 
 ok('leert niets zolang hij niet gestart is', leer.feed(note(0x35, true)) === null && !leer.busy);
 
-leer.start('deck.A.play');
+leer.start('track.1.play');
 ok('gestart betekent bezig', leer.busy);
 const r1 = leer.feed(note(0x20, true));      // pad 1/1, bestaat echt op het apparaat
 ok('een noot koppelt meteen', r1.sig === 'note:0:32' && r1.mode === 'trigger');
 ok('en stopt daarna vanzelf', !leer.busy);
-ok('de regel staat in de mapping', m.rules.get('note:0:32')?.action === 'deck.A.play');
+ok('de regel staat in de mapping', m.rules.get('note:0:32')?.action === 'track.1.play');
 ok('met de naam van het apparaat erbij', m.rules.get('note:0:32').label === 'pad 1/1');
 
 // een knop die het profiel niet kent koppelt ook, gewoon zonder naam
-leer.start('deck.A.cue');
+leer.start('track.1.cue');
 leer.feed(note(0x35, true));
 ok('onbekende knop koppelt zonder naam',
-  m.rules.get('note:0:53')?.action === 'deck.A.cue' && m.rules.get('note:0:53').label === undefined);
+  m.rules.get('note:0:53')?.action === 'track.1.cue' && m.rules.get('note:0:53').label === undefined);
 
 // meteen bruikbaar, zonder herstart
 geraakt.length = 0;
 m.handle(note(0x20, true));
-ok('de nieuwe koppeling werkt direct', geraakt.at(-1)?.[0] === 'deck.A.play');
+ok('de nieuwe koppeling werkt direct', geraakt.at(-1)?.[0] === 'track.1.play');
 
 // ---- een CC scherpt zichzelf aan ------------------------------------------
 
 klok = 1000;
-leer.start('deck.B.low');
+leer.start('track.2.low');
 leer.feed(cc(20, 1));
 ok('eerste CC koppelt vast als absoluut', m.rules.get('cc:0:20').mode === 'absolute');
 ok('en blijft luisteren', leer.busy);
@@ -71,13 +71,13 @@ ok('na het venster stopt hij', !leer.busy);
 // ---- per ongeluk een andere knop aanraken ---------------------------------
 
 klok += 1000;
-leer.start('deck.A.filter');
+leer.start('track.1.filter');
 leer.feed(cc(30, 5));
 leer.feed(cc(31, 60));      // toch een andere knop
 leer.feed(cc(31, 61));
-ok('de laatste knop wint', m.rules.get('cc:0:31')?.action === 'deck.A.filter');
+ok('de laatste knop wint', m.rules.get('cc:0:31')?.action === 'track.1.filter');
 ok('de per ongeluk aangeraakte knop is weer los',
-  m.rules.get('cc:0:30')?.action === 'deck.A.filter');
+  m.rules.get('cc:0:30')?.action === 'track.1.filter');
 leer.stop();
 
 // ---- overschrijven wordt gemeld -------------------------------------------
@@ -85,21 +85,21 @@ leer.stop();
 klok += 1000;
 let gemeld = null;
 leer.on('bound', (b) => { gemeld = b; });
-leer.start('deck.A.play');
+leer.start('track.1.play');
 leer.feed(cc(31, 100));
-ok('overschrijven wordt gemeld', gemeld.overschrijft === 'deck.A.filter');
-ok('en de nieuwe action staat er', m.rules.get('cc:0:31').action === 'deck.A.play');
+ok('overschrijven wordt gemeld', gemeld.overschrijft === 'track.1.filter');
+ok('en de nieuwe action staat er', m.rules.get('cc:0:31').action === 'track.1.play');
 
 // ---- vergeten -------------------------------------------------------------
 
-const weg = leer.vergeet('deck.A.play');
-ok('vergeten haalt alle koppelingen weg', weg.length === 2 && m.forAction('deck.A.play').length === 0);
-ok('vergeten van iets zonder koppeling doet niets', leer.vergeet('deck.B.play').length === 0);
+const weg = leer.vergeet('track.1.play');
+ok('vergeten haalt alle koppelingen weg', weg.length === 2 && m.forAction('track.1.play').length === 0);
+ok('vergeten van iets zonder koppeling doet niets', leer.vergeet('track.2.play').length === 0);
 
 // ---- rommel niet koppelen -------------------------------------------------
 
 klok += 1000;
-leer.start('deck.A.cue');
+leer.start('track.1.cue');
 ok('clock koppelt niet', leer.feed({ sig: 'clock', type: 'clock', channel: -1, value: 0 }) === null);
 ok('en hij blijft wachten', leer.busy);
 leer.stop();

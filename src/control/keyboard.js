@@ -6,24 +6,24 @@ import { invoke } from './actions.js';
  */
 export const KEYMAP = {
   // deck A
-  KeyQ: 'deck.A.play',      KeyW: 'deck.A.cue',
-  KeyA: 'deck.A.hotcue.1',  KeyS: 'deck.A.hotcue.2',
-  KeyD: 'deck.A.hotcue.3',  KeyF: 'deck.A.hotcue.4',
-  Digit1: 'deck.A.loop.1',  Digit2: 'deck.A.loop.2',
-  Digit3: 'deck.A.loop.4',  Digit4: 'deck.A.loop.8',
-  Digit5: 'deck.A.loop.exit',
-  KeyZ: 'deck.A.nudge.back', KeyX: 'deck.A.nudge.fwd',
-  KeyE: 'deck.A.focus',
+  KeyQ: 'track.1.play',      KeyW: 'track.1.cue',
+  KeyA: 'track.1.hotcue.1',  KeyS: 'track.1.hotcue.2',
+  KeyD: 'track.1.hotcue.3',  KeyF: 'track.1.hotcue.4',
+  Digit1: 'track.1.loop.1',  Digit2: 'track.1.loop.2',
+  Digit3: 'track.1.loop.4',  Digit4: 'track.1.loop.8',
+  Digit5: 'track.1.loop.exit',
+  KeyZ: 'track.1.nudge.back', KeyX: 'track.1.nudge.fwd',
+  KeyE: 'track.1.focus',
 
   // deck B
-  KeyP: 'deck.B.play',       KeyO: 'deck.B.cue',
-  KeyJ: 'deck.B.hotcue.1',   KeyK: 'deck.B.hotcue.2',
-  KeyL: 'deck.B.hotcue.3',   Semicolon: 'deck.B.hotcue.4',
-  Digit7: 'deck.B.loop.1',   Digit8: 'deck.B.loop.2',
-  Digit9: 'deck.B.loop.4',   Digit0: 'deck.B.loop.8',
-  Minus:  'deck.B.loop.exit',
-  Comma: 'deck.B.nudge.back', Period: 'deck.B.nudge.fwd',
-  KeyI: 'deck.B.focus',
+  KeyP: 'track.2.play',       KeyO: 'track.2.cue',
+  KeyJ: 'track.2.hotcue.1',   KeyK: 'track.2.hotcue.2',
+  KeyL: 'track.2.hotcue.3',   Semicolon: 'track.2.hotcue.4',
+  Digit7: 'track.2.loop.1',   Digit8: 'track.2.loop.2',
+  Digit9: 'track.2.loop.4',   Digit0: 'track.2.loop.8',
+  Minus:  'track.2.loop.exit',
+  Comma: 'track.2.nudge.back', Period: 'track.2.nudge.fwd',
+  KeyI: 'track.2.focus',
 };
 
 /** Shift + hotcue wist die hotcue. Ingebouwde modifier, geen aparte tabel. */

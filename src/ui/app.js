@@ -1,6 +1,6 @@
 import { Engine } from '../engine/engine.js';
 import { EFFECTEN } from '../engine/fx.js';
-import { bindEngine, invoke, read as readAction, metaOf } from '../control/actions.js';
+import { bindEngine, invoke, read as readAction, metaOf, trackVanDeck } from '../control/actions.js';
 import { attachKeyboard } from '../control/keyboard.js';
 import { MidiHub } from '../control/midi.js';
 import { Mapping } from '../control/mapping.js';
@@ -335,7 +335,7 @@ const midi = new MidiHub();
 const mapping = new Mapping({
   read: readAction,
   invoke,
-  vars: () => ({ focus: engine.focus }),
+  vars: () => ({ focus: trackVanDeck(engine.focus) }),
 });
 let device = generic;
 

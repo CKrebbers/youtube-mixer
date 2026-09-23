@@ -66,23 +66,30 @@ export function list() {
   });
 }
 
+/** Welke track op welk engine-deck zit. Eén plek, zodat acht er later bij passen. */
+export const TRACKS = [[1, 'A'], [2, 'B']];
+export const trackVanDeck = (id) => TRACKS.find(([, d]) => d === id)?.[0] ?? null;
+
 /** Registreert de complete standaardset voor een engine. */
 export function bindEngine(engine) {
-  for (const id of ['A', 'B']) {
+  // De bus spreekt in TRACKS, de engine nog in decks A en B. Track 1 = A,
+  // track 2 = B. Zo hoeven mappings niet opnieuw als er acht tracks komen:
+  // dan groeit deze lijst, en veranderen de namen niet nog een keer.
+  for (const [nr, id] of TRACKS) {
     const d = engine.deck(id);
-    const n = `deck.${id}`;
+    const n = `track.${nr}`;
     const bool = (fn) => () => (fn() ? 1 : 0);
 
     define(`${n}.play`, 'trigger', (on) => { if (on) d.togglePlay(); },
-      { label: `Deck ${id} play/pause`, read: bool(() => d.playing) });
+      { label: `Track ${nr} play/pause`, read: bool(() => d.playing) });
     define(`${n}.cue`, 'trigger', (on) => { if (on) d.cue(); },
-      { label: `Deck ${id} cue`, read: bool(() => d.buffer && Math.abs(d.position - d.cuePoint) < 0.02) });
+      { label: `Track ${nr} cue`, read: bool(() => d.buffer && Math.abs(d.position - d.cuePoint) < 0.02) });
     define(`${n}.sync`, 'trigger', (on) => {
       if (!on) return;
       const r = engine.sync(id);
       if (!r.ok) console.warn(`[sync] deck ${id}: ${r.reden}`);
       engine.emit('sync', { id, ...r });
-    }, { label: `Deck ${id} sync naar het andere deck`,
+    }, { label: `Track ${nr} sync naar het andere deck`,
          read: () => {
            const d2 = engine.ander(id);
            if (!d.grid || !d2.grid) return 0;
@@ -103,62 +110,62 @@ export function bindEngine(engine) {
       // De UI mag dit door de server laten verfijnen: jouw tap geeft het
       // octaaf, de analyse haalt er honderdsten van een bpm van.
       engine.emit('tap', { deck: id, bpm: r.bpm, taps: r.taps });
-    }, { label: `Deck ${id} tap tempo`, read: () => (d.grid ? 1 : 0) });
+    }, { label: `Track ${nr} tap tempo`, read: () => (d.grid ? 1 : 0) });
 
     define(`${n}.grid.here`, 'trigger', (on) => {
       if (!on || !d.grid) return;
       d.grid.ankerHier(d.position);
       d.emit('change', d);
-    }, { label: `Deck ${id} beat 1 hier` });
+    }, { label: `Track ${nr} beat 1 hier` });
 
     define(`${n}.grid.back`, 'trigger', (on) => { if (on && d.grid) { d.grid.schuif(-0.005); d.emit('change', d); } },
-      { label: `Deck ${id} grid 5 ms terug` });
+      { label: `Track ${nr} grid 5 ms terug` });
     define(`${n}.grid.fwd`, 'trigger', (on) => { if (on && d.grid) { d.grid.schuif(0.005); d.emit('change', d); } },
-      { label: `Deck ${id} grid 5 ms vooruit` });
+      { label: `Track ${nr} grid 5 ms vooruit` });
     define(`${n}.grid.double`, 'trigger', (on) => { if (on && d.grid) { d.grid.verdubbel(); d.emit('change', d); } },
-      { label: `Deck ${id} bpm x2` });
+      { label: `Track ${nr} bpm x2` });
     define(`${n}.grid.halve`, 'trigger', (on) => { if (on && d.grid) { d.grid.halveer(); d.emit('change', d); } },
-      { label: `Deck ${id} bpm /2` });
+      { label: `Track ${nr} bpm /2` });
     define(`${n}.grid.clear`, 'trigger', (on) => { if (on) { d.grid = null; tap.reset(); d.emit('change', d); } },
-      { label: `Deck ${id} grid wissen`, read: () => (d.grid ? 1 : 0) });
+      { label: `Track ${nr} grid wissen`, read: () => (d.grid ? 1 : 0) });
 
     for (const beats of [0.25, 0.5, 1, 2, 4, 8, 16]) {
       define(`${n}.beatloop.${beats}`, 'trigger', (on) => { if (on) d.setBeatLoop(beats); },
-        { label: `Deck ${id} loop ${beats} ${beats === 1 ? 'tel' : 'tellen'}`,
+        { label: `Track ${nr} loop ${beats} ${beats === 1 ? 'tel' : 'tellen'}`,
           read: () => (d.loopBeats === beats ? 1 : 0) });
     }
 
     for (let i = 0; i < 4; i++) {
       define(`${n}.hotcue.${i + 1}`, 'trigger', (on) => { if (on) d.hotcue(i); },
-        { label: `Deck ${id} hotcue ${i + 1}`, read: bool(() => d.hotcues[i] !== null) });
+        { label: `Track ${nr} hotcue ${i + 1}`, read: bool(() => d.hotcues[i] !== null) });
       define(`${n}.hotcue.${i + 1}.delete`, 'trigger', (on) => { if (on) d.hotcue(i, { del: true }); },
-        { label: `Deck ${id} hotcue ${i + 1} wissen` });
+        { label: `Track ${nr} hotcue ${i + 1} wissen` });
     }
 
     for (const sec of [0.5, 1, 2, 4, 8]) {
       define(`${n}.loop.${sec}`, 'trigger', (on) => { if (on) d.setLoop(sec); },
-        { label: `Deck ${id} loop ${sec}s`,
+        { label: `Track ${nr} loop ${sec}s`,
           read: bool(() => d.loop && Math.abs((d.loop.end - d.loop.start) - sec) < 0.01) });
     }
     define(`${n}.loop.exit`, 'trigger', (on) => { if (on) d.clearLoop(); },
-      { label: `Deck ${id} loop uit`, read: bool(() => d.loop) });
-    define(`${n}.loop.halve`, 'trigger', (on) => { if (on) d.halveLoop(); }, { label: `Deck ${id} loop /2` });
-    define(`${n}.loop.double`, 'trigger', (on) => { if (on) d.doubleLoop(); }, { label: `Deck ${id} loop x2` });
+      { label: `Track ${nr} loop uit`, read: bool(() => d.loop) });
+    define(`${n}.loop.halve`, 'trigger', (on) => { if (on) d.halveLoop(); }, { label: `Track ${nr} loop /2` });
+    define(`${n}.loop.double`, 'trigger', (on) => { if (on) d.doubleLoop(); }, { label: `Track ${nr} loop x2` });
 
-    define(`${n}.nudge.back`, 'trigger', (on) => { if (on) d.nudge(-0.05); }, { label: `Deck ${id} nudge -` });
-    define(`${n}.nudge.fwd`, 'trigger', (on) => { if (on) d.nudge(0.05); }, { label: `Deck ${id} nudge +` });
+    define(`${n}.nudge.back`, 'trigger', (on) => { if (on) d.nudge(-0.05); }, { label: `Track ${nr} nudge -` });
+    define(`${n}.nudge.fwd`, 'trigger', (on) => { if (on) d.nudge(0.05); }, { label: `Track ${nr} nudge +` });
 
     define(`${n}.pitch`, 'value', (v) => d.setRate(0.92 + v * 0.16),
-      { label: `Deck ${id} pitch ±8%`, bipolar: true, read: () => (d.rate - 0.92) / 0.16 });
+      { label: `Track ${nr} pitch ±8%`, bipolar: true, read: () => (d.rate - 0.92) / 0.16 });
     define(`${n}.seek`, 'value', (v) => d.seek(v * d.duration),
-      { label: `Deck ${id} scrub`, read: () => (d.duration ? d.position / d.duration : 0) });
+      { label: `Track ${nr} scrub`, read: () => (d.duration ? d.position / d.duration : 0) });
 
     // bipolar: staat in het midden in rust. De LED-ring hoort dan pan-stijl te
     // zijn in plaats van volume-stijl; dat is het enige wat de LED-laag hoeft
     // te weten om hem goed te tekenen.
     for (const p of ['trim', 'low', 'mid', 'high', 'filter', 'fader']) {
       define(`${n}.${p}`, 'value', (v) => d.set(p, v),
-        { label: `Deck ${id} ${p}`, bipolar: ['low', 'mid', 'high', 'filter'].includes(p),
+        { label: `Track ${nr} ${p}`, bipolar: ['low', 'mid', 'high', 'filter'].includes(p),
           read: () => d.ui[p] });
     }
 
@@ -167,13 +174,13 @@ export function bindEngine(engine) {
     // effect, dan doet plek 1 iets anders en hoef je niets opnieuw te koppelen.
     // Dat is de hele opzet waar de racks straks op verder bouwen.
     define(`${n}.fx.mix`, 'value', (v) => d.fx.setMix(v),
-      { label: `Deck ${id} FX dry/wet`, read: () => d.fx.mix });
+      { label: `Track ${nr} FX dry/wet`, read: () => d.fx.mix });
     define(`${n}.fx.bypass`, 'trigger', (on) => { if (on) d.fx.setBypass(!d.fx.bypass); },
-      { label: `Deck ${id} FX uit`, read: () => (d.fx.bypass ? 1 : 0) });
+      { label: `Track ${nr} FX uit`, read: () => (d.fx.bypass ? 1 : 0) });
     // Acht plekken: precies de acht device knobs van één bank.
     for (let k = 1; k <= 8; k++) {
       define(`${n}.fx.knop.${k}`, 'value', (v) => d.fx.setPlek(k, v),
-        { label: `Deck ${id} FX plek ${k}`,
+        { label: `Track ${nr} FX plek ${k}`,
           bipolar: false,
           read: () => d.fx.leesPlek(k) });
     }
@@ -183,7 +190,7 @@ export function bindEngine(engine) {
       const i = lijst.indexOf(d.fx.effectId);
       d.fx.zetEffect(lijst[(i + 1) % lijst.length]);
       d.emit('change', d);
-    }, { label: `Deck ${id} volgend effect` });
+    }, { label: `Track ${nr} volgend effect` });
 
     define(`${n}.focus`, 'trigger', (on) => { if (on) engine.setFocus(id); },
       { label: `Focus deck ${id}`, read: bool(() => engine.focus === id) });

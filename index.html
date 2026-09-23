@@ -34,58 +34,58 @@
     <canvas class="wave-zoom"></canvas>
     <canvas class="wave-overview"></canvas>
     <div class="deck-transport">
-      <button data-kind="button" data-action="deck.A.cue" class="btn cue">CUE</button>
-      <button data-kind="button" data-action="deck.A.play" class="btn play">PLAY</button>
+      <button data-kind="button" data-action="track.1.cue" class="btn cue">CUE</button>
+      <button data-kind="button" data-action="track.1.play" class="btn play">PLAY</button>
       <div class="hotcues">
-        <button data-kind="button" data-action="deck.A.hotcue.1" data-action-shift="deck.A.hotcue.1.delete" class="hc hc1">1</button>
-        <button data-kind="button" data-action="deck.A.hotcue.2" data-action-shift="deck.A.hotcue.2.delete" class="hc hc2">2</button>
-        <button data-kind="button" data-action="deck.A.hotcue.3" data-action-shift="deck.A.hotcue.3.delete" class="hc hc3">3</button>
-        <button data-kind="button" data-action="deck.A.hotcue.4" data-action-shift="deck.A.hotcue.4.delete" class="hc hc4">4</button>
+        <button data-kind="button" data-action="track.1.hotcue.1" data-action-shift="track.1.hotcue.1.delete" class="hc hc1">1</button>
+        <button data-kind="button" data-action="track.1.hotcue.2" data-action-shift="track.1.hotcue.2.delete" class="hc hc2">2</button>
+        <button data-kind="button" data-action="track.1.hotcue.3" data-action-shift="track.1.hotcue.3.delete" class="hc hc3">3</button>
+        <button data-kind="button" data-action="track.1.hotcue.4" data-action-shift="track.1.hotcue.4.delete" class="hc hc4">4</button>
       </div>
       <div class="loops">
         <span class="loop-kop">tellen</span>
-        <button data-kind="button" data-action="deck.A.beatloop.1" class="btn sm bl">1</button>
-        <button data-kind="button" data-action="deck.A.beatloop.2" class="btn sm bl">2</button>
-        <button data-kind="button" data-action="deck.A.beatloop.4" class="btn sm bl">4</button>
-        <button data-kind="button" data-action="deck.A.beatloop.8" class="btn sm bl">8</button>
+        <button data-kind="button" data-action="track.1.beatloop.1" class="btn sm bl">1</button>
+        <button data-kind="button" data-action="track.1.beatloop.2" class="btn sm bl">2</button>
+        <button data-kind="button" data-action="track.1.beatloop.4" class="btn sm bl">4</button>
+        <button data-kind="button" data-action="track.1.beatloop.8" class="btn sm bl">8</button>
         <span class="loop-kop">sec</span>
-        <button data-kind="button" data-action="deck.A.loop.1" class="btn sm">1</button>
-        <button data-kind="button" data-action="deck.A.loop.2" class="btn sm">2</button>
-        <button data-kind="button" data-action="deck.A.loop.4" class="btn sm">4</button>
-        <button data-kind="button" data-action="deck.A.loop.halve" class="btn sm">/2</button>
-        <button data-kind="button" data-action="deck.A.loop.double" class="btn sm">x2</button>
-        <button data-kind="button" data-action="deck.A.loop.exit" class="btn sm warn">uit</button>
+        <button data-kind="button" data-action="track.1.loop.1" class="btn sm">1</button>
+        <button data-kind="button" data-action="track.1.loop.2" class="btn sm">2</button>
+        <button data-kind="button" data-action="track.1.loop.4" class="btn sm">4</button>
+        <button data-kind="button" data-action="track.1.loop.halve" class="btn sm">/2</button>
+        <button data-kind="button" data-action="track.1.loop.double" class="btn sm">x2</button>
+        <button data-kind="button" data-action="track.1.loop.exit" class="btn sm warn">uit</button>
       </div>
       <div class="grid-tools">
-        <button data-kind="button" data-action="deck.A.tap" class="btn sm tap">TAP</button>
+        <button data-kind="button" data-action="track.1.tap" class="btn sm tap">TAP</button>
         <span class="bpm-val" title="bpm van het beatgrid, meegerekend met de pitch">—</span>
-        <button data-kind="button" data-action="deck.A.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
-        <button data-kind="button" data-action="deck.A.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
-        <button data-kind="button" data-action="deck.A.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
-        <button data-kind="button" data-action="deck.A.grid.halve" class="btn sm" title="bpm halveren">/2</button>
-        <button data-kind="button" data-action="deck.A.grid.double" class="btn sm" title="bpm verdubbelen">x2</button>
-        <button data-kind="button" data-action="deck.A.sync" class="btn sm sync" title="tempo en fase gelijk aan het andere deck">SYNC</button>
+        <button data-kind="button" data-action="track.1.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
+        <button data-kind="button" data-action="track.1.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
+        <button data-kind="button" data-action="track.1.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
+        <button data-kind="button" data-action="track.1.grid.halve" class="btn sm" title="bpm halveren">/2</button>
+        <button data-kind="button" data-action="track.1.grid.double" class="btn sm" title="bpm verdubbelen">x2</button>
+        <button data-kind="button" data-action="track.1.sync" class="btn sm sync" title="tempo en fase gelijk aan het andere deck">SYNC</button>
         <span class="fase" title="hoe ver dit deck voor of achter loopt"><b></b><i></i></span>
       </div>
       <div class="fx-row">
         <span class="fx-kop">FX</span>
         <select class="fx-rack" title="rack van dit nummer"></select>
-        <button data-kind="button" data-action="deck.A.fx.next" class="btn sm fx-naam" title="volgend effect">Delay</button>
+        <button data-kind="button" data-action="track.1.fx.next" class="btn sm fx-naam" title="volgend effect">Delay</button>
         <button class="btn sm fx-bewaar" title="dit rack bij dit nummer bewaren">bewaar</button>
         <button class="btn sm fx-bewerk" title="rack bewerken: effecten, knoppen, bereiken">bewerk</button>
-        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.1" data-label="1" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.2" data-label="2" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.3" data-label="3" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.4" data-label="4" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.5" data-label="5" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.6" data-label="6" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.7" data-label="7" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.A.fx.knop.8" data-label="8" data-value="0.5"></div>
-        <div class="knob sm fx-mix" data-action="deck.A.fx.mix" data-label="MIX" data-value="0"></div>
-        <button data-kind="button" data-action="deck.A.fx.bypass" class="btn sm fx-bypass" title="effect uit">uit</button>
+        <div class="knob sm fx-plek" data-action="track.1.fx.knop.1" data-label="1" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.1.fx.knop.2" data-label="2" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.1.fx.knop.3" data-label="3" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.1.fx.knop.4" data-label="4" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.1.fx.knop.5" data-label="5" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.1.fx.knop.6" data-label="6" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.1.fx.knop.7" data-label="7" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.1.fx.knop.8" data-label="8" data-value="0.5"></div>
+        <div class="knob sm fx-mix" data-action="track.1.fx.mix" data-label="MIX" data-value="0"></div>
+        <button data-kind="button" data-action="track.1.fx.bypass" class="btn sm fx-bypass" title="effect uit">uit</button>
       </div>
       <label class="pitch">PITCH <span class="pitch-val">0.0%</span>
-        <input type="range" class="hfader" min="0" max="1" step="0.0005" value="0.5" data-action="deck.A.pitch">
+        <input type="range" class="hfader" min="0" max="1" step="0.0005" value="0.5" data-action="track.1.pitch">
       </label>
     </div>
     <div class="dropzone">sleep een audiobestand hierheen &nbsp;·&nbsp; <button class="link demo-btn">of laad demotrack</button></div>
@@ -95,22 +95,22 @@
   <section class="mixer">
     <div class="strips">
       <div class="strip" data-deck="A">
-        <div class="knob" data-action="deck.A.trim" data-label="TRIM" data-value="0.5"></div>
-        <div class="knob" data-action="deck.A.high" data-label="HIGH" data-value="0.5" data-bipolar="true"></div>
-        <div class="knob" data-action="deck.A.mid"  data-label="MID"  data-value="0.5" data-bipolar="true"></div>
-        <div class="knob" data-action="deck.A.low"  data-label="LOW"  data-value="0.5" data-bipolar="true"></div>
-        <div class="knob filter" data-action="deck.A.filter" data-label="FILTER" data-value="0.5" data-bipolar="true"></div>
+        <div class="knob" data-action="track.1.trim" data-label="TRIM" data-value="0.5"></div>
+        <div class="knob" data-action="track.1.high" data-label="HIGH" data-value="0.5" data-bipolar="true"></div>
+        <div class="knob" data-action="track.1.mid"  data-label="MID"  data-value="0.5" data-bipolar="true"></div>
+        <div class="knob" data-action="track.1.low"  data-label="LOW"  data-value="0.5" data-bipolar="true"></div>
+        <div class="knob filter" data-action="track.1.filter" data-label="FILTER" data-value="0.5" data-bipolar="true"></div>
         <div class="meter ch-meter"><i></i></div>
-        <input type="range" class="vfader" orient="vertical" min="0" max="1" step="0.001" value="1" data-action="deck.A.fader">
+        <input type="range" class="vfader" orient="vertical" min="0" max="1" step="0.001" value="1" data-action="track.1.fader">
       </div>
       <div class="strip" data-deck="B">
-        <div class="knob" data-action="deck.B.trim" data-label="TRIM" data-value="0.5"></div>
-        <div class="knob" data-action="deck.B.high" data-label="HIGH" data-value="0.5" data-bipolar="true"></div>
-        <div class="knob" data-action="deck.B.mid"  data-label="MID"  data-value="0.5" data-bipolar="true"></div>
-        <div class="knob" data-action="deck.B.low"  data-label="LOW"  data-value="0.5" data-bipolar="true"></div>
-        <div class="knob filter" data-action="deck.B.filter" data-label="FILTER" data-value="0.5" data-bipolar="true"></div>
+        <div class="knob" data-action="track.2.trim" data-label="TRIM" data-value="0.5"></div>
+        <div class="knob" data-action="track.2.high" data-label="HIGH" data-value="0.5" data-bipolar="true"></div>
+        <div class="knob" data-action="track.2.mid"  data-label="MID"  data-value="0.5" data-bipolar="true"></div>
+        <div class="knob" data-action="track.2.low"  data-label="LOW"  data-value="0.5" data-bipolar="true"></div>
+        <div class="knob filter" data-action="track.2.filter" data-label="FILTER" data-value="0.5" data-bipolar="true"></div>
         <div class="meter ch-meter"><i></i></div>
-        <input type="range" class="vfader" orient="vertical" min="0" max="1" step="0.001" value="1" data-action="deck.B.fader">
+        <input type="range" class="vfader" orient="vertical" min="0" max="1" step="0.001" value="1" data-action="track.2.fader">
       </div>
     </div>
     <div class="xfader-row">
@@ -131,58 +131,58 @@
     <canvas class="wave-zoom"></canvas>
     <canvas class="wave-overview"></canvas>
     <div class="deck-transport">
-      <button data-kind="button" data-action="deck.B.cue" class="btn cue">CUE</button>
-      <button data-kind="button" data-action="deck.B.play" class="btn play">PLAY</button>
+      <button data-kind="button" data-action="track.2.cue" class="btn cue">CUE</button>
+      <button data-kind="button" data-action="track.2.play" class="btn play">PLAY</button>
       <div class="hotcues">
-        <button data-kind="button" data-action="deck.B.hotcue.1" data-action-shift="deck.B.hotcue.1.delete" class="hc hc1">1</button>
-        <button data-kind="button" data-action="deck.B.hotcue.2" data-action-shift="deck.B.hotcue.2.delete" class="hc hc2">2</button>
-        <button data-kind="button" data-action="deck.B.hotcue.3" data-action-shift="deck.B.hotcue.3.delete" class="hc hc3">3</button>
-        <button data-kind="button" data-action="deck.B.hotcue.4" data-action-shift="deck.B.hotcue.4.delete" class="hc hc4">4</button>
+        <button data-kind="button" data-action="track.2.hotcue.1" data-action-shift="track.2.hotcue.1.delete" class="hc hc1">1</button>
+        <button data-kind="button" data-action="track.2.hotcue.2" data-action-shift="track.2.hotcue.2.delete" class="hc hc2">2</button>
+        <button data-kind="button" data-action="track.2.hotcue.3" data-action-shift="track.2.hotcue.3.delete" class="hc hc3">3</button>
+        <button data-kind="button" data-action="track.2.hotcue.4" data-action-shift="track.2.hotcue.4.delete" class="hc hc4">4</button>
       </div>
       <div class="loops">
         <span class="loop-kop">tellen</span>
-        <button data-kind="button" data-action="deck.B.beatloop.1" class="btn sm bl">1</button>
-        <button data-kind="button" data-action="deck.B.beatloop.2" class="btn sm bl">2</button>
-        <button data-kind="button" data-action="deck.B.beatloop.4" class="btn sm bl">4</button>
-        <button data-kind="button" data-action="deck.B.beatloop.8" class="btn sm bl">8</button>
+        <button data-kind="button" data-action="track.2.beatloop.1" class="btn sm bl">1</button>
+        <button data-kind="button" data-action="track.2.beatloop.2" class="btn sm bl">2</button>
+        <button data-kind="button" data-action="track.2.beatloop.4" class="btn sm bl">4</button>
+        <button data-kind="button" data-action="track.2.beatloop.8" class="btn sm bl">8</button>
         <span class="loop-kop">sec</span>
-        <button data-kind="button" data-action="deck.B.loop.1" class="btn sm">1</button>
-        <button data-kind="button" data-action="deck.B.loop.2" class="btn sm">2</button>
-        <button data-kind="button" data-action="deck.B.loop.4" class="btn sm">4</button>
-        <button data-kind="button" data-action="deck.B.loop.halve" class="btn sm">/2</button>
-        <button data-kind="button" data-action="deck.B.loop.double" class="btn sm">x2</button>
-        <button data-kind="button" data-action="deck.B.loop.exit" class="btn sm warn">uit</button>
+        <button data-kind="button" data-action="track.2.loop.1" class="btn sm">1</button>
+        <button data-kind="button" data-action="track.2.loop.2" class="btn sm">2</button>
+        <button data-kind="button" data-action="track.2.loop.4" class="btn sm">4</button>
+        <button data-kind="button" data-action="track.2.loop.halve" class="btn sm">/2</button>
+        <button data-kind="button" data-action="track.2.loop.double" class="btn sm">x2</button>
+        <button data-kind="button" data-action="track.2.loop.exit" class="btn sm warn">uit</button>
       </div>
       <div class="grid-tools">
-        <button data-kind="button" data-action="deck.B.tap" class="btn sm tap">TAP</button>
+        <button data-kind="button" data-action="track.2.tap" class="btn sm tap">TAP</button>
         <span class="bpm-val" title="bpm van het beatgrid, meegerekend met de pitch">—</span>
-        <button data-kind="button" data-action="deck.B.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
-        <button data-kind="button" data-action="deck.B.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
-        <button data-kind="button" data-action="deck.B.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
-        <button data-kind="button" data-action="deck.B.grid.halve" class="btn sm" title="bpm halveren">/2</button>
-        <button data-kind="button" data-action="deck.B.grid.double" class="btn sm" title="bpm verdubbelen">x2</button>
-        <button data-kind="button" data-action="deck.B.sync" class="btn sm sync" title="tempo en fase gelijk aan het andere deck">SYNC</button>
+        <button data-kind="button" data-action="track.2.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
+        <button data-kind="button" data-action="track.2.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
+        <button data-kind="button" data-action="track.2.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
+        <button data-kind="button" data-action="track.2.grid.halve" class="btn sm" title="bpm halveren">/2</button>
+        <button data-kind="button" data-action="track.2.grid.double" class="btn sm" title="bpm verdubbelen">x2</button>
+        <button data-kind="button" data-action="track.2.sync" class="btn sm sync" title="tempo en fase gelijk aan het andere deck">SYNC</button>
         <span class="fase" title="hoe ver dit deck voor of achter loopt"><b></b><i></i></span>
       </div>
       <div class="fx-row">
         <span class="fx-kop">FX</span>
         <select class="fx-rack" title="rack van dit nummer"></select>
-        <button data-kind="button" data-action="deck.B.fx.next" class="btn sm fx-naam" title="volgend effect">Delay</button>
+        <button data-kind="button" data-action="track.2.fx.next" class="btn sm fx-naam" title="volgend effect">Delay</button>
         <button class="btn sm fx-bewaar" title="dit rack bij dit nummer bewaren">bewaar</button>
         <button class="btn sm fx-bewerk" title="rack bewerken: effecten, knoppen, bereiken">bewerk</button>
-        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.1" data-label="1" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.2" data-label="2" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.3" data-label="3" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.4" data-label="4" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.5" data-label="5" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.6" data-label="6" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.7" data-label="7" data-value="0.5"></div>
-        <div class="knob sm fx-plek" data-action="deck.B.fx.knop.8" data-label="8" data-value="0.5"></div>
-        <div class="knob sm fx-mix" data-action="deck.B.fx.mix" data-label="MIX" data-value="0"></div>
-        <button data-kind="button" data-action="deck.B.fx.bypass" class="btn sm fx-bypass" title="effect uit">uit</button>
+        <div class="knob sm fx-plek" data-action="track.2.fx.knop.1" data-label="1" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.2.fx.knop.2" data-label="2" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.2.fx.knop.3" data-label="3" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.2.fx.knop.4" data-label="4" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.2.fx.knop.5" data-label="5" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.2.fx.knop.6" data-label="6" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.2.fx.knop.7" data-label="7" data-value="0.5"></div>
+        <div class="knob sm fx-plek" data-action="track.2.fx.knop.8" data-label="8" data-value="0.5"></div>
+        <div class="knob sm fx-mix" data-action="track.2.fx.mix" data-label="MIX" data-value="0"></div>
+        <button data-kind="button" data-action="track.2.fx.bypass" class="btn sm fx-bypass" title="effect uit">uit</button>
       </div>
       <label class="pitch">PITCH <span class="pitch-val">0.0%</span>
-        <input type="range" class="hfader" min="0" max="1" step="0.0005" value="0.5" data-action="deck.B.pitch">
+        <input type="range" class="hfader" min="0" max="1" step="0.0005" value="0.5" data-action="track.2.pitch">
       </label>
     </div>
     <div class="dropzone">sleep een audiobestand hierheen &nbsp;·&nbsp; <button class="link demo-btn">of laad demotrack</button></div>

@@ -132,7 +132,12 @@ test/
 - Een onbekend effecttype in een rack wordt NIET weggegooid: het blijft als ruwe
   JSON bewaard, staat uit, en komt er bij het opslaan ongeschonden weer uit.
   Eén keer openen in een oudere versie mag geen rack slopen.
-- De FX-knoppen wijzen naar een PLEK (`deck.A.fx.knop.1`), niet naar een
+- De action-bus spreekt in TRACKS (`track.1.filter`), de engine in decks (A, B).
+  De vertaling staat op één plek: `TRACKS` in `actions.js`. `{focus}` in een
+  mapping wordt een tracknummer. Mappings van versie 1 (`deck.A.…`) worden bij
+  het laden omgezet door `migreerAction()`; niet weghalen, er kunnen nog
+  geëxporteerde bestanden rondslingeren.
+- De FX-knoppen wijzen naar een PLEK (`track.1.fx.knop.1`), niet naar een
   parameter. Wissel je van effect, dan betekent plek 1 iets anders en hoef je
   niets opnieuw te koppelen. Dat is de opzet waar de effect-racks op verder
   bouwen: het rack bepaalt wat een plek doet, de mapping blijft staan.

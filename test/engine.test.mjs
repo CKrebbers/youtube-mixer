@@ -59,7 +59,7 @@ ok('peaks berekend', an.count > 100 && an.peaks.length === an.count*2);
 ok('demotrack heeft signaal', Math.max(...buf.getChannelData(0).slice(0,5000)) > 0.2);
 
 eng.deck('A').load(buf, 'demo');
-invoke('deck.A.play', true);
+invoke('track.1.play', true);
 ok('deck A speelt', eng.deck('A').playing);
 
 NOW += 1.0;
@@ -70,46 +70,46 @@ NOW += 1.0;
 ok('positie schaalt met playbackRate (3.0s)', Math.abs(eng.deck('A').position - 3.0) < 0.001);
 
 eng.deck('A').setRate(1);
-invoke('deck.A.hotcue.1', true);
+invoke('track.1.hotcue.1', true);
 ok('hotcue 1 gezet op 3.0s', Math.abs(eng.deck('A').hotcues[0] - 3.0) < 0.001);
 
 eng.deck('A').seek(0.5);
-invoke('deck.A.hotcue.1', true);
+invoke('track.1.hotcue.1', true);
 ok('hotcue 1 springt terug naar 3.0s', Math.abs(eng.deck('A').position - 3.0) < 0.001);
 
-invoke('deck.A.loop.1', true);
+invoke('track.1.loop.1', true);
 NOW += 2.5;
 const p = eng.deck('A').position;
 ok('loop wrapt binnen [3.0,3.87)', p >= 3.0 && p < 3.87);
 const lenBefore = eng.deck('A').loop.end - eng.deck('A').loop.start;
 ok('loop geklemd op trackeinde', Math.abs(lenBefore - (buf.duration - 3.0)) < 1e-6);
-invoke('deck.A.loop.halve', true);
+invoke('track.1.loop.halve', true);
 ok('loop gehalveerd', Math.abs((eng.deck('A').loop.end - eng.deck('A').loop.start) - lenBefore/2) < 1e-6);
-invoke('deck.A.loop.double', true);
+invoke('track.1.loop.double', true);
 ok('loop verdubbeld terug', Math.abs((eng.deck('A').loop.end - eng.deck('A').loop.start) - lenBefore) < 1e-6);
-invoke('deck.A.loop.exit', true);
+invoke('track.1.loop.exit', true);
 ok('loop weg', eng.deck('A').loop === null);
 
-invoke('deck.A.play', true);
+invoke('track.1.play', true);
 ok('play toggelt naar pauze', !eng.deck('A').playing);
 
 const g = xfaderGains(0.5);
 ok('xfader equal-power in midden (~0.707)', Math.abs(g.a-0.7071)<0.001 && Math.abs(g.b-0.7071)<0.001);
 ok('xfader links = A vol open', xfaderGains(0).a === 1 && Math.abs(xfaderGains(0).b) < 1e-9);
 
-invoke('deck.A.low', 0);
+invoke('track.1.low', 0);
 ok('EQ kill onder 3%', eng.deck('A').chain.eqLow.gain.value === -70);
-invoke('deck.A.low', 0.5);
+invoke('track.1.low', 0.5);
 ok('EQ midden = 0 dB', Math.abs(eng.deck('A').chain.eqLow.gain.value) < 1e-9);
 
-invoke('deck.A.filter', 0);
+invoke('track.1.filter', 0);
 ok('filter links = LPF laag', eng.deck('A').chain.lpf.frequency.value < 300);
-invoke('deck.A.filter', 1);
+invoke('track.1.filter', 1);
 ok('filter rechts = HPF hoog', eng.deck('A').chain.hpf.frequency.value > 8000);
-invoke('deck.A.filter', 0.5);
+invoke('track.1.filter', 0.5);
 ok('filter midden = bypass', eng.deck('A').chain.lpf.frequency.value > 20000 && eng.deck('A').chain.hpf.frequency.value < 25);
 
-invoke('deck.A.pitch', 1);
+invoke('track.1.pitch', 1);
 ok('pitch +8%', Math.abs(eng.deck('A').rate - 1.08) < 1e-9);
 
 const snap = eng.snapshot();
@@ -189,20 +189,20 @@ const zonder = eng.deck('B');
 zonder.load(buf, 'demo');
 ok('zonder grid gebeurt er niets', zonder.setBeatLoop(4) === false && zonder.loop === null);
 
-invoke('deck.A.grid.double', true);
+invoke('track.1.grid.double', true);
 ok('bpm verdubbelen via de bus', dA.grid.bpm === 240);
-invoke('deck.A.grid.halve', true);
+invoke('track.1.grid.halve', true);
 ok('en weer halveren', dA.grid.bpm === 120);
 
 const voorSchuif = dA.grid.firstBeat;
-invoke('deck.A.grid.fwd', true);
+invoke('track.1.grid.fwd', true);
 ok('grid opschuiven via de bus', Math.abs(dA.grid.firstBeat - (voorSchuif + 0.005)) < 1e-9);
 
 dA.seek(3.3);
-invoke('deck.A.grid.here', true);
+invoke('track.1.grid.here', true);
 ok('beat 1 hier leggen', Math.abs(dA.grid.firstBeat - 3.3) < 1e-9);
 
-invoke('deck.A.grid.clear', true);
+invoke('track.1.grid.clear', true);
 ok('grid wissen', dA.grid === null);
 ok('en dan doet een beat-loop niets meer', dA.setBeatLoop(4) === false);
 
@@ -380,17 +380,17 @@ fx.setMix(0);
 
 // via de bus
 const beginEffect = fx.effectId;
-invoke('deck.A.fx.next', true);
+invoke('track.1.fx.next', true);
 ok('volgend effect via de bus', fx.effectId !== beginEffect);
-for (let i = 1; i < EFFECTEN.length; i++) invoke('deck.A.fx.next', true);
+for (let i = 1; i < EFFECTEN.length; i++) invoke('track.1.fx.next', true);
 ok('en na een rondje sta je weer waar je begon', fx.effectId === beginEffect);
-invoke('deck.A.fx.mix', 0.3);
+invoke('track.1.fx.mix', 0.3);
 ok('mix via de bus', Math.abs(fx.mix - 0.3) < 1e-9);
-invoke('deck.A.fx.knop.1', 0.7);
+invoke('track.1.fx.knop.1', 0.7);
 ok('plek via de bus', Math.abs(fx.leesPlek(1) - 0.7) < 1e-9);
-invoke('deck.A.fx.bypass', true);
+invoke('track.1.fx.bypass', true);
 ok('bypass via de bus', fx.bypass === true);
-invoke('deck.A.fx.bypass', true);
+invoke('track.1.fx.bypass', true);
 ok('en is een schakelaar', fx.bypass === false);
 fx.setMix(0);
 

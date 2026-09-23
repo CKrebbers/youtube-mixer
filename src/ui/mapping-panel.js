@@ -139,8 +139,9 @@ export class MappingPanel {
   async importeer(bestand) {
     if (!bestand) return;
     try {
-      const { aantal, fouten } = this.mapping.load(await bestand.text());
+      const { aantal, fouten, gemigreerd } = this.mapping.load(await bestand.text());
       this.melding = `${bestand.name}: ${aantal} regels geladen`
+        + (gemigreerd ? ` — ${gemigreerd} omgezet van deck naar track` : '')
         + (fouten.length ? ` — ${fouten.length} genegeerd` : '');
       fouten.forEach((f) => console.warn('[mapping]', f));
     } catch (err) {

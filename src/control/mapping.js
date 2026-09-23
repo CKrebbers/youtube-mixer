@@ -8,7 +8,7 @@ import { Emitter, clamp } from '../lib/emitter.js';
  * action-bus op gaat. Daarmee is hij ook zonder browser te testen.
  *
  * Regelvorm:
- *   { "in": "cc:0:48", "action": "deck.A.filter", "mode": "absolute" }
+ *   { "in": "cc:0:48", "action": "track.1.filter", "mode": "absolute" }
  *
  * `in` is `type:channel:number`. Een `*` op de kanaalplek matcht elk kanaal:
  * `cc:*:16` vangt de device knob van de APC40 mkII, die in mode 0 via het
@@ -49,12 +49,25 @@ export function resolveTarget(action, vars) {
     : action;
 }
 
+/**
+ * Mappings van vóór 23 september 2026 (versie 1) spraken in decks:
+ * `deck.A.filter`. Sindsdien spreekt de bus in tracks, `track.1.filter`, zodat
+ * er acht bij kunnen zonder dat de namen nóg een keer veranderen. Een oud
+ * bestand wordt bij het inlezen omgezet; weggooien zou je eigen koppelingen
+ * kosten.
+ */
+export const MAPPING_VERSIE = 2;
+const OUDE_DECKS = { A: '1', B: '2' };
+export function migreerAction(action) {
+  return action.replace(/^deck\.([AB]|\{focus\})\./, (m, d) => `track.${OUDE_DECKS[d] ?? d}.`);
+}
+
 export class Mapping extends Emitter {
   /**
    * @param read   (actionId) -> huidige stand 0..1 of null. Nodig voor
    *               soft-takeover en voor relatieve encoders.
    * @param invoke (actionId, value) -> void. De action-bus.
-   * @param vars   () -> { focus: 'A' }. Wordt per bericht opnieuw gevraagd.
+   * @param vars   () -> { focus: 1 } (tracknummer). Wordt per bericht opnieuw gevraagd.
    */
   constructor({ read, invoke, vars = () => ({}), now = () => (globalThis.performance?.now() ?? Date.now()) } = {}) {
     super();
@@ -76,6 +89,7 @@ export class Mapping extends Emitter {
 
     const rules = new Map();
     const fouten = [];
+    let gemigreerd = 0;
     doc.rules.forEach((r, i) => {
       if (!r || typeof r.in !== 'string' || typeof r.action !== 'string') {
         fouten.push(`regel ${i}: "in" en "action" zijn verplicht`); return;
@@ -86,8 +100,10 @@ export class Mapping extends Emitter {
         fouten.push(`regel ${i}: "${r.in}" is geen geldige signature (type:kanaal:nummer)`); return;
       }
       if (rules.has(r.in)) fouten.push(`regel ${i}: "${r.in}" staat al gekoppeld, laatste wint`);
+      const action = (doc.version ?? 1) < 2 ? migreerAction(r.action) : r.action;
+      if (action !== r.action) gemigreerd++;
       rules.set(r.in, {
-        in: r.in, action: r.action, mode,
+        in: r.in, action, mode,
         invert: !!r.invert,
         step: typeof r.step === 'number' ? r.step : undefined,
         takeover: typeof r.takeover === 'number' ? r.takeover : undefined,
@@ -100,14 +116,14 @@ export class Mapping extends Emitter {
     this.rules = rules;
     this.resetTakeover();
     this.emit('change', this);
-    return { aantal: rules.size, fouten };
+    return { aantal: rules.size, fouten, gemigreerd };
   }
 
   toJSON() {
     return {
       name: this.name,
       device: this.device,
-      version: 1,
+      version: MAPPING_VERSIE,
       rules: [...this.rules.values()].map((r) => {
         const o = { in: r.in, action: r.action, mode: r.mode };
         if (r.invert) o.invert = true;
