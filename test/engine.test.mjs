@@ -134,6 +134,16 @@ invoke('track.1.pitch.bereik', true);            // 8 -> 16, terug naar standaar
 invoke('track.1.pitch', 0.5);
 ok('fader midden = 0%', eng.deck('A').rate === 1);
 invoke('track.1.pitch', 1);
+{
+  // Nieuw nummer: pitch terug op 0, bereik blijft.
+  const dP = eng.deck('A');
+  dP.pitchBereik = 0.5;
+  dP.load(buf, 'volgend nummer');
+  ok('nieuw nummer begint op 0% pitch', dP.rate === 1 && dP.bron.rate === 1 && read('track.1.pitch') === 0.5);
+  ok('... het bereik blijft staan', dP.pitchBereik === 0.5);
+  dP.pitchBereik = 0.16;
+  invoke('track.1.pitch', 1);
+}
 
 const snap = eng.snapshot();
 // ---- regressie: een afgedankte bron mag niets meer melden ----------------

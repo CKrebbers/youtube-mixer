@@ -151,6 +151,7 @@ test/
   `deck.js`, action `track.N.pitch.bereik`). De fader blijft 0..1, de engine
   schaalt. Bereik wisselen laat het tempo staan; alleen de faderstand verschuift.
   Sync mag verder (0,5–2): dan staat de fader tegen de aanslag (read geklemd).
+  Een nieuw nummer begint op 0% pitch (`_naLaden`); het bereik blijft staan.
 - De master-"limiter" is een `DynamicsCompressor`, geen look-ahead limiter.
 - Er zijn twee soorten loops naast elkaar: in seconden en in tellen. De
   beat-loops klikken in op het grid; zonder grid doen ze niets.

@@ -124,6 +124,9 @@ export class Deck extends Emitter {
     this.hotcues = [null, null, null, null];
     this.grid = null;
     this.loopBeats = null;
+    // Een nieuw nummer begint op 0%: de pitch van het vorige zegt niets over
+    // dit nummer. Het bereik blijft staan, dat is een keuze van de DJ.
+    this.setRate(1);
     this.emit('load', this);
   }
 

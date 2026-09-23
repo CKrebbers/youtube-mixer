@@ -80,7 +80,7 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   aanraakt. Opties: ±8 / ±16 / ±50%, of het bereik schuift mee met sync.
   **Advies:** kiesbaar ±8/±16/±50, standaard ±16.
 
-- [ ] **C2. Pitch terug op 0 bij een nieuw nummer?** Nu houdt een track de
+- [x] **C2. Pitch terug op 0 bij een nieuw nummer?** — Clay: ja (gebouwd 23 sep). Nu houdt een track de
   pitch van het vorige nummer. **Advies:** ja, terug naar 0.
 
 - [ ] **C3. Crossfaderkant: één knop die rondloopt (A→B→thru) of drie aparte?**
