@@ -24,8 +24,19 @@ class StreamLezer extends AudioWorkletProcessor {
     this.duur = 0;
     this.trackRate = sampleRate;
     this.eindeGemeld = false;
+    this.vorig = null;               // het segment waar we uit komen, voor de overgang
+    this.wisselT = -Infinity;
+    this.staat = { env: 1 };
     this.port.onmessage = ({ data: m }) => {
-      if (m.type === 'segment') { this.seg = m.seg; this.eindeGemeld = false; }
+      if (m.type === 'segment') {
+        // Het nieuwe segment niet hard erin zetten maar overvloeien vanaf
+        // het huidige blok. Een segment dat niet speelt en niet speelde
+        // hoeft geen overgang.
+        if (this.seg.speelt || m.seg.speelt) { this.vorig = this.seg; this.wisselT = currentFrame / sampleRate; }
+        this.seg = m.seg;
+        this.segId = m.id;
+        this.eindeGemeld = false;
+      }
       else if (m.type === 'pagina') this.paginas.set(m.i, m.data);
       else if (m.type === 'weg') this.paginas.delete(m.i);
       else if (m.type === 'bron') {
@@ -43,10 +54,14 @@ class StreamLezer extends AudioWorkletProcessor {
     const r = renderBlok({
       seg: this.seg, paginas: this.paginas, uit, frames: uit[0].length,
       t0: currentFrame / sampleRate, ctxRate: sampleRate, trackRate: this.trackRate, duur: this.duur,
+      vorig: this.vorig, wisselT: this.wisselT, staat: this.staat,
     });
+    if (this.vorig && currentFrame / sampleRate > this.wisselT + 0.01) this.vorig = null;
     if (r === 'einde' && !this.eindeGemeld) {
       this.eindeGemeld = true;
-      this.port.postMessage({ type: 'einde' });
+      // Met het segment-id: een late melding van vóór een seek mag het deck
+      // niet naar het einde laten springen.
+      this.port.postMessage({ type: 'einde', id: this.segId });
     }
     return true;
   }

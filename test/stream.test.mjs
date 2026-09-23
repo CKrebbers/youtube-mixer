@@ -123,6 +123,33 @@ try {
   ok(`met naad: grootste stap ${(grootste / toonStap).toFixed(2)}x een normale stap (geen tik)`, grootste < 1.5 * toonStap);
   const midden = blok({ T: 0, P: lusStart, R: 1, loop: { start: lusStart, end: lusEind }, speelt: true }, 0, 4800).uit[0];
   ok('buiten de naad nog steeds exact de samples', midden[100] === vanKop[(48000 + 100) * 2] / 32768);
+
+  // Seek midden in de toon: zonder overgang een sprong in de golfvorm (tik).
+  const maxStap = (x) => { let m = 0; for (let i = 1; i < x.length; i++) m = Math.max(m, Math.abs(x[i] - x[i - 1])); return m; };
+  const oudSeg = { T: 0, P: 1.0, R: 1, loop: null, speelt: true };
+  const nieuwSeg = { T: 0.01, P: 2.00731, R: 1, loop: null, speelt: true };
+  const blokSeek = (metOvergang) => {
+    const uit = [new Float32Array(1024), new Float32Array(1024)];
+    renderBlok({ seg: nieuwSeg, paginas, uit, frames: 1024, t0: 0.01, ctxRate: 48000, trackRate: 48000, duur: 3,
+      ...(metOvergang ? { vorig: oudSeg, wisselT: 0.01 } : {}) });
+    return uit[0];
+  };
+  const toonStap2 = 0.125 * 2 * Math.PI * 331 / 48000;
+  const oudBlok = new Float32Array(1025);
+  renderBlok({ seg: oudSeg, paginas, uit: [oudBlok, new Float32Array(1025)], frames: 1025, t0: 0.01 - 1 / 48000, ctxRate: 48000, trackRate: 48000, duur: 3 });
+  const seekZonder = Float32Array.of(oudBlok[0], ...blokSeek(false));
+  const seekMet = Float32Array.of(oudBlok[0], ...blokSeek(true));
+  ok(`seek zonder overgang: sprong ${(maxStap(seekZonder) / toonStap2).toFixed(0)}x een normale stap`, maxStap(seekZonder) > 5 * toonStap2);
+  ok(`seek met overgang: grootste stap ${(maxStap(seekMet) / toonStap2).toFixed(2)}x (geen tik)`, maxStap(seekMet) < 1.5 * toonStap2);
+
+  // Gat: pagina 1 ontbreekt; aanlopen tegen het gat moet uitvloeien, niet afkappen.
+  const metGat = new Map(paginas); metGat.delete(1);
+  const staat = { env: 1 };
+  const aanloop = [new Float32Array(600), new Float32Array(600)];
+  renderBlok({ seg: { T: 0, P: (PAGINA - 400) / 48000, R: 1, loop: null, speelt: true }, paginas: metGat,
+    uit: aanloop, frames: 600, t0: 0, ctxRate: 48000, trackRate: 48000, duur: 3, staat });
+  ok(`tegen een gat aan: grootste stap ${(maxStap(aanloop[0]) / toonStap2).toFixed(2)}x (uitgevloeid, geen tik)`, maxStap(aanloop[0]) < 1.5 * toonStap2);
+  ok('in het gat: stil', aanloop[0].slice(450).every((v) => v === 0));
 } finally {
   rmSync(map, { recursive: true, force: true });
 }
@@ -237,6 +264,24 @@ console.log('\nStreamBron');
 
   bron.vernietig();
   ok('vernietig ruimt op', !bron.buffer && bron.geheugen === 0 && bron.node === null);
+
+  // Race: twee keer snel laden. De eerste is traag; de tweede moet winnen en
+  // de eerste mag geen pagina's meer in de tweede schuiven.
+  const traag = new StreamBron(ctx, {}, { interval: 1e9, haal: async (url, init) => {
+    if (url.includes('eerste')) await new Promise((r) => setTimeout(r, 60));
+    return haal(url, init);
+  } });
+  const eersteLaad = traag.laad({ url: '/media/eerste/audio.wav' }).then(() => 'klaar', (e) => (e.vervangen ? 'vervangen' : e.message));
+  await new Promise((r) => setTimeout(r, 5));
+  const tweede = await traag.laad({ url: '/media/tweede/audio.wav' }).then(() => 'klaar', (e) => e.message);
+  ok('twee keer snel laden: de laatste wint', tweede === 'klaar' && (await eersteLaad) === 'vervangen'
+    && traag.bestand.url.includes('tweede'));
+  traag.vernietig();
+  const opgeruimd = new StreamBron(ctx, {}, { interval: 1e9, haal: async (u, i) => { await new Promise((r) => setTimeout(r, 30)); return haal(u, i); } });
+  const halfweg = opgeruimd.laad({ url: '/media/x/audio.wav' }).then(() => 'klaar', (e) => (e.vervangen ? 'vervangen' : e.message));
+  await new Promise((r) => setTimeout(r, 5));
+  opgeruimd.vernietig();
+  ok('vernietigd tijdens het laden: geeft op, bouwt niets meer op', (await halfweg) === 'vervangen' && opgeruimd._timer === null);
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

@@ -24,6 +24,9 @@ import {
   STIL, PAGINA, PAGINA_BYTES, BYTES_PER_FRAME, positieOp, ctxTijdVan, leesWavKop, controleerWav, plan, reeksen,
 } from './stream-kern.js';
 
+/** Zo lang vloeit een bron in en uit bij start, seek en stop. Te kort om te horen, lang genoeg tegen een tik. */
+export const DECLICK = 0.004;
+
 export class BufferBron {
   constructor(ctx, uitgang) {
     this.ctx = ctx;
@@ -64,10 +67,15 @@ export class BufferBron {
     return Math.min(p, this.buffer.duration);
   }
 
-  /** Wanneer passeert deze bron die tracktijd, op de audioklok? */
+  /**
+   * Wanneer passeert deze bron die tracktijd (voor het eerst vanaf nu), op de
+   * audioklok? Zelfde regel als ctxTijdVan in de streamkern: binnen een loop
+   * die al rondging telt de gevouwen positie.
+   */
   ctxTimeOf(trackTijd) {
     if (!this.speelt || !this.buffer) return null;
-    return this._startedAt + (trackTijd - this._offset) / this.rate;
+    return ctxTijdVan({ T: this._startedAt, P: this._offset, R: this.rate, loop: this.loop, speelt: true },
+      trackTijd, this.ctx.currentTime);
   }
 
   start(vanaf) {
@@ -81,7 +89,15 @@ export class BufferBron {
       src.loopStart = this.loop.start;
       src.loopEnd = this.loop.end;
     }
-    src.connect(this.uitgang);
+    // Eigen volumeregelaar per start: de oude bron vloeit in 4 ms uit, deze in
+    // 4 ms in. Hard stoppen en midden in een golfvorm beginnen gaf bij elke
+    // seek, hotcue en pauze een tik, harder naarmate er meer geluid was.
+    const nu = this.ctx.currentTime;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0, nu);
+    g.gain.linearRampToValueAtTime(1, nu + DECLICK);
+    src.connect(g).connect(this.uitgang);
+    this.bronGain = g;
     // Vuurt alleen bij een ECHT trackeinde: bij stop() halen we de handler
     // eraf, want een afgedankte bron die 'einde' roept terwijl zijn opvolger
     // al speelt zet het hele deck op zijn kop.
@@ -100,11 +116,20 @@ export class BufferBron {
 
   stop() {
     if (this.source) {
-      const src = this.source;
+      const src = this.source, g = this.bronGain;
       src.onended = null;
-      try { src.stop(); } catch (_) {}
-      src.disconnect();
+      const nu = this.ctx.currentTime;
+      try {
+        // Uitvloeien in plaats van afkappen. cancelAndHold houdt de waarde vast
+        // waar een lopende fade-in nu is, anders springt hij eerst naar 1.
+        if (g.gain.cancelAndHoldAtTime) g.gain.cancelAndHoldAtTime(nu);
+        else { g.gain.cancelScheduledValues?.(nu); g.gain.setValueAtTime(g.gain.value, nu); }
+        g.gain.linearRampToValueAtTime(0, nu + DECLICK);
+        src.stop(nu + DECLICK + 0.001);
+      } catch (_) { try { src.stop(); } catch (__) {} }
+      src.onended = () => { try { src.disconnect(); g.disconnect(); } catch (_) {} };
       this.source = null;
+      this.bronGain = null;
     }
     this.speelt = false;
   }
@@ -208,7 +233,7 @@ export class StreamBron {
     return Math.min(positieOp(this.seg, this.ctx.currentTime), this.duur);
   }
 
-  ctxTimeOf(x) { return ctxTijdVan(this.seg, x); }
+  ctxTimeOf(x) { return ctxTijdVan(this.seg, x, this.ctx.currentTime); }
 
   /**
    * Een WAV-bestand openen. Leest alleen de kop, en haalt dan de eerste
@@ -217,18 +242,28 @@ export class StreamBron {
    */
   async laad({ url }) {
     this.stop();
-    this._generatie++;
+    this.fouten = 0;
+    // Elke laad krijgt een nummer; na elke await kijken of hij nog de
+    // laatste is. Twee keer snel laden mengde anders pagina's van twee
+    // nummers, en een vernietigde bron bouwde zijn worklet weer op.
+    const gen = ++this._generatie;
+    const nogActueel = () => {
+      if (gen !== this._generatie || this._vernietigd) throw Object.assign(new Error('vervangen door een nieuwere laad'), { vervangen: true });
+    };
     await laadStreamModule(this.ctx);
+    nogActueel();
     if (!this.node) {
       this.node = new AudioWorkletNode(this.ctx, 'stream-lezer', {
         numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
       });
-      this.node.port.onmessage = ({ data: m }) => { if (m.type === 'einde') this._einde(); };
+      this.node.port.onmessage = ({ data: m }) => { if (m.type === 'einde' && (m.id === undefined || m.id === this._segId)) this._einde(); };
       this.node.connect(this.uitgang);
     }
     const res = await this.haal(url, { headers: { Range: 'bytes=0-65535' } });
+    nogActueel();
     if (!res.ok) throw new Error(`audio niet gevonden (${res.status})`);
     const kop = leesWavKop(await res.arrayBuffer());
+    nogActueel();
     const fout = controleerWav(kop);
     if (fout) throw new Error(fout);
 
@@ -240,6 +275,7 @@ export class StreamBron {
     this.node.port.postMessage({ type: 'bron', duur: this.duur, sr: kop.sampleRate });
     this._stuur();
     await this.bijvullen();
+    nogActueel();
     this._timer ??= setInterval(() => this.bijvullen().catch(() => {}), this.interval);
   }
 
@@ -266,7 +302,9 @@ export class StreamBron {
 
   async _haalReeks({ van, tot }) {
     const { url, kop } = this.bestand;
-    const gen = this._generatie;
+    // Het BESTAND vastpakken, niet een getal: bij een snelle tweede laad
+    // was het getal al opgehoogd voordat deze reeks begon.
+    const bestand = this.bestand;
     for (let i = van; i <= tot; i++) this.onderweg.add(i);
     try {
       const a = kop.dataStart + van * PAGINA_BYTES;
@@ -274,7 +312,7 @@ export class StreamBron {
       const res = await this.haal(url, { headers: { Range: `bytes=${a}-${b}` } });
       if (res.status !== 206) throw new Error(`geen deelantwoord (${res.status})`);
       const bytes = await res.arrayBuffer();
-      if (gen !== this._generatie || !this.node) return;   // intussen een ander nummer
+      if (this.bestand !== bestand || !this.node) return;   // intussen een ander nummer
       for (let i = van; i <= tot; i++) {
         const o = (i - van) * PAGINA_BYTES;
         if (o >= bytes.byteLength) break;
@@ -288,6 +326,8 @@ export class StreamBron {
     } catch (err) {
       this.fouten++;
       if (this.fouten <= 3) console.warn('[stream] pagina ophalen mislukt:', err.message);
+      // Eén keer per reeks fouten laten weten; een hapering zonder uitleg is erger.
+      if (this.fouten === 1 || this.fouten % 20 === 0) this.onFout?.(`stream hapert: ${err.message}`);
     } finally {
       for (let i = van; i <= tot; i++) this.onderweg.delete(i);
     }
@@ -349,6 +389,7 @@ export class StreamBron {
 
   vernietig() {
     this.stop();
+    this._vernietigd = true;
     this._generatie++;
     clearInterval(this._timer);
     this._timer = null;

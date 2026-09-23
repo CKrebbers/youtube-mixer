@@ -36,10 +36,19 @@ export function positieOp(seg, t) {
   return p;
 }
 
-/** Wanneer passeert dit segment tracktijd x, op de audioklok? */
-export function ctxTijdVan(seg, x) {
+/**
+ * Wanneer passeert dit segment tracktijd x (voor het eerst na `nu`), op de
+ * audioklok? Binnen een loop die al is rondgegaan telt de gevouwen positie:
+ * rekenen vanaf P gaf dan een tijd in het verleden, en gate en sampler
+ * vielen naast de tel.
+ */
+export function ctxTijdVan(seg, x, nu = seg.T) {
   if (!seg.speelt) return null;
-  return seg.T + (x - seg.P) / seg.R;
+  const pos = positieOp(seg, nu);
+  let t = nu + (x - pos) / seg.R;
+  const loop = seg.loop;
+  if (loop && x < pos && x >= loop.start && loop.end > loop.start) t += (loop.end - loop.start) / seg.R;
+  return t;
 }
 
 // ---- WAV ------------------------------------------------------------------
@@ -161,44 +170,89 @@ function lees(paginas, f, k) {
  */
 export const LOOP_NAAD = 0.005;
 
+/** Zo lang vloeien twee segmenten in elkaar over (play, seek, hotcue, stop). */
+export const SEGMENT_FADE = 0.004;
+/** Zo ver vooruit kijken naar een gat, en zo lang doet het uitvloeien erover. */
+export const GAT_FADE = 0.003;
+
+/** Is er data voor frame n en zijn buren (cubisch leest n-1..n+2)? */
+function heeftFrame(paginas, n) {
+  if (n < 0) return true;                 // vóór het begin is stilte, geen gat
+  return paginas.has(Math.floor(n / PAGINA)) && paginas.has(Math.floor((n + 2) / PAGINA));
+}
+
+/**
+ * Eén frame van één segment: [L, R], of null voorbij het trackeinde.
+ * Met de loop-naad: in de laatste LOOP_NAAD van een loop overvloeien naar
+ * wat er vlak vóór het begin staat.
+ */
+function leesSegment(seg, t, paginas, trackRate, duur, naad) {
+  const p = positieOp(seg, t);
+  const loop = seg.loop;
+  if (!loop && p >= duur) return null;
+  const f = p * trackRate;
+  const rest = loop ? loop.end - p : Infinity;
+  if (rest < naad && rest > 0) {
+    // Equal-power: de twee stukken zijn niet gelijk, dus een lineaire fade
+    // zou in het midden een dipje geven.
+    const w = 1 - rest / naad;
+    const a = Math.cos(w * Math.PI / 2), b = Math.sin(w * Math.PI / 2);
+    const g = (loop.start - rest) * trackRate;
+    return [lees(paginas, f, 0) * a + lees(paginas, g, 0) * b, lees(paginas, f, 1) * a + lees(paginas, g, 1) * b];
+  }
+  return [lees(paginas, f, 0), lees(paginas, f, 1)];
+}
+
+const naadVan = (seg) => (seg?.loop ? Math.min(LOOP_NAAD, (seg.loop.end - seg.loop.start) / 4) : 0);
+
 /**
  * Een blok audio renderen. Dit is wat de worklet per 128 frames aanroept.
  *
  * Bij rate 1 en een geheel startpunt komt het exacte sample eruit: de
  * interpolatie valt dan weg (frac = 0). Anders cubisch (Catmull-Rom): lineair
  * dempt de hoge tonen hoorbaar bij een paar procent pitch, en ambient is hoog.
- * Alleen in de laatste LOOP_NAAD van een loop wordt er gemengd.
+ *
+ * Drie dingen tegen tikken:
+ *   loop-naad   in de laatste LOOP_NAAD van een loop (zie leesSegment)
+ *   wissel      `vorig` + `wisselT`: de eerste SEGMENT_FADE na play, seek,
+ *               hotcue of stop vloeit het oude segment over in het nieuwe
+ *   gat         een pagina die er (nog) niet is: GAT_FADE vooruit kijken en
+ *               lineair uitvloeien, na het gat weer in. `staat.env` bewaart
+ *               de stand tussen blokken.
  *
  * @returns 'einde' als het trackeinde binnen dit blok viel, anders null.
  */
-export function renderBlok({ seg, paginas, uit, frames, t0, ctxRate, trackRate, duur }) {
+export function renderBlok({ seg, paginas, uit, frames, t0, ctxRate, trackRate, duur,
+  vorig = null, wisselT = -Infinity, staat = { env: 1 } }) {
   const [L, R] = uit;
-  if (!seg.speelt) { L.fill(0, 0, frames); R.fill(0, 0, frames); return null; }
-  const loop = seg.loop;
-  // Een heel korte loop krijgt een kortere naad, anders is hij alleen nog naad.
-  const naad = loop ? Math.min(LOOP_NAAD, (loop.end - loop.start) / 4) : 0;
+  const inWissel = vorig && t0 < wisselT + SEGMENT_FADE;
+  if (!seg.speelt && !inWissel) { L.fill(0, 0, frames); R.fill(0, 0, frames); return null; }
+  const naad = naadVan(seg), naadOud = naadVan(vorig);
+  const vooruit = GAT_FADE * trackRate * Math.max(0.5, Math.abs(seg.R || 1));
+  const stap = 1 / (GAT_FADE * ctxRate);
   let einde = null;
   for (let i = 0; i < frames; i++) {
-    const p = positieOp(seg, t0 + i / ctxRate);
-    if (!loop && p >= duur) {
-      L.fill(0, i, frames); R.fill(0, i, frames);
-      einde = 'einde';
-      break;
+    const t = t0 + i / ctxRate;
+    let l = 0, r = 0;
+    if (seg.speelt) {
+      const v = leesSegment(seg, t, paginas, trackRate, duur, naad);
+      if (v === null) { einde = 'einde'; }
+      else {
+        // Gat vooruit? Dan uitvloeien; data er weer? Dan invloeien.
+        const n = Math.floor(positieOp(seg, t) * trackRate);
+        const doel = heeftFrame(paginas, n) && heeftFrame(paginas, Math.floor(n + vooruit)) ? 1 : 0;
+        staat.env = doel > staat.env ? Math.min(1, staat.env + stap) : Math.max(doel, staat.env - stap);
+        l = v[0] * staat.env; r = v[1] * staat.env;
+      }
     }
-    const f = p * trackRate;
-    const rest = loop ? loop.end - p : Infinity;
-    if (rest < naad && rest > 0) {
-      // Equal-power: de twee stukken zijn niet gelijk, dus een lineaire fade
-      // zou in het midden een dipje geven.
-      const w = 1 - rest / naad;
+    if (vorig && t < wisselT + SEGMENT_FADE) {
+      const w = Math.max(0, Math.min(1, (t - wisselT) / SEGMENT_FADE));
       const a = Math.cos(w * Math.PI / 2), b = Math.sin(w * Math.PI / 2);
-      const g = (loop.start - rest) * trackRate;
-      L[i] = lees(paginas, f, 0) * a + lees(paginas, g, 0) * b;
-      R[i] = lees(paginas, f, 1) * a + lees(paginas, g, 1) * b;
-    } else {
-      L[i] = lees(paginas, f, 0);
-      R[i] = lees(paginas, f, 1);
+      const o = vorig.speelt ? leesSegment(vorig, t, paginas, trackRate, duur, naadOud) : null;
+      l = (o ? o[0] : 0) * a + l * b;
+      r = (o ? o[1] : 0) * a + r * b;
     }
+    L[i] = l; R[i] = r;
   }
   return einde;
 }
