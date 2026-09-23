@@ -145,6 +145,19 @@ export class BufferBron {
   /** Positie zetten terwijl hij stilstaat. */
   plaats(p) { this._offset = p; }
 
+  /** Een stuk tracktijd als losse AudioBuffer, voor de sampler. */
+  async knip(van, tot) {
+    if (!this.buffer) throw new Error('niets geladen');
+    const sr = this.buffer.sampleRate;
+    const a = Math.max(0, Math.round(van * sr)), b = Math.min(this.buffer.length, Math.round(tot * sr));
+    const uit = this.ctx.createBuffer(2, Math.max(1, b - a), sr);
+    for (let k = 0; k < 2; k++) {
+      const bron = this.buffer.getChannelData(Math.min(k, this.buffer.numberOfChannels - 1));
+      uit.getChannelData(k).set(bron.subarray(a, b));
+    }
+    return uit;
+  }
+
   vernietig() { this.stop(); this.buffer = null; }
 
   setRate(r) {
@@ -333,7 +346,31 @@ export class StreamBron {
     }
   }
 
-  _stuur() { this.node?.port.postMessage({ type: 'segment', seg: this.seg }); }
+  /**
+   * Een stuk tracktijd als losse AudioBuffer, voor de sampler. Opnieuw van
+   * schijf gelezen: de pagina's zitten in de worklet, en wat er achter de
+   * positie ligt is misschien al opgeruimd.
+   */
+  async knip(van, tot) {
+    if (!this.bestand) throw new Error('niets geladen');
+    const { url, kop } = this.bestand;
+    const sr = kop.sampleRate;
+    const a0 = Math.max(0, Math.round(van * sr)), b0 = Math.min(kop.dataLengte / BYTES_PER_FRAME, Math.round(tot * sr));
+    if (b0 <= a0) throw new Error('leeg stuk');
+    const res = await this.haal(url, { headers: { Range: `bytes=${kop.dataStart + a0 * BYTES_PER_FRAME}-${kop.dataStart + b0 * BYTES_PER_FRAME - 1}` } });
+    if (res.status !== 206) throw new Error(`knippen mislukt (${res.status})`);
+    const pcm = new Int16Array(await res.arrayBuffer());
+    const n = pcm.length / 2;
+    const uit = this.ctx.createBuffer(2, n, sr);
+    const L = uit.getChannelData(0), R = uit.getChannelData(1);
+    for (let i = 0; i < n; i++) { L[i] = pcm[i * 2] / 32768; R[i] = pcm[i * 2 + 1] / 32768; }
+    return uit;
+  }
+
+  _stuur() {
+    this._segId = (this._segId || 0) + 1;
+    this.node?.port.postMessage({ type: 'segment', seg: this.seg, id: this._segId });
+  }
 
   _segment(p, speelt) {
     this.seg = { T: this.ctx.currentTime, P: p, R: this.rate, loop: this.loop, speelt };

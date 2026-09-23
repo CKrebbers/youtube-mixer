@@ -242,6 +242,29 @@ export function bindEngine(engine) {
     }
   }
 
+  // ---- sampler: acht pads -------------------------------------------------
+  // Leeg: pak de laatste tellen van de track met focus. Gevuld: start op de
+  // volgende tel, of stop. Shift (de .wis-variant) maakt hem leeg.
+  const sampler = engine.sampler;
+  if (sampler) {
+    for (let i = 0; i < 8; i++) {
+      define(`sampler.${i + 1}`, 'trigger', (on) => {
+        if (!on) return;
+        if (sampler.pads[i]) { sampler.wissel(i); return; }
+        const deck = engine.focused();
+        sampler.neem(i, deck, { bron: trackVanDeck(deck.id) })
+          .catch((err) => engine.emit('melding', { tekst: `sampler pad ${i + 1}: ${err.message}`, soort: 'fout' }));
+      }, { label: `Sampler pad ${i + 1}`,
+           read: () => (sampler.pads[i]?.speelt ? 1 : sampler.pads[i] ? 0.5 : 0) });
+      define(`sampler.${i + 1}.wis`, 'trigger', (on) => { if (on) sampler.wis(i); },
+        { label: `Sampler pad ${i + 1} leegmaken` });
+    }
+    define('sampler.lengte', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },
+      { label: 'Sampler: hoeveel tellen', read: () => [1, 2, 4, 8].indexOf(sampler.tellen) / 3 });
+    define('sampler.volume', 'value', (v) => sampler.setVolume(v),
+      { label: 'Sampler volume', read: () => sampler.volume });
+  }
+
   define('mixer.xfader', 'value', (v) => engine.setXfader(v),
     { label: 'Crossfader', bipolar: true, read: () => engine.xfader });
   define('mixer.master', 'value', (v) => engine.setMaster(v),

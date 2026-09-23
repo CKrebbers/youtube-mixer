@@ -730,6 +730,66 @@ console.log('\nsends');
   ok('elke track heeft beide sends op de bus', list().filter((a) => /^track\.\d\.send\.[ab]$/.test(a.id)).length === 16);
 }
 
+// ---- sampler ----------------------------------------------------------------
+
+console.log('\nsampler');
+{
+  const { knipBereik, naadloos } = await import('../src/engine/sampler.js');
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  const g = new Beatgrid({ bpm: 120, firstBeat: 0.1 });       // tel op 0,1 · 0,6 · 1,1 …
+  let r = knipBereik(g, 5.35, 4);
+  ok('knippen eindigt op de laatste tel vóór de positie', Math.abs(r.tot - 5.1) < 1e-9);
+  ok('en is precies 4 tellen lang', Math.abs(r.tot - r.van - 2) < 1e-9 && r.bpm === 120);
+  r = knipBereik(g, 5.1, 4);
+  ok('precies op een tel: die tel telt mee', Math.abs(r.tot - 5.1) < 1e-9);
+  r = knipBereik(null, 3, 4);
+  ok('zonder grid: laatste 2 s, geen tempo', r.van === 1 && r.tot === 3 && r.bpm === null);
+  const kort = knipBereik(g, 0.7, 8);
+  ok('vlak na het begin: minder HELE tellen, op de tel, niet een afgekapt stuk',
+    kort.tellen === 1 && Math.abs(kort.van - 0.1) < 1e-9 && Math.abs(kort.tot - 0.6) < 1e-9);
+
+  // Naadloos: een zaagtand die niet netjes rondloopt krijgt een zachte naad.
+  const voor = 10, n = 200;
+  const x = new Float32Array(voor + n).map((_, i) => (i % 37) / 37);
+  const [uit] = naadloos([x], voor);
+  ok('naadloos haalt de voorloop eraf', uit.length === n && uit[0] === x[voor]);
+  ok('het laatste sample sluit aan op wat vlak vóór het begin stond',
+    Math.abs(uit[n - 1] - x[voor - 1]) < 1e-6);
+  ok('buiten de naad blijft alles gelijk', uit[50] === x[voor + 50]);
+
+  // De sampler zelf, met de mock
+  const sm = eng.sampler;
+  const dS = eng.deck('F');
+  dS.load(buf, 'sample-bron');
+  dS.setGrid(new Beatgrid({ bpm: 124, firstBeat: 0 }));
+  dS.seek(1.3);
+  sm.tellen = 2;
+  await sm.neem(0, dS, { bron: 6 });
+  const pad = sm.pads[0];
+  ok('pad gevuld, met tempo en bron', pad && pad.bpm === 124 && pad.bron === 6 && pad.tellen === 2);
+  ok('lengte: 2 tellen van 124 bpm', Math.abs(pad.buffer.duration - 2 * 60 / 124) < 0.001);
+  // klok: 120 bpm hoorbaar, volgende tel over 0,3 s
+  const oudeKlok = sm.klok;
+  sm.klok = () => ({ beatLengte: 0.5, ankerCtx: NOW + 0.3 });
+  sm.wissel(0);
+  ok('start op de volgende tel, niet nu', Math.abs(sm.pads[0].start - (NOW + 0.3)) < 1e-9);
+  ok('op het tempo dat je hoort (120/124)', Math.abs(sm.pads[0].src.playbackRate.value - 120 / 124) < 1e-9);
+  ok('als loop', sm.pads[0].src.loop === true);
+  sm.wissel(0);
+  ok('nog eens: stop', !sm.pads[0].speelt);
+  sm.klok = () => null;
+  sm.wissel(0);
+  ok('zonder maat: meteen, op eigen tempo', sm.pads[0].start === NOW && sm.pads[0].src.playbackRate.value === 1);
+  sm.wis(0);
+  ok('wis maakt de pad leeg', sm.pads[0] === null);
+  sm.klok = oudeKlok;
+  let fout = null;
+  await sm.neem(1, eng.deck('H')).catch((e) => { fout = e.message; });
+  ok('lege track: een duidelijke reden, geen halve pad', fout && sm.pads[1] === null);
+  invoke('sampler.lengte', true);
+  ok('lengte-knop loopt rond', [1, 2, 4, 8].includes(sm.tellen));
+}
+
 // ---- ronde 1 van de verbeteringen (23 sep): engine-correctheid -------------
 
 console.log('\nengine-correctheid');

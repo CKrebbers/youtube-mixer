@@ -2,6 +2,7 @@ import { Emitter, clamp, piek } from '../lib/emitter.js';
 import { Deck } from './deck.js';
 import { createMasterChain, xfaderGains, faderGain } from './audio-graph.js';
 import { InsertSlot } from './fx.js';
+import { Sampler } from './sampler.js';
 
 /**
  * Acht tracks, één per fader van de APC40 mkII. De engine noemt ze A t/m H;
@@ -78,6 +79,11 @@ export class Engine extends Emitter {
       for (const id of DECK_IDS) this.decks[id][`send${bus}`].connect(slot.in);
       this.sends[bus] = slot;
     }
+
+    // De sampler speelt op de maat van wat je hoort: dezelfde klok als sync.
+    this.sampler = new Sampler(this.ctx, this.master.input, {
+      klok: () => { const d = this.syncMaster(); return d ? d.fxKlok() : null; },
+    });
 
     this.xfader = 0.5;
     this.xfaderCurve = 'smooth';
