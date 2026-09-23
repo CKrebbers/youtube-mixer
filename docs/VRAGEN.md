@@ -92,9 +92,10 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   eerder "selecteren". **Advies:** nummer = focus, play op een eigen knopje.
   — Clay: zo doen (gebouwd 23 sep: nummer = `track.N.focus`, ▶ = play).
 
-- [ ] **C5. Sends: vóór of na de crossfader?** Nu na de fader, vóór de
+- [x] **C5. Sends: vóór of na de crossfader?** Nu na de fader, vóór de
   crossfader: een track die je met de crossfader wegdraait, blijft insturen.
   **Advies:** zo laten (echo-out met de crossfader werkt dan ook).
+  — Clay: zo laten (23 sep).
 
 - [ ] **C6. De echo op de bus op de maat?** Nu een vaste tijd (~250 ms).
   **Advies:** ja, een tijd in tellen (1/8, 3/16, 1/4) op de klok van de maat.

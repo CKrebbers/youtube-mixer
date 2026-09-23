@@ -331,6 +331,8 @@ test/
   staart sterft vanzelf uit (echo-out). Het insert-effect per track zit
   daarentegen VÓÓR de fader en wordt dus mee dichtgedraaid. Sendknop is
   kwadratisch: het eerste stuk subtiel, het laatste gooit.
+  Bewust vóór de crossfader (Clay, 23 sep): wegdraaien met de crossfader
+  stuurt nog in, zodat echo-out ook met de crossfader werkt.
 - Sampler: een lege pad knipt de laatste N tellen van de track met FOCUS, in
   tracktijd, eindigend op de laatste tel vóór de positie (`knipBereik`). Een
   streamende track wordt daarvoor opnieuw van schijf gelezen (`bron.knip`),
