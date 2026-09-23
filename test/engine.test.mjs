@@ -373,7 +373,7 @@ ok('en laat het huidige staan', fx.effectId === 'delay');
 
 // plekken, niet parameters
 ok('plek 1 heeft een naam', fx.plekNaam(1) === 'tijd');
-ok('plek 4 bestaat niet bij dit effect', fx.plekNaam(4) === null);
+ok('plek 4 is de maat-schakelaar, plek 5 bestaat niet', fx.plekNaam(4) === 'sync' && fx.plekNaam(5) === null);
 fx.setPlek(2, 0.8);
 ok('plek zetten werkt', Math.abs(fx.leesPlek(2) - 0.8) < 1e-9);
 ok('buiten bereik zetten faalt netjes', fx.setPlek(9, 0.5) === false);
@@ -429,7 +429,7 @@ fx.setMix(0);
 
 fx.zetEffect('delay');
 const snapFx = eng.snapshot().decks.A.fx;
-ok('snapshot draagt de fx-staat', snapFx.effect === 'delay' && snapFx.plekken.length === 3);
+ok('snapshot draagt de fx-staat', snapFx.effect === 'delay' && snapFx.plekken.length === 4);
 ok('met de naam van elke plek', snapFx.plekken[0].naam === 'tijd');
 ok('en alleen plekken die bestaan', snapFx.plekken.every((p2) => p2.naam));
 
@@ -748,6 +748,41 @@ console.log('\nsends');
   invoke('send.b.knop.3', 0);
   invoke('send.a.knop.1', 0.3);
   ok('busknop: echotijd', Math.abs(eng.sends.A.paramWaarde('a', 'tijd') - 0.3) < 1e-9);
+  // Echo op de maat (C6): standaard 1/4 tel van de maat-track, knop 4 = vrij.
+  // De klok ver vooruit: eerdere tests lieten fades achter op hun eigen tijd.
+  NOW = 1000;
+  const kop = () => eng.sends.A.keten.node.slots.get('a').inst;
+  ok('echo-bus staat standaard op de maat', eng.sends.A.paramWaarde('a', 'sync') === 1);
+  NOW += 1;
+  invoke('send.a.knop.1', 3 / 7);
+  const dM = eng.deck('D');
+  const { Beatgrid: BG } = await import('../src/engine/beatgrid.js');
+  dM.load(buf, 'maat'); dM.setGrid(new BG({ bpm: 120, firstBeat: 0 })); dM.play();
+  const meester = eng.syncMaster();
+  const tel = meester.fxKlok().beatLengte;
+  NOW += 1;
+  dM.emit('change', dM);
+  ok(`op de maat: 1/4 tel = ${tel.toFixed(3)} s`, Math.abs(kop()._kop().tijden[kop()._kop().actief] - tel) < 1e-6);
+  NOW += 1;
+  invoke('send.a.knop.1', 1 / 7);
+  ok('knop 1 kiest de deling: 1/8 tel', Math.abs(kop()._kop().tijden[kop()._kop().actief] - tel / 2) < 1e-6);
+  NOW += 1;
+  meester.setRate(meester.rate * 1.1);
+  ok('tempo omhoog: de echo loopt mee', Math.abs(kop()._kop().tijden[kop()._kop().actief] - meester.fxKlok().beatLengte / 2) < 1e-6);
+  NOW += 1;
+  meester.setRate(meester.rate / 1.1);
+  const { toonWaarde: tw } = await import('../src/engine/fx.js');
+  ok('eenheid volgt de schakelaar', tw('delay', 'tijd', 1 / 7, (q) => eng.sends.A.paramWaarde('a', q)) === '1/8 tel'
+    && tw('delay', 'tijd', 0) === '20 ms');
+  NOW += 1;
+  invoke('send.a.knop.4', 0);
+  ok('knop 4 naar vrij: weer milliseconden', Math.abs(kop()._kop().tijden[kop()._kop().actief] - 0.02 * Math.pow(60, 1 / 7)) < 1e-6);
+  NOW += 1;
+  invoke('send.a.knop.4', 1);
+  dM.stop();
+  ok('maat-track stopt: de echo houdt de laatste tel', Math.abs(kop()._kop().tijden[kop()._kop().actief] - tel / 2) < 1e-6);
+  dM.setGrid(null);
+  NOW = 0;
   ok('elke track heeft beide sends op de bus', list().filter((a) => /^track\.\d\.send\.[ab]$/.test(a.id)).length === 16);
 }
 

@@ -333,6 +333,14 @@ test/
   kwadratisch: het eerste stuk subtiel, het laatste gooit.
   Bewust vóór de crossfader (Clay, 23 sep): wegdraaien met de crossfader
   stuurt nog in, zodat echo-out ook met de crossfader werkt.
+- De delay kan op de maat (`sync`, Clay 23 sep: "met een schakelaar"). Op de maat
+  kiest dezelfde tijdknop een deling uit `ECHO_DELINGEN` (1/16 … 1/1, kort naar
+  lang) × de hoorbare tel van de klok; vrij is het weer 20 ms–1,2 s. Zonder klok
+  houdt hij de laatst bekende tel (niet terugvallen: dat verspringt midden in een
+  set). Tempo/seek/grid herankert, via `wissel()` dus zonder doppler. De bussen
+  horen bij geen deck: de engine herankert ze bij elke 'change' van een deck.
+  Echo-bus: standaard op de maat, 1/4 tel, knop 4 = schakelaar. `toonWaarde`
+  krijgt een `lees` mee zodat de eenheid ("1/8 tel" of "250 ms") klopt.
 - Sampler: een lege pad knipt de laatste N tellen van de track met FOCUS, in
   tracktijd, eindigend op de laatste tel vóór de positie (`knipBereik`). Een
   streamende track wordt daarvoor opnieuw van schijf gelezen (`bron.knip`),

@@ -273,7 +273,7 @@ export class RackEditor {
       for (const p of this.paramKnoppen) {
         const v = fx.paramWaarde(p.slot, p.param);
         if ((p.vast || !p.knob.dragging) && Math.abs(v - p.knob.value) > 0.0005) p.knob.set(v, true);
-        const t = toonWaarde(p.type, p.param, v);
+        const t = toonWaarde(p.type, p.param, v, (q) => fx.paramWaarde(p.slot, q));
         if (p.uit.textContent !== t) p.uit.textContent = t;
       }
     } catch (err) {
@@ -313,6 +313,12 @@ export class RackEditor {
     const naam = this.effecten.find((e) => e.id === node.type)?.naam || node.type;
     const zelfde = keten.filter((n) => n.type === node.type);
     return zelfde.length > 1 ? `${naam} ${zelfde.indexOf(node) + 1}` : naam;
+  }
+
+  /** De andere parameters van hetzelfde effect, voor eenheden die ervan afhangen (delay op de maat). */
+  _leesVan(target) {
+    const slot = target.slice(0, target.indexOf('.'));
+    return (q) => this.fx.paramWaarde(slot, q);
   }
 
   _typeVan(target) {
@@ -449,7 +455,7 @@ export class RackEditor {
       const link = m.links[l];
       if (doe === 'van' || doe === 'tot') {
         link[doe === 'van' ? 'from' : 'to'] = v;
-        tekst = toonWaarde(this._typeVan(link.target), link.target.slice(link.target.indexOf('.') + 1), v);
+        tekst = toonWaarde(this._typeVan(link.target), link.target.slice(link.target.indexOf('.') + 1), v, this._leesVan(link.target));
       } else if (doe === 'in0') link.in = [v, (link.in || [0, 1])[1]];
       else if (doe === 'in1') link.in = [(link.in || [0, 1])[0], v];
     }
@@ -624,17 +630,17 @@ export class RackEditor {
       return `<div class="re-link">
         <div class="re-link-kop">
           <b>${esc(this._doelNaam(x.target))}</b>
-          <span class="re-kantwaarde${mod === 'dicht' ? ' actief' : ''}" title="bij knop dicht">${esc(toonWaarde(type, param, x.from ?? 0))}</span>
+          <span class="re-kantwaarde${mod === 'dicht' ? ' actief' : ''}" title="bij knop dicht">${esc(toonWaarde(type, param, x.from ?? 0, this._leesVan(x.target)))}</span>
           <span class="re-pijl">→</span>
-          <span class="re-kantwaarde${mod === 'open' ? ' actief' : ''}" title="bij knop open">${esc(toonWaarde(type, param, x.to ?? 1))}</span>
+          <span class="re-kantwaarde${mod === 'open' ? ' actief' : ''}" title="bij knop open">${esc(toonWaarde(type, param, x.to ?? 1, this._leesVan(x.target)))}</span>
           <button class="link re-meer" data-doe="meer" data-plek="${plek}" data-link="${l}" title="precies instellen">${open ? '▾' : '▸'}${afwijkend && !open ? '•' : ''}</button>
           <button class="btn sm re-weg" data-doe="link-weg" data-plek="${plek}" data-link="${l}" title="niet meer sturen">×</button>
         </div>
         ${open ? `<div class="re-meer-vak">
           <label class="re-schuif"><span>stuurt</span>
             <select data-doe="doel" data-plek="${plek}" data-link="${l}">${opties}</select></label>
-          ${schuif('van', l, x.from ?? 0, 'knop dicht', toonWaarde(type, param, x.from ?? 0))}
-          ${schuif('tot', l, x.to ?? 1, 'knop open', toonWaarde(type, param, x.to ?? 1))}
+          ${schuif('van', l, x.from ?? 0, 'knop dicht', toonWaarde(type, param, x.from ?? 0, this._leesVan(x.target)))}
+          ${schuif('tot', l, x.to ?? 1, 'knop open', toonWaarde(type, param, x.to ?? 1, this._leesVan(x.target)))}
           ${schuif('in0', l, in0, 'begint bij knopstand', pct(in0))}
           ${schuif('in1', l, in1, 'klaar bij knopstand', pct(in1))}
           <label class="re-schuif"><span>verloop</span>

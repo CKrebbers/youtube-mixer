@@ -25,11 +25,14 @@ const nrVan = (id) => DECK_IDS.indexOf(id) + 1;
  * track zelf. Knop 1..3 per bus zijn plekken, net als bij de tracks.
  */
 export const SEND_RACKS = {
-  A: { schema: 1, name: 'Echo', chain: [{ slot: 'a', type: 'delay', params: { tijd: 0.62, feedback: 0.5, toon: 0.5 } }],
+  // Standaard op de maat, 1/4 tel (knop 3/7 van de acht delingen). Knop 4
+  // schakelt naar vrij; dan is knop 1 weer milliseconden.
+  A: { schema: 1, name: 'Echo', chain: [{ slot: 'a', type: 'delay', params: { tijd: 3 / 7, feedback: 0.5, toon: 0.5, sync: 1 } }],
     macros: [
-      { place: 1, label: 'tijd', default: 0.62, links: [{ target: 'a.tijd', from: 0, to: 1 }] },
+      { place: 1, label: 'tijd', default: 3 / 7, links: [{ target: 'a.tijd', from: 0, to: 1 }] },
       { place: 2, label: 'herhaling', default: 0.5, links: [{ target: 'a.feedback', from: 0, to: 1 }] },
       { place: 3, label: 'toon', default: 0.5, links: [{ target: 'a.toon', from: 0, to: 1 }] },
+      { place: 4, label: 'op de maat', default: 1, links: [{ target: 'a.sync', from: 0, to: 1 }] },
     ] },
   B: { schema: 1, name: 'Galm', chain: [{ slot: 'a', type: 'reverb', params: { grootte: 0.7, toon: 0.5, meng: 1, freeze: 0 } }],
     macros: [
@@ -71,19 +74,25 @@ export class Engine extends Emitter {
     }
 
     this.sends = {};
+    // De bussen lopen op de maat van wat je hoort: dezelfde klok als sync en sampler.
+    const maatKlok = () => { const d = this.syncMaster(); return d ? d.fxKlok() : null; };
     for (const [bus, rack] of Object.entries(SEND_RACKS)) {
       const slot = new InsertSlot(this.ctx);
+      slot.setKlok(maatKlok);
       slot.setMix(1);                        // helemaal nat
       slot.zetRack(rack);
       slot.out.connect(this.master.input);
       for (const id of DECK_IDS) this.decks[id][`send${bus}`].connect(slot.in);
       this.sends[bus] = slot;
     }
+    // Een bus hoort bij geen enkel deck, dus niemand herankert hem vanzelf.
+    // Elke wijziging aan een deck (tempo, grid, play, seek) kan de maat
+    // veranderen; de delay rekent alleen opnieuw als hij op de maat staat en
+    // wisselt alleen als de tijd echt anders is.
+    for (const id of DECK_IDS) this.decks[id].on('change', () => { for (const s of Object.values(this.sends)) s.heranker(); });
 
     // De sampler speelt op de maat van wat je hoort: dezelfde klok als sync.
-    this.sampler = new Sampler(this.ctx, this.master.input, {
-      klok: () => { const d = this.syncMaster(); return d ? d.fxKlok() : null; },
-    });
+    this.sampler = new Sampler(this.ctx, this.master.input, { klok: maatKlok });
 
     this.xfader = 0.5;
     this.xfaderCurve = 'smooth';

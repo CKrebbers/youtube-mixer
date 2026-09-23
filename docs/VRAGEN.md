@@ -97,8 +97,9 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   **Advies:** zo laten (echo-out met de crossfader werkt dan ook).
   — Clay: zo laten (23 sep).
 
-- [ ] **C6. De echo op de bus op de maat?** Nu een vaste tijd (~250 ms).
+- [x] **C6. De echo op de bus op de maat?** Nu een vaste tijd (~250 ms).
   **Advies:** ja, een tijd in tellen (1/8, 3/16, 1/4) op de klok van de maat.
+  — Clay: ja, met een schakelaar (gebouwd 23 sep: delay-parameter `sync`, echo-bus knop 4).
 
 ---
 

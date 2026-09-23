@@ -47,6 +47,18 @@ export const delingVan = (t) => DELINGEN[Math.min(DELINGEN.length - 1,
  */
 export const GEEN_KLOK = () => null;
 
+/**
+ * Echotijden op de maat, van kort naar lang: knop rechts = langer, net als in
+ * milliseconden. Los van DELINGEN (gate), die van lang naar kort loopt.
+ */
+export const ECHO_DELINGEN = [
+  { id: '1/16', tellen: 0.25 }, { id: '1/8', tellen: 0.5 }, { id: '3/16', tellen: 0.75 },
+  { id: '1/4', tellen: 1 }, { id: '3/8', tellen: 1.5 }, { id: '1/2', tellen: 2 },
+  { id: '3/4', tellen: 3 }, { id: '1/1', tellen: 4 },
+];
+export const echoDelingVan = (t) => ECHO_DELINGEN[Math.min(ECHO_DELINGEN.length - 1,
+  Math.max(0, Math.round(clamp(t) * (ECHO_DELINGEN.length - 1))))];
+
 // ---- eenheden --------------------------------------------------------------
 // Wat een 0..1-waarde in het echt IS. Rekent met precies dezelfde formule als
 // zet() hieronder; wijkt een van de twee af, dan liegt het scherm.
@@ -125,13 +137,16 @@ export const EFFECTEN = [
   {
     id: 'delay',
     naam: 'Delay',
-    params: ['tijd', 'feedback', 'toon'],
-    standaard: { tijd: 0.35, feedback: 0.45, toon: 0.6 },
+    params: ['tijd', 'feedback', 'toon', 'sync'],
+    standaard: { tijd: 0.35, feedback: 0.45, toon: 0.6, sync: 0 },
     eenheid: {
-      tijd: (t) => `${Math.round(expMap(t, 0.02, 1.2) * 1000)} ms`,
+      // Op de maat betekent dezelfde knop een deling in plaats van ms.
+      tijd: (t, lees) => ((lees?.('sync') ?? 0) >= 0.5 ? `${echoDelingVan(t).id} tel` : `${Math.round(expMap(t, 0.02, 1.2) * 1000)} ms`),
       feedback: (t) => pct(t * 0.92),
       toon: (t) => hz(expMap(t, 300, 16000)),
+      sync: (t) => (t >= 0.5 ? 'op de maat' : 'vrij'),
     },
+    trappen: { sync: 2 },
     /*
      * Twee leeskoppen op hetzelfde signaal, in plaats van één delay waarvan
      * je de tijd verschuift.
@@ -147,7 +162,7 @@ export const EFFECTEN = [
      *   in ─► som ─┬─► kop 1 ─► g1 ─┐
      *              └─► kop 2 ─► g2 ─┴─► uit ─► toon ─► fb ─► som
      */
-    bouw(ctx) {
+    bouw(ctx, { klok = GEEN_KLOK } = {}) {
       const ingang = ctx.createGain();
       const uitgang = ctx.createGain();
       const som = ctx.createGain();
@@ -172,7 +187,8 @@ export const EFFECTEN = [
       gains[0].gain.value = 1;
       gains[1].gain.value = 0;
 
-      const staat = { tijd: 0.35, feedback: 0.45 };
+      // knop = stand van de tijdknop; tijd = de seconden die daaruit volgen.
+      const staat = { knop: 0.35, sync: false, tijd: 0.35, feedback: 0.45, tel: null };
       let actief = 0;              // welke kop je hoort
       let klaarOm = 0;             // audiokloktijd waarop de lopende fade af is
       let wachtend = null;         // laatste tijd die nog moet, als je snel draait
@@ -202,23 +218,45 @@ export const EFFECTEN = [
         klaarOm = nu + TIJD_FADE + 0.005;
       };
 
+      /*
+       * Op de maat: tellen × de hoorbare tellengte van de klok. Is er even
+       * geen klok (de maat-track staat stil), dan de laatst bekende tel —
+       * terugvallen op een vast tempo zou de echo midden in een set laten
+       * verspringen. Nooit een tel gezien: 120 bpm.
+       */
+      const seconden = () => {
+        if (!staat.sync) return expMap(staat.knop, 0.02, 1.2);
+        const k = klok();
+        if (k?.beatLengte > 0) staat.tel = k.beatLengte;
+        return Math.min(1.99, Math.max(0.003, (staat.tel ?? 0.5) * echoDelingVan(staat.knop).tellen));
+      };
+
       let eerste = true;
+      const zetTijd = () => {
+        const sec = seconden();
+        staat.tijd = sec;
+        // Bij het bouwen, of zolang de audio niet loopt, klinkt er niets:
+        // dan beide koppen meteen goed. Een fade wachten op een klok die
+        // stilstaat zou nooit klaar zijn.
+        if (eerste || (ctx.state && ctx.state !== 'running')) {
+          eerste = false;
+          for (const k of koppen) k.delayTime.value = sec;
+          wachtend = null;
+        } else {
+          wissel(sec);
+        }
+      };
+
       return {
         in: ingang, out: uitgang,
         zet(naam, v, now) {
           const t = clamp(v);
           if (naam === 'tijd') {
-            staat.tijd = expMap(t, 0.02, 1.2);
-            // Bij het bouwen, of zolang de audio niet loopt, klinkt er niets:
-            // dan beide koppen meteen goed. Een fade wachten op een klok die
-            // stilstaat zou nooit klaar zijn.
-            if (eerste || (ctx.state && ctx.state !== 'running')) {
-              eerste = false;
-              for (const k of koppen) k.delayTime.value = staat.tijd;
-              wachtend = null;
-            } else {
-              wissel(staat.tijd);
-            }
+            staat.knop = t;
+            zetTijd();
+          } else if (naam === 'sync') {
+            staat.sync = t >= 0.5;
+            zetTijd();
           } else if (naam === 'feedback') {
             // Geklemd onder 1: zelfoscillatie blaast je set op.
             staat.feedback = t * 0.92;
@@ -230,6 +268,9 @@ export const EFFECTEN = [
         // Hoe lang blijft er nog iets klinken als de invoer stopt?
         staart: () => Math.min(8, staat.tijd * (staat.feedback > 0.05
           ? Math.log(0.001) / Math.log(staat.feedback) : 1)),
+        // Tempo, seek of een andere maat-track: op de maat opnieuw uitrekenen.
+        // Via wissel(), dus met kruisfade en zonder doppler.
+        heranker: () => { if (staat.sync) zetTijd(); },
         vernietig: () => { clearTimeout(timer); timer = null; wachtend = null; },
         // Voor de tests: welke kop klinkt en op welke tijd.
         _kop: () => ({ actief, tijden: koppen.map((k) => k.delayTime.value), gains: gains.map((g) => g.gain.value) }),
@@ -647,9 +688,10 @@ export const EFFECTEN = [
 export const effectVan = (id) => EFFECTEN.find((e) => e.id === id) || null;
 
 /** Een parameterwaarde zoals een mens hem leest: "350 ms", "LP 2,1 kHz", "45%". */
-export function toonWaarde(type, param, v) {
+/** @param lees  optioneel (param) => waarde van de andere parameters van hetzelfde effect */
+export function toonWaarde(type, param, v, lees = null) {
   const f = effectVan(type)?.eenheid?.[param];
-  return f ? f(clamp(v)) : `${Math.round(clamp(v) * 100)}%`;
+  return f ? f(clamp(v), lees) : `${Math.round(clamp(v) * 100)}%`;
 }
 
 // ---- ketens ----------------------------------------------------------------
