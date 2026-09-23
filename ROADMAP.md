@@ -9,7 +9,7 @@ Vink af in dit bestand zodra een fase draait.
 | 2 | **klaar** | MIDI-laag, MIDI-learn, APC40 mkII-mapping, LED-feedback |
 | 0 | **klaar** | Ingest: yt-dlp + ffmpeg + library |
 | 3 | **volgende** | Beatgrid, BPM, sync, keylock, beat-loops |
-| 4 | | Video-mixer (WebGL) |
+| 4 | **begonnen** | Video volgt audio per track, WebGL-mix op fader × crossfader, los venster; nog: blend modes, video-FX, GOP-meting |
 | 5 | **begonnen** | FX-racks per link draaien met zes effecten incl. tempo-gesynchroniseerde gate, en zijn op het gehoor te bouwen in de rack-editor (knoppen bovenaan, echte eenheden, DICHT/OPEN), met drie kant-en-klare racks; acht tracks in engine en scherm (twee vensters + trackrij, crossfader A/B/thru, sync naar de luidste); streamen vanaf schijf (acht albums ~30 MB); nog: APC-mapping voor tracks 3-8, sends, 4 decks, sampler, recording |
 
 

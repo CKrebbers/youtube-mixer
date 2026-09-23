@@ -17,6 +17,7 @@
     </label>
     <button id="lib-btn" class="ghost">library</button>
     <button id="leer-btn" class="ghost">koppelen</button>
+    <button id="video-btn" class="ghost" title="video-mixer (V)">video</button>
     <button id="midi-btn" class="ghost">MIDI</button>
     <button id="help-btn" class="ghost">? toetsen</button>
     <button id="audio-btn" class="primary">audio starten</button>
@@ -264,6 +265,19 @@
     <div class="re-keten"></div>
     <div class="re-macros"></div>
   </div>
+</section>
+
+<!-- ================= VIDEO ================= -->
+<section id="video-panel" class="video-panel hidden">
+  <div class="vid-head">
+    <span class="vid-titel">VIDEO</span>
+    <span class="vid-status"></span>
+    <span class="vid-tools">
+      <button class="btn sm vid-los" title="in een eigen venster, voor een tweede scherm">los venster</button>
+      <button class="btn sm vid-sluit">sluit</button>
+    </span>
+  </div>
+  <canvas class="vid-canvas"></canvas>
 </section>
 
 <div id="leer-balk" class="leer-balk hidden"></div>

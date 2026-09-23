@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>VARVE DJ — video</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none}
+  video{width:100%;height:100%;object-fit:contain;display:block}
+  p{position:fixed;inset:auto 0 16px 0;text-align:center;color:#7b8794;font:13px system-ui;cursor:default}
+</style>
+</head>
+<body>
+<video autoplay muted playsinline></video>
+<p class="hint">dubbelklik voor volledig scherm · sleep dit venster naar het tweede scherm</p>
+<script>
+  // Het beeld komt van het canvas in het hoofdvenster: daar wordt gemengd,
+  // hier alleen getoond. Zo draait de mixer één keer, niet twee.
+  const v = document.querySelector('video');
+  const hint = document.querySelector('.hint');
+  // Herlaad je de app, dan is het oude canvas weg en zou dit venster op een
+  // dode stream blijven hangen. Daarom elke seconde kijken of we nog aan HET
+  // canvas van nu hangen, en anders opnieuw koppelen.
+  let canvas = null;
+  const koppel = () => {
+    let mixer = null;
+    try { mixer = window.opener && !window.opener.closed ? window.opener.videoMixer : null; } catch (_) {}
+    if (!mixer) {
+      hint.textContent = 'geen app gevonden — open dit venster vanuit de app (knop "los venster")';
+      hint.style.opacity = 1;
+      return;
+    }
+    if (mixer.canvas === canvas) return;
+    canvas = mixer.canvas;
+    v.srcObject = canvas.captureStream(30);
+    v.play().catch(() => {});
+  };
+  koppel();
+  setInterval(koppel, 1000);
+  document.addEventListener('dblclick', () => {
+    if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen();
+  });
+  setTimeout(() => { hint.style.transition = 'opacity 1s'; hint.style.opacity = 0; }, 4000);
+</script>
+</body>
+</html>

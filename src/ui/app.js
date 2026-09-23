@@ -10,6 +10,7 @@ import { MappingPanel } from './mapping-panel.js';
 import { LearnMode } from './learn-mode.js';
 import { LibraryPanel } from './library-panel.js';
 import { RackEditor } from './rack-editor.js';
+import { VideoMixer } from '../video/video-mixer.js';
 import apc40mk2 from '../control/devices/apc40mk2.js';
 import generic from '../control/devices/generic.js';
 import { MidiMonitor } from './midi-monitor.js';
@@ -25,6 +26,30 @@ bindEngine(engine);
 window.engine = engine;   // handig in de console tijdens bouwen
 
 const perDeck = (maak) => Object.fromEntries(DECK_IDS.map((id) => [id, maak(id)]));
+
+// ---- video ----------------------------------------------------------------
+// Een eigen laag die de engine alleen uitleest (regel 1). Mengt de video's van
+// alle acht tracks op één canvas; het losse venster krijgt DAT canvas als
+// stream, zodat er maar één keer gemengd wordt.
+const videoPaneel = document.getElementById('video-panel');
+const videoMixer = new VideoMixer({ canvas: videoPaneel.querySelector('.vid-canvas'), engine, decks: DECK_IDS });
+window.videoMixer = videoMixer;
+let losVenster = null;
+const videoAan = () => !videoPaneel.classList.contains('hidden') || (losVenster && !losVenster.closed);
+const toggleVideo = () => {
+  videoPaneel.classList.toggle('hidden');
+  if (!videoAan()) videoMixer.pauzeerAlles();
+};
+document.getElementById('video-btn').addEventListener('click', toggleVideo);
+videoPaneel.querySelector('.vid-sluit').addEventListener('click', toggleVideo);
+videoPaneel.querySelector('.vid-los').addEventListener('click', () => {
+  if (losVenster && !losVenster.closed) { losVenster.focus(); return; }
+  losVenster = window.open('video.html', 'varve-video', 'width=960,height=540');
+});
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyV' && !e.target.matches('input, textarea, select')) toggleVideo();
+});
+if (videoMixer.fout) console.warn('[video]', videoMixer.fout);
 const analysis = perDeck(() => null);
 const views = {};
 const knobs = [];
@@ -138,6 +163,7 @@ for (const v of VENSTERS) {
     const id = venster[v];
     const buf = renderDemoTrack(engine.ctx, { seed: DECK_IDS.indexOf(id), bars: 16 });
     engine.deck(id).load(buf, `demo ${trackVanDeck(id)} — 124 bpm`);
+    videoMixer.zetBron(id, null);
     analysis[id] = computePeaks(buf);
   });
 }
@@ -147,6 +173,7 @@ async function loadFile(id, file) {
   const arr = await file.arrayBuffer();
   const buf = await engine.ctx.decodeAudioData(arr);
   engine.deck(id).load(buf, file.name.replace(/\.[^.]+$/, ''));
+  videoMixer.zetBron(id, null);
   analysis[id] = computePeaks(buf);
   console.log(`[deck ${id}] ${file.name} — ${buf.duration.toFixed(1)}s — RMS ${rmsDb(buf).toFixed(1)} dBFS`);
 }
@@ -246,6 +273,7 @@ const library = new LibraryPanel({
     const uitCache = track.peaks ? await laadPeaks('/' + track.peaks.bestand.replace(/^\//, ''),
       { samplesPerBucket: track.peaks.perBucket, duration: track.duur || duur }) : null;
     analysis[deckId] = uitCache;
+    videoMixer.zetBron(deckId, track.video ? '/' + track.video.replace(/^\//, '') : null);
     deckTrack[deckId] = track.id;
     // Een eerder uitgemeten grid komt mee met de link.
     engine.deck(deckId).setGrid(track.grid || null);
@@ -823,6 +851,13 @@ function tekenFrame() {
   }
 
   mapPanel.tick();
+  if (videoAan()) {
+    videoMixer.teken();
+    const st = videoMixer.stand().filter((l) => l.video && l.speelt);
+    const tekst = videoMixer.fout || (st.length ? st.map((l) => `${trackVanDeck(l.id)}: ${Math.round(l.verschil * 1000)} ms`).join(' · ') : 'geen zichtbare video');
+    const statusEl = videoPaneel.querySelector('.vid-status');
+    if (statusEl.textContent !== tekst) statusEl.textContent = tekst;
+  }
 
   masterMeter.style.width = (s.masterPeak * 100).toFixed(1) + '%';
   masterMeter.classList.toggle('clip', s.masterPeak > 0.98);

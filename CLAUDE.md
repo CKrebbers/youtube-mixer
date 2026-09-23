@@ -63,6 +63,8 @@ src/
   ui/               app.js, waveform.js, controls.js, midi-monitor.js,
                     mapping-panel.js (de lijst), learn-mode.js (aanwijzen op het scherm),
                     rack-editor.js (racks bouwen met de muis, werkt op een kopie)
+  video/            volg.js         hoe een video de audio volgt. Puur rekenwerk.
+                    video-mixer.js  <video> per track, gemengd met WebGL2. Leest de engine alleen uit.
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
 server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
@@ -89,6 +91,7 @@ test/
   detect.test.mjs   beatdetectie op materiaal waarvan het antwoord bekend is
   rack.test.mjs     macro-resolutie met een gouden bestand, migratie, onbekende effecten
   stream.test.mjs   streamkern tegen ffmpeg (bit voor bit), pagina-plan, StreamBron
+  video.test.mjs    video volgt audio: bijsturen, springen, zichtbaarheid
 ```
 
 ## Conventies
@@ -258,6 +261,20 @@ test/
   bucket een min en een max als float32). De browser leest dat bestand en valt
   alleen terug op zelf rekenen als het er niet is. Het formaat is identiek aan
   `computePeaks()`; `analyze.test.mjs` vergelijkt ze bit voor bit.
+- Video is SLAAF van de audio (`src/video/`, fase 4). Klein verschil: een
+  fractie sneller of trager (hooguit 10%); boven 150 ms: springen, naar waar
+  de audio is ALS de seek klaar is (gemeten seekduur per video). Het doel is
+  wat je HOORT: deckpositie min uitgangsvertraging. Zichtbaarheid = fader ×
+  crossfader; wat onzichtbaar is wordt gepauzeerd en niet geüpload. Het losse
+  venster (`video.html`) toont het canvas van het hoofdvenster via
+  captureStream: er wordt één keer gemengd.
+- De video's hebben een sleutelbeeld per 8,3 s (zoals YouTube ze levert).
+  Springen midden in zo'n stuk laat de decoder tot 8 s beeld doorrekenen.
+  Nog niet gemeten in een zichtbaar venster; hapert het bij loops, dan is de
+  oplossing een kortere GOP bij de ingest (-g 30), niet slimmer springen.
+- Chrome laadt en decodeert geen media in een tabblad dat niet zichtbaar is,
+  en pauzeert daar de animatielus. Video-gedrag test je dus met het venster
+  vooraan; in een achtergrondtab meet je niets.
 - Een effect-rack hangt aan een LINK (`tracks.id`), niet aan een fader. Laad je
   hetzelfde nummer op een andere track, dan komen zijn racks mee. Meerdere per
   nummer, één actief. De inhoud is JSON: wat er ín een rack staat is een zaak
