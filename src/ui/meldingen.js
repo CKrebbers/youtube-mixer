@@ -16,14 +16,34 @@ import { bijFout, trackVanDeck } from '../control/actions.js';
  * en die leest niemand tijdens een set.
  */
 const meldingen = document.getElementById('meldingen');
+const MAX = 4;
+const weg = (el) => { el.classList.add('weg'); setTimeout(() => el.remove(), 400); };
+
+/**
+ * Info verdwijnt na `duur` ms. Een FOUT blijft staan tot je erop klikt: die
+ * moet je gezien hebben, ook als je net naar de APC keek. Te veel tegelijk:
+ * eerst de oudste info weg, pas daarna de oudste fout.
+ */
 export function meld(tekst, soort = 'info', duur = 5000) {
+  // Dezelfde fout die al staat (een stream die blijft haperen): niet stapelen.
+  const al = soort === 'fout' && [...meldingen.children].find((m) => m.classList.contains('fout') && m.textContent === tekst);
+  if (al) return al;
   const el = document.createElement('div');
   el.className = `melding ${soort}`;
   el.textContent = tekst;
   meldingen.append(el);
-  while (meldingen.children.length > 4) meldingen.firstElementChild.remove();
-  setTimeout(() => { el.classList.add('weg'); setTimeout(() => el.remove(), 400); }, duur);
-  if (soort === 'fout') console.warn('[melding]', tekst);
+  while (meldingen.children.length > MAX) {
+    const oudste = [...meldingen.children].find((m) => !m.classList.contains('fout')) ?? meldingen.firstElementChild;
+    oudste.remove();
+  }
+  if (soort === 'fout') {
+    el.title = 'klik om weg te halen';
+    el.addEventListener('click', () => weg(el), { once: true });
+    console.warn('[melding]', tekst);
+  } else {
+    setTimeout(() => weg(el), duur);
+  }
+  return el;
 }
 
 /** Kort op de knop zelf laten zien wat er gebeurde; de console leest niemand. */

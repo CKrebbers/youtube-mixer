@@ -117,10 +117,13 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
     // De TAP-knop staat alleen op het scherm voor de track met focus.
     const knop = deck === engine.focus ? document.querySelector('#focus-deck .tap') : null;
     knop?.classList.add('bezig');
+    // Waar je tikte, in tracktijd: de server scoort dan ±45 s rond die plek,
+    // zodat een lang album met tempowissels het tempo van HIER krijgt.
+    const positie = engine.deck(deck).position;
     try {
       const res = await fetch(`/api/library/${trackId}/grid/verfijn`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bpm }),
+        body: JSON.stringify({ bpm, positie }),
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const r = await res.json();

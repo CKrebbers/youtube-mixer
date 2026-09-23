@@ -7,6 +7,7 @@ import { esc } from './dom.js';
 import {
   kolomControls, SCENES, MASTERKOLOM, TRANSPORT, TEMPO, DEVICE_KNOBS, DEVICE_KNOPPEN,
   PIJLEN, SHIFT, BANK, CROSSFADER, leesControl, kortInKolom, lichtVan, naamVan,
+  kolomInfo, kantVan, isKantKnop,
 } from './spiegel-plan.js';
 
 /**
@@ -46,17 +47,14 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
     const nr = trackVanDeck(id);
     const c = Object.fromEntries(kolomControls(nr).map((x) => [x.rol, x]));
     return `<div class="kol" data-deck="${id}" data-kolom="${nr}">
-      <div class="kol-kop"><b class="kol-nr">${nr}</b><span class="kol-titel">— leeg —</span></div>
+      <div class="kol-kop"><b class="kol-nr">${nr}</b><span class="kol-maat hidden" title="deze track geeft de maat (sync, sampler, video-puls)">MAAT</span></div>
+      <div class="kol-titel">— leeg —</div>
+      <div class="kol-info"><span class="kol-rest" title="resterende tijd">—</span><span class="kol-bpm" title="bpm die je hoort (grid × pitch)">—</span><i class="kol-speelt">▶</i></div>
       ${html(c.knob)}
       <div class="kol-pads">${[1, 2, 3, 4, 5].map((r) => knopHtml(c[`pad${r}`])).join('')}</div>
       ${knopHtml(c.stop)}
       ${knopHtml(c.select, 'spg-select')}
       <div class="kol-2x2">${knopHtml(c.activator)}${knopHtml(c.ab)}${knopHtml(c.solo)}${knopHtml(c.arm)}</div>
-      <div class="kol-kanten" title="crossfaderkant: A, thru (altijd hoorbaar) of B">
-        <button data-kind="button" data-action="track.${nr}.xfade.a" class="kol-kant" data-kant="A">A</button>
-        <button data-kind="button" data-action="track.${nr}.xfade.thru" class="kol-kant" data-kant="thru">thru</button>
-        <button data-kind="button" data-action="track.${nr}.xfade.b" class="kol-kant" data-kant="B">B</button>
-      </div>
       <div class="kol-onder">${faderHtml(c.fader, 'vfader')}<div class="meter vmeter kol-meter"><i></i></div></div>
       <div class="kol-voet"><b>${nr}</b></div>
     </div>`;
@@ -83,7 +81,9 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
   // Alles met een data-sig is een gespiegelde control.
   for (const el of document.querySelectorAll('[data-sig]')) {
     const kolom = el.closest('.kol')?.dataset.kolom;
-    items.push({ el, sig: el.dataset.sig, kolom: kolom ? Number(kolom) : null, r: null });
+    // Onderdelen die teken() elke frame nodig heeft, één keer opgezocht.
+    items.push({ el, sig: el.dataset.sig, kolom: kolom ? Number(kolom) : null, r: null,
+      t: el.querySelector('.spg-t'), lab: null });
     if (!perSig.has(el.dataset.sig)) perSig.set(el.dataset.sig, []);
     perSig.get(el.dataset.sig).push(el);
   }
@@ -155,6 +155,9 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
     el.title = r ? r.titel : `APC: ${naamVan(item.sig)} — (niets gekoppeld)`;
     item.fxPlek = r ? Number(/^track\.\d+\.fx\.knob\.(\d)$/.exec(r.action)?.[1]) || null : null;
     if (!item.fxPlek) el.classList.remove('dof');
+    // De A|B-knop toont de KANT (A / thru / B), geen aan/uit-licht; zie teken().
+    item.kant = !!r && isKantKnop(r.action);
+    if (!item.kant) delete el.dataset.kant;
     let tekst = r ? r.kort : '';
     // In een kolom staat het tracknummer al bovenaan: "focus 3" wordt "focus".
     if (item.kolom) tekst = kortInKolom(tekst).replace(new RegExp(`^focus ${item.kolom}$`), 'focus');
@@ -166,7 +169,7 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
       }
       const lab = el.querySelector('.knob-label');
       if (lab && !item.fxPlek && lab.textContent !== tekst) lab.textContent = tekst;
-    } else if (!isFader) {
+    } else if (!isFader && !item.kant) {
       const t = el.querySelector('.spg-t');
       if (t && t.textContent !== tekst) t.textContent = tekst;
     }
@@ -222,7 +225,8 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
   const kolEls = Object.fromEntries(DECK_IDS.map((id) => {
     const root = kolommenEl.querySelector(`.kol[data-deck="${id}"]`);
     return [id, { root, titel: root.querySelector('.kol-titel'), meter: root.querySelector('.kol-meter i'),
-      kanten: [...root.querySelectorAll('.kol-kant')] }];
+      maat: root.querySelector('.kol-maat'), rest: root.querySelector('.kol-rest'), bpm: root.querySelector('.kol-bpm'),
+      hoogte: '' }];
   }));
   const fdTrack = document.querySelector('.fd-track');
   const fdTitel = document.querySelector('.fd-titel');
@@ -230,6 +234,9 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
   const fdLaagUitleg = document.querySelector('.fd-laag-uitleg');
   const focusdeel = document.getElementById('focusdeel');
   const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  // classList.toggle met dezelfde stand is goedkoop, maar niet gratis: 16
+  // elementen × 6 klassen × 60 frames. Alleen aanraken wat verandert.
+  const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
   let laatsteFocus = engine.focus;
 
   function teken(s) {
@@ -240,36 +247,59 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
       const titel = d.title || '— leeg —';
       tekst(k.titel, titel);
       tekst(b.titel, titel);
-      k.meter.style.height = (d.level * 100).toFixed(1) + '%';
+      const hoogte = (d.level * 100).toFixed(1) + '%';
+      if (k.hoogte !== hoogte) { k.hoogte = hoogte; k.meter.style.height = hoogte; }
+      // MAAT op een track die stilstaat: gedimd en "(stil)". De maat komt dan
+      // van de eerste geladen track met grid, niet van wat je hoort.
+      const maat = s.maat === id, stil = maat && !d.playing;
       for (const root of [k.root, b.root]) {
-        root.classList.toggle('speelt', d.playing);
-        root.classList.toggle('leeg', !d.loaded);
-        root.classList.toggle('focused', s.focus === id);
-        root.classList.toggle('tweede', venster.R === id && s.focus !== id);
-        root.classList.toggle('maat', s.maat === id);
+        klasse(root, 'speelt', d.playing);
+        klasse(root, 'leeg', !d.loaded);
+        klasse(root, 'focused', s.focus === id);
+        klasse(root, 'tweede', venster.R === id && s.focus !== id);
+        klasse(root, 'maat', maat);
+        klasse(root, 'maat-stil', stil);
       }
-      k.kanten.forEach((el) => el.classList.toggle('on', el.dataset.kant === d.kant));
+      klasse(k.maat, 'hidden', !maat);
+      tekst(k.maat, stil ? 'MAAT (stil)' : 'MAAT');
+      const info = kolomInfo(d);
+      tekst(k.rest, info.rest);
+      tekst(k.bpm, info.bpm);
+      klasse(k.rest, 'bijna', info.bijna);
       b.view.draw(d, analysis[id]);
     }
 
     // Lampjes: wat de action zelf zegt, net als de LED-laag.
     for (const item of items) {
       const { el, r } = item;
-      if (el.tagName === 'INPUT' || el.classList.contains('knob')) continue;
-      const licht = r ? lichtVan(readAction(r.action)) : null;
+      if (!item.t || el === shiftEl) continue;   // draaiknop, fader, shift: eigen regels
+      if (item.kant) {
+        // A|B-knop: de letter van de kant in de kleur van de kant.
+        const kant = kantVan(readAction(r.action)) ?? '';
+        if (el.dataset.kant !== kant) { el.dataset.kant = kant; tekst(item.t, kant); }
+        if (el.dataset.licht !== '') el.dataset.licht = '';
+        continue;
+      }
+      // On/Off brandt als het effect AAN staat (zoals de LED op de APC), terwijl
+      // de read van fx.bypass 1 = uit is.
+      const ruw = r ? readAction(r.action) : null;
+      const licht = r ? lichtVan(/\.fx\.bypass$/.test(r.action) && ruw != null ? 1 - ruw : ruw) : null;
       const want = licht ?? '';
       if (el.dataset.licht !== want) el.dataset.licht = want;
     }
-    if (shiftEl) shiftEl.dataset.licht = appMapping?.shift ? 'aan' : 'uit';
+    if (shiftEl) {
+      const want = appMapping?.shift ? 'aan' : 'uit';
+      if (shiftEl.dataset.licht !== want) shiftEl.dataset.licht = want;
+    }
 
     // Device knobs in het rack: de naam van de plek, en dof als hij niets doet.
     const fd = s.decks[s.focus];
     for (const item of items) {
       if (!item.fxPlek) continue;
       const p = fd?.fx.plekken.find((x) => x.plek === item.fxPlek);
-      const lab = item.el.querySelector('.knob-label');
-      if (lab) tekst(lab, p?.naam || `fx ${item.fxPlek}`);
-      item.el.classList.toggle('dof', !p);
+      item.lab ??= item.el.querySelector('.knob-label');
+      if (item.lab) tekst(item.lab, p?.naam || `fx ${item.fxPlek}`);
+      klasse(item.el, 'dof', !p);
     }
 
     const nr = trackVanDeck(s.focus);
@@ -278,7 +308,7 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
     const laag = lagen?.stand.device ?? 'strip';
     tekst(fdLaag, laag.toUpperCase());
     tekst(fdLaagUitleg, laag === 'rack' ? 'de acht knoppen van het rack' : 'trim · high · mid · low / echo · galm · fx');
-    focusdeel.dataset.laag = laag;
+    if (focusdeel.dataset.laag !== laag) focusdeel.dataset.laag = laag;
   }
 
   return { herbereken, koppel, markeer, teken, bron, items };

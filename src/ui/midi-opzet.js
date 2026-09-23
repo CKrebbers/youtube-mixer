@@ -10,6 +10,7 @@ import { MappingPanel } from './mapping-panel.js';
 import { LearnMode } from './learn-mode.js';
 import { MidiMonitor } from './midi-monitor.js';
 import { meld } from './meldingen.js';
+import { tabblad, isEersteTabblad } from './tabblad.js';
 
 /**
  * Alles rond MIDI aan de schermkant: hub, mapping, LED-laag, leren, het
@@ -30,6 +31,17 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
   const pickDevice = (naam) => DEVICES.find((d) => d.match.test(naam || '')) || generic;
 
   const midi = new MidiHub();
+  /*
+   * Maar één VARVE-tabblad praat met de APC (tabblad.js, Web Lock). Een tweede
+   * tabblad vraagt helemaal GEEN MIDI-toegang aan: dan kan het ook niets
+   * sturen. Twee of drie tabbladen die tegelijk init en LED's naar de APC
+   * sturen, lieten Chrome's MIDI-dienst crashen (23 sep 2026, net als de
+   * vier crashes op 22 sep). Wordt dit tabblad later het eerste (het andere
+   * sloot), dan pas MIDI openen.
+   */
+  const echteInit = midi.init.bind(midi);
+  midi.init = (...a) => (isEersteTabblad() ? echteInit(...a) : Promise.resolve(false));
+  tabblad().on('eerste', () => { echteInit().catch(() => {}); });
   const mapping = new Mapping({
     read: readAction,
     invoke,
@@ -46,6 +58,8 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
 
   midi.on('input', (port) => {
     device = pickDevice(port?.name);
+    // Echofilter per apparaat (feedback-lussen via LED-ringen); zie devices/*.js.
+    midi.echoFilter = device.echoFilter !== false;
     console.log(`[midi] ${port ? port.name : 'geen invoer'} -> profiel ${device.id}`);
   });
 
@@ -66,7 +80,7 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
   // LED's lopen op hun eigen klok, niet op de renderloop. requestAnimationFrame
   // staat stil zodra het venster naar de achtergrond gaat, en dan zouden de
   // lampjes op de controller bevriezen terwijl de muziek doorspeelt.
-  setInterval(() => feedback.tick(), 33);
+  setInterval(() => { if (isEersteTabblad()) feedback.tick(); }, 33);
 
   // Laat de controller niet met oude lampjes achter. Bij het sluiten is er geen
   // volgende tik meer, dus dit gaat direct — en alleen wat echt brandt, niet de

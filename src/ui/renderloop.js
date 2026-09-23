@@ -1,5 +1,6 @@
 import { read as readAction, trackVanDeck } from '../control/actions.js';
 import { fmtTime } from '../lib/emitter.js';
+import { BIJNA_EINDE } from './spiegel-plan.js';
 
 /**
  * De renderloop: één rAF voor de hele UI. De engine wordt alleen uitgelezen,
@@ -30,11 +31,21 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     fase: r.querySelector('.fase'),
     faseWijzer: r.querySelector('.fase i'),
   };
+  // Het aantal tellen staat vast per knop; de track in de action wisselt met de focus.
+  for (const b of e.beatBtns) b._tellen = parseFloat(b.dataset.action.split('.').pop());
   const fxRij = document.querySelector('#focusdeel .fx-row');
   const fxNaam = fxRij.querySelector('.fx-naam');
   const padEls = [...document.querySelectorAll('.pad')];
+  const lengteKnop = document.querySelector('.sampler-lengte');
   const masterMeter = document.querySelector('.master-meter i');
   const curveBtn = document.querySelector('.curve');
+
+  // Alleen schrijven wat verandert: een textContent of classList die elke
+  // frame opnieuw gezet wordt, laat Chrome elke frame stijl en opmaak
+  // narekenen, ook als er niets verschilt.
+  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
+  const stijl = (el, prop, v) => { if (el.style[prop] !== v) el.style[prop] = v; };
 
   /**
    * Schermknoppen bijwerken vanuit de engine.
@@ -105,44 +116,51 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       views.zoom.draw(d, analysis[id]);
       views.overview.draw(d, analysis[id]);
 
-      if (e.title.textContent !== (d.title || '— leeg —')) e.title.textContent = d.title || '— leeg —';
-      e.pos.textContent = fmtTime(d.position);
-      e.rem.textContent = '-' + fmtTime(Math.max(0, d.duration - d.position));
-      e.play.classList.toggle('on', d.playing);
-      e.pitch.textContent = ((d.rate - 1) * 100).toFixed(1) + '%';
-      const bereik = `±${Math.round(engine.deck(id).pitchBereik * 100)}`;
-      if (e.pitchBereik.textContent !== bereik) e.pitchBereik.textContent = bereik;
+      tekst(e.title, d.title || '— leeg —');
+      tekst(e.pos, fmtTime(d.position));
+      const rest = Math.max(0, d.duration - d.position);
+      tekst(e.rem, '-' + fmtTime(rest));
+      klasse(e.rem, 'bijna', d.playing && d.loaded && rest < BIJNA_EINDE);
+      klasse(e.play, 'on', d.playing);
+      tekst(e.pitch, ((d.rate - 1) * 100).toFixed(1) + '%');
+      tekst(e.pitchBereik, `±${Math.round(engine.deck(id).pitchBereik * 100)}`);
       // bpm: wat je HOORT, dus inclusief pitch.
-      e.bpm.textContent = d.bpm ? d.bpm.toFixed(1) : '—';
-      e.bpm.classList.toggle('leeg', !d.bpm);
-      e.tap.classList.toggle('actief', !!d.grid);
-      e.maat.classList.toggle('hidden', s.maat !== id);
-      views.root.classList.toggle('leeg', !d.loaded);
+      tekst(e.bpm, d.bpm ? d.bpm.toFixed(1) : '—');
+      klasse(e.bpm, 'leeg', !d.bpm);
+      // TAP met een grid: "grid bekend", een rustige stijl — niet "actief",
+      // want er gebeurt niets zolang je niet tikt.
+      klasse(e.tap, 'grid-bekend', !!d.grid);
+      // MAAT gedimd als de maatgever stilstaat (dan is het de eerste track met grid).
+      const maat = s.maat === id, stil = maat && !d.playing;
+      klasse(e.maat, 'hidden', !maat);
+      klasse(e.maat, 'stil', stil);
+      tekst(e.maat, stil ? 'MAAT (stil)' : 'MAAT');
+      klasse(views.root, 'leeg', !d.loaded);
 
       // Fasemeter: hoe ver deze track voor of achter loopt, over een halve tel.
       // Handig bij handmatig beatmatchen én als controle op de sync.
       const f = s.fase?.[id];
-      e.fase.classList.toggle('leeg', f === null || f === undefined);
+      klasse(e.fase, 'leeg', f === null || f === undefined);
       if (f !== null && f !== undefined && d.grid) {
         const halveTel = (60 / d.grid.bpm) / d.rate / 2;   // hoorbare tel: sneller = korter
         const uit = Math.max(-1, Math.min(1, f / halveTel));
-        e.faseWijzer.style.left = `${50 + uit * 46}%`;
-        e.faseWijzer.classList.toggle('strak', Math.abs(f) < 0.006);
-        e.fase.title = `${f >= 0 ? '+' : ''}${(f * 1000).toFixed(0)} ms`;
+        stijl(e.faseWijzer, 'left', `${(50 + uit * 46).toFixed(1)}%`);
+        klasse(e.faseWijzer, 'strak', Math.abs(f) < 0.006);
+        const ms = `${f >= 0 ? '+' : ''}${(f * 1000).toFixed(0)} ms`;
+        if (e.fase.title !== ms) e.fase.title = ms;
       }
       // Wat er klinkt: het rack wijst naar PLEKKEN; de namen staan op de device knobs.
-      const naam = d.fx.naam || '—';
-      if (fxNaam.textContent !== naam) fxNaam.textContent = naam;
+      tekst(fxNaam, d.fx.naam || '—');
 
-      e.sync.classList.toggle('gelijk', readAction(`track.${trackVanDeck(id)}.sync`) === 1);
-      e.beatBtns.forEach((b) => {
-        b.classList.toggle('dood', !d.grid);
-        const n = parseFloat(b.dataset.action.split('.').pop());
-        b.classList.toggle('on', d.loopBeats === n);
-      });
+      klasse(e.sync, 'gelijk', readAction(`track.${trackVanDeck(id)}.sync`) === 1);
+      for (const b of e.beatBtns) {
+        klasse(b, 'dood', !d.grid);
+        klasse(b, 'on', d.loopBeats === b._tellen);
+      }
 
-      d.hotcues.forEach((t, i) => e.hotcues[i].classList.toggle('set', t !== null));
-      e.loopBtns.forEach((b) => b.classList.toggle('on', !!d.loop && !b.classList.contains('warn')));
+      d.hotcues.forEach((t, i) => klasse(e.hotcues[i], 'set', t !== null));
+      // Een seconde-loopknop brandt alleen als DEZE lengte loopt (de action weet dat).
+      for (const b of e.loopBtns) klasse(b, 'on', !b.classList.contains('warn') && readAction(b.dataset.action) === 1);
       stappen.volgRackKiezer(id);
     });
     veilig('koppelpaneel', () => {
@@ -150,17 +168,14 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     });
     veilig('sampler', () => {
       // Sampler-pads: leeg, gevuld (met van welke track en hoeveel tellen), speelt.
-      const lengteKnop = document.querySelector('.sampler-lengte');
-      const lengteTekst = `${engine.sampler.tellen} tel${engine.sampler.tellen === 1 ? '' : 'len'}`;
-      if (lengteKnop.textContent !== lengteTekst) lengteKnop.textContent = lengteTekst;
+      tekst(lengteKnop, `${engine.sampler.tellen} tel${engine.sampler.tellen === 1 ? '' : 'len'}`);
       for (const p of engine.sampler.stand()) {
         const el = padEls[p.pad - 1];
-        el.classList.toggle('gevuld', p.gevuld);
-        el.classList.toggle('speelt', p.speelt);
-        el.classList.toggle('bezig', p.bezig);
-        el.classList.toggle('bewaard', p.bewaard);
-        const t = p.gevuld ? `track ${p.bron} · ${p.tellen}` : p.bewaard ? `↺ track ${p.bewaardBron} · ${p.bewaardTellen ?? '?'}` : '';
-        if (el.lastElementChild.textContent !== t) el.lastElementChild.textContent = t;
+        klasse(el, 'gevuld', p.gevuld);
+        klasse(el, 'speelt', p.speelt);
+        klasse(el, 'bezig', p.bezig);
+        klasse(el, 'bewaard', p.bewaard);
+        tekst(el.lastElementChild, p.gevuld ? `track ${p.bron} · ${p.tellen}` : p.bewaard ? `↺ track ${p.bewaardBron} · ${p.bewaardTellen ?? '?'}` : '');
       }
     });
     veilig('opnemen', () => {
@@ -170,9 +185,9 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       stappen.video();
     });
     veilig('master', () => {
-      masterMeter.style.height = (s.masterPeak * 100).toFixed(1) + '%';
-      masterMeter.classList.toggle('clip', s.masterPeak > 0.98);
-      curveBtn.textContent = 'curve: ' + s.xfaderCurve;
+      stijl(masterMeter, 'height', (s.masterPeak * 100).toFixed(1) + '%');
+      klasse(masterMeter, 'clip', s.masterPeak > 0.98);
+      tekst(curveBtn, 'curve: ' + s.xfaderCurve);
     });
   }
   requestAnimationFrame(frame);

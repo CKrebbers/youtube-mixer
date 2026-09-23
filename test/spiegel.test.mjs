@@ -81,5 +81,22 @@ l2.zet('device', 'rack');
 ok('in het rack licht hij op', read('layer.device.view') === 1);
 ok('een grid-kiesknop licht op als zijn mapje open staat', read('layer.grid.hotcues') === 1 && read('layer.grid.loops') === 0);
 
+// ---- de kolomkop: resterende tijd, bpm, crossfaderkant ---------------------
+
+const deck = (x) => ({ loaded: true, duration: 300, position: 0, playing: false, bpm: null, ...x });
+ok('resterend in hele seconden, naar boven afgerond', P.kolomInfo(deck({ position: 87.6 })).rest === '-3:33');
+ok('op het einde: -0:00', P.kolomInfo(deck({ position: 300 })).rest === '-0:00');
+ok('lange track: minuten lopen door', P.kolomInfo(deck({ duration: 3725, position: 0 })).rest === '-62:05');
+ok('bpm is de hoorbare (d.bpm), één decimaal', P.kolomInfo(deck({ bpm: 153.04 })).bpm === '153.0');
+ok('geen grid: streepje', P.kolomInfo(deck({})).bpm === '—');
+ok('lege track: streepjes, nooit bijna', P.kolomInfo({ loaded: false }).rest === '—' && !P.kolomInfo({ loaded: false }).bijna);
+ok('onder 30 s en spelend = bijna', P.kolomInfo(deck({ position: 275, playing: true })).bijna);
+ok('onder 30 s maar stil = niet bijna (niets aan de hand)', !P.kolomInfo(deck({ position: 275 })).bijna);
+ok('31 s voor het eind = nog niet bijna', !P.kolomInfo(deck({ position: 269, playing: true })).bijna);
+ok('kant uit read(): 0 = A, 0,5 = thru, 1 = B, null = onbekend',
+  P.kantVan(0) === 'A' && P.kantVan(0.5) === 'thru' && P.kantVan(1) === 'B' && P.kantVan(null) === null);
+ok('alleen xfade.side toont de kant (niet de losse A/B/thru-actions)',
+  P.isKantKnop('track.3.xfade.side') && !P.isKantKnop('track.3.xfade.a') && !P.isKantKnop(null));
+
 if (fails.length) { console.log(`\n${fails.length} FAIL`); process.exit(1); }
 console.log('\nspiegel: alles groen');

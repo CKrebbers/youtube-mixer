@@ -162,3 +162,31 @@ export function zetTweede(venster, deckId) {
   if (!deckId || venster.L === deckId || venster.R === deckId) return venster;
   return { L: venster.L, R: deckId };
 }
+
+// ---- de kolomkop: tijd, bpm, crossfaderkant ---------------------------------
+
+/** Onder dit aantal seconden resterend knippert de tijd rood (als de track speelt). */
+export const BIJNA_EINDE = 30;
+
+/**
+ * Wat er in de kop van een kolom staat, uit de deckstand van `snapshot()`:
+ * resterende tijd als "-3:32" (geen honderdsten: in een donkere zaal lees je
+ * die toch niet), de HOORBARE bpm (grid × rate, dat is `d.bpm`) en of het
+ * einde nadert. Een lege track geeft streepjes.
+ */
+export function kolomInfo(d) {
+  if (!d?.loaded || !d.duration) return { rest: '—', bpm: '—', bijna: false };
+  const s = Math.max(0, d.duration - d.position);
+  const hele = Math.ceil(s - 1e-6);
+  const rest = `-${Math.floor(hele / 60)}:${String(hele % 60).padStart(2, '0')}`;
+  return { rest, bpm: d.bpm ? d.bpm.toFixed(1) : '—', bijna: !!d.playing && s < BIJNA_EINDE };
+}
+
+/** De crossfaderkant uit `read('track.N.xfade.side')`: 0 = A, 0,5 = thru, 1 = B. */
+export function kantVan(v) {
+  if (v === null || v === undefined) return null;
+  return v <= 0.25 ? 'A' : v >= 0.75 ? 'B' : 'thru';
+}
+
+/** Is dit de knop die de crossfaderkant rondzet? Dan toont hij de kant, geen licht. */
+export const isKantKnop = (action) => /^track\.\d+\.xfade\.side$/.test(action ?? '');

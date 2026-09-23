@@ -14,6 +14,7 @@ import { opzetLaden } from './laden.js';
 import { opzetOnderpanelen } from './onderpanelen.js';
 import { opzetMidi } from './midi-opzet.js';
 import { startRenderloop } from './renderloop.js';
+import { tabblad } from './tabblad.js';
 
 /**
  * Het instappunt van de schermlaag: maakt de engine en zet de modules in
@@ -36,6 +37,26 @@ const perDeck = (maak) => Object.fromEntries(DECK_IDS.map((id) => [id, maak(id)]
 
 koppelMeldingen(engine);
 window.meld = meld;
+
+// ---- één VARVE-tabblad luistert naar de APC ------------------------------
+// Een tweede tabblad krijgt anders elke knopdruk ook, en stuurt zijn eigen
+// LED's. Wie de lock heeft is het eerste (zie tabblad.js); midi-opzet.js
+// vraagt het met isEersteTabblad().
+{
+  const t = tabblad();
+  let melding = null;
+  t.on('tweede', () => {
+    document.body.classList.add('tweede-tabblad');
+    melding = meld('er is al een VARVE-tabblad open — dit tabblad luistert niet naar de APC (sluit het andere, dan neemt dit het over)', 'fout');
+  });
+  t.on('eerste', () => {
+    if (!document.body.classList.contains('tweede-tabblad')) return;
+    document.body.classList.remove('tweede-tabblad');
+    melding?.remove();
+    meld('het andere VARVE-tabblad is dicht — dit tabblad luistert nu naar de APC');
+  });
+  window.tabblad = t;
+}
 
 /** Wat meerdere modules lezen én schrijven. */
 const staat = {

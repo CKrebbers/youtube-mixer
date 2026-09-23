@@ -27,6 +27,14 @@ function tekenGolf(g, analysis, range, w, h, color) {
 }
 
 /**
+ * Hotcues: geel met hun nummer, net als de pads op de APC en op het scherm
+ * (--m-hotcues in styles.css). Eén kleur voor alle vier: het NUMMER zegt welke
+ * het is, de kleur zegt "dit is een hotcue". Vier kleuren botsten met de
+ * mapjekleuren van het grid (cyaan = loops, violet = sampler).
+ */
+export const HOTCUE_KLEUR = '#ffd23c';
+
+/**
  * Twee weergaven uit dezelfde peaks-array:
  *   - overview: hele track, statisch, met playhead en cues
  *   - zoom:     scrollend, playhead vast in het midden
@@ -38,8 +46,31 @@ export class WaveformView {
     this.mode = mode;
     this.pxPerSecond = pxPerSecond;
     this.color = color;
+    this.cache = null;
+    this.sleutel = null;
     this.resize();
     new ResizeObserver(() => this.resize()).observe(canvas);
+  }
+
+  /**
+   * De golfvorm van de hele track, één keer getekend in een eigen canvas. Het
+   * overzicht verandert alleen van positie; acht keer (plus het focusoverzicht)
+   * per frame alle peaks van een album van een half uur aflopen kost te veel.
+   * Opnieuw bij een andere analyse, lengte of canvasmaat.
+   */
+  golfCache(analysis, duur, w, h) {
+    const k = this.sleutel;
+    if (k?.analysis !== analysis || k.duur !== duur || k.w !== w || k.h !== h) {
+      const dpr = window.devicePixelRatio || 1;
+      this.cache ??= document.createElement('canvas');
+      this.cache.width = w * dpr;
+      this.cache.height = h * dpr;
+      const c = this.cache.getContext('2d');
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      tekenGolf(c, analysis, { t0: 0, t1: duur }, w, h, this.color);
+      this.sleutel = { analysis, duur, w, h };
+    }
+    return this.cache;
   }
 
   resize() {
@@ -109,8 +140,9 @@ export class WaveformView {
     // uur vallen 9000 lijnen samen tot een grijze soep.
     if (deckState.grid && this.mode === 'zoom') this.tekenGrid(deckState.grid, range, span, w, h);
 
-    // golfvorm
-    tekenGolf(g, analysis, range, w, h, this.color);
+    // golfvorm: het overzicht uit de cache, de zoom scrolt en tekent elke frame
+    if (this.mode === 'overview') g.drawImage(this.golfCache(analysis, deckState.duration, w, h), 0, 0, w, h);
+    else tekenGolf(g, analysis, range, w, h, this.color);
 
     // afgespeeld deel dimmen (alleen in overview)
     if (this.mode === 'overview') {
@@ -123,12 +155,12 @@ export class WaveformView {
       if (t === null) return;
       const x = ((t - range.t0) / span) * w;
       if (x < -10 || x > w + 10) return;
-      g.fillStyle = ['#ff5f56', '#ffbd2e', '#27c93f', '#5ac8fa'][i];
+      g.fillStyle = HOTCUE_KLEUR;
       g.fillRect(x - 1, 0, 2, h);
-      g.fillRect(x - 1, 0, 11, 11);
+      g.fillRect(x - 1, 0, 13, 13);
       g.fillStyle = '#000';
-      g.font = '9px ui-monospace, monospace';
-      g.fillText(String(i + 1), x + 2, 8);
+      g.font = 'bold 11px ui-monospace, monospace';
+      g.fillText(String(i + 1), x + 2, 10);
     });
 
     // cuepunt
@@ -157,8 +189,6 @@ export class WaveformView {
 export class BaanView extends WaveformView {
   constructor(canvas, opts = {}) {
     super(canvas, { ...opts, mode: 'overview' });
-    this.cache = null;
-    this.sleutel = null;
   }
 
   draw(d, analysis) {
@@ -170,18 +200,7 @@ export class BaanView extends WaveformView {
       g.fillRect(0, h / 2 - 0.5, w, 1);
       return;
     }
-    if (this.sleutel?.analysis !== analysis || this.sleutel.duur !== d.duration
-      || this.sleutel.w !== w || this.sleutel.h !== h) {
-      const dpr = window.devicePixelRatio || 1;
-      this.cache ??= document.createElement('canvas');
-      this.cache.width = w * dpr;
-      this.cache.height = h * dpr;
-      const c = this.cache.getContext('2d');
-      c.setTransform(dpr, 0, 0, dpr, 0, 0);
-      tekenGolf(c, analysis, { t0: 0, t1: d.duration }, w, h, this.color);
-      this.sleutel = { analysis, duur: d.duration, w, h };
-    }
-    g.drawImage(this.cache, 0, 0, w, h);
+    g.drawImage(this.golfCache(analysis, d.duration, w, h), 0, 0, w, h);
     const x = (t) => (t / d.duration) * w;
     if (d.loop) {
       g.fillStyle = 'rgba(255,190,60,0.25)';
@@ -191,7 +210,7 @@ export class BaanView extends WaveformView {
     g.fillRect(0, 0, x(d.position), h);
     d.hotcues.forEach((t, i) => {
       if (t === null) return;
-      g.fillStyle = ['#ff5f56', '#ffbd2e', '#27c93f', '#5ac8fa'][i];
+      g.fillStyle = HOTCUE_KLEUR;
       g.fillRect(x(t) - 0.5, 0, 1, h);
     });
     g.fillStyle = '#ff3b30';

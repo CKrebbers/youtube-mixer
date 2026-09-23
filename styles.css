@@ -4,6 +4,10 @@
   --warn:#ffbe3c; --red:#ff3b30;
   /* grid-mapjes, zoals de LED's op de APC: hotcues geel, loops cyaan, sampler violet, video blauw */
   --m-hotcues:#ffd23c; --m-loops:#3cd6ff; --m-sampler:#b07cff; --m-video:#4c7dff;
+  /* crossfaderkant, zoals de tweekleurige LED van de A|B-knop: geel A, oranje B, thru grijs */
+  --kant-a:#ffd23c; --kant-b:#ff8a2a;
+  /* kleine grijze tekst die toch leesbaar moet zijn: 5,5:1 op --panel2 */
+  --klein:#8a96a2;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -33,9 +37,14 @@ a.ghost{text-decoration:none;font-size:13px}
 /* ---- layout: het scherm spiegelt de APC40 ----
    boven links de track met focus, onder links de acht kolommen, rechts het
    focusdeel (rechterhelft van de APC), daarnaast de inklapbare videokolom. */
-main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 390px;grid-template-rows:auto auto;
-  align-content:start;gap:8px;padding:8px;min-height:0;overflow:auto}
+/* Rij 1 (de track met focus) krijgt altijd zijn volle hoogte; rij 2 (de
+   kolommen) krijgt wat overblijft en krimpt in de faders. Zonder min-height:auto
+   op het focusdeck mocht die rij tot 0 krimpen en schoven de kolommen over de
+   banen heen (gemeten op 1440×790: 211 px waar 350 nodig is). */
+main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 390px;grid-template-rows:auto 1fr;
+  gap:8px;padding:8px;min-height:0;overflow:auto}
 .focus-deck{grid-column:1;grid-row:1}
+.deck.focus-deck{min-height:auto}   /* wint van .deck{min-height:0} hieronder */
 .kolommen{grid-column:1;grid-row:2}
 .focusdeel{grid-column:2;grid-row:1 / 3}
 .video-panel{grid-column:3;grid-row:1 / 3}
@@ -60,7 +69,7 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 390px;grid-template
 .btn{border:1px solid var(--line);border-radius:5px;padding:7px 12px;background:var(--panel2);
   font-size:11px;letter-spacing:.08em;font-weight:600}
 .btn:hover{border-color:var(--dim)}
-.btn.sm{padding:5px 8px;font-size:10px;letter-spacing:.04em}
+.btn.sm{padding:4px 7px;font-size:11px;letter-spacing:.04em}
 .btn.on{background:var(--a);color:#03100e;border-color:var(--a)}
 .btn.warn.on,.btn.warn{color:var(--warn)}
 .btn.play.on{background:var(--a);color:#03100e;border-color:var(--a)}
@@ -69,12 +78,11 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 390px;grid-template
 .hotcues{display:flex;gap:4px}
 .hc{width:30px;height:30px;border-radius:5px;border:1px solid var(--line);
   background:var(--panel2);font-size:11px;font-weight:700;color:var(--dim)}
-.hc.set{color:#000}
-.hc1.set{background:#ff5f56}.hc2.set{background:#ffbd2e}
-.hc3.set{background:#27c93f}.hc4.set{background:#5ac8fa}
+/* hotcues: geel met nummer, overal hetzelfde (pads, golfvorm, APC) */
+.hc.set{color:#1a1200;background:var(--m-hotcues);border-color:var(--m-hotcues)}
 .loops{display:flex;gap:3px}
 
-.pitch{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.1em;color:var(--dim);margin-left:auto}
+.pitch{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.1em;color:var(--dim);margin-left:auto}
 .pitch-val{font-family:ui-monospace,monospace;color:var(--text);min-width:46px;text-align:right}
 .pitch-bereik{min-width:34px;font-family:ui-monospace,monospace}
 
@@ -88,7 +96,7 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 390px;grid-template
 .knob-ind{position:absolute;left:50%;top:3px;width:2px;height:13px;margin-left:-1px;
   background:var(--text);border-radius:1px;transform-origin:50% 16px}
 .knob.filter .knob-ind{background:var(--warn)}
-.knob-label{font-size:9px;letter-spacing:.1em;color:var(--dim)}
+.knob-label{font-size:11px;letter-spacing:.06em;color:var(--klein)}
 
 .meter{height:6px;width:100%;background:#0b0e11;border-radius:3px;overflow:hidden;border:1px solid var(--line)}
 .meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--a),#8ee06a 70%,var(--warn) 88%,var(--red));transition:width .04s linear}
@@ -102,7 +110,9 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 .hfader{width:110px}
 .vfader{writing-mode:vertical-lr;direction:rtl;width:26px;flex:1;min-height:70px}
 .xfader{flex:1}
-.xfader-row{display:flex;align-items:center;gap:10px;font-size:10px;color:var(--dim);letter-spacing:.1em}
+.xfader-row{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--klein);letter-spacing:.1em}
+.kant-a{color:var(--kant-a);font-weight:700}
+.kant-b{color:var(--kant-b);font-weight:700}
 .curve{align-self:center}
 
 /* ---- help ---- */
@@ -276,10 +286,12 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .lib-weg:hover{color:var(--red);border-color:var(--red)}
 
 /* ---- beatgrid-gereedschap ---- */
-.loop-kop{font-size:8px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;margin:0 2px 0 4px}
+.loop-kop{font-size:11px;letter-spacing:.06em;color:var(--klein);text-transform:uppercase;margin:0 2px 0 4px}
 .grid-tools{display:flex;align-items:center;gap:3px}
 .grid-tools .tap{min-width:38px}
-.grid-tools .tap.actief{background:var(--warn);color:#1a1200;border-color:var(--warn)}
+/* TAP met een grid: "grid bekend" — rustig, geen vulling. Vol = actief, en
+   dat is TAP pas als je tikt (.bezig, .verfijnd). */
+.grid-tools .tap.grid-bekend{color:var(--text);box-shadow:inset 0 -2px 0 #5d6b78}
 .bpm-val{font-family:ui-monospace,monospace;font-size:12px;color:var(--text);min-width:58px;text-align:center}
 .bpm-val.leeg{color:var(--dim)}
 .btn.bl{min-width:22px}
@@ -300,16 +312,16 @@ body.leermodus .loops .btn::after{bottom:-12px}
 
 /* ---- effect-slot ---- */
 .fx-row{display:flex;align-items:center;gap:7px;margin-left:8px}
-.fx-kop{font-size:8px;letter-spacing:.14em;color:var(--dim)}
+.fx-kop{font-size:11px;letter-spacing:.1em;color:var(--klein)}
 .fx-naam{min-width:62px;color:var(--b)}
 .knob.sm .knob-dial{width:26px;height:26px}
 .knob.sm .knob-ind{height:9px;top:2px;transform-origin:50% 11px}
-.knob.sm .knob-label{font-size:8px}
+.knob.sm .knob-label{font-size:11px}
 .fx-bypass.on{background:var(--warn);color:#1a1200;border-color:var(--warn)}
 
 .fx-row{flex-wrap:wrap}
 .fx-rack{background:var(--panel2);border:1px solid var(--line);border-radius:4px;
-  padding:3px 5px;color:var(--text);font:inherit;font-size:10px;max-width:130px}
+  padding:3px 5px;color:var(--text);font:inherit;font-size:11px;max-width:130px}
 .fx-rack:focus{outline:none;border-color:var(--b)}
 .knob.sm.fx-plek.leeg{opacity:.22;pointer-events:none}
 .fx-bewaar{color:var(--dim)}
@@ -436,11 +448,11 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 /* ---- sends ---- */
 .sends{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:8px;margin-top:6px}
 .send-bus{display:flex;align-items:center;justify-content:space-between;gap:4px}
-.send-kop{font-size:9px;letter-spacing:.12em;color:var(--dim);width:56px}
+.send-kop{font-size:11px;letter-spacing:.06em;color:var(--klein);width:62px}
 
 /* ---- sampler ---- */
 .sampler-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px}
-.sampler-kop{font-size:10px;letter-spacing:.16em;font-weight:700;color:var(--dim)}
+.sampler-kop{font-size:11px;letter-spacing:.16em;font-weight:700;color:var(--klein)}
 .sampler-lengte{min-width:68px}
 .pads{flex:1;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
 .pad{display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border:1px dashed var(--line);
@@ -460,7 +472,8 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .melding{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--a);
   color:var(--text);padding:7px 12px;border-radius:5px;font-size:12px;max-width:560px;
   box-shadow:0 6px 18px rgba(0,0,0,.45);transition:opacity .4s}
-.melding.fout{border-left-color:var(--red)}
+.melding.fout{border-left-color:var(--red);pointer-events:auto;cursor:pointer}
+.melding.fout::after{content:"  ✕";color:var(--klein)}
 .melding.weg{opacity:0}
 
 .fx-naam{font-size:11px;color:var(--b);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
@@ -490,34 +503,46 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .focus-deck .deck-head{align-items:center}
 .focus-deck.leeg .deck-title{color:var(--dim)}
 .focus-deck .demo-btn{font-size:11px}
-.maat-badge{font:700 8px/1 ui-monospace,monospace;letter-spacing:.1em;color:#03100e;background:var(--warn);
-  padding:3px 5px;border-radius:3px}
+.maat-badge{font:700 11px/1 ui-monospace,monospace;letter-spacing:.06em;color:#03100e;background:var(--warn);
+  padding:3px 5px;border-radius:3px;white-space:nowrap}
 .maat-badge.hidden{display:none}
+/* de maatgever staat stil: dan is het "de eerste track met grid", niet wat je hoort */
+.maat-badge.stil{background:none;color:var(--warn);box-shadow:inset 0 0 0 1px #6b5a34;opacity:.7}
+/* resterende tijd: rood en knipperend in de laatste 30 s van een spelende track */
+.t-rem.bijna,.kol-rest.bijna{color:var(--red) !important;animation:knipper .5s steps(2) infinite}
 .focus-deck .deck-transport{gap:6px}
-.banen{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line);padding-top:6px}
-.baan{display:grid;grid-template-columns:18px minmax(80px,170px) minmax(0,1fr);align-items:center;gap:6px;
-  height:17px;padding:0 4px;border-radius:3px;cursor:pointer;position:relative}
+/* acht banen in twee kolommen van vier (1-4 links, 5-8 rechts): half zo hoog,
+   en de golfvorm blijft lang genoeg om te zien waar je bent */
+.banen{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(4,auto);grid-auto-flow:column;
+  gap:2px 14px;border-top:1px solid var(--line);padding-top:6px}
+.baan{display:grid;grid-template-columns:18px minmax(60px,150px) minmax(0,1fr);align-items:center;gap:6px;
+  height:18px;padding:0 4px;border-radius:3px;cursor:pointer;position:relative;min-width:0}
 .baan:hover{background:rgba(255,255,255,.03)}
 .baan canvas{width:100%;height:14px;border-radius:2px;display:block}
 .baan-nr{font:700 11px ui-monospace,monospace;color:var(--dim);text-align:center}
-.baan-titel{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.baan-titel{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
 .baan.leeg .baan-titel,.baan.leeg .baan-nr{color:#4a5661}
 .baan.leeg canvas{opacity:.5}
 .baan.focused{background:rgba(74,217,196,.12)}
 .baan.focused .baan-nr{color:var(--a)}
 .baan.tweede .baan-nr{color:var(--b)}
-.baan.speelt .baan-nr::before{content:"▶";position:absolute;left:-2px;font-size:7px;color:var(--a)}
-.baan.maat .baan-titel::after{content:" MAAT";font:700 8px ui-monospace,monospace;color:var(--warn)}
+.baan.speelt .baan-nr::before{content:"▶";position:absolute;left:-2px;font-size:9px;color:var(--a)}
+.baan.maat .baan-titel::after{content:" MAAT";font:700 11px ui-monospace,monospace;color:var(--warn)}
+.baan.maat-stil .baan-titel::after{content:" MAAT (stil)";opacity:.6}
 .baan.drag,.kol.drag,.focus-deck.drag{outline:1px solid var(--a);outline-offset:-1px}
 
 /* gespiegelde knoppen: kleur uit het grid-mapje, licht uit read() */
 button.spg{--kleur:var(--a);position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
   min-width:0;border:1px solid var(--line);border-radius:4px;background:var(--panel2);color:var(--dim);
-  font-size:9px;line-height:1.1;padding:2px 3px;overflow:hidden;transition:background .08s,border-color .08s}
+  font-size:11px;line-height:1.1;padding:2px 3px;overflow:hidden;transition:background .08s,border-color .08s}
 button.spg:hover{border-color:var(--dim)}
 .spg-t{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.spg-naam{display:block;max-width:100%;font-size:7px;letter-spacing:.04em;color:#4f5b66;text-transform:uppercase;
+/* De naam van de fysieke APC-knop staat alleen in de koppelmodus op het
+   scherm (9 px, 5,5:1): in de zaal telt wat een knop DOET, en dat staat er
+   groot. De naam blijft in de tooltip. */
+.spg-naam{display:none;max-width:100%;font-size:9px;letter-spacing:.04em;color:var(--klein);text-transform:uppercase;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.leermodus .spg-naam{display:block}
 .spg[data-modus="hotcues"]{--kleur:var(--m-hotcues)}
 .spg[data-modus="loops"]{--kleur:var(--m-loops)}
 .spg[data-modus="sampler"]{--kleur:var(--m-sampler)}
@@ -527,7 +552,12 @@ button.spg[data-modus]{border-color:color-mix(in srgb,var(--kleur) 30%,var(--lin
 button.spg[data-licht="half"]{border-color:var(--kleur);color:var(--text);
   background:color-mix(in srgb,var(--kleur) 22%,var(--panel2))}
 button.spg[data-licht="aan"]{background:var(--kleur);border-color:var(--kleur);color:#061014}
-button.spg[data-licht="aan"] .spg-naam{color:rgba(0,0,0,.55)}
+button.spg[data-licht="aan"] .spg-naam{color:rgba(0,0,0,.7)}
+/* A|B-knop: de letter van de kant in de kleur van de kant, geen aan/uit */
+button.spg[data-kant]{font-weight:700}
+button.spg[data-kant="A"]{color:var(--kant-a);border-color:var(--kant-a);background:color-mix(in srgb,var(--kant-a) 16%,var(--panel2))}
+button.spg[data-kant="B"]{color:var(--kant-b);border-color:var(--kant-b);background:color-mix(in srgb,var(--kant-b) 16%,var(--panel2))}
+button.spg[data-kant="thru"]{color:var(--text);border-color:#3c4b58}
 button.spg.leeg{opacity:.28}
 button.spg.leeg .spg-t{display:none}
 .spg.stuurt-niet{opacity:.55;cursor:not-allowed}
@@ -543,14 +573,22 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
   display:flex;flex-direction:column;gap:3px;min-width:0}
 .kol.focused{border-color:var(--a);box-shadow:0 0 0 1px var(--a) inset}
 .kol.tweede{border-color:#5a4880}
-.kol-kop{display:flex;align-items:center;gap:5px;min-width:0;height:16px}
-.kol-nr{font-weight:800;font-size:13px;color:var(--dim)}
+.kol-kop{display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0;height:16px}
+.kol-nr{font-weight:800;font-size:14px;color:var(--dim)}
+.kol-maat{font:700 11px/1 ui-monospace,monospace;letter-spacing:.04em;color:#03100e;background:var(--warn);
+  padding:2px 4px;border-radius:3px;white-space:nowrap}
+.kol-maat.hidden{display:none}
+.kol.maat-stil .kol-maat{background:none;color:var(--warn);box-shadow:inset 0 0 0 1px #6b5a34;opacity:.7}
+.kol-info{display:flex;align-items:baseline;gap:6px;min-width:0;white-space:nowrap;overflow:hidden}
+.kol-rest{font:600 14px/1.1 ui-monospace,monospace;color:var(--text)}
+.kol-bpm{font:12px/1.1 ui-monospace,monospace;color:var(--klein);margin-left:auto}
+.kol-speelt{font-style:normal;font-size:11px;color:var(--a);visibility:hidden}
+.kol.speelt .kol-speelt{visibility:visible}
+.kol.leeg .kol-rest,.kol.leeg .kol-bpm{color:#4a5661}
 .kol.focused .kol-nr{color:var(--a)}
 .kol.tweede .kol-nr{color:var(--b)}
-.kol-titel{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);flex:1}
+.kol-titel{font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
 .kol.leeg .kol-titel{color:#4a5661}
-.kol.maat::after{content:"MAAT";position:absolute;top:5px;right:5px;font:700 8px/1 ui-monospace,monospace;
-  letter-spacing:.1em;color:#03100e;background:var(--warn);padding:2px 4px;border-radius:3px}
 .kol > .spg-knob{align-self:center}
 .kol-pads{display:flex;flex-direction:column;gap:3px}
 .spg-pad{height:22px}
@@ -558,24 +596,19 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
 .spg-select[data-licht="aan"]{--kleur:var(--a)}
 .kol-2x2{display:grid;grid-template-columns:1fr 1fr;gap:3px}
 .spg-mini{height:20px}
-.kol-kanten{display:flex}
-.kol-kant{flex:1;font-size:8px;padding:1px 0;border:1px solid var(--line);color:#4f5b66;margin-left:-1px;background:none}
-.kol-kant:first-child{border-radius:3px 0 0 3px;margin-left:0}.kol-kant:last-child{border-radius:0 3px 3px 0}
-.kol-kant.on[data-kant="A"]{color:var(--a);border-color:var(--a)}
-.kol-kant.on[data-kant="B"]{color:var(--b);border-color:var(--b)}
-.kol-kant.on[data-kant="thru"]{color:var(--text);border-color:var(--dim)}
-.kol-onder{display:flex;justify-content:center;align-items:stretch;gap:6px;height:118px}
+/* De fader krimpt als het scherm laag is (laptop), en groeit tot 200 px. */
+.kol-onder{display:flex;justify-content:center;align-items:stretch;gap:6px;flex:1 1 118px;min-height:56px;max-height:200px}
 .kol-onder .vfader{flex:0 0 26px;height:100%;min-height:0}
 .meter.vmeter{width:6px;height:100%;display:flex;align-items:flex-end}
 .meter.vmeter i{width:100%;height:0;transition:height .04s linear;
   background:linear-gradient(0deg,var(--a),#8ee06a 70%,var(--warn) 88%,var(--red))}
-.kol-voet{text-align:center;font-size:10px;color:var(--dim)}
+.kol-voet{text-align:center;font-size:11px;color:var(--klein)}
 .kol.focused .kol-voet b{color:var(--a)}
 
 /* het focusdeel: de rechterhelft van de APC */
 .focusdeel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;
   display:flex;flex-direction:column;gap:6px;min-width:0}
-.fd-kop{font-size:10px;letter-spacing:.12em;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fd-kop{font-size:11px;letter-spacing:.1em;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fd-track{color:var(--a)}
 .fd-titel{color:var(--text);letter-spacing:0}
 .fd-body{display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px}
@@ -583,16 +616,16 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
 .fd-scene-knoppen{display:flex;flex-direction:column;gap:3px}
 .spg-scene{height:24px;border-radius:12px !important}
 .fd-scenes > .spg-knob{align-self:center}
-.fd-scenes .kol-onder{height:150px}
+.fd-scenes .kol-onder{flex:0 0 150px;max-height:none}
 .fd-rechts{display:flex;flex-direction:column;gap:8px;min-width:0}
 .fd-transport{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}
 .fd-tempo{grid-column:4;grid-row:2 / 4;display:flex;align-items:center;justify-content:center}
 .fd-device{border:1px solid var(--line);border-radius:6px;padding:6px}
 .focusdeel[data-laag="rack"] .fd-device{border-color:var(--b)}
-.fd-device-kop{display:flex;align-items:baseline;gap:6px;font-size:9px;letter-spacing:.12em;color:var(--dim);min-width:0}
+.fd-device-kop{display:flex;align-items:baseline;gap:6px;font-size:11px;letter-spacing:.08em;color:var(--klein);min-width:0}
 .fd-laag{color:var(--a)}
 .focusdeel[data-laag="rack"] .fd-laag{color:var(--b)}
-.fd-laag-uitleg{letter-spacing:0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fd-laag-uitleg{letter-spacing:0;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fd-knobs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 6px;margin:6px 0;justify-items:center}
 .fd-devknoppen{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}
 .fd-pijlen{display:flex;align-items:center;gap:6px}
@@ -602,9 +635,32 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
 .pijl-op{grid-column:2;grid-row:1}.pijl-links{grid-column:1;grid-row:2}
 .pijl-rechts{grid-column:3;grid-row:2}.pijl-neer{grid-column:2;grid-row:3}
 .spg-pijl .spg-t{display:none}
-.spg-teken{font-style:normal;font-size:9px}
+.spg-teken{font-style:normal;font-size:11px}
 .spg-shift[data-licht="aan"]{--kleur:#fff}
 .focusdeel .fx-row{margin:0;gap:5px}
 .focusdeel .fx-rack{max-width:150px}
 .focusdeel .sends{margin-top:0}
 .focusdeel .xfader-row .xfader{flex:1}
+
+/* ---- laptopmaat: 1440×900 geeft ~790 px browserruimte ----
+   Eerst de grote golfvorm en de knoppen in de kolommen lager; de fader krimpt
+   daarna vanzelf (kol-onder). Het focusdeck houdt zijn banen. */
+@media (max-height:900px){
+  .wave-zoom{height:64px}
+  .wave-overview{height:22px}
+  .deck{padding:8px;gap:6px}
+  .focus-deck .deck-transport{row-gap:4px}
+  .focus-deck .btn:not(.sm){padding:5px 10px}
+  .hc{width:26px;height:26px}
+  .kol{padding:4px;gap:2px}
+  .kol-pads{gap:2px}
+  .spg-pad{height:19px}
+  .spg-knop{min-height:21px}
+  .spg-mini{height:19px}
+  .kol-voet{display:none}
+  .kol .spg-knob .knob-dial{width:22px;height:22px}
+  .kol .spg-knob .knob-ind{height:8px;transform-origin:50% 9px}
+  .fd-scenes .kol-onder{flex-basis:110px}
+  .sampler-rij{padding-bottom:6px}
+  .pad{height:26px}
+}

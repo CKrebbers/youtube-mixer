@@ -25,6 +25,11 @@ console.log('\nopmaak van het hoofdscherm');
 {
   const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
   for (const sel of ['.kolommen', '.kol', 'button.spg', '.baan']) ok(`styles.css heeft regels voor ${sel}`, css.includes(sel + '{') || css.includes(sel + ' {') || css.includes(sel + ','));
+  // Laptopmaat (1440×790): het focusdeck mag niet onder zijn inhoud krimpen,
+  // anders schuiven de kolommen over de banen. De fader krimpt in plaats daarvan.
+  ok('het focusdeck houdt zijn hoogte (.deck.focus-deck{min-height:auto})', /\.deck\.focus-deck\{[^}]*min-height:auto/.test(css));
+  ok('de kolommen krijgen de rest (grid-template-rows:auto 1fr)', /main\{[^}]*grid-template-rows:auto 1fr/.test(css));
+  ok('de kolomfader krimpt mee (.kol-onder flex)', /\.kol-onder\{[^}]*flex:1 1/.test(css));
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
