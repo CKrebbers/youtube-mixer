@@ -137,6 +137,38 @@ ok('en staat ver van een strak ritme af', ritme.zekerheid - opRuis.zekerheid > 0
     seg.every((s) => Math.abs(s.bpm - eenTempo.bpm) > 0.5) || seg.length === 3);
 }
 
+// ---- tap-verfijning rond de tap ------------------------------------------
+// Je tikt op het stuk dat je HOORT. Over de hele track scoren liet het tempo
+// van een ander stuk winnen zodra dat ook binnen de marge viel.
+
+{
+  const delen = [[120, 150, 0], [126, 150, 0.2]];
+  const x = new Float32Array(Math.round(SR * 300));
+  let t = 0;
+  for (const [bpm, duur, start] of delen) {
+    const deel = klikspoor(duur, bpm, start);
+    const o = Math.round(t * SR);
+    for (let i = 0; i < deel.length && o + i < x.length; i++) x[o + i] += deel[i];
+    t += duur;
+  }
+  const { env, envRate, tijdOffset } = d.onsetEnvelope(x, SR);
+  const n = d.normaliseerEnvelope(env, envRate);
+  const vroeg = d.verfijnTempoFase(n, envRate, 123, tijdOffset, { rond: 60 });
+  const laat = d.verfijnTempoFase(n, envRate, 123, tijdOffset, { rond: 240 });
+  ok(`tap op 60 s, getikt 123: ${vroeg.bpm.toFixed(2)} (120 verwacht)`, Math.abs(vroeg.bpm - 120) < 0.1);
+  ok(`tap op 240 s, getikt 123: ${laat.bpm.toFixed(2)} (126 verwacht)`, Math.abs(laat.bpm - 126) < 0.1);
+  // Fase meten waar je tikte: de tel van het gevonden grid die daar het dichtst
+  // bij ligt. Bij tracktijd 0 meten telt een fractie bpm 240 s lang op.
+  const telBij = (r, P) => { const p = 60 / r.bpm; return r.firstBeat + Math.round((P - r.firstBeat) / p) * p; };
+  ok(`fase op 60 s klopt (${fasefout(telBij(vroeg, 60), 0, 120).toFixed(1)} ms)`, fasefout(telBij(vroeg, 60), 0, 120) < 15);
+  ok(`fase op 240 s klopt (${fasefout(telBij(laat, 240), 150.2, 126).toFixed(1)} ms)`, fasefout(telBij(laat, 240), 150.2, 126) < 15);
+  const heel = d.verfijnTempoFase(n, envRate, 123, tijdOffset);
+  const zonder = d.verfijnTempoFase(n, envRate, 123, tijdOffset, { rond: null });
+  ok('zonder positie: de hele track, als vroeger', heel.bpm === zonder.bpm && heel.firstBeat === zonder.firstBeat);
+  const eind = d.verfijnTempoFase(n, envRate, 123, tijdOffset, { rond: 299 });
+  ok(`tap vlak voor het einde: venster schuift terug (${eind.bpm.toFixed(2)})`, Math.abs(eind.bpm - 126) < 0.1);
+}
+
 // ---- randgevallen ----------------------------------------------------------
 
 ok('een te kort fragment geeft geen tempo',

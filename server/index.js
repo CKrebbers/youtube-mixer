@@ -1,15 +1,13 @@
 import { createServer } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { join, extname, normalize, sep } from 'node:path';
+import { join, extname, resolve, relative, isAbsolute, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { ingest, controleerTooling, YTDLP_GETEST_OP } from './ingest.js';
 import { Library } from './library.js';
-import { maakOnset } from './analyze.js';
-import { verfijnTempoFase } from './detect.js';
+import { maakOnset, verfijnUitBestand } from './analyze.js';
 import * as opname from './opname.js';
-import { readFile } from 'node:fs/promises';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -21,6 +19,20 @@ import { readFile } from 'node:fs/promises';
 
 const WORTEL = fileURLToPath(new URL('..', import.meta.url));
 const POORT = Number(process.env.PORT) || 8777;
+// Instelbaar voor de tests: zo komt een testserver nooit aan Clay's media/
+// (ook het opruimen van .bezig-mappen bij het opstarten niet — dat wiste
+// anders de werkmap van een ingest die op de echte server liep).
+const MEDIA = process.env.VARVE_MEDIA || join(WORTEL, 'media');
+
+/**
+ * Paden in de database zijn relatief ("media/<id>/audio.wav"), zoals de browser
+ * ze opvraagt. Deze twee vertalen naar en van de schijf.
+ */
+const opSchijf = (rel) => {
+  const p = String(rel).replace(/^\/+/, '');
+  return p.startsWith('media/') ? join(MEDIA, p.slice('media/'.length)) : join(WORTEL, p);
+};
+const alsPad = (abs) => 'media/' + relative(MEDIA, abs).split(sep).join('/');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -99,7 +111,7 @@ function startIngest(url) {
   opdrachten.set(id, opdracht);
 
   ingest(url, {
-    mediaDir: join(WORTEL, 'media'),
+    mediaDir: MEDIA,
     onStap: (s) => { Object.assign(opdracht, s); },
   }).then((r) => {
     opdracht.klaar = Date.now();
@@ -110,15 +122,20 @@ function startIngest(url) {
         : `klaar — ${r.track.titel}`;
       // Paden relatief maken: de browser vraagt ze straks op via deze server.
       opdracht.track = { ...r.track,
-        audio: r.track.audio.replace(WORTEL, '').split(sep).join('/'),
-        video: r.track.video ? r.track.video.replace(WORTEL, '').split(sep).join('/') : null };
+        audio: alsPad(r.track.audio),
+        video: r.track.video ? alsPad(r.track.video) : null };
       if (r.track.peaks) {
-        opdracht.track.peaks = { ...r.track.peaks,
-          bestand: r.track.peaks.bestand.replace(WORTEL, '').split(sep).join('/') };
+        opdracht.track.peaks = { ...r.track.peaks, bestand: alsPad(r.track.peaks.bestand) };
+      }
+      if (r.track.onset) {
+        opdracht.track.onset = { ...r.track.onset, bestand: alsPad(r.track.onset.bestand) };
       }
       try {
         lib.bewaarTrack(opdracht.track);
         if (opdracht.track.peaks) lib.bewaarPeaks(opdracht.track.id, opdracht.track.peaks);
+        // De ingest rekende de envelope al uit; zonder dit deed de eerste tap
+        // het hele werk nog een keer.
+        if (opdracht.track.onset) lib.bewaarOnset(opdracht.track.id, opdracht.track.onset);
       } catch (err) {
         // De ingest is gelukt; dat mag niet alsnog omvallen op de database.
         console.error('[server] track niet in library gekregen:', err?.message || err);
@@ -147,14 +164,34 @@ const MAG = [/^\/$/, /^\/(index|video|apc)\.html$/, /^\/styles\.css$/, /^\/src\/
   /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
   /^\/favicon\.ico$/];
 
+/**
+ * Het pad dat de witte lijst te zien krijgt, of null.
+ *
+ * De lijst wordt getoetst op het pad NA decoderen en normaliseren, relatief aan
+ * de projectmap — anders kwam `/src/..%2fmedia%2flibrary.db` erdoor: het
+ * begint met /src/, en pas daarna werd `..` opgelost. Gecodeerde slashes,
+ * backslashes, `.`/`..`-segmenten en nulbytes worden gewoon geweigerd; een
+ * echte bestandsnaam heeft ze nooit nodig.
+ */
+function schoonPad(pad) {
+  if (/%(2f|5c|00)/i.test(pad)) return null;
+  let d;
+  try { d = decodeURIComponent(pad); } catch { return undefined; }
+  if (d.includes('\\') || d.includes('\0')) return null;
+  if (!d.startsWith('/')) d = '/' + d;
+  if (d.split('/').some((seg) => seg === '..' || seg === '.')) return null;
+  const abs = resolve(WORTEL, '.' + d);
+  const rel = relative(WORTEL, abs);
+  if (rel.startsWith('..') || isAbsolute(rel)) return null;
+  const schoon = '/' + rel.split(sep).join('/') + (d.endsWith('/') && rel ? '/' : '');
+  return MAG.some((r) => r.test(schoon)) ? schoon : null;
+}
+
 async function statisch(req, res, pad) {
-  let schoon;
-  try { schoon = decodeURIComponent(pad); } catch { json(res, 400, { fout: 'ongeldig pad' }); return; }
-  if (!schoon.startsWith('/')) schoon = '/' + schoon;
-  if (!MAG.some((r) => r.test(schoon))) { json(res, 404, { fout: 'niet gevonden', pad }); return; }
-  // Geen uitstapjes buiten de projectmap.
-  const veilig = normalize(join(WORTEL, schoon)).replace(/\0/g, '');
-  if (!veilig.startsWith(WORTEL)) { json(res, 403, { fout: 'buiten de projectmap' }); return; }
+  const schoon = schoonPad(pad);
+  if (schoon === undefined) { json(res, 400, { fout: 'ongeldig pad' }); return; }
+  if (schoon === null) { json(res, 404, { fout: 'niet gevonden', pad }); return; }
+  const veilig = schoon.startsWith('/media/') ? opSchijf(schoon) : join(WORTEL, schoon);
 
   let info;
   try { info = await stat(veilig); } catch { json(res, 404, { fout: 'niet gevonden', pad }); return; }
@@ -188,17 +225,48 @@ async function statisch(req, res, pad) {
   stuur(createReadStream(bestand));
 }
 
+/**
+ * Host en Origin. Geeft de reden terug als het verzoek niet van ons is.
+ *
+ * HOST: tegen DNS-rebinding. Een website kan zijn eigen naam naar 127.0.0.1
+ * laten wijzen; de browser vindt de pagina dan "same-origin" met deze server
+ * en mag alles lezen — library, opnames. Maar de Host-kop blijft die vreemde
+ * naam. Dus: alleen localhost, 127.0.0.1 of [::1], met onze eigen poort.
+ *
+ * ORIGIN: tegen CSRF. Alles wat iets verandert (niet GET/HEAD) moet van onze
+ * eigen pagina komen. Stuurt de client geen Origin (curl, de tests), dan is
+ * het geen browser op een vreemde site en mag het. "null" (sandbox, file://)
+ * is wél een browser en mag niet.
+ */
+const EIGEN_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+function vreemdVerzoek(req) {
+  const host = String(req.headers.host || '').toLowerCase();
+  const m = /^(localhost|127\.0\.0\.1|\[::1\]):(\d+)$/.exec(host);
+  if (!m || !EIGEN_HOSTS.has(m[1]) || Number(m[2]) !== POORT) return 'onbekende host';
+  if (req.method === 'GET' || req.method === 'HEAD') return null;
+  const origin = req.headers.origin;
+  if (origin === undefined) return null;
+  if (String(origin).toLowerCase() !== `http://${host}`) return 'verzoek van een andere oorsprong';
+  return null;
+}
+
 const server = createServer(async (req, res) => {
   try {
+    // Eerst: is dit verzoek wel voor ons? Zie `vreemdVerzoek`.
+    const vreemd = vreemdVerzoek(req);
+    if (vreemd) return json(res, 403, { fout: vreemd });
+
     const url = new URL(req.url, 'http://localhost');
     const pad = url.pathname;
 
     if (pad === '/api/tooling') return json(res, 200, await controleerTooling());
 
     // Alleen JSON: een gewoon formulier of text/plain van een willekeurige
-    // website komt zo niet zonder CORS-vraag binnen.
+    // website komt zo niet zonder CORS-vraag binnen. Het mediatype zelf moet
+    // application/json ZIJN; `text/plain;x=application/json` is text/plain.
+    const mediatype = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
     if (req.method === 'POST' && pad !== '/api/opname/start' && !/^\/api\/opname\/[\w-]+\/(stuk|klaar|video\.\w+)$/.test(pad)
-      && pad.startsWith('/api/') && !/application\/json/i.test(req.headers['content-type'] || '')
+      && pad.startsWith('/api/') && mediatype !== 'application/json'
       && !/^\/api\/library\/[\w-]+\/(racks\/\d+|geladen)$/.test(pad)) {
       return json(res, 415, { fout: 'alleen application/json' });
     }
@@ -260,29 +328,31 @@ const server = createServer(async (req, res) => {
       if (!onset) {
         // Nog geen envelope (track van vóór deze functie): nu uitrekenen en
         // bewaren, dan is het de volgende keer meteen klaar.
-        const doel = join(WORTEL, 'media', id, 'onset.bin');
-        const r = await maakOnset(join(WORTEL, track.audio), doel);
+        const doel = join(MEDIA, id, 'onset.bin');
+        const r = await maakOnset(opSchijf(track.audio), doel);
         if (!r.ok) return json(res, 500, { fout: r.fout });
-        onset = lib.bewaarOnset(id, { ...r,
-          bestand: doel.replace(WORTEL, '').split(sep).join('/') });
+        onset = lib.bewaarOnset(id, { ...r, bestand: alsPad(doel) });
       }
 
-      let env;
-      try {
-        const b = await readFile(join(WORTEL, onset.bestand));
-        env = new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4);
-      } catch (err) {
-        return json(res, 500, { fout: `onset-bestand onleesbaar: ${err.message}` });
+      // Waar je tikte (tracktijd, seconden). Dan telt alleen ±45 s daaromheen:
+      // op een album met tempowissels wint anders het tempo van een ander stuk.
+      // Zonder positie: de hele track.
+      const positie = body?.positie == null ? null : Number(body.positie);
+      if (positie !== null && !(Number.isFinite(positie) && positie >= 0)) {
+        return json(res, 400, { fout: 'positie moet een tijd in seconden zijn' });
       }
-
       const marge = Number(body?.marge) || 0.03;
-      const r = verfijnTempoFase(env, onset.envRate, bpm, onset.tijdOffset, { marge });
+      // In een worker: 3 uur envelope scoren kostte 7,9 s op de hoofdthread.
+      const r = await verfijnUitBestand(opSchijf(onset.bestand), onset.envRate, bpm, onset.tijdOffset,
+        { marge, rond: positie });
+      if (!r.ok) return json(res, 500, { fout: r.fout });
       return json(res, 200, {
         getikt: bpm,
         bpm: r.bpm,
         firstBeat: r.firstBeat,
         verschuiving: r.bpm - bpm,
         marge,
+        positie,
       });
     }
 
@@ -309,10 +379,12 @@ const server = createServer(async (req, res) => {
     const mOpname = /^\/api\/opname\/([\w-]+)\/(stuk|klaar)$/.exec(pad);
     if (mOpname && req.method === 'POST') {
       const [, id, wat] = mOpname;
-      if (wat === 'klaar') { const r = await opname.sluit(OPNAMES, id); return json(res, r.ok ? 200 : 400, r); }
+      // ?frame=N (stuk) en ?frames=N (klaar): de plek op de audioklok. Zonder: oud gedrag.
+      const getal = (k) => (url.searchParams.has(k) ? Number(url.searchParams.get(k)) : undefined);
+      if (wat === 'klaar') { const r = await opname.sluit(OPNAMES, id, { frames: getal('frames') }); return json(res, r.ok ? 200 : 400, r); }
       const stuk = await leesRuw(req);
       if (!stuk) return json(res, 413, { ok: false, fout: 'stuk te groot' });
-      const r = await opname.voegToe(OPNAMES, id, stuk);
+      const r = await opname.voegToe(OPNAMES, id, stuk, getal('frame'));
       return json(res, r.ok ? 200 : 400, r);
     }
 
@@ -384,8 +456,8 @@ process.on('uncaughtException', (e) => console.error('[server] onafgevangen:', e
 // download): opruimen. Een goede track staat nooit in zo'n map.
 try {
   const { readdir, rm: weg } = await import('node:fs/promises');
-  for (const n of await readdir(join(WORTEL, 'media')).catch(() => [])) {
-    if (n.startsWith('.bezig-')) await weg(join(WORTEL, 'media', n), { recursive: true, force: true });
+  for (const n of await readdir(MEDIA).catch(() => [])) {
+    if (n.startsWith('.bezig-')) await weg(join(MEDIA, n), { recursive: true, force: true });
   }
 } catch (_) {}
 

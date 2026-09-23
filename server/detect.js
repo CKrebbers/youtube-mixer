@@ -327,7 +327,24 @@ export function faseUitEnvelope(env, envRate, bpm, tijdOffset = 0, { oversample 
  * zoeken we over een klein rooster van tempo's, bepalen per tempo de beste
  * fase, en kiezen het paar dat samen het beste op de aanslagen valt.
  */
-export function verfijnTempoFase(env, envRate, bpmStart, tijdOffset = 0, { marge = 0.03, stappen = 61 } = {}) {
+export function verfijnTempoFase(env, envRate, bpmStart, tijdOffset = 0,
+  { marge = 0.03, stappen = 61, rond = null, straal = 45 } = {}) {
+  /*
+   * Alleen scoren rond de plek waar je tikte (`rond`, tracktijd in seconden,
+   * ± `straal`). Een album van een halfuur heeft zeven tempo's; over de hele
+   * track scoren laat het tempo van het langste stuk winnen, niet dat van
+   * wat je hoort. Zonder `rond`: de hele track, exact zoals vroeger.
+   */
+  let van = 0, tot = env.length;
+  if (rond !== null && Number.isFinite(rond)) {
+    const midden = (rond - tijdOffset) * envRate;
+    van = Math.max(0, Math.floor(midden - straal * envRate));
+    tot = Math.min(env.length, Math.ceil(midden + straal * envRate));
+    // Te dicht bij het einde of voorbij de track: schuif het venster terug.
+    if (tot - van < 2 * straal * envRate) {
+      van = Math.max(0, Math.min(van, Math.floor(tot - 2 * straal * envRate)));
+    }
+  }
   const lees = (t) => {
     if (t < 0 || t >= env.length - 1) return 0;
     const i = Math.floor(t), f = t - i;
@@ -342,10 +359,13 @@ export function verfijnTempoFase(env, envRate, bpmStart, tijdOffset = 0, { marge
    * ziet maar wel hoort.
    */
   const scoreVan = (periode, offset) => {
-    const aantal = Math.floor((env.length - 2 - periode) / periode);
+    const aantal = Math.floor((tot - van - 2 - periode) / periode);
     if (aantal < 2) return 0;
+    // Eerste puls in het venster met dezelfde fase. Voor van = 0 precies de
+    // offset zelf (geen modulo): dan blijft het oude resultaat bit voor bit.
+    const basis = van === 0 ? offset : van + (((offset - van) % periode) + periode) % periode;
     let score = 0;
-    for (let k = 0; k < aantal; k++) score += lees(offset + k * periode);
+    for (let k = 0; k < aantal; k++) score += lees(basis + k * periode);
     return score / aantal;
   };
 

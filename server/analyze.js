@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, readFile } from 'node:fs/promises';
+import { Worker } from 'node:worker_threads';
 
 /**
  * Golfvorm-peaks vooraf uitrekenen en op schijf zetten.
@@ -18,11 +19,51 @@ const KANALEN = 2;
 const SAMPLERATE = 48000;
 
 /**
+ * Het rekenwerk draait in een worker_thread, nooit op de hoofdthread.
+ *
+ * De server die dit uitrekent is dezelfde die de decks hun audio geeft, met
+ * Range-verzoeken van ~1,4 s per keer. Blokkeert de event loop, dan staat elk
+ * deck stil: gemeten 2,6 s zonder antwoord bij 12 minuten audio (onset), ~9 s
+ * per album tijdens een ingest. Dat is een gat in je set.
+ *
+ * Eén worker per opdracht: opstarten kost ~30 ms, niets vergeleken met het
+ * werk, en een worker die omvalt neemt niets mee. De functies met `Hier` erachter
+ * doen het echte werk en staan in `hier`, zodat de worker ze kan aanroepen.
+ */
+function inWerker(taak, args) {
+  return new Promise((klaar) => {
+    let gemeld = false;
+    const meld = (r) => { if (!gemeld) { gemeld = true; klaar(r); } };
+    let w;
+    try {
+      w = new Worker(new URL('./analyse-werker.js', import.meta.url), { workerData: { taak, args } });
+    } catch (err) {
+      meld({ ok: false, fout: `analyse kon niet starten: ${err?.message || err}` });
+      return;
+    }
+    w.once('message', meld);
+    w.once('error', (err) => meld({ ok: false, fout: `analyse viel om: ${err?.message || err}` }));
+    w.once('exit', (code) => meld({ ok: false, fout: `analyse stopte zonder antwoord (code ${code})` }));
+  });
+}
+
+export const maakPeaks = (audioBestand, doel, opties = {}) => inWerker('peaks', [audioBestand, doel, opties]);
+export const maakOnset = (audioBestand, doel, opties = {}) => inWerker('onset', [audioBestand, doel, opties]);
+
+/**
+ * Tap-verfijning op een bewaarde onset-envelope. Leest het bestand in de
+ * worker: 3 uur envelope is 16 MB, die hoeft niet over de draadgrens.
+ * Geeft { ok, bpm, firstBeat, score } of { ok: false, fout }.
+ */
+export const verfijnUitBestand = (bestand, envRate, bpm, tijdOffset, opties = {}) =>
+  inWerker('verfijn', [bestand, envRate, bpm, tijdOffset, opties]);
+
+/**
  * Leest de audio als ruwe floats uit ffmpeg en rekent al lezend de peaks uit.
  * Streamend, want een halfuur stereo is 712 MB aan ruwe floats — dat wil je
  * niet in één keer in het geheugen hebben staan.
  */
-export function maakPeaks(audioBestand, doel, { perBucket = PER_BUCKET } = {}) {
+function maakPeaksHier(audioBestand, doel, { perBucket = PER_BUCKET } = {}) {
   return new Promise((klaar) => {
     let kind;
     try {
@@ -97,7 +138,7 @@ export function maakPeaks(audioBestand, doel, { perBucket = PER_BUCKET } = {}) {
  * lezen: jij tikt acht tellen, de server pakt deze envelope erbij en verfijnt
  * jouw bpm tot op honderdsten. Zelfde patroon als de peaks-cache, zelfde reden.
  */
-export async function maakOnset(audioBestand, doel, { sampleRate = 11025 } = {}) {
+async function maakOnsetHier(audioBestand, doel, { sampleRate = 11025 } = {}) {
   const { onsetEnvelope, normaliseerEnvelope } = await import('./detect.js');
 
   const pcm = await new Promise((klaar) => {
@@ -127,3 +168,18 @@ export async function maakOnset(audioBestand, doel, { sampleRate = 11025 } = {})
   }
   return { ok: true, frames: schoon.length, envRate, tijdOffset, bytes: schoon.byteLength };
 }
+
+async function verfijnHier(bestand, envRate, bpm, tijdOffset, opties) {
+  let env;
+  try {
+    const b = await readFile(bestand);
+    env = new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4);
+  } catch (err) {
+    return { ok: false, fout: `onset-bestand onleesbaar: ${err?.message || err}` };
+  }
+  const { verfijnTempoFase } = await import('./detect.js');
+  return { ok: true, ...verfijnTempoFase(env, envRate, bpm, tijdOffset, opties) };
+}
+
+/** Voor de worker. Niet rechtstreeks aanroepen vanuit de server. */
+export const hier = { peaks: maakPeaksHier, onset: maakOnsetHier, verfijn: verfijnHier };

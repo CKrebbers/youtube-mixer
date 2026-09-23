@@ -2,10 +2,11 @@
 // Draait een EIGEN server op een eigen poort met een tijdelijke database en
 // opnamemap: je echte library en opnames blijven buiten schot.
 // Draai met: node test/server.test.mjs
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { request } from 'node:http';
 
 const { Library } = await import('../server/library.js');
 const fails = [];
@@ -13,9 +14,40 @@ const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? ' 
 
 const map = mkdtempSync(join(tmpdir(), 'varve-server-'));
 const db = join(map, 'test.db');
+const media = join(map, 'media');
+
+/*
+ * Een lange klikspoor-track (mono 16-bit, 11025 Hz — de onset-analyse
+ * hersamplet toch naar 11025): eerst 6 minuten op 120 bpm, dan 6 op 126.
+ * Lang genoeg dat de analyse seconden kost; de tempowissel test de tap die
+ * rond zijn eigen positie verfijnt.
+ */
+const SR = 11025;
+function klikWav(delen) {
+  const duur = delen.reduce((a, d) => a + d.duur, 0);
+  const x = new Int16Array(Math.round(SR * duur));
+  let t0 = 0;
+  for (const { duur: dd, bpm } of delen) {
+    for (let t = t0; t < t0 + dd; t += 60 / bpm) {
+      const s = Math.round(t * SR);
+      for (let i = 0; i < 220 && s + i < x.length; i++) {
+        x[s + i] = Math.round(20000 * Math.exp(-i / 40) * Math.sin((2 * Math.PI * 900 * i) / SR));
+      }
+    }
+    t0 += dd;
+  }
+  const kop = Buffer.alloc(44);
+  kop.write('RIFF', 0); kop.writeUInt32LE(36 + x.byteLength, 4); kop.write('WAVE', 8);
+  kop.write('fmt ', 12); kop.writeUInt32LE(16, 16); kop.writeUInt16LE(1, 20); kop.writeUInt16LE(1, 22);
+  kop.writeUInt32LE(SR, 24); kop.writeUInt32LE(SR * 2, 28); kop.writeUInt16LE(2, 32); kop.writeUInt16LE(16, 34);
+  kop.write('data', 36); kop.writeUInt32LE(x.byteLength, 40);
+  return Buffer.concat([kop, Buffer.from(x.buffer)]);
+}
+mkdirSync(join(media, 'nummerZ'), { recursive: true });
+writeFileSync(join(media, 'nummerZ', 'audio.wav'), klikWav([{ duur: 360, bpm: 120 }, { duur: 360, bpm: 126 }]));
 // Twee nummers in de testdatabase, om racks tussen nummers te kunnen proberen.
 const lib = new Library(db);
-for (const id of ['nummerX', 'nummerY']) {
+for (const id of ['nummerX', 'nummerY', 'nummerZ']) {
   lib.bewaarTrack({ id, url: `https://example.com/${id}`, titel: id, uploader: 't', duur: 10,
     audio: `media/${id}/audio.wav`, video: null, thumbnail: null, loudness: {}, doelLoudness: -14, ytdlp: 'x' });
 }
@@ -23,7 +55,7 @@ lib.db.close?.();
 
 const poort = 20000 + Math.floor(Math.random() * 20000);
 const server = spawn(process.execPath, ['server/index.js'], {
-  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames') },
+  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_MEDIA: media },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 const B = `http://localhost:${poort}`;
@@ -34,6 +66,17 @@ try {
     await new Promise((r) => setTimeout(r, 100));
   }
   const status = async (pad, init) => (await fetch(B + pad, init)).status;
+  // fetch normaliseert het pad en laat geen eigen Host toe. Dit stuurt LETTERLIJK.
+  const rauw = (pad, { method = 'GET', headers = {}, body = null } = {}) => new Promise((klaar) => {
+    const rq = request({ host: '127.0.0.1', port: poort, path: pad, method, headers: { Host: `localhost:${poort}`, ...headers } }, (res) => {
+      const delen = [];
+      res.on('data', (d) => delen.push(d));
+      res.on('end', () => klaar({ status: res.statusCode, body: Buffer.concat(delen).toString() }));
+    });
+    rq.on('error', (e) => klaar({ status: 0, body: String(e) }));
+    if (body) rq.write(body);
+    rq.end();
+  });
 
   console.log('witte lijst');
   ok('de app komt door', (await status('/')) === 200 && (await status('/src/ui/app.js')) === 200);
@@ -41,6 +84,12 @@ try {
     && (await status('/media/library.db')) === 404 && (await status('/server/index.js')) === 404);
   ok('kapot pad: 400, geen crash', (await status('/%E0%A4%A')) === 400);
   ok('traversal: niet bereikbaar', (await status('/src/../server/index.js')) === 404);
+  const uitstapjes = ['/src/..%2fmedia%2flibrary.db', '/src/..%2f.git%2fconfig', '/src/..%2F..%2F..%2Fetc%2Fpasswd',
+    '/src/..%5cserver%5cindex.js', '/src/%2e%2e%2fserver/index.js', '/src/../server/index.js', '/mappings/..%2fserver%2findex.js'];
+  const uitkomsten = [];
+  for (const p of uitstapjes) uitkomsten.push((await rauw(p)).status);
+  ok(`gecodeerde slash of .. letterlijk: nooit 200 (${uitkomsten.join(' ')})`, uitkomsten.every((c) => c !== 200 && c !== 0));
+  ok('een gewoon bestand in /src komt letterlijk nog wel door', (await rauw('/src/ui/app.js')).status === 200);
 
   console.log('\nRange');
   const r1 = await fetch(`${B}/styles.css`, { headers: { Range: 'bytes=0-99999999' } });
@@ -53,6 +102,31 @@ try {
   console.log('\nalleen JSON');
   ok('ingest met text/plain wordt geweigerd', (await status('/api/ingest', {
     method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{"url":"https://x"}' })) === 415);
+  // Een ongeldige URL in de body: komt het verzoek er toch door, dan 400 en geen echte ingest.
+  ok('text/plain met "application/json" als parameter: ook geweigerd', (await status('/api/ingest', {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;x=application/json' }, body: '{"url":"geen"}' })) === 415);
+  ok('application/json; charset=utf-8 mag wel', (await status('/api/ingest', {
+    method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: '{"url":"geen"}' })) === 400);
+
+  console.log('\nHost en Origin (DNS-rebinding, CSRF)');
+  const hosts = [`localhost:${poort}`, `127.0.0.1:${poort}`, `[::1]:${poort}`];
+  const hostCodes = [];
+  for (const h of hosts) hostCodes.push((await rauw('/api/opnames', { headers: { Host: h } })).status);
+  ok(`localhost, 127.0.0.1 en [::1] met de juiste poort: 200 (${hostCodes.join(' ')})`, hostCodes.every((c) => c === 200));
+  const vreemd = [];
+  for (const h of ['evil.example', `evil.example:${poort}`, 'localhost:1', `localhost.evil.example:${poort}`]) {
+    vreemd.push((await rauw('/api/opnames', { headers: { Host: h } })).status);
+  }
+  ok(`een vreemde Host (DNS-rebinding): 403 (${vreemd.join(' ')})`, vreemd.every((c) => c === 403));
+  const mapJson = JSON.stringify({ mapping: { version: 2, rules: [] } });
+  ok('POST vanaf een andere oorsprong: 403', (await rauw('/api/mapping', { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: 'http://evil.example' }, body: mapJson })).status === 403);
+  ok('DELETE vanaf een andere oorsprong: 403', (await rauw('/api/mapping', { method: 'DELETE',
+    headers: { Origin: `http://localhost:${poort + 1}` } })).status === 403);
+  ok('Origin "null" (sandbox, file://): 403', (await rauw('/api/mapping', { method: 'DELETE', headers: { Origin: 'null' } })).status === 403);
+  ok('POST vanaf de eigen pagina: gewoon 200', (await rauw('/api/mapping', { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: `http://localhost:${poort}` }, body: mapJson })).status === 200);
+  ok('zonder Origin (curl, tests): toegestaan', (await rauw('/api/mapping', { method: 'DELETE' })).status === 200);
 
   console.log('\nracks horen bij hun eigen nummer');
   const post = (pad, body) => fetch(B + pad, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
@@ -90,7 +164,47 @@ try {
   const st = await fetch(`${B}/api/opname/${s.id}/stuk`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: stuk });
   const k = await (await fetch(`${B}/api/opname/${s.id}/klaar`, { method: 'POST' })).json();
   ok('start, stuk, klaar: een seconde', s.ok && st.ok && Math.abs(k.duur - 1) < 1e-9);
+  const eigen = { Origin: `http://localhost:${poort}` };
+  const s2 = await (await fetch(`${B}/api/opname/start`, { method: 'POST', headers: eigen })).json();
+  const st2 = await fetch(`${B}/api/opname/${s2.id}/stuk`, { method: 'POST', headers: { ...eigen, 'Content-Type': 'application/octet-stream' }, body: stuk });
+  const k2 = await fetch(`${B}/api/opname/${s2.id}/klaar`, { method: 'POST', headers: eigen });
+  ok('opname-POSTs (binair) vanaf de eigen pagina blijven werken', s2.ok && st2.status === 200 && k2.status === 200);
   ok('video met een verboden extensie wordt geweigerd', (await status(`/api/opname/${s.id}/video.exe`, { method: 'POST', body: 'x' })) === 400);
+
+  console.log('\nanalyse blokkeert de server niet');
+  // Geen onset.bin: de verfijning rekent de envelope nu uit (12 minuten audio).
+  // Intussen blijven Range-verzoeken komen, zoals een spelend deck ze doet.
+  const wachttijden = [];
+  let klaarMet = false;
+  const t0 = performance.now();
+  const verfijn = fetch(`${B}/api/library/nummerZ/grid/verfijn`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bpm: 123, positie: 540 }) })
+    .then((r) => r.json()).finally(() => { klaarMet = true; });
+  while (!klaarMet) {
+    const t = performance.now();
+    const r = await fetch(`${B}/media/nummerZ/audio.wav`, { headers: { Range: 'bytes=0-65535' } });
+    await r.arrayBuffer();
+    wachttijden.push(performance.now() - t);
+    await new Promise((z) => setTimeout(z, 10));
+  }
+  const vf = await verfijn;
+  const duur = performance.now() - t0;
+  const traagst = Math.max(...wachttijden);
+  const p95 = [...wachttijden].sort((a, b) => a - b)[Math.floor(wachttijden.length * 0.95)];
+  // p95 onder 50 ms, en geen enkele stilstand van een halve seconde. Vóór de
+  // worker: één antwoord van 2,6 s. De max is ruim omdat een drukke machine
+  // (andere tests tegelijk) zelf ook wel eens een tik hapert.
+  ok(`analyse duurde ${(duur / 1000).toFixed(1)} s, Range-antwoorden p95 ${p95.toFixed(0)} ms, traagste ${traagst.toFixed(0)} ms (${wachttijden.length} verzoeken)`,
+    wachttijden.length > 5 && p95 < 50 && traagst < 500);
+  ok(`tap op 540 s (126 bpm-deel), getikt 123: ${vf.bpm?.toFixed(2)} bpm`, Math.abs(vf.bpm - 126) < 0.1);
+  const vf2 = await fetch(`${B}/api/library/nummerZ/grid/verfijn`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bpm: 123, positie: 120 }) }).then((r) => r.json());
+  ok(`tap op 120 s (120 bpm-deel), getikt 123: ${vf2.bpm?.toFixed(2)} bpm`, Math.abs(vf2.bpm - 120) < 0.1);
+  // Fase gemeten bij de tap (120 s), op het 120-bpm-grid dat op 0 begint.
+  const tel = vf2.firstBeat + Math.round((120 - vf2.firstBeat) / (60 / vf2.bpm)) * (60 / vf2.bpm);
+  const fase = (tel % 0.5 + 0.5) % 0.5;
+  ok(`en de tel valt op het grid (${(Math.min(fase, 0.5 - fase) * 1000).toFixed(1)} ms naast)`, Math.min(fase, 0.5 - fase) < 0.015);
+  ok('onset.bin is in de testmap gezet, niet in media/ van Clay', (await import('node:fs')).existsSync(join(media, 'nummerZ', 'onset.bin')));
 } finally {
   server.kill();
   rmSync(map, { recursive: true, force: true });
