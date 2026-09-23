@@ -75,7 +75,7 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 
 ## C. Spelen en mixen 💬
 
-- [ ] **C1. Pitchbereik.** De fader doet ±8%, sync mag tot 0,5–2×. Na een
+- [x] **C1. Pitchbereik.** — Clay: kiesbaar, standaard ±16% (gebouwd 23 sep). De fader doet ±8%, sync mag tot 0,5–2×. Na een
   grote sync staat de fader tegen de aanslag en springt terug als je hem
   aanraakt. Opties: ±8 / ±16 / ±50%, of het bereik schuift mee met sync.
   **Advies:** kiesbaar ±8/±16/±50, standaard ±16.

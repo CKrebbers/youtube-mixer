@@ -15,8 +15,8 @@
  */
 import { Beatgrid, TapTempo } from '../engine/beatgrid.js';
 import { EFFECTEN } from '../engine/fx.js';
-import { clamp } from '../lib/emitter.js';
 import { DECK_IDS, XFADE_KANTEN } from '../engine/engine.js';
+import { PITCH_BEREIKEN } from '../engine/deck.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
 
@@ -176,10 +176,12 @@ export function bindEngine(engine) {
     define(`${n}.nudge.back`, 'trigger', (on) => { if (on) d.nudge(-0.05); }, { label: `Track ${nr} nudge -` });
     define(`${n}.nudge.fwd`, 'trigger', (on) => { if (on) d.nudge(0.05); }, { label: `Track ${nr} nudge +` });
 
-    define(`${n}.pitch`, 'value', (v) => d.setRate(0.92 + v * 0.16),
-      // Sync mag verder dan ±8% (0,5–2); de read blijft binnen 0..1, anders
-      // raken fader en soft-takeover van slag.
-      { label: `Track ${nr} pitch ±8%`, bipolar: true, read: () => clamp((d.rate - 0.92) / 0.16) });
+    // Het bereik (±8/16/50%) zit in het deck; de fader blijft 0..1. De read
+    // is geklemd: sync mag verder dan het bereik, en dan staat hij tegen de aanslag.
+    define(`${n}.pitch`, 'value', (v) => d.setPitch(v),
+      { label: `Track ${nr} pitch`, bipolar: true, read: () => d.pitch });
+    define(`${n}.pitch.bereik`, 'trigger', (on) => { if (on) d.volgendBereik(); },
+      { label: `Track ${nr} pitchbereik ±8 / ±16 / ±50%`, read: () => PITCH_BEREIKEN.indexOf(d.pitchBereik) / (PITCH_BEREIKEN.length - 1) });
     define(`${n}.seek`, 'value', (v) => d.seek(v * d.duration),
       { label: `Track ${nr} scrub`, read: () => (d.duration ? d.position / d.duration : 0) });
 

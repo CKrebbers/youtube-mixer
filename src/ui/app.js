@@ -879,6 +879,7 @@ for (const v of VENSTERS) {
     rem: r.querySelector('.t-rem'),
     play: r.querySelector('.play'),
     pitch: r.querySelector('.pitch-val'),
+    pitchBereik: r.querySelector('.pitch-bereik'),
     meter: document.querySelector(`.strip[data-venster="${v}"] .ch-meter i`),
     hotcues: [...r.querySelectorAll('.hc')],
     loopBtns: [...r.querySelectorAll('.loops .btn:not(.bl)')],
@@ -990,6 +991,8 @@ function tekenFrame() {
       e.rem.textContent = '-' + fmtTime(Math.max(0, d.duration - d.position));
       e.play.classList.toggle('on', d.playing);
       e.pitch.textContent = ((d.rate - 1) * 100).toFixed(1) + '%';
+      const bereik = `±${Math.round(engine.deck(id).pitchBereik * 100)}`;
+      if (e.pitchBereik.textContent !== bereik) e.pitchBereik.textContent = bereik;
       e.meter.style.width = (d.level * 100).toFixed(1) + '%';
       // bpm: wat je HOORT, dus inclusief pitch.
       e.bpm.textContent = d.bpm ? d.bpm.toFixed(1) : '—';

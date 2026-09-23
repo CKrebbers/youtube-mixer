@@ -52,7 +52,7 @@ globalThis.AudioContext = class {
 };
 
 const { Engine } = await import('../src/engine/engine.js');
-const { bindEngine, invoke, list } = await import('../src/control/actions.js');
+const { bindEngine, invoke, list, read } = await import('../src/control/actions.js');
 const { computePeaks } = await import('../src/analysis/peaks.js');
 const { renderDemoTrack } = await import('../src/analysis/demo-track.js');
 const { xfaderGains } = await import('../src/engine/audio-graph.js');
@@ -122,7 +122,18 @@ invoke('track.1.filter', 0.5);
 ok('filter midden = bypass', eng.deck('A').chain.lpf.frequency.value > 20000 && eng.deck('A').chain.hpf.frequency.value < 25);
 
 invoke('track.1.pitch', 1);
-ok('pitch +8%', Math.abs(eng.deck('A').rate - 1.08) < 1e-9);
+ok('pitch standaard ±16%: fader rechts = +16%', Math.abs(eng.deck('A').rate - 1.16) < 1e-9);
+invoke('track.1.pitch.bereik', true);            // 16 -> 50
+ok('bereik wisselen laat het tempo staan', Math.abs(eng.deck('A').rate - 1.16) < 1e-9 && eng.deck('A').pitchBereik === 0.5);
+ok('... en verschuift alleen de faderstand', Math.abs(read('track.1.pitch') - 0.66) < 1e-9);
+invoke('track.1.pitch.bereik', true);            // 50 -> 8
+ok('op ±8% staat +16% tegen de aanslag (read geklemd)', eng.deck('A').pitchBereik === 0.08 && read('track.1.pitch') === 1);
+invoke('track.1.pitch', 0);
+ok('±8%: fader links = -8%', Math.abs(eng.deck('A').rate - 0.92) < 1e-9);
+invoke('track.1.pitch.bereik', true);            // 8 -> 16, terug naar standaard
+invoke('track.1.pitch', 0.5);
+ok('fader midden = 0%', eng.deck('A').rate === 1);
+invoke('track.1.pitch', 1);
 
 const snap = eng.snapshot();
 // ---- regressie: een afgedankte bron mag niets meer melden ----------------

@@ -5,6 +5,13 @@ import { BufferBron, StreamBron } from './bron.js';
 import { InsertSlot } from './fx.js';
 
 /**
+ * Hoe ver de pitchfader reikt, naar elke kant. Kiesbaar per track; sync mag
+ * altijd verder (0,5–2). Standaard ±16%: ±8% liet de fader na een grote sync
+ * tegen de aanslag staan.
+ */
+export const PITCH_BEREIKEN = [0.08, 0.16, 0.5];
+
+/**
  * Eén deck: transport, cues, loops, beatgrid, kanaalstrip.
  *
  * HOE er geluid uit een track komt weet dit deck niet — dat staat in `bron.js`.
@@ -40,6 +47,7 @@ export class Deck extends Emitter {
     this.title = '— leeg —';
 
     this.rate = 1;              // playbackRate (pitch schuift mee — keylock = fase 3)
+    this.pitchBereik = 0.16;    // zie PITCH_BEREIKEN
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.loop = null;           // {start, end}
@@ -150,6 +158,22 @@ export class Deck extends Emitter {
   }
 
   nudge(seconds) { this.seek(this.position + seconds); }
+
+  /** Pitchfader 0..1 (midden = 0%), geschaald op het bereik van deze track. */
+  setPitch(v) { this.setRate(1 + (clamp(v) * 2 - 1) * this.pitchBereik); }
+
+  /** Waar de pitchfader hoort te staan. Geklemd: na een grote sync staat hij tegen de aanslag. */
+  get pitch() { return clamp(0.5 + (this.rate - 1) / (2 * this.pitchBereik)); }
+
+  /**
+   * Volgend bereik. Het tempo blijft gelijk; alleen de faderstand verschuift,
+   * en soft-takeover vangt dat op.
+   */
+  volgendBereik() {
+    const i = PITCH_BEREIKEN.indexOf(this.pitchBereik);
+    this.pitchBereik = PITCH_BEREIKEN[(i + 1) % PITCH_BEREIKEN.length];
+    this.emit('change', this);
+  }
 
   setRate(r) {
     const nr = clamp(r, 0.5, 2);
