@@ -22,6 +22,16 @@ import { Emitter, clamp } from '../lib/emitter.js';
  *   relative-2c   encoder, tweecomplement: 1..63 = +, 65..127 = -
  *   relative-bin  encoder, binary offset: waarde - 64 is de stap
  *
+ * Shift en mapjes (sinds 23 september 2026):
+ *   { "in": "note:0:52", "action": "track.1.loop.exit", "shift": true }
+ *   { "in": "cc:0:48", "action": "track.1.send.a", "laag": "top.echo" }
+ * Een regel met `shift` geldt alleen zolang de shiftknop (`"shift": "note:0:98"`
+ * bovenaan de mapping) ingedrukt is; zonder shift-variant valt shift terug op
+ * de gewone regel, zodat een fader gewoon blijft werken. Een regel met `laag`
+ * geldt alleen als dat mapje open is (zie lagen.js) en gaat dan voor een regel
+ * zonder laag. Meerdere regels per signature dus; de sleutel is
+ * `sig[#shift][@laag]`.
+ *
  * Soft-takeover uitzetten voor een regel die op een doorlopend bewegende waarde
  * staat (scrub bijvoorbeeld): zet `"takeover": 1` — dan valt elke stand binnen
  * de marge en pakt de knop altijd direct over.
@@ -41,6 +51,9 @@ const RELATIVE_STEP = 1 / 127;
 const LAST_TTL = 1000;
 
 export const MODES = ['trigger', 'absolute', 'relative-2c', 'relative-bin'];
+
+/** Sleutel van een regel: dezelfde knop kan met shift en per mapje iets anders doen. */
+export const sleutelVan = (r) => `${r.in}${r.shift ? '#shift' : ''}${r.laag ? `@${r.laag}` : ''}`;
 
 /** Vult {focus} en andere variabelen in. Puur tekst, geen kennis van decks. */
 export function resolveTarget(action, vars) {
@@ -106,16 +119,23 @@ export class Mapping extends Emitter {
    * @param invoke (actionId, value) -> void. De action-bus.
    * @param vars   () -> { focus: 1 } (tracknummer). Wordt per bericht opnieuw gevraagd.
    */
-  constructor({ read, invoke, vars = () => ({}), now = () => (globalThis.performance?.now() ?? Date.now()) } = {}) {
+  /**
+   * @param lagen  () -> ['top.filter', 'device.rack', …]: de open mapjes.
+   */
+  constructor({ read, invoke, vars = () => ({}), lagen = () => [], now = () => (globalThis.performance?.now() ?? Date.now()) } = {}) {
     super();
     this.read = read;
     this.invoke = invoke;
     this.vars = vars;
+    this.lagen = lagen;
     this.now = now;
     this.name = 'leeg';
     this.device = 'generic';
-    this.rules = new Map();     // sig -> regel
+    this.rules = new Map();     // sleutel (sig[#shift][@laag]) -> regel
     this.state = new Map();     // sig -> { caught, last, target }
+    this.shiftSig = null;       // welke knop shift is, uit de mapping
+    this.shift = false;
+    this.vast = new Map();      // sig -> { rule, target } van een ingedrukte knop
   }
 
   // ---- laden en opslaan --------------------------------------------------
@@ -136,17 +156,24 @@ export class Mapping extends Emitter {
       if (!/^[a-z]+:(\*|\d+):\d+$/.test(r.in) && !/^[a-z-]+$/.test(r.in)) {
         fouten.push(`regel ${i}: "${r.in}" is geen geldige signature (type:kanaal:nummer)`); return;
       }
-      if (rules.has(r.in)) fouten.push(`regel ${i}: "${r.in}" staat al gekoppeld, laatste wint`);
       const action = migreerAction(r.action, doc.version ?? 1);
       if (action !== r.action) gemigreerd++;
-      rules.set(r.in, {
+      const regel = {
         in: r.in, action, mode,
         invert: !!r.invert,
         step: typeof r.step === 'number' ? r.step : undefined,
         takeover: typeof r.takeover === 'number' ? r.takeover : undefined,
         label: r.label,
-      });
+        shift: r.shift ? true : undefined,
+        laag: typeof r.laag === 'string' ? r.laag : undefined,
+      };
+      const k = sleutelVan(regel);
+      if (rules.has(k)) fouten.push(`regel ${i}: "${k}" staat al gekoppeld, laatste wint`);
+      rules.set(k, regel);
     });
+    this.shiftSig = typeof doc.shift === 'string' ? doc.shift : null;
+    this.shift = false;
+    this.vast.clear();
 
     this.name = doc.name || 'naamloos';
     this.device = doc.device || 'generic';
@@ -161,8 +188,11 @@ export class Mapping extends Emitter {
       name: this.name,
       device: this.device,
       version: MAPPING_VERSIE,
+      ...(this.shiftSig ? { shift: this.shiftSig } : {}),
       rules: [...this.rules.values()].map((r) => {
         const o = { in: r.in, action: r.action, mode: r.mode };
+        if (r.shift) o.shift = true;
+        if (r.laag) o.laag = r.laag;
         if (r.invert) o.invert = true;
         if (r.step !== undefined) o.step = r.step;
         if (r.takeover !== undefined) o.takeover = r.takeover;
@@ -176,22 +206,67 @@ export class Mapping extends Emitter {
 
   // ---- regels bewerken (MIDI-learn gebruikt dit) --------------------------
 
+  /**
+   * Een knop koppelen. Zonder expliciete `shift`/`laag` in opts: de stand van
+   * NU. Houd je shift vast, dan wordt het een shift-regel; hoort deze knop bij
+   * een mapje, dan komt hij in het mapje dat open staat. Zo koppel je in een
+   * mapje zonder dat je daar iets voor hoeft in te stellen.
+   */
   set(sig, action, opts = {}) {
-    this.rules.set(sig, { in: sig, action, mode: opts.mode || 'trigger', ...opts });
+    const shift = opts.shift ?? (this.shift || undefined);
+    let laag = opts.laag;
+    if (laag === undefined) {
+      const groepen = new Set([...this.rules.values()].filter((r) => r.in === sig && r.laag).map((r) => r.laag.split('.')[0]));
+      laag = this.lagen().find((l) => groepen.has(l.split('.')[0]));
+    }
+    const regel = { in: sig, action, mode: opts.mode || 'trigger', ...opts, shift: shift || undefined, laag: laag || undefined };
+    this.rules.set(sleutelVan(regel), regel);
     this.state.delete(sig);
     this.emit('change', this);
+    return regel;
   }
 
-  remove(sig) {
-    const weg = this.rules.delete(sig);
-    this.state.delete(sig);
+  /** Een regel weghalen, op sleutel. Een kale signature is de regel zonder shift en laag. */
+  remove(sleutel) {
+    const weg = this.rules.delete(sleutel);
+    this.state.delete(sleutel.split(/[#@]/)[0]);
     if (weg) this.emit('change', this);
     return weg;
   }
 
-  /** Alle signatures die naar deze action wijzen — voor de UI. */
+  /** Alle sleutels die naar deze action wijzen — voor de UI. */
   forAction(actionId) {
-    return [...this.rules.values()].filter((r) => r.action === actionId).map((r) => r.in);
+    return [...this.rules.entries()].filter(([, r]) => r.action === actionId).map(([k]) => k);
+  }
+
+  /**
+   * Welke regel geldt NU voor deze signature? Met shift eerst de shift-regels,
+   * daarna de gewone; binnen die twee eerst het open mapje, dan zonder mapje;
+   * exacte signature voor wildcard (`cc:*:16`).
+   */
+  kies(sig, { shift = this.shift } = {}) {
+    const [type, ch, nr] = sig.split(':');
+    const sigs = ch === '*' ? [sig] : [sig, `${type}:*:${nr}`];
+    const open = this.lagen();
+    for (const s of sigs) {
+      for (const sh of shift ? ['#shift', ''] : ['']) {
+        for (const l of open) { const r = this.rules.get(`${s}${sh}@${l}`); if (r) return r; }
+        const r = this.rules.get(`${s}${sh}`);
+        if (r) return r;
+      }
+    }
+    return null;
+  }
+
+  /** Per fysieke control de regel die nu geldt (zonder shift) — voor de LED's. */
+  actieveRegels() {
+    const uit = new Map();
+    for (const r of this.rules.values()) {
+      if (uit.has(r.in)) continue;
+      const k = this.kies(r.in, { shift: false });
+      if (k) uit.set(r.in, k);
+    }
+    return uit;
   }
 
   // ---- soft-takeover -----------------------------------------------------
@@ -227,12 +302,27 @@ export class Mapping extends Emitter {
    * signature niet gekoppeld is — de monitor gebruikt dat om mee te kijken.
    */
   handle(msg) {
-    // Exacte regel gaat voor; een wildcard-regel vangt de rest van de kanalen.
-    const rule = this.rules.get(msg.sig)
-      || (msg.channel >= 0 ? this.rules.get(`${msg.type}:*:${msg.number}`) : undefined);
+    // De shiftknop zelf: alleen onthouden, niets op de bus.
+    if (this.shiftSig && msg.sig === this.shiftSig) {
+      const aan = msg.type === 'note' ? msg.on : msg.value >= 64;
+      if (aan !== this.shift) { this.shift = aan; this.emit('shift', aan); }
+      return { rule: { in: msg.sig, action: 'shift', mode: 'trigger', label: 'shift' }, target: 'shift', mode: 'trigger', value: aan, taken: true };
+    }
+
+    // Loslaten gaat naar dezelfde action als het indrukken, ook als shift of
+    // het mapje intussen veranderde. Anders blijft een drukknop hangen.
+    const los = msg.type === 'note' && !msg.on;
+    const vast = los ? this.vast.get(msg.sig) : null;
+    if (vast) {
+      this.vast.delete(msg.sig);
+      if (vast.rule.mode === 'trigger' || !vast.rule.mode) return this._trigger(vast.rule, msg, vast.target);
+    }
+
+    const rule = this.kies(msg.sig);
     if (!rule) return null;
 
     const target = resolveTarget(rule.action, this.vars());
+    if (msg.type === 'note' && msg.on) this.vast.set(msg.sig, { rule, target });
 
     switch (rule.mode) {
       case 'absolute':   return this._absolute(rule, msg, target);

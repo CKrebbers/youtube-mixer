@@ -59,7 +59,8 @@ src/
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
                     keyboard.js     toetsen -> actions
                     midi.js         Web MIDI: poorten, parsen, sysex. Kent geen actions.
-                    mapping.js      signature -> action, soft-takeover. Kent geen hardware.
+                    mapping.js      signature -> action, soft-takeover, shift, mapjes. Kent geen hardware.
+                    lagen.js        mapjes (lagen): welk mapje open staat, vastzetten en gluren
                     feedback.js     engine-stand -> LED's, met diffing. Leest de mapping.
                     midi-learn.js   action kiezen, control bewegen, gekoppeld
                     devices/        apc40mk2.js, generic.js — wat er op het apparaat zit
@@ -68,7 +69,7 @@ src/
   ui/               app.js (instappunt: engine + modules in volgorde opzetten)
                     vensters, laden, racks, sampler-opslag, meldingen,
                     onderpanelen, midi-opzet, opname-knop, video-paneel,
-                    renderloop — elk een opzet…()-functie
+                    renderloop, mapje-balk — elk een opzet…()-functie
                     waveform.js, controls.js, midi-monitor.js,
                     mapping-panel.js (de lijst), learn-mode.js (aanwijzen op het scherm),
                     rack-editor.js (racks bouwen met de muis, werkt op een kopie)
@@ -423,6 +424,23 @@ test/
   binnen 60 ms terugkomt, bereikt de mapping niet. Zonder die rem maken de
   LED-ringen een lus — wij zetten een ring, het apparaat meldt de stand terug,
   wij verwerken dat als een knopdraai — en loopt de bus vol.
+- MAPJES (lagen) en SHIFT op de controller (Clay, 23 sep, VRAGEN B3). Een regel
+  kan `"shift": true` en/of `"laag": "top.echo"` hebben; de sleutel is
+  `sig[#shift][@laag]`, dus één knop heeft meerdere regels. `mapping.kies()`
+  zoekt: met shift eerst shift-regels, dan gewone (een fader blijft werken met
+  shift vast); binnen elk eerst het open mapje, dan zonder mapje. Loslaten gaat
+  ALTIJD naar de action van het indrukken (`mapping.vast`), ook als shift of het
+  mapje intussen wisselde. De shiftknop staat bovenaan de mapping (`"shift"`)
+  en gaat nooit de bus op. Groepen en mapjes staan in `lagen.js` (top = track
+  knobs, device = device knobs, grid); kort drukken = vast, vasthouden ≥ 400 ms
+  vanuit een ander mapje = gluren (loslaten = terug), nog eens drukken = het
+  volgende mapje onder dezelfde kiesknop. Kiesknoppen zijn actions
+  (`layer.<groep>.<knop>`, `layer.grid.next/prev`). Koppelen komt in het mapje
+  dat open staat, en met shift vast in de shift-laag. De LED's volgen
+  `mapping.actieveRegels()`; wat bij een dicht mapje hoort gaat uit, en het
+  ringtype wisselt mee. `mapje-balk.js` toont bij elke wissel wat de knoppen
+  doen. De standaardmapping (333 regels) is gegenereerd volgens de tabel in
+  `docs/APC40.md`; aanpassen mag gewoon in de JSON of met koppelen.
 - De LED-laag leest de MAPPING, niet de engine. Koppel je een pad aan iets
   anders, dan verhuist zijn lampje vanzelf mee. Er is bewust geen tweede tabel.
 - LED's lopen op een eigen `setInterval`, niet op de renderloop: `requestAnimationFrame`

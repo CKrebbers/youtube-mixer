@@ -85,7 +85,8 @@ export class MidiLearn extends Emitter {
 
     const mode = raadModus(this.buf);
     const label = this.device?.label?.(msg.sig) ?? undefined;
-    const vorige = this.mapping.rules.get(msg.sig);
+    // Wat hier NU geldt (met shift en het open mapje), niet zomaar de kale regel.
+    const vorige = this.mapping.kies?.(msg.sig) ?? this.mapping.rules.get(msg.sig);
     const overschrijft = vorige && vorige.action !== this.action ? vorige.action : null;
 
     this.mapping.set(msg.sig, this.action, { mode, label });

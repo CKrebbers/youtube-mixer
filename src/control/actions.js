@@ -19,6 +19,7 @@ import { DECK_IDS, XFADE_KANTEN } from '../engine/engine.js';
 import { PITCH_BEREIKEN } from '../engine/deck.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
+import { GROEPEN, LAAGNAAM } from './lagen.js';
 
 const registry = new Map();
 
@@ -357,6 +358,14 @@ export function bindVideo(mixer) {
     define(`video.fx.${VIDEO_FX_ACTIE[fx.id] ?? fx.id}`, 'value', (v) => mixer.zetFx(fx.id, v),
       { label: `Video ${fx.naam}`, bipolar: !!fx.bipolair, read: () => mixer.fx[fx.id] });
   }
+  // Drukvariant, voor het video-grid: vol aan zolang je drukt, daarna terug.
+  for (const fx of VIDEO_FX) {
+    let stond = null;
+    define(`video.fx.${VIDEO_FX_ACTIE[fx.id] ?? fx.id}.hold`, 'trigger', (on) => {
+      if (on && stond === null) { stond = mixer.fx[fx.id]; mixer.zetFx(fx.id, 1); }
+      else if (!on && stond !== null) { mixer.zetFx(fx.id, stond); stond = null; }
+    }, { label: `Video ${fx.naam} vasthouden`, read: () => (stond !== null ? 1 : 0) });
+  }
   define('video.mode', 'trigger', (on) => { if (on) mixer.volgendeModus(); },
     { label: 'Video: volgende mengvorm', read: () => MODI.indexOf(mixer.modus) / (MODI.length - 1) });
   define('video.pulse', 'value', (v) => mixer.zetPuls(v),
@@ -385,4 +394,23 @@ export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnam
     { label: 'Opname stoppen (zet hem achter shift)', read: () => (opnemer.bezig ? 1 : 0) });
   define('record.mode', 'trigger', (on) => { if (on && !opnemer.bezig) opnameSoort(); },
     { label: 'Opname: audio of audio + video', read: () => (opnemer.metVideo ? 1 : 0) });
+}
+
+/**
+ * De kiesknoppen van de mapjes (lagen.js): Pan/Sends/User, de knoppen onder de
+ * device knobs, en de grid-pagina's. Een kiesknop is een gewone action, dus
+ * ook te koppelen aan een andere knop of te bedienen met de muis.
+ */
+export function bindLagen(lagen) {
+  for (const [groep, g] of Object.entries(GROEPEN)) {
+    for (const knop of Object.keys(g.knoppen)) {
+      define(`layer.${groep}.${knop}`, 'trigger', (on) => lagen.druk(groep, knop, on),
+        { label: `Mapje ${g.naam}: ${g.knoppen[knop].map((l) => LAAGNAAM[`${groep}.${l}`] ?? l).join(' / ')}`,
+          read: () => (lagen.isOpen(groep, knop) ? 1 : 0) });
+    }
+    if (g.volgorde) {
+      define(`layer.${groep}.next`, 'trigger', (on) => { if (on) lagen.stap(groep, 1); }, { label: `Mapje ${g.naam}: volgende` });
+      define(`layer.${groep}.prev`, 'trigger', (on) => { if (on) lagen.stap(groep, -1); }, { label: `Mapje ${g.naam}: vorige` });
+    }
+  }
 }

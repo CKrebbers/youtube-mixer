@@ -49,28 +49,52 @@ track select → focus. Controleren met de MIDI-monitor welke kanalen binnenkome
 gevonden, geen scherm, geen motorfaders, geen aanslaggevoeligheid. USB-gevoed:
 direct aansluiten, niet via een zwakke hub. Onze wachtrij (16 berichten / 4 ms) aanhouden.
 
-## Voorgestelde indeling (kolom = track 1–8)
+## Indeling (GEBOUWD 23 september 2026, VRAGEN B3) — mode 0x42, met mapjes
 
-| Sectie | Normaal | Met shift |
+Gemeten in 0x42: Track Select `note:N:51` (kanaal = kolom), device knobs
+`cc:0:16–23` (altijd kanaal 0), track knobs `cc:0:48–55`, Pan/Sends/User
+`note:0:87/88/89`, Shift `note:0:98`, tempo `cc:0:13` relatief, Bank ◀ ▶
+`note:0:60/61`. Niet gemeten (uit het protocol): Clip Stop `note:N:52`,
+cue level `cc:0:47`.
+
+**Vaste kern (nooit anders)**
+| Knop | Normaal | Met shift |
 |---|---|---|
-| Fader / master / crossfader | `track.N.fader` / `mixer.master` / `mixer.xfader` | – |
+| Fader 1–8 · master · crossfader | `track.N.fader` · `mixer.master` · `mixer.xfader` | – |
 | Activator | `track.N.play` | `track.N.cue` |
-| Solo | `track.N.sync` (LED: aan = in sync, knippert = geeft de maat) | `track.N.tap` |
-| Record arm | `window.R.show.N` | `window.L.show.N` |
-| Track select | `track.N.focus` | – |
-| Clip stop | `track.N.loop.toggle` | `track.N.loop.exit` |
-| A/B | `track.N.xfade.side` (uit=A, geel=B, oranje=thru — feedback.js moet 3 standen leren) | – |
-| Device knobs | `track.{focus}.fx.knob.1–8`; Clip/Device view wisselt naar strip (high/mid/low/trim/fx.mix/send.a/send.b/pitch); Master-knop → video.fx.* | shift+Master: `send.a/b.knop.1–8` |
-| Track knobs | laag via Pan/Sends/User: **Pan = `track.N.filter`**, Sends = `track.N.send.a` (shift: `.send.b`), User = `track.{R}.fx.knob.1–8` (rack van het rechtervenster) | |
-| Grid rij 1–4 | `track.N.hotcue.1–4` | `.hotcue.K.delete` |
-| Grid rij 5 | `sampler.1–8` | `sampler.K.clear` |
-| Scene 1–5 | beatloop 4 · 8 · 16 · loop ½ · loop ×2 (focus-track) | loop 2/4/8 s · beatloop 1/2 |
-| Device-knoppen | on/off = `fx.bypass`, device L/R = `grid.halve/double`, bank L/R = `grid.back/fwd`, detail = `grid.here` | shift+device lock = `rack.volgend`, shift+Pan = `fx.next`, shift+bank lock = `grid.clear` |
-| Transport | Play = `track.{focus}.play`, Record = `record.start`, Session = `sampler.length`, Tap, Nudge ± | Record = `record.stop`, Session = `record.mode` |
-| Encoders | tempo = `track.{focus}.pitch`, cue = `sampler.volume` | cue = `video.pulse` |
-| Pijlen | links/rechts = `focus.prev/next`, op/neer = `video.mode` / `video.pulse.target` | |
-| Metronome | `mixer.xfader.curve` | |
-| Stop all clips | bewust leeg | |
+| Solo | `track.N.sync` | `track.N.tap` |
+| A/B | `track.N.xfade.side` | – |
+| Track Select | `track.N.focus` | – |
+| Record Arm | `window.R.show.N` | `window.L.show.N` |
+| Clip Stop | `track.N.loop.toggle` | `track.N.loop.exit` |
+| Tempo · Nudge ± · Play · Tap | pitch · nudge · play · tap van `{focus}` | – |
+| Record | `record.start` | `record.stop` |
+| Session | `sampler.length` | `record.mode` |
+| Metronome | `mixer.xfader.curve` | – |
+| Pijlen ← → / ↑ ↓ | `focus.prev/next` / `layer.grid.prev/next` | – |
+| Cue level | `sampler.volume` | `video.pulse` |
+| Scene launch 1–5 | beatloop 4 · 8 · 16 · ½ · ×2 (focus) | grid-mapje hotcues · loops · sampler · video · – |
+| Device ◀ ▶ · On/Off | `rack.prev/next` · `fx.bypass` (focus) | – |
+| Stop All Clips, Lock, Bank Lock, Master | bewust leeg | – |
+
+**Mapjes**
+| Kiesknop | Mapje | Knoppen doen |
+|---|---|---|
+| Pan | top.filter | track knob N = `track.N.filter` |
+| Sends (nog eens: galm) | top.echo / top.reverb | `track.N.send.a` / `.send.b` |
+| User | top.low | `track.N.low` (bass-swap) |
+| Clip/Device View | device.rack | `track.{focus}.fx.knob.1–8` |
+| Detail View | device.strip | trim · high · mid · low · filter · fx.mix · send.a · send.b |
+| Bank ◀ | device.sends | echo 1–4 · galm 1–3 · sampler-volume |
+| Bank ▶ | device.video | 6 effecten · puls |
+| Shift+scene 1 / ↑↓ | grid.hotcues | rij 1–4 hotcue 1–4 per track (shift: wissen), rij 5 sampler (shift: leeg) |
+| Shift+scene 2 | grid.loops | rij 1–5 = beatloop 1 · 2 · 4 · 8 · 16 per track |
+| Shift+scene 3 | grid.sampler | rij 1 pads, rij 2 leegmaken, pad 1/5 lengte |
+| Shift+scene 4 | grid.video | rij 1 effect vasthouden, rij 2 mengvorm · puls-doel |
+
+Kort drukken = vast, vasthouden = gluren. Het balkje bovenin zegt wat de
+knoppen nu doen. Nog open: welke APC-knoppen de drukknoppen (`.hold`, D3)
+worden, en de kleurbetekenis (B4) en knipperen op de tel (B2).
 
 **Kleuren op het grid:** uit = niets te doen · donkergrijs = leeg · zachte tint =
 gevuld · volle tint = actief · knipperen = loopt in de tijd · rood = opname/wissen.

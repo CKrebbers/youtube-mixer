@@ -32,7 +32,9 @@ bindEngine(engine);
 
 const bus = [];
 const send = (b) => { bus.push([...b]); return true; };
-const mapping = new Mapping({ read, invoke: () => {}, vars: () => ({ focus: trackVanDeck(engine.focus) }) });
+const { Lagen } = await import('../src/control/lagen.js');
+const lagen = new Lagen();
+const mapping = new Mapping({ read, invoke: () => {}, vars: () => ({ focus: trackVanDeck(engine.focus) }), lagen: () => lagen.actief() });
 const standaard = JSON.parse(readFileSync(new URL('../mappings/apc40mk2.json', import.meta.url), 'utf8'));
 /*
  * De ringtests draaien op een mapping MET banken, zoals in generic mode: EQ op
@@ -70,7 +72,7 @@ ok('en knoppen die in geen enkele regel voorkomen', nullen.some((b) => b[1] === 
 // krijgen, en een vast getal zou dan bij elke uitbreiding breken.
 const ringen = bus.filter((b) => (b[0] & 0xf0) === 0xb0
   && ((b[1] >= 0x18 && b[1] <= 0x1f) || (b[1] >= 0x38 && b[1] <= 0x3f)));
-const knopRegels = [...mapping.rules.values()]
+const knopRegels = [...mapping.actieveRegels().values()]
   .filter((r) => apc.ringFor(r.in.replace(':*:', ':0:')));
 ok(`elke gekoppelde knop krijgt een ringtype (${knopRegels.length})`,
   ringen.length === knopRegels.length && knopRegels.length >= 12);
@@ -176,14 +178,38 @@ fb.blackout();
 ok('blackout dekt elke LED op het apparaat', bus.length === apc.allLeds().length);
 ok('blackout zet alles op nul', bus.every((b) => b[2] === 0));
 
+// ---- mapjes: wat dichtgaat, gaat uit ----------------------------------------
+{
+  const busM = [];
+  const lgM = new Lagen();
+  const mM = new Mapping({ read: (a) => (a.endsWith('hotcue.1') ? 1 : a.endsWith('beatloop.1') ? 0 : null), invoke: () => {}, lagen: () => lgM.actief() });
+  mM.load({ version: 3, rules: [
+    { in: 'note:0:32', action: 'track.1.hotcue.1', mode: 'trigger', laag: 'grid.hotcues' },
+    { in: 'note:0:33', action: 'track.2.hotcue.1', mode: 'trigger', laag: 'grid.hotcues' },
+    { in: 'note:0:32', action: 'track.1.beatloop.1', mode: 'trigger', laag: 'grid.loops' },
+  ] });
+  const fbM = new Feedback({ device: apc, mapping: mM, read: mM.read, meta: () => null, send: (b) => { busM.push([...b]); return true; } });
+  fbM.klaar = true;
+  fbM.tick(999);
+  const aan = busM.find((b) => b[1] === 32);
+  ok('mapje hotcues: de gezette hotcue brandt', aan && aan[2] === apc.palette.geel);
+  busM.length = 0;
+  lgM.zet('grid', 'loops');
+  fbM.tick(999);
+  ok('mapje wisselt: de pad krijgt de stand van het nieuwe mapje', busM.some((b) => b[1] === 32 && b[2] === apc.palette.donkergrijs));
+  ok('en een pad zonder regel in dit mapje gaat uit', busM.some((b) => b[1] === 33 && b[2] === 0));
+}
+
 // ---- de standaardmapping (0x42, geen banken) ------------------------------
 {
   const m = new Mapping({ read, invoke: () => {}, vars: () => ({ focus: 1 }) });
   m.load(standaard);
   const dk = [...m.rules.values()].filter((r) => /^cc:\d+:(1[6-9]|2[0-3])$/.test(r.in));
-  ok('standaard: device knobs alleen op kanaal 0 (0x42 bankt niet)', dk.length === 8 && dk.every((r) => r.in.startsWith('cc:0:')));
-  ok('standaard: device knobs bedienen het rack van de track met focus',
-    dk.every((r, i) => r.action === `track.{focus}.fx.knob.${Number(r.in.split(':')[2]) - 15}`));
+  ok('standaard: device knobs alleen op kanaal 0 (0x42 bankt niet)', dk.length > 0 && dk.every((r) => r.in.startsWith('cc:0:')));
+  const rack = dk.filter((r) => r.laag === 'device.rack');
+  ok('standaard: in het mapje "rack" bedienen ze het rack van de track met focus',
+    rack.length === 8 && rack.every((r) => r.action === `track.{focus}.fx.knob.${Number(r.in.split(':')[2]) - 15}`));
+  ok('standaard: elke device knob hoort bij een mapje', dk.every((r) => r.laag?.startsWith('device.')));
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

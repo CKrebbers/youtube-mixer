@@ -20,7 +20,7 @@ import { meld } from './meldingen.js';
  * binnenkant niet kennen: de hub weet van geen actions, de mapping van geen
  * hardware, en de engine van geen van beide.
  */
-export function opzetMidi({ engine, sluitOnderpanelen }) {
+export function opzetMidi({ engine, sluitOnderpanelen, lagen }) {
   const DEVICES = [apc40mk2, generic];   // generic matcht alles, dus als laatste
   const pickDevice = (naam) => DEVICES.find((d) => d.match.test(naam || '')) || generic;
 
@@ -29,6 +29,7 @@ export function opzetMidi({ engine, sluitOnderpanelen }) {
     read: readAction,
     invoke,
     vars: () => ({ focus: trackVanDeck(engine.focus) }),
+    lagen: () => lagen?.actief() ?? [],
   });
   let device = generic;
 
@@ -108,7 +109,9 @@ export function opzetMidi({ engine, sluitOnderpanelen }) {
     msg.control = device.label(msg.sig);
     // Tijdens het leren gaan berichten NIET door de mapping: anders verzet je je
     // filter terwijl je een knop aan het koppelen bent.
-    if (learn.busy) { msg.leer = learn.feed(msg); return; }
+    // De shiftknop gaat altijd naar de mapping, ook tijdens koppelen: zo kun
+    // je een shift-regel koppelen door shift vast te houden.
+    if (learn.busy && msg.sig !== mapping.shiftSig) { msg.leer = learn.feed(msg); return; }
     msg.hit = mapping.handle(msg);
     if (msg.hit?.taken && msg.lag != null) latency.voeg(msg.lag);
   });

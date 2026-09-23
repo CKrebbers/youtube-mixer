@@ -47,7 +47,7 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   clock sturen (onbevestigd). Zelf knipperen via `track.N.tel` kan altijd.
   **Advies:** zelf (klokvast volgens regel 3); MIDI clock proberen als extra.
 
-- [ ] **B3. De indeling.** Richting gekozen door Clay (23 sep): **mapjes (lagen)**.
+- [x] **B3. De indeling.** GEBOUWD 23 sep (tabel in `docs/APC40.md`). Richting gekozen door Clay: **mapjes (lagen)**.
   Vaste kern die nooit wisselt (faders, crossfader, master, play/cue/sync,
   tempo, Track Select); drie soorten mapjes met een oplichtende kiesknop —
   track knobs (Pan/Sends/User), device knobs (rack / EQ-strip / send-bussen /

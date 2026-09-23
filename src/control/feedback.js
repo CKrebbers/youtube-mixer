@@ -21,6 +21,11 @@ const KLEURSCHEMA = [
   [/\.cue$/,         { aan: 'wit', uit: 'donkergrijs' }],
   [/\.focus$/,       { aan: 'oranje', uit: 'donkergrijs' }],
   [/^mixer\./,       { aan: 'blauw', uit: 'donkergrijs' }],
+  [/\.beatloop\./,   { aan: 'cyaan', uit: 'donkergrijs' }],
+  [/^sampler\.\d+$/,  { aan: 'violet', uit: 'donkergrijs' }],
+  [/\.clear$|\.delete$/, { aan: 'rood', uit: 'donkergrijs' }],
+  [/^video\./,        { aan: 'blauw', uit: 'donkergrijs' }],
+  [/^layer\./,        { aan: 'wit', uit: 'donkergrijs' }],
 ];
 
 const kleurVoor = (actie) =>
@@ -75,7 +80,7 @@ export class Feedback {
   ringTypes() {
     const ring = this.device.ring;
     if (!ring || !this.device.ringFor) return;
-    for (const regel of this.mapping.rules.values()) {
+    for (const regel of this._regels()) {
       const ringSig = this.device.ringFor(uitSig(regel.in));
       if (!ringSig) continue;
       const doel = resolveTarget(regel.action, this.mapping.vars());
@@ -83,6 +88,14 @@ export class Feedback {
       const p = ontleed(ringSig);
       if (p) this.send([0xb0 | p.channel, p.number, m?.bipolar ? ring.pan : ring.volume]);
     }
+  }
+
+  /**
+   * De regels die NU gelden: per knop die van het open mapje (zonder shift).
+   * Een mapping zonder mapjes geeft gewoon alle regels.
+   */
+  _regels() {
+    return this.mapping.actieveRegels ? this.mapping.actieveRegels().values() : this.mapping.rules.values();
   }
 
   /** Volgende tick alles opnieuw sturen — na init, mapping-wissel of herverbinden. */
@@ -95,7 +108,8 @@ export class Feedback {
     const palet = this.device.palette || {};
     const gedrag = this.device.behaviour || {};
 
-    for (const regel of this.mapping.rules.values()) {
+    const ring = this.device.ring;
+    for (const regel of this._regels()) {
       const sig = uitSig(regel.in);
       const control = this.device.controls.get(sig);
       if (!control) continue;
@@ -110,6 +124,14 @@ export class Feedback {
         // Geen lampje maar een ring: die toont de SOFTWARE-stand. Precies wat
         // je wilt zien als een knop nog niet overgepakt heeft.
         uit.set(sig, [0xb0 | p.channel, p.number, Math.round(waarde * 127)]);
+        // Het ringtype hoort bij wat de knop NU doet: wisselt het mapje van
+        // filter (bipolair) naar send, dan wisselt de ring mee.
+        const ringSig = ring && this.device.ringFor?.(sig);
+        const rp = ringSig && ontleed(ringSig);
+        if (rp) {
+          const m = this.meta ? this.meta(doel) : null;
+          uit.set(`type:${ringSig}`, [0xb0 | rp.channel, rp.number, m?.bipolar ? ring.pan : ring.volume]);
+        }
         continue;
       }
       if (!control.led) continue;
@@ -137,6 +159,15 @@ export class Feedback {
     if (this.gepauzeerd || !this.klaar) return 0;
     const wil = this.desired();
     let n = 0;
+    // Wat niet meer gewild is (een ander mapje): uit. Anders blijft een pad
+    // branden met de kleur van een mapje dat al dicht is.
+    for (const [sig, sleutel] of this.vorige) {
+      if (wil.has(sig) || sig.startsWith('type:')) continue;
+      const b = sleutel.split(',').map(Number);
+      this.send([b[0], b[1], 0]);
+      this.vorige.delete(sig);
+      if (++n >= max) return n;
+    }
     for (const [sig, bytes] of wil) {
       const sleutel = bytes.join(',');
       if (this.vorige.get(sig) === sleutel) continue;

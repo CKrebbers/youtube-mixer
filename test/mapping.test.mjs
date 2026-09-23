@@ -225,7 +225,9 @@ ok('export -> import geeft exact dezelfde staat',
 // ---- de standaardmapping tegen de werkelijkheid ---------------------------
 // Een deck-dubbel: genoeg om bindEngine zijn werk te laten doen, zonder audio.
 
-const { bindEngine, list, read } = await import('../src/control/actions.js');
+const { bindEngine, bindVideo, bindApp, bindLagen, list, read } = await import('../src/control/actions.js');
+const { Lagen } = await import('../src/control/lagen.js');
+const { sleutelVan } = await import('../src/control/mapping.js');
 const dubbeldeck = (id) => ({
   id, playing: false, position: 0, cuePoint: 0, duration: 10, rate: 1, buffer: {},
   hotcues: [null, null, null, null], loop: null,
@@ -242,8 +244,14 @@ const nepEngine = {
   ander(id) { return this.decks[id === 'A' ? 'B' : 'A']; },
   setFocus(id) { this.focus = id; }, setXfader(v) { this.xfader = v; },
   setMaster(v) { this.masterLevel = v; }, setXfaderCurve(c) { this.xfaderCurve = c; },
+  // Genoeg om ook sampler, bussen, video, vensters en mapjes te laten bestaan.
+  sampler: { pads: [], herinneringen: [], tellen: 4, volume: 0.8 },
+  sends: { A: { setPlek() {}, leesPlek: () => 0 }, B: { setPlek() {}, leesPlek: () => 0 } },
 };
 bindEngine(nepEngine);
+bindVideo({ fx: {}, modus: 'mix', puls: 0, pulsDoel: 'rgb', zetFx() {}, volgendeModus() {}, zetPuls() {}, volgendPulsDoel() {} });
+bindApp({ toon() {}, venster: () => ({ L: 'A', R: 'B' }), opnemer: {}, opnameStart() {}, opnameStop() {}, opnameSoort() {}, rackStap() {} });
+bindLagen(new Lagen());
 const acties = new Set(list().map((a) => a.id));
 ok('actions geregistreerd voor deze controle', acties.size > 60);
 
@@ -257,8 +265,15 @@ for (const regel of doc.rules) {
 if (onbekend.length) console.log('   onbekend:', [...new Set(onbekend)]);
 ok('mapping verwijst alleen naar bestaande actions', onbekend.length === 0);
 
-const dubbel = doc.rules.map((r) => r.in).filter((v, i, a) => a.indexOf(v) !== i);
-ok('geen dubbele signatures in de mapping', dubbel.length === 0);
+// Met shift en mapjes mag een knop vaker voorkomen; per sleutel niet.
+const dubbel = doc.rules.map(sleutelVan).filter((v, i, a) => a.indexOf(v) !== i);
+if (dubbel.length) console.log('   dubbel:', dubbel);
+ok('geen dubbele sleutels (knop + shift + mapje) in de mapping', dubbel.length === 0);
+const { GROEPEN } = await import('../src/control/lagen.js');
+const bestaat = (l) => { const [g, n] = l.split('.'); return Object.values(GROEPEN[g]?.knoppen || {}).flat().includes(n); };
+ok('elk mapje uit de mapping bestaat in lagen.js', doc.rules.every((r) => !r.laag || bestaat(r.laag)));
+ok('elk mapje in lagen.js heeft regels in de mapping', Object.entries(GROEPEN).every(([g, d]) =>
+  Object.values(d.knoppen).flat().every((n) => doc.rules.some((r) => r.laag === `${g}.${n}`))));
 
 // Een wildcard-kanaal controleren we op kanaal 0: bestaat die control daar,
 // dan bestaat hij ook op de andere kanalen die het apparaat gebruikt.
@@ -331,6 +346,89 @@ console.log('\nmigratie van versie 1');
   const nieuw = new Mapping({ read: () => 0, invoke: () => {} });
   const r2 = nieuw.load({ version: 3, rules: [{ in: 'cc:0:48', action: 'deck.A.filter', mode: 'absolute' }] });
   ok('versie 3 wordt niet aangeraakt', r2.gemigreerd === 0 && nieuw.rules.get('cc:0:48').action === 'deck.A.filter');
+}
+
+// ---- mapjes en shift (VRAGEN B3) -----------------------------------------
+
+console.log('\nmapjes en shift');
+{
+  const { Lagen, GLUREN } = await import('../src/control/lagen.js');
+  let t = 0;
+  const lg = new Lagen({ now: () => t });
+  ok('begint op de standaard-mapjes', lg.actief().join() === 'top.filter,device.rack,grid.hotcues');
+  lg.druk('top', 'sends', true); t += 100; lg.druk('top', 'sends', false);
+  ok('kort drukken zet het mapje vast', lg.stand.top === 'echo');
+  lg.druk('top', 'sends', true); t += 100; lg.druk('top', 'sends', false);
+  ok('nog eens op dezelfde kiesknop: het volgende mapje eronder (galm)', lg.stand.top === 'reverb');
+  lg.druk('top', 'pan', true); t += 50; lg.druk('top', 'pan', false);
+  lg.druk('top', 'user', true); t += GLUREN + 10;
+  ok('vasthouden: het mapje is open zolang je vasthoudt', lg.stand.top === 'low');
+  lg.druk('top', 'user', false);
+  ok('loslaten na gluren: terug naar waar je was', lg.stand.top === 'filter');
+  lg.stap('grid', 1);
+  ok('bladeren door het grid', lg.stand.grid === 'loops');
+  lg.stap('grid', -2);
+  ok('en rond', lg.stand.grid === 'video');
+  lg.zet('grid', 'hotcues');
+
+  const gestuurd = [];
+  const m = new Mapping({ read: () => 0.5, invoke: (a, v) => gestuurd.push([a, v]), vars: () => ({ focus: 3 }), lagen: () => lg.actief() });
+  m.load({ version: 3, shift: 'note:0:98', rules: [
+    { in: 'note:0:52', action: 'track.1.loop.toggle', mode: 'trigger' },
+    { in: 'note:0:52', action: 'track.1.loop.exit', mode: 'trigger', shift: true },
+    { in: 'cc:0:7', action: 'track.1.fader', mode: 'absolute' },
+    { in: 'cc:0:48', action: 'track.1.filter', mode: 'absolute', laag: 'top.filter' },
+    { in: 'cc:0:48', action: 'track.1.send.a', mode: 'absolute', laag: 'top.echo' },
+    { in: 'note:0:32', action: 'track.1.hotcue.1', mode: 'trigger', laag: 'grid.hotcues' },
+    { in: 'note:0:32', action: 'track.1.hotcue.1.delete', mode: 'trigger', laag: 'grid.hotcues', shift: true },
+    { in: 'note:0:32', action: 'track.1.beatloop.1', mode: 'trigger', laag: 'grid.loops' },
+  ] });
+  const noot = (n, on) => ({ type: 'note', channel: 0, number: n, sig: `note:0:${n}`, on, value: on ? 127 : 0, norm: on ? 1 : 0 });
+  const cc = (n, v) => ({ type: 'cc', channel: 0, number: n, sig: `cc:0:${n}`, value: v, norm: v / 127 });
+  ok('meerdere regels per knop worden geladen', m.rules.size === 8);
+
+  m.handle(noot(52, true)); m.handle(noot(52, false));
+  ok('zonder shift: de gewone regel', gestuurd[0][0] === 'track.1.loop.toggle');
+  m.handle(noot(98, true));
+  ok('de shiftknop zelf gaat niet de bus op', m.shift === true && gestuurd.length === 2);
+  m.handle(noot(52, true));
+  ok('met shift: de shift-regel', gestuurd.at(-1)[0] === 'track.1.loop.exit');
+  m.handle(noot(98, false));
+  m.handle(noot(52, false));
+  ok('loslaten gaat naar dezelfde action als het indrukken, ook na shift los', gestuurd.at(-1)[0] === 'track.1.loop.exit' && gestuurd.at(-1)[1] === false);
+  m.handle(noot(98, true));
+  m.handle(cc(7, 64));
+  ok('shift vast en geen shift-regel: de fader werkt gewoon', gestuurd.at(-1)[0] === 'track.1.fader');
+  m.handle(noot(98, false));
+
+  m.handle(cc(48, 64));
+  ok('track knob in mapje filter', gestuurd.at(-1)[0] === 'track.1.filter');
+  lg.zet('top', 'echo');
+  m.handle(cc(48, 64));
+  ok('zelfde knop in mapje echo', gestuurd.at(-1)[0] === 'track.1.send.a');
+  m.handle(noot(32, true));
+  lg.zet('grid', 'loops');                 // mapje wisselt terwijl de pad ingedrukt is
+  m.handle(noot(32, false));
+  ok('pad loslaten na een mapjewissel: toch naar de hotcue', gestuurd.at(-2)[0] === 'track.1.hotcue.1' && gestuurd.at(-1)[0] === 'track.1.hotcue.1' && gestuurd.at(-1)[1] === false);
+  m.handle(noot(32, true)); m.handle(noot(32, false));
+  ok('daarna: de pad van het loops-mapje', gestuurd.at(-1)[0] === 'track.1.beatloop.1');
+  ok('actieveRegels: per knop de regel van nu', m.actieveRegels().get('note:0:32').action === 'track.1.beatloop.1'
+    && m.actieveRegels().get('cc:0:48').action === 'track.1.send.a');
+
+  // Koppelen in een mapje: de nieuwe regel komt in het open mapje.
+  const regel = m.set('cc:0:48', 'track.1.low', { mode: 'absolute' });
+  ok('koppelen komt in het open mapje, de andere blijven', regel.laag === 'top.echo'
+    && m.rules.get('cc:0:48@top.filter').action === 'track.1.filter' && m.rules.get('cc:0:48@top.echo').action === 'track.1.low');
+  m.handle(noot(98, true));
+  const sr = m.set('note:0:52', 'track.1.cue', { mode: 'trigger' });
+  m.handle(noot(98, false));
+  ok('koppelen met shift vast: een shift-regel', sr.shift === true && m.rules.get('note:0:52').action === 'track.1.loop.toggle');
+  ok('forAction geeft sleutels, weghalen op sleutel', m.forAction('track.1.cue')[0] === 'note:0:52#shift' && m.remove('note:0:52#shift') && !m.rules.has('note:0:52#shift'));
+
+  const terug = new Mapping({ read: () => 0, invoke: () => {}, lagen: () => lg.actief() });
+  terug.load(m.toJSON());
+  ok('shift en mapjes overleven exporteren en inladen', terug.shiftSig === 'note:0:98' && terug.rules.size === m.rules.size
+    && terug.rules.get('note:0:32#shift@grid.hotcues').action === 'track.1.hotcue.1.delete');
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

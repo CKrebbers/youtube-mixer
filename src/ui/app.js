@@ -1,5 +1,7 @@
 import { Engine, DECK_IDS } from '../engine/engine.js';
-import { bindEngine, bindVideo, bindApp } from '../control/actions.js';
+import { bindEngine, bindVideo, bindApp, bindLagen } from '../control/actions.js';
+import { Lagen } from '../control/lagen.js';
+import { opzetMapjeBalk } from './mapje-balk.js';
 import { attachKeyboard } from '../control/keyboard.js';
 import { meld, koppelMeldingen } from './meldingen.js';
 import { opzetVideo } from './video-paneel.js';
@@ -94,7 +96,12 @@ window.addEventListener('keydown', (e) => { if (e.code === 'Escape') help.classL
 attachKeyboard(engine, { onHelp: toggleHelp, venster: (v) => staat.venster[v] });
 
 // ---- MIDI -----------------------------------------------------------------
-const midiDelen = opzetMidi({ engine, sluitOnderpanelen: onderpanelen.sluitOnderpanelen });
+// Mapjes op de controller (VRAGEN B3): welke laag van de knoppen open staat.
+const lagen = new Lagen();
+bindLagen(lagen);
+window.lagen = lagen;
+const midiDelen = opzetMidi({ engine, sluitOnderpanelen: onderpanelen.sluitOnderpanelen, lagen });
+opzetMapjeBalk({ lagen, mapping: midiDelen.mapping, vars: () => midiDelen.mapping.vars() });
 window.midi = midiDelen.midi;         // handig in de console tijdens bouwen
 window.mapping = midiDelen.mapping;
 window.feedback = midiDelen.feedback;
