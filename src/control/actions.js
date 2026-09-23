@@ -224,6 +224,21 @@ export function bindEngine(engine) {
     define(`${n}.focus`, 'trigger', (on) => { if (on) engine.setFocus(id); },
       { label: `Focus track ${nr}`, read: bool(() => engine.focus === id) });
 
+    // Eén knop voor loop aan/uit (Clip stop op de APC): 8 tellen met grid, anders 4 s.
+    define(`${n}.loop.wissel`, 'trigger', (on) => {
+      if (!on || !d.buffer) return;
+      if (d.loop) d.clearLoop();
+      else if (d.grid) d.setBeatLoop(8);
+      else d.setLoop(4);
+    }, { label: `Track ${nr} loop aan/uit`, read: bool(() => d.loop) });
+
+    // Alleen om uit te lezen, voor LED's: geeft deze track de maat, en valt nu
+    // de tel? Afgeleid van positie en grid (regel 3), geen eigen teller.
+    define(`${n}.maat`, 'trigger', () => {}, { label: `Track ${nr} geeft de maat (alleen lezen)`,
+      read: bool(() => engine.syncMaster()?.id === id) });
+    define(`${n}.tel`, 'trigger', () => {}, { label: `Track ${nr} op de tel (alleen lezen)`,
+      read: bool(() => d.playing && d.grid && d.grid.phase(d.position) < 0.15) });
+
     // Crossfader-toewijzing: A -> B -> thru -> A, zoals de knop op de APC.
     // read() geeft 0 / 0.5 / 1 zodat een LED er drie standen van kan maken.
     define(`${n}.xfade.kant`, 'trigger', (on) => {
@@ -265,6 +280,14 @@ export function bindEngine(engine) {
       { label: 'Sampler volume', read: () => sampler.volume });
   }
 
+  // Focus door de tracks: de pijlen op de APC.
+  const focusStap = (stap) => {
+    const i = DECK_IDS.indexOf(engine.focus);
+    engine.setFocus(DECK_IDS[(i + stap + DECK_IDS.length) % DECK_IDS.length]);
+  };
+  define('focus.vorige', 'trigger', (on) => { if (on) focusStap(-1); }, { label: 'Focus: vorige track' });
+  define('focus.volgende', 'trigger', (on) => { if (on) focusStap(1); }, { label: 'Focus: volgende track' });
+
   define('mixer.xfader', 'value', (v) => engine.setXfader(v),
     { label: 'Crossfader', bipolar: true, read: () => engine.xfader });
   define('mixer.master', 'value', (v) => engine.setMaster(v),
@@ -290,4 +313,26 @@ export function bindVideo(mixer) {
     { label: 'Video: puls op de tel', read: () => mixer.puls });
   define('video.puls.doel', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
     { label: 'Video: wat er pulst', read: () => PULS_DOELEN.indexOf(mixer.pulsDoel) / (PULS_DOELEN.length - 1) });
+}
+
+/**
+ * Wat de schermlaag doet maar op de bus hoort, zodat een APC-knop het kan:
+ * een track in een venster zetten, opnemen, door racks bladeren. De functies
+ * komen van app.js; hier alleen de namen en de read.
+ */
+export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnameSoort, rackStap }) {
+  for (const [nr, id] of TRACKS) {
+    for (const v of ['L', 'R']) {
+      define(`venster.${v}.toon.${nr}`, 'trigger', (on) => { if (on) toon(v, id); },
+        { label: `Track ${nr} in het ${v === 'L' ? 'linker' : 'rechter'}venster`, read: () => (venster()[v] === id ? 1 : 0) });
+    }
+    define(`track.${nr}.rack.volgend`, 'trigger', (on) => { if (on) rackStap(id, 1); }, { label: `Track ${nr} volgend rack` });
+    define(`track.${nr}.rack.vorig`, 'trigger', (on) => { if (on) rackStap(id, -1); }, { label: `Track ${nr} vorig rack` });
+  }
+  define('opname.start', 'trigger', (on) => { if (on && !opnemer.bezig) opnameStart(); },
+    { label: 'Opname starten', read: () => (opnemer.bezig ? 1 : 0) });
+  define('opname.stop', 'trigger', (on) => { if (on && opnemer.bezig) opnameStop(); },
+    { label: 'Opname stoppen (zet hem achter shift)', read: () => (opnemer.bezig ? 1 : 0) });
+  define('opname.soort', 'trigger', (on) => { if (on && !opnemer.bezig) opnameSoort(); },
+    { label: 'Opname: audio of audio + video', read: () => (opnemer.metVideo ? 1 : 0) });
 }

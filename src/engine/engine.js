@@ -233,6 +233,8 @@ export class Engine extends Emitter {
       xfader: this.xfader, xfaderCurve: this.xfaderCurve,
       master: this.masterLevel, masterPeak: this.masterPeak(),
       fase, decks,
+      // Welke track geeft nu de maat (sync, sampler, video-puls)?
+      maat: this.syncMaster()?.id ?? null,
     };
   }
 }

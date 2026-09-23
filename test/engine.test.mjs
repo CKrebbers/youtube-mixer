@@ -853,6 +853,35 @@ console.log('\nengine-correctheid');
   NOW = 0;
 }
 
+// ---- nieuwe actions voor de APC-indeling -----------------------------------
+
+console.log('\nAPC-actions');
+{
+  const { read: leesA } = await import('../src/control/actions.js');
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  const dL = eng.deck('E');
+  dL.load(buf, 'loop'); dL.setGrid(null);
+  invoke('track.5.loop.wissel', true);
+  ok('loop.wissel zonder grid: 4 seconden', dL.loop && Math.abs(dL.loop.end - dL.loop.start - Math.min(4, dL.duration)) < 1e-6);
+  invoke('track.5.loop.wissel', true);
+  ok('nog eens: loop uit', !dL.loop && leesA('track.5.loop.wissel') === 0);
+  dL.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+  dL.seek(0.2);
+  invoke('track.5.loop.wissel', true);
+  ok('met grid: 8 tellen (of wat er past)', dL.loop && dL.loopBeats === 8 || (dL.loop && dL.loop.end <= dL.duration));
+  dL.clearLoop();
+  const oudeFocus = eng.focus;
+  eng.setFocus('H'); invoke('focus.volgende', true);
+  ok('focus.volgende loopt rond: 8 -> 1', eng.focus === 'A');
+  invoke('focus.vorige', true);
+  ok('focus.vorige: 1 -> 8', eng.focus === 'H');
+  eng.setFocus(oudeFocus);
+  const maatId = eng.syncMaster()?.id;
+  ok('maat-read wijst precies één track aan', maatId && leesA(`track.${'ABCDEFGH'.indexOf(maatId) + 1}.maat`) === 1
+    && ['A','B','C','D','E','F','G','H'].filter((x) => leesA(`track.${'ABCDEFGH'.indexOf(x) + 1}.maat`) === 1).length === 1);
+  ok('tel-read is 0 als de track stilstaat', leesA('track.5.tel') === 0);
+}
+
 // ---- acht tracks ------------------------------------------------------------
 // Eén per fader. Wat voor twee werkte moet precies zo blijven klinken.
 
