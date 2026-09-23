@@ -185,7 +185,9 @@ export async function normaliseer(bron, gemeten, doel) {
     + `:measured_thresh=${gemeten.drempel}:offset=${gemeten.offset}:linear=true:print_format=summary`;
   const r = await run('ffmpeg', [
     '-hide_banner', '-nostats', '-y', '-i', bron,
-    '-af', filter, '-ar', '48000', '-ac', '2', doel,
+    // pcm_s16le expliciet: de streamende bron leest dit formaat rechtstreeks
+    // van schijf, met Range-verzoeken. Een ander formaat zou hij weigeren.
+    '-af', filter, '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', doel,
   ]);
   return r.ok ? { ok: true } : { ok: false, fout: `normaliseren mislukt (code ${r.code})` };
 }

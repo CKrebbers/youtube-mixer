@@ -1,7 +1,7 @@
 import { Emitter, clamp } from '../lib/emitter.js';
 import { createDeckChain, setEqBand, setBipolarFilter, faderGain } from './audio-graph.js';
 import { Beatgrid } from './beatgrid.js';
-import { BufferBron } from './bron.js';
+import { BufferBron, StreamBron } from './bron.js';
 import { InsertSlot } from './fx.js';
 
 /**
@@ -19,7 +19,7 @@ export class Deck extends Emitter {
   constructor(ctx, id) {
     super();
     this.ctx = ctx;
-    this.id = id;               // 'A' | 'B'
+    this.id = id;               // 'A' t/m 'H'
     this.chain = createDeckChain(ctx);
 
     /*
@@ -35,8 +35,8 @@ export class Deck extends Emitter {
     this.fx.zetEffect('delay');          // mix staat op 0, dus nog niet hoorbaar
     this.fx.setKlok(() => this.fxKlok());
 
-    this.bron = new BufferBron(ctx, this.chain.input);
-    this.bron.onEinde = () => this.emit('change', this);
+    this.bron = null;
+    this._zetBron(new BufferBron(ctx, this.chain.input));
     this.title = '— leeg —';
 
     this.rate = 1;              // playbackRate (pitch schuift mee — keylock = fase 3)
@@ -63,8 +63,37 @@ export class Deck extends Emitter {
 
   // ---- laden -------------------------------------------------------------
 
+  /** Van soort bron wisselen. Alleen bij het laden, dus er klinkt niets. */
+  _zetBron(bron) {
+    if (this.bron === bron) return;
+    this.bron?.vernietig();
+    this.bron = bron;
+    bron.onEinde = () => this.emit('change', this);
+    // Vaste punten: hier springt de DJ heen, dus daar mag een streamende bron
+    // geen gat hebben. Een BufferBron negeert het, die heeft alles al.
+    bron.vastpunten = () => [this.cuePoint, ...this.hotcues, this.loop?.start ?? null];
+  }
+
+  /** Een heel bestand, uitgepakt in het geheugen: losgesleepte bestanden en de demotrack. */
   load(buffer, title) {
+    if (!(this.bron instanceof BufferBron)) this._zetBron(new BufferBron(this.ctx, this.chain.input));
     this.bron.laad(buffer);
+    this._naLaden(title);
+  }
+
+  /**
+   * Streamen vanaf de server: wat uit de library komt. Een paar MB in het
+   * geheugen in plaats van 23 MB per minuut.
+   */
+  async laadStream(url, title, opties) {
+    if (!(this.bron instanceof StreamBron)) this._zetBron(new StreamBron(this.ctx, this.chain.input, opties));
+    this.cuePoint = 0;
+    this.hotcues = [null, null, null, null];
+    await this.bron.laad({ url });
+    this._naLaden(title);
+  }
+
+  _naLaden(title) {
     this.title = title || 'untitled';
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
@@ -99,7 +128,7 @@ export class Deck extends Emitter {
     if (!this.buffer) return;
     const p = clamp(pos, 0, this.duration);
     if (this.playing) this.bron.start(p);
-    else this.bron._offset = p;
+    else this.bron.plaats(p);
     this.fx.heranker();
     this.emit('change', this);
   }
@@ -140,7 +169,7 @@ export class Deck extends Emitter {
   /** CDJ-logica: spelend -> terug naar cue en pauzeren. Gepauzeerd -> cue hier zetten. */
   cue() {
     if (!this.buffer) return;
-    if (this.playing) { this.stop(); this.bron._offset = this.cuePoint; }
+    if (this.playing) { this.stop(); this.bron.plaats(this.cuePoint); }
     else if (Math.abs(this.position - this.cuePoint) < 0.005) { this.play(); }
     else { this.cuePoint = this.position; }
     this.emit('change', this);

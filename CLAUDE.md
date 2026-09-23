@@ -44,7 +44,9 @@ styles.css
 src/
   engine/           audio-graph.js  kanaalstrip, EQ, bipolair filter, master, xfader
                     beatgrid.js     tempo + anker, tap tempo. Puur rekenwerk.
-                    bron.js         HOE een track geluid wordt. Inwisselbaar.
+                    bron.js         HOE een track geluid wordt: BufferBron en StreamBron
+                    stream-kern.js  streamen als puur rekenwerk: segment, pagina's, WAV
+                    stream-lezer.js de AudioWorklet die pagina's afspeelt
                     fx.js           insert-slot: ketens bouwen, klikvrij wisselen
                     rack.js         racks als data: macro's, curves, migratie
                     deck.js         transport, cues, loops, beatgrid (geluid zit in bron.js)
@@ -84,6 +86,7 @@ test/
   beatgrid.test.mjs beatrekenen, grid bewerken, tap tempo met een misser erin
   detect.test.mjs   beatdetectie op materiaal waarvan het antwoord bekend is
   rack.test.mjs     macro-resolutie met een gouden bestand, migratie, onbekende effecten
+  stream.test.mjs   streamkern tegen ffmpeg (bit voor bit), pagina-plan, StreamBron
 ```
 
 ## Conventies
@@ -102,8 +105,21 @@ test/
 
 ## Bekende grenzen (niet als bug rapporteren)
 
-- `AudioBufferSourceNode` houdt de hele track in RAM: een uur stereo ≈ 1,4 GB float32.
-  Streaming via AudioWorklet is een bewust uitgesteld probleem.
+- Wat uit de library komt STREAMT (`StreamBron`, sinds 23 september 2026): alleen
+  pagina's van ~1,4 s rond de positie, de loop, het cuepunt en de hotcues staan
+  in het geheugen, ~4-6 MB per track, hoe lang hij ook is. Gemeten: acht keer
+  een album van 31 minuten ~30 MB, waar het uitgepakt 5,7 GB was. Losgesleepte
+  bestanden en de demotrack gebruiken nog `BufferBron` (hele track in RAM).
+- Streamen leest `audio.wav` rechtstreeks met Range-verzoeken, en kan daarom
+  alleen 16-bit PCM stereo. De ingest zet dat formaat expliciet. Verander je
+  het formaat van `audio.wav`, dan weigert de StreamBron het met een reden.
+- Springen naar een plek die nog niet binnen is, geeft een paar tientallen ms
+  stilte (een gat is stilte, nooit een herhaling). Hotcues en cuepunt zijn
+  vastgepind en klinken direct.
+- Hoofdthread en worklet delen GEEN teller: ze rekenen allebei met dezelfde
+  formule uit `stream-kern.js` op dezelfde audioklok ("vanaf T staat de
+  positie op P met snelheid R"). Elke wijziging is een nieuw segment; een
+  bericht dat laat aankomt rekent vanaf T door. Regel 3 over een draadgrens.
 - Pitch schuift mee met tempo. Dat is `playbackRate`. Keylock hoort bij fase 3.
 - De master-"limiter" is een `DynamicsCompressor`, geen look-ahead limiter.
 - Er zijn twee soorten loops naast elkaar: in seconden en in tellen. De
@@ -143,8 +159,6 @@ test/
 - Sync kent geen "het andere deck" meer: een track synct naar de track die je
   het hardst hoort (fader × crossfader, spelend, met grid). Speelt er niets,
   dan de eerste geladen track met grid.
-- Acht lange albums tegelijk laden past niet in het geheugen (31 minuten is al
-  ~700 MB). Dat is de streaming-grens van hierboven, nu met acht vermenigvuldigd.
 - De action-bus spreekt in TRACKS (`track.1.filter`), de engine in decks (A, B).
   De vertaling staat op één plek: `TRACKS` in `actions.js`. `{focus}` in een
   mapping wordt een tracknummer. Mappings van versie 1 (`deck.A.…`) worden bij

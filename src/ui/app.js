@@ -234,26 +234,25 @@ const library = new LibraryPanel({
   label: (id) => String(trackVanDeck(id)),
   onLaad: async (deckId, track) => {
     // NIET wachten op engine.resume(): zonder gebruikersgebaar lost die belofte
-    // nooit in en blijft het laden eeuwig hangen. Decoderen kan prima op een
+    // nooit in en blijft het laden eeuwig hangen. Laden kan prima op een
     // gepauzeerde context; hervatten proberen we daarna, en lukt dat niet dan
     // zeggen we het gewoon.
-    const res = await fetch('/' + track.audio.replace(/^\//, ''));
-    if (!res.ok) throw new Error(`audio niet gevonden (${res.status})`);
-    const buf = await engine.ctx.decodeAudioData(await res.arrayBuffer());
-    engine.deck(deckId).load(buf, track.titel);
-    // Golfvorm uit de cache; alleen als die er niet is rekenen we hem zelf uit.
+    // Streamen: alleen de kop en de eerste pagina's, niet het hele bestand.
+    // Een uur kost zo een paar MB in plaats van 1,4 GB.
+    const url = '/' + track.audio.replace(/^\//, '');
+    await engine.deck(deckId).laadStream(url, track.titel);
+    const duur = engine.deck(deckId).duration;
+    // Golfvorm uit de cache. Zelf uitrekenen kan niet meer: er is geen buffer.
     const uitCache = track.peaks ? await laadPeaks('/' + track.peaks.bestand.replace(/^\//, ''),
-      // Duur uit de LIBRARY, niet uit de buffer: straks is er geen buffer meer
-      // omdat het deck streamt.
-      { samplesPerBucket: track.peaks.perBucket, duration: track.duur || buf.duration }) : null;
-    analysis[deckId] = uitCache || computePeaks(buf);
+      { samplesPerBucket: track.peaks.perBucket, duration: track.duur || duur }) : null;
+    analysis[deckId] = uitCache;
     deckTrack[deckId] = track.id;
     // Een eerder uitgemeten grid komt mee met de link.
     engine.deck(deckId).setGrid(track.grid || null);
     haalRacks(deckId);
     gridBewaard[deckId] = track.grid ? JSON.stringify(track.grid) : 'null';
-    console.log(`[deck ${deckId}] ${track.titel} — ${buf.duration.toFixed(1)}s`
-      + ` — golfvorm ${uitCache ? 'uit cache' : 'zelf berekend'}`);
+    console.log(`[deck ${deckId}] ${track.titel} — ${duur.toFixed(1)}s — streamt`
+      + (uitCache ? '' : ' — LET OP: geen peaks.bin, dus geen golfvorm'));
 
     engine.resume().catch(() => {});
     if (engine.ctx.state !== 'running') {

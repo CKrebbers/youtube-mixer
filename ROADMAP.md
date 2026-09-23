@@ -10,7 +10,7 @@ Vink af in dit bestand zodra een fase draait.
 | 0 | **klaar** | Ingest: yt-dlp + ffmpeg + library |
 | 3 | **volgende** | Beatgrid, BPM, sync, keylock, beat-loops |
 | 4 | | Video-mixer (WebGL) |
-| 5 | **begonnen** | FX-racks per link draaien met zes effecten incl. tempo-gesynchroniseerde gate, en zijn met de muis te bouwen in de rack-editor; acht tracks in engine en scherm (twee vensters + trackrij, crossfader A/B/thru, sync naar de luidste); nog: APC-mapping voor tracks 3-8, sends, 4 decks, sampler, recording |
+| 5 | **begonnen** | FX-racks per link draaien met zes effecten incl. tempo-gesynchroniseerde gate, en zijn met de muis te bouwen in de rack-editor; acht tracks in engine en scherm (twee vensters + trackrij, crossfader A/B/thru, sync naar de luidste); streamen vanaf schijf (acht albums ~30 MB); nog: APC-mapping voor tracks 3-8, sends, 4 decks, sampler, recording |
 
 
 ---
@@ -108,7 +108,13 @@ warbelt hoorbaar op aangehouden polyfone klanken — pads, drones, strijkers.
 Mixxx noemt SoundTouch de optie voor machines met weinig vermogen. De
 scene-wijsheid "tot 8% is prima" gaat over clubtracks met drums, niet hierover.
 
-### Streamen — nog niet bouwen, wél voorbereiden
+### Streamen — gebouwd op 23 september 2026
+
+Zie CLAUDE.md onder bekende grenzen. Wat hieronder staat was het ontwerp; het is
+zo gebouwd. Gemeten: acht albums van 31 minuten ~30 MB, bit voor bit gelijk aan
+de bytes op schijf.
+
+#### Het oorspronkelijke ontwerp
 
 Een **ringbuffer is het verkeerde model** voor een deck: die gaat uit van vooruit
 en monotoon consumeren, terwijl een deck achteruit gaat, springt en herhaalt.
