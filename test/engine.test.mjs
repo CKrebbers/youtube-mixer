@@ -534,6 +534,47 @@ console.log('\nherkomst van een rack');
   ok('lege naam laat de oude staan', hf.rackNaam === 'y');
 }
 
+// ---- delaytijd: kruisfaden in plaats van doppler-gejank --------------------
+// Delaytijd verschuiven liet de toonhoogte van de echo glijden. Nu gaat een
+// nieuwe tijd op de stille leeskop en wordt er naartoe gefaded.
+
+console.log('\ndelaytijd zonder gejank');
+{
+  const { effectVan } = await import('../src/engine/fx.js');
+  const ctx = new AudioContext();
+  const d = effectVan('delay').bouw(ctx);
+  NOW = 100;
+  d.zet('tijd', 0.35, NOW);
+  let k = d._kop();
+  ok('bij het bouwen: beide koppen op dezelfde tijd, één hoorbaar',
+    k.tijden[0] === k.tijden[1] && k.gains[0] === 1 && k.gains[1] === 0);
+  d.zet('tijd', 0.8, NOW);
+  k = d._kop();
+  ok('nieuwe tijd gaat op de ANDERE kop, de oude blijft staan',
+    k.actief === 1 && k.tijden[1] > k.tijden[0] && Math.abs(k.tijden[0] - k.tijden[1]) > 0.1);
+  ok('en daar wordt naartoe gefaded', k.gains[0] < 1e-6 && k.gains[1] > 0.999);
+  const oudeTijd = k.tijden[0];
+  d.zet('tijd', 0.2, NOW + 0.01);          // snel doordraaien, midden in de fade
+  d.zet('tijd', 0.5, NOW + 0.02);
+  k = d._kop();
+  ok('tijdens een fade: niets over elkaar heen', k.actief === 1 && k.tijden[0] === oudeTijd);
+  NOW += 0.2;
+  await new Promise((r) => setTimeout(r, 150));
+  k = d._kop();
+  const verwacht = 0.02 * Math.pow(1.2 / 0.02, 0.5);
+  ok('daarna komt de LAATSTE stand, niet een tussenstand',
+    k.actief === 0 && Math.abs(k.tijden[0] - verwacht) < 1e-9);
+  NOW += 1;
+  d.zet('tijd', 0.5, NOW);
+  ok('dezelfde tijd nog eens: geen onnodige fade', d._kop().actief === 0);
+  ctx.state = 'suspended';
+  d.zet('tijd', 0.9, NOW);
+  k = d._kop();
+  ok('audio staat stil: meteen, geen fade die op een stilstaande klok wacht',
+    k.tijden[0] === k.tijden[1] && Math.abs(k.tijden[0] - 0.02 * Math.pow(60, 0.9)) < 1e-9);
+  NOW = 0;
+}
+
 // ---- acht tracks ------------------------------------------------------------
 // Eén per fader. Wat voor twee werkte moet precies zo blijven klinken.
 

@@ -24,6 +24,7 @@ import { leesRack, schrijfRack, resolveMacros, rackVanEffect, LEEG_RACK } from '
  */
 
 export const FADE = 0.04;      // 40 ms kruisfade
+const TIJD_FADE = 0.08;        // delaytijd wisselen: iets langer, echo's zijn lang
 
 /**
  * Muzikale delingen. Een rack slaat een DELING op, nooit seconden — anders
@@ -102,10 +103,28 @@ export const EFFECTEN = [
     naam: 'Delay',
     params: ['tijd', 'feedback', 'toon'],
     standaard: { tijd: 0.35, feedback: 0.45, toon: 0.6 },
+    /*
+     * Twee leeskoppen op hetzelfde signaal, in plaats van één delay waarvan
+     * je de tijd verschuift.
+     *
+     * Verschuif je delayTime, dan leest de delay zijn geheugen met een andere
+     * snelheid uit en glijdt de toonhoogte van alles wat al in de echo zit:
+     * het doppler-gejank van een tapedelay. Hier niet: beide koppen krijgen
+     * steeds hetzelfde signaal, dus ook de stille kop heeft een geldige
+     * geschiedenis. Een nieuwe tijd gaat op de stille kop, en daar
+     * kruisfaden we naartoe. Ableton noemt dit "Fade"; het andere heet daar
+     * "Repitch".
+     *
+     *   in ─► som ─┬─► kop 1 ─► g1 ─┐
+     *              └─► kop 2 ─► g2 ─┴─► uit ─► toon ─► fb ─► som
+     */
     bouw(ctx) {
       const ingang = ctx.createGain();
       const uitgang = ctx.createGain();
-      const delay = ctx.createDelay(2.0);
+      const som = ctx.createGain();
+      const koppen = [ctx.createDelay(2.0), ctx.createDelay(2.0)];
+      const gains = [ctx.createGain(), ctx.createGain()];
+      const mix = ctx.createGain();
       const fb = ctx.createGain();
       const toon = ctx.createBiquadFilter();
       toon.type = 'lowpass';
@@ -113,18 +132,60 @@ export const EFFECTEN = [
       // Let op: een lus MOET een DelayNode bevatten, anders mute de browser het
       // hele lusgedeelte. En delayTime in een lus wordt geklemd op minimaal één
       // render quantum (128 samples, ~2,7 ms bij 48 kHz).
-      ingang.connect(delay);
-      delay.connect(toon).connect(fb).connect(delay);
-      delay.connect(uitgang);
+      ingang.connect(som);
+      for (let k = 0; k < 2; k++) som.connect(koppen[k]).connect(gains[k]).connect(mix);
+      mix.connect(uitgang);
+      mix.connect(toon).connect(fb).connect(som);
+      gains[0].gain.value = 1;
+      gains[1].gain.value = 0;
 
       const staat = { tijd: 0.35, feedback: 0.45 };
+      let actief = 0;              // welke kop je hoort
+      let klaarOm = 0;             // audiokloktijd waarop de lopende fade af is
+      let wachtend = null;         // laatste tijd die nog moet, als je snel draait
+      let timer = null;
+
+      const wissel = (sec) => {
+        const nu = ctx.currentTime;
+        if (nu < klaarOm) {
+          // Twee fades over elkaar klikken. Onthoud alleen de laatste stand
+          // en pak die zodra deze fade klaar is.
+          wachtend = sec;
+          timer ??= setTimeout(() => {
+            timer = null;
+            const w = wachtend;
+            wachtend = null;
+            if (w !== null) wissel(w);
+          }, (klaarOm - nu) * 1000 + 5);
+          return;
+        }
+        if (Math.abs(koppen[actief].delayTime.value - sec) < 1e-4) return;
+        const nieuw = 1 - actief;
+        koppen[nieuw].delayTime.cancelScheduledValues?.(nu);
+        koppen[nieuw].delayTime.setValueAtTime(sec, nu);
+        zetCurve(gains[actief].gain, 1, 0, ctx, TIJD_FADE);
+        zetCurve(gains[nieuw].gain, 0, 1, ctx, TIJD_FADE);
+        actief = nieuw;
+        klaarOm = nu + TIJD_FADE + 0.005;
+      };
+
+      let eerste = true;
       return {
         in: ingang, out: uitgang,
         zet(naam, v, now) {
           const t = clamp(v);
           if (naam === 'tijd') {
             staat.tijd = expMap(t, 0.02, 1.2);
-            delay.delayTime.setTargetAtTime(staat.tijd, now, 0.05);
+            // Bij het bouwen, of zolang de audio niet loopt, klinkt er niets:
+            // dan beide koppen meteen goed. Een fade wachten op een klok die
+            // stilstaat zou nooit klaar zijn.
+            if (eerste || (ctx.state && ctx.state !== 'running')) {
+              eerste = false;
+              for (const k of koppen) k.delayTime.value = staat.tijd;
+              wachtend = null;
+            } else {
+              wissel(staat.tijd);
+            }
           } else if (naam === 'feedback') {
             // Geklemd onder 1: zelfoscillatie blaast je set op.
             staat.feedback = t * 0.92;
@@ -136,6 +197,8 @@ export const EFFECTEN = [
         // Hoe lang blijft er nog iets klinken als de invoer stopt?
         staart: () => Math.min(8, staat.tijd * (staat.feedback > 0.05
           ? Math.log(0.001) / Math.log(staat.feedback) : 1)),
+        // Voor de tests: welke kop klinkt en op welke tijd.
+        _kop: () => ({ actief, tijden: koppen.map((k) => k.delayTime.value), gains: gains.map((g) => g.gain.value) }),
       };
     },
   },

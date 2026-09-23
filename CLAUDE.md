@@ -183,6 +183,13 @@ test/
   moment waarop de volgende tel valt op de audioklok. Herankeren is verplicht
   bij seek, hotcue, tempowijziging en gridbewerking — vergeet er één en je gate
   loopt na twintig minuten een zestiende naast.
+- Delaytijd wordt NIET verschoven op één DelayNode: dat laat de toonhoogte van
+  de echo glijden (gemeten: een toon van 1000 Hz zwiepte tot 4293 Hz). Er zijn
+  twee leeskoppen op hetzelfde signaal; een nieuwe tijd gaat op de stille kop
+  en daar wordt 80 ms naartoe gefaded (5 Hz afwijking). Snel draaien wacht tot
+  de fade klaar is en pakt dan de laatste stand — twee fades over elkaar
+  klikken. Loopt de audio niet, dan direct: een fade op een stilstaande klok
+  wordt nooit klaar.
 - Effecten wisselen gaat NOOIT door de bedrading te veranderen waar signaal
   doorheen loopt: twee complete ketens equal-power kruisfaden, en de oude pas
   opruimen na fade plus staarttijd. `disconnect()` is niet sample-accuraat en
