@@ -1,6 +1,7 @@
 import { VormLagen } from '../vormen/laag.js';
-import { SYSTEMEN } from '../vormen/systemen.js';
+import { SYSTEMEN, SYSTEEM } from '../vormen/systemen.js';
 import { bindVormen, VORM_KNOPPEN } from '../control/actions.js';
+import { meld } from './meldingen.js';
 
 /**
  * De vormlagen op het scherm: een rij onder de video-effecten, alleen als de
@@ -11,6 +12,11 @@ import { bindVormen, VORM_KNOPPEN } from '../control/actions.js';
  * Moet vóór opzetVensters draaien: die zoekt alle `.knob` en `[data-action]`
  * in het document op en bindt ze. Wat hier neergezet wordt, doet dus vanzelf
  * mee met de muis, de APC en het terugvolgen via read().
+ *
+ * De vormen draaien in een Worker als de browser dat kan (laag.js). Per laag
+ * staat klein wat hij kost: "1 · 12 ms · 50%" = rekentijd per beeld en de
+ * kwaliteit waarop het budget hem zette. Een noodrem en een terugval naar de
+ * hoofdthread komen in de meldingenstrook.
  */
 
 const SLEUTEL = 'varve.vormen';
@@ -49,6 +55,9 @@ export function opzetVormen({ videoMixer }) {
     <span class="vid-sep"></span>
     <div class="knob sm" data-action="video.layer.opacity" data-label="DEKKING" data-value="0.8" data-default="0.8"></div>
     ${Array.from({ length: VORM_KNOPPEN }, (_, k) => `<div class="knob sm vorm-knop" data-action="video.layer.knob.${k + 1}" data-label="" data-value="0.5"></div>`).join('')}
+    <span class="vorm-metingen" style="display:flex;gap:10px;font-size:11px;font-variant-numeric:tabular-nums;opacity:.7">
+      ${vormen.lagen.map((_, i) => `<span class="vorm-meting">${i + 1} uit</span>`).join('')}
+    </span>
   `;
   document.querySelector('#video-panel .vid-fx').after(rij);
 
@@ -73,6 +82,29 @@ export function opzetVormen({ videoMixer }) {
     });
   }
   vormen.on('change', volg);
+
+  // Rekentijd en kwaliteit per laag. Alleen weergave, dus een gewone timer
+  // (de vormen zelf lopen op de audioklok); niets schrijven wat niet verandert.
+  const metingen = [...rij.querySelectorAll('.vorm-meting')];
+  function toonMetingen() {
+    vormen.lagen.forEach((laag, i) => {
+      const el = metingen[i];
+      const ms = laag.ms;
+      const tekst = !laag.aan ? `${i + 1} uit`
+        : ms == null ? `${i + 1} …`
+          : `${i + 1} · ${ms < 10 ? ms.toFixed(1) : Math.round(ms)} ms · ${Math.round(laag.kwaliteit * 100)}%`;
+      if (el.textContent !== tekst) el.textContent = tekst;
+      const krap = laag.aan && (laag.teZwaar || laag.kwaliteit < 1);
+      el.style.color = krap ? '#eea13c' : '';
+      el.title = `vormlaag ${i + 1}: ${laag.modus === 'werker' ? 'in een Worker' : 'op de hoofdthread'}, budget ${laag.budgetMs} ms per beeld`
+        + (laag.teZwaar ? ' — ook op de laagste kwaliteit nog te zwaar' : '');
+    });
+  }
+  setInterval(toonMetingen, 500);
+  vormen.on('noodrem', ({ laag, systeem, ms, kwaliteit }) => meld(
+    `vormlaag ${laag + 1} (${SYSTEEM[systeem]?.naam ?? systeem}): ${Math.round(ms)} ms per beeld, te zwaar — kwaliteit naar ${Math.round(kwaliteit * 100)}%`));
+  vormen.on('modus', ({ laag, reden }) => meld(`vormlaag ${laag + 1} draait op de hoofdthread (${reden})`));
+  vormen.on('fout', ({ laag, systeem, bericht }) => meld(`vormlaag ${laag + 1} (${SYSTEEM[systeem]?.naam ?? systeem}): ${bericht}`, 'fout'));
   // De Knob-elementen worden pas in opzetVensters opgebouwd: dan pas labels zetten.
   queueMicrotask(volg);
 
