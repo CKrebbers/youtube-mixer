@@ -96,6 +96,8 @@ server/             draait apart: `node server/index.js`
   analyse-werker.js peaks, onset en tap-verfijning in een worker_thread (server blijft vrij)
   detect.js         FFT, onset-envelope, tempo, segmentatie. Geen dependencies.
   opname.js         opnames: WAV dat groeit, kop herstellen na een crash
+tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py) — zie tools/README.md
+Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
   apc40mk2.json     standaardmapping (data, geen code)
   generic.json      leeg startpunt
@@ -646,3 +648,8 @@ De uitkomsten van het onderzoek van 22 september 2026 staan in ROADMAP.md onder
   Cue level bpm ±0,01 (shift ±0,1; track.N.grid.bpm lineair over 40–300) · Lock = slot (alleen in
   grid-modus: erbuiten zou een losse druk ongemerkt het slot eraf halen). Wat de grid-modus niet
   definieert blijft werken. regel.led.lees laat een lampje de stand van een andere action tonen.
+- Eigen mapping = VOLLEDIGE kopie (server + localStorage). Gevolg: een nieuwe standaard-
+  mapping bereikt Clay niet zolang er een eigen kopie staat (23 sep: de grid-modus ontbrak
+  daardoor op de APC). Tot "mapping als verschil bewaren" (ronde 3) gebouwd is: na een
+  wijziging aan mappings/apc40mk2.json de eigen kopie (GET /api/mapping) vergelijken met de
+  vorige standaard, Clay's eigen regels overnemen en de samengevoegde versie POSTen.

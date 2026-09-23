@@ -1,0 +1,122 @@
+
+album, stuk 156 (A) @11:40: waarheid 155.99 bpm (tap-bpm-fout p50 |3.52|% bij 4, |1.46|% bij 8; regressie |2.22|% / |0.72|%)
+  4 taps server : goed 18/40, offbeat 3, anders 19; |fase| p50 14 ms, |bpm-fout| p50 2.27%, spreiding bpm 3.46%
+  4 taps tapfase: goed 17/40, offbeat 0, anders 23; |fase| p50 14 ms, |bpm-fout| p50 2.95%, spreiding bpm 3.23%
+  4 taps regr   : goed 29/40, offbeat 0, anders 11; |fase| p50 6 ms, |bpm-fout| p50 0.03%, spreiding bpm 1.71%
+  4 taps regr+fs: goed 29/40, offbeat 0, anders 11; |fase| p50 6 ms, |bpm-fout| p50 0.03%, spreiding bpm 1.91%
+  8 taps server : goed 37/40, offbeat 0, anders 3; |fase| p50 5 ms, |bpm-fout| p50 0.03%, spreiding bpm 0.99%
+  8 taps tapfase: goed 37/40, offbeat 0, anders 3; |fase| p50 5 ms, |bpm-fout| p50 0.03%, spreiding bpm 0.98%
+  8 taps regr   : goed 40/40, offbeat 0, anders 0; |fase| p50 6 ms, |bpm-fout| p50 0.03%, spreiding bpm 0.03%
+  8 taps regr+fs: goed 40/40, offbeat 0, anders 0; |fase| p50 6 ms, |bpm-fout| p50 0.03%, spreiding bpm 0.03%
+
+album, stuk 156 (A) @12:40: waarheid 156.22 bpm (tap-bpm-fout p50 |3.58|% bij 4, |1.33|% bij 8; regressie |1.91|% / |0.59|%)
+  4 taps server : goed 20/40, offbeat 9, anders 11; |fase| p50 7 ms, |bpm-fout| p50 2.96%, spreiding bpm 4.71%
+  4 taps tapfase: goed 20/40, offbeat 0, anders 20; |fase| p50 6 ms, |bpm-fout| p50 2.77%, spreiding bpm 5.16%
+  4 taps regr   : goed 30/40, offbeat 6, anders 4; |fase| p50 3 ms, |bpm-fout| p50 0.15%, spreiding bpm 2.17%
+  4 taps regr+fs: goed 30/40, offbeat 0, anders 10; |fase| p50 3 ms, |bpm-fout| p50 0.15%, spreiding bpm 1.91%
+  8 taps server : goed 37/40, offbeat 1, anders 2; |fase| p50 3 ms, |bpm-fout| p50 0.15%, spreiding bpm 0.86%
+  8 taps tapfase: goed 36/40, offbeat 0, anders 4; |fase| p50 3 ms, |bpm-fout| p50 0.16%, spreiding bpm 1.40%
+  8 taps regr   : goed 40/40, offbeat 0, anders 0; |fase| p50 1 ms, |bpm-fout| p50 0.12%, spreiding bpm 0.03%
+  8 taps regr+fs: goed 40/40, offbeat 0, anders 0; |fase| p50 2 ms, |bpm-fout| p50 0.12%, spreiding bpm 0.03%
+
+album, stuk 156 (B, andere fase) @15:50: waarheid 155.96 bpm (tap-bpm-fout p50 |2.77|% bij 4, |1.73|% bij 8; regressie |1.78|% / |0.79|%)
+  4 taps server : goed 23/40, offbeat 4, anders 13; |fase| p50 5 ms, |bpm-fout| p50 0.02%, spreiding bpm 3.40%
+  4 taps tapfase: goed 23/40, offbeat 0, anders 17; |fase| p50 10 ms, |bpm-fout| p50 0.04%, spreiding bpm 3.37%
+  4 taps regr   : goed 30/40, offbeat 2, anders 8; |fase| p50 4 ms, |bpm-fout| p50 0.02%, spreiding bpm 2.51%
+  4 taps regr+fs: goed 30/40, offbeat 0, anders 10; |fase| p50 8 ms, |bpm-fout| p50 0.03%, spreiding bpm 2.17%
+  8 taps server : goed 30/40, offbeat 1, anders 9; |fase| p50 5 ms, |bpm-fout| p50 0.02%, spreiding bpm 2.56%
+  8 taps tapfase: goed 30/40, offbeat 2, anders 8; |fase| p50 7 ms, |bpm-fout| p50 0.04%, spreiding bpm 2.44%
+  8 taps regr   : goed 40/40, offbeat 0, anders 0; |fase| p50 4 ms, |bpm-fout| p50 0.01%, spreiding bpm 0.02%
+  8 taps regr+fs: goed 40/40, offbeat 0, anders 0; |fase| p50 4 ms, |bpm-fout| p50 0.02%, spreiding bpm 0.03%
+
+album, stuk 156 (B) @16:50: waarheid 156.04 bpm (tap-bpm-fout p50 |2.67|% bij 4, |1.50|% bij 8; regressie |1.47|% / |0.85|%)
+  4 taps server : goed 25/40, offbeat 11, anders 4; |fase| p50 5 ms, |bpm-fout| p50 0.01%, spreiding bpm 3.32%
+  4 taps tapfase: goed 25/40, offbeat 2, anders 13; |fase| p50 4 ms, |bpm-fout| p50 0.04%, spreiding bpm 3.04%
+  4 taps regr   : goed 35/40, offbeat 4, anders 1; |fase| p50 4 ms, |bpm-fout| p50 0.01%, spreiding bpm 2.26%
+  4 taps regr+fs: goed 35/40, offbeat 0, anders 5; |fase| p50 3 ms, |bpm-fout| p50 0.03%, spreiding bpm 1.90%
+  8 taps server : goed 32/40, offbeat 6, anders 2; |fase| p50 5 ms, |bpm-fout| p50 0.01%, spreiding bpm 2.70%
+  8 taps tapfase: goed 32/40, offbeat 4, anders 4; |fase| p50 4 ms, |bpm-fout| p50 0.03%, spreiding bpm 2.69%
+  8 taps regr   : goed 39/40, offbeat 1, anders 0; |fase| p50 4 ms, |bpm-fout| p50 0.01%, spreiding bpm 0.24%
+  8 taps regr+fs: goed 39/40, offbeat 0, anders 1; |fase| p50 3 ms, |bpm-fout| p50 0.02%, spreiding bpm 0.42%
+
+Bay Ledges, tempo zwalkt @1:15: waarheid 153.61 bpm (tap-bpm-fout p50 |2.36|% bij 4, |1.81|% bij 8; regressie |1.40|% / |0.72|%)
+  4 taps server : goed 3/40, offbeat 14, anders 23; |fase| p50 91 ms, |bpm-fout| p50 1.01%, spreiding bpm 3.39%
+  4 taps tapfase: goed 5/40, offbeat 2, anders 33; |fase| p50 76 ms, |bpm-fout| p50 0.75%, spreiding bpm 3.67%
+  4 taps regr   : goed 2/40, offbeat 20, anders 18; |fase| p50 158 ms, |bpm-fout| p50 1.00%, spreiding bpm 0.72%
+  4 taps regr+fs: goed 9/40, offbeat 0, anders 31; |fase| p50 76 ms, |bpm-fout| p50 0.71%, spreiding bpm 0.75%
+  8 taps server : goed 6/40, offbeat 21, anders 13; |fase| p50 158 ms, |bpm-fout| p50 1.01%, spreiding bpm 0.81%
+  8 taps tapfase: goed 16/40, offbeat 0, anders 24; |fase| p50 68 ms, |bpm-fout| p50 0.71%, spreiding bpm 1.05%
+  8 taps regr   : goed 1/40, offbeat 26, anders 13; |fase| p50 159 ms, |bpm-fout| p50 1.00%, spreiding bpm 0.26%
+  8 taps regr+fs: goed 9/40, offbeat 0, anders 31; |fase| p50 77 ms, |bpm-fout| p50 0.72%, spreiding bpm 0.39%
+
+Bay Ledges @2:25: waarheid 152.87 bpm (tap-bpm-fout p50 |2.29|% bij 4, |1.40|% bij 8; regressie |1.39|% / |0.74|%)
+  4 taps server : goed 24/40, offbeat 1, anders 15; |fase| p50 4 ms, |bpm-fout| p50 0.10%, spreiding bpm 3.75%
+  4 taps tapfase: goed 25/40, offbeat 0, anders 15; |fase| p50 4 ms, |bpm-fout| p50 0.10%, spreiding bpm 3.96%
+  4 taps regr   : goed 33/40, offbeat 1, anders 6; |fase| p50 3 ms, |bpm-fout| p50 0.09%, spreiding bpm 2.07%
+  4 taps regr+fs: goed 33/40, offbeat 0, anders 7; |fase| p50 3 ms, |bpm-fout| p50 0.09%, spreiding bpm 2.65%
+  8 taps server : goed 36/40, offbeat 1, anders 3; |fase| p50 3 ms, |bpm-fout| p50 0.08%, spreiding bpm 1.84%
+  8 taps tapfase: goed 36/40, offbeat 0, anders 4; |fase| p50 3 ms, |bpm-fout| p50 0.08%, spreiding bpm 1.82%
+  8 taps regr   : goed 40/40, offbeat 0, anders 0; |fase| p50 3 ms, |bpm-fout| p50 0.07%, spreiding bpm 0.03%
+  8 taps regr+fs: goed 40/40, offbeat 0, anders 0; |fase| p50 3 ms, |bpm-fout| p50 0.07%, spreiding bpm 0.03%
+
+Sakamoto-lijst 129 @14:50: waarheid 129.19 bpm (tap-bpm-fout p50 |2.37|% bij 4, |1.59|% bij 8; regressie |1.23|% / |0.45|%)
+  4 taps server : goed 28/40, offbeat 4, anders 8; |fase| p50 14 ms, |bpm-fout| p50 0.05%, spreiding bpm 2.72%
+  4 taps tapfase: goed 27/40, offbeat 0, anders 13; |fase| p50 14 ms, |bpm-fout| p50 0.05%, spreiding bpm 2.78%
+  4 taps regr   : goed 36/40, offbeat 0, anders 4; |fase| p50 12 ms, |bpm-fout| p50 0.04%, spreiding bpm 1.57%
+  4 taps regr+fs: goed 35/40, offbeat 0, anders 5; |fase| p50 12 ms, |bpm-fout| p50 0.04%, spreiding bpm 1.10%
+  8 taps server : goed 35/40, offbeat 2, anders 3; |fase| p50 11 ms, |bpm-fout| p50 0.03%, spreiding bpm 1.75%
+  8 taps tapfase: goed 34/40, offbeat 0, anders 6; |fase| p50 10 ms, |bpm-fout| p50 0.03%, spreiding bpm 0.50%
+  8 taps regr   : goed 40/40, offbeat 0, anders 0; |fase| p50 10 ms, |bpm-fout| p50 0.03%, spreiding bpm 0.03%
+  8 taps regr+fs: goed 40/40, offbeat 0, anders 0; |fase| p50 12 ms, |bpm-fout| p50 0.03%, spreiding bpm 0.03%
+
+Sakamoto-lijst 120 @36:30: waarheid 120.38 bpm (tap-bpm-fout p50 |1.33|% bij 4, |1.51|% bij 8; regressie |1.59|% / |0.61|%)
+  4 taps server : goed 28/40, offbeat 0, anders 12; |fase| p50 23 ms, |bpm-fout| p50 0.33%, spreiding bpm 3.07%
+  4 taps tapfase: goed 28/40, offbeat 1, anders 11; |fase| p50 23 ms, |bpm-fout| p50 0.33%, spreiding bpm 2.81%
+  4 taps regr   : goed 31/40, offbeat 0, anders 9; |fase| p50 23 ms, |bpm-fout| p50 0.32%, spreiding bpm 0.56%
+  4 taps regr+fs: goed 31/40, offbeat 0, anders 9; |fase| p50 23 ms, |bpm-fout| p50 0.32%, spreiding bpm 0.56%
+  8 taps server : goed 26/40, offbeat 0, anders 14; |fase| p50 23 ms, |bpm-fout| p50 0.33%, spreiding bpm 0.72%
+  8 taps tapfase: goed 27/40, offbeat 1, anders 12; |fase| p50 23 ms, |bpm-fout| p50 0.33%, spreiding bpm 0.72%
+  8 taps regr   : goed 35/40, offbeat 0, anders 5; |fase| p50 22 ms, |bpm-fout| p50 0.31%, spreiding bpm 0.03%
+  8 taps regr+fs: goed 36/40, offbeat 0, anders 4; |fase| p50 21 ms, |bpm-fout| p50 0.31%, spreiding bpm 0.03%
+
+Sakamoto-lijst 101 @40:00: waarheid 100.61 bpm (tap-bpm-fout p50 |1.46|% bij 4, |0.93|% bij 8; regressie |1.37|% / |0.43|%)
+  4 taps server : goed 25/40, offbeat 0, anders 15; |fase| p50 7 ms, |bpm-fout| p50 0.24%, spreiding bpm 2.02%
+  4 taps tapfase: goed 29/40, offbeat 0, anders 11; |fase| p50 4 ms, |bpm-fout| p50 0.23%, spreiding bpm 1.77%
+  4 taps regr   : goed 31/40, offbeat 0, anders 9; |fase| p50 5 ms, |bpm-fout| p50 0.24%, spreiding bpm 1.45%
+  4 taps regr+fs: goed 33/40, offbeat 0, anders 7; |fase| p50 4 ms, |bpm-fout| p50 0.24%, spreiding bpm 1.39%
+  8 taps server : goed 30/40, offbeat 0, anders 10; |fase| p50 4 ms, |bpm-fout| p50 0.23%, spreiding bpm 1.61%
+  8 taps tapfase: goed 37/40, offbeat 0, anders 3; |fase| p50 3 ms, |bpm-fout| p50 0.22%, spreiding bpm 1.10%
+  8 taps regr   : goed 26/40, offbeat 0, anders 14; |fase| p50 7 ms, |bpm-fout| p50 0.25%, spreiding bpm 0.69%
+  8 taps regr+fs: goed 37/40, offbeat 0, anders 3; |fase| p50 4 ms, |bpm-fout| p50 0.23%, spreiding bpm 0.39%
+
+Sakamoto-lijst 173 @42:15: waarheid 172.33 bpm (tap-bpm-fout p50 |3.16|% bij 4, |2.03|% bij 8; regressie |2.14|% / |0.73|%)
+  4 taps server : goed 19/40, offbeat 3, anders 18; |fase| p50 29 ms, |bpm-fout| p50 0.69%, spreiding bpm 5.83%
+  4 taps tapfase: goed 15/40, offbeat 1, anders 24; |fase| p50 27 ms, |bpm-fout| p50 2.47%, spreiding bpm 5.76%
+  4 taps regr   : goed 24/40, offbeat 3, anders 13; |fase| p50 18 ms, |bpm-fout| p50 0.49%, spreiding bpm 2.09%
+  4 taps regr+fs: goed 21/40, offbeat 0, anders 19; |fase| p50 19 ms, |bpm-fout| p50 0.51%, spreiding bpm 2.19%
+  8 taps server : goed 26/40, offbeat 2, anders 12; |fase| p50 17 ms, |bpm-fout| p50 0.49%, spreiding bpm 2.43%
+  8 taps tapfase: goed 16/40, offbeat 0, anders 24; |fase| p50 25 ms, |bpm-fout| p50 0.52%, spreiding bpm 3.05%
+  8 taps regr   : goed 36/40, offbeat 0, anders 4; |fase| p50 19 ms, |bpm-fout| p50 0.48%, spreiding bpm 0.79%
+  8 taps regr+fs: goed 27/40, offbeat 0, anders 13; |fase| p50 20 ms, |bpm-fout| p50 0.50%, spreiding bpm 0.79%
+
+zoned out (geen puls) @5:00: waarheid 120.40 bpm (tap-bpm-fout p50 |2.08|% bij 4, |1.18|% bij 8; regressie |1.05|% / |0.61|%)
+  4 taps server : goed 0/40, offbeat 13, anders 27; |fase| p50 141 ms, |bpm-fout| p50 1.36%, spreiding bpm 3.17%
+  4 taps tapfase: goed 0/40, offbeat 0, anders 40; |fase| p50 51 ms, |bpm-fout| p50 2.34%, spreiding bpm 3.72%
+  4 taps regr   : goed 0/40, offbeat 23, anders 17; |fase| p50 224 ms, |bpm-fout| p50 0.48%, spreiding bpm 1.77%
+  4 taps regr+fs: goed 0/40, offbeat 0, anders 40; |fase| p50 55 ms, |bpm-fout| p50 1.36%, spreiding bpm 2.25%
+  8 taps server : goed 0/40, offbeat 25, anders 15; |fase| p50 225 ms, |bpm-fout| p50 0.47%, spreiding bpm 1.81%
+  8 taps tapfase: goed 0/40, offbeat 0, anders 40; |fase| p50 54 ms, |bpm-fout| p50 1.37%, spreiding bpm 1.85%
+  8 taps regr   : goed 0/40, offbeat 19, anders 21; |fase| p50 142 ms, |bpm-fout| p50 1.34%, spreiding bpm 1.06%
+  8 taps regr+fs: goed 0/40, offbeat 0, anders 40; |fase| p50 53 ms, |bpm-fout| p50 1.37%, spreiding bpm 1.32%
+
+zoned out (geen puls) @25:00: waarheid 119.50 bpm (tap-bpm-fout p50 |2.25|% bij 4, |1.62|% bij 8; regressie |1.16|% / |0.75|%)
+  4 taps server : goed 0/40, offbeat 22, anders 18; |fase| p50 232 ms, |bpm-fout| p50 2.61%, spreiding bpm 2.95%
+  4 taps tapfase: goed 0/40, offbeat 1, anders 39; |fase| p50 50 ms, |bpm-fout| p50 2.55%, spreiding bpm 3.04%
+  4 taps regr   : goed 0/40, offbeat 8, anders 32; |fase| p50 61 ms, |bpm-fout| p50 2.58%, spreiding bpm 2.56%
+  4 taps regr+fs: goed 0/40, offbeat 0, anders 40; |fase| p50 30 ms, |bpm-fout| p50 2.57%, spreiding bpm 2.56%
+  8 taps server : goed 0/40, offbeat 18, anders 22; |fase| p50 189 ms, |bpm-fout| p50 2.60%, spreiding bpm 2.59%
+  8 taps tapfase: goed 0/40, offbeat 0, anders 40; |fase| p50 29 ms, |bpm-fout| p50 2.56%, spreiding bpm 2.26%
+  8 taps regr   : goed 0/40, offbeat 10, anders 30; |fase| p50 87 ms, |bpm-fout| p50 2.59%, spreiding bpm 2.58%
+  8 taps regr+fs: goed 0/40, offbeat 0, anders 40; |fase| p50 30 ms, |bpm-fout| p50 2.55%, spreiding bpm 1.77%
+
+Totaal (zonder zoned out): {"A":{"ok":508,"off":83,"fout":209},"B":{"ok":515,"off":13,"fout":272},"C":{"ok":618,"off":63,"fout":119},"D":{"ok":634,"off":0,"fout":166}}
