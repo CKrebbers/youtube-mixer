@@ -67,6 +67,8 @@ src/
                     video-mixer.js  <video> per track, gemengd met WebGL2. Leest de engine alleen uit.
                     instellingen.js welke video-effecten en mengvormen er zijn (data)
                     puls.js         effecten op de tel: vorm, welke track de maat geeft
+  opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
+                    opnemer-worklet.js  telt frames, zet om naar 16-bit, geeft per seconde door
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
 server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
@@ -74,12 +76,14 @@ server/             draait apart: `node server/index.js`
   library.js        SQLite via node:sqlite. Tracks, peaks, effect-racks.
   analyze.js        golfvorm-peaks én onset-envelope vooraf, streamend uit ffmpeg
   detect.js         FFT, onset-envelope, tempo, segmentatie. Geen dependencies.
+  opname.js         opnames: WAV dat groeit, kop herstellen na een crash
 mappings/
   apc40mk2.json     standaardmapping (data, geen code)
   generic.json      leeg startpunt
 racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 media/              binnengehaalde bestanden + library.db (niet in git)
+opnames/            je opgenomen sets als WAV (niet in git)
 test/
   engine.test.mjs   engine tegen gemockte Web Audio API, draait in Node
   mapping.test.mjs  mapping + soft-takeover, puur logica, geen mock nodig
@@ -94,6 +98,7 @@ test/
   rack.test.mjs     macro-resolutie met een gouden bestand, migratie, onbekende effecten
   stream.test.mjs   streamkern tegen ffmpeg (bit voor bit), pagina-plan, StreamBron
   video.test.mjs    video volgt audio: bijsturen, springen, zichtbaarheid
+  opname.test.mjs   opname-WAV: stukken, kop, herstel na crash, geen ../
 ```
 
 ## Conventies
@@ -291,6 +296,19 @@ test/
 - Chrome laadt en decodeert geen media in een tabblad dat niet zichtbaar is,
   en pauzeert daar de animatielus. Video-gedrag test je dus met het venster
   vooraan; in een achtergrondtab meet je niets.
+- Opnemen tapt de master NA de limiter: wat de zaal hoort. De worklet geeft
+  per seconde een stuk; de server plakt het meteen achter het bestand, dus
+  een crash kost hooguit een seconde. De WAV-kop krijgt zijn lengte pas bij
+  "klaar"; is dat nooit gebeurd, dan herstelt `lijst()` hem bij het opstarten
+  uit de bestandsgrootte. De lengte komt van getelde frames (audioklok), niet
+  van een timer. Alleen op 48 kHz: de kop zegt 48000.
+- Met video erbij: naast de WAV een set-<id>.mp4 (H.264, 1280×720, 30 fps,
+  8 Mbit/s — ~3,6 GB per uur) met eigen geluidsspoor, via MediaRecorder op
+  het mixer-canvas. mp4 als Chrome het kan, anders webm. Ook per seconde
+  weggeschreven. Tijdens een video-opname rendert de mixer door, ook als het
+  paneel dicht is, anders neem je zwart op. Het beeld loopt een paar ms
+  achter op het geluid in de video (de mixer mikt op wat je HOORT, de
+  opname-tap zit vóór de uitgangsvertraging): minder dan één beeld.
 - Een effect-rack hangt aan een LINK (`tracks.id`), niet aan een fader. Laad je
   hetzelfde nummer op een andere track, dan komen zijn racks mee. Meerdere per
   nummer, één actief. De inhoud is JSON: wat er ín een rack staat is een zaak

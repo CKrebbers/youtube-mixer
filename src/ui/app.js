@@ -11,6 +11,7 @@ import { LearnMode } from './learn-mode.js';
 import { LibraryPanel } from './library-panel.js';
 import { RackEditor } from './rack-editor.js';
 import { VideoMixer } from '../video/video-mixer.js';
+import { Opnemer } from '../opname/opnemer.js';
 import apc40mk2 from '../control/devices/apc40mk2.js';
 import generic from '../control/devices/generic.js';
 import { MidiMonitor } from './midi-monitor.js';
@@ -36,7 +37,9 @@ const videoMixer = new VideoMixer({ canvas: videoPaneel.querySelector('.vid-canv
 window.videoMixer = videoMixer;
 bindVideo(videoMixer);
 let losVenster = null;
-const videoAan = () => !videoPaneel.classList.contains('hidden') || (losVenster && !losVenster.closed);
+// Ook tijdens een video-opname renderen, anders neem je zwart op.
+const videoAan = () => !videoPaneel.classList.contains('hidden') || (losVenster && !losVenster.closed)
+  || !!window.opnemer?.metVideo;
 const toggleVideo = () => {
   videoPaneel.classList.toggle('hidden');
   if (!videoAan()) videoMixer.pauzeerAlles();
@@ -51,6 +54,36 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyV' && !e.target.matches('input, textarea, select')) toggleVideo();
 });
 if (videoMixer.fout) console.warn('[video]', videoMixer.fout);
+
+// ---- opnemen --------------------------------------------------------------
+// Wat uit de master komt, naar opnames/ op deze schijf. De lengte komt van
+// de audioklok (de worklet telt frames), niet van een timer.
+const opnemer = new Opnemer({ engine });
+window.opnemer = opnemer;
+const opnameKnop = document.getElementById('opname-btn');
+const opnameSoort = document.getElementById('opname-soort');
+// Je laatste keuze onthouden: gemak per browser, geen gegevens die ertoe doen.
+try { opnameSoort.value = localStorage.getItem('varve.opnameSoort') || 'audio'; } catch (_) {}
+opnameSoort.addEventListener('change', () => { try { localStorage.setItem('varve.opnameSoort', opnameSoort.value); } catch (_) {} });
+const mb = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1).replace('.', ',')} GB` : `${Math.round(b / 1e6)} MB`);
+const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+opnameKnop.addEventListener('click', async () => {
+  opnameKnop.classList.remove('gelukt', 'mislukt');
+  if (!opnemer.bezig) {
+    await engine.resume().catch(() => {});
+    const r = await opnemer.start({ video: opnameSoort.value === 'video' ? videoMixer.canvas : null });
+    if (!r.ok) { opnameKnop.textContent = 'opnemen mislukt'; opnameKnop.classList.add('mislukt'); opnameKnop.title = r.fout; }
+    return;
+  }
+  opnameKnop.textContent = 'afronden…';
+  const r = await opnemer.stop();
+  opnameKnop.classList.add(r.ok ? 'gelukt' : 'mislukt');
+  opnameKnop.textContent = r.ok ? `✓ ${mmss(r.duur)} bewaard` : 'afronden mislukt';
+  opnameKnop.title = r.ok
+    ? `opnames/${r.bestand}${r.video ? ` en opnames/${r.video} (${mb(r.videoBytes)})` : ''}${r.waarschuwing ? ' — let op: ' + r.waarschuwing : ''}`
+    : r.fout;
+  setTimeout(() => { if (!opnemer.bezig) { opnameKnop.textContent = '● opnemen'; opnameKnop.classList.remove('gelukt'); } }, 6000);
+});
 const analysis = perDeck(() => null);
 const views = {};
 const knobs = [];
@@ -852,6 +885,13 @@ function tekenFrame() {
   }
 
   mapPanel.tick();
+  if (opnemer.bezig) {
+    const t = `■ ${mmss(opnemer.seconden)} · ${mb(opnemer.bytes)}${opnemer.metVideo ? ` + ${mb(opnemer.videoBytes)} video` : ''}`;
+    if (opnameKnop.textContent !== t) opnameKnop.textContent = t;
+    opnameKnop.classList.add('bezig');
+    opnameSoort.disabled = true;
+    opnameKnop.title = opnemer.fout || `opnemen naar opnames/${opnemer.bestand} — klik om te stoppen`;
+  } else { opnameKnop.classList.remove('bezig'); opnameSoort.disabled = false; }
   if (videoAan()) {
     videoMixer.teken();
     const st = videoMixer.stand().filter((l) => l.video && l.speelt);

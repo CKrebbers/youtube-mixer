@@ -431,3 +431,13 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .vid-fx{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px}
 .vid-modus,.vid-pulsdoel{min-width:64px;text-transform:uppercase;letter-spacing:.08em}
 .vid-sep{width:1px;align-self:stretch;background:var(--line)}
+
+/* ---- opnemen ---- */
+.opname{font-variant-numeric:tabular-nums}
+.opname.bezig{color:#fff;background:var(--red);border-color:var(--red)}
+.opname.gelukt{color:var(--a);border-color:var(--a)}
+.opname.mislukt{color:var(--red);border-color:var(--red)}
+.opname-groep{display:flex;align-items:center;gap:4px}
+.opname-soort{background:var(--panel2);color:var(--dim);border:1px solid var(--line);border-radius:5px;
+  padding:4px 4px;font:inherit;font-size:11px}
+.opname-soort:disabled{opacity:.5}

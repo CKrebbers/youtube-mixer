@@ -8,6 +8,7 @@ import { ingest, controleerTooling, YTDLP_GETEST_OP } from './ingest.js';
 import { Library } from './library.js';
 import { maakOnset } from './analyze.js';
 import { verfijnTempoFase } from './detect.js';
+import * as opname from './opname.js';
 import { readFile } from 'node:fs/promises';
 
 /**
@@ -65,6 +66,21 @@ async function leesJson(req, max = 64 * 1024) {
       if (data.length > max) { req.destroy(); klaar(null); }
     });
     req.on('end', () => { try { klaar(JSON.parse(data || '{}')); } catch { klaar(null); } });
+    req.on('error', () => klaar(null));
+  });
+}
+
+/** Ruwe bytes, voor opname-stukken. Eén seconde stereo 16-bit is 192 kB. */
+async function leesRuw(req, max = 4 * 1024 * 1024) {
+  return new Promise((klaar) => {
+    const delen = [];
+    let n = 0;
+    req.on('data', (d) => {
+      n += d.length;
+      if (n > max) { req.destroy(); klaar(null); return; }
+      delen.push(d);
+    });
+    req.on('end', () => klaar(Buffer.concat(delen)));
     req.on('error', () => klaar(null));
   });
 }
@@ -245,6 +261,31 @@ const server = createServer(async (req, res) => {
     if (mGeladen && req.method === 'POST') { lib.geladen(mGeladen[1]); return json(res, 200, { ok: true }); }
 
     // ---- effect-racks: horen bij de link, niet bij een fader --------------
+
+    // ---- opnames van je set: blijven op deze schijf, gaan nergens heen -----
+
+    const OPNAMES = join(WORTEL, 'opnames');
+    if (pad === '/api/opnames' && req.method === 'GET') return json(res, 200, { opnames: await opname.lijst(OPNAMES) });
+    if (pad === '/api/opname/start' && req.method === 'POST') {
+      const r = await opname.start(OPNAMES);
+      return json(res, r.ok ? 200 : 500, r);
+    }
+    const mVideo = /^\/api\/opname\/([\w-]+)\/video\.(\w+)$/.exec(pad);
+    if (mVideo && req.method === 'POST') {
+      const stuk = await leesRuw(req, 16 * 1024 * 1024);
+      if (!stuk) return json(res, 413, { ok: false, fout: 'videostuk te groot' });
+      const r = await opname.voegVideoToe(OPNAMES, mVideo[1], mVideo[2], stuk);
+      return json(res, r.ok ? 200 : 400, r);
+    }
+    const mOpname = /^\/api\/opname\/([\w-]+)\/(stuk|klaar)$/.exec(pad);
+    if (mOpname && req.method === 'POST') {
+      const [, id, wat] = mOpname;
+      if (wat === 'klaar') { const r = await opname.sluit(OPNAMES, id); return json(res, r.ok ? 200 : 400, r); }
+      const stuk = await leesRuw(req);
+      if (!stuk) return json(res, 413, { ok: false, fout: 'stuk te groot' });
+      const r = await opname.voegToe(OPNAMES, id, stuk);
+      return json(res, r.ok ? 200 : 400, r);
+    }
 
     const mRacks = /^\/api\/library\/([\w-]+)\/racks$/.exec(pad);
     if (mRacks) {
