@@ -21,6 +21,12 @@ import { Emitter, clamp } from '../lib/emitter.js';
  *   absolute      fader/knop 0..1, MET soft-takeover
  *   relative-2c   encoder, tweecomplement: 1..63 = +, 65..127 = -
  *   relative-bin  encoder, binary offset: waarde - 64 is de stap
+ *   endless       knop met LED-ring die absolute waarden stuurt (APC40 mkII:
+ *                 device en track knobs). Nieuwe waarde = softwarewaarde +
+ *                 (v - vorige v van deze knop). De ring toont al de
+ *                 softwarewaarde, dus na een focus- of mapjewissel draai je
+ *                 meteen door vanaf wat je ziet, zonder over te pakken.
+ *                 Faders hebben geen ring en blijven absolute + takeover.
  *
  * Shift en mapjes (sinds 23 september 2026):
  *   { "in": "note:0:52", "action": "track.1.loop.exit", "shift": true }
@@ -50,7 +56,7 @@ const RELATIVE_STEP = 1 / 127;
  */
 const LAST_TTL = 1000;
 
-export const MODES = ['trigger', 'absolute', 'relative-2c', 'relative-bin'];
+export const MODES = ['trigger', 'absolute', 'relative-2c', 'relative-bin', 'endless'];
 
 /** Sleutel van een regel: dezelfde knop kan met shift en per mapje iets anders doen. */
 export const sleutelVan = (r) => `${r.in}${r.shift ? '#shift' : ''}${r.laag ? `@${r.laag}` : ''}`;
@@ -166,6 +172,10 @@ export class Mapping extends Emitter {
         label: r.label,
         shift: r.shift ? true : undefined,
         laag: typeof r.laag === 'string' ? r.laag : undefined,
+        // Hoe de LED onder deze knop oplicht, bovenop het kleurschema in
+        // feedback.js: { aan, half, uit, invert, tel }. Data, dus hij hoort mee
+        // bij exporteren — anders ben je hem kwijt na één keer opslaan.
+        led: r.led && typeof r.led === 'object' && !Array.isArray(r.led) ? { ...r.led } : undefined,
       };
       const k = sleutelVan(regel);
       if (rules.has(k)) fouten.push(`regel ${i}: "${k}" staat al gekoppeld, laatste wint`);
@@ -197,6 +207,7 @@ export class Mapping extends Emitter {
         if (r.step !== undefined) o.step = r.step;
         if (r.takeover !== undefined) o.takeover = r.takeover;
         if (r.label) o.label = r.label;
+        if (r.led) o.led = { ...r.led };
         return o;
       }),
     };
@@ -258,12 +269,18 @@ export class Mapping extends Emitter {
     return null;
   }
 
-  /** Per fysieke control de regel die nu geldt (zonder shift) — voor de LED's. */
-  actieveRegels() {
+  /**
+   * Per fysieke control de regel die nu geldt — voor de LED's. Standaard met
+   * de shiftstand van NU: houd je shift vast, dan tonen de lampjes wat de
+   * knoppen met shift doen (hotcue wissen in rood). Een knop zonder
+   * shift-variant houdt zijn gewone regel; een knop die ALLEEN met shift iets
+   * doet (● = cue) valt zonder shift weg en blijft donker.
+   */
+  actieveRegels({ shift = this.shift } = {}) {
     const uit = new Map();
     for (const r of this.rules.values()) {
       if (uit.has(r.in)) continue;
-      const k = this.kies(r.in, { shift: false });
+      const k = this.kies(r.in, { shift });
       if (k) uit.set(r.in, k);
     }
     return uit;
@@ -346,6 +363,7 @@ export class Mapping extends Emitter {
       case 'absolute':   return this._absolute(rule, msg, target);
       case 'relative-2c':  return this._relative(rule, msg, target, (v) => (v >= 64 ? v - 128 : v));   // 64 = -64 (protocol v1.2 p37)
       case 'relative-bin': return this._relative(rule, msg, target, (v) => v - 64);
+      case 'endless':    return this._endless(rule, msg, target);
       default:           return this._trigger(rule, msg, target);
     }
   }
@@ -394,6 +412,46 @@ export class Mapping extends Emitter {
     st.sent = v;
     this.invoke(target, v);
     return { rule, target, mode: rule.mode, value: v, taken: true };
+  }
+
+  /**
+   * Endless: verschil met het vorige bericht van DEZE knop, opgeteld bij de
+   * softwarewaarde. Geen overpakken, geen sprong.
+   *
+   * Zonder vorige stand (eerste bericht, andere track of mapje, controller
+   * opnieuw aangesloten) alleen onthouden: één tikje kwijt, nooit een sprong.
+   * Heeft iets anders de waarde intussen verzet (muis, tweede controller),
+   * dan ook opnieuw beginnen. Dat is nodig als de APC zijn interne knopstand
+   * gelijkzet met de ring die wij sturen — dat weten we niet zeker — want
+   * dan komt het volgende bericht vanaf de NIEUWE stand en zou het verschil
+   * met de oude een sprong zijn. Met die regel klopt het in beide gevallen.
+   * Geen LAST_TTL hier: in 0x42 zijn er geen banken, dus elke draai van deze
+   * knop komt bij ons binnen en de vorige stand veroudert niet.
+   */
+  _endless(rule, msg, target) {
+    const st = this._stateFor(rule.in, target);
+    st.caught = true;                        // er valt niets over te pakken
+    const v = rule.invert ? 1 - msg.norm : msg.norm;
+    const sw = this.read ? this.read(target) : null;
+    const eps0 = rule.takeover ?? TAKEOVER_EPS;
+    if (sw != null && st.sent != null && Math.abs(sw - st.sent) > eps0) st.last = null;
+
+    const vorige = st.last;
+    st.last = v;
+    if (vorige === null || sw == null) {
+      st.sent = sw;
+      return { rule, target, mode: rule.mode, value: v, software: sw, taken: false };
+    }
+    let delta = v - vorige;
+    // Op de aanslag nog eens hetzelfde bericht: dat is doordraaien, geen
+    // stilstand. Anders kom je vanaf een ring op 0,2 met de knop op 127
+    // nooit meer omhoog.
+    if (!delta && (msg.value === 127 || msg.value === 0)) delta = (msg.value === 127 ? 1 : -1) * (rule.invert ? -1 : 1) / 127;
+    if (!delta) return { rule, target, mode: rule.mode, value: sw, taken: false };
+    const nieuw = clamp(sw + delta);
+    st.sent = nieuw;
+    this.invoke(target, nieuw);
+    return { rule, target, mode: rule.mode, value: nieuw, delta, taken: true };
   }
 
   _relative(rule, msg, target, toDelta) {

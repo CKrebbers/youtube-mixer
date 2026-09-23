@@ -544,6 +544,78 @@ console.log('\nmapjes en shift');
   ok('toetsenbord: een late keyup stuurt niets dubbel', log.length === 1);
 }
 
+// ---- endless: de 16 knoppen met LED-ring (ronde 2) -------------------------
+// De ring toont al de softwarewaarde. Na een focus- of mapjewissel moet
+// doordraaien dus meteen werken, vanaf wat de ring laat zien: nieuwe waarde =
+// software + verschil met het vorige bericht van deze knop.
+console.log('\nendless');
+{
+  const mE = maak('A');
+  mE.load({ rules: [{ in: 'cc:0:16', action: 'track.{focus}.trim', mode: 'endless' }] });
+  stand['track.1.trim'] = 0.5; stand['track.2.trim'] = 0.2;
+  geraakt.length = 0;
+  const r0 = mE.handle(cc(16, 100));
+  ok('endless: eerste bericht wordt alleen onthouden', r0.taken === false && geraakt.length === 0 && stand['track.1.trim'] === 0.5);
+  mE.handle(cc(16, 103));
+  ok('endless: daarna software + verschil (+3)', Math.abs(stand['track.1.trim'] - (0.5 + 3 / 127)) < 1e-9);
+  mE.handle(cc(16, 90));
+  ok('endless: en terug (-13)', Math.abs(stand['track.1.trim'] - (0.5 - 10 / 127)) < 1e-9);
+  ok('endless: telt nooit als "los" bij soft-takeover', !mE.takeoverStatus().includes('cc:0:16'));
+
+  mE._focus = 'B';                          // focuswissel: de knop staat fysiek op 90
+  mE.handle(cc(16, 91));
+  ok('endless: na een focuswissel springt de nieuwe track niet', stand['track.2.trim'] === 0.2);
+  mE.handle(cc(16, 93));
+  ok('endless: en draait meteen door vanaf de ring (0,2 + 2)', Math.abs(stand['track.2.trim'] - (0.2 + 2 / 127)) < 1e-9);
+
+  stand['track.2.trim'] = 0.7;              // de muis verzet de waarde
+  mE.handle(cc(16, 94));
+  ok('endless: na een verzetting door iets anders eerst opnieuw onthouden', stand['track.2.trim'] === 0.7);
+  mE.handle(cc(16, 95));
+  ok('endless: en dan verder vanaf de nieuwe stand', Math.abs(stand['track.2.trim'] - (0.7 + 1 / 127)) < 1e-9);
+
+  stand['track.2.trim'] = 0.99;
+  mE.handle(cc(16, 60)); mE.handle(cc(16, 80));
+  ok('endless: klemt op 1', stand['track.2.trim'] === 1);
+  mE.handle(cc(16, 70));
+  ok('endless: na klemmen direct weer omlaag (geen dode zone)', Math.abs(stand['track.2.trim'] - (1 - 10 / 127)) < 1e-9);
+
+  // Op de aanslag: stuurt de knop nog eens 127 terwijl hij al op 127 stond,
+  // dan is dat doordraaien, geen stilstand.
+  stand['track.2.trim'] = 0.3;
+  mE.handle(cc(16, 126)); mE.handle(cc(16, 127));
+  const voorAanslag = stand['track.2.trim'];
+  mE.handle(cc(16, 127));
+  ok('endless: op de aanslag telt nog een 127 als een stap', Math.abs(stand['track.2.trim'] - (voorAanslag + 1 / 127)) < 1e-9);
+
+  ok('endless is een geldige modus en overleeft export', (() => {
+    const t = maak(); t.load(mE.toJSON()); return t.rules.get('cc:0:16').mode === 'endless';
+  })());
+
+  const st = new Mapping({ read: () => 0.5, invoke: () => {} });
+  st.load(doc);
+  const ringknoppen = [...st.rules.values()].filter((r) => /^cc:0:(1[6-9]|2[0-3]|4[89]|5[0-5])$/.test(r.in));
+  ok(`standaard: de 16 ringknoppen staan op endless (${ringknoppen.length} regels)`,
+    ringknoppen.length >= 16 && ringknoppen.every((r) => r.mode === 'endless'));
+  const faders = [...st.rules.values()].filter((r) => /^cc:\d:7$|^cc:0:1[45]$/.test(r.in));
+  ok('standaard: faders blijven absolute (soft-takeover)', faders.length === 10 && faders.every((r) => r.mode === 'absolute'));
+
+  // Het 2×2-blok: A|B = crossfaderkant, ● = cue alleen met shift.
+  ok('2×2: A|B = crossfaderkant, ● doet zonder shift niets, ● + shift = cue (alle 8 kolommen)',
+    [0, 1, 2, 3, 4, 5, 6, 7].every((ch) => st.kies(`note:${ch}:66`, { shift: false })?.action === `track.${ch + 1}.xfade.side`
+      && st.kies(`note:${ch}:48`, { shift: false }) === null && st.kies(`note:${ch}:48`, { shift: true })?.action === `track.${ch + 1}.cue`));
+  ok('actieveRegels volgt shift', st.actieveRegels({ shift: true }).get('note:0:48')?.action === 'track.1.cue'
+    && !st.actieveRegels({ shift: false }).has('note:0:48'));
+}
+
+// ---- LED-instellingen in een regel overleven laden en exporteren -------------
+{
+  const t = maak();
+  t.load({ version: 3, rules: [{ in: 'note:0:62', action: 'track.1.fx.bypass', mode: 'trigger', led: { invert: true } }] });
+  const t2 = maak(); t2.load(t.toJSON());
+  ok('regel.led blijft bewaard bij laden en exporteren', t2.rules.get('note:0:62').led?.invert === true);
+}
+
 // ---- apc.html: elke knop een uitleg ---------------------------------------
 {
   const { beschrijf } = await import('../src/ui/apc-beschrijf.js');

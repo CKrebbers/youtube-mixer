@@ -142,6 +142,10 @@ export class MidiHub extends Emitter {
     this.rxOther = 0;            // verkeer op de rest — zwijgt de gekozene, dan is dit het antwoord
     this.echoes = 0;             // teruggekaatste berichten die we genegeerd hebben
     this._verstuurd = new Map(); // 'sig=waarde' -> tijdstip, voor echodetectie
+    // Echo's wegfilteren. Per apparaat uit te zetten (device.echoFilter): het
+    // filter kan een echte beweging slikken die toevallig gelijk is aan wat
+    // wij net stuurden. De app zet dit bij het kiezen van het apparaat.
+    this.echoFilter = true;
     this._wachtrij = [];         // uitgaande bytes, in volgorde
     this._tikker = null;
     this.asking = false;         // wachtend op de toestemmingsdialoog van Chrome
@@ -323,7 +327,7 @@ export class MidiHub extends Emitter {
   }
 
   _isEcho(msg) {
-    if (!this._verstuurd.size) return false;
+    if (!this.echoFilter || !this._verstuurd.size) return false;
     const sleutel = `${msg.sig}=${msg.value}`;
     const t = this._verstuurd.get(sleutel);
     if (t === undefined) return false;

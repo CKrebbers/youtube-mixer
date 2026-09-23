@@ -40,15 +40,29 @@ export const gridNote = (col, row) => GRID.first + (GRID.rows - row) * GRID.cols
 export const PALETTE = {
   uit: 0, donkergrijs: 1, grijs: 2, wit: 3,
   rood: 5, roodzacht: 4, rooddonker: 6,
-  oranje: 9, oranjezacht: 8,
-  geel: 13, geelzacht: 12,
-  limoen: 17, groen: 21, groenzacht: 20, groendonker: 22,
+  oranje: 9, oranjezacht: 8, oranjedonker: 10,
+  geel: 13, geelzacht: 12, geeldonker: 14,
+  limoen: 17, limoendonker: 18, groen: 21, groenzacht: 20, groendonker: 22,
   mint: 29, zeegroen: 33,
-  cyaan: 37, cyaanzacht: 36,
-  blauw: 45, blauwzacht: 44, hemelsblauw: 41,
-  paars: 49, violet: 48,
-  magenta: 53, roze: 57,
+  cyaan: 37, cyaanzacht: 36, cyaandonker: 38,
+  blauw: 45, blauwzacht: 44, blauwdonker: 46, hemelsblauw: 41,
+  violet: 49, violetzacht: 48, violetdonker: 50,
+  magenta: 53, magentadonker: 54, roze: 57,
 };
+
+/*
+ * Kleurbetekenis (VRAGEN B4, Clay akkoord): uit = niets te doen, donkergrijs =
+ * leeg maar bruikbaar, <kleur>donker (velocity n+1 na de volle, #59xxxx) =
+ * gevuld/dicht, volle kleur = actief, rood = wissen (alleen met shift). De
+ * "zacht"-varianten (n-1) zijn pastels en even FEL als de volle kleur: die
+ * zijn geen gedimde stand, ook al lijkt de naam dat te zeggen.
+ */
+
+/**
+ * De tweekleurige LED onder de crossfader A/B-knop: 0 = uit, 1 = geel,
+ * 2-127 = oranje (protocol v1.2, "Bi-Color LED"). Geen palet, drie standen.
+ */
+export const BICOLOR = { uit: 0, geel: 1, oranje: 127 };
 
 /** Hex per velocity, voor de paletproef en voor kleurkeuzes in de UI. */
 export const PALETTE_HEX = {
@@ -170,6 +184,15 @@ export const apc40mk2 = {
   grid: GRID,
   gridNote,
   palette: PALETTE,
+  bicolor: BICOLOR,
+  /*
+   * Echofilter in de hub (midi.js): een bericht dat identiek terugkomt binnen
+   * 60 ms na wat wij stuurden, wordt genegeerd. Voor 0x42 NIET bewezen nodig
+   * (het protocol zegt nergens dat de APC ringwaarden terugmeldt), maar ook
+   * niet bewezen overbodig. Blijft aan tot de monitor het uitwijst: zegt
+   * hub.status().echoes na een sessie draaien nog steeds 0, dan mag dit false.
+   */
+  echoFilter: true,
   paletteHex: PALETTE_HEX,
   behaviour: BEHAVIOUR,
   ring: RING,

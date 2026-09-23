@@ -4,7 +4,7 @@ import { trackVanDeck } from '../src/control/actions.js';
 
 const { Mapping } = await import('../src/control/mapping.js');
 const { Feedback } = await import('../src/control/feedback.js');
-const { bindEngine, read, metaOf } = await import('../src/control/actions.js');
+const { bindEngine, read, metaOf, invoke } = await import('../src/control/actions.js');
 const apc = (await import('../src/control/devices/apc40mk2.js')).default;
 
 const fails = [];
@@ -13,7 +13,8 @@ const ok = (naam, cond) => { if (!cond) fails.push(naam); console.log((cond ? ' 
 // Deck-dubbel: genoeg voor bindEngine, geen audio nodig.
 const dubbeldeck = (id) => ({
   id, playing: false, position: 0, cuePoint: 0, duration: 10, rate: 1, buffer: {},
-  hotcues: [null, null, null, null], loop: null,
+  hotcues: [null, null, null, null], loop: null, grid: null, loopBeats: null,
+  fx: { bypass: false, effectId: 'filter', mix: 1, leesPlek: () => 0.5, setBypass(b) { this.bypass = b; } },
   ui: { trim: 0.5, low: 0.5, mid: 0.5, high: 0.5, filter: 0.5, fader: 1 },
   togglePlay() { this.playing = !this.playing; }, cue() {}, hotcue(i) { this.hotcues[i] = 1; },
   setLoop(s) { this.loop = { start: 0, end: s }; }, clearLoop() { this.loop = null; },
@@ -23,6 +24,9 @@ const dubbeldeck = (id) => ({
 const engine = {
   decks: { A: dubbeldeck('A'), B: dubbeldeck('B') },
   focus: 'A', xfader: 0.5, masterLevel: 0.8, xfaderCurve: 'smooth',
+  kant: { A: 'A', B: 'B' }, setKant(id, k) { this.kant[id] = k; },
+  ctx: { outputLatency: 0.05, baseLatency: 0 },
+  syncMaster() { return null; },
   deck(id) { return this.decks[id]; },
   ander(id) { return this.decks[id === 'A' ? 'B' : 'A']; },
   setFocus(id) { this.focus = id; }, setXfader(v) { this.xfader = v; },
@@ -106,7 +110,7 @@ bus.length = 0;
 n = fb.tick(999);
 ok('één verandering geeft precies één bericht', n === 1 && bus.length === 1);
 const hot = bus[0];
-ok('hotcue-pad wordt geel', hot[2] === apc.palette.geel);
+ok('gezette hotcue wordt gedimd geel (B4: gevuld)', hot[2] === apc.palette.geeldonker && hot[2] === 14);
 ok('hotcue-pad zit op noot 32 (pad 1/1, linksboven)', hot[1] === 32);
 ok('pad gebruikt gedragskanaal 0 (vaste kleur)', hot[0] === 0x90);
 
@@ -210,6 +214,147 @@ ok('blackout zet alles op nul', bus.every((b) => b[2] === 0));
   ok('standaard: in het mapje "rack" bedienen ze het rack van de track met focus',
     rack.length === 8 && rack.every((r) => r.action === `track.{focus}.fx.knob.${Number(r.in.split(':')[2]) - 15}`));
   ok('standaard: elke device knob hoort bij een mapje', dk.every((r) => r.laag?.startsWith('device.')));
+}
+
+// ---- ronde 2 (23 sep): drie standen, B4-kleuren, shift, On/Off, op de tel --
+{
+  const standen = {};
+  const lees = (a) => (a in standen ? standen[a] : null);
+  const lgR = new Lagen();
+  const mR = new Mapping({ read: lees, invoke: () => {}, vars: () => ({ focus: 1 }), lagen: () => lgR.actief() });
+  mR.load(standaard);
+  const busR = [];
+  const fbR = new Feedback({ device: apc, mapping: mR, read: lees, meta: () => null, send: (b) => { busR.push([...b]); return true; } });
+  fbR.klaar = true;
+  const led = (sig) => fbR.desired().get(sig)?.[2] ?? null;   // wat er NU zou branden
+  const noot = (n, on) => ({ type: 'note', channel: 0, number: n, sig: `note:0:${n}`, on, value: on ? 127 : 0, norm: on ? 1 : 0 });
+
+  // 1. A|B-knop = crossfaderkant op de tweekleurige LED: A geel, B oranje, thru uit.
+  standen['track.1.xfade.side'] = 0;       // read: A = 0, thru = 0,5, B = 1
+  ok('A|B-knop: kant A = geel (velocity 1)', led('note:0:66') === 1);
+  standen['track.1.xfade.side'] = 1;
+  ok('A|B-knop: kant B = oranje (velocity 127)', led('note:0:66') === 127);
+  standen['track.1.xfade.side'] = 0.5;
+  ok('A|B-knop: thru = uit', led('note:0:66') === 0);
+  standen['track.3.xfade.side'] = 0;
+  ok('A|B-knop van kolom 3 op kanaal 3', fbR.desired().get('note:2:66')?.[0] === 0x92);
+
+  // ● (record arm) doet zonder shift niets, en brandt dus ook niet.
+  standen['track.1.cue'] = 1;
+  ok('● zonder shift: geen regel, geen lampje', led('note:0:48') === null);
+
+  // 4. Shift: LED's tonen de shift-regels, en dat gebeurt meteen bij het event.
+  standen['track.1.hotcue.1'] = 0.5;
+  standen['track.1.hotcue.1.delete'] = 1;
+  standen['track.1.hotcue.2'] = 0;
+  standen['track.1.hotcue.2.delete'] = 0;
+  fbR.tick(999);
+  busR.length = 0;
+  mR.handle(noot(98, true));
+  ok('shift ingedrukt: LED\'s verversen zonder op de volgende tick te wachten', busR.length > 0);
+  ok('shift: ● toont cue', busR.some((b) => b[0] === 0x90 && b[1] === 48 && b[2] === 127));
+  ok('shift: een gezette hotcue wordt ROOD (wissen)', led('note:0:32') === apc.palette.rood);
+  ok('shift: een lege hotcue is niets te wissen = uit', led('note:0:24') === 0);
+  mR.handle(noot(98, false));
+  ok('shift los: terug naar gedimd geel', led('note:0:32') === apc.palette.geeldonker);
+  ok('shift los: ● weer donker', led('note:0:48') === null);
+
+  // 2 + 3. Halve standen en B4-kleuren.
+  ok('hotcue leeg (track geladen) = donkergrijs', led('note:0:24') === 1);
+  standen['track.1.hotcue.2'] = 1;
+  ok('hotcue actief (ingedrukt) = volle kleur', led('note:0:24') === apc.palette.geel);
+  delete standen['track.1.hotcue.2'];
+  ok('hotcue zonder track (read null) = uit', led('note:0:24') === null);
+  lgR.zet('grid', 'sampler');
+  standen['sampler.1'] = 0;
+  ok('sampler-pad leeg = donkergrijs', led('note:0:32') === 1);
+  standen['sampler.1'] = 0.5;
+  ok('sampler-pad gevuld = gedimd violet (50), niet dezelfde als spelend', led('note:0:32') === 50);
+  standen['sampler.1'] = 1;
+  ok('sampler-pad speelt = violet (49)', led('note:0:32') === 49);
+  ok('grid-kiesknop sampler dicht = gedimd violet', (standen['layer.grid.sampler'] = 0, led('note:0:84') === 50));
+  standen['sampler.1.clear'] = 0.5;
+  ok('leegmaken zonder shift: gedimd rood (er valt iets te wissen)', led('note:0:24') === apc.palette.rooddonker);
+  lgR.zet('grid', 'hotcues');
+  ok('gedimde kleuren zijn de donkere (#59xxxx), niet de fel-pastel "zacht"',
+    ['geeldonker', 'cyaandonker', 'blauwdonker', 'violetdonker'].every((k) => {
+      const hex = apc.paletteHex[apc.palette[k]];
+      return hex && Math.max(...[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))) <= 0x64;
+    }));
+
+  // 5. On/Off brandt als het effect AAN staat.
+  standen['track.1.fx.bypass'] = 0;
+  ok('On/Off: effect aan = LED aan', led('note:0:62') === 127);
+  standen['track.1.fx.bypass'] = 1;
+  ok('On/Off: effect uit (bypass) = LED uit', led('note:0:62') === 0);
+
+  // 6. Op de tel: fel/gedimd, gerekend uit de fase van wat je HOORT.
+  lgR.zet('grid', 'loops');
+  standen['track.1.beatloop.1'] = 1;
+  standen['track.1.phase'] = 0.1;
+  ok('actieve loop op de tel = fel cyaan', led('note:0:32') === apc.palette.cyaan);
+  standen['track.1.phase'] = 0.6;
+  ok('actieve loop tussen de tellen = gedimd cyaan', led('note:0:32') === apc.palette.cyaandonker);
+  standen['track.1.phase'] = null;
+  ok('loop op een stilstaande track: gewoon fel, geen knipperen', led('note:0:32') === apc.palette.cyaan);
+  standen['track.1.beatloop.2'] = 0;
+  standen['track.1.phase'] = 0.1;
+  ok('een loop die NIET loopt knippert niet', led('note:0:24') === 1);
+  lgR.zet('grid', 'hotcues');
+
+  standen['track.1.focus'] = 1; standen['track.1.leads'] = 1;
+  standen['track.1.phase'] = 0.6;
+  ok('Track Select van de maatgever met focus: aan tussen de tellen', led('note:0:51') === 127);
+  standen['track.1.phase'] = 0.1;
+  ok('... en even uit op de tel', led('note:0:51') === 0);
+  standen['track.1.focus'] = 0;
+  ok('maatgever zonder focus: even aan op de tel', led('note:0:51') === 127);
+  standen['track.1.leads'] = 0;
+  ok('geen maatgever: geen tel, gewoon de focusstand', led('note:0:51') === 0);
+
+  // Verkeer: een knipperende LED stuurt twee berichten per tel, niet 30.
+  lgR.zet('grid', 'loops');
+  standen['track.1.leads'] = 1; standen['track.1.focus'] = 1;
+  fbR.tick(999);
+  busR.length = 0;
+  for (let t = 0; t < 2000; t += 33) {       // 2 s op 120 bpm = 4 tellen, tik elke 33 ms
+    standen['track.1.phase'] = (t / 500) % 1;
+    fbR.tick();
+  }
+  const perLed = (n) => busR.filter((b) => b[1] === n).length;
+  ok(`knipperen: loop-pad ${perLed(32)} en Track Select ${perLed(51)} berichten in 4 tellen (≤ 8)`,
+    perLed(32) <= 8 && perLed(51) <= 8 && perLed(32) >= 6);
+  lgR.zet('grid', 'hotcues');
+}
+
+// ---- de reads achter de B4-kleuren (echte action-bus) -----------------------
+{
+  const A = engine.decks.A;
+  A.buffer = {}; A.hotcues = [null, null, null, null];
+  ok('hotcue-read: leeg op een geladen track = 0', read('track.1.hotcue.1') === 0);
+  A.hotcues[0] = 2;
+  ok('hotcue-read: gezet = 0,5 (gevuld)', read('track.1.hotcue.1') === 0.5);
+  invoke('track.1.hotcue.1', true);
+  ok('hotcue-read: ingedrukt = 1 (actief)', read('track.1.hotcue.1') === 1);
+  invoke('track.1.hotcue.1', false);
+  ok('hotcue-read: los = weer 0,5', read('track.1.hotcue.1') === 0.5);
+  ok('wis-read: iets te wissen = 1', read('track.1.hotcue.1.delete') === 1 && read('track.1.hotcue.2.delete') === 0);
+  ok('beatloop-read zonder grid = null (niets te doen)', read('track.1.beatloop.4') === null);
+  A.buffer = null;
+  ok('hotcue-read zonder track = null', read('track.1.hotcue.1') === null && read('track.1.hotcue.1.delete') === null);
+  ok('loop.toggle-read zonder track = null', read('track.1.loop.toggle') === null);
+  A.buffer = {};
+  A.fx.effectId = null;
+  ok('On/Off-read zonder effect = null (niets aan of uit te zetten)', read('track.1.fx.bypass') === null);
+  A.fx.effectId = 'filter';
+
+  // Fase van wat je HOORT: positie min uitgangsvertraging × rate.
+  A.grid = { bpm: 120, phase(t) { const b = t * 2; return b - Math.floor(b); } };
+  A.playing = true; A.position = 1.1; A.rate = 1;
+  ok('fase-read rekent met de uitgangsvertraging (50 ms)', Math.abs(read('track.1.phase') - 0.1) < 1e-9);
+  A.playing = false;
+  ok('fase-read op een stilstaande track = null', read('track.1.phase') === null);
+  A.grid = null; A.hotcues[0] = null;
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

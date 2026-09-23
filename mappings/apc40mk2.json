@@ -7,7 +7,7 @@
     {
       "in": "cc:0:48",
       "action": "track.1.filter",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "track knob 1"
     },
     {
@@ -50,7 +50,7 @@
     },
     {
       "in": "note:0:66",
-      "action": "track.1.cue",
+      "action": "track.1.xfade.side",
       "mode": "trigger",
       "label": "crossfader A/B 1"
     },
@@ -69,14 +69,15 @@
     },
     {
       "in": "note:0:48",
-      "action": "track.1.xfade.side",
+      "action": "track.1.cue",
       "mode": "trigger",
-      "label": "record arm 1"
+      "label": "record arm 1 + shift",
+      "shift": true
     },
     {
       "in": "cc:0:49",
       "action": "track.2.filter",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "track knob 2"
     },
     {
@@ -119,7 +120,7 @@
     },
     {
       "in": "note:1:66",
-      "action": "track.2.cue",
+      "action": "track.2.xfade.side",
       "mode": "trigger",
       "label": "crossfader A/B 2"
     },
@@ -138,14 +139,15 @@
     },
     {
       "in": "note:1:48",
-      "action": "track.2.xfade.side",
+      "action": "track.2.cue",
       "mode": "trigger",
-      "label": "record arm 2"
+      "label": "record arm 2 + shift",
+      "shift": true
     },
     {
       "in": "cc:0:50",
       "action": "track.3.filter",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "track knob 3"
     },
     {
@@ -188,7 +190,7 @@
     },
     {
       "in": "note:2:66",
-      "action": "track.3.cue",
+      "action": "track.3.xfade.side",
       "mode": "trigger",
       "label": "crossfader A/B 3"
     },
@@ -207,14 +209,15 @@
     },
     {
       "in": "note:2:48",
-      "action": "track.3.xfade.side",
+      "action": "track.3.cue",
       "mode": "trigger",
-      "label": "record arm 3"
+      "label": "record arm 3 + shift",
+      "shift": true
     },
     {
       "in": "cc:0:51",
       "action": "track.4.filter",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "track knob 4"
     },
     {
@@ -257,7 +260,7 @@
     },
     {
       "in": "note:3:66",
-      "action": "track.4.cue",
+      "action": "track.4.xfade.side",
       "mode": "trigger",
       "label": "crossfader A/B 4"
     },
@@ -276,14 +279,15 @@
     },
     {
       "in": "note:3:48",
-      "action": "track.4.xfade.side",
+      "action": "track.4.cue",
       "mode": "trigger",
-      "label": "record arm 4"
+      "label": "record arm 4 + shift",
+      "shift": true
     },
     {
       "in": "cc:0:52",
       "action": "track.5.filter",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "track knob 5"
     },
     {
@@ -326,7 +330,7 @@
     },
     {
       "in": "note:4:66",
-      "action": "track.5.cue",
+      "action": "track.5.xfade.side",
       "mode": "trigger",
       "label": "crossfader A/B 5"
     },
@@ -345,14 +349,15 @@
     },
     {
       "in": "note:4:48",
-      "action": "track.5.xfade.side",
+      "action": "track.5.cue",
       "mode": "trigger",
-      "label": "record arm 5"
+      "label": "record arm 5 + shift",
+      "shift": true
     },
     {
       "in": "cc:0:53",
       "action": "track.6.filter",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "track knob 6"
     },
     {
@@ -395,7 +400,7 @@
     },
     {
       "in": "note:5:66",
-      "action": "track.6.cue",
+      "action": "track.6.xfade.side",
       "mode": "trigger",
       "label": "crossfader A/B 6"
     },
@@ -414,14 +419,15 @@
     },
     {
       "in": "note:5:48",
-      "action": "track.6.xfade.side",
+      "action": "track.6.cue",
       "mode": "trigger",
-      "label": "record arm 6"
+      "label": "record arm 6 + shift",
+      "shift": true
     },
     {
       "in": "cc:0:54",
       "action": "track.7.filter",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "track knob 7"
     },
     {
@@ -464,7 +470,7 @@
     },
     {
       "in": "note:6:66",
-      "action": "track.7.cue",
+      "action": "track.7.xfade.side",
       "mode": "trigger",
       "label": "crossfader A/B 7"
     },
@@ -483,14 +489,15 @@
     },
     {
       "in": "note:6:48",
-      "action": "track.7.xfade.side",
+      "action": "track.7.cue",
       "mode": "trigger",
-      "label": "record arm 7"
+      "label": "record arm 7 + shift",
+      "shift": true
     },
     {
       "in": "cc:0:55",
       "action": "track.8.filter",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "track knob 8"
     },
     {
@@ -533,7 +540,7 @@
     },
     {
       "in": "note:7:66",
-      "action": "track.8.cue",
+      "action": "track.8.xfade.side",
       "mode": "trigger",
       "label": "crossfader A/B 8"
     },
@@ -552,9 +559,10 @@
     },
     {
       "in": "note:7:48",
-      "action": "track.8.xfade.side",
+      "action": "track.8.cue",
       "mode": "trigger",
-      "label": "record arm 8"
+      "label": "record arm 8 + shift",
+      "shift": true
     },
     {
       "in": "cc:0:14",
@@ -703,112 +711,112 @@
     {
       "in": "cc:0:16",
       "action": "track.{focus}.trim",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 1",
       "laag": "device.strip"
     },
     {
       "in": "cc:0:17",
       "action": "track.{focus}.high",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 2",
       "laag": "device.strip"
     },
     {
       "in": "cc:0:18",
       "action": "track.{focus}.mid",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 3",
       "laag": "device.strip"
     },
     {
       "in": "cc:0:19",
       "action": "track.{focus}.low",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 4",
       "laag": "device.strip"
     },
     {
       "in": "cc:0:20",
       "action": "track.{focus}.send.a",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 5",
       "laag": "device.strip"
     },
     {
       "in": "cc:0:21",
       "action": "track.{focus}.send.b",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 6",
       "laag": "device.strip"
     },
     {
       "in": "cc:0:22",
       "action": "track.{focus}.fx.mix",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 7",
       "laag": "device.strip"
     },
     {
       "in": "cc:0:23",
       "action": "track.{focus}.fx.knob.1",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 8",
       "laag": "device.strip"
     },
     {
       "in": "cc:0:16",
       "action": "track.{focus}.fx.knob.1",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 1",
       "laag": "device.rack"
     },
     {
       "in": "cc:0:17",
       "action": "track.{focus}.fx.knob.2",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 2",
       "laag": "device.rack"
     },
     {
       "in": "cc:0:18",
       "action": "track.{focus}.fx.knob.3",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 3",
       "laag": "device.rack"
     },
     {
       "in": "cc:0:19",
       "action": "track.{focus}.fx.knob.4",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 4",
       "laag": "device.rack"
     },
     {
       "in": "cc:0:20",
       "action": "track.{focus}.fx.knob.5",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 5",
       "laag": "device.rack"
     },
     {
       "in": "cc:0:21",
       "action": "track.{focus}.fx.knob.6",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 6",
       "laag": "device.rack"
     },
     {
       "in": "cc:0:22",
       "action": "track.{focus}.fx.knob.7",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 7",
       "laag": "device.rack"
     },
     {
       "in": "cc:0:23",
       "action": "track.{focus}.fx.knob.8",
-      "mode": "absolute",
+      "mode": "endless",
       "label": "device knob 8",
       "laag": "device.rack"
     },

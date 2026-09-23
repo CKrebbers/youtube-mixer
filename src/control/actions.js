@@ -181,17 +181,23 @@ export function bindEngine(engine) {
     define(`${n}.grid.clear`, 'trigger', (on) => { if (on) { d.grid = null; tap.reset(); d.emit('change', d); } },
       { label: `Track ${nr} grid wissen`, read: () => (d.grid ? 1 : 0) });
 
+    // Reads voor de LED's (VRAGEN B4): null = niets te doen (lege track, geen
+    // grid), 0 = leeg maar bruikbaar, 0,5 = gevuld, 1 = actief.
     for (const beats of [0.25, 0.5, 1, 2, 4, 8, 16]) {
       define(`${n}.beatloop.${beats}`, 'trigger', (on) => { if (on) d.setBeatLoop(beats); },
         { label: `Track ${nr} loop ${beats} ${beats === 1 ? 'tel' : 'tellen'}`,
-          read: () => (d.loopBeats === beats ? 1 : 0) });
+          read: () => (!d.buffer || !d.grid ? null : d.loopBeats === beats ? 1 : 0) });
     }
 
     for (let i = 0; i < 4; i++) {
-      define(`${n}.hotcue.${i + 1}`, 'trigger', (on) => { if (on) d.hotcue(i); },
-        { label: `Track ${nr} hotcue ${i + 1}`, read: bool(() => d.hotcues[i] !== null) });
+      // Actief = ingedrukt: je ziet onder je vinger dat de pad het deed.
+      let ingedrukt = false;
+      define(`${n}.hotcue.${i + 1}`, 'trigger', (on) => { ingedrukt = !!on; if (on) d.hotcue(i); },
+        { label: `Track ${nr} hotcue ${i + 1}`,
+          read: () => (!d.buffer ? null : d.hotcues[i] === null ? 0 : ingedrukt ? 1 : 0.5) });
       define(`${n}.hotcue.${i + 1}.delete`, 'trigger', (on) => { if (on) d.hotcue(i, { del: true }); },
-        { label: `Track ${nr} hotcue ${i + 1} wissen` });
+        { label: `Track ${nr} hotcue ${i + 1} wissen`,
+          read: () => (!d.buffer ? null : d.hotcues[i] !== null ? 1 : 0) });
     }
 
     for (const sec of [0.5, 1, 2, 4, 8]) {
@@ -248,8 +254,10 @@ export function bindEngine(engine) {
     // Dat is de hele opzet waar de racks straks op verder bouwen.
     define(`${n}.fx.mix`, 'value', (v) => d.fx.setMix(v),
       { label: `Track ${nr} FX dry/wet`, read: () => d.fx.mix });
+    // read = bypass (1 = effect UIT); de LED draait dat om (feedback.js).
+    // Zonder effect in de slot valt er niets aan of uit te zetten: null.
     define(`${n}.fx.bypass`, 'trigger', (on) => { if (on) d.fx.setBypass(!d.fx.bypass); },
-      { label: `Track ${nr} FX uit`, read: () => (d.fx.bypass ? 1 : 0) });
+      { label: `Track ${nr} FX uit`, read: () => (!d.fx.effectId ? null : d.fx.bypass ? 1 : 0) });
     // Acht plekken: precies de acht device knobs van één bank.
     for (let k = 1; k <= 8; k++) {
       define(`${n}.fx.knob.${k}`, 'value', (v) => d.fx.setPlek(k, v),
@@ -277,7 +285,7 @@ export function bindEngine(engine) {
       if (d.loop) d.clearLoop();
       else if (d.grid) d.setBeatLoop(8);
       else d.setLoop(4);
-    }, { label: `Track ${nr} loop aan/uit`, read: bool(() => d.loop) });
+    }, { label: `Track ${nr} loop aan/uit`, read: () => (!d.buffer ? null : d.loop ? 1 : 0) });
 
     // Alleen om uit te lezen, voor LED's: geeft deze track de maat, en valt nu
     // de tel? Afgeleid van positie en grid (regel 3), geen eigen teller.
@@ -285,6 +293,16 @@ export function bindEngine(engine) {
       read: bool(() => engine.syncMaster()?.id === id) });
     define(`${n}.beat`, 'trigger', () => {}, { label: `Track ${nr} op de tel (alleen lezen)`,
       read: bool(() => d.playing && d.grid && d.grid.phase(d.position) < 0.15) });
+    // Fase binnen de tel van wat je HOORT: positie min de uitgangsvertraging
+    // (× rate, want de positie loopt in tracktijd), zoals de video-puls. Voor
+    // LED's die op de tel knipperen. null als hij niet speelt of geen grid heeft.
+    define(`${n}.phase`, 'trigger', () => {}, { label: `Track ${nr} fase binnen de tel (alleen lezen)`,
+      read: () => {
+        if (!d.playing || !d.grid) return null;
+        const c = engine.ctx;
+        const vertraging = (c?.outputLatency || 0) + (c?.baseLatency || 0);
+        return d.grid.phase(d.position - vertraging * (d.rate || 1));
+      } });
 
     // Crossfader-toewijzing: A -> B -> thru -> A, zoals de knop op de APC.
     // read() geeft 0 / 0.5 / 1 zodat een LED er drie standen van kan maken.
@@ -335,7 +353,10 @@ export function bindEngine(engine) {
         if (!on) return;
         if (sampler.pads[i]) sampler.wis(i);
         else sampler.vergeet(i);
-      }, { label: `Sampler pad ${i + 1} leegmaken (leeg + bewaard: vergeten)` });
+      }, { label: `Sampler pad ${i + 1} leegmaken (leeg + bewaard: vergeten)`,
+           // 0,5: er valt iets te wissen (gedimd rood); dit staat niet achter
+           // shift, dus vol rood zou de hele tijd schreeuwen.
+           read: () => (sampler.pads[i] || sampler.herinneringen?.[i] ? 0.5 : 0) });
     }
     define('sampler.length', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },
       { label: 'Sampler: hoeveel tellen', read: () => [1, 2, 4, 8].indexOf(sampler.tellen) / 3 });

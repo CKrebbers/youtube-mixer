@@ -79,6 +79,16 @@ hub2.send([0xb0, 0x13, 50]); await leeg();
 binnen([0xb0, 0x13, 77]);        // andere waarde: geen echo
 ok('een andere waarde is geen echo', gehoord.at(-1) === 'cc:0:19=77');
 
+// Per apparaat uit te zetten: een controller die niets terugkaatst verliest
+// anders af en toe een echte knopbeweging die toevallig gelijk is aan wat wij
+// net stuurden (bijv. een ring op 64 en jij draait door 64).
+hub2.echoFilter = false;
+hub2.send([0xb0, 0x13, 88]); await leeg();
+binnen([0xb0, 0x13, 88]);
+ok('echofilter uit: een gelijk bericht komt gewoon door', gehoord.at(-1) === 'cc:0:19=88');
+hub2.echoFilter = true;
+ok('echofilter staat standaard aan', new MidiHub().echoFilter === true);
+
 // ---- uitgaande wachtrij ---------------------------------------------------
 // Een burst van honderd berichten in één lus is voor geen enkele MIDI-stack
 // prettig; Comet legt er zelfs zijn MIDI-service mee om. Alles wat naar buiten

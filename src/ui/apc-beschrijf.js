@@ -26,7 +26,7 @@ export function beschrijf(action) {
     if (rest === 'sync') return r('sync', 'sync naar de track die de maat geeft');
     if (rest === 'tap') return r('tap', 'tap tempo');
     if (rest === 'focus') return { kort: `focus ${k}`, lang: `focus op ${w} (device knobs en focus-knoppen volgen)` };
-    if (rest === 'xfade.side') return r('A/B/thru', 'crossfaderkant A → B → thru');
+    if (rest === 'xfade.side') return r('A/B/thru', 'crossfaderkant A → B → thru (lampje: geel = A, oranje = B, uit = thru)');
     if (rest === 'loop.toggle') return r('loop', 'loop aan/uit (8 tellen met grid, anders 4 s)');
     if (rest === 'loop.exit') return r('loop weg', 'loop weg');
     if (rest === 'loop.halve') return r('loop ½', 'loop halveren');
@@ -34,7 +34,7 @@ export function beschrijf(action) {
     if (rest === 'send.a') return r('echo', 'echo-send (naar de gedeelde echo)');
     if (rest === 'send.b') return r('galm', 'galm-send (naar de gedeelde galm)');
     if (rest === 'fx.mix') return r('fx mix', 'effect dry/wet');
-    if (rest === 'fx.bypass') return r('fx uit', 'effect aan/uit');
+    if (rest === 'fx.bypass') return r('fx aan/uit', 'effect aan/uit (lampje brandt = effect aan)');
     if (rest === 'rack.next') return r('rack ▶', 'volgend rack');
     if (rest === 'rack.prev') return r('◀ rack', 'vorig rack');
     if (rest === 'bend.back') return r('trager', 'even trager zolang je drukt (bend −4%)');
@@ -72,7 +72,7 @@ export function beschrijf(action) {
     'record.start': ['rec', 'opname starten'], 'record.stop': ['rec stop', 'opname stoppen'],
     'record.mode': ['rec soort', 'opname: audio of audio + video'],
     'sampler.length': ['tellen', 'sampler: hoeveel tellen een lege pad pakt (1/2/4/8)'],
-    'sampler.volume': ['smp vol', 'sampler-volume'],
+    'sampler.volume': ['sampler', 'sampler-volume'],
     'focus.next': ['focus ▶', 'focus naar de volgende track'], 'focus.prev': ['◀ focus', 'focus naar de vorige track'],
     'video.mode': ['mengvorm', 'video: volgende mengvorm'], 'video.pulse': ['puls', 'video: puls op de tel'],
     'video.pulse.target': ['puls-doel', 'video: wat er op de tel pulst'],

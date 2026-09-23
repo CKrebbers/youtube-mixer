@@ -12,7 +12,7 @@ import { esc } from './dom.js';
 
 const MODUSNAAM = {
   trigger: 'knop', absolute: 'absoluut',
-  'relative-2c': 'relatief 2c', 'relative-bin': 'relatief bin',
+  'relative-2c': 'relatief 2c', 'relative-bin': 'relatief bin', endless: 'eindeloos',
 };
 
 export class MappingPanel {
