@@ -1,4 +1,5 @@
 import { fmtTime } from '../lib/emitter.js';
+import { esc } from './dom.js';
 
 /**
  * Het library-paneel: URL erin, track eruit, één klik op een deck.
@@ -8,14 +9,15 @@ import { fmtTime } from '../lib/emitter.js';
  * die ook de golfvorm-analyse bijhoudt.
  */
 
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class LibraryPanel {
-  constructor({ root, onLaad, decks = ['A', 'B'], label = (d) => d }) {
+  constructor({ root, onLaad, decks = ['A', 'B'], label = (d) => d, stand = () => 'leeg' }) {
     this.root = root;
     this.onLaad = onLaad;
     this.decks = decks;
     this.label = label;
+    this.stand = stand;          // (deck) => 'leeg' | 'geladen' | 'speelt'
+    this.zeker = null;           // { soort, sleutel, tot } voor 'nog eens klikken'
     this.tracks = [];
     this.opdrachten = [];
     this.bezig = new Set();     // tracks die nu geladen worden
@@ -37,13 +39,40 @@ export class LibraryPanel {
 
     this.el.rijen.addEventListener('click', (e) => {
       const knop = e.target.closest('button[data-deck]');
-      if (knop) return this.laad(knop.dataset.id, knop.dataset.deck);
+      if (knop) {
+        // Over een track die SPEELT laden valt de zaal stil. Dan eerst vragen:
+        // nog een keer klikken binnen 3 s.
+        if (this.stand(knop.dataset.deck) === 'speelt' && !this._bevestigd('laad', `${knop.dataset.id}:${knop.dataset.deck}`)) {
+          this.melding = { tekst: `track ${this.label(knop.dataset.deck)} speelt — klik nog eens om er toch overheen te laden`, goed: false };
+          return this.tekenStatus();
+        }
+        return this.laad(knop.dataset.id, knop.dataset.deck);
+      }
       const weg = e.target.closest('button[data-weg]');
-      if (weg) return this.verwijder(weg.dataset.weg);
+      if (weg) {
+        // Weghalen gooit ook het grid en de racks van dit nummer weg.
+        if (!this._bevestigd('weg', weg.dataset.weg)) {
+          const t = this.tracks.find((x) => x.id === weg.dataset.weg);
+          this.melding = { tekst: `"${t?.titel ?? weg.dataset.weg}" weghalen, met grid en racks? Klik nog eens op ×`, goed: false };
+          return this.tekenStatus();
+        }
+        return this.verwijder(weg.dataset.weg);
+      }
     });
 
     this.ververs();
     this.pollen();
+  }
+
+  /** Tweede klik op hetzelfde binnen 3 s? */
+  _bevestigd(soort, sleutel) {
+    const nu = Date.now();
+    if (this.zeker && this.zeker.soort === soort && this.zeker.sleutel === sleutel && nu < this.zeker.tot) {
+      this.zeker = null;
+      return true;
+    }
+    this.zeker = { soort, sleutel, tot: nu + 3000 };
+    return false;
   }
 
   get open() { return !this.root.classList.contains('hidden'); }
@@ -75,7 +104,7 @@ export class LibraryPanel {
     this.tekenRijen();
     try {
       const r = await this.onLaad(deck, track);
-      this.melding = { tekst: `${track.titel} staat op deck ${deck}`
+      this.melding = { tekst: `${track.titel} staat op track ${this.label(deck)}`
         + (r?.hint ? ` — ${r.hint}` : ''), goed: true };
       fetch(`/api/library/${id}/geladen`, { method: 'POST' }).catch(() => {});
     } catch (err) {
@@ -161,7 +190,7 @@ export class LibraryPanel {
         <span class="lib-lufs">${esc(lufs)}</span>
         <span class="lib-racks">${t.racks ? `${t.racks} rack${t.racks === 1 ? '' : 's'}` : '—'}</span>
         <span class="lib-knoppen">
-          ${this.decks.map((d) => `<button class="btn sm lib-trk" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)}"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}
+          ${this.decks.map((d) => `<button class="btn sm lib-trk ${this.stand(d)}" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)} (${this.stand(d)})"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}
           <button class="btn sm lib-weg" data-weg="${esc(t.id)}" title="uit de lijst halen">×</button>
         </span>
       </div>`;

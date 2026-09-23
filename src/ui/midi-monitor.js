@@ -1,4 +1,5 @@
 import { describe, hex, NOISY } from '../control/midi.js';
+import { esc } from './dom.js';
 
 const MAX_ROWS = 400;      // ringbuffer: ouder dan dit interesseert niemand live
 const VISIBLE = 160;       // meer regels tekenen dan dit kost alleen maar tijd
@@ -22,7 +23,6 @@ function annotation(m) {
   return { cls: '', tekst: '' };
 }
 
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 /**
  * Live zicht op de MIDI-bus: wat komt binnen, wat gaat eruit, hoe snel.

@@ -441,3 +441,47 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .opname-soort{background:var(--panel2);color:var(--dim);border:1px solid var(--line);border-radius:5px;
   padding:4px 4px;font:inherit;font-size:11px}
 .opname-soort:disabled{opacity:.5}
+
+/* ---- sends ---- */
+.sends{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:8px;margin-top:6px}
+.send-bus{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.send-kop{font-size:9px;letter-spacing:.12em;color:var(--dim);width:56px}
+.trk-sends{display:flex;justify-content:space-around}
+
+/* ---- sampler ---- */
+.sampler-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px}
+.sampler-kop{font-size:10px;letter-spacing:.16em;font-weight:700;color:var(--dim)}
+.sampler-lengte{min-width:68px}
+.pads{flex:1;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+.pad{display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border:1px dashed var(--line);
+  border-radius:5px;color:var(--dim);font-size:11px;background:none;min-width:0}
+.pad b{font-family:ui-monospace,monospace;color:var(--warn)}
+.pad span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pad.gevuld{border-style:solid;background:var(--panel2);color:var(--text)}
+.pad.speelt{background:var(--warn);border-color:var(--warn);color:#1a1200}
+.pad.speelt b{color:#1a1200}
+.pad.bezig{animation:knipper .4s steps(2) infinite}
+@keyframes knipper{50%{opacity:.4}}
+
+/* ---- meldingen ---- */
+.meldingen{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:60;
+  display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+.melding{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--a);
+  color:var(--text);padding:7px 12px;border-radius:5px;font-size:12px;max-width:560px;
+  box-shadow:0 6px 18px rgba(0,0,0,.45);transition:opacity .4s}
+.melding.fout{border-left-color:var(--red)}
+.melding.weg{opacity:0}
+
+.fx-naam{font-size:11px;color:var(--b);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+.fx-volgend{min-width:22px}
+
+/* library: laat zien wat er op elke track staat */
+.lib-trk.geladen{border-color:var(--dim);color:var(--text)}
+.lib-trk.speelt{border-color:var(--warn);color:var(--warn)}
+
+/* welke track geeft de maat, en welke heeft de focus */
+.trk.focused{border-color:var(--a);box-shadow:0 0 0 1px var(--a) inset}
+.trk{position:relative}
+.trk.maat::after{content:"MAAT";position:absolute;top:5px;right:6px;font:700 8px/1 ui-monospace,monospace;
+  letter-spacing:.1em;color:#03100e;background:var(--warn);padding:2px 4px;border-radius:3px}
+.deck.focused{border-color:var(--a)}

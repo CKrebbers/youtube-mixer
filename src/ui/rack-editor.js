@@ -1,4 +1,5 @@
 import { CURVES, neemOp } from '../engine/rack.js';
+import { esc, pct } from './dom.js';
 import { toonWaarde } from '../engine/fx.js';
 import { Knob } from './controls.js';
 
@@ -34,8 +35,6 @@ import { Knob } from './controls.js';
  * bijhoudt welk rack bij welk nummer hoort.
  */
 
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const pct = (v) => `${Math.round((typeof v === 'number' ? v : 0) * 100)}%`;
 const KNOPPEN = [1, 2, 3, 4, 5, 6, 7, 8];
 
 // Glijtijd op een schuif: het eerste stukje is "direct", daarna 1 s tot 5 min
@@ -120,9 +119,10 @@ export class RackEditor {
 
   openVoor(deckId) {
     const zelfde = deckId === this.deckId;
-    // Een ander rack of een andere track: wat je aan het instellen was,
-    // hoort daar niet meer bij. De stand terugzetten zou in het nieuwe rack
-    // iets anders betekenen, dus die laten we staan.
+    // Naar een andere track: de knop die op de oude op 0 of 1 stond, eerst
+    // terug. Anders bleef die track op DICHT of OPEN hangen. Zelfde track met
+    // een ander rack: dat rack begint toch op zijn eigen standen.
+    if (this.modus && !zelfde && this.deckId) this._uitModus({ tekenen: false });
     this.modus = null;
     this.deckId = deckId;
     this.kopie = JSON.parse(JSON.stringify(this.fx.naarJSON()));
@@ -172,12 +172,28 @@ export class RackEditor {
     const plek = this.gekozen;
     if (!this._macro(plek)) return;
     if (this.modus?.plek === plek && this.modus.kant === kant) { this._uitModus(); return; }
+    // Hoort de zaal deze track, dan springt de knop hoorbaar naar 0 of 1.
+    // Niet ongevraagd: eerst zeggen, bij een tweede klik doen.
+    if (!this.modus && this._hoorbaar() && this._zeker !== `${plek}:${kant}`) {
+      this._zeker = `${plek}:${kant}`;
+      setTimeout(() => { if (this._zeker === `${plek}:${kant}`) this._zeker = null; }, 3000);
+      this.melding = { tekst: `deze track is hoorbaar: ${kant.toUpperCase()} zet knop ${plek} live op ${kant === 'dicht' ? '0' : 'vol'} — klik nog eens om door te gaan`, goed: false };
+      this._tekenStatus();
+      return;
+    }
+    this._zeker = null;
     const vorige = this.modus?.plek === plek ? this.modus.vorige : this.fx.leesPlek(plek);
     if (this.modus && this.modus.plek !== plek) this._uitModus({ tekenen: false });
     this.modus = { plek, kant, vorige };
     this.fx.setPlek(plek, kant === 'dicht' ? 0 : 1, { direct: true });
     this._tekenKeten();
     this._tekenMacros();
+  }
+
+  /** Speelt deze track en staat hij open (fader en crossfader)? */
+  _hoorbaar() {
+    const d = this.engine.deck(this.deckId);
+    return d.playing && d.ui.fader > 0.01 && this.engine.xfadeGain(this.deckId) > 0.01;
   }
 
   /** Stoppen met instellen; de knop terug naar waar hij stond. */

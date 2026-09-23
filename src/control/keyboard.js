@@ -36,6 +36,9 @@ const SHIFT_ALIAS = (id) => id.includes('.hotcue.') ? `${id}.delete` : id;
  * @param opts.venster  (v: 'L'|'R') -> deck-id dat daar nu staat. Zonder:
  *                      links track 1, rechts track 2.
  */
+/** Is dit een veld waarin getypt wordt? Dan zijn letters letters, geen sneltoetsen. */
+export const isTypen = (el) => !!el?.matches?.('input[type=text], input[type=search], input[type=url], input:not([type]), textarea, [contenteditable]');
+
 export function attachKeyboard(engine, opts = {}) {
   // Per toets de action die bij het INDRUKKEN gold: loslaten moet daar
   // terechtkomen, ook als het venster intussen een andere track toont.
@@ -43,10 +46,14 @@ export function attachKeyboard(engine, opts = {}) {
   const venster = opts.venster || ((v) => (v === 'L' ? 'A' : 'B'));
   const vul = (id) => id.replace(/\{([LR])\}/, (m, v) => trackVanDeck(venster(v)));
 
-  const xfadeStep = (dir) => engine.setXfader(engine.xfader + dir * 0.05);
+  // Via de bus, net als elke andere bediening: dan volgen scherm en LED's vanzelf.
+  const xfadeStep = (dir) => invoke('mixer.xfader', Math.max(0, Math.min(1, engine.xfader + dir * 0.05)));
 
   window.addEventListener('keydown', (e) => {
-    if (e.target.matches('input, textarea, select')) return;
+    // Alleen tijdens TYPEN geen sneltoetsen. Een fader of keuzemenu dat focus
+    // kreeg door een klik, zette eerder álle toetsen stil tot je ergens
+    // anders klikte.
+    if (isTypen(e.target)) return;
 
     if (e.code === 'BracketLeft')  { xfadeStep(-1); e.preventDefault(); return; }
     if (e.code === 'BracketRight') { xfadeStep(1);  e.preventDefault(); return; }

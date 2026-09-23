@@ -53,15 +53,6 @@ export class Knob {
   }
 }
 
-export class Fader {
-  constructor(el) {
-    this.el = el;
-    this.action = el.dataset.action;
-    this.input = el;
-    el.addEventListener('input', () => invoke(this.action, parseFloat(el.value)));
-  }
-  set(v) { this.el.value = v; }
-}
 
 export function bindButtons(root) {
   root.querySelectorAll('[data-action][data-kind="button"]').forEach((btn) => {

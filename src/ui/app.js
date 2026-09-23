@@ -1,7 +1,8 @@
 import { Engine, DECK_IDS } from '../engine/engine.js';
+import { esc, mmss, mb } from './dom.js';
 import { EFFECTEN } from '../engine/fx.js';
-import { bindEngine, bindVideo, invoke, read as readAction, metaOf, trackVanDeck } from '../control/actions.js';
-import { attachKeyboard } from '../control/keyboard.js';
+import { bindEngine, bindVideo, bindApp, bijFout, invoke, read as readAction, metaOf, trackVanDeck } from '../control/actions.js';
+import { attachKeyboard, isTypen } from '../control/keyboard.js';
 import { MidiHub } from '../control/midi.js';
 import { Mapping } from '../control/mapping.js';
 import { Feedback } from '../control/feedback.js';
@@ -51,7 +52,7 @@ videoPaneel.querySelector('.vid-los').addEventListener('click', () => {
   losVenster = window.open('video.html', 'varve-video', 'width=960,height=540');
 });
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyV' && !e.target.matches('input, textarea, select')) toggleVideo();
+  if (e.code === 'KeyV' && !isTypen(e.target)) toggleVideo();
 });
 if (videoMixer.fout) console.warn('[video]', videoMixer.fout);
 
@@ -59,14 +60,16 @@ if (videoMixer.fout) console.warn('[video]', videoMixer.fout);
 // Wat uit de master komt, naar opnames/ op deze schijf. De lengte komt van
 // de audioklok (de worklet telt frames), niet van een timer.
 const opnemer = new Opnemer({ engine });
+opnemer.onFout = (f) => meld(`opname: ${f}`, 'fout', 8000);
 window.opnemer = opnemer;
+// De tab sluiten of herladen tijdens een opname: eerst vragen. De audio staat
+// grotendeels veilig op schijf, maar de laatste seconde en de video niet.
+window.addEventListener('beforeunload', (e) => { if (opnemer.bezig) { e.preventDefault(); e.returnValue = ''; } });
 const opnameKnop = document.getElementById('opname-btn');
 const opnameSoort = document.getElementById('opname-soort');
 // Je laatste keuze onthouden: gemak per browser, geen gegevens die ertoe doen.
 try { opnameSoort.value = localStorage.getItem('varve.opnameSoort') || 'audio'; } catch (_) {}
 opnameSoort.addEventListener('change', () => { try { localStorage.setItem('varve.opnameSoort', opnameSoort.value); } catch (_) {} });
-const mb = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1).replace('.', ',')} GB` : `${Math.round(b / 1e6)} MB`);
-const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 opnameKnop.addEventListener('click', async () => {
   opnameKnop.classList.remove('gelukt', 'mislukt');
   if (!opnemer.bezig) {
@@ -75,6 +78,14 @@ opnameKnop.addEventListener('click', async () => {
     if (!r.ok) { opnameKnop.textContent = 'opnemen mislukt'; opnameKnop.classList.add('mislukt'); opnameKnop.title = r.fout; }
     return;
   }
+  // Stoppen vraagt een tweede klik binnen 3 s: één misklik mag een set niet afbreken.
+  if (!opnameKnop.dataset.zeker) {
+    opnameKnop.dataset.zeker = '1';
+    opnameKnop.textContent = 'nog eens = stoppen';
+    setTimeout(() => { delete opnameKnop.dataset.zeker; }, 3000);
+    return;
+  }
+  delete opnameKnop.dataset.zeker;
   opnameKnop.textContent = 'afronden…';
   const r = await opnemer.stop();
   opnameKnop.classList.add(r.ok ? 'gelukt' : 'mislukt');
@@ -112,6 +123,10 @@ tracksEl.innerHTML = DECK_IDS.map((id) => {
     </div>
     <div class="meter trk-meter"><i></i></div>
     <input type="range" class="hfader trk-fader" min="0" max="1" step="0.001" value="1" data-action="track.${nr}.fader" title="fader">
+    <div class="trk-sends">
+      <div class="knob sm" data-action="track.${nr}.send.a" data-label="ECHO" data-value="0" data-default="0" title="send naar de gedeelde echo"></div>
+      <div class="knob sm" data-action="track.${nr}.send.b" data-label="GALM" data-value="0" data-default="0" title="send naar de gedeelde galm"></div>
+    </div>
     <div class="trk-knoppen">
       <button data-kind="button" data-action="track.${nr}.xfade.kant" class="btn sm trk-kant" title="crossfader: A, B of thru">thru</button>
       <button class="btn sm trk-toon" data-toon="L" title="toon in het linkervenster">L</button>
@@ -127,6 +142,13 @@ const faders = [...document.querySelectorAll('input[type=range][data-action]')];
 faders.forEach((el) => {
   el.addEventListener('input', () => invoke(el.dataset.action, parseFloat(el.value)));
 });
+// Na loslaten de focus teruggeven: een fader met focus volgt MIDI niet meer
+// (volgEngine slaat hem over) en vangt de pijltjestoetsen.
+document.addEventListener('pointerup', (e) => {
+  const el = e.target.closest?.('input[type=range]');
+  if (el) setTimeout(() => el.blur(), 0);
+});
+document.addEventListener('change', (e) => { if (e.target.matches?.('select')) e.target.blur(); });
 
 tracksEl.addEventListener('click', (e) => {
   const knop = e.target.closest('.trk-toon');
@@ -198,16 +220,23 @@ for (const v of VENSTERS) {
     const buf = renderDemoTrack(engine.ctx, { seed: DECK_IDS.indexOf(id), bars: 16 });
     engine.deck(id).load(buf, `demo ${trackVanDeck(id)} — 124 bpm`);
     videoMixer.zetBron(id, null);
+    losVanLibrary(id);
     analysis[id] = computePeaks(buf);
   });
 }
 
 async function loadFile(id, file) {
   await engine.resume();
-  const arr = await file.arrayBuffer();
-  const buf = await engine.ctx.decodeAudioData(arr);
+  let buf;
+  try {
+    buf = await engine.ctx.decodeAudioData(await file.arrayBuffer());
+  } catch (err) {
+    meld(`"${file.name}" is geen audio die de browser kan lezen`, 'fout');
+    return;
+  }
   engine.deck(id).load(buf, file.name.replace(/\.[^.]+$/, ''));
   videoMixer.zetBron(id, null);
+  losVanLibrary(id);
   analysis[id] = computePeaks(buf);
   console.log(`[deck ${id}] ${file.name} — ${buf.duration.toFixed(1)}s — RMS ${rmsDb(buf).toFixed(1)} dBFS`);
 }
@@ -218,6 +247,22 @@ async function loadFile(id, file) {
 
 /** Welk nummer staat op welk deck — nodig om het grid bij de juiste link te bewaren. */
 const deckTrack = perDeck(() => null);
+const laadTeller = perDeck(() => 0);
+const nieuweLaad = (id) => ++laadTeller[id];
+const nogDeLaatste = (id, nr) => laadTeller[id] === nr;
+
+/**
+ * Een los bestand of de demotrack hoort bij GEEN library-nummer. Zonder dit
+ * bleef de track aan het vorige nummer hangen, en werd een getikt grid bij
+ * dat nummer bewaard.
+ */
+function losVanLibrary(id) {
+  nieuweLaad(id);
+  deckTrack[id] = null;
+  gridBewaard[id] = null;
+  rackCache[id] = [];
+  vulRackKiezer(id);
+}
 const gridBewaard = perDeck(() => null);
 
 /**
@@ -275,6 +320,9 @@ engine.on('tap', async ({ deck, bpm, taps }) => {
     });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     const r = await res.json();
+    // Intussen een ander nummer op deze track? Dan hoort dit grid er niet bij.
+    // Gooien in plaats van return: dan loopt het opruimen hieronder gewoon.
+    if (deckTrack[deck] !== trackId) throw new Error('intussen een ander nummer op deze track');
     const d = engine.deck(deck);
     d.setGrid(new Beatgrid({ bpm: r.bpm, firstBeat: r.firstBeat }));
     console.log(`[tap] deck ${deck}: ${bpm.toFixed(1)} getikt -> ${r.bpm.toFixed(2)} bpm`
@@ -293,6 +341,7 @@ const library = new LibraryPanel({
   root: libPaneel,
   decks: DECK_IDS,
   label: (id) => String(trackVanDeck(id)),
+  stand: (id) => { const d = engine.deck(id); return !d.buffer ? 'leeg' : d.playing ? 'speelt' : 'geladen'; },
   onLaad: async (deckId, track) => {
     // NIET wachten op engine.resume(): zonder gebruikersgebaar lost die belofte
     // nooit in en blijft het laden eeuwig hangen. Laden kan prima op een
@@ -301,11 +350,16 @@ const library = new LibraryPanel({
     // Streamen: alleen de kop en de eerste pagina's, niet het hele bestand.
     // Een uur kost zo een paar MB in plaats van 1,4 GB.
     const url = '/' + track.audio.replace(/^\//, '');
-    await engine.deck(deckId).laadStream(url, track.titel);
+    // Klik je snel een tweede nummer op dezelfde track, dan wint dat. Deze
+    // laad mag daarna niets meer zetten: geen titel, golfvorm, grid of video
+    // van het verkeerde nummer.
+    const mijnLaad = nieuweLaad(deckId);
+    if (!(await engine.deck(deckId).laadStream(url, track.titel))) return null;
     const duur = engine.deck(deckId).duration;
     // Golfvorm uit de cache. Zelf uitrekenen kan niet meer: er is geen buffer.
     const uitCache = track.peaks ? await laadPeaks('/' + track.peaks.bestand.replace(/^\//, ''),
       { samplesPerBucket: track.peaks.perBucket, duration: track.duur || duur }) : null;
+    if (!nogDeLaatste(deckId, mijnLaad)) return null;
     analysis[deckId] = uitCache;
     videoMixer.zetBron(deckId, track.video ? '/' + track.video.replace(/^\//, '') : null);
     deckTrack[deckId] = track.id;
@@ -332,7 +386,8 @@ const toggleLib = () => {
 document.getElementById('lib-btn').addEventListener('click', toggleLib);
 libPaneel.querySelector('.lib-close').addEventListener('click', toggleLib);
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyL' && !e.target.matches('input, textarea, select')) toggleLib();
+  // B van bibliotheek. L was ook hotcue 3 rechts: dan deed één toets twee dingen.
+  if (e.code === 'KeyB' && !isTypen(e.target)) toggleLib();
 });
 
 // ---- effect-racks per link ------------------------------------------------
@@ -341,7 +396,6 @@ window.addEventListener('keydown', (e) => {
 
 const rackCache = perDeck(() => []);
 
-const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /** Rechtstreeks uit de DOM: `els` wordt pas verderop aangemaakt. Null als de track niet in beeld is. */
 const fxEl = (deckId, klasse) => {
@@ -360,14 +414,22 @@ async function haalRacks(deckId) {
   if (trackId) {
     try {
       const r = await fetch(`/api/library/${trackId}/racks`);
+      if (!r.ok) throw new Error(`${r.status}`);
       const j = await r.json();
       rackCache[deckId] = j.racks || [];
-    } catch (_) {}
+    } catch (err) { meld(`racks van dit nummer niet geladen (${err.message})`, 'fout'); }
   }
+  // Intussen weer iets anders geladen? Dan hoort dit rack er niet bij.
+  if (deckTrack[deckId] !== trackId) return;
   const actief = rackCache[deckId].find((x) => x.actief);
+  const fx = engine.deck(deckId).fx;
   if (actief) {
-    const fouten = engine.deck(deckId).fx.zetRack(actief.data, { herkomst: actief.id }).fouten;
+    const fouten = fx.zetRack(actief.data, { herkomst: actief.id }).fouten;
     fouten.forEach((f) => console.warn(`[rack ${deckId}]`, f));
+  } else if (typeof fx.herkomst === 'number') {
+    // Een nummer zonder eigen rack mag het rack van het VORIGE nummer niet
+    // houden: dan schreef "bewaar" daar overheen. Terug naar het standaardeffect.
+    fx.standaard();
   }
   vulRackKiezer(deckId);
 }
@@ -441,6 +503,29 @@ async function bewaarRack(deckId, { naam, alsNieuw = false } = {}) {
   return { rack, nieuw: id === null };
 }
 
+/**
+ * Een melding onderaan het scherm, een paar seconden. Voor wat misgaat en
+ * niet bij één knop hoort: een mislukte sync, een stream die hapert, een
+ * bestand dat niet te lezen is. Tot nu toe stond dat alleen in de console,
+ * en die leest niemand tijdens een set.
+ */
+const meldingen = document.getElementById('meldingen');
+function meld(tekst, soort = 'info', duur = 5000) {
+  const el = document.createElement('div');
+  el.className = `melding ${soort}`;
+  el.textContent = tekst;
+  meldingen.append(el);
+  while (meldingen.children.length > 4) meldingen.firstElementChild.remove();
+  setTimeout(() => { el.classList.add('weg'); setTimeout(() => el.remove(), 400); }, duur);
+  if (soort === 'fout') console.warn('[melding]', tekst);
+}
+window.meld = meld;
+// Meldingen uit de engine en de bus: sync die niet kan, een pad die niet
+// vult, een stream die hapert, een action die faalt.
+engine.on('melding', ({ tekst, soort }) => meld(tekst, soort));
+for (const id of DECK_IDS) engine.deck(id).on('fout', (tekst) => meld(`track ${trackVanDeck(id)}: ${tekst}`, 'fout'));
+bijFout((id, err) => meld(`${id} faalde: ${err.message}`, 'fout'));
+
 /** Kort op de knop zelf laten zien wat er gebeurde; de console leest niemand. */
 function meldOpKnop(knop, tekst, goed) {
   clearTimeout(knop._melding);
@@ -466,9 +551,7 @@ for (const v of VENSTERS) {
     }
     const rack = rackCache[id].find((x) => String(x.id) === kiezer.value);
     if (!rack) return;
-    rackCache[id].forEach((x) => { x.actief = x === rack; });
-    engine.deck(id).fx.zetRack(rack.data, { herkomst: rack.id }).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
-    fetch(`/api/library/${deckTrack[id]}/racks/${rack.id}`, { method: 'POST' }).catch(() => {});
+    zetRackVan(id, rack);
     kiezer.blur();
   });
 
@@ -477,15 +560,18 @@ for (const v of VENSTERS) {
     const id = venster[v];
     const fx = engine.deck(id).fx;
     if (!deckTrack[id]) { meldOpKnop(knop, 'geen library-nummer', false); return; }
-    // Een nieuw rack heeft een naam nodig; een bestaand houdt de zijne.
-    let naam = null;
+    // Een nieuw rack heeft een naam nodig. Geen prompt(): zo'n venster legt
+    // de hele pagina stil, ook MIDI, LED's en het ophalen van de stream.
+    // De editor heeft een naamveld; daar gaan we heen.
     if (typeof fx.herkomst !== 'number') {
-      const voorstel = fx.rackNaam === 'nieuw rack' ? fx.effectId || 'rack' : fx.rackNaam;
-      naam = prompt('Naam voor dit nieuwe rack:', voorstel);
-      if (!naam) return;
+      rackEditor.openVoor(id);
+      const veld = document.querySelector('#rack-editor .re-naam');
+      veld.focus(); veld.select();
+      meld('geef het rack een naam en klik "bewaar"');
+      return;
     }
     try {
-      const { nieuw } = await bewaarRack(id, { naam });
+      const { nieuw } = await bewaarRack(id, {});
       meldOpKnop(knop, nieuw ? 'nieuw ✓' : 'bewaard ✓', true);
     } catch (err) {
       meldOpKnop(knop, 'mislukt', false);
@@ -514,16 +600,36 @@ for (const v of VENSTERS) {
   });
 }
 for (const v of VENSTERS) vulRackKiezer(venster[v]);
+/** Een rack van een nummer aanzetten, zoals de kiezer het doet. */
+function zetRackVan(id, rack) {
+  rackCache[id].forEach((x) => { x.actief = x === rack; });
+  engine.deck(id).fx.zetRack(rack.data, { herkomst: rack.id }).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
+  fetch(`/api/library/${deckTrack[id]}/racks/${rack.id}`, { method: 'POST' }).catch(() => {});
+}
+
+// Door de racks bladeren (APC): eerst die van het nummer, dan de kant-en-klare.
+function rackStap(id, stap) {
+  const lijst = [...rackCache[id].map((r) => ({ herkomst: r.id, zet: () => zetRackVan(id, r) })),
+    ...sjablonen.map((r, i) => ({ herkomst: `s:${i}`, zet: () => engine.deck(id).fx.zetRack(r, { herkomst: `s:${i}` }) }))];
+  if (!lijst.length) return;
+  const nu = lijst.findIndex((x) => x.herkomst === engine.deck(id).fx.herkomst);
+  lijst[(nu + stap + lijst.length) % lijst.length].zet();
+  vulRackKiezer(id);
+}
 
 // ---- audio unlock + help --------------------------------------------------
 
 const audioBtn = document.getElementById('audio-btn');
-audioBtn.addEventListener('click', async () => {
+const audioAan = async () => {
   await engine.resume();
   midi.init();
   audioBtn.textContent = `audio actief · ${engine.ctx.sampleRate / 1000} kHz · ${Math.round(engine.ctx.baseLatency * 1000)} ms`;
   audioBtn.classList.remove('primary');
-});
+};
+audioBtn.addEventListener('click', audioAan);
+// De browser wil een klik voordat er geluid mag. Elke eerste klik telt: PLAY
+// indrukken vóór "audio starten" gaf anders een deck dat speelt zonder geluid.
+document.addEventListener('pointerdown', () => { if (engine.ctx.state !== 'running') audioAan().catch(() => {}); }, { capture: true });
 
 const help = document.getElementById('help');
 const toggleHelp = () => help.classList.toggle('hidden');
@@ -723,7 +829,29 @@ async function loadMapping(url) {
     monitor.note(`mapping laden mislukt: ${err.message}`);
   }
 }
-loadMapping('mappings/apc40mk2.json');
+/*
+ * Je eigen koppelingen bewaren. Wat je met "koppelen" aan de APC hing, was bij
+ * herladen weg: er werd altijd de standaardmapping geladen. Nu staat je laatste
+ * mapping in de browser (localStorage, per browser), en die gaat voor.
+ */
+const EIGEN_MAPPING = 'varve.mapping';
+let mappingGeladen = false;
+function bewaarEigenMapping() {
+  if (!mappingGeladen) return;               // niet de lege begintoestand bewaren
+  try { localStorage.setItem(EIGEN_MAPPING, JSON.stringify(mapping.toJSON())); } catch (_) {}
+}
+mapping.on('change', bewaarEigenMapping);
+(async () => {
+  let eigen = null;
+  try { eigen = JSON.parse(localStorage.getItem(EIGEN_MAPPING) || 'null'); } catch (_) {}
+  if (eigen?.rules?.length) {
+    const { aantal } = mapping.load(eigen);
+    monitor.note(`jouw eigen mapping geladen — ${aantal} regels ("standaard herstellen" zet de APC-standaard terug)`);
+  } else {
+    await loadMapping('mappings/apc40mk2.json');
+  }
+  mappingGeladen = true;
+})();
 
 const toggleMidi = () => {
   midiPanel.classList.toggle('hidden');
@@ -732,7 +860,7 @@ const toggleMidi = () => {
 document.getElementById('midi-btn').addEventListener('click', toggleMidi);
 midiPanel.querySelector('.mon-close').addEventListener('click', toggleMidi);
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyM' && !e.target.matches('input, textarea, select')) toggleMidi();
+  if (e.code === 'KeyM' && !isTypen(e.target)) toggleMidi();
 });
 
 // Chrome kan voor de sysex-permissie een gebruikersgebaar eisen. Daarom een
@@ -772,6 +900,7 @@ const trkEls = perDeck((id) => {
   return { root: r, titel: r.querySelector('.trk-titel'), meter: r.querySelector('.trk-meter i'),
     kant: r.querySelector('.trk-kant'), toon: [...r.querySelectorAll('.trk-toon')] };
 });
+const padEls = [...document.querySelectorAll('.pad')];
 const masterMeter = document.querySelector('.master-meter i');
 const curveBtn = document.querySelector('.curve');
 
@@ -795,6 +924,23 @@ function volgEngine() {
   }
 }
 
+/**
+ * Elk onderdeel van het frame zijn eigen vangnet. Eerst stond er één try om
+ * alles: gooide het videopaneel, dan werden sampler, opnameteller en meters
+ * nooit meer bijgewerkt, zonder dat je zag waarom. Nu valt alleen dat ene
+ * stuk stil, met hooguit één melding per seconde per onderdeel.
+ */
+const laatsteFout = {};
+function veilig(naam, fn) {
+  try { fn(); } catch (err) {
+    const nu = performance.now();
+    if (!laatsteFout[naam] || nu - laatsteFout[naam] > 1000) {
+      laatsteFout[naam] = nu;
+      console.error(`[ui] ${naam} overgeslagen:`, err);
+    }
+  }
+}
+
 /*
  * Eén exceptie in deze lus stopte vroeger het plannen van het volgende frame,
  * en daarmee bevroor de hele UI: tijd, meters, golfvorm. Voor een instrument
@@ -815,97 +961,139 @@ function frame() {
 
 function tekenFrame() {
   const s = engine.snapshot();
-  volgEngine();
-
-  for (const id of DECK_IDS) {
-    const d = s.decks[id], t = trkEls[id];
-    if (t.titel.textContent !== (d.title || '— leeg —')) t.titel.textContent = d.title || '— leeg —';
-    t.meter.style.width = (d.level * 100).toFixed(1) + '%';
-    t.root.classList.toggle('speelt', d.playing);
-    t.root.classList.toggle('leeg', !d.loaded);
-    t.root.classList.toggle('focused', s.focus === id);
-    if (t.kant.textContent !== d.kant) t.kant.textContent = d.kant;
-    t.kant.dataset.kant = d.kant;
-    t.toon.forEach((b) => b.classList.toggle('on', venster[b.dataset.toon] === id));
-  }
-
-  for (const v of VENSTERS) {
-    const id = venster[v];
-    const d = s.decks[id], e = els[v];
-    views[v].zoom.draw(d, analysis[id]);
-    views[v].overview.draw(d, analysis[id]);
-
-    e.title.textContent = d.title;
-    e.pos.textContent = fmtTime(d.position);
-    e.rem.textContent = '-' + fmtTime(Math.max(0, d.duration - d.position));
-    e.play.classList.toggle('on', d.playing);
-    e.pitch.textContent = ((d.rate - 1) * 100).toFixed(1) + '%';
-    e.meter.style.width = (d.level * 100).toFixed(1) + '%';
-    // bpm: wat je HOORT, dus inclusief pitch.
-    e.bpm.textContent = d.bpm ? d.bpm.toFixed(1) : '—';
-    e.bpm.classList.toggle('leeg', !d.bpm);
-    e.tap.classList.toggle('actief', !!d.grid);
-
-    // Fasemeter: hoe ver dit deck voor of achter loopt, over een halve tel.
-    // Handig bij handmatig beatmatchen én als controle op de sync.
-    const f = s.fase?.[id];
-    e.fase.classList.toggle('leeg', f === null || f === undefined);
-    if (f !== null && f !== undefined && d.grid) {
-      const halveTel = (60 / d.grid.bpm) * d.rate / 2;
-      const uit = Math.max(-1, Math.min(1, f / halveTel));
-      e.faseWijzer.style.left = `${50 + uit * 46}%`;
-      e.faseWijzer.classList.toggle('strak', Math.abs(f) < 0.006);
-      e.fase.title = `${f >= 0 ? '+' : ''}${(f * 1000).toFixed(0)} ms`;
+  veilig('volgen', () => {
+    volgEngine();
+  });
+  veilig('trackrij', () => {
+    for (const id of DECK_IDS) {
+      const d = s.decks[id], t = trkEls[id];
+      if (t.titel.textContent !== (d.title || '— leeg —')) t.titel.textContent = d.title || '— leeg —';
+      t.meter.style.width = (d.level * 100).toFixed(1) + '%';
+      t.root.classList.toggle('speelt', d.playing);
+      t.root.classList.toggle('leeg', !d.loaded);
+      t.root.classList.toggle('focused', s.focus === id);
+    t.root.classList.toggle('maat', s.maat === id);
+      if (t.kant.textContent !== d.kant) t.kant.textContent = d.kant;
+      t.kant.dataset.kant = d.kant;
+      t.toon.forEach((b) => b.classList.toggle('on', venster[b.dataset.toon] === id));
     }
-    // De knoppen wijzen naar een PLEK; wissel je van effect, dan verandert
-    // alleen wat er onder die plek zit. Daarom lopen de labels mee.
-    e.fxNaam.textContent = d.fx.naam || '—';
-    e.fxBypass.classList.toggle('on', d.fx.bypass);
-    // Een plek zonder macro staat er wel, maar dof en dood: zo zie je in één
-    // oogopslag hoeveel knoppen dit rack gebruikt.
-    e.fxPlekken.forEach((el, i) => {
-      const p = d.fx.plekken.find((x) => x.plek === i + 1);
-      const label = el.querySelector('.knob-label');
-      const tekst = p?.naam || String(i + 1);
-      if (label && label.textContent !== tekst) label.textContent = tekst;
-      el.classList.toggle('leeg', !p);
-    });
+  });
+  veilig('vensters', () => {
+    for (const v of VENSTERS) {
+      const id = venster[v];
+      const d = s.decks[id], e = els[v];
+      views[v].zoom.draw(d, analysis[id]);
+      views[v].overview.draw(d, analysis[id]);
 
-    e.sync.classList.toggle('gelijk', readAction(`track.${trackVanDeck(id)}.sync`) === 1);
-    e.beatBtns.forEach((b) => {
-      b.classList.toggle('dood', !d.grid);
-      const n = parseFloat(b.dataset.action.split('.').pop());
-      b.classList.toggle('on', d.loopBeats === n);
-    });
+      e.title.textContent = d.title;
+      e.pos.textContent = fmtTime(d.position);
+      e.rem.textContent = '-' + fmtTime(Math.max(0, d.duration - d.position));
+      e.play.classList.toggle('on', d.playing);
+      e.pitch.textContent = ((d.rate - 1) * 100).toFixed(1) + '%';
+      e.meter.style.width = (d.level * 100).toFixed(1) + '%';
+      // bpm: wat je HOORT, dus inclusief pitch.
+      e.bpm.textContent = d.bpm ? d.bpm.toFixed(1) : '—';
+      e.bpm.classList.toggle('leeg', !d.bpm);
+      e.tap.classList.toggle('actief', !!d.grid);
 
-    d.hotcues.forEach((t, i) => e.hotcues[i].classList.toggle('set', t !== null));
-    e.loopBtns.forEach((b) => b.classList.toggle('on', !!d.loop && !b.classList.contains('warn')));
-    views[v].root.classList.toggle('focused', s.focus === id);
-    volgRackKiezer(id);
-  }
+      // Fasemeter: hoe ver dit deck voor of achter loopt, over een halve tel.
+      // Handig bij handmatig beatmatchen én als controle op de sync.
+      const f = s.fase?.[id];
+      e.fase.classList.toggle('leeg', f === null || f === undefined);
+      if (f !== null && f !== undefined && d.grid) {
+        const halveTel = (60 / d.grid.bpm) / d.rate / 2;   // hoorbare tel: sneller = korter
+        const uit = Math.max(-1, Math.min(1, f / halveTel));
+        e.faseWijzer.style.left = `${50 + uit * 46}%`;
+        e.faseWijzer.classList.toggle('strak', Math.abs(f) < 0.006);
+        e.fase.title = `${f >= 0 ? '+' : ''}${(f * 1000).toFixed(0)} ms`;
+      }
+      // De knoppen wijzen naar een PLEK; wissel je van effect, dan verandert
+      // alleen wat er onder die plek zit. Daarom lopen de labels mee.
+      e.fxNaam.textContent = d.fx.naam || '—';
+      e.fxBypass.classList.toggle('on', d.fx.bypass);
+      // Een plek zonder macro staat er wel, maar dof en dood: zo zie je in één
+      // oogopslag hoeveel knoppen dit rack gebruikt.
+      e.fxPlekken.forEach((el, i) => {
+        const p = d.fx.plekken.find((x) => x.plek === i + 1);
+        const label = el.querySelector('.knob-label');
+        const tekst = p?.naam || String(i + 1);
+        if (label && label.textContent !== tekst) label.textContent = tekst;
+        el.classList.toggle('leeg', !p);
+      });
 
-  mapPanel.tick();
-  if (opnemer.bezig) {
-    const t = `■ ${mmss(opnemer.seconden)} · ${mb(opnemer.bytes)}${opnemer.metVideo ? ` + ${mb(opnemer.videoBytes)} video` : ''}`;
-    if (opnameKnop.textContent !== t) opnameKnop.textContent = t;
-    opnameKnop.classList.add('bezig');
-    opnameSoort.disabled = true;
-    opnameKnop.title = opnemer.fout || `opnemen naar opnames/${opnemer.bestand} — klik om te stoppen`;
-  } else { opnameKnop.classList.remove('bezig'); opnameSoort.disabled = false; }
-  if (videoAan()) {
-    videoMixer.teken();
-    const st = videoMixer.stand().filter((l) => l.video && l.speelt);
-    const tekst = videoMixer.fout || (st.length ? st.map((l) => `${trackVanDeck(l.id)}: ${Math.round(l.verschil * 1000)} ms`).join(' · ') : 'geen zichtbare video');
-    const modusEl = videoPaneel.querySelector('.vid-modus');
-    if (modusEl.textContent !== videoMixer.modus) modusEl.textContent = videoMixer.modus;
-    const doelEl = videoPaneel.querySelector('.vid-pulsdoel');
-    if (doelEl.textContent !== videoMixer.pulsDoel) doelEl.textContent = videoMixer.pulsDoel;
-    const statusEl = videoPaneel.querySelector('.vid-status');
-    if (statusEl.textContent !== tekst) statusEl.textContent = tekst;
-  }
+      e.sync.classList.toggle('gelijk', readAction(`track.${trackVanDeck(id)}.sync`) === 1);
+      e.beatBtns.forEach((b) => {
+        b.classList.toggle('dood', !d.grid);
+        const n = parseFloat(b.dataset.action.split('.').pop());
+        b.classList.toggle('on', d.loopBeats === n);
+      });
 
-  masterMeter.style.width = (s.masterPeak * 100).toFixed(1) + '%';
-  masterMeter.classList.toggle('clip', s.masterPeak > 0.98);
-  curveBtn.textContent = 'curve: ' + s.xfaderCurve;
+      d.hotcues.forEach((t, i) => e.hotcues[i].classList.toggle('set', t !== null));
+      e.loopBtns.forEach((b) => b.classList.toggle('on', !!d.loop && !b.classList.contains('warn')));
+      views[v].root.classList.toggle('focused', s.focus === id);
+      volgRackKiezer(id);
+    }
+  });
+  veilig('koppelpaneel', () => {
+    mapPanel.tick();
+  });
+  veilig('sampler', () => {
+    // Sampler-pads: leeg, gevuld (met van welke track en hoeveel tellen), speelt.
+    const lengteKnop = document.querySelector('.sampler-lengte');
+    const lengteTekst = `${engine.sampler.tellen} tel${engine.sampler.tellen === 1 ? '' : 'len'}`;
+    if (lengteKnop.textContent !== lengteTekst) lengteKnop.textContent = lengteTekst;
+    for (const p of engine.sampler.stand()) {
+      const el = padEls[p.pad - 1];
+      el.classList.toggle('gevuld', p.gevuld);
+      el.classList.toggle('speelt', p.speelt);
+      el.classList.toggle('bezig', p.bezig);
+      const t = p.gevuld ? `track ${p.bron} · ${p.tellen}` : '';
+      if (el.lastElementChild.textContent !== t) el.lastElementChild.textContent = t;
+    }
+  });
+  veilig('opnemen', () => {
+    if (opnemer.bezig && !opnameKnop.dataset.zeker) {
+      const t = `■ ${mmss(opnemer.seconden)} · ${mb(opnemer.bytes)}${opnemer.metVideo ? ` + ${mb(opnemer.videoBytes)} video` : ''}`;
+      if (opnameKnop.textContent !== t) opnameKnop.textContent = t;
+      opnameKnop.classList.add('bezig');
+      opnameSoort.disabled = true;
+      opnameKnop.title = opnemer.fout || `opnemen naar opnames/${opnemer.bestand} — klik om te stoppen`;
+    } else { opnameKnop.classList.remove('bezig'); opnameSoort.disabled = false; }
+  });
+  veilig('video', () => {
+    if (videoAan()) {
+      videoMixer.teken();
+      const st = videoMixer.stand().filter((l) => l.video && l.speelt);
+      const tekst = videoMixer.fout || (st.length ? st.map((l) => `${trackVanDeck(l.id)}: ${Math.round(l.verschil * 1000)} ms`).join(' · ') : 'geen zichtbare video');
+      const modusEl = videoPaneel.querySelector('.vid-modus');
+      if (modusEl.textContent !== videoMixer.modus) modusEl.textContent = videoMixer.modus;
+      const doelEl = videoPaneel.querySelector('.vid-pulsdoel');
+      if (doelEl.textContent !== videoMixer.pulsDoel) doelEl.textContent = videoMixer.pulsDoel;
+      const statusEl = videoPaneel.querySelector('.vid-status');
+      if (statusEl.textContent !== tekst) statusEl.textContent = tekst;
+    }
+  });
+  veilig('master', () => {
+    masterMeter.style.width = (s.masterPeak * 100).toFixed(1) + '%';
+    masterMeter.classList.toggle('clip', s.masterPeak > 0.98);
+    curveBtn.textContent = 'curve: ' + s.xfaderCurve;
+  });
 }
 requestAnimationFrame(frame);
+
+// ---- wat de schermlaag doet, ook op de bus (voor de APC) ------------------
+bindApp({
+  toon: (v, id) => toonInVenster(v, id),
+  venster: () => venster,
+  opnemer,
+  opnameStart: async () => {
+    const r = await opnemer.start({ video: opnameSoort.value === 'video' ? videoMixer.canvas : null });
+    if (!r.ok) meld(`opnemen: ${r.fout}`, 'fout');
+  },
+  opnameStop: async () => {
+    const r = await opnemer.stop();
+    meld(r.ok ? `opname bewaard: opnames/${r.bestand}` : `afronden mislukt: ${r.fout}`, r.ok ? 'info' : 'fout');
+  },
+  opnameSoort: () => { opnameSoort.value = opnameSoort.value === 'video' ? 'audio' : 'video'; opnameSoort.dispatchEvent(new Event('change')); },
+  rackStap,
+});

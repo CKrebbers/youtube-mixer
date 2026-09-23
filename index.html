@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VARVE DJ — fase 1</title>
+<title>VARVE DJ</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <header class="topbar">
-  <div class="brand">VARVE<span>DJ</span> <em>fase 1 — audio-engine</em></div>
+  <div class="brand">VARVE<span>DJ</span></div>
   <div class="topbar-right">
     <div class="meter master-meter"><i></i></div>
     <label class="master-knob"><span>MASTER</span>
@@ -70,15 +70,16 @@
         <button data-kind="button" data-action="track.1.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
         <button data-kind="button" data-action="track.1.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
         <button data-kind="button" data-action="track.1.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
-        <button data-kind="button" data-action="track.1.grid.halve" class="btn sm" title="bpm halveren">/2</button>
-        <button data-kind="button" data-action="track.1.grid.double" class="btn sm" title="bpm verdubbelen">x2</button>
-        <button data-kind="button" data-action="track.1.sync" class="btn sm sync" title="tempo en fase gelijk aan de luidste track">SYNC</button>
+        <button data-kind="button" data-action="track.1.grid.halve" class="btn sm" title="bpm van het grid halveren">bpm½</button>
+        <button data-kind="button" data-action="track.1.grid.double" class="btn sm" title="bpm van het grid verdubbelen">bpm×2</button>
+        <button data-kind="button" data-action="track.1.sync" class="btn sm sync" title="tempo en fase gelijk aan de track die je het hardst hoort">SYNC</button>
         <span class="fase" title="hoe ver dit deck voor of achter loopt"><b></b><i></i></span>
       </div>
       <div class="fx-row">
         <span class="fx-kop">FX</span>
         <select class="fx-rack" title="rack van dit nummer"></select>
-        <button data-kind="button" data-action="track.1.fx.next" class="btn sm fx-naam" title="volgend effect">Delay</button>
+        <span class="fx-naam" title="wat er nu klinkt">Delay</span>
+        <button data-kind="button" data-action="track.1.fx.next" class="btn sm fx-volgend" title="volgend los effect — vervangt wat er nu klinkt">›</button>
         <button class="btn sm fx-bewaar" title="dit rack bij dit nummer bewaren">bewaar</button>
         <button class="btn sm fx-bewerk" title="rack bewerken: effecten, knoppen, bereiken">bewerk</button>
         <div class="knob sm fx-plek" data-action="track.1.fx.knop.1" data-label="1" data-value="0.5"></div>
@@ -127,6 +128,20 @@
       <span>B</span>
     </div>
     <button data-kind="button" data-action="mixer.xfader.curve" class="btn sm curve">curve: smooth</button>
+    <div class="sends" title="gedeelde echo en galm, na de fader: fader dicht en de staart loopt door">
+      <div class="send-bus">
+        <span class="send-kop">A · ECHO</span>
+        <div class="knob sm" data-action="send.a.knop.1" data-label="TIJD" data-value="0.62"></div>
+        <div class="knob sm" data-action="send.a.knop.2" data-label="HERH" data-value="0.5"></div>
+        <div class="knob sm" data-action="send.a.knop.3" data-label="TOON" data-value="0.5"></div>
+      </div>
+      <div class="send-bus">
+        <span class="send-kop">B · GALM</span>
+        <div class="knob sm" data-action="send.b.knop.1" data-label="GROOT" data-value="0.7"></div>
+        <div class="knob sm" data-action="send.b.knop.2" data-label="TOON" data-value="0.5"></div>
+        <div class="knob sm" data-action="send.b.knop.3" data-label="VAST" data-value="0"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ================= VENSTER RECHTS (standaard track 2) ================= -->
@@ -167,15 +182,16 @@
         <button data-kind="button" data-action="track.2.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
         <button data-kind="button" data-action="track.2.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
         <button data-kind="button" data-action="track.2.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
-        <button data-kind="button" data-action="track.2.grid.halve" class="btn sm" title="bpm halveren">/2</button>
-        <button data-kind="button" data-action="track.2.grid.double" class="btn sm" title="bpm verdubbelen">x2</button>
-        <button data-kind="button" data-action="track.2.sync" class="btn sm sync" title="tempo en fase gelijk aan de luidste track">SYNC</button>
+        <button data-kind="button" data-action="track.2.grid.halve" class="btn sm" title="bpm van het grid halveren">bpm½</button>
+        <button data-kind="button" data-action="track.2.grid.double" class="btn sm" title="bpm van het grid verdubbelen">bpm×2</button>
+        <button data-kind="button" data-action="track.2.sync" class="btn sm sync" title="tempo en fase gelijk aan de track die je het hardst hoort">SYNC</button>
         <span class="fase" title="hoe ver dit deck voor of achter loopt"><b></b><i></i></span>
       </div>
       <div class="fx-row">
         <span class="fx-kop">FX</span>
         <select class="fx-rack" title="rack van dit nummer"></select>
-        <button data-kind="button" data-action="track.2.fx.next" class="btn sm fx-naam" title="volgend effect">Delay</button>
+        <span class="fx-naam" title="wat er nu klinkt">Delay</span>
+        <button data-kind="button" data-action="track.2.fx.next" class="btn sm fx-volgend" title="volgend los effect — vervangt wat er nu klinkt">›</button>
         <button class="btn sm fx-bewaar" title="dit rack bij dit nummer bewaren">bewaar</button>
         <button class="btn sm fx-bewerk" title="rack bewerken: effecten, knoppen, bereiken">bewerk</button>
         <div class="knob sm fx-plek" data-action="track.2.fx.knop.1" data-label="1" data-value="0.5"></div>
@@ -200,6 +216,23 @@
 <!-- ================= ACHT TRACKS ================= -->
 <!-- Gevuld door app.js: acht keer hetzelfde, dat hoort niet met de hand. -->
 <section id="tracks" class="tracks"></section>
+
+<!-- ================= SAMPLER ================= -->
+<section id="sampler" class="sampler-rij">
+  <span class="sampler-kop">SAMPLER</span>
+  <button data-kind="button" data-action="sampler.lengte" class="btn sm sampler-lengte" title="hoeveel tellen een lege pad pakt">4 tellen</button>
+  <div class="pads">
+    <button data-kind="button" data-action="sampler.1" data-action-shift="sampler.1.wis" class="pad" data-pad="1" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>1</b><span></span></button>
+    <button data-kind="button" data-action="sampler.2" data-action-shift="sampler.2.wis" class="pad" data-pad="2" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>2</b><span></span></button>
+    <button data-kind="button" data-action="sampler.3" data-action-shift="sampler.3.wis" class="pad" data-pad="3" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>3</b><span></span></button>
+    <button data-kind="button" data-action="sampler.4" data-action-shift="sampler.4.wis" class="pad" data-pad="4" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>4</b><span></span></button>
+    <button data-kind="button" data-action="sampler.5" data-action-shift="sampler.5.wis" class="pad" data-pad="5" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>5</b><span></span></button>
+    <button data-kind="button" data-action="sampler.6" data-action-shift="sampler.6.wis" class="pad" data-pad="6" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>6</b><span></span></button>
+    <button data-kind="button" data-action="sampler.7" data-action-shift="sampler.7.wis" class="pad" data-pad="7" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>7</b><span></span></button>
+    <button data-kind="button" data-action="sampler.8" data-action-shift="sampler.8.wis" class="pad" data-pad="8" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>8</b><span></span></button>
+  </div>
+  <div class="knob sm" data-action="sampler.volume" data-label="VOL" data-value="0.8"></div>
+</section>
 
 <!-- ================= LIBRARY ================= -->
 <section id="lib-panel" class="lib-panel hidden">
@@ -299,6 +332,7 @@
   </div>
 </section>
 
+<div id="meldingen" class="meldingen" aria-live="polite"></div>
 <div id="leer-balk" class="leer-balk hidden"></div>
 
 <div id="help" class="overlay hidden">
@@ -308,41 +342,41 @@
       <div>
         <h3>Linkervenster</h3>
         <table>
-          <tr><td>Q</td><td>play / pause</td></tr>
-          <tr><td>W</td><td>cue</td></tr>
-          <tr><td>A S D F</td><td>hotcue 1–4 (shift = wissen)</td></tr>
-          <tr><td>1 2 3 4</td><td>loop 1 / 2 / 4 / 8 sec</td></tr>
+          <tr><td>Q / W</td><td>play · cue</td></tr>
+          <tr><td>A S D F</td><td>hotcue 1–4 (shift: wissen)</td></tr>
+          <tr><td>1 2 3 4</td><td>loop 1 · 2 · 4 · 8 s</td></tr>
           <tr><td>5</td><td>loop uit</td></tr>
-          <tr><td>Z X</td><td>nudge −/+ 50 ms</td></tr>
-          <tr><td>E</td><td>focus op deck A</td></tr>
+          <tr><td>Z / X</td><td>nudge − / +</td></tr>
+          <tr><td>E</td><td>focus hierop</td></tr>
         </table>
       </div>
       <div>
         <h3>Rechtervenster</h3>
         <table>
-          <tr><td>P</td><td>play / pause</td></tr>
-          <tr><td>O</td><td>cue</td></tr>
-          <tr><td>J K L ;</td><td>hotcue 1–4 (shift = wissen)</td></tr>
-          <tr><td>7 8 9 0</td><td>loop 1 / 2 / 4 / 8 sec</td></tr>
+          <tr><td>P / O</td><td>play · cue</td></tr>
+          <tr><td>J K L ;</td><td>hotcue 1–4 (shift: wissen)</td></tr>
+          <tr><td>7 8 9 0</td><td>loop 1 · 2 · 4 · 8 s</td></tr>
           <tr><td>-</td><td>loop uit</td></tr>
-          <tr><td>, .</td><td>nudge −/+ 50 ms</td></tr>
-          <tr><td>I</td><td>focus op deck B</td></tr>
+          <tr><td>, / .</td><td>nudge − / +</td></tr>
+          <tr><td>I</td><td>focus hierop</td></tr>
         </table>
       </div>
       <div>
         <h3>Algemeen</h3>
         <table>
-          <tr><td>Spatie</td><td>play/pause op focus-deck</td></tr>
-          <tr><td>[ ]</td><td>crossfader naar A / B</td></tr>
-          <tr><td>/</td><td>dit scherm</td></tr>
+          <tr><td>spatie</td><td>play/pauze van de track met focus</td></tr>
+          <tr><td>[ / ]</td><td>crossfader</td></tr>
+          <tr><td>B</td><td>library (bibliotheek)</td></tr>
+          <tr><td>V</td><td>video</td></tr>
           <tr><td>M</td><td>MIDI-monitor</td></tr>
-          <tr><td>koppelen</td><td>klik een knop, beweeg de controller</td></tr>
-          <tr><td>shift-klik</td><td>koppeling weghalen (in koppelmodus)</td></tr>
-          <tr><td>sleep op knop</td><td>waarde (shift = fijn)</td></tr>
-          <tr><td>dubbelklik knop</td><td>terug naar midden</td></tr>
+          <tr><td>/</td><td>deze kaart</td></tr>
+          <tr><td>Esc</td><td>paneel sluiten</td></tr>
         </table>
       </div>
     </div>
+    <p class="hint">De toetsen van een venster bedienen de track die daar staat. Zet een track in een venster met L of R in de trackrij.
+      Shift+klik op een hotcue of sampler-pad maakt hem leeg. Dubbelklik op een knop zet hem terug.
+      <b>MAAT</b> in de trackrij = de track waar sync, sampler en video-puls op lopen.</p>
     <p class="hint">Sluiten met Esc of klik buiten dit venster.</p>
   </div>
 </div>

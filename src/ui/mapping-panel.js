@@ -1,4 +1,5 @@
 import { list } from '../control/actions.js';
+import { esc } from './dom.js';
 
 /**
  * Het koppelpaneel: elke action met zijn huidige knop, een leerknop ernaast,
@@ -8,7 +9,6 @@ import { list } from '../control/actions.js';
  * `actions.js` gedefinieerd is, is hier koppelbaar — ook wat er later bij komt.
  */
 
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 const MODUSNAAM = {
   trigger: 'knop', absolute: 'absoluut',
@@ -54,7 +54,13 @@ export class MappingPanel {
 
     this.el.exporteer.addEventListener('click', () => this.exporteer());
     this.el.importeer.addEventListener('change', (e) => this.importeer(e.target.files[0]));
-    this.el.reset.addEventListener('click', () => this.onReset?.());
+    // Standaard herstellen gooit je eigen koppelingen weg: tweede klik binnen 3 s.
+    this.el.reset.addEventListener('click', () => {
+      if (this._zekerReset && Date.now() < this._zekerReset) { this._zekerReset = 0; this.el.reset.textContent = 'standaard herstellen'; this.onReset?.(); return; }
+      this._zekerReset = Date.now() + 3000;
+      this.el.reset.textContent = 'nog eens = je eigen koppelingen weg';
+      setTimeout(() => { this.el.reset.textContent = 'standaard herstellen'; }, 3000);
+    });
 
     mapping.on('change', () => { this.vuil = true; });
     learn.on('armed', () => { this.vuil = true; });
