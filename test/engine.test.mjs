@@ -25,6 +25,7 @@ globalThis.AudioContext = class {
   createAnalyser(){ return node('analyser'); }
   createDelay(){ const n = node('delay'); n.delayTime = param(0); return n; }
   createWaveShaper(){ const n = node('shaper'); n.curve = null; n.oversample = 'none'; return n; }
+  createChannelMerger(){ return node('merger'); }
   createOscillator(){ const n = node('osc'); n.type='sine'; n.start=()=>{}; n.stop=()=>{}; return n; }
   createBufferSource(){ const s = node('src'); s.playbackRate=param(1); s.loop=false; s.loopStart=0; s.loopEnd=0;
     // De echte API vuurt onended ASYNCHROON na stop(), en houdt een bron in
@@ -616,6 +617,41 @@ console.log('\ndelaytijd zonder gejank');
   ok('audio staat stil: meteen, geen fade die op een stilstaande klok wacht',
     k.tijden[0] === k.tijden[1] && Math.abs(k.tijden[0] - 0.02 * Math.pow(60, 0.9)) < 1e-9);
   NOW = 0;
+}
+
+// ---- reverb met freeze --------------------------------------------------------
+
+console.log('\nreverb en freeze');
+{
+  const { effectVan, toonWaarde } = await import('../src/engine/fx.js');
+  const r = effectVan('reverb').bouw(new AudioContext());
+  for (const [p, v] of Object.entries(effectVan('reverb').standaard)) r.zet(p, v, 0);
+  let st = r._staat();
+  ok('bouwt, acht lijnen, allemaal onder 1 (dus sterft uit)', st.gains.length === 8 && st.gains.every((g) => g > 0 && g < 1));
+  ok('langere lijn verliest per rondgang meer (zelfde RT60 voor allemaal)', st.gains[7] < st.gains[0]);
+  const rt = st.rt60, g0 = st.gains[0];
+  ok('gain volgt RT60: 60 dB na rt60 seconden', Math.abs(Math.pow(g0, rt / 0.0297) - 0.001) < 1e-6);
+  r.zet('grootte', 1, 0);
+  ok('grotere ruimte: gains dichter bij 1', r._staat().gains[0] > g0);
+  r.zet('freeze', 1, 0);
+  st = r._staat();
+  ok('freeze: invoer dicht, lus (bijna) verliesloos', st.invoer === 0 && st.gains.every((g) => g > 0.999 && g < 1));
+  ok('freeze: opruimen wacht niet eeuwig', r.staart() <= 1);
+  r.zet('freeze', 0, 0);
+  ok('freeze los: weer uitsterven, invoer open', r._staat().invoer === 1 && r._staat().gains.every((g) => g < 0.999));
+  ok('eenheden', toonWaarde('reverb', 'grootte', 0) === '0,4 s' && toonWaarde('reverb', 'freeze', 1) === 'vast');
+
+  // Q van een lowpass is in Web Audio een piek in dB. Positief in een lus =
+  // groeien in plaats van uitsterven. Voor ELK filter in een feedbacklus.
+  for (const id of ['reverb', 'delay']) {
+    const ctx = new AudioContext();
+    const filters = [];
+    const maak = ctx.createBiquadFilter.bind(ctx);
+    ctx.createBiquadFilter = () => { const b = maak(); filters.push(b); return b; };
+    effectVan(id).bouw(ctx);
+    ok(`${id}: geen enkel lowpass-filter met een piek (Q < -3 dB)`,
+      filters.filter((f) => f.type === 'lowpass').every((f) => f.Q.value < -3));
+  }
 }
 
 // ---- acht tracks ------------------------------------------------------------

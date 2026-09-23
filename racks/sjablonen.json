@@ -5,74 +5,308 @@
     {
       "schema": 1,
       "name": "Oplossen",
-      "tags": ["overgang", "ambient"],
+      "tags": [
+        "overgang",
+        "ambient",
+        "galm"
+      ],
       "chain": [
-        { "slot": "a", "type": "filter", "params": { "freq": 0.5, "reso": 0.15 } },
-        { "slot": "b", "type": "delay", "params": { "tijd": 0.75, "feedback": 0.25, "toon": 0.55 } },
-        { "slot": "c", "type": "phaser", "params": { "snelheid": 0.15, "diepte": 0, "feedback": 0.3 } }
+        {
+          "slot": "a",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.15
+          }
+        },
+        {
+          "slot": "b",
+          "type": "delay",
+          "params": {
+            "tijd": 0.75,
+            "feedback": 0.25,
+            "toon": 0.55
+          }
+        },
+        {
+          "slot": "d",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.6,
+            "toon": 0.45,
+            "meng": 0.3,
+            "freeze": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "phaser",
+          "params": {
+            "snelheid": 0.15,
+            "diepte": 0,
+            "feedback": 0.3
+          }
+        }
       ],
       "macros": [
-        { "place": 1, "label": "Oplossen", "default": 0, "links": [
-          { "target": "a.freq", "from": 0.5, "to": 0.22 },
-          { "target": "b.feedback", "from": 0.25, "to": 0.85, "curve": "exp" },
-          { "target": "c.diepte", "from": 0, "to": 0.6, "in": [0.4, 1] }
-        ] },
-        { "place": 2, "label": "Afstand", "default": 0.3, "links": [
-          { "target": "b.tijd", "from": 0.55, "to": 0.9 }
-        ] },
-        { "place": 3, "label": "Glans", "default": 0.3, "links": [
-          { "target": "c.snelheid", "from": 0.05, "to": 0.5 }
-        ] },
-        { "place": 4, "label": "Kleur", "default": 0.5, "links": [
-          { "target": "b.toon", "from": 0.2, "to": 0.9 }
-        ] }
+        {
+          "place": 1,
+          "label": "Oplossen",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.freq",
+              "from": 0.5,
+              "to": 0.22
+            },
+            {
+              "target": "b.feedback",
+              "from": 0.25,
+              "to": 0.85,
+              "curve": "exp"
+            },
+            {
+              "target": "d.meng",
+              "from": 0.3,
+              "to": 0.85
+            },
+            {
+              "target": "c.diepte",
+              "from": 0,
+              "to": 0.6,
+              "in": [
+                0.4,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Afstand",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "b.tijd",
+              "from": 0.55,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Glans",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "c.snelheid",
+              "from": 0.05,
+              "to": 0.5
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Kleur",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "b.toon",
+              "from": 0.2,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 5,
+          "label": "Vasthouden",
+          "default": 0,
+          "links": [
+            {
+              "target": "d.freeze",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 6,
+          "label": "Ruimte",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "d.grootte",
+              "from": 0.4,
+              "to": 0.95
+            }
+          ]
+        }
       ]
     },
     {
       "schema": 1,
       "name": "Dub-worp",
-      "tags": ["dub", "echo"],
+      "tags": [
+        "dub",
+        "echo"
+      ],
       "chain": [
-        { "slot": "a", "type": "delay", "params": { "tijd": 0.72, "feedback": 0.15, "toon": 0.6 } },
-        { "slot": "b", "type": "filter", "params": { "freq": 0.5, "reso": 0.35 } }
+        {
+          "slot": "a",
+          "type": "delay",
+          "params": {
+            "tijd": 0.72,
+            "feedback": 0.15,
+            "toon": 0.6
+          }
+        },
+        {
+          "slot": "b",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.35
+          }
+        }
       ],
       "macros": [
-        { "place": 1, "label": "Worp", "default": 0, "links": [
-          { "target": "a.feedback", "from": 0.15, "to": 0.9, "curve": "exp" }
-        ] },
-        { "place": 2, "label": "Maat", "default": 0.4, "links": [
-          { "target": "a.tijd", "from": 0.6, "to": 0.85 }
-        ] },
-        { "place": 3, "label": "Kleur", "default": 0.5, "bipolar": true, "links": [
-          { "target": "b.freq", "from": 0.1, "to": 0.9 }
-        ] },
-        { "place": 4, "label": "Donker", "default": 0, "links": [
-          { "target": "a.toon", "from": 0.9, "to": 0.25 }
-        ] }
+        {
+          "place": 1,
+          "label": "Worp",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.feedback",
+              "from": 0.15,
+              "to": 0.9,
+              "curve": "exp"
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Maat",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "a.tijd",
+              "from": 0.6,
+              "to": 0.85
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Kleur",
+          "default": 0.5,
+          "bipolar": true,
+          "links": [
+            {
+              "target": "b.freq",
+              "from": 0.1,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Donker",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.toon",
+              "from": 0.9,
+              "to": 0.25
+            }
+          ]
+        }
       ]
     },
     {
       "schema": 1,
       "name": "Getij",
-      "tags": ["lang", "beweging"],
+      "tags": [
+        "lang",
+        "beweging"
+      ],
       "chain": [
-        { "slot": "a", "type": "filter", "params": { "freq": 0.5, "reso": 0.25 } },
-        { "slot": "b", "type": "gate", "params": { "deling": 0.4, "vorm": 0.6, "diepte": 0 } },
-        { "slot": "c", "type": "ringmod", "params": { "toon": 0.25, "meng": 0 } }
+        {
+          "slot": "a",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.25
+          }
+        },
+        {
+          "slot": "b",
+          "type": "gate",
+          "params": {
+            "deling": 0.4,
+            "vorm": 0.6,
+            "diepte": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "ringmod",
+          "params": {
+            "toon": 0.25,
+            "meng": 0
+          }
+        }
       ],
       "macros": [
-        { "place": 1, "label": "Getij", "default": 0.5, "bipolar": true, "links": [
-          { "target": "a.freq", "from": 0.08, "to": 0.92 }
-        ] },
-        { "place": 2, "label": "Adem", "default": 0, "links": [
-          { "target": "b.diepte", "from": 0, "to": 0.6 }
-        ] },
-        { "place": 3, "label": "Metaal", "default": 0, "links": [
-          { "target": "c.meng", "from": 0, "to": 0.3, "curve": "exp" }
-        ] },
-        { "place": 4, "label": "Klank", "default": 0.3, "links": [
-          { "target": "c.toon", "from": 0.1, "to": 0.6 }
-        ] }
+        {
+          "place": 1,
+          "label": "Getij",
+          "default": 0.5,
+          "bipolar": true,
+          "links": [
+            {
+              "target": "a.freq",
+              "from": 0.08,
+              "to": 0.92
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Adem",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.diepte",
+              "from": 0,
+              "to": 0.6
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Metaal",
+          "default": 0,
+          "links": [
+            {
+              "target": "c.meng",
+              "from": 0,
+              "to": 0.3,
+              "curve": "exp"
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Klank",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "c.toon",
+              "from": 0.1,
+              "to": 0.6
+            }
+          ]
+        }
       ]
     }
   ]

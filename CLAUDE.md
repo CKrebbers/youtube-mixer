@@ -201,6 +201,15 @@ test/
   moment waarop de volgende tel valt op de audioklok. Herankeren is verplicht
   bij seek, hotcue, tempowijziging en gridbewerking — vergeet er één en je gate
   loopt na twintig minuten een zestiende naast.
+- **Q van een Web Audio-lowpass is een piek in DECIBEL, geen factor.** De
+  standaard (1 dB) is al 12% boven 1 bij de afsnijfrequentie. In een
+  feedbacklus groeit dat: de reverb zwol aan in plaats van uit te sterven, en
+  de delay op volle feedback deed hetzelfde (lusversterking 1,03). Elk filter
+  in een lus krijgt een negatieve Q; `engine.test.mjs` controleert het.
+- De reverb is een FDN (acht lijnen, Householder-matrix), geen ConvolverNode:
+  alleen zo kan freeze vasthouden (invoer dicht, lus verliesloos). Galmtijd
+  meet je aan de HELLING van het uitsterven, niet aan de eerste -60 dB na de
+  piek; zo gemeten klopt de knop (3,46 s beloofd, 3,5 s gemeten).
 - Delaytijd wordt NIET verschoven op één DelayNode: dat laat de toonhoogte van
   de echo glijden (gemeten: een toon van 1000 Hz zwiepte tot 4293 Hz). Er zijn
   twee leeskoppen op hetzelfde signaal; een nieuwe tijd gaat op de stille kop

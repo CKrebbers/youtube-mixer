@@ -146,6 +146,10 @@ export const EFFECTEN = [
       const fb = ctx.createGain();
       const toon = ctx.createBiquadFilter();
       toon.type = 'lowpass';
+      // Standaard Q is 1 dB: een bult van 12% boven 1 in de feedbacklus. Met
+      // feedback op 92% is de lus dan 1,03 en zwelt een echo aan in plaats
+      // van uit te sterven. Negatief = geen piek. Zie ook de reverb.
+      toon.Q.value = -6;
 
       // Let op: een lus MOET een DelayNode bevatten, anders mute de browser het
       // hele lusgedeelte. En delayTime in een lus wordt geklemd op minimaal één
@@ -467,6 +471,133 @@ export const EFFECTEN = [
           }
         },
         staart: () => 0,
+      };
+    },
+  },
+  {
+    id: 'reverb',
+    naam: 'Reverb',
+    params: ['grootte', 'toon', 'meng', 'freeze'],
+    standaard: { grootte: 0.55, toon: 0.5, meng: 0.5, freeze: 0 },
+    eenheid: {
+      grootte: (t) => `${expMap(t, 0.4, 30).toFixed(1).replace('.', ',')} s`,
+      toon: (t) => hz(expMap(t, 1200, 16000)),
+      meng: pct,
+      freeze: (t) => (t >= 0.5 ? 'vast' : 'uit'),
+    },
+    trappen: { freeze: 2 },
+    /*
+     * Algoritmische galm: een feedback delay network (FDN).
+     *
+     * Acht vertragingslijnen die in een lus in elkaar overlopen via een
+     * Householder-matrix (y = x - 2/N·Σx). Die matrix is verliesloos: alle
+     * energie blijft in de lus, en hoe snel de galm uitsterft bepaalt alleen
+     * de gain per lijn. Dat maakt FREEZE één handeling: invoer dicht, gain op
+     * (bijna) 1, demping open — en de galm hangt, zo lang als je wilt.
+     *
+     * Waarom geen ConvolverNode: die klinkt mooi, maar zijn staart is een
+     * bestand met een einde. Vasthouden kan dan niet.
+     *
+     * De lijnen bewegen een fractie van een milliseconde (modulatie). Zonder
+     * dat gaat een FDN metalig ringen op aangehouden tonen, en aangehouden
+     * tonen zijn precies dit repertoire.
+     *
+     *   in ─► mono ─► predelay ─► ±in ─┐
+     *                                   ▼
+     *            ┌── lijn_i ─► demping_i ─► g_i ─┬─► lijn_i (terug)
+     *            │                               ├─► Σ·(-2/N) ─► alle lijnen
+     *            │                               └─► L of R ─► nat
+     *   in ─────────────────────────────────────────────────── droog ─► uit
+     */
+    bouw(ctx) {
+      const N = 8;
+      // Onderling ondeelbare lengtes (ms), anders vallen echo's samen en hoor je een toon.
+      const LENGTES = [29.7, 37.1, 41.1, 43.7, 53.9, 61.3, 67.9, 73.1];
+      const ingang = ctx.createGain();
+      const uitgang = ctx.createGain();
+      const droog = ctx.createGain();
+      const nat = ctx.createGain();
+      const mono = ctx.createGain();
+      mono.channelCount = 1;
+      mono.channelCountMode = 'explicit';
+      mono.channelInterpretation = 'speakers';
+      const invoer = ctx.createGain();           // dicht bij freeze
+      const voor = ctx.createDelay(0.2);
+      voor.delayTime.value = 0.018;
+      const som = ctx.createGain();
+      som.gain.value = -2 / N;
+      const links = ctx.createGain(), rechts = ctx.createGain();
+      const stereo = ctx.createChannelMerger(2);
+
+      ingang.connect(droog).connect(uitgang);
+      ingang.connect(mono).connect(invoer).connect(voor);
+      links.connect(stereo, 0, 0);
+      rechts.connect(stereo, 0, 1);
+      stereo.connect(nat).connect(uitgang);
+      links.gain.value = rechts.gain.value = 0.5;   // vier lijnen per kant
+
+      const lijnen = LENGTES.map((ms, i) => {
+        const d = ctx.createDelay(0.2);
+        d.delayTime.value = ms / 1000;
+        const demping = ctx.createBiquadFilter();
+        demping.type = 'lowpass';
+        // Q is bij een Web Audio-lowpass een piek in DECIBEL, geen factor.
+        // Alles boven ~-3 dB geeft een bultje boven 1 bij de afsnijfrequentie,
+        // en in een lus die duizenden keren rondgaat groeit dat bultje tot de
+        // galm aanzwelt in plaats van uitsterft. Gemeten, op 23 september 2026.
+        demping.Q.value = -6;
+        const g = ctx.createGain();
+        const injectie = ctx.createGain();
+        injectie.gain.value = i % 2 ? -0.35 : 0.35;
+        voor.connect(injectie).connect(d);
+        d.connect(demping).connect(g);
+        g.connect(d);                             // eigen lus (diagonaal van de matrix)
+        g.connect(som);                           // en naar de rest via -2/N
+        som.connect(d);
+        g.connect(i % 2 ? rechts : links);
+        return { d, demping, g, s: ms / 1000 };
+      });
+
+      // Modulatie: vier trage oscillatoren, elk op twee lijnen in tegenfase.
+      for (let k = 0; k < 4; k++) {
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = 0.11 + k * 0.07;
+        const diep = ctx.createGain(); diep.gain.value = 0.00035;
+        const tegen = ctx.createGain(); tegen.gain.value = -0.00035;
+        lfo.connect(diep).connect(lijnen[k].d.delayTime);
+        lfo.connect(tegen).connect(lijnen[k + 4].d.delayTime);
+        try { lfo.start(); } catch (_) {}
+      }
+
+      const staat = { rt60: 3, toon: 6000, vast: false };
+      const pasToe = (now) => {
+        for (const l of lijnen) {
+          // RT60: na zoveel seconden is het 60 dB zachter. Per rondgang van
+          // lengte s is de gain dan 10^(-3·s/RT60).
+          const g = staat.vast ? 0.9998 : Math.pow(10, (-3 * l.s) / staat.rt60);
+          l.g.gain.setTargetAtTime(g, now, 0.05);
+          l.demping.frequency.setTargetAtTime(staat.vast ? 20000 : staat.toon, now, 0.05);
+        }
+        invoer.gain.setTargetAtTime(staat.vast ? 0 : 1, now, 0.05);
+      };
+
+      return {
+        in: ingang, out: uitgang,
+        zet(naam, v, now) {
+          const t = clamp(v);
+          if (naam === 'grootte') staat.rt60 = expMap(t, 0.4, 30);
+          else if (naam === 'toon') staat.toon = expMap(t, 1200, 16000);
+          else if (naam === 'freeze') staat.vast = t >= 0.5;
+          else if (naam === 'meng') {
+            nat.gain.setTargetAtTime(Math.cos((1 - t) * Math.PI / 2), now, 0.02);
+            droog.gain.setTargetAtTime(Math.cos(t * Math.PI / 2), now, 0.02);
+            return;
+          } else return;
+          pasToe(now);
+        },
+        // Bevroren houdt hij oneindig vast; de opruiming wacht dan niet eeuwig.
+        staart: () => (staat.vast ? 1 : Math.min(30, staat.rt60)),
+        _staat: () => ({ ...staat, gains: lijnen.map((l) => l.g.gain.value), invoer: invoer.gain.value }),
       };
     },
   },
