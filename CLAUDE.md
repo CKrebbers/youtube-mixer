@@ -44,7 +44,7 @@ als een feature erom lijkt te vragen, is dat bijna altijd een ontwerpfout elders
 
 ```
 index.html          geen build-stap, plain ES-modules
-apc.html            de APC-kaarten: per mapje wat elke knop doet (src/ui/apc-kaart.js)
+apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze doen (src/ui/apc-kaart.js)
 styles.css
 src/
   engine/           audio-graph.js  kanaalstrip, EQ, bipolair filter, master, xfader
@@ -467,11 +467,14 @@ test/
   ringtype wisselt mee. `mapje-balk.js` toont bij elke wissel wat de knoppen
   doen. De standaardmapping (269 regels) is gegenereerd volgens de tabel in
   `docs/APC40.md`; aanpassen mag gewoon in de JSON of met koppelen.
-  `apc.html` tekent per mapje de APC met wat elke knop doet. Hij leest dezelfde
-  mapping (eigen versie van de server, anders de standaard) en vraagt aan
-  `Mapping.kies()` wat geldt, dus hij klopt vanzelf. Voeg je een action toe aan
-  de mapping, geef hem dan een uitleg in `apc-beschrijf.js`; de test eist dat.
-  De tekening is een schema, de plaats van knoppen bij benadering.
+  `apc.html` is een interactieve kaart: één APC met de knoppen op hun ECHTE
+  plek (uitgemeten op de Features-tekening, User Guide p4: apparaat x 70–1040,
+  y 392–970 → procenten). Schakelaars voor grid-modus, strip/rack en shift;
+  klik = uitleg (nu, met shift, per modus); zoeken markeert waar een functie
+  zit; kleur per soort. Hij luistert zelf mee met de APC (alleen invoer, stuurt
+  niets) en volgt shift en modusknoppen via een eigen Mapping die alleen
+  `layer.*` uitvoert. Wat een knop doet komt uit de mapping via `kies()`; geef
+  een nieuwe action een uitleg in `apc-beschrijf.js` (de test eist dat).
 - De LED-laag leest de MAPPING, niet de engine. Koppel je een pad aan iets
   anders, dan verhuist zijn lampje vanzelf mee. Er is bewust geen tweede tabel.
 - LED's lopen op een eigen `setInterval`, niet op de renderloop: `requestAnimationFrame`

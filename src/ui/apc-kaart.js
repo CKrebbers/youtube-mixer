@@ -1,155 +1,289 @@
 import { Mapping, resolveTarget } from '../control/mapping.js';
-import { GROEPEN, LAAGNAAM } from '../control/lagen.js';
+import { GROEPEN, LAAGNAAM, Lagen } from '../control/lagen.js';
 import apc from '../control/devices/apc40mk2.js';
 import { esc } from './dom.js';
 import { beschrijf } from './apc-beschrijf.js';
 
 /**
- * De APC-kaarten: per mapje een tekening van de APC40 mkII met wat elke knop
- * doet, plus een tabel. Niets hiervan staat met de hand in deze pagina: hij
- * leest dezelfde mapping als de app (je eigen versie als die er is, anders de
- * standaard) en vraagt aan dezelfde `Mapping.kies()` welke regel geldt. Pas je
- * de mapping aan, dan klopt deze pagina vanzelf.
+ * De interactieve APC-kaart (apc.html).
  *
- * De tekening is een schema: de plaats van de knoppen is bij benadering.
+ * Eén tekening van de APC40 mkII, knoppen op hun ECHTE plek: uitgemeten op
+ * de Features-tekening in de User Guide v1.0 (p4). Het apparaat loopt daar van
+ * x 70–1040 en y 392–970; elke positie hieronder is dat, omgerekend naar
+ * procenten. Zie docs/APC40-onderzoek.md.
+ *
+ * Wat een knop doet komt NIET uit deze pagina maar uit de mapping (je eigen
+ * versie van de server, anders de standaard) via dezelfde `Mapping.kies()` als
+ * de app. Schakelaars bovenaan kiezen grid-modus, strip/rack en shift; de
+ * labels wisselen direct mee. Is de APC aangesloten, dan luistert de pagina
+ * zelf mee (alleen lezen, stuurt niets): een aangeraakte knop licht op, en
+ * modus en shift volgen wat je op het apparaat doet.
  */
 
-// ---- het apparaat (x, y in procenten) -------------------------------------
-// Volgens de Features-tekening in de User Guide v1.0 (p4); zie
-// docs/APC40-onderzoek.md. Verhoudingen bij benadering, plaatsing juist.
+// ---- plaatsing (procenten van het apparaat) --------------------------------
 
-const K = (sig, x, y, soort) => ({ sig, x, y, soort });
-const kolX = (i) => 5 + i * 6.6;
-const MASTER = 58.5;
-const PLAAT = [];
+const X0 = 70, Y0 = 392, B = 970, H = 578;
+const px = (x) => ((x - X0) / B) * 100;
+const py = (y) => ((y - Y0) / H) * 100;
+const K = (sig, x, y, soort, deel) => ({ sig, x: px(x), y: py(y), soort, deel });
+
+const kolom = (i) => 115 + i * 74;          // x van kolom 1..8 (i = 0..7)
+const MASTERKOL = 697;
+const RIJEN_GRID = [497, 533, 568, 604, 639];
+export const PLAAT = [];
 for (let i = 0; i < 8; i++) {
-  const x = kolX(i);
-  PLAAT.push(K(`cc:0:${48 + i}`, x, 5, 'knop-rond'));                                 // track knob
-  for (let rij = 1; rij <= 5; rij++) PLAAT.push(K(`note:0:${apc.gridNote(i + 1, rij)}`, x, 10 + rij * 5.8, 'pad'));
-  PLAAT.push(K(`note:${i}:52`, x, 46, 'knop'));                                       // clip stop
-  PLAAT.push(K(`note:${i}:51`, x, 51, 'knop'));                                       // track select
-  // 2×2 per track: [activator | A/B] boven [solo | record arm]
-  PLAAT.push(K(`note:${i}:50`, x - 1.6, 56.5, 'mini'));
-  PLAAT.push(K(`note:${i}:66`, x + 1.6, 56.5, 'mini'));
-  PLAAT.push(K(`note:${i}:49`, x - 1.6, 61.5, 'mini'));
-  PLAAT.push(K(`note:${i}:48`, x + 1.6, 61.5, 'mini'));
-  PLAAT.push(K(`cc:${i}:7`, x, 82, 'fader'));
+  const x = kolom(i);
+  PLAAT.push(K(`cc:0:${48 + i}`, x, 438, 'draai', 'kolom'));
+  RIJEN_GRID.forEach((y, r) => PLAAT.push(K(`note:0:${apc.gridNote(i + 1, r + 1)}`, x, y, 'pad', 'grid')));
+  PLAAT.push(K(`note:${i}:52`, x, 678, 'knop', 'kolom'));        // clip stop
+  PLAAT.push(K(`note:${i}:51`, x, 717, 'breed', 'kolom'));       // track select
+  PLAAT.push(K(`note:${i}:50`, x - 18, 752, 'mini', 'kolom'));   // activator (nummer)
+  PLAAT.push(K(`note:${i}:66`, x + 18, 752, 'mini', 'kolom'));   // A|B
+  PLAAT.push(K(`note:${i}:49`, x - 18, 787, 'mini', 'kolom'));   // S
+  PLAAT.push(K(`note:${i}:48`, x + 18, 787, 'mini', 'kolom'));   // ●
+  PLAAT.push(K(`cc:${i}:7`, x, 885, 'fader', 'kolom'));
 }
-for (let s = 1; s <= 5; s++) PLAAT.push(K(`note:0:${81 + s}`, MASTER, 10 + s * 5.8, 'scene'));
-PLAAT.push(K('note:0:81', MASTER, 46, 'knop'));          // stop all clips
-PLAAT.push(K('note:0:80', MASTER, 51, 'knop'));          // master (track select van de master)
-PLAAT.push(K('cc:0:47', MASTER, 59, 'encoder'));         // cue level
-PLAAT.push(K('cc:0:14', MASTER, 82, 'fader'));           // masterfader
-// rechterdeel: drie rijen bovenin, tempo rechts ervan
-[['note:0:87', 72, 11], ['note:0:91', 79, 11], ['note:0:93', 86, 11], ['note:0:102', 93, 11],
-  ['note:0:88', 72, 17], ['note:0:90', 79, 17], ['note:0:99', 86, 17],
-  ['note:0:89', 72, 23], ['note:0:100', 79, 23], ['note:0:101', 86, 23]]
-  .forEach(([s, x, y]) => PLAAT.push(K(s, x, y, 'knop')));
-PLAAT.push(K('cc:0:13', 94, 20, 'encoder'));             // tempo, twee rijen hoog
-for (let i = 0; i < 8; i++) PLAAT.push(K(`cc:0:${16 + i}`, 72 + (i % 4) * 7.3, i < 4 ? 32 : 40, 'knop-rond'));
-[['note:0:58', 72, 48], ['note:0:59', 79.3, 48], ['note:0:60', 86.6, 48], ['note:0:61', 93.9, 48],
-  ['note:0:62', 72, 53], ['note:0:63', 79.3, 53], ['note:0:64', 86.6, 53], ['note:0:65', 93.9, 53]]
-  .forEach(([s, x, y]) => PLAAT.push(K(s, x, y, 'knop')));
-// linksonder de vier pijlen, rechts daarvan Shift en Bank
-PLAAT.push(K('note:0:94', 75.5, 60, 'pijl'));
-PLAAT.push(K('note:0:97', 71, 65, 'pijl'));
-PLAAT.push(K('note:0:96', 80, 65, 'pijl'));
-PLAAT.push(K('note:0:95', 75.5, 70, 'pijl'));
-PLAAT.push(K('note:0:98', 86.6, 62, 'knop'));            // shift
-PLAAT.push(K('note:0:103', 93.9, 62, 'knop'));           // bank
-PLAAT.push(K('cc:0:15', 86, 88, 'xfader'));              // crossfader rechtsonder
+RIJEN_GRID.forEach((y, s) => PLAAT.push(K(`note:0:${82 + s}`, MASTERKOL, y, 'scene', 'master')));
+PLAAT.push(K('note:0:81', MASTERKOL, 678, 'knop', 'master'));       // stop all clips
+PLAAT.push(K('note:0:80', MASTERKOL, 717, 'breed', 'master'));      // master
+PLAAT.push(K('cc:0:47', MASTERKOL, 770, 'draaiklein', 'master'));   // cue level
+PLAAT.push(K('cc:0:14', MASTERKOL, 885, 'fader', 'master'));        // masterfader
+// rechterdeel: drie rijen, tempo rechts ervan
+[['note:0:87', 758, 485], ['note:0:91', 840, 485], ['note:0:93', 915, 485], ['note:0:102', 988, 485],
+  ['note:0:88', 758, 527], ['note:0:90', 832, 527], ['note:0:99', 907, 527],
+  ['note:0:89', 758, 567], ['note:0:100', 832, 567], ['note:0:101', 907, 567]]
+  .forEach(([s, x, y]) => PLAAT.push(K(s, x, y, 'knop', 'rechts')));
+PLAAT.push(K('cc:0:13', 975, 545, 'draaigroot', 'rechts'));
+[765, 840, 913, 988].forEach((x, i) => PLAAT.push(K(`cc:0:${16 + i}`, x, 625, 'draai', 'rechts')));
+[765, 840, 913, 988].forEach((x, i) => PLAAT.push(K(`cc:0:${20 + i}`, x, 700, 'draai', 'rechts')));
+[['note:0:58', 757, 760], ['note:0:59', 828, 760], ['note:0:60', 905, 760], ['note:0:61', 978, 760],
+  ['note:0:62', 757, 800], ['note:0:63', 828, 800], ['note:0:64', 905, 800], ['note:0:65', 978, 800],
+  ['note:0:98', 905, 840], ['note:0:103', 978, 840]]
+  .forEach(([s, x, y]) => PLAAT.push(K(s, x, y, 'knop', 'rechts')));
+[['note:0:94', 790, 836], ['note:0:97', 766, 858], ['note:0:96', 814, 858], ['note:0:95', 790, 880]]
+  .forEach(([s, x, y]) => PLAAT.push(K(s, x, y, 'pijl', 'rechts')));
+PLAAT.push(K('cc:0:15', 918, 932, 'xfader', 'rechts'));
 
 const naamVan = (sig) => apc.label(sig) ?? sig;
+const PER_SIG = new Map(PLAAT.map((k) => [k.sig, k]));
 
-// ---- de kaarten ------------------------------------------------------------
+// ---- soorten (kleur op de kaart) -------------------------------------------
 
-const STANDAARD = Object.fromEntries(Object.entries(GROEPEN).map(([g, d]) => [g, d.standaard]));
+export const SOORTEN = [
+  ['mapje', 'modus kiezen', /^layer\./],
+  ['hotcue', 'hotcues', /\.hotcue\./],
+  ['loop', 'loops', /\.(beatloop\.[\d.]+|loop\.\w+)$/],
+  ['sampler', 'sampler', /^sampler\./],
+  ['video', 'video', /^video\./],
+  ['opname', 'opname', /^record\./],
+  ['fx', 'effecten & sends', /\.(fx\.\w+|fx\.knob\.\d|send\.[ab]|rack\.\w+)$|^send\.[ab]\./],
+  ['mixer', 'mixer', /\.(fader|filter|trim|high|mid|low|xfade\.\w+)$|^mixer\./],
+  ['transport', 'transport & focus', /\.(play|cue|sync|tap|focus|pitch|bend\.\w+|nudge\.\w+|pitch\.range)$|^focus\.|^window\./],
+];
+export const soortVan = (action) => (action ? (SOORTEN.find(([, , re]) => re.test(action))?.[0] ?? 'transport') : 'vrij');
 
-/** Welke kaarten er zijn: de kern, shift, en elk mapje. */
-function kaarten() {
-  const lijst = [
-    { id: 'kern', titel: 'Vaste kern', uitleg: 'Wat altijd hetzelfde doet, in welk mapje je ook zit. Hier grijp je blind naar.',
-      stand: STANDAARD, shift: false, filter: (r) => !r.laag },
-    { id: 'shift', titel: 'Met shift', uitleg: 'Houd SHIFT vast. Wat hier niet oplicht, doet met shift hetzelfde als zonder.',
-      stand: STANDAARD, shift: true, filter: (r) => r.shift },
-  ];
+// ---- toestand ------------------------------------------------------------------
+
+const lagen = new Lagen();
+let shift = false;
+let gekozen = null;          // sig van de aangeklikte knop
+let zoek = '';
+let mapping = null;
+
+/** De regel voor een knop, eventueel in een andere stand dan de huidige. */
+function regelVan(sig, { metShift = shift, stand = null } = {}) {
+  if (!stand) return mapping.kies(sig, { shift: metShift });
+  const oud = mapping.lagen;
+  mapping.lagen = () => Object.entries(stand).map(([g, l]) => `${g}.${l}`);
+  const r = mapping.kies(sig, { shift: metShift });
+  mapping.lagen = oud;
+  return r;
+}
+const tekst = (r) => (r ? beschrijf(resolveTarget(r.action, {})) : null);
+
+// ---- tekenen -----------------------------------------------------------------
+
+const plaat = document.getElementById('plaat');
+const detail = document.getElementById('detail');
+
+function tekenPlaat() {
+  plaat.innerHTML = '<b class="logo">APC40<sup>mkII</sup></b><b class="akai">AKAI professional</b>'
+    + '<i class="vak vak-grid"></i><i class="vak vak-device"></i><i class="vak vak-pijlen"></i>'
+    + PLAAT.map((k) => {
+      const r = regelVan(k.sig);
+      const b = tekst(r);
+      const soort = soortVan(r?.action);
+      const hoogte = zoek && b ? (b.lang + ' ' + b.kort + ' ' + naamVan(k.sig)).toLowerCase().includes(zoek) : false;
+      const cls = ['c', k.soort, `s-${soort}`, gekozen === k.sig ? 'gekozen' : '',
+        zoek ? (hoogte ? 'treffer' : 'mis') : '', r?.shift ? 'shiftregel' : ''].join(' ');
+      return `<button class="${cls}" data-sig="${esc(k.sig)}" style="left:${k.x.toFixed(2)}%;top:${k.y.toFixed(2)}%"
+        title="${esc(naamVan(k.sig))}${b ? ` — ${esc(b.lang)}` : ' — vrij'}"><i></i><span>${b ? esc(b.kort) : ''}</span></button>`;
+    }).join('');
+  document.querySelectorAll('[data-modus]').forEach((el) => {
+    const [g, l] = el.dataset.modus.split('.');
+    el.classList.toggle('aan', lagen.stand[g] === l);
+  });
+  document.getElementById('shift').classList.toggle('aan', shift);
+}
+
+function tekenDetail() {
+  if (!gekozen) {
+    detail.innerHTML = '<h3>Klik op een knop</h3><p class="dim">…of druk hem in op de APC. Hier zie je wat hij nu doet, wat hij met shift doet, en wat hij in elke modus doet.</p>'
+      + '<p class="dim">Zoek hierboven op een functie ("loop", "filter", "cue") om te zien waar hij zit.</p>';
+    return;
+  }
+  const k = PER_SIG.get(gekozen);
+  const lang = (r) => (r ? esc(tekst(r).lang) : '<span class="dim">niets (vrij)</span>');
+  const gewoon = regelVan(gekozen, { metShift: false });
+  const metShift = regelVan(gekozen, { metShift: true });
+  const rijen = [];
   for (const [g, d] of Object.entries(GROEPEN)) {
-    for (const [knop, lagen] of Object.entries(d.knoppen)) {
-      for (const laag of lagen) {
-        const id = `${g}.${laag}`;
-        lijst.push({ id, groep: g, titel: `${d.naam}: ${LAAGNAAM[id] ?? laag}`, kiesknop: `layer.${g}.${knop}`,
-          uitleg: g === 'grid' ? 'Kies met SHIFT + scene launch, of blader met pijl ▲ ▼.' : 'Kies met de oplichtende kiesknop. Vasthouden = even gluren.',
-          stand: { ...STANDAARD, [g]: laag }, shift: false, filter: (r) => r.laag === id, metShift: true });
+    const perLaag = Object.values(d.knoppen).flat()
+      .map((l) => ({ l, r: regelVan(gekozen, { metShift: false, stand: { ...lagen.stand, [g]: l } }) }));
+    if (new Set(perLaag.map((x) => x.r?.action ?? '')).size > 1) {
+      for (const { l, r } of perLaag) {
+        rijen.push(`<tr class="${lagen.stand[g] === l ? 'nu' : ''}"><td>${esc(LAAGNAAM[`${g}.${l}`] ?? l)}</td><td>${lang(r)}</td></tr>`);
       }
     }
   }
-  return lijst;
+  const waar = { grid: 'grid-pad', kolom: 'in de kolom van een track', master: 'masterkolom (rechts van het grid)', rechts: 'rechterdeel' }[k.deel];
+  detail.innerHTML = `
+    <h3><i class="stip s-${soortVan(gewoon?.action)}"></i>${esc(naamVan(gekozen))}</h3>
+    <p class="dim">${esc(waar)}</p>
+    <dl>
+      <dt>doet nu</dt><dd>${lang(gewoon)}</dd>
+      <dt>met shift</dt><dd>${metShift && metShift !== gewoon ? lang(metShift) : '<span class="dim">hetzelfde</span>'}</dd>
+    </dl>
+    ${rijen.length ? `<h4>per modus</h4><table>${rijen.join('')}</table>` : ''}`;
 }
 
-function tekenKaart(mapping, kaart) {
-  const lagen = Object.entries(kaart.stand).map(([g, l]) => `${g}.${l}`);
-  mapping.lagen = () => lagen;
-  const rij = [];
-  const knoppen = PLAAT.map((k) => {
-    const regel = mapping.kies(k.sig, { shift: kaart.shift });
-    const hoort = regel && kaart.filter(regel);
-    const kies = regel && kaart.kiesknop && regel.action === kaart.kiesknop;
-    const metShift = kaart.metShift && hoort ? mapping.kies(k.sig, { shift: true }) : null;
-    if (hoort) rij.push({ k, regel, metShift: metShift && metShift !== regel ? metShift : null });
-    const b = regel ? beschrijf(resolveTarget(regel.action, {})) : null;
-    const cls = ['apc-c', k.soort, hoort ? 'aan' : regel ? 'dof' : 'leeg', kies ? 'kies' : ''].join(' ');
-    return `<div class="${cls}" style="left:${k.x}%;top:${k.y}%" title="${esc(naamVan(k.sig))}${regel ? ` — ${esc(beschrijf(regel.action).lang)}` : ''}">
-      <i></i><span>${hoort || kies ? esc(b.kort) : ''}</span></div>`;
+function tekenLijst() {
+  // Alles wat nu iets doet, per deel van het apparaat; wat per kolom gelijk is op één regel.
+  const delen = [['kolom', 'Per track (kolom 1–8)'], ['grid', 'Grid (modus: ' + (LAAGNAAM[`grid.${lagen.stand.grid}`] ?? '') + ')'],
+    ['master', 'Masterkolom'], ['rechts', 'Rechterdeel — de track met focus']];
+  document.getElementById('lijst').innerHTML = delen.map(([deel, titel]) => {
+    const groepen = new Map();
+    for (const k of PLAAT.filter((x) => x.deel === deel)) {
+      const r = regelVan(k.sig);
+      if (!r) continue;
+      const knop = naamVan(k.sig);
+      const m = /(\d)(\/\d)?$/.exec(knop);
+      const n = deel === 'rechts' ? null : m ? m[1] : null;
+      const alg = (t) => (n ? t.replaceAll(`track ${n}`, 'track N').replaceAll(`sampler-pad ${n}`, 'sampler-pad N') : t);
+      const doet = alg(tekst(r).lang);
+      const sleutel = (n ? knop.replace(/(\d)(\/\d)?$/, 'N$2') : knop) + '|' + doet;
+      if (!groepen.has(sleutel)) groepen.set(sleutel, { knop, tpl: n ? knop.replace(/(\d)(\/\d)?$/, '#$2') : null, ns: [], doet, soort: soortVan(r.action), sig: k.sig });
+      if (n) groepen.get(sleutel).ns.push(n);
+    }
+    const rijen = [...groepen.values()].map((g) => {
+      const meer = g.ns.length > 1;
+      const knop = g.tpl ? g.tpl.replace('#', meer ? `${g.ns[0]}–${g.ns.at(-1)}` : g.ns[0]) : g.knop;
+      const doet = meer ? g.doet.replaceAll('track N', 'die track').replaceAll('sampler-pad N', 'die sampler-pad')
+        : g.doet.replaceAll('track N', `track ${g.ns[0]}`).replaceAll('sampler-pad N', `sampler-pad ${g.ns[0]}`);
+      return `<tr data-sig="${esc(g.sig)}"><td><i class="stip s-${g.soort}"></i>${esc(knop)}</td><td>${esc(doet)}</td></tr>`;
+    }).join('');
+    return `<section><h3>${esc(titel)}</h3><table>${rijen}</table></section>`;
   }).join('');
-
-  // Tabel: wat per kolom hetzelfde doet ("clip stop 1–8") wordt één regel.
-  const groepen = new Map();
-  for (const { k, regel, metShift } of rij) {
-    const knop = naamVan(k.sig);
-    const m = /(\d)(\/\d)?$/.exec(knop);
-    const n = m ? m[1] : null;
-    const alg = (t) => (n ? t.replaceAll(`track ${n}`, 'track N').replaceAll(`sampler-pad ${n}`, 'sampler-pad N') : t);
-    const doet = alg(beschrijf(regel.action).lang);
-    const shift = metShift ? alg(beschrijf(metShift.action).lang) : '';
-    const sleutel = [n ? knop.replace(/(\d)(\/\d)?$/, 'N$2') : knop, doet, shift].join('|');
-    if (!groepen.has(sleutel)) groepen.set(sleutel, { knop, n: [], doet, shift, tpl: n ? knop.replace(/(\d)(\/\d)?$/, '#$2') : null });
-    if (n) groepen.get(sleutel).n.push(n);
-  }
-  const bereik = (ns) => (ns.length > 2 && ns.every((x, i) => i === 0 || +x === +ns[i - 1] + 1) ? `${ns[0]}–${ns.at(-1)}` : ns.join(', '));
-  const leesbaar = (t, meer) => (meer ? t.replaceAll('track N', 'de track van die kolom').replaceAll('sampler-pad N', 'de sampler-pad van die kolom') : t.replaceAll('track N', 'track').replaceAll('sampler-pad N', 'sampler-pad'));
-  const tabel = [...groepen.values()].map((g) => {
-    const meer = g.n.length > 1;
-    const knop = g.tpl ? g.tpl.replace('#', meer ? bereik(g.n) : g.n[0]) : g.knop;
-    const eén = (t) => (meer ? leesbaar(t, true) : t.replaceAll('track N', `track ${g.n[0]}`).replaceAll('sampler-pad N', `sampler-pad ${g.n[0]}`));
-    return `<tr><td>${esc(knop)}</td><td>${esc(eén(g.doet))}</td>
-      ${kaart.metShift ? `<td>${g.shift ? esc(eén(g.shift)) : '<span class="dim">—</span>'}</td>` : ''}</tr>`;
-  }).join('');
-
-  return `<section class="apc-kaart" id="${esc(kaart.id)}">
-    <h2>${esc(kaart.titel)}</h2>
-    <p>${esc(kaart.uitleg)}</p>
-    <div class="apc-plaat">${knoppen}<b class="apc-deel links">clip-grid en trackstrips</b><b class="apc-deel rechts">device en transport</b></div>
-    <table class="apc-tabel"><thead><tr><th>knop</th><th>doet</th>${kaart.metShift ? '<th>met shift</th>' : ''}</tr></thead>
-      <tbody>${tabel || '<tr><td colspan="3" class="dim">niets in dit mapje</td></tr>'}</tbody></table>
-  </section>`;
 }
+
+function alles() { tekenPlaat(); tekenDetail(); tekenLijst(); }
+
+// ---- bediening op de pagina ----------------------------------------------------
+
+plaat.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-sig]');
+  gekozen = el ? (gekozen === el.dataset.sig ? null : el.dataset.sig) : null;
+  tekenPlaat(); tekenDetail();
+});
+document.getElementById('lijst').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-sig]');
+  if (!tr) return;
+  gekozen = tr.dataset.sig;
+  tekenPlaat(); tekenDetail();
+  plaat.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+document.querySelectorAll('[data-modus]').forEach((el) => el.addEventListener('click', () => {
+  const [g, l] = el.dataset.modus.split('.');
+  lagen.zet(g, l);
+}));
+document.getElementById('shift').addEventListener('click', () => { shift = !shift; alles(); });
+document.getElementById('zoek').addEventListener('input', (e) => { zoek = e.target.value.trim().toLowerCase(); tekenPlaat(); });
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { gekozen = null; zoek = ''; document.getElementById('zoek').value = ''; tekenPlaat(); tekenDetail(); }
+  if (e.key === 'Shift' && !e.repeat && e.target.tagName !== 'INPUT') { shift = true; alles(); }
+});
+window.addEventListener('keyup', (e) => { if (e.key === 'Shift' && shift && e.target.tagName !== 'INPUT') { shift = false; alles(); } });
+lagen.on('change', alles);
+
+document.getElementById('legenda').innerHTML = [...SOORTEN.map(([id, naam]) => [id, naam]), ['vrij', 'vrij (doet niets)']]
+  .map(([id, naam]) => `<span><i class="stip s-${id}"></i>${esc(naam)}</span>`).join('');
+
+// ---- live meekijken met de APC (alleen lezen) --------------------------------
+
+/**
+ * De pagina opent de APC-invoer zelf. Web MIDI laat meerdere tabbladen tegelijk
+ * luisteren; deze stuurt NIETS terug (geen init, geen lampjes), dus hij zit de
+ * mixer niet in de weg. De eigen Mapping doet alleen shift en de modusknoppen
+ * (layer.*) na, zodat de kaart volgt wat je op het apparaat doet.
+ */
+async function luisterMee() {
+  const status = document.getElementById('live');
+  if (!navigator.requestMIDIAccess) { status.textContent = 'geen Web MIDI in deze browser'; return; }
+  let toegang;
+  try { toegang = await navigator.requestMIDIAccess({ sysex: false }); } catch (_) { status.textContent = 'MIDI niet toegestaan'; return; }
+  const koppel = () => {
+    const invoer = [...toegang.inputs.values()].find((p) => /apc40/i.test(p.name));
+    status.textContent = invoer ? 'live: druk een knop op de APC' : 'APC niet aangesloten';
+    status.classList.toggle('aan', !!invoer);
+    if (!invoer) return;
+    invoer.onmidimessage = ({ data }) => {
+      const [st, nr, w = 0] = data;
+      const soort = st & 0xf0, ch = st & 0x0f;
+      if (soort !== 0x90 && soort !== 0x80 && soort !== 0xb0) return;
+      const type = soort === 0xb0 ? 'cc' : 'note';
+      const aan = soort === 0x90 && w > 0;
+      const sig = `${type}:${ch}:${nr}`;
+      const shiftVoor = shift;
+      mapping.handle({ type, channel: ch, number: nr, value: w, norm: w / 127, on: aan, sig });
+      shift = mapping.shift;
+      if ((type === 'cc' || aan) && PER_SIG.has(sig) && sig !== mapping.shiftSig) {
+        gekozen = sig;
+        tekenPlaat(); tekenDetail();
+        const el = plaat.querySelector(`[data-sig="${CSS.escape(sig)}"]`);
+        el?.classList.add('geraakt');
+        setTimeout(() => el?.classList.remove('geraakt'), 400);
+      } else if (shift !== shiftVoor) alles();
+    };
+  };
+  koppel();
+  toegang.onstatechange = koppel;
+}
+
+// ---- starten ---------------------------------------------------------------------
 
 async function laadMapping() {
   try {
     const r = await fetch('/api/mapping');
     const j = r.ok ? await r.json() : null;
-    if (j?.mapping?.rules?.length) return { doc: j.mapping, bron: 'jouw eigen mapping (van de server)' };
+    if (j?.mapping?.rules?.length) return { doc: j.mapping, bron: 'jouw eigen mapping' };
   } catch (_) {}
   const r = await fetch('mappings/apc40mk2.json');
   return { doc: await r.json(), bron: 'de standaardmapping' };
 }
 
 const { doc, bron } = await laadMapping();
-const mapping = new Mapping({ read: () => null, invoke: () => {} });
+mapping = new Mapping({
+  read: () => null,
+  // Alleen de modusknoppen doen hier iets; al het andere hoort bij de mixer.
+  invoke: (actie, aan) => {
+    const m = /^layer\.(\w+)\.(\w+)$/.exec(actie);
+    if (!m) return;
+    if (m[2] === 'next' || m[2] === 'prev') { if (aan) lagen.stap(m[1], m[2] === 'next' ? 1 : -1); return; }
+    lagen.druk(m[1], m[2], aan);
+  },
+  lagen: () => lagen.actief(),
+});
 mapping.load(doc);
-const lijst = kaarten();
-document.getElementById('bron').textContent = `Gelezen uit ${bron}: ${mapping.rules.size} regels.`;
-document.getElementById('inhoud').innerHTML = lijst.map((k) => `<a href="#${esc(k.id)}">${esc(k.titel)}</a>`).join('');
-document.getElementById('kaarten').innerHTML = lijst.map((k) => tekenKaart(mapping, k)).join('');
-// De kaarten bestaan pas nu: een link naar #mapje springt daarom hier pas.
-if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
+document.getElementById('bron').textContent = `Uit ${bron} (${mapping.rules.size} regels).`;
+alles();
+luisterMee();

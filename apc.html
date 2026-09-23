@@ -3,33 +3,123 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>APC-kaarten — VARVE DJ</title>
+<title>APC-kaart — VARVE DJ</title>
 <link rel="stylesheet" href="styles.css">
+<style>
+  body.kaart{display:block;overflow:auto;user-select:text;-webkit-user-select:text}
+  .k-kop{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;
+    padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .k-kop .brand em{font-style:normal;color:var(--dim);font-weight:400;letter-spacing:0;margin-left:8px;font-size:11px}
+  .k-groep{display:flex;align-items:center;gap:4px}
+  .k-groep > span{font-size:10px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;margin-right:4px}
+  .k-knop{border:1px solid var(--line);border-radius:5px;padding:4px 10px;color:var(--dim);font-size:12px;background:none;cursor:pointer}
+  .k-knop:hover{color:var(--text);border-color:var(--dim)}
+  .k-knop.aan{color:#0b0e11;background:var(--text);border-color:var(--text);font-weight:600}
+  .k-knop[data-modus="grid.hotcues"].aan{background:#ffd23c;border-color:#ffd23c}
+  .k-knop[data-modus="grid.loops"].aan{background:#35c6ff;border-color:#35c6ff}
+  .k-knop[data-modus="grid.sampler"].aan{background:#a57cff;border-color:#a57cff}
+  .k-knop[data-modus="grid.video"].aan{background:#4c7dff;border-color:#4c7dff;color:#fff}
+  #shift.aan{background:var(--warn);border-color:var(--warn)}
+  #zoek{background:var(--panel2);border:1px solid var(--line);border-radius:5px;color:var(--text);padding:5px 10px;font:inherit;width:190px}
+  #live{font-size:11px;color:var(--dim)} #live.aan{color:var(--a)} #live.aan::before{content:"● "}
+  .k-kop a{margin-left:auto;text-decoration:none}
+  .k-main{max-width:1500px;margin:0 auto;padding:14px 16px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
+  @media (max-width:1000px){ .k-main{grid-template-columns:1fr} }
+  #plaat{position:relative;width:100%;aspect-ratio:970/578;background:linear-gradient(#15191e,#0e1114);border:2px solid #2a323b;
+    border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);container-type:inline-size;overflow:hidden}
+  #plaat .logo{position:absolute;left:78%;top:3.5%;font:800 3.4cqw/1 ui-sans-serif,system-ui;color:#2c343d;letter-spacing:.05em}
+  #plaat .logo sup{font-size:.35em;letter-spacing:0;margin-left:.2em}
+  #plaat .akai{position:absolute;left:69%;top:92%;font:800 1.4cqw/1 ui-sans-serif,system-ui;color:#2c343d;letter-spacing:.1em}
+  #plaat .vak{position:absolute;border:1px solid #232b33;border-radius:.8cqw}
+  #plaat .vak-grid{left:1.2%;top:12.5%;width:66.5%;height:33%}
+  #plaat .vak-device{left:68.5%;top:34.5%;width:30.5%;height:26.5%}
+  #plaat .vak-pijlen{left:70.5%;top:75%;width:8%;height:10.5%}
+  #plaat .c{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;
+    gap:.25cqw;background:none;border:0;padding:0;cursor:pointer;color:var(--text)}
+  #plaat .c i{display:block;border:.15cqw solid var(--kl,#3a444e);background:color-mix(in srgb,var(--kl,#3a444e) 22%,#12161a);transition:transform .12s,box-shadow .12s}
+  #plaat .c span{font-size:1.05cqw;line-height:1.05;white-space:nowrap;max-width:7cqw;overflow:hidden;text-overflow:ellipsis;color:#cfd8e0}
+  #plaat .pad span,#plaat .scene span,#plaat .breed span,#plaat .knop span{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);max-width:92%;pointer-events:none}
+  #plaat .pad i{width:6.6cqw;height:2.6cqw;border-radius:.35cqw}
+  #plaat .scene i{width:3.6cqw;height:2.6cqw;border-radius:.35cqw}
+  #plaat .scene span{max-width:3.4cqw;font-size:.85cqw}
+  #plaat .knop i{width:5.2cqw;height:2.5cqw;border-radius:.35cqw}
+  #plaat .knop span{max-width:5cqw;font-size:.9cqw}
+  #plaat .breed i{width:6.6cqw;height:2.4cqw;border-radius:.35cqw}
+  #plaat .mini i{width:3.1cqw;height:2.5cqw;border-radius:.3cqw}
+  #plaat .mini span{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);max-width:3cqw;font-size:.72cqw;pointer-events:none}
+  #plaat .pijl i{width:2.3cqw;height:2.3cqw;border-radius:.3cqw}
+  #plaat .pijl span{display:none}
+  #plaat .draai i,#plaat .draaiklein i,#plaat .draaigroot i{border-radius:50%;box-shadow:0 0 0 .35cqw color-mix(in srgb,var(--kl,#3a444e) 35%,transparent)}
+  #plaat .draai i{width:4.4cqw;height:4.4cqw}
+  #plaat .draaiklein i{width:3cqw;height:3cqw}
+  #plaat .draaigroot i{width:5.6cqw;height:5.6cqw}
+  #plaat .fader{height:24%} #plaat .fader i{width:1.1cqw;height:100%;border-radius:.5cqw;position:relative}
+  #plaat .fader i::after{content:"";position:absolute;left:50%;top:30%;transform:translate(-50%,-50%);width:4.6cqw;height:2.2cqw;border-radius:.3cqw;
+    background:#2a323b;border:.15cqw solid var(--kl,#3a444e)}
+  #plaat .xfader i{width:12.4cqw;height:1cqw;border-radius:.5cqw;position:relative}
+  #plaat .xfader i::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:2.2cqw;height:4cqw;border-radius:.3cqw;
+    background:#2a323b;border:.15cqw solid var(--kl,#3a444e)}
+  #plaat .s-vrij{opacity:.45} #plaat .s-vrij span{color:var(--dim)}
+  #plaat .c:hover i{transform:scale(1.08)}
+  #plaat .c.gekozen i{box-shadow:0 0 0 .35cqw #fff,0 0 1.5cqw rgba(255,255,255,.4)}
+  #plaat .c.geraakt i{box-shadow:0 0 0 .5cqw var(--warn),0 0 2cqw var(--warn)}
+  #plaat .c.mis{opacity:.15} #plaat .c.treffer i{box-shadow:0 0 0 .35cqw var(--warn)}
+  #plaat .c.shiftregel span{color:var(--warn)}
+  /* soorten: dezelfde kleur op de kaart, in de legenda en in de lijst */
+  .s-transport{--kl:#3ddc84} .s-mixer{--kl:#4ad9c4} .s-hotcue{--kl:#ffd23c} .s-loop{--kl:#35c6ff}
+  .s-fx{--kl:#c48cff} .s-sampler{--kl:#ff5fd2} .s-video{--kl:#4c7dff} .s-opname{--kl:#ff3b30}
+  .s-mapje{--kl:#e6edf3} .s-vrij{--kl:#3a444e}
+  .stip{display:inline-block;width:.8em;height:.8em;border-radius:3px;background:var(--kl);margin-right:6px;vertical-align:-1px}
+  #legenda{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 2px 0;font-size:11px;color:var(--dim)}
+  .paneel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;position:sticky;top:64px}
+  .paneel h3{margin:0 0 4px;font-size:15px} .paneel h4{margin:14px 0 6px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .paneel dl{margin:10px 0 0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px}
+  .paneel dt{color:var(--dim);font-size:11px;padding-top:2px} .paneel dd{margin:0}
+  .paneel table{width:100%;border-collapse:collapse;font-size:12px}
+  .paneel td{padding:4px 6px;border-top:1px solid #1a2129;vertical-align:top} .paneel td:first-child{color:var(--dim);white-space:nowrap}
+  .paneel tr.nu td{color:var(--text);background:rgba(255,255,255,.04)} .paneel tr.nu td:first-child::before{content:"▸ ";color:var(--warn)}
+  .dim{color:var(--dim)}
+  .uitleg{max-width:1500px;margin:0 auto;padding:0 16px;color:var(--dim);font-size:12px;line-height:1.6}
+  .uitleg b{color:var(--text)}
+  #lijst{max-width:1500px;margin:6px auto 30px;padding:0 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+  #lijst section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+  #lijst h3{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+  #lijst table{width:100%;border-collapse:collapse;font-size:12px}
+  #lijst td{padding:3px 6px;border-top:1px solid #1a2129;vertical-align:top}
+  #lijst td:first-child{white-space:nowrap;color:var(--text);font-family:ui-monospace,monospace;font-size:11px}
+  #lijst tr{cursor:pointer} #lijst tr:hover td{background:rgba(255,255,255,.03)}
+</style>
 </head>
-<body class="apc-pagina">
-<header class="apc-kop">
-  <div class="brand">VARVE<span>DJ</span> <em>APC40 mkII — wat elke knop doet</em></div>
+<body class="kaart">
+<header class="k-kop">
+  <div class="brand">VARVE<span>DJ</span> <em>APC-kaart</em></div>
+  <div class="k-groep"><span>grid</span>
+    <button class="k-knop" data-modus="grid.hotcues">hotcues</button>
+    <button class="k-knop" data-modus="grid.loops">loops</button>
+    <button class="k-knop" data-modus="grid.sampler">sampler</button>
+    <button class="k-knop" data-modus="grid.video">video</button>
+  </div>
+  <div class="k-groep"><span>rechts</span>
+    <button class="k-knop" data-modus="device.strip">strip</button>
+    <button class="k-knop" data-modus="device.rack">rack</button>
+  </div>
+  <button class="k-knop" id="shift" title="of houd Shift op je toetsenbord vast">⇧ shift</button>
+  <input id="zoek" type="search" placeholder="zoek: loop, filter, cue…" autocomplete="off">
+  <span id="live">…</span>
   <a class="ghost" href="/">terug naar de mixer</a>
 </header>
-<main class="apc-main">
-  <section class="apc-intro">
-    <p><b>Zo werkt het.</b> Elke <b>kolom is een track</b> (1–8), altijd: de knop bovenaan is het <b>filter</b>
-      van die track, onderaan de <b>fader</b>. Het blokje van vier boven de fader: <b>nummer = play</b>,
-      <b>A|B = cue</b>, <b>S = sync</b>, <b>● = crossfaderkant</b>. <b>Track Select</b> kiest welke track
-      de <b>rechterkant</b> bedient. Clip Stop zet de loop van die track aan of uit.</p>
-    <p><b>Rechts</b> staat de track met focus, zoals op een DJ-mixer: de device knobs zijn
-      <b>trim · high · mid · low</b> (boven) en <b>echo · galm · fx-mix · fx 1</b> (onder).
-      <b>Clip/Device View</b> (licht op) wisselt ze naar het <b>rack</b> (fx 1–8) en terug. Tempo = pitch
-      (shift: fijn), <b>Nudge = even trager/sneller zolang je drukt</b>, Tap = tap tempo.</p>
-    <p><b>Het grid</b> heeft vier modi, gekozen met de <b>scene-knoppen</b> ernaast, elk in een eigen kleur:
-      1 hotcues (geel) · 2 loops (cyaan) · 3 sampler (violet) · 4 video (blauw). Scene 5 = loop weg.
-      Vasthouden = even gluren. <b>Shift</b> is alleen voor het zeldzame: wissen, opname stoppen, fijne pitch.</p>
-    <p class="dim">De tekening is een schema: de plaats van de knoppen is bij benadering. Wat een knop doet, komt
-      rechtstreeks uit de mapping en klopt precies. <span id="bron"></span></p>
-    <nav id="inhoud" class="apc-inhoud"></nav>
-  </section>
-  <div id="kaarten"></div>
+<main class="k-main">
+  <div>
+    <div id="plaat" aria-label="de APC40 mkII van bovenaf"></div>
+    <div id="legenda"></div>
+  </div>
+  <aside id="detail" class="paneel"></aside>
 </main>
+<p class="uitleg"><b>Elke kolom is een track</b>: filter bovenaan, fader onderaan, play · cue · sync · crossfaderkant in het blokje van vier.
+  <b>Track Select</b> kiest welke track de <b>rechterkant</b> bedient. De <b>scene-knoppen</b> naast het grid kiezen de grid-modus,
+  <b>Clip/Device View</b> wisselt rechts tussen strip en rack. Vasthouden van een modusknop = even gluren. Plaatsing volgens de officiële
+  handleiding; wat een knop doet komt rechtstreeks uit de mapping. <span id="bron"></span></p>
+<div id="lijst"></div>
 <script type="module" src="src/ui/apc-kaart.js"></script>
 </body>
 </html>
