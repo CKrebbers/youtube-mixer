@@ -130,5 +130,6 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   `hotcue.1.delete` naast `sampler.1.wis`). Kan zonder dat je mappings breken
   (de omzetting bestaat al). **Advies:** ja, vóór de APC-indeling definitief wordt.
 
-- [ ] **E3. Mappings ook op de server bewaren** in plaats van alleen in de
+- [x] **E3. Mappings ook op de server bewaren** in plaats van alleen in de
   browser (localStorage). Dan overleven ze een andere browser of gewiste data.
+  — Clay: ja (gebouwd 23 sep: server eerst, localStorage reserve; herstellen wist beide).

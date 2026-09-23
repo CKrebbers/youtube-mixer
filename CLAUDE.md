@@ -403,8 +403,10 @@ test/
     Sneltoetsen alleen uit tijdens TYPEN (`isTypen`). Eén onderpaneel tegelijk
     (library, MIDI, rack-editor: `sluitOnderpanelen`), Esc sluit. Destructief = tweede klik
     binnen 3 s (laden over een spelende track, nummer weghalen, opname stoppen,
-    mapping resetten, DICHT/OPEN op een hoorbare track). Eigen MIDI-mapping in
-    localStorage. MAAT-badge toont wie de maat geeft.
+    mapping resetten, DICHT/OPEN op een hoorbare track). Eigen MIDI-mapping op de
+    server (`/api/mapping`, instellingen-tabel) en in localStorage als reserve;
+    bij opstarten gaat de server voor. "Standaard herstellen" wist beide, zodat
+    de app daarna weer `mappings/apc40mk2.json` volgt (Clay 23 sep, E3). MAAT-badge toont wie de maat geeft.
 - Een effect-rack hangt aan een LINK (`tracks.id`), niet aan een fader. Laad je
   hetzelfde nummer op een andere track, dan komen zijn racks mee. Meerdere per
   nummer, één actief. De inhoud is JSON: wat er ín een rack staat is een zaak

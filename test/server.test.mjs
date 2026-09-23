@@ -75,6 +75,15 @@ try {
   await fetch(`${B}/api/library/nummerX/samples/2`, { method: 'DELETE' });
   ok('vergeten', (await (await fetch(`${B}/api/library/nummerX/samples`)).json()).samples.length === 0);
 
+  console.log('\neigen mapping');
+  ok('nog niets bewaard: null', (await (await fetch(`${B}/api/mapping`)).json()).mapping === null);
+  const mp = await post('/api/mapping', { mapping: { version: 2, rules: [{ in: 'cc:1:7', action: 'track.1.fader' }] } });
+  ok('mapping bewaren', mp.ok && mp.regels === 1);
+  ok('en terughalen', (await (await fetch(`${B}/api/mapping`)).json()).mapping.rules[0].action === 'track.1.fader');
+  await fetch(`${B}/api/mapping`, { method: 'DELETE' });
+  ok('standaard herstellen: weer geen eigen mapping', (await (await fetch(`${B}/api/mapping`)).json()).mapping === null);
+  ok('zonder rules geweigerd', (await status('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mapping: {} }) })) === 400);
+
   console.log('\nopnames');
   const s = await (await fetch(`${B}/api/opname/start`, { method: 'POST' })).json();
   const stuk = new Uint8Array(48000 * 4);

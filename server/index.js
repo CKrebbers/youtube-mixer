@@ -329,6 +329,18 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ---- je eigen MIDI-mapping: ook hier, niet alleen in de browser --------
+    // Een andere browser of gewiste sitedata kostte anders al je koppelingen.
+    if (pad === '/api/mapping' && req.method === 'GET') return json(res, 200, { mapping: lib.haal('mapping', null) });
+    if (pad === '/api/mapping' && req.method === 'POST') {
+      const b = await leesJson(req);
+      if (!b?.mapping || !Array.isArray(b.mapping.rules)) return json(res, 400, { fout: 'een mapping heeft rules nodig' });
+      lib.zet('mapping', b.mapping);
+      return json(res, 200, { ok: true, regels: b.mapping.rules.length });
+    }
+    // "Standaard herstellen": geen eigen mapping meer, de app volgt weer mappings/apc40mk2.json.
+    if (pad === '/api/mapping' && req.method === 'DELETE') { lib.zet('mapping', null); return json(res, 200, { ok: true }); }
+
     // ---- sampler-pads: horen bij het nummer, net als racks en grid ---------
     const mSamples = /^\/api\/library\/([\w-]+)\/samples(?:\/(\d+))?$/.exec(pad);
     if (mSamples) {

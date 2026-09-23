@@ -9,6 +9,7 @@ import generic from '../control/devices/generic.js';
 import { MappingPanel } from './mapping-panel.js';
 import { LearnMode } from './learn-mode.js';
 import { MidiMonitor } from './midi-monitor.js';
+import { meld } from './meldingen.js';
 
 /**
  * Alles rond MIDI aan de schermkant: hub, mapping, LED-laag, leren, het
@@ -175,7 +176,9 @@ export function opzetMidi({ engine, sluitOnderpanelen }) {
   const mapPaneel = midiPanel.querySelector('.mon-map');
   const mapPanel = new MappingPanel({
     root: mapPaneel, mapping, learn, device: apc40mk2,
-    onReset: () => loadMapping('mappings/apc40mk2.json'),
+    // Je eigen versie echt weggooien (server en browser), niet de standaard
+    // als "eigen" bewaren: anders volgt de app nooit meer een nieuwe standaard.
+    onReset: () => herstelStandaard(),
   });
 
   midiPanel.querySelector('.mon-map-knop').addEventListener('click', () => {
@@ -199,25 +202,53 @@ export function opzetMidi({ engine, sluitOnderpanelen }) {
   /*
    * Je eigen koppelingen bewaren. Wat je met "koppelen" aan de APC hing, was bij
    * herladen weg: er werd altijd de standaardmapping geladen. Nu staat je laatste
-   * mapping in de browser (localStorage, per browser), en die gaat voor.
+   * mapping op de SERVER (library-database, overleeft een andere browser en
+   * gewiste sitedata) én in de browser (localStorage, als reserve als de server
+   * even niet bereikbaar is). Bij het opstarten: server eerst.
    */
   const EIGEN_MAPPING = 'varve.mapping';
   let mappingGeladen = false;
+  let naarServer = null;
   function bewaarEigenMapping() {
     if (!mappingGeladen) return;               // niet de lege begintoestand bewaren
-    try { localStorage.setItem(EIGEN_MAPPING, JSON.stringify(mapping.toJSON())); } catch (_) {}
+    const doc = mapping.toJSON();
+    try { localStorage.setItem(EIGEN_MAPPING, JSON.stringify(doc)); } catch (_) {}
+    // Koppelen geeft soms een reeks wijzigingen vlak na elkaar: één keer sturen.
+    clearTimeout(naarServer);
+    naarServer = setTimeout(() => {
+      fetch('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mapping: doc }) })
+        .then((r) => { if (!r.ok) throw new Error(`${r.status}`); })
+        .catch((err) => meld(`mapping niet op de server bewaard (${err.message}) — staat wel in deze browser`, 'fout'));
+    }, 500);
   }
   mapping.on('change', bewaarEigenMapping);
+  async function herstelStandaard() {
+    mappingGeladen = false;
+    clearTimeout(naarServer);
+    try { localStorage.removeItem(EIGEN_MAPPING); } catch (_) {}
+    try { await fetch('/api/mapping', { method: 'DELETE' }); } catch (err) { meld(`eigen mapping op de server niet gewist (${err.message})`, 'fout'); }
+    await loadMapping('mappings/apc40mk2.json');
+    mappingGeladen = true;
+  }
   (async () => {
-    let eigen = null;
-    try { eigen = JSON.parse(localStorage.getItem(EIGEN_MAPPING) || 'null'); } catch (_) {}
-    if (eigen?.rules?.length) {
+    let vanServer = null, lokaal = null, serverBereikbaar = true;
+    try {
+      const r = await fetch('/api/mapping');
+      if (!r.ok) throw new Error(`${r.status}`);
+      vanServer = (await r.json()).mapping;
+    } catch (_) { serverBereikbaar = false; }
+    try { lokaal = JSON.parse(localStorage.getItem(EIGEN_MAPPING) || 'null'); } catch (_) {}
+    const eigen = vanServer?.rules?.length ? vanServer : lokaal?.rules?.length ? lokaal : null;
+    if (eigen) {
       const { aantal } = mapping.load(eigen);
-      monitor.note(`jouw eigen mapping geladen — ${aantal} regels ("standaard herstellen" zet de APC-standaard terug)`);
+      const waar = eigen === vanServer ? 'van de server' : serverBereikbaar ? 'uit deze browser' : 'uit deze browser (server niet bereikbaar)';
+      monitor.note(`jouw eigen mapping geladen ${waar} — ${aantal} regels ("standaard herstellen" zet de APC-standaard terug)`);
     } else {
       await loadMapping('mappings/apc40mk2.json');
     }
     mappingGeladen = true;
+    // Stond hij alleen in de browser (van vóór deze versie)? Dan nu ook naar de server.
+    if (eigen && eigen !== vanServer && serverBereikbaar) bewaarEigenMapping();
   })();
 
   const toggleMidi = () => {
