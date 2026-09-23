@@ -33,7 +33,8 @@ const TYPES = {
 
 /** Opdrachten leven in het geheugen. Wat af is, gaat de database in. */
 const opdrachten = new Map();
-const lib = new Library(join(WORTEL, 'media', 'library.db'));
+// Instelbaar voor de tests: een eigen database en opnamemap, niet de jouwe.
+const lib = new Library(process.env.VARVE_DB || join(WORTEL, 'media', 'library.db'));
 
 /**
  * Cross-origin isolation. Nodig zodra de decks via een AudioWorklet met
@@ -87,6 +88,9 @@ async function leesRuw(req, max = 4 * 1024 * 1024) {
 
 /** Start een ingest en laat hem op de achtergrond lopen. */
 function startIngest(url) {
+  // Dezelfde URL twee keer plakken terwijl de eerste nog loopt: de lopende
+  // teruggeven in plaats van een tweede ernaast te starten.
+  for (const o of opdrachten.values()) if (o.url === url && o.status === 'bezig') return o;
   const id = randomUUID().slice(0, 8);
   const opdracht = {
     id, url, status: 'bezig', stap: 'wachten', tekst: 'in de wachtrij',
@@ -135,9 +139,21 @@ function startIngest(url) {
   return opdracht;
 }
 
+/**
+ * Wat de browser mag ophalen. Een witte lijst in plaats van "alles in de
+ * projectmap": anders kon /.git/config of /media/library.db gewoon mee.
+ */
+const MAG = [/^\/$/, /^\/(index|video)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
+  /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
+  /^\/favicon\.ico$/];
+
 async function statisch(req, res, pad) {
+  let schoon;
+  try { schoon = decodeURIComponent(pad); } catch { json(res, 400, { fout: 'ongeldig pad' }); return; }
+  if (!schoon.startsWith('/')) schoon = '/' + schoon;
+  if (!MAG.some((r) => r.test(schoon))) { json(res, 404, { fout: 'niet gevonden', pad }); return; }
   // Geen uitstapjes buiten de projectmap.
-  const veilig = normalize(join(WORTEL, decodeURIComponent(pad))).replace(/\0/g, '');
+  const veilig = normalize(join(WORTEL, schoon)).replace(/\0/g, '');
   if (!veilig.startsWith(WORTEL)) { json(res, 403, { fout: 'buiten de projectmap' }); return; }
 
   let info;
@@ -149,22 +165,27 @@ async function statisch(req, res, pad) {
   const kop = { 'Content-Type': type, 'Cache-Control': 'no-store', 'Accept-Ranges': 'bytes', ...ISOLATIE };
 
   // Range-verzoeken: nodig zodra de browser video gaat scrubben.
+  // Een leesfout halverwege mag de server niet meenemen.
+  const stuur = (stroom) => { stroom.on('error', () => res.destroy()); stroom.pipe(res); };
   const range = req.headers.range;
   if (range) {
-    const m = /bytes=(\d*)-(\d*)/.exec(range);
-    if (m) {
-      const start = m[1] ? parseInt(m[1], 10) : 0;
-      const eind = m[2] ? parseInt(m[2], 10) : info.size - 1;
-      if (start < info.size) {
-        res.writeHead(206, { ...kop, 'Content-Range': `bytes ${start}-${eind}/${info.size}`,
-          'Content-Length': eind - start + 1 });
-        createReadStream(bestand, { start, end: eind }).pipe(res);
+    const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+    if (m && (m[1] || m[2])) {
+      let start, eind;
+      if (!m[1]) { start = Math.max(0, info.size - parseInt(m[2], 10)); eind = info.size - 1; }   // "de laatste N bytes"
+      else { start = parseInt(m[1], 10); eind = m[2] ? Math.min(parseInt(m[2], 10), info.size - 1) : info.size - 1; }
+      if (start >= info.size || eind < start) {
+        res.writeHead(416, { ...kop, 'Content-Range': `bytes */${info.size}` });
+        res.end();
         return;
       }
+      res.writeHead(206, { ...kop, 'Content-Range': `bytes ${start}-${eind}/${info.size}`, 'Content-Length': eind - start + 1 });
+      stuur(createReadStream(bestand, { start, end: eind }));
+      return;
     }
   }
   res.writeHead(200, { ...kop, 'Content-Length': info.size });
-  createReadStream(bestand).pipe(res);
+  stuur(createReadStream(bestand));
 }
 
 const server = createServer(async (req, res) => {
@@ -173,6 +194,14 @@ const server = createServer(async (req, res) => {
     const pad = url.pathname;
 
     if (pad === '/api/tooling') return json(res, 200, await controleerTooling());
+
+    // Alleen JSON: een gewoon formulier of text/plain van een willekeurige
+    // website komt zo niet zonder CORS-vraag binnen.
+    if (req.method === 'POST' && pad !== '/api/opname/start' && !/^\/api\/opname\/[\w-]+\/(stuk|klaar|video\.\w+)$/.test(pad)
+      && pad.startsWith('/api/') && !/application\/json/i.test(req.headers['content-type'] || '')
+      && !/^\/api\/library\/[\w-]+\/(racks\/\d+|geladen)$/.test(pad)) {
+      return json(res, 415, { fout: 'alleen application/json' });
+    }
 
     if (pad === '/api/ingest' && req.method === 'POST') {
       const body = await leesJson(req);
@@ -264,7 +293,7 @@ const server = createServer(async (req, res) => {
 
     // ---- opnames van je set: blijven op deze schijf, gaan nergens heen -----
 
-    const OPNAMES = join(WORTEL, 'opnames');
+    const OPNAMES = process.env.VARVE_OPNAMES || join(WORTEL, 'opnames');
     if (pad === '/api/opnames' && req.method === 'GET') return json(res, 200, { opnames: await opname.lijst(OPNAMES) });
     if (pad === '/api/opname/start' && req.method === 'POST') {
       const r = await opname.start(OPNAMES);
@@ -303,7 +332,7 @@ const server = createServer(async (req, res) => {
     const mRack = /^\/api\/library\/([\w-]+)\/racks\/(\d+)$/.exec(pad);
     if (mRack) {
       const [, trackId, rackId] = mRack;
-      if (req.method === 'DELETE') return json(res, 200, { weg: lib.verwijderRack(Number(rackId)) });
+      if (req.method === 'DELETE') return json(res, 200, { weg: lib.verwijderRack(Number(rackId), trackId) });
       if (req.method === 'POST') {
         return json(res, 200, { rack: lib.zetActiefRack(trackId, Number(rackId)) });
       }
@@ -321,6 +350,15 @@ const server = createServer(async (req, res) => {
 // Laatste vangnet. Zonder dit legt één losse promise de hele server om.
 process.on('unhandledRejection', (r) => console.error('[server] losse promise:', r));
 process.on('uncaughtException', (e) => console.error('[server] onafgevangen:', e?.message || e));
+
+// Werkmappen van een ingest die nooit afkwam (server gestopt midden in een
+// download): opruimen. Een goede track staat nooit in zo'n map.
+try {
+  const { readdir, rm: weg } = await import('node:fs/promises');
+  for (const n of await readdir(join(WORTEL, 'media')).catch(() => [])) {
+    if (n.startsWith('.bezig-')) await weg(join(WORTEL, 'media', n), { recursive: true, force: true });
+  }
+} catch (_) {}
 
 const tooling = await controleerTooling();
 if (!tooling.ok) console.warn(`[server] LET OP: ${tooling.ontbreekt.join(', ')} ontbreekt — ingest werkt niet`);

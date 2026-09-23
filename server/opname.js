@@ -56,9 +56,13 @@ export async function voegToe(map, id, stuk) {
   let f;
   try {
     f = await open(join(map, naamVan(id)), 'a');
-    await f.write(stuk);
+    const { bytesWritten } = await f.write(stuk);
+    // Een half geschreven stuk verschuift alles erna een half frame: dan
+    // liever een duidelijke fout.
+    if (bytesWritten !== stuk.length) return { ok: false, fout: `maar ${bytesWritten} van ${stuk.length} bytes geschreven` };
     return { ok: true };
   } catch (err) {
+    if (err.code === 'ENOSPC') return { ok: false, fout: 'de schijf is vol', vol: true };
     return { ok: false, fout: err.code === 'ENOENT' ? 'opname bestaat niet' : err.message };
   } finally {
     await f?.close();

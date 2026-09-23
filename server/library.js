@@ -90,9 +90,18 @@ export class Library {
   /** Schema-versie in de database zelf, zodat een uitbreiding later geen gok is. */
   _migreer() {
     const huidig = this.db.prepare('PRAGMA user_version').get().user_version;
+    // Per versie in één transactie: ging het mis tussen de ALTERs en het
+    // ophogen van user_version, dan startte de server nooit meer (dubbele kolom).
     for (let v = huidig; v < SCHEMA.length; v++) {
-      this.db.exec(SCHEMA[v]);
-      this.db.exec(`PRAGMA user_version = ${v + 1}`);
+      this.db.exec('BEGIN');
+      try {
+        this.db.exec(SCHEMA[v]);
+        this.db.exec(`PRAGMA user_version = ${v + 1}`);
+        this.db.exec('COMMIT');
+      } catch (err) {
+        this.db.exec('ROLLBACK');
+        throw err;
+      }
     }
     return SCHEMA.length;
   }
@@ -198,10 +207,14 @@ export class Library {
   bewaarRack({ id = null, trackId, naam, data, actief = false }) {
     const nu = Date.now();
     const tekst = JSON.stringify(data ?? {});
-    if (id) {
-      this.db.prepare('UPDATE racks SET naam = ?, data = ?, gewijzigd = ? WHERE id = ?')
-        .run(naam, tekst, nu, id);
-    } else {
+    // Alleen een rack van DIT nummer mag bijgewerkt worden. Zonder de
+    // track-voorwaarde overschreef een verdwaalde id het rack van een ander
+    // nummer; dan liever een nieuw rack.
+    const bijgewerkt = id
+      ? this.db.prepare('UPDATE racks SET naam = ?, data = ?, gewijzigd = ? WHERE id = ? AND track_id = ?')
+        .run(naam, tekst, nu, id, trackId).changes
+      : 0;
+    if (!bijgewerkt) {
       id = this.db.prepare(`INSERT INTO racks (track_id, naam, data, actief, gemaakt, gewijzigd)
         VALUES (?,?,?,0,?,?)`).run(trackId, naam, tekst, nu, nu).lastInsertRowid;
     }
@@ -226,7 +239,8 @@ export class Library {
     return r ? { ...r, data: veiligJson(r.data), actief: true } : null;
   }
 
-  verwijderRack(id) {
+  verwijderRack(id, trackId = null) {
+    if (trackId !== null) return this.db.prepare('DELETE FROM racks WHERE id = ? AND track_id = ?').run(id, trackId).changes > 0;
     return this.db.prepare('DELETE FROM racks WHERE id = ?').run(id).changes > 0;
   }
 

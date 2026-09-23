@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { mkdir, rm, stat } from 'node:fs/promises';
+import { mkdir, rm, stat, rename } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { maakPeaks, maakOnset } from './analyze.js';
 
@@ -235,7 +236,17 @@ export async function ingest(url, { mediaDir = 'media', video = true, onStap = (
   if (!meta.ok) return { ok: false, fout: meta.fout };
 
   const id = meta.info.id;
-  const map = join(mediaDir, id);
+  // De id wordt een mapnaam. yt-dlp maakt hem bij sommige sites uit de URL
+  // (de generic extractor: unquote(basename)), dus "../../x" is mogelijk —
+  // en bij een mislukking volgde dan een rm -rf buiten media/. Alleen veilige ids.
+  if (typeof id !== 'string' || !/^[\w-]{1,64}$/.test(id)) {
+    return { ok: false, fout: `onbruikbare video-id ${JSON.stringify(id)} — alleen letters, cijfers, - en _` };
+  }
+  // In een eigen werkmap, pas bij succes naar media/<id>/. Een mislukte
+  // HERHAALDE download gooide anders de goede, al bestaande track weg, en
+  // twee ingests van hetzelfde nummer schreven door elkaar in dezelfde map.
+  const doel = join(mediaDir, id);
+  const map = join(mediaDir, `.bezig-${id}-${randomBytes(4).toString('hex')}`);
   const tijdelijk = join(map, 'rauw');
   await mkdir(map, { recursive: true });
 
@@ -328,11 +339,27 @@ export async function ingest(url, { mediaDir = 'media', video = true, onStap = (
     await rm(rauw, { force: true });
     const duur = await duurVan(audio);
 
+    // Alles is gelukt: verhuizen naar de echte map. Bestanden die er al
+    // waren (een eerdere download) worden per stuk vervangen; een video die
+    // deze keer mislukte laat de oude staan.
+    await mkdir(doel, { recursive: true });
+    const verhuis = async (pad) => {
+      if (!pad) return null;
+      const naar = join(doel, pad.slice(map.length + 1));
+      await rename(pad, naar);
+      return naar;
+    };
+    const audioDef = await verhuis(audio);
+    const videoDef = await verhuis(videoBestand);
+    if (peaks) peaks.bestand = await verhuis(peaks.bestand);
+    if (onset) onset.bestand = await verhuis(onset.bestand);
+    await rm(map, { recursive: true, force: true });
+
     return {
       ok: true,
       track: {
         id, url: meta.info.url, titel: meta.info.titel, uploader: meta.info.uploader,
-        duur, audio, video: videoBestand, videoFout, peaks, onset, thumbnail: meta.info.thumbnail,
+        duur, audio: audioDef, video: videoDef, videoFout, peaks, onset, thumbnail: meta.info.thumbnail,
         loudness: meting.gemeten, doelLoudness: LOUDNESS.I,
         ytdlp: await ytdlpVersie(),
       },
