@@ -181,7 +181,12 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   of alleen losse functies plukken (hotcues 5–8, loop in/out, brake/slip/kill, tempo-master)?
 - [x] **G3. Actielog met terugspelen** — 24 sep: ja, als spoor D (ROADMAP punt 17), niet hash-exact. (idee uit AV-kern, ~1 dag): set opnieuw renderen of
   een fout naspelen. Willen?
-- [ ] **G4. Bedienplan blijven gebruiken?** Pas dan loont een import naar de VARVE-mapping.
+- [x] **G4. Bedienplan blijven gebruiken?** — 24 sep, middag: Clay vroeg of "alleen
+  AV-kern" de beste aanpak is; advies ja, genoteerd als besluit tenzij hij het anders
+  wil. Bedienplan blijft de bron voor AV-kern; Varve houdt zijn eigen mapping, koppelen
+  en `apc.html`. Geen importeur (spoor D wordt alleen het handelingenlog). Mist Clay
+  ooit het overzicht van Bedienplan voor Varve, dan een EXPORT Varve → blauwdruk
+  (alleen lezen), niet andersom. Pas dan loont een import naar de VARVE-mapping.
 - [x] **G5. Wat is een "Vormmachine"** — gevonden: Clay's artifact, nu `Input/vormmachines.html`, gebouwd als vormlagen. (26 in de blauwdruk, nergens gevonden)?
 - [x] **G6. `Input/` in git of in .gitignore?** — Clay: .gitignore (e285371). Open: waar is `modules/` voor? Advies: .gitignore (zips + een complete
   .git van AV-kern); alleen de blauwdruk eventueel naar docs/. En waar is de lege map
@@ -191,18 +196,28 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 
 ## H. Nieuw (24 sep, nacht): vormlagen en stems
 
-- [ ] **H1. Klinken de stems goed genoeg?** 🎧 Luister naar `tools/stems/uit/no-surprises/`
+- [x] **H1. Klinken de stems goed genoeg?** — Clay (24 sep, middag): ja, ze klinken
+  goed, ook al hadden de nummers weinig lagen. Door naar H2. 🎧 Luister naar `tools/stems/uit/no-surprises/`
   (4-vocals, 3-other) en `bay-ledges/`. Is zang ↔ instrumentaal schoon genoeg om live
   mee te spelen? Nee = stems parkeren. Ja = H2.
-- [ ] **H2. Twee stems of vier?** 💬 Bij Clay's repertoire zijn drums en bas vrijwel leeg.
+- [x] **H2. Twee stems of vier?** — Clay (24 sep, middag): **kiesbaar per nummer**.
+  Standaard twee (zang, rest); vier als je dat bij het binnenhalen vraagt. Bouwen na
+  25 okt (ROADMAP 15). 💬 Bij Clay's repertoire zijn drums en bas vrijwel leeg.
   **Advies:** twee (zang, rest): half de opslag, één knop per track.
 - [ ] **H3. Splitsen op de Omarchy-machine?** 💬 (GTX 1660; geschat 3–6× sneller, en het
   concurreert niet met de set.) Eerst meten met meet.py daar. Daarna: batch via een
   gedeelde map, geen open dienst.
-- [ ] **H4. Vormlagen op de APC en de beamer: bevalt het?** 🎛 Zie ROADMAP punt 1. Specifiek:
+- [x] **H4. Vormlagen op de APC en de beamer: bevalt het?** — Clay (24 sep, middag):
+  "goed voor nu". Budgetten en waasdrempel blijven zoals ze zijn tot er iets opvalt. 🎛 Zie ROADMAP punt 1. Specifiek:
   is de waasdrempel (3–8%) te streng voor zachte sporen, en werken de budgetten
   van 4 en 12 ms op de M1 met 8 video's?
 - [ ] **H5. Na 25 okt: eerst de AI-laag van AV-kern of eerst Varve (ROADMAP 12–24)?** 💬
-- [ ] **H6. Isomorfe vormen met geluid?** 💬 Snaar, trommelvlies, epicykels en korrelwolk
+- [x] **H6. Isomorfe vormen met geluid?** — Clay (24 sep, middag): **eerst AV-kern, dan
+  Varve**. Het geluid wordt één audiomodule (AudioWorklet: aanslagen komen als berichten
+  uit de Worker, de modale synthese rekent in de worklet in plaats van 12–32 ms op de
+  hoofdthread), eerst voor AV-kern 06a–c (Resonator, Korrelwolk). Na 25 okt in Varve via
+  een eigen vormbus vóór de limiter, standaard dicht; grondtoon = toonsoort van de
+  maatgever (zodra toonsoort-detectie er is), zelf spelen op de tel, korrelwolk op een
+  sampler-pad. 💬 Snaar, trommelvlies, epicykels en korrelwolk
   kunnen ook klinken (sink vóór de limiter, eigen gain, standaard dicht). Willen, en zo
   ja: welke bus?
