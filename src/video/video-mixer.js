@@ -134,8 +134,8 @@ void main() {
 }`;
 
 // Twee beeldlagen over het gemengde beeld. Een laag is een canvas dat als
-// texture binnenkomt zoals een video (zelfde oriëntatie), passend op het
-// doek; buiten zijn beeld telt hij niet mee. De achtergrond van een vorm is
+// texture binnenkomt zoals een video (zelfde oriëntatie), vullend op het
+// doek (lagen.js, LAAG_FIT); buiten zijn beeld telt hij niet mee. De achtergrond van een vorm is
 // bijna-zwart (#07090c): die trekken we per kanaal eraf, anders licht
 // screen/add het hele vierkant een tikje (blauwig) op. Daarboven een zachte
 // drempel: een 8-bits canvas dat met een kleine alpha vervaagt komt nooit

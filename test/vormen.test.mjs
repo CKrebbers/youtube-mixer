@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 
 const { SYSTEMEN, SYSTEEM, draaiKnoppen, maakRng } = await import('../src/vormen/systemen.js');
 const { VormLaag, VormLagen, STAP, MAX_STAPPEN } = await import('../src/vormen/laag.js');
-const { actieveLagen, lagenUniforms, MAX_BEELDLAGEN } = await import('../src/video/lagen.js');
+const { actieveLagen, lagenUniforms, MAX_BEELDLAGEN, LAAG_FIT } = await import('../src/video/lagen.js');
+const { leesLaag } = await import('../src/video/passen.js');
 const { VideoMixer } = await import('../src/video/video-mixer.js');
 const actions = await import('../src/control/actions.js');
 
@@ -201,7 +202,13 @@ console.log('de mixer: lagen tussen mengen en effecten');
   const act = actieveLagen(lagen);
   ok(`alleen lagen die aan staan en te zien zijn, hooguit ${MAX_BEELDLAGEN}`, act.length === 2 && act[0] === lagen[0] && act[1] === lagen[3]);
   const u = lagenUniforms(act, [[512, 512], [512, 512]], 1280, 720);
-  ok('een vierkant staat passend op 16:9 (randen links en rechts)', bij(u.s[0], 16 / 9, 1e-6) && bij(u.s[1], 1));
+  ok('een vierkant VULT 16:9 (Clay 24 sep): schaal [1, 9/16]', LAAG_FIT === 'vullen' && bij(u.s[0], 1) && bij(u.s[1], 9 / 16, 1e-6));
+  const hoek = [[0, 0], [1, 0], [0, 1], [1, 1], [0.001, 0.5], [0.999, 0.5]].map(([x, y]) => leesLaag(x, y, [u.s[0], u.s[1]]).binnen);
+  ok('geen lege banden: elke hoek en rand van het doek valt binnen de vorm', hoek.every((b) => b === 1));
+  const boven = leesLaag(0.5, 0, [u.s[0], u.s[1]]), onder = leesLaag(0.5, 1, [u.s[0], u.s[1]]);
+  ok(`boven en onder valt elk 22% weg (zichtbaar ${boven.y.toFixed(3)}–${onder.y.toFixed(3)})`, bij(boven.y, (1 - 9 / 16) / 2, 1e-6) && bij(onder.y, 1 - (1 - 9 / 16) / 2, 1e-6));
+  const breed = lagenUniforms(act, [[1280, 720], [912, 512]], 1280, 720);
+  ok('een laag die al 16:9 is blijft 1:1 (voor later, als de systemen breed tekenen)', bij(breed.s[0], 1) && bij(breed.s[1], 1) && Math.abs(breed.s[2] - 1) < 0.01 && Math.abs(breed.s[3] - 1) < 0.01);
   ok('dekking en mengvorm per laag', bij(u.a[0], 0.5, 1e-6) && u.m[0] === 1 && u.m[1] === 2);
   ok('lege plek: dekking 0', lagenUniforms([], [], 1280, 720).a.every((x) => x === 0));
 

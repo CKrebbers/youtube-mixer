@@ -19,6 +19,13 @@ import { schaalVoor } from './passen.js';
 export const MENGVORMEN = ['screen', 'add', 'multiply'];
 export const MAX_BEELDLAGEN = 2;
 export const ZICHTBAAR = 0.002;
+/**
+ * Een beeldlaag VULT het doek (Clay, 24 sep): een vierkante vorm wordt zo
+ * groot als de breedte, boven en onder valt 22% weg. Passend gaf lege banden
+ * links en rechts. Los van `video.fit`, want dat is voor de video's. Later
+ * tekenen de systemen zelf 16:9 (ROADMAP 7), dan valt er niets meer weg.
+ */
+export const LAAG_FIT = 'vullen';
 
 /** Welke lagen tekenen we: aan, niet doorzichtig, hooguit MAX_BEELDLAGEN. */
 export function actieveLagen(lagen) {
@@ -26,8 +33,8 @@ export function actieveLagen(lagen) {
 }
 
 /**
- * De uniforms voor de lagenshader. Een laag staat PASSEND op het doek
- * (vierkant in 16:9: randen links en rechts); buiten zijn beeld telt hij
+ * De uniforms voor de lagenshader. Een laag VULT het doek (LAAG_FIT: een
+ * vierkant in 16:9 verliest boven en onder); buiten zijn beeld telt hij
  * niet mee. Lege plekken krijgen dekking 0.
  *
  * @param maten  per laag [breedte, hoogte] van zijn canvas
@@ -39,7 +46,7 @@ export function lagenUniforms(lagen, maten, breedte, hoogte) {
   lagen.slice(0, MAX_BEELDLAGEN).forEach((l, i) => {
     a[i] = Math.max(0, Math.min(1, l.dekking));
     m[i] = Math.max(0, MENGVORMEN.indexOf(l.mengvorm));
-    const [sx, sy] = schaalVoor(maten[i][0], maten[i][1], 'passend', breedte, hoogte);
+    const [sx, sy] = schaalVoor(maten[i][0], maten[i][1], LAAG_FIT, breedte, hoogte);
     s[i * 2] = sx; s[i * 2 + 1] = sy;
   });
   return { a, m, s };

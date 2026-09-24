@@ -675,6 +675,12 @@ docs/
     frame(t) })`. Geen laag aan = de oude drie stappen, bit voor bit; het doek
     `gelaagd` bestaat pas na de eerste laag. De bijna-zwarte achtergrond van
     een vorm (#07090c) wordt in de shader afgetrokken.
+  - Een vormlaag VULT het beeld (`LAAG_FIT` in `video/lagen.js`, Clay 24 sep):
+    het vierkant van 512 wordt zo breed als het doek, boven en onder valt 22% weg,
+    en het is 2,5× opgeschaald, dus zachter. Passend gaf lege banden links en
+    rechts. Los van `video.fit`, dat alleen voor de video's is. Afgesproken: vóór
+    AV-kern de vormen overneemt (ROADMAP 7) tekenen alle 26 systemen zelf 16:9.
+    Ze gaan nu overal uit van één zijde `g.S` en n×n-roosters.
   - Knoppen wijzen naar een PLEK (`video.layer.knob.1–6`), op de GEKOZEN laag,
     zoals de FX-knoppen: een andere vorm vraagt geen nieuwe koppeling. Alleen
     knoppen zonder `sel`/`re` (keuzelijsten en herstart-knoppen niet).
