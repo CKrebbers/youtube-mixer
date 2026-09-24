@@ -42,3 +42,9 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   `mapping.handle`), tekent 60 beelden en zet schermafdrukken in `tools/headless/uit/`
   (niet in git). Let op: in headless rekent WebGL in software (swiftshader); snelheid
   zegt hier niets.
+
+## stems/
+- `meet.py` — proef met Demucs (stems splitsen) op Clay's eigen nummers: rekentijd op de M1
+  (GPU via MPS of CPU) en het energie-aandeel per stem. Leest `media/<id>/audio.wav`, schrijft
+  fragment + vier stems naar `tools/stems/uit/` (niet in git). Draait in een eigen venv met
+  `demucs` (geen dependency van de app). Uitkomst 24 sep: zie docs/plugins of HANDOFF.
