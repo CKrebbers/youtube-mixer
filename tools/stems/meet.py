@@ -4,7 +4,7 @@ het duurt op de M1. Leest media/<id>/audio.wav (alleen lezen), schrijft
 per nummer het fragment plus vier stems naar tools/stems/uit/ (niet in git).
 
 Geen onderdeel van de app. Draai met de Python waarin demucs staat:
-  <venv>/bin/python tools/stems/meet.py [--apparaat mps|cpu] [--model htdemucs]
+  <venv>/bin/python tools/stems/meet.py [--apparaat cuda|mps|cpu] [--model htdemucs] [--media <map>]
 
 Bewust zonder torchaudio.load/save (vraagt in 2.9 torchcodec): WAV lezen en
 schrijven met de standaardbibliotheek, hersamplen met torchaudio.functional.
@@ -48,9 +48,10 @@ def schrijf_wav(pad, x, sr):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--apparaat', default='mps' if torch.backends.mps.is_available() else 'cpu')
+    ap.add_argument('--apparaat', default='cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
     ap.add_argument('--model', default='htdemucs')
     ap.add_argument('--alleen', default=None, help='één naam uit PROEVEN')
+    ap.add_argument('--media', default=os.path.join(WORTEL, 'media'), help='map met <id>/audio.wav (op een andere machine)')
     a = ap.parse_args()
     os.makedirs(UIT, exist_ok=True)
 
@@ -64,7 +65,7 @@ def main():
     for tid, naam, begin, lengte in PROEVEN:
         if a.alleen and naam != a.alleen:
             continue
-        pad = os.path.join(WORTEL, 'media', tid, 'audio.wav')
+        pad = os.path.join(a.media, tid, 'audio.wav')
         if not os.path.exists(pad):
             print(f'{naam}: {pad} bestaat niet, overgeslagen'); continue
         mix, sr = lees_wav(pad, begin, lengte)
@@ -78,6 +79,8 @@ def main():
             uit = apply_model(model, x[None], device=a.apparaat, shifts=0, split=True, overlap=0.25, progress=False)[0]
         if a.apparaat == 'mps':
             torch.mps.synchronize()
+        elif a.apparaat.startswith('cuda'):
+            torch.cuda.synchronize()
         reken = time.perf_counter() - t1
         uit = uit * (ref.std() + 1e-8) + ref.mean()
         map_ = os.path.join(UIT, naam)
