@@ -1,6 +1,7 @@
 import { Emitter, clamp, piek } from '../lib/emitter.js';
 import { createDeckChain, setEqBand, setBipolarFilter, faderGain } from './audio-graph.js';
 import { Beatgrid } from './beatgrid.js';
+import { ToonKaart } from './toonsoort.js';
 import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
 import { maakWav } from './stream-kern.js';
 import { InsertSlot } from './fx.js';
@@ -61,6 +62,15 @@ export class Deck extends Emitter {
     // data: de UI zet ze na het laden van een library-nummer, "tel 1 hier"
     // snapt ernaar en de zoom tekent ze. Het deck rekent er zelf niet mee.
     this.onsets = null;
+
+    // Toonsoortkaart (src/engine/toonsoort.js) of null. Van de PLAAT, in
+    // tracktijd, en net als het grid van de app: het deck kent geen library.
+    this.toonKaart = null;
+    // Afspraak met het keylock-spoor (TOONSOORT.md §6, KEYLOCK.md): zolang er
+    // geen keylock is klinkt de toon mee met de pitch, en klopt de formule in
+    // `toonsoort` al voor de pitchfader. Keylock en transponeren komen hier.
+    this.keylock = false;
+    this.transpositie = 0;      // halve tonen, mag een breuk zijn
 
     /*
      * Sends: na de fader, vóór de crossfader. Fader dicht = er gaat niets
@@ -150,6 +160,7 @@ export class Deck extends Emitter {
     this.hotcues = [null, null, null, null];
     this.grid = null;
     this.onsets = null;
+    this.toonKaart = null;
     this.loopBeats = null;
     // Een nieuw nummer begint op 0%: de pitch van het vorige zegt niets over
     // dit nummer. Het bereik blijft staan, dat is een keuze van de DJ.
@@ -357,6 +368,35 @@ export class Deck extends Emitter {
 
   /** Hoorbare bpm op de huidige plek: het grid staat in tracktijd, de rate rekt dat op. */
   get bpm() { return this.grid ? this.grid.bpmAt(this.position) * this.rate : null; }
+
+  // ---- toonsoort ---------------------------------------------------------
+
+  setToonKaart(kaart) {
+    this.toonKaart = kaart instanceof ToonKaart ? kaart : ToonKaart.van(kaart);
+    this.emit('change', this);
+    return this.toonKaart;
+  }
+
+  /**
+   * Na een bewerking met de hand (kwint, relatief, nieuw stuk): de kaart is
+   * geen voorstel van de analyse meer, dus de achtergrond laat hem staan.
+   */
+  toonGewijzigd() {
+    if (this.toonKaart) this.toonKaart.bron = 'hand';
+    this.emit('change', this);
+  }
+
+  /**
+   * De toonsoort die je HOORT op de huidige plek (Clay, T3), of null zonder
+   * kaart: de plaat verschoven met de pitch (rate, zonder bend: die zou laten
+   * flikkeren zolang je duwt) en straks transpositie en keylock. Zie
+   * hoorbaar() in toonsoort.js; de positie komt van de audioklok (regel 3).
+   */
+  get toonsoort() {
+    if (!this.toonKaart) return null;
+    return this.toonKaart.hoorbaarBij(this.position,
+      { rate: this.rate, transpositie: this.transpositie, keylock: this.keylock });
+  }
 
   /**
    * Loop van een aantal tellen, ingeklikt op het grid.
