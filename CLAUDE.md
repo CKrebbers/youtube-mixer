@@ -681,6 +681,11 @@ docs/
     rechts. Los van `video.fit`, dat alleen voor de video's is. Afgesproken: vóór
     AV-kern de vormen overneemt (ROADMAP 7) tekenen alle 26 systemen zelf 16:9.
     Ze gaan nu overal uit van één zijde `g.S` en n×n-roosters.
+  - De lagenstap leest het gemengde beeld (een BUFFER) met `1.0 - uv.y`. Met `uv`
+    was het een derde omkering en stond de video onder een vormlaag op zijn kop
+    (Clay, 24 sep). De lagen zelf zijn canvas-texturen en gaan zoals een video.
+    `kijk.mjs` meet het met vier gekleurde kwarten, met en zonder laag, en faalt
+    op de oude shader.
   - Knoppen wijzen naar een PLEK (`video.layer.knob.1–6`), op de GEKOZEN laag,
     zoals de FX-knoppen: een andere vorm vraagt geen nieuwe koppeling. Alleen
     knoppen zonder `sel`/`re` (keuzelijsten en herstart-knoppen niet).

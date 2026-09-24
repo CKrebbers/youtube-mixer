@@ -31,6 +31,11 @@ Lees in deze volgorde:
   - `kijk.mjs` wacht nu tot de app klaar is (`44a2cca`). De vaste 2,5 s faalde op
     een drukke machine, ook zonder de wijziging.
   - NIET gezien in Clay's Chrome op de M1.
+  - **Video op zijn kop onder een vormlaag**: GEREPAREERD in de lagenshader (lees de
+    buffer met `1 - uv.y`). Dat was de derde omkering. Nagemeten headless met een
+    nepvideo van vier kwarten; `kijk.mjs` controleert het nu en faalt op de oude
+    code. Clay zag ook iets "vierkants". Headless is zowel de video als de vorm
+    16:9 over de hele breedte; vragen wat er na herladen nog vierkant is.
 - **Clay moet nu:**
   1. De luistertest keylock doen (A3): `tools/keylock/uit/` met
      `tools/keylock/LUISTER.md`, een kwartier met koptelefoon. Daarmee beslist hij
