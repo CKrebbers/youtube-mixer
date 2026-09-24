@@ -275,8 +275,14 @@ export class Mapping extends Emitter {
 
   /** Een regel weghalen, op sleutel. Een kale signature is de regel zonder shift en laag. */
   remove(sleutel) {
+    const was = this.rules.get(sleutel);
     const weg = this.rules.delete(sleutel);
     this.state.delete(sleutel.split(/[#@]/)[0]);
+    // Een fragmentregel is niet van jou: hij komt meteen terug (anders pas na
+    // herladen, en dan doet weghalen iets anders dan wat je zag). En haal je een
+    // eigen regel weg die er een afdekte, dan staat die er meteen weer.
+    this._pasExtraToe(this.rules);
+    if (was?.bron) return false;
     if (weg) this.emit('change', this);
     return weg;
   }

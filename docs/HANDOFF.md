@@ -4,6 +4,53 @@ Lees in deze volgorde: `CLAUDE.md` (architectuur, regels, valkuilen), dan dit
 bestand, dan `docs/VERBETERINGEN.md` (rondes 1–3), `docs/VRAGEN.md` (open
 vragen voor Clay) en `docs/APC40.md` (de indeling zoals gebouwd).
 
+## Nieuw (24 september 2026, later): sporen A en B plus controleur (stap 2 en 3)
+
+Zes agenten werkten tegelijk, elk in een eigen worktree; daarna is alles
+samengevoegd op main.
+
+- **A — reageren op de mix.** `src/analysis/features.js`, `luisteraar.js` en
+  `router.js`. Device knob 8 in het mapje vorm is REAGEER; standaard bas → knop 1.
+- **B1–B3 — alle 26 vormen.** De zware, de middelzware en de isomorfe. De
+  isomorfe zijn hier alleen beeld: de geluidssink is nog niet aangesloten.
+- **B4 — Worker en tijdsbudget.** Een Worker per laag en een budget in ms,
+  met een noodrem.
+- **Controleur.** Tien bevindingen, alle verwerkt:
+  - het mapje vorm en de vormcode bestaan alleen met de vlag;
+  - de mapping wordt alleen bewaard als jouw deel veranderde;
+  - de achtergrondwaas wordt in de shader weggefilterd;
+  - bij een systeemwissel wordt de context gereset;
+  - de lagenstap wordt buiten teken() gebouwd;
+  - een fragmentregel weghalen kan niet (hij komt meteen terug);
+  - de mapje-balk nummert alleen de draaiknoppen;
+  - bij het starten verschijnt een melding "vormlagen staan aan";
+  - sf staat nu bij de middelzware.
+
+Tests: `node test/alles.mjs` geeft 29 bestanden, 1920 checks, groen. Ook
+`node tools/headless/kijk.mjs` is groen: Worker-modus, bitmap-oriëntatie,
+reageren. Details staan in CLAUDE.md (VORMLAGEN).
+
+### NIET getest
+- **Alles op Clay's M1 in echte Chrome.**
+  - Is een budget van 4 of 12 ms goed?
+  - Grijpt de noodrem in bij zware vormen (Lenia, Clifford) met 8 video's?
+  - Throttlet de Air na 30 minuten?
+- **De APC:** knob 8 (ring), Detail View, en gluren in het mapje vorm.
+- **Of het beeld "zichtbaar inzakt"** bij een bass-kill. Geijkt op
+  getallen, niet met het oog.
+- **Hoe de 16 nieuwe vormen er echt uitzien.** Ook grovere kwaliteit is
+  alleen met getallen gecontroleerd.
+- **De drempel in schoon()** (3–8%): mogelijk verdwijnen er zachte sporen die
+  Clay juist mooi vond.
+
+### Volgende stap
+1. Clay: `http://localhost:8777/?vormen=1`, videopaneel (V), een track met
+   video. Probeer Detail View, On/Off, knob 1–8 en Device ◀ ▶ door alle 26 vormen.
+   Zet REAGEER open en doe een bass-kill.
+2. Daarna volgens het plan eerst AV-kern (publicatie 25 okt): die kan
+   `src/vormen/hulp.js` en `systemen*.js` ongewijzigd kopiëren.
+3. Na 25 okt: spoor C (DJ-functies) en D (handelingenlog, blauwdruk-import).
+
 ## Nieuw (24 september 2026, nacht): vormlagen, stap 1 van het AV-kern-plan
 
 Clay gaf `Input/` plus twee artifacts (Vormmachines, APC40 ontleed) en twee

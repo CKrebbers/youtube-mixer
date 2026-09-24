@@ -136,8 +136,11 @@ void main() {
 // Twee beeldlagen over het gemengde beeld. Een laag is een canvas dat als
 // texture binnenkomt zoals een video (zelfde oriëntatie), passend op het
 // doek; buiten zijn beeld telt hij niet mee. De achtergrond van een vorm is
-// bijna-zwart (#07090c): die trekken we eraf, anders licht screen/add het hele
-// vierkant een tikje op.
+// bijna-zwart (#07090c): die trekken we per kanaal eraf, anders licht
+// screen/add het hele vierkant een tikje (blauwig) op. Daarboven een zachte
+// drempel: een 8-bits canvas dat met een kleine alpha vervaagt komt nooit
+// helemaal terug op de achtergrond (bij lz ~11 niveaus erboven), en die waas
+// hoort niet over de video. Wat helderder is dan ~8% blijft ongemoeid.
 const LAGEN = `#version 300 es
 precision mediump float;
 in vec2 uv;
@@ -147,7 +150,11 @@ uniform float a[2];
 uniform int m[2];
 uniform vec2 s[2];
 float binnen(vec2 q) { return step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0); }
-vec3 schoon(vec3 l) { return clamp((l - vec3(0.028)) / 0.972, 0.0, 1.0); }
+vec3 schoon(vec3 l) {
+  const vec3 bg = vec3(7.0, 9.0, 12.0) / 255.0;
+  vec3 c = clamp((l - bg) / (vec3(1.0) - bg), 0.0, 1.0);
+  return c * smoothstep(0.03, 0.08, max(c.r, max(c.g, c.b)));
+}
 vec3 leg(vec3 c, vec3 l, float d, int vorm) {
   if (vorm == 1) return c + l * d;                  // add
   if (vorm == 2) return mix(c, c * l, d);           // multiply
@@ -197,14 +204,14 @@ export class VideoMixer {
     this.meng = this._programma(VERTEX, MENG);
     this.effect = this._programma(VERTEX, EFFECT);
     this.toon = this._programma(VERTEX, TOON);
-    this.lagenProg = this._programma(VERTEX, LAGEN);
-    this.prog = this.meng && this.effect && this.toon && this.lagenProg;
+    this.lagenProg = null;           // pas bij de eerste beeldlaag: zonder vormen niets extra's
+    this.prog = this.meng && this.effect && this.toon;
     if (!this.prog) return;
 
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-    for (const prog of [this.meng, this.effect, this.toon, this.lagenProg]) {
+    for (const prog of [this.meng, this.effect, this.toon]) {
       const loc = gl.getAttribLocation(prog, 'p');
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
@@ -218,9 +225,6 @@ export class VideoMixer {
     gl.uniform1i(this.loc(this.effect, 'vorig'), 1);
     gl.useProgram(this.toon);
     gl.uniform1i(this.loc(this.toon, 'beeld'), 0);
-    gl.useProgram(this.lagenProg);
-    gl.uniform1i(this.loc(this.lagenProg, 'basis'), 0);
-    for (let i = 0; i < MAX_BEELDLAGEN; i++) gl.uniform1i(this.loc(this.lagenProg, `l${i}`), 1 + i);
 
     // Eén zwart pixel voor lege plekken: een sampler zonder texture is ongeldig.
     this.zwart = this._texture();
@@ -249,8 +253,30 @@ export class VideoMixer {
    * Geeft een functie terug die hem weer weghaalt.
    */
   voegBeeldlaagToe(laag) {
+    this._maakLagenStap();
     this.beeldlagen.push(laag);
     return () => { this.beeldlagen = this.beeldlagen.filter((l) => l !== laag); };
+  }
+
+  /**
+   * Programma, doek en texturen voor de lagenstap, één keer, buiten teken():
+   * een texture maken bindt hem op de unit die dan actief is, en midden in een
+   * beeld overschreef dat eens de eerste laag (controleur, 24 sep).
+   */
+  _maakLagenStap() {
+    const gl = this.gl;
+    if (!gl || this.lagenProg) return;
+    const prog = this._programma(VERTEX, LAGEN);
+    if (!prog) { console.warn('[video] lagenstap:', this.fout); this.fout = null; return; }
+    const loc = gl.getAttribLocation(prog, 'p');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.useProgram(prog);
+    gl.uniform1i(this.loc(prog, 'basis'), 0);
+    for (let i = 0; i < MAX_BEELDLAGEN; i++) gl.uniform1i(this.loc(prog, `l${i}`), 1 + i);
+    this.gelaagd = this._doek();
+    this.laagTex = Array.from({ length: MAX_BEELDLAGEN }, () => this._texture());
+    this.lagenProg = prog;
   }
 
   zetFx(id, v) { if (id in this.fx) this.fx[id] = Math.max(0, Math.min(1, v)); }
@@ -413,14 +439,12 @@ export class VideoMixer {
    */
   _lagen(vertraging) {
     const actief = actieveLagen(this.beeldlagen);
-    if (!actief.length) return null;
+    if (!actief.length || !this.lagenProg) return null;
     const gl = this.gl;
-    if (!this.gelaagd) this.gelaagd = this._doek();
     const t = Math.max(0, this.engine.ctx.currentTime - vertraging);
     const maten = [];
     actief.forEach((laag, i) => {
       const beeld = laag.frame(t);
-      if (!this.laagTex[i]) this.laagTex[i] = this._texture();
       gl.activeTexture(gl.TEXTURE1 + i);
       gl.bindTexture(gl.TEXTURE_2D, this.laagTex[i]);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, beeld);

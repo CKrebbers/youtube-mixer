@@ -235,9 +235,16 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
   const EIGEN_MAPPING = 'varve.mapping';
   let mappingGeladen = false;
   let naarServer = null;
+  let laatstBewaard = null;
   function bewaarEigenMapping() {
     if (!mappingGeladen) return;               // niet de lege begintoestand bewaren
     const doc = mapping.toJSON();
+    // Alleen als JOUW deel veranderde. Een fragment dat erbij komt (vormlagen,
+    // Mapping.voegToe) geeft ook 'change', en maakte anders van de standaard
+    // stilletjes een volledige eigen kopie (controleur, 24 sep).
+    const tekst = JSON.stringify(doc);
+    if (tekst === laatstBewaard) return;
+    laatstBewaard = tekst;
     try { localStorage.setItem(EIGEN_MAPPING, JSON.stringify(doc)); } catch (_) {}
     // Koppelen geeft soms een reeks wijzigingen vlak na elkaar: één keer sturen.
     clearTimeout(naarServer);
@@ -254,6 +261,7 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
     try { localStorage.removeItem(EIGEN_MAPPING); } catch (_) {}
     try { await fetch('/api/mapping', { method: 'DELETE' }); } catch (err) { meld(`eigen mapping op de server niet gewist (${err.message})`, 'fout'); }
     await loadMapping('mappings/apc40mk2.json');
+    laatstBewaard = JSON.stringify(mapping.toJSON());
     mappingGeladen = true;
   }
   (async () => {
@@ -272,6 +280,7 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
     } else {
       await loadMapping('mappings/apc40mk2.json');
     }
+    laatstBewaard = JSON.stringify(mapping.toJSON());
     mappingGeladen = true;
     // Stond hij alleen in de browser (van vóór deze versie)? Dan nu ook naar de server.
     if (eigen && eigen !== vanServer && serverBereikbaar) bewaarEigenMapping();

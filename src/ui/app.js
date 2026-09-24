@@ -15,7 +15,7 @@ import { opzetOnderpanelen } from './onderpanelen.js';
 import { opzetMidi } from './midi-opzet.js';
 import { startRenderloop } from './renderloop.js';
 import { tabblad } from './tabblad.js';
-import { vormenAan, opzetVormen } from './vorm-paneel.js';
+import { vormenAan } from './vlag.js';
 
 /**
  * Het instappunt van de schermlaag: maakt de engine en zet de modules in
@@ -73,7 +73,7 @@ window.videoMixer = videoMixer;
 bindVideo(videoMixer);
 // Vormlagen (Vormmachines) over de video: alleen met ?vormen=1 (docs/plugins/01-plan.md).
 // Vóór opzetVensters, die bindt alle knoppen die er dan staan.
-const vormen = vormenAan() ? opzetVormen({ videoMixer }) : null;
+const vormen = vormenAan() ? (await import('./vorm-paneel.js')).opzetVormen({ videoMixer }) : null;
 window.vormen = vormen?.vormen;
 
 // ---- opnemen --------------------------------------------------------------

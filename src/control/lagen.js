@@ -44,7 +44,7 @@ export const GROEPEN = {
   },
   device: {
     naam: 'device knobs', standaard: 'strip',
-    knoppen: { view: ['strip', 'rack'], detail: ['vorm'] },
+    knoppen: { view: ['strip', 'rack'] },
   },
   grid: {
     naam: 'grid', standaard: 'hotcues',
@@ -52,6 +52,13 @@ export const GROEPEN = {
     volgorde: ['hotcues', 'loops', 'sampler', 'video'],
   },
 };
+
+/**
+ * Het mapje "vorm" (vormlagen) onder Detail View. Alleen met ?vormen=1:
+ * opzetVormen() roept dit aan VÓÓR bindLagen, zodat er zonder vlag geen
+ * action layer.device.detail bestaat en apc.html geen lege rij toont.
+ */
+export function voegVormMapjeToe() { GROEPEN.device.knoppen.detail = ['vorm']; }
 
 /** Hoe een mapje op het scherm heet. */
 export const LAAGNAAM = {

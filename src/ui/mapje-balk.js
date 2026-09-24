@@ -68,7 +68,13 @@ export function opzetMapjeBalk({ lagen, mapping, vars }) {
     let knoppen = '';
     if (groep === 'device') {
       const v = vars();
-      knoppen = regels.map((r, i) => `<span><b>${i + 1}</b> ${esc(kort(metaOf(resolveTarget(r.action, v))?.label ?? r.action))}</span>`).join('');
+      // Genummerd: alleen de draaiknoppen (cc 16–23 = device knob 1–8), op hun
+      // eigen nummer. Knoppen in het mapje (◀ ▶, On/Off, Bank) apart, zonder
+      // nummer: anders stond er in het mapje vorm "8 vorige vorm".
+      const naam = (r) => esc(kort(metaOf(resolveTarget(r.action, v))?.label ?? r.action));
+      knoppen = regels.filter((r) => r.in.startsWith('cc:'))
+        .map((r) => `<span><b>${Number(r.in.split(':')[2]) - 15}</b> ${naam(r)}</span>`).join('')
+        + regels.filter((r) => !r.in.startsWith('cc:')).map((r) => `<span>${naam(r)}</span>`).join('');
     } else if (groep === 'top' && regels[0]) {
       knoppen = `<span>${esc(kort(metaOf(resolveTarget(regels[0].action, vars()))?.label ?? ''))} — per track, knop 1–8</span>`;
     }

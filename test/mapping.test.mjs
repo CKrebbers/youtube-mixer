@@ -274,6 +274,7 @@ const bestaat = (l) => { const [g, n] = l.split('.'); return Object.values(GROEP
 ok('elk mapje uit de mapping bestaat in lagen.js', doc.rules.every((r) => !r.laag || bestaat(r.laag)));
 // Een mapje mag ook zijn regels uit een fragment halen (apc40mk2-vormen.json:
 // het mapje "vorm", alleen met ?vormen=1).
+(await import('../src/control/lagen.js')).voegVormMapjeToe();   // zoals opzetVormen met ?vormen=1
 const fragment = JSON.parse(readFileSync(new URL('../mappings/apc40mk2-vormen.json', import.meta.url), 'utf8'));
 const metFragment = [...doc.rules, ...fragment.rules];
 ok('elk mapje in lagen.js heeft regels in de mapping of een fragment', Object.entries(GROEPEN).every(([g, d]) =>
@@ -688,6 +689,10 @@ console.log('fragmenten: regels die erbij komen maar niet van jou worden');
   ok('het fragment gaat NIET mee in je bewaarde mapping', m.toJSON().rules.every((x) => x.action !== 'layer.device.detail') && m.toJSON().rules.length === 2);
   m.load({ name: 'andere', version: 3, rules: [{ in: 'note:0:11', action: 'x', mode: 'trigger' }] });
   ok('en blijft staan als er een andere mapping geladen wordt', m.kies('note:0:65')?.action === 'layer.device.detail' && m.kies('note:0:60')?.action === 'video.layer.select.prev');
+  ok('een fragmentregel weghalen kan niet: hij staat er meteen weer', m.remove('note:0:65') === false && m.kies('note:0:65')?.action === 'layer.device.detail');
+  m.set('note:0:60', 'eigen.dekt', { mode: 'trigger', laag: 'device.vorm' });
+  m.remove('note:0:60@device.vorm');
+  ok('een eigen regel weghalen die een fragmentregel afdekte: die staat er meteen weer', m.kies('note:0:60')?.action === 'video.layer.select.prev');
   m.set('note:0:65', 'zelf.gekoppeld', { mode: 'trigger' });
   ok('koppel je er zelf iets overheen, dan is het de jouwe en gaat hij wel mee', m.toJSON().rules.some((x) => x.in === 'note:0:65' && x.action === 'zelf.gekoppeld'));
 }

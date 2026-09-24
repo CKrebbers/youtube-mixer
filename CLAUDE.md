@@ -67,11 +67,15 @@ src/
                     midi-learn.js   action kiezen, control bewegen, gekoppeld
                     devices/        apc40mk2.js, generic.js — wat er op het apparaat zit
   analysis/         peaks.js        golfvorm-peaks + ruwe RMS
+                    features.js     banden laag/midden/hoog, rms, zwaartepunt, onsets uit een spectrum. Puur, tijd van buiten.
+                    luisteraar.js   leest de master-AnalyserNode uit (alleen lezen) -> features
+                    router.js       route { bron, doel, sterkte }: offset bovenop een vormknop. Puur.
                     demo-track.js   synthetische 124-bpm testtrack
   ui/               app.js (instappunt: engine + modules in volgorde opzetten)
                     vensters, laden, racks, sampler-opslag, meldingen,
                     onderpanelen, midi-opzet, opname-knop, video-paneel,
                     renderloop, mapje-balk — elk een opzet…()-functie
+                    vlag.js + vorm-paneel.js: ?vormen=1 en de VORM-rij (paneel pas geladen als de vlag aan staat)
                     waveform.js, controls.js, midi-monitor.js,
                     mapping-panel.js (de lijst), learn-mode.js (aanwijzen op het scherm),
                     rack-editor.js (racks bouwen met de muis, werkt op een kopie)
@@ -81,8 +85,12 @@ src/
                     tabblad.js      Web Lock 'varve-mixer': maar één tabblad praat met de APC
                     apc-kaart.js    apc.html: de APC met knoppen op hun echte plek, klik = uitleg
                     apc-beschrijf.js elke action in gewone taal (de test eist er een voor de hele standaardmapping)
-  vormen/           systemen.js     de Vormmachines (Clay's artifact): geen DOM, toeval met zaad, tijd van buiten
-                    laag.js         een vorm als beeldlaag: stappen van 1/60 s op de audioklok, knoppen 0..1
+  vormen/           hulp.js         paletten, toeval met zaad, ruis, tekenhulp (gedeeld door de systemen)
+                    systemen.js     de Vormmachines (Clay's artifact): 10 lichte + de lijst van alle 26
+                    systemen-zwaar.js / -meer.js / -isomorf.js  de andere 16 (zwaar · middel · beeld = geluid)
+                    laag.js         een vorm als beeldlaag: 1/60 s-stappen op de audioklok, knoppen 0..1, Worker of hoofdthread
+                    werker.js       de Worker van een laag: OffscreenCanvas -> ImageBitmap; draaiWerker() is testbaar
+                    budget.js       tijdsbudget in ms: EMA, kwaliteit in stapjes, noodrem. Puur.
   video/            volg.js         hoe een video de audio volgt. Puur rekenwerk.
                     video-mixer.js  <video> per track, gemengd met WebGL2. Leest de engine alleen uit.
                     instellingen.js welke video-effecten en mengvormen er zijn (data)
@@ -134,6 +142,9 @@ test/
   bronnen.test.mjs  TikTok-links zonder netwerk, ffprobe-controle, eigen staande video door de pijplijn
   upload.test.mjs   upload-route op een eigen server: grens, geen media, hash-id, streamen i.p.v. geheugen
   vormen.test.mjs   vormlagen: elk systeem, zaad, 1/60 s-stappen, knoppen, bus, fragment, mixer (nep-WebGL)
+  vormen-zwaar/-meer/-isomorf.test.mjs  de 16 extra systemen: puur, zaad, g.kwaliteit, ms per stap, nep-sink
+  werker.test.mjs   Worker-logica zonder Worker, budget met nep-klok, noodrem, terugval
+  analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -661,16 +672,65 @@ docs/
     zoals de FX-knoppen: een andere vorm vraagt geen nieuwe koppeling. Alleen
     knoppen zonder `sel`/`re` (keuzelijsten en herstart-knoppen niet).
   - APC: Detail View opent het mapje `device.vorm` (derde mapje van de
-    device-groep). Daarin device knobs 1–6 = vorm, 7 = dekking (8 vrij voor
-    "reageren op de mix", stap 2), Device ◀ ▶ = vorm, On/Off = laag aan/uit,
+    device-groep; bestaat alleen met de vlag: `voegVormMapjeToe()` vóór
+    bindLagen). Daarin device knobs 1–6 = vorm, 7 = dekking, 8 = reageren op
+    de mix (`video.layer.react`), Device ◀ ▶ = vorm, On/Off = laag aan/uit,
     Bank ◀ ▶ = laag 1/2. De videomodus op scene 4 is NIET veranderd.
   - Die regels staan in een FRAGMENT (`mappings/apc40mk2-vormen.json`) dat
     `Mapping.voegToe()` erbij zet: het gaat niet mee in `toJSON()`, dus niet in
     Clay's bewaarde mapping, en overleeft het laden van een andere mapping.
-    Een eigen regel op dezelfde plek wint.
-  - Nu tien lichte/middelzware systemen op de hoofdthread (lz, hg, bd, fl, sf,
-    ec, cc, km, dp, fy). De zware (cl, ln, gs, sp, wv, if; sp piekt tot 82 ms)
-    komen pas met een Worker (stap 3). Twee lagen tegelijk, niet meer.
+    Een eigen regel op dezelfde plek wint; weghalen kan niet (hij komt meteen
+    terug). midi-opzet bewaart je mapping alleen als JOUW deel veranderde
+    (vergelijking met het laatst bewaarde), anders maakte het fragment van de
+    standaard stilletjes een volledige eigen kopie.
+  - Alle 26 systemen (24 sep, sporen B1–B3): tien lichte in systemen.js, vijf
+    zware (gs, cl, ln, ph, sp), zeven middel (ch, jl, ls, dl, lg, wv, if) en vier
+    isomorf (sn, tv, ep, dw). Alleen imports uit hulp.js. sf is middelzwaar
+    (~1,4 ms), niet licht. Twee lagen tegelijk, niet meer.
+  - `g.kwaliteit` (0,25..1, ontbreekt = 1): zware lussen schalen mee, het BEELD
+    wordt grover, de BEWEGING nooit trager (gs/ln op het halve rooster met
+    meegeschaalde diffusie/kernel; ph minder agents; cl/if minder punten; sp
+    hooguit 150000 × kwaliteit omvallers per stap, de rest de volgende stap —
+    abels, dus zelfde eindvorm). dl negeert hem bewust.
+  - Isomorf: geluid alleen achter `g.geluid = null | { ctx, uit, grondtoon?,
+    toonladder?, korrelBuffer? }`; in Varve nog NERGENS aangesloten, dus alleen
+    beeld. Knoppen met `geluid: 1` (volume) slaat draaiKnoppen over. Een
+    aanslag met sink rekent 12–32 ms op de hoofdthread: vóór aansluiten naar
+    een worklet of cachen.
+  - WORKER (stap 3): elke laag een module-Worker als Worker, OffscreenCanvas
+    en createImageBitmap bestaan, anders hoofdthread (`laag.modus`). In de
+    Worker draait dezelfde VormLaag in hoofd-modus. Terug komt per beeld een
+    ImageBitmap via createImageBitmap (NIET transferToImageBitmap: dat wist
+    het canvas en de vormen tekenen op hun vorige beeld). `frame(t)` wacht
+    nooit. Parameters ALTIJD via `laag.zetParams()` (ook modulatie), niet
+    `laag.p` direct. Een ImageBitmap negeert UNPACK_FLIP_Y: zet je dat ooit
+    aan in video-mixer.js, dan staan vormen in werker-modus ondersteboven.
+  - Tijdsbudget per laag in ms (budget.js): 4 ms hoofdthread, 12 ms Worker
+    (aannames, niet op de M1 gemeten). EMA; erboven kwaliteit −0,125, onder de
+    helft trager omhoog; noodrem na 3 beelden boven 2× budget: meteen 0,25 en
+    een melding, de laag gaat niet uit. Het scherm toont "12 ms · 50%".
+  - Een systeemwissel zet de 2D-context terug (`ctx.reset()`) en wist het
+    canvas: anders lekten lineCap/imageSmoothing van het ene systeem naar het
+    volgende. De lagenstap (programma, doek, texturen) wordt pas gebouwd bij de
+    eerste `voegBeeldlaagToe`, buiten teken(). `schoon()` in de shader trekt
+    #07090c per kanaal af met een zachte drempel (3–8%): een 8-bits canvas dat
+    met kleine alpha vervaagt komt nooit terug op de achtergrond, en die waas
+    hoort niet over de video. Bij fl met spoor 0,01 blijft er meer over.
+  - REAGEREN OP DE MIX (stap 2): de vorm hoort de MASTER (na de limiter: kill,
+    fader, crossfader, sends en sampler tellen mee), niet de hardst klinkende
+    track (die wissel gaf sprongen). Analysers per strip en master op fftSize
+    2048, smoothing 0; gladmaken doet features.js met exp(-dt/τ) op de
+    audioklok (0,02 s op, 0,12 s neer). Banden = gemiddeld vermogen per bin op
+    een eigen dB-bereik per band (BAND_DB), geijkt op Clay's library met
+    master 0,8. Onset = spectrale flux gemiddeld per band, drempel mediaan(1 s)
+    × 1,4 + 0,01, refractair 80 ms; op 30 fps vindt hij er minder (bekend).
+  - Een route schrijft een OFFSET via `zetModulatie(i, offset)`: leesKnop/read()
+    blijven de basisstand, dus scherm, LED-ring en soft-takeover bewegen niet
+    mee. Nooit moduleren via actions of zetKnop. De analyse loopt mee met het
+    tekenen (vlak voor laag.frame), geen eigen timer; alle sterktes dicht =
+    niets uitgelezen. Eén route per laag, standaard bas → knop 1, sterkte 0;
+    `video.layer.react.source/.target` lopen rond. Sessietoestand, niet bewaard.
+    Nog niet: onset.bin (offline), metPuls als route.
 
 ## Onderzochte keuzes
 

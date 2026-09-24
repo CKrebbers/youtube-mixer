@@ -1,6 +1,7 @@
 import { VormLagen } from '../vormen/laag.js';
 import { SYSTEMEN, SYSTEEM } from '../vormen/systemen.js';
 import { bindVormen, VORM_KNOPPEN } from '../control/actions.js';
+import { voegVormMapjeToe } from '../control/lagen.js';
 import { meld } from './meldingen.js';
 import { Luisteraar } from '../analysis/luisteraar.js';
 import { Router, BRONNEN, BRON_NAAM, DOEL_PLEKKEN } from '../analysis/router.js';
@@ -21,25 +22,14 @@ import { Router, BRONNEN, BRON_NAAM, DOEL_PLEKKEN } from '../analysis/router.js'
  * hoofdthread komen in de meldingenstrook.
  */
 
-const SLEUTEL = 'varve.vormen';
-
-export function vormenAan(url = location.href) {
-  const v = new URL(url).searchParams.get('vormen');
-  try {
-    if (v === '1') localStorage.setItem(SLEUTEL, '1');
-    if (v === '0') localStorage.removeItem(SLEUTEL);
-    return localStorage.getItem(SLEUTEL) === '1';
-  } catch (_) {
-    return v === '1';
-  }
-}
-
 /** Een 2D-canvas buiten het document: OffscreenCanvas waar het kan. */
 const maakCanvas = (w, h) => (typeof OffscreenCanvas !== 'undefined'
   ? new OffscreenCanvas(w, h)
   : Object.assign(document.createElement('canvas'), { width: w, height: h }));
 
 export function opzetVormen({ videoMixer }) {
+  voegVormMapjeToe();
+  meld('vormlagen staan aan (onthouden in deze browser — ?vormen=0 zet ze uit)');
   const vormen = new VormLagen({ maakCanvas });
   vormen.lagen.forEach((laag) => videoMixer.voegBeeldlaagToe(laag));
 

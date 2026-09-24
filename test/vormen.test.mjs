@@ -16,10 +16,15 @@ const bij = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 // ---- nep-canvas: elke tekenaanroep telt, niets tekent -----------------------
 function maakCanvas(w, h) {
   const tel = { n: 0 };
-  const ctx = new Proxy({
+  // Zoals een echte 2D-context: begintoestand, en reset() zet die terug.
+  const BEGIN = { lineCap: 'butt', lineJoin: 'miter', lineWidth: 1, globalAlpha: 1, imageSmoothingEnabled: true };
+  const doel = {
+    ...BEGIN,
     createImageData: (b, hh) => ({ data: new Uint8ClampedArray(b * hh * 4) }),
+    reset: () => Object.assign(doel, BEGIN),
     tel,
-  }, {
+  };
+  const ctx = new Proxy(doel, {
     get(t, k) { if (k in t) return t[k]; return () => { tel.n++; }; },
     set(t, k, v) { t[k] = v; return true; },
   });
@@ -115,6 +120,11 @@ console.log('knoppen: 0..1 in, de engine schaalt (regel 2)');
   ok('een knop die er niet is: null, en zetten doet niets', laag.leesKnop(5) === null && (laag.zetKnop(5, 1), true));
   laag.zetSysteem('hg');
   ok('ander systeem: eigen knoppen en standaarden', laag.knoppen[0].k === 'a' && laag.p.a === 3);
+  const ctx = laag.canvas.getContext('2d');
+  laag.zetSysteem('lz'); laag.frame(0);
+  const rond = ctx.lineCap === 'round';
+  laag.zetSysteem('fl');
+  ok('een ander systeem begint met een schone context (geen ronde kappen van lz in fl)', rond && ctx.lineCap === 'butt' && ctx.globalAlpha === 1 && ctx.imageSmoothingEnabled === true);
 }
 
 console.log('twee lagen, één gekozen');
@@ -164,7 +174,9 @@ console.log('op de action-bus');
 
 console.log('het mappingfragment voor de APC');
 {
-  const { Lagen } = await import('../src/control/lagen.js');
+  const { Lagen, GROEPEN, voegVormMapjeToe } = await import('../src/control/lagen.js');
+  ok('zonder vlag bestaat het mapje vorm niet (geen action, geen lege rij op apc.html)', !GROEPEN.device.knoppen.detail);
+  voegVormMapjeToe();                            // wat opzetVormen doet, vóór bindLagen
   actions.bindLagen(new Lagen());
   const frag = JSON.parse(readFileSync(new URL('../mappings/apc40mk2-vormen.json', import.meta.url), 'utf8'));
   const std = JSON.parse(readFileSync(new URL('../mappings/apc40mk2.json', import.meta.url), 'utf8'));
@@ -211,7 +223,7 @@ console.log('de mixer: lagen tussen mengen en effecten');
   }, { get(t, k) { if (k in t) return t[k]; return () => {}; } });
   const engine = { ctx: { currentTime: 2, outputLatency: 0, baseLatency: 0 }, deck: () => ({ buffer: null, ui: { fader: 0 } }), xfadeGain: () => 0 };
   const mixer = new VideoMixer({ canvas: { getContext: () => gl }, engine, decks: ['A', 'B'] });
-  ok('de mixer bouwt ook het lagenprogramma', !mixer.fout && mixer.lagenProg);
+  ok('zonder beeldlagen geen lagenprogramma en geen extra doek (niets extra te compileren)', !mixer.fout && !mixer.lagenProg && !mixer.gelaagd);
 
   log.length = 0;
   mixer.teken();
@@ -223,7 +235,8 @@ console.log('de mixer: lagen tussen mengen en effecten');
   v.lagen.forEach((l) => mixer.voegBeeldlaagToe(l));
   log.length = 0;
   mixer.teken();
-  ok('lagen toegevoegd maar uit: nog steeds bit voor bit de oude weg', log.filter((l) => l.draw).length === 3 && !mixer.gelaagd);
+  ok('lagen toegevoegd: programma, doek en texturen één keer, buiten teken()', mixer.lagenProg && mixer.gelaagd && mixer.laagTex.length === MAX_BEELDLAGEN);
+  ok('maar uit: nog steeds bit voor bit de oude weg', log.filter((l) => l.draw).length === 3);
 
   v.lagen[0].aan = true;
   log.length = 0;

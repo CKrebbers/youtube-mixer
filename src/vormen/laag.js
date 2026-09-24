@@ -125,6 +125,13 @@ export class VormLaag extends Emitter {
   /** Het systeem hier opstarten (hoofd-modus), met de parameters zoals ze staan. */
   _initHier() {
     this.budget.herstel(this.kwaliteit);
+    // Eén context voor alle systemen van deze laag: zonder terugzetten lekt
+    // lineCap='round' van lz/bd/dp naar fl en sf, en imageSmoothingEnabled=false
+    // van ec/cc naar de rest. In het origineel had elk systeem een eigen canvas.
+    const c = this.ctx;
+    if (typeof c.reset === 'function') c.reset();
+    else Object.assign(c, { lineCap: 'butt', lineJoin: 'miter', lineWidth: 1, globalAlpha: 1, imageSmoothingEnabled: true, globalCompositeOperation: 'source-over' });
+    c.fillStyle = ACHTERGROND; c.fillRect(0, 0, this.maat, this.maat);
     this.s = { o: {}, e: {} };
     this.g = {
       ctx: this.ctx, S: this.maat, D: this.maat / 320, t: 0, kwaliteit: this.kwaliteit,
