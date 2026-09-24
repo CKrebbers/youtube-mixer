@@ -31,6 +31,17 @@ function zoekChrome() {
 }
 
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
+/**
+ * Wachten tot de app klaar is (engine, mixer en, met de vlag, de vormen), niet
+ * een vaste tijd: op een drukke machine duurde laden meer dan de 2,5 s die hier
+ * eerst stond, en dan faalde alles erna. Daarna nog even voor de eerste beelden.
+ */
+async function wachtOpApp(metVormen, maxMs = 20000) {
+  const klaar = metVormen ? 'window.engine && window.videoMixer && window.vormen' : 'window.engine && window.videoMixer';
+  const t0 = Date.now();
+  while (Date.now() - t0 < maxMs) { if (await evalueer(`!!(${klaar})`).catch(() => false)) break; await wacht(200); }
+  await wacht(1000);
+}
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
     VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_HERANALYSE: 'uit' },
@@ -87,7 +98,7 @@ try {
   // ---- zonder vlag: de app zoals hij was ----------------------------------
   console.log('zonder ?vormen');
   await cdp('Page.navigate', { url: `http://localhost:${POORT}/?vormen=0` });
-  await wacht(2500);
+  await wachtOpApp(false);
   ok('de app start', await evalueer('!!window.engine && !!window.videoMixer'));
   ok('geen MIDI in dit tabblad', await evalueer('!navigator.requestMIDIAccess'));
   ok('geen vormlagen: geen rij, geen actions, geen beeldlagen',
@@ -99,7 +110,7 @@ try {
   // ---- met vlag ------------------------------------------------------------
   console.log('met ?vormen=1');
   await cdp('Page.navigate', { url: `http://localhost:${POORT}/?vormen=1` });
-  await wacht(2500);
+  await wachtOpApp(true);
   ok('de vormrij staat in het videopaneel', await evalueer("!!document.querySelector('#video-panel .vid-vorm')"));
   ok('twee lagen aan de mixer gehangen', await evalueer('window.videoMixer.beeldlagen.length === 2'));
   ok('de vormen draaien in een Worker (werker-modus, budget 12 ms)',
