@@ -63,17 +63,18 @@ Zoek de oorzaak voor je iets wijzigt en vertel me wat het was.
 
 ---
 
-## Hervatten na 24 september 2026 (vormlagen, AV-kern, stems)
+## Hervatten na 24 september 2026 (vormlagen, AV-kern, stems, toonsoort, keylock)
 
 ```
 We gaan verder met VARVE DJ. Pak eerst de draad op, zonder iets te bouwen:
 
 1. Lees in deze volgorde: CLAUDE.md (vooral de regels 1–3, de APC-/Chrome-regel
-   en de sectie VORMLAGEN), docs/HANDOFF.md vanaf "BEGIN HIER", de takenlijst
-   bovenaan ROADMAP.md, docs/VRAGEN.md (open: A2, A3, F1, G4, H1–H6) en
-   docs/plugins/01-plan.md (AV-kern × Varve: besluiten).
-2. Controleer de stand: git status en git log -5 (verwacht: schoon, t/m c06e0be
-   of later), en `node test/alles.mjs` (verwacht: 29 bestanden, ~1920 checks, groen).
+   en de secties VORMLAGEN en "Toonsoort en keylock"), docs/HANDOFF.md vanaf
+   "BEGIN HIER", de takenlijst bovenaan ROADMAP.md, docs/VRAGEN.md (open: A2, A3,
+   F1, H3, H5, I1–I4), docs/plugins/01-plan.md (AV-kern × Varve: besluiten) en de
+   beslissingen in docs/TOONSOORT.md §9 en docs/KEYLOCK.md §7.
+2. Controleer de stand: git status en git log -5 (verwacht: schoon, t/m de commit
+   "Overdracht 24 sep middag" of later), en `node test/alles.mjs` (verwacht: 29 bestanden, ~1920 checks, groen).
 3. Vat in hooguit tien regels samen waar we staan, wat ik nog moet testen of
    beslissen, en wat volgens ROADMAP de volgende stap is. Vraag me dan wat ik wil.
 
@@ -91,7 +92,9 @@ Harde regels:
 - Afspraak: tot 25 oktober gaat AV-kern voor (publicatie 1). Varve-werk daarna,
   in de volgorde van ROADMAP, tenzij ik iets anders vraag.
 - Materiaal van mij staat in Input/ (vormmachines.html, Totaalplan, projectplan,
-  av-kern.zip met de TS-bron, blueprint). Stems om te beluisteren: tools/stems/uit/.
+  av-kern.zip met de TS-bron, blueprint). AV-kern zelf: ~/src/av-kern (eigen repo,
+  FASE0-TEST.md). Om te beluisteren: tools/stems/uit/ en tools/keylock/uit/
+  (LUISTER.md).
 
 Sluit elke sessie af met een bijgewerkte HANDOFF (begin-hier), ROADMAP, VRAGEN en
 CLAUDE.md, zodat de volgende sessie hier weer kan beginnen.

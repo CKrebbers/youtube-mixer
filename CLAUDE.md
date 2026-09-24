@@ -109,7 +109,9 @@ server/             draait apart: `node server/index.js`
   analyse-werker.js peaks, onset en tap-verfijning in een worker_thread (server blijft vrij)
   detect.js         FFT, onset-envelope, tempo, segmentatie. Geen dependencies.
   opname.js         opnames: WAV dat groeit, kop herstellen na een crash
-tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py) — zie tools/README.md
+tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
+                    headless/kijk.mjs (headless zonder MIDI), stems/ (Demucs-proef), toonsoort/ (meetinstrument),
+                    keylock/ (Signalsmith-proef + luisterbestanden) — zie tools/README.md
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
   apc40mk2.json     standaardmapping (data, geen code)
@@ -153,6 +155,8 @@ docs/
   APC40.md          wat het apparaat kan en de indeling zoals gebouwd
   APC40-onderzoek.md DJ-conventies, bestaande mappings, fysieke indeling (bron van de indeling)
   plugins/          AV-kern × Varve: inventaris, plan (01-plan.md), negen analyses
+  TOONSOORT.md      toonsoort per nummer: meting op Clay's library + ontwerp (bouwen na 25 okt)
+  KEYLOCK.md        keylock en toon verschuiven met Signalsmith: meting + ontwerp (bouwen na 25 okt)
 ```
 
 ## Conventies
@@ -578,6 +582,9 @@ docs/
   aangesloten is en Clay's tabblad open staat. Vraag Clay eerst de APC los te
   koppelen, of test met zijn toestemming in zijn tabblad. De lock beschermt
   pas vanaf deze versie; een tabblad met oude code in het geheugen doet niet mee.
+  AV-kern (`~/src/av-kern`, Vite op :5173) heeft sinds 24 sep dezelfde wachtrij
+  en een eigen lock (`av-kern-apc`), maar een Web Lock geldt per ORIGIN: tegen
+  elkaar beschermen ze niet. Varve en AV-kern nooit tegelijk open met de APC.
 - De hub telt alleen poorten met state `connected`: Chrome laat een
   losgetrokken poort staan (`disconnected`), dus opnieuw aansluiten gaf eerst
   geen init en dode LED's. Valt de invoer weg, dan laat `mapping.losgekoppeld()`
@@ -747,6 +754,38 @@ De uitkomsten van het onderzoek van 22 september 2026 staan in ROADMAP.md onder
 - Streamen gebruikt een pagina-cache op samplepositie met vastgepinde pagina's
   voor hotcues, geen ringbuffer. Een ringbuffer gaat uit van vooruit consumeren;
   een deck springt en gaat achteruit.
+
+## Toonsoort en keylock (24 sep 2026: ontwerp en meting, bouwen na 25 okt)
+
+Volledig in `docs/TOONSOORT.md` en `docs/KEYLOCK.md`, besluiten in VRAGEN blok I.
+Clay: na 25 okt vooraan (ROADMAP 14–15), eerst toonsoort, dan keylock. Wat een
+bouwer niet mag missen:
+- **Toonsoort is een KAART** in tracktijd, van de plaat, zoals het grid:
+  `{stukken:[{van, toonsoort, stemming, zekerheid}], bron, slot, versie}` per link
+  (schema v6). Een stemming PER STUK (zoned out +43 ct, ADRIANA −45…+25 ct); zonder
+  stemmingscorrectie gaan synthetische proeven fout. Profiel Temperley 2005
+  (8/10 op bekende stukken; edma en Krumhansl 5/10: die kiezen op piano de kwint).
+  Zeker ≥ 0,40, onder 0,15 = "~" (geen duidelijke toonsoort: bij ambient een eerlijk
+  antwoord). Drempels rusten op ~15 stukken: herijken na ~20 sloten.
+- **Wat je HOORT** (Clay, T3): halve tonen erbij = transpositie + (keylock ? 0 :
+  12·log2(rate)) + stemming/100; `bend` telt niet mee (flikkert). De library toont de plaat.
+- **Keylock = Signalsmith 1.3.2 BINNEN `stream-lezer.js`** (optie A), gevoed met hele
+  frames uit de pagina's; dezelfde segmenten {T, P, R}. NIET hun `.mjs` importeren in
+  onze worklet: dat registreert hun eigen processor; de WASM-fabriek moet er los uit
+  (`tools/keylock/kern.mjs`, `laadFabriek`). Het npm-pakket heeft GEEN LICENSE-bestand:
+  bij vendoren de MIT-tekst uit de bron-repo erbij. De Emscripten-code noemt
+  `document.currentScript`: `regels.test.mjs` vlagt dat, dus vendoren in een submap
+  of de regel aanpassen.
+- Hoorbare positie klopt (±0,6 ms) alleen met vooruitblik uitLat + 128 frames.
+  Tempo en bend gaan direct in (T = nu); een SPRONG met keylock aan wordt gepland op
+  uitLat + één blok (63–93 ms, exact, volle sterkte; Clay K3). Ter plekke seeken
+  verliest de eerste ~60 ms. Zonder keylock blijft springen direct.
+- Acht decks ~16% van een kern, maar zonder `splitComputation` vallen de STFT-blokken
+  samen tot 170% van een quantum: gespreid rekenen is verplicht. Pieken tot +3,6 dB
+  bij zang (headroom). Keylock aan/uit wisselen vraagt een polariteitskeuze, anders
+  een dip tot −15 dB (ontworpen, niet gebouwd).
+- Namen op het deck, gedeeld door beide ontwerpen: `deck.keylock` (boolean) en
+  `deck.transpositie` (halve tonen). Transponeren mag ook zonder keylock (K8).
 
 ## Werkwijze die hier werkt
 

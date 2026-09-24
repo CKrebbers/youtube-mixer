@@ -1,33 +1,118 @@
-# Overdracht — waar we staan (24 september 2026, nacht)
+# Overdracht — waar we staan (24 september 2026, middag)
 
-Lees in deze volgorde: `CLAUDE.md` (architectuur, regels, valkuilen, sectie
-VORMLAGEN), dan dit bestand, dan `ROADMAP.md` (bovenaan: DE TAKENLIJST OP
-VOLGORDE), `docs/VRAGEN.md` (open vragen, nieuw: H1–H6), `docs/plugins/01-plan.md`
-(AV-kern × Varve, besluiten) en `docs/APC40.md`.
+Lees in deze volgorde:
+1. `CLAUDE.md`: architectuur, regels, valkuilen, en de secties VORMLAGEN en
+   "Toonsoort en keylock".
+2. Dit bestand.
+3. `ROADMAP.md`: bovenaan staat DE TAKENLIJST OP VOLGORDE.
+4. `docs/VRAGEN.md`: open vragen, nieuw is blok I.
+5. `docs/plugins/01-plan.md`: AV-kern × Varve.
+6. `docs/APC40.md`.
 
-## BEGIN HIER (stand 24 sep, nacht)
+## BEGIN HIER (stand 24 sep, middag)
 
-- **main** is schoon en alles is gecommit. Laatste commits: `24611e4` (stems-meetscript
-  CUDA), `3d1092d` (stems-proef), `02b1763` (controleur verwerkt), vormlagen
-  stap 1–3. `node test/alles.mjs`: 29 bestanden, 1920 checks, groen.
-  `node tools/headless/kijk.mjs`: groen.
-- **Waar we staan:** de vormlagen zijn gebouwd (26 Vormmachines als beeld over de
-  video, Worker, tijdsbudget, reageren op de mix via knob 8). Clay heeft het NOG
-  NIET zelf geprobeerd. Dat is de eerste stap.
-- **Afspraak over de volgorde:** tot 25 oktober gaat AV-kern voor (publicatie 1).
-  De hele lijst staat bovenaan `ROADMAP.md`.
-- **Stems splitsen:** gemeten, niet gebouwd (zie hieronder). Clay moet eerst
-  luisteren (VRAGEN H1).
-- **Materiaal van Clay:** alles staat nu in `Input/` (in .gitignore):
-  `vormmachines.html`, `Totaalplan AV-kern.md`, het projectplan, `av-kern.zip`
-  (de leesbare TS-bron: uitpakken om te lezen) en `blueprint-varvedj.json`.
-  De artifacts: Vormmachines https://claude.ai/artifact/46VSeyzUpaT4GvNAMQb6rh,
-  APC40 ontleed https://claude.ai/artifact/6KMpwkBft7e32DEnUbL9St.
-- **Werkwijze die werkte:** grote klussen met parallelle agenten, elk in een eigen
-  git worktree met een eigen branch, plus een controleur die alleen leest; daarna
-  zelf samenvoegen, tests na elke merge, worktrees opruimen. Headless kijken met
-  `tools/headless/kijk.mjs`: Web MIDI eruit, eigen poorten via VARVE_KIJK_POORT
-  en VARVE_KIJK_DEBUG. NOOIT een gewoon Chrome-tabblad (APC-regel).
+- **main** is schoon en alles is gecommit. `node test/alles.mjs` geeft 29 bestanden,
+  1920 checks, groen. Eén run onder zware belasting (een ingest van Clay plus het
+  opruimen van worktrees tegelijk) gaf 5 rode bestanden met 1839 checks. Welke het
+  waren is niet vastgelegd; een tweede run was groen. Gebeurt het weer: draai
+  `node test/alles.mjs` terwijl de machine rustig is en noteer welke bestanden het zijn.
+- **Deze sessie** (details hieronder):
+  - AV-kern fase 0 klaargezet in `~/src/av-kern`;
+  - toonsoort en keylock onderzocht en gemeten, ontwerp in `docs/TOONSOORT.md` en
+    `docs/KEYLOCK.md`;
+  - vragen G4, H1, H2, H4 en H6 beslist;
+  - blok I in VRAGEN.
+- **Clay moet nu:**
+  1. De luistertest keylock doen (A3): `tools/keylock/uit/` met
+     `tools/keylock/LUISTER.md`, een kwartier met koptelefoon. Daarmee beslist hij
+     I1–I3.
+  2. AV-kern fase 0 testen: `~/src/av-kern/FASE0-TEST.md`. Varve moet daarbij
+     HELEMAAL dicht; één app met de APC.
+  3. In Varve de beatgrid-dingen proberen (ROADMAP 1). De vormlagen zijn "goed voor nu".
+- **Volgorde:** tot 25 okt gaat AV-kern voor (ROADMAP 6–11). Na 25 okt in Varve:
+  1. mapping als verschil (13);
+  2. toonsoort (14);
+  3. keylock (15);
+  4. de rest van de lijst.
+- **Werkwijze die werkte:**
+  - Parallelle agenten, elk in een eigen worktree of repo met een eigen branch.
+  - Daarna zelf nalopen en samenvoegen, met tests na elke merge.
+  - Worktrees en branches opruimen.
+  - Headless alleen met `tools/headless/kijk.mjs`, nooit een gewoon Chrome-tabblad.
+
+  Les van vandaag: meetagenten op hele albums duren ruim een uur. Laat ze op
+  fragmenten meten als het sneller moet, en start ze niet terwijl Clay een ingest doet.
+
+## Nieuw (24 september 2026, middag): AV-kern fase 0, toonsoort, keylock
+
+Drie agenten liepen tegelijk.
+
+### AV-kern fase 0 (`~/src/av-kern`)
+- **Repo:** uitgepakt uit `Input/av-kern.zip` naar `~/src/av-kern`, naast
+  `av-scene-kit`. Er is geen remote. `main` = `9ef37b9`: 7 commits bovenop `ca66e0d`.
+  `npm test` geeft 40 tests groen (was 17), `npm run build` is groen.
+- **Driver veilig gemaakt:**
+  - Een wachtrij van hooguit 16 berichten per 4 ms. Vroeger gingen er 135
+    LED-berichten in één synchrone lus uit, plus 51 bij het verbinden.
+  - Alleen poorten met state `connected`, en de modus-sysex alleen als de
+    uitvoerpoort wisselt.
+  - Een Web Lock `av-kern-apc`: een tweede tabblad vraagt geen MIDI aan.
+  - Shift wordt losgelaten als de invoer wegvalt.
+  - De 0x41-keuze is niet veranderd.
+- **`npm run niet-gemapt`:** maakt van een actielog de lijst voor Totaalplan 0.1.
+- **`FASE0-TEST.md`:** een checklist van ~40 minuten voor Clay.
+- **Varve na AV-kern:** Varve stuurt zelf 0x42 en een blackout bij het laden. Helpt
+  dat niet, dan de USB-kabel er 5 s uit terwijl Varve open staat.
+- **Open:**
+  - 0.2: de Ademmachine in Bedienplan nalopen (Clay).
+  - 0.4: `reference/ademmachine.html`. Dat is het artifact
+    claude.ai/artifact/P4LL87G9D1XxZknFHQUptS; niet opgehaald.
+  - 0.5: `prompts/` (achterhaald: de sessies zijn al gebouwd).
+  - Echofilter en LED's in rAF (bevriezen in een achtergrondtab): alleen gemeld.
+- **NIET getest:** niets op de echte APC en niets in echte Chrome; alleen een
+  nagebouwde Web MIDI en headless met MIDI eruit.
+
+### Toonsoort (`docs/TOONSOORT.md`, `tools/toonsoort/`)
+- **Profiel:** Temperley 2005, met harmonisch/percussief scheiden, log en een
+  stemming per stuk. 8/10 goed op bekende stukken; edma en Krumhansl 5/10. De
+  synthetische proef: 24/24.
+- **Kaart:** Viterbi over vensters van 24 s. In ADRIANA liggen alle 17 grenzen binnen
+  15 s van een echte nummergrens.
+- **Snelheid:** ~0,1 s per minuut audio.
+- **Zekerheid:** de helft van de library zit onder 0,15. Dat is ambient: eerlijk.
+- **Grondwaarheid dun:** 10 stukken, allemaal Sakamoto. Herijken na ~20 sloten.
+- **Uitkomsten:** `meting.txt` en `synth.txt`. De vergelijkingsruns staan in
+  `tools/toonsoort/uit/`, niet in git.
+
+### Keylock (`docs/KEYLOCK.md`, `tools/keylock/`)
+- **Pakket:** Signalsmith 1.3.2, npm 96 KB, WASM 63 KB. Het pakket staat in
+  `tools/keylock/pakket/`, niet in git; `proef.mjs haal` haalt het opnieuw.
+- **Toon:** staat exact bij 0,92 en 1,08. Transponeren zit 2–4 cent naast.
+- **Positie:** klopt tot ±0,6 ms met een vooruitblik van uitLat + 128 frames.
+- **Rekenwerk:** ~2% van een kern per deck, 8 decks ~16%. Gespreid rekenen is
+  verplicht. Gemeten in Node onder wisselende belasting; ±2× onzeker.
+- **Luisterbestanden:** `tools/keylock/uit/` (429 MB, niet in git): 4 nummers,
+  14–16 varianten per nummer, 3 dB zachter. Opnieuw maken met
+  `node tools/keylock/proef.mjs luister`.
+- **NIET getest:**
+  - in echte Chrome (AudioWorklet, baseLatency);
+  - beluisterd;
+  - korte loops met keylock en de tempo's 0,5 en 2;
+  - de polariteitskeuze en het opwarmen: alleen ontworpen.
+
+### Beslist met Clay (24 sep, middag)
+- **G4:** Bedienplan alleen voor AV-kern; Varve houdt zijn eigen mapping.
+- **H1:** de stems klinken goed.
+- **H2:** stems kiesbaar per nummer, standaard twee.
+- **H4:** vormlagen "goed voor nu".
+- **H6:** isomorf geluid eerst als AV-kern-module, daarna in Varve via een vormbus.
+- **Wanneer:** toonsoort en keylock na 25 okt, vooraan.
+- **Door Clay gekozen:**
+  - T3: wat je hoort;
+  - K3: een sprong duurt ~95 ms en is exact;
+  - K8: transponeren mag ook zonder keylock.
+- **Volgens het advies, tenzij Clay bezwaar maakt:** T1, T2, T4–T7, K5 en K7.
+- **Open:** I1–I4 (K1, K2, K4, K6).
 
 ## Stems splitsen — proef (24 sep, nacht)
 
