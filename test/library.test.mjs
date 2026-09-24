@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const { Library, SCHEMA, normaliseerGrid } = await import('../server/library.js');
+const { TOON_VERSIE } = await import('../server/toon.js');
 const { DatabaseSync } = await import('node:sqlite');
 
 const fails = [];
@@ -125,7 +126,8 @@ lib.bewaarGrid('abc123', kaart);            // voor het opruimen hieronder
   ins.run('geenanker', 'https://youtu.be/geenanker', 'geen anker', 'media/x/audio.wav', 3, 99, null, null);
   db.close();
   const l4 = new Library(pad4);
-  ok('v4 wordt v5', l4.versie === 5);
+  // Niet op een hard nummer: er komen versies bij (toonsoort, en wat andere sporen toevoegen).
+  ok(`v4 wordt de nieuwste (v${SCHEMA.length})`, l4.versie === SCHEMA.length);
   const m = l4.track('metgrid').grid;
   ok('bestaand grid wordt één stuk', m && m.stukken.length === 1 && m.stukken[0].bpm === 128.25
     && Math.abs(m.stukken[0].anker - 0.42) < 1e-9 && m.stukken[0].van === 0 && m.beatsPerBar === 3);
@@ -133,8 +135,76 @@ lib.bewaarGrid('abc123', kaart);            // voor het opruimen hieronder
   ok('zonder anker: anker 0, maat van 4', l4.track('geenanker').grid.stukken[0].anker === 0 && l4.track('geenanker').grid.beatsPerBar === 4);
   l4.sluit();
   const l5 = new Library(pad4);
-  ok('opnieuw openen migreert niet nog een keer', l5.versie === 5 && l5.track('metgrid').grid.stukken.length === 1);
+  ok('opnieuw openen migreert niet nog een keer', l5.versie === SCHEMA.length && l5.track('metgrid').grid.stukken.length === 1);
   l5.sluit();
+}
+
+// ---- migratie naar de toonsoort op een echte database van vóór toon_json ----
+{
+  const pad5 = join(map, 'v5.db');
+  const db = new DatabaseSync(pad5);
+  const v = SCHEMA.findIndex((sql) => /toon_json/.test(sql));
+  for (let i = 0; i < v; i++) db.exec(SCHEMA[i]);
+  db.exec(`PRAGMA user_version = ${v}`);
+  db.prepare(`INSERT INTO tracks (id, url, titel, audio, toegevoegd, grid_json) VALUES (?,?,?,?,?,?)`)
+    .run('oud', 'https://youtu.be/oud', 'oud nummer', 'media/oud/audio.wav', 1, JSON.stringify({ stukken: [{ van: 0, bpm: 100, anker: 0.5 }], slot: true }));
+  db.close();
+  const l = new Library(pad5);
+  const kolommen = l.db.prepare('PRAGMA table_info(tracks)').all().map((k) => k.name);
+  ok(`een database zonder toon_json krijgt de kolom (schema v${v} -> v${l.versie})`, v > 0 && kolommen.includes('toon_json') && l.versie === SCHEMA.length);
+  ok('een bestaand nummer: toon null, grid ongeschonden', l.track('oud').toon === null && l.track('oud').grid.slot === true);
+  ok('en moet dus een toonsoort krijgen (achtergrond)', l.teToonAnalyseren().includes('oud'));
+  l.sluit();
+}
+
+// ---- toonsoort: hoort bij de link, net als grid en racks ---------------------
+
+{
+  lib.bewaarTrack(nummer('toon1', 'Toon één'));
+  ok('een nieuw nummer heeft nog geen toonsoort', lib.track('toon1').toon === null);
+  const kaartT = { versie: TOON_VERSIE, stemming: 2.3,
+    stukken: [{ van: 0, toonsoort: 'G', stemming: 8, zekerheid: 0.87 }, { van: 215.2, toonsoort: 'Ab', stemming: 8, zekerheid: 0.83 }],
+    bron: 'auto', slot: false };
+  const b = lib.bewaarToon('toon1', kaartT);
+  ok('de kaart uit docs/TOONSOORT.md §3 komt terug zoals hij erin ging', JSON.stringify(b) === JSON.stringify(kaartT)
+    && JSON.stringify(lib.track('toon1').toon) === JSON.stringify(kaartT));
+  ok('en komt mee in de lijst', lib.tracks({ zoek: 'Toon één' })[0].toon.stukken[1].toonsoort === 'Ab');
+  lib.bewaarTrack(nummer('toon1', 'Toon één, opnieuw binnengehaald'));
+  ok('opnieuw binnenhalen gooit de toonsoort niet weg', lib.track('toon1').toon?.stukken.length === 2);
+  let gegooidT = false;
+  try { lib.bewaarToon('toon1', { stukken: [{ van: 0, toonsoort: 'H' }] }); } catch { gegooidT = true; }
+  ok('een ongeldige kaart gooit en laat de bewaarde staan', gegooidT && lib.track('toon1').toon.stukken.length === 2);
+  lib.bewaarToon('toon1', null);
+  ok('toonsoort wissen kan', lib.track('toon1').toon === null);
+
+  // Automatisch: nooit over slot, over hand alleen met overHand, de achtergrond alleen wat MOET.
+  const autoT = { versie: TOON_VERSIE, stemming: 0, stukken: [{ van: 0, toonsoort: 'C', stemming: 0, zekerheid: 0.6 }] };
+  for (const id of ['tLeeg', 'tOud', 'tSlot', 'tHand', 'tAuto']) lib.bewaarTrack(nummer(id, id));
+  lib.bewaarToon('tOud', { ...autoT, versie: undefined, bron: 'auto' });
+  lib.bewaarToon('tSlot', { stukken: [{ van: 0, toonsoort: 'F#m', stemming: -3 }], bron: 'hand', slot: true });
+  lib.bewaarToon('tHand', { stukken: [{ van: 0, toonsoort: 'D', stemming: 0 }], bron: 'hand' });
+  lib.bewaarToon('tAuto', { ...autoT, bron: 'auto' });
+  const teDoenT = lib.teToonAnalyseren().filter((x) => x.startsWith('t') && x !== 'toon1');
+  ok(`te analyseren: leeg en oud, niet slot/hand/actueel (${teDoenT.join(',')})`, teDoenT.join(',') === 'tLeeg,tOud');
+  const bump = lib.teToonAnalyseren({ versie: TOON_VERSIE + 1 }).filter((x) => x.startsWith('t') && x !== 'toon1');
+  ok(`na een versie-bump ook de actuele auto-kaart, nog steeds niet hand/slot (${bump.join(',')})`, bump.join(',') === 'tLeeg,tOud,tAuto');
+
+  const slotVoorT = JSON.stringify(lib.track('tSlot').toon);
+  ok('SLOT wordt nooit overschreven', !lib.bewaarAutoToon('tSlot', autoT).bewaard && !lib.bewaarAutoToon('tSlot', autoT, { overHand: true }).bewaard
+    && !lib.bewaarAutoToon('tSlot', autoT, { alleenOud: true, versie: TOON_VERSIE + 1 }).bewaard && JSON.stringify(lib.track('tSlot').toon) === slotVoorT);
+  ok('met de hand: niet zonder overHand, ook niet na een versie-bump', !lib.bewaarAutoToon('tHand', autoT).bewaard
+    && !lib.bewaarAutoToon('tHand', autoT, { alleenOud: true, versie: TOON_VERSIE + 1 }).bewaard && lib.track('tHand').toon.bron === 'hand');
+  ok('de achtergrond laat een actuele auto-kaart staan', !lib.bewaarAutoToon('tAuto', autoT, { alleenOud: true }).bewaard);
+  const rOudT = lib.bewaarAutoToon('tOud', { ...autoT, bron: 'hand', slot: true }, { alleenOud: true });
+  ok('een oude auto-kaart wordt vervangen, en een voorstel is altijd auto en nooit op slot',
+    rOudT.bewaard && rOudT.toon.bron === 'auto' && rOudT.toon.slot === false && rOudT.toon.versie === TOON_VERSIE);
+  ok('leeg krijgt het voorstel', lib.bewaarAutoToon('tLeeg', autoT).bewaard);
+  ok('↻ (overHand) mag over hand', lib.bewaarAutoToon('tHand', autoT, { overHand: true }).bewaard && lib.track('tHand').toon.bron === 'auto');
+  const rForceerT = lib.bewaarAutoToon('tSlot', autoT, { overHand: true, overSlot: true });
+  ok('alleen met overSlot (tweede klik) over een slot heen, en dan niet meer op slot', rForceerT.bewaard && rForceerT.toon.slot === false);
+  ok('onbekend nummer: niet bewaard', !lib.bewaarAutoToon('bestaatniet', autoT).bewaard);
+  ok('na afloop hoeft niets meer', !lib.teToonAnalyseren().some((x) => x.startsWith('t') && x !== 'toon1'));
+  for (const id of ['toon1', 'tLeeg', 'tOud', 'tSlot', 'tHand', 'tAuto']) lib.verwijderTrack(id);
 }
 
 // ---- peaks ----------------------------------------------------------------

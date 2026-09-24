@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { bronVan } from './links.js';
+import { TOON_VERSIE, leesToonsoort, toonsoortNaam } from './toon.js';
 
 /**
  * De library: wat er binnengehaald is, en wat erbij hoort.
@@ -102,6 +103,12 @@ export const SCHEMA = [
       'beatsPerBar', COALESCE(grid_beats_per_bar, 4))
     WHERE grid_bpm IS NOT NULL;
   `,
+  // versie 6 (of later: elk spoor zet zijn migratie achteraan) — de TOONSOORT
+  // als kaart, zoals het grid: { versie, stemming, stukken: [{ van, toonsoort,
+  // stemming, zekerheid }], bron, slot } als JSON. Zie docs/TOONSOORT.md §3.
+  `
+  ALTER TABLE tracks ADD COLUMN toon_json TEXT;
+  `,
 ];
 
 /** Hooguit zoveel stukken per grid: een tempokaart, geen beat-voor-beat-lijst. */
@@ -158,6 +165,91 @@ export function autoGridWeigert(huidig, { overHand = false, overSlot = false, al
 
 /** Moet dit grid bij het opstarten (opnieuw) geanalyseerd worden? Leeg of oud, niet op slot. */
 export const moetAnalyse = (grid) => !grid || (!grid.slot && grid.bron !== 'auto' && grid.bron !== 'hand');
+
+// ---- toonsoort: een kaart per link, net als het grid -------------------------
+
+/** Hooguit zoveel stukken per kaart (een automatisch stuk is minstens 24 s: 27 uur). */
+export const MAX_TOON_STUKKEN = 4096;
+
+/**
+ * Een toonsoortkaart uit de buitenwereld netjes maken (docs/TOONSOORT.md §3):
+ *
+ *   { versie, stemming, stukken: [{ van, toonsoort, stemming, zekerheid? }], bron, slot }
+ *
+ * - `toonsoort`: de vaste spelling `C Db D Eb E F F# G Ab A Bb B`, `m` erachter
+ *   voor mineur; een andere schrijfwijze van dezelfde toon ('C#', 'G#m') wordt
+ *   de vaste. `null` = geen toonsoort (met de hand gezet, of stilte).
+ * - `van` in tracktijd (s), ≥ 0; gesorteerd, geen twee op dezelfde plek.
+ * - `stemming` in cent, -50..+50: per stuk (ontbreekt: die van het geheel) en
+ *   bovenaan (ontbreekt: die van het eerste stuk, anders 0).
+ * - `zekerheid` 0..1 blijft staan als hij er is (ook in een met de hand
+ *   bewerkte kaart: stukken die je niet aanraakte houden de hunne, zoals bij
+ *   het grid); een stuk zonder zekerheid is met de hand gezet en dus zeker.
+ * - `bron`: 'auto' of 'hand'. Ontbreekt hij, dan 'hand': wat van buiten komt
+ *   zonder te zeggen wat het is, mag de achtergrond niet overschrijven.
+ * - `slot`: true = met de hand bevestigd, nooit automatisch overschreven.
+ * - `versie`: de versie van de analyse (TOON_VERSIE), een geheel getal ≥ 1;
+ *   anders weggelaten (telt dan als oud).
+ * Null als het geen bruikbare kaart is: dan kan een route 400 zeggen.
+ */
+export function normaliseerToon(t) {
+  if (!t || typeof t !== 'object' || Array.isArray(t)) return null;
+  const getal = (x) => typeof x === 'number' && Number.isFinite(x);
+  const centOk = (x) => getal(x) && x >= -50 && x <= 50;
+  if (!Array.isArray(t.stukken) || !t.stukken.length || t.stukken.length > MAX_TOON_STUKKEN) return null;
+  if (t.stemming != null && !centOk(t.stemming)) return null;
+  const eerste = t.stukken[0]?.stemming;
+  const heel = t.stemming != null ? t.stemming : centOk(eerste) ? eerste : 0;
+  const stukken = [];
+  for (const s of t.stukken) {
+    if (!s || typeof s !== 'object' || !getal(s.van) || s.van < 0) return null;
+    let toonsoort = null;
+    if (s.toonsoort !== null) {
+      const k = leesToonsoort(s.toonsoort);
+      if (k == null) return null;
+      toonsoort = toonsoortNaam(k);
+    }
+    if (s.stemming != null && !centOk(s.stemming)) return null;
+    const stuk = { van: s.van, toonsoort, stemming: s.stemming != null ? s.stemming : heel };
+    if (s.zekerheid != null) {
+      if (!getal(s.zekerheid)) return null;
+      stuk.zekerheid = Math.max(0, Math.min(1, s.zekerheid));
+    }
+    stukken.push(stuk);
+  }
+  stukken.sort((a, b) => a.van - b.van);
+  for (let i = 1; i < stukken.length; i++) if (stukken[i].van === stukken[i - 1].van) return null;
+  const uit = {};
+  if (Number.isInteger(t.versie) && t.versie >= 1) uit.versie = t.versie;
+  uit.stemming = heel;
+  uit.stukken = stukken;
+  uit.bron = t.bron === 'auto' ? 'auto' : 'hand';
+  uit.slot = t.slot === true;
+  return uit;
+}
+
+/**
+ * Mag een automatische kaart over deze heen? Dezelfde regels als het grid
+ * (autoGridWeigert): nooit over een kaart op slot, tenzij `overSlot` (tweede
+ * klik op ↻); over een met de hand gezette kaart alleen met `overHand` (↻);
+ * met `alleenOud` (de achtergrond) alleen wat nog MOET (moetToonAnalyse).
+ * Geeft null als het mag, anders de reden.
+ */
+export function autoToonWeigert(huidig, { overHand = false, overSlot = false, alleenOud = false, versie = TOON_VERSIE } = {}) {
+  if (!huidig) return null;
+  if (alleenOud && !moetToonAnalyse(huidig, versie)) return 'intussen al een toonsoort';
+  if (huidig.slot && !overSlot) return 'de toonsoort staat op slot';
+  if (huidig.bron === 'hand' && !overHand && !huidig.slot) return 'de toonsoort is met de hand gezet';
+  return null;
+}
+
+/**
+ * Moet deze kaart (opnieuw) geanalyseerd worden? Leeg, of AUTOMATISCH met
+ * een oudere analyseversie (het algoritme werd beter). Met de hand gezet of
+ * op slot: nooit. `versie` alleen voor de tests (een versie-bump nabootsen).
+ */
+export const moetToonAnalyse = (toon, versie = TOON_VERSIE) =>
+  !toon || (!toon.slot && toon.bron === 'auto' && !((toon.versie ?? 0) >= versie));
 
 export class Library {
   constructor(pad) {
@@ -241,8 +333,12 @@ export class Library {
       ? { bestand: r.onset_bestand, frames: r.onset_frames, envRate: r.onset_rate, tijdOffset: r.onset_offset }
       : null;
     // bron: 'youtube' | 'tiktok' | 'bestand' | 'web' — het label in de lijst.
-    return { ...r, racks: n, grid, onset, bron: bronVan(r.url),
+    return { ...r, racks: n, grid, toon: this._toon(r), onset, bron: bronVan(r.url),
       peaks: p ? { bestand: p.bestand, buckets: p.buckets, perBucket: p.per_bucket } : null };
+  }
+
+  _toon(r) {
+    return r.toon_json != null ? normaliseerToon(veiligJson(r.toon_json, null)) : null;
   }
 
   _grid(r) {
@@ -312,6 +408,50 @@ export class Library {
   teAnalyseren() {
     return this.db.prepare('SELECT id, grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar FROM tracks ORDER BY toegevoegd')
       .all().filter((r) => moetAnalyse(this._grid(r))).map((r) => r.id);
+  }
+
+  // ---- toonsoort ---------------------------------------------------------
+
+  /**
+   * null wist de kaart. Een onbruikbare kaart gooit, zodat de route 400 kan
+   * zeggen in plaats van stilletjes de bewaarde kaart te wissen.
+   */
+  bewaarToon(trackId, toon) {
+    const t = toon == null ? null : normaliseerToon(toon);
+    if (toon != null && !t) throw new Error('ongeldige toonsoort');
+    this.db.prepare('UPDATE tracks SET toon_json = ? WHERE id = ?').run(t ? JSON.stringify(t) : null, trackId);
+    return this.track(trackId)?.toon ?? null;
+  }
+
+  /**
+   * Een automatische kaart bewaren, maar alleen als het mag (autoToonWeigert).
+   * Lezen en schrijven in één transactie: een correctie met de hand die net
+   * binnenkwam wordt niet alsnog overschreven. Geeft { bewaard, toon, reden? }.
+   */
+  bewaarAutoToon(trackId, toon, opties = {}) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const huidig = this.track(trackId);
+      if (!huidig) { this.db.exec('ROLLBACK'); return { bewaard: false, toon: null, reden: 'onbekend nummer' }; }
+      const reden = autoToonWeigert(huidig.toon, opties);
+      if (reden) { this.db.exec('ROLLBACK'); return { bewaard: false, toon: huidig.toon, reden }; }
+      const t = this.bewaarToon(trackId, { ...toon, bron: 'auto', slot: false });
+      this.db.exec('COMMIT');
+      return { bewaard: true, toon: t };
+    } catch (err) {
+      try { this.db.exec('ROLLBACK'); } catch {}
+      throw err;
+    }
+  }
+
+  /**
+   * Nummers waarvan de toonsoort (opnieuw) geanalyseerd moet worden: zonder
+   * kaart, of met een automatische kaart van een oudere analyseversie.
+   * Oudste eerst. `versie` alleen voor de tests.
+   */
+  teToonAnalyseren({ versie = TOON_VERSIE } = {}) {
+    return this.db.prepare('SELECT id, toon_json FROM tracks ORDER BY toegevoegd').all()
+      .filter((r) => moetToonAnalyse(this._toon(r), versie)).map((r) => r.id);
   }
 
   bewaarOnset(trackId, onset) {

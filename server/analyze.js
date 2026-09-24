@@ -77,6 +77,15 @@ export const maakOnsets = (onsetBestand, envRate, tijdOffset) =>
   inWerker('onsets', [onsetBestand, envRate, tijdOffset]);
 
 /**
+ * De toonsoort van een hele track als kaart (docs/TOONSOORT.md): de audio
+ * mono op 4410 Hz, dan `toonKaart` uit toon.js. Een uur audio kost 6-27 s
+ * (afhankelijk van hoe druk de machine is) en 64 MB pcm: in de worker.
+ * Geeft { ok, toon } met toon = { versie, stemming, stukken, bron: 'auto',
+ * slot: false }, of { ok: false, fout }.
+ */
+export const maakToon = (audioBestand) => inWerker('toon', [audioBestand]);
+
+/**
  * Zekerheid vanaf waar een stuk ZEKER heet: sync en beat-loops mogen daar,
  * het grid wordt vol getekend. Zelfde getal als ZEKER_VANAF in de engine
  * (beatgrid.js); de server kent de engine niet, server.test vergelijkt ze.
@@ -385,6 +394,14 @@ async function maakOnsetsHier(onsetBestand, envRate, tijdOffset) {
   return { ok: true, tijden: Array.from(tijden, (t) => Math.round(t * 1000) / 1000) };
 }
 
+async function maakToonHier(audioBestand) {
+  const { toonKaart, TOON_SR } = await import('./toon.js');
+  const pcm = await leesPcm(audioBestand, TOON_SR);
+  if (!pcm || !pcm.length) return { ok: false, fout: 'kon de audio niet lezen voor de toonsoort' };
+  const toon = toonKaart(pcm, TOON_SR);
+  return toon ? { ok: true, toon } : { ok: false, fout: 'te kort voor een toonsoort' };
+}
+
 /** Voor de worker. Niet rechtstreeks aanroepen vanuit de server. */
 export const hier = { peaks: maakPeaksHier, onset: maakOnsetHier, verfijn: verfijnHier,
-  grid: maakGridHier, onsets: maakOnsetsHier };
+  grid: maakGridHier, onsets: maakOnsetsHier, toon: maakToonHier };
