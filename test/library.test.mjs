@@ -3,7 +3,7 @@ import { rmSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const { Library, SCHEMA, normaliseerGrid } = await import('../server/library.js');
+const { Library, SCHEMA, normaliseerGrid, sorteertitel, SORTERING, MAX_HOTCUES } = await import('../server/library.js');
 const { DatabaseSync } = await import('node:sqlite');
 
 const fails = [];
@@ -125,15 +125,19 @@ lib.bewaarGrid('abc123', kaart);            // voor het opruimen hieronder
   ins.run('geenanker', 'https://youtu.be/geenanker', 'geen anker', 'media/x/audio.wav', 3, 99, null, null);
   db.close();
   const l4 = new Library(pad4);
-  ok('v4 wordt v5', l4.versie === 5);
+  // Niet op een vast getal: een ander spoor voegt ook een versie toe.
+  ok(`v4 wordt de nieuwste (v${SCHEMA.length})`, l4.versie === SCHEMA.length);
   const m = l4.track('metgrid').grid;
   ok('bestaand grid wordt één stuk', m && m.stukken.length === 1 && m.stukken[0].bpm === 128.25
     && Math.abs(m.stukken[0].anker - 0.42) < 1e-9 && m.stukken[0].van === 0 && m.beatsPerBar === 3);
   ok('zonder grid blijft zonder grid', l4.track('zonder').grid === null);
   ok('zonder anker: anker 0, maat van 4', l4.track('geenanker').grid.stukken[0].anker === 0 && l4.track('geenanker').grid.beatsPerBar === 4);
+  ok('na de migratie heeft een oud nummer een titelsleutel (sorteren op titel)',
+    l4.db.prepare('SELECT titel_sleutel FROM tracks WHERE id = ?').get('geenanker').titel_sleutel === 'geen anker');
+  ok('en een lege hotcue-tabel', l4.hotcues('metgrid').length === 0);
   l4.sluit();
   const l5 = new Library(pad4);
-  ok('opnieuw openen migreert niet nog een keer', l5.versie === 5 && l5.track('metgrid').grid.stukken.length === 1);
+  ok('opnieuw openen migreert niet nog een keer', l5.versie === SCHEMA.length && l5.track('metgrid').grid.stukken.length === 1);
   l5.sluit();
 }
 
@@ -161,6 +165,23 @@ lib.bewaarSample('def456', { pad: 3, van: 1, tot: 2 });
 ok('pad 3 van een ander nummer staat los', lib.samples('def456').length === 1 && lib.samples('abc123')[0].van === 20);
 ok('vergeten', lib.verwijderSample('def456', 3) && lib.samples('def456').length === 0);
 ok('vergeten wat er niet is: false', lib.verwijderSample('def456', 3) === false);
+
+// ---- hotcues: horen bij het nummer, zoals de sampler-pads -------------------
+
+ok('een nieuw nummer heeft geen hotcues', lib.hotcues('abc123').length === 0);
+lib.bewaarHotcue('abc123', { nr: 1, tijd: 12.5 });
+lib.bewaarHotcue('abc123', { nr: 3, tijd: 64.25 });
+ok('hotcues bewaard, op volgorde van plek', JSON.stringify(lib.hotcues('abc123')) === JSON.stringify([{ nr: 1, tijd: 12.5 }, { nr: 3, tijd: 64.25 }]));
+const hc = lib.bewaarHotcue('abc123', { nr: 1, tijd: 13 });
+ok('dezelfde plek opnieuw: overschrijven, niet verdubbelen', hc.tijd === 13 && lib.hotcues('abc123').length === 2);
+lib.bewaarHotcue('def456', { nr: 1, tijd: 2 });
+ok('hotcue 1 van een ander nummer staat los', lib.hotcues('def456')[0].tijd === 2 && lib.hotcues('abc123')[0].tijd === 13);
+ok('wissen', lib.verwijderHotcue('def456', 1) && lib.hotcues('def456').length === 0);
+ok('wissen wat er niet is: false', lib.verwijderHotcue('def456', 1) === false);
+ok('ruimte voor meer plekken dan het deck nu heeft', MAX_HOTCUES >= 4);
+let hcFout = false;
+try { lib.bewaarHotcue('bestaatniet', { nr: 1, tijd: 1 }); } catch { hcFout = true; }
+ok('een hotcue bij een onbekend nummer kan niet (foreign key)', hcFout);
 
 // ---- automatisch grid (stap C) ---------------------------------------------
 // Een voorstel van de analyse mag nooit over een grid op slot, en niet over
@@ -205,9 +226,111 @@ ok('track weg', lib.track('abc123') === null);
 ok('zijn racks gaan mee', lib.racks('abc123').length === 0);
 ok('zijn peaks ook', lib.peaks('abc123') === null);
 ok('en zijn sampler-pads', lib.samples('abc123').length === 0);
+ok('en zijn hotcues', lib.hotcues('abc123').length === 0
+  && lib.db.prepare('SELECT COUNT(*) AS n FROM hotcues WHERE track_id = ?').get('abc123').n === 0);
 ok('het andere nummer blijft staan', lib.track('def456') !== null && lib.racks('def456').length === 1);
 
 lib.sluit();
+
+// ---- de lijst: meer dan 200, sorteren, pagina's ----------------------------
+// Vroeger gaf tracks() stilletjes hooguit 200 nummers terug. Nu: alles, of een
+// pagina; sorteren op titel, bpm, duur, toegevoegd en laatst gespeeld.
+{
+  const lg = new Library(join(map, 'groot.db'));
+  const N = 450;
+  const titels = ['Élan', 'alpha', 'Zulu', 'beta', 'Track 10', 'Track 2', 'track 1'];
+  lg.db.exec('BEGIN');
+  for (let i = 0; i < N; i++) {
+    lg.bewaarTrack({ ...nummer(`n${i}`, i < titels.length ? titels[i] : `Nummer ${String(i).padStart(3, '0')}`), duur: 60 + ((i * 37) % 500) });
+    // Een derde zonder grid, de rest een bpm; een kwart ooit geladen.
+    if (i % 3) lg.bewaarGrid(`n${i}`, { bpm: 80 + (i % 90), firstBeat: 0 });
+  }
+  // Toegevoegd vastzetten (alles kwam in dezelfde paar ms binnen).
+  lg.db.prepare('UPDATE tracks SET toegevoegd = 1000000 + CAST(substr(id, 2) AS INTEGER) * 1000').run();
+  lg.db.exec('COMMIT');
+  const geladen = [];
+  for (let i = 0; i < N; i += 4) geladen.push(`n${i}`);
+  let klok = 5e12;
+  const echteNu = Date.now;
+  Date.now = () => ++klok;             // elke laad een eigen, oplopend moment
+  for (const id of geladen) lg.geladen(id);
+  Date.now = echteNu;
+
+  ok(`meer dan 200: alle ${N} komen terug (vroeger 200)`, lg.tracks().length === N && lg.aantalTracks() === N);
+
+  const ids = (l) => l.map((t) => t.id);
+  const alle = (sorteer, richting) => {
+    const uit = [];
+    for (let van = 0; van < N; van += 100) uit.push(...lg.tracks({ sorteer, richting, van, aantal: 100 }));
+    return uit;
+  };
+  for (const s of Object.keys(SORTERING)) {
+    for (const r of ['op', 'af']) {
+      const p = ids(alle(s, r));
+      ok(`${s} ${r}: pagina's achter elkaar = de hele lijst, elk nummer één keer`,
+        p.length === N && new Set(p).size === N && JSON.stringify(p) === JSON.stringify(ids(lg.tracks({ sorteer: s, richting: r }))));
+    }
+    ok(`${s}: omgekeerd sorteren is de lijst achterstevoren, op wat geen waarde heeft na`, (() => {
+      const op = ids(lg.tracks({ sorteer: s, richting: 'op' })), af = ids(lg.tracks({ sorteer: s, richting: 'af' }));
+      const leeg = new Set(lg.tracks({ sorteer: s }).filter((t) => (s === 'bpm' ? t.grid_bpm : s === 'gespeeld' ? t.laatst_geladen : 1) == null).map((t) => t.id));
+      const zonder = (l) => l.filter((id) => !leeg.has(id));
+      const achteraan = (l) => leeg.size === 0 || l.slice(-leeg.size).every((id) => leeg.has(id));
+      return JSON.stringify(zonder(op).reverse()) === JSON.stringify(zonder(af)) && achteraan(op) && achteraan(af);
+    })());
+  }
+
+  const tOp = lg.tracks({ sorteer: 'titel', richting: 'op' });
+  const sleutels = tOp.map((t) => sorteertitel(t.titel));
+  ok('titel op: gesorteerd op de sleutel', sleutels.every((k, i) => i === 0 || sleutels[i - 1] <= k));
+  ok('titel: hoofdletters tellen niet (alpha, beta vóór Élan en Zulu)', tOp.findIndex((t) => t.titel === 'alpha') < tOp.findIndex((t) => t.titel === 'beta'));
+  ok('titel: een accent telt niet (Élan tussen de e en de f, niet na Zulu)',
+    tOp.findIndex((t) => t.titel === 'Élan') < tOp.findIndex((t) => t.titel === 'Nummer 007')
+    && tOp.findIndex((t) => t.titel === 'Élan') > tOp.findIndex((t) => t.titel === 'beta'));
+  ok('titel: getallen op waarde (track 1, Track 2, Track 10)', (() => {
+    const i1 = tOp.findIndex((t) => t.titel === 'track 1'), i2 = tOp.findIndex((t) => t.titel === 'Track 2'), i10 = tOp.findIndex((t) => t.titel === 'Track 10');
+    return i1 < i2 && i2 < i10;
+  })());
+  ok('titelsleutel: "Élan" = "elan", 007 = 7', sorteertitel('Élan') === 'elan' && sorteertitel('a 007') === sorteertitel('a 7'));
+  ok('standaardrichting per kolom: titel op, toegevoegd af',
+    SORTERING.titel.eerst === 'op' && SORTERING.toegevoegd.eerst === 'af'
+    && lg.tracks({ sorteer: 'toegevoegd', aantal: 1 })[0].id === `n${N - 1}`);
+
+  const bOp = lg.tracks({ sorteer: 'bpm', richting: 'op' }), bAf = lg.tracks({ sorteer: 'bpm', richting: 'af' });
+  const bpms = (l) => l.filter((t) => t.grid_bpm != null).map((t) => t.grid_bpm);
+  ok('bpm op: oplopend, zonder grid achteraan', bpms(bOp).every((b, i, a) => i === 0 || a[i - 1] <= b) && bOp.at(-1).grid === null && bOp[0].grid !== null);
+  ok('bpm af: aflopend, zonder grid OOK achteraan', bpms(bAf).every((b, i, a) => i === 0 || a[i - 1] >= b) && bAf.at(-1).grid === null && bAf[0].grid !== null);
+  ok('bpm-sortering volgt wat de lijst toont (eerste stuk)', bOp[0].grid.stukken[0].bpm === bOp[0].grid_bpm);
+
+  const dOp = lg.tracks({ sorteer: 'duur', richting: 'op' }).map((t) => t.duur);
+  ok('duur op', dOp.every((d, i) => i === 0 || dOp[i - 1] <= d));
+
+  const gAf = lg.tracks({ sorteer: 'gespeeld' });
+  ok('laatst gespeeld (standaard af): de laatst geladen bovenaan', gAf[0].id === geladen.at(-1) && gAf[1].id === geladen.at(-2));
+  ok('nooit geladen: achteraan', gAf.slice(geladen.length).every((t) => t.laatst_geladen === null)
+    && gAf.slice(0, geladen.length).every((t) => t.laatst_geladen !== null));
+  ok('laatst gespeeld op: de langst niet gespeelde eerst, nooit geladen nog steeds achteraan',
+    lg.tracks({ sorteer: 'gespeeld', richting: 'op', aantal: 1 })[0].id === geladen[0]
+    && lg.tracks({ sorteer: 'gespeeld', richting: 'op' }).at(-1).laatst_geladen === null);
+
+  ok('zoeken + pagina + telling', lg.aantalTracks({ zoek: 'Nummer 1' }) === 100
+    && lg.tracks({ zoek: 'Nummer 1', sorteer: 'titel', aantal: 50, van: 90 }).length === 10
+    && lg.tracks({ zoek: 'Nummer 1', sorteer: 'titel', aantal: 50, van: 90 })[0].titel === 'Nummer 190');
+  lg.bewaarTrack(nummer('pct', 'Gratis 100% vinyl'));
+  lg.bewaarTrack(nummer('under', 'a_b'));
+  ok('% en _ zoeken letterlijk (geen jokers)', lg.aantalTracks({ zoek: '100%' }) === 1 && lg.aantalTracks({ zoek: '%' }) === 1
+    && lg.aantalTracks({ zoek: 'a_b' }) === 1 && lg.aantalTracks({ zoek: '_' }) === 1);
+  ok('voorbij het einde: een lege pagina', lg.tracks({ sorteer: 'titel', van: 10000, aantal: 100 }).length === 0);
+  let sortFout = false;
+  try { lg.tracks({ sorteer: 'titel; DROP TABLE tracks' }); } catch { sortFout = true; }
+  ok('onbekende sortering gooit (en komt niet in de SQL)', sortFout && lg.aantalTracks() === N + 2);
+  const r0 = lg.tracks({ sorteer: 'titel', aantal: 1 })[0];
+  ok('een rij uit een pagina heeft alles om te laden (audio, peaks-veld, grid, racks)',
+    'audio' in r0 && 'peaks' in r0 && 'grid' in r0 && r0.racks === 0 && !('titel_sleutel' in r0) && !('_rij' in r0));
+  lg.bewaarTrack(nummer('n5', '0 eerst'));
+  ok('opnieuw binnenhalen met een nieuwe titel: de sleutel gaat mee', lg.tracks({ sorteer: 'titel', aantal: 1 })[0].id === 'n5');
+  lg.sluit();
+}
+
 rmSync(map, { recursive: true, force: true });
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

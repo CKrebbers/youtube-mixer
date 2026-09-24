@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, YTDLP_GETEST_OP } from './ingest.js';
 import { normaliseerLink, ontsmetNaam, BESTAND_EXT } from './links.js';
-import { Library, normaliseerGrid } from './library.js';
+import { Library, normaliseerGrid, SORTERING, MAX_PER_PAGINA, MAX_HOTCUES } from './library.js';
 import { ZEKER_VANAF } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets } from './analyze.js';
 import * as opname from './opname.js';
@@ -494,8 +494,31 @@ const server = createServer(async (req, res) => {
 
     // ---- library ---------------------------------------------------------
 
+    /*
+     * De lijst, per pagina: ?zoek=&sorteer=titel|bpm|duur|toegevoegd|gespeeld
+     * &richting=op|af&van=0&aantal=100. Geeft { tracks, totaal, van }; totaal
+     * is het aantal treffers, zodat het paneel weet hoe lang de lijst is
+     * zonder alles op te halen. Zonder aantal: alles (voor de meet-tools).
+     * Eén pagina is hooguit MAX_PER_PAGINA rijen: deze server levert ook de
+     * pagina's van spelende decks, dus geen verzoek mag hem lang bezighouden.
+     */
     if (pad === '/api/library' && req.method === 'GET') {
-      return json(res, 200, { tracks: lib.tracks({ zoek: url.searchParams.get('zoek') || '' }) });
+      const q = url.searchParams;
+      const zoek = q.get('zoek') || '';
+      const sorteer = q.get('sorteer') || 'toegevoegd';
+      if (!SORTERING[sorteer]) return json(res, 400, { fout: `sorteer op ${Object.keys(SORTERING).join(', ')}` });
+      const richting = q.get('richting');
+      if (richting !== null && richting !== 'op' && richting !== 'af') return json(res, 400, { fout: 'richting is op of af' });
+      const heel = (k) => (q.has(k) ? Number(q.get(k)) : null);
+      const van = heel('van') ?? 0, aantal = heel('aantal');
+      if (!(Number.isInteger(van) && van >= 0)) return json(res, 400, { fout: 'van is een rijnummer vanaf 0' });
+      if (aantal !== null && !(Number.isInteger(aantal) && aantal >= 1 && aantal <= MAX_PER_PAGINA)) {
+        return json(res, 400, { fout: `aantal is 1..${MAX_PER_PAGINA}` });
+      }
+      return json(res, 200, {
+        tracks: lib.tracks({ zoek, sorteer, richting, van, aantal }),
+        totaal: lib.aantalTracks({ zoek }), van,
+      });
     }
 
     const mTrack = /^\/api\/library\/([\w-]+)$/.exec(pad);
@@ -711,6 +734,22 @@ const server = createServer(async (req, res) => {
       if (padNr && req.method === 'DELETE') return json(res, 200, { weg: lib.verwijderSample(trackId, Number(padNr)) });
     }
 
+    // ---- hotcues: horen bij het nummer, net als de sampler-pads -------------
+    const mHotcues = /^\/api\/library\/([\w-]+)\/hotcues(?:\/(\d+))?$/.exec(pad);
+    if (mHotcues) {
+      const [, trackId, nrTekst] = mHotcues;
+      if (!nrTekst && req.method === 'GET') return json(res, 200, { hotcues: lib.hotcues(trackId) });
+      if (!nrTekst && req.method === 'POST') {
+        const b = await leesJson(req);
+        const nr = Number(b?.nr), tijd = b?.tijd;
+        if (!(Number.isInteger(nr) && nr >= 1 && nr <= MAX_HOTCUES)) return json(res, 400, { fout: `nr moet 1..${MAX_HOTCUES} zijn` });
+        if (!(typeof tijd === 'number' && Number.isFinite(tijd) && tijd >= 0)) return json(res, 400, { fout: 'tijd in seconden tracktijd, vanaf 0' });
+        if (!lib.track(trackId)) return json(res, 404, { fout: 'onbekend nummer' });
+        return json(res, 200, { hotcue: lib.bewaarHotcue(trackId, { nr, tijd }) });
+      }
+      if (nrTekst && req.method === 'DELETE') return json(res, 200, { weg: lib.verwijderHotcue(trackId, Number(nrTekst)) });
+    }
+
     const mRack = /^\/api\/library\/([\w-]+)\/racks\/(\d+)$/.exec(pad);
     if (mRack) {
       const [, trackId, rackId] = mRack;
@@ -753,7 +792,7 @@ if (tooling.verouderd) console.warn(`[server] yt-dlp is verouderd (nieuwste ${to
 
 server.listen(POORT, '127.0.0.1', () => {
   console.log(`VARVE DJ  ·  http://localhost:${POORT}`);
-  console.log(`library: ${lib.tracks().length} nummers  ·  schema v${lib.versie}`);
+  console.log(`library: ${lib.aantalTracks()} nummers  ·  schema v${lib.versie}`);
   console.log(`yt-dlp ${tooling.ytdlp}  ·  ffmpeg ${tooling.ffmpeg ? 'ok' : 'ONTBREEKT'}`);
   const her = process.env.VARVE_HERANALYSE;
   if (her !== 'uit') {
