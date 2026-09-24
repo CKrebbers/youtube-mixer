@@ -49,7 +49,7 @@ Drie agenten liepen tegelijk.
 
 ### AV-kern fase 0 (`~/src/av-kern`)
 - **Repo:** uitgepakt uit `Input/av-kern.zip` naar `~/src/av-kern`, naast
-  `av-scene-kit`. Er is geen remote. `main` = `9ef37b9`: 7 commits bovenop `ca66e0d`.
+  `av-scene-kit`. Er is geen remote. `main` = `ab7e115`: 8 commits bovenop `ca66e0d`.
   `npm test` geeft 40 tests groen (was 17), `npm run build` is groen.
 - **Driver veilig gemaakt:**
   - Een wachtrij van hooguit 16 berichten per 4 ms. Vroeger gingen er 135
@@ -65,8 +65,9 @@ Drie agenten liepen tegelijk.
   dat niet, dan de USB-kabel er 5 s uit terwijl Varve open staat.
 - **Open:**
   - 0.2: de Ademmachine in Bedienplan nalopen (Clay).
-  - 0.4: `reference/ademmachine.html`. Dat is het artifact
-    claude.ai/artifact/P4LL87G9D1XxZknFHQUptS; niet opgehaald.
+  - 0.4 is gedaan (`ab7e115`): `reference/ademmachine.html` is ongewijzigd uit het
+    artifact gehaald. De mockup heeft een eigen MIDI-koppeling zonder wachtrij of lock:
+    niet openen met de APC aangesloten (staat in `reference/README.md`).
   - 0.5: `prompts/` (achterhaald: de sessies zijn al gebouwd).
   - Echofilter en LED's in rAF (bevriezen in een achtergrondtab): alleen gemeld.
 - **NIET getest:** niets op de echte APC en niets in echte Chrome; alleen een

@@ -20,7 +20,7 @@ meditatie-instrument, eigen repo, `Input/Totaalplan AV-kern.md`). Afspraak: tot
 5. Luistertest keylock (A3): `tools/keylock/uit/` met `tools/keylock/LUISTER.md`. Beslist I1–I3 in VRAGEN.
 
 **AV-kern tot publicatie 1 (25 okt)**
-De repo staat sinds 24 sep in `~/src/av-kern` (main `9ef37b9`, 40 tests groen).
+De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 6. Fase 0 afmaken volgens `~/src/av-kern/FASE0-TEST.md`:
    - Varve helemaal dicht;
    - 20 min spelen en daarna `npm run niet-gemapt`;
@@ -33,7 +33,7 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `9ef37b9`, 40 tests groen).
    - Web Lock `av-kern-apc`;
    - Shift los bij loskoppelen.
 
-   Nog van Clay: 0.2 (de Ademmachine in Bedienplan nalopen) en 0.4 (`reference/ademmachine.html` uit het artifact).
+   0.4 is gedaan: `reference/ademmachine.html` uit het artifact. Die NIET openen met de APC aangesloten, want de mockup stuurt zonder wachtrij. Nog van Clay: 0.2 (de Ademmachine in Bedienplan nalopen).
 7. De vormen overnemen uit Varve (`src/vormen/hulp.js` + `systemen*.js`, plain JS),
    in plaats van beeldmodules 06d–f.
 8. Audiomodules 06a–c (Pad, Korrelwolk, Resonator, Ruimte). Het geluid van de isomorfe
