@@ -319,12 +319,49 @@ export class Deck extends Emitter {
 
   // ---- hotcues & loops ---------------------------------------------------
 
+  /*
+   * Zetten en wissen melden zich ook als 'hotcue' ({ i, tijd }, tijd null =
+   * gewist): de app bewaart ze bij het nummer. Het deck kent geen library;
+   * springen naar een hotcue meldt niets, laden (alles wissen) ook niet.
+   */
   hotcue(i, { del = false } = {}) {
     if (!this.buffer) return;
-    if (del) { this.hotcues[i] = null; this.emit('change', this); return; }
-    if (this.hotcues[i] === null) this.hotcues[i] = this.position;
+    if (del) {
+      const had = this.hotcues[i] !== null;
+      this.hotcues[i] = null;
+      this.emit('change', this);
+      if (had) this.emit('hotcue', { i, tijd: null });
+      return;
+    }
+    const nieuw = this.hotcues[i] === null;
+    if (nieuw) this.hotcues[i] = this.position;
     else this.seek(this.hotcues[i]);
     this.emit('change', this);
+    if (nieuw) this.emit('hotcue', { i, tijd: this.hotcues[i] });
+  }
+
+  /**
+   * Bewaarde hotcues terugzetten (de app, na het laden van een nummer).
+   * Alleen op LEGE plekken: wat je intussen zelf zette wint. Tijden buiten de
+   * track of geen getal worden overgeslagen. Meldt geen 'hotcue': dit is
+   * terugzetten, niet zetten. Geeft de plekken terug die gevuld werden.
+   */
+  restoreHotcues(tijden) {
+    if (!this.buffer || !Array.isArray(tijden)) return [];
+    const gezet = [];
+    for (let i = 0; i < this.hotcues.length; i++) {
+      const t = tijden[i];
+      if (this.hotcues[i] !== null || typeof t !== 'number' || !Number.isFinite(t) || t < 0 || t > this.duration) continue;
+      this.hotcues[i] = t;
+      gezet.push(i);
+    }
+    if (gezet.length) {
+      // Meteen vastpinnen (een streamende bron haalt ze anders pas bij zijn
+      // volgende ronde): hotcues moeten direct klinken.
+      this.bron.bijvullen?.().catch(() => {});
+      this.emit('change', this);
+    }
+    return gezet;
   }
 
   // ---- beatgrid ----------------------------------------------------------
