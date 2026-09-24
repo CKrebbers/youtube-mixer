@@ -274,7 +274,7 @@ body.leermodus .loops .btn::after{bottom:-12px}
 
 .lib-rijen{flex:1;overflow:auto;font-size:11px}
 .lib-leeg{padding:24px;text-align:center;color:var(--dim)}
-.lib-rij{display:grid;grid-template-columns:1fr 140px 60px 64px 92px 110px 60px auto;gap:10px;
+.lib-rij{display:grid;grid-template-columns:1fr 140px 60px 64px 86px 92px 110px 60px auto;gap:10px;
   align-items:center;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.03)}
 .lib-rij:hover{background:rgba(255,255,255,.03)}
 .lib-titel{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -298,6 +298,25 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .lib-grid.zeker{color:#50dcff}
 .lib-grid.onzeker{color:rgba(80,220,255,.55)}
 .lib-grid.geenpuls{color:#ff6a5f}
+/* Toonsoort van de plaat (TOONSOORT.md §5): klik = de kiezer. Onzeker gedimd
+   met "?", "~" = geen duidelijke toonsoort, op slot in de kleur van het slot. */
+.lib-toon{font:11px ui-monospace,monospace;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:var(--text);padding:1px 4px;margin-left:-4px;border:1px solid transparent;border-radius:3px}
+.lib-toon:hover,.lib-toon.open{border-color:var(--line)}
+.lib-toon.onzeker{color:rgba(80,220,255,.55);font-style:italic}
+.lib-toon.geen,.lib-toon.leeg{color:var(--dim)}
+.lib-toon.slot{color:var(--a)}
+.lib-toonkiezer{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:6px 12px 8px;
+  background:rgba(255,255,255,.02);border-bottom:1px solid var(--line)}
+.lib-tk-kop{width:100%;font-size:11px;color:var(--klein)}
+/* 24 knoppen, in wijzervolgorde: kolom per Camelot-getal, A (mineur) boven B (majeur) */
+.lib-tk-wijzer{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:minmax(44px,1fr);gap:3px}
+.lib-tk{display:flex;flex-direction:column;align-items:center;line-height:1.1;padding:3px 4px}
+.lib-tk small{font-size:11px;color:var(--klein)}
+.lib-tk.mineur{background:#131a20}
+.lib-tk.on small{color:#03100e}
+.lib-tk-rest{display:flex;gap:4px}
+.lib-tk-slot.on{background:none;color:var(--a)}
 .lib-her{color:var(--dim)}
 .lib-her.bezig{opacity:.5;pointer-events:none}
 /* bpm in een onzeker gridstuk: gedimd, met "?" (sync en beat-loops weigeren daar) */
@@ -314,6 +333,29 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .bpm-val.leeg{color:var(--dim)}
 .btn.bl{min-width:22px}
 .btn.bl.dood{opacity:.35}
+
+/* ---- toonsoort (TOONSOORT.md §5): wat je HOORT, groot bij de bpm ----
+   onzeker = gedimd met "?", zoals de bpm; "~" = geen duidelijke toonsoort
+   (geen fout: bij ambient een eerlijk antwoord); "—" = nog geen kaart. */
+.toon-val{position:relative;display:inline-flex;align-items:center;min-width:0}
+.toon-knop{display:inline-flex;align-items:baseline;gap:6px;padding:1px 6px;border:1px solid transparent;
+  border-radius:4px;white-space:nowrap}
+.toon-knop:hover{border-color:var(--line)}
+.toon-hoofd{font:700 15px/1.2 ui-monospace,monospace;color:var(--text)}
+.toon-versch{font:600 12px ui-monospace,monospace;font-style:normal;color:var(--warn)}
+.toon-cent{font:12px ui-monospace,monospace;font-style:normal;color:var(--klein)}
+.toon-versch:empty,.toon-cent:empty{display:none}
+.toon-val.onzeker .toon-hoofd,.kol-toon.onzeker{color:rgba(80,220,255,.55);font-style:italic}
+.toon-val.geen .toon-hoofd{color:var(--dim)}
+.toon-val.leeg .toon-hoofd{color:#4a5661;font-weight:400}
+/* klik op de toonsoort: corrigeren, alleen het stuk waar je bent */
+.toon-menu{position:absolute;top:calc(100% + 4px);left:0;z-index:30;display:flex;flex-wrap:wrap;gap:3px;
+  width:258px;padding:6px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+  box-shadow:0 6px 18px rgba(0,0,0,.55)}
+.toon-menu.hidden{display:none}
+.toon-menu-kop{width:100%;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--klein)}
+.toon-menu .btn.dood{opacity:.35}
+.toon-menu .btn.on{background:none;color:var(--a);border-color:var(--a)}
 
 /* ---- sync en fasemeter ---- */
 .btn.sync.gelijk{border-color:var(--a);color:var(--a)}
@@ -603,6 +645,12 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
 .kol-speelt{font-style:normal;font-size:11px;color:var(--a);visibility:hidden}
 .kol.speelt .kol-speelt{visibility:visible}
 .kol.leeg .kol-rest,.kol.leeg .kol-bpm{color:#4a5661}
+/* bpm met de toonsoort die je hoort eronder (TOONSOORT.md §5): in de kop
+   ernaast was geen plek, daar staat de MAAT-badge (gemeten op 1440×900) */
+.kol-tempo{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;min-width:0}
+.kol-toon{font:12px/1.1 ui-monospace,monospace;color:var(--klein);
+  max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kol-toon.leeg,.kol.leeg .kol-toon{color:#4a5661}
 .kol.focused .kol-nr{color:var(--a)}
 .kol.tweede .kol-nr{color:var(--b)}
 .kol-titel{font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}

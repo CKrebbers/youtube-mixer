@@ -5,6 +5,7 @@ import { knobVan } from './controls.js';
 import { BaanView } from './waveform.js';
 import { esc } from './dom.js';
 import { bpmTekst } from './grid-strook.js';
+import { kolomToon } from './toon-weergave.js';
 import {
   kolomControls, SCENES, MASTERKOLOM, TRANSPORT, TEMPO, DEVICE_KNOBS, DEVICE_KNOPPEN,
   PIJLEN, SHIFT, BANK, CROSSFADER, leesControl, kortInKolom, lichtVan, naamVan,
@@ -50,7 +51,7 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
     return `<div class="kol" data-deck="${id}" data-kolom="${nr}">
       <div class="kol-kop"><b class="kol-nr">${nr}</b><span class="kol-maat hidden" title="deze track geeft de maat (sync, sampler, video-puls)">MAAT</span></div>
       <div class="kol-titel">— leeg —</div>
-      <div class="kol-info"><span class="kol-rest" title="resterende tijd">—</span><span class="kol-bpm" title="bpm die je hoort (grid × pitch)">—</span><i class="kol-speelt">▶</i></div>
+      <div class="kol-info"><span class="kol-rest" title="resterende tijd">—</span><span class="kol-tempo"><span class="kol-bpm" title="bpm die je hoort (grid × pitch)">—</span><span class="kol-toon leeg" title="toonsoort die je hoort">—</span></span><i class="kol-speelt">▶</i></div>
       ${html(c.knob)}
       <div class="kol-pads">${[1, 2, 3, 4, 5].map((r) => knopHtml(c[`pad${r}`])).join('')}</div>
       ${knopHtml(c.stop)}
@@ -227,7 +228,7 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
     const root = kolommenEl.querySelector(`.kol[data-deck="${id}"]`);
     return [id, { root, titel: root.querySelector('.kol-titel'), meter: root.querySelector('.kol-meter i'),
       maat: root.querySelector('.kol-maat'), rest: root.querySelector('.kol-rest'), bpm: root.querySelector('.kol-bpm'),
-      hoogte: '' }];
+      toon: root.querySelector('.kol-toon'), hoogte: '' }];
   }));
   const fdTrack = document.querySelector('.fd-track');
   const fdTitel = document.querySelector('.fd-titel');
@@ -269,6 +270,12 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
       tekst(k.bpm, d.loaded && d.bpm ? bpmTekst(d.bpm, d.gridZeker) : info.bpm);
       klasse(k.bpm, 'onzeker', !!d.bpm && d.gridZeker === false);
       klasse(k.rest, 'bijna', info.bijna);
+      // Toonsoort die je HOORT (T3): `9B G`, onzeker gedimd met "?", "~" = geen
+      // duidelijke. De plaat staat in de tooltip.
+      const toon = kolomToon(d.loaded ? d.toon : null);
+      tekst(k.toon, toon.tekst);
+      for (const soort of ['zeker', 'onzeker', 'geen', 'leeg']) klasse(k.toon, soort, toon.soort === soort);
+      if (k.toon.title !== toon.titel) k.toon.title = toon.titel;
       b.view.draw(d, analysis[id]);
     }
 

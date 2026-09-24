@@ -1,6 +1,8 @@
 import { fmtTime } from '../lib/emitter.js';
 import { esc } from './dom.js';
 import { gridStatus, libraryBpm, STATUS_TEKST } from './grid-strook.js';
+import { libraryToon, KIEZER } from './toon-weergave.js';
+import { ToonKaart, camelot, kortNaam, volleNaam } from '../engine/toonsoort.js';
 
 /** Het label per bron (server/links.js: bronVan). */
 const BRON_LABEL = { youtube: 'YT', tiktok: 'TikTok', bestand: 'bestand', web: 'web' };
@@ -22,10 +24,12 @@ export const isVideoBestand = (file) => /^video\//.test(file?.type || '') || ['m
 
 
 export class LibraryPanel {
-  constructor({ root, onLaad, onGrid = () => {}, decks = ['A', 'B'], label = (d) => d, stand = () => 'leeg' }) {
+  constructor({ root, onLaad, onGrid = () => {}, onToon = () => {}, decks = ['A', 'B'], label = (d) => d, stand = () => 'leeg' }) {
     this.root = root;
     this.onLaad = onLaad;
     this.onGrid = onGrid;        // (trackId, grid) na "opnieuw analyseren": op de decks zetten
+    this.onToon = onToon;        // (trackId, toon) na kiezen in de library: op de decks zetten
+    this.kiezer = null;          // track-id waarvan de toonsoortkiezer open staat
     this.decks = decks;
     this.label = label;
     this.stand = stand;          // (deck) => 'leeg' | 'geladen' | 'speelt'
@@ -70,6 +74,17 @@ export class LibraryPanel {
     this.el.zoek.addEventListener('input', () => { this.zoek = this.el.zoek.value.trim(); this.ververs(); });
 
     this.el.rijen.addEventListener('click', (e) => {
+      // Toonsoort: klik op de badge = de kiezer onder die rij, open of dicht.
+      const toon = e.target.closest('button[data-toon]');
+      if (toon) {
+        this.kiezer = this.kiezer === toon.dataset.toon ? null : toon.dataset.toon;
+        return this.tekenRijen();
+      }
+      const tk = e.target.closest('button[data-tk]');
+      if (tk) {
+        if (tk.dataset.tk === 'sluit') { this.kiezer = null; return this.tekenRijen(); }
+        return this.kiesToon(tk.dataset.id, tk.dataset.tk);
+      }
       const knop = e.target.closest('button[data-deck]');
       if (knop) {
         // Over een track die SPEELT laden valt de zaal stil. Dan eerst vragen:
@@ -258,6 +273,76 @@ export class LibraryPanel {
     this.tekenRijen();
   }
 
+  /**
+   * Toonsoort met de hand (TOONSOORT.md §7): een van de 24, "geen", of
+   * bevestigen (slot aan/uit zonder te veranderen). Met de hand = bron 'hand'
+   * en op slot: de analyse blijft er voorgoed af. Een album (meer stukken)
+   * wordt daarbij één stuk; dat gaat pas na een tweede klik, zoals laden over
+   * een spelende track.
+   */
+  async kiesToon(id, keuze) {
+    const track = this.tracks.find((t) => t.id === id);
+    if (!track) return;
+    const kaart = ToonKaart.van(track.toon);
+    let nieuw;
+    if (keuze === 'slot') {
+      if (!kaart) return;
+      nieuw = kaart.kopie();
+      nieuw.slot = !nieuw.slot;
+    } else {
+      const k = keuze === 'geen' ? null : Number(keuze);
+      if (k !== null && !(Number.isInteger(k) && k >= 0 && k < 24)) return;
+      if (kaart && kaart.aantalStukken > 1 && !this._bevestigd('toon', `${id}:${keuze}`)) {
+        const wat = k === null ? '"geen toonsoort"' : `${camelot(k)} ${kortNaam(k)}`;
+        this.melding = { tekst: `"${track.titel}" heeft ${kaart.aantalStukken} toonsoortstukken — klik nog eens om er één ${wat} van te maken`, goed: false };
+        return this.tekenStatus();
+      }
+      nieuw = kaart ? kaart.kopie().vervangDoorEen(k) : ToonKaart.metHand(k);
+      nieuw.slot = true;
+    }
+    nieuw.bron = 'hand';
+    const json = nieuw.toJSON();
+    try {
+      const r = await fetch(`/api/library/${id}/toon`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toon: json }),
+      });
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      track.toon = json;
+      this.onToon(id, json);
+      this.melding = { tekst: `${track.titel}: ${libraryToon(json, track.duur).tekst}${nieuw.slot ? ' (op slot)' : ' (slot eraf)'}`, goed: true };
+      if (keuze !== 'slot') this.kiezer = null;
+    } catch (err) {
+      this.melding = { tekst: `toonsoort niet bewaard: ${err.message}`, goed: false };
+    }
+    this.tekenStatus();
+    this.tekenRijen();
+  }
+
+  /** Een track bewaarde een toonsoort die op het deck bewerkt is: de lijst toont hem ook. */
+  zetToon(id, json) {
+    const t = this.tracks.find((x) => x.id === id);
+    if (!t) return;
+    t.toon = json;
+    if (this.open) this.tekenRijen();
+  }
+
+  /** De kiezer onder een rij: 24 toonsoorten in wijzervolgorde, "geen", bevestigen. */
+  kiezerHtml(t) {
+    const kaart = ToonKaart.van(t.toon);
+    const hoofd = libraryToon(t.toon, t.duur).k;
+    const n = kaart?.aantalStukken ?? 0;
+    const id = esc(t.id);
+    return `<div class="lib-toonkiezer">
+      <span class="lib-tk-kop">toonsoort van de plaat${n > 1 ? ` — ${n} stukken: kiezen maakt er één van (tweede klik)` : ''}</span>
+      <span class="lib-tk-wijzer">${KIEZER.map((x) => `<button class="btn sm lib-tk${x.k === hoofd ? ' on' : ''}${x.mineur ? ' mineur' : ''}" data-tk="${x.k}" data-id="${id}" title="${esc(`${x.camelot} ${volleNaam(x.k)}`)}">${x.camelot}<small>${esc(x.kort)}</small></button>`).join('')}</span>
+      <span class="lib-tk-rest">
+        <button class="btn sm" data-tk="geen" data-id="${id}" title="geen duidelijke toonsoort (ambient, drone)">geen toonsoort</button>
+        ${kaart ? `<button class="btn sm lib-tk-slot${kaart.slot ? ' on' : ''}" data-tk="slot" data-id="${id}" title="${kaart.slot ? 'het slot eraf: de analyse mag hem weer vervangen' : 'bevestigen zonder te veranderen: op slot blijft de analyse eraf'}">${kaart.slot ? 'slot eraf' : 'bevestigen'}</button>` : ''}
+        <button class="btn sm" data-tk="sluit" title="dicht">×</button>
+      </span>
+    </div>`;
+  }
+
   async verwijder(id) {
     const track = this.tracks.find((t) => t.id === id);
     if (!track) return;
@@ -333,11 +418,14 @@ export class LibraryPanel {
       const gridTitel = gs.status === 'geen' ? 'nog geen grid — wordt op de achtergrond geanalyseerd, of tik het tempo'
         : `${n} stuk${n === 1 ? '' : 'ken'}${gs.aandeel !== null && gs.status !== 'slot' && gs.status !== 'hand' ? `, ${Math.round(gs.aandeel * 100)}% van de tijd zeker` : ''}`;
       const her = this.analyseert.has(t.id);
+      // Toonsoort van de PLAAT (geen pitch): hoofdtoonsoort + hoeveel andere.
+      const toon = libraryToon(t.toon, t.duur);
       return `<div class="lib-rij">
         <span class="lib-titel" title="${esc(t.url)}"><i class="lib-bron ${esc(t.bron || 'web')}">${esc(BRON_LABEL[t.bron] || 'web')}</i>${esc(t.titel)}</span>
         <span class="lib-uploader">${esc(t.uploader || '')}</span>
         <span class="lib-duur">${fmtTime(t.duur || 0).replace(/\.\d+$/, '')}</span>
         <span class="lib-bpm" title="tempo van het grid bij het begin">${esc(libraryBpm(t.grid))}</span>
+        <button class="lib-toon ${toon.soort}${toon.slot ? ' slot' : ''}${this.kiezer === t.id ? ' open' : ''}" data-toon="${esc(t.id)}" title="${esc(toon.titel)}">${esc(toon.tekst)}</button>
         <span class="lib-grid ${gs.status}" title="${esc(gridTitel)}">${esc(STATUS_TEKST[gs.status])}</span>
         <span class="lib-lufs">${esc(lufs)}</span>
         <span class="lib-racks">${t.racks ? `${t.racks} rack${t.racks === 1 ? '' : 's'}` : '—'}</span>
@@ -346,7 +434,7 @@ export class LibraryPanel {
           <button class="btn sm lib-her${her ? ' bezig' : ''}" data-her="${esc(t.id)}" title="grid opnieuw analyseren${t.grid?.slot ? ' (staat op slot: tweede klik)' : ''}">${her ? '…' : '↻'}</button>
           <button class="btn sm lib-weg" data-weg="${esc(t.id)}" title="uit de lijst halen">×</button>
         </span>
-      </div>`;
+      </div>${this.kiezer === t.id ? this.kiezerHtml(t) : ''}`;
     }).join('');
   }
 }

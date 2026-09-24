@@ -2,6 +2,7 @@ import { read as readAction, trackVanDeck } from '../control/actions.js';
 import { fmtTime } from '../lib/emitter.js';
 import { BIJNA_EINDE } from './spiegel-plan.js';
 import { bpmTekst } from './grid-strook.js';
+import { focusToon } from './toon-weergave.js';
 
 /**
  * De renderloop: één rAF voor de hele UI. De engine wordt alleen uitgelezen,
@@ -33,6 +34,13 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     maat: r.querySelector('.maat-badge'),
     fase: r.querySelector('.fase'),
     faseWijzer: r.querySelector('.fase i'),
+    toon: r.querySelector('.toon-val'),
+    toonKnop: r.querySelector('.toon-knop'),
+    toonHoofd: r.querySelector('.toon-hoofd'),
+    toonVersch: r.querySelector('.toon-versch'),
+    toonCent: r.querySelector('.toon-cent'),
+    toonMenu: r.querySelector('.toon-menu'),
+    toonMenuKnoppen: [...r.querySelectorAll('.toon-menu [data-action]')],
   };
   // Het aantal tellen staat vast per knop; de track in de action wisselt met de focus.
   for (const b of e.beatBtns) b._tellen = parseFloat(b.dataset.action.split('.').pop());
@@ -134,6 +142,21 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       klasse(e.bpm, 'onzeker', !!d.bpm && d.gridZeker === false);
       if (d.bpm && d.gridZeker === false) { if (e.bpm.title !== ONZEKER_TITEL) e.bpm.title = ONZEKER_TITEL; }
       else if (e.bpm.title) e.bpm.title = '';
+      // Toonsoort die je HOORT (T3), groot: "4B · As majeur", +1, −32 ct.
+      const toon = focusToon(d.loaded ? d.toon : null);
+      tekst(e.toonHoofd, toon.hoofd);
+      tekst(e.toonVersch, toon.verschuiving);
+      tekst(e.toonCent, toon.cent);
+      for (const soort of ['zeker', 'onzeker', 'geen', 'leeg']) klasse(e.toon, soort, toon.soort === soort);
+      if (e.toonKnop.title !== toon.titel) e.toonKnop.title = toon.titel;
+      // Het correctiemenu: wat niets te doen heeft (geen kaart) gedimd, slot brandt.
+      if (!e.toonMenu.classList.contains('hidden')) {
+        for (const b of e.toonMenuKnoppen) {
+          const v = readAction(b.dataset.action);
+          klasse(b, 'dood', v === null);
+          klasse(b, 'on', v === 1);
+        }
+      }
       // TAP met een grid: "grid bekend", een rustige stijl — niet "actief",
       // want er gebeurt niets zolang je niet tikt.
       klasse(e.tap, 'grid-bekend', !!d.grid);
