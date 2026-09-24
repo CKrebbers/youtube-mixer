@@ -1,0 +1,150 @@
+keylock-proef 2026-09-24T13:18, Node v26.8.2, media: /Users/claykrebbers/Desktop/1. Projects/Youtube mixer/media
+
+== info ==
+signalsmith-stretch 1.3.2, licentie in package.json: MIT, LICENSE-bestand in het pakket: NEE
+  README.md                  4.0 KB
+  SignalsmithStretch.js      111.1 KB
+  SignalsmithStretch.mjs     111.2 KB
+  package.json               0.5 KB
+  WASM: 84.0 KB base64 in het .mjs = 63.0 KB binair
+
+preset                 blok      interval  invoerlat  uitvoerlat samen      geheugen/instantie
+  standaard            120.0 ms   30.0 ms    60.0 ms    60.0 ms    120.0 ms   1728 KB
+  standaard-gespreid   120.0 ms   30.0 ms    60.0 ms    90.0 ms    150.0 ms   1728 KB
+  goedkoper            100.0 ms   40.0 ms    50.0 ms    50.0 ms    100.0 ms   1152 KB
+  goedkoper-gespreid   100.0 ms   40.0 ms    50.0 ms    90.0 ms    140.0 ms   1152 KB
+  kort                 60.0 ms    15.0 ms    30.0 ms    30.0 ms    60.0 ms    768 KB
+  (Signalsmith noemt 120/30 "default" en 100/40 gespreid "cheaper".)
+
+== controle 1: toonhoogte (sinus 440 Hz) ==
+  keylock 0,92       440.00 Hz (verwacht 440.00, 0.00 cent)
+  keylock 1,08       440.00 Hz (verwacht 440.00, 0.00 cent)
+  keylock 1,00       440.00 Hz (verwacht 440.00, -0.00 cent)
+  toon +2 op 1,00    494.48 Hz (verwacht 493.88, 2.08 cent)
+  toon -1 op 1,00    416.17 Hz (verwacht 415.30, 3.62 cent)
+  toon +1 op 1,08    466.63 Hz (verwacht 466.16, 1.73 cent)
+  zoals nu, rate 1,08  475.20 Hz (pitch mee: 475.20)
+
+== controle 2: hoorbare positie (regel 3 over de draadgrens) ==
+  Klik op tracktijd x moet klinken op audiokloktijd T + (x - P) / R. Afwijking in ms:
+  rate 1,00                     gemiddeld  -0.01 ms, grootste 0.02 ms (48 klikken)
+  rate 0,92                     gemiddeld  -0.32 ms, grootste 0.61 ms (48 klikken)
+  rate 1,08                     gemiddeld   0.25 ms, grootste 0.57 ms (48 klikken)
+  rate 1,00 toon +2             gemiddeld  -0.06 ms, grootste 0.19 ms (48 klikken)
+  rate 1,08 goedkoper-gespreid  gemiddeld   0.39 ms, grootste 1.14 ms (48 klikken)
+  rate 1,08 kort                gemiddeld   0.09 ms, grootste 0.16 ms (48 klikken)
+
+== controle 3: kleur zonder tempowijziging (keylock aan, rate 1,00, toon 0) ==
+  Energie per octaafband t.o.v. het origineel (dB), 8 s; en het golfvormverschil:
+                     63   125   250   500    1k    2k    4k    8k   16k   golfvorm
+  sakamoto          0.0   0.0   0.0   0.0   0.0  -0.0  -0.0  -0.0  -0.0   -5.6 dB
+  zoned-out        -0.0  -0.0  -0.0  -0.0  -0.0  -0.0  -0.0  -0.0  -0.0   5.7 dB
+  adriana          -0.0  -0.0  -0.0  -0.0  -0.0  -0.0  -0.0  -0.0  -0.0   5.7 dB
+  no-surprises     -0.0  -0.0  -0.0  -0.0  -0.0  -0.0  -0.0  -0.0  -0.0   5.3 dB
+  (golfvorm rond 0 dB of hoger = de fase is anders, niet dat het slechter klinkt:
+   een phase vocoder bouwt de golf opnieuw op. Keylock op 1,00 is dus niet "uit".)
+
+== controle 4: springen met keylock (hotcue, play, seek) ==
+  Klik precies op het doel. Wanneer klinkt hij, en op welke sterkte?
+  ter plekke seeken, T = nu                latentie   0 ms, klik op    0.3 ms, sterkte -37.5 dB
+  gepland seeken, T = nu + uitLat + blok   latentie  63 ms, klik op    0.0 ms, sterkte -0.2 dB
+  verse stretcher, opwarmen 0              latentie   0 ms, klik op   -2.5 ms, sterkte -12.8 dB
+  verse stretcher, opwarmen uitLat         latentie   0 ms, klik op   -2.4 ms, sterkte -2.7 dB
+  verse stretcher, opwarmen blok           latentie   0 ms, klik op   -0.0 ms, sterkte -0.0 dB
+
+  Op muziek (sakamoto): energie na de sprong t.o.v. een stretcher die er al doorheen speelde, per 5 ms:
+  verse stretcher, opwarmen 0         -40.0  -27.2  -18.5  -12.2   -7.8   -4.2   -3.1   -2.5   -1.3    0.6   -1.1   -0.9  dB (0-60 ms)
+  verse stretcher, opwarmen uitLat      0.6   -0.1   -0.4   -0.2   -0.2    0.5   -0.1   -0.5   -0.2    1.2   -0.7   -0.6  dB (0-60 ms)
+  verse stretcher, opwarmen blok        0.8   -0.0   -0.4    0.0   -0.0    0.5    0.0   -0.4   -0.1    1.0   -0.5   -0.6  dB (0-60 ms)
+  gepland seeken (speelde elders)      -0.5   -0.9   -0.2   -1.1   -0.5    0.4    0.2   -0.5   -0.2    0.8   -0.1   -0.2  dB (0-60 ms)
+
+== controle 5: tempo wijzigen tijdens keylock, zonder plannen (T = nu) ==
+  Afwijking van de hoorbare positie (ms, min/max over 12 wisselmomenten), per tijdvak na de wissel:
+  1 -> 1.08   -200..0: -0.0/-0.0  0..30: 0.2/1.9  30..60: 3.9/3.9  60..90: 5.4/5.4  90..150: -1.6/0.3  150..600: 0.0/0.5  600..1200: 0.0/0.5
+  1 -> 0.92   -200..0: -0.0/-0.0  0..30: -2.3/-0.2  30..60: -4.6/-4.6  60..90: -0.6/-0.6  90..150: -0.3/0.4  150..600: -0.6/-0.1  600..1200: -0.5/0.0
+  1 -> 1.04   -200..0: -0.0/-0.0  0..30: 0.1/1.0  30..60: 2.0/2.0  60..90: 2.7/2.7  90..150: -1.0/0.3  150..600: 0.2/0.4  600..1200: 0.0/0.4
+  1.04 -> 1   -200..0: 0.1/0.1  0..30: -1.0/-0.1  30..60: -2.0/-2.0  60..90: -2.9/-2.9  90..150: 0.0/0.8  150..600: -0.0/0.0  600..1200: -0.0/0.0
+  (verwacht: binnen de eerste uitLat hooguit uitLat × ΔR, daarna weer ±0,5 ms)
+
+  belasting van de machine (load average 1/5/15 min): 2.8 / 5.0 / 9.2 op 8 kernen
+
+== meten: één stereodeck, 20 s audio na 3 s opwarmen, sakamoto vanaf 300 s, 3× (minimum per quantum) ==
+  budget per quantum van 128 frames: 2667 µs; ms/s en % = CPU-tijd van de thread, van één kern
+  blokquantum = mediaan van de quanta waarin een STFT-blok valt (niet gespreid rekent alles daar)
+  zoals nu (renderBlok) 1,08             13.3 ms/s   1.33 %  p50   33  p99    44  max    52 µs
+  -- standaard --
+  keylock 1,00                           17.0 ms/s   1.70 %  p50    4  p99   469  max   500 µs  blokquantum   457 µs (8.9%)
+  keylock 0,92                           23.0 ms/s   2.30 %  p50    4  p99   630  max   720 µs  blokquantum   565 µs (8.9%)
+  keylock 0,95                           20.0 ms/s   2.00 %  p50    4  p99   564  max   673 µs  blokquantum   553 µs (8.9%)
+  keylock 1,05                           20.0 ms/s   2.00 %  p50    4  p99   561  max   584 µs  blokquantum   552 µs (8.9%)
+  keylock 1,08                           20.0 ms/s   2.00 %  p50    4  p99   559  max   577 µs  blokquantum   552 µs (8.9%)
+  toon -2                                19.8 ms/s   1.98 %  p50    4  p99   549  max   558 µs  blokquantum   544 µs (8.9%)
+  toon -1                                20.0 ms/s   2.00 %  p50    4  p99   556  max   613 µs  blokquantum   549 µs (8.9%)
+  toon +1                                19.9 ms/s   1.99 %  p50    4  p99   557  max   568 µs  blokquantum   550 µs (8.9%)
+  toon +2                                19.8 ms/s   1.98 %  p50    4  p99   551  max   559 µs  blokquantum   547 µs (8.9%)
+  toon +2 met formantbehoud              23.7 ms/s   2.37 %  p50    4  p99   669  max   676 µs  blokquantum   665 µs (8.9%)
+  -- standaard-gespreid --
+  keylock 0,92                           20.5 ms/s   2.05 %  p50   54  p99   102  max   105 µs
+  keylock 1,08                           20.7 ms/s   2.07 %  p50   54  p99   102  max   109 µs
+  toon +2                                20.3 ms/s   2.03 %  p50   53  p99   102  max   102 µs
+  -- goedkoper --
+  keylock 0,92                           13.2 ms/s   1.32 %  p50    4  p99   480  max   494 µs  blokquantum   464 µs (6.7%)
+  keylock 1,08                           13.3 ms/s   1.33 %  p50    4  p99   483  max   536 µs  blokquantum   467 µs (6.7%)
+  toon +2                                13.2 ms/s   1.32 %  p50    4  p99   478  max   493 µs  blokquantum   468 µs (6.7%)
+  -- goedkoper-gespreid --
+  keylock 0,92                           13.5 ms/s   1.35 %  p50   39  p99    56  max    56 µs
+  keylock 1,08                           13.7 ms/s   1.37 %  p50   40  p99    56  max    59 µs
+  toon +2                                13.6 ms/s   1.36 %  p50   39  p99    57  max    58 µs
+  -- kort --
+  keylock 0,92                           19.8 ms/s   1.98 %  p50    4  p99   281  max   291 µs  blokquantum   276 µs (17.8%)
+  keylock 1,08                           19.9 ms/s   1.99 %  p50    4  p99   281  max   291 µs  blokquantum   276 µs (17.8%)
+  toon +2                                19.7 ms/s   1.97 %  p50    4  p99   279  max   284 µs  blokquantum   275 µs (17.8%)
+  -- hun AudioWorkletProcessor (optie C), nagebootst --
+  standaard, keylock 1,08                29.6 ms/s   2.96 %  p50   29  p99   596  max   609 µs  blokquantum   582 µs (8.9%)
+  standaard, toon +2                     32.6 ms/s   3.26 %  p50   29  p99   676  max   688 µs  blokquantum   670 µs (8.9%)
+  cheaper, keylock 1,08                  24.5 ms/s   2.45 %  p50   67  p99    84  max    88 µs
+  standaard gespreid, keylock 1,08       34.6 ms/s   3.46 %  p50   86  p99   150  max   256 µs
+
+== meten: snelste seconde van 15 (benadert een prestatiekern) ==
+  zoals nu (renderBlok) 1,08           snelste  13.5 ms/s (1.35% van een kern), mediaan 14.1 ms/s
+  standaard, keylock 1,08              snelste  21.6 ms/s (2.16% van een kern), mediaan 22.8 ms/s
+  standaard-gespreid, keylock 1,08     snelste  23.2 ms/s (2.32% van een kern), mediaan 29.5 ms/s
+  goedkoper, keylock 1,08              snelste  13.1 ms/s (1.31% van een kern), mediaan 13.3 ms/s
+  goedkoper-gespreid, keylock 1,08     snelste  13.5 ms/s (1.35% van een kern), mediaan 13.7 ms/s
+  kort, keylock 1,08                   snelste  19.6 ms/s (1.96% van een kern), mediaan 19.9 ms/s
+
+== meten: opwarmen bij een sprong (in één keer; minimum en mediaan van 25) ==
+  standaard    uitLat (60 ms): min 1816 µs, mediaan 1832 µs   blok (120 ms): min 2448 µs, mediaan 2482 µs
+  goedkoper    uitLat (50 ms): min 1045 µs, mediaan 1086 µs   blok (100 ms): min 1581 µs, mediaan 1628 µs
+  kort         uitLat (30 ms): min 902 µs, mediaan 917 µs   blok (60 ms): min 1488 µs, mediaan 1505 µs
+
+== meten: acht decks tegelijk (20 s), som per quantum ==
+  (3×, minimum per quantum; % = van het budget van 2667 µs per quantum)
+  standaard, verspreid gestart       CPU  16.4% van een kern =  16.2% budget gem  p99  1182  max  1492 µs  boven budget 0.00%, boven de helft 0.1%  zwaarste callback 256: 34%, 512: 28%
+  standaard, alle blokken tegelijk   CPU  25.0% van een kern =  26.5% budget gem  p99 11190  max 52357 µs  boven budget 8.89%, boven de helft 8.9%  zwaarste callback 256: 984%, 512: 493%
+  standaard-gespreid, tegelijk       CPU  41.9% van een kern =  47.3% budget gem  p99  3460  max  5906 µs  boven budget 3.88%, boven de helft 35.8%  zwaarste callback 256: 159%, 512: 104%
+  goedkoper, verspreid gestart       CPU  26.2% van een kern =  29.0% budget gem  p99  2316  max  5066 µs  boven budget 0.45%, boven de helft 23.1%  zwaarste callback 256: 104%, 512: 71%
+  goedkoper-gespreid, tegelijk       CPU  27.8% van een kern =  31.5% budget gem  p99  2284  max  5992 µs  boven budget 0.35%, boven de helft 11.3%  zwaarste callback 256: 164%, 512: 98%
+
+  belasting na afloop: 18.5 / 10.1 / 10.3
+
+== luisterbestanden: 40 s per fragment naar tools/keylock/uit/ ==
+  sakamoto       14 bestanden, 65.7 s  (🎥 𝐩𝐥𝐚𝐲𝐥𝐢𝐬𝐭ㅣ류이치사카모토, 기억의 저편에서 클래식이 되다ㅣBest)
+  zoned-out      14 bestanden, 46.4 s  (zoned out)
+  adriana        16 bestanden, 50.4 s  (I will delete this album on September 22 at 22:22)
+  no-surprises   16 bestanden, 56.9 s  (no surprises - Radiohead)
+
+== toegevoegd: acht decks uit de run van 13:12 UTC (zelfde code voor dit deel, rustiger) ==
+  De acht decks hierboven liepen tijdens een piek (load 18,5; Chrome ~250%, een ffmpeg
+  van een ander proces). Herhalen om 13:38 UTC kon niet: load 45. Dit is de uitvoer
+  van de run van 13:12 UTC, letterlijk overgenomen, met load 8,0 bij de start van meet:
+== meten: acht decks tegelijk (20 s), som per quantum ==
+  (3×, minimum per quantum; % = van het budget van 2667 µs per quantum)
+  standaard, verspreid gestart       CPU  16.1% van een kern =  15.9% budget gem  p99  1158  max  1205 µs  boven budget 0.00%, boven de helft 0.0%  zwaarste callback 256: 23%, 512: 22%
+  standaard, alle blokken tegelijk   CPU  16.0% van een kern =  15.9% budget gem  p99  4442  max  4513 µs  boven budget 8.89%, boven de helft 8.9%  zwaarste callback 256: 85%, 512: 43%
+  standaard-gespreid, tegelijk       CPU  16.4% van een kern =  16.3% budget gem  p99   821  max   852 µs  boven budget 0.00%, boven de helft 0.0%  zwaarste callback 256: 31%, 512: 23%
+  goedkoper, verspreid gestart       CPU  10.5% van een kern =  10.4% budget gem  p99   519  max   533 µs  boven budget 0.00%, boven de helft 0.0%  zwaarste callback 256: 19%, 512: 15%
+  goedkoper-gespreid, tegelijk       CPU  10.9% van een kern =  10.8% budget gem  p99   430  max   454 µs  boven budget 0.00%, boven de helft 0.0%  zwaarste callback 256: 15%, 512: 15%
+
+  belasting na afloop: 3.8 / 8.0 / 11.5
+  Opnieuw meten: node tools/keylock/proef.mjs acht

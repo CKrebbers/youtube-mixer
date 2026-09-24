@@ -27,6 +27,10 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 - [ ] **A3. Luistertest: keylock (Signalsmith-demo).** 🎧
   Staat al sinds fase 3 open. Een kwartier met de demo op je eigen ambient,
   ±5% en ±8%. Beslist of keylock Signalsmith wordt. Daarmee is fase 3 af.
+  **Klaar om te luisteren (24 sep):** niet de demo maar je eigen nummers, door
+  de echte Signalsmith 1.3.2 gehaald: `tools/keylock/uit/` (sakamoto, zoned-out,
+  adriana, no-surprises), leeswijzer en scorekaart in `tools/keylock/LUISTER.md`.
+  Daarna de beslissingen K1–K8 in `docs/KEYLOCK.md` (ontwerp, metingen, advies).
 
 ---
 

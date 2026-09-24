@@ -43,6 +43,28 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   (niet in git). Let op: in headless rekent WebGL in software (swiftshader); snelheid
   zegt hier niets.
 
+## keylock/
+Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen
+nummers. Ontwerp en uitkomst: `docs/KEYLOCK.md`. Leest alleen `media/<id>/audio.wav` en
+`media/library.db` (ook vanuit een worktree: de hoofdmap wordt via git gevonden;
+`VARVE_MEDIA` wijst een andere map aan). Geen browser nodig.
+
+```
+node tools/keylock/proef.mjs haal       # één keer: npm pack naar tools/keylock/pakket/ (niet in git), sha512 gecontroleerd
+node tools/keylock/proef.mjs alles      # info + controle + meet + luister (~3 min)
+```
+Los: `info` (bestanden, licentie, latentie per preset), `controle` (toonhoogte, hoorbare
+positie, klankkleur op 1,00, springen, tempowissel), `meet` (CPU per deck, acht decks,
+opwarmen), `acht` (alleen de acht decks, gevoelig voor belasting), `luister [nummer] [--van s] [--duur s]` (WAV's naar `tools/keylock/uit/`,
+niet in git; met `LUISTER.md` als leeswijzer).
+
+| bestand | wat |
+|---|---|
+| kern.mjs | de WASM-fabriek los van de schil van Signalsmith (wat in stream-lezer.js zou komen), `Kern` op de ruwe exports, `StretchSpeler` (een deck zoals optie A: segment {T,P,R}, latentie gecompenseerd, geplande sprong, opwarmen, loop uitgerold), en hun eigen AudioWorkletProcessor nagebootst (optie C) |
+| proef.mjs | de opdrachten hierboven |
+| LUISTER.md | wat er in de luisterbestanden zit en waar je op let (VRAGEN A3) |
+| metingen-2026-09-24.txt | de uitkomst van `alles` op 24 september (M1, met wisselende belasting) |
+
 ## stems/
 - `meet.py` — proef met Demucs (stems splitsen) op Clay's eigen nummers: rekentijd op de M1
   (GPU via MPS of CPU) en het energie-aandeel per stem. Leest `media/<id>/audio.wav`, schrijft
