@@ -131,7 +131,7 @@ for (const t of alle) {
   if (lijst.length) {
     zeg('');
     zeg(`Bekende toonsoorten (${lijst.length}; X = bronnen oneens, telt niet mee); gevonden over PRECIES dat stuk, variant ${hoofd.naam}, per profiel`);
-    zeg('(goed / relatief = zelfde Camelot-getal / kwint = buur op de wijzer / parallel / fout), zekerheid; en hoeveel van de tijd de kaart (edma) het goede getal geeft:');
+    zeg('(goed / relatief = zelfde Camelot-getal / kwint = buur op de wijzer / parallel / fout), zekerheid; en hoeveel van de tijd de kaart (T05, stemming per stuk) het goede getal geeft:');
     for (const s of lijst) {
       const goedeK = [s.toonsoort, ...(s.ook || [])].map(T.leesSleutel).filter((k) => k != null);
       const kb = goedeK[0];
@@ -172,7 +172,7 @@ for (const t of alle) {
           ks.exact += x.exact; ks.getal += x.getal; ks.duur += x.duur;
         }
       }
-      const aandeel = kaartAandeel(kaarten.edma).getal / Math.max(1, eind - s.van);
+      const aandeel = kaartAandeel(kaarten[HOOFDKAART]).getal / Math.max(1, eind - s.van);
       const cel = (p) => { const x = per[`${hoofd.naam}/${p}`]; return `${T.kort(x.k).padEnd(3)} ${x.o.soort.padEnd(8)} ${fmt(x.z)}`; };
       const bk = [s.toonsoort, ...(s.ook || [])].join('/');
       zeg(`  ${mmss(s.van)}-${mmss(s.tot ?? t.duur)} ${s.titel.slice(0, 26).padEnd(26)} ${bk.padEnd(7)} (${s.zeker}) | `

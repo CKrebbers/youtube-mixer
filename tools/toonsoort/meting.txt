@@ -7,7 +7,7 @@ Hoofdvariant: hpss+log (bereik 55-2000 Hz). Zekerheid = toon × beslist (zie too
 ====================================================================================================
 I will delete this album on September 22 at 22:22  —  ADRIANA  [f3a7DiCsm8k]  30:59
 Stemming: -9.7 cent t.o.v. A=440 (A = 437.6 Hz; helderheid R 0.38)  ·  1000 frames, 100% niet stil
-Rekentijd per minuut audio: lezen (ffmpeg) 0.071 s · FFT+stemming 0.033 s · chroma+profielen 0.001 s · kaart 0.000 s · kaart per stuk 0.001 s  (totaal 3.3 s voor 31.0 min)
+Rekentijd per minuut audio: lezen (ffmpeg) 0.397 s · FFT+stemming 0.138 s · chroma+profielen 0.003 s · kaart 0.001 s · kaart per stuk 0.005 s  (totaal 16.8 s voor 31.0 min)
 Hoofdtoonsoort (T05/per-stuk, meeste tijd met zekerheid ≥ 0,10): Bes majeur (B♭ 6B), 18% van de tijd, zekerheid 0.12
 
 Heel het nummer, variant hpss+log:   profiel      toonsoort          zekerheid = toon × beslist   r     marge(ander getal)  2e keus
@@ -76,7 +76,7 @@ Grenzen tussen nummers (18): hoeveel kaartgrenzen liggen binnen 15 s van een ech
 ====================================================================================================
 🎥 𝐩𝐥𝐚𝐲𝐥𝐢𝐬𝐭ㅣ류이치사카모토, 기억의 저편에서 클래식이 되다ㅣBest of Ryuichi Sakamoto  —  Ending Credits  [mOzW9KQKfzA]  60:22
 Stemming: 2.3 cent t.o.v. A=440 (A = 440.6 Hz; helderheid R 0.81)  ·  1949 frames, 100% niet stil
-Rekentijd per minuut audio: lezen (ffmpeg) 0.071 s · FFT+stemming 0.033 s · chroma+profielen 0.000 s · kaart 0.000 s · kaart per stuk 0.001 s  (totaal 6.4 s voor 60.4 min)
+Rekentijd per minuut audio: lezen (ffmpeg) 0.371 s · FFT+stemming 0.134 s · chroma+profielen 0.001 s · kaart 0.000 s · kaart per stuk 0.005 s  (totaal 30.8 s voor 60.4 min)
 Hoofdtoonsoort (T05/per-stuk, meeste tijd met zekerheid ≥ 0,10): C majeur (C 8B), 22% van de tijd, zekerheid 0.50
 
 Heel het nummer, variant hpss+log:   profiel      toonsoort          zekerheid = toon × beslist   r     marge(ander getal)  2e keus
@@ -144,22 +144,22 @@ Kaart edma/per-stuk (25 stukken):
    45:39-48:15 Cm 5A 0.43 [-2]  |  48:15-48:55 Gm 6A 0.09 [-4]  |  48:55-55:02 B♭m 3A 0.53 [9]  |  55:02-59:08 G 9B 0.35 [10]  |  59:08-60:20 A♭ 4B 0.26 [4]
 
 Bekende toonsoorten (15; X = bronnen oneens, telt niet mee); gevonden over PRECIES dat stuk, variant hpss+log, per profiel
-(goed / relatief = zelfde Camelot-getal / kwint = buur op de wijzer / parallel / fout), zekerheid; en hoeveel van de tijd de kaart (edma) het goede getal geeft:
+(goed / relatief = zelfde Camelot-getal / kwint = buur op de wijzer / parallel / fout), zekerheid; en hoeveel van de tijd de kaart (T05, stemming per stuk) het goede getal geeft:
   0:00-3:35 Aqua                       G       (M) | KK G   goed     0.55 | T99 G   goed     0.74 | T05 G   goed     0.87 | Sha G   goed     0.67 | edma G   goed     0.19 | bgate G   goed     0.48 | T05+edma G   goed     0.58 | alle6 G   goed     0.65 | kaart 100%
-  3:35-4:31 Aqua (slot, modulatie)     Ab      (C) | KK A♭  goed     0.17 | T99 A♭  goed     0.79 | T05 A♭  goed     0.83 | Sha A♭  goed     0.43 | edma A♭  goed     0.09 | bgate A♭  goed     0.41 | T05+edma A♭  goed     0.50 | alle6 A♭  goed     0.51 | kaart 89%
-  4:31-9:20 Merry Christmas Mr. Lawren Db/Bbm  (H) | KK B♭m goed     0.10 | T99 D♭  goed     0.00 | T05 B♭m goed     0.31 | Sha B♭m goed     0.47 | edma B♭m goed     0.65 | bgate B♭m goed     0.83 | T05+edma B♭m goed     0.53 | alle6 B♭m goed     0.43 | kaart 98%
-  9:20-14:30 Bolerish                   C       (H) | KK C   goed     0.44 | T99 C   goed     0.44 | T05 C   goed     0.56 | Sha C   goed     0.57 | edma C   goed     0.27 | bgate C   goed     0.63 | T05+edma C   goed     0.48 | alle6 C   goed     0.55 | kaart 56%
-  14:30-18:09 Rain                       B/Ebm   (X) | KK B♭m kwint    0.00 | T99 F♯  kwint    0.00 | T05 E♭m goed     0.00 | Sha B♭m kwint    0.00 | edma B♭m kwint    0.00 | bgate B♭m kwint    0.00 | T05+edma E♭m goed     0.00 | alle6 E♭m goed     0.00 | kaart 14%
-  18:09-24:03 The Last Emperor (Theme)   G/Em    (M) | KK Bm  kwint    0.00 | T99 G   goed     0.00 | T05 Em  goed     0.00 | Sha Bm  kwint    0.04 | edma Bm  kwint    0.00 | bgate Bm  kwint    0.00 | T05+edma Em  goed     0.00 | alle6 Em  goed     0.00 | kaart 17%
-  24:03-28:21 koko                       Ab      (M) | KK E♭  kwint    0.01 | T99 A♭  goed     0.19 | T05 A♭  goed     0.42 | Sha E♭  kwint    0.00 | edma E♭  kwint    0.06 | bgate E♭  kwint    0.07 | T05+edma A♭  goed     0.04 | alle6 A♭  goed     0.02 | kaart 0%
-  28:21-33:15 Solitude                   Fm/Ab   (H) | KK Cm  kwint    0.00 | T99 A♭  goed     0.07 | T05 A♭  goed     0.00 | Sha Cm  kwint    0.00 | edma Cm  kwint    0.00 | bgate Cm  kwint    0.00 | T05+edma Cm  kwint    0.00 | alle6 Cm  kwint    0.00 | kaart 0%
+  3:35-4:31 Aqua (slot, modulatie)     Ab      (C) | KK A♭  goed     0.17 | T99 A♭  goed     0.79 | T05 A♭  goed     0.83 | Sha A♭  goed     0.43 | edma A♭  goed     0.09 | bgate A♭  goed     0.41 | T05+edma A♭  goed     0.50 | alle6 A♭  goed     0.51 | kaart 98%
+  4:31-9:20 Merry Christmas Mr. Lawren Db/Bbm  (H) | KK B♭m goed     0.10 | T99 D♭  goed     0.00 | T05 B♭m goed     0.31 | Sha B♭m goed     0.47 | edma B♭m goed     0.65 | bgate B♭m goed     0.83 | T05+edma B♭m goed     0.53 | alle6 B♭m goed     0.43 | kaart 100%
+  9:20-14:30 Bolerish                   C       (H) | KK C   goed     0.44 | T99 C   goed     0.44 | T05 C   goed     0.56 | Sha C   goed     0.57 | edma C   goed     0.27 | bgate C   goed     0.63 | T05+edma C   goed     0.48 | alle6 C   goed     0.55 | kaart 97%
+  14:30-18:09 Rain                       B/Ebm   (X) | KK B♭m kwint    0.00 | T99 F♯  kwint    0.00 | T05 E♭m goed     0.00 | Sha B♭m kwint    0.00 | edma B♭m kwint    0.00 | bgate B♭m kwint    0.00 | T05+edma E♭m goed     0.00 | alle6 E♭m goed     0.00 | kaart 64%
+  18:09-24:03 The Last Emperor (Theme)   G/Em    (M) | KK Bm  kwint    0.00 | T99 G   goed     0.00 | T05 Em  goed     0.00 | Sha Bm  kwint    0.04 | edma Bm  kwint    0.00 | bgate Bm  kwint    0.00 | T05+edma Em  goed     0.00 | alle6 Em  goed     0.00 | kaart 67%
+  24:03-28:21 koko                       Ab      (M) | KK E♭  kwint    0.01 | T99 A♭  goed     0.19 | T05 A♭  goed     0.42 | Sha E♭  kwint    0.00 | edma E♭  kwint    0.06 | bgate E♭  kwint    0.07 | T05+edma A♭  goed     0.04 | alle6 A♭  goed     0.02 | kaart 98%
+  28:21-33:15 Solitude                   Fm/Ab   (H) | KK Cm  kwint    0.00 | T99 A♭  goed     0.07 | T05 A♭  goed     0.00 | Sha Cm  kwint    0.00 | edma Cm  kwint    0.00 | bgate Cm  kwint    0.00 | T05+edma Cm  kwint    0.00 | alle6 Cm  kwint    0.00 | kaart 97%
   33:15-38:33 Blu                        Am/F    (X) | KK Am  goed     0.14 | T99 C   kwint    0.03 | T05 C   kwint    0.17 | Sha Am  goed     0.48 | edma Am  goed     0.43 | bgate Am  goed     0.60 | T05+edma Am  goed     0.38 | alle6 Am  goed     0.32 | kaart 100%
   38:33-41:54 Ieta                       F       (M) | KK Am  fout     0.14 | T99 C   kwint    0.00 | T05 C   kwint    0.00 | Sha Am  fout     0.04 | edma Dm  relatief 0.02 | bgate Dm  relatief 0.04 | T05+edma Am  fout     0.03 | alle6 Am  fout     0.02 | kaart 0%
   41:54-44:03 Germination                Bm/D    (H) | KK Dm  parallel 0.00 | T99 Dm  parallel 0.00 | T05 Dm  parallel 0.00 | Sha Dm  parallel 0.00 | edma Dm  parallel 0.00 | bgate Dm  parallel 0.00 | T05+edma Dm  parallel 0.00 | alle6 Dm  parallel 0.00 | kaart 0%
-  44:03-48:59 The Sheltering Sky         Cm/Gm   (X) | KK Gm  goed     0.40 | T99 Gm  goed     0.00 | T05 Gm  goed     0.04 | Sha Gm  goed     0.15 | edma Gm  goed     0.00 | bgate Cm  goed     0.00 | T05+edma Gm  goed     0.03 | alle6 Gm  goed     0.13 | kaart 96%
-  48:59-55:10 Merry Christmas Mr. Lawren Bbm/Db  (M) | KK B♭m goed     0.00 | T99 D♭  goed     0.00 | T05 D♭  goed     0.00 | Sha B♭m goed     0.30 | edma B♭m goed     0.54 | bgate B♭m goed     0.69 | T05+edma B♭m goed     0.03 | alle6 B♭m goed     0.05 | kaart 98%
+  44:03-48:59 The Sheltering Sky         Cm/Gm   (X) | KK Gm  goed     0.40 | T99 Gm  goed     0.00 | T05 Gm  goed     0.04 | Sha Gm  goed     0.15 | edma Gm  goed     0.00 | bgate Cm  goed     0.00 | T05+edma Gm  goed     0.03 | alle6 Gm  goed     0.13 | kaart 70%
+  48:59-55:10 Merry Christmas Mr. Lawren Bbm/Db  (M) | KK B♭m goed     0.00 | T99 D♭  goed     0.00 | T05 D♭  goed     0.00 | Sha B♭m goed     0.30 | edma B♭m goed     0.54 | bgate B♭m goed     0.69 | T05+edma B♭m goed     0.03 | alle6 B♭m goed     0.05 | kaart 94%
   55:10-59:02 Aqua (Orchestra)           G       (M) | KK G   goed     0.56 | T99 G   goed     0.76 | T05 G   goed     0.81 | Sha G   goed     0.64 | edma G   goed     0.39 | bgate G   goed     0.66 | T05+edma G   goed     0.65 | alle6 G   goed     0.69 | kaart 100%
-  59:02-60:24 Aqua (Orchestra, slot)     Ab      (C) | KK A♭  goed     0.33 | T99 A♭  goed     0.69 | T05 A♭  goed     0.73 | Sha A♭  goed     0.64 | edma A♭  goed     0.17 | bgate A♭  goed     0.66 | T05+edma A♭  goed     0.53 | alle6 A♭  goed     0.65 | kaart 88%
+  59:02-60:24 Aqua (Orchestra, slot)     Ab      (C) | KK A♭  goed     0.33 | T99 A♭  goed     0.69 | T05 A♭  goed     0.73 | Sha A♭  goed     0.64 | edma A♭  goed     0.17 | bgate A♭  goed     0.66 | T05+edma A♭  goed     0.53 | alle6 A♭  goed     0.65 | kaart 95%
 
 Grenzen tussen nummers (12): hoeveel kaartgrenzen liggen binnen 15 s van een echte grens (precisie), en hoeveel echte grenzen krijgen een kaartgrens (dekking; een grens tussen twee nummers in dezelfde toonsoort hoeft geen kaartgrens te zijn)
    T99                  8/25 kaartgrenzen raak · 8/12 echte grenzen gedekt · afwijking mediaan 4.8 s
@@ -174,7 +174,7 @@ Grenzen tussen nummers (12): hoeveel kaartgrenzen liggen binnen 15 s van een ech
 ====================================================================================================
 Bay Ledges - Ciel (demo)  —  Bay Ledges  [HGv_ySHXtYI]  3:33
 Stemming: -0.3 cent t.o.v. A=440 (A = 439.9 Hz; helderheid R 0.81)  ·  114 frames, 100% niet stil
-Rekentijd per minuut audio: lezen (ffmpeg) 0.098 s · FFT+stemming 0.038 s · chroma+profielen 0.001 s · kaart 0.000 s · kaart per stuk 0.001 s  (totaal 0.5 s voor 3.6 min)
+Rekentijd per minuut audio: lezen (ffmpeg) 0.522 s · FFT+stemming 0.141 s · chroma+profielen 0.004 s · kaart 0.000 s · kaart per stuk 0.007 s  (totaal 2.4 s voor 3.6 min)
 Hoofdtoonsoort (T05/per-stuk, meeste tijd met zekerheid ≥ 0,10): D majeur (D 10B), 100% van de tijd, zekerheid 0.77
 
 Heel het nummer, variant hpss+log:   profiel      toonsoort          zekerheid = toon × beslist   r     marge(ander getal)  2e keus
@@ -209,7 +209,7 @@ Kaart edma/per-stuk (1 stuk):
 ====================================================================================================
 zoned out  —  Ambient2K  [1W1-nPXEVKk]  41:47
 Stemming: 42.5 cent t.o.v. A=440 (A = 450.9 Hz; helderheid R 0.42)  ·  1348 frames, 100% niet stil
-Rekentijd per minuut audio: lezen (ffmpeg) 0.070 s · FFT+stemming 0.034 s · chroma+profielen 0.000 s · kaart 0.000 s · kaart per stuk 0.001 s  (totaal 4.4 s voor 41.8 min)
+Rekentijd per minuut audio: lezen (ffmpeg) 0.495 s · FFT+stemming 0.186 s · chroma+profielen 0.001 s · kaart 0.000 s · kaart per stuk 0.005 s  (totaal 28.6 s voor 41.8 min)
 Hoofdtoonsoort (T05/per-stuk, meeste tijd met zekerheid ≥ 0,10): C majeur (C 8B), 12% van de tijd, zekerheid 0.11
 
 Heel het nummer, variant hpss+log:   profiel      toonsoort          zekerheid = toon × beslist   r     marge(ander getal)  2e keus
@@ -258,7 +258,7 @@ Kaart edma/per-stuk (9 stukken):
 ====================================================================================================
 no surprises - Radiohead  —  lennonstella  [tiktok-7031697544472251694]  1:19
 Stemming: -7.7 cent t.o.v. A=440 (A = 438.0 Hz; helderheid R 0.81)  ·  41 frames, 100% niet stil
-Rekentijd per minuut audio: lezen (ffmpeg) 0.140 s · FFT+stemming 0.030 s · chroma+profielen 0.001 s · kaart 0.000 s · kaart per stuk 0.001 s  (totaal 0.2 s voor 1.3 min)
+Rekentijd per minuut audio: lezen (ffmpeg) 0.876 s · FFT+stemming 0.130 s · chroma+profielen 0.010 s · kaart 0.001 s · kaart per stuk 0.018 s  (totaal 1.4 s voor 1.3 min)
 Hoofdtoonsoort (T05/per-stuk, meeste tijd met zekerheid ≥ 0,10): D majeur (D 10B), 100% van de tijd, zekerheid 0.18
 
 Heel het nummer, variant hpss+log:   profiel      toonsoort          zekerheid = toon × beslist   r     marge(ander getal)  2e keus
@@ -293,7 +293,7 @@ Kaart edma/per-stuk (1 stuk):
 ====================================================================================================
 set-20260923-212203  —  (eigen bestand)  [lokaal-099183d8a81b]  1:44
 Stemming: -17.3 cent t.o.v. A=440 (A = 435.6 Hz; helderheid R 0.50)  ·  55 frames, 100% niet stil
-Rekentijd per minuut audio: lezen (ffmpeg) 0.122 s · FFT+stemming 0.031 s · chroma+profielen 0.001 s · kaart 0.000 s · kaart per stuk 0.001 s  (totaal 0.3 s voor 1.7 min)
+Rekentijd per minuut audio: lezen (ffmpeg) 1.686 s · FFT+stemming 0.142 s · chroma+profielen 0.003 s · kaart 0.000 s · kaart per stuk 0.005 s  (totaal 3.2 s voor 1.7 min)
 Hoofdtoonsoort (T05/per-stuk, meeste tijd met zekerheid ≥ 0,10): Fis majeur (F♯ 2B), 100% van de tijd, zekerheid 0.31
 
 Heel het nummer, variant hpss+log:   profiel      toonsoort          zekerheid = toon × beslist   r     marge(ander getal)  2e keus
@@ -328,7 +328,7 @@ Kaart edma/per-stuk (1 stuk):
 ====================================================================================================
 set-20260923-140637  —  (eigen bestand)  [lokaal-34c123f373bc]  1:56
 Stemming: 3.5 cent t.o.v. A=440 (A = 440.9 Hz; helderheid R 0.84)  ·  61 frames, 100% niet stil
-Rekentijd per minuut audio: lezen (ffmpeg) 0.120 s · FFT+stemming 0.030 s · chroma+profielen 0.001 s · kaart 0.000 s · kaart per stuk 0.001 s  (totaal 0.3 s voor 1.9 min)
+Rekentijd per minuut audio: lezen (ffmpeg) 1.052 s · FFT+stemming 0.148 s · chroma+profielen 0.009 s · kaart 0.002 s · kaart per stuk 0.011 s  (totaal 2.3 s voor 1.9 min)
 Hoofdtoonsoort (T05/per-stuk, meeste tijd met zekerheid ≥ 0,10): geen (geen), 0% van de tijd, zekerheid 0.00
 
 Heel het nummer, variant hpss+log:   profiel      toonsoort          zekerheid = toon × beslist   r     marge(ander getal)  2e keus
@@ -363,7 +363,7 @@ Kaart edma/per-stuk (1 stuk):
 ====================================================================================================
 set-20260923-232817  —  (eigen bestand)  [lokaal-5fd670457996]  5:36
 Stemming: -22.6 cent t.o.v. A=440 (A = 434.3 Hz; helderheid R 0.26)  ·  179 frames, 100% niet stil
-Rekentijd per minuut audio: lezen (ffmpeg) 0.086 s · FFT+stemming 0.031 s · chroma+profielen 0.001 s · kaart 0.000 s · kaart per stuk 0.001 s  (totaal 0.7 s voor 5.6 min)
+Rekentijd per minuut audio: lezen (ffmpeg) 0.616 s · FFT+stemming 0.204 s · chroma+profielen 0.004 s · kaart 0.000 s · kaart per stuk 0.011 s  (totaal 4.7 s voor 5.6 min)
 Hoofdtoonsoort (T05/per-stuk, meeste tijd met zekerheid ≥ 0,10): Bes majeur (B♭ 6B), 30% van de tijd, zekerheid 0.74
 
 Heel het nummer, variant hpss+log:   profiel      toonsoort          zekerheid = toon × beslist   r     marge(ander getal)  2e keus
@@ -558,11 +558,11 @@ Verdeling (aantal stukken · aandeel van de tijd · waarvan bekend: ja/nee):
   0.65–1.00:  10 stukken ·  18% van de tijd · bekend 3 ja / 0 nee
 
 Rekentijd per minuut audio (s):   lezen    FFT     chroma+profielen   kaart    kaart per stuk
-I will delete this album on Sept  0.071   0.033   0.001              0.000    0.001   (31.0 min)
-🎥 𝐩𝐥𝐚𝐲𝐥𝐢𝐬𝐭ㅣ류이치사카모토, 기억의  0.071   0.033   0.000              0.000    0.001   (60.4 min)
-Bay Ledges - Ciel (demo)          0.098   0.038   0.001              0.000    0.001   (3.6 min)
-zoned out                         0.070   0.034   0.000              0.000    0.001   (41.8 min)
-no surprises - Radiohead          0.140   0.030   0.001              0.000    0.001   (1.3 min)
-set-20260923-212203               0.122   0.031   0.001              0.000    0.001   (1.7 min)
-set-20260923-140637               0.120   0.030   0.001              0.000    0.001   (1.9 min)
-set-20260923-232817               0.086   0.031   0.001              0.000    0.001   (5.6 min)
+I will delete this album on Sept  0.397   0.138   0.003              0.001    0.005   (31.0 min)
+🎥 𝐩𝐥𝐚𝐲𝐥𝐢𝐬𝐭ㅣ류이치사카모토, 기억의  0.371   0.134   0.001              0.000    0.005   (60.4 min)
+Bay Ledges - Ciel (demo)          0.522   0.141   0.004              0.000    0.007   (3.6 min)
+zoned out                         0.495   0.186   0.001              0.000    0.005   (41.8 min)
+no surprises - Radiohead          0.876   0.130   0.010              0.001    0.018   (1.3 min)
+set-20260923-212203               1.686   0.142   0.003              0.000    0.005   (1.7 min)
+set-20260923-140637               1.052   0.148   0.009              0.002    0.011   (1.9 min)
+set-20260923-232817               0.616   0.204   0.004              0.000    0.011   (5.6 min)
