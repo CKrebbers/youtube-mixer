@@ -217,12 +217,12 @@ for (const [label, cent] of [['A = 440', 0], ['A = 432 (−31,8 cent)', 1200 * M
   for (const [t, reeks, mineur] of [[0, 'I-V-vi-IV', 0], [9, 'i-iv-V-i', 1]]) {
     const b = await meet(stuk({ tonica: t, reeks, cent, zaad: 400 + t }));
     const { C } = T.chroma(b.hs[hoofd.hs], hoofd.chroma);
-    const r = T.toonsoortVan(C, 0, b.frames, b.ok, 'edma');
+    const r = T.toonsoortVan(C, 0, b.frames, b.ok, 'temperley05');
     // Ter vergelijking: zonder stemmingscorrectie (raster op 440).
     const zonder = T.chroma(T.halveTonen(b.sp, 0, hoofd.bereikOpties), hoofd.chroma).C;
-    const r0 = T.toonsoortVan(zonder, 0, b.frames, b.ok, 'edma');
+    const r0 = T.toonsoortVan(zonder, 0, b.frames, b.ok, 'temperley05');
     zeg(`${label.padEnd(22)} ${T.kort(sleutel(t, mineur)).padEnd(3)}  stemming gemeten ${fmt(b.sp.stemming, 1).padStart(6)} cent (echt ${fmt(cent, 1).padStart(6)}, R ${fmt(b.sp.stemmingR)})`
-      + `  edma: ${T.kort(r.k).padEnd(3)} zekerheid ${fmt(r.zekerheid)}  |  zonder correctie: ${T.kort(r0.k).padEnd(3)} zekerheid ${fmt(r0.zekerheid)}`);
+      + `  T05: ${T.kort(r.k).padEnd(3)} zekerheid ${fmt(r.zekerheid)}  |  zonder correctie: ${T.kort(r0.k).padEnd(3)} zekerheid ${fmt(r0.zekerheid)}`);
   }
 }
 zeg('');

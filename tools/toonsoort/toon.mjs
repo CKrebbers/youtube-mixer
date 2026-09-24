@@ -185,7 +185,9 @@ export function kies(r) {
 
 export const STANDAARD = {
   N: 16384,           // FFT-lengte (op ~4,4 kHz: 3,7 s, 0,27 Hz per bin)
-  hop: 4096,          // 0,93 s
+  // 1,86 s (halve overlap). Gemeten tegen 4096: dezelfde uitkomsten op de
+  // Sakamoto-stukken en in de kaart, de FFT kost de helft (meting.txt).
+  hop: 8192,
   fmin: 55,           // A1; eronder vooral gerommel en kick
   fmax: 2000,         // net onder de rolloff van ffmpeg's hersampler op 4410 Hz
   cent: 10,           // fijn raster voor de stemming
