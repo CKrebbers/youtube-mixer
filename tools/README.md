@@ -84,6 +84,9 @@ vanuit een git-worktree (zoekt media/ in de hoofdmap), of zet `VARVE_ROOT`.
 | synth.mjs → synth.txt | synthetisch materiaal met een bekend antwoord: 24 toonsoorten, relatief mineur, 432 Hz, nul-proeven, modulatie, stemming per stuk |
 | meet.mjs → meting.txt | alle nummers: per profiel, kaart, grenzen, zekerheid, rekentijd; `--wissel`, `--venster`, `--sr/--N/--hop` voor vergelijkingen (naar uit/) |
 | bekend.json | bekende toonsoorten met bron (H bladmuziek, M Spotify-algoritme, X tegenspraak, C eigen chroma) en nummergrenzen |
+| fragmenten.mjs → fragmenten.txt | de SERVER (`server/toon.js`, zoals de worker hem draait) op fragmenten van hooguit 2 minuten per nummer (`ffmpeg -ss/-t`), naast de kaart in meting.txt. 25 sep: 11/11 gelijk |
 
 Draai met `node tools/toonsoort/meet.mjs [id ...]` en `node tools/toonsoort/synth.mjs`. Uitkomst
-24 sep: zie docs/TOONSOORT.md. `uit/` staat niet in git.
+24 sep: zie docs/TOONSOORT.md. `uit/` staat niet in git. `server/toon.js` is een kopie van de
+gekozen keten uit toon.mjs; `test/toon.test.mjs` controleert dat ze getal voor getal gelijk rekenen
+(pas je toon.mjs aan voor een proef, laat dan `kaartPerStuk`, `spectrum` en `nietStil` staan of pas de test aan).

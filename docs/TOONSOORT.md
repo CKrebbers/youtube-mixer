@@ -467,3 +467,63 @@ Totaal 2,5–3 sessies zonder de optie. Kan vóór keylock: de formule werkt met
   de stiltes, gecontroleerd op twee frames.
 - De cover van No Surprises: de gevonden D/B m is niet te controleren.
 - Rekentijden op deze M1, en wisselend met wat er verder draaide.
+
+## 13. Gebouwd: de server (25 september 2026, spoor toon-server)
+
+ROADMAP 14a. Wat er staat, en wat de client (engine, actions, weergave) ervan
+mag verwachten.
+
+**Waar.** `server/toon.js` (de keten van §2, uit `tools/toonsoort/toon.mjs` zonder
+varianten, andere profielen en de oude nul; `test/toon.test.mjs` legt beide naast
+elkaar: bit voor bit gelijk). `maakToon` in `analyze.js` (worker, mono 4410 Hz).
+In `library.js`: kolom `toon_json` (eigen element achteraan in `SCHEMA`),
+`normaliseerToon`, `autoToonWeigert`, `moetToonAnalyse`, `teToonAnalyseren`,
+`bewaarToon`, `bewaarAutoToon`; `_verrijk` geeft `toon` mee. Ingest: stap `toon`
+("toonsoort zoeken") na het grid in `verwerk()`.
+
+**De kaart** is precies §3, met deze afspraken:
+
+- Automatisch: het eerste stuk begint op 0; `van` op 0,1 s, `stemming` op 0,1 cent,
+  `zekerheid` op 0,01. `versie` = `TOON_VERSIE` (nu 1).
+- `toonsoort: null` in een AUTOMATISCHE kaart = stilte (de kaart vond daar geen
+  klank; `zekerheid` 0, `stemming` die van het geheel). In een kaart met de hand:
+  "geen toonsoort". Verder geeft de analyse altijd een toonsoort met een zekerheid.
+- Normaliseren (ook wat de browser post): een andere schrijfwijze van dezelfde
+  toon wordt de vaste spelling (`C#` → `Db`, `G#m` → `Abm`); geen ♯/♭, geen
+  "mineur". Stukken gesorteerd; twee op dezelfde `van` = ongeldig. `stemming`
+  buiten −50..+50 = ongeldig (niet omgerekend naar de buurtoon). Een stuk zonder
+  `stemming` krijgt die van het geheel; zonder `stemming` bovenaan: die van het
+  eerste stuk. `zekerheid` blijft staan als hij er is, ook met `bron: 'hand'`
+  (zoals bij het grid: stukken die je niet aanraakte houden de hunne). Zonder
+  `bron` wordt het `'hand'` (dan overschrijft de achtergrond hem nooit). `versie`
+  alleen als geheel getal ≥ 1, anders weggelaten (telt als oud).
+
+**Routes.**
+
+| Route | Wat |
+|---|---|
+| `GET /api/library/<id>/toon` | `{ toon }` (kaart of null); 404 onbekend nummer |
+| `POST /api/library/<id>/toon` | body `{ toon: kaart }` of `{ toon: null }` → `{ toon }` zoals bewaard. 400 bij een ongeldige kaart, een body zonder `toon` of geen JSON (het grid wist dan; hier niet); 404; 415 als het geen `application/json` is. Body tot 512 kB (lange opnames) |
+| `POST /api/library/<id>/toon/analyseer` | ↻: `{ voorstel, bewaard, toon, reden? }`. Over een kaart met de hand: bewaard. Over SLOT alleen met `{ forceer: true }` (tweede klik). 500 met `fout` als de analyse mislukt |
+| `GET /api/library` | elk nummer heeft `toon` (kaart of null) |
+
+↻ in de library = de client roept `/grid/analyseer` én `/toon/analyseer` aan; de
+server koppelt ze niet.
+
+**Achtergrond.** Dezelfde wachtrij als het grid (`heranalyseOpAchtergrond`): per
+nummer eerst het grid (als `moetAnalyse`), dan de toonsoort (als
+`moetToonAnalyse`: geen kaart, of `bron: 'auto'` met `versie` < `TOON_VERSIE`).
+Eén tegelijk, niet tijdens een ingest, `VARVE_HERANALYSE` voor allebei. Log:
+`[toon] …`, aan het eind `[analyse] achtergrondanalyse klaar`. Wordt het algoritme
+beter: `TOON_VERSIE` ophogen, dan krijgen alle automatische kaarten bij de volgende
+start een nieuwe; met de hand en op slot blijven staan.
+
+**Gemeten.** Synthetisch (`test/toon.test.mjs`, door ffmpeg en de worker): C-cadens
+C (0,57, −2 ct); A mineur op 432 Hz Am op −33 ct; een "album" C [0] · C [+45] ·
+E♭ [−40] · stilte · F♯m met grenzen binnen 7 s; ruis zekerheid 0. Op Clay's library
+(`tools/toonsoort/fragmenten.txt`, alleen lezend, hooguit 2 minuten per nummer):
+11 van 11 fragmenten dezelfde toonsoort en stemming (±1 ct) als de kaart in
+meting.txt; de drie nummers korter dan 2 minuten getal voor getal gelijk. Een
+fragment van 60 s uit een stuk van 3 minuten kan een lagere zekerheid krijgen
+(zoned out 22:40: 0,13 tegen 0,74 over het hele stuk); de toonsoort bleef.
+Rekentijd 0,4–1,8 s per fragment op een drukke machine, inclusief ffmpeg.

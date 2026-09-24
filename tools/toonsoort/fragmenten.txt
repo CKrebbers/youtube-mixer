@@ -1,0 +1,29 @@
+Toonsoort van de server (server/toon.js) op fragmenten, 2026-09-24. Library: /Users/claykrebbers/Desktop/1. Projects/Youtube mixer/media (alleen lezen).
+Verwacht = het stuk van de kaart T05/per-stuk in meting.txt (hele nummers) waar het fragment in valt.
+Klopt = zelfde toonsoort en stemming binnen 5 cent (op de cirkel). Zekerheid ter informatie: een fragment is een ander stuk audio.
+
+fragment                          verwacht (meting.txt)          server op het fragment                    klopt  rekentijd
+Sakamoto 1:00+60s                 G 9B [8] z0.86                 G 9B [7] z0.75                             ja    0.42 s
+                                  (stuk 0:00-3:35 (Aqua))
+Sakamoto 3:40+50s                 Ab 4B [8] z0.86                Ab 4B [8] z0.90                            ja    0.38 s
+                                  (stuk 3:35-4:31 (slot van Aqua))
+ADRIANA 3:00+60s                  D 10B [1] z0.52                D 10B [1] z0.51                            ja    0.39 s
+                                  (stuk 2:56-4:53)
+ADRIANA 11:35+60s                 F 7B [-45] z0.49               F 7B [-45] z0.51                           ja    0.38 s
+                                  (stuk 11:29-13:31)
+Ciel 0:30+120s                    D 10B [0] z0.77                D 10B [0] z0.74                            ja    0.66 s
+                                  (stuk 0:00-3:31)
+zoned out 22:40+60s               Bb 6B [-5] z0.74               Bb 6B [-6] z0.13                           ja    0.43 s
+                                  (stuk 22:26-25:30)
+zoned out 5:00+60s                G 9B [-48] z0.39               G 9B [-47] z0.43                           ja    0.36 s
+                                  (stuk 4:53-7:01)
+No Surprises 0:00+120s            D 10B [-8] z0.18               D 10B [-8] z0.18                           ja    0.43 s
+                                  (stuk heel nummer, 1:16; stemming bovenaan -7.7 ct)
+set-212203 0:00+120s              F# 2B [-17] z0.31              F# 2B [-17] z0.31                          ja    0.52 s
+                                  (stuk heel nummer, 1:42; stemming bovenaan -17.3 ct)
+set-140637 0:00+120s              G 9B [4] z0.09                 G 9B [4] z0.09                             ja    0.68 s
+                                  (stuk heel nummer, 1:53; stemming bovenaan 3.5 ct)
+set-232817 2:52+97s               Bb 6B [-3] z0.74               Bb 6B [-2] z0.77                           ja    0.53 s
+                                  (stuk 2:50-4:31)
+
+11/11 fragmenten kloppen met meting.txt.
