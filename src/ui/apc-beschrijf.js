@@ -78,7 +78,10 @@ export function beschrijf(action) {
     const v = { opacity: ['dekking', 'vormlaag: dekking'], on: ['laag aan', 'vormlaag aan/uit'],
       next: ['vorm ▶', 'vormlaag: volgende vorm'], prev: ['◀ vorm', 'vormlaag: vorige vorm'],
       blend: ['mengvorm', 'vormlaag: screen · add · multiply'],
-      'select.next': ['laag ▶', 'volgende vormlaag kiezen'], 'select.prev': ['◀ laag', 'vorige vormlaag kiezen'] }[m[1]];
+      'select.next': ['laag ▶', 'volgende vormlaag kiezen'], 'select.prev': ['◀ laag', 'vorige vormlaag kiezen'],
+      react: ['reageer', 'vormlaag: hoe sterk de vorm op de mix reageert (standaard de bas op knop 1; dicht = niet)'],
+      'react.source': ['reageer op', 'vormlaag: reageren op laag · midden · hoog · klap · luid'],
+      'react.target': ['reageer knop', 'vormlaag: welke knop (1–6) op de mix reageert'] }[m[1]];
     if (v) return { kort: v[0], lang: v[1] };
   }
   if ((m = /^video\.fx\.(\w+)\.hold$/.exec(action))) return { kort: `${VIDEO[m[1]] ?? m[1]}!`, lang: `video ${VIDEO[m[1]] ?? m[1]} vol aan zolang je drukt` };

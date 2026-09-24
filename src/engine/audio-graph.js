@@ -34,9 +34,13 @@ export function createDeckChain(ctx) {
   const fader = ctx.createGain();
   const xfade = ctx.createGain();
 
+  // 2048: bins van 23,4 Hz op 48 kHz, zodat 40–200 Hz (de bas) zeven bins
+  // krijgt in plaats van drie. Geen smoothing in de node: die werkt per
+  // uitleesbeurt, dus op de framerate. Gladmaken doet src/analysis/features.js
+  // in seconden (regel 3). piek() leest het tijdsignaal en merkt hier niets van.
   const analyser = ctx.createAnalyser();
-  analyser.fftSize = 1024;
-  analyser.smoothingTimeConstant = 0.6;
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0;
 
   trim.connect(eqLow).connect(eqMid).connect(eqHigh)
       .connect(hpf).connect(lpf).connect(fader).connect(xfade);
@@ -89,8 +93,8 @@ export function createMasterChain(ctx) {
   limiter.release.value = 0.1;
 
   const analyser = ctx.createAnalyser();
-  analyser.fftSize = 1024;
-  analyser.smoothingTimeConstant = 0.5;
+  analyser.fftSize = 2048;             // zie createDeckChain; de vormlagen lezen deze uit
+  analyser.smoothingTimeConstant = 0;
 
   gain.connect(limiter).connect(analyser).connect(ctx.destination);
   return { input: gain, gain, limiter, analyser };

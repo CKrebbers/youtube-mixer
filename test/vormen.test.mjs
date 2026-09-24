@@ -139,7 +139,8 @@ console.log('twee lagen, één gekozen');
 console.log('op de action-bus');
 {
   const v = new VormLagen({ maakCanvas });
-  actions.bindVormen(v);
+  const { Router } = await import('../src/analysis/router.js');
+  actions.bindVormen(v, new Router(v.lagen.length));   // met router: ook video.layer.react (device knob 8)
   actions.invoke('video.layer.knob.1', 0);
   ok('knop 1 werkt op de gekozen laag', v.lagen[0].leesKnop(0) === 0 && actions.read('video.layer.knob.1') === 0);
   actions.invoke('video.layer.select.next', true); actions.invoke('video.layer.select.next', false);

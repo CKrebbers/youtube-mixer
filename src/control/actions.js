@@ -465,7 +465,7 @@ export function bindVideo(mixer) {
  */
 export const VORM_KNOPPEN = 6;
 
-export function bindVormen(vormen) {
+export function bindVormen(vormen, router = null) {
   const laag = () => vormen.laag;
   for (let k = 1; k <= VORM_KNOPPEN; k++) {
     define(`video.layer.knob.${k}`, 'value', (v) => laag().zetKnop(k - 1, v),
@@ -485,6 +485,15 @@ export function bindVormen(vormen) {
     define(`video.layer.select.${i + 1}`, 'trigger', (on) => { if (on) vormen.kies(i); },
       { label: `Vormlaag ${i + 1} kiezen`, read: () => (vormen.gekozen === i ? 1 : 0) });
   });
+  // Reageren op de mix (src/analysis/router.js): per laag één route, op de
+  // gekozen laag. De sterkte is een offset bovenop de knop, geen knopstand.
+  if (!router) return;
+  define('video.layer.react', 'value', (v) => router.zetSterkte(vormen.gekozen, v),
+    { label: 'Vormlaag: reageren op de mix (sterkte)', read: () => router.route(vormen.gekozen).sterkte });
+  define('video.layer.react.source', 'trigger', (on) => { if (on) router.volgendeBron(vormen.gekozen); },
+    { label: 'Vormlaag: reageren op laag · midden · hoog · klap · luid' });
+  define('video.layer.react.target', 'trigger', (on) => { if (on) router.volgendDoel(vormen.gekozen); },
+    { label: 'Vormlaag: reageren, welke knop (1–6)' });
 }
 
 /**

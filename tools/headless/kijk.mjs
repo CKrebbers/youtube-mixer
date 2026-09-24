@@ -178,6 +178,57 @@ try {
     return a === b && new Set(a.split(' ')).size === 4;
   })()`));
   await foto('met-vormen.png');
+
+  // ---- reageren op de mix (stap 2) ----------------------------------------
+  console.log('reageren op de mix');
+  await evalueer(`(async () => {
+    window.__act = await import('/src/control/actions.js');
+    const { renderDemoTrack } = await import('/src/analysis/demo-track.js');
+    await window.engine.deck('A').laadGeheugen(renderDemoTrack(window.engine.ctx, { seed: 0, bars: 16 }), 'demo');
+    __act.invoke('track.1.fader', 1); __act.invoke('mixer.xfader', 0);
+    __act.invoke('track.1.play', true); __act.invoke('track.1.play', false);
+  })()`);
+  await evalueer('__apc(0x90, 60, 127); __apc(0x80, 60, 0)');          // Bank ◀: terug naar laag 1
+  ok('reageren staat standaard dicht', await evalueer("__act.read('video.layer.react') === 0 && window.vormen.lagen[0].mod.every((x) => x === 0)"));
+  await evalueer('__apc(0xB0, 23, 0); for (let v = 8; v <= 127; v += 8) __apc(0xB0, 23, v)');
+  const sterkte = await evalueer("__act.read('video.layer.react')");
+  ok('APC device knob 8 in het mapje vorm draait "reageer" open (endless)', sterkte > 0.5, sterkte?.toFixed(2));
+  const meet = (s) => evalueer(`new Promise((ok) => {
+    const l = window.vormen.lagen[0], uit = []; const eind = performance.now() + ${s * 1000};
+    const f = () => { uit.push(l.mod[0]); performance.now() < eind ? requestAnimationFrame(f) : ok({ uit, basis: l.leesKnop(0) }); };
+    requestAnimationFrame(f);
+  })`);
+  const gem = (xs) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+  const basis0 = await evalueer('window.vormen.lagen[0].leesKnop(0)');
+  await wacht(400);
+  const met = await meet(1.5);
+  ok('de demo speelt en de bas duwt knop 1 (offset > 0)', gem(met.uit) > 0.05, `gem ${gem(met.uit).toFixed(3)} over ${met.uit.length} beelden`);
+  ok('de knop zelf (scherm, ring, soft-takeover) blijft op zijn basisstand', met.basis === basis0);
+  await evalueer("__act.invoke('track.1.low', 0)");
+  await wacht(400);
+  const kill = await meet(1.5);
+  ok('bass-kill op de track: de offset zakt in', gem(kill.uit) < gem(met.uit) * 0.5, `${gem(met.uit).toFixed(3)} -> ${gem(kill.uit).toFixed(3)}`);
+  await evalueer("__act.invoke('track.1.low', 0.5)");
+  for (let i = 0; i < 3; i++) await evalueer("__act.invoke('video.layer.react.source', true); __act.invoke('video.layer.react.source', false)");
+  ok('bron gewisseld naar klap (onset)', await evalueer("document.querySelector('.vorm-reageer-bron').value === 'onset'"));
+  // De animatielus haalt headless (swiftshader) maar een paar beelden per
+  // seconde: te traag om klappen van 0,1 s te zien. De detector zelf meten we
+  // daarom met een eigen luisteraar op dezelfde master-analyser, op ~60 Hz.
+  const kl = await evalueer(`(async () => {
+    const { Luisteraar } = await import('/src/analysis/luisteraar.js');
+    const e = window.engine, l = new Luisteraar({ analyser: () => e.master.analyser, sampleRate: () => e.ctx.sampleRate });
+    let n = 0, laag = 0, m = 0; const eind = e.ctx.currentTime + 3;
+    await new Promise((ok) => { const f = () => { const w = l.lees(e.ctx.currentTime); if (w) { n += w.klap ? 1 : 0; laag += w.laag; m++; } e.ctx.currentTime < eind ? setTimeout(f, 16) : ok(); }; f(); });
+    return { n, laag: laag / m, m, fft: e.master.analyser.fftSize };
+  })()`);
+  ok('echte AnalyserNode op fftSize 2048', kl.fft === 2048);
+  ok('klappen op de demo (124 bpm, 3 s): tussen 4 en 30', kl.n >= 4 && kl.n <= 30, `${kl.n} klappen in ${kl.m} metingen, laag gem ${kl.laag.toFixed(2)}`);
+  await evalueer("__act.invoke('video.layer.react', 0)");
+  const dicht = await meet(1);
+  ok('reageer dicht: offset terug op 0', dicht.uit.length > 0 && dicht.uit[dicht.uit.length - 1] === 0);
+  ok('geen fouten tijdens reageren', meldingen.length === 0, meldingen.join(' | '));
+  await evalueer("__act.invoke('track.1.play', true); __act.invoke('track.1.play', false)");
+
   await evalueer("window.vormen.lagen.forEach((l) => { l.aan = false; })");
   await wacht(300);
   await foto('lagen-uit.png');
