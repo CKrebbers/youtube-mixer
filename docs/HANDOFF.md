@@ -22,6 +22,15 @@ Lees in deze volgorde:
     `docs/KEYLOCK.md`;
   - vragen G4, H1, H2, H4 en H6 beslist;
   - blok I in VRAGEN.
+- **Later op 24 sep:**
+  - **Vormlagen VULLEN het beeld** (`4addd90`). Clay zag vierkante vormen met lege
+    banden. Nu valt boven en onder 22% weg en is het beeld zachter (2,5×
+    opgeschaald). Echt 16:9 tekenen komt vóór ROADMAP 7.
+  - Herladen is genoeg, de server hoeft niet opnieuw te starten.
+  - Headless gecontroleerd: `kijk.mjs` is groen, met een schermafdruk.
+  - `kijk.mjs` wacht nu tot de app klaar is (`44a2cca`). De vaste 2,5 s faalde op
+    een drukke machine, ook zonder de wijziging.
+  - NIET gezien in Clay's Chrome op de M1.
 - **Clay moet nu:**
   1. De luistertest keylock doen (A3): `tools/keylock/uit/` met
      `tools/keylock/LUISTER.md`, een kwartier met koptelefoon. Daarmee beslist hij
