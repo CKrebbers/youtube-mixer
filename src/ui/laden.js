@@ -21,6 +21,9 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
   const nieuweLaad = (id) => ++laadTeller[id];
   const nogDeLaatste = (id, nr) => laadTeller[id] === nr;
   const gridBewaard = perDeck(() => null);
+  // Wat er van de toonsoortkaart per track het laatst bewaard (of geladen) is.
+  const toonBewaard = perDeck(() => null);
+  const toonTekst = (kaart) => (kaart ? JSON.stringify(kaart.toJSON()) : 'null');
 
   /**
    * Een los bestand of de demotrack hoort bij GEEN library-nummer. Zonder dit
@@ -31,6 +34,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
     nieuweLaad(id);
     deckTrack[id] = null;
     gridBewaard[id] = null;
+    toonBewaard[id] = null;
     racks.losVanNummer(id);
   }
 
@@ -122,7 +126,41 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
       }
     }
   }
-  setInterval(bewaarGrid, 1500);
+
+  /**
+   * De toonsoortkaart hoort ook bij de link (TOONSOORT.md §7): wat op het deck
+   * met de hand gecorrigeerd is (track.N.key.*), gaat naar
+   * POST /api/library/<id>/toon. Alleen wat veranderde. Een weigering van de
+   * server (4xx) meldt het één keer en probeert dezelfde kaart niet opnieuw;
+   * een netwerkfout of 5xx de volgende ronde wel.
+   */
+  async function bewaarToon() {
+    for (const id of DECK_IDS) {
+      const trackId = deckTrack[id];
+      if (!trackId) continue;
+      const kaart = engine.deck(id).toonKaart;
+      const tekst = toonTekst(kaart);
+      if (tekst === toonBewaard[id]) continue;
+      toonBewaard[id] = tekst;
+      try {
+        const res = await fetch(`/api/library/${trackId}/toon`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ toon: kaart ? kaart.toJSON() : null }),
+        });
+        if (res.status >= 400 && res.status < 500) {
+          meld(`toonsoort van track ${trackVanDeck(id)} niet bewaard: ${res.status} ${res.statusText}`, 'fout');
+          continue;
+        }
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        library.zetToon(trackId, JSON.parse(tekst));
+      } catch (err) {
+        // Volgende ronde opnieuw, als dit nummer er dan nog op staat.
+        if (deckTrack[id] === trackId && toonBewaard[id] === tekst) toonBewaard[id] = null;
+        console.warn('[toon] niet bewaard:', err.message);
+      }
+    }
+  }
+  setInterval(() => { bewaarGrid(); bewaarToon(); }, 1500);
 
   /**
    * De tap-hybride.
@@ -215,6 +253,14 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
         gridBewaard[id] = grid ? JSON.stringify(engine.deck(id).grid?.toJSON() ?? null) : 'null';
       }
     },
+    // De kiezer in de lijst: staat dat nummer op een track, dan krijgt die de
+    // nieuwe kaart meteen (en de bewaarlus ziet hem als bewaard).
+    onToon: (trackId, toon) => {
+      for (const id of DECK_IDS) {
+        if (deckTrack[id] !== trackId) continue;
+        toonBewaard[id] = toonTekst(engine.deck(id).setToonKaart(toon));
+      }
+    },
     onLaad: async (deckId, track) => {
       // NIET wachten op engine.resume(): zonder gebruikersgebaar lost die belofte
       // nooit in en blijft het laden eeuwig hangen. Laden kan prima op een
@@ -241,6 +287,8 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
       racks.haalRacks(deckId);
       haalSamples(deckId, track.id);
       gridBewaard[deckId] = track.grid ? JSON.stringify(track.grid) : 'null';
+      // De toonsoort van de plaat (TOONSOORT.md §3), zoals /api/library hem geeft.
+      toonBewaard[deckId] = toonTekst(engine.deck(deckId).setToonKaart(track.toon ?? null));
       haalOnsets(deckId, track.id, mijnLaad);
       console.log(`[deck ${deckId}] ${track.titel} — ${duur.toFixed(1)}s — streamt`
         + (uitCache ? '' : ' — LET OP: geen peaks.bin, dus geen golfvorm'));
