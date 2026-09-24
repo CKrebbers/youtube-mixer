@@ -203,6 +203,40 @@ try {
   const weg = await (await postGrid('nummerX', { grid: null })).json();
   ok('null wist het grid', weg.grid === null);
 
+  console.log('\ntoonsoort-route (kaart, docs/TOONSOORT.md §3)');
+  const postToon = (id, body, type = 'application/json') => fetch(`${B}/api/library/${id}/toon`, { method: 'POST',
+    headers: { 'Content-Type': type }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+  ok('GET toon van een nummer zonder toonsoort: null', (await (await fetch(`${B}/api/library/nummerX/toon`)).json()).toon === null);
+  const tk = { versie: 1, stemming: -32, stukken: [{ van: 0, toonsoort: 'C#', stemming: -32, zekerheid: 0.4 },
+    { van: 95.5, toonsoort: null, stemming: -32 }, { van: 120, toonsoort: 'Bbm' }], bron: 'hand', slot: true };
+  const tb = await (await postToon('nummerX', { toon: tk })).json();
+  ok('POST met de hand: bewaard, vaste spelling (C# -> Db), null = geen toonsoort, slot blijft',
+    tb.toon?.stukken.length === 3 && tb.toon.stukken[0].toonsoort === 'Db' && tb.toon.stukken[1].toonsoort === null
+    && tb.toon.stukken[2].toonsoort === 'Bbm' && tb.toon.stukken[2].stemming === -32 && tb.toon.slot === true && tb.toon.bron === 'hand');
+  ok('GET geeft dezelfde kaart terug', JSON.stringify((await (await fetch(`${B}/api/library/nummerX/toon`)).json()).toon) === JSON.stringify(tb.toon));
+  const inLijstT = (await (await fetch(`${B}/api/library`)).json()).tracks;
+  ok('/api/library draagt per nummer "toon" mee (kaart of null)', inLijstT.find((t) => t.id === 'nummerX').toon?.stukken.length === 3
+    && inLijstT.find((t) => t.id === 'nummerY').toon === null);
+  const bewaard = async () => (await (await fetch(`${B}/api/library/nummerX/toon`)).json()).toon?.stukken.length;
+  const foutT = [];
+  for (const [naam, body] of [['onbekende toonsoort', { toon: { stukken: [{ van: 0, toonsoort: 'H' }] } }],
+    ['stemming buiten -50..50', { toon: { stukken: [{ van: 0, toonsoort: 'C', stemming: 70 }] } }],
+    ['geen stukken', { toon: { stukken: [] } }], ['zonder "toon"', {}], ['geen JSON', '{kapot']]) {
+    const r = await postToon('nummerX', body);
+    if (r.status !== 400) foutT.push(`${naam}: ${r.status}`);
+  }
+  ok(`onzin: 400, en de bewaarde kaart blijft${foutT.length ? ` (${foutT.join(', ')})` : ''}`, !foutT.length && (await bewaard()) === 3);
+  ok('als formulier (text/plain): 415', (await postToon('nummerX', { toon: null }, 'text/plain')).status === 415 && (await bewaard()) === 3);
+  ok('onbekend nummer: 404', (await postToon('bestaatNiet', { toon: null })).status === 404
+    && (await fetch(`${B}/api/library/bestaatNiet/toon`)).status === 404);
+  const lang = { toon: { stemming: 0, bron: 'hand', stukken: Array.from({ length: 3000 }, (_, i) => ({ van: i * 24, toonsoort: 'A', stemming: 0 })) } };
+  const rl = await postToon('nummerY', lang);
+  // Boven de 64 kB van de andere routes: een opname van 20 uur met om de 24 s een stuk.
+  ok(`een lange opname met de hand (3000 stukken, ${Math.round(JSON.stringify(lang).length / 1024)} kB): past`,
+    JSON.stringify(lang).length > 64 * 1024 && rl.status === 200 && (await rl.json()).toon.stukken.length === 3000);
+  const wegT = await (await postToon('nummerX', { toon: null })).json();
+  ok('null wist de toonsoort', wegT.toon === null && (await bewaard()) === undefined);
+
   console.log('\nopnames');
   const s = await (await fetch(`${B}/api/opname/start`, { method: 'POST' })).json();
   const stuk = new Uint8Array(48000 * 4);

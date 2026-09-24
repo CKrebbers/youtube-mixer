@@ -6,9 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, YTDLP_GETEST_OP } from './ingest.js';
 import { normaliseerLink, ontsmetNaam, BESTAND_EXT } from './links.js';
-import { Library, normaliseerGrid } from './library.js';
+import { Library, normaliseerGrid, normaliseerToon, moetAnalyse, moetToonAnalyse } from './library.js';
 import { ZEKER_VANAF } from './analyze.js';
-import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets } from './analyze.js';
+import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon } from './analyze.js';
+import { toonSamenvatting } from './toon.js';
 import * as opname from './opname.js';
 
 /**
@@ -149,6 +150,11 @@ function startOpdracht(sleutel, url, werk) {
         if (opdracht.track.grid) {
           const g = lib.bewaarAutoGrid(opdracht.track.id, opdracht.track.grid);
           console.log(`[grid] ${opdracht.track.titel}: ${g.bewaard ? gridSamenvatting(g.grid) : `voorstel niet bewaard (${g.reden})`}`);
+        }
+        // En de toonsoort, met dezelfde regels: nooit over een slot of een kaart met de hand.
+        if (opdracht.track.toon) {
+          const t = lib.bewaarAutoToon(opdracht.track.id, opdracht.track.toon);
+          console.log(`[toon] ${opdracht.track.titel}: ${t.bewaard ? toonSamenvatting(t.toon) : `voorstel niet bewaard (${t.reden})`}`);
         }
         onsetCache.delete(opdracht.track.id);
       } catch (err) {
@@ -321,6 +327,19 @@ async function analyseer(track) {
   return maakGrid(opSchijf(o.onset.bestand), o.onset.envRate, o.onset.tijdOffset, opSchijf(track.audio));
 }
 
+/**
+ * De toonsoortkaart voor een nummer uit de library (in een worker). Eén
+ * tegelijk per nummer: ↻ terwijl de achtergrond hetzelfde nummer doet krijgt
+ * dezelfde uitkomst in plaats van het werk dubbel.
+ */
+const toonBezig = new Map();
+function analyseerToon(track) {
+  if (!toonBezig.has(track.id)) {
+    toonBezig.set(track.id, maakToon(opSchijf(track.audio)).finally(() => toonBezig.delete(track.id)));
+  }
+  return toonBezig.get(track.id);
+}
+
 /*
  * Onset-pieken per nummer, in het geheugen: ze veranderen alleen als de
  * envelope verandert (opnieuw binnenhalen). Een uur is ~18.000 tijden.
@@ -329,31 +348,57 @@ const onsetCache = new Map();
 
 /**
  * Op de achtergrond: elk nummer zonder grid, of met een grid van vóór de
- * automatische analyse (geen slot, geen bron), krijgt een voorstel. Eén
- * tegelijk, pas na het opstarten, en niet terwijl er binnengehaald wordt:
- * dit is het minst belangrijke werk van de server. Het rekenwerk zit in een
- * worker, dus de decks merken er niets van (server.test meet dat).
+ * automatische analyse (geen slot, geen bron), krijgt een voorstel; en elk
+ * nummer zonder toonsoort, of met een AUTOMATISCHE kaart van een oudere
+ * analyseversie (TOON_VERSIE), een kaart. Per nummer eerst het grid, dan de
+ * toonsoort. Eén tegelijk, pas na het opstarten, en niet terwijl er
+ * binnengehaald wordt: dit is het minst belangrijke werk van de server. Het
+ * rekenwerk zit in een worker, dus de decks merken er niets van (server.test
+ * en gridauto.test meten dat).
  *
  * VARVE_HERANALYSE: 'uit' = niet doen (tests die het niet meten), een getal =
- * zoveel ms wachten na het opstarten (standaard 5000).
+ * zoveel ms wachten na het opstarten (standaard 5000). Geldt voor allebei.
  */
 async function heranalyseOpAchtergrond() {
-  const ids = lib.teAnalyseren();
+  const grids = lib.teAnalyseren();
+  const tonen = lib.teToonAnalyseren();
+  const ids = [...grids, ...tonen.filter((id) => !grids.includes(id))];
   if (!ids.length) return;
-  console.log(`[grid] ${ids.length} nummer${ids.length === 1 ? '' : 's'} zonder automatisch grid — analyse op de achtergrond, één tegelijk`);
-  for (const id of ids) {
+  const n = (x) => `${x.length} nummer${x.length === 1 ? '' : 's'}`;
+  if (grids.length) console.log(`[grid] ${n(grids)} zonder automatisch grid — analyse op de achtergrond, één tegelijk`);
+  if (tonen.length) console.log(`[toon] ${n(tonen)} zonder (actuele) toonsoort — analyse op de achtergrond, één tegelijk`);
+  const geenIngest = async () => {
     while ([...opdrachten.values()].some((o) => o.status === 'bezig')) await new Promise((z) => setTimeout(z, 2000));
-    const track = lib.track(id);
+  };
+  for (const id of ids) {
+    await geenIngest();
+    let track = lib.track(id);
     // Intussen getikt, op slot gezet of weggehaald? Dan niet meer.
-    if (!track || !lib.teAnalyseren().includes(id)) continue;
-    const t0 = Date.now();
-    const r = await analyseer(track);
-    if (!r.ok) { console.log(`[grid] ${track.titel}: overgeslagen (${r.fout})`); continue; }
-    const b = lib.bewaarAutoGrid(id, r.grid, { alleenOud: true });
-    console.log(`[grid] ${track.titel}: ${b.bewaard ? gridSamenvatting(b.grid) : `niet bewaard (${b.reden})`}`
-      + ` — ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+    if (track && moetAnalyse(track.grid)) {
+      const t0 = Date.now();
+      const r = await analyseer(track);
+      if (!r.ok) console.log(`[grid] ${track.titel}: overgeslagen (${r.fout})`);
+      else {
+        const b = lib.bewaarAutoGrid(id, r.grid, { alleenOud: true });
+        console.log(`[grid] ${track.titel}: ${b.bewaard ? gridSamenvatting(b.grid) : `niet bewaard (${b.reden})`}`
+          + ` — ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+      }
+    }
+    await geenIngest();
+    track = lib.track(id);
+    // Intussen met de hand gezet of op slot? Dan niet (bewaarAutoToon kijkt nog eens, in een transactie).
+    if (track && moetToonAnalyse(track.toon)) {
+      const t0 = Date.now();
+      const r = await analyseerToon(track);
+      if (!r.ok) console.log(`[toon] ${track.titel}: overgeslagen (${r.fout})`);
+      else {
+        const b = lib.bewaarAutoToon(id, r.toon, { alleenOud: true });
+        console.log(`[toon] ${track.titel}: ${b.bewaard ? toonSamenvatting(b.toon) : `niet bewaard (${b.reden})`}`
+          + ` — ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+      }
+    }
   }
-  console.log('[grid] achtergrondanalyse klaar');
+  console.log('[analyse] achtergrondanalyse klaar');
 }
 
 /**
@@ -524,6 +569,52 @@ const server = createServer(async (req, res) => {
         return json(res, 400, { fout: 'ongeldig grid: stukken met van, bpm (40-300) en anker, of { bpm, firstBeat }' });
       }
       return json(res, 200, { grid: lib.bewaarGrid(mGrid[1], grid) });
+    }
+
+    /*
+     * De toonsoort van een nummer: een KAART in tracktijd, zoals het grid
+     * (docs/TOONSOORT.md §3): { versie, stemming, stukken: [{ van, toonsoort,
+     * stemming, zekerheid? }], bron, slot }. POST = met de hand: de browser
+     * zet bron 'hand' (ontbreekt bron, dan wordt het 'hand') en slot =
+     * bevestigd; null wist. Zelfde regels als POST .../grid, met twee
+     * verschillen: een body zonder `toon` (of geen JSON) is 400 in plaats van
+     * "wissen", en de body mag groter zijn (512 kB: lange opnames).
+     */
+    const mToon = /^\/api\/library\/([\w-]+)\/toon$/.exec(pad);
+    if (mToon && req.method === 'GET') {
+      const t = lib.track(mToon[1]);
+      return t ? json(res, 200, { toon: t.toon }) : json(res, 404, { fout: 'onbekend nummer' });
+    }
+    if (mToon && req.method === 'POST') {
+      const body = await leesJson(req, 512 * 1024);
+      if (!lib.track(mToon[1])) return json(res, 404, { fout: 'onbekend nummer' });
+      if (!body || typeof body !== 'object' || !('toon' in body)) {
+        return json(res, 400, { fout: 'stuur { toon: <kaart> } of { toon: null } als JSON' });
+      }
+      const toon = body.toon ?? null;
+      if (toon !== null && !normaliseerToon(toon)) {
+        return json(res, 400, { fout: 'ongeldige toonsoort: stukken met van (s, ≥ 0, elk een eigen plek), '
+          + 'toonsoort (C Db D Eb E F F# G Ab A Bb B, m voor mineur, of null) en stemming (-50..50 cent)' });
+      }
+      return json(res, 200, { toon: lib.bewaarToon(mToon[1], toon) });
+    }
+
+    /*
+     * Toonsoort opnieuw analyseren (↻ in de library, samen met het grid).
+     * Zoals .../grid/analyseer: geeft het voorstel terug en bewaart het, ook
+     * over een met de hand gezette kaart; over een kaart op SLOT alleen met
+     * { forceer: true } (tweede klik), anders { bewaard: false, reden }.
+     */
+    const mToonAnalyseer = /^\/api\/library\/([\w-]+)\/toon\/analyseer$/.exec(pad);
+    if (mToonAnalyseer && req.method === 'POST') {
+      const track = lib.track(mToonAnalyseer[1]);
+      if (!track) return json(res, 404, { fout: 'onbekend nummer' });
+      const body = await leesJson(req);
+      const r = await analyseerToon(track);
+      if (!r.ok) return json(res, 500, { fout: r.fout });
+      const b = lib.bewaarAutoToon(track.id, r.toon, { overHand: true, overSlot: body?.forceer === true });
+      console.log(`[toon] opnieuw: ${track.titel}: ${b.bewaard ? toonSamenvatting(b.toon) : `niet bewaard (${b.reden})`}`);
+      return json(res, 200, { voorstel: r.toon, bewaard: b.bewaard, toon: b.toon, ...(b.reden ? { reden: b.reden } : {}) });
     }
 
     /*
@@ -757,7 +848,7 @@ server.listen(POORT, '127.0.0.1', () => {
   console.log(`yt-dlp ${tooling.ytdlp}  ·  ffmpeg ${tooling.ffmpeg ? 'ok' : 'ONTBREEKT'}`);
   const her = process.env.VARVE_HERANALYSE;
   if (her !== 'uit') {
-    setTimeout(() => heranalyseOpAchtergrond().catch((err) => console.error('[grid] achtergrond:', err?.message || err)),
+    setTimeout(() => heranalyseOpAchtergrond().catch((err) => console.error('[analyse] achtergrond:', err?.message || err)),
       Number.isFinite(Number(her)) && her !== '' && her !== undefined ? Number(her) : 5000);
   }
 });

@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, rm, stat, rename } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { maakPeaks, maakOnset, maakGrid } from './analyze.js';
+import { maakPeaks, maakOnset, maakGrid, maakToon } from './analyze.js';
 import { normaliseerLink, bronVan, trackIdVoor, tiktokHint } from './links.js';
 
 /**
@@ -434,6 +434,15 @@ async function verwerk({ id, map, onStap, haalAudio, haalVideo, info, ytdlp }, m
       if (g.ok) grid = g.grid;
     }
 
+    // ---- toonsoort -----------------------------------------------------------
+    // Een kaart in stukken met een stemming per stuk (docs/TOONSOORT.md). Een
+    // paar seconden per uur, in een worker. Mislukt het, dan is er geen
+    // toonsoort en probeert de server het bij het opstarten opnieuw; de
+    // ingest faalt er nooit op.
+    onStap({ stap: 'toon', tekst: 'toonsoort zoeken' });
+    const tk = await maakToon(audio);
+    const toon = tk.ok ? tk.toon : null;
+
     // ---- video, met constante framerate -----------------------------------
     let videoBestand = null;
     let videoFout = null;
@@ -481,7 +490,7 @@ async function verwerk({ id, map, onStap, haalAudio, haalVideo, info, ytdlp }, m
       ok: true,
       track: {
         id, url: info.url, titel: info.titel, uploader: info.uploader,
-        duur, audio: audioDef, video: videoDef, videoFout, peaks, onset, grid, thumbnail: info.thumbnail,
+        duur, audio: audioDef, video: videoDef, videoFout, peaks, onset, grid, toon, thumbnail: info.thumbnail,
         loudness: meting.gemeten, doelLoudness: LOUDNESS.I,
         ytdlp: ytdlp ? await ytdlpVersie() : null,
       },

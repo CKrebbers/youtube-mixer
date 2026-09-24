@@ -1,8 +1,9 @@
 // Toonsoort per nummer (docs/TOONSOORT.md, ROADMAP 14a): het rekenwerk op
 // synthetisch materiaal met een bekend antwoord (toonsoort én stemming), door
 // DEZELFDE ffmpeg-hersampler als de library (48 kHz -> 4410 Hz) en dezelfde
-// worker als de server; en de regels van de kaart (normaliseren, slot, hand,
-// versie). Alles in een tijdelijke map: je echte library blijft buiten schot.
+// worker als de server; de regels van de kaart (normaliseren, slot, hand,
+// versie); en de server zelf: achtergrond en ↻, op een eigen poort met een
+// tijdelijke database en mediamap. Je echte library blijft buiten schot.
 // Draai met: node test/toon.test.mjs
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,7 +11,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const T = await import('../server/toon.js');
-const { normaliseerToon, autoToonWeigert, moetToonAnalyse } = await import('../server/library.js');
+const { Library, normaliseerToon, autoToonWeigert, moetToonAnalyse } = await import('../server/library.js');
 const { maakToon } = await import('../server/analyze.js');
 
 const fails = [];
@@ -253,7 +254,79 @@ ok('de achtergrond: niet over een actuele auto-kaart, wel over een oude', autoTo
   && autoToonWeigert(auto(undefined), { alleenOud: true }) === null && autoToonWeigert(auto(T.TOON_VERSIE), { alleenOud: true, versie: bump }) === null);
 ok('opnieuw binnenhalen (geen opties): auto over auto mag', autoToonWeigert(auto(T.TOON_VERSIE)) === null);
 
-rmSync(map, { recursive: true, force: true });
+// ---- de server: achtergrond en ↻ ----------------------------------------------------
+
+console.log('\nserver: achtergrond (versie-bump) en ↻');
+const db = join(map, 'test.db');
+const lib = new Library(db);
+const nummers = { tLeeg: 'c', tOud: 'am432', tHandOud: 'c', tSlot: 'c', tNu: 'c' };
+for (const [id, audio] of Object.entries(nummers)) {
+  lib.bewaarTrack({ id, url: `https://example.com/${id}`, titel: id, uploader: 't', duur: 40,
+    audio: `media/${audio}/audio.wav`, video: null, thumbnail: null, loudness: {}, doelLoudness: -14, ytdlp: 'x' });
+  // Een grid op slot: dan doet de achtergrond hier alleen de toonsoort.
+  lib.bewaarGrid(id, { stukken: [{ van: 0, bpm: 120, anker: 0 }], slot: true });
+}
+const OUD = { stemming: 0, stukken: [{ van: 0, toonsoort: 'F#', stemming: 0, zekerheid: 0.9 }], bron: 'auto' };   // zonder versie = oud
+lib.bewaarToon('tOud', OUD);
+lib.bewaarToon('tHandOud', { ...OUD, bron: 'hand' });
+lib.bewaarToon('tSlot', { ...OUD, bron: 'hand', slot: true });
+lib.bewaarToon('tNu', { ...OUD, versie: T.TOON_VERSIE });
+const voor = Object.fromEntries(Object.keys(nummers).map((id) => [id, JSON.stringify(lib.track(id).toon)]));
+ok(`te analyseren: leeg en oud-auto (${lib.teToonAnalyseren().join(',')})`, lib.teToonAnalyseren().join(',') === 'tLeeg,tOud');
+lib.sluit();
+
+const poort = 20000 + Math.floor(Math.random() * 20000);
+const server = spawn(process.execPath, ['server/index.js'], {
+  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_MEDIA: media,
+    VARVE_HERANALYSE: '0' },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
+let log = '';
+server.stdout.on('data', (d) => { log += d; });
+server.stderr.on('data', (d) => { log += d; });
+const B = `http://localhost:${poort}`;
+const toonVan = async (id) => (await (await fetch(`${B}/api/library/${id}/toon`)).json()).toon;
+try {
+  for (let i = 0; i < 50; i++) {
+    const r = await fetch(`${B}/api/opnames`).catch(() => null);
+    if (r?.ok) break;
+    await new Promise((z) => setTimeout(z, 100));
+  }
+  const t0 = performance.now();
+  while (!log.includes('achtergrondanalyse klaar') && performance.now() - t0 < 120000) await new Promise((z) => setTimeout(z, 100));
+  ok(`achtergrond klaar in ${((performance.now() - t0) / 1000).toFixed(1)} s, de log zegt wat er gebeurt`,
+    log.includes('achtergrondanalyse klaar') && /\[toon\] 2 nummers zonder \(actuele\) toonsoort/.test(log) && /\[toon\] tLeeg: 1 stuk: C 8B/.test(log));
+  ok('geen grid-analyse (alle grids op slot)', !/\[grid\] \d+ nummer/.test(log));
+  const leeg = await toonVan('tLeeg'), oud = await toonVan('tOud');
+  ok(`leeg: een automatische kaart (${leeg?.stukken.map((s) => s.toonsoort).join(',')}, versie ${leeg?.versie})`,
+    leeg?.bron === 'auto' && leeg.versie === T.TOON_VERSIE && leeg.stukken[0].toonsoort === 'C');
+  ok(`auto zonder versie (oud): opnieuw, nu Am (${oud?.stukken.map((s) => s.toonsoort).join(',')})`,
+    oud?.bron === 'auto' && oud.versie === T.TOON_VERSIE && oud.stukken[0].toonsoort === 'Am');
+  const onaangeroerd = [];
+  for (const id of ['tHandOud', 'tSlot', 'tNu']) if (JSON.stringify(await toonVan(id)) === voor[id]) onaangeroerd.push(id);
+  ok(`met de hand (ook zonder versie), op slot en actueel auto: niet aangeraakt (${onaangeroerd.join(', ')})`, onaangeroerd.length === 3);
+  const lijst = (await (await fetch(`${B}/api/library`)).json()).tracks;
+  ok('/api/library geeft per nummer "toon" mee', lijst.length === 5 && lijst.every((t) => 'toon' in t) && lijst.find((t) => t.id === 'tLeeg').toon.stukken[0].toonsoort === 'C');
+
+  const her = (id, body = {}) => fetch(`${B}/api/library/${id}/toon/analyseer`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const rS = await (await her('tSlot')).json();
+  ok(`↻ over SLOT: voorstel terug (${rS.voorstel?.stukken[0].toonsoort}), niet bewaard ("${rS.reden}")`,
+    rS.bewaard === false && /slot/.test(rS.reden) && rS.voorstel.stukken[0].toonsoort === 'C'
+    && JSON.stringify(rS.toon) === voor.tSlot && JSON.stringify(await toonVan('tSlot')) === voor.tSlot);
+  const rS2 = await (await her('tSlot', { forceer: true })).json();
+  ok('met forceer (tweede klik): bewaard, auto, niet meer op slot', rS2.bewaard === true && rS2.toon.bron === 'auto' && rS2.toon.slot === false
+    && rS2.toon.stukken[0].toonsoort === 'C' && (await toonVan('tSlot')).bron === 'auto');
+  const rH = await (await her('tHandOud')).json();
+  ok('↻ over een kaart met de hand: bewaard (daar vroeg je om)', rH.bewaard === true && rH.toon.bron === 'auto' && rH.toon.stukken[0].toonsoort === 'C');
+  ok('↻ op een onbekend nummer: 404', (await her('bestaatniet')).status === 404);
+  ok('↻ als formulier: 415', (await fetch(`${B}/api/library/tNu/toon/analyseer`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{}' })).status === 415);
+  const [p1, p2] = await Promise.all([her('tNu'), her('tNu')].map((p) => p.then((r) => r.json())));
+  ok('twee keer ↻ tegelijk: twee antwoorden, dezelfde kaart', p1.bewaard && p2.bewaard && JSON.stringify(p1.voorstel) === JSON.stringify(p2.voorstel));
+} finally {
+  server.kill();
+  rmSync(map, { recursive: true, force: true });
+}
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

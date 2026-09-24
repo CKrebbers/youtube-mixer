@@ -128,6 +128,12 @@ ok('een kapotte bron meldt de fout in plaats van stil te falen',
   const naast = g ? Math.abs(g.stukken[0].anker - (T0 + Math.round((g.stukken[0].anker - T0) / P) * P)) : 1;
   ok(`124 bpm, zeker, tel op de klik (${(naast * 1000).toFixed(1)} ms)`,
     !!g && g.zeker === true && Math.abs(g.stukken[0].bpm - 124) < 0.1 && naast < 0.012);
+  const tk = r.track?.toon;
+  ok(`en zoekt de toonsoort (stap "toon"): een kaart, auto, versie, vanaf 0 (${tk?.stukken.map((s) => `${s.toonsoort} z${s.zekerheid}`).join(' | ')})`,
+    stappen.includes('toon') && stappen.indexOf('toon') > stappen.indexOf('grid') && tk?.bron === 'auto' && tk.slot === false
+    && tk.versie >= 1 && tk.stukken[0].van === 0 && tk.stukken.every((s) => typeof s.zekerheid === 'number'));
+  // Een klikspoor van 900 Hz is geen muziek: hoe dan ook geen zekere toonsoort.
+  ok('een klikspoor heeft geen duidelijke toonsoort (zekerheid < 0,15)', !!tk && tk.stukken.every((s) => s.zekerheid < 0.15));
   // Wat de server ermee doet: bewaren, maar nooit over een grid op slot.
   const { Library } = await import('../server/library.js');
   const lib = new Library(join(map, 'lib.db'));
@@ -135,6 +141,8 @@ ok('een kapotte bron meldt de fout in plaats van stil te falen',
   lib.bewaarGrid(r.track.id, { stukken: [{ van: 0, bpm: 62, anker: 0 }], slot: true });
   ok('een grid op slot blijft staan als het nummer opnieuw binnenkomt', !lib.bewaarAutoGrid(r.track.id, g).bewaard
     && lib.track(r.track.id).grid.stukken[0].bpm === 62);
+  lib.bewaarToon(r.track.id, { stukken: [{ van: 0, toonsoort: 'E', stemming: 0 }], bron: 'hand', slot: true });
+  ok('een toonsoort op slot ook', !lib.bewaarAutoToon(r.track.id, tk).bewaard && lib.track(r.track.id).toon.stukken[0].toonsoort === 'E');
   lib.sluit();
 }
 
