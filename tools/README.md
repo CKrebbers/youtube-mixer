@@ -42,6 +42,13 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   `mapping.handle`), tekent 60 beelden en zet schermafdrukken in `tools/headless/uit/`
   (niet in git). Let op: in headless rekent WebGL in software (swiftshader); snelheid
   zegt hier niets.
+- `library.mjs [uitmap]` — het library-paneel met een GROTE library: maakt een tijdelijke
+  database met 5000 nummers (`VARVE_KIJK_AANTAL`) plus twee met echte audio, en bekijkt
+  openen, scrollen tot onderaan (rijen in de DOM, ms per beeld, aantal pagina-verzoeken),
+  sorteren op elke kolomkop (vergeleken met de API), zoeken, de sortering na herladen, en
+  hotcues die bij het nummer bewaard worden en terugkomen (ook op een andere track).
+  Zelfde veiligheid als `kijk.mjs` (geen MIDI, eigen server). Poorten: `VARVE_KIJK_POORT`
+  (standaard 8814) en `VARVE_KIJK_DEBUG` (9414).
 
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen
