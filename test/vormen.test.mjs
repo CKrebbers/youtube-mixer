@@ -3,8 +3,9 @@
 // Draai met: node test/vormen.test.mjs
 import { readFileSync } from 'node:fs';
 
-const { SYSTEMEN, SYSTEEM, draaiKnoppen, maakRng } = await import('../src/vormen/systemen.js');
-const { VormLaag, VormLagen, STAP, MAX_STAPPEN } = await import('../src/vormen/laag.js');
+const { SYSTEMEN, SYSTEEM, draaiKnoppen, maakRng, ACHTERGROND } = await import('../src/vormen/systemen.js');
+const { VormLaag, VormLagen, STAP, MAX_STAPPEN, LAAG_BREEDTE, LAAG_HOOGTE } = await import('../src/vormen/laag.js');
+const { maten, cellen, rooster, blit, clear, fade, midden } = await import('../src/vormen/hulp.js');
 const { actieveLagen, lagenUniforms, MAX_BEELDLAGEN, LAAG_FIT } = await import('../src/video/lagen.js');
 const { leesLaag } = await import('../src/video/passen.js');
 const { VideoMixer } = await import('../src/video/video-mixer.js');
@@ -30,6 +31,18 @@ function maakCanvas(w, h) {
     set(t, k, v) { t[k] = v; return true; },
   });
   return { width: w, height: h, getContext: () => ctx, tel };
+}
+/**
+ * Nep-canvas dat elke tekenaanroep MET argumenten opschrijft, zodat we zien
+ * over welk vlak clear, fade en blit gaan. Zoals een echte context: een
+ * onbekende methode bestaat niet (dan gooit het), niet stilletjes niets.
+ */
+function opneemCanvas(w, h) {
+  const log = [];
+  const ctx = { fillStyle: '#000', imageSmoothingEnabled: true, log };
+  for (const m of ['fillRect', 'drawImage', 'putImageData']) ctx[m] = (...a) => log.push([m, ...a]);
+  ctx.createImageData = (b, hh) => ({ width: b, height: hh, data: new Uint8ClampedArray(b * hh * 4) });
+  return { width: w, height: h, getContext: () => ctx, log };
 }
 /** Alle getallen in de toestand van een systeem, om NaN te vinden en toestanden te vergelijken. */
 function getallen(s, uit = [], diep = 0) {
@@ -78,6 +91,75 @@ console.log('de systemen');
   ok('draaiknoppen: geen keuzelijst en geen herstart-knop (ec: alleen "rijen per frame")', dk.length === 1 && dk[0].k === 'sp');
   ok('draaiknoppen: nooit meer dan zes', SYSTEMEN.every((s) => draaiKnoppen(s).length <= 6));
   ok('elk systeem heeft minstens één draaiknop', SYSTEMEN.every((s) => draaiKnoppen(s).length >= 1));
+}
+
+console.log('het doek is 16:9 (ROADMAP 7)');
+{
+  const { BREEDTE, HOOGTE } = await import('../src/video/video-mixer.js');
+  ok(`${LAAG_BREEDTE} × ${LAAG_HOOGTE}: precies 16:9`, LAAG_BREEDTE * 9 === LAAG_HOOGTE * 16);
+  ok('niet groter dan het oude vierkant van 512² (budget.js hoeft niet opnieuw)', LAAG_BREEDTE * LAAG_HOOGTE <= 512 * 512);
+  ok('een heel getal keer naar het doek van de mixer (geen scheve resampling)',
+    BREEDTE % LAAG_BREEDTE === 0 && HOOGTE % LAAG_HOOGTE === 0 && BREEDTE / LAAG_BREEDTE === HOOGTE / LAAG_HOOGTE);
+
+  const laag = new VormLaag({ maakCanvas: opneemCanvas, systeem: 'hg' });
+  ok('een vormlaag tekent op een canvas van 640 × 360', laag.canvas.width === 640 && laag.canvas.height === 360);
+  ok('g kent W en H, D = korte zijde / 320, S = H (tijdelijk)',
+    laag.g.W === 640 && laag.g.H === 360 && bij(laag.g.D, 360 / 320) && laag.g.S === 360);
+  ok('bij het starten gaat het HELE doek naar de achtergrond',
+    laag.canvas.log.some(([m, x, y, b, h]) => m === 'fillRect' && x === 0 && y === 0 && b === 640 && h === 360) && laag.ctx.fillStyle === ACHTERGROND);
+  const eigen = new VormLaag({ maakCanvas: opneemCanvas, systeem: 'lz', breedte: 320, hoogte: 180 });
+  ok('een eigen maat kan (breedte, hoogte)', eigen.canvas.width === 320 && eigen.g.W === 320 && eigen.g.H === 180 && bij(eigen.g.D, 180 / 320));
+
+  const m = maten(640, 360), staand = maten(360, 640);
+  ok('maten(): D op de KORTE zijde, liggend en staand gelijk (lijnen even dik)', bij(m.D, 1.125) && bij(staand.D, m.D) && m.S === 360);
+
+  const c = opneemCanvas(640, 360);
+  const g = { ...m, ctx: c.getContext('2d'), maakCanvas: opneemCanvas };
+  clear(g); fade(g, 0.1);
+  const vlakken = c.log.filter(([f]) => f === 'fillRect').map((a) => a.slice(1).join(','));
+  ok('clear en fade gaan over het hele doek (niet meer S × S)', vlakken.length === 2 && vlakken.every((v) => v === '0,0,640,360'));
+
+  // cellen(): evenveel cellen als n × n, vierkant, over het hele doek.
+  const ns = [64, 110, 128, 150, 160, 180, 200, 256, 320];
+  const rs = ns.map((n) => ({ n, ...cellen(g, n) }));
+  ok(`cellen(g, n): evenveel cellen als n × n, hooguit 2% ernaast (${ns.join(', ')})`,
+    rs.every(({ n, nx, ny }) => Math.abs(nx * ny - n * n) / (n * n) < 0.02));
+  ok('en ze zijn vierkant: breedte en hoogte van een cel hooguit 1% uit elkaar',
+    rs.every(({ nx, ny }) => Math.abs(640 / nx - 360 / ny) / (360 / ny) < 0.01));
+  ok('cel = pixels per cel (H / ny)', rs.every(({ ny, cel }) => bij(cel, 360 / ny)));
+  const c128 = cellen(g, 128);
+  ok('cellen(g, 128) = 171 × 96, cel 3,75 (het voorbeeld in hulp.js)', c128.nx === 171 && c128.ny === 96 && bij(c128.cel, 3.75));
+  const vol = cellen(g, 128, 2), half = { nx: vol.nx / 2, ny: vol.ny / 2 };
+  ok('veelvoud 2: de halve maat past precies (2×2-blokken)', vol.nx % 2 === 0 && vol.ny % 2 === 0 && Number.isInteger(half.nx) && Number.isInteger(half.ny));
+  ok('en de halve heeft ook vierkante cellen', Math.abs(640 / half.nx - 360 / half.ny) / (360 / half.ny) < 0.01);
+  ok('ny een veelvoud van 9: exact vierkant (640 × 360 is 16:9 met ggd 40)', cellen(g, 320, 9).nx * 360 === cellen(g, 320, 9).ny * 640);
+  ok('op een staand doek ook vierkant', (() => { const s = cellen({ ...staand }, 128); return Math.abs(360 / s.nx - 640 / s.ny) / (640 / s.ny) < 0.01 && s.ny > s.nx; })());
+
+  // rooster(): nieuw (nx × ny, over het hele doek) en verouderd (n × n, links).
+  const gr = rooster(g, cellen(g, 128));
+  ok('rooster(g, cellen(g, n)): nx × ny pixels, px heeft nx * ny plekken, cel gaat mee',
+    gr.c.width === 171 && gr.c.height === 96 && gr.px.length === 171 * 96 && bij(gr.cel, 3.75) && !gr.oud);
+  c.log.length = 0;
+  blit(gr, g, true);
+  const teken = c.log.find(([f]) => f === 'drawImage');
+  ok('blit rekt het rooster over het HELE doek', teken && teken[1] === gr.c && teken.slice(2).join(',') === '0,0,640,360');
+  ok('blit met pix: scherpe blokken', g.ctx.imageSmoothingEnabled === false);
+  const oud = rooster(g, 128);
+  c.log.length = 0;
+  blit(oud, g, false);
+  const links = c.log.find(([f]) => f === 'drawImage');
+  ok('verouderd rooster(g, n): n × n, en blit legt het links neer (S × S) tot het systeem om is',
+    oud.oud && oud.n === 128 && oud.px.length === 128 * 128 && links.slice(2).join(',') === '0,0,360,360');
+
+  const md = midden(g);
+  ok('midden(g): middelpunt en korte zijde', md.cx === 320 && md.cy === 180 && md.kort === 360);
+  ok('midden(g).vak: het vierkant in het midden', md.vak.x === 140 && md.vak.y === 0 && md.vak.b === 360 && md.vak.h === 360);
+  c.log.length = 0;
+  blit(rooster(g, { nx: 110, ny: 110 }), g, false, md.vak);
+  ok('een bewust vierkant rooster in het midden: blit(gr, g, pix, midden(g).vak)',
+    c.log.find(([f]) => f === 'drawImage').slice(2).join(',') === '140,0,360,360');
+  const mdStaand = midden({ ...staand });
+  ok('staand: het vak schuift verticaal', mdStaand.vak.x === 0 && mdStaand.vak.y === 140 && mdStaand.kort === 360);
 }
 
 console.log('tijd: stappen van 1/60 s op de audioklok (regel 3)');
@@ -208,7 +290,15 @@ console.log('de mixer: lagen tussen mengen en effecten');
   const boven = leesLaag(0.5, 0, [u.s[0], u.s[1]]), onder = leesLaag(0.5, 1, [u.s[0], u.s[1]]);
   ok(`boven en onder valt elk 22% weg (zichtbaar ${boven.y.toFixed(3)}–${onder.y.toFixed(3)})`, bij(boven.y, (1 - 9 / 16) / 2, 1e-6) && bij(onder.y, 1 - (1 - 9 / 16) / 2, 1e-6));
   const breed = lagenUniforms(act, [[1280, 720], [912, 512]], 1280, 720);
-  ok('een laag die al 16:9 is blijft 1:1 (voor later, als de systemen breed tekenen)', bij(breed.s[0], 1) && bij(breed.s[1], 1) && Math.abs(breed.s[2] - 1) < 0.01 && Math.abs(breed.s[3] - 1) < 0.01);
+  ok('een laag die al 16:9 is blijft 1:1', bij(breed.s[0], 1) && bij(breed.s[1], 1) && Math.abs(breed.s[2] - 1) < 0.01 && Math.abs(breed.s[3] - 1) < 0.01);
+  const { maatVan } = await import('../src/video/passen.js');
+  const echt = new VormLaag({ maakCanvas, systeem: 'lz' });
+  const [lb, lh] = maatVan(echt.frame(0));
+  const eigen = lagenUniforms([{ aan: true, dekking: 1 }], [[lb, lh]], 1280, 720);
+  ok(`een vormlaag (${lb} × ${lh}) past precies: schaal [1, 1], niets valt weg, niets extra opgeschaald`,
+    lb === 640 && lh === 360 && eigen.s[0] === 1 && eigen.s[1] === 1);
+  const hoeken = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => leesLaag(x, y, [eigen.s[0], eigen.s[1]]));
+  ok('de hoeken van het doek zijn de hoeken van de vorm', hoeken.every((h, i) => h.binnen === 1 && h.x === [0, 1, 0, 1][i] && h.y === [0, 0, 1, 1][i]));
   ok('dekking en mengvorm per laag', bij(u.a[0], 0.5, 1e-6) && u.m[0] === 1 && u.m[1] === 2);
   ok('lege plek: dekking 0', lagenUniforms([], [], 1280, 720).a.every((x) => x === 0));
 

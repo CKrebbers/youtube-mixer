@@ -2,6 +2,62 @@
  * Gedeelde hulp voor de Vormmachines: paletten, toeval met een zaadje, ruis,
  * tekenen. Uit Clay's `vormmachines.html`, zonder DOM en zonder Math.random.
  * Elk systeembestand (systemen.js en de uitbreidingen) importeert hieruit.
+ *
+ * ---- HET DOEK IS 16:9 (ROADMAP 7) -------------------------------------------
+ *
+ * Een systeem tekent op g.W × g.H pixels (640 × 360 in de app, laag.js), niet
+ * meer op een vierkant. Wat een systeem op `g` vindt, naast ctx, t, r, pal, L,
+ * kwaliteit en maakCanvas:
+ *
+ *   g.W, g.H   breedte en hoogte van het doek in pixels.
+ *   g.D        maat voor lijndikte en kleine afstanden: KORTE zijde / 320
+ *              (1,125 op 640 × 360). Een lijn van 1,2 * g.D is ten opzichte
+ *              van de vorm even dik als op het oude vierkant (daar S / 320).
+ *              In "320-eenheden" is het doek g.W / g.D breed en g.H / g.D
+ *              hoog (568,9 × 320).
+ *   g.S        VEROUDERD, = g.H. Bestaat alleen zolang niet alle systemen om
+ *              zijn: een systeem dat nog S × S tekent komt links op het doek
+ *              als vierkant. Nieuwe code gebruikt g.S nooit.
+ *
+ *   maten(W, H) -> { W, H, D, S }
+ *       Die vier voor een doek van W × H. laag.js bouwt g hiermee; een test
+ *       die zelf een g maakt doet hetzelfde:
+ *         const g = { ...maten(640, 360), ctx, t: 0, pal, L, r: maakRng(7), maakCanvas };
+ *
+ *   clear(g), fade(g, a)
+ *       Het HELE doek (W × H) naar de achtergrond, of er met alpha a naartoe.
+ *
+ *   cellen(g, n, veelvoud = 1) -> { nx, ny, cel }
+ *       Een rooster met VIERKANTE cellen over het hele doek, met evenveel
+ *       cellen als het oude n × n: dezelfde rekentijd, dus het tijdsbudget
+ *       (budget.js) en de metingen per systeem blijven kloppen.
+ *       cellen(g, 128) -> { nx: 171, ny: 96, cel: 3,75 } op 640 × 360.
+ *       nx en ny zijn veelvouden van `veelvoud` (2 voor een halve maat die
+ *       precies past: 2×2-blokken omlaag en omhoog). `cel` = pixels per cel
+ *       (g.H / ny). Index: y * nx + x; ruimtelijk rondlopen per as apart
+ *       ((x + nx) % nx, (y + ny) % ny). Een andere n = fijner of grover;
+ *       n is de maat van het oude vierkant, niet een zijde van het nieuwe.
+ *
+ *   rooster(g, { nx, ny }) -> { nx, ny, c, x, img, px }
+ *       Een pixelrooster van nx × ny om met ImageData te vullen (px is een
+ *       Uint32Array van nx * ny, ABGR zoals g.L). Meestal rechtstreeks:
+ *         s.g = rooster(g, cellen(g, 128));    // s.g.nx, s.g.ny, s.g.cel
+ *       VEROUDERD: rooster(g, n) met één GETAL geeft het oude n × n-vierkant,
+ *       en blit legt dat links neer (S × S). Alleen voor niet-omgezette
+ *       systemen; een bewust vierkant rooster is rooster(g, { nx: n, ny: n }).
+ *
+ *   blit(gr, g, pix, vak)
+ *       Het rooster op het doek zetten, over het HELE doek (pix = scherpe
+ *       blokken, anders zacht). Met `vak` ({ x, y, b, h }) ergens anders,
+ *       bijv. een vierkant rooster in het midden: blit(gr, g, pix, midden(g).vak).
+ *
+ *   midden(g) -> { cx, cy, kort, vak }
+ *       Voor een systeem dat om een middelpunt draait (cirkels, attractors,
+ *       rozetten): het midden van het doek en de korte zijde. Wat vroeger
+ *       S / 2 + x * S * 0.42 was, wordt cx + x * kort * 0.42 (en y met cy).
+ *       Straal en schaal altijd op `kort`, zodat de vorm heel in beeld blijft;
+ *       de breedte eromheen is ruimte, niet iets om uit te rekken.
+ *       `vak` = het vierkant van kort × kort in het midden ({ x, y, b, h }).
  */
 
 export const PI = Math.PI, TAU = PI * 2;
@@ -64,20 +120,55 @@ export function noise(x, y) {
   return lp(v, lp(u, grad(PERM[A], x, y), grad(PERM[B], x - 1, y)), lp(u, grad(PERM[A + 1], x, y - 1), grad(PERM[B + 1], x - 1, y - 1))) * 0.5;
 }
 
-// ---- tekenhulp -------------------------------------------------------------
+// ---- het doek: maten en tekenhulp (zie de API bovenaan) --------------------
 
-/** Een pixelrooster van n×n, om met ImageData te vullen en dan opgeschaald te tekenen. */
-export function rooster(g, n) {
-  const c = g.maakCanvas(n, n), x = c.getContext('2d'), img = x.createImageData(n, n);
-  return { n, c, x, img, px: new Uint32Array(img.data.buffer) };
+/** g.W, g.H, g.D (korte zijde / 320) en de verouderde g.S (= g.H) voor een doek van W × H. */
+export function maten(W, H) {
+  return { W, H, D: Math.min(W, H) / 320, S: H };
 }
-export function blit(gr, g, pix) {
+
+/**
+ * Een rooster met vierkante cellen over het hele doek, met evenveel cellen
+ * als n × n. Eerst ny (op de wortel van de verhouding), dan nx zo dat de
+ * cellen vierkant zijn; op 640 × 360 wijken ze hooguit een half procent af
+ * (blit rekt het rooster precies over het doek, dat zie je niet).
+ */
+export function cellen(g, n, veelvoud = 1) {
+  const v = Math.max(1, Math.round(veelvoud));
+  const rond = (x) => Math.max(v, Math.round(x / v) * v);
+  const ny = rond(n * Math.sqrt(g.H / g.W));
+  const nx = rond(ny * g.W / g.H);
+  return { nx, ny, cel: g.H / ny };
+}
+
+/**
+ * Een pixelrooster om met ImageData te vullen en dan opgeschaald te tekenen.
+ * maat = { nx, ny } (uit cellen()), of VEROUDERD een getal n voor n × n.
+ */
+export function rooster(g, maat) {
+  const oud = typeof maat === 'number';
+  const nx = oud ? maat : maat.nx, ny = oud ? maat : maat.ny;
+  const c = g.maakCanvas(nx, ny), x = c.getContext('2d'), img = x.createImageData(nx, ny);
+  const gr = { nx, ny, c, x, img, px: new Uint32Array(img.data.buffer) };
+  if (oud) Object.assign(gr, { n: maat, oud: true });
+  else if (maat.cel !== undefined) gr.cel = maat.cel;
+  return gr;
+}
+export function blit(gr, g, pix, vak) {
   gr.x.putImageData(gr.img, 0, 0);
   g.ctx.imageSmoothingEnabled = !pix;
-  g.ctx.drawImage(gr.c, 0, 0, g.S, g.S);
+  if (vak) g.ctx.drawImage(gr.c, vak.x, vak.y, vak.b, vak.h);
+  else if (gr.oud) g.ctx.drawImage(gr.c, 0, 0, g.S, g.S);     // verouderd: het oude vierkant, links
+  else g.ctx.drawImage(gr.c, 0, 0, g.W, g.H);
 }
-export function clear(g) { g.ctx.fillStyle = ACHTERGROND; g.ctx.fillRect(0, 0, g.S, g.S); }
-export function fade(g, a) { g.ctx.fillStyle = `rgba(7,9,12,${a})`; g.ctx.fillRect(0, 0, g.S, g.S); }
+export function clear(g) { g.ctx.fillStyle = ACHTERGROND; g.ctx.fillRect(0, 0, g.W, g.H); }
+export function fade(g, a) { g.ctx.fillStyle = `rgba(7,9,12,${a})`; g.ctx.fillRect(0, 0, g.W, g.H); }
+
+/** Midden en korte zijde, voor systemen die om een middelpunt draaien. */
+export function midden(g) {
+  const kort = Math.min(g.W, g.H), cx = g.W / 2, cy = g.H / 2;
+  return { cx, cy, kort, vak: { x: cx - kort / 2, y: cy - kort / 2, b: kort, h: kort } };
+}
 
 // Knoppen zoals in het origineel. re = verandering vraagt een nieuwe init
 // (niet op een draaiknop), fix = niet willekeurig maken, sel = keuzelijst.

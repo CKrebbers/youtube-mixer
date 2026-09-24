@@ -20,10 +20,13 @@ export const MENGVORMEN = ['screen', 'add', 'multiply'];
 export const MAX_BEELDLAGEN = 2;
 export const ZICHTBAAR = 0.002;
 /**
- * Een beeldlaag VULT het doek (Clay, 24 sep): een vierkante vorm wordt zo
- * groot als de breedte, boven en onder valt 22% weg. Passend gaf lege banden
- * links en rechts. Los van `video.fit`, want dat is voor de video's. Later
- * tekenen de systemen zelf 16:9 (ROADMAP 7), dan valt er niets meer weg.
+ * Een beeldlaag VULT het doek (Clay, 24 sep). Sinds ROADMAP 7 is een vormlaag
+ * zelf 16:9 (640 × 360, src/vormen/laag.js): op het 16:9-doek is de schaal
+ * dan [1, 1], er valt niets weg en er wordt niets extra opgeschaald (alleen
+ * de vaste 2× van 640 naar 1280). 'vullen' blijft staan voor een laag met
+ * een andere verhouding: die verliest liever een rand dan dat er lege banden
+ * komen (een vierkant: boven en onder 22% weg). Los van `video.fit`, want
+ * dat is voor de video's.
  */
 export const LAAG_FIT = 'vullen';
 
@@ -34,8 +37,8 @@ export function actieveLagen(lagen) {
 
 /**
  * De uniforms voor de lagenshader. Een laag VULT het doek (LAAG_FIT: een
- * vierkant in 16:9 verliest boven en onder); buiten zijn beeld telt hij
- * niet mee. Lege plekken krijgen dekking 0.
+ * 16:9-vormlaag past precies, een vierkant zou boven en onder verliezen);
+ * buiten zijn beeld telt hij niet mee. Lege plekken krijgen dekking 0.
  *
  * @param maten  per laag [breedte, hoogte] van zijn canvas
  */
