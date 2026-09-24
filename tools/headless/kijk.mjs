@@ -243,6 +243,46 @@ try {
   await evalueer("window.vormen.lagen.forEach((l) => { l.aan = false; })");
   await wacht(300);
   await foto('lagen-uit.png');
+
+  // ---- oriëntatie: video en vorm rechtop, ook met een laag aan -----------
+  // Clay (24 sep): met een vormlaag aan stond de YouTube-video op zijn kop. De
+  // lagenstap las het gemengde beeld (een buffer) met uv, en dat was een derde
+  // omkering. Gemeten met ASYMMETRISCHE beelden (vier kwarten), op het canvas
+  // zelf, direct na teken().
+  console.log('oriëntatie met en zonder laag');
+  const orient = await evalueer(`(async () => {
+    const mx = window.videoMixer, gl = mx.gl;
+    const kwart = (b, h) => {
+      const c = document.createElement('canvas'); c.width = b; c.height = h;
+      const x = c.getContext('2d');
+      [['#f00', 0, 0], ['#0f0', b / 2, 0], ['#00f', 0, h / 2], ['#ff0', b / 2, h / 2]].forEach(([k, a, d]) => { x.fillStyle = k; x.fillRect(a, d, b / 2, h / 2); });
+      return c;
+    };
+    const nep = Object.assign(kwart(1280, 720), { readyState: 4, currentTime: 0, paused: false, seeking: false, duration: 100, playbackRate: 1, play: () => Promise.resolve(), pause: () => {} });
+    __act.invoke('track.1.fader', 1); __act.invoke('mixer.xfader', 0);
+    const id = mx.decks[0], oud = mx.lagen.get(id);
+    mx.lagen.set(id, { video: nep, url: '', tex: mx._texture(), seekStart: 0, seekDuur: 0, klaar: true });
+    const naam = ([r, g, b]) => r > 150 && g > 150 && b < 100 ? 'geel' : r > 150 && g < 100 ? 'rood' : g > 150 && r < 100 ? 'groen' : b > 150 && r < 100 ? 'blauw' : 'anders';
+    const meet = () => {
+      mx.teken();
+      const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(4);
+      const lees = (fx, fy) => { gl.readPixels(Math.floor(fx * (W - 1)), Math.floor((1 - fy) * (H - 1)), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return naam(px); };
+      return [lees(0.05, 0.1), lees(0.95, 0.1), lees(0.05, 0.9), lees(0.95, 0.9)].join(' ');
+    };
+    const zonder = meet();
+    window.vormen.lagen[0].aan = true; window.vormen.lagen[0].dekking = 0.01;
+    const met = meet();
+    window.vormen.lagen[0].aan = false;
+    if (oud) mx.lagen.set(id, oud); else mx.lagen.delete(id);
+    const weg = mx.voegBeeldlaagToe({ aan: true, dekking: 1, mengvorm: 'add', frame: () => kwart(512, 512) });
+    const laag = meet();
+    weg();
+    return { zonder, met, laag };
+  })()`);
+  const rechtop = 'rood groen blauw geel';
+  ok('video zonder laag staat rechtop (vier kwarten)', orient.zonder === rechtop, orient.zonder);
+  ok('video ONDER een vormlaag staat ook rechtop', orient.met === rechtop, orient.met);
+  ok('de vormlaag zelf staat rechtop en vult tot in de hoeken', orient.laag === rechtop, orient.laag);
 } catch (err) {
   ok('script liep door', false, err.message);
 } finally {

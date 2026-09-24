@@ -161,7 +161,13 @@ vec3 leg(vec3 c, vec3 l, float d, int vorm) {
   return vec3(1.0) - (vec3(1.0) - c) * (vec3(1.0) - l * d);   // screen
 }
 void main() {
-  vec3 c = texture(basis, uv).rgb;
+  // basis is een BUFFER (het gemengde beeld): die staat omgekeerd t.o.v. een
+  // video- of canvas-texture, en elke stap die een buffer met uv leest keert
+  // hem om. Zonder lagen vallen de twee omkeringen (effecten, tonen) tegen
+  // elkaar weg; deze stap zou een derde zijn en zette de video op zijn kop
+  // (Clay, 24 sep). Dus hier recht lezen. De lagen zelf (l0, l1) zijn canvas-
+  // texturen en gaan zoals een video in de mengstap.
+  vec3 c = texture(basis, vec2(uv.x, 1.0 - uv.y)).rgb;
   vec2 q = (uv - 0.5) * s[0] + 0.5;
   if (a[0] > 0.0) c = leg(c, schoon(texture(l0, q).rgb), a[0] * binnen(q), m[0]);
   q = (uv - 0.5) * s[1] + 0.5;
