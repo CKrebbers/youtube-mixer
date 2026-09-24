@@ -113,5 +113,58 @@ ok('een geleerde mapping laadt zonder fouten', uitslag.fouten.length === 0);
 ok('export -> import geeft exact dezelfde staat', JSON.stringify(m2.toJSON()) === JSON.stringify(m.toJSON()));
 ok('inclusief de geleerde modus', m2.rules.get('cc:0:20').mode === 'relative-2c');
 
+// ---- leren bovenop de standaard: bewaard wordt het verschil ----------------
+// Export blijft VOLLEDIG (een bestand voor mensen, leesbaar zonder de
+// standaard); bewaren gaat als verschil. Het rondje moet beide overleven.
+
+{
+  const { readFileSync } = await import('node:fs');
+  const { isVerschil } = await import('../src/control/mapping.js');
+  const std = JSON.parse(readFileSync(new URL('../mappings/apc40mk2.json', import.meta.url), 'utf8'));
+  const ms = maak();
+  ms.laadStandaard(std);
+  const leerS = new MidiLearn({ mapping: ms, device: apc, now: () => klok });
+  klok += 1000;
+  // Een knop die de standaard niet gebruikt: pad 1/1 staat in de standaard
+  // alleen in mapjes, dus kaal (zonder mapje) is hij nieuw.
+  leerS.start('track.2.play');
+  leerS.feed(note(0x20, true));
+  // En een knop die de standaard WEL heeft, zonder mapje: track knob 1.
+  klok += 1000;
+  leerS.start('track.1.trim');
+  leerS.feed(cc(48, 40));
+  klok += 1000; leerS.feed(cc(48, 41));
+  // Een koppeling van de standaard vergeten: Clip Stop 1 met shift.
+  const stdClip = std.rules.find((r) => r.in === 'note:0:52' && r.shift && !r.laag);
+  const weg = leerS.vergeet(stdClip.action);
+  const v = ms.verschil();
+  ok('geleerd bovenop de standaard: het verschil heeft alleen jouw twee koppelingen',
+    v.rules.length === 2 && v.rules.some((r) => r.in === 'note:0:32' && r.action === 'track.2.play')
+    && v.rules.some((r) => r.in === 'cc:0:48' && r.action === 'track.1.trim' && r.mode === 'absolute'));
+  ok('en wat je vergat als markering', weg.length >= 1 && v.removed.includes('note:0:52#shift'));
+
+  const tekstS = ms.export();
+  const bestand = JSON.parse(tekstS);
+  ok('exporteren geeft het VOLLEDIGE document, geen verschil',
+    !isVerschil(bestand) && bestand.rules.length === std.rules.length + 1 - weg.length);
+  // Inladen in een verse app (standaard gezet, zoals na opstarten).
+  const mi = maak();
+  mi.laadStandaard(std);
+  const u = mi.load(tekstS);
+  ok('importeren van dat bestand: geen fouten, exact dezelfde staat', u.fouten.length === 0
+    && JSON.stringify(mi.toJSON()) === JSON.stringify(ms.toJSON()));
+  ok('en daarna precies hetzelfde verschil om te bewaren', JSON.stringify(mi.verschil()) === JSON.stringify(v));
+
+  // Het verschil zelf als bestand inladen kan ook (bovenop de standaard) …
+  const md = maak();
+  md.laadStandaard(std);
+  md.load(JSON.stringify(v));
+  ok('een verschil inladen legt het bovenop de standaard', md.rules.size === ms.rules.size && md.rules.get('note:0:32').action === 'track.2.play');
+  // … maar nooit als hele mapping.
+  let fout = null;
+  try { maak().load(JSON.stringify(v)); } catch (e) { fout = e.message; }
+  ok('een verschil zonder standaard eronder wordt geweigerd, niet als 3 regels geladen', !!fout);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

@@ -158,6 +158,176 @@ export function migreerAction(action, versie = 1) {
   return a;
 }
 
+/** Een regel zoals hij in een document staat: alleen wat ertoe doet, in vaste volgorde. */
+function regelNaarJSON(r) {
+  const o = { in: r.in, action: r.action, mode: r.mode };
+  if (r.shift) o.shift = true;
+  if (r.laag) o.laag = r.laag;
+  if (r.invert) o.invert = true;
+  if (r.step !== undefined) o.step = r.step;
+  if (r.takeover !== undefined) o.takeover = r.takeover;
+  if (r.label) o.label = r.label;
+  if (r.led) o.led = { ...r.led };
+  return o;
+}
+
+/**
+ * Een volledig mapping-document gecontroleerd en in de vorm van toJSON():
+ * acties gemigreerd, regels genormaliseerd, dubbele sleutels samengevoegd.
+ * Twee documenten zijn daarna regel voor regel te vergelijken.
+ */
+export function normaliseer(data) {
+  const doc = typeof data === 'string' ? JSON.parse(data) : data;
+  const { rules, fouten, gemigreerd } = leesRegels(doc);
+  return {
+    doc: {
+      name: doc.name || 'naamloos',
+      device: doc.device || 'generic',
+      version: MAPPING_VERSIE,
+      ...(typeof doc.shift === 'string' ? { shift: doc.shift } : {}),
+      rules: [...rules.values()].map(regelNaarJSON),
+    },
+    fouten, gemigreerd,
+  };
+}
+
+/*
+ * EIGEN MAPPING ALS VERSCHIL (ROADMAP 13, 25 sep 2026)
+ *
+ * Tot nu toe bewaarde de app je eigen mapping als VOLLEDIGE kopie. Een nieuwe
+ * standaardmapping kwam dan nooit bij je aan (23 sep: de grid-modus ontbrak op
+ * de APC). Nu bewaren we alleen wat JIJ anders hebt dan de standaard:
+ *
+ *   { kind: 'diff', version, device, base,     base = vingerafdruk van de standaard
+ *     top: { shift?, name? },                  alleen topvelden die anders zijn
+ *     rules: [ … ],                            regels die je toevoegde of veranderde (volledig)
+ *     removed: [ 'cc:0:20@device.rack', … ] }  sleutels van standaardregels die je weghaalde
+ *
+ * Laden = standaard + verschil. Een nieuwe regel in de standaard komt dus
+ * vanzelf binnen; een regel die jij veranderde of weghaalde blijft van jou,
+ * ook als de standaard hem later verandert. Het verschil wordt telkens
+ * opnieuw UITGEREKEND (standaard tegen wat er nu staat), niet bijgehouden per
+ * bewerking: koppel je een knop terug naar wat de standaard doet, dan
+ * verdwijnt hij vanzelf uit je verschil.
+ *
+ * Fragmenten (Mapping.voegToe, de vormlagen) horen er nooit bij: ze gaan al
+ * niet mee in toJSON(), dus ook niet in het verschil.
+ *
+ * `rules` is altijd een lijst, ook als hij leeg is: de server (/api/mapping)
+ * weigert een document zonder `rules`. Zo werkt dit zonder de server te
+ * herstarten. `version` telt hier, net als in een volledig document, de
+ * generatie van de action-namen: migreerAction werkt dus ook op een verschil.
+ */
+
+export const isVerschil = (doc) => !!doc && typeof doc === 'object' && doc.kind === 'diff';
+
+const sleutelTekst = (r) => JSON.stringify(regelNaarJSON(r));
+
+/** FNV-1a (32 bit): klein, synchroon, overal hetzelfde. Geen beveiliging, alleen herkennen. */
+function fnv1a(tekst) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < tekst.length; i++) { h ^= tekst.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * Vingerafdruk van een standaard: apparaat, shiftknop en de regels, op
+ * sleutel gesorteerd (de volgorde van de regels betekent niets). De naam telt
+ * niet mee: een andere naam is geen andere standaard. Vorm: "3fa2c01b-291",
+ * met het aantal regels erachter zodat een mens hem ook kan lezen.
+ */
+export function vingerafdruk(data) {
+  const { doc } = normaliseer(data);
+  const regels = doc.rules.map((r) => [sleutelVan(r), r]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const canon = JSON.stringify({ device: doc.device, shift: doc.shift ?? null, rules: regels.map(([, r]) => r) });
+  return `${fnv1a(canon)}-${doc.rules.length}`;
+}
+
+/**
+ * Wat heeft `data` anders dan de standaard `basis`? Beide volledige documenten;
+ * `base` is de vingerafdruk van `basis` als je die al hebt. Een ander apparaat
+ * dan de standaard is een fout van de aanroeper: dan is er geen zinnig
+ * verschil (alles zou "weg" en "nieuw" zijn).
+ */
+export function maakVerschil(basis, data, base = null) {
+  const b = normaliseer(basis).doc;
+  const d = normaliseer(data).doc;
+  if (b.device !== d.device) throw new Error(`mapping: verschil tussen twee apparaten ("${b.device}" en "${d.device}") kan niet`);
+  const inBasis = new Map(b.rules.map((r) => [sleutelVan(r), sleutelTekst(r)]));
+  const inDoc = new Map(d.rules.map((r) => [sleutelVan(r), r]));
+  const top = {};
+  if ((d.shift ?? null) !== (b.shift ?? null)) top.shift = d.shift ?? null;
+  if (d.name !== b.name) top.name = d.name;
+  // Vaste volgorde, zodat hetzelfde verschil altijd dezelfde tekst is (anders
+  // bewaart de app na elk laden opnieuw): veranderde regels in de volgorde van
+  // de standaard, daarna wat je toevoegde in jouw volgorde.
+  const veranderd = [...inBasis].filter(([k, t]) => inDoc.has(k) && sleutelTekst(inDoc.get(k)) !== t).map(([k]) => inDoc.get(k));
+  const nieuw = d.rules.filter((r) => !inBasis.has(sleutelVan(r)));
+  return {
+    kind: 'diff',
+    version: MAPPING_VERSIE,
+    device: b.device,
+    base: base ?? vingerafdruk(b),
+    top,
+    rules: [...veranderd, ...nieuw],
+    removed: [...inBasis.keys()].filter((k) => !inDoc.has(k)),
+  };
+}
+
+/**
+ * Standaard + verschil = het volledige document. Volgorde: die van de
+ * standaard (een veranderde regel op zijn eigen plek), wat je toevoegde
+ * achteraan. `standaardNieuw`: de standaard is veranderd sinds dit verschil
+ * gemaakt is — wat erbij kwam staat erin, jouw regels winnen.
+ */
+export function pasVerschilToe(basis, verschil) {
+  if (!isVerschil(verschil)) throw new Error('mapping: dit is geen verschil (kind: "diff" ontbreekt)');
+  const b = normaliseer(basis).doc;
+  if (verschil.device !== b.device) {
+    throw new Error(`mapping: dit verschil hoort bij "${verschil.device}", de standaard is "${b.device}"`);
+  }
+  const { rules: eigen, fouten, gemigreerd } = leesRegels({
+    version: verschil.version ?? MAPPING_VERSIE,
+    rules: Array.isArray(verschil.rules) ? verschil.rules : [],
+  });
+  if (!Array.isArray(verschil.rules)) fouten.push('verschil: "rules" is geen lijst');
+  const weg = new Set();
+  (Array.isArray(verschil.removed) ? verschil.removed : []).forEach((k, i) => {
+    if (typeof k === 'string') weg.add(k); else fouten.push(`verschil: removed ${i} is geen sleutel`);
+  });
+  const top = verschil.top && typeof verschil.top === 'object' ? verschil.top : {};
+
+  const rules = [];
+  const gebruikt = new Set();
+  let weggehaald = 0;
+  for (const r of b.rules) {
+    const k = sleutelVan(r);
+    if (eigen.has(k)) { rules.push(regelNaarJSON(eigen.get(k))); gebruikt.add(k); } // jouw regel wint
+    else if (weg.has(k)) weggehaald++;
+    else rules.push(r);
+  }
+  for (const [k, r] of eigen) if (!gebruikt.has(k)) rules.push(regelNaarJSON(r));
+
+  let shift = b.shift;
+  if ('shift' in top) {
+    if (top.shift === null || typeof top.shift === 'string') shift = top.shift;
+    else fouten.push('verschil: top.shift is geen knop (en geen null), de standaard blijft');
+  }
+  return {
+    doc: {
+      name: typeof top.name === 'string' ? top.name : b.name,
+      device: b.device,
+      version: MAPPING_VERSIE,
+      ...(typeof shift === 'string' ? { shift } : {}),
+      rules,
+    },
+    fouten, gemigreerd,
+    eigen: eigen.size,
+    weg: weggehaald,
+    standaardNieuw: typeof verschil.base === 'string' && verschil.base !== vingerafdruk(b),
+  };
+}
+
 export class Mapping extends Emitter {
   /**
    * @param read   (actionId) -> huidige stand 0..1 of null. Nodig voor
@@ -183,12 +353,57 @@ export class Mapping extends Emitter {
     this.shift = false;
     this.vast = new Map();      // sig -> { rule, target } van een ingedrukte knop
     this.extra = new Map();     // bron -> regels die erbij komen maar niet van jou zijn (voegToe)
+    this.basis = null;          // de standaard waar je eigen verschil op rust: { doc, vingerafdruk }
   }
 
   // ---- laden en opslaan --------------------------------------------------
 
+  /**
+   * Een volledig document laden. Is het een VERSCHIL (kind: 'diff'), dan komt
+   * het bovenop de standaard die met laadStandaard/zetStandaard gezet is; een
+   * verschil zonder die standaard (of voor een ander apparaat) wordt geweigerd,
+   * anders laad je stilletjes alleen je vier eigen regels als hele mapping.
+   */
   load(data) {
     const doc = typeof data === 'string' ? JSON.parse(data) : data;
+    if (isVerschil(doc)) {
+      if (!this.basis) throw new Error('mapping: een verschil heeft een standaard nodig, en die is nog niet geladen');
+      const v = pasVerschilToe(this.basis.doc, doc);
+      const uit = this._laad(v.doc);
+      return { ...uit, fouten: [...v.fouten, ...uit.fouten], gemigreerd: v.gemigreerd,
+        verschil: true, eigen: v.eigen, weg: v.weg, standaardNieuw: v.standaardNieuw };
+    }
+    return this._laad(doc);
+  }
+
+  /**
+   * De standaard waar je eigen verschil tegen afgezet wordt (mappings/<apparaat>.json).
+   * Verandert niets aan wat er nu gekoppeld is.
+   */
+  zetStandaard(data) {
+    const { doc, fouten } = normaliseer(data);
+    this.basis = { doc, vingerafdruk: vingerafdruk(doc) };
+    return { fouten };
+  }
+
+  /** De standaard zetten én laden: geen eigen verschil (meer). */
+  laadStandaard(data) {
+    const { fouten } = this.zetStandaard(data);
+    const uit = this._laad(this.basis.doc);
+    return { ...uit, fouten: [...fouten, ...uit.fouten] };
+  }
+
+  /**
+   * Wat jij anders hebt dan de standaard, als verschil-document. null als er
+   * geen standaard is voor dit apparaat (dan eerst zetStandaard: een verschil
+   * tegen de standaard van een ander apparaat betekent niets).
+   */
+  verschil() {
+    if (!this.basis || this.basis.doc.device !== this.device) return null;
+    return maakVerschil(this.basis.doc, this.toJSON(), this.basis.vingerafdruk);
+  }
+
+  _laad(doc) {
     const { rules, fouten, gemigreerd } = leesRegels(doc);
     this._pasExtraToe(rules);
     this.shiftSig = typeof doc.shift === 'string' ? doc.shift : null;
@@ -235,20 +450,16 @@ export class Mapping extends Emitter {
       device: this.device,
       version: MAPPING_VERSIE,
       ...(this.shiftSig ? { shift: this.shiftSig } : {}),
-      rules: [...this.rules.values()].filter((r) => !r.bron).map((r) => {
-        const o = { in: r.in, action: r.action, mode: r.mode };
-        if (r.shift) o.shift = true;
-        if (r.laag) o.laag = r.laag;
-        if (r.invert) o.invert = true;
-        if (r.step !== undefined) o.step = r.step;
-        if (r.takeover !== undefined) o.takeover = r.takeover;
-        if (r.label) o.label = r.label;
-        if (r.led) o.led = { ...r.led };
-        return o;
-      }),
+      rules: [...this.rules.values()].filter((r) => !r.bron).map(regelNaarJSON),
     };
   }
 
+  /**
+   * Exporteren geeft het VOLLEDIGE document, geen verschil: een bestand voor
+   * mensen en voor een andere computer. Het leest zonder te weten op welke
+   * standaard het rustte, en inladen geeft precies wat erin staat. Bewaren
+   * (server, browser) gaat wel als verschil; zie mapping-opslag.js.
+   */
   export() { return JSON.stringify(this.toJSON(), null, 2); }
 
   // ---- regels bewerken (MIDI-learn gebruikt dit) --------------------------

@@ -3,6 +3,7 @@ import { GROEPEN, LAAGNAAM, Lagen } from '../control/lagen.js';
 import apc from '../control/devices/apc40mk2.js';
 import { esc } from './dom.js';
 import { beschrijf } from './apc-beschrijf.js';
+import { laadEigen } from './mapping-opslag.js';
 
 /**
  * De interactieve APC-kaart (apc.html).
@@ -264,17 +265,6 @@ async function luisterMee() {
 
 // ---- starten ---------------------------------------------------------------------
 
-async function laadMapping() {
-  try {
-    const r = await fetch('/api/mapping');
-    const j = r.ok ? await r.json() : null;
-    if (j?.mapping?.rules?.length) return { doc: j.mapping, bron: 'jouw eigen mapping' };
-  } catch (_) {}
-  const r = await fetch('mappings/apc40mk2.json');
-  return { doc: await r.json(), bron: 'de standaardmapping' };
-}
-
-const { doc, bron } = await laadMapping();
 mapping = new Mapping({
   read: () => null,
   // Alleen de modusknoppen doen hier iets; al het andere hoort bij de mixer.
@@ -286,7 +276,17 @@ mapping = new Mapping({
   },
   lagen: () => lagen.actief(),
 });
-mapping.load(doc);
+// Dezelfde weg als de app: standaard + jouw verschil van de server (een oude
+// volledige kopie wordt alleen hier in het geheugen omgezet). Deze pagina
+// leest alleen: bewaren doet de app.
+let bron = 'de standaardmapping';
+try {
+  const v = await laadEigen(mapping, { haal: (...a) => fetch(...a) });
+  if (v.bron && (v.eigen || v.weg)) bron = `jouw eigen mapping (de standaard + ${v.eigen} eigen regel${v.eigen === 1 ? '' : 's'}${v.weg ? `, ${v.weg} weggehaald` : ''})`;
+} catch (err) {
+  mapping.laadStandaard(await (await fetch('mappings/apc40mk2.json')).json());
+  bron = `de standaardmapping (jouw eigen kon niet gelezen worden: ${err.message})`;
+}
 document.getElementById('bron').textContent = `Uit ${bron} (${mapping.rules.size} regels).`;
 alles();
 // Meekijken met de APC pas na een klik: dan opent deze pagina nooit

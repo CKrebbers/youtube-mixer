@@ -93,8 +93,13 @@ export class MappingPanel {
       return `<b class="bad">beweeg nu de knop die je aan <u>${esc(this.learn.action)}</u> wilt koppelen</b> — Esc om te stoppen`;
     }
     const n = this.mapping.rules.size;
+    // Hoeveel daarvan van JOU zijn: alleen dat wordt bewaard (als verschil met
+    // de standaard), de rest volgt de standaard, ook als die verandert.
+    const v = this.mapping.verschil?.();
+    const eigen = v ? v.rules.length + v.removed.length + Object.keys(v.top).length : null;
     return (this.melding ? `<b class="good">${esc(this.melding)}</b> &nbsp;·&nbsp; ` : '')
-      + `${esc(this.mapping.name)} · ${n} koppeling${n === 1 ? '' : 'en'}`;
+      + `${esc(this.mapping.name)} · ${n} koppeling${n === 1 ? '' : 'en'}`
+      + (eigen === null ? '' : eigen ? ` · ${eigen} eigen (de rest volgt de standaard)` : ' · precies de standaard');
   }
 
   render() {

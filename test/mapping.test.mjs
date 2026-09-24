@@ -697,5 +697,340 @@ console.log('fragmenten: regels die erbij komen maar niet van jou worden');
   ok('koppel je er zelf iets overheen, dan is het de jouwe en gaat hij wel mee', m.toJSON().rules.some((x) => x.in === 'note:0:65' && x.action === 'zelf.gekoppeld'));
 }
 
+// ---- eigen mapping als VERSCHIL met de standaard (ROADMAP 13) ----------------
+// Clay's echte kopie (GET /api/mapping, 24 sep): de standaard met rack-knoppen
+// 5-8 op video-effecten, gekoppeld met "leren" (dus absolute), in een andere
+// volgorde dan het bestand. Precies die vorm bouwen we hier na.
+
+console.log('\neigen mapping als verschil');
+const {
+  maakVerschil, pasVerschilToe, vingerafdruk, isVerschil, normaliseer, MAPPING_VERSIE,
+} = await import('../src/control/mapping.js');
+const VIDEO_KNOPPEN = { 'cc:0:20': 'video.fx.pixel', 'cc:0:21': 'video.fx.rgb', 'cc:0:22': 'video.fx.trails', 'cc:0:23': 'video.fx.grain' };
+const kopieVanClay = () => {
+  const d = JSON.parse(JSON.stringify(doc));
+  for (const r of d.rules) {
+    if (r.laag === 'device.rack' && VIDEO_KNOPPEN[r.in]) { r.action = VIDEO_KNOPPEN[r.in]; r.mode = 'absolute'; }
+  }
+  d.rules.reverse();                         // volgorde betekent niets
+  return d;
+};
+const alsSet = (d) => new Map(normaliseer(d).doc.rules.map((r) => [sleutelVan(r), JSON.stringify(r)]));
+const zelfde = (a, b) => { const x = alsSet(a), y = alsSet(b); return x.size === y.size && [...x].every(([k, t]) => y.get(k) === t); };
+const kaal = () => new Mapping({ read: () => null, invoke: () => {} });
+{
+  const kopie = kopieVanClay();
+  const v = maakVerschil(doc, kopie);
+  ok('oude kopie -> verschil: alleen de vier eigen regels, niets weggehaald', isVerschil(v)
+    && v.rules.length === 4 && v.removed.length === 0 && Object.keys(v.top).length === 0
+    && v.rules.every((r) => r.laag === 'device.rack' && r.action === VIDEO_KNOPPEN[r.in] && r.mode === 'absolute'));
+  ok('het verschil draagt de vingerafdruk van de standaard en een lijst "rules" (de server eist die)',
+    v.base === vingerafdruk(doc) && Array.isArray(v.rules) && v.device === 'apc40mk2' && v.version === MAPPING_VERSIE);
+  ok('standaard + verschil = precies de oude kopie', zelfde(pasVerschilToe(doc, v).doc, kopie));
+  ok('het verschil is klein (de kopie is ~30 kB)', JSON.stringify(v).length < 1000);
+
+  // In een Mapping: standaard zetten, verschil erop, en terugrekenen.
+  const mv = kaal();
+  mv.laadStandaard(doc);
+  ok('alleen de standaard: leeg verschil', (() => { const w = mv.verschil(); return w.rules.length === 0 && w.removed.length === 0; })());
+  const u = mv.load(v);
+  ok('verschil laden in een Mapping', u.verschil && u.eigen === 4 && u.weg === 0 && !u.standaardNieuw && u.fouten.length === 0);
+  ok('en wat hij dan uitrekent is weer hetzelfde verschil', JSON.stringify(mv.verschil()) === JSON.stringify(v));
+  ok('eigen regel doet wat Clay koppelde', mv.rules.get('cc:0:20@device.rack').action === 'video.fx.pixel');
+
+  // De vingerafdruk: volgorde en naam tellen niet, inhoud wel.
+  const omgedraaid = { ...doc, name: 'anders genoemd', rules: [...doc.rules].reverse() };
+  ok('vingerafdruk: volgorde en naam tellen niet', vingerafdruk(omgedraaid) === vingerafdruk(doc));
+  ok('vingerafdruk: een andere regel wel', vingerafdruk(kopie) !== vingerafdruk(doc));
+
+  // Een NIEUWE standaard: een regel erbij, een regel die Clay niet aanraakte
+  // anders, en de standaard verandert óók een knop die Clay zelf koppelde.
+  const nieuw = JSON.parse(JSON.stringify(doc));
+  nieuw.rules.push({ in: 'note:0:65', action: 'layer.device.detail', mode: 'trigger', label: 'nieuw in de standaard' });
+  const filterRegel = nieuw.rules.find((r) => r.in === 'cc:0:48' && !r.shift && !r.laag);
+  filterRegel.action = 'track.1.trim';
+  nieuw.rules.find((r) => r.in === 'cc:0:21' && r.laag === 'device.rack').action = 'track.{focus}.fx.knob.6.hold';
+  const mn = kaal();
+  mn.laadStandaard(nieuw);
+  const un = mn.load(v);
+  ok('nieuwe standaardregel komt binnen', mn.rules.get('note:0:65')?.action === 'layer.device.detail');
+  ok('een standaardregel die Clay niet aanraakte volgt de nieuwe standaard', mn.rules.get('cc:0:48').action === 'track.1.trim');
+  ok('een eigen regel wint, ook als de standaard hem later verandert', mn.rules.get('cc:0:21@device.rack').action === 'video.fx.rgb');
+  ok('en het laden meldt dat de standaard veranderd is', un.standaardNieuw === true && un.eigen === 4);
+  ok('opnieuw uitgerekend: nog steeds alleen de vier eigen regels, nu tegen de nieuwe standaard',
+    (() => { const w = mn.verschil(); return w.rules.length === 4 && w.base === vingerafdruk(nieuw) && w.base !== v.base; })());
+
+  // Weghalen: een markering, en die blijft staan als de standaard verandert.
+  const mw = kaal();
+  mw.laadStandaard(doc);
+  mw.load(v);
+  ok('een standaardregel weghalen', mw.remove('note:0:52#shift') === true);
+  const vw = mw.verschil();
+  ok('weghalen wordt een markering in het verschil', vw.removed.length === 1 && vw.removed[0] === 'note:0:52#shift' && vw.rules.length === 4);
+  const nieuw2 = JSON.parse(JSON.stringify(nieuw));
+  nieuw2.rules.find((r) => r.in === 'note:0:52' && r.shift && !r.laag).action = 'track.1.loop.exit.nieuw';
+  const mw2 = kaal();
+  mw2.laadStandaard(nieuw2);
+  const uw = mw2.load(vw);
+  ok('weggehaalde regel blijft weg, ook als de nieuwe standaard hem verandert',
+    !mw2.rules.has('note:0:52#shift') && uw.weg === 1 && mw2.rules.has('note:0:52'));
+
+  // Terugkoppelen naar wat de standaard doet: dan is het niet meer van jou.
+  const std20 = doc.rules.find((r) => r.in === 'cc:0:20' && r.laag === 'device.rack');
+  mw.set('cc:0:20', std20.action, { mode: std20.mode, label: std20.label, laag: 'device.rack' });
+  ok('een regel terug naar de standaard verdwijnt uit het verschil', !mw.verschil().rules.some((r) => r.in === 'cc:0:20'));
+
+  // Topvelden: de shiftknop.
+  const ms = kaal();
+  ms.laadStandaard(doc);
+  ms.load({ ...doc, shift: 'note:0:99' });
+  const vs = ms.verschil();
+  ok('een andere shiftknop is een topveld in het verschil', vs.top.shift === 'note:0:99' && vs.rules.length === 0 && !('name' in vs.top));
+  const ms2 = kaal(); ms2.laadStandaard(doc); ms2.load(vs);
+  ok('en komt terug bij laden', ms2.shiftSig === 'note:0:99');
+  const zonder = { ...doc }; delete zonder.shift;
+  ms.load(zonder);
+  ok('geen shiftknop meer = shift: null', ms.verschil().top.shift === null);
+  ms2.load(ms.verschil());
+  ok('en geen shiftknop na laden', ms2.shiftSig === null);
+
+  // Weigeren wat niet klopt, in plaats van vier regels als hele mapping te laden.
+  let fout = null;
+  try { kaal().load(v); } catch (e) { fout = e.message; }
+  ok('een verschil zonder standaard wordt geweigerd', /standaard/.test(fout || ''));
+  fout = null;
+  try { const g = kaal(); g.laadStandaard({ device: 'generic', rules: [] }); g.load(v); } catch (e) { fout = e.message; }
+  ok('een verschil voor een ander apparaat wordt geweigerd', /apc40mk2/.test(fout || ''));
+  ok('verschil() zonder passende standaard: null (eerst die standaard erbij)',
+    kaal().verschil() === null && (() => { const g = kaal(); g.laadStandaard(doc); g.load({ device: 'generic', rules: [] }); return g.verschil() === null; })());
+
+  // Een verschil met oude action-namen wordt net zo gemigreerd als een heel bestand.
+  const oudV = { kind: 'diff', version: 2, device: 'apc40mk2', rules: [{ in: 'cc:0:20', action: 'track.{focus}.fx.knop.5.druk', mode: 'trigger', laag: 'device.rack' }] };
+  const mo = kaal(); mo.laadStandaard(doc);
+  const uo = mo.load(oudV);
+  ok('migreerAction werkt ook in een verschil', mo.rules.get('cc:0:20@device.rack').action === 'track.{focus}.fx.knob.5.hold' && uo.gemigreerd === 1);
+}
+
+console.log('fragment blijft buiten het verschil');
+{
+  const fragment = JSON.parse(readFileSync(new URL('../mappings/apc40mk2-vormen.json', import.meta.url), 'utf8'));
+  const mf = new Mapping({ read: () => null, invoke: () => {}, lagen: () => ['device.vorm'] });
+  mf.laadStandaard(doc);
+  mf.load(maakVerschil(doc, kopieVanClay()));
+  const voor = JSON.stringify(mf.verschil());
+  const r = mf.voegToe('vormen', fragment);
+  ok('het fragment is er', r.aantal > 0 && mf.kies('cc:0:16')?.bron === 'vormen');
+  ok('en het verschil is precies hetzelfde gebleven', JSON.stringify(mf.verschil()) === voor);
+  mf.set('cc:0:16', 'zelf.over.vorm', { mode: 'endless', laag: 'device.vorm' });
+  ok('koppel je zelf over een fragmentregel, dan komt die WEL in je verschil',
+    mf.verschil().rules.some((x) => x.in === 'cc:0:16' && x.laag === 'device.vorm' && x.action === 'zelf.over.vorm'));
+
+  // Een fragment op de plek van een standaardregel die je weghaalde: de
+  // markering blijft, het fragment vult aan zolang het aan staat.
+  const basis = { device: 'x', rules: [{ in: 'note:0:10', action: 'standaard.knop', mode: 'trigger' }] };
+  const mx = new Mapping({ read: () => null, invoke: () => {} });
+  mx.laadStandaard(basis);
+  mx.voegToe('frag', { rules: [{ in: 'note:0:10', action: 'fragment.knop', mode: 'trigger' }] });
+  ok('de standaard gaat voor een fragment', mx.kies('note:0:10').action === 'standaard.knop');
+  mx.remove('note:0:10');
+  ok('weghalen: het fragment vult het gat', mx.kies('note:0:10').action === 'fragment.knop');
+  const vx = mx.verschil();
+  ok('en in het verschil staat alleen de markering, niet de fragmentregel', vx.removed[0] === 'note:0:10' && vx.rules.length === 0);
+  const zonderFrag = new Mapping({ read: () => null, invoke: () => {} });
+  zonderFrag.laadStandaard(basis);
+  zonderFrag.load(vx);
+  ok('zonder fragment is de knop na laden echt leeg', zonderFrag.kies('note:0:10') === null);
+}
+
+console.log('generic: een mapping voor een ander apparaat');
+{
+  const gen = JSON.parse(readFileSync(new URL('../mappings/generic.json', import.meta.url), 'utf8'));
+  const mg = kaal();
+  mg.laadStandaard(gen);
+  mg.set('cc:3:7', 'track.1.fader', { mode: 'absolute', label: 'fader' });
+  mg.set('note:3:1', 'track.1.play', { mode: 'trigger' });
+  const vg = mg.verschil();
+  ok('verschil tegen de lege generic-standaard = je hele mapping', vg.device === 'generic' && vg.rules.length === 2 && vg.removed.length === 0);
+  const mg2 = kaal();
+  mg2.laadStandaard(gen);
+  mg2.load(vg);
+  ok('en terug', mg2.rules.get('cc:3:7')?.action === 'track.1.fader' && mg2.rules.size === 2 && mg2.device === 'generic');
+}
+
+// ---- het hele opstarten tegen een nagebouwde server --------------------------
+// Net zo streng als server/index.js: POST zonder "rules"-lijst = 400, JSON
+// gaat als tekst de database in en komt er als nieuw object weer uit, een
+// onbekend bestand is 404. De browser-opslag geeft null voor wat er niet is,
+// net als localStorage.
+
+console.log('opstarten, omzetten, bewaren (mapping-opslag.js)');
+const { opzetMappingOpslag, laadEigen, haalStandaard, EIGEN_MAPPING } = await import('../src/ui/mapping-opslag.js');
+const nepServer = ({ opgeslagen = null, bereikbaar = true, bestanden = {} } = {}) => {
+  const s = { db: opgeslagen === null ? null : JSON.stringify(opgeslagen), bereikbaar, posts: 0, bestanden, kapot: new Set() };
+  s.haal = async (url, opts = {}) => {
+    if (!s.bereikbaar) throw new TypeError('Failed to fetch');
+    const antwoord = (code, body) => new Response(JSON.stringify(body), { status: code, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/api/mapping') {
+      const methode = opts.method || 'GET';
+      if (methode === 'GET') return antwoord(200, { mapping: s.db === null ? null : JSON.parse(s.db) });
+      if (methode === 'DELETE') { s.db = null; return antwoord(200, { ok: true }); }
+      if (methode === 'POST') {
+        if (opts.headers?.['Content-Type'] !== 'application/json') return antwoord(415, { fout: 'alleen application/json' });
+        const b = JSON.parse(opts.body);
+        if (!b?.mapping || !Array.isArray(b.mapping.rules)) return antwoord(400, { fout: 'een mapping heeft rules nodig' });
+        s.posts++;
+        s.db = JSON.stringify(b.mapping);
+        return antwoord(200, { ok: true, regels: b.mapping.rules.length });
+      }
+    }
+    const mb = /^mappings\/([\w-]+)\.json$/.exec(url);
+    if (mb) {
+      if (s.kapot.has(mb[1])) return antwoord(500, { fout: 'kapot' });
+      if (s.bestanden[mb[1]]) return antwoord(200, s.bestanden[mb[1]]);
+      try { return antwoord(200, JSON.parse(readFileSync(new URL(`../mappings/${mb[1]}.json`, import.meta.url), 'utf8'))); } catch { return antwoord(404, {}); }
+    }
+    return antwoord(404, {});
+  };
+  s.inDb = () => (s.db === null ? null : JSON.parse(s.db));
+  return s;
+};
+const nepOpslag = (begin = {}) => {
+  const d = new Map(Object.entries(begin));
+  return { getItem: (k) => (d.has(k) ? d.get(k) : null), setItem: (k, v) => d.set(k, String(v)), removeItem: (k) => d.delete(k), d };
+};
+const rust = () => new Promise((r) => setTimeout(r, 5));
+{
+  // 1. De oude volledige kopie van Clay staat op de server.
+  const kopie = normaliseer(kopieVanClay()).doc;
+  const srv = nepServer({ opgeslagen: kopie });
+  const winkel = nepOpslag({ [EIGEN_MAPPING]: JSON.stringify(kopie) });
+  const meldingen = [];
+  const m1 = kaal();
+  const o1 = opzetMappingOpslag({ mapping: m1, haal: srv.haal, opslag: winkel, meld: (t, s) => meldingen.push([t, s]), wacht: 0 });
+  const v1 = await o1.start();
+  ok('opstarten met een oude kopie: omgezet, van de server, 4 eigen, 0 weg',
+    v1.omgezet && v1.bron === 'server' && v1.eigen === 4 && v1.weg === 0 && v1.bewaard === true);
+  ok('wat er nu gekoppeld is, is precies de oude kopie', zelfde(m1.toJSON(), kopie));
+  const opServer = srv.inDb();
+  ok('op de server staat nu het verschil, niet meer de kopie', isVerschil(opServer) && opServer.rules.length === 4 && srv.posts === 1);
+  ok('en in de browser hetzelfde', winkel.getItem(EIGEN_MAPPING) === JSON.stringify(opServer));
+  ok('zonder foutmeldingen', meldingen.length === 0);
+
+  // 2. Nog een keer opstarten: niets om te bewaren.
+  const m2 = kaal();
+  const o2 = opzetMappingOpslag({ mapping: m2, haal: srv.haal, opslag: winkel, wacht: 0 });
+  const v2 = await o2.start();
+  ok('tweede start: verschil geladen, niets omgezet of bewaard', !v2.omgezet && !v2.standaardNieuw && srv.posts === 1 && zelfde(m2.toJSON(), kopie));
+
+  // 3. Een fragment komt binnen: geen 'eigen' wijziging, dus niets naar de server.
+  m2.voegToe('vormen', JSON.parse(readFileSync(new URL('../mappings/apc40mk2-vormen.json', import.meta.url), 'utf8')));
+  await rust();
+  ok('een fragment dat binnenkomt bewaart niets', srv.posts === 1);
+
+  // 4. Iets koppelen: het verschil groeit met één regel.
+  m2.set('note:0:66', 'track.1.sync', { mode: 'trigger' });
+  await rust();
+  ok('koppelen bewaart het verschil (nu 5 eigen regels)', srv.posts === 2 && srv.inDb().rules.length === 5 && JSON.parse(winkel.getItem(EIGEN_MAPPING)).rules.length === 5);
+
+  // 5. De standaard wordt bijgewerkt (nieuwe regel): komt vanzelf binnen.
+  const nieuw = JSON.parse(JSON.stringify(doc));
+  nieuw.rules.push({ in: 'note:0:65', action: 'layer.device.detail', mode: 'trigger' });
+  srv.bestanden.apc40mk2 = nieuw;
+  const m3 = kaal();
+  const gemeld3 = [];
+  const o3 = opzetMappingOpslag({ mapping: m3, haal: srv.haal, opslag: winkel, meld: (t) => gemeld3.push(t), wacht: 0 });
+  const v3 = await o3.start();
+  ok('nieuwe standaard: de nieuwe regel is er, jouw 5 ook', m3.rules.get('note:0:65')?.action === 'layer.device.detail'
+    && m3.rules.get('cc:0:20@device.rack').action === 'video.fx.pixel' && m3.rules.get('note:0:66').action === 'track.1.sync');
+  ok('en het verschil wordt meteen tegen de nieuwe standaard bewaard', v3.standaardNieuw && srv.posts === 3 && srv.inDb().base === vingerafdruk(nieuw));
+
+  // 6. Standaard herstellen = een leeg verschil, geen gat.
+  const ok3 = await o3.herstel();
+  const leegV = srv.inDb();
+  ok('standaard herstellen: een LEEG verschil op de server', ok3 && isVerschil(leegV) && leegV.rules.length === 0 && leegV.removed.length === 0);
+  ok('en in de browser', JSON.parse(winkel.getItem(EIGEN_MAPPING)).rules.length === 0);
+  ok('en de mapping is precies de standaard', zelfde(m3.toJSON(), nieuw) && m3.verschil().rules.length === 0);
+  // Een oude kopie in een ANDERE browser komt daarna niet meer terug: de server heeft iets.
+  const andereBrowser = nepOpslag({ [EIGEN_MAPPING]: JSON.stringify(kopie) });
+  const m4b = kaal();
+  const v4b = await opzetMappingOpslag({ mapping: m4b, haal: srv.haal, opslag: andereBrowser, wacht: 0 }).start();
+  ok('na herstellen wint de server (leeg verschil) van een oude kopie in een andere browser',
+    v4b.bron === 'server' && m4b.verschil().rules.length === 0
+    && m4b.rules.get('cc:0:20@device.rack').action === 'track.{focus}.fx.knob.5');
+}
+{
+  // Server leeg, maar een oude kopie in de browser: omzetten en naar de server.
+  const kopie = kopieVanClay();
+  const srv = nepServer();
+  const winkel = nepOpslag({ [EIGEN_MAPPING]: JSON.stringify(kopie) });
+  const m = kaal();
+  const v = await opzetMappingOpslag({ mapping: m, haal: srv.haal, opslag: winkel, wacht: 0 }).start();
+  ok('alleen in de browser: omgezet en naar de server', v.bron === 'browser' && v.omgezet && isVerschil(srv.inDb()) && srv.inDb().rules.length === 4);
+
+  // Helemaal niets bereikbaar (ook de standaard niet): foutmelding, niets bewaren.
+  srv.bereikbaar = false;
+  const gemeld = [];
+  const mo = kaal();
+  const oo = opzetMappingOpslag({ mapping: mo, haal: srv.haal, opslag: winkel, meld: (t, s) => gemeld.push(s), wacht: 0 });
+  const vo = await oo.start();
+  ok('niets bereikbaar: een foutmelding en geen bewaren', vo.fout && gemeld.includes('fout') && !oo.geladen
+    && JSON.parse(winkel.getItem(EIGEN_MAPPING)).rules.length === 4);
+}
+{
+  // Alleen de API weg, de bestanden wel (zoals een 500 op /api/mapping).
+  const srv = nepServer();
+  const haal = async (url, o) => (url === '/api/mapping' ? new Response('{}', { status: 500 }) : srv.haal(url, o));
+  const winkel = nepOpslag({ [EIGEN_MAPPING]: JSON.stringify(maakVerschil(doc, kopieVanClay())) });
+  const gemeld = [];
+  const m = kaal();
+  const o = opzetMappingOpslag({ mapping: m, haal, opslag: winkel, meld: (t, s) => gemeld.push(s), wacht: 0 });
+  const v = await o.start();
+  ok('API geeft 500: het verschil uit de browser, en niet proberen te bewaren', v.bron === 'browser' && !v.serverBereikbaar && v.eigen === 4 && gemeld.length === 0);
+  m.set('note:0:66', 'track.1.sync', { mode: 'trigger' });
+  await rust();
+  ok('koppelen terwijl de server faalt: in de browser bewaard, en een foutmelding',
+    JSON.parse(winkel.getItem(EIGEN_MAPPING)).rules.length === 5 && gemeld.includes('fout'));
+}
+{
+  // De standaard komt niet binnen: dan NIETS bewaren, anders overschrijft de
+  // eerste 'change' (een fragment) Clay's verschil met een lege mapping.
+  const srv = nepServer({ opgeslagen: maakVerschil(doc, kopieVanClay()) });
+  srv.kapot.add('apc40mk2');
+  const gemeld = [];
+  const m = kaal();
+  const o = opzetMappingOpslag({ mapping: m, haal: srv.haal, opslag: nepOpslag(), meld: (t, s) => gemeld.push(s), wacht: 0 });
+  await o.start();
+  m.voegToe('vormen', { rules: [{ in: 'note:0:65', action: 'layer.device.detail', mode: 'trigger' }] });
+  m.set('note:0:66', 'track.1.sync', { mode: 'trigger' });
+  await rust();
+  ok('standaard onbereikbaar: foutmelding, en Clay\'s verschil op de server blijft ongemoeid',
+    gemeld.filter((s) => s === 'fout').length >= 1 && srv.posts === 0 && srv.inDb().rules.length === 4 && !o.geladen);
+}
+{
+  // Importeren van een mapping voor een ander apparaat (generic): de standaard
+  // van DAT apparaat wordt erbij gehaald, en het verschil is daartegen.
+  const srv = nepServer();
+  const winkel = nepOpslag();
+  const m = kaal();
+  const o = opzetMappingOpslag({ mapping: m, haal: srv.haal, opslag: winkel, wacht: 0 });
+  await o.start();
+  m.load({ name: 'mijn keyboard', device: 'generic', version: 3, rules: [{ in: 'cc:3:7', action: 'track.1.fader', mode: 'absolute' }] });
+  await rust();
+  const opgeslagen = srv.inDb();
+  ok('import voor generic: bewaard als verschil tegen generic.json', isVerschil(opgeslagen) && opgeslagen.device === 'generic'
+    && opgeslagen.rules.length === 1 && opgeslagen.top.name === 'mijn keyboard');
+  const m2 = kaal();
+  await opzetMappingOpslag({ mapping: m2, haal: srv.haal, opslag: winkel, wacht: 0 }).start();
+  ok('en na herladen weer precies die mapping', m2.device === 'generic' && m2.name === 'mijn keyboard' && m2.rules.size === 1);
+  // Een apparaat zonder standaardbestand: lege standaard, verschil = alles.
+  ok('onbekend apparaat: een lege standaard (404), geen fout',
+    (await haalStandaard('bestaat-niet', srv.haal)).rules.length === 0 && (await haalStandaard('../server/index', srv.haal)).rules.length === 0);
+  // apc.html leest alleen: laadEigen bewaart niets.
+  const voor = srv.posts;
+  const kaart = kaal();
+  await laadEigen(kaart, { haal: nepServer({ opgeslagen: normaliseer(kopieVanClay()).doc }).haal });
+  ok('laadEigen (apc.html) zet een oude kopie om in het geheugen en bewaart niets', srv.posts === voor && kaart.rules.get('cc:0:23@device.rack').action === 'video.fx.grain');
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
