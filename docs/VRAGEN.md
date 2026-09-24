@@ -1,6 +1,6 @@
 # Open vragen voor Clay
 
-Stand: 24 september 2026 (middag). Open: A2, A3 (keylock-luistertest staat klaar),
+Stand: 24 september 2026 (avond). Open: A2, A3 (keylock-luistertest staat klaar),
 F1, H3, H5, en I1–I4 (keylock na het luisteren, APC-plek). G1–G6, H1, H2, H4 en H6
 zijn beslist; de toonsoort- en keylockkeuzes staan in blok I. Per vraag: wat er speelt, de opties, mijn advies, en wat er
 nodig is om hem te beantwoorden. Afvinken zodra beslist; het besluit komt

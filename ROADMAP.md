@@ -3,7 +3,7 @@
 Eén fase per keer. Maak een fase af en laat hem draaien voordat de volgende begint.
 Vink af in dit bestand zodra een fase draait.
 
-## DE TAKENLIJST OP VOLGORDE (24 september 2026, met Clay doorgenomen; bijgewerkt 24 sep middag)
+## DE TAKENLIJST OP VOLGORDE (24 september 2026, met Clay doorgenomen; bijgewerkt 24 sep avond)
 
 Twee projecten naast elkaar: Varve DJ (deze repo) en AV-kern (het
 meditatie-instrument, eigen repo, `Input/Totaalplan AV-kern.md`). Afspraak: tot
@@ -11,7 +11,8 @@ meditatie-instrument, eigen repo, `Input/Totaalplan AV-kern.md`). Afspraak: tot
 
 **Nu (tot 27 sep)**
 1. Clay probeert Varve in zijn eigen tabblad.
-   - Vormlagen: gedaan, "goed voor nu" (H4).
+   - Vormlagen: gedaan, "goed voor nu" (H4). Ze vullen het beeld en de video staat
+     rechtop eronder (24 sep avond, goedgekeurd in Clay's Chrome).
    - Nog: de beatgrid-dingen (4× tap, grid-modus Shift + Metronome).
    - Wat niet klopt: eerst repareren.
 2. Echofilter: na een sessie `hub.status().echoes` bekijken; staat die op 0, dan uitzetten voor de APC.

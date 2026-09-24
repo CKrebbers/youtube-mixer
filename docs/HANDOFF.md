@@ -1,4 +1,4 @@
-# Overdracht — waar we staan (24 september 2026, middag)
+# Overdracht — waar we staan (24 september 2026, avond)
 
 Lees in deze volgorde:
 1. `CLAUDE.md`: architectuur, regels, valkuilen, en de secties VORMLAGEN en
@@ -9,53 +9,67 @@ Lees in deze volgorde:
 5. `docs/plugins/01-plan.md`: AV-kern × Varve.
 6. `docs/APC40.md`.
 
-## BEGIN HIER (stand 24 sep, middag)
+## BEGIN HIER (stand 24 sep, avond)
 
-- **main** is schoon en alles is gecommit. `node test/alles.mjs` geeft 29 bestanden,
-  1920 checks, groen. Eén run onder zware belasting (een ingest van Clay plus het
-  opruimen van worktrees tegelijk) gaf 5 rode bestanden met 1839 checks. Welke het
-  waren is niet vastgelegd; een tweede run was groen. Gebeurt het weer: draai
-  `node test/alles.mjs` terwijl de machine rustig is en noteer welke bestanden het zijn.
-- **Deze sessie** (details hieronder):
-  - AV-kern fase 0 klaargezet in `~/src/av-kern`;
-  - toonsoort en keylock onderzocht en gemeten, ontwerp in `docs/TOONSOORT.md` en
-    `docs/KEYLOCK.md`;
-  - vragen G4, H1, H2, H4 en H6 beslist;
-  - blok I in VRAGEN.
-- **Later op 24 sep:**
-  - **Vormlagen VULLEN het beeld** (`4addd90`). Clay zag vierkante vormen met lege
-    banden. Nu valt boven en onder 22% weg en is het beeld zachter (2,5×
-    opgeschaald). Echt 16:9 tekenen komt vóór ROADMAP 7.
-  - Herladen is genoeg, de server hoeft niet opnieuw te starten.
-  - Headless gecontroleerd: `kijk.mjs` is groen, met een schermafdruk.
-  - `kijk.mjs` wacht nu tot de app klaar is (`44a2cca`). De vaste 2,5 s faalde op
-    een drukke machine, ook zonder de wijziging.
-  - Gezien en goedgekeurd door Clay in zijn eigen Chrome (24 sep, avond).
-  - **Video op zijn kop onder een vormlaag**: GEREPAREERD in de lagenshader (lees de
-    buffer met `1 - uv.y`). Dat was de derde omkering. Nagemeten headless met een
-    nepvideo van vier kwarten; `kijk.mjs` controleert het nu en faalt op de oude
-    code. **Clay bevestigde in zijn eigen Chrome: "nu staat alles goed"**: de video
-    staat rechtop en de vormen vullen het beeld. Het "vierkante" was de oude versie.
-- **Clay moet nu:**
-  1. De luistertest keylock doen (A3): `tools/keylock/uit/` met
-     `tools/keylock/LUISTER.md`, een kwartier met koptelefoon. Daarmee beslist hij
-     I1–I3.
-  2. AV-kern fase 0 testen: `~/src/av-kern/FASE0-TEST.md`. Varve moet daarbij
-     HELEMAAL dicht; één app met de APC.
-  3. In Varve de beatgrid-dingen proberen (ROADMAP 1). De vormlagen zijn "goed voor nu".
-- **Volgorde:** tot 25 okt gaat AV-kern voor (ROADMAP 6–11). Na 25 okt in Varve:
-  1. mapping als verschil (13);
-  2. toonsoort (14);
-  3. keylock (15);
-  4. de rest van de lijst.
+- **Varve:** `main` is schoon en alles is gecommit. `node test/alles.mjs` geeft
+  29 bestanden, 1923 checks, groen. `node tools/headless/kijk.mjs` is groen, ook de
+  nieuwe oriëntatiecontrole.
+  - Onder zware belasting gaf de suite één keer 5 rode bestanden; welke is niet
+    vastgelegd. Gebeurt het weer: bij een rustige machine opnieuw draaien en de
+    bestanden noteren.
+  - Op een drukke machine heeft `kijk.mjs` eigen poorten nodig
+    (`VARVE_KIJK_POORT`, `VARVE_KIJK_DEBUG`).
+- **AV-kern:** `~/src/av-kern`, `main` = `ab7e115`, 40 tests groen, geen remote.
+  Fase 0 is klaargezet: een veilige driver en `FASE0-TEST.md`. 0.4 is gedaan:
+  `reference/ademmachine.html`.
+- **Vandaag gedaan** (details in de secties hieronder):
+  1. AV-kern fase 0 klaargezet: wachtrij, poorten, Web Lock, Shift los, checklist,
+     Ademmachine-mockup.
+  2. Toonsoort en keylock onderzocht en gemeten: `docs/TOONSOORT.md`,
+     `docs/KEYLOCK.md`, `tools/toonsoort/`, `tools/keylock/`. Luisterbestanden staan
+     in `tools/keylock/uit/`. Clay: bouwen na 25 okt, vooraan.
+  3. Vragen beslist: G4, H1, H2, H4, H6, T3, K3 en K8; de rest van T en K volgens het
+     advies. Blok I in VRAGEN.
+  4. Vormlagen VULLEN het beeld (`4addd90`), en de video staat niet meer op zijn kop
+     onder een vormlaag (`cef1d28`). **Door Clay goedgekeurd in zijn eigen Chrome.**
+- **Clay moet nog** (de volgende sessie begint met zijn uitkomsten):
+  1. **Keylock luisteren (A3):** `tools/keylock/uit/` met `tools/keylock/LUISTER.md`,
+     per nummer een score van 0 tot 3. Daarmee beslissen we I1–I3 (Signalsmith ja of
+     nee, welke instelling, standaard aan of uit). Zet die in VRAGEN blok I en in
+     KEYLOCK §7.
+  2. **AV-kern fase 0 met de APC:** `~/src/av-kern/FASE0-TEST.md`, ~40 minuten, Varve
+     HELEMAAL dicht. Hij brengt de uitvoer van `npm run niet-gemapt` en zijn notities
+     mee.
+     - Die gaan in `LOG.md` van AV-kern.
+     - Meer dan 3 afwijkende nummers: eerst `src/kern/apc40.ts` en de spec corrigeren.
+     - Daarna 0.2: de Ademmachine in Bedienplan nalopen.
+  3. In Varve de beatgrid-dingen proberen (4× tap, grid-modus) en daarna
+     `hub.status().echoes` bekijken (ROADMAP 1–2).
+  4. Mag later: H3 (stems meten op de Omarchy-machine).
+- **Daarna volgens ROADMAP:** tot 25 okt AV-kern (6–11). Punt 7 begint in VARVE: de
+  26 vormen echt 16:9 laten tekenen met agenten (`g.S` en de n×n-roosters worden
+  breedte × hoogte). Daarna neemt AV-kern ze over. Na 25 okt in Varve: 13 mapping als
+  verschil, 14 toonsoort, 15 keylock.
 - **Werkwijze die werkte:**
   - Parallelle agenten, elk in een eigen worktree of repo met een eigen branch.
   - Daarna zelf nalopen en samenvoegen, met tests na elke merge.
   - Worktrees en branches opruimen.
   - Headless alleen met `tools/headless/kijk.mjs`, nooit een gewoon Chrome-tabblad.
+  - Een bug die Clay ziet: eerst headless nabouwen met een ASYMMETRISCH testbeeld,
+    dan repareren, dan laten zien dat de controle op de oude code faalt.
+  - Meetagenten op hele albums duren ruim een uur. Geef tussendoor zelf de stand door,
+    en laat ze liever op fragmenten meten.
 
-  Les van vandaag: meetagenten op hele albums duren ruim een uur. Laat ze op
-  fragmenten meten als het sneller moet, en start ze niet terwijl Clay een ingest doet.
+## Wat er later op 24 sep nog bij kwam (vormlagen in Clay's Chrome)
+- **Vormlagen VULLEN het beeld** (`4addd90`). Clay zag vierkante vormen met lege
+  banden. Nu valt boven en onder 22% weg en is het beeld zachter (2,5× opgeschaald).
+  Echt 16:9 komt vóór ROADMAP 7.
+- **Video op zijn kop onder een vormlaag:** gerepareerd (`cef1d28`). De lagenshader
+  las het gemengde beeld (een buffer) met uv, en dat was een derde omkering. Nu
+  `1 - uv.y`. `kijk.mjs` meet het met vier gekleurde kwarten en faalt op de oude code.
+- **`kijk.mjs` wacht op de app** (`44a2cca`) in plaats van vaste 2,5 s.
+- Clay: "het werkt, nu staat alles goed". Het "vierkante" was de oude versie vóór
+  het herladen.
 
 ## Nieuw (24 september 2026, middag): AV-kern fase 0, toonsoort, keylock
 

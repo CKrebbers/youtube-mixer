@@ -74,9 +74,13 @@ We gaan verder met VARVE DJ. Pak eerst de draad op, zonder iets te bouwen:
    F1, H3, H5, I1–I4), docs/plugins/01-plan.md (AV-kern × Varve: besluiten) en de
    beslissingen in docs/TOONSOORT.md §9 en docs/KEYLOCK.md §7.
 2. Controleer de stand: git status en git log -5 (verwacht: schoon, t/m de commit
-   "Overdracht 24 sep middag" of later), en `node test/alles.mjs` (verwacht: 29 bestanden, ~1920 checks, groen).
+   "Overdracht 24 sep avond" of later), en `node test/alles.mjs` (verwacht: 29
+   bestanden, ~1923 checks, groen). Ook AV-kern: `git -C ~/src/av-kern log -1`
+   (verwacht: ab7e115 of later, 40 tests).
 3. Vat in hooguit tien regels samen waar we staan, wat ik nog moet testen of
-   beslissen, en wat volgens ROADMAP de volgende stap is. Vraag me dan wat ik wil.
+   beslissen, en wat volgens ROADMAP de volgende stap is. Vraag of ik de uitkomst
+   van de keylock-luistertest (scorekaart) en van de AV-kern-fase 0-test heb, en
+   vraag me dan wat ik wil.
 
 Harde regels:
 - Open NOOIT een gewoon Chrome-tabblad met VARVE: de APC hangt aan mijn Chrome en
