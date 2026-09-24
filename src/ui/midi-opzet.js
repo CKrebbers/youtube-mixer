@@ -11,11 +11,12 @@ import { LearnMode } from './learn-mode.js';
 import { MidiMonitor } from './midi-monitor.js';
 import { meld } from './meldingen.js';
 import { tabblad, isEersteTabblad } from './tabblad.js';
+import { opzetMappingOpslag } from './mapping-opslag.js';
 
 /**
  * Alles rond MIDI aan de schermkant: hub, mapping, LED-laag, leren, het
- * MIDI-paneel met monitor, paletproef en koppellijst, en je eigen mapping in
- * localStorage.
+ * MIDI-paneel met monitor, paletproef en koppellijst, en je eigen mapping
+ * (bewaard als verschil met de standaard, zie mapping-opslag.js).
  *
  * hub (bytes) -> mapping (betekenis) -> action-bus. Drie lagen die elkaars
  * binnenkant niet kennen: de hub weet van geen actions, de mapping van geen
@@ -202,8 +203,8 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
   const mapPaneel = midiPanel.querySelector('.mon-map');
   const mapPanel = new MappingPanel({
     root: mapPaneel, mapping, learn, device: apc40mk2,
-    // Je eigen versie echt weggooien (server en browser), niet de standaard
-    // als "eigen" bewaren: anders volgt de app nooit meer een nieuwe standaard.
+    // Standaard herstellen = een leeg verschil bewaren (server en browser):
+    // daarna volgt de app weer precies mappings/apc40mk2.json, ook een nieuwe.
     onReset: () => herstelStandaard(),
   });
 
@@ -212,79 +213,35 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
     if (dicht) learn.stop(); else mapPanel.vuil = true;
   });
 
-  async function loadMapping(url) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const { aantal, fouten } = mapping.load(await res.json());
-      fouten.forEach((f) => console.warn('[mapping]', f));
-      console.log(`[mapping] ${mapping.name}: ${aantal} regels`);
-      monitor.note(`mapping geladen: ${mapping.name} — ${aantal} regels`);
-    } catch (err) {
-      console.warn('[mapping] laden mislukt:', err);
-      monitor.note(`mapping laden mislukt: ${err.message}`);
-    }
-  }
   /*
-   * Je eigen koppelingen bewaren. Wat je met "koppelen" aan de APC hing, was bij
-   * herladen weg: er werd altijd de standaardmapping geladen. Nu staat je laatste
-   * mapping op de SERVER (library-database, overleeft een andere browser en
-   * gewiste sitedata) én in de browser (localStorage, als reserve als de server
-   * even niet bereikbaar is). Bij het opstarten: server eerst.
+   * Je eigen koppelingen bewaren: op de SERVER (library-database, overleeft een
+   * andere browser en gewiste sitedata) én in de browser (localStorage, als
+   * reserve als de server even niet bereikbaar is). Bij het opstarten: server
+   * eerst. Sinds 25 sep 2026 als VERSCHIL met de standaard (mapping-opslag.js):
+   * een nieuwe standaardmapping komt zo vanzelf bij je binnen, jouw eigen
+   * regels blijven van jou. Een oude volledige kopie wordt bij het laden omgezet.
    */
-  const EIGEN_MAPPING = 'varve.mapping';
-  let mappingGeladen = false;
-  let naarServer = null;
-  let laatstBewaard = null;
-  function bewaarEigenMapping() {
-    if (!mappingGeladen) return;               // niet de lege begintoestand bewaren
-    const doc = mapping.toJSON();
-    // Alleen als JOUW deel veranderde. Een fragment dat erbij komt (vormlagen,
-    // Mapping.voegToe) geeft ook 'change', en maakte anders van de standaard
-    // stilletjes een volledige eigen kopie (controleur, 24 sep).
-    const tekst = JSON.stringify(doc);
-    if (tekst === laatstBewaard) return;
-    laatstBewaard = tekst;
-    try { localStorage.setItem(EIGEN_MAPPING, JSON.stringify(doc)); } catch (_) {}
-    // Koppelen geeft soms een reeks wijzigingen vlak na elkaar: één keer sturen.
-    clearTimeout(naarServer);
-    naarServer = setTimeout(() => {
-      fetch('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mapping: doc }) })
-        .then((r) => { if (!r.ok) throw new Error(`${r.status}`); })
-        .catch((err) => meld(`mapping niet op de server bewaard (${err.message}) — staat wel in deze browser`, 'fout'));
-    }, 500);
-  }
-  mapping.on('change', bewaarEigenMapping);
+  const opslag = (() => { try { return window.localStorage; } catch (_) { return null; } })();
+  const mappingOpslag = opzetMappingOpslag({ mapping, haal: (...a) => fetch(...a), opslag, meld });
+
   async function herstelStandaard() {
-    mappingGeladen = false;
-    clearTimeout(naarServer);
-    try { localStorage.removeItem(EIGEN_MAPPING); } catch (_) {}
-    try { await fetch('/api/mapping', { method: 'DELETE' }); } catch (err) { meld(`eigen mapping op de server niet gewist (${err.message})`, 'fout'); }
-    await loadMapping('mappings/apc40mk2.json');
-    laatstBewaard = JSON.stringify(mapping.toJSON());
-    mappingGeladen = true;
+    if (await mappingOpslag.herstel()) monitor.note(`standaard hersteld: ${mapping.name} — ${mapping.rules.size} regels, geen eigen regels`);
   }
-  (async () => {
-    let vanServer = null, lokaal = null, serverBereikbaar = true;
-    try {
-      const r = await fetch('/api/mapping');
-      if (!r.ok) throw new Error(`${r.status}`);
-      vanServer = (await r.json()).mapping;
-    } catch (_) { serverBereikbaar = false; }
-    try { lokaal = JSON.parse(localStorage.getItem(EIGEN_MAPPING) || 'null'); } catch (_) {}
-    const eigen = vanServer?.rules?.length ? vanServer : lokaal?.rules?.length ? lokaal : null;
-    if (eigen) {
-      const { aantal } = mapping.load(eigen);
-      const waar = eigen === vanServer ? 'van de server' : serverBereikbaar ? 'uit deze browser' : 'uit deze browser (server niet bereikbaar)';
-      monitor.note(`jouw eigen mapping geladen ${waar} — ${aantal} regels ("standaard herstellen" zet de APC-standaard terug)`);
-    } else {
-      await loadMapping('mappings/apc40mk2.json');
+
+  mappingOpslag.start().then((v) => {
+    (v.fouten || []).forEach((f) => console.warn('[mapping]', f));
+    if (!v.bron) {
+      if (!v.fout) monitor.note(`mapping geladen: ${mapping.name} — ${mapping.rules.size} regels`);
+      return;
     }
-    laatstBewaard = JSON.stringify(mapping.toJSON());
-    mappingGeladen = true;
-    // Stond hij alleen in de browser (van vóór deze versie)? Dan nu ook naar de server.
-    if (eigen && eigen !== vanServer && serverBereikbaar) bewaarEigenMapping();
-  })();
+    const waar = v.bron === 'server' ? 'van de server' : v.serverBereikbaar ? 'uit deze browser' : 'uit deze browser (server niet bereikbaar)';
+    const eigen = `${v.eigen} eigen regel${v.eigen === 1 ? '' : 's'}${v.weg ? `, ${v.weg} weggehaald` : ''}`;
+    monitor.note(`jouw mapping geladen ${waar}: de standaard + ${eigen} — ${mapping.rules.size} regels ("standaard herstellen" haalt je eigen regels weg)`);
+    // Eén keer zeggen wat er veranderde aan hoe je mapping bewaard wordt, of
+    // dat er een nieuwe standaard is: anders merk je dat pas op de APC.
+    if (v.omgezet) meld(`je eigen mapping staat nu als verschil met de standaard (${eigen}): nieuwe standaardregels komen voortaan vanzelf binnen`);
+    else if (v.standaardNieuw) meld(`de standaardmapping is bijgewerkt: wat erbij kwam staat erop, je ${eigen} blijven van jou`);
+  }).catch((err) => meld(`mapping: ${err.message}`, 'fout'));
 
   const toggleMidi = () => {
     if (midiPanel.classList.contains('hidden')) sluitOnderpanelen('midi');

@@ -180,6 +180,15 @@ try {
   await fetch(`${B}/api/mapping`, { method: 'DELETE' });
   ok('standaard herstellen: weer geen eigen mapping', (await (await fetch(`${B}/api/mapping`)).json()).mapping === null);
   ok('zonder rules geweigerd', (await status('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mapping: {} }) })) === 400);
+  // Sinds 25 sep bewaart de app een VERSCHIL met de standaard (mapping-opslag.js).
+  // De server kijkt alleen naar "rules": ook een leeg verschil moet erdoor, en
+  // alles erbij (kind, base, top, removed) moet er ongeschonden weer uitkomen.
+  const verschil = { kind: 'diff', version: 3, device: 'apc40mk2', base: '35823dda-291', top: { shift: null },
+    rules: [], removed: ['note:0:52#shift'] };
+  const mv = await post('/api/mapping', { mapping: verschil });
+  ok('een leeg verschil (alleen een markering) wordt bewaard', mv.ok && mv.regels === 0);
+  ok('en komt ongeschonden terug', JSON.stringify((await (await fetch(`${B}/api/mapping`)).json()).mapping) === JSON.stringify(verschil));
+  await fetch(`${B}/api/mapping`, { method: 'DELETE' });
 
   console.log('\ngrid-route (tempokaart)');
   const postGrid = (id, body) => fetch(`${B}/api/library/${id}/grid`, { method: 'POST',
