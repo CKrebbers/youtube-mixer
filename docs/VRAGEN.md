@@ -1,8 +1,8 @@
 # Open vragen voor Clay
 
-Stand: 24 september 2026 (nacht). Open: A2, A3, F1, G4, H1–H6; de rest is
-beslist en gebouwd. G1–G3 en G5 zijn beantwoord door het AV-kern-werk
-(docs/plugins/01-plan.md). Per vraag: wat er speelt, de opties, mijn advies, en wat er
+Stand: 24 september 2026 (middag). Open: A2, A3 (keylock-luistertest staat klaar),
+F1, H3, H5, en I1–I4 (keylock na het luisteren, APC-plek). G1–G6, H1, H2, H4 en H6
+zijn beslist; de toonsoort- en keylockkeuzes staan in blok I. Per vraag: wat er speelt, de opties, mijn advies, en wat er
 nodig is om hem te beantwoorden. Afvinken zodra beslist; het besluit komt
 daarna in CLAUDE.md of ROADMAP.md.
 
@@ -183,7 +183,7 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 - [x] **G2. Is de blauwdruk een nieuwe wens?** — 24 sep: nee, losse functies plukken (spoor C); Varve wordt geen blauwdruk op AV-kern. Hij botst met vastgelegde keuzes (acht
   tracks / één kolom = één track, beeld = video van de track, fader = volume). Heropenen
   of alleen losse functies plukken (hotcues 5–8, loop in/out, brake/slip/kill, tempo-master)?
-- [x] **G3. Actielog met terugspelen** — 24 sep: ja, als spoor D (ROADMAP punt 17), niet hash-exact. (idee uit AV-kern, ~1 dag): set opnieuw renderen of
+- [x] **G3. Actielog met terugspelen** — 24 sep: ja, als spoor D (ROADMAP punt 20), niet hash-exact. (idee uit AV-kern, ~1 dag): set opnieuw renderen of
   een fout naspelen. Willen?
 - [x] **G4. Bedienplan blijven gebruiken?** — 24 sep, middag: Clay vroeg of "alleen
   AV-kern" de beste aanpak is; advies ja, genoteerd als besluit tenzij hij het anders
@@ -206,7 +206,7 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   mee te spelen? Nee = stems parkeren. Ja = H2.
 - [x] **H2. Twee stems of vier?** — Clay (24 sep, middag): **kiesbaar per nummer**.
   Standaard twee (zang, rest); vier als je dat bij het binnenhalen vraagt. Bouwen na
-  25 okt (ROADMAP 15). 💬 Bij Clay's repertoire zijn drums en bas vrijwel leeg.
+  25 okt (ROADMAP 17). 💬 Bij Clay's repertoire zijn drums en bas vrijwel leeg.
   **Advies:** twee (zang, rest): half de opslag, één knop per track.
 - [ ] **H3. Splitsen op de Omarchy-machine?** 💬 (GTX 1660; geschat 3–6× sneller, en het
   concurreert niet met de set.) Eerst meten met meet.py daar. Daarna: batch via een
@@ -215,7 +215,7 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   "goed voor nu". Budgetten en waasdrempel blijven zoals ze zijn tot er iets opvalt. 🎛 Zie ROADMAP punt 1. Specifiek:
   is de waasdrempel (3–8%) te streng voor zachte sporen, en werken de budgetten
   van 4 en 12 ms op de M1 met 8 video's?
-- [ ] **H5. Na 25 okt: eerst de AI-laag van AV-kern of eerst Varve (ROADMAP 12–24)?** 💬
+- [ ] **H5. Na 25 okt: eerst de AI-laag van AV-kern of eerst Varve (ROADMAP 13–26)?** 💬
 - [x] **H6. Isomorfe vormen met geluid?** — Clay (24 sep, middag): **eerst AV-kern, dan
   Varve**. Het geluid wordt één audiomodule (AudioWorklet: aanslagen komen als berichten
   uit de Worker, de modale synthese rekent in de worklet in plaats van 12–32 ms op de
@@ -225,3 +225,42 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   sampler-pad. 💬 Snaar, trommelvlies, epicykels en korrelwolk
   kunnen ook klinken (sink vóór de limiter, eigen gain, standaard dicht). Willen, en zo
   ja: welke bus?
+
+---
+
+## I. Toonsoort en keylock (24 sep, middag)
+
+Onderzocht met twee agenten: `docs/TOONSOORT.md` en `docs/KEYLOCK.md`. Clay koos
+**bouwen na 25 okt, vooraan**: direct na "mapping als verschil bewaren", eerst
+toonsoort en dan keylock.
+
+Beslist:
+- **T3, door Clay:** kolomkop en focusdeel tonen de toonsoort die je HOORT, met pitch
+  en transpositie; de library toont de plaat.
+- **K3, door Clay:** een sprong met keylock aan duurt ~95 ms en komt exact uit.
+- **K8, door Clay:** toon verschuiven mag ook als keylock uit staat.
+- **Volgens advies, tenzij Clay bezwaar maakt:**
+  - T1: Temperley 2005;
+  - T2: `9B G`, met de volle naam in het focusdeel;
+  - T4: onzeker = gedimd met "?", onder 0,15 een "~";
+  - T5: cent tonen vanaf 20 cent afwijking;
+  - T6: corrigeren op de APC komt later;
+  - T7: harmonisch mixen komt later en staat standaard uit;
+  - K5: ±12 halve tonen, terug naar 0 bij een nieuw nummer;
+  - K7: de sampler blijft zoals hij is.
+
+Open:
+- [ ] **I1 (= K1). Wordt het Signalsmith?** 🎧 Na A3. Scoort ±5% op sakamoto en zoned-out
+  een 0 of 1 op de scorekaart, dan ja.
+- [ ] **I2 (= K2). Welke instelling?** 🎧 Standaard, goedkoper of kort. Luister naar
+  13 en 14 tegen 08. **Advies:** standaard, gespreid; goedkoper als je 13 niet van 08
+  onderscheidt.
+- [ ] **I3 (= K4). Keylock standaard aan of uit?** 🎧 Luister naar 01 tegen 04.
+  **Advies:** uit, en keylock blijft staan bij een nieuw nummer.
+- [ ] **I4 (= K6). Waar op de APC?** 🎛 Na ROADMAP 13. **Voorstel:**
+  - Bank = keylock;
+  - Shift + Bank = pitchbereik;
+  - Shift + Nudge ± = toon;
+  - Shift + Tap = toon terug naar 0.
+
+  Eerst op `apc.html` bekijken of het in de hand ligt.

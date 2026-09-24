@@ -427,7 +427,7 @@ define(`${n}.key.reset`, 'trigger', (on) => { if (on) d.setToon(0); },
 
 In de grid-modus (`edit`) is Shift + Nudge al "grid ±1 ms"; mapje-regels gaan voor, dus
 dat botst niet. **Kanttekening:** Clay's eigen mapping is een VOLLEDIGE kopie; nieuwe
-regels in `mappings/apc40mk2.json` bereiken hem niet. Eerst ROADMAP 12 ("eigen mapping
+regels in `mappings/apc40mk2.json` bereiken hem niet. Eerst ROADMAP 13 ("eigen mapping
 als verschil bewaren"), of de handmatige samenvoeg-stap uit CLAUDE.md (Beatgrid,
 laatste punt).
 
@@ -470,12 +470,25 @@ laatste punt).
 |---|---|
 | vendoren (script + LICENSE), `leesInvoer`, keylock-weg in `stream-lezer.js`, segment met toekomstige T in StreamBron en stream-kern, S1, gespreid, tests in Node | 1,5–2 |
 | deck (`keylock`, `toon`), actions, `apc-beschrijf.js`, scherm (KEY-badge), toetsenbord, CLAUDE.md | 1 |
-| APC-regels (na ROADMAP 12) | 0,25 |
+| APC-regels (na ROADMAP 13) | 0,25 |
 | optioneel: S2 (aanloop ~20 ms), polariteitskeuze, sampler met toon | 1 |
 
 Totaal **2,5–4 sessies**, na de luistertest (15 minuten).
 
 ## 7. Beslissingen voor Clay
+
+> **Besloten op 24 september 2026:**
+> - **Wanneer:** na 25 okt, vooraan in de Varve-lijst, direct na "mapping als
+>   verschil bewaren" (ROADMAP 13) en na toonsoort.
+> - **Door Clay gekozen:**
+>   - K3: (a) ~95 ms, exact.
+>   - K8: toestaan.
+> - **Volgens het advies, tenzij Clay bezwaar maakt:**
+>   - K5: halve tonen, ±12, terug naar 0 bij een nieuw nummer.
+>   - K7: (a), de sampler blijft zoals hij is.
+> - **Open:**
+>   - K1, K2 en K4: na de luistertest (VRAGEN A3, `tools/keylock/LUISTER.md`).
+>   - K6: na ROADMAP 13, eerst op `apc.html` bekijken.
 
 Eén voor één, elk met een advies.
 
@@ -509,7 +522,7 @@ pas als er een nummer om vraagt.
 
 **K6. Waar op de APC?** 🎛
 Voorstel: Bank = keylock (LED), Shift + Bank = pitchbereik, Shift + Nudge ± = toon,
-Shift + Tap = toon 0. Na ROADMAP 12.
+Shift + Tap = toon 0. Na ROADMAP 13.
 Advies: dit voorstel, maar eerst op `apc.html` kijken of het in de hand ligt.
 
 **K7. Moet de sampler de toon van zijn deck volgen?** 💬

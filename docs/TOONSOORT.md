@@ -371,6 +371,13 @@ helpt of afleidt. Het rekenwerk is klein (0,5 sessie) zodra de toonsoort er is.
 
 ## 9. Beslissingen voor Clay
 
+> **Besloten op 24 september 2026:**
+> - **Wanneer:** na 25 okt, vooraan in de Varve-lijst: direct na "mapping als
+>   verschil bewaren" (ROADMAP 13). Eerst toonsoort, dan keylock.
+> - **T3:** Clay koos wat je HOORT.
+> - **T1, T2, T4–T7:** volgens het advies hieronder, tenzij Clay bezwaar maakt.
+>   Dat is (a) bij elk.
+
 Eén voor één, elk met een advies.
 
 **T1. Welk profiel?**

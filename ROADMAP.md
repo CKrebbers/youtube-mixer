@@ -3,61 +3,88 @@
 Eén fase per keer. Maak een fase af en laat hem draaien voordat de volgende begint.
 Vink af in dit bestand zodra een fase draait.
 
-## DE TAKENLIJST OP VOLGORDE (24 september 2026, met Clay doorgenomen)
+## DE TAKENLIJST OP VOLGORDE (24 september 2026, met Clay doorgenomen; bijgewerkt 24 sep middag)
 
 Twee projecten naast elkaar: Varve DJ (deze repo) en AV-kern (het
 meditatie-instrument, eigen repo, `Input/Totaalplan AV-kern.md`). Afspraak: tot
 25 oktober gaat AV-kern voor. Regel: altijd maar één app tegelijk met de APC.
 
 **Nu (tot 27 sep)**
-1. Clay probeert Varve in zijn eigen tabblad: `?vormen=1`, videopaneel (V),
-   Detail View, knob 1–8, Device ◀ ▶ door de 26 vormen, REAGEER + bass-kill.
-   Daarnaast de beatgrid-dingen (4× tap, grid-modus Shift + Metronome). Wat niet
-   klopt: eerst repareren.
-2. Echofilter: na een sessie `hub.status().echoes`; 0 → uitzetten voor de APC.
-3. VRAGEN G1–G5 afvinken (grotendeels beantwoord door het AV-kern-werk; G4 is open).
-4. Stems: Clay luistert naar `tools/stems/uit/` (VRAGEN H1). Eventueel meten op de
-   Omarchy-machine (H3).
+1. Clay probeert Varve in zijn eigen tabblad.
+   - Vormlagen: gedaan, "goed voor nu" (H4).
+   - Nog: de beatgrid-dingen (4× tap, grid-modus Shift + Metronome).
+   - Wat niet klopt: eerst repareren.
+2. Echofilter: na een sessie `hub.status().echoes` bekijken; staat die op 0, dan uitzetten voor de APC.
+3. ~~VRAGEN G1–G5~~: allemaal beslist. G4: Bedienplan alleen voor AV-kern.
+4. ~~Stems luisteren~~: H1 ja, H2 kiesbaar per nummer. Nog open: H3 (meten op de Omarchy-machine).
+5. Luistertest keylock (A3): `tools/keylock/uit/` met `tools/keylock/LUISTER.md`. Beslist I1–I3 in VRAGEN.
 
 **AV-kern tot publicatie 1 (25 okt)**
-5. Fase 0 afmaken: APC testen op AV-kern, luisteren op de M1 (kern 01–05 is gebouwd).
-6. De vormen overnemen uit Varve (`src/vormen/hulp.js` + `systemen*.js`, plain JS),
+De repo staat sinds 24 sep in `~/src/av-kern` (main `9ef37b9`, 40 tests groen).
+6. Fase 0 afmaken volgens `~/src/av-kern/FASE0-TEST.md`:
+   - Varve helemaal dicht;
+   - 20 min spelen en daarna `npm run niet-gemapt`;
+   - 10 min luisteren op de M1;
+   - een replay.
+
+   Klaargezet op 24 sep:
+   - wachtrij van 16 berichten per 4 ms;
+   - alleen poorten die echt aangesloten zijn;
+   - Web Lock `av-kern-apc`;
+   - Shift los bij loskoppelen.
+
+   Nog van Clay: 0.2 (de Ademmachine in Bedienplan nalopen) en 0.4 (`reference/ademmachine.html` uit het artifact).
+7. De vormen overnemen uit Varve (`src/vormen/hulp.js` + `systemen*.js`, plain JS),
    in plaats van beeldmodules 06d–f.
-7. Audiomodules 06a–c (Pad, Korrelwolk, Resonator, Ruimte).
-8. Sessie 07: twintig scènes.
-9. Sessie 08: opname, Wake Lock, beeldvullend.
-10. Publicatie 1: een meditatie van 10 minuten online.
+8. Audiomodules 06a–c (Pad, Korrelwolk, Resonator, Ruimte). Het geluid van de isomorfe
+   vormen wordt hier één gedeelde module (AudioWorklet; H6), die Varve later overneemt.
+9. Sessie 07: twintig scènes.
+10. Sessie 08: opname, Wake Lock, beeldvullend.
+11. Publicatie 1: een meditatie van 10 minuten online.
 
 **Beslismoment rond 25 okt** (VRAGEN H5)
-11. Eerst de AI-laag van AV-kern (Totaalplan: 26 okt – 8 nov) of eerst Varve?
+12. Eerst de AI-laag van AV-kern (Totaalplan: 26 okt – 8 nov) of eerst Varve?
 
 **Varve daarna, op volgorde** (in [ ] wat parallel kan)
-12. Eigen mapping als VERSCHIL bewaren (vóór alles wat de standaardmapping
-    verandert). [parallel met 14]
-13. Spoor C, DJ-functies: beatjump, play.quant (starten op de maat), EQ-kill,
+13. Eigen mapping als VERSCHIL bewaren (vóór alles wat de standaardmapping
+    verandert). [parallel met 14 en 18]
+14. Toonsoort per nummer (`docs/TOONSOORT.md`, 2,5–3 sessies):
+    - `server/toon.js` in de worker, schema v6, een kaart met een stemming per stuk;
+    - weergave van wat je HOORT (T3);
+    - geen APC-knoppen (T6).
+15. Keylock en toon verschuiven (`docs/KEYLOCK.md`, 2,5–4 sessies):
+    - Signalsmith in `stream-lezer.js` (optie A), na I1–I3;
+    - een sprong duurt ~95 ms (K3), transponeren mag ook zonder keylock (K8);
+    - de APC-plek (I4) na 13.
+16. Spoor C, DJ-functies: beatjump, play.quant (starten op de maat), EQ-kill,
     loop in/out, brake, plus de vrije APC-knoppen (VERBETERINGEN ronde 3).
-14. Video mengen in het losse venster (beamer bevriest nu als het hoofdtabblad
+17. Stems, kiesbaar per nummer (H2):
+    - standaard twee, vier op verzoek;
+    - splitsen bij de ingest;
+    - stem-fader vóór de EQ;
+    - eventueel op de Omarchy-machine (H3).
+18. Video mengen in het losse venster (de beamer bevriest nu als het hoofdtabblad
     naar de achtergrond gaat).
-15. Stems (alleen als H1 = ja): splitsen bij de ingest, 2 stems, stem-fader vóór de EQ,
-    eventueel op de Omarchy-machine.
-16. Luistertests A2 (streamen/loops) en A3 (keylock) → keylock bouwen (Signalsmith).
-17. Spoor D: handelingenlog + terugspelen; blauwdruk-import alleen als G4 = ja.
-    [parallel met 18]
-18. Library: meer dan 200 nummers, sorteren, hotcues per nummer, voortgang/wachtrij ingest.
-19. Audiopad zonder allocaties per frame (renderBlok, 8 decks).
-20. Vormen verder: geluid van de isomorfe vormen aansluiten, routes per nummer
-    bewaren, beeldscènes/zwart/flits, onset.bin als bron, metPuls als route.
-21. Beatgrid-restpunten (156-bpm-stuk album, verfijnen na "tel 1 hier", maat-anker).
-22. Toonsoort-detectie.
-23. Koptelefoon-cue (F1): eerst hardware.
-24. Klein: PALETTE_HEX 60 → 128, RF64 afspelen in de browser testen.
+19. Luistertest A2 (streamen, loops, seek).
+20. Spoor D: handelingenlog + terugspelen. Geen blauwdruk-import (G4). [parallel met 21]
+21. Library: meer dan 200 nummers, sorteren, hotcues per nummer, voortgang/wachtrij ingest.
+22. Audiopad zonder allocaties per frame (renderBlok, 8 decks).
+23. Vormen verder:
+    - geluid van de isomorfe vormen via een eigen vormbus (H6, na de AV-kern-module;
+      grondtoon = toonsoort van de maatgever, dus na 14);
+    - routes per nummer bewaren;
+    - beeldscènes, zwart en flits;
+    - onset.bin als bron, metPuls als route.
+24. Beatgrid-restpunten (156-bpm-stuk album, verfijnen na "tel 1 hier", maat-anker).
+25. Koptelefoon-cue (F1): eerst hardware.
+26. Klein: PALETTE_HEX 60 → 128, RF64 afspelen in de browser testen.
 
 | Fase | Status | Resultaat |
 |---|---|---|
 | 1 | **klaar** | Audio-engine, 2 decks, EQ/filter/xfader, waveform, toetsenbord |
 | 2 | **klaar** | MIDI-laag, MIDI-learn, APC40 mkII-mapping, LED-feedback |
 | 0 | **klaar** | Ingest: yt-dlp + ffmpeg + library |
-| 3 | **bijna klaar** | Beatgrid, BPM (tap-hybride), sync, beat-loops draaien; open: keylock (wacht op luistertest, VRAGEN A3) en key-detectie |
+| 3 | **bijna klaar** | Beatgrid, BPM (tap-hybride), sync, beat-loops draaien; open: keylock en toonsoort. Ontworpen en gemeten op 24 sep (`docs/KEYLOCK.md`, `docs/TOONSOORT.md`); keylock wacht op de luistertest (A3). Bouwen na 25 okt, ROADMAP 14–15 |
 | 4 | **klaar** | Video volgt audio per track, WebGL-mix op fader × crossfader, los venster, vier mengvormen, zes effecten en een puls op de tel, alles op de action-bus en op het APC-grid (grid-modus video: effect vasthouden, mengvorm, puls-doel). Verbeteringen (mengen in het losse venster) in `docs/VERBETERINGEN.md` ronde 3 |
 | 5 | **begonnen** | FX-racks per link draaien met zes effecten incl. tempo-gesynchroniseerde gate, en zijn op het gehoor te bouwen in de rack-editor (knoppen bovenaan, echte eenheden, DICHT/OPEN), met drie kant-en-klare racks; acht tracks in engine en scherm (het scherm spiegelt de APC: acht kolommen + focusdeel, crossfader A/B/thru, sync naar de luidste); streamen vanaf schijf (acht albums ~30 MB); je set opnemen (WAV, of WAV + 720p-video); sends naar gedeelde echo en galm; sampler met acht pads op het grid; APC-indeling voor alle acht tracks, sends en pads gebouwd (mode 0x42, `docs/APC40.md`); nog: testen op het apparaat, daarna ronde 3 uit `docs/VERBETERINGEN.md` |
 
