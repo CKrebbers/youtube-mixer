@@ -1,7 +1,8 @@
 # Open vragen voor Clay
 
-Stand: 23 september 2026 (avond), na verbeterronde 1 en 2 uit
-`docs/VERBETERINGEN.md`. Open: A2, A3, F1; de rest is beslist en gebouwd. Per vraag: wat er speelt, de opties, mijn advies, en wat er
+Stand: 24 september 2026 (nacht). Open: A2, A3, F1, G4, H1–H6; de rest is
+beslist en gebouwd. G1–G3 en G5 zijn beantwoord door het AV-kern-werk
+(docs/plugins/01-plan.md). Per vraag: wat er speelt, de opties, mijn advies, en wat er
 nodig is om hem te beantwoorden. Afvinken zodra beslist; het besluit komt
 daarna in CLAUDE.md of ROADMAP.md.
 
@@ -172,16 +173,36 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
 
 ## G. Clay's map `Input/` (23 sep, zie docs/INPUT.md)
 
-- [ ] **G1. Wat wil je met `Input/`?** Naslag, ideeënbak, of iets waarin VARVE en AV-kern
+- [x] **G1. Wat wil je met `Input/`?** — 24 sep: AV-kern en Varve samenbrengen; uitgewerkt in docs/plugins/01-plan.md. Naslag, ideeënbak, of iets waarin VARVE en AV-kern
   samenkomen? (fase1-zip = oude versie van dit project; av-kern = eigen project met eigen
   .git, Vite/TS; blueprint-varvedj.json = Bedienplan-export: twee decks, vier beeldlagen.)
-- [ ] **G2. Is de blauwdruk een nieuwe wens?** Hij botst met vastgelegde keuzes (acht
+- [x] **G2. Is de blauwdruk een nieuwe wens?** — 24 sep: nee, losse functies plukken (spoor C); Varve wordt geen blauwdruk op AV-kern. Hij botst met vastgelegde keuzes (acht
   tracks / één kolom = één track, beeld = video van de track, fader = volume). Heropenen
   of alleen losse functies plukken (hotcues 5–8, loop in/out, brake/slip/kill, tempo-master)?
-- [ ] **G3. Actielog met terugspelen** (idee uit AV-kern, ~1 dag): set opnieuw renderen of
+- [x] **G3. Actielog met terugspelen** — 24 sep: ja, als spoor D (ROADMAP punt 17), niet hash-exact. (idee uit AV-kern, ~1 dag): set opnieuw renderen of
   een fout naspelen. Willen?
 - [ ] **G4. Bedienplan blijven gebruiken?** Pas dan loont een import naar de VARVE-mapping.
-- [ ] **G5. Wat is een "Vormmachine"** (26 in de blauwdruk, nergens gevonden)?
+- [x] **G5. Wat is een "Vormmachine"** — gevonden: Clay's artifact, nu `Input/vormmachines.html`, gebouwd als vormlagen. (26 in de blauwdruk, nergens gevonden)?
 - [x] **G6. `Input/` in git of in .gitignore?** — Clay: .gitignore (e285371). Open: waar is `modules/` voor? Advies: .gitignore (zips + een complete
   .git van AV-kern); alleen de blauwdruk eventueel naar docs/. En waar is de lege map
   `modules/` voor?
+
+---
+
+## H. Nieuw (24 sep, nacht): vormlagen en stems
+
+- [ ] **H1. Klinken de stems goed genoeg?** 🎧 Luister naar `tools/stems/uit/no-surprises/`
+  (4-vocals, 3-other) en `bay-ledges/`. Is zang ↔ instrumentaal schoon genoeg om live
+  mee te spelen? Nee = stems parkeren. Ja = H2.
+- [ ] **H2. Twee stems of vier?** 💬 Bij Clay's repertoire zijn drums en bas vrijwel leeg.
+  **Advies:** twee (zang, rest): half de opslag, één knop per track.
+- [ ] **H3. Splitsen op de Omarchy-machine?** 💬 (GTX 1660; geschat 3–6× sneller, en het
+  concurreert niet met de set.) Eerst meten met meet.py daar. Daarna: batch via een
+  gedeelde map, geen open dienst.
+- [ ] **H4. Vormlagen op de APC en de beamer: bevalt het?** 🎛 Zie ROADMAP punt 1. Specifiek:
+  is de waasdrempel (3–8%) te streng voor zachte sporen, en werken de budgetten
+  van 4 en 12 ms op de M1 met 8 video's?
+- [ ] **H5. Na 25 okt: eerst de AI-laag van AV-kern of eerst Varve (ROADMAP 12–24)?** 💬
+- [ ] **H6. Isomorfe vormen met geluid?** 💬 Snaar, trommelvlies, epicykels en korrelwolk
+  kunnen ook klinken (sink vóór de limiter, eigen gain, standaard dicht). Willen, en zo
+  ja: welke bus?

@@ -1,8 +1,63 @@
-# Overdracht — waar we staan (23 september 2026, avond)
+# Overdracht — waar we staan (24 september 2026, nacht)
 
-Lees in deze volgorde: `CLAUDE.md` (architectuur, regels, valkuilen), dan dit
-bestand, dan `docs/VERBETERINGEN.md` (rondes 1–3), `docs/VRAGEN.md` (open
-vragen voor Clay) en `docs/APC40.md` (de indeling zoals gebouwd).
+Lees in deze volgorde: `CLAUDE.md` (architectuur, regels, valkuilen, sectie
+VORMLAGEN), dan dit bestand, dan `ROADMAP.md` (bovenaan: DE TAKENLIJST OP
+VOLGORDE), `docs/VRAGEN.md` (open vragen, nieuw: H1–H6), `docs/plugins/01-plan.md`
+(AV-kern × Varve, besluiten) en `docs/APC40.md`.
+
+## BEGIN HIER (stand 24 sep, nacht)
+
+- **main** is schoon en alles is gecommit. Laatste commits: `24611e4` (stems-meetscript
+  CUDA), `3d1092d` (stems-proef), `02b1763` (controleur verwerkt), vormlagen
+  stap 1–3. `node test/alles.mjs`: 29 bestanden, 1920 checks, groen.
+  `node tools/headless/kijk.mjs`: groen.
+- **Waar we staan:** de vormlagen zijn gebouwd (26 Vormmachines als beeld over de
+  video, Worker, tijdsbudget, reageren op de mix via knob 8). Clay heeft het NOG
+  NIET zelf geprobeerd. Dat is de eerste stap.
+- **Afspraak over de volgorde:** tot 25 oktober gaat AV-kern voor (publicatie 1).
+  De hele lijst staat bovenaan `ROADMAP.md`.
+- **Stems splitsen:** gemeten, niet gebouwd (zie hieronder). Clay moet eerst
+  luisteren (VRAGEN H1).
+- **Materiaal van Clay:** alles staat nu in `Input/` (in .gitignore):
+  `vormmachines.html`, `Totaalplan AV-kern.md`, het projectplan, `av-kern.zip`
+  (de leesbare TS-bron: uitpakken om te lezen) en `blueprint-varvedj.json`.
+  De artifacts: Vormmachines https://claude.ai/artifact/46VSeyzUpaT4GvNAMQb6rh,
+  APC40 ontleed https://claude.ai/artifact/6KMpwkBft7e32DEnUbL9St.
+- **Werkwijze die werkte:** grote klussen met parallelle agenten, elk in een eigen
+  git worktree met een eigen branch, plus een controleur die alleen leest; daarna
+  zelf samenvoegen, tests na elke merge, worktrees opruimen. Headless kijken met
+  `tools/headless/kijk.mjs`: Web MIDI eruit, eigen poorten via VARVE_KIJK_POORT
+  en VARVE_KIJK_DEBUG. NOOIT een gewoon Chrome-tabblad (APC-regel).
+
+## Stems splitsen — proef (24 sep, nacht)
+
+Clay vroeg om een "live stem splitter". Advies en uitkomst:
+- **"Live" in DJ-software** (Serato, rekordbox, djay) = vooraf rekenen, live
+  bedienen. Voor Varve past dat als stap in de ingest (naast peaks en onsets),
+  met stems naast `audio.wav` in de cache en per track stem-faders vóór de EQ.
+  Echt realtime splitsen in de browser voor 8 decks: afgeraden.
+- **Gemeten met Demucs htdemucs op de M1** (`tools/stems/meet.py`, uitkomst in
+  `tools/stems/uit/meting-*.json`, stems om te beluisteren in `tools/stems/uit/<nummer>/`,
+  niet in git): GPU (MPS) 1,9–2,4× realtime, CPU 0,85×. Een uur Sakamoto ≈ 27 min.
+  De som van de stems ligt −34 tot −43 dB van het origineel. Opslag ≈ 44 MB per minuut.
+- **Bij Clay's repertoire:** drums en bas zijn vrijwel leeg. Bij Sakamoto,
+  zoned out en het album zit 82–100% in "other". Alleen zang ↔ rest werkt:
+  No Surprises 52% zang, Bay Ledges 13,5%. **Advies:** als het goed klinkt, TWEE
+  stems (zang en rest) in plaats van vier. Bouwen als spoor ná 25 okt en na
+  "mapping als verschil bewaren".
+- **Omarchy-machine van Clay** (Ryzen 7 5800X, GTX 1660 6 GB, 32 GB): geschat
+  (NIET gemeten) 3–6× sneller dan de M1 op CUDA. Grootste winst: het splitsen
+  concurreert daar niet met video en vormen tijdens een set. Voorstel: een batch
+  via een gedeelde map (rsync/Syncthing), geen open netwerkdienst. Meten: Clay
+  draait meet.py daar (commando's in het gesprek: python3.12-venv,
+  `pip install torch torchaudio demucs`, `--apparaat cuda --media <map>`), of
+  zet sshd aan en geeft de hostnaam.
+- **Demucs staat NIET in de app.** Hij zat in een tijdelijke venv in de sessie-
+  scratchpad (weg na de sessie). Opnieuw opzetten:
+  `python3 -m venv --system-site-packages <map> && <map>/bin/pip install demucs`.
+  PyTorch 2.9.1 met MPS staat al systeembreed op de Mac. Het model (~80 MB)
+  staat in de torch-cache.
+
 
 ## Nieuw (24 september 2026, later): sporen A en B plus controleur (stap 2 en 3)
 

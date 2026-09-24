@@ -3,6 +3,55 @@
 Eén fase per keer. Maak een fase af en laat hem draaien voordat de volgende begint.
 Vink af in dit bestand zodra een fase draait.
 
+## DE TAKENLIJST OP VOLGORDE (24 september 2026, met Clay doorgenomen)
+
+Twee projecten naast elkaar: Varve DJ (deze repo) en AV-kern (het
+meditatie-instrument, eigen repo, `Input/Totaalplan AV-kern.md`). Afspraak: tot
+25 oktober gaat AV-kern voor. Regel: altijd maar één app tegelijk met de APC.
+
+**Nu (tot 27 sep)**
+1. Clay probeert Varve in zijn eigen tabblad: `?vormen=1`, videopaneel (V),
+   Detail View, knob 1–8, Device ◀ ▶ door de 26 vormen, REAGEER + bass-kill.
+   Daarnaast de beatgrid-dingen (4× tap, grid-modus Shift + Metronome). Wat niet
+   klopt: eerst repareren.
+2. Echofilter: na een sessie `hub.status().echoes`; 0 → uitzetten voor de APC.
+3. VRAGEN G1–G5 afvinken (grotendeels beantwoord door het AV-kern-werk; G4 is open).
+4. Stems: Clay luistert naar `tools/stems/uit/` (VRAGEN H1). Eventueel meten op de
+   Omarchy-machine (H3).
+
+**AV-kern tot publicatie 1 (25 okt)**
+5. Fase 0 afmaken: APC testen op AV-kern, luisteren op de M1 (kern 01–05 is gebouwd).
+6. De vormen overnemen uit Varve (`src/vormen/hulp.js` + `systemen*.js`, plain JS),
+   in plaats van beeldmodules 06d–f.
+7. Audiomodules 06a–c (Pad, Korrelwolk, Resonator, Ruimte).
+8. Sessie 07: twintig scènes.
+9. Sessie 08: opname, Wake Lock, beeldvullend.
+10. Publicatie 1: een meditatie van 10 minuten online.
+
+**Beslismoment rond 25 okt** (VRAGEN H5)
+11. Eerst de AI-laag van AV-kern (Totaalplan: 26 okt – 8 nov) of eerst Varve?
+
+**Varve daarna, op volgorde** (in [ ] wat parallel kan)
+12. Eigen mapping als VERSCHIL bewaren (vóór alles wat de standaardmapping
+    verandert). [parallel met 14]
+13. Spoor C, DJ-functies: beatjump, play.quant (starten op de maat), EQ-kill,
+    loop in/out, brake, plus de vrije APC-knoppen (VERBETERINGEN ronde 3).
+14. Video mengen in het losse venster (beamer bevriest nu als het hoofdtabblad
+    naar de achtergrond gaat).
+15. Stems (alleen als H1 = ja): splitsen bij de ingest, 2 stems, stem-fader vóór de EQ,
+    eventueel op de Omarchy-machine.
+16. Luistertests A2 (streamen/loops) en A3 (keylock) → keylock bouwen (Signalsmith).
+17. Spoor D: handelingenlog + terugspelen; blauwdruk-import alleen als G4 = ja.
+    [parallel met 18]
+18. Library: meer dan 200 nummers, sorteren, hotcues per nummer, voortgang/wachtrij ingest.
+19. Audiopad zonder allocaties per frame (renderBlok, 8 decks).
+20. Vormen verder: geluid van de isomorfe vormen aansluiten, routes per nummer
+    bewaren, beeldscènes/zwart/flits, onset.bin als bron, metPuls als route.
+21. Beatgrid-restpunten (156-bpm-stuk album, verfijnen na "tel 1 hier", maat-anker).
+22. Toonsoort-detectie.
+23. Koptelefoon-cue (F1): eerst hardware.
+24. Klein: PALETTE_HEX 60 → 128, RF64 afspelen in de browser testen.
+
 | Fase | Status | Resultaat |
 |---|---|---|
 | 1 | **klaar** | Audio-engine, 2 decks, EQ/filter/xfader, waveform, toetsenbord |

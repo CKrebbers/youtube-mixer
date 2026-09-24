@@ -219,4 +219,4 @@ Bronnen:
 - `/Users/claykrebbers/Desktop/1. Projects/Youtube mixer/src/engine/audio-graph.js`
 - `/Users/claykrebbers/Desktop/1. Projects/Youtube mixer/mappings/apc40mk2.json`
 - `/Users/claykrebbers/Desktop/1. Projects/Youtube mixer/docs/plugins/00-inventaris.md`
-- `/private/tmp/claude-501/-Users-claykrebbers-Desktop-1--Projects-Youtube-mixer/dd38f872-bcfc-421d-aa8d-2748af7e8626/scratchpad/bench/vm-bench.cjs`
+- `tools/bench/vm-bench.cjs`
