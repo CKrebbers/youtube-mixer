@@ -160,6 +160,13 @@ distributie, en een browser-app serveren ís distributie — de JavaScript gaat
 naar de bezoeker. Op localhost mag alles; zodra dit op varve.nl staat zou Rubber
 Band de hele app GPL maken. Signalsmith is MIT en heeft dat probleem niet.
 
+**Nagemeten op 24 september 2026** (`docs/KEYLOCK.md`, `tools/keylock/`): het
+`.mjs` is 111 KB, maar in een worklet importeren registreert HUN processor; de
+WASM-fabriek moet er los uit. ~2% van een kern per deck (8 decks ~16%, onder
+belasting tot 2×), zonder gespreid rekenen pieken tot 170% van een quantum bij
+acht decks. Plannen is alleen nodig voor SPRONGEN (uitLat + één blok, 63–93 ms),
+niet voor tempo. Advies: stretcher in `stream-lezer.js` (optie A).
+
 **Niet SoundTouch/WSOLA voor dit repertoire.** WSOLA zoekt één plakplek en
 warbelt hoorbaar op aangehouden polyfone klanken — pads, drones, strijkers.
 Mixxx noemt SoundTouch de optie voor machines met weinig vermogen. De
