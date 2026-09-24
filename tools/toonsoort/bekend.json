@@ -1,0 +1,63 @@
+{
+  "_uitleg": [
+    "Bekende toonsoorten per nummer in Clay's library, om de meting aan te toetsen. Opgezocht 24 september 2026.",
+    "van/tot in tracktijd (s). toonsoort = het antwoord; ook = wat een andere goede bron zegt (meestal de relatieve: zelfde tonen, zelfde Camelot-getal). Goed = een van beide.",
+    "zeker: H = bladmuziek, transcriptie of muziekanalyse; M = Spotify-algoritme via songbpm.com (zelf een algoritme, dus geen echte grondwaarheid); X = bronnen spreken elkaar tegen; C = alleen uit onze eigen chroma (X en C worden getoond, niet meegeteld).",
+    "Welke opname: afgeleid uit de duur (Clay's versie tegen de duur op songbpm/Spotify).",
+    "Grenzen Sakamoto: stiltes in audio.wav, gecontroleerd op twee videoframes (1500 s = koko, 2600 s = Germination). Grenzen ADRIANA: tracklist van Bandcamp (duren) naast de stiltes in audio.wav."
+  ],
+  "tiktok-7031697544472251694": {
+    "opmerking": "Cover door Lennon Stella. Het origineel (Radiohead) staat in F majeur (H: musicnotes MN0088770, Wikipedia) en ~32-36 cent laag gestemd (L: blog.grainapps.com/radiohead-no-surprises-431hz). Van de cover is geen toonsoort te vinden.",
+    "stukken": [
+      { "van": 0, "tot": 79, "titel": "No Surprises (cover Lennon Stella)", "toonsoort": null, "zeker": "-", "bron": "niet gevonden" }
+    ]
+  },
+  "HGv_ySHXtYI": {
+    "opmerking": "Bay Ledges - Ciel (demo): geen toonsoort te vinden, release nog niet uit.",
+    "stukken": []
+  },
+  "mOzW9KQKfzA": {
+    "grenzen": [271.8, 560.5, 870.3, 1089.6, 1443, 1701, 1995.5, 2313, 2514.6, 2643.2, 2939, 3310],
+    "stukken": [
+      { "van": 0, "tot": 215, "titel": "Aqua", "toonsoort": "G", "zeker": "M",
+        "bron": "https://songbpm.com/@ryuichi-sakamoto/aqua (alle ~20 versies G majeur)" },
+      { "van": 215, "tot": 271.8, "titel": "Aqua (slot, modulatie)", "toonsoort": "Ab", "zeker": "C",
+        "bron": "C = alleen uit onze eigen chroma afgelezen (As Bes C Des Es F G hoog, D E A B Fis laag), in beide versies; telt niet mee. De kaart vond deze modulatie een halve toon omhoog zelf." },
+      { "van": 271.8, "tot": 560.5, "titel": "Merry Christmas Mr. Lawrence", "toonsoort": "Db", "ook": ["Bbm"], "zeker": "H",
+        "bron": "https://www.musicnotes.com/sheetmusic/mtd.asp?ppn=MN0126069 (pianosolo, Des majeur); MusicRadar-analyse van het thema: Bes mineur" },
+      { "van": 560.5, "tot": 870.3, "titel": "Bolerish", "toonsoort": "C", "zeker": "H",
+        "bron": "https://scores.ananas.nu/Ryuichi%20Sakamoto%20-%20Bolerish.pdf (transcriptie R.S. Bryder: geen voortekening, orgelpunt op C, passages met bes = C mixolydisch). songbpm zegt F majeur (dezelfde tonen als C mixolydisch): het Spotify-algoritme valt hier in de kwint-valkuil." },
+      { "van": 870.3, "tot": 1089.6, "titel": "Rain", "toonsoort": "B", "ook": ["Ebm"], "zeker": "X",
+        "bron": "songbpm: B majeur (trio 3:38) tegen Es mineur (2009, 3:30); amateurtranscriptie zes kruisen. Tegenspraak." },
+      { "van": 1089.6, "tot": 1443, "titel": "The Last Emperor (Theme)", "toonsoort": "G", "ook": ["Em"], "zeker": "M",
+        "bron": "https://songbpm.com/@ryuichi-sakamoto/the-last-emperor-theme (soundtrack 5:54 = Clay's duur: G); andere versies E mineur" },
+      { "van": 1443, "tot": 1701, "titel": "koko", "toonsoort": "Ab", "zeker": "M",
+        "bron": "https://songbpm.com/@ryuichi-sakamoto/koko-instrumental-sbwz5 (Instrumental 4:18 = Clay's duur); de 4:05-versies G/E mineur" },
+      { "van": 1701, "tot": 1995.5, "titel": "Solitude", "toonsoort": "Fm", "ook": ["Ab"], "zeker": "H",
+        "bron": "https://www.musicnotes.com/sheetmusic/mtd.asp?ppn=MN0207652 (Signature Artist-transcriptie, F mineur); songbpm Tony Takitani 4:54: As majeur" },
+      { "van": 1995.5, "tot": 2313, "titel": "Blu", "toonsoort": "Am", "ook": ["F"], "zeker": "X",
+        "bron": "songbpm: A mineur (5:20, 2015) tegen F majeur (5:17, 2023); Clay's versie 5:18. Tegenspraak." },
+      { "van": 2313, "tot": 2514.6, "titel": "Ieta", "toonsoort": "F", "zeker": "M",
+        "bron": "https://songbpm.com/@ryuichi-sakamoto/ieta-B02Ppx22qO (single 2022, 3:20; enige bron)" },
+      { "van": 2514.6, "tot": 2643.2, "titel": "Germination", "toonsoort": "Bm", "ook": ["D"], "zeker": "H",
+        "bron": "https://www.musicnotes.com/sheetmusic/mtd.asp?ppn=MN0258687 (Signature Artist, B mineur); songbpm soundtrack 2:09: D majeur, maar dezelfde opname als heruitgave: C majeur" },
+      { "van": 2643.2, "tot": 2939, "titel": "The Sheltering Sky", "toonsoort": "Cm", "ook": ["Gm"], "zeker": "X",
+        "bron": "songbpm Playing the Piano 4:54: C mineur; trio 1996 en een pianotranscriptie (nicolamorali.com): G mineur. Tegenspraak (een kwint)." },
+      { "van": 2939, "tot": 3310, "titel": "Merry Christmas Mr. Lawrence (Orchestra)", "toonsoort": "Bbm", "ook": ["Db"], "zeker": "M",
+        "bron": "https://songbpm.com/@ryuichi-sakamoto/merry-christmas-mr-lawrence-a2hwe (orkest 5:43) en Tohoku Youth Orchestra 6:13: Bes mineur" },
+      { "van": 3310, "tot": 3542, "titel": "Aqua (Orchestra)", "toonsoort": "G", "zeker": "M",
+        "bron": "https://songbpm.com/@ryuichi-sakamoto/aqua-yw095 (Playing the Orchestra 2014, 5:03)" },
+      { "van": 3542, "tot": 3624, "titel": "Aqua (Orchestra, slot)", "toonsoort": "Ab", "zeker": "C",
+        "bron": "C = eigen chroma, zie Aqua (slot); telt niet mee." }
+    ]
+  },
+  "f3a7DiCsm8k": {
+    "opmerking": "ADRIANA - figure xiii (19 nummers, uitgebracht 19 sep 2026): geen toonsoorten te vinden. Wel de grenzen (Bandcamp-duren, opgeteld).",
+    "grenzen": [89, 184, 297, 400, 488, 597, 686, 815, 918, 1047, 1135, 1224, 1320, 1417, 1506, 1592, 1671, 1764],
+    "stukken": []
+  },
+  "1W1-nPXEVKk": {
+    "opmerking": "Ambient2K - zoned out: een doorlopende mix zonder stiltes; de tracklist van het album ambient4k (Bandcamp) telt op tot 50:10, de video duurt 41:47, dus de volgorde is niet te reconstrueren. Geen toonsoorten te vinden.",
+    "stukken": []
+  }
+}
