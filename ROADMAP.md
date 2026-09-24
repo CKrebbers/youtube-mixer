@@ -34,8 +34,11 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
    - Shift los bij loskoppelen.
 
    0.4 is gedaan: `reference/ademmachine.html` uit het artifact. Die NIET openen met de APC aangesloten, want de mockup stuurt zonder wachtrij. Nog van Clay: 0.2 (de Ademmachine in Bedienplan nalopen).
-7. De vormen overnemen uit Varve (`src/vormen/hulp.js` + `systemen*.js`, plain JS),
-   in plaats van beeldmodules 06d–f.
+7. Eerst in Varve: alle 26 systemen echt 16:9 laten tekenen (Clay 24 sep; nu een
+   vierkant dat het beeld vult door boven en onder bij te snijden). Met agenten,
+   1–2 sessies: `g.S` en de n×n-roosters worden breedte × hoogte. Ook AV-kern
+   publiceert 16:9. Daarna de vormen overnemen uit Varve (`src/vormen/hulp.js` +
+   `systemen*.js`, plain JS), in plaats van beeldmodules 06d–f.
 8. Audiomodules 06a–c (Pad, Korrelwolk, Resonator, Ruimte). Het geluid van de isomorfe
    vormen wordt hier één gedeelde module (AudioWorklet; H6), die Varve later overneemt.
 9. Sessie 07: twintig scènes.
