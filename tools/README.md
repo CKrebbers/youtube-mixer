@@ -48,3 +48,20 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   (GPU via MPS of CPU) en het energie-aandeel per stem. Leest `media/<id>/audio.wav`, schrijft
   fragment + vier stems naar `tools/stems/uit/` (niet in git). Draait in een eigen venv met
   `demucs` (geen dependency van de app). Uitkomst 24 sep: zie docs/plugins of HANDOFF.
+
+## toonsoort/
+Toonsoort (key) meten op Clay's library (docs/TOONSOORT.md). Leest alleen: `media/<id>/audio.wav`
+via ffmpeg en `media/library.db` (readOnly); schrijft niets in media/ of de database. Werkt ook
+vanuit een git-worktree (zoekt media/ in de hoofdmap), of zet `VARVE_ROOT`.
+
+| bestand | wat |
+|---|---|
+| toon.mjs | het rekenwerk, puur: stemming, halve tonen, chroma, zes profielen, nul, kaart, stemming per stuk |
+| lees.mjs | audio via ffmpeg (mono 4410 Hz), library alleen-lezen |
+| varianten.mjs | welke chroma-varianten en profielen vergeleken worden |
+| synth.mjs → synth.txt | synthetisch materiaal met een bekend antwoord: 24 toonsoorten, relatief mineur, 432 Hz, nul-proeven, modulatie, stemming per stuk |
+| meet.mjs → meting.txt | alle nummers: per profiel, kaart, grenzen, zekerheid, rekentijd; `--wissel`, `--venster`, `--sr/--N/--hop` voor vergelijkingen (naar uit/) |
+| bekend.json | bekende toonsoorten met bron (H bladmuziek, M Spotify-algoritme, X tegenspraak, C eigen chroma) en nummergrenzen |
+
+Draai met `node tools/toonsoort/meet.mjs [id ...]` en `node tools/toonsoort/synth.mjs`. Uitkomst
+24 sep: zie docs/TOONSOORT.md. `uit/` staat niet in git.
