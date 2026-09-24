@@ -42,6 +42,13 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   `mapping.handle`), tekent 60 beelden en zet schermafdrukken in `tools/headless/uit/`
   (niet in git). Let op: in headless rekent WebGL in software (swiftshader); snelheid
   zegt hier niets.
+- `vormen-plaat.mjs <uitmap> [--stappen 180] [--zaad 7] [--kwaliteit 1] [--alleen gs,ln]` — alle
+  Vormmachines op één plaat (ROADMAP 7): elk systeem met vast zaad na een vast aantal stappen van
+  1/60 s als `<id>.png` (640 × 360), plus `plaat.png` (contactblad) en `plaat.json`. Per systeem
+  "16:9" of "vierkant" (tekent het rechts van het oude vierkant, x ≥ 1,05 H?) en het zwaartepunt.
+  Zelfde veiligheid als kijk.mjs (geen MIDI, eigen server, tijdelijke db; poorten uit
+  `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`, standaard 8792/9338). De app start niet: een kaal document
+  van de eigen server importeert `/src/vormen/`. Exit 1 als een systeem gooit.
 
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen
