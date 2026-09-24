@@ -272,11 +272,30 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .lib-job-balk{height:4px;background:#0b0e11;border:1px solid var(--line);border-radius:2px;overflow:hidden}
 .lib-job-balk i{display:block;height:100%;background:var(--a)}
 
-.lib-rijen{flex:1;overflow:auto;font-size:11px}
+/* De lijst: kop (plakt bovenaan), een ruimte zo hoog als de hele lijst, en
+   daarin een venster met alleen de rijen die je ziet (library-lijst.js).
+   Rijhoogte en kolommen zet het paneel zelf (--lib-rij-h, --lib-kolommen):
+   die rekenen mee met de scrollpositie en moeten dus op één plek staan. */
+.lib-rijen{flex:1;overflow:auto;font-size:11px;position:relative;overscroll-behavior:contain}
 .lib-leeg{padding:24px;text-align:center;color:var(--dim)}
-.lib-rij{display:grid;grid-template-columns:1fr 140px 60px 64px 92px 110px 60px auto;gap:10px;
-  align-items:center;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.03)}
+.lib-kop,.lib-rij{display:grid;grid-template-columns:var(--lib-kolommen);gap:10px;align-items:center;
+  height:var(--lib-rij-h);box-sizing:border-box;padding:0 12px}
+.lib-kop{position:sticky;top:0;z-index:1;background:var(--panel);border-bottom:1px solid var(--line)}
+.lib-kop.hidden{display:none}
+.lib-kopcel{font:inherit;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+button.lib-kopcel{background:none;border:0;padding:0;cursor:pointer}
+button.lib-kopcel:hover{color:var(--text)}
+.lib-sorteer.aan{color:var(--a)}
+.lib-sorteer i{font-style:normal;margin-left:4px}
+.lib-kop-knoppen{visibility:hidden}
+.lib-ruimte{position:relative}
+.lib-venster{position:absolute;left:0;right:0;top:0}
+.lib-rij{border-bottom:1px solid rgba(255,255,255,.03)}
 .lib-rij:hover{background:rgba(255,255,255,.03)}
+.lib-rij.laadt{color:var(--dim)}
+.lib-datum{font-family:ui-monospace,monospace;color:var(--dim);white-space:nowrap;overflow:hidden}
+.lib-knoppen .btn.sm{min-width:23px}
 .lib-titel{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Waar een nummer vandaan komt: YT / TikTok / bestand / web. */
 .lib-bron{display:inline-block;font-style:normal;font-size:8px;letter-spacing:.06em;text-transform:uppercase;

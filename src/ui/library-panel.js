@@ -1,9 +1,9 @@
-import { fmtTime } from '../lib/emitter.js';
 import { esc } from './dom.js';
-import { gridStatus, libraryBpm, STATUS_TEKST } from './grid-strook.js';
-
-/** Het label per bron (server/links.js: bronVan). */
-const BRON_LABEL = { youtube: 'YT', tiktok: 'TikTok', bestand: 'bestand', web: 'web' };
+import { gridStatus } from './grid-strook.js';
+import {
+  RIJ_H, PaginaCache, lijstUrl, zichtbaar, volgendeSortering, leesSortering, bewaarSortering,
+  kolomSjabloon, kopHtml, cellenHtml, standaardOpslag,
+} from './library-lijst.js';
 
 /** Wat de upload aanneemt; gelijk aan BESTAND_EXT in server/links.js. */
 export const BESTAND_EXT = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'wav', 'mp3', 'flac', 'm4a', 'aiff', 'aif', 'ogg', 'opus'];
@@ -22,7 +22,8 @@ export const isVideoBestand = (file) => /^video\//.test(file?.type || '') || ['m
 
 
 export class LibraryPanel {
-  constructor({ root, onLaad, onGrid = () => {}, decks = ['A', 'B'], label = (d) => d, stand = () => 'leeg' }) {
+  constructor({ root, onLaad, onGrid = () => {}, decks = ['A', 'B'], label = (d) => d, stand = () => 'leeg',
+    opslag = standaardOpslag() }) {
     this.root = root;
     this.onLaad = onLaad;
     this.onGrid = onGrid;        // (trackId, grid) na "opnieuw analyseren": op de decks zetten
@@ -30,12 +31,20 @@ export class LibraryPanel {
     this.label = label;
     this.stand = stand;          // (deck) => 'leeg' | 'geladen' | 'speelt'
     this.zeker = null;           // { soort, sleutel, tot } voor 'nog eens klikken'
-    this.tracks = [];
     this.opdrachten = [];
     this.bezig = new Set();     // tracks die nu geladen worden
     this.analyseert = new Set(); // tracks waarvan het grid nu opnieuw geanalyseerd wordt
     this.melding = null;
     this.zoek = '';
+    // De lijst: pagina's van de server, alleen zichtbare rijen getekend (library-lijst.js).
+    this.opslag = opslag;
+    this.sortering = leesSortering(opslag);
+    this.cache = new PaginaCache(async (vraag, pagina) => {
+      const r = await fetch(lijstUrl(vraag, pagina));
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.fout || `${r.status}`);
+      return j;
+    });
 
     this.uploads = [];          // { sleutel, naam, pct, fout } — lokaal, tot de server een opdracht heeft
     this.naLaden = new Map();   // opdracht-id -> deck: na de ingest op die track laden (gesleept op een track)
@@ -67,9 +76,36 @@ export class LibraryPanel {
       root.classList.remove('drag');
       this.uploadBestanden([...e.dataTransfer.files]);
     });
-    this.el.zoek.addEventListener('input', () => { this.zoek = this.el.zoek.value.trim(); this.ververs(); });
+    // Zoeken op de server: even wachten tot je uitgetypt bent, en dan bovenaan beginnen.
+    let zoekTimer = null;
+    this.el.zoek.addEventListener('input', () => {
+      clearTimeout(zoekTimer);
+      zoekTimer = setTimeout(() => {
+        const zoek = this.el.zoek.value.trim();
+        if (zoek !== this.zoek) { this.zoek = zoek; this.ververs({ bovenaan: true }); }
+      }, 120);
+    });
+
+    // Kop, lege ruimte zo hoog als de hele lijst, en het venster met de rijen die je ziet.
+    this.el.rijen.innerHTML = '<div class="lib-kop"></div><div class="lib-ruimte"><div class="lib-venster"></div></div>';
+    this.el.kop = this.el.rijen.querySelector('.lib-kop');
+    this.el.ruimte = this.el.rijen.querySelector('.lib-ruimte');
+    this.el.venster = this.el.rijen.querySelector('.lib-venster');
+    root.style.setProperty('--lib-rij-h', `${RIJ_H}px`);
+    root.style.setProperty('--lib-kolommen', kolomSjabloon());
+    this.tekenKop();
+    let beeld = 0;
+    const volg = () => {
+      if (beeld) return;
+      beeld = requestAnimationFrame(() => { beeld = 0; this.tekenRijen(); this._haalZichtbaar(); });
+    };
+    this.el.rijen.addEventListener('scroll', volg, { passive: true });
+    // Het paneel opent (0 -> 340 px hoog): dan pas weten we hoeveel rijen er passen.
+    if (typeof ResizeObserver === 'function') new ResizeObserver(volg).observe(this.el.rijen);
 
     this.el.rijen.addEventListener('click', (e) => {
+      const kop = e.target.closest('button[data-sorteer]');
+      if (kop) return this.sorteer(kop.dataset.sorteer);
       const knop = e.target.closest('button[data-deck]');
       if (knop) {
         // Over een track die SPEELT laden valt de zaal stil. Dan eerst vragen:
@@ -83,7 +119,7 @@ export class LibraryPanel {
       const her = e.target.closest('button[data-her]');
       if (her) {
         // Over een grid op SLOT (door jou bevestigd) alleen na een tweede klik.
-        const t = this.tracks.find((x) => x.id === her.dataset.her);
+        const t = this._track(her.dataset.her);
         if (t?.grid?.slot && !this._bevestigd('her', t.id)) {
           this.melding = { tekst: `het grid van "${t.titel}" staat op slot — klik nog eens op ↻ om het toch te vervangen`, goed: false };
           return this.tekenStatus();
@@ -92,10 +128,10 @@ export class LibraryPanel {
       }
       const weg = e.target.closest('button[data-weg]');
       if (weg) {
-        // Weghalen gooit ook het grid en de racks van dit nummer weg.
+        // Weghalen gooit ook grid, racks, hotcues en sampler-pads van dit nummer weg.
         if (!this._bevestigd('weg', weg.dataset.weg)) {
-          const t = this.tracks.find((x) => x.id === weg.dataset.weg);
-          this.melding = { tekst: `"${t?.titel ?? weg.dataset.weg}" weghalen, met grid en racks? Klik nog eens op ×`, goed: false };
+          const t = this._track(weg.dataset.weg);
+          this.melding = { tekst: `"${t?.titel ?? weg.dataset.weg}" weghalen, met grid, racks en hotcues? Klik nog eens op ×`, goed: false };
           return this.tekenStatus();
         }
         return this.verwijder(weg.dataset.weg);
@@ -118,6 +154,22 @@ export class LibraryPanel {
   }
 
   get open() { return !this.root.classList.contains('hidden'); }
+
+  /** Wat er nu van de lijst geladen is, op volgorde (console; de lijst zelf staat in `cache`). */
+  get tracks() { return this.cache.geladen; }
+
+  /** Een nummer op id: uit de geladen pagina's, of net binnengehaald. */
+  _track(id) { return this.cache.vind(id); }
+
+  /** Klik op een kolomkop. */
+  sorteer(sleutel) {
+    const nieuw = volgendeSortering(this.sortering, sleutel);
+    if (nieuw === this.sortering) return;
+    this.sortering = nieuw;
+    bewaarSortering(this.opslag, nieuw);
+    this.tekenKop();
+    this.ververs({ bovenaan: true });
+  }
 
   async haalBinnen() {
     const url = this.el.url.value.trim();
@@ -205,12 +257,12 @@ export class LibraryPanel {
       this.tekenStatus();
       return;
     }
-    if (!this.tracks.some((t) => t.id === o.track.id)) this.tracks.unshift(o.track);
+    if (!this._track(o.track.id)) this.cache.extra.set(o.track.id, o.track);
     this.laad(o.track.id, deck);
   }
 
   async laad(id, deck) {
-    const track = this.tracks.find((t) => t.id === id);
+    const track = this._track(id);
     if (!track || this.bezig.has(id)) return;
     this.bezig.add(id);
     this.tekenRijen();
@@ -219,6 +271,10 @@ export class LibraryPanel {
       this.melding = { tekst: `${track.titel} staat op track ${this.label(deck)}`
         + (r?.hint ? ` — ${r.hint}` : ''), goed: true };
       fetch(`/api/library/${id}/geladen`, { method: 'POST' }).catch(() => {});
+      // "gespeeld" meteen bijwerken, maar NIET opnieuw sorteren: de lijst
+      // springt dan niet onder je muis weg terwijl je de volgende zoekt.
+      track.laatst_geladen = Date.now();
+      track.keer_geladen = (track.keer_geladen || 0) + 1;
     } catch (err) {
       this.melding = { tekst: `laden mislukt: ${err.message}`, goed: false };
     }
@@ -229,7 +285,7 @@ export class LibraryPanel {
 
   /** Het grid opnieuw laten voorstellen door de server (in een worker, een paar seconden). */
   async heranalyseer(id, forceer = false) {
-    const track = this.tracks.find((t) => t.id === id);
+    const track = this._track(id);
     if (!track || this.analyseert.has(id)) return;
     this.analyseert.add(id);
     this.melding = { tekst: `grid van "${track.titel}" wordt opnieuw geanalyseerd…`, goed: true };
@@ -259,7 +315,7 @@ export class LibraryPanel {
   }
 
   async verwijder(id) {
-    const track = this.tracks.find((t) => t.id === id);
+    const track = this._track(id);
     if (!track) return;
     // Alleen uit de library; de bestanden laat ik staan. Wissen van schijf is
     // onomkeerbaar en hoort een bewuste handeling te zijn, geen klik naast.
@@ -268,14 +324,33 @@ export class LibraryPanel {
     this.ververs();
   }
 
-  async ververs() {
+  /**
+   * De lijst opnieuw van de server: het stuk dat je ziet, in één keer
+   * geruild (geen flits). `bovenaan`: nieuwe zoekterm of sortering, dan
+   * begin je bovenaan; anders (nummer weg, ingest klaar) blijf je waar je was.
+   */
+  async ververs({ bovenaan = false } = {}) {
+    if (bovenaan) this.el.rijen.scrollTop = 0;
+    const { van, tot } = this._venster(Math.max(this.cache.totaal, 1));
     try {
-      const r = await fetch('/api/library' + (this.zoek ? `?zoek=${encodeURIComponent(this.zoek)}` : ''));
-      const j = await r.json();
-      this.tracks = j.tracks || [];
-    } catch { this.tracks = []; }
+      if (!(await this.cache.ververs({ zoek: this.zoek, ...this.sortering }, van, tot))) return;
+    } catch (err) {
+      this.melding = { tekst: `library niet geladen: ${err.message}`, goed: false };
+    }
     this.tekenStatus();
     this.tekenRijen();
+    this._haalZichtbaar();
+  }
+
+  /** Welke rijen er nu in beeld zijn (met marge). */
+  _venster(totaal = this.cache.totaal) {
+    return zichtbaar({ boven: this.el.rijen.scrollTop, hoogte: this.el.rijen.clientHeight || 400, totaal });
+  }
+
+  /** Scrollen naar een stuk dat nog niet binnen is: ophalen en tekenen. */
+  async _haalZichtbaar() {
+    const { van, tot } = this._venster();
+    if (await this.cache.zorgVoor(van, tot)) { this.tekenStatus(); this.tekenRijen(); }
   }
 
   async pollJobs() {
@@ -300,10 +375,12 @@ export class LibraryPanel {
   }
 
   tekenStatus() {
-    const n = this.tracks.length;
+    const n = this.cache.totaal;
     const m = this.melding
       ? `<b class="${this.melding.goed ? 'goed' : 'bad'}">${esc(this.melding.tekst)}</b> &nbsp;·&nbsp; ` : '';
-    this.el.status.innerHTML = m + `${n} nummer${n === 1 ? '' : 's'} in de library`;
+    this.el.status.innerHTML = m + (this.zoek
+      ? `${n} gevonden voor "${esc(this.zoek)}"`
+      : `${n} nummer${n === 1 ? '' : 's'} in de library`);
   }
 
   tekenJobs() {
@@ -320,33 +397,48 @@ export class LibraryPanel {
     this.el.jobs.classList.toggle('hidden', lopend.length + ups.length === 0);
   }
 
+  /** De kolomkop: sorteerknoppen, en onzichtbare knoppen zodat de kolommen gelijk lopen met de rijen. */
+  tekenKop() {
+    this.el.kop.innerHTML = kopHtml(this.sortering,
+      this.decks.map((d) => `<button class="btn sm lib-trk" tabindex="-1">${esc(this.label(d))}</button>`).join('')
+      + '<button class="btn sm" tabindex="-1">↻</button><button class="btn sm" tabindex="-1">×</button>');
+  }
+
+  /**
+   * Alleen de rijen die je ziet (plus een marge) staan in de DOM; de ruimte
+   * eromheen is zo hoog als de hele lijst, dus de scrollbalk klopt.
+   */
   tekenRijen() {
-    if (!this.tracks.length) {
-      this.el.rijen.innerHTML = `<div class="lib-leeg">nog niets binnengehaald — plak hierboven een YouTube- of TikTok-link, of sleep je eigen audio en video hierheen</div>`;
+    const totaal = this.cache.totaal;
+    this.el.kop.classList.toggle('hidden', !totaal);
+    if (!totaal) {
+      this.el.ruimte.style.height = '';
+      this.el.venster.style.transform = '';
+      this.el.venster.innerHTML = this.zoek
+        ? `<div class="lib-leeg">niets gevonden voor "${esc(this.zoek)}"</div>`
+        : `<div class="lib-leeg">nog niets binnengehaald — plak hierboven een YouTube- of TikTok-link, of sleep je eigen audio en video hierheen</div>`;
       return;
     }
-    this.el.rijen.innerHTML = this.tracks.map((t) => {
-      const lufs = t.loudness_i != null ? `${t.loudness_i.toFixed(1)} → ${t.doel_loudness} LUFS` : '—';
+    const { van, tot } = this._venster();
+    this.el.ruimte.style.height = `${totaal * RIJ_H}px`;
+    this.el.venster.style.transform = `translateY(${van * RIJ_H}px)`;
+    const nu = Date.now();
+    // Per deck één keer vragen, niet per rij.
+    const standen = this.decks.map((d) => this.stand(d));
+    const rijen = [];
+    for (let i = van; i < tot; i++) {
+      const t = this.cache.rij(i);
+      if (!t) { rijen.push('<div class="lib-rij laadt"><span class="lib-titel">…</span></div>'); continue; }
       const laadt = this.bezig.has(t.id);
-      const gs = gridStatus(t.grid, t.duur);
-      const n = t.grid?.stukken?.length ?? 0;
-      const gridTitel = gs.status === 'geen' ? 'nog geen grid — wordt op de achtergrond geanalyseerd, of tik het tempo'
-        : `${n} stuk${n === 1 ? '' : 'ken'}${gs.aandeel !== null && gs.status !== 'slot' && gs.status !== 'hand' ? `, ${Math.round(gs.aandeel * 100)}% van de tijd zeker` : ''}`;
       const her = this.analyseert.has(t.id);
-      return `<div class="lib-rij">
-        <span class="lib-titel" title="${esc(t.url)}"><i class="lib-bron ${esc(t.bron || 'web')}">${esc(BRON_LABEL[t.bron] || 'web')}</i>${esc(t.titel)}</span>
-        <span class="lib-uploader">${esc(t.uploader || '')}</span>
-        <span class="lib-duur">${fmtTime(t.duur || 0).replace(/\.\d+$/, '')}</span>
-        <span class="lib-bpm" title="tempo van het grid bij het begin">${esc(libraryBpm(t.grid))}</span>
-        <span class="lib-grid ${gs.status}" title="${esc(gridTitel)}">${esc(STATUS_TEKST[gs.status])}</span>
-        <span class="lib-lufs">${esc(lufs)}</span>
-        <span class="lib-racks">${t.racks ? `${t.racks} rack${t.racks === 1 ? '' : 's'}` : '—'}</span>
+      rijen.push(`<div class="lib-rij">${cellenHtml(t, nu)}
         <span class="lib-knoppen">
-          ${this.decks.map((d) => `<button class="btn sm lib-trk ${this.stand(d)}" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)} (${this.stand(d)})"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}
+          ${this.decks.map((d, k) => `<button class="btn sm lib-trk ${standen[k]}" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)} (${standen[k]})"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}
           <button class="btn sm lib-her${her ? ' bezig' : ''}" data-her="${esc(t.id)}" title="grid opnieuw analyseren${t.grid?.slot ? ' (staat op slot: tweede klik)' : ''}">${her ? '…' : '↻'}</button>
           <button class="btn sm lib-weg" data-weg="${esc(t.id)}" title="uit de lijst halen">×</button>
         </span>
-      </div>`;
-    }).join('');
+      </div>`);
+    }
+    this.el.venster.innerHTML = rijen.join('');
   }
 }
