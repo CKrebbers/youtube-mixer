@@ -5,7 +5,8 @@
  * Een lijst stukken { van, toonsoort, stemming, zekerheid? }, gesorteerd op
  * `van`. Een stuk geldt vanaf `van` tot het volgende; het eerste ook vóór zijn
  * `van`. `stemming` (cent, −50..+50) hoort bij het stuk: een album of mix heeft
- * per nummer een eigen A. `toonsoort` null = "geen toonsoort", met de hand gezet.
+ * per nummer een eigen A. `toonsoort` null = "geen toonsoort": met de hand gezet,
+ * of (in een automatische kaart, met zekerheid 0) stilte.
  *
  * Wat je HOORT is afgeleid, zoals `deck.bpm` van `grid.bpm` (Clay, T3):
  *
@@ -351,7 +352,10 @@ export class ToonKaart {
    * alleen vanaf hier. False als er op t al een stuk begint.
    */
   splits(t) {
-    if (!eindig(t) || this._stukken.some((s) => Math.abs(s.van - t) < EPS)) return false;
+    // Vóór 0 geen stuk: vlak na play is "wat je hoort" (positie min
+    // uitgangsvertraging) negatief, en een `van` onder 0 weigert de server;
+    // daarna zou elke bewaarpoging van deze kaart mislukken.
+    if (!eindig(t) || t < 0 || this._stukken.some((s) => Math.abs(s.van - t) < EPS)) return false;
     const s = this._stukken[this.stukIndex(t)];
     const nieuw = { van: t, k: s.k, stemming: s.stemming };
     if (eindig(s.zekerheid)) nieuw.zekerheid = s.zekerheid;
