@@ -1,4 +1,4 @@
-import { synchroniseer, zichtbaarheid } from './volg.js';
+import { synchroniseer, zichtbaarheid, inDePas } from './volg.js';
 import { videoFoutTekst, laadtTeLang, LAAD_GEDULD } from './fouten.js';
 import { VIDEO_FX, MODI } from './instellingen.js';
 import { PULS_DOELEN, pulsVorm, maatgever, metPuls } from './puls.js';
@@ -24,7 +24,8 @@ import { hoorbaar, naVertraging, uitgangsVertraging } from '../engine/hoorbaar.j
  * Er kunnen twee mixers zijn: die in het hoofdvenster (bediend via de bus)
  * en die in het losse venster (de beamer, beamer.js). De tweede neemt elk
  * beeld alles over van de eerste (neemOver) en heeft eigen <video>'s: een
- * verborgen tabblad decodeert niets.
+ * verborgen tabblad decodeert niets. Die eigen video's lopen eerst in
+ * (loopIn): bijsturen en uploaden zonder te mengen, tot ze in de pas lopen.
  *
  * Drie stappen per beeld, elk in een eigen shader:
  *   mengen    acht video's -> één beeld, volgens de mengvorm
@@ -394,14 +395,6 @@ export class VideoMixer {
     video.src = url;
     const laag = { video, url, tex: this._texture(), seekStart: 0, seekDuur: 0.15, klaar: false,
       zichtSinds: null, gemeld: false };
-    // Hoe lang een seek duurt, om er de volgende keer rekening mee te houden.
-    video.addEventListener('seeked', () => {
-      if (laag.seekStart) {
-        const d = (performance.now() - laag.seekStart) / 1000;
-        laag.seekDuur = laag.seekDuur * 0.7 + Math.min(2, d) * 0.3;
-        laag.seekStart = 0;
-      }
-    });
     video.addEventListener('loadeddata', () => { laag.klaar = true; });
     // Ontbreekt het bestand of is het kapot, dan zegt de strook het; anders
     // blijft de beamer zwart zonder dat iemand weet waarom.
@@ -413,24 +406,64 @@ export class VideoMixer {
     this.lagen.set(deckId, laag);
   }
 
+  /**
+   * Inlopen (het losse venster, beamer.js): elke video bijsturen en de
+   * zichtbare uploaden, precies zoals teken(), maar niet mengen. Zolang toont
+   * het losse venster het beeld van het hoofdvenster (toonBeeld). Uploaden is
+   * nodig: een <video> die niemand uitleest krijgt in Chrome geen vers beeld,
+   * en het eerste eigen beeld na de overname was dan 200–400 ms oud
+   * (gemeten, tools/headless/beamer.mjs). Geeft terug of alle zichtbare
+   * video's in de pas lopen (inDePas, volg.js).
+   */
+  loopIn() {
+    if (!this.gl || !this.prog) return true;
+    return inDePas(this._bijwerken(this._vertraging()).pas);
+  }
+
+  /**
+   * Een kant-en-klaar beeld tonen in plaats van zelf te mengen: tijdens de
+   * inloop zet het hoofdvenster zijn canvas op dat van het losse venster
+   * (beamer.js). Zelfde thread, dus een gewone upload, zonder stream ertussen:
+   * met captureStream liep dat beeld onder belasting tot 2,9 s achter
+   * (tools/headless/beamer.mjs). Roep dit aan METEEN na het tekenen van
+   * `bron`, in dezelfde taak: een WebGL-canvas zonder preserveDrawingBuffer is
+   * leeg zodra hij getoond is. Een canvas-texture staat zoals een video, dus
+   * de toonstap zet hem rechtop.
+   */
+  toonBeeld(bron) {
+    const gl = this.gl;
+    if (!gl || !this.prog) return;
+    gl.activeTexture(gl.TEXTURE0);
+    this.leenTex ??= this._texture();
+    gl.bindTexture(gl.TEXTURE_2D, this.leenTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bron);
+    gl.useProgram(this.toon);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, BREEDTE, HOOGTE);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
   /** Wat je hoort loopt de uitgangsvertraging achter op de deckpositie. */
   _vertraging() { return uitgangsVertraging(this.engine.ctx); }
 
-  /** Eén frame: elke video bijsturen, de zichtbare uploaden, mengen, tekenen. */
-  teken() {
+  /**
+   * Elke video bijsturen en de zichtbare uploaden, elk op zijn eigen
+   * texture-unit (TEXTURE0 + plek). Voor teken() en loopIn(). Geeft per plek
+   * het gewicht en de schaal voor de mengstap, en per zichtbare video of hij
+   * in de pas loopt (voor inDePas).
+   */
+  _bijwerken(vertraging) {
     const gl = this.gl;
-    if (!gl || !this.prog) return;
-    this.beelden++;
-    gl.useProgram(this.meng);
     const w = new Float32Array(MAX);
     const schaal = new Float32Array(MAX * 2).fill(1);
-    const vertraging = this._vertraging();
+    const pas = [];
     // Stond dit tekenen stil (tabblad verborgen, het andere venster mengde,
     // paneel dicht), dan telt die tijd niet als "zichtbaar": een video die
     // intussen niet laden kon, kreeg anders bij het eerste beeld meteen
     // "na 10 s nog geen beeld".
     const nuMs = performance.now();
-    if (nuMs - this.vorigBeeldMs > 1000) for (const l of this.lagen.values()) l.zichtSinds = null;
+    // Een sprong die toen liep meten we niet: die tijd zegt niets over springen.
+    if (nuMs - this.vorigBeeldMs > 1000) for (const l of this.lagen.values()) { l.zichtSinds = null; l.seekStart = 0; }
     this.vorigBeeldMs = nuMs;
 
     this.decks.forEach((id, i) => {
@@ -440,7 +473,7 @@ export class VideoMixer {
       gl.activeTexture(gl.TEXTURE0 + i);
       if (!laag || zicht < ZICHTBAAR) {
         if (laag && !laag.video.paused) laag.video.pause();
-        if (laag) laag.zichtSinds = null;
+        if (laag) { laag.zichtSinds = null; laag.seekStart = 0; }
         gl.bindTexture(gl.TEXTURE_2D, this.zwart);
         return;
       }
@@ -449,19 +482,33 @@ export class VideoMixer {
         laag.gemeld = true;
         this.onFout?.(id, `na ${LAAD_GEDULD} s nog geen beeld`);
       }
-      this._volg(laag, d, vertraging);
+      const doel = this._volg(laag, d, vertraging);
+      const v = laag.video;
+      const beeld = laag.klaar && v.readyState >= 2;
       gl.bindTexture(gl.TEXTURE_2D, laag.tex);
-      if (laag.klaar && laag.video.readyState >= 2) {
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, laag.video);
+      if (beeld) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
         w[i] = zicht;
-        const [sx, sy] = schaalVoor(...maatVan(laag.video), this.fit, BREEDTE, HOOGTE);
+        const [sx, sy] = schaalVoor(...maatVan(v), this.fit, BREEDTE, HOOGTE);
         schaal[i * 2] = sx; schaal[i * 2 + 1] = sy;
       }
+      pas.push({ klaar: beeld, zoekt: v.seeking, verschil: v.currentTime - doel, fout: laag.gemeld });
     });
+    return { w, schaal, pas };
+  }
+
+  /** Eén frame: elke video bijsturen, de zichtbare uploaden, mengen, tekenen. */
+  teken() {
+    const gl = this.gl;
+    if (!gl || !this.prog) return;
+    this.beelden++;
+    const vertraging = this._vertraging();
+    const { w, schaal } = this._bijwerken(vertraging);
 
     gl.viewport(0, 0, BREEDTE, HOOGTE);
 
     // 1. mengen -> gemengd
+    gl.useProgram(this.meng);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.gemengd.fb);
     gl.uniform1fv(this.loc(this.meng, 'w'), w);
     gl.uniform2fv(this.loc(this.meng, 's'), schaal);
@@ -537,14 +584,29 @@ export class VideoMixer {
    */
   _volg(laag, deck, vertraging) {
     const v = laag.video;
+    // Hoe lang een sprong duurt, om er de volgende keer rekening mee te houden:
+    // gemeten tot het eerste beeld waarin seeking weer false is. NIET met het
+    // 'seeked'-event: dat is een taak die onder belasting pas NA dat beeld
+    // komt. Sprong dat beeld opnieuw (de vorige landde te laat), dan hoorde het
+    // event bij de vorige sprong en duurde de nieuwe "0 s". Gemeten met acht
+    // tracks onder zware belasting (tools/headless/beamer.mjs): seekDuur zakte
+    // naar 0,00–0,04 s terwijl sprongen 0,8–1,7 s duurden, dus elke sprong
+    // landde een seconde te laat en de video's sprongen 20 s achter het geluid aan.
+    if (laag.seekStart && !v.seeking) {
+      const d = (performance.now() - laag.seekStart) / 1000;
+      laag.seekDuur = laag.seekDuur * 0.7 + Math.min(2, d) * 0.3;
+      laag.seekStart = 0;
+    }
+    // Ook stilstaand min de vertraging (niet hoorbaar()): zo blijft het beeld
+    // bij een pauze staan waar het was, zonder seek. Met de snelheid van NU
+    // (bend, rem), niet de pitchfader: anders loopt een rem het beeld voorbij
+    // en springt het terug.
+    const snelheid = deck.snelheid ?? deck.rate;
+    const doel = Math.max(0, naVertraging(deck.position, vertraging, snelheid));
     const r = synchroniseer({
       videoTijd: v.currentTime,
-      // Ook stilstaand min de vertraging (niet hoorbaar()): zo blijft het
-      // beeld bij een pauze staan waar het was, zonder seek. Met de snelheid
-      // van NU (bend, rem), niet de pitchfader: anders loopt een rem het
-      // beeld voorbij en springt het terug.
-      doel: Math.max(0, naVertraging(deck.position, vertraging, deck.snelheid ?? deck.rate)),
-      rate: deck.snelheid ?? deck.rate,
+      doel,
+      rate: snelheid,
       // Wacht het deck op zijn start op de maat, dan staat de positie stil:
       // het beeld ook, anders loopt het weg en springt het terug.
       speelt: deck.playing && !deck.wacht,
@@ -560,6 +622,7 @@ export class VideoMixer {
     if (Math.abs(v.playbackRate - rate) > 0.001) v.playbackRate = rate;
     if (r.speel && v.paused) v.play().catch(() => {});
     else if (!r.speel && !v.paused) v.pause();
+    return doel;
   }
 
   /** Paneel en los venster dicht: niets meer decoderen. */

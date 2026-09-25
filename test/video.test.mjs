@@ -254,6 +254,51 @@ console.log('\nde mixer meldt een video die niet laadt');
   } finally { performance.now = echteNu; }
 }
 
+console.log('\nsprongen die lang duren: seekDuur leert de echte duur, ook als het seeked-event laat komt');
+{
+  // Onder belasting komt het 'seeked'-event pas NA het volgende beeld. Sprong
+  // dat beeld opnieuw (de vorige landde te laat), dan hoorde het event bij de
+  // vorige sprong en telde de nieuwe als 0 s: seekDuur zakte naar ~0, elke
+  // sprong landde 0,8 s te laat, en de video sprong eindeloos achter het
+  // geluid aan (tools/headless/beamer.mjs, acht tracks, 25 sep).
+  const { VideoMixer } = await import('../src/video/video-mixer.js');
+  const gl = new Proxy({ TEXTURE0: 1000, createTexture: () => ({}), createFramebuffer: () => ({}), createProgram: () => ({}),
+    createShader: () => ({}), getShaderParameter: () => true, getProgramParameter: () => true,
+    getUniformLocation: (p, n) => n, getAttribLocation: () => 0 },
+  { get(t, k) { return k in t ? t[k] : () => {}; } });
+  const echteNu = performance.now;
+  let klok = 1000;
+  performance.now = () => klok;
+  try {
+    const deck = { buffer: {}, ui: { fader: 1 }, position: 30, rate: 1, playing: true, grid: null };
+    const engine = { ctx: { currentTime: 1, outputLatency: 0, baseLatency: 0 }, deck: () => deck, xfadeGain: () => 1 };
+    let v;
+    const maakVideo = () => (v = { paused: true, readyState: 4, seeking: false, playbackRate: 1, luister: {}, src: '', t: 0, klaarOm: 0, laat: false,
+      addEventListener(n, f) { (this.luister[n] ??= []).push(f); }, removeAttribute() {}, load() {},
+      pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); },
+      get currentTime() { return this.t; },
+      set currentTime(x) { this.t = x; this.seeking = true; this.klaarOm = klok + 800; } });   // elke sprong duurt 0,8 s
+    const mx = new VideoMixer({ canvas: { getContext: () => gl }, engine, decks: ['A'], maakVideo });
+    mx.zetBron('A', '/media/s/video.mp4');
+    mx.lagen.get('A').klaar = true;
+    let sprongen = 0, laatsteSprong = 0;
+    for (let n = 0; n < 1200; n++) {                         // 20 s op 60 beelden per seconde
+      klok += 1000 / 60;
+      deck.position = 30 + (klok - 1000) / 1000;
+      if (v.laat) { v.laat = false; (v.luister.seeked ?? []).forEach((f) => f()); }   // het event van de vorige sprong, een beeld te laat
+      if (v.seeking && klok >= v.klaarOm) { v.seeking = false; v.laat = true; }
+      else if (!v.seeking && !v.paused) v.t += v.playbackRate / 60;
+      const voor = v.klaarOm;
+      mx.teken();
+      if (v.klaarOm !== voor) { sprongen++; laatsteSprong = klok; }
+    }
+    const laag = mx.lagen.get('A');
+    ok('seekDuur leert de echte duur (0,8 s), niet de tijd tot een laat event', laag.seekDuur > 0.6, `${laag.seekDuur.toFixed(2)} s`);
+    ok('de video komt in de pas en springt daarna niet meer', laatsteSprong < 11000 && Math.abs(v.t - deck.position) < 0.05,
+      `${sprongen} sprongen, laatste na ${((laatsteSprong - 1000) / 1000).toFixed(1)} s, verschil ${Math.round((v.t - deck.position) * 1000)} ms`);
+  } finally { performance.now = echteNu; }
+}
+
 console.log('\nde beamer: wie mengt er (het losse venster loopt door als het hoofdtabblad verborgen is)');
 {
   const { wieMengt, Beamer, isDicht, isVerborgen } = await import('../src/video/beamer.js');
@@ -291,12 +336,151 @@ console.log('\nde beamer: wie mengt er (het losse venster loopt door als het hoo
   ok('los venster verborgen: een nieuwe video-opname neemt het eigen canvas (dat mengt nu)',
     b.opnameCanvas('hoofd-canvas') === 'hoofd-canvas' && b.opnameWaar === 'hoofd');
   venster.document.hidden = false;
-  ok('weer zichtbaar: het losse venster neemt het weer over', s(b.wieMengt({ paneelOpen: true })) === '-LV');
+  ok('weer zichtbaar: eerst inlopen (zijn video\'s stonden stil), het paneel mengt nog',
+    s(b.wieMengt({ paneelOpen: true, nu: 1000 })) === 'H--' && b.rolLos(venster, b.wieMengt({ paneelOpen: true, nu: 1000 })) === 'inloop');
+  b.meldPas(venster, true, 1000);
+  ok('in de pas: het losse venster neemt het weer over', !b.meldPas(venster, true, 1400) && s(b.wieMengt({ paneelOpen: true, nu: 1400 })) === '-LV');
   ok('een venster waar we niet in mogen kijken telt als zichtbaar', !isVerborgen({ get document() { throw new Error('SecurityError'); } }));
   venster.closed = true;
   ok('dicht zonder afmelden (crash): levend() ruimt op en meldt het', b.levend() === null && weg === 2 && !b.wieMengt({ paneelOpen: true }).los);
   ok('een venster waar we niet meer bij mogen telt als dicht',
     isDicht({ get closed() { throw new Error('SecurityError'); } }) && isDicht(null) && !isDicht({ closed: false }));
+}
+
+console.log('\nde inloop: het losse venster toont het beeld van het hoofdvenster tot zijn eigen video\'s in de pas lopen');
+{
+  const { inDePas, INLOOP_DREMPEL, SPRING_VANAF } = await import('../src/video/volg.js');
+  const { wieMengt, inloopStap, Beamer, INLOOP_HOUD, INLOOP_MAX } = await import('../src/video/beamer.js');
+  const s = (x) => `${x.hoofd ? 'H' : '-'}${x.los ? 'L' : '-'}${x.voorbeeld ? 'V' : '-'}${x.inloop ? 'I' : '-'}`;
+
+  const goed = { klaar: true, zoekt: false, verschil: 0.01, fout: false };
+  ok('alle zichtbare video\'s klaar, niet aan het springen, dicht bij wat je hoort: in de pas', inDePas([goed, { ...goed, verschil: -0.02 }]));
+  ok('één nog zonder beeld: niet', !inDePas([goed, { ...goed, klaar: false }]));
+  ok('één nog aan het springen: niet', !inDePas([goed, { ...goed, zoekt: true }]));
+  ok(`strenger dan springen: ${INLOOP_DREMPEL * 1000} ms, niet ${SPRING_VANAF * 1000} (daartussen stuurt volg nog bij)`,
+    INLOOP_DREMPEL < SPRING_VANAF && inDePas([{ ...goed, verschil: INLOOP_DREMPEL }]) && !inDePas([{ ...goed, verschil: -(INLOOP_DREMPEL + 0.001) }]));
+  ok('een video met een fout houdt de overname niet op', inDePas([goed, { klaar: false, zoekt: false, verschil: 9, fout: true }]));
+  ok('geen zichtbare video: niets in te lopen', inDePas([]));
+
+  ok('inloop: het hoofdvenster mengt (ook met het paneel dicht), het losse venster niet',
+    s(wieMengt({ losOpen: true, paneelOpen: true, inloop: true })) === 'H--I' && s(wieMengt({ losOpen: true, paneelOpen: false, inloop: true })) === 'H--I');
+  ok('zonder los venster geen inloop', s(wieMengt({ losOpen: false, paneelOpen: true, inloop: true })) === 'H---');
+  ok('na de inloop weer één keer mengen', s(wieMengt({ losOpen: true, paneelOpen: true, inloop: false })) === '-LV-');
+
+  let il = { sinds: 0, pasSinds: null };
+  il = inloopStap(il, false, 500);
+  ok('nog niet in de pas: inloop loopt door', il && il.pasSinds === null);
+  il = inloopStap(il, true, 600);
+  ok(`in de pas, maar nog geen ${INLOOP_HOUD * 1000} ms: door`, il && il.pasSinds === 600 && inloopStap(il, true, 600 + INLOOP_HOUD * 1000 - 1));
+  ok('even eruit (een sprong): de teller begint opnieuw', inloopStap(il, false, 700).pasSinds === null
+    && !!inloopStap(inloopStap(il, false, 700), true, 800 + INLOOP_HOUD * 1000 - 1));
+  ok(`${INLOOP_HOUD * 1000} ms achter elkaar in de pas: voorbij`, inloopStap(il, true, 600 + INLOOP_HOUD * 1000) === null);
+  ok(`nooit in de pas: na ${INLOOP_MAX} s neemt het losse venster hoe dan ook over`,
+    inloopStap({ sinds: 0, pasSinds: null }, false, INLOOP_MAX * 1000 - 1) && inloopStap({ sinds: 0, pasSinds: null }, false, INLOOP_MAX * 1000) === null);
+
+  // De Beamer: wanneer wel, wanneer niet, en de overname.
+  const venster = { closed: false, document: { hidden: false } };
+  const mixer = { canvas: 'los-canvas' };
+  const b = new Beamer();
+  b.wieMengt({ paneelOpen: true, nu: 0 });                  // het paneel mengt: zijn video's lopen al
+  b.meldAan(venster, mixer, 100);
+  let w = b.wieMengt({ paneelOpen: true, nu: 100 });
+  ok('los venster open terwijl het paneel mengde: inloop, het hoofdvenster blijft mengen', s(w) === 'H--I' && b.rolLos(venster, w) === 'inloop' && !b.mengtLos(venster, w));
+  ok('een tweede los venster doet niet mee', b.rolLos({ closed: false }, w) === null);
+  ok('een video-opname die nu start neemt het losse canvas (daar staat het beeld van het hoofdvenster op, en straks het eigen)',
+    b.opnameCanvas('hoofd-canvas') === 'los-canvas' && b.opnameWaar === 'los');
+  ok('en de inloop gaat gewoon door (de opname heeft het beeld al)', s(b.wieMengt({ paneelOpen: true, opname: 'los', nu: 200 })) === 'H--I');
+  ok('meldPas: nog niet in de pas, blijft inlopen', b.meldPas(venster, false, 2000) === true);
+  b.meldPas(venster, true, 3000);
+  ok('in de pas en dat blijft zo: het losse venster mengt zelf, het hoofdvenster stopt',
+    b.meldPas(venster, true, 3000 + INLOOP_HOUD * 1000) === false && s(b.wieMengt({ paneelOpen: true, nu: 3400 })) === '-LV-'
+    && b.rolLos(venster, b.wieMengt({ paneelOpen: true, nu: 3400 })) === 'mengt');
+  ok('een ander venster kan de inloop niet beëindigen', new Beamer().meldPas(venster, true, 0) === false);
+
+  const b2 = new Beamer();
+  b2.wieMengt({ paneelOpen: false, nu: 0 });                // paneel dicht: niemand mengde
+  b2.meldAan(venster, mixer, 0);
+  ok('het hoofdvenster mengde niet (paneel dicht): geen inloop, het losse venster mengt meteen',
+    s(b2.wieMengt({ paneelOpen: false, nu: 0 })) === '-L--');
+
+  const b3 = new Beamer();
+  b3.wieMengt({ paneelOpen: true, nu: 0 });
+  b3.meldAan(venster, mixer, 0);
+  ok('hoofdtabblad verborgen: geen beeld om te lenen, het losse venster mengt meteen',
+    s(b3.wieMengt({ paneelOpen: true, hoofdVerborgen: true, nu: 50 })) === '-LV-');
+  ok('en dat blijft zo als het hoofdtabblad terugkomt (de inloop is voorbij)', s(b3.wieMengt({ paneelOpen: true, nu: 5000 })) === '-LV-');
+
+  // Verborgen en weer zichtbaar: alleen inlopen als het hoofdvenster intussen mengde.
+  const b5 = new Beamer();
+  b5.meldAan(venster, mixer, 0);
+  venster.document.hidden = true;
+  b5.wieMengt({ paneelOpen: false, nu: 10 });               // niemand mengt
+  venster.document.hidden = false;
+  ok('los venster terug, maar het paneel was dicht: meteen zelf mengen', s(b5.wieMengt({ paneelOpen: false, nu: 20 })) === '-L--');
+  venster.document.hidden = true;
+  b5.wieMengt({ paneelOpen: true, nu: 30 });                // het paneel nam het over
+  ok('verborgen tijdens de inloop: geen inloop meer (zijn lus staat toch stil)', !b5.los.inloop);
+  venster.document.hidden = false;
+  ok('terug terwijl het paneel mengde: opnieuw inlopen', s(b5.wieMengt({ paneelOpen: true, nu: 40 })) === 'H--I');
+  delete venster.document.hidden;
+}
+
+console.log('\nde mixer in het losse venster loopt in: bijsturen en uploaden, niet mengen');
+{
+  const { VideoMixer } = await import('../src/video/video-mixer.js');
+  let id = 0;
+  const tel = { upload: 0, teken: 0 };
+  const gl = new Proxy({ TEXTURE0: 1000, createTexture: () => ({ tex: ++id }), createFramebuffer: () => ({ fb: ++id }),
+    createProgram: () => ({ prog: ++id }), createShader: () => ({ sh: ++id }), getShaderParameter: () => true,
+    getProgramParameter: () => true, getUniformLocation: (p, n) => n, getAttribLocation: () => 0,
+    texImage2D: () => { tel.upload++; }, drawArrays: () => { tel.teken++; } },
+  { get(t, k) { return k in t ? t[k] : () => {}; } });
+  const nepVideo = () => {
+    const luister = {};
+    return { paused: true, currentTime: 0, readyState: 0, seeking: false, playbackRate: 1, luister, src: '',
+      addEventListener: (n, f) => { (luister[n] ??= []).push(f); }, removeAttribute() { this.src = ''; },
+      load() {}, pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); },
+      set currentTime(t) { this._t = t; this.seeking = true; }, get currentTime() { return this._t ?? 0; } };
+  };
+  const decks = { A: { buffer: {}, ui: { fader: 1 }, position: 12, rate: 1, playing: true, grid: null },
+    B: { buffer: {}, ui: { fader: 0 }, position: 3, rate: 1, playing: true, grid: null } };
+  const engine = { ctx: { currentTime: 1, outputLatency: 0.02, baseLatency: 0 }, deck: (d) => decks[d], xfadeGain: () => 1 };
+  const los = new VideoMixer({ canvas: { getContext: () => gl }, engine, decks: ['A', 'B'], maakVideo: nepVideo });
+  tel.upload = 0; tel.teken = 0;                             // de lege texture uit de constructor telt niet
+  los.zetBron('A', '/media/a/video.mp4');
+  los.zetBron('B', '/media/b/video.mp4');
+  const va = los.lagen.get('A').video, vb = los.lagen.get('B').video;
+  vb.paused = false;
+  ok('nog geen beeld: niet in de pas', los.loopIn() === false);
+  ok('zonder te uploaden of te tekenen', tel.upload === 0 && tel.teken === 0 && los.beelden === 0);
+  ok('de zichtbare video loopt al (zodat hij bij kan komen), de onzichtbare staat stil', !va.paused && vb.paused);
+  va.readyState = 4; va.luister.loadeddata.forEach((f) => f());
+  los.loopIn();
+  ok('beeld binnen, maar 12 s naast wat je hoort: springen (naar de audio plus de seekduur)', va.seeking && va.currentTime > 11.9);
+  ok('en dan nog niet in de pas', los.loopIn() === false);
+  va.seeking = false; va._t = 12 - 0.02 + 0.01;               // na de sprong: 10 ms naast wat je hoort
+  tel.upload = 0;
+  ok('geland, dicht bij wat je HOORT (positie min uitgangsvertraging): in de pas', los.loopIn() === true);
+  ok('met beeld wordt hij WEL geüpload (anders is het eerste eigen beeld na de overname oud), maar niets gemengd',
+    tel.upload === 1 && tel.teken === 0 && los.beelden === 0);
+  decks.B.ui.fader = 1;
+  ok('een tweede track gaat open: die moet ook eerst in de pas', los.loopIn() === false);
+  vb.readyState = 4; vb.luister.loadeddata.forEach((f) => f()); vb.seeking = false; vb._t = 3 - 0.02;
+  ok('ook in de pas: samen in de pas', los.loopIn() === true);
+  tel.upload = 0; tel.teken = 0;
+  los.teken();
+  ok('na de overname tekent teken() gewoon (twee video\'s geüpload, drie stappen)', tel.upload === 2 && tel.teken === 3);
+
+  // toonBeeld: het beeld van het hoofdvenster erop, één upload en één stap (tonen), geen video.
+  tel.upload = 0; tel.teken = 0;
+  const bronnen = [];
+  gl.texImage2D = (...a) => { tel.upload++; bronnen.push(a.at(-1)); };
+  const hoofdCanvas = { hoofd: true };
+  los.toonBeeld(hoofdCanvas);
+  ok('toonBeeld: het canvas van het hoofdvenster geüpload en getoond, verder niets', tel.upload === 1 && tel.teken === 1 && bronnen[0] === hoofdCanvas);
+  const tex = los.leenTex;
+  los.toonBeeld(hoofdCanvas);
+  ok('elk beeld dezelfde texture (niets nieuws per beeld)', los.leenTex === tex);
 }
 
 console.log('\nde mixer in het losse venster neemt alles over van die in het hoofdvenster');
