@@ -1644,6 +1644,22 @@ console.log('\ntransport');
   druk('track.7.beatjump.fwd');
   ok('... 4 tellen past precies (38 – 40)', Math.abs(dG.loop.end - 40) < 1e-9);
   dG.clearLoop();
+  // Zonder loop voorbij het einde: weigeren. Klemmen op het einde liet de track
+  // eindigen en stoppen, midden in een set.
+  NOW = 715;
+  dG.seek(39); dG.play();                                       // 1 s voor het einde; 4 tellen = 2 s
+  const nEinde = meldingen.length;
+  druk('track.7.beatjump.fwd');
+  ok('beatjump voorbij het einde (zonder loop): niet gesprongen, hij speelt door', Math.abs(dG.position - 39) < 1e-9 && dG.playing);
+  ok('... met een melding', meldingen.length === nEinde + 1 && /einde/.test(meldingen.at(-1).tekst));
+  dG.seek(38);
+  const rEinde = dG.beatjump(1);
+  ok('... precies OP het einde landen is ook eindigen: niet (38 + 2 = 40)', !rEinde.ok && rEinde.waarom === 'einde' && Math.abs(dG.position - 38) < 1e-9);
+  dG.seek(37.9);
+  ok('... wat nog past, springt gewoon (37,9 -> 39,9)', dG.beatjump(1).ok && Math.abs(dG.position - 39.9) < 1e-9);
+  dG.seek(1);
+  ok('terug voorbij het begin: klemt op 0 en speelt door vanaf het begin', dG.beatjump(-1).ok && dG.position === 0 && dG.playing);
+  dG.stop();
 
   // Onzeker stuk (niet op slot): weigeren, zoals beat-loops.
   dG.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 }, { van: 10, bpm: 120, anker: 0, zekerheid: 0.3 }] }));

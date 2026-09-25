@@ -272,10 +272,12 @@ export function bindEngine(engine) {
     // Beatjump: de ingestelde lengte (1–32 tellen, standaard 4) terug of
     // vooruit, op het grid. In een loop schuift de loop mee. Zelfde regels als
     // beat-loops: zonder grid of in een onzeker stuk niets, en dan zeggen waarom.
+    // Voorbij het einde ook niet (Deck.beatjump): anders stopte de track.
     const sprongMelding = {
       geengrid: 'beatjump kan niet zonder beatgrid — tik eerst het tempo (TAP)',
       onzeker: ONZEKER,
       rand: 'beatjump: de loop komt dan buiten het nummer te liggen',
+      einde: 'beatjump: dat valt voorbij het einde van het nummer — niet gesprongen',
     };
     for (const [richting, naam, tekst] of [[-1, 'back', 'terug'], [1, 'fwd', 'vooruit']]) {
       let ingedrukt = false;
