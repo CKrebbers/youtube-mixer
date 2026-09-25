@@ -833,6 +833,42 @@ export function tempoCurve(env, envRate, { vensterSec = 12, stapSec = 4, ...opti
   return uit;
 }
 
+const mediaanVan = (a) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+
+/**
+ * De eerste helft van segmenteer: bruikbare vensters (bpm, zekerheid ≥
+ * `minZekerheid`) aan elkaar rijgen zolang het tempo binnen `tolerantie` van
+ * de mediaan blijft en er geen GAT tussen zit (meer dan `maxGat` s zonder
+ * bruikbaar venster; standaard twee stappen van de curve). Nog niets
+ * opgeslokt of weggegooid. Per keten { van, tot (middens van het eerste en
+ * laatste venster), bpms, zeker, idx (indexen in `curve`), gatNa }, plus de stap.
+ */
+export function ketens(curve, { tolerantie = 0.03, minZekerheid = 0.30, maxGat = null } = {}) {
+  // Stapgrootte uit de curve zelf; een gat is meer dan twee stappen zonder bruikbaar venster.
+  const stappen = [];
+  for (let i = 1; i < curve.length; i++) stappen.push(curve[i].tijd - curve[i - 1].tijd);
+  const stap = stappen.length ? mediaanVan(stappen) : 0;
+  const gat = maxGat ?? 2 * stap + 1e-6;
+  const uit = [];
+  let huidig = null;
+  curve.forEach((p, i) => {
+    if (!(p.bpm && p.zekerheid >= minZekerheid)) return;
+    if (huidig) {
+      const ref = mediaanVan(huidig.bpms);
+      const overGat = p.tijd - huidig.tot > gat;
+      if (!overGat && Math.abs(p.bpm - ref) / ref <= tolerantie) {
+        huidig.bpms.push(p.bpm); huidig.zeker.push(p.zekerheid); huidig.tot = p.tijd; huidig.idx.push(i);
+        return;
+      }
+      huidig.gatNa = overGat;
+      uit.push(huidig);
+    }
+    huidig = { van: p.tijd, tot: p.tijd, bpms: [p.bpm], zeker: [p.zekerheid], idx: [i] };
+  });
+  if (huidig) uit.push(huidig);
+  return { ketens: uit, stap };
+}
+
 /**
  * De tempocurve opknippen in segmenten met een stabiel tempo.
  *
@@ -844,31 +880,8 @@ export function tempoCurve(env, envRate, { vensterSec = 12, stapSec = 4, ...opti
  * alleen tussen twee gaten, dan vervalt het.
  */
 export function segmenteer(curve, { tolerantie = 0.03, minSec = 20, minZekerheid = 0.30, maxGat = null } = {}) {
-  const bruikbaar = curve.filter((p) => p.bpm && p.zekerheid >= minZekerheid);
-  if (!bruikbaar.length) return [];
-  const mediaanVan = (a) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
-  // Stapgrootte uit de curve zelf; een gat is meer dan twee stappen zonder bruikbaar venster.
-  const stappen = [];
-  for (let i = 1; i < curve.length; i++) stappen.push(curve[i].tijd - curve[i - 1].tijd);
-  const stap = stappen.length ? mediaanVan(stappen) : 0;
-  const gat = maxGat ?? 2 * stap + 1e-6;
-
-  const nieuw = (p) => ({ van: p.tijd, tot: p.tijd, bpms: [p.bpm], zeker: [p.zekerheid] });
-  const segmenten = [];
-  let huidig = nieuw(bruikbaar[0]);
-  for (let i = 1; i < bruikbaar.length; i++) {
-    const p = bruikbaar[i];
-    const ref = mediaanVan(huidig.bpms);
-    const overGat = p.tijd - huidig.tot > gat;
-    if (!overGat && Math.abs(p.bpm - ref) / ref <= tolerantie) {
-      huidig.bpms.push(p.bpm); huidig.zeker.push(p.zekerheid); huidig.tot = p.tijd;
-    } else {
-      huidig.gatNa = overGat;
-      segmenten.push(huidig);
-      huidig = nieuw(p);
-    }
-  }
-  segmenten.push(huidig);
+  const { ketens: segmenten, stap } = ketens(curve, { tolerantie, minZekerheid, maxGat });
+  if (!segmenten.length) return [];
 
   // Grenzen: een segment beslaat zijn vensters (midden ± halve stap).
   for (const sg of segmenten) { sg.van -= stap / 2; sg.tot += stap / 2; }
@@ -972,11 +985,154 @@ export function faseStabiliteit(env, envRate, tijdOffset, bpm, van, tot, { sub =
 }
 
 /**
+ * Tweede kans voor brokjes die anders wegvallen (25 september 2026).
+ *
+ * De tempocurve schat per venster van 12 s een tempo met autocorrelatie, en
+ * op dit repertoire kiest die midden in een nummer vaak iets toevalligs: op
+ * het album 148, 131, 112 en 107 in een nummer op 156. De stabiliteit wordt
+ * dan op het VERKEERDE tempo gemeten, het venster telt als gat, en het nummer
+ * valt uiteen in brokjes tussen gaten die segmenteer als ruis weggooit
+ * (korter dan minSec, geen buur zonder gat). Zo verdween het 156-bpm-stuk
+ * (album, 11:45-13:29): negen zekere vensters in vier brokjes van 4-16 s,
+ * gescheiden door 16-44 s "gat", terwijl één grid op 156,0 er van 11:27 tot
+ * 13:39 op ±30 ms op past (fase-stabiliteit 19-22 van de 22 stapjes).
+ *
+ * Dus: is een keten (ketens()) korter dan minSec, en ligt er binnen `maxBrug`
+ * seconden een keten met HETZELFDE tempo T, zonder echt stuk (≥ minSec) van
+ * een ander tempo ertussen, dan meten we elk venster daartussen ook op T
+ * (`zekerOp(T, venster)`, geschaald zoals elk venster). Houdt de fase daar
+ * vast (≥ minZekerheid, en niet slechter dan op zijn eigen tempo), dan hoort
+ * het venster bij T.
+ * - Alleen om een te kort brokje te redden. Twee ketens die elk lang genoeg
+ *   zijn blijven gescheiden, ook als het gat ertussen op T vasthoudt: één
+ *   stuk heeft één tempo en één anker, en over minuten loopt een tempo dat
+ *   0,5% zwalkt een tel weg (Sakamoto 34:26-37:47: samengevoegd stond het
+ *   grid tot 235 ms naast).
+ * - Een gat waar de puls op T niet vasthoudt (stilte tussen twee nummers,
+ *   een break zonder tel) blijft een gat en knipt zoals altijd.
+ * - Octaven: een venster op de HELFT van T is dezelfde puls (album 2:10-2:18,
+ *   een half-time passage op 71-75 in een stuk op 150). Dat gaat mee als de
+ *   fase op T vasthoudt, ook als de halve tel nét iets beter scoort: het grid
+ *   op T bevat de tellen van T/2. Een venster op het DUBBELE van T blijft
+ *   altijd staan, zoals tempoUitEnvelope bij twijfel de tel kiest en niet de
+ *   maat. Op een tempo dat ±1% zwalkt houdt een halve tel zijn fase beter
+ *   vast (dubbele marge in ms); zonder deze regel werd het octaaffoute stuk
+ *   van Bay Ledges (76 waar 153 klopt) langer en zelfs "zeker" (0,48 -> 0,72).
+ *   De marge is dubbel: op de halve tel zit de schatting tot 5% naast.
+ * - Alles uit de EERSTE ronde: een aangepast venster maakt geen nieuwe ketens.
+ * Wijzigt `curve` ter plekke (bpm, zekerheid, `tweedeKans: true`); geeft het
+ * aantal aangepaste vensters.
+ */
+export function tweedeKans(curve, zekerOp, { tolerantie = 0.04, minZekerheid = 0.2, minSec = 20, maxBrug = 60 } = {}) {
+  const { ketens: kt, stap } = ketens(curve, { tolerantie, minZekerheid });
+  const zelfde = (a, b) => Math.abs(a - b) / Math.min(a, b) <= tolerantie;
+  const octaaf = (a, f, T) => !!a && Math.abs(Math.log(a * f / T)) <= 2 * tolerantie;
+  const lang = (k) => k.tot - k.van + stap >= minSec;
+  // Per venster de beste kandidaat: [T, z].
+  const kandidaat = new Map();
+  for (let a = 0; a < kt.length; a++) {
+    const A = kt[a], TA = mediaanVan(A.bpms);
+    let c = a + 1;
+    for (; c < kt.length; c++) {
+      if (kt[c].van - A.tot > maxBrug) { c = kt.length; break; }
+      if (zelfde(mediaanVan(kt[c].bpms), TA)) break;
+      if (lang(kt[c])) { c = kt.length; break; }      // een echt stuk van een ander tempo ertussen
+    }
+    if (c >= kt.length) continue;
+    const C = kt[c];
+    if (lang(A) && lang(C)) continue;                 // niets te redden
+    const T = Math.sqrt(TA * mediaanVan(C.bpms));
+    for (let i = A.idx.at(-1) + 1; i < C.idx[0]; i++) {
+      if (curve[i].bpm && zelfde(curve[i].bpm, T)) continue;
+      const z = zekerOp(T, curve[i]);
+      if (!(kandidaat.get(i)?.[1] >= z)) kandidaat.set(i, [T, z]);
+    }
+  }
+  let aantal = 0;
+  for (const [i, [T, z]] of kandidaat) {
+    const c = curve[i];
+    if (octaaf(c.bpm, 0.5, T)) continue;                                   // dubbel: de tel blijft
+    if (z < minZekerheid || (z < c.zekerheid && !octaaf(c.bpm, 2, T))) continue;   // half: fase op T volstaat
+    Object.assign(c, { bpm: T, zekerheid: z, tweedeKans: true });
+    aantal++;
+  }
+  return aantal;
+}
+
+/**
+ * Waar valt de puls van [van, tot) op een grid (bpm, anker)? Cirkelgemiddelde
+ * van de envelope (afgetopt op p95, zoals faseStabiliteit) op de fase van dat
+ * grid: { fase (-0,5..0,5 tel), R (0..1: hoe duidelijk) }, of null.
+ */
+export function faseOpGrid(env, envRate, tijdOffset, bpm, anker, van, tot) {
+  if (!(bpm > 0)) return null;
+  const p = 60 / bpm;
+  const fA = Math.max(0, Math.floor((van - tijdOffset) * envRate));
+  const fB = Math.min(env.length, Math.floor((tot - tijdOffset) * envRate));
+  if (fB - fA < envRate) return null;
+  const gesorteerd = env.slice(fA, fB).sort();
+  const kap = gesorteerd[Math.floor(0.95 * (gesorteerd.length - 1))] || 1e-9;
+  const w = (2 * Math.PI) / (p * envRate);
+  const cw = Math.cos(w), sw = Math.sin(w);
+  const h0 = 2 * Math.PI * ((fA / envRate + tijdOffset - anker) / p);
+  let c = Math.cos(h0), sn = Math.sin(h0), re = 0, im = 0, som = 0;
+  for (let f = fA; f < fB; f++) {
+    const e = env[f] < kap ? env[f] : kap;
+    re += e * c; im += e * sn; som += e;
+    const nc = c * cw - sn * sw; sn = c * sw + sn * cw; c = nc;
+  }
+  if (!(som > 0)) return null;
+  return { fase: Math.atan2(im, re) / (2 * Math.PI), R: Math.hypot(re, im) / som };
+}
+
+/**
+ * Past ÉÉN grid op deze vensters? De controle op de tweede kans (25 september
+ * 2026, controleur).
+ *
+ * tweedeKans redt een venster als de fase op T daar VASTHOUDT
+ * (faseStabiliteit), maar niet of hij op dezelfde PLEK ligt als bij de buren:
+ * stabiliteit vergeeft een vaste drift (een tempo tot ~4 bpm naast) en een
+ * sprong telt maar in een paar stapjes. Zo plakte hij een volgend nummer op
+ * hetzelfde tempo in een andere fase, of 1-3% sneller, aan een stuk vast, en
+ * dat stuk was "zeker": synthetisch tot 61% van de kicks een halve tel naast,
+ * op Sakamoto (1:08-1:50) vensters tot 268 ms naast. Sync en beat-loops
+ * vertrouwen een zeker stuk.
+ *
+ * Per venster (`tijd` ± `vensterSec`/2) met een duidelijke puls (R ≥ `minR`)
+ * de fase op het grid; de maat is de fase waar de meeste andere dichtbij
+ * liggen (een cirkel heeft geen gewone mediaan). Het grid past niet als meer
+ * dan `maxAandeel` van alle vensters, of van de geredde vensters
+ * (`tweedeKans`), verder dan `maxAfwijking` tel van die fase ligt. Het tweede
+ * omdat een kort geplakt stuk onder de 10% van een lang stuk kan blijven.
+ * Gemeten op de geredde stukken van het album (156 en 150), Bay Ledges, de
+ * jungle-mix en Sakamoto: hooguit 0,12 tel naast (album 11:45, 47 ms).
+ */
+export function eenGridPast(env, envRate, tijdOffset, grid, vensters,
+  { vensterSec = 12, minR = 0.15, maxAfwijking = 0.15, maxAandeel = 0.1 } = {}) {
+  const wrap = (x) => x - Math.round(x);
+  const fasen = [];
+  for (const v of vensters) {
+    const f = faseOpGrid(env, envRate, tijdOffset, grid.bpm, grid.anker, v.tijd - vensterSec / 2, v.tijd + vensterSec / 2);
+    if (f && f.R >= minR) fasen.push({ fase: f.fase, gered: !!v.tweedeKans });
+  }
+  if (!fasen.length) return true;
+  let ref = 0, best = -1;
+  for (const { fase } of fasen) {
+    const n = fasen.filter((x) => Math.abs(wrap(x.fase - fase)) <= maxAfwijking).length;
+    if (n > best) { best = n; ref = fase; }
+  }
+  const teVeel = (lijst) => lijst.filter((x) => Math.abs(wrap(x.fase - ref)) > maxAfwijking).length > maxAandeel * lijst.length;
+  return !teVeel(fasen) && !teVeel(fasen.filter((x) => x.gered));
+}
+
+/**
  * Een grid-voorstel voor een hele track: een lijst stukken in tracktijd,
  * [{ van, tot, bpm, anker, zekerheid }], aaneengesloten van 0 tot het einde.
  *
  * - tempo per venster (tempoCurve), zekerheid per venster = fase-stabiliteit
  *   tegen een nul (dezelfde envelope met blokken van 1 s geschud);
+ * - een tweede kans voor brokjes die anders wegvallen (tweedeKans): de
+ *   vensters tussen twee brokjes met hetzelfde tempo opnieuw op dat tempo;
  * - segmenteren (geen stuk over een gat), per stuk tempo en fase verfijnen;
  * - wat tussen de stukken overblijft wordt ook een stuk: het tempo van de
  *   buur, het grid loopt door, maar de zekerheid is wat er gemeten wordt
@@ -1031,17 +1187,52 @@ export function analyseerGrid(env, envRate, tijdOffset = 0, opties = {}) {
     if (i % nulStap === 0) for (const e of nulEnvs) nul.push(beste(e, c.bpm, a, b).st);
     c.bpm = r.bpm;
   });
-  // De 97e percentiel van de nul: daarboven is het geen toeval meer.
-  const nulGrens = kwantiel(nul, 0.97);
+  // De 97e percentiel van de nul: daarboven is het geen toeval meer. Een
+  // vaste `nulGrens` is voor metingen op een FRAGMENT: de nul van een stuk van
+  // vier minuten is niet die van het hele nummer (album: 0,77 tegen 0,82).
+  const nulGrens = Number.isFinite(opties.nulGrens) ? opties.nulGrens : kwantiel(nul, 0.97);
   const schaal = (x, g) => Math.max(0, Math.min(1, (x - g) / Math.max(1e-6, 1 - g)));
   curve.forEach((c, i) => { c.autocorrelatie = c.zekerheid; c.zekerheid = schaal(echt[i], nulGrens); });
+
+  // Tempo en fase van een segment: dezelfde verfijning voor de controle hieronder en voor het stuk zelf.
+  const gridVan = (sg) => verfijnTempoFase(env, envRate, sg.bpm, tijdOffset,
+    { rond: (sg.van + sg.tot) / 2, straal: Math.max(6, (sg.tot - sg.van) / 2), marge: 0.02 });
+
+  const eerste = curve.map((c) => ({ bpm: c.bpm, zekerheid: c.zekerheid }));
+  const terug = (i) => { Object.assign(curve[i], eerste[i]); delete curve[i].tweedeKans; };
+  const gered = tweedeKans(curve, (bpm, c) => {
+    const a = Math.max(0, c.tijd - omgeving), b = Math.min(duur, c.tijd + omgeving);
+    return schaal(faseStabiliteit(env, envRate, tijdOffset, bpm, a, b), nulGrens);
+  }, { tolerantie, minZekerheid, minSec });
+  if (gered) {
+    // Een tweede kans die geen stuk oplevert, telt niet: dan de eerste meting
+    // terug, anders kleurt hij de zekerheid van een gat (Sakamoto 37:47: 0,05 -> 0,16).
+    const proef = segmenteer(curve, { tolerantie, minSec, minZekerheid });
+    curve.forEach((c, i) => {
+      if (!c.tweedeKans) return;
+      const inStuk = proef.some((sg) => c.tijd >= sg.van && c.tijd < sg.tot && Math.abs(Math.log(sg.bpm / c.bpm)) <= tolerantie);
+      if (!inStuk) terug(i);
+    });
+    // Een tweede kans die een stuk oplevert waar niet één grid op past (twee
+    // nummers in een andere fase, of net een ander tempo) telt ook niet (eenGridPast).
+    for (const sg of segmenteer(curve, { tolerantie, minSec, minZekerheid })) {
+      const binnen = [];
+      curve.forEach((c, i) => {
+        if (c.tijd >= sg.van && c.tijd < sg.tot && c.bpm && c.zekerheid >= minZekerheid
+          && Math.abs(Math.log(sg.bpm / c.bpm)) <= tolerantie) binnen.push(i);
+      });
+      if (!binnen.some((i) => curve[i].tweedeKans)) continue;
+      const r = gridVan(sg);
+      if (eenGridPast(env, envRate, tijdOffset, { bpm: r.bpm, anker: r.firstBeat }, binnen.map((i) => curve[i]), { vensterSec })) continue;
+      for (const i of binnen) if (curve[i].tweedeKans) terug(i);
+    }
+  }
 
   const segmenten = segmenteer(curve, { tolerantie, minSec, minZekerheid });
   const stukken = [];
   for (const sg of segmenten) {
     const midden = (sg.van + sg.tot) / 2;
-    const r = verfijnTempoFase(env, envRate, sg.bpm, tijdOffset,
-      { rond: midden, straal: Math.max(6, (sg.tot - sg.van) / 2), marge: 0.02 });
+    const r = gridVan(sg);
     const p = 60 / r.bpm;
     let anker = r.firstBeat + Math.ceil((sg.van - r.firstBeat) / p - 1e-9) * p;
     if (pcm) {

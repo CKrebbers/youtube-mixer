@@ -308,7 +308,11 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
       haalSamples(deckId, track.id);
       haalHotcues(deckId, track.id);
     }
-    gridBewaard[deckId] = track.grid ? JSON.stringify(track.grid) : 'null';
+    // Wat de ENGINE ervan maakte telt als bewaard: een grid van vóór het
+    // maat-anker krijgt bij het inlezen een `maat` per stuk, en dat is geen
+    // reden om bij elk laden te schrijven. Pas bij een echte bewerking.
+    // (Bij terugspelen bewaart de lus sowieso niets: terugspeelDecks.)
+    gridBewaard[deckId] = JSON.stringify(engine.deck(deckId).grid?.toJSON() ?? null);
     // De toonsoort van de plaat (TOONSOORT.md §3), zoals /api/library hem geeft.
     // Ook bij terugspelen: de kaart hoort bij de plaat van NU (correcties van
     // toen staan er al in); bewaarToon slaat terugspeelDecks over.

@@ -74,6 +74,14 @@ const KLEURSCHEMA = [
  */
 export const TEL_VENSTER = 0.25;
 
+/**
+ * Op de "1" van de maat twee keer zo lang: een halve tel. Zo zie je op de
+ * APC waar de maat begint, zonder extra berichten (nog steeds aan en uit, één
+ * keer per tel). De "1" komt van het maat-anker van het stuk
+ * (`track.N.barbeat`); zonder die read knippert elke tel even kort, als vroeger.
+ */
+export const TEL_VENSTER_EEN = 0.5;
+
 /** Drie standen uit een read: 'uit', 'half', 'aan'. */
 const standVan = (v) => (v >= 0.99 ? 'aan' : v > 0.01 ? 'half' : 'uit');
 
@@ -237,7 +245,7 @@ export class Feedback {
     if (soort === 'maat' && this.read(`track.${nr}.leads`) !== 1) return null;
     const fase = this.read(`track.${nr}.phase`);
     if (fase === null || fase === undefined) return null;
-    return fase < TEL_VENSTER;
+    return fase < (this.read(`track.${nr}.barbeat`) === 1 ? TEL_VENSTER_EEN : TEL_VENSTER);
   }
 
   /**

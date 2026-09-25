@@ -396,6 +396,198 @@ console.log('\nfase-stabiliteit en analyseerGrid');
     uitslag.every(([b, st]) => st.every((s) => s.zekerheid >= ZEKER_VANAF) && st.every((s) => Math.abs(s.bpm / b - 1) < 0.002)));
 }
 
+// ---- het 156-bpm-stuk (25 september 2026) ---------------------------------
+// Op het album viel een nummer op 156 weg: de tempocurve zag er per venster
+// van 12 s vaak iets anders in (148, 131, 112, 107), dus alleen brokjes van
+// 4-16 s bleven over, gescheiden door 16-44 s "gat", en segmenteer gooide ze
+// allemaal weg als ruis (minSec). tweedeKans meet de vensters tussen twee
+// brokjes met hetzelfde tempo opnieuw op dat tempo.
+
+console.log('\ntweede kans: brokjes van één stuk');
+{
+  const ZEKER = 0.9;
+  // Een curve zoals op het album: 140, dan 156 in brokjes, dan 150. Tussen de
+  // brokjes toevallige tempo's zonder zekerheid (op hun eigen tempo).
+  const toeval = [148, 131, 112, 107, 98, 126, 115, 101];
+  const brokjes = [[70, 74], [90, 90], [134, 146], [166, 170]];     // album: 8, 4, 16, 8 s; gaten 16, 44, 20 s
+  const inBrok = (t) => brokjes.some(([a, b]) => t >= a && t <= b);
+  const maak = () => {
+    const c = [];
+    for (let t = 2, k = 0; t <= 300; t += 4, k++) {
+      if (t < 62) c.push({ tijd: t, bpm: 140, zekerheid: ZEKER });
+      else if (t > 178) c.push({ tijd: t, bpm: 150, zekerheid: ZEKER });
+      else if (inBrok(t)) c.push({ tijd: t, bpm: 156 + (k % 3) - 1, zekerheid: 0.8 });
+      else c.push({ tijd: t, bpm: toeval[k % toeval.length], zekerheid: 0 });
+    }
+    return c;
+  };
+  // Op 156 houdt de fase het hele nummer vast (album: 19-22 van de 22 stapjes).
+  const op156 = (T, c) => (Math.abs(T - 156) < 2 && c.tijd > 62 && c.tijd < 178 ? 0.8 : 0);
+  const opties = { tolerantie: 0.04, minSec: 20, minZekerheid: 0.2 };
+  const rond156 = (seg) => seg.filter((s) => Math.abs(s.bpm - 156) < 2);
+
+  const oud = d.segmenteer(maak(), opties);
+  ok(`zonder tweede kans valt 156 weg (${oud.map((s) => `${s.van.toFixed(0)}-${s.tot.toFixed(0)} ${s.bpm}`).join(' | ')})`,
+    rond156(oud).length === 0 && oud.length === 2);
+  const curve = maak();
+  const n = d.tweedeKans(curve, op156, opties);
+  const nieuw = d.segmenteer(curve, opties);
+  const s156 = rond156(nieuw);
+  ok(`met tweede kans: één stuk op 156 van het eerste tot het laatste brokje (${n} vensters; ${nieuw.map((s) => `${s.van.toFixed(0)}-${s.tot.toFixed(0)} ${s.bpm.toFixed(1)}`).join(' | ')})`,
+    s156.length === 1 && s156[0].van <= 70 && s156[0].tot >= 170 && nieuw.length === 3);
+  ok('de vensters vóór het eerste en na het laatste brokje blijven zoals ze waren (een stuk groeit niet aan de rand)',
+    curve.filter((c) => c.tijd < 70 || c.tijd > 170).every((c) => !c.tweedeKans));
+  ok('140 en 150 blijven staan', Math.abs(nieuw[0].bpm - 140) < 0.1 && Math.abs(nieuw[2].bpm - 150) < 0.1);
+
+  // Een break zonder tel tussen de brokjes (op 156 houdt de fase daar NIET): die blijft een gat.
+  const metBreak = maak();
+  d.tweedeKans(metBreak, (T, c) => (c.tijd > 94 && c.tijd < 130 ? 0 : op156(T, c)), opties);
+  const sb = rond156(d.segmenteer(metBreak, opties));
+  ok(`een break zonder puls op 156 blijft een gat (${sb.map((s) => `${s.van.toFixed(0)}-${s.tot.toFixed(0)}`).join(' | ')})`,
+    sb.length === 2 && sb[0].tot <= 96 && sb[1].van >= 128);
+
+  // Te ver uit elkaar (meer dan een minuut tussen twee brokjes): geen brug.
+  const ver = [];
+  for (let t = 2; t <= 200; t += 4) {
+    const brok = (t >= 30 && t <= 38) || (t >= 110 && t <= 118);
+    ver.push({ tijd: t, bpm: brok ? 156 : 107, zekerheid: brok ? 0.8 : 0 });
+  }
+  ok('twee brokjes meer dan een minuut uit elkaar: geen brug', d.tweedeKans(ver, () => 0.8, opties) === 0);
+
+  // Twee ketens die elk lang genoeg zijn blijven gescheiden, ook als de fase
+  // ertussen op hun tempo vasthoudt: één stuk = één tempo en één anker, en
+  // over minuten loopt een tempo dat een fractie zwalkt een tel weg.
+  const lang = [];
+  for (let t = 2; t <= 120; t += 4) {
+    const gat = t > 42 && t < 62;
+    lang.push({ tijd: t, bpm: gat ? 97 : 120, zekerheid: gat ? 0 : 0.9 });
+  }
+  ok('twee lange ketens op hetzelfde tempo: niets te redden, geen brug', d.tweedeKans(lang, () => 0.9, opties) === 0);
+
+  // Octaven. Een half-time passage (album 2:10-2:18: 71-75 in een stuk op 150)
+  // gaat mee met T als de fase op T vasthoudt, ook als hij zelf iets beter scoort.
+  const half = [
+    { tijd: 2, bpm: 152, zekerheid: 0.75 }, { tijd: 6, bpm: 148, zekerheid: 0.5 },
+    { tijd: 10, bpm: 72, zekerheid: 0.5 }, { tijd: 14, bpm: 71.4, zekerheid: 0.25 }, { tijd: 18, bpm: 75, zekerheid: 0.75 },
+    { tijd: 22, bpm: 150, zekerheid: 1 },
+  ];
+  d.tweedeKans(half, (T) => (Math.abs(T - 150) < 3 ? 0.5 : 0), opties);
+  ok(`half-time tussen 150 en 150 wordt 150 (${half.map((c) => c.bpm.toFixed(0)).join(' ')})`,
+    half.every((c) => Math.abs(c.bpm - 150) < 3) && Math.abs(half[4].zekerheid - 0.5) < 1e-9);
+  // Het dubbele blijft: bij twijfel de tel, niet de maat (Bay Ledges: anders groeide het octaaffoute stuk op 76).
+  const dubbel = [
+    { tijd: 2, bpm: 76, zekerheid: 0.5 }, { tijd: 6, bpm: 77, zekerheid: 0.5 },
+    { tijd: 10, bpm: 153, zekerheid: 0 }, { tijd: 14, bpm: 152, zekerheid: 0.25 },
+    { tijd: 18, bpm: 76, zekerheid: 0.75 },
+  ];
+  d.tweedeKans(dubbel, () => 1, opties);
+  ok(`een venster op het dubbele tempo wordt niet gehalveerd (${dubbel.map((c) => c.bpm).join(' ')})`,
+    dubbel[2].bpm === 153 && dubbel[3].bpm === 152);
+}
+
+console.log('\ntweede kans op audio: 140 -> 156 in brokjes -> 150');
+{
+  const { ZEKER_VANAF } = await import('../src/engine/beatgrid.js');
+  // De kick op 156 loopt het hele nummer door; tussen de schone brokjes van
+  // 6 s liggen fills (vier klappen op 107 bpm, telkens ergens anders) die de
+  // autocorrelatie van 12 s naar 107 trekken. Op 107 houdt de fase niet vast,
+  // op 156 wel: precies wat het album deed.
+  const r = prng(77), ev = [];
+  const A156 = 60.15, p156 = 60 / 156;
+  const brokjes = [[60, 66], [84, 90], [114, 120], [144, 150]];
+  for (let t = 0.2; t < 60; t += 60 / 140) ev.push([t, 0.5, 'kick']);
+  for (let t = A156; t < 150; t += p156) ev.push([t, 0.3, 'kick']);
+  for (let k = 0; k < brokjes.length - 1; k++) {
+    const a = brokjes[k][1], b = brokjes[k + 1][0];
+    for (let t = a + 0.3; t < b - 1; t += 2.5) {
+      const t0 = t + 0.8 * (r() * 0.5 + 0.5);
+      for (let j = 0; j < 4; j++) ev.push([t0 + j * 60 / 107, 0.9, 'hat']);
+    }
+  }
+  for (let t = 150.1; t < 210; t += 60 / 150) ev.push([t, 0.5, 'kick']);
+  const m = envVan(spoorVan(210, ev, { vloer: 0.01, seed: 78 }));
+  const st = d.analyseerGrid(m.env, m.envRate, m.tijdOffset);
+  const tekst = st.map((s) => `${s.van.toFixed(0)}-${s.tot.toFixed(0)} ${s.bpm.toFixed(2)} z${s.zekerheid.toFixed(2)}`).join(' | ');
+  const s156 = st.filter((s) => Math.abs(s.bpm - 156) < 0.1 && s.zekerheid >= ZEKER_VANAF);
+  // Gemeten: 68-144 op 156,00 (z 0,86). Zonder tweede kans: alleen 104-124 (de rest kreeg het grid van 140).
+  ok(`het stuk op 156 wordt gevonden en is zeker (${tekst})`, s156.length === 1 && s156[0].van <= 70 && s156[0].tot >= 140);
+  const tel = s156[0] ? s156[0].anker + Math.round((100 - s156[0].anker) / p156) * p156 : NaN;
+  ok(`en zijn fase klopt (${fasefout(tel, A156, 156).toFixed(1)} ms)`, fasefout(tel, A156, 156) < 25);
+  ok('140 en 150 staan er nog, zeker', Math.abs(st[0].bpm - 140) < 0.1 && st[0].zekerheid >= ZEKER_VANAF
+    && st.some((s) => Math.abs(s.bpm - 150) < 0.1 && s.zekerheid >= ZEKER_VANAF && s.tot > 200));
+}
+
+// ---- controle op de tweede kans (25 september 2026, controleur) -----------
+// faseStabiliteit vraagt alleen of de fase VASTHOUDT, niet of hij op dezelfde
+// plek ligt als bij de buren. Zonder eenGridPast plakte de tweede kans een
+// volgend nummer op hetzelfde tempo in een andere fase (of 2,7% sneller) aan
+// het stuk ervoor, en was dat stuk "zeker": sync had er een halve tel naast gezeten.
+
+console.log('\neen grid moet passen: eenGridPast');
+{
+  const p = 60 / 150;
+  const kicks = (delen) => {
+    const ev = [];
+    for (const [van, tot, anker] of delen) { let t = anker; while (t < van) t += p; for (; t < tot; t += p) ev.push([t, 0.5, 'kick']); }
+    return ev;
+  };
+  const vensters = (van, tot, gered = () => false) => {
+    const uit = [];
+    for (let t = van; t <= tot; t += 4) uit.push({ tijd: t, tweedeKans: gered(t) });
+    return uit;
+  };
+  const grid = { bpm: 150, anker: 0.2 };
+  const een = envVan(spoorVan(60, kicks([[0, 60, 0.2]]), { seed: 51 }));
+  ok('één nummer, één fase: past', d.eenGridPast(een.env, een.envRate, een.tijdOffset, grid, vensters(6, 54)));
+  const twee = envVan(spoorVan(120, kicks([[0, 60, 0.2], [60, 120, 60.0]]), { seed: 52 }));
+  ok('tweede helft een halve tel verschoven: past niet', !d.eenGridPast(twee.env, twee.envRate, twee.tijdOffset, grid, vensters(6, 114)));
+  // Een kort stuk in een andere fase achter een lang stuk: onder de 10% van alle vensters...
+  const lang = envVan(spoorVan(215, kicks([[0, 200, 0.2], [200, 215, 200.0]]), { seed: 53 }));
+  ok('een kort stuk ernaast, niet gered: onder de 10%, past', d.eenGridPast(lang.env, lang.envRate, lang.tijdOffset, grid, vensters(6, 210)));
+  // ...maar waren dat de vensters die de tweede kans erbij haalde, dan niet.
+  ok('dezelfde vensters als geredde vensters: past niet',
+    !d.eenGridPast(lang.env, lang.envRate, lang.tijdOffset, grid, vensters(6, 210, (t) => t >= 190)));
+  ok('zonder duidelijke puls oordeelt hij niet', d.eenGridPast(new Float32Array(10000), 86, 0, grid, vensters(6, 100)));
+}
+
+console.log('\ntweede kans plakt geen ander nummer vast');
+{
+  // 150 schoon (60 s), dan een tweede nummer (140 s) met fills op 107 en drie
+  // schone brokjes, zoals B in de test hierboven: in een andere FASE (een halve
+  // tel) of op een net ander TEMPO (154). Oud en met de controle: het stuk op
+  // 150 stopt rond 76 s. Zonder de controle liep het "zeker" door tot 152 s.
+  const { ZEKER_VANAF } = await import('../src/engine/beatgrid.js');
+  const r = prng(61), p = 60 / 150;
+  let tweede = [];
+  const maak = (bpm2, anker2) => {
+    const ev = [];
+    tweede = [];
+    for (let t = 0.2; t < 60; t += p) ev.push([t, 0.5, 'kick']);
+    for (let t = anker2; t < 200; t += 60 / bpm2) { ev.push([t, 0.3, 'kick']); tweede.push(t); }
+    const brokjes = [[66, 72], [100, 106], [140, 146]];
+    for (let t0 = 60.3; t0 < 199; t0 += 2.5) {
+      if (brokjes.some(([a, b]) => t0 >= a - 2 && t0 <= b)) continue;
+      const f = t0 + 0.8 * (r() * 0.5 + 0.5);
+      for (let j = 0; j < 4; j++) ev.push([f + j * 60 / 107, 0.9, 'hat']);
+    }
+    return envVan(spoorVan(200, ev, { vloer: 0.01, seed: 62 }));
+  };
+  for (const [naam, bpm2, anker2] of [['zelfde tempo, halve tel verschoven', 150, 60.4], ['154 in plaats van 150', 154, 60.1]]) {
+    const m = maak(bpm2, anker2);
+    const st = d.analyseerGrid(m.env, m.envRate, m.tijdOffset);
+    const tekst = st.map((s) => `${s.van.toFixed(0)}-${s.tot.toFixed(0)} ${s.bpm.toFixed(2)} z${s.zekerheid.toFixed(2)}`).join(' | ');
+    // Geen zeker stuk dat na 90 s doorloopt terwijl de kicks van het tweede nummer erin naast zijn grid liggen.
+    const naast = (s) => {
+      const q = 60 / s.bpm;
+      const erin = tweede.filter((t) => t >= s.van && t < s.tot);
+      return erin.filter((t) => Math.abs(t - (s.anker + Math.round((t - s.anker) / q) * q)) > 0.03).length / Math.max(1, erin.length);
+    };
+    const fout = st.filter((s) => s.zekerheid >= ZEKER_VANAF && s.tot > 90 && naast(s) > 0.25);
+    ok(`${naam}: geen zeker stuk met het grid van het eerste nummer over het tweede (${tekst})`, fout.length === 0);
+    ok('  en het eerste nummer blijft zeker op 150', Math.abs(st[0].bpm - 150) < 0.1 && st[0].zekerheid >= ZEKER_VANAF && st[0].tot >= 56);
+  }
+}
+
 console.log('\nfase-ijking: niet op één tik, maar op een reeks klanken');
 {
   ok('de vastgelegde vertraging is wat de meting nu geeft',

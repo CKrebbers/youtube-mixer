@@ -19,7 +19,11 @@ Draai met `node tools/beatmeting/<script>.mjs` vanuit de projectmap.
 | tijd.mjs | rekentijd en bit-vergelijking met onset.bin |
 | offset-synth.mjs, offset-check.mjs | fase-afwijking van de onset-ijking |
 | stapA/sim.mjs e.a. | de metingen vóór/na stap A (tap 53% → 91% goed, 0% offbeat) |
-De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
+| rest/fragment.mjs `id:van:duur[:nul]` | restpunt 1: analyseerGrid oud (cc527e3) tegen nieuw (tweedeKans) op fragmenten van onset.bin |
+| rest/tel1-synth.mjs `[tempofout]`, rest/tel1-echt.mjs `id:van:duur:bpm` | restpunt 2: "tel 1 hier" met en zonder verfijnen, synthetisch en op echte muziek |
+De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking; die in
+`rest/` van 25 september. `rest/` leest geen server maar de bestanden zelf (ook vanuit een
+worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van het systeem.
 
 ## git/
 - `test-index.sh` — test precies wat er in de git-index staat (niet de werkmap): pakt de

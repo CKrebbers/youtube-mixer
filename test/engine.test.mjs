@@ -1542,6 +1542,9 @@ console.log('\ntempokaart');
   dE.seek(3.5);
   nt(82, true); nt(82, false);
   ok('scene 1: tel 1 hier, gesnapt', Math.abs(dE.grid.stukken[2].anker - 3.52) < 1e-9);
+  // En die tel is de "1" van de maat in dat stuk (maat-anker, 25 sep): het lampje knippert daar lang.
+  ok('scene 1: de gesnapte tel is de "1" van de maat', dE.grid.isDownbeat(3.52) && dE.grid.telInMaat(3.53) === 1
+    && dE.grid.telInMaat(3.52 + 60 / dE.grid.bpmAt(3.52)) === 2);
   dE.onsets = null;
 
   nt(98, true); nt(90, true); nt(90, false); nt(98, false);

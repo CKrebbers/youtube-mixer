@@ -17,6 +17,16 @@
  * Is die korter dan een halve tel van het vorige stuk, dan vervalt de laatste
  * tel van het vorige stuk — anders krijg je een flits van een tel.
  *
+ * MATEN (25 september 2026): elk stuk heeft een maat-anker `maat`, de
+ * tracktijd van een tel 1. De tellen lopen door over de grenzen, de maten niet
+ * per se: na een tempowissel begint een nieuw nummer vaak op een eigen "1".
+ * Een stuk zonder `maat` (een grid van vóór deze versie, de analyse, een nieuw
+ * stuk) krijgt er een bij het inlezen: de maten lopen dan door vanaf het
+ * vorige stuk, precies zoals ze vroeger telden (het eerste stuk: zijn anker
+ * is tel 1). Daarna houdt elk stuk zijn eigen maat vast, ook als je een ander
+ * stuk bewerkt. Een maat die erbij komt is de eerste tel 1 op of na het begin
+ * van het stuk; een bestaande blijft staan waar hij staat.
+ *
  * Alle tijden zijn TRACKTIJD in seconden, niet afspeeltijd. Draait een deck op
  * 1,05x, dan verschuift het grid niet — de track klinkt alleen sneller. Wie de
  * hoorbare bpm wil, vermenigvuldigt zelf met de rate.
@@ -29,6 +39,7 @@
 
 const EPS = 1e-9;
 const eindig = (x) => typeof x === 'number' && Number.isFinite(x);
+const mod = (a, n) => ((a % n) + n) % n;
 
 export const MIN_BPM = 40;
 export const MAX_BPM = 300;
@@ -62,12 +73,15 @@ function stukVan(s) {
   if (!eindig(bpm) || bpm <= 0 || !eindig(anker) || !eindig(van)) return null;
   const uit = { van, bpm: klem(bpm), anker };
   if (eindig(s.zekerheid)) uit.zekerheid = Math.max(0, Math.min(1, s.zekerheid));
+  // Geen maat (oud grid) = niets; null telt niet als 0.
+  const maat = s.maat === null || s.maat === undefined || s.maat === '' ? NaN : Number(s.maat);
+  if (eindig(maat)) uit.maat = maat;
   return uit;
 }
 
 export class Beatgrid {
   /**
-   * @param data  { stukken: [{ van, bpm, anker, zekerheid? }], beatsPerBar?, zeker?, slot? }
+   * @param data  { stukken: [{ van, bpm, anker, zekerheid?, maat? }], beatsPerBar?, zeker?, slot? }
    *              of het oude { bpm, firstBeat, beatsPerBar } (= één stuk).
    */
   constructor(data = {}) {
@@ -92,7 +106,15 @@ export class Beatgrid {
   // ---- de kaart --------------------------------------------------------------
 
   /** Kopieën: wie wil wijzigen, gebruikt de methoden hieronder. */
-  get stukken() { return this._stukken.map((s) => ({ ...s })); }
+  get stukken() {
+    // Altijd in dezelfde volgorde (zoals de server hem bewaart): wie JSON vergelijkt, ziet alleen echte verschillen.
+    return this._stukken.map((s) => {
+      const k = { van: s.van, bpm: s.bpm, anker: s.anker };
+      if (eindig(s.zekerheid)) k.zekerheid = s.zekerheid;
+      if (eindig(s.maat)) k.maat = s.maat;
+      return k;
+    });
+  }
   get aantalStukken() { return this._stukken.length; }
 
   /**
@@ -126,13 +148,49 @@ export class Beatgrid {
           if (delen.at(-1)?.overgang) delen.pop();
           continue;
         }
-        delen.push({ t0: tp, b0: p, L: start - tp, stuk: i, overgang: true, sT: tp, sB: p });
+        // De overgangstel is de laatste tel van het vorige stuk: die telt nog in ZIJN maat.
+        delen.push({ t0: tp, b0: p, L: start - tp, stuk: i, overgang: true, sT: tp, sB: p, maatStuk: vorig.stuk });
         delen.push({ t0: start, b0: p + 1, L, stuk: i, sT: start, sB: p + 1 });
         break;
       }
     }
     this._delen = delen;
+
+    /*
+     * Maten per stuk: `_maatB[i]` = het (doorlopende) telnummer van een tel 1
+     * in stuk i. Zonder eigen `maat` telt een stuk de maten van het vorige
+     * door; dat was vroeger het hele verhaal (tel 0 = anker van het eerste
+     * stuk = tel 1), dus een oud grid ziet er precies zo uit als toen. Zo'n
+     * maat wordt daarna vastgelegd als de eerste tel 1 op of na `van`, op het
+     * eigen rooster van het stuk.
+     */
+    const per = this.beatsPerBar;
+    const hoofd = [];
+    for (const d of delen) if (!d.overgang) hoofd[d.stuk] = d;
+    this._maatB = [];
+    let vorige = 0;
+    for (let i = 0; i < this._stukken.length; i++) {
+      const s = this._stukken[i], d = hoofd[i];
+      if (!d) {                                           // viel weg: geen eigen tellen
+        if (!eindig(s.maat)) delete s.maat;
+        this._maatB[i] = vorige;
+        continue;
+      }
+      if (eindig(s.maat)) {
+        // Een eigen maat blijft staan waar hij staat (niet "netjes" verplaatsen:
+        // na ×2 zijn er twee kandidaten voor de "1", en ½ moet de oude terugvinden).
+        this._maatB[i] = vorige = d.b0 + Math.round((s.maat - d.t0) / d.L);
+        continue;
+      }
+      const eerste = d.b0 + Math.ceil((s.van - d.t0) / d.L - EPS);
+      const b = eerste + mod(vorige - eerste, per);
+      s.maat = d.t0 + (b - d.b0) * d.L;
+      this._maatB[i] = vorige = b;
+    }
   }
+
+  /** Telnummer van een tel 1 in de maat van deel d. */
+  _maatVan(d) { return this._maatB[d.maatStuk ?? d.stuk]; }
 
   _deelBijTijd(t) {
     const d = this._delen;
@@ -233,11 +291,28 @@ export class Beatgrid {
     return b - Math.floor(b);
   }
 
-  /** Positie binnen de maat, 0..1. Hiermee lijn je twee decks op de "1" uit. */
+  /**
+   * Positie binnen de maat, 0..1, geteld vanaf de maat van het stuk waar t in
+   * valt. Hiermee lijn je twee decks op de "1" uit.
+   */
   barPhase(t) {
-    const b = this.beatAt(t) / this.beatsPerBar;
-    return b - Math.floor(b);
+    const d = this._deelBijTijd(t);
+    const x = (d.b0 + (t - d.t0) / d.L - this._maatVan(d)) / this.beatsPerBar;
+    return x - Math.floor(x);
   }
+
+  /**
+   * Welke tel van de maat klinkt er op t: 1..beatsPerBar (tussen twee tellen:
+   * de vorige). Voor lampjes die op de "1" anders knipperen.
+   */
+  telInMaat(t) {
+    const d = this._deelBijTijd(t);
+    const b = Math.floor(d.b0 + (t - d.t0) / d.L + 1e-6);
+    return mod(b - this._maatVan(this._deelBijBeat(b)), this.beatsPerBar) + 1;
+  }
+
+  /** Is tel `b` (doorlopend telnummer) een tel 1? */
+  isMaatbegin(b) { return mod(b - this._maatVan(this._deelBijBeat(b)), this.beatsPerBar) === 0; }
 
   /** Staat deze tijd op de eerste tel van een maat? */
   isDownbeat(t, tolerantie = 0.02) {
@@ -253,13 +328,20 @@ export class Beatgrid {
    */
   beatsBetween(van, tot, max = 4096, stap = 1) {
     const uit = [];
-    const per = this.beatsPerBar;
-    let b = Math.ceil(this.beatAt(van) - EPS);
-    if (stap > 1) b += ((stap - (b % stap)) % stap + stap) % stap;
-    for (let i = 0; i < max; i++, b += stap) {
+    // Met stap > 1: uitlijnen op de maat van het stuk waar de tel in valt,
+    // opnieuw bij elk stuk (een nieuw stuk kan een eigen "1" hebben).
+    const lijn = (b) => {
+      if (stap <= 1) return b;
+      // Tel voor tel: de uitgelijnde tel kan in een volgend stuk vallen, met een andere "1".
+      for (let n = 0; n < 8 * stap && mod(b - this._maatVan(this._deelBijBeat(b)), stap) !== 0; n++) b++;
+      return b;
+    };
+    let b = lijn(Math.ceil(this.beatAt(van) - EPS));
+    for (let i = 0; i < max; i++) {
       const t = this.timeOf(b);
       if (t > tot) break;
-      uit.push({ tijd: t, beat: b, maatbegin: ((b % per) + per) % per === 0 });
+      uit.push({ tijd: t, beat: b, maatbegin: this.isMaatbegin(b) });
+      b = lijn(b + 1);
     }
     return uit;
   }
@@ -289,19 +371,28 @@ export class Beatgrid {
    */
   setBpm(bpm, { ankerTijd = null, bij = null } = {}) {
     return this._pas(this._i(ankerTijd ?? bij), (s) => {
-      if (ankerTijd !== null) s.anker = ankerTijd;
-      else if (bij !== null) s.anker = this._roosterTel(s, bij);
+      // Vanaf de tel die blijft liggen telt de maat hetzelfde aantal tellen
+      // door: een tempo bijstellen verschuift de "1" niet naar een andere tel.
+      const P = ankerTijd ?? (bij !== null ? this._roosterTel(s, bij) : s.anker);
+      const k = Math.round((s.maat - P) * s.bpm / 60);
+      s.anker = P;
       s.bpm = klem(bpm);
+      if (eindig(s.maat)) s.maat = P + k * 60 / s.bpm;
     });
   }
 
   /** Tempo en/of tel in één keer, voor het stuk rond t (een tap, de verfijning). */
   zetStuk(t, { bpm, anker, zekerheid } = {}) {
     return this._pas(this._i(t), (s) => {
+      // De tel bij t houdt zijn plek in de maat: een tap zet tempo en tel,
+      // niet de "1" (die zet "tel 1 hier").
+      const plek = eindig(t) ? t : s.anker;
+      const k = Math.round((this._roosterTel(s, plek) - s.maat) * s.bpm / 60);
       if (eindig(bpm)) s.bpm = klem(bpm);
       if (eindig(anker)) s.anker = anker;
       if (eindig(zekerheid)) s.zekerheid = Math.max(0, Math.min(1, zekerheid));
       else delete s.zekerheid;
+      if (eindig(s.maat)) s.maat = this._roosterTel(s, plek) - k * 60 / s.bpm;
     });
   }
 
@@ -312,11 +403,13 @@ export class Beatgrid {
     return this._pas(this._i(bij), (s) => {
       if (bij !== null) s.anker = this._roosterTel(s, bij);
       s.bpm = klem(s.bpm * f);
+      // De "1" blijft waar hij was: bij ×2 ligt hij nog op het rooster, bij ½ de dichtstbijzijnde tel.
+      if (eindig(s.maat)) s.maat = this._roosterTel(s, s.maat);
     });
   }
 
   /** Het stuk rond `bij` opschuiven, in seconden. */
-  schuif(seconden, bij = null) { return this._pas(this._i(bij), (s) => { s.anker += seconden; }); }
+  schuif(seconden, bij = null) { return this._pas(this._i(bij), (s) => { s.anker += seconden; s.maat += seconden; }); }
 
   /**
    * Het stuk rond `bij` een deel van ZIJN tel opschuiven: 0,5 = een halve tel.
@@ -324,17 +417,20 @@ export class Beatgrid {
    * kick); voor- of achteruit is bij een halve tel hetzelfde rooster.
    */
   schuifTel(fractie, bij = null) {
-    return this._pas(this._i(bij), (s) => { s.anker += fractie * 60 / s.bpm; });
+    return this._pas(this._i(bij), (s) => { const d = fractie * 60 / s.bpm; s.anker += d; s.maat += d; });
   }
 
-  /** Leg een tel precies hier (in het stuk rond t). Gebruik je als je op de "1" tikt. */
-  ankerHier(t) { return this._pas(this._i(t), (s) => { s.anker = t; }); }
+  /**
+   * "Tel 1 hier": leg een tel precies hier (in het stuk rond t), en maak hem
+   * de "1" van de maat. Gebruik je als je op de "1" drukt.
+   */
+  ankerHier(t) { return this._pas(this._i(t), (s) => { s.anker = t; s.maat = t; }); }
 
   /**
    * Schuif het stuk rond t zo dat zijn dichtstbijzijnde tel op t komt te liggen.
    * Handig als het tempo klopt maar het grid een fractie verschoven staat.
    */
-  lijnUitOp(t) { return this._pas(this._i(t), (s) => { s.anker += t - this._roosterTel(s, t); }); }
+  lijnUitOp(t) { return this._pas(this._i(t), (s) => { const d = t - this._roosterTel(s, t); s.anker += d; s.maat += d; }); }
 
   /**
    * Nieuw stuk vanaf t: zelfde tempo en fase als het stuk waar je in zat, dus
@@ -344,7 +440,23 @@ export class Beatgrid {
   splits(t) {
     if (!eindig(t) || this._stukken.some((s) => Math.abs(s.van - t) < EPS)) return false;
     const s = this._stukken[this.stukIndex(t)];
-    this._stukken.push({ van: t, bpm: s.bpm, anker: s.anker });
+    // Dezelfde maten: de eerste "1" op of na t, op het rooster van DIT stuk.
+    // Niet via timeOf: in de laatste maat vóór een volgend stuk valt die "1"
+    // in dat stuk, op een ander tempo, en dan kreeg de rest van de maat een
+    // "1" op de verkeerde tel (controleur, 25 sep).
+    let maat;
+    if (eindig(s.maat)) {
+      const L = 60 / s.bpm, per = this.beatsPerBar;
+      const een = s.anker + Math.round((s.maat - s.anker) / L) * L;
+      const k = Math.ceil((t - een) / L - EPS);
+      maat = een + (k + mod(-k, per)) * L;
+    } else {
+      // Een stuk zonder eigen tellen (weggevallen): zoals het nu klinkt.
+      let b = Math.ceil(this.beatAt(t) - EPS);
+      for (let n = 0; n < 8 * this.beatsPerBar && !this.isMaatbegin(b); n++) b++;
+      maat = this.timeOf(b);
+    }
+    this._stukken.push({ van: t, bpm: s.bpm, anker: s.anker, maat });
     this._bouw();
     return true;
   }

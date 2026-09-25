@@ -1,0 +1,36 @@
+grid-tempo exact; 900 keer drukken; fout t.o.v. de echte tel (ms)
+  A: gem   0.3  |p50|   3.7  |p90|  21.0  max  31.3  >10 ms  18%
+  B: gem  -0.8  |p50|   1.9  |p90|   3.5  max  25.0  >10 ms   1%
+  C: gem  -0.9  |p50|   1.9  |p90|   3.7  max  26.3  >10 ms   2%
+  D: gem  -0.8  |p50|   1.9  |p90|   3.7  max  26.3  >10 ms   2%
+grid-tempo 1.00% naast; 900 keer drukken; fout t.o.v. de echte tel (ms)
+  A: gem   0.3  |p50|   3.7  |p90|  21.0  max  31.3  >10 ms  18%
+  B: gem  -0.9  |p50|   1.9  |p90|   3.7  max  25.0  >10 ms   1%
+  C: gem   0.3  |p50|   3.7  |p90|  21.0  max  31.3  >10 ms  18%
+  D: gem  -0.8  |p50|   2.0  |p90|   3.9  max  26.3  >10 ms   3%
+derde mening op de ijkklanken (ms te laat, aanzet 5/30 ms): tik/5: 4.0  tik/30: 19.9  kick/5: 7.7  kick/30: 30.0  ruis/5: 4.6  ruis/30: 24.9  hihat/5: 3.7  hihat/30: 11.9  akkoord/5: 8.0  akkoord/30: 35.2
+
+_x5K5Ihutbw 1414+100 (173.97 bpm), 207 keer drukken, t.o.v. de derde mening (ms):
+   A snap          gem    8.0  |p50|  10.7  |p90|  17.8
+   B route         gem   -2.9  |p50|   2.3  |p90|   3.8   (207 keer bijgesteld)
+   D alleen flank  gem   -2.9  |p50|   2.3  |p90|   3.8   (207 keer bijgesteld)
+CVeYI-gmX00 889+56 (169.73 bpm), 108 keer drukken, t.o.v. de derde mening (ms):
+   A snap          gem   -2.1  |p50|   7.1  |p90|  16.5
+   B route         gem  -10.4  |p50|  11.7  |p90|  26.1   (84 keer bijgesteld)
+   D alleen flank  gem   -8.5  |p50|  12.1  |p90|  26.1   (36 keer bijgesteld)
+f3a7DiCsm8k 120+48 (150.00 bpm), 81 keer drukken, t.o.v. de derde mening (ms):
+   A snap          gem   -6.0  |p50|  11.5  |p90|  21.2
+   B route         gem   -5.7  |p50|   5.7  |p90|  13.1   (67 keer bijgesteld)
+   D alleen flank  gem   -6.6  |p50|  11.3  |p90|  21.2   (6 keer bijgesteld)
+f3a7DiCsm8k 705+100 (156.00 bpm), 186 keer drukken, t.o.v. de derde mening (ms):
+   A snap          gem  -11.4  |p50|  12.7  |p90|  22.3
+   B route         gem  -12.6  |p50|  13.2  |p90|  22.4   (178 keer bijgesteld)
+   D alleen flank  gem  -11.4  |p50|  12.7  |p90|  22.3   (0 keer bijgesteld)
+mOzW9KQKfzA 1710+80 (115.20 bpm), 108 keer drukken, t.o.v. de derde mening (ms):
+   A snap          gem   -7.4  |p50|   9.7  |p90|  19.0
+   B route         gem   -8.4  |p50|  10.9  |p90|  23.7   (50 keer bijgesteld)
+   D alleen flank  gem   -7.4  |p50|   9.7  |p90|  19.0   (0 keer bijgesteld)
+HGv_ySHXtYI 0+44 (156.69 bpm), 75 keer drukken, t.o.v. de derde mening (ms):
+   A snap          gem  -12.4  |p50|  13.4  |p90|  24.7
+   B route         gem  -12.6  |p50|  11.8  |p90|  29.8   (58 keer bijgesteld)
+   D alleen flank  gem  -12.4  |p50|  13.4  |p90|  24.7   (0 keer bijgesteld)

@@ -395,6 +395,13 @@ export function bindEngine(engine) {
         if (!d.playing || !d.grid) return null;
         return d.grid.phase(hoorbaar());
       } });
+    // Welke tel van de maat je HOORT (1..4), geteld vanaf de "1" van het stuk
+    // (maat-anker, 25 sep 2026). Voor lampjes die op de "1" langer knipperen.
+    define(`${n}.barbeat`, 'trigger', () => {}, { label: `Track ${nr} tel van de maat (alleen lezen)`,
+      read: () => {
+        if (!d.playing || !d.grid) return null;
+        return d.grid.telInMaat(hoorbaar());
+      } });
 
     // Crossfader-toewijzing: A -> B -> thru -> A, zoals de knop op de APC.
     // read() geeft 0 / 0.5 / 1 zodat een LED er drie standen van kan maken.

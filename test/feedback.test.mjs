@@ -295,6 +295,14 @@ ok('blackout zet alles op nul', bus.every((b) => b[2] === 0));
   ok('actieve loop op de tel = fel cyaan', led('note:0:32') === apc.palette.cyaan);
   standen['track.1.phase'] = 0.6;
   ok('actieve loop tussen de tellen = gedimd cyaan', led('note:0:32') === apc.palette.cyaandonker);
+  // Op de "1" van de maat (maat-anker per stuk) een halve tel fel, anders een kwart.
+  standen['track.1.phase'] = 0.35; standen['track.1.barbeat'] = 1;
+  ok('op de "1" van de maat: na een kwart tel nog fel', led('note:0:32') === apc.palette.cyaan);
+  standen['track.1.barbeat'] = 2;
+  ok('op tel 2: na een kwart tel gedimd', led('note:0:32') === apc.palette.cyaandonker);
+  standen['track.1.barbeat'] = 1; standen['track.1.phase'] = 0.6;
+  ok('ook op de "1": na een halve tel gedimd', led('note:0:32') === apc.palette.cyaandonker);
+  delete standen['track.1.barbeat'];
   standen['track.1.phase'] = null;
   ok('loop op een stilstaande track: gewoon fel, geen knipperen', led('note:0:32') === apc.palette.cyaan);
   standen['track.1.beatloop.2'] = 0;
@@ -319,8 +327,10 @@ ok('blackout zet alles op nul', bus.every((b) => b[2] === 0));
   busR.length = 0;
   for (let t = 0; t < 2000; t += 33) {       // 2 s op 120 bpm = 4 tellen, tik elke 33 ms
     standen['track.1.phase'] = (t / 500) % 1;
+    standen['track.1.barbeat'] = Math.floor(t / 500) % 4 + 1;    // de "1" knippert langer, niet vaker
     fbR.tick();
   }
+  delete standen['track.1.barbeat'];
   const perLed = (n) => busR.filter((b) => b[1] === n).length;
   ok(`knipperen: loop-pad ${perLed(32)} en Track Select ${perLed(51)} berichten in 4 tellen (≤ 8)`,
     perLed(32) <= 8 && perLed(51) <= 8 && perLed(32) >= 6);
@@ -389,8 +399,15 @@ ok('blackout zet alles op nul', bus.every((b) => b[2] === 0));
   A.grid = { bpm: 120, phase(t) { const b = t * 2; return b - Math.floor(b); } };
   A.playing = true; A.position = 1.1; A.rate = 1;
   ok('fase-read rekent met de uitgangsvertraging (50 ms)', Math.abs(read('track.1.phase') - 0.1) < 1e-9);
+  // Tel van de maat van wat je HOORT, vanaf het maat-anker van het stuk: de "1" op 1,0 s.
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  A.grid = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, maat: 1.0 }] });
+  A.position = 1.1;
+  ok('maat-read: 50 ms na de "1" (wat je hoort) = tel 1', read('track.1.barbeat') === 1);
+  A.position = 1.1 + 0.5 * 3;
+  ok('maat-read: drie tellen later = tel 4', read('track.1.barbeat') === 4);
   A.playing = false;
-  ok('fase-read op een stilstaande track = null', read('track.1.phase') === null);
+  ok('fase-read op een stilstaande track = null', read('track.1.phase') === null && read('track.1.barbeat') === null);
   A.grid = null; A.hotcues[0] = null;
 }
 
