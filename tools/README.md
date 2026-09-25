@@ -41,7 +41,10 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   met en zonder `?vormen=1`, stuurt APC-bytes door de mapping (`parseMessage` →
   `mapping.handle`), tekent 60 beelden en zet schermafdrukken in `tools/headless/uit/`
   (niet in git). Let op: in headless rekent WebGL in software (swiftshader); snelheid
-  zegt hier niets.
+  zegt hier niets. Het handelingenlog loopt er helemaal doorheen: knop, bus, server,
+  lijst, terugspelen (demo én een klikspoor dat door de ingest gaat), mee met een
+  opname, en de tegenproef dat een teruggespeelde track niets in de library bewaart.
+  Poorten: `VARVE_KIJK_POORT` en `VARVE_KIJK_DEBUG` (naast een andere sessie).
 
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen
