@@ -106,6 +106,42 @@ langer en "zeker" (0,48 -> 0,72).
 Let op: het album heeft een grid met `bron: 'auto'`; de server heranalyseert dat niet
 vanzelf. ↻ in de library (opnieuw analyseren) geeft het nieuwe voorstel.
 
+### 2. Na "tel 1 hier" verfijnen met /grid/verfijn — gemeten, NIET gebouwd
+Vraag: wordt de tel beter als de browser na "tel 1 hier" (snap ±30 ms naar een klap) de
+route /grid/verfijn aanroept met `{ bpm, positie, anker }` (verfijnTap met het anker als
+voorwaarde, dan de voorflank op 24 s audio, `fijneFase`) en het anker overneemt als het
+minder dan 30 ms verschuift? Metingen en scripts: `tools/beatmeting/rest/tel1*.mjs`,
+uitkomst `tel1.txt`.
+
+Synthetisch (de ijkklanken met andere zaden en tempo's, 900 keer drukken ±25 ms naast
+de tel, fout t.o.v. de ECHTE tel): duidelijk beter.
+| | \|p50\| | \|p90\| | > 10 ms |
+|---|---|---|---|
+| A snap (zoals nu) | 3,7 ms | 21,0 ms | 18% |
+| B + /grid/verfijn | 1,9 ms | 3,5 ms (3,7 bij een grid-tempo 1% naast) | 1% |
+| C alleen voorflank op het grid-tempo | 1,9 ms | 3,7 ms, maar bij 1% tempofout niets meer (profiel uitgesmeerd) | 2% / 18% |
+
+Op Clay's muziek (6 fragmenten, alleen lezend) is de echte tel onbekend. Derde mening:
+de aanzet op 1 ms-resolutie, mediaan over ±12 s (geijkt: scherpe aanzet 4-8 ms laat).
+| fragment | A snap \|p50\|/\|p90\| | B verfijnd | voorflank gemeten |
+|---|---|---|---|
+| jungle-mix 23:34 (174) | 10,7 / 17,8 | 2,3 / 3,8 | 207 van 207 |
+| let it all go 14:49 (170) | 7,1 / 16,5 | 11,7 / 26,1 (gem. -10 ms) | 36 van 108 |
+| album 2:00 (150) | 11,5 / 21,2 | 5,7 / 13,1 | 6 van 81 |
+| album 11:45 (156) | 12,7 / 22,3 | 13,2 / 22,4 | 0 |
+| Sakamoto 28:30 (115) | 9,7 / 19,0 | 10,9 / 23,7 | 0 |
+| Bay Ledges 0:00 (157) | 13,4 / 24,7 | 11,8 / 29,8 | 0 |
+
+Oordeel: niet meetbaar beter op het materiaal waar het om gaat. De voorflank lukt maar op
+twee van de zes fragmenten; waar hij niet lukt neemt de route de grove fase (envelope van
+93 ms, ±20 ms) in plaats van de klap, en dat is niet beter dan snappen. Waar hij wel lukt
+is het één keer veel beter (jungle) en één keer ~20 ms te vroeg (let it all go: de
+voorflank ligt daar steeds 20 ms vóór de grove fase, waarschijnlijk een ander instrument
+vóór de kick). Daarom weggelaten; "tel 1 hier" snapt zoals het deed. Wie het later wil:
+alleen overnemen als de voorflank gemeten is (variant D) houdt jungle en laat de rest
+staan, maar let it all go blijft dan 20 ms te vroeg — eerst uitzoeken wie daar gelijk
+heeft (luisteren of een meting per instrument).
+
 ### 3. Maat-anker per stuk — gebouwd (`maat` in elk stuk van de tempokaart)
 Vroeger telden de maten door over de hele kaart: tel 0 (het anker van het eerste stuk)
 was een "1", en elke vierde tel daarna, over alle stukken heen. Na een tempowissel (een
