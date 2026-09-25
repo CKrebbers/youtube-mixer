@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { mkdir, rm, stat, rename } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
@@ -41,8 +41,7 @@ export const GEANNULEERD = 'geannuleerd';
  * schrijft zijn voortgang naar stdout, ffmpeg -progress ook). Een regel die
  * over twee stukken data valt wordt eerst heel gemaakt.
  *
- * signal: annuleren. Dan SIGTERM (yt-dlp en ffmpeg stoppen daar netjes op),
- * en na 3 s SIGKILL als hij er dan nog is. Het resultaat komt pas als het
+ * signal: annuleren (zie `stop` hieronder). Het resultaat komt pas als het
  * proces echt weg is — dan pas mag de werkmap weg. { afgebroken: true }.
  */
 export function run(cmd, args, { onLijn, onUit, signal, timeout = 30 * 60 * 1000 } = {}) {
@@ -58,15 +57,40 @@ export function run(cmd, args, { onLijn, onUit, signal, timeout = 30 * 60 * 1000
       klaar({ ok: false, code: -1, stdout: '', stderr: String(err?.message || err) });
       return;
     }
-    let stdout = '', stderr = '', afgekapt = false, afgebroken = false, hard = null;
-    const klok = setTimeout(() => { afgekapt = true; kind.kill('SIGKILL'); }, timeout);
+    let stdout = '', stderr = '', afgekapt = false, afgebroken = false, stoppend = false, gesloten = false, hard = null;
+    /*
+     * Stoppen (annuleren, of te lang bezig). SIGINT, NIET SIGTERM: yt-dlp is
+     * Python en heeft geen SIGTERM-afhandeling, dus hij viel meteen om en liet
+     * de ffmpeg achter die hij zelf startte (als downloader bij een livestream
+     * of HLS, of voor een nabewerking). Die ffmpeg erft onze stdout/stderr:
+     * 'close' kwam dan pas als hij klaar was — bij een livestream nooit, en de
+     * wachtrij stond stil op "stoppen". Op SIGINT (Ctrl-C) stuurt yt-dlp zijn
+     * ffmpeg een 'q', wacht erop en stopt (gemeten: 0,6 s). ffmpeg zelf stopt
+     * op SIGINT net zo netjes als op SIGTERM.
+     * Na 3 s: SIGKILL voor hem én alles wat eronder hing. Die familie wordt
+     * meteen opgeschreven: valt hij om, dan hangen zijn kinderen aan launchd
+     * en zijn ze niet meer als de zijne te vinden. Daarna laten we onze pijpen
+     * los; anders wacht 'close' nog op wie ze vasthoudt.
+     */
     const stop = () => {
-      afgebroken = true;
-      kind.kill('SIGTERM');
-      hard = setTimeout(() => kind.kill('SIGKILL'), 3000);
+      if (stoppend) return;
+      stoppend = true;
+      const familie = nakomelingen(kind.pid);
+      kind.kill('SIGINT');
+      hard = setTimeout(async () => {
+        const leeft = kind.exitCode === null && kind.signalCode === null;
+        const pids = new Set([...await familie, ...(leeft ? await nakomelingen(kind.pid) : [])]);
+        if (gesloten) return;
+        for (const pid of pids) { try { process.kill(pid, 'SIGKILL'); } catch {} }
+        kind.kill('SIGKILL');
+        kind.stdout.destroy();
+        kind.stderr.destroy();
+      }, 3000);
     };
-    signal?.addEventListener('abort', stop, { once: true });
-    const opruimen = () => { clearTimeout(klok); clearTimeout(hard); signal?.removeEventListener('abort', stop); };
+    const klok = setTimeout(() => { afgekapt = true; stop(); }, timeout);
+    const opAbort = () => { afgebroken = true; stop(); };
+    signal?.addEventListener('abort', opAbort, { once: true });
+    const opruimen = () => { gesloten = true; clearTimeout(klok); clearTimeout(hard); signal?.removeEventListener('abort', opAbort); };
 
     const regels = (terug) => {
       if (!terug) return () => {};
@@ -90,6 +114,32 @@ export function run(cmd, args, { onLijn, onUit, signal, timeout = 30 * 60 * 1000
       if (onLijn && stderr && !/[\r\n]$/.test(stderr)) foutRegel('\n');
       klaar({ ok: code === 0 && !afgekapt && !afgebroken, code, stdout, stderr, afgekapt, afgebroken });
     });
+  });
+}
+
+/**
+ * Alle nakomelingen van `pid` (kinderen, kleinkinderen…) volgens ps, of []
+ * als dat niet lukt. Voor het stoppen in run(). Bewust niet via run() zelf:
+ * die kan bij een time-out weer hier uitkomen.
+ */
+export function nakomelingen(pid) {
+  return new Promise((klaar) => {
+    if (!(pid > 0)) { klaar([]); return; }
+    try {
+      execFile('ps', ['-A', '-o', 'pid=,ppid='], { timeout: 5000 }, (err, uit) => {
+        if (err) { klaar([]); return; }
+        const kinderen = new Map();
+        for (const regel of String(uit).split('\n')) {
+          const [p, ouder] = regel.trim().split(/\s+/).map(Number);
+          if (p > 0 && ouder > 0) kinderen.set(ouder, [...(kinderen.get(ouder) ?? []), p]);
+        }
+        const familie = [];
+        for (const rij = [pid]; rij.length;) {
+          for (const k of kinderen.get(rij.shift()) ?? []) if (!familie.includes(k)) { familie.push(k); rij.push(k); }
+        }
+        klaar(familie);
+      });
+    } catch { klaar([]); }
   });
 }
 

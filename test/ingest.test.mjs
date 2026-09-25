@@ -1,9 +1,10 @@
 // De ingest-laag zonder netwerk: ffmpeg maakt zijn eigen testmateriaal.
 // Wat hier NIET getest wordt is yt-dlp zelf — dat vraagt YouTube, en een test
 // die van een externe dienst afhangt is geen test maar een weersverwachting.
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const ing = await import('../server/ingest.js');
 
@@ -141,6 +142,46 @@ ok('een kapotte bron meldt de fout in plaats van stil te falen',
   ok('een grid op slot blijft staan als het nummer opnieuw binnenkomt', !lib.bewaarAutoGrid(r.track.id, g).bewaard
     && lib.track(r.track.id).grid.stukken[0].bpm === 62);
   lib.sluit();
+
+  // Annuleren terwijl de ECHTE yt-dlp ffmpeg als downloader gebruikt: zo haalt
+  // hij een livestream (en sommige HLS) binnen, en die ffmpeg erft onze
+  // stdout/stderr. Met SIGTERM viel yt-dlp om (Python heeft daar geen
+  // afhandeling voor), liep ffmpeg door en hield onze pijpen vast: run() kwam
+  // niet terug en de wachtrij stond stil. Een eigen yt-dlp-config, alleen voor
+  // deze check, zet de ffmpeg-downloader aan; met -re duurt een minuut ook een minuut.
+  {
+    const wacht = (ms) => new Promise((z) => setTimeout(z, ms));
+    const cfg = join(map, 'cfg');
+    mkdirSync(join(cfg, 'yt-dlp'), { recursive: true });
+    writeFileSync(join(cfg, 'yt-dlp', 'config'), '--downloader ffmpeg\n--downloader-args "ffmpeg_i:-re"\n');
+    const srv2 = createServer((q, r2) => {
+      r2.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': wav.length });
+      r2.end(q.method === 'HEAD' ? undefined : wav);
+    });
+    await new Promise((k) => srv2.listen(0, '127.0.0.1', k));
+    const fdMedia = join(map, 'media-fd');
+    // Alleen processen van deze check: de werkmap staat in hun opdrachtregel.
+    const zoek = () => { try { return execFileSync('pgrep', ['-f', fdMedia]).toString().trim().split('\n').filter(Boolean).map(Number); } catch { return []; } };
+    process.env.XDG_CONFIG_HOME = cfg;
+    const ac = new AbortController();
+    const p = ing.ingest(`http://127.0.0.1:${srv2.address().port}/live-fd.wav`, { mediaDir: fdMedia, video: false, signal: ac.signal });
+    // Wachten tot yt-dlp én zijn ffmpeg lopen.
+    let fd = [];
+    for (let i = 0; i < 300 && (fd = zoek()).length < 2; i++) await wacht(100);
+    await wacht(500);
+    ac.abort();
+    const t0 = Date.now();
+    const r2 = await Promise.race([p, wacht(15000).then(() => null)]);
+    delete process.env.XDG_CONFIG_HOME;
+    ok(`de echte yt-dlp met ffmpeg als downloader stopt op annuleren (${fd.length} processen, ${r2 ? `${Date.now() - t0} ms` : 'hing > 15 s'})`,
+      fd.length >= 2 && r2?.afgebroken === true);
+    await wacht(300);
+    const over = zoek();
+    ok(`en daarna draait er niets meer van (${over.length} over)`, over.length === 0);
+    for (const x of over) { try { process.kill(x, 'SIGKILL'); } catch {} }
+    await p;
+    srv2.close();
+  }
 }
 
 rmSync(map, { recursive: true, force: true });

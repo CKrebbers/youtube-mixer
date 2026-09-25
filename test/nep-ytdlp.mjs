@@ -11,9 +11,18 @@
 //   ...lijst...  metadata is een playlist (3 nummers)
 //   ...kapot...  metadata faalt zoals yt-dlp faalt
 //   ...traag...  de download duurt 25 stappen × NEP_TRAAG_MS (tijd om te annuleren)
+//   ...kind...   start tijdens de download een kind dat ONZE stdout/stderr erft,
+//                zoals yt-dlp ffmpeg als downloader start (livestream, HLS)
+//   ...doof...   negeert SIGINT (zoals een yt-dlp die in C-code vastzit)
 //   watch?v=<id> een YouTube-nummer (extractor Youtube)
 // Een videodownload (-f bv/b) faalt altijd: video is bonus, de audio blijft.
+//
+// Signalen zoals de echte (Python) yt-dlp: SIGINT = KeyboardInterrupt, dan
+// ruimt hij zijn kinderen op (ffmpeg krijgt 'q', een nabewerking wordt
+// gekild) en stopt met code 1. SIGTERM heeft hij NIET: dan valt hij meteen
+// om en laat zijn kinderen achter.
 import { appendFileSync, copyFileSync, writeFileSync, chmodSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,7 +42,13 @@ async function nep(args) {
     if (process.env.NEP_LOG) appendFileSync(process.env.NEP_LOG, JSON.stringify({ wat, pid: process.pid, ...extra }) + '\n');
   };
   const url = args[args.length - 1] || '';
-  process.on('SIGTERM', () => { log('gestopt', { url }); process.exit(143); });
+  let kind = null;
+  process.on('SIGINT', () => {
+    if (url.includes('doof')) { log('doof', { url }); return; }
+    kind?.kill('SIGINT');
+    log('gestopt', { url });
+    process.exit(1);
+  });
 
   if (args.includes('--version')) { console.log('2026.08.19'); return; }
 
@@ -68,6 +83,10 @@ async function nep(args) {
   const i = args.indexOf('--progress-template');
   const sjabloon = i >= 0 ? args[i + 1].replace(/^download:/, '') : null;
   const totaal = 1000000;
+  if (url.includes('kind')) {
+    kind = spawn('sleep', ['60'], { stdio: ['ignore', 'inherit', 'inherit'] });
+    log('kind', { url, kind: kind.pid });
+  }
   for (let k = 1; k <= stappen; k++) {
     await new Promise((z) => setTimeout(z, ms));
     const binnen = Math.round((totaal * k) / stappen);

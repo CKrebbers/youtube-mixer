@@ -220,8 +220,31 @@ try {
     ok(`uitkomst: geannuleerd (${r.fout}), binnen ${Date.now() - t0} ms`, r.ok === false && r.afgebroken === true && r.fout === 'geannuleerd' && Date.now() - t0 < 4000);
     let leeft = true;
     try { process.kill(pid, 0); } catch { leeft = false; }
-    ok('de nep-yt-dlp kreeg SIGTERM en is weg', !leeft && regels().some((x) => x.wat === 'gestopt' && x.pid === pid));
+    ok('de nep-yt-dlp kreeg SIGINT (zoals Ctrl-C), stopte zelf en is weg', !leeft && regels().some((x) => x.wat === 'gestopt' && x.pid === pid));
     ok('de werkmap is opgeruimd, er staat niets in media/', werkmappen().length === 0 && readdirSync(media).length === 0);
+
+    // yt-dlp met ffmpeg als downloader (livestream, HLS): dat kind schrijft in
+    // ONZE pijpen. Met SIGTERM viel yt-dlp om, liep het kind door en hield de
+    // pijp vast: run() kwam pas terug als het kind klaar was — bij een
+    // livestream nooit, en de wachtrij stond stil ("stoppen").
+    const leeftNog = (p) => { try { process.kill(p, 0); return true; } catch { return false; } };
+    for (const [link, wat] of [['nummer-kind-traag', 'yt-dlp met een kind op onze pijp: ruimt het zelf op (SIGINT)'],
+      ['nummer-kind-doof-traag', 'reageert hij niet op SIGINT: na 3 s hij én zijn kind SIGKILL']]) {
+      const ac3 = new AbortController();
+      const p3 = ing.ingest(`http://127.0.0.1:9/${link}`, { mediaDir: media, video: false, signal: ac3.signal });
+      let k;
+      for (let i = 0; i < 200 && !(k = regels().find((x) => x.wat === 'kind' && x.url.endsWith(link))); i++) await wacht(50);
+      const ouder = k?.pid, kleinkind = k?.kind;
+      ac3.abort();
+      const t3 = Date.now();
+      const r3 = await Promise.race([p3, wacht(10000).then(() => null)]);
+      ok(`${wat}: geannuleerd na ${Date.now() - t3} ms`, !!k && r3?.afgebroken === true && Date.now() - t3 < 8000);
+      await wacht(100);
+      ok('  yt-dlp en zijn kind zijn allebei weg, geen werkmap', !!k && !leeftNog(ouder) && !leeftNog(kleinkind) && werkmappen().length === 0);
+      // Faalde het, dan niets laten slingeren (alleen wat deze test zelf startte).
+      for (const x of [ouder, kleinkind]) if (x) { try { process.kill(x, 'SIGKILL'); } catch {} }
+      await p3;
+    }
 
     // Een gewone: loopt helemaal door, met voortgang van ffmpeg ook.
     const st2 = [];

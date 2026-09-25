@@ -114,7 +114,7 @@ try {
   ok(`daarna: geannuleerd (${oa?.status})`, oa?.status === 'geannuleerd');
   let leeft = true;
   try { process.kill(pidA, 0); } catch { leeft = false; }
-  ok('de nep-yt-dlp is gestopt (SIGTERM) en weg', !!pidA && !leeft && regels().some((x) => x.wat === 'gestopt' && x.pid === pidA));
+  ok('de nep-yt-dlp is gestopt (SIGINT) en weg', !!pidA && !leeft && regels().some((x) => x.wat === 'gestopt' && x.pid === pidA));
   ok('zijn werkmap is opgeruimd', werkmappen('.bezig-generic-nummer-a-traag').length === 0);
 
   const ob = await wachtOp(rb.id, afgelopen);
