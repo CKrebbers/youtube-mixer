@@ -209,6 +209,51 @@ console.log('\nde mixer meldt een video die niet laadt');
   } finally { performance.now = echteNu; }
 }
 
+console.log('\nsprongen die lang duren: seekDuur leert de echte duur, ook als het seeked-event laat komt');
+{
+  // Onder belasting komt het 'seeked'-event pas NA het volgende beeld. Sprong
+  // dat beeld opnieuw (de vorige landde te laat), dan hoorde het event bij de
+  // vorige sprong en telde de nieuwe als 0 s: seekDuur zakte naar ~0, elke
+  // sprong landde 0,8 s te laat, en de video sprong eindeloos achter het
+  // geluid aan (tools/headless/beamer.mjs, acht tracks, 25 sep).
+  const { VideoMixer } = await import('../src/video/video-mixer.js');
+  const gl = new Proxy({ TEXTURE0: 1000, createTexture: () => ({}), createFramebuffer: () => ({}), createProgram: () => ({}),
+    createShader: () => ({}), getShaderParameter: () => true, getProgramParameter: () => true,
+    getUniformLocation: (p, n) => n, getAttribLocation: () => 0 },
+  { get(t, k) { return k in t ? t[k] : () => {}; } });
+  const echteNu = performance.now;
+  let klok = 1000;
+  performance.now = () => klok;
+  try {
+    const deck = { buffer: {}, ui: { fader: 1 }, position: 30, rate: 1, playing: true, grid: null };
+    const engine = { ctx: { currentTime: 1, outputLatency: 0, baseLatency: 0 }, deck: () => deck, xfadeGain: () => 1 };
+    let v;
+    const maakVideo = () => (v = { paused: true, readyState: 4, seeking: false, playbackRate: 1, luister: {}, src: '', t: 0, klaarOm: 0, laat: false,
+      addEventListener(n, f) { (this.luister[n] ??= []).push(f); }, removeAttribute() {}, load() {},
+      pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); },
+      get currentTime() { return this.t; },
+      set currentTime(x) { this.t = x; this.seeking = true; this.klaarOm = klok + 800; } });   // elke sprong duurt 0,8 s
+    const mx = new VideoMixer({ canvas: { getContext: () => gl }, engine, decks: ['A'], maakVideo });
+    mx.zetBron('A', '/media/s/video.mp4');
+    mx.lagen.get('A').klaar = true;
+    let sprongen = 0, laatsteSprong = 0;
+    for (let n = 0; n < 1200; n++) {                         // 20 s op 60 beelden per seconde
+      klok += 1000 / 60;
+      deck.position = 30 + (klok - 1000) / 1000;
+      if (v.laat) { v.laat = false; (v.luister.seeked ?? []).forEach((f) => f()); }   // het event van de vorige sprong, een beeld te laat
+      if (v.seeking && klok >= v.klaarOm) { v.seeking = false; v.laat = true; }
+      else if (!v.seeking && !v.paused) v.t += v.playbackRate / 60;
+      const voor = v.klaarOm;
+      mx.teken();
+      if (v.klaarOm !== voor) { sprongen++; laatsteSprong = klok; }
+    }
+    const laag = mx.lagen.get('A');
+    ok('seekDuur leert de echte duur (0,8 s), niet de tijd tot een laat event', laag.seekDuur > 0.6, `${laag.seekDuur.toFixed(2)} s`);
+    ok('de video komt in de pas en springt daarna niet meer', laatsteSprong < 11000 && Math.abs(v.t - deck.position) < 0.05,
+      `${sprongen} sprongen, laatste na ${((laatsteSprong - 1000) / 1000).toFixed(1)} s, verschil ${Math.round((v.t - deck.position) * 1000)} ms`);
+  } finally { performance.now = echteNu; }
+}
+
 console.log('\nde beamer: wie mengt er (het losse venster loopt door als het hoofdtabblad verborgen is)');
 {
   const { wieMengt, Beamer, isDicht, isVerborgen } = await import('../src/video/beamer.js');

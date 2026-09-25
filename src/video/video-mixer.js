@@ -394,14 +394,6 @@ export class VideoMixer {
     video.src = url;
     const laag = { video, url, tex: this._texture(), seekStart: 0, seekDuur: 0.15, klaar: false,
       zichtSinds: null, gemeld: false };
-    // Hoe lang een seek duurt, om er de volgende keer rekening mee te houden.
-    video.addEventListener('seeked', () => {
-      if (laag.seekStart) {
-        const d = (performance.now() - laag.seekStart) / 1000;
-        laag.seekDuur = laag.seekDuur * 0.7 + Math.min(2, d) * 0.3;
-        laag.seekStart = 0;
-      }
-    });
     video.addEventListener('loadeddata', () => { laag.klaar = true; });
     // Ontbreekt het bestand of is het kapot, dan zegt de strook het; anders
     // blijft de beamer zwart zonder dat iemand weet waarom.
@@ -433,7 +425,8 @@ export class VideoMixer {
     // intussen niet laden kon, kreeg anders bij het eerste beeld meteen
     // "na 10 s nog geen beeld".
     const nuMs = performance.now();
-    if (nuMs - this.vorigBeeldMs > 1000) for (const l of this.lagen.values()) l.zichtSinds = null;
+    // Een sprong die toen liep meten we niet: die tijd zegt niets over springen.
+    if (nuMs - this.vorigBeeldMs > 1000) for (const l of this.lagen.values()) { l.zichtSinds = null; l.seekStart = 0; }
     this.vorigBeeldMs = nuMs;
 
     this.decks.forEach((id, i) => {
@@ -443,7 +436,7 @@ export class VideoMixer {
       gl.activeTexture(gl.TEXTURE0 + i);
       if (!laag || zicht < ZICHTBAAR) {
         if (laag && !laag.video.paused) laag.video.pause();
-        if (laag) laag.zichtSinds = null;
+        if (laag) { laag.zichtSinds = null; laag.seekStart = 0; }
         gl.bindTexture(gl.TEXTURE_2D, this.zwart);
         return;
       }
@@ -540,6 +533,19 @@ export class VideoMixer {
    */
   _volg(laag, deck, vertraging) {
     const v = laag.video;
+    // Hoe lang een sprong duurt, om er de volgende keer rekening mee te houden:
+    // gemeten tot het eerste beeld waarin seeking weer false is. NIET met het
+    // 'seeked'-event: dat is een taak die onder belasting pas NA dat beeld
+    // komt. Sprong dat beeld opnieuw (de vorige landde te laat), dan hoorde het
+    // event bij de vorige sprong en duurde de nieuwe "0 s". Gemeten met acht
+    // tracks onder zware belasting (tools/headless/beamer.mjs): seekDuur zakte
+    // naar 0,00–0,04 s terwijl sprongen 0,8–1,7 s duurden, dus elke sprong
+    // landde een seconde te laat en de video's sprongen 20 s achter het geluid aan.
+    if (laag.seekStart && !v.seeking) {
+      const d = (performance.now() - laag.seekStart) / 1000;
+      laag.seekDuur = laag.seekDuur * 0.7 + Math.min(2, d) * 0.3;
+      laag.seekStart = 0;
+    }
     const r = synchroniseer({
       videoTijd: v.currentTime,
       doel: Math.max(0, deck.position - vertraging * deck.rate),
