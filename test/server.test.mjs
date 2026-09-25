@@ -231,6 +231,11 @@ try {
   const st = await fetch(`${B}/api/opname/${s.id}/stuk`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: stuk });
   const k = await (await fetch(`${B}/api/opname/${s.id}/klaar`, { method: 'POST' })).json();
   ok('start, stuk, klaar: een seconde', s.ok && st.ok && Math.abs(k.duur - 1) < 1e-9);
+  // De opname afspelen gaat via /opnames/…: uit VARVE_OPNAMES, niet uit de
+  // opnames/ in de projectmap (daar stond hij niet, of een andere).
+  const alsBestand = await fetch(`${B}/opnames/set-${s.id}.wav`);
+  ok(`/opnames/set-….wav komt uit VARVE_OPNAMES (${alsBestand.status})`, alsBestand.status === 200
+    && (await alsBestand.arrayBuffer()).byteLength >= 48000 * 4);
   const eigen = { Origin: `http://localhost:${poort}` };
   const s2 = await (await fetch(`${B}/api/opname/start`, { method: 'POST', headers: eigen })).json();
   const st2 = await fetch(`${B}/api/opname/${s2.id}/stuk`, { method: 'POST', headers: { ...eigen, 'Content-Type': 'application/octet-stream' }, body: stuk });

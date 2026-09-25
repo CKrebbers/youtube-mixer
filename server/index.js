@@ -26,6 +26,9 @@ const POORT = Number(process.env.PORT) || 8777;
 // (ook het opruimen van .bezig-mappen bij het opstarten niet — dat wiste
 // anders de werkmap van een ingest die op de echte server liep).
 const MEDIA = process.env.VARVE_MEDIA || join(WORTEL, 'media');
+// Opnames en handelingenlogs. Ook de statische /opnames/-paden komen hieruit,
+// anders las een testserver (of een andere opnamemap) uit de projectmap.
+const OPNAMES = process.env.VARVE_OPNAMES || join(WORTEL, 'opnames');
 
 /**
  * Paden in de database zijn relatief ("media/<id>/audio.wav"), zoals de browser
@@ -403,7 +406,11 @@ async function statisch(req, res, pad) {
   const schoon = schoonPad(pad);
   if (schoon === undefined) { json(res, 400, { fout: 'ongeldig pad' }); return; }
   if (schoon === null) { json(res, 404, { fout: 'niet gevonden', pad }); return; }
-  const veilig = schoon.startsWith('/media/') ? opSchijf(schoon) : join(WORTEL, schoon);
+  // De witte lijst laat onder /opnames/ alleen set-<id>.wav/mp4/webm door: geen
+  // submap, dus `join` blijft binnen OPNAMES.
+  const veilig = schoon.startsWith('/media/') ? opSchijf(schoon)
+    : schoon.startsWith('/opnames/') ? join(OPNAMES, schoon.slice('/opnames/'.length))
+      : join(WORTEL, schoon);
 
   let info;
   try { info = await stat(veilig); } catch { json(res, 404, { fout: 'niet gevonden', pad }); return; }
@@ -656,7 +663,6 @@ const server = createServer(async (req, res) => {
 
     // ---- opnames van je set: blijven op deze schijf, gaan nergens heen -----
 
-    const OPNAMES = process.env.VARVE_OPNAMES || join(WORTEL, 'opnames');
     if (pad === '/api/opnames' && req.method === 'GET') return json(res, 200, { opnames: await opname.lijst(OPNAMES) });
     if (pad === '/api/opname/start' && req.method === 'POST') {
       const r = await opname.start(OPNAMES);
