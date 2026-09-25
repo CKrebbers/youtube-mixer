@@ -514,6 +514,8 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .vid-status{font-size:11px;color:var(--dim);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vid-tools{display:flex;gap:4px}
 .vid-canvas{width:100%;aspect-ratio:16/9;background:#000;display:block}
+.vid-voorbeeld{width:100%;aspect-ratio:16/9;background:#000;display:block;object-fit:contain}
+.vid-canvas.verstopt,.vid-voorbeeld.verstopt{display:none}
 .vid-fx{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px}
 .vid-modus,.vid-pulsdoel{min-width:64px;text-transform:uppercase;letter-spacing:.08em}
 .vid-sep{width:1px;align-self:stretch;background:var(--line)}

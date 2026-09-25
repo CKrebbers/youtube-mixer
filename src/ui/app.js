@@ -22,7 +22,7 @@ import { vormenAan } from './vlag.js';
  * Het instappunt van de schermlaag: maakt de engine en zet de modules in
  * volgorde op. Wat de modules delen staat in `staat` of gaat als parameter
  * mee; niets via globals. De `window.*`-haakjes zijn er om in de console van
- * Chrome te kunnen testen (en `window.videoMixer` voor het losse videovenster).
+ * Chrome te kunnen testen (en `window.varveBeamer` voor het losse videovenster).
  *
  * Volgorde: een module die iets van een LATERE module nodig heeft, krijgt
  * een pijlfunctie die die pas bij aanroepen opzoekt (`laden`, `racks`,
@@ -71,6 +71,8 @@ const staat = {
 const video = opzetVideo({ engine });
 const { videoMixer } = video;
 window.videoMixer = videoMixer;
+// Het losse venster (video.html) meldt zich hier aan en mengt zelf (src/video/beamer.js).
+window.varveBeamer = video.api;
 bindVideo(videoMixer);
 // Vormlagen (Vormmachines) over de video: alleen met ?vormen=1 (docs/plugins/01-plan.md).
 // Vóór opzetVensters, die bindt alle knoppen die er dan staan.
@@ -78,7 +80,7 @@ const vormen = vormenAan() ? (await import('./vorm-paneel.js')).opzetVormen({ vi
 window.vormen = vormen?.vormen;
 
 // ---- opnemen --------------------------------------------------------------
-const opname = opzetOpname({ engine, videoMixer });
+const opname = opzetOpname({ engine, videoCanvas: video.opnameCanvas });
 window.opnemer = opname.opnemer;
 
 // ---- het scherm als spiegel van de APC, en de track met focus -------------

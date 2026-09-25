@@ -8,12 +8,16 @@ import { meld } from './meldingen.js';
  * Wat uit de master komt, naar opnames/ op deze schijf. De lengte komt van
  * de audioklok (de worklet telt frames), niet van een timer. Dezelfde
  * start/stop staat ook op de bus (bindApp), voor de APC.
+ *
+ * `videoCanvas()` geeft het canvas voor een video-opname: dat van het losse
+ * venster als dat mengt (het loopt door als dit tabblad verborgen is), anders
+ * dat van het paneel (video-paneel.js, beamer.js).
  */
-export function opzetOpname({ engine, videoMixer }) {
+export function opzetOpname({ engine, videoCanvas }) {
   const opnemer = new Opnemer({ engine });
   opnemer.onFout = (f) => meld(`opname: ${f}`, 'fout', 8000);
   // app.js zet window.opnemer; het videopaneel leest die om te weten of het
-  // tijdens een video-opname moet doorrenderen.
+  // tijdens een video-opname moet doorrenderen, en uit welk venster.
 
   // De tab sluiten of herladen tijdens een opname: eerst vragen. De audio staat
   // grotendeels veilig op schijf, maar de laatste seconde en de video niet.
@@ -27,7 +31,7 @@ export function opzetOpname({ engine, videoMixer }) {
     opnameKnop.classList.remove('gelukt', 'mislukt');
     if (!opnemer.bezig) {
       await engine.resume().catch(() => {});
-      const r = await opnemer.start({ video: opnameSoort.value === 'video' ? videoMixer.canvas : null });
+      const r = await opnemer.start({ video: opnameSoort.value === 'video' ? videoCanvas() : null });
       if (!r.ok) { opnameKnop.textContent = 'opnemen mislukt'; opnameKnop.classList.add('mislukt'); opnameKnop.title = r.fout; }
       return;
     }
@@ -64,7 +68,7 @@ export function opzetOpname({ engine, videoMixer }) {
 
   // Wat de bus (bindApp) aanroept: zonder tweede klik, met een melding.
   const opnameStart = async () => {
-    const r = await opnemer.start({ video: opnameSoort.value === 'video' ? videoMixer.canvas : null });
+    const r = await opnemer.start({ video: opnameSoort.value === 'video' ? videoCanvas() : null });
     if (!r.ok) meld(`opnemen: ${r.fout}`, 'fout');
   };
   const opnameStop = async () => {

@@ -1,4 +1,5 @@
 import { synchroniseer, zichtbaarheid } from './volg.js';
+import { videoFoutTekst, laadtTeLang, LAAD_GEDULD } from './fouten.js';
 import { VIDEO_FX, MODI } from './instellingen.js';
 import { PULS_DOELEN, pulsVorm, maatgever, metPuls } from './puls.js';
 import { FITS, schaalVoor, maatVan } from './passen.js';
@@ -19,6 +20,11 @@ import { hoorbaar, naVertraging, uitgangsVertraging } from '../engine/hoorbaar.j
  *
  * Zuinig: acht 720p-video's tegelijk decoderen is zwaar. Een track die niet
  * te zien is, wordt gepauzeerd en niet geüpload.
+ *
+ * Er kunnen twee mixers zijn: die in het hoofdvenster (bediend via de bus)
+ * en die in het losse venster (de beamer, beamer.js). De tweede neemt elk
+ * beeld alles over van de eerste (neemOver) en heeft eigen <video>'s: een
+ * verborgen tabblad decodeert niets.
  *
  * Drie stappen per beeld, elk in een eigen shader:
  *   mengen    acht video's -> één beeld, volgens de mengvorm
@@ -188,13 +194,19 @@ export class VideoMixer {
    * @param canvas   waar het beeld komt
    * @param engine   alleen om uit te lezen: deck(), xfadeGain(), ctx
    * @param decks    deck-id's in volgorde, hooguit acht
+   * @param maakVideo een <video> maken; in het losse venster die van ZIJN document (de tests geven een nep)
    */
-  constructor({ canvas, engine, decks }) {
+  constructor({ canvas, engine, decks, maakVideo = () => document.createElement('video') }) {
     this.canvas = canvas;
     this.engine = engine;
     this.decks = decks.slice(0, MAX);
-    this.lagen = new Map();          // deckId -> { video, url, tex, seekStart, seekDuur, klaar }
+    this.maakVideo = maakVideo;
+    this.lagen = new Map();          // deckId -> { video, url, tex, seekStart, seekDuur, klaar, zichtSinds, gemeld }
+    this.bronnen = new Map();        // deckId -> url: wat er zou moeten hangen (ook zonder WebGL), voor neemOver
     this.fout = null;
+    this.onFout = null;              // (deckId, tekst): de video van een nummer ontbreekt of laadt niet
+    this.beelden = 0;                // getekende beelden, voor de status en de tests
+    this.vorigBeeldMs = -Infinity;   // performance.now() van het vorige teken()
     canvas.width = BREEDTE;
     canvas.height = HOOGTE;
 
@@ -272,9 +284,10 @@ export class VideoMixer {
    */
   _maakLagenStap() {
     const gl = this.gl;
-    if (!gl || this.lagenProg) return;
+    if (!gl || this.lagenProg || this.lagenMislukt) return;
     const prog = this._programma(VERTEX, LAGEN);
-    if (!prog) { console.warn('[video] lagenstap:', this.fout); this.fout = null; return; }
+    // Niet elk beeld opnieuw proberen (neemOver roept dit elk beeld aan).
+    if (!prog) { console.warn('[video] lagenstap:', this.fout); this.fout = null; this.lagenMislukt = true; return; }
     const loc = gl.getAttribLocation(prog, 'p');
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
@@ -285,6 +298,31 @@ export class VideoMixer {
     this.laagTex = Array.from({ length: MAX_BEELDLAGEN }, () => this._texture());
     this.lagenProg = prog;
   }
+
+  /**
+   * Het losse venster: alles overnemen van de mixer in het hoofdvenster —
+   * engine, knoppen, mengvorm, puls, passend/vullen, welke video op welke
+   * track en de beeldlagen (dezelfde objecten: een vorm rekent één keer, voor
+   * wie er mengt). Elk beeld opnieuw; wat niet verandert kost niets.
+   * Herlaadt het hoofdvenster, dan komt hier vanzelf de nieuwe engine binnen.
+   */
+  neemOver(hoofd) {
+    // Zonder WebGL2 is er niets om over te nemen (en geen this.fx); dit
+    // venster meldt zich dan ook niet aan, maar zijn lus roept dit elk beeld.
+    if (!this.gl) return;
+    this.engine = hoofd.engine;
+    for (const k in hoofd.fx) this.fx[k] = hoofd.fx[k];
+    this.modus = hoofd.modus;
+    this.puls = hoofd.puls;
+    this.pulsDoel = hoofd.pulsDoel;
+    this.fit = hoofd.fit;
+    this.beeldlagen = hoofd.beeldlagen;
+    if (this.beeldlagen.length) this._maakLagenStap();
+    for (const id of this.decks) this.zetBron(id, hoofd.bron(id));
+  }
+
+  /** Welke video er op deze track hoort (url), of null. */
+  bron(deckId) { return this.bronnen.get(deckId) ?? null; }
 
   zetFx(id, v) { if (id in this.fx) this.fx[id] = Math.max(0, Math.min(1, v)); }
   volgendeModus() { this.modus = MODI[(MODI.indexOf(this.modus) + 1) % MODI.length]; }
@@ -336,6 +374,7 @@ export class VideoMixer {
 
   /** Een video aan een track hangen, of weghalen met null. */
   zetBron(deckId, url) {
+    this.bronnen.set(deckId, url || null);
     const oud = this.lagen.get(deckId);
     if (oud?.url === url) return;
     if (oud) {
@@ -346,12 +385,13 @@ export class VideoMixer {
       this.lagen.delete(deckId);
     }
     if (!url || !this.gl) return;
-    const video = document.createElement('video');
+    const video = this.maakVideo();
     video.muted = true;                      // het geluid komt uit de engine, nooit hieruit
     video.playsInline = true;
     video.preload = 'auto';
     video.src = url;
-    const laag = { video, url, tex: this._texture(), seekStart: 0, seekDuur: 0.15, klaar: false };
+    const laag = { video, url, tex: this._texture(), seekStart: 0, seekDuur: 0.15, klaar: false,
+      zichtSinds: null, gemeld: false };
     // Hoe lang een seek duurt, om er de volgende keer rekening mee te houden.
     video.addEventListener('seeked', () => {
       if (laag.seekStart) {
@@ -361,6 +401,13 @@ export class VideoMixer {
       }
     });
     video.addEventListener('loadeddata', () => { laag.klaar = true; });
+    // Ontbreekt het bestand of is het kapot, dan zegt de strook het; anders
+    // blijft de beamer zwart zonder dat iemand weet waarom.
+    video.addEventListener('error', () => {
+      if (this.lagen.get(deckId) !== laag || laag.gemeld) return;
+      laag.gemeld = true;
+      this.onFout?.(deckId, videoFoutTekst(video.error));
+    });
     this.lagen.set(deckId, laag);
   }
 
@@ -371,10 +418,18 @@ export class VideoMixer {
   teken() {
     const gl = this.gl;
     if (!gl || !this.prog) return;
+    this.beelden++;
     gl.useProgram(this.meng);
     const w = new Float32Array(MAX);
     const schaal = new Float32Array(MAX * 2).fill(1);
     const vertraging = this._vertraging();
+    // Stond dit tekenen stil (tabblad verborgen, het andere venster mengde,
+    // paneel dicht), dan telt die tijd niet als "zichtbaar": een video die
+    // intussen niet laden kon, kreeg anders bij het eerste beeld meteen
+    // "na 10 s nog geen beeld".
+    const nuMs = performance.now();
+    if (nuMs - this.vorigBeeldMs > 1000) for (const l of this.lagen.values()) l.zichtSinds = null;
+    this.vorigBeeldMs = nuMs;
 
     this.decks.forEach((id, i) => {
       const laag = this.lagen.get(id);
@@ -383,8 +438,14 @@ export class VideoMixer {
       gl.activeTexture(gl.TEXTURE0 + i);
       if (!laag || zicht < ZICHTBAAR) {
         if (laag && !laag.video.paused) laag.video.pause();
+        if (laag) laag.zichtSinds = null;
         gl.bindTexture(gl.TEXTURE_2D, this.zwart);
         return;
+      }
+      laag.zichtSinds ??= nuMs;
+      if (laadtTeLang({ zichtbaar: true, klaar: laag.klaar, gemeld: laag.gemeld, sinds: laag.zichtSinds, nu: nuMs })) {
+        laag.gemeld = true;
+        this.onFout?.(id, `na ${LAAD_GEDULD} s nog geen beeld`);
       }
       this._volg(laag, d, vertraging);
       gl.bindTexture(gl.TEXTURE_2D, laag.tex);
@@ -465,6 +526,13 @@ export class VideoMixer {
     return this.gelaagd;
   }
 
+  /*
+   * Bijsturen op video.currentTime, niet op requestVideoFrameCallback: gemeten
+   * (tools/headless/beamer.mjs, docs/BEAMER.md) loopt het mediaTime dat rVFC
+   * meldt ~13 ms ACHTER op het beeld dat texImage2D werkelijk uploadt, en
+   * currentTime zit er binnen ~4 ms op. Sturen op rVFC maakte de fout op het
+   * canvas groter (|11,5| i.p.v. |8,4| ms; 8,3 is het minimum bij 30 fps).
+   */
   _volg(laag, deck, vertraging) {
     const v = laag.video;
     const r = synchroniseer({
