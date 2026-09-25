@@ -16,10 +16,13 @@ import { esc, mmss } from './dom.js';
  * - Laden (laden.js roept naLaad): welk nummer op welke track, met het grid.
  * - Focus: meteen, bij elke 'change' van de engine (de banen zetten focus
  *   buiten de bus om).
- * - Rack, grid en bewaarde pads: VERGELEKEN, niet gemeld. Na elke knopdruk
- *   (een microtask, dus direct achter de action) en elke 100 ms: de
- *   rack-editor, de tap-verfijning van de server en "opnieuw analyseren"
- *   gaan buiten de bus om, en die wil je bij terugspelen ook terug.
+ * - Rack, grid, hotcues en bewaarde pads: VERGELEKEN, niet gemeld. Na elke
+ *   knopdruk (een microtask, dus direct achter de action) en elke 100 ms: de
+ *   rack-editor, de tap-verfijning van de server, "opnieuw analyseren" en de
+ *   hotcues die na het laden uit de library terugkomen (hotcue-opslag.js)
+ *   gaan buiten de bus om, en die wil je bij terugspelen ook terug. Zonder
+ *   de hotcues ZETTE een hotcue-knop bij terugspelen een nieuwe hotcue waar
+ *   hij toen naar een bewaarde sprong.
  * - Loopt er een opname, dan hoort het log erbij met hetzelfde id: het begint
  *   en stopt met de opname. Een los log dat al liep wordt dan afgesloten en
  *   gaat na de opname als nieuw los log verder.
@@ -37,13 +40,14 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
 
   // ---- vastleggen -----------------------------------------------------------
 
-  const gezien = { rack: {}, grid: {}, pads: null, focus: null };
+  const gezien = { rack: {}, grid: {}, hotcues: {}, pads: null, focus: null };
   // Een rack verandert door zetRack (nieuw object), bewerkMacros (nieuwe lijst),
   // zetParam (nieuwe params), hernoem en aan/uit. Identiteit vergelijken is
   // goedkoop; de knopstanden horen er NIET bij, die staan als actions in het log.
   const rackSleutel = (fx) => [fx.rack, fx.rack?.macros, fx.rack?.name, fx.bypass, ...(fx.rack?.chain || []).map((n) => n.params)];
   const zelfde = (a, b) => !!a && !!b && a.length === b.length && a.every((x, i) => x === b[i]);
   const gridTekst = (d) => (d.grid ? JSON.stringify(d.grid.toJSON()) : 'null');
+  const hotcueTekst = (d) => JSON.stringify(d.hotcues || []);
   const padsTekst = () => JSON.stringify(herinneringenVan(engine.sampler, trackVanDeck));
 
   /** Wat er nu staat telt als gezien: het staat al in de beginstand. */
@@ -52,6 +56,7 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
       const d = engine.deck(id);
       gezien.rack[id] = rackSleutel(d.fx);
       gezien.grid[id] = gridTekst(d);
+      gezien.hotcues[id] = hotcueTekst(d);
     }
     gezien.pads = padsTekst();
     gezien.focus = engine.focus;
@@ -65,6 +70,8 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
       if (!zelfde(s, gezien.rack[id])) { gezien.rack[id] = s; log.gebeurtenis('rack', { track: nr, rack: rackStand(d.fx) }); }
       const g = gridTekst(d);
       if (g !== gezien.grid[id]) { gezien.grid[id] = g; log.gebeurtenis('grid', { track: nr, grid: JSON.parse(g) }); }
+      const h = hotcueTekst(d);
+      if (h !== gezien.hotcues[id]) { gezien.hotcues[id] = h; log.gebeurtenis('hotcues', { track: nr, hotcues: JSON.parse(h) }); }
     }
     const p = padsTekst();
     if (p !== gezien.pads) { gezien.pads = p; log.gebeurtenis('pads', { herinneringen: JSON.parse(p) }); }
@@ -89,6 +96,7 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
   function naLaad({ deckId, duur, ...info }) {
     if (!log.bezig) return;
     gezien.grid[deckId] = gridTekst(engine.deck(deckId));
+    gezien.hotcues[deckId] = hotcueTekst(engine.deck(deckId));
     log.gebeurtenis('laad', { track: trackVanDeck(deckId), ...info, duur: Math.round(duur * 1000) / 1000 });
   }
 

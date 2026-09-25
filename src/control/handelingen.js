@@ -224,8 +224,12 @@ export const RONDLOPERS = ['mixer.xfader.curve', 'sampler.length', 'video.mode',
  * Value-actions die NIET in de beginstand staan: positie, tempo en grid
  * worden apart en precies teruggezet (een seek via de bus rekent in een
  * fractie van de duur, pitch is geklemd, grid.bpm zou het grid bewerken).
+ * `track.N.key` (de toonsoort van de plaat hier) zou de toonsoortkaart
+ * bewerken en een automatische kaart "met de hand" maken: die kaart hoort
+ * bij het nummer in de library, niet bij de set (zie OVERSLAAN in
+ * terugspelen.js).
  */
-export const NIET_IN_WAARDEN = /^track\.\d+\.(seek|pitch|tempo|grid\.bpm)$/;
+export const NIET_IN_WAARDEN = /^track\.\d+\.(seek|pitch|tempo|grid\.bpm|key)$/;
 
 /** Het rack van een track zoals het log het bewaart: inhoud én live standen. */
 export function rackStand(fx) {

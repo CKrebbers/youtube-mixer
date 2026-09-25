@@ -545,6 +545,59 @@ try {
         eind3.speelt === eind2.speelt && eind3.rate === eind2.rate && eind3.hot === eind2.hot && eind3.bSpeelt === eind2.bSpeelt
         && Math.abs(eind3.pos - eind2.pos) <= 0.021 && Math.abs(eind3.bPos - eind2.bPos) < 1e-9 && eind3.fader === eind2.fader && eind3.x === eind2.x);
     }
+    // Naden met ronde 1 (integratie-r2): de toonsoort en de hotcues horen bij
+    // het NUMMER in de library, niet bij de set.
+    {
+      const a = eng.deck('A');
+      a.pause();
+      a.load(renderDemoTrack(eng.ctx, { seed: 0, bars: 4 }), 'demo 1');
+      a.setToonKaart({ versie: 1, stukken: [{ van: 0, toonsoort: 'Am', stemming: 0, zekerheid: 0.9 }], bron: 'auto' });
+      const toonVoor = JSON.stringify(a.toonKaart.toJSON());
+      const st = H.leesStand({ engine: eng, tracks: A.TRACKS, herkomst: () => ({ bron: 'demo', demo: { seed: 0, bars: 4 } }), acties: A.list(), lees: A.read });
+      ok('beginstand: track.N.key staat er niet in (zou de toonsoortkaart bewerken)', A.read('track.1.key') !== null
+        && !Object.keys(st.waarden).some((k) => /^track\.\d+\.key/.test(k)));
+      const plan = T.maakPlan([[0.1, 'track.1.key.fifth.up', true], [0.1, 'track.1.key.fifth.up', false], [0.2, 'track.1.key', 0.5],
+        [0.3, 'track.1.key.lock', true], [0.4, 'track.1.fader', 0.5], [0.5, 'track.1.keylock', true]]).plan;
+      ok(`terugspelen slaat het corrigeren van de toonsoort over (${plan.map((x) => x.a).join(', ')})`,
+        plan.map((x) => x.a).join() === 'track.1.fader,track.1.keylock');
+      // Een stand terugzetten laat de kaart ongemoeid (auto blijft auto).
+      const doeT = T.maakUitvoerder({ engine: eng, tracks: A.TRACKS, invoke: A.invoke, read: A.read, has: A.has,
+        huidig: () => ({ bron: 'demo', demo: { seed: 0, bars: 4 } }), laad: async () => true });
+      await doeT.stand(st);
+      ok('een beginstand terugzetten verandert de toonsoortkaart niet', JSON.stringify(a.toonKaart.toJSON()) === toonVoor && a.toonKaart.bron === 'auto');
+
+      // Hotcues die na het laden uit de library terugkomen (hotcue-opslag.js)
+      // gaan buiten de bus om; logboek.js legt ze vast als 'hotcues'. Terug:
+      // precies die tijden, zonder 'hotcue'-melding (dan stuurt de
+      // hotcue-opslag niets naar de server).
+      let gemeld = 0;
+      const tel = () => { gemeld++; };
+      a.on('hotcue', tel);
+      a.hotcues = [null, 1.5, null, null];
+      doeT.hotcues(1, [2.25, null, 0.5, null]);
+      ok(`hotcues-gebeurtenis: precies de tijden van toen, ook de lege (${JSON.stringify(a.hotcues)})`,
+        JSON.stringify(a.hotcues) === '[2.25,null,0.5,null]' && gemeld === 0);
+      a.seek(3);
+      A.invoke('track.1.hotcue.1', true); A.invoke('track.1.hotcue.1', false);
+      ok(`... en de hotcue-knop springt dan, zoals toen (positie ${a.position.toFixed(2)})`, Math.abs(a.position - 2.25) < 1e-9 && a.hotcues[0] === 2.25);
+      a.off?.('hotcue', tel);
+      // Grid en hotcues horen bij het nummer: staat het nummer van toen niet
+      // op de track (laden mislukt, iets anders erop), dan niet toepassen.
+      const tz = nepTimers();
+      const gedaan = [];
+      const spz = new T.Terugspeler({ klok: () => NOW, invoke: (x) => gedaan.push(x), elke: tz.elke, stopElke: tz.stopElke,
+        doe: { stand: async () => ({ zonder: [2] }), laad: async () => true, rack: () => {}, focus: () => {}, pads: () => {},
+          grid: (t) => gedaan.push(`grid ${t}`), hotcues: (t, h) => gedaan.push(`hotcues ${t} ${JSON.stringify(h)}`) } });
+      let klaarZ = null;
+      spz.onKlaar = (x) => { klaarZ = x; };
+      await spz.start({ stand: { tracks: [] }, duur: 0.1, regels: [
+        { t: 0.01, e: 'hotcues', track: 1, hotcues: [1, null, null, null] }, { t: 0.02, e: 'grid', track: 2, grid: null },
+        { t: 0.03, e: 'hotcues', track: 2, hotcues: [3, null, null, null] }, [0.04, 'track.2.fader', 0.5]] });
+      const Tz = spz.T0;
+      while (NOW < Tz + 0.11) { NOW = Math.round((NOW + 0.01) * 1000) / 1000; tz.tik(); }
+      ok(`hotcues-gebeurtenis wordt toegepast; grid en hotcues op een track zonder zijn nummer niet (${gedaan.join(' | ')})`,
+        gedaan.join('|') === 'hotcues 1 [1,null,null,null]|track.2.fader' && klaarZ?.overgeslagen === 2);
+    }
     ok('DECK_IDS en TRACKS horen bij elkaar (acht tracks)', DECK_IDS.length === A.TRACKS.length);
   }
 

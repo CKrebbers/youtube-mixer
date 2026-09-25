@@ -33,8 +33,12 @@ import { PITCH_BEREIKEN } from '../engine/deck.js';
  *   welk rack het werd, en die wordt wel teruggezet.
  * - layer.*: welk mapje er op de APC open staat. Dat gaat over je handen,
  *   niet over wat er klinkt, en het zou de APC onder je vingers omzetten.
+ * - track.N.key en track.N.key.*: de toonsoort CORRIGEREN. De kaart hoort
+ *   bij de plaat in de library (TOONSOORT.md §7), en de correctie van toen
+ *   is toen al bewaard: terugspelen laadt de kaart van nu, en er nog eens
+ *   een kwint bij doen zou hem twee keer toepassen. Ze staan wel in het log.
  */
-export const OVERSLAAN = /^(record\.|log\.|layer\.|track\.\d+\.rack\.(next|prev)$)/;
+export const OVERSLAAN = /^(record\.|log\.|layer\.|track\.\d+\.rack\.(next|prev)$|track\.\d+\.key(\.|$))/;
 
 /**
  * Actions die over het NUMMER gaan (transport, cues, loops, grid). Staat het
@@ -57,7 +61,15 @@ export function trackVanActie(a) {
  * geteld. Een `stand` midden in het log (na de beginstand) komt van een
  * terugspelen dat toen liep terwijl dit log opnam: zie Terugspeler._stand.
  */
-const SOORTEN = new Set(['laad', 'focus', 'rack', 'grid', 'pads', 'stand']);
+const SOORTEN = new Set(['laad', 'focus', 'rack', 'grid', 'hotcues', 'pads', 'stand']);
+
+/**
+ * Gebeurtenissen die over het NUMMER gaan, net als NUMMER_NODIG: staat het
+ * nummer van toen niet op de track, dan niet toepassen. Anders kreeg een
+ * gewoon geladen nummer (een laad die bij terugspelen mislukte) het grid
+ * van een ander nummer, en de bewaarlus zette dat in de library.
+ */
+const NUMMER_GEBEURTENIS = new Set(['grid', 'hotcues']);
 
 /** Sleutel in `laadt` voor een stand midden in het log: dan wacht ALLES. */
 const ALLES = '*';
@@ -96,7 +108,8 @@ export class Terugspeler {
   /**
    * @param klok    () => seconden op de audioklok
    * @param invoke  (action, waarde) => void — de bus
-   * @param doe     { stand(stand, { nogBezig }), laad(track, e), rack(track, rack), grid(track, grid), focus(track), pads(herinneringen) }
+   * @param doe     { stand(stand, { nogBezig }), laad(track, e), rack(track, rack), grid(track, grid),
+   *                  hotcues(track, tijden), focus(track), pads(herinneringen) }
    *                stand en laad mogen een Promise geven. laad: false = mislukt;
    *                stand: { zonder: [tracks zonder hun nummer van toen] }; nogBezig()
    *                wordt false als er intussen gestopt is (dan niets meer zetten)
@@ -173,7 +186,10 @@ export class Terugspeler {
     // in zijn rij, de rest loopt door.
     const rij = this.laadt.get(ALLES) ?? (x.track !== null ? this.laadt.get(x.track) : undefined);
     if (rij) { rij.push(x); return; }
-    if (x.soort === 'actie' && this.zonder.has(x.track) && NUMMER_NODIG.test(x.a)) { this.stats.overgeslagen++; return; }
+    if (this.zonder.has(x.track) && (x.soort === 'actie' ? NUMMER_NODIG.test(x.a) : NUMMER_GEBEURTENIS.has(x.soort))) {
+      this.stats.overgeslagen++;
+      return;
+    }
     const laat = nu - x.tijd;
     if (laat > 0.05) { this.stats.laat++; this.stats.maxLaat = Math.max(this.stats.maxLaat, laat); }
     this.stats.gedaan++;
@@ -186,6 +202,7 @@ export class Terugspeler {
       else if (x.soort === 'stand') this._stand(x);
       else if (x.soort === 'rack') this.doe.rack(x.track, x.e.rack);
       else if (x.soort === 'grid') this.doe.grid(x.track, x.e.grid ?? null);
+      else if (x.soort === 'hotcues') this.doe.hotcues(x.track, x.e.hotcues);
       else if (x.soort === 'focus') this.doe.focus(x.track);
       else if (x.soort === 'pads') this.doe.pads(x.e.herinneringen || []);
     } catch (err) {
@@ -409,6 +426,17 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
     grid: (track, g) => {
       const d = deck(track);
       if (d?.buffer && gridTekst(d) !== JSON.stringify(g ?? null)) d.setGrid(g ?? null);
+    },
+    // De hotcues van toen, precies (ook de lege plekken). Via restoreHotcues:
+    // die pint ze meteen vast en meldt geen 'hotcue', dus de hotcue-opslag
+    // stuurt niets naar de library.
+    hotcues: (track, tijden) => {
+      const d = deck(track);
+      if (!d?.buffer || !Array.isArray(tijden)) return;
+      const nieuw = d.hotcues.map((_, i) => (Number.isFinite(tijden[i]) ? tijden[i] : null));
+      if (JSON.stringify(nieuw) === JSON.stringify(d.hotcues)) return;
+      d.hotcues = d.hotcues.map(() => null);
+      d.restoreHotcues(nieuw);
     },
     focus: (track) => { const id = deckVan(track); if (id && engine.focus !== id) engine.setFocus(id); },
     pads: (lijst) => herinneringen(lijst),
