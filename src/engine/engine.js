@@ -48,6 +48,48 @@ export const SEND_RACKS = {
 const STANDAARD_KANT = { A: 'A', B: 'B' };
 
 /**
+ * Hysterese op de maatgever (VRAGEN G2). Twee tracks die ongeveer even hard
+ * klinken lieten de maat heen en weer springen: de MAAT-badge, de gate en
+ * echo op de bussen, de sampler en de video-puls sprongen mee. Nu wisselt
+ * de maat pas als een andere track MAAT_MARGE_DB harder klinkt, en dat
+ * MAAT_WACHT seconden lang (op de audioklok) volhoudt. Stopt de maatgever
+ * (pauze, rem, einde, grid weg, leeg), dan meteen.
+ */
+export const MAAT_MARGE_DB = 3;
+export const MAAT_WACHT = 0.25;
+const MAAT_FACTOR = Math.pow(10, MAAT_MARGE_DB / 20);
+
+/**
+ * Wie geeft de maat, met hysterese. Puur: geen engine, geen klok van zichzelf.
+ *
+ * @param staat   { id, sinds } — de maatgever tot nu, en sinds wanneer (audioklok)
+ *                hij verslagen wordt; wordt bijgewerkt
+ * @param niveaus [[id, gain], …] — alleen tracks die de maat KUNNEN geven
+ *                (spelend, met grid, niet remmend), in tracknummervolgorde
+ * @param nu      audiokloktijd
+ * @returns { id, wacht } — de maatgever (of null), en over hoeveel seconden
+ *          er misschien gewisseld wordt (null: er wacht niets)
+ */
+export function volgMaatgever(staat, niveaus, nu) {
+  let luidste = null, hoogste = -1, huidig = -1;
+  for (const [id, g] of niveaus) {
+    if (g > hoogste + 1e-9) { luidste = id; hoogste = g; }
+    if (id === staat.id) huidig = g;
+  }
+  // Geen (geldige) maatgever meer: meteen de luidste. Gelijk: het laagste nummer.
+  if (huidig < 0) { staat.id = luidste; staat.sinds = null; return { id: luidste, wacht: null }; }
+  if (luidste === staat.id || !(hoogste > huidig * MAAT_FACTOR)) {
+    staat.sinds = null;
+    return { id: staat.id, wacht: null };
+  }
+  // Verslagen: sinds wanneer, en is het lang genoeg?
+  if (staat.sinds === null) staat.sinds = nu;
+  const over = staat.sinds + MAAT_WACHT - nu;
+  if (over <= 1e-9) { staat.id = luidste; staat.sinds = null; return { id: luidste, wacht: null }; }
+  return { id: staat.id, wacht: over };
+}
+
+/**
  * De engine kent GEEN MIDI, GEEN DOM en GEEN YouTube.
  * Hij kent decks, een mixer en een klok. Alles daarbuiten praat via actions.js.
  */
@@ -77,6 +119,11 @@ export class Engine extends Emitter {
       this.kant[id] = STANDAARD_KANT[id] || 'thru';
     }
 
+    // Wie de maat geeft (zie volgMaatgever): bijgehouden, niet elke keer opnieuw gekozen.
+    this._maat = { id: null, sinds: null };
+    this._maatTimer = null;
+    this._maatMelden = false;        // er staat al een 'change' klaar voor een wissel
+
     this.sends = {};
     // De bussen lopen op de maat van wat je hoort: dezelfde klok als sync en sampler.
     const maatKlok = () => { const d = this.syncMaster(); return d ? d.fxKlok() : null; };
@@ -100,6 +147,7 @@ export class Engine extends Emitter {
      * uit of er echt iets anders is; meestal gebeurt er niets.
      */
     const volgMaat = () => {
+      this.maatgever();               // eerst bijwerken wie de maat geeft
       for (const s of Object.values(this.sends)) s.heranker();
       this.sampler.heranker();
     };
@@ -154,20 +202,59 @@ export class Engine extends Emitter {
    * Naar wie synct deze track? Er is geen "het andere deck" meer.
    *
    * De track die je het HARDST hoort: fader maal crossfader, en hij moet
-   * spelen en een grid hebben. Speelt er niets, dan de eerste geladen track
-   * met een grid. Gelijke stand: het laagste nummer. Saai en voorspelbaar,
-   * en in de praktijk precies de track waar je op wilt landen.
+   * spelen, een grid hebben en niet remmen; een wissel pas met 3 dB verschil
+   * en 250 ms geduld (maatgever). Speelt er niets, dan de eerste geladen
+   * track met een grid. Gelijke stand: het laagste nummer. Saai en
+   * voorspelbaar, en in de praktijk precies de track waar je op wilt landen.
    */
   syncMaster(id) {
+    // De maatgever (met hysterese): dezelfde track als de MAAT-badge, de
+    // bussen, de sampler en de video-puls. Is dat deze track zelf, dan de
+    // luidste andere, zonder hysterese.
+    const m = this.maatgever();
+    if (m && m.id !== id) return m;
     let beste = null, besteGain = -1;
     for (const k of DECK_IDS) {
       const d = this.decks[k];
-      if (k === id || !d.buffer || !d.grid || !d.playing) continue;
-      const g = faderGain(d.ui.fader) * this.xfadeGain(k);
+      if (k === id || !this._kanMaat(d)) continue;
+      const g = this._maatGain(k);
       if (g > besteGain + 1e-9) { beste = d; besteGain = g; }
     }
     if (beste) return beste;
     return DECK_IDS.map((k) => this.decks[k]).find((d) => d.id !== id && d.buffer && d.grid) || null;
+  }
+
+  /** Kan deze track de maat geven? Spelen, een grid hebben, en niet remmen. */
+  _kanMaat(d) { return !!(d.buffer && d.grid && d.playing && !d.remt); }
+
+  /** Hoe hard je hem hoort: fader maal crossfader (zoals voor sync altijd al). */
+  _maatGain(k) { return faderGain(this.decks[k].ui.fader) * this.xfadeGain(k); }
+
+  /**
+   * De track die de maat geeft (sync, bussen, sampler, video-puls, de
+   * MAAT-badge), met hysterese: zie volgMaatgever. Null als er niets speelt.
+   *
+   * Bijgewerkt bij elke 'change' (fader, crossfader, play, rem: alles wat de
+   * niveaus verandert meldt dat) en bij elke vraag. Het wachten loopt op de
+   * audioklok; een timer zorgt dat de wissel ook komt als niemand iets vraagt
+   * (hij bepaalt alleen WANNEER er gekeken wordt). Wisselt de maat, dan meldt
+   * de engine 'change', zodat bussen en sampler opnieuw aanhaken.
+   */
+  maatgever() {
+    const niveaus = [];
+    for (const k of DECK_IDS) if (this._kanMaat(this.decks[k])) niveaus.push([k, this._maatGain(k)]);
+    const was = this._maat.id;
+    const { id, wacht } = volgMaatgever(this._maat, niveaus, this.ctx.currentTime);
+    if (wacht !== null && !this._maatTimer) {
+      this._maatTimer = setTimeout(() => { this._maatTimer = null; this.maatgever(); }, wacht * 1000 + 5);
+      this._maatTimer?.unref?.();
+    }
+    if (id !== was && !this._maatMelden) {
+      // Niet midden in wie hier vroeg (een snapshot, een heranker): straks.
+      this._maatMelden = true;
+      queueMicrotask(() => { this._maatMelden = false; this.emit('change'); });
+    }
+    return id ? this.decks[id] : null;
   }
 
   /**

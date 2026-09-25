@@ -1,6 +1,6 @@
 import { synchroniseer, zichtbaarheid } from './volg.js';
 import { VIDEO_FX, MODI } from './instellingen.js';
-import { PULS_DOELEN, pulsVorm, klokTrack, metPuls } from './puls.js';
+import { PULS_DOELEN, pulsVorm, metPuls } from './puls.js';
 import { FITS, schaalVoor, maatVan } from './passen.js';
 import { actieveLagen, lagenUniforms, MAX_BEELDLAGEN } from './lagen.js';
 
@@ -292,18 +292,16 @@ export class VideoMixer {
   volgendPulsDoel() { this.pulsDoel = PULS_DOELEN[(PULS_DOELEN.indexOf(this.pulsDoel) + 1) % PULS_DOELEN.length]; }
 
   /**
-   * Waar in de tel we nu zijn, als vorm 0..1 — van de track die het hardst
-   * klinkt, op het moment dat je hem HOORT. 0 als er geen maat is.
+   * Waar in de tel we nu zijn, als vorm 0..1 — van de track die de maat
+   * geeft (Engine.maatgever: de luidste, met hysterese, dezelfde als de
+   * MAAT-badge en de sampler), op het moment dat je hem HOORT. 0 als er geen
+   * maat is, of als die track niet te zien is (fader of crossfader dicht).
    */
   _pulsNu(vertraging) {
     if (this.puls <= 0) return 0;
-    const id = klokTrack(this.decks.map((d) => {
-      const deck = this.engine.deck(d);
-      return { id: d, speelt: deck.playing, heeftGrid: !!deck.grid,
-        zicht: deck.buffer ? zichtbaarheid(deck.ui.fader, this.engine.xfadeGain(d)) : 0 };
-    }));
-    if (!id) return 0;
-    const deck = this.engine.deck(id);
+    const deck = this.engine.syncMaster?.();
+    if (!deck?.grid || !deck.playing || !this.decks.includes(deck.id)) return 0;
+    if (zichtbaarheid(deck.ui.fader, this.engine.xfadeGain(deck.id)) <= 0.001) return 0;
     return pulsVorm(deck.grid.phase(deck.position - vertraging * deck.rate));
   }
 

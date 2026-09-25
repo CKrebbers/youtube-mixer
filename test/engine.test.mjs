@@ -1244,8 +1244,13 @@ console.log('\nacht tracks');
   e8.deck('C').togglePlay();
   e8.deck('D').togglePlay();
   e8.deck('C').set('fader', 0.6);
+  // Hysterese (G2): de maat wisselt pas als een ander 250 ms (audioklok)
+  // minstens 3 dB harder klinkt. Hier 13,5 dB, dus na 250 ms.
+  ok('meteen na de fader: de maat blijft nog even (hysterese)', e8.syncMaster('A').id === 'C');
+  NOW += 0.3;
   ok('speelt er iets: de luidste die speelt', e8.syncMaster('A').id === 'D');
   e8.deck('D').set('fader', 0.3);
+  NOW += 0.3;
   ok('fader omlaag: de ander wordt master', e8.syncMaster('A').id === 'C');
   e8.setXfader(1);              // C staat op kant B: nu vol open
   e8.deck('D').set('fader', 1);
@@ -1430,6 +1435,77 @@ console.log('\nrem (vinylstop)');
   dR.pause();
   ok('pauze tijdens het remmen: meteen stil, rem eraf', !dR.playing && !dR.remt);
   dR.setRate(1);
+  NOW = 0;
+}
+
+console.log('\nmaatgever met hysterese');
+{
+  const { volgMaatgever, MAAT_WACHT, MAAT_MARGE_DB } = await import('../src/engine/engine.js');
+  const { Beatgrid: BG } = await import('../src/engine/beatgrid.js');
+  // Nep-niveaus op een nep-klok: de regel zelf.
+  const dB = (x) => Math.pow(10, x / 20);
+  const st = { id: null, sinds: null };
+  let r = volgMaatgever(st, [['A', dB(-10)], ['B', dB(-10)]], 0);
+  ok('begin: meteen de luidste (gelijk: de eerste)', r.id === 'A' && r.wacht === null);
+  let wissels = 0;
+  for (let i = 0; i < 200; i++) {
+    const was = st.id;
+    volgMaatgever(st, [['A', dB(-10)], ['B', dB(-10 + 2 * Math.sin(i / 3))]], i * 0.05);
+    if (st.id !== was) wissels++;
+  }
+  ok(`twee even harde tracks (±2 dB om elkaar heen, 10 s): ${wissels} wissels`, wissels === 0 && st.id === 'A');
+  r = volgMaatgever(st, [['A', dB(-10)], ['B', dB(-10 + MAAT_MARGE_DB + 0.5)]], 20);
+  ok(`${MAAT_MARGE_DB + 0.5} dB harder: nog niet, wacht ${MAAT_WACHT * 1000} ms`, r.id === 'A' && Math.abs(r.wacht - MAAT_WACHT) < 1e-9);
+  r = volgMaatgever(st, [['A', dB(-10)], ['B', dB(-6.5)]], 20.2);
+  ok('na 200 ms nog A', r.id === 'A' && Math.abs(r.wacht - 0.05) < 1e-9);
+  r = volgMaatgever(st, [['A', dB(-10)], ['B', dB(-6.5)]], 20.25);
+  ok('na 250 ms: B', r.id === 'B' && r.wacht === null);
+  volgMaatgever(st, [['A', dB(-2)], ['B', dB(-6.5)]], 21);
+  volgMaatgever(st, [['A', dB(-6)], ['B', dB(-6.5)]], 21.2);            // even niet meer 3 dB
+  r = volgMaatgever(st, [['A', dB(-2)], ['B', dB(-6.5)]], 21.3);
+  ok('even onder de drempel: het wachten begint opnieuw', r.id === 'B' && Math.abs(r.wacht - MAAT_WACHT) < 1e-9);
+  r = volgMaatgever(st, [['A', dB(-2)], ['B', dB(-6.5)]], 21.55);
+  ok('… en na 250 ms aaneen: A', r.id === 'A');
+  r = volgMaatgever(st, [['B', dB(-40)]], 21.56);
+  ok('maatgever stopt: meteen de volgende, ook als die zacht is', r.id === 'B' && r.wacht === null);
+  r = volgMaatgever(st, [], 22);
+  ok('niets speelt: geen maatgever', r.id === null);
+
+  // In de engine: faders zijn de niveaus, de audioklok is die van de mock,
+  // en de timer is echt (niemand hoeft te vragen).
+  NOW = 500;
+  const em = new Engine();
+  for (const [id, bpm] of [['A', 124], ['B', 130], ['C', 120]]) {
+    const d = em.deck(id); d.load(buf, id); d.setGrid(new BG({ bpm, firstBeat: 0 }));
+  }
+  em.setKant('A', 'thru'); em.setKant('B', 'thru');
+  em.deck('A').play(); em.deck('B').play();
+  ok('twee tracks, even hard: de eerste geeft de maat', em.snapshot().maat === 'A');
+  let meldingen = 0;
+  em.on('change', () => meldingen++);
+  em.deck('A').set('fader', 0.94);                  // −2,7 dB
+  em.deck('B').set('fader', 0.97);                  // −1,35 dB: B iets harder
+  NOW += 1;
+  ok('B 1,35 dB harder, een seconde lang: de maat blijft bij A', em.snapshot().maat === 'A' && em.syncMaster().id === 'A');
+  ok('… en de bussen lopen op A (124 bpm)', Math.abs(em.sends.A.klok().beatLengte - 60 / 124) < 1e-9);
+  const rs = em.sync('C');
+  ok('sync gaat naar de maatgever (de badge), niet naar wie nét harder staat', rs.ok && rs.master === 'A');
+  em.deck('C').setRate(1);
+  em.deck('A').set('fader', 0.6);                   // −18 dB: B nu 16,6 dB harder
+  ok('B duidelijk harder: niet meteen', em.snapshot().maat === 'A');
+  NOW += 0.3;
+  await new Promise((res) => setTimeout(res, 300));
+  ok('na 250 ms op de audioklok: B, door de timer, en gemeld (bussen haken aan)',
+    em._maat.id === 'B' && meldingen > 0 && Math.abs(em.sends.A.klok().beatLengte - 60 / 130) < 1e-9);
+  em.deck('B').pause();
+  ok('maatgever pauzeert: meteen de ander', em.snapshot().maat === 'A');
+  em.deck('B').play();
+  NOW += 0.3;
+  ok('B speelt weer en is harder: na 250 ms weer B', em.snapshot().maat === 'B');
+  em.deck('B').rem();
+  ok('maatgever remt: meteen de ander (een remmende track geeft geen maat)', em.snapshot().maat === 'A');
+  em.deck('B').pause(); em.deck('A').pause();
+  ok('niets speelt: MAAT (stil) op de eerste met grid, zoals altijd', em.snapshot().maat === 'A' && !em.deck('A').playing);
   NOW = 0;
 }
 

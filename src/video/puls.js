@@ -1,10 +1,11 @@
 /**
  * Video-effecten op de tel. Puur rekenwerk: geen DOM, geen WebGL.
  *
- * De maat komt van wat je HOORT: de track die het hardst klinkt, speelt en een
- * beatgrid heeft. Zelfde gedachte als sync — er is geen "het andere deck".
- * De puls komt bovenop de stand van de knop: RGB op 30% springt op de tel
- * omhoog en zakt terug naar 30%.
+ * De maat komt van wat je HOORT: de maatgever van de engine (de track die het
+ * hardst klinkt, speelt en een beatgrid heeft, met hysterese; zie
+ * Engine.maatgever). Dezelfde als sync, sampler en de MAAT-badge. De puls
+ * komt bovenop de stand van de knop: RGB op 30% springt op de tel omhoog en
+ * zakt terug naar 30%.
  */
 
 /** Wat er kan pulsen. "flits" is geen effectknop maar een lichtflits op de tel. */
@@ -16,20 +17,6 @@ export const PULS_DOELEN = ['rgb', 'pixel', 'spiegel', 'korrel', 'flits'];
  * @param fase 0..1 binnen de tel
  */
 export const pulsVorm = (fase) => Math.exp(-5 * Math.max(0, Math.min(1, fase)));
-
-/**
- * Welke track geeft de maat aan?
- * @param tracks [{ id, speelt, heeftGrid, zicht }] — zicht = fader × crossfader
- * @returns id of null
- */
-export function klokTrack(tracks) {
-  let beste = null, hoogste = 0.001;
-  for (const t of tracks) {
-    if (!t.speelt || !t.heeftGrid || t.zicht <= hoogste) continue;
-    beste = t.id; hoogste = t.zicht;
-  }
-  return beste;
-}
 
 /**
  * De effectstanden met de puls erbovenop.

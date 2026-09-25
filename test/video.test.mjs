@@ -66,19 +66,34 @@ console.log('\nvideo op de action-bus');
 
 console.log('\neffecten op de tel');
 {
-  const { pulsVorm, klokTrack, metPuls, PULS_DOELEN } = await import('../src/video/puls.js');
+  const { pulsVorm, metPuls, PULS_DOELEN } = await import('../src/video/puls.js');
   ok('op de tel: vol', pulsVorm(0) === 1);
   ok('halve tel: bijna weg', pulsVorm(0.5) < 0.1);
   ok('altijd tussen 0 en 1', [-1, 0, 0.3, 1, 2].every((f) => pulsVorm(f) >= 0 && pulsVorm(f) <= 1));
-  const tracks = [
-    { id: 'A', speelt: true, heeftGrid: true, zicht: 0.4 },
-    { id: 'B', speelt: true, heeftGrid: true, zicht: 0.9 },
-    { id: 'C', speelt: true, heeftGrid: false, zicht: 1 },
-    { id: 'D', speelt: false, heeftGrid: true, zicht: 1 },
-  ];
-  ok('de maat komt van de luidste die speelt en een grid heeft', klokTrack(tracks) === 'B');
-  ok('niemand geschikt: geen maat', klokTrack([{ id: 'A', speelt: false, heeftGrid: true, zicht: 1 }]) === null);
-  ok('fader dicht telt niet mee', klokTrack([{ id: 'A', speelt: true, heeftGrid: true, zicht: 0 }]) === null);
+
+  // De maat komt van de MAATGEVER van de engine (met hysterese, dezelfde als
+  // de MAAT-badge en de sampler), niet van een eigen keuze in de mixer: die
+  // sprong heen en weer bij twee even harde tracks.
+  const { VideoMixer } = await import('../src/video/video-mixer.js');
+  const gl = new Proxy({ TEXTURE0: 1000, TEXTURE_2D: 1, FRAMEBUFFER: 2, ARRAY_BUFFER: 3,
+    getShaderParameter: () => true, getProgramParameter: () => true, getUniformLocation: (p, n) => n, getAttribLocation: () => 0 },
+  { get(t, k) { if (k in t) return t[k]; return () => ({}); } });
+  const nepDeck = (id, fader, positie) => ({ id, playing: true, position: positie, rate: 1, buffer: {}, ui: { fader },
+    grid: { phase: (p) => ((p % 0.5) + 0.5) % 0.5 / 0.5 } });
+  const decks = { A: nepDeck('A', 0.6, 10.1), B: nepDeck('B', 1, 20.3) };
+  let meester = decks.A;
+  const engine = { ctx: { currentTime: 2, outputLatency: 0, baseLatency: 0 }, deck: (id) => decks[id],
+    xfadeGain: () => 1, syncMaster: () => meester };
+  const vm = new VideoMixer({ canvas: { getContext: () => gl }, engine, decks: ['A', 'B'] });
+  vm.zetPuls(1);
+  ok('de puls volgt de maatgever van de engine, ook als een ander net harder staat',
+    bij(vm._pulsNu(0), pulsVorm(decks.A.grid.phase(10.1))) && !bij(vm._pulsNu(0), pulsVorm(decks.B.grid.phase(20.3))));
+  meester = decks.B;
+  ok('wisselt de engine, dan wisselt de puls mee', bij(vm._pulsNu(0), pulsVorm(decks.B.grid.phase(20.3))));
+  meester = null;
+  ok('geen maatgever: geen puls', vm._pulsNu(0) === 0);
+  meester = decks.A; decks.A.ui.fader = 0;
+  ok('maatgever niet te zien (fader dicht): geen puls', vm._pulsNu(0) === 0);
   const fx = { rgb: 0.3, pixel: 0 };
   const r = metPuls(fx, 'rgb', 0.5, 1);
   ok('puls komt bovenop de knop', Math.abs(r.fx.rgb - 0.8) < 1e-9 && r.flits === 0);
