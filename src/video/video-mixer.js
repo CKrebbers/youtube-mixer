@@ -20,6 +20,11 @@ import { actieveLagen, lagenUniforms, MAX_BEELDLAGEN } from './lagen.js';
  * Zuinig: acht 720p-video's tegelijk decoderen is zwaar. Een track die niet
  * te zien is, wordt gepauzeerd en niet geüpload.
  *
+ * Er kunnen twee mixers zijn: die in het hoofdvenster (bediend via de bus)
+ * en die in het losse venster (de beamer, beamer.js). De tweede neemt elk
+ * beeld alles over van de eerste (neemOver) en heeft eigen <video>'s: een
+ * verborgen tabblad decodeert niets.
+ *
  * Drie stappen per beeld, elk in een eigen shader:
  *   mengen    acht video's -> één beeld, volgens de mengvorm
  *   lagen     ALLEEN als er een beeldlaag aan staat (lagen.js, de
@@ -188,7 +193,7 @@ export class VideoMixer {
    * @param canvas   waar het beeld komt
    * @param engine   alleen om uit te lezen: deck(), xfadeGain(), ctx
    * @param decks    deck-id's in volgorde, hooguit acht
-   * @param maakVideo een <video> maken (de tests geven een nep)
+   * @param maakVideo een <video> maken; in het losse venster die van ZIJN document (de tests geven een nep)
    */
   constructor({ canvas, engine, decks, maakVideo = () => document.createElement('video') }) {
     this.canvas = canvas;
@@ -196,8 +201,10 @@ export class VideoMixer {
     this.decks = decks.slice(0, MAX);
     this.maakVideo = maakVideo;
     this.lagen = new Map();          // deckId -> { video, url, tex, seekStart, seekDuur, klaar, zichtSinds, gemeld }
+    this.bronnen = new Map();        // deckId -> url: wat er zou moeten hangen (ook zonder WebGL), voor neemOver
     this.fout = null;
     this.onFout = null;              // (deckId, tekst): de video van een nummer ontbreekt of laadt niet
+    this.beelden = 0;                // getekende beelden, voor de status en de tests
     canvas.width = BREEDTE;
     canvas.height = HOOGTE;
 
@@ -275,9 +282,10 @@ export class VideoMixer {
    */
   _maakLagenStap() {
     const gl = this.gl;
-    if (!gl || this.lagenProg) return;
+    if (!gl || this.lagenProg || this.lagenMislukt) return;
     const prog = this._programma(VERTEX, LAGEN);
-    if (!prog) { console.warn('[video] lagenstap:', this.fout); this.fout = null; return; }
+    // Niet elk beeld opnieuw proberen (neemOver roept dit elk beeld aan).
+    if (!prog) { console.warn('[video] lagenstap:', this.fout); this.fout = null; this.lagenMislukt = true; return; }
     const loc = gl.getAttribLocation(prog, 'p');
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
@@ -288,6 +296,28 @@ export class VideoMixer {
     this.laagTex = Array.from({ length: MAX_BEELDLAGEN }, () => this._texture());
     this.lagenProg = prog;
   }
+
+  /**
+   * Het losse venster: alles overnemen van de mixer in het hoofdvenster —
+   * engine, knoppen, mengvorm, puls, passend/vullen, welke video op welke
+   * track en de beeldlagen (dezelfde objecten: een vorm rekent één keer, voor
+   * wie er mengt). Elk beeld opnieuw; wat niet verandert kost niets.
+   * Herlaadt het hoofdvenster, dan komt hier vanzelf de nieuwe engine binnen.
+   */
+  neemOver(hoofd) {
+    this.engine = hoofd.engine;
+    for (const k in hoofd.fx) this.fx[k] = hoofd.fx[k];
+    this.modus = hoofd.modus;
+    this.puls = hoofd.puls;
+    this.pulsDoel = hoofd.pulsDoel;
+    this.fit = hoofd.fit;
+    this.beeldlagen = hoofd.beeldlagen;
+    if (this.beeldlagen.length) this._maakLagenStap();
+    for (const id of this.decks) this.zetBron(id, hoofd.bron(id));
+  }
+
+  /** Welke video er op deze track hoort (url), of null. */
+  bron(deckId) { return this.bronnen.get(deckId) ?? null; }
 
   zetFx(id, v) { if (id in this.fx) this.fx[id] = Math.max(0, Math.min(1, v)); }
   volgendeModus() { this.modus = MODI[(MODI.indexOf(this.modus) + 1) % MODI.length]; }
@@ -342,6 +372,7 @@ export class VideoMixer {
 
   /** Een video aan een track hangen, of weghalen met null. */
   zetBron(deckId, url) {
+    this.bronnen.set(deckId, url || null);
     const oud = this.lagen.get(deckId);
     if (oud?.url === url) return;
     if (oud) {
@@ -388,6 +419,7 @@ export class VideoMixer {
   teken() {
     const gl = this.gl;
     if (!gl || !this.prog) return;
+    this.beelden++;
     gl.useProgram(this.meng);
     const w = new Float32Array(MAX);
     const schaal = new Float32Array(MAX * 2).fill(1);

@@ -2,6 +2,7 @@ import { DECK_IDS } from '../engine/engine.js';
 import { trackVanDeck } from '../control/actions.js';
 import { isTypen } from '../control/keyboard.js';
 import { VideoMixer } from '../video/video-mixer.js';
+import { Beamer } from '../video/beamer.js';
 import { meld } from './meldingen.js';
 
 /**
@@ -9,12 +10,19 @@ import { meld } from './meldingen.js';
  * renderloop er elk frame op zet.
  *
  * Een eigen laag die de engine alleen uitleest (regel 1). Mengt de video's van
- * alle acht tracks op één canvas; het losse venster krijgt DAT canvas als
- * stream, zodat er maar één keer gemengd wordt.
+ * alle acht tracks op één canvas. Staat het losse venster open, dan mengt
+ * DAT (src/video/beamer.js): het blijft lopen als dit tabblad verborgen is.
+ * Het paneel toont dan zijn beeld, er wordt nog steeds één keer gemengd.
+ *
+ * `api` wordt `window.varveBeamer`: daar meldt het losse venster zich aan en
+ * leest het de engine en de mixer van hier.
  */
 export function opzetVideo({ engine }) {
   const videoPaneel = document.getElementById('video-panel');
-  const videoMixer = new VideoMixer({ canvas: videoPaneel.querySelector('.vid-canvas'), engine, decks: DECK_IDS });
+  const canvasEl = videoPaneel.querySelector('.vid-canvas');
+  const voorbeeld = videoPaneel.querySelector('.vid-voorbeeld');
+  const videoMixer = new VideoMixer({ canvas: canvasEl, engine, decks: DECK_IDS });
+  const beamer = new Beamer();
 
   /** De video van een nummer ontbreekt of laadt niet: in de strook, niet alleen in de console. */
   const meldVideoFout = (id, tekst) => {
@@ -23,41 +31,95 @@ export function opzetVideo({ engine }) {
     meld(`video van track ${trackVanDeck(id)}${titel ? ` (${titel})` : ''}: ${tekst}`, 'fout');
   };
   videoMixer.onFout = meldVideoFout;
-  let losVenster = null;
-  // Ook tijdens een video-opname renderen, anders neem je zwart op.
-  const videoAan = () => !videoPaneel.classList.contains('hidden') || (losVenster && !losVenster.closed)
-    || !!window.opnemer?.metVideo;
+
+  const paneelOpen = () => !videoPaneel.classList.contains('hidden');
+  /** Waar een LOPENDE video-opname zijn beeld vandaan haalt, of null. */
+  const opname = () => (window.opnemer?.metVideo ? beamer.opnameWaar : null);
+  const wie = () => beamer.wieMengt({ paneelOpen: paneelOpen(), opname: opname() });
+
+  beamer.onWeg = () => {
+    if (opname() === 'los') {
+      meld('het losse venster ging dicht tijdens een video-opname: het beeld in die opname staat vanaf hier stil (het geluid loopt door) — stop de opname en start een nieuwe', 'fout');
+    }
+  };
+
   const toggleVideo = () => {
     videoPaneel.classList.toggle('hidden');
-    if (!videoAan()) videoMixer.pauzeerAlles();
+    if (!wie().hoofd) videoMixer.pauzeerAlles();
   };
   document.getElementById('video-btn').addEventListener('click', toggleVideo);
   videoPaneel.querySelector('.vid-sluit').addEventListener('click', toggleVideo);
   videoPaneel.querySelector('.vid-los').addEventListener('click', () => {
-    if (losVenster && !losVenster.closed) { losVenster.focus(); return; }
-    losVenster = window.open('video.html', 'varve-video', 'width=960,height=540');
+    // Na herladen van dit tabblad kennen we het venster alleen nog doordat
+    // het zich weer aanmeldde: window.open met dezelfde naam zou het herladen.
+    const los = beamer.levend();
+    if (los) { los.venster.focus(); return; }
+    window.open('video.html', 'varve-video', 'width=960,height=540');
   });
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyV' && !isTypen(e.target)) toggleVideo();
   });
   if (videoMixer.fout) console.warn('[video]', videoMixer.fout);
 
-  /** Eén frame: mengen en de statusregel bijwerken, alleen als iemand kijkt of opneemt. */
-  const teken = () => {
-    if (videoAan()) {
-      videoMixer.teken();
-      const st = videoMixer.stand().filter((l) => l.video && l.speelt);
-      const tekst = videoMixer.fout || (st.length ? st.map((l) => `${trackVanDeck(l.id)}: ${Math.round(l.verschil * 1000)} ms`).join(' · ') : 'geen zichtbare video');
-      const modusEl = videoPaneel.querySelector('.vid-modus');
-      if (modusEl.textContent !== videoMixer.modus) modusEl.textContent = videoMixer.modus;
-      const fitEl = videoPaneel.querySelector('.vid-fit');
-      if (fitEl && fitEl.textContent !== videoMixer.fit) fitEl.textContent = videoMixer.fit;
-      const doelEl = videoPaneel.querySelector('.vid-pulsdoel');
-      if (doelEl.textContent !== videoMixer.pulsDoel) doelEl.textContent = videoMixer.pulsDoel;
-      const statusEl = videoPaneel.querySelector('.vid-status');
-      if (statusEl.textContent !== tekst) statusEl.textContent = tekst;
+  /**
+   * Het beeld van het losse venster in het paneel (of niets). captureStream
+   * kost weinig vergeleken met nog eens mengen; verborgen kijkt er niemand,
+   * dan staat de stream uit.
+   */
+  let voorbeeldVan = null;
+  function zetVoorbeeld(bron) {
+    if (document.hidden) bron = null;
+    if (bron === voorbeeldVan) return;
+    voorbeeld.srcObject?.getTracks().forEach((t) => t.stop());
+    voorbeeld.srcObject = null;
+    voorbeeldVan = bron;
+    if (bron) {
+      try { voorbeeld.srcObject = bron.captureStream(30); voorbeeld.play().catch(() => {}); } catch (err) {
+        console.warn('[video] voorbeeld van het losse venster:', err.message);
+      }
     }
+    canvasEl.classList.toggle('verstopt', !!bron);
+    voorbeeld.classList.toggle('verstopt', !bron);
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) zetVoorbeeld(null); });
+
+  /** Eén frame: mengen als het hier moet, en de statusregel bijwerken. */
+  const teken = () => {
+    const w = wie();
+    const los = beamer.levend();
+    if (w.hoofd) videoMixer.teken();
+    else videoMixer.pauzeerAlles();
+    zetVoorbeeld(w.voorbeeld ? los.mixer.canvas : null);
+    if (!paneelOpen()) return;
+    const bron = w.hoofd || !los ? videoMixer : los.mixer;
+    const st = bron.stand().filter((l) => l.video && l.speelt);
+    const tekst = bron.fout || `${w.los ? 'beamer · ' : ''}${st.length ? st.map((l) => `${trackVanDeck(l.id)}: ${Math.round(l.verschil * 1000)} ms`).join(' · ') : 'geen zichtbare video'}`;
+    const modusEl = videoPaneel.querySelector('.vid-modus');
+    if (modusEl.textContent !== videoMixer.modus) modusEl.textContent = videoMixer.modus;
+    const fitEl = videoPaneel.querySelector('.vid-fit');
+    if (fitEl && fitEl.textContent !== videoMixer.fit) fitEl.textContent = videoMixer.fit;
+    const doelEl = videoPaneel.querySelector('.vid-pulsdoel');
+    if (doelEl.textContent !== videoMixer.pulsDoel) doelEl.textContent = videoMixer.pulsDoel;
+    const statusEl = videoPaneel.querySelector('.vid-status');
+    if (statusEl.textContent !== tekst) statusEl.textContent = tekst;
+    const titel = w.los ? 'het losse venster mengt (het loopt door als dit tabblad verborgen is)' : '';
+    if (statusEl.title !== titel) statusEl.title = titel;
   };
 
-  return { videoMixer, videoAan, teken };
+  /** Het canvas voor een nieuwe video-opname, en onthouden waar het vandaan komt. */
+  const opnameCanvas = () => beamer.opnameCanvas(videoMixer.canvas);
+
+  /** Wat het losse venster van hier gebruikt (window.varveBeamer). */
+  const api = {
+    engine,
+    videoMixer,
+    meldAan: (venster, mixer) => beamer.meldAan(venster, mixer),
+    meldAf: (venster) => beamer.meldAf(venster),
+    mengtLos: (venster) => beamer.mengtLos(venster, wie()),
+    losOpen: () => !!beamer.levend(),       // voor de console en tools/headless/beamer.mjs
+    opnameUitLos: () => opname() === 'los',
+    meldVideoFout,
+  };
+
+  return { videoMixer, teken, opnameCanvas, api, beamer };
 }

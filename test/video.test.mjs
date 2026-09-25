@@ -192,5 +192,93 @@ console.log('\nde mixer meldt een video die niet laadt');
   ok('een fout van een video die al weg is telt niet', meldingen.length === 1);
 }
 
+console.log('\nde beamer: wie mengt er (het losse venster loopt door als het hoofdtabblad verborgen is)');
+{
+  const { wieMengt, Beamer, isDicht, isVerborgen } = await import('../src/video/beamer.js');
+  const s = (x) => `${x.hoofd ? 'H' : '-'}${x.los ? 'L' : '-'}${x.voorbeeld ? 'V' : '-'}`;
+  ok('niets open: niemand mengt', s(wieMengt({ losOpen: false, paneelOpen: false })) === '---');
+  ok('alleen het paneel: het hoofdvenster mengt (zoals altijd)', s(wieMengt({ losOpen: false, paneelOpen: true })) === 'H--');
+  ok('los venster open: DAT mengt, en het paneel toont zijn beeld (één keer mengen)', s(wieMengt({ losOpen: true, paneelOpen: true })) === '-LV');
+  ok('los venster open, paneel dicht: alleen het losse venster', s(wieMengt({ losOpen: true, paneelOpen: false })) === '-L-');
+  ok('video-opname uit het hoofdvenster, paneel dicht: hoofd mengt door (anders zwart in de opname)',
+    s(wieMengt({ losOpen: false, paneelOpen: false, opname: 'hoofd' })) === 'H--');
+  ok('opname begon in het hoofdvenster, dan los venster erbij: allebei (een MediaRecorder wisselt niet van bron)',
+    s(wieMengt({ losOpen: true, paneelOpen: true, opname: 'hoofd' })) === 'HL-');
+  ok('opname uit het losse venster: alleen dat mengt', s(wieMengt({ losOpen: true, paneelOpen: false, opname: 'los' })) === '-L-');
+  ok('los venster weg tijdens zijn opname: het paneel mengt weer zelf', s(wieMengt({ losOpen: false, paneelOpen: true, opname: 'los' })) === 'H--');
+
+  const b = new Beamer();
+  let weg = 0;
+  b.onWeg = () => weg++;
+  const venster = { closed: false }, ander = { closed: false };
+  const mixer = { canvas: { naam: 'los-canvas' } };
+  ok('zonder los venster: opname uit het eigen canvas', b.opnameCanvas('hoofd-canvas') === 'hoofd-canvas' && b.opnameWaar === 'hoofd');
+  b.meldAan(venster, mixer);
+  ok('aangemeld: het losse venster mengt', b.wieMengt({ paneelOpen: true }).los && b.mengtLos(venster, b.wieMengt({ paneelOpen: true })));
+  ok('een ander venster mengt niet (alleen het aangemelde)', !b.mengtLos(ander, b.wieMengt({ paneelOpen: true })));
+  ok('opname nu uit het losse canvas', b.opnameCanvas('hoofd-canvas') === mixer.canvas && b.opnameWaar === 'los');
+  ok('afmelden door een ander venster doet niets', b.meldAf(ander) === false && b.los && weg === 0);
+  ok('afmelden (pagehide): weg, en onWeg één keer', b.meldAf(venster) === true && !b.los && weg === 1);
+  b.meldAan(venster, mixer);
+  ok('herladen van het losse venster: zelfde venster meldt zich weer aan', b.levend()?.venster === venster);
+  venster.document = { hidden: true };
+  ok('los venster verborgen (geminimaliseerd): zijn lus staat stil, het paneel mengt weer zelf',
+    s(b.wieMengt({ paneelOpen: true })) === 'H--' && b.levend()?.venster === venster && weg === 1);
+  venster.document.hidden = false;
+  ok('weer zichtbaar: het losse venster neemt het weer over', s(b.wieMengt({ paneelOpen: true })) === '-LV');
+  ok('een venster waar we niet in mogen kijken telt als zichtbaar', !isVerborgen({ get document() { throw new Error('SecurityError'); } }));
+  venster.closed = true;
+  ok('dicht zonder afmelden (crash): levend() ruimt op en meldt het', b.levend() === null && weg === 2 && !b.wieMengt({ paneelOpen: true }).los);
+  ok('een venster waar we niet meer bij mogen telt als dicht',
+    isDicht({ get closed() { throw new Error('SecurityError'); } }) && isDicht(null) && !isDicht({ closed: false }));
+}
+
+console.log('\nde mixer in het losse venster neemt alles over van die in het hoofdvenster');
+{
+  const { VideoMixer } = await import('../src/video/video-mixer.js');
+  // Nep-WebGL en nep-<video>: genoeg om te zien wat er gemaakt, gebonden en geladen wordt.
+  let id = 0;
+  const gl = new Proxy({ TEXTURE0: 1000, createTexture: () => ({ tex: ++id }), createFramebuffer: () => ({ fb: ++id }),
+    createProgram: () => ({ prog: ++id }), createShader: () => ({ sh: ++id }), getShaderParameter: () => true,
+    getProgramParameter: () => true, getUniformLocation: (p, n) => n, getAttribLocation: () => 0 },
+  { get(t, k) { return k in t ? t[k] : () => {}; } });
+  const nepVideo = () => {
+    const luister = {};
+    return { paused: true, currentTime: 0, readyState: 0, seeking: false, playbackRate: 1, luister, src: '',
+      addEventListener: (n, f) => { (luister[n] ??= []).push(f); }, removeAttribute() { this.src = ''; },
+      load() {}, pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); } };
+  };
+  const deck = { buffer: {}, ui: { fader: 1 }, position: 3, rate: 1, playing: false, grid: null };
+  const engineOud = { ctx: { currentTime: 1, outputLatency: 0, baseLatency: 0 }, deck: () => deck, xfadeGain: () => 1 };
+  const engineNieuw = { ...engineOud, ctx: { currentTime: 9, outputLatency: 0, baseLatency: 0 } };
+  const hoofd = new VideoMixer({ canvas: { getContext: () => gl }, engine: engineOud, decks: ['A', 'B'], maakVideo: nepVideo });
+  const los = new VideoMixer({ canvas: { getContext: () => gl }, engine: { ctx: {} }, decks: ['A', 'B'], maakVideo: nepVideo });
+
+  hoofd.zetBron('A', '/media/x/video.mp4');
+  hoofd.zetFx('pixel', 0.4); hoofd.volgendeModus(); hoofd.volgendeFit(); hoofd.zetPuls(0.7); hoofd.volgendPulsDoel();
+  los.neemOver(hoofd);
+  ok('knoppen, mengvorm, passend/vullen, puls en doel over', los.fx.pixel === 0.4 && los.modus === hoofd.modus
+    && los.fit === 'vullen' && los.puls === 0.7 && los.pulsDoel === hoofd.pulsDoel);
+  ok('het losse venster leest de engine van het hoofdvenster', los.engine === engineOud);
+  const eigen = los.lagen.get('A');
+  ok('dezelfde video, maar een EIGEN <video> (een verborgen tabblad decodeert niets)',
+    eigen && eigen.url === '/media/x/video.mp4' && eigen.video !== hoofd.lagen.get('A').video);
+  los.neemOver(hoofd);
+  ok('elk beeld opnieuw overnemen maakt niets opnieuw', los.lagen.get('A') === eigen);
+  hoofd.zetBron('A', null);
+  los.neemOver(hoofd);
+  ok('video weg in het hoofdvenster: ook hier weg (en losgelaten)', !los.lagen.has('A') && eigen.video.src === '');
+  ok('zonder beeldlagen geen lagenstap in het losse venster', !los.lagenProg);
+  const laag = { aan: true, dekking: 1, mengvorm: 'screen', frame: () => ({ width: 512, height: 512 }) };
+  hoofd.voegBeeldlaagToe(laag);
+  los.neemOver(hoofd);
+  ok('beeldlagen: DEZELFDE objecten (een vorm rekent één keer), lagenstap hier gebouwd',
+    los.beeldlagen === hoofd.beeldlagen && los.beeldlagen[0] === laag && !!los.lagenProg && !!los.gelaagd);
+  hoofd.engine = engineNieuw;
+  los.neemOver(hoofd);
+  ok('hoofdvenster herladen: de nieuwe engine komt vanzelf mee', los.engine === engineNieuw);
+
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
