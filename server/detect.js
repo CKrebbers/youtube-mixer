@@ -1791,6 +1791,82 @@ export function analyseerGrid(env, envRate, tijdOffset = 0, opties = {}) {
     delen.splice(i, 2, { van: a.van, tot: b.tot, bpm: samen.bpm, r: samen.r, pastNiet: false, segment: a.segment });
     i--;
   }
+  /*
+   * Een BREAK is geen ander nummer (controle 25 sep). Liggen de stukken vóór en
+   * na een tussendeel op één doorlopend grid (hetzelfde tempo, de tellen van het
+   * ene vallen op het grid van het andere), en ligt de puls in het tussendeel
+   * op dat grid op de tel of precies op de offbeat (alleen hats of een bas op de
+   * "en": een halve tel verder), dan loopt de maat daar gewoon door. Gesplitst
+   * werd dat een eigen "zeker" stuk een halve tel naast (synthetisch: een break
+   * van 60 s met alleen offbeat-hats), of een onzeker gat in een schoon nummer
+   * (16-32 s); vóór de toets per stuk was het één zeker stuk met het goede grid.
+   * Dus weer één stuk, met het grid door beide kanten (van tel tot tel over het
+   * hele stuk: nauwkeuriger dan elke kant apart). Hooguit 32 maten (plus twee
+   * stappen voor de grenzen): wat langer is kan ook een heel nummer zijn dat
+   * toevallig tussen twee nummers in dezelfde fase valt (een album op precies
+   * 170), en dat houdt zijn eigen grid. Een versnelling (de muziek loopt weg en
+   * valt terug op het grid, V in detect.test) heeft geen vaste fase en blijft
+   * wat hij was. Bekende grens: hetzelfde patroon precies een halve tel
+   * verschoven tussen twee stukken op één grid wordt ook één stuk.
+   */
+  const doorlopend = (a, b) => {
+    if (Math.abs(Math.log(a.r.bpm / b.r.bpm)) > 0.005) return null;
+    const telBij = (r, t) => { const p = 60 / r.bpm; return r.firstBeat + Math.round((t - r.firstBeat) / p) * p; };
+    const ta = telBij(a.r, (a.van + a.tot) / 2), tb = telBij(b.r, (b.van + b.tot) / 2);
+    const N = (tb - ta) * a.r.bpm / 60, k = Math.round(N);
+    if (k < 1 || Math.abs(N - k) > vensterOpties.maxAfwijking) return null;
+    const g = { bpm: 60 * k / (tb - ta), anker: ta };
+    if (Math.abs(Math.log(g.bpm / a.r.bpm)) > 0.005 || Math.abs(Math.log(g.bpm / b.r.bpm)) > 0.005) return null;
+    // Zonder `anders` op de kanten (tolerantie 0): die zijn al getoetst, het gaat
+    // hier alleen om de fase op g, en het zoeken per venster is het dure deel.
+    const fasen = (x, tol) => vensterFasen(env, envRate, tijdOffset, g, vanDeel(x),
+      { vensterSec, van: x.van, tot: x.tot, minR: vensterOpties.minR, tolerantie: tol });
+    const kanten = [...fasen(a, 0), ...fasen(b, 0)];
+    if (!stukPast(kanten, vensterOpties).past) return null;
+    const refKant = modusFase(kanten.filter((f) => f.R >= vensterOpties.minR).map((f) => f.fase), vensterOpties.maxAfwijking);
+    // Het tussendeel: geen venster met puls op een ander tempo, en de fase per
+    // blok van stapSec (niet per venster van 12 s: bij een kort tussendeel
+    // overlappen die bijna helemaal en lijkt een versnelling dan ook vast) op
+    // minstens twee blokken met puls, ALLE binnen de marge van de tel van de
+    // kanten, of ALLE van hun offbeat (een halve tel ernaast). Niet elke vaste
+    // fase: let it all go 31:40-32:00 ligt 0,2 tel (70 ms) voor het grid van
+    // de stukken eromheen, met precies hun patroon (klappen op de tel, 1/4 en
+    // 1/2, alles 0,2 tel verschoven): dat is een ander grid, geen break, en
+    // splitsen had daar gelijk.
+    if (fasen({ van: a.tot, tot: b.van }, tolerantie).some((f) => f.anders)) return null;
+    const blokken = [];
+    for (let t = a.tot; b.van - t >= stapSec / 2; t += stapSec) {
+      const f = faseOpGrid(env, envRate, tijdOffset, g.bpm, g.anker, t, Math.min(b.van, t + stapSec));
+      if (f && f.R >= vensterOpties.minR) blokken.push(telWrap(f.fase - refKant));
+    }
+    if (blokken.length < 2) return null;
+    const binnen = (verschuiving) => blokken.every((f) => Math.abs(telWrap(f - verschuiving)) <= vensterOpties.maxAfwijking);
+    return binnen(0) || binnen(0.5) ? g : null;
+  };
+  // Over een segmentgrens heen (segmenteer knipte al, bv. waar de zekerheid bij
+  // de break wegzakte): één stuk per segment, beide met het doorlopende grid,
+  // zoals vroeger. Anders zou de zekerheid over de grens heen gemiddeld worden.
+  for (let i = 0; i + 2 < delen.length; i++) {
+    const a = delen[i];
+    if (a.rest || a.pastNiet || Math.abs(a.tot - delen[i + 1].van) > 1e-6) continue;
+    const maxTussen = 128 * 60 / a.r.bpm + 2 * stapSec;
+    for (let j = i + 2; j < delen.length; j++) {
+      const b = delen[j];
+      if (Math.abs(delen[j - 1].tot - b.van) > 1e-6 || b.van - a.tot > maxTussen) break;
+      if (b.rest || b.pastNiet) continue;
+      const g = doorlopend(a, b);
+      if (Array.isArray(opties.diag)) opties.diag.push({ doorlopend: { van: a.van, tussen: [a.tot, b.van], tot: b.tot, g } });
+      if (!g) continue;
+      const nieuw = [];
+      for (const x of delen.slice(i, j + 1)) {
+        if (nieuw.length && nieuw.at(-1).segment === x.segment) nieuw.at(-1).tot = x.tot;
+        else nieuw.push({ van: x.van, tot: x.tot, bpm: a.bpm, r: { bpm: g.bpm, firstBeat: g.anker }, pastNiet: false, segment: x.segment });
+      }
+      delen.splice(i, j - i + 1, ...nieuw);
+      i += nieuw.length - 2;
+      break;
+    }
+  }
   for (const deel of delen) {
     if (deel.rest || deel.pastNiet) for (const c of curve) if (c.tijd >= deel.van && c.tijd < deel.tot) c.pastNiet = true;
   }

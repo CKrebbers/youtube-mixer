@@ -660,6 +660,36 @@ console.log('\nelk stuk moet passen: sprong, tempowissel, schoon');
   ok(`een versnelling van een tel in 16 s: onzeker, links en rechts zeker (${tekst(stV)})`,
     allesPast(stV, vers) && zeker(stV).length === 2 && midden && midden.zekerheid < ZEKER_VANAF && midden.tot - midden.van < 20);
 
+  // Een break is geen ander nummer (controle 25 sep): 128 met kicks en zachte
+  // offbeat-hats, en in de break alleen hats op de offbeat. De puls ligt daar
+  // een halve tel verder, maar de maat loopt door. Gesplitst werd een break van
+  // 60 s een eigen ZEKER stuk een halve tel naast, en een van 16 of 32 s een
+  // onzeker gat; vóór de toets per stuk was het één zeker stuk. Nu weer dat.
+  for (const [lang, duur] of [[16, 180], [32, 180], [60, 240]]) {
+    const p = 60 / 128, ev = [], tellen = [];
+    for (let t = 0.2; t < duur; t += p) {
+      tellen.push(t);
+      if (t >= 60 && t < 60 + lang) ev.push([t + p / 2, 0.3, 'hat']);
+      else ev.push([t, 0.5, 'kick'], [t + p / 2, 0.05, 'hat']);
+    }
+    const m = envVan(spoorVan(duur, ev, { seed: 9 }));
+    const st = d.analyseerGrid(m.env, m.envRate, m.tijdOffset);
+    ok(`een break van ${lang} s met alleen offbeat-hats: één zeker stuk op de tel (${tekst(st)})`,
+      st.length === 1 && st[0].zekerheid >= ZEKER_VANAF && naast(st[0], tellen) === 0);
+  }
+  // Maar niet elke vaste fase is een break: hetzelfde patroon 20 s lang 0,2 tel
+  // verschoven (let it all go 31:40, 70 ms op 170) is een ander grid. Dat blijft
+  // gesplitst: geen zeker stuk waar de klappen naast liggen.
+  const q = 60 / 170, ver = [], verEv = [];
+  for (let t = 0.2; t < 140; t += q) {
+    const u = t >= 60 && t < 80 ? t + 0.2 * q : t;
+    ver.push(u); verEv.push([u, 0.5, 'kick'], [u + q / 4, 0.2, 'hat'], [u + q / 2, 0.15, 'hat']);
+  }
+  const mVer = envVan(spoorVan(140, verEv, { seed: 61 }));
+  const stVer = d.analyseerGrid(mVer.env, mVer.envRate, mVer.tijdOffset);
+  ok(`hetzelfde patroon 20 s lang 0,2 tel verschoven: blijft gesplitst (${tekst(stVer)})`,
+    zeker(stVer).length >= 2 && allesPast(stVer, ver));
+
   // Wat meteen past, blijft zoals het was: één stuk, zeker, het juiste tempo.
   for (const [naam, bpm, jitter, hats] of [['schoon op 128 met hats', 128, 0, true], ['122 met ±15 ms speling', 122, 0.015, false]]) {
     const echt = kicksIn([[0, 120, bpm, 0.3]], { jitter });
