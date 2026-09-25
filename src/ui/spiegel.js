@@ -12,6 +12,17 @@ import {
 } from './spiegel-plan.js';
 
 /**
+ * De Lock-knop van de APC (device-sectie, rij 2, tweede knop, note 63): daar
+ * staat de Q van quantize. De plek in styles.css (.fd-quantize) rekent met
+ * dezelfde cel: kolom 2, rij 2 van .fd-devknoppen.
+ */
+const LOCK_SIG = DEVICE_KNOPPEN[1][1].sig;
+const QUANTIZE_TITEL = {
+  aan: 'quantize AAN, voor alle tracks: cue, hotcues en loop in/out op de tel, hotcues springen in de maat — klik of toets 6',
+  uit: 'quantize uit — klik of toets 6 om cue, hotcues en loop in/out op de tel te zetten (alle tracks)',
+};
+
+/**
  * Het hoofdscherm als spiegel van de APC40 mkII. Onder links de acht kolommen
  * (track knob · vijf pads · Clip Stop · Track Select · 2×2 · fader), rechts
  * het focusdeel (scene launch, transport, device knobs, crossfader), boven
@@ -73,7 +84,16 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
     + TRANSPORT[1].map((c) => knopHtml(c)).join('') + `<div class="fd-tempo">${knobHtml(TEMPO)}</div>`
     + TRANSPORT[2].map((c) => knopHtml(c)).join('');
   document.getElementById('fd-knobs').innerHTML = DEVICE_KNOBS.map(knobHtml).join('');
-  document.getElementById('fd-devknoppen').innerHTML = DEVICE_KNOPPEN.flat().map((c) => knopHtml(c)).join('');
+  // Quantize (transport.quantize, voor alle tracks) heeft nog geen knop op de
+  // APC, en zonder stand zie je niet waarom hotcues en cue ineens op de tel
+  // vallen. Een kleine Q in de hoek van LOCK: daar komt hij op de APC. Klik =
+  // aan/uit, net als toets 6. Geen gespiegelde control (geen data-sig): wordt
+  // Lock in de mapping zelf quantize, dan toont die knop het en gaat de Q weg.
+  const devKnoppen = document.getElementById('fd-devknoppen');
+  devKnoppen.innerHTML = DEVICE_KNOPPEN.flat().map((c) => knopHtml(c)).join('')
+    + `<button class="fd-quantize" data-kind="button" data-action="transport.quantize" data-licht="uit"
+        aria-pressed="false" title="${QUANTIZE_TITEL.uit}">Q</button>`;
+  const quantizeEl = devKnoppen.querySelector('.fd-quantize');
   document.getElementById('fd-pijlen').innerHTML = `<div class="fd-kruis">${PIJLEN.map((c) => knopHtml(c, `pijl-${c.rol}`)).join('')}</div>`
     + knopHtml(SHIFT, 'spg-shift') + knopHtml(BANK);
   const xfRij = document.getElementById('fd-xfader');
@@ -187,6 +207,9 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
     for (const item of items) {
       zet(item, item.sig === SHIFT.sig ? null : leesControl(m, item.sig, { shift, vars }));
     }
+    // Is Lock (in dit mapje, met deze shift) zelf quantize, dan is de Q dubbel.
+    const lock = items.find((it) => it.sig === LOCK_SIG);
+    quantizeEl.classList.toggle('hidden', lock?.r?.action === 'transport.quantize');
     if (shiftEl) {
       shiftEl.querySelector('.spg-t').textContent = 'SHIFT';
       shiftEl.classList.remove('leeg');
@@ -293,6 +316,13 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
     if (shiftEl) {
       const want = appMapping?.shift ? 'aan' : 'uit';
       if (shiftEl.dataset.licht !== want) shiftEl.dataset.licht = want;
+    }
+    // Quantize uit de snapshot; alleen schrijven als de stand verandert.
+    const q = s.quantize ? 'aan' : 'uit';
+    if (quantizeEl.dataset.licht !== q) {
+      quantizeEl.dataset.licht = q;
+      quantizeEl.setAttribute('aria-pressed', String(q === 'aan'));
+      quantizeEl.title = QUANTIZE_TITEL[q];
     }
 
     // Device knobs in het rack: de naam van de plek, en dof als hij niets doet.

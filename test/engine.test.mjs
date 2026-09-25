@@ -1994,10 +1994,15 @@ console.log('\ntransport');
       && Math.abs(dG.loop.start - 9) < 1e-9 && Math.abs(dG.loop.end - 11) < 1e-9);
     toets('KeyG', true);
     ok('toets shift+G: reloop/exit haalt de loop eraf', dG.loop === null);
+    const nQ = meldingen.length;
     toets('Digit6');
     ok('toets 6: quantize aan', eng.quantize === true);
+    ok('... met een melding: het toetsenbord heeft geen lampje', meldingen.length === nQ + 1
+      && /quantize aan/.test(meldingen.at(-1).tekst) && meldingen.at(-1).soort === 'info');
     toets('Digit6');
-    ok('... en weer uit', eng.quantize === false);
+    ok('... en weer uit, ook gemeld', eng.quantize === false && meldingen.length === nQ + 2 && /quantize uit/.test(meldingen.at(-1).tekst));
+    druk('transport.quantize'); druk('transport.quantize');
+    ok('... via de bus (scherm, APC) geen melding: daar zie je de stand', meldingen.length === nQ + 2 && eng.quantize === false);
     dG.stop(); dM.stop(); dM.seek(0); NOW = 900;
     dM.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));        // hierboven stond hij op onzeker
     toets('KeyP', true);
