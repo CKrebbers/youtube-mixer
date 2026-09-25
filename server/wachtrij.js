@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
  *
  * Een opdracht is een gewoon object (dat gaat zo naar de browser):
  *   { id, sleutel, url, soort, titel, status, stap, tekst, pct, stappen,
- *     plek, begonnen, gestart, klaar, fout, track, bestond, playlist, live }
+ *     plek, begonnen, gestart, klaar, fout, track, bestond, playlist, live, opnieuw }
  * status: 'wacht' → 'bezig' → 'klaar' | 'mislukt' | 'geannuleerd'.
  *
  * De wachtrij weet niets van yt-dlp, ffmpeg of de library: het werk is een

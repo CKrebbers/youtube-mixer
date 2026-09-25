@@ -45,7 +45,8 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
 - `kijk-ingest.mjs [uitmap]` — de ingest-strook in het library-paneel, met de nep-yt-dlp
   uit `test/nep-ytdlp.mjs` (geen netwerk): vier regels plakken (één playlist), voortgang
   per stap, een wachtende en de lopende annuleren, "al in de library" met laadknoppen,
-  een playlist die alleen yt-dlp herkent. Zelfde veiligheid als kijk.mjs (eigen server,
+  een playlist die alleen yt-dlp herkent, en een herstart van de server midden in de rij
+  (melding onderaan met het paneel dicht, "opnieuw" zet ze terug). Zelfde veiligheid als kijk.mjs (eigen server,
   geen MIDI); poorten via `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`. Foto's `ingest-*.png`.
 
 ## keylock/

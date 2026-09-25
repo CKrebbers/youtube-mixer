@@ -3,7 +3,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { stat, rm } from 'node:fs/promises';
 import { join, extname, resolve, relative, isAbsolute, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, stappenVoor, YTDLP_GETEST_OP } from './ingest.js';
 import { bekijkLink, ontsmetNaam, BESTAND_EXT } from './links.js';
 import { Wachtrij, isOpen } from './wachtrij.js';
@@ -51,6 +51,14 @@ const TYPES = {
  * eigen bestanden door elkaar). Wat af is, gaat de database in.
  */
 const wachtrij = new Wachtrij();
+/*
+ * Welke run van de server dit is. De rij staat alleen in het geheugen: na een
+ * herstart is hij leeg, en wat wachtte of liep is weg. De browser ziet aan een
+ * ANDERE waarde dat dat gebeurde, en biedt aan ze opnieuw in de rij te zetten.
+ * Niet afleiden uit een ontbrekende opdracht: een die intussen af was, kan
+ * ook (in een ander tabblad) weggeklikt zijn.
+ */
+const SERVER_RUN = randomUUID();
 // Instelbaar voor de tests: een eigen database en opnamemap, niet de jouwe.
 const lib = new Library(process.env.VARVE_DB || join(WORTEL, 'media', 'library.db'));
 
@@ -176,6 +184,9 @@ async function nieuweLink(tekst, { opnieuw = false } = {}) {
     },
   });
   if (dubbel) return { code: 200, antwoord: { ...opdracht, dubbel: true } };
+  // Zichtbaar voor de browser: na een herstart van de server zet de strook
+  // hem zo terug (anders "staat al in de library" en gebeurt er niets).
+  if (opnieuw) opdracht.opnieuw = true;
   return { code: 202, antwoord: { ...opdracht, ...(b.lijstEraf ? { lijstEraf: true } : {}) } };
 }
 
@@ -518,7 +529,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (pad === '/api/ingest' && req.method === 'GET') {
-      return json(res, 200, { opdrachten: wachtrij.lijst() });
+      return json(res, 200, { opdrachten: wachtrij.lijst(), server: SERVER_RUN });
     }
 
     // Annuleren (wacht of bezig) of, als hij al af is, uit de lijst halen.

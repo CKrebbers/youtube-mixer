@@ -189,6 +189,117 @@ try {
     laat();
     await onderweg;
     ok('een upload die terugkwam terwijl een poll onderweg was, blijft wachten', strook.naLaden.get('net-geupload') === 'B');
+
+    // Na een herstart van de server is de rij leeg (hij staat in zijn geheugen).
+    // De strook zegt dat, en zet met één klik terug wat de browser nog weet.
+    const posts = [];
+    let antwoord = null, postFout = false;
+    globalThis.fetch = async (u, opties = {}) => {
+      if (opties.method === 'POST') {
+        const body = JSON.parse(opties.body);
+        posts.push(body);
+        if (postFout) throw new Error('server weg');
+        return { ok: true, status: 202, json: async () => ({ resultaten: body.urls.map((x) => ({ code: 202, url: x, status: 'wacht' })) }) };
+      }
+      const a = typeof antwoord === 'function' ? await antwoord() : antwoord;
+      return { json: async () => a };
+    };
+    // Een upload via een nep-XMLHttpRequest: de server zet hem in de rij (wacht).
+    const xhr0 = globalThis.XMLHttpRequest;
+    let volgendeUpload = 'b1';
+    globalThis.XMLHttpRequest = class {
+      constructor() { this.upload = {}; }
+      open() {} setRequestHeader() {} abort() {}
+      send() { const id = volgendeUpload; setTimeout(() => { this.status = 202; this.responseText = JSON.stringify({ id, status: 'wacht', soort: 'bestand' }); this.onload(); }, 0); }
+    };
+    globalThis.setInterval = () => 0;
+    const meldingen = [], buiten = [];
+    let paneelOpen = true;
+    const el2 = { addEventListener() {}, classList: { toggle() {} }, innerHTML: '', contains: () => true };
+    const buitenWeg = [];
+    const s2 = new IngestStrook({ el: el2, meld: (t) => meldingen.push(t), open: () => paneelOpen,
+      meldBuiten: (t) => { buiten.push(t); return { remove: () => buitenWeg.push(t) }; } });
+    globalThis.setInterval = interval0;
+    const bestand = { name: 'eigen.wav', size: 10 };
+    const L1 = { id: 'l1', soort: 'link', url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa', status: 'bezig', stappen: [] };
+    const L2 = { id: 'l2', soort: 'link', url: 'http://127.0.0.1:9/nummer-b', status: 'wacht', plek: 1 };
+    const L3 = { id: 'l3', soort: 'link', url: 'http://127.0.0.1:9/toch-opnieuw', status: 'wacht', plek: 2, opnieuw: true };
+    const B1 = { id: 'b1', soort: 'bestand', url: 'bestand:eigen.wav', titel: 'eigen', status: 'wacht', plek: 3 };
+    const B2 = { id: 'b2', soort: 'bestand', url: 'bestand:ander.mp4', titel: 'ander', status: 'wacht', plek: 4 };
+    const K = { id: 'k', soort: 'link', url: 'http://127.0.0.1:9/al-klaar', status: 'klaar', klaar: Date.now() };
+    // Zoals de server: vlak na de upload staat hij in de lijst, en de lijst
+    // staat op NIEUWSTE EERST (lijst()). Terugzetten moet in de volgorde van de rij.
+    antwoord = { opdrachten: [B1], server: 'run-1' };
+    await s2.uploadBestand(bestand, { naDeck: 'C' });
+    await wacht(0);
+    ok('een upload die in de rij staat: de strook onthoudt het bestand (en de track)', s2.bestanden.get('b1')?.file === bestand && s2.bestanden.get('b1')?.naDeck === 'C');
+    antwoord = { opdrachten: [K, B2, B1, L3, L2, L1], server: 'run-1' };
+    await s2.poll();
+    antwoord = { opdrachten: [K, B2, B1, L3, L1], server: 'run-1' };
+    await s2.poll();
+    ok('dezelfde server, een opdracht minder (af en weggeklikt): geen herstart', s2.herstart === null && !/herstart/.test(el2.innerHTML));
+    antwoord = { opdrachten: [K, B2, B1, L3, L2, L1], server: 'run-1' };
+    await s2.poll();
+    // Een tweede upload komt terug, maar vóór de volgende poll gaat de server om:
+    // die staat alleen in `bestanden`, niet in de vorige lijst.
+    const laatBestand = { name: 'laat.wav', size: 20 };
+    volgendeUpload = 'b3';
+    antwoord = async () => { throw new Error('server weg'); };
+    await s2.uploadBestand(laatBestand);
+    await wacht(0);
+    ok('een upload die terugkwam terwijl de server al wegviel: ook onthouden', s2.bestanden.get('b3')?.file === laatBestand);
+    // Een late poll van de OUDE server kan pas na de nieuwe terugkomen.
+    let laatOud;
+    antwoord = () => new Promise((z) => { laatOud = () => z({ opdrachten: [K, B2, B1, L3, L2, L1], server: 'run-1' }); });
+    const oudOnderweg = s2.poll();
+    await wacht(0);
+    paneelOpen = false;
+    antwoord = { opdrachten: [], server: 'run-2' };
+    await s2.poll();
+    ok(`andere server: wat wachtte of liep is weg, gemeld ("${meldingen.at(-1)}")`,
+      /de server is herstart: 6 opdrachten uit de wachtrij zijn weg/.test(meldingen.at(-1)) && /opnieuw/.test(meldingen.at(-1)));
+    ok(`het paneel is dicht: ook onderaan gemeld ("${buiten.at(-1)}")`, buiten.length === 1 && /6 opdrachten.*open de library/.test(buiten[0]));
+    ok('de strook toont het bovenaan, met "opnieuw" en welk bestand opnieuw gesleept moet',
+      /ing-rij herstart/.test(el2.innerHTML) && /data-herstart="opnieuw"/.test(el2.innerHTML) && /6 opdrachten/.test(el2.innerHTML) && /opnieuw slepen: ander/.test(el2.innerHTML));
+    ok('in de volgorde van de rij (niet nieuwste eerst): links, bewaarde bestanden (ook de late), het onbekende apart; wat klaar was niet',
+      s2.herstart?.links.join() === [L1.url, L2.url, L3.url].join() && s2.herstart.opnieuw.join() === L3.url
+      && s2.herstart.bestanden.map((x) => x.file.name).join() === 'eigen.wav,laat.wav' && s2.herstart.kwijt.join() === 'ander');
+    const n0 = meldingen.length;
+    laatOud();
+    await oudOnderweg;
+    ok('een laat antwoord van de oude server telt niet (geen "herstart" terug, de lijst blijft leeg)',
+      meldingen.length === n0 && s2.server === 'run-2' && s2.opdrachten.length === 0 && s2.herstart?.links.length === 3);
+    await s2.poll();
+    ok('de volgende poll (zelfde nieuwe server): niet nog eens', meldingen.length === n0 && buiten.length === 1 && s2.herstart?.links.length === 3);
+    paneelOpen = true;
+    const opnieuw = [];
+    s2.uploadBestand = async (file, opties) => { opnieuw.push({ file, ...opties }); };
+    const klik = (herstart) => s2._klik({ target: { closest: () => ({ dataset: { herstart } }) } });
+    postFout = true;
+    await klik('opnieuw');
+    ok('opnieuw terwijl de server nog weg is: de melding blijft staan, niets kwijt', s2.herstart?.links.length === 3 && /lukte niet/.test(meldingen.at(-1)));
+    postFout = false;
+    posts.length = 0;
+    await klik('opnieuw');
+    ok(`opnieuw: de links terug in de rij, "toch opnieuw" apart (${JSON.stringify(posts)})`, posts.length === 2
+      && posts[0].urls.join() === [L1.url, L2.url].join() && !posts[0].opnieuw && posts[1].urls.join() === L3.url && posts[1].opnieuw === true);
+    ok('en de melding onderaan is weg (je koos al)', buitenWeg.length === 1 && buitenWeg[0] === buiten[0]);
+    ok('en de bewaarde bestanden opnieuw geüpload, naar dezelfde track', opnieuw.length === 2 && opnieuw[0].file === bestand && opnieuw[0].naDeck === 'C'
+      && opnieuw[1].file === laatBestand && !opnieuw[1].naDeck);
+    ok(`de melding zegt hoeveel ("${meldingen.at(-1)}"), de strook is weer gewoon`, /3 in de wachtrij/.test(meldingen.at(-1)) && s2.herstart === null && !/herstart/.test(el2.innerHTML));
+    antwoord = { opdrachten: [L1], server: 'run-2' };
+    await s2.poll();
+    antwoord = { opdrachten: [], server: 'run-3' };
+    await s2.poll();
+    ok('paneel open: alleen in het paneel, niet onderaan', buiten.length === 1 && /1 opdracht uit de wachtrij is weg/.test(meldingen.at(-1)));
+    posts.length = 0;
+    await klik('laat');
+    ok('× bij de herstartmelding: weg, niets opnieuw', s2.herstart === null && posts.length === 0);
+    const s3 = new IngestStrook({ el: el2, meld: (t) => meldingen.push(t) });
+    antwoord = { opdrachten: [], server: 'run-4' };
+    await s3.poll();
+    ok('een pagina die net geladen is: niets te melden', s3.herstart === null);
+    globalThis.XMLHttpRequest = xhr0;
     globalThis.fetch = fetch0;
   }
 

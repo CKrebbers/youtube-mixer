@@ -43,12 +43,16 @@ await ing.run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavf
 }
 
 const poort = 20000 + Math.floor(Math.random() * 20000);
-const server = spawn(process.execPath, ['server/index.js'], {
+const nepYtdlp = maakNepYtdlp(map);
+// Een functie: aan het eind wordt de server herstart (zelfde poort, database en media).
+const startServer = () => spawn(process.execPath, ['server/index.js'], {
   env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'),
-    VARVE_HERANALYSE: 'uit', VARVE_YTDLP: maakNepYtdlp(map), NEP_LOG: log, NEP_BRON: bron },
+    VARVE_HERANALYSE: 'uit', VARVE_YTDLP: nepYtdlp, NEP_LOG: log, NEP_BRON: bron },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
+let server = startServer();
 const B = `http://localhost:${poort}`;
+const opruimen = [];   // pids van nep-yt-dlp's die bij een herstart van de server wees werden
 
 const regels = () => (existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 const post = async (body, headers = {}) => {
@@ -76,6 +80,9 @@ try {
     if (await fetch(`${B}/api/ingest`).then((r) => r.ok).catch(() => false)) break;
     await wacht(100);
   }
+  const run1 = (await (await fetch(`${B}/api/ingest`)).json()).server;
+  ok(`GET /api/ingest zegt welke run van de server dit is (${run1})`, typeof run1 === 'string' && run1.length >= 8
+    && (await (await fetch(`${B}/api/ingest`)).json()).server === run1);
 
   console.log('weigeren en al binnen, vóór de wachtrij');
   const pl = await post({ url: 'https://www.youtube.com/playlist?list=PL1' });
@@ -142,6 +149,8 @@ try {
   const oo = await wachtOp(opnieuw.j.id, afgelopen);
   ok('met opnieuw: true wordt hij toch binnengehaald', opnieuw.status === 202 && oo?.status === 'klaar' && !oo.bestond
     && regels().slice(n).some((x) => x.wat === 'download'));
+  ok('en de opdracht zegt opnieuw: true (na een herstart zet de strook hem zo terug); een gewone niet',
+    opnieuw.j.opnieuw === true && oo.opnieuw === true && !ob.opnieuw);
   const kwijt = await post({ url: 'https://www.youtube.com/watch?v=weg12345678' });
   ok('in de library maar de audio is weg: gewoon opnieuw in de rij', kwijt.status === 202 && !kwijt.j.bestond);
   await wachtOp(kwijt.j.id, afgelopen);
@@ -191,8 +200,35 @@ try {
   ok('en de link erna ook', oe?.status === 'geannuleerd');
   await wacht(300);
   ok('geen enkele werkmap meer, de server leeft', werkmappen().length === 0 && (await fetch(`${B}/api/ingest`)).ok);
+
+  // Na een herstart is de rij leeg (hij staat in het geheugen) en krijgt de
+  // server een andere run: daaraan ziet de strook dat er opdrachten weg zijn.
+  console.log('\nserver herstart');
+  const H1 = 'http://127.0.0.1:9/herstart-traag', H2 = 'http://127.0.0.1:9/herstart-b';
+  const hp = await post({ urls: [H1, H2] });
+  const [rh1, rh2] = hp.j.resultaten ?? [];
+  await wachtOp(rh1.id, (o) => o.stap === 'audio' && o.pct > 0);
+  const pidH = regels().find((x) => x.wat === 'download' && x.url === H1)?.pid;
+  if (pidH) opruimen.push(pidH);
+  const weg1 = new Promise((z) => server.once('exit', z));
+  server.kill();
+  await weg1;
+  server = startServer();
+  let na = null;
+  for (let i = 0; i < 200 && !na; i++) {
+    na = await fetch(`${B}/api/ingest`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!na) await wacht(100);
+  }
+  ok(`na de herstart: een andere run (${na?.server})`, typeof na?.server === 'string' && na.server !== run1);
+  ok('en de rij is leeg: wat liep en wachtte is weg', !!na && !na.opdrachten.some((o) => o.id === rh1?.id || o.id === rh2?.id));
+  ok('de werkmap van de onderbroken download is bij het opstarten opgeruimd', werkmappen().length === 0);
+  // Wat de strook met "opnieuw" doet: dezelfde links nog eens in één lijst.
+  const terug = await post({ urls: [H2] });
+  const oh2 = await wachtOp(terug.j.resultaten?.[0]?.id, afgelopen);
+  ok(`opnieuw in de rij bij de nieuwe server: 202 en klaar (${oh2?.status})`, terug.status === 202 && terug.j.resultaten?.[0]?.code === 202 && oh2?.status === 'klaar');
 } finally {
   server.kill();
+  for (const pid of opruimen) { try { process.kill(pid, 'SIGKILL'); } catch {} }
   rmSync(map, { recursive: true, force: true });
 }
 

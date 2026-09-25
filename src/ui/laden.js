@@ -252,6 +252,9 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
       return null;
     },
   });
+  // Opdrachten die bij een herstart van de server uit de rij vielen: ook
+  // onderaan melden, want met het paneel dicht zie je de strook niet.
+  library.strook.meldBuiten = (tekst) => meld(tekst, 'fout');
 
   return { laadBuffer, loadFile, library, libPaneel };
 }

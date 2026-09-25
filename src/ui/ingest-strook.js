@@ -85,16 +85,25 @@ export class IngestStrook {
    * @param opties.laad      (track, deck) => laden, na een klik op een laadknop in de strook
    * @param opties.laadNaIngest (track, deck) => een op een track gesleept bestand is binnen
    * @param opties.onNieuw   () => er staat een nieuw nummer in de library (lijst verversen)
+   * @param opties.meldBuiten (tekst) => een melding BUITEN het paneel (de strook onderaan het
+   *                          scherm), voor wat je niet mag missen als het paneel dicht is. Geeft
+   *                          hij het element terug, dan haalt de strook het weg zodra je kiest.
    */
   constructor({ el, url, haal, decks = [], label = (d) => d, stand = () => 'leeg', open = () => true,
-    meld = () => {}, bevestigd = () => true, laad = () => {}, laadNaIngest = () => {}, onNieuw = () => {} }) {
-    Object.assign(this, { el, url, haal, decks, label, stand, isOpen: open, meld, bevestigd, laad, laadNaIngest, onNieuw });
+    meld = () => {}, bevestigd = () => true, laad = () => {}, laadNaIngest = () => {}, onNieuw = () => {},
+    meldBuiten = () => {} }) {
+    Object.assign(this, { el, url, haal, decks, label, stand, isOpen: open, meld, bevestigd, laad, laadNaIngest, onNieuw, meldBuiten });
     this.opdrachten = [];        // zoals de server ze geeft
     this.uploads = [];           // { sleutel, naam, pct, status: 'wacht'|'bezig', xhr, file, naDeck, gestopt }
     this.naLaden = new Map();    // opdracht-id -> deck (een bestand op een track gesleept)
     this.gezienKlaar = new Set();
     this.opnieuw = null;         // { link, tot }: nog eens "haal binnen" = opnieuw binnenhalen
     this.weg = new Set();        // lokaal weggeklikt, tot de server het ook zegt
+    // Na een herstart van de server (zie _herstart):
+    this.server = null;          // welke run van de server de vorige lijst gaf
+    this.oudeRuns = new Set();   // runs die al vervangen zijn: een laat antwoord van zo'n run telt niet
+    this.bestanden = new Map();  // opdracht-id -> { file, naam, naDeck }: een upload die nog in de rij staat
+    this.herstart = null;        // { links, opnieuw, bestanden, kwijt }: wat weg is en terug kan
 
     if (this.url) {
       this.url.placeholder = 'plak één of meer links (YouTube, TikTok, …) en druk op enter…';
@@ -167,13 +176,16 @@ export class IngestStrook {
     this.poll();
   }
 
-  /** Wat de server van de links vond, in één melding; geweigerde links blijven in het veld. */
-  _uitkomst(uitkomsten, { een, link, opnieuw }) {
+  /**
+   * Wat de server van de links vond, in één melding; geweigerde links blijven
+   * in het veld. `veld: false` (opnieuw na een herstart): het veld niet aanraken.
+   */
+  _uitkomst(uitkomsten, { een, link, opnieuw, veld = true }) {
     const geweigerd = uitkomsten.filter((u) => u.code >= 400);
     const nieuw = uitkomsten.filter((u) => u.code === 202);
     const dubbel = uitkomsten.filter((u) => u.dubbel);
     const bestond = uitkomsten.filter((u) => u.bestond);
-    this.url.value = geweigerd.map((u) => u.url).filter(Boolean).join(' ');
+    if (veld) this.url.value = geweigerd.map((u) => u.url).filter(Boolean).join(' ');
     if (een) {
       const u = uitkomsten[0] ?? {};
       if (u.code >= 400) return this.meld(u.fout || 'kon hem niet in de wachtrij zetten', false);
@@ -243,6 +255,11 @@ export class IngestStrook {
         else if (opdracht) {
           this.meld(opdracht.bestond ? `${up.naam} staat al in de library` : `${up.naam} geüpload — staat in de wachtrij`, true);
           if (up.naDeck) this.naLaden.set(opdracht.id, up.naDeck);
+          // Het bestand zelf onthouden tot hij af is: na een herstart van de
+          // server is zijn werkmap weg, en dan kan hij alleen van hier terug.
+          if (opdracht.status === 'wacht' || opdracht.status === 'bezig') {
+            this.bestanden.set(opdracht.id, { file: up.file, naam: up.naam, naDeck: up.naDeck });
+          }
         }
         this.teken();
         this.poll();
@@ -266,11 +283,19 @@ export class IngestStrook {
   async poll() {
     // Wat al wachtte vóór deze vraag (zie onder); een upload die net terugkwam niet.
     const wachtte = [...this.naLaden.keys()];
-    let lijst;
+    const bewaard = [...this.bestanden.keys()];
+    let lijst, server;
     try {
       const r = await fetch('/api/ingest');
-      lijst = (await r.json()).opdrachten || [];
+      const j = await r.json();
+      lijst = j.opdrachten || [];
+      server = j.server ?? null;
     } catch { return; }
+    // Een antwoord van een server die intussen al vervangen is (vertrok vóór
+    // de herstart, kwam na het eerste antwoord van de nieuwe): overslaan.
+    // Anders leek het een tweede herstart, terug naar de oude.
+    if (server && this.oudeRuns.has(server)) return;
+    this._herstart(lijst, server);
     this.opdrachten = lijst;
     for (const id of this.weg) if (!lijst.some((o) => o.id === id)) this.weg.delete(id);
     // Nieuw in de library? Eén keer de lijst verversen.
@@ -288,7 +313,105 @@ export class IngestStrook {
     // wat er al stond toen deze vraag vertrok: een antwoord dat onderweg was
     // terwijl een upload terugkwam, kent die nieuwe opdracht nog niet.
     for (const id of wachtte) if (!lijst.some((o) => o.id === id)) this.naLaden.delete(id);
+    // Een bewaard bestand is niet meer nodig als hij af is (of onbekend, zoals hierboven).
+    for (const id of bewaard) {
+      const o = lijst.find((x) => x.id === id);
+      if (!o || (o.status !== 'wacht' && o.status !== 'bezig')) this.bestanden.delete(id);
+    }
     this.teken();
+  }
+
+  /**
+   * Is de server herstart (een andere `server` dan bij de vorige lijst)? Dan
+   * is wat bij de vorige lijst wachtte of liep weg: de rij staat in zijn
+   * geheugen. Niet stil laten verdwijnen: de strook zegt het en biedt aan ze
+   * opnieuw in de rij te zetten. Links weet de browser nog (de url van de
+   * opdracht); een upload alleen als het bestand nog in `bestanden` staat
+   * (deze pagina uploadde hem) — anders moet je hem opnieuw slepen.
+   * Een pagina die net geladen is heeft geen vorige lijst: dan niets.
+   */
+  _herstart(lijst, server) {
+    const vorige = this.server;
+    this.server = server;
+    if (!vorige || !server || vorige === server) return;
+    this.oudeRuns.add(vorige);
+    const nu = new Set(lijst.map((o) => o.id));
+    const weg = this.opdrachten.filter((o) => (o.status === 'wacht' || o.status === 'bezig') && !nu.has(o.id));
+    // Een upload die terugkwam NA de vorige lijst staat daar nog niet in, maar
+    // wel in `bestanden`: die hoort er ook bij, anders viel hij stil weg.
+    for (const [id, b] of this.bestanden) {
+      if (!nu.has(id) && !weg.some((o) => o.id === id)) weg.push({ id, soort: 'bestand', titel: b.naam, status: 'wacht' });
+    }
+    if (!weg.length) return;
+    // In de volgorde van de rij: wat liep eerst, dan op plek. De lijst van de
+    // server staat op nieuwste eerst; zo terugzetten draaide de rij om.
+    const rang = (o) => (o.status === 'bezig' ? -1 : (o.plek ?? Infinity));
+    weg.sort((a, b) => rang(a) - rang(b));
+    const h = this.herstart ?? { links: [], opnieuw: [], bestanden: [], kwijt: [] };
+    for (const o of weg) {
+      const b = this.bestanden.get(o.id);
+      this.bestanden.delete(o.id);
+      if (o.soort === 'bestand') {
+        if (b) h.bestanden.push(b);
+        else h.kwijt.push(o.titel || String(o.url || '').replace(/^bestand:/, ''));
+      } else if (o.url && !h.links.includes(o.url)) {
+        h.links.push(o.url);
+        // Was hij met "toch opnieuw" in de rij gezet, dan terug ook zo; anders
+        // zei de server "staat al in de library" en haalde hij niets.
+        if (o.opnieuw) h.opnieuw.push(o.url);
+      }
+    }
+    this.herstart = h;
+    const n = h.links.length + h.bestanden.length + h.kwijt.length;
+    const tekst = `de server is herstart: ${n} opdracht${n === 1 ? '' : 'en'} uit de wachtrij ${n === 1 ? 'is' : 'zijn'} weg`;
+    const terug = h.links.length + h.bestanden.length;
+    this.meld(tekst + (terug ? ' — "opnieuw" in de strook zet ze terug' : ''), false);
+    // Het paneel dicht (downloads lopen meestal op de achtergrond): dan zie je
+    // de strook niet. Onderaan melden, tot je hem wegklikt of in de strook kiest.
+    if (!this.isOpen()) {
+      this._buiten?.remove?.();
+      this._buiten = this.meldBuiten(tekst + (terug ? ' — open de library (B) en klik "opnieuw" om ze terug te zetten' : '')) ?? null;
+    }
+  }
+
+  /** Gekozen ("opnieuw" of ×): de herstartrij weg, en de melding onderaan ook. */
+  _herstartAf() {
+    this.herstart = null;
+    this._buiten?.remove?.();
+    this._buiten = null;
+  }
+
+  /** "opnieuw": de links in één keer terug in de rij, daarna de bewaarde bestanden één voor één. */
+  async _zetTerug() {
+    const h = this.herstart;
+    if (!h) return;
+    this._herstartAf();
+    this.teken();
+    const uitkomsten = [];
+    // Per soort: gewone links, en links die met "toch opnieuw" in de rij stonden.
+    const groepen = [[h.links.filter((u) => !h.opnieuw.includes(u)), false], [h.opnieuw, true]];
+    try {
+      for (const [links, opnieuw] of groepen) {
+        for (let i = 0; i < links.length; i += 100) {
+          const r = await fetch('/api/ingest', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ urls: links.slice(i, i + 100), ...(opnieuw ? { opnieuw: true } : {}) }),
+          });
+          const j = await r.json();
+          if (!r.ok) throw new Error(j.fout || `code ${r.status}`);
+          uitkomsten.push(...(j.resultaten || []));
+        }
+      }
+    } catch (err) {
+      // Niets kwijt: de rij blijft staan, nog eens klikken kan (wat al terug was, is dan "dubbel").
+      this.herstart = h;
+      this.meld(`opnieuw in de wachtrij zetten lukte niet: ${err.message}`, false);
+      this.teken();
+      return;
+    }
+    if (uitkomsten.length) this._uitkomst(uitkomsten, { een: false, veld: false });
+    this.poll();
+    for (const b of h.bestanden) await this.uploadBestand(b.file, { naDeck: b.naDeck });
   }
 
   /** Alleen vragen zolang er iets loopt, of het paneel open staat. */
@@ -311,6 +434,11 @@ export class IngestStrook {
   async _klik(e) {
     const knop = e.target.closest('button');
     if (!knop || !this.el.contains(knop)) return;
+    if (knop.dataset.herstart !== undefined) {
+      if (knop.dataset.herstart === 'opnieuw') return this._zetTerug();
+      this._herstartAf();
+      return this.teken();
+    }
     if (knop.dataset.upload) {
       const up = this.uploads.find((u) => u.sleutel === knop.dataset.upload);
       if (!up) return;
@@ -358,11 +486,30 @@ export class IngestStrook {
     const kop = nBezig + nWacht > 1
       ? `<div class="ing-kop">wachtrij · ${nBezig} bezig · ${nWacht} wachtend · één tegelijk</div>` : '';
     const ups = this.uploads.map((u) => this._uploadRij(u));
+    const herstart = this.herstart ? [this._herstartRij(this.herstart)] : [];
     // Alleen als er iets veranderde: anders verspringt hover en begint het
     // knipperende streepje bij elke poll opnieuw.
-    const html = kop + [...ups, ...rijen.map((o) => this._rij(o))].join('');
+    const html = kop + [...herstart, ...ups, ...rijen.map((o) => this._rij(o))].join('');
     if (html !== this._html) { this.el.innerHTML = html; this._html = html; }
-    this.el.classList.toggle('hidden', ups.length + rijen.length === 0);
+    this.el.classList.toggle('hidden', herstart.length + ups.length + rijen.length === 0);
+  }
+
+  /** Bovenaan tot je kiest: wat er door een herstart van de server uit de rij verdween. */
+  _herstartRij(h) {
+    const terug = h.links.length + h.bestanden.length;
+    const n = terug + h.kwijt.length;
+    const kwijt = h.kwijt.length
+      ? ` — ${h.kwijt.length === 1 ? 'dit bestand moet' : `${h.kwijt.length} bestanden moeten`} je opnieuw slepen: ${h.kwijt.slice(0, 3).join(', ')}${h.kwijt.length > 3 ? ', …' : ''}`
+      : '';
+    const wat = [...h.links.map(kortUrl), ...h.bestanden.map((b) => b.naam), ...h.kwijt].join(' · ');
+    return `<div class="lib-job ing-rij herstart">
+      <span class="lib-job-stap">herstart</span>
+      <span class="lib-job-tekst" title="${esc(wat)}"><b>de server is herstart</b> <i class="ing-sub">${n} opdracht${n === 1 ? '' : 'en'} uit de wachtrij ${n === 1 ? 'is' : 'zijn'} weg${esc(kwijt)}</i></span>
+      <span class="ing-stappen"></span>
+      <span></span>
+      <span class="ing-pct"></span>
+      <span class="ing-knoppen">${terug ? `<button class="btn sm" data-herstart="opnieuw" title="${esc(`zet ${terug === 1 ? 'hem' : `alle ${terug}`} opnieuw in de wachtrij: ${wat}`)}">opnieuw</button>` : ''}<button class="btn sm ing-x" data-herstart="laat" title="laten zo">×</button></span>
+    </div>`;
   }
 
   _uploadRij(u) {
