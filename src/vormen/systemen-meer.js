@@ -2,8 +2,32 @@
  * De middelzware Vormmachines (spoor B2): ch, jl, ls, dl, lg, wv, if.
  * Uit Clay's `vormmachines.html`, onder dezelfde regels als systemen.js:
  * geen DOM, geen Math.random (toeval uit `g.r()`), geen eigen klok (`g.t`,
- * seconden van de audioklok), één `step()` = 1/60 s, tekenen op `g.ctx`
- * (maat `g.S`, `g.D` = S/320) en pixelroosters via `rooster(g, n)`.
+ * seconden van de audioklok), één `step()` = 1/60 s, tekenen op `g.ctx`.
+ *
+ * 16:9 (ROADMAP 7, API bovenaan hulp.js): het doek is g.W × g.H, lijnen en
+ * stippen in g.D. Roosters zijn nx × ny met vierkante cellen uit
+ * `cellen(g, n)`: evenveel cellen als het oude n × n, dus dezelfde rekentijd.
+ * Nergens uitgerekt: een cirkel blijft rond. Bij ch, wv, ls en if staat wat
+ * vroeger op het vierkant stond nu HEEL in de hoogte en laat de breedte meer
+ * van dezelfde wereld zien; jl en dl vullen de breedte en snijden daarvoor
+ * boven en onder iets af (zoals het beeld van 24 sep). Per systeem:
+ *   ch  de plaat is 16:9: y 0..1, x over nx/ny plaatbreedtes, het oude
+ *       vierkant in het midden. Zelfde golflengtes, zelfde korrels.
+ *   jl  hetzelfde stuk van het complexe vlak als het oude 3 × 3 (9 eenheden²),
+ *       nu 4 × 2,25: de verzameling vult de breedte (een hoge vorm valt boven
+ *       en onder iets weg; uitzoomen met de zoomknop).
+ *   ls  de figuur past in het hele 16:9-vak, in het midden. Alle vijf vormen
+ *       zijn smaller dan 16:9: ze worden even hoog als vroeger (88%), de
+ *       Koch-vlok (breder dan hoog) 15% groter. Links en rechts achtergrond.
+ *   dl  het beeld heeft de celmaat van 24 sep (cellen(g, 150), 201 × 113).
+ *       Punt: de ronde figuur groeit tot 0,45 × de BREEDTE en steekt boven en
+ *       onder buiten beeld (zoals het bijgesneden beeld van 24 sep); hij rekent
+ *       daarvoor op een kaart van 201 × 201. Bodemlijn: over de hele breedte.
+ *   lg  r loopt over de hele breedte (meer kolommen), x over de hoogte.
+ *   wv  golflengte en bronafstand in de oude eenheid (korte zijde / 150): het
+ *       oude beeld in het midden, de golven lopen door tot de randen.
+ *   if  een varen is een staande figuur: bewust een VIERKANT rooster (320²,
+ *       als vroeger) in het midden (`midden(g).vak`); links en rechts achtergrond.
  *
  * KWALITEIT: `g.kwaliteit` (0,25..1, ontbreekt = 1). Een scheduler zet hem
  * lager als een laag over zijn tijdsbudget gaat. Het beeld wordt grover
@@ -37,7 +61,7 @@
  * het formaat van het origineel: ['naam', 'e'] = gebeurtenis.
  */
 
-import { PI, TAU, pcol, rooster, blit, clear, K, SEL } from './hulp.js';
+import { PI, TAU, pcol, rooster, cellen, blit, clear, midden, K, SEL } from './hulp.js';
 
 const cl01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : (v || 0));
 /** Schaal naar het grootste wat hij ooit zag (langzaam vergetend), zoals `auto` in het origineel. */
@@ -51,10 +75,10 @@ function auto(s, k, v) {
 const kw = (g) => { const q = g.kwaliteit; return q > 0 ? (q < 0.25 ? 0.25 : q > 1 ? 1 : q) : 1; };
 /** Blokgrootte voor pixelsystemen: 1 bij volle kwaliteit, 2 bij een kwart. */
 const blok = (q) => Math.max(1, Math.min(3, Math.round(1 / Math.sqrt(q))));
-/** Vul een blok van b×b vanaf (X, Y) in een rooster van N breed. */
-function vulBlok(px, N, X, Y, b, kleur) {
-  const yb = Math.min(b, N - Y), xb = Math.min(b, N - X);
-  for (let yy = 0; yy < yb; yy++) { const r = (Y + yy) * N + X; for (let xx = 0; xx < xb; xx++) px[r + xx] = kleur; }
+/** Vul een blok van b×b vanaf (X, Y) in een rooster van nx × ny. */
+function vulBlok(px, nx, ny, X, Y, b, kleur) {
+  const yb = Math.min(b, ny - Y), xb = Math.min(b, nx - X);
+  for (let yy = 0; yy < yb; yy++) { const r = (Y + yy) * nx + X; for (let xx = 0; xx < xb; xx++) px[r + xx] = kleur; }
 }
 
 export const SYSTEMEN_MEER = [
@@ -63,15 +87,22 @@ export const SYSTEMEN_MEER = [
     knobs: [K('n', 'modus n', 1, 14, 1, 3, { rnd: [1, 10] }), K('m', 'modus m', 1, 14, 1, 5, { rnd: [1, 12] }), K('amp', 'trilling', 0.3, 6, 0.1, 2.5, { fix: 1 }),
       K('cnt', 'zandkorrels', 2000, 16000, 500, 9000, { re: 1, fix: 1 })],
     outs: ['beweging', 'orde'],
+    // De plaat is 16:9: y loopt van 0 tot 1 (de hoogte), x over A = nx/ny
+    // plaatbreedtes, van x0 tot x0 + A, zodat het oude vierkant 0..1 in het
+    // midden ligt. Het veld is dezelfde formule, dus dezelfde golflengtes; het
+    // loopt gewoon door naar links en rechts. Korrels en cellen even veel als
+    // vroeger: even helder, even duur.
     init(s, p, g) {
       const n = p.cnt | 0; s.n = n; s.x = new Float32Array(n); s.y = new Float32Array(n);
-      for (let i = 0; i < n; i++) { s.x[i] = g.r(); s.y[i] = g.r(); }
-      s.g = rooster(g, 256); s.c = new Uint16Array(256 * 256);
+      s.g = rooster(g, cellen(g, 256)); s.c = new Uint16Array(s.g.nx * s.g.ny);
+      s.A = s.g.nx / s.g.ny; s.x0 = (1 - s.A) / 2;
+      for (let i = 0; i < n; i++) { s.x[i] = s.x0 + g.r() * s.A; s.y[i] = g.r(); }
     },
     step(s, p, g) {
       // Bij lagere kwaliteit bewegen alleen de eerste korrels; de rest ligt stil en telt niet.
       const q = kw(g), na = Math.max(1, Math.ceil(s.n * q));
-      const n = p.n, m = p.m, amp = p.amp * 0.012, N = 256, c = s.c, r = g.r, gelijk = n === m, X = s.x, Y = s.y;
+      const n = p.n, m = p.m, amp = p.amp * 0.012, nx = s.g.nx, ny = s.g.ny, x0 = s.x0, x1 = s.x0 + s.A;
+      const c = s.c, r = g.r, gelijk = n === m, X = s.x, Y = s.y;
       c.fill(0);
       let sf = 0, orde = 0;
       for (let i = 0; i < na; i++) {
@@ -79,8 +110,8 @@ export const SYSTEMEN_MEER = [
         const a = Math.cos(n * PI * x) * Math.cos(m * PI * y), b = Math.cos(m * PI * x) * Math.cos(n * PI * y), af = Math.abs(gelijk ? a : a - b), f = af * amp + 0.0006;
         sf += af; if (af < 0.08) orde++;
         x += (r() - 0.5) * f; y += (r() - 0.5) * f;
-        if (x < 0) x = -x; if (x > 1) x = 2 - x; if (y < 0) y = -y; if (y > 1) y = 2 - y;
-        X[i] = x; Y[i] = y; c[Math.min(N - 1, y * N | 0) * N + Math.min(N - 1, x * N | 0)]++;
+        if (x < x0) x = 2 * x0 - x; if (x > x1) x = 2 * x1 - x; if (y < 0) y = -y; if (y > 1) y = 2 - y;
+        X[i] = x; Y[i] = y; c[Math.min(ny - 1, y * ny | 0) * nx + Math.min(nx - 1, (x - x0) * ny | 0)]++;
       }
       const px = s.g.px, L = g.L, h = 70 / q;   // minder korrels, elk telt zwaarder: even helder
       for (let i = 0; i < c.length; i++) px[i] = L[Math.min(255, c[i] * h) | 0];
@@ -92,16 +123,18 @@ export const SYSTEMEN_MEER = [
     knobs: [K('r', 'straal van c', 0.3, 1.1, 0.001, 0.7885, { rnd: [0.62, 0.82] }), K('sp', 'snelheid', 0, 1, 0.01, 0.25, { fix: 1 }),
       K('it', 'iteraties', 20, 160, 1, 70, { fix: 1 }), K('z', 'zoom', 0.6, 3, 0.01, 1, { fix: 1 })],
     outs: ['re', 'im', 'binnen'],
-    init(s, p, g) { s.g = rooster(g, 180); s.th = 0; },
+    // Het beeld beslaat evenveel van het complexe vlak als het oude vierkant
+    // van 3 × 3 (bij zoom 1): 4 × 2,25. Eén cel is even groot als vroeger.
+    init(s, p, g) { s.g = rooster(g, cellen(g, 180)); s.th = 0; },
     step(s, p, g) {
-      const N = 180, px = s.g.px, L = g.L, mi = p.it | 0, b = blok(kw(g));
+      const nx = s.g.nx, ny = s.g.ny, px = s.g.px, L = g.L, mi = p.it | 0, b = blok(kw(g));
       s.th += p.sp * 0.008;
-      const cr = p.r * Math.cos(s.th), ci = p.r * Math.sin(s.th), sc = 3 / (N * p.z), L0 = L[0];
-      for (let Y = 0; Y < N; Y += b) for (let X = 0; X < N; X += b) {
-        let zx = (X - N / 2) * sc, zy = (Y - N / 2) * sc, i = 0, m = 0;
+      const cr = p.r * Math.cos(s.th), ci = p.r * Math.sin(s.th), sc = 3 / (Math.sqrt(nx * ny) * p.z), L0 = L[0];
+      for (let Y = 0; Y < ny; Y += b) for (let X = 0; X < nx; X += b) {
+        let zx = (X - nx / 2) * sc, zy = (Y - ny / 2) * sc, i = 0, m = 0;
         for (; i < mi; i++) { const xx = zx * zx, yy = zy * zy; m = xx + yy; if (m > 16) break; zy = 2 * zx * zy + ci; zx = xx - yy + cr; }
         const kleur = i >= mi ? L0 : L[Math.min(255, (Math.sqrt((i + 1 - Math.log2(Math.log2(m) + 1e-9)) / mi) * 255) | 0)];
-        if (b === 1) px[Y * N + X] = kleur; else vulBlok(px, N, X, Y, b, kleur);
+        if (b === 1) px[Y * nx + X] = kleur; else vulBlok(px, nx, ny, X, Y, b, kleur);
       }
       blit(s.g, g);
       s.o.re = cl01(0.5 + cr / 2.4); s.o.im = cl01(0.5 + ci / 2.4);
@@ -153,7 +186,7 @@ export const SYSTEMEN_MEER = [
     },
     step(s, p, g) {
       clear(g);
-      const S = g.S, t = g.t, base = p.ang * PI / 180, w = p.wind * PI / 180, A = s.hoek, code = s.code, seg = s.seg, plek = s.plek;
+      const W = g.W, H = g.H, t = g.t, base = p.ang * PI / 180, w = p.wind * PI / 180, A = s.hoek, code = s.code, seg = s.seg, plek = s.plek;
       for (let d = 0; d <= s.maxDep; d++) A[d] = base + Math.sin(t * 1.1 + d * 0.6) * w;   // hoek per diepte, zoals het origineel per teken
       let x = 0, y = 0, h = -PI / 2, dep = 0, k = 0, minx = 0, maxx = 0, miny = 0, maxy = 0;
       for (let i = 0; i < s.len; i++) {
@@ -168,9 +201,15 @@ export const SYSTEMEN_MEER = [
         else if (c === 4) { s.stX[dep] = x; s.stY[dep] = y; s.stH[dep] = h; dep++; }
         else if (c === 5) { dep--; x = s.stX[dep]; y = s.stY[dep]; h = s.stH[dep]; }
       }
-      const kk = S * 0.88 / Math.max(maxx - minx, maxy - miny, 1e-6), ox = S / 2 - (minx + maxx) / 2 * kk, oy = S / 2 - (miny + maxy) / 2 * kk;
+      // Passend in het hele 16:9-vak (88%), in het midden. Een vorm die smaller
+      // is dan 16:9 (alle vijf) wordt 88% van de hoogte, zoals op het vierkant.
+      const kk = 0.88 * Math.min(W / Math.max(maxx - minx, 1e-6), H / Math.max(maxy - miny, 1e-6));
+      const ox = W / 2 - (minx + maxx) / 2 * kk, oy = H / 2 - (miny + maxy) / 2 * kk;
       const ctx = g.ctx;
-      ctx.lineWidth = Math.max(0.6, Math.min(1.6, kk * 0.35)) * g.D / (g.D > 1 ? 1.4 : 1); ctx.lineCap = 'round';
+      // Lijndikte als het origineel (kk × 0,35 geklemd, maal D), maar kk in 320-eenheden
+      // (kk / D × 0,56, want 0,56 = 0,35 × de oude D van 1,6): anders telde de maat
+      // van het doek twee keer mee en werden de lijnen op 360 px 30% dunner t.o.v. de vorm.
+      ctx.lineWidth = Math.max(0.6, Math.min(1.6, kk / g.D * 0.56)) * g.D / (g.D > 1 ? 1.4 : 1); ctx.lineCap = 'round';
       for (let d = 0; d < 8; d++) {
         const van = s.begin[d], tot = s.begin[d + 1];
         if (van === tot) continue;
@@ -185,24 +224,37 @@ export const SYSTEMEN_MEER = [
     knobs: [K('st', 'plakkans', 0.03, 1, 0.01, 1, { rnd: [0.1, 1] }), K('wind', 'wind naar zaad', 0, 0.5, 0.01, 0.05, { rnd: [0, 0.35] }),
       SEL('seed', 'zaad', ['Punt', 'Bodemlijn'], 0, { re: 1 })],
     outs: [['plak', 'e'], 'straal', 'groei'],
+    // Het beeld is een rooster met de celmaat van 24 sep (cellen(g, 150):
+    // 201 × 113, een cel = 1/113 van de hoogte), dus dezelfde korrel en, bij
+    // 50000 zwerfstappen per stap, dezelfde groeisnelheid op het scherm.
+    // Punt: een DLA-figuur is rond. Hij groeit, als vroeger, tot 0,45 × de
+    // BREEDTE (90 cellen) en steekt dus boven en onder buiten beeld, precies
+    // zoals het bijgesneden beeld van 24 sep. Daarvoor rekent hij op een
+    // bezettingskaart van nx × nx (evenveel cellen als het oude 200²) en toont
+    // hij de middelste ny rijen (vanaf rij oy). Met de kaart even hoog als het
+    // beeld groeide er een X: zwervers die boven en onder stierven, voedden
+    // die armen niet meer.
+    // Bodemlijn: kaart = beeld, over de hele breedte, tot 8% onder de bovenkant.
     init(s, p, g) {
-      const N = 200; s.N = N; s.bez = new Uint8Array(N * N); s.g = rooster(g, N); s.c = N >> 1; s.nst = 0;
+      s.g = rooster(g, cellen(g, 150)); s.nx = s.g.nx; s.ny = s.g.ny;
+      s.sh = p.seed == 0 ? s.nx : s.ny; s.oy = (s.sh - s.ny) >> 1;   // hoogte van de kaart, en de eerste rij in beeld
+      s.bez = new Uint8Array(s.nx * s.sh); s.cx = s.nx >> 1; s.cy = s.sh >> 1; s.nst = 0;
       this.opnieuw(s, p, g);
     },
     /** Leeg beginnen zonder nieuwe buffers: na een volgroeide figuur, en in init. */
     opnieuw(s, p, g) {
-      const N = s.N, px = s.g.px, L = g.L;
-      s.bez.fill(0); px.fill(L[0]); s.rmax = 2; s.top = N - 1; s.af = false; s.afOp = 0; s.wx = -1; s.wy = -1;
-      if (p.seed == 0) { s.bez[s.c * N + s.c] = 1; px[s.c * N + s.c] = L[255]; }
-      else for (let x = 0; x < N; x++) { s.bez[(N - 1) * N + x] = 1; px[(N - 1) * N + x] = L[255]; }
+      const nx = s.nx, sh = s.sh, px = s.g.px, L = g.L;
+      s.bez.fill(0); px.fill(L[0]); s.rmax = 2; s.top = sh - 1; s.af = false; s.afOp = 0; s.wx = -1; s.wy = -1;
+      if (p.seed == 0) { s.bez[s.cy * nx + s.cx] = 1; px[(s.cy - s.oy) * nx + s.cx] = L[255]; }
+      else for (let x = 0; x < nx; x++) { s.bez[(sh - 1) * nx + x] = 1; px[(sh - 1) * nx + x] = L[255]; }
     },
     /** Een nieuwe zwerver, in s.wx/s.wy (het origineel gaf een array terug). */
     zwerver(s, p, g) {
-      if (p.seed == 0) { const a = g.r() * TAU, r = s.rmax + 6; s.wx = Math.round(s.c + Math.cos(a) * r); s.wy = Math.round(s.c + Math.sin(a) * r); }
-      else { s.wx = g.r() * s.N | 0; s.wy = Math.max(1, s.top - 6); }
+      if (p.seed == 0) { const a = g.r() * TAU, r = s.rmax + 6; s.wx = Math.round(s.cx + Math.cos(a) * r); s.wy = Math.round(s.cy + Math.sin(a) * r); }
+      else { s.wx = g.r() * s.nx | 0; s.wy = Math.max(1, s.top - 6); }
     },
     step(s, p, g) {
-      const N = s.N, o = s.bez, px = s.g.px, L = g.L, pt = p.seed == 0, r = g.r;
+      const nx = s.nx, sh = s.sh, oy = s.oy, ny = s.ny, o = s.bez, px = s.g.px, L = g.L, pt = p.seed == 0, r = g.r, cx = s.cx, cy = s.cy, rEind = nx * 0.45;
       if (s.af) {
         // Twee seconden laten staan; loopt de klok terug (nieuwe AudioContext), dan ook opnieuw.
         if (g.t - s.afOp > 2 || g.t < s.afOp) this.opnieuw(s, p, g);
@@ -211,16 +263,17 @@ export const SYSTEMEN_MEER = [
       if (s.wx < 0) this.zwerver(s, p, g);
       let x = s.wx, y = s.wy;
       for (let k = 0; k < 50000; k++) {
-        if (r() < p.wind) { if (pt) { const dx = s.c - x, dy = s.c - y; if (Math.abs(dx) > Math.abs(dy)) x += Math.sign(dx); else y += Math.sign(dy); } else y++; }
+        if (r() < p.wind) { if (pt) { const dx = cx - x, dy = cy - y; if (Math.abs(dx) > Math.abs(dy)) x += Math.sign(dx); else y += Math.sign(dy); } else y++; }
         else { const d = r() * 4 | 0; if (d === 0) x++; else if (d === 1) x--; else if (d === 2) y++; else y--; }
-        if (!pt) x = (x + N) % N;
-        if (x < 1 || x > N - 2 || y < 1 || y > N - 2) { this.zwerver(s, p, g); x = s.wx; y = s.wy; continue; }
-        if (pt) { const dx = x - s.c, dy = y - s.c; if (dx * dx + dy * dy > (s.rmax + 22) ** 2) { this.zwerver(s, p, g); x = s.wx; y = s.wy; continue; } }
-        const i = y * N + x;
-        if ((o[i - 1] | o[i + 1] | o[i - N] | o[i + N]) && r() < p.st) {
+        if (!pt) x = (x + nx) % nx;
+        if (x < 1 || x > nx - 2 || y < 1 || y > sh - 2) { this.zwerver(s, p, g); x = s.wx; y = s.wy; continue; }
+        if (pt) { const dx = x - cx, dy = y - cy; if (dx * dx + dy * dy > (s.rmax + 22) ** 2) { this.zwerver(s, p, g); x = s.wx; y = s.wy; continue; } }
+        const i = y * nx + x;
+        if ((o[i - 1] | o[i + 1] | o[i - nx] | o[i + nx]) && r() < p.st) {
           o[i] = 1; s.nst++;
-          if (pt) { const rr = Math.hypot(x - s.c, y - s.c); if (rr > s.rmax) s.rmax = rr; px[i] = L[Math.min(255, 60 + (rr / (N * 0.45)) * 195 | 0)]; if (s.rmax > N * 0.45) { s.af = true; s.afOp = g.t; break; } }
-          else { if (y < s.top) s.top = y; px[i] = L[Math.min(255, 60 + ((N - y) / N) * 195 | 0)]; if (s.top < N * 0.08) { s.af = true; s.afOp = g.t; break; } }
+          const zicht = y >= oy && y < oy + ny, j = (y - oy) * nx + x;   // de kaart kan hoger zijn dan het beeld
+          if (pt) { const rr = Math.hypot(x - cx, y - cy); if (rr > s.rmax) s.rmax = rr; if (zicht) px[j] = L[Math.min(255, 60 + (rr / rEind) * 195 | 0)]; if (s.rmax > rEind) { s.af = true; s.afOp = g.t; break; } }
+          else { if (y < s.top) s.top = y; px[j] = L[Math.min(255, 60 + ((sh - y) / sh) * 195 | 0)]; if (s.top < sh * 0.08) { s.af = true; s.afOp = g.t; break; } }
           this.zwerver(s, p, g); x = s.wx; y = s.wy;
         }
       }
@@ -231,31 +284,35 @@ export const SYSTEMEN_MEER = [
     uit(s, p) {
       const n = s.nst; if (n) s.e.plak = 1;
       s.o.groei = auto(s, 'g', n); s.nst = 0;
-      s.o.straal = p.seed == 0 ? cl01(s.rmax / (s.N * 0.45)) : cl01((s.N - s.top) / (s.N * 0.92));
+      s.o.straal = p.seed == 0 ? cl01(s.rmax / (s.nx * 0.45)) : cl01((s.sh - s.top) / (s.sh * 0.92));
     } },
 
   { id: 'lg', naam: 'Logistieke afbeelding', sub: 'bifurcatie · de weg naar chaos', cat: 'Chaos', pal: 'fosfor',
     knobs: [K('r0', 'r van', 2.4, 3.99, 0.001, 2.8, { re: 1, rnd: [2.8, 3.8] }), K('r1', 'r tot', 2.5, 4, 0.001, 4, { re: 1, rnd: [3.6, 4] }),
       K('sp', 'scansnelheid', 0, 1, 0.01, 0.3, { fix: 1 })],
     outs: ['r', 'baan', ['stap', 'e']],
+    // Een grafiek: r loopt over de hele breedte (nx kolommen, meer dan de oude
+    // 320), x over de hoogte (ny rijen). Per kolom 260 punten zoals vroeger;
+    // over minder rijen verdeeld is een chaotisch stuk iets voller.
     init(s, p, g) {
       let r0 = p.r0, r1 = p.r1; if (r1 <= r0) r1 = Math.min(4, r0 + 0.01);
-      s.r0 = r0; s.r1 = r1; const N = 320; s.g = rooster(g, N); const h = new Float32Array(N * N);
-      for (let c = 0; c < N; c++) {
-        const r = r0 + (r1 - r0) * c / (N - 1); let x = 0.5;
+      s.r0 = r0; s.r1 = r1; s.g = rooster(g, cellen(g, 320));
+      const nx = s.g.nx, ny = s.g.ny, h = new Float32Array(nx * ny);
+      for (let c = 0; c < nx; c++) {
+        const r = r0 + (r1 - r0) * c / (nx - 1); let x = 0.5;
         for (let i = 0; i < 300; i++) x = r * x * (1 - x);
-        for (let i = 0; i < 260; i++) { x = r * x * (1 - x); h[Math.min(N - 1, ((1 - x) * (N - 1)) | 0) * N + c]++; }
+        for (let i = 0; i < 260; i++) { x = r * x * (1 - x); h[Math.min(ny - 1, ((1 - x) * (ny - 1)) | 0) * nx + c]++; }
       }
       for (let i = 0; i < h.length; i++) s.g.px[i] = g.L[Math.min(255, h[i] ? 60 + Math.log(1 + h[i]) * 38 : 0) | 0];
       s.fc = 0; s.lx = 0.37;
     },
     step(s, p, g) {
       blit(s.g, g);
-      const ctx = g.ctx, S = g.S, D = g.D, f = (g.t * p.sp * 0.08) % 1, r = s.r0 + (s.r1 - s.r0) * f, X = f * S;
-      ctx.strokeStyle = 'rgba(238,161,60,.5)'; ctx.lineWidth = D; ctx.beginPath(); ctx.moveTo(X, 0); ctx.lineTo(X, S); ctx.stroke();
+      const ctx = g.ctx, W = g.W, H = g.H, D = g.D, f = (g.t * p.sp * 0.08) % 1, r = s.r0 + (s.r1 - s.r0) * f, X = f * W;
+      ctx.strokeStyle = 'rgba(238,161,60,.5)'; ctx.lineWidth = D; ctx.beginPath(); ctx.moveTo(X, 0); ctx.lineTo(X, H); ctx.stroke();
       let x = 0.5; for (let i = 0; i < 400; i++) x = r * x * (1 - x);
       ctx.fillStyle = '#eea13c';
-      for (let i = 0; i < 64; i++) { x = r * x * (1 - x); ctx.beginPath(); ctx.arc(X, (1 - x) * S, 2.6 * D, 0, TAU); ctx.fill(); }
+      for (let i = 0; i < 64; i++) { x = r * x * (1 - x); ctx.beginPath(); ctx.arc(X, (1 - x) * H, 2.6 * D, 0, TAU); ctx.fill(); }
       s.o.r = cl01((r - 2.4) / 1.6); s.fc++;
       if (s.fc % 8 === 0) { let lx = s.lx; if (!(lx > 0 && lx < 1)) lx = 0.37; lx = r * lx * (1 - lx); s.lx = lx; s.o.baan = lx; s.e.stap = 1; }
     } },
@@ -265,36 +322,41 @@ export const SYSTEMEN_MEER = [
       K('rad', 'bronafstand', 0, 0.45, 0.005, 0.18, { re: 1 })],
     outs: ['midden', ['golftop', 'e']],
     RUST: 8,   // zoveel stappen moet de golflengte stilstaan voor de tabellen gebouwd worden
+    // Golflengte en bronafstand blijven in de oude eenheid: 1/150 van de
+    // korte zijde (de golflengte-knop "3..40" betekent dus hetzelfde). Het
+    // oude vierkant staat in het midden, de golven lopen door tot de randen.
+    // De afstanden in s.d staan in die eenheid; het rooster is cellen(g, 150).
     init(s, p, g) {
-      const N = 150; s.N = N; s.g = rooster(g, N); s.d = [];
+      s.g = rooster(g, cellen(g, 150)); s.d = [];
+      const nx = s.g.nx, ny = s.g.ny, per = 150 / ny;   // oude eenheden per cel
       for (let j = 0; j < p.n; j++) {
-        const a = j / p.n * TAU, sx = N / 2 + Math.cos(a) * p.rad * N, sy = N / 2 + Math.sin(a) * p.rad * N, d = new Float32Array(N * N);
-        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) d[y * N + x] = Math.hypot(x - sx, y - sy);
+        const a = j / p.n * TAU, sx = nx / 2 + Math.cos(a) * p.rad * ny, sy = ny / 2 + Math.sin(a) * p.rad * ny, d = new Float32Array(nx * ny);
+        for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) d[y * nx + x] = Math.hypot(x - sx, y - sy) * per;
         s.d.push(d);
       }
-      s.C = new Float32Array(N * N); s.Sn = new Float32Array(N * N); s.k = NaN; s.rust = 0;
+      s.C = new Float32Array(nx * ny); s.Sn = new Float32Array(nx * ny); s.k = NaN; s.rust = 0;
       // Kleur uit een tabel over v ∈ [-1, 1]: het origineel rekende per pixel (v/2 + ½)^1,6.
       const L = g.L; s.kleur = new Uint32Array(2049);
       for (let j = 0; j <= 2048; j++) { const v = j / 1024 - 1; s.kleur[j] = L[Math.min(255, ((v * 0.5 + 0.5) ** 1.6 * 255) | 0)]; }
     },
     step(s, p, g) {
-      const N = s.N, k = TAU / p.wl, w = g.t * p.sp * 3, n = s.d.length, px = s.g.px, kl = s.kleur, b = blok(kw(g)), inv = 1 / n;
+      const nx = s.g.nx, ny = s.g.ny, k = TAU / p.wl, w = g.t * p.sp * 3, n = s.d.length, px = s.g.px, kl = s.kleur, b = blok(kw(g)), inv = 1 / n;
       if (k !== s.k) { s.k = k; s.rust = 0; }
       if (s.rust < this.RUST && ++s.rust === this.RUST) {
-        const C = s.C, Sn = s.Sn; C.fill(0); Sn.fill(0);
-        for (let j = 0; j < n; j++) { const d = s.d[j]; for (let i = 0; i < N * N; i++) { const a = k * d[i]; C[i] += Math.cos(a); Sn[i] += Math.sin(a); } }
+        const C = s.C, Sn = s.Sn, nn = nx * ny; C.fill(0); Sn.fill(0);
+        for (let j = 0; j < n; j++) { const d = s.d[j]; for (let i = 0; i < nn; i++) { const a = k * d[i]; C[i] += Math.cos(a); Sn[i] += Math.sin(a); } }
       }
       const tabel = s.rust >= this.RUST, cw = Math.cos(w) * inv, sw = Math.sin(w) * inv;
-      for (let Y = 0; Y < N; Y += b) for (let X = 0; X < N; X += b) {
-        const i = Y * N + X;
+      for (let Y = 0; Y < ny; Y += b) for (let X = 0; X < nx; X += b) {
+        const i = Y * nx + X;
         let v;
         if (tabel) v = s.C[i] * cw + s.Sn[i] * sw;
         else { v = 0; for (let j = 0; j < n; j++) v += Math.cos(k * s.d[j][i] - w); v *= inv; }
         const kleur = kl[((v + 1) * 1024 + 0.5) | 0];
-        if (b === 1) px[i] = kleur; else vulBlok(px, N, X, Y, b, kleur);
+        if (b === 1) px[i] = kleur; else vulBlok(px, nx, ny, X, Y, b, kleur);
       }
       blit(s.g, g);
-      const m = (N >> 1) * N + (N >> 1);
+      const m = (ny >> 1) * nx + (nx >> 1);
       let v = 0; for (let j = 0; j < n; j++) v += Math.cos(k * s.d[j][m] - w);
       v = 0.5 + 0.5 * v / n;
       if (v > 0.85 && (s.pv ?? 1) <= 0.85) s.e.golftop = 1;
@@ -305,8 +367,14 @@ export const SYSTEMEN_MEER = [
     knobs: [K('k', 'kromming', -0.12, 0.12, 0.001, 0.04), K('bl', 'bladgrootte', 0.4, 1.4, 0.01, 1), K('st', 'stengel', 0.7, 0.9, 0.001, 0.85),
       K('wind', 'wind', 0, 1, 0.01, 0.4, { fix: 1 })],
     outs: ['wind', 'kromming'],
+    // Een varen is een staande figuur: hij krijgt BEWUST een vierkant rooster
+    // van 320 × 320 (zelfde cellen en rekentijd als vroeger), heel in de
+    // hoogte en in het midden van het doek (`midden(g).vak`). Links en rechts
+    // is achtergrond; een bredere varen zou uitrekken zijn.
     init(s, p, g) {
-      const N = 320; s.N = N; s.g = rooster(g, N); s.h = new Float32Array(N * N); s.x = 0; s.y = 0; s.m = 0;
+      const N = 320; s.N = N; s.g = rooster(g, { nx: N, ny: N }); s.vak = midden(g).vak;
+      s.h = new Float32Array(N * N); s.x = 0; s.y = 0; s.m = 0;
+      clear(g);   // de randen naast het vak tekent hij nooit: die staan vanaf hier op de achtergrond
       // (log(1+h)/log(1+max))^0,6 uit een tabel van 4096 stappen.
       const L = g.L; s.kleur = new Uint32Array(4097);
       for (let j = 0; j <= 4096; j++) s.kleur[j] = L[Math.min(255, (Math.pow(j / 4096, 0.6) * 255) | 0)];
@@ -339,7 +407,7 @@ export const SYSTEMEN_MEER = [
         else { px[i] = L0; h[i] = v * 0.78; }
       }
       s.m = md;
-      blit(s.g, g);
+      blit(s.g, g, false, s.vak);
       s.o.wind = 0.5 + 0.5 * Math.sin(g.t * 1.3); s.o.kromming = cl01((p.k + 0.12) / 0.24);
     } },
 ];
