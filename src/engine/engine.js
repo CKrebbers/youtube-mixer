@@ -292,6 +292,14 @@ export class Engine extends Emitter {
       return { ok: true, tempo: true, fase: false, rate, bpm: doelBpm, master: master.id,
         reden: 'tempo gelijk; de fase pas als beide tracks spelen' };
     }
+    // Remt deze track, dan alleen het tempo (dat geldt na de rem, zie
+    // Deck.rem). De fase zetten is een sprong, en een sprong haalt de rem
+    // eraf: sync hief de rem anders ongemerkt op, en de track stond meteen
+    // weer op volle snelheid.
+    if (slave.remt) {
+      return { ok: true, tempo: true, fase: false, rate, bpm: doelBpm, master: master.id,
+        reden: 'tempo gelijk; de fase niet tijdens het remmen' };
+    }
 
     const beat = slave.grid.beatLengthAt(slave.position);
     let delta = (master.grid.phase(master.position) - slave.grid.phase(slave.position)) * beat;

@@ -1525,6 +1525,13 @@ console.log('\nmaatgever met hysterese');
   ok('B speelt weer en is harder: na 250 ms weer B', em.snapshot().maat === 'B');
   em.deck('B').rem();
   ok('maatgever remt: meteen de ander (een remmende track geeft geen maat)', em.snapshot().maat === 'A');
+  // Sync op de track die remt: alleen het tempo. De fase zetten is een
+  // sprong, en die haalde de rem eraf: de track stond dan meteen weer op
+  // volle snelheid.
+  const pB = em.deck('B').position;
+  const rsRem = em.sync('B');
+  ok('sync tijdens het remmen: alleen het tempo, de rem loopt door', rsRem.ok && !rsRem.fase && rsRem.master === 'A'
+    && em.deck('B').remt && Math.abs(em.deck('B').rate - 124 / 130) < 1e-9 && em.deck('B').position === pB);
   em.deck('B').pause(); em.deck('A').pause();
   ok('niets speelt: MAAT (stil) op de eerste met grid, zoals altijd', em.snapshot().maat === 'A' && !em.deck('A').playing);
   NOW = 0;
