@@ -1064,7 +1064,10 @@ de luistertest A3 en I1–I3. Wat een bouwer niet mag missen:
   2T blijft staan, twee lange ketens nooit samen). Het moet wel ÉÉN grid opleveren
   (`eenGridPast`: > 10% van de vensters > 0,15 tel naast = niet), anders plakte hij een volgend
   nummer op hetzelfde tempo "zeker" vast. Het 156-bpm-stuk van het album staat er na ↻ in.
-  <!-- TODO hoofdsessie: grid-past (rest-grid-past.md): eenGridPast op elk stuk? regel invullen. -->
+  Bekend gat: ook BUITEN de tweede kans meet zekerheid of de fase vasthoudt, niet of het grid
+  past (segmenteer rijgt vensters binnen 4% tempo aaneen zonder naar de fase te kijken;
+  synthetisch 12–22% van de kicks naast in een "zeker" stuk). `eenGridPast` op elk stuk is in de
+  maak (HANDOFF). Tot dan: een sync die naast ligt = het grid, niet de sync.
   Meten op fragmenten (`tools/beatmeting/rest/fragment.mjs`): met de nul van het hele nummer.
 - Verfijnen na "tel 1 hier" (`/grid/verfijn` met anker) is gemeten en NIET gebouwd: op Clay's
   muziek niet beter (de voorflank lukt op 2 van 6 fragmenten).

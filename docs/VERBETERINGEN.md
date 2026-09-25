@@ -86,7 +86,7 @@ vonden en bewust niet herstelden.
 - Audiopad: het stabiele venster van `renderblok.test.mjs` dekt niet elk pad (exact, gat,
   overgang alleen in het venster met berichten).
 - Beatgrid: "zeker" zegt niet dat het grid past, ook buiten de tweede kans (docs/BEATGRID.md).
-  <!-- TODO hoofdsessie: grid-past (eenGridPast op elk stuk) hier afvinken of aanvullen. -->
+  In de maak: `eenGridPast` op elk stuk (`spoor3/grid-past-2`, nog niet op main).
 - ~~Beamer: na openen seconden lang ontbrekende of verschoven tracks in het losse venster
   (controle, bevinding 4)~~ — inloop gebouwd 25 sep (`spoor3/beamer-inloop-2`, `docs/BEAMER.md`);
   de seekduur telt tot `seeking` false is. Open: wordt het hoofdtabblad verborgen tijdens de

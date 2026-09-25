@@ -329,4 +329,3 @@ APC-indeling (voorstel A):
 - [ ] **J31. Rij 5 (op de maat) als de track al speelt: donkergroen of uit?** 👀 De APC-indeling koos "uit" (rij 5 toont alleen wat je nog kunt inzetten). Sinds shift+Q op een spelende track pauzeert, volgt het lampje de read: fel = wacht, donkergroen = speelt (drukken = pauze), donkergrijs = stil. **Advies:** zo laten: drukken doet iets, dus het lampje brandt.
 - [ ] **J32. Stop All Clips = rem van de focus-track?** 💬 Die knop heeft geen lampje op de APC. **Advies:** zo laten.
 - [ ] **J33. Met `?vormen=1` in het mapje vorm: shift + Bank ◀ ▶ = beatjump-lengte, niet de vormlaag.** 💬 Een shift-regel gaat overal voor het open mapje; Bank ◀ ▶ zonder shift kiest daar de laag. **Advies:** zo laten.
-<!-- TODO hoofdsessie: vragen uit grid-past (rest-grid-past.md). -->

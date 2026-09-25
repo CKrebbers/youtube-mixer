@@ -14,7 +14,8 @@ de APC.
 agents zoveel mogelijk taken uit". Daarom zijn 7 (Varve-kant), 13, 14, 16, 18, 20,
 21, 22, 23 (deel) en 24 op 25 sep gebouwd, met agenten in parallelle sporen. Nog
 niet door Clay geprobeerd: zie de proeflijst in `docs/HANDOFF.md` (BEGIN HIER).
-<!-- TODO hoofdsessie: na het samenvoegen de branch/commit waarop dit staat. -->
+Alles hierboven staat sinds 25 sep ~16:30 op `main` (via `integratie-r4b`), behalve
+"grid moet passen per stuk" (24, nog bezig op `spoor3/grid-past-2`).
 
 **Nu (Clay)**
 1. Clay probeert Varve in zijn eigen tabblad.
@@ -95,7 +96,8 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     - beeldscènes, zwart en flits.
 24. ~~Beatgrid-restpunten~~ — gedaan 25 sep: tweede kans (156-bpm-stuk, na ↻),
     maat-anker per stuk; verfijnen na "tel 1 hier" gemeten en NIET gebouwd.
-    <!-- TODO hoofdsessie: grid-past (eenGridPast op elk stuk). -->
+    Nog bezig: `eenGridPast` op ELK stuk, zodat een stuk niet "zeker" heet terwijl
+    het grid naast de muziek ligt (`spoor3/grid-past-2`, niet op main).
 25. Koptelefoon-cue (F1): eerst hardware.
 26. Klein: PALETTE_HEX 60 → 128, RF64 afspelen in de browser testen.
 

@@ -20,16 +20,18 @@ Lees in deze volgorde:
   gebouwd. Elk spoor had een bouwer en een controleur in een eigen worktree;
   daarna drie integratierondes (`integratie-r1` → `r2` → `r3`) met naadtests,
   een ronde rest-sporen (`spoor3/*`) en deze docs (`spoor3/docs`).
-- **Stand van de code:** `integratie-r3` (nog niet op `main`) plus de rest-sporen
-  `spoor3/transport-rest`, `toon-tweede`, `fx-hellingen`, `vormen-tijd` en
-  `ingest-rest-2`.
-  <!-- TODO hoofdsessie: eindbranch en eindcommit na het samenvoegen van de
-  rest-sporen, APC-indeling (voorstel A), beamer-inloop en grid-past; testuitkomst
-  van de eindstand (`node test/alles.mjs`, kijk.mjs). -->
-  Op `integratie-r3`: 36 bestanden, 3165 checks, alleen de vormen-tijdchecks
-  wankelden onder zware belasting (`spoor3/vormen-tijd` meet nu in threadtijd).
-  Headless groen: `kijk.mjs`, `vormen-plaat.mjs`, `toon-keten.mjs`,
-  `library.mjs`, `kijk-ingest.mjs`, `vorm-maat.mjs`, `beamer.mjs`.
+- **Stand van de code:** alles staat op `main` (25 sep ~16:30, via
+  `integratie-r1` → `r2` → `r3` → `r4a` → `r4b` plus deze afronding), behalve
+  "grid moet passen per stuk" (`spoor3/grid-past-2`, nog bezig; zie punt 14).
+  `node test/alles.mjs`: 36 bestanden, 3370 checks, groen (integrator én
+  hoofdsessie; de vormen-tijdchecks meten nu threadtijd en blijven ook onder
+  zware belasting groen). Headless groen: `kijk.mjs`, `apc-klank.mjs`,
+  `vormen-plaat.mjs`, `toon-keten.mjs`, `library.mjs`, `kijk-ingest.mjs`,
+  `vorm-maat.mjs`, `beamer.mjs`.
+- **Branches en worktrees:** de `spoor*/`- en `integratie*`-branches staan er nog
+  (alles is samengevoegd; opruimen mag). Worktree `wf_32429e39-397-4` heeft
+  niet-gecommit werk van een afgebroken eerste poging van renderblok: overbodig
+  (overgedaan op `spoor2/renderblok`), maar alleen weg met Clay's ja.
 - **Server:** herstart gebeurt door de hoofdsessie (bijna alles in `server/` is
   veranderd). Vóór de herstart een kopie van `media/library.db` en `-wal` naar
   `~/.varve-library-voor-v7.db`, zoals bij v4 en v5. Bij de eerste start migreert de
@@ -75,7 +77,9 @@ Lees in deze volgorde:
 13. **Beamer-inloop** (18): het losse venster toont eerst het beeld van het
     hoofdvenster en mengt pas zelf als zijn video's in de pas lopen (acht tracks
     ~8–9 s); sprongen landen weer op tijd (seekduur klopt nu onder belasting).
-14. <!-- TODO hoofdsessie: grid-past: één regel. -->
+14. **Grid moet passen** (24): nog BEZIG, niet op main (`spoor3/grid-past-2`):
+    `eenGridPast` op elk stuk, zodat een stuk niet "zeker" heet terwijl het grid
+    naast de muziek ligt. Tot dan: ligt een sync naast, dan ligt het grid naast.
 
 ### Wat Clay nu doet
 Server is herstart (hoofdsessie). Dan: je tabblad herladen
