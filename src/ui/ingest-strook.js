@@ -103,6 +103,23 @@ export class IngestStrook {
     }
     this.haal?.addEventListener('click', () => this.haalBinnen());
     this.el.addEventListener('click', (e) => this._klik(e));
+    /*
+     * Niet hertekenen terwijl je in de strook drukt. Een knop die tussen
+     * indrukken en loslaten vervangen wordt, krijgt geen klik (gemeten in
+     * Chrome) — en de strook tekent bij elke poll (1,2 s) en bij elk stukje
+     * uploadvoortgang opnieuw. Na het loslaten (en dus na de klik) alsnog.
+     */
+    this._vast = false;
+    this._later = false;
+    this.el.addEventListener('pointerdown', () => { this._vast = true; });
+    const los = () => {
+      if (!this._vast) return;
+      this._vast = false;
+      if (this._later) { this._later = false; setTimeout(() => this.teken(), 0); }
+    };
+    globalThis.addEventListener?.('pointerup', los, true);
+    globalThis.addEventListener?.('pointercancel', los, true);
+    globalThis.addEventListener?.('blur', los);
     this.teken();
     this.poll();
     setInterval(() => this._tik(), 1200);
@@ -326,6 +343,7 @@ export class IngestStrook {
   // ---- tekenen --------------------------------------------------------------
 
   teken() {
+    if (this._vast) { this._later = true; return; }
     const rijen = zichtbaar(this.opdrachten.filter((o) => !this.weg.has(o.id)));
     const open = this.opdrachten.filter((o) => o.status === 'bezig' || o.status === 'wacht');
     const nBezig = open.filter((o) => o.status === 'bezig').length + this.uploads.filter((u) => u.status === 'bezig').length;
@@ -333,7 +351,10 @@ export class IngestStrook {
     const kop = nBezig + nWacht > 1
       ? `<div class="ing-kop">wachtrij · ${nBezig} bezig · ${nWacht} wachtend · één tegelijk</div>` : '';
     const ups = this.uploads.map((u) => this._uploadRij(u));
-    this.el.innerHTML = kop + [...ups, ...rijen.map((o) => this._rij(o))].join('');
+    // Alleen als er iets veranderde: anders verspringt hover en begint het
+    // knipperende streepje bij elke poll opnieuw.
+    const html = kop + [...ups, ...rijen.map((o) => this._rij(o))].join('');
+    if (html !== this._html) { this.el.innerHTML = html; this._html = html; }
     this.el.classList.toggle('hidden', ups.length + rijen.length === 0);
   }
 

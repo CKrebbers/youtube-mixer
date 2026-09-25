@@ -84,6 +84,21 @@ const RIJEN = `[...document.querySelectorAll('#lib-panel .ing-rij')].map((r) => 
 const rij = (deel) => `${RIJEN}.find((x) => (x.titel || '').includes(${JSON.stringify(deel)}))`;
 const klikX = (deel) => evalueer(`(() => { const r = [...document.querySelectorAll('#lib-panel .ing-rij')].find((x) => x.querySelector('.lib-job-tekst b')?.textContent.includes(${JSON.stringify(deel)})); r?.querySelector('button.ing-x')?.click(); return !!r; })()`);
 const status = () => evalueer("document.querySelector('#lib-panel .lib-status').textContent");
+/**
+ * Met de MUIS op × van een rij, zoals Clay klikt: indrukken, `ms` vasthouden,
+ * loslaten (CDP Input, geen el.click()). De strook tekent intussen opnieuw.
+ */
+async function muisX(deel, ms) {
+  const plek = await evalueer(`(() => { const r = [...document.querySelectorAll('#lib-panel .ing-rij')].find((x) => x.querySelector('.lib-job-tekst b')?.textContent.includes(${JSON.stringify(deel)}));
+    const b = r?.querySelector('button.ing-x')?.getBoundingClientRect(); return b ? { x: b.x + b.width / 2, y: b.y + b.height / 2 } : null; })()`);
+  if (!plek) return false;
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: plek.x, y: plek.y });
+  await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: plek.x, y: plek.y, button: 'left', clickCount: 1 });
+  await wacht(ms);
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: plek.x, y: plek.y, button: 'left', clickCount: 1 });
+  await wacht(100);
+  return true;
+}
 
 try {
   let doelen = null;
@@ -140,8 +155,14 @@ try {
   console.log('annuleren');
   await klikX('watch?v=abcdefghijk');
   ok('× op een wachtende: meteen geannuleerd', await totdat(`/geannuleerd/.test((${rij('watch?v=abcdefghijk')})?.klasse || '')`, 5000));
-  await klikX('nummer-a-traag');
-  ok('× op de lopende vraagt eerst een tweede klik', /klik nog eens op × om te stoppen/.test(await status()) && /bezig/.test((await evalueer(rij('nummer-a-traag'))).klasse));
+  // Met de muis en 2,5 s ingedrukt: intussen pollt de strook en loopt het
+  // percentage op, dus hij tekent opnieuw. Vroeger verving dat de knop onder
+  // de muis en ging de klik verloren (bij een upload met voortgang altijd).
+  const html0 = await evalueer("document.querySelector('#lib-panel .lib-jobs').innerHTML");
+  await muisX('nummer-a-traag', 2500);
+  ok('× op de lopende (echte muis, lang ingedrukt terwijl de voortgang loopt) vraagt eerst een tweede klik',
+    /klik nog eens op × om te stoppen/.test(await status()) && /bezig/.test((await evalueer(rij('nummer-a-traag'))).klasse), await status());
+  ok('en na het loslaten tekent de strook weer bij', await totdat(`document.querySelector('#lib-panel .lib-jobs').innerHTML !== ${JSON.stringify(html0)}`, 5000));
   await klikX('nummer-a-traag');
   ok('tweede klik: hij stopt en wordt geannuleerd', await totdat(`/geannuleerd/.test((${rij('nummer-a-traag')})?.klasse || '')`, 8000));
   ok('de volgende (b) loopt meteen daarna', await totdat(`/bezig|klaar/.test((${rij('Nep nummer-b')})?.klasse || '')`, 15000));
