@@ -318,9 +318,16 @@ export class Deck extends Emitter {
     this.fx.heranker();
     clearTimeout(this._wisselTimer);
     this._wisselTimer = null;
-    if (!this.grid || !this.playing || this.grid.aantalStukken < 2) return;
-    const wissel = this.grid.volgendeWissel(this.position);
-    const op = wissel === null ? null : this.ctxTimeOf(wissel);
+    if (!this.grid || !this.playing) return;
+    // Wacht hij op zijn start op de maat, dan eerst op DIE start: pas vanaf
+    // dan klinkt hij en telt hij mee als maatgever (Engine.syncMaster), en
+    // dan moeten echo en sampler opnieuw aanhaken.
+    let op = this.bron.wachtTot;
+    if (op == null) {
+      if (this.grid.aantalStukken < 2) return;
+      const wissel = this.grid.volgendeWissel(this.position);
+      op = wissel === null ? null : this.ctxTimeOf(wissel);
+    }
     if (op === null || !Number.isFinite(op)) return;
     const ms = Math.max(0, (op - this.ctx.currentTime) * 1000) + 5;
     this._wisselTimer = setTimeout(() => {

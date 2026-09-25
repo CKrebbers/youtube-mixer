@@ -229,17 +229,26 @@ export class Engine extends Emitter {
    * spelen en een grid hebben. Speelt er niets, dan de eerste geladen track
    * met een grid. Gelijke stand: het laagste nummer. Saai en voorspelbaar,
    * en in de praktijk precies de track waar je op wilt landen.
+   *
+   * Een track die op zijn start op de maat WACHT (deck.wacht) speelt al, maar
+   * klinkt nog niet: die telt pas mee als er verder niets klinkt. Anders nam
+   * hij met een hogere fader de maat over tot een maat voordat je hem hoort:
+   * sync van een derde track ging naar zijn tempo, en echo en sampler liepen
+   * er al op. Op zijn start meldt het deck zich (Deck._heranker).
    */
   syncMaster(id) {
-    let beste = null, besteGain = -1;
-    for (const k of DECK_IDS) {
-      const d = this.decks[k];
-      if (k === id || !d.buffer || !d.grid || !d.playing) continue;
-      const g = faderGain(d.ui.fader) * this.xfadeGain(k);
-      if (g > besteGain + 1e-9) { beste = d; besteGain = g; }
-    }
-    if (beste) return beste;
-    return DECK_IDS.map((k) => this.decks[k]).find((d) => d.id !== id && d.buffer && d.grid) || null;
+    const hardste = (wachtendMag) => {
+      let beste = null, besteGain = -1;
+      for (const k of DECK_IDS) {
+        const d = this.decks[k];
+        if (k === id || !d.buffer || !d.grid || !d.playing || (d.wacht && !wachtendMag)) continue;
+        const g = faderGain(d.ui.fader) * this.xfadeGain(k);
+        if (g > besteGain + 1e-9) { beste = d; besteGain = g; }
+      }
+      return beste;
+    };
+    return hardste(false) || hardste(true)
+      || DECK_IDS.map((k) => this.decks[k]).find((d) => d.id !== id && d.buffer && d.grid) || null;
   }
 
   /**

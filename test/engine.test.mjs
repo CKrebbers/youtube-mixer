@@ -1852,6 +1852,36 @@ console.log('\ntransport');
   ok('tellen: 1 = de volgende tel, met de rate van de maatgever', Math.abs(r4.op - verwacht) < 1e-9);
   dG.stop(); dM.setRate(1);
 
+  // Een track die op de maat wacht, klinkt nog niet: hij geeft de maat niet
+  // (sync, sampler, echo, lampje), ook niet met een hogere fader dan de track
+  // die je hoort. Anders synct een derde track naar een tempo dat nog niemand
+  // hoort, en liepen echo en sampler tot een maat te vroeg op zijn tempo.
+  {
+    const dF = eng.deck('F');                                   // track 6
+    dF.load(lang, 'derde');
+    dF.setGrid(new Beatgrid({ bpm: 125, firstBeat: 0 }));
+    dM.set('fader', 0.5); dF.set('fader', 1);
+    NOW = 807.66;                                               // maatgever H vlak voor zijn maatbegin (8,0)
+    const maatH = NOW + (8.0 - dM.position);
+    dF.seek(8.16);                                              // op een tel van 125 bpm
+    eng.startOpDeMaat('F');
+    ok('een wachtende track met een hogere fader: de maat blijft bij wat je hoort (H)', dF.wacht
+      && Math.abs(dF.bron.wachtTot - maatH) < 1e-9 && eng.syncMaster()?.id === 'H' && eng.syncMaster('G')?.id === 'H'
+      && read('track.8.leads') === 1 && read('track.6.leads') === 0);
+    const rG = eng.sync('G');
+    ok('... sync van een andere track gaat naar H (120 bpm), niet naar de wachtende (125)', rG.ok && rG.master === 'H'
+      && Math.abs(dG.rate - 1) < 1e-9);
+    let gemeld = 0;
+    dF.on('change', () => { gemeld++; });
+    NOW = 807.75;                                               // voorbij zijn start
+    ok('na zijn start geeft hij de maat wel (hardste fader)', !dF.wacht && eng.syncMaster()?.id === 'F');
+    // Op zijn start meldt hij zich zelf (timer op de audioklok, zoals bij een
+    // stukgrens): echo en sampler herankeren dan op de nieuwe maatgever.
+    await new Promise((r) => setTimeout(r, 150));
+    ok(`... en op dat moment meldt hij 'change' (${gemeld}x), zodat echo en sampler volgen`, gemeld >= 1);
+    dF.stop(); dG.setRate(1); dM.set('fader', 1); dF.set('fader', 1);
+  }
+
   // Maatgever in een onzeker stuk: meteen, met een melding.
   dM.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0, stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.3 }] }));
   const nMaat = meldingen.length;
