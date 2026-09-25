@@ -102,15 +102,16 @@ het midden in een set begint. ~10 kB met acht tracks.
 ```
 {"t":0,"e":"stand","focus":1,
  "tracks":[{"track":1,"bron":"library","nummer":"abc123","titel":"...",
-            "positie":83.2,"speelt":true,"rate":1.02,"bereik":0.16,
+            "positie":83.2,"speelt":true,"wacht":false,"rate":1.02,"bereik":0.16,
             "cue":12.1,"hotcues":[30.5,null,null,null],
             "loop":{"start":64,"end":72,"tellen":16}|null,
             "grid":{"stukken":[...],"beatsPerBar":4,...}|null,
             "kant":"A",
-            "rack":{"data":{...rack-JSON...},"standen":{"1":0.4},"herkomst":17,"mix":0.5,"bypass":false}},
+            "rack":{"data":{...rack-JSON...},"standen":{"1":0.4},"herkomst":17,"mix":0.5,"bypass":false},
+            "kill":{"low":false,"mid":false,"high":false},"sprong":4},
            ...],
  "waarden":{"track.1.fader":1,"mixer.xfader":0.5,"video.fx.pixel":0,...},
- "rond":{"mixer.xfader.curve":0,"sampler.length":0.667,"video.mode":0,...},
+ "rond":{"mixer.xfader.curve":0,"sampler.length":0.667,"video.mode":0,"transport.quantize":0,...},
  "pads":[{"track":2,"van":80,"tot":82,"bpm":124,"tellen":4,"speelt":false}|null, ...8],
  "herinneringen":[{"track":2,"van":...,"tot":...,"bpm":...,"tellen":...}|null, ...8]}
 ```
@@ -121,7 +122,20 @@ het midden in een set begint. ~10 kB met acht tracks.
   `track.N.key`: terugzetten zou de toonsoortkaart van het nummer bewerken (en een
   automatische kaart "met de hand" maken), en die kaart hoort bij de library.
 - `rond`: triggers die rondlopen (`RONDLOPERS`): terugzetten = drukken tot de
-  read klopt.
+  read klopt. Ook `transport.quantize` (één schakelaar voor de hele engine).
+- Sinds ronde 3 (25 sep, dj-transport en dj-klank) per track ook:
+  - `kill`: de kill-SCHAKELAARS per band. `track.N.kill.*` zijn toggles op de
+    bus: zonder deze stand speelde een log dat met een kill aan begon omgekeerd
+    terug. De drukvariant (`.hold`) niet: loslaten = weg.
+  - `sprong`: de beatjump-lengte in tellen (`.halve`/`.double` lopen niet rond).
+  - `wacht`: de track wachtte op zijn start op de maat (`play.quant`); dan is
+    `speelt` false. Terugspelen start hem, nadat de rest speelt, opnieuw op de
+    maat (`engine.startOpDeMaat`).
+  - De remtijd (`track.N.brake.time`) is een value-action en staat in `waarden`.
+  - Bewust NIET: een lopende rem (hij speelt bij terugspelen gewoon), het
+    loop-in-punt en de vorige loop (reloop).
+  Een ouder log zonder `kill` of `transport.quantize`: die bestonden toen niet,
+  dus terugspelen zet ze UIT, wat er nu ook aan staat.
 - Een `stand` kan ook MIDDEN in een log staan: daar begon een terugspelen terwijl
   dit log liep (opnieuw renderen). De beginstand daarvan zet posities, tempo,
   cues, loops en wat speelt buiten de bus om; zonder die regel was de opname van
@@ -216,10 +230,11 @@ iets op de tracks staat: het vervangt ze). Tijdens terugspelen toont ↺ de tijd
 klik = stoppen (de tracks spelen door). Op de bus: `log.replay.stop`.
 
 1. **Beginstand**: alle nummers tegelijk laden (library streamend, demo opnieuw
-   uit zijn zaad), dan per track bereik, kant, rack, rate, cue, hotcues, positie,
-   loop; dan `waarden` via de bus, `rond` door te drukken, focus, pads; als
-   laatste alles wat speelde in ÉÉN keer aan, zodat de tracks onderling liggen
-   zoals toen. De klok loopt dan nog niet.
+   uit zijn zaad), dan per track bereik, kant, rack, kill, beatjump-lengte,
+   rate, cue, hotcues, positie, loop; dan `waarden` via de bus, `rond` door te
+   drukken, focus, pads; als laatste alles wat speelde in ÉÉN keer aan, zodat
+   de tracks onderling liggen zoals toen, en daarna wie op de maat wachtte
+   opnieuw op de maat. De klok loopt dan nog niet.
 2. **T0 = ctx.currentTime**, en elke regel gaat de bus op zodra de klok T0 + t
    passeert. Een timer van 10 ms bepaalt hoe vaak we kijken, niet waar we zijn
    (regel 3). Gelijke tijden: in de volgorde van het log.
@@ -251,9 +266,10 @@ Wat NIET opnieuw de bus op gaat (`OVERSLAAN`):
   zou hem twee keer toepassen. Ze staan wel in het log.
 
 Een track zonder zijn nummer van toen (niet meer in de library, een los
-bestand, laden mislukt, of leeg): transport, cues, loops, grid en seek
-(`NUMMER_NODIG`) worden overgeslagen en geteld, anders speelt `play` wat er
-toevallig staat. Faders, EQ, focus en kant gaan wel door. Ook de `grid`- en
+bestand, laden mislukt, of leeg): transport, cues, loops, grid en seek, en
+sinds ronde 3 ook beatjump en rem (`NUMMER_NODIG`) worden overgeslagen en
+geteld, anders speelt `play` wat er toevallig staat. Faders, EQ (ook kill),
+focus en kant gaan wel door. Ook de `grid`- en
 `hotcues`-gebeurtenissen worden dan overgeslagen: anders kreeg een gewoon
 geladen nummer (laden bij terugspelen mislukt) het grid van een ander nummer,
 en de bewaarlus zette dat in de library.

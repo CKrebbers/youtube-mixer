@@ -23,7 +23,7 @@
  * en een fader dichtdraaien moet altijd kunnen. Wil je een fout exact
  * naspelen: niets aanraken.
  */
-import { PITCH_BEREIKEN } from '../engine/deck.js';
+import { PITCH_BEREIKEN, SPRONG_TELLEN, EQ_BANDEN } from '../engine/deck.js';
 
 /**
  * Wat NIET opnieuw de bus op gaat:
@@ -48,7 +48,7 @@ export const OVERSLAAN = /^(record\.|log\.|layer\.|track\.\d+\.rack\.(next|prev)
  * die horen bij de track, niet bij het nummer, en gelden ook voor wat er
  * later in het log op geladen wordt.
  */
-export const NUMMER_NODIG = /^track\.\d+\.(play|cue|sync|tap|hotcue\.|beatloop\.|loop\.|nudge\.|grid\.|seek$)/;
+export const NUMMER_NODIG = /^track\.\d+\.(play|cue|sync|tap|hotcue\.|beatloop\.|loop\.|nudge\.|grid\.|seek$|beatjump\.(back|fwd)$|brake$)/;
 
 /** Het tracknummer van een action (`track.3.fader` -> 3), of null. */
 export function trackVanActie(a) {
@@ -393,6 +393,13 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
       if (!d) continue;
       if (PITCH_BEREIKEN.includes(t.bereik)) d.pitchBereik = t.bereik;
       if (t.kant) engine.setKant(d.id, t.kant);
+      // Kill en beatjump-lengte horen bij de TRACK (mixer), niet bij het
+      // nummer. Een log van vóór de kill: toen stond er geen kill aan.
+      for (const band of EQ_BANDEN) {
+        const aan = !!t.kill?.[band];
+        if (d.kill && d.kill[band] !== aan) d.setKill(band, aan);
+      }
+      if (SPRONG_TELLEN.includes(t.sprong)) d.sprongTellen = t.sprong;
       rack(d.fx, t.rack);
       if (!geladen.has(d.id) || !d.buffer) continue;
       // Het grid van toen. Een library-nummer kreeg het al mee bij het laden,
@@ -406,7 +413,8 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
       else d.clearLoop();
     }
     for (const [a, v] of Object.entries(st.waarden || {})) if (has(a)) invoke(a, v);
-    for (const [a, v] of Object.entries(st.rond || {})) rondTot(a, v);
+    // Quantize bestond vóór ronde 3 niet: een ouder log begon zonder.
+    for (const [a, v] of Object.entries({ 'transport.quantize': 0, ...(st.rond || {}) })) rondTot(a, v);
     if (deckVan(st.focus)) engine.setFocus(deckVan(st.focus));
     herinneringen(st.herinneringen);
     await pads(st.pads);
@@ -414,6 +422,12 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
     for (const t of lijst) {
       const d = deck(t.track);
       if (t.speelt && d && geladen.has(d.id)) d.play();
+    }
+    // Wie toen op zijn start op de maat wachtte: opnieuw op de maat, nu de
+    // rest speelt (dezelfde maatgever als toen, dus dezelfde "1").
+    for (const t of lijst) {
+      const d = deck(t.track);
+      if (t.wacht && !t.speelt && d && geladen.has(d.id) && !d.playing) engine.startOpDeMaat?.(d.id);
     }
     (st.pads || []).forEach((p, i) => { if (p?.speelt && engine.sampler?.pads[i] && !engine.sampler.pads[i].speelt) engine.sampler.wissel(i); });
     return { zonder };

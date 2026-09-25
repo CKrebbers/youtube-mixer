@@ -598,6 +598,68 @@ try {
       ok(`hotcues-gebeurtenis wordt toegepast; grid en hotcues op een track zonder zijn nummer niet (${gedaan.join(' | ')})`,
         gedaan.join('|') === 'hotcues 1 [1,null,null,null]|track.2.fader' && klaarZ?.overgeslagen === 2);
     }
+    // Naden met ronde 3 (integratie-r3): de nieuwe standen van dj-transport
+    // (quantize, beatjump-lengte, wachten op de maat) en dj-klank (kill,
+    // remtijd) in de beginstand. Kill en quantize zijn TOGGLES op de bus: een
+    // log dat met een kill aan begint speelde zonder die stand omgekeerd terug.
+    {
+      const demo = { seed: 0, bars: 4 };
+      const a = eng.deck('A'), c = eng.deck('C');
+      for (const d of DECK_IDS.map((id) => eng.deck(id))) d.pause();
+      a.load(renderDemoTrack(eng.ctx, demo), 'demo 1');
+      a.setGrid({ bpm: 124, firstBeat: 0 });
+      c.load(renderDemoTrack(eng.ctx, demo), 'demo 3');
+      c.setGrid({ bpm: 124, firstBeat: 0 });
+      const herk = { A: { bron: 'demo', demo }, C: { bron: 'demo', demo } };
+      a.setKill('low', true);
+      eng.setQuantize(true);
+      a.sprongTellen = 8;
+      A.invoke('track.1.brake.time', 0.3);
+      a.seek(0.3); a.play();
+      c.seek(2 * 60 / 124);                                          // op een tel
+      const opDeMaat = eng.startOpDeMaat('C');
+      const st = H.leesStand({ engine: eng, tracks: A.TRACKS, herkomst: (id) => herk[id] ?? null, acties: A.list(), lees: A.read });
+      const s1 = st.tracks[0], s3 = st.tracks[2];
+      ok(`beginstand ronde 3: kill-schakelaars, quantize (rond), beatjump-lengte, remtijd (${JSON.stringify(s1.kill)}, q ${st.rond['transport.quantize']}, ${s1.sprong} tellen, ${st.waarden['track.1.brake.time']})`,
+        s1.kill.low === true && s1.kill.mid === false && s1.kill.high === false && st.rond['transport.quantize'] === 1 && s1.sprong === 8
+        && Math.abs(st.waarden['track.1.brake.time'] - 0.3) < 1e-9);
+      ok(`beginstand: een track die op de maat wacht speelt nog niet, en wacht (${opDeMaat.op !== null ? 'gepland' : 'meteen'})`,
+        opDeMaat.op !== null && c.wacht && s3.wacht === true && s3.speelt === false && s1.wacht === false && s1.speelt === true);
+      ok('de drukvariant van kill staat niet in de stand (loslaten = weg)', !('killVast' in s1) && Object.keys(s1.kill).join() === 'low,mid,high');
+      // Het log: kill laag gaat UIT (toggle), beatjump en rem gaan over het nummer.
+      const regels = [[0.1, 'track.1.kill.low', true], [0.1, 'track.1.kill.low', false], [0.15, 'track.1.fader', 0.9]];
+      ok('beatjump en rem horen bij het nummer (NUMMER_NODIG), kill bij de track', T.NUMMER_NODIG.test('track.1.beatjump.fwd')
+        && T.NUMMER_NODIG.test('track.1.brake') && T.NUMMER_NODIG.test('track.1.play.quant') && T.NUMMER_NODIG.test('track.1.loop.in')
+        && !T.NUMMER_NODIG.test('track.1.kill.low') && !T.NUMMER_NODIG.test('track.1.brake.time') && !T.NUMMER_NODIG.test('track.1.beatjump.double'));
+      // Alles anders, en terugspelen.
+      for (const d of DECK_IDS.map((id) => eng.deck(id))) d.pause();
+      a.setKill('low', false); a.setKill('high', true);
+      eng.setQuantize(false);
+      a.sprongTellen = 2;
+      A.invoke('track.1.brake.time', 0.9);
+      const tq = nepTimers();
+      const doeQ = T.maakUitvoerder({ engine: eng, tracks: A.TRACKS, invoke: A.invoke, read: A.read, has: A.has,
+        huidig: (id) => herk[id] ?? null, laad: async () => true });
+      const spq = new T.Terugspeler({ klok: () => NOW, invoke: A.invoke, doe: doeQ, elke: tq.elke, stopElke: tq.stopElke });
+      await spq.start({ stand: st, regels, duur: 0.2 });
+      ok(`na de beginstand: kill laag weer AAN, hoog uit, quantize aan, 8 tellen, remtijd 0,3 (${JSON.stringify(a.kill)})`,
+        a.kill.low === true && a.kill.high === false && eng.quantize === true && a.sprongTellen === 8
+        && Math.abs(A.read('track.1.brake.time') - 0.3) < 1e-9);
+      ok('... en de track die toen op de maat wachtte, wacht nu weer op de maat', a.playing && !a.wacht && c.playing && c.wacht);
+      const Tq = spq.T0;
+      while (NOW < Tq + 0.21) { NOW = Math.round((NOW + 0.01) * 1000) / 1000; tq.tik(); }
+      ok(`na het log: de toggle zette kill laag UIT, zoals toen (niet omgekeerd) (${JSON.stringify(a.kill)})`, a.kill.low === false && a.ui.fader === 0.9);
+      // Een log van vóór ronde 3 (geen kill, geen quantize in de stand): toen
+      // bestonden ze niet, dus uit, wat er nu ook aan staat.
+      a.setKill('mid', true); eng.setQuantize(true);
+      const oud = { ...st, rond: { ...st.rond }, tracks: st.tracks.map(({ kill, sprong, wacht, ...t }) => t) };
+      delete oud.rond['transport.quantize'];
+      await doeQ.stand(oud);
+      ok(`een ouder log zonder kill/quantize: alles uit (${JSON.stringify(a.kill)}, quantize ${eng.quantize})`,
+        !a.kill.low && !a.kill.mid && !a.kill.high && eng.quantize === false);
+      for (const d of DECK_IDS.map((id) => eng.deck(id))) d.pause();
+      a.setKill('low', false);
+    }
     ok('DECK_IDS en TRACKS horen bij elkaar (acht tracks)', DECK_IDS.length === A.TRACKS.length);
   }
 

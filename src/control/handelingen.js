@@ -216,9 +216,11 @@ export function leesLog(tekst) {
 
 /**
  * Trigger-actions waarvan de read een STAND is die je terugzet door te
- * drukken tot hij klopt: een knop die rondloopt (curve, tellen, mengvorm).
+ * drukken tot hij klopt: een knop die rondloopt (curve, tellen, mengvorm), of
+ * een schakelaar voor de hele engine (quantize, dj-transport: anders snapt
+ * een teruggespeelde hotcue anders dan toen).
  */
-export const RONDLOPERS = ['mixer.xfader.curve', 'sampler.length', 'video.mode', 'video.fit', 'video.pulse.target'];
+export const RONDLOPERS = ['mixer.xfader.curve', 'sampler.length', 'video.mode', 'video.fit', 'video.pulse.target', 'transport.quantize'];
 
 /**
  * Value-actions die NIET in de beginstand staan: positie, tempo en grid
@@ -261,12 +263,20 @@ export function leesStand({ engine, tracks, herkomst, acties, lees }) {
     const h = d.buffer ? (herkomst(id) || { bron: 'los' }) : { bron: 'leeg' };
     uit.tracks.push({
       track: nr, ...h, titel: d.buffer ? (d.title ?? null) : null,
-      positie: d.position, speelt: !!d.playing, rate: d.rate, bereik: d.pitchBereik,
+      // Een track die op zijn start op de maat WACHT (dj-transport) speelt nog
+      // niet: `wacht`, en terugspelen start hem opnieuw op de maat.
+      positie: d.position, speelt: !!d.playing && !d.wacht, wacht: !!d.wacht, rate: d.rate, bereik: d.pitchBereik,
       cue: d.cuePoint ?? 0, hotcues: [...(d.hotcues || [])],
       loop: d.loop ? { start: d.loop.start, end: d.loop.end, tellen: d.loopBeats ?? null } : null,
       grid: d.grid ? d.grid.toJSON() : null,
       kant: engine.kant?.[id] ?? null,
       rack: rackStand(d.fx),
+      // De kill-SCHAKELAARS (dj-klank): track.N.kill.* zijn toggles, dus een
+      // log dat met een kill aan begint speelde anders omgekeerd terug. De
+      // drukvariant (killVast) is loslaten = weg, die hoort niet in een stand.
+      kill: { ...(d.kill || {}) },
+      // Beatjump-lengte (dj-transport): halve/double zijn geen rondlopers.
+      sprong: d.sprongTellen ?? null,
     });
   }
   for (const a of acties) {
