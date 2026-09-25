@@ -474,8 +474,10 @@ export class VideoMixer {
     const v = laag.video;
     const r = synchroniseer({
       videoTijd: v.currentTime,
-      doel: Math.max(0, deck.position - vertraging * deck.rate),
-      rate: deck.rate,
+      // De snelheid van NU (bend, rem), niet de pitchfader: anders loopt een
+      // rem het beeld voorbij en springt het terug.
+      doel: Math.max(0, deck.position - vertraging * (deck.snelheid ?? deck.rate)),
+      rate: deck.snelheid ?? deck.rate,
       speelt: deck.playing,
       zoekt: v.seeking,
       seekDuur: laag.seekDuur,

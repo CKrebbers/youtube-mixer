@@ -299,6 +299,159 @@ console.log('\nStreamBron');
   ok('vernietigd tijdens het laden: geeft op, bouwt niets meer op', (await halfweg) === 'vervangen' && opgeruimd._timer === null);
 }
 
+// ---- rem (vinylstop): één formule, hoofdthread en worklet -----------------------
+
+console.log('\nrem (vinylstop)');
+{
+  const { snelheidOp, remStil, REM_UIT, maakWav } = K;
+  const SR = 48000;
+  const seg = { T: 10, P: 30, R: 1.2, loop: null, speelt: true, rem: { a: -1.2 / 0.8 } };      // 0,8 s remmen
+  ok('zonder rem (rem = null, of geen rem) precies de oude regel',
+    positieOp({ ...seg, rem: null }, 12) === 30 + (12 - 10) * 1.2 && positieOp({ T: 10, P: 30, R: 1.2, loop: null, speelt: true }, 12) === 30 + (12 - 10) * 1.2);
+  ok('begint met snelheid R, positie P', snelheidOp(seg, 10) === 1.2 && dichtbij(positieOp(seg, 10), 30));
+  ok('positie = P + R·dt + a·dt²/2', dichtbij(positieOp(seg, 10.3), 30 + 1.2 * 0.3 + 0.5 * seg.rem.a * 0.09));
+  ok('stil na R/|a| s, op P + R·D/2, en daar blijft hij',
+    dichtbij(remStil(seg), 10.8) && dichtbij(positieOp(seg, 10.8), 30 + 1.2 * 0.8 / 2)
+    && positieOp(seg, 99) === positieOp(seg, 10.8) && snelheidOp(seg, 11) === 0);
+  ok('ctxTijdVan is het omgekeerde, ook tijdens de rem',
+    [30.1, 30.3, 30.47].every((x) => dichtbij(positieOp(seg, ctxTijdVan(seg, x, 10.05)), x)));
+  ok('voorbij de plek waar hij stilvalt: nooit (null)', ctxTijdVan(seg, 30.49, 10) === null);
+  const lus = { T: 0, P: 4, R: 1, loop: { start: 4, end: 4.3 }, speelt: true, rem: { a: -1 / 2 } };
+  ok('rem in een loop: vouwt terug', dichtbij(positieOp(lus, 0.5), 4 + ((0.5 - 0.0625) % 0.3)));
+  ok('… en ctxTijdVan kent de ronde', dichtbij(positieOp(lus, ctxTijdVan(lus, 4.1, 0.5)), 4.1) && ctxTijdVan(lus, 4.1, 0.5) > 0.5);
+
+  // Materiaal: een helling (frame n heeft waarde n % 30000, dus uit de
+  // uitvoer is terug te lezen WELKE positie de worklet las) en een sinus.
+  const DUUR = 6, n = DUUR * SR;
+  const helling = new Float32Array(n).map((_, i) => (i % 30000) / 32767);
+  const sinus = new Int16Array(n * 2);
+  for (let i = 0; i < n; i++) sinus[2 * i] = sinus[2 * i + 1] = Math.round(Math.sin(2 * Math.PI * 331 * i / SR) * 0.125 * 32767);
+  const sinPag = new Map();
+  for (let p = 0; p * PAGINA * 2 < sinus.length; p++) sinPag.set(p, sinus.slice(p * PAGINA * 2, (p + 1) * PAGINA * 2));
+
+  // Een StreamBron met een nagemaakte worklet: wat hij stuurt vangen we op.
+  const { StreamBron, geheugenHaal } = await import('../src/engine/bron.js');
+  const berichten = [];
+  globalThis.AudioWorkletNode = class {
+    constructor() { this.port = { postMessage: (m) => berichten.push(m), onmessage: null }; }
+    connect() {} disconnect() {}
+  };
+  const ctx = { currentTime: 0, audioWorklet: { addModule: async () => {} } };
+  const bron = new StreamBron(ctx, {}, { interval: 1e9, haal: async () => { throw new Error('mag niet naar het netwerk'); } });
+  const haal = geheugenHaal(maakWav([helling], SR));
+  await bron.laad({ url: 'geheugen:rem', haal });
+  const paginas = new Map();
+  for (const m of berichten) if (m.type === 'pagina') paginas.set(m.i, m.data);
+  const laatsteSeg = () => berichten.filter((m) => m.type === 'segment').pop().seg;
+
+  ctx.currentTime = 1;
+  bron.start(0.7);
+  ctx.currentTime = 1.1;                         // positie 0,8
+  let klaar = 0;
+  bron.onRemKlaar = () => klaar++;
+  const D = 0.25;
+  ok('rem geweigerd zonder geldige tijd', !bron.rem(0) && !bron.remt);
+  ok('rem: de bron remt, en speelt nog', bron.rem(D) && bron.remt && bron.speelt);
+  const remSeg = laatsteSeg();
+  ok('de worklet krijgt één segment met de rem erin', remSeg.rem.a === -1 / D && remSeg.T === 1.1 && dichtbij(remSeg.P, 0.8));
+
+  // De worklet: blok voor blok vanaf T, per frame terug te lezen welke positie
+  // hij las. De hoofdthread: bron.positie op dezelfde audiokloktijd.
+  const F = Math.round((D + 0.05) * SR);
+  const uit = [new Float32Array(F), new Float32Array(F)];
+  for (let i = 0; i < F; i += 128) {
+    renderBlok({ seg: remSeg, paginas, uit: [uit[0].subarray(i, i + 128), uit[1].subarray(i, i + 128)],
+      frames: Math.min(128, F - i), t0: 1.1 + i / SR, ctxRate: SR, trackRate: SR, duur: DUUR });
+  }
+  let verschil = 0, gat = false, vol = 0;
+  const volTot = Math.floor(D * (1 - REM_UIT) * SR);           // tot hier klinkt hij vol
+  for (let i = 0; i < volTot; i++) {
+    ctx.currentTime = 1.1 + i / SR;
+    const hoofd = bron.positie * SR;
+    const worklet = uit[0][i] * 32768 + 30000;                 // frames 30000..59999 = waarde 0..29999
+    verschil = Math.max(verschil, Math.abs(worklet - hoofd));
+    if (uit[0][i] === 0) gat = true;
+    vol++;
+  }
+  ok(`positie hoofdthread = worklet, frame voor frame over ${vol} frames (grootste verschil ${verschil.toExponential(1)} frame)`, verschil < 0.01);
+  ok('geen gat tijdens het remmen', !gat);
+  const stilVanaf = Math.ceil(D * SR) + 1;
+  ok('na stilstand: stilte, exact', uit[0].subarray(stilVanaf).every((v) => v === 0) && uit[1].subarray(stilVanaf).every((v) => v === 0));
+  let daalt = true;
+  for (let i = volTot + 1; i < stilVanaf; i++) if (Math.abs(uit[0][i]) > Math.abs(uit[0][i - 1]) + 1e-6) daalt = false;
+  ok(`het laatste deel (${Math.round(D * REM_UIT * 1000)} ms) dooft uit tot 0`, daalt && Math.abs(uit[0][stilVanaf - 2]) < 1e-3);
+  ctx.currentTime = 1.1 + D + 0.01;
+  ok('hoofdthread: stil op P + R·D/2', dichtbij(bron.positie, 0.8 + D / 2) && bron.snelheid === 0);
+
+  // Stilstand wordt een pauze op die plek (een timer zegt WANNEER, de
+  // formule WAAR). Daarna gewoon play.
+  await new Promise((r) => setTimeout(r, 300));
+  const pauze = laatsteSeg();
+  ok('na de rem: gepauzeerd op de plek waar hij stilviel, één melding',
+    !bron.speelt && !bron.remt && klaar === 1 && !pauze.speelt && dichtbij(pauze.P, 0.8 + D / 2) && dichtbij(bron.positie, 0.8 + D / 2));
+  bron.start(bron.positie);
+  ctx.currentTime += 0.5;
+  ok('play daarna: gewoon verder, op tempo', bron.speelt && !bron.remt && dichtbij(bron.positie, 0.8 + D / 2 + 0.5));
+
+  // Tijdens het remmen: tempo onthouden, loop aan/uit remt door, start haalt hem eraf.
+  bron.rem(1);
+  const stilOp = remStil(bron.seg);
+  const segVoor = bron.seg;
+  ctx.currentTime += 0.2;
+  bron.setRate(1.1);
+  ok('tempo tijdens het remmen: rem loopt door (zelfde segment), tempo onthouden', bron.seg === segVoor && bron.rate === 1.1);
+  const p0 = bron.positie;
+  bron.setLoop(p0 - 0.05, p0 + 0.3);
+  ok('loop aan tijdens het remmen: remt door, stilstand op hetzelfde moment, geen sprong',
+    bron.remt && dichtbij(remStil(bron.seg), stilOp) && dichtbij(bron.positie, p0) && dichtbij(bron.snelheid, 0.8));
+  ctx.currentTime += 0.3;
+  const p1 = bron.positie;
+  bron.clearLoop();
+  ok('loop uit tijdens het remmen: idem', bron.remt && dichtbij(remStil(bron.seg), stilOp) && dichtbij(bron.positie, p1) && !bron.seg.loop);
+  bron.start(bron.positie);
+  ok('start (play, seek, hotcue) haalt de rem eraf, met het onthouden tempo', !bron.remt && bron.seg.rem === null && bron.seg.R === 1.1);
+  bron.vernietig();
+
+  // Klikvrij, op een sinus, zoals de worklet het krijgt: het remsegment komt
+  // 3 ms na T binnen, de pauze 5 ms na stilstand. Geen stap tussen twee
+  // samples mag groter zijn dan wat de toon op volle snelheid zelf doet.
+  const toon = 0.125 * 2 * Math.PI * 331 / SR;
+  const maxStap = (x) => { let m = 0; for (let i = 1; i < x.length; i++) m = Math.max(m, Math.abs(x[i] - x[i - 1])); return m; };
+  const draai = (stappen, tot) => {
+    const alles = [];
+    const staat = { env: 1 };
+    let seg = stappen[0].seg, vorig = null, wisselT = -Infinity, k = 1;
+    for (let t0 = stappen[0].t; t0 < tot; t0 += 128 / SR) {
+      if (k < stappen.length && t0 >= stappen[k].t) { vorig = seg; seg = stappen[k].seg; wisselT = t0; k++; }
+      const u = [new Float32Array(128), new Float32Array(128)];
+      renderBlok({ seg, paginas: sinPag, uit: u, frames: 128, t0, ctxRate: SR, trackRate: SR, duur: DUUR, vorig, wisselT, staat });
+      alles.push(...u[0]);
+    }
+    return Float32Array.from(alles);
+  };
+  const T = 2, D2 = 0.4;
+  const oud = { T: 1, P: 1.5, R: 1, loop: null, speelt: true, rem: null };
+  const rem = { T, P: positieOp(oud, T), R: 1, loop: null, speelt: true, rem: { a: -1 / D2 } };
+  const stil = { T: T + D2 + 0.005, P: positieOp(rem, T + D2), R: 1, loop: null, speelt: false, rem: null };
+  const geluid = draai([{ t: T - 0.02, seg: oud }, { t: T + 0.003, seg: rem }, { t: stil.T, seg: stil }], T + D2 + 0.03);
+  // Het begin is een gewone segmentwissel: equal-power over 4 ms, en twee
+  // (bijna) gelijke stukken tellen daarin op tot hooguit √2 (zoals bij seek).
+  // Daarna, de rem zelf en zijn einde: nooit meer dan een normale stap.
+  const naWissel = Math.ceil((0.02 + 0.003 + K.SEGMENT_FADE) * SR) + 128;
+  ok(`remmen tot stilstand en pauze: grootste stap ${(maxStap(geluid) / toon).toFixed(2)}x (de wissel aan het begin), `
+    + `daarna ${(maxStap(geluid.subarray(naWissel)) / toon).toFixed(2)}x een normale stap (geen tik)`,
+  maxStap(geluid) < 1.5 * toon && maxStap(geluid.subarray(naWissel)) <= toon * 1.001);
+  const telStil = Math.ceil((0.02 + D2) * SR) + 1;
+  ok('na stilstand exact stil, ook door de overgang naar de pauze heen', geluid.subarray(telStil).every((v) => v === 0));
+  let blokGat = false;
+  for (let b = 0; b + 128 < (0.02 + D2 * (1 - REM_UIT)) * SR; b += 128) if (maxStap(geluid.subarray(b, b + 128)) === 0 && Math.max(...geluid.subarray(b, b + 128).map(Math.abs)) < 1e-3) blokGat = true;
+  ok('geen stil blok zolang hij vol klinkt', !blokGat);
+  // Los tijdens het remmen (halve snelheid): overvloeien naar de volle snelheid.
+  const los = { T: T + D2 / 2, P: positieOp(rem, T + D2 / 2), R: 1, loop: null, speelt: true, rem: null };
+  const losGeluid = draai([{ t: T - 0.02, seg: oud }, { t: T + 0.003, seg: rem }, { t: los.T + 0.003, seg: los }], los.T + 0.05);
+  ok(`los tijdens het remmen: grootste stap ${(maxStap(losGeluid) / toon).toFixed(2)}x (geen tik)`, maxStap(losGeluid) < 1.5 * toon);
+}
+
 // ---- één motor: losse bestanden via de streamkern -------------------------
 
 console.log('\nlos bestand via de streamkern');

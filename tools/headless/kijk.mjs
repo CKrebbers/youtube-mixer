@@ -238,6 +238,35 @@ try {
   const dicht = await meet(1);
   ok('reageer dicht: offset terug op 0', dicht.uit.length > 0 && dicht.uit[dicht.uit.length - 1] === 0);
   ok('geen fouten tijdens reageren', meldingen.length === 0, meldingen.join(' | '));
+
+  // ---- rem in de echte worklet (ROADMAP 16, spoor C) -----------------------
+  // De demo speelt nog (via de StreamBron). Het remsegment gaat per bericht
+  // naar de echte AudioWorklet; hier meten we wat er uit de master komt.
+  console.log('rem (echte AudioContext en worklet)');
+  const rem = await evalueer(`(async () => {
+    const d = window.engine.deck('A'), c = window.engine.ctx, a = window.engine.master.analyser, b = new Float32Array(a.fftSize);
+    __act.invoke('track.1.brake.time', Math.log(4) / Math.log(50));          // 0,4 s
+    const t0 = c.currentTime, p0 = d.position, R = d.rate;
+    __act.invoke('track.1.brake', true); __act.invoke('track.1.brake', false);
+    const remt = d.remt, uit = [];
+    await new Promise((ok) => { const f = () => {
+      a.getFloatTimeDomainData(b); let m = 0; for (const x of b) m = Math.max(m, Math.abs(x));
+      uit.push({ t: c.currentTime - t0, p: d.position, piek: m });
+      c.currentTime - t0 < 0.9 ? setTimeout(f, 10) : ok(); }; f(); });
+    return { remt, p0, R, D: d.remTijd, uit, speelt: d.playing, remtNog: d.remt, eind: d.position };
+  })()`);
+  const vroeg = rem.uit.filter((m) => m.t < 0.15), laat = rem.uit.filter((m) => m.t > 0.6);
+  let oplopend = true;
+  for (let i = 1; i < rem.uit.length; i++) if (rem.uit[i].p < rem.uit[i - 1].p - 1e-9) oplopend = false;
+  ok('rem: remt, klinkt eerst nog', rem.remt && vroeg.length > 0 && Math.max(...vroeg.map((m) => m.piek)) > 0.05,
+    `piek vroeg ${Math.max(...vroeg.map((m) => m.piek)).toFixed(3)}`);
+  ok('… stil na stilstand, en gepauzeerd op P + R·D/2', !rem.speelt && !rem.remtNog && laat.length > 0
+    && Math.max(...laat.map((m) => m.piek)) < 1e-3 && Math.abs(rem.eind - (rem.p0 + rem.R * rem.D / 2)) < 0.01,
+  `piek laat ${Math.max(...laat.map((m) => m.piek)).toExponential(1)}, ${(rem.eind - rem.p0).toFixed(4)} s afgelegd (verwacht ${(rem.R * rem.D / 2).toFixed(4)})`);
+  ok('… de positie loopt nooit terug', oplopend);
+  ok('geen fouten bij de rem', meldingen.length === 0, meldingen.join(' | '));
+  await evalueer("__act.invoke('track.1.play', true); __act.invoke('track.1.play', false)");     // weer spelen, zoals hiervoor
+
   await evalueer("__act.invoke('track.1.play', true); __act.invoke('track.1.play', false)");
 
   await evalueer("window.vormen.lagen.forEach((l) => { l.aan = false; })");

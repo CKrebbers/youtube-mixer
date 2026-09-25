@@ -11,6 +11,16 @@ import { InsertSlot } from './fx.js';
  * tegen de aanslag staan.
  */
 export const PITCH_BEREIKEN = [0.08, 0.16, 0.5];
+/**
+ * Remtijd (vinylstop) in SECONDEN, niet in tellen: een rem is een gebaar van
+ * de draaitafel (de motor gaat uit), geen maatlengte; hij moet ook werken
+ * zonder grid of met een onzeker grid (ambient, lange sets); en de knop
+ * betekent dan altijd hetzelfde, op welk tempo je ook zit. De knop is
+ * exponentieel: 0 = 0,1 s (een ruk), midden ≈ 0,7 s, 1 = 5 s (stekker eruit).
+ */
+export const REM_MIN = 0.1;
+export const REM_MAX = 5;
+export const REM_STANDAARD = 1;
 /** Hoeveel een nudge (bend) versnelt of vertraagt zolang je drukt. */
 export const BEND = 0.04;
 
@@ -52,6 +62,7 @@ export class Deck extends Emitter {
     this.rate = 1;              // playbackRate (pitch schuift mee — keylock = fase 3)
     this.pitchBereik = 0.16;    // zie PITCH_BEREIKEN
     this.buigt = 0;             // -1/0/+1: nudge (bend) ingedrukt
+    this.remTijd = REM_STANDAARD;   // seconden tot stilstand, zie rem()
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.loop = null;           // {start, end}
@@ -96,6 +107,8 @@ export class Deck extends Emitter {
     this.bron = bron;
     bron.onEinde = () => this.emit('change', this);
     bron.onFout = (tekst) => this.emit('fout', tekst);
+    // De rem is uitgelopen: de bron staat nu stil op die plek (een pauze).
+    bron.onRemKlaar = () => { this._heranker(); this.emit('change', this); };
     // Vaste punten: hier springt de DJ heen, dus daar mag een streamende bron
     // geen gat hebben. Een BufferBron negeert het, die heeft alles al.
     // Tijdens het laden horen cue en hotcues nog bij de OUDE track (ze worden
@@ -176,7 +189,15 @@ export class Deck extends Emitter {
     this.emit('change', this);
   }
 
-  togglePlay() { this.playing ? this.pause() : this.play(); }
+  /**
+   * Play/pauze. Tijdens een rem: los, en gewoon door (zoals start/stop op een
+   * draaitafel die nog uitloopt: de motor pakt hem weer op).
+   */
+  togglePlay() {
+    if (this.remt) this.laatRemLos();
+    else if (this.playing) this.pause();
+    else this.play();
+  }
 
   /**
    * Naar tracktijd `pos` springen.
@@ -242,6 +263,54 @@ export class Deck extends Emitter {
     this._heranker();
   }
 
+  // ---- rem (vinylstop) -----------------------------------------------------
+
+  /** Remt dit deck nu (de snelheid loopt naar 0)? */
+  get remt() { return !!this.bron.remt; }
+
+  /**
+   * Hoe snel de positie NU loopt, in tracktijd per seconde: de rate met bend,
+   * en tijdens een rem wat daarvan over is. Voor de video, die een rem moet
+   * volgen zonder te springen.
+   */
+  get snelheid() { return this.bron.snelheid ?? this.rate; }
+
+  /**
+   * Remmen tot stilstand in `remTijd` seconden, daarna gepauzeerd op de plek
+   * waar hij stilviel; play speelt dan gewoon verder. Nog eens drukken tijdens
+   * het remmen = LOS: meteen weer op tempo, zoals de start/stop-knop van een
+   * draaitafel die nog uitloopt, en je kunt er een "tape stop" mee maken die
+   * op de drop weer invalt. Wie meteen stil wil: pauze. Op een stilstaand deck
+   * doet hij niets: een rem mag nooit onverwacht iets starten.
+   *
+   * Effecten op de tel van dit deck houden hun laatste tempo (fxKlok geeft
+   * tijdens de rem niets, dus er wordt niet opnieuw aangehaakt), en een
+   * remmende track geeft geen maat meer (Engine.maatgever).
+   */
+  rem() {
+    if (this.remt) { this.laatRemLos(); return true; }
+    if (!this.buffer || !this.playing) return false;
+    if (!this.bron.rem?.(this.remTijd)) return false;
+    this.emit('change', this);
+    return true;
+  }
+
+  /** De rem eraf: vanaf waar hij nu is gewoon verder op zijn tempo. */
+  laatRemLos() {
+    if (!this.remt) return;
+    this.bron.start(this.position);
+    this._heranker();
+    this.emit('change', this);
+  }
+
+  /** Remtijd als knop 0..1 (exponentieel, REM_MIN–REM_MAX seconden). */
+  setRemTijd(norm) {
+    this.remTijd = REM_MIN * Math.pow(REM_MAX / REM_MIN, clamp(norm));
+    this.emit('change', this);
+  }
+
+  get remKnop() { return Math.log(this.remTijd / REM_MIN) / Math.log(REM_MAX / REM_MIN); }
+
   setRate(r) {
     const nr = clamp(r, 0.5, 2);
     this.rate = nr;
@@ -258,7 +327,8 @@ export class Deck extends Emitter {
    * niet, en dat is eerlijker dan hem op een verzonnen tempo laten draaien.
    */
   fxKlok() {
-    if (!this.grid || !this.playing) return null;
+    // Remmen: geen maat. Wat al op de tel loopt houdt zijn tempo.
+    if (!this.grid || !this.playing || this.remt) return null;
     // De tel die komt, en hoe lang DIE duurt (tot de tel erna): met een
     // tempokaart is dat het tempo van het stuk waar je naartoe gaat.
     const n = Math.ceil(this.grid.beatAt(this.position) - 1e-9);

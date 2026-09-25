@@ -1278,6 +1278,81 @@ console.log('\nacht tracks');
   ok('thru-knop', eng.kant.C === 'thru' && leesAction('track.3.xfade.thru') === 1);
 }
 
+// ---- rem (vinylstop) (ROADMAP 16, spoor C) ----------------------------------------
+
+console.log('\nrem (vinylstop)');
+{
+  const { REM_STANDAARD } = await import('../src/engine/deck.js');
+  const { REM_UIT } = await import('../src/engine/stream-kern.js');
+  const dR = eng.deck('H');
+  NOW = 400;
+  dR.load(buf, 'rem');
+  dR.seek(0.5);
+  ok('stilstaand: rem doet niets (lampje uit: niets te remmen)', !dR.rem() && !dR.remt && read('track.8.brake') === null);
+  ok(`remtijd standaard ${REM_STANDAARD} s`, dR.remTijd === REM_STANDAARD && Math.abs(read('track.8.brake.time') - Math.log(10) / Math.log(50)) < 1e-9);
+  invoke('track.8.brake.time', 1);
+  const vijf = dR.remTijd;
+  invoke('track.8.brake.time', 0.5);
+  const midden = dR.remTijd;
+  invoke('track.8.brake.time', 0);
+  ok(`remtijd-knop: 0 = ${dR.remTijd} s, midden = ${midden.toFixed(2)} s, 1 = ${vijf} s`,
+    Math.abs(dR.remTijd - 0.1) < 1e-12 && Math.abs(vijf - 5) < 1e-9 && Math.abs(midden - Math.sqrt(0.5)) < 1e-9 && read('track.8.brake.time') === 0);
+
+  dR.play();
+  ok('speelt: rem-lampje 0 (er valt te remmen)', read('track.8.brake') === 0);
+  NOW += 0.2;
+  const P0 = dR.position, D = 0.1;
+  const pr = dR.bron.source.playbackRate, g = dR.bron.bronGain.gain;
+  invoke('track.8.brake', true); invoke('track.8.brake', false);
+  ok('rem: het deck remt en speelt nog (lampje 1)', dR.remt && dR.playing && read('track.8.brake') === 1);
+  NOW += 0.05;
+  ok('halverwege: positie = P + R·t − R·t²/(2D), snelheid gehalveerd',
+    Math.abs(dR.position - (P0 + 0.05 - 0.05 * 0.05 / (2 * D))) < 1e-9 && Math.abs(dR.snelheid - 0.5) < 1e-9);
+  ok('de reserve (BufferBron): playbackRate glijdt naar 0, volume dooft in het laatste stuk',
+    pr.value === 0 && g.value === 0 && REM_UIT > 0 && REM_UIT < 1);
+  ok('een remmende track geeft geen maat (fxKlok leeg)', dR.fxKlok() === null);
+  NOW += 0.1;
+  ok('na de remtijd: stil op P + R·D/2', Math.abs(dR.position - (P0 + D / 2)) < 1e-9 && dR.snelheid === 0);
+  let klaar = 0;
+  dR.on('change', () => { if (!dR.playing) klaar++; });
+  await new Promise((r) => setTimeout(r, 200));
+  ok('daarna een gewone pauze op die plek (en gemeld)', !dR.playing && !dR.remt && klaar > 0
+    && Math.abs(dR.position - (P0 + D / 2)) < 1e-9 && read('track.8.brake') === null);
+
+  invoke('track.8.play', true);
+  NOW += 0.1;
+  ok('play: gewoon verder vanaf daar, op tempo', dR.playing && !dR.remt && Math.abs(dR.position - (P0 + D / 2 + 0.1)) < 1e-9);
+
+  // Tweede druk tijdens het remmen = los.
+  invoke('track.8.brake.time', 1);                  // 5 s
+  const P1 = dR.position;
+  invoke('track.8.brake', true);
+  NOW += 1;
+  const P2 = dR.position;
+  ok('5 s remmen, na 1 s: 0,9 s afgelegd', Math.abs(P2 - (P1 + 1 - 1 / 10)) < 1e-9);
+  invoke('track.8.brake', true);
+  ok('nog eens drukken tijdens het remmen: los, weer op tempo', !dR.remt && dR.playing && dR.snelheid === dR.rate);
+  NOW += 0.5;
+  ok('… en verder vanaf waar hij was', Math.abs(dR.position - (P2 + 0.5)) < 1e-9);
+
+  invoke('track.8.brake', true);
+  NOW += 0.2;
+  invoke('track.8.play', true);
+  ok('play tijdens het remmen: los, niet pauzeren', dR.playing && !dR.remt);
+
+  // Tempo tijdens het remmen: onthouden, de rem loopt door.
+  invoke('track.8.brake', true);
+  const P3 = dR.position;
+  NOW += 0.5;
+  dR.setRate(1.1);
+  ok('tempo tijdens het remmen: de rem loopt gewoon door, het tempo wordt onthouden',
+    dR.remt && Math.abs(dR.position - (P3 + 0.5 - 0.25 / 10)) < 1e-9 && dR.rate === 1.1);
+  dR.pause();
+  ok('pauze tijdens het remmen: meteen stil, rem eraf', !dR.playing && !dR.remt);
+  dR.setRate(1);
+  NOW = 0;
+}
+
 // ---- toetsenbord ------------------------------------------------------------
 // Spatie wees na de hernoeming naar deck.* nog naar een naam die niet meer
 // bestond, en niemand merkte het. Nu staat het vast.
@@ -1313,6 +1388,16 @@ console.log('\ntoetsenbord');
   toets('Space');
   ok('spatie speelt de track met focus', dC.playing !== voorSpatie);
   if (dC.playing) toets('Space');
+
+  // Rem op de toets links van 1 (Backquote, op een Mac-ISO-toetsenbord soms
+  // IntlBackslash): linkerhand = focus. Nog eens = los.
+  toets('KeyQ'); toets('KeyQ', 'keyup');
+  toets('Backquote'); toets('Backquote', 'keyup');
+  ok('` remt de track in het linkervenster', dC.remt);
+  toets('IntlBackslash'); toets('IntlBackslash', 'keyup');
+  ok('nog eens (ook via IntlBackslash): los, speelt door', !dC.remt && dC.playing);
+  ok('= remt de rechterhand', KEYMAP.Equal === 'track.{R}.brake');
+  dC.pause();
 }
 
 {

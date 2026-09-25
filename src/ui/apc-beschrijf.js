@@ -43,6 +43,8 @@ export function beschrijf(action) {
     if (rest === 'pitch.range') return r('bereik', 'pitchbereik ±8 / ±16 / ±50%');
     if (rest === 'nudge.back') return r('nudge −', 'even terugduwen');
     if (rest === 'nudge.fwd') return r('nudge +', 'even vooruitduwen');
+    if (rest === 'brake') return r('rem', 'rem (vinylstop): in de remtijd naar stilstand, dan pauze; tijdens het remmen nog eens = los');
+    if (rest === 'brake.time') return r('remtijd', 'remtijd: 0,1 tot 5 seconden tot stilstand');
     if (rest === 'grid.here') return r('tel 1 hier', 'tel 1 hier: de tel komt op wat je hoort, gesnapt naar een klap binnen 30 ms');
     if (rest === 'grid.double') return r('bpm ×2', 'bpm ×2 van het gridstuk hier');
     if (rest === 'grid.halve') return r('bpm ½', 'bpm ½ van het gridstuk hier');
