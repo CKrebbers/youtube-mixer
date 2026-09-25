@@ -1306,16 +1306,24 @@ console.log('\nacht tracks');
 console.log('\nEQ-kill');
 {
   const { EQ_KILL_DB, KILL_FADE, eqDb } = await import('../src/engine/audio-graph.js');
+  const { startDrempel } = await import('../src/engine/overgang.js');
   const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
   const dK = eng.deck('H');
+  const WACHT = startDrempel(eng.ctx);
   NOW = 300;
   const fouten0 = OVERLAP_FOUTEN, breuk0 = CURVE_BREUK;
   const p = dK.chain.eqLow.gain;
   // De kill-overgangen op de lage band, om hun vorm na te lopen: een
-  // beginpunt (setValueAtTime) en de hellingen erna.
+  // beginpunt op nu (setValueAtTime), hetzelfde punt nog eens na de
+  // startdrempel, en de hellingen erna.
   const curves = [];
   const origZet = p.setValueAtTime, origHelling = p.linearRampToValueAtTime;
-  p.setValueAtTime = function (x, t) { curves.push({ t, d: 0, c: [x] }); return origZet.call(this, x, t); };
+  p.setValueAtTime = function (x, t) {
+    const k = curves[curves.length - 1];
+    if (k && k.c.length === 1 && k.c[0] === x) k.t = t;
+    else curves.push({ nu: t, t, d: 0, c: [x] });
+    return origZet.call(this, x, t);
+  };
   p.linearRampToValueAtTime = function (x, t) {
     const k = curves[curves.length - 1];
     if (k) { k.c.push(x); k.d = t - k.t; }
@@ -1329,8 +1337,13 @@ console.log('\nEQ-kill');
   ok('kill-lampje 0: open, bruikbaar', read('track.8.kill.low') === 0 && read('track.8.kill.low.hold') === 0);
   invoke('track.8.kill.low', true); invoke('track.8.kill.low', false);
   ok('kill aan: de lage band naar −70 dB (lampje 1)', p.value === EQ_KILL_DB && dK.gekild('low') && read('track.8.kill.low') === 1);
-  ok('… met een overgang van 5 ms vanaf nu, niet hard', curves.length === 1 && Math.abs(curves[0].d - KILL_FADE) < 1e-9
-    && curves[0].t === NOW && curves[0].c.length === 33);
+  ok('… met een overgang van 5 ms, niet hard', curves.length === 1 && Math.abs(curves[0].d - KILL_FADE) < 1e-9
+    && curves[0].nu === NOW && curves[0].c.length === 33);
+  // Een renderthread die voorloopt zet hellingpunten die voor hem al voorbij
+  // zijn op zijn eigen nu: bij een kill van 5 ms kon de hele kill zo één stap
+  // worden. Daarom blijft hij tot startDrempel staan en begint dan pas.
+  ok(`… die pas na de startdrempel (${(WACHT * 1000).toFixed(1)} ms) begint`,
+    Math.abs(curves[0].t - (NOW + WACHT)) < 1e-9);
   // Klikvrij: in AMPLITUDE een zachte S. Een rechte lijn in dB doet bijna
   // alle amplitude in de eerste stapjes, en dat is een tik.
   const amp = (db) => Math.pow(10, db / 20);
@@ -1346,9 +1359,9 @@ console.log('\nEQ-kill');
   // setValueCurveAtTime gooide setTargetAtTime daar NotSupportedError, en
   // cancelAndHoldAtTime ertegen gaf in Chrome een sprong (CURVE_BREUK).
   let gegooid = null;
-  NOW += 0.001;
+  NOW += WACHT + 0.001;
   try { invoke('track.8.low', 0.3); } catch (e) { gegooid = e; }
-  ok('1 ms later aan de knop draaien, tijdens de kill-overgang: geen NotSupportedError, geen afgebroken curve',
+  ok('1 ms na het begin aan de knop draaien, tijdens de kill-overgang: geen NotSupportedError, geen afgebroken curve',
     gegooid === null && OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
   ok('… de band blijft weg, de knop onthoudt 0,3', p.value === EQ_KILL_DB && dK.ui.low === 0.3);
   NOW += 0.001;
@@ -1360,7 +1373,7 @@ console.log('\nEQ-kill');
   NOW += 1;
   const m = dK.chain.eqMid.gain;
   invoke('track.8.kill.mid', true);
-  NOW += 0.002;
+  NOW += WACHT + 0.002;
   gegooid = null;
   try { invoke('track.8.kill.mid', true); } catch (e) { gegooid = e; }
   ok('kill aan en 2 ms later weer uit (overgang loopt nog): geen NotSupportedError, geen afgebroken curve (sprong in Chrome)',
@@ -1611,6 +1624,56 @@ console.log('\ntoetsenbord');
     NOW = 50.025; sf.zetEffect('crush');
   } catch (e) { gegooid = e; }
   ok(`snel wisselen midden in een kruisfade gooit niet${gegooid ? ': ' + gegooid.message : ''}`, gegooid === null);
+  NOW = 0;
+}
+
+{
+  // De kruisfade zelf, zoals Chrome hem ziet. Met setValueCurveAtTime + een
+  // cancelAndHoldAtTime erin (mixdraai of tweede wissel binnen 40 ms) speelde
+  // Chrome 153 de afgekapte curve opnieuw af: een sprong van 0,15–0,52 in de
+  // gain. Nu een beginpunt en lineaire hellingen, pas na de startdrempel.
+  const { startDrempel } = await import('../src/engine/overgang.js');
+  const { FADE } = await import('../src/engine/fx.js');
+  const sf = eng.deck('C').fx, ctx = sf.ctx, W = startDrempel(ctx);
+  const breuk0 = CURVE_BREUK, fouten0 = OVERLAP_FOUTEN;
+  const log = new Map();          // gain-param -> aanroepen
+  const maak = ctx.createGain;
+  ctx.createGain = function () {
+    const n = maak.call(this), p = n.gain, l = [];
+    log.set(p, l);
+    for (const f of ['setValueAtTime', 'linearRampToValueAtTime', 'setTargetAtTime', 'setValueCurveAtTime', 'cancelAndHoldAtTime']) {
+      const orig = p[f];
+      p[f] = function (...a) { l.push([f, ...a]); return orig.apply(this, a); };
+    }
+    return n;
+  };
+  NOW = 60; sf.setMix(0.6); sf.standaard();
+  const D = sf.keten.gain.gain;
+  NOW = 61; sf.zetEffect('filter');
+  const F = sf.keten.gain.gain;
+  const wet = Math.sin(0.6 * Math.PI / 2);
+  const zet = log.get(F).filter(([f]) => f === 'setValueAtTime'), hel = log.get(F).filter(([f]) => f === 'linearRampToValueAtTime');
+  const ep = (i) => wet * Math.sin(i / 32 * Math.PI / 2);
+  ok(`effectwissel: nieuwe keten van 0 naar nat met een beginpunt en 32 hellingen, pas na de startdrempel (${(W * 1000).toFixed(1)} ms)`,
+    zet.length === 2 && zet[0][1] === 0 && zet[0][2] === 61 && zet[1][1] === 0 && Math.abs(zet[1][2] - (61 + W)) < 1e-9
+    && hel.length === 32 && Math.abs(hel[31][2] - (61 + W + FADE)) < 1e-9 && Math.abs(hel[31][1] - wet) < 1e-12);
+  ok('… equal-power: elk punt op sin, dezelfde vorm als de oude curve',
+    hel.every(([, x, t], k) => Math.abs(x - ep(k + 1)) < 1e-9 && Math.abs(t - (61 + W + FADE * (k + 1) / 32)) < 1e-9));
+  const uit = log.get(D).filter(([f, , t]) => f === 'linearRampToValueAtTime' && t > 61);
+  ok('… de oude keten naar 0, ook als hellingen en ook pas na de drempel',
+    uit.length === 32 && uit[31][1] === 0 && Math.abs(uit[0][2] - (61 + W + FADE / 32)) < 1e-9);
+  NOW = 61 + W + 0.005;
+  sf.setMix(0.9);
+  ok('5 ms in de kruisfade aan de mix draaien: vasthouden midden in een HELLING, geen afgebroken curve',
+    CURVE_BREUK === breuk0 && OVERLAP_FOUTEN === fouten0 && log.get(F).at(-1)[0] === 'setTargetAtTime'
+    && log.get(F).at(-2)[0] === 'cancelAndHoldAtTime' && log.get(F).at(-2)[1] === NOW);
+  NOW = 61 + W + 0.010;
+  sf.zetEffect('phaser');
+  ok('10 ms in de kruisfade nog een wissel: geen afgebroken curve, de vorige vloeit vanaf daar uit',
+    CURVE_BREUK === breuk0 && OVERLAP_FOUTEN === fouten0
+    && log.get(F).filter(([f]) => f === 'linearRampToValueAtTime').at(-1)[1] === 0);
+  ok('nergens een setValueCurveAtTime op een kruisfade', [...log.values()].every((l) => l.every(([f]) => f !== 'setValueCurveAtTime')));
+  delete ctx.createGain;
   NOW = 0;
 }
 
@@ -2534,6 +2597,7 @@ console.log('\ntransport');
 }
 
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);
+ok(`geen enkele afgebroken curve in de hele test (${CURVE_BREUK}): in Chrome een sprong`, CURVE_BREUK === 0);
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
