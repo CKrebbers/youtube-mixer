@@ -57,6 +57,8 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   zegt hier niets. Het handelingenlog loopt er helemaal doorheen: knop, bus, server,
   lijst, terugspelen (demo én een klikspoor dat door de ingest gaat), mee met een
   opname, en de tegenproef dat een teruggespeelde track niets in de library bewaart.
+  De Q van quantize bij Lock staat er precies als Lock (in het open mapje) geen
+  quantize is, los van wat de standaardmapping met Lock doet.
   Poorten: `VARVE_KIJK_POORT` en `VARVE_KIJK_DEBUG` (naast een andere sessie).
 - `toon.mjs` — de toonsoort op het scherm nalopen met een NEP-library (verzoeken
   onderschept): kolomkop, focus, correctiemenu, library-kolom en kiezer.

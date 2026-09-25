@@ -108,6 +108,43 @@ try {
   ok('geen fouten', meldingen.length === 0, meldingen.join(' | '));
   meldingen.length = 0;
 
+  // ---- de Q van quantize bij Lock (spiegel.js) -----------------------------
+  // Quantize heeft op het scherm een Q in de hoek van Lock, tot Lock in de
+  // mapping zelf quantize is: dan toont die knop het en is de Q dubbel. Los van
+  // wat de standaardmapping nu met Lock doet (dat verandert met de
+  // APC-indeling): de Q staat er precies als Lock, in het mapje dat open staat,
+  // GEEN quantize is. Daarna de regel terug zoals hij was.
+  console.log('quantize bij Lock');
+  const qStand = () => evalueer(`(() => {
+    const q = document.querySelector('#fd-devknoppen .fd-quantize');
+    const lock = document.querySelector('#fd-devknoppen [data-sig="note:0:63"]');
+    return { q: !!q, zichtbaar: !!q && getComputedStyle(q).display !== 'none', action: lock?.dataset.action ?? null };
+  })()`);
+  const qKlopt = (s) => s.q && s.zichtbaar === (s.action !== 'transport.quantize');
+  ok('het scherm leest de APC-mapping van de app', await evalueer("window.mapping.device === 'apc40mk2' && window.mapping.rules.size > 0"));
+  const q0 = await qStand();
+  ok(`Q bij Lock: ${q0.zichtbaar ? 'zichtbaar' : 'weg'} (Lock: ${q0.action ?? 'niets'})`, qKlopt(q0));
+  await evalueer(`(() => {
+    const m = window.mapping;
+    window.__lockWas = m.rules.has('note:0:63') ? structuredClone(m.rules.get('note:0:63')) : null;
+    m.set('note:0:63', 'transport.quantize', { laag: null, mode: 'trigger' });
+  })()`);
+  const q1 = await qStand();
+  ok('Lock zelf quantize: de Q is weg', q1.action === 'transport.quantize' && !q1.zichtbaar && qKlopt(q1));
+  await evalueer("window.lagen.zet('edit', 'aan')");
+  const q2 = await qStand();
+  ok(`… in de grid-modus is Lock iets anders (${q2.action ?? 'niets'}): de Q ${q2.zichtbaar ? 'is er weer' : 'blijft weg'}`, qKlopt(q2));
+  await evalueer("window.lagen.zet('edit', 'uit')");
+  await evalueer(`(() => {
+    const m = window.mapping, was = window.__lockWas;
+    if (was) { const { in: sig, action, ...rest } = was; m.set(sig, action, { laag: null, ...rest }); } else m.remove('note:0:63');
+    delete window.__lockWas;
+  })()`);
+  const q3 = await qStand();
+  ok('regel terug: zelfde stand als eerst', q3.action === q0.action && q3.zichtbaar === q0.zichtbaar && qKlopt(q3));
+  ok('geen fouten rond de Q', meldingen.length === 0, meldingen.join(' | '));
+  meldingen.length = 0;
+
   // ---- met vlag ------------------------------------------------------------
   console.log('met ?vormen=1');
   await cdp('Page.navigate', { url: `http://localhost:${POORT}/?vormen=1` });
