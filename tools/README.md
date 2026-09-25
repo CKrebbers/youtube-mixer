@@ -32,6 +32,15 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
 - `vm-bench.cjs [id] [N]` — rekentijd per stap van de Vormmachines in Node (nep-canvas,
   tekenen telt niet mee: een ondergrens). Een kopie van de systemen uit Clay's
   `vormmachines.html`. De cijfers staan in `docs/plugins/02-analyses.md` (risico's).
+- `renderblok.mjs [--sec 60] [--rondes 3] [--ref <commit>] [--profiel]` — het audiopad van
+  acht streamende decks: de echte worklet (`stream-lezer.js` + `renderBlok`) in een
+  nagebouwde AudioWorkletGlobalScope, met loops, seeks, hotcues, tempowissels, pauze, een
+  gat en het trackeinde. Meet uitvoer (hash over de bits), CPU per seconde audio, blokken/s,
+  tijd per stap en AFVAL (bytes per blok, GC's tijdens de run, heap na GC); `--profiel`
+  zegt per functie waar er gealloceerd wordt. `--ref` meet een oudere commit ernaast (uit
+  git, alleen lezen). Draai met `nice -n 10 node --expose-gc tools/bench/renderblok.mjs`.
+  Cijfers: `docs/AUDIOPAD.md` (25 sep: 194 → 57,5 ms/s, 12,7 kB → 0 afval per blok). De
+  bewaking dat het afvalvrij blijft zit niet hier maar in `test/renderblok.test.mjs`.
 
 ## headless/
 - `kijk.mjs` — de app in een headless Chromium (uit de Playwright-cache, geen npm-pakket;

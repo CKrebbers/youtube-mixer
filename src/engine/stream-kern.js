@@ -15,6 +15,11 @@
  * Elke wijziging (play, seek, pitch, loop) is een nieuw segment. Komt het
  * bericht een paar milliseconden te laat bij de worklet aan, dan rekent hij
  * de formule gewoon vanaf T door en zit hij meteen op de goede plek.
+ *
+ * Een nieuw soort beweging (een rem: de snelheid loopt terug naar 0) is een
+ * extra veld op het segment en een extra term in positieOp, en nergens
+ * anders: renderBlok vraagt elke positie aan positieOp (zie posities()).
+ * Wat er dan nog meer mee moet staat bij positieOp.
  */
 
 export const PAGINA = 65536;           // frames per pagina, ~1,37 s op 48 kHz
@@ -24,7 +29,19 @@ export const PAGINA_BYTES = PAGINA * BYTES_PER_FRAME;
 
 export const STIL = Object.freeze({ T: 0, P: 0, R: 1, loop: null, speelt: false });
 
-/** Positie in tracktijd (seconden) op audiokloktijd t. */
+/**
+ * Positie in tracktijd (seconden) op audiokloktijd t.
+ *
+ * Een versnelling (rem) komt in de regel met `p = ...`: P + (t - T) * R
+ * wordt dan P + afgelegde weg met een snelheid die vanaf R terugloopt (en na
+ * stilstand niet verder), vóór het vouwen in de loop. Dezelfde functie draait
+ * op de hoofdthread (bron.js) en per frame in de worklet, dus beide zien de
+ * rem meteen. Wat er dan nog meer mee moet: ctxTijdVan (het omgekeerde, nu
+ * lineair), `vooruit` in renderBlok (rekent met |R| als bovengrens: klopt
+ * zolang het alleen afremt), en test/renderblok.test.mjs (een segment zonder
+ * rem moet bit voor bit dezelfde hash geven; houd de functie klein en zonder
+ * objecten, anders is het audiopad niet meer afvalvrij).
+ */
 export function positieOp(seg, t) {
   if (!seg.speelt) return seg.P;
   let p = seg.P + (t - seg.T) * seg.R;
@@ -157,29 +174,126 @@ export function reeksen(paginas, max = 8) {
 
 // ---- samples lezen ---------------------------------------------------------
 
-/**
- * Eén sample uit de pagina's, of 0 als die pagina er (nog) niet is. Stilte is
- * het eerlijke antwoord op een gat; de vorige pagina herhalen klinkt als een
- * haperende cd.
+/*
+ * GEEN AFVAL OP DE AUDIOTHREAD (ROADMAP 22, cijfers in docs/AUDIOPAD.md).
+ *
+ * Acht decks, elk 375 blokken per seconde. Alles wat hier per blok of per
+ * frame een object aanmaakt, moet de garbage collector opruimen, en die
+ * draait op de audiothread zelf: een pauze daar is een tik. Vóór de ombouw
+ * was het ~12,7 kB per blok (een array [L, R] per frame, en elke double die
+ * een niet-geïnlinede functie in of uit ging als los HeapNumber-object):
+ * een kleine GC zo'n negen keer per seconde.
+ *
+ * De regels die dat voorkomen:
+ *   - tussenresultaten in vaste Float64Arrays (`klad`). Float64 is precies
+ *     een JS-getal: er wordt niets afgerond, de uitvoer blijft bit voor bit;
+ *   - een hulpfunctie op het hete pad krijgt alleen objecten en HELE getallen
+ *     mee en geeft niets (of een boolean) terug, nooit een losse double. Een
+ *     double over een functiegrens wordt een HeapNumber zodra V8 die functie
+ *     niet inlinet, en of hij inlinet hangt af van een budget dat per
+ *     V8-versie verschilt. Zo hangt "geen afval" niet van de inliner af;
+ *   - wat per blok vastligt (t0, rates, duur) staat als veld op `klad`, niet
+ *     als argument, om dezelfde reden;
+ *   - positieOp (een double erin, een double eruit) komt alleen in
+ *     `posities()` voor, een lus die niets anders doet: daar is hij de enige
+ *     kandidaat voor het inlinebudget en wordt hij ruim ingelijfd, ook met
+ *     een term erbij. Gebeurt dat ooit niet, dan ziet de test het.
+ * test/renderblok.test.mjs bewaakt het (heap over duizenden blokken) en
+ * tools/bench/renderblok.mjs meet het.
+ *
+ * Eén klad voor alle decks: de worklet rendert ze na elkaar, nooit door
+ * elkaar heen, en renderBlok roept niets aan dat terugroept.
  */
-function sample(paginas, n, k) {
-  if (n < 0) return 0;
-  const p = paginas.get(Math.floor(n / PAGINA));
-  if (!p) return 0;
-  const i = (n % PAGINA) * KANALEN + k;
-  return i < p.length ? p[i] * (1 / 32768) : 0;
+
+const VOORBIJ = 0, GEWOON = 1, NAAD = 2;        // soort frame, zie segKlad
+
+/** Werkruimte voor één segment, `n` frames. */
+function segKlad(n) {
+  return {
+    pos: new Float64Array(n),     // positie in tracktijd (s), uit positieOp
+    f: new Float64Array(n),       // leespositie in frames
+    g: new Float64Array(n),       // in de naad: de tweede leespositie, vlak vóór het loopbegin
+    w: new Float64Array(n),       // in de naad: hoe ver (0..1)
+    l: new Float64Array(n),       // het frame, links en rechts (na de naad)
+    r: new Float64Array(n),
+    gl: new Float64Array(n),      // wat er op g staat
+    gr: new Float64Array(n),
+    soort: new Uint8Array(n),     // VOORBIJ (na het trackeinde), GEWOON of NAAD
+  };
 }
 
-/** Eén kanaal op een fractionele framepositie: exact op een heel frame, anders cubisch. */
-function lees(paginas, f, k) {
-  const n = Math.floor(f);
-  const x = f - n;
-  // Afrondruis van de klokrekening: 12,9999999 is gewoon sample 13.
-  if (x < 1e-7) return sample(paginas, n, k);
-  if (x > 1 - 1e-7) return sample(paginas, n + 1, k);
-  const y0 = sample(paginas, n - 1, k), y1 = sample(paginas, n, k);
-  const y2 = sample(paginas, n + 1, k), y3 = sample(paginas, n + 2, k);
-  return y1 + 0.5 * x * (y2 - y0 + x * (2 * y0 - 5 * y1 + 4 * y2 - y3 + x * (3 * (y1 - y2) + y3 - y0)));
+const klad = {
+  n: 0,                           // voor hoeveel frames er ruimte is
+  // Per blok gezet door renderBlok. NaN en geen 0: dan zijn het vanaf het
+  // begin double-velden, en die schrijft V8 ter plekke over.
+  t0: NaN, ctxRate: NaN, trackRate: NaN, duur: NaN,
+  nu: null,                       // segKlad van het segment
+  oud: null,                      // segKlad van `vorig` (de overgang)
+  yl: new Float64Array(4),        // de vier buren voor cubisch, links en rechts
+  yr: new Float64Array(4),
+  k0: -1, v0: false,              // heeftPagina: de laatste twee antwoorden (per blok)
+  k1: -1, v1: false,
+};
+
+/** Eén keer (de worklet: 128 frames), of als een blok groter is dan ooit. */
+function groei(frames) {
+  if (klad.nu && frames <= klad.n) return;
+  klad.n = frames;
+  klad.nu = segKlad(frames);
+  klad.oud = segKlad(frames);
+}
+
+/**
+ * Frame n (beide kanalen) naar L[i] en R[i], of 0 als die pagina er (nog)
+ * niet is. Stilte is het eerlijke antwoord op een gat; de vorige pagina
+ * herhalen klinkt als een haperende cd.
+ */
+function leesFrame(paginas, n, L, R, i) {
+  L[i] = 0; R[i] = 0;
+  if (n < 0) return;
+  const p = paginas.get(Math.floor(n / PAGINA));
+  if (!p) return;
+  const j = (n % PAGINA) * KANALEN;
+  if (j < p.length) L[i] = p[j] * (1 / 32768);
+  if (j + 1 < p.length) R[i] = p[j + 1] * (1 / 32768);
+}
+
+/**
+ * Lezen op fractionele frameposities F[i], voor elke i < tot met
+ * soort[i] >= vanaf: exact op een heel frame, anders cubisch (Catmull-Rom).
+ */
+function leesKubisch(paginas, F, L, R, soort, vanaf, tot) {
+  const yl = klad.yl, yr = klad.yr;
+  for (let i = 0; i < tot; i++) {
+    if (soort[i] < vanaf) continue;
+    const f = F[i];
+    const n = Math.floor(f);
+    const x = f - n;
+    // Afrondruis van de klokrekening: 12,9999999 is gewoon sample 13.
+    if (x < 1e-7) { leesFrame(paginas, n, L, R, i); continue; }
+    if (x > 1 - 1e-7) { leesFrame(paginas, n + 1, L, R, i); continue; }
+    // De vier buren n-1..n+2 staan bijna altijd op één pagina: dan één keer
+    // opzoeken in plaats van vier. Anders (paginagrens, gat, vóór het begin,
+    // een afgekapte laatste pagina) frame voor frame, met dezelfde uitkomst.
+    const k = Math.floor((n - 1) / PAGINA);
+    const p = n >= 1 && k === Math.floor((n + 2) / PAGINA) ? paginas.get(k) : undefined;
+    const j = ((n - 1) % PAGINA) * KANALEN;
+    if (p && j + 7 < p.length) {
+      yl[0] = p[j] * (1 / 32768); yr[0] = p[j + 1] * (1 / 32768);
+      yl[1] = p[j + 2] * (1 / 32768); yr[1] = p[j + 3] * (1 / 32768);
+      yl[2] = p[j + 4] * (1 / 32768); yr[2] = p[j + 5] * (1 / 32768);
+      yl[3] = p[j + 6] * (1 / 32768); yr[3] = p[j + 7] * (1 / 32768);
+    } else {
+      leesFrame(paginas, n - 1, yl, yr, 0);
+      leesFrame(paginas, n, yl, yr, 1);
+      leesFrame(paginas, n + 1, yl, yr, 2);
+      leesFrame(paginas, n + 2, yl, yr, 3);
+    }
+    let y0 = yl[0], y1 = yl[1], y2 = yl[2], y3 = yl[3];
+    L[i] = y1 + 0.5 * x * (y2 - y0 + x * (2 * y0 - 5 * y1 + 4 * y2 - y3 + x * (3 * (y1 - y2) + y3 - y0)));
+    y0 = yr[0]; y1 = yr[1]; y2 = yr[2]; y3 = yr[3];
+    R[i] = y1 + 0.5 * x * (y2 - y0 + x * (2 * y0 - 5 * y1 + 4 * y2 - y3 + x * (3 * (y1 - y2) + y3 - y0)));
+  }
 }
 
 /**
@@ -201,39 +315,76 @@ export const GAT_FADE = 0.003;
 /** Is er data voor frame n en zijn buren (cubisch leest n-1..n+2)? */
 function heeftFrame(paginas, n) {
   if (n < 0) return true;                 // vóór het begin is stilte, geen gat
-  return paginas.has(Math.floor(n / PAGINA)) && paginas.has(Math.floor((n + 2) / PAGINA));
+  return heeftPagina(paginas, Math.floor(n / PAGINA)) && heeftPagina(paginas, Math.floor((n + 2) / PAGINA));
 }
 
 /**
- * Eén frame van één segment: [L, R], of null voorbij het trackeinde.
- * Met de loop-naad: in de laatste LOOP_NAAD van een loop overvloeien naar
- * wat er vlak vóór het begin staat.
+ * Is pagina k er? Per frame wordt dat vier keer gevraagd, bijna altijd voor
+ * dezelfde één of twee pagina's, en binnen een blok verandert het antwoord
+ * niet (berichten komen tussen blokken). Dus: de laatste twee antwoorden
+ * onthouden. renderBlok wist ze bij elk blok (ander deck, andere pagina's).
  */
-function leesSegment(seg, t, paginas, trackRate, duur, naad) {
-  const p = positieOp(seg, t);
-  const loop = seg.loop;
-  if (!loop && p >= duur) return null;
-  const f = p * trackRate;
-  const rest = loop ? loop.end - p : Infinity;
-  if (rest < naad && rest > 0) {
-    // Equal-power: de twee stukken zijn niet gelijk, dus een lineaire fade
-    // zou in het midden een dipje geven.
-    const w = 1 - rest / naad;
-    const a = Math.cos(w * Math.PI / 2), b = Math.sin(w * Math.PI / 2);
-    const g = (loop.start - rest) * trackRate;
-    return [lees(paginas, f, 0) * a + lees(paginas, g, 0) * b, lees(paginas, f, 1) * a + lees(paginas, g, 1) * b];
-  }
-  return [lees(paginas, f, 0), lees(paginas, f, 1)];
+function heeftPagina(paginas, k) {
+  if (k === klad.k0) return klad.v0;
+  if (k === klad.k1) return klad.v1;
+  const v = paginas.has(k);
+  klad.k1 = klad.k0; klad.v1 = klad.v0;
+  klad.k0 = k; klad.v0 = v;
+  return v;
 }
 
-/*
- * Hooguit een kwart van de loop, en nooit langer dan er vóór het loopbegin
- * staat: een loop die op 0 s begint heeft daar niets, en de naad vloeide dan
- * naar stilte (een dip vlak voor elke herhaling). Liever dan geen naad.
+/**
+ * De positie van de eerste `tot` frames van dit blok, op de audioklok van
+ * frame i: t0 + i / ctxRate. De ENIGE aanroep van positieOp in het audiopad,
+ * in een lus die niets anders doet (zie boven: zo wordt hij geïnlined).
  */
-const naadVan = (seg) => (seg?.loop
-  ? Math.max(0, Math.min(LOOP_NAAD, (seg.loop.end - seg.loop.start) / 4, seg.loop.start))
-  : 0);
+function posities(seg, pos, tot) {
+  const t0 = klad.t0, ctxRate = klad.ctxRate;
+  for (let i = 0; i < tot; i++) pos[i] = positieOp(seg, t0 + i / ctxRate);
+}
+
+/**
+ * Eén segment voor de eerste `tot` frames van het blok, naar S.l en S.r;
+ * S.soort zegt welke frames voorbij het trackeinde vallen (VOORBIJ). Met de
+ * loop-naad: in de laatste LOOP_NAAD van een loop overvloeien naar wat er
+ * vlak vóór het begin staat.
+ */
+function leesSegment(seg, paginas, S, tot) {
+  posities(seg, S.pos, tot);
+  const loop = seg.loop;
+  // De naad: hooguit een kwart van de loop, en nooit langer dan er vóór het
+  // loopbegin staat. Een loop die op 0 s begint heeft daar niets, en de naad
+  // vloeide dan naar stilte (een dip vlak voor elke herhaling). Liever dan
+  // geen naad.
+  const naad = loop ? Math.max(0, Math.min(LOOP_NAAD, (loop.end - loop.start) / 4, loop.start)) : 0;
+  const trackRate = klad.trackRate, duur = klad.duur;
+  const pos = S.pos, soort = S.soort;
+  let metNaad = false;
+  for (let i = 0; i < tot; i++) {
+    const p = pos[i];
+    if (!loop && p >= duur) { soort[i] = VOORBIJ; continue; }
+    S.f[i] = p * trackRate;
+    const rest = loop ? loop.end - p : Infinity;
+    if (rest < naad && rest > 0) {
+      S.w[i] = 1 - rest / naad;
+      S.g[i] = (loop.start - rest) * trackRate;
+      soort[i] = NAAD;
+      metNaad = true;
+    } else soort[i] = GEWOON;
+  }
+  leesKubisch(paginas, S.f, S.l, S.r, soort, GEWOON, tot);
+  if (!metNaad) return;
+  leesKubisch(paginas, S.g, S.gl, S.gr, soort, NAAD, tot);
+  for (let i = 0; i < tot; i++) {
+    if (soort[i] !== NAAD) continue;
+    // Equal-power: de twee stukken zijn niet gelijk, dus een lineaire fade
+    // zou in het midden een dipje geven.
+    const w = S.w[i];
+    const a = Math.cos(w * Math.PI / 2), b = Math.sin(w * Math.PI / 2);
+    S.l[i] = S.l[i] * a + S.gl[i] * b;
+    S.r[i] = S.r[i] * a + S.gr[i] * b;
+  }
+}
 
 /**
  * Een blok audio renderen. Dit is wat de worklet per 128 frames aanroept.
@@ -250,39 +401,59 @@ const naadVan = (seg) => (seg?.loop
  *               lineair uitvloeien, na het gat weer in. `staat.env` bewaart
  *               de stand tussen blokken.
  *
+ * In drie stappen, zonder afval (zie boven): per segment de posities
+ * (positieOp) en de samples (leesSegment), daarna per frame gat en wissel.
+ * `vooruit` rekent met seg.R als bovengrens van de snelheid; komt er een
+ * versnelling bij (rem, zie positieOp), dan blijft |R| de bovengrens zolang
+ * het deck alleen afremt.
+ *
+ * Geef in een lus die elk blok draait `staat` mee en hergebruik het object
+ * met de argumenten (zoals stream-lezer.js): een nieuw object per blok is
+ * weer afval.
+ *
  * @returns 'einde' als het trackeinde binnen dit blok viel, anders null.
  */
 export function renderBlok({ seg, paginas, uit, frames, t0, ctxRate, trackRate, duur,
   vorig = null, wisselT = -Infinity, staat = { env: 1 } }) {
-  const [L, R] = uit;
-  const inWissel = vorig && t0 < wisselT + SEGMENT_FADE;
-  if (!seg.speelt && !inWissel) { L.fill(0, 0, frames); R.fill(0, 0, frames); return null; }
-  const naad = naadVan(seg), naadOud = naadVan(vorig);
+  const L = uit[0], R = uit[1];
+  // Hoeveel frames vallen in de overgang? Altijd het begin van het blok: t loopt op.
+  let wissel = 0;
+  if (vorig) while (wissel < frames && t0 + wissel / ctxRate < wisselT + SEGMENT_FADE) wissel++;
+  if (!seg.speelt && wissel === 0) { L.fill(0, 0, frames); R.fill(0, 0, frames); return null; }
+
+  groei(frames);
+  klad.t0 = t0; klad.ctxRate = ctxRate; klad.trackRate = trackRate; klad.duur = duur;
+  const nu = klad.nu, oud = klad.oud;
+  if (seg.speelt) leesSegment(seg, paginas, nu, frames);
+  if (wissel > 0 && vorig.speelt) leesSegment(vorig, paginas, oud, wissel);
+
   const vooruit = GAT_FADE * trackRate * Math.max(0.5, Math.abs(seg.R || 1));
   const stap = 1 / (GAT_FADE * ctxRate);
+  klad.k0 = -1; klad.k1 = -1;             // heeftPagina: niets onthouden van een vorig blok
+  let env = staat.env;
   let einde = null;
   for (let i = 0; i < frames; i++) {
-    const t = t0 + i / ctxRate;
     let l = 0, r = 0;
     if (seg.speelt) {
-      const v = leesSegment(seg, t, paginas, trackRate, duur, naad);
-      if (v === null) { einde = 'einde'; }
+      if (nu.soort[i] === VOORBIJ) { einde = 'einde'; }
       else {
         // Gat vooruit? Dan uitvloeien; data er weer? Dan invloeien.
-        const n = Math.floor(positieOp(seg, t) * trackRate);
+        const n = Math.floor(nu.f[i]);
         const doel = heeftFrame(paginas, n) && heeftFrame(paginas, Math.floor(n + vooruit)) ? 1 : 0;
-        staat.env = doel > staat.env ? Math.min(1, staat.env + stap) : Math.max(doel, staat.env - stap);
-        l = v[0] * staat.env; r = v[1] * staat.env;
+        env = doel > env ? Math.min(1, env + stap) : Math.max(doel, env - stap);
+        l = nu.l[i] * env; r = nu.r[i] * env;
       }
     }
-    if (vorig && t < wisselT + SEGMENT_FADE) {
+    if (i < wissel) {
+      const t = t0 + i / ctxRate;
       const w = Math.max(0, Math.min(1, (t - wisselT) / SEGMENT_FADE));
       const a = Math.cos(w * Math.PI / 2), b = Math.sin(w * Math.PI / 2);
-      const o = vorig.speelt ? leesSegment(vorig, t, paginas, trackRate, duur, naadOud) : null;
-      l = (o ? o[0] : 0) * a + l * b;
-      r = (o ? o[1] : 0) * a + r * b;
+      const o = vorig.speelt && oud.soort[i] !== VOORBIJ;
+      l = (o ? oud.l[i] : 0) * a + l * b;
+      r = (o ? oud.r[i] : 0) * a + r * b;
     }
     L[i] = l; R[i] = r;
   }
+  staat.env = env;
   return einde;
 }

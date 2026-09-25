@@ -6,6 +6,12 @@
  * er moeten zijn, wanneer, en wat er weg mag, beslist de hoofdthread. Op de
  * audiothread wil je geen beslissingen, alleen rekenwerk met een vaste duur.
  *
+ * En geen afval: process() maakt per blok niets aan (zie "geen afval op de
+ * audiothread" in stream-kern.js). De argumenten van renderBlok staan in één
+ * object per deck dat elk blok wordt bijgewerkt. Wat wél iets aanmaakt gebeurt
+ * per BERICHT, niet per blok: een binnenkomend bericht (dat maakt de browser)
+ * en de melding 'einde' (hooguit één per segment).
+ *
  * Berichten erin:
  *   { type: 'segment', seg }        nieuwe afspeelstand
  *   { type: 'bron', duur, sr }      nieuw bestand: alles leeg
@@ -20,6 +26,7 @@ class StreamLezer extends AudioWorkletProcessor {
   constructor() {
     super();
     this.seg = STIL;
+    this.segId = 0;
     this.paginas = new Map();
     this.duur = 0;
     this.trackRate = sampleRate;
@@ -27,6 +34,14 @@ class StreamLezer extends AudioWorkletProcessor {
     this.vorig = null;               // het segment waar we uit komen, voor de overgang
     this.wisselT = -Infinity;
     this.staat = { env: 1 };
+    // De argumenten van renderBlok: elk blok bijgewerkt, niet elk blok een
+    // nieuw object. NaN voor wat een double wordt: dan is het veld dat meteen,
+    // en een double-veld schrijft V8 ter plekke over.
+    this.blok = {
+      seg: STIL, paginas: this.paginas, uit: null, frames: 0,
+      t0: NaN, ctxRate: sampleRate, trackRate: sampleRate, duur: NaN,
+      vorig: null, wisselT: -Infinity, staat: this.staat,
+    };
     this.port.onmessage = ({ data: m }) => {
       if (m.type === 'segment') {
         // Het nieuwe segment niet hard erin zetten maar overvloeien vanaf
@@ -51,11 +66,11 @@ class StreamLezer extends AudioWorkletProcessor {
   process(_, outputs) {
     const uit = outputs[0];
     if (uit.length < 2) return true;
-    const r = renderBlok({
-      seg: this.seg, paginas: this.paginas, uit, frames: uit[0].length,
-      t0: currentFrame / sampleRate, ctxRate: sampleRate, trackRate: this.trackRate, duur: this.duur,
-      vorig: this.vorig, wisselT: this.wisselT, staat: this.staat,
-    });
+    const b = this.blok;
+    b.seg = this.seg; b.uit = uit; b.frames = uit[0].length;
+    b.t0 = currentFrame / sampleRate; b.trackRate = this.trackRate; b.duur = this.duur;
+    b.vorig = this.vorig; b.wisselT = this.wisselT;
+    const r = renderBlok(b);
     if (this.vorig && currentFrame / sampleRate > this.wisselT + 0.01) this.vorig = null;
     if (r === 'einde' && !this.eindeGemeld) {
       this.eindeGemeld = true;
