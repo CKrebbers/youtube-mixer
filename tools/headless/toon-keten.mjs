@@ -146,7 +146,7 @@ async function tot(fn, ms = 8000) {
 async function upload(naam, body) {
   const r = await fetch(`${B}/api/upload?naam=${encodeURIComponent(naam)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body });
   const j = await r.json();
-  const o = await tot(async () => (await (await fetch(`${B}/api/ingest`)).json()).opdrachten.find((x) => x.id === j.id && x.status !== 'bezig'), 180000);
+  const o = await tot(async () => (await (await fetch(`${B}/api/ingest`)).json()).opdrachten.find((x) => x.id === j.id && x.status !== 'bezig' && x.status !== 'wacht'), 180000);
   return o;
 }
 async function wachtApp() {

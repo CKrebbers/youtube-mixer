@@ -430,6 +430,53 @@ try {
     const gridGewoon = await evalueer(`fetch('/api/library/${nummer}/grid').then((r) => r.json()).then((j) => j.grid?.stukken?.[0]?.bpm ?? null)`);
     ok('tegenproef: na een gewone laad wordt hetzelfde grid wél bewaard', gridGewoon === 133, String(gridGewoon));
     await evalueer("window.engine.deck('B').pause()");
+
+    // Naden met ronde 1 (integratie-r2): hotcues en toonsoort horen bij het
+    // NUMMER. Een bewaarde hotcue komt na het laden van de server terug, buiten
+    // de bus om: het log legt hem vast ('hotcues'), en terugspelen springt er
+    // dan naartoe in plaats van een nieuwe te zetten. Wat je daarna op de
+    // teruggespeelde track aan hotcues en toonsoort doet, gaat niet naar de library.
+    {
+      const B = `http://localhost:${POORT}`;
+      const hotcuesServer = async () => JSON.stringify((await (await fetch(`${B}/api/library/${nummer}/hotcues`)).json()).hotcues);
+      const toonServer = async () => JSON.stringify((await (await fetch(`${B}/api/library/${nummer}`)).json()).track?.toon ?? null);
+      await fetch(`${B}/api/library/${nummer}/hotcues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nr: 1, tijd: 4 }) });
+      const hotVoor = await hotcuesServer();
+      await evalueer("document.getElementById('log-btn').click()");
+      await wacht(300);
+      await evalueer(`(async () => { const { track } = await (await fetch('/api/library/${nummer}')).json(); await window.library.onLaad('B', track); })()`);
+      for (let i = 0; i < 25 && (await evalueer("window.engine.deck('B').hotcues[0]")) !== 4; i++) await wacht(200);
+      await wacht(400);
+      await evalueer("window.engine.deck('B').pause(); window.engine.deck('B').seek(1); __act.invoke('track.2.hotcue.1', true); __act.invoke('track.2.hotcue.1', false)");
+      const toen = await evalueer("({ pos: window.engine.deck('B').position, hot: [...window.engine.deck('B').hotcues] })");
+      await wacht(400);
+      await evalueer("document.getElementById('log-btn').click()");
+      for (let i = 0; i < 25 && (await evalueer('window.logboek.log.bezig')); i++) await wacht(200);
+      const l4 = (await evalueer("fetch('/api/handelingen').then((r) => r.json()).then((j) => j.logs)"))[0];
+      const r4 = (await evalueer(`fetch('/api/handelingen/${l4.id}').then((r) => r.text())`)).split('\n').filter(Boolean).map((r) => JSON.parse(r));
+      ok(`de hotcue die bij het nummer terugkwam staat in het log (${JSON.stringify(r4.filter((r) => r.e === 'hotcues').map((r) => r.hotcues))})`,
+        r4.some((r) => r.e === 'hotcues' && r.track === 2 && r.hotcues[0] === 4) && Math.abs(toen.pos - 4) < 0.01);
+      // Iets anders op track 2, en terugspelen.
+      await evalueer("window.engine.setFocus('B'); document.querySelector('#focus-deck .demo-btn').click()");
+      for (let i = 0; i < 50 && !(await evalueer("window.engine.deck('B').title?.startsWith('demo')")); i++) await wacht(200);
+      await evalueer("window.engine.deck('B').pause()");
+      await evalueer("document.getElementById('terug-btn').click()");
+      for (let i = 0; i < 25 && !(await evalueer(`!!document.querySelector('#log-lijst [data-speel="${l4.id}"]')`)); i++) await wacht(200);
+      await evalueer(`document.querySelector('#log-lijst [data-speel="${l4.id}"]').click(); document.querySelector('#log-lijst [data-speel="${l4.id}"]').click()`);
+      for (let i = 0; i < 25 && !(await evalueer('window.logboek.terugspeler.bezig')); i++) await wacht(200);
+      for (let i = 0; i < 60 && (await evalueer('window.logboek.terugspeler.bezig')); i++) await wacht(200);
+      const nu = await evalueer("({ titel: window.engine.deck('B').title, pos: window.engine.deck('B').position, hot: [...window.engine.deck('B').hotcues] })");
+      ok(`teruggespeeld: de hotcue-knop sprong naar de bewaarde hotcue, zoals toen (${nu.pos.toFixed(2)} s, hotcues ${JSON.stringify(nu.hot)})`,
+        !nu.titel.startsWith('demo') && nu.hot[0] === 4 && Math.abs(nu.pos - 4) < 0.05, JSON.stringify(nu));
+      // Op de teruggespeelde track: hotcue 2 zetten en de toonsoort zetten.
+      const toonVoor = await toonServer();
+      await evalueer("__act.invoke('track.2.hotcue.2', true); __act.invoke('track.2.hotcue.2', false); __act.invoke('track.2.key', 0.5)");
+      await wacht(2200);                            // bewaarlus 1,5 s, hotcues meteen
+      const na = { hot: await hotcuesServer(), toon: await toonServer(), deckHot: await evalueer("window.engine.deck('B').hotcues[1]"),
+        deckToon: await evalueer("window.engine.deck('B').toonKaart?.bron ?? null") };
+      ok('op een teruggespeelde track gaan hotcues en toonsoort niet naar de library', na.hot === hotVoor && na.toon === toonVoor
+        && na.deckHot !== null && na.deckToon === 'hand', `${hotVoor} -> ${na.hot} · ${toonVoor} -> ${na.toon} · deck ${na.deckHot}/${na.deckToon}`);
+    }
   }
   ok('geen fouten rond het log', meldingen.length === 0, meldingen.join(' | '));
 } catch (err) {
