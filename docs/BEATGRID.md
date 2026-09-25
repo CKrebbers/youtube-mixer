@@ -264,7 +264,8 @@ Gemeten na (scripts en uitkomst: `tools/beatmeting/rest/gridpast*.mjs/.txt`):
   tel, 150 → 153 en 128 → 129,5, drie nummers, een staart, een versnelling, twee schone
   stukken; en de onderdelen los). Met de detect.js van vóór falen ze, op de schone na.
 
-Controle (25 sep, `integratie-r5`; scripts in de scratchpad van de controleur):
+Controle (25 sep, `integratie-r5`; verslag in `docs/verslagen/2026-09-25/controle-grid-past.md`,
+de proefscripts zijn niet bewaard):
 - **Hersteld: een break werd een eigen grid.** 128 met kicks en zachte offbeat-hats, in de
   break alleen hats op de offbeat (ook: een bas op de offbeat, claps op 2 en 4 met hats):
   een break van 60 s werd een eigen ZEKER stuk een halve tel naast (100% van de tellen), een

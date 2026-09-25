@@ -195,6 +195,7 @@ docs/
   HANDELINGENLOG.md formaat, keuzes en grenzen van het handelingenlog
   AUDIOPAD.md       audiopad zonder afval: waar het zat, de regels, cijfers vóór/na
   VORMEN-16x9.md    vormen op 640 × 360: API, per systeem, Clay's keuze, uitzonderingen
+  verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
 ## Conventies

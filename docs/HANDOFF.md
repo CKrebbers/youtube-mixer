@@ -11,6 +11,35 @@ Lees in deze volgorde:
 5. Per onderdeel: `docs/TOONSOORT.md` (§13), `MAPPING-VERSCHIL.md`, `LIBRARY.md`,
    `BEAMER.md`, `HANDELINGENLOG.md`, `AUDIOPAD.md`, `VORMEN-16x9.md`,
    `BEATGRID.md` (restpunten), `APC40.md`.
+6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
+   `docs/verslagen/2026-09-25/` (README = index per spoor).
+
+## HERVATTEN (opgeruimd 25 sep, avond)
+
+De repo is schoon: alleen `main`, geen andere branches of worktrees, niets
+ongecommit. De server draait met de nieuwe code (`~/.varve-server.log`); na een
+herstart van de Mac: `cd` naar de projectmap en
+`nohup node server/index.js >> ~/.varve-server.log 2>&1 &`.
+
+De volgende sessie begint met wat Clay zegt over zijn proefsessie. Hervat-prompt:
+
+> We gaan verder met Varve. Lees CLAUDE.md en docs/HANDOFF.md (HERVATTEN en
+> BEGIN HIER). Ik heb de proeflijst gedaan; dit klopte niet: … [of: ik heb nog
+> niet geprobeerd]. Repareer eerst wat niet klopt, leg me daarna de vragen uit
+> VRAGEN blok J voor die op gevoel gaan (🎛/👀), één voor één met advies.
+
+Wat er na de proefsessie open ligt, op volgorde (zie ROADMAP):
+1. Reparatieronde voor wat Clay vond (in zijn eigen Chrome, met de APC).
+2. VRAGEN blok J (33): de meeste volgen het advies; alleen 🎛/👀 vragen hem.
+3. Na een sessie `hub.status().echoes` bekijken: 0 = echofilter voor de APC uit.
+4. ↻ in de library op het album, let it all go, Sakamoto en de jungle-mix
+   (de nieuwe beatgrid-analyse geldt pas na ↻).
+5. Keylock (ROADMAP 15): wacht op de luistertest A3 (`tools/keylock/LUISTER.md`).
+6. AV-kern tot publicatie 1 (25 okt), fase 0 met `~/src/av-kern/FASE0-TEST.md`
+   (Varve helemaal dicht). Beslissing H5 rond 25 okt.
+7. Stems (17), daarna de rest van ROADMAP.
+Advies dat nog open staat: de projectmap buiten iCloud zetten (bv. `~/src/varve`):
+iCloud maakte conflictkopieën ("detect 2.js") en synchroniseert elke worktree.
 
 ## BEGIN HIER (stand 25 sep)
 
