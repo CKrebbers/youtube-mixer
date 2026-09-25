@@ -52,16 +52,27 @@ export function trackVanActie(a) {
   return m ? Number(m[1]) : null;
 }
 
-/** Soorten gebeurtenissen die terugspelen kent; de rest wordt overgeslagen en geteld. */
-const SOORTEN = new Set(['laad', 'focus', 'rack', 'grid', 'pads']);
+/**
+ * Soorten gebeurtenissen die terugspelen kent; de rest wordt overgeslagen en
+ * geteld. Een `stand` midden in het log (na de beginstand) komt van een
+ * terugspelen dat toen liep terwijl dit log opnam: zie Terugspeler._stand.
+ */
+const SOORTEN = new Set(['laad', 'focus', 'rack', 'grid', 'pads', 'stand']);
+
+/** Sleutel in `laadt` voor een stand midden in het log: dan wacht ALLES. */
+const ALLES = '*';
 
 /**
  * Het draaiboek: alle regels met het moment waarop ze de bus op gaan,
  * gesorteerd op tijd en daarbinnen in de volgorde van het log.
+ *
+ * @param beginstand  de stand die al vóór T0 gezet wordt (die gaat er niet
+ *                    nog eens in). Niet opgegeven: de eerste stand van het log.
  */
-export function maakPlan(regels) {
+export function maakPlan(regels, { beginstand } = {}) {
   const plan = [];
   let volg = 0, onbekend = 0;
+  let eersteStand = beginstand === undefined;
   for (const r of regels) {
     if (Array.isArray(r)) {
       const [t, a, v] = r;
@@ -69,7 +80,8 @@ export function maakPlan(regels) {
       if (OVERSLAAN.test(a)) continue;
       plan.push({ tijd: t, volg: volg++, soort: 'actie', a, v, track: trackVanActie(a) });
     } else if (r && typeof r === 'object' && typeof r.e === 'string') {
-      if (r.e === 'kop' || r.e === 'stand' || r.e === 'eind') continue;
+      if (r.e === 'kop' || r.e === 'eind') continue;
+      if (r.e === 'stand' && (r === beginstand || eersteStand)) { eersteStand = false; continue; }
       if (!SOORTEN.has(r.e) || !Number.isFinite(r.t)) { onbekend++; continue; }
       // Laden begint zo lang vóór het moment dat hij klaar was als hij toen duurde.
       const duur = r.e === 'laad' && Number.isFinite(r.duur) && r.duur > 0 ? r.duur : 0;
@@ -100,6 +112,10 @@ export class Terugspeler {
     this.plan = null;
     this.onKlaar = null;
     this.onFout = null;
+    // Na elke stand die buiten de bus om gezet is (de beginstand, of een stand
+    // midden in het log). Loopt er intussen een log (een opname van dit
+    // terugspelen), dan moet die stand daarin: logboek.js schrijft hem erin.
+    this.onStand = null;
     this._nr = 0;
   }
 
@@ -115,12 +131,13 @@ export class Terugspeler {
   async start({ stand = null, regels = [], duur = null } = {}) {
     if (this.plan) this.stop();
     const nr = ++this._nr;
-    const { plan, onbekend } = maakPlan(regels);
+    const { plan, onbekend } = maakPlan(regels, { beginstand: stand });
     this.plan = plan;
     this.i = 0;
     this.T0 = null;
     this.duur = duur ?? (plan.length ? plan[plan.length - 1].tijd : 0);
-    this.laadt = new Map();             // track -> handelingen die wachten tot hij geladen is
+    this.laadt = new Map();             // track (of ALLES) -> handelingen die wachten tot hij geladen is
+    this._bezig = new Set();            // laden die nog lopen (een stand wacht erop)
     this.ingedrukt = new Set();         // triggers die nog niet losgelaten zijn
     this.zonder = new Set();            // tracks waar het nummer van toen niet op staat (NUMMER_NODIG)
     this.stats = { regels: plan.length, gedaan: 0, onbekend, laat: 0, maxLaat: 0, mislukt: 0, overgeslagen: 0 };
@@ -132,6 +149,7 @@ export class Terugspeler {
         for (const t of r?.zonder || []) this.zonder.add(t);
       } catch (err) { this.onFout?.(`beginstand: ${err.message}`); }
       if (nr !== this._nr) return;      // intussen gestopt
+      try { this.onStand?.(); } catch (_) {}
     }
     this.T0 = this.klok();
     this._timer = this.elke(() => this._tik(), this.tikMs);
@@ -141,17 +159,20 @@ export class Terugspeler {
   stop() { this._eind('gestopt'); }
 
   _tik() {
-    if (!this.plan) return;
+    // Tijdens een stand midden in het log staat de klok van het log stil.
+    if (!this.plan || this.laadt.has(ALLES)) return;
     const nu = this.klok() - this.T0;
-    while (this.plan && this.i < this.plan.length && this.plan[this.i].tijd <= nu) this._doe(this.plan[this.i++], nu);
+    while (this.plan && !this.laadt.has(ALLES) && this.i < this.plan.length && this.plan[this.i].tijd <= nu) this._doe(this.plan[this.i++], nu);
     // Klaar als alles gedaan is EN de tijd van het log om is: een set opnieuw
     // renderen duurt net zo lang als het origineel, ook na de laatste handeling.
     if (this.plan && this.i >= this.plan.length && !this.laadt.size && nu >= this.duur) this._eind('klaar');
   }
 
   _doe(x, nu) {
-    // Deze track laadt nog: achteraan in zijn rij, de rest loopt door.
-    if (x.track !== null && this.laadt.has(x.track)) { this.laadt.get(x.track).push(x); return; }
+    // Er wordt een stand gezet: alles wacht. Deze track laadt nog: achteraan
+    // in zijn rij, de rest loopt door.
+    const rij = this.laadt.get(ALLES) ?? (x.track !== null ? this.laadt.get(x.track) : undefined);
+    if (rij) { rij.push(x); return; }
     if (x.soort === 'actie' && this.zonder.has(x.track) && NUMMER_NODIG.test(x.a)) { this.stats.overgeslagen++; return; }
     const laat = nu - x.tijd;
     if (laat > 0.05) { this.stats.laat++; this.stats.maxLaat = Math.max(this.stats.maxLaat, laat); }
@@ -162,6 +183,7 @@ export class Terugspeler {
         else if (x.v === false) this.ingedrukt.delete(x.a);
         this.invoke(x.a, x.v);
       } else if (x.soort === 'laad') this._laad(x);
+      else if (x.soort === 'stand') this._stand(x);
       else if (x.soort === 'rack') this.doe.rack(x.track, x.e.rack);
       else if (x.soort === 'grid') this.doe.grid(x.track, x.e.grid ?? null);
       else if (x.soort === 'focus') this.doe.focus(x.track);
@@ -177,19 +199,53 @@ export class Terugspeler {
     this.laadt.set(x.track, rij);
     const nr = this._nr;
     let gelukt = false;
-    Promise.resolve().then(() => this.doe.laad(x.track, x.e)).then((r) => {
+    const bezig = Promise.resolve().then(() => this.doe.laad(x.track, x.e)).then((r) => {
       gelukt = r !== false;
       if (!gelukt) this.stats.mislukt++;
     }, (err) => {
       this.stats.mislukt++;
       this.onFout?.(`track ${x.track} laden: ${err.message}`);
-    }).then(() => {
+    });
+    this._bezig.add(bezig);
+    bezig.then(() => {
+      this._bezig.delete(bezig);
       if (nr !== this._nr || !this.plan) return;
       if (gelukt) this.zonder.delete(x.track);
       else this.zonder.add(x.track);
       this.laadt.delete(x.track);
       // Wat er intussen voor deze track kwam, nu en in volgorde. Staat er
       // weer een laad tussen, dan wacht de rest daarop (_doe regelt dat).
+      const nu = this.klok() - this.T0;
+      for (const y of rij) this._doe(y, nu);
+      this._tik();
+    });
+  }
+
+  /**
+   * Een stand midden in het log. Die komt van een terugspelen dat liep
+   * terwijl dit log opnam (opnieuw renderen): de beginstand daarvan zette
+   * posities, tempo, cues, loops en wat speelt BUITEN de bus om, dus hier
+   * weer. Alles wacht, eerst op wat nog laadt (anders laadt de stand
+   * hetzelfde nummer er nog eens overheen), dan de stand; de klok van het log
+   * staat zolang stil, net als bij de beginstand, zodat wat erna komt op
+   * dezelfde plek in de muziek valt.
+   */
+  _stand(x) {
+    const rij = [];
+    this.laadt.set(ALLES, rij);
+    const nr = this._nr;
+    const nogBezig = () => nr === this._nr;
+    const begon = this.klok();
+    Promise.all([...this._bezig]).then(() => (nogBezig() ? this.doe.stand(x.e, { nogBezig }) : null)).then((r) => {
+      if (nogBezig() && r) this.zonder = new Set(r.zonder || []);
+    }, (err) => {
+      this.stats.mislukt++;
+      this.onFout?.(`stand: ${err.message}`);
+    }).then(() => {
+      if (!nogBezig() || !this.plan) return;
+      this.T0 += this.klok() - begon;
+      this.laadt.delete(ALLES);
+      try { this.onStand?.(); } catch (_) {}
       const nu = this.klok() - this.T0;
       for (const y of rij) this._doe(y, nu);
       this._tik();
@@ -220,11 +276,18 @@ export class Terugspeler {
  * @param laad    (deckId, e) => Promise<boolean>: e = { bron, nummer, titel, grid, demo }
  * @param meld    (tekst, soort) => void
  * @param invoke, read, has  de bus
+ * @param huidig  deckId => waar wat er NU op staat vandaan komt ({ bron, nummer | demo }),
+ *                of null als dat niet telt. Staat er al precies dat nummer, dan laadt
+ *                de stand het niet opnieuw: een stand midden in het log komt vlak na de
+ *                laad-gebeurtenissen van diezelfde nummers.
  */
-export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, read, has }) {
+export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, read, has, huidig = () => null }) {
   const deckVan = (nr) => tracks.find(([n]) => n === nr)?.[1] ?? null;
   const deck = (nr) => (deckVan(nr) ? engine.deck(deckVan(nr)) : null);
   const gridTekst = (d) => (d.grid ? JSON.stringify(d.grid.toJSON()) : 'null');
+  const zelfdeNummer = (a, b) => !!a && !!b && a.bron === b.bron
+    && (a.bron === 'library' ? !!a.nummer && a.nummer === b.nummer
+      : a.bron === 'demo' && Number(a.demo?.seed) === Number(b.demo?.seed) && Number(a.demo?.bars) === Number(b.demo?.bars));
 
   /** Een rack uit het log: alleen wat verschilt, anders hoor je een kruisfade voor niets. */
   function rack(fx, r) {
@@ -297,6 +360,9 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
         zonder.push(t.track);
         return;
       }
+      // Staat dat nummer er al (net geladen): niet nog eens. Wat een laad
+      // terugzet (cue, hotcues, grid, loop, tempo) zet de stand hieronder zelf.
+      if (zelfdeNummer(huidig(d.id), t)) { geladen.add(d.id); return; }
       const gelukt = await Promise.resolve().then(() => laad(d.id, t))
         .catch((err) => { meld(`terugspelen: track ${t.track}: ${err.message}`, 'fout'); return false; });
       if (gelukt) geladen.add(d.id);

@@ -324,6 +324,45 @@ try {
       && klaar?.overgeslagen === 3 && klaar.mislukt === 1 && klaar.reden === 'klaar');
   }
 
+  console.log('\nterugspelen: een stand midden in het log (nep-klok)');
+  {
+    // Een stand midden in het log (terugspelen dat toen opnam) die 0,4 s laadt:
+    // alles wacht, en de klok van het log staat zolang stil. Wat erna komt valt
+    // dus 0,4 s later op de audioklok, op dezelfde plek in de muziek.
+    let klokT = 0;
+    const timers = nepTimers();
+    const gedaan = [];
+    let standKlaar = null;
+    const doe = {
+      stand: (st) => { gedaan.push(['stand', st.naam, klokT]); if (st.naam === 'begin') return { zonder: [] };
+        return new Promise((z) => { standKlaar = () => z({ zonder: [] }); }); },
+      laad: async () => true, rack() {}, grid() {}, focus() {}, pads() {},
+    };
+    const sp = new T.Terugspeler({ klok: () => klokT, invoke: (a, v) => gedaan.push([a, v, klokT]), doe, elke: timers.elke, stopElke: timers.stopElke });
+    let onStand = 0;
+    sp.onStand = () => onStand++;
+    const begin = { t: 0, e: 'stand', naam: 'begin' };
+    const regels = [{ t: 0, e: 'kop', versie: 1 }, begin, [0.1, 'track.1.fader', 0.5], { t: 0.2, e: 'stand', naam: 'midden' },
+      [0.2, 'mixer.xfader', 0.1], [0.3, 'track.1.fader', 0.7], { t: 0.5, e: 'eind', regels: 6 }];
+    await sp.start({ stand: begin, regels, duur: 0.5 });
+    const T0 = sp.T0;
+    const stap = async (tot) => { while (klokT < tot - 1e-9) { klokT = Math.round((klokT + 0.01) * 1000) / 1000; timers.tik(); await new Promise((z) => setTimeout(z, 0)); } };
+    await stap(T0 + 0.25);
+    ok('de beginstand niet nog eens, de stand midden in het log wel', gedaan.filter((x) => x[0] === 'stand').map((x) => x[1]).join() === 'begin,midden');
+    ok('tijdens die stand wacht alles (ook wat geen track heeft)', !gedaan.some((x) => x[0] === 'mixer.xfader'));
+    await stap(T0 + 0.6);                   // de stand laadt 0,4 s
+    standKlaar();
+    await new Promise((z) => setTimeout(z, 0));
+    const xf = gedaan.find((x) => x[0] === 'mixer.xfader');
+    ok(`daarna meteen wat op het moment van de stand stond (${xf ? (xf[2] - T0).toFixed(2) : '-'} s)`, xf && Math.abs(xf[2] - (T0 + 0.6)) < 0.011);
+    await stap(T0 + 0.8);
+    const f7 = gedaan.find((x) => x[0] === 'track.1.fader' && x[1] === 0.7);
+    ok(`en de klok van het log stond stil: 0,3 s valt op ${f7 ? (f7[2] - T0).toFixed(2) : '-'} s (0,3 + 0,4 wachten)`, f7 && Math.abs(f7[2] - (T0 + 0.7)) < 0.011);
+    ok('onStand na de beginstand én na de stand midden in het log', onStand === 2);
+    await stap(T0 + 1);
+    ok('klaar, duur plus de wachttijd', !sp.bezig);
+  }
+
   console.log('\nrondje met de echte engine (Web Audio-mock)');
   {
     const { Engine, DECK_IDS } = await import('../src/engine/engine.js');
@@ -430,6 +469,75 @@ try {
       const dA = eng.deck('A');
       ok(`gestopt tijdens het laden van de beginstand: daarna niets meer (speelt ${dA.playing}, positie ${dA.position.toFixed(2)}, fader ${dA.ui.fader})`,
         !!laadKlaar && !dA.playing && dA.position < 1 && dA.ui.fader === 0.3 && !sp3.bezig && t3.aantal() === 0);
+    }
+    // Opnieuw renderen: terugspelen terwijl er een log loopt (een opname neemt
+    // er vanzelf een mee). Ook DAT log moet terug te spelen zijn, inclusief wat
+    // de beginstand buiten de bus om zette: positie, tempo, hotcues, wat speelt.
+    // Eerst stond dat er niet in: de derde generatie speelde niets af.
+    {
+      const herk = {};
+      const laadDemo = (id, demo, titel) => { eng.deck(id).load(renderDemoTrack(eng.ctx, demo), titel); herk[id] = { bron: 'demo', demo }; };
+      const standNu = () => H.leesStand({ engine: eng, tracks: A.TRACKS, herkomst: (id) => herk[id] ?? null, acties: A.list(), lees: A.read });
+      const tk = nepTimers();
+      const dir4 = join(map, 'opnieuw');
+      const srv4 = nepServer(dir4);
+      const nieuwLog = () => new H.Handelingenlog({ klok: () => NOW, haal: srv4.haal, wacht: async () => {}, elke: tk.elke, stopElke: tk.stopElke });
+      const a = eng.deck('A'), b = eng.deck('B');
+      // (1) het origineel: A speelt vanaf 1,2 s op 1,05x met hotcue 1 op 2,0 s; B staat stil op 0,5 s.
+      laadDemo('A', { seed: 0, bars: 4 }, 'demo 1'); laadDemo('B', { seed: 1, bars: 2 }, 'demo 2');
+      a.setRate(1.05); a.seek(1.2); a.hotcues = [2.0, null, null, null]; a.play(); b.pause(); b.seek(0.5);
+      const log1 = nieuwLog();
+      const weg1 = A.bijInvoke((id, v) => log1.neem(id, v));
+      const r1 = await log1.start({ stand: standNu() });
+      NOW += 0.3; A.invoke('track.1.fader', 0.6);
+      NOW += 0.5; A.invoke('track.1.hotcue.1', true); A.invoke('track.1.hotcue.1', false);
+      NOW += 0.2; A.invoke('mixer.xfader', 0.3);
+      NOW += 0.5; tk.tik();
+      await log1.stop(); weg1();
+      const l1 = H.leesLog(readFileSync(join(dir4, `set-${r1.id}.acties.jsonl`), 'latin1'));
+      // (2) door elkaar, een log aan (de opname) en terugspelen.
+      const husselen = () => {
+        laadDemo('A', { seed: 5, bars: 2 }, 'iets anders'); b.play();
+        A.invoke('track.1.fader', 0.2); A.invoke('mixer.xfader', 0.9);
+      };
+      husselen();
+      const log2 = nieuwLog();
+      const weg2 = A.bijInvoke((id, v) => log2.neem(id, v));
+      const L2 = NOW;
+      const r2 = await log2.start({ stand: standNu() });
+      const uitvoerder = (naLaad) => T.maakUitvoerder({ engine: eng, tracks: A.TRACKS, invoke: A.invoke, read: A.read, has: A.has,
+        huidig: (id) => herk[id] ?? null,
+        laad: async (deckId, e) => { laadDemo(deckId, e.demo, e.titel); naLaad?.(deckId, e); return true; } });
+      // laden.js meldt elke geslaagde laad aan het log (naLaad): hier nagebootst.
+      const sp4 = new T.Terugspeler({ klok: () => NOW, invoke: A.invoke, elke: tk.elke, stopElke: tk.stopElke,
+        doe: uitvoerder((deckId, e) => log2.gebeurtenis('laad', { track: A.trackVanDeck(deckId), bron: 'demo', demo: e.demo, titel: e.titel, duur: 0, grid: null })) });
+      // Wat logboek.js doet: elke stand die het terugspelen buiten de bus om zet, in het lopende log.
+      let standen = 0;
+      sp4.onStand = () => { standen++; if (log2.bezig) log2.gebeurtenis('stand', standNu()); };
+      await sp4.start({ stand: l1.stand, regels: l1.regels, duur: l1.duur });
+      while (sp4.bezig) { NOW = Math.round((NOW + 0.01) * 1000) / 1000; tk.tik(); await Promise.resolve(); }
+      const D = NOW - L2;
+      const eind2 = { pos: a.position, speelt: a.playing, rate: a.rate, hot: a.hotcues[0], bSpeelt: b.playing, bPos: b.position, fader: a.ui.fader, x: eng.xfader };
+      await log2.stop(); weg2();
+      const l2 = H.leesLog(readFileSync(join(dir4, `set-${r2.id}.acties.jsonl`), 'latin1'));
+      ok(`tweede generatie gelijk aan het origineel (A ${eind2.pos.toFixed(2)} s, speelt ${eind2.speelt}, hotcue ${eind2.hot})`,
+        eind2.speelt && eind2.rate === 1.05 && eind2.hot === 2 && !eind2.bSpeelt && eind2.fader === 0.6 && eind2.x === 0.3);
+      ok('onStand na de beginstand, en de stand staat midden in het nieuwe log', standen === 1
+        && l2.regels.filter((r) => r?.e === 'stand').length === 2);
+      ok('een stand midden in het log komt in het draaiboek, de beginstand niet', T.maakPlan(l2.regels, { beginstand: l2.stand }).plan.filter((x) => x.soort === 'stand').length === 1
+        && T.maakPlan(l2.regels).plan.filter((x) => x.soort === 'stand').length === 1);
+      // (3) weer door elkaar, en die nieuwe versie terugspelen: dezelfde eindstand.
+      husselen();
+      const t5 = nepTimers();
+      const sp5 = new T.Terugspeler({ klok: () => NOW, invoke: A.invoke, doe: uitvoerder(null), elke: t5.elke, stopElke: t5.stopElke });
+      await sp5.start({ stand: l2.stand, regels: l2.regels, duur: l2.duur });
+      const T5 = sp5.T0;
+      while (NOW < T5 + D - 1e-9) { NOW = Math.round((NOW + 0.01) * 1000) / 1000; t5.tik(); await new Promise((z) => setTimeout(z, 0)); }
+      const eind3 = { pos: a.position, speelt: a.playing, rate: a.rate, hot: a.hotcues[0], bSpeelt: b.playing, bPos: b.position, fader: a.ui.fader, x: eng.xfader };
+      sp5.stop();
+      ok(`de opname van een terugspeelsessie speelt zelf ook terug (A ${eind3.pos.toFixed(2)} / ${eind2.pos.toFixed(2)} s, speelt ${eind3.speelt}, B speelt ${eind3.bSpeelt})`,
+        eind3.speelt === eind2.speelt && eind3.rate === eind2.rate && eind3.hot === eind2.hot && eind3.bSpeelt === eind2.bSpeelt
+        && Math.abs(eind3.pos - eind2.pos) <= 0.021 && Math.abs(eind3.bPos - eind2.bPos) < 1e-9 && eind3.fader === eind2.fader && eind3.x === eind2.x);
     }
     ok('DECK_IDS en TRACKS horen bij elkaar (acht tracks)', DECK_IDS.length === A.TRACKS.length);
   }

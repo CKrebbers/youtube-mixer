@@ -127,8 +127,17 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
 
   const terugspeler = new Terugspeler({
     klok, invoke,
-    doe: maakUitvoerder({ engine, tracks: TRACKS, laad: laden.laadVoorTerugspelen, meld, invoke, read, has }),
+    doe: maakUitvoerder({ engine, tracks: TRACKS, laad: laden.laadVoorTerugspelen, meld, invoke, read, has,
+      // Wat terugspelen zelf laadde (of een demo, die de library niet raakt)
+      // hoeft een stand niet opnieuw te laden. Een nummer dat gewoon geladen
+      // is wel: dan komt het in terugspeelDecks en bewaart het niets.
+      huidig: (id) => (staat.terugspeelDecks.has(id) || staat.deckHerkomst[id]?.bron === 'demo' ? staat.deckHerkomst[id] : null) }),
   });
+  // Loopt er een log terwijl we terugspelen (de opname van een nieuwe versie),
+  // dan ziet dat log de actions wel, maar niet wat de stand buiten de bus om
+  // zette: posities, tempo, cues, loops, wat speelt. Die stand gaat erin, zodat
+  // ook die nieuwe versie terug te spelen is (terugspelen.js, Terugspeler._stand).
+  terugspeler.onStand = () => { if (log.bezig) log.gebeurtenis('stand', stand()); };
   terugspeler.onFout = (f) => meld(`terugspelen: ${f}`, 'fout');
   terugspeler.onKlaar = ({ reden, gedaan, laat, maxLaat, mislukt, onbekend, overgeslagen }) => {
     speelt = null;

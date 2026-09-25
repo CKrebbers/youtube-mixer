@@ -120,6 +120,10 @@ het midden in een set begint. ~10 kB met acht tracks.
   `.tempo` en `.grid.bpm` (positie, tempo en grid staan per track, precies).
 - `rond`: triggers die rondlopen (`RONDLOPERS`): terugzetten = drukken tot de
   read klopt.
+- Een `stand` kan ook MIDDEN in een log staan: daar begon een terugspelen terwijl
+  dit log liep (opnieuw renderen). De beginstand daarvan zet posities, tempo,
+  cues, loops en wat speelt buiten de bus om; zonder die regel was de opname van
+  een replay zelf niet terug te spelen. Zie "Terugspelen", punt 5.
 
 **`laad`**: een geslaagde laad, op het moment dat hij KLAAR was.
 ```
@@ -217,6 +221,12 @@ klik = stoppen (de tracks spelen door). Op de bus: `log.replay.stop`.
    nog ingedrukt was: geen hangende bend. Stop je terwijl de beginstand nog
    laadt, dan blijft wat al geladen is staan, maar wordt er niets meer gezet
    of gestart (`nogBezig`).
+5. **Een stand midden in het log** (zie het formaat) is een nieuwe beginstand:
+   alles wacht, eerst op wat nog laadt, dan wordt de stand gezet, en de klok van
+   het log staat zolang stil (T0 schuift op), net als bij het begin. Een nummer
+   dat er al staat (net door terugspelen geladen, of dezelfde demo) wordt niet
+   nog eens geladen (`huidig`). Na elke stand roept de Terugspeler `onStand`;
+   loopt er een log, dan schrijft logboek.js de stand van dat moment erin.
 
 Wat NIET opnieuw de bus op gaat (`OVERSLAAN`):
 - `record.*`, `log.*`: terugspelen start geen opname en geen log. Wil je de
@@ -247,7 +257,9 @@ inmiddels anders kan zijn. Een sjabloon (`s:2`) wel.
 Wil je een fout EXACT naspelen: niets aanraken. Soft-takeover voorkomt dat een
 fader springt als hij niet staat waar de replay hem zette. Loopt er tijdens het
 terugspelen een log, dan legt dat de replay plus jouw handelingen vast: een
-nieuwe versie van de set.
+nieuwe versie van de set. Wat de beginstand buiten de bus om zette staat
+erin als een `stand` midden in dat log (punt 5), zodat die nieuwe versie zelf
+ook terug te spelen is (`handelingenlog.test.mjs`: drie generaties).
 
 **Niets bewaren.** Wat terugspelen laadt staat in `staat.terugspeelDecks` tot er
 gewoon iets anders op die track geladen wordt. Voor die tracks gaat er niets
