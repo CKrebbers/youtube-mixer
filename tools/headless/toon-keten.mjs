@@ -1,7 +1,8 @@
 // De toonsoort door de HELE keten, headless, met de echte server (ROADMAP 14):
 // upload -> ingest (stap "toon", in de worker) -> library -> /api/library ->
 // deck -> kolomkop en focus -> met de hand corrigeren -> POST /toon -> slot in
-// de kiezer -> pagina herladen -> weer laden -> ↻ (grid én toonsoort).
+// de kiezer -> pagina herladen -> weer laden -> ↻ (grid én toonsoort) -> een
+// nummer waar de analyse twijfelt: de tweede kandidaat van de server in de tooltips.
 //
 // Anders dan toon.mjs wordt hier NIETS onderschept of nagemaakt: het nummer gaat
 // door de gewone upload-route en de ingest, en elke controle leest wat de server
@@ -59,10 +60,27 @@ function stuk(tonica, mineur, duur, zaad) {
     noot(x, t, 2, freq(grond - 12), 0.2, rnd);
     for (let m = 0; m < 4; m++) { const n = 72 + tonica + ladder[Math.floor(rnd() * 7)]; noot(x, t + m * 0.5, 0.5, freq(n > 84 ? n - 12 : n), 0.07, rnd, sinus); }
   }
+  kick(x, duur);
+  return x;
+}
+function kick(x, duur) {
   for (let t = 0; t < duur - 0.3; t += 60 / 124) {
     const a = Math.round(t * BR);
     for (let i = 0; i < 0.2 * BR && a + i < x.length; i++) x[a + i] += 0.5 * Math.sin(2 * Math.PI * 55 * i / BR) * Math.exp(-i / BR / 0.12);
   }
+}
+/**
+ * Alleen kwinten, om en om op C en G, zonder terts en zonder melodie: C of G?
+ * De analyse twijfelt (gemeten met zaad 5: G, zekerheid 0,10, tweede C).
+ */
+function kwinten(duur, zaad) {
+  const rnd = rndMet(zaad), x = new Float32Array(Math.round(duur * BR));
+  for (let t = 0, i = 0; t < duur; t += 2, i++) {
+    const grond = 48 + (i % 2 ? 7 : 0);
+    for (const iv of [0, 7]) noot(x, t, 2, freq(grond + iv), 0.12, rnd);
+    noot(x, t, 2, freq(grond - 12), 0.2, rnd);
+  }
+  kick(x, duur);
   return x;
 }
 function wav(...delen) {
@@ -82,6 +100,8 @@ function wav(...delen) {
 const ALBUM = wav(stuk(0, false, 70, 1), stuk(3, false, 70, 2));
 // Nummer 2: 40 s A mineur.
 const TWEEDE = wav(stuk(9, true, 40, 3));
+// Nummer 3: 40 s kwinten op C en G, waar de analyse twijfelt.
+const TWIJFEL = wav(kwinten(40, 5));
 
 function zoekChrome() {
   if (process.env.VARVE_CHROME) return process.env.VARVE_CHROME;
@@ -166,14 +186,22 @@ try {
   const t0 = Date.now();
   const o1 = await upload('album C dan Es.wav', ALBUM);
   const o2 = await upload('tweede in Am.wav', TWEEDE);
-  const ID = o1?.track?.id, ID2 = o2?.track?.id;
-  ok(`twee nummers via de gewone upload-route en de ingest (${((Date.now() - t0) / 1000).toFixed(1)} s)`, o1?.status === 'klaar' && o2?.status === 'klaar', o1?.fout || o2?.fout || '');
+  const o3 = await upload('twijfel C of G.wav', TWIJFEL);
+  const ID = o1?.track?.id, ID2 = o2?.track?.id, ID3 = o3?.track?.id;
+  ok(`drie nummers via de gewone upload-route en de ingest (${((Date.now() - t0) / 1000).toFixed(1)} s)`,
+    o1?.status === 'klaar' && o2?.status === 'klaar' && o3?.status === 'klaar', o1?.fout || o2?.fout || o3?.fout || '');
   const k1 = await serverToon(ID);
   ok(`de ingest bewaarde een automatische kaart: ${k1?.stukken.map((s) => `${s.van}s ${s.toonsoort} z${s.zekerheid}`).join(' | ')}`,
     k1?.bron === 'auto' && k1.slot === false && k1.versie >= 1 && k1.stukken.length === 2
     && k1.stukken[0].toonsoort === 'C' && k1.stukken[1].toonsoort === 'Eb' && Math.abs(k1.stukken[1].van - 70) <= 12);
   const k2 = await serverToon(ID2);
   ok(`tweede nummer: ${k2?.stukken.map((s) => s.toonsoort).join(' | ')}`, k2?.stukken.length === 1 && k2.stukken[0].toonsoort === 'Am');
+  const k3 = await serverToon(ID3);
+  ok(`twijfelnummer: ${k3?.stukken.map((s) => `${s.toonsoort} z${s.zekerheid} of ${s.tweede}`).join(' | ')}`,
+    k3?.stukken.length === 1 && k3.stukken[0].toonsoort === 'G' && k3.stukken[0].tweede === 'C' && k3.stukken[0].zekerheid < 0.40);
+  const alleStukken = [k1, k2, k3].flatMap((k) => k?.stukken ?? []);
+  ok(`de ingest geeft elk stuk een tweede kandidaat (${alleStukken.map((s) => `${s.toonsoort}/${s.tweede}`).join(' ')})`,
+    alleStukken.length === 4 && alleStukken.every((s) => typeof s.tweede === 'string' && s.tweede !== s.toonsoort));
   const lijst = (await (await fetch(`${B}/api/library`)).json()).tracks;
   ok('/api/library draagt dezelfde kaart', JSON.stringify(lijst.find((t) => t.id === ID)?.toon) === JSON.stringify(k1));
 
@@ -211,7 +239,7 @@ try {
 
   // library-kolom: de plaat, uit /api/library
   await klik('#lib-btn');
-  await tot(() => evalueer(`document.querySelectorAll('.lib-rij').length === 2`));
+  await tot(() => evalueer(`document.querySelectorAll('.lib-rij').length === 3`));
   const b1 = await badge(ID);
   ok(`library-kolom toont de kaart van de server ("${b1?.t}")`, /^(8B C|5B E♭)\?? \+1$/.test(b1?.t ?? ''));
   await foto('keten-library.png', await rect('#lib-panel', 0));
@@ -285,7 +313,7 @@ try {
   await wachtApp();
   await evalueer('window.engine.resume()');
   await klik('#lib-btn');
-  await tot(() => evalueer(`document.querySelectorAll('.lib-rij').length === 2`));
+  await tot(() => evalueer(`document.querySelectorAll('.lib-rij').length === 3`));
   const b2 = await badge(ID);
   ok(`na herladen: library op slot ("${b2?.t}")`, /\bslot\b/.test(b2?.c ?? '') && /\+1$/.test(b2?.t ?? ''));
   await evalueer(`window.library.laad(${JSON.stringify(ID)}, 'B')`);
@@ -314,6 +342,25 @@ try {
   await frames(6);
   ok(`... en track 2 toont het meteen ("${(await kolom('B')).t}")`, /^5B E♭\??$/.test((await kolom('B')).t));
   await foto('keten-library-na.png', await rect('#lib-panel', 0));
+
+  // ---- 5. de tweede kandidaat (TOONSOORT §5, T4): van de server tot in de tooltip ----
+  const b3 = await badge(ID3);
+  ok(`library: "${b3?.t}", de tooltip noemt de tweede kandidaat ("${b3?.title.split('\n')[0]}")`,
+    b3?.t === '~' && b3.title.includes('geen duidelijke toonsoort (best passend: G, of C)'));
+  await evalueer(`window.library.laad(${JSON.stringify(ID3)}, 'C')`);
+  await klik('#lib-panel .lib-close');
+  await evalueer(`(() => { const e = window.engine; e.deck('C').seek(20); e.setFocus('C'); })()`);
+  await frames(12);
+  const kC = await kolom('C');
+  ok(`kolomkop track 3: "${kC.t}", tooltip "${kC.title.split('\n')[0]}"`,
+    kC.t === '~' && kC.title.includes('geen duidelijke toonsoort (best passend: G, of C)'));
+  const fC = await evalueer(`(() => { const k = document.querySelector('#focus-deck .toon-knop'); return { t: document.querySelector('#focus-deck .toon-hoofd').textContent, title: k.title }; })()`);
+  ok(`focus: "${fC.t}", zelfde tooltip`, fC.t === '~' && fC.title.includes('geen duidelijke toonsoort (best passend: G, of C)'));
+  // Met de pitch schuift de tweede mee: +6% is een halve toon (Ab, of Db).
+  await evalueer(`window.engine.deck('C').setRate(1.06)`);
+  await frames(6);
+  const kC2 = await kolom('C');
+  ok(`... en schuift mee met de pitch (+6%: "${kC2.title.split('\n')[0]}")`, kC2.title.includes('best passend: A♭, of D♭'));
 
   ok('geen fouten in de console', meldingen.length === 0, meldingen.join(' | '));
 } catch (err) {

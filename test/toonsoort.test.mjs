@@ -165,6 +165,14 @@ const FIXTURE = {
   ok('library alles onder 0,15: "~" met de beste gok in de tooltip',
     W.libraryToon({ stukken: [{ van: 0, toonsoort: 'E', stemming: 0, zekerheid: 0.05 }] }).tekst === '~'
     && W.libraryToon({ stukken: [{ van: 0, toonsoort: 'E', stemming: 0, zekerheid: 0.05 }] }).titel.includes('best passend: E'));
+  ok('library onder 0,15 met de tweede kandidaat van de server: "best passend: E, of A"',
+    W.libraryToon({ stukken: [{ van: 0, toonsoort: 'E', stemming: 0, zekerheid: 0.05, tweede: 'A' }], bron: 'auto' }).titel.includes('best passend: E, of A'));
+  ok('library onzeker: ", of D" achter de zekerheid',
+    W.libraryToon({ stukken: [{ van: 0, toonsoort: 'G', stemming: 0, zekerheid: 0.3, tweede: 'D' }], bron: 'auto' }).titel.includes('onzeker (zekerheid 0,30), of D'));
+  ok('library album: de tweede van het LANGSTE stuk in de hoofdtoonsoort', W.libraryToon({ stukken: [
+    { van: 0, toonsoort: 'G', stemming: 0, zekerheid: 0.3, tweede: 'C' },
+    { van: 20, toonsoort: 'E', stemming: 0, zekerheid: 0.9, tweede: 'A' },
+    { van: 50, toonsoort: 'G', stemming: 0, zekerheid: 0.3, tweede: 'D' }], bron: 'auto' }, 200).titel.includes('9B G majeur — onzeker (zekerheid 0,30), of D'));
   ok('library op slot: zeker en slot', W.libraryToon({ ...album, slot: true }, 560).slot === true && W.libraryToon({ ...album, slot: true }, 560).soort === 'zeker');
   ok('library "geen toonsoort" met de hand: "~"', W.libraryToon({ stukken: [{ van: 0, toonsoort: null, stemming: 0 }], bron: 'hand' }).tekst === '~');
   ok('de kiezer: 24 knoppen in wijzervolgorde, 1A eerst', W.KIEZER.length === 24 && W.KIEZER[0].camelot === '1A' && W.KIEZER[1].camelot === '1B' && W.KIEZER[1].kort === 'B');
@@ -333,12 +341,16 @@ const FIXTURE = {
 {
   console.log('\nnaad met de server (normaliseerToon)');
   const { normaliseerToon } = await import('../server/library.js');
-  // Zoals server/toon.js hem maakt: eerste stuk op 0, stilte = null met zekerheid 0.
-  const auto = { versie: 1, stemming: -12.3, bron: 'auto', slot: false, stukken: [
-    { van: 0, toonsoort: 'C', stemming: -10.1, zekerheid: 0.73 },
+  // Zoals server/toon.js hem maakt: eerste stuk op 0, stilte = null met zekerheid 0,
+  // een tweede kandidaat bij elk stuk met een toonsoort.
+  const auto = { versie: 1, stemming: -12.3, stukken: [
+    { van: 0, toonsoort: 'C', stemming: -10.1, zekerheid: 0.73, tweede: 'F' },
     { van: 64.9, toonsoort: null, stemming: -12.3, zekerheid: 0 },
-    { van: 110.2, toonsoort: 'Ebm', stemming: 44.8, zekerheid: 0.12 },
-  ] };
+    { van: 110.2, toonsoort: 'Ebm', stemming: 44.8, zekerheid: 0.12, tweede: 'Bbm' },
+  ], bron: 'auto', slot: false };
+  ok('een kaart van de server gaat ongeschonden door normaliseerToon', JSON.stringify(normaliseerToon(auto)) === JSON.stringify(auto));
+  ok('... en na laden in de browser schrijft die hem teken voor teken terug (geen valse POST uit de bewaarlus)',
+    JSON.stringify(new ToonKaart(normaliseerToon(auto)).toJSON()) === JSON.stringify(auto));
   const bewerkingen = {
     'kwint +': (x) => x.kwint(120, 1), 'kwint −': (x) => x.kwint(5, -1), 'maj/min': (x) => x.wisselModus(120),
     '½ +': (x) => x.halveToon(5, 1), 'geen': (x) => x.geen(5), 'stuk zetten': (x) => x.zetStuk(80, { toonsoort: 'F#' }),
@@ -355,10 +367,16 @@ const FIXTURE = {
     const json = kaart.toJSON();
     const s = normaliseerToon(json);
     const zelfde = s && s.stukken.length === json.stukken.length
-      && s.stukken.every((x, i) => x.van === json.stukken[i].van && x.toonsoort === json.stukken[i].toonsoort && x.stemming === json.stukken[i].stemming);
+      && s.stukken.every((x, i) => x.van === json.stukken[i].van && x.toonsoort === json.stukken[i].toonsoort && x.stemming === json.stukken[i].stemming
+        && x.tweede === json.stukken[i].tweede);
     if (!zelfde) geweigerd.push(naam);
   }
-  ok(`na elke bewerking neemt de server de kaart aan, met dezelfde stukken${geweigerd.length ? ` (geweigerd: ${geweigerd.join(', ')})` : ''}`, !geweigerd.length);
+  ok(`na elke bewerking neemt de server de kaart aan, met dezelfde stukken en tweede kandidaten${geweigerd.length ? ` (geweigerd: ${geweigerd.join(', ')})` : ''}`, !geweigerd.length);
+  {
+    const k1 = new ToonKaart(auto).kwint(120, 1), s1 = normaliseerToon({ ...k1.toJSON(), bron: 'hand' });
+    ok('met de hand gezet stuk: de tweede kandidaat valt weg, de andere stukken houden de hunne',
+      !('tweede' in s1.stukken[2]) && s1.stukken[0].tweede === 'F');
+  }
   ok('ToonKaart.metHand (encoder zonder kaart) en "geen toonsoort" ook', !!normaliseerToon(ToonKaart.metHand(k('Am')).toJSON())
     && !!normaliseerToon(ToonKaart.metHand(null).toJSON()));
   // null in een AUTOMATISCHE kaart is stilte (server/toon.js), niet "met de hand".

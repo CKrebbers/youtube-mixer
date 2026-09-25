@@ -47,7 +47,9 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
 - `toon-keten.mjs` — de toonsoort door de HELE keten met de echte server, niets
   onderschept: upload → ingest (stap "toon") → /api/library → deck → kolomkop/focus →
   corrigeren → POST → slot → pagina herladen → ↻. Vertraagt alleen peaks.bin van een
-  tweede nummer, om te zien dat laden over een track het vorige nummer niet wist.
+  tweede nummer, om te zien dat laden over een track het vorige nummer niet wist. Een
+  derde nummer (kwinten op C en G) laat de analyse twijfelen: de tweede kandidaat van
+  de server moet in de tooltips van library, kolomkop en focus staan.
   Beide met `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG` zoals kijk.mjs.
 - `library.mjs [uitmap]` — het library-paneel met een GROTE library: maakt een tijdelijke
   database met 5000 nummers (`VARVE_KIJK_AANTAL`) plus twee met echte audio, en bekijkt
