@@ -28,16 +28,14 @@ Lees in deze volgorde:
   zware belasting groen). Headless groen: `kijk.mjs`, `apc-klank.mjs`,
   `vormen-plaat.mjs`, `toon-keten.mjs`, `library.mjs`, `kijk-ingest.mjs`,
   `vorm-maat.mjs`, `beamer.mjs`.
-- **Branches en worktrees:** de `spoor*/`- en `integratie*`-branches staan er nog
-  (alles is samengevoegd; opruimen mag). Worktree `wf_32429e39-397-4` heeft
-  niet-gecommit werk van een afgebroken eerste poging van renderblok: overbodig
-  (overgedaan op `spoor2/renderblok`), maar alleen weg met Clay's ja.
-- **Server:** herstart gebeurt door de hoofdsessie (bijna alles in `server/` is
-  veranderd). Vóór de herstart een kopie van `media/library.db` en `-wal` naar
-  `~/.varve-library-voor-v7.db`, zoals bij v4 en v5. Bij de eerste start migreert de
-  database van schema v5 naar v7 (`toon_json`, tabel `hotcues`, `titel_sleutel`;
-  op een kopie van Clay's db gemeten: 6 ms, alles gelijk) en analyseert de server
-  op de achtergrond de toonsoort van alle nummers (samen ~16–70 s, in een worker).
+- **Opgeruimd (Clay: ja):** alleen `main` staat er nog; alle sporen- en
+  integratiebranches en worktrees zijn weg (alles zat in main, `git branch -d`).
+- **Server:** herstart op 25 sep met main 0484b10, log in `~/.varve-server.log`
+  (`nohup node server/index.js >> ~/.varve-server.log 2>&1 &`). Database van
+  schema v5 naar v7 gemigreerd; back-ups `~/.varve-library-voor-v7.db` en
+  `~/.varve-mapping-voor-verschil.json` (je volledige kopie van 291 regels). De
+  toonsoort van alle 10 nummers is op de achtergrond uitgerekend. Bestaande
+  auto-grids veranderen pas na ↻ (album, let it all go, Sakamoto, jungle-mix).
 
 ### Wat er vandaag gebouwd is
 1. **Toonsoort** (14): server (`server/toon.js` in de worker, ingest-stap,
