@@ -38,10 +38,12 @@ index), maar dat is niet gemeten.
 `{ tracks, totaal, van }`.
 
 - `sorteer`: `titel`, `bpm`, `duur`, `toegevoegd` (standaard), `gespeeld`.
-  Onbekend = 400.
+  Onbekend = 400. Alleen EIGEN sleutels (`isSortering`, `Object.hasOwn`):
+  `constructor` of `toString` bestaan ook op elk object en gaven eerst een 500.
 - `richting`: `op` of `af`. Zonder: de eerste richting van die kolom (titel,
   bpm en duur op; toegevoegd en gespeeld af).
-- `van` (vanaf 0) en `aantal` (1..500). Zonder `aantal`: ALLES (de meet-tools in
+- `van` (een veilig geheel getal vanaf 0; niet met `| 0` afronden, dat is 32 bits)
+  en `aantal` (1..500). Zonder `aantal`: ALLES (de meet-tools in
   `tools/beatmeting/` rekenden daarop; die hadden dezelfde stille grens van 200).
 - `totaal` is het aantal treffers van de zoekterm, niet van de pagina.
 - Zoeken: `%` en `_` zijn nu gewone tekens (`100%` zoekt 100%).
@@ -76,7 +78,9 @@ meteen bij (vroeger twee extra queries per nummer).
   localStorage (`varve.library.sortering`), alles in try/catch (ook het LEZEN van
   `localStorage` zelf, dat gooit bij geblokkeerde sitedata).
 - Zoeken wacht 120 ms na de laatste toets; een laat antwoord op een oudere
-  zoekterm valt weg (generatie in `PaginaCache`).
+  zoekterm valt weg (generatie in `PaginaCache`). Ook een pagina die nog voor
+  de VORIGE vraag onderweg was (scrollen vlak na een klik op de kop) valt weg:
+  `zorgVoor` kijkt naar de generatie én naar de vraag zelf.
 - Verversen (ingest klaar, nummer weg, paneel open) haalt het zichtbare stuk
   opnieuw en ruilt pas als alles binnen is: geen flits van lege rijen. Je blijft
   waar je was; alleen een nieuwe zoekterm of sortering begint bovenaan.
@@ -142,7 +146,10 @@ machine zwaar belast: load average ~30):
 - paneel open tot de rijen er staan: ~20 ms;
 - 23 rijen in de DOM bovenaan, 17 onderaan;
 - een scrollbeeld tekenen: p95 3,3 ms, traagst 8 ms (121 stappen door de lijst);
-- 50 paginaverzoeken voor de hele lijst.
+- 50 paginaverzoeken voor de hele lijst;
+- controle (25 sep, na de herstellingen): tweede klik bij laden over een
+  spelende track, weghalen (eerst vragen; midden in de lijst blijf je staan;
+  hotcues gaan mee) ook groen.
 
 Server (in Node, zelfde belasting): een pagina van 100 uit 5000 nummers 7–30 ms,
 afhankelijk van de sortering (de ruis van de belasting is groter dan het
@@ -157,6 +164,17 @@ rustige M1 naar verwachting een fractie daarvan: **niet gemeten**.
 - Hotcues horen bij het nummer, maar "quantize voor hotcues" (spoor C) niet
   hier. Raakt dat spoor `deck.hotcue()`, dan bij samenvoegen de twee
   `emit('hotcue', …)`-regels meenemen.
+- Tussen het laden van een nummer ('load' van het deck) en het terugzetten van
+  zijn hotcues zit het ophalen van de golfvorm en de hotcues (lokaal tientallen
+  ms). Druk je in dat gat op een LEGE hotcue, dan zet je hem (jouw handeling
+  wint) en overschrijft dat de bewaarde op de server. Laden gaat alleen met de
+  muis in het paneel, dus in de praktijk krap; niet veranderd.
+- Samenvoegen met het toonsoort-spoor: allebei een element achteraan `SCHEMA`.
+  Draai GEEN server van één van beide sporen op Clay's echte `library.db`
+  vóór het samenvoegen: staat zijn database dan op v6 van het ene spoor en
+  wordt de volgorde na het samenvoegen andersom, dan draait de migratie van
+  hetzelfde spoor nog eens (fout "bestaat al": de server start niet) en die van
+  het andere nooit.
 - De pagina-cache vergeet niets zolang de vraag gelijk blijft: wie door alle
   5000 scrolt heeft ze alle 5000 als objecten in het geheugen (~5 MB). De DOM
   blijft klein.
