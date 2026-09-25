@@ -229,6 +229,16 @@ try {
     const onzeKinderen = () => execFileSync('ps', ['-A', '-o', 'pid=,ppid=,stat=,comm=']).toString().split('\n')
       .map((l) => l.trim().split(/\s+/)).filter((d) => Number(d[1]) === process.pid && d[3] !== 'ps')
       .map(([pid, , stat, comm]) => `${pid} ${stat} ${comm}`);
+    /*
+     * Wat BLIJFT staan. Onder zware belasting (load 130) zag ps één keer een
+     * kind dat nog aan het starten of stoppen was ("?NE (node)"; welk is niet
+     * vastgesteld, vermoedelijk de ps van nakomelingen() uit een eerdere
+     * check). Zoiets is even later weg; een zombie blijft tot het proces stopt.
+     */
+    const blijvend = async () => {
+      for (let i = 0; i < 30; i++) { if (!onzeKinderen().length) return []; await wacht(100); }
+      return onzeKinderen();
+    };
     const { maakPeaks, maakGrid, maakOnsets, verfijnUitBestand, STOP_NOODREM_MS } = await import('../server/analyze.js');
     const duren = [];
     for (let i = 0; i < 5; i++) {
@@ -239,8 +249,7 @@ try {
       const r5 = await p5;
       duren.push(r5.afgebroken ? Date.now() - t : -1);
     }
-    await wacht(300);
-    const over = onzeKinderen();
+    const over = await blijvend();
     ok(`5× annuleren midden in golfvorm/ritme (${duren.join(', ')} ms): alle 5 geannuleerd`, duren.every((d) => d > 0 && d < 2000));
     ok(`  en er blijft niets onder ons staan, ook geen zombie (${over.join('; ') || 'niets'})`, over.length === 0);
 
@@ -253,8 +262,8 @@ try {
     const pG = maakGrid(join(map, 'kort.bin'), on.envRate, on.tijdOffset, kort, { signal: acG.signal });
     setTimeout(() => acG.abort(), 60);
     const rG = await pG;
-    await wacht(300);
-    ok(`grid annuleren: geannuleerd, niets over (${onzeKinderen().join('; ') || 'niets'})`, on.ok && rG.afgebroken === true && onzeKinderen().length === 0);
+    const overG = await blijvend();
+    ok(`grid annuleren: geannuleerd, niets over (${overG.join('; ') || 'niets'})`, on.ok && rG.afgebroken === true && overG.length === 0);
 
     /*
      * Annuleren terwijl de worker REKENT (zijn ffmpeg is al gelezen): 'stop'
@@ -275,9 +284,10 @@ try {
     acR.abort();
     const rR = await pR;
     const dR = Date.now() - tStop;
-    await wacht(300);
-    ok(`annuleren tijdens het rekenen (ffmpeg klaar na ${tStop - tR} ms): gestopt na ${dR} ms (noodrem ${STOP_NOODREM_MS} ms), niets over`,
-      rekent && rR.afgebroken === true && dR < STOP_NOODREM_MS + 1500 && onzeKinderen().length === 0);
+    const overR = await blijvend();
+    ok(`annuleren tijdens het rekenen (ffmpeg klaar na ${tStop - tR} ms${rekent ? '' : ', NIET gezien'}): `
+      + `${rR.afgebroken ? 'gestopt' : `"${rR.fout ?? 'klaar'}"`} na ${dR} ms (noodrem ${STOP_NOODREM_MS} ms), over: ${overR.join('; ') || 'niets'}`,
+    rekent && rR.afgebroken === true && dR < STOP_NOODREM_MS + 1500 && overR.length === 0);
 
     // Zonder signal (tap-verfijning, achtergrond-heranalyse, onsets): ongewijzigd.
     const g = await maakGrid(join(map, 'kort.bin'), on.envRate, on.tijdOffset, kort);

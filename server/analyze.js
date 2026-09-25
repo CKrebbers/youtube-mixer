@@ -145,9 +145,13 @@ let analyseGestopt = false;
 function startFfmpeg(args) {
   if (analyseGestopt) return null;
   const kind = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
-  // 'exit' komt pas als libuv het proces heeft binnengehaald; 'error' als hij nooit startte.
-  lopend.set(kind, new Promise((weg) => { kind.once('exit', weg); kind.once('error', weg); })
-    .then(() => { lopend.delete(kind); }));
+  // 'exit' komt pas als libuv het proces heeft binnengehaald. 'error' telt alleen
+  // als hij nooit startte (geen pid, en dan komt er geen 'exit'): met een pid
+  // kan 'error' alleen een mislukte kill zijn, en dan leeft hij nog.
+  lopend.set(kind, new Promise((weg) => {
+    kind.once('exit', weg);
+    kind.on('error', () => { if (!kind.pid) weg(); });
+  }).then(() => { lopend.delete(kind); }));
   return kind;
 }
 
