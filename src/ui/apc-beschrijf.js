@@ -10,6 +10,7 @@ const SEND_A = ['tijd', 'herhaling', 'toon', 'op de maat'];
 const SEND_B = ['grootte', 'toon', 'vasthouden'];
 const VIDEO = { pixel: 'pixel', mirror: 'spiegel', rgb: 'RGB', color: 'kleur', trails: 'sporen', grain: 'korrel' };
 const EQ = { trim: 'trim', high: 'high', mid: 'mid', low: 'low', filter: 'filter', fader: 'volume', pitch: 'pitch' };
+const KILL = { low: 'laag', mid: 'midden', high: 'hoog' };
 
 /** { kort, lang }: kort past op de tekening, lang staat in de tabel. */
 export function beschrijf(action) {
@@ -43,6 +44,8 @@ export function beschrijf(action) {
     if (rest === 'pitch.range') return r('bereik', 'pitchbereik ±8 / ±16 / ±50%');
     if (rest === 'nudge.back') return r('nudge −', 'even terugduwen');
     if (rest === 'nudge.fwd') return r('nudge +', 'even vooruitduwen');
+    if ((m = /^kill\.(low|mid|high)$/.exec(rest))) return r(`kill ${KILL[m[1]]}`, `kill ${KILL[m[1]]} aan/uit (de knopstand blijft; lampje = band weg)`);
+    if ((m = /^kill\.(low|mid|high)\.hold$/.exec(rest))) return r(`kill ${KILL[m[1]]}!`, `kill ${KILL[m[1]]} zolang je drukt`);
     if (rest === 'brake') return r('rem', 'rem (vinylstop): in de remtijd naar stilstand, dan pauze; tijdens het remmen nog eens = los');
     if (rest === 'brake.time') return r('remtijd', 'remtijd: 0,1 tot 5 seconden tot stilstand');
     if (rest === 'grid.here') return r('tel 1 hier', 'tel 1 hier: de tel komt op wat je hoort, gesnapt naar een klap binnen 30 ms');

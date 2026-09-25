@@ -45,8 +45,9 @@ const KLEURSCHEMA = [
   // toont. Hier staat `uit` dus voor kant A, niet voor "niets".
   [/\.xfade\.side$/, { uit: 'geel', half: 'uit', aan: 'oranje' }],
   [/\.fx\.bypass$/,  { aan: 'groen', uit: 'donkergrijs', invert: true }],
-  // Rem: oranje zolang hij remt, en uit als de track stilstaat (read null:
-  // niets te remmen).
+  // Kill: rood zolang de band weg is. Rem: oranje zolang hij remt, en uit
+  // als de track stilstaat (read null: niets te remmen).
+  [/\.kill\.(low|mid|high)(\.hold)?$/, { aan: 'rood', uit: 'donkergrijs' }],
   [/\.brake$/,       { aan: 'oranje', uit: 'donkergrijs' }],
   [/^mixer\./,       { aan: 'blauw', uit: 'donkergrijs' }],
   [/\.beatloop\./,   { aan: 'cyaan', half: 'cyaandonker', uit: 'donkergrijs', tel: 'aan' }],

@@ -20,7 +20,7 @@ import { PITCH_BEREIKEN } from '../engine/deck.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
 import { FITS } from '../video/passen.js';
-import { REM_MIN, REM_MAX } from '../engine/deck.js';
+import { EQ_BANDEN, REM_MIN, REM_MAX } from '../engine/deck.js';
 import { GROEPEN, LAAGNAAM } from './lagen.js';
 
 const registry = new Map();
@@ -293,6 +293,19 @@ export function bindEngine(engine) {
       define(`${n}.${p}`, 'value', (v) => d.set(p, v),
         { label: `Track ${nr} ${p}`, bipolar: ['low', 'mid', 'high', 'filter'].includes(p),
           read: () => d.ui[p] });
+    }
+
+    // EQ-kill per band: een schakelaar (aan/uit) en een drukknop (weg zolang
+    // je drukt). De knopstand blijft staan, dus kill uit is precies terug.
+    // Lampje, voor beide: 1 = de band is weg (door schakelaar of drukknop),
+    // 0 = open, null = lege track zonder kill (niets te doen).
+    for (const band of EQ_BANDEN) {
+      const naam = { low: 'laag', mid: 'midden', high: 'hoog' }[band];
+      const stand = () => (d.gekild(band) ? 1 : d.buffer ? 0 : null);
+      define(`${n}.kill.${band}`, 'trigger', (on) => { if (on) d.toggleKill(band); },
+        { label: `Track ${nr} kill ${naam} aan/uit`, read: stand });
+      define(`${n}.kill.${band}.hold`, 'trigger', (on) => d.houdKill(band, !!on),
+        { label: `Track ${nr} kill ${naam} zolang je drukt`, read: stand });
     }
 
     // Sends: na de fader naar de gedeelde echo (A) en galm (B).

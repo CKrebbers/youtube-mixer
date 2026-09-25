@@ -239,10 +239,26 @@ try {
   ok('reageer dicht: offset terug op 0', dicht.uit.length > 0 && dicht.uit[dicht.uit.length - 1] === 0);
   ok('geen fouten tijdens reageren', meldingen.length === 0, meldingen.join(' | '));
 
-  // ---- rem in de echte worklet (ROADMAP 16, spoor C) -----------------------
+  // ---- kill en rem in de echte worklet (ROADMAP 16, spoor C) ---------------
   // De demo speelt nog (via de StreamBron). Het remsegment gaat per bericht
   // naar de echte AudioWorklet; hier meten we wat er uit de master komt.
-  console.log('rem (echte AudioContext en worklet)');
+  console.log('kill en rem (echte AudioContext en worklet)');
+  const bas = (s) => evalueer(`(async () => {
+    const { Luisteraar } = await import('/src/analysis/luisteraar.js');
+    const e = window.engine, l = new Luisteraar({ analyser: () => e.master.analyser, sampleRate: () => e.ctx.sampleRate });
+    let laag = 0, m = 0; const eind = e.ctx.currentTime + ${s};
+    await new Promise((ok) => { const f = () => { const w = l.lees(e.ctx.currentTime); if (w) { laag += w.laag; m++; } e.ctx.currentTime < eind ? setTimeout(f, 16) : ok(); }; f(); });
+    return laag / Math.max(1, m);
+  })()`);
+  const basVoor = await bas(1);
+  await evalueer("__act.invoke('track.1.kill.low', true); __act.invoke('track.1.kill.low', false)");
+  await wacht(100);
+  const basKill = await bas(1);
+  await evalueer("__act.invoke('track.1.kill.low', true); __act.invoke('track.1.kill.low', false)");
+  await wacht(100);
+  const basNa = await bas(1);
+  ok('kill laag: de bas verdwijnt, en komt terug als de kill eraf gaat', basKill < basVoor * 0.5 && basNa > basVoor * 0.7,
+    `${basVoor.toFixed(2)} -> ${basKill.toFixed(2)} -> ${basNa.toFixed(2)}`);
   const rem = await evalueer(`(async () => {
     const d = window.engine.deck('A'), c = window.engine.ctx, a = window.engine.master.analyser, b = new Float32Array(a.fftSize);
     __act.invoke('track.1.brake.time', Math.log(4) / Math.log(50));          // 0,4 s
@@ -264,7 +280,7 @@ try {
     && Math.max(...laat.map((m) => m.piek)) < 1e-3 && Math.abs(rem.eind - (rem.p0 + rem.R * rem.D / 2)) < 0.01,
   `piek laat ${Math.max(...laat.map((m) => m.piek)).toExponential(1)}, ${(rem.eind - rem.p0).toFixed(4)} s afgelegd (verwacht ${(rem.R * rem.D / 2).toFixed(4)})`);
   ok('… de positie loopt nooit terug', oplopend);
-  ok('geen fouten bij de rem', meldingen.length === 0, meldingen.join(' | '));
+  ok('geen fouten bij kill en rem', meldingen.length === 0, meldingen.join(' | '));
   await evalueer("__act.invoke('track.1.play', true); __act.invoke('track.1.play', false)");     // weer spelen, zoals hiervoor
 
   await evalueer("__act.invoke('track.1.play', true); __act.invoke('track.1.play', false)");

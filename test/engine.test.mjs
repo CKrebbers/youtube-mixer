@@ -1278,7 +1278,87 @@ console.log('\nacht tracks');
   ok('thru-knop', eng.kant.C === 'thru' && leesAction('track.3.xfade.thru') === 1);
 }
 
-// ---- rem (vinylstop) (ROADMAP 16, spoor C) ----------------------------------------
+// ---- EQ-kill, rem en de maatgever (ROADMAP 16, spoor C) -------------------------
+
+console.log('\nEQ-kill');
+{
+  const { EQ_KILL_DB, KILL_FADE, eqDb } = await import('../src/engine/audio-graph.js');
+  const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+  const dK = eng.deck('H');
+  NOW = 300;
+  const fouten0 = OVERLAP_FOUTEN;
+  const p = dK.chain.eqLow.gain;
+  // De curves die op de lage band gezet worden, om hun vorm na te lopen.
+  const curves = [];
+  const orig = p.setValueCurveAtTime;
+  p.setValueCurveAtTime = function (c, t, d) { curves.push({ c: Float64Array.from(c), t, d }); return orig.call(this, c, t, d); };
+
+  ok('lege track: kill-lampje uit (niets te doen)', read('track.8.kill.low') === null);
+  dK.load(buf, 'kill');
+  invoke('track.8.low', 0.7);
+  const stand = eqDb(0.7);
+  ok('kill-lampje 0: open, bruikbaar', read('track.8.kill.low') === 0 && read('track.8.kill.low.hold') === 0);
+  invoke('track.8.kill.low', true); invoke('track.8.kill.low', false);
+  ok('kill aan: de lage band naar −70 dB (lampje 1)', p.value === EQ_KILL_DB && dK.gekild('low') && read('track.8.kill.low') === 1);
+  ok('… met een curve van 5 ms vanaf nu, niet hard', curves.length === 1 && curves[0].d === KILL_FADE && curves[0].t === NOW);
+  // Klikvrij: in AMPLITUDE een zachte S. Een rechte lijn in dB doet bijna
+  // alle amplitude in de eerste stapjes, en dat is een tik.
+  const amp = (db) => Math.pow(10, db / 20);
+  const stapMax = (c) => { let m = 0; for (let i = 1; i < c.length; i++) m = Math.max(m, Math.abs(amp(c[i]) - amp(c[i - 1]))); return m; };
+  const recht = Float64Array.from({ length: 33 }, (_, i) => stand + (EQ_KILL_DB - stand) * i / 32);
+  const weg = Math.abs(amp(stand) - amp(EQ_KILL_DB));
+  ok(`… in amplitude zacht: grootste stap ${(100 * stapMax(curves[0].c) / weg).toFixed(1)}% van de weg (recht in dB: ${(100 * stapMax(recht) / weg).toFixed(0)}%)`,
+    stapMax(curves[0].c) < 0.06 * weg && stapMax(recht) > 0.15 * weg && curves[0].c[0] === Math.fround(stand));
+  ok('de EQ-knop blijft staan', dK.ui.low === 0.7 && read('track.8.low') === 0.7);
+
+  // Meteen aan de knop draaien, terwijl de kill-curve nog loopt: in Chrome
+  // gooit setTargetAtTime dan NotSupportedError, tenzij de curve eerst wordt afgebroken.
+  let gegooid = null;
+  try { invoke('track.8.low', 0.3); } catch (e) { gegooid = e; }
+  ok('aan de knop draaien tijdens de kill-curve: geen NotSupportedError', gegooid === null && OVERLAP_FOUTEN === fouten0);
+  ok('… de band blijft weg, de knop onthoudt 0,3', p.value === EQ_KILL_DB && dK.ui.low === 0.3);
+  NOW += 0.001;
+  invoke('track.8.kill.low', true);
+  ok('kill uit: precies terug op de knopstand (0,3)', Math.abs(p.value - eqDb(0.3)) < 1e-5 && !dK.gekild('low') && read('track.8.kill.low') === 0);
+  ok('… met weer een curve, van −70 naar de knop', curves.length === 2 && curves[1].c[0] === EQ_KILL_DB && Math.abs(curves[1].c[32] - eqDb(0.3)) < 1e-5);
+
+  // Twee keer drukken binnen de 5 ms: de tweede curve begint waar de eerste nu is.
+  NOW += 1;
+  const m = dK.chain.eqMid.gain;
+  invoke('track.8.kill.mid', true);
+  NOW += 0.002;
+  gegooid = null;
+  try { invoke('track.8.kill.mid', true); } catch (e) { gegooid = e; }
+  ok('kill aan en 2 ms later weer uit (curve loopt nog): geen NotSupportedError', gegooid === null && OVERLAP_FOUTEN === fouten0);
+  ok('… en terug op de knopstand', Math.abs(m.value - eqDb(dK.ui.mid)) < 1e-5 && !dK.gekild('mid'));
+
+  // Drukvariant.
+  const hoog = dK.chain.eqHigh.gain;
+  NOW += 1;
+  invoke('track.8.kill.high.hold', true);
+  ok('drukknop: weg zolang je drukt (beide lampjes 1)', dK.gekild('high') && hoog.value === EQ_KILL_DB
+    && read('track.8.kill.high.hold') === 1 && read('track.8.kill.high') === 1);
+  NOW += 0.2;
+  invoke('track.8.kill.high.hold', false);
+  ok('loslaten: terug op de knopstand', !dK.gekild('high') && Math.abs(hoog.value - eqDb(dK.ui.high)) < 1e-5);
+  invoke('track.8.kill.high', true);
+  NOW += 0.2;
+  invoke('track.8.kill.high.hold', true); NOW += 0.2; invoke('track.8.kill.high.hold', false);
+  ok('schakelaar aan, dan drukken en loslaten: blijft weg (de schakelaar staat nog aan)', dK.gekild('high') && hoog.value === EQ_KILL_DB);
+  NOW += 0.2;
+  invoke('track.8.kill.high', true);
+  ok('schakelaar uit: terug', !dK.gekild('high') && Math.abs(hoog.value - eqDb(dK.ui.high)) < 1e-5);
+  invoke('track.8.kill.low', true);
+  ok('per band: laag weg, midden en hoog niet', dK.gekild('low') && !dK.gekild('mid') && !dK.gekild('high')
+    && m.value !== EQ_KILL_DB && hoog.value !== EQ_KILL_DB);
+  NOW += 0.2;
+  invoke('track.8.kill.low', true);
+  p.setValueCurveAtTime = orig;
+  ok('elke kill- en rem-action heeft een uitleg op de APC-kaart',
+    ['kill.low', 'kill.mid', 'kill.high', 'kill.low.hold', 'kill.high.hold', 'brake', 'brake.time']
+      .every((a) => !beschrijf(`track.8.${a}`).lang.startsWith('?') && beschrijf(`track.8.${a}`).kort !== a));
+  ok('geen overlappende automatisering bij al dat schakelen', OVERLAP_FOUTEN === fouten0);
+}
 
 console.log('\nrem (vinylstop)');
 {
