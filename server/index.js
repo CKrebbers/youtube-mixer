@@ -10,6 +10,7 @@ import { Library, normaliseerGrid } from './library.js';
 import { ZEKER_VANAF } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets } from './analyze.js';
 import * as opname from './opname.js';
+import * as handelingen from './handelingen.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -667,6 +668,39 @@ const server = createServer(async (req, res) => {
       if (!stuk) return json(res, 413, { ok: false, fout: 'stuk te groot' });
       const r = await opname.voegToe(OPNAMES, id, stuk, getal('frame'));
       return json(res, r.ok ? 200 : 400, r);
+    }
+
+    // ---- handelingenlogs: naast de opnames, zelfde id (server/handelingen.js) ----
+    // Alles JSON, ook de stukken: { van, tekst }. De tekst is ASCII, dus de
+    // browser weet precies hoeveel bytes hij schreef en waar het volgende stuk komt.
+    if (pad === '/api/handelingen' && req.method === 'GET') return json(res, 200, { logs: await handelingen.lijst(OPNAMES) });
+    if (pad === '/api/handelingen/start' && req.method === 'POST') {
+      const body = await leesJson(req);
+      if (!body) return json(res, 400, { ok: false, fout: 'ongeldige JSON' });
+      const r = await handelingen.start(OPNAMES, { id: body.id ?? null });
+      return json(res, r.ok ? 200 : 400, r);
+    }
+    const mLog = /^\/api\/handelingen\/([\w-]+)(\/stuk)?$/.exec(pad);
+    if (mLog?.[2] && req.method === 'POST') {
+      // Rauw lezen en dan pas decoderen: leesJson plakt stukken als tekst
+      // aan elkaar, en dan kan een teken over een pakketgrens stuk gaan.
+      const ruw = await leesRuw(req, 2 * handelingen.MAX_STUK + 1024);
+      if (!ruw) return json(res, 413, { ok: false, fout: 'stuk te groot' });
+      let body;
+      try { body = JSON.parse(ruw.toString('utf8')); } catch { return json(res, 400, { ok: false, fout: 'ongeldige JSON' }); }
+      const r = await handelingen.schrijf(OPNAMES, mLog[1], body?.van, body?.tekst);
+      return json(res, r.ok ? 200 : 400, r);
+    }
+    if (mLog && !mLog[2] && req.method === 'GET') {
+      const p = await handelingen.pad(OPNAMES, mLog[1]);
+      if (!p.ok) return json(res, p.fout === 'log bestaat niet' ? 404 : 400, p);
+      // Precies de bytes van nu: een lopend log groeit terwijl we lezen.
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store',
+        'Content-Length': p.bytes, ...ISOLATIE });
+      if (!p.bytes) return res.end();
+      const stroom = createReadStream(p.pad, { start: 0, end: p.bytes - 1 });
+      stroom.on('error', () => res.destroy());
+      return stroom.pipe(res);
     }
 
     const mRacks = /^\/api\/library\/([\w-]+)\/racks$/.exec(pad);

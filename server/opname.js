@@ -101,20 +101,28 @@ async function schrijfAlles(f, buf, pos) {
   }
 }
 
-const ID = /^[0-9]{8}-[0-9]{6}(-[0-9]+)?$/;
+/** Een opname-id: datum-tijd, eventueel met volgnummer. Ook het id van een handelingenlog. */
+export const ID = /^[0-9]{8}-[0-9]{6}(-[0-9]+)?$/;
 const naamVan = (id) => `set-${id}.wav`;
+/** Het handelingenlog naast een opname (server/handelingen.js). */
+export const LOG_EXT = '.acties.jsonl';
 
 /** Een id op de tijd van nu: set-20260923-213012.wav sorteert vanzelf goed. */
-function nieuwId(nu = new Date()) {
+export function nieuwId(nu = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
   return `${nu.getFullYear()}${p(nu.getMonth() + 1)}${p(nu.getDate())}-${p(nu.getHours())}${p(nu.getMinutes())}${p(nu.getSeconds())}`;
 }
 
+const bestaat = (pad) => stat(pad).then(() => true, () => false);
+
 export async function start(map, { nu } = {}) {
   await mkdir(map, { recursive: true });
   let id = nieuwId(nu), n = 1;
-  // Twee opnames in dezelfde seconde: niet over elkaar heen.
-  while (await stat(join(map, naamVan(id))).then(() => true, () => false)) id = `${nieuwId(nu)}-${++n}`;
+  // Twee opnames in dezelfde seconde: niet over elkaar heen. Ook niet op het
+  // id van een los handelingenlog uit dezelfde seconde: het log van DEZE
+  // opname krijgt straks dat id, en schreef dan in het andere log.
+  const bezet = async (x) => (await bestaat(join(map, naamVan(x)))) || bestaat(join(map, `set-${x}${LOG_EXT}`));
+  while (await bezet(id)) id = `${nieuwId(nu)}-${++n}`;
   const f = await open(join(map, naamVan(id)), 'wx');
   await f.write(wavKop(0), 0, KOP, 0);
   await f.close();
