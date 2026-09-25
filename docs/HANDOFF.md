@@ -1,64 +1,168 @@
-# Overdracht — waar we staan (24 september 2026, avond)
+# Overdracht — waar we staan (25 september 2026)
 
 Lees in deze volgorde:
-1. `CLAUDE.md`: architectuur, regels, valkuilen, en de secties VORMLAGEN en
-   "Toonsoort en keylock".
+1. `CLAUDE.md`: architectuur, regels, valkuilen. Nieuw sinds 25 sep: transport,
+   rem, EQ-kill, maatgever met hysterese, hoorbaar.js, overgangen als hellingen,
+   het losse venster dat zelf mengt, handelingenlog, library, ingest-wachtrij,
+   mapping als verschil, vormen 16:9, toonsoort.
 2. Dit bestand.
 3. `ROADMAP.md`: bovenaan staat DE TAKENLIJST OP VOLGORDE.
-4. `docs/VRAGEN.md`: open vragen, nieuw is blok I.
-5. `docs/plugins/01-plan.md`: AV-kern × Varve.
-6. `docs/APC40.md`.
+4. `docs/VRAGEN.md`: open vragen, nieuw is blok J.
+5. Per onderdeel: `docs/TOONSOORT.md` (§13), `MAPPING-VERSCHIL.md`, `LIBRARY.md`,
+   `BEAMER.md`, `HANDELINGENLOG.md`, `AUDIOPAD.md`, `VORMEN-16x9.md`,
+   `BEATGRID.md` (restpunten), `APC40.md`.
 
-## BEGIN HIER (stand 24 sep, avond)
+## BEGIN HIER (stand 25 sep)
 
-- **Varve:** `main` is schoon en alles is gecommit. `node test/alles.mjs` geeft
-  29 bestanden, 1923 checks, groen. `node tools/headless/kijk.mjs` is groen, ook de
-  nieuwe oriëntatiecontrole.
-  - Onder zware belasting gaf de suite één keer 5 rode bestanden; welke is niet
-    vastgelegd. Gebeurt het weer: bij een rustige machine opnieuw draaien en de
-    bestanden noteren.
-  - Op een drukke machine heeft `kijk.mjs` eigen poorten nodig
-    (`VARVE_KIJK_POORT`, `VARVE_KIJK_DEBUG`).
-- **AV-kern:** `~/src/av-kern`, `main` = `ab7e115`, 40 tests groen, geen remote.
-  Fase 0 is klaargezet: een veilige driver en `FASE0-TEST.md`. 0.4 is gedaan:
-  `reference/ademmachine.html`.
-- **Vandaag gedaan** (details in de secties hieronder):
-  1. AV-kern fase 0 klaargezet: wachtrij, poorten, Web Lock, Shift los, checklist,
-     Ademmachine-mockup.
-  2. Toonsoort en keylock onderzocht en gemeten: `docs/TOONSOORT.md`,
-     `docs/KEYLOCK.md`, `tools/toonsoort/`, `tools/keylock/`. Luisterbestanden staan
-     in `tools/keylock/uit/`. Clay: bouwen na 25 okt, vooraan.
-  3. Vragen beslist: G4, H1, H2, H4, H6, T3, K3 en K8; de rest van T en K volgens het
-     advies. Blok I in VRAGEN.
-  4. Vormlagen VULLEN het beeld (`4addd90`), en de video staat niet meer op zijn kop
-     onder een vormlaag (`cef1d28`). **Door Clay goedgekeurd in zijn eigen Chrome.**
-- **Clay moet nog** (de volgende sessie begint met zijn uitkomsten):
-  1. **Keylock luisteren (A3):** `tools/keylock/uit/` met `tools/keylock/LUISTER.md`,
-     per nummer een score van 0 tot 3. Daarmee beslissen we I1–I3 (Signalsmith ja of
-     nee, welke instelling, standaard aan of uit). Zet die in VRAGEN blok I en in
-     KEYLOCK §7.
-  2. **AV-kern fase 0 met de APC:** `~/src/av-kern/FASE0-TEST.md`, ~40 minuten, Varve
-     HELEMAAL dicht. Hij brengt de uitvoer van `npm run niet-gemapt` en zijn notities
-     mee.
-     - Die gaan in `LOG.md` van AV-kern.
-     - Meer dan 3 afwijkende nummers: eerst `src/kern/apc40.ts` en de spec corrigeren.
-     - Daarna 0.2: de Ademmachine in Bedienplan nalopen.
-  3. In Varve de beatgrid-dingen proberen (4× tap, grid-modus) en daarna
-     `hub.status().echoes` bekijken (ROADMAP 1–2).
-  4. Mag later: H3 (stems meten op de Omarchy-machine).
-- **Daarna volgens ROADMAP:** tot 25 okt AV-kern (6–11). Punt 7 begint in VARVE: de
-  26 vormen echt 16:9 laten tekenen met agenten (`g.S` en de n×n-roosters worden
-  breedte × hoogte). Daarna neemt AV-kern ze over. Na 25 okt in Varve: 13 mapping als
-  verschil, 14 toonsoort, 15 keylock.
-- **Werkwijze die werkte:**
-  - Parallelle agenten, elk in een eigen worktree of repo met een eigen branch.
-  - Daarna zelf nalopen en samenvoegen, met tests na elke merge.
-  - Worktrees en branches opruimen.
-  - Headless alleen met `tools/headless/kijk.mjs`, nooit een gewoon Chrome-tabblad.
-  - Een bug die Clay ziet: eerst headless nabouwen met een ASYMMETRISCH testbeeld,
-    dan repareren, dan laten zien dat de controle op de oude code faalt.
-  - Meetagenten op hele albums duren ruim een uur. Geef tussendoor zelf de stand door,
-    en laat ze liever op fragmenten meten.
+- **Waarom zoveel tegelijk:** Clay vroeg op 24 sep avond "voer met zoveel mogelijk
+  sub agents zoveel mogelijk taken uit". Daarom is afgeweken van "tot 25 okt
+  AV-kern eerst": ROADMAP 7, 13, 14, 16, 18, 20, 21, 22, 23 (deel) en 24 zijn
+  gebouwd. Elk spoor had een bouwer en een controleur in een eigen worktree;
+  daarna drie integratierondes (`integratie-r1` → `r2` → `r3`) met naadtests,
+  een ronde rest-sporen (`spoor3/*`) en deze docs (`spoor3/docs`).
+- **Stand van de code:** `integratie-r3` (nog niet op `main`) plus de rest-sporen
+  `spoor3/transport-rest`, `toon-tweede`, `fx-hellingen`, `vormen-tijd` en
+  `ingest-rest-2`.
+  <!-- TODO hoofdsessie: eindbranch en eindcommit na het samenvoegen van de
+  rest-sporen, APC-indeling (voorstel A), beamer-inloop en grid-past; testuitkomst
+  van de eindstand (`node test/alles.mjs`, kijk.mjs). -->
+  Op `integratie-r3`: 36 bestanden, 3165 checks, alleen de vormen-tijdchecks
+  wankelden onder zware belasting (`spoor3/vormen-tijd` meet nu in threadtijd).
+  Headless groen: `kijk.mjs`, `vormen-plaat.mjs`, `toon-keten.mjs`,
+  `library.mjs`, `kijk-ingest.mjs`, `vorm-maat.mjs`, `beamer.mjs`.
+- **Server:** herstart gebeurt door de hoofdsessie (bijna alles in `server/` is
+  veranderd). Vóór de herstart een kopie van `media/library.db` en `-wal` naar
+  `~/.varve-library-voor-v7.db`, zoals bij v4 en v5. Bij de eerste start migreert de
+  database van schema v5 naar v7 (`toon_json`, tabel `hotcues`, `titel_sleutel`;
+  op een kopie van Clay's db gemeten: 6 ms, alles gelijk) en analyseert de server
+  op de achtergrond de toonsoort van alle nummers (samen ~16–70 s, in een worker).
+
+### Wat er vandaag gebouwd is
+1. **Toonsoort** (14): server (`server/toon.js` in de worker, ingest-stap,
+   achtergrond, ↻ doet grid én toonsoort) en scherm (kolomkop onder de bpm,
+   focuskop met correctiemenu, library-kolom TOON met kiezer), met de tweede
+   kandidaat in de tooltip. Toont wat je HOORT (pitch telt mee).
+2. **Mapping als verschil** (13): je eigen mapping (4 regels: rack-knoppen 5–8 =
+   video-effecten) wordt bij het eerste herladen een verschil met de standaard;
+   een nieuwe standaard komt voortaan vanzelf binnen.
+3. **Library** (21): voorbij 200 nummers (pagina's, alleen zichtbare rijen),
+   sorteren op titel/bpm/duur/toegevoegd/gespeeld, hotcues bewaard per nummer.
+4. **Ingest** (21): wachtrij (één tegelijk, links en bestanden), voortgang per stap
+   met percentage, annuleren, playlist/kanaal/livestream geweigerd, dubbel
+   herkend, en na een serverherstart "opnieuw".
+5. **Beamer** (18): het losse venster mengt zelf en loopt door met het
+   hoofdtabblad naar achteren; foutmelding als de video van een nummer ontbreekt.
+6. **Handelingenlog** (20): ○ log naast de opname (en vanzelf bij elke opname),
+   ↺ om terug te spelen, ook "opnieuw renderen" (● dan speel).
+7. **Transport** (16): beatjump, loop in/out/reloop, quantize voor alle tracks
+   (Q in de hoek van Lock), starten op de maat.
+8. **Klank** (16): EQ-kill per band, rem (vinylstop), en de maatgever wisselt pas
+   na 3 dB en 250 ms (geen geflipper meer tussen badge, puls en vormen).
+   Effectwissel en kill als hellingen: geen tik meer in Chrome.
+9. **Audiopad** (22): renderBlok en worklet maken geen afval meer; acht decks
+   ~3× minder CPU.
+10. **Vormen 16:9** (7): alle 26 op 640 × 360, jouw keuze "Midden, 2 breder"
+    (Harmonograaf breder, Zonnebloem tot in de hoeken). **Maatbronnen** (23 deel):
+    klap en tel van de maatgever als REAGEER-bron.
+11. **Beatgrid** (24): het 156-bpm-stuk van het album komt terug (na ↻), elk stuk
+    heeft zijn eigen "1", en de "1" knippert langer. Verfijnen na "tel 1 hier" is
+    gemeten en niet gebouwd (niet beter op jouw muziek).
+12. <!-- TODO hoofdsessie: APC-indeling voorstel A (grid-modus 5 "klank", Bank ◀ ▶
+    beatjump, Pan/Sends/User loop in/out/reloop, Lock quantize, Stop All Clips rem,
+    shift + nummer op de maat), beamer-inloop en grid-past: één regel per stuk. -->
+
+### Wat Clay nu doet
+Server is herstart (hoofdsessie). Dan: je tabblad herladen
+(`http://localhost:8777`, voor de vormen `?vormen=1`). Open geen tweede
+VARVE-tabblad met de APC aangesloten.
+
+Bij het eerste herladen hoort er één melding te komen: "je eigen mapping staat nu
+als verschil met de standaard (4 eigen regels)"; in MIDI → lijst staat "4 eigen".
+
+Proeflijst (wat niet klopt: noteren, dan eerst repareren):
+1. **Toonsoort:** in de kolomkop onder de bpm (bv. `9B G`), groot in de focuskop.
+   Schuif de pitch: de toonsoort schuift mee. Klik op de toonsoort in de focuskop:
+   kwint ±, maj/min, ½ ±, geen, nieuw stuk, slot. Library (B): kolom TOON is de
+   plaat, klik = kiezer (kiezen zet hem op slot). ↻ = grid én toonsoort opnieuw.
+2. **Library:** klik op een kolomkop = sorteren (nog eens = omgekeerd). Zet een
+   hotcue, laad het nummer op een andere track: de hotcue komt terug, ook na
+   herladen van de pagina.
+3. **Ingest-strook:** plak drie links tegelijk (één per regel): één DOWNLOAD met
+   %, de rest WACHT. × op een wachtende, × op de lopende vraagt een tweede klik.
+   Een playlist-link wordt geweigerd; een link die er al is geeft "al binnen" met
+   laadknoppen.
+4. **Beamer:** "los venster" naar de beamer, dubbelklik (volledig scherm). Zet in
+   het hoofdvenster een ander tabblad vooraan: het beeld moet doorlopen. Ook een
+   video-opname zo proberen. Let op de eerste seconden na openen met veel
+   video's (inloop).
+5. **Handelingenlog:** ○ log aan, een paar minuten spelen, uit; ↺ → speel: de set
+   komt terug. Of ● opnemen (neemt vanzelf een log mee) en die terugspelen.
+6. **Transport en klank op het toetsenbord:** R/T beatjump (shift+R/T: lengte),
+   G loop in, C loop out, shift+G reloop, 6 quantize (let op de Q op Lock),
+   shift+Q start een tweede track op de maat van de eerste, ` (links van 1) rem.
+   Rechterhand: Y/U, H/N, shift+H, shift+P, =. Kill heeft geen toetsen.
+   **Op de APC:** <!-- TODO hoofdsessie: waar beatjump, loop in/out, quantize,
+   op de maat, kill (grid-modus 5) en rem zitten na voorstel A. -->
+7. **Vormen:** `?vormen=1`, videopaneel (V), Detail View, Device ◀ ▶ door alle 26:
+   rond in het midden, Harmonograaf breed, Zonnebloem tot in de hoeken, niets
+   uitgerekt. REAGEER-bron op "klap (maat)" of "tel": volgt de MAAT-badge.
+8. **Album:** in de library ↻ op "I will delete this album…" (twee klikken als het
+   grid op slot staat). Daarna staat het stuk op 156 bpm (11:45–13:29, ook
+   15:41–16:17) in het grid, als zeker.
+9. Nog van eerder: na een sessie `hub.status().echoes` (ROADMAP 2) en de
+   keylock-luistertest A3.
+
+### Wat NIET getest is
+Voor alles: **niets in Clay's eigen Chrome, niets op de APC, niets beluisterd.**
+Getest is in Node en headless (MIDI eruit, eigen server en database), vaak onder
+zware belasting van de andere agenten.
+- **Toonsoort:** of hij muzikaal klopt op je library (alleen fragmenten: 11/11
+  gelijk aan de meting); de eerste achtergrondanalyse op je echte database;
+  tooltips zoals Chrome ze toont; de kolom is 13 px hoger (onder 900 px hoogte
+  zakt de fader verder weg).
+- **Mapping als verschil:** de omzetting in je echte browser, en een oude kopie in
+  een tweede browser (Comet); de LED's na het laden op het apparaat.
+- **Library:** een echte muis en scrollbalk; een lege hotcue indrukken in de
+  tientallen ms tussen laden en terugzetten overschrijft de bewaarde.
+- **Ingest:** echte YouTube en TikTok (geen netwerk; de voortgang is gemeten met de
+  echte yt-dlp op een lokale server); een echte livestream.
+- **Beamer:** een echte beamer op een tweede scherm; langer dan een paar seconden
+  verborgen (Chrome knijpt na 5 min harder); acht video's in het losse venster;
+  de vertraging tussen canvas en scherm (aanname 16–33 ms).
+- **Handelingenlog:** een echt uur; MIDI en LED's tijdens terugspelen; terugspelen
+  met echte library-nummers; mogelijk een korte stilte bij de start (uit de code).
+- **Transport, rem, kill:** niets gehoord (beatjump in de maat, starten op de maat,
+  het uitdoven van de rem, kill op zware bas); de ~9 ms extra vertraging van kill
+  en effectwissel niet op gevoel; de maatgever-wissel in een achtergrondtab.
+- **Audiopad:** afvalvrij gemeten in Node, niet in Chrome's audiothread; geen acht
+  echte decks gehoord.
+- **Vormen:** rekentijd op de M1 in echte Chrome; een lange Worker-sessie; hoe de
+  dunnere lijnen (2× in plaats van 2,5× opgeschaald) er op de beamer uitzien.
+- **Beatgrid:** ↻ op het hele album (alleen fragmenten gemeten); het langere
+  knipperen op de "1" op de APC.
+
+### Werkwijze die vandaag werkte
+- Per spoor een bouwer en een controleur, elk in een eigen worktree; de
+  controleur laat elke herstelde fout eerst falen op de oude code.
+- Integreren in rondes, met naadtests voor wat twee sporen samen raken (toonsoort
+  × library, handelingenlog × hotcues, transport × klank).
+- Bestanden met " 2" in de naam zijn iCloud-conflictkopieën: nooit committen,
+  `git add` per pad.
+- Tijdmetingen in tests wankelen onder de belasting van tien agenten: los
+  opnieuw draaien voor je iets aanpast.
+
+## Geschiedenis: BEGIN HIER van 24 sep (avond), ingekort
+
+- `main` was schoon: 29 bestanden, 1923 checks. AV-kern (`~/src/av-kern`, `main` =
+  `ab7e115`, 40 tests) had fase 0 klaargezet.
+- Gedaan die dag: AV-kern fase 0 voorbereid; toonsoort en keylock onderzocht en
+  gemeten; G4, H1, H2, H4, H6, T3, K3, K8 beslist; vormlagen vulden het beeld en de
+  video stond niet meer op zijn kop (door Clay goedgekeurd).
+- Clay moest nog: keylock-luistertest A3 (`tools/keylock/LUISTER.md`), AV-kern
+  fase 0 met de APC (`~/src/av-kern/FASE0-TEST.md`, Varve helemaal dicht), de
+  beatgrid-dingen proberen, `hub.status().echoes` bekijken. Die staan nog open.
+- Het plan was: tot 25 okt AV-kern (6–11), daarna 13–15 in Varve. Op 25 sep is
+  daarvan afgeweken (zie boven).
 
 ## Wat er later op 24 sep nog bij kwam (vormlagen in Clay's Chrome)
 - **Vormlagen VULLEN het beeld** (`4addd90`). Clay zag vierkante vormen met lege
@@ -368,7 +472,7 @@ Clay's tabblad open staat. Vraag Clay eerst de APC los te koppelen, of test met
 zijn toestemming in zijn tabblad. Let op: `apc.html` leest de APC zelf mee
 (zonder sysex, stuurt niets) en valt buiten de lock.
 
-## Wat NIET getest is
+## Wat NIET getest was (23 sep)
 
 - De hele beatgrid-UI in de browser en op de APC: zekerheidsstrook, onset-streepjes,
   "?" bij de bpm, library-kolommen en ↻, grid-modus (Shift + Metronome) met de
@@ -395,7 +499,7 @@ zijn toestemming in zijn tabblad. Let op: `apc.html` leest de APC zelf mee
   ALLEEN als de APC niet aangesloten is (zie de regel hierboven); ruim
   testracks/opnames in zijn library weer op.
 
-## Volgende stap
+## Volgende stap (23 sep; grotendeels gedaan, zie BEGIN HIER)
 
 1. Clay test in zijn EIGEN tabblad (http://localhost:8777; open er zelf geen extra):
    een nummer laden, 4× Tap, grid-modus proberen, `apc.html` ernaast ("live meekijken"
