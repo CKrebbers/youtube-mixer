@@ -136,7 +136,12 @@ try {
       const antwoord = (obj, code = 200) => cdp('Fetch.fulfillRequest', { requestId, responseCode: code,
         responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
         body: Buffer.from(JSON.stringify(obj)).toString('base64') });
-      if (request.method === 'GET' && pad === '/api/library') return antwoord({ tracks: TRACKS });
+      // Het paneel vraagt pagina's (?van=&aantal=, library-spoor); zonder aantal alles.
+      if (request.method === 'GET' && pad === '/api/library') {
+        const q = new URL(request.url).searchParams;
+        const van = Number(q.get('van') || 0), aantal = q.has('aantal') ? Number(q.get('aantal')) : TRACKS.length;
+        return antwoord({ tracks: TRACKS.slice(van, van + aantal), totaal: TRACKS.length, van });
+      }
       const t = /^\/api\/library\/([\w-]+)\/toon$/.exec(pad);
       if (request.method === 'POST' && t) {
         const body = JSON.parse(request.postData || '{}');

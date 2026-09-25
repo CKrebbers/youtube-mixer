@@ -137,6 +137,7 @@ const rect = (selector, marge = 4) => evalueer(`(() => { const b = document.quer
 const frames = (n = 10) => evalueer(`new Promise((ok) => { let i = 0; const f = () => (++i < ${n} ? requestAnimationFrame(f) : ok()); requestAnimationFrame(f); })`);
 const serverToon = async (id) => (await (await fetch(`${B}/api/library/${id}/toon`)).json()).toon;
 const serverGrid = async (id) => (await (await fetch(`${B}/api/library/${id}/grid`)).json()).grid;
+const serverHotcues = async (id) => (await (await fetch(`${B}/api/library/${id}/hotcues`)).json()).hotcues;
 async function tot(fn, ms = 8000) {
   const t0 = Date.now();
   while (Date.now() - t0 < ms) { const v = await fn(); if (v) return v; await wacht(150); }
@@ -250,11 +251,28 @@ try {
   await klik(`.lib-toon[data-toon="${ID}"]`);   // kiezer dicht
   const gridVoor = JSON.stringify(await serverGrid(ID));
 
-  // een ander nummer over track A laden, met een trage golfvorm: het OUDE nummer blijft staan
+  // hotcues horen bij het nummer (library-spoor): hotcue 1 op het eerste nummer
+  await evalueer(`(() => { const d = window.engine.deck('A'); d.seek(30); d.hotcue(0); })()`);
+  const hc1 = await tot(async () => { const h = await serverHotcues(ID); return h?.length ? h : null; });
+  ok(`hotcue 1 van het eerste nummer staat op de server (${hc1?.map((h) => `${h.nr}@${h.tijd.toFixed(2)}`).join(' ')})`,
+    hc1?.length === 1 && hc1[0].nr === 1 && Math.abs(hc1[0].tijd - 30) < 0.5);
+
+  // een ander nummer over track A laden, met een trage golfvorm: het OUDE nummer blijft staan.
+  // In het gat (het nieuwe nummer staat al op het deck, de golfvorm nog niet; deckTrack
+  // is dan null) een hotcue zetten: die hoort bij het NIEUWE nummer, niet bij het vorige.
   peaksVertraging = ID2;
-  await evalueer(`window.library.laad(${JSON.stringify(ID2)}, 'A')`);
+  await evalueer(`(window.__klaar = false, window.__laad = window.library.laad(${JSON.stringify(ID2)}, 'A').then(() => { window.__klaar = true; }), true)`);
+  const inGat = await tot(() => evalueer(`window.engine.deck('A').duration < 60 && !window.__klaar`), 5000);
+  const gatHotcue = await evalueer(`(() => { if (window.__klaar) return null; const d = window.engine.deck('A'); d.seek(12); d.hotcue(1); return d.hotcues[1]; })()`);
+  await evalueer('window.__laad');
   peaksVertraging = null;
+  ok(`in het gat een hotcue gezet op het nieuwe nummer (${gatHotcue?.toFixed?.(2)} s)`, inGat && Math.abs(gatHotcue - 12) < 0.5);
   await wacht(1800);
+  const hcNa1 = await serverHotcues(ID), hcNa2 = await tot(async () => { const h = await serverHotcues(ID2); return h?.length ? h : null; });
+  ok(`... die staat bij het nieuwe nummer (${hcNa2?.map((h) => `${h.nr}@${h.tijd.toFixed(2)}`).join(' ')}), het vorige houdt alleen de zijne`,
+    hcNa2?.length === 1 && hcNa2[0].nr === 2 && Math.abs(hcNa2[0].tijd - 12) < 0.5
+    && JSON.stringify(hcNa1) === JSON.stringify(hc1));
+  ok('... en blijft op het deck staan na het laden', await evalueer(`Math.abs(window.engine.deck('A').hotcues[1] - 12) < 0.5 && window.engine.deck('A').hotcues[0] === null`));
   const naLaad = await serverToon(ID);
   ok(`laden over track A wist de toonsoort van het vorige nummer niet (${naLaad ? `${naLaad.stukken.length} stukken, slot ${naLaad.slot}` : 'GEWIST'})`,
     naLaad?.slot === true && naLaad.stukken.length === 2);
@@ -276,6 +294,9 @@ try {
   await frames(12);
   const kB = await kolom('B');
   ok(`na herladen: track 2 op 110 s zegt B♭, zeker want op slot ("${kB.t}")`, kB.t === '6B B♭' && /\bzeker\b/.test(kB.c));
+  const hcB = await tot(() => evalueer(`window.engine.deck('B').hotcues[0]`));
+  ok(`na herladen: hotcue 1 van het eerste nummer komt terug op track 2 (${hcB?.toFixed?.(2)} s), de hotcue uit het gat niet`,
+    Math.abs(hcB - 30) < 0.5 && await evalueer(`window.engine.deck('B').hotcues[1] === null`));
   await foto('keten-herladen.png');
 
   // ---- 4. ↻ in de library: grid én toonsoort opnieuw (tweede klik: er staat een slot op) ----
