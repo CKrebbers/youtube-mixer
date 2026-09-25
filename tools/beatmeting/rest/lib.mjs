@@ -42,6 +42,16 @@ export async function detectOud() {
 }
 
 /**
+ * detect.js zoals hij in `commit` was (die moet `nulGrens` al kennen: vanaf de
+ * restpunten, 25 september 2026). Voor "elk stuk moet passen": 12776ba.
+ */
+export async function detectVan(commit) {
+  const pad = path.join(TMP, `detect-${commit}.js`);
+  if (!existsSync(pad)) writeFileSync(pad, execFileSync('git', ['show', `${commit}:server/detect.js`], { cwd: ROOT, encoding: 'utf8' }));
+  return import(pad);
+}
+
+/**
  * Een stuk van de bewaarde envelope (onset.bin): precies wat de server
  * analyseerde. Het begin valt op het raster van de tempocurve van het HELE
  * nummer (stappen van 345 frames), anders liggen de vensters anders dan toen.

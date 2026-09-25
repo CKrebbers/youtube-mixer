@@ -120,12 +120,11 @@ wat het was). Alle winst hierboven blijft (op de geredde stukken hooguit 0,12 te
 album 11:45, 47 ms); in elk synthetisch geval is de uitkomst weer die van vóór de tweede
 kans. Test: detect.test.mjs, "tweede kans plakt geen ander nummer vast" (faalt zonder).
 
-Wat er NIET mee opgelost is (bestond al, ook zonder tweede kans): segmenteer rijgt
+Wat er NIET mee opgelost was (bestond al, ook zonder tweede kans): segmenteer rijgt
 vensters op hetzelfde tempo (±4%) aaneen zonder naar de fase te kijken, en de zekerheid
 van een stuk is de stabiliteit van zijn vensters, niet of zijn ene grid past. Twee nummers
 op hetzelfde tempo zonder duidelijk gat ertussen worden zo één "zeker" stuk (synthetisch
-12-22% van de kicks naast). eenGridPast op elk stuk toepassen zou dat vangen; dat is een
-eigen stap met eigen metingen.
+12-22% van de kicks naast). Opgelost in punt 4 hieronder.
 
 ### 2. Na "tel 1 hier" verfijnen met /grid/verfijn — gemeten, NIET gebouwd
 Vraag: wordt de tel beter als de browser na "tel 1 hier" (snap ±30 ms naar een klap) de
@@ -196,3 +195,74 @@ Nu heeft elk stuk `maat`: de tracktijd van een tel 1 op zijn eigen rooster.
 - Geen schemawijziging: het staat in `grid_json`; `normaliseerGrid` (server) laat `maat`
   staan en voegt er geen toe. Een grid wordt niet bewaard alleen omdat hij geladen werd
   (laden.js vergelijkt met wat de engine ervan maakte), pas bij een echte bewerking.
+
+### 4. Het grid moet passen, op elk stuk — gebouwd (`stukPast` en splitsen in analyseerGrid)
+De zekerheid van een stuk zei alleen dat de fase in elk venster VASTHOUDT, niet dat het
+ene grid van het stuk er overal op past. Twee nummers op (bijna) hetzelfde tempo zonder
+gat werden zo één zeker stuk, en sync en beat-loops vertrouwden een grid dat naast de
+muziek lag. Gemeten vóór (12776ba): synthetisch 14 valse zekere stukken (tot 73% van de
+kicks meer dan 0,15 tel naast), op Clay's muziek vier zekere stukken met een blok van 12 s
+dat meer dan 0,15 tel naast de rest lag: let it all go 14:49-15:45 en 31:18-32:02,
+Sakamoto 28:30-29:58 en 35:59-37:47.
+
+Hoe het nu gaat (detect.js, alles achter analyseerGrid):
+- **Toets per stuk** (`stukPast`): per venster met een duidelijke puls de fase op het grid
+  van het stuk. Past niet als meer dan 10% (één mag altijd) verder dan 0,1 tel van de fase
+  met de meeste buren ligt, als drie op een rij naast liggen, of twee op een rij meer dan
+  0,25 tel. Een venster waarvan de puls op een tempo tot 4% ernaast twee keer zo duidelijk
+  is, telt als naast (`anders`, gezocht in stapjes van 0,25%: de tempocurve zat er bij een
+  versnelling 2% naast). 0,1 en niet 0,15 zoals eenGridPast: de fase met de meeste buren
+  kiest zijn plek zelf, dus ±0,15 liet een sprong van 0,3 tel toe, en die zat er bij let it
+  all go twee keer in (een kwart tel, 100 ms op 170).
+- **Past het niet: splitsen.** `faseSprongen` zoekt op de vensters één grens, of twee met
+  een rest ertussen (korter dan 20 s: een versnelling waarin de muziek een tel wegloopt en
+  daarna weer op het grid valt), met twee modellen per kant: dezelfde fase (zelfde tempo,
+  ander nummer) of een fase die gestaag wegloopt (een tempo tot 4% ernaast). De kandidaten
+  worden met echte grids getoetst, per kant op hooguit 120 s bij de grens; `verfijnGrens`
+  zet de grens daarna op de envelope (cosinus van de fase per frame, met een rest waar
+  geen van beide past), beide kanten worden over hun hele lengte opnieuw verfijnd en
+  getoetst, en zo verder, hooguit 6 keer diep.
+- Een kant korter dan 20 s (minSec) wordt geen stuk maar een **rest**: een gat met het grid
+  van de buur en een zekerheid van hooguit 0,5 per venster (`PAST_NIET`), dus onzeker. Een
+  rest blijft een gat, ook korter dan een venster (anders schoof de buur er weer overheen).
+- Levert splitsen niets op: het grid **bijstellen** op de helling van de fasen
+  (`faseHelling`: let it all go 15:06-15:45 liep met 170,27 in 36 s een kwart tel weg, met
+  169,72 past het), anders blijft het stuk heel en onzeker (rubato, een tempo dat zwalkt).
+  Niet eerder: een sprong of een tempowissel is ook "schuin", en bijgesteld paste die binnen
+  de marge op een tempo dat nergens klopte. Alleen als de fasen echt op een rechte lijn
+  liggen (elk venster binnen 0,05 tel) mag het meteen.
+- Buren uit hetzelfde segment die samen ook passen, worden weer één stuk.
+- Een stuk dat meteen past, krijgt precies het grid van vroeger.
+
+Gemeten na (scripts en uitkomst: `tools/beatmeting/rest/gridpast*.mjs/.txt`):
+- Synthetisch (`gridpast-synth`: de scenario's van de tweede kans plus schone sprongen,
+  tempowissels, een staart van 15 s, drie nummers, een versnelling en een mix van 20
+  minuten): valse zekere stukken 14 → 0; geen scenario houdt minder goed-zekere tijd over.
+- 48 fragmenten van Clay's library (`gridpast`): 41 precies gelijk (o.a. het album op 156
+  11:45-13:29 en 15:41, 2:00-2:48, 29:38; alle jungle-stukken; Bay Ledges; de korte
+  nummers), 7 anders; zeker met een blok van 12 s > 0,15 tel naast: 4 → 0.
+
+| fragment | vóór | na |
+|---|---|---|
+| let it all go 14:49 | 14:49-15:45 zeker, blokken 63 -1 -57 -20 ms | 15:06-15:45 zeker op 169,72 (5 -6 25), ervoor onzeker |
+| let it all go 31:18 | 31:18-32:02 zeker, 63 52 -33 | 31:18-31:40 en 31:40-32:02 zeker, elk één fase (een sprong van 0,28 tel) |
+| Sakamoto 28:30 | 28:30-29:58 zeker, laatste blok -227 ms | 28:30-29:29 op 115,21 en 29:29-29:58 op 116,68, allebei zeker |
+| Sakamoto 35:59 | 35:59-37:47 zeker, -114 107 -83 | 35:59-36:33 (119,98), 36:33-36:57 (123,05: de versnelling), 36:57-37:31 (120,43) zeker; daarna onzeker |
+| Sakamoto 34:26 | 34:26-35:18 onzeker (0,54) | 34:37-35:18 zeker (0,65, blokken 10 10 -2) |
+| Sakamoto 2:28, 33:34, 42:55 | onzeker | anders verdeeld, nog steeds onzeker |
+
+- Rekentijd: gewone fragmenten 1,2-1,8×; het ergste geval, een synthetische mix van een uur
+  met 18 nummers op één tempo zonder gat: 11,8 s tegen 4,0 s (vóór één vals zeker stuk,
+  53% naast; na alle 18, grenzen binnen 7 s). detect.test: 21 → 31 s.
+- Test: detect.test.mjs, "elk stuk moet passen" (een sprong van een halve en van een kwart
+  tel, 150 → 153 en 128 → 129,5, drie nummers, een staart, een versnelling, twee schone
+  stukken; en de onderdelen los). Met de detect.js van vóór falen ze, op de schone na.
+
+Wat niet opgelost is, of een keuze:
+- Een kort stuk op 1-2% ander tempo aan de rand van een lang stuk kan erin blijven hangen
+  (synthetisch S8: 20 s op 150 vóór 152,5, 4% van de kicks naast, zoals vroeger). Een regel
+  "twee vensters naast aan de rand" ving dat, maar knipte het album op 156 zonder reden in
+  tweeën (een trage drift), dus weggelaten.
+- Een deel van net onder de 20 s wordt een rest (onzeker), ook als er een grid op past.
+- Niet gemeten op hele albums (bewust), niet in de browser, de server niet herstart. Grids
+  met `bron: 'auto'` veranderen pas na ↻ in de library.
