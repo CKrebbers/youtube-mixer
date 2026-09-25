@@ -440,10 +440,23 @@ export class Beatgrid {
   splits(t) {
     if (!eindig(t) || this._stukken.some((s) => Math.abs(s.van - t) < EPS)) return false;
     const s = this._stukken[this.stukIndex(t)];
-    // Dezelfde maten: de eerste "1" op of na t, zoals hij nu ligt.
-    let b = Math.ceil(this.beatAt(t) - EPS);
-    for (let n = 0; n < 8 * this.beatsPerBar && !this.isMaatbegin(b); n++) b++;
-    this._stukken.push({ van: t, bpm: s.bpm, anker: s.anker, maat: this.timeOf(b) });
+    // Dezelfde maten: de eerste "1" op of na t, op het rooster van DIT stuk.
+    // Niet via timeOf: in de laatste maat vóór een volgend stuk valt die "1"
+    // in dat stuk, op een ander tempo, en dan kreeg de rest van de maat een
+    // "1" op de verkeerde tel (controleur, 25 sep).
+    let maat;
+    if (eindig(s.maat)) {
+      const L = 60 / s.bpm, per = this.beatsPerBar;
+      const een = s.anker + Math.round((s.maat - s.anker) / L) * L;
+      const k = Math.ceil((t - een) / L - EPS);
+      maat = een + (k + mod(-k, per)) * L;
+    } else {
+      // Een stuk zonder eigen tellen (weggevallen): zoals het nu klinkt.
+      let b = Math.ceil(this.beatAt(t) - EPS);
+      for (let n = 0; n < 8 * this.beatsPerBar && !this.isMaatbegin(b); n++) b++;
+      maat = this.timeOf(b);
+    }
+    this._stukken.push({ van: t, bpm: s.bpm, anker: s.anker, maat });
     this._bouw();
     return true;
   }

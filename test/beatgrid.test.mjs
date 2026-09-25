@@ -324,6 +324,18 @@ ok('en het tempo klopt nog steeds', Math.abs(tt4.tap(31 * 480, 0).bpm - 125) < 0
   ok('en het nieuwe stuk heeft zijn eerste "1" als maat (22,0)', bij(s2.stukken[1].maat, 22));
   s2.setBpm(118, { bij: 5 });
   ok('het eerste stuk bijstellen verschuift de "1" van het tweede niet', s2.isDownbeat(22) && s2.isDownbeat(24));
+
+  // Splitsen in de laatste maat vóór een stuk op een ander tempo (controleur,
+  // 25 sep): de volgende "1" ligt dan in DAT stuk (20,9 op 150). Die werd de
+  // maat van het nieuwe stuk, afgerond op zijn eigen rooster (21,0), en 19,0
+  // werd een "1" terwijl het tel 3 was.
+  const s3 = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, maat: 0 }, { van: 20, bpm: 150, anker: 20.1, maat: 20.9 }] });
+  const een = (g) => g.beatsBetween(15, 25).filter((x) => x.maatbegin).map((x) => x.tijd.toFixed(2)).join(' ');
+  const voorS3 = een(s3);
+  s3.splits(18.7);
+  ok(`splitsen vlak voor een ander stuk: dezelfde maten (${voorS3} / ${een(s3)})`, een(s3) === voorS3 && s3.telInMaat(19.0) === 3);
+  const nieuwStuk = s3.stukken[1];
+  ok('en de maat van het nieuwe stuk ligt op zijn eigen rooster', Math.abs(((nieuwStuk.maat - nieuwStuk.anker) * nieuwStuk.bpm / 60) % 1) < 1e-9);
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
