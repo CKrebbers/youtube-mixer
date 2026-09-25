@@ -307,6 +307,66 @@ try {
     && Math.abs(document.querySelector('#lib-panel .lib-rijen').scrollTop - 28 * 2500) < 2`, 5000), await status());
   await foto('library-weg.png');
 
+  // ---- toonsoort in de lange lijst (samengevoegd met het toonsoort-spoor) ----
+  // De kiezer zweeft onder zijn rij; de rijen eronder verschuiven niet, ook niet
+  // als zijn rij uit het getekende stuk scrollt. zetToon vindt een nummer dat
+  // niet in beeld is, en de kiezer op de laatste rij is te bereiken.
+  console.log('\ntoonsoort in de lange lijst');
+  const LIJST = "document.querySelector('#lib-panel .lib-rijen')";
+  const rijVan = (id) => `document.querySelector('#lib-panel .lib-toon[data-toon="${id}"]')?.closest('.lib-rij')`;
+  // Rijen in het venster liggen precies 28 px uit elkaar (de kiezer telt niet mee).
+  const REGELMATIG = `(() => { const r = [...document.querySelectorAll('#lib-panel .lib-venster .lib-rij')].map((e) => e.getBoundingClientRect().top);
+    return r.length > 5 && r.every((y, i) => i === 0 || Math.abs(y - r[i - 1] - 28) < 0.5); })()`;
+  const onderRij = (id) => evalueer(`(() => { const r = ${rijVan(id)}, k = document.querySelector('#lib-panel .lib-toonkiezer');
+    return !!(r && k) && Math.abs(k.getBoundingClientRect().top - r.getBoundingClientRect().bottom) < 1.5; })()`);
+  const inBeeldToon = await evalueer("[...document.querySelectorAll('#lib-panel .lib-venster .lib-toon')].map((b) => b.dataset.toon)");
+  const kid = inBeeldToon[14];
+  await evalueer(`document.querySelector('#lib-panel .lib-toon[data-toon="${kid}"]').click()`);
+  ok('de toonsoort-kolom is een knop; klik opent de kiezer onder die rij', await tot(`document.querySelectorAll('#lib-panel .lib-toonkiezer .lib-tk').length === 24`, 3000)
+    && await onderRij(kid));
+  ok('de rijen eronder verspringen niet (de kiezer zweeft erover)', await evalueer(REGELMATIG));
+  const HEEL_IN_BEELD = `(() => { const k = document.querySelector('#lib-panel .lib-toonkiezer')?.getBoundingClientRect(),
+    l = ${LIJST}.getBoundingClientRect(); return !!k && k.bottom <= l.bottom + 1 && k.top >= l.top; })()`;
+  ok(`de kiezer onder de ${inBeeldToon.indexOf(kid) + 1}e getekende rij staat helemaal in beeld (de lijst schoof mee)`,
+    await tot(HEEL_IN_BEELD, 2000) && await onderRij(kid));
+  await foto('library-kiezer.png');
+  await evalueer(`${LIJST}.scrollTop += 28 * 3`);
+  await wacht(150);
+  ok('drie rijen verder gescrold: de kiezer hangt nog onder zijn rij', await onderRij(kid) && await evalueer(REGELMATIG));
+  await evalueer(`${LIJST}.scrollTop += 28 * 60`);
+  ok('zijn rij uit het getekende stuk: kiezer weg, rijen regelmatig',
+    await tot(`!document.querySelector('#lib-panel .lib-toonkiezer') && ${TITELS}.length > 5`, 5000) && await evalueer(REGELMATIG));
+  await evalueer(`${LIJST}.scrollTop -= 28 * 63`);
+  ok('terug: de kiezer staat weer onder zijn rij', await tot(`!!document.querySelector('#lib-panel .lib-toonkiezer')`, 3000) && await onderRij(kid));
+  await evalueer(`document.querySelector('#lib-panel .lib-toonkiezer [data-tk="sluit"]').click()`);
+  ok('× sluit de kiezer', await tot(`!document.querySelector('#lib-panel .lib-toonkiezer')`, 2000));
+
+  // zetToon op een nummer dat in een geladen pagina staat maar NIET in de DOM.
+  const verborgen = await evalueer(`(() => { const c = window.library.cache, inDom = new Set([...document.querySelectorAll('#lib-panel .lib-toon')].map((b) => b.dataset.toon));
+    for (const p of c.paginas.values()) for (const t of p) if (!inDom.has(t.id)) return t.id; return null; })()`);
+  const KAART = { stemming: 0, stukken: [{ van: 0, toonsoort: 'C', stemming: 0 }], bron: 'hand', slot: true };
+  await evalueer(`window.library.zetToon(${JSON.stringify(verborgen)}, ${JSON.stringify(KAART)})`);
+  const rijNr = await evalueer(`(() => { const c = window.library.cache; for (const [k, p] of c.paginas) { const i = p.findIndex((t) => t.id === ${JSON.stringify(verborgen)}); if (i >= 0) return k * c.grootte + i; } return -1; })()`);
+  await evalueer(`${LIJST}.scrollTop = 28 * ${Math.max(0, rijNr - 3)}`);
+  ok(`zetToon op een nummer buiten beeld (${verborgen}, rij ${rijNr}): na scrollen staat de nieuwe kaart in zijn rij`,
+    await tot(`document.querySelector('#lib-panel .lib-toon[data-toon="${verborgen}"]')?.textContent === '8B C'
+      && document.querySelector('#lib-panel .lib-toon[data-toon="${verborgen}"]').classList.contains('slot')`, 5000));
+  ok('zetToon op een nummer dat nergens geladen is: geen fout', await evalueer(`(window.library.zetToon('bestaat-niet', ${JSON.stringify(KAART)}), true)`));
+
+  // De kiezer op de LAATSTE rij: de lijst wordt langer, dus je kunt hem in beeld scrollen.
+  await evalueer(`${LIJST}.scrollTop = ${LIJST}.scrollHeight`);
+  // Wachten tot de rijen van ONDERAAN er staan (niet de vorige die nog in de DOM zitten).
+  await tot(`(() => { const c = window.library.cache, b = [...document.querySelectorAll('#lib-panel .lib-venster .lib-toon')].at(-1);
+    return !!b && b.dataset.toon === c.rij(c.totaal - 1)?.id; })()`, 5000);
+  const laatste = await evalueer("[...document.querySelectorAll('#lib-panel .lib-venster .lib-toon')].at(-1).dataset.toon");
+  await evalueer(`document.querySelector('#lib-panel .lib-toon[data-toon="${laatste}"]').click()`);
+  await tot(`!!document.querySelector('#lib-panel .lib-toonkiezer')`, 2000);
+  await evalueer(`${LIJST}.scrollTop = ${LIJST}.scrollHeight`);
+  await wacht(150);
+  ok('kiezer op de laatste rij: helemaal in beeld te scrollen', await onderRij(laatste) && await evalueer(HEEL_IN_BEELD));
+  await foto('library-kiezer-onderaan.png');
+  await evalueer(`document.querySelector('#lib-panel .lib-toonkiezer [data-tk="sluit"]').click()`);
+
   ok('geen fouten in de console', meldingen.length === 0, meldingen.join(' | '));
 } catch (err) {
   ok('script liep door', false, err.message);

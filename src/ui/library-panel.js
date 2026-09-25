@@ -114,7 +114,8 @@ export class LibraryPanel {
       const toon = e.target.closest('button[data-toon]');
       if (toon) {
         this.kiezer = this.kiezer === toon.dataset.toon ? null : toon.dataset.toon;
-        return this.tekenRijen();
+        this.tekenRijen();
+        return this._kiezerInBeeld();
       }
       const tk = e.target.closest('button[data-tk]');
       if (tk) {
@@ -187,6 +188,18 @@ export class LibraryPanel {
     track[veld] = waarde;
     const nu = this._track(track.id);
     if (nu && nu !== track) nu[veld] = waarde;
+  }
+
+  /**
+   * Het paneel is laag (340 px, een rij of zeven): een kiezer onder een van
+   * de onderste rijen viel eronder weg. Dan de lijst zover schuiven dat hij
+   * helemaal in beeld staat; zijn rij blijft dan ook in beeld.
+   */
+  _kiezerInBeeld() {
+    const k = this.el.venster.querySelector('.lib-toonkiezer');
+    if (!k) return;
+    const onder = k.getBoundingClientRect().bottom - this.el.rijen.getBoundingClientRect().bottom;
+    if (onder > 0) this.el.rijen.scrollTop += Math.ceil(onder) + 4;
   }
 
   /** Klik op een kolomkop. */
