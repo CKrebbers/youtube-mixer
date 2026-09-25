@@ -53,6 +53,12 @@ export function normaliseerLink(link) {
 
 /** Een YouTube-video-id: precies 11 tekens. */
 const YT_ID = /^[\w-]{11}$/;
+/**
+ * Twee woorden van 11 tekens die GEEN video zijn: /embed/videoseries?list=…
+ * (een ingesloten playlist) en /embed/live_stream?channel=… (de livestream
+ * van een kanaal). Anders werden ze watch?v=videoseries: "alleen dit nummer".
+ */
+const GEEN_ID = new Set(['videoseries', 'live_stream']);
 
 export const PLAYLIST_FOUT = 'dit is een playlist — plak de link van één nummer '
   + '(met v= én list= erin wordt het gewoon dat nummer)';
@@ -96,12 +102,12 @@ function bekijkYoutube(u, link) {
   if (host === 'youtu.be' || host.endsWith('.youtu.be')) id = pad.split('/')[1] || null;
   else if (/^\/watch\/?$/.test(pad)) id = q.get('v');
   else id = /^\/(?:shorts|live|embed|v|e)\/([^/]+)/.exec(pad)?.[1] ?? null;
-  if (id && YT_ID.test(id)) {
+  if (id && YT_ID.test(id) && !GEEN_ID.has(id)) {
     return { ok: true, link: `https://www.youtube.com/watch?v=${id}`, id, sleutel: id, ...(q.has('list') ? { lijstEraf: true } : {}) };
   }
   if (q.has('list') || /^\/playlist\/?$/.test(pad)) return { ok: false, playlist: true, fout: PLAYLIST_FOUT };
   // Kanalen, zoekresultaten en overzichten: voor yt-dlp ook playlists.
-  if (/^\/(@[^/]+|channel\/|c\/|user\/|results\/?$|feed\/)/.test(pad)) {
+  if (/^\/(@[^/]+|channel\/|c\/|user\/|results\/?$|feed\/|embed\/live_stream)/.test(pad)) {
     return { ok: false, playlist: true, fout: 'dit is een kanaal of overzicht, geen nummer — plak de link van één video' };
   }
   return { ok: true, link, id: null, sleutel: link };

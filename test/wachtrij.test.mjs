@@ -115,6 +115,12 @@ try {
   const pl = bekijkLink('https://www.youtube.com/playlist?list=PLabc');
   ok(`playlist-link: geweigerd met reden ("${pl.fout}")`, !pl.ok && pl.playlist && /playlist/.test(pl.fout));
   ok('watch zonder v maar met list: ook een playlist', bekijkLink('https://www.youtube.com/watch?list=PLabc').playlist === true);
+  // "videoseries" en "live_stream" zijn 11 tekens, maar geen video-id.
+  ok('een ingesloten playlist (embed/videoseries?list=): playlist, niet watch?v=videoseries',
+    ['https://www.youtube.com/embed/videoseries?list=PLabc', 'https://www.youtube-nocookie.com/embed/videoseries?list=PLx']
+      .every((u) => bekijkLink(u).playlist === true));
+  ok('embed/live_stream?channel=: de livestream van een kanaal, geweigerd',
+    bekijkLink('https://www.youtube.com/embed/live_stream?channel=UC123').playlist === true);
   ok('kanalen en zoekresultaten: geweigerd', ['https://www.youtube.com/@varve', 'https://www.youtube.com/@varve/videos',
     'https://www.youtube.com/channel/UC123', 'https://www.youtube.com/results?search_query=x'].every((u) => bekijkLink(u).playlist === true));
   ok('TikTok-video: id zonder netwerk; profiel geweigerd', bekijkLink('https://tiktok.com/@a/video/123?x=1').id === 'tiktok-123'
