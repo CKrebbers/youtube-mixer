@@ -37,7 +37,8 @@ import { zichtbaarheid } from '../video/volg.js';
  *   - Neemt een ANDERE track de maat over terwijl hij al speelde, dan tellen
  *     alleen klappen en tellen vanaf het vorige beeld (zoals elke klap: een
  *     beeld later, nog bijna vol). Anders sprong het beeld naar het midden van
- *     een klap die 80 ms eerder op de nieuwe track viel. Begint de nieuwe
+ *     een klap die 80 ms eerder op de nieuwe track viel. Die grens vervalt
+ *     zodra hij terugspringt tot ervóór (loop rond, hotcue). Begint de nieuwe
  *     maatgever net te spelen, dan telt alles: zijn eerste tel ligt dan nog
  *     vóór wat je hoort, en die wil je zien.
  *   - Komen de klappen van de maatgever later binnen (ze worden na het laden
@@ -175,9 +176,9 @@ export class MaatLezer {
 
     const w = this.waarden;
     const nw = {};
-    nw.maatklap = this._bron('maatklap', id, d?.onsets ?? null, vanaf, dt,
+    nw.maatklap = this._bron('maatklap', id, d?.onsets ?? null, vanaf, pos, dt,
       (v0) => ({ v: klapOmhullende(d.onsets, pos, rate, v0), tau: KLAP_TAU }), w.maatklap);
-    nw.tel = this._bron('tel', id, d?.grid ?? null, vanaf, dt, (v0) => {
+    nw.tel = this._bron('tel', id, d?.grid ?? null, vanaf, pos, dt, (v0) => {
       const { v, lengte } = telPuls(d.grid, pos, v0);
       return { v, tau: lengte > 0 ? lengte / (TEL_STEIL * rate) : null };
     }, w.tel);
@@ -190,15 +191,17 @@ export class MaatLezer {
   /**
    * Eén bron een stap verder. `data` = de klappen of het grid van de
    * maatgever: verandert de maatgever of zijn data, dan is het een wissel,
-   * en vanaf dan telt alleen wat op of na `vanaf` (tracktijd) valt.
+   * en vanaf dan telt alleen wat op of na `vanaf` (tracktijd) valt. Die grens
+   * geldt tot de hoorbare positie `pos` er weer vóór komt (een loop die
+   * rondgaat, een hotcue terug): wat daar ligt hoor je opnieuw, dus dat telt.
    */
-  _bron(naam, id, data, vanaf, dt, reken, vorige) {
+  _bron(naam, id, data, vanaf, pos, dt, reken, vorige) {
     const b = this.bronnen[naam];
     if (id !== b.id || data !== b.data) {
       b.vanaf = Number.isFinite(vanaf) ? vanaf : -Infinity;
       b.id = id;
       b.data = data;
-    }
+    } else if (pos < b.vanaf) b.vanaf = -Infinity;
     let nieuw = 0;
     if (id !== null && data) {
       const r = reken(b.vanaf);

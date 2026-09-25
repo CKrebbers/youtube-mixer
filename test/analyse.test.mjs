@@ -433,6 +433,32 @@ console.log('de maat: klappen uit de onset-analyse en de tel van de maatgever');
       bij(na.maatklap, Math.exp(-0.01 / M.KLAP_TAU), 1e-9) && na.tel > 0.9 && voor.maatklap < 0.05);
   }
 
+  // De grens van een overname geldt alleen voor die overname: B neemt de maat
+  // over MIDDEN in zijn loop (0,75–1,75), dus de loop gaat daarna terug tot
+  // vóór het moment van de wissel. Die klappen en tellen hoor je opnieuw, dus
+  // die wil je zien. (Eerst bleef de grens staan tot de volgende wissel: de
+  // hele loop bleef stil, net als alles na een hotcue terug.)
+  {
+    const aKlap = Float64Array.from({ length: 12 }, (_, k) => k * 0.5);
+    const bKlap = Float64Array.from({ length: 12 }, (_, k) => 0.25 + k * 0.5);
+    const A = deck({ onsets: aKlap }), B = deck({ onsets: bKlap, anker: 0.25 });
+    const tr = [{ id: 'A', deck: A, zicht: 1 }, { id: 'B', deck: B, zicht: 0.5 }];
+    const l = lezer(tr, 0);
+    const fps = 120, r = [];
+    for (let i = 0; i <= 3.2 * fps; i++) {
+      klok.c = i / fps;
+      if (i === Math.round(1.33 * fps)) tr[0].zicht = 0.2;        // B neemt de maat over, bij 1,33 in zijn loop
+      if (klok.c > 1.33 && B.position >= 1.75) { B.P0 = 0.75 + (B.position - 1.75); B.c0 = klok.c; }
+      r.push({ c: klok.c, pos: B.position, wie: l.maatgever, ...l.lees(klok.c) });
+    }
+    // De eerste beelden na elke klap van B in de loop (0,75 en 1,25), na de wissel.
+    const na = (tk) => r.filter((x) => x.c > 1.34 && x.pos >= tk && x.pos < tk + 1 / fps + 1e-9);
+    const klappen = [...na(0.75), ...na(1.25)];
+    ok(`maatgever B in een loop die terug gaat tot vóór de wissel: zijn klappen en tellen komen door `
+      + `(${klappen.length} beelden, klap ${Math.min(...klappen.map((x) => x.maatklap)).toFixed(2)}, tel ${Math.min(...klappen.map((x) => x.tel)).toFixed(2)})`,
+    klappen.length >= 4 && klappen.every((x) => x.wie === 'B' && x.maatklap > 0.9 && x.tel > 0.9));
+  }
+
   // Terug in de tijd (nieuwe AudioContext) of lang niets: opnieuw beginnen.
   {
     const l = lezer([{ id: 'A', deck: deck({ onsets: klapTijden }), zicht: 1 }]);
