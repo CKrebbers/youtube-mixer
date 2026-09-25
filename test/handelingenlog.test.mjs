@@ -386,6 +386,10 @@ try {
     ok('beginstand teruggezet: de demo opnieuw geladen op track 1', geladen.length === 1 && geladen[0][0] === 'A' && geladen[0][2] === 0);
     ok('... wat er toen niet stond speelt niet mee (track 2 stil)', !eng.deck('B').playing);
     ok('... en de faders staan weer zoals bij het begin', eng.deck('A').ui.fader === 1 && eng.xfader === 0.5 && eng.deck('A').ui.low === 0.5);
+    // De demo komt zonder grid uit zijn zaad (zoals laadVoorTerugspelen hem
+    // maakt); het grid van toen (hier getikt: 124 bpm) moet er weer op.
+    ok(`... met het grid van toen (${eng.deck('A').grid?.bpmAt(0) ?? 'geen'} bpm)`,
+      JSON.stringify(eng.deck('A').grid?.toJSON() ?? null) === JSON.stringify(stand0.tracks[0].grid));
     while (NOW < T0 + l.duur + 0.05) { NOW = Math.round((NOW + 0.01) * 1000) / 1000; t2m.tik(); }
     ok(`terugspelen klaar (${klaar?.gedaan} handelingen, ${klaar?.laat} te laat)`, klaar?.reden === 'klaar' && klaar.laat === 0);
     const d = eng.deck('A');

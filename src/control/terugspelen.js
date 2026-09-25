@@ -312,6 +312,9 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
       if (t.kant) engine.setKant(d.id, t.kant);
       rack(d.fx, t.rack);
       if (!geladen.has(d.id) || !d.buffer) continue;
+      // Het grid van toen. Een library-nummer kreeg het al mee bij het laden,
+      // maar de demo komt zonder grid uit zijn zaad (een getikt grid was weg).
+      if (gridTekst(d) !== JSON.stringify(t.grid ?? null)) d.setGrid(t.grid ?? null);
       if (Number.isFinite(t.rate)) d.setRate(t.rate);
       d.cuePoint = Number.isFinite(t.cue) ? t.cue : 0;
       if (Array.isArray(t.hotcues)) d.hotcues = [0, 1, 2, 3].map((i) => (Number.isFinite(t.hotcues[i]) ? t.hotcues[i] : null));
