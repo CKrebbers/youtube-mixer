@@ -156,6 +156,8 @@ klik tegelijk opneemt. Pas daarna kan er een vaste voorsprong bij.
   "video van track 1 (kwarten): het bestand ontbreekt of het formaat wordt niet
   ondersteund". Een 404 geeft code 4. Getest door `video.mp4` van schijf te halen.
 - Zichtbaar en na 10 s nog geen beeld (`LAAD_GEDULD`, `fouten.js`): "na 10 s nog geen beeld".
+  Alleen tijd waarin deze mixer ook TEKENT telt: stond hij meer dan 1 s stil
+  (tabblad verborgen, het andere venster mengde), dan begint de teller opnieuw.
 - Eén melding per bron. Het losse venster meldt via het hoofdvenster, want de beamer
   toont geen tekst voor de zaal. Melden twee mixers dezelfde fout, dan staat die
   één keer in de strook (`meld()` stapelt geen gelijke fouten).

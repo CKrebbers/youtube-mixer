@@ -190,6 +190,23 @@ console.log('\nde mixer meldt een video die niet laadt');
   hoofd.zetBron('B', null);
   vb.luister.error.forEach((f) => f());
   ok('een fout van een video die al weg is telt niet', meldingen.length === 1);
+
+  // "Na 10 s nog geen beeld" telt de tijd dat de laag te ZIEN was. Tekent deze
+  // mixer een tijd niet (tabblad verborgen: rAF stil en Chrome laadt geen
+  // media; of het andere venster mengde), dan telt die tijd niet mee: bij het
+  // eerste beeld daarna meteen melden was vals alarm.
+  const echteNu = performance.now;
+  let klok = 0;
+  performance.now = () => klok;
+  try {
+    meldingen.length = 0;
+    hoofd.zetBron('A', '/media/traag/video.mp4');   // laadt niet (readyState 0), zichtbaar (fader 1)
+    hoofd.teken(); klok = 500; hoofd.teken();
+    klok = 60500; hoofd.teken();                     // een minuut niet getekend
+    ok('een minuut niet getekend: die tijd telt niet als "geen beeld"', meldingen.length === 0);
+    while (klok < 71000) { klok += 100; hoofd.teken(); }
+    ok('wel 10 s zichtbaar getekend zonder beeld: één melding', meldingen.length === 1 && meldingen[0][0] === 'A' && /10 s/.test(meldingen[0][1]));
+  } finally { performance.now = echteNu; }
 }
 
 console.log('\nde beamer: wie mengt er (het losse venster loopt door als het hoofdtabblad verborgen is)');

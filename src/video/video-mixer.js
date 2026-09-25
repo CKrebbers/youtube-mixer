@@ -205,6 +205,7 @@ export class VideoMixer {
     this.fout = null;
     this.onFout = null;              // (deckId, tekst): de video van een nummer ontbreekt of laadt niet
     this.beelden = 0;                // getekende beelden, voor de status en de tests
+    this.vorigBeeldMs = -Infinity;   // performance.now() van het vorige teken()
     canvas.width = BREEDTE;
     canvas.height = HOOGTE;
 
@@ -427,6 +428,13 @@ export class VideoMixer {
     const w = new Float32Array(MAX);
     const schaal = new Float32Array(MAX * 2).fill(1);
     const vertraging = this._vertraging();
+    // Stond dit tekenen stil (tabblad verborgen, het andere venster mengde,
+    // paneel dicht), dan telt die tijd niet als "zichtbaar": een video die
+    // intussen niet laden kon, kreeg anders bij het eerste beeld meteen
+    // "na 10 s nog geen beeld".
+    const nuMs = performance.now();
+    if (nuMs - this.vorigBeeldMs > 1000) for (const l of this.lagen.values()) l.zichtSinds = null;
+    this.vorigBeeldMs = nuMs;
 
     this.decks.forEach((id, i) => {
       const laag = this.lagen.get(id);
@@ -439,7 +447,6 @@ export class VideoMixer {
         gl.bindTexture(gl.TEXTURE_2D, this.zwart);
         return;
       }
-      const nuMs = performance.now();
       laag.zichtSinds ??= nuMs;
       if (laadtTeLang({ zichtbaar: true, klaar: laag.klaar, gemeld: laag.gemeld, sinds: laag.zichtSinds, nu: nuMs })) {
         laag.gemeld = true;
