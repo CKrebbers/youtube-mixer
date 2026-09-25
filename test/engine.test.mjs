@@ -1599,6 +1599,56 @@ console.log('\ntoetsenbord');
   NOW = 0;
 }
 
+{
+  // De kruisfade zelf, zoals Chrome hem ziet. Met setValueCurveAtTime + een
+  // cancelAndHoldAtTime erin (mixdraai of tweede wissel binnen 40 ms) speelde
+  // Chrome 153 de afgekapte curve opnieuw af: een sprong van 0,15–0,52 in de
+  // gain. Nu een beginpunt en lineaire hellingen, pas na de startdrempel.
+  const { startDrempel } = await import('../src/engine/overgang.js');
+  const { FADE } = await import('../src/engine/fx.js');
+  const sf = eng.deck('C').fx, ctx = sf.ctx, W = startDrempel(ctx);
+  const breuk0 = CURVE_BREUK, fouten0 = OVERLAP_FOUTEN;
+  const log = new Map();          // gain-param -> aanroepen
+  const maak = ctx.createGain;
+  ctx.createGain = function () {
+    const n = maak.call(this), p = n.gain, l = [];
+    log.set(p, l);
+    for (const f of ['setValueAtTime', 'linearRampToValueAtTime', 'setTargetAtTime', 'setValueCurveAtTime', 'cancelAndHoldAtTime']) {
+      const orig = p[f];
+      p[f] = function (...a) { l.push([f, ...a]); return orig.apply(this, a); };
+    }
+    return n;
+  };
+  NOW = 60; sf.setMix(0.6); sf.standaard();
+  const D = sf.keten.gain.gain;
+  NOW = 61; sf.zetEffect('filter');
+  const F = sf.keten.gain.gain;
+  const wet = Math.sin(0.6 * Math.PI / 2);
+  const zet = log.get(F).filter(([f]) => f === 'setValueAtTime'), hel = log.get(F).filter(([f]) => f === 'linearRampToValueAtTime');
+  const ep = (i) => wet * Math.sin(i / 32 * Math.PI / 2);
+  ok(`effectwissel: nieuwe keten van 0 naar nat met een beginpunt en 32 hellingen, pas na de startdrempel (${(W * 1000).toFixed(1)} ms)`,
+    zet.length === 2 && zet[0][1] === 0 && zet[0][2] === 61 && zet[1][1] === 0 && Math.abs(zet[1][2] - (61 + W)) < 1e-9
+    && hel.length === 32 && Math.abs(hel[31][2] - (61 + W + FADE)) < 1e-9 && Math.abs(hel[31][1] - wet) < 1e-12);
+  ok('… equal-power: elk punt op sin, dezelfde vorm als de oude curve',
+    hel.every(([, x, t], k) => Math.abs(x - ep(k + 1)) < 1e-9 && Math.abs(t - (61 + W + FADE * (k + 1) / 32)) < 1e-9));
+  const uit = log.get(D).filter(([f, , t]) => f === 'linearRampToValueAtTime' && t > 61);
+  ok('… de oude keten naar 0, ook als hellingen en ook pas na de drempel',
+    uit.length === 32 && uit[31][1] === 0 && Math.abs(uit[0][2] - (61 + W + FADE / 32)) < 1e-9);
+  NOW = 61 + W + 0.005;
+  sf.setMix(0.9);
+  ok('5 ms in de kruisfade aan de mix draaien: vasthouden midden in een HELLING, geen afgebroken curve',
+    CURVE_BREUK === breuk0 && OVERLAP_FOUTEN === fouten0 && log.get(F).at(-1)[0] === 'setTargetAtTime'
+    && log.get(F).at(-2)[0] === 'cancelAndHoldAtTime' && log.get(F).at(-2)[1] === NOW);
+  NOW = 61 + W + 0.010;
+  sf.zetEffect('phaser');
+  ok('10 ms in de kruisfade nog een wissel: geen afgebroken curve, de vorige vloeit vanaf daar uit',
+    CURVE_BREUK === breuk0 && OVERLAP_FOUTEN === fouten0
+    && log.get(F).filter(([f]) => f === 'linearRampToValueAtTime').at(-1)[1] === 0);
+  ok('nergens een setValueCurveAtTime op een kruisfade', [...log.values()].every((l) => l.every(([f]) => f !== 'setValueCurveAtTime')));
+  delete ctx.createGain;
+  NOW = 0;
+}
+
 // ---- tempokaart: grid in stukken (stap B) -----------------------------------
 // Alles wat met het grid rekent, moet dat doen op de plek waar het deck NU is.
 
@@ -1820,6 +1870,7 @@ console.log('\ntempokaart');
 }
 
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);
+ok(`geen enkele afgebroken curve in de hele test (${CURVE_BREUK}): in Chrome een sprong`, CURVE_BREUK === 0);
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

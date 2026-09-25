@@ -269,6 +269,43 @@ try {
   })()`);
   ok('kill: snel aan/uit en knop tijdens de overgang, in Chrome\'s automatisering geen sprong', killStap.every((m) => m < 0.05),
     `grootste stap in amplitude ${killStap.map((m) => m.toFixed(3)).join(' / ')}`);
+  // Dezelfde vraag voor de kruisfade van een effectwissel (fx.js): een echte
+  // InsertSlot in een OfflineAudioContext. Elke gain (droog, elke keten) krijgt
+  // een ConstantSource van 1 als invoer en een eigen kanaal: dat kanaal IS de
+  // gain, sample voor sample. Wissel, en 5 ms later aan de mix, of 8 ms later
+  // nog een wissel: met setValueCurveAtTime speelde Chrome de afgekapte curve
+  // opnieuw af, 0,15–0,33 in één sample (realtime tot 0,60).
+  const fxStap = await evalueer(`(async () => {
+    const { InsertSlot } = await import('/src/engine/fx.js');
+    const SR = 48000, Q = 128 / SR, K = 6, uit = [];
+    for (const stappen of [
+      [[40, (s) => s.zetEffect('filter')], [42, (s) => s.setMix(0.9)]],
+      [[40, (s) => s.zetEffect('filter')], [43, (s) => s.zetEffect('phaser')]],
+      [[40, (s) => s.zetEffect('filter')], [44, (s) => s.zetEffect('phaser')],
+        [48, (s) => { s.setMix(0.7); s.setBypass(true); s.setBypass(false); }], [50, (s) => s.zetEffect('crush')]],
+    ]) {
+      const ctx = new OfflineAudioContext(K, SR * 0.25, SR);
+      const slot = new InsertSlot(ctx);
+      // Opruimen loopt op een gewone timer; offline loopt de audioklok daar
+      // los van, en losmaken zou hier de meting afknippen, niet het geluid.
+      slot._ruimOp = () => {};
+      const merger = new ChannelMergerNode(ctx, { numberOfInputs: K });
+      merger.connect(ctx.destination);
+      const een = new ConstantSourceNode(ctx, { offset: 1 }); een.start();
+      const gepeild = new Set();
+      const peil = (g) => { if (g && !gepeild.has(g) && gepeild.size < K) { een.connect(g); g.connect(merger, 0, gepeild.size); gepeild.add(g); } };
+      peil(slot.dry);
+      slot.standaard(); slot.setMix(0.6); peil(slot.keten.gain);
+      for (const [q, doe] of stappen) ctx.suspend(q * Q).then(() => { doe(slot); peil(slot.keten?.gain); ctx.resume(); });
+      const b = await ctx.startRendering();
+      let m = 0;
+      for (let k = 0; k < gepeild.size; k++) { const d = b.getChannelData(k); for (let i = 1; i < d.length; i++) m = Math.max(m, Math.abs(d[i] - d[i - 1])); }
+      uit.push(m);
+    }
+    return uit;
+  })()`);
+  ok('effectwissel: binnen de kruisfade aan de mix draaien of nog eens wisselen, in Chrome geen sprong', fxStap.every((m) => m < 0.01),
+    `grootste stap in de gains ${fxStap.map((m) => m.toFixed(4)).join(' / ')}`);
   const bas = (s) => evalueer(`(async () => {
     const { Luisteraar } = await import('/src/analysis/luisteraar.js');
     const e = window.engine, l = new Luisteraar({ analyser: () => e.master.analyser, sampleRate: () => e.ctx.sampleRate });

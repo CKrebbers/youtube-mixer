@@ -1,5 +1,6 @@
 import { clamp, expMap } from '../lib/emitter.js';
 import { leesRack, schrijfRack, resolveMacros, rackVanEffect, LEEG_RACK } from './rack.js';
+import { startDrempel, houdVast, zetHellingen } from './overgang.js';
 
 /**
  * De insert-slot: één effectketen per deck, klikvrij verwisselbaar.
@@ -48,12 +49,11 @@ export const delingVan = (t) => DELINGEN[Math.min(DELINGEN.length - 1,
 export const GEEN_KLOK = () => null;
 
 /**
- * Hoe dicht bij `nu` een start op de audioklok nog op tijd komt. Wat binnen
- * de uitgangsbuffer valt (of binnen het blok dat de audiothread al rendert)
- * start te laat, en dan hoor je hem naast de tel. Plus 3 ms marge voor het
- * bericht naar de audiothread.
+ * Hoe dicht bij `nu` een start op de audioklok nog op tijd komt; wat
+ * daarbinnen valt start te laat, en dan hoor je hem naast de tel. Staat in
+ * overgang.js, omdat kruisfades en de kill dezelfde drempel nodig hebben.
  */
-export const startDrempel = (ctx) => Math.max(ctx.baseLatency ?? 0, 128 / ctx.sampleRate) + 0.003;
+export { startDrempel };
 
 /**
  * Het moment om op de tel te starten: het anker van de klok, of — als dat al
@@ -92,36 +92,41 @@ const filterStand = (t) => {
   return d < 0 ? `LP ${hz(expMap(1 + d, 200, 22050))}` : `HP ${hz(expMap(d, 20, 9000))}`;
 };
 const crushStappen = (t) => Math.max(1, Math.round(Math.pow(2, 1 + (1 - t) * 6)));
-const CURVE_N = 33;
+const OVERGANG_N = 33;
 
-/** Equal-power curve van a naar b. */
-function fadeCurve(van, naar) {
-  const c = new Float32Array(CURVE_N);
-  for (let i = 0; i < CURVE_N; i++) {
-    const t = i / (CURVE_N - 1);
-    c[i] = van * Math.cos(t * Math.PI / 2) + naar * Math.cos((1 - t) * Math.PI / 2);
+/**
+ * Equal-power van `van` naar `naar` in OVERGANG_N punten; het eerste is
+ * precies `van`, het laatste precies `naar`.
+ */
+function fadePunten(van, naar) {
+  const p = new Array(OVERGANG_N);
+  for (let i = 0; i < OVERGANG_N; i++) {
+    const t = i / (OVERGANG_N - 1);
+    p[i] = van * Math.cos(t * Math.PI / 2) + naar * Math.cos((1 - t) * Math.PI / 2);
   }
-  return c;
+  p[0] = van; p[OVERGANG_N - 1] = naar;
+  return p;
 }
 
 /**
- * Een doelwaarde zetten op een parameter waar mogelijk nog een curve op loopt.
+ * Een doelwaarde zetten op een parameter waar mogelijk nog een overgang
+ * loopt: de kruisfade van een effectwissel, of een vorige zetDoel. Dat
+ * gebeurt precies wanneer je aan de mix draait vlak nadat je van effect
+ * gewisseld bent, oftewel: tijdens het spelen.
  *
- * Web Audio weigert `setTargetAtTime` als het overlapt met een lopende
- * `setValueCurveAtTime` — en gooit dan een NotSupportedError die je hele
- * aanroepketen meeneemt. Dat gebeurt precies wanneer je aan de mix draait vlak
- * nadat je van effect gewisseld bent, oftewel: tijdens het spelen.
- *
- * `cancelAndHoldAtTime` breekt de curve netjes af op zijn huidige waarde.
- * Kent de browser hem niet, dan vallen we terug; en faalt het alsnog, dan
- * zetten we de waarde hard in plaats van de aanroeper te laten struikelen.
+ * Eerst vasthouden waar hij nu is, dan vanaf daar naar het doel. Dat gaat
+ * netjes omdat hier alleen hellingen en setTargetAtTime lopen, NOOIT een
+ * setValueCurveAtTime (zie overgang.js): bovenop een lopende curve gooit
+ * setTargetAtTime een NotSupportedError die je hele aanroepketen meeneemt,
+ * en een curve afbreken met cancelAndHoldAtTime gaf in Chrome een sprong.
+ * Direct op `nu`, zonder drempel: een setTargetAtTime die te laat
+ * binnenkomt begint gewoon vanaf waar de parameter dan is (gemeten: 300
+ * knopstappen in realtime, geen sprong). Faalt het alsnog, dan zetten we de
+ * waarde hard in plaats van de aanroeper te laten struikelen.
  */
 export function zetDoel(param, waarde, ctx, tau = 0.01) {
   const nu = ctx.currentTime;
-  try {
-    if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(nu);
-    else param.cancelScheduledValues?.(nu);
-  } catch (_) {}
+  try { houdVast(param, nu); } catch (_) {}
   try {
     param.setTargetAtTime(waarde, nu, tau);
   } catch (_) {
@@ -130,24 +135,21 @@ export function zetDoel(param, waarde, ctx, tau = 0.01) {
 }
 
 /**
- * Een equal-power curve van `van` naar `naar`, ook als er nog een loopt.
- *
- * cancelScheduledValues haalt alleen weg wat op of na `nu` BEGINT; een curve
- * die al loopt blijft staan, en een nieuwe erbovenop gooit NotSupportedError.
- * Twee keer snel van rack wisselen (binnen de 40 ms van een kruisfade) deed
- * precies dat — en het oude vangnet gooide dezelfde fout nog eens. Nu eerst
- * de lopende curve afbreken op zijn huidige waarde, en vanaf daar verder.
+ * Een equal-power overgang naar `naar` in `duur`, vanaf waar de parameter
+ * nu is, ook als er nog een overgang loopt (twee rackwissels binnen 40 ms,
+ * of aan de mix draaien vlak na een wissel). Als beginpunt plus lineaire
+ * hellingen en pas na `startDrempel`, NIET als setValueCurveAtTime: waarom
+ * staat in overgang.js. Geeft het moment op de audioklok waarop hij klaar is.
  */
-function zetCurve(param, van, naar, ctx, duur = FADE) {
-  const nu = ctx.currentTime;
+function zetOvergang(param, naar, ctx, duur = FADE) {
+  const nu = ctx.currentTime, wacht = startDrempel(ctx);
   try {
-    if (param.cancelAndHoldAtTime) { param.cancelAndHoldAtTime(nu); van = param.value; }
-    else param.cancelScheduledValues?.(nu);
-    param.setValueCurveAtTime(fadeCurve(van, naar), nu, duur);
+    zetHellingen(param, (van) => fadePunten(van, naar), nu, duur, wacht);
   } catch (_) {
     // Laatste vangnet: nooit de aanroeper laten struikelen.
     try { param.setTargetAtTime(naar, nu, duur / 3); } catch (__) { try { param.value = naar; } catch (___) {} }
   }
+  return nu + wacht + duur;
 }
 
 // ---- effecten --------------------------------------------------------------
@@ -233,10 +235,10 @@ export const EFFECTEN = [
         const nieuw = 1 - actief;
         koppen[nieuw].delayTime.cancelScheduledValues?.(nu);
         koppen[nieuw].delayTime.setValueAtTime(sec, nu);
-        zetCurve(gains[actief].gain, 1, 0, ctx, TIJD_FADE);
-        zetCurve(gains[nieuw].gain, 0, 1, ctx, TIJD_FADE);
+        zetOvergang(gains[actief].gain, 0, ctx, TIJD_FADE);
+        // De fade begint pas na startDrempel: klaar is hij dus ook later.
+        klaarOm = zetOvergang(gains[nieuw].gain, 1, ctx, TIJD_FADE) + 0.005;
         actief = nieuw;
-        klaarOm = nu + TIJD_FADE + 0.005;
       };
 
       /*
@@ -886,11 +888,12 @@ export class InsertSlot {
     this._pasMacrosToe();
 
     const { wet } = this._niveaus();
-    zetCurve(gain.gain, 0, wet, this.ctx);
+    zetOvergang(gain.gain, wet, this.ctx);
     if (vorige) {
-      zetCurve(vorige.gain.gain, vorige.gain.gain.value, 0, this.ctx);
+      // Opruimen na fade plus staart, en de fade begint pas na startDrempel.
+      const klaar = zetOvergang(vorige.gain.gain, 0, this.ctx) - this.ctx.currentTime;
       this.oud.push(vorige);
-      setTimeout(() => this._ruimOp(vorige), (FADE + vorige.node.staart()) * 1000 + 50);
+      setTimeout(() => this._ruimOp(vorige), (klaar + vorige.node.staart()) * 1000 + 50);
     }
     return { fouten };
   }
