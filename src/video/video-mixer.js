@@ -1,4 +1,4 @@
-import { synchroniseer, zichtbaarheid } from './volg.js';
+import { synchroniseer, zichtbaarheid, inDePas } from './volg.js';
 import { videoFoutTekst, laadtTeLang, LAAD_GEDULD } from './fouten.js';
 import { VIDEO_FX, MODI } from './instellingen.js';
 import { PULS_DOELEN, pulsVorm, klokTrack, metPuls } from './puls.js';
@@ -23,7 +23,8 @@ import { actieveLagen, lagenUniforms, MAX_BEELDLAGEN } from './lagen.js';
  * Er kunnen twee mixers zijn: die in het hoofdvenster (bediend via de bus)
  * en die in het losse venster (de beamer, beamer.js). De tweede neemt elk
  * beeld alles over van de eerste (neemOver) en heeft eigen <video>'s: een
- * verborgen tabblad decodeert niets.
+ * verborgen tabblad decodeert niets. Die eigen video's lopen eerst in
+ * (loopIn): bijsturen en uploaden zonder te mengen, tot ze in de pas lopen.
  *
  * Drie stappen per beeld, elk in een eigen shader:
  *   mengen    acht video's -> één beeld, volgens de mengvorm
@@ -405,21 +406,60 @@ export class VideoMixer {
     this.lagen.set(deckId, laag);
   }
 
+  /**
+   * Inlopen (het losse venster, beamer.js): elke video bijsturen en de
+   * zichtbare uploaden, precies zoals teken(), maar niet mengen. Zolang toont
+   * het losse venster het beeld van het hoofdvenster (toonBeeld). Uploaden is
+   * nodig: een <video> die niemand uitleest krijgt in Chrome geen vers beeld,
+   * en het eerste eigen beeld na de overname was dan 200–400 ms oud
+   * (gemeten, tools/headless/beamer.mjs). Geeft terug of alle zichtbare
+   * video's in de pas lopen (inDePas, volg.js).
+   */
+  loopIn() {
+    if (!this.gl || !this.prog) return true;
+    return inDePas(this._bijwerken(this._vertraging()).pas);
+  }
+
+  /**
+   * Een kant-en-klaar beeld tonen in plaats van zelf te mengen: tijdens de
+   * inloop zet het hoofdvenster zijn canvas op dat van het losse venster
+   * (beamer.js). Zelfde thread, dus een gewone upload, zonder stream ertussen:
+   * met captureStream liep dat beeld onder belasting tot 2,9 s achter
+   * (tools/headless/beamer.mjs). Roep dit aan METEEN na het tekenen van
+   * `bron`, in dezelfde taak: een WebGL-canvas zonder preserveDrawingBuffer is
+   * leeg zodra hij getoond is. Een canvas-texture staat zoals een video, dus
+   * de toonstap zet hem rechtop.
+   */
+  toonBeeld(bron) {
+    const gl = this.gl;
+    if (!gl || !this.prog) return;
+    gl.activeTexture(gl.TEXTURE0);
+    this.leenTex ??= this._texture();
+    gl.bindTexture(gl.TEXTURE_2D, this.leenTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bron);
+    gl.useProgram(this.toon);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, BREEDTE, HOOGTE);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
   /** Wat je hoort loopt de uitgangsvertraging achter op de deckpositie. */
   _vertraging() {
     const ctx = this.engine.ctx;
     return (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
   }
 
-  /** Eén frame: elke video bijsturen, de zichtbare uploaden, mengen, tekenen. */
-  teken() {
+  /**
+   * Elke video bijsturen en de zichtbare uploaden, elk op zijn eigen
+   * texture-unit (TEXTURE0 + plek). Voor teken() en loopIn(). Geeft per plek
+   * het gewicht en de schaal voor de mengstap, en per zichtbare video of hij
+   * in de pas loopt (voor inDePas).
+   */
+  _bijwerken(vertraging) {
     const gl = this.gl;
-    if (!gl || !this.prog) return;
-    this.beelden++;
-    gl.useProgram(this.meng);
     const w = new Float32Array(MAX);
     const schaal = new Float32Array(MAX * 2).fill(1);
-    const vertraging = this._vertraging();
+    const pas = [];
     // Stond dit tekenen stil (tabblad verborgen, het andere venster mengde,
     // paneel dicht), dan telt die tijd niet als "zichtbaar": een video die
     // intussen niet laden kon, kreeg anders bij het eerste beeld meteen
@@ -445,19 +485,33 @@ export class VideoMixer {
         laag.gemeld = true;
         this.onFout?.(id, `na ${LAAD_GEDULD} s nog geen beeld`);
       }
-      this._volg(laag, d, vertraging);
+      const doel = this._volg(laag, d, vertraging);
+      const v = laag.video;
+      const beeld = laag.klaar && v.readyState >= 2;
       gl.bindTexture(gl.TEXTURE_2D, laag.tex);
-      if (laag.klaar && laag.video.readyState >= 2) {
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, laag.video);
+      if (beeld) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
         w[i] = zicht;
-        const [sx, sy] = schaalVoor(...maatVan(laag.video), this.fit, BREEDTE, HOOGTE);
+        const [sx, sy] = schaalVoor(...maatVan(v), this.fit, BREEDTE, HOOGTE);
         schaal[i * 2] = sx; schaal[i * 2 + 1] = sy;
       }
+      pas.push({ klaar: beeld, zoekt: v.seeking, verschil: v.currentTime - doel, fout: laag.gemeld });
     });
+    return { w, schaal, pas };
+  }
+
+  /** Eén frame: elke video bijsturen, de zichtbare uploaden, mengen, tekenen. */
+  teken() {
+    const gl = this.gl;
+    if (!gl || !this.prog) return;
+    this.beelden++;
+    const vertraging = this._vertraging();
+    const { w, schaal } = this._bijwerken(vertraging);
 
     gl.viewport(0, 0, BREEDTE, HOOGTE);
 
     // 1. mengen -> gemengd
+    gl.useProgram(this.meng);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.gemengd.fb);
     gl.uniform1fv(this.loc(this.meng, 'w'), w);
     gl.uniform2fv(this.loc(this.meng, 's'), schaal);
@@ -546,9 +600,10 @@ export class VideoMixer {
       laag.seekDuur = laag.seekDuur * 0.7 + Math.min(2, d) * 0.3;
       laag.seekStart = 0;
     }
+    const doel = Math.max(0, deck.position - vertraging * deck.rate);
     const r = synchroniseer({
       videoTijd: v.currentTime,
-      doel: Math.max(0, deck.position - vertraging * deck.rate),
+      doel,
       rate: deck.rate,
       speelt: deck.playing,
       zoekt: v.seeking,
@@ -563,6 +618,7 @@ export class VideoMixer {
     if (Math.abs(v.playbackRate - rate) > 0.001) v.playbackRate = rate;
     if (r.speel && v.paused) v.play().catch(() => {});
     else if (!r.speel && !v.paused) v.pause();
+    return doel;
   }
 
   /** Paneel en los venster dicht: niets meer decoderen. */

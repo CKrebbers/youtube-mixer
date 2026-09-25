@@ -11,6 +11,11 @@ import { VideoMixer } from './video-mixer.js';
  * Alleen lezen (regel 1): knoppen, bronnen en beeldlagen komen elk beeld via
  * neemOver; posities van de audioklok van het hoofdvenster (regel 3).
  *
+ * Inloop (beamer.js): net aangemeld, en het hoofdvenster mengde al? Dan zet
+ * DAT zijn beeld op ons canvas (mixer.toonBeeld, vanuit zijn eigen lus) en
+ * stuurt dit venster zijn eigen video's alleen bij (mixer.loopIn). Lopen die
+ * in de pas, dan mengt het zelf, vanaf dat beeld.
+ *
  * Herladen:
  *   dit venster   pagehide meldt af; het nieuwe document meldt zich weer aan
  *   hoofdvenster  varveBeamer is even weg (dan blijft het laatste beeld
@@ -78,8 +83,12 @@ function frame() {
     if (nu !== app) koppel(nu);
     if (app && mixer) {
       mixer.neemOver(app.videoMixer);
-      if (app.mengtLos(window)) mixer.teken();
-      else mixer.pauzeerAlles();
+      let rol = app.rolLos(window);
+      // Inlopen: eigen video's bijsturen; het beeld zet het hoofdvenster erop.
+      // In de pas (of te lang bezig)? Dan meteen zelf mengen.
+      if (rol === 'inloop' && !app.meldPas(window, mixer.loopIn())) rol = 'mengt';
+      if (rol === 'mengt') mixer.teken();
+      else if (rol !== 'inloop') mixer.pauzeerAlles();
     }
   } catch (err) {
     // Eén slechte frame mag de beamer niet stilzetten; wel melden, hooguit één keer per seconde.

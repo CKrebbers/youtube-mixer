@@ -44,6 +44,24 @@ export function synchroniseer({ videoTijd, doel, rate = 1, speelt, zoekt = false
   return { spring: null, rate: rate * (1 + bij), speel: true };
 }
 
+export const INLOOP_DREMPEL = 0.05;   // s: anderhalf beeld bij 30 fps
+
+/**
+ * Lopen deze video's in de pas? Voor de inloop van het losse venster
+ * (beamer.js): pas als alle ZICHTBARE video's een beeld hebben, niet meer
+ * springen en hooguit `drempel` naast wat je hoort zitten, neemt het het
+ * mengen over. Strenger dan SPRING_VANAF: daarbinnen stuurt volg nog tot
+ * 10% bij, en dat zou je bij de overname zien als een beeld dat terugspringt.
+ * Een video met een fout (bestand weg, kapot) telt niet mee: die komt nooit
+ * in de pas en de fout staat al in de strook.
+ *
+ * @param lagen [{ klaar, zoekt, verschil, fout }] — alleen de zichtbare
+ * @returns bool (ook true zonder zichtbare video's: dan valt er niets in te lopen)
+ */
+export function inDePas(lagen, drempel = INLOOP_DREMPEL) {
+  return lagen.every((l) => l.fout || (l.klaar && !l.zoekt && Math.abs(l.verschil) <= drempel));
+}
+
 /**
  * Hoe zichtbaar een track is: wat je hoort, zie je. Fader maal crossfader,
  * dezelfde twee die bepalen hoe hard hij klinkt.

@@ -39,10 +39,11 @@ Bestanden:
 
 | bestand | wat |
 |---|---|
-| `src/video/beamer.js` | puur: `wieMengt()`, `Beamer` (aanmelden, afmelden, dicht of verborgen gevonden, bron van de opname) |
-| `src/video/beamer-venster.js` | het losse venster: mixer maken, aanmelden, elk beeld `neemOver` + `teken` |
+| `src/video/beamer.js` | puur: `wieMengt()`, `inloopStap()`, `Beamer` (aanmelden, afmelden, dicht of verborgen gevonden, inloop, bron van de opname) |
+| `src/video/beamer-venster.js` | het losse venster: mixer maken, aanmelden, elk beeld `neemOver` + `teken` (of tijdens de inloop `loopIn`) |
 | `video.html` | alleen nog een canvas en het hulpje; de module doet de rest |
-| `src/video/video-mixer.js` | `neemOver(hoofd)`, `bron(id)`, `maakVideo`, `onFout`, `beelden` |
+| `src/video/video-mixer.js` | `neemOver(hoofd)`, `bron(id)`, `maakVideo`, `onFout`, `beelden`, `loopIn()`, `toonBeeld(canvas)` |
+| `src/video/volg.js` | `inDePas()`: lopen de zichtbare video's in de pas (voor het einde van de inloop) |
 | `src/ui/video-paneel.js` | `window.varveBeamer` (via app.js), wie er mengt, het voorbeeld in het paneel |
 
 ## Wie mengt er
@@ -55,6 +56,7 @@ Bestanden:
 | open | – | uit het losse venster | nee | ja | beeld van het losse venster |
 | open | open | uit het hoofdvenster | ja | ja | eigen canvas |
 | open maar geminimaliseerd | open | – | ja | nee (zijn lus staat stil) | eigen canvas |
+| net open of terug, **inloop** | open of dicht | – of uit het losse venster | ja, en zet zijn beeld op het losse canvas | nee, stuurt alleen zijn eigen video's bij | eigen canvas |
 
 Er wordt dus **één keer gemengd**. Het paneel laat het beeld van het losse
 venster zien via `captureStream`, net als het losse venster vroeger dat van het
@@ -67,10 +69,94 @@ kan niet van bron wisselen. Die opname neemt daarom het hoofdcanvas op tot je
 hem stopt, en het losse venster mengt voor de beamer. Daarna mengt weer alleen
 het losse venster.
 
+De tweede uitzondering is de inloop (hieronder): de eerste seconden nadat het
+losse venster opengaat, mengt het hoofdvenster nog, tot de video's van het
+losse venster in de pas lopen.
+
+## Inloop: de eerste seconden na het openen
+
+Het losse venster heeft eigen `<video>`'s. Die moeten eerst laden en naar de plek
+van het geluid springen. Met acht tracks tegelijk duurde dat seconden. Al die tijd
+ontbraken er tracks op de beamer, of liepen ze 1 tot 5,7 s naast het geluid
+(controleur, bevinding 4).
+
+**Oplossing.** Mengde het hoofdvenster net nog? Dan blijft het mengen. Direct na elk
+beeld zet het dat beeld ook op het canvas van het losse venster
+(`VideoMixer.toonBeeld`). Het losse venster stuurt ondertussen zijn eigen video's
+bij en uploadt ze, maar mengt niets (`VideoMixer.loopIn`). Het neemt het mengen
+over zodra alle zichtbare video's in de pas lopen, en dat 0,3 s lang blijven doen
+(`inDePas`, volg.js). In de pas betekent: beeld binnen, niet aan het springen, hooguit
+50 ms naast wat je hoort. Na 20 s neemt het losse venster het hoe dan ook over
+(`INLOOP_MAX`). Een video met een fout telt niet mee. Het beeld op de beamer wisselt
+dan van bron, maar niet van inhoud.
+
+- **Wanneer.** Bij aanmelden: openen, of herladen van een van beide vensters. En
+  wanneer een verborgen los venster weer zichtbaar wordt, want zijn video's stonden
+  stil. Alleen als het hoofdvenster op dat moment mengde. Met het paneel dicht mengde
+  het niet: dan staan zijn video's stil op een oude plek, en is zijn beeld niet beter.
+- **Hoofdtabblad verborgen: meteen zelf mengen.** Een verborgen tabblad heeft geen
+  animatielus en decodeert geen video. Er is dan geen beeld om te lenen. Wordt het
+  hoofdtabblad verborgen tijdens de inloop, dan neemt het losse venster meteen over.
+  Zijn video's lopen dan nog in, dus de eerste seconden kan het beeld naast het
+  geluid lopen, net als vóór de inloop.
+- **Twee keer mengen, alleen tijdens de inloop.** Het hoofdvenster mengt dan, en het
+  losse venster decodeert zijn eigen video's. Bij acht tracks zijn dat zestien video's
+  tegelijk. Daarna mengt weer één venster.
+- **Video-opname.** Op het losse canvas staat altijd het goede beeld, ook tijdens de
+  inloop. Een opname die dan start, neemt daarom het losse canvas. Daarna loopt die
+  opname gewoon door.
+- **Waarom geen stream en geen eigen lus.** Eerst toonde het losse venster het
+  hoofdcanvas via `captureStream` in een `<video>`. Onder belasting liep dat beeld
+  steeds verder achter, tot 2,9 s. Daarna las het losse venster het hoofdcanvas in
+  zijn eigen lus. Dat gaf een leeg beeld: een WebGL-canvas zonder
+  `preserveDrawingBuffer` is leeg zodra het getoond is. Nu uploadt het hoofdvenster
+  zijn canvas in dezelfde taak waarin het tekent. Dat kan, want beide vensters
+  draaien op dezelfde thread.
+- **Uploaden tijdens de inloop.** Een `<video>` die niemand uitleest, krijgt in
+  Chrome geen vers beeld. Zonder upload was het eerste eigen beeld na de overname
+  200–400 ms oud. `teken()` en `loopIn()` delen daarom één lus (`_bijwerken`).
+
+### De inloop bleef hangen: `seekDuur` mat de verkeerde sprong
+
+Onder zware belasting kwamen de eigen video's in 20 s niet in de pas. Het spoor
+(`VARVE_BEAMER_SPOOR=1`) liet zien waarom. De mixer houdt per video bij hoe lang een
+sprong duurt (`seekDuur`), en springt zoveel verder vooruit. Die tijd werd gemeten tot
+het `seeked`-event. Dat event is een taak, en onder belasting kwam het pas ná het
+volgende beeld. Sprong de mixer in dat beeld opnieuw, omdat de vorige sprong te laat
+landde, dan hoorde het event bij de vorige sprong. De nieuwe sprong telde dan als 0 s.
+`seekDuur` zakte zo naar 0,00–0,04 s, terwijl sprongen 0,8–1,7 s duurden. Elke sprong
+landde daardoor een seconde te laat, en de video bleef springen.
+
+Nu meet `_volg` tot het eerste beeld waarin `seeking` weer false is. Tijd waarin de
+mixer niet tekende, of waarin de track niet te zien was, telt niet mee. Dit geldt ook
+voor het hoofdvenster, bijvoorbeeld bij hotcues onder belasting. `video.test.mjs`
+bootst het na, met sprongen van 0,8 s en een `seeked` dat een beeld te laat komt. Op
+de oude code faalt die test: de video komt nooit in de pas.
+
+### Gemeten
+
+Headless (`VARVE_BEAMER_DEEL=inloop`), acht tracks met elk een blok op een eigen rij,
+mengvorm "licht", alle faders open. Per beeld wordt gemeten wat er op het losse canvas
+komt, direct na het tekenen. Per track staat daar hoe ver het beeld van het geluid af
+zit. Rijen die omgedraaid of verwisseld zijn, geven hier fouten van seconden: de
+tracks spelen elk op een andere plek.
+
+| code | belasting (load, 8 kernen) | beelden waarin een track ontbrak | grootste fout | eigen mengen vanaf |
+|---|---|---|---|---|
+| vóór (`spoor2/beamer-c`) | ~130 | 359 van 1090, de eerste ~8,5 s | 136 ms | meteen |
+| vóór, eerdere meting (rAF) | 10–35 | alle beelden in de eerste 6,5 s | 202 ms | meteen |
+| inloop, zonder de `seekDuur`-fix | 100–200 | 0 tijdens de inloop, daarna 259 van 804 | 151 ms | 19 s (time-out) |
+| **na** | 14–28 | **0 van 1045** | **94 ms** | 8,0 s |
+| **na** | 40–90 | **0 van 988** | 127 ms (één beeld na een hapering van 100 ms) | 9,4 s |
+
+Het paneel zelf (de maatstaf, in dezelfde meting) haalt 48–84 ms. Bij 30 fps is één
+beeld 33 ms, en de meting telt ook de uitgangsvertraging mee. De grens in de test is
+150 ms (`SPRING_VANAF`).
+
 ## Video-opname
 
-Een nieuwe video-opname neemt het canvas van het losse venster als dat mengt
-(`Beamer.opnameCanvas`), en anders het eigen canvas. Het geluid blijft de tap
+Een nieuwe video-opname neemt het canvas van het losse venster als dat mengt of
+inloopt (`Beamer.opnameCanvas`), en anders het eigen canvas. Het geluid blijft de tap
 op de master in het hoofdvenster. Gemeten met het hoofdtabblad 2,5 s verborgen
 tijdens de opname: 54–55 beelden op 4 fps uit de mp4, en het beeld stond nergens langer dan één zo'n beeld (0,25 s) stil.
 
@@ -178,7 +264,9 @@ klik tegelijk opneemt. Pas daarna kan er een vaste voorsprong bij.
   - Het hoofdtabblad wordt verborgen met een tweede tabblad in hetzelfde venster
     dat naar voren komt. Daarna staat `document.visibilityState` op 'hidden' en
     staat de rAF stil, zoals bij Clay.
-  - Uitkomst: 38 controles groen. Zie de tabel hieronder.
+  - Acht tracks met video (elk een blok op een eigen rij), voor de inloop.
+    `VARVE_BEAMER_DEEL=inloop` draait alleen dat deel.
+  - Uitkomst: 46 controles groen. Zie de tabel hieronder.
   - `VARVE_WORTEL=<export van oude code>` draait alleen de beeldcontrole. Op
     `main` faalt die: blok 495 → 495 px.
 
@@ -191,6 +279,10 @@ klik tegelijk opneemt. Pas daarna kan er een vaste voorsprong bij.
 | herladen | beide kanten |
 | geminimaliseerd | het paneel neemt het over |
 | video ontbreekt | foutmelding |
+| inloop, acht tracks: elke track in elk beeld | 0 van 1045 beelden missen er een |
+| inloop: elk beeld binnen 150 ms | grootste 94 ms (paneel 48–58) |
+| overname, daarna één keer mengen | na 8,0 s; hoofd 0, los 60 beelden/s |
+| geminimaliseerd, weer terug | loopt in, neemt het over na 0,5 s (één video) |
 
 ## Niet getest
 
@@ -198,7 +290,12 @@ klik tegelijk opneemt. Pas daarna kan er een vaste voorsprong bij.
 - Volledig scherm (dubbelklik), langer dan een minuut verborgen, en Chrome's
   "intensive throttling" na 5 min. De lus van het losse venster hangt niet af van
   timers in het hoofdvenster, maar dit is niet gemeten.
-- Acht video's tegelijk in het losse venster. Er is één video gebruikt.
+- De inloop op Clay's M1 zonder andere belasting. Hier liep de load tijdens de metingen
+  van 14 tot 250 op 8 kernen. Hoe lang de inloop daar duurt, is dus niet gemeten.
+- Wat zestien video's tegelijk tijdens de inloop kosten, op zijn machine en met echte
+  YouTube-video's: 720p, sleutelbeeld per 8,3 s.
+- Herladen en terughalen van een geminimaliseerd los venster met acht tracks. Met één
+  video is het getest.
 - De vertraging tussen canvas en scherm (zie hierboven).
 - `beforeunload` in het losse venster tijdens een opname. Chrome toont die
   vraag alleen na een klik in dat venster.
