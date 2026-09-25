@@ -221,10 +221,19 @@ try {
   await wacht(700);
   ok('maatgever zonder klappen: het paneel zegt het', (await status()) === 'maat 2 · geen klappen', await status());
 
-  // Alles stil: geen maatgever, geen fout, de offset dooft uit tot 0.
+  // Fader van B dicht (crossfader nog op B, dus A hoor je ook niet): de
+  // MAAT-badge blijft op B (syncMaster neemt een spelende track, ook als je
+  // hem niet hoort), de vormen niet. Het paneel zegt waarom.
+  await evalueer("__act.invoke('track.2.fader', 0)");
+  await wacht(700);
+  ok('fader van de maatgever dicht: MAAT-badge op 2, het paneel zegt dat je hem niet hoort',
+    (await evalueer("window.engine.syncMaster()?.id === 'B'")) && (await status()) === 'geen maat · track 2 hoor je niet', await status());
+
+  // Alles stil: geen maatgever, geen fout, de offset dooft uit tot 0. De
+  // badge staat dan op "MAAT (stil)" van track 1 (de eerste met een grid).
   await evalueer("__act.invoke('track.1.play', true); __act.invoke('track.1.play', false); __act.invoke('track.2.play', true); __act.invoke('track.2.play', false)");
   await wacht(700);
-  ok('alles stil: "geen maat"', (await status()) === 'geen maat', await status());
+  ok('alles stil: "geen maat" en waarom', (await status()) === 'geen maat · track 1 staat stil', await status());
   const stil = await haak(1.5);
   ok('zonder maatgever: offset 0', stil.length > 0 && stil[stil.length - 1].mod === 0, `${stil.length} beelden`);
   await evalueer("__act.invoke('video.layer.react', 0)");

@@ -136,9 +136,14 @@ export function opzetVormen({ videoMixer }) {
     if (maatTekst.style.display !== display) maatTekst.style.display = display;
     if (!zichtbaar) return;
     const { tr } = maat.kies();
-    const nr = tr ? videoMixer.decks.indexOf(tr.id) + 1 : 0;
-    const tekst = !tr ? 'geen maat'
-      : b === 'maatklap' && !tr.deck.onsets?.length ? `maat ${nr} · geen klappen` : `maat ${nr}`;
+    const nr = (id) => videoMixer.decks.indexOf(id) + 1;
+    // Geen maat, terwijl de MAAT-badge (syncMaster: sync, sampler, sends) wel
+    // op een track staat: die staat stil, of speelt maar je hoort hem niet
+    // (fader dicht, crossfader weg). Zeg dat, anders lijkt het een fout.
+    const badge = tr ? null : engine.syncMaster?.();
+    const tekst = tr ? (b === 'maatklap' && !tr.deck.onsets?.length ? `maat ${nr(tr.id)} · geen klappen` : `maat ${nr(tr.id)}`)
+      : !badge ? 'geen maat'
+        : `geen maat · track ${nr(badge.id)} ${badge.playing ? 'hoor je niet' : 'staat stil'}`;
     if (maatTekst.textContent !== tekst) maatTekst.textContent = tekst;
   }
   vormen.on('change', volg);
