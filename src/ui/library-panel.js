@@ -1,6 +1,7 @@
 import { fmtTime } from '../lib/emitter.js';
 import { esc } from './dom.js';
 import { gridStatus, libraryBpm, STATUS_TEKST } from './grid-strook.js';
+import { IngestStrook } from './ingest-strook.js';
 
 /** Het label per bron (server/links.js: bronVan). */
 const BRON_LABEL = { youtube: 'YT', tiktok: 'TikTok', bestand: 'bestand', web: 'web' };
@@ -31,14 +32,10 @@ export class LibraryPanel {
     this.stand = stand;          // (deck) => 'leeg' | 'geladen' | 'speelt'
     this.zeker = null;           // { soort, sleutel, tot } voor 'nog eens klikken'
     this.tracks = [];
-    this.opdrachten = [];
     this.bezig = new Set();     // tracks die nu geladen worden
     this.analyseert = new Set(); // tracks waarvan het grid nu opnieuw geanalyseerd wordt
     this.melding = null;
     this.zoek = '';
-
-    this.uploads = [];          // { sleutel, naam, pct, fout } — lokaal, tot de server een opdracht heeft
-    this.naLaden = new Map();   // opdracht-id -> deck: na de ingest op die track laden (gesleept op een track)
 
     this.el = {
       url: root.querySelector('.lib-url'),
@@ -51,8 +48,17 @@ export class LibraryPanel {
       rijen: root.querySelector('.lib-rijen'),
     };
 
-    this.el.haal.addEventListener('click', () => this.haalBinnen());
-    this.el.url.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.haalBinnen(); });
+    // Binnenhalen, wachtrij en voortgang: de strook (ingest-strook.js). Hij
+    // luistert zelf naar het invoerveld en "haal binnen".
+    this.strook = new IngestStrook({
+      el: this.el.jobs, url: this.el.url, haal: this.el.haal,
+      decks, label, stand, open: () => this.open,
+      meld: (tekst, goed) => { this.melding = { tekst, goed }; this.tekenStatus(); },
+      bevestigd: (soort, sleutel) => this._bevestigd(soort, sleutel),
+      laad: (track, deck) => this._laadTrack(track, deck),
+      laadNaIngest: (track, deck) => this._laadNaIngest(track, deck),
+      onNieuw: () => this.ververs(),
+    });
     // Eigen bestanden: de knop opent de kiezer, of sleep ze op het paneel.
     this.el.bestand?.addEventListener('click', () => this.el.bestanden.click());
     this.el.bestanden?.addEventListener('change', () => {
@@ -103,7 +109,6 @@ export class LibraryPanel {
     });
 
     this.ververs();
-    this.pollen();
   }
 
   /** Tweede klik op hetzelfde binnen 3 s? */
@@ -119,27 +124,10 @@ export class LibraryPanel {
 
   get open() { return !this.root.classList.contains('hidden'); }
 
-  async haalBinnen() {
-    const url = this.el.url.value.trim();
-    if (!url) return;
-    this.el.haal.disabled = true;
-    try {
-      const r = await fetch('/api/ingest', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
-      });
-      const j = await r.json();
-      if (!r.ok) { this.melding = { tekst: j.fout || 'kon de ingest niet starten', goed: false }; }
-      else { this.el.url.value = ''; this.melding = { tekst: 'binnenhalen gestart', goed: true }; }
-    } catch (err) {
-      this.melding = { tekst: `server niet bereikbaar: ${err.message}`, goed: false };
-    }
-    this.el.haal.disabled = false;
-    this.tekenStatus();
-    this.pollJobs();
-  }
+  /** Wat in het invoerveld staat binnenhalen (één of meer links): de strook doet het. */
+  haalBinnen() { return this.strook.haalBinnen(); }
 
-  /** Meerdere bestanden: één voor één uploaden (de ingest loopt daarna op de server). */
+  /** Meerdere bestanden: alleen wat we aannemen; de strook uploadt ze één voor één. */
   async uploadBestanden(files) {
     const goed = files.filter(isMediaBestand);
     const fout = files.filter((f) => !isMediaBestand(f));
@@ -147,66 +135,36 @@ export class LibraryPanel {
       this.melding = { tekst: `overgeslagen: ${fout.map((f) => f.name).join(', ')} — ik neem ${BESTAND_EXT.join(', ')}`, goed: false };
       this.tekenStatus();
     }
-    for (const f of goed) await this.uploadBestand(f);
+    if (goed.length) await this.strook.uploadBestanden(goed);
   }
 
   /**
-   * Eén eigen bestand naar de server: /api/upload, daarna dezelfde pijplijn
-   * als een link (loudness, golfvorm, grid, video). Met XMLHttpRequest en
-   * niet fetch: alleen die meldt hoe ver de upload is.
+   * Eén eigen bestand naar de server (zie IngestStrook.uploadBestand): daarna
+   * dezelfde wachtrij en pijplijn als een link.
    *
    * naDeck: na de ingest meteen op die track laden (het bestand werd op een
    * track gesleept). Speelt die track dan, dan NIET eroverheen: dat zou de
    * zaal stilleggen zonder dat je nog iets deed.
    * Geeft de opdracht van de server terug, of null.
    */
-  uploadBestand(file, { naDeck = null } = {}) {
-    const up = { sleutel: `${file.name}:${file.size}:${Date.now()}`, naam: file.name, pct: 0, fout: null };
-    this.uploads.push(up);
-    this.tekenJobs();
-    return new Promise((klaar) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', `/api/upload?naam=${encodeURIComponent(file.name)}`);
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) { up.pct = (e.loaded / e.total) * 100; this.tekenJobs(); }
-      };
-      const klaarMet = (opdracht, fout) => {
-        this.uploads = this.uploads.filter((u) => u !== up);
-        if (fout) this.melding = { tekst: `${file.name}: ${fout}`, goed: false };
-        else if (opdracht) {
-          this.melding = { tekst: opdracht.bestond ? `${file.name} staat al in de library` : `${file.name} geüpload — wordt verwerkt`, goed: true };
-          if (naDeck) this.naLaden.set(opdracht.id, naDeck);
-        }
-        this.tekenStatus();
-        this.pollJobs();
-        klaar(opdracht ?? null);
-      };
-      xhr.onload = () => {
-        let j = null;
-        try { j = JSON.parse(xhr.responseText); } catch {}
-        if (xhr.status >= 200 && xhr.status < 300 && j) klaarMet(j, null);
-        else klaarMet(null, j?.fout || `upload mislukt (${xhr.status})`);
-      };
-      // Een verbroken verbinding: de server sluit bij een te groot bestand, of hij draait niet.
-      xhr.onerror = () => klaarMet(null, 'upload afgebroken — te groot (grens 8 GB), of de server is weg');
-      xhr.send(file);
-    });
+  uploadBestand(file, { naDeck = null } = {}) { return this.strook.uploadBestand(file, { naDeck }); }
+
+  /** Een nummer uit de strook laden (de strook vroeg al de tweede klik over een spelende track). */
+  _laadTrack(track, deck) {
+    if (!track) return;
+    if (!this.tracks.some((t) => t.id === track.id)) this.tracks.unshift(track);
+    return this.laad(track.id, deck);
   }
 
   /** Klaar met een opdracht die op een track moest? Dan nu laden — als dat mag. */
-  _laadNaIngest(o) {
-    const deck = this.naLaden.get(o.id);
-    if (!deck || o.status === 'bezig') return;
-    this.naLaden.delete(o.id);
-    if (o.status !== 'klaar' || !o.track) return;
+  _laadNaIngest(track, deck) {
+    if (!deck || !track) return;
     if (this.stand(deck) === 'speelt') {
-      this.melding = { tekst: `${o.track.titel} is binnen, maar track ${this.label(deck)} speelt — laad hem hier in de lijst`, goed: false };
+      this.melding = { tekst: `${track.titel} is binnen, maar track ${this.label(deck)} speelt — laad hem hier in de lijst`, goed: false };
       this.tekenStatus();
       return;
     }
-    if (!this.tracks.some((t) => t.id === o.track.id)) this.tracks.unshift(o.track);
-    this.laad(o.track.id, deck);
+    this._laadTrack(track, deck);
   }
 
   async laad(id, deck) {
@@ -278,46 +236,11 @@ export class LibraryPanel {
     this.tekenRijen();
   }
 
-  async pollJobs() {
-    try {
-      const r = await fetch('/api/ingest');
-      const j = await r.json();
-      const vorigeKlaar = this.opdrachten.filter((o) => o.status === 'klaar').length;
-      this.opdrachten = j.opdrachten || [];
-      const nuKlaar = this.opdrachten.filter((o) => o.status === 'klaar').length;
-      if (nuKlaar > vorigeKlaar) await this.ververs();
-      for (const o of this.opdrachten) if (this.naLaden.has(o.id)) this._laadNaIngest(o);
-      this.tekenJobs();
-    } catch {}
-  }
-
-  /** Alleen kijken zolang er iets loopt of het paneel open staat. */
-  pollen() {
-    setInterval(() => {
-      const loopt = this.opdrachten.some((o) => o.status === 'bezig') || this.naLaden.size > 0;
-      if (loopt || this.open) this.pollJobs();
-    }, 1200);
-  }
-
   tekenStatus() {
     const n = this.tracks.length;
     const m = this.melding
       ? `<b class="${this.melding.goed ? 'goed' : 'bad'}">${esc(this.melding.tekst)}</b> &nbsp;·&nbsp; ` : '';
     this.el.status.innerHTML = m + `${n} nummer${n === 1 ? '' : 's'} in de library`;
-  }
-
-  tekenJobs() {
-    const lopend = this.opdrachten.filter((o) => o.status === 'bezig' || Date.now() - (o.klaar || 0) < 20000);
-    const ups = this.uploads.map((u) => ({ status: 'bezig', stap: 'upload', tekst: `uploaden — ${u.naam}`, pct: u.pct }));
-    this.el.jobs.innerHTML = [...ups, ...lopend].map((o) => {
-      const kl = o.status === 'mislukt' ? 'mislukt' : (o.status === 'klaar' ? 'klaar' : 'bezig');
-      return `<div class="lib-job ${kl}">
-        <span class="lib-job-stap">${esc(o.stap || o.status)}</span>
-        <span class="lib-job-tekst">${esc(o.tekst || '')}</span>
-        ${o.pct != null ? `<span class="lib-job-balk"><i style="width:${o.pct}%"></i></span>` : ''}
-      </div>`;
-    }).join('');
-    this.el.jobs.classList.toggle('hidden', lopend.length + ups.length === 0);
   }
 
   tekenRijen() {

@@ -134,6 +134,33 @@ try {
   ok('stappen: link met video, bestand zonder', ing.stappenVoor().join() === 'metadata,audio,meten,normaliseren,peaks,onset,grid,video'
     && ing.stappenVoor({ link: false, video: false }).join() === 'meten,normaliseren,peaks,onset,grid');
 
+  console.log('\nde strook in de browser (pure delen)');
+  {
+    const { splitsLinks, zichtbaar, stappenStand, BLIJFT } = await import('../src/ui/ingest-strook.js');
+    const geplakt = 'https://youtu.be/a1\r\n  https://youtu.be/b2,\n<https://vimeo.com/3>\nhier geen link\n"https://youtu.be/a1"\thttps://x.nl/4;';
+    ok(`links uit geplakte regels: volgorde, zonder dubbel en leestekens (${splitsLinks(geplakt).join(' ')})`,
+      splitsLinks(geplakt).join(' ') === 'https://youtu.be/a1 https://youtu.be/b2 https://vimeo.com/3 https://x.nl/4');
+    ok('geen links: leeg', splitsLinks('zomaar tekst').length === 0 && splitsLinks(null).length === 0 && splitsLinks('http://').length === 0);
+    const nu = 1e6;
+    const lijst = [
+      { id: 'k1', status: 'klaar', klaar: nu - 1000, begonnen: 1 },
+      { id: 'k2', status: 'klaar', klaar: nu - BLIJFT.klaar - 1, begonnen: 2 },
+      { id: 'b1', status: 'klaar', bestond: true, klaar: nu - BLIJFT.klaar - 1, begonnen: 3 },
+      { id: 'm1', status: 'mislukt', klaar: nu - 3600e3, begonnen: 4 },
+      { id: 'g1', status: 'geannuleerd', klaar: nu - BLIJFT.geannuleerd - 1, begonnen: 5 },
+      { id: 'w2', status: 'wacht', plek: 2, begonnen: 6 },
+      { id: 'w1', status: 'wacht', plek: 1, begonnen: 7 },
+      { id: 'z', status: 'bezig', begonnen: 8 },
+    ];
+    ok(`zichtbaar: bezig, wachtend op plek, dan af; oud weg, mislukt blijft (${zichtbaar(lijst, nu).map((o) => o.id).join(',')})`,
+      zichtbaar(lijst, nu).map((o) => o.id).join(',') === 'z,w1,w2,k1,b1,m1');
+    const st = stappenStand({ status: 'bezig', stap: 'meten', stappen: ing.stappenVoor() });
+    ok('stappen: gedaan tot de huidige, die is "nu", de rest straks',
+      st.map((s) => s.stand[0]).join('') === 'ggnsssss' && st[1].naam === 'download' && st[4].naam === 'golfvorm');
+    ok('klaar: alles gedaan; wacht: niets', stappenStand({ status: 'klaar', stap: 'klaar', stappen: ['a', 'b'] }).every((s) => s.stand === 'gedaan')
+      && stappenStand({ status: 'wacht', stap: 'wachten', stappen: ['a', 'b'] }).every((s) => s.stand === 'straks'));
+  }
+
   console.log('\nrun() en de analyse-worker annuleren');
   {
     const ac = new AbortController();

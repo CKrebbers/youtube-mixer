@@ -419,7 +419,8 @@ export async function ingest(url, { mediaDir = 'media', video = true, onStap = (
   const tijdelijk = join(map, 'rauw');
 
   const haalAudio = async () => {
-    const s = { stap: 'audio', tekst: `audio downloaden — ${meta.info.titel}` };
+    // De titel is een eigen veld: de strook zet hem vooraan, niet in elke stap.
+    const s = { stap: 'audio', tekst: 'audio downloaden' };
     stap({ ...s, titel: meta.info.titel });
     const dl = await run(ytdlp(), [
       '-f', 'bestaudio/best', '--no-playlist', '--no-warnings', ...VOORTGANG_SJABLOON,

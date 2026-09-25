@@ -6,10 +6,11 @@
 //   NEP_LOG    bestand waar elke aanroep een JSON-regel in schrijft
 //   NEP_BRON   een echt audiobestand dat de "download" wordt
 //   NEP_MS     wachttijd per voortgangsstap (standaard 30 ms)
+//   NEP_TRAAG_MS  idem voor een trage link (standaard 200 ms)
 // En met de link zelf:
 //   ...lijst...  metadata is een playlist (3 nummers)
 //   ...kapot...  metadata faalt zoals yt-dlp faalt
-//   ...traag...  de download duurt 25 stappen × 200 ms (tijd om te annuleren)
+//   ...traag...  de download duurt 25 stappen × NEP_TRAAG_MS (tijd om te annuleren)
 //   watch?v=<id> een YouTube-nummer (extractor Youtube)
 // Een videodownload (-f bv/b) faalt altijd: video is bonus, de audio blijft.
 import { appendFileSync, copyFileSync, writeFileSync, chmodSync } from 'node:fs';
@@ -63,7 +64,7 @@ async function nep(args) {
   log('download', { url });
   const traag = url.includes('traag');
   const stappen = traag ? 25 : 5;
-  const ms = traag ? 200 : Number(process.env.NEP_MS) || 30;
+  const ms = traag ? Number(process.env.NEP_TRAAG_MS) || 200 : Number(process.env.NEP_MS) || 30;
   const i = args.indexOf('--progress-template');
   const sjabloon = i >= 0 ? args[i + 1].replace(/^download:/, '') : null;
   const totaal = 1000000;

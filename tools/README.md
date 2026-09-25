@@ -42,6 +42,11 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   `mapping.handle`), tekent 60 beelden en zet schermafdrukken in `tools/headless/uit/`
   (niet in git). Let op: in headless rekent WebGL in software (swiftshader); snelheid
   zegt hier niets.
+- `kijk-ingest.mjs [uitmap]` — de ingest-strook in het library-paneel, met de nep-yt-dlp
+  uit `test/nep-ytdlp.mjs` (geen netwerk): vier regels plakken (één playlist), voortgang
+  per stap, een wachtende en de lopende annuleren, "al in de library" met laadknoppen,
+  een playlist die alleen yt-dlp herkent. Zelfde veiligheid als kijk.mjs (eigen server,
+  geen MIDI); poorten via `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`. Foto's `ingest-*.png`.
 
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen

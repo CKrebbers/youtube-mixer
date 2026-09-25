@@ -55,7 +55,7 @@ export function normaliseerLink(link) {
 const YT_ID = /^[\w-]{11}$/;
 
 export const PLAYLIST_FOUT = 'dit is een playlist — plak de link van één nummer '
-  + '(een link met v= én list= wordt gewoon dat ene nummer)';
+  + '(met v= én list= erin wordt het gewoon dat nummer)';
 
 /**
  * Wat een geplakte link wordt voordat hij de wachtrij in gaat. Puur, zonder
