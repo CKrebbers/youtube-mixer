@@ -161,10 +161,10 @@ const c = kaarten.c.toon;
 ok(`C-cadens op 440: één stuk C, zeker, stemming ~0 (${kort(kaarten.c)})`,
   kaarten.c.ok && c.stukken.length === 1 && c.stukken[0].toonsoort === 'C' && c.stukken[0].zekerheid >= 0.4
   && Math.abs(c.stukken[0].stemming) < 4 && Math.abs(c.stemming) < 4);
-ok('het formaat van §3: versie, stemming, stukken { van, toonsoort, stemming, zekerheid }, bron auto, niet op slot',
+ok('het formaat van §3: versie, stemming, stukken { van, toonsoort, stemming, zekerheid, tweede }, bron auto, niet op slot',
   c.versie === T.TOON_VERSIE && c.bron === 'auto' && c.slot === false && c.stukken[0].van === 0
   && JSON.stringify(Object.keys(c)) === '["versie","stemming","stukken","bron","slot"]'
-  && JSON.stringify(Object.keys(c.stukken[0])) === '["van","toonsoort","stemming","zekerheid"]');
+  && JSON.stringify(Object.keys(c.stukken[0])) === '["van","toonsoort","stemming","zekerheid","tweede"]');
 ok('en normaliseren verandert er niets aan', JSON.stringify(normaliseerToon(c)) === JSON.stringify(c));
 
 const am = kaarten.am432.toon;
@@ -182,6 +182,17 @@ ok(`album: C [0] | C [+45] | Eb [-40] | stilte | F#m, grenzen binnen 12 s (${kor
 ok('stilte: toonsoort null met zekerheid 0', al.stukken[3]?.toonsoort === null && al.stukken[3]?.zekerheid === 0);
 ok('met stemming per stuk: C op +45 heet C, niet Db (zonder: één stemming voor het geheel, synth.txt §6)',
   al.stukken[1]?.toonsoort === 'C' && al.stukken[1].stemming > 35);
+
+// De tweede kandidaat (§5, T4: "best passend: E, of A"): bij elk stuk met een
+// toonsoort, in de vaste spelling, met een ANDER Camelot-getal (de relatieve
+// deelt zijn plek op de wijzer en telt niet als twijfel). Stilte heeft er geen.
+const metToon = Object.values(kaarten).filter((x) => x.ok).flatMap((x) => x.toon.stukken).filter((s) => s.toonsoort !== null);
+const cg = (n) => T.camelotGetal(T.leesToonsoort(n));
+ok(`tweede kandidaat bij elk stuk met een toonsoort (${metToon.length}), vaste spelling, ander Camelot-getal`
+  + ` (${metToon.map((s) => `${s.toonsoort}/${s.tweede}`).join(' ')})`,
+  metToon.length === 7 && metToon.every((s) => typeof s.tweede === 'string' && T.toonsoortNaam(T.leesToonsoort(s.tweede)) === s.tweede
+    && cg(s.tweede) !== cg(s.toonsoort)));
+ok('stilte: geen tweede kandidaat', !('tweede' in al.stukken[3]));
 
 const rz = kaarten.ruis.toon;
 ok(`ruis: geen duidelijke toonsoort, zekerheid < 0,15 (${kort(kaarten.ruis)})`,
@@ -201,7 +212,20 @@ console.log('\nhetzelfde als het meetinstrument');
     okI, 'temperley05', { wissel: 1.2, venster: 24 });
   const sp = T.spectrum(pcm, T.TOON_SR);
   const server = T.kaartPerStuk(sp, okI);
-  ok(`kaartPerStuk: ${server.length} stukken, gelijk tot op de laatste bit`, JSON.stringify(server) === JSON.stringify(instrument));
+  // Alleen `tweede` bestaat niet in het instrument; de rest (ook de keuze van de
+  // toonsoort, `k`) moet bit voor bit gelijk zijn.
+  const zonderTweede = server.map(({ tweede, ...rest }) => rest);
+  ok(`kaartPerStuk: ${server.length} stukken, gelijk tot op de laatste bit (zonder het veld tweede)`,
+    JSON.stringify(zonderTweede) === JSON.stringify(instrument) && server.every((s) => 'tweede' in s));
+  // En de tweede is kAnder uit dezelfde kies() als het instrument: de beste met een ander Camelot-getal.
+  const kAnder = instrument.map((s) => {
+    if (s.stil) return null;
+    const a = Math.round(s.van * sp.frameRate), b = Math.round(s.tot * sp.frameRate);
+    const Cs = I.chroma(I.halveTonen(spI, s.stemming, { fmin: 55, fmax: 2000, van: a, tot: b }), { hpss: true, vloer: false, compressie: 'log' }).C;
+    return I.toonsoortVan(Cs, 0, b - a, okI.subarray(a, b), 'temperley05', { proeven: 32 }).kAnder;
+  });
+  ok(`tweede = kAnder van het instrument op dezelfde frames (${server.map((s) => T.toonsoortNaam(s.tweede) ?? '-').join(' ')})`,
+    JSON.stringify(server.map((s) => s.tweede)) === JSON.stringify(kAnder));
   ok('de stemming van het geheel ook', sp.stemming === spI.stemming);
   ok('en de worker levert precies toonKaart van dezelfde pcm', JSON.stringify(T.toonKaart(pcm)) === JSON.stringify(al));
 }
@@ -228,11 +252,25 @@ const ongeldig = {
   'stemming bovenaan buiten bereik': { stemming: -60, stukken: [{ van: 0, toonsoort: 'C' }] },
   'twee stukken op dezelfde plek': { stukken: [{ van: 10, toonsoort: 'C' }, { van: 10, toonsoort: 'G' }] },
   'zekerheid geen getal': { stukken: [{ van: 0, toonsoort: 'C', zekerheid: 'hoog' }] },
+  'onleesbare tweede': { stukken: [{ van: 0, toonsoort: 'C', zekerheid: 0.2, tweede: 'H' }] },
+  'tweede geen tekst': { stukken: [{ van: 0, toonsoort: 'C', zekerheid: 0.2, tweede: 7 }] },
   'te veel stukken': { stukken: Array.from({ length: 4097 }, (_, i) => ({ van: i, toonsoort: 'C' })) },
 };
 const doorgelaten = Object.entries(ongeldig).filter(([, t]) => normaliseerToon(t) !== null).map(([k]) => k);
 ok(`onbruikbaar is null (${Object.keys(ongeldig).length} gevallen${doorgelaten.length ? `; DOORGELATEN: ${doorgelaten.join(', ')}` : ''})`, !doorgelaten.length);
 ok('rand: -50 en +50 cent mogen', normaliseerToon({ stemming: 50, stukken: [{ van: 0, toonsoort: 'C', stemming: -50 }] }) !== null);
+const tw = normaliseerToon({ bron: 'hand', stukken: [
+  { van: 0, toonsoort: 'C', stemming: 0, zekerheid: 0.3, tweede: 'G' },
+  { van: 30, toonsoort: 'Bbm', stemming: 0, zekerheid: 0.1, tweede: 'C#' },
+  { van: 60, toonsoort: 'D', stemming: 0, tweede: 'A' },
+  { van: 90, toonsoort: null, stemming: 0, zekerheid: 0, tweede: 'E' },
+  { van: 120, toonsoort: 'Db', stemming: 0, zekerheid: 0.2, tweede: 'C#' },
+] });
+ok('tweede: blijft naast een zekerheid (ook in een kaart met de hand), in de vaste spelling, achteraan',
+  tw.stukken[0].tweede === 'G' && tw.stukken[1].tweede === 'Db'
+  && JSON.stringify(Object.keys(tw.stukken[0])) === '["van","toonsoort","stemming","zekerheid","tweede"]');
+ok('tweede valt weg: met de hand gezet (geen zekerheid), zonder toonsoort, gelijk aan de toonsoort',
+  !('tweede' in tw.stukken[2]) && !('tweede' in tw.stukken[3]) && !('tweede' in tw.stukken[4]));
 
 // ---- de regels: slot, hand, versie -----------------------------------------------
 
@@ -299,7 +337,7 @@ try {
   ok('geen grid-analyse (alle grids op slot)', !/\[grid\] \d+ nummer/.test(log));
   const leeg = await toonVan('tLeeg'), oud = await toonVan('tOud');
   ok(`leeg: een automatische kaart (${leeg?.stukken.map((s) => s.toonsoort).join(',')}, versie ${leeg?.versie})`,
-    leeg?.bron === 'auto' && leeg.versie === T.TOON_VERSIE && leeg.stukken[0].toonsoort === 'C');
+    leeg?.bron === 'auto' && leeg.versie === T.TOON_VERSIE && leeg.stukken[0].toonsoort === 'C' && leeg.stukken[0].tweede === c.stukken[0].tweede);
   ok(`auto zonder versie (oud): opnieuw, nu Am (${oud?.stukken.map((s) => s.toonsoort).join(',')})`,
     oud?.bron === 'auto' && oud.versie === T.TOON_VERSIE && oud.stukken[0].toonsoort === 'Am');
   const onaangeroerd = [];

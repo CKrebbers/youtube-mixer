@@ -8,7 +8,9 @@
  * stuk. Zonder de varianten, de andere profielen en de oude tijd-nul. Het
  * rekenwerk is regel voor regel hetzelfde gebleven: toon.test legt de kaart
  * van deze module naast die van het instrument, getal voor getal. Wijk je
- * ervan af, verhoog dan TOON_VERSIE (en meet opnieuw).
+ * ervan af, verhoog dan TOON_VERSIE (en meet opnieuw). Eén veld is erbij
+ * gekomen dat het instrument niet heeft: `tweede` per stuk (de tweede
+ * kandidaat, uit dezelfde kies()); de vergelijking laat alleen dat veld weg.
  *
  * De keten:
  *   mono pcm op 4410 Hz
@@ -28,6 +30,11 @@ import { fft } from './detect.js';
  * het algoritme beter, verhoog dit getal: de server analyseert dan op de
  * achtergrond alle AUTOMATISCHE kaarten met een oudere versie opnieuw; wat
  * met de hand gezet is of op slot staat blijft (library.js, moetToonAnalyse).
+ *
+ * `tweede` (25 sep) kwam erbij zonder ophogen: de keuze van de toonsoort bleef
+ * bit voor bit gelijk, en er bestond nog geen library met kaarten (Clay's
+ * database stond op schema v5, zonder toon_json). Een kaart van vóór `tweede`
+ * mist alleen de tweede kandidaat in de tooltip; ↻ in de library geeft hem.
  */
 export const TOON_VERSIE = 1;
 
@@ -534,7 +541,10 @@ export function kaartPerStuk(sp, ok) {
     const st = stemmingVan(sp, a, b);
     const Cs = chroma(halveTonen(sp, st.cent, { van: a, tot: b })).C;
     const t = toonsoortVan(Cs, 0, b - a, ok.subarray(a, b), { proeven: 32 });
-    return { a, b, k: t.k, zekerheid: t.zekerheid, toon: t.toon, beslist: t.beslist, r: t.r, stemming: st.cent, stemmingR: st.R };
+    // `tweede`: de beste sleutel met een ANDER Camelot-getal (kies().kAnder), uit
+    // dezelfde correlaties. Alleen erbij gezet: de keuze van `k` verandert niet.
+    return { a, b, k: t.k, zekerheid: t.zekerheid, toon: t.toon, beslist: t.beslist, r: t.r, stemming: st.cent, stemmingR: st.R,
+      tweede: t.k == null ? null : t.kAnder };
   };
   const stukken = ruw.map((s) => {
     const a = Math.round(s.van * sp.frameRate), b = Math.round(s.tot * sp.frameRate);
@@ -548,8 +558,11 @@ export function kaartPerStuk(sp, ok) {
       i--;
     }
   }
+  // `tweede` staat ACHTERAAN en bestaat niet in het meetinstrument: toon.test legt
+  // de rest naast tools/toonsoort/toon.mjs en laat alleen dit veld weg.
   return stukken.map((sk) => ({ van: sk.a / sp.frameRate, tot: sk.b / sp.frameRate, k: sk.k, zekerheid: sk.zekerheid,
-    toon: sk.toon, beslist: sk.beslist, r: sk.r, stemming: sk.stemming, stemmingR: sk.stemmingR, stil: !!sk.stil }));
+    toon: sk.toon, beslist: sk.beslist, r: sk.r, stemming: sk.stemming, stemmingR: sk.stemmingR, stil: !!sk.stil,
+    tweede: sk.stil ? null : sk.tweede ?? null }));
 }
 
 // ---- de hele keten -> de kaart zoals hij bewaard wordt --------------------------
@@ -562,13 +575,17 @@ const cent = (x) => Math.max(-50, Math.min(50, rond(x, 1)));
  * Van mono pcm (op `sr`, standaard 4410 Hz) naar de kaart zoals de library
  * hem bewaart (docs/TOONSOORT.md §3):
  *
- *   { versie, stemming, stukken: [{ van, toonsoort, stemming, zekerheid }], bron: 'auto', slot: false }
+ *   { versie, stemming, stukken: [{ van, toonsoort, stemming, zekerheid, tweede }], bron: 'auto', slot: false }
  *
  * `van` in tracktijd (s, op 0,1 s); een stuk loopt tot de `van` van het
  * volgende, het eerste begint op 0. `toonsoort` in de vaste spelling, of null
  * voor STILTE (de kaart vindt daar geen klank; een automatische kaart geeft
  * verder altijd een toonsoort, met een zekerheid). `stemming` in cent: per
- * stuk, en bovenaan voor het geheel. Null als de audio te kort is (< 3,7 s).
+ * stuk, en bovenaan voor het geheel. `tweede` (zelfde spelling): de tweede
+ * kandidaat voor de tooltip ("best passend: E, of A", TOONSOORT.md §5), de beste
+ * met een ANDER Camelot-getal; de relatieve telt niet, die deelt zijn tonen en
+ * zijn plek op de wijzer. Stilte heeft geen tweede. Null als de audio te kort
+ * is (< 3,7 s).
  */
 export function toonKaart(pcm, sr = TOON_SR) {
   if (!pcm || pcm.length < STANDAARD.N) return null;
@@ -577,12 +594,16 @@ export function toonKaart(pcm, sr = TOON_SR) {
   const ruw = kaartPerStuk(sp, ok);
   if (!ruw.length) return null;
   const heel = cent(sp.stemming);
-  const stukken = ruw.map((s, i) => ({
-    van: i === 0 ? 0 : rond(s.van, 1),
-    toonsoort: s.stil ? null : toonsoortNaam(s.k),
-    stemming: s.stil || !Number.isFinite(s.stemming) ? heel : cent(s.stemming),
-    zekerheid: s.stil ? 0 : rond(s.zekerheid, 2),
-  }));
+  const stukken = ruw.map((s, i) => {
+    const stuk = {
+      van: i === 0 ? 0 : rond(s.van, 1),
+      toonsoort: s.stil ? null : toonsoortNaam(s.k),
+      stemming: s.stil || !Number.isFinite(s.stemming) ? heel : cent(s.stemming),
+      zekerheid: s.stil ? 0 : rond(s.zekerheid, 2),
+    };
+    if (stuk.toonsoort !== null && s.tweede != null) stuk.tweede = toonsoortNaam(s.tweede);
+    return stuk;
+  });
   return { versie: TOON_VERSIE, stemming: heel, stukken, bron: 'auto', slot: false };
 }
 

@@ -120,11 +120,12 @@ export function libraryToon(json, duur = null) {
     regels.push(kaart.stukken.every((s) => Number.isFinite(s.zekerheid)) ? 'stilte: de analyse vond geen klank' : GEEN_HAND);
   } else if (h.soort === 'geen') {
     uit = { tekst: `~${h.anderen ? ` +${h.anderen}` : ''}`, soort: 'geen', k: h.k };
-    regels.push(`geen duidelijke toonsoort (best passend: ${kortNaam(h.k)})`);
+    regels.push(`geen duidelijke toonsoort (best passend: ${kandidaten(h.k, h.tweede)})`);
   } else {
     uit = { tekst: `${camelot(h.k)} ${kortNaam(h.k)}${h.soort === 'onzeker' ? '?' : ''}${h.anderen ? ` +${h.anderen}` : ''}`, soort: h.soort, k: h.k };
     regels.push(`${camelot(h.k)} ${volleNaam(h.k)}`
       + (h.soort === 'onzeker' && Number.isFinite(h.zekerheid) ? ` — onzeker (zekerheid ${komma(h.zekerheid)})` : '')
+      + (h.soort === 'onzeker' && h.tweede !== null && h.tweede !== h.k ? `, of ${kortNaam(h.tweede)}` : '')
       + (kaart.aantalStukken > 1 ? `, ${Math.round(h.aandeel * 100)}% van de tijd` : ''));
     if (Math.abs(h.stemming) >= CENT_TONEN) regels.push(`stemming ${centTekst(h.stemming)}`);
   }

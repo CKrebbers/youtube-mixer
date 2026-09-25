@@ -174,7 +174,8 @@ function stukVan(s) {
   }
   const uit = { van, k, stemming: eindig(Number(s.stemming)) ? klemCent(Number(s.stemming)) : 0 };
   if (eindig(s.zekerheid)) uit.zekerheid = Math.max(0, Math.min(1, s.zekerheid));
-  // De tweede kandidaat van de analyse (optioneel): voor de tooltip.
+  // De tweede kandidaat van de analyse (optioneel): voor de tooltip. De server
+  // (server/toon.js) zet hem bij elk stuk van een automatische kaart.
   const tweede = s.tweede === null || s.tweede === undefined ? null : leesToonsoort(s.tweede);
   if (tweede !== null) uit.tweede = tweede;
   const extra = {};
@@ -269,7 +270,9 @@ export class ToonKaart {
    * tijd klinkt. Stukken zonder duidelijke toonsoort ('geen') tellen alleen als
    * er niets anders is. `anderen` = hoeveel ANDERE toonsoorten er in de kaart
    * staan (voor "3A B♭m +4"). Het laatste stuk loopt tot `duur`; onbekend = een minuut.
-   * @returns { k, soort, aandeel, anderen, stemming } of null als er nergens een toonsoort is.
+   * `tweede` = de tweede kandidaat van de analyse bij het langste stuk in die
+   * toonsoort (voor de tooltip), of null.
+   * @returns { k, soort, aandeel, anderen, stemming, tweede } of null als er nergens een toonsoort is.
    */
   hoofd(duur = null) {
     const s = this._stukken;
@@ -298,6 +301,8 @@ export class ToonKaart {
     const sleutels = new Set(s.filter((x) => x.k !== null).map((x) => x.k));
     // Zekerheid van de hoofdtoonsoort: tijdgewogen over zijn stukken (hand = zeker).
     const z = beste.p.zd > 0 && beste.p.zd >= beste.p.d - EPS ? beste.p.z / beste.p.zd : null;
+    let lang = -1, tweede = null;
+    s.forEach((x, i) => { if (x.k === beste.k && tijd(i) > lang) { lang = tijd(i); tweede = x.tweede ?? null; } });
     return {
       k: beste.k,
       soort: soortZekerheid(z, this.slot, beste.k),
@@ -305,6 +310,7 @@ export class ToonKaart {
       aandeel: beste.p.d / totaal,
       anderen: sleutels.size - 1,
       stemming: beste.p.d > 0 ? beste.p.st / beste.p.d : 0,
+      tweede,
     };
   }
 

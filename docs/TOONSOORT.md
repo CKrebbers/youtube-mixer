@@ -208,8 +208,8 @@ ALTER TABLE tracks ADD COLUMN toon_json TEXT;
   "versie": 1,
   "stemming": 2.3,
   "stukken": [
-    { "van": 0,     "toonsoort": "G",  "stemming": 8, "zekerheid": 0.87 },
-    { "van": 215.2, "toonsoort": "Ab", "stemming": 8, "zekerheid": 0.83 }
+    { "van": 0,     "toonsoort": "G",  "stemming": 8, "zekerheid": 0.87, "tweede": "D" },
+    { "van": 215.2, "toonsoort": "Ab", "stemming": 8, "zekerheid": 0.83, "tweede": "Eb" }
   ],
   "bron": "auto",
   "slot": false
@@ -224,6 +224,10 @@ ALTER TABLE tracks ADD COLUMN toon_json TEXT;
 - `stemming` in cent, −50..+50: per stuk, en `stemming` bovenaan voor het geheel.
 - `zekerheid` alleen bij `bron: 'auto'`; een stuk dat met de hand gezet is, is
   zeker.
+- `tweede` (erbij sinds 25 sep): de tweede kandidaat voor de tooltip (§5), in
+  dezelfde spelling. De beste met een ANDER Camelot-getal (`kAnder` in `kies()`),
+  dus precies de buur waartegen de zekerheid gemeten wordt; de relatieve telt niet.
+  Hoort bij de zekerheid: een stuk met de hand gezet heeft er geen, stilte ook niet.
 - `bron` `'auto'` | `'hand'`, `slot` = met de hand bevestigd: wordt NOOIT
   automatisch overschreven. Precies als het grid (`autoGridWeigert`,
   `moetAnalyse`).
@@ -488,6 +492,14 @@ In `library.js`: kolom `toon_json` (eigen element achteraan in `SCHEMA`),
 
 - Automatisch: het eerste stuk begint op 0; `van` op 0,1 s, `stemming` op 0,1 cent,
   `zekerheid` op 0,01. `versie` = `TOON_VERSIE` (nu 1).
+- `tweede` (25 sep, spoor toon-tweede): elk stuk met een toonsoort krijgt de tweede
+  kandidaat, als laatste sleutel (`van, toonsoort, stemming, zekerheid, tweede`).
+  Zelfde `kies()` als de eerste; de keuze van de eerste blijft bit voor bit die van het
+  meetinstrument (toon.test laat alleen dit veld weg bij de vergelijking, en rekent
+  `kAnder` apart na met het instrument). GEEN `TOON_VERSIE` 2: de toonsoort zelf
+  veranderde niet, en er bestond nog geen library met kaarten (Clay's database op v5,
+  zonder `toon_json`). Een kaart zonder `tweede` (van een testserver van vóór 25 sep)
+  mist alleen de tweede in de tooltip; ↻ geeft hem.
 - `toonsoort: null` in een AUTOMATISCHE kaart = stilte (de kaart vond daar geen
   klank; `zekerheid` 0, `stemming` die van het geheel). In een kaart met de hand:
   "geen toonsoort". Verder geeft de analyse altijd een toonsoort met een zekerheid.
@@ -499,7 +511,10 @@ In `library.js`: kolom `toon_json` (eigen element achteraan in `SCHEMA`),
   eerste stuk. `zekerheid` blijft staan als hij er is, ook met `bron: 'hand'`
   (zoals bij het grid: stukken die je niet aanraakte houden de hunne). Zonder
   `bron` wordt het `'hand'` (dan overschrijft de achtergrond hem nooit). `versie`
-  alleen als geheel getal ≥ 1, anders weggelaten (telt als oud).
+  alleen als geheel getal ≥ 1, anders weggelaten (telt als oud). `tweede`: andere
+  schrijfwijze wordt de vaste, onleesbaar = ongeldig; hij valt weg bij een stuk zonder
+  `zekerheid` (met de hand), zonder toonsoort, of als hij gelijk is aan de toonsoort.
+  De browser haalt hem weg zodra je een stuk met de hand zet (`_pas`/`zetStuk`).
 
 **Routes.**
 
