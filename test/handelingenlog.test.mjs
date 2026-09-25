@@ -405,6 +405,28 @@ try {
     doe.rack(1, { ...rackNu, herkomst: 17, standen: { ...rackNu.standen, 1: 0.8 } });
     ok('ander rack: teruggezet met zijn standen, zonder het library-id van toen', JSON.stringify(fx.naarJSON()) === JSON.stringify(rackNu.data)
       && fx.leesPlek(1) === 0.8 && fx.herkomst === null);
+    // Stoppen terwijl de beginstand nog laadt: daarna gebeurt er niets meer.
+    // Eerst zette de beginstand na het laden toch de standen en startte hij
+    // alles wat toen speelde, terwijl je al op stop had gedrukt.
+    {
+      let laadKlaar = null;
+      const doeTraag = T.maakUitvoerder({ engine: eng, tracks: A.TRACKS, invoke: A.invoke, read: A.read, has: A.has,
+        laad: (deckId, e) => new Promise((z) => { laadKlaar = () => { eng.deck(deckId).load(renderDemoTrack(eng.ctx, e.demo), e.titel); z(true); }; }) });
+      const t3 = nepTimers();
+      const sp3 = new T.Terugspeler({ klok: () => NOW, invoke: A.invoke, doe: doeTraag, elke: t3.elke, stopElke: t3.stopElke });
+      const standSpeelt = { ...l.stand, tracks: l.stand.tracks.map((t) => (t.track === 1 ? { ...t, speelt: true, positie: 1.5 } : t)) };
+      eng.deck('A').pause();
+      A.invoke('track.1.fader', 0.3);
+      const bezig = sp3.start({ stand: standSpeelt, regels: l.regels, duur: l.duur });
+      await new Promise((z) => setTimeout(z, 0));
+      sp3.stop();
+      laadKlaar?.();
+      await bezig;
+      await new Promise((z) => setTimeout(z, 0));
+      const dA = eng.deck('A');
+      ok(`gestopt tijdens het laden van de beginstand: daarna niets meer (speelt ${dA.playing}, positie ${dA.position.toFixed(2)}, fader ${dA.ui.fader})`,
+        !!laadKlaar && !dA.playing && dA.position < 1 && dA.ui.fader === 0.3 && !sp3.bezig && t3.aantal() === 0);
+    }
     ok('DECK_IDS en TRACKS horen bij elkaar (acht tracks)', DECK_IDS.length === A.TRACKS.length);
   }
 

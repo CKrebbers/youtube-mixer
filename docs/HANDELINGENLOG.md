@@ -214,7 +214,9 @@ klik = stoppen (de tracks spelen door). Op de bus: `log.replay.stop`.
    geteld als te laat); de andere tracks lopen door.
 4. **Klaar** als alle regels gedaan zijn EN de duur van het log om is: opnieuw
    renderen duurt zo lang als het origineel. Stoppen (of klaar) laat los wat
-   nog ingedrukt was: geen hangende bend.
+   nog ingedrukt was: geen hangende bend. Stop je terwijl de beginstand nog
+   laadt, dan blijft wat al geladen is staan, maar wordt er niets meer gezet
+   of gestart (`nogBezig`).
 
 Wat NIET opnieuw de bus op gaat (`OVERSLAAN`):
 - `record.*`, `log.*`: terugspelen start geen opname en geen log. Wil je de

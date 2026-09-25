@@ -84,9 +84,10 @@ export class Terugspeler {
   /**
    * @param klok    () => seconden op de audioklok
    * @param invoke  (action, waarde) => void — de bus
-   * @param doe     { stand(stand), laad(track, e), rack(track, rack), grid(track, grid), focus(track), pads(herinneringen) }
+   * @param doe     { stand(stand, { nogBezig }), laad(track, e), rack(track, rack), grid(track, grid), focus(track), pads(herinneringen) }
    *                stand en laad mogen een Promise geven. laad: false = mislukt;
-   *                stand: { zonder: [tracks zonder hun nummer van toen] }
+   *                stand: { zonder: [tracks zonder hun nummer van toen] }; nogBezig()
+   *                wordt false als er intussen gestopt is (dan niets meer zetten)
    * @param elke    (fn, ms) -> handvat; stopElke ruimt hem op
    */
   constructor({ klok, invoke, doe, elke = (fn, ms) => setInterval(fn, ms), stopElke = (h) => clearInterval(h), tikMs = 10 }) {
@@ -125,7 +126,9 @@ export class Terugspeler {
     this.stats = { regels: plan.length, gedaan: 0, onbekend, laat: 0, maxLaat: 0, mislukt: 0, overgeslagen: 0 };
     if (stand) {
       try {
-        const r = await this.doe.stand(stand);
+        // Stop je tijdens het laden, dan mag de beginstand daarna niets meer
+        // zetten of starten: `nogBezig` zegt of dit terugspelen nog loopt.
+        const r = await this.doe.stand(stand, { nogBezig: () => nr === this._nr });
         for (const t of r?.zonder || []) this.zonder.add(t);
       } catch (err) { this.onFout?.(`beginstand: ${err.message}`); }
       if (nr !== this._nr) return;      // intussen gestopt
@@ -280,7 +283,7 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
    * wat op de bus staat, en als laatste alles wat speelde in ÉÉN keer aan,
    * zodat de tracks onderling liggen zoals toen.
    */
-  async function stand(st) {
+  async function stand(st, { nogBezig = () => true } = {}) {
     const lijst = st.tracks || [];
     const geladen = new Set();
     const zonder = [];                  // tracks zonder hun nummer van toen (zie NUMMER_NODIG)
@@ -299,6 +302,9 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
       if (gelukt) geladen.add(d.id);
       else zonder.push(t.track);
     }));
+    // Intussen gestopt: wat geladen is blijft staan, maar er wordt niets meer
+    // gezet en niets gestart.
+    if (!nogBezig()) return { zonder, gestopt: true };
     for (const t of lijst) {
       const d = deck(t.track);
       if (!d) continue;
@@ -318,6 +324,7 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
     if (deckVan(st.focus)) engine.setFocus(deckVan(st.focus));
     herinneringen(st.herinneringen);
     await pads(st.pads);
+    if (!nogBezig()) return { zonder, gestopt: true };
     for (const t of lijst) {
       const d = deck(t.track);
       if (t.speelt && d && geladen.has(d.id)) d.play();
