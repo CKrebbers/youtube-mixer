@@ -1060,6 +1060,72 @@ export function tweedeKans(curve, zekerOp, { tolerantie = 0.04, minZekerheid = 0
 }
 
 /**
+ * Waar valt de puls van [van, tot) op een grid (bpm, anker)? Cirkelgemiddelde
+ * van de envelope (afgetopt op p95, zoals faseStabiliteit) op de fase van dat
+ * grid: { fase (-0,5..0,5 tel), R (0..1: hoe duidelijk) }, of null.
+ */
+export function faseOpGrid(env, envRate, tijdOffset, bpm, anker, van, tot) {
+  if (!(bpm > 0)) return null;
+  const p = 60 / bpm;
+  const fA = Math.max(0, Math.floor((van - tijdOffset) * envRate));
+  const fB = Math.min(env.length, Math.floor((tot - tijdOffset) * envRate));
+  if (fB - fA < envRate) return null;
+  const gesorteerd = env.slice(fA, fB).sort();
+  const kap = gesorteerd[Math.floor(0.95 * (gesorteerd.length - 1))] || 1e-9;
+  const w = (2 * Math.PI) / (p * envRate);
+  const cw = Math.cos(w), sw = Math.sin(w);
+  const h0 = 2 * Math.PI * ((fA / envRate + tijdOffset - anker) / p);
+  let c = Math.cos(h0), sn = Math.sin(h0), re = 0, im = 0, som = 0;
+  for (let f = fA; f < fB; f++) {
+    const e = env[f] < kap ? env[f] : kap;
+    re += e * c; im += e * sn; som += e;
+    const nc = c * cw - sn * sw; sn = c * sw + sn * cw; c = nc;
+  }
+  if (!(som > 0)) return null;
+  return { fase: Math.atan2(im, re) / (2 * Math.PI), R: Math.hypot(re, im) / som };
+}
+
+/**
+ * Past ÉÉN grid op deze vensters? De controle op de tweede kans (25 september
+ * 2026, controleur).
+ *
+ * tweedeKans redt een venster als de fase op T daar VASTHOUDT
+ * (faseStabiliteit), maar niet of hij op dezelfde PLEK ligt als bij de buren:
+ * stabiliteit vergeeft een vaste drift (een tempo tot ~4 bpm naast) en een
+ * sprong telt maar in een paar stapjes. Zo plakte hij een volgend nummer op
+ * hetzelfde tempo in een andere fase, of 1-3% sneller, aan een stuk vast, en
+ * dat stuk was "zeker": synthetisch tot 61% van de kicks een halve tel naast,
+ * op Sakamoto (1:08-1:50) vensters tot 268 ms naast. Sync en beat-loops
+ * vertrouwen een zeker stuk.
+ *
+ * Per venster (`tijd` ± `vensterSec`/2) met een duidelijke puls (R ≥ `minR`)
+ * de fase op het grid; de maat is de fase waar de meeste andere dichtbij
+ * liggen (een cirkel heeft geen gewone mediaan). Het grid past niet als meer
+ * dan `maxAandeel` van alle vensters, of van de geredde vensters
+ * (`tweedeKans`), verder dan `maxAfwijking` tel van die fase ligt. Het tweede
+ * omdat een kort geplakt stuk onder de 10% van een lang stuk kan blijven.
+ * Gemeten op de geredde stukken van het album (156 en 150), Bay Ledges, de
+ * jungle-mix en Sakamoto: hooguit 0,12 tel naast (album 11:45, 47 ms).
+ */
+export function eenGridPast(env, envRate, tijdOffset, grid, vensters,
+  { vensterSec = 12, minR = 0.15, maxAfwijking = 0.15, maxAandeel = 0.1 } = {}) {
+  const wrap = (x) => x - Math.round(x);
+  const fasen = [];
+  for (const v of vensters) {
+    const f = faseOpGrid(env, envRate, tijdOffset, grid.bpm, grid.anker, v.tijd - vensterSec / 2, v.tijd + vensterSec / 2);
+    if (f && f.R >= minR) fasen.push({ fase: f.fase, gered: !!v.tweedeKans });
+  }
+  if (!fasen.length) return true;
+  let ref = 0, best = -1;
+  for (const { fase } of fasen) {
+    const n = fasen.filter((x) => Math.abs(wrap(x.fase - fase)) <= maxAfwijking).length;
+    if (n > best) { best = n; ref = fase; }
+  }
+  const teVeel = (lijst) => lijst.filter((x) => Math.abs(wrap(x.fase - ref)) > maxAfwijking).length > maxAandeel * lijst.length;
+  return !teVeel(fasen) && !teVeel(fasen.filter((x) => x.gered));
+}
+
+/**
  * Een grid-voorstel voor een hele track: een lijst stukken in tracktijd,
  * [{ van, tot, bpm, anker, zekerheid }], aaneengesloten van 0 tot het einde.
  *
@@ -1128,7 +1194,12 @@ export function analyseerGrid(env, envRate, tijdOffset = 0, opties = {}) {
   const schaal = (x, g) => Math.max(0, Math.min(1, (x - g) / Math.max(1e-6, 1 - g)));
   curve.forEach((c, i) => { c.autocorrelatie = c.zekerheid; c.zekerheid = schaal(echt[i], nulGrens); });
 
+  // Tempo en fase van een segment: dezelfde verfijning voor de controle hieronder en voor het stuk zelf.
+  const gridVan = (sg) => verfijnTempoFase(env, envRate, sg.bpm, tijdOffset,
+    { rond: (sg.van + sg.tot) / 2, straal: Math.max(6, (sg.tot - sg.van) / 2), marge: 0.02 });
+
   const eerste = curve.map((c) => ({ bpm: c.bpm, zekerheid: c.zekerheid }));
+  const terug = (i) => { Object.assign(curve[i], eerste[i]); delete curve[i].tweedeKans; };
   const gered = tweedeKans(curve, (bpm, c) => {
     const a = Math.max(0, c.tijd - omgeving), b = Math.min(duur, c.tijd + omgeving);
     return schaal(faseStabiliteit(env, envRate, tijdOffset, bpm, a, b), nulGrens);
@@ -1140,16 +1211,28 @@ export function analyseerGrid(env, envRate, tijdOffset = 0, opties = {}) {
     curve.forEach((c, i) => {
       if (!c.tweedeKans) return;
       const inStuk = proef.some((sg) => c.tijd >= sg.van && c.tijd < sg.tot && Math.abs(Math.log(sg.bpm / c.bpm)) <= tolerantie);
-      if (!inStuk) { Object.assign(c, eerste[i]); delete c.tweedeKans; }
+      if (!inStuk) terug(i);
     });
+    // Een tweede kans die een stuk oplevert waar niet één grid op past (twee
+    // nummers in een andere fase, of net een ander tempo) telt ook niet (eenGridPast).
+    for (const sg of segmenteer(curve, { tolerantie, minSec, minZekerheid })) {
+      const binnen = [];
+      curve.forEach((c, i) => {
+        if (c.tijd >= sg.van && c.tijd < sg.tot && c.bpm && c.zekerheid >= minZekerheid
+          && Math.abs(Math.log(sg.bpm / c.bpm)) <= tolerantie) binnen.push(i);
+      });
+      if (!binnen.some((i) => curve[i].tweedeKans)) continue;
+      const r = gridVan(sg);
+      if (eenGridPast(env, envRate, tijdOffset, { bpm: r.bpm, anker: r.firstBeat }, binnen.map((i) => curve[i]), { vensterSec })) continue;
+      for (const i of binnen) if (curve[i].tweedeKans) terug(i);
+    }
   }
 
   const segmenten = segmenteer(curve, { tolerantie, minSec, minZekerheid });
   const stukken = [];
   for (const sg of segmenten) {
     const midden = (sg.van + sg.tot) / 2;
-    const r = verfijnTempoFase(env, envRate, sg.bpm, tijdOffset,
-      { rond: midden, straal: Math.max(6, (sg.tot - sg.van) / 2), marge: 0.02 });
+    const r = gridVan(sg);
     const p = 60 / r.bpm;
     let anker = r.firstBeat + Math.ceil((sg.van - r.firstBeat) / p - 1e-9) * p;
     if (pcm) {

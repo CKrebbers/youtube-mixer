@@ -106,6 +106,27 @@ langer en "zeker" (0,48 -> 0,72).
 Let op: het album heeft een grid met `bron: 'auto'`; de server heranalyseert dat niet
 vanzelf. ↻ in de library (opnieuw analyseren) geeft het nieuwe voorstel.
 
+Controle (25 september 2026, controleur): de tweede kans redt een venster als de fase op T
+VASTHOUDT, niet als hij op dezelfde PLEK ligt als bij de buren (stabiliteit vergeeft een
+vaste drift tot ~4 bpm en ziet een fasesprong maar in een paar stapjes). Synthetisch
+plakte hij zo een volgend nummer aan het stuk ervoor, "zeker": op hetzelfde tempo een
+halve tel verschoven (stuk 0-76 s werd 0-152 s, 61% van de kicks tot 181 ms naast), op 154
+tegen 150 (52%), een half-time nummer in een andere fase (33%), een kort stuk 2% sneller
+achter een lang stuk. Op Sakamoto 1:08-1:50 lagen de geredde vensters tot 268 ms naast
+(daar niet zeker, z 0,48). Daarom `eenGridPast`: het grid dat het stuk krijgt naast de
+fase van elk venster met een duidelijke puls; ligt meer dan 10% van alle vensters, of van
+de geredde, meer dan 0,15 tel naast, dan telt de tweede kans in dat stuk niet (terug naar
+wat het was). Alle winst hierboven blijft (op de geredde stukken hooguit 0,12 tel naast:
+album 11:45, 47 ms); in elk synthetisch geval is de uitkomst weer die van vóór de tweede
+kans. Test: detect.test.mjs, "tweede kans plakt geen ander nummer vast" (faalt zonder).
+
+Wat er NIET mee opgelost is (bestond al, ook zonder tweede kans): segmenteer rijgt
+vensters op hetzelfde tempo (±4%) aaneen zonder naar de fase te kijken, en de zekerheid
+van een stuk is de stabiliteit van zijn vensters, niet of zijn ene grid past. Twee nummers
+op hetzelfde tempo zonder duidelijk gat ertussen worden zo één "zeker" stuk (synthetisch
+12-22% van de kicks naast). eenGridPast op elk stuk toepassen zou dat vangen; dat is een
+eigen stap met eigen metingen.
+
 ### 2. Na "tel 1 hier" verfijnen met /grid/verfijn — gemeten, NIET gebouwd
 Vraag: wordt de tel beter als de browser na "tel 1 hier" (snap ±30 ms naar een klap) de
 route /grid/verfijn aanroept met `{ bpm, positie, anker }` (verfijnTap met het anker als
