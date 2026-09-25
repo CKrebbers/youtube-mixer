@@ -103,13 +103,95 @@ export const SCHEMA = [
       'beatsPerBar', COALESCE(grid_beats_per_bar, 4))
     WHERE grid_bpm IS NOT NULL;
   `,
-  // versie 6 (of later: elk spoor zet zijn migratie achteraan) — de TOONSOORT
-  // als kaart, zoals het grid: { versie, stemming, stukken: [{ van, toonsoort,
-  // stemming, zekerheid }], bron, slot } als JSON. Zie docs/TOONSOORT.md §3.
+  // versie 6 — de TOONSOORT als kaart, zoals het grid: { versie, stemming,
+  // stukken: [{ van, toonsoort, stemming, zekerheid }], bron, slot } als JSON.
+  // Zie docs/TOONSOORT.md §3.
   `
   ALTER TABLE tracks ADD COLUMN toon_json TEXT;
   `,
+  // versie 7 — hotcues bij het nummer, zoals de sampler-pads: WAAR ze staan, in
+  // tracktijd. Laad je het nummer opnieuw, dan staan ze er weer.
+  // En de lijst voorbij 200 nummers: een sorteersleutel voor de titel die
+  // vooraf is uitgerekend (sorteertitel() per rij per verzoek kostte bij 5000
+  // nummers tientallen ms) en een index per sorteerkolom.
+  // Toonsoort (6) en library (7) zijn tegelijk gebouwd, elk als eigen element
+  // achteraan; bij het samenvoegen (25 sep) is dit de volgorde geworden. Draai
+  // nooit een server van één van beide sporen alleen op de echte library.db:
+  // dan krijgt die zijn element als v6 en past de volgorde niet meer.
+  `
+  CREATE TABLE hotcues (
+    track_id      TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    nr            INTEGER NOT NULL,      -- 1..MAX_HOTCUES (het deck heeft er nu 4)
+    tijd          REAL NOT NULL,         -- seconden tracktijd
+    gemaakt       INTEGER NOT NULL,
+    PRIMARY KEY (track_id, nr)
+  );
+  ALTER TABLE tracks ADD COLUMN titel_sleutel TEXT;
+  UPDATE tracks SET titel_sleutel = sorteertitel(titel);
+  CREATE INDEX tracks_titel ON tracks(titel_sleutel, toegevoegd);
+  CREATE INDEX tracks_bpm ON tracks(grid_bpm, toegevoegd);
+  CREATE INDEX tracks_duur ON tracks(duur, toegevoegd);
+  CREATE INDEX tracks_toegevoegd ON tracks(toegevoegd);
+  CREATE INDEX tracks_gespeeld ON tracks(laatst_geladen, toegevoegd);
+  `,
 ];
+
+/** Zoveel hotcues per nummer neemt de library aan; het deck gebruikt er nu 4. */
+export const MAX_HOTCUES = 8;
+
+/**
+ * Waarop de lijst kan sorteren, en welke kant een eerste klik op. Alleen
+ * deze sleutels komen in de SQL: de kolom is nooit tekst van buiten.
+ * Wat geen waarde heeft (geen grid, nooit geladen) staat altijd ACHTERAAN,
+ * welke kant je ook op sorteert: "—" bovenaan zegt niets.
+ * Bij gelijke waarden: laatst toegevoegd eerst (toegevoegd, dan rowid: wat
+ * in dezelfde milliseconde binnenkwam); omgekeerd sorteren keert ook dat om,
+ * zodat "nog eens klikken" precies de lijst achterstevoren is.
+ * Een kolom erbij (toonsoort) = een regel hier, een index in SCHEMA en een
+ * kolom in src/ui/library-lijst.js.
+ */
+export const SORTERING = {
+  titel: { sql: 'titel_sleutel', eerst: 'op' },
+  bpm: { sql: 'grid_bpm', eerst: 'op' },           // het tempo bij het begin, zoals de lijst het toont
+  duur: { sql: 'duur', eerst: 'op' },
+  toegevoegd: { sql: 'toegevoegd', eerst: 'af' },
+  gespeeld: { sql: 'laatst_geladen', eerst: 'af' }, // gezet door POST /api/library/<id>/geladen
+};
+
+/**
+ * Is dit een sortering? Alleen EIGEN sleutels: `SORTERING['constructor']`
+ * bestaat ook (van Object), en gaf dan "no such column: undefined" en een 500.
+ */
+export const isSortering = (s) => typeof s === 'string' && Object.hasOwn(SORTERING, s);
+
+/** De ORDER BY voor een sortering en richting. Alleen uit SORTERING, nooit van buiten. */
+function volgorde(sorteer, richting, t = '') {
+  const s = SORTERING[sorteer];
+  const op = (richting ?? s.eerst) === 'op';
+  const [heen, terug] = op ? ['ASC', 'DESC'] : ['DESC', 'ASC'];
+  // toegevoegd is zelf de sleutel: dan alleen nog de rowid als gelijkspel.
+  if (sorteer === 'toegevoegd') return `${t}toegevoegd ${heen}, ${t}rowid ${heen}`;
+  return `${t}${s.sql} ${heen} NULLS LAST, ${t}toegevoegd ${terug}, ${t}rowid ${terug}`;
+}
+
+/** Een track met wat de lijst er meteen bij wil: aantal racks en de peaks. */
+const RIJ = `SELECT t.*, t.rowid AS _rij,
+    (SELECT COUNT(*) FROM racks r WHERE r.track_id = t.id) AS _racks,
+    p.bestand AS _p_bestand, p.buckets AS _p_buckets, p.per_bucket AS _p_per
+  FROM tracks t LEFT JOIN peaks p ON p.track_id = t.id`;
+
+/** Zoveel rijen per verzoek, hooguit. Zo blijft één verzoek een paar ms, ook bij 5000 nummers. */
+export const MAX_PER_PAGINA = 500;
+
+/**
+ * De sorteersleutel voor titels: zonder accenten, kleine letters, en getallen
+ * op lengte gezet zodat "Track 2" vóór "Track 10" komt. SQLite's NOCASE kent
+ * alleen ASCII; "Élan" kwam dan na de z.
+ */
+export function sorteertitel(s) {
+  return String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim()
+    .replace(/\d+/g, (n) => n.replace(/^0+(?=\d)/, '').padStart(12, '0'));
+}
 
 /** Hooguit zoveel stukken per grid: een tempokaart, geen beat-voor-beat-lijst. */
 export const MAX_STUKKEN = 4096;
@@ -257,6 +339,8 @@ export class Library {
     this.db = new DatabaseSync(pad);
     this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec('PRAGMA foreign_keys = ON');
+    this.db.function('sorteertitel', { deterministic: true }, sorteertitel);
+    this._stmts = new Map();
     this._migreer();
   }
 
@@ -282,6 +366,13 @@ export class Library {
   get versie() { return this.db.prepare('PRAGMA user_version').get().user_version; }
   sluit() { this.db.close(); }
 
+  /** Een voorbereide query, hergebruikt: per rij opnieuw voorbereiden kostte meer dan de query zelf. */
+  _q(sql) {
+    let st = this._stmts.get(sql);
+    if (!st) { st = this.db.prepare(sql); this._stmts.set(sql, st); }
+    return st;
+  }
+
   // ---- tracks ------------------------------------------------------------
 
   /** Voegt toe of werkt bij. Opnieuw binnenhalen overschrijft, maar telt door. */
@@ -290,10 +381,10 @@ export class Library {
     this.db.prepare(`
       INSERT INTO tracks (id, url, titel, uploader, duur, audio, video, thumbnail,
         loudness_i, loudness_tp, loudness_lra, loudness_drempel, loudness_offset,
-        doel_loudness, ytdlp, toegevoegd)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        doel_loudness, ytdlp, toegevoegd, titel_sleutel)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(id) DO UPDATE SET
-        url=excluded.url, titel=excluded.titel, uploader=excluded.uploader,
+        url=excluded.url, titel=excluded.titel, titel_sleutel=excluded.titel_sleutel, uploader=excluded.uploader,
         duur=excluded.duur, audio=excluded.audio, video=excluded.video,
         thumbnail=excluded.thumbnail, loudness_i=excluded.loudness_i,
         loudness_tp=excluded.loudness_tp, loudness_lra=excluded.loudness_lra,
@@ -303,38 +394,67 @@ export class Library {
       t.id, t.url, t.titel, t.uploader || '', t.duur || 0, t.audio, t.video || null,
       t.thumbnail || '', t.loudness?.I ?? null, t.loudness?.TP ?? null,
       t.loudness?.LRA ?? null, t.loudness?.drempel ?? null, t.loudness?.offset ?? null,
-      t.doelLoudness ?? null, t.ytdlp || null, nu,
+      t.doelLoudness ?? null, t.ytdlp || null, nu, sorteertitel(t.titel),
     );
     return this.track(t.id);
   }
 
   track(id) {
-    const r = this.db.prepare('SELECT * FROM tracks WHERE id = ?').get(id);
+    const r = this._q(`${RIJ} WHERE t.id = ?`).get(id);
     return r ? this._verrijk(r) : null;
   }
 
-  /** Alles, of wat op de zoekterm lijkt. Nieuwste eerst. */
-  tracks({ zoek = '', limiet = 200 } = {}) {
-    const rijen = zoek
-      ? this.db.prepare(`SELECT * FROM tracks
-          WHERE titel LIKE ? OR uploader LIKE ? OR url LIKE ?
-          ORDER BY toegevoegd DESC LIMIT ?`)
-        .all(`%${zoek}%`, `%${zoek}%`, `%${zoek}%`, limiet)
-      : this.db.prepare('SELECT * FROM tracks ORDER BY toegevoegd DESC LIMIT ?').all(limiet);
-    return rijen.map((r) => this._verrijk(r));
+  /**
+   * Een stuk van de lijst: wat op de zoekterm lijkt, gesorteerd, vanaf rij
+   * `van`. Zonder `aantal` alles (de meet-tools willen de hele library);
+   * het paneel vraagt altijd een pagina. Vroeger stond hier LIMIT 200 zonder
+   * dat iemand het merkte: nummer 201 bestond gewoon niet.
+   * Onbekende sortering gooit (de route zegt dan 400).
+   */
+  tracks({ zoek = '', sorteer = 'toegevoegd', richting = null, van = 0, aantal = null } = {}) {
+    if (!isSortering(sorteer)) throw new Error(`onbekende sortering: ${sorteer}`);
+    const { waar, args } = zoekFilter(zoek);
+    // Alles (de meet-tools): één query, er valt niets over te slaan.
+    if (aantal == null) {
+      return this.db.prepare(`${RIJ} WHERE t.rowid IN (SELECT rowid FROM tracks ${waar}) ORDER BY ${volgorde(sorteer, richting, 't.')}`)
+        .all(...args).map((r) => this._verrijk(r));
+    }
+    // In twee stappen: eerst alleen de rowids in de goede volgorde (smal, uit
+    // de index), dan de hele rijen van die ene pagina. Alles in één keer
+    // sleepte elke brede rij door de sorteerder, ook de 4900 die je overslaat.
+    // Het gelijkspel (toegevoegd, rowid) maakt de volgorde vast: anders kan
+    // dezelfde rij op twee pagina's staan, of op geen.
+    // Hele getallen vanaf 0, maar NIET met `| 0`: dat rekent in 32 bits, en
+    // van = 2^32 + 1 werd dan rij 1 in plaats van een lege pagina.
+    const heel = (x) => Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.trunc(Number(x)) || 0));
+    const ids = this._q(`SELECT rowid AS r FROM tracks ${waar} ORDER BY ${volgorde(sorteer, richting)} LIMIT ? OFFSET ?`)
+      .all(...args, heel(aantal), heel(van))
+      .map((x) => x.r);
+    if (!ids.length) return [];
+    const perId = new Map(this.db.prepare(`${RIJ} WHERE t.rowid IN (${ids.map(() => '?').join(',')})`)
+      .all(...ids).map((r) => [r._rij, r]));
+    return ids.map((r) => this._verrijk(perId.get(r)));
   }
 
-  /** Aantal racks meegeven: dat wil je in het paneel zien zonder tweede vraag. */
-  _verrijk(r) {
-    const n = this.db.prepare('SELECT COUNT(*) AS n FROM racks WHERE track_id = ?').get(r.id).n;
-    const p = this.peaks(r.id);
+  /** Hoeveel nummers er zijn, of hoeveel op de zoekterm lijken. */
+  aantalTracks({ zoek = '' } = {}) {
+    const { waar, args } = zoekFilter(zoek);
+    return this._q(`SELECT COUNT(*) AS n FROM tracks ${waar}`).get(...args).n;
+  }
+
+  /**
+   * Een rij uit RIJ netjes maken. Aantal racks en de peaks zitten al in de
+   * rij (één query per pagina in plaats van twee per nummer): het aantal
+   * racks wil je in het paneel zien zonder tweede vraag.
+   */
+  _verrijk({ titel_sleutel: _s, _rij, _racks, _p_bestand, _p_buckets, _p_per, ...r }) {
     const grid = this._grid(r);
     const onset = r.onset_bestand
       ? { bestand: r.onset_bestand, frames: r.onset_frames, envRate: r.onset_rate, tijdOffset: r.onset_offset }
       : null;
     // bron: 'youtube' | 'tiktok' | 'bestand' | 'web' — het label in de lijst.
-    return { ...r, racks: n, grid, toon: this._toon(r), onset, bron: bronVan(r.url),
-      peaks: p ? { bestand: p.bestand, buckets: p.buckets, perBucket: p.per_bucket } : null };
+    return { ...r, racks: _racks, grid, toon: this._toon(r), onset, bron: bronVan(r.url),
+      peaks: _p_bestand != null ? { bestand: _p_bestand, buckets: _p_buckets, perBucket: _p_per } : null };
   }
 
   _toon(r) {
@@ -529,6 +649,25 @@ export class Library {
     return this.db.prepare('DELETE FROM samples WHERE track_id = ? AND pad = ?').run(trackId, pad).changes > 0;
   }
 
+  // ---- hotcues ------------------------------------------------------------
+  // Eén tijd per plek per nummer; opnieuw zetten overschrijft. De engine kent
+  // de library niet: de app bewaart bij zetten/wissen en zet ze terug bij laden.
+
+  hotcues(trackId) {
+    return this.db.prepare('SELECT nr, tijd FROM hotcues WHERE track_id = ? ORDER BY nr').all(trackId);
+  }
+
+  bewaarHotcue(trackId, { nr, tijd }) {
+    this.db.prepare(`INSERT INTO hotcues (track_id, nr, tijd, gemaakt) VALUES (?,?,?,?)
+      ON CONFLICT (track_id, nr) DO UPDATE SET tijd = excluded.tijd, gemaakt = excluded.gemaakt`)
+      .run(trackId, nr, tijd, Date.now());
+    return this.hotcues(trackId).find((h) => h.nr === nr) ?? null;
+  }
+
+  verwijderHotcue(trackId, nr) {
+    return this.db.prepare('DELETE FROM hotcues WHERE track_id = ? AND nr = ?').run(trackId, nr).changes > 0;
+  }
+
   // ---- peaks -------------------------------------------------------------
   // Peaks opnieuw berekenen bij elke load is verspilling; ze veranderen nooit.
 
@@ -541,7 +680,7 @@ export class Library {
   }
 
   peaks(trackId) {
-    return this.db.prepare('SELECT * FROM peaks WHERE track_id = ?').get(trackId) || null;
+    return this._q('SELECT * FROM peaks WHERE track_id = ?').get(trackId) || null;
   }
 
   // ---- losse instellingen ------------------------------------------------
@@ -556,6 +695,13 @@ export class Library {
     const r = this.db.prepare('SELECT waarde FROM instellingen WHERE sleutel = ?').get(sleutel);
     return r ? veiligJson(r.waarde, standaard) : standaard;
   }
+}
+
+/** WHERE-deel voor de zoekterm. % en _ zijn gewone tekens: "100%" zoekt 100%. */
+function zoekFilter(zoek) {
+  if (!zoek) return { waar: '', args: [] };
+  const z = `%${String(zoek).replace(/[\\%_]/g, (c) => '\\' + c)}%`;
+  return { waar: "WHERE titel LIKE ? ESCAPE '\\' OR uploader LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\'", args: [z, z, z] };
 }
 
 const veiligJson = (tekst, val = {}) => { try { return JSON.parse(tekst); } catch { return val; } };

@@ -13,7 +13,7 @@ import { meld } from './meldingen.js';
  * Hier wordt ook de golfvorm-analyse (`staat.analysis`) bijgehouden en welk
  * library-nummer er op welke track staat (`staat.deckTrack`).
  */
-export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
+export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haalHotcues = () => {} }) {
   const { deckTrack, analysis } = staat;
   const perDeck = (maak) => Object.fromEntries(DECK_IDS.map((id) => [id, maak(id)]));
 
@@ -293,6 +293,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
       engine.deck(deckId).setGrid(track.grid || null);
       racks.haalRacks(deckId);
       haalSamples(deckId, track.id);
+      haalHotcues(deckId, track.id);
       gridBewaard[deckId] = track.grid ? JSON.stringify(track.grid) : 'null';
       // De toonsoort van de plaat (TOONSOORT.md §3), zoals /api/library hem geeft.
       toonBewaard[deckId] = toonTekst(engine.deck(deckId).setToonKaart(track.toon ?? null));

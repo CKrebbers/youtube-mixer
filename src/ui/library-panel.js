@@ -1,11 +1,11 @@
-import { fmtTime } from '../lib/emitter.js';
 import { esc } from './dom.js';
-import { gridStatus, libraryBpm, STATUS_TEKST } from './grid-strook.js';
+import { gridStatus } from './grid-strook.js';
 import { libraryToon, KIEZER } from './toon-weergave.js';
 import { ToonKaart, camelot, kortNaam, volleNaam } from '../engine/toonsoort.js';
-
-/** Het label per bron (server/links.js: bronVan). */
-const BRON_LABEL = { youtube: 'YT', tiktok: 'TikTok', bestand: 'bestand', web: 'web' };
+import {
+  RIJ_H, PaginaCache, lijstUrl, zichtbaar, volgendeSortering, leesSortering, bewaarSortering,
+  kolomSjabloon, kopHtml, cellenHtml, standaardOpslag,
+} from './library-lijst.js';
 
 /** Wat de upload aanneemt; gelijk aan BESTAND_EXT in server/links.js. */
 export const BESTAND_EXT = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'wav', 'mp3', 'flac', 'm4a', 'aiff', 'aif', 'ogg', 'opus'];
@@ -24,7 +24,8 @@ export const isVideoBestand = (file) => /^video\//.test(file?.type || '') || ['m
 
 
 export class LibraryPanel {
-  constructor({ root, onLaad, onGrid = () => {}, onToon = () => {}, decks = ['A', 'B'], label = (d) => d, stand = () => 'leeg' }) {
+  constructor({ root, onLaad, onGrid = () => {}, onToon = () => {}, decks = ['A', 'B'], label = (d) => d,
+    stand = () => 'leeg', opslag = standaardOpslag() }) {
     this.root = root;
     this.onLaad = onLaad;
     this.onGrid = onGrid;        // (trackId, grid) na "opnieuw analyseren": op de decks zetten
@@ -34,12 +35,20 @@ export class LibraryPanel {
     this.label = label;
     this.stand = stand;          // (deck) => 'leeg' | 'geladen' | 'speelt'
     this.zeker = null;           // { soort, sleutel, tot } voor 'nog eens klikken'
-    this.tracks = [];
     this.opdrachten = [];
     this.bezig = new Set();     // tracks die nu geladen worden
-    this.analyseert = new Set(); // tracks waarvan het grid nu opnieuw geanalyseerd wordt
+    this.analyseert = new Set(); // tracks waarvan grid en toonsoort nu opnieuw geanalyseerd worden
     this.melding = null;
     this.zoek = '';
+    // De lijst: pagina's van de server, alleen zichtbare rijen getekend (library-lijst.js).
+    this.opslag = opslag;
+    this.sortering = leesSortering(opslag);
+    this.cache = new PaginaCache(async (vraag, pagina) => {
+      const r = await fetch(lijstUrl(vraag, pagina));
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.fout || `${r.status}`);
+      return j;
+    });
 
     this.uploads = [];          // { sleutel, naam, pct, fout } — lokaal, tot de server een opdracht heeft
     this.naLaden = new Map();   // opdracht-id -> deck: na de ingest op die track laden (gesleept op een track)
@@ -71,9 +80,36 @@ export class LibraryPanel {
       root.classList.remove('drag');
       this.uploadBestanden([...e.dataTransfer.files]);
     });
-    this.el.zoek.addEventListener('input', () => { this.zoek = this.el.zoek.value.trim(); this.ververs(); });
+    // Zoeken op de server: even wachten tot je uitgetypt bent, en dan bovenaan beginnen.
+    let zoekTimer = null;
+    this.el.zoek.addEventListener('input', () => {
+      clearTimeout(zoekTimer);
+      zoekTimer = setTimeout(() => {
+        const zoek = this.el.zoek.value.trim();
+        if (zoek !== this.zoek) { this.zoek = zoek; this.ververs({ bovenaan: true }); }
+      }, 120);
+    });
+
+    // Kop, lege ruimte zo hoog als de hele lijst, en het venster met de rijen die je ziet.
+    this.el.rijen.innerHTML = '<div class="lib-kop"></div><div class="lib-ruimte"><div class="lib-venster"></div></div>';
+    this.el.kop = this.el.rijen.querySelector('.lib-kop');
+    this.el.ruimte = this.el.rijen.querySelector('.lib-ruimte');
+    this.el.venster = this.el.rijen.querySelector('.lib-venster');
+    root.style.setProperty('--lib-rij-h', `${RIJ_H}px`);
+    root.style.setProperty('--lib-kolommen', kolomSjabloon());
+    this.tekenKop();
+    let beeld = 0;
+    const volg = () => {
+      if (beeld) return;
+      beeld = requestAnimationFrame(() => { beeld = 0; this.tekenRijen(); this._haalZichtbaar(); });
+    };
+    this.el.rijen.addEventListener('scroll', volg, { passive: true });
+    // Het paneel opent (0 -> 340 px hoog): dan pas weten we hoeveel rijen er passen.
+    if (typeof ResizeObserver === 'function') new ResizeObserver(volg).observe(this.el.rijen);
 
     this.el.rijen.addEventListener('click', (e) => {
+      const kop = e.target.closest('button[data-sorteer]');
+      if (kop) return this.sorteer(kop.dataset.sorteer);
       // Toonsoort: klik op de badge = de kiezer onder die rij, open of dicht.
       const toon = e.target.closest('button[data-toon]');
       if (toon) {
@@ -99,7 +135,7 @@ export class LibraryPanel {
       if (her) {
         // ↻ = grid én toonsoort opnieuw (TOONSOORT.md §4). Staat een van de
         // twee op SLOT (door jou bevestigd), dan alleen na een tweede klik.
-        const t = this.tracks.find((x) => x.id === her.dataset.her);
+        const t = this._track(her.dataset.her);
         const slot = [t?.grid?.slot && 'het grid', t?.toon?.slot && 'de toonsoort'].filter(Boolean);
         if (slot.length && !this._bevestigd('her', t.id)) {
           this.melding = { tekst: `${slot.join(' en ')} van "${t.titel}" ${slot.length > 1 ? 'staan' : 'staat'} op slot — klik nog eens op ↻ om toch opnieuw te analyseren`, goed: false };
@@ -109,10 +145,10 @@ export class LibraryPanel {
       }
       const weg = e.target.closest('button[data-weg]');
       if (weg) {
-        // Weghalen gooit ook het grid en de racks van dit nummer weg.
+        // Weghalen gooit ook grid, racks, hotcues en sampler-pads van dit nummer weg.
         if (!this._bevestigd('weg', weg.dataset.weg)) {
-          const t = this.tracks.find((x) => x.id === weg.dataset.weg);
-          this.melding = { tekst: `"${t?.titel ?? weg.dataset.weg}" weghalen, met grid en racks? Klik nog eens op ×`, goed: false };
+          const t = this._track(weg.dataset.weg);
+          this.melding = { tekst: `"${t?.titel ?? weg.dataset.weg}" weghalen, met grid, racks en hotcues? Klik nog eens op ×`, goed: false };
           return this.tekenStatus();
         }
         return this.verwijder(weg.dataset.weg);
@@ -135,6 +171,33 @@ export class LibraryPanel {
   }
 
   get open() { return !this.root.classList.contains('hidden'); }
+
+  /** Wat er nu van de lijst geladen is, op volgorde (console; de lijst zelf staat in `cache`). */
+  get tracks() { return this.cache.geladen; }
+
+  /** Een nummer op id: uit de geladen pagina's, of net binnengehaald. */
+  _track(id) { return this.cache.vind(id); }
+
+  /**
+   * Een veld van een nummer bijwerken na een await: `track` is het object van
+   * vóór het wachten, maar de lijst kan intussen nieuwe pagina's hebben (een
+   * ingest werd klaar, je scrolde): dan staat het nummer er als ander object.
+   */
+  _werkBij(track, veld, waarde) {
+    track[veld] = waarde;
+    const nu = this._track(track.id);
+    if (nu && nu !== track) nu[veld] = waarde;
+  }
+
+  /** Klik op een kolomkop. */
+  sorteer(sleutel) {
+    const nieuw = volgendeSortering(this.sortering, sleutel);
+    if (nieuw === this.sortering) return;
+    this.sortering = nieuw;
+    bewaarSortering(this.opslag, nieuw);
+    this.tekenKop();
+    this.ververs({ bovenaan: true });
+  }
 
   async haalBinnen() {
     const url = this.el.url.value.trim();
@@ -222,12 +285,12 @@ export class LibraryPanel {
       this.tekenStatus();
       return;
     }
-    if (!this.tracks.some((t) => t.id === o.track.id)) this.tracks.unshift(o.track);
+    if (!this._track(o.track.id)) this.cache.extra.set(o.track.id, o.track);
     this.laad(o.track.id, deck);
   }
 
   async laad(id, deck) {
-    const track = this.tracks.find((t) => t.id === id);
+    const track = this._track(id);
     if (!track || this.bezig.has(id)) return;
     this.bezig.add(id);
     this.tekenRijen();
@@ -236,6 +299,10 @@ export class LibraryPanel {
       this.melding = { tekst: `${track.titel} staat op track ${this.label(deck)}`
         + (r?.hint ? ` — ${r.hint}` : ''), goed: true };
       fetch(`/api/library/${id}/geladen`, { method: 'POST' }).catch(() => {});
+      // "gespeeld" meteen bijwerken, maar NIET opnieuw sorteren: de lijst
+      // springt dan niet onder je muis weg terwijl je de volgende zoekt.
+      track.laatst_geladen = Date.now();
+      track.keer_geladen = (track.keer_geladen || 0) + 1;
     } catch (err) {
       this.melding = { tekst: `laden mislukt: ${err.message}`, goed: false };
     }
@@ -250,7 +317,7 @@ export class LibraryPanel {
    * dus hier twee verzoeken. `forceer` = tweede klik: ook over een slot.
    */
   async heranalyseer(id, forceer = false) {
-    const track = this.tracks.find((t) => t.id === id);
+    const track = this._track(id);
     if (!track || this.analyseert.has(id)) return;
     this.analyseert.add(id);
     this.melding = { tekst: `grid en toonsoort van "${track.titel}" worden opnieuw geanalyseerd…`, goed: true };
@@ -271,7 +338,7 @@ export class LibraryPanel {
     else if (!g.value.bewaard) { delen.push(`grid niet vervangen (${g.value.reden})`); goed = false; }
     else {
       const grid = g.value.grid;
-      track.grid = grid;
+      this._werkBij(track, 'grid', grid);
       this.onGrid(id, grid);
       const st = gridStatus(grid, track.duur);
       delen.push(`grid ${grid.stukken.length} stuk${grid.stukken.length === 1 ? '' : 'ken'}, ${Math.round((st.aandeel ?? 0) * 100)}% zeker`);
@@ -279,7 +346,7 @@ export class LibraryPanel {
     if (t.status === 'rejected') { delen.push(`toonsoort: analyseren mislukt (${t.reason?.message})`); goed = false; }
     else if (!t.value.bewaard) { delen.push(`toonsoort niet vervangen (${t.value.reden})`); goed = false; }
     else {
-      track.toon = t.value.toon;
+      this._werkBij(track, 'toon', t.value.toon);
       this.onToon(id, t.value.toon);
       delen.push(`toonsoort ${libraryToon(t.value.toon, track.duur).tekst}`);
     }
@@ -297,7 +364,7 @@ export class LibraryPanel {
    * een spelende track.
    */
   async kiesToon(id, keuze) {
-    const track = this.tracks.find((t) => t.id === id);
+    const track = this._track(id);
     if (!track) return;
     const kaart = ToonKaart.van(track.toon);
     let nieuw;
@@ -323,7 +390,7 @@ export class LibraryPanel {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toon: json }),
       });
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      track.toon = json;
+      this._werkBij(track, 'toon', json);
       this.onToon(id, json);
       this.melding = { tekst: `${track.titel}: ${libraryToon(json, track.duur).tekst}${nieuw.slot ? ' (op slot)' : ' (slot eraf)'}`, goed: true };
       if (keuze !== 'slot') this.kiezer = null;
@@ -334,21 +401,30 @@ export class LibraryPanel {
     this.tekenRijen();
   }
 
-  /** Een track bewaarde een toonsoort die op het deck bewerkt is: de lijst toont hem ook. */
+  /**
+   * Een track bewaarde een toonsoort die op het deck bewerkt is: de lijst toont
+   * hem ook. Het nummer hoeft niet in beeld te staan: `_track` zoekt in ALLE
+   * geladen pagina's (en in wat net binnenkwam). Staat het in geen enkele
+   * geladen pagina, dan is er niets bij te werken: die pagina komt later van
+   * de server, en die heeft de kaart dan al.
+   */
   zetToon(id, json) {
-    const t = this.tracks.find((x) => x.id === id);
+    const t = this._track(id);
     if (!t) return;
     t.toon = json;
     if (this.open) this.tekenRijen();
   }
 
-  /** De kiezer onder een rij: 24 toonsoorten in wijzervolgorde, "geen", bevestigen. */
-  kiezerHtml(t) {
+  /**
+   * De kiezer onder een rij: 24 toonsoorten in wijzervolgorde, "geen",
+   * bevestigen. `boven` = px vanaf de bovenkant van het venster (onder de rij).
+   */
+  kiezerHtml(t, boven = 0) {
     const kaart = ToonKaart.van(t.toon);
     const hoofd = libraryToon(t.toon, t.duur).k;
     const n = kaart?.aantalStukken ?? 0;
     const id = esc(t.id);
-    return `<div class="lib-toonkiezer">
+    return `<div class="lib-toonkiezer" style="top:${boven}px">
       <span class="lib-tk-kop">toonsoort van de plaat${n > 1 ? ` — ${n} stukken: kiezen maakt er één van (tweede klik)` : ''}</span>
       <span class="lib-tk-wijzer">${KIEZER.map((x) => `<button class="btn sm lib-tk${x.k === hoofd ? ' on' : ''}${x.mineur ? ' mineur' : ''}" data-tk="${x.k}" data-id="${id}" title="${esc(`${x.camelot} ${volleNaam(x.k)}`)}">${x.camelot}<small>${esc(x.kort)}</small></button>`).join('')}</span>
       <span class="lib-tk-rest">
@@ -360,7 +436,7 @@ export class LibraryPanel {
   }
 
   async verwijder(id) {
-    const track = this.tracks.find((t) => t.id === id);
+    const track = this._track(id);
     if (!track) return;
     // Alleen uit de library; de bestanden laat ik staan. Wissen van schijf is
     // onomkeerbaar en hoort een bewuste handeling te zijn, geen klik naast.
@@ -369,14 +445,34 @@ export class LibraryPanel {
     this.ververs();
   }
 
-  async ververs() {
+  /**
+   * De lijst opnieuw van de server: het stuk dat je ziet, in één keer
+   * geruild (geen flits). `bovenaan`: nieuwe zoekterm of sortering, dan
+   * begin je bovenaan; anders (nummer weg, ingest klaar) blijf je waar je was.
+   */
+  async ververs({ bovenaan = false } = {}) {
+    // Nieuwe zoekterm of sortering: de kiezer hoort bij een rij die nu ergens anders staat.
+    if (bovenaan) { this.el.rijen.scrollTop = 0; this.kiezer = null; }
+    const { van, tot } = this._venster(Math.max(this.cache.totaal, 1));
     try {
-      const r = await fetch('/api/library' + (this.zoek ? `?zoek=${encodeURIComponent(this.zoek)}` : ''));
-      const j = await r.json();
-      this.tracks = j.tracks || [];
-    } catch { this.tracks = []; }
+      if (!(await this.cache.ververs({ zoek: this.zoek, ...this.sortering }, van, tot))) return;
+    } catch (err) {
+      this.melding = { tekst: `library niet geladen: ${err.message}`, goed: false };
+    }
     this.tekenStatus();
     this.tekenRijen();
+    this._haalZichtbaar();
+  }
+
+  /** Welke rijen er nu in beeld zijn (met marge). */
+  _venster(totaal = this.cache.totaal) {
+    return zichtbaar({ boven: this.el.rijen.scrollTop, hoogte: this.el.rijen.clientHeight || 400, totaal });
+  }
+
+  /** Scrollen naar een stuk dat nog niet binnen is: ophalen en tekenen. */
+  async _haalZichtbaar() {
+    const { van, tot } = this._venster();
+    if (await this.cache.zorgVoor(van, tot)) { this.tekenStatus(); this.tekenRijen(); }
   }
 
   async pollJobs() {
@@ -401,10 +497,12 @@ export class LibraryPanel {
   }
 
   tekenStatus() {
-    const n = this.tracks.length;
+    const n = this.cache.totaal;
     const m = this.melding
       ? `<b class="${this.melding.goed ? 'goed' : 'bad'}">${esc(this.melding.tekst)}</b> &nbsp;·&nbsp; ` : '';
-    this.el.status.innerHTML = m + `${n} nummer${n === 1 ? '' : 's'} in de library`;
+    this.el.status.innerHTML = m + (this.zoek
+      ? `${n} gevonden voor "${esc(this.zoek)}"`
+      : `${n} nummer${n === 1 ? '' : 's'} in de library`);
   }
 
   tekenJobs() {
@@ -421,36 +519,55 @@ export class LibraryPanel {
     this.el.jobs.classList.toggle('hidden', lopend.length + ups.length === 0);
   }
 
+  /** De kolomkop: sorteerknoppen, en onzichtbare knoppen zodat de kolommen gelijk lopen met de rijen. */
+  tekenKop() {
+    this.el.kop.innerHTML = kopHtml(this.sortering,
+      this.decks.map((d) => `<button class="btn sm lib-trk" tabindex="-1">${esc(this.label(d))}</button>`).join('')
+      + '<button class="btn sm" tabindex="-1">↻</button><button class="btn sm" tabindex="-1">×</button>');
+  }
+
+  /**
+   * Alleen de rijen die je ziet (plus een marge) staan in de DOM; de ruimte
+   * eromheen is zo hoog als de hele lijst, dus de scrollbalk klopt.
+   */
   tekenRijen() {
-    if (!this.tracks.length) {
-      this.el.rijen.innerHTML = `<div class="lib-leeg">nog niets binnengehaald — plak hierboven een YouTube- of TikTok-link, of sleep je eigen audio en video hierheen</div>`;
+    const totaal = this.cache.totaal;
+    this.el.kop.classList.toggle('hidden', !totaal);
+    if (!totaal) {
+      this.el.ruimte.style.height = '';
+      this.el.venster.style.transform = '';
+      this.el.venster.innerHTML = this.zoek
+        ? `<div class="lib-leeg">niets gevonden voor "${esc(this.zoek)}"</div>`
+        : `<div class="lib-leeg">nog niets binnengehaald — plak hierboven een YouTube- of TikTok-link, of sleep je eigen audio en video hierheen</div>`;
       return;
     }
-    this.el.rijen.innerHTML = this.tracks.map((t) => {
-      const lufs = t.loudness_i != null ? `${t.loudness_i.toFixed(1)} → ${t.doel_loudness} LUFS` : '—';
+    const { van, tot } = this._venster();
+    this.el.ruimte.style.height = `${totaal * RIJ_H}px`;
+    this.el.venster.style.transform = `translateY(${van * RIJ_H}px)`;
+    const nu = Date.now();
+    // Per deck één keer vragen, niet per rij.
+    const standen = this.decks.map((d) => this.stand(d));
+    const staat = { kiezer: this.kiezer };
+    const rijen = [];
+    let kiezer = '';
+    for (let i = van; i < tot; i++) {
+      const t = this.cache.rij(i);
+      if (!t) { rijen.push('<div class="lib-rij laadt"><span class="lib-titel">…</span></div>'); continue; }
       const laadt = this.bezig.has(t.id);
-      const gs = gridStatus(t.grid, t.duur);
-      const n = t.grid?.stukken?.length ?? 0;
-      const gridTitel = gs.status === 'geen' ? 'nog geen grid — wordt op de achtergrond geanalyseerd, of tik het tempo'
-        : `${n} stuk${n === 1 ? '' : 'ken'}${gs.aandeel !== null && gs.status !== 'slot' && gs.status !== 'hand' ? `, ${Math.round(gs.aandeel * 100)}% van de tijd zeker` : ''}`;
       const her = this.analyseert.has(t.id);
-      // Toonsoort van de PLAAT (geen pitch): hoofdtoonsoort + hoeveel andere.
-      const toon = libraryToon(t.toon, t.duur);
-      return `<div class="lib-rij">
-        <span class="lib-titel" title="${esc(t.url)}"><i class="lib-bron ${esc(t.bron || 'web')}">${esc(BRON_LABEL[t.bron] || 'web')}</i>${esc(t.titel)}</span>
-        <span class="lib-uploader">${esc(t.uploader || '')}</span>
-        <span class="lib-duur">${fmtTime(t.duur || 0).replace(/\.\d+$/, '')}</span>
-        <span class="lib-bpm" title="tempo van het grid bij het begin">${esc(libraryBpm(t.grid))}</span>
-        <button class="lib-toon ${toon.soort}${toon.slot ? ' slot' : ''}${this.kiezer === t.id ? ' open' : ''}" data-toon="${esc(t.id)}" title="${esc(toon.titel)}">${esc(toon.tekst)}</button>
-        <span class="lib-grid ${gs.status}" title="${esc(gridTitel)}">${esc(STATUS_TEKST[gs.status])}</span>
-        <span class="lib-lufs">${esc(lufs)}</span>
-        <span class="lib-racks">${t.racks ? `${t.racks} rack${t.racks === 1 ? '' : 's'}` : '—'}</span>
+      rijen.push(`<div class="lib-rij">${cellenHtml(t, nu, staat)}
         <span class="lib-knoppen">
-          ${this.decks.map((d) => `<button class="btn sm lib-trk ${this.stand(d)}" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)} (${this.stand(d)})"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}
+          ${this.decks.map((d, k) => `<button class="btn sm lib-trk ${standen[k]}" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)} (${standen[k]})"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}
           <button class="btn sm lib-her${her ? ' bezig' : ''}" data-her="${esc(t.id)}" title="grid en toonsoort opnieuw analyseren${t.grid?.slot || t.toon?.slot ? ' (staat op slot: tweede klik)' : ''}">${her ? '…' : '↻'}</button>
           <button class="btn sm lib-weg" data-weg="${esc(t.id)}" title="uit de lijst halen">×</button>
         </span>
-      </div>${this.kiezer === t.id ? this.kiezerHtml(t) : ''}`;
-    }).join('');
+      </div>`);
+      // De kiezer ZWEEFT onder zijn rij, over de rijen eronder heen: de lijst
+      // rekent met een vaste rijhoogte (scrollbalk, welke rijen in beeld), en
+      // een kiezer tussen de rijen zou alles eronder laten verspringen zodra
+      // zijn rij uit het getekende stuk scrollt.
+      if (this.kiezer === t.id) kiezer = this.kiezerHtml(t, (i - van + 1) * RIJ_H);
+    }
+    this.el.venster.innerHTML = rijen.join('') + kiezer;
   }
 }

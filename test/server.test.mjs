@@ -71,6 +71,16 @@ for (const id of ['nummerX', 'nummerY', 'nummerZ', 'nummerR']) {
   lib.bewaarTrack({ id, url: `https://example.com/${id}`, titel: id, uploader: 't', duur: 10,
     audio: `media/${id}/audio.wav`, video: null, thumbnail: null, loudness: {}, doelLoudness: -14, ytdlp: 'x' });
 }
+// En genoeg om voorbij de oude grens van 200 te komen.
+const EXTRA = 250;
+lib.db.exec('BEGIN');
+for (let i = 0; i < EXTRA; i++) {
+  const id = `extra${String(i).padStart(3, '0')}`;
+  lib.bewaarTrack({ id, url: `https://example.com/${id}`, titel: `Extra ${i}`, uploader: 't', duur: 30 + i,
+    audio: `media/${id}/audio.wav`, video: null, thumbnail: null, loudness: {}, doelLoudness: -14, ytdlp: 'x' });
+}
+lib.db.exec('COMMIT');
+const TOTAAL = 4 + EXTRA;
 lib.db.close?.();
 
 const poort = 20000 + Math.floor(Math.random() * 20000);
@@ -171,6 +181,57 @@ try {
   ok('niet als formulier', (await status('/api/library/nummerX/samples', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{}' })) === 415);
   await fetch(`${B}/api/library/nummerX/samples/2`, { method: 'DELETE' });
   ok('vergeten', (await (await fetch(`${B}/api/library/nummerX/samples`)).json()).samples.length === 0);
+
+  console.log('\nde lijst: meer dan 200, sorteren, pagina\'s');
+  const lijst = async (q = '') => { const r = await fetch(`${B}/api/library${q}`); return { status: r.status, ...(await r.json()) }; };
+  const volledig = await lijst();
+  ok(`zonder pagina: alle ${TOTAAL} (vroeger hooguit 200), met totaal`, volledig.tracks.length === TOTAAL && volledig.totaal === TOTAAL);
+  const p3 = await lijst('?sorteer=duur&richting=op&van=200&aantal=100');
+  ok('een pagina voorbij 200: de rest, en het totaal', p3.status === 200 && p3.tracks.length === TOTAAL - 200 && p3.totaal === TOTAAL && p3.van === 200);
+  const stukken = [];
+  for (let van = 0; van < TOTAAL; van += 100) stukken.push(...(await lijst(`?sorteer=titel&van=${van}&aantal=100`)).tracks.map((t) => t.id));
+  ok('pagina\'s op titel achter elkaar: elk nummer precies één keer', stukken.length === TOTAAL && new Set(stukken).size === TOTAAL);
+  const duren = (await lijst('?sorteer=duur&richting=af&aantal=5')).tracks.map((t) => t.duur);
+  ok(`duur af: langste eerst (${duren.join(' ')})`, duren[0] === 30 + EXTRA - 1 && duren.every((d, i) => i === 0 || duren[i - 1] >= d));
+  ok('zoeken geeft het aantal treffers als totaal', (await lijst('?zoek=nummerX&aantal=10')).totaal === 1);
+  await fetch(`${B}/api/library/extra123/geladen`, { method: 'POST' });
+  ok('laatst gespeeld: net geladen staat bovenaan', (await lijst('?sorteer=gespeeld&aantal=1')).tracks[0].id === 'extra123');
+  const fouten = [];
+  for (const q of ['?sorteer=onzin', '?sorteer=titel;DROP', '?sorteer=constructor', '?sorteer=toString', '?sorteer=__proto__',
+    '?richting=omhoog', '?aantal=0', '?aantal=501', '?aantal=1.5', '?van=-1', '?van=abc']) {
+    fouten.push((await lijst(q)).status);
+  }
+  ok(`onzin in de vraag: 400 (${fouten.join(' ')})`, fouten.every((c) => c === 400));
+  const ver = await lijst('?sorteer=titel&van=4294967297&aantal=5');
+  ok('van ver voorbij het einde (2^32 + 1): een lege pagina, niet rij 1', ver.status === 200 && ver.tracks.length === 0 && ver.totaal === TOTAAL);
+  ok('van groter dan een veilig geheel getal: 400', (await lijst('?van=1e20&aantal=5')).status === 400);
+  ok('en de library staat er nog', (await lijst('?aantal=1')).totaal === TOTAAL);
+
+  console.log('\nhotcues per nummer');
+  const zetHc = (id, body) => fetch(`${B}/api/library/${id}/hotcues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const hcVan = async (id) => (await (await fetch(`${B}/api/library/${id}/hotcues`)).json()).hotcues;
+  ok('een nummer zonder hotcues: lege lijst', (await hcVan('nummerX')).length === 0);
+  const h1 = await (await zetHc('nummerX', { nr: 1, tijd: 3.5 })).json();
+  await zetHc('nummerX', { nr: 4, tijd: 61.25 });
+  ok('hotcue bewaren', h1.hotcue?.nr === 1 && h1.hotcue.tijd === 3.5);
+  ok('ophalen, op volgorde', JSON.stringify(await hcVan('nummerX')) === JSON.stringify([{ nr: 1, tijd: 3.5 }, { nr: 4, tijd: 61.25 }]));
+  await zetHc('nummerX', { nr: 1, tijd: 4 });
+  ok('dezelfde plek opnieuw: overschreven', (await hcVan('nummerX'))[0].tijd === 4 && (await hcVan('nummerX')).length === 2);
+  const hcFouten = [];
+  for (const b of [{ nr: 0, tijd: 1 }, { nr: 9, tijd: 1 }, { nr: 1.5, tijd: 1 }, { nr: 1, tijd: -1 }, { nr: 1, tijd: '3' }, { nr: 1 }, { nr: 1, tijd: null }]) {
+    hcFouten.push((await zetHc('nummerX', b)).status);
+  }
+  ok(`ongeldige plek of tijd: 400 (${hcFouten.join(' ')})`, hcFouten.every((c) => c === 400));
+  ok('onbekend nummer: 404', (await zetHc('bestaatniet', { nr: 1, tijd: 1 })).status === 404);
+  ok('niet als formulier', (await status('/api/library/nummerX/hotcues', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{"nr":1,"tijd":1}' })) === 415);
+  ok('niet vanaf een andere oorsprong', (await rauw('/api/library/nummerX/hotcues/1', { method: 'DELETE', headers: { Origin: 'http://evil.example' } })).status === 403);
+  const wegHc = await (await fetch(`${B}/api/library/nummerX/hotcues/4`, { method: 'DELETE' })).json();
+  ok('wissen', wegHc.weg === true && (await hcVan('nummerX')).length === 1);
+  ok('wissen wat er niet is: weg false', (await (await fetch(`${B}/api/library/nummerX/hotcues/4`, { method: 'DELETE' })).json()).weg === false);
+  ok('hotcues van het ene nummer horen niet bij het andere', (await hcVan('nummerY')).length === 0);
+  await zetHc('extra007', { nr: 2, tijd: 9 });
+  await fetch(`${B}/api/library/extra007`, { method: 'DELETE' });
+  ok('nummer weghalen: zijn hotcues gaan mee', (await hcVan('extra007')).length === 0 && (await lijst('?aantal=1')).totaal === TOTAAL - 1);
 
   console.log('\neigen mapping');
   ok('nog niets bewaard: null', (await (await fetch(`${B}/api/mapping`)).json()).mapping === null);

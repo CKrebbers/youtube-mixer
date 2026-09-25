@@ -1097,6 +1097,15 @@ console.log('\nloops, tellen en laden');
   await laadPlekken;
   ok('tijdens het laden pint de nieuwe track geen hotcues van de oude', tijdensLaden.every((x) => x === null || x === 0) || tijdensLaden.length === 0);
   ok('geslaagde laad wist ze wel', dSt.cuePoint === 0 && dSt.hotcues.every((h) => h === null));
+  // Bewaarde hotcues terug op een STREAMENDE track (hotcues per nummer): ze
+  // horen meteen bij de vaste punten, en er wordt direct bijgevuld, niet pas
+  // bij de volgende tik van de bron.
+  let bijgevuld = 0;
+  const echtBijvullen = dSt.bron.bijvullen.bind(dSt.bron);
+  dSt.bron.bijvullen = () => { bijgevuld++; return echtBijvullen(); };
+  dSt.restoreHotcues([null, 1.5]);
+  ok('stream: teruggezette hotcues meteen vastgepind', dSt.bron.vastpunten().includes(1.5) && bijgevuld === 1);
+  delete dSt.bron.bijvullen;
   dSt.bron.vernietig();
   dSt.load(buf, 'terug naar buffer');
   eng.ctx.audioWorklet = oudCtxWorklet;
@@ -1548,6 +1557,131 @@ console.log('\ntempokaart');
     lg.stand.grid === 'hotcues' && JSON.stringify(dE.grid.toJSON()) === g0);
   ok('buiten grid-modus: cue level is weer sampler-volume', bpmVol === null || read('sampler.volume') !== bpmVol);
   dE.setGrid(null);
+}
+
+// ---- hotcues per nummer: het deck meldt, de app bewaart ----------------------
+// Het deck kent geen library (regel 1). Het meldt 'hotcue' bij zetten en
+// wissen; terugzetten na het laden gaat via restoreHotcues, dat NIETS meldt
+// (anders zou terugzetten weer bewaren) en alleen lege plekken vult.
+{
+  const dH = eng.deck('H');
+  dH.load(buf, 'hotcues');
+  const meldingen = [];
+  const uit = dH.on('hotcue', (m) => meldingen.push(m));
+  dH.seek(1.25);
+  invoke('track.8.hotcue.2', true);
+  ok('zetten meldt { i, tijd }', meldingen.length === 1 && meldingen[0].i === 1 && Math.abs(meldingen[0].tijd - 1.25) < 1e-9);
+  dH.seek(0.5);
+  invoke('track.8.hotcue.2', true);
+  ok('springen naar een hotcue meldt niets', meldingen.length === 1 && Math.abs(dH.position - 1.25) < 1e-9);
+  invoke('track.8.hotcue.2.delete', true);
+  ok('wissen meldt tijd null', meldingen.length === 2 && meldingen[1].i === 1 && meldingen[1].tijd === null && dH.hotcues[1] === null);
+  invoke('track.8.hotcue.2.delete', true);
+  ok('wissen wat er niet is meldt niets', meldingen.length === 2);
+
+  dH.seek(2);
+  invoke('track.8.hotcue.1', true);
+  meldingen.length = 0;
+  let veranderd = 0;
+  const uitC = dH.on('change', () => veranderd++);
+  const gezet = dH.restoreHotcues([0.1, 1.5, buf.duration + 1, 'x']);
+  ok('terugzetten vult alleen lege plekken (wat je al zette wint)', dH.hotcues[0] === 2 && dH.hotcues[1] === 1.5);
+  ok('tijden buiten de track of geen getal: overgeslagen', dH.hotcues[2] === null && dH.hotcues[3] === null
+    && JSON.stringify(gezet) === '[1]');
+  ok('terugzetten meldt geen hotcue (anders bewaart de app wat hij net ophaalde), wel een change',
+    meldingen.length === 0 && veranderd === 1);
+  ok('niets terug te zetten: geen change', dH.restoreHotcues([null, null]).length === 0 && veranderd === 1);
+  uitC();
+  dH.load(buf, 'volgende');
+  ok('laden wist ze zonder te melden (het nummer is weg, niet de hotcue)', meldingen.length === 0 && dH.hotcues.every((h) => h === null));
+  const leeg = new (eng.deck('H').constructor)(eng.ctx, 'X');
+  ok('zonder track: terugzetten doet niets', leeg.restoreHotcues([1]).length === 0);
+  uit();
+}
+
+// ---- de opslag van de app: bewaren bij het nummer, terugzetten bij laden ----
+// Met een nagebouwde server die net zo streng is als de echte (404 voor een
+// onbekend nummer, 400 voor onzin) en ASYNCHROON antwoordt, met een POST die
+// trager is dan een DELETE: zonder rij kwam "zetten + meteen wissen" in
+// omgekeerde volgorde aan en stond de hotcue er de volgende keer weer.
+{
+  const { opzetHotcueOpslag } = await import('../src/ui/hotcue-opslag.js');
+  const db = new Map([['nummer1', new Map([[1, 0.5], [3, 2.0]])], ['nummer2', new Map()]]);
+  const log = [];
+  const vertraging = { GET: 5, POST: 15, DELETE: 1 };
+  const haal = async (url, init = {}) => {
+    const m = init.method || 'GET';
+    await new Promise((r) => setTimeout(r, vertraging[m]));
+    log.push(`${m} ${url}${init.body ? ' ' + init.body : ''}`);
+    const [, id, nr] = /^\/api\/library\/([^/]+)\/hotcues(?:\/(\d+))?$/.exec(url) || [];
+    const rij = db.get(decodeURIComponent(id));
+    if (m === 'GET') return Response.json({ hotcues: rij ? [...rij].sort((a, b) => a[0] - b[0]).map(([n, tijd]) => ({ nr: n, tijd })) : [] });
+    if (m === 'DELETE') return Response.json({ weg: !!rij?.delete(Number(nr)) });
+    const b = JSON.parse(init.body);
+    if (!(Number.isInteger(b.nr) && b.nr >= 1 && b.nr <= 8) || typeof b.tijd !== 'number' || !(b.tijd >= 0)) return Response.json({ fout: 'onzin' }, { status: 400 });
+    if (!rij) return Response.json({ fout: 'onbekend nummer' }, { status: 404 });
+    rij.set(b.nr, b.tijd);
+    return Response.json({ hotcue: b });
+  };
+  const fouten = [];
+  const opslag = opzetHotcueOpslag({ engine: eng, haal, meld: (tekst, soort) => { if (soort === 'fout') fouten.push(tekst); } });
+  const dH = eng.deck('H');
+  const hc = (nr, wis = false) => invoke(`track.8.hotcue.${nr}${wis ? '.delete' : ''}`, true);
+
+  dH.load(buf, 'nummer 1');
+  dH.seek(1.0);
+  hc(2);                                          // gezet vóór de app weet welk nummer het is
+  ok('vóór haalHotcues: nog niets verstuurd', log.length === 0);
+  await opslag.haalHotcues('H', 'nummer1');
+  await opslag.rust();
+  ok('bewaarde hotcues terug op het deck', dH.hotcues[0] === 0.5 && dH.hotcues[2] === 2.0);
+  ok('wat je vóór het ophalen zette blijft staan en gaat alsnog naar de server',
+    dH.hotcues[1] === 1.0 && db.get('nummer1').get(2) === 1.0);
+
+  const voor = log.length;
+  dH.seek(3.0);
+  hc(4); hc(4, true);                             // zetten en meteen wissen
+  await opslag.rust();
+  ok('zetten + meteen wissen: in volgorde bij de server, hotcue weg',
+    !db.get('nummer1').has(4) && /^POST /.test(log[voor]) && /^DELETE .*\/hotcues\/4$/.test(log[voor + 1]));
+
+  // Opnieuw laden; TIJDENS het ophalen wis je hotcue 1 en zet je hem op 0.25.
+  dH.load(buf, 'nummer 1 weer');
+  const bezig = opslag.haalHotcues('H', 'nummer1');
+  hc(1, true);                                    // leeg na het laden: doet niets
+  dH.seek(0.25);
+  hc(1);
+  await bezig;
+  await opslag.rust();
+  ok('wat je tijdens het ophalen zette wint van wat de server had', dH.hotcues[0] === 0.25 && db.get('nummer1').get(1) === 0.25);
+  ok('de rest komt wel terug', dH.hotcues[1] === 1.0 && dH.hotcues[2] === 2.0);
+
+  // Een los bestand: geen nummer, dus niets bewaren.
+  const n0 = log.length;
+  dH.load(buf, 'los bestand');
+  dH.seek(0.7);
+  hc(3);
+  await opslag.rust();
+  ok('los bestand of demo: niets naar de server', log.length === n0 && dH.hotcues[2] === 0.7);
+
+  // Snel twee nummers achter elkaar: het eerste antwoord hoort niet meer bij deze track.
+  dH.load(buf, 'nummer 1');
+  const eerste = opslag.haalHotcues('H', 'nummer1');
+  dH.load(buf, 'nummer 2');
+  await Promise.all([eerste, opslag.haalHotcues('H', 'nummer2')]);
+  ok('een laat antwoord van het vorige nummer zet niets op de track', dH.hotcues.every((h) => h === null));
+  dH.seek(1.5);
+  hc(1);
+  await opslag.rust();
+  ok('en nieuwe hotcues gaan naar het nieuwe nummer', db.get('nummer2').get(1) === 1.5 && db.get('nummer1').get(1) === 0.25);
+
+  // Een nummer dat de server niet (meer) kent: een foutmelding, geen stilte.
+  dH.load(buf, 'weg');
+  await opslag.haalHotcues('H', 'weggehaald');
+  hc(1);
+  await opslag.rust();
+  ok('bewaren mislukt: een foutmelding op het scherm', fouten.some((f) => /hotcue 1 niet bewaard.*404/.test(f)));
+  ok('geen onzin naar de server gestuurd', !log.some((l) => /"tijd":null/.test(l)));
 }
 
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);

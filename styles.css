@@ -272,11 +272,30 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .lib-job-balk{height:4px;background:#0b0e11;border:1px solid var(--line);border-radius:2px;overflow:hidden}
 .lib-job-balk i{display:block;height:100%;background:var(--a)}
 
-.lib-rijen{flex:1;overflow:auto;font-size:11px}
+/* De lijst: kop (plakt bovenaan), een ruimte zo hoog als de hele lijst, en
+   daarin een venster met alleen de rijen die je ziet (library-lijst.js).
+   Rijhoogte en kolommen zet het paneel zelf (--lib-rij-h, --lib-kolommen):
+   die rekenen mee met de scrollpositie en moeten dus op één plek staan. */
+.lib-rijen{flex:1;overflow:auto;font-size:11px;position:relative;overscroll-behavior:contain}
 .lib-leeg{padding:24px;text-align:center;color:var(--dim)}
-.lib-rij{display:grid;grid-template-columns:1fr 140px 60px 64px 86px 92px 110px 60px auto;gap:10px;
-  align-items:center;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.03)}
+.lib-kop,.lib-rij{display:grid;grid-template-columns:var(--lib-kolommen);gap:10px;align-items:center;
+  height:var(--lib-rij-h);box-sizing:border-box;padding:0 12px}
+.lib-kop{position:sticky;top:0;z-index:1;background:var(--panel);border-bottom:1px solid var(--line)}
+.lib-kop.hidden{display:none}
+.lib-kopcel{font:inherit;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+button.lib-kopcel{background:none;border:0;padding:0;cursor:pointer}
+button.lib-kopcel:hover{color:var(--text)}
+.lib-sorteer.aan{color:var(--a)}
+.lib-sorteer i{font-style:normal;margin-left:4px}
+.lib-kop-knoppen{visibility:hidden}
+.lib-ruimte{position:relative}
+.lib-venster{position:absolute;left:0;right:0;top:0}
+.lib-rij{border-bottom:1px solid rgba(255,255,255,.03)}
 .lib-rij:hover{background:rgba(255,255,255,.03)}
+.lib-rij.laadt{color:var(--dim)}
+.lib-datum{font-family:ui-monospace,monospace;color:var(--dim);white-space:nowrap;overflow:hidden}
+.lib-knoppen .btn.sm{min-width:23px}
 .lib-titel{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Waar een nummer vandaan komt: YT / TikTok / bestand / web. */
 .lib-bron{display:inline-block;font-style:normal;font-size:8px;letter-spacing:.06em;text-transform:uppercase;
@@ -300,14 +319,18 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .lib-grid.geenpuls{color:#ff6a5f}
 /* Toonsoort van de plaat (TOONSOORT.md §5): klik = de kiezer. Onzeker gedimd
    met "?", "~" = geen duidelijke toonsoort, op slot in de kleur van het slot. */
+.lib-toon-cel{min-width:0;display:flex}
 .lib-toon{font:11px ui-monospace,monospace;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  color:var(--text);padding:1px 4px;margin-left:-4px;border:1px solid transparent;border-radius:3px}
+  max-width:calc(100% + 4px);color:var(--text);padding:1px 4px;margin-left:-4px;border:1px solid transparent;border-radius:3px}
 .lib-toon:hover,.lib-toon.open{border-color:var(--line)}
 .lib-toon.onzeker{color:rgba(80,220,255,.55);font-style:italic}
 .lib-toon.geen,.lib-toon.leeg{color:var(--dim)}
 .lib-toon.slot{color:var(--a)}
-.lib-toonkiezer{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:6px 12px 8px;
-  background:rgba(255,255,255,.02);border-bottom:1px solid var(--line)}
+/* De kiezer zweeft onder zijn rij (top zet het paneel), over de rijen eronder:
+   de lijst rekent met een vaste rijhoogte, een kiezer ertussen zou verspringen. */
+.lib-toonkiezer{position:absolute;left:0;right:0;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;
+  padding:6px 12px 8px;background:var(--panel2);border:1px solid var(--line);border-top:0;
+  box-shadow:0 8px 18px rgba(0,0,0,.5)}
 .lib-tk-kop{width:100%;font-size:11px;color:var(--klein)}
 /* 24 knoppen, in wijzervolgorde: kolom per Camelot-getal, A (mineur) boven B (majeur) */
 .lib-tk-wijzer{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:minmax(44px,1fr);gap:3px}

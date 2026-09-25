@@ -10,6 +10,7 @@ import { opzetVensters } from './vensters.js';
 import { opzetSpiegel } from './spiegel.js';
 import { opzetRacks } from './racks.js';
 import { opzetSamplerOpslag } from './sampler-opslag.js';
+import { opzetHotcueOpslag } from './hotcue-opslag.js';
 import { opzetLaden } from './laden.js';
 import { opzetOnderpanelen } from './onderpanelen.js';
 import { opzetMidi } from './midi-opzet.js';
@@ -96,9 +97,10 @@ const vensters = opzetVensters({
 // ---- effect-racks, sampler-pads, laden en library -------------------------
 const racks = opzetRacks({ engine, staat });
 const samplerOpslag = opzetSamplerOpslag({ engine, staat });
+const hotcueOpslag = opzetHotcueOpslag({ engine, meld });
 const laden = opzetLaden({
   engine, staat, videoMixer,
-  racks, haalSamples: samplerOpslag.haalSamples,
+  racks, haalSamples: samplerOpslag.haalSamples, haalHotcues: hotcueOpslag.haalHotcues,
 });
 window.library = laden.library;
 
