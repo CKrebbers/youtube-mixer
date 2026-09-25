@@ -2,7 +2,7 @@
 // annuleren (ook midden in een download van een nep-yt-dlp), playlists
 // weigeren, dubbel herkennen, voortgangsberichten.
 // Draai met: node test/wachtrij.test.mjs
-import { mkdtempSync, rmSync, readFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -219,6 +219,83 @@ try {
     let kinderen = '';
     try { kinderen = execFileSync('pgrep', ['-P', String(process.pid), 'ffmpeg']).toString().trim(); } catch {}
     ok(`en zijn ffmpeg is ook weg (${kinderen || 'geen'})`, kinderen === '');
+
+    /*
+     * Zombies. De ffmpeg van een worker hoort bij de lus van die worker; een
+     * terminate() liet hem als <defunct> onder ons staan tot het proces stopte
+     * (pgrep hierboven ziet dat niet: een zombie heeft geen naam meer). ps
+     * telt ze wel. Gemeten vóór het herstel: 5× annuleren = 5 zombies.
+     */
+    const onzeKinderen = () => execFileSync('ps', ['-A', '-o', 'pid=,ppid=,stat=,comm=']).toString().split('\n')
+      .map((l) => l.trim().split(/\s+/)).filter((d) => Number(d[1]) === process.pid && d[3] !== 'ps')
+      .map(([pid, , stat, comm]) => `${pid} ${stat} ${comm}`);
+    const { maakPeaks, maakGrid, maakOnsets, verfijnUitBestand, STOP_NOODREM_MS } = await import('../server/analyze.js');
+    const duren = [];
+    for (let i = 0; i < 5; i++) {
+      const ac5 = new AbortController();
+      const t = Date.now();
+      const p5 = (i % 2 ? maakPeaks : maakOnset)(lang, join(map, `z${i}.bin`), { signal: ac5.signal });
+      setTimeout(() => ac5.abort(), 150);
+      const r5 = await p5;
+      duren.push(r5.afgebroken ? Date.now() - t : -1);
+    }
+    await wacht(300);
+    const over = onzeKinderen();
+    ok(`5× annuleren midden in golfvorm/ritme (${duren.join(', ')} ms): alle 5 geannuleerd`, duren.every((d) => d > 0 && d < 2000));
+    ok(`  en er blijft niets onder ons staan, ook geen zombie (${over.join('; ') || 'niets'})`, over.length === 0);
+
+    // Het grid leest per stuk 40 s audio (ook ffmpeg): kort audiobestand met een puls.
+    const kort = join(map, 'kort.wav');
+    await ing.run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi',
+      '-i', "aevalsrc='0.8*sin(2*PI*900*t)*exp(-60*mod(t,0.5))':s=48000:d=40", '-ac', '2', kort]);
+    const on = await maakOnset(kort, join(map, 'kort.bin'));
+    const acG = new AbortController();
+    const pG = maakGrid(join(map, 'kort.bin'), on.envRate, on.tijdOffset, kort, { signal: acG.signal });
+    setTimeout(() => acG.abort(), 60);
+    const rG = await pG;
+    await wacht(300);
+    ok(`grid annuleren: geannuleerd, niets over (${onzeKinderen().join('; ') || 'niets'})`, on.ok && rG.afgebroken === true && onzeKinderen().length === 0);
+
+    /*
+     * Annuleren terwijl de worker REKENT (zijn ffmpeg is al gelezen): 'stop'
+     * komt pas aan als de lus vrij is. Dan de noodrem: terminate() na
+     * STOP_NOODREM_MS. Er loopt op dat moment geen ffmpeg, dus ook geen zombie.
+     */
+    const acR = new AbortController();
+    const tR = Date.now();
+    const pR = maakOnset(lang, join(map, 'reken.bin'), { signal: acR.signal });
+    let zag = false, rekent = false;
+    for (let i = 0; i < 3000 && !rekent; i++) {
+      const k = onzeKinderen().some((x) => x.endsWith('ffmpeg'));
+      if (k) zag = true;
+      else if (zag) rekent = true;
+      if (!rekent) await wacht(10);
+    }
+    const tStop = Date.now();
+    acR.abort();
+    const rR = await pR;
+    const dR = Date.now() - tStop;
+    await wacht(300);
+    ok(`annuleren tijdens het rekenen (ffmpeg klaar na ${tStop - tR} ms): gestopt na ${dR} ms (noodrem ${STOP_NOODREM_MS} ms), niets over`,
+      rekent && rR.afgebroken === true && dR < STOP_NOODREM_MS + 1500 && onzeKinderen().length === 0);
+
+    // Zonder signal (tap-verfijning, achtergrond-heranalyse, onsets): ongewijzigd.
+    const g = await maakGrid(join(map, 'kort.bin'), on.envRate, on.tijdOffset, kort);
+    const v = await verfijnUitBestand(join(map, 'kort.bin'), on.envRate, 120, on.tijdOffset, { rond: 20, audio: kort });
+    const o = await maakOnsets(join(map, 'kort.bin'), on.envRate, on.tijdOffset);
+    ok(`zonder signal: grid (${g.grid?.stukken?.[0]?.bpm?.toFixed(1)} bpm), verfijning (${v.bpm?.toFixed(2)}) en onsets werken`,
+      g.ok && Math.abs(g.grid.stukken[0].bpm - 120) < 1 && v.ok && Math.abs(v.bpm - 120) < 0.5 && o.ok && o.tijden.length > 50);
+    // De worker luistert nu naar 'stop'; na zijn antwoord moet hij toch vanzelf stoppen,
+    // anders blijft er per analyse een thread hangen. Een los proces zonder
+    // process.exit() eindigt alleen als dat zo is.
+    // Als bestand, niet met -e: een worker erft de vlaggen van node, en --input-type mag daar niet.
+    const script = join(map, 'los.mjs');
+    writeFileSync(script, `const m = await import(${JSON.stringify(new URL('../server/analyze.js', import.meta.url).href)});\n`
+      + `const r = await m.maakOnsets(${JSON.stringify(join(map, 'kort.bin'))}, ${on.envRate}, ${on.tijdOffset});\nconsole.log(r.ok);\n`);
+    const tL = Date.now();
+    let los = '';
+    try { los = execFileSync(process.execPath, [script], { timeout: 15000 }).toString().trim(); } catch (err) { los = `hing of viel om: ${err.message.split('\n')[0]}`; }
+    ok(`een worker stopt vanzelf na zijn antwoord (los proces eindigt na ${Date.now() - tL} ms: ${los})`, los === 'true');
   }
 
   console.log('\nde pijplijn met een nep-yt-dlp: annuleren midden in de download');

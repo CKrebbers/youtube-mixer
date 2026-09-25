@@ -30,21 +30,38 @@ const SAMPLERATE = 48000;
  * werk, en een worker die omvalt neemt niets mee. De functies met `Hier` erachter
  * doen het echte werk en staan in `hier`, zodat de worker ze kan aanroepen.
  *
- * `signal` (een geannuleerde ingest): de worker wordt beëindigd. Zijn ffmpeg
- * leest dan in een gesloten pijp en stopt vanzelf. { afgebroken: true }.
+ * `signal` (een geannuleerde ingest): de worker krijgt 'stop', killt zijn
+ * eigen ffmpeg's, wacht tot ze echt weg zijn en stopt zelf. Pas dan
+ * { afgebroken: true }. NIET meteen terminate(): een ffmpeg hoort bij de
+ * event loop van de thread die hem startte, en alleen die roept waitpid aan.
+ * Een beëindigde worker liet elke ffmpeg als <defunct> onder de server staan
+ * tot die stopte (gemeten: 5× annuleren = 5 zombies). terminate() blijft de
+ * noodrem na STOP_NOODREM_MS: een worker die zo lang rekent zonder de lus
+ * vrij te geven (onsetEnvelope, analyseerGrid) heeft op dat moment geen
+ * ffmpeg meer lopen — die zijn allemaal gelezen vóór het rekenen.
+ *
+ * Zonder signal (tap-verfijning, achtergrond-heranalyse, onsets) verandert
+ * er niets: antwoord = klaar, en de worker stopt vanzelf.
  */
+export const STOP_NOODREM_MS = 2000;
+const GESTOPT = Object.freeze({ ok: false, fout: 'geannuleerd', afgebroken: true });
+
 function inWerker(taak, args, signal = null) {
   return new Promise((klaar) => {
-    let gemeld = false, w = null;
-    const stop = () => {
-      meld({ ok: false, fout: 'geannuleerd', afgebroken: true });
-      w?.terminate().catch(() => {});
-    };
+    let gemeld = false, w = null, stoppend = false, noodrem = null;
     const meld = (r) => {
       if (gemeld) return;
       gemeld = true;
+      clearTimeout(noodrem);
       signal?.removeEventListener('abort', stop);
       klaar(r);
+    };
+    const stop = () => {
+      if (stoppend || gemeld) return;
+      stoppend = true;
+      if (!w) { meld({ ...GESTOPT }); return; }
+      w.postMessage('stop');
+      noodrem = setTimeout(() => w.terminate().catch(() => {}), STOP_NOODREM_MS);
     };
     if (signal?.aborted) { stop(); return; }
     try {
@@ -54,9 +71,11 @@ function inWerker(taak, args, signal = null) {
       return;
     }
     signal?.addEventListener('abort', stop, { once: true });
-    w.once('message', meld);
-    w.once('error', (err) => meld({ ok: false, fout: `analyse viel om: ${err?.message || err}` }));
-    w.once('exit', (code) => meld({ ok: false, fout: `analyse stopte zonder antwoord (code ${code})` }));
+    // Na 'stop' telt alleen nog dat hij weg is: een antwoord dat net
+    // onderweg was, is van een opdracht die niet meer bestaat.
+    w.once('message', (r) => { if (!stoppend) meld(r); });
+    w.once('error', (err) => { if (!stoppend) meld({ ok: false, fout: `analyse viel om: ${err?.message || err}` }); });
+    w.once('exit', (code) => meld(stoppend ? { ...GESTOPT } : { ok: false, fout: `analyse stopte zonder antwoord (code ${code})` }));
   });
 }
 
@@ -112,6 +131,39 @@ export const ZEKER_VANAF = 0.65;
 /** Onder deze zekerheid: geen puls (de strook wordt rood/gestreept). */
 export const GEEN_PULS = 0.15;
 
+/*
+ * Elke ffmpeg van een analyse gaat via startFfmpeg(), zodat stopAnalyse()
+ * ze kan vinden. Dit is module-staat van de THREAD: in de praktijk van één
+ * analyse-worker (één opdracht per worker), nooit van de hoofdthread.
+ * Een nieuwe lezer (toonsoort, …) hoort hier ook doorheen, anders laat een
+ * geannuleerde ingest hem weer als zombie achter.
+ */
+const lopend = new Map();   // kind -> belofte die afgaat als het proces weg is (waitpid gedaan)
+let analyseGestopt = false;
+
+/** ffmpeg met stdout/stderr als pijp, of null als deze thread gestopt is. Gooit als spawn gooit. */
+function startFfmpeg(args) {
+  if (analyseGestopt) return null;
+  const kind = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  // 'exit' komt pas als libuv het proces heeft binnengehaald; 'error' als hij nooit startte.
+  lopend.set(kind, new Promise((weg) => { kind.once('exit', weg); kind.once('error', weg); })
+    .then(() => { lopend.delete(kind); }));
+  return kind;
+}
+
+/**
+ * Voor de worker, op 'stop': geen nieuwe ffmpeg meer, de lopende SIGKILL
+ * (ze lezen alleen; er valt niets netjes af te sluiten) en wachten tot ze
+ * binnengehaald zijn. Daarna mag de worker weg zonder zombies.
+ */
+export function stopAnalyse() {
+  analyseGestopt = true;
+  for (const kind of lopend.keys()) {
+    if (kind.exitCode === null && kind.signalCode === null) { try { kind.kill('SIGKILL'); } catch {} }
+  }
+  return Promise.all(lopend.values());
+}
+
 /**
  * Leest de audio als ruwe floats uit ffmpeg en rekent al lezend de peaks uit.
  * Streamend, want een halfuur stereo is 712 MB aan ruwe floats — dat wil je
@@ -121,14 +173,15 @@ function maakPeaksHier(audioBestand, doel, { perBucket = PER_BUCKET } = {}) {
   return new Promise((klaar) => {
     let kind;
     try {
-      kind = spawn('ffmpeg', [
+      kind = startFfmpeg([
         '-hide_banner', '-nostats', '-loglevel', 'error', '-i', audioBestand,
         '-f', 'f32le', '-acodec', 'pcm_f32le', '-ac', String(KANALEN), '-ar', String(SAMPLERATE), '-',
-      ], { stdio: ['ignore', 'pipe', 'pipe'] });
+      ]);
     } catch (err) {
       klaar({ ok: false, fout: String(err?.message || err) });
       return;
     }
+    if (!kind) { klaar({ ...GESTOPT }); return; }
 
     const uit = [];          // min/max per bucket, als we gaan
     let mn = 1, mx = -1;     // lopende min/max van de huidige bucket
@@ -205,10 +258,11 @@ function leesPcm(audioBestand, sampleRate, { van = null, duur = null } = {}) {
     let kind;
     const stuk = van === null ? [] : ['-ss', String(Math.max(0, van)), '-t', String(duur)];
     try {
-      kind = spawn('ffmpeg', ['-hide_banner', '-nostats', '-loglevel', 'error', ...stuk, '-i', audioBestand,
-        '-f', 'f32le', '-acodec', 'pcm_f32le', '-ac', '1', '-ar', String(sampleRate), '-'],
-        { stdio: ['ignore', 'pipe', 'pipe'] });
+      kind = startFfmpeg(['-hide_banner', '-nostats', '-loglevel', 'error', ...stuk, '-i', audioBestand,
+        '-f', 'f32le', '-acodec', 'pcm_f32le', '-ac', '1', '-ar', String(sampleRate), '-']);
     } catch { klaar(null); return; }
+    // Gestopt: geen audio, dus elke lezer valt netjes af ("kon de audio niet lezen").
+    if (!kind) { klaar(null); return; }
     const stukken = [];
     kind.stdout.on('data', (c) => stukken.push(c));
     kind.on('error', () => klaar(null));
