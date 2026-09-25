@@ -216,5 +216,41 @@ console.log('\nafval');
   besteB.gcs === 0 && besteB.bytes < DREMPEL + 16 * n);
 }
 
+// ---- 3. de rem (vinylstop): ook zonder afval ----------------------------------
+// Een remmend segment heeft een extra veld (rem: { a }) en een extra term in
+// positieOp, en dooft in zijn laatste stuk uit (remUit). Ook dat mag per blok
+// niets aanmaken. De berichten: dezelfde decks, maar elk segment remt, in
+// 0,1–2 s, zodat een venster remmen, uitdoven én stilstand bevat, in loops,
+// tegen het gat en voorbij het einde. Hierboven staat de gouden hash: die
+// gaat over segmenten zonder rem en is dus niet veranderd.
+
+console.log('\nrem');
+{
+  const remBerichten = (van, stappen, elke) => {
+    const lijst = maakBerichten(van, stappen, elke);
+    for (const ev of lijst) for (const { blok: b, event } of ev) {
+      const seg = event.data.seg;
+      seg.rem = { a: -seg.R / (0.1 + (b % 7) * 0.3) };
+    }
+    return lijst;
+  };
+  const w = maakDecks();
+  draai(w, 4000, remBerichten(0, 4000, 41));           // opwarmen, ook met de rem
+  const STAPPEN = 1500, DREMPEL = 1024;
+  const beter = (a, b) => !a || b.gcs < a.gcs || (b.gcs === a.gcs && b.bytes < a.bytes);
+  let beste = null, n = 0, pogingen = 0;
+  for (; pogingen < 30; pogingen++) {
+    const ber = remBerichten(w.blok, STAPPEN, 37);
+    n = ber.reduce((s, ev) => s + ev.length, 0);
+    const r = venster(w, STAPPEN, ber);
+    if (beter(beste, r)) beste = r;
+    if (r.gcs === 0 && r.bytes < DREMPEL + 16 * n) break;
+  }
+  console.log(`      ${n} remsegmenten: ${beste.bytes} bytes, ${beste.gcs} GC's (venster ${pogingen + 1})`);
+  ok(beste.gcs ? `remmende decks: ${beste.gcs} GC's in het schoonste venster (er is afval)`
+    : `remmende decks: ${(beste.bytes / n).toFixed(1)} bytes per bericht, geen GC`,
+  beste.gcs === 0 && beste.bytes < DREMPEL + 16 * n);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

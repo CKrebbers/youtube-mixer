@@ -9,17 +9,26 @@
  * formule op dezelfde audioklok niet. Regel 3, maar dan over een draadgrens.
  *
  * Het segment:
- *   { T, P, R, loop, speelt }
+ *   { T, P, R, loop, speelt, rem }
  *   "vanaf audiokloktijd T staat de positie op P en loopt hij met snelheid R"
+ *   rem = { a } (a < 0): hij REMT (vinylstop): positie = P + R·dt + a·dt²/2,
+ *   tot de snelheid R + a·dt op 0 staat; daarna staat hij stil. rem = null
+ *   (of ontbreekt): de gewone rechte lijn, bit voor bit zoals altijd.
  *
- * Elke wijziging (play, seek, pitch, loop) is een nieuw segment. Komt het
+ *   Waarom een object en geen getal `a` op het segment: net als `loop`. Een
+ *   getal-veld dat op sommige segmenten ontbreekt, laat V8 bij ELK lezen een
+ *   nieuw getal-object maken (de waarde moet dan "getal of undefined" zijn),
+ *   en dat was afval op de audiothread (gemeten: 260 bytes per blok). Een
+ *   object-veld lezen maakt niets aan, ook als het ontbreekt.
+ *
+ * Elke wijziging (play, seek, pitch, loop, rem) is een nieuw segment. Komt het
  * bericht een paar milliseconden te laat bij de worklet aan, dan rekent hij
  * de formule gewoon vanaf T door en zit hij meteen op de goede plek.
  *
- * Een nieuw soort beweging (een rem: de snelheid loopt terug naar 0) is een
- * extra veld op het segment en een extra term in positieOp, en nergens
- * anders: renderBlok vraagt elke positie aan positieOp (zie posities()).
- * Wat er dan nog meer mee moet staat bij positieOp.
+ * De rem zit in positieOp en nergens anders in het audiopad: renderBlok vraagt
+ * elke positie aan positieOp (zie posities()). Daarnaast rekent ctxTijdVan
+ * hem terug, zegt snelheidOp hoe snel het nu gaat (voor de video), en dooft
+ * remUit het geluid in het laatste stuk (zie REM_UIT).
  */
 
 export const PAGINA = 65536;           // frames per pagina, ~1,37 s op 48 kHz
@@ -27,24 +36,42 @@ export const KANALEN = 2;
 export const BYTES_PER_FRAME = 4;      // 16 bit stereo
 export const PAGINA_BYTES = PAGINA * BYTES_PER_FRAME;
 
-export const STIL = Object.freeze({ T: 0, P: 0, R: 1, loop: null, speelt: false });
+export const STIL = Object.freeze({ T: 0, P: 0, R: 1, loop: null, speelt: false, rem: null });
+
+/**
+ * Onder dit deel van de beginsnelheid dooft een rem uit, lineair tot stilte
+ * op het moment van stilstand. Tot dan klinkt hij vol: de toon zakt, dat is
+ * de rem. Het laatste stuk (bij 1 s remmen de laatste 250 ms, twee octaven
+ * en meer omlaag) zou anders een trage golf van volle sterkte zijn die op
+ * stilstand als een gelijkspanning blijft staan: een plof, en dan een tik
+ * als hij wegvalt. Een draaitafel doet hetzelfde vanzelf: een element geeft
+ * spanning naar snelheid.
+ */
+export const REM_UIT = 0.25;
 
 /**
  * Positie in tracktijd (seconden) op audiokloktijd t.
  *
- * Een versnelling (rem) komt in de regel met `p = ...`: P + (t - T) * R
- * wordt dan P + afgelegde weg met een snelheid die vanaf R terugloopt (en na
- * stilstand niet verder), vóór het vouwen in de loop. Dezelfde functie draait
- * op de hoofdthread (bron.js) en per frame in de worklet, dus beide zien de
- * rem meteen. Wat er dan nog meer mee moet: ctxTijdVan (het omgekeerde, nu
- * lineair), `vooruit` in renderBlok (rekent met |R| als bovengrens: klopt
- * zolang het alleen afremt), en test/renderblok.test.mjs (een segment zonder
- * rem moet bit voor bit dezelfde hash geven; houd de functie klein en zonder
- * objecten, anders is het audiopad niet meer afvalvrij).
+ * Met een rem (seg.rem.a < 0) loopt de snelheid lineair van R naar 0 en blijft
+ * de positie daarna staan, vóór het vouwen in de loop. Zonder rem precies
+ * de oude regel: een segment zonder rem geeft bit voor bit hetzelfde (de
+ * gouden hash in test/renderblok.test.mjs). Dezelfde functie draait op de
+ * hoofdthread (bron.js) en per frame in de worklet, dus beide zien de rem
+ * meteen. Houd hem klein en zonder objecten: hij wordt in posities()
+ * ingelijfd, en anders is het audiopad niet meer afvalvrij.
  */
 export function positieOp(seg, t) {
   if (!seg.speelt) return seg.P;
-  let p = seg.P + (t - seg.T) * seg.R;
+  let p;
+  const rem = seg.rem;
+  if (rem) {
+    // Remmen: na dt = -R/a staat hij stil, en daar blijft hij.
+    const a = rem.a;
+    let dt = t - seg.T;
+    const stil = -seg.R / a;
+    if (dt > stil) dt = stil;
+    p = seg.P + dt * (seg.R + 0.5 * a * dt);
+  } else p = seg.P + (t - seg.T) * seg.R;
   const loop = seg.loop;
   if (loop) {
     const len = loop.end - loop.start;
@@ -54,18 +81,47 @@ export function positieOp(seg, t) {
 }
 
 /**
+ * Hoe snel de positie loopt op audiokloktijd t, in tracktijd per seconde:
+ * R, of tijdens een rem wat daarvan over is (0 na stilstand). Niet voor het
+ * audiopad; de video volgt hiermee een rem zonder te springen.
+ */
+export function snelheidOp(seg, t) {
+  if (!seg.speelt) return 0;
+  if (!seg.rem) return seg.R;
+  return Math.max(0, Math.min(seg.R, seg.R + seg.rem.a * (t - seg.T)));
+}
+
+/** Wanneer een remmend segment stilstaat, op de audioklok. Null zonder rem. */
+export const remStil = (seg) => (seg.speelt && seg.rem ? seg.T - seg.R / seg.rem.a : null);
+
+/**
  * Wanneer passeert dit segment tracktijd x (voor het eerst na `nu`), op de
  * audioklok? Binnen een loop die al is rondgegaan telt de gevouwen positie:
  * rekenen vanaf P gaf dan een tijd in het verleden, en gate en sampler
- * vielen naast de tel.
+ * vielen naast de tel. Tijdens een rem: null als hij stilstaat voordat hij
+ * er is.
  */
 export function ctxTijdVan(seg, x, nu = seg.T) {
   if (!seg.speelt) return null;
   const pos = positieOp(seg, nu);
-  let t = nu + (x - pos) / seg.R;
   const loop = seg.loop;
-  if (loop && x < pos && x >= loop.start && loop.end > loop.start) t += (loop.end - loop.start) / seg.R;
-  return t;
+  const rond = loop && x < pos && x >= loop.start && loop.end > loop.start;
+  if (!seg.rem) {
+    let t = nu + (x - pos) / seg.R;
+    if (rond) t += (loop.end - loop.start) / seg.R;
+    return t;
+  }
+  // Remmen: de afstand s afleggen met snelheid v die met a afneemt, dus
+  // v·τ + a·τ²/2 = s. De kleinste wortel, in de vorm die niet wegvalt als a
+  // klein is: τ = 2s / (v + √(v² + 2as)). Onder de wortel negatief: hij
+  // staat eerder stil.
+  const s = x - pos + (rond ? loop.end - loop.start : 0);
+  if (s === 0) return nu;
+  const v = snelheidOp(seg, nu);
+  const d = v * v + 2 * seg.rem.a * s;
+  if (d < 0) return null;
+  const tau = (2 * s) / (v + Math.sqrt(d));
+  return Number.isFinite(tau) ? nu + tau : null;
 }
 
 // ---- WAV ------------------------------------------------------------------
@@ -373,16 +429,38 @@ function leesSegment(seg, paginas, S, tot) {
     } else soort[i] = GEWOON;
   }
   leesKubisch(paginas, S.f, S.l, S.r, soort, GEWOON, tot);
-  if (!metNaad) return;
-  leesKubisch(paginas, S.g, S.gl, S.gr, soort, NAAD, tot);
+  if (metNaad) {
+    leesKubisch(paginas, S.g, S.gl, S.gr, soort, NAAD, tot);
+    for (let i = 0; i < tot; i++) {
+      if (soort[i] !== NAAD) continue;
+      // Equal-power: de twee stukken zijn niet gelijk, dus een lineaire fade
+      // zou in het midden een dipje geven.
+      const w = S.w[i];
+      const a = Math.cos(w * Math.PI / 2), b = Math.sin(w * Math.PI / 2);
+      S.l[i] = S.l[i] * a + S.gl[i] * b;
+      S.r[i] = S.r[i] * a + S.gr[i] * b;
+    }
+  }
+  if (seg.rem) remUit(seg, S, tot);
+}
+
+/**
+ * Een remmend segment dooft uit zodra de snelheid onder REM_UIT van de
+ * beginsnelheid komt, lineair tot 0 op het moment van stilstand (zie
+ * REM_UIT). Zelfde klok als posities(): frame i valt op t0 + i / ctxRate.
+ * Na stilstand is het stil; de positie staat dan vast en de hoofdthread
+ * maakt er even later een pauze van.
+ */
+function remUit(seg, S, tot) {
+  const t0 = klad.t0, ctxRate = klad.ctxRate;
+  const k = seg.rem.a / seg.R;             // per seconde, negatief
+  const L = S.l, R = S.r;
   for (let i = 0; i < tot; i++) {
-    if (soort[i] !== NAAD) continue;
-    // Equal-power: de twee stukken zijn niet gelijk, dus een lineaire fade
-    // zou in het midden een dipje geven.
-    const w = S.w[i];
-    const a = Math.cos(w * Math.PI / 2), b = Math.sin(w * Math.PI / 2);
-    S.l[i] = S.l[i] * a + S.gl[i] * b;
-    S.r[i] = S.r[i] * a + S.gr[i] * b;
+    // Wat er van de beginsnelheid over is (1 → 0), gedeeld door REM_UIT.
+    let g = (1 + k * (t0 + i / ctxRate - seg.T)) / REM_UIT;
+    if (g > 1) g = 1;
+    else if (!(g > 0)) g = 0;
+    L[i] *= g; R[i] *= g;
   }
 }
 
@@ -403,9 +481,9 @@ function leesSegment(seg, paginas, S, tot) {
  *
  * In drie stappen, zonder afval (zie boven): per segment de posities
  * (positieOp) en de samples (leesSegment), daarna per frame gat en wissel.
- * `vooruit` rekent met seg.R als bovengrens van de snelheid; komt er een
- * versnelling bij (rem, zie positieOp), dan blijft |R| de bovengrens zolang
- * het deck alleen afremt.
+ * `vooruit` rekent met seg.R als bovengrens van de snelheid. Tijdens een rem
+ * (zie positieOp) gaat het langzamer dan R, dus kijkt hij dan iets verder
+ * vooruit dan nodig: aan de veilige kant.
  *
  * Geef in een lus die elk blok draait `staat` mee en hergebruik het object
  * met de argumenten (zoals stream-lezer.js): een nieuw object per blok is
