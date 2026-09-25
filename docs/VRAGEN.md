@@ -305,7 +305,8 @@ Beamer:
 - [ ] **J15. Dubbele menging in het randgeval "opname begon zonder los venster, daarna open"?** 💬 Nu: dan mengen beide tijdelijk. **Advies:** laten (het alternatief bevriest de beamer weer met het hoofdtabblad naar achteren).
 - [ ] **J16. De vertraging tussen canvas en beamer meten?** 🎛 Telefooncamera op 240 fps, beamer en luidspreker in beeld, een klik met een witte flits. **Advies:** eerst meten, pas daarna het beeld een vaste voorsprong geven (nu aangenomen: 16–33 ms).
 - [ ] **J17. Melding als een nummer zonder video op de beamer staat?** 💬 Nu: alleen een ontbrekend of kapot bestand is een fout. **Advies:** geen melding.
-<!-- TODO hoofdsessie: vragen uit beamer-inloop (rest-beamer-inloop.md). -->
+- [ ] **J27. Inloop: hoe snel neemt het losse venster over?** 👀 Nu: als alle zichtbare video's 0,3 s binnen 50 ms van het geluid lopen, uiterlijk na 20 s; tot dan toont het het beeld van het hoofdvenster ("beamer loopt in"). Gemeten onder belasting: acht tracks 8–9,4 s. **Advies:** zo laten; kijk op je M1 hoe lang "beamer loopt in" blijft staan.
+- [ ] **J28. Tijdens de inloop mengen beide vensters (bij acht tracks zestien video's).** 🎛 Hapert het hoofdvenster in die seconden? **Advies:** eerst kijken; zo ja, dan is de bovengrens van 20 s korter zetten één getal.
 
 Handelingenlog:
 - [ ] **J18. Log altijd aan, vanaf het openen?** 💬 Nu: met ○ log en vanzelf met elke opname. Altijd aan kost ~1–8 MB per uur in `opnames/`, en dan is ook een onverwachte fout na te spelen. **Advies:** ja, als keuze die onthouden wordt.
@@ -321,4 +322,11 @@ Mapping en beatgrid:
 - [ ] **J24. Rack-knoppen 5–8 (video-effecten) op "endless" zetten?** 🎛 Koppelen raadt een CC altijd als absoluut (soft-takeover); de andere ringknoppen staan op endless (meteen doordraaien vanaf de ring). **Advies:** ja, in je verschil.
 - [ ] **J25. Bij een nieuwe standaardmapping zien WELKE regels erbij kwamen?** 💬 Nu alleen de melding "de standaardmapping is bijgewerkt". **Advies:** nog niet (dan moet het verschil per regel onthouden wat de standaard had).
 - [ ] **J26. ½ op tel 2 of 4 schuift de "1" een tel op.** 🎛 Moet ½ de "1" houden? **Advies:** ja (`docs/BEATGRID.md`, open punt; eerst jouw ja).
-<!-- TODO hoofdsessie: vragen uit grid-past (rest-grid-past.md) en uit de APC-indeling (voorstel A). -->
+
+APC-indeling (voorstel A):
+- [ ] **J29. Modus klank op Shift + scene 5?** 🎛 Scene 5 blijft één druk "loop weg"; in klank brandt hij magenta, dus daar zie je niet of er een loop loopt (Clip Stop per kolom wel). **Advies:** zo laten; ▲ ▼ werkt ook.
+- [ ] **J30. Zijn de nieuwe kleuren op het apparaat uit elkaar te houden?** 🎛 Magenta 53/54 (klank), donkerrood 6 (kill: open), donkeroranje 10 (rem: speelt), donkergroen 22 (op de maat: speelt) tegen donkergrijs (stil); Pan/Sends/User knipperen op de tel. **Advies:** eerst kijken; een kleur wisselen is één regel in `feedback.js`.
+- [ ] **J31. Rij 5 (op de maat) als de track al speelt: donkergroen of uit?** 👀 De APC-indeling koos "uit" (rij 5 toont alleen wat je nog kunt inzetten). Sinds shift+Q op een spelende track pauzeert, volgt het lampje de read: fel = wacht, donkergroen = speelt (drukken = pauze), donkergrijs = stil. **Advies:** zo laten: drukken doet iets, dus het lampje brandt.
+- [ ] **J32. Stop All Clips = rem van de focus-track?** 💬 Die knop heeft geen lampje op de APC. **Advies:** zo laten.
+- [ ] **J33. Met `?vormen=1` in het mapje vorm: shift + Bank ◀ ▶ = beatjump-lengte, niet de vormlaag.** 💬 Een shift-regel gaat overal voor het open mapje; Bank ◀ ▶ zonder shift kiest daar de laag. **Advies:** zo laten.
+<!-- TODO hoofdsessie: vragen uit grid-past (rest-grid-past.md). -->

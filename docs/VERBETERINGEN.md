@@ -53,8 +53,8 @@ vonden en bewust niet herstelden.
   kill hoog/mid/laag vasthouden, rij 4 rem, rij 5 op de maat starten); rechts voor de focus-track
   Bank ◀ ▶ = beatjump (shift = lengte ½/×2), Pan/Sends/User = loop in/out/reloop, Lock = quantize,
   Stop All Clips = rem; shift + nummer in het 2×2-blok = op de maat starten. Keylock krijgt later
-  Bank. Dub-worp en galm vasthouden hebben nog geen plek.
-  <!-- TODO hoofdsessie: voorstel A gebouwd? commit of branch erbij. -->
+  Bank. Dub-worp en galm vasthouden hebben nog geen plek. — Voorstel A gebouwd 25 sep
+  (`spoor3/apc-indeling`, samengevoegd in `integratie-r4b` 31c1cb3; 374 regels, `eerder`).
 - Video: ~~mengen naar het losse venster~~ — gedaan 25 sep (`docs/BEAMER.md`); ~~beeldverhouding~~
   — gedaan 24 sep (`passen.js`); ~~requestVideoFrameCallback~~ — gemeten en NIET gebruikt (25 sep,
   `docs/BEAMER.md`); ~~foutmelding bij ontbrekende video~~ — gedaan 25 sep (`video/fouten.js`).
@@ -86,4 +86,10 @@ vonden en bewust niet herstelden.
 - Audiopad: het stabiele venster van `renderblok.test.mjs` dekt niet elk pad (exact, gat,
   overgang alleen in het venster met berichten).
 - Beatgrid: "zeker" zegt niet dat het grid past, ook buiten de tweede kans (docs/BEATGRID.md).
-  <!-- TODO hoofdsessie: grid-past (eenGridPast op elk stuk) en beamer-inloop hier afvinken of aanvullen. -->
+  <!-- TODO hoofdsessie: grid-past (eenGridPast op elk stuk) hier afvinken of aanvullen. -->
+- ~~Beamer: na openen seconden lang ontbrekende of verschoven tracks in het losse venster
+  (controle, bevinding 4)~~ — inloop gebouwd 25 sep (`spoor3/beamer-inloop-2`, `docs/BEAMER.md`);
+  de seekduur telt tot `seeking` false is. Open: wordt het hoofdtabblad verborgen tijdens de
+  inloop, dan neemt het losse venster meteen over met video's die nog inlopen.
+- APC-indeling: in de modus klank toont scene 5 niet of er een loop loopt (hij brandt magenta:
+  klank open); Clip Stop per kolom toont het wel.

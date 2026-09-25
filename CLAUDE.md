@@ -109,7 +109,7 @@ src/
                     puls.js         effecten op de tel: vorm, maatgever() zoals je hem hoort
                     passen.js       beeldverhouding per laag: passend (randen) of vullen. Puur.
                     lagen.js        beeldlagen over de mix: welke tellen mee, uniforms. Puur.
-                    beamer.js       wie mengt: hoofdvenster of los venster (de beamer). Puur.
+                    beamer.js       wie mengt: hoofdvenster of los venster (de beamer), en de inloop. Puur.
                     beamer-venster.js video.html: het losse venster mengt ZELF (eigen <video>'s, WebGL, lus)
                     fouten.js       video ontbreekt of laadt niet: tekst en wachtregel. Puur.
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
@@ -128,13 +128,14 @@ server/             draait apart: `node server/index.js`
   opname.js         opnames: WAV dat groeit, kop herstellen na een crash
   handelingen.js    handelingenlogs naast de opnames: stukken op hun plek, lijst, lezen
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
-                    headless/ (kijk.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs, vorm-maat.mjs,
-                    vormen-plaat.mjs, beamer.mjs: headless zonder MIDI), bench/ (renderblok.mjs: CPU en afval),
+                    headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
+                    CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
-  apc40mk2.json     standaardmapping (data, geen code)
+  apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
   generic.json      leeg startpunt
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
 racks/
@@ -261,11 +262,15 @@ docs/
   - Quantize is ÉÉN schakelaar voor de hele engine (`transport.quantize`): zetten
     snapt naar de tel; een hotcue-SPRONG is fasebehoudend en meteen
     (`metFaseVan`), en de HOTCUE beslist of een loop blijft (`_naarHotcue`), niet
-    het landingspunt. Alleen op een zeker grid. Scherm: een Q in de hoek van Lock
-    (absoluut in de cel: een extra grid-item verschuift de APC-knoppen).
+    het landingspunt. Alleen op een zeker grid. Op de APC en het scherm = Lock,
+    met zijn stand. Doet Lock in het open mapje iets anders (grid-modus: slot),
+    dan staat er een Q in de hoek van Lock (`herbereken()` in spiegel.js;
+    absoluut in de cel: een extra grid-item verschuift de APC-knoppen).
   - Starten op de maat (`track.N.play.quant`): het geluid begint op het volgende
     maatbegin van de maatgever en de tel van de track bij het startpunt valt
-    erop; zonder maatgever meteen; op een spelende of wachtende track = pauze.
+    erop; zonder maatgever meteen. Op een actieve track als play (`togglePlay`):
+    speelt = pauze, wacht = annuleren, remt = los. Lampje (read): 1 = wacht
+    (fel groen), 0,5 = speelt (donkergroen), 0 = stil (donkergrijs), null = leeg.
     GEPLAND STARTEN (`bron.start(p, { op })`): de bron speelt al (`deck.wacht`)
     maar klinkt pas vanaf `op`, sample-exact; de worklet krijgt `gepland: true`
     (zonder klinkt vóór T wat er vóór het startpunt staat); `ctxTijdVan` rekent
@@ -275,9 +280,11 @@ docs/
     korte loop elke ronde op), en sync doet dan alleen het tempo.
   - Toetsen: R/T en Y/U beatjump (shift: lengte), G/C en H/N loop in/out
     (shift: reloop), shift+Q/P op de maat, 6 quantize.
-    <!-- TODO hoofdsessie: APC-indeling voorstel A zoals gebouwd (grid-modus 5
-    "klank", Bank ◀ ▶ beatjump, Pan/Sends/User loop in/out/reloop, Lock
-    quantize, Stop All Clips rem, shift + nummer = op de maat). -->
+  - Op de APC (voorstel A, 25 sep, `docs/APC40.md`), rechts voor de focus-track:
+    Bank ◀ ▶ beatjump (shift: lengte ½/×2), Pan/Sends/User loop in/out/reloop,
+    Lock quantize, Stop All Clips rem (geen LED op het apparaat); shift + nummer
+    (2×2) = op de maat. Bank (0x67) blijft vrij voor keylock (VRAGEN I4). Kill,
+    rem en op de maat per kolom: de grid-modus klank (MAPJES).
 - REM (vinylstop, 25 sep): `track.N.brake` remt in `track.N.brake.time`
   (SECONDEN 0,1–5, standaard 1: een gebaar van de draaitafel, ook zonder grid)
   lineair tot stilstand, daarna een gewone pauze. Nog eens drukken of play = los;
@@ -505,7 +512,10 @@ docs/
   `computePeaks()`; `analyze.test.mjs` vergelijkt ze bit voor bit.
 - Video is SLAAF van de audio (`src/video/`, fase 4). Klein verschil: een
   fractie sneller of trager (hooguit 10%); boven 150 ms: springen, naar waar
-  de audio is ALS de seek klaar is (gemeten seekduur per video). Het doel is
+  de audio is ALS de seek klaar is (seekduur per video, gemeten in `_volg` tot
+  het eerste beeld met `seeking` weer false; NIET met het `seeked`-event: dat
+  komt onder belasting na de volgende sprong, seekduur zakte naar ~0 en de
+  video's bleven springen). Het doel is
   wat je HOORT: deckpositie min uitgangsvertraging, op `deck.snelheid` (ook bend
   en rem). Zichtbaarheid = fader × crossfader; wat onzichtbaar is of op de maat
   wacht wordt gepauzeerd en niet geüpload. requestVideoFrameCallback is gemeten en
@@ -519,9 +529,16 @@ docs/
   `neemOver()` alles over, ook DEZELFDE beeldlaag-objecten; de bus blijft bij het
   hoofdvenster. Open en zichtbaar = het hoofdvenster mengt niet en toont het
   beamerbeeld via captureStream (`wieMengt`); verborgen = het paneel mengt weer.
-  Nieuwe video's in het losse venster lopen eerst in (onder zware belasting acht
-  tracks ~6 s uit de pas). <!-- TODO hoofdsessie: beamer-inloop
-  (rest-beamer-inloop.md): wat er gebouwd is en de regel die eruit volgt. -->
+  INLOOP (`beamer.js`): gaat het losse venster open of komt het terug van
+  verborgen terwijl het hoofdvenster mengde, dan blijft DAT mengen en zet het
+  elk beeld meteen op het losse canvas (`toonBeeld`, in dezelfde taak: een
+  WebGL-canvas zonder preserveDrawingBuffer is leeg zodra hij getoond is;
+  captureStream liep onder belasting tot 2,9 s weg). Het losse venster stuurt
+  en uploadt intussen zijn eigen video's zonder te mengen (`loopIn`: een
+  `<video>` die niemand uitleest krijgt geen vers beeld) en neemt over als alle
+  zichtbare 0,3 s binnen 50 ms lopen (`inDePas`), of na 20 s. Hoofdtabblad
+  verborgen = meteen zelf mengen. Gemeten: acht tracks 8–9,4 s inloop, elk
+  beeld binnen 150 ms, overname naadloos.
   Headless: `tools/headless/beamer.mjs` (Chrome for Testing `--headless=new`:
   alleen daar wordt een tabblad echt verborgen).
 - De video's hebben een sleutelbeeld per 8,3 s (zoals YouTube ze levert).
@@ -770,15 +787,20 @@ docs/
   een mapje — één kolom = één track (filter boven, fader onder, play/sync/A-B
   in het 2×2-blok, cue onder shift), rechts de strip van de focus-track in DJ-mixervolgorde.
   Alleen twee groepen: `device` (strip ↔ rack, één oplichtende knop) en `grid`
-  (hotcues/loops/sampler/video op de scene-knoppen, elk een eigen kleur).
+  (hotcues/loops/sampler/video/klank op de scene-knoppen, elk een eigen kleur).
   Kort drukken = vast, vasthouden ≥ 400 ms vanuit een ander mapje = gluren.
   Kiesknoppen zijn actions (`layer.<groep>.<knop>`, `layer.grid.next/prev`). Koppelen komt in het mapje
   dat open staat, en met shift vast in de shift-laag. De LED's volgen
   `mapping.actieveRegels()`; wat bij een dicht mapje hoort gaat uit, en het
   ringtype wisselt mee. `mapje-balk.js` toont bij elke wissel wat de knoppen
-  doen. De standaardmapping (291 regels op 23 sep) is gegenereerd volgens de
+  doen. De standaardmapping (374 regels sinds voorstel A, 25 sep) volgt de
   tabel in `docs/APC40.md`; aanpassen mag gewoon in de JSON of met koppelen.
-  <!-- TODO hoofdsessie: aantal regels en de grid-modus 5 "klank" na voorstel A. -->
+  Grid-modus KLANK (magenta): Shift + scene 5 (scene 5 zelf blijft één druk
+  "loop weg") of ▲ ▼. Per kolom rij 1–3 kill hoog/mid/laag zolang je drukt
+  (`.hold`; shift + pad = schakelaar), rij 4 rem, rij 5 op de maat. In klank
+  brandt scene 5 magenta via `led.lees` (lees bepaalt ook KLEUR en tel). Kill
+  fel rood = weg, donkerrood = open; rem fel oranje = remt, donker = speelt. De
+  spiegel licht op zoals de LED (`lamp`/`lampOm` = led.lees/led.invert).
   `apc.html` is een interactieve kaart: één APC met de knoppen op hun ECHTE
   plek (uitgemeten op de Features-tekening, User Guide p4: apparaat x 70–1040,
   y 392–970 → procenten). Schakelaars voor grid-modus, strip/rack en shift;
@@ -797,6 +819,13 @@ docs/
   gelezen is; kwam de standaard niet binnen, dan die sessie niets bewaren. Code
   van vóór 25 sep leest een verschil als volledige mapping (APC dood): niet
   terugdraaien zonder eerst een export terug te zetten.
+  Een oude VOLLEDIGE kopie wordt afgezet tegen de standaard waar hij het
+  dichtst bij ligt (`verschilVanKopie`): de huidige of een voorganger uit
+  `eerder` in het standaardbestand (verschil met de huidige regels, op
+  vingerafdruk gecontroleerd). Zonder voorganger gold alles wat de standaard
+  erbij kreeg als "door jou weggehaald". **Na elke wijziging aan
+  `mappings/apc40mk2.json`: `node tools/mapping/eerder.mjs`** (vóór de commit;
+  idempotent; `mapping.test` faalt anders).
 - De LED-laag leest de MAPPING, niet de engine. Koppel je een pad aan iets
   anders, dan verhuist zijn lampje vanzelf mee. Er is bewust geen tweede tabel.
 - LED's in drie standen uit `read()` (VRAGEN B4): `null` = UIT (niets te doen,
@@ -873,7 +902,9 @@ docs/
     device-groep; bestaat alleen met de vlag: `voegVormMapjeToe()` vóór
     bindLagen). Daarin device knobs 1–6 = vorm, 7 = dekking, 8 = reageren op
     de mix (`video.layer.react`), Device ◀ ▶ = vorm, On/Off = laag aan/uit,
-    Bank ◀ ▶ = laag 1/2. De videomodus op scene 4 is NIET veranderd.
+    Bank ◀ ▶ = laag 1/2 (het open mapje wint van beatjump; shift + Bank blijft
+    de beatjump-lengte: een shift-regel gaat voor het mapje, bewust). De
+    videomodus op scene 4 is NIET veranderd.
   - Die regels staan in een FRAGMENT (`mappings/apc40mk2-vormen.json`) dat
     `Mapping.voegToe()` erbij zet: het gaat niet mee in `toJSON()`, dus niet in
     Clay's bewaarde mapping, en overleeft het laden van een andere mapping.
@@ -1053,5 +1084,5 @@ de luistertest A3 en I1–I3. Wat een bouwer niet mag missen:
   Scene 1 tel 1 hier (snapt ±30 ms naar een onset, vanaf wat je HOORT: positie min
   uitgangsvertraging × rate) · 2 ×2 · 3 ½ · 4 halve tel · 5 nieuw stuk · Nudge ±5 ms (shift ±1) ·
   Cue level bpm ±0,01 (shift ±0,1; track.N.grid.bpm lineair over 40–300) · Lock = slot (alleen in
-  grid-modus: erbuiten zou een losse druk ongemerkt het slot eraf halen). Wat de grid-modus niet
+  grid-modus, het open mapje wint; erbuiten is Lock quantize). Wat de grid-modus niet
   definieert blijft werken. regel.led.lees laat een lampje de stand van een andere action tonen.

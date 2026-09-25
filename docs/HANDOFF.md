@@ -54,8 +54,8 @@ Lees in deze volgorde:
    hoofdtabblad naar achteren; foutmelding als de video van een nummer ontbreekt.
 6. **Handelingenlog** (20): ○ log naast de opname (en vanzelf bij elke opname),
    ↺ om terug te spelen, ook "opnieuw renderen" (● dan speel).
-7. **Transport** (16): beatjump, loop in/out/reloop, quantize voor alle tracks
-   (Q in de hoek van Lock), starten op de maat.
+7. **Transport** (16): beatjump, loop in/out/reloop, quantize voor alle tracks,
+   starten op de maat.
 8. **Klank** (16): EQ-kill per band, rem (vinylstop), en de maatgever wisselt pas
    na 3 dB en 250 ms (geen geflipper meer tussen badge, puls en vormen).
    Effectwissel en kill als hellingen: geen tik meer in Chrome.
@@ -67,9 +67,15 @@ Lees in deze volgorde:
 11. **Beatgrid** (24): het 156-bpm-stuk van het album komt terug (na ↻), elk stuk
     heeft zijn eigen "1", en de "1" knippert langer. Verfijnen na "tel 1 hier" is
     gemeten en niet gebouwd (niet beter op jouw muziek).
-12. <!-- TODO hoofdsessie: APC-indeling voorstel A (grid-modus 5 "klank", Bank ◀ ▶
-    beatjump, Pan/Sends/User loop in/out/reloop, Lock quantize, Stop All Clips rem,
-    shift + nummer op de maat), beamer-inloop en grid-past: één regel per stuk. -->
+12. **APC-indeling** (voorstel A, 16): grid-modus 5 "klank" (Shift + scene 5 of
+    ▲ ▼: per kolom kill hoog/mid/laag zolang je drukt, rem, op de maat), rechts
+    Bank ◀ ▶ beatjump, Pan/Sends/User loop in/out/reloop, Lock quantize, Stop All
+    Clips rem, shift + nummer op de maat. 291 → 374 regels; je oude kopie wordt
+    tegen de juiste standaard omgezet (`eerder`), dus alles komt op je APC.
+13. **Beamer-inloop** (18): het losse venster toont eerst het beeld van het
+    hoofdvenster en mengt pas zelf als zijn video's in de pas lopen (acht tracks
+    ~8–9 s); sprongen landen weer op tijd (seekduur klopt nu onder belasting).
+14. <!-- TODO hoofdsessie: grid-past: één regel. -->
 
 ### Wat Clay nu doet
 Server is herstart (hoofdsessie). Dan: je tabblad herladen
@@ -77,7 +83,10 @@ Server is herstart (hoofdsessie). Dan: je tabblad herladen
 VARVE-tabblad met de APC aangesloten.
 
 Bij het eerste herladen hoort er één melding te komen: "je eigen mapping staat nu
-als verschil met de standaard (4 eigen regels)"; in MIDI → lijst staat "4 eigen".
+als verschil met de standaard (4 eigen regels) … — en de bijgewerkte standaard
+staat er al op"; in MIDI → lijst staat "4 eigen" en 374 regels. Nagerekend met je
+echte kopie (GET, niets gepost): 374 regels, je 4 rack-knoppen (device knobs 5–8
+in het rack = video-effecten), niets weggehaald.
 
 Proeflijst (wat niet klopt: noteren, dan eerst repareren):
 1. **Toonsoort:** in de kolomkop onder de bpm (bv. `9B G`), groot in de focuskop.
@@ -93,16 +102,24 @@ Proeflijst (wat niet klopt: noteren, dan eerst repareren):
    laadknoppen.
 4. **Beamer:** "los venster" naar de beamer, dubbelklik (volledig scherm). Zet in
    het hoofdvenster een ander tabblad vooraan: het beeld moet doorlopen. Ook een
-   video-opname zo proberen. Let op de eerste seconden na openen met veel
-   video's (inloop).
+   video-opname zo proberen. Open het losse venster met een paar video's aan:
+   de statusregel zegt eerst "beamer loopt in" (het beeld van het hoofdvenster),
+   na een paar seconden "beamer": er mag niets verspringen of ontbreken.
 5. **Handelingenlog:** ○ log aan, een paar minuten spelen, uit; ↺ → speel: de set
    komt terug. Of ● opnemen (neemt vanzelf een log mee) en die terugspelen.
 6. **Transport en klank op het toetsenbord:** R/T beatjump (shift+R/T: lengte),
-   G loop in, C loop out, shift+G reloop, 6 quantize (let op de Q op Lock),
+   G loop in, C loop out, shift+G reloop, 6 quantize (Lock licht op),
    shift+Q start een tweede track op de maat van de eerste, ` (links van 1) rem.
    Rechterhand: Y/U, H/N, shift+H, shift+P, =. Kill heeft geen toetsen.
-   **Op de APC:** <!-- TODO hoofdsessie: waar beatjump, loop in/out, quantize,
-   op de maat, kill (grid-modus 5) en rem zitten na voorstel A. -->
+   **Op de APC** (voor de track met focus): Bank ◀ ▶ beatjump (shift + Bank:
+   lengte ½/×2), Pan loop in, Sends loop out, User reloop, Lock quantize, Stop
+   All Clips rem; shift + nummer (2×2) = op de maat. **Modus klank:** Shift +
+   scene 5 (of ▲ ▼), scene 5 brandt magenta. Per kolom: rij 1–3 kill hoog/mid/laag
+   zolang je drukt (shift + pad = vast), rij 4 rem, rij 5 op de maat. Kijk of de
+   kleuren uit elkaar te houden zijn: magenta 53/54, donkerrood (kill open),
+   donkeroranje (rem: speelt), donkergroen (op de maat: speelt) tegen donkergrijs
+   (stil), en of Pan/Sends/User op de tel knipperen. In de grid-modus (Shift +
+   Metronome) is Lock nog steeds het slot. `apc.html` toont alles met uitleg.
 7. **Vormen:** `?vormen=1`, videopaneel (V), Detail View, Device ◀ ▶ door alle 26:
    rond in het midden, Harmonograaf breed, Zonnebloem tot in de hoeken, niets
    uitgerekt. REAGEER-bron op "klap (maat)" of "tel": volgt de MAAT-badge.
@@ -131,6 +148,13 @@ zware belasting van de andere agenten.
   de vertraging tussen canvas en scherm (aanname 16–33 ms).
 - **Handelingenlog:** een echt uur; MIDI en LED's tijdens terugspelen; terugspelen
   met echte library-nummers; mogelijk een korte stilte bij de start (uit de code).
+- **APC-indeling:** niets op het apparaat: de nieuwe kleuren, het knipperen van
+  Pan/Sends/User, de kill-drukknop met echte aanslagen; de omzetting van je kopie
+  alleen nagerekend (nep-fetch), de melding niet gezien. Met `?vormen=1` en het
+  mapje vorm open is shift + Bank ◀ ▶ de beatjump-lengte, niet de vormlaag (bewust).
+- **Beamer-inloop:** een echte beamer, de M1 zonder andere belasting (hoe lang de
+  inloop daar duurt), zestien echte YouTube-video's tegelijk tijdens de inloop,
+  inloop na herladen en na een geminimaliseerd los venster met acht tracks.
 - **Transport, rem, kill:** niets gehoord (beatjump in de maat, starten op de maat,
   het uitdoven van de rem, kill op zware bas); de ~9 ms extra vertraging van kill
   en effectwissel niet op gevoel; de maatgever-wissel in een achtergrondtab.

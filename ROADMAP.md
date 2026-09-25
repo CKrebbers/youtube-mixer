@@ -68,15 +68,18 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     - APC: Clay 25 sep, keylock krijgt later Bank (I4).
 16. ~~Spoor C, DJ-functies~~ — gedaan 25 sep: beatjump, loop in/out/reloop,
     quantize, starten op de maat, EQ-kill, rem, hysterese op de maatgever.
-    APC-plekken: voorstel A (Clay 25 sep).
-    <!-- TODO hoofdsessie: APC-indeling voorstel A gebouwd? dan hier afvinken. -->
+    ~~APC-plekken: voorstel A~~ — gebouwd 25 sep (`docs/APC40.md`): grid-modus
+    klank (kill/rem/op de maat per kolom), Bank ◀ ▶ beatjump, Pan/Sends/User
+    loop, Lock quantize, Stop All rem; 374 regels, `eerder` voor oude kopieën.
+    Nog door Clay op het apparaat te proberen (kleuren).
 17. Stems, kiesbaar per nummer (H2):
     - standaard twee, vier op verzoek;
     - splitsen bij de ingest;
     - stem-fader vóór de EQ;
     - eventueel op de Omarchy-machine (H3).
 18. ~~Video mengen in het losse venster~~ — gedaan 25 sep: het losse venster mengt
-    zelf (`docs/BEAMER.md`). <!-- TODO hoofdsessie: beamer-inloop. -->
+    zelf (`docs/BEAMER.md`), met inloop: tot zijn video's in de pas lopen toont
+    het het beeld van het hoofdvenster; seekduur klopt onder belasting.
 19. Luistertest A2 (streamen, loops, seek).
 20. ~~Spoor D: handelingenlog + terugspelen~~ — gedaan 25 sep (`docs/HANDELINGENLOG.md`).
 21. ~~Library: meer dan 200 nummers, sorteren, hotcues per nummer,
