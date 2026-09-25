@@ -252,12 +252,36 @@ export async function controleerTooling() {
 }
 
 /**
+ * Een LIVESTREAM heeft geen einde: yt-dlp neemt hem op (ffmpeg als
+ * downloader) tot de uitzending stopt of onze time-out van 30 minuten
+ * afgaat, en dan mislukt de opdracht alsnog — terwijl de wachtrij al die tijd
+ * stilstaat. Dus meteen na de metadata weigeren, met de reden.
+ * yt-dlp's live_status: 'is_live' (nu), 'is_upcoming' (aangekondigd), en
+ * 'was_live'/'post_live'/'not_live'. Een afgelopen uitzending is gewoon een
+ * video (was_live) en mag. Oudere extractors zetten alleen is_live.
+ * Geeft de reden, of null als het geen (lopende of komende) livestream is.
+ */
+export function liveReden(j) {
+  const status = j?.live_status;
+  if (status === 'is_upcoming') {
+    return 'dit is een aangekondigde livestream die nog niet begonnen is — '
+      + 'binnenhalen kan pas als de uitzending voorbij is en als video online staat';
+  }
+  if (status === 'is_live' || (j?.is_live === true && !status)) {
+    return 'dit is een livestream die nu loopt — die heeft geen einde om binnen te halen. '
+      + 'Probeer het opnieuw als de uitzending voorbij is en als video online staat';
+  }
+  return null;
+}
+
+/**
  * Haalt alleen de metadata op. Snel, en het valideert de URL voordat we gaan downloaden.
  *
  * Een PLAYLIST (of kanaal, album, profiel: voor yt-dlp allemaal hetzelfde)
  * wordt geweigerd: downloaden zou elk nummer erin binnenhalen, want
  * --no-playlist geldt alleen voor een link die video én lijst is.
  * --flat-playlist houdt die vraag kort: hij loopt de lijst niet af.
+ * Een lopende of aangekondigde livestream ook (liveReden).
  */
 export async function metadata(url, { signal } = {}) {
   const r = await run(ytdlp(), [
@@ -273,6 +297,8 @@ export async function metadata(url, { signal } = {}) {
         fout: `dit is een playlist${n ? ` (${n} nummers)` : ''}${j.title ? ` "${String(j.title).slice(0, 80)}"` : ''}`
           + ' — plak de link van één nummer' };
     }
+    const live = liveReden(j);
+    if (live) return { ok: false, live: true, fout: j.title ? `"${String(j.title).slice(0, 80)}": ${live}` : live };
     // TikTok geeft als titel "TikTok video #<id>"; de beschrijving zegt meer.
     const kaal = /^TikTok video #\d+$/.test(j.title || '');
     const beschrijving = String(j.description || '').replace(/\s+/g, ' ').trim().slice(0, 120);
@@ -451,6 +477,8 @@ export async function ingest(url, { mediaDir = 'media', video = true, onStap = (
   if (signal?.aborted) return alsGeannuleerd({ ok: false }, signal);
   onStap({ stap: 'metadata', tekst: 'metadata ophalen' });
   const meta = await metadata(link, { signal });
+  // Een livestream is geen TikTok-probleem: de titel kan woorden bevatten waar tiktokHint op aanslaat.
+  if (meta.live) return alsGeannuleerd({ ok: false, fout: meta.fout, live: true }, signal);
   if (!meta.ok) return alsGeannuleerd({ ok: false, fout: metHint(meta.fout), ...(meta.playlist ? { playlist: true } : {}) }, signal);
 
   // De id wordt een mapnaam. yt-dlp maakt hem bij sommige sites uit de URL

@@ -379,6 +379,34 @@ try {
     ok(`playlist uit de metadata: geweigerd ("${r4.fout}")`, !r4.ok && r4.playlist === true && /playlist \(3 nummers\)/.test(r4.fout));
     const r5 = await ing.ingest('http://127.0.0.1:9/kapot', { mediaDir: media });
     ok('een kapotte link: de foutregel van yt-dlp', !r5.ok && /kapotte link/.test(r5.fout));
+
+    // Livestreams: meteen na de metadata geweigerd, nooit een download (die
+    // liep anders tot de time-out van 30 min en mislukte dan alsnog).
+    for (const [link, wat, reden] of [['nu-live', 'een lopende livestream (live_status is_live)', /livestream die nu loopt/],
+      ['straks-live', 'een aangekondigde livestream (is_upcoming)', /nog niet begonnen/],
+      ['oud-live', 'alleen is_live: true (zonder live_status)', /livestream die nu loopt/]]) {
+      const voor = regels().length;
+      const tL = Date.now();
+      const rl = await ing.ingest(`http://127.0.0.1:9/${link}`, { mediaDir: media });
+      const wat2 = regels().slice(voor).map((x) => x.wat);
+      ok(`${wat}: geweigerd na ${Date.now() - tL} ms, zonder download ("${rl.fout}")`,
+        !rl.ok && rl.live === true && reden.test(rl.fout) && /Nep /.test(rl.fout) && wat2.join() === 'meta');
+    }
+    const voorWas = regels().length;
+    const rw2 = await ing.ingest('http://127.0.0.1:9/was-live', { mediaDir: media, video: false });
+    ok(`een afgelopen livestream (was_live) is gewoon een video: binnengehaald (${rw2.fout ?? rw2.track?.id})`,
+      rw2.ok && rw2.track.id === 'generic-was-live' && regels().slice(voorWas).some((x) => x.wat === 'download'));
+    ok('liveReden: alleen is_live en is_upcoming; was_live, post_live en not_live niet',
+      !!ing.liveReden({ live_status: 'is_live' }) && !!ing.liveReden({ live_status: 'is_upcoming' }) && !!ing.liveReden({ is_live: true })
+      && ['was_live', 'post_live', 'not_live'].every((s) => ing.liveReden({ live_status: s, is_live: false }) === null)
+      && ing.liveReden({ is_live: true, live_status: 'was_live' }) === null && ing.liveReden({}) === null && ing.liveReden(null) === null);
+    // In de wachtrij: mislukt met de reden, en de volgende begint meteen.
+    const qL = new Wachtrij();
+    const oL = qL.voegToe({ sleutel: 'l', werk: (onStap, signal) => ing.ingest('http://127.0.0.1:9/nu-live', { mediaDir: media, onStap, signal }) }).opdracht;
+    const oN = qL.voegToe({ sleutel: 'n', werk: async () => ({ ok: true, track: track('N') }) }).opdracht;
+    await qL.stil();
+    ok(`in de wachtrij: "mislukt" met de reden, live: true, en de volgende loopt (${oL.tekst.slice(0, 60)}…)`,
+      oL.status === 'mislukt' && oL.live === true && /livestream/.test(oL.fout) && oN.status === 'klaar');
     ok('nergens een werkmap achtergebleven', werkmappen().length === 0);
     delete process.env.VARVE_YTDLP;
   }

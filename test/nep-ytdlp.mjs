@@ -14,6 +14,11 @@
 //   ...kind...   start tijdens de download een kind dat ONZE stdout/stderr erft,
 //                zoals yt-dlp ffmpeg als downloader start (livestream, HLS)
 //   ...doof...   negeert SIGINT (zoals een yt-dlp die in C-code vastzit)
+//   ...nu-live...    een livestream die loopt (is_live, live_status 'is_live');
+//                    downloaden duurt dan "eeuwig" (500 stappen), zoals een echte
+//   ...straks-live...  een aangekondigde livestream (live_status 'is_upcoming')
+//   ...oud-live...   alleen is_live: true, zonder live_status (oudere extractors)
+//   ...was-live...   een afgelopen livestream (was_live): gewoon een video
 //   watch?v=<id> een YouTube-nummer (extractor Youtube)
 // Een videodownload (-f bv/b) faalt altijd: video is bonus, de audio blijft.
 //
@@ -62,9 +67,15 @@ async function nep(args) {
     const u = new URL(url);
     const v = u.searchParams.get('v');
     const id = v || (u.pathname.split('/').pop() || 'x').replace(/\.[^.]*$/, '').replace(/[^\w-]/g, '');
+    // Zoals yt-dlp 2026.08.19 het zet: een lopende stream heeft geen duur.
+    const live = url.includes('nu-live') ? { is_live: true, was_live: false, live_status: 'is_live', duration: null }
+      : url.includes('straks-live') ? { is_live: false, was_live: false, live_status: 'is_upcoming', duration: null }
+        : url.includes('oud-live') ? { is_live: true, duration: null }
+          : url.includes('was-live') ? { is_live: false, was_live: true, live_status: 'was_live' }
+            : { is_live: false, was_live: false, live_status: 'not_live' };
     console.log(JSON.stringify({
       id, extractor_key: v ? 'Youtube' : 'Generic', title: `Nep ${id}`, uploader: 'nep',
-      duration: 20, webpage_url: v ? `https://www.youtube.com/watch?v=${v}` : url,
+      duration: 20, webpage_url: v ? `https://www.youtube.com/watch?v=${v}` : url, ...live,
     }));
     return;
   }
@@ -78,7 +89,7 @@ async function nep(args) {
   }
   log('download', { url });
   const traag = url.includes('traag');
-  const stappen = traag ? 25 : 5;
+  const stappen = /nu-live|oud-live/.test(url) ? 500 : traag ? 25 : 5;
   const ms = traag ? Number(process.env.NEP_TRAAG_MS) || 200 : Number(process.env.NEP_MS) || 30;
   const i = args.indexOf('--progress-template');
   const sjabloon = i >= 0 ? args[i + 1].replace(/^download:/, '') : null;

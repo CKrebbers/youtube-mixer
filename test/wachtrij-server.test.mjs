@@ -150,6 +150,17 @@ try {
   const lp = await post({ url: 'http://127.0.0.1:9/een-lijst' });
   const olp = await wachtOp(lp.j.id, afgelopen);
   ok(`een playlist die alleen yt-dlp herkent: mislukt met reden ("${olp?.fout}")`, olp?.status === 'mislukt' && olp.playlist === true && /3 nummers/.test(olp.fout));
+  // Een livestream: na de metadata mislukt met de reden, zonder download, en
+  // de link erachter hoeft niet op een eindeloze opname te wachten.
+  const lv = await post({ url: 'http://127.0.0.1:9/nu-live' });
+  const naLive = await post({ url: 'http://127.0.0.1:9/nummer-f' });
+  const tLv = Date.now();
+  const olv = await wachtOp(lv.j.id, afgelopen, 10000);
+  ok(`een lopende livestream: mislukt na ${Date.now() - tLv} ms met reden ("${olv?.fout}")`,
+    olv?.status === 'mislukt' && olv.live === true && /livestream die nu loopt/.test(olv.fout));
+  ok('  yt-dlp heeft hem niet gedownload', !regels().some((x) => x.wat === 'download' && x.url.includes('nu-live')));
+  const onf = await wachtOp(naLive.j.id, afgelopen);
+  ok(`  de link erachter loopt gewoon (${onf?.status})`, onf?.status === 'klaar');
   const wlp = await weg(lp.j.id);
   ok('een afgelopen opdracht wegklikken: uit de lijst', wlp.status === 200 && wlp.j.weg === true && !(await opdracht(lp.j.id)));
   ok('een onbekende opdracht: 404', (await weg('bestaatniet')).status === 404);
