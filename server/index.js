@@ -511,7 +511,7 @@ const server = createServer(async (req, res) => {
       if (richting !== null && richting !== 'op' && richting !== 'af') return json(res, 400, { fout: 'richting is op of af' });
       const heel = (k) => (q.has(k) ? Number(q.get(k)) : null);
       const van = heel('van') ?? 0, aantal = heel('aantal');
-      if (!(Number.isInteger(van) && van >= 0)) return json(res, 400, { fout: 'van is een rijnummer vanaf 0' });
+      if (!(Number.isSafeInteger(van) && van >= 0)) return json(res, 400, { fout: 'van is een rijnummer vanaf 0' });
       if (aantal !== null && !(Number.isInteger(aantal) && aantal >= 1 && aantal <= MAX_PER_PAGINA)) {
         return json(res, 400, { fout: `aantal is 1..${MAX_PER_PAGINA}` });
       }

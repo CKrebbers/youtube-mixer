@@ -320,6 +320,8 @@ lib.sluit();
   ok('% en _ zoeken letterlijk (geen jokers)', lg.aantalTracks({ zoek: '100%' }) === 1 && lg.aantalTracks({ zoek: '%' }) === 1
     && lg.aantalTracks({ zoek: 'a_b' }) === 1 && lg.aantalTracks({ zoek: '_' }) === 1);
   ok('voorbij het einde: een lege pagina', lg.tracks({ sorteer: 'titel', van: 10000, aantal: 100 }).length === 0);
+  ok('ook ver voorbij 2^31 (niet in 32 bits rondgerekend naar rij 0 of 1)',
+    lg.tracks({ sorteer: 'titel', van: 2 ** 31, aantal: 5 }).length === 0 && lg.tracks({ sorteer: 'titel', van: 2 ** 32 + 1, aantal: 5 }).length === 0);
   let sortFout = false;
   try { lg.tracks({ sorteer: 'titel; DROP TABLE tracks' }); } catch { sortFout = true; }
   ok('onbekende sortering gooit (en komt niet in de SQL)', sortFout && lg.aantalTracks() === N + 2);

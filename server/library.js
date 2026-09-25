@@ -330,8 +330,11 @@ export class Library {
     // sleepte elke brede rij door de sorteerder, ook de 4900 die je overslaat.
     // Het gelijkspel (toegevoegd, rowid) maakt de volgorde vast: anders kan
     // dezelfde rij op twee pagina's staan, of op geen.
+    // Hele getallen vanaf 0, maar NIET met `| 0`: dat rekent in 32 bits, en
+    // van = 2^32 + 1 werd dan rij 1 in plaats van een lege pagina.
+    const heel = (x) => Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.trunc(Number(x)) || 0));
     const ids = this._q(`SELECT rowid AS r FROM tracks ${waar} ORDER BY ${volgorde(sorteer, richting)} LIMIT ? OFFSET ?`)
-      .all(...args, Math.max(0, aantal | 0), Math.max(0, van | 0))
+      .all(...args, heel(aantal), heel(van))
       .map((x) => x.r);
     if (!ids.length) return [];
     const perId = new Map(this.db.prepare(`${RIJ} WHERE t.rowid IN (${ids.map(() => '?').join(',')})`)

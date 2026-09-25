@@ -202,6 +202,9 @@ try {
     fouten.push((await lijst(q)).status);
   }
   ok(`onzin in de vraag: 400 (${fouten.join(' ')})`, fouten.every((c) => c === 400));
+  const ver = await lijst('?sorteer=titel&van=4294967297&aantal=5');
+  ok('van ver voorbij het einde (2^32 + 1): een lege pagina, niet rij 1', ver.status === 200 && ver.tracks.length === 0 && ver.totaal === TOTAAL);
+  ok('van groter dan een veilig geheel getal: 400', (await lijst('?van=1e20&aantal=5')).status === 400);
   ok('en de library staat er nog', (await lijst('?aantal=1')).totaal === TOTAAL);
 
   console.log('\nhotcues per nummer');
