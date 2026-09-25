@@ -1,32 +1,36 @@
 // De zware Vormmachines (gs, cl, ln, ph, sp): zonder browser, met een
-// nep-canvas. Elk systeem draait, is herhaalbaar, luistert naar g.kwaliteit,
-// en blijft binnen een beeld (16 ms) per stap.
+// nep-canvas van 640 × 360 (16:9, zoals laag.js). Elk systeem draait, is
+// herhaalbaar, vult het doek, luistert naar g.kwaliteit, en blijft binnen een
+// beeld (16 ms) per stap.
 // Draai met: node test/vormen-zwaar.test.mjs
 import { readFileSync } from 'node:fs';
 
-const { SYSTEMEN_ZWAAR, kwaliteit, HALF_ONDER, SP_MAX_OMVAL, sinT } = await import('../src/vormen/systemen-zwaar.js');
+const { SYSTEMEN_ZWAAR, kwaliteit, HALF_ONDER, SP_MAX_OMVAL, ROOSTER, sinT } = await import('../src/vormen/systemen-zwaar.js');
 const { draaiKnoppen, SYSTEMEN } = await import('../src/vormen/systemen.js');
-const { LUTS, maakRng } = await import('../src/vormen/hulp.js');
+const { LUTS, maakRng, maten, midden } = await import('../src/vormen/hulp.js');
+const { LAAG_BREEDTE, LAAG_HOOGTE } = await import('../src/vormen/laag.js');
 
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
 
 // ---- nep-canvas: elke tekenaanroep telt, niets tekent (zoals vormen.test) --
+// drawImage bewaart zijn argumenten: zo is te zien WAAR een rooster landt.
 function maakCanvas(w, h) {
-  const tel = { n: 0 };
+  const tel = { n: 0 }, getekend = [];
   const ctx = new Proxy({
     createImageData: (b, hh) => ({ data: new Uint8ClampedArray(b * hh * 4) }),
-    tel,
+    drawImage: (...a) => { tel.n++; getekend.push(a); },
+    tel, getekend,
   }, {
     get(t, k) { if (k in t) return t[k]; return () => { tel.n++; }; },
     set(t, k, v) { t[k] = v; return true; },
   });
-  return { width: w, height: h, getContext: () => ctx, tel };
+  return { width: w, height: h, getContext: () => ctx, tel, getekend };
 }
-/** Een g zoals VormLaag.zetSysteem hem bouwt, op S = 640 (de maat uit de meting). */
-function maakG(sys, { zaad = 7, q, S = 640 } = {}) {
-  const canvas = maakCanvas(S, S);
-  const g = { ctx: canvas.getContext('2d'), S, D: S / 320, t: 0, pal: sys.pal, L: LUTS[sys.pal], r: maakRng(zaad), maakCanvas, canvas };
+/** Een g zoals VormLaag.zetSysteem hem bouwt: 640 × 360, W/H/D uit maten(). */
+function maakG(sys, { zaad = 7, q, W = LAAG_BREEDTE, H = LAAG_HOOGTE } = {}) {
+  const canvas = maakCanvas(W, H);
+  const g = { ctx: canvas.getContext('2d'), ...maten(W, H), t: 0, pal: sys.pal, L: LUTS[sys.pal], r: maakRng(zaad), maakCanvas, canvas };
   if (q !== undefined) g.kwaliteit = q;
   return g;
 }
@@ -63,6 +67,8 @@ console.log('de bestanden');
   ok('systemen-zwaar.js kent geen DOM, geen eigen klok en geen Math.random', !/\bdocument\b|\bwindow\b|performance\.now|Math\.random|Path2D/.test(bron));
   const imports = [...bron.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]);
   ok('importeert alleen uit ./hulp.js', imports.length >= 1 && imports.every((i) => i === './hulp.js'));
+  // g.S (verouderd, = g.H) niet als g.S en niet uitgepakt als { S } = g.
+  ok('16:9: gebruikt g.S niet meer', !/\bg\.S\b/.test(bron) && !/\{[^}=]*\bS\b[^}=]*\}\s*=\s*g\b/.test(bron));
   ok('vijf systemen: gs, cl, ln, ph, sp', SYSTEMEN_ZWAAR.map((s) => s.id).sort().join() === 'cl,gs,ln,ph,sp');
   ok('ze staan in SYSTEMEN, en geen id komt twee keer voor', SYSTEMEN_ZWAAR.every((s) => SYSTEMEN.includes(s)) && new Set(SYSTEMEN.map((s) => s.id)).size === SYSTEMEN.length);
   ok('elk systeem heeft naam, palet, knoppen, init en step', SYSTEMEN_ZWAAR.every((s) => s.naam && LUTS[s.pal] && s.knobs.length && typeof s.init === 'function' && typeof s.step === 'function'));
@@ -106,6 +112,103 @@ for (const sys of SYSTEMEN_ZWAAR) {
     dk.length >= 1 && dk.length <= 6 && dk.every((k) => !k.sel && !k.re));
 }
 
+console.log('16:9: het hele doek, vierkante cellen');
+{
+  const W = LAAG_BREEDTE, H = LAAG_HOOGTE, vak = midden({ W, H }).vak;
+  const vierkant = (nx, ny) => Math.abs((W / nx) / (H / ny) - 1) < 0.01;
+  // Waar het rooster op het doek landt: het laatste drawImage van een stap.
+  for (const sys of SYSTEMEN_ZWAAR) {
+    const r = start(sys);
+    r.stap(3);
+    const [, x, y, b, h] = r.g.canvas.getekend.at(-1) ?? [];
+    if (sys.id === 'cl') ok(`cl: het vierkante histogram landt in het middenvak (${x}, ${y}, ${b} × ${h}), de vorm heel in beeld`, x === vak.x && y === vak.y && b === vak.b && h === vak.h);
+    else ok(`${sys.id}: het rooster beslaat het hele doek (${x}, ${y}, ${b} × ${h})`, x === 0 && y === 0 && b === W && h === H);
+  }
+  // gs en ln: nx × ny met vierkante cellen, evenveel als het oude n × n.
+  for (const id of ['gs', 'ln']) {
+    const n = ROOSTER[id], { vol, half } = start(ID[id]).s;
+    ok(`${id}: ${vol.nx} × ${vol.ny} met vierkante cellen, even, en de halve maat ${half.nx} × ${half.ny} ook vierkant`,
+      vierkant(vol.nx, vol.ny) && vierkant(half.nx, half.ny) && vol.nx % 2 === 0 && vol.ny % 2 === 0 && vol.nx > vol.ny * 1.7);
+    ok(`${id}: evenveel cellen als het oude ${n}² (${vol.nx * vol.ny} tegen ${n * n}), dus dezelfde rekentijd`, Math.abs(vol.nx * vol.ny / (n * n) - 1) < 0.02);
+  }
+  // ln: de kernel klopt op het halve rooster, ook bij een oneven straal.
+  const straal = (c) => { let som = 0; for (let k = 0; k < c.off.length; k++) { const dy = Math.round(c.off[k] / c.Px), dx = c.off[k] - dy * c.Px; som += c.w[k] * Math.hypot(dx, dy); } return som; };
+  for (const R of [7, 10, 13]) {
+    const { vol, half } = start(ID.ln, { p: { R } }).s;
+    const a = straal(vol), b = straal(half);
+    ok(`ln: kernelstraal ${R} -> op de halve maat ${half.R}; gewogen straal ${a.toFixed(2)} -> ${b.toFixed(2)} cel, de helft (±3%)`,
+      vol.R === R && half.R === R / 2 && Math.abs(a / b / 2 - 1) < 0.03 && Math.abs(vol.w.reduce((x, y) => x + y, 0) - 1) < 1e-5);
+  }
+  // gs: zaaien per as (x 0,95 is rechts op het brede rooster).
+  {
+    const r = start(ID.gs), c = r.s.cur, i = ((0.5 * c.ny) | 0) * c.nx + ((0.95 * c.nx) | 0);
+    c.v[i] = 0;
+    ID.gs.pointer.call(ID.gs, r.s, r.p, 0.95, 0.5, r.g);
+    ok('gs: pointer per as: (0,95; 0,5) zaait rechts op het brede rooster', c.v[i] >= 0.25);
+  }
+  // ph: deeltjes houden schaal en snelheid t.o.v. de hoogte; rekentijd hooguit × W/H.
+  {
+    const r = start(ID.ph), { nx, ny, n, ax, ay } = r.s;
+    ok(`ph: spoorveld ${nx} × ${ny}, cellen van g.H / ${ROOSTER.ph} (als op het oude vierkant van 160), vierkant`, ny === ROOSTER.ph && vierkant(nx, ny));
+    ok(`ph: evenveel agents per cel als 5000 op 160² (${n} op ${nx * ny})`, Math.abs(n / (nx * ny) / (5000 / 25600) - 1) < 0.01);
+    ok(`ph: rekentijd groeit hooguit met de verhouding van de oppervlaktes (${(nx * ny / 25600).toFixed(2)}× cellen, ${(n / 5000).toFixed(2)}× agents, grens ${(W / H).toFixed(2)})`,
+      nx * ny / 25600 <= W / H * 1.01 && n / 5000 <= W / H * 1.01);
+    let sx = 0, sy = 0, rmax = 0;
+    for (let i = 0; i < n; i++) { sx += ax[i]; sy += ay[i]; rmax = Math.max(rmax, Math.hypot(ax[i] - nx / 2, ay[i] - ny / 2)); }
+    ok(`ph: de agents beginnen in een schijf rond het midden (${(sx / n / nx).toFixed(2)}, ${(sy / n / ny).toFixed(2)}), straal op de korte zijde`,
+      Math.abs(sx / n / nx - 0.5) < 0.01 && Math.abs(sy / n / ny - 0.5) < 0.01 && rmax <= 0.32 * ny + 1e-3);
+  }
+  // cl: de vorm blijft heel: de rand van het histogram blijft leeg.
+  {
+    const r = start(ID.cl);
+    r.stap(120);
+    const { N, h } = r.s, rand = Math.floor(N * 0.02);
+    let buiten = 0, rijen = 0;
+    for (let y = 0; y < N; y++) {
+      let rij = 0;
+      for (let x = 0; x < N; x++) { if (!h[y * N + x]) continue; rij = 1; if (x < rand || x >= N - rand || y < rand || y >= N - rand) buiten++; }
+      rijen += rij;
+    }
+    ok(`cl: niets in de buitenste 2% van het histogram (heel in beeld), en hij beslaat ${(rijen / N * 100).toFixed(0)}% van de hoogte`, buiten === 0 && rijen > N * 0.4);
+  }
+  // sp: oneven maten, symmetrisch, en "vol" pas aan de zijkant.
+  {
+    const r = start(ID.sp), { nx, ny } = r.s, a = r.s.a;
+    ok(`sp: ${nx} × ${ny}, oneven (exact midden), vierkante cellen van ~4 pixels`, nx % 2 === 1 && ny % 2 === 1 && vierkant(nx, ny) && Math.abs(W / nx - 4) < 0.1);
+    ok(`sp: minder cellen dan het oude 129² (${nx * ny}): de lawine is begrensd, zo is hij sneller vol`, nx * ny < 129 * 129);
+    let bij = 0, sym = true, stappen = 0;
+    for (let i = 0; i < 600 && !r.s.done; i++) {
+      r.stap(1); stappen++;
+      if (r.s.sn || r.s.done) continue;
+      bij++;
+      for (let y = 0; y < ny && sym; y++) for (let x = 0; x < nx; x++) if (a[y * nx + x] !== a[y * nx + nx - 1 - x] || a[y * nx + x] !== a[(ny - 1 - y) * nx + x]) { sym = false; break; }
+    }
+    ok(`sp: waar hij bijgelopen is (${bij}×) is de mandala spiegelsymmetrisch, links-rechts en boven-onder`, bij > 0 && sym);
+    let zij = false, boven = false, onder = false;
+    for (let y = 0; y < ny; y++) if (a[y * nx + 1] || a[y * nx + nx - 2]) zij = true;
+    for (let x = 0; x < nx; x++) { if (a[x]) boven = true; if (a[(ny - 1) * nx + x]) onder = true; }
+    ok(`sp: "vol" na ${(stappen / 60).toFixed(1)} s, als de hoop de zijkant raakt; boven- en onderrand zijn dan al bereikt (massa ${r.s.o.massa.toFixed(2)})`,
+      r.s.done > 0 && zij && boven && onder && stappen / 60 < 4 && r.s.o.massa > 0.5);
+  }
+  // sp: de andere plekken liggen symmetrisch op het brede rooster.
+  for (const [pl, naam] of [[1, 'vier punten'], [2, 'diagonaal']]) {
+    const r = start(ID.sp, { p: { pl } }), { nx, ny, a, pts } = r.s;
+    let bij = 0, sym = true, stappen = 0;
+    for (let i = 0; i < 900 && !r.s.done; i++) {
+      r.stap(1); stappen++;
+      if (r.s.sn || r.s.done) continue;
+      bij++;
+      for (let j = 0; j < a.length && sym; j++) {
+        const x = j % nx, y = (j / nx) | 0;
+        if (pl === 1 ? a[j] !== a[y * nx + nx - 1 - x] || a[j] !== a[(ny - 1 - y) * nx + x] : a[j] !== a[a.length - 1 - j]) sym = false;
+      }
+    }
+    const binnen = pts.every(([x, y]) => x > 0 && x < nx - 1 && y > 0 && y < ny - 1);
+    ok(`sp (${naam}): ${pts.length} plekken op het brede rooster, ${pl === 1 ? 'spiegelsymmetrisch' : 'puntsymmetrisch'} waar hij bijliep (${bij}×), vol na ${(stappen / 60).toFixed(1)} s`,
+      binnen && bij > 0 && sym && r.s.done > 0 && getallen(r.s).every(Number.isFinite));
+  }
+}
+
 console.log('g.kwaliteit');
 {
   ok('ontbreekt = 1, geklemd op 0,25..1', kwaliteit({}) === 1 && kwaliteit({ kwaliteit: 0.1 }) === 0.25 && kwaliteit({ kwaliteit: 3 }) === 1 && kwaliteit({ kwaliteit: NaN }) === 1 && kwaliteit({ kwaliteit: 0.5 }) === 0.5);
@@ -125,8 +228,8 @@ console.log('g.kwaliteit');
     const vol = r.s.cur;
     r.g.kwaliteit = 0.25; r.stap(1);
     const half = r.s.cur;
-    const nVol = vol.n ?? vol.N, nHalf = half.n ?? half.N;
-    ok(`${id}: onder ${HALF_ONDER} rekent hij op de halve maat (${nVol} -> ${nHalf})`, nHalf * 2 === nVol);
+    ok(`${id}: onder ${HALF_ONDER} rekent hij op de halve maat (${vol.nx} × ${vol.ny} -> ${half.nx} × ${half.ny})`,
+      half !== vol && half.nx * 2 === vol.nx && half.ny * 2 === vol.ny);
     const voor = id === 'gs' ? r.s.o.dekking : r.s.o.massa;
     r.stap(120);
     const na = id === 'gs' ? r.s.o.dekking : r.s.o.massa;
@@ -157,7 +260,7 @@ console.log('g.kwaliteit');
     const x0 = r.s.ax.slice(), y0 = r.s.ay.slice();
     r.stap(1);
     const n = Math.round(r.s.n * 0.25);
-    const d = (i) => { let dx = Math.abs(r.s.ax[i] - x0[i]), dy = Math.abs(r.s.ay[i] - y0[i]); dx = Math.min(dx, 160 - dx); dy = Math.min(dy, 160 - dy); return Math.hypot(dx, dy); };
+    const d = (i) => { let dx = Math.abs(r.s.ax[i] - x0[i]), dy = Math.abs(r.s.ay[i] - y0[i]); dx = Math.min(dx, r.s.nx - dx); dy = Math.min(dy, r.s.ny - dy); return Math.hypot(dx, dy); };
     ok(`ph: op 0,25 lopen ${n} van de ${r.s.n} agents, even snel`, Math.abs(d(0) - 1) < 1e-3 && Math.abs(d(n - 1) - 1) < 1e-3 && r.s.ax[n + 5] === x0[n + 5]);
   }
   // cl: sinus uit de tabel, over het hele bereik dat de attractor gebruikt.
@@ -187,26 +290,26 @@ console.log('g.kwaliteit');
 
 console.log('zandhoop: begrensd, en toch dezelfde vorm');
 {
-  // Referentie: het origineel, met de onbegrensde lus.
-  const N = 129, c = N >> 1;
-  const ref = new Uint32Array(N * N);
+  // Referentie: het origineel, met de onbegrensde lus, op hetzelfde rooster.
+  const GPF = 600, r = start(ID.sp, { q: 0.25, p: { gpf: GPF } });
+  const NX = r.s.nx, NY = r.s.ny, c = (NY >> 1) * NX + (NX >> 1);
+  const ref = new Uint32Array(NX * NY);
   const legOrigineel = (add) => {
     const a = ref, st = [];
-    a[c * N + c] += add; st.push(c * N + c);
+    a[c] += add; st.push(c);
     while (st.length) {
       const i = st.pop(), v = a[i];
       if (v < 4) continue;
       const q = v >> 2; a[i] = v & 3;
-      const x = i % N, y = (i / N) | 0;
+      const x = i % NX, y = (i / NX) | 0;
       if (x > 0) { a[i - 1] += q; if (a[i - 1] >= 4) st.push(i - 1); }
-      if (x < N - 1) { a[i + 1] += q; if (a[i + 1] >= 4) st.push(i + 1); }
-      if (y > 0) { a[i - N] += q; if (a[i - N] >= 4) st.push(i - N); }
-      if (y < N - 1) { a[i + N] += q; if (a[i + N] >= 4) st.push(i + N); }
+      if (x < NX - 1) { a[i + 1] += q; if (a[i + 1] >= 4) st.push(i + 1); }
+      if (y > 0) { a[i - NX] += q; if (a[i - NX] >= 4) st.push(i - NX); }
+      if (y < NY - 1) { a[i + NX] += q; if (a[i + NX] >= 4) st.push(i + NX); }
     }
   };
   // Het origineel krijgt de korrels pas als we vergelijken, allemaal tegelijk:
   // de stapel is abels, dus de uitkomst is dezelfde, en het scheelt rekenen.
-  const GPF = 600, r = start(ID.sp, { q: 0.25, p: { gpf: GPF } });
   const max = Math.round(SP_MAX_OMVAL * 0.25);
   let stappen = 0, achter = 0, vergeleken = 0, gelijk = true, meest = 0, open = 0;
   for (let i = 0; i < 300 && !r.s.done; i++) {
@@ -219,7 +322,7 @@ console.log('zandhoop: begrensd, en toch dezelfde vorm');
   }
   ok(`nooit meer dan ${max} omvallers per stap op kwaliteit 0,25 (meest ${meest}; de lawine liep ${achter} van de ${stappen} stappen achter)`, meest <= max && meest > 0 && achter > 0);
   ok(`waar hij bijgelopen is (${vergeleken}×), is de stapel precies die van het origineel (abels)`, vergeleken > 0 && gelijk);
-  ok('de stapel met achterstand past altijd (één plek per cel)', r.s.sn <= N * N);
+  ok('de stapel met achterstand past altijd (één plek per cel)', r.s.sn <= NX * NY);
 
   const r2 = start(ID.sp);
   r2.stap(10);
@@ -228,7 +331,7 @@ console.log('zandhoop: begrensd, en toch dezelfde vorm');
   ok('terug in de tijd na "vol": hij begint opnieuw in plaats van eeuwig te wachten', r2.s.done === 0);
 }
 
-console.log('tijd per stap (S = 640, zonder echt tekenen: een ondergrens)');
+console.log('tijd per stap (640 × 360, zonder echt tekenen: een ondergrens)');
 {
   const meet = (sys, q, n = 200) => {
     const r = start(sys, { q });
