@@ -42,6 +42,15 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   `mapping.handle`), tekent 60 beelden en zet schermafdrukken in `tools/headless/uit/`
   (niet in git). Let op: in headless rekent WebGL in software (swiftshader); snelheid
   zegt hier niets.
+- `beamer.mjs` — het losse venster (de beamer, docs/BEAMER.md): mengt het zelf, en
+  loopt het beeld door als het hoofdtabblad VERBORGEN is. Gebruikt de volledige Chrome
+  for Testing met `--headless=new` (alleen daar wordt een tabblad echt verborgen) en
+  WebGL op Metal (`VARVE_KIJK_GL=swiftshader` voor de CPU). Maakt met ffmpeg een
+  testvideo (vier gekleurde kwarten + een schuivend wit blok), haalt die door de echte
+  upload en ingest van een eigen server, en meet uit de plek van het blok hoe ver het
+  beeld op het canvas van het geluid af zit. MIDI eruit vóór ELKE pagina (ook het
+  losse venster). `VARVE_WORTEL=<map>` draait de beeldcontrole op andere (oude) code.
+  Op een drukke machine: `VARVE_KIJK_POORT` en `VARVE_KIJK_DEBUG` zetten.
 
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen

@@ -521,6 +521,13 @@ export class VideoMixer {
     return this.gelaagd;
   }
 
+  /*
+   * Bijsturen op video.currentTime, niet op requestVideoFrameCallback: gemeten
+   * (tools/headless/beamer.mjs, docs/BEAMER.md) loopt het mediaTime dat rVFC
+   * meldt ~13 ms ACHTER op het beeld dat texImage2D werkelijk uploadt, en
+   * currentTime zit er binnen ~4 ms op. Sturen op rVFC maakte de fout op het
+   * canvas groter (|11,5| i.p.v. |8,4| ms; 8,3 is het minimum bij 30 fps).
+   */
   _volg(laag, deck, vertraging) {
     const v = laag.video;
     const r = synchroniseer({
