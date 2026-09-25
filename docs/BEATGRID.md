@@ -178,7 +178,13 @@ Nu heeft elk stuk `maat`: de tracktijd van een tel 1 op zijn eigen rooster.
   uitlijnen nemen de "1" mee; een tempo bijstellen (encoder, tap, verfijning) houdt de
   tel bij de plek waar je bent op dezelfde plek in de maat; ×2 houdt de "1" waar hij
   was, ½ neemt de dichtstbijzijnde tel (×2 en daarna ½ geeft de oude terug); een
-  nieuw stuk neemt de maten mee.
+  nieuw stuk neemt de maten mee (op zijn eigen rooster: in de laatste maat vóór een
+  stuk op een ander tempo werd tel 3 anders een "1"; hersteld door de controleur).
+- Open (controleur, niet gebouwd): ½ laat de tel het dichtst bij de speelkop liggen,
+  ook als dat tel 2 of 4 is. Dan liggen de nieuwe tellen op 2 en 4, de "1" moet een
+  tel opschuiven, en ½ gevolgd door ×2 geeft de "1" niet terug (op tel 1 en 3 wel).
+  Met een maat-anker kan ½ de "1" als tel houden (tellen op 1 en 3, zoals
+  DJ-software halveert); dat verandert welke tellen blijven, dus eerst vragen.
 - Een overgangstel (de laatste tel van het vorige stuk) telt nog in de maat van het
   vorige stuk.
 - Wat ermee rekent: `barPhase`, `isDownbeat`, `beatsBetween` (maatbegin, ook ver
