@@ -41,11 +41,19 @@ export function positieOp(seg, t) {
  * audioklok? Binnen een loop die al is rondgegaan telt de gevouwen positie:
  * rekenen vanaf P gaf dan een tijd in het verleden, en gate en sampler
  * vielen naast de tel.
+ *
+ * Een GEPLANDE start (T na `nu`, starten op de maat): tot T staat hij stil op
+ * P, dus er wordt vanaf T gerekend, niet vanaf `nu`. Rekenen vanaf `nu` liep
+ * een denkbeeldige positie vóór P terug, en een punt in de loop tussen die
+ * positie en P kreeg dan een tijd vóór T, terwijl hij daar pas na een ronde
+ * langskomt. Een punt achter P buiten de loop geeft (net als een punt achter
+ * de speelkop) een tijd vóór T: daar komt hij niet meer langs.
  */
 export function ctxTijdVan(seg, x, nu = seg.T) {
   if (!seg.speelt) return null;
-  const pos = positieOp(seg, nu);
-  let t = nu + (x - pos) / seg.R;
+  const vanaf = Math.max(nu, seg.T);
+  const pos = positieOp(seg, vanaf);
+  let t = vanaf + (x - pos) / seg.R;
   const loop = seg.loop;
   if (loop && x < pos && x >= loop.start && loop.end > loop.start) t += (loop.end - loop.start) / seg.R;
   return t;

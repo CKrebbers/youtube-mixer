@@ -1975,6 +1975,35 @@ console.log('\ntransport');
   ok('snapshot draagt in-punt, wachten en sprong', 'loopIn' in eng.snapshot().decks.G && eng.snapshot().decks.G.wacht === false
     && eng.snapshot().decks.G.sprongTellen === 4);
 
+  // ctxTimeOf tijdens het wachten, met een loop: tot T staat hij stil op P, dus
+  // een punt IN de loop vóór P komt pas na een ronde langs. Rekenen vanaf nu
+  // liep een denkbeeldige positie vóór P terug, en gaf dan een tijd vóór de
+  // start. fxKlok en de stukgrens vragen alleen punten ná P; dit is voor wie
+  // er later wel om vraagt.
+  {
+    const { ctxTijdVan } = await import('../src/engine/stream-kern.js');
+    dM.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));      // hierboven stond hij op onzeker
+    dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+    NOW = 820.0;
+    dM.stop(); dM.seek(0.3); dM.play();                         // maatbegin 2,0 = ctx 821,7
+    dG.stop(); dG.clearLoop(); dG.seek(8.0);
+    dG.setLoopRange(7.5, 8.5);                                  // loop van één tel, startpunt erin
+    eng.startOpDeMaat('G');
+    const Tl = dG.bron.wachtTot;
+    NOW = 820.1;                                                // 1,6 s vóór de start
+    ok(`ctxTimeOf tijdens het wachten, punt in de loop vóór het startpunt: na een ronde (T + 0,75; was ${(dG.ctxTimeOf(7.75) - Tl).toFixed(2)})`,
+      dG.wacht && Math.abs(Tl - 821.7) < 1e-9 && Math.abs(dG.ctxTimeOf(7.75) - (Tl + 0.75)) < 1e-9);
+    ok('... een punt erna: T + de afstand (8,25 -> T + 0,25), het startpunt zelf: T', Math.abs(dG.ctxTimeOf(8.25) - (Tl + 0.25)) < 1e-9
+      && Math.abs(dG.ctxTimeOf(8.0) - Tl) < 1e-9);
+    NOW = Tl + 0.6;                                             // na de start: 8,0 -> 8,5 -> 7,5 -> 7,6
+    ok('... en na de start komt hij er ook echt op dat moment langs', Math.abs(dG.position - 7.6) < 1e-9);
+    dG.stop(); dG.clearLoop(); dM.stop();
+    // De StreamBron (de app) rekent met dezelfde formule; ook met een andere rate.
+    const seg = { T: 10, P: 9, R: 1.25, loop: { start: 8, end: 10 }, speelt: true };
+    ok('ctxTijdVan met een geplande start: vanaf T, niet vanaf nu (8,5 -> 11,2)', Math.abs(ctxTijdVan(seg, 8.5, 8.0) - 11.2) < 1e-9
+      && Math.abs(ctxTijdVan(seg, 9.5, 8.0) - 10.4) < 1e-9);
+  }
+
   // Toetsen en uitleg.
   const { KEYMAP, SHIFT_ALIAS } = await import('../src/control/keyboard.js');
   const { beschrijf } = await import('../src/ui/apc-beschrijf.js');

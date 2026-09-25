@@ -87,7 +87,8 @@ export class BufferBron {
   /**
    * Wanneer passeert deze bron die tracktijd (voor het eerst vanaf nu), op de
    * audioklok? Zelfde regel als ctxTijdVan in de streamkern: binnen een loop
-   * die al rondging telt de gevouwen positie.
+   * die al rondging telt de gevouwen positie, en vóór een geplande start
+   * rekent hij vanaf die start.
    */
   ctxTimeOf(trackTijd) {
     if (!this.speelt || !this.buffer) return null;
@@ -302,8 +303,9 @@ export class StreamBron {
   get wachtTot() { return this.seg.speelt && this.ctx.currentTime < this.seg.T ? this.seg.T : null; }
 
   /*
-   * ctxTijdVan klopt ook vóór een geplande start: vanaf `nu` rekent hij
-   * terug naar een positie vóór P, en komt precies op T + (x − P) / R uit.
+   * ctxTijdVan klopt ook vóór een geplande start: dan rekent hij vanaf T
+   * (daar staat hij op P), dus T + (x − P) / R, en een punt in de loop vóór P
+   * komt pas na een ronde langs.
    */
   ctxTimeOf(x) { return ctxTijdVan(this.seg, x, this.ctx.currentTime); }
 
