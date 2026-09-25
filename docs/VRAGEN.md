@@ -1,12 +1,13 @@
 # Open vragen voor Clay
 
-Stand: 24 september 2026 (avond). Open: A2, A3 (keylock-luistertest staat klaar),
-F1, H3, H5, en I1–I4 (keylock na het luisteren, APC-plek). G1–G6, H1, H2, H4 en H6
-zijn beslist; de toonsoort- en keylockkeuzes staan in blok I. Per vraag: wat er speelt, de opties, mijn advies, en wat er
+Stand: 25 september 2026. Open: A2, A3 (keylock-luistertest staat klaar), F1, H3,
+H5 (deels beantwoord), I1–I4 (keylock na het luisteren) en het nieuwe blok J (keuzes
+uit de sporen van 25 sep). G1–G6, H1, H2, H4 en H6 zijn beslist; de toonsoort- en
+keylockkeuzes staan in blok I. Per vraag: wat er speelt, de opties, mijn advies, en wat er
 nodig is om hem te beantwoorden. Afvinken zodra beslist; het besluit komt
 daarna in CLAUDE.md of ROADMAP.md.
 
-Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
+Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 👀 kijken · 💬 alleen een keuze
 
 ---
 
@@ -216,6 +217,10 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 💬 alleen een keuze
   is de waasdrempel (3–8%) te streng voor zachte sporen, en werken de budgetten
   van 4 en 12 ms op de M1 met 8 video's?
 - [ ] **H5. Na 25 okt: eerst de AI-laag van AV-kern of eerst Varve (ROADMAP 13–26)?** 💬
+  — Deels beantwoord door 25 sep: op Clay's vraag ("zoveel mogelijk met sub agents")
+  zijn 13, 14, 16, 18, 20, 21, 22, 23 (deel) en 24 al gebouwd. Van Varve blijven
+  vooral 15 keylock, 17 stems, 23 (rest), 25 en 26 over (volgorde in ROADMAP). Open
+  blijft: gaat AV-kern (publicatie 25 okt, daarna de AI-laag) vóór keylock en stems?
 - [x] **H6. Isomorfe vormen met geluid?** — Clay (24 sep, middag): **eerst AV-kern, dan
   Varve**. Het geluid wordt één audiomodule (AudioWorklet: aanslagen komen als berichten
   uit de Worker, de modale synthese rekent in de worklet in plaats van 12–32 ms op de
@@ -257,10 +262,63 @@ Open:
   onderscheidt.
 - [ ] **I3 (= K4). Keylock standaard aan of uit?** 🎧 Luister naar 01 tegen 04.
   **Advies:** uit, en keylock blijft staan bij een nieuw nummer.
-- [ ] **I4 (= K6). Waar op de APC?** 🎛 Na ROADMAP 13. **Voorstel:**
+- [ ] **I4 (= K6). Waar op de APC?** 🎛 Clay 25 sep (voorstel A): keylock krijgt
+  later Bank. De rest van het voorstel hieronder staat nog open. **Voorstel:**
   - Bank = keylock;
   - Shift + Bank = pitchbereik;
   - Shift + Nudge ± = toon;
   - Shift + Tap = toon terug naar 0.
 
   Eerst op `apc.html` bekijken of het in de hand ligt.
+
+---
+
+## J. Keuzes uit de sporen van 25 september
+
+Elk spoor bouwde met een keuze die Clay kan omdraaien. Wat er nu staat is het
+advies van de bouwer of controleur, tenzij anders vermeld. Alleen wat echt een
+keuze is; de rest staat in `docs/HANDOFF.md` (wat niet getest is).
+
+Transport (beatjump, loop in/out, quantize, op de maat):
+- [ ] **J1. Starten op de maat: volgende MAAT of volgende tel?** 🎧 Nu: maat. **Advies:** maat (blauwdruk, plan en Ableton doen het zo); een tel-knop erbij is één regel.
+- [ ] **J2. Quantize voor alle tracks of per track?** 💬 Nu: één schakelaar voor alle tracks. **Advies:** zo laten (één knop, zoals rekordbox, Traktor en Serato).
+- [ ] **J3. Hotcue met quantize: meteen of op de volgende tel?** 🎧 Nu: meteen, fasebehoudend. **Advies:** meteen (klinkt hetzelfde, reageert tot een tel sneller).
+- [ ] **J4. Beatjump terug voorbij het begin: klemmen of weigeren?** 💬 Nu: klemmen op 0 (voorbij het einde wordt al geweigerd). **Advies:** weigeren, net als het einde: klemmen breekt de beatmatch van een track die je net inmixt. Eén regel.
+
+Klank (rem, kill, maatgever):
+- [ ] **J5. Remtijd in seconden of in tellen?** 🎧 Nu: seconden, 0,1–5 s, standaard 1 s. **Advies:** seconden (een gebaar van de draaitafel, werkt ook zonder grid).
+- [ ] **J6. Tweede druk op rem tijdens het remmen: los of meteen stil?** 🎧 Nu: los, meteen weer op tempo (tape stop die op de drop invalt); pauze = meteen stil. **Advies:** zo laten.
+- [ ] **J7. Klinkt het uitdoven als een vinylstop, en wil je een spin-up na loslaten?** 🎧 Nu: uitdoven in het laatste kwart van de snelheid, loslaten = meteen op tempo. **Advies:** eerst luisteren; eerder/later uitdoven is één getal, een spin-up ~een uur werk.
+- [ ] **J8. Maatgever-hysterese: 3 dB en 250 ms goed?** 🎛 Nu: een andere track neemt de maat pas over na 3 dB harder gedurende 250 ms. **Advies:** zo laten tot het in een set opvalt.
+
+Toonsoort:
+- [ ] **J9. Toonsoort in de kolomkop onder de bpm (`9B G`), of alleen Camelot?** 👀 Nu: onder de bpm (naast het nummer drukte de MAAT-badge hem weg). **Advies:** zo laten (T2).
+- [ ] **J10. Sneltoetsen om de toonsoort te corrigeren?** 💬 Nu: alleen het menu in de focuskop en de kiezer in de library. **Advies:** geen toetsen: een per ongeluk verzette kwint wordt als "met de hand" bewaard.
+- [ ] **J11. Library "+N": aantal andere toonsoorten of aantal stukken?** 💬 Nu: andere toonsoorten (ADRIANA: 18 stukken in 6 toonsoorten = +5). **Advies:** zo laten.
+
+Library en ingest:
+- [ ] **J12. Voorrang in de ingest-rij voor een bestand dat je op een TRACK sleept?** 💬 Nu: achteraan, dus een video voor track 3 wacht achter een lange download. Geen advies van de bouwer; **voorstel:** alleen wat je op een track sleept vooraan (dat wil je nu spelen).
+- [ ] **J13. Een hele playlist in de wachtrij zetten?** 💬 Nu: geweigerd, zoals gevraagd. **Advies:** blijven weigeren tot je erom vraagt (met `--flat-playlist` is het daarna een klein stapje).
+- [ ] **J14. Tweede klik voor "opnieuw binnenhalen" en voor × op een lopende download: goed, of te voorzichtig?** 💬 **Advies:** zo laten (dezelfde regel als elke destructieve knop); een ↻-knop bij "al binnen" kan ook.
+
+Beamer:
+- [ ] **J15. Dubbele menging in het randgeval "opname begon zonder los venster, daarna open"?** 💬 Nu: dan mengen beide tijdelijk. **Advies:** laten (het alternatief bevriest de beamer weer met het hoofdtabblad naar achteren).
+- [ ] **J16. De vertraging tussen canvas en beamer meten?** 🎛 Telefooncamera op 240 fps, beamer en luidspreker in beeld, een klik met een witte flits. **Advies:** eerst meten, pas daarna het beeld een vaste voorsprong geven (nu aangenomen: 16–33 ms).
+- [ ] **J17. Melding als een nummer zonder video op de beamer staat?** 💬 Nu: alleen een ontbrekend of kapot bestand is een fout. **Advies:** geen melding.
+<!-- TODO hoofdsessie: vragen uit beamer-inloop (rest-beamer-inloop.md). -->
+
+Handelingenlog:
+- [ ] **J18. Log altijd aan, vanaf het openen?** 💬 Nu: met ○ log en vanzelf met elke opname. Altijd aan kost ~1–8 MB per uur in `opnames/`, en dan is ook een onverwachte fout na te spelen. **Advies:** ja, als keuze die onthouden wordt.
+- [ ] **J19. Opnieuw renderen in één knop, een "alleen kijken"-stand (MIDI uit tijdens terugspelen), logs weghalen uit de lijst?** 💬 Geen van drie gebouwd; geen advies van de bouwer. Eerst gebruiken en dan kiezen.
+
+Vormen 16:9:
+- [ ] **J20. tv (Trommelvlies): de "lucht" naast het ronde vel.** 👀 Een golf die van het vel naar buiten loopt. Bevalt hij, rustiger (`LUCHT_FEL` lager), of alleen het vel op zwart? Geen advies (een beeldvondst).
+- [ ] **J21. dw (Korrelwolk): smaller stereobeeld?** 🎧 Beeld = geluid: een samengetrokken wolk bestrijkt nu ×0,56 van de korrelbuffer en het stereobeeld. Of het geluid over de oude breedte, minder letterlijk isomorf? **Advies:** zo laten; het geluid is in Varve nog nergens aangesloten (H6).
+- [ ] **J22. ls, if (en cl): heel in het midden, of breder?** 👀 Nu: heel in het midden (valt onder "Midden"). Anders: een rij planten/varens, groter en bijgesneden zoals op 24 sep, of cl tot 18% groter over de hele breedte. **Advies:** zo houden.
+- [ ] **J23. Roosters (gs, ln, cc, ec, …): vlekken ~25% kleiner dan op 24 sep.** 👀 Nu: evenveel cellen, dus zelfde rekentijd. Even groot als 24 sep is goedkoper maar grover. **Advies:** zo laten.
+
+Mapping en beatgrid:
+- [ ] **J24. Rack-knoppen 5–8 (video-effecten) op "endless" zetten?** 🎛 Koppelen raadt een CC altijd als absoluut (soft-takeover); de andere ringknoppen staan op endless (meteen doordraaien vanaf de ring). **Advies:** ja, in je verschil.
+- [ ] **J25. Bij een nieuwe standaardmapping zien WELKE regels erbij kwamen?** 💬 Nu alleen de melding "de standaardmapping is bijgewerkt". **Advies:** nog niet (dan moet het verschil per regel onthouden wat de standaard had).
+- [ ] **J26. ½ op tel 2 of 4 schuift de "1" een tel op.** 🎛 Moet ½ de "1" houden? **Advies:** ja (`docs/BEATGRID.md`, open punt; eerst jouw ja).
+<!-- TODO hoofdsessie: vragen uit grid-past (rest-grid-past.md) en uit de APC-indeling (voorstel A). -->
