@@ -89,6 +89,26 @@ video-effecten; verder is alles de standaard. 524 bytes.
   alleen herladen van de pagina.
 - **apc.html** leest dezelfde weg (`laadEigen`), bewaart niets.
 
+## Opstarten: wanneer er NIET bewaard wordt (controleur, 25 sep)
+
+Bewaren vervangt wat er op de server staat. Dat mag alleen als de app weet wat
+daar staat:
+
+- **Server niet gelezen** (GET `/api/mapping` faalt, POST misschien wel): de
+  reserve uit de browser wordt geladen, maar opstarten stuurt NIETS naar de
+  server, ook niet na omzetten of een nieuwe standaard. Een oude kopie van vóór
+  de grid-modus in de browser zou anders, omgezet, de grid-modus als
+  "weggehaald" over Clay's verschil heen zetten zonder dat hij iets deed. Een
+  koppeling daarna wordt wel bewaard, zoals altijd.
+- **Eigen mapping niet geladen** (de standaard kwam de eerste keer niet binnen,
+  de tweede keer wel): de standaard staat erop, maar die sessie wordt NIETS
+  bewaard tot je herlaadt of bewust "standaard herstellen" kiest; de
+  foutmelding zegt het. Anders verving de eerste koppeling al je eigen regels
+  door één.
+- **Van de server geladen**: de reserve in de browser wordt hetzelfde verschil
+  (alleen de browser). Anders bleef in een tweede browser (Comet) een oude
+  volledige kopie liggen die het overneemt zodra de server even niet antwoordt.
+
 ## Waarom het omzetten exact is
 
 `git log -- mappings/apc40mk2.json`: de laatste wijziging is 1196c2b (23 sep
@@ -120,6 +140,22 @@ eerst, en pas daarna iets aan de standaardmapping.
   mapping; niet per MIDI-bericht.
 - De mapping-versie blijft 3: een volledig document is niet veranderd, en de
   action-namen ook niet. Het verschil herken je aan `kind`, niet aan de versie.
+- OUDE code (van vóór dit spoor: terugdraaien, of een branch zonder dit spoor op
+  :8777) kent `kind` niet en leest een verschil als volledige mapping: de APC
+  heeft dan alleen je 4 eigen regels en geen shift. Koppel je daar iets, dan
+  bewaart de oude code een "kopie" van 5 regels, en de nieuwe code zet die
+  later om met 286 standaardregels als weggehaald en zonder shift (gemeten met
+  de code van main; herstellen kan met
+  "standaard herstellen", je eigen regels opnieuw koppelen). Dus: niet
+  terugdraaien zonder eerst de volledige mapping (export) terug te POSTen.
+- Een OUD geëxporteerd bestand importeren (van vóór een standaardwijziging)
+  laadt precies dat bestand: wat de standaard sindsdien kreeg, staat daarna als
+  "weggehaald" in je verschil. Een export draagt geen `base`.
+- Koppelen en binnen 500 ms herladen: de server heeft de koppeling dan nog niet
+  (zoals vóór dit spoor) en bij opstarten wint de server.
+- Een `led` met dezelfde inhoud maar een andere sleutelvolgorde telt als een
+  andere regel (JSON-tekstvergelijking). Nu heeft elke `led` in de standaard
+  één sleutel, dus het speelt niet.
 
 ## Code en tests
 
@@ -136,6 +172,8 @@ eerst, en pas daarna iets aan de standaardmapping.
   nagebouwde server die net zo streng is als de echte (POST zonder `rules` = 400,
   JSON als tekst in de database), inclusief: standaard onbereikbaar = niets
   bewaren (anders overschreef een fragment Clay's verschil met een lege mapping).
+  Controleur: server niet gelezen = niets naar de server bij opstarten; standaard
+  één keer niet binnen = die sessie niets bewaren; de reserve volgt de server.
 - `test/learn.test.mjs`: leren bovenop de standaard, export volledig, rondje
   export/import geeft hetzelfde verschil.
 - `test/server.test.mjs`: een leeg verschil gaat erdoor en komt ongeschonden terug.

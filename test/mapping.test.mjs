@@ -1032,5 +1032,75 @@ const rust = () => new Promise((r) => setTimeout(r, 5));
   ok('laadEigen (apc.html) zet een oude kopie om in het geheugen en bewaart niets', srv.posts === voor && kaart.rules.get('cc:0:23@device.rack').action === 'video.fx.grain');
 }
 
+// ---- controleur 25 sep: niets overschrijven zonder dat Clay iets deed ----------
+// Een OUDE kopie in de browser, van vóór de grid-modus (23 sep): de handmatige
+// samenvoeging ging alleen naar de server, dus in een tweede browser (Comet)
+// kan zo'n kopie nog staan. Omgezet tegen de huidige standaard worden alle
+// grid-modusregels "weggehaald".
+const oudeBrowserKopie = () => {
+  const k = normaliseer(kopieVanClay()).doc;
+  k.rules = k.rules.filter((r) => r.laag !== 'edit.aan');
+  return k;
+};
+console.log('controleur: server niet gelezen = niet naar de server bij opstarten');
+{
+  // GET /api/mapping faalt (500), POST werkt wel: de server heeft Clay's goede
+  // verschil, de browser een oude kopie. Opstarten mag het verschil op de
+  // server NIET vervangen: het is niet gelezen, dus niet bekend of het nieuwer is.
+  const goed = maakVerschil(doc, kopieVanClay());
+  const srv = nepServer({ opgeslagen: goed });
+  const haal = (url, o) => (url === '/api/mapping' && !o?.method ? Promise.resolve(new Response('{}', { status: 500 })) : srv.haal(url, o));
+  const winkel = nepOpslag({ [EIGEN_MAPPING]: JSON.stringify(oudeBrowserKopie()) });
+  const m = kaal();
+  const v = await opzetMappingOpslag({ mapping: m, haal, opslag: winkel, wacht: 0 }).start();
+  await rust();
+  ok('server niet gelezen + oude kopie in de browser: wel geladen (reserve), maar niets naar de server',
+    v.bron === 'browser' && v.omgezet && srv.posts === 0);
+  ok('Clay\'s verschil op de server is ongeschonden (geen grid-modus "weggehaald")',
+    JSON.stringify(srv.inDb()) === JSON.stringify(goed));
+}
+console.log('controleur: eigen mapping niet geladen = deze sessie niets bewaren');
+{
+  // mappings/apc40mk2.json komt de EERSTE keer niet binnen (500, bv. de server
+  // herstart net), de tweede keer wel: de standaard staat erop, Clay's verschil
+  // is niet geladen. Koppelt hij daarna één knop, dan mag dat zijn vier eigen
+  // regels op de server niet vervangen door een verschil van één regel.
+  const goed = maakVerschil(doc, kopieVanClay());
+  const srv = nepServer({ opgeslagen: goed });
+  let eerste = true;
+  const haal = (url, o) => {
+    if (url === 'mappings/apc40mk2.json' && eerste) { eerste = false; return Promise.resolve(new Response('{}', { status: 500 })); }
+    return srv.haal(url, o);
+  };
+  const gemeld = [];
+  const m = kaal();
+  const o = opzetMappingOpslag({ mapping: m, haal, opslag: nepOpslag(), meld: (t, s) => gemeld.push([t, s]), wacht: 0 });
+  const v = await o.start();
+  ok('standaard eerst niet binnen: de standaard staat erop, met een foutmelding', !!v.fout && m.rules.size === doc.rules.length
+    && gemeld.some(([t, s]) => s === 'fout' && /niet bewaard/.test(t)));
+  m.set('note:0:66', 'track.1.sync', { mode: 'trigger' });
+  m.voegToe('vormen', fragment);
+  await rust();
+  ok('een koppeling daarna overschrijft Clay\'s verschil op de server niet', srv.posts === 0 && JSON.stringify(srv.inDb()) === JSON.stringify(goed));
+  // Standaard herstellen is een bewuste keuze: dat mag wel, en daarna wordt er weer bewaard.
+  ok('standaard herstellen mag daarna wel (bewust)', await o.herstel() && srv.inDb().rules.length === 0 && o.geladen);
+  m.set('note:0:66', 'track.1.sync', { mode: 'trigger' });
+  await rust();
+  ok('en daarna wordt koppelen weer bewaard', srv.inDb().rules.length === 1);
+}
+console.log('controleur: de reserve in de browser volgt de server');
+{
+  // Chrome zette de kopie om; in Comet staat nog de oude kopie. Comet laadt
+  // van de server (goed), maar zijn reserve moet dan ook het verschil worden,
+  // anders ligt de oude kopie klaar voor de dag dat de server even niet antwoordt.
+  const goed = maakVerschil(doc, kopieVanClay());
+  const srv = nepServer({ opgeslagen: goed });
+  const comet = nepOpslag({ [EIGEN_MAPPING]: JSON.stringify(oudeBrowserKopie()) });
+  const m = kaal();
+  const v = await opzetMappingOpslag({ mapping: m, haal: srv.haal, opslag: comet, wacht: 0 }).start();
+  ok('van de server geladen, niets naar de server', v.bron === 'server' && srv.posts === 0);
+  ok('en de reserve in de browser is nu hetzelfde verschil', comet.getItem(EIGEN_MAPPING) === JSON.stringify(goed));
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
