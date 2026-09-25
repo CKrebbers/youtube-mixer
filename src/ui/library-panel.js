@@ -97,13 +97,15 @@ export class LibraryPanel {
       }
       const her = e.target.closest('button[data-her]');
       if (her) {
-        // Over een grid op SLOT (door jou bevestigd) alleen na een tweede klik.
+        // ↻ = grid én toonsoort opnieuw (TOONSOORT.md §4). Staat een van de
+        // twee op SLOT (door jou bevestigd), dan alleen na een tweede klik.
         const t = this.tracks.find((x) => x.id === her.dataset.her);
-        if (t?.grid?.slot && !this._bevestigd('her', t.id)) {
-          this.melding = { tekst: `het grid van "${t.titel}" staat op slot — klik nog eens op ↻ om het toch te vervangen`, goed: false };
+        const slot = [t?.grid?.slot && 'het grid', t?.toon?.slot && 'de toonsoort'].filter(Boolean);
+        if (slot.length && !this._bevestigd('her', t.id)) {
+          this.melding = { tekst: `${slot.join(' en ')} van "${t.titel}" ${slot.length > 1 ? 'staan' : 'staat'} op slot — klik nog eens op ↻ om toch opnieuw te analyseren`, goed: false };
           return this.tekenStatus();
         }
-        return this.heranalyseer(her.dataset.her, !!t?.grid?.slot);
+        return this.heranalyseer(her.dataset.her, slot.length > 0);
       }
       const weg = e.target.closest('button[data-weg]');
       if (weg) {
@@ -242,32 +244,46 @@ export class LibraryPanel {
     this.tekenRijen();
   }
 
-  /** Het grid opnieuw laten voorstellen door de server (in een worker, een paar seconden). */
+  /**
+   * ↻: grid én toonsoort opnieuw laten voorstellen door de server (elk in een
+   * worker, een paar seconden; TOONSOORT.md §4). De server koppelt ze niet,
+   * dus hier twee verzoeken. `forceer` = tweede klik: ook over een slot.
+   */
   async heranalyseer(id, forceer = false) {
     const track = this.tracks.find((t) => t.id === id);
     if (!track || this.analyseert.has(id)) return;
     this.analyseert.add(id);
-    this.melding = { tekst: `grid van "${track.titel}" wordt opnieuw geanalyseerd…`, goed: true };
+    this.melding = { tekst: `grid en toonsoort van "${track.titel}" worden opnieuw geanalyseerd…`, goed: true };
     this.tekenStatus();
     this.tekenRijen();
-    try {
-      const r = await fetch(`/api/library/${id}/grid/analyseer`, {
+    const vraag = async (wat) => {
+      const r = await fetch(`/api/library/${id}/${wat}/analyseer`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ forceer }),
       });
-      const j = await r.json();
+      const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.fout || `${r.status}`);
-      if (j.bewaard) {
-        track.grid = j.grid;
-        this.onGrid(id, j.grid);
-        const st = gridStatus(j.grid, track.duur);
-        this.melding = { tekst: `${track.titel}: ${j.grid.stukken.length} stuk${j.grid.stukken.length === 1 ? '' : 'ken'}, `
-          + `${Math.round((st.aandeel ?? 0) * 100)}% zeker`, goed: true };
-      } else {
-        this.melding = { tekst: `${track.titel}: niet vervangen (${j.reden})`, goed: false };
-      }
-    } catch (err) {
-      this.melding = { tekst: `analyseren mislukt: ${err.message}`, goed: false };
+      return j;
+    };
+    const [g, t] = await Promise.allSettled([vraag('grid'), vraag('toon')]);
+    const delen = [];
+    let goed = true;
+    if (g.status === 'rejected') { delen.push(`grid: analyseren mislukt (${g.reason?.message})`); goed = false; }
+    else if (!g.value.bewaard) { delen.push(`grid niet vervangen (${g.value.reden})`); goed = false; }
+    else {
+      const grid = g.value.grid;
+      track.grid = grid;
+      this.onGrid(id, grid);
+      const st = gridStatus(grid, track.duur);
+      delen.push(`grid ${grid.stukken.length} stuk${grid.stukken.length === 1 ? '' : 'ken'}, ${Math.round((st.aandeel ?? 0) * 100)}% zeker`);
     }
+    if (t.status === 'rejected') { delen.push(`toonsoort: analyseren mislukt (${t.reason?.message})`); goed = false; }
+    else if (!t.value.bewaard) { delen.push(`toonsoort niet vervangen (${t.value.reden})`); goed = false; }
+    else {
+      track.toon = t.value.toon;
+      this.onToon(id, t.value.toon);
+      delen.push(`toonsoort ${libraryToon(t.value.toon, track.duur).tekst}`);
+    }
+    this.melding = { tekst: `${track.titel}: ${delen.join(' · ')}`, goed };
     this.analyseert.delete(id);
     this.tekenStatus();
     this.tekenRijen();
@@ -431,7 +447,7 @@ export class LibraryPanel {
         <span class="lib-racks">${t.racks ? `${t.racks} rack${t.racks === 1 ? '' : 's'}` : '—'}</span>
         <span class="lib-knoppen">
           ${this.decks.map((d) => `<button class="btn sm lib-trk ${this.stand(d)}" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)} (${this.stand(d)})"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}
-          <button class="btn sm lib-her${her ? ' bezig' : ''}" data-her="${esc(t.id)}" title="grid opnieuw analyseren${t.grid?.slot ? ' (staat op slot: tweede klik)' : ''}">${her ? '…' : '↻'}</button>
+          <button class="btn sm lib-her${her ? ' bezig' : ''}" data-her="${esc(t.id)}" title="grid en toonsoort opnieuw analyseren${t.grid?.slot || t.toon?.slot ? ' (staat op slot: tweede klik)' : ''}">${her ? '…' : '↻'}</button>
           <button class="btn sm lib-weg" data-weg="${esc(t.id)}" title="uit de lijst halen">×</button>
         </span>
       </div>${this.kiezer === t.id ? this.kiezerHtml(t) : ''}`;

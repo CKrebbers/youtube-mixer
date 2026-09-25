@@ -325,5 +325,50 @@ const FIXTURE = {
   ok('de standaardmapping heeft (nog) geen toonsoortknoppen (T6)', std.rules.every((r) => !/\.key(\.|$)/.test(r.action)));
 }
 
+// ---- de naad: wat de browser bewaart, moet de server aannemen ------------------
+// laden.js post elke 1,5 s de hele kaart; weigert de server (400), dan meldt hij
+// dat één keer en probeert hij DIE kaart niet opnieuw: elke volgende bewerking
+// weigert dan ook. Dus: na elke bewerking moet normaliseerToon (server) de kaart
+// aannemen, met dezelfde stukken.
+{
+  console.log('\nnaad met de server (normaliseerToon)');
+  const { normaliseerToon } = await import('../server/library.js');
+  // Zoals server/toon.js hem maakt: eerste stuk op 0, stilte = null met zekerheid 0.
+  const auto = { versie: 1, stemming: -12.3, bron: 'auto', slot: false, stukken: [
+    { van: 0, toonsoort: 'C', stemming: -10.1, zekerheid: 0.73 },
+    { van: 64.9, toonsoort: null, stemming: -12.3, zekerheid: 0 },
+    { van: 110.2, toonsoort: 'Ebm', stemming: 44.8, zekerheid: 0.12 },
+  ] };
+  const bewerkingen = {
+    'kwint +': (x) => x.kwint(120, 1), 'kwint −': (x) => x.kwint(5, -1), 'maj/min': (x) => x.wisselModus(120),
+    '½ +': (x) => x.halveToon(5, 1), 'geen': (x) => x.geen(5), 'stuk zetten': (x) => x.zetStuk(80, { toonsoort: 'F#' }),
+    'nieuw stuk op 30 s': (x) => x.splits(30),
+    // hoorbaar() = positie min uitgangsvertraging: vlak na play op 0 is dat negatief.
+    'nieuw stuk vlak na play (hoorbaar −0,04 s)': (x) => x.splits(-0.04),
+    'slot': (x) => { x.slot = true; }, 'één stuk (kiezer)': (x) => x.vervangDoorEen('G'), 'één stuk "geen"': (x) => x.vervangDoorEen(null),
+  };
+  const geweigerd = [];
+  for (const [naam, fn] of Object.entries(bewerkingen)) {
+    const kaart = new ToonKaart(auto);
+    fn(kaart);
+    kaart.bron = 'hand';
+    const json = kaart.toJSON();
+    const s = normaliseerToon(json);
+    const zelfde = s && s.stukken.length === json.stukken.length
+      && s.stukken.every((x, i) => x.van === json.stukken[i].van && x.toonsoort === json.stukken[i].toonsoort && x.stemming === json.stukken[i].stemming);
+    if (!zelfde) geweigerd.push(naam);
+  }
+  ok(`na elke bewerking neemt de server de kaart aan, met dezelfde stukken${geweigerd.length ? ` (geweigerd: ${geweigerd.join(', ')})` : ''}`, !geweigerd.length);
+  ok('ToonKaart.metHand (encoder zonder kaart) en "geen toonsoort" ook', !!normaliseerToon(ToonKaart.metHand(k('Am')).toJSON())
+    && !!normaliseerToon(ToonKaart.metHand(null).toJSON()));
+  // null in een AUTOMATISCHE kaart is stilte (server/toon.js), niet "met de hand".
+  const stil = new ToonKaart(auto).hoorbaarBij(80);
+  ok(`stilte uit de analyse heet geen "met de hand gezet" ("${W.toonTitel(stil).split('\n')[0]}")`,
+    W.kolomToon(stil).tekst === '~' && !W.toonTitel(stil).includes('met de hand') && W.toonTitel(stil).includes('stilte'));
+  const hand = new ToonKaart(auto).geen(5);
+  ok('"geen toonsoort" met de hand blijft zo heten', W.toonTitel(hand.hoorbaarBij(5)).startsWith('geen toonsoort (met de hand gezet)'));
+  ok('library: een kaart met alleen stilte heet ook zo', W.libraryToon({ ...auto, stukken: [{ van: 0, toonsoort: null, stemming: 0, zekerheid: 0 }] }).titel.startsWith('stilte'));
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

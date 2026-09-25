@@ -33,6 +33,14 @@ const halveTonen = (n) => `${Math.abs(n)} halve ${Math.abs(n) === 1 ? 'toon' : '
 const kandidaten = (k, tweede) => kortNaam(k) + (tweede !== null && tweede !== undefined && tweede !== k ? `, of ${kortNaam(tweede)}` : '');
 
 /**
+ * Een stuk zonder toonsoort: in een AUTOMATISCHE kaart is dat stilte (de server
+ * zet dan zekerheid 0, server/toon.js), met de hand gezet heeft het geen zekerheid.
+ */
+const STILTE = 'stilte: de analyse vond hier geen klank';
+const GEEN_HAND = 'geen toonsoort (met de hand gezet)';
+const geenTekst = (zekerheid) => (Number.isFinite(zekerheid) ? STILTE : GEEN_HAND);
+
+/**
  * De tooltip bij wat je hoort (kolomkop en focus). `t` = deck.toonsoort
  * (hoorbaarBij in toonsoort.js). Regels, van belangrijk naar minder.
  */
@@ -40,7 +48,7 @@ export function toonTitel(t) {
   if (!t) return 'nog geen toonsoort voor deze track';
   const regels = [];
   if (t.k === null) {
-    regels.push('geen toonsoort (met de hand gezet)');
+    regels.push(geenTekst(t.zekerheid));
   } else if (t.soort === 'geen') {
     regels.push(`geen duidelijke toonsoort (best passend: ${kandidaten(t.k, t.tweede)})`);
   } else {
@@ -109,7 +117,7 @@ export function libraryToon(json, duur = null) {
   let uit;
   if (!h) {
     uit = { tekst: '~', soort: 'geen', k: null };
-    regels.push('geen toonsoort (met de hand gezet)');
+    regels.push(kaart.stukken.every((s) => Number.isFinite(s.zekerheid)) ? 'stilte: de analyse vond geen klank' : GEEN_HAND);
   } else if (h.soort === 'geen') {
     uit = { tekst: `~${h.anderen ? ` +${h.anderen}` : ''}`, soort: 'geen', k: h.k };
     regels.push(`geen duidelijke toonsoort (best passend: ${kortNaam(h.k)})`);
@@ -124,7 +132,7 @@ export function libraryToon(json, duur = null) {
     const stukken = kaart.stukken;
     const lijst = stukken.slice(0, 24).map((s, i) => {
       const t = kaart.stukAt(s.van);
-      const naam = t.k === null ? 'geen' : `${camelot(t.k)} ${kortNaam(t.k)}`;
+      const naam = t.k === null ? (Number.isFinite(t.zekerheid) ? 'stilte' : 'geen') : `${camelot(t.k)} ${kortNaam(t.k)}`;
       const z = Number.isFinite(t.zekerheid) ? ` (${komma(t.zekerheid)})` : '';
       return `${mmss(i === 0 ? 0 : s.van)}  ${t.soort === 'geen' && t.k !== null ? `~ ${naam}` : naam}${z}`;
     });

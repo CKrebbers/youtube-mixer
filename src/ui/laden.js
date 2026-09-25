@@ -274,6 +274,13 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
       // van het verkeerde nummer.
       const mijnLaad = nieuweLaad(deckId);
       if (!(await engine.deck(deckId).laadStream(url, track.titel))) return null;
+      // Vanaf hier staat het NIEUWE nummer op het deck, zonder grid en
+      // toonsoort (_naLaden), maar deckTrack wijst nog naar het vorige. Liep
+      // de bewaarlus (om de 1,5 s) in dat gat, terwijl de golfvorm hieronder
+      // nog binnenkwam, dan stuurde hij grid: null en toon: null naar het
+      // VORIGE nummer en wiste daar slot en correcties. Tot alles hieronder
+      // staat, hoort deze track dus bij geen enkel nummer.
+      deckTrack[deckId] = null;
       const duur = engine.deck(deckId).duration;
       // Golfvorm uit de cache. Zelf uitrekenen kan niet meer: er is geen buffer.
       const uitCache = track.peaks ? await laadPeaks('/' + track.peaks.bestand.replace(/^\//, ''),
