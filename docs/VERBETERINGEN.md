@@ -85,8 +85,12 @@ vonden en bewust niet herstelden.
 - Ingest: een upload die LOOPT als de server wegvalt staat niet in de herstartrij.
 - Audiopad: het stabiele venster van `renderblok.test.mjs` dekt niet elk pad (exact, gat,
   overgang alleen in het venster met berichten).
-- Beatgrid: "zeker" zegt niet dat het grid past, ook buiten de tweede kans (docs/BEATGRID.md).
-  In de maak: `eenGridPast` op elk stuk (`spoor3/grid-past-2`, nog niet op main).
+- ~~Beatgrid: "zeker" zegt niet dat het grid past, ook buiten de tweede kans~~ — gebouwd 25 sep
+  (`integratie-r5`, `docs/BEATGRID.md` punt 4). Open: een kort stuk op 1–2% ander tempo aan de
+  rand van een lang stuk; een deel < 20 s wordt onzeker ook als er een grid op past; hetzelfde
+  patroon precies een halve tel verschoven tussen twee stukken op één grid wordt één stuk (de
+  prijs van de break-regel); een tempo dat golft (rubato, periode ~30 s) blijft vaak zeker
+  (vensters van 12 s middelen het weg); rekentijd tot ~4× op een uur (in de worker).
 - ~~Beamer: na openen seconden lang ontbrekende of verschoven tracks in het losse venster
   (controle, bevinding 4)~~ — inloop gebouwd 25 sep (`spoor3/beamer-inloop-2`, `docs/BEAMER.md`);
   de seekduur telt tot `seeking` false is. Open: wordt het hoofdtabblad verborgen tijdens de

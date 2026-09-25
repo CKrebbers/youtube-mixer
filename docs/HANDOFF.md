@@ -20,10 +20,10 @@ Lees in deze volgorde:
   gebouwd. Elk spoor had een bouwer en een controleur in een eigen worktree;
   daarna drie integratierondes (`integratie-r1` → `r2` → `r3`) met naadtests,
   een ronde rest-sporen (`spoor3/*`) en deze docs (`spoor3/docs`).
-- **Stand van de code:** alles staat op `main` (25 sep ~16:30, via
-  `integratie-r1` → `r2` → `r3` → `r4a` → `r4b` plus deze afronding), behalve
-  "grid moet passen per stuk" (`spoor3/grid-past-2`, nog bezig; zie punt 14).
-  `node test/alles.mjs`: 36 bestanden, 3370 checks, groen (integrator én
+- **Stand van de code:** alles staat op `main` (25 sep, via
+  `integratie-r1` → `r2` → `r3` → `r4a` → `r4b` → `r5` plus deze afronding); `r5`
+  is "grid moet passen per stuk" (punt 14), gecontroleerd en met één herstel.
+  `node test/alles.mjs`: 36 bestanden, 3402 checks, groen (integrator én
   hoofdsessie; de vormen-tijdchecks meten nu threadtijd en blijven ook onder
   zware belasting groen). Headless groen: `kijk.mjs`, `apc-klank.mjs`,
   `vormen-plaat.mjs`, `toon-keten.mjs`, `library.mjs`, `kijk-ingest.mjs`,
@@ -77,9 +77,10 @@ Lees in deze volgorde:
 13. **Beamer-inloop** (18): het losse venster toont eerst het beeld van het
     hoofdvenster en mengt pas zelf als zijn video's in de pas lopen (acht tracks
     ~8–9 s); sprongen landen weer op tijd (seekduur klopt nu onder belasting).
-14. **Grid moet passen** (24): nog BEZIG, niet op main (`spoor3/grid-past-2`):
-    `eenGridPast` op elk stuk, zodat een stuk niet "zeker" heet terwijl het grid
-    naast de muziek ligt. Tot dan: ligt een sync naast, dan ligt het grid naast.
+14. **Grid moet passen** (24): een stuk heet alleen nog "zeker" als zijn ene grid
+    er overal op past; anders wordt het gesplitst waar de fase verspringt, of
+    onzeker. Een break met de puls op de offbeat blijft één stuk. Bestaande grids
+    veranderen pas na ↻ in de library (let it all go, Sakamoto, jungle-mix).
 
 ### Wat Clay nu doet
 Server is herstart (hoofdsessie). Dan: je tabblad herladen
@@ -167,7 +168,9 @@ zware belasting van de andere agenten.
 - **Vormen:** rekentijd op de M1 in echte Chrome; een lange Worker-sessie; hoe de
   dunnere lijnen (2× in plaats van 2,5× opgeschaald) er op de beamer uitzien.
 - **Beatgrid:** ↻ op het hele album (alleen fragmenten gemeten); het langere
-  knipperen op de "1" op de APC.
+  knipperen op de "1" op de APC. "Grid moet passen": niet op hele albums of mixen,
+  de rekentijd niet op een echte mix van een uur (synthetisch tot ~4× vroeger, in de
+  worker), en of een break op jouw muziek één stuk blijft alleen synthetisch.
 
 ### Werkwijze die vandaag werkte
 - Per spoor een bouwer en een controleur, elk in een eigen worktree; de

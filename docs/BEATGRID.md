@@ -232,6 +232,11 @@ Hoe het nu gaat (detect.js, alles achter analyseerGrid):
   de marge op een tempo dat nergens klopte. Alleen als de fasen echt op een rechte lijn
   liggen (elk venster binnen 0,05 tel) mag het meteen.
 - Buren uit hetzelfde segment die samen ook passen, worden weer één stuk.
+- **Een break is geen ander nummer** (controle, zie onder): liggen de stukken vóór en na
+  een tussendeel van hooguit 32 maten op één doorlopend grid, en ligt de puls in het
+  tussendeel (per blok van 4 s) overal op de tel of overal precies op de offbeat, dan wordt
+  het weer één stuk met het grid door beide kanten (over een segmentgrens: één stuk per
+  segment, allebei met dat grid).
 - Een stuk dat meteen past, krijgt precies het grid van vroeger.
 
 Gemeten na (scripts en uitkomst: `tools/beatmeting/rest/gridpast*.mjs/.txt`):
@@ -251,14 +256,44 @@ Gemeten na (scripts en uitkomst: `tools/beatmeting/rest/gridpast*.mjs/.txt`):
 | Sakamoto 34:26 | 34:26-35:18 onzeker (0,54) | 34:37-35:18 zeker (0,65, blokken 10 10 -2) |
 | Sakamoto 2:28, 33:34, 42:55 | onzeker | anders verdeeld, nog steeds onzeker |
 
-- Rekentijd: gewone fragmenten 1,2-1,8×; het ergste geval, een synthetische mix van een uur
-  met 18 nummers op één tempo zonder gat: 11,8 s tegen 4,0 s (vóór één vals zeker stuk,
-  53% naast; na alle 18, grenzen binnen 7 s). detect.test: 21 → 31 s.
+- Rekentijd: gewone fragmenten 1,2-1,8×; een synthetische mix van een uur met 18 nummers
+  op één tempo zonder gat: 11,8 s tegen 4,0 s (vóór één vals zeker stuk, 53% naast; na alle
+  18, grenzen binnen 7 s). Niet het ergste geval: zie de controle hieronder (tot ~17 s).
+  detect.test: 21 → 31 s.
 - Test: detect.test.mjs, "elk stuk moet passen" (een sprong van een halve en van een kwart
   tel, 150 → 153 en 128 → 129,5, drie nummers, een staart, een versnelling, twee schone
   stukken; en de onderdelen los). Met de detect.js van vóór falen ze, op de schone na.
 
+Controle (25 sep, `integratie-r5`; scripts in de scratchpad van de controleur):
+- **Hersteld: een break werd een eigen grid.** 128 met kicks en zachte offbeat-hats, in de
+  break alleen hats op de offbeat (ook: een bas op de offbeat, claps op 2 en 4 met hats):
+  een break van 60 s werd een eigen ZEKER stuk een halve tel naast (100% van de tellen), een
+  van 16-32 s een onzeker gat; vóór de toets was het één zeker stuk met het goede grid. Nu
+  weer dat (de break-regel hierboven). Een break van stilte blijft een gat, zoals altijd.
+  Test: detect.test "een break van 16/32/60 s" (faalt op de code van de bouwer) en
+  "hetzelfde patroon 0,2 tel verschoven" (faalt als de regel elke vaste fase neemt).
+- Niet elke vaste fase is een break: let it all go 31:40-32:00 ligt 0,2 tel (70 ms, per blok
+  van 4 s) voor het grid eromheen, met precies hetzelfde klappenpatroon (op de tel, ¼ en ½: 42/30/14% van de
+  klappen, daar alles 0,2 tel verschoven). Een ander grid, dus splitsen had daar gelijk; een
+  eerste versie van de break-regel plakte het weer vast. Daarom alleen op de tel of precies
+  op de offbeat, en de fase per blok van 4 s (vensters van 12 s overlappen in een kort
+  tussendeel bijna helemaal, en dan leek de versnelling V ook "vast").
+- Getoetst en goed bevonden (geen verschil tussen bouwer en herstel): live drums met een
+  tempo dat 1-3% wandelt (4 min: vóór één vals zeker stuk, nu twee die passen; een uur: nog
+  4 van de 24 zekere stukken naast, vóór alles), swing (ongewijzigd één stuk), een
+  DJ-overgang (fase 0,3 of 1,2% tempo: nu gesplitst).
+- 48 fragmenten en de synthetische set van de bouwer: precies gelijk aan de bouwer.
+- Een synthetisch uur (min van twee rondes; vóór → na): schoon 3,9 → 4,8 s; 18 nummers op
+  150 zonder gat 4,1 → 13,5 s; live drums 3,9 → 17 s; rubato 4,2 → 14,5 s; 15 nummers met
+  een break 4,0 → 14 s (bouwer 14,4 s, 4 valse zekere stukken; herstel 0). In de worker,
+  dus de decks merken het niet; binnenhalen van een uur wacht ~10-13 s langer.
+
 Wat niet opgelost is, of een keuze:
+- Hetzelfde patroon precies een halve tel verschoven tussen twee stukken op één grid wordt
+  één stuk (de break-regel ziet het verschil met offbeat-hats niet).
+- Een tempo dat golft (rubato ±2% met een periode van 30 s): vensters van 12 s middelen
+  het weg, en stukken blijven zeker met meer dan 5% van de tellen verder dan 0,15 tel naast
+  (synthetisch uur: 13 van 15 zekere stukken; vóór de toets één zeker stuk over alles).
 - Een kort stuk op 1-2% ander tempo aan de rand van een lang stuk kan erin blijven hangen
   (synthetisch S8: 20 s op 150 vóór 152,5, 4% van de kicks naast, zoals vroeger). Een regel
   "twee vensters naast aan de rand" ving dat, maar knipte het album op 156 zonder reden in
