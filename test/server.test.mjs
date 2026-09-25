@@ -160,6 +160,36 @@ try {
   ok('POST vanaf de eigen pagina: gewoon 200', (await rauw('/api/mapping', { method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: `http://localhost:${poort}` }, body: mapJson })).status === 200);
   ok('zonder Origin (curl, tests): toegestaan', (await rauw('/api/mapping', { method: 'DELETE' })).status === 200);
+  // De routes van de sporen die samen integratie-r2 werden (toonsoort,
+  // library-pagina's, hotcues, handelingenlog, ingest-wachtrij): allemaal
+  // achter dezelfde controles, want die staan vóór elke route.
+  {
+    const wijzigend = [
+      ['POST', '/api/library/nummerX/toon', { toon: null }], ['POST', '/api/library/nummerX/toon/analyseer', {}],
+      ['POST', '/api/library/nummerX/hotcues', { nr: 1, tijd: 2 }], ['DELETE', '/api/library/nummerX/hotcues/1'],
+      ['POST', '/api/handelingen/start', {}], ['POST', '/api/handelingen/20260925-120000/stuk', { van: 0, tekst: '[0,"a",1]\n' }],
+      ['POST', '/api/ingest', { url: 'https://www.youtube.com/watch?v=abcdefghijk' }], ['DELETE', '/api/ingest/abc'],
+    ];
+    const vreemdeOrigin = [], vreemdeHost = [], tekst = [];
+    for (const [method, pad, body] of wijzigend) {
+      const b = body ? JSON.stringify(body) : null;
+      vreemdeOrigin.push((await rauw(pad, { method, body: b, headers: { 'Content-Type': 'application/json', Origin: 'http://evil.example' } })).status);
+      vreemdeHost.push((await rauw(pad, { method, body: b, headers: { 'Content-Type': 'application/json', Host: `evil.example:${poort}` } })).status);
+      if (method === 'POST') tekst.push((await rauw(pad, { method, body: b, headers: { 'Content-Type': 'text/plain', Origin: `http://localhost:${poort}` } })).status);
+    }
+    ok(`nieuwe routes: een andere oorsprong krijgt 403 (${vreemdeOrigin.join(' ')})`, vreemdeOrigin.every((c) => c === 403));
+    ok(`nieuwe routes: een vreemde Host krijgt 403 (${vreemdeHost.join(' ')})`, vreemdeHost.every((c) => c === 403));
+    ok(`nieuwe POST-routes: text/plain van de eigen pagina krijgt 415 (${tekst.join(' ')})`, tekst.every((c) => c === 415));
+    const lezen = [];
+    for (const pad of ['/api/library?sorteer=titel&van=0&aantal=2', '/api/library/nummerX/hotcues', '/api/library/nummerX/toon', '/api/handelingen', '/api/ingest']) {
+      lezen.push((await rauw(pad, { headers: { Host: `evil.example:${poort}` } })).status);
+    }
+    ok(`ook lezen (pagina's, hotcues, toon, logs, wachtrij) met een vreemde Host: 403 (${lezen.join(' ')})`, lezen.every((c) => c === 403));
+    const hot = await (await fetch(`${B}/api/library/nummerX/hotcues`)).json();
+    const logs = await (await fetch(`${B}/api/handelingen`)).json();
+    const rij = await (await fetch(`${B}/api/ingest`)).json();
+    ok('en er is niets veranderd: geen hotcue, geen log, niets in de wachtrij', hot.hotcues?.length === 0 && logs.logs?.length === 0 && rij.opdrachten?.length === 0);
+  }
 
   console.log('\nracks horen bij hun eigen nummer');
   const post = (pad, body) => fetch(B + pad, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
