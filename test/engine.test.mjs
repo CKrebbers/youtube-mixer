@@ -1666,12 +1666,13 @@ console.log('\ntransport');
   dG.load(lang, 'loops');                                       // vers nummer: niets onthouden
   dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
   dG.seek(3);
-  ok('loop out zonder loop in doet niets', dG.loopOut() === false && dG.loop === null && read('track.7.loop.out') === 0);
+  ok('loop out zonder loop in doet niets (lampje uit: null)', dG.loopOut() === false && dG.loop === null && read('track.7.loop.out') === null);
   ok('reloop zonder loop en zonder vorige loop: niets te doen (null)', read('track.7.loop.reloop') === null);
   NOW = 720;
   dG.seek(3.23); dG.play();
   druk('track.7.loop.in');
   ok('loop in: onthouden, nog geen loop; lampje wacht op out', dG.loopInPunt === 3.23 && dG.loop === null && read('track.7.loop.in') === 1);
+  ok('... en loop out is nu bruikbaar (0)', read('track.7.loop.out') === 0);
   NOW += 1.54;                                                  // 4,77
   druk('track.7.loop.out');
   ok('loop out: de loop gaat meteen aan, van in tot hier', dG.loop && Math.abs(dG.loop.start - 3.23) < 1e-9 && Math.abs(dG.loop.end - 4.77) < 1e-9);

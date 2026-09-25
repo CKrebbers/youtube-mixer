@@ -258,9 +258,11 @@ export function bindEngine(engine) {
     define(`${n}.loop.in`, 'trigger', (on) => { if (on) d.loopIn(); },
       { label: `Track ${nr} loop in (begin van een handmatige loop)`,
         read: () => (!d.buffer ? null : d.loopInPunt !== null ? 1 : 0) });
+    // 1 = er loopt een loop, 0 = loop in staat klaar (drukken sluit hem),
+    // null = niets te doen (nog geen loop in).
     define(`${n}.loop.out`, 'trigger', (on) => { if (on) d.loopOut(); },
       { label: `Track ${nr} loop out (einde, de loop gaat aan)`,
-        read: () => (!d.buffer ? null : d.loop ? 1 : 0) });
+        read: () => (!d.buffer ? null : d.loop ? 1 : d.loopInPunt !== null ? 0 : null) });
     // 1 = er loopt een loop (drukken = eraf), 0,5 = er is een loop om terug
     // te halen, null = niets te doen.
     define(`${n}.loop.reloop`, 'trigger', (on) => { if (on) d.reloop(); },
