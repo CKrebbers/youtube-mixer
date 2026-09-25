@@ -307,6 +307,11 @@ try {
   ok(`met de hand (ook zonder versie), op slot en actueel auto: niet aangeraakt (${onaangeroerd.join(', ')})`, onaangeroerd.length === 3);
   const lijst = (await (await fetch(`${B}/api/library`)).json()).tracks;
   ok('/api/library geeft per nummer "toon" mee', lijst.length === 5 && lijst.every((t) => 'toon' in t) && lijst.find((t) => t.id === 'tLeeg').toon.stukken[0].toonsoort === 'C');
+  // Het paneel vraagt PAGINA'S (library-spoor): daar moet de kaart net zo in staan.
+  const pagina = await (await fetch(`${B}/api/library?sorteer=titel&richting=op&van=1&aantal=2`)).json();
+  ok(`een pagina van /api/library draagt "toon" ook (${pagina.tracks?.map((t) => t.id).join(',')} van ${pagina.totaal})`,
+    pagina.totaal === 5 && pagina.van === 1 && pagina.tracks.length === 2 && pagina.tracks.every((t) => 'toon' in t)
+    && pagina.tracks.every((t) => JSON.stringify(t.toon) === JSON.stringify(lijst.find((x) => x.id === t.id).toon)));
 
   const her = (id, body = {}) => fetch(`${B}/api/library/${id}/toon/analyseer`, { method: 'POST',
     headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

@@ -154,6 +154,20 @@ ok('sjabloon: de titel rekt mee, de knoppen zo breed als ze zijn',
   L.kolomSjabloon().startsWith('minmax(160px, 1fr) ') && L.kolomSjabloon().endsWith(' max-content')
   && L.kolomSjabloon().split(/ (?![^(]*\))/).length === L.KOLOMMEN.length + 1);
 ok('zonder grid: — en "geen grid"', L.cellenHtml({ ...t, grid: null }, nu).includes('geen grid'));
+
+// De toonsoort-kolom (samengevoegd met het toonsoort-spoor): tussen bpm en grid,
+// een knop voor de kiezer, niet sorteerbaar.
+const ids = L.KOLOMMEN.map((k) => k.id);
+ok('toon staat tussen bpm en grid', ids.indexOf('toon') === ids.indexOf('bpm') + 1 && ids.indexOf('grid') === ids.indexOf('toon') + 1);
+ok('toon is niet sorteerbaar', !L.KOLOMMEN.find((k) => k.id === 'toon').sorteer && !/data-sorteer="toon"/.test(L.kopHtml(L.STANDAARD_SORTERING)));
+ok('zonder kaart: —, knop met het id (ontsnapt)', /<button class="lib-toon leeg" data-toon="x"[^>]*>—<\/button>/.test(html));
+const album = { ...t, id: 'a"b', toon: { stukken: [{ van: 0, toonsoort: 'C', stemming: 0, zekerheid: 0.8 },
+  { van: 3000, toonsoort: 'Eb', stemming: 0, zekerheid: 0.7 }], bron: 'hand', slot: true } };
+const htmlAlbum = L.cellenHtml(album, nu, { kiezer: 'a"b' });
+ok('album op slot: hoofdtoonsoort +1, klasse slot, id ontsnapt', htmlAlbum.includes('8B C +1') && /class="lib-toon zeker slot open"/.test(htmlAlbum)
+  && htmlAlbum.includes('data-toon="a&quot;b"'));
+ok('open alleen bij de rij van de kiezer', !/ open"/.test(L.cellenHtml(album, nu, { kiezer: 'ander' })) && !/ open"/.test(L.cellenHtml(album, nu)));
+ok('een nieuwe kaart (zetToon) wordt opnieuw uitgerekend', L.cellenHtml({ ...album, toon: { ...album.toon, stukken: [album.toon.stukken[1]] } }, nu).includes('5B E♭<'));
 const kop = L.kopHtml({ sorteer: 'bpm', richting: 'op' }, '<b>k</b>');
 ok('kop: de actieve kolom met pijl en aria-sort', /data-sorteer="bpm" aria-sort="ascending"[^>]*>bpm<i>▲<\/i>/.test(kop)
   && /data-sorteer="titel" aria-sort="none"/.test(kop));
