@@ -1097,6 +1097,15 @@ console.log('\nloops, tellen en laden');
   await laadPlekken;
   ok('tijdens het laden pint de nieuwe track geen hotcues van de oude', tijdensLaden.every((x) => x === null || x === 0) || tijdensLaden.length === 0);
   ok('geslaagde laad wist ze wel', dSt.cuePoint === 0 && dSt.hotcues.every((h) => h === null));
+  // Bewaarde hotcues terug op een STREAMENDE track (hotcues per nummer): ze
+  // horen meteen bij de vaste punten, en er wordt direct bijgevuld, niet pas
+  // bij de volgende tik van de bron.
+  let bijgevuld = 0;
+  const echtBijvullen = dSt.bron.bijvullen.bind(dSt.bron);
+  dSt.bron.bijvullen = () => { bijgevuld++; return echtBijvullen(); };
+  dSt.restoreHotcues([null, 1.5]);
+  ok('stream: teruggezette hotcues meteen vastgepind', dSt.bron.vastpunten().includes(1.5) && bijgevuld === 1);
+  delete dSt.bron.bijvullen;
   dSt.bron.vernietig();
   dSt.load(buf, 'terug naar buffer');
   eng.ctx.audioWorklet = oudCtxWorklet;
