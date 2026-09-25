@@ -3,7 +3,7 @@
 // Draai met: node test/vormen.test.mjs
 import { readFileSync } from 'node:fs';
 
-const { SYSTEMEN, SYSTEEM, draaiKnoppen, maakRng, ACHTERGROND } = await import('../src/vormen/systemen.js');
+const { SYSTEMEN, SYSTEEM, draaiKnoppen, maakRng, ACHTERGROND, LUTS } = await import('../src/vormen/systemen.js');
 const { VormLaag, VormLagen, STAP, MAX_STAPPEN, LAAG_BREEDTE, LAAG_HOOGTE } = await import('../src/vormen/laag.js');
 const { maten, cellen, rooster, blit, clear, fade, midden } = await import('../src/vormen/hulp.js');
 const { actieveLagen, lagenUniforms, MAX_BEELDLAGEN, LAAG_FIT } = await import('../src/video/lagen.js');
@@ -160,6 +160,153 @@ console.log('het doek is 16:9 (ROADMAP 7)');
     c.log.find(([f]) => f === 'drawImage').slice(2).join(',') === '140,0,360,360');
   const mdStaand = midden({ ...staand });
   ok('staand: het vak schuift verticaal', mdStaand.vak.x === 0 && mdStaand.vak.y === 140 && mdStaand.kort === 360);
+}
+
+console.log('de lichte systemen (systemen.js) tekenen echt 16:9');
+{
+  // Velden vullen het hele doek; vormen rond een middelpunt staan in het
+  // midden, heel in beeld, geschaald op de korte zijde (docs/VORMEN-16x9.md).
+  const VELD = ['bd', 'fl', 'ec', 'cc'], VORM = ['lz', 'hg', 'sf', 'km', 'dp', 'fy'];
+  const bron = readFileSync(new URL('../src/vormen/systemen.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  ok('systemen.js gebruikt g.S niet meer, en geen verouderd rooster(g, n)',
+    !/\bg\.S\b/.test(bron) && !/rooster\(g,\s*[\w$.]+\s*\)/.test(bron) && /rooster\(g, cellen\(/.test(bron));
+  const lichte = [...VELD, ...VORM];
+  ok(`alle lichte systemen zijn ingedeeld (${lichte.length})`, lichte.every((id) => SYSTEEM[id]) && new Set(lichte).size === 10);
+
+  /** Nep-canvas dat bijhoudt waar er getekend wordt (lijnen, bogen, beelden; clear/fade niet). */
+  function bereikCanvas(w, h) {
+    const b = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+    const punt = (x, y, r = 0) => { b.x0 = Math.min(b.x0, x - r); b.x1 = Math.max(b.x1, x + r); b.y0 = Math.min(b.y0, y - r); b.y1 = Math.max(b.y1, y + r); };
+    const doel = {
+      lineCap: 'butt', lineJoin: 'miter', lineWidth: 1, globalAlpha: 1, imageSmoothingEnabled: true,
+      createImageData: (bb, hh) => ({ data: new Uint8ClampedArray(bb * hh * 4) }),
+      moveTo: (x, y) => punt(x, y), lineTo: (x, y) => punt(x, y), arc: (x, y, r) => punt(x, y, r),
+      drawImage: (_, x, y, bb, hh) => { if (bb !== undefined) { punt(x, y); punt(x + bb, y + hh); } },
+    };
+    const ctx = new Proxy(doel, { get(t, k) { return k in t ? t[k] : () => {}; }, set(t, k, v) { t[k] = v; return true; } });
+    return { width: w, height: h, getContext: () => ctx, bereik: b };
+  }
+  const W = LAAG_BREEDTE, H = LAAG_HOOGTE;
+  const bereik = {};
+  for (const id of lichte) {
+    const laag = new VormLaag({ maakCanvas: bereikCanvas, systeem: id, zaad: 7 });
+    for (let i = 0; i < 300; i++) laag.frame(i * STAP);
+    bereik[id] = laag.canvas.bereik;
+  }
+  const pct = (v) => `${Math.round(v * 100)}%`;
+  for (const id of VELD) {
+    const b = bereik[id];
+    ok(`${id}: tekent over het hele doek, van rand tot rand (x ${pct(b.x0 / W)}–${pct(b.x1 / W)}, y ${pct(b.y0 / H)}–${pct(b.y1 / H)})`,
+      b.x0 <= 0.02 * W && b.x1 >= 0.98 * W && b.y0 <= 0.02 * H && b.y1 >= 0.98 * H);
+  }
+  for (const id of VORM) {
+    const b = bereik[id], mx = (b.x0 + b.x1) / 2 / W;
+    ok(`${id}: in het midden (${mx.toFixed(3)}), heel in beeld en niet breder dan de korte zijde (${Math.round(b.x1 - b.x0)} × ${Math.round(b.y1 - b.y0)} px)`,
+      Math.abs(mx - 0.5) < 0.03 && b.y0 >= -0.02 * H && b.y1 <= 1.02 * H && b.x1 - b.x0 <= 1.02 * H);
+  }
+  for (const id of ['sf', 'km', 'fy']) {
+    const b = bereik[id], bw = b.x1 - b.x0, bh = b.y1 - b.y0;
+    ok(`${id}: een cirkel blijft rond (breedte/hoogte ${(bw / bh).toFixed(3)})`, Math.abs(bw / bh - 1) < 0.1);
+  }
+
+  // Wat meegroeit met het doek: deeltjes even dicht als op 320 × 320, roosters
+  // met vierkante cellen en evenveel cellen als het oude n × n.
+  const g = { ...maten(W, H), ctx: maakCanvas(W, H).getContext('2d'), t: 0, r: maakRng(7), maakCanvas };
+  const start = (id, p = {}) => {
+    const sys = SYSTEEM[id], s = { o: {}, e: {} };
+    const pp = { ...Object.fromEntries(sys.knobs.map((k) => [k.k, k.v])), ...p };
+    sys.init.call(sys, s, pp, { ...g, pal: sys.pal, L: LUTS[sys.pal], r: maakRng(7) });
+    return { s, p: pp };
+  };
+  const dicht = (n, oud) => Math.abs((n / ((W / g.D) * (H / g.D))) / (oud / (320 * 320)) - 1) < 0.01;
+  const bd = start('bd').s, fl = start('fl').s;
+  ok(`bd: ${bd.n} boids in ${Math.round(bd.Wu)} × ${Math.round(bd.Hu)} eenheden, even dicht als 170 op 320 × 320`, bd.n === 302 && dicht(bd.n, 170) && bd.Hu === 320);
+  ok(`fl: ${fl.n} deeltjes, even dicht als 2200 op 320 × 320`, fl.n === 3911 && dicht(fl.n, 2200) && fl.Hu === 320);
+  const ec = start('ec').s, cc = start('cc').s;
+  const vierkant = (nx, ny) => Math.abs(W / nx - H / ny) / (H / ny) < 0.01;
+  ok(`ec: ${ec.W} × ${ec.H} cellen over het hele doek, vierkant, evenveel als 160 × 160`,
+    ec.g.nx === ec.W && ec.g.ny === ec.H && vierkant(ec.W, ec.H) && Math.abs(ec.W * ec.H / 160 ** 2 - 1) < 0.02 && !ec.g.oud);
+  ok(`cc: ${cc.NX} × ${cc.NY} cellen, vierkant, evenveel als 128 × 128`,
+    cc.g.nx === cc.NX && cc.g.ny === cc.NY && vierkant(cc.NX, cc.NY) && Math.abs(cc.NX * cc.NY / 128 ** 2 - 1) < 0.02 && !cc.g.oud);
+
+  // Boids zoekt buren in vakken. Dat moet precies dezelfde buren geven als
+  // alle paren aflopen, zoals het origineel (ook niet over de rand heen).
+  const sysBd = SYSTEEM.bd;
+  const allePaar = (s, p) => {
+    const n = s.n, v2 = p.vis * p.vis, sd = (p.vis * 0.45) ** 2, vx2 = Float32Array.from(s.vx), vy2 = Float32Array.from(s.vy);
+    for (let i = 0; i < n; i++) {
+      let cx = 0, cy = 0, ax = 0, ay = 0, sx = 0, sy = 0, c = 0;
+      for (let j = 0; j < n; j++) {
+        if (i === j) continue;
+        const dx = s.x[j] - s.x[i], dy = s.y[j] - s.y[i], d2 = dx * dx + dy * dy;
+        if (d2 < v2) { cx += s.x[j]; cy += s.y[j]; ax += vx2[j]; ay += vy2[j]; c++; if (d2 < sd && d2 > 0) { sx -= dx / d2; sy -= dy / d2; } }
+      }
+      let vx = vx2[i], vy = vy2[i];
+      if (c) { vx += ((ax / c) - vx) * 0.05 * p.ali + ((cx / c) - s.x[i]) * 0.0012 * p.coh; vy += ((ay / c) - vy) * 0.05 * p.ali + ((cy / c) - s.y[i]) * 0.0012 * p.coh; }
+      vx += sx * p.sep * 0.9; vy += sy * p.sep * 0.9;
+      const sp = Math.hypot(vx, vy) || 1, cl = Math.max(1, Math.min(2.6, sp));
+      vx2[i] = vx / sp * cl; vy2[i] = vy / sp * cl;
+    }
+    return { vx: vx2, vy: vy2 };
+  };
+  let slechtst = 0, rand = 0;
+  for (const vis of [10, 23.5, 38, 90]) {
+    const { s, p } = start('bd', { vis });
+    const gg = { ...g, pal: sysBd.pal, L: LUTS[sysBd.pal] };
+    for (let k = 0; k < 120; k++) {                  // zwermen laten vormen: vakken lopen vol
+      const ref = allePaar(s, p);
+      sysBd.step.call(sysBd, s, p, gg);
+      for (let i = 0; i < s.n; i++) slechtst = Math.max(slechtst, Math.abs(ref.vx[i] - s.vx[i]), Math.abs(ref.vy[i] - s.vy[i]));
+    }
+    for (let i = 0; i < s.n; i++) if (s.x[i] < p.vis || s.x[i] > s.Wu - p.vis || s.y[i] < p.vis || s.y[i] > s.Hu - p.vis) rand++;
+  }
+  ok(`bd: buren via vakken = alle paren aflopen, bij zichtafstand 10, 23,5, 38 en 90 (grootste verschil ${slechtst.toExponential(1)})`, slechtst < 1e-5 && rand > 0);
+
+  // Rekentijd: wat met het doek meegroeit, groeit hooguit met de oppervlakte
+  // (16/9). Tekenaanroepen per stap op het oude vierkant (360 × 360, zaad 7,
+  // na 60 stappen), gemeten op 3ca17ea vóór de omzetting.
+  const VIERKANT = { lz: 113, hg: 6019, bd: 681, fl: 4409, sf: 7603, ec: 1, cc: 1, km: 363, dp: 271, fy: 4198 };
+  const { BUDGET_HOOFD } = await import('../src/vormen/budget.js');
+  // Telt tekenaanroepen zoals maakCanvas, maar met één gedeelde functie: geen
+  // nieuwe closure per aanroep, zodat de meting over het systeem gaat.
+  const snelCanvas = (w, h) => {
+    const tel = { n: 0 }, tik = () => { tel.n++; };
+    const doel = { createImageData: (b, hh) => ({ data: new Uint8ClampedArray(b * hh * 4) }) };
+    const ctx = new Proxy(doel, { get: (t, k) => (k in t ? t[k] : tik), set: (t, k, v) => { t[k] = v; return true; } });
+    return { width: w, height: h, getContext: () => ctx, tel };
+  };
+  const meet = (id) => {
+    const sys = SYSTEEM[id], c = snelCanvas(W, H), { s, p } = start(id);
+    const gg = { ...g, ctx: c.getContext('2d'), pal: sys.pal, L: LUTS[sys.pal], r: maakRng(7) };
+    let i = 0;
+    const stap = () => { gg.t = ++i / 60; s.e = {}; sys.step.call(sys, s, p, gg); };
+    for (let k = 0; k < 60; k++) stap();
+    const n0 = c.tel.n, ts = [];
+    // Per stap de kleinste van wandklok en processortijd (zoals vormen-zwaar):
+    // een drukke machine die ons even wegzet telt dan niet mee.
+    for (let k = 0; k < 100; k++) {
+      const c0 = process.cpuUsage(), t0 = performance.now();
+      stap();
+      const wand = performance.now() - t0, cpu = process.cpuUsage(c0);
+      ts.push(Math.min(wand, (cpu.user + cpu.system) / 1000));
+    }
+    ts.sort((a, b) => a - b);
+    return { aanroepen: (c.tel.n - n0) / 100, med: ts[50] };
+  };
+  const regels = [];
+  const teVeel = [], teTraag = [];
+  for (const id of lichte) {
+    let m = meet(id);
+    for (let poging = 1; poging < 3 && m.med >= BUDGET_HOOFD; poging++) { const m2 = meet(id); if (m2.med < m.med) m = m2; }
+    regels.push(`${id} ${m.med.toFixed(2)} ms ×${(m.aanroepen / VIERKANT[id]).toFixed(2)}`);
+    if (m.aanroepen > VIERKANT[id] * 16 / 9 + 0.5) teVeel.push(id);
+    if (m.med >= BUDGET_HOOFD) teTraag.push(id);
+  }
+  console.log(`      ${regels.join(' · ')}`);
+  ok('tekenaanroepen per stap hooguit 16/9 × die op het oude vierkant', teVeel.length === 0);
+  if (teVeel.length) console.log('      te veel:', teVeel.join(', '));
+  ok(`en elk licht systeem rekent een stap in minder dan het budget van de hoofdthread (${BUDGET_HOOFD} ms, zonder echt tekenen)`, teTraag.length === 0);
+  if (teTraag.length) console.log('      te traag:', teTraag.join(', '));
 }
 
 console.log('tijd: stappen van 1/60 s op de audioklok (regel 3)');
