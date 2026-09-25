@@ -144,17 +144,22 @@ export class PaginaCache {
     if (!nodig.length) return false;
     for (const p of nodig) this.onderweg.add(p);
     let nieuw = false;
+    // Nog dezelfde vraag? De generatie alleen is niet genoeg: scroll je terwijl
+    // een nieuwe vraag (ververs) al vertrokken is, dan heeft deze de generatie
+    // van de nieuwe maar nog de OUDE vraag. Kwam de nieuwe eerst terug, dan
+    // viel deze pagina van de oude sortering er anders alsnog in, met zijn totaal.
+    const actueel = () => gen === this.gen && vraag === this.vraag;
     await Promise.all(nodig.map(async (p) => {
       try {
         const a = await this.haalPagina(vraag, p);
-        if (gen !== this.gen) return;
+        if (!actueel()) return;
         this.paginas.set(p, a.tracks || []);
         this.totaal = a.totaal ?? this.totaal;
         nieuw = true;
       } catch {
         // volgende scroll probeert het opnieuw
       } finally {
-        if (gen === this.gen) this.onderweg.delete(p);
+        if (actueel()) this.onderweg.delete(p);
       }
     }));
     return nieuw;

@@ -104,6 +104,19 @@ const nieuwer = c.ververs({ zoek: '', sorteer: 'duur', richting: 'op' }, 0, 18);
 await Promise.all([oudeVraag, scroll, nieuwer]);
 ok('een pagina van de vorige sortering wordt weggegooid', c.vraag.sorteer === 'duur' && c.rij(100) === undefined);
 
+// Andersom: de nieuwe vraag is al VERTROKKEN als je scrollt (klik op de kop,
+// dan meteen scrollen). zorgVoor pakt dan nog de oude vraag, maar de
+// generatie van de nieuwe; komt de nieuwe eerst terug, dan mag de trage
+// pagina van de oude vraag er niet alsnog in (en het totaal niet overschrijven).
+vertraging = (vraag, p) => (p === 1 ? 40 : 5);
+await c.ververs({ zoek: '', sorteer: 'bpm', richting: 'op' }, 0, 18);
+const naarZoek = c.ververs({ zoek: 'z', sorteer: 'bpm', richting: 'op' }, 0, 18);   // 30 treffers
+const scrollOud = c.zorgVoor(100, 130);        // nog de oude vraag (250 nummers), pagina 1, traag
+await Promise.all([naarZoek, scrollOud]);
+ok('scrollen terwijl een nieuwe vraag onderweg is: geen rijen of totaal van de oude vraag erin',
+  c.vraag.zoek === 'z' && c.rij(100) === undefined && c.totaal === 30);
+await c.ververs({ zoek: '', sorteer: 'duur', richting: 'op' }, 0, 18);   // terug naar de hele lijst
+
 // Netwerk even weg tijdens scrollen: geen fout naar boven, later opnieuw.
 vertraging = () => 1;
 kapot = new Set([2]);
