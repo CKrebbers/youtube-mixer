@@ -95,10 +95,13 @@ export class Beamer {
   /**
    * Het canvas voor een nieuwe video-opname: dat van het losse venster als dat
    * mengt (het loopt door als het hoofdtabblad verborgen is), anders het eigen.
+   * Een verborgen los venster (geminimaliseerd, of achter het hoofdvenster op
+   * hetzelfde scherm) mengt NIET: zijn lus staat stil, dus zijn canvas ook.
    */
   opnameCanvas(hoofdCanvas) {
     const los = this.levend();
-    this.opnameWaar = los ? 'los' : 'hoofd';
-    return los ? los.mixer.canvas : hoofdCanvas;
+    const mengt = !!los && !isVerborgen(los.venster);
+    this.opnameWaar = mengt ? 'los' : 'hoofd';
+    return mengt ? los.mixer.canvas : hoofdCanvas;
   }
 }

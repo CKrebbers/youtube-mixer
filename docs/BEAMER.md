@@ -74,6 +74,14 @@ Een nieuwe video-opname neemt het canvas van het losse venster als dat mengt
 op de master in het hoofdvenster. Gemeten met het hoofdtabblad 2,5 s verborgen
 tijdens de opname: 54–55 beelden op 4 fps uit de mp4, en het beeld stond nergens langer dan één zo'n beeld (0,25 s) stil.
 
+Een VERBORGEN los venster (geminimaliseerd, of op hetzelfde scherm helemaal
+achter het hoofdvenster: macOS meldt dat als verborgen) mengt niet, want zijn
+lus staat stil. Een opname die dan start neemt het eigen canvas (controleur,
+25 sep: eerst nam hij het stilstaande canvas van het losse venster). Wordt het
+losse venster pas TIJDENS zijn eigen opname verborgen, dan staat het beeld in
+die opname stil tot het weer zichtbaar is. Op een beamer op een tweede scherm
+gebeurt dat niet.
+
 Gaat het losse venster dicht tijdens zijn eigen opname, dan staat het beeld in
 die opname vanaf dan stil. Het geluid loopt door. Daarom:
 

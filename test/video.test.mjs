@@ -224,6 +224,10 @@ console.log('\nde beamer: wie mengt er (het losse venster loopt door als het hoo
   venster.document = { hidden: true };
   ok('los venster verborgen (geminimaliseerd): zijn lus staat stil, het paneel mengt weer zelf',
     s(b.wieMengt({ paneelOpen: true })) === 'H--' && b.levend()?.venster === venster && weg === 1);
+  // Een verborgen los venster (geminimaliseerd, of op hetzelfde scherm achter
+  // het hoofdvenster) tekent niet: een opname van ZIJN canvas zou stilstaan.
+  ok('los venster verborgen: een nieuwe video-opname neemt het eigen canvas (dat mengt nu)',
+    b.opnameCanvas('hoofd-canvas') === 'hoofd-canvas' && b.opnameWaar === 'hoofd');
   venster.document.hidden = false;
   ok('weer zichtbaar: het losse venster neemt het weer over', s(b.wieMengt({ paneelOpen: true })) === '-LV');
   ok('een venster waar we niet in mogen kijken telt als zichtbaar', !isVerborgen({ get document() { throw new Error('SecurityError'); } }));
