@@ -1455,6 +1455,11 @@ console.log('\nrem (vinylstop)');
   NOW += 0.2;
   invoke('track.8.play', true);
   ok('play tijdens het remmen: los, niet pauzeren', dR.playing && !dR.remt);
+  // shift+Q (play.quant) is op een spelende track "zoals play": tijdens een rem dus ook los.
+  invoke('track.8.brake', true);
+  NOW += 0.2;
+  invoke('track.8.play.quant', true);
+  ok('play.quant tijdens het remmen: ook los, zoals play', dR.playing && !dR.remt && !dR.wacht);
 
   // Tempo tijdens het remmen: onthouden, de rem loopt door.
   invoke('track.8.brake', true);
@@ -2067,6 +2072,22 @@ console.log('\ntransport');
   druk('track.7.beatjump.fwd');
   ok('... 4 tellen past precies (38 – 40)', Math.abs(dG.loop.end - 40) < 1e-9);
   dG.clearLoop();
+  // Zonder loop voorbij het einde: weigeren. Klemmen op het einde liet de track
+  // eindigen en stoppen, midden in een set.
+  NOW = 715;
+  dG.seek(39); dG.play();                                       // 1 s voor het einde; 4 tellen = 2 s
+  const nEinde = meldingen.length;
+  druk('track.7.beatjump.fwd');
+  ok('beatjump voorbij het einde (zonder loop): niet gesprongen, hij speelt door', Math.abs(dG.position - 39) < 1e-9 && dG.playing);
+  ok('... met een melding', meldingen.length === nEinde + 1 && /einde/.test(meldingen.at(-1).tekst));
+  dG.seek(38);
+  const rEinde = dG.beatjump(1);
+  ok('... precies OP het einde landen is ook eindigen: niet (38 + 2 = 40)', !rEinde.ok && rEinde.waarom === 'einde' && Math.abs(dG.position - 38) < 1e-9);
+  dG.seek(37.9);
+  ok('... wat nog past, springt gewoon (37,9 -> 39,9)', dG.beatjump(1).ok && Math.abs(dG.position - 39.9) < 1e-9);
+  dG.seek(1);
+  ok('terug voorbij het begin: klemt op 0 en speelt door vanaf het begin', dG.beatjump(-1).ok && dG.position === 0 && dG.playing);
+  dG.stop();
 
   // Onzeker stuk (niet op slot): weigeren, zoals beat-loops.
   dG.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 }, { van: 10, bpm: 120, anker: 0, zekerheid: 0.3 }] }));
@@ -2240,7 +2261,10 @@ console.log('\ntransport');
   ok('na het maatbegin loopt hij, in fase met de maatgever', !dG.wacht && Math.abs(dG.position - 8.25) < 1e-9
     && Math.abs(dG.grid.phase(dG.position) - dM.grid.phase(dM.position)) < 1e-9);
   ok('... en ook op dezelfde plek in de maat (de "1" viel samen)', Math.abs(dG.grid.barPhase(dG.position) - dM.grid.barPhase(dM.position)) < 1e-9);
-  ok('... play.quant terwijl hij speelt: niets te doen (null)', read('track.7.play.quant') === null);
+  ok('... play.quant terwijl hij speelt: lampje gedimd (0,5), want drukken = pauze', read('track.7.play.quant') === 0.5);
+  // shift+Q was eerst gewoon play/pauze: op een spelende track pauzeert hij nog.
+  druk('track.7.play.quant');
+  ok('play.quant op een SPELENDE track: pauze, zoals play', !dG.playing && !dG.wacht && Math.abs(dG.position - 8.25) < 1e-9);
   dG.stop();
 
   // Startpunt een fractie na zijn tel (cue zonder quantize): de TEL valt op de 1.
@@ -2259,6 +2283,12 @@ console.log('\ntransport');
   // Pauze tijdens het wachten annuleert.
   druk('track.7.play');
   ok('pauze tijdens het wachten: stil, op het startpunt, bron weg', !dG.playing && !dG.wacht && dG.position === 8 && !dG.bron.source);
+  // Nog een keer play.quant tijdens het wachten: ook annuleren (net als play).
+  druk('track.7.play.quant');
+  ok('play.quant: wacht (weer) op het maatbegin 805,7', dG.wacht && Math.abs(dG.bron.wachtTot - 805.7) < 1e-9);
+  druk('track.7.play.quant');
+  ok('... nog een keer play.quant tijdens het wachten: geannuleerd, stil op het startpunt', !dG.playing && !dG.wacht
+    && dG.position === 8 && !dG.bron.source && read('track.7.play.quant') === 0);
   // Tempo, sprong en sync tijdens het wachten: het startmoment blijft.
   NOW = 804.0;
   eng.startOpDeMaat('G');                                       // maatbegin 805,7
@@ -2381,6 +2411,35 @@ console.log('\ntransport');
   ok('snapshot draagt in-punt, wachten en sprong', 'loopIn' in eng.snapshot().decks.G && eng.snapshot().decks.G.wacht === false
     && eng.snapshot().decks.G.sprongTellen === 4);
 
+  // ctxTimeOf tijdens het wachten, met een loop: tot T staat hij stil op P, dus
+  // een punt IN de loop vóór P komt pas na een ronde langs. Rekenen vanaf nu
+  // liep een denkbeeldige positie vóór P terug, en gaf dan een tijd vóór de
+  // start. fxKlok en de stukgrens vragen alleen punten ná P; dit is voor wie
+  // er later wel om vraagt.
+  {
+    const { ctxTijdVan } = await import('../src/engine/stream-kern.js');
+    dM.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));      // hierboven stond hij op onzeker
+    dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+    NOW = 820.0;
+    dM.stop(); dM.seek(0.3); dM.play();                         // maatbegin 2,0 = ctx 821,7
+    dG.stop(); dG.clearLoop(); dG.seek(8.0);
+    dG.setLoopRange(7.5, 8.5);                                  // loop van één tel, startpunt erin
+    eng.startOpDeMaat('G');
+    const Tl = dG.bron.wachtTot;
+    NOW = 820.1;                                                // 1,6 s vóór de start
+    ok(`ctxTimeOf tijdens het wachten, punt in de loop vóór het startpunt: na een ronde (T + 0,75; was ${(dG.ctxTimeOf(7.75) - Tl).toFixed(2)})`,
+      dG.wacht && Math.abs(Tl - 821.7) < 1e-9 && Math.abs(dG.ctxTimeOf(7.75) - (Tl + 0.75)) < 1e-9);
+    ok('... een punt erna: T + de afstand (8,25 -> T + 0,25), het startpunt zelf: T', Math.abs(dG.ctxTimeOf(8.25) - (Tl + 0.25)) < 1e-9
+      && Math.abs(dG.ctxTimeOf(8.0) - Tl) < 1e-9);
+    NOW = Tl + 0.6;                                             // na de start: 8,0 -> 8,5 -> 7,5 -> 7,6
+    ok('... en na de start komt hij er ook echt op dat moment langs', Math.abs(dG.position - 7.6) < 1e-9);
+    dG.stop(); dG.clearLoop(); dM.stop();
+    // De StreamBron (de app) rekent met dezelfde formule; ook met een andere rate.
+    const seg = { T: 10, P: 9, R: 1.25, loop: { start: 8, end: 10 }, speelt: true };
+    ok('ctxTijdVan met een geplande start: vanaf T, niet vanaf nu (8,5 -> 11,2)', Math.abs(ctxTijdVan(seg, 8.5, 8.0) - 11.2) < 1e-9
+      && Math.abs(ctxTijdVan(seg, 9.5, 8.0) - 10.4) < 1e-9);
+  }
+
   // Toetsen en uitleg.
   const { KEYMAP, SHIFT_ALIAS } = await import('../src/control/keyboard.js');
   const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
@@ -2416,10 +2475,15 @@ console.log('\ntransport');
       && Math.abs(dG.loop.start - 9) < 1e-9 && Math.abs(dG.loop.end - 11) < 1e-9);
     toets('KeyG', true);
     ok('toets shift+G: reloop/exit haalt de loop eraf', dG.loop === null);
+    const nQ = meldingen.length;
     toets('Digit6');
     ok('toets 6: quantize aan', eng.quantize === true);
+    ok('... met een melding: het toetsenbord heeft geen lampje', meldingen.length === nQ + 1
+      && /quantize aan/.test(meldingen.at(-1).tekst) && meldingen.at(-1).soort === 'info');
     toets('Digit6');
-    ok('... en weer uit', eng.quantize === false);
+    ok('... en weer uit, ook gemeld', eng.quantize === false && meldingen.length === nQ + 2 && /quantize uit/.test(meldingen.at(-1).tekst));
+    druk('transport.quantize'); druk('transport.quantize');
+    ok('... via de bus (scherm, APC) geen melding: daar zie je de stand', meldingen.length === nQ + 2 && eng.quantize === false);
     dG.stop(); dM.stop(); dM.seek(0); NOW = 900;
     dM.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));        // hierboven stond hij op onzeker
     toets('KeyP', true);
@@ -2428,6 +2492,11 @@ console.log('\ntransport');
     dG.seek(8);
     toets('KeyQ', true);
     ok('toets shift+Q: de track met focus (G) wacht op het maatbegin van H (902,0)', dG.wacht && Math.abs(dG.bron.wachtTot - 902) < 1e-9);
+    toets('KeyQ', true);
+    ok('toets shift+Q nog een keer tijdens het wachten: geannuleerd', !dG.playing && !dG.wacht);
+    dG.play();
+    toets('KeyQ', true);
+    ok('toets shift+Q op een spelende track: pauze, zoals vroeger', !dG.playing && !dG.wacht);
     dG.stop(); dM.stop(); dG.clearLoop();
   }
   const nieuw = ['track.7.beatjump.back', 'track.7.beatjump.fwd', 'track.7.beatjump.halve', 'track.7.beatjump.double',

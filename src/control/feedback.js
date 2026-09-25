@@ -38,7 +38,8 @@ const KLEURSCHEMA = [
   [/\.loop\.exit$/,  { aan: 'rood', uit: 'uit' }],
   [/\.loop\./,       { aan: 'cyaan', half: 'cyaandonker', uit: 'donkergrijs', tel: 'aan' }],
   [/\.play$/,        { aan: 'groen', uit: 'donkergrijs' }],
-  [/\.play\.quant$/, { aan: 'groen', uit: 'donkergrijs' }],       // aan = wacht op de maat
+  // aan = wacht op de maat, half = speelt (drukken = pauze, zoals play)
+  [/\.play\.quant$/, { aan: 'groen', half: 'groendonker', uit: 'donkergrijs' }],
   [/\.beatjump\.(back|fwd)$/, { aan: 'cyaan', uit: 'donkergrijs' }],
   // De lengte is een keuze (index), geen niveau: altijd gedimd, zoals sampler.length.
   [/\.beatjump\.(halve|double)$/, { aan: 'cyaandonker', half: 'cyaandonker', uit: 'cyaandonker' }],

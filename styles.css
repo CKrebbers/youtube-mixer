@@ -225,13 +225,17 @@ body.leermodus .knob,
 body.leermodus .btn,
 body.leermodus button.spg[data-action],
 body.leermodus .hc{outline:1px dashed #3a4752;outline-offset:2px;position:relative}
+/* de Q van quantize staat absoluut in de hoek van Lock: niet relative maken */
+body.leermodus .fd-quantize{outline:1px dashed #3a4752;outline-offset:2px}
 body.leermodus .knob.gekoppeld,
 body.leermodus .btn.gekoppeld,
 body.leermodus button.spg.gekoppeld,
+body.leermodus .fd-quantize.gekoppeld,
 body.leermodus .hc.gekoppeld{outline:1px solid var(--a)}
 body.leermodus .knob.leert,
 body.leermodus .btn.leert,
 body.leermodus button.spg.leert,
+body.leermodus .fd-quantize.leert,
 body.leermodus .hc.leert{outline:2px solid var(--warn);animation:leerpuls .8s ease-in-out infinite}
 @keyframes leerpuls{50%{outline-color:#6b4d10}}
 body.leermodus .knob::after,
@@ -752,7 +756,15 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
 .focusdeel[data-laag="rack"] .fd-laag{color:var(--b)}
 .fd-laag-uitleg{letter-spacing:0;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fd-knobs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 6px;margin:6px 0;justify-items:center}
-.fd-devknoppen{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}
+.fd-devknoppen{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;position:relative}
+/* Quantize: een Q in de rechterbovenhoek van Lock (kolom 2, rij 2), waar hij
+   op de APC komt. 50% + halve gap (1,5 px) + 2 px binnen de cel. Aan = vol. */
+.fd-quantize{position:absolute;z-index:1;top:calc(50% + 3.5px);right:calc(50% + 3.5px);
+  min-width:15px;height:15px;padding:0 3px;border:1px solid #3c4b58;border-radius:3px;
+  background:var(--panel);color:var(--klein);font:700 11px/13px ui-monospace,monospace}
+.fd-quantize:hover{border-color:var(--dim)}
+.fd-quantize[data-licht="aan"]{background:var(--a);border-color:var(--a);color:#061014;box-shadow:0 0 0 1px var(--panel)}
+.fd-quantize.hidden{display:none}
 .fd-pijlen{display:flex;align-items:center;gap:6px}
 .fd-pijlen > .spg{flex:1}
 .fd-kruis{display:grid;grid-template-columns:repeat(3,24px);grid-template-rows:repeat(3,18px);gap:1px}

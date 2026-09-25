@@ -26,6 +26,10 @@ ok('pad 1 van kolom 1 is de BOVENSTE rij (noot 0x20), niet 0x00', P.kolomControl
 ok('pad 5 van kolom 8 is rechtsonder (noot 0x07)', P.kolomControls(8)[5].sig === 'note:0:7');
 ok('track select 3 zit op kanaal 2', P.kolomControls(3).find((c) => c.rol === 'select').sig === 'note:2:51');
 ok('device knobs 1-8 zijn cc 16-23', P.DEVICE_KNOBS.map((c) => c.sig).join() === [16, 17, 18, 19, 20, 21, 22, 23].map((n) => `cc:0:${n}`).join());
+// De Q van quantize staat in de hoek van Lock; spiegel.js en styles.css
+// (.fd-quantize) rekenen met rij 2, knop 2 van de device-knoppen.
+ok('Lock is rij 2, knop 2 van de device-knoppen (daar staat de Q van quantize)',
+  P.DEVICE_KNOPPEN[1][1].sig === 'note:0:63' && apc.label('note:0:63') === 'device lock');
 
 // ---- wat de knoppen doen ---------------------------------------------------
 

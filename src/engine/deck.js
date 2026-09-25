@@ -588,7 +588,17 @@ export class Deck extends Emitter {
    * verschoven loop) zonder slot: weigeren, net als beat-loops. Een sprong
    * die een fractie van een tel naast valt, hoor je meteen.
    *
-   * @returns {{ ok: boolean, waarom?: 'leeg'|'geengrid'|'onzeker'|'rand' }}
+   * Voorbij het EINDE (zonder loop) ook weigeren ('einde'), net als een loop
+   * die buiten het nummer zou vallen ('rand'). Klemmen op het einde liet de
+   * track eindigen en stoppen: midden in een set is dat stilte op de vloer.
+   * Klemmen op de laatste hele tel die nog past helpt niet: dan eindigt hij
+   * een tel later alsnog, en de sprong is ongemerkt korter dan de lengte die
+   * je koos (weg frase). Weigeren laat de muziek gewoon doorspelen, met een
+   * melding; wat er nog over is, kun je zelf met een kortere sprong nemen.
+   * Voorbij het BEGIN blijft het klemmen op 0: de track speelt dan door
+   * vanaf het begin, alleen de fase verspringt (zoals een CDJ).
+   *
+   * @returns {{ ok: boolean, waarom?: 'leeg'|'geengrid'|'onzeker'|'rand'|'einde' }}
    */
   beatjump(richting, tellen = this.sprongTellen) {
     if (!this.buffer) return { ok: false, waarom: 'leeg' };
@@ -599,7 +609,8 @@ export class Deck extends Emitter {
     if (!this._opGrid(p) || !this._opGrid(doel)) return { ok: false, waarom: 'onzeker' };
     const l = this.loop;
     if (!l) {
-      // Voorbij begin of einde: tegen de rand, zoals een CDJ. Daar houdt de fase op.
+      // Precies OP het einde landen is ook eindigen: dan stopt hij meteen.
+      if (n > 0 && doel >= this.duration) return { ok: false, waarom: 'einde' };
       this.seek(doel);
       return { ok: true };
     }

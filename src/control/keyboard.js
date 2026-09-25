@@ -60,6 +60,18 @@ export const SHIFT_ALIAS = (id) => {
 };
 
 /**
+ * Schakelaars voor de hele engine die je vanaf het toetsenbord omzet zonder
+ * ernaar te kijken: wat de nieuwe stand is, komt even in de meldingstrook.
+ * Quantize verandert stil hoe cue en hotcues landen; zonder melding merk je
+ * dat pas bij de volgende hotcue.
+ */
+const MELD_NA = {
+  'transport.quantize': (engine) => (engine.quantize
+    ? 'quantize aan (alle tracks): cue, hotcues en loop in/out op de tel'
+    : 'quantize uit (alle tracks): cue, hotcues en loop in/out precies waar je drukt'),
+};
+
+/**
  * @param opts.venster  (v: 'L'|'R') -> deck-id dat daar nu staat. Zonder:
  *                      links track 1, rechts track 2.
  */
@@ -98,7 +110,7 @@ export function attachKeyboard(engine, opts = {}) {
     const basis = vul(KEYMAP[e.code]);
     const id = e.shiftKey ? SHIFT_ALIAS(basis) : basis;
     held.set(e.code, id);
-    invoke(id, true);
+    if (invoke(id, true) && MELD_NA[id]) engine.emit('melding', { tekst: MELD_NA[id](engine), soort: 'info' });
   });
 
   window.addEventListener('keyup', (e) => {

@@ -325,10 +325,12 @@ export function bindEngine(engine) {
     // Beatjump: de ingestelde lengte (1–32 tellen, standaard 4) terug of
     // vooruit, op het grid. In een loop schuift de loop mee. Zelfde regels als
     // beat-loops: zonder grid of in een onzeker stuk niets, en dan zeggen waarom.
+    // Voorbij het einde ook niet (Deck.beatjump): anders stopte de track.
     const sprongMelding = {
       geengrid: 'beatjump kan niet zonder beatgrid — tik eerst het tempo (TAP)',
       onzeker: ONZEKER,
       rand: 'beatjump: de loop komt dan buiten het nummer te liggen',
+      einde: 'beatjump: dat valt voorbij het einde van het nummer — niet gesprongen',
     };
     for (const [richting, naam, tekst] of [[-1, 'back', 'terug'], [1, 'fwd', 'vooruit']]) {
       let ingedrukt = false;
@@ -350,14 +352,19 @@ export function bindEngine(engine) {
 
     // Starten op de maat: het geluid begint op het volgende maatbegin van de
     // track die de maat geeft (Engine.startOpDeMaat); zonder maatgever meteen.
-    // Gewone play en pauze annuleren het wachten. Lampje: 1 = wacht op de
-    // maat, 0 = stil (bruikbaar), null = speelt al of leeg (niets te doen).
+    // Speelt hij al, of wacht hij nog op de maat, dan pauze, net als play:
+    // shift+Q was eerst gewoon play/pauze, en Clay's vingers pauzeren er nog
+    // mee. Nog een keer drukken tijdens het wachten annuleert het wachten.
+    // Tijdens een rem: los, ook net als play (togglePlay).
+    // Lampje: 1 = wacht op de maat, 0,5 = speelt (drukken = pauze), 0 = stil
+    // (bruikbaar), null = leeg (niets te doen).
     define(`${n}.play.quant`, 'trigger', (on) => {
-      if (!on || d.playing) return;
+      if (!on) return;
+      if (d.playing) { d.togglePlay(); return; }
       const r = engine.startOpDeMaat(id);
       if (r.reden) engine.emit('melding', { tekst: `track ${nr}: ${r.reden}`, soort: r.ok ? 'info' : 'fout' });
-    }, { label: `Track ${nr} starten op de volgende maat van de maatgever`,
-         read: () => (!d.buffer ? null : d.wacht ? 1 : d.playing ? null : 0) });
+    }, { label: `Track ${nr} starten op de volgende maat van de maatgever (speelt hij: pauze)`,
+         read: () => (!d.buffer ? null : d.wacht ? 1 : d.playing ? 0.5 : 0) });
 
     define(`${n}.nudge.back`, 'trigger', (on) => { if (on) d.nudge(-0.05); }, { label: `Track ${nr} nudge -` });
     define(`${n}.nudge.fwd`, 'trigger', (on) => { if (on) d.nudge(0.05); }, { label: `Track ${nr} nudge +` });

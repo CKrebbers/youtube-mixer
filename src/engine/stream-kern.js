@@ -100,28 +100,37 @@ export const remStil = (seg) => (seg.speelt && seg.rem ? seg.T - seg.R / seg.rem
  * rekenen vanaf P gaf dan een tijd in het verleden, en gate en sampler
  * vielen naast de tel. Tijdens een rem: null als hij stilstaat voordat hij
  * er is.
+ *
+ * Een GEPLANDE start (T na `nu`, starten op de maat): tot T staat hij stil op
+ * P, dus er wordt vanaf T gerekend, niet vanaf `nu`. Rekenen vanaf `nu` liep
+ * een denkbeeldige positie vóór P terug, en een punt in de loop tussen die
+ * positie en P kreeg dan een tijd vóór T, terwijl hij daar pas na een ronde
+ * langskomt. Een punt achter P buiten de loop geeft (net als een punt achter
+ * de speelkop) een tijd vóór T: daar komt hij niet meer langs.
  */
 export function ctxTijdVan(seg, x, nu = seg.T) {
   if (!seg.speelt) return null;
-  const pos = positieOp(seg, nu);
+  const vanaf = Math.max(nu, seg.T);
+  const pos = positieOp(seg, vanaf);
   const loop = seg.loop;
   const rond = loop && x < pos && x >= loop.start && loop.end > loop.start;
   if (!seg.rem) {
-    let t = nu + (x - pos) / seg.R;
+    let t = vanaf + (x - pos) / seg.R;
     if (rond) t += (loop.end - loop.start) / seg.R;
     return t;
   }
   // Remmen: de afstand s afleggen met snelheid v die met a afneemt, dus
   // v·τ + a·τ²/2 = s. De kleinste wortel, in de vorm die niet wegvalt als a
   // klein is: τ = 2s / (v + √(v² + 2as)). Onder de wortel negatief: hij
-  // staat eerder stil.
+  // staat eerder stil. (Een gepland segment heeft geen rem; `vanaf` is hier
+  // dus gewoon `nu`, tenzij iemand ooit een rem in de toekomst plant.)
   const s = x - pos + (rond ? loop.end - loop.start : 0);
-  if (s === 0) return nu;
-  const v = snelheidOp(seg, nu);
+  if (s === 0) return vanaf;
+  const v = snelheidOp(seg, vanaf);
   const d = v * v + 2 * seg.rem.a * s;
   if (d < 0) return null;
   const tau = (2 * s) / (v + Math.sqrt(d));
-  return Number.isFinite(tau) ? nu + tau : null;
+  return Number.isFinite(tau) ? vanaf + tau : null;
 }
 
 // ---- WAV ------------------------------------------------------------------
