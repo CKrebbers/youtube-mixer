@@ -50,6 +50,8 @@ export class Opnemer {
     this.fout = null;
     this._rij = Promise.resolve();
     this._klaar = null;
+    this.onBegin = null;       // (id) => void: de opname loopt (het handelingenlog begint dan mee)
+    this.onEind = null;        // (id) => void: de opname stopt
   }
 
   get bezig() { return !!this.node; }
@@ -111,6 +113,8 @@ export class Opnemer {
     node.connect(this._stil).connect(ctx.destination);
     this.node = node;
     if (video) this._startVideo(video, soort);
+    // Het handelingenlog hoort bij de opname, met hetzelfde id (logboek.js).
+    try { this.onBegin?.(this.id); } catch (err) { console.warn('[opname] onBegin:', err); }
     return { ok: true, bestand: this.bestand, video: soort?.ext ?? null };
   }
 
@@ -202,6 +206,7 @@ export class Opnemer {
     node.disconnect();
     this._stil?.disconnect();
     this.node = null;
+    try { this.onEind?.(id); } catch (err) { console.warn('[opname] onEind:', err); }
     await this._stopVideo();
     await this._rij;                       // alles wat onderweg was, eerst binnen
     try {

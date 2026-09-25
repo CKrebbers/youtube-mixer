@@ -6,6 +6,7 @@ import { attachKeyboard } from '../control/keyboard.js';
 import { meld, koppelMeldingen } from './meldingen.js';
 import { opzetVideo } from './video-paneel.js';
 import { opzetOpname } from './opname-knop.js';
+import { opzetLogboek } from './logboek.js';
 import { opzetVensters } from './vensters.js';
 import { opzetSpiegel } from './spiegel.js';
 import { opzetRacks } from './racks.js';
@@ -64,6 +65,8 @@ window.meld = meld;
 const staat = {
   venster: { L: 'A', R: 'B' },          // L = track met focus, R = de vorige focus (zie vensters.js)
   deckTrack: perDeck(() => null),       // welk library-nummer op welke track (null = los bestand, demo, leeg)
+  deckHerkomst: perDeck(() => null),    // waar de track vandaan komt: library, demo of los (voor het handelingenlog)
+  terugspeelDecks: new Set(),           // tracks die terugspelen laadde: daarvan wordt niets in de library bewaard
   analysis: perDeck(() => null),        // golfvorm-peaks per track
 };
 
@@ -97,14 +100,20 @@ const vensters = opzetVensters({
 });
 
 // ---- effect-racks, sampler-pads, laden en library -------------------------
-const racks = opzetRacks({ engine, staat });
+const racks = opzetRacks({ engine, staat, naRack: (id) => logboek.naRack(id) });
 const samplerOpslag = opzetSamplerOpslag({ engine, staat });
 const hotcueOpslag = opzetHotcueOpslag({ engine, meld });
 const laden = opzetLaden({
   engine, staat, videoMixer,
   racks, haalSamples: samplerOpslag.haalSamples, haalHotcues: hotcueOpslag.haalHotcues,
+  naLaad: (info) => logboek.naLaad(info),
 });
 window.library = laden.library;
+
+// ---- handelingenlog: wat er op de bus gebeurt, om terug te spelen ---------
+// Loopt vanzelf mee met een opname (zelfde id). docs/HANDELINGENLOG.md.
+const logboek = opzetLogboek({ engine, staat, laden, opnemer: opname.opnemer });
+window.logboek = logboek;
 
 const onderpanelen = opzetOnderpanelen({ library: laden.library, rackEditor: racks.rackEditor });
 
@@ -164,6 +173,7 @@ startRenderloop({
     volgRackKiezer: racks.volgRackKiezer,
     koppelpaneel: () => midiDelen.mapPanel.tick(),
     opnemen: opname.teken,
+    logboek: logboek.teken,
     video: video.teken,
   },
 });

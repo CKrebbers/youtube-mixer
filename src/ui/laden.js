@@ -3,6 +3,7 @@ import { Beatgrid } from '../engine/beatgrid.js';
 import { trackVanDeck } from '../control/actions.js';
 import { LibraryPanel, isVideoBestand, isMediaBestand } from './library-panel.js';
 import { computePeaks, rmsDb, laadPeaks } from '../analysis/peaks.js';
+import { renderDemoTrack } from '../analysis/demo-track.js';
 import { meld } from './meldingen.js';
 
 /**
@@ -11,10 +12,20 @@ import { meld } from './meldingen.js';
  * en de tap-verfijning door de server.
  *
  * Hier wordt ook de golfvorm-analyse (`staat.analysis`) bijgehouden en welk
- * library-nummer er op welke track staat (`staat.deckTrack`).
+ * library-nummer er op welke track staat (`staat.deckTrack`), plus waar een
+ * track vandaan komt (`staat.deckHerkomst`: library, demo of een los bestand).
+ * `naLaad` hoort elke geslaagde laad (het handelingenlog, logboek.js).
+ *
+ * Terugspelen (logboek.js) laadt via `laadVoorTerugspelen`: dezelfde weg,
+ * maar met het grid uit het log en ZONDER iets te bewaren. Zo'n track staat
+ * in `staat.terugspeelDecks` tot er gewoon iets anders op geladen wordt:
+ * grid, toonsoort, hotcues, tap-verfijning en sampler-pads van een set van
+ * toen mogen niet over wat er nu in de library staat heen.
  */
-export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haalHotcues = () => {} }) {
+export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haalHotcues = () => {}, naLaad = () => {} }) {
   const { deckTrack, analysis } = staat;
+  const terugspeelDecks = staat.terugspeelDecks;
+  const deckHerkomst = staat.deckHerkomst;
   const perDeck = (maak) => Object.fromEntries(DECK_IDS.map((id) => [id, maak(id)]));
 
   const laadTeller = perDeck(() => 0);
@@ -35,6 +46,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     deckTrack[id] = null;
     gridBewaard[id] = null;
     toonBewaard[id] = null;
+    terugspeelDecks.delete(id);
     racks.losVanNummer(id);
   }
 
@@ -42,8 +54,12 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
    * Een AudioBuffer op een track, via de streamkern (één afspeelmotor): loops
    * zonder tik, declick en knippen zoals bij de library. False als er intussen
    * iets anders op deze track geladen werd.
+   *
+   * `herkomst` zegt wat het is, voor het handelingenlog: de demotrack is
+   * terug te maken ({ bron: 'demo', demo: { seed, bars } }), een los bestand niet.
    */
-  async function laadBuffer(id, buf, titel) {
+  async function laadBuffer(id, buf, titel, herkomst = { bron: 'los' }) {
+    const begon = performance.now();
     losVanLibrary(id);
     const mijnLaad = laadTeller[id];
     let gelukt;
@@ -56,6 +72,8 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     if (!gelukt || !nogDeLaatste(id, mijnLaad)) return false;
     videoMixer.zetBron(id, null);
     analysis[id] = computePeaks(buf);
+    deckHerkomst[id] = herkomst;
+    naLaad({ deckId: id, ...herkomst, nummer: null, titel, duur: (performance.now() - begon) / 1000, grid: null });
     return true;
   }
 
@@ -106,7 +124,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     {
       for (const id of DECK_IDS) {
         const trackId = deckTrack[id];
-        if (!trackId) continue;
+        if (!trackId || terugspeelDecks.has(id)) continue;   // terugspelen: het grid van toen niet bewaren
         const grid = engine.deck(id).grid;
         const tekst = grid ? JSON.stringify(grid.toJSON()) : 'null';
         if (tekst === gridBewaard[id]) continue;
@@ -137,7 +155,8 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
   async function bewaarToon() {
     for (const id of DECK_IDS) {
       const trackId = deckTrack[id];
-      if (!trackId) continue;
+      // Terugspelen: niets naar de library, net als het grid (zie boven).
+      if (!trackId || terugspeelDecks.has(id)) continue;
       const kaart = engine.deck(id).toonKaart;
       const tekst = toonTekst(kaart);
       if (tekst === toonBewaard[id]) continue;
@@ -181,6 +200,8 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     if (taps < 4 || verfijnBezig) return;
     const trackId = deckTrack[deck];
     if (!trackId) return;                       // demotrack of losgesleept bestand
+    // Terugspelen: het verfijnde grid van toen staat al in het log (een grid-gebeurtenis).
+    if (terugspeelDecks.has(deck)) return;
     verfijnBezig = true;
     // De TAP-knop staat alleen op het scherm voor de track met focus.
     const knop = deck === engine.focus ? document.querySelector('#focus-deck .tap') : null;
@@ -234,6 +255,108 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     }
   }
 
+  /**
+   * Een library-nummer op een track, streamend. Voor de library (onLaad) en
+   * voor terugspelen (`terugspelen: true`, met het grid uit het log): dan
+   * worden racks en pads NIET uit de library gehaald (die komen uit het log)
+   * en wordt er niets bewaard.
+   */
+  async function laadLibrary(deckId, track, { terugspelen = false, grid } = {}) {
+    const begon = performance.now();
+    // NIET wachten op engine.resume(): zonder gebruikersgebaar lost die belofte
+    // nooit in en blijft het laden eeuwig hangen. Laden kan prima op een
+    // gepauzeerde context; hervatten proberen we daarna, en lukt dat niet dan
+    // zeggen we het gewoon.
+    // Streamen: alleen de kop en de eerste pagina's, niet het hele bestand.
+    // Een uur kost zo een paar MB in plaats van 1,4 GB.
+    const url = '/' + track.audio.replace(/^\//, '');
+    // Klik je snel een tweede nummer op dezelfde track, dan wint dat. Deze
+    // laad mag daarna niets meer zetten: geen titel, golfvorm, grid of video
+    // van het verkeerde nummer.
+    const mijnLaad = nieuweLaad(deckId);
+    if (!(await engine.deck(deckId).laadStream(url, track.titel))) return null;
+    // Vanaf hier staat het NIEUWE nummer op het deck, zonder grid en
+    // toonsoort (_naLaden), maar deckTrack wijst nog naar het vorige. Liep
+    // de bewaarlus (om de 1,5 s) in dat gat, terwijl de golfvorm hieronder
+    // nog binnenkwam, dan stuurde hij grid: null en toon: null naar het
+    // VORIGE nummer en wiste daar slot en correcties. Tot alles hieronder
+    // staat, hoort deze track dus bij geen enkel nummer.
+    deckTrack[deckId] = null;
+    const duur = engine.deck(deckId).duration;
+    // Golfvorm uit de cache. Zelf uitrekenen kan niet meer: er is geen buffer.
+    const uitCache = track.peaks ? await laadPeaks('/' + track.peaks.bestand.replace(/^\//, ''),
+      { samplesPerBucket: track.peaks.perBucket, duration: track.duur || duur }) : null;
+    if (!nogDeLaatste(deckId, mijnLaad)) return null;
+    analysis[deckId] = uitCache;
+    videoMixer.zetBron(deckId, track.video ? '/' + track.video.replace(/^\//, '') : null);
+    deckTrack[deckId] = track.id;
+    deckHerkomst[deckId] = { bron: 'library', nummer: track.id };
+    if (terugspelen) {
+      terugspeelDecks.add(deckId);
+      // Het grid van toen. Racks, pads en hotcues van dit nummer niet
+      // ophalen: die staan in het log (hotcues als 'hotcues'-gebeurtenis, zie
+      // logboek.js); de kiezer toont dan alleen de kant-en-klare. Zonder
+      // haalHotcues weet de hotcue-opslag niet welk nummer dit is, dus wat
+      // terugspelen aan hotcues zet gaat ook niet naar de server.
+      engine.deck(deckId).setGrid(grid ?? null);
+      racks.losVanNummer(deckId);
+    } else {
+      terugspeelDecks.delete(deckId);
+      // Een eerder uitgemeten grid komt mee met de link.
+      engine.deck(deckId).setGrid(track.grid || null);
+      racks.haalRacks(deckId);
+      haalSamples(deckId, track.id);
+      haalHotcues(deckId, track.id);
+    }
+    gridBewaard[deckId] = track.grid ? JSON.stringify(track.grid) : 'null';
+    // De toonsoort van de plaat (TOONSOORT.md §3), zoals /api/library hem geeft.
+    // Ook bij terugspelen: de kaart hoort bij de plaat van NU (correcties van
+    // toen staan er al in); bewaarToon slaat terugspeelDecks over.
+    toonBewaard[deckId] = toonTekst(engine.deck(deckId).setToonKaart(track.toon ?? null));
+    haalOnsets(deckId, track.id, mijnLaad);
+    console.log(`[deck ${deckId}] ${track.titel} — ${duur.toFixed(1)}s — streamt`
+      + (terugspelen ? ' — terugspelen' : '') + (uitCache ? '' : ' — LET OP: geen peaks.bin, dus geen golfvorm'));
+    const g = engine.deck(deckId).grid;
+    naLaad({ deckId, bron: 'library', nummer: track.id, titel: track.titel,
+      duur: (performance.now() - begon) / 1000, grid: g ? g.toJSON() : null });
+
+    engine.resume().catch(() => {});
+    if (engine.ctx.state !== 'running') {
+      return { hint: 'druk op "audio starten" om geluid te krijgen' };
+    }
+    return null;
+  }
+
+  /**
+   * Laden voor terugspelen (logboek.js), uit een laad-gebeurtenis of de
+   * beginstand van een log: { bron, nummer, titel, grid, demo }. True als het
+   * lukte. Een los bestand is niet terug te halen: dat zeggen we.
+   */
+  async function laadVoorTerugspelen(deckId, e) {
+    const nr = trackVanDeck(deckId);
+    if (e.bron === 'demo') {
+      await engine.resume().catch(() => {});
+      const demo = { seed: Number(e.demo?.seed) || 0, bars: Number(e.demo?.bars) || 16 };
+      return laadBuffer(deckId, renderDemoTrack(engine.ctx, demo), e.titel || `demo ${nr}`, { bron: 'demo', demo });
+    }
+    if (e.bron !== 'library' || !e.nummer) {
+      meld(`terugspelen: op track ${nr} stond een los bestand${e.titel ? ` ("${e.titel}")` : ''} — dat is niet terug te halen`, 'fout');
+      return false;
+    }
+    let track;
+    try {
+      const r = await fetch(`/api/library/${encodeURIComponent(e.nummer)}`);
+      if (r.status === 404) throw new Error('staat niet meer in de library');
+      if (!r.ok) throw new Error(`${r.status}`);
+      track = (await r.json()).track;
+    } catch (err) {
+      meld(`terugspelen: "${e.titel || e.nummer}" op track ${nr}: ${err.message}`, 'fout');
+      return false;
+    }
+    await laadLibrary(deckId, track, { terugspelen: true, grid: e.grid ?? null });
+    return deckTrack[deckId] === track.id;
+  }
+
   // ---- library --------------------------------------------------------------
   // Het paneel praat met de server; het laden op een deck loopt hierlangs, want
   // hier wordt ook de golfvorm-analyse bijgehouden.
@@ -261,53 +384,8 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
         toonBewaard[id] = toonTekst(engine.deck(id).setToonKaart(toon));
       }
     },
-    onLaad: async (deckId, track) => {
-      // NIET wachten op engine.resume(): zonder gebruikersgebaar lost die belofte
-      // nooit in en blijft het laden eeuwig hangen. Laden kan prima op een
-      // gepauzeerde context; hervatten proberen we daarna, en lukt dat niet dan
-      // zeggen we het gewoon.
-      // Streamen: alleen de kop en de eerste pagina's, niet het hele bestand.
-      // Een uur kost zo een paar MB in plaats van 1,4 GB.
-      const url = '/' + track.audio.replace(/^\//, '');
-      // Klik je snel een tweede nummer op dezelfde track, dan wint dat. Deze
-      // laad mag daarna niets meer zetten: geen titel, golfvorm, grid of video
-      // van het verkeerde nummer.
-      const mijnLaad = nieuweLaad(deckId);
-      if (!(await engine.deck(deckId).laadStream(url, track.titel))) return null;
-      // Vanaf hier staat het NIEUWE nummer op het deck, zonder grid en
-      // toonsoort (_naLaden), maar deckTrack wijst nog naar het vorige. Liep
-      // de bewaarlus (om de 1,5 s) in dat gat, terwijl de golfvorm hieronder
-      // nog binnenkwam, dan stuurde hij grid: null en toon: null naar het
-      // VORIGE nummer en wiste daar slot en correcties. Tot alles hieronder
-      // staat, hoort deze track dus bij geen enkel nummer.
-      deckTrack[deckId] = null;
-      const duur = engine.deck(deckId).duration;
-      // Golfvorm uit de cache. Zelf uitrekenen kan niet meer: er is geen buffer.
-      const uitCache = track.peaks ? await laadPeaks('/' + track.peaks.bestand.replace(/^\//, ''),
-        { samplesPerBucket: track.peaks.perBucket, duration: track.duur || duur }) : null;
-      if (!nogDeLaatste(deckId, mijnLaad)) return null;
-      analysis[deckId] = uitCache;
-      videoMixer.zetBron(deckId, track.video ? '/' + track.video.replace(/^\//, '') : null);
-      deckTrack[deckId] = track.id;
-      // Een eerder uitgemeten grid komt mee met de link.
-      engine.deck(deckId).setGrid(track.grid || null);
-      racks.haalRacks(deckId);
-      haalSamples(deckId, track.id);
-      haalHotcues(deckId, track.id);
-      gridBewaard[deckId] = track.grid ? JSON.stringify(track.grid) : 'null';
-      // De toonsoort van de plaat (TOONSOORT.md §3), zoals /api/library hem geeft.
-      toonBewaard[deckId] = toonTekst(engine.deck(deckId).setToonKaart(track.toon ?? null));
-      haalOnsets(deckId, track.id, mijnLaad);
-      console.log(`[deck ${deckId}] ${track.titel} — ${duur.toFixed(1)}s — streamt`
-        + (uitCache ? '' : ' — LET OP: geen peaks.bin, dus geen golfvorm'));
-
-      engine.resume().catch(() => {});
-      if (engine.ctx.state !== 'running') {
-        return { hint: 'druk op "audio starten" om geluid te krijgen' };
-      }
-      return null;
-    },
+    onLaad: (deckId, track) => laadLibrary(deckId, track),
   });
 
-  return { laadBuffer, loadFile, library, libPaneel };
+  return { laadBuffer, loadFile, library, libPaneel, laadVoorTerugspelen };
 }

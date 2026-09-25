@@ -283,6 +283,155 @@ try {
   ok('video zonder laag staat rechtop (vier kwarten)', orient.zonder === rechtop, orient.zonder);
   ok('video ONDER een vormlaag staat ook rechtop', orient.met === rechtop, orient.met);
   ok('de vormlaag zelf staat rechtop en vult tot in de hoeken', orient.laag === rechtop, orient.laag);
+
+  // ---- handelingenlog: vastleggen, bewaren, terugspelen (docs/HANDELINGENLOG.md) ----
+  console.log('handelingenlog');
+  meldingen.length = 0;
+  await evalueer("window.engine.setFocus('A'); document.querySelector('#focus-deck .demo-btn').click()");
+  for (let i = 0; i < 50 && !(await evalueer("window.engine.deck('A').title?.startsWith('demo 1')")); i++) await wacht(200);
+  await evalueer("document.getElementById('log-btn').click()");
+  ok('○ log: het log loopt', await evalueer('window.logboek.log.bezig'));
+  await wacht(300);
+  await evalueer(`(() => {
+    __act.invoke('track.1.play', true); __act.invoke('track.1.play', false);
+    __act.invoke('track.1.fader', 0.6); __act.invoke('mixer.xfader', 0.3);
+    window.engine.setFocus('B');
+  })()`);
+  await wacht(700);
+  await evalueer("window.engine.setFocus('A'); __act.invoke('track.1.low', 0.2)");
+  await wacht(1200);
+  await foto('handelingenlog-loopt.png');
+  ok('de knop toont tijd en grootte (renderloop)', await evalueer("/^◉ log \\d+:\\d\\d · \\d+ kB$/.test(document.getElementById('log-btn').textContent)"),
+    await evalueer("document.getElementById('log-btn').textContent"));
+  const eindStand = await evalueer("({ fader: window.engine.deck('A').ui.fader, x: window.engine.xfader, low: window.engine.deck('A').ui.low, speelt: window.engine.deck('A').playing })");
+  await evalueer("document.getElementById('log-btn').click()");
+  for (let i = 0; i < 25 && (await evalueer('window.logboek.log.bezig')); i++) await wacht(200);
+  const logs = await evalueer("fetch('/api/handelingen').then((r) => r.json()).then((j) => j.logs)");
+  ok('bewaard: één log, netjes af', logs.length === 1 && logs[0].af && !logs[0].opname, JSON.stringify(logs[0]));
+  const inhoud = await evalueer(`fetch('/api/handelingen/${logs[0].id}').then((r) => r.text())`);
+  const regels = inhoud.trim().split('\n').map((r) => JSON.parse(r));
+  const stand = regels.find((r) => r.e === 'stand');
+  ok('beginstand: track 1 is de demo (terug te maken), focus op 1', stand?.tracks[0].bron === 'demo' && stand.tracks[0].demo?.seed === 0 && stand.focus === 1);
+  ok('de actions staan erin, in volgorde', regels.filter(Array.isArray).map((a) => a[1]).join() === 'track.1.play,track.1.play,track.1.fader,mixer.xfader,track.1.low');
+  ok('focus heen en terug als gebeurtenis (de banen gaan buiten de bus om)', regels.filter((r) => r.e === 'focus').map((r) => r.track).join() === '2,1');
+  // Alles anders zetten, en terugspelen via de lijst.
+  await evalueer("__act.invoke('track.1.fader', 0.1); __act.invoke('mixer.xfader', 0.9); __act.invoke('track.1.low', 0.9); window.engine.deck('A').pause()");
+  await evalueer("document.getElementById('terug-btn').click()");
+  for (let i = 0; i < 25 && !(await evalueer("!!document.querySelector('#log-lijst [data-speel]')")); i++) await wacht(200);
+  ok('↺ toont de lijst', await evalueer(`!!document.querySelector('#log-lijst [data-speel="${logs[0].id}"]')`));
+  await foto('handelingenlog-lijst.png');
+  await evalueer(`document.querySelector('#log-lijst [data-speel="${logs[0].id}"]').click()`);
+  ok('er staat iets op de tracks: eerst "nog eens"', await evalueer("document.querySelector('#log-lijst [data-speel]').textContent.startsWith('nog eens')"));
+  await evalueer(`document.querySelector('#log-lijst [data-speel="${logs[0].id}"]').click()`);
+  for (let i = 0; i < 25 && !(await evalueer('window.logboek.terugspeler.bezig')); i++) await wacht(200);
+  ok('terugspelen loopt', await evalueer('window.logboek.terugspeler.bezig'));
+  for (let i = 0; i < 40 && (await evalueer('window.logboek.terugspeler.bezig')); i++) await wacht(200);
+  const naTerug = await evalueer("({ fader: window.engine.deck('A').ui.fader, x: window.engine.xfader, low: window.engine.deck('A').ui.low, speelt: window.engine.deck('A').playing, focus: window.engine.focus })");
+  ok('klaar, en dezelfde eindstand als toen', JSON.stringify({ ...naTerug, focus: undefined }) === JSON.stringify({ ...eindStand, focus: undefined }) && naTerug.focus === 'A',
+    `${JSON.stringify(naTerug)} / ${JSON.stringify(eindStand)}`);
+  // Met een opname mee: zelfde id.
+  await evalueer("document.getElementById('opname-btn').click()");
+  for (let i = 0; i < 25 && !(await evalueer('window.opnemer.bezig && window.logboek.log.id')); i++) await wacht(200);
+  ok('opname gestart: het log begint mee, met hetzelfde id', await evalueer('window.logboek.log.bezig && window.logboek.log.opname === window.opnemer.id && window.logboek.log.id === window.opnemer.id'),
+    await evalueer('`${window.opnemer.id} / ${window.logboek.log.id}`'));
+  await wacht(1200);
+  await evalueer("document.getElementById('opname-btn').click(); document.getElementById('opname-btn').click()");
+  for (let i = 0; i < 25 && (await evalueer('window.opnemer.bezig || window.logboek.log.bezig')); i++) await wacht(200);
+  const logs2 = await evalueer("fetch('/api/handelingen').then((r) => r.json()).then((j) => j.logs)");
+  ok('opname gestopt: het log ook, en de lijst weet dat er een opname bij is', logs2.length === 2 && logs2.some((l) => l.opname && l.af));
+  // Opnieuw renderen: ● opnemen en dan terugspelen. Het log van die opname
+  // krijgt de beginstand van het terugspelen erin (een stand midden in het log),
+  // en speelt daardoor zelf ook terug, met dezelfde eindstand.
+  {
+    const eindNu = "({ fader: window.engine.deck('A').ui.fader, x: window.engine.xfader, low: window.engine.deck('A').ui.low, speelt: window.engine.deck('A').playing })";
+    const husselen = "__act.invoke('track.1.fader', 0.1); __act.invoke('mixer.xfader', 0.9); __act.invoke('track.1.low', 0.9); window.engine.deck('A').pause()";
+    const speelLog = async (id) => {
+      await evalueer("document.getElementById('terug-btn').click()");
+      for (let i = 0; i < 25 && !(await evalueer(`!!document.querySelector('#log-lijst [data-speel="${id}"]:not([disabled])')`)); i++) await wacht(200);
+      await evalueer(`document.querySelector('#log-lijst [data-speel="${id}"]').click(); document.querySelector('#log-lijst [data-speel="${id}"]').click()`);
+      for (let i = 0; i < 25 && !(await evalueer('window.logboek.terugspeler.bezig')); i++) await wacht(200);
+      // Terugspelen duurt op de audioklok zo lang als het log (hier ruim 10 s
+      // audioklok); 8 s wachten was op een drukke machine te kort.
+      for (let i = 0; i < 150 && (await evalueer('window.logboek.terugspeler.bezig')); i++) await wacht(200);
+    };
+    await evalueer(husselen);
+    await evalueer("document.getElementById('opname-btn').click()");
+    for (let i = 0; i < 25 && !(await evalueer('window.opnemer.bezig && window.logboek.log.id')); i++) await wacht(200);
+    const opnId = await evalueer('window.logboek.log.id');
+    await speelLog(logs[0].id);
+    const na2 = await evalueer(eindNu);
+    await evalueer("document.getElementById('opname-btn').click(); document.getElementById('opname-btn').click()");
+    for (let i = 0; i < 25 && (await evalueer('window.opnemer.bezig || window.logboek.log.bezig')); i++) await wacht(200);
+    const r2 = (await evalueer(`fetch('/api/handelingen/${opnId}').then((r) => r.text())`)).split('\n').filter(Boolean).map((r) => JSON.parse(r));
+    const standen = r2.filter((r) => r.e === 'stand');
+    ok('opname van een replay: de stand van het terugspelen staat midden in zijn log', standen.length === 2 && standen[1].t > 0
+      && standen[1].tracks[0].bron === 'demo' && standen[1].tracks[0].speelt === false, `${standen.length} standen`);
+    await evalueer(husselen);
+    await speelLog(opnId);
+    const na3 = await evalueer(eindNu);
+    ok('en die opname speelt zelf ook terug: dezelfde eindstand', JSON.stringify(na3) === JSON.stringify(na2) && na2.speelt,
+      `${JSON.stringify(na3)} / ${JSON.stringify(na2)}`);
+  }
+  // Een ECHT library-nummer (een klikspoor door de ingest): terugspelen laadt
+  // het streamend terug op dezelfde track, met het grid uit het log.
+  {
+    const SR = 48000, N = SR * 12, wav = Buffer.alloc(44 + N * 4);
+    wav.write('RIFF', 0); wav.writeUInt32LE(36 + N * 4, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20); wav.writeUInt16LE(2, 22); wav.writeUInt32LE(SR, 24); wav.writeUInt32LE(SR * 4, 28);
+    wav.writeUInt16LE(4, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(N * 4, 40);
+    for (let t = 0; t < 12; t += 0.5) for (let i = 0; i < 400; i++) {
+      const v = Math.round(16000 * Math.exp(-i / 60) * Math.sin(2 * Math.PI * 800 * i / SR)), o = 44 + (Math.round(t * SR) + i) * 4;
+      wav.writeInt16LE(v, o); wav.writeInt16LE(v, o + 2);
+    }
+    const up = await fetch(`http://localhost:${POORT}/api/upload?naam=klikspoor.wav`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav }).then((r) => r.json());
+    let nummer = null;
+    for (let i = 0; i < 150 && !nummer; i++) {
+      await wacht(200);
+      const o = (await fetch(`http://localhost:${POORT}/api/ingest`).then((r) => r.json())).opdrachten.find((x) => x.id === up.id);
+      if (o?.status === 'klaar') nummer = o.track.id;
+      if (o?.status === 'mislukt') break;
+    }
+    ok('een klikspoor door de ingest: een library-nummer', !!nummer, nummer || up.fout);
+    await evalueer(`(async () => { const { track } = await (await fetch('/api/library/${nummer}')).json(); await window.library.onLaad('B', track); })()`);
+    await evalueer("document.getElementById('log-btn').click()");
+    await wacht(300);
+    await evalueer("__act.invoke('track.2.fader', 0.5); __act.invoke('track.2.play', true); __act.invoke('track.2.play', false)");
+    await wacht(1200);
+    const posToen = await evalueer("window.engine.deck('B').position");
+    await evalueer("document.getElementById('log-btn').click()");
+    for (let i = 0; i < 25 && (await evalueer('window.logboek.log.bezig')); i++) await wacht(200);
+    const l3 = (await evalueer("fetch('/api/handelingen').then((r) => r.json()).then((j) => j.logs)"))[0];
+    const st3 = (await evalueer(`fetch('/api/handelingen/${l3.id}').then((r) => r.text())`)).split('\n').filter(Boolean).map((r) => JSON.parse(r)).find((r) => r.e === 'stand');
+    ok('beginstand: track 2 is dat library-nummer', st3?.tracks[1].bron === 'library' && st3.tracks[1].nummer === nummer);
+    // Iets anders op track 2, en terugspelen.
+    await evalueer("document.querySelector('#focus-deck .demo-btn') && window.engine.setFocus('B')");
+    await evalueer("document.querySelector('#focus-deck .demo-btn').click()");
+    for (let i = 0; i < 50 && !(await evalueer("window.engine.deck('B').title?.startsWith('demo')")); i++) await wacht(200);
+    await evalueer("window.engine.deck('B').pause(); __act.invoke('track.2.fader', 0.1)");
+    await evalueer("document.getElementById('terug-btn').click()");
+    for (let i = 0; i < 25 && !(await evalueer(`!!document.querySelector('#log-lijst [data-speel="${l3.id}"]')`)); i++) await wacht(200);
+    await evalueer(`document.querySelector('#log-lijst [data-speel="${l3.id}"]').click(); document.querySelector('#log-lijst [data-speel="${l3.id}"]').click()`);
+    for (let i = 0; i < 25 && !(await evalueer('window.logboek.terugspeler.bezig')); i++) await wacht(200);
+    for (let i = 0; i < 40 && (await evalueer('window.logboek.terugspeler.bezig')); i++) await wacht(200);
+    const b = await evalueer("({ titel: window.engine.deck('B').title, fader: window.engine.deck('B').ui.fader, speelt: window.engine.deck('B').playing, pos: window.engine.deck('B').position, grid: !!window.engine.deck('B').grid })");
+    ok('teruggespeeld: het library-nummer weer op track 2, fader 0,5, speelt', b.titel !== 'demo 2 — 124 bpm' && !b.titel.startsWith('demo') && b.fader === 0.5 && b.speelt,
+      JSON.stringify(b));
+    ok(`en de positie loopt zoals toen (${b.pos.toFixed(2)} s, toen ${posToen.toFixed(2)} s bij het stoppen)`, b.pos >= posToen - 0.3);
+    // Wat terugspelen laadde, bewaart niets in de library (het grid van toen mag niet over dat van nu).
+    const gridVoor = await evalueer(`fetch('/api/library/${nummer}/grid').then((r) => r.json()).then((j) => JSON.stringify(j.grid))`);
+    await evalueer("window.engine.deck('B').setGrid({ bpm: 133, firstBeat: 0.1 }); window.engine.deck('B').gridGewijzigd()");
+    await wacht(2200);                              // de bewaarlus loopt elke 1,5 s
+    const gridNa = await evalueer(`fetch('/api/library/${nummer}/grid').then((r) => r.json()).then((j) => JSON.stringify(j.grid))`);
+    ok('een grid op een teruggespeelde track gaat niet naar de library', gridNa === gridVoor, `${gridVoor} -> ${gridNa}`);
+    // Tegenproef: gewoon geladen wordt het wél bewaard (anders zegt de check hierboven niets).
+    await evalueer(`(async () => { const { track } = await (await fetch('/api/library/${nummer}')).json(); await window.library.onLaad('B', track);
+      window.engine.deck('B').setGrid({ bpm: 133, firstBeat: 0.1 }); window.engine.deck('B').gridGewijzigd(); })()`);
+    await wacht(2200);
+    const gridGewoon = await evalueer(`fetch('/api/library/${nummer}/grid').then((r) => r.json()).then((j) => j.grid?.stukken?.[0]?.bpm ?? null)`);
+    ok('tegenproef: na een gewone laad wordt hetzelfde grid wél bewaard', gridGewoon === 133, String(gridGewoon));
+    await evalueer("window.engine.deck('B').pause()");
+  }
+  ok('geen fouten rond het log', meldingen.length === 0, meldingen.join(' | '));
 } catch (err) {
   ok('script liep door', false, err.message);
 } finally {

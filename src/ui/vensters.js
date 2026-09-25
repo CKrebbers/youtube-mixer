@@ -101,12 +101,13 @@ export function opzetVensters({ engine, venster, laadBuffer, loadFile, naFocus }
     root,
   };
 
-  // klikken op overview = springen
+  // klikken op overview = springen. Via de bus (track.N.seek), zodat het
+  // handelingenlog de sprong ziet en terugspelen hem ook maakt.
   root.querySelector('.wave-overview').addEventListener('pointerdown', (e) => {
     const d = engine.deck(venster.L);
     if (!d.buffer) return;
     const r = e.currentTarget.getBoundingClientRect();
-    d.seek(((e.clientX - r.left) / r.width) * d.duration);
+    invoke(`track.${trackVanDeck(venster.L)}.seek`, Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
   });
 
   // drop op de grote weergave = laden op de track met focus
@@ -131,8 +132,10 @@ export function opzetVensters({ engine, venster, laadBuffer, loadFile, naFocus }
   root.querySelector('.demo-btn').addEventListener('click', async () => {
     await engine.resume();
     const id = venster.L;
-    const buf = renderDemoTrack(engine.ctx, { seed: DECK_IDS.indexOf(id), bars: 16 });
-    await laadBuffer(id, buf, `demo ${trackVanDeck(id)} — 124 bpm`);
+    const demo = { seed: DECK_IDS.indexOf(id), bars: 16 };
+    const buf = renderDemoTrack(engine.ctx, demo);
+    // De demo is uit zijn zaad terug te maken: zo speelt een handelingenlog hem terug.
+    await laadBuffer(id, buf, `demo ${trackVanDeck(id)} — 124 bpm`, { bron: 'demo', demo });
   });
 
   return { toonInVenster, views, knobs, faders };

@@ -211,6 +211,9 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     veilig('opnemen', () => {
       stappen.opnemen();
     });
+    veilig('logboek', () => {
+      stappen.logboek?.();
+    });
     veilig('video', () => {
       stappen.video();
     });

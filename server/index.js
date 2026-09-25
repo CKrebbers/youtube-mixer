@@ -14,6 +14,7 @@ import { ZEKER_VANAF } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon } from './analyze.js';
 import { toonSamenvatting } from './toon.js';
 import * as opname from './opname.js';
+import * as handelingen from './handelingen.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -29,6 +30,9 @@ const POORT = Number(process.env.PORT) || 8777;
 // (ook het opruimen van .bezig-mappen bij het opstarten niet — dat wiste
 // anders de werkmap van een ingest die op de echte server liep).
 const MEDIA = process.env.VARVE_MEDIA || join(WORTEL, 'media');
+// Opnames en handelingenlogs. Ook de statische /opnames/-paden komen hieruit,
+// anders las een testserver (of een andere opnamemap) uit de projectmap.
+const OPNAMES = process.env.VARVE_OPNAMES || join(WORTEL, 'opnames');
 
 /**
  * Paden in de database zijn relatief ("media/<id>/audio.wav"), zoals de browser
@@ -77,14 +81,25 @@ const json = (res, code, data) => {
   res.end(body);
 };
 
+/**
+ * Een JSON-body. De pakketten worden als BYTES verzameld en pas aan het eind
+ * één keer gedecodeerd: `data += d` decodeerde elk pakket los, en een
+ * UTF-8-teken dat over een pakketgrens viel werd dan twee keer U+FFFD (een
+ * racknaam met een é, een mapping met een “). `max` telt bytes.
+ */
 async function leesJson(req, max = 64 * 1024) {
   return new Promise((klaar) => {
-    let data = '';
+    const delen = [];
+    let n = 0;
     req.on('data', (d) => {
-      data += d;
-      if (data.length > max) { req.destroy(); klaar(null); }
+      n += d.length;
+      if (n > max) { req.destroy(); klaar(null); return; }
+      delen.push(d);
     });
-    req.on('end', () => { try { klaar(JSON.parse(data || '{}')); } catch { klaar(null); } });
+    req.on('end', () => {
+      const data = Buffer.concat(delen).toString('utf8');
+      try { klaar(JSON.parse(data || '{}')); } catch { klaar(null); }
+    });
     req.on('error', () => klaar(null));
   });
 }
@@ -439,7 +454,11 @@ async function statisch(req, res, pad) {
   const schoon = schoonPad(pad);
   if (schoon === undefined) { json(res, 400, { fout: 'ongeldig pad' }); return; }
   if (schoon === null) { json(res, 404, { fout: 'niet gevonden', pad }); return; }
-  const veilig = schoon.startsWith('/media/') ? opSchijf(schoon) : join(WORTEL, schoon);
+  // De witte lijst laat onder /opnames/ alleen set-<id>.wav/mp4/webm door: geen
+  // submap, dus `join` blijft binnen OPNAMES.
+  const veilig = schoon.startsWith('/media/') ? opSchijf(schoon)
+    : schoon.startsWith('/opnames/') ? join(OPNAMES, schoon.slice('/opnames/'.length))
+      : join(WORTEL, schoon);
 
   let info;
   try { info = await stat(veilig); } catch { json(res, 404, { fout: 'niet gevonden', pad }); return; }
@@ -761,7 +780,6 @@ const server = createServer(async (req, res) => {
 
     // ---- opnames van je set: blijven op deze schijf, gaan nergens heen -----
 
-    const OPNAMES = process.env.VARVE_OPNAMES || join(WORTEL, 'opnames');
     if (pad === '/api/opnames' && req.method === 'GET') return json(res, 200, { opnames: await opname.lijst(OPNAMES) });
     if (pad === '/api/opname/start' && req.method === 'POST') {
       const r = await opname.start(OPNAMES);
@@ -784,6 +802,39 @@ const server = createServer(async (req, res) => {
       if (!stuk) return json(res, 413, { ok: false, fout: 'stuk te groot' });
       const r = await opname.voegToe(OPNAMES, id, stuk, getal('frame'));
       return json(res, r.ok ? 200 : 400, r);
+    }
+
+    // ---- handelingenlogs: naast de opnames, zelfde id (server/handelingen.js) ----
+    // Alles JSON, ook de stukken: { van, tekst }. De tekst is ASCII, dus de
+    // browser weet precies hoeveel bytes hij schreef en waar het volgende stuk komt.
+    if (pad === '/api/handelingen' && req.method === 'GET') return json(res, 200, { logs: await handelingen.lijst(OPNAMES) });
+    if (pad === '/api/handelingen/start' && req.method === 'POST') {
+      const body = await leesJson(req);
+      if (!body) return json(res, 400, { ok: false, fout: 'ongeldige JSON' });
+      const r = await handelingen.start(OPNAMES, { id: body.id ?? null });
+      return json(res, r.ok ? 200 : 400, r);
+    }
+    const mLog = /^\/api\/handelingen\/([\w-]+)(\/stuk)?$/.exec(pad);
+    if (mLog?.[2] && req.method === 'POST') {
+      // Rauw lezen (tot 8 MB: een stuk van 4 MB kan in JSON verdubbelen) en
+      // dan pas decoderen; zo is "te groot" (413) te onderscheiden van kapot (400).
+      const ruw = await leesRuw(req, 2 * handelingen.MAX_STUK + 1024);
+      if (!ruw) return json(res, 413, { ok: false, fout: 'stuk te groot' });
+      let body;
+      try { body = JSON.parse(ruw.toString('utf8')); } catch { return json(res, 400, { ok: false, fout: 'ongeldige JSON' }); }
+      const r = await handelingen.schrijf(OPNAMES, mLog[1], body?.van, body?.tekst);
+      return json(res, r.ok ? 200 : 400, r);
+    }
+    if (mLog && !mLog[2] && req.method === 'GET') {
+      const p = await handelingen.pad(OPNAMES, mLog[1]);
+      if (!p.ok) return json(res, p.fout === 'log bestaat niet' ? 404 : 400, p);
+      // Precies de bytes van nu: een lopend log groeit terwijl we lezen.
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store',
+        'Content-Length': p.bytes, ...ISOLATIE });
+      if (!p.bytes) return res.end();
+      const stroom = createReadStream(p.pad, { start: 0, end: p.bytes - 1 });
+      stroom.on('error', () => res.destroy());
+      return stroom.pipe(res);
     }
 
     const mRacks = /^\/api\/library\/([\w-]+)\/racks$/.exec(pad);

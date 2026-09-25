@@ -530,6 +530,19 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
   padding:4px 4px;font:inherit;font-size:11px}
 .opname-soort:disabled{opacity:.5}
 
+/* ---- handelingenlog (logboek.js) ---- */
+.log-knop{font-variant-numeric:tabular-nums}
+.log-knop.bezig{color:var(--a);border-color:var(--a)}
+.log-lijst{position:fixed;top:46px;right:14px;z-index:40;width:min(460px,calc(100vw - 28px));max-height:60vh;overflow:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 6px;box-shadow:0 10px 30px rgba(0,0,0,.55)}
+.log-lijst.hidden{display:none}
+.log-kop{font-size:11px;letter-spacing:.08em;font-weight:700;color:var(--klein);padding:6px 4px}
+.log-rij{display:flex;align-items:center;gap:10px;padding:6px 4px;border-top:1px solid var(--line);font-size:12px;
+  font-variant-numeric:tabular-nums}
+.log-wanneer{flex:1;color:var(--text)}
+.log-klein{color:var(--klein);font-size:11px}
+.log-opn{color:var(--red);font-size:11px}
+
 /* ---- sends ---- */
 .sends{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:8px;margin-top:6px}
 .send-bus{display:flex;align-items:center;justify-content:space-between;gap:4px}

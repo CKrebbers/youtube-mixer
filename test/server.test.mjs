@@ -250,6 +250,28 @@ try {
   ok('een leeg verschil (alleen een markering) wordt bewaard', mv.ok && mv.regels === 0);
   ok('en komt ongeschonden terug', JSON.stringify((await (await fetch(`${B}/api/mapping`)).json()).mapping) === JSON.stringify(verschil));
   await fetch(`${B}/api/mapping`, { method: 'DELETE' });
+  // Een JSON-body komt in pakketten binnen. leesJson plakte die als TEKST aan
+  // elkaar (`data += d`): een UTF-8-teken dat over de grens viel werd twee
+  // keer U+FFFD. Hier valt de grens midden in de é en midden in de “.
+  {
+    const naam = 'café — “zoned out”';
+    const body = Buffer.from(JSON.stringify({ mapping: { version: 3, name: naam, rules: [] } }));
+    const e = body.indexOf(Buffer.from('é')) + 1;
+    const q = body.indexOf(Buffer.from('“')) + 2;
+    const inStukken = (delen) => new Promise((klaar) => {
+      const rq = request({ host: '127.0.0.1', port: poort, path: '/api/mapping', method: 'POST',
+        headers: { Host: `localhost:${poort}`, 'Content-Type': 'application/json' } }, (res) => { res.resume(); res.on('end', () => klaar(res.statusCode)); });
+      rq.on('error', () => klaar(0));
+      (async () => {
+        for (const d of delen) { rq.write(d); await new Promise((z) => setTimeout(z, 30)); }
+        rq.end();
+      })();
+    });
+    const code = await inStukken([body.subarray(0, e), body.subarray(e, q), body.subarray(q)]);
+    const terug = (await (await fetch(`${B}/api/mapping`)).json()).mapping;
+    ok(`JSON in stukken met een teken over de grens: heel (${JSON.stringify(terug?.name)})`, code === 200 && terug?.name === naam);
+    await fetch(`${B}/api/mapping`, { method: 'DELETE' });
+  }
 
   console.log('\ngrid-route (tempokaart)');
   const postGrid = (id, body) => fetch(`${B}/api/library/${id}/grid`, { method: 'POST',
@@ -313,6 +335,11 @@ try {
   const st = await fetch(`${B}/api/opname/${s.id}/stuk`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: stuk });
   const k = await (await fetch(`${B}/api/opname/${s.id}/klaar`, { method: 'POST' })).json();
   ok('start, stuk, klaar: een seconde', s.ok && st.ok && Math.abs(k.duur - 1) < 1e-9);
+  // De opname afspelen gaat via /opnames/…: uit VARVE_OPNAMES, niet uit de
+  // opnames/ in de projectmap (daar stond hij niet, of een andere).
+  const alsBestand = await fetch(`${B}/opnames/set-${s.id}.wav`);
+  ok(`/opnames/set-….wav komt uit VARVE_OPNAMES (${alsBestand.status})`, alsBestand.status === 200
+    && (await alsBestand.arrayBuffer()).byteLength >= 48000 * 4);
   const eigen = { Origin: `http://localhost:${poort}` };
   const s2 = await (await fetch(`${B}/api/opname/start`, { method: 'POST', headers: eigen })).json();
   const st2 = await fetch(`${B}/api/opname/${s2.id}/stuk`, { method: 'POST', headers: { ...eigen, 'Content-Type': 'application/octet-stream' }, body: stuk });
