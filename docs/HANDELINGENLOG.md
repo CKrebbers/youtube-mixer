@@ -191,7 +191,7 @@ van 25 sep verzamelt die ook bytes (`server.test.mjs` stuurt een é over de gren
 
 | Route | Wat |
 |---|---|
-| `POST /api/handelingen/start` `{id?}` | nieuw log. Met `id`: het log van die opname (de WAV moet bestaan; nog eens = goed, niets overschreven). Zonder: een nieuw id |
+| `POST /api/handelingen/start` `{id?}` | nieuw log. Met `id`: het log van die opname (de WAV moet bestaan; nog eens = goed zolang het log leeg is, anders 400: wie "ok" krijgt schrijft vanaf byte 0). Zonder: een nieuw id |
 | `POST /api/handelingen/<id>/stuk` `{van, tekst}` | een stuk op zijn plek |
 | `GET /api/handelingen` | alle logs, nieuwste eerst: `{id, bestand, bytes, duur, af, begon, versie, opname}` (kop + staart, niet het hele bestand) |
 | `GET /api/handelingen/<id>` | het log (`application/x-ndjson`), precies de bytes van dat moment |

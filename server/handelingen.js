@@ -35,8 +35,9 @@ const bestaat = (pad) => stat(pad).then(() => true, () => false);
 
 /**
  * Een nieuw, leeg log. Met `id`: het log van die opname (de WAV moet er
- * zijn). Bestaat het log al, dan is dat een herhaalde start na een verloren
- * antwoord: gewoon goed, er wordt niets overschreven.
+ * zijn). Bestaat het log al maar is het nog LEEG, dan is dat een herhaalde
+ * start na een verloren antwoord: gewoon goed. Staat er al iets in, dan
+ * niet: wie "ok" krijgt begint op byte 0 te schrijven, over dat log heen.
  */
 export async function start(map, { id = null, nu } = {}) {
   try {
@@ -48,8 +49,10 @@ export async function start(map, { id = null, nu } = {}) {
         await (await open(join(map, naamVan(id)), 'wx')).close();
         return { ok: true, id, bestand: naamVan(id), opname: true };
       } catch (err) {
-        if (err.code === 'EEXIST') return { ok: true, id, bestand: naamVan(id), opname: true, bestond: true };
-        throw err;
+        if (err.code !== 'EEXIST') throw err;
+        const { size } = await stat(join(map, naamVan(id)));
+        if (size > 0) return { ok: false, fout: 'bij deze opname hoort al een log' };
+        return { ok: true, id, bestand: naamVan(id), opname: true, bestond: true };
       }
     }
     let x = nieuwId(nu), n = 1;

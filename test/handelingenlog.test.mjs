@@ -210,6 +210,12 @@ try {
     ok('log van een opname: zelfde id', bij.ok && bij.id === opn.id && bij.opname === true);
     const nogEens = await S.start(dir, { id: opn.id });
     ok('nog eens (antwoord kwijt): goed, niets overschreven', nogEens.ok && nogEens.bestond === true);
+    // Maar staat er al iets in, dan is het geen herhaalde start: wie dan "ok"
+    // krijgt, schrijft vanaf byte 0 over dat log heen.
+    await S.schrijf(dir, opn.id, 0, '{"t":0,"e":"kop","versie":1}\n');
+    const weer = await S.start(dir, { id: opn.id });
+    ok(`een log dat al loopt of af is: niet nog eens beginnen (${weer.fout})`, !weer.ok
+      && readFileSync(join(dir, `set-${opn.id}.acties.jsonl`), 'latin1').startsWith('{"t":0,"e":"kop"'));
     const los2 = await S.start(dir, { nu });
     ok('een los log daarna in dezelfde seconde: weer een eigen id', los2.ok && ![los.id, opn.id].includes(los2.id));
     // Samenvatting: netjes af, of afgebroken met een halve staart.
