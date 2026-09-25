@@ -62,3 +62,46 @@ D. Grid-modus op de APC: Shift + Metronome aan/uit. Tap = tikken; Nudge ± = gri
    2 = ×2, 3 = ½, 4 = halve tel verschuiven, 5 = nieuw stuk hier. Controle VISUEEL (knipperen
    op de tel, klappen en gridlijnen in de zoom): een hoorbare klik zou de zaal horen, want
    VARVE heeft geen koptelefoon-uitgang (F1).
+
+## Restpunten (25 september 2026)
+
+### 1. Het 156-bpm-stuk van het album viel weg — gerepareerd (`tweedeKans` in detect.js)
+Gemeten op fragmenten van "I will delete this album" (onset.bin, alleen lezend, vensters op
+het raster van het hele album; de nul van het hele album afgeleid uit de bewaarde
+zekerheden: 18/22 = 0,818).
+
+Oorzaak: niet minSec zelf, maar wat eraan voorafgaat. De tempocurve schat per venster van
+12 s een tempo, en midden in het nummer op 156 (11:27-13:39) koos die vaak iets
+toevalligs: 148, 131, 112, 107, 98. Daar werd de stabiliteit op het verkeerde tempo
+gemeten (9-15 van de 22 stapjes = onder de nul), dus die vensters telden als gat. Over
+bleven negen zekere vensters in vier brokjes van 8, 4, 16 en 8 s, gescheiden door 16, 44
+en 20 s "gat". segmenteer knipt bij elk gat, en een brokje korter dan minSec tussen twee
+gaten gaat weg als ruis: alle vier. Terwijl één grid op 156,000 er van 11:27 tot 13:39 op
+past: 19-22 van de 22 stapjes, fase van de puls per 12 s binnen ±30 ms.
+
+Reparatie: een keten (aaneengeregen vensters, `ketens()`) die korter is dan minSec krijgt
+een tweede kans. Ligt er binnen 60 s een keten met hetzelfde tempo T, zonder echt stuk
+(≥ minSec) van een ander tempo ertussen, dan worden de vensters daartussen ook op T
+gemeten; houdt de fase daar vast (boven de nul, niet slechter dan op het eigen tempo), dan
+horen ze bij T. Een venster op T/2 gaat mee als de fase op T vasthoudt; een venster op 2T
+blijft altijd staan (bij twijfel de tel). Twee ketens die elk lang genoeg zijn worden nooit
+verbonden. Een tweede kans die geen stuk oplevert wordt teruggedraaid.
+
+Voor/na (zelfde nul, zelfde vensters):
+| fragment | oud | nieuw |
+|---|---|---|
+| album 10:00-14:30 | niets (146,9 over alles, z 0,12) | 11:45-13:29 op 156,06, z 0,84, grid binnen -48…+1 ms |
+| album 14:40-18:40 | niets | 15:41-16:17 op 155,98, z 0,92 (het tweede stuk op 156) |
+| album 1:00-5:30 | 150: 2:00-2:24 z 0,62; 140: 3:52-4:24 z 0,50 | 150: 2:00-2:48 z 0,71; 140: 3:52-4:36 z 0,55 |
+| album 18:00-22:00, 23:00-26:00 | 150: 19:05-20:01 | gelijk |
+| Bay Ledges (heel, 3:34) | 0:44-1:32 op 76,23 (octaaffout), z 0,48 | 0:44-1:32 op 153,66, z 0,30 |
+| let it all go (2×), Sakamoto (3×), jungle-mix (3×), 2-4 min elk | | gelijk, op één zekerheid na (jungle 1:28-2:40: 0,61 -> 0,64) |
+
+Tussenversies die het slechter maakten (en waarom de regels zijn zoals ze zijn): vensters
+tussen ELKE twee buren met hetzelfde tempo opnieuw meten voegde bij Sakamoto 34:26-37:47
+drie stukken samen tot één grid dat 235 ms naast stond (tempo zwalkt 1% over drie
+minuten); een venster op 2T omlaag laten gaan maakte het octaaffoute stuk van Bay Ledges
+langer en "zeker" (0,48 -> 0,72).
+
+Let op: het album heeft een grid met `bron: 'auto'`; de server heranalyseert dat niet
+vanzelf. ↻ in de library (opnieuw analyseren) geeft het nieuwe voorstel.
