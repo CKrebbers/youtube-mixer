@@ -67,7 +67,7 @@ console.log('de bestanden');
   ok('systemen-zwaar.js kent geen DOM, geen eigen klok en geen Math.random', !/\bdocument\b|\bwindow\b|performance\.now|Math\.random|Path2D/.test(bron));
   const imports = [...bron.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]);
   ok('importeert alleen uit ./hulp.js', imports.length >= 1 && imports.every((i) => i === './hulp.js'));
-  // g.S (verouderd, = g.H) niet als g.S en niet uitgepakt als { S } = g.
+  // g.S (de zijde van het oude vierkant, bestaat niet meer) niet als g.S en niet uitgepakt als { S } = g.
   ok('16:9: gebruikt g.S niet meer', !/\bg\.S\b/.test(bron) && !/\{[^}=]*\bS\b[^}=]*\}\s*=\s*g\b/.test(bron));
   ok('vijf systemen: gs, cl, ln, ph, sp', SYSTEMEN_ZWAAR.map((s) => s.id).sort().join() === 'cl,gs,ln,ph,sp');
   ok('ze staan in SYSTEMEN, en geen id komt twee keer voor', SYSTEMEN_ZWAAR.every((s) => SYSTEMEN.includes(s)) && new Set(SYSTEMEN.map((s) => s.id)).size === SYSTEMEN.length);

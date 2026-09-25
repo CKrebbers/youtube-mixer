@@ -62,6 +62,12 @@ console.log('de systemen');
     readFileSync(new URL(`../src/vormen/${f}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
   ok(`hulp.js en systemen*.js (${bestanden.length}) kennen geen DOM, geen eigen klok en geen Math.random`, bestanden.length >= 2 && vies.length === 0);
   if (vies.length) console.log('      vies:', vies.join(', '));
+  // ROADMAP 7: alle 26 tekenen op W × H; de zijde van het oude vierkant (g.S)
+  // bestaat niet meer, ook niet uitgepakt als { S } = g.
+  const metS = bestanden.filter((f) => /\bg\.S\b|\{[^}=]*\bS\b[^}=]*\}\s*=\s*g\b/.test(
+    readFileSync(new URL(`../src/vormen/${f}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
+  ok('geen enkel systeembestand noemt g.S nog', metS.length === 0);
+  if (metS.length) console.log('      met g.S:', metS.join(', '));
   ok(`${SYSTEMEN.length} systemen, elk met een uniek id`, SYSTEMEN.length >= 8 && new Set(SYSTEMEN.map((s) => s.id)).size === SYSTEMEN.length);
 
   const echt = Math.random;
@@ -78,6 +84,42 @@ console.log('de systemen');
     if (fout) console.log('      ', fout.message);
   }
   Math.random = echt;
+
+  // Zelfde zaad = dezelfde tekening, voor elk systeem: elke tekenaanroep met
+  // zijn getallen en elke stijl die gezet wordt gaat in een hash, en van een
+  // pixelrooster de pixels zelf. Eén hash voor alle canvassen van een laag
+  // (het doek én de roosters, die hun eigen canvas hebben).
+  const hashCanvassen = (st = { h: 2166136261 }) => (w, h) => {
+    const mix = (v) => {
+      const s = typeof v === 'number' ? v.toFixed(4) : typeof v === 'string' ? v : '';
+      for (let i = 0; i < s.length; i++) st.h = Math.imul(st.h ^ s.charCodeAt(i), 16777619) >>> 0;
+    };
+    const doel = { createImageData: (b, hh) => ({ data: new Uint8ClampedArray(b * hh * 4) }) };
+    const ctx = new Proxy(doel, {
+      get(o, k) {
+        if (k in o) return o[k];
+        return (...a) => {
+          mix(k);
+          for (const x of a) {
+            if (x?.data) { const d = x.data; for (let i = 0; i < d.length; i += 4 * 7) mix(d[i] + d[i + 1] * 256 + d[i + 2] * 65536); } else mix(x);
+          }
+        };
+      },
+      set(o, k, v) { mix(k); mix(v); o[k] = v; return true; },
+    });
+    return { width: w, height: h, getContext: () => ctx, st };
+  };
+  const tekening = (id, zaad) => {
+    // Een meetklok die 0 zegt: anders zet het budget (wandklok) op een drukke
+    // machine de kwaliteit lager, en dan tekent fl terecht minder.
+    const l = new VormLaag({ maakCanvas: hashCanvassen(), systeem: id, zaad, nu: () => 0 });
+    for (let i = 0; i < 20; i++) l.frame(i * STAP);
+    return l.canvas.st.h;
+  };
+  const anders = SYSTEMEN.filter((s) => tekening(s.id, 7) !== tekening(s.id, 7)).map((s) => s.id);
+  ok(`alle ${SYSTEMEN.length}: zelfde zaad = precies dezelfde tekening (hash over 20 stappen)`,
+    anders.length === 0 && tekening('bd', 7) !== tekening('bd', 8) && tekening('cc', 7) !== tekening('cc', 8));
+  if (anders.length) console.log('      anders:', anders.join(', '));
 
   const na = (zaad) => { const l = new VormLaag({ maakCanvas, systeem: 'bd', zaad }); for (let i = 0; i < 60; i++) l.frame(i * STAP); return getallen(l.s); };
   const a = na(3), b = na(3), c = na(4);
@@ -103,15 +145,15 @@ console.log('het doek is 16:9 (ROADMAP 7)');
 
   const laag = new VormLaag({ maakCanvas: opneemCanvas, systeem: 'hg' });
   ok('een vormlaag tekent op een canvas van 640 × 360', laag.canvas.width === 640 && laag.canvas.height === 360);
-  ok('g kent W en H, D = korte zijde / 320, S = H (tijdelijk)',
-    laag.g.W === 640 && laag.g.H === 360 && bij(laag.g.D, 360 / 320) && laag.g.S === 360);
+  ok('g kent W en H, D = korte zijde / 320, en geen S meer (alle 26 zijn om)',
+    laag.g.W === 640 && laag.g.H === 360 && bij(laag.g.D, 360 / 320) && !('S' in laag.g));
   ok('bij het starten gaat het HELE doek naar de achtergrond',
     laag.canvas.log.some(([m, x, y, b, h]) => m === 'fillRect' && x === 0 && y === 0 && b === 640 && h === 360) && laag.ctx.fillStyle === ACHTERGROND);
   const eigen = new VormLaag({ maakCanvas: opneemCanvas, systeem: 'lz', breedte: 320, hoogte: 180 });
   ok('een eigen maat kan (breedte, hoogte)', eigen.canvas.width === 320 && eigen.g.W === 320 && eigen.g.H === 180 && bij(eigen.g.D, 180 / 320));
 
   const m = maten(640, 360), staand = maten(360, 640);
-  ok('maten(): D op de KORTE zijde, liggend en staand gelijk (lijnen even dik)', bij(m.D, 1.125) && bij(staand.D, m.D) && m.S === 360);
+  ok('maten(): D op de KORTE zijde, liggend en staand gelijk (lijnen even dik), geen S', bij(m.D, 1.125) && bij(staand.D, m.D) && !('S' in m));
 
   const c = opneemCanvas(640, 360);
   const g = { ...m, ctx: c.getContext('2d'), maakCanvas: opneemCanvas };
@@ -135,7 +177,7 @@ console.log('het doek is 16:9 (ROADMAP 7)');
   ok('ny een veelvoud van 9: exact vierkant (640 × 360 is 16:9 met ggd 40)', cellen(g, 320, 9).nx * 360 === cellen(g, 320, 9).ny * 640);
   ok('op een staand doek ook vierkant', (() => { const s = cellen({ ...staand }, 128); return Math.abs(360 / s.nx - 640 / s.ny) / (640 / s.ny) < 0.01 && s.ny > s.nx; })());
 
-  // rooster(): nieuw (nx × ny, over het hele doek) en verouderd (n × n, links).
+  // rooster(): nx × ny, over het hele doek. Het oude getal-geval gooit.
   const gr = rooster(g, cellen(g, 128));
   ok('rooster(g, cellen(g, n)): nx × ny pixels, px heeft nx * ny plekken, cel gaat mee',
     gr.c.width === 171 && gr.c.height === 96 && gr.px.length === 171 * 96 && bij(gr.cel, 3.75) && !gr.oud);
@@ -144,12 +186,9 @@ console.log('het doek is 16:9 (ROADMAP 7)');
   const teken = c.log.find(([f]) => f === 'drawImage');
   ok('blit rekt het rooster over het HELE doek', teken && teken[1] === gr.c && teken.slice(2).join(',') === '0,0,640,360');
   ok('blit met pix: scherpe blokken', g.ctx.imageSmoothingEnabled === false);
-  const oud = rooster(g, 128);
-  c.log.length = 0;
-  blit(oud, g, false);
-  const links = c.log.find(([f]) => f === 'drawImage');
-  ok('verouderd rooster(g, n): n × n, en blit legt het links neer (S × S) tot het systeem om is',
-    oud.oud && oud.n === 128 && oud.px.length === 128 * 128 && links.slice(2).join(',') === '0,0,360,360');
+  let gooit = null;
+  try { rooster(g, 128); } catch (e) { gooit = e; }
+  ok('rooster(g, getal) bestaat niet meer: hij gooit, in plaats van stil een vierkant links te tekenen', gooit instanceof TypeError);
 
   const md = midden(g);
   ok('midden(g): middelpunt en korte zijde', md.cx === 320 && md.cy === 180 && md.kort === 360);
@@ -166,11 +205,13 @@ console.log('de lichte systemen (systemen.js) tekenen echt 16:9');
 {
   // Velden vullen het hele doek; vormen rond een middelpunt staan in het
   // midden, heel in beeld, geschaald op de korte zijde (docs/VORMEN-16x9.md).
-  const VELD = ['bd', 'fl', 'ec', 'cc'], VORM = ['lz', 'hg', 'sf', 'km', 'dp', 'fy'];
+  // Twee uitzonderingen die de breedte gebruiken (Clay 25 sep): hg (de
+  // x-slinger zwaait W / H zo ver) en fy (de spiraal tot in de hoeken).
+  const VELD = ['bd', 'fl', 'ec', 'cc'], VORM = ['lz', 'sf', 'km', 'dp'], BREED = ['hg', 'fy'];
   const bron = readFileSync(new URL('../src/vormen/systemen.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
   ok('systemen.js gebruikt g.S niet meer, en geen verouderd rooster(g, n)',
     !/\bg\.S\b/.test(bron) && !/rooster\(g,\s*[\w$.]+\s*\)/.test(bron) && /rooster\(g, cellen\(/.test(bron));
-  const lichte = [...VELD, ...VORM];
+  const lichte = [...VELD, ...VORM, ...BREED];
   ok(`alle lichte systemen zijn ingedeeld (${lichte.length})`, lichte.every((id) => SYSTEEM[id]) && new Set(lichte).size === 10);
 
   /** Nep-canvas dat bijhoudt waar er getekend wordt (lijnen, bogen, beelden; clear/fade niet). */
@@ -204,9 +245,21 @@ console.log('de lichte systemen (systemen.js) tekenen echt 16:9');
     ok(`${id}: in het midden (${mx.toFixed(3)}), heel in beeld en niet breder dan de korte zijde (${Math.round(b.x1 - b.x0)} × ${Math.round(b.y1 - b.y0)} px)`,
       Math.abs(mx - 0.5) < 0.03 && b.y0 >= -0.02 * H && b.y1 <= 1.02 * H && b.x1 - b.x0 <= 1.02 * H);
   }
-  for (const id of ['sf', 'km', 'fy']) {
+  for (const id of ['sf', 'km']) {
     const b = bereik[id], bw = b.x1 - b.x0, bh = b.y1 - b.y0;
     ok(`${id}: een cirkel blijft rond (breedte/hoogte ${(bw / bh).toFixed(3)})`, Math.abs(bw / bh - 1) < 0.1);
+  }
+  {
+    // hg: de x-slinger zwaait W / H zo ver als de y-slinger, dus de figuur
+    // vult de breedte in dezelfde verhouding als de hoogte, heel in beeld.
+    const b = bereik.hg, fx = (b.x1 - b.x0) / W, fy = (b.y1 - b.y0) / H, mx = (b.x0 + b.x1) / 2 / W;
+    ok(`hg: vult de breedte zoals de hoogte (x ${pct(b.x0 / W)}–${pct(b.x1 / W)}, y ${pct(b.y0 / H)}–${pct(b.y1 / H)}), in het midden, heel in beeld`,
+      fx >= 0.75 && Math.abs(fx / fy - 1) < 0.08 && Math.abs(mx - 0.5) < 0.03 && b.x0 >= 0 && b.x1 <= W && b.y0 >= 0 && b.y1 <= H);
+    // fy: de spiraal loopt door tot in de hoeken; zaden die er helemaal
+    // buiten vallen worden niet getekend.
+    const f = bereik.fy, rmax = SYSTEEM.fy.DICHT * H / Math.sqrt(10) * 0.42 * 2;     // grootste zaad dat kan (n 10, sz 2), ruim
+    ok(`fy: tekent tot in de hoeken (x ${pct(f.x0 / W)}–${pct(f.x1 / W)}, y ${pct(f.y0 / H)}–${pct(f.y1 / H)}) en niets ver buiten beeld`,
+      f.x0 <= 0 && f.x1 >= W && f.y0 <= 0 && f.y1 >= H && f.x0 > -rmax && f.x1 < W + rmax && f.y0 > -rmax && f.y1 < H + rmax);
   }
 
   // Wat meegroeit met het doek: deeltjes even dicht als op 320 × 320, roosters
@@ -261,6 +314,84 @@ console.log('de lichte systemen (systemen.js) tekenen echt 16:9');
     for (let i = 0; i < s.n; i++) if (s.x[i] < p.vis || s.x[i] > s.Wu - p.vis || s.y[i] < p.vis || s.y[i] > s.Hu - p.vis) rand++;
   }
   ok(`bd: buren via vakken = alle paren aflopen, bij zichtafstand 10, 23,5, 38 en 90 (grootste verschil ${slechtst.toExponential(1)})`, slechtst < 1e-5 && rand > 0);
+
+  // fy: een ingezoomde zonnebloem. Welke zaden hij tekent, en hoeveel.
+  {
+    const sysFy = SYSTEEM.fy;
+    const zaden = (p = {}, t = 1) => {
+      const arcs = [];
+      const doel = { createImageData: (b, hh) => ({ data: new Uint8ClampedArray(b * hh * 4) }), arc: (x, y, r) => arcs.push([x, y, r]) };
+      let aanroepen = 0;
+      const ctx = new Proxy(doel, { get: (o, k) => (k in o ? (...a) => { aanroepen++; return o[k](...a); } : () => { aanroepen++; }), set: (o, k, v) => { o[k] = v; return true; } });
+      const pp = { ...Object.fromEntries(sysFy.knobs.map((k) => [k.k, k.v])), ...p };
+      sysFy.step.call(sysFy, {}, pp, { ...g, ctx, t, pal: sysFy.pal, L: LUTS[sysFy.pal] });
+      return { arcs, aanroepen, c: H * sysFy.DICHT / Math.sqrt(pp.n | 0) };
+    };
+    const { arcs, c } = zaden();
+    ok(`fy: alleen zaden die (deels) in beeld vallen worden getekend (${arcs.length})`,
+      arcs.length > 1000 && arcs.every(([x, y, r]) => x + r >= 0 && x - r <= W && y + r >= 0 && y - r <= H));
+    // Geen rand en geen lege strook: met de gulden hoek zelf (drift 0; met
+    // drift ontstaan armen met ruimte ertussen, zoals altijd) heeft elk punt
+    // van het doek, ook de vier hoeken, een zaad binnen 1,7 zaadafstand (een
+    // zaad heeft ~π c²; langs de rand vallen zaden net buiten beeld weg).
+    const gulden = zaden({ dr: 0 }, 1).arcs;
+    const dichtste = (px, py) => Math.min(...gulden.map(([x, y]) => Math.hypot(x - px, y - py)));
+    const punten = [[0, 0], [W, 0], [0, H], [W, H]];
+    for (let y = 0; y <= H; y += 24) for (let x = 0; x <= W; x += 32) punten.push([x, y]);
+    const gat = Math.max(...punten.map(([x, y]) => dichtste(x, y)));
+    ok(`fy: de spiraal loopt door tot in de hoeken, zonder rand of gat (verste punt ${(gat / c).toFixed(2)} zaadafstand van een zaad)`, gat < 1.7 * c);
+    const hoek = arcs.filter(([x, y]) => Math.hypot(x - W / 2, y - H / 2) > Math.hypot(W, H) / 2 - 3 * c);
+    const binnen = arcs.filter(([x, y]) => Math.hypot(x - W / 2, y - H / 2) < 3 * c);
+    ok('fy: de zaden groeien naar de hoeken toe (de rand van de bloem ligt daar)',
+      hoek.length && binnen.length && Math.min(...hoek.map((a) => a[2])) > 2 * Math.max(...binnen.map((a) => a[2])));
+    // Rekentijd: tekenaanroepen hooguit 16/9 × die van het oude vierkant met
+    // dezelfde knoppen (daar tekende hij n − 1 zaden van 3 aanroepen, plus
+    // clear), over het hele bereik van zaden en zaadgrootte. Speling van 16
+    // zaden: bij de kleinste n en de grootste zaden tellen de halve zaden
+    // langs de rand zwaar mee (×1,8 van een paar honderd aanroepen).
+    const slechtst = [];
+    for (const n of [100, 400, 1400, 3000]) for (const sz of [0.3, 1, 2]) for (const t of [0, 3, 6.3]) {
+      const oud = 3 * (n - 1) + 1, nieuw = zaden({ n, sz }, t).aanroepen;
+      slechtst.push({ n, sz, t, x: nieuw / oud, over: nieuw - 16 / 9 * oud });
+    }
+    const erg = slechtst.reduce((a, b) => (b.over > a.over ? b : a));
+    ok(`fy: over het hele bereik (n 100–3000, zaadgrootte 0,3–2) hooguit 16/9 × de tekenaanroepen van het oude vierkant (slechtst ×${erg.x.toFixed(2)} bij n ${erg.n}, zaadgrootte ${erg.sz})`,
+      erg.over <= 3 * 16);
+    const std = slechtst.find((r) => r.n === 1400 && r.sz === 1 && r.t === 0);
+    ok(`fy: op de standaard (1400 zaden) ×${std.x.toFixed(2)}`, std.x < 16 / 9);
+  }
+
+  // fl luistert naar g.kwaliteit: alleen de eerste n · kwaliteit deeltjes
+  // bewegen en tekenen, even snel; de rest ligt stil.
+  {
+    const sysFl = SYSTEEM.fl;
+    const draai = (kw, stappen = 30) => {
+      let lijnen = 0;
+      const doel = { createImageData: (b, hh) => ({ data: new Uint8ClampedArray(b * hh * 4) }), lineTo: () => { lijnen++; } };
+      const ctx = new Proxy(doel, { get: (o, k) => (k in o ? o[k] : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
+      const { s, p } = start('fl');
+      const gg = { ...g, ctx, pal: sysFl.pal, L: LUTS[sysFl.pal], r: maakRng(7), kwaliteit: kw };
+      const x0 = Float32Array.from(s.x), y0 = Float32Array.from(s.y);
+      let stap = 0, snel = 0, gemeten = 0;
+      for (let k = 0; k < stappen; k++) {
+        gg.t = ++stap / 60; lijnen = 0;
+        sysFl.step.call(sysFl, s, p, gg);
+        for (let i = 0; i < Math.round(s.n * (kw ?? 1)); i += 97) {    // alleen wie beweegt
+          const d = Math.hypot(s.x[i] - s.ox[i], s.y[i] - s.oy[i]);
+          if (d > 0 && d < 10) { snel += d; gemeten++; }
+        }
+      }
+      let stil = 0;
+      for (let i = 0; i < s.n; i++) if (s.x[i] === x0[i] && s.y[i] === y0[i]) stil++;
+      return { lijnen, stil, n: s.n, snel: snel / gemeten, p };
+    };
+    const vol = draai(1), kwart = draai(0.25), zonder = draai(undefined);
+    ok(`fl kwaliteit 1: alle ${vol.n} deeltjes bewegen en tekenen`, vol.lijnen === vol.n && vol.stil === 0 && zonder.lijnen === vol.n);
+    ok(`fl kwaliteit 0,25: een kwart tekent (${kwart.lijnen}), de rest ligt stil (${kwart.stil})`,
+      kwart.lijnen === Math.round(vol.n * 0.25) && kwart.stil === vol.n - kwart.lijnen);
+    ok(`fl: even snel op elke kwaliteit (${vol.snel.toFixed(3)} en ${kwart.snel.toFixed(3)} eenheden per stap = snelheid ${vol.p.sp})`,
+      bij(vol.snel, vol.p.sp, 1e-3) && bij(kwart.snel, vol.p.sp, 1e-3));
+  }
 
   // Rekentijd: wat met het doek meegroeit, groeit hooguit met de oppervlakte
   // (16/9). Tekenaanroepen per stap op het oude vierkant (360 × 360, zaad 7,

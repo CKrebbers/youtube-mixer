@@ -12,15 +12,14 @@
  *   g.W, g.H   breedte en hoogte van het doek in pixels.
  *   g.D        maat voor lijndikte en kleine afstanden: KORTE zijde / 320
  *              (1,125 op 640 × 360). Een lijn van 1,2 * g.D is ten opzichte
- *              van de vorm even dik als op het oude vierkant (daar S / 320).
- *              In "320-eenheden" is het doek g.W / g.D breed en g.H / g.D
- *              hoog (568,9 × 320).
- *   g.S        VEROUDERD, = g.H. Bestaat alleen zolang niet alle systemen om
- *              zijn: een systeem dat nog S × S tekent komt links op het doek
- *              als vierkant. Nieuwe code gebruikt g.S nooit.
+ *              van de vorm even dik als op het oude vierkant van 512 (daar
+ *              512 / 320). In "320-eenheden" is het doek g.W / g.D breed en
+ *              g.H / g.D hoog (568,9 × 320).
+ *   Er is geen g.S meer (de zijde van het oude vierkant): alle 26 systemen
+ *   tekenen op W × H. vormen.test.mjs controleert dat geen systeem hem noemt.
  *
- *   maten(W, H) -> { W, H, D, S }
- *       Die vier voor een doek van W × H. laag.js bouwt g hiermee; een test
+ *   maten(W, H) -> { W, H, D }
+ *       Die drie voor een doek van W × H. laag.js bouwt g hiermee; een test
  *       die zelf een g maakt doet hetzelfde:
  *         const g = { ...maten(640, 360), ctx, t: 0, pal, L, r: maakRng(7), maakCanvas };
  *
@@ -42,9 +41,9 @@
  *       Een pixelrooster van nx × ny om met ImageData te vullen (px is een
  *       Uint32Array van nx * ny, ABGR zoals g.L). Meestal rechtstreeks:
  *         s.g = rooster(g, cellen(g, 128));    // s.g.nx, s.g.ny, s.g.cel
- *       VEROUDERD: rooster(g, n) met één GETAL geeft het oude n × n-vierkant,
- *       en blit legt dat links neer (S × S). Alleen voor niet-omgezette
- *       systemen; een bewust vierkant rooster is rooster(g, { nx: n, ny: n }).
+ *       Een bewust vierkant rooster is rooster(g, { nx: n, ny: n }), met
+ *       blit(gr, g, pix, midden(g).vak). Het oude rooster(g, n) met één
+ *       GETAL bestaat niet meer en gooit.
  *
  *   blit(gr, g, pix, vak)
  *       Het rooster op het doek zetten, over het HELE doek (pix = scherpe
@@ -53,8 +52,8 @@
  *
  *   midden(g) -> { cx, cy, kort, vak }
  *       Voor een systeem dat om een middelpunt draait (cirkels, attractors,
- *       rozetten): het midden van het doek en de korte zijde. Wat vroeger
- *       S / 2 + x * S * 0.42 was, wordt cx + x * kort * 0.42 (en y met cy).
+ *       rozetten): het midden van het doek en de korte zijde. Wat op het oude
+ *       vierkant S / 2 + x * S * 0.42 was, wordt cx + x * kort * 0.42 (en y met cy).
  *       Straal en schaal altijd op `kort`, zodat de vorm heel in beeld blijft;
  *       de breedte eromheen is ruimte, niet iets om uit te rekken.
  *       `vak` = het vierkant van kort × kort in het midden ({ x, y, b, h }).
@@ -122,9 +121,9 @@ export function noise(x, y) {
 
 // ---- het doek: maten en tekenhulp (zie de API bovenaan) --------------------
 
-/** g.W, g.H, g.D (korte zijde / 320) en de verouderde g.S (= g.H) voor een doek van W × H. */
+/** g.W, g.H en g.D (korte zijde / 320) voor een doek van W × H. */
 export function maten(W, H) {
-  return { W, H, D: Math.min(W, H) / 320, S: H };
+  return { W, H, D: Math.min(W, H) / 320 };
 }
 
 /**
@@ -143,22 +142,21 @@ export function cellen(g, n, veelvoud = 1) {
 
 /**
  * Een pixelrooster om met ImageData te vullen en dan opgeschaald te tekenen.
- * maat = { nx, ny } (uit cellen()), of VEROUDERD een getal n voor n × n.
+ * maat = { nx, ny } (uit cellen(), dan gaat `cel` mee). Een los getal (het
+ * oude n × n van vóór 16:9) gooit: dat zou stil een vierkant links tekenen.
  */
 export function rooster(g, maat) {
-  const oud = typeof maat === 'number';
-  const nx = oud ? maat : maat.nx, ny = oud ? maat : maat.ny;
+  if (!(maat?.nx > 0 && maat?.ny > 0)) throw new TypeError('rooster(g, { nx, ny }): geef een maat, bijv. cellen(g, n)');
+  const { nx, ny } = maat;
   const c = g.maakCanvas(nx, ny), x = c.getContext('2d'), img = x.createImageData(nx, ny);
   const gr = { nx, ny, c, x, img, px: new Uint32Array(img.data.buffer) };
-  if (oud) Object.assign(gr, { n: maat, oud: true });
-  else if (maat.cel !== undefined) gr.cel = maat.cel;
+  if (maat.cel !== undefined) gr.cel = maat.cel;
   return gr;
 }
 export function blit(gr, g, pix, vak) {
   gr.x.putImageData(gr.img, 0, 0);
   g.ctx.imageSmoothingEnabled = !pix;
   if (vak) g.ctx.drawImage(gr.c, vak.x, vak.y, vak.b, vak.h);
-  else if (gr.oud) g.ctx.drawImage(gr.c, 0, 0, g.S, g.S);     // verouderd: het oude vierkant, links
   else g.ctx.drawImage(gr.c, 0, 0, g.W, g.H);
 }
 export function clear(g) { g.ctx.fillStyle = ACHTERGROND; g.ctx.fillRect(0, 0, g.W, g.H); }

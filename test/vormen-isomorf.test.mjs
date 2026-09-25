@@ -135,12 +135,11 @@ const nepSink = (opties = {}) => {
 const telOp = (ctx) => Object.values(ctx.tel).reduce((a, b) => a + b, 0);
 
 // ---- een g zoals VormLaag.zetSysteem hem maakt ------------------------------
-// Op het doek van de app (640 × 360), met maten() uit hulp.js, maar ZONDER
-// de verouderde g.S: gebruikt een systeem hem nog, dan wordt het NaN.
+// Op het doek van de app (640 × 360), met maten() uit hulp.js. Die kent geen
+// g.S meer: gebruikt een systeem hem nog, dan wordt het NaN.
 function maakG(sys, { zaad = 7, breedte = W, hoogte = H, geluid = null, kwaliteit, opname = false } = {}) {
   const canvas = opname ? maakOpneemCanvas(breedte, hoogte) : maakCanvas(breedte, hoogte);
-  const { S, ...m } = maten(breedte, hoogte);
-  const g = { ctx: canvas.getContext('2d'), ...m, t: 0, pal: sys.pal, L: LUTS[sys.pal], r: maakRng(zaad), maakCanvas, geluid };
+  const g = { ctx: canvas.getContext('2d'), ...maten(breedte, hoogte), t: 0, pal: sys.pal, L: LUTS[sys.pal], r: maakRng(zaad), maakCanvas, geluid };
   if (kwaliteit !== undefined) g.kwaliteit = kwaliteit;
   return { g, canvas };
 }

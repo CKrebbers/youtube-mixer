@@ -154,7 +154,7 @@ export class VormLaag extends Emitter {
     else Object.assign(c, { lineCap: 'butt', lineJoin: 'miter', lineWidth: 1, globalAlpha: 1, imageSmoothingEnabled: true, globalCompositeOperation: 'source-over' });
     c.fillStyle = ACHTERGROND; c.fillRect(0, 0, this.breedte, this.hoogte);
     this.s = { o: {}, e: {} };
-    // W, H, D en (verouderd, tot alle systemen om zijn) S = H: hulp.js, maten().
+    // W, H en D: hulp.js, maten().
     this.g = {
       ctx: this.ctx, ...maten(this.breedte, this.hoogte), t: 0, kwaliteit: this.kwaliteit,
       pal: this.sys.pal, L: LUTS[this.sys.pal], r: maakRng(this.zaad), maakCanvas: this.maakCanvas,

@@ -21,9 +21,16 @@
  *     wereld van g.W / g.D × g.H / g.D eenheden (568,9 × 320) met evenveel
  *     deeltjes per oppervlak als op het oude vierkant van 320 × 320; roosters
  *     zijn cellen(g, n): vierkante cellen, evenveel als het oude n × n.
- *   - VORMEN rond een middelpunt (lz, hg, sf, km, dp, fy) schalen op de korte
- *     zijde (midden(g)) en blijven heel in beeld; wat links en rechts overblijft
- *     is ruimte (achtergrond = doorzichtig boven de video).
+ *   - VORMEN rond een middelpunt (lz, sf, km, dp) schalen op de korte zijde
+ *     (midden(g)) en blijven heel en rond in het midden; wat links en rechts
+ *     overblijft is ruimte (achtergrond = doorzichtig boven de video).
+ *   - Twee uitzonderingen (Clay 25 sep), omdat de breedte daar natuurlijk is:
+ *     hg (de x-slinger zwaait W / H zo ver, de figuur vult de breedte) en fy
+ *     (de spiraal loopt door tot in de hoeken, zonder rand).
+ *
+ * g.kwaliteit (budget.js): van de lichte luistert alleen fl (3911 deeltjes,
+ * ×16/9 door het bredere doek): bij minder kwaliteit bewegen er minder. De
+ * andere blijven ruim onder het budget.
  *
  * Stap 1 (docs/plugins/01-plan.md): alleen de LICHTE systemen, gemeten onder
  * 0,5 ms per stap in Node (bench: tools/bench/vm-bench.cjs), plus drie
@@ -42,6 +49,9 @@ import { SYSTEMEN_MEER } from './systemen-meer.js';
 import { SYSTEMEN_ISOMORF } from './systemen-isomorf.js';
 
 export { ACHTERGROND, PALETTEN, LUTS, maakRng, noise };
+
+/** g.kwaliteit (budget.js), geklemd op 0,25..1; ontbreekt of onzin = 1. */
+const kwaliteit = (g) => { const k = g.kwaliteit; return Number.isFinite(k) ? Math.max(0.25, Math.min(1, k)) : 1; };
 
 // ---- de systemen -----------------------------------------------------------
 
@@ -76,7 +86,12 @@ const EIGEN = [
     init() {},
     step(s, p, g) {
       clear(g);
-      const ctx = g.ctx, { cx, cy, kort } = midden(g), T = Math.min(260, 5 / p.d), n = 6000, dt = T / n, ph = g.t * p.ph * 0.6, R = kort * 0.42, bands = 6;
+      // Elke slinger zwaait over zijn eigen as tot 8% van de rand (Clay 25 sep):
+      // de x-slinger W / H zo ver als de y-slinger (16/9 op 640 × 360), dus de
+      // figuur vult de breedte. Een cirkel (a = b) wordt daardoor een ellips;
+      // dat is de afspraak. Op het scherm is de figuur zo breed als op 24 sep,
+      // dus 6000 punten blijven even glad.
+      const ctx = g.ctx, { cx, cy } = midden(g), T = Math.min(260, 5 / p.d), n = 6000, dt = T / n, ph = g.t * p.ph * 0.6, Rx = g.W * 0.42, Ry = g.H * 0.42, bands = 6;
       ctx.lineWidth = 0.9 * g.D; ctx.globalAlpha = 0.85;
       for (let bnd = 0; bnd < bands; bnd++) {
         ctx.beginPath();
@@ -85,7 +100,7 @@ const EIGEN = [
           const t = i * dt, e = Math.exp(-p.d * t),
             x = e * (0.6 * Math.sin(p.a * t + ph) + 0.4 * Math.sin(p.b * t)),
             y = e * (0.6 * Math.sin((p.b + p.e) * t) + 0.4 * Math.sin(p.a * t + ph * 0.5 + 1));
-          const X = cx + x * R, Y = cy + y * R;
+          const X = cx + x * Rx, Y = cy + y * Ry;
           if (i === i0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
         }
         ctx.strokeStyle = pcol(g.pal, 0.95 - bnd * 0.11); ctx.stroke();
@@ -163,9 +178,13 @@ const EIGEN = [
     },
     step(s, p, g) {
       fade(g, p.tr);
-      const ctx = g.ctx, D = g.D, sc = p.sc, tz = g.t * p.ev * 0.25, e = 1;
+      // Bij lagere kwaliteit (budget.js) bewegen en tekenen alleen de eerste
+      // n · kwaliteit deeltjes; de rest ligt stil tot hij terugkomt. Zelfde
+      // veld en snelheid, een dunner beeld. Op 16:9 zijn het er 3911 (×16/9),
+      // zo kan het budget ook hier terugregelen.
+      const ctx = g.ctx, D = g.D, sc = p.sc, tz = g.t * p.ev * 0.25, e = 1, n = Math.max(1, Math.round(s.n * kwaliteit(g)));
       const F = (x, y) => noise(x * sc + tz, y * sc) + 0.5 * noise(x * sc * 2.1 - tz * 0.7, y * sc * 2.1 + 11);
-      for (let i = 0; i < s.n; i++) {
+      for (let i = 0; i < n; i++) {
         const x = s.x[i], y = s.y[i], vx = F(x, y + e) - F(x, y - e), vy = -(F(x + e, y) - F(x - e, y)), m = Math.hypot(vx, vy) || 1;
         s.ox[i] = x; s.oy[i] = y; s.x[i] = x + vx / m * p.sp; s.y[i] = y + vy / m * p.sp;
       }
@@ -173,11 +192,11 @@ const EIGEN = [
       ctx.lineWidth = D;
       for (let c = 0; c < 4; c++) {
         ctx.beginPath();
-        for (let i = c; i < s.n; i += 4) { ctx.moveTo(s.ox[i] * D, s.oy[i] * D); ctx.lineTo(s.x[i] * D, s.y[i] * D); }
+        for (let i = c; i < n; i += 4) { ctx.moveTo(s.ox[i] * D, s.oy[i] * D); ctx.lineTo(s.x[i] * D, s.y[i] * D); }
         ctx.strokeStyle = pcol(g.pal, 0.45 + c * 0.18); ctx.stroke();
       }
       const Wu = s.Wu, Hu = s.Hu;
-      for (let i = 0; i < s.n; i++) {
+      for (let i = 0; i < n; i++) {
         const nx = s.x[i], ny = s.y[i];
         if (--s.l[i] < 0 || nx < 0 || nx > Wu || ny < 0 || ny > Hu) { s.x[i] = g.r() * Wu; s.y[i] = g.r() * Hu; s.l[i] = 80 + g.r() * 200; }
       }
@@ -307,14 +326,29 @@ const EIGEN = [
 
   { id: 'fy', naam: 'Fyllotaxis', sub: 'de gulden hoek · zonnebloempit', cat: 'Groei', pal: 'gloed',
     knobs: [K('ang', 'hoek °', 90, 180, 0.001, 137.508), K('n', 'zaden', 100, 3000, 10, 1400, { fix: 1 }), K('dr', 'drift', 0, 1, 0.01, 0.25, { fix: 1 }), K('sz', 'zaadgrootte', 0.3, 2, 0.01, 1, { fix: 1 })],
+    // Hoe dicht de zaden staan: n zaden op een schijf met straal DICHT × de
+    // korte zijde (het origineel: 0,46, en daar hield de bloem op).
+    DICHT: 0.6,
     init() {},
     step(s, p, g) {
       clear(g);
-      const ctx = g.ctx, { cx, cy, kort } = midden(g), n = p.n | 0, a = (p.ang + Math.sin(g.t * 0.25) * p.dr * 0.9) * PI / 180, c = kort * 0.46 / Math.sqrt(n);
-      for (let i = 1; i < n; i++) {
-        const r = c * Math.sqrt(i), th = i * a;
-        ctx.fillStyle = pcol(g.pal, 0.3 + 0.7 * (i / n)); ctx.beginPath();
-        ctx.arc(cx + Math.cos(th) * r, cy + Math.sin(th) * r, Math.max(0.6, c * 0.42 * p.sz * (0.4 + 0.6 * Math.sqrt(i / n))), 0, TAU); ctx.fill();
+      // Een ingezoomde zonnebloem (Clay 25 sep): de spiraal loopt door tot in
+      // de hoeken, zonder rand. De RAND van de bloem ligt in de hoek (straal =
+      // halve diagonaal): daar zijn de zaden het grootst en het lichtst, zoals
+      // vroeger aan de rand. Zaden die buiten beeld vallen worden berekend
+      // maar niet getekend. Met DICHT 0,6 (vroeger 0,46) zijn ze 30% groter dan
+      // op het oude vierkant; zo tekent hij, met de halve zaden langs de rand,
+      // hooguit 16/9 zoveel als het oude vierkant (op 1400 zaden ×1,6).
+      const ctx = g.ctx, W = g.W, H = g.H, { cx, cy, kort } = midden(g), n = p.n | 0, a = (p.ang + Math.sin(g.t * 0.25) * p.dr * 0.9) * PI / 180;
+      const c = kort * this.DICHT / Math.sqrt(n), rand = Math.hypot(W, H) / 2, N = (rand / c) ** 2, k = c * 0.42 * p.sz;
+      for (let i = 1; ; i++) {
+        // i / N = (r / rand)²: de groei en de kleur zoals vroeger i / n.
+        const r = c * Math.sqrt(i), f = i / N, rad = Math.max(0.6, k * (0.4 + 0.6 * Math.sqrt(f)));
+        if (r - rad > rand) break;                     // voorbij de hoeken: klaar
+        const th = i * a, x = cx + Math.cos(th) * r, y = cy + Math.sin(th) * r;
+        if (x + rad < 0 || x - rad > W || y + rad < 0 || y - rad > H) continue;
+        ctx.fillStyle = pcol(g.pal, 0.3 + 0.7 * f); ctx.beginPath();
+        ctx.arc(x, y, rad, 0, TAU); ctx.fill();
       }
     } },
 ];

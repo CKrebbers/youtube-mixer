@@ -49,9 +49,8 @@ function maakLaag(sys, { zaad = 7, kwaliteit, knoppen = {}, breedte = W, hoogte 
   const p = Object.fromEntries(sys.knobs.map((k) => [k.k, k.v]));
   Object.assign(p, knoppen);
   const s = { o: {}, e: {} };
-  // Zonder de verouderde g.S: een systeem dat hem nog leest, rekent met NaN en valt hieronder op.
-  const { S: _verouderd, ...maat } = maten(breedte, hoogte);
-  const g = { ctx: canvas.getContext('2d'), ...maat, t: 0, pal: sys.pal, L: LUTS[sys.pal], r: maakRng(zaad), maakCanvas };
+  // maten() kent geen g.S meer: een systeem dat hem nog leest, rekent met NaN en valt hieronder op.
+  const g = { ctx: canvas.getContext('2d'), ...maten(breedte, hoogte), t: 0, pal: sys.pal, L: LUTS[sys.pal], r: maakRng(zaad), maakCanvas };
   if (kwaliteit !== undefined) g.kwaliteit = kwaliteit;
   sys.init.call(sys, s, p, g);
   let i = 0;
