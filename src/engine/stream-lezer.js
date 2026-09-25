@@ -8,6 +8,10 @@
  *
  * Berichten erin:
  *   { type: 'segment', seg }        nieuwe afspeelstand
+ *   { type: 'segment', seg, gepland: true }
+ *                                   start op de maat: T ligt in de toekomst;
+ *                                   tot T klinkt wat er klonk (of stilte),
+ *                                   op T begint de overgang
  *   { type: 'bron', duur, sr }      nieuw bestand: alles leeg
  *   { type: 'pagina', i, data }     Int16Array, overgedragen, niet gekopieerd
  *   { type: 'weg', i }              pagina mag weg
@@ -26,13 +30,25 @@ class StreamLezer extends AudioWorkletProcessor {
     this.eindeGemeld = false;
     this.vorig = null;               // het segment waar we uit komen, voor de overgang
     this.wisselT = -Infinity;
+    this.startT = -Infinity;         // een gepland segment klinkt pas vanaf hier
     this.staat = { env: 1 };
     this.port.onmessage = ({ data: m }) => {
       if (m.type === 'segment') {
         // Het nieuwe segment niet hard erin zetten maar overvloeien vanaf
         // het huidige blok. Een segment dat niet speelt en niet speelde
         // hoeft geen overgang.
-        if (this.seg.speelt || m.seg.speelt) { this.vorig = this.seg; this.wisselT = currentFrame / sampleRate; }
+        const nu = currentFrame / sampleRate;
+        // Een gepland segment dat nog niet begonnen is, klinkt niet: daar
+        // valt niets uit te vloeien (zijn formule gaf vóór T de muziek vóór
+        // het cuepunt, en die mag je nooit horen).
+        const klinkt = this.seg.speelt && nu >= this.startT;
+        if (klinkt || m.seg.speelt) {
+          this.vorig = klinkt ? this.seg : STIL;
+          // Gepland: de overgang begint op T. Tot dan geeft renderBlok het
+          // oude segment (of stilte) en telt het nieuwe voor nul mee.
+          this.wisselT = m.gepland ? Math.max(nu, m.seg.T) : nu;
+        }
+        this.startT = m.gepland ? m.seg.T : -Infinity;
         this.seg = m.seg;
         this.segId = m.id;
         this.eindeGemeld = false;
@@ -42,6 +58,7 @@ class StreamLezer extends AudioWorkletProcessor {
       else if (m.type === 'bron') {
         this.paginas.clear();
         this.seg = STIL;
+        this.startT = -Infinity;
         this.duur = m.duur;
         this.trackRate = m.sr;
       }
