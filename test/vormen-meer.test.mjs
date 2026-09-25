@@ -12,6 +12,13 @@ const { LAAG_BREEDTE, LAAG_HOOGTE } = await import('../src/vormen/laag.js');
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
 
+// Rekentijd in THREADTIJD: alleen de ms dat onze eigen JS-draad rekende, zonder
+// de tijd dat de planner ons wegzet (onder load tot 330 ms voor een stap van 5)
+// en zonder GC- en compilerdraden. Wat de stap zelf doet telt wel. Onder load
+// rekenen we soms op een trage kern (2 à 3× zo duur): boven het budget nog eens
+// meten, hooguit drie keer, de beste telt. Waarom zo: zie vormen.test.mjs.
+const draadMs = () => { const t = process.threadCpuUsage(); return (t.user + t.system) / 1000; };
+
 // ---- nep-canvas: elke tekenaanroep telt, niets tekent -----------------------
 // Streng waar het ertoe doet: Path2D bestaat niet (de systemen mogen hem niet
 // gebruiken), en stroke() met een argument telt als fout. Voor de 16:9-checks
@@ -64,7 +71,7 @@ function meet(sys, opties, n = 180, direct = false) {
   try {
     for (let i = 0; i < 10; i++) l.stap();               // opwarmen: de JIT eerst
     const tijden = [];
-    for (let i = 0; i < n; i++) { const t0 = performance.now(); l.stap(); tijden.push(performance.now() - t0); }
+    for (let i = 0; i < n; i++) { const t0 = draadMs(); l.stap(); tijden.push(draadMs() - t0); }
     return { gem: tijden.reduce((a, b) => a + b, 0) / n, max: Math.max(...tijden), laag: l };
   } finally { if (direct) sys.RUST = rust; }
 }
@@ -304,11 +311,9 @@ console.log('kwaliteit 0,25: werkt, en is goedkoper waar er een zware lus is');
 console.log('meten: ms per stap in Node, nep-canvas (alleen het rekenwerk)');
 {
   for (const sys of SYSTEMEN_MEER) {
-    // Opnieuw meten bij een uitschieter (tot zes keer): andere processen op de machine (parallelle
-    // agenten, load 12 gemeten) mogen een piek niet op dit systeem schuiven. Een systeem dat echt
-    // te zwaar is, haalt het in geen enkele ronde.
+    // Het maximum telt, niet een percentiel: één dure stap is een hapering.
     let m1 = meet(sys, {});
-    for (let r = 0; r < 5 && m1.max >= 16; r++) { const m = meet(sys, {}); if (m.max < m1.max) m1 = m; }
+    for (let r = 1; r < 3 && m1.max >= 16; r++) { const m = meet(sys, {}); if (m.max < m1.max) m1 = m; }
     const m4 = meet(sys, { kwaliteit: 0.25 });
     console.log(`      ${sys.id.padEnd(3)} kwaliteit 1: gem ${m1.gem.toFixed(2)} ms, max ${m1.max.toFixed(2)} ms · kwaliteit 0,25: gem ${m4.gem.toFixed(2)} ms, max ${m4.max.toFixed(2)} ms`);
     ok(`${sys.id}: max < 16 ms per stap bij kwaliteit 1`, m1.max < 16);
