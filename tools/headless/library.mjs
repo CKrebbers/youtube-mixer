@@ -268,6 +268,45 @@ try {
   ok('en de server ook (laatst gespeeld)', (await api('/api/library?sorteer=gespeeld&aantal=1')).tracks[0].id === 'echt1');
   await foto('library-hotcues.png');
 
+  // ---- laden over een spelende track: pas bij de tweede klik ---------------
+  console.log('\nladen over een spelende track, weghalen');
+  const klikLaad = (id, deck) => evalueer(`document.querySelector('#lib-panel button[data-deck="${deck}"][data-id="${id}"]').click()`);
+  const status = () => evalueer("document.querySelector('#lib-panel .lib-status').textContent");
+  await evalueer("window.engine.deck('A').play()");
+  ok('track 1 speelt', await tot("window.engine.deck('A').playing", 3000));
+  await klikLaad('echt2', 'A');
+  await wacht(300);
+  ok('eerste klik over een spelende track: niets geladen, wel de vraag',
+    await evalueer("window.engine.deck('A').title === 'echt echt1'") && (await status()).includes('klik nog eens'), await status());
+  await klikLaad('echt2', 'A');
+  ok('tweede klik: wel geladen', await tot("window.engine.deck('A').title === 'echt echt2' && !window.library.bezig.size", 10000));
+
+  // ---- weghalen: eerst vragen, dan weg (met zijn hotcues) ----------------
+  const klikWeg = (id) => evalueer(`document.querySelector('#lib-panel button[data-weg="${id}"]').click()`);
+  const voorTotaal = (await api('/api/library?aantal=1')).totaal;
+  await klikWeg('echt1');
+  await wacht(300);
+  ok('weghalen vraagt eerst', (await api('/api/library?aantal=1')).totaal === voorTotaal && (await status()).includes('Klik nog eens op ×'));
+  await klikWeg('echt1');
+  ok('tweede klik: weg, op het scherm en op de server',
+    await tot(`!document.querySelector('#lib-panel button[data-weg="echt1"]') && document.querySelector('#lib-panel .lib-status').textContent.includes('1 gevonden')`, 5000)
+    && (await api('/api/library?aantal=1')).totaal === voorTotaal - 1, await status());
+  ok('en zijn hotcues ook', (await api('/api/library/echt1/hotcues')).hotcues.length === 0);
+
+  // Midden in de hele lijst weghalen: je blijft waar je was.
+  await evalueer(`(() => { const z = document.querySelector('#lib-panel .lib-zoek'); z.value = ''; z.dispatchEvent(new Event('input')); })()`);
+  ok('zoekterm leeg: weer de hele lijst', await tot(`document.querySelector('#lib-panel .lib-status').textContent.includes('${N + 1} nummers')`, 5000), await status());
+  await evalueer('document.querySelector("#lib-panel .lib-rijen").scrollTop = 28 * 2500');
+  ok('midden in de lijst: rijen staan er', await tot(`${TITELS}.length > 5`, 5000));
+  const inBeeld = await evalueer("[...document.querySelectorAll('#lib-panel .lib-venster button[data-weg]')].map((b) => b.dataset.weg)");
+  const weg = inBeeld[12];
+  await klikWeg(weg);
+  await klikWeg(weg);
+  ok(`weghalen midden in de lijst (${weg}): weg, en je blijft waar je was`, await tot(`!document.querySelector('#lib-panel button[data-weg="${weg}"]')
+    && document.querySelector('#lib-panel .lib-status').textContent.includes('${N} nummers')
+    && Math.abs(document.querySelector('#lib-panel .lib-rijen').scrollTop - 28 * 2500) < 2`, 5000), await status());
+  await foto('library-weg.png');
+
   ok('geen fouten in de console', meldingen.length === 0, meldingen.join(' | '));
 } catch (err) {
   ok('script liep door', false, err.message);
