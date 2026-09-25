@@ -32,6 +32,13 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
 - `hunks.py` — `list <bestand>` toont de hunks van een bestand; `stage <bestand> '[0,2]'`
   zet alleen die hunks klaar; `strip <bestand> 'a-b,c-d'` zet de werkversie min die regels klaar.
 
+## mapping/
+- `eerder.mjs [git-revisie] [apparaat]` — na een wijziging aan `mappings/apc40mk2.json`: zet
+  de vorige versie (standaard uit git HEAD) als voorganger in `eerder`, met de voorgangers
+  die die al had. Nodig zodat een oude VOLLEDIGE eigen mapping bij het omzetten tegen de
+  juiste standaard wordt afgezet (docs/MAPPING-VERSCHIL.md, "Eerdere standaarden").
+  `test/mapping.test.mjs` controleert dat elke voorganger terug te rekenen is.
+
 ## bench/
 - `vm-bench.cjs [id] [N]` — rekentijd per stap van de Vormmachines in Node (nep-canvas,
   tekenen telt niet mee: een ondergrens). Een kopie van de systemen uit Clay's

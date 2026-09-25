@@ -1,4 +1,4 @@
-import { isVerschil, maakVerschil, normaliseer, MAPPING_VERSIE } from '../control/mapping.js';
+import { isVerschil, normaliseer, verschilVanKopie, MAPPING_VERSIE } from '../control/mapping.js';
 
 /**
  * Waar je eigen MIDI-mapping staat, en in welke vorm (ROADMAP 13, 25 sep 2026).
@@ -77,13 +77,15 @@ export async function laadEigen(mapping, { haal, opslag = null }) {
   }
 
   // Een oude volledige kopie: verschil uitrekenen en DAT laden, zodat wat je
-  // nu ziet precies is wat je na herladen krijgt.
+  // nu ziet precies is wat je na herladen krijgt. Afgezet tegen de standaard
+  // waar de kopie op rust (de huidige of een voorganger uit `eerder`): anders
+  // zou alles wat de standaard sinds die kopie kreeg als "weggehaald" gelden.
   const kopie = normaliseer(eigen).doc;
   const standaard = await haalStandaard(kopie.device, haal);
-  const verschil = maakVerschil(standaard, kopie);
+  const { verschil } = verschilVanKopie(standaard, kopie);
   mapping.laadStandaard(standaard);
   const uit = mapping.load(verschil);
-  return { bron, serverBereikbaar, omgezet: true, standaardNieuw: false, eigen: uit.eigen, weg: uit.weg, aantal: uit.aantal, fouten: uit.fouten };
+  return { bron, serverBereikbaar, omgezet: true, standaardNieuw: uit.standaardNieuw, eigen: uit.eigen, weg: uit.weg, aantal: uit.aantal, fouten: uit.fouten };
 }
 
 /**

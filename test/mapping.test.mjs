@@ -1213,5 +1213,57 @@ console.log('controleur: de reserve in de browser volgt de server');
   ok('en de reserve in de browser is nu hetzelfde verschil', comet.getItem(EIGEN_MAPPING) === JSON.stringify(goed));
 }
 
+// ---- eerdere standaarden: een oude kopie krijgt de nieuwe regels -------------
+// Clay's server had op 25 sep nog zijn VOLLEDIGE kopie van 24 sep (291 regels:
+// de standaard 35823dda-291 + vier rack-knoppen op video). De standaard kreeg
+// daarna de indeling "Voorstel A" (83 regels erbij). Omzetten tegen de nieuwe
+// standaard gaf die 83 als "door Clay weggehaald": ze kwamen nooit binnen.
+console.log('eerdere standaarden (eerder in het standaardbestand)');
+{
+  const { eerdereStandaarden, verschilVanKopie, maakEerder } = await import('../src/control/mapping.js');
+  const eerder = eerdereStandaarden(doc);
+  ok('het standaardbestand draagt zijn voorgangers mee en ze zijn allemaal terug te rekenen (anders: node tools/mapping/eerder.mjs)',
+    Array.isArray(doc.eerder) && doc.eerder.length >= 1 && eerder.length === doc.eerder.length);
+  const vorige = eerder.find((e) => e.vingerafdruk === '35823dda-291')?.doc;
+  ok('de voorganger waar Clay\'s kopie van 24 sep op rust (35823dda-291, 291 regels) staat erin', vorige?.rules.length === 291);
+  ok('de voorganger is de huidige min de nieuwe regels (alleen toegevoegd, niets veranderd)',
+    doc.eerder.find((e) => e.vingerafdruk === '35823dda-291')?.rules.length === 0);
+  ok('maakEerder rekent uit wat er staat',
+    JSON.stringify(maakEerder(doc, vorige).removed) === JSON.stringify(doc.eerder.find((e) => e.vingerafdruk === '35823dda-291').removed));
+  // Zo stond hij op Clay's server: de VORIGE standaard met de vier video-knoppen.
+  const kopie = JSON.parse(JSON.stringify(vorige));
+  for (const r of kopie.rules) if (r.laag === 'device.rack' && VIDEO_KNOPPEN[r.in]) { r.action = VIDEO_KNOPPEN[r.in]; r.mode = 'absolute'; }
+  const { verschil, basis } = verschilVanKopie(doc, kopie);
+  ok('een oude kopie wordt afgezet tegen de standaard waar hij op rust: 4 eigen, niets weggehaald',
+    basis === '35823dda-291' && verschil.base === '35823dda-291' && verschil.rules.length === 4 && verschil.removed.length === 0);
+  ok('zonder voorganger zou elke nieuwe regel "weggehaald" zijn (dat lost dit op)',
+    maakVerschil(doc, kopie).removed.length === doc.rules.length - vorige.rules.length);
+  const mk = kaal();
+  mk.laadStandaard(doc);
+  const u = mk.load(verschil);
+  const oudeSleutels = new Set(vorige.rules.map(sleutelVan));
+  const nieuweSleutels = doc.rules.map(sleutelVan).filter((k) => !oudeSleutels.has(k));
+  ok(`geladen: de nieuwe standaard (${doc.rules.length}) met Clay's 4 regels, alle ${nieuweSleutels.length} nieuwe regels erop`,
+    u.standaardNieuw && u.weg === 0 && u.eigen === 4 && mk.rules.size === doc.rules.length
+    && nieuweSleutels.every((k) => mk.rules.has(k)) && mk.rules.get('cc:0:22@device.rack').action === 'video.fx.trails');
+  ok('geen nieuwe regel valt op een eigen sleutel van Clay (rack-knoppen 5–8)',
+    !nieuweSleutels.some((k) => Object.keys(VIDEO_KNOPPEN).some((sig) => k === `${sig}@device.rack`)));
+  const na = mk.verschil();
+  ok('opnieuw uitgerekend tegen de nieuwe standaard: alleen de 4', na.rules.length === 4 && na.removed.length === 0 && na.base === vingerafdruk(doc));
+  ok('een kopie van de HUIDIGE standaard blijft tegen de huidige afgezet', verschilVanKopie(doc, kopieVanClay()).basis === 'huidig');
+  const kapot = { ...doc, eerder: [{ ...doc.eerder[0], removed: doc.eerder[0].removed.slice(1) }] };
+  ok('een voorganger die niet meer klopt (vingerafdruk) telt niet mee: liever niets dan een verkeerde basis',
+    eerdereStandaarden(kapot).length === 0 && verschilVanKopie(kapot, kopie).basis === 'huidig');
+
+  // Het hele opstarten, zoals Clay's app het straks doet: kopie op de server.
+  const srv = nepServer({ opgeslagen: normaliseer(kopie).doc });
+  const ms = kaal();
+  const v = await opzetMappingOpslag({ mapping: ms, haal: srv.haal, opslag: nepOpslag(), wacht: 0 }).start();
+  ok('opstarten: omgezet én de nieuwe standaard erop, bewaard als 4 eigen regels tegen de nieuwe standaard',
+    v.omgezet && v.standaardNieuw && v.eigen === 4 && v.weg === 0 && srv.posts === 1
+    && srv.inDb().rules.length === 4 && srv.inDb().removed.length === 0 && srv.inDb().base === vingerafdruk(doc));
+  ok('en de APC heeft de modus klank (shift + scene 5)', ms.kies('note:0:86', { shift: true })?.action === 'layer.grid.klank');
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
