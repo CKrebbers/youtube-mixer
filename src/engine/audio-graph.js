@@ -1,4 +1,5 @@
 import { clamp, expMap, dbToGain } from '../lib/emitter.js';
+import { houdVast, zetHellingen } from './overgang.js';
 
 export const EQ_MIN_DB = -30;   // onder deze waarde snappen we naar 'kill'
 export const EQ_MAX_DB = 8;
@@ -63,26 +64,17 @@ export function eqDb(norm) {
 }
 
 /**
- * Een parameter vasthouden waar hij NU is: een lopende kill-overgang
- * (hieronder) wordt daar afgebroken, en wat erna komt begint op die plek.
- * Zonder dat liepen de resterende hellingen van de kill na een knopdraai
- * gewoon door, of begon een tweede kill vanaf het verkeerde punt.
- */
-function houdVast(param, now) {
-  try {
-    if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(now);
-    else param.cancelScheduledValues?.(now);
-  } catch (_) {}
-}
-
-/**
  * EQ-knop 0..1, midden = 0 dB. Onderste 3% = kill. Staat de band op kill
  * (schakelaar of drukknop), dan blijft hij weg: de knopstand wordt onthouden
  * (in deck.ui) maar pas weer hoorbaar als de kill eraf gaat.
+ *
+ * Eerst vasthouden (overgang.js): een lopende kill-overgang wordt daar
+ * afgebroken, en het doel begint op die plek. Zonder dat liepen de
+ * resterende hellingen van de kill na een knopdraai gewoon door.
  */
 export function setEqBand(param, norm, now, kill = false) {
   const db = kill ? EQ_KILL_DB : eqDb(norm);
-  houdVast(param, now);
+  try { houdVast(param, now); } catch (_) {}
   try { param.setTargetAtTime(db, now, 0.01); } catch (_) { try { param.value = db; } catch (__) {} }
 }
 
@@ -96,30 +88,26 @@ const KILL_N = 33;
  * (snel achter elkaar drukken, of aan de knop draaien): eerst vasthouden,
  * dan vanaf daar.
  *
- * Als losse lineaire hellingen, NIET als setValueCurveAtTime: in Chrome
- * (gemeten op 153, offline én realtime) houdt cancelAndHoldAtTime MIDDEN in
- * een lopende curve niet vast, maar speelt het afgekapte stuk opnieuw af
- * vanaf het begin van de curve. Kill aan en binnen 5 ms weer uit, of een
- * knopdraai in die 5 ms, gaf zo een sprong van tientallen dB (0,45 -> 1,0 in
- * amplitude, in één sample). Midden in een lineaire helling houdt Chrome wel
- * netjes vast. Tussen de punten interpoleert een helling lineair in dB,
- * precies zoals een curve dat doet: dezelfde vorm. En een helling kan nooit
- * de NotSupportedError van een overlappende curve geven.
+ * Als losse lineaire hellingen, NIET als setValueCurveAtTime, en pas na
+ * `wacht` (de deck geeft startDrempel mee): waarom staat in overgang.js. Een
+ * curve gaf in Chrome bij kill aan en binnen 5 ms weer uit, of een knopdraai
+ * in die 5 ms, een sprong van 0,45 -> 1,0 in amplitude in één sample; zonder
+ * wacht kon een renderthread die voorliep de hele kill tot één stap maken.
+ * Tussen de punten interpoleert een helling lineair in dB, precies zoals een
+ * curve dat doet: dezelfde vorm.
  */
-export function killEqBand(param, norm, kill, now) {
+export function killEqBand(param, norm, kill, now, wacht = 0) {
   const naar = kill ? EQ_KILL_DB : eqDb(norm);
   try {
-    houdVast(param, now);
-    const van = param.value;
-    const ga = dbToGain(van), gb = dbToGain(naar), vloer = dbToGain(EQ_KILL_DB);
-    // Het beginpunt vastleggen: een helling begint anders bij het vorige
-    // ingeplande punt, en dat kan lang geleden zijn (dan springt hij).
-    param.setValueAtTime(van, now);
-    for (let i = 1; i < KILL_N; i++) {
-      const s = (1 - Math.cos(Math.PI * i / (KILL_N - 1))) / 2;
-      const db = i === KILL_N - 1 ? naar : 20 * Math.log10(Math.max(vloer, ga + (gb - ga) * s));
-      param.linearRampToValueAtTime(db, now + KILL_FADE * i / (KILL_N - 1));
-    }
+    zetHellingen(param, (van) => {
+      const ga = dbToGain(van), gb = dbToGain(naar), vloer = dbToGain(EQ_KILL_DB);
+      return Array.from({ length: KILL_N }, (_, i) => {
+        if (i === 0) return van;
+        if (i === KILL_N - 1) return naar;
+        const s = (1 - Math.cos(Math.PI * i / (KILL_N - 1))) / 2;
+        return 20 * Math.log10(Math.max(vloer, ga + (gb - ga) * s));
+      });
+    }, now, KILL_FADE, wacht);
   } catch (_) {
     // Laatste vangnet: nooit de aanroeper laten struikelen.
     try { param.setTargetAtTime(naar, now, KILL_FADE / 3); } catch (__) { try { param.value = naar; } catch (___) {} }

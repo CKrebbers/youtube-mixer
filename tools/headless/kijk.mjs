@@ -306,6 +306,35 @@ try {
   })()`);
   ok('effectwissel: binnen de kruisfade aan de mix draaien of nog eens wisselen, in Chrome geen sprong', fxStap.every((m) => m < 0.01),
     `grootste stap in de gains ${fxStap.map((m) => m.toFixed(4)).join(' / ')}`);
+  // Hellingen hebben een eigen valkuil: de renderthread kan een paar ms voor
+  // ctx.currentTime uit lopen (realtime gemeten tot 7,5 ms), en Chrome zet
+  // een nieuw punt dat voor hem al voorbij is op zijn eigen nu. Van hellingen
+  // vallen de punten die al voorbij zijn dan samen tot één sprong (een curve
+  // schuift als geheel op). Daarom beginnen ze pas na startDrempel. Hier
+  // deterministisch nagebootst: op blok 40 plannen alsof het nog blok 38 is.
+  const voorloop = await evalueer(`(async () => {
+    const { zetHellingen, startDrempel } = await import('/src/engine/overgang.js');
+    const { killEqBand, eqDb } = await import('/src/engine/audio-graph.js');
+    const SR = 48000, Q = 128 / SR, uit = {};
+    const ep = (a, b) => Array.from({ length: 33 }, (_, i) => { const t = i / 32; return a * Math.cos(t * Math.PI / 2) + b * Math.cos((1 - t) * Math.PI / 2); });
+    const proef = async (naam, begin, doe, db = false) => {
+      const ctx = new OfflineAudioContext(1, SR * 0.2, SR);
+      const c = new ConstantSourceNode(ctx, { offset: begin }); c.connect(ctx.destination); c.start();
+      ctx.suspend(40 * Q).then(() => { doe(c.offset, 38 * Q, startDrempel(ctx)); ctx.resume(); });
+      const d = (await ctx.startRendering()).getChannelData(0);
+      const a = db ? (x) => Math.pow(10, x / 20) : (x) => x;
+      let m = 0; for (let i = 1; i < d.length; i++) m = Math.max(m, Math.abs(a(d[i]) - a(d[i - 1])));
+      uit[naam] = m;
+    };
+    await proef('fadeOpNu', 0, (p, nu) => zetHellingen(p, (v) => ep(v, 1), nu, 0.04, 0));
+    await proef('fade', 0, (p, nu, w) => zetHellingen(p, (v) => ep(v, 1), nu, 0.04, w));
+    await proef('killOpNu', eqDb(0.5), (p, nu) => killEqBand(p, 0.5, true, nu, 0), true);
+    await proef('kill', eqDb(0.5), (p, nu, w) => killEqBand(p, 0.5, true, nu, w), true);
+    return uit;
+  })()`);
+  ok('renderthread 5,3 ms voor: kruisfade en kill na startDrempel zonder sprong (op nu: wel, de valkuil bestaat nog)',
+    voorloop.fade < 0.01 && voorloop.kill < 0.05 && voorloop.fadeOpNu > 0.1 && voorloop.killOpNu > 0.5,
+    `fade ${voorloop.fade.toFixed(4)} (op nu ${voorloop.fadeOpNu.toFixed(3)}), kill ${voorloop.kill.toFixed(4)} (op nu ${voorloop.killOpNu.toFixed(3)})`);
   const bas = (s) => evalueer(`(async () => {
     const { Luisteraar } = await import('/src/analysis/luisteraar.js');
     const e = window.engine, l = new Luisteraar({ analyser: () => e.master.analyser, sampleRate: () => e.ctx.sampleRate });

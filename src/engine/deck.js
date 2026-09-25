@@ -4,6 +4,7 @@ import { Beatgrid } from './beatgrid.js';
 import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
 import { maakWav } from './stream-kern.js';
 import { InsertSlot } from './fx.js';
+import { startDrempel } from './overgang.js';
 
 /**
  * Hoe ver de pitchfader reikt, naar elke kant. Kiesbaar per track; sync mag
@@ -560,15 +561,16 @@ export class Deck extends Emitter {
   }
 
   /**
-   * Alleen als het hoorbaar verandert een korte curve op de EQ (klikvrij,
-   * killEqBand). Schakelaar aan terwijl je al drukt: er verandert niets.
+   * Alleen als het hoorbaar verandert een korte overgang op de EQ (klikvrij,
+   * killEqBand), die begint na startDrempel (zie overgang.js). Schakelaar aan
+   * terwijl je al drukt: er verandert niets.
    */
   _pasKillToe(band) {
     const weg = this.gekild(band);
     if (weg !== this._killHoorbaar[band]) {
       this._killHoorbaar[band] = weg;
       const param = { low: this.chain.eqLow, mid: this.chain.eqMid, high: this.chain.eqHigh }[band].gain;
-      killEqBand(param, this.ui[band], weg, this.ctx.currentTime);
+      killEqBand(param, this.ui[band], weg, this.ctx.currentTime, startDrempel(this.ctx));
     }
     this.emit('change', this);
   }

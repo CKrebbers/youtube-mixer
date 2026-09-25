@@ -1296,16 +1296,24 @@ console.log('\nacht tracks');
 console.log('\nEQ-kill');
 {
   const { EQ_KILL_DB, KILL_FADE, eqDb } = await import('../src/engine/audio-graph.js');
+  const { startDrempel } = await import('../src/engine/overgang.js');
   const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
   const dK = eng.deck('H');
+  const WACHT = startDrempel(eng.ctx);
   NOW = 300;
   const fouten0 = OVERLAP_FOUTEN, breuk0 = CURVE_BREUK;
   const p = dK.chain.eqLow.gain;
   // De kill-overgangen op de lage band, om hun vorm na te lopen: een
-  // beginpunt (setValueAtTime) en de hellingen erna.
+  // beginpunt op nu (setValueAtTime), hetzelfde punt nog eens na de
+  // startdrempel, en de hellingen erna.
   const curves = [];
   const origZet = p.setValueAtTime, origHelling = p.linearRampToValueAtTime;
-  p.setValueAtTime = function (x, t) { curves.push({ t, d: 0, c: [x] }); return origZet.call(this, x, t); };
+  p.setValueAtTime = function (x, t) {
+    const k = curves[curves.length - 1];
+    if (k && k.c.length === 1 && k.c[0] === x) k.t = t;
+    else curves.push({ nu: t, t, d: 0, c: [x] });
+    return origZet.call(this, x, t);
+  };
   p.linearRampToValueAtTime = function (x, t) {
     const k = curves[curves.length - 1];
     if (k) { k.c.push(x); k.d = t - k.t; }
@@ -1319,8 +1327,13 @@ console.log('\nEQ-kill');
   ok('kill-lampje 0: open, bruikbaar', read('track.8.kill.low') === 0 && read('track.8.kill.low.hold') === 0);
   invoke('track.8.kill.low', true); invoke('track.8.kill.low', false);
   ok('kill aan: de lage band naar −70 dB (lampje 1)', p.value === EQ_KILL_DB && dK.gekild('low') && read('track.8.kill.low') === 1);
-  ok('… met een overgang van 5 ms vanaf nu, niet hard', curves.length === 1 && Math.abs(curves[0].d - KILL_FADE) < 1e-9
-    && curves[0].t === NOW && curves[0].c.length === 33);
+  ok('… met een overgang van 5 ms, niet hard', curves.length === 1 && Math.abs(curves[0].d - KILL_FADE) < 1e-9
+    && curves[0].nu === NOW && curves[0].c.length === 33);
+  // Een renderthread die voorloopt zet hellingpunten die voor hem al voorbij
+  // zijn op zijn eigen nu: bij een kill van 5 ms kon de hele kill zo één stap
+  // worden. Daarom blijft hij tot startDrempel staan en begint dan pas.
+  ok(`… die pas na de startdrempel (${(WACHT * 1000).toFixed(1)} ms) begint`,
+    Math.abs(curves[0].t - (NOW + WACHT)) < 1e-9);
   // Klikvrij: in AMPLITUDE een zachte S. Een rechte lijn in dB doet bijna
   // alle amplitude in de eerste stapjes, en dat is een tik.
   const amp = (db) => Math.pow(10, db / 20);
@@ -1336,9 +1349,9 @@ console.log('\nEQ-kill');
   // setValueCurveAtTime gooide setTargetAtTime daar NotSupportedError, en
   // cancelAndHoldAtTime ertegen gaf in Chrome een sprong (CURVE_BREUK).
   let gegooid = null;
-  NOW += 0.001;
+  NOW += WACHT + 0.001;
   try { invoke('track.8.low', 0.3); } catch (e) { gegooid = e; }
-  ok('1 ms later aan de knop draaien, tijdens de kill-overgang: geen NotSupportedError, geen afgebroken curve',
+  ok('1 ms na het begin aan de knop draaien, tijdens de kill-overgang: geen NotSupportedError, geen afgebroken curve',
     gegooid === null && OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
   ok('… de band blijft weg, de knop onthoudt 0,3', p.value === EQ_KILL_DB && dK.ui.low === 0.3);
   NOW += 0.001;
@@ -1350,7 +1363,7 @@ console.log('\nEQ-kill');
   NOW += 1;
   const m = dK.chain.eqMid.gain;
   invoke('track.8.kill.mid', true);
-  NOW += 0.002;
+  NOW += WACHT + 0.002;
   gegooid = null;
   try { invoke('track.8.kill.mid', true); } catch (e) { gegooid = e; }
   ok('kill aan en 2 ms later weer uit (overgang loopt nog): geen NotSupportedError, geen afgebroken curve (sprong in Chrome)',
