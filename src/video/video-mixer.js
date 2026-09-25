@@ -1,4 +1,5 @@
 import { synchroniseer, zichtbaarheid } from './volg.js';
+import { videoFoutTekst, laadtTeLang, LAAD_GEDULD } from './fouten.js';
 import { VIDEO_FX, MODI } from './instellingen.js';
 import { PULS_DOELEN, pulsVorm, klokTrack, metPuls } from './puls.js';
 import { FITS, schaalVoor, maatVan } from './passen.js';
@@ -187,13 +188,16 @@ export class VideoMixer {
    * @param canvas   waar het beeld komt
    * @param engine   alleen om uit te lezen: deck(), xfadeGain(), ctx
    * @param decks    deck-id's in volgorde, hooguit acht
+   * @param maakVideo een <video> maken (de tests geven een nep)
    */
-  constructor({ canvas, engine, decks }) {
+  constructor({ canvas, engine, decks, maakVideo = () => document.createElement('video') }) {
     this.canvas = canvas;
     this.engine = engine;
     this.decks = decks.slice(0, MAX);
-    this.lagen = new Map();          // deckId -> { video, url, tex, seekStart, seekDuur, klaar }
+    this.maakVideo = maakVideo;
+    this.lagen = new Map();          // deckId -> { video, url, tex, seekStart, seekDuur, klaar, zichtSinds, gemeld }
     this.fout = null;
+    this.onFout = null;              // (deckId, tekst): de video van een nummer ontbreekt of laadt niet
     canvas.width = BREEDTE;
     canvas.height = HOOGTE;
 
@@ -348,12 +352,13 @@ export class VideoMixer {
       this.lagen.delete(deckId);
     }
     if (!url || !this.gl) return;
-    const video = document.createElement('video');
+    const video = this.maakVideo();
     video.muted = true;                      // het geluid komt uit de engine, nooit hieruit
     video.playsInline = true;
     video.preload = 'auto';
     video.src = url;
-    const laag = { video, url, tex: this._texture(), seekStart: 0, seekDuur: 0.15, klaar: false };
+    const laag = { video, url, tex: this._texture(), seekStart: 0, seekDuur: 0.15, klaar: false,
+      zichtSinds: null, gemeld: false };
     // Hoe lang een seek duurt, om er de volgende keer rekening mee te houden.
     video.addEventListener('seeked', () => {
       if (laag.seekStart) {
@@ -363,6 +368,13 @@ export class VideoMixer {
       }
     });
     video.addEventListener('loadeddata', () => { laag.klaar = true; });
+    // Ontbreekt het bestand of is het kapot, dan zegt de strook het; anders
+    // blijft de beamer zwart zonder dat iemand weet waarom.
+    video.addEventListener('error', () => {
+      if (this.lagen.get(deckId) !== laag || laag.gemeld) return;
+      laag.gemeld = true;
+      this.onFout?.(deckId, videoFoutTekst(video.error));
+    });
     this.lagen.set(deckId, laag);
   }
 
@@ -388,8 +400,15 @@ export class VideoMixer {
       gl.activeTexture(gl.TEXTURE0 + i);
       if (!laag || zicht < ZICHTBAAR) {
         if (laag && !laag.video.paused) laag.video.pause();
+        if (laag) laag.zichtSinds = null;
         gl.bindTexture(gl.TEXTURE_2D, this.zwart);
         return;
+      }
+      const nuMs = performance.now();
+      laag.zichtSinds ??= nuMs;
+      if (laadtTeLang({ zichtbaar: true, klaar: laag.klaar, gemeld: laag.gemeld, sinds: laag.zichtSinds, nu: nuMs })) {
+        laag.gemeld = true;
+        this.onFout?.(id, `na ${LAAD_GEDULD} s nog geen beeld`);
       }
       this._volg(laag, d, vertraging);
       gl.bindTexture(gl.TEXTURE_2D, laag.tex);

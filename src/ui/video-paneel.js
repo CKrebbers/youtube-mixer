@@ -2,6 +2,7 @@ import { DECK_IDS } from '../engine/engine.js';
 import { trackVanDeck } from '../control/actions.js';
 import { isTypen } from '../control/keyboard.js';
 import { VideoMixer } from '../video/video-mixer.js';
+import { meld } from './meldingen.js';
 
 /**
  * Het videopaneel: de kolom naast de vensters, het losse venster en wat de
@@ -14,6 +15,14 @@ import { VideoMixer } from '../video/video-mixer.js';
 export function opzetVideo({ engine }) {
   const videoPaneel = document.getElementById('video-panel');
   const videoMixer = new VideoMixer({ canvas: videoPaneel.querySelector('.vid-canvas'), engine, decks: DECK_IDS });
+
+  /** De video van een nummer ontbreekt of laadt niet: in de strook, niet alleen in de console. */
+  const meldVideoFout = (id, tekst) => {
+    if (!id) { meld(`video: ${tekst}`, 'fout'); return; }
+    const titel = engine.deck(id)?.title;
+    meld(`video van track ${trackVanDeck(id)}${titel ? ` (${titel})` : ''}: ${tekst}`, 'fout');
+  };
+  videoMixer.onFout = meldVideoFout;
   let losVenster = null;
   // Ook tijdens een video-opname renderen, anders neem je zwart op.
   const videoAan = () => !videoPaneel.classList.contains('hidden') || (losVenster && !losVenster.closed)

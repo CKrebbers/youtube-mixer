@@ -149,5 +149,48 @@ console.log('\nbeeldverhouding per laag (staande video)');
     && !/l\[i\] \* w\[i\]/.test(bron));
 }
 
+console.log('\nvideo van een nummer ontbreekt of laadt niet');
+{
+  const { videoFoutTekst, laadtTeLang, LAAD_GEDULD } = await import('../src/video/fouten.js');
+  ok('404 of een formaat dat niet kan: "ontbreekt"', /ontbreekt/.test(videoFoutTekst({ code: 4 })));
+  ok('kapot bestand: "niet te decoderen"', /decoderen/.test(videoFoutTekst({ code: 3 })));
+  ok('onbekend: de boodschap zelf, of iets', videoFoutTekst({ code: 9, message: 'raar' }) === 'raar' && videoFoutTekst(null).length > 0);
+  const basis = { zichtbaar: true, klaar: false, gemeld: false, sinds: 0 };
+  ok(`zichtbaar en na ${LAAD_GEDULD} s nog geen beeld: melden`, laadtTeLang({ ...basis, nu: LAAD_GEDULD * 1000 + 1 }));
+  ok('nog binnen het geduld: niet', !laadtTeLang({ ...basis, nu: LAAD_GEDULD * 1000 - 1 }));
+  ok('niet te zien, al klaar of al gemeld: niet', !laadtTeLang({ ...basis, zichtbaar: false, nu: 1e9 })
+    && !laadtTeLang({ ...basis, klaar: true, nu: 1e9 }) && !laadtTeLang({ ...basis, gemeld: true, nu: 1e9 }));
+}
+
+console.log('\nde mixer meldt een video die niet laadt');
+{
+  const { VideoMixer } = await import('../src/video/video-mixer.js');
+  let id = 0;
+  const gl = new Proxy({ TEXTURE0: 1000, createTexture: () => ({ tex: ++id }), createFramebuffer: () => ({ fb: ++id }),
+    createProgram: () => ({ prog: ++id }), createShader: () => ({ sh: ++id }), getShaderParameter: () => true,
+    getProgramParameter: () => true, getUniformLocation: (p, n) => n, getAttribLocation: () => 0 },
+  { get(t, k) { return k in t ? t[k] : () => {}; } });
+  const nepVideo = () => {
+    const luister = {};
+    return { paused: true, currentTime: 0, readyState: 0, seeking: false, playbackRate: 1, luister, src: '',
+      addEventListener: (n, f) => { (luister[n] ??= []).push(f); }, removeAttribute() { this.src = ''; },
+      load() {}, pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); } };
+  };
+  const deck = { buffer: {}, ui: { fader: 1 }, position: 3, rate: 1, playing: false, grid: null };
+  const engine = { ctx: { currentTime: 1, outputLatency: 0, baseLatency: 0 }, deck: () => deck, xfadeGain: () => 1 };
+  const hoofd = new VideoMixer({ canvas: { getContext: () => gl }, engine, decks: ['A', 'B'], maakVideo: nepVideo });
+  const meldingen = [];
+  hoofd.onFout = (d, t) => meldingen.push([d, t]);
+  hoofd.zetBron('B', '/media/weg/video.mp4');
+  const vb = hoofd.lagen.get('B').video;
+  vb.error = { code: 4 };
+  vb.luister.error.forEach((f) => f());
+  vb.luister.error.forEach((f) => f());
+  ok('bestand ontbreekt (404): één melding met de track erbij', meldingen.length === 1 && meldingen[0][0] === 'B' && /ontbreekt/.test(meldingen[0][1]));
+  hoofd.zetBron('B', null);
+  vb.luister.error.forEach((f) => f());
+  ok('een fout van een video die al weg is telt niet', meldingen.length === 1);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
