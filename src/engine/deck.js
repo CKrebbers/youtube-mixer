@@ -13,6 +13,8 @@ import { InsertSlot } from './fx.js';
 export const PITCH_BEREIKEN = [0.08, 0.16, 0.5];
 /** Hoeveel een nudge (bend) versnelt of vertraagt zolang je drukt. */
 export const BEND = 0.04;
+/** Beatjump-lengtes in tellen, te halveren en te verdubbelen. Standaard 4. */
+export const SPRONG_TELLEN = [1, 2, 4, 8, 16, 32];
 
 /**
  * Eén deck: transport, cues, loops, beatgrid, kanaalstrip.
@@ -55,6 +57,13 @@ export class Deck extends Emitter {
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.loop = null;           // {start, end}
+    // Quantize: cue, hotcues en loop in/out op de tel, hotcue-sprongen
+    // fasebehoudend. Eén schakelaar voor de hele engine (Engine.setQuantize
+    // zet hem op elk deck); het deck leest alleen deze vlag.
+    this.quantize = false;
+    this.sprongTellen = 4;      // beatjump-lengte, zie SPRONG_TELLEN
+    this.loopInPunt = null;     // loop in gezet, wacht op loop out (tracktijd)
+    this.vorigeLoop = null;     // voor reloop: de laatste loop die eraf ging
 
     this.grid = null;           // Beatgrid, of null als de track nog niet uitgemeten is
     // Onset-pieken (tracktijd, s), gesorteerde Float64Array, of null. Alleen
@@ -100,7 +109,10 @@ export class Deck extends Emitter {
     // geen gat hebben. Een BufferBron negeert het, die heeft alles al.
     // Tijdens het laden horen cue en hotcues nog bij de OUDE track (ze worden
     // pas gewist als de laad slaagt): dan niets vastpinnen in het nieuwe bestand.
-    bron.vastpunten = () => (this._laadt ? [] : [this.cuePoint, ...this.hotcues, this.loop?.start ?? null]);
+    // Het loop-in-punt en de loop voor reloop horen erbij: daar springt de
+    // loop straks naartoe, ook als dat verder dan 5 s terug ligt.
+    bron.vastpunten = () => (this._laadt ? [] : [this.cuePoint, ...this.hotcues, this.loop?.start ?? null,
+      this.loopInPunt, this.vorigeLoop?.start ?? null]);
   }
 
   /** Een heel bestand, uitgepakt in het geheugen: losgesleepte bestanden en de demotrack. */
@@ -151,6 +163,8 @@ export class Deck extends Emitter {
     this.grid = null;
     this.onsets = null;
     this.loopBeats = null;
+    this.loopInPunt = null;
+    this.vorigeLoop = null;
     // Een nieuw nummer begint op 0%: de pitch van het vorige zegt niets over
     // dit nummer. Het bereik blijft staan, dat is een keuze van de DJ.
     this.setRate(1);
@@ -161,13 +175,28 @@ export class Deck extends Emitter {
 
   stop() { this.bron.stop(); }
 
-  play() {
+  /**
+   * Spelen vanaf de positie. Met `op` (audiokloktijd, later dan nu) begint
+   * het geluid pas dan, sample-exact: starten op de maat (Engine.startOpDeMaat).
+   * Tot dan geldt het deck als spelend, maar staat de positie stil; pauze
+   * annuleert het.
+   */
+  play({ op = null } = {}) {
     if (!this.buffer || this.playing) return;
     let at = this.position;
     if (at >= this.duration - 0.01) at = 0;
-    this.bron.start(at);
+    this.bron.start(at, op === null ? undefined : { op });
     this._heranker();
     this.emit('change', this);
+  }
+
+  /** Wacht dit deck op een geplande start (starten op de maat)? */
+  get wacht() { return this.bron.wachtTot != null; }
+
+  /** Opties voor bron.start: tijdens het wachten hetzelfde startmoment houden. */
+  _startOpties(extra) {
+    const op = this.bron.wachtTot;
+    return op == null ? extra : { ...extra, op };
   }
 
   pause() {
@@ -199,7 +228,9 @@ export class Deck extends Emitter {
       if (binnenLoop && len > 0) p = l.start + ((((p - l.start) % len) + len) % len);
       else this._verlaatLoop();
     }
-    if (this.playing) this.bron.start(p);
+    // Wacht het deck op de maat, dan blijft die start staan: alleen het punt
+    // waar hij begint verschuift (hotcue, beatjump, nudge tijdens het wachten).
+    if (this.playing) this.bron.start(p, this._startOpties());
     else this.bron.plaats(p);
     this._heranker();
     this.emit('change', this);
@@ -209,8 +240,15 @@ export class Deck extends Emitter {
 
   /** Loop eraf zonder 'change' te melden: de aanroeper meldt zelf. */
   _verlaatLoop() {
+    this._onthoudLoop();
     this.loopBeats = null;
     if (this.loop) this.bron.clearLoop();
+  }
+
+  /** De loop die eraf gaat bewaren voor reloop (zoals op een CDJ). */
+  _onthoudLoop() {
+    const l = this.loop;
+    if (l) this.vorigeLoop = { start: l.start, end: l.end, beats: this.loopBeats ?? null };
   }
 
   /** Pitchfader 0..1 (midden = 0%), geschaald op het bereik van deze track. */
@@ -313,7 +351,12 @@ export class Deck extends Emitter {
       this.bron.plaats(this.cuePoint);
     }
     else if (Math.abs(this.position - this.cuePoint) < 0.005) { this.play(); }
-    else { this.cuePoint = this.position; }
+    else {
+      // Met quantize op de dichtstbijzijnde tel, en de speelkop gaat mee:
+      // anders zette de volgende druk steeds opnieuw een cue in plaats van te spelen.
+      this.cuePoint = this._snap(this.position);
+      if (this.cuePoint !== this.position) this.bron.plaats(this.cuePoint);
+    }
     this.emit('change', this);
   }
 
@@ -322,8 +365,97 @@ export class Deck extends Emitter {
   hotcue(i, { del = false } = {}) {
     if (!this.buffer) return;
     if (del) { this.hotcues[i] = null; this.emit('change', this); return; }
-    if (this.hotcues[i] === null) this.hotcues[i] = this.position;
-    else this.seek(this.hotcues[i]);
+    // Quantize: zetten op de tel, springen fasebehoudend (_snap, _faseDoel).
+    if (this.hotcues[i] === null) this.hotcues[i] = this._snap(this.position);
+    else this.seek(this._faseDoel(this.hotcues[i]));
+    this.emit('change', this);
+  }
+
+  // ---- quantize ----------------------------------------------------------
+
+  /**
+   * Mag het grid op tracktijd t gebruikt worden om op te snappen? Alleen in
+   * een zeker stuk (of op slot): een cue op een verkeerde tel is erger dan
+   * een cue een fractie naast de tel. Zelfde regel als sync en beat-loops.
+   */
+  _opGrid(t) { return !!this.grid && this.grid.zekerBij(t); }
+
+  /** Quantize aan en het grid daar zeker: de dichtstbijzijnde tel. Anders t zelf. */
+  _snap(t) {
+    return this.quantize && this._opGrid(t) ? clamp(this.grid.nearest(t), 0, this.duration) : t;
+  }
+
+  /**
+   * Waar een sprong naar `doel` landt. Met quantize, tijdens het spelen, op
+   * een zeker grid: fasebehoudend (Beatgrid.metFaseVan), meteen en zonder te
+   * struikelen: een hotcue op de tel, ingedrukt op 0,3 van een tel, landt op
+   * 0,3 na de hotcue. Zo doen Traktor en Mixxx het ook. Wachten tot de
+   * volgende tel klinkt hetzelfde, maar reageert tot een tel trager.
+   */
+  _faseDoel(doel) {
+    if (!this.quantize || !this.playing || !this._opGrid(this.position) || !this._opGrid(doel)) return doel;
+    return clamp(this.grid.metFaseVan(doel, this.position), 0, this.duration);
+  }
+
+  // ---- beatjump ----------------------------------------------------------
+
+  /** Beatjump-lengte halveren of verdubbelen, binnen SPRONG_TELLEN. */
+  halveerSprong() { this._zetSprong(-1); }
+  verdubbelSprong() { this._zetSprong(1); }
+  _zetSprong(stap) {
+    const i = SPRONG_TELLEN.indexOf(this.sprongTellen);
+    const j = clamp((i < 0 ? SPRONG_TELLEN.indexOf(4) : i) + stap, 0, SPRONG_TELLEN.length - 1);
+    this.sprongTellen = SPRONG_TELLEN[j];
+    this.emit('change', this);
+  }
+
+  /**
+   * Beatjump: `richting` (−1 of +1) × de ingestelde lengte, of × `tellen`
+   * als die meekomt, op het grid.
+   *
+   * In TELLEN (Beatgrid.verschuif): de fase binnen de tel blijft precies
+   * gelijk, ook over een stukgrens van de tempokaart. Binnen een loop schuift
+   * de LOOP mee, zoals in Traktor, rekordbox en Serato: de speelkop houdt zijn
+   * plek in de loop en je hoort dezelfde loop verderop in het nummer. Alleen
+   * de speelkop verplaatsen zou de loop verlaten, en dan was beatjump in een
+   * loop niets anders dan de loop uitzetten.
+   *
+   * Zonder grid, of met een onzeker stuk (bij de speelkop, het doel of de
+   * verschoven loop) zonder slot: weigeren, net als beat-loops. Een sprong
+   * die een fractie van een tel naast valt, hoor je meteen.
+   *
+   * @returns {{ ok: boolean, waarom?: 'leeg'|'geengrid'|'onzeker'|'rand' }}
+   */
+  beatjump(richting, tellen = this.sprongTellen) {
+    if (!this.buffer) return { ok: false, waarom: 'leeg' };
+    if (!this.grid) return { ok: false, waarom: 'geengrid' };
+    const g = this.grid, p = this.position;
+    const n = Math.sign(richting) * tellen;
+    const doel = g.verschuif(p, n);
+    if (!this._opGrid(p) || !this._opGrid(doel)) return { ok: false, waarom: 'onzeker' };
+    const l = this.loop;
+    if (!l) {
+      // Voorbij begin of einde: tegen de rand, zoals een CDJ. Daar houdt de fase op.
+      this.seek(doel);
+      return { ok: true };
+    }
+    const start = g.verschuif(l.start, n), eind = g.verschuif(l.end, n);
+    if (!this._opGrid(start) || !this._opGrid(eind)) return { ok: false, waarom: 'onzeker' };
+    if (start < 0 || eind > this.duration + 1e-9) return { ok: false, waarom: 'rand' };
+    // Begin en einde schuiven evenveel tellen: loopBeats blijft kloppen.
+    this._spring(doel, { start, end: eind });
+    return { ok: true };
+  }
+
+  /**
+   * Loop en positie in één keer: één segment voor de streamkern, één nieuwe
+   * bron voor de BufferBron. Klikvrij via de gewone overgang van een sprong.
+   */
+  _spring(p, loop) {
+    const pos = clamp(p, 0, this.duration);
+    if (this.playing) this.bron.start(pos, this._startOpties({ loop }));
+    else { this.bron.setLoop(loop.start, loop.end); this.bron.plaats(pos); }
+    this._heranker();
     this.emit('change', this);
   }
 
@@ -394,10 +526,73 @@ export class Deck extends Emitter {
   }
 
   clearLoop() {
+    this._onthoudLoop();
     this.loopBeats = null;
     if (!this.loop) return;
     this.bron.clearLoop();
     this.emit('change', this);
+  }
+
+  // ---- loop in / loop out / reloop (handmatig, zoals een CDJ) -------------
+
+  /**
+   * Loop in: het begin van een handmatige loop, op de positie (met quantize
+   * op de dichtstbijzijnde tel). Er gebeurt nog niets hoorbaars: de loop gaat
+   * pas aan bij loop out. Nog eens drukken zet een nieuw begin.
+   */
+  loopIn() {
+    if (!this.buffer) return false;
+    this.loopInPunt = this._snap(this.position);
+    this.emit('change', this);
+    return true;
+  }
+
+  /**
+   * Loop out: het einde op de positie, en de loop gaat meteen aan. Met
+   * quantize (en een zeker grid) een heel aantal tellen, minstens één; dan
+   * weet de loop ook hoeveel tellen hij is (lampje van "loop 4", halveren).
+   * Staat de speelkop vóór het begin, dan niets: het in-punt blijft wachten.
+   * Hij vervangt wat er liep; halveren, verdubbelen, loop uit en reloop
+   * werken er gewoon op, net als op de loops in seconden en tellen.
+   */
+  loopOut() {
+    if (!this.buffer || this.loopInPunt === null) return false;
+    const start = this.loopInPunt, p = this.position;
+    let eind = p, beats = null;
+    if (this.quantize && this._opGrid(start) && this._opGrid(p)) {
+      const g = this.grid;
+      const b0 = g.beatAt(start);
+      const n = Math.round(g.beatAt(p) - b0);
+      if (n < 0) return false;                          // meer dan een halve tel vóór het begin
+      beats = Math.max(1, n);
+      eind = g.timeOf(b0 + beats);
+    }
+    const vol = eind;
+    eind = Math.min(eind, this.duration);
+    if (!this._loopMag(start, eind)) return false;
+    this.loopInPunt = null;
+    // Geklemd op het trackeinde is het geen heel aantal tellen meer.
+    return this._zetLoop(start, eind, beats !== null && eind > vol - 1e-6 ? beats : null);
+  }
+
+  /**
+   * Reloop/exit, zoals op een CDJ. Loopt er een loop: eraf (hij wordt
+   * onthouden). Anders: de laatste loop weer aan, en terug naar zijn begin
+   * (met quantize fasebehoudend, teruggevouwen in de loop).
+   */
+  reloop() {
+    if (!this.buffer) return false;
+    if (this.loop) { this.clearLoop(); return true; }
+    const v = this.vorigeLoop;
+    if (!v) return false;
+    const loop = { start: v.start, end: Math.min(v.end, this.duration) };
+    if (!this._loopMag(loop.start, loop.end)) return false;
+    let doel = this._faseDoel(loop.start);
+    const len = loop.end - loop.start;
+    if (doel < loop.start || doel >= loop.end) doel = loop.start + ((((doel - loop.start) % len) + len) % len);
+    this.loopBeats = loop.end > v.end - 1e-6 ? v.beats : null;
+    this._spring(doel, loop);
+    return true;
   }
 
   /*

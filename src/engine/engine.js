@@ -1,7 +1,7 @@
 import { Emitter, clamp, piek } from '../lib/emitter.js';
 import { Deck } from './deck.js';
 import { createMasterChain, xfaderGains, faderGain } from './audio-graph.js';
-import { InsertSlot } from './fx.js';
+import { InsertSlot, startDrempel } from './fx.js';
 import { Sampler } from './sampler.js';
 
 /**
@@ -110,6 +110,7 @@ export class Engine extends Emitter {
     this.xfaderCurve = 'smooth';
     this.masterLevel = 0.8;
     this.focus = 'A';
+    this.quantize = false;       // zie setQuantize
 
     this.applyXfader();
     this.master.gain.gain.value = faderGain(this.masterLevel);
@@ -148,6 +149,77 @@ export class Engine extends Emitter {
     this.masterLevel = clamp(norm);
     this.master.gain.gain.setTargetAtTime(faderGain(this.masterLevel), this.ctx.currentTime, 0.02);
     this.emit('change');
+  }
+
+  /**
+   * Quantize, voor de HELE engine: cue, hotcues en loop in/out op de tel,
+   * hotcue-sprongen fasebehoudend (zie Deck._snap en _faseDoel).
+   *
+   * Eén schakelaar in plaats van één per track: met acht tracks wil je niet
+   * per track onthouden of hij aan stond, het kost op de APC één knop in
+   * plaats van acht, en rekordbox, Traktor en Serato doen het ook zo. Het
+   * deck draagt de vlag, zodat hij zelf niets van de engine hoeft te weten.
+   */
+  setQuantize(aan) {
+    this.quantize = !!aan;
+    for (const id of DECK_IDS) this.decks[id].quantize = this.quantize;
+    this.emit('change');
+  }
+
+  /**
+   * Starten op de maat (play.quant): het geluid begint op het volgende
+   * MAATBEGIN van de maatgever (syncMaster: de track die je het hardst hoort),
+   * zodat de track in fase en op de "1" invalt. Zonder spelende maatgever met
+   * een zeker grid: meteen, zoals gewone play.
+   *
+   * Maat en geen tel: dat vroeg de blauwdruk ("start op volgende maat") en
+   * het plan ("een track die precies op de volgende maat invalt"), en het is
+   * wat de APC in Ableton ook doet (launch op de volgende maat). Wachten is
+   * hooguit één maat (2 s op 120 bpm). `tellen` = 1 geeft de volgende tel.
+   * Het maatbegin is dat van het grid: tel 0 van het eerste stuk en elke
+   * vierde tel daarna, zoals de golfvorm het tekent.
+   *
+   * Fase: de tel van deze track die het dichtst bij het startpunt ligt, valt
+   * precies op dat maatbegin. Staat het startpunt een fractie naast zijn tel
+   * (cue zonder quantize), dan begint het geluid evenveel eerder of later, en
+   * valt de klap toch op de "1". Zonder zeker grid op deze track geldt het
+   * startpunt zelf als tel.
+   *
+   * Regel 3: het moment komt van de audioklok (ctxTimeOf van de maatgever),
+   * en de bron begint daar sample-exact. Geen timer. Ligt het maatbegin
+   * binnen de uitgangsbuffer (startDrempel), dan de maat erna.
+   *
+   * @returns {{ ok: boolean, op: number|null, master?: string, reden?: string }}
+   */
+  startOpDeMaat(id, { tellen = null } = {}) {
+    const d = this.decks[id];
+    if (!d?.buffer) return { ok: false, op: null, reden: `track ${nrVan(id)} is leeg` };
+    if (d.playing) return { ok: false, op: null };
+    const m = this.syncMaster(id);
+    const k = m?.playing ? m.fxKlok() : null;
+    if (!k) { d.play(); return { ok: true, op: null }; }
+    if (!m.gridZekerHier) {
+      d.play();
+      return { ok: true, op: null, master: m.id, reden: `grid van track ${nrVan(m.id)} is daar onzeker — meteen gestart` };
+    }
+    const g = m.grid;
+    const per = tellen ?? g.beatsPerBar;
+    // Tel b van de maatgever op de audioklok. In een loop via de klok (tellen
+    // van gelijke lengte vanaf de volgende tel): ctxTimeOf kent geen tel voorbij
+    // het loopeinde, en een beat-loop is toch een heel aantal tellen.
+    const n = Math.ceil(g.beatAt(m.position) - 1e-9);
+    const telOp = (b) => (m.loop ? k.ankerCtx + (b - n) * k.beatLengte : m.ctxTimeOf(g.timeOf(b)));
+    // Waar de tel van deze track ligt ten opzichte van het startpunt, in afspeeltijd.
+    const p = d.position >= d.duration - 0.01 ? 0 : d.position;
+    let off = 0;
+    if (d.grid && d.grid.zekerBij(p)) off = (p - d.grid.timeOf(Math.round(d.grid.beatAt(p)))) / d.rate;
+    const grens = this.ctx.currentTime + startDrempel(this.ctx);
+    let b = g.volgendeVeelvoud(n, per);
+    let op = telOp(b) + off;
+    for (let i = 0; i < 64 && !(op >= grens); i++) { b += per; op = telOp(b) + off; }
+    if (!Number.isFinite(op) || !(op >= grens)) { d.play(); return { ok: true, op: null, master: m.id }; }
+    d.play({ op });
+    return { ok: true, op, master: m.id };
   }
 
   /**
@@ -205,6 +277,12 @@ export class Engine extends Emitter {
       return { ok: true, tempo: true, fase: false, rate, bpm: doelBpm, master: master.id,
         reden: 'tempo gelijk; de fase pas als beide tracks spelen' };
     }
+    // Wacht een van beide nog op zijn start op de maat, dan staat zijn
+    // positie stil en zegt de fase nu niets. De fase komt dan van die start.
+    if (master.wacht || slave.wacht) {
+      return { ok: true, tempo: true, fase: false, rate, bpm: doelBpm, master: master.id,
+        reden: 'tempo gelijk; de fase komt van de start op de maat' };
+    }
 
     const beat = slave.grid.beatLengthAt(slave.position);
     let delta = (master.grid.phase(master.position) - slave.grid.phase(slave.position)) * beat;
@@ -252,12 +330,13 @@ export class Engine extends Emitter {
               .filter((p) => p.naam !== null),
             ketens: d.fx.nodeAantal },
       hotcues: d.hotcues.slice(), loop: d.loop ? { ...d.loop } : null,
+      loopIn: d.loopInPunt, wacht: d.wacht, sprongTellen: d.sprongTellen,
       ui: { ...d.ui }, level: d.level(), kant: this.kant[d.id],
     });
     const decks = {}, fase = {};
     for (const id of DECK_IDS) { decks[id] = deckState(this.decks[id]); fase[id] = this.faseVerschil(id); }
     return {
-      focus: this.focus,
+      focus: this.focus, quantize: this.quantize,
       xfader: this.xfader, xfaderCurve: this.xfaderCurve,
       master: this.masterLevel, masterPeak: this.masterPeak(),
       fase, decks,

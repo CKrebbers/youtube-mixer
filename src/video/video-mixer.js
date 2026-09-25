@@ -299,7 +299,7 @@ export class VideoMixer {
     if (this.puls <= 0) return 0;
     const id = klokTrack(this.decks.map((d) => {
       const deck = this.engine.deck(d);
-      return { id: d, speelt: deck.playing, heeftGrid: !!deck.grid,
+      return { id: d, speelt: deck.playing && !deck.wacht, heeftGrid: !!deck.grid,
         zicht: deck.buffer ? zichtbaarheid(deck.ui.fader, this.engine.xfadeGain(d)) : 0 };
     }));
     if (!id) return 0;
@@ -476,7 +476,9 @@ export class VideoMixer {
       videoTijd: v.currentTime,
       doel: Math.max(0, deck.position - vertraging * deck.rate),
       rate: deck.rate,
-      speelt: deck.playing,
+      // Wacht het deck op zijn start op de maat, dan staat de positie stil:
+      // het beeld ook, anders loopt het weg en springt het terug.
+      speelt: deck.playing && !deck.wacht,
       zoekt: v.seeking,
       seekDuur: laag.seekDuur,
     });

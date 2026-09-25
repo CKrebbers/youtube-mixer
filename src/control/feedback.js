@@ -38,6 +38,10 @@ const KLEURSCHEMA = [
   [/\.loop\.exit$/,  { aan: 'rood', uit: 'uit' }],
   [/\.loop\./,       { aan: 'cyaan', half: 'cyaandonker', uit: 'donkergrijs', tel: 'aan' }],
   [/\.play$/,        { aan: 'groen', uit: 'donkergrijs' }],
+  [/\.play\.quant$/, { aan: 'groen', uit: 'donkergrijs' }],       // aan = wacht op de maat
+  [/\.beatjump\.(back|fwd)$/, { aan: 'cyaan', uit: 'donkergrijs' }],
+  // De lengte is een keuze (index), geen niveau: altijd gedimd, zoals sampler.length.
+  [/\.beatjump\.(halve|double)$/, { aan: 'cyaandonker', half: 'cyaandonker', uit: 'cyaandonker' }],
   [/\.cue$/,         { aan: 'wit', uit: 'donkergrijs' }],
   [/\.focus$/,       { aan: 'oranje', half: 'oranjedonker', uit: 'donkergrijs', tel: 'maat' }],
   // Crossfaderkant: read A = 0, thru = 0,5, B = 1 (actions.js). Op de
