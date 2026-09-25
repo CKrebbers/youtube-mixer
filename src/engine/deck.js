@@ -5,6 +5,7 @@ import { ToonKaart } from './toonsoort.js';
 import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
 import { maakWav } from './stream-kern.js';
 import { InsertSlot } from './fx.js';
+import { hoorbaar, uitgangsVertraging } from './hoorbaar.js';
 
 /**
  * Hoe ver de pitchfader reikt, naar elke kant. Kiesbaar per track; sync mag
@@ -427,11 +428,13 @@ export class Deck extends Emitter {
    * De toonsoort die je HOORT op de huidige plek (Clay, T3), of null zonder
    * kaart: de plaat verschoven met de pitch (rate, zonder bend: die zou laten
    * flikkeren zolang je duwt) en straks transpositie en keylock. Zie
-   * hoorbaar() in toonsoort.js; de positie komt van de audioklok (regel 3).
+   * hoorbaar() in toonsoort.js. De plek is wat je hoort (engine/hoorbaar.js:
+   * positie min uitgangsvertraging), dezelfde plek waar track.N.key.* een
+   * stuk corrigeert; de positie komt van de audioklok (regel 3).
    */
   get toonsoort() {
     if (!this.toonKaart) return null;
-    return this.toonKaart.hoorbaarBij(this.position,
+    return this.toonKaart.hoorbaarBij(hoorbaar(this, uitgangsVertraging(this.ctx)),
       { rate: this.rate, transpositie: this.transpositie, keylock: this.keylock });
   }
 

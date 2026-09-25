@@ -277,6 +277,15 @@ const FIXTURE = {
   ok('transpositie telt ook met keylock: As − 1 = G', d.toonsoort.toonsoort === 'G');
   d.keylock = false; d.transpositie = 0;
   d.setRate(1);
+  // Wat je HOORT (engine/hoorbaar.js): spelend de positie min de
+  // uitgangsvertraging (hier 5 ms), dezelfde plek waar track.1.key.* een stuk
+  // corrigeert. Vlak na de stukgrens (215,2 s) hoor je nog G.
+  d.seek(215.203); d.play();
+  ok(`spelend vlak na een stukgrens: de toonsoort die je hoort (${d.toonsoort.camelot}), gelijk aan read(track.1.key)`,
+    d.toonsoort.camelot === '9B' && Math.abs(read('track.1.key') - T.WIJZER.indexOf(k('G')) / 23) < 1e-9);
+  d.pause();
+  ok('stilstaand telt de positie zelf: As (4B)', d.toonsoort.camelot === '4B');
+  d.seek(300);
 
   // De actions, op wat je hoort (stilstaand = de positie).
   invoke('track.1.key.fifth.up', true);

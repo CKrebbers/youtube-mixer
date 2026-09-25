@@ -1,7 +1,8 @@
 /**
  * Wat je HOORT, in tracktijd. Puur rekenwerk, één plek voor de formule die
- * de LED-fase, de grid-modus ("tel 1 hier"), de video (volgen en puls) en de
- * maatbronnen van de vormlagen delen.
+ * de LED-fase, de grid-modus ("tel 1 hier"), de toonsoort (weergave en
+ * corrigeren), de video (volgen en puls) en de maatbronnen van de vormlagen
+ * delen.
  *
  * De positie van een deck komt van de audioklok (regel 3), maar wat de
  * audioklok NU afspeelt komt pas na de uitgangsvertraging van de geluidskaart
