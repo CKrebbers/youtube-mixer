@@ -247,13 +247,16 @@ voor chroma plus stemming per frame).
 ## 4. Wanneer
 
 - **Bij het binnenhalen**, in `verwerk()` (`server/ingest.js`), na het grid:
-  `onStap({ stap: 'toon', tekst: 'toonsoort zoeken' })`, `maakToon(audio)` in
-  de bestaande worker (`inWerker('toon', …)`, `hier.toon` in `analyze.js`).
+  `stap({ stap: 'toon', tekst: 'toonsoort zoeken' })`, `maakToon(audio, { signal })`
+  in de bestaande worker (`inWerker('toon', …)`, `hier.toon` in `analyze.js`).
   Mislukt het, dan is er geen toonsoort en probeert de achtergrond het later;
-  de ingest faalt er nooit op.
+  de ingest faalt er nooit op. Sinds de ingest-wachtrij (integratie-r2) staat
+  'toon' in `stappenVoor()` (de strook toont hem als "toonsoort") en stopt
+  annuleren ook deze worker.
 - **Op de achtergrond** voor wat er al staat: dezelfde wachtrij als het grid
   (`heranalyseOpAchtergrond`), per nummer eerst het grid, dan de toonsoort als
-  `moetToonAnalyse`. Eén tegelijk, niet tijdens een ingest, `VARVE_HERANALYSE=uit`
+  `moetToonAnalyse`. Eén tegelijk, niet zolang er iets in de ingest-wachtrij
+  staat (`wachtrij.open`), `VARVE_HERANALYSE=uit`
   geldt voor allebei. Clay's acht nummers: 16–70 s in totaal, één keer.
 - **↻ in de library** doet grid én toonsoort opnieuw (tweede klik als er een
   slot op staat, zoals nu).
