@@ -168,6 +168,13 @@ export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => 
     const v = mapping.verschil();
     laatst = v ? JSON.stringify(v) : null;
     geladen = true;
+    // Van de server geladen: de reserve in deze browser wordt hetzelfde. Anders
+    // blijft daar een oude kopie liggen (een tweede browser, of van vóór de
+    // samenvoeging van 23 sep) die het overneemt zodra de server even niet
+    // antwoordt. Alleen de browser; de server heeft het al.
+    if (verslag.bron === 'server' && laatst) {
+      try { if (opslag && opslag.getItem(EIGEN_MAPPING) !== laatst) opslag.setItem(EIGEN_MAPPING, laatst); } catch (_) {}
+    }
     // Omgezet, een nieuwe standaard (de vingerafdruk in het verschil klopt niet
     // meer), of alleen in de browser gevonden: dan nu bewaren, zodat server en
     // browser weer het verschil van nu hebben. Maar ALLEEN als de server gelezen

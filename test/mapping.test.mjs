@@ -1088,6 +1088,19 @@ console.log('controleur: eigen mapping niet geladen = deze sessie niets bewaren'
   await rust();
   ok('en daarna wordt koppelen weer bewaard', srv.inDb().rules.length === 1);
 }
+console.log('controleur: de reserve in de browser volgt de server');
+{
+  // Chrome zette de kopie om; in Comet staat nog de oude kopie. Comet laadt
+  // van de server (goed), maar zijn reserve moet dan ook het verschil worden,
+  // anders ligt de oude kopie klaar voor de dag dat de server even niet antwoordt.
+  const goed = maakVerschil(doc, kopieVanClay());
+  const srv = nepServer({ opgeslagen: goed });
+  const comet = nepOpslag({ [EIGEN_MAPPING]: JSON.stringify(oudeBrowserKopie()) });
+  const m = kaal();
+  const v = await opzetMappingOpslag({ mapping: m, haal: srv.haal, opslag: comet, wacht: 0 }).start();
+  ok('van de server geladen, niets naar de server', v.bron === 'server' && srv.posts === 0);
+  ok('en de reserve in de browser is nu hetzelfde verschil', comet.getItem(EIGEN_MAPPING) === JSON.stringify(goed));
+}
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
