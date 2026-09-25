@@ -1032,5 +1032,33 @@ const rust = () => new Promise((r) => setTimeout(r, 5));
   ok('laadEigen (apc.html) zet een oude kopie om in het geheugen en bewaart niets', srv.posts === voor && kaart.rules.get('cc:0:23@device.rack').action === 'video.fx.grain');
 }
 
+// ---- controleur 25 sep: niets overschrijven zonder dat Clay iets deed ----------
+// Een OUDE kopie in de browser, van vóór de grid-modus (23 sep): de handmatige
+// samenvoeging ging alleen naar de server, dus in een tweede browser (Comet)
+// kan zo'n kopie nog staan. Omgezet tegen de huidige standaard worden alle
+// grid-modusregels "weggehaald".
+const oudeBrowserKopie = () => {
+  const k = normaliseer(kopieVanClay()).doc;
+  k.rules = k.rules.filter((r) => r.laag !== 'edit.aan');
+  return k;
+};
+console.log('controleur: server niet gelezen = niet naar de server bij opstarten');
+{
+  // GET /api/mapping faalt (500), POST werkt wel: de server heeft Clay's goede
+  // verschil, de browser een oude kopie. Opstarten mag het verschil op de
+  // server NIET vervangen: het is niet gelezen, dus niet bekend of het nieuwer is.
+  const goed = maakVerschil(doc, kopieVanClay());
+  const srv = nepServer({ opgeslagen: goed });
+  const haal = (url, o) => (url === '/api/mapping' && !o?.method ? Promise.resolve(new Response('{}', { status: 500 })) : srv.haal(url, o));
+  const winkel = nepOpslag({ [EIGEN_MAPPING]: JSON.stringify(oudeBrowserKopie()) });
+  const m = kaal();
+  const v = await opzetMappingOpslag({ mapping: m, haal, opslag: winkel, wacht: 0 }).start();
+  await rust();
+  ok('server niet gelezen + oude kopie in de browser: wel geladen (reserve), maar niets naar de server',
+    v.bron === 'browser' && v.omgezet && srv.posts === 0);
+  ok('Clay\'s verschil op de server is ongeschonden (geen grid-modus "weggehaald")',
+    JSON.stringify(srv.inDb()) === JSON.stringify(goed));
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

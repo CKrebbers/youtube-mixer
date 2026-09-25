@@ -165,9 +165,12 @@ export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => 
     laatst = v ? JSON.stringify(v) : null;
     geladen = true;
     // Omgezet, een nieuwe standaard (de vingerafdruk in het verschil klopt niet
-    // meer), of alleen in de browser gevonden terwijl de server bereikbaar is:
-    // dan nu bewaren, zodat server en browser weer het verschil van nu hebben.
-    if (verslag.omgezet || verslag.standaardNieuw || (verslag.bron === 'browser' && verslag.serverBereikbaar)) {
+    // meer), of alleen in de browser gevonden: dan nu bewaren, zodat server en
+    // browser weer het verschil van nu hebben. Maar ALLEEN als de server gelezen
+    // is. Anders weten we niet of wat daar staat nieuwer is dan de reserve in
+    // deze browser (een oude kopie van vóór de grid-modus zou de grid-modus als
+    // "weggehaald" over Clay's verschil heen zetten, zonder dat hij iets deed).
+    if (verslag.serverBereikbaar && (verslag.omgezet || verslag.standaardNieuw || verslag.bron === 'browser')) {
       laatst = null;
       verslag.bewaard = await bewaarNu(true);
     }
