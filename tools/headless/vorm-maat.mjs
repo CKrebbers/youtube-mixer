@@ -63,7 +63,7 @@ const ok = (naam, cond, extra = '') => { uitkomst.push([naam, !!cond]); console.
 const meetMaat = (s, stap = '') => evalueer(`(async () => {
   const e = window.engine, M = window.__maat, mx = window.videoMixer;
   const vertraging = () => (e.ctx.outputLatency || 0) + (e.ctx.baseLatency || 0);
-  const l = window.__lezer ??= new M.MaatLezer({ tracks: () => M.engineTracks(e, mx.decks), vertraging });
+  const l = window.__lezer ??= M.engineMaatLezer(e, mx.decks, vertraging);
   const uit = []; const eind = e.ctx.currentTime + ${s};
   let vorig = null;
   await new Promise((ok) => {
@@ -134,6 +134,7 @@ try {
   await evalueer(`(async () => {
     window.__act = await import('/src/control/actions.js');
     window.__maat = await import('/src/analysis/maat.js');
+    window.__MAAT_WACHT = (await import('/src/engine/engine.js')).MAAT_WACHT;
     const { Beatgrid } = await import('/src/engine/beatgrid.js');
     const { renderDemoTrack } = await import('/src/analysis/demo-track.js');
     await window.engine.resume();
@@ -167,7 +168,7 @@ try {
   const haak = (s) => evalueer(`(async () => {
     const e = window.engine, M = window.__maat, mx = window.videoMixer, l = window.vormen.lagen[0];
     const vertraging = () => (e.ctx.outputLatency || 0) + (e.ctx.baseLatency || 0);
-    const eigen = new M.MaatLezer({ tracks: () => M.engineTracks(e, mx.decks), vertraging });
+    const eigen = M.engineMaatLezer(e, mx.decks, vertraging);
     const uit = []; const eind = e.ctx.currentTime + ${s};
     await new Promise((ok) => {
       const f = () => {
@@ -195,14 +196,21 @@ try {
   ok('tussen de tellen dooft het uit', Math.min(...a.map((r) => r.tel)) < 0.15 && Math.min(...a.map((r) => r.klap)) < 0.15);
   ok('nergens omhoog zonder klap of tel', vreemdOmhoog(a) === 0, `${vreemdOmhoog(a)} keer`);
 
-  // Crossfader naar B, halverwege de meting, vlak NA een klap van B (25–75 ms):
-  // B geeft de maat, een halve tel verschoven, en staat dan midden in een klap.
+  // Crossfader naar B, halverwege de meting. De maatgever wisselt pas na
+  // MAAT_WACHT (hysterese, integratie ronde 3): de crossfader gaat zo dat de
+  // WISSEL vlak na een klap van B valt (25–75 ms), dus B staat dan midden in
+  // een klap.
   const w = await meetMaat(3, `if (!window.__gezet && e.ctx.currentTime > eind - 1.5) {
-    const b = e.deck('B'), f = b.grid.phase(b.position - vertraging() * b.rate);
-    if (f > 0.05 && f < 0.15) { window.__gezet = true; __act.invoke('mixer.xfader', 1); }
+    const b = e.deck('B'), f = b.grid.phase(b.position - vertraging() * b.rate + window.__MAAT_WACHT * b.rate);
+    if (f > 0.05 && f < 0.15) { window.__gezet = true; window.__gezetT = e.ctx.currentTime; __act.invoke('mixer.xfader', 1); }
   }`);
   const i = w.findIndex((r) => r.wie === 'B');
   ok('crossfader naar B: track 2 geeft de maat', i > 0 && w.slice(i).every((r) => r.wie === 'B'), i > 0 ? `wissel op meting ${i}` : 'geen wissel');
+  const gezetT = await evalueer('window.__gezetT - ((window.engine.ctx.outputLatency || 0) + (window.engine.ctx.baseLatency || 0))');
+  const wachtte = i > 0 ? w[i].t - gezetT : NaN;
+  const MAAT_WACHT = await evalueer('window.__MAAT_WACHT');
+  ok(`de vormen wisselen pas na MAAT_WACHT, zoals de MAAT-badge (hysterese van de engine): ${(wachtte * 1000).toFixed(0)} ms`,
+    wachtte >= MAAT_WACHT - 1e-3 && wachtte < MAAT_WACHT + 0.15);
   ok('geen sprong omhoog bij de wissel midden in een klap van B, ook niet met echte decks',
     vreemdOmhoog(w) === 0 && i > 0 && w[i].klap <= w[i - 1].klap + 1e-9 && w[i].tel <= w[i - 1].tel + 1e-9 && w[i].ruwKlap > 0.3,
     i > 0 ? `klap ${w[i - 1].klap.toFixed(2)} -> ${w[i].klap.toFixed(2)}, tel ${w[i - 1].tel.toFixed(2)} -> ${w[i].tel.toFixed(2)}; `
