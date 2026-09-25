@@ -239,6 +239,38 @@ export class Beatgrid {
     return b - Math.floor(b);
   }
 
+  /**
+   * Tracktijd `tellen` tellen verder dan t (negatief = terug): een beatjump.
+   * In TELLEN, niet in seconden: over een stukgrens van de tempokaart is een
+   * tel niet overal even lang, en zo blijft de fase binnen de tel precies
+   * gelijk (t op 0,3 van zijn tel landt op 0,3 van de doeltel).
+   */
+  verschuif(t, tellen) { return this.timeOf(this.beatAt(t) + tellen); }
+
+  /**
+   * Waar je naartoe springt als de fase moet blijven lopen (quantize): het
+   * punt bij `doel` dat op dezelfde plek in zijn tel zit als `t`, hooguit een
+   * halve tel van `doel` af. Een hotcue op de tel, ingedrukt op 0,3 van een
+   * tel, landt zo op 0,3 na de hotcue: het ritme struikelt niet.
+   */
+  metFaseVan(doel, t) {
+    const bd = this.beatAt(doel), bt = this.beatAt(t);
+    let d = (bt - Math.floor(bt)) - (bd - Math.floor(bd));
+    if (d >= 0.5) d -= 1;
+    if (d < -0.5) d += 1;
+    return this.timeOf(bd + d);
+  }
+
+  /**
+   * De eerste tel op of na tel `b` waarvan het nummer een veelvoud is van
+   * `per`: met per = beatsPerBar het volgende maatbegin (zoals de golfvorm
+   * het tekent, geteld vanaf tel 0 van het eerste stuk).
+   */
+  volgendeVeelvoud(b, per = this.beatsPerBar) {
+    const n = Math.ceil(b - EPS);
+    return n + ((((-n) % per) + per) % per);
+  }
+
   /** Staat deze tijd op de eerste tel van een maat? */
   isDownbeat(t, tolerantie = 0.02) {
     const p = this.barPhase(t);
