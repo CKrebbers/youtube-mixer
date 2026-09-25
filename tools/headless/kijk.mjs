@@ -11,13 +11,14 @@
 // Chromium: de headless shell uit de Playwright-cache (~/Library/Caches/ms-playwright),
 // of zet VARVE_CHROME op een eigen pad.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
 const UIT = process.argv[2] || join(WORTEL, 'tools/headless/uit');
+mkdirSync(UIT, { recursive: true });            // anders faalt de eerste foto pas na alle checks
 const POORT = Number(process.env.VARVE_KIJK_POORT) || 8791, DEBUG = Number(process.env.VARVE_KIJK_DEBUG) || 9337;
 const tmp = mkdtempSync(join(tmpdir(), 'varve-kijk-'));
 

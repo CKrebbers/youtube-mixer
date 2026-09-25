@@ -1,7 +1,7 @@
 // Alle Vormmachines op één plaat (ROADMAP 7): elk systeem met een vast zaad
 // na een vast aantal stappen van 1/60 s, als PNG, plus één contactblad. Zo
-// zie je in één keer welke systemen het 16:9-doek al vullen en welke nog een
-// vierkant links tekenen (g.S), en of een omzetting het beeld heel liet.
+// zie je in één keer hoe elk systeem het 16:9-doek gebruikt (heel in het
+// midden, of over de breedte), en of er iets stilvalt, ontploft of uitrekt.
 //
 // Hetzelfde als kijk.mjs waar het om veiligheid gaat: headless Chromium uit
 // de Playwright-cache, navigator.requestMIDIAccess weg vóór de pagina laadt
@@ -22,13 +22,15 @@
 // 8792 en 9338. Chromium: VARVE_CHROME of de headless shell uit de Playwright-cache.
 //
 // Uit: <uitmap>/<id>.png (640 × 360), <uitmap>/plaat.png (contactblad) en
-// <uitmap>/plaat.json (per systeem: ms per stap, hoeveel er te zien is, en
-// hoeveel daarvan RECHTS van het oude vierkant ligt, x ≥ 1,05 H). Een
-// systeem dat nog alleen S × S tekent heeft daar niets: "vierkant". Het
-// zwaartepunt (midden-x) ligt dan rond 0,28, bij een omgezet systeem dat om
-// het midden draait rond 0,5. Faalt (exit 1) als een
-// systeem gooit. De ms zijn headless op een drukke machine: vergelijk ze
-// onderling, niet met het budget.
+// <uitmap>/plaat.json (per systeem: ms per stap, hoeveel er te zien is,
+// hoeveel daarvan RECHTS van het oude vierkant ligt (x ≥ 1,05 H), het
+// zwaartepunt (midden-x) en van waar tot waar er licht is (x-bereik, als
+// deel van de breedte). Een systeem dat alleen een vierkant links tekent
+// (zoals vóór ROADMAP 7) heeft rechts niets: "vierkant", midden-x ~0,28;
+// een vorm heel in het midden heeft midden-x ~0,5 en een x-bereik van
+// hooguit ~0,56 (de korte zijde); wie de breedte vult ~0,9 of meer.
+// Faalt (exit 1) als een systeem gooit. De ms zijn headless op een drukke
+// machine: vergelijk ze onderling, niet met het budget.
 import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
@@ -116,12 +118,17 @@ const IN_PAGINA = `(async () => {
     // niets; een staart of lijndikte steekt er hooguit een paar pixels over
     // (Boids tot ~7 px). Vandaar 5% marge.
     const grens = Math.round(H * 1.05);
-    let licht = 0, rechts = 0, somX = 0;
+    let licht = 0, rechts = 0, somX = 0, x0 = W, x1 = -1;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const i = (y * W + x) * 4;
-      if (Math.max(d[i] - 7, d[i + 1] - 9, d[i + 2] - 12) > 12) { licht++; somX += x; if (x >= grens) rechts++; }
+      if (Math.max(d[i] - 7, d[i + 1] - 9, d[i + 2] - 12) > 12) {
+        licht++; somX += x; if (x >= grens) rechts++;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+      }
     }
-    return { licht: licht / (W * H), rechts: licht ? rechts / licht : 0, zwaartepuntX: licht ? somX / licht / W : null };
+    return { licht: licht / (W * H), rechts: licht ? rechts / licht : 0, zwaartepuntX: licht ? somX / licht / W : null,
+      bereikX: licht ? [x0 / W, (x1 + 1) / W] : null };
   };
   window.__plaat = async (id, stappen, zaad, kwaliteit) => {
     const sys = SYSTEMEN.find((s) => s.id === id);
@@ -209,7 +216,7 @@ try {
   if (onbekend.length) console.log(`onbekend, overgeslagen: ${onbekend.join(', ')}`);
 
   console.log(`${ids.length} systemen · zaad ${ZAAD} · ${STAPPEN} stappen (${(STAPPEN / 60).toFixed(1)} s) · kwaliteit ${KWALITEIT}`);
-  console.log('id  naam                       ms/stap  licht  rechts  midden-x  soort');
+  console.log('id  naam                       ms/stap  licht  rechts  midden-x  x-bereik   soort');
   const uitslagen = [];
   for (const id of ids) {
     const u = await evalueer(`window.__plaat(${JSON.stringify(id)}, ${STAPPEN}, ${ZAAD}, ${KWALITEIT})`);
@@ -219,7 +226,7 @@ try {
     if (u.fout) fouten++;
     uitslagen.push(u);
     const pct = (v) => (v == null ? '   -' : `${(v * 100).toFixed(1).padStart(4)}%`);
-    console.log(`${id.padEnd(3)} ${u.naam.padEnd(26).slice(0, 26)} ${(u.ms == null ? '-' : u.ms.toFixed(2)).padStart(7)}  ${pct(u.licht)}  ${pct(u.rechts)}  ${u.zwaartepuntX == null ? '    -' : u.zwaartepuntX.toFixed(2).padStart(8)}  ${u.soort}${u.fout ? ` (${u.fout})` : ''}`);
+    console.log(`${id.padEnd(3)} ${u.naam.padEnd(26).slice(0, 26)} ${(u.ms == null ? '-' : u.ms.toFixed(2)).padStart(7)}  ${pct(u.licht)}  ${pct(u.rechts)}  ${u.zwaartepuntX == null ? '    -' : u.zwaartepuntX.toFixed(2).padStart(8)}  ${u.bereikX ? u.bereikX.map((v) => v.toFixed(2)).join('–') : '    -    '}  ${u.soort}${u.fout ? ` (${u.fout})` : ''}`);
   }
   const kop = `Vormmachines · zaad ${ZAAD} · ${STAPPEN} stappen van 1/60 s · kwaliteit ${KWALITEIT} · ${uitslagen[0]?.maat?.join(' × ') ?? ''} · ${nu()}`;
   writeFileSync(join(UIT, 'plaat.png'), Buffer.from(await evalueer(`window.__blad(${JSON.stringify(uitslagen)}, ${JSON.stringify(kop)})`), 'base64'));
