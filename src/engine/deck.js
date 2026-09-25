@@ -193,6 +193,17 @@ export class Deck extends Emitter {
   /** Wacht dit deck op een geplande start (starten op de maat)? */
   get wacht() { return this.bron.wachtTot != null; }
 
+  /**
+   * Een wachtende start naar een ander moment verzetten, vanaf hetzelfde
+   * startpunt (Engine._volgWachtenden: de maat verschoof). Speelt hij al, dan niets.
+   */
+  herplan(op) {
+    if (!this.wacht) return;
+    this.bron.start(this.position, { op });
+    this._heranker();
+    this.emit('change', this);
+  }
+
   /** Opties voor bron.start: tijdens het wachten hetzelfde startmoment houden. */
   _startOpties(extra) {
     const op = this.bron.wachtTot;

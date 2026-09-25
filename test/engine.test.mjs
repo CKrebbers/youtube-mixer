@@ -1882,6 +1882,52 @@ console.log('\ntransport');
     dF.stop(); dG.setRate(1); dM.set('fader', 1); dF.set('fader', 1);
   }
 
+  // Het maatbegin verschuift tijdens het wachten: de wachtende track loopt mee,
+  // zoals de sampler-pads. Een vast startmoment viel anders naast de 1.
+  {
+    NOW = 810.0;                                                // H speelt op 120 bpm
+    const bar = Math.ceil(dM.position / 2 - 1e-9) * 2;          // zijn volgende maatbegin (tracktijd)
+    dG.stop(); dG.seek(8.0);                                    // op de tel
+    eng.startOpDeMaat('G');
+    const T0 = dG.bron.wachtTot;
+    ok('plan: op het maatbegin van H', Math.abs(T0 - dM.ctxTimeOf(bar)) < 1e-9);
+    NOW += 0.5;
+    dM.setRate(1.03);                                           // pitchfader van de maatgever +3%
+    ok(`tempo van de maatgever +3% tijdens het wachten: de start schuift mee (${((dG.bron.wachtTot - T0) * 1000).toFixed(1)} ms)`,
+      dG.wacht && Math.abs(dG.bron.wachtTot - dM.ctxTimeOf(bar)) < 1e-9 && Math.abs(dG.bron.wachtTot - T0) > 0.02);
+    ok('... vanaf hetzelfde startpunt', dG.position === 8 && Math.abs(dG.bron.source._wanneer - dG.bron.wachtTot) < 1e-9
+      && dG.bron.source._vanaf === 8);
+    dG.stop(); dM.setRate(1);
+
+    // Eigen tempo verzet tijdens het wachten (sync) met een startpunt naast de tel.
+    const bar2 = Math.ceil(dM.position / 2 - 1e-9) * 2;
+    dG.seek(8.1);                                               // 0,1 s na zijn tel
+    eng.startOpDeMaat('G');
+    dG.setRate(1.05);
+    ok('eigen tempo verzet met een startpunt naast de tel: zijn TEL valt nog op het maatbegin',
+      dG.wacht && Math.abs(dG.ctxTimeOf(8.0) - dM.ctxTimeOf(bar2)) < 1e-9);
+    // Stopt de maatgever tijdens het wachten, dan blijft het plan staan.
+    const T2 = dG.bron.wachtTot;
+    dM.pause();
+    ok('maatgever stopt tijdens het wachten: het startmoment blijft', dG.wacht && dG.bron.wachtTot === T2);
+    dM.play(); dG.stop(); dG.setRate(1);
+
+    // Maatgever in een loop van één tel: de klok telt door, dus "opnieuw de
+    // volgende maat" schoof de start elke ronde een tel op. Hij moet op
+    // dezelfde tel blijven, ook na een ronde en een 'change' (fader open).
+    dM.seek(20.1); dM.setBeatLoop(1);                           // loop 20,0 – 20,5 (tel 40)
+    dG.seek(8.0);
+    eng.startOpDeMaat('G');
+    const T3 = dG.bron.wachtTot;
+    NOW += 0.6;                                                 // H is één keer rond
+    dG.set('fader', 0.9);
+    ok(`maatgever in een loop van één tel: na een ronde blijft de start staan (${((dG.bron.wachtTot - T3) * 1000).toFixed(0)} ms)`,
+      dG.wacht && Math.abs(dG.bron.wachtTot - T3) < 1e-9);
+    dM.clearLoop();
+    ok('... ook als de loop eraf gaat (de tellen lopen door)', dG.wacht && Math.abs(dG.bron.wachtTot - T3) < 1e-9);
+    dG.stop(); dG.set('fader', 1);
+  }
+
   // Maatgever in een onzeker stuk: meteen, met een melding.
   dM.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0, stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.3 }] }));
   const nMaat = meldingen.length;

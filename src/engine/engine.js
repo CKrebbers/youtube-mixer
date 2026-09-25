@@ -99,9 +99,11 @@ export class Engine extends Emitter {
      * of aan de mixer (crossfader) kan de maat veranderen. Ze rekenen zelf
      * uit of er echt iets anders is; meestal gebeurt er niets.
      */
+    this._opDeMaat = {};         // id -> { tellen }: wacht op de maat (startOpDeMaat)
     const volgMaat = () => {
       for (const s of Object.values(this.sends)) s.heranker();
       this.sampler.heranker();
+      this._volgWachtenden();
     };
     for (const id of DECK_IDS) this.decks[id].on('change', volgMaat);
     this.on('change', volgMaat);
@@ -187,7 +189,8 @@ export class Engine extends Emitter {
    *
    * Regel 3: het moment komt van de audioklok (ctxTimeOf van de maatgever),
    * en de bron begint daar sample-exact. Geen timer. Ligt het maatbegin
-   * binnen de uitgangsbuffer (startDrempel), dan de maat erna.
+   * binnen de uitgangsbuffer (startDrempel), dan de maat erna. Tijdens het
+   * wachten loopt hij mee als die tel verschuift (_volgWachtenden).
    *
    * @returns {{ ok: boolean, op: number|null, master?: string, reden?: string }}
    */
@@ -202,24 +205,77 @@ export class Engine extends Emitter {
       d.play();
       return { ok: true, op: null, master: m.id, reden: `grid van track ${nrVan(m.id)} is daar onzeker — meteen gestart` };
     }
-    const g = m.grid;
-    const per = tellen ?? g.beatsPerBar;
-    // Tel b van de maatgever op de audioklok. In een loop via de klok (tellen
-    // van gelijke lengte vanaf de volgende tel): ctxTimeOf kent geen tel voorbij
-    // het loopeinde, en een beat-loop is toch een heel aantal tellen.
-    const n = Math.ceil(g.beatAt(m.position) - 1e-9);
-    const telOp = (b) => (m.loop ? k.ankerCtx + (b - n) * k.beatLengte : m.ctxTimeOf(g.timeOf(b)));
-    // Waar de tel van deze track ligt ten opzichte van het startpunt, in afspeeltijd.
-    const p = d.position >= d.duration - 0.01 ? 0 : d.position;
-    let off = 0;
-    if (d.grid && d.grid.zekerBij(p)) off = (p - d.grid.timeOf(Math.round(d.grid.beatAt(p)))) / d.rate;
+    const { n, telOp } = this._tellenVan(m, k);
+    const off = this._naastDeTel(d);
     const grens = this.ctx.currentTime + startDrempel(this.ctx);
-    let b = g.volgendeVeelvoud(n, per);
+    const per = tellen ?? m.grid.beatsPerBar;
+    let b = m.grid.volgendeVeelvoud(n, per);
     let op = telOp(b) + off;
     for (let i = 0; i < 64 && !(op >= grens); i++) { b += per; op = telOp(b) + off; }
     if (!Number.isFinite(op) || !(op >= grens)) { d.play(); return { ok: true, op: null, master: m.id }; }
     d.play({ op });
+    // Welke TEL van de maatgever het werd (audioklok), voor _volgWachtenden.
+    this._opDeMaat[id] = { tel: op - off };
     return { ok: true, op, master: m.id };
+  }
+
+  /**
+   * De tellen van maatgever `m` op de audioklok: `telOp(b)` = wanneer tel b
+   * valt, `n` = zijn eerstvolgende tel. In een loop via de klok `k` (tellen
+   * van gelijke lengte vanaf de volgende tel): ctxTimeOf kent geen tel voorbij
+   * het loopeinde, en een beat-loop is toch een heel aantal tellen.
+   */
+  _tellenVan(m, k) {
+    const g = m.grid;
+    const n = Math.ceil(g.beatAt(m.position) - 1e-9);
+    return { n, telOp: (b) => (m.loop ? k.ankerCtx + (b - n) * k.beatLengte : m.ctxTimeOf(g.timeOf(b))) };
+  }
+
+  /** Waar de tel van track `d` ligt ten opzichte van zijn startpunt, in afspeeltijd. */
+  _naastDeTel(d) {
+    const p = d.position >= d.duration - 0.01 ? 0 : d.position;
+    return d.grid && d.grid.zekerBij(p) ? (p - d.grid.timeOf(Math.round(d.grid.beatAt(p)))) / d.rate : 0;
+  }
+
+  /**
+   * Wachtende tracks lopen mee met de maat, zoals de sampler-pads: verschuift
+   * de tel van de maatgever waarop een track zou beginnen (tempo, sprong of
+   * grid van de maatgever, of een andere maatgever), of verandert het eigen
+   * tempo of startpunt, dan opnieuw plannen. Een vast startmoment viel anders
+   * naast de 1: +3% op de maatgever halverwege een maat van 120 bpm = 35 ms.
+   *
+   * Het volgt DEZELFDE tel (de dichtstbijzijnde bij de geplande), niet
+   * opnieuw "de volgende maat": in een loop korter dan een maat telt de klok
+   * door, en dan schoof de start bij elke ronde (en elke fader-'change') een
+   * loop op, zodat hij nooit begon. Niet meer als de start al in de
+   * uitgangsbuffer zit, en niet op een maatgever die zelf wacht of stilstaat:
+   * dan blijft het plan. Bend telt niet mee (geen 'change'), net als bij de sampler.
+   */
+  _volgWachtenden() {
+    for (const id of DECK_IDS) {
+      const plan = this._opDeMaat[id];
+      if (!plan) continue;
+      const d = this.decks[id];
+      const T = d.bron.wachtTot;
+      if (T == null) { this._opDeMaat[id] = null; continue; }
+      const grens = this.ctx.currentTime + startDrempel(this.ctx);
+      if (T < grens) continue;
+      const m = this.syncMaster(id);
+      const k = m?.playing && !m.wacht ? m.fxKlok() : null;
+      if (!k || !(k.beatLengte > 0) || !m.gridZekerHier) continue;
+      const { n, telOp } = this._tellenVan(m, k);
+      // Schatten met de lengte van de volgende tel, dan de echte dichtstbijzijnde
+      // zoeken: over een stukgrens van de tempokaart zijn de tellen niet even lang.
+      const afstand = (b) => Math.abs(telOp(b) - plan.tel);
+      let b = n + Math.round((plan.tel - k.ankerCtx) / k.beatLengte);
+      for (let i = 0; i < 16 && afstand(b + 1) < afstand(b); i++) b++;
+      for (let i = 0; i < 16 && afstand(b - 1) < afstand(b); i++) b--;
+      const tel = telOp(b);
+      const op = tel + this._naastDeTel(d);
+      if (!Number.isFinite(op) || op < grens) continue;
+      plan.tel = tel;
+      if (Math.abs(op - T) > 1e-6) d.herplan(op);
+    }
   }
 
   /**
