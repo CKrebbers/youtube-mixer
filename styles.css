@@ -280,6 +280,7 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .ing-rij.geannuleerd .lib-job-stap{color:var(--dim)}
 .ing-rij.bestond .lib-job-stap{color:#50dcff}
 .ing-rij.mislukt .ing-sub{color:var(--red)}
+.ing-rij.herstart .ing-sub{color:var(--warn)}
 .ing-rij b{font-weight:600}
 .ing-sub{font-style:normal;color:var(--dim)}
 .ing-stappen{display:flex;gap:2px}

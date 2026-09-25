@@ -2,7 +2,7 @@
 // annuleren (ook midden in een download van een nep-yt-dlp), playlists
 // weigeren, dubbel herkennen, voortgangsberichten.
 // Draai met: node test/wachtrij.test.mjs
-import { mkdtempSync, rmSync, readFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -190,6 +190,117 @@ try {
     laat();
     await onderweg;
     ok('een upload die terugkwam terwijl een poll onderweg was, blijft wachten', strook.naLaden.get('net-geupload') === 'B');
+
+    // Na een herstart van de server is de rij leeg (hij staat in zijn geheugen).
+    // De strook zegt dat, en zet met één klik terug wat de browser nog weet.
+    const posts = [];
+    let antwoord = null, postFout = false;
+    globalThis.fetch = async (u, opties = {}) => {
+      if (opties.method === 'POST') {
+        const body = JSON.parse(opties.body);
+        posts.push(body);
+        if (postFout) throw new Error('server weg');
+        return { ok: true, status: 202, json: async () => ({ resultaten: body.urls.map((x) => ({ code: 202, url: x, status: 'wacht' })) }) };
+      }
+      const a = typeof antwoord === 'function' ? await antwoord() : antwoord;
+      return { json: async () => a };
+    };
+    // Een upload via een nep-XMLHttpRequest: de server zet hem in de rij (wacht).
+    const xhr0 = globalThis.XMLHttpRequest;
+    let volgendeUpload = 'b1';
+    globalThis.XMLHttpRequest = class {
+      constructor() { this.upload = {}; }
+      open() {} setRequestHeader() {} abort() {}
+      send() { const id = volgendeUpload; setTimeout(() => { this.status = 202; this.responseText = JSON.stringify({ id, status: 'wacht', soort: 'bestand' }); this.onload(); }, 0); }
+    };
+    globalThis.setInterval = () => 0;
+    const meldingen = [], buiten = [];
+    let paneelOpen = true;
+    const el2 = { addEventListener() {}, classList: { toggle() {} }, innerHTML: '', contains: () => true };
+    const buitenWeg = [];
+    const s2 = new IngestStrook({ el: el2, meld: (t) => meldingen.push(t), open: () => paneelOpen,
+      meldBuiten: (t) => { buiten.push(t); return { remove: () => buitenWeg.push(t) }; } });
+    globalThis.setInterval = interval0;
+    const bestand = { name: 'eigen.wav', size: 10 };
+    const L1 = { id: 'l1', soort: 'link', url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa', status: 'bezig', stappen: [] };
+    const L2 = { id: 'l2', soort: 'link', url: 'http://127.0.0.1:9/nummer-b', status: 'wacht', plek: 1 };
+    const L3 = { id: 'l3', soort: 'link', url: 'http://127.0.0.1:9/toch-opnieuw', status: 'wacht', plek: 2, opnieuw: true };
+    const B1 = { id: 'b1', soort: 'bestand', url: 'bestand:eigen.wav', titel: 'eigen', status: 'wacht', plek: 3 };
+    const B2 = { id: 'b2', soort: 'bestand', url: 'bestand:ander.mp4', titel: 'ander', status: 'wacht', plek: 4 };
+    const K = { id: 'k', soort: 'link', url: 'http://127.0.0.1:9/al-klaar', status: 'klaar', klaar: Date.now() };
+    // Zoals de server: vlak na de upload staat hij in de lijst, en de lijst
+    // staat op NIEUWSTE EERST (lijst()). Terugzetten moet in de volgorde van de rij.
+    antwoord = { opdrachten: [B1], server: 'run-1' };
+    await s2.uploadBestand(bestand, { naDeck: 'C' });
+    await wacht(0);
+    ok('een upload die in de rij staat: de strook onthoudt het bestand (en de track)', s2.bestanden.get('b1')?.file === bestand && s2.bestanden.get('b1')?.naDeck === 'C');
+    antwoord = { opdrachten: [K, B2, B1, L3, L2, L1], server: 'run-1' };
+    await s2.poll();
+    antwoord = { opdrachten: [K, B2, B1, L3, L1], server: 'run-1' };
+    await s2.poll();
+    ok('dezelfde server, een opdracht minder (af en weggeklikt): geen herstart', s2.herstart === null && !/herstart/.test(el2.innerHTML));
+    antwoord = { opdrachten: [K, B2, B1, L3, L2, L1], server: 'run-1' };
+    await s2.poll();
+    // Een tweede upload komt terug, maar vóór de volgende poll gaat de server om:
+    // die staat alleen in `bestanden`, niet in de vorige lijst.
+    const laatBestand = { name: 'laat.wav', size: 20 };
+    volgendeUpload = 'b3';
+    antwoord = async () => { throw new Error('server weg'); };
+    await s2.uploadBestand(laatBestand);
+    await wacht(0);
+    ok('een upload die terugkwam terwijl de server al wegviel: ook onthouden', s2.bestanden.get('b3')?.file === laatBestand);
+    // Een late poll van de OUDE server kan pas na de nieuwe terugkomen.
+    let laatOud;
+    antwoord = () => new Promise((z) => { laatOud = () => z({ opdrachten: [K, B2, B1, L3, L2, L1], server: 'run-1' }); });
+    const oudOnderweg = s2.poll();
+    await wacht(0);
+    paneelOpen = false;
+    antwoord = { opdrachten: [], server: 'run-2' };
+    await s2.poll();
+    ok(`andere server: wat wachtte of liep is weg, gemeld ("${meldingen.at(-1)}")`,
+      /de server is herstart: 6 opdrachten uit de wachtrij zijn weg/.test(meldingen.at(-1)) && /opnieuw/.test(meldingen.at(-1)));
+    ok(`het paneel is dicht: ook onderaan gemeld ("${buiten.at(-1)}")`, buiten.length === 1 && /6 opdrachten.*open de library/.test(buiten[0]));
+    ok('de strook toont het bovenaan, met "opnieuw" en welk bestand opnieuw gesleept moet',
+      /ing-rij herstart/.test(el2.innerHTML) && /data-herstart="opnieuw"/.test(el2.innerHTML) && /6 opdrachten/.test(el2.innerHTML) && /opnieuw slepen: ander/.test(el2.innerHTML));
+    ok('in de volgorde van de rij (niet nieuwste eerst): links, bewaarde bestanden (ook de late), het onbekende apart; wat klaar was niet',
+      s2.herstart?.links.join() === [L1.url, L2.url, L3.url].join() && s2.herstart.opnieuw.join() === L3.url
+      && s2.herstart.bestanden.map((x) => x.file.name).join() === 'eigen.wav,laat.wav' && s2.herstart.kwijt.join() === 'ander');
+    const n0 = meldingen.length;
+    laatOud();
+    await oudOnderweg;
+    ok('een laat antwoord van de oude server telt niet (geen "herstart" terug, de lijst blijft leeg)',
+      meldingen.length === n0 && s2.server === 'run-2' && s2.opdrachten.length === 0 && s2.herstart?.links.length === 3);
+    await s2.poll();
+    ok('de volgende poll (zelfde nieuwe server): niet nog eens', meldingen.length === n0 && buiten.length === 1 && s2.herstart?.links.length === 3);
+    paneelOpen = true;
+    const opnieuw = [];
+    s2.uploadBestand = async (file, opties) => { opnieuw.push({ file, ...opties }); };
+    const klik = (herstart) => s2._klik({ target: { closest: () => ({ dataset: { herstart } }) } });
+    postFout = true;
+    await klik('opnieuw');
+    ok('opnieuw terwijl de server nog weg is: de melding blijft staan, niets kwijt', s2.herstart?.links.length === 3 && /lukte niet/.test(meldingen.at(-1)));
+    postFout = false;
+    posts.length = 0;
+    await klik('opnieuw');
+    ok(`opnieuw: de links terug in de rij, "toch opnieuw" apart (${JSON.stringify(posts)})`, posts.length === 2
+      && posts[0].urls.join() === [L1.url, L2.url].join() && !posts[0].opnieuw && posts[1].urls.join() === L3.url && posts[1].opnieuw === true);
+    ok('en de melding onderaan is weg (je koos al)', buitenWeg.length === 1 && buitenWeg[0] === buiten[0]);
+    ok('en de bewaarde bestanden opnieuw geüpload, naar dezelfde track', opnieuw.length === 2 && opnieuw[0].file === bestand && opnieuw[0].naDeck === 'C'
+      && opnieuw[1].file === laatBestand && !opnieuw[1].naDeck);
+    ok(`de melding zegt hoeveel ("${meldingen.at(-1)}"), de strook is weer gewoon`, /3 in de wachtrij/.test(meldingen.at(-1)) && s2.herstart === null && !/herstart/.test(el2.innerHTML));
+    antwoord = { opdrachten: [L1], server: 'run-2' };
+    await s2.poll();
+    antwoord = { opdrachten: [], server: 'run-3' };
+    await s2.poll();
+    ok('paneel open: alleen in het paneel, niet onderaan', buiten.length === 1 && /1 opdracht uit de wachtrij is weg/.test(meldingen.at(-1)));
+    posts.length = 0;
+    await klik('laat');
+    ok('× bij de herstartmelding: weg, niets opnieuw', s2.herstart === null && posts.length === 0);
+    const s3 = new IngestStrook({ el: el2, meld: (t) => meldingen.push(t) });
+    antwoord = { opdrachten: [], server: 'run-4' };
+    await s3.poll();
+    ok('een pagina die net geladen is: niets te melden', s3.herstart === null);
+    globalThis.XMLHttpRequest = xhr0;
     globalThis.fetch = fetch0;
   }
 
@@ -227,6 +338,93 @@ try {
     let kinderen = '';
     try { kinderen = execFileSync('pgrep', ['-P', String(process.pid), 'ffmpeg']).toString().trim(); } catch {}
     ok(`en zijn ffmpeg is ook weg (${kinderen || 'geen'})`, kinderen === '');
+
+    /*
+     * Zombies. De ffmpeg van een worker hoort bij de lus van die worker; een
+     * terminate() liet hem als <defunct> onder ons staan tot het proces stopte
+     * (pgrep hierboven ziet dat niet: een zombie heeft geen naam meer). ps
+     * telt ze wel. Gemeten vóór het herstel: 5× annuleren = 5 zombies.
+     */
+    const onzeKinderen = () => execFileSync('ps', ['-A', '-o', 'pid=,ppid=,stat=,comm=']).toString().split('\n')
+      .map((l) => l.trim().split(/\s+/)).filter((d) => Number(d[1]) === process.pid && d[3] !== 'ps')
+      .map(([pid, , stat, comm]) => `${pid} ${stat} ${comm}`);
+    /*
+     * Wat BLIJFT staan. Onder zware belasting (load 130) zag ps één keer een
+     * kind dat nog aan het starten of stoppen was ("?NE (node)"; welk is niet
+     * vastgesteld, vermoedelijk de ps van nakomelingen() uit een eerdere
+     * check). Zoiets is even later weg; een zombie blijft tot het proces stopt.
+     */
+    const blijvend = async () => {
+      for (let i = 0; i < 30; i++) { if (!onzeKinderen().length) return []; await wacht(100); }
+      return onzeKinderen();
+    };
+    const { maakPeaks, maakGrid, maakOnsets, verfijnUitBestand, STOP_NOODREM_MS } = await import('../server/analyze.js');
+    const duren = [];
+    for (let i = 0; i < 5; i++) {
+      const ac5 = new AbortController();
+      const t = Date.now();
+      const p5 = (i % 2 ? maakPeaks : maakOnset)(lang, join(map, `z${i}.bin`), { signal: ac5.signal });
+      setTimeout(() => ac5.abort(), 150);
+      const r5 = await p5;
+      duren.push(r5.afgebroken ? Date.now() - t : -1);
+    }
+    const over = await blijvend();
+    ok(`5× annuleren midden in golfvorm/ritme (${duren.join(', ')} ms): alle 5 geannuleerd`, duren.every((d) => d > 0 && d < 2000));
+    ok(`  en er blijft niets onder ons staan, ook geen zombie (${over.join('; ') || 'niets'})`, over.length === 0);
+
+    // Het grid leest per stuk 40 s audio (ook ffmpeg): kort audiobestand met een puls.
+    const kort = join(map, 'kort.wav');
+    await ing.run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi',
+      '-i', "aevalsrc='0.8*sin(2*PI*900*t)*exp(-60*mod(t,0.5))':s=48000:d=40", '-ac', '2', kort]);
+    const on = await maakOnset(kort, join(map, 'kort.bin'));
+    const acG = new AbortController();
+    const pG = maakGrid(join(map, 'kort.bin'), on.envRate, on.tijdOffset, kort, { signal: acG.signal });
+    setTimeout(() => acG.abort(), 60);
+    const rG = await pG;
+    const overG = await blijvend();
+    ok(`grid annuleren: geannuleerd, niets over (${overG.join('; ') || 'niets'})`, on.ok && rG.afgebroken === true && overG.length === 0);
+
+    /*
+     * Annuleren terwijl de worker REKENT (zijn ffmpeg is al gelezen): 'stop'
+     * komt pas aan als de lus vrij is. Dan de noodrem: terminate() na
+     * STOP_NOODREM_MS. Er loopt op dat moment geen ffmpeg, dus ook geen zombie.
+     */
+    const acR = new AbortController();
+    const tR = Date.now();
+    const pR = maakOnset(lang, join(map, 'reken.bin'), { signal: acR.signal });
+    let zag = false, rekent = false;
+    for (let i = 0; i < 3000 && !rekent; i++) {
+      const k = onzeKinderen().some((x) => x.endsWith('ffmpeg'));
+      if (k) zag = true;
+      else if (zag) rekent = true;
+      if (!rekent) await wacht(10);
+    }
+    const tStop = Date.now();
+    acR.abort();
+    const rR = await pR;
+    const dR = Date.now() - tStop;
+    const overR = await blijvend();
+    ok(`annuleren tijdens het rekenen (ffmpeg klaar na ${tStop - tR} ms${rekent ? '' : ', NIET gezien'}): `
+      + `${rR.afgebroken ? 'gestopt' : `"${rR.fout ?? 'klaar'}"`} na ${dR} ms (noodrem ${STOP_NOODREM_MS} ms), over: ${overR.join('; ') || 'niets'}`,
+    rekent && rR.afgebroken === true && dR < STOP_NOODREM_MS + 1500 && overR.length === 0);
+
+    // Zonder signal (tap-verfijning, achtergrond-heranalyse, onsets): ongewijzigd.
+    const g = await maakGrid(join(map, 'kort.bin'), on.envRate, on.tijdOffset, kort);
+    const v = await verfijnUitBestand(join(map, 'kort.bin'), on.envRate, 120, on.tijdOffset, { rond: 20, audio: kort });
+    const o = await maakOnsets(join(map, 'kort.bin'), on.envRate, on.tijdOffset);
+    ok(`zonder signal: grid (${g.grid?.stukken?.[0]?.bpm?.toFixed(1)} bpm), verfijning (${v.bpm?.toFixed(2)}) en onsets werken`,
+      g.ok && Math.abs(g.grid.stukken[0].bpm - 120) < 1 && v.ok && Math.abs(v.bpm - 120) < 0.5 && o.ok && o.tijden.length > 50);
+    // De worker luistert nu naar 'stop'; na zijn antwoord moet hij toch vanzelf stoppen,
+    // anders blijft er per analyse een thread hangen. Een los proces zonder
+    // process.exit() eindigt alleen als dat zo is.
+    // Als bestand, niet met -e: een worker erft de vlaggen van node, en --input-type mag daar niet.
+    const script = join(map, 'los.mjs');
+    writeFileSync(script, `const m = await import(${JSON.stringify(new URL('../server/analyze.js', import.meta.url).href)});\n`
+      + `const r = await m.maakOnsets(${JSON.stringify(join(map, 'kort.bin'))}, ${on.envRate}, ${on.tijdOffset});\nconsole.log(r.ok);\n`);
+    const tL = Date.now();
+    let los = '';
+    try { los = execFileSync(process.execPath, [script], { timeout: 15000 }).toString().trim(); } catch (err) { los = `hing of viel om: ${err.message.split('\n')[0]}`; }
+    ok(`een worker stopt vanzelf na zijn antwoord (los proces eindigt na ${Date.now() - tL} ms: ${los})`, los === 'true');
   }
 
   console.log('\nde pijplijn met een nep-yt-dlp: annuleren midden in de download');
@@ -300,6 +498,34 @@ try {
     ok(`playlist uit de metadata: geweigerd ("${r4.fout}")`, !r4.ok && r4.playlist === true && /playlist \(3 nummers\)/.test(r4.fout));
     const r5 = await ing.ingest('http://127.0.0.1:9/kapot', { mediaDir: media });
     ok('een kapotte link: de foutregel van yt-dlp', !r5.ok && /kapotte link/.test(r5.fout));
+
+    // Livestreams: meteen na de metadata geweigerd, nooit een download (die
+    // liep anders tot de time-out van 30 min en mislukte dan alsnog).
+    for (const [link, wat, reden] of [['nu-live', 'een lopende livestream (live_status is_live)', /livestream die nu loopt/],
+      ['straks-live', 'een aangekondigde livestream (is_upcoming)', /nog niet begonnen/],
+      ['oud-live', 'alleen is_live: true (zonder live_status)', /livestream die nu loopt/]]) {
+      const voor = regels().length;
+      const tL = Date.now();
+      const rl = await ing.ingest(`http://127.0.0.1:9/${link}`, { mediaDir: media });
+      const wat2 = regels().slice(voor).map((x) => x.wat);
+      ok(`${wat}: geweigerd na ${Date.now() - tL} ms, zonder download ("${rl.fout}")`,
+        !rl.ok && rl.live === true && reden.test(rl.fout) && /Nep /.test(rl.fout) && wat2.join() === 'meta');
+    }
+    const voorWas = regels().length;
+    const rw2 = await ing.ingest('http://127.0.0.1:9/was-live', { mediaDir: media, video: false });
+    ok(`een afgelopen livestream (was_live) is gewoon een video: binnengehaald (${rw2.fout ?? rw2.track?.id})`,
+      rw2.ok && rw2.track.id === 'generic-was-live' && regels().slice(voorWas).some((x) => x.wat === 'download'));
+    ok('liveReden: alleen is_live en is_upcoming; was_live, post_live en not_live niet',
+      !!ing.liveReden({ live_status: 'is_live' }) && !!ing.liveReden({ live_status: 'is_upcoming' }) && !!ing.liveReden({ is_live: true })
+      && ['was_live', 'post_live', 'not_live'].every((s) => ing.liveReden({ live_status: s, is_live: false }) === null)
+      && ing.liveReden({ is_live: true, live_status: 'was_live' }) === null && ing.liveReden({}) === null && ing.liveReden(null) === null);
+    // In de wachtrij: mislukt met de reden, en de volgende begint meteen.
+    const qL = new Wachtrij();
+    const oL = qL.voegToe({ sleutel: 'l', werk: (onStap, signal) => ing.ingest('http://127.0.0.1:9/nu-live', { mediaDir: media, onStap, signal }) }).opdracht;
+    const oN = qL.voegToe({ sleutel: 'n', werk: async () => ({ ok: true, track: track('N') }) }).opdracht;
+    await qL.stil();
+    ok(`in de wachtrij: "mislukt" met de reden, live: true, en de volgende loopt (${oL.tekst.slice(0, 60)}…)`,
+      oL.status === 'mislukt' && oL.live === true && /livestream/.test(oL.fout) && oN.status === 'klaar');
     ok('nergens een werkmap achtergebleven', werkmappen().length === 0);
     delete process.env.VARVE_YTDLP;
   }

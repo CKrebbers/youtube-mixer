@@ -8,7 +8,7 @@
 // Gebruik:  node tools/headless/kijk-ingest.mjs [uitmap]
 // Poorten:  VARVE_KIJK_POORT (8792) en VARVE_KIJK_DEBUG (9338).
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readdirSync, writeFileSync, rmSync, existsSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync, existsSync, mkdirSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,14 +34,18 @@ const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const bron = join(tmp, 'bron.wav');
 await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi',
   '-i', "aevalsrc='0.8*sin(2*PI*900*t)*exp(-60*mod(t,0.5))':s=44100:d=12", '-ac', '2', bron]);
-const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
+const nepYtdlp = maakNepYtdlp(tmp), nepLog = join(tmp, 'nep.log');
+// Een functie: aan het eind wordt de server herstart (zelfde poort, database en media).
+const startServer = () => spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
     VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_HERANALYSE: 'uit',
     // Een trage download duurt 25 × 1,2 s: headless (swiftshader, drukke machine)
     // is traag, en er moet tijd zijn om hem te annuleren.
-    VARVE_YTDLP: maakNepYtdlp(tmp), NEP_LOG: join(tmp, 'nep.log'), NEP_BRON: bron, NEP_TRAAG_MS: '1200' },
+    VARVE_YTDLP: nepYtdlp, NEP_LOG: nepLog, NEP_BRON: bron, NEP_TRAAG_MS: '1200' },
   stdio: 'ignore',
 });
+let server = startServer();
+const wezen = [];   // pids van nep-yt-dlp's die bij de herstart hun server kwijtraakten
 const chrome = spawn(zoekChrome(), [
   `--remote-debugging-port=${DEBUG}`, `--user-data-dir=${join(tmp, 'profiel')}`,
   '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--window-size=1440,900',
@@ -188,12 +192,65 @@ try {
   await foto('ingest-mislukt.png');
   await evalueer("document.querySelector('#lib-panel .ing-rij.mislukt button.ing-x').click()");
   ok('× klikt hem weg', await totdat(`!${RIJEN}.some((x) => /mislukt/.test(x.klasse))`, 5000));
+
+  // De rij staat in het geheugen van de server: na een herstart is hij leeg.
+  // De strook mag dat niet stil laten gebeuren. Het paneel is dicht, zoals
+  // tijdens een set: dan ook onderaan melden.
+  console.log('server herstart');
+  await evalueer("(() => { const v = document.querySelector('#lib-panel .lib-url'); v.value = 'http://127.0.0.1:9/herstart-a-traag http://127.0.0.1:9/herstart-b-traag'; v.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()");
+  ok('twee trage links in de rij: één bezig, één wacht', await totdat(`${RIJEN}.some((x) => /bezig/.test(x.klasse) && /herstart-a/.test(x.titel)) && ${RIJEN}.some((x) => /wacht/.test(x.klasse) && /herstart-b/.test(x.titel))`, 15000),
+    JSON.stringify(await evalueer(RIJEN)));
+  await evalueer("document.getElementById('lib-btn').click()");
+  ok('het paneel is dicht', await evalueer("document.getElementById('lib-panel').classList.contains('hidden')"));
+  const pidA = await (async () => {
+    for (let i = 0; i < 50; i++) {
+      const r = existsSync(nepLog) && readFileSync(nepLog, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((x) => x.wat === 'download' && /herstart-a/.test(x.url));
+      if (r) return r.pid;
+      await wacht(100);
+    }
+    return null;
+  })();
+  if (pidA) wezen.push(pidA);
+  const weg1 = new Promise((z) => server.once('exit', z));
+  server.kill();
+  await weg1;
+  await wacht(1500);   // de strook pollt intussen tegen een server die er niet is
+  server = startServer();
+  ok('onderaan: "de server is herstart: 2 opdrachten … weg", tot je hem wegklikt',
+    await totdat("[...document.querySelectorAll('#meldingen .melding.fout')].some((m) => /server is herstart: 2 opdrachten uit de wachtrij zijn weg.*opnieuw/.test(m.textContent))", 20000),
+    await evalueer("[...document.querySelectorAll('#meldingen .melding')].map((m) => m.textContent).join(' | ')"));
+  await evalueer("document.getElementById('lib-btn').click()");
+  const HERSTART = "document.querySelector('#lib-panel .ing-rij.herstart')";
+  ok('paneel open: bovenaan de strook een rij "herstart" met "opnieuw" en ×',
+    await totdat(`${HERSTART} && ${HERSTART}.querySelector('[data-herstart=opnieuw]') && ${HERSTART}.querySelector('[data-herstart=laat]')`, 5000));
+  ok('de rij zegt hoeveel er weg is', /2 opdrachten uit de wachtrij zijn weg/.test(await evalueer(`${HERSTART}.textContent`)));
+  ok('en de oude opdrachten staan er niet meer als bezig of wachtend', !(await evalueer(`${RIJEN}.some((x) => /bezig|wacht/.test(x.klasse))`)));
+  await foto('ingest-herstart.png');
+  // "opnieuw" met de muis, zoals Clay klikt.
+  const plekO = await evalueer(`(() => { const b = ${HERSTART}.querySelector('[data-herstart=opnieuw]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: plekO.x, y: plekO.y });
+  await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: plekO.x, y: plekO.y, button: 'left', clickCount: 1 });
+  await wacht(120);
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: plekO.x, y: plekO.y, button: 'left', clickCount: 1 });
+  ok('klik op "opnieuw": beide links terug in de rij, in dezelfde volgorde',
+    await totdat(`!${HERSTART} && ${RIJEN}.some((x) => /bezig/.test(x.klasse) && /herstart-a/.test(x.titel)) && ${RIJEN}.some((x) => /wacht/.test(x.klasse) && /herstart-b/.test(x.titel))`, 15000),
+    JSON.stringify(await evalueer(RIJEN)));
+  ok('melding: 2 in de wachtrij', /2 in de wachtrij/.test(await status()), await status());
+  ok('en de melding onderaan is weg (je koos al)', await totdat("![...document.querySelectorAll('#meldingen .melding')].some((m) => /server is herstart/.test(m.textContent))", 3000));
+  await foto('ingest-herstart-terug.png');
+  // Netjes stoppen, zodat er bij het afsluiten niets loopt.
+  await klikX('herstart-b');
+  await klikX('herstart-a');
+  await klikX('herstart-a');
+  ok('en weer te annuleren', await totdat(`${RIJEN}.filter((x) => /geannuleerd/.test(x.klasse) && /herstart/.test(x.titel)).length === 2`, 10000),
+    JSON.stringify(await evalueer(RIJEN)));
   ok('geen fouten in de pagina', meldingen.length === 0, meldingen.join(' | '));
 } catch (err) {
   ok('script liep door', false, err.message);
 } finally {
   try { ws?.close(); } catch (_) {}
   chrome.kill(); server.kill();
+  for (const pid of wezen) { try { process.kill(pid, 'SIGKILL'); } catch (_) {} }
   await wacht(300);
   try { rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (_) {}
 }

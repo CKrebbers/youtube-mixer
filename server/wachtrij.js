@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
  *
  * Een opdracht is een gewoon object (dat gaat zo naar de browser):
  *   { id, sleutel, url, soort, titel, status, stap, tekst, pct, stappen,
- *     plek, begonnen, gestart, klaar, fout, track, bestond, playlist }
+ *     plek, begonnen, gestart, klaar, fout, track, bestond, playlist, live, opnieuw }
  * status: 'wacht' → 'bezig' → 'klaar' | 'mislukt' | 'geannuleerd'.
  *
  * De wachtrij weet niets van yt-dlp, ffmpeg of de library: het werk is een
@@ -206,7 +206,7 @@ export class Wachtrij {
       Object.assign(o, { status: 'geannuleerd', stap: 'geannuleerd', tekst: 'geannuleerd', fout: null });
     } else {
       Object.assign(o, { status: 'mislukt', stap: 'mislukt', fout: r.fout || 'onbekende fout', tekst: `mislukt — ${r.fout || 'onbekende fout'}`,
-        ...(r.playlist ? { playlist: true } : {}) });
+        ...(r.playlist ? { playlist: true } : {}), ...(r.live ? { live: true } : {}) });
     }
   }
 
