@@ -13,9 +13,9 @@
  *   laad(buffer) · start(vanaf) · stop() · pauzeer() · plaats(p)
  *   positie · speelt · duur · buffer (waarheidswaarde: is er iets geladen)
  *   setRate(r) · setLoop(start, end) · clearLoop() · ctxTimeOf(t)
- *   rem(duur) · remt · snelheid   vinylstop, zie "REMMEN" hieronder
  *   vernietig()       opruimen als het deck een andere soort bron kiest
  *   onEinde = fn      alleen bij een ECHT trackeinde
+ *   rem(duur) · remt · snelheid   vinylstop, zie "REMMEN" onder de BufferBron
  *   onRemKlaar = fn   de rem is uitgelopen: de bron staat nu gepauzeerd
  *
  * Regel 3 van CLAUDE.md geldt hier onverkort: positie komt van ctx.currentTime,
@@ -29,45 +29,6 @@ import {
 
 /** Zo lang vloeit een bron in en uit bij start, seek en stop. Te kort om te horen, lang genoeg tegen een tik. */
 export const DECLICK = 0.004;
-
-/**
- * Een parameter vasthouden waar hij nu is, ook midden in een fade, zodat
- * wat erna komt daar begint (en niet eerst terugspringt).
- */
-function houdVast(param, nu) {
-  if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(nu);
-  else { param.cancelScheduledValues?.(nu); param.setValueAtTime(param.value, nu); }
-}
-
-/**
- * De rem afmaken zodra hij is uitgelopen (`eind`, audioklok). De timer
- * bepaalt alleen WANNEER; is de audioklok nog niet zo ver (een timer loopt
- * niet op die klok), dan nog eens. `klaar` kijkt zelf of de rem er nog is.
- */
-function planRem(bron, eind, klaar) {
-  clearTimeout(bron._remTimer);
-  const ms = Math.max(0, (eind - bron.ctx.currentTime) * 1000) + 5;
-  bron._remTimer = setTimeout(() => {
-    bron._remTimer = null;
-    if (bron.ctx.currentTime < eind) planRem(bron, eind, klaar);
-    else klaar();
-  }, ms);
-  bron._remTimer?.unref?.();
-}
-
-/*
- * REMMEN (vinylstop): rem(duur) laat de snelheid in `duur` seconden op de
- * audioklok lineair naar 0 lopen, zoals een draaitafel waarvan de motor
- * uitgaat. De positie volgt de formule uit stream-kern.js (positieOp met
- * `rem`), op de hoofdthread en in de worklet dezelfde. In het laatste stuk
- * dooft hij uit (REM_UIT), en op stilstand wordt het een gewone pauze op de
- * plek waar hij stilviel; `onRemKlaar` meldt dat. Een timer bepaalt alleen
- * WANNEER dat gebeurt, de plek komt uit de formule (regel 3).
- *
- * Tijdens het remmen: tempo (pitchfader, bend, sync) wordt onthouden maar
- * remt niet anders; een loop aan of uit remt gewoon door; start (play,
- * seek, hotcue), stop en pauze halen de rem eraf.
- */
 
 export class BufferBron {
   constructor(ctx, uitgang) {
@@ -198,7 +159,7 @@ export class BufferBron {
   _remSeg() { const r = this._rem; return { T: r.T, P: r.P, R: r.R, loop: this.loop, speelt: true, rem: { a: r.a } }; }
 
   /**
-   * Remmen tot stilstand in `duur` seconden (zie REMMEN boven). De reserve
+   * Remmen tot stilstand in `duur` seconden (zie REMMEN hieronder, na deze klasse). De reserve
    * doet het eenvoudig: playbackRate lineair naar 0 (Web Audio rekent dat per
    * blok van 128, de streamkern per sample) en het volume in het laatste
    * stuk naar 0. De positie rekent met dezelfde formule als de streamkern.
@@ -280,6 +241,47 @@ export class BufferBron {
     this._offset = p;
     this._startedAt = this.ctx.currentTime;
   }
+}
+
+// ---- remmen (beide bronnen) --------------------------------------------------
+
+/*
+ * REMMEN (vinylstop): rem(duur) laat de snelheid in `duur` seconden op de
+ * audioklok lineair naar 0 lopen, zoals een draaitafel waarvan de motor
+ * uitgaat. De positie volgt de formule uit stream-kern.js (positieOp met
+ * `rem`), op de hoofdthread en in de worklet dezelfde. In het laatste stuk
+ * dooft hij uit (REM_UIT), en op stilstand wordt het een gewone pauze op de
+ * plek waar hij stilviel; `onRemKlaar` meldt dat. Een timer bepaalt alleen
+ * WANNEER dat gebeurt, de plek komt uit de formule (regel 3).
+ *
+ * Tijdens het remmen: tempo (pitchfader, bend, sync) wordt onthouden maar
+ * remt niet anders; een loop aan of uit remt gewoon door; start (play,
+ * seek, hotcue), stop en pauze halen de rem eraf.
+ */
+
+/**
+ * Een parameter vasthouden waar hij nu is, ook midden in een fade, zodat
+ * wat erna komt daar begint (en niet eerst terugspringt).
+ */
+function houdVast(param, nu) {
+  if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(nu);
+  else { param.cancelScheduledValues?.(nu); param.setValueAtTime(param.value, nu); }
+}
+
+/**
+ * De rem afmaken zodra hij is uitgelopen (`eind`, audioklok). De timer
+ * bepaalt alleen WANNEER; is de audioklok nog niet zo ver (een timer loopt
+ * niet op die klok), dan nog eens. `klaar` kijkt zelf of de rem er nog is.
+ */
+function planRem(bron, eind, klaar) {
+  clearTimeout(bron._remTimer);
+  const ms = Math.max(0, (eind - bron.ctx.currentTime) * 1000) + 5;
+  bron._remTimer = setTimeout(() => {
+    bron._remTimer = null;
+    if (bron.ctx.currentTime < eind) planRem(bron, eind, klaar);
+    else klaar();
+  }, ms);
+  bron._remTimer?.unref?.();
 }
 
 // ---- streamen -------------------------------------------------------------
