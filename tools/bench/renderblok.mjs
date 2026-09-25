@@ -38,7 +38,7 @@ import os from 'node:os';
 import { PerformanceObserver, performance, constants as perfConst } from 'node:perf_hooks';
 import { Session } from 'node:inspector/promises';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -243,12 +243,18 @@ async function tel(fn) {
   return { bytes: a1 - a0, klein, groot, overig, heapGroei: heap1 - heap0 };
 }
 
-async function profiel(fn, bestanden) {
+/**
+ * `verwacht` = de bytes die de afvalmeting zag. Het interval schaalt mee
+ * (hooguit ~200 000 monsters): met 64 bytes en 2 GB afval werd het profiel
+ * een string te lang voor V8, en liep --profiel op 60 s vast.
+ */
+async function profiel(fn, bestanden, verwacht = 0) {
   const s = new Session();
   s.connect();
   await s.post('HeapProfiler.enable');
   await s.post('HeapProfiler.startSampling', {
-    samplingInterval: 64, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true,
+    samplingInterval: Math.max(64, Math.ceil(verwacht / 200000)),
+    includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true,
   });
   fn();
   const { profile } = await s.post('HeapProfiler.stopSampling');
@@ -272,7 +278,9 @@ async function profiel(fn, bestanden) {
 // ---- hoofdprogramma -----------------------------------------------------------
 
 function haalRef(commit) {
-  const map = mkdtempSync(join(os.tmpdir(), 'varve-bench-'));
+  // realpath: op macOS is de tmp-map een symlink (/var -> /private/var), en het
+  // profiel noemt de echte naam; anders vond --profiel de ref-bestanden niet.
+  const map = realpathSync(mkdtempSync(join(os.tmpdir(), 'varve-bench-')));
   for (const f of ['stream-kern.js', 'stream-lezer.js']) {
     writeFileSync(join(map, f), execFileSync('git', ['show', `${commit}:src/engine/${f}`], { cwd: ROOT }));
   }
@@ -344,9 +352,10 @@ try {
 
   // 4. Waar.
   if (PROFIEL) {
-    console.log('\nwaar er gealloceerd wordt (sampling heap profiler, 64 bytes, incl. wat een GC al opruimde)');
+    console.log('\nwaar er gealloceerd wordt (sampling heap profiler, incl. wat een GC al opruimde)');
     for (const v of varianten.filter((x) => !x.leeg)) {
-      const p = await profiel(() => draai(v.Lezer, draaiboek, blokken), [join(v.map, 'stream-kern.js'), join(v.map, 'stream-lezer.js')].map((f) => pathToFileURL(f).href));
+      const p = await profiel(() => draai(v.Lezer, draaiboek, blokken),
+        [join(v.map, 'stream-kern.js'), join(v.map, 'stream-lezer.js')].map((f) => pathToFileURL(f).href), v.afval.bytes);
       const inEngine = p.per.reduce((n, [, b]) => n + b, 0);
       console.log(`  ${v.naam}: ${(inEngine / (blokken * DECKS)).toFixed(1)} bytes/blok in stream-kern/stream-lezer (van ${(p.totaal / (blokken * DECKS)).toFixed(1)} in totaal)`);
       for (const [k, b] of p.per.slice(0, 10)) console.log(`    ${(b / (blokken * DECKS)).toFixed(1).padStart(8)} bytes/blok  ${k}`);
