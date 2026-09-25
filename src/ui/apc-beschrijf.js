@@ -38,7 +38,7 @@ export function beschrijf(action) {
     if (rest === 'beatjump.fwd') return r('spring ▶', 'beatjump vooruit (standaard 4 tellen, op het grid; in een loop schuift de loop mee)');
     if (rest === 'beatjump.halve') return r('sprong ½', 'beatjump-lengte halveren (1 · 2 · 4 · 8 · 16 · 32 tellen)');
     if (rest === 'beatjump.double') return r('sprong ×2', 'beatjump-lengte verdubbelen (1 · 2 · 4 · 8 · 16 · 32 tellen)');
-    if (rest === 'play.quant') return r('play ▸1', 'starten op de volgende maat van de track die de maat geeft (zonder maatgever meteen); lampje = wacht');
+    if (rest === 'play.quant') return r('play ▸1', 'starten op de volgende maat van de track die de maat geeft (zonder maatgever meteen); speelt of wacht hij al: pauze, zoals play; lampje vol = wacht, gedimd = speelt');
     if (rest === 'send.a') return r('echo', 'echo-send (naar de gedeelde echo)');
     if (rest === 'send.b') return r('galm', 'galm-send (naar de gedeelde galm)');
     if (rest === 'fx.mix') return r('fx mix', 'effect dry/wet');

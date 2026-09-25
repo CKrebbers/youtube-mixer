@@ -1813,7 +1813,10 @@ console.log('\ntransport');
   ok('na het maatbegin loopt hij, in fase met de maatgever', !dG.wacht && Math.abs(dG.position - 8.25) < 1e-9
     && Math.abs(dG.grid.phase(dG.position) - dM.grid.phase(dM.position)) < 1e-9);
   ok('... en ook op dezelfde plek in de maat (de "1" viel samen)', Math.abs(dG.grid.barPhase(dG.position) - dM.grid.barPhase(dM.position)) < 1e-9);
-  ok('... play.quant terwijl hij speelt: niets te doen (null)', read('track.7.play.quant') === null);
+  ok('... play.quant terwijl hij speelt: lampje gedimd (0,5), want drukken = pauze', read('track.7.play.quant') === 0.5);
+  // shift+Q was eerst gewoon play/pauze: op een spelende track pauzeert hij nog.
+  druk('track.7.play.quant');
+  ok('play.quant op een SPELENDE track: pauze, zoals play', !dG.playing && !dG.wacht && Math.abs(dG.position - 8.25) < 1e-9);
   dG.stop();
 
   // Startpunt een fractie na zijn tel (cue zonder quantize): de TEL valt op de 1.
@@ -1832,6 +1835,12 @@ console.log('\ntransport');
   // Pauze tijdens het wachten annuleert.
   druk('track.7.play');
   ok('pauze tijdens het wachten: stil, op het startpunt, bron weg', !dG.playing && !dG.wacht && dG.position === 8 && !dG.bron.source);
+  // Nog een keer play.quant tijdens het wachten: ook annuleren (net als play).
+  druk('track.7.play.quant');
+  ok('play.quant: wacht (weer) op het maatbegin 805,7', dG.wacht && Math.abs(dG.bron.wachtTot - 805.7) < 1e-9);
+  druk('track.7.play.quant');
+  ok('... nog een keer play.quant tijdens het wachten: geannuleerd, stil op het startpunt', !dG.playing && !dG.wacht
+    && dG.position === 8 && !dG.bron.source && read('track.7.play.quant') === 0);
   // Tempo, sprong en sync tijdens het wachten: het startmoment blijft.
   NOW = 804.0;
   eng.startOpDeMaat('G');                                       // maatbegin 805,7
@@ -1997,6 +2006,11 @@ console.log('\ntransport');
     dG.seek(8);
     toets('KeyQ', true);
     ok('toets shift+Q: de track met focus (G) wacht op het maatbegin van H (902,0)', dG.wacht && Math.abs(dG.bron.wachtTot - 902) < 1e-9);
+    toets('KeyQ', true);
+    ok('toets shift+Q nog een keer tijdens het wachten: geannuleerd', !dG.playing && !dG.wacht);
+    dG.play();
+    toets('KeyQ', true);
+    ok('toets shift+Q op een spelende track: pauze, zoals vroeger', !dG.playing && !dG.wacht);
     dG.stop(); dM.stop(); dG.clearLoop();
   }
   const nieuw = ['track.7.beatjump.back', 'track.7.beatjump.fwd', 'track.7.beatjump.halve', 'track.7.beatjump.double',

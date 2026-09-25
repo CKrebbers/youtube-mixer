@@ -297,14 +297,18 @@ export function bindEngine(engine) {
 
     // Starten op de maat: het geluid begint op het volgende maatbegin van de
     // track die de maat geeft (Engine.startOpDeMaat); zonder maatgever meteen.
-    // Gewone play en pauze annuleren het wachten. Lampje: 1 = wacht op de
-    // maat, 0 = stil (bruikbaar), null = speelt al of leeg (niets te doen).
+    // Speelt hij al, of wacht hij nog op de maat, dan pauze, net als play:
+    // shift+Q was eerst gewoon play/pauze, en Clay's vingers pauzeren er nog
+    // mee. Nog een keer drukken tijdens het wachten annuleert het wachten.
+    // Lampje: 1 = wacht op de maat, 0,5 = speelt (drukken = pauze), 0 = stil
+    // (bruikbaar), null = leeg (niets te doen).
     define(`${n}.play.quant`, 'trigger', (on) => {
-      if (!on || d.playing) return;
+      if (!on) return;
+      if (d.playing) { d.pause(); return; }
       const r = engine.startOpDeMaat(id);
       if (r.reden) engine.emit('melding', { tekst: `track ${nr}: ${r.reden}`, soort: r.ok ? 'info' : 'fout' });
-    }, { label: `Track ${nr} starten op de volgende maat van de maatgever`,
-         read: () => (!d.buffer ? null : d.wacht ? 1 : d.playing ? null : 0) });
+    }, { label: `Track ${nr} starten op de volgende maat van de maatgever (speelt hij: pauze)`,
+         read: () => (!d.buffer ? null : d.wacht ? 1 : d.playing ? 0.5 : 0) });
 
     define(`${n}.nudge.back`, 'trigger', (on) => { if (on) d.nudge(-0.05); }, { label: `Track ${nr} nudge -` });
     define(`${n}.nudge.fwd`, 'trigger', (on) => { if (on) d.nudge(0.05); }, { label: `Track ${nr} nudge +` });
