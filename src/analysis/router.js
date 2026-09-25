@@ -1,12 +1,15 @@
 import { Emitter, clamp } from '../lib/emitter.js';
 
 /**
- * Modulatie: een kenmerk van de mix (features.js) duwt een knop van een
- * vormlaag. Puur: de router kent geen DOM, geen Web Audio en geen VormLaag,
- * alleen een doel met `zetModulatie(i, offset)`.
+ * Modulatie: een kenmerk van de mix (features.js) of van de maat (maat.js)
+ * duwt een knop van een vormlaag. Puur: de router kent geen DOM, geen Web
+ * Audio en geen VormLaag, alleen een doel met `zetModulatie(i, offset)`.
  *
  * Een route = { bron, doel, sterkte }:
- *   bron     'laag' | 'midden' | 'hoog' | 'onset' | 'rms'
+ *   bron     wat de zaal hoort (de master, luisteraar.js):
+ *              'laag' | 'midden' | 'hoog' | 'onset' (klap) | 'rms' (luid)
+ *            of de maatgever (maat.js):
+ *              'maatklap' (zijn klappen uit de onset-analyse) | 'tel' (zijn tel)
  *   doel     knopplek 1..6 van de laag (een PLEK, zoals video.layer.knob.N:
  *            een andere vorm vraagt geen nieuwe route)
  *   sterkte  0..1
@@ -17,8 +20,14 @@ import { Emitter, clamp } from '../lib/emitter.js';
  * zijn. Zelfde patroon als metPuls (puls.js) en plekEffectief (fx.js).
  */
 
-export const BRONNEN = ['laag', 'midden', 'hoog', 'onset', 'rms'];
-export const BRON_NAAM = { laag: 'laag', midden: 'midden', hoog: 'hoog', onset: 'klap', rms: 'luid' };
+/** Uit de master-analyser (luisteraar.js). */
+export const MIX_BRONNEN = ['laag', 'midden', 'hoog', 'onset', 'rms'];
+/** Van de maatgever (maat.js): geen analyser nodig, alleen positie, grid en klappen. */
+export const MAAT_BRONNEN = ['maatklap', 'tel'];
+/** In deze volgorde lopen ze rond (video.layer.react.source). */
+export const BRONNEN = [...MIX_BRONNEN, ...MAAT_BRONNEN];
+export const BRON_NAAM = { laag: 'laag', midden: 'midden', hoog: 'hoog', onset: 'klap', rms: 'luid',
+  maatklap: 'klap (maat)', tel: 'tel' };
 export const DOEL_PLEKKEN = 6;
 
 export const standaardRoute = () => ({ bron: 'laag', doel: 1, sterkte: 0 });
@@ -36,6 +45,23 @@ export function offsets(routes, kenmerken, aantal = DOEL_PLEKKEN) {
     uit[i] += clamp(kenmerken[r.bron] ?? 0) * clamp(r.sterkte);
   }
   return uit;
+}
+
+/**
+ * De kenmerken op tijd t, maar alleen uit de lezers die een open route nodig
+ * heeft: alleen 'tel' open = de analyser wordt niet gelezen, alleen 'laag'
+ * open = de maat niet. `nodig` komt van router.nodig(); leeg = null.
+ * @param lezers { mix, maat } met elk `lees(t)` -> { bron: 0..1 } of null
+ */
+export function leesKenmerken(t, nodig, { mix = null, maat = null } = {}) {
+  let wilMix = false, wilMaat = false;
+  for (const b of nodig) {
+    if (MAAT_BRONNEN.includes(b)) wilMaat = true;
+    else wilMix = true;
+  }
+  const a = wilMix ? mix?.lees(t) ?? null : null;
+  const b = wilMaat ? maat?.lees(t) ?? null : null;
+  return a && b ? { ...a, ...b } : a || b;
 }
 
 /**
@@ -68,6 +94,13 @@ export class Router extends Emitter {
 
   /** Staat er ergens een route open? Zo niet, dan hoeft er niets geanalyseerd te worden. */
   actief() { return this.routes.some((rs) => rs.some((r) => r.sterkte > 0)); }
+
+  /** Welke bronnen een open route heeft (een Set; leeg = niets uitlezen). */
+  nodig() {
+    const uit = new Set();
+    for (const rs of this.routes) for (const r of rs) if (r.sterkte > 0) uit.add(r.bron);
+    return uit;
+  }
 
   /**
    * De offsets op de lagen zetten. `lagen[i]` hoort bij `routes[i]`.

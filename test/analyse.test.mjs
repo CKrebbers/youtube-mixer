@@ -6,7 +6,10 @@ import { readFileSync } from 'node:fs';
 
 const F = await import('../src/analysis/features.js');
 const { Luisteraar } = await import('../src/analysis/luisteraar.js');
-const { Router, offsets, BRONNEN, standaardRoute } = await import('../src/analysis/router.js');
+const { Router, offsets, BRONNEN, MIX_BRONNEN, MAAT_BRONNEN, standaardRoute, leesKenmerken } = await import('../src/analysis/router.js');
+const M = await import('../src/analysis/maat.js');
+const { Beatgrid } = await import('../src/engine/beatgrid.js');
+const { pulsVorm } = await import('../src/video/puls.js');
 const { VormLaag, VormLagen } = await import('../src/vormen/laag.js');
 const actions = await import('../src/control/actions.js');
 
@@ -175,7 +178,8 @@ console.log('de router: een offset bovenop de knop');
   ok('offset = kenmerk × sterkte op de doelplek', bij(offsets([{ bron: 'laag', doel: 2, sterkte: 0.5 }], kenm)[1], 0.4) && offsets([{ bron: 'laag', doel: 2, sterkte: 0.5 }], kenm)[0] === 0);
   ok('zonder kenmerken (geen audio): alles 0', offsets([{ bron: 'laag', doel: 1, sterkte: 1 }], null).every((x) => x === 0));
   ok('een doel buiten 1..6 doet niets', offsets([{ bron: 'laag', doel: 9, sterkte: 1 }], kenm).every((x) => x === 0));
-  ok('vijf bronnen', BRONNEN.join() === 'laag,midden,hoog,onset,rms');
+  ok('zeven bronnen: vijf uit de master, dan klap en tel van de maatgever',
+    BRONNEN.join() === 'laag,midden,hoog,onset,rms,maatklap,tel' && MIX_BRONNEN.length === 5 && MAAT_BRONNEN.join() === 'maatklap,tel');
 
   const laag = new VormLaag({ maakCanvas: nepCanvas, systeem: 'bd' });
   laag.zetKnop(0, 0.3);
@@ -215,6 +219,8 @@ console.log('op de action-bus: sterkte, bron en doel op de gekozen laag');
   actions.invoke('video.layer.react.source', true); actions.invoke('video.layer.react.source', false);
   actions.invoke('video.layer.react.target', true);
   ok('bron en doel wisselen op de gekozen laag', router.route(1).bron === 'midden' && router.route(1).doel === 2 && router.route(0).bron === 'laag');
+  for (let i = 0; i < 5; i++) { actions.invoke('video.layer.react.source', true); actions.invoke('video.layer.react.source', false); }
+  ok('react.source loopt door naar de maatgever: midden → hoog → klap → luid → klap (maat) → tel', router.route(1).bron === 'tel');
   ok('react is een value, bron en doel zijn triggers',
     actions.metaOf('video.layer.react').type === 'value' && actions.metaOf('video.layer.react.source').type === 'trigger');
   v.zetSysteem('hg', v.lagen[0]);
@@ -226,14 +232,266 @@ console.log('op de action-bus: sterkte, bron en doel op de gekozen laag');
   const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
   ok('uitleg voor react, react.source en react.target',
     ['video.layer.react', 'video.layer.react.source', 'video.layer.react.target'].every((a) => beschrijf(a).kort !== a && !beschrijf(a).lang.startsWith('?')));
+  const uitleg = beschrijf('video.layer.react.source').lang;
+  ok('de uitleg van react.source noemt de nieuwe bronnen (maatgever, klappen, tel)', /maatgever/.test(uitleg) && /klappen/.test(uitleg) && / tel$/.test(uitleg));
+}
+
+console.log('de maat: klappen uit de onset-analyse en de tel van de maatgever');
+{
+  // Een nep-audioklok en nep-decks: positie = P0 + (klok - c0) × rate zolang
+  // hij speelt, zoals bron.positie (regel 3). t = klok - vertraging, zoals de
+  // mixer hem aan laag.frame geeft; de lezer rekent de hoorbare positie zelf.
+  const klok = { c: 0 };
+  const deck = ({ onsets = null, bpm = 120, anker = 0, grid = null, rate = 1, P0 = 0, c0 = 0, speelt = true } = {}) => ({
+    playing: speelt, rate, onsets, P0, c0,
+    grid: grid ?? (bpm ? new Beatgrid({ bpm, firstBeat: anker }) : null),
+    get position() { return this.playing ? this.P0 + (klok.c - this.c0) * this.rate : this.P0; },
+  });
+  const lezer = (tracks, V = 0) => new M.MaatLezer({ tracks: () => tracks, vertraging: () => V });
+  const V = 0.04;                                 // uitgangsvertraging
+
+  ok('klapVorm: 0 vóór de opkomst, half op de helft, 1 op de klap, exp(-d/τ) erna',
+    M.klapVorm(-M.KLAP_OP - 1e-6) === 0 && bij(M.klapVorm(-M.KLAP_OP / 2), 0.5) && M.klapVorm(0) === 1 && bij(M.klapVorm(M.KLAP_TAU), Math.exp(-1)));
+  const kl = Float64Array.from([1, 1.5, 2]);
+  ok('laatsteKlap: binair zoeken, op de klap telt hij mee', M.laatsteKlap(kl, 0.5) === -1 && M.laatsteKlap(kl, 1.5) === 1 && M.laatsteKlap(kl, 9) === 2);
+  ok('omhullende: de piek valt OP de klap, de opkomst ligt ervoor (de klappen zijn vooraf bekend)',
+    M.klapOmhullende(kl, 1.5) === 1 && bij(M.klapOmhullende(kl, 1.5 - M.KLAP_OP / 2), 0.5) && M.klapOmhullende(kl, 0.9) === 0);
+  ok('omhullende op rate 2: afstand in kloktijd (0,1 s tracktijd = 0,05 s echt)', bij(M.klapOmhullende(kl, 2.1, 2), Math.exp(-0.05 / M.KLAP_TAU)));
+  ok('omhullende zonder klappen of zonder positie: 0', M.klapOmhullende(null, 1) === 0 && M.klapOmhullende(new Float64Array(0), 1) === 0 && M.klapOmhullende(kl, NaN) === 0);
+
+  // Een reeks beelden op fps, met klappen en een grid; sleutel = beeldnummer op 120 fps.
+  const klapTijden = Float64Array.from([1.0, 1.5, 2.0, 2.25, 2.75, 3.5]);
+  const reeks = (fps, { rate = 1, grid = null } = {}) => {
+    const d = deck({ onsets: klapTijden, rate, grid });
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }], V);
+    const uit = new Map();
+    for (let i = 0; i <= 4.2 * fps; i++) {
+      klok.c = i / fps;
+      uit.set(i * 120 / fps, { c: klok.c, t: klok.c - V, hoor: d.position - V * rate, ...l.lees(klok.c - V) });
+    }
+    return uit;
+  };
+  const verschil = (a, b) => {
+    let m = 0;
+    for (const [k, w] of a) { const x = b.get(k); m = Math.max(m, Math.abs(x.maatklap - w.maatklap), Math.abs(x.tel - w.tel)); }
+    return m;
+  };
+  const r30 = reeks(30), r60 = reeks(60), r120 = reeks(120);
+  const v1 = Math.max(verschil(r30, r60), verschil(r30, r120));
+  ok(`30, 60 en 120 fps: klap en tel op hetzelfde moment even hoog (max verschil ${v1.toExponential(1)})`, v1 < 1e-9);
+  const gezien = (r, fps) => [...klapTijden].every((kt) => {
+    const eerst = [...r.values()].find((w) => w.hoor >= kt - 1e-12);   // het eerste beeld op of na de klap
+    return eerst && eerst.maatklap >= Math.exp(-(1 / fps) / M.KLAP_TAU) - 1e-9;
+  });
+  ok('elke klap te zien op 30, 60 en 120 fps (het beeld erna staat nog bijna vol)', gezien(r30, 30) && gezien(r60, 60) && gezien(r120, 120));
+  const tussen = [...r120.values()].find((w) => w.hoor >= 3.0 - 1e-12);
+  ok('tussen de klappen dooft hij uit (exp(-d/τ) na de klap op 2,75)', bij(tussen.maatklap, Math.exp(-(tussen.hoor - 2.75) / M.KLAP_TAU), 1e-9));
+  ok('vóór de eerste klap: 0', r120.get(0).maatklap === 0);
+  const g120 = new Beatgrid({ bpm: 120, firstBeat: 0 });
+  let telAf = 0;
+  for (const w of r120.values()) telAf = Math.max(telAf, Math.abs(w.tel - pulsVorm(g120.phase(w.hoor))));
+  ok(`tel = pulsVorm(fase van wat je hoort), precies de video-puls (max verschil ${telAf.toExponential(1)})`, telAf < 1e-9);
+
+  const q30 = reeks(30, { rate: 1.1 }), q120 = reeks(120, { rate: 1.1 });
+  let telQ = 0;
+  for (const w of q120.values()) telQ = Math.max(telQ, Math.abs(w.tel - pulsVorm(g120.phase(w.hoor))));
+  ok('rate 1,1: 30 en 120 fps gelijk, tel nog steeds de video-puls', verschil(q30, q120) < 1e-9 && telQ < 1e-9);
+  // Een tempokaart: 120 bpm, vanaf 2,1 s 150 bpm (met een overgangstel). Het
+  // uitdoven volgt de lengte van DEZE tel, anders hield de staart de puls op.
+  const kaart = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 2.1, bpm: 150, anker: 2.13 }] });
+  const k30 = reeks(30, { grid: kaart }), k120 = reeks(120, { grid: kaart });
+  let telK = 0;
+  for (const w of k120.values()) telK = Math.max(telK, Math.abs(w.tel - pulsVorm(kaart.phase(w.hoor))));
+  ok(`tempokaart (120 -> 150 bpm): nog steeds de video-puls, 30 = 120 fps (${telK.toExponential(1)})`, telK < 1e-9 && verschil(k30, k120) < 1e-9);
+  {
+    const d = deck({ onsets: Float64Array.from([2.0]), rate: 1.25 });
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }], V);
+    // Hoorbaar = 1,25·c - 0,04·1,25: de klap op 2,0 hoor je op c = 2,05 / 1,25 = 1,64.
+    const op = (c) => { klok.c = c; return { ...l.lees(c - V) }; };
+    op(1.0);
+    const rijst = op(1.64 - M.KLAP_OP / 2);
+    const piek = op(1.64);
+    const later = op(1.74);
+    ok('rate 1,25: de piek valt op het moment dat je hem HOORT (positie min vertraging × rate)', bij(piek.maatklap, 1, 1e-9) && bij(rijst.maatklap, 0.5, 1e-9));
+    ok('rate 1,25: uitdoven in kloktijd (0,1 s later exp(-1), niet exp(-1,25))', bij(later.maatklap, Math.exp(-1), 1e-9));
+  }
+
+  // Zonder maatgever of zonder klappen: 0, geen fout.
+  {
+    klok.c = 1;
+    const leeg = lezer([], V);
+    const w = leeg.lees(1 - V);
+    ok('geen tracks: 0 en 0, geen maatgever', w.maatklap === 0 && w.tel === 0 && leeg.maatgever === null);
+    const zonder = new M.MaatLezer();
+    ok('zonder tracks-functie: ook 0, geen fout', zonder.lees(1).maatklap === 0 && zonder.lees(1.1).tel === 0);
+    const alleen = (d, zicht = 1) => { const l = lezer([{ id: 'A', deck: d, zicht }]); klok.c = 1.0; const r = l.lees(1.0); return { ...r, wie: l.maatgever }; };
+    const stil = alleen(deck({ onsets: klapTijden, speelt: false, P0: 1.0 }));
+    ok('de enige track staat stil: geen maatgever, 0', stil.wie === null && stil.maatklap === 0 && stil.tel === 0);
+    const dicht = alleen(deck({ onsets: klapTijden }), 0);
+    ok('fader dicht (zicht 0): je hoort hem niet, dus geen maatgever', dicht.wie === null && dicht.maatklap === 0);
+    const geenGrid = alleen(deck({ onsets: klapTijden, bpm: 0 }));
+    ok('geen grid: geen maatgever (net als sync en de video-puls)', geenGrid.wie === null && geenGrid.maatklap === 0);
+    klok.c = 1.01;
+    const l = lezer([{ id: 'A', deck: deck({ onsets: null }), zicht: 1 }]);
+    const w2 = l.lees(1.01);
+    ok('maatgever zonder klappen (los bestand, demo): klap 0, de tel werkt', w2.maatklap === 0 && w2.tel > 0.9 && l.maatgever === 'A');
+    ok('dezelfde t twee keer (twee lagen in één beeld): hetzelfde object, niets veranderd', l.lees(1.01) === w2);
+  }
+
+  // De maatgever valt weg midden in een klap: de staart dooft uit, geen val naar 0.
+  {
+    const d = deck({ onsets: klapTijden });
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }]);
+    klok.c = 1.0; l.lees(1.0);
+    klok.c = 1.02; const voor = { ...l.lees(1.02) };
+    d.P0 = d.position; d.playing = false;                          // stop
+    klok.c = 1.04; const na = l.lees(1.04);
+    ok(`maatgever stopt midden in een klap: de staart dooft uit (${voor.maatklap.toFixed(2)} -> ${na.maatklap.toFixed(2)})`,
+      l.maatgever === null && bij(na.maatklap, voor.maatklap * Math.exp(-0.02 / M.KLAP_TAU), 1e-9) && na.tel > 0.5);
+    klok.c = 2.2; const laat = l.lees(2.2);
+    ok('…en staat na ruim een seconde op PRECIES 0 (geen eindeloze staart, dus geen parameterbericht per beeld)', laat.maatklap === 0 && laat.tel === 0);
+  }
+
+  // Wisselende maatgever. A klapt op de tel (0; 0,5; …), B ertussen (0,25; 0,75; …).
+  // Beide spelen; wie de maat geeft volgt de crossfader.
+  {
+    const aKlap = Float64Array.from({ length: 12 }, (_, k) => k * 0.5);
+    const bKlap = Float64Array.from({ length: 12 }, (_, k) => 0.25 + k * 0.5);
+    const A = deck({ onsets: aKlap, anker: 0 }), B = deck({ onsets: bKlap, anker: 0.25 });
+    const tr = [{ id: 'A', deck: A, zicht: 1 }, { id: 'B', deck: B, zicht: 0.5 }];
+    const l = lezer(tr, 0);
+    const fps = 120, r = [];
+    const [i1, i2, i3] = [1.33, 2.02, 2.52].map((t) => Math.round(t * fps));   // de beelden waarop de crossfader beweegt
+    const wissels = { [i1]: 0.2, [i2]: 1, [i3]: 0.2 };
+    for (let i = 0; i <= 3 * fps; i++) {
+      klok.c = i / fps;
+      if (i in wissels) tr[0].zicht = wissels[i];
+      r.push({ t: klok.c, ...l.lees(klok.c), wie: l.maatgever });
+    }
+    const beeld = (t) => r.findIndex((x) => x.t >= t - 1e-9);
+    const ruw = (wie, t) => ({ maatklap: M.klapOmhullende(wie === 'A' ? aKlap : bKlap, t), tel: pulsVorm((wie === 'A' ? A : B).grid.phase(t)) });
+
+    ok('de maat wisselt A -> B -> A -> B', r[i1 - 1].wie === 'A' && r[i1].wie === 'B' && r[i2 - 1].wie === 'B' && r[i2].wie === 'A'
+      && r[i3 - 1].wie === 'A' && r[i3].wie === 'B');
+    for (const [i, naar] of [[i1, 'B'], [i2, 'A']]) {
+      const n = ruw(naar, r[i].t);
+      ok(`wissel naar ${naar} op ${r[i].t.toFixed(2)} s, midden in een klap van ${naar}: geen sprong omhoog `
+        + `(klap ${r[i - 1].maatklap.toFixed(2)} -> ${r[i].maatklap.toFixed(2)}, tel ${r[i - 1].tel.toFixed(2)} -> ${r[i].tel.toFixed(2)}; `
+        + `zonder de regel ${n.maatklap.toFixed(2)} en ${n.tel.toFixed(2)})`,
+      r[i].maatklap <= r[i - 1].maatklap + 1e-12 && r[i].tel <= r[i - 1].tel + 1e-12 && n.maatklap > 0.3 && n.tel > 0.3);
+    }
+    {
+      const i = i3, dt = 1 / fps, n = ruw('B', r[i].t);
+      ok(`wissel weg van A vlak na zijn klap (${r[i - 1].maatklap.toFixed(2)}): geen val naar B (${n.maatklap.toFixed(2)}), de staart dooft uit`,
+        bij(r[i].maatklap, r[i - 1].maatklap * Math.exp(-dt / M.KLAP_TAU), 1e-9) && r[i].tel >= r[i - 1].tel * Math.exp(-dt / 0.1) - 1e-9 && n.maatklap < 0.1);
+    }
+    const na = r[beeld(2.75)];
+    ok('daarna komen klap en tel van de nieuwe maatgever gewoon door', na.maatklap > 0.99 && na.tel > 0.99 && r[beeld(1.75)].maatklap > 0.99);
+    // Over de hele reeks: omhoog alleen als de maatgever van dat beeld net een klap of tel had.
+    let vreemd = 0;
+    for (let i = 1; i < r.length; i++) {
+      const [a, b] = [r[i - 1], r[i]];
+      const kl = b.wie === 'A' ? aKlap : bKlap, g = (b.wie === 'A' ? A : B).grid;
+      const klap = [...kl].some((k) => k > a.t - 1e-9 && k < b.t + M.KLAP_OP);
+      const tel = Math.floor(g.beatAt(b.t)) > Math.floor(g.beatAt(a.t));
+      if ((b.maatklap > a.maatklap + 1e-9 && !klap) || (b.tel > a.tel + 1e-9 && !tel)) vreemd++;
+    }
+    ok(`nergens een sprong omhoog zonder klap of tel van de maatgever (${vreemd} keer)`, vreemd === 0);
+  }
+
+  // Start vanaf stilstand, op de tel: die eerste tel wil je zien (geen "overname").
+  {
+    const d = deck({ onsets: Float64Array.from([1.0, 1.5]), speelt: false, P0: 1.0 });
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }], 0);       // vertraging 0 (zoals in Node): het beeld valt al NA de tel
+    klok.c = 5; l.lees(5);
+    d.c0 = 5 + 1 / 120; d.playing = true;                         // play, halverwege het beeld
+    klok.c = 5 + 1 / 60;
+    const w = l.lees(klok.c);
+    ok(`play op de tel: de eerste tel en klap zijn te zien (tel ${w.tel.toFixed(2)}, klap ${w.maatklap.toFixed(2)})`, w.tel > 0.9 && w.maatklap > 0.9);
+  }
+
+  // De klappen komen pas na het laden binnen (laden.js haalt ze op): geen sprong naar een klap van net.
+  {
+    const d = deck({ onsets: null });
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }], 0);
+    klok.c = 1.0; l.lees(1.0);
+    klok.c = 1.05; d.onsets = Float64Array.from([0.98, 1.5]);
+    const w = { ...l.lees(1.05) };
+    klok.c = 1.5; const w2 = l.lees(1.5);
+    ok('klappen die later binnenkomen: geen sprong naar de klap van 70 ms geleden, de volgende komt door', w.maatklap === 0 && bij(w2.maatklap, 1));
+  }
+
+  // Een loop die rondgaat is GEEN wissel (zelfde track): de klap op het
+  // loopbegin hoor je, dus die zie je ook.
+  {
+    const d = deck({ onsets: Float64Array.from([1.0, 1.5]) });
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }], 0);
+    klok.c = 1.43; const voor = { ...l.lees(1.43) };
+    klok.c = 1.45; d.P0 = 1.0; d.c0 = 1.45;                        // loop 1,0–1,45: terug naar het begin
+    klok.c = 1.46; const na = l.lees(1.46);
+    ok(`loop rond: de klap op het loopbegin komt door (${voor.maatklap.toFixed(2)} -> ${na.maatklap.toFixed(2)}), de tel ook`,
+      bij(na.maatklap, Math.exp(-0.01 / M.KLAP_TAU), 1e-9) && na.tel > 0.9 && voor.maatklap < 0.05);
+  }
+
+  // Terug in de tijd (nieuwe AudioContext) of lang niets: opnieuw beginnen.
+  {
+    const l = lezer([{ id: 'A', deck: deck({ onsets: klapTijden }), zicht: 1 }]);
+    klok.c = 1.0; l.lees(1.0);
+    klok.c = 0.3; const w = l.lees(0.3);
+    ok('terug in de tijd: opnieuw beginnen, geen staart uit de toekomst', w.maatklap === 0);
+  }
+
+  const nepEngine = {
+    deck: (id) => ({ A: { buffer: {}, ui: { fader: 0.5 } }, B: { buffer: null, ui: { fader: 1 } } })[id],
+    xfadeGain: (id) => (id === 'A' ? 0.8 : 1),
+  };
+  const et = M.engineTracks(nepEngine, ['A', 'B']);
+  ok('engineTracks: zicht = fader × crossfader, een lege track 0 (zoals de video-puls)', et[0].id === 'A' && bij(et[0].zicht, 0.4) && et[1].zicht === 0);
+}
+
+console.log('de router: alleen uitlezen wat een open route nodig heeft');
+{
+  let mixGelezen = 0, maatGelezen = 0;
+  const mix = { lees: () => { mixGelezen++; return { laag: 0.5, midden: 0, hoog: 0, onset: 0, rms: 0 }; } };
+  const maat = { lees: () => { maatGelezen++; return { maatklap: 0.25, tel: 0.75 }; } };
+  const router = new Router(2);
+  ok('alles dicht: niets nodig', router.nodig().size === 0);
+  router.zetSterkte(0, 0.5); router.zetBron(0, 'tel');
+  let k = leesKenmerken(1, router.nodig(), { mix, maat });
+  ok('alleen tel open: de maat gelezen, de analyser NIET', maatGelezen === 1 && mixGelezen === 0 && k.tel === 0.75);
+  router.zetSterkte(1, 0.5);                                         // laag 2: de standaard, bas
+  k = leesKenmerken(2, router.nodig(), { mix, maat });
+  ok('tel op laag 1 en bas op laag 2: allebei, in één object', maatGelezen === 2 && mixGelezen === 1 && k.tel === 0.75 && k.laag === 0.5);
+  router.zetSterkte(0, 0);
+  leesKenmerken(3, router.nodig(), { mix, maat });
+  ok('alleen bas open: de maat niet', maatGelezen === 2 && mixGelezen === 2);
+  router.zetSterkte(0, 1);
+  const half = leesKenmerken(4, router.nodig(), { mix: { lees: () => null }, maat });
+  ok('geen analyser (nog geen audio): de maat werkt gewoon', half.tel === 0.75 && !('laag' in half) && offsets([router.route(1)], half)[0] === 0);
+  ok('niets nodig: null', leesKenmerken(5, new Set(), { mix, maat }) === null);
+
+  const r2 = new Router(1);
+  const langs = [];
+  for (let i = 0; i < BRONNEN.length; i++) { r2.volgendeBron(0); langs.push(r2.route(0).bron); }
+  ok(`rondlopen: ${langs.join(' → ')}`, langs.join() === 'midden,hoog,onset,rms,maatklap,tel,laag');
+
+  const laag = new VormLaag({ maakCanvas: nepCanvas, systeem: 'bd' });
+  laag.zetKnop(0, 0.2);
+  const r3 = new Router(1);
+  r3.zetBron(0, 'tel'); r3.zetSterkte(0, 0.5);
+  r3.pasToe({ tel: 0.8 }, [laag]);
+  ok('tel als route: een OFFSET (0,8 × 0,5) bovenop de knop, de knop zelf blijft staan', bij(laag.mod[0], 0.4) && bij(laag.leesKnop(0), 0.2));
 }
 
 console.log('regel 1 en de vormen-regels');
 {
-  const vies = ['features.js', 'router.js', 'luisteraar.js'].filter((f) => /\bdocument\b|\bwindow\b|performance\.now|Math\.random|setInterval|requestAnimationFrame/.test(
+  const vies = ['features.js', 'router.js', 'luisteraar.js', 'maat.js'].filter((f) => /\bdocument\b|\bwindow\b|performance\.now|Math\.random|setInterval|requestAnimationFrame/.test(
     readFileSync(new URL(`../src/analysis/${f}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
-  ok('features, router en luisteraar: geen DOM, geen eigen klok, geen timer', vies.length === 0);
+  ok('features, router, luisteraar en maat: geen DOM, geen eigen klok, geen timer', vies.length === 0);
   if (vies.length) console.log('      vies:', vies.join(', '));
+  const imp = [...readFileSync(new URL('../src/analysis/maat.js', import.meta.url), 'utf8').matchAll(/from '([^']+)'/g)].map((m) => m[1]);
+  ok(`maat.js importeert alleen pure modules, niet de engine (${imp.join(', ')})`,
+    imp.every((x) => ['../lib/emitter.js', '../video/puls.js', '../video/volg.js'].includes(x)));
 }
 
 function nepCanvas(w, h) {
