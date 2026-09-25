@@ -13,8 +13,11 @@ import { Emitter } from '../lib/emitter.js';
  *           oplichtende knop wisselt; twee standen, niet meer. Detail View
  *           opent een derde: de gekozen VORMLAAG (Vormmachines, alleen met
  *           ?vormen=1; zonder dat staan er geen regels in en doet hij niets).
- *   grid    het 5×8-grid: hotcues · loops · sampler · video, gekozen met de
- *           scene-knoppen ernaast, elk in een eigen kleur.
+ *   grid    het 5×8-grid: hotcues · loops · sampler · video · klank, gekozen
+ *           met de scene-knoppen ernaast (klank: Shift + scene 5, want scene 5
+ *           zelf is "loop weg"), of rondlopend met ▲ ▼. Elk een eigen kleur.
+ *           Klank (Clay 25 sep, "Voorstel A"): per kolom kill hoog · mid ·
+ *           laag (vasthouden; met shift vastzetten) · rem · op de maat starten.
  *
  *   edit    de grid-modus (stap D, docs/BEATGRID.md): Shift + Metronome zet
  *           hem aan of uit. Aan = scene-knoppen, nudge, cue level en Lock
@@ -48,8 +51,8 @@ export const GROEPEN = {
   },
   grid: {
     naam: 'grid', standaard: 'hotcues',
-    knoppen: { hotcues: ['hotcues'], loops: ['loops'], sampler: ['sampler'], video: ['video'] },
-    volgorde: ['hotcues', 'loops', 'sampler', 'video'],
+    knoppen: { hotcues: ['hotcues'], loops: ['loops'], sampler: ['sampler'], video: ['video'], klank: ['klank'] },
+    volgorde: ['hotcues', 'loops', 'sampler', 'video', 'klank'],
   },
 };
 
@@ -66,6 +69,7 @@ export const LAAGNAAM = {
   'device.vorm': 'vormlaag (knoppen 1–6 · dekking)',
   'edit.aan': 'grid-modus (beatgrid bewerken)', 'edit.uit': 'uit',
   'grid.hotcues': 'hotcues', 'grid.loops': 'loops', 'grid.sampler': 'sampler', 'grid.video': 'video',
+  'grid.klank': 'klank (kill · rem · op de maat)',
 };
 
 export class Lagen extends Emitter {

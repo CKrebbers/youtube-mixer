@@ -374,6 +374,117 @@ ok('blackout zet alles op nul', bus.every((b) => b[2] === 0));
   ok('grid-modus: een andere track zonder focus blijft donker', led('note:0:51') === 0);
 }
 
+// ---- modus klank en de knoppen rechts (Clay 25 sep, "Voorstel A"): LED's ----
+{
+  const standen = {};
+  const lees = (a) => (a in standen ? standen[a] : null);
+  const lg = new Lagen();
+  const m = new Mapping({ read: lees, invoke: () => {}, vars: () => ({ focus: 2 }), lagen: () => lg.actief() });
+  m.load(standaard);
+  const busK = [];
+  const fbK = new Feedback({ device: apc, mapping: m, read: lees, meta: () => null, send: (b) => { busK.push([...b]); return true; } });
+  fbK.klaar = true;
+  const led = (sig) => fbK.desired().get(sig)?.[2] ?? null;
+  const noot = (n, on, ch = 0) => ({ type: 'note', channel: ch, number: n, sig: `note:${ch}:${n}`, on, value: on ? 127 : 0, norm: on ? 1 : 0 });
+  const P = apc.palette;
+
+  // De scene-knop: klank dicht = donker magenta (alleen met shift te zien, want
+  // scene 5 is zonder shift "loop weg"), open = fel magenta.
+  standen['layer.grid.hotcues'] = 1; standen['layer.grid.klank'] = 0; standen['track.2.loop.exit'] = 0;
+  ok('zonder shift: scene 5 = loop weg (geen loop = uit)', led('note:0:86') === 0);
+  m.handle(noot(98, true));
+  ok('shift vast: scene 5 toont de modus klank, dicht = donker magenta', led('note:0:86') === P.magentadonker);
+  m.handle(noot(98, false));
+  lg.zet('grid', 'klank'); standen['layer.grid.hotcues'] = 0; standen['layer.grid.klank'] = 1;
+  ok('klank open: scene 5 fel magenta, ook zonder loop (lampje = modus, knop blijft loop weg)', led('note:0:86') === P.magenta);
+  ok('klank open: de andere modi gedimd (scene 1 donkergeel)', led('note:0:82') === P.geeldonker);
+  ok('klank-kleuren: donker = paletindex n+1 van de volle kleur (de #59-tinten), niet de pastels',
+    ['magenta', 'rood', 'oranje', 'groen'].every((k) => P[`${k}donker`] === P[k] + 1 && /59/.test(apc.paletteHex[P[`${k}donker`]])));
+
+  // Rij 1-3: kill. Open = donkerrood, weg = fel rood, lege track = uit.
+  standen['track.1.kill.high.hold'] = 0;
+  ok('kill-pad, band open = donkerrood (er valt te killen)', led('note:0:32') === P.rooddonker);
+  standen['track.1.kill.high.hold'] = 1;
+  ok('kill-pad, band weg = fel rood', led('note:0:32') === P.rood);
+  delete standen['track.1.kill.high.hold'];
+  ok('kill-pad op een lege track = uit (read null)', led('note:0:32') === null);
+  standen['track.1.kill.high'] = 1; standen['track.1.kill.high.hold'] = 1;
+  m.handle(noot(98, true));
+  ok('shift: de pad hangt aan de schakelaar en toont dezelfde stand (weg = rood)',
+    m.actieveRegels().get('note:0:32')?.action === 'track.1.kill.high' && led('note:0:32') === P.rood);
+  m.handle(noot(98, false));
+  standen['track.4.kill.low.hold'] = 1;
+  ok('kill laag van track 4 zit op rij 3, kolom 4', led(`note:0:${apc.gridNote(4, 3)}`) === P.rood);
+
+  // Rij 4: rem. Speelt = donker oranje, remt = fel, staat stil = uit.
+  standen['track.1.brake'] = 0;
+  ok('rem: speelt (er valt te remmen) = donker oranje', led('note:0:8') === P.oranjedonker);
+  standen['track.1.brake'] = 1;
+  ok('rem: remt = fel oranje', led('note:0:8') === P.oranje);
+  delete standen['track.1.brake'];
+  ok('rem: staat stil = uit', led('note:0:8') === null);
+
+  // Rij 5: op de maat, volgens de read van play.quant (transport-rest):
+  // wacht = fel groen, speelt = donkergroen (drukken = pauze, zoals play),
+  // stil = donkergrijs (kan starten), lege track = uit.
+  standen['track.1.play.quant'] = 0;
+  ok('op de maat: stil (kan starten) = donkergrijs', led('note:0:0') === P.donkergrijs);
+  standen['track.1.play.quant'] = 0.5;
+  ok('op de maat: speelt (drukken = pauze) = donkergroen', led('note:0:0') === P.groendonker);
+  standen['track.1.play.quant'] = 1;
+  ok('op de maat: wacht op de maat = fel groen', led('note:0:0') === P.groen);
+  delete standen['track.1.play.quant'];
+  ok('op de maat: lege track = uit', led('note:0:0') === null);
+
+  // Wisselen naar een andere modus: de klank-pads gaan uit of krijgen de nieuwe stand.
+  standen['track.1.brake'] = 1;
+  fbK.tick(999); busK.length = 0;
+  lg.zet('grid', 'hotcues'); standen['layer.grid.klank'] = 0;
+  fbK.tick(999);
+  ok('klank dicht: de rem-pad (rij 4) krijgt de stand van hotcues (hotcue 4 op een lege track = uit)',
+    busK.some((b) => b[1] === 8 && b[2] === 0) && led('note:0:8') === null);
+  delete standen['track.1.brake'];
+
+  // 2×2: shift + nummer = op de maat (eenkleurig).
+  standen['track.3.play'] = 0; standen['track.3.play.quant'] = 1;
+  ok('nummer zonder shift = play (stil = uit)', led('note:2:50') === 0);
+  m.handle(noot(98, true));
+  ok('shift + nummer: het lampje brandt zolang de track op de maat wacht', led('note:2:50') === 127);
+  m.handle(noot(98, false));
+
+  // Rechts: Lock = quantize (brandt als aan), in de grid-modus het slot.
+  standen['transport.quantize'] = 1;
+  ok('Lock: quantize aan = lampje aan', led('note:0:63') === 127);
+  standen['transport.quantize'] = 0;
+  ok('Lock: quantize uit = lampje uit', led('note:0:63') === 0);
+  standen['transport.quantize'] = 1; standen['track.2.grid.lock'] = 0;
+  lg.zet('edit', 'aan');
+  ok('Lock in de grid-modus toont het slot, niet quantize', led('note:0:63') === 0);
+  lg.zet('edit', 'uit');
+  standen['track.2.brake'] = 1;
+  ok('Stop All Clips heeft geen lampje (en de rem stuurt er dus niets heen)', !fbK.desired().has('note:0:81'));
+
+  // Bank ◀ ▶ (beatjump): aan zolang je drukt, uit zonder grid (read null).
+  standen['track.2.beatjump.back'] = 0; standen['track.2.beatjump.fwd'] = 1;
+  ok('Bank ◀ los = uit, Bank ▶ ingedrukt = aan', led('note:0:60') === 0 && led('note:0:61') === 127);
+  delete standen['track.2.beatjump.back'];
+  ok('beatjump zonder grid: uit (niets te doen)', led('note:0:60') === null);
+  // Shift: lengte. ◀ brandt zolang halveren kan, ▶ zolang verdubbelen kan.
+  standen['track.2.beatjump.halve'] = 0; standen['track.2.beatjump.double'] = 0;       // 1 tel (minimum)
+  m.handle(noot(98, true));
+  ok('shift, lengte 1 tel: ◀ (halveren) uit, ▶ (verdubbelen) aan', led('note:0:60') === 0 && led('note:0:61') === 127);
+  standen['track.2.beatjump.halve'] = 1; standen['track.2.beatjump.double'] = 1;       // 32 tellen (maximum)
+  ok('shift, lengte 32 tellen: ◀ aan, ▶ uit', led('note:0:60') === 127 && led('note:0:61') === 0);
+  standen['track.2.beatjump.halve'] = 0.4; standen['track.2.beatjump.double'] = 0.4;   // ertussen
+  ok('shift, lengte ertussen: beide aan', led('note:0:60') === 127 && led('note:0:61') === 127);
+  m.handle(noot(98, false));
+
+  // Pan/Sends/User: loop in (klaar = aan), loop out (loopt = aan), reloop.
+  standen['track.2.loop.in'] = 1; standen['track.2.loop.out'] = 0; standen['track.2.loop.reloop'] = 0.5;
+  ok('Pan (loop in klaar) aan, Sends (nog geen loop) uit, User (loop terug te halen) aan',
+    led('note:0:87') === 127 && led('note:0:88') === 0 && led('note:0:89') === 127);
+}
+
 // ---- de reads achter de B4-kleuren (echte action-bus) -----------------------
 {
   const A = engine.decks.A;

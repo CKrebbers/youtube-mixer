@@ -124,6 +124,42 @@ tegelijk landt), dan is het omzetten nog steeds verliesvrij (standaard + verschi
 standaardregel zou dan als "weggehaald" gemarkeerd worden. Daarom: dit spoor
 eerst, en pas daarna iets aan de standaardmapping.
 
+## Eerdere standaarden (25 sep, spoor3/apc-indeling)
+
+Wat hierboven stond gebeurde ook echt: de APC-indeling "Voorstel A" (83 nieuwe
+regels) landt terwijl Clay's server nog zijn VOLLEDIGE kopie van 24 september
+heeft (gelezen met GET op 25 sep: 291 regels, standaard `35823dda-291` + de vier
+rack-knoppen). Omgezet tegen de nieuwe standaard zou dat 4 eigen regels en 83
+"weggehaald" geven: de nieuwe functies kwamen nooit op zijn APC.
+
+Daarom draagt het standaardbestand zijn voorgangers mee, onder `eerder`, elk als
+verschil met de huidige regels:
+
+```json
+"eerder": [
+  { "vingerafdruk": "35823dda-291", "tot": "2026-09-25", "rules": [], "removed": ["note:0:50#shift", "…83 sleutels"] }
+]
+```
+
+- Een oude volledige kopie wordt afgezet tegen de standaard waar hij het DICHTST
+  bij ligt (minste regels + weggehaald), de huidige of een voorganger; bij
+  gelijkspel de huidige (`verschilVanKopie` in mapping.js, gebruikt door
+  `laadEigen`). Het verschil draagt dan de vingerafdruk van de voorganger, dus
+  laden = nieuwe standaard + zijn eigen regels, en `standaardNieuw` zorgt dat
+  het meteen opnieuw bewaard wordt tegen de nieuwe standaard.
+- Een voorganger telt alleen mee als "huidige + verschil" precies zijn
+  vingerafdruk geeft (`eerdereStandaarden`): liever niets dan een verkeerde basis.
+- `normaliseer` laat `eerder` weg: het telt niet mee in de vingerafdruk, gaat
+  niet mee in `toJSON()`, en de rest van de app ziet het niet.
+- **Verander je `mappings/apc40mk2.json`, draai dan `node tools/mapping/eerder.mjs`**
+  (de versie in git HEAD wordt een voorganger, de oude voorgangers komen mee).
+  `test/mapping.test.mjs` faalt anders, want dan klopt geen voorganger meer.
+- Nagerekend met Clay's echte kopie en de code van deze branch (`laadEigen`
+  met een nep-fetch, niets gepost): 374 regels, 4 eigen (cc:0:20–23 in het
+  rack = video-effecten), 0 weggehaald, alle 83 nieuwe regels geladen, geen
+  nieuwe regel op een van zijn sleutels; bewaard wordt daarna een verschil van
+  4 regels tegen `e2bef131-374`.
+
 ## Bekende grenzen
 
 - Botst jouw regel met een latere wijziging van de standaard op DEZELFDE sleutel,

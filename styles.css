@@ -3,7 +3,7 @@
   --text:#dfe7ee; --dim:#7b8794; --a:#4ad9c4; --b:#c48cff;
   --warn:#ffbe3c; --red:#ff3b30;
   /* grid-mapjes, zoals de LED's op de APC: hotcues geel, loops cyaan, sampler violet, video blauw */
-  --m-hotcues:#ffd23c; --m-loops:#3cd6ff; --m-sampler:#b07cff; --m-video:#4c7dff;
+  --m-hotcues:#ffd23c; --m-loops:#3cd6ff; --m-sampler:#b07cff; --m-video:#4c7dff; --m-klank:#ff4fe0;
   /* crossfaderkant, zoals de tweekleurige LED van de A|B-knop: geel A, oranje B, thru grijs */
   --kant-a:#ffd23c; --kant-b:#ff8a2a;
   /* kleine grijze tekst die toch leesbaar moet zijn: 5,5:1 op --panel2 */
@@ -670,6 +670,12 @@ body.leermodus .spg-naam{display:block}
 .spg[data-modus="loops"]{--kleur:var(--m-loops)}
 .spg[data-modus="sampler"]{--kleur:var(--m-sampler)}
 .spg[data-modus="video"]{--kleur:var(--m-video)}
+.spg[data-modus="klank"]{--kleur:var(--m-klank)}
+/* In de modus klank hebben de pads de kleur van hun LED op de APC: kill rood,
+   rem oranje, op de maat groen. De scene-knop blijft magenta (de modus). */
+.spg[data-modus="klank"][data-action*=".kill."]{--kleur:var(--red)}
+.spg[data-modus="klank"][data-action$=".brake"]{--kleur:#ff9d2e}
+.spg[data-modus="klank"][data-action$=".play.quant"]{--kleur:#3ddc84}
 button.spg[data-modus]{border-color:color-mix(in srgb,var(--kleur) 30%,var(--line));
   color:color-mix(in srgb,var(--kleur) 55%,var(--dim))}
 button.spg[data-licht="half"]{border-color:var(--kleur);color:var(--text);

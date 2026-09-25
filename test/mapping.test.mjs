@@ -377,7 +377,7 @@ console.log('\nmapjes en shift');
   lg.stap('grid', 1);
   ok('bladeren door het grid', lg.stand.grid === 'loops');
   lg.stap('grid', -2);
-  ok('en rond', lg.stand.grid === 'video');
+  ok('en rond (vijf modi: van loops twee terug is klank)', lg.stand.grid === 'klank');
   lg.zet('grid', 'hotcues');
 
   const gestuurd = [];
@@ -657,6 +657,117 @@ console.log('\ngrid-modus');
   const anders = sigs.filter((sig) => [false, true].some((sh) => gm.kies(sig, { shift: sh }) !== null
     && gm.kies(sig, { shift: sh })?.action !== zonder.kies(sig, { shift: sh })?.action && !(sh && sig === 'note:0:90')));
   ok(`buiten grid-modus doet elke knop wat hij deed (behalve Shift + Metronome)${anders.length ? ' — anders: ' + anders.join() : ''}`, anders.length === 0);
+}
+
+// ---- modus klank en de knoppen rechts (Clay 25 sep, "Voorstel A") -----------
+console.log('\nmodus klank en de nieuwe knoppen rechts');
+{
+  const { Lagen, GROEPEN, GLUREN: GLUREN_MS } = await import('../src/control/lagen.js');
+  let t = 0;
+  const lg = new Lagen({ now: () => t });
+  const km = new Mapping({ read: () => 0.5, invoke: () => {}, lagen: () => lg.actief() });
+  km.load(doc);
+  const actie = (sig, shift = false) => km.kies(sig, { shift })?.action ?? null;
+
+  ok('klank is de vijfde grid-modus, na video', GROEPEN.grid.volgorde.join() === 'hotcues,loops,sampler,video,klank'
+    && GROEPEN.grid.knoppen.klank?.join() === 'klank');
+  lg.zet('grid', 'video'); lg.stap('grid', 1);
+  ok('▼ vanuit video = klank', lg.stand.grid === 'klank');
+  lg.stap('grid', 1);
+  ok('▼ vanuit klank = weer hotcues (rondlopen)', lg.stand.grid === 'hotcues');
+  lg.stap('grid', -1);
+  ok('▲ vanuit hotcues = klank', lg.stand.grid === 'klank');
+  lg.zet('grid', 'hotcues');
+
+  // Direct: Shift + scene 5. Scene 5 zelf blijft "loop weg" (één druk, geen shift).
+  ok('scene 5 zonder shift = loop weg, met shift = modus klank',
+    actie('note:0:86') === 'track.{focus}.loop.exit' && actie('note:0:86', true) === 'layer.grid.klank');
+  // Door de mapping met de echte Lagen, zoals de APC het stuurt: shift vast, scene 5 kort.
+  const viaBus = new Mapping({ read: () => 0, invoke: (a, on) => { const x = /^layer\.grid\.(\w+)$/.exec(a); if (x) lg.druk('grid', x[1], on); },
+    lagen: () => lg.actief() });
+  viaBus.load(doc);
+  viaBus.handle(note(98, true)); viaBus.handle(note(86, true)); t += 100; viaBus.handle(note(98, false)); viaBus.handle(note(86, false));
+  ok('Shift + scene 5 kort: klank staat vast open (shift eerder los maakt niet uit)', lg.stand.grid === 'klank');
+  viaBus.handle(note(82, true)); t += 100; viaBus.handle(note(82, false));
+  ok('scene 1: terug naar hotcues', lg.stand.grid === 'hotcues');
+  viaBus.handle(note(98, true)); viaBus.handle(note(86, true)); t += GLUREN_MS + 10; viaBus.handle(note(86, false)); viaBus.handle(note(98, false));
+  ok('Shift + scene 5 vasthouden = even gluren: loslaten is terug naar hotcues', lg.stand.grid === 'hotcues');
+
+  // De pads: per kolom (= track) van boven naar onder, met en zonder shift.
+  lg.zet('grid', 'klank');
+  const RIJEN = [['kill.high.hold', 'kill.high'], ['kill.mid.hold', 'kill.mid'], ['kill.low.hold', 'kill.low'], ['brake', 'brake'], ['play.quant', 'play.quant']];
+  const mis = [];
+  for (let kol = 1; kol <= 8; kol++) {
+    for (let rij = 1; rij <= 5; rij++) {
+      const sig = `note:0:${apc.gridNote(kol, rij)}`;
+      const [gewoon, metShift] = RIJEN[rij - 1];
+      if (actie(sig) !== `track.${kol}.${gewoon}`) mis.push(`${kol}/${rij}`);
+      if (actie(sig, true) !== `track.${kol}.${metShift}`) mis.push(`${kol}/${rij}+shift`);
+    }
+  }
+  ok(`klank: elke pad (rij, kolom) doet de juiste action op de juiste track, met en zonder shift${mis.length ? ' — mis: ' + mis.join() : ''}`, mis.length === 0);
+  ok('klank: linksboven (noot 0x20) = kill hoog van track 1, rechtsonder (0x07) = op de maat van track 8',
+    actie('note:0:32') === 'track.1.kill.high.hold' && actie('note:0:7') === 'track.8.play.quant');
+  ok('klank: scene 5 blijft loop weg, zijn lampje toont "klank open"',
+    actie('note:0:86') === 'track.{focus}.loop.exit' && km.kies('note:0:86').led?.lees === 'layer.grid.klank');
+  ok('klank: wat de modus niet definieert werkt gewoon (fader, play, filter, Clip Stop)',
+    actie('cc:0:7') === 'track.1.fader' && actie('note:0:50') === 'track.1.play' && actie('cc:0:48') === 'track.1.filter'
+    && actie('note:0:52') === 'track.1.loop.toggle');
+
+  // Een kill-pad is een drukknop: indrukken = weg, loslaten = terug, ook als
+  // shift er tussendoor komt. Shift + pad = de schakelaar (vastzetten).
+  const gestuurd = [];
+  const kb = new Mapping({ read: () => 0, invoke: (a, v) => gestuurd.push(`${a}=${v}`), vars: () => ({ focus: 2 }), lagen: () => lg.actief() });
+  kb.load(doc);
+  kb.handle(note(apc.gridNote(3, 1), true)); kb.handle(note(98, true)); kb.handle(note(apc.gridNote(3, 1), false)); kb.handle(note(98, false));
+  ok('kill-pad: indrukken en loslaten naar de drukknop, ook met shift ertussen',
+    gestuurd.join() === 'track.3.kill.high.hold=true,track.3.kill.high.hold=false');
+  gestuurd.length = 0;
+  kb.handle(note(98, true)); kb.handle(note(apc.gridNote(3, 3), true)); kb.handle(note(98, false)); kb.handle(note(apc.gridNote(3, 3), false));
+  ok('shift + kill-pad = de schakelaar, en loslaten gaat daar ook heen (shift eerder los)',
+    gestuurd.join() === 'track.3.kill.low=true,track.3.kill.low=false');
+  gestuurd.length = 0;
+  kb.handle(note(apc.gridNote(5, 4), true)); kb.handle(note(apc.gridNote(5, 4), false));
+  kb.handle(note(apc.gridNote(6, 5), true)); kb.handle(note(apc.gridNote(6, 5), false));
+  ok('rij 4 = rem, rij 5 = op de maat, op de track van de kolom (niet de focus)',
+    gestuurd.join() === 'track.5.brake=true,track.5.brake=false,track.6.play.quant=true,track.6.play.quant=false');
+  lg.zet('grid', 'hotcues');
+
+  // Rechts: de track met focus ({focus}), zoals de rest van het focusdeel.
+  const verwacht = {
+    'note:0:60': 'track.{focus}.beatjump.back', 'note:0:61': 'track.{focus}.beatjump.fwd',
+    'note:0:87': 'track.{focus}.loop.in', 'note:0:88': 'track.{focus}.loop.out', 'note:0:89': 'track.{focus}.loop.reloop',
+    'note:0:63': 'transport.quantize', 'note:0:81': 'track.{focus}.brake',
+  };
+  const misR = Object.entries(verwacht).filter(([sig, a]) => actie(sig) !== a);
+  ok(`rechts: Bank ◀ ▶ beatjump, Pan/Sends/User loop in/out/reloop, Lock quantize, Stop All rem${misR.length ? ' — mis: ' + misR.map((x) => x[0]).join() : ''}`, misR.length === 0);
+  ok('shift + Bank ◀ ▶ = beatjump-lengte ½ / ×2',
+    actie('note:0:60', true) === 'track.{focus}.beatjump.halve' && actie('note:0:61', true) === 'track.{focus}.beatjump.double');
+  ok('2×2: shift + nummer = op de maat starten, zonder shift play (alle 8 kolommen)',
+    [0, 1, 2, 3, 4, 5, 6, 7].every((ch) => actie(`note:${ch}:50`, true) === `track.${ch + 1}.play.quant` && actie(`note:${ch}:50`) === `track.${ch + 1}.play`));
+  ok('Bank blijft vrij, ook met shift (keylock, VRAGEN I4)', actie('note:0:103') === null && actie('note:0:103', true) === null);
+  const opF = new Mapping({ read: () => 0, invoke: (a) => gestuurd.push(a), vars: () => ({ focus: 4 }), lagen: () => lg.actief() });
+  opF.load(doc);
+  gestuurd.length = 0;
+  for (const n of [61, 88, 81]) { opF.handle(note(n, true)); opF.handle(note(n, false)); }
+  ok('rechts gaat naar de focus-track (focus 4)',
+    gestuurd.join() === 'track.4.beatjump.fwd,track.4.beatjump.fwd,track.4.loop.out,track.4.loop.out,track.4.brake,track.4.brake');
+
+  // Lock: quantize, behalve in de grid-modus (edit): daar blijft het het slot.
+  lg.zet('edit', 'aan');
+  ok('Lock in de grid-modus blijft het grid-slot (het open mapje wint), ook met shift',
+    actie('note:0:63') === 'track.{focus}.grid.lock' && actie('note:0:63', true) === 'track.{focus}.grid.lock');
+  ok('in de grid-modus doen Bank ◀ ▶ en Stop All gewoon hun werk', actie('note:0:60') === 'track.{focus}.beatjump.back' && actie('note:0:81') === 'track.{focus}.brake');
+  lg.zet('edit', 'uit');
+  ok('grid-modus uit: Lock is weer quantize', actie('note:0:63') === 'transport.quantize');
+
+  // Met ?vormen=1 en het mapje vorm open wint het fragment op Bank ◀ ▶.
+  km.voegToe('vormen', fragment);
+  lg.zet('device', 'vorm');
+  ok('mapje vorm (fragment): Bank ◀ ▶ kiest de vormlaag, niet beatjump',
+    actie('note:0:60') === 'video.layer.select.prev' && actie('note:0:61') === 'video.layer.select.next');
+  lg.zet('device', 'strip');
+  ok('mapje vorm dicht: Bank ◀ ▶ weer beatjump', actie('note:0:60') === 'track.{focus}.beatjump.back');
 }
 
 // ---- LED-instellingen in een regel overleven laden en exporteren -------------
@@ -1100,6 +1211,58 @@ console.log('controleur: de reserve in de browser volgt de server');
   const v = await opzetMappingOpslag({ mapping: m, haal: srv.haal, opslag: comet, wacht: 0 }).start();
   ok('van de server geladen, niets naar de server', v.bron === 'server' && srv.posts === 0);
   ok('en de reserve in de browser is nu hetzelfde verschil', comet.getItem(EIGEN_MAPPING) === JSON.stringify(goed));
+}
+
+// ---- eerdere standaarden: een oude kopie krijgt de nieuwe regels -------------
+// Clay's server had op 25 sep nog zijn VOLLEDIGE kopie van 24 sep (291 regels:
+// de standaard 35823dda-291 + vier rack-knoppen op video). De standaard kreeg
+// daarna de indeling "Voorstel A" (83 regels erbij). Omzetten tegen de nieuwe
+// standaard gaf die 83 als "door Clay weggehaald": ze kwamen nooit binnen.
+console.log('eerdere standaarden (eerder in het standaardbestand)');
+{
+  const { eerdereStandaarden, verschilVanKopie, maakEerder } = await import('../src/control/mapping.js');
+  const eerder = eerdereStandaarden(doc);
+  ok('het standaardbestand draagt zijn voorgangers mee en ze zijn allemaal terug te rekenen (anders: node tools/mapping/eerder.mjs)',
+    Array.isArray(doc.eerder) && doc.eerder.length >= 1 && eerder.length === doc.eerder.length);
+  const vorige = eerder.find((e) => e.vingerafdruk === '35823dda-291')?.doc;
+  ok('de voorganger waar Clay\'s kopie van 24 sep op rust (35823dda-291, 291 regels) staat erin', vorige?.rules.length === 291);
+  ok('de voorganger is de huidige min de nieuwe regels (alleen toegevoegd, niets veranderd)',
+    doc.eerder.find((e) => e.vingerafdruk === '35823dda-291')?.rules.length === 0);
+  ok('maakEerder rekent uit wat er staat',
+    JSON.stringify(maakEerder(doc, vorige).removed) === JSON.stringify(doc.eerder.find((e) => e.vingerafdruk === '35823dda-291').removed));
+  // Zo stond hij op Clay's server: de VORIGE standaard met de vier video-knoppen.
+  const kopie = JSON.parse(JSON.stringify(vorige));
+  for (const r of kopie.rules) if (r.laag === 'device.rack' && VIDEO_KNOPPEN[r.in]) { r.action = VIDEO_KNOPPEN[r.in]; r.mode = 'absolute'; }
+  const { verschil, basis } = verschilVanKopie(doc, kopie);
+  ok('een oude kopie wordt afgezet tegen de standaard waar hij op rust: 4 eigen, niets weggehaald',
+    basis === '35823dda-291' && verschil.base === '35823dda-291' && verschil.rules.length === 4 && verschil.removed.length === 0);
+  ok('zonder voorganger zou elke nieuwe regel "weggehaald" zijn (dat lost dit op)',
+    maakVerschil(doc, kopie).removed.length === doc.rules.length - vorige.rules.length);
+  const mk = kaal();
+  mk.laadStandaard(doc);
+  const u = mk.load(verschil);
+  const oudeSleutels = new Set(vorige.rules.map(sleutelVan));
+  const nieuweSleutels = doc.rules.map(sleutelVan).filter((k) => !oudeSleutels.has(k));
+  ok(`geladen: de nieuwe standaard (${doc.rules.length}) met Clay's 4 regels, alle ${nieuweSleutels.length} nieuwe regels erop`,
+    u.standaardNieuw && u.weg === 0 && u.eigen === 4 && mk.rules.size === doc.rules.length
+    && nieuweSleutels.every((k) => mk.rules.has(k)) && mk.rules.get('cc:0:22@device.rack').action === 'video.fx.trails');
+  ok('geen nieuwe regel valt op een eigen sleutel van Clay (rack-knoppen 5–8)',
+    !nieuweSleutels.some((k) => Object.keys(VIDEO_KNOPPEN).some((sig) => k === `${sig}@device.rack`)));
+  const na = mk.verschil();
+  ok('opnieuw uitgerekend tegen de nieuwe standaard: alleen de 4', na.rules.length === 4 && na.removed.length === 0 && na.base === vingerafdruk(doc));
+  ok('een kopie van de HUIDIGE standaard blijft tegen de huidige afgezet', verschilVanKopie(doc, kopieVanClay()).basis === 'huidig');
+  const kapot = { ...doc, eerder: [{ ...doc.eerder[0], removed: doc.eerder[0].removed.slice(1) }] };
+  ok('een voorganger die niet meer klopt (vingerafdruk) telt niet mee: liever niets dan een verkeerde basis',
+    eerdereStandaarden(kapot).length === 0 && verschilVanKopie(kapot, kopie).basis === 'huidig');
+
+  // Het hele opstarten, zoals Clay's app het straks doet: kopie op de server.
+  const srv = nepServer({ opgeslagen: normaliseer(kopie).doc });
+  const ms = kaal();
+  const v = await opzetMappingOpslag({ mapping: ms, haal: srv.haal, opslag: nepOpslag(), wacht: 0 }).start();
+  ok('opstarten: omgezet én de nieuwe standaard erop, bewaard als 4 eigen regels tegen de nieuwe standaard',
+    v.omgezet && v.standaardNieuw && v.eigen === 4 && v.weg === 0 && srv.posts === 1
+    && srv.inDb().rules.length === 4 && srv.inDb().removed.length === 0 && srv.inDb().base === vingerafdruk(doc));
+  ok('en de APC heeft de modus klank (shift + scene 5)', ms.kies('note:0:86', { shift: true })?.action === 'layer.grid.klank');
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

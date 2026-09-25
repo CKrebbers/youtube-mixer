@@ -32,6 +32,13 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
 - `hunks.py` — `list <bestand>` toont de hunks van een bestand; `stage <bestand> '[0,2]'`
   zet alleen die hunks klaar; `strip <bestand> 'a-b,c-d'` zet de werkversie min die regels klaar.
 
+## mapping/
+- `eerder.mjs [git-revisie] [apparaat]` — na een wijziging aan `mappings/apc40mk2.json`: zet
+  de vorige versie (standaard uit git HEAD) als voorganger in `eerder`, met de voorgangers
+  die die al had. Nodig zodat een oude VOLLEDIGE eigen mapping bij het omzetten tegen de
+  juiste standaard wordt afgezet (docs/MAPPING-VERSCHIL.md, "Eerdere standaarden").
+  `test/mapping.test.mjs` controleert dat elke voorganger terug te rekenen is.
+
 ## bench/
 - `vm-bench.cjs [id] [N]` — rekentijd per stap van de Vormmachines in Node (nep-canvas,
   tekenen telt niet mee: een ondergrens). Een kopie van de systemen uit Clay's
@@ -76,6 +83,13 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   hotcues die bij het nummer bewaard worden en terugkomen (ook op een andere track).
   Zelfde veiligheid als `kijk.mjs` (geen MIDI, eigen server). Poorten: `VARVE_KIJK_POORT`
   (standaard 8814) en `VARVE_KIJK_DEBUG` (9414).
+- `apc-klank.mjs [uitmap]` — de APC-indeling "Voorstel A" (25 sep) met een nep-APC (bytes →
+  `parseMessage` → `mapping.handle`, geen MIDI, eigen server): Shift + scene 5 = modus klank,
+  mapje-balk, kill-pad vasthouden en met shift vastzetten, Bank ◀ ▶ (beatjump en lengte),
+  Pan/Sends/User (loop in/out/reloop), Lock (quantize; in de grid-modus het slot), Stop All
+  (rem), de LED-bytes uit `feedback.desired()` op het APC-profiel (er gaat niets naar buiten),
+  de spiegel, en `apc.html` met de nieuwe knoppen. Poorten: `VARVE_KIJK_POORT` (standaard 8793)
+  en `VARVE_KIJK_DEBUG` (9339).
 - `vorm-maat.mjs` — dezelfde opzet (eigen server, geen MIDI), alleen `?vormen=1`: de maat
   als bron voor de vormlagen (`src/analysis/maat.js`). Twee demotracks met grid en klappen,
   meet op de audioklok klappen en tel van de maatgever, wisselt de maatgever met de

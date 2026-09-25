@@ -77,9 +77,11 @@ export const SOORTEN = [
   ['sampler', 'sampler', /^sampler\./],
   ['video', 'video', /^video\./],
   ['opname', 'opname', /^record\./],
+  // Vóór "mixer": track.1.kill.high eindigt op .high, en dat is geen EQ-knop.
+  ['klank', 'kill & rem', /\.(kill\.(low|mid|high)(\.hold)?|brake(\.time)?)$/],
   ['fx', 'effecten & sends', /\.(fx\.\w+|fx\.knob\.\d|send\.[ab]|rack\.\w+)$|^send\.[ab]\./],
   ['mixer', 'mixer', /\.(fader|filter|trim|high|mid|low|xfade\.\w+)$|^mixer\./],
-  ['transport', 'transport & focus', /\.(play|cue|sync|tap|focus|pitch|bend\.\w+|nudge\.\w+|pitch\.range)$|^focus\.|^window\./],
+  ['transport', 'transport & focus', /\.(play|play\.quant|cue|sync|tap|focus|pitch|bend\.\w+|nudge\.\w+|pitch\.range|beatjump\.\w+)$|^focus\.|^window\.|^transport\./],
 ];
 export const soortVan = (action) => (action ? (SOORTEN.find(([, , re]) => re.test(action))?.[0] ?? 'transport') : 'vrij');
 

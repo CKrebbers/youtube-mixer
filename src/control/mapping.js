@@ -328,6 +328,68 @@ export function pasVerschilToe(basis, verschil) {
   };
 }
 
+/*
+ * EERDERE STANDAARDEN (25 sep 2026, APC-indeling "Voorstel A")
+ *
+ * Een oude VOLLEDIGE kopie (van vóór het verschil) zegt niet op welke
+ * standaard hij rustte. Zet je hem om tegen een NIEUWERE standaard, dan lijkt
+ * alles wat die standaard erbij kreeg door jou weggehaald: het verschil krijgt
+ * die sleutels als `removed`, en de nieuwe functies komen nooit binnen. Precies
+ * wat het verschil moest voorkomen (docs/MAPPING-VERSCHIL.md).
+ *
+ * Daarom draagt het standaardbestand zijn voorgangers mee, elk als verschil
+ * met de huidige regels: `eerder: [{ vingerafdruk, rules, removed, top? }]`.
+ * Huidige standaard + zo'n verschil = die voorganger, en de vingerafdruk
+ * controleert dat (klopt hij niet, dan telt de voorganger niet mee: liever
+ * niets dan een verkeerde basis). Een oude kopie wordt afgezet tegen de
+ * standaard waar hij het DICHTST bij ligt (minste regels in het verschil);
+ * bij gelijkspel de huidige. Het verschil draagt dan de vingerafdruk van die
+ * voorganger, dus het laden zegt "standaard bijgewerkt" en wat erbij kwam
+ * staat erop. Bijwerken na een wijziging aan de standaard:
+ * `node tools/mapping/eerder.mjs` (test/mapping.test.mjs eist dat het klopt).
+ */
+
+/** Een voorganger van `nieuw` als verschil met `nieuw`: wat er in het standaardbestand onder `eerder` staat. */
+export function maakEerder(nieuw, oud) {
+  const v = maakVerschil(nieuw, oud);
+  return { vingerafdruk: vingerafdruk(oud), ...(Object.keys(v.top).length ? { top: v.top } : {}), rules: v.rules, removed: v.removed };
+}
+
+/**
+ * De voorgangers uit `standaard.eerder` als volledige documenten, alleen die
+ * waarvan de vingerafdruk klopt. `[{ vingerafdruk, doc }]`.
+ */
+export function eerdereStandaarden(standaard) {
+  const lijst = Array.isArray(standaard?.eerder) ? standaard.eerder : [];
+  const uit = [];
+  for (const e of lijst) {
+    if (!e || typeof e.vingerafdruk !== 'string') continue;
+    try {
+      const { doc, fouten } = pasVerschilToe(standaard, {
+        kind: 'diff', version: MAPPING_VERSIE, device: normaliseer(standaard).doc.device,
+        top: e.top || {}, rules: Array.isArray(e.rules) ? e.rules : [], removed: Array.isArray(e.removed) ? e.removed : [],
+      });
+      if (!fouten.length && vingerafdruk(doc) === e.vingerafdruk) uit.push({ vingerafdruk: e.vingerafdruk, doc });
+    } catch (_) { /* een kapotte voorganger telt niet mee */ }
+  }
+  return uit;
+}
+
+/**
+ * Een oude volledige kopie als verschil, afgezet tegen de standaard waar hij
+ * het dichtst bij ligt: de huidige of een voorganger (`eerder`). Geeft het
+ * verschil plus `basis`: 'huidig' of de vingerafdruk van de voorganger.
+ */
+export function verschilVanKopie(standaard, kopie) {
+  const maat = (v) => v.rules.length + v.removed.length + Object.keys(v.top).length;
+  let beste = { v: maakVerschil(standaard, kopie), basis: 'huidig' };
+  for (const e of eerdereStandaarden(standaard)) {
+    const v = maakVerschil(e.doc, kopie, e.vingerafdruk);
+    if (maat(v) < maat(beste.v)) beste = { v, basis: e.vingerafdruk };
+  }
+  return { verschil: beste.v, basis: beste.basis };
+}
+
 export class Mapping extends Emitter {
   /**
    * @param read   (actionId) -> huidige stand 0..1 of null. Nodig voor

@@ -237,7 +237,10 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
     monitor.note(`jouw mapping geladen ${waar}: de standaard + ${eigen} — ${mapping.rules.size} regels ("standaard herstellen" haalt je eigen regels weg)`);
     // Eén keer zeggen wat er veranderde aan hoe je mapping bewaard wordt, of
     // dat er een nieuwe standaard is: anders merk je dat pas op de APC.
-    if (v.omgezet) meld(`je eigen mapping staat nu als verschil met de standaard (${eigen}): nieuwe standaardregels komen voortaan vanzelf binnen`);
+    if (v.omgezet) {
+      meld(`je eigen mapping staat nu als verschil met de standaard (${eigen}): nieuwe standaardregels komen voortaan vanzelf binnen`
+        + (v.standaardNieuw ? ' — en de bijgewerkte standaard staat er al op' : ''));
+    }
     else if (v.standaardNieuw) meld(`de standaardmapping is bijgewerkt: wat erbij kwam staat erop, je ${eigen} blijven van jou`);
   }).catch((err) => meld(`mapping: ${err.message}`, 'fout'));
 

@@ -23,8 +23,10 @@ import { resolveTarget } from './mapping.js';
  *
  *   invert  LED brandt als read 0 is (On/Off: read = bypass, lampje = effect aan)
  *   lees    action waarvan de LED de stand toont, in plaats van die van de
- *           knop zelf. Metronome doet in de grid-modus nog steeds de
- *           crossfadercurve, maar zijn lampje zegt dan "grid-modus aan".
+ *           knop zelf, ook in de KLEUR van die action. Metronome doet in de
+ *           grid-modus nog steeds de crossfadercurve, maar zijn lampje zegt dan
+ *           "grid-modus aan"; scene 5 blijft in de modus klank "loop weg", maar
+ *           brandt magenta: klank staat open.
  *   tel     knipperen op de tel, zelf gerekend (zie TEL_VENSTER):
  *           'aan'  zolang de stand `aan` is: fel op de tel, gedimd ertussen
  *           'maat' alleen als deze track de maat geeft: op de tel omgekeerd
@@ -38,7 +40,9 @@ const KLEURSCHEMA = [
   [/\.loop\.exit$/,  { aan: 'rood', uit: 'uit' }],
   [/\.loop\./,       { aan: 'cyaan', half: 'cyaandonker', uit: 'donkergrijs', tel: 'aan' }],
   [/\.play$/,        { aan: 'groen', uit: 'donkergrijs' }],
-  // aan = wacht op de maat, half = speelt (drukken = pauze, zoals play)
+  // Op de maat starten (ook rij 5 in de modus klank), volgens de read van
+  // play.quant: fel = wacht op de maat, donker = speelt (drukken = pauze, zoals
+  // play), donkergrijs = stil (kan starten), uit = lege track (read null).
   [/\.play\.quant$/, { aan: 'groen', half: 'groendonker', uit: 'donkergrijs' }],
   [/\.beatjump\.(back|fwd)$/, { aan: 'cyaan', uit: 'donkergrijs' }],
   // De lengte is een keuze (index), geen niveau: altijd gedimd, zoals sampler.length.
@@ -50,10 +54,11 @@ const KLEURSCHEMA = [
   // toont. Hier staat `uit` dus voor kant A, niet voor "niets".
   [/\.xfade\.side$/, { uit: 'geel', half: 'uit', aan: 'oranje' }],
   [/\.fx\.bypass$/,  { aan: 'groen', uit: 'donkergrijs', invert: true }],
-  // Kill: rood zolang de band weg is. Rem: oranje zolang hij remt, en uit
-  // als de track stilstaat (read null: niets te remmen).
-  [/\.kill\.(low|mid|high)(\.hold)?$/, { aan: 'rood', uit: 'donkergrijs' }],
-  [/\.brake$/,       { aan: 'oranje', uit: 'donkergrijs' }],
+  // Kill (B4 zoals de modus klank hem toont, Clay 25 sep): fel rood = de band
+  // is weg, donkerrood = open (er valt te killen), uit = lege track. Rem:
+  // fel oranje = remt, donker = speelt (er valt te remmen), uit = staat stil.
+  [/\.kill\.(low|mid|high)(\.hold)?$/, { aan: 'rood', uit: 'rooddonker' }],
+  [/\.brake$/,       { aan: 'oranje', uit: 'oranjedonker' }],
   [/^mixer\./,       { aan: 'blauw', uit: 'donkergrijs' }],
   [/\.beatloop\./,   { aan: 'cyaan', half: 'cyaandonker', uit: 'donkergrijs', tel: 'aan' }],
   [/^sampler\.\d+$/,  { aan: 'violet', half: 'violetdonker', uit: 'donkergrijs' }],
@@ -70,6 +75,9 @@ const KLEURSCHEMA = [
   [/^layer\.grid\.loops$/,   { aan: 'cyaan', uit: 'cyaandonker' }],
   [/^layer\.grid\.sampler$/, { aan: 'violet', uit: 'violetdonker' }],
   [/^layer\.grid\.video$/,   { aan: 'blauw', uit: 'blauwdonker' }],
+  // Klank: magenta. Niet rood: dat is "loop weg" op dezelfde scene-knop, en
+  // wissen. Niet violet of blauw: dat zijn sampler en video, er vlak boven.
+  [/^layer\.grid\.klank$/,   { aan: 'magenta', uit: 'magentadonker' }],
   [/^layer\./,        { aan: 'wit', uit: 'donkergrijs' }],
 ];
 
@@ -206,10 +214,10 @@ export class Feedback {
       }
       if (!control.led) continue;
 
-      const kleur = { ...kleurVoor(regel.action), ...(regel.led || {}) };
+      const kleur = { ...kleurVoor(regel.led?.lees ?? regel.action), ...(regel.led || {}) };
       let stand = standVan(kleur.invert ? 1 - waarde : waarde);
       if (stand === 'half' && kleur.half === undefined) stand = 'aan';
-      const tel = kleur.tel ? this._tel(kleur.tel, doel, stand) : null;   // null = knippert niet
+      const tel = kleur.tel ? this._tel(kleur.tel, bron, stand) : null;   // null = knippert niet
       const naamVan = (s) => kleur[s] ?? (s === 'half' ? kleur.aan : undefined);
 
       if (control.led === 'rgb') {
