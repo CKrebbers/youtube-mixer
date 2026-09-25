@@ -23,12 +23,24 @@
 /** Hoe ver wat je hoort achterloopt op de audioklok (seconden): outputLatency + baseLatency. */
 export const uitgangsVertraging = (ctx) => (ctx?.outputLatency || 0) + (ctx?.baseLatency || 0);
 
-/** Positie min vertraging × rate: wat je hoort van een deck dat SPEELT. */
-export const naVertraging = (positie, vertraging, rate) => positie - vertraging * (rate > 0 ? rate : 1);
+/**
+ * Positie min vertraging × rate: wat je hoort van een deck dat SPEELT. Rate 0
+ * is echt (het einde van een rem: dan hoor je de plek waar hij stilstaat);
+ * alleen zonder rate (een kaal deck-object) geldt 1.
+ */
+export const naVertraging = (positie, vertraging, rate) =>
+  positie - vertraging * (Number.isFinite(rate) && rate >= 0 ? rate : 1);
 
 /**
- * De tracktijd die je nu hoort van een deck ({ playing, position, rate }).
- * Stilstaand is de positie zelf wat je hoort en ziet.
+ * De tracktijd die je nu hoort van een deck ({ playing, position, rate,
+ * wacht?, remt?, snelheid? }). Stilstaand is de positie zelf wat je hoort en
+ * ziet, en ook een track die op zijn start op de maat WACHT (dj-transport):
+ * die staat stil op zijn startpunt en je hoort nog niets. Tijdens een REM
+ * (dj-klank) loopt de positie trager dan de pitchfader: dan telt de snelheid
+ * van nu (deck.snelheid), anders viel "wat je hoort" tot een uitgangs-
+ * vertraging vóór de plek waar hij stilvalt.
  */
 export const hoorbaar = (deck, vertraging) =>
-  (deck.playing ? naVertraging(deck.position, vertraging, deck.rate) : deck.position);
+  (deck.playing && !deck.wacht
+    ? naVertraging(deck.position, vertraging, deck.remt ? deck.snelheid : deck.rate)
+    : deck.position);

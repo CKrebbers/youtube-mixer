@@ -608,6 +608,14 @@ console.log('wat je HOORT: één formule (engine/hoorbaar.js)');
     bij(H.hoorbaar({ playing: true, position: 10, rate: 1.25 }, 0.04), 10 - 0.05) && bij(H.hoorbaar({ playing: true, position: 10 }, 0.04), 9.96));
   ok('stilstaand: de positie zelf', H.hoorbaar({ playing: false, position: 10, rate: 1.25 }, 0.04) === 10);
   ok('naVertraging (de video, ook stilstaand): dezelfde formule', bij(H.naVertraging(10, 0.04, 1.25), 9.95));
+  // Integratie ronde 3: wachten op de maat (dj-transport) en remmen (dj-klank).
+  ok('wacht op de maat: de positie zelf (hij staat stil op zijn startpunt, je hoort nog niets)',
+    H.hoorbaar({ playing: true, wacht: true, position: 8, rate: 1 }, 0.04) === 8);
+  ok('remt: min vertraging × de snelheid van NU, niet de pitchfader',
+    bij(H.hoorbaar({ playing: true, remt: true, snelheid: 0.5, position: 10, rate: 1.1 }, 0.04), 9.98));
+  ok('rem helemaal stil (snelheid 0): de plek waar hij stilstaat, niet 1× de vertraging ervoor',
+    H.hoorbaar({ playing: true, remt: true, snelheid: 0, position: 10, rate: 1 }, 0.04) === 10 && H.naVertraging(10, 0.04, 0) === 10);
+  ok('zonder rate (een kaal object) blijft 1 gelden', bij(H.naVertraging(10, 0.04, undefined), 9.96) && bij(H.naVertraging(10, 0.04, NaN), 9.96));
   // Geen vijfde kopie: de vertraging van de geluidskaart wordt alleen hier opgeteld.
   const { readdirSync } = await import('node:fs');
   const alle = (map) => readdirSync(new URL(map, import.meta.url), { withFileTypes: true })
