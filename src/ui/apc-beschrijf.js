@@ -99,6 +99,8 @@ export function beschrijf(action) {
     'mixer.xfader.curve': ['curve', 'crossfadercurve wisselen'],
     'record.start': ['rec', 'opname starten'], 'record.stop': ['rec stop', 'opname stoppen'],
     'record.mode': ['rec soort', 'opname: audio of audio + video'],
+    'log.toggle': ['log', 'handelingenlog aan/uit: wat je op de bus doet, met de tijd, om de set terug te spelen'],
+    'log.replay.stop': ['stop terug', 'terugspelen van een handelingenlog stoppen (de tracks spelen door)'],
     'sampler.length': ['tellen', 'sampler: hoeveel tellen een lege pad pakt (1/2/4/8)'],
     'sampler.volume': ['sampler', 'sampler-volume'],
     'focus.next': ['focus ▶', 'focus naar de volgende track'], 'focus.prev': ['◀ focus', 'focus naar de vorige track'],

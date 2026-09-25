@@ -61,6 +61,9 @@ function drukknop(slotVan, k) {
 export function invoke(id, value) {
   const a = registry.get(id);
   if (!a) { console.warn('[actions] onbekend:', id); return false; }
+  // Wie meeluistert (het handelingenlog) hoort het vóór de action draait:
+  // dan staat de handeling in het log vóór wat eruit volgt.
+  for (const f of busLuisteraars) { try { f(id, value); } catch (_) {} }
   // Een action die gooit mag de aanroeper niet meenemen: de MIDI-hub stuurt
   // het bericht daarna nog naar de monitor, en juist dán wil je het zien.
   try {
@@ -72,6 +75,14 @@ export function invoke(id, value) {
   }
   return true;
 }
+
+const busLuisteraars = new Set();
+/**
+ * Meeluisteren op de bus: (id, waarde) bij elke action die bestaat, van
+ * MIDI, toetsenbord, muis of terugspelen. Voor het handelingenlog. Geeft een
+ * functie terug die weer ophoudt.
+ */
+export function bijInvoke(fn) { busLuisteraars.add(fn); return () => busLuisteraars.delete(fn); }
 
 const foutLuisteraars = new Set();
 /** Laat weten als een action faalt, om het op het scherm te zetten. */
@@ -517,6 +528,18 @@ export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnam
     { label: 'Opname stoppen (zet hem achter shift)', read: () => (opnemer.bezig ? 1 : 0) });
   define('record.mode', 'trigger', (on) => { if (on && !opnemer.bezig) opnameSoort(); },
     { label: 'Opname: audio of audio + video', read: () => (opnemer.metVideo ? 1 : 0) });
+}
+
+/**
+ * Het handelingenlog (docs/HANDELINGENLOG.md): aan/uit en terugspelen
+ * stoppen. Op de bus zodat een toets of knop het kan; er staat bewust geen
+ * APC-knop op. Terugspelen slaat log.* zelf over (terugspelen.js).
+ */
+export function bindLog({ log, wissel, terugspeler }) {
+  define('log.toggle', 'trigger', (on) => { if (on) wissel(); },
+    { label: 'Handelingenlog aan/uit', read: () => (log.bezig ? 1 : 0) });
+  define('log.replay.stop', 'trigger', (on) => { if (on && terugspeler.bezig) terugspeler.stop(); },
+    { label: 'Terugspelen stoppen', read: () => (terugspeler.bezig ? 1 : 0) });
 }
 
 /**
