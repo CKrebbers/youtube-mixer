@@ -42,6 +42,13 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   `mapping.handle`), tekent 60 beelden en zet schermafdrukken in `tools/headless/uit/`
   (niet in git). Let op: in headless rekent WebGL in software (swiftshader); snelheid
   zegt hier niets.
+- `toon.mjs` — de toonsoort op het scherm nalopen met een NEP-library (verzoeken
+  onderschept): kolomkop, focus, correctiemenu, library-kolom en kiezer.
+- `toon-keten.mjs` — de toonsoort door de HELE keten met de echte server, niets
+  onderschept: upload → ingest (stap "toon") → /api/library → deck → kolomkop/focus →
+  corrigeren → POST → slot → pagina herladen → ↻. Vertraagt alleen peaks.bin van een
+  tweede nummer, om te zien dat laden over een track het vorige nummer niet wist.
+  Beide met `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG` zoals kijk.mjs.
 
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen
