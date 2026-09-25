@@ -240,7 +240,10 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples }) {
       engine.deck(deckId).setGrid(track.grid || null);
       racks.haalRacks(deckId);
       haalSamples(deckId, track.id);
-      gridBewaard[deckId] = track.grid ? JSON.stringify(track.grid) : 'null';
+      // Wat de ENGINE ervan maakte telt als bewaard: een grid van vóór het
+      // maat-anker krijgt bij het inlezen een `maat` per stuk, en dat is geen
+      // reden om bij elk laden te schrijven. Pas bij een echte bewerking.
+      gridBewaard[deckId] = JSON.stringify(engine.deck(deckId).grid?.toJSON() ?? null);
       haalOnsets(deckId, track.id, mijnLaad);
       console.log(`[deck ${deckId}] ${track.titel} — ${duur.toFixed(1)}s — streamt`
         + (uitCache ? '' : ' — LET OP: geen peaks.bin, dus geen golfvorm'));

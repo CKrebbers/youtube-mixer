@@ -107,6 +107,15 @@ try { lib.bewaarGrid('abc123', { stukken: [{ van: 0, bpm: 'veel', anker: 0 }] })
 ok('een ongeldig grid gooit en laat het bewaarde staan', gegooid && lib.track('abc123').grid.stukken.length === 2);
 ok('normaliseer: bpm buiten 40-300 geweigerd', normaliseerGrid({ bpm: 500 }) === null);
 ok('normaliseer: stukken gesorteerd', normaliseerGrid({ stukken: [{ van: 9, bpm: 100, anker: 9 }, { van: 0, bpm: 120, anker: 0 }] }).stukken[0].van === 0);
+// Maat-anker per stuk (25 sep): gaat mee, is optioneel, en een oud grid blijft zoals het was.
+const metMaat = normaliseerGrid({ stukken: [{ van: 0, bpm: 120, anker: 0.1, maat: 2.1 }, { van: 60, bpm: 126, anker: 60.2, zekerheid: 0.7, maat: 61.15 }] });
+ok('normaliseer: maat per stuk gaat mee', metMaat.stukken[0].maat === 2.1 && metMaat.stukken[1].maat === 61.15 && metMaat.stukken[1].zekerheid === 0.7);
+ok('normaliseer: zonder maat komt er geen maat bij (oud grid ongewijzigd)', !('maat' in normaliseerGrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }] }).stukken[0]));
+ok('normaliseer: een onbruikbare maat (null, tekst) valt weg, het grid blijft',
+  !('maat' in normaliseerGrid({ stukken: [{ van: 0, bpm: 120, anker: 0, maat: null }] }).stukken[0])
+  && !('maat' in normaliseerGrid({ stukken: [{ van: 0, bpm: 120, anker: 0, maat: 'tel een' }] }).stukken[0]));
+lib.bewaarGrid('abc123', { stukken: [{ van: 0, bpm: 120, anker: 0.1, maat: 2.1 }], beatsPerBar: 4 });
+ok('bewaard en teruggelezen: de maat staat erin', lib.track('abc123').grid.stukken[0].maat === 2.1);
 
 lib.bewaarGrid('abc123', null);
 ok('grid wissen kan', lib.track('abc123').grid === null);

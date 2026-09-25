@@ -105,3 +105,31 @@ langer en "zeker" (0,48 -> 0,72).
 
 Let op: het album heeft een grid met `bron: 'auto'`; de server heranalyseert dat niet
 vanzelf. ↻ in de library (opnieuw analyseren) geeft het nieuwe voorstel.
+
+### 3. Maat-anker per stuk — gebouwd (`maat` in elk stuk van de tempokaart)
+Vroeger telden de maten door over de hele kaart: tel 0 (het anker van het eerste stuk)
+was een "1", en elke vierde tel daarna, over alle stukken heen. Na een tempowissel (een
+nieuw nummer op het album) viel de "1" daardoor op een willekeurige tel.
+
+Nu heeft elk stuk `maat`: de tracktijd van een tel 1 op zijn eigen rooster.
+- Oude JSON zonder `maat` (en wat de analyse maakt): bij het inlezen krijgt elk stuk er
+  een, doorgeteld vanaf het vorige stuk: precies de maten van vroeger (getest: maatbegin
+  en barPhase op elke plek gelijk). Vastgelegd als de eerste "1" op of na `van`.
+- Daarna houdt elk stuk zijn eigen "1": een ANDER stuk bewerken verschuift hem niet
+  meer (vroeger wel: een andere bpm vooraan telde door tot achteraan).
+- Tel 1 hier (grid-modus scene 1) zet de tel én de "1". Schuiven, halve tel en
+  uitlijnen nemen de "1" mee; een tempo bijstellen (encoder, tap, verfijning) houdt de
+  tel bij de plek waar je bent op dezelfde plek in de maat; ×2 houdt de "1" waar hij
+  was, ½ neemt de dichtstbijzijnde tel (×2 en daarna ½ geeft de oude terug); een
+  nieuw stuk neemt de maten mee.
+- Een overgangstel (de laatste tel van het vorige stuk) telt nog in de maat van het
+  vorige stuk.
+- Wat ermee rekent: `barPhase`, `isDownbeat`, `beatsBetween` (maatbegin, ook ver
+  uitgezoomd per stuk uitgelijnd: de golfvorm), en nieuw `telInMaat(t)` (1..4).
+- Knipperen op de tel: nieuwe read `track.N.barbeat` (welke tel van de maat je HOORT);
+  op de "1" knippert een lampje een halve tel in plaats van een kwart
+  (`TEL_VENSTER_EEN` in feedback.js). Nog steeds twee berichten per LED per tel.
+  Dit is een keuze (aanname): zo zie je op de APC waar de maat begint.
+- Geen schemawijziging: het staat in `grid_json`; `normaliseerGrid` (server) laat `maat`
+  staan en voegt er geen toe. Een grid wordt niet bewaard alleen omdat hij geladen werd
+  (laden.js vergelijkt met wat de engine ervan maakte), pas bij een echte bewerking.

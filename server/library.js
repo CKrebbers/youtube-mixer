@@ -109,7 +109,7 @@ export const MAX_STUKKEN = 4096;
 
 /**
  * Een grid uit de buitenwereld netjes maken: het nieuwe formaat
- * { stukken: [{ van, bpm, anker, zekerheid? }], beatsPerBar?, zeker?, slot? }
+ * { stukken: [{ van, bpm, anker, zekerheid?, maat? }], beatsPerBar?, zeker?, slot? }
  * of het oude { bpm, firstBeat, beatsPerBar } (= één stuk). Null als het
  * geen bruikbaar grid is. Dezelfde regels als `Beatgrid` in de engine, maar
  * de library kent de engine niet.
@@ -126,6 +126,10 @@ export function normaliseerGrid(g) {
     if (bpm < 40 || bpm > 300) return null;
     const stuk = { van: Number(s.van ?? 0), bpm, anker: Number(s.anker ?? 0) };
     if (getal(s.zekerheid)) stuk.zekerheid = Math.max(0, Math.min(1, Number(s.zekerheid)));
+    // Maat-anker (25 sep 2026): tracktijd van een tel 1 in dit stuk. Optioneel:
+    // zonder tellen de maten door zoals vroeger (de engine vult hem aan). Geen
+    // schemawijziging, het staat in grid_json.
+    if (getal(s.maat)) stuk.maat = Number(s.maat);
     stukken.push(stuk);
   }
   if (!stukken.length) return null;

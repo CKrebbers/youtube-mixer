@@ -251,5 +251,80 @@ ok('en het tempo klopt nog steeds', Math.abs(tt4.tap(31 * 480, 0).bpm - 125) < 0
   ok('snap: zonder onsets (null of leeg) niet snappen', snapNaarOnset(null, 1.0) === 1.0 && snapNaarOnset(new Float64Array(0), 1.0) === 1.0);
 }
 
+// ---- maat-anker per stuk (25 september 2026) -----------------------------------
+// Elk stuk weet welke tel zijn "1" is. Een grid van vóór deze versie heeft dat
+// veld niet: dan tellen de maten door zoals vroeger (tel 0 van het hele grid =
+// anker van het eerste stuk = tel 1), en dat moet er precies zo uit blijven zien.
+{
+  const oudeMaat = (g, b) => ((b % 4) + 4) % 4 === 0;        // de oude regel: doorlopend telnummer
+  // 120 tot 10 s, dan 150 met een tel op 10,1 (tel 20). Oud: tel 20 = tel 1, 21 = 2 ...
+  const oudJson = { stukken: [{ van: 0, bpm: 120, anker: 0.3 }, { van: 10, bpm: 150, anker: 10.1 }, { van: 30, bpm: 100, anker: 30.37 }], beatsPerBar: 4 };
+  const g = Beatgrid.van(JSON.parse(JSON.stringify(oudJson)));
+  const tellen = g.beatsBetween(-3, 45);
+  ok(`oud grid zonder maat: maatbegin precies als vroeger (${tellen.filter((b) => b.maatbegin).length} maten)`,
+    tellen.every((b) => b.maatbegin === oudeMaat(g, b.beat)));
+  let fase = true;
+  for (let t = -2; t < 45; t += 0.013) {
+    const b = g.beatAt(t), x = b / 4 - Math.floor(b / 4);
+    if (Math.abs(g.barPhase(t) - x) > 1e-9 && Math.abs(Math.abs(g.barPhase(t) - x) - 1) > 1e-9) fase = false;
+  }
+  ok('en barPhase ook (op elke plek gelijk aan de oude berekening)', fase);
+  const j = g.toJSON();
+  ok('na inlezen heeft elk stuk een maat: de eerste "1" in het stuk',
+    j.stukken.every((s) => Number.isFinite(s.maat) && s.maat >= s.van - 1e-9 && g.isDownbeat(s.maat)));
+  const terug = Beatgrid.van(JSON.parse(JSON.stringify(j)));
+  ok('opslaan en terughalen: dezelfde maten', terug.beatsBetween(-3, 45).every((b, i) => b.maatbegin === tellen[i].maatbegin));
+  ok('een maat van null (oud of kapot) telt als geen maat',
+    Beatgrid.van({ stukken: [{ van: 0, bpm: 120, anker: 0.3, maat: null }] }).stukken[0].maat === 0.3);
+
+  // Een eigen "1" per stuk: het tweede stuk begint een nieuwe maat op 10,1,
+  // waar het doortellen tel 1 zou geven... maak het tel 3: 10,1 + 2 tellen = 10,9.
+  const eigen = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 10, bpm: 150, anker: 10.1, maat: 10.9 }] });
+  ok('eigen maat: 10,9 is een tel 1, 10,1 niet', eigen.isDownbeat(10.9) && !eigen.isDownbeat(10.1) && bij(eigen.barPhase(10.9), 0, 1e-9));
+  ok('telInMaat telt vanaf de eigen "1"', eigen.telInMaat(10.1) === 3 && eigen.telInMaat(10.5) === 4 && eigen.telInMaat(10.9) === 1 && eigen.telInMaat(11.0) === 1);
+  ok('het eerste stuk telt gewoon door (8,0 is tel 1, 9,5 tel 4)', eigen.isDownbeat(8) && eigen.telInMaat(9.5) === 4);
+  const rond = eigen.beatsBetween(9, 12.2).map((b) => `${b.tijd.toFixed(1)}${b.maatbegin ? '!' : ''}`).join(' ');
+  ok(`maatbegin volgt het stuk (${rond})`, rond === '9.0 9.5 10.1 10.5 10.9! 11.3 11.7 12.1');
+  ok('de overgangstel (9,5) hoort nog bij de maat van het eerste stuk', eigen.telInMaat(9.5) === 4 && eigen.telInMaat(9.7) === 4);
+  const ver = eigen.beatsBetween(0, 20, 100, 4).map((b) => b.tijd.toFixed(1)).join(' ');
+  ok(`ver uitgezoomd (alleen maatbegin): uitgelijnd per stuk (${ver})`,
+    eigen.beatsBetween(0, 20, 100, 4).every((b) => b.maatbegin) && ver.startsWith('0.0 2.0 4.0 6.0 8.0 10.9 12.5'));
+
+  // Bewerken: de "1" gaat mee met het grid, of blijft op zijn tel.
+  const b = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 20, bpm: 120, anker: 20, maat: 21 }] });
+  b.ankerHier(25.3);
+  ok('tel 1 hier: de tel komt hier en het is een "1"', b.isDownbeat(25.3) && bij(b.nearest(25.3), 25.3) && b.telInMaat(25.8) === 2);
+  ok('en het eerste stuk merkt er niets van', b.isDownbeat(2) && b.isDownbeat(18));
+  b.schuif(0.01, 25);
+  const opEen = (g, t) => { const f = g.barPhase(t); return Math.min(f, 1 - f) < 1e-9; };
+  ok('schuiven: de "1" schuift mee', opEen(b, 25.31) && b.telInMaat(25.305) === 4);
+  b.schuifTel(0.5, 25);
+  ok('halve tel: de "1" gaat mee met zijn tel (25,56)', b.isDownbeat(25.56) && b.telInMaat(26.06) === 2);
+  b.setBpm(124, { bij: 27.06 });
+  ok('tempo vanaf hier: de tel bij 27,06 blijft tel 4 (drie tellen na de "1" op 25,56)', b.telInMaat(27.06) === 4 && b.isDownbeat(27.06 + 60 / 124));
+  b.verdubbel(27.06);
+  ok('×2: de "1" op 27,544 blijft een "1"', b.isDownbeat(27.06 + 60 / 124) && b.bpmAt(28) === 248);
+  b.halveer(27.06);
+  const voorBpm = b.stukken[1].maat;
+  b.zetStuk(27.06, { bpm: 124.5, anker: 27.07 });
+  ok('tap/verfijning (zetStuk): de tel bij de tap houdt zijn plek in de maat', b.telInMaat(27.07) === 4 && b.isDownbeat(27.07 + 60 / 124.5) && Number.isFinite(voorBpm));
+
+  // Een eerder stuk bewerken verschuift de maten van het volgende niet meer
+  // (vroeger telden die door, en een andere bpm vooraan gaf ze een andere "1").
+  const c = Beatgrid.van({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 10, bpm: 150, anker: 10.1 }] });
+  const voor = c.beatsBetween(10, 20).filter((x) => x.maatbegin).map((x) => x.tijd.toFixed(3)).join(' ');
+  c.setBpm(121, { bij: 5 });
+  const na = c.beatsBetween(10, 20).filter((x) => x.maatbegin).map((x) => x.tijd.toFixed(3)).join(' ');
+  ok(`een ander stuk bewerken laat deze maten staan (${voor})`, voor === na);
+
+  // Splitsen verandert niets aan de maten, en daarna houdt het nieuwe stuk zijn "1".
+  const s2 = new Beatgrid({ bpm: 120, firstBeat: 0 });
+  s2.splits(21.1);
+  ok('splitsen: dezelfde maten', s2.beatsBetween(0, 40).every((x) => x.maatbegin === oudeMaat(s2, x.beat)));
+  ok('en het nieuwe stuk heeft zijn eerste "1" als maat (22,0)', bij(s2.stukken[1].maat, 22));
+  s2.setBpm(118, { bij: 5 });
+  ok('het eerste stuk bijstellen verschuift de "1" van het tweede niet', s2.isDownbeat(22) && s2.isDownbeat(24));
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
