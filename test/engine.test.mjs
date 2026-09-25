@@ -1955,6 +1955,23 @@ console.log('\ntempokaart');
   await opslag.rust();
   ok('bewaren mislukt: een foutmelding op het scherm', fouten.some((f) => /hotcue 1 niet bewaard.*404/.test(f)));
   ok('geen onzin naar de server gestuurd', !log.some((l) => /"tijd":null/.test(l)));
+
+  // Naad dj-transport × library (integratie ronde 3): met quantize gaat de
+  // GESNAPTE tijd naar de server, niet de plek waar je drukte.
+  {
+    const { Beatgrid } = await import('../src/engine/beatgrid.js');
+    dH.load(buf, 'nummer 2 met grid');
+    await opslag.haalHotcues('H', 'nummer2');
+    dH.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+    eng.setQuantize(true);
+    dH.seek(1.37);
+    hc(4);
+    await opslag.rust();
+    eng.setQuantize(false);
+    ok(`quantize: de bewaarde hotcue is de tel (${db.get('nummer2').get(4)} s), niet waar je drukte (1,37 s)`,
+      db.get('nummer2').get(4) === 1.5 && dH.hotcues[3] === 1.5);
+    dH.setGrid(null);
+  }
 }
 
 // ---- transport: beatjump, loop in/out, quantize, starten op de maat --------
