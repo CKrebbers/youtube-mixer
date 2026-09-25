@@ -21,6 +21,8 @@ Draai met `node tools/beatmeting/<script>.mjs` vanuit de projectmap.
 | stapA/sim.mjs e.a. | de metingen vóór/na stap A (tap 53% → 91% goed, 0% offbeat) |
 | rest/fragment.mjs `id:van:duur[:nul]` | restpunt 1: analyseerGrid oud (cc527e3) tegen nieuw (tweedeKans) op fragmenten van onset.bin |
 | rest/tel1-synth.mjs `[tempofout]`, rest/tel1-echt.mjs `id:van:duur:bpm` | restpunt 2: "tel 1 hier" met en zonder verfijnen, synthetisch en op echte muziek |
+| rest/gridpast.mjs `[id:van:duur[:nul] ...]` | restpunt 4: past het grid op elk stuk, vóór (12776ba) tegen nu, op 48 fragmenten |
+| rest/gridpast-synth.mjs `[naam ...]` | hetzelfde synthetisch, de echte kicks bekend (`LANGE_MIX=1`: ook een mix van 20 min) |
 De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking; die in
 `rest/` van 25 september. `rest/` leest geen server maar de bestanden zelf (ook vanuit een
 worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van het systeem.
