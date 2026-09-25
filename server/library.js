@@ -261,6 +261,12 @@ export class Library {
     return this.db.prepare('DELETE FROM tracks WHERE id = ?').run(id).changes > 0;
   }
 
+  /** Het nummer met precies deze link (url is UNIQUE), of null. Voor "staat al in de library". */
+  trackMetUrl(url) {
+    const r = this.db.prepare('SELECT * FROM tracks WHERE url = ?').get(String(url ?? ''));
+    return r ? this._verrijk(r) : null;
+  }
+
   // ---- beatgrid ----------------------------------------------------------
 
   /**

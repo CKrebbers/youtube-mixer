@@ -51,6 +51,62 @@ export function normaliseerLink(link) {
   return tekst;
 }
 
+/** Een YouTube-video-id: precies 11 tekens. */
+const YT_ID = /^[\w-]{11}$/;
+
+export const PLAYLIST_FOUT = 'dit is een playlist — plak de link van één nummer '
+  + '(een link met v= én list= wordt gewoon dat ene nummer)';
+
+/**
+ * Wat een geplakte link wordt voordat hij de wachtrij in gaat. Puur, zonder
+ * netwerk: { ok: true, link, id, sleutel, lijstEraf? } of { ok: false, fout, playlist? }.
+ *
+ * - link: wat yt-dlp krijgt. Een YouTube-video wordt altijd
+ *   https://www.youtube.com/watch?v=<id>, zonder list=, index=, si= en de
+ *   rest: dan is youtu.be/<id>, /shorts/<id> en watch?v=<id>&list=… hetzelfde
+ *   nummer, en haalt yt-dlp nooit per ongeluk een hele lijst.
+ * - id: de track-id als die zonder netwerk vaststaat (YouTube, TikTok), anders null.
+ * - sleutel: waarop de wachtrij "staat er al in" herkent: de id, of anders de link.
+ *
+ * Een playlist, kanaal of profiel wordt hier geweigerd. yt-dlp zou er ALLES
+ * van binnenhalen; wat hier niet herkend wordt, vangt de metadata-stap nog op
+ * (_type 'playlist', zie ingest.js).
+ */
+export function bekijkLink(tekst) {
+  const link = normaliseerLink(tekst);
+  if (!link) return { ok: false, fout: 'geef een geldige http(s)-URL' };
+  const u = new URL(link);
+  const bron = bronVan(link);
+  if (bron === 'youtube') return bekijkYoutube(u, link);
+  if (bron === 'tiktok') {
+    const m = /^\/@[^/]*\/video\/(\d+)$/.exec(u.pathname);
+    if (m) return { ok: true, link, id: `tiktok-${m[1]}`, sleutel: `tiktok-${m[1]}` };
+    if (/^\/@[^/]+\/?$/.test(u.pathname)) {
+      return { ok: false, playlist: true, fout: 'dit is een TikTok-profiel, geen video — plak de link van één video' };
+    }
+  }
+  return { ok: true, link, id: null, sleutel: link };
+}
+
+function bekijkYoutube(u, link) {
+  const host = u.hostname.toLowerCase();
+  const pad = u.pathname;
+  const q = u.searchParams;
+  let id = null;
+  if (host === 'youtu.be' || host.endsWith('.youtu.be')) id = pad.split('/')[1] || null;
+  else if (/^\/watch\/?$/.test(pad)) id = q.get('v');
+  else id = /^\/(?:shorts|live|embed|v|e)\/([^/]+)/.exec(pad)?.[1] ?? null;
+  if (id && YT_ID.test(id)) {
+    return { ok: true, link: `https://www.youtube.com/watch?v=${id}`, id, sleutel: id, ...(q.has('list') ? { lijstEraf: true } : {}) };
+  }
+  if (q.has('list') || /^\/playlist\/?$/.test(pad)) return { ok: false, playlist: true, fout: PLAYLIST_FOUT };
+  // Kanalen, zoekresultaten en overzichten: voor yt-dlp ook playlists.
+  if (/^\/(@[^/]+|channel\/|c\/|user\/|results\/?$|feed\/)/.test(pad)) {
+    return { ok: false, playlist: true, fout: 'dit is een kanaal of overzicht, geen nummer — plak de link van één video' };
+  }
+  return { ok: true, link, id: null, sleutel: link };
+}
+
 /**
  * De id waaronder een nummer in media/ en de database komt.
  *

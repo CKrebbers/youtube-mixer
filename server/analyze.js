@@ -29,26 +29,40 @@ const SAMPLERATE = 48000;
  * Eén worker per opdracht: opstarten kost ~30 ms, niets vergeleken met het
  * werk, en een worker die omvalt neemt niets mee. De functies met `Hier` erachter
  * doen het echte werk en staan in `hier`, zodat de worker ze kan aanroepen.
+ *
+ * `signal` (een geannuleerde ingest): de worker wordt beëindigd. Zijn ffmpeg
+ * leest dan in een gesloten pijp en stopt vanzelf. { afgebroken: true }.
  */
-function inWerker(taak, args) {
+function inWerker(taak, args, signal = null) {
   return new Promise((klaar) => {
-    let gemeld = false;
-    const meld = (r) => { if (!gemeld) { gemeld = true; klaar(r); } };
-    let w;
+    let gemeld = false, w = null;
+    const stop = () => {
+      meld({ ok: false, fout: 'geannuleerd', afgebroken: true });
+      w?.terminate().catch(() => {});
+    };
+    const meld = (r) => {
+      if (gemeld) return;
+      gemeld = true;
+      signal?.removeEventListener('abort', stop);
+      klaar(r);
+    };
+    if (signal?.aborted) { stop(); return; }
     try {
       w = new Worker(new URL('./analyse-werker.js', import.meta.url), { workerData: { taak, args } });
     } catch (err) {
       meld({ ok: false, fout: `analyse kon niet starten: ${err?.message || err}` });
       return;
     }
+    signal?.addEventListener('abort', stop, { once: true });
     w.once('message', meld);
     w.once('error', (err) => meld({ ok: false, fout: `analyse viel om: ${err?.message || err}` }));
     w.once('exit', (code) => meld({ ok: false, fout: `analyse stopte zonder antwoord (code ${code})` }));
   });
 }
 
-export const maakPeaks = (audioBestand, doel, opties = {}) => inWerker('peaks', [audioBestand, doel, opties]);
-export const maakOnset = (audioBestand, doel, opties = {}) => inWerker('onset', [audioBestand, doel, opties]);
+// `signal` hoort niet in de worker (niet over te zetten); de rest van de opties wel.
+export const maakPeaks = (audioBestand, doel, { signal, ...opties } = {}) => inWerker('peaks', [audioBestand, doel, opties], signal);
+export const maakOnset = (audioBestand, doel, { signal, ...opties } = {}) => inWerker('onset', [audioBestand, doel, opties], signal);
 
 /**
  * Tap-verfijning op een bewaarde onset-envelope. Leest het bestand in de
@@ -66,8 +80,8 @@ export const verfijnUitBestand = (bestand, envRate, bpm, tijdOffset, opties = {}
  * Geeft { ok, grid } met grid = tempokaart met `bron: 'auto'`, `slot: false`
  * en per stuk een `zekerheid`; of { ok: false, fout }.
  */
-export const maakGrid = (onsetBestand, envRate, tijdOffset, audio = null) =>
-  inWerker('grid', [onsetBestand, envRate, tijdOffset, audio]);
+export const maakGrid = (onsetBestand, envRate, tijdOffset, audio = null, { signal } = {}) =>
+  inWerker('grid', [onsetBestand, envRate, tijdOffset, audio], signal);
 
 /**
  * De onset-PIEKEN als tijden (tracktijd, s), gesorteerd. Voor "tel 1 hier"

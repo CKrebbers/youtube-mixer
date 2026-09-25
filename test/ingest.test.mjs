@@ -115,10 +115,15 @@ ok('een kapotte bron meldt de fout in plaats van stil te falen',
   });
   await new Promise((k) => srv.listen(0, '127.0.0.1', k));
   const stappen = [];
+  const pcts = [];
   const r = await ing.ingest(`http://127.0.0.1:${srv.address().port}/klik124.wav`,
-    { mediaDir: map, video: false, onStap: (s) => stappen.push(s.stap) });
+    { mediaDir: map, video: false, onStap: (s) => { stappen.push(s.stap); if (s.stap === 'audio' && s.pct != null) pcts.push(s.pct); } });
   srv.close();
   ok(`ingest van een lokaal klikspoor lukt${r.ok ? '' : ` (${r.fout})`}`, r.ok === true);
+  // De echte yt-dlp schrijft zijn voortgang naar stdout; vóór 25 sep las de
+  // ingest alleen stderr en kwam er nooit een percentage.
+  ok(`de echte yt-dlp meldt een downloadpercentage (${pcts.length} keer, laatste ${pcts.at(-1)?.toFixed(0)}%)`,
+    pcts.length >= 2 && pcts.every((p, i) => i === 0 || p >= pcts[i - 1]) && pcts.at(-1) === 100);
   const g = r.track?.grid;
   ok('de ingest zoekt een beatgrid (stap "grid")', stappen.includes('grid'));
   ok('en levert een automatisch grid: bron auto, niet op slot', g?.bron === 'auto' && g.slot === false);

@@ -3,9 +3,10 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { stat, rm } from 'node:fs/promises';
 import { join, extname, resolve, relative, isAbsolute, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomUUID, createHash } from 'node:crypto';
-import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, YTDLP_GETEST_OP } from './ingest.js';
-import { normaliseerLink, ontsmetNaam, BESTAND_EXT } from './links.js';
+import { createHash } from 'node:crypto';
+import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, stappenVoor, YTDLP_GETEST_OP } from './ingest.js';
+import { bekijkLink, ontsmetNaam, BESTAND_EXT } from './links.js';
+import { Wachtrij, isOpen } from './wachtrij.js';
 import { Library, normaliseerGrid } from './library.js';
 import { ZEKER_VANAF } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets } from './analyze.js';
@@ -45,8 +46,11 @@ const TYPES = {
   '.woff2': 'font/woff2', '.ico': 'image/x-icon',
 };
 
-/** Opdrachten leven in het geheugen. Wat af is, gaat de database in. */
-const opdrachten = new Map();
+/**
+ * Opdrachten leven in het geheugen, in de wachtrij (één tegelijk, links en
+ * eigen bestanden door elkaar). Wat af is, gaat de database in.
+ */
+const wachtrij = new Wachtrij();
 // Instelbaar voor de tests: een eigen database en opnamemap, niet de jouwe.
 const lib = new Library(process.env.VARVE_DB || join(WORTEL, 'media', 'library.db'));
 
@@ -100,75 +104,79 @@ async function leesRuw(req, max = 4 * 1024 * 1024) {
   });
 }
 
-/** Start een ingest van een link en laat hem op de achtergrond lopen. */
-function startIngest(url) {
-  return startOpdracht(url, url, (onStap) => ingest(url, { mediaDir: MEDIA, onStap }));
+/** Hooguit zoveel links in één keer plakken. */
+const MAX_LINKS = 100;
+
+/** Het nummer, als zijn audio er ook echt nog staat; anders null (dan mag hij opnieuw). */
+async function metAudio(t) {
+  return t && await stat(opSchijf(t.audio)).then(() => true, () => false) ? t : null;
 }
 
 /**
- * Een opdracht op de achtergrond: `werk(onStap)` geeft wat ingest() geeft.
- * `sleutel` voorkomt dubbel werk: dezelfde link (of hetzelfde bestand) twee
- * keer terwijl de eerste nog loopt geeft de lopende terug.
+ * Een binnengehaald nummer in de library zetten. Geeft het nummer zoals de
+ * library het nu kent (dus met het grid dat er echt staat: een grid op slot
+ * blijft, ook als de ingest een nieuw voorstel had).
  */
-function startOpdracht(sleutel, url, werk) {
-  for (const o of opdrachten.values()) if (o.sleutel === sleutel && o.status === 'bezig') return o;
-  const id = randomUUID().slice(0, 8);
-  const opdracht = {
-    id, sleutel, url, status: 'bezig', stap: 'wachten', tekst: 'in de wachtrij',
-    pct: null, begonnen: Date.now(), klaar: null, fout: null, track: null,
-  };
-  opdrachten.set(id, opdracht);
-
-  werk((s) => { Object.assign(opdracht, s); }).then((r) => {
-    opdracht.klaar = Date.now();
-    if (r.ok) {
-      opdracht.status = 'klaar';
-      opdracht.stap = 'klaar';
-      opdracht.pct = null;
-      opdracht.tekst = r.track.videoFout
-        ? `klaar (zonder video: ${r.track.videoFout}) — ${r.track.titel}`
-        : `klaar — ${r.track.titel}`;
-      // Paden relatief maken: de browser vraagt ze straks op via deze server.
-      opdracht.track = { ...r.track,
-        audio: alsPad(r.track.audio),
-        video: r.track.video ? alsPad(r.track.video) : null };
-      if (r.track.peaks) {
-        opdracht.track.peaks = { ...r.track.peaks, bestand: alsPad(r.track.peaks.bestand) };
-      }
-      if (r.track.onset) {
-        opdracht.track.onset = { ...r.track.onset, bestand: alsPad(r.track.onset.bestand) };
-      }
-      try {
-        lib.bewaarTrack(opdracht.track);
-        if (opdracht.track.peaks) lib.bewaarPeaks(opdracht.track.id, opdracht.track.peaks);
-        // De ingest rekende de envelope al uit; zonder dit deed de eerste tap
-        // het hele werk nog een keer.
-        if (opdracht.track.onset) lib.bewaarOnset(opdracht.track.id, opdracht.track.onset);
-        // Het grid-voorstel van de ingest. Nooit over een grid op slot, en bij
-        // opnieuw binnenhalen ook niet over een grid dat je met de hand bewerkte.
-        if (opdracht.track.grid) {
-          const g = lib.bewaarAutoGrid(opdracht.track.id, opdracht.track.grid);
-          console.log(`[grid] ${opdracht.track.titel}: ${g.bewaard ? gridSamenvatting(g.grid) : `voorstel niet bewaard (${g.reden})`}`);
-        }
-        onsetCache.delete(opdracht.track.id);
-      } catch (err) {
-        // De ingest is gelukt; dat mag niet alsnog omvallen op de database.
-        console.error('[server] track niet in library gekregen:', err?.message || err);
-      }
-    } else {
-      opdracht.status = 'mislukt';
-      opdracht.fout = r.fout;
-      opdracht.tekst = `mislukt — ${r.fout}`;
+function bewaarInLibrary(r) {
+  // Paden relatief maken: de browser vraagt ze straks op via deze server.
+  const track = { ...r,
+    audio: alsPad(r.audio),
+    video: r.video ? alsPad(r.video) : null };
+  if (r.peaks) track.peaks = { ...r.peaks, bestand: alsPad(r.peaks.bestand) };
+  if (r.onset) track.onset = { ...r.onset, bestand: alsPad(r.onset.bestand) };
+  try {
+    lib.bewaarTrack(track);
+    if (track.peaks) lib.bewaarPeaks(track.id, track.peaks);
+    // De ingest rekende de envelope al uit; zonder dit deed de eerste tap
+    // het hele werk nog een keer.
+    if (track.onset) lib.bewaarOnset(track.id, track.onset);
+    // Het grid-voorstel van de ingest. Nooit over een grid op slot, en bij
+    // opnieuw binnenhalen ook niet over een grid dat je met de hand bewerkte.
+    if (track.grid) {
+      const g = lib.bewaarAutoGrid(track.id, track.grid);
+      console.log(`[grid] ${track.titel}: ${g.bewaard ? gridSamenvatting(g.grid) : `voorstel niet bewaard (${g.reden})`}`);
     }
-  }).catch((err) => {
-    // Hier mag niets doorheen glippen: een kapotte ingest is normaal bedrijf.
-    opdracht.status = 'mislukt';
-    opdracht.fout = String(err?.message || err);
-    opdracht.tekst = `mislukt — ${opdracht.fout}`;
-    opdracht.klaar = Date.now();
-  });
+    onsetCache.delete(track.id);
+    return { ...(lib.track(track.id) ?? track), videoFout: track.videoFout ?? null };
+  } catch (err) {
+    // De ingest is gelukt; dat mag niet alsnog omvallen op de database.
+    console.error('[server] track niet in library gekregen:', err?.message || err);
+    return track;
+  }
+}
 
-  return opdracht;
+/**
+ * Een geplakte link de wachtrij in. Geeft { code, antwoord }:
+ * - 400: geen link, of een playlist/kanaal (playlist: true);
+ * - 200 + dubbel: hij staat al in de wachtrij (die opdracht);
+ * - 200 + bestond: hij staat al in de library (een afgeronde opdracht met
+ *   het nummer, zodat de browser hem meteen kan laden);
+ * - 202: nieuw in de rij.
+ * `opnieuw`: toch binnenhalen, ook al staat hij in de library.
+ */
+async function nieuweLink(tekst, { opnieuw = false } = {}) {
+  const b = bekijkLink(tekst);
+  if (!b.ok) {
+    return { code: 400, antwoord: { url: String(tekst ?? '').trim().slice(0, 500), fout: b.fout, ...(b.playlist ? { playlist: true } : {}) } };
+  }
+  const loopt = wachtrij.zoek(b.sleutel);
+  if (loopt) return { code: 200, antwoord: { ...loopt, dubbel: true } };
+  if (!opnieuw) {
+    const al = (b.id && await metAudio(lib.track(b.id))) || await metAudio(lib.trackMetUrl(b.link));
+    if (al) return { code: 200, antwoord: wachtrij.voegKlaarToe({ sleutel: al.id, url: b.link, track: al }) };
+  }
+  const { opdracht, dubbel } = wachtrij.voegToe({
+    sleutel: b.sleutel, url: b.link, soort: 'link', stappen: stappenVoor({ link: true, video: true }),
+    werk: async (onStap, signal) => {
+      const r = await ingest(b.link, { mediaDir: MEDIA, onStap, signal,
+        // Tweede controle, als de id bekend is: een andere link naar hetzelfde nummer.
+        bestaat: opnieuw ? null : async (id) => metAudio(lib.track(id)) });
+      if (r.ok && !r.bestond) r.track = bewaarInLibrary(r.track);
+      return r;
+    },
+  });
+  if (dubbel) return { code: 200, antwoord: { ...opdracht, dubbel: true } };
+  return { code: 202, antwoord: { ...opdracht, ...(b.lijstEraf ? { lijstEraf: true } : {}) } };
 }
 
 /**
@@ -246,29 +254,35 @@ async function upload(req, res, url) {
 
   const id = `lokaal-${hash.digest('hex').slice(0, 12)}`;
   // Al in de library (en de audio staat er nog)? Dan is er niets te doen.
-  const al = lib.track(id);
-  if (al && await stat(opSchijf(al.audio)).then(() => true, () => false)) {
+  const al = await metAudio(lib.track(id));
+  if (al) {
     await rm(map, { recursive: true, force: true }).catch(() => {});
-    const opdracht = {
-      id: randomUUID().slice(0, 8), sleutel: id, url: al.url, status: 'klaar', stap: 'klaar',
-      tekst: `al in de library — ${al.titel}`, pct: null, begonnen: Date.now(), klaar: Date.now(),
-      fout: null, track: al, bestond: true,
-    };
-    opdrachten.set(opdracht.id, opdracht);
-    return json(res, 200, opdracht);
+    return json(res, 200, wachtrij.voegKlaarToe({ sleutel: id, url: al.url, soort: 'bestand', track: al }));
   }
 
-  // Loopt hetzelfde bestand al (twee keer gesleept)? Dan die, en deze kopie weg.
-  const loopt = [...opdrachten.values()].find((o) => o.sleutel === id && o.status === 'bezig');
+  // Loopt of wacht hetzelfde bestand al (twee keer gesleept)? Dan die, en deze kopie weg.
+  const loopt = wachtrij.zoek(id);
   if (loopt) {
     await rm(map, { recursive: true, force: true }).catch(() => {});
     return json(res, 202, loopt);
   }
   const titel = info.tags.titel || naam.titel;
-  return json(res, 202, startOpdracht(id, `bestand:${naam.naam}`, (onStap) => ingestBestand(bron, {
-    id, map, mediaDir: MEDIA, onStap, heeftVideo: info.video,
-    info: { url: `bestand:${id.slice('lokaal-'.length)}:${naam.naam}`, titel, uploader: info.tags.artiest },
-  })));
+  // Achter in de rij, net als een link. De werkmap met het bestand staat er
+  // al: annuleer je vóór hij begint, dan gaat die weg (bijAnnuleren).
+  const { opdracht } = wachtrij.voegToe({
+    sleutel: id, url: `bestand:${naam.naam}`, soort: 'bestand', titel,
+    stappen: stappenVoor({ link: false, video: info.video }),
+    werk: async (onStap, signal) => {
+      const r = await ingestBestand(bron, {
+        id, map, mediaDir: MEDIA, onStap, signal, heeftVideo: info.video,
+        info: { url: `bestand:${id.slice('lokaal-'.length)}:${naam.naam}`, titel, uploader: info.tags.artiest, duur: info.duur },
+      });
+      if (r.ok) r.track = bewaarInLibrary(r.track);
+      return r;
+    },
+    bijAnnuleren: () => rm(map, { recursive: true, force: true }),
+  });
+  return json(res, 202, opdracht);
 }
 
 /**
@@ -342,7 +356,7 @@ async function heranalyseOpAchtergrond() {
   if (!ids.length) return;
   console.log(`[grid] ${ids.length} nummer${ids.length === 1 ? '' : 's'} zonder automatisch grid — analyse op de achtergrond, één tegelijk`);
   for (const id of ids) {
-    while ([...opdrachten.values()].some((o) => o.status === 'bezig')) await new Promise((z) => setTimeout(z, 2000));
+    while (wachtrij.open) await new Promise((z) => setTimeout(z, 2000));
     const track = lib.track(id);
     // Intussen getikt, op slot gezet of weggehaald? Dan niet meer.
     if (!track || !lib.teAnalyseren().includes(id)) continue;
@@ -480,16 +494,43 @@ const server = createServer(async (req, res) => {
       return json(res, 415, { fout: 'alleen application/json' });
     }
 
+    /*
+     * Binnenhalen: { url } (één link) of { urls: [...] } (geplakte lijst),
+     * met { opnieuw: true } om een nummer uit de library toch opnieuw te halen.
+     * YouTube, TikTok of wat yt-dlp verder kent; zie links.js en nieuweLink().
+     * Eén link: het antwoord van nieuweLink (400/200/202). Een lijst: 202 met
+     * { resultaten: [{ code, ...opdracht of fout }] } in dezelfde volgorde.
+     */
     if (pad === '/api/ingest' && req.method === 'POST') {
       const body = await leesJson(req);
-      // YouTube, TikTok of wat yt-dlp verder kent; zie links.js.
-      const link = normaliseerLink(body?.url);
-      if (!link) return json(res, 400, { fout: 'geef een geldige http(s)-URL' });
-      return json(res, 202, startIngest(link));
+      const opnieuw = body?.opnieuw === true;
+      if (Array.isArray(body?.urls)) {
+        if (!body.urls.length || body.urls.length > MAX_LINKS) return json(res, 400, { fout: `geef 1 tot ${MAX_LINKS} links` });
+        const resultaten = [];
+        for (const u of body.urls) {
+          const r = await nieuweLink(u, { opnieuw });
+          resultaten.push({ code: r.code, ...r.antwoord });
+        }
+        return json(res, 202, { resultaten });
+      }
+      const r = await nieuweLink(body?.url, { opnieuw });
+      return json(res, r.code, r.antwoord);
     }
 
     if (pad === '/api/ingest' && req.method === 'GET') {
-      return json(res, 200, { opdrachten: [...opdrachten.values()].sort((a, b) => b.begonnen - a.begonnen) });
+      return json(res, 200, { opdrachten: wachtrij.lijst() });
+    }
+
+    // Annuleren (wacht of bezig) of, als hij al af is, uit de lijst halen.
+    const mOpdracht = /^\/api\/ingest\/([\w-]+)$/.exec(pad);
+    if (mOpdracht && req.method === 'DELETE') {
+      const o = wachtrij.opdrachten.get(mOpdracht[1]);
+      if (!o) return json(res, 404, { fout: 'onbekende opdracht' });
+      if (isOpen(o)) {
+        const r = wachtrij.annuleer(o.id);
+        return json(res, 200, { ok: r.ok, opdracht: r.opdracht });
+      }
+      return json(res, 200, { ok: wachtrij.vergeet(o.id), weg: true });
     }
 
     // ---- library ---------------------------------------------------------
