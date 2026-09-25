@@ -339,6 +339,39 @@ try {
   for (let i = 0; i < 25 && (await evalueer('window.opnemer.bezig || window.logboek.log.bezig')); i++) await wacht(200);
   const logs2 = await evalueer("fetch('/api/handelingen').then((r) => r.json()).then((j) => j.logs)");
   ok('opname gestopt: het log ook, en de lijst weet dat er een opname bij is', logs2.length === 2 && logs2.some((l) => l.opname && l.af));
+  // Opnieuw renderen: ● opnemen en dan terugspelen. Het log van die opname
+  // krijgt de beginstand van het terugspelen erin (een stand midden in het log),
+  // en speelt daardoor zelf ook terug, met dezelfde eindstand.
+  {
+    const eindNu = "({ fader: window.engine.deck('A').ui.fader, x: window.engine.xfader, low: window.engine.deck('A').ui.low, speelt: window.engine.deck('A').playing })";
+    const husselen = "__act.invoke('track.1.fader', 0.1); __act.invoke('mixer.xfader', 0.9); __act.invoke('track.1.low', 0.9); window.engine.deck('A').pause()";
+    const speelLog = async (id) => {
+      await evalueer("document.getElementById('terug-btn').click()");
+      for (let i = 0; i < 25 && !(await evalueer(`!!document.querySelector('#log-lijst [data-speel="${id}"]:not([disabled])')`)); i++) await wacht(200);
+      await evalueer(`document.querySelector('#log-lijst [data-speel="${id}"]').click(); document.querySelector('#log-lijst [data-speel="${id}"]').click()`);
+      for (let i = 0; i < 25 && !(await evalueer('window.logboek.terugspeler.bezig')); i++) await wacht(200);
+      // Terugspelen duurt op de audioklok zo lang als het log (hier ruim 10 s
+      // audioklok); 8 s wachten was op een drukke machine te kort.
+      for (let i = 0; i < 150 && (await evalueer('window.logboek.terugspeler.bezig')); i++) await wacht(200);
+    };
+    await evalueer(husselen);
+    await evalueer("document.getElementById('opname-btn').click()");
+    for (let i = 0; i < 25 && !(await evalueer('window.opnemer.bezig && window.logboek.log.id')); i++) await wacht(200);
+    const opnId = await evalueer('window.logboek.log.id');
+    await speelLog(logs[0].id);
+    const na2 = await evalueer(eindNu);
+    await evalueer("document.getElementById('opname-btn').click(); document.getElementById('opname-btn').click()");
+    for (let i = 0; i < 25 && (await evalueer('window.opnemer.bezig || window.logboek.log.bezig')); i++) await wacht(200);
+    const r2 = (await evalueer(`fetch('/api/handelingen/${opnId}').then((r) => r.text())`)).split('\n').filter(Boolean).map((r) => JSON.parse(r));
+    const standen = r2.filter((r) => r.e === 'stand');
+    ok('opname van een replay: de stand van het terugspelen staat midden in zijn log', standen.length === 2 && standen[1].t > 0
+      && standen[1].tracks[0].bron === 'demo' && standen[1].tracks[0].speelt === false, `${standen.length} standen`);
+    await evalueer(husselen);
+    await speelLog(opnId);
+    const na3 = await evalueer(eindNu);
+    ok('en die opname speelt zelf ook terug: dezelfde eindstand', JSON.stringify(na3) === JSON.stringify(na2) && na2.speelt,
+      `${JSON.stringify(na3)} / ${JSON.stringify(na2)}`);
+  }
   // Een ECHT library-nummer (een klikspoor door de ingest): terugspelen laadt
   // het streamend terug op dezelfde track, met het grid uit het log.
   {
