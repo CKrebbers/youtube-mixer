@@ -19,20 +19,32 @@
  *     Loopt de klok TERUG (nieuwe AudioContext), dan schuift alles wat op
  *     een tijd staat mee, anders groeit een uitsterving tot oneindig.
  *   - g.kwaliteit (0,25..1, ontbreekt = 1) maakt het beeld grover, nooit de
- *     beweging trager: tv rekent op een kleiner rooster, sn op minder punten
- *     van de snaar, ep tekent het spoor in minder stukken, dw bundelt de
- *     deeltjes per kleurband.
+ *     beweging trager: tv rekent op een kleiner rooster (vel én lucht), sn op
+ *     minder punten van de snaar, ep tekent spoor en kanalen in minder
+ *     stukken, dw bundelt de deeltjes per kleurband.
  *   - Tekst in het beeld (nootnaam, bijschriften) is weg: over de video is
  *     dat ruis, net als het tekstje van km in systemen.js.
  *   - Geen allocaties per frame: werkarrays, spoor (ringbuffer) en geest van
  *     ep staan in init.
+ *   - HET DOEK IS 16:9 (g.W × g.H, ROADMAP 7; hulp.js). Het geluid is
+ *     daarbij niet veranderd, ook niet waar de vorm het bepaalt:
+ *       sn  de snaar ligt over de hele breedte (hoogtes op g.H); een snaar
+ *           is een lijn, en zijn toon hangt niet af van de lengte in beeld.
+ *       tv  het vel blijft ROND, in het midden (dezelfde Bessel-modi, dus
+ *           hetzelfde geluid; een rechthoekig vel zou andere modi en een
+ *           andere klank geven). Naast het vel: de lucht, wat de slag
+ *           uitstraalt (zie luchtCache).
+ *       ep  de figuur rond het midden, op de korte zijde; links en rechts de
+ *           twee kanalen L (= x) en R (= y) als golfvorm (zie kanalen()).
+ *       dw  de korrels bewegen in echte eenheden (niets rekt uit); x blijft
+ *           voor het geluid de fractie van de breedte (buffer en panorama).
  *
  * Een systeem met een levende geluidsbron (ep: twee oscillatoren) heeft
  * `gate(s, p, aan, g)` (stil/aan zonder op te ruimen) en `stop(s)` (opruimen).
  * Wie een laag uitzet of een ander systeem kiest, roept die aan.
  */
 
-import { PI, TAU, LUTS, pcol, rooster, blit, clear, maakRng, K, SEL } from './hulp.js';
+import { PI, TAU, LUTS, pcol, rooster, blit, clear, midden, maakRng, K, SEL } from './hulp.js';
 
 // ---- klein gereedschap -----------------------------------------------------
 
@@ -138,6 +150,69 @@ export function drumCache(N = 110) {
 /** Roostermaat van tv bij een kwaliteit: 110 (origineel), 78 of 55. */
 const vel = (kw) => (kw >= 0.75 ? 110 : kw >= 0.4 ? 78 : 55);
 
+// ---- de lucht rond het vel: wat een slag uitstraalt --------------------------
+//
+// Het vel blijft rond (dezelfde Bessel-modi, dus hetzelfde geluid). Wat op het
+// 16:9-doek naast het vel ligt, is de LUCHT: per modus een golf die vanaf de
+// rand naar buiten loopt, met het hoekpatroon van die modus (m = 0 ringen,
+// m = 1 twee lobben in tegenfase, m = 2 vier). Zo is ook de rest van het beeld
+// het geluid, zoals het de ruimte in gaat. Beeld, geen akoestiek: snelheid en
+// sterkte zijn beeldkeuzes, en alleen m ≤ 2 straalt (hogere m stralen bij een
+// vel nauwelijks uit, en zo blijft de rekentijd binnen de verhouding W / H).
+// Een slag loopt als FRONT naar buiten: voorbij het front klinkt in de lucht
+// nog de slag ervoor (LUCHT_GESCHIEDENIS slagen terug), over een smalle band
+// in elkaar overvloeiend, zodat het front geen trapjes van het rooster toont.
+
+/** De modi die uitstralen (index in DRUM) en hun gewicht per hoekgetal m. */
+export const LUCHT_MODI = DRUM.map((_, k) => k).filter((k) => DRUM[k][0] <= 2);
+const LUCHT_M = [1, 0.75, 0.5];
+/** Golfsnelheid in de lucht, in stralen van het vel per seconde: in ~2 s bij de verste hoek. */
+export const LUCHT_C = 0.5;
+/** Hoe fel de lucht is ten opzichte van het vel (het vel blijft de hoofdzaak). */
+const LUCHT_FEL = 0.45;
+/** Hoeveel eerdere slagen de lucht onthoudt (fronten die nog onderweg zijn). */
+export const LUCHT_GESCHIEDENIS = 4;
+/** Halve breedte van de overvloeiband rond een front, en de aanloop vanaf de rand, in stralen. */
+const LUCHT_BAND = 0.04, LUCHT_AANLOOP = 0.08;
+const LCACHE = {};
+/**
+ * Per doek (nx × ny cellen over W × H, het vel in het midden met straal
+ * kort / 2): de cellen buiten het vel, OPLOPEND op afstand tot de rand
+ * (zodat een golffront één plek in de lijst is), en per cel en per
+ * uitstralende modus vier getallen:
+ *   w · cos mθ · cos κρ,  w · cos mθ · sin κρ,  w · sin mθ · cos κρ,  w · sin mθ · sin κρ
+ * met ρ = r − 1 (afstand tot de rand in stralen), κ = ω / c en
+ * w = gewicht(m) / √r (een cilindergolf verliest zo zijn energie) × een
+ * aanloop vanaf de rand (de rand van het vel zit vast en is donker; zo loopt
+ * de lucht er zacht uit weg in plaats van tegen de trapjes van het vel aan).
+ * Pure data, gedeeld door alle lagen.
+ */
+export function luchtCache(nx, ny, W, H) {
+  const sleutel = `${nx}x${ny}:${W}x${H}`;
+  if (LCACHE[sleutel]) return LCACHE[sleutel];
+  const kort = Math.min(W, H), R = kort / 2, cx = W / 2, cy = H / 2, cel = Math.min(W / nx, H / ny);
+  const binnen = 1 - 1.5 * cel / R;                      // tot net onder de rand: geen naad onder de zachte rand van het vel
+  const cellen = [];
+  for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+    const u = ((x + 0.5) * W / nx - cx) / R, v = ((y + 0.5) * H / ny - cy) / R, r = Math.hypot(u, v);
+    if (r > binnen) cellen.push([y * nx + x, Math.max(0, r - 1), Math.max(r, 0.5), Math.atan2(v, u)]);
+  }
+  cellen.sort((a, b) => a[1] - b[1]);
+  const n = cellen.length, NL = LUCHT_MODI.length, P = new Float32Array(n * NL * 4);
+  cellen.forEach(([, rho, r, th], q) => {
+    const aanloop = 1 - Math.exp(-rho / LUCHT_AANLOOP);
+    LUCHT_MODI.forEach((k, j) => {
+      const [m, jz] = DRUM[k], kappa = TAU * 0.8 * (jz / DRUM[0][1]) / LUCHT_C, w = LUCHT_M[m] / Math.sqrt(r) * aanloop;
+      const cm = Math.cos(m * th) * w, sm = Math.sin(m * th) * w, ck = Math.cos(kappa * rho), sk = Math.sin(kappa * rho), o = (q * NL + j) * 4;
+      P[o] = cm * ck; P[o + 1] = cm * sk; P[o + 2] = sm * ck; P[o + 3] = sm * sk;
+    });
+  });
+  return (LCACHE[sleutel] = { nx, ny, idx: Int32Array.from(cellen, (c) => c[0]), rho: Float32Array.from(cellen, (c) => c[1]), P, NL });
+}
+const zacht = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+/** De lucht in één cel voor één slag: coëfficiënten c vanaf e maal de tabel P vanaf o. */
+function luchtSom(c, e, P, o, n) { let z = 0; for (let j = 0; j < n; j++) z += c[e + j] * P[o + j]; return z; }
+
 // ---- Fourier: vormen als draaiende cirkels ---------------------------------
 
 /** Een gesloten lijn opnieuw bemonsteren op M punten, gelijk verdeeld over de lengte. */
@@ -222,7 +297,17 @@ const SN = {
     if (klinkt(g)) playBuf(g.geluid, modalBuffer(g.geluid.ctx, s.fr, s.am, s.ta, Math.min(4.5, s.ta[0] * 5), 0, s.gr), p.vol, (pos - 0.5) * 0.6);
   },
   act: { aanslaan(s, p, g) { SN.strike(s, p, p.pos, g); } },
-  pointer(s, p, x, y, down, g) { if (down) this.strike(s, p, Math.min(0.97, Math.max(0.03, (x - 0.08) / 0.84)), g); },
+  /**
+   * Waar de snaar ligt: over de hele breedte, met aan beide kanten dezelfde
+   * rand als boven (8% van de hoogte). De snaar is een lijn, geen vlak: langer
+   * maken rekt niets uit, en de toon hangt niet af van de lengte in beeld.
+   */
+  kam(g) { const rand = g.H * 0.08; return { x0: rand, x1: g.W - rand }; },
+  pointer(s, p, x, y, down, g) {
+    if (!down) return;
+    const { x0, x1 } = this.kam(g);
+    this.strike(s, p, Math.min(0.97, Math.max(0.03, (x * g.W - x0) / (x1 - x0))), g);
+  },
   step(s, p, g) {
     const t = g.t;
     volgKlok(s, t, ['t0', 'next']);
@@ -231,7 +316,9 @@ const SN = {
       s.next = t + (1 / p.auto) * (0.6 + g.r() * 0.8);
     }
     clear(g);
-    const ctx = g.ctx, S = g.S, D = g.D, M = s.M, X = s.X, dt = t - s.t0, cy = S * 0.4, amp = S * 0.2, cur = s.cur, env = s.env, x0 = S * 0.08, x1 = S * 0.92;
+    // Hoogtes op g.H (zoals vroeger op S), de snaar en de balken over g.W.
+    const ctx = g.ctx, H = g.H, D = g.D, M = s.M, X = s.X, dt = t - s.t0, cy = H * 0.4, amp = H * 0.2, cur = s.cur, env = s.env;
+    const { x0, x1 } = this.kam(g);
     const st = Math.max(1, Math.round(1 / kwaliteit(g)));     // om de hoeveel punten van de snaar
     for (let k = 0; k < M; k++) { env[k] = s.A[k] * Math.exp(-dt / s.tau[k]); cur[k] = env[k] * Math.cos(TAU * 0.6 * this.ratio(k + 1, p.B) * dt); }
     ctx.lineWidth = D; ctx.globalAlpha = 0.3;
@@ -257,7 +344,7 @@ const SN = {
     ctx.beginPath(); ctx.moveTo(px, cy - amp * 1.2); ctx.lineTo(px, cy + amp * 1.2); ctx.stroke(); ctx.setLineDash([]);
     const qx = x0 + (x1 - x0) * p.pos, qy = cy + amp * 1.25;
     ctx.fillStyle = '#eea13c'; ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(qx - 5 * D, qy + 8 * D); ctx.lineTo(qx + 5 * D, qy + 8 * D); ctx.fill();
-    const by = S * 0.86, bh = S * 0.14, bw = (x1 - x0) / M;
+    const by = H * 0.86, bh = H * 0.14, bw = (x1 - x0) / M;
     let E = 0;
     for (let k = 0; k < M; k++) {
       const v = Math.abs(env[k] * Math.sin((k + 1) * PI * p.pick));
@@ -280,15 +367,31 @@ const TV = {
     s.a = new Float32Array(16); s.b = new Float32Array(16); s.tau = new Float32Array(16).fill(1); s.t0 = 0; s.next = 0; s.E = 0; s.ER = 1; s.hit = null; s.tl = null;
     s.A = new Float32Array(16); s.B = new Float32Array(16);
     s.fr = new Float32Array(16); s.am = new Float32Array(16); s.ta = new Float32Array(16);
-    s.vellen = {};                                         // per roostermaat een drumCache + rooster, pas gemaakt als nodig
+    // Eerdere slagen, nieuwste eerst: voorbij het front van een slag klinkt in
+    // de lucht nog de slag ervoor. Vooraf gemaakt, bij een slag doorgeschoven.
+    s.hist = Array.from({ length: LUCHT_GESCHIEDENIS }, () => ({ a: new Float32Array(16), b: new Float32Array(16), tau: new Float32Array(16).fill(1), t0: 0 }));
+    s.lc = new Float32Array((1 + LUCHT_GESCHIEDENIS) * LUCHT_MODI.length * 4);   // coëfficiënten per slag, de laatste eerst
+    s.front = new Float32Array(1 + LUCHT_GESCHIEDENIS);
+    s.vellen = {};                                         // per roostermaat een drumCache + rooster + lucht, pas gemaakt als nodig
     this.vel(s, g);
     s.gr = geluidsToeval(g);
   },
+  /**
+   * Het vel is een VIERKANT rooster van N × N in het midden (midden(g).vak),
+   * de lucht een rooster over het hele doek met cellen van twee velpixels.
+   * Buiten de cirkel is het vel doorzichtig (0), daar zie je de lucht.
+   */
   vel(s, g) {
     const N = vel(kwaliteit(g));
-    return s.vellen[N] ?? (s.vellen[N] = { DC: drumCache(N), g: rooster(g, N) });
+    if (s.vellen[N]) return s.vellen[N];
+    const cel = 2 * Math.min(g.W, g.H) / N, lx = Math.max(1, Math.round(g.W / cel)), ly = Math.max(1, Math.round(g.H / cel));
+    const lg = rooster(g, { nx: lx, ny: ly });
+    lg.px.fill(LUTS.fosfor[0]);                            // onder het vel: dekkend, anders schemert het vorige beeld door de zachte rand
+    return (s.vellen[N] = { DC: drumCache(N), g: rooster(g, { nx: N, ny: N }), LC: luchtCache(lx, ly, g.W, g.H), lg });
   },
   strike(s, p, rs, th, g) {
+    const oud = s.hist.pop();                              // de oudste wordt de vorige: geen allocatie
+    oud.a.set(s.a); oud.b.set(s.b); oud.tau.set(s.tau); oud.t0 = s.t0; s.hist.unshift(oud);
     const t = g.t, dt = t - s.t0, f0 = mtof(midiFrom(grondtoon(g) - 12, Math.round(p.toon), ladder(g)));
     for (let k = 0; k < 16; k++) {
       const [m, j] = DRUM[k], ratio = j / DRUM[0][1], dec = Math.exp(-dt / s.tau[k]) * Math.cos(TAU * 0.8 * ratio * dt);
@@ -301,16 +404,36 @@ const TV = {
     if (klinkt(g)) playBuf(g.geluid, modalBuffer(g.geluid.ctx, s.fr, s.am, s.ta, Math.min(4, s.ta[0] * 5), 0.25 * p.hard, s.gr), p.vol, rs * Math.cos(th) * 0.5);
   },
   act: { slaan(s, p, g) { TV.strike(s, p, p.rad, g.r() * TAU, g); } },
-  pointer(s, p, x, y, down, g) { if (!down) return; const u = x * 2 - 1, v = y * 2 - 1; this.strike(s, p, Math.min(0.95, Math.hypot(u, v)), Math.atan2(v, u), g); },
+  pointer(s, p, x, y, down, g) {
+    if (!down) return;
+    const { cx, cy, kort } = midden(g), u = (x * g.W - cx) / (kort / 2), v = (y * g.H - cy) / (kort / 2);
+    this.strike(s, p, Math.min(0.95, Math.hypot(u, v)), Math.atan2(v, u), g);
+  },
+  /**
+   * De coëfficiënten van de lucht voor één slag (a, b, tau, t0) op tijd t,
+   * per uitstralende modus vier: omhulling × (a, b) × (cos, sin) van de fase
+   * die het vel NU heeft. De lucht op afstand ρ krijgt daarbij −κρ uit de
+   * tabel, dus een golf die met LUCHT_C naar buiten loopt.
+   */
+  luchtCoef(uit, o, a, b, tau, t0, t) {
+    const dt = t - t0;
+    for (let j = 0; j < LUCHT_MODI.length; j++, o += 4) {
+      const k = LUCHT_MODI[j], w = TAU * 0.8 * (DRUM[k][1] / DRUM[0][1]) * dt, e = Math.exp(-dt / tau[k]), c = Math.cos(w) * e, sn = Math.sin(w) * e;
+      uit[o] = a[k] * c; uit[o + 1] = a[k] * sn; uit[o + 2] = b[k] * c; uit[o + 3] = b[k] * sn;
+    }
+  },
   step(s, p, g) {
     const t = g.t;
-    if (s.hit && s.tl != null && t < s.tl) s.hit.t += t - s.tl;   // de ring schuift mee terug
+    if (s.tl != null && t < s.tl) {                         // de ring en de eerdere slagen schuiven mee terug
+      if (s.hit) s.hit.t += t - s.tl;
+      for (const h of s.hist) if (h.t0) h.t0 += t - s.tl;
+    }
     volgKlok(s, t, ['t0', 'next']);
     if (p.auto > 0 && t >= s.next) {
       if (s.next) this.strike(s, p, Math.min(0.95, Math.max(0, p.rad + (g.r() - 0.5) * 0.2)), g.r() * TAU, g);
       s.next = t + (1 / p.auto) * (0.6 + g.r() * 0.8);
     }
-    const { DC, g: gr } = this.vel(s, g), dt = t - s.t0, A = s.A, B = s.B;
+    const { DC, g: gr, LC, lg } = this.vel(s, g), dt = t - s.t0, A = s.A, B = s.B;
     let E = 0, ER = 0;
     for (let k = 0; k < 16; k++) {
       const ratio = DRUM[k][1] / DRUM[0][1], e = Math.exp(-dt / s.tau[k]), c = e * Math.cos(TAU * 0.8 * ratio * dt);
@@ -318,19 +441,44 @@ const TV = {
       const en = (s.a[k] ** 2 + s.b[k] ** 2) * e * e;
       E += en; ER += en * ratio;
     }
-    const px = gr.px, L = g.L, np = DC.idx.length, C = DC.C, Sn = DC.S;
-    px.fill(LUTS.fosfor[0]);
+    const L = g.L;
+    // De lucht. Slag i (0 = de laatste) geldt tot zijn front, op afstand
+    // LUCHT_C × zijn leeftijd; daarachter de slag ervoor. De cellen liggen
+    // op afstand gesorteerd, dus één keer doorlopen. Rond elk front een band
+    // van ±LUCHT_BAND waarin de twee slagen overvloeien.
+    {
+      const lpx = lg.px, idx = LC.idx, rho = LC.rho, P = LC.P, NL4 = LC.NL * 4, n = idx.length, fel = 120 * LUCHT_FEL;
+      const NH = 1 + LUCHT_GESCHIEDENIS, c = s.lc, F = s.front;
+      this.luchtCoef(c, 0, s.a, s.b, s.tau, s.t0, t); F[0] = LUCHT_C * (t - s.t0);
+      for (let h = 1; h < NH; h++) {
+        const o = s.hist[h - 1];
+        this.luchtCoef(c, h * NL4, o.a, o.b, o.tau, o.t0, t); F[h] = Math.max(F[h - 1], LUCHT_C * (t - o.t0));
+      }
+      let h = 0;                                            // de oudste slag die we kennen (NH − 1) geldt tot het eind
+      for (let q = 0; q < n; q++) {
+        const r = rho[q], o = q * NL4;
+        while (h < NH - 1 && r >= F[h]) h++;
+        let z = luchtSom(c, h * NL4, P, o, NL4);
+        if (h < NH - 1 && r > F[h] - LUCHT_BAND) { const w = zacht((r - F[h] + LUCHT_BAND) / (2 * LUCHT_BAND)); z = z * (1 - w) + luchtSom(c, (h + 1) * NL4, P, o, NL4) * w; }
+        else if (h > 0 && r < F[h - 1] + LUCHT_BAND) { const w = zacht((r - F[h - 1] + LUCHT_BAND) / (2 * LUCHT_BAND)); z = luchtSom(c, (h - 1) * NL4, P, o, NL4) * (1 - w) + z * w; }
+        lpx[idx[q]] = L[Math.max(0, Math.min(255, 128 + z * fel | 0))];
+      }
+    }
+    blit(lg, g);                                             // over het hele doek, zacht
+    // Het vel, vierkant in het midden; buiten de cirkel doorzichtig.
+    const px = gr.px, np = DC.idx.length, C = DC.C, Sn = DC.S;
     for (let q = 0; q < np; q++) {
       let z = 0;
       for (let k = 0; k < 16; k++) z += A[k] * C[k][q] + B[k] * Sn[k][q];
       px[DC.idx[q]] = L[Math.max(0, Math.min(255, 128 + z * 120 | 0))];
     }
-    blit(gr, g);
-    const ctx = g.ctx, S = g.S, D = g.D, R = S / 2 * (DC.N - 1) / DC.N;
-    ctx.strokeStyle = 'rgba(201,211,230,.35)'; ctx.lineWidth = 1.5 * D; ctx.beginPath(); ctx.arc(S / 2, S / 2, R, 0, TAU); ctx.stroke();
+    const { cx, cy, kort, vak } = midden(g);
+    blit(gr, g, false, vak);
+    const ctx = g.ctx, D = g.D, R = kort / 2 * (DC.N - 1) / DC.N;
+    ctx.strokeStyle = 'rgba(201,211,230,.35)'; ctx.lineWidth = 1.5 * D; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
     if (s.hit) {
       const a = t - s.hit.t;
-      if (a < 1) { ctx.strokeStyle = `rgba(238,161,60,${1 - a})`; ctx.beginPath(); ctx.arc(S / 2 + s.hit.x * R, S / 2 + s.hit.y * R, (4 + a * 30) * D, 0, TAU); ctx.stroke(); }
+      if (a < 1) { ctx.strokeStyle = `rgba(238,161,60,${1 - a})`; ctx.beginPath(); ctx.arc(cx + s.hit.x * R, cy + s.hit.y * R, (4 + a * 30) * D, 0, TAU); ctx.stroke(); }
     }
     s.E = E; s.ER = E > 1e-6 ? ER / E : 1;
     s.o.energie = cl01(Math.sqrt(s.E) * 1.5); s.o.helderheid = cl01((s.ER - 1) / 3.8);
@@ -352,7 +500,14 @@ const EP = {
   },
   load(s, pts) { s.list = fourier(pts); s.waveK = -1; s.ghostK = -1; s.trN = 0; s.trI = 0; },
   act: { volgende(s) { s.fi = (s.fi + 1) % 6; EP.load(s, epShape(s.fi)); } },
-  pointer(s, p, x, y, down) { if (down) s.draw = []; if (s.draw) s.draw.push([x * 2 - 1, y * 2 - 1]); },
+  // Tekenen gaat in eenheden van de halve korte zijde rond het midden: een
+  // cirkel op het scherm blijft een cirkel (x * 2 - 1 zou hem 16:9 platdrukken).
+  pointer(s, p, x, y, down, g) {
+    if (down) s.draw = [];
+    if (!s.draw) return;
+    const { cx, cy, kort } = midden(g);
+    s.draw.push([(x * g.W - cx) / (kort / 2), (y * g.H - cy) / (kort / 2)]);
+  },
   pointerUp(s) { if (s.draw && s.draw.length > 12) this.load(s, resample(s.draw, 256)); s.draw = null; },
   /** Twee oscillatoren (L = x, R = y) op de sink; pas als hij speelt. */
   ensure(s, g) {
@@ -387,6 +542,40 @@ const EP = {
     oL.disconnect(); oR.disconnect(); m.disconnect(); g.disconnect();
     s.au = null;
   },
+  /**
+   * Wat je HOORT, naast wat je ziet: links kanaal L (= x), rechts kanaal R
+   * (= y), als oscilloscoop over één hele omwenteling, het nieuwste punt bij
+   * de figuur en het oudste aan de rand. Gelezen uit de geest (dezelfde K
+   * cirkels, 301 punten per omwenteling) met lineaire interpolatie: geen
+   * tweede Fourier-som, en de golf schuift glad, ook als hij langzaam draait.
+   * De hoogte is dezelfde schaal als de figuur. Minder kwaliteit = minder punten.
+   * Geen ruimte naast de figuur (een doek dat niet breed is): niets.
+   */
+  kanalen(s, g, cx, cy, kort, sc) {
+    const ctx = g.ctx, D = g.D, gh = s.ghost, rand = g.H * 0.06, binnen = kort * 0.47;
+    const breed = cx - binnen - rand;
+    if (breed < 8 * D) return;
+    const n = Math.max(24, Math.round(96 * kwaliteit(g))), delen = 4, ALPHA = [0.75, 0.5, 0.3, 0.14];
+    ctx.strokeStyle = 'rgba(201,211,230,.08)'; ctx.lineWidth = D; ctx.beginPath();
+    ctx.moveTo(rand, cy); ctx.lineTo(cx - binnen, cy); ctx.moveTo(cx + binnen, cy); ctx.lineTo(g.W - rand, cy);
+    ctx.stroke();
+    ctx.lineWidth = 1.4 * D; ctx.strokeStyle = pcol(g.pal, 0.72);
+    for (const kant of [-1, 1]) {                          // -1 = links (L, x), 1 = rechts (R, y)
+      const c = kant < 0 ? 0 : 1, x0 = cx + kant * binnen;
+      let deel = 0;
+      ctx.globalAlpha = ALPHA[0]; ctx.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const u = i / n, f = (((s.ph - u) % 1) + 1) % 1 * 300, i0 = Math.min(299, f | 0), fr = f - i0;
+        const v = gh[2 * i0 + c] * (1 - fr) + gh[2 * i0 + 2 + c] * fr, X = x0 + kant * u * breed, Y = cy + v * sc;
+        if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y);
+        if (i < n && (i + 1) * delen > (deel + 1) * n) {   // grens van een deel: afmaken en zachter verder
+          ctx.stroke(); deel++; ctx.globalAlpha = ALPHA[deel]; ctx.beginPath(); ctx.moveTo(X, Y);
+        }
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  },
   step(s, p, g) {
     // s.lt == null i.p.v. het origineel `s.lt || t`: de audioklok begint op 0.
     const t = g.t, dt = Math.max(0, Math.min(0.1, t - (s.lt ?? t)));   // terug in de tijd: stilstaan, niet achteruit
@@ -419,7 +608,10 @@ const EP = {
       s.ghostK = K; s.trN = 0; s.trI = 0;
     }
     clear(g);
-    const ctx = g.ctx, S = g.S, D = g.D, sc = S * 0.36, cx = S / 2, cy = S / 2, a = s.ph * TAU;
+    // De figuur rond het midden, op de korte zijde (heel in beeld); links en
+    // rechts ervan de twee kanalen als golfvorm.
+    const ctx = g.ctx, D = g.D, { cx, cy, kort } = midden(g), sc = kort * 0.36, a = s.ph * TAU;
+    this.kanalen(s, g, cx, cy, kort, sc);
     ctx.strokeStyle = 'rgba(201,211,230,.14)'; ctx.lineWidth = D; ctx.beginPath();
     for (let i = 0; i <= 300; i++) { const X = cx + gh[2 * i] * sc, Y = cy + gh[2 * i + 1] * sc; if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); }
     ctx.stroke();
@@ -449,7 +641,7 @@ const EP = {
     ctx.fillStyle = '#fbe8f3'; ctx.beginPath(); ctx.arc(cx + x * sc, cy + y * sc, 3 * D, 0, TAU); ctx.fill();
     if (s.draw && s.draw.length > 1) {
       ctx.strokeStyle = '#eea13c'; ctx.lineWidth = 2 * D; ctx.beginPath();
-      s.draw.forEach(([u, v], i) => { const X = (u + 1) / 2 * S, Y = (v + 1) / 2 * S; if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); });
+      s.draw.forEach(([u, v], i) => { const X = cx + u * kort / 2, Y = cy + v * kort / 2; if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); });
       ctx.stroke();
     }
     s.tip[0] = x; s.tip[1] = y;
@@ -464,6 +656,17 @@ const DW = {
   presets: [['Mist', { dens: 30, mov: 0.15, swirl: 0.1, size: 0.3 }], ['Regen', { dens: 40, mov: 0.7, swirl: 0, size: 0.04 }],
     ['Draaikolk', { dens: 18, mov: 0.2, swirl: 0.9, size: 0.12 }], ['Stil', { dens: 4, mov: 0.1, swirl: 0.2, size: 0.35 }]],
   outs: ['hoogte', 'breedte', 'spreiding'], events: ['korrel'],
+  /*
+   * 16:9: s.x en s.y blijven FRACTIES van breedte en hoogte (0..1), want dat
+   * is wat het geluid leest: x = plek in de korrelbuffer en panorama, y = toon.
+   * De beweging rekent in echte eenheden (de hoogte = 1, de breedte = W / H):
+   * duwtjes, draaikolk, veer naar het midden, demping en snelheid zijn in alle
+   * richtingen gelijk, dus de wolk beweegt precies zoals vroeger op de korte
+   * zijde en rekt niet uit. Beginnen en verstrooien gaan over het hele doek.
+   * (Een zwakkere veer in x, zodat de wolk even breed blijft als het doek,
+   * is geprobeerd: de draaikolk maakt er dan een draaiende staaf van, en
+   * breder wordt hij er toch niet door.) Op een vierkant doek is alles zoals het was.
+   */
   init(s, p, g) {
     const n = 80;
     s.n = n; s.x = new Float32Array(n).map(() => 0.2 + g.r() * 0.6); s.y = new Float32Array(n).map(() => 0.2 + g.r() * 0.6);
@@ -499,43 +702,48 @@ const DW = {
     s.last = t;
     if (s.att && s.att.t > t) s.att.t = t;
     const n = s.n, att = s.att && t - s.att.t < 0.4 ? s.att : null;
+    const A = g.W / g.H, m = 0.02;                         // breedte in echte eenheden, rand (zoals vroeger 0,02)
     for (let i = 0; i < n; i++) {
-      const dx = s.x[i] - 0.5, dy = s.y[i] - 0.5;
+      const X = s.x[i] * A, dx = X - A / 2, dy = s.y[i] - 0.5;
       let ax = (g.r() - 0.5) * p.mov * 3 - dy * p.swirl * 0.8 - dx * 0.15, ay = (g.r() - 0.5) * p.mov * 3 + dx * p.swirl * 0.8 - dy * 0.15;
-      if (att) { ax += (att.x - s.x[i]) * 4; ay += (att.y - s.y[i]) * 4; }
-      s.vx[i] = (s.vx[i] + ax * dt) * 0.97; s.vy[i] = (s.vy[i] + ay * dt) * 0.97; s.x[i] += s.vx[i] * dt; s.y[i] += s.vy[i] * dt;
-      if (s.x[i] < 0.02) { s.x[i] = 0.02; s.vx[i] *= -1; }
-      if (s.x[i] > 0.98) { s.x[i] = 0.98; s.vx[i] *= -1; }
-      if (s.y[i] < 0.02) { s.y[i] = 0.02; s.vy[i] *= -1; }
-      if (s.y[i] > 0.98) { s.y[i] = 0.98; s.vy[i] *= -1; }
+      if (att) { ax += (att.x * A - X) * 4; ay += (att.y - s.y[i]) * 4; }
+      s.vx[i] = (s.vx[i] + ax * dt) * 0.97; s.vy[i] = (s.vy[i] + ay * dt) * 0.97;
+      // Eerst opslaan, dan de rand toetsen (op de Float32-waarde, zoals vroeger):
+      // op een vierkant doek (A = 1) zo bit voor bit de oude beweging.
+      s.x[i] = (X + s.vx[i] * dt) / A; s.y[i] += s.vy[i] * dt;
+      if (s.x[i] * A < m) { s.x[i] = m / A; s.vx[i] *= -1; }
+      if (s.x[i] * A > A - m) { s.x[i] = 1 - m / A; s.vx[i] *= -1; }
+      if (s.y[i] < m) { s.y[i] = m; s.vy[i] *= -1; }
+      if (s.y[i] > 1 - m) { s.y[i] = 1 - m; s.vy[i] *= -1; }
       s.f[i] *= 0.9;
     }
     s.acc += p.dens * dt;
     while (s.acc >= 1) { s.acc -= 1; this.emit(s, p, g.r() * n | 0, g); }
     clear(g);
-    const ctx = g.ctx, S = g.S, D = g.D, kw = kwaliteit(g);
+    const ctx = g.ctx, W = g.W, H = g.H, D = g.D, kw = kwaliteit(g);
+    // Acht stroken = acht stukken van de korrelbuffer (x), vijftien toonlijnen (y).
     ctx.fillStyle = 'rgba(45,86,212,.07)';
-    for (let b = 1; b < 8; b += 2) ctx.fillRect(b * S / 8, 0, S / 8, S);
+    for (let b = 1; b < 8; b += 2) ctx.fillRect(b * W / 8, 0, W / 8, H);
     // Toonlijnen: één pad (ze kruisen niet, dus hetzelfde beeld als vijftien strokes).
     ctx.strokeStyle = 'rgba(201,211,230,.07)'; ctx.lineWidth = D; ctx.beginPath();
-    for (let l = 0; l <= 14; l++) { const y = S * (l / 14); ctx.moveTo(0, y); ctx.lineTo(S, y); }
+    for (let l = 0; l <= 14; l++) { const y = H * (l / 14); ctx.moveTo(0, y); ctx.lineTo(W, y); }
     ctx.stroke();
     if (kw >= 1) {
-      for (let i = 0; i < n; i++) { ctx.fillStyle = pcol(g.pal, 0.45 + 0.5 * (1 - s.y[i])); ctx.beginPath(); ctx.arc(s.x[i] * S, s.y[i] * S, 2.3 * D, 0, TAU); ctx.fill(); }
+      for (let i = 0; i < n; i++) { ctx.fillStyle = pcol(g.pal, 0.45 + 0.5 * (1 - s.y[i])); ctx.beginPath(); ctx.arc(s.x[i] * W, s.y[i] * H, 2.3 * D, 0, TAU); ctx.fill(); }
     } else {
       // Grover: de kleur per band, één pad per band.
       const nb = Math.max(4, Math.round(16 * kw));
       for (let i = 0; i < n; i++) s.band[i] = Math.min(nb - 1, (1 - s.y[i]) * nb | 0);
       for (let b = 0; b < nb; b++) {
         ctx.fillStyle = pcol(g.pal, 0.45 + 0.5 * (b + 0.5) / nb); ctx.beginPath();
-        for (let i = 0; i < n; i++) if (s.band[i] === b) { const X = s.x[i] * S, Y = s.y[i] * S; ctx.moveTo(X + 2.3 * D, Y); ctx.arc(X, Y, 2.3 * D, 0, TAU); }
+        for (let i = 0; i < n; i++) if (s.band[i] === b) { const X = s.x[i] * W, Y = s.y[i] * H; ctx.moveTo(X + 2.3 * D, Y); ctx.arc(X, Y, 2.3 * D, 0, TAU); }
         ctx.fill();
       }
     }
     for (let i = 0; i < n; i++) {
-      if (s.f[i] > 0.05) { ctx.strokeStyle = `rgba(238,244,240,${s.f[i]})`; ctx.beginPath(); ctx.arc(s.x[i] * S, s.y[i] * S, (3 + (1 - s.f[i]) * 16) * D, 0, TAU); ctx.stroke(); }
+      if (s.f[i] > 0.05) { ctx.strokeStyle = `rgba(238,244,240,${s.f[i]})`; ctx.beginPath(); ctx.arc(s.x[i] * W, s.y[i] * H, (3 + (1 - s.f[i]) * 16) * D, 0, TAU); ctx.stroke(); }
     }
-    if (att) { ctx.strokeStyle = 'rgba(238,161,60,.6)'; ctx.beginPath(); ctx.arc(att.x * S, att.y * S, 10 * D, 0, TAU); ctx.stroke(); }
+    if (att) { ctx.strokeStyle = 'rgba(238,161,60,.6)'; ctx.beginPath(); ctx.arc(att.x * W, att.y * H, 10 * D, 0, TAU); ctx.stroke(); }
     let mx = 0, my = 0, v = 0;
     for (let i = 0; i < n; i++) { mx += s.x[i]; my += s.y[i]; }
     mx /= n; my /= n;

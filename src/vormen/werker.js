@@ -14,7 +14,8 @@ import { BUDGET_WERKER } from './budget.js';
  * waarheid. Alleen het budget is ruimer (BUDGET_WERKER): hier blokkeert niets.
  *
  * Berichten van de hoofdthread (alleen gegevens, geen functies):
- *   { type: 'kies', systeem, zaad, maat, budgetMs, kwaliteit }  systeem (opnieuw) starten
+ *   { type: 'kies', systeem, zaad, breedte, hoogte, budgetMs, kwaliteit }
+ *                                                                systeem (opnieuw) starten, doek in pixels
  *   { type: 'params', p: { naam: waarde } }                      parameters in eigen eenheid
  *   { type: 'kwaliteit', v }                                     kwaliteit met de hand
  *   { type: 'frame', t }                                         bijwerken tot t (audioklok, s)
@@ -26,7 +27,7 @@ import { BUDGET_WERKER } from './budget.js';
  * Het beeld gaat als ImageBitmap terug (transferable, geen kopie over de
  * grens). Met createImageBitmap(canvas), NIET transferToImageBitmap(): dat
  * laat het canvas leeg achter, en de meeste vormen tekenen verder op hun
- * vorige beeld (sporen, fade). Een kopie van 512² kost weinig.
+ * vorige beeld (sporen, fade). Een kopie van 640 × 360 kost weinig.
  *
  * `draaiWerker(zelf, …)` is de logica als functie van een 'self'-achtig
  * object, zodat de test hem in Node kan draaien zonder echte Worker. Alleen
@@ -40,7 +41,7 @@ export function draaiWerker(zelf, { maakCanvas, maakBitmap, nu }) {
 
   function kies(m) {
     if (!laag) {
-      laag = new VormLaag({ maakCanvas, werker: false, systeem: m.systeem, zaad: m.zaad, maat: m.maat,
+      laag = new VormLaag({ maakCanvas, werker: false, systeem: m.systeem, zaad: m.zaad, breedte: m.breedte, hoogte: m.hoogte,
         budgetMs: m.budgetMs ?? BUDGET_WERKER, nu, kwaliteit: m.kwaliteit });
       laag.on('noodrem', (info) => zelf.postMessage({ type: 'noodrem', ...info }));
     } else {

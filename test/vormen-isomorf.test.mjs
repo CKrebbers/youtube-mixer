@@ -1,12 +1,17 @@
 // De vier isomorfe Vormmachines (sn, tv, ep, dw): beeld zonder geluid, en
 // geluid alleen achter een sink. Nep-canvas en een nep-AudioContext die
-// net zo streng is als Chrome over wat hij aanneemt.
+// net zo streng is als Chrome over wat hij aanneemt. Op het 16:9-doek van
+// de app (640 × 360, ROADMAP 7): het hele doek, niets uitgerekt, en het
+// geluid precies als op het oude vierkant.
 // Draai met: node test/vormen-isomorf.test.mjs
 import { readFileSync } from 'node:fs';
 
-const { SYSTEMEN_ISOMORF, beeldKnoppen, klinkt, modalBuffer, drumCache, fourier, epShape, midiFrom, mtof, nname } =
+const { SYSTEMEN_ISOMORF, beeldKnoppen, klinkt, modalBuffer, drumCache, luchtCache, LUCHT_C, LUCHT_MODI, LUCHT_GESCHIEDENIS, fourier, epShape, midiFrom, mtof, nname } =
   await import('../src/vormen/systemen-isomorf.js');
 const { draaiKnoppen, SYSTEMEN, LUTS, maakRng } = await import('../src/vormen/systemen.js');
+const { maten, midden } = await import('../src/vormen/hulp.js');
+const { LAAG_BREEDTE, LAAG_HOOGTE } = await import('../src/vormen/laag.js');
+const W = LAAG_BREEDTE, H = LAAG_HOOGTE;
 
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
@@ -23,6 +28,34 @@ function maakCanvas(w, h) {
     set(t, k, v) { t[k] = v; return true; },
   });
   return { width: w, height: h, getContext: () => ctx, tel };
+}
+// Een doek dat elke tekenaanroep met zijn argumenten bewaart (log.length = 0 om te wissen).
+function maakOpneemCanvas(w, h) {
+  const log = [], tel = { n: 0 };
+  const ctx = new Proxy({
+    createImageData: (b, hh) => ({ data: new Uint8ClampedArray(b * hh * 4) }),
+    tel,
+  }, {
+    get(t, k) { if (k in t) return t[k]; return (...a) => { tel.n++; log.push([k, a]); }; },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  return { width: w, height: h, getContext: () => ctx, tel, log };
+}
+/**
+ * Van links tot rechts: het x-bereik van alles wat in `log` getekend is,
+ * ZONDER de achtergrond (clear: één fillRect over het hele doek), want die
+ * reikt altijd tot de randen en zegt niets over de vorm.
+ */
+function bereik(log, w = W, h = H) {
+  let lo = Infinity, hi = -Infinity;
+  const zet = (a, b = a) => { lo = Math.min(lo, a); hi = Math.max(hi, b); };
+  for (const [k, a] of log) {
+    if (k === 'moveTo' || k === 'lineTo') zet(a[0]);
+    else if (k === 'arc') zet(a[0] - a[2], a[0] + a[2]);
+    else if (k === 'fillRect' && !(a[0] === 0 && a[1] === 0 && a[2] === w && a[3] === h)) zet(a[0], a[0] + a[2]);
+    else if (k === 'drawImage') zet(a[1], a[1] + a[3]);
+  }
+  return { lo, hi };
 }
 function getallen(s, uit = [], diep = 0) {
   if (diep > 3 || s == null) return uit;
@@ -102,9 +135,11 @@ const nepSink = (opties = {}) => {
 const telOp = (ctx) => Object.values(ctx.tel).reduce((a, b) => a + b, 0);
 
 // ---- een g zoals VormLaag.zetSysteem hem maakt ------------------------------
-function maakG(sys, { zaad = 7, maat = 512, geluid = null, kwaliteit } = {}) {
-  const canvas = maakCanvas(maat, maat);
-  const g = { ctx: canvas.getContext('2d'), S: maat, D: maat / 320, t: 0, pal: sys.pal, L: LUTS[sys.pal], r: maakRng(zaad), maakCanvas, geluid };
+// Op het doek van de app (640 × 360), met maten() uit hulp.js. Die kent geen
+// g.S meer: gebruikt een systeem hem nog, dan wordt het NaN.
+function maakG(sys, { zaad = 7, breedte = W, hoogte = H, geluid = null, kwaliteit, opname = false } = {}) {
+  const canvas = opname ? maakOpneemCanvas(breedte, hoogte) : maakCanvas(breedte, hoogte);
+  const g = { ctx: canvas.getContext('2d'), ...maten(breedte, hoogte), t: 0, pal: sys.pal, L: LUTS[sys.pal], r: maakRng(zaad), maakCanvas, geluid };
   if (kwaliteit !== undefined) g.kwaliteit = kwaliteit;
   return { g, canvas };
 }
@@ -356,6 +391,205 @@ console.log('de hulpjes');
   ok('drumCache: per maat één keer, pixels binnen het vel', drumCache(110) === dc && dc.idx.length > 0.7 * 110 * 110 && dc.idx.length < 0.8 * 110 * 110 && dc2.idx.length < dc.idx.length);
   const f = fourier(epShape(0));
   ok('fourier: 255 cirkels, grootste eerst', f.length === 255 && Math.hypot(f[0].re, f[0].im) >= Math.hypot(f[1].re, f[1].im));
+}
+
+console.log('16:9 (ROADMAP 7): het hele doek, niets uitgerekt, het geluid hetzelfde');
+{
+  const [SN, TV, EP, DW] = SYSTEMEN_ISOMORF;
+  const bron = readFileSync(new URL('../src/vormen/systemen-isomorf.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  ok('noemt g.S niet meer, en geen verouderd rooster(g, getal)', !/\bg\.S\b/.test(bron) && !/rooster\(\s*g\s*,(?!\s*\{)/.test(bron));
+
+  // Na 3 s: wat de laatste stap tekent reikt van rand tot rand, en niet ver buiten het doek.
+  for (const sys of SYSTEMEN_ISOMORF) {
+    const run = { sys, ...start(sys, { opname: true }) };
+    draai(run, 179); run.canvas.log.length = 0; draai(run, 1, 179 / 60);
+    const { lo, hi } = bereik(run.canvas.log);
+    ok(`${sys.id}: het beeld reikt van ${lo.toFixed(0)} tot ${hi.toFixed(0)} px op ${W}: de hele breedte`, lo <= 0.1 * W && hi >= 0.9 * W && lo >= -0.05 * W && hi <= 1.05 * W);
+  }
+
+  // sn: de snaar van rand tot rand (rand = 8% van de hoogte), hoogtes op H.
+  {
+    const run = { sys: SN, ...start(SN, { opname: true, p: { auto: 0 } }) };
+    run.g.t = 1; SN.act.aanslaan(run.s, run.p, run.g); run.canvas.log.length = 0; draai(run, 1, 1.5);
+    const r = H * 0.08, pad = run.canvas.log.filter(([k]) => k === 'moveTo' || k === 'lineTo').map(([, a]) => a);
+    ok('sn: de snaar loopt van 0,08 H tot W − 0,08 H, op 0,4 H', pad.some(([x, y]) => bij(x, r, 1e-9) && bij(y, 0.4 * H, 1e-6)) && pad.some(([x, y]) => bij(x, W - r, 1e-9) && bij(y, 0.4 * H, 0.5)));
+    const plek = (pos) => (r + (W - 2 * r) * pos) / W;
+    const a = { sys: SN, ...start(SN, { p: { auto: 0 } }) }, b = { sys: SN, ...start(SN, { p: { auto: 0 } }) };
+    a.g.t = b.g.t = 2;
+    SN.pointer(a.s, a.p, plek(0.3), 0.4, true, a.g); SN.strike(b.s, b.p, 0.3, b.g);
+    ok('sn: klikken op 30% van de snaar = aanslaan op plukplek 0,3', a.s.A.every((x, i) => bij(x, b.s.A[i], 1e-6)));
+  }
+
+  // tv: het vel rond en vierkant in het midden, de lucht over het hele doek.
+  {
+    const run = { sys: TV, ...start(TV, { opname: true }) };
+    draai(run, 120); run.canvas.log.length = 0; draai(run, 1, 2);
+    const plaatjes = run.canvas.log.filter(([k]) => k === 'drawImage').map(([, a]) => a), v = run.s.vellen[110];
+    const { vak } = midden(run.g);
+    ok('tv: de lucht over het hele doek, daarna het vel (110 × 110) in het vierkant in het midden',
+      plaatjes.length === 2 && plaatjes[0][0] === v.lg.c && plaatjes[0].slice(1).join() === `0,0,${W},${H}` &&
+      plaatjes[1][0] === v.g.c && v.g.nx === 110 && v.g.ny === 110 && plaatjes[1].slice(1).join() === [vak.x, vak.y, vak.b, vak.h].join() && vak.b === H && vak.x === (W - H) / 2);
+    const lc = v.LC;
+    ok(`tv: lucht ${lc.nx} × ${lc.ny} cellen (twee velpixels), ${lc.idx.length} buiten het vel, op afstand gesorteerd`,
+      lc.nx === 98 && lc.ny === 55 && lc.rho.every((x, i) => i === 0 || x >= lc.rho[i - 1]) && lc.idx.length > 0.5 * lc.nx * lc.ny && lc.idx.length < 0.75 * lc.nx * lc.ny);
+    ok('tv: alleen m ≤ 2 straalt uit (9 van de 16 modi), en de lucht begint op nul aan de rand',
+      LUCHT_MODI.length === 9 && [...lc.P.subarray(0, lc.NL * 4)].every((x) => Math.abs(x) < 1e-3));
+    ok('tv: luchtCache per doek één keer', luchtCache(98, 55, W, H) === lc);
+
+    // Het front: één slag, dan loopt de lucht met LUCHT_C naar buiten; verder weg nog niets.
+    // (Lange uitklinktijd, zodat de lucht na een paar seconden nog duidelijk beweegt.)
+    const eenSlag = () => { const r = { sys: TV, ...start(TV, { zaad: 4, p: { auto: 0, damp: 3 } }) }; r.g.t = 1; TV.act.slaan(r.s, r.p, r.g); return r; };
+    const een = eenSlag(), lv = een.s.vellen[110], leeg = een.g.L[128], n = lv.LC.idx.length;
+    const cellen = (run, f) => { let x = 0; for (let q = 0; q < n; q++) if (f(lv.LC.rho[q], run.s.vellen[110].lg.px[lv.LC.idx[q]], q)) x++; return x; };
+    draai(een, 1, 1.5);
+    const front = LUCHT_C * 0.5;
+    const voor = cellen(een, (r, pix) => r > 0.02 && r < front - 0.05 && pix !== leeg), achter = cellen(een, (r, pix) => r > front + 0.05 && pix !== leeg);
+    ok(`tv: 0,5 s na de eerste slag: lucht tot ρ = ${front} (${voor} cellen), daarachter nog stil (${achter})`, voor > 50 && achter === 0);
+    draai(een, 1, 3.2);
+    const ver = cellen(een, (r) => r > 0.8), verBeweegt = cellen(een, (r, pix) => r > 0.8 && pix !== leeg);
+    ok(`tv: 2,2 s na de slag is het front voorbij de verste hoek (${verBeweegt} van ${ver} verre cellen bewegen)`, ver > 50 && verBeweegt > 0.6 * ver);
+    // Een tweede slag: voorbij zijn front klinkt de eerste nog (geen flits over de hele lucht).
+    const twee = eenSlag();
+    draai(twee, 1, 3.2);
+    twee.g.t = 3.2; TV.act.slaan(twee.s, twee.p, twee.g);
+    ok(`tv: een slag schuift de vorige in de geschiedenis (${LUCHT_GESCHIEDENIS} terug)`, twee.s.hist.length === LUCHT_GESCHIEDENIS && twee.s.hist[0].t0 === 1 && twee.s.hist[1].t0 === 0);
+    draai(een, 1, 3.4); draai(twee, 1, 3.4);
+    const f2 = LUCHT_C * 0.2;
+    const verGelijk = cellen(twee, (r, pix, q) => r > f2 + 0.05 && pix === een.s.vellen[110].lg.px[lv.LC.idx[q]]), verAlle = cellen(twee, (r) => r > f2 + 0.05);
+    const dichtAnders = cellen(twee, (r, pix, q) => r < f2 - 0.05 && pix !== een.s.vellen[110].lg.px[lv.LC.idx[q]]);
+    ok(`tv: 0,2 s na een tweede slag: voorbij zijn front precies de lucht van de eerste (${verGelijk} van ${verAlle}), ervoor de nieuwe (${dichtAnders} anders)`,
+      verAlle > 100 && verGelijk === verAlle && dichtAnders > 20);
+    // Klok terug: de leeftijd van de vorige slag blijft gelijk.
+    const leeftijd = twee.g.t - twee.s.hist[0].t0;
+    draai(twee, 1, 0.5);
+    ok('tv: klok terug -> de eerdere slagen schuiven mee', bij(twee.g.t - twee.s.hist[0].t0, leeftijd, 1e-9));
+    // Klikken: een kwart van de korte zijde rechts van het midden = slagstraal 0,5.
+    const k = { sys: TV, ...start(TV, { p: { auto: 0 } }) };
+    k.g.t = 1; TV.pointer(k.s, k.p, (W / 2 + H / 4) / W, 0.5, true, k.g);
+    ok('tv: klikken rekent in de korte zijde rond het midden (rechts van het midden = straal 0,5, hoek 0)', bij(k.s.hit.x, 0.5, 1e-9) && bij(k.s.hit.y, 0, 1e-9));
+  }
+
+  // ep: de figuur rond het midden op de korte zijde; L en R als golfvorm ernaast.
+  {
+    const run = { sys: EP, ...start(EP, { opname: true }) };
+    draai(run, 90); run.canvas.log.length = 0; draai(run, 1, 1.5);
+    const { cx, cy, kort } = midden(run.g), sc = kort * 0.36, b = kort * 0.47;
+    const pad = run.canvas.log.filter(([k]) => k === 'moveTo' || k === 'lineTo').map(([, a]) => a);
+    const begint = (X, v) => pad.some(([x, y]) => bij(x, X, 1e-9) && Math.abs(y - (cy + v * sc)) < 2);
+    ok(`ep: de punt staat niet op de as (x ${run.s.tip[0].toFixed(2)}, y ${run.s.tip[1].toFixed(2)}), dus de volgende twee zeggen iets`, Math.abs(run.s.tip[0]) > 0.1 && Math.abs(run.s.tip[1]) > 0.1);
+    ok('ep: rechts begint kanaal R bij de figuur op de hoogte van de punt (y)', begint(cx + b, run.s.tip[1]));
+    ok('ep: links begint kanaal L bij de figuur met de x van de punt', begint(cx - b, run.s.tip[0]));
+    ok('ep: de golfvormen blijven binnen de hoogte van de figuur', pad.filter(([x]) => x > cx + b || x < cx - b).every(([, y]) => Math.abs(y - cy) <= sc * 1.3));
+    // Tekenen: een cirkel op het scherm blijft een cirkel (x * 2 - 1 maakte er een ovaal van).
+    const t = { sys: EP, ...start(EP) };
+    for (let i = 0; i <= 64; i++) {
+      const a = i / 64 * 2 * Math.PI;
+      EP.pointer(t.s, t.p, (cx + 100 * Math.cos(a)) / W, (cy + 100 * Math.sin(a)) / H, i === 0, t.g);
+    }
+    EP.pointerUp(t.s);
+    const [c0, c1] = t.s.list, m0 = Math.hypot(c0.re, c0.im), m1 = Math.hypot(c1.re, c1.im);
+    ok(`ep: een getekende cirkel wordt één cirkel (grootste ${m0.toFixed(3)}, tweede ${m1.toFixed(3)})`, m0 > 0.95 && m1 < 0.03);
+    const smal = { sys: EP, ...start(EP, { breedte: 360, hoogte: 360, opname: true }) };
+    draai(smal, 30);
+    const smalPad = smal.canvas.log.filter(([k]) => k === 'moveTo' || k === 'lineTo');
+    ok('ep: op een vierkant doek geen golfvormen (geen ruimte), de figuur blijft', smalPad.length > 300 && smalPad.every(([, [x]]) => Math.abs(x - 180) < 0.47 * 360));
+  }
+
+  // dw: bewegen in echte eenheden, dus in beeld even veel naar links/rechts als op/neer.
+  {
+    const run = { sys: DW, ...start(DW, { p: { mov: 1, swirl: 0, dens: 0 } }) };
+    let sx = 0, sy = 0;
+    for (let i = 0; i < 240; i++) {
+      const x0 = Float64Array.from(run.s.x), y0 = Float64Array.from(run.s.y);
+      draai(run, 1, i / 60);
+      for (let j = 0; j < run.s.n; j++) { sx += ((run.s.x[j] - x0[j]) * W) ** 2; sy += ((run.s.y[j] - y0[j]) * H) ** 2; }
+    }
+    ok(`dw: stapjes in beeld even groot in x en y (verhouding ${(sx / sy).toFixed(2)}): niets uitgerekt`, sx / sy > 0.8 && sx / sy < 1.25);
+    const breed = { sys: DW, ...start(DW) };
+    ok('dw: begint over het hele doek (x als fractie van de breedte)', Math.min(...breed.s.x) < 0.25 && Math.max(...breed.s.x) > 0.75);
+    // Het geluid leest x als fractie van de breedte, op elk doek hetzelfde.
+    const korrels = [];                                   // per doek: { pan, rate, start: [wanneer, plek, duur] }
+    for (const [b, h] of [[W, H], [512, 512]]) {
+      const sink = nepSink();
+      sink.korrelBuffer = sink.ctx.createBuffer(2, 48000 * 3, 48000);
+      const panner = sink.ctx.createStereoPanner, bron = sink.ctx.createBufferSource, k = {};
+      sink.ctx.createStereoPanner = () => (k.pn = panner());
+      sink.ctx.createBufferSource = () => { const n = bron(), s0 = n.start; n.start = (...a) => { k.start = a; s0(...a); }; return (k.src = n); };
+      const r = { sys: DW, ...start(DW, { geluid: sink, breedte: b, hoogte: h, p: { dens: 0 } }) };
+      r.s.x[5] = 0.25; r.s.y[5] = 0.3; r.g.t = 1;
+      DW.emit(r.s, r.p, 5, r.g);
+      korrels.push({ pan: k.pn.pan.value, rate: k.src.playbackRate.value, start: k.start });
+    }
+    const [k1, k2] = korrels;
+    ok('dw: een korrel op 25% van de breedte: panorama −0,4, en toon en plek in de buffer als op het oude vierkant',
+      bij(k1.pan, -0.4, 1e-6) && k1.pan === k2.pan && k1.rate === k2.rate && k1.start.join() === k2.start.join());
+    // Op een vierkant doek precies de oude beweging (dezelfde regels als vóór 16:9, hier nagebouwd).
+    const oud = (s, p, g) => {
+      const t = g.t, dt = Math.max(0, Math.min(0.05, t - (s.last ?? t)));
+      s.last = t;
+      const n = s.n;
+      for (let i = 0; i < n; i++) {
+        const dx = s.x[i] - 0.5, dy = s.y[i] - 0.5;
+        const ax = (g.r() - 0.5) * p.mov * 3 - dy * p.swirl * 0.8 - dx * 0.15, ay = (g.r() - 0.5) * p.mov * 3 + dx * p.swirl * 0.8 - dy * 0.15;
+        s.vx[i] = (s.vx[i] + ax * dt) * 0.97; s.vy[i] = (s.vy[i] + ay * dt) * 0.97; s.x[i] += s.vx[i] * dt; s.y[i] += s.vy[i] * dt;
+        if (s.x[i] < 0.02) { s.x[i] = 0.02; s.vx[i] *= -1; }
+        if (s.x[i] > 0.98) { s.x[i] = 0.98; s.vx[i] *= -1; }
+        if (s.y[i] < 0.02) { s.y[i] = 0.02; s.vy[i] *= -1; }
+        if (s.y[i] > 0.98) { s.y[i] = 0.98; s.vy[i] *= -1; }
+      }
+      s.acc += p.dens * dt;
+      while (s.acc >= 1) { s.acc -= 1; g.r(); g.r(); }       // emit: index en jitter
+    };
+    const nieuw = { sys: DW, ...start(DW, { breedte: 360, hoogte: 360, p: { swirl: 0.9, mov: 0.7 } }) };
+    const ref = { sys: { ...DW, step: oud }, ...start(DW, { breedte: 360, hoogte: 360, p: { swirl: 0.9, mov: 0.7 } }) };
+    draai(nieuw, 600); draai(ref, 600);
+    ok('dw: op een vierkant doek bit voor bit de oude beweging (10 s, draaikolk 0,9 tegen de randen)',
+      ['x', 'y', 'vx', 'vy'].every((v) => nieuw.s[v].every((x, i) => Object.is(x, ref.s[v][i]))));
+  }
+
+  // sn, tv, ep: het geluid hangt niet af van het doek: op 16:9 en op het oude 512² dezelfde samples.
+  for (const [sys, p] of [[SN, { auto: 2 }], [TV, { auto: 2 }]]) {
+    const buffers = [];
+    for (const [b, h] of [[W, H], [512, 512]]) {
+      const sink = nepSink(), echt = sink.ctx.createBuffer, lijst = [];
+      sink.ctx.createBuffer = (...a) => { const buf = echt(...a); lijst.push(buf); return buf; };
+      loop(sys, { geluid: sink, breedte: b, hoogte: h, p }, 240);
+      buffers.push(lijst);
+    }
+    const [a, b] = buffers;
+    ok(`${sys.id}: ${a.length} aanslagen klinken op 16:9 sample voor sample als op het oude vierkant`,
+      a.length >= 3 && a.length === b.length && a.every((buf, i) => buf.getChannelData(0).every((x, j) => Object.is(x, b[i].getChannelData(0)[j]))));
+  }
+  {
+    const golven = [];
+    for (const [b, h] of [[W, H], [512, 512]]) {
+      const sink = nepSink(), echt = sink.ctx.createPeriodicWave, lijst = [];
+      sink.ctx.createPeriodicWave = (re, im) => { lijst.push([...re, ...im]); return echt(re, im); };
+      loop(EP, { geluid: sink, breedte: b, hoogte: h }, 60);
+      golven.push(lijst);
+    }
+    ok('ep: dezelfde golfvormen (L = x, R = y) op 16:9 als op het oude vierkant', golven[0].length === 2 && JSON.stringify(golven[0]) === JSON.stringify(golven[1]));
+  }
+}
+
+console.log('rekentijd: 640 × 360 hooguit W / H keer een vierkant van 360 × 360');
+{
+  // Mediaan van 180 stappen, beste van drie rondes (de machine is druk).
+  const meet = (sys, breedte, hoogte) => {
+    let best = Infinity;
+    for (let ronde = 0; ronde < 3; ronde++) {
+      const run = { sys, ...start(sys, { breedte, hoogte }) }, ts = [];
+      for (let i = 0; i < 180; i++) { run.g.t = i / 60; const t0 = performance.now(); sys.step.call(sys, run.s, run.p, run.g); ts.push(performance.now() - t0); }
+      ts.sort((a, b) => a - b);
+      best = Math.min(best, ts[90]);
+    }
+    return best;
+  };
+  for (const sys of SYSTEMEN_ISOMORF) { meet(sys, W, H); meet(sys, H, H); }   // opwarmen
+  for (const sys of SYSTEMEN_ISOMORF) {
+    const vk = meet(sys, H, H), br = meet(sys, W, H);
+    ok(`${sys.id}: ${vk.toFixed(3)} ms op 360² -> ${br.toFixed(3)} ms op 640 × 360 (× ${(br / vk).toFixed(2)}, mag × ${(W / H).toFixed(2)})`, br <= vk * (W / H) * 1.15 + 0.01);
+  }
 }
 
 console.log('in een echte VormLaag (zoals de hoofdsessie ze straks toevoegt)');

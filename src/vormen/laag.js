@@ -1,5 +1,6 @@
 import { Emitter } from '../lib/emitter.js';
 import { SYSTEMEN, SYSTEEM, LUTS, ACHTERGROND, maakRng, draaiKnoppen } from './systemen.js';
+import { maten } from './hulp.js';
 import { MENGVORMEN, MAX_BEELDLAGEN } from '../video/lagen.js';
 import { Budget, BUDGET_HOOFD, BUDGET_WERKER, KWALITEIT_MIN } from './budget.js';
 
@@ -40,7 +41,23 @@ import { Budget, BUDGET_HOOFD, BUDGET_WERKER, KWALITEIT_MIN } from './budget.js'
 
 export const STAP = 1 / 60;
 export const MAX_STAPPEN = 3;
-export const MAAT = 512;               // het systeem rekent in 320-eenheden, D = MAAT/320
+/**
+ * Het doek van een vormlaag: 16:9 zoals het videobeeld (ROADMAP 7), zodat er
+ * op de mixer niets wegvalt en niets scheef wordt opgerekt. 640 × 360:
+ *   - oppervlakte 230 400 pixels, 12% MINDER dan het oude vierkant van 512²:
+ *     wat met het doek meegroeit (clear/fade, blit, de ImageBitmap-kopie in
+ *     de Worker, de upload naar de GPU) wordt niet duurder, dus de budgetten
+ *     van budget.js (4 ms hoofdthread, 12 ms Worker) hoeven niet opnieuw;
+ *   - precies 2× naar het doek van de mixer (1280 × 720): elke pixel wordt
+ *     2 × 2, geen scheve resampling. Van het oude vierkant was maar
+ *     512 × 288 te zien, 2,5× opgeschaald; nu is alles te zien en scherper;
+ *   - precies 16:9 (ggd 40): een rooster met ny een veelvoud van 9 heeft
+ *     exact vierkante cellen (hulp.js, cellen()).
+ * g.D = korte zijde / 320 = 1,125: lijnen zijn ten opzichte van de vorm even
+ * dik als vroeger (512 / 320 op het vierkant).
+ */
+export const LAAG_BREEDTE = 640;
+export const LAAG_HOOGTE = 360;
 export const AANTAL_LAGEN = MAX_BEELDLAGEN;
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -62,19 +79,22 @@ export class VormLaag extends Emitter {
   /**
    * @param maakCanvas (w, h) -> canvas met getContext('2d')
    * @param zaad       begin van het toeval; zelfde zaad = zelfde beeld
+   * @param breedte, hoogte  het doek in pixels (standaard 640 × 360)
    * @param werker     undefined = automatisch (Worker als het kan), false =
    *                   hoofdthread, of een functie die een Worker(-achtig) maakt
    * @param budgetMs   ms per beeld; standaard 4 op de hoofdthread, 12 in de Worker
    * @param nu         klok om te METEN (ms), alleen voor het budget
    * @param kwaliteit  beginstand van g.kwaliteit
    */
-  constructor({ maakCanvas, systeem = SYSTEMEN[0].id, zaad = 1, maat = MAAT, werker, budgetMs, nu = standaardKlok, kwaliteit }) {
+  constructor({ maakCanvas, systeem = SYSTEMEN[0].id, zaad = 1, breedte = LAAG_BREEDTE, hoogte = LAAG_HOOGTE,
+    werker, budgetMs, nu = standaardKlok, kwaliteit }) {
     super();
     this.maakCanvas = maakCanvas;
     this.zaad = zaad;
-    this.canvas = maakCanvas(maat, maat);
+    this.canvas = maakCanvas(breedte, hoogte);
     this.ctx = this.canvas.getContext('2d');
-    this.maat = maat;
+    this.breedte = breedte;
+    this.hoogte = hoogte;
     this.nu = nu;
     this.aan = false;
     this.dekking = 0.8;
@@ -98,7 +118,7 @@ export class VormLaag extends Emitter {
       // Tot het eerste beeld binnen is: de achtergrond van een vorm, die de
       // shader eraf trekt. Zo is er altijd iets om te uploaden.
       this.ctx.fillStyle = ACHTERGROND;
-      this.ctx.fillRect(0, 0, maat, maat);
+      this.ctx.fillRect(0, 0, breedte, hoogte);
     }
     this.zetSysteem(systeem, kwaliteit);
   }
@@ -116,7 +136,8 @@ export class VormLaag extends Emitter {
     this.teZwaar = false;
     this.laatst = null;
     if (this.werker) {
-      this._post({ type: 'kies', systeem: sys.id, zaad: this.zaad, maat: this.maat, budgetMs: this.budgetMs, kwaliteit: this.kwaliteit });
+      this._post({ type: 'kies', systeem: sys.id, zaad: this.zaad, breedte: this.breedte, hoogte: this.hoogte,
+        budgetMs: this.budgetMs, kwaliteit: this.kwaliteit });
       return;
     }
     this._initHier();
@@ -131,10 +152,11 @@ export class VormLaag extends Emitter {
     const c = this.ctx;
     if (typeof c.reset === 'function') c.reset();
     else Object.assign(c, { lineCap: 'butt', lineJoin: 'miter', lineWidth: 1, globalAlpha: 1, imageSmoothingEnabled: true, globalCompositeOperation: 'source-over' });
-    c.fillStyle = ACHTERGROND; c.fillRect(0, 0, this.maat, this.maat);
+    c.fillStyle = ACHTERGROND; c.fillRect(0, 0, this.breedte, this.hoogte);
     this.s = { o: {}, e: {} };
+    // W, H en D: hulp.js, maten().
     this.g = {
-      ctx: this.ctx, S: this.maat, D: this.maat / 320, t: 0, kwaliteit: this.kwaliteit,
+      ctx: this.ctx, ...maten(this.breedte, this.hoogte), t: 0, kwaliteit: this.kwaliteit,
       pal: this.sys.pal, L: LUTS[this.sys.pal], r: maakRng(this.zaad), maakCanvas: this.maakCanvas,
     };
     this.laatst = null;

@@ -11,13 +11,14 @@
 // Chromium: de headless shell uit de Playwright-cache (~/Library/Caches/ms-playwright),
 // of zet VARVE_CHROME op een eigen pad.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
 const UIT = process.argv[2] || join(WORTEL, 'tools/headless/uit');
+mkdirSync(UIT, { recursive: true });            // anders faalt de eerste foto pas na alle checks
 const POORT = Number(process.env.VARVE_KIJK_POORT) || 8791, DEBUG = Number(process.env.VARVE_KIJK_DEBUG) || 9337;
 const tmp = mkdtempSync(join(tmpdir(), 'varve-kijk-'));
 
@@ -150,13 +151,13 @@ try {
   ok('de audioklok loopt, dus de vormen bewegen', t1 > t0, `${(t1 - t0).toFixed(2)} s`);
   ok('de mixer heeft de lagenstap gebouwd', await evalueer('!!window.videoMixer.gelaagd && !window.videoMixer.fout'), await evalueer('window.videoMixer.fout || ""'));
   ok('nog steeds in de Worker na 60 beelden (geen terugval)', await evalueer("window.vormen.lagen.every((l) => l.modus === 'werker')"));
-  ok('de Worker stuurde ImageBitmaps terug, en frame() geeft het laatste',
-    await evalueer("window.vormen.lagen.every((l) => l.beeld instanceof ImageBitmap && l.beeld.width === 512 && l.versie > 3)"),
+  ok('de Worker stuurde ImageBitmaps terug (16:9, 640 × 360), en frame() geeft het laatste',
+    await evalueer("window.vormen.lagen.every((l) => l.beeld instanceof ImageBitmap && l.beeld.width === 640 && l.beeld.height === 360 && l.versie > 3)"),
     await evalueer("window.vormen.lagen.map((l) => `v${l.versie} ${l.ms?.toFixed(1)} ms ${Math.round(l.kwaliteit * 100)}%`).join(' | ')"));
   ok('het bitmap is niet leeg (createImageBitmap kopieert; transferToImageBitmap liet het canvas leeg)', await evalueer(`(() => {
-    const c = new OffscreenCanvas(512, 512), x = c.getContext('2d');
+    const c = new OffscreenCanvas(640, 360), x = c.getContext('2d');
     x.drawImage(window.vormen.lagen[0].beeld, 0, 0);
-    const d = x.getImageData(0, 0, 512, 512).data;
+    const d = x.getImageData(0, 0, 640, 360).data;
     let licht = 0;
     for (let i = 0; i < d.length; i += 4 * 97) if (d[i] + d[i + 1] + d[i + 2] > 60) licht++;
     return licht > 5;
@@ -274,15 +275,21 @@ try {
     const met = meet();
     window.vormen.lagen[0].aan = false;
     if (oud) mx.lagen.set(id, oud); else mx.lagen.delete(id);
-    const weg = mx.voegBeeldlaagToe({ aan: true, dekking: 1, mengvorm: 'add', frame: () => kwart(512, 512) });
+    // Een laag zoals een vormlaag nu is (16:9, 640 × 360), en een vierkante
+    // (LAAG_FIT 'vullen': boven en onder valt weg, de hoeken blijven gevuld).
+    let weg = mx.voegBeeldlaagToe({ aan: true, dekking: 1, mengvorm: 'add', frame: () => kwart(640, 360) });
     const laag = meet();
     weg();
-    return { zonder, met, laag };
+    weg = mx.voegBeeldlaagToe({ aan: true, dekking: 1, mengvorm: 'add', frame: () => kwart(512, 512) });
+    const vierkant = meet();
+    weg();
+    return { zonder, met, laag, vierkant };
   })()`);
   const rechtop = 'rood groen blauw geel';
   ok('video zonder laag staat rechtop (vier kwarten)', orient.zonder === rechtop, orient.zonder);
   ok('video ONDER een vormlaag staat ook rechtop', orient.met === rechtop, orient.met);
-  ok('de vormlaag zelf staat rechtop en vult tot in de hoeken', orient.laag === rechtop, orient.laag);
+  ok('de vormlaag zelf (16:9) staat rechtop en vult tot in de hoeken', orient.laag === rechtop, orient.laag);
+  ok('een vierkante laag ook (vullen)', orient.vierkant === rechtop, orient.vierkant);
 
   // ---- handelingenlog: vastleggen, bewaren, terugspelen (docs/HANDELINGENLOG.md) ----
   console.log('handelingenlog');
