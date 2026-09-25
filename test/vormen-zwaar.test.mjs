@@ -13,6 +13,13 @@ const { LAAG_BREEDTE, LAAG_HOOGTE } = await import('../src/vormen/laag.js');
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
 
+// Rekentijd in THREADTIJD: alleen de ms dat onze eigen JS-draad rekende, zonder
+// de tijd dat de planner ons wegzet (onder load tot 330 ms voor een stap van 5)
+// en zonder GC- en compilerdraden. Wat de stap zelf doet telt wel. Onder load
+// rekenen we soms op een trage kern (2 à 3× zo duur): boven het budget nog eens
+// meten, hooguit drie keer, de beste telt. Waarom zo: zie vormen.test.mjs.
+const draadMs = () => { const t = process.threadCpuUsage(); return (t.user + t.system) / 1000; };
+
 // ---- nep-canvas: elke tekenaanroep telt, niets tekent (zoals vormen.test) --
 // drawImage bewaart zijn argumenten: zo is te zien WAAR een rooster landt.
 function maakCanvas(w, h) {
@@ -337,26 +344,18 @@ console.log('tijd per stap (640 × 360, zonder echt tekenen: een ondergrens)');
     const r = start(sys, { q });
     r.stap(40);                                  // opwarmen (JIT)
     const ts = [];
-    // Per stap de kleinste van wandkloktijd en processortijd: de wandklok telt
-    // mee als de machine ons even wegzet (andere processen), de processortijd
-    // telt GC-draden mee. Wat overblijft is wat de stap zelf kost.
     for (let i = 0; i < n; i++) {
-      const c0 = process.cpuUsage(), t0 = performance.now();
+      const t0 = draadMs();
       r.stap(1);
-      const wand = performance.now() - t0, c = process.cpuUsage(c0);
-      ts.push(Math.min(wand, (c.user + c.system) / 1000));
+      ts.push(draadMs() - t0);
     }
     ts.sort((a, b) => a - b);
     return { gem: ts.reduce((a, b) => a + b, 0) / n, p99: ts[Math.floor(n * 0.99)], max: ts[n - 1] };
   };
   for (const sys of SYSTEMEN_ZWAAR) {
-    // Een uitschieter door een drukke machine (andere processen) is geen
-    // eigenschap van het systeem: tot drie keer meten, de beste run telt.
-    let best = null;
-    for (let poging = 0; poging < 3 && !(best && best.max < 16); poging++) {
-      const m = meet(sys, 1);
-      if (!best || m.max < best.max) best = m;
-    }
+    // Het maximum telt, niet een percentiel: één dure stap is een hapering.
+    let best = meet(sys, 1);
+    for (let poging = 1; poging < 3 && best.max >= 16; poging++) { const m = meet(sys, 1); if (m.max < best.max) best = m; }
     const laag = [0, 1].map(() => meet(sys, 0.25, 80)).reduce((a, b) => (a.gem < b.gem ? a : b));
     const vol = [0, 1].map(() => meet(sys, 1, 80)).reduce((a, b) => (a.gem < b.gem ? a : b));
     console.log(`      ${sys.id}: kwaliteit 1 gem ${best.gem.toFixed(2)} ms, p99 ${best.p99.toFixed(2)}, max ${best.max.toFixed(2)} · kwaliteit 0,25 gem ${laag.gem.toFixed(2)} ms, max ${laag.max.toFixed(2)}`);

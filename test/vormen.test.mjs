@@ -15,6 +15,22 @@ const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
 const bij = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 
+// Rekentijd in THREADTIJD (process.threadCpuUsage): alleen de ms dat onze eigen
+// JS-draad rekende. Op een drukke machine (load 30–250 op 8 kernen, gemeten 25
+// sep) loopt de wandklok door terwijl de planner ons wegzet: tot 330 ms voor een
+// stap van 5. process.cpuUsage telt GC- en compilerdraden mee: tot 27 ms. Wat de
+// stap zelf doet telt wel, ook GC op de hoofddraad: voor het werk van de stap
+// is de check even streng. Wat threadtijd NIET wegneemt: onder load rekenen we
+// op een trage kern (E-kern, koude cache), 2 à 3× zo duur. Daarom boven het
+// budget nog eens meten, hooguit drie keer, de beste telt; een stap die echt te
+// duur is, is dat elke keer. Bewust niet: een percentiel (p95 verstopt een stap
+// die ALTIJD traag is, zoals wv stap 7: 2,5 ms tegen een p95 van 0,2) en een
+// referentieblok waarmee de drempel meeschaalt (ander rekenwerk vertraagt anders:
+// alleen op de E-kernen werd fl 2,2× zo duur en een vast Float32-blok niet, onder
+// load 250 fl 2,2× en het blok 1,3×; zo'n drempel schaalt met het blok mee, niet
+// met de vorm, en wordt dus te ruim of te krap).
+const draadMs = () => { const t = process.threadCpuUsage(); return (t.user + t.system) / 1000; };
+
 // ---- nep-canvas: elke tekenaanroep telt, niets tekent -----------------------
 function maakCanvas(w, h) {
   const tel = { n: 0 };
@@ -413,14 +429,7 @@ console.log('de lichte systemen (systemen.js) tekenen echt 16:9');
     const stap = () => { gg.t = ++i / 60; s.e = {}; sys.step.call(sys, s, p, gg); };
     for (let k = 0; k < 60; k++) stap();
     const n0 = c.tel.n, ts = [];
-    // Per stap de kleinste van wandklok en processortijd (zoals vormen-zwaar):
-    // een drukke machine die ons even wegzet telt dan niet mee.
-    for (let k = 0; k < 100; k++) {
-      const c0 = process.cpuUsage(), t0 = performance.now();
-      stap();
-      const wand = performance.now() - t0, cpu = process.cpuUsage(c0);
-      ts.push(Math.min(wand, (cpu.user + cpu.system) / 1000));
-    }
+    for (let k = 0; k < 100; k++) { const t0 = draadMs(); stap(); ts.push(draadMs() - t0); }
     ts.sort((a, b) => a - b);
     return { aanroepen: (c.tel.n - n0) / 100, med: ts[50] };
   };
