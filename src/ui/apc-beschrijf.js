@@ -31,6 +31,14 @@ export function beschrijf(action) {
     if (rest === 'loop.exit') return r('loop weg', 'loop weg');
     if (rest === 'loop.halve') return r('loop ½', 'loop halveren');
     if (rest === 'loop.double') return r('loop ×2', 'loop verdubbelen');
+    if (rest === 'loop.in') return r('loop in', 'loop in: begin van een handmatige loop (met quantize op de tel); lampje = wacht op loop out');
+    if (rest === 'loop.out') return r('loop out', 'loop out: einde, en de loop gaat meteen aan (met quantize een heel aantal tellen)');
+    if (rest === 'loop.reloop') return r('reloop', 'reloop/exit: loopt er een loop, dan eraf; anders de laatste loop terug en naar zijn begin');
+    if (rest === 'beatjump.back') return r('◀ spring', 'beatjump terug (standaard 4 tellen, op het grid; in een loop schuift de loop mee)');
+    if (rest === 'beatjump.fwd') return r('spring ▶', 'beatjump vooruit (standaard 4 tellen, op het grid; in een loop schuift de loop mee)');
+    if (rest === 'beatjump.halve') return r('sprong ½', 'beatjump-lengte halveren (1 · 2 · 4 · 8 · 16 · 32 tellen)');
+    if (rest === 'beatjump.double') return r('sprong ×2', 'beatjump-lengte verdubbelen (1 · 2 · 4 · 8 · 16 · 32 tellen)');
+    if (rest === 'play.quant') return r('play ▸1', 'starten op de volgende maat van de track die de maat geeft (zonder maatgever meteen); lampje = wacht');
     if (rest === 'send.a') return r('echo', 'echo-send (naar de gedeelde echo)');
     if (rest === 'send.b') return r('galm', 'galm-send (naar de gedeelde galm)');
     if (rest === 'fx.mix') return r('fx mix', 'effect dry/wet');
@@ -107,6 +115,7 @@ export function beschrijf(action) {
   const vast = {
     'mixer.master': ['master', 'mastervolume'], 'mixer.xfader': ['crossfader', 'crossfader'],
     'mixer.xfader.curve': ['curve', 'crossfadercurve wisselen'],
+    'transport.quantize': ['quantize', 'quantize aan/uit, voor alle tracks: cue, hotcues en loop in/out op de tel, hotcues springen in de maat'],
     'record.start': ['rec', 'opname starten'], 'record.stop': ['rec stop', 'opname stoppen'],
     'record.mode': ['rec soort', 'opname: audio of audio + video'],
     'log.toggle': ['log', 'handelingenlog aan/uit: wat je op de bus doet, met de tijd, om de set terug te spelen'],

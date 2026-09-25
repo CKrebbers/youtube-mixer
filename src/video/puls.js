@@ -48,7 +48,8 @@ export function klokTrack(tracks) {
 export function maatgever(engine, ids) {
   return klokTrack(ids.map((id) => {
     const d = engine.deck(id);
-    return { id, speelt: !!d.playing, heeftGrid: !!d.grid, zicht: d.buffer ? klinkt(d.ui.fader, engine.xfadeGain(id)) : 0 };
+    // Een track die op zijn start op de maat WACHT, klinkt nog niet: geen tel.
+    return { id, speelt: !!d.playing && !d.wacht, heeftGrid: !!d.grid, zicht: d.buffer ? klinkt(d.ui.fader, engine.xfadeGain(id)) : 0 };
   }));
 }
 

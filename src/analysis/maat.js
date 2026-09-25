@@ -152,7 +152,7 @@ export class MaatLezer {
   kies() {
     const lijst = this.tracks?.() ?? [];
     const id = klokTrack(lijst.map((tr) => ({
-      id: tr.id, speelt: !!tr.deck?.playing, heeftGrid: !!tr.deck?.grid, zicht: tr.zicht ?? 0,
+      id: tr.id, speelt: !!tr.deck?.playing && !tr.deck?.wacht, heeftGrid: !!tr.deck?.grid, zicht: tr.zicht ?? 0,
     })));
     return { tr: id === null ? null : lijst.find((x) => x.id === id), lijst };
   }

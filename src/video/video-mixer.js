@@ -541,7 +541,9 @@ export class VideoMixer {
       // beeld bij een pauze staan waar het was, zonder seek.
       doel: Math.max(0, naVertraging(deck.position, vertraging, deck.rate)),
       rate: deck.rate,
-      speelt: deck.playing,
+      // Wacht het deck op zijn start op de maat, dan staat de positie stil:
+      // het beeld ook, anders loopt het weg en springt het terug.
+      speelt: deck.playing && !deck.wacht,
       zoekt: v.seeking,
       seekDuur: laag.seekDuur,
     });

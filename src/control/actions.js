@@ -17,7 +17,7 @@ import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/b
 import { ToonKaart, WIJZER } from '../engine/toonsoort.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
-import { PITCH_BEREIKEN } from '../engine/deck.js';
+import { PITCH_BEREIKEN, SPRONG_TELLEN } from '../engine/deck.js';
 import { hoorbaar as hoorbaarVan, uitgangsVertraging } from '../engine/hoorbaar.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
@@ -304,6 +304,60 @@ export function bindEngine(engine) {
     define(`${n}.loop.halve`, 'trigger', (on) => { if (on) d.halveLoop(); }, { label: `Track ${nr} loop /2` });
     define(`${n}.loop.double`, 'trigger', (on) => { if (on) d.doubleLoop(); }, { label: `Track ${nr} loop x2` });
 
+    // ---- transport: loop in/out, reloop, beatjump, starten op de maat ------
+    // Handmatige loop zoals op een CDJ: in, dan out (de loop gaat meteen aan),
+    // reloop/exit. Met quantize (transport.quantize) op de tel.
+    define(`${n}.loop.in`, 'trigger', (on) => { if (on) d.loopIn(); },
+      { label: `Track ${nr} loop in (begin van een handmatige loop)`,
+        read: () => (!d.buffer ? null : d.loopInPunt !== null ? 1 : 0) });
+    // 1 = er loopt een loop, 0 = loop in staat klaar (drukken sluit hem),
+    // null = niets te doen (nog geen loop in).
+    define(`${n}.loop.out`, 'trigger', (on) => { if (on) d.loopOut(); },
+      { label: `Track ${nr} loop out (einde, de loop gaat aan)`,
+        read: () => (!d.buffer ? null : d.loop ? 1 : d.loopInPunt !== null ? 0 : null) });
+    // 1 = er loopt een loop (drukken = eraf), 0,5 = er is een loop om terug
+    // te halen, null = niets te doen.
+    define(`${n}.loop.reloop`, 'trigger', (on) => { if (on) d.reloop(); },
+      { label: `Track ${nr} reloop / loop uit`,
+        read: () => (!d.buffer ? null : d.loop ? 1 : d.vorigeLoop ? 0.5 : null) });
+
+    // Beatjump: de ingestelde lengte (1–32 tellen, standaard 4) terug of
+    // vooruit, op het grid. In een loop schuift de loop mee. Zelfde regels als
+    // beat-loops: zonder grid of in een onzeker stuk niets, en dan zeggen waarom.
+    const sprongMelding = {
+      geengrid: 'beatjump kan niet zonder beatgrid — tik eerst het tempo (TAP)',
+      onzeker: ONZEKER,
+      rand: 'beatjump: de loop komt dan buiten het nummer te liggen',
+    };
+    for (const [richting, naam, tekst] of [[-1, 'back', 'terug'], [1, 'fwd', 'vooruit']]) {
+      let ingedrukt = false;
+      define(`${n}.beatjump.${naam}`, 'trigger', (on) => {
+        ingedrukt = !!on;
+        if (!on) return;
+        const r = d.beatjump(richting);
+        if (!r.ok && sprongMelding[r.waarom]) engine.emit('melding', { tekst: `track ${nr}: ${sprongMelding[r.waarom]}`, soort: 'fout' });
+      }, { label: `Track ${nr} beatjump ${tekst}`,
+           read: () => (!d.buffer || !d.grid || d.gridZekerHier === false ? null : ingedrukt ? 1 : 0) });
+    }
+    // Lengte als keuze (index), zoals sampler.length: halveren en verdubbelen.
+    // Maar per track: op een lege track is er niets te doen (B4: null = uit).
+    const sprongStand = () => (!d.buffer ? null : SPRONG_TELLEN.indexOf(d.sprongTellen) / (SPRONG_TELLEN.length - 1));
+    define(`${n}.beatjump.halve`, 'trigger', (on) => { if (on) d.halveerSprong(); },
+      { label: `Track ${nr} beatjump-lengte halveren (${SPRONG_TELLEN.join('/')} tellen)`, read: sprongStand });
+    define(`${n}.beatjump.double`, 'trigger', (on) => { if (on) d.verdubbelSprong(); },
+      { label: `Track ${nr} beatjump-lengte verdubbelen (${SPRONG_TELLEN.join('/')} tellen)`, read: sprongStand });
+
+    // Starten op de maat: het geluid begint op het volgende maatbegin van de
+    // track die de maat geeft (Engine.startOpDeMaat); zonder maatgever meteen.
+    // Gewone play en pauze annuleren het wachten. Lampje: 1 = wacht op de
+    // maat, 0 = stil (bruikbaar), null = speelt al of leeg (niets te doen).
+    define(`${n}.play.quant`, 'trigger', (on) => {
+      if (!on || d.playing) return;
+      const r = engine.startOpDeMaat(id);
+      if (r.reden) engine.emit('melding', { tekst: `track ${nr}: ${r.reden}`, soort: r.ok ? 'info' : 'fout' });
+    }, { label: `Track ${nr} starten op de volgende maat van de maatgever`,
+         read: () => (!d.buffer ? null : d.wacht ? 1 : d.playing ? null : 0) });
+
     define(`${n}.nudge.back`, 'trigger', (on) => { if (on) d.nudge(-0.05); }, { label: `Track ${nr} nudge -` });
     define(`${n}.nudge.fwd`, 'trigger', (on) => { if (on) d.nudge(0.05); }, { label: `Track ${nr} nudge +` });
     // Bend: zolang je drukt 4% trager of sneller, loslaten = terug. Zo werkt
@@ -385,21 +439,23 @@ export function bindEngine(engine) {
     // de tel? Afgeleid van positie en grid (regel 3), geen eigen teller.
     define(`${n}.leads`, 'trigger', () => {}, { label: `Track ${nr} geeft de maat (alleen lezen)`,
       read: bool(() => engine.syncMaster()?.id === id) });
+    // Wacht de track op zijn start op de maat, dan staat hij stil: geen tel.
     define(`${n}.beat`, 'trigger', () => {}, { label: `Track ${nr} op de tel (alleen lezen)`,
-      read: bool(() => d.playing && d.grid && d.grid.phase(d.position) < 0.15) });
+      read: bool(() => d.playing && !d.wacht && d.grid && d.grid.phase(d.position) < 0.15) });
     // Fase binnen de tel van wat je HOORT: positie min de uitgangsvertraging
     // (× rate, want de positie loopt in tracktijd), zoals de video-puls. Voor
-    // LED's die op de tel knipperen. null als hij niet speelt of geen grid heeft.
+    // LED's die op de tel knipperen. null als hij niet speelt (of nog op de
+    // maat wacht) of geen grid heeft.
     define(`${n}.phase`, 'trigger', () => {}, { label: `Track ${nr} fase binnen de tel (alleen lezen)`,
       read: () => {
-        if (!d.playing || !d.grid) return null;
+        if (!d.playing || d.wacht || !d.grid) return null;
         return d.grid.phase(hoorbaar());
       } });
     // Welke tel van de maat je HOORT (1..4), geteld vanaf de "1" van het stuk
     // (maat-anker, 25 sep 2026). Voor lampjes die op de "1" langer knipperen.
     define(`${n}.barbeat`, 'trigger', () => {}, { label: `Track ${nr} tel van de maat (alleen lezen)`,
       read: () => {
-        if (!d.playing || !d.grid) return null;
+        if (!d.playing || d.wacht || !d.grid) return null;
         return d.grid.telInMaat(hoorbaar());
       } });
 
@@ -478,6 +534,11 @@ export function bindEngine(engine) {
   define('mixer.xfader.curve', 'trigger', (on) => {
     if (on) engine.setXfaderCurve(engine.xfaderCurve === 'smooth' ? 'sharp' : 'smooth');
   }, { label: 'Crossfader-curve wisselen', read: () => (engine.xfaderCurve === 'sharp' ? 1 : 0) });
+
+  // Eén quantize voor alle tracks (zie Engine.setQuantize).
+  define('transport.quantize', 'trigger', (on) => { if (on) engine.setQuantize(!engine.quantize); },
+    { label: 'Quantize aan/uit: cue, hotcues en loop in/out op de tel, hotcues springen in de maat',
+      read: () => (engine.quantize ? 1 : 0) });
 }
 
 /**

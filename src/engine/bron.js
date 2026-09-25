@@ -10,9 +10,10 @@
  *   StreamBron    pagina-cache op schijf, voor acht tracks tegelijk
  *
  * Het contract:
- *   laad(buffer) · start(vanaf) · stop() · pauzeer() · plaats(p)
+ *   laad(buffer) · start(vanaf, { op, loop }) · stop() · pauzeer() · plaats(p)
  *   positie · speelt · duur · buffer (waarheidswaarde: is er iets geladen)
  *   setRate(r) · setLoop(start, end) · clearLoop() · ctxTimeOf(t)
+ *   wachtTot          audiokloktijd waarop een GEPLANDE start begint, anders null
  *   vernietig()       opruimen als het deck een andere soort bron kiest
  *   onEinde = fn      alleen bij een ECHT trackeinde
  *
@@ -26,6 +27,21 @@ import {
 
 /** Zo lang vloeit een bron in en uit bij start, seek en stop. Te kort om te horen, lang genoeg tegen een tik. */
 export const DECLICK = 0.004;
+
+/*
+ * GEPLAND STARTEN (starten op de maat): start(vanaf, { op }) met `op` later
+ * dan nu. De bron "speelt" dan al (speelt = true, zodat pauze het annuleert
+ * en ctxTimeOf klopt), maar klinkt pas vanaf `op`, sample-exact op de
+ * audioklok. Tot dan staat de positie stil op `vanaf` (zoals een sampler-pad
+ * vóór zijn start: t <= T ? P). Tempo, loop en bend tijdens het wachten
+ * houden het startmoment vast; een sprong plant het deck opnieuw op hetzelfde
+ * moment (deck.seek). `wachtTot` zegt of en tot wanneer er gewacht wordt.
+ *
+ * `loop` in start(): loop en positie in één keer, voor beatjump in een loop en
+ * reloop. Eerst setLoop en dan start gaf de streamkern twee segmenten vlak na
+ * elkaar, en de overgang ging dan via een tussenstand die nooit bedoeld was.
+ */
+const gepland = (op, nu) => Number.isFinite(op) && op > nu;
 
 export class BufferBron {
   constructor(ctx, uitgang) {
@@ -59,7 +75,8 @@ export class BufferBron {
   get positie() {
     if (!this.buffer) return 0;
     if (!this.speelt) return this._offset;
-    let p = this._offset + (this.ctx.currentTime - this._startedAt) * this.rate;
+    // Vóór een geplande start staat hij stil op zijn beginpunt.
+    let p = this._offset + Math.max(0, this.ctx.currentTime - this._startedAt) * this.rate;
     if (this.loop) {
       const len = this.loop.end - this.loop.start;
       if (len > 0 && p >= this.loop.end) p = this.loop.start + ((p - this.loop.start) % len);
@@ -78,9 +95,13 @@ export class BufferBron {
       trackTijd, this.ctx.currentTime);
   }
 
-  start(vanaf) {
+  /** Wacht deze bron op een geplande start? Dan de audiokloktijd daarvan, anders null. */
+  get wachtTot() { return this.speelt && this.ctx.currentTime < this._startedAt ? this._startedAt : null; }
+
+  start(vanaf, { op = null, loop } = {}) {
     if (!this.buffer) return false;
     this.stop();
+    if (loop !== undefined) this.loop = loop;
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffer;
     src.playbackRate.value = this.rate;
@@ -93,9 +114,12 @@ export class BufferBron {
     // 4 ms in. Hard stoppen en midden in een golfvorm beginnen gaf bij elke
     // seek, hotcue en pauze een tik, harder naarmate er meer geluid was.
     const nu = this.ctx.currentTime;
+    // Gepland: Web Audio start een bron zelf sample-exact op een latere tijd.
+    const wanneer = gepland(op, nu) ? op : nu;
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(0, nu);
-    g.gain.linearRampToValueAtTime(1, nu + DECLICK);
+    if (wanneer > nu) g.gain.setValueAtTime(0, wanneer);
+    g.gain.linearRampToValueAtTime(1, wanneer + DECLICK);
     src.connect(g).connect(this.uitgang);
     this.bronGain = g;
     // Vuurt alleen bij een ECHT trackeinde: bij stop() halen we de handler
@@ -106,10 +130,10 @@ export class BufferBron {
       this._offset = this.duur;
       this.onEinde?.();
     };
-    src.start(0, vanaf);
+    src.start(wanneer > nu ? wanneer : 0, vanaf);
     this.source = src;
     this._offset = vanaf;
-    this._startedAt = this.ctx.currentTime;
+    this._startedAt = wanneer;
     this.speelt = true;
     return true;
   }
@@ -162,10 +186,16 @@ export class BufferBron {
 
   setRate(r) {
     if (this.speelt && this.source) {
-      // Eerst de teller bijwerken met de OUDE rate, anders klopt de positie niet.
-      this._offset = this.positie;
-      this._startedAt = this.ctx.currentTime;
-      this.source.playbackRate.setTargetAtTime(r, this.ctx.currentTime, 0.02);
+      if (this.wachtTot !== null) {
+        // Nog niet begonnen: het startmoment en -punt blijven, alleen de
+        // snelheid vanaf daar verandert. Meteen, er klinkt nog niets.
+        this.source.playbackRate.setValueAtTime(r, this.ctx.currentTime);
+      } else {
+        // Eerst de teller bijwerken met de OUDE rate, anders klopt de positie niet.
+        this._offset = this.positie;
+        this._startedAt = this.ctx.currentTime;
+        this.source.playbackRate.setTargetAtTime(r, this.ctx.currentTime, 0.02);
+      }
     }
     this.rate = r;
   }
@@ -182,8 +212,11 @@ export class BufferBron {
   clearLoop() {
     if (!this.loop) return;
     const p = this.positie;
+    const wacht = this.wachtTot !== null;
     this.loop = null;
     if (this.source) this.source.loop = false;
+    // Wacht hij nog op een geplande start, dan blijft die staan.
+    if (wacht) return;
     // De bron speelt lineair verder vanaf de gewrapte positie; alleen de teller
     // moet daarop gezet worden. Opnieuw starten zou een hoorbare klik geven.
     this._offset = p;
@@ -261,9 +294,17 @@ export class StreamBron {
 
   get positie() {
     if (!this.bestand) return 0;
-    return Math.min(positieOp(this.seg, this.ctx.currentTime), this.duur);
+    // Vóór een geplande start (T in de toekomst) staat hij stil op P.
+    return Math.min(positieOp(this.seg, Math.max(this.ctx.currentTime, this.seg.T)), this.duur);
   }
 
+  /** Wacht deze bron op een geplande start? Dan de audiokloktijd daarvan, anders null. */
+  get wachtTot() { return this.seg.speelt && this.ctx.currentTime < this.seg.T ? this.seg.T : null; }
+
+  /*
+   * ctxTijdVan klopt ook vóór een geplande start: vanaf `nu` rekent hij
+   * terug naar een positie vóór P, en komt precies op T + (x − P) / R uit.
+   */
   ctxTimeOf(x) { return ctxTijdVan(this.seg, x, this.ctx.currentTime); }
 
   /**
@@ -386,9 +427,20 @@ export class StreamBron {
     return uit;
   }
 
-  _stuur() {
+  /**
+   * `gepland`: T ligt in de toekomst en de worklet moet tot dan stil blijven
+   * (of het oude segment laten doorklinken) en pas op T overvloeien. Zonder
+   * die vlag begint de overgang zodra het bericht er is.
+   */
+  _stuur(gepland = false) {
     this._segId = (this._segId || 0) + 1;
-    this.node?.port.postMessage({ type: 'segment', seg: this.seg, id: this._segId });
+    this.node?.port.postMessage({ type: 'segment', seg: this.seg, id: this._segId, ...(gepland ? { gepland: true } : {}) });
+  }
+
+  /** Het wachtende segment aanpassen zonder het startmoment te verliezen. */
+  _pasWachtendAan(wijziging) {
+    this.seg = { ...this.seg, ...wijziging };
+    this._stuur(true);
   }
 
   _segment(p, speelt) {
@@ -403,9 +455,15 @@ export class StreamBron {
     this.onEinde?.();
   }
 
-  start(vanaf) {
+  start(vanaf, { op = null, loop } = {}) {
     if (!this.bestand) return false;
-    this._segment(vanaf, true);
+    if (loop !== undefined) this.loop = loop;
+    if (gepland(op, this.ctx.currentTime)) {
+      this.seg = { T: op, P: vanaf, R: this.rate, loop: this.loop, speelt: true };
+      this._stuur(true);
+    } else {
+      this._segment(vanaf, true);
+    }
     this.bijvullen().catch(() => {});             // meteen, niet pas bij de volgende tik
     return true;
   }
@@ -427,20 +485,23 @@ export class StreamBron {
   setRate(r) {
     const p = this.positie;
     this.rate = r;
-    if (this.seg.speelt) this._segment(p, true);
+    if (this.wachtTot !== null) this._pasWachtendAan({ R: r });
+    else if (this.seg.speelt) this._segment(p, true);
   }
 
   setLoop(start, end) {
     const p = this.positie;
     this.loop = { start, end };
-    this._segment(p, this.seg.speelt);
+    if (this.wachtTot !== null) this._pasWachtendAan({ loop: this.loop });
+    else this._segment(p, this.seg.speelt);
   }
 
   clearLoop() {
     if (!this.loop) return;
     const p = this.positie;
     this.loop = null;
-    this._segment(p, this.seg.speelt);
+    if (this.wachtTot !== null) this._pasWachtendAan({ loop: null });
+    else this._segment(p, this.seg.speelt);
   }
 
   vernietig() {

@@ -43,7 +43,8 @@ globalThis.AudioContext = class {
     // leven tot dat gebeurt. De oude mock deed geen van beide en hield daarmee
     // een bug uit fase 1 uit het zicht: een afgedankte bron die 'einde track'
     // meldde terwijl zijn opvolger al speelde.
-    s.start=()=>{ LIVE.add(s); };
+    // Onthoudt wanneer en waarvandaan: starten op de maat plant een bron in de toekomst.
+    s.start=(wanneer=0, vanaf=0)=>{ s._wanneer=wanneer; s._vanaf=vanaf; LIVE.add(s); };
     s.stop=()=>{ if(!LIVE.has(s)) return; LIVE.delete(s); queueMicrotask(()=>s.onended?.()); };
     return s; }
   createBuffer(ch,len,sr){ const d=[...Array(ch)].map(()=>new Float32Array(len));
@@ -1685,6 +1686,492 @@ console.log('\ntempokaart');
   await opslag.rust();
   ok('bewaren mislukt: een foutmelding op het scherm', fouten.some((f) => /hotcue 1 niet bewaard.*404/.test(f)));
   ok('geen onzin naar de server gestuurd', !log.some((l) => /"tijd":null/.test(l)));
+}
+
+// ---- transport: beatjump, loop in/out, quantize, starten op de maat --------
+// ROADMAP 16, spoor C. Alles in TELLEN op het grid (tempokaart), elk moment
+// van de audioklok (regel 3), en weigeren in een onzeker stuk zoals beat-loops.
+
+console.log('\ntransport');
+{
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  const { ONZEKER } = await import('../src/engine/engine.js');
+  const { SPRONG_TELLEN } = await import('../src/engine/deck.js');
+  const lang = eng.ctx.createBuffer(2, 48000 * 40, 48000);      // 40 s stilte
+  const meldingen = [];
+  const opMelding = (m) => meldingen.push(m);
+  eng.on('melding', opMelding);
+  for (const d of Object.values(eng.decks)) d.stop();
+  const dG = eng.deck('G');                                     // track 7
+  dG.load(lang, 'transport');
+  const druk = (a) => { invoke(a, true); invoke(a, false); };
+
+  // -- beatjump --
+  dG.seek(5);
+  druk('track.7.beatjump.fwd');
+  ok('beatjump zonder grid: blijft staan, met een melding', dG.position === 5 && /beatgrid/.test(meldingen.at(-1)?.tekst));
+  ok('beatjump zonder grid: lampje uit (null)', read('track.7.beatjump.fwd') === null);
+
+  dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+  ok('beatjump-lengte standaard 4 tellen', dG.sprongTellen === 4 && SPRONG_TELLEN.join() === '1,2,4,8,16,32');
+  dG.seek(5.1);
+  invoke('track.7.beatjump.fwd', true);
+  ok('beatjump vooruit: 4 tellen = 2 s op 120 bpm', Math.abs(dG.position - 7.1) < 1e-9);
+  ok('... lampje vol zolang ingedrukt', read('track.7.beatjump.fwd') === 1);
+  invoke('track.7.beatjump.fwd', false);
+  ok('... bruikbaar (0) na loslaten', read('track.7.beatjump.fwd') === 0);
+  druk('track.7.beatjump.back');
+  ok('beatjump terug', Math.abs(dG.position - 5.1) < 1e-9);
+
+  for (let i = 0; i < 4; i++) druk('track.7.beatjump.halve');
+  ok('halveren stopt op 1 tel', dG.sprongTellen === 1 && read('track.7.beatjump.halve') === 0);
+  for (let i = 0; i < 7; i++) druk('track.7.beatjump.double');
+  ok('verdubbelen stopt op 32 tellen', dG.sprongTellen === 32 && read('track.7.beatjump.double') === 1);
+  for (let i = 0; i < 3; i++) druk('track.7.beatjump.halve');
+  ok('... en terug naar 4', dG.sprongTellen === 4);
+
+  NOW = 700;
+  dG.seek(5.1); dG.play();
+  NOW += 0.3;                                                   // 5,4: 0,8 in de tel
+  const fase0 = dG.grid.phase(dG.position);
+  druk('track.7.beatjump.fwd');
+  ok('beatjump tijdens spelen: dezelfde fase in de tel (7,4)', Math.abs(dG.position - 7.4) < 1e-9
+    && Math.abs(dG.grid.phase(dG.position) - fase0) < 1e-9 && dG.playing);
+  NOW += 0.1;
+  ok('... en hij loopt door vanaf daar', Math.abs(dG.position - 7.5) < 1e-9);
+  dG.stop();
+
+  // Over een stukgrens: 120 bpm, vanaf 2,0 s 150 bpm (tellen … 1,0 · 1,5 · 2,1 · 2,5 · 2,9 · 3,3 …).
+  dG.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 2.0, bpm: 150, anker: 2.1 }] }));
+  dG.seek(1.25);
+  ok('beatjump over een stukgrens telt tellen: 1,25 + 4 tellen = 3,1 (niet 3,25)', dG.beatjump(1).ok && Math.abs(dG.position - 3.1) < 1e-9);
+  dG.beatjump(-1);
+  ok('... en terug precies op 1,25', Math.abs(dG.position - 1.25) < 1e-9);
+
+  // In een loop: de loop schuift mee, de speelkop houdt zijn plek erin.
+  dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+  NOW = 710;
+  dG.seek(4.0); dG.play();
+  dG.setBeatLoop(4);                                            // 4,0 – 6,0
+  NOW += 0.7;                                                   // 4,7
+  druk('track.7.beatjump.fwd');
+  ok('beatjump in een loop: de loop schuift 4 tellen mee (6,0 – 8,0)', Math.abs(dG.loop.start - 6) < 1e-9 && Math.abs(dG.loop.end - 8) < 1e-9);
+  ok('... de speelkop houdt zijn plek in de loop (6,7)', Math.abs(dG.position - 6.7) < 1e-9 && dG.playing);
+  ok('... de loop blijft 4 tellen (lampje loop 4)', dG.loopBeats === 4 && read('track.7.beatloop.4') === 1);
+  NOW += 1.5;
+  ok('... en loopt daar rond (8,2 -> 6,2)', Math.abs(dG.position - 6.2) < 1e-9);
+  druk('track.7.beatjump.back'); druk('track.7.beatjump.back');
+  ok('twee keer terug: de loop staat op 2,0 – 4,0', Math.abs(dG.loop.start - 2) < 1e-9 && Math.abs(dG.position - 2.2) < 1e-9);
+  // Een loop over een stukgrens: de TELLEN blijven gelijk, de seconden niet.
+  dG.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 5.0, bpm: 150, anker: 5.0 }] }));
+  dG.stop(); dG.clearLoop(); dG.seek(3.0); dG.setBeatLoop(4);   // 3,0 – 5,0: tel 6 t/m 10
+  dG.beatjump(1);
+  ok('loop over een stukgrens geschoven: 4 tellen van 150 bpm (5,0 – 6,6)', Math.abs(dG.loop.start - 5) < 1e-9
+    && Math.abs(dG.loop.end - 6.6) < 1e-9 && Math.abs(dG.position - 5) < 1e-9 && dG.loopBeats === 4);
+  dG.clearLoop();
+  // Tegen het einde van het nummer: de loop past er niet meer, dan niet.
+  dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+  dG.seek(36); dG.setBeatLoop(4);                               // 36 – 38
+  dG.sprongTellen = 8;
+  const nRand = meldingen.length;
+  druk('track.7.beatjump.fwd');
+  ok('loop zou voorbij het einde komen: blijft staan, met een melding', Math.abs(dG.loop.start - 36) < 1e-9
+    && dG.position === 36 && meldingen.length === nRand + 1);
+  dG.sprongTellen = 4;
+  druk('track.7.beatjump.fwd');
+  ok('... 4 tellen past precies (38 – 40)', Math.abs(dG.loop.end - 40) < 1e-9);
+  dG.clearLoop();
+
+  // Onzeker stuk (niet op slot): weigeren, zoals beat-loops.
+  dG.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 }, { van: 10, bpm: 120, anker: 0, zekerheid: 0.3 }] }));
+  dG.seek(12);
+  const nOnz = meldingen.length;
+  druk('track.7.beatjump.back');
+  ok('beatjump in een onzeker stuk: blijft staan', dG.position === 12);
+  ok('... met dezelfde melding als beat-loops', meldingen.length === nOnz + 1 && meldingen.at(-1).tekst.includes(ONZEKER));
+  ok('... lampje uit (null)', read('track.7.beatjump.back') === null);
+  dG.seek(8.5);
+  const r1 = dG.beatjump(1);
+  ok('vanuit een zeker stuk IN een onzeker stuk springen: ook niet', !r1.ok && r1.waarom === 'onzeker' && dG.position === 8.5);
+  ok('binnen het zekere stuk wel', dG.beatjump(-1).ok && Math.abs(dG.position - 6.5) < 1e-9);
+  dG.grid.slot = true;
+  dG.seek(12);
+  ok('op slot mag het overal', dG.beatjump(-1).ok && Math.abs(dG.position - 10) < 1e-9);
+
+  // -- loop in / loop out / reloop --
+  ok('de loops van hierboven zijn onthouden voor reloop', dG.vorigeLoop !== null && read('track.7.loop.reloop') === 0.5);
+  dG.load(lang, 'loops');                                       // vers nummer: niets onthouden
+  dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+  dG.seek(3);
+  ok('loop out zonder loop in doet niets (lampje uit: null)', dG.loopOut() === false && dG.loop === null && read('track.7.loop.out') === null);
+  ok('reloop zonder loop en zonder vorige loop: niets te doen (null)', read('track.7.loop.reloop') === null);
+  NOW = 720;
+  dG.seek(3.23); dG.play();
+  druk('track.7.loop.in');
+  ok('loop in: onthouden, nog geen loop; lampje wacht op out', dG.loopInPunt === 3.23 && dG.loop === null && read('track.7.loop.in') === 1);
+  ok('... en loop out is nu bruikbaar (0)', read('track.7.loop.out') === 0);
+  NOW += 1.54;                                                  // 4,77
+  druk('track.7.loop.out');
+  ok('loop out: de loop gaat meteen aan, van in tot hier', dG.loop && Math.abs(dG.loop.start - 3.23) < 1e-9 && Math.abs(dG.loop.end - 4.77) < 1e-9);
+  ok('... zonder quantize geen aantal tellen; lampjes out aan, in uit', dG.loopBeats === null
+    && read('track.7.loop.out') === 1 && read('track.7.loop.in') === 0);
+  NOW += 0.5;
+  ok('... en loopt rond (3,73)', Math.abs(dG.position - 3.73) < 1e-9);
+  druk('track.7.loop.reloop');
+  ok('reloop/exit met een loop: eraf, speelt door; lampje "terug te halen"', dG.loop === null && dG.playing && read('track.7.loop.reloop') === 0.5);
+  NOW += 3;
+  druk('track.7.loop.reloop');
+  ok('reloop: dezelfde loop weer aan, terug naar zijn begin', dG.loop && Math.abs(dG.loop.start - 3.23) < 1e-9
+    && Math.abs(dG.loop.end - 4.77) < 1e-9 && Math.abs(dG.position - 3.23) < 1e-9 && read('track.7.loop.reloop') === 1);
+  druk('track.7.loop.exit');
+  ok('loop.exit onthoudt de loop ook voor reloop', dG.loop === null && dG.vorigeLoop && Math.abs(dG.vorigeLoop.start - 3.23) < 1e-9);
+  dG.stop();
+  dG.seek(10); druk('track.7.loop.in'); dG.seek(9);
+  ok('loop out vóór het in-punt: niets, het in-punt blijft wachten', dG.loopOut() === false && dG.loop === null && dG.loopInPunt === 10);
+  dG.setBeatLoop(2);
+  ok('de andere loops werken ernaast (beat-loop 2)', dG.loopBeats === 2);
+  dG.seek(10.5); druk('track.7.loop.out');
+  ok('loop out vervangt een lopende beat-loop', Math.abs(dG.loop.start - 10) < 1e-9 && Math.abs(dG.loop.end - 10.5) < 1e-9 && dG.loopBeats === null);
+  dG.clearLoop();
+  dG.load(lang, 'ander nummer');
+  ok('een ander nummer: geen in-punt en geen loop om terug te halen', dG.loopInPunt === null && dG.vorigeLoop === null);
+
+  // -- quantize: één schakelaar voor alle tracks --
+  dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+  ok('quantize staat standaard uit', eng.quantize === false && read('transport.quantize') === 0);
+  druk('transport.quantize');
+  ok('quantize aan via de bus, op elke track', eng.quantize && Object.values(eng.decks).every((d) => d.quantize) && read('transport.quantize') === 1);
+  ok('en in de snapshot', eng.snapshot().quantize === true);
+
+  NOW = 730;
+  dG.seek(3.23); dG.play();
+  druk('track.7.loop.in');
+  ok('loop in met quantize: op de dichtstbijzijnde tel (3,0)', dG.loopInPunt === 3);
+  NOW += 1.57;                                                  // 4,80: dichtstbij is 5,0
+  druk('track.7.loop.out');
+  ok('loop out met quantize: een heel aantal tellen (3,0 – 5,0)', Math.abs(dG.loop.start - 3) < 1e-9 && Math.abs(dG.loop.end - 5) < 1e-9 && dG.loopBeats === 4);
+  ok('... dan brandt het lampje van loop 4', read('track.7.beatloop.4') === 1);
+  druk('track.7.loop.halve');                                   // 3,0 – 4,0; 4,8 vouwt naar 3,8
+  ok('halveren werkt erop (2 tellen)', dG.loopBeats === 2 && Math.abs(dG.loop.end - 4) < 1e-9);
+  dG.clearLoop();
+  druk('track.7.loop.in');                                      // 3,8 -> tel 4,0, speelkop er nog vóór
+  druk('track.7.loop.out');
+  ok('loop out vlak na loop in (speelkop nog vóór de tel): minstens één tel', dG.loop
+    && Math.abs(dG.loop.start - 4) < 1e-9 && Math.abs(dG.loop.end - 4.5) < 1e-9 && dG.loopBeats === 1);
+  dG.clearLoop();
+  dG.seek(4.0); dG.setBeatLoop(4);                              // 4,0 – 6,0, speelt
+  dG.clearLoop(); dG.seek(9.15);                                // 0,3 in de tel
+  druk('track.7.loop.reloop');
+  ok('reloop met quantize: terug naar het begin, fasebehoudend (4,15)', Math.abs(dG.position - 4.15) < 1e-9 && dG.loopBeats === 4);
+  dG.clearLoop(); dG.seek(9.4);                                 // 0,8 in de tel: 0,1 s vóór het begin
+  druk('track.7.loop.reloop');
+  ok('... valt dat vóór het begin, dan teruggevouwen in de loop (5,9)', Math.abs(dG.position - 5.9) < 1e-9 && dG.loop);
+  dG.clearLoop();
+
+  // Hotcues met quantize: zetten op de tel, springen fasebehoudend.
+  dG.seek(2.1);
+  druk('track.7.hotcue.1');
+  ok('hotcue zetten met quantize: op de dichtstbijzijnde tel (2,0)', dG.hotcues[0] === 2);
+  dG.seek(6.3);
+  NOW += 0.1;                                                   // 6,4: 0,8 in de tel
+  druk('track.7.hotcue.1');
+  ok('hotcue springen met quantize: fasebehoudend, 0,2 tel vóór de hotcue (1,9)', Math.abs(dG.position - 1.9) < 1e-9);
+  ok('... de fase is dezelfde als vóór de sprong', Math.abs(dG.grid.phase(dG.position) - 0.8) < 1e-9);
+  dG.seek(6.15);                                                // 0,3 in de tel
+  druk('track.7.hotcue.1');
+  ok('... op 0,3 in de tel: 0,15 s na de hotcue (2,15)', Math.abs(dG.position - 2.15) < 1e-9);
+  // In een loop: of de loop blijft, hangt af van waar de HOTCUE ligt, niet van
+  // waar de fasebehoudende sprong landt (tot een halve tel ernaast). Zonder
+  // quantize bleef een hotcue op het loopbegin in de loop; met quantize viel
+  // hij vóór het begin en haalde hij de loop eraf.
+  dG.setBeatLoop(4);                                            // 2,15 -> loop 2,0 – 4,0
+  NOW += 0.65;                                                  // 2,8: 0,6 in de tel
+  druk('track.7.hotcue.1');                                     // hotcue 1 = 2,0 = het loopbegin
+  ok('hotcue op het loopbegin met quantize: de loop blijft, sprong teruggevouwen (3,8)', !!dG.loop
+    && Math.abs(dG.loop.start - 2) < 1e-9 && Math.abs(dG.position - 3.8) < 1e-9);
+  dG.clearLoop(); dG.seek(3.8); dG.setLoopRange(2.0, 4.0);      // los van de check hierboven
+  dG.hotcues[1] = 4.0;                                          // op het loopEINDE: net buiten de loop
+  NOW += 0.1;                                                   // 3,9: 0,8 in de tel
+  druk('track.7.hotcue.2');
+  ok('hotcue net buiten de loop met quantize: de loop gaat eraf, ook al valt de sprong erin (3,9)', dG.loop === null
+    && Math.abs(dG.position - 3.9) < 1e-9);
+  NOW += 0.3;
+  ok('... en hij speelt voorbij het oude loopeinde door (4,2)', Math.abs(dG.position - 4.2) < 1e-9);
+  dG.hotcues[1] = null;
+  dG.stop();
+  dG.seek(7.3);
+  druk('track.7.hotcue.1');
+  ok('stilstaand springt een hotcue gewoon precies naar de hotcue', dG.position === 2);
+  dG.seek(7.3);
+  druk('track.7.cue');
+  ok('cue zetten met quantize: op de tel, en de speelkop gaat mee', dG.cuePoint === 7.5 && dG.position === 7.5);
+  druk('track.7.cue');
+  ok('... zodat de volgende druk speelt vanaf de cue', dG.playing);
+  dG.stop();
+  // In een onzeker stuk snapt quantize niet: een cue op een verkeerde tel is erger.
+  dG.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 }, { van: 10, bpm: 120, anker: 0, zekerheid: 0.3 }] }));
+  dG.seek(12.3);
+  druk('track.7.hotcue.2');
+  ok('hotcue in een onzeker stuk: precies waar je drukt (12,3)', dG.hotcues[1] === 12.3);
+  dG.hotcues[1] = null;
+  druk('transport.quantize');
+  ok('quantize weer uit', !eng.quantize && !dG.quantize);
+  dG.seek(2.1);
+  druk('track.7.hotcue.3');
+  ok('zonder quantize: hotcue precies waar je drukt', dG.hotcues[2] === 2.1);
+
+  // -- starten op de maat --
+  const dM = eng.deck('H');                                     // track 8: de maatgever
+  // B4: op een lege track is er niets te doen, dus alle nieuwe lampjes uit.
+  // Track 8 is sinds de hotcue-test (ronde 1) al geladen, en een deck kent geen
+  // "leeg maken": de bron zonder buffer is hier genoeg, want de load hieronder
+  // zet alles opnieuw (integratie ronde 3).
+  dM.bron.vernietig();
+  const leeg =['beatjump.back', 'beatjump.fwd', 'beatjump.halve', 'beatjump.double', 'loop.in', 'loop.out', 'loop.reloop', 'play.quant']
+    .filter((a) => read(`track.8.${a}`) !== null);
+  ok(`lege track: alle transportlampjes uit (null)${leeg.length ? ': ' + leeg.join(', ') : ''}`, !dM.buffer && leeg.length === 0);
+  dM.load(lang, 'maat');
+  dM.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+  dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+  dG.stop(); dG.seek(8.0);
+  NOW = 800;
+  ok('play.quant stil en er is een track: bruikbaar (0)', read('track.7.play.quant') === 0);
+  druk('track.7.play.quant');
+  ok('play.quant zonder spelende maatgever: meteen', dG.playing && !dG.wacht && dG.bron.source._wanneer === 0);
+  dG.stop(); dG.seek(8.0);
+
+  dM.seek(0.3); dM.play();                                      // maatbegin (tel 4) op 2,0 s = ctx 801,7
+  NOW = 800.1;
+  druk('track.7.play.quant');
+  const T = 801.7;
+  ok(`play.quant: gepland op het volgende maatbegin van de maatgever (${dG.bron.wachtTot})`, dG.wacht && Math.abs(dG.bron.wachtTot - T) < 1e-9);
+  ok('... de bron start daar sample-exact, op het startpunt', Math.abs(dG.bron.source._wanneer - T) < 1e-9 && dG.bron.source._vanaf === 8);
+  ok('... lampje wacht (1); play brandt ook', read('track.7.play.quant') === 1 && read('track.7.play') === 1);
+  ok('... tot dan staat de positie stil', dG.position === 8);
+  ok('... en knippert er niets op de tel', read('track.7.phase') === null && read('track.7.beat') === 0);
+  ok('... ctxTimeOf klopt al vóór de start', Math.abs(dG.ctxTimeOf(8.5) - (T + 0.5)) < 1e-9);
+  NOW = T + 0.25;
+  ok('na het maatbegin loopt hij, in fase met de maatgever', !dG.wacht && Math.abs(dG.position - 8.25) < 1e-9
+    && Math.abs(dG.grid.phase(dG.position) - dM.grid.phase(dM.position)) < 1e-9);
+  ok('... en ook op dezelfde plek in de maat (de "1" viel samen)', Math.abs(dG.grid.barPhase(dG.position) - dM.grid.barPhase(dM.position)) < 1e-9);
+  ok('... play.quant terwijl hij speelt: niets te doen (null)', read('track.7.play.quant') === null);
+  dG.stop();
+
+  // Startpunt een fractie na zijn tel (cue zonder quantize): de TEL valt op de 1.
+  dG.seek(8.1);
+  NOW = 802.0;                                                  // maatgever op 2,3; volgend maatbegin 4,0 = ctx 803,7
+  const r2 = eng.startOpDeMaat('G');
+  ok('startpunt 0,1 s na zijn tel: het geluid begint 0,1 s na het maatbegin', r2.ok && Math.abs(r2.op - 803.8) < 1e-9 && r2.master === 'H');
+  NOW = 804.0;
+  ok('... en dan is de fase gelijk aan die van de maatgever', Math.abs(dG.grid.phase(dG.position) - dM.grid.phase(dM.position)) < 1e-9);
+  dG.stop(); dG.seek(8.0);
+
+  // Maatbegin binnen de uitgangsbuffer: dan de maat erna.
+  NOW = 803.695;                                                // maatbegin 803,7 over 5 ms, drempel 8 ms
+  const r3 = eng.startOpDeMaat('G');
+  ok('maatbegin te dichtbij (5 ms, binnen de uitgangsbuffer): de maat erna', Math.abs(r3.op - 805.7) < 1e-9);
+  // Pauze tijdens het wachten annuleert.
+  druk('track.7.play');
+  ok('pauze tijdens het wachten: stil, op het startpunt, bron weg', !dG.playing && !dG.wacht && dG.position === 8 && !dG.bron.source);
+  // Tempo, sprong en sync tijdens het wachten: het startmoment blijft.
+  NOW = 804.0;
+  eng.startOpDeMaat('G');                                       // maatbegin 805,7
+  dG.setRate(1.1);
+  ok('tempo verzetten tijdens het wachten: startmoment blijft', dG.wacht && Math.abs(dG.bron.wachtTot - 805.7) < 1e-9 && dG.position === 8);
+  dG.hotcues[3] = 12;
+  druk('track.7.hotcue.4');
+  ok('hotcue tijdens het wachten: zelfde startmoment, ander startpunt', dG.wacht && Math.abs(dG.bron.wachtTot - 805.7) < 1e-9 && dG.position === 12);
+  const rs = eng.sync('G');
+  ok('sync tijdens het wachten: alleen het tempo, de fase komt van de start', rs.ok && rs.fase === false && Math.abs(dG.rate - 1) < 1e-9
+    && Math.abs(dG.bron.wachtTot - 805.7) < 1e-9);
+  NOW = 805.8;
+  ok('... en op het maatbegin loopt hij vanaf de hotcue', Math.abs(dG.position - 12.1) < 1e-9);
+  dG.stop(); dG.seek(8.0);
+
+  // Op de tel in plaats van de maat (tellen: 1), en met een maatgever op +5%.
+  dM.setRate(1.05);
+  NOW = 806.0;
+  const pM = dM.position;
+  const r4 = eng.startOpDeMaat('G', { tellen: 1 });
+  const verwacht = 806.0 + (dM.grid.next(pM) - pM) / 1.05;
+  ok('tellen: 1 = de volgende tel, met de rate van de maatgever', Math.abs(r4.op - verwacht) < 1e-9);
+  dG.stop(); dM.setRate(1);
+
+  // Een track die op de maat wacht, klinkt nog niet: hij geeft de maat niet
+  // (sync, sampler, echo, lampje), ook niet met een hogere fader dan de track
+  // die je hoort. Anders synct een derde track naar een tempo dat nog niemand
+  // hoort, en liepen echo en sampler tot een maat te vroeg op zijn tempo.
+  {
+    const dF = eng.deck('F');                                   // track 6
+    dF.load(lang, 'derde');
+    dF.setGrid(new Beatgrid({ bpm: 125, firstBeat: 0 }));
+    dM.set('fader', 0.5); dF.set('fader', 1);
+    NOW = 807.66;                                               // maatgever H vlak voor zijn maatbegin (8,0)
+    const maatH = NOW + (8.0 - dM.position);
+    dF.seek(8.16);                                              // op een tel van 125 bpm
+    eng.startOpDeMaat('F');
+    ok('een wachtende track met een hogere fader: de maat blijft bij wat je hoort (H)', dF.wacht
+      && Math.abs(dF.bron.wachtTot - maatH) < 1e-9 && eng.syncMaster()?.id === 'H' && eng.syncMaster('G')?.id === 'H'
+      && read('track.8.leads') === 1 && read('track.6.leads') === 0);
+    const rG = eng.sync('G');
+    ok('... sync van een andere track gaat naar H (120 bpm), niet naar de wachtende (125)', rG.ok && rG.master === 'H'
+      && Math.abs(dG.rate - 1) < 1e-9);
+    let gemeld = 0;
+    dF.on('change', () => { gemeld++; });
+    NOW = 807.75;                                               // voorbij zijn start
+    ok('na zijn start geeft hij de maat wel (hardste fader)', !dF.wacht && eng.syncMaster()?.id === 'F');
+    // Op zijn start meldt hij zich zelf (timer op de audioklok, zoals bij een
+    // stukgrens): echo en sampler herankeren dan op de nieuwe maatgever.
+    await new Promise((r) => setTimeout(r, 150));
+    ok(`... en op dat moment meldt hij 'change' (${gemeld}x), zodat echo en sampler volgen`, gemeld >= 1);
+    dF.stop(); dG.setRate(1); dM.set('fader', 1); dF.set('fader', 1);
+  }
+
+  // Het maatbegin verschuift tijdens het wachten: de wachtende track loopt mee,
+  // zoals de sampler-pads. Een vast startmoment viel anders naast de 1.
+  {
+    NOW = 810.0;                                                // H speelt op 120 bpm
+    const bar = Math.ceil(dM.position / 2 - 1e-9) * 2;          // zijn volgende maatbegin (tracktijd)
+    dG.stop(); dG.seek(8.0);                                    // op de tel
+    eng.startOpDeMaat('G');
+    const T0 = dG.bron.wachtTot;
+    ok('plan: op het maatbegin van H', Math.abs(T0 - dM.ctxTimeOf(bar)) < 1e-9);
+    NOW += 0.5;
+    dM.setRate(1.03);                                           // pitchfader van de maatgever +3%
+    ok(`tempo van de maatgever +3% tijdens het wachten: de start schuift mee (${((dG.bron.wachtTot - T0) * 1000).toFixed(1)} ms)`,
+      dG.wacht && Math.abs(dG.bron.wachtTot - dM.ctxTimeOf(bar)) < 1e-9 && Math.abs(dG.bron.wachtTot - T0) > 0.02);
+    ok('... vanaf hetzelfde startpunt', dG.position === 8 && Math.abs(dG.bron.source._wanneer - dG.bron.wachtTot) < 1e-9
+      && dG.bron.source._vanaf === 8);
+    dG.stop(); dM.setRate(1);
+
+    // Eigen tempo verzet tijdens het wachten (sync) met een startpunt naast de tel.
+    const bar2 = Math.ceil(dM.position / 2 - 1e-9) * 2;
+    dG.seek(8.1);                                               // 0,1 s na zijn tel
+    eng.startOpDeMaat('G');
+    dG.setRate(1.05);
+    ok('eigen tempo verzet met een startpunt naast de tel: zijn TEL valt nog op het maatbegin',
+      dG.wacht && Math.abs(dG.ctxTimeOf(8.0) - dM.ctxTimeOf(bar2)) < 1e-9);
+    // Een nudge van de wachtende track zelf is een bedoelde verschuiving: het
+    // startmoment blijft (deck.seek), ook al volgt de engine de maat.
+    const Tn = dG.bron.wachtTot;
+    druk('track.7.nudge.fwd');
+    ok('nudge tijdens het wachten: startmoment blijft, het startpunt schuift 50 ms', dG.wacht
+      && Math.abs(dG.bron.wachtTot - Tn) < 1e-9 && Math.abs(dG.position - 8.15) < 1e-9);
+    // Stopt de maatgever tijdens het wachten, dan blijft het plan staan.
+    const T2 = dG.bron.wachtTot;
+    dM.pause();
+    ok('maatgever stopt tijdens het wachten: het startmoment blijft', dG.wacht && dG.bron.wachtTot === T2);
+    dM.play(); dG.stop(); dG.setRate(1);
+
+    // Maatgever in een loop van één tel: de klok telt door, dus "opnieuw de
+    // volgende maat" schoof de start elke ronde een tel op. Hij moet op
+    // dezelfde tel blijven, ook na een ronde en een 'change' (fader open).
+    dM.seek(20.1); dM.setBeatLoop(1);                           // loop 20,0 – 20,5 (tel 40)
+    dG.seek(8.0);
+    eng.startOpDeMaat('G');
+    const T3 = dG.bron.wachtTot;
+    NOW += 0.6;                                                 // H is één keer rond
+    dG.set('fader', 0.9);
+    ok(`maatgever in een loop van één tel: na een ronde blijft de start staan (${((dG.bron.wachtTot - T3) * 1000).toFixed(0)} ms)`,
+      dG.wacht && Math.abs(dG.bron.wachtTot - T3) < 1e-9);
+    dM.clearLoop();
+    ok('... ook als de loop eraf gaat (de tellen lopen door)', dG.wacht && Math.abs(dG.bron.wachtTot - T3) < 1e-9);
+    dG.stop(); dG.set('fader', 1);
+  }
+
+  // Maatgever in een onzeker stuk: meteen, met een melding.
+  dM.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0, stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.3 }] }));
+  const nMaat = meldingen.length;
+  druk('track.7.play.quant');
+  ok('maatgever onzeker: meteen gestart, met een melding', dG.playing && !dG.wacht && meldingen.length === nMaat + 1
+    && meldingen.at(-1).soort === 'info');
+  dG.stop(); dM.stop();
+
+  // De snapshot (scherm, renderloop) kent de nieuwe stand.
+  ok('snapshot draagt in-punt, wachten en sprong', 'loopIn' in eng.snapshot().decks.G && eng.snapshot().decks.G.wacht === false
+    && eng.snapshot().decks.G.sprongTellen === 4);
+
+  // Toetsen en uitleg.
+  const { KEYMAP, SHIFT_ALIAS } = await import('../src/control/keyboard.js');
+  const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+  const ids = new Set(list().map((a) => a.id));
+  const vul = (id) => id.replace('{L}', '3').replace('{R}', '2');
+  const metShift = Object.values(KEYMAP).map((id) => SHIFT_ALIAS(vul(id))).filter((id) => !ids.has(id));
+  ok('elke toets MET shift wijst ook naar een bestaande action', metShift.length === 0);
+  ok('toetsen: R/T beatjump, G/C loop in/out, 6 quantize; shift: Q = op de maat, R/T = lengte, G = reloop',
+    KEYMAP.KeyR === 'track.{L}.beatjump.back' && KEYMAP.KeyT === 'track.{L}.beatjump.fwd'
+    && KEYMAP.KeyG === 'track.{L}.loop.in' && KEYMAP.KeyC === 'track.{L}.loop.out' && KEYMAP.Digit6 === 'transport.quantize'
+    && SHIFT_ALIAS('track.3.play') === 'track.3.play.quant' && SHIFT_ALIAS('track.3.beatjump.back') === 'track.3.beatjump.halve'
+    && SHIFT_ALIAS('track.3.beatjump.fwd') === 'track.3.beatjump.double' && SHIFT_ALIAS('track.3.loop.in') === 'track.3.loop.reloop'
+    && SHIFT_ALIAS('track.3.hotcue.2') === 'track.3.hotcue.2.delete');
+  {
+    // Echt drukken, via de handler: G heeft focus (links), H is de tweede (rechts).
+    const { attachKeyboard } = await import('../src/control/keyboard.js');
+    const handlers = {};
+    const oudWindow = globalThis.window;
+    globalThis.window = { addEventListener: (t, f) => { handlers[t] = f; } };
+    attachKeyboard(eng, { venster: (v) => (v === 'L' ? 'G' : 'H') });
+    globalThis.window = oudWindow;
+    const toets = (code, shiftKey = false) => {
+      for (const type of ['keydown', 'keyup']) handlers[type]({ code, shiftKey, target: { matches: () => false }, preventDefault() {} });
+    };
+    dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 })); dG.stop(); dG.seek(5);
+    toets('KeyT', true);
+    ok('toets shift+T: beatjump-lengte ×2 (8 tellen)', dG.sprongTellen === 8);
+    toets('KeyT');
+    ok('toets T: beatjump vooruit, 8 tellen (5 -> 9)', Math.abs(dG.position - 9) < 1e-9);
+    toets('KeyR', true);
+    toets('KeyG'); dG.seek(11); toets('KeyC');
+    ok('toetsen shift+R, G en C: lengte terug naar 4, loop 9 – 11', dG.sprongTellen === 4 && dG.loop
+      && Math.abs(dG.loop.start - 9) < 1e-9 && Math.abs(dG.loop.end - 11) < 1e-9);
+    toets('KeyG', true);
+    ok('toets shift+G: reloop/exit haalt de loop eraf', dG.loop === null);
+    toets('Digit6');
+    ok('toets 6: quantize aan', eng.quantize === true);
+    toets('Digit6');
+    ok('... en weer uit', eng.quantize === false);
+    dG.stop(); dM.stop(); dM.seek(0); NOW = 900;
+    dM.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));        // hierboven stond hij op onzeker
+    toets('KeyP', true);
+    ok('toets shift+P: de tweede track (H) start op de maat, zonder maatgever meteen', dM.playing && !dM.wacht);
+    NOW = 900.1;
+    dG.seek(8);
+    toets('KeyQ', true);
+    ok('toets shift+Q: de track met focus (G) wacht op het maatbegin van H (902,0)', dG.wacht && Math.abs(dG.bron.wachtTot - 902) < 1e-9);
+    dG.stop(); dM.stop(); dG.clearLoop();
+  }
+  const nieuw = ['track.7.beatjump.back', 'track.7.beatjump.fwd', 'track.7.beatjump.halve', 'track.7.beatjump.double',
+    'track.7.loop.in', 'track.7.loop.out', 'track.7.loop.reloop', 'track.7.play.quant', 'transport.quantize'];
+  const zonderUitleg = nieuw.filter((a) => !ids.has(a) || beschrijf(a).kort === a || beschrijf(a).lang.startsWith('?') || beschrijf(a).lang === a);
+  ok(`elke nieuwe action bestaat en heeft een uitleg voor apc.html${zonderUitleg.length ? ': ' + zonderUitleg.join(', ') : ''}`, zonderUitleg.length === 0);
+
+  eng.off?.('melding', opMelding);
+  NOW = 0;
+}
+
+// ---- naad transport × hotcues per nummer (integratie ronde 3) ----------------
+// Met quantize snapt een nieuwe hotcue naar de tel. De 'hotcue'-melding (die de
+// app naar de library stuurt) moet de GESNAPTE tijd dragen, niet de positie van
+// het indrukken: anders staat hij na herladen een fractie naast de tel.
+{
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  const dF = eng.deck('F');
+  dF.load(eng.ctx.createBuffer(2, 48000 * 20, 48000), 'quantize-hotcue');
+  dF.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+  const meldingen = [];
+  const uit = dF.on('hotcue', (m) => meldingen.push(m));
+  eng.setQuantize(true);
+  dF.seek(3.1);
+  invoke('track.6.hotcue.1', true); invoke('track.6.hotcue.1', false);
+  ok(`quantize: de hotcue staat op de tel (${dF.hotcues[0]}) en de melding draagt die tijd (${meldingen[0]?.tijd})`,
+    dF.hotcues[0] === 3 && meldingen.length === 1 && meldingen[0].i === 0 && meldingen[0].tijd === 3);
+  invoke('track.6.hotcue.1.delete', true); invoke('track.6.hotcue.1.delete', false);
+  ok('wissen met quantize meldt nog steeds tijd null', meldingen.length === 2 && meldingen[1].tijd === null);
+  eng.setQuantize(false);
+  dF.seek(3.1);
+  invoke('track.6.hotcue.1', true); invoke('track.6.hotcue.1', false);
+  ok('zonder quantize: de positie van het indrukken', dF.hotcues[0] === 3.1 && meldingen[2]?.tijd === 3.1);
+  uit();
 }
 
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);

@@ -338,5 +338,45 @@ ok('en het tempo klopt nog steeds', Math.abs(tt4.tap(31 * 480, 0).bpm - 125) < 0
   ok('en de maat van het nieuwe stuk ligt op zijn eigen rooster', Math.abs(((nieuwStuk.maat - nieuwStuk.anker) * nieuwStuk.bpm / 60) % 1) < 1e-9);
 }
 
+// ---- transport: beatjump, fasebehoudend springen, maatbegin ------------------
+// Rekenwerk achter beatjump, quantize en starten op de maat (deck.js,
+// engine.js). Alles in tellen, zodat een stukgrens niets scheef trekt.
+console.log('\ntransport-rekenwerk');
+{
+  const vast = new Beatgrid({ bpm: 120, firstBeat: 0 });
+  ok('verschuif: 4 tellen op 120 bpm = 2 s', bij(vast.verschuif(1.1, 4), 3.1));
+  ok('verschuif: terug mag ook, en onder 0', bij(vast.verschuif(1.1, -4), -0.9));
+  // 120 bpm, vanaf 2,0 s 150 bpm met een tel op 2,1. Tellen: … 1,0 · 1,5 · 2,1 · 2,5 · 2,9 · 3,3 …
+  const kaart = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 2.0, bpm: 150, anker: 2.1 }] });
+  const doel = kaart.verschuif(1.25, 4);            // tel 2,5 -> 6,5: halverwege 2,9 en 3,3
+  ok(`verschuif over een stukgrens telt tellen: 1,25 + 4 tellen = ${doel.toFixed(3)} (3,1)`, bij(doel, 3.1));
+  ok('... en de fase in de tel blijft gelijk (0,5)', bij(kaart.phase(doel), 0.5) && bij(kaart.phase(1.25), 0.5));
+  ok('verschuif terug over de grens is het omgekeerde', bij(kaart.verschuif(doel, -4), 1.25));
+
+  ok('metFaseVan: doel op de tel, t op 0,3 van zijn tel -> 0,15 s erna', bij(vast.metFaseVan(1.0, 2.15), 1.15));
+  ok('metFaseVan: t op 0,8 -> 0,2 tel VÓÓR het doel (hooguit een halve tel)', bij(vast.metFaseVan(1.0, 2.4), 0.9));
+  ok('metFaseVan: doel niet op de tel -> fase van t, dichtbij het doel', bij(vast.metFaseVan(1.2, 3.05), 1.05));
+  ok('metFaseVan: al in fase -> het doel zelf', bij(vast.metFaseVan(1.0, 7.0), 1.0));
+  const naGrens = kaart.metFaseVan(2.5, 1.25);     // doel in het stuk van 150 bpm, t halverwege een tel
+  ok(`metFaseVan over een stukgrens: fase gelijk (${kaart.phase(naGrens).toFixed(3)})`, bij(kaart.phase(naGrens), 0.5)
+    && Math.abs(naGrens - 2.5) <= 0.2 + 1e-9);
+
+  ok('volgendeVeelvoud: vanaf tel 5 is het volgende maatbegin 8', vast.volgendeVeelvoud(5) === 8);
+  ok('volgendeVeelvoud: op een maatbegin blijft het staan', vast.volgendeVeelvoud(8) === 8);
+  ok('volgendeVeelvoud: net erna (8,01) is het 12', vast.volgendeVeelvoud(8.01) === 12);
+  ok('volgendeVeelvoud: negatief werkt ook (−3 -> 0)', vast.volgendeVeelvoud(-3) === 0);
+  ok('volgendeVeelvoud per 1 = de volgende tel', vast.volgendeVeelvoud(5.2, 1) === 6);
+
+  // Maatbegin met het maat-anker per stuk (integratie ronde 3): starten op de
+  // maat valt op de "1" van het stuk van de maatgever, niet op een maat die
+  // vanaf tel 0 van het eerste stuk doortelt.
+  const eigen = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 10, bpm: 150, anker: 10.1, maat: 10.9 }] });
+  const b1 = eigen.beatAt(10.1);                   // tel 20: doorgeteld een "1", hier tel 3
+  ok(`volgendeVeelvoud volgt de eigen "1" van het stuk (tel ${b1} -> ${eigen.volgendeVeelvoud(b1)}, op ${eigen.timeOf(eigen.volgendeVeelvoud(b1)).toFixed(2)} s)`,
+    eigen.volgendeVeelvoud(b1) === b1 + 2 && eigen.isMaatbegin(eigen.volgendeVeelvoud(b1)) && bij(eigen.timeOf(eigen.volgendeVeelvoud(b1)), 10.9));
+  ok('... en in het eerste stuk gewoon doorgeteld (tel 13 -> 16 = 8,0 s)', eigen.volgendeVeelvoud(13) === 16 && bij(eigen.timeOf(16), 8));
+  ok('... per 1 blijft de volgende tel', eigen.volgendeVeelvoud(b1 + 0.3, 1) === b1 + 1);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

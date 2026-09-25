@@ -314,6 +314,45 @@ export class Beatgrid {
   /** Is tel `b` (doorlopend telnummer) een tel 1? */
   isMaatbegin(b) { return mod(b - this._maatVan(this._deelBijBeat(b)), this.beatsPerBar) === 0; }
 
+  /**
+   * Tracktijd `tellen` tellen verder dan t (negatief = terug): een beatjump.
+   * In TELLEN, niet in seconden: over een stukgrens van de tempokaart is een
+   * tel niet overal even lang, en zo blijft de fase binnen de tel precies
+   * gelijk (t op 0,3 van zijn tel landt op 0,3 van de doeltel).
+   */
+  verschuif(t, tellen) { return this.timeOf(this.beatAt(t) + tellen); }
+
+  /**
+   * Waar je naartoe springt als de fase moet blijven lopen (quantize): het
+   * punt bij `doel` dat op dezelfde plek in zijn tel zit als `t`, hooguit een
+   * halve tel van `doel` af. Een hotcue op de tel, ingedrukt op 0,3 van een
+   * tel, landt zo op 0,3 na de hotcue: het ritme struikelt niet.
+   */
+  metFaseVan(doel, t) {
+    const bd = this.beatAt(doel), bt = this.beatAt(t);
+    let d = (bt - Math.floor(bt)) - (bd - Math.floor(bd));
+    if (d >= 0.5) d -= 1;
+    if (d < -0.5) d += 1;
+    return this.timeOf(bd + d);
+  }
+
+  /**
+   * De eerste tel op of na tel `b` die `per` tellen na een "1" valt (een
+   * veelvoud van `per`, geteld vanaf de "1" van het stuk waar hij in valt):
+   * met per = beatsPerBar het volgende MAATbegin. Sinds het maat-anker per
+   * stuk (`maat`, 25 sep) is dat de "1" van dat stuk, zoals de golfvorm hem
+   * tekent en de lampjes hem knipperen (isMaatbegin/telInMaat), niet een
+   * maat die vanaf tel 0 van het eerste stuk doortelt. Oude grids zonder
+   * `maat` tellen door vanaf het vorige stuk, dus daar is het hetzelfde.
+   */
+  volgendeVeelvoud(b, per = this.beatsPerBar) {
+    let n = Math.ceil(b - EPS);
+    // Binnen één stuk is het er na hooguit `per` tellen; over een stukgrens
+    // (een andere "1") hooguit twee keer zoveel. 8× is ruim.
+    for (let i = 0; i < 8 * per && mod(n - this._maatVan(this._deelBijBeat(n)), per) !== 0; i++) n++;
+    return n;
+  }
+
   /** Staat deze tijd op de eerste tel van een maat? */
   isDownbeat(t, tolerantie = 0.02) {
     const p = this.barPhase(t);

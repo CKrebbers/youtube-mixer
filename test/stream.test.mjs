@@ -341,5 +341,101 @@ console.log('\nlos bestand via de streamkern');
   bron.vernietig();
 }
 
+// ---- starten op de maat: een gepland segment ---------------------------------
+// De StreamBron plant een start op T (later dan nu); de worklet blijft tot T
+// stil en begint op T precies op het startpunt. Zonder de vlag `gepland` gaf
+// de formule vóór T de muziek van vóór het startpunt.
+
+console.log('\ngepland starten (starten op de maat)');
+{
+  const { maakWav } = K;
+  const { StreamBron, geheugenHaal } = await import('../src/engine/bron.js');
+  const n = 48000 * 3;
+  // Zaagtand van 0,1 s: elke plek in het bestand is aan zijn waarde te herkennen.
+  const L = new Float32Array(n).map((_, i) => (i % 4800) / 4800 - 0.5);
+  const wav = maakWav([L, L], 48000);
+  const pcm = new Int16Array(wav, 44);
+
+  const berichten = [];
+  globalThis.AudioWorkletNode = class {
+    constructor() { this.port = { postMessage: (m) => berichten.push(m), onmessage: null }; }
+    connect() {} disconnect() {}
+  };
+  const ctx = { currentTime: 10, audioWorklet: { addModule: async () => {} } };
+  const bron = new StreamBron(ctx, {}, { interval: 1e9 });
+  await bron.laad({ url: 'geheugen:G:1', haal: geheugenHaal(wav) });
+  const segmenten = () => berichten.filter((m) => m.type === 'segment');
+
+  bron.start(1.0, { op: 10.5 });
+  const s1 = segmenten().at(-1);
+  ok('gepland: het segment begint op T, met de vlag voor de worklet', s1.gepland === true && s1.seg.T === 10.5 && s1.seg.P === 1.0 && s1.seg.speelt);
+  ok('... de bron speelt al (pauze annuleert), maar wacht', bron.speelt && bron.wachtTot === 10.5);
+  ctx.currentTime = 10.2;
+  ok('... vóór T staat de positie stil op het startpunt', bron.positie === 1.0);
+  ok('... ctxTimeOf klopt al vóór T', dichtbij(bron.ctxTimeOf(1.25), 10.75));
+  bron.setRate(1.1);
+  const s2 = segmenten().at(-1);
+  ok('tempo tijdens het wachten: T en P blijven, R verandert', s2.gepland && s2.seg.T === 10.5 && s2.seg.P === 1.0 && s2.seg.R === 1.1);
+  bron.setLoop(1.0, 2.0);
+  ok('loop tijdens het wachten: T blijft', segmenten().at(-1).seg.T === 10.5 && segmenten().at(-1).seg.loop?.end === 2.0 && bron.wachtTot === 10.5);
+  bron.clearLoop();
+  ctx.currentTime = 10.6;
+  ok('na T loopt hij, vanaf P op T', dichtbij(bron.positie, 1.0 + 0.1 * 1.1) && bron.wachtTot === null);
+  bron.setRate(1);
+  ok('na T is een tempowissel weer een gewoon segment (T = nu)', !segmenten().at(-1).gepland && segmenten().at(-1).seg.T === 10.6);
+  const voor = segmenten().length;
+  bron.start(2.0, { loop: { start: 2.0, end: 2.5 } });
+  ok('start met loop: loop en positie in ÉÉN segment', segmenten().length === voor + 1
+    && segmenten().at(-1).seg.loop?.start === 2.0 && segmenten().at(-1).seg.P === 2.0 && bron.loop.end === 2.5);
+  bron.start(1.0, { op: 11 });
+  bron.pauzeer();
+  ok('pauze tijdens het wachten: stil op het startpunt', !bron.speelt && bron.positie === 1.0 && bron.wachtTot === null);
+  bron.vernietig();
+
+  // De worklet zelf, met een nagemaakte AudioWorkletGlobalScope.
+  let Lezer = null;
+  globalThis.sampleRate = 48000;
+  globalThis.currentFrame = 0;
+  globalThis.AudioWorkletProcessor = class { constructor() { this.port = { postMessage: () => {}, onmessage: null }; } };
+  globalThis.registerProcessor = (_naam, k) => { Lezer = k; };
+  await import('../src/engine/stream-lezer.js');
+  const T = 0.1, P = 1.0, Tf = Math.round(T * 48000);
+  const draai = (berichtenIn, frames = 9600) => {
+    const w = new Lezer();
+    const zend = (m) => w.port.onmessage({ data: m });
+    zend({ type: 'bron', duur: 3, sr: 48000 });
+    for (let i = 0; i * PAGINA < n; i++) zend({ type: 'pagina', i, data: pcm.slice(i * PAGINA * 2, Math.min(n, (i + 1) * PAGINA) * 2) });
+    const uit = new Float32Array(frames);
+    for (let f = 0; f < frames; f += 128) {
+      globalThis.currentFrame = f;
+      for (const [op, m] of berichtenIn) if (op === f) zend(m);
+      const blok = [new Float32Array(128), new Float32Array(128)];
+      w.process([], [blok]);
+      uit.set(blok[0], f);
+    }
+    return uit;
+  };
+  const seg = { T, P, R: 1, loop: null, speelt: true };
+  const gepland = draai([[0, { type: 'segment', seg, id: 1, gepland: true }]]);
+  ok('worklet: vóór T volkomen stil (geen muziek van vóór het startpunt)', gepland.slice(0, Tf + 1).every((v) => v === 0));
+  const na = Tf + Math.ceil(0.004 * 48000) + 1;                // na 4 ms invloeien
+  let afw = 0;
+  for (let k = na; k < na + 3000; k++) afw = Math.max(afw, Math.abs(gepland[k] - pcm[(P * 48000 + (k - Tf)) * 2] / 32768));
+  ok(`worklet: vanaf T precies het startpunt, sample voor sample (afwijking ${afw.toExponential(1)})`, afw < 1e-6);
+  ok('worklet: het invloeien begint op T, niet eerder', Math.abs(gepland[Tf + 100]) > 0.1);
+  const zonderVlag = draai([[0, { type: 'segment', seg, id: 1 }]]);
+  ok('zonder de vlag klonk vóór T de muziek van vóór het startpunt (daarom de vlag)', zonderVlag.slice(200, Tf).some((v) => Math.abs(v) > 0.1));
+  const geannuleerd = draai([[0, { type: 'segment', seg, id: 1, gepland: true }],
+    [2560, { type: 'segment', seg: { ...seg, T: 2560 / 48000, speelt: false }, id: 2 }]]);
+  ok('worklet: pauze vóór T annuleert: helemaal stil, ook geen tikje', geannuleerd.every((v) => v === 0));
+  const verzet = draai([[0, { type: 'segment', seg, id: 1, gepland: true }],
+    [2560, { type: 'segment', seg: { ...seg, P: 2.0 }, id: 2, gepland: true }]]);
+  let afw2 = 0;
+  for (let k = na; k < na + 2000; k++) afw2 = Math.max(afw2, Math.abs(verzet[k] - pcm[(2.0 * 48000 + (k - Tf)) * 2] / 32768));
+  ok('worklet: startpunt verzet tijdens het wachten (hotcue): stil tot T, dan het nieuwe punt',
+    verzet.slice(0, Tf + 1).every((v) => v === 0) && afw2 < 1e-6);
+  delete globalThis.registerProcessor; delete globalThis.AudioWorkletProcessor;
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
