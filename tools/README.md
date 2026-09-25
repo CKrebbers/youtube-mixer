@@ -83,6 +83,11 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   beeld op het canvas van het geluid af zit. MIDI eruit vóór ELKE pagina (ook het
   losse venster). `VARVE_WORTEL=<map>` draait de beeldcontrole op andere (oude) code.
   Op een drukke machine: `VARVE_KIJK_POORT` en `VARVE_KIJK_DEBUG` zetten.
+- `kijk-ingest.mjs [uitmap]` — de ingest-strook in het library-paneel, met de nep-yt-dlp
+  uit `test/nep-ytdlp.mjs` (geen netwerk): vier regels plakken (één playlist), voortgang
+  per stap, een wachtende en de lopende annuleren, "al in de library" met laadknoppen,
+  een playlist die alleen yt-dlp herkent. Zelfde veiligheid als kijk.mjs (eigen server,
+  geen MIDI); poorten via `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`. Foto's `ingest-*.png`.
 
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen

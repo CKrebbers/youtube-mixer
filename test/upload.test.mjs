@@ -54,7 +54,8 @@ const wachtOp = async (opdrachtId, maxMs = 60000) => {
   while (Date.now() - t0 < maxMs) {
     const j = await (await fetch(`${B}/api/ingest`)).json();
     const o = j.opdrachten.find((x) => x.id === opdrachtId);
-    if (o && o.status !== 'bezig') return o;
+    // 'wacht': in de wachtrij achter een ander (sinds 25 sep één tegelijk).
+    if (o && o.status !== 'bezig' && o.status !== 'wacht') return o;
     await new Promise((r) => setTimeout(r, 200));
   }
   return null;

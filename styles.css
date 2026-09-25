@@ -271,6 +271,26 @@ body.leermodus .loops .btn::after{bottom:-12px}
 .lib-job-tekst{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lib-job-balk{height:4px;background:#0b0e11;border:1px solid var(--line);border-radius:2px;overflow:hidden}
 .lib-job-balk i{display:block;height:100%;background:var(--a)}
+/* Ingest-strook (ingest-strook.js): wachtrij en voortgang per nummer. */
+.lib-jobs{max-height:150px;overflow:auto}
+.ing-kop{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.lib-job.ing-rij{grid-template-columns:92px minmax(0,1fr) auto 110px 34px auto;gap:8px;min-height:22px}
+.ing-rij .lib-job-stap{font-size:10px;font-weight:700}
+.ing-rij.wacht .lib-job-stap{color:var(--dim)}
+.ing-rij.geannuleerd .lib-job-stap{color:var(--dim)}
+.ing-rij.bestond .lib-job-stap{color:#50dcff}
+.ing-rij.mislukt .ing-sub{color:var(--red)}
+.ing-rij b{font-weight:600}
+.ing-sub{font-style:normal;color:var(--dim)}
+.ing-stappen{display:flex;gap:2px}
+.ing-stappen i{display:block;width:12px;height:4px;border-radius:1px;background:#1d252d}
+.ing-stappen i.gedaan{background:var(--a)}
+.ing-stappen i.nu{background:var(--warn);animation:ing-puls 1s ease-in-out infinite alternate}
+@keyframes ing-puls{from{opacity:.45}to{opacity:1}}
+.ing-pct{font-family:ui-monospace,monospace;font-size:10px;color:var(--dim);text-align:right}
+.ing-knoppen{display:flex;gap:3px;justify-content:flex-end}
+.ing-x{color:var(--dim)}
+.ing-x:hover{color:var(--red);border-color:var(--red)}
 
 /* De lijst: kop (plakt bovenaan), een ruimte zo hoog als de hele lijst, en
    daarin een venster met alleen de rijen die je ziet (library-lijst.js).
