@@ -1845,6 +1845,60 @@ console.log('\ntransport');
   ok('snapshot draagt in-punt, wachten en sprong', 'loopIn' in eng.snapshot().decks.G && eng.snapshot().decks.G.wacht === false
     && eng.snapshot().decks.G.sprongTellen === 4);
 
+  // Toetsen en uitleg.
+  const { KEYMAP, SHIFT_ALIAS } = await import('../src/control/keyboard.js');
+  const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+  const ids = new Set(list().map((a) => a.id));
+  const vul = (id) => id.replace('{L}', '3').replace('{R}', '2');
+  const metShift = Object.values(KEYMAP).map((id) => SHIFT_ALIAS(vul(id))).filter((id) => !ids.has(id));
+  ok('elke toets MET shift wijst ook naar een bestaande action', metShift.length === 0);
+  ok('toetsen: R/T beatjump, G/C loop in/out, 6 quantize; shift: Q = op de maat, R/T = lengte, G = reloop',
+    KEYMAP.KeyR === 'track.{L}.beatjump.back' && KEYMAP.KeyT === 'track.{L}.beatjump.fwd'
+    && KEYMAP.KeyG === 'track.{L}.loop.in' && KEYMAP.KeyC === 'track.{L}.loop.out' && KEYMAP.Digit6 === 'transport.quantize'
+    && SHIFT_ALIAS('track.3.play') === 'track.3.play.quant' && SHIFT_ALIAS('track.3.beatjump.back') === 'track.3.beatjump.halve'
+    && SHIFT_ALIAS('track.3.beatjump.fwd') === 'track.3.beatjump.double' && SHIFT_ALIAS('track.3.loop.in') === 'track.3.loop.reloop'
+    && SHIFT_ALIAS('track.3.hotcue.2') === 'track.3.hotcue.2.delete');
+  {
+    // Echt drukken, via de handler: G heeft focus (links), H is de tweede (rechts).
+    const { attachKeyboard } = await import('../src/control/keyboard.js');
+    const handlers = {};
+    const oudWindow = globalThis.window;
+    globalThis.window = { addEventListener: (t, f) => { handlers[t] = f; } };
+    attachKeyboard(eng, { venster: (v) => (v === 'L' ? 'G' : 'H') });
+    globalThis.window = oudWindow;
+    const toets = (code, shiftKey = false) => {
+      for (const type of ['keydown', 'keyup']) handlers[type]({ code, shiftKey, target: { matches: () => false }, preventDefault() {} });
+    };
+    dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 })); dG.stop(); dG.seek(5);
+    toets('KeyT', true);
+    ok('toets shift+T: beatjump-lengte ×2 (8 tellen)', dG.sprongTellen === 8);
+    toets('KeyT');
+    ok('toets T: beatjump vooruit, 8 tellen (5 -> 9)', Math.abs(dG.position - 9) < 1e-9);
+    toets('KeyR', true);
+    toets('KeyG'); dG.seek(11); toets('KeyC');
+    ok('toetsen shift+R, G en C: lengte terug naar 4, loop 9 – 11', dG.sprongTellen === 4 && dG.loop
+      && Math.abs(dG.loop.start - 9) < 1e-9 && Math.abs(dG.loop.end - 11) < 1e-9);
+    toets('KeyG', true);
+    ok('toets shift+G: reloop/exit haalt de loop eraf', dG.loop === null);
+    toets('Digit6');
+    ok('toets 6: quantize aan', eng.quantize === true);
+    toets('Digit6');
+    ok('... en weer uit', eng.quantize === false);
+    dG.stop(); dM.stop(); dM.seek(0); NOW = 900;
+    dM.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));        // hierboven stond hij op onzeker
+    toets('KeyP', true);
+    ok('toets shift+P: de tweede track (H) start op de maat, zonder maatgever meteen', dM.playing && !dM.wacht);
+    NOW = 900.1;
+    dG.seek(8);
+    toets('KeyQ', true);
+    ok('toets shift+Q: de track met focus (G) wacht op het maatbegin van H (902,0)', dG.wacht && Math.abs(dG.bron.wachtTot - 902) < 1e-9);
+    dG.stop(); dM.stop(); dG.clearLoop();
+  }
+  const nieuw = ['track.7.beatjump.back', 'track.7.beatjump.fwd', 'track.7.beatjump.halve', 'track.7.beatjump.double',
+    'track.7.loop.in', 'track.7.loop.out', 'track.7.loop.reloop', 'track.7.play.quant', 'transport.quantize'];
+  const zonderUitleg = nieuw.filter((a) => !ids.has(a) || beschrijf(a).kort === a || beschrijf(a).lang.startsWith('?') || beschrijf(a).lang === a);
+  ok(`elke nieuwe action bestaat en heeft een uitleg voor apc.html${zonderUitleg.length ? ': ' + zonderUitleg.join(', ') : ''}`, zonderUitleg.length === 0);
+
   eng.off?.('melding', opMelding);
   NOW = 0;
 }

@@ -19,6 +19,8 @@ export const KEYMAP = {
   Digit5: 'track.{L}.loop.exit',
   KeyZ: 'track.{L}.nudge.back', KeyX: 'track.{L}.nudge.fwd',
   KeyE: 'track.{L}.focus',
+  KeyR: 'track.{L}.beatjump.back', KeyT: 'track.{L}.beatjump.fwd',
+  KeyG: 'track.{L}.loop.in',       KeyC: 'track.{L}.loop.out',
 
   // rechterhand: de vorige focus
   KeyP: 'track.{R}.play',       KeyO: 'track.{R}.cue',
@@ -29,10 +31,29 @@ export const KEYMAP = {
   Minus:  'track.{R}.loop.exit',
   Comma: 'track.{R}.nudge.back', Period: 'track.{R}.nudge.fwd',
   KeyI: 'track.{R}.focus',
+  KeyY: 'track.{R}.beatjump.back', KeyU: 'track.{R}.beatjump.fwd',
+  KeyH: 'track.{R}.loop.in',       KeyN: 'track.{R}.loop.out',
+
+  // midden: voor alle tracks
+  Digit6: 'transport.quantize',
 };
 
-/** Shift + hotcue wist die hotcue. Ingebouwde modifier, geen aparte tabel. */
-const SHIFT_ALIAS = (id) => id.includes('.hotcue.') ? `${id}.delete` : id;
+/**
+ * Shift als ingebouwde modifier, geen aparte tabel: hotcue -> wissen, play ->
+ * starten op de maat, beatjump terug/vooruit -> lengte halveren/verdubbelen,
+ * loop in -> reloop/exit.
+ */
+const SHIFT_VARIANT = [
+  [/\.hotcue\.\d+$/, (id) => `${id}.delete`],
+  [/\.play$/, (id) => `${id}.quant`],
+  [/\.beatjump\.back$/, (id) => id.replace(/back$/, 'halve')],
+  [/\.beatjump\.fwd$/, (id) => id.replace(/fwd$/, 'double')],
+  [/\.loop\.in$/, (id) => id.replace(/in$/, 'reloop')],
+];
+export const SHIFT_ALIAS = (id) => {
+  const v = SHIFT_VARIANT.find(([re]) => re.test(id));
+  return v ? v[1](id) : id;
+};
 
 /**
  * @param opts.venster  (v: 'L'|'R') -> deck-id dat daar nu staat. Zonder:
