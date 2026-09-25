@@ -141,6 +141,45 @@ lib.bewaarGrid('abc123', kaart);            // voor het opruimen hieronder
   l5.sluit();
 }
 
+// ---- migratie vanaf v5 MET data (zoals Clay's library van 25 sep) ----------
+// Tot SCHEMA.length, niet tot een vast getal: het toonsoort-spoor voegt ook
+// een versie toe. Niets mag verloren gaan; de titelsleutel wordt gevuld.
+{
+  const pad5 = join(map, 'v5.db');
+  const db = new DatabaseSync(pad5);
+  for (let v = 0; v < 5; v++) db.exec(SCHEMA[v]);
+  db.exec('PRAGMA user_version = 5');
+  const ins = db.prepare(`INSERT INTO tracks (id, url, titel, uploader, duur, audio, toegevoegd, laatst_geladen, keer_geladen, grid_bpm, grid_json)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
+  const titels = ['Élan vital', 'zoned out', 'Track 10', 'track 2', '足袋 workshop', 'ADRIANA — deel 1'];
+  titels.forEach((titel, i) => ins.run(`v5n${i}`, `https://youtu.be/v5n${i}`, titel, 'x', 100 + i, `media/v5n${i}/audio.wav`, 1000 + i,
+    i % 2 ? 5000 + i : null, i % 2, i % 3 ? 120 + i : null, i % 3 ? JSON.stringify({ stukken: [{ van: 0, bpm: 120 + i, anker: 0 }] }) : null));
+  db.prepare('INSERT INTO racks (track_id, naam, data, actief, gemaakt, gewijzigd) VALUES (?,?,?,?,?,?)').run('v5n0', 'r', '{}', 1, 1, 1);
+  db.prepare('INSERT INTO samples (track_id, pad, van, tot, tellen, bpm, gemaakt) VALUES (?,?,?,?,?,?,?)').run('v5n0', 1, 1, 2, 4, 120, 1);
+  db.prepare('INSERT INTO peaks (track_id, bestand, buckets, per_bucket, gemaakt) VALUES (?,?,?,?,?)').run('v5n0', 'media/v5n0/peaks.bin', 10, 480, 1);
+  const voor = db.prepare('SELECT * FROM tracks ORDER BY id').all();
+  db.close();
+
+  const l = new Library(pad5);
+  ok(`v5 met data wordt de nieuwste (v${SCHEMA.length})`, l.versie === SCHEMA.length);
+  const na = l.db.prepare('SELECT * FROM tracks ORDER BY id').all();
+  ok('elke rij ongeschonden, op de nieuwe titelsleutel na', na.length === voor.length
+    && na.every(({ titel_sleutel: _s, ...r }, i) => JSON.stringify(r) === JSON.stringify(voor[i])));
+  ok('elke oude rij heeft een titelsleutel', na.every((r) => r.titel_sleutel === sorteertitel(r.titel)));
+  ok('racks, pads en peaks staan er nog', l.racks('v5n0').length === 1 && l.samples('v5n0').length === 1 && l.peaks('v5n0') !== null);
+  ok('titel op: zonder accenten en hoofdletters, getallen op waarde',
+    JSON.stringify(l.tracks({ sorteer: 'titel', richting: 'op' }).map((x) => x.titel))
+    === JSON.stringify(['ADRIANA — deel 1', 'Élan vital', 'track 2', 'Track 10', 'zoned out', '足袋 workshop']));
+  const bpm = l.tracks({ sorteer: 'bpm', richting: 'af' });
+  ok('bpm af: oude grids tellen mee, zonder grid achteraan', bpm[0].grid_bpm === 125 && bpm.slice(-2).every((x) => x.grid_bpm === null));
+  ok('gespeeld: wat nooit geladen is achteraan', l.tracks({ sorteer: 'gespeeld' }).slice(-3).every((x) => x.laatst_geladen === null));
+  l.bewaarHotcue('v5n0', { nr: 1, tijd: 3 });
+  l.verwijderTrack('v5n0');
+  ok('weghalen op een gemigreerde database: hotcues, racks en pads gaan mee',
+    l.db.prepare('SELECT (SELECT COUNT(*) FROM hotcues) + (SELECT COUNT(*) FROM racks) + (SELECT COUNT(*) FROM samples) AS n').get().n === 0);
+  l.sluit();
+}
+
 // ---- peaks ----------------------------------------------------------------
 
 lib.bewaarPeaks('abc123', { bestand: 'media/abc123/peaks.bin', buckets: 8192, perBucket: 256 });
