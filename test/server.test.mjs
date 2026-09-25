@@ -197,7 +197,8 @@ try {
   await fetch(`${B}/api/library/extra123/geladen`, { method: 'POST' });
   ok('laatst gespeeld: net geladen staat bovenaan', (await lijst('?sorteer=gespeeld&aantal=1')).tracks[0].id === 'extra123');
   const fouten = [];
-  for (const q of ['?sorteer=onzin', '?sorteer=titel;DROP', '?richting=omhoog', '?aantal=0', '?aantal=501', '?aantal=1.5', '?van=-1', '?van=abc']) {
+  for (const q of ['?sorteer=onzin', '?sorteer=titel;DROP', '?sorteer=constructor', '?sorteer=toString', '?sorteer=__proto__',
+    '?richting=omhoog', '?aantal=0', '?aantal=501', '?aantal=1.5', '?van=-1', '?van=abc']) {
     fouten.push((await lijst(q)).status);
   }
   ok(`onzin in de vraag: 400 (${fouten.join(' ')})`, fouten.every((c) => c === 400));

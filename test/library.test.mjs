@@ -323,6 +323,11 @@ lib.sluit();
   let sortFout = false;
   try { lg.tracks({ sorteer: 'titel; DROP TABLE tracks' }); } catch { sortFout = true; }
   ok('onbekende sortering gooit (en komt niet in de SQL)', sortFout && lg.aantalTracks() === N + 2);
+  const protoFouten = ['constructor', 'toString', '__proto__'].map((s) => {
+    try { lg.tracks({ sorteer: s, aantal: 1 }); return 'geen fout'; } catch (e) { return e.message; }
+  });
+  ok(`een naam van Object (constructor, toString) is ook onbekend, geen SQL-fout (${protoFouten.join(' / ')})`,
+    protoFouten.every((m) => /onbekende sortering/.test(m)));
   const r0 = lg.tracks({ sorteer: 'titel', aantal: 1 })[0];
   ok('een rij uit een pagina heeft alles om te laden (audio, peaks-veld, grid, racks)',
     'audio' in r0 && 'peaks' in r0 && 'grid' in r0 && r0.racks === 0 && !('titel_sleutel' in r0) && !('_rij' in r0));

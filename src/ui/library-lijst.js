@@ -37,12 +37,12 @@ export const SORTEER_SLEUTEL = 'varve.library.sortering';
 
 /** Klik op een kolomkop: een andere kolom = zijn eigen eerste richting, dezelfde nog eens = omgekeerd. */
 export function volgendeSortering(huidig, sleutel) {
-  if (!(sleutel in SORTERINGEN)) return huidig;
+  if (!Object.hasOwn(SORTERINGEN, sleutel)) return huidig;
   if (huidig?.sorteer === sleutel) return { sorteer: sleutel, richting: huidig.richting === 'op' ? 'af' : 'op' };
   return { sorteer: sleutel, richting: SORTERINGEN[sleutel] };
 }
 
-const geldig = (s) => !!s && s.sorteer in SORTERINGEN && (s.richting === 'op' || s.richting === 'af');
+const geldig = (s) => !!s && Object.hasOwn(SORTERINGEN, s.sorteer) && (s.richting === 'op' || s.richting === 'af');
 
 /** De laatst gekozen sortering, uit localStorage. Leeg, kapot of geblokkeerd: de standaard. */
 export function leesSortering(opslag) {

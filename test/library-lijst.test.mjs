@@ -23,6 +23,8 @@ s = L.volgendeSortering(s, 'titel');
 ok('en weer terug', s.richting === 'op');
 ok('laatst gespeeld begint met de laatste bovenaan', L.volgendeSortering(s, 'gespeeld').richting === 'af');
 ok('een onbekende kolom verandert niets', L.volgendeSortering(s, 'lufs') === s);
+ok('ook geen naam van een JavaScript-object (constructor, toString)',
+  L.volgendeSortering(s, 'constructor') === s && L.volgendeSortering(s, 'toString') === s);
 
 console.log('\nonthouden (localStorage mag ontbreken of gooien)');
 const geheugen = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
@@ -34,6 +36,8 @@ o.setItem(L.SORTEER_SLEUTEL, '{kapot');
 ok('kapotte JSON: de standaard', L.leesSortering(o).sorteer === 'toegevoegd');
 o.setItem(L.SORTEER_SLEUTEL, '{"sorteer":"lufs","richting":"op"}');
 ok('een kolom die niet (meer) bestaat: de standaard', L.leesSortering(o).sorteer === 'toegevoegd');
+o.setItem(L.SORTEER_SLEUTEL, '{"sorteer":"toString","richting":"op"}');
+ok('"toString" is geen kolom (de server zou 500 geven en de lijst bleef leeg)', L.leesSortering(o).sorteer === 'toegevoegd');
 const gooit = { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('QuotaExceeded'); } };
 let fout = null;
 try { L.bewaarSortering(gooit, { sorteer: 'titel', richting: 'op' }); ok('opslag die gooit: lezen geeft de standaard', L.leesSortering(gooit).sorteer === 'toegevoegd'); } catch (e) { fout = e; }

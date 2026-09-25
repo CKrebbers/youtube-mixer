@@ -149,6 +149,12 @@ export const SORTERING = {
   gespeeld: { sql: 'laatst_geladen', eerst: 'af' }, // gezet door POST /api/library/<id>/geladen
 };
 
+/**
+ * Is dit een sortering? Alleen EIGEN sleutels: `SORTERING['constructor']`
+ * bestaat ook (van Object), en gaf dan "no such column: undefined" en een 500.
+ */
+export const isSortering = (s) => typeof s === 'string' && Object.hasOwn(SORTERING, s);
+
 /** De ORDER BY voor een sortering en richting. Alleen uit SORTERING, nooit van buiten. */
 function volgorde(sorteer, richting, t = '') {
   const s = SORTERING[sorteer];
@@ -312,7 +318,7 @@ export class Library {
    * Onbekende sortering gooit (de route zegt dan 400).
    */
   tracks({ zoek = '', sorteer = 'toegevoegd', richting = null, van = 0, aantal = null } = {}) {
-    if (!SORTERING[sorteer]) throw new Error(`onbekende sortering: ${sorteer}`);
+    if (!isSortering(sorteer)) throw new Error(`onbekende sortering: ${sorteer}`);
     const { waar, args } = zoekFilter(zoek);
     // Alles (de meet-tools): één query, er valt niets over te slaan.
     if (aantal == null) {

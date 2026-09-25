@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, YTDLP_GETEST_OP } from './ingest.js';
 import { normaliseerLink, ontsmetNaam, BESTAND_EXT } from './links.js';
-import { Library, normaliseerGrid, SORTERING, MAX_PER_PAGINA, MAX_HOTCUES } from './library.js';
+import { Library, normaliseerGrid, SORTERING, isSortering, MAX_PER_PAGINA, MAX_HOTCUES } from './library.js';
 import { ZEKER_VANAF } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets } from './analyze.js';
 import * as opname from './opname.js';
@@ -506,7 +506,7 @@ const server = createServer(async (req, res) => {
       const q = url.searchParams;
       const zoek = q.get('zoek') || '';
       const sorteer = q.get('sorteer') || 'toegevoegd';
-      if (!SORTERING[sorteer]) return json(res, 400, { fout: `sorteer op ${Object.keys(SORTERING).join(', ')}` });
+      if (!isSortering(sorteer)) return json(res, 400, { fout: `sorteer op ${Object.keys(SORTERING).join(', ')}` });
       const richting = q.get('richting');
       if (richting !== null && richting !== 'op' && richting !== 'af') return json(res, 400, { fout: 'richting is op of af' });
       const heel = (k) => (q.has(k) ? Number(q.get(k)) : null);
