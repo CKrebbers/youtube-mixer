@@ -367,8 +367,24 @@ export class Deck extends Emitter {
     if (del) { this.hotcues[i] = null; this.emit('change', this); return; }
     // Quantize: zetten op de tel, springen fasebehoudend (_snap, _faseDoel).
     if (this.hotcues[i] === null) this.hotcues[i] = this._snap(this.position);
-    else this.seek(this._faseDoel(this.hotcues[i]));
+    else this._naarHotcue(this.hotcues[i]);
     this.emit('change', this);
+  }
+
+  /**
+   * Naar een hotcue springen (met quantize fasebehoudend). Of een loop blijft,
+   * hangt af van waar de HOTCUE ligt, niet van waar de sprong landt: die kan
+   * tot een halve tel ernaast vallen. Een hotcue op het loopbegin, ingedrukt
+   * op 0,6 van een tel, landde anders vóór de loop en haalde hem eraf; een
+   * hotcue op het loopeinde (net erbuiten) landde erin en bleef erin hangen.
+   * In de loop vouwt de sprong terug, zoals bij reloop.
+   */
+  _naarHotcue(h) {
+    const doel = this._faseDoel(h);
+    const l = this.loop;
+    const binnen = !!l && h >= l.start && h < l.end;
+    if (l && !binnen) this._verlaatLoop();
+    this.seek(doel, { binnenLoop: binnen });
   }
 
   // ---- quantize ----------------------------------------------------------

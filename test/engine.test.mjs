@@ -1743,6 +1743,24 @@ console.log('\ntransport');
   dG.seek(6.15);                                                // 0,3 in de tel
   druk('track.7.hotcue.1');
   ok('... op 0,3 in de tel: 0,15 s na de hotcue (2,15)', Math.abs(dG.position - 2.15) < 1e-9);
+  // In een loop: of de loop blijft, hangt af van waar de HOTCUE ligt, niet van
+  // waar de fasebehoudende sprong landt (tot een halve tel ernaast). Zonder
+  // quantize bleef een hotcue op het loopbegin in de loop; met quantize viel
+  // hij vóór het begin en haalde hij de loop eraf.
+  dG.setBeatLoop(4);                                            // 2,15 -> loop 2,0 – 4,0
+  NOW += 0.65;                                                  // 2,8: 0,6 in de tel
+  druk('track.7.hotcue.1');                                     // hotcue 1 = 2,0 = het loopbegin
+  ok('hotcue op het loopbegin met quantize: de loop blijft, sprong teruggevouwen (3,8)', !!dG.loop
+    && Math.abs(dG.loop.start - 2) < 1e-9 && Math.abs(dG.position - 3.8) < 1e-9);
+  dG.clearLoop(); dG.seek(3.8); dG.setLoopRange(2.0, 4.0);      // los van de check hierboven
+  dG.hotcues[1] = 4.0;                                          // op het loopEINDE: net buiten de loop
+  NOW += 0.1;                                                   // 3,9: 0,8 in de tel
+  druk('track.7.hotcue.2');
+  ok('hotcue net buiten de loop met quantize: de loop gaat eraf, ook al valt de sprong erin (3,9)', dG.loop === null
+    && Math.abs(dG.position - 3.9) < 1e-9);
+  NOW += 0.3;
+  ok('... en hij speelt voorbij het oude loopeinde door (4,2)', Math.abs(dG.position - 4.2) < 1e-9);
+  dG.hotcues[1] = null;
   dG.stop();
   dG.seek(7.3);
   druk('track.7.hotcue.1');
