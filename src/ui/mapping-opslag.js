@@ -148,18 +148,22 @@ export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => 
       verslag = await laadEigen(mapping, { haal, opslag });
     } catch (err) {
       // Wat er bewaard staat is niet te lezen, of de standaard kwam niet binnen.
-      // Dan de standaard erop en zeggen wat er aan de hand is; een koppeling die
-      // je nu maakt overschrijft de oude. Kwam ook de standaard niet binnen, dan
-      // bewaren we deze sessie NIETS: anders overschreef de eerste 'change' (een
-      // fragment dat binnenkomt) jouw verschil met een lege mapping.
-      meld(`jouw eigen mapping kon niet geladen worden (${err.message}) — de standaard staat erop`, 'fout');
+      // Dan de standaard erop en zeggen wat er aan de hand is, maar deze sessie
+      // NIETS bewaren (tot "standaard herstellen", een bewuste keuze). Jouw
+      // verschil op de server is dan niet geladen, dus alles wat hier bewaard
+      // wordt zou het vervangen: één koppeling na een haperende server
+      // (controleur 25 sep: standaard één keer 500) kostte je al je eigen
+      // regels. Kwam ook de standaard niet binnen, dan geldt hetzelfde: anders
+      // overschreef de eerste 'change' (een fragment) je verschil met een lege
+      // mapping.
       try {
         mapping.laadStandaard(await haalStandaard(STANDAARD_APPARAAT, haal));
+        meld(`jouw eigen mapping kon niet geladen worden (${err.message}) — de standaard staat erop, en koppelingen worden niet bewaard tot je herlaadt`, 'fout');
       } catch (e2) {
         meld(`standaardmapping niet geladen (${e2.message}) — koppelingen worden niet bewaard tot je herlaadt`, 'fout');
         return { bron: null, fout: e2.message };
       }
-      verslag = { bron: null, fout: err.message };
+      return { bron: null, fout: err.message };
     }
     const v = mapping.verschil();
     laatst = v ? JSON.stringify(v) : null;

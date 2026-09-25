@@ -1059,6 +1059,35 @@ console.log('controleur: server niet gelezen = niet naar de server bij opstarten
   ok('Clay\'s verschil op de server is ongeschonden (geen grid-modus "weggehaald")',
     JSON.stringify(srv.inDb()) === JSON.stringify(goed));
 }
+console.log('controleur: eigen mapping niet geladen = deze sessie niets bewaren');
+{
+  // mappings/apc40mk2.json komt de EERSTE keer niet binnen (500, bv. de server
+  // herstart net), de tweede keer wel: de standaard staat erop, Clay's verschil
+  // is niet geladen. Koppelt hij daarna één knop, dan mag dat zijn vier eigen
+  // regels op de server niet vervangen door een verschil van één regel.
+  const goed = maakVerschil(doc, kopieVanClay());
+  const srv = nepServer({ opgeslagen: goed });
+  let eerste = true;
+  const haal = (url, o) => {
+    if (url === 'mappings/apc40mk2.json' && eerste) { eerste = false; return Promise.resolve(new Response('{}', { status: 500 })); }
+    return srv.haal(url, o);
+  };
+  const gemeld = [];
+  const m = kaal();
+  const o = opzetMappingOpslag({ mapping: m, haal, opslag: nepOpslag(), meld: (t, s) => gemeld.push([t, s]), wacht: 0 });
+  const v = await o.start();
+  ok('standaard eerst niet binnen: de standaard staat erop, met een foutmelding', !!v.fout && m.rules.size === doc.rules.length
+    && gemeld.some(([t, s]) => s === 'fout' && /niet bewaard/.test(t)));
+  m.set('note:0:66', 'track.1.sync', { mode: 'trigger' });
+  m.voegToe('vormen', fragment);
+  await rust();
+  ok('een koppeling daarna overschrijft Clay\'s verschil op de server niet', srv.posts === 0 && JSON.stringify(srv.inDb()) === JSON.stringify(goed));
+  // Standaard herstellen is een bewuste keuze: dat mag wel, en daarna wordt er weer bewaard.
+  ok('standaard herstellen mag daarna wel (bewust)', await o.herstel() && srv.inDb().rules.length === 0 && o.geladen);
+  m.set('note:0:66', 'track.1.sync', { mode: 'trigger' });
+  await rust();
+  ok('en daarna wordt koppelen weer bewaard', srv.inDb().rules.length === 1);
+}
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
