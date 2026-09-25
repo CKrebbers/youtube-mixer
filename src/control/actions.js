@@ -288,7 +288,8 @@ export function bindEngine(engine) {
            read: () => (!d.buffer || !d.grid || d.gridZekerHier === false ? null : ingedrukt ? 1 : 0) });
     }
     // Lengte als keuze (index), zoals sampler.length: halveren en verdubbelen.
-    const sprongStand = () => SPRONG_TELLEN.indexOf(d.sprongTellen) / (SPRONG_TELLEN.length - 1);
+    // Maar per track: op een lege track is er niets te doen (B4: null = uit).
+    const sprongStand = () => (!d.buffer ? null : SPRONG_TELLEN.indexOf(d.sprongTellen) / (SPRONG_TELLEN.length - 1));
     define(`${n}.beatjump.halve`, 'trigger', (on) => { if (on) d.halveerSprong(); },
       { label: `Track ${nr} beatjump-lengte halveren (${SPRONG_TELLEN.join('/')} tellen)`, read: sprongStand });
     define(`${n}.beatjump.double`, 'trigger', (on) => { if (on) d.verdubbelSprong(); },

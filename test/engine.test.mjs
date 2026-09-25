@@ -1785,6 +1785,10 @@ console.log('\ntransport');
 
   // -- starten op de maat --
   const dM = eng.deck('H');                                     // track 8: de maatgever
+  // B4: op een lege track is er niets te doen, dus alle nieuwe lampjes uit.
+  const leeg = ['beatjump.back', 'beatjump.fwd', 'beatjump.halve', 'beatjump.double', 'loop.in', 'loop.out', 'loop.reloop', 'play.quant']
+    .filter((a) => read(`track.8.${a}`) !== null);
+  ok(`lege track: alle transportlampjes uit (null)${leeg.length ? ': ' + leeg.join(', ') : ''}`, !dM.buffer && leeg.length === 0);
   dM.load(lang, 'maat');
   dM.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
   dG.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
