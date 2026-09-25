@@ -42,6 +42,12 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking.
   `mapping.handle`), tekent 60 beelden en zet schermafdrukken in `tools/headless/uit/`
   (niet in git). Let op: in headless rekent WebGL in software (swiftshader); snelheid
   zegt hier niets.
+- `vorm-maat.mjs` — dezelfde opzet (eigen server, geen MIDI), alleen `?vormen=1`: de maat
+  als bron voor de vormlagen (`src/analysis/maat.js`). Twee demotracks met grid en klappen,
+  meet op de audioklok klappen en tel van de maatgever, wisselt de maatgever met de
+  crossfader midden in een klap (geen sprong omhoog), roept de haak in `laag.frame` zelf aan
+  (de animatielus haalt headless maar een beeld per paar seconden) en leest de statustekst
+  van het paneel. Poorten via `VARVE_KIJK_POORT` / `VARVE_KIJK_DEBUG` (standaard 8792/9338).
 
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen
