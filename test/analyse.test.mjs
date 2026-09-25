@@ -10,6 +10,7 @@ const { Router, offsets, BRONNEN, MIX_BRONNEN, MAAT_BRONNEN, standaardRoute, lee
 const M = await import('../src/analysis/maat.js');
 const { Beatgrid } = await import('../src/engine/beatgrid.js');
 const { pulsVorm } = await import('../src/video/puls.js');
+const { faderGain } = await import('../src/engine/audio-graph.js');
 const { VormLaag, VormLagen } = await import('../src/vormen/laag.js');
 const actions = await import('../src/control/actions.js');
 
@@ -472,7 +473,52 @@ console.log('de maat: klappen uit de onset-analyse en de tel van de maatgever');
     xfadeGain: (id) => (id === 'A' ? 0.8 : 1),
   };
   const et = M.engineTracks(nepEngine, ['A', 'B']);
-  ok('engineTracks: zicht = fader × crossfader, een lege track 0 (zoals de video-puls)', et[0].id === 'A' && bij(et[0].zicht, 0.4) && et[1].zicht === 0);
+  ok('engineTracks: hoe hard hij klinkt = faderGain × crossfader (zoals syncMaster), een lege track 0',
+    et[0].id === 'A' && bij(et[0].zicht, faderGain(0.5) * 0.8) && et[1].zicht === 0);
+
+  // Wie de maat geeft: vorm, video-puls en de MAAT-badge (engine.syncMaster:
+  // ook sync, sampler en sends) moeten dezelfde track kiezen zolang die
+  // speelt en hoorbaar is. Eerst rangschikten vorm en video-puls op de
+  // LINEAIRE fader, syncMaster op het echte volume (dB-curve): track 1 (A)
+  // fader 1 en track 3 (thru) fader 0,8 met de crossfader in het midden gaf
+  // MAAT op 1 en de puls op 3.
+  {
+    const { Engine, DECK_IDS } = await import('../src/engine/engine.js');
+    const { xfaderGains } = await import('../src/engine/audio-graph.js');
+    const { maatgever } = await import('../src/video/puls.js');
+    const nep = (xfader, stand) => {
+      const kant = { A: 'A', B: 'B' };
+      const decks = Object.fromEntries(DECK_IDS.map((id) => [id, { id, buffer: stand[id] ? {} : null,
+        grid: stand[id]?.grid === false ? null : stand[id] ? new Beatgrid({ bpm: 120, firstBeat: 0 }) : null,
+        playing: !!stand[id]?.speelt, position: 1, rate: 1, onsets: null, ui: { fader: stand[id]?.fader ?? 1 } }]));
+      const e = { decks, kant, deck: (id) => decks[id],
+        xfadeGain: (id) => { const g = xfaderGains(xfader); return kant[id] === 'A' ? g.a : kant[id] === 'B' ? g.b : 1; } };
+      e.syncMaster = Engine.prototype.syncMaster;
+      return e;
+    };
+    const badge = (e) => { const m = e.syncMaster(); return m?.playing ? m.id : null; };
+    const vorm = (e) => new M.MaatLezer({ tracks: () => M.engineTracks(e, DECK_IDS) }).kies().tr?.id ?? null;
+    const e1 = nep(0.5, { A: { speelt: true, fader: 1 }, C: { speelt: true, fader: 0.8 } });
+    ok(`track 1 fader 1 (A-kant), track 3 fader 0,8 (thru), crossfader midden: badge, vorm en video-puls kiezen dezelfde (${badge(e1)} · ${vorm(e1)} · ${maatgever(e1, DECK_IDS)})`,
+      badge(e1) === 'A' && vorm(e1) === 'A' && maatgever(e1, DECK_IDS) === 'A');
+    // Veel standen: fader, crossfader, wie speelt, wie een grid heeft.
+    let zaad = 7;
+    const r = () => { zaad = (zaad * 16807) % 2147483647; return (zaad - 1) / 2147483646; };
+    let anders = 0, n = 0;
+    for (let k = 0; k < 400; k++) {
+      const stand = {};
+      for (const id of DECK_IDS) if (r() < 0.6) stand[id] = { speelt: r() < 0.7, fader: r() < 0.15 ? 0 : r(), grid: r() < 0.9 };
+      const e = nep(r(), stand);
+      const b = badge(e);
+      // Speelt de badge-track maar hoor je hem niet (fader dicht, crossfader weg),
+      // dan geen puls: dat verschil is bewust (je hoort geen tel).
+      const hoorbaar = b && faderGain(e.decks[b].ui.fader) * e.xfadeGain(b) > 0.001;
+      const verwacht = hoorbaar ? b : null;
+      n++;
+      if (vorm(e) !== verwacht || maatgever(e, DECK_IDS) !== verwacht) anders++;
+    }
+    ok(`${n} willekeurige standen: vorm en video-puls volgen de MAAT-badge zolang je die track hoort (${anders} keer anders)`, anders === 0);
+  }
 }
 
 console.log('de router: alleen uitlezen wat een open route nodig heeft');

@@ -1,6 +1,5 @@
 import { clamp } from '../lib/emitter.js';
-import { klokTrack, pulsVorm } from '../video/puls.js';
-import { zichtbaarheid } from '../video/volg.js';
+import { klokTrack, klinkt, pulsVorm } from '../video/puls.js';
 
 /**
  * De maat als bron voor de vormlagen (router.js), naast de banden uit de
@@ -17,7 +16,8 @@ import { zichtbaarheid } from '../video/volg.js';
  *
  * Maatgever = de track die het hardst klinkt, speelt en een grid heeft:
  * klokTrack uit puls.js, dezelfde keuze als de video-puls, zodat vorm en
- * video op dezelfde tel slaan.
+ * video op dezelfde tel slaan. "Hardst" op het echte volume (klinkt()), dus
+ * ook de track met de MAAT-badge (engine.syncMaster) zolang je hem hoort.
  *
  * Tijd (regel 3): alles volgt uit de POSITIE van het deck, en die komt van de
  * audioklok (bron.positie). Hoorbaar = positie min uitgangsvertraging × rate,
@@ -112,12 +112,13 @@ export function telPuls(grid, pos, vanaf = -Infinity) {
 
 /**
  * De tracks zoals de maatlezer ze wil zien, uit de engine (alleen uitlezen,
- * duck-typed: deze module importeert de engine niet). Zicht = fader ×
- * crossfader, precies zoals de video-mixer het voor de video-puls rekent.
+ * duck-typed: deze module importeert de engine niet). `zicht` = hoe hard hij
+ * klinkt (klinkt() uit puls.js, zoals de video-puls en engine.syncMaster), dus
+ * dezelfde maatgever als de MAAT-badge zolang je die track hoort.
  */
 export const engineTracks = (engine, ids) => ids.map((id) => {
   const deck = engine.deck(id);
-  return { id, deck, zicht: deck.buffer ? zichtbaarheid(deck.ui.fader, engine.xfadeGain(id)) : 0 };
+  return { id, deck, zicht: deck.buffer ? klinkt(deck.ui.fader, engine.xfadeGain(id)) : 0 };
 });
 
 const leeg = () => ({ id: null, data: null, vanaf: -Infinity, tau: null });
