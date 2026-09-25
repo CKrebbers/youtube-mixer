@@ -4,7 +4,9 @@ import { bindVormen, VORM_KNOPPEN } from '../control/actions.js';
 import { voegVormMapjeToe } from '../control/lagen.js';
 import { meld } from './meldingen.js';
 import { Luisteraar } from '../analysis/luisteraar.js';
-import { Router, BRONNEN, BRON_NAAM, DOEL_PLEKKEN } from '../analysis/router.js';
+import { uitgangsVertraging } from '../engine/hoorbaar.js';
+import { MaatLezer, engineTracks } from '../analysis/maat.js';
+import { Router, MIX_BRONNEN, MAAT_BRONNEN, BRON_NAAM, DOEL_PLEKKEN, leesKenmerken } from '../analysis/router.js';
 
 /**
  * De vormlagen op het scherm: een rij onder de video-effecten, alleen als de
@@ -38,17 +40,22 @@ export function opzetVormen({ videoMixer }) {
   // Geen eigen timer: een vorm die niet getekend wordt (paneel dicht, laag uit)
   // hoeft ook niet te reageren, en een timer zou in een achtergrondtab toch
   // stilstaan net als het beeld. Twee lagen in één beeld = één keer uitlezen
-  // (de luisteraar kijkt naar t). Alle sterktes dicht = de analyser wordt niet
-  // eens gelezen.
+  // (luisteraar en maatlezer kijken naar t). Alleen wat een open route nodig
+  // heeft wordt gelezen; alle sterktes dicht = niets.
   const engine = videoMixer.engine;
   const luisteraar = new Luisteraar({ analyser: () => engine.master?.analyser, sampleRate: () => engine.ctx.sampleRate });
+  // De maat: klappen en tel van de track die het hardst klinkt (dezelfde als
+  // de video-puls), op wat je hoort. Dezelfde vertraging als de mixer voor t.
+  const vertraging = () => uitgangsVertraging(engine.ctx);
+  const maat = new MaatLezer({ tracks: () => engineTracks(engine, videoMixer.decks), vertraging });
   const router = new Router(vormen.lagen.length);
   let wasActief = false;
   for (const laag of vormen.lagen) {
     const teken = laag.frame.bind(laag);
     laag.frame = (t) => {
-      const actief = router.actief();
-      if (actief || wasActief) router.pasToe(actief ? luisteraar.lees(t) : null, vormen.lagen);
+      const nodig = router.nodig();
+      const actief = nodig.size > 0;
+      if (actief || wasActief) router.pasToe(actief ? leesKenmerken(t, nodig, { mix: luisteraar, maat }) : null, vormen.lagen);
       wasActief = actief;
       return teken(t);
     };
@@ -71,9 +78,14 @@ export function opzetVormen({ videoMixer }) {
     <span class="vid-sep"></span>
     <span class="vorm-reageer">
     <div class="knob sm" data-action="video.layer.react" data-label="REAGEER" data-value="0" data-default="0" title="hoe sterk de vorm op de mix reageert (APC: device knob 8 in het mapje vorm)"></div>
-    <select class="vorm-reageer-bron" title="waarop: wat de zaal hoort (master)">${BRONNEN.map((b) => `<option value="${b}">${BRON_NAAM[b]}</option>`).join('')}</select>
+    <select class="vorm-reageer-bron" title="waarop: wat de zaal hoort (de master), of de maatgever: zijn klappen uit de analyse van het nummer, of zijn tel">
+      <optgroup label="de zaal (master)">${MIX_BRONNEN.map((b) => `<option value="${b}">${BRON_NAAM[b]}</option>`).join('')}</optgroup>
+      <optgroup label="de maatgever">${MAAT_BRONNEN.map((b) => `<option value="${b}">${BRON_NAAM[b]}</option>`).join('')}</optgroup>
+    </select>
     <span class="vorm-pijl">→</span>
     <select class="vorm-reageer-doel" title="welke knop reageert">${Array.from({ length: DOEL_PLEKKEN }, (_, k) => `<option value="${k + 1}">${k + 1}</option>`).join('')}</select>
+    <span class="vorm-reageer-maat" style="display:none;font-size:11px;opacity:.7"
+      title="de maatgever: de track die het hardst klinkt, speelt en een grid heeft (dezelfde als de video-puls). Zonder maatgever, of zonder klappen (een los bestand of de demo), blijft de knop op zijn stand."></span>
     </span>
     <span class="vorm-metingen" style="display:flex;gap:10px;font-size:11px;font-variant-numeric:tabular-nums;opacity:.7">
       ${vormen.lagen.map((_, i) => `<span class="vorm-meting">${i + 1} uit</span>`).join('')}
@@ -85,6 +97,7 @@ export function opzetVormen({ videoMixer }) {
   kiezer.addEventListener('change', () => vormen.zetSysteem(kiezer.value));
   const bron = rij.querySelector('.vorm-reageer-bron');
   const doel = rij.querySelector('.vorm-reageer-doel');
+  const maatTekst = rij.querySelector('.vorm-reageer-maat');
   bron.addEventListener('change', () => router.zetBron(vormen.gekozen, bron.value));
   doel.addEventListener('change', () => router.zetDoel(vormen.gekozen, Number(doel.value)));
 
@@ -109,6 +122,29 @@ export function opzetVormen({ videoMixer }) {
     bron.value = r.bron;
     [...doel.options].forEach((o, k) => { o.textContent = laag.knoppen[k] ? `${k + 1} ${laag.knoppen[k].l}` : `${k + 1} (—)`; });
     doel.value = String(r.doel);
+    toonMaat();
+  }
+
+  /**
+   * Bij een maatbron: van welke track de maat nu komt, of waarom er niets
+   * gebeurt. Alleen weergave; de maatlezer zelf rekent op de audioklok.
+   */
+  function toonMaat() {
+    const b = router.route(vormen.gekozen).bron;
+    const zichtbaar = MAAT_BRONNEN.includes(b);
+    const display = zichtbaar ? '' : 'none';
+    if (maatTekst.style.display !== display) maatTekst.style.display = display;
+    if (!zichtbaar) return;
+    const { tr } = maat.kies();
+    const nr = (id) => videoMixer.decks.indexOf(id) + 1;
+    // Geen maat, terwijl de MAAT-badge (syncMaster: sync, sampler, sends) wel
+    // op een track staat: die staat stil, of speelt maar je hoort hem niet
+    // (fader dicht, crossfader weg). Zeg dat, anders lijkt het een fout.
+    const badge = tr ? null : engine.syncMaster?.();
+    const tekst = tr ? (b === 'maatklap' && !tr.deck.onsets?.length ? `maat ${nr(tr.id)} · geen klappen` : `maat ${nr(tr.id)}`)
+      : !badge ? 'geen maat'
+        : `geen maat · track ${nr(badge.id)} ${badge.playing ? 'hoor je niet' : 'staat stil'}`;
+    if (maatTekst.textContent !== tekst) maatTekst.textContent = tekst;
   }
   vormen.on('change', volg);
   router.on('change', volg);
@@ -130,7 +166,7 @@ export function opzetVormen({ videoMixer }) {
         + (laag.teZwaar ? ' — ook op de laagste kwaliteit nog te zwaar' : '');
     });
   }
-  setInterval(toonMetingen, 500);
+  setInterval(() => { toonMetingen(); toonMaat(); }, 500);
   vormen.on('noodrem', ({ laag, systeem, ms, kwaliteit }) => meld(
     `vormlaag ${laag + 1} (${SYSTEEM[systeem]?.naam ?? systeem}): ${Math.round(ms)} ms per beeld, te zwaar — kwaliteit naar ${Math.round(kwaliteit * 100)}%`));
   vormen.on('modus', ({ laag, reden }) => meld(`vormlaag ${laag + 1} draait op de hoofdthread (${reden})`));
@@ -138,5 +174,5 @@ export function opzetVormen({ videoMixer }) {
   // De Knob-elementen worden pas in opzetVensters opgebouwd: dan pas labels zetten.
   queueMicrotask(volg);
 
-  return { vormen, router, luisteraar };
+  return { vormen, router, luisteraar, maat };
 }

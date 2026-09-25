@@ -1,8 +1,9 @@
 import { synchroniseer, zichtbaarheid } from './volg.js';
 import { VIDEO_FX, MODI } from './instellingen.js';
-import { PULS_DOELEN, pulsVorm, klokTrack, metPuls } from './puls.js';
+import { PULS_DOELEN, pulsVorm, maatgever, metPuls } from './puls.js';
 import { FITS, schaalVoor, maatVan } from './passen.js';
 import { actieveLagen, lagenUniforms, MAX_BEELDLAGEN } from './lagen.js';
+import { hoorbaar, naVertraging, uitgangsVertraging } from '../engine/hoorbaar.js';
 
 /**
  * De video-mixer: per track een gedempte <video>, samen gemengd op een canvas
@@ -293,18 +294,15 @@ export class VideoMixer {
 
   /**
    * Waar in de tel we nu zijn, als vorm 0..1 — van de track die het hardst
-   * klinkt, op het moment dat je hem HOORT. 0 als er geen maat is.
+   * klinkt (dezelfde als de MAAT-badge, zie klinkt() in puls.js), op het
+   * moment dat je hem HOORT. 0 als er geen maat is.
    */
   _pulsNu(vertraging) {
     if (this.puls <= 0) return 0;
-    const id = klokTrack(this.decks.map((d) => {
-      const deck = this.engine.deck(d);
-      return { id: d, speelt: deck.playing, heeftGrid: !!deck.grid,
-        zicht: deck.buffer ? zichtbaarheid(deck.ui.fader, this.engine.xfadeGain(d)) : 0 };
-    }));
+    const id = maatgever(this.engine, this.decks);
     if (!id) return 0;
     const deck = this.engine.deck(id);
-    return pulsVorm(deck.grid.phase(deck.position - vertraging * deck.rate));
+    return pulsVorm(deck.grid.phase(hoorbaar(deck, vertraging)));
   }
 
   _programma(vs, fs) {
@@ -367,10 +365,7 @@ export class VideoMixer {
   }
 
   /** Wat je hoort loopt de uitgangsvertraging achter op de deckpositie. */
-  _vertraging() {
-    const ctx = this.engine.ctx;
-    return (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
-  }
+  _vertraging() { return uitgangsVertraging(this.engine.ctx); }
 
   /** Eén frame: elke video bijsturen, de zichtbare uploaden, mengen, tekenen. */
   teken() {
@@ -474,7 +469,9 @@ export class VideoMixer {
     const v = laag.video;
     const r = synchroniseer({
       videoTijd: v.currentTime,
-      doel: Math.max(0, deck.position - vertraging * deck.rate),
+      // Ook stilstaand min de vertraging (niet hoorbaar()): zo blijft het
+      // beeld bij een pauze staan waar het was, zonder seek.
+      doel: Math.max(0, naVertraging(deck.position, vertraging, deck.rate)),
       rate: deck.rate,
       speelt: deck.playing,
       zoekt: v.seeking,

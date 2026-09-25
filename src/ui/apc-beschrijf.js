@@ -89,7 +89,8 @@ export function beschrijf(action) {
       blend: ['mengvorm', 'vormlaag: screen · add · multiply'],
       'select.next': ['laag ▶', 'volgende vormlaag kiezen'], 'select.prev': ['◀ laag', 'vorige vormlaag kiezen'],
       react: ['reageer', 'vormlaag: hoe sterk de vorm op de mix reageert (standaard de bas op knop 1; dicht = niet)'],
-      'react.source': ['reageer op', 'vormlaag: reageren op laag · midden · hoog · klap · luid'],
+      'react.source': ['reageer op', 'vormlaag: waarop de vorm reageert, rondlopend — wat de zaal hoort: laag · midden · hoog · klap · luid; '
+        + 'dan de maatgever (de track die het hardst klinkt, met grid): zijn klappen uit de analyse van het nummer · zijn tel'],
       'react.target': ['reageer knop', 'vormlaag: welke knop (1–6) op de mix reageert'] }[m[1]];
     if (v) return { kort: v[0], lang: v[1] };
   }

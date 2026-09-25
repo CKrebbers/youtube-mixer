@@ -1,3 +1,5 @@
+import { faderGain } from '../engine/audio-graph.js';
+
 /**
  * Video-effecten op de tel. Puur rekenwerk: geen DOM, geen WebGL.
  *
@@ -18,9 +20,20 @@ export const PULS_DOELEN = ['rgb', 'pixel', 'spiegel', 'korrel', 'flits'];
 export const pulsVorm = (fase) => Math.exp(-5 * Math.max(0, Math.min(1, fase)));
 
 /**
+ * Hoe hard een track KLINKT, om de maatgever te kiezen: de fader met zijn
+ * dB-curve maal de crossfader. Dezelfde rangorde als engine.syncMaster (sync,
+ * sampler, sends, de MAAT-badge), zodat puls en vormen op de tel slaan van de
+ * track waar MAAT op staat. Niet de lineaire zichtbaarheid (volg.js): die is
+ * voor het mengen van beeld, en zette een track op fader 0,8 (thru) boven een
+ * op vol met de crossfader in het midden, terwijl die eerste 6 dB zachter klinkt.
+ */
+export const klinkt = (fader, xfadeGain) => faderGain(fader) * Math.max(0, Math.min(1, xfadeGain));
+
+/**
  * Welke track geeft de maat aan?
- * @param tracks [{ id, speelt, heeftGrid, zicht }] — zicht = fader × crossfader
- * @returns id of null
+ * @param tracks [{ id, speelt, heeftGrid, zicht }] — zicht = hoe hard hij klinkt (klinkt())
+ * @returns id of null. Een track die je niet hoort (fader dicht, crossfader
+ *   weg) geeft geen maat, ook al zet syncMaster er MAAT op: geen tel te zien.
  */
 export function klokTrack(tracks) {
   let beste = null, hoogste = 0.001;
@@ -29,6 +42,14 @@ export function klokTrack(tracks) {
     beste = t.id; hoogste = t.zicht;
   }
   return beste;
+}
+
+/** De maatgever uit de engine (alleen uitlezen, duck-typed): klokTrack op klinkt(). */
+export function maatgever(engine, ids) {
+  return klokTrack(ids.map((id) => {
+    const d = engine.deck(id);
+    return { id, speelt: !!d.playing, heeftGrid: !!d.grid, zicht: d.buffer ? klinkt(d.ui.fader, engine.xfadeGain(id)) : 0 };
+  }));
 }
 
 /**

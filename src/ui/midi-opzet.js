@@ -12,6 +12,7 @@ import { MidiMonitor } from './midi-monitor.js';
 import { meld } from './meldingen.js';
 import { tabblad, isEersteTabblad } from './tabblad.js';
 import { opzetMappingOpslag } from './mapping-opslag.js';
+import { uitgangsVertraging } from '../engine/hoorbaar.js';
 
 /**
  * Alles rond MIDI aan de schermkant: hub, mapping, LED-laag, leren, het
@@ -112,10 +113,7 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
       const s = [...this.buf].sort((a, b) => a - b);
       return s[Math.floor(s.length / 2)];
     },
-    audioMs() {
-      const c = engine.ctx;
-      return ((c.baseLatency || 0) + (c.outputLatency || 0)) * 1000;
-    },
+    audioMs() { return uitgangsVertraging(engine.ctx) * 1000; },
     totaal() { const m = this.mediaan(); return m === null ? null : m + this.audioMs(); },
     tekst() {
       const m = this.mediaan();
