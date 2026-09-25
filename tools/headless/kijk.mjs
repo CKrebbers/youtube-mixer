@@ -243,6 +243,32 @@ try {
   // De demo speelt nog (via de StreamBron). Het remsegment gaat per bericht
   // naar de echte AudioWorklet; hier meten we wat er uit de master komt.
   console.log('kill en rem (echte AudioContext en worklet)');
+  // Eerst de automatisering zelf, in Chrome: killEqBand en setEqBand op een
+  // parameter in een OfflineAudioContext, met suspend precies op een blok.
+  // Kill aan en een blok (2,7 ms, binnen de 5 ms) later weer uit, of aan de
+  // knop gedraaid: met setValueCurveAtTime + cancelAndHoldAtTime speelde
+  // Chrome de afgekapte curve opnieuw af, een sprong van 0,55 in amplitude.
+  const killStap = await evalueer(`(async () => {
+    const { killEqBand, setEqBand } = await import('/src/engine/audio-graph.js');
+    const SR = 48000, Q = 128 / SR, uit = [];
+    for (const stappen of [
+      [[1, (p, t) => setEqBand(p, 0.5, t)], [2, (p, t) => killEqBand(p, 0.5, true, t)], [3, (p, t) => killEqBand(p, 0.5, false, t)]],
+      [[1, (p, t) => setEqBand(p, 0.5, t)], [2, (p, t) => killEqBand(p, 0.5, true, t)], [3, (p, t) => setEqBand(p, 0.8, t, true)], [8, (p, t) => killEqBand(p, 0.8, false, t)]],
+      [[1, (p, t) => setEqBand(p, 0.5, t, true)], [8, (p, t) => killEqBand(p, 0.5, false, t)], [9, (p, t) => setEqBand(p, 0.3, t)]],
+    ]) {
+      const ctx = new OfflineAudioContext(1, SR * 0.06, SR);
+      const c = new ConstantSourceNode(ctx, { offset: 0 });
+      c.connect(ctx.destination); c.start();
+      for (const [q, doe] of stappen) ctx.suspend(q * Q).then(() => { doe(c.offset, q * Q); ctx.resume(); });
+      const d = (await ctx.startRendering()).getChannelData(0);
+      let m = 0;
+      for (let i = 1; i < d.length; i++) m = Math.max(m, Math.abs(Math.pow(10, d[i] / 20) - Math.pow(10, d[i - 1] / 20)));
+      uit.push(m);
+    }
+    return uit;
+  })()`);
+  ok('kill: snel aan/uit en knop tijdens de overgang, in Chrome\'s automatisering geen sprong', killStap.every((m) => m < 0.05),
+    `grootste stap in amplitude ${killStap.map((m) => m.toFixed(3)).join(' / ')}`);
   const bas = (s) => evalueer(`(async () => {
     const { Luisteraar } = await import('/src/analysis/luisteraar.js');
     const e = window.engine, l = new Luisteraar({ analyser: () => e.master.analyser, sampleRate: () => e.ctx.sampleRate });

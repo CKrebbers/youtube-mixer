@@ -6,6 +6,11 @@ const LIVE = new Set();   // bronnen die nu geluid maken
 // en verborg zo precies de fout die live je hele aanroepketen meenam.
 const overlapFout = () => Object.assign(new Error('NotSupportedError: overlapt met een lopende setValueCurveAtTime'), { name: 'NotSupportedError' });
 let OVERLAP_FOUTEN = 0;
+// En net zo slordig als Chrome (gemeten op 153, offline én realtime):
+// cancelAndHoldAtTime MIDDEN in een lopende setValueCurveAtTime houdt niet
+// vast, maar speelt het afgekapte stuk opnieuw af vanaf het begin van de
+// curve — een sprong. Chrome gooit niet, dus de mock ook niet; hij telt het.
+let CURVE_BREUK = 0;
 const param = (v=0) => ({ value:v, _curves:[],
   _check(t){ const tt = t ?? NOW; for (const c of this._curves) if (tt >= c.a && tt < c.b) { OVERLAP_FOUTEN++; throw overlapFout(); } },
   setTargetAtTime(x,t){ this._check(t); this.value=x; },
@@ -18,7 +23,10 @@ const param = (v=0) => ({ value:v, _curves:[],
   // Volgens de spec: alleen wat op of na t BEGINT verdwijnt. Een curve die al
   // loopt blijft staan — daarom bestaat cancelAndHoldAtTime.
   cancelScheduledValues(t=NOW){ this._curves = this._curves.filter((c) => c.a < t); },
-  cancelAndHoldAtTime(t=NOW){ this._curves = this._curves.filter((c) => c.a < t).map((c) => ({ a:c.a, b:Math.min(c.b, t) })); },
+  cancelAndHoldAtTime(t=NOW){
+    if (this._curves.some((c) => c.a < t && t < c.b)) CURVE_BREUK++;
+    this._curves = this._curves.filter((c) => c.a < t).map((c) => ({ a:c.a, b:Math.min(c.b, t) }));
+  },
 });
 const node = (type) => ({
   type, gain:param(1), frequency:param(1000), Q:param(1), detune:param(0),
@@ -1291,12 +1299,18 @@ console.log('\nEQ-kill');
   const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
   const dK = eng.deck('H');
   NOW = 300;
-  const fouten0 = OVERLAP_FOUTEN;
+  const fouten0 = OVERLAP_FOUTEN, breuk0 = CURVE_BREUK;
   const p = dK.chain.eqLow.gain;
-  // De curves die op de lage band gezet worden, om hun vorm na te lopen.
+  // De kill-overgangen op de lage band, om hun vorm na te lopen: een
+  // beginpunt (setValueAtTime) en de hellingen erna.
   const curves = [];
-  const orig = p.setValueCurveAtTime;
-  p.setValueCurveAtTime = function (c, t, d) { curves.push({ c: Float64Array.from(c), t, d }); return orig.call(this, c, t, d); };
+  const origZet = p.setValueAtTime, origHelling = p.linearRampToValueAtTime;
+  p.setValueAtTime = function (x, t) { curves.push({ t, d: 0, c: [x] }); return origZet.call(this, x, t); };
+  p.linearRampToValueAtTime = function (x, t) {
+    const k = curves[curves.length - 1];
+    if (k) { k.c.push(x); k.d = t - k.t; }
+    return origHelling.call(this, x, t);
+  };
 
   ok('lege track: kill-lampje uit (niets te doen)', read('track.8.kill.low') === null);
   dK.load(buf, 'kill');
@@ -1305,36 +1319,42 @@ console.log('\nEQ-kill');
   ok('kill-lampje 0: open, bruikbaar', read('track.8.kill.low') === 0 && read('track.8.kill.low.hold') === 0);
   invoke('track.8.kill.low', true); invoke('track.8.kill.low', false);
   ok('kill aan: de lage band naar −70 dB (lampje 1)', p.value === EQ_KILL_DB && dK.gekild('low') && read('track.8.kill.low') === 1);
-  ok('… met een curve van 5 ms vanaf nu, niet hard', curves.length === 1 && curves[0].d === KILL_FADE && curves[0].t === NOW);
+  ok('… met een overgang van 5 ms vanaf nu, niet hard', curves.length === 1 && Math.abs(curves[0].d - KILL_FADE) < 1e-9
+    && curves[0].t === NOW && curves[0].c.length === 33);
   // Klikvrij: in AMPLITUDE een zachte S. Een rechte lijn in dB doet bijna
   // alle amplitude in de eerste stapjes, en dat is een tik.
   const amp = (db) => Math.pow(10, db / 20);
   const stapMax = (c) => { let m = 0; for (let i = 1; i < c.length; i++) m = Math.max(m, Math.abs(amp(c[i]) - amp(c[i - 1]))); return m; };
   const recht = Float64Array.from({ length: 33 }, (_, i) => stand + (EQ_KILL_DB - stand) * i / 32);
   const weg = Math.abs(amp(stand) - amp(EQ_KILL_DB));
-  ok(`… in amplitude zacht: grootste stap ${(100 * stapMax(curves[0].c) / weg).toFixed(1)}% van de weg (recht in dB: ${(100 * stapMax(recht) / weg).toFixed(0)}%)`,
-    stapMax(curves[0].c) < 0.06 * weg && stapMax(recht) > 0.15 * weg && curves[0].c[0] === Math.fround(stand));
+  const vorm = curves[0]?.c ?? [];
+  ok(`… in amplitude zacht: grootste stap ${(100 * stapMax(vorm) / weg).toFixed(1)}% van de weg (recht in dB: ${(100 * stapMax(recht) / weg).toFixed(0)}%)`,
+    vorm.length === 33 && stapMax(vorm) < 0.06 * weg && stapMax(recht) > 0.15 * weg && Math.abs(vorm[0] - stand) < 1e-6);
   ok('de EQ-knop blijft staan', dK.ui.low === 0.7 && read('track.8.low') === 0.7);
 
-  // Meteen aan de knop draaien, terwijl de kill-curve nog loopt: in Chrome
-  // gooit setTargetAtTime dan NotSupportedError, tenzij de curve eerst wordt afgebroken.
+  // Meteen aan de knop draaien, terwijl de kill-overgang nog loopt. Met een
+  // setValueCurveAtTime gooide setTargetAtTime daar NotSupportedError, en
+  // cancelAndHoldAtTime ertegen gaf in Chrome een sprong (CURVE_BREUK).
   let gegooid = null;
+  NOW += 0.001;
   try { invoke('track.8.low', 0.3); } catch (e) { gegooid = e; }
-  ok('aan de knop draaien tijdens de kill-curve: geen NotSupportedError', gegooid === null && OVERLAP_FOUTEN === fouten0);
+  ok('1 ms later aan de knop draaien, tijdens de kill-overgang: geen NotSupportedError, geen afgebroken curve',
+    gegooid === null && OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
   ok('… de band blijft weg, de knop onthoudt 0,3', p.value === EQ_KILL_DB && dK.ui.low === 0.3);
   NOW += 0.001;
   invoke('track.8.kill.low', true);
   ok('kill uit: precies terug op de knopstand (0,3)', Math.abs(p.value - eqDb(0.3)) < 1e-5 && !dK.gekild('low') && read('track.8.kill.low') === 0);
-  ok('… met weer een curve, van −70 naar de knop', curves.length === 2 && curves[1].c[0] === EQ_KILL_DB && Math.abs(curves[1].c[32] - eqDb(0.3)) < 1e-5);
+  ok('… met weer een overgang, van −70 naar de knop', curves.length === 2 && curves[1].c[0] === EQ_KILL_DB && Math.abs(curves[1].c[32] - eqDb(0.3)) < 1e-5);
 
-  // Twee keer drukken binnen de 5 ms: de tweede curve begint waar de eerste nu is.
+  // Twee keer drukken binnen de 5 ms: de tweede overgang begint waar de eerste nu is.
   NOW += 1;
   const m = dK.chain.eqMid.gain;
   invoke('track.8.kill.mid', true);
   NOW += 0.002;
   gegooid = null;
   try { invoke('track.8.kill.mid', true); } catch (e) { gegooid = e; }
-  ok('kill aan en 2 ms later weer uit (curve loopt nog): geen NotSupportedError', gegooid === null && OVERLAP_FOUTEN === fouten0);
+  ok('kill aan en 2 ms later weer uit (overgang loopt nog): geen NotSupportedError, geen afgebroken curve (sprong in Chrome)',
+    gegooid === null && OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
   ok('… en terug op de knopstand', Math.abs(m.value - eqDb(dK.ui.mid)) < 1e-5 && !dK.gekild('mid'));
 
   // Drukvariant.
@@ -1358,11 +1378,12 @@ console.log('\nEQ-kill');
     && m.value !== EQ_KILL_DB && hoog.value !== EQ_KILL_DB);
   NOW += 0.2;
   invoke('track.8.kill.low', true);
-  p.setValueCurveAtTime = orig;
+  p.setValueAtTime = origZet; p.linearRampToValueAtTime = origHelling;
   ok('elke kill- en rem-action heeft een uitleg op de APC-kaart',
     ['kill.low', 'kill.mid', 'kill.high', 'kill.low.hold', 'kill.high.hold', 'brake', 'brake.time']
       .every((a) => !beschrijf(`track.8.${a}`).lang.startsWith('?') && beschrijf(`track.8.${a}`).kort !== a));
-  ok('geen overlappende automatisering bij al dat schakelen', OVERLAP_FOUTEN === fouten0);
+  ok('geen overlappende automatisering en geen afgebroken curve bij al dat schakelen',
+    OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
 }
 
 console.log('\nrem (vinylstop)');

@@ -63,10 +63,10 @@ export function eqDb(norm) {
 }
 
 /**
- * Een parameter vasthouden waar hij NU is: een lopende curve (de kill
- * hieronder) wordt daar afgebroken. Een setTargetAtTime bovenop een lopende
- * setValueCurveAtTime gooit anders NotSupportedError (zie zetDoel in fx.js),
- * en dat gebeurt precies als je vlak na een kill aan de EQ-knop draait.
+ * Een parameter vasthouden waar hij NU is: een lopende kill-overgang
+ * (hieronder) wordt daar afgebroken, en wat erna komt begint op die plek.
+ * Zonder dat liepen de resterende hellingen van de kill na een knopdraai
+ * gewoon door, of begon een tweede kill vanaf het verkeerde punt.
  */
 function houdVast(param, now) {
   try {
@@ -90,10 +90,21 @@ const KILL_N = 33;
 
 /**
  * Kill aan of uit: de band in KILL_FADE naar EQ_KILL_DB, of terug naar de
- * knopstand. Een curve in dB die in AMPLITUDE een zachte S volgt: een
- * rechte lijn in dB doet bijna alle amplitude in het eerste (heen) of
- * laatste (terug) stukje, en dat is een tik. Ook als er nog een curve loopt
- * (snel achter elkaar drukken): eerst vasthouden, dan vanaf daar.
+ * knopstand. In dB, maar zo dat de AMPLITUDE een zachte S volgt: een rechte
+ * lijn in dB doet bijna alle amplitude in het eerste (heen) of laatste
+ * (terug) stukje, en dat is een tik. Ook als er nog een overgang loopt
+ * (snel achter elkaar drukken, of aan de knop draaien): eerst vasthouden,
+ * dan vanaf daar.
+ *
+ * Als losse lineaire hellingen, NIET als setValueCurveAtTime: in Chrome
+ * (gemeten op 153, offline én realtime) houdt cancelAndHoldAtTime MIDDEN in
+ * een lopende curve niet vast, maar speelt het afgekapte stuk opnieuw af
+ * vanaf het begin van de curve. Kill aan en binnen 5 ms weer uit, of een
+ * knopdraai in die 5 ms, gaf zo een sprong van tientallen dB (0,45 -> 1,0 in
+ * amplitude, in één sample). Midden in een lineaire helling houdt Chrome wel
+ * netjes vast. Tussen de punten interpoleert een helling lineair in dB,
+ * precies zoals een curve dat doet: dezelfde vorm. En een helling kan nooit
+ * de NotSupportedError van een overlappende curve geven.
  */
 export function killEqBand(param, norm, kill, now) {
   const naar = kill ? EQ_KILL_DB : eqDb(norm);
@@ -101,13 +112,14 @@ export function killEqBand(param, norm, kill, now) {
     houdVast(param, now);
     const van = param.value;
     const ga = dbToGain(van), gb = dbToGain(naar), vloer = dbToGain(EQ_KILL_DB);
-    const c = new Float32Array(KILL_N);
-    for (let i = 0; i < KILL_N; i++) {
+    // Het beginpunt vastleggen: een helling begint anders bij het vorige
+    // ingeplande punt, en dat kan lang geleden zijn (dan springt hij).
+    param.setValueAtTime(van, now);
+    for (let i = 1; i < KILL_N; i++) {
       const s = (1 - Math.cos(Math.PI * i / (KILL_N - 1))) / 2;
-      c[i] = 20 * Math.log10(Math.max(vloer, ga + (gb - ga) * s));
+      const db = i === KILL_N - 1 ? naar : 20 * Math.log10(Math.max(vloer, ga + (gb - ga) * s));
+      param.linearRampToValueAtTime(db, now + KILL_FADE * i / (KILL_N - 1));
     }
-    c[0] = van; c[KILL_N - 1] = naar;
-    param.setValueCurveAtTime(c, now, KILL_FADE);
   } catch (_) {
     // Laatste vangnet: nooit de aanroeper laten struikelen.
     try { param.setTargetAtTime(naar, now, KILL_FADE / 3); } catch (__) { try { param.value = naar; } catch (___) {} }
