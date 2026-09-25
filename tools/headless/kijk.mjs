@@ -124,6 +124,24 @@ try {
   ok('het scherm leest de APC-mapping van de app', await evalueer("window.mapping.device === 'apc40mk2' && window.mapping.rules.size > 0"));
   const q0 = await qStand();
   ok(`Q bij Lock: ${q0.zichtbaar ? 'zichtbaar' : 'weg'} (Lock: ${q0.action ?? 'niets'})`, qKlopt(q0));
+  // Sinds de APC-indeling (ronde 4b) is Lock in de STANDAARDmapping quantize:
+  // dan staat quantize één keer op het scherm (Lock, met zijn stand), geen Q.
+  const lockStand = () => evalueer(`(() => {
+    const zichtbaar = [...document.querySelectorAll('#focusdeel [data-action="transport.quantize"]')]
+      .filter((el) => getComputedStyle(el).display !== 'none' && el.offsetParent);
+    const lock = document.querySelector('#fd-devknoppen [data-sig="note:0:63"]');
+    return { n: zichtbaar.length, licht: lock?.dataset.licht ?? null, tekst: lock?.textContent.trim() ?? '' };
+  })()`);
+  ok('standaardmapping: Lock = quantize en de Q is weg', q0.action === 'transport.quantize' && !q0.zichtbaar);
+  const l0 = await lockStand();
+  const qa = await evalueer("(async () => { const a = await import('/src/control/actions.js'); a.invoke('transport.quantize', true); a.invoke('transport.quantize', false); return window.engine.quantize; })()");
+  let l1 = await lockStand();
+  for (let i = 0; i < 30 && l1.licht === l0.licht; i++) { await wacht(100); l1 = await lockStand(); }
+  ok('quantize staat één keer in het focusdeel (niets dubbel), Lock volgt zijn stand',
+    l0.n === 1 && l1.n === 1 && l0.licht !== l1.licht && [l0.licht, l1.licht].includes('aan'),
+    `${l0.n}/${l1.n} zichtbaar, licht ${l0.licht} -> ${l1.licht}, quantize ${qa}, "${l1.tekst}"`);
+  await foto('focusdeel-lock-quantize.png');
+  await evalueer("(async () => { const a = await import('/src/control/actions.js'); a.invoke('transport.quantize', true); a.invoke('transport.quantize', false); })()");
   await evalueer(`(() => {
     const m = window.mapping;
     window.__lockWas = m.rules.has('note:0:63') ? structuredClone(m.rules.get('note:0:63')) : null;

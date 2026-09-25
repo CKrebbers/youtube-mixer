@@ -766,6 +766,12 @@ console.log('\nmodus klank en de nieuwe knoppen rechts');
   lg.zet('device', 'vorm');
   ok('mapje vorm (fragment): Bank ◀ ▶ kiest de vormlaag, niet beatjump',
     actie('note:0:60') === 'video.layer.select.prev' && actie('note:0:61') === 'video.layer.select.next');
+  // Bewust: een shift-regel gaat voor het open mapje (mapping.kies), dus
+  // shift + Bank ◀ ▶ blijft ook in het mapje vorm de beatjump-lengte.
+  ok('mapje vorm: shift + Bank ◀ ▶ = beatjump-lengte (shift-regel gaat voor het mapje)',
+    actie('note:0:60', true) === 'track.{focus}.beatjump.halve' && actie('note:0:61', true) === 'track.{focus}.beatjump.double');
+  ok('mapje vorm: Detail View blijft het fragment (mapje vorm kiezen), de standaard heeft er geen regel',
+    actie('note:0:65') === 'layer.device.detail');
   lg.zet('device', 'strip');
   ok('mapje vorm dicht: Bank ◀ ▶ weer beatjump', actie('note:0:60') === 'track.{focus}.beatjump.back');
 }
