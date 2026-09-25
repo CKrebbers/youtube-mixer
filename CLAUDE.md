@@ -48,16 +48,19 @@ index.html          geen build-stap, plain ES-modules
 apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze doen (src/ui/apc-kaart.js)
 styles.css
 src/
-  engine/           audio-graph.js  kanaalstrip, EQ, bipolair filter, master, xfader
-                    beatgrid.js     tempo + anker, tap tempo. Puur rekenwerk.
-                    bron.js         HOE een track geluid wordt: BufferBron en StreamBron
-                    stream-kern.js  streamen als puur rekenwerk: segment, pagina's, WAV
+  engine/           audio-graph.js  kanaalstrip, EQ (+ kill), bipolair filter, master, xfader
+                    beatgrid.js     tempokaart + maat-anker per stuk, tap tempo, beatjump-rekenwerk. Puur.
+                    toonsoort.js    ToonKaart: toonsoort per stuk, wat je hoort, bewerken. Puur.
+                    hoorbaar.js     wat je HOORT: uitgangsVertraging(ctx), hoorbaar(deck, V). Eén plek.
+                    overgang.js     overgangen op een AudioParam: hellingen na startDrempel (geen curves)
+                    bron.js         HOE een track geluid wordt: BufferBron en StreamBron (ook gepland starten, rem)
+                    stream-kern.js  streamen als puur rekenwerk: segment, pagina's, WAV, rem; afvalvrij
                     stream-lezer.js de AudioWorklet die pagina's afspeelt
                     fx.js           insert-slot: ketens bouwen, klikvrij wisselen
                     rack.js         racks als data: macro's, curves, migratie
-                    deck.js         transport, cues, loops, beatgrid (geluid zit in bron.js)
+                    deck.js         transport, cues, loops, beatjump, quantize, rem, beatgrid (geluid zit in bron.js)
                     sampler.js      acht pads: knippen op het grid, loopen op de maat van wat je hoort
-                    engine.js       decks + mixer + snapshot()
+                    engine.js       decks + mixer + maatgever (hysterese) + starten op de maat + snapshot()
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
                     keyboard.js     toetsen -> actions
                     midi.js         Web MIDI: poorten, parsen, sysex. Kent geen actions.
@@ -65,11 +68,14 @@ src/
                     lagen.js        mapjes (lagen): welk mapje open staat, vastzetten en gluren
                     feedback.js     engine-stand -> LED's, met diffing. Leest de mapping.
                     midi-learn.js   action kiezen, control bewegen, gekoppeld
+                    handelingen.js  het handelingenlog: [t, action, waarde] op de audioklok, per seconde weg
+                    terugspelen.js  een log terugspelen: beginstand, dan elke regel op T0 + t
                     devices/        apc40mk2.js, generic.js — wat er op het apparaat zit
   analysis/         peaks.js        golfvorm-peaks + ruwe RMS
                     features.js     banden laag/midden/hoog, rms, zwaartepunt, onsets uit een spectrum. Puur, tijd van buiten.
                     luisteraar.js   leest de master-AnalyserNode uit (alleen lezen) -> features
                     router.js       route { bron, doel, sterkte }: offset bovenop een vormknop. Puur.
+                    maat.js         klappen (deck.onsets) en tel van de maatgever als bron, op wat je hoort. Puur.
                     demo-track.js   synthetische 124-bpm testtrack
   ui/               app.js (instappunt: engine + modules in volgorde opzetten)
                     vensters, laden, racks, sampler-opslag, meldingen,
@@ -85,6 +91,12 @@ src/
                     tabblad.js      Web Lock 'varve-mixer': maar één tabblad praat met de APC
                     apc-kaart.js    apc.html: de APC met knoppen op hun echte plek, klik = uitleg
                     apc-beschrijf.js elke action in gewone taal (de test eist er een voor de hele standaardmapping)
+                    toon-weergave.js toonsoort als tekst: kolomkop, focus, library, tooltip. Puur.
+                    library-lijst.js de library als virtuele lijst: kolommen, cellen, pagina-cache. Puur.
+                    hotcue-opslag.js hotcues per nummer bewaren: welk nummer op welke track, één verzoek tegelijk
+                    mapping-opslag.js je eigen mapping als verschil: standaard ophalen, omzetten, bewaren, herstellen
+                    ingest-strook.js de ingest-wachtrij in het library-paneel: plakken, voortgang, ×, laadknoppen
+                    logboek.js      ○ log en ↺ naast de opname: vastleggen, vergelijken, lijst, terugspelen
   vormen/           hulp.js         paletten, toeval met zaad, ruis, tekenhulp (gedeeld door de systemen)
                     systemen.js     de Vormmachines (Clay's artifact): 10 lichte + de lijst van alle 26
                     systemen-zwaar.js / -meer.js / -isomorf.js  de andere 16 (zwaar · middel · beeld = geluid)
@@ -94,9 +106,12 @@ src/
   video/            volg.js         hoe een video de audio volgt. Puur rekenwerk.
                     video-mixer.js  <video> per track, gemengd met WebGL2. Leest de engine alleen uit.
                     instellingen.js welke video-effecten en mengvormen er zijn (data)
-                    puls.js         effecten op de tel: vorm, welke track de maat geeft
+                    puls.js         effecten op de tel: vorm, maatgever() zoals je hem hoort
                     passen.js       beeldverhouding per laag: passend (randen) of vullen. Puur.
                     lagen.js        beeldlagen over de mix: welke tellen mee, uniforms. Puur.
+                    beamer.js       wie mengt: hoofdvenster of los venster (de beamer). Puur.
+                    beamer-venster.js video.html: het losse venster mengt ZELF (eigen <video>'s, WebGL, lus)
+                    fouten.js       video ontbreekt of laadt niet: tekst en wachtregel. Puur.
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
                     opnemer-worklet.js  telt frames, zet om naar 16-bit, geeft per seconde door
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
@@ -104,14 +119,19 @@ server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
   ingest.js         yt-dlp (of een eigen bestand) -> ffmpeg -> media/<id>/. Gooit nooit.
   links.js          links netjes maken (TikTok), bron van een nummer, id's, bestandsnamen
-  library.js        SQLite via node:sqlite. Tracks, peaks, effect-racks.
-  analyze.js        golfvorm-peaks én onset-envelope vooraf, streamend uit ffmpeg
-  analyse-werker.js peaks, onset en tap-verfijning in een worker_thread (server blijft vrij)
-  detect.js         FFT, onset-envelope, tempo, segmentatie. Geen dependencies.
+  library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren), peaks, racks, grid, toonsoort, hotcues.
+  analyze.js        golfvorm-peaks, onset-envelope en toonsoort vooraf, streamend uit ffmpeg
+  analyse-werker.js peaks, onset, tap-verfijning en toonsoort in een worker_thread (server blijft vrij)
+  detect.js         FFT, onset-envelope, tempo, segmentatie (+ tweede kans). Geen dependencies.
+  toon.js           toonsoort: stemming per stuk, chroma, Temperley 2005, kaart (Viterbi). Puur.
+  wachtrij.js       de ingest-wachtrij: één tegelijk (links en uploads), annuleren met een AbortSignal
   opname.js         opnames: WAV dat groeit, kop herstellen na een crash
+  handelingen.js    handelingenlogs naast de opnames: stukken op hun plek, lijst, lezen
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
-                    headless/kijk.mjs (headless zonder MIDI), stems/ (Demucs-proef), toonsoort/ (meetinstrument),
-                    keylock/ (Signalsmith-proef + luisterbestanden) — zie tools/README.md
+                    headless/ (kijk.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs, vorm-maat.mjs,
+                    vormen-plaat.mjs, beamer.mjs: headless zonder MIDI), bench/ (renderblok.mjs: CPU en afval),
+                    stems/ (Demucs-proef), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
+                    luisterbestanden) — zie tools/README.md
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
   apc40mk2.json     standaardmapping (data, geen code)
@@ -127,8 +147,17 @@ test/
   feedback.test.mjs LED-diffing en paletproef, bytes worden opgevangen
   learn.test.mjs    MIDI-learn, modusherkenning, export/import-rondje
   midi.test.mjs     parsen, poortkeuze op naam, echodetectie
-  library.test.mjs  database, effect-racks per link, cascade bij verwijderen
+  library.test.mjs  database, effect-racks per link, cascade bij verwijderen, migraties (SCHEMA.length)
+  library-lijst.test.mjs  virtuele lijst, pagina-cache (ook de race bij een nieuwe sortering), kolommen
   ingest.test.mjs   pipeline zonder netwerk; ffmpeg maakt zijn eigen testmateriaal
+  wachtrij.test.mjs wachtrij, annuleren (ook midden in een nep-download), playlist, dubbel, voortgang, strook
+  wachtrij-server.test.mjs  eigen server + nep-yt-dlp: urls, volgorde, DELETE, dubbel, upload in de rij, herstart
+  nep-ytdlp.mjs     nep-yt-dlp voor de tests (VARVE_YTDLP), geen netwerk — geen test zelf
+  toon.test.mjs     toonsoort van de server: synthetisch via ffmpeg + worker, gelijk aan het meetinstrument
+  toonsoort.test.mjs ToonKaart, wat je hoort, key-actions, weergave; elke bewerking door normaliseerToon
+  handelingenlog.test.mjs  vastleggen (nep-klok), haperend netwerk, terugspelen, paden, grootte, eigen server
+  renderblok.test.mjs  audiopad zonder afval: echte worklet, 8 decks, gouden hash, 0 GC over 12 000 blokken
+  gridauto.test.mjs, gridzeker.test.mjs  grid bij binnenhalen en op de achtergrond; zekerheid per stuk
   analyze.test.mjs  peaks van de server tegen die van de browser, bit voor bit
   beatgrid.test.mjs beatrekenen, grid bewerken, tap tempo met een misser erin
   detect.test.mjs   beatdetectie op materiaal waarvan het antwoord bekend is
@@ -145,8 +174,9 @@ test/
   upload.test.mjs   upload-route op een eigen server: grens, geen media, hash-id, streamen i.p.v. geheugen
   vormen.test.mjs   vormlagen: elk systeem, zaad, 1/60 s-stappen, knoppen, bus, fragment, mixer (nep-WebGL)
   vormen-zwaar/-meer/-isomorf.test.mjs  de 16 extra systemen: puur, zaad, g.kwaliteit, ms per stap, nep-sink
+                    (ms per stap in THREADtijd, beste van 3: de wandklok telde onder load de planner mee)
   werker.test.mjs   Worker-logica zonder Worker, budget met nep-klok, noodrem, terugval
-  analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions
+  analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions, maatbronnen
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -155,8 +185,15 @@ docs/
   APC40.md          wat het apparaat kan en de indeling zoals gebouwd
   APC40-onderzoek.md DJ-conventies, bestaande mappings, fysieke indeling (bron van de indeling)
   plugins/          AV-kern × Varve: inventaris, plan (01-plan.md), negen analyses
-  TOONSOORT.md      toonsoort per nummer: meting op Clay's library + ontwerp (bouwen na 25 okt)
-  KEYLOCK.md        keylock en toon verschuiven met Signalsmith: meting + ontwerp (bouwen na 25 okt)
+  BEATGRID.md       beatgrid: meting, plan, restpunten (tweede kans, maat-anker)
+  TOONSOORT.md      toonsoort per nummer: meting, ontwerp, en wat gebouwd is (§13)
+  KEYLOCK.md        keylock en toon verschuiven met Signalsmith: meting + ontwerp (nog niet gebouwd)
+  MAPPING-VERSCHIL.md  eigen mapping als verschil: vorm, gedrag, Clay's echte verschil
+  LIBRARY.md        library: pagina's, sorteren, hotcues per nummer, schema v6/v7
+  BEAMER.md         het losse venster mengt zelf: wie mengt, opname, herladen, rVFC-meting
+  HANDELINGENLOG.md formaat, keuzes en grenzen van het handelingenlog
+  AUDIOPAD.md       audiopad zonder afval: waar het zat, de regels, cijfers vóór/na
+  VORMEN-16x9.md    vormen op 640 × 360: API, per systeem, Clay's keuze, uitzonderingen
 ```
 
 ## Conventies
@@ -172,6 +209,7 @@ docs/
 | Tests | Alle bestanden in `test/` moeten groen blijven: `node test/alles.mjs`. Bij wijzigingen: check toevoegen. |
 | Mocks | Een mock die makkelijker is dan de echte API verbergt bugs. De Web Audio-mock vuurt `onended` asynchroon omdat de browser dat ook doet. |
 | Browser | Chrome. Web MIDI bestaat niet in Safari — geen polyfill-pogingen. |
+| Git | `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud) en bestanden met " 2" in de naam zijn conflictkopieën. Nooit committen. |
 
 ## Bekende grenzen (niet als bug rapporteren)
 
@@ -202,6 +240,58 @@ docs/
   formule uit `stream-kern.js` op dezelfde audioklok ("vanaf T staat de
   positie op P met snelheid R"). Elke wijziging is een nieuw segment; een
   bericht dat laat aankomt rekent vanaf T door. Regel 3 over een draadgrens.
+- HET AUDIOPAD MAAKT GEEN AFVAL (25 sep, ROADMAP 22, `docs/AUDIOPAD.md`): een GC
+  op de audiothread is een tik. `renderBlok` en de worklet maken per blok niets
+  aan: tussenresultaten in `klad` (Float64Arrays), hulpfuncties op het hete pad
+  krijgen alleen objecten en hele getallen en geven niets of een boolean terug
+  (een double over een functiegrens wordt een HeapNumber zodra V8 niet inlinet),
+  `positieOp` alleen via `posities()`. Een nieuw segmentveld is een OBJECT
+  (`rem: { a }`), geen getal dat soms ontbreekt (dat maakte per blok een
+  getal-object). `renderblok.test.mjs` eist 0 GC's en een gouden hash; die hangt
+  van V8's sin/cos af: na een Node-update opnieuw meten op de oude kern, niet
+  blind overnemen.
+- TRANSPORT (25 sep, ROADMAP 16):
+  - Beatjump (`track.N.beatjump.*`, lengte 1–32, standaard 4) rekent in TELLEN
+    (`Beatgrid.verschuif`): fase exact, ook over een stukgrens; in een loop
+    schuift de LOOP mee. Weigeren met een melding: zonder grid, onzeker stuk
+    zonder slot, loop buiten het nummer, voorbij het einde (klemmen liet de
+    track midden in een set stoppen). Voorbij het begin: klemmen op 0.
+  - Loop in/out/reloop: out zet de loop meteen aan; reloop = eraf, of de vorige
+    loop (`vorigeLoop`) terug. In-punt en vorige loop zijn vastpunten.
+  - Quantize is ÉÉN schakelaar voor de hele engine (`transport.quantize`): zetten
+    snapt naar de tel; een hotcue-SPRONG is fasebehoudend en meteen
+    (`metFaseVan`), en de HOTCUE beslist of een loop blijft (`_naarHotcue`), niet
+    het landingspunt. Alleen op een zeker grid. Scherm: een Q in de hoek van Lock
+    (absoluut in de cel: een extra grid-item verschuift de APC-knoppen).
+  - Starten op de maat (`track.N.play.quant`): het geluid begint op het volgende
+    maatbegin van de maatgever en de tel van de track bij het startpunt valt
+    erop; zonder maatgever meteen; op een spelende of wachtende track = pauze.
+    GEPLAND STARTEN (`bron.start(p, { op })`): de bron speelt al (`deck.wacht`)
+    maar klinkt pas vanaf `op`, sample-exact; de worklet krijgt `gepland: true`
+    (zonder klinkt vóór T wat er vóór het startpunt staat); `ctxTijdVan` rekent
+    vanaf max(nu, T). Een wachtende track geeft de maat niet (tenzij verder niets
+    klinkt), volgt DEZELFDE tel van de maatgever als die verschuift
+    (`_volgWachtenden`; "de volgende maat" opnieuw uitrekenen schoof in een
+    korte loop elke ronde op), en sync doet dan alleen het tempo.
+  - Toetsen: R/T en Y/U beatjump (shift: lengte), G/C en H/N loop in/out
+    (shift: reloop), shift+Q/P op de maat, 6 quantize.
+    <!-- TODO hoofdsessie: APC-indeling voorstel A zoals gebouwd (grid-modus 5
+    "klank", Bank ◀ ▶ beatjump, Pan/Sends/User loop in/out/reloop, Lock
+    quantize, Stop All Clips rem, shift + nummer = op de maat). -->
+- REM (vinylstop, 25 sep): `track.N.brake` remt in `track.N.brake.time`
+  (SECONDEN 0,1–5, standaard 1: een gebaar van de draaitafel, ook zonder grid)
+  lineair tot stilstand, daarna een gewone pauze. Nog eens drukken of play = los;
+  op een stilstaand of wachtend deck niets. Segment `rem: { a }`: positieOp =
+  P + R·dt + a·dt²/2 tot stilstand, zelfde formule in hoofdthread en worklet.
+  Onder 25% snelheid (`REM_UIT`) dooft de worklet uit (anders een plof van de
+  vastgehouden laatste sample). Tijdens een rem: sync zet alleen het tempo, een
+  loopwissel houdt dezelfde rem (alleen P schuift), seek/hotcue/pauze/nudge
+  halen hem eraf, geen maatgever, `fxKlok` null; de video volgt `deck.snelheid`.
+  Toetsen: ` (links van 1) = focus, = = rechterhand.
+- EQ-KILL (25 sep): `track.N.kill.low/mid/high` (schakelaar) en `.hold`, −70 dB
+  zoals de knop-kill. De knopstand blijft staan (kill uit = precies terug), ook
+  bij een nieuw nummer, zoals de EQ-knoppen. Klikvrij met hellingen van 5 ms die
+  in AMPLITUDE een zachte S volgen (zie overgangen). Lampje 1 = weg, 0 = open.
 - Pitch schuift mee met tempo. Dat is `playbackRate`. Keylock hoort bij fase 3.
 - Nudge op de APC = BEND (`deck.bend`, actions `track.N.bend.back/fwd`): zolang
   je drukt draait alleen de BRON 4% trager/sneller; `deck.rate` (pitchfader,
@@ -275,8 +365,8 @@ docs/
   en `send.a/b.knob.K.hold`. Indrukken = vol open (direct, geen glijden),
   loslaten = terug naar de stand van vóór het drukken. Wisselt het rack tijdens
   het drukken, dan niet terugzetten. Op het scherm: alt + vasthouden (shift is
-  al fijn slepen). Op de APC nog geen knop toegewezen; voorstel voor vrije
-  knoppen (Lock, Detail View) in `docs/VERBETERINGEN.md` ronde 3.
+  al fijn slepen). Op de APC nog geen knop toegewezen (Lock werd quantize,
+  voorstel A van 25 sep; `docs/VERBETERINGEN.md` ronde 3).
 - Botsen twee macro's op dezelfde parameter, dan wint de HOOGSTE plek. Saai en
   voorspelbaar; "laatste in de lijst wint" hangt van de volgorde af.
 - Een onbekend effecttype in een rack wordt NIET weggegooid: het blijft als ruwe
@@ -317,9 +407,21 @@ docs/
   LED (geel = A, oranje = B, uit = thru), op het scherm de letter in die
   kleur. De drie segmenten van C3 zijn weg van het scherm; de actions
   `track.N.xfade.a/.thru/.b` bestaan nog om te koppelen.
-- Sync kent geen "het andere deck" meer: een track synct naar de track die je
-  het hardst hoort (fader × crossfader, spelend, met grid). Speelt er niets,
-  dan de eerste geladen track met grid.
+- Sync kent geen "het andere deck" meer: een track synct naar de MAATGEVER
+  (`Engine.maatgever()`): de hardst klinkende (faderGain × crossfader) die speelt,
+  een grid heeft, niet wacht en niet remt, met HYSTERESE (25 sep): een ander
+  neemt het pas over als hij 3 dB harder klinkt (`MAAT_MARGE_DB`) en dat 250 ms
+  audioklok volhoudt (`MAAT_WACHT`); stopt of remt de maatgever, dan meteen. Puur
+  (`volgMaatgever`); een timer bepaalt alleen WANNEER, een wissel meldt 'change'.
+  `syncMaster(id)`: maatgever → luidste andere → luidste wachtende als verder
+  niets klinkt → eerste geladen met grid. MAAT-badge, bussen, sampler, sync,
+  starten op de maat, video-puls en vormen volgen zo dezelfde track; puls en
+  vormen alleen als je hem hoort (`maatgever()` in puls.js).
+- Wat je HOORT staat op één plek, `src/engine/hoorbaar.js`: positie −
+  (outputLatency + baseLatency) × rate tijdens spelen (tijdens een rem de
+  snelheid van nu; rate 0 is echt), de positie zelf als hij stilstaat of wacht.
+  Video `_volg` gebruikt `naVertraging()`, dat ook stilstaand aftrekt (anders
+  seekt de video bij elke pauze). Bend telt niet mee (< 1 ms).
 - De action-bus spreekt in TRACKS (`track.1.filter`), de engine in decks (A, B).
   De vertaling staat op één plek: `TRACKS` in `actions.js`. `{focus}` in een
   mapping wordt een tracknummer. Mappings van versie 1 (`deck.A.…`) en 2
@@ -331,11 +433,18 @@ docs/
   parameter. Wissel je van effect, dan betekent plek 1 iets anders en hoef je
   niets opnieuw te koppelen. Dat is de opzet waar de effect-racks op verder
   bouwen: het rack bepaalt wat een plek doet, de mapping blijft staan.
-- Zet nooit `setTargetAtTime` op een AudioParam waar nog een `setValueCurveAtTime`
-  op loopt: Web Audio gooit dan een NotSupportedError die je hele aanroepketen
-  meeneemt. Gebruik `zetDoel()` uit `fx.js`; die breekt de curve eerst af met
-  `cancelAndHoldAtTime`. Dit gebeurt precies wanneer je aan de mix draait vlak
-  na een effectwissel — dus tijdens het spelen.
+- Overgangen op een AudioParam (kruisfade, kill) NOOIT als `setValueCurveAtTime`
+  (25 sep): bovenop een lopende curve gooit `setTargetAtTime` NotSupportedError,
+  en afbreken met `cancelAndHoldAtTime` gooit niet, maar Chrome speelt het
+  afgekapte stuk dan opnieuw af vanaf het begin (sprong 0,15–0,6). Gebruik
+  `zetHellingen()` (`src/engine/overgang.js`, via `zetOvergang` in fx.js en
+  `killEqBand`): vasthouden, beginpunt, lineaire hellingen, en pas beginnen na
+  `startDrempel`, want de renderthread loopt tot ~7,5 ms vóór `currentTime` en
+  Chrome zet een voorbij punt op zijn eigen nu: korte hellingen vallen dan samen
+  tot één stap (de kill van 5 ms in één sample). Een doelwaarde (mix, EQ-knop)
+  gaat direct via `zetDoel()`/`setEqBand` (houdVast + setTargetAtTime). De mock
+  telt afgebroken curves (`CURVE_BREUK` = 0); `kijk.mjs` meet het in Chrome. Nog
+  op nu: gate zonder maat (5 ms) en de declick van de BufferBron (4 ms).
 - Een tempo-gesynchroniseerd effect krijgt zijn klok van het DECK, niet van een
   grid dat het zelf opzoekt: `fxKlok()` levert de hoorbare tellengte plus het
   moment waarop de volgende tel valt op de audioklok. Herankeren is verplicht
@@ -397,10 +506,24 @@ docs/
 - Video is SLAAF van de audio (`src/video/`, fase 4). Klein verschil: een
   fractie sneller of trager (hooguit 10%); boven 150 ms: springen, naar waar
   de audio is ALS de seek klaar is (gemeten seekduur per video). Het doel is
-  wat je HOORT: deckpositie min uitgangsvertraging. Zichtbaarheid = fader ×
-  crossfader; wat onzichtbaar is wordt gepauzeerd en niet geüpload. Het losse
-  venster (`video.html`) toont het canvas van het hoofdvenster via
-  captureStream: er wordt één keer gemengd.
+  wat je HOORT: deckpositie min uitgangsvertraging, op `deck.snelheid` (ook bend
+  en rem). Zichtbaarheid = fader × crossfader; wat onzichtbaar is of op de maat
+  wacht wordt gepauzeerd en niet geüpload. requestVideoFrameCallback is gemeten en
+  NIET gebruikt: zijn `mediaTime` loopt ~10 ms achter op wat `texImage2D` uploadt.
+  Ontbrekende of kapotte video: een fout in de strook (`fouten.js`), één per bron.
+- HET LOSSE VENSTER MENGT ZELF (25 sep, ROADMAP 18, `docs/BEAMER.md`):
+  `video.html` heeft een eigen VideoMixer, eigen `<video>`'s en WebGL op ZIJN rAF,
+  dus de beamer loopt door met het hoofdtabblad verborgen. Het leest
+  `window.opener.varveBeamer` (same-origin, zelfde thread; geen berichten, want
+  de timers van een verborgen tabblad worden geknepen) en neemt elk beeld via
+  `neemOver()` alles over, ook DEZELFDE beeldlaag-objecten; de bus blijft bij het
+  hoofdvenster. Open en zichtbaar = het hoofdvenster mengt niet en toont het
+  beamerbeeld via captureStream (`wieMengt`); verborgen = het paneel mengt weer.
+  Nieuwe video's in het losse venster lopen eerst in (onder zware belasting acht
+  tracks ~6 s uit de pas). <!-- TODO hoofdsessie: beamer-inloop
+  (rest-beamer-inloop.md): wat er gebouwd is en de regel die eruit volgt. -->
+  Headless: `tools/headless/beamer.mjs` (Chrome for Testing `--headless=new`:
+  alleen daar wordt een tabblad echt verborgen).
 - De video's hebben een sleutelbeeld per 8,3 s (zoals YouTube ze levert).
   Springen midden in zo'n stuk laat de decoder tot 8 s beeld doorrekenen.
   Clay zag loops en sprongen op 23 september 2026 netjes meelopen, dus de GOP
@@ -413,8 +536,8 @@ docs/
   een laag over de bediening. Effecten en mengvorm staan op de action-bus
   (`video.fx.*`, `video.mode`, via `bindVideo`), dus ze zijn te koppelen.
   Effecten op de tel (`video.pulse`, `video.pulse.target`): de maat komt van de
-  track die het hardst klinkt, speelt en een grid heeft, op het moment dat je
-  hem HOORT. De puls komt bovenop de knopstand en dooft binnen een halve tel.
+  maatgever van de engine (zie Sync), alleen als je hem hoort, op het moment dat
+  je hem HOORT. De puls komt bovenop de knopstand en dooft binnen een halve tel.
   Meet je dit, meet dan NIET precies op de tel: door afronding val je dan op
   het einde van de vorige tel en zie je niets.
   Testen zonder zichtbaar venster: geef de mixer een canvas als nep-video,
@@ -441,12 +564,27 @@ docs/
   8 Mbit/s — ~3,6 GB per uur) met eigen geluidsspoor, via MediaRecorder op
   het mixer-canvas. mp4 als Chrome het kan, anders webm. Ook per seconde
   weggeschreven. Tijdens een video-opname rendert de mixer door, ook als het
-  paneel dicht is, anders neem je zwart op. Maar NIET in een achtergrondtab:
-  dan staat `requestAnimationFrame` stil en bevriezen zowel de beamer (het
-  losse venster toont het canvas van het hoofdtabblad) als de video-opname.
-  Hoofdtabblad dus zichtbaar houden (ronde 3: mengen naar het losse venster). Het beeld loopt een paar ms
+  paneel dicht is, anders neem je zwart op. Een nieuwe opname neemt het canvas
+  van wie er mengt (`Beamer.opnameCanvas`): met het losse venster open mag het
+  hoofdtabblad verborgen zijn, zonder bevriest de opname in een achtergrondtab.
+  Een opname die in het hoofdvenster begon blijft daar (MediaRecorder wisselt
+  niet van bron). Het beeld loopt een paar ms
   achter op het geluid in de video (de mixer mikt op wat je HOORT, de
   opname-tap zit vóór de uitgangsvertraging): minder dan één beeld.
+- HANDELINGENLOG (25 sep, ROADMAP 20, `docs/HANDELINGENLOG.md`): elke action als
+  `[t, action, waarde]` op de audioklok, plus laad/focus/rack/grid/hotcues/pads en
+  een beginstand. Het hangt aan de bus (`bijInvoke`, vóór de action) en de
+  laadlaag (`naLaad`); de engine weet van niets. Bewaard NAAST de opname
+  (`opnames/set-<id>.acties.jsonl`, zelfde id), in stukken op hun byte zoals
+  `?frame=N`, alleen ASCII (tekens = bytes). Rack, grid, pads en hotcues worden
+  VERGELEKEN, niet gemeld: zo komen editor, server en de hotcues die na het laden
+  terugkomen erin. Terugspelen: beginstand, dan T0 + t op de audioklok; slaat
+  `record.*`, `log.*`, `layer.*`, `rack.next/prev` en `track.N.key*` over, en op
+  een track zonder zijn nummer van toen ook transport. MIDI doet mee (een fader
+  moet altijd kunnen). Terugspelen bewaart NIETS in de library
+  (`staat.terugspeelDecks`). Opnieuw renderen (● dan speel): de beginstand gaat
+  buiten de bus om, dus `Terugspeler.onStand` schrijft een `stand` midden in het
+  lopende log. Klikken op golfvorm/baan springt via de bus (`track.N.seek`).
 - Sends: per track A (echo) en B (galm), getapt NA de fader en vóór de
   crossfader, naar twee gedeelde bussen in de engine (`engine.sends`). Een bus
   is een gewone InsertSlot met een rack (`SEND_RACKS`), maar helemaal nat: het
@@ -496,9 +634,9 @@ docs/
   - `ctxTimeOf`/`ctxTijdVan` houden rekening met een loop die al rondging.
   - Elk effect heeft `vernietig()` (oscillatoren en bronnen stoppen); `_ruimOp`
     roept die aan. Losmaken alleen lekte complete ketens.
-  - `zetCurve` breekt een lopende curve eerst af (`cancelAndHoldAtTime`): twee
-    rackwissels binnen 40 ms gooiden anders NotSupportedError. De mock in
-    engine.test is daarom net zo streng als Chrome over overlappende automatisering.
+  - `zetOvergang` (was `zetCurve`) houdt een lopende overgang vast en gaat van
+    daar verder: twee rackwissels binnen 40 ms gooiden anders NotSupportedError.
+    De mock in engine.test is daarom net zo streng als Chrome.
   - StreamBron.laad nummert elke laad en controleert na elke await; de app doet
     hetzelfde (`nieuweLaad`/`nogDeLaatste`). Opnemer: start en stop na elkaar.
   - Server: witte lijst voor statische bestanden, Range geklemd, POST-routes
@@ -517,7 +655,9 @@ docs/
     blokkade was 2,6 s bij verfijnen, nu enkele ms — anders gaten in spelende
     decks, want de server levert ook hun pagina's. Tap-verfijning scoort
     ±45 s rond `positie` (tracktijd) als die meekomt: lange albums hebben
-    tempowissels. Na een serverwijziging: server herstarten.
+    tempowissels. Na een serverwijziging: server herstarten. `leesJson`
+    verzamelt Buffers en decodeert één keer (25 sep: `data += d` brak een
+    UTF-8-teken over een pakketgrens); statische `/opnames/` komt uit `VARVE_OPNAMES`.
   - UI: fouten naar `meld()` (strook onderaan), nooit alleen console. Geen
     `prompt()` (legt de pagina stil). Library = toets B (L is hotcue 3 van de
     vorige focus, `{R}`). Sneltoetsen alleen uit tijdens TYPEN (`isTypen`).
@@ -528,8 +668,8 @@ docs/
     binnen 3 s (laden over een spelende track, nummer weghalen, opname stoppen,
     mapping resetten, DICHT/OPEN op een hoorbare track). Eigen MIDI-mapping op de
     server (`/api/mapping`, instellingen-tabel) en in localStorage als reserve;
-    bij opstarten gaat de server voor. "Standaard herstellen" wist beide, zodat
-    de app daarna weer `mappings/apc40mk2.json` volgt (Clay 23 sep, E3). MAAT-badge toont wie de maat geeft.
+    bij opstarten gaat de server voor (E3; sinds 25 sep als VERSCHIL, zie onder
+    MAPJES). MAAT-badge toont wie de maat geeft.
 - Eigen bestanden (24 september 2026): `POST /api/upload?naam=…` met het
   bestand als body (application/octet-stream, audio/* of video/*; de enige
   uitzondering op de JSON-regel, Host/Origin blijft). GESTREAMD naar een
@@ -554,6 +694,20 @@ docs/
   extractor ervoor (`tiktok-<getal>`). Beeld met `-S res:720` (720 op de
   KORTE kant): `[height<=720]` gaf op een staande TikTok niets. De transcode
   schaalt naar hooguit 720 op de korte kant (4K eigen video's ook).
+- INGEST-WACHTRIJ (25 sep, ROADMAP 21, `server/wachtrij.js`): één opdracht
+  tegelijk, links én eigen bestanden in één rij; `POST /api/ingest` met `{ url }`
+  of `{ urls }` (≤ 100), `DELETE /api/ingest/<id>` annuleert. Annuleren met
+  SIGINT, niet SIGTERM: yt-dlp (Python) valt op SIGTERM om en laat de ffmpeg
+  staan die hij bij live/HLS start; die erft onze pijpen, dus `run()` hing en de
+  rij stond stil. Na 3 s SIGKILL voor de hele familie. Een analyse-worker ruimt
+  eerst zijn eigen ffmpeg's op (`startFfmpeg`), anders een zombie per annulering.
+  yt-dlp meldt voortgang op STDOUT (`--newline`, eigen `--progress-template`).
+  Vooraf geweigerd: playlist, kanaal, profiel (`bekijkLink`); in de metadata
+  playlists en livestreams. Dubbel (in de rij, of in de library met audio op
+  schijf) = geen download. Na een serverherstart (ander `server`-id in
+  `GET /api/ingest`) zet de strook "opnieuw" klaar. De strook tekent niet tijdens
+  een druk: een knop die tussen indrukken en loslaten vervangen wordt, krijgt in
+  Chrome geen klik. `VARVE_YTDLP` = een andere yt-dlp (tests: `nep-ytdlp.mjs`).
 - Beeldverhouding: elke videolaag houdt zijn eigen verhouding
   (`videoWidth/videoHeight`, `passen.js`). `video.fit`: passend (standaard,
   zwarte randen) of vullen (bijsnijden). Buiten zijn beeld is een laag
@@ -562,26 +716,34 @@ docs/
   hetzelfde nummer op een andere track, dan komen zijn racks mee. Meerdere per
   nummer, één actief. De inhoud is JSON: wat er ín een rack staat is een zaak
   van de FX-laag, zodat het schema niet mee hoeft te veranderen met elk effect.
+- LIBRARY (25 sep, ROADMAP 21, `docs/LIBRARY.md`): PAGINA'S van de server
+  (`GET /api/library?sorteer=&richting=&van=&aantal=`, hooguit 500; zonder
+  `aantal` alles), en het paneel tekent alleen de zichtbare rijen (vaste hoogte
+  28 px; iets zwevends, zoals de toonsoortkiezer, staat absoluut onder zijn rij).
+  Sorteren alleen op eigen sleutels (`isSortering`), NULL achteraan, gelijkspel op
+  toegevoegd + rowid. Schema v6 = `toon_json`, v7 = `hotcues` + `titel_sleutel`;
+  tests rekenen met `SCHEMA.length`.
+- Hotcues horen bij het NUMMER (tabel `hotcues`, zoals de pads): het deck meldt
+  'hotcue' alleen bij zetten/wissen (met quantize de gesnapte tijd),
+  `restoreHotcues()` vult alleen lege plekken en meldt niets; `hotcue-opslag.js`
+  houdt zelf bij welk nummer waar staat. Laden zet `deckTrack` op null zodra
+  `laadStream` slaagt: anders zag de bewaarlus het nieuwe nummer onder het oude
+  id en postte grid en toon als null naar het vorige (slot en al weg).
 - Alles wat naar buiten gaat loopt door een wachtrij: maximaal 16 berichten per
   4 ms. Comet (Chromium 152) legt zijn eigen MIDI-service om bij een burst —
   vier crashes op 22 september 2026, alle vier in `MidiService_TaskService_Thread`
   op dezelfde codeplek. Dat is hun bug, maar honderd berichten in één synchrone
   lus is sowieso geen net gedrag. Alleen bij het sluiten van de pagina mag het
   direct, want dan is er geen volgende tik meer.
-- ÉÉN VARVE-tabblad praat met de APC (`tabblad.js`, Web Lock `varve-mixer`).
-  Op 23 september 2026 om 20:27 crashte Chrome in `MidiService_TaskService_Thread`,
-  op dezelfde plek als de vier crashes van 22 sep; vermoedelijk omdat vier
-  VARVE-tabbladen tegelijk init en LED's naar de APC stuurden (twee
-  testtabbladen, een agent-tabblad en dat van Clay). Wie de lock heeft is het
-  tabblad; een tweede tabblad vraagt helemaal GEEN MIDI-toegang aan
-  (`midi-opzet.js` wrapt `midi.init`) en neemt het pas over als het eerste
-  sluit. Een lock verdwijnt ook bij een crash, dus er blijft geen spook hangen.
-  Uitzondering: `apc.html` vraagt zelf MIDI-toegang aan, zonder sysex en zonder
-  iets te sturen (alleen meelezen), en doet niet mee aan de lock.
+- ÉÉN VARVE-tabblad praat met de APC (`tabblad.js`, Web Lock `varve-mixer`), sinds
+  Chrome op 23 sep in `MidiService_TaskService_Thread` crashte met vier
+  VARVE-tabbladen die tegelijk init en LED's stuurden. Een tweede tabblad vraagt
+  helemaal GEEN MIDI-toegang aan (`midi-opzet.js` wrapt `midi.init`) en neemt het
+  pas over als het eerste sluit (een lock verdwijnt ook bij een crash).
+  Uitzondering: `apc.html` leest zelf mee, zonder sysex en zonder iets te sturen.
   **Regel voor sessies:** open NOOIT een extra VARVE-tabblad terwijl de APC
   aangesloten is en Clay's tabblad open staat. Vraag Clay eerst de APC los te
-  koppelen, of test met zijn toestemming in zijn tabblad. De lock beschermt
-  pas vanaf deze versie; een tabblad met oude code in het geheugen doet niet mee.
+  koppelen, of test met zijn toestemming in zijn tabblad.
   AV-kern (`~/src/av-kern`, Vite op :5173) heeft sinds 24 sep dezelfde wachtrij
   en een eigen lock (`av-kern-apc`), maar een Web Lock geldt per ORIGIN: tegen
   elkaar beschermen ze niet. Varve en AV-kern nooit tegelijk open met de APC.
@@ -614,8 +776,9 @@ docs/
   dat open staat, en met shift vast in de shift-laag. De LED's volgen
   `mapping.actieveRegels()`; wat bij een dicht mapje hoort gaat uit, en het
   ringtype wisselt mee. `mapje-balk.js` toont bij elke wissel wat de knoppen
-  doen. De standaardmapping (291 regels) is gegenereerd volgens de tabel in
-  `docs/APC40.md`; aanpassen mag gewoon in de JSON of met koppelen.
+  doen. De standaardmapping (291 regels op 23 sep) is gegenereerd volgens de
+  tabel in `docs/APC40.md`; aanpassen mag gewoon in de JSON of met koppelen.
+  <!-- TODO hoofdsessie: aantal regels en de grid-modus 5 "klank" na voorstel A. -->
   `apc.html` is een interactieve kaart: één APC met de knoppen op hun ECHTE
   plek (uitgemeten op de Features-tekening, User Guide p4: apparaat x 70–1040,
   y 392–970 → procenten). Schakelaars voor grid-modus, strip/rack en shift;
@@ -624,6 +787,16 @@ docs/
   niets) en volgt shift en modusknoppen via een eigen Mapping die alleen
   `layer.*` uitvoert. Wat een knop doet komt uit de mapping via `kies()`; geef
   een nieuwe action een uitleg in `apc-beschrijf.js` (de test eist dat).
+- Eigen mapping = VERSCHIL met de standaard (25 sep, ROADMAP 13,
+  `docs/MAPPING-VERSCHIL.md`): `{ kind:'diff', device, base, top, rules, removed }`
+  op de server en in localStorage. Laden = `mappings/<device>.json` + verschil, dus
+  een nieuwe standaardregel komt vanzelf binnen en een eigen regel wint (stil). Wie
+  de standaard verandert, hoeft Clay's kopie niet meer samen te voegen. Export
+  blijft VOLLEDIG; "standaard herstellen" = een LEEG verschil (wissen liet een
+  kopie uit een andere browser terugkomen). Opstarten bewaart alleen als de server
+  gelezen is; kwam de standaard niet binnen, dan die sessie niets bewaren. Code
+  van vóór 25 sep leest een verschil als volledige mapping (APC dood): niet
+  terugdraaien zonder eerst een export terug te zetten.
 - De LED-laag leest de MAPPING, niet de engine. Koppel je een pad aan iets
   anders, dan verhuist zijn lampje vanzelf mee. Er is bewust geen tweede tabel.
 - LED's in drie standen uit `read()` (VRAGEN B4): `null` = UIT (niets te doen,
@@ -637,7 +810,8 @@ docs/
   APC (dat vraagt MIDI clock): `track.N.phase` = gridfase op positie min
   uitgangsvertraging, dus op wat je hoort. Loop-pads knipperen zolang ze aan
   staan; de Track Select van de maatgever knippert omgekeerd. Een kwart tel
-  fel, twee berichten per LED per tel.
+  fel, op de "1" van de maat een halve (`track.N.barbeat`, `TEL_VENSTER_EEN`),
+  twee berichten per LED per tel.
 - De 16 ringknoppen (track knobs en device knobs) staan in modus `endless`:
   de knop stuurt absolute waarden, maar we gebruiken alleen het verschil met
   zijn vorige waarde, opgeteld bij de softwarestand. De ring toont al die
@@ -653,9 +827,6 @@ docs/
   (`track.{focus}.fx.knob.1-8`). Controls per trackstrip (fader, activator,
   solo, clip stop, track select) melden via het KANAAL welke strip.
   Na loskoppelen staat hij weer in generic (0x40): init opnieuw bij elke hotplug.
-  In generic mode verhuisde de device-sectie mee met de geselecteerde strip
-  (bank 1-8 = kanaal 0-7) en stuurde Track Select niets; daar rekende de oude
-  standaardmapping mee, en dat klopte in 0x41/0x42 niet.
 
 - VORMLAGEN (24 september 2026, docs/plugins/01-plan.md, stap 1): de
   Vormmachines uit Clay's artifact als generatief beeld over de video. Alleen
@@ -675,12 +846,21 @@ docs/
     frame(t) })`. Geen laag aan = de oude drie stappen, bit voor bit; het doek
     `gelaagd` bestaat pas na de eerste laag. De bijna-zwarte achtergrond van
     een vorm (#07090c) wordt in de shader afgetrokken.
-  - Een vormlaag VULT het beeld (`LAAG_FIT` in `video/lagen.js`, Clay 24 sep):
-    het vierkant van 512 wordt zo breed als het doek, boven en onder valt 22% weg,
-    en het is 2,5× opgeschaald, dus zachter. Passend gaf lege banden links en
-    rechts. Los van `video.fit`, dat alleen voor de video's is. Afgesproken: vóór
-    AV-kern de vormen overneemt (ROADMAP 7) tekenen alle 26 systemen zelf 16:9.
-    Ze gaan nu overal uit van één zijde `g.S` en n×n-roosters.
+  - Het doek van een vormlaag is 16:9, 640 × 360 (25 sep, ROADMAP 7,
+    `docs/VORMEN-16x9.md`): 12% minder pixels dan het oude 512², precies 2× naar
+    1280 × 720 (de budgetten kloppen), schaal [1, 1] in de mixer; `LAAG_FIT`
+    'vullen' geldt alleen nog voor een laag met een andere verhouding. g heeft W,
+    H en D (korte zijde / 320); `g.S` bestaat niet meer (vormen.test controleert
+    het). De API staat bovenaan hulp.js (`cellen`, `rooster(g, { nx, ny })`,
+    `blit`, `midden`); nalopen met `tools/headless/vormen-plaat.mjs`.
+  - Clay 25 sep, letterlijk: "Midden, 2 breder". Vormen rond een middelpunt
+    blijven heel en rond in het midden (links en rechts doorzichtig boven de
+    video); de Harmonograaf slingert breder (een cirkel wordt een ellips) en de
+    Zonnebloem loopt door tot in de hoeken. Velden en roosters vullen het doek.
+    De bewuste uitzonderingen per systeem (dl, jl, tv-lucht, ep-kanalen, dw, sp,
+    ph) staan in VORMEN-16x9.md. Het geluid van de isomorfe is sample voor sample
+    gelijk gebleven, maar een samengetrokken dw-wolk bestrijkt ×0,56 van buffer
+    en stereobeeld (beeld = geluid).
   - De lagenstap leest het gemengde beeld (een BUFFER) met `1.0 - uv.y`. Met `uv`
     was het een derde omkering en stond de video onder een vormlaag op zijn kop
     (Clay, 24 sep). De lagen zelf zijn canvas-texturen en gaan zoals een video.
@@ -707,9 +887,9 @@ docs/
     (~1,4 ms), niet licht. Twee lagen tegelijk, niet meer.
   - `g.kwaliteit` (0,25..1, ontbreekt = 1): zware lussen schalen mee, het BEELD
     wordt grover, de BEWEGING nooit trager (gs/ln op het halve rooster met
-    meegeschaalde diffusie/kernel; ph minder agents; cl/if minder punten; sp
-    hooguit 150000 × kwaliteit omvallers per stap, de rest de volgende stap —
-    abels, dus zelfde eindvorm). dl negeert hem bewust.
+    meegeschaalde diffusie/kernel; ph minder agents; cl/if minder punten; fl minder
+    deeltjes, sinds 16:9 ×1,78; sp hooguit 150000 × kwaliteit omvallers per stap,
+    de rest de volgende stap — abels, dus zelfde eindvorm). dl negeert hem bewust.
   - Isomorf: geluid alleen achter `g.geluid = null | { ctx, uit, grondtoon?,
     toonladder?, korrelBuffer? }`; in Varve nog NERGENS aangesloten, dus alleen
     beeld. Knoppen met `geluid: 1` (volume) slaat draaiKnoppen over. Een
@@ -748,7 +928,16 @@ docs/
     tekenen (vlak voor laag.frame), geen eigen timer; alle sterktes dicht =
     niets uitgelezen. Eén route per laag, standaard bas → knop 1, sterkte 0;
     `video.layer.react.source/.target` lopen rond. Sessietoestand, niet bewaard.
-    Nog niet: onset.bin (offline), metPuls als route.
+  - DE MAAT ALS BRON (25 sep, ROADMAP 23, `src/analysis/maat.js`): naast de vijf
+    master-bronnen `maatklap` (de klappen uit de offline onset-analyse,
+    `deck.onsets`) en `tel` (`pulsVorm`, als `video.pulse`), van de maatgever van
+    de engine (`engineMaatLezer`), alleen als je hem hoort. De klap loopt 12 ms
+    VÓÓR de klap op tot 1 op de klap (ze zijn vooraf bekend), τ 0,1 s in KLOKtijd.
+    Geen sprong: de uitvoer zakt nooit sneller dan de puls uitdooft; neemt een
+    track die al speelde de maat over, dan telt alleen wat sinds het vorige beeld
+    komt, tot hij terugspringt tot ervóór (loop rond, hotcue). Alleen de lezer die
+    een open route nodig heeft wordt gelezen (`router.nodig()`). Nog niet:
+    `metPuls` zelf als route.
 
 ## Onderzochte keuzes
 
@@ -766,18 +955,40 @@ De uitkomsten van het onderzoek van 22 september 2026 staan in ROADMAP.md onder
   voor hotcues, geen ringbuffer. Een ringbuffer gaat uit van vooruit consumeren;
   een deck springt en gaat achteruit.
 
-## Toonsoort en keylock (24 sep 2026: ontwerp en meting, bouwen na 25 okt)
+## Toonsoort (gebouwd 25 sep) en keylock (ontwerp, nog niet gebouwd)
 
-Volledig in `docs/TOONSOORT.md` en `docs/KEYLOCK.md`, besluiten in VRAGEN blok I.
-Clay: na 25 okt vooraan (ROADMAP 14–15), eerst toonsoort, dan keylock. Wat een
-bouwer niet mag missen:
+Volledig in `docs/TOONSOORT.md` (§13: wat gebouwd is) en `docs/KEYLOCK.md`,
+besluiten in VRAGEN blok I. Toonsoort is op 25 sep gebouwd (ROADMAP 14), eerder
+dan "na 25 okt" (Clay 24 sep avond: zoveel mogelijk met agenten). Keylock wacht op
+de luistertest A3 en I1–I3. Wat een bouwer niet mag missen:
 - **Toonsoort is een KAART** in tracktijd, van de plaat, zoals het grid:
-  `{stukken:[{van, toonsoort, stemming, zekerheid}], bron, slot, versie}` per link
-  (schema v6). Een stemming PER STUK (zoned out +43 ct, ADRIANA −45…+25 ct); zonder
-  stemmingscorrectie gaan synthetische proeven fout. Profiel Temperley 2005
-  (8/10 op bekende stukken; edma en Krumhansl 5/10: die kiezen op piano de kwint).
-  Zeker ≥ 0,40, onder 0,15 = "~" (geen duidelijke toonsoort: bij ambient een eerlijk
-  antwoord). Drempels rusten op ~15 stukken: herijken na ~20 sloten.
+  `{stukken:[{van, toonsoort, stemming, zekerheid, tweede?}], bron, slot, versie}`
+  per link (schema v6, kolom `toon_json`). Een stemming PER STUK (zoned out +43 ct,
+  ADRIANA −45…+25 ct); zonder stemmingscorrectie gaan synthetische proeven fout.
+  Profiel Temperley 2005 (8/10 op bekende stukken; edma en Krumhansl 5/10: die
+  kiezen op piano de kwint). Zeker ≥ 0,40, onder 0,15 = "~" (geen duidelijke
+  toonsoort: bij ambient een eerlijk antwoord); de drempels staan in
+  `src/engine/toonsoort.js`. Ze rusten op ~15 stukken: herijken na ~20 sloten.
+- SERVER: `server/toon.js` rekent getal voor getal hetzelfde als
+  `tools/toonsoort/toon.mjs` (toon.test controleert het); worker-taak, ingest-stap
+  na het grid, op de achtergrond per nummer eerst grid dan toonsoort.
+  `TOON_VERSIE`: alleen AUTO-kaarten met een lagere versie worden opnieuw gedaan;
+  verhoog hem bij een beter algoritme en meet opnieuw (`fragmenten.mjs`). Regels
+  als het grid: slot nooit overschrijven, 'hand' alleen via ↻ (↻ = grid én
+  toonsoort). `POST .../toon` zonder `toon` = 400, NIET wissen. Alles wat de
+  browser post gaat door `normaliseerToon` (vaste spelling C Db D Eb E F F# G Ab A
+  Bb B, m voor mineur); toonsoort.test stuurt elke bewerking erdoorheen. null in
+  een AUTO-kaart = stilte (zekerheid 0), met de hand = "geen toonsoort". `tweede`
+  (de beste met een ANDER Camelot-getal) hoort bij de zekerheid: een stuk dat je
+  met de hand zet verliest beide.
+- CLIENT: `src/engine/toonsoort.js` (ToonKaart, puur). Het deck krijgt `toonKaart`
+  van laden.js (laden wist hem, zoals het grid); `deck.toonsoort` = wat je HOORT.
+  Actions `track.N.key.*` en `track.N.key` (24 standen in wijzervolgorde) werken op
+  het stuk rond wat je hoort. Geen APC-knoppen (T6) en geen sneltoetsen: een per
+  ongeluk verzette kwint wordt bewaard als 'hand'. Kolom: toonsoort ONDER de bpm
+  (ernaast drukte de MAAT-badge hem weg); focuskop: klik = correctiemenu;
+  library-kolom 'toon' = de PLAAT, klik = kiezer (bron 'hand' + slot). laden.js
+  POST elke 1,5 s wat veranderde; een 4xx één keer melden, niet herhalen.
 - **Wat je HOORT** (Clay, T3): halve tonen erbij = transpositie + (keylock ? 0 :
   12·log2(rate)) + stemming/100; `bend` telt niet mee (flikkert). De library toont de plaat.
 - **Keylock = Signalsmith 1.3.2 BINNEN `stream-lezer.js`** (optie A), gevoed met hele
@@ -786,7 +997,8 @@ bouwer niet mag missen:
   (`tools/keylock/kern.mjs`, `laadFabriek`). Het npm-pakket heeft GEEN LICENSE-bestand:
   bij vendoren de MIT-tekst uit de bron-repo erbij. De Emscripten-code noemt
   `document.currentScript`: `regels.test.mjs` vlagt dat, dus vendoren in een submap
-  of de regel aanpassen.
+  of de regel aanpassen. Wat erbij komt in de worklet houdt zich aan de regels van
+  het audiopad (geen afval per blok; `renderblok.test.mjs`).
 - Hoorbare positie klopt (±0,6 ms) alleen met vooruitblik uitLat + 128 frames.
   Tempo en bend gaan direct in (T = nu); een SPRONG met keylock aan wordt gepland op
   uitLat + één blok (63–93 ms, exact, volle sterkte; Clay K3). Ter plekke seeken
@@ -805,12 +1017,26 @@ bouwer niet mag missen:
 - Meld het expliciet als iets een aanname is die verkeerd kan zijn.
 - Geen features bouwen die niet gevraagd zijn, ook niet als ze voor de hand liggen.
 
-## Beatgrid (23 sep 2026, docs/BEATGRID.md)
-- Het grid is een TEMPOKAART: stukken {van, bpm, anker, zekerheid?} in tracktijd; tellen lopen
-  door over de grenzen. Reken in tellen (timeOf/beatAt) en met bpmAt/beatLengthAt(pos) — nooit
+## Beatgrid (23 sep 2026, restpunten 25 sep, docs/BEATGRID.md)
+- Het grid is een TEMPOKAART: stukken {van, bpm, anker, zekerheid?, maat?} in tracktijd; tellen
+  lopen door over de grenzen. Reken in tellen (timeOf/beatAt) en met bpmAt/beatLengthAt(pos) — nooit
   grid.bpm/beatLength (alleen het eerste stuk). Bewerken raakt alleen het stuk rond de positie
   en loopt via deck.gridGewijzigd() (herankert, zet bron:'hand'). slot = met de hand bevestigd
   (Lock of een tap van ≥ 4 tikken).
+- MAAT-ANKER (25 sep): `maat` = tracktijd van een tel 1 op het eigen rooster van het stuk. Zonder
+  (oude JSON, analyse) telt hij door vanaf het vorige stuk = de oude maten; daarna houdt elk stuk
+  zijn eigen "1". Tel 1 hier zet tel én "1". Reken met maten ALTIJD via barPhase/telInMaat/
+  isMaatbegin/beatsBetween, nooit met beat % beatsPerBar. Laden bewaart niets (alleen een bewerking).
+- TWEEDE KANS (25 sep, `tweedeKans` in detect.js): de tempocurve van 12 s kiest midden in een
+  nummer vaak een toevallig tempo, en dan telt het venster als gat. Een korte keten met binnen
+  60 s een keten op hetzelfde tempo T laat de vensters ertussen opnieuw meten op T (T/2 gaat mee,
+  2T blijft staan, twee lange ketens nooit samen). Het moet wel ÉÉN grid opleveren
+  (`eenGridPast`: > 10% van de vensters > 0,15 tel naast = niet), anders plakte hij een volgend
+  nummer op hetzelfde tempo "zeker" vast. Het 156-bpm-stuk van het album staat er na ↻ in.
+  <!-- TODO hoofdsessie: grid-past (rest-grid-past.md): eenGridPast op elk stuk? regel invullen. -->
+  Meten op fragmenten (`tools/beatmeting/rest/fragment.mjs`): met de nul van het hele nummer.
+- Verfijnen na "tel 1 hier" (`/grid/verfijn` met anker) is gemeten en NIET gebouwd: op Clay's
+  muziek niet beter (de voorflank lukt op 2 van 6 fragmenten).
 - Tap: rechte lijn door de tikken; de server verfijnt alleen ±25% rond de getikte fase; geen
   puls (score niet boven een geschudde nul) → zeker:false en de tap blijft staan.
 - Bij binnenhalen automatisch analyseGrid (bron:'auto', zekerheid per stuk = fase-stabiliteit
@@ -829,8 +1055,3 @@ bouwer niet mag missen:
   Cue level bpm ±0,01 (shift ±0,1; track.N.grid.bpm lineair over 40–300) · Lock = slot (alleen in
   grid-modus: erbuiten zou een losse druk ongemerkt het slot eraf halen). Wat de grid-modus niet
   definieert blijft werken. regel.led.lees laat een lampje de stand van een andere action tonen.
-- Eigen mapping = VOLLEDIGE kopie (server + localStorage). Gevolg: een nieuwe standaard-
-  mapping bereikt Clay niet zolang er een eigen kopie staat (23 sep: de grid-modus ontbrak
-  daardoor op de APC). Tot "mapping als verschil bewaren" (ronde 3) gebouwd is: na een
-  wijziging aan mappings/apc40mk2.json de eigen kopie (GET /api/mapping) vergelijken met de
-  vorige standaard, Clay's eigen regels overnemen en de samengevoegde versie POSTen.
