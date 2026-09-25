@@ -281,6 +281,17 @@ try {
     await wacht(1500);
     ok('de vormlaag komt in het losse venster: dezelfde lagen, lagenstap gebouwd',
       await ev(pop, 'window.beamerMixer.beeldlagen === opener.videoMixer.beeldlagen && !!window.beamerMixer.gelaagd'));
+    // De maat als bron (maatbronnen, vorm-paneel.js): de haak zit op de laag
+    // zelf, dus ook het losse venster voedt hem. Grid op track 1, bron 'tel',
+    // reageren open; gemeten als het hoofdtabblad verborgen is (hieronder).
+    await ev(hoofd, `(() => {
+      const d = window.engine.deck('A');
+      if (!d.grid) d.setGrid({ bpm: 120, firstBeat: 0 });
+      const bron = document.querySelector('.vorm-reageer-bron');
+      bron.value = 'tel'; bron.dispatchEvent(new Event('change'));
+      __act.invoke('video.layer.react', 1);
+      return true;
+    })()`);
 
     // Een video-opname starten terwijl het losse venster mengt: die neemt ZIJN canvas.
     await ev(hoofd, "(() => { const s = document.getElementById('opname-soort'); s.value = 'video'; s.dispatchEvent(new Event('change')); })()");
@@ -317,6 +328,13 @@ try {
     ok('het losse venster blijft mengen', l1 - l0 > 60, `${l1 - l0} beelden in ~2,3 s`);
     ok('de vormlaag (Worker van het verborgen tabblad) levert door', (await ev(hoofd, 'window.vormen.lagen[0].versie')) - v0 > 10,
       `${(await ev(hoofd, 'window.vormen.lagen[0].versie')) - v0} beelden`);
+    // Alleen het losse venster roept laag.frame nog aan (de rAF van het
+    // hoofdtabblad staat stil): beweegt de tel-offset, dan nam het de maatbron mee.
+    const tellen = [];
+    for (let i = 0; i < 24; i++) { tellen.push(await ev(hoofd, 'window.vormen.lagen[0].mod[0]')); await wacht(60); }
+    const verschillend = new Set(tellen.map((x) => x.toFixed(3))).size;
+    ok('de maatbron (tel) beweegt de vormknop mee terwijl alleen het losse venster mengt',
+      Math.max(...tellen) > 0.3 && verschillend > 4, `max ${Math.max(...tellen).toFixed(2)}, ${verschillend} verschillende standen`);
     const verborgen = await meetSync(2);
     toonSync('sync, hoofdtabblad verborgen', verborgen);
     ok('ook met het hoofdtabblad verborgen volgt het beeld de audio (binnen 17 ms)', verborgen.n > 30 && Math.abs(verborgen.gem) < 0.017, `${ms(verborgen.gem)} ms, |${ms(verborgen.abs)}|`);
