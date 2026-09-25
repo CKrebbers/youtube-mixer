@@ -305,6 +305,9 @@ export class VideoMixer {
    * Herlaadt het hoofdvenster, dan komt hier vanzelf de nieuwe engine binnen.
    */
   neemOver(hoofd) {
+    // Zonder WebGL2 is er niets om over te nemen (en geen this.fx); dit
+    // venster meldt zich dan ook niet aan, maar zijn lus roept dit elk beeld.
+    if (!this.gl) return;
     this.engine = hoofd.engine;
     for (const k in hoofd.fx) this.fx[k] = hoofd.fx[k];
     this.modus = hoofd.modus;

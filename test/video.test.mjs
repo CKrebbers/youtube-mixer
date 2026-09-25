@@ -282,6 +282,14 @@ console.log('\nde mixer in het losse venster neemt alles over van die in het hoo
   los.neemOver(hoofd);
   ok('hoofdvenster herladen: de nieuwe engine komt vanzelf mee', los.engine === engineNieuw);
 
+  // Zonder WebGL2 meldt het losse venster zich niet aan, maar zijn lus roept
+  // neemOver elk beeld aan: dat mag niet gooien (eerst: TypeError op this.fx,
+  // elke seconde een console.error in het losse venster).
+  const zonderGl = new VideoMixer({ canvas: { getContext: () => null }, engine: { ctx: {} }, decks: ['A', 'B'], maakVideo: nepVideo });
+  let gooit = null;
+  try { zonderGl.neemOver(hoofd); zonderGl.pauzeerAlles(); } catch (err) { gooit = err.message; }
+  ok('los venster zonder WebGL2: neemOver gooit niet', !!zonderGl.fout && gooit === null);
+
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
