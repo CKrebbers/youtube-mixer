@@ -231,6 +231,8 @@ const klad = {
   oud: null,                      // segKlad van `vorig` (de overgang)
   yl: new Float64Array(4),        // de vier buren voor cubisch, links en rechts
   yr: new Float64Array(4),
+  k0: -1, v0: false,              // heeftPagina: de laatste twee antwoorden (per blok)
+  k1: -1, v1: false,
 };
 
 /** Eén keer (de worklet: 128 frames), of als een blok groter is dan ooit. */
@@ -270,10 +272,23 @@ function leesKubisch(paginas, F, L, R, soort, vanaf, tot) {
     // Afrondruis van de klokrekening: 12,9999999 is gewoon sample 13.
     if (x < 1e-7) { leesFrame(paginas, n, L, R, i); continue; }
     if (x > 1 - 1e-7) { leesFrame(paginas, n + 1, L, R, i); continue; }
-    leesFrame(paginas, n - 1, yl, yr, 0);
-    leesFrame(paginas, n, yl, yr, 1);
-    leesFrame(paginas, n + 1, yl, yr, 2);
-    leesFrame(paginas, n + 2, yl, yr, 3);
+    // De vier buren n-1..n+2 staan bijna altijd op één pagina: dan één keer
+    // opzoeken in plaats van vier. Anders (paginagrens, gat, vóór het begin,
+    // een afgekapte laatste pagina) frame voor frame, met dezelfde uitkomst.
+    const k = Math.floor((n - 1) / PAGINA);
+    const p = n >= 1 && k === Math.floor((n + 2) / PAGINA) ? paginas.get(k) : undefined;
+    const j = ((n - 1) % PAGINA) * KANALEN;
+    if (p && j + 7 < p.length) {
+      yl[0] = p[j] * (1 / 32768); yr[0] = p[j + 1] * (1 / 32768);
+      yl[1] = p[j + 2] * (1 / 32768); yr[1] = p[j + 3] * (1 / 32768);
+      yl[2] = p[j + 4] * (1 / 32768); yr[2] = p[j + 5] * (1 / 32768);
+      yl[3] = p[j + 6] * (1 / 32768); yr[3] = p[j + 7] * (1 / 32768);
+    } else {
+      leesFrame(paginas, n - 1, yl, yr, 0);
+      leesFrame(paginas, n, yl, yr, 1);
+      leesFrame(paginas, n + 1, yl, yr, 2);
+      leesFrame(paginas, n + 2, yl, yr, 3);
+    }
     let y0 = yl[0], y1 = yl[1], y2 = yl[2], y3 = yl[3];
     L[i] = y1 + 0.5 * x * (y2 - y0 + x * (2 * y0 - 5 * y1 + 4 * y2 - y3 + x * (3 * (y1 - y2) + y3 - y0)));
     y0 = yr[0]; y1 = yr[1]; y2 = yr[2]; y3 = yr[3];
@@ -300,13 +315,28 @@ export const GAT_FADE = 0.003;
 /** Is er data voor frame n en zijn buren (cubisch leest n-1..n+2)? */
 function heeftFrame(paginas, n) {
   if (n < 0) return true;                 // vóór het begin is stilte, geen gat
-  return paginas.has(Math.floor(n / PAGINA)) && paginas.has(Math.floor((n + 2) / PAGINA));
+  return heeftPagina(paginas, Math.floor(n / PAGINA)) && heeftPagina(paginas, Math.floor((n + 2) / PAGINA));
+}
+
+/**
+ * Is pagina k er? Per frame wordt dat vier keer gevraagd, bijna altijd voor
+ * dezelfde één of twee pagina's, en binnen een blok verandert het antwoord
+ * niet (berichten komen tussen blokken). Dus: de laatste twee antwoorden
+ * onthouden. renderBlok wist ze bij elk blok (ander deck, andere pagina's).
+ */
+function heeftPagina(paginas, k) {
+  if (k === klad.k0) return klad.v0;
+  if (k === klad.k1) return klad.v1;
+  const v = paginas.has(k);
+  klad.k1 = klad.k0; klad.v1 = klad.v0;
+  klad.k0 = k; klad.v0 = v;
+  return v;
 }
 
 /**
  * De positie van de eerste `tot` frames van dit blok, op de audioklok van
  * frame i: t0 + i / ctxRate. De ENIGE aanroep van positieOp in het audiopad,
- * in een lus die niets anders doet (zie boven: dan inlinet V8 hem altijd).
+ * in een lus die niets anders doet (zie boven: zo wordt hij geïnlined).
  */
 function posities(seg, pos, tot) {
   const t0 = klad.t0, ctxRate = klad.ctxRate;
@@ -399,6 +429,7 @@ export function renderBlok({ seg, paginas, uit, frames, t0, ctxRate, trackRate, 
 
   const vooruit = GAT_FADE * trackRate * Math.max(0.5, Math.abs(seg.R || 1));
   const stap = 1 / (GAT_FADE * ctxRate);
+  klad.k0 = -1; klad.k1 = -1;             // heeftPagina: niets onthouden van een vorig blok
   let env = staat.env;
   let einde = null;
   for (let i = 0; i < frames; i++) {
