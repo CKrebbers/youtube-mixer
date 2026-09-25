@@ -97,7 +97,7 @@ export const maakOnsets = (onsetBestand, envRate, tijdOffset) =>
  * Geeft { ok, toon } met toon = { versie, stemming, stukken, bron: 'auto',
  * slot: false }, of { ok: false, fout }.
  */
-export const maakToon = (audioBestand) => inWerker('toon', [audioBestand]);
+export const maakToon = (audioBestand, { signal } = {}) => inWerker('toon', [audioBestand], signal);
 
 /**
  * Zekerheid vanaf waar een stuk ZEKER heet: sync en beat-loops mogen daar,

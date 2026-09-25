@@ -13,7 +13,7 @@ import { esc } from './dom.js';
 /** Hoe de stappen van de server op het scherm heten. */
 export const STAP_NAMEN = {
   upload: 'upload', wachten: 'wacht', metadata: 'gegevens', audio: 'download', meten: 'meten',
-  normaliseren: 'normaliseren', peaks: 'golfvorm', onset: 'ritme', grid: 'grid', video: 'video',
+  normaliseren: 'normaliseren', peaks: 'golfvorm', onset: 'ritme', grid: 'grid', toon: 'toonsoort', video: 'video',
   stoppen: 'stoppen', klaar: 'klaar', mislukt: 'mislukt', geannuleerd: 'geannuleerd',
 };
 

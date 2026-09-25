@@ -408,7 +408,7 @@ export async function werkmap(mediaDir, id) {
  * Een link begint met metadata en downloaden; een eigen bestand niet.
  */
 export function stappenVoor({ link = true, video = true } = {}) {
-  return [...(link ? ['metadata', 'audio'] : []), 'meten', 'normaliseren', 'peaks', 'onset', 'grid', ...(video ? ['video'] : [])];
+  return [...(link ? ['metadata', 'audio'] : []), 'meten', 'normaliseren', 'peaks', 'onset', 'grid', 'toon', ...(video ? ['video'] : [])];
 }
 
 /**
@@ -632,9 +632,10 @@ async function verwerk({ id, map, onStap, signal, haalAudio, haalVideo, info, yt
     // Een kaart in stukken met een stemming per stuk (docs/TOONSOORT.md). Een
     // paar seconden per uur, in een worker. Mislukt het, dan is er geen
     // toonsoort en probeert de server het bij het opstarten opnieuw; de
-    // ingest faalt er nooit op.
-    onStap({ stap: 'toon', tekst: 'toonsoort zoeken' });
-    const tk = await maakToon(audio);
+    // ingest faalt er nooit op. Via stap() en met het signal, zoals de
+    // stappen hierboven: annuleren stopt ook dit rekenwerk (de worker).
+    stap({ stap: 'toon', tekst: 'toonsoort zoeken' });
+    const tk = await maakToon(audio, { signal });
     const toon = tk.ok ? tk.toon : null;
 
     // ---- video, met constante framerate -----------------------------------

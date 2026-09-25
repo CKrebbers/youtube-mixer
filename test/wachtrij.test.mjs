@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 const { Wachtrij, isOpen } = await import('../server/wachtrij.js');
 const { bekijkLink } = await import('../server/links.js');
 const ing = await import('../server/ingest.js');
-const { maakOnset } = await import('../server/analyze.js');
+const { maakOnset, maakToon } = await import('../server/analyze.js');
 const { maakNepYtdlp } = await import('./nep-ytdlp.mjs');
 
 const fails = [];
@@ -137,8 +137,8 @@ try {
   ok('andere regels: null', ing.leesDownload('[info] x: Downloading 1 format(s)') === null && ing.leesDownload('') === null);
   ok('ffmpeg -progress: out_time_us en out_time_ms (ook µs)', ing.leesFfmpegTijd('out_time_us=2500000') === 2.5
     && ing.leesFfmpegTijd('out_time_ms=1000000') === 1 && ing.leesFfmpegTijd('out_time=N/A') === null && ing.leesFfmpegTijd('progress=end') === null);
-  ok('stappen: link met video, bestand zonder', ing.stappenVoor().join() === 'metadata,audio,meten,normaliseren,peaks,onset,grid,video'
-    && ing.stappenVoor({ link: false, video: false }).join() === 'meten,normaliseren,peaks,onset,grid');
+  ok('stappen: link met video, bestand zonder', ing.stappenVoor().join() === 'metadata,audio,meten,normaliseren,peaks,onset,grid,toon,video'
+    && ing.stappenVoor({ link: false, video: false }).join() === 'meten,normaliseren,peaks,onset,grid,toon');
 
   console.log('\nde strook in de browser (pure delen)');
   {
@@ -162,7 +162,8 @@ try {
       zichtbaar(lijst, nu).map((o) => o.id).join(',') === 'z,w1,w2,k1,b1,m1');
     const st = stappenStand({ status: 'bezig', stap: 'meten', stappen: ing.stappenVoor() });
     ok('stappen: gedaan tot de huidige, die is "nu", de rest straks',
-      st.map((s) => s.stand[0]).join('') === 'ggnsssss' && st[1].naam === 'download' && st[4].naam === 'golfvorm');
+      st.map((s) => s.stand[0]).join('') === 'ggnssssss' && st[1].naam === 'download' && st[4].naam === 'golfvorm'
+      && st[7].naam === 'toonsoort');
     ok('klaar: alles gedaan; wacht: niets', stappenStand({ status: 'klaar', stap: 'klaar', stappen: ['a', 'b'] }).every((s) => s.stand === 'gedaan')
       && stappenStand({ status: 'wacht', stap: 'wachten', stappen: ['a', 'b'] }).every((s) => s.stand === 'straks'));
 
@@ -215,6 +216,13 @@ try {
     setTimeout(() => ac2.abort(), 150);
     const rw = await pw;
     ok(`analyse-worker: stopt meteen (${Date.now() - t1} ms)`, rw.afgebroken === true && Date.now() - t1 < 2000);
+    // De toonsoort (ronde 1) is ook een stap van de pijplijn: die stopt net zo.
+    const ac3 = new AbortController();
+    const t2 = Date.now();
+    const pt = maakToon(lang, { signal: ac3.signal });
+    setTimeout(() => ac3.abort(), 150);
+    const rt = await pt;
+    ok(`toonsoort-worker: stopt ook meteen (${Date.now() - t2} ms)`, rt.afgebroken === true && Date.now() - t2 < 2000);
     await wacht(800);
     let kinderen = '';
     try { kinderen = execFileSync('pgrep', ['-P', String(process.pid), 'ffmpeg']).toString().trim(); } catch {}

@@ -94,7 +94,7 @@ try {
     && rc?.status === 'wacht' && rc.plek === 2 && rd?.status === 'wacht' && rd.plek === 3);
   ok('v= én list=: in de rij als alleen dat nummer', rc?.url === 'https://www.youtube.com/watch?v=abcdefghijk' && rc.lijstEraf === true);
   ok('een playlist en een niet-link in de lijst: 400 met reden, de rest gaat door', rpl?.code === 400 && rpl.playlist === true && rgeen?.code === 400);
-  ok('stappen voor de strook: metadata … video', ra?.stappen?.join() === 'metadata,audio,meten,normaliseren,peaks,onset,grid,video');
+  ok('stappen voor de strook: metadata … video', ra?.stappen?.join() === 'metadata,audio,meten,normaliseren,peaks,onset,grid,toon,video');
   const dub = await post({ url: Bl });
   ok('dezelfde link nog eens terwijl hij wacht: dezelfde opdracht, dubbel', dub.status === 200 && dub.j.dubbel === true && dub.j.id === rb?.id);
 
@@ -170,7 +170,7 @@ try {
     rq.end(wav);
   });
   ok(`upload terwijl een link loopt: 202 en wacht (${up.j.status}, plek ${up.j.plek})`, up.status === 202 && up.j.status === 'wacht' && up.j.plek === 1 && up.j.soort === 'bestand');
-  ok('stappen van een bestand: zonder metadata en download', up.j.stappen?.join() === 'meten,normaliseren,peaks,onset,grid');
+  ok('stappen van een bestand: zonder metadata en download', up.j.stappen?.join() === 'meten,normaliseren,peaks,onset,grid,toon');
   ok('zijn werkmap met het bestand staat klaar', werkmappen('.bezig-upload-').length === 1);
   const wu = await weg(up.j.id);
   await wacht(200);
