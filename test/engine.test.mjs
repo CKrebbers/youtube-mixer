@@ -1910,6 +1910,12 @@ console.log('\ntransport');
     dG.setRate(1.05);
     ok('eigen tempo verzet met een startpunt naast de tel: zijn TEL valt nog op het maatbegin',
       dG.wacht && Math.abs(dG.ctxTimeOf(8.0) - dM.ctxTimeOf(bar2)) < 1e-9);
+    // Een nudge van de wachtende track zelf is een bedoelde verschuiving: het
+    // startmoment blijft (deck.seek), ook al volgt de engine de maat.
+    const Tn = dG.bron.wachtTot;
+    druk('track.7.nudge.fwd');
+    ok('nudge tijdens het wachten: startmoment blijft, het startpunt schuift 50 ms', dG.wacht
+      && Math.abs(dG.bron.wachtTot - Tn) < 1e-9 && Math.abs(dG.position - 8.15) < 1e-9);
     // Stopt de maatgever tijdens het wachten, dan blijft het plan staan.
     const T2 = dG.bron.wachtTot;
     dM.pause();

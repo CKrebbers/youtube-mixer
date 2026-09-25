@@ -214,8 +214,10 @@ export class Engine extends Emitter {
     for (let i = 0; i < 64 && !(op >= grens); i++) { b += per; op = telOp(b) + off; }
     if (!Number.isFinite(op) || !(op >= grens)) { d.play(); return { ok: true, op: null, master: m.id }; }
     d.play({ op });
-    // Welke TEL van de maatgever het werd (audioklok), voor _volgWachtenden.
-    this._opDeMaat[id] = { tel: op - off };
+    // Voor _volgWachtenden: welke TEL van de maatgever het werd (audioklok),
+    // en hoe ver het startpunt naast zijn tel lag in TRACKtijd (blijft staan
+    // bij een sprong tijdens het wachten; alleen het eigen tempo rekt het op).
+    this._opDeMaat[id] = { tel: op - off, naast: off * d.rate };
     return { ok: true, op, master: m.id };
   }
 
@@ -241,8 +243,10 @@ export class Engine extends Emitter {
    * Wachtende tracks lopen mee met de maat, zoals de sampler-pads: verschuift
    * de tel van de maatgever waarop een track zou beginnen (tempo, sprong of
    * grid van de maatgever, of een andere maatgever), of verandert het eigen
-   * tempo of startpunt, dan opnieuw plannen. Een vast startmoment viel anders
-   * naast de 1: +3% op de maatgever halverwege een maat van 120 bpm = 35 ms.
+   * tempo, dan opnieuw plannen. Een vast startmoment viel anders naast de 1:
+   * +3% op de maatgever halverwege een maat van 120 bpm = 35 ms. Een sprong
+   * van de wachtende track zelf (hotcue, beatjump, nudge) houdt zijn
+   * startmoment, zoals deck.seek belooft: wat naast de tel lag, blijft ernaast.
    *
    * Het volgt DEZELFDE tel (de dichtstbijzijnde bij de geplande), niet
    * opnieuw "de volgende maat": in een loop korter dan een maat telt de klok
@@ -271,7 +275,7 @@ export class Engine extends Emitter {
       for (let i = 0; i < 16 && afstand(b + 1) < afstand(b); i++) b++;
       for (let i = 0; i < 16 && afstand(b - 1) < afstand(b); i++) b--;
       const tel = telOp(b);
-      const op = tel + this._naastDeTel(d);
+      const op = tel + plan.naast / d.rate;
       if (!Number.isFinite(op) || op < grens) continue;
       plan.tel = tel;
       if (Math.abs(op - T) > 1e-6) d.herplan(op);
