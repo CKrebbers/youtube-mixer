@@ -264,6 +264,8 @@ export class IngestStrook {
   // ---- met de server bijblijven ---------------------------------------------
 
   async poll() {
+    // Wat al wachtte vóór deze vraag (zie onder); een upload die net terugkwam niet.
+    const wachtte = [...this.naLaden.keys()];
     let lijst;
     try {
       const r = await fetch('/api/ingest');
@@ -281,6 +283,11 @@ export class IngestStrook {
     }
     if (nieuw) this.onNieuw();
     for (const o of lijst) if (this.naLaden.has(o.id)) this._naIngest(o);
+    // Kent de server hem niet meer (herstart: de rij staat in zijn geheugen),
+    // dan komt hij ook nooit af. Anders bleef _tik voor altijd pollen. Alleen
+    // wat er al stond toen deze vraag vertrok: een antwoord dat onderweg was
+    // terwijl een upload terugkwam, kent die nieuwe opdracht nog niet.
+    for (const id of wachtte) if (!lijst.some((o) => o.id === id)) this.naLaden.delete(id);
     this.teken();
   }
 

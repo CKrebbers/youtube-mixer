@@ -159,6 +159,31 @@ try {
       st.map((s) => s.stand[0]).join('') === 'ggnsssss' && st[1].naam === 'download' && st[4].naam === 'golfvorm');
     ok('klaar: alles gedaan; wacht: niets', stappenStand({ status: 'klaar', stap: 'klaar', stappen: ['a', 'b'] }).every((s) => s.stand === 'gedaan')
       && stappenStand({ status: 'wacht', stap: 'wachten', stappen: ['a', 'b'] }).every((s) => s.stand === 'straks'));
+
+    // Een op een track gesleept bestand waarvan de server de opdracht niet meer
+    // kent (herstart: de rij staat in zijn geheugen) komt nooit af: niet eeuwig
+    // blijven pollen. Maar een upload die terugkomt terwijl een poll onderweg
+    // is, mag dat oudere antwoord niet wissen.
+    const { IngestStrook } = await import('../src/ui/ingest-strook.js');
+    const [fetch0, interval0] = [globalThis.fetch, globalThis.setInterval];
+    let houdVast = null;
+    globalThis.fetch = async () => { await houdVast; return { json: async () => ({ opdrachten: [] }) }; };
+    globalThis.setInterval = () => 0;
+    const el = { addEventListener() {}, classList: { toggle() {} }, innerHTML: '', contains: () => true };
+    const strook = new IngestStrook({ el });
+    globalThis.setInterval = interval0;
+    await wacht(0);
+    strook.naLaden.set('weg-na-herstart', 'A');
+    await strook.poll();
+    ok('na een herstart van de server: niet blijven wachten op een opdracht die hij niet meer kent', !strook.naLaden.has('weg-na-herstart'));
+    let laat;
+    houdVast = new Promise((z) => { laat = z; });
+    const onderweg = strook.poll();
+    strook.naLaden.set('net-geupload', 'B');
+    laat();
+    await onderweg;
+    ok('een upload die terugkwam terwijl een poll onderweg was, blijft wachten', strook.naLaden.get('net-geupload') === 'B');
+    globalThis.fetch = fetch0;
   }
 
   console.log('\nrun() en de analyse-worker annuleren');
