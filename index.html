@@ -38,6 +38,22 @@
       <span class="deck-title">— leeg —</span>
       <span class="maat-badge hidden" title="deze track geeft de maat (sync, sampler, video-puls)">MAAT</span>
       <span class="bpm-val" title="bpm van het beatgrid, meegerekend met de pitch">—</span>
+      <!-- Toonsoort die je HOORT (TOONSOORT.md §5, T3): groot, met de volle naam.
+           Klik = corrigeren per stuk, op de positie (de actions uit §7). -->
+      <span class="toon-val leeg">
+        <button class="toon-knop" title="nog geen toonsoort voor deze track"><b class="toon-hoofd">—</b><i class="toon-versch"></i><i class="toon-cent"></i></button>
+        <span class="toon-menu hidden" title="toonsoort van de plaat corrigeren, alleen het stuk waar je nu bent">
+          <span class="toon-menu-kop">dit stuk</span>
+          <button data-kind="button" data-action="track.1.key.fifth.down" class="btn sm" title="een kwint omlaag (Camelot −1): de meest gemaakte fout">kwint −</button>
+          <button data-kind="button" data-action="track.1.key.fifth.up" class="btn sm" title="een kwint omhoog (Camelot +1)">kwint +</button>
+          <button data-kind="button" data-action="track.1.key.mode" class="btn sm" title="majeur ↔ mineur, zelfde Camelot-getal (relatief)">maj/min</button>
+          <button data-kind="button" data-action="track.1.key.semitone.down" class="btn sm" title="een halve toon lager (fout rond ±50 cent)">½ −</button>
+          <button data-kind="button" data-action="track.1.key.semitone.up" class="btn sm" title="een halve toon hoger (fout rond ±50 cent)">½ +</button>
+          <button data-kind="button" data-action="track.1.key.none" class="btn sm" title="hier geen toonsoort (ambient, drone)">geen</button>
+          <button data-kind="button" data-action="track.1.key.split" class="btn sm" title="nieuw stuk vanaf hier (album, modulatie)">nieuw stuk</button>
+          <button data-kind="button" data-action="track.1.key.lock" class="btn sm toon-slot" title="bevestigen: op slot laat de analyse de kaart staan">slot</button>
+        </span>
+      </span>
       <span class="fase" title="hoe ver deze track voor of achter loopt"><b></b><i></i></span>
       <span class="deck-time"><b class="t-pos">0:00.00</b> <i class="t-rem">-0:00.00</i></span>
       <button class="link demo-btn" title="een synthetische testtrack van 124 bpm op deze track">demo</button>

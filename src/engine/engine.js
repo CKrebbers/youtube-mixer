@@ -244,6 +244,8 @@ export class Engine extends Emitter {
       playing: d.playing, position: d.position, duration: d.duration,
       rate: d.rate, cuePoint: d.cuePoint,
       grid: d.grid ? d.grid.toJSON() : null, gridZeker: d.gridZekerHier, bpm: d.bpm, loopBeats: d.loopBeats ?? null,
+      // Toonsoort die je HOORT op de positie (of null): zie deck.toonsoort.
+      toon: d.toonsoort,
       fx: { effect: d.fx.effectId, naam: d.fx.rackNaam ?? null,
             mix: d.fx.mix, bypass: d.fx.bypass,
             plekken: [1, 2, 3, 4, 5, 6, 7, 8]

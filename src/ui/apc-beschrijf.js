@@ -56,6 +56,15 @@ export function beschrijf(action) {
     if (rest === 'grid.bpm') return r('grid bpm', 'bpm van het gridstuk hier: 0,01 per tik, met shift 0,1');
     if (rest === 'grid.lock') return r('slot', 'grid op slot (lampje = op slot; de automatische analyse blijft er dan af)');
     if (rest === 'grid.clear') return r('grid weg', 'grid wissen');
+    if (rest === 'key') return r('toon', 'toonsoort van de plaat hier: 24 standen in wijzervolgorde (1A 1B … 12B), voor een encoder');
+    if (rest === 'key.fifth.up') return r('toon kwint+', 'toonsoort hier een kwint omhoog (Camelot +1): de meest gemaakte fout van de analyse');
+    if (rest === 'key.fifth.down') return r('toon kwint−', 'toonsoort hier een kwint omlaag (Camelot −1)');
+    if (rest === 'key.mode') return r('maj/min', 'toonsoort hier majeur ↔ mineur (relatief: zelfde Camelot-getal)');
+    if (rest === 'key.semitone.up') return r('toon +½', 'toonsoort hier een halve toon hoger (fout rond ±50 cent)');
+    if (rest === 'key.semitone.down') return r('toon −½', 'toonsoort hier een halve toon lager (fout rond ±50 cent)');
+    if (rest === 'key.none') return r('geen toon', 'hier geen toonsoort (ambient, drone)');
+    if (rest === 'key.split') return r('toonstuk', 'nieuw toonsoortstuk vanaf hier (album, modulatie)');
+    if (rest === 'key.lock') return r('toon slot', 'toonsoort bevestigen (lampje = op slot; de analyse blijft er dan af)');
     if ((m = /^fx\.knob\.(\d)$/.exec(rest))) return r(`rack ${m[1]}`, `rack-knop ${m[1]} (wat die doet hangt van het rack af)`);
     if ((m = /^hotcue\.(\d)$/.exec(rest))) return { kort: `${k}·cue ${m[1]}`, lang: `hotcue ${m[1]} — ${w}` };
     if ((m = /^hotcue\.(\d)\.delete$/.exec(rest))) return { kort: `wis ${m[1]}`, lang: `hotcue ${m[1]} wissen — ${w}` };

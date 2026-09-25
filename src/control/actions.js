@@ -14,6 +14,7 @@
  * beweegt, en kan de LED-laag niet weten wat hij moet laten branden.
  */
 import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/beatgrid.js';
+import { ToonKaart, WIJZER } from '../engine/toonsoort.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
 import { PITCH_BEREIKEN } from '../engine/deck.js';
@@ -218,6 +219,48 @@ export function bindEngine(engine) {
       { label: `Track ${nr} grid op slot`, read: () => (!d.grid ? null : d.grid.slot ? 1 : 0) });
     define(`${n}.grid.clear`, 'trigger', (on) => { if (on) { tap.reset(); d.setGrid(null); } },
       { label: `Track ${nr} grid wissen`, read: () => (d.grid ? 1 : 0) });
+
+    // ---- toonsoort (docs/TOONSOORT.md §7) -----------------------------------
+    // Corrigeren per STUK, op wat je HOORT (net als het grid). De kaart is van
+    // de plaat: een kwint omhoog verandert wat er op de plaat staat, niet de
+    // pitch. Op de APC in versie 1 geen knoppen (T6): corrigeren is zeldzaam en
+    // niet live, maar met deze actions kan koppelen later zonder code. Read:
+    // null zonder kaart (niets te doen), 1 zolang ingedrukt, anders `rust()`.
+    const toonKnop = (id, fn, label, rust = () => 0) => {
+      let ingedrukt = false;
+      define(`${n}.key.${id}`, 'trigger', (on) => {
+        ingedrukt = !!on;
+        if (on && d.toonKaart) { fn(d.toonKaart, hoorbaar()); d.toonGewijzigd(); }
+      }, { label, read: () => (!d.toonKaart ? null : ingedrukt ? 1 : rust()) });
+    };
+    toonKnop('fifth.up', (k, p) => k.kwint(p, 1), `Track ${nr} toonsoort hier een kwint omhoog (Camelot +1)`);
+    toonKnop('fifth.down', (k, p) => k.kwint(p, -1), `Track ${nr} toonsoort hier een kwint omlaag (Camelot −1)`);
+    toonKnop('mode', (k, p) => k.wisselModus(p), `Track ${nr} toonsoort hier majeur ↔ mineur (relatief)`);
+    toonKnop('semitone.up', (k, p) => k.halveToon(p, 1), `Track ${nr} toonsoort hier een halve toon hoger`);
+    toonKnop('semitone.down', (k, p) => k.halveToon(p, -1), `Track ${nr} toonsoort hier een halve toon lager`);
+    toonKnop('none', (k, p) => k.geen(p), `Track ${nr} hier geen toonsoort`);
+    toonKnop('split', (k, p) => k.splits(p), `Track ${nr} nieuw toonsoortstuk hier`,
+      () => (d.toonKaart.aantalStukken > 1 ? 0.5 : 0));
+    // Bevestigen: slot aan/uit. Op slot laat de analyse de kaart altijd staan.
+    define(`${n}.key.lock`, 'trigger', (on) => {
+      if (!on || !d.toonKaart) return;
+      d.toonKaart.slot = !d.toonKaart.slot;
+      d.toonGewijzigd();
+    }, { label: `Track ${nr} toonsoort bevestigen (slot)`, read: () => (!d.toonKaart ? null : d.toonKaart.slot ? 1 : 0) });
+    // De toonsoort van de plaat hier als value 0..1: 24 standen in wijzervolgorde
+    // (1A 1B 2A … 12B), voor een encoder (regel 2: de mapping weet niets van
+    // toonsoorten). Zonder kaart maakt hij er een, met de hand gezet.
+    define(`${n}.key`, 'value', (v) => {
+      if (!d.buffer) return;
+      const k = WIJZER[Math.round(Math.min(1, Math.max(0, v)) * (WIJZER.length - 1))];
+      if (!d.toonKaart) { d.setToonKaart(ToonKaart.metHand(k)); return; }
+      d.toonKaart.zetStuk(hoorbaar(), { toonsoort: k });
+      d.toonGewijzigd();
+    }, { label: `Track ${nr} toonsoort van de plaat hier (24 standen, voor een encoder)`,
+         read: () => {
+           const k = d.toonKaart?.stukAt(hoorbaar()).k ?? null;
+           return k === null ? null : WIJZER.indexOf(k) / (WIJZER.length - 1);
+         } });
 
     // Reads voor de LED's (VRAGEN B4): null = niets te doen (lege track, geen
     // grid), 0 = leeg maar bruikbaar, 0,5 = gevuld, 1 = actief.

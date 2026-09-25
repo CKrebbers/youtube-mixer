@@ -121,6 +121,13 @@ export function opzetVensters({ engine, venster, laadBuffer, loadFile, naFocus }
     });
   }
 
+  // Toonsoort: klik = het correctiemenu (per stuk, op de positie). De knoppen
+  // erin zijn gewone actions (track.N.key.*) en volgen de focus zoals de rest.
+  const toonMenu = root.querySelector('.toon-menu');
+  root.querySelector('.toon-knop').addEventListener('click', () => toonMenu.classList.toggle('hidden'));
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest?.('.toon-val')) toonMenu.classList.add('hidden'); });
+  window.addEventListener('keydown', (e) => { if (e.code === 'Escape') toonMenu.classList.add('hidden'); });
+
   root.querySelector('.demo-btn').addEventListener('click', async () => {
     await engine.resume();
     const id = venster.L;
