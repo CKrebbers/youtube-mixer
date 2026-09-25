@@ -536,13 +536,18 @@ export class StreamBron {
   }
 
   /**
-   * Doorremmen vanaf hier met dezelfde vertraging, na een loopwissel: de
-   * plek uit het oude segment (met de oude loop gevouwen), de snelheid die
-   * er nog over is. Stilstand valt daardoor op hetzelfde moment.
+   * Doorremmen na een loopwissel: DEZELFDE rem (T, R en rem blijven), alleen
+   * de loop is anders. P wordt zo gekozen dat hij nu staat waar het oude
+   * segment (met de oude loop gevouwen) hem had. Stilstand valt daardoor op
+   * hetzelfde moment, en het uitdoven (remUit rekent vanaf T en R, de
+   * beginsnelheid) loopt gewoon door. Met T = nu en R = de snelheid die er
+   * nog over was, begon het uitdoven opnieuw: in het laatste kwart stond het
+   * geluid dan ineens weer vol, vlak voor stilstand.
    */
   _remVerder() {
     const nu = this.ctx.currentTime, oud = this.seg;
-    this.seg = { T: nu, P: this.positie, R: snelheidOp(oud, nu), loop: this.loop, speelt: true, rem: oud.rem };
+    const weg = positieOp({ ...oud, loop: null }, nu) - oud.P;        // afgelegd sinds T, ongevouwen
+    this.seg = { T: oud.T, P: this.positie - weg, R: oud.R, loop: this.loop, speelt: true, rem: oud.rem };
     this._stuur();
     this._planRemKlaar();
   }

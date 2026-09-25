@@ -450,6 +450,35 @@ console.log('\nrem (vinylstop)');
   const los = { T: T + D2 / 2, P: positieOp(rem, T + D2 / 2), R: 1, loop: null, speelt: true, rem: null };
   const losGeluid = draai([{ t: T - 0.02, seg: oud }, { t: T + 0.003, seg: rem }, { t: los.T + 0.003, seg: los }], los.T + 0.05);
   ok(`los tijdens het remmen: grootste stap ${(maxStap(losGeluid) / toon).toFixed(2)}x (geen tik)`, maxStap(losGeluid) < 1.5 * toon);
+
+  // Een loop aan in het laatste kwart (daar dooft hij uit), zoals de
+  // StreamBron hem stuurt: het geluid gaat gewoon door zoals zonder loop
+  // (hij valt stil voordat de loop rondgaat). Het nieuwe segment nam eerst
+  // de snelheid van DAT moment als beginsnelheid, en dan stond het uitdoven
+  // ineens weer vol, vlak voor stilstand.
+  {
+    const ctx2 = { currentTime: 1, audioWorklet: { addModule: async () => {} } };
+    const b2 = new StreamBron(ctx2, {}, { interval: 1e9, haal: async () => { throw new Error('mag niet naar het netwerk'); } });
+    await b2.laad({ url: 'geheugen:rem-lus', haal });
+    b2.start(1.5);
+    const begin = b2.seg;
+    ctx2.currentTime = T;
+    b2.rem(D2);
+    const remmend = b2.seg;
+    const LUS = T + 0.35;                            // snelheid nog 12,5%: midden in het uitdoven
+    ctx2.currentTime = LUS;
+    b2.setLoop(b2.positie, b2.positie + 0.3);
+    const verder = b2.seg;
+    b2.vernietig();
+    const zonder = draai([{ t: T - 0.02, seg: begin }, { t: T + 0.003, seg: remmend }], T + D2 + 0.01);
+    const met = draai([{ t: T - 0.02, seg: begin }, { t: T + 0.003, seg: remmend }, { t: LUS + 0.003, seg: verder }], T + D2 + 0.01);
+    // Vanaf na de overgang (4 ms equal-power, op een blokgrens) tot stilstand.
+    const van = Math.ceil((LUS - (T - 0.02) + 0.003 + K.SEGMENT_FADE) * SR) + 256, tot = Math.floor((D2 + 0.02) * SR);
+    let verschil = 0, piek = 0;
+    for (let i = van; i < tot; i++) { verschil = Math.max(verschil, Math.abs(met[i] - zonder[i])); piek = Math.max(piek, Math.abs(met[i])); }
+    ok(`loop aan in het laatste kwart van de rem: dooft uit zoals zonder loop (verschil ${verschil.toExponential(1)}, piek ${piek.toFixed(3)} tegen ${Math.max(...zonder.subarray(van, tot).map(Math.abs)).toFixed(3)})`,
+      verschil < 1e-4 && remStil(verder) === remStil(remmend));
+  }
 }
 
 // ---- één motor: losse bestanden via de streamkern -------------------------
