@@ -588,6 +588,150 @@ console.log('\ntweede kans plakt geen ander nummer vast');
   }
 }
 
+// ---- het grid van ELK stuk moet passen (25 september 2026) ------------------
+// segmenteer rijgt vensters op hetzelfde tempo (±4%) aaneen zonder naar de fase
+// te kijken, en de zekerheid is de fase-STABILITEIT van de vensters, niet of het
+// ene grid van het stuk past. Twee nummers op (bijna) hetzelfde tempo zonder gat
+// werden zo één zeker stuk (vroeger hieronder 32-67% van de kicks naast). Nu:
+// splitsen waar de fase verspringt, of onzeker. Naast = verder dan 0,15 tel.
+
+console.log('\nelk stuk moet passen: sprong, tempowissel, schoon');
+{
+  const { ZEKER_VANAF, GEEN_PULS } = await import('../src/engine/beatgrid.js');
+  // Kicks per deel [van, tot, bpm, anker], eventueel met menselijke speling.
+  const kicksIn = (delen, { jitter = 0, seed = 3 } = {}) => {
+    const r = prng(seed), uit = [];
+    for (const [van, tot, bpm, anker] of delen) {
+      const p = 60 / bpm;
+      for (let t = anker + Math.ceil((van - anker) / p - 1e-9) * p; t < tot; t += p) uit.push(t + jitter * r());
+    }
+    return uit;
+  };
+  const naast = (s, echt) => {
+    const q = 60 / s.bpm, erin = echt.filter((t) => t >= s.van && t < s.tot);
+    return erin.filter((t) => Math.abs(t - (s.anker + Math.round((t - s.anker) / q) * q)) > 0.15 * q).length / Math.max(1, erin.length);
+  };
+  const analyse = (duur, echt, extra = []) => {
+    const m = envVan(spoorVan(duur, [...echt.map((t) => [t, 0.5, 'kick']), ...extra], { seed: 71 }));
+    return d.analyseerGrid(m.env, m.envRate, m.tijdOffset);
+  };
+  const tekst = (st) => st.map((s) => `${s.van.toFixed(0)}-${s.tot.toFixed(0)} ${s.bpm.toFixed(2)} z${s.zekerheid.toFixed(2)}`).join(' | ');
+  const zeker = (st) => st.filter((s) => s.zekerheid >= ZEKER_VANAF);
+  // Geen zeker stuk waar meer dan 3% van de kicks naast zijn grid ligt.
+  const allesPast = (st, echt) => zeker(st).every((s) => naast(s, echt) <= 0.03);
+
+  const p150 = 0.4, p124 = 60 / 124;
+  for (const [naam, duur, delen, grens] of [
+    ['zelfde tempo, een halve tel verschoven (150)', 140, [[0, 70, 150, 0.2], [70, 140, 150, 70.2 + p150 / 2]], 70],
+    ['zelfde tempo, een kwart tel verschoven (124)', 150, [[0, 75, 124, 0.2], [75, 150, 124, 0.2 + p124 / 4]], 75],
+    ['nummerwissel op bijna hetzelfde tempo (150 -> 153)', 140, [[0, 70, 150, 0.2], [70, 140, 153, 70.1]], 70],
+    ['nummerwissel op bijna hetzelfde tempo (128 -> 129,5)', 150, [[0, 75, 128, 0.2], [75, 150, 129.5, 75.3]], 75],
+  ]) {
+    const echt = kicksIn(delen);
+    const st = analyse(duur, echt);
+    const z = zeker(st);
+    // Vroeger: één zeker stuk over alles, 32-50% van de kicks naast.
+    ok(`${naam}: geen zeker stuk met kicks naast zijn grid (${tekst(st)})`, allesPast(st, echt));
+    ok('  beide nummers zeker, elk op zijn eigen tempo, grens binnen 4 s',
+      z.length === 2 && Math.abs(z[0].tot - grens) < 4 && Math.abs(z[1].van - grens) < 4
+      && Math.abs(z[0].bpm - delen[0][2]) < 0.1 && Math.abs(z[1].bpm - delen[1][2]) < 0.1);
+  }
+
+  // Drie nummers op 150 zonder gat, elk in een andere fase: drie zekere stukken.
+  const drie = kicksIn([[0, 60, 150, 0.2], [60, 120, 150, 60.2 + p150 / 2], [120, 180, 150, 120.2 + p150 / 4]]);
+  const st3 = analyse(180, drie);
+  ok(`drie nummers op hetzelfde tempo: drie zekere stukken, alle passend (${tekst(st3)})`,
+    zeker(st3).length === 3 && allesPast(st3, drie));
+
+  // Een ander nummer van 15 s aan het eind (korter dan minSec): geen eigen stuk,
+  // dus onzeker, en niet meer in het zekere stuk ervoor (vroeger 9% naast).
+  const staart = kicksIn([[0, 150, 150, 0.2], [150, 165, 150, 150.2 + p150 / 2]]);
+  const stS = analyse(165, staart);
+  ok(`een staart van 15 s in een andere fase wordt onzeker (${tekst(stS)})`,
+    allesPast(stS, staart) && zeker(stS).length === 1 && zeker(stS)[0].tot > 145 && stS.at(-1).zekerheid < ZEKER_VANAF);
+
+  // Een versnelling: 16 s op 153,75 (de muziek loopt precies een tel voor) en dan
+  // weer 150, op het grid. Geen van beide kanten past in de versnelling: een rest
+  // ertussen (vroeger één zeker stuk, 8% van de kicks naast).
+  const vers = [];
+  for (let t = 0.2; t < 140; t += 60 / (t >= 60 && t < 76 ? 153.75 : 150)) vers.push(t);
+  const stV = analyse(140, vers);
+  const midden = stV.find((s) => s.van <= 68 && s.tot > 68);
+  ok(`een versnelling van een tel in 16 s: onzeker, links en rechts zeker (${tekst(stV)})`,
+    allesPast(stV, vers) && zeker(stV).length === 2 && midden && midden.zekerheid < ZEKER_VANAF && midden.tot - midden.van < 20);
+
+  // Wat meteen past, blijft zoals het was: één stuk, zeker, het juiste tempo.
+  for (const [naam, bpm, jitter, hats] of [['schoon op 128 met hats', 128, 0, true], ['122 met ±15 ms speling', 122, 0.015, false]]) {
+    const echt = kicksIn([[0, 120, bpm, 0.3]], { jitter });
+    const st = analyse(120, echt, hats ? echt.map((t) => [t + 30 / bpm, 0.15, 'hat']) : []);
+    ok(`${naam}: één zeker stuk (${tekst(st)})`, st.length === 1 && st[0].zekerheid >= ZEKER_VANAF
+      && Math.abs(st[0].bpm - bpm) < 0.05 && naast(st[0], echt) === 0);
+  }
+  ok('PAST_NIET ligt tussen "geen puls" en "zeker"', d.PAST_NIET > GEEN_PULS && d.PAST_NIET < ZEKER_VANAF);
+}
+
+console.log('\nelk stuk moet passen: de onderdelen');
+{
+  // Fasen per venster (elke 4 s), zoals vensterFasen ze geeft.
+  const vensters = (van, tot, fase) => {
+    const uit = [];
+    for (let t = van; t < tot; t += 4) uit.push({ tijd: t, fase: fase(t), R: 0.3, anders: false });
+    return uit;
+  };
+  const w = (x) => x - Math.round(x);
+  const vlak = vensters(2, 120, () => 0.02);
+  ok('stukPast: één fase past', d.stukPast(vlak).past);
+  ok('  een halve tel verschoven vanaf de helft past niet', !d.stukPast(vensters(2, 120, (t) => (t < 60 ? 0 : 0.5))).past);
+  ok('  een langzame drift binnen ±0,1 tel past', d.stukPast(vensters(2, 120, (t) => 0.001 * (t - 60))).past);
+  ok('  één losse uitschieter mag', d.stukPast(vensters(2, 120, (t) => (t === 58 ? 0.4 : 0))).past);
+  ok('  twee vensters op een rij een halve tel naast niet (een ander nummer van 15 s)',
+    !d.stukPast(vensters(2, 200, (t) => (t >= 190 ? 0.5 : 0))).past);
+  // Een sprong van 0,28 tel met twee vensters ertussen (let it all go 14:49-15:24:
+  // 0,20 0,21 0,19 0,16 0,03 -0,08 ...): met ±0,15 rond de modus (zoals
+  // eenGridPast) past hij, want de modus gaat ertussen liggen; met ±0,1 niet.
+  const sprong = vensters(2, 60, (t) => (t < 26 ? 0.19 : t < 28 ? 0.12 : t < 32 ? 0.05 : -0.09));
+  ok('  een sprong van 0,28 tel past niet (met de marge van eenGridPast wel)',
+    !d.stukPast(sprong).past && d.stukPast(sprong, { maxAfwijking: 0.15 }).past);
+  ok('  een venster op een tempo ernaast (anders) telt als naast',
+    !d.stukPast(vensters(2, 120, () => 0).map((f) => (f.tijd >= 100 ? { ...f, anders: true } : f))).past);
+
+  const sp = d.faseSprongen(vensters(2, 200, (t) => (t < 100 ? 0.05 : 0.55)), 0, 200, 150);
+  const k = sp.kandidaten[0];
+  ok(`faseSprongen: een sprong van een halve tel op 100 s (${k?.model} ${k?.links.toFixed(0)}..${k?.rechts.toFixed(0)}, ${k?.kosten} tegen ${sp.heel})`,
+    k && Math.abs(k.links - 100) <= 2 && k.links === k.rechts && k.kosten === 0 && sp.heel >= 10);
+  // Een tempowissel: rechts loopt de fase 0,02 tel per seconde weg (1% op 120).
+  const tw = d.faseSprongen(vensters(2, 200, (t) => (t < 100 ? 0 : w(0.02 * (t - 100)))), 0, 200, 120);
+  const kl = tw.kandidaten.find((x) => x.model === 'lijn');
+  ok(`  een tempowissel op 100 s vindt het lijnmodel (${kl?.links.toFixed(0)}, ${kl?.kosten})`,
+    kl && Math.abs(kl.links - 100) <= 4 && kl.kosten <= 1);
+  // Een versnelling: de fase loopt in 16 s een hele tel door en valt dan terug
+  // op het grid: twee grenzen met een rest ertussen.
+  const vs = d.faseSprongen(vensters(2, 200, (t) => (t < 80 || t >= 96 ? 0 : w(-(t - 80) / 16))), 0, 200, 150);
+  const kv = vs.kandidaten[0];
+  ok(`  een versnelling: een rest ertussen (${kv?.links.toFixed(0)}..${kv?.rechts.toFixed(0)})`,
+    kv && kv.links >= 76 && kv.links <= 84 && kv.rechts >= 92 && kv.rechts <= 100 && kv.rechts > kv.links);
+
+  const helling = d.faseHelling(vensters(2, 120, (t) => w(0.1 + 0.006 * t)), { rest: true });
+  ok(`faseHelling: 0,006 tel/s, over de halve tel heen (${helling?.helling.toFixed(4)}, rest ${helling?.rest.toFixed(3)})`,
+    helling && Math.abs(helling.helling - 0.006) < 1e-4 && helling.rest < 1e-6);
+  ok('  te weinig vensters: null', d.faseHelling(vensters(2, 12, () => 0)) === null);
+
+  // verfijnGrens op echte klanken: 150 in twee fasen, de grids elk 30 ms naast
+  // hun klap (het zwaartepunt ligt er vaak een vast stuk naast).
+  const ev = [];
+  for (let t = 0.2; t < 60; t += 0.4) ev.push([t, 0.5, 'kick']);
+  for (let t = 60.4; t < 120; t += 0.4) ev.push([t, 0.5, 'kick']);
+  const m = envVan(spoorVan(120, ev, { seed: 81 }));
+  const gA = { bpm: 150, anker: 0.2 + 0.03 }, gB = { bpm: 150, anker: 0.4 + 0.03 };
+  // De envelope-piek van een klap ligt iets na de klap; meet het zwaartepunt zoals de aanroeper.
+  const zp = (g, a, b) => ({ bpm: g.bpm, anker: g.anker + d.faseOpGrid(m.env, m.envRate, m.tijdOffset, g.bpm, g.anker, a, b).fase * 0.4 });
+  const g = d.verfijnGrens(m.env, m.envRate, m.tijdOffset, zp(gA, 10, 50), zp(gB, 70, 110), 44, 76);
+  ok(`verfijnGrens: twee fasen, grens op 60 s (${g.links.toFixed(2)}..${g.rechts.toFixed(2)})`,
+    Math.abs(g.links - 60) < 0.5 && g.links === g.rechts);
+  const zonderR = d.verfijnGrens(m.env, m.envRate, m.tijdOffset, zp(gA, 10, 50), null, 44, 76);
+  ok(`  zonder grid rechts: waar links ophoudt te passen (${zonderR.links.toFixed(2)})`, Math.abs(zonderR.links - 60) < 1);
+}
+
 console.log('\nfase-ijking: niet op één tik, maar op een reeks klanken');
 {
   ok('de vastgelegde vertraging is wat de meting nu geeft',

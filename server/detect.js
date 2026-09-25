@@ -1125,6 +1125,383 @@ export function eenGridPast(env, envRate, tijdOffset, grid, vensters,
   return !teVeel(fasen) && !teVeel(fasen.filter((x) => x.gered));
 }
 
+/*
+ * Past het grid van ELK stuk? (25 september 2026)
+ *
+ * segmenteer rijgt vensters op hetzelfde tempo (±4%) aaneen zonder naar de
+ * fase te kijken, en de zekerheid van een stuk is de stabiliteit van zijn
+ * vensters: of de fase in elk venster VASTHOUDT, niet of ze op dezelfde plek
+ * ligt. Twee nummers op (bijna) hetzelfde tempo zonder duidelijk gat werden zo
+ * één "zeker" stuk met één grid: synthetisch tot de helft van de kicks naast, op
+ * Clay's muziek (let it all go 14:49 en 31:18, Sakamoto 28:30 en 35:59)
+ * vensters tot een halve tel naast. Sync en beat-loops vertrouwen een zeker
+ * stuk. Daarom krijgt elk stuk een toets zoals eenGridPast (stukPast: fase
+ * per venster op het grid, strenger, met reeksen), en wat niet past wordt
+ * gesplitst waar de fase verspringt (faseSprongen, verfijnGrens), of onzeker
+ * (PAST_NIET). Het verloop staat in analyseerGrid.
+ */
+
+/**
+ * Zoveel zekerheid krijgt een venster hooguit als het grid van zijn stuk er
+ * niet op past: onder ZEKER_VANAF (0,65) en boven GEEN_PULS (0,15), allebei in
+ * analyze.js. Er IS een puls, maar sync en beat-loops horen er niet op te
+ * vertrouwen: onzeker. detect.test controleert dat het ertussen blijft.
+ */
+export const PAST_NIET = 0.5;
+
+/** Hoeveel tel ligt een fase naast een andere (-0,5..0,5). */
+const telWrap = (x) => x - Math.round(x);
+
+/**
+ * De fase waar de meeste andere binnen `marge` liggen (een cirkel heeft geen
+ * gewone mediaan, en een gemiddelde van twee groepen een kwart tel uit elkaar
+ * ligt precies ertussen en "past" dan op allebei). Gesorteerd en met twee
+ * wijzers: n log n. Bij gelijke stand de eerste in de invoer.
+ */
+function modusFase(fasen, marge) {
+  const n = fasen.length;
+  if (!n) return 0;
+  const s = fasen.map((x, i) => [telWrap(x), i]).sort((a, b) => a[0] - b[0]);
+  const rond = [...s.map(([x]) => x - 1), ...s.map(([x]) => x), ...s.map(([x]) => x + 1)];
+  let ref = 0, best = -1, bestI = Infinity, lo = 0, hi = 0;
+  for (let k = 0; k < n; k++) {
+    const x = s[k][0];
+    while (rond[lo] < x - marge - 1e-12) lo++;
+    while (hi < rond.length && rond[hi] <= x + marge + 1e-12) hi++;
+    const aantal = Math.min(n, hi - lo);
+    if (aantal > best || (aantal === best && s[k][1] < bestI)) { best = aantal; ref = fasen[s[k][1]]; bestI = s[k][1]; }
+  }
+  return ref;
+}
+
+/**
+ * Oordeel over afwijkingen (tel van de referentie, Infinity = een ander
+ * tempo), in tijdsvolgorde. Naast = verder dan `maxAfwijking`. Het past niet
+ * als er te veel naast liggen, `maxReeks` op een rij, of `maxVerReeks` op een
+ * rij VER naast (meer dan `ver`, een kwart tel: dat hoor je als flam).
+ * Eén losse uitschieter mag altijd: in een stuk van twintig seconden (vijf
+ * vensters) is dat al 20%, en een blok dat ergens anders ligt vangt de reeks.
+ * De korte reeks ver naast is er voor wat maar twee vensters beslaat: een
+ * ander nummer van 15 s aan het eind van een stuk van drie minuten (2 van 51,
+ * een halve tel naast), of een versnelling waarin de muziek in 16 s een hele
+ * tel wegloopt en daarna weer op het grid valt (Sakamoto 36:41-36:57).
+ */
+function oordeelVan(afwijking, { maxAfwijking = 0.1, maxAandeel = 0.1, maxReeks = 3, ver = 0.25, maxVerReeks = 2 } = {}) {
+  let n = 0, reeks = 0, rij = 0, verReeks = 0, verRij = 0;
+  for (const a of afwijking) {
+    if (a > maxAfwijking) { n++; rij++; reeks = Math.max(reeks, rij); } else rij = 0;
+    if (a > ver) { verRij++; verReeks = Math.max(verReeks, verRij); } else verRij = 0;
+  }
+  const past = n <= Math.max(1, maxAandeel * afwijking.length) && reeks < maxReeks && verReeks < maxVerReeks;
+  return { past, n: afwijking.length, naast: n, reeks, verReeks };
+}
+
+/**
+ * Per venster de fase op een grid: { tijd, fase (tel), R, anders }, op tijd
+ * gesorteerd. Gemeten over `tijd` ± `vensterSec`/2, maar alleen binnen
+ * [van, tot): wat buiten het stuk valt, hoort niet bij zijn grid (een venster
+ * op de grens mengt anders de fase van de buren erin).
+ *
+ * `anders`: het venster heeft een duidelijke puls op een tempo vlak naast het
+ * grid (binnen `tolerantie`, in stapjes van `tempoStap`, geen octaaf) die het
+ * grid niet ziet: R daar minstens `andersFactor` keer zo groot en ≥ `minR`.
+ * Een nummer 2-3% sneller schuift binnen twaalf seconden een halve tot hele tel
+ * op het grid door; zijn R op het grid zakt dan onder minR, en zonder deze
+ * vlag was het onzichtbaar (synthetisch: 150 schoon, dan 154 met fills).
+ * Gezocht, niet het tempo van de tempocurve: die zat er op Sakamoto (36:41)
+ * 2% naast (121 waar 123 de puls was, een versnelling van 16 s waarin de
+ * muziek een hele tel wegloopt), en dan kwam de verhouding niet boven 1,9.
+ * Gemeten op de stukken (zekerheid ≥ 0,2) van 22 fragmenten: de verhouding
+ * is p50 1,01, p95 1,3; in de zekere stukken boven 1,4 met R ≥ 0,15 alleen
+ * in die versnelling (1,7-2,9).
+ */
+export function vensterFasen(env, envRate, tijdOffset, grid, vensters,
+  { vensterSec = 12, van = -Infinity, tot = Infinity, minR = 0.15, tolerantie = 0.04, andersFactor = 2, tempoStap = 0.0025 } = {}) {
+  const uit = [];
+  const K = Math.floor(tolerantie / tempoStap + 1e-9);
+  for (const v of vensters) {
+    const a = Math.max(van, v.tijd - vensterSec / 2), b = Math.min(tot, v.tijd + vensterSec / 2);
+    const f = faseOpGrid(env, envRate, tijdOffset, grid.bpm, grid.anker, a, b);
+    if (!f) continue;
+    let anders = false;
+    if (K > 0 && f.R * andersFactor <= 1) {
+      const bpms = [];
+      for (let k = -K; k <= K; k++) if (k) bpms.push(grid.bpm * Math.exp(k * tempoStap));
+      const beste = Math.max(...pulsOpTempos(env, envRate, tijdOffset, bpms, a, b));
+      anders = beste >= minR && beste >= andersFactor * f.R;
+    }
+    uit.push({ tijd: v.tijd, fase: f.fase, R: f.R, anders });
+  }
+  return uit.sort((x, y) => x.tijd - y.tijd);
+}
+
+/**
+ * R (0..1, hoe duidelijk de puls is) van [van, tot) op elk tempo uit `bpms`:
+ * hetzelfde als faseOpGrid(...).R, maar de afgetopte envelope maar één keer.
+ */
+function pulsOpTempos(env, envRate, tijdOffset, bpms, van, tot) {
+  const fA = Math.max(0, Math.floor((van - tijdOffset) * envRate));
+  const fB = Math.min(env.length, Math.floor((tot - tijdOffset) * envRate));
+  if (fB - fA < envRate) return bpms.map(() => 0);
+  const deel = env.slice(fA, fB);
+  const gesorteerd = Float32Array.from(deel).sort();
+  const kap = gesorteerd[Math.floor(0.95 * (gesorteerd.length - 1))] || 1e-9;
+  let som = 0;
+  for (let i = 0; i < deel.length; i++) { if (deel[i] > kap) deel[i] = kap; som += deel[i]; }
+  if (!(som > 0)) return bpms.map(() => 0);
+  return bpms.map((bpm) => {
+    const w = (2 * Math.PI * bpm) / (60 * envRate);
+    const cw = Math.cos(w), sw = Math.sin(w);
+    let c = 1, sn = 0, re = 0, im = 0;
+    for (let i = 0; i < deel.length; i++) {
+      re += deel[i] * c; im += deel[i] * sn;
+      const nc = c * cw - sn * sw; sn = c * sw + sn * cw; c = nc;
+    }
+    return Math.hypot(re, im) / som;
+  });
+}
+
+/**
+ * Past het grid op een stuk? Alleen vensters met een duidelijke puls tellen:
+ * op het grid (R ≥ `minR`, zoals in eenGridPast) of op een tempo vlak ernaast
+ * (`anders`, zie vensterFasen: die liggen altijd naast). Het past niet als
+ * meer dan `maxAandeel` ervan (één mag altijd) verder dan `maxAfwijking` tel
+ * van de modus ligt, als er `maxReeks` op een rij naast liggen (een ander
+ * nummer van 20 s aan het eind van een stuk van drie minuten blijft onder de
+ * 10%, maar is drie vensters achter elkaar), of `maxVerReeks` op een rij meer
+ * dan `ver` naast (oordeelVan). Losse uitschieters (een fill, een break) zijn
+ * geen reeks.
+ * `maxAfwijking` is 0,1 tel, strenger dan de 0,15 van eenGridPast: de modus
+ * kiest zijn plek zelf, dus ±0,15 liet een sprong van 0,3 tel binnen één stuk
+ * toe, en die zat er op Clay's muziek twee keer in (let it all go 14:49-15:24
+ * en 31:18-32:02: een kwart tel, 100 ms op 170). Op de 48 fragmenten bleef
+ * met 0,1 elk ander zeker stuk zoals het was (de wijdste: jungle 7:48-10:40,
+ * 0,14 tel van eerste tot laatste blok).
+ * Geeft { past, n, naast, reeks, verReeks }.
+ */
+export function stukPast(fasen, { minR = 0.15, maxAfwijking = 0.1, maxAandeel = 0.1, maxReeks = 3, ver = 0.25, maxVerReeks = 2 } = {}) {
+  const tel = fasen.filter((f) => f.R >= minR || f.anders);
+  if (!tel.length) return { past: true, n: 0, naast: 0, reeks: 0, verReeks: 0 };
+  const ref = modusFase(tel.filter((f) => !f.anders).map((f) => f.fase), maxAfwijking);
+  return oordeelVan(tel.map((f) => (f.anders ? Infinity : Math.abs(telWrap(f.fase - ref)))),
+    { maxAfwijking, maxAandeel, maxReeks, ver, maxVerReeks });
+}
+
+/**
+ * Hoe hard loopt de muziek van het grid weg, in tel per seconde? Vensters met
+ * een duidelijke puls op het grid (R ≥ `minR`, niet `anders`), op volgorde
+ * uitgevouwen (elke stap hooguit een halve tel), een rechte lijn met R als
+ * gewicht. Een helling b betekent: de muziek is 60·b bpm langzamer dan het
+ * grid. Null onder vier vensters.
+ */
+export function faseHelling(fasen, { minR = 0.15, rest = false } = {}) {
+  const tel = fasen.filter((f) => f.R >= minR && !f.anders).sort((a, b) => a.tijd - b.tijd);
+  if (tel.length < 4) return null;
+  let x = 0, vorige = null;
+  const punten = tel.map((f) => {
+    x = vorige === null ? f.fase : x + telWrap(f.fase - vorige);
+    vorige = f.fase;
+    return { t: f.tijd, x, w: f.R };
+  });
+  let sw = 0, st = 0, sx = 0;
+  for (const p of punten) { sw += p.w; st += p.w * p.t; sx += p.w * p.x; }
+  const tm = st / sw, xm = sx / sw;
+  let boven = 0, onder = 0;
+  for (const p of punten) { boven += p.w * (p.t - tm) * (p.x - xm); onder += p.w * (p.t - tm) ** 2; }
+  if (!(onder > 0)) return null;
+  const b = boven / onder;
+  if (!rest) return b;
+  // Met `rest`: { helling, rest } = ook de grootste afstand van een venster tot de lijn.
+  return { helling: b, rest: Math.max(...punten.map((p) => Math.abs(p.x - xm - b * (p.t - tm)))) };
+}
+
+/**
+ * Waar verspringt de fase? Kandidaat-grenzen voor een stuk dat niet past.
+ *
+ * De vensters met een duidelijke puls (R ≥ `minR`, of `anders`), met hun
+ * fase op het grid van het hele stuk. Voor elke grens tussen twee vensters:
+ * hoeveel vensters links plus rechts NIET in een model passen (een `anders`
+ * venster nooit). Een kant korter dan `minSec` wordt geen stuk maar een rest:
+ * al zijn vensters tellen, maar voor `restKosten` (de helft): een venster in
+ * een rest wordt onzeker, een venster dat naast een zeker grid ligt is fout.
+ * Zonder dat verschil kostte een ander nummer van 15 s aan het eind evenveel
+ * als een grens 18 s te vroeg, en won de vroege. Twee modellen voor een kant:
+ * - VAST: één fase (hetzelfde tempo, een andere plek: een ander nummer op
+ *   hetzelfde tempo);
+ * - LIJN: fase = a + b·t, een eigen tempo tot `tolerantie` ernaast (een
+ *   nummerwissel op bijna hetzelfde tempo: het grid van het hele stuk is een
+ *   compromis en de fase van elke kant loopt weg).
+ * Een venster past als het binnen `maxAfwijking` ligt van de fase waar de
+ * meeste liggen: een rond histogram met vakken van een kwart `maxAfwijking`,
+ * per helling één keer van links naar rechts en één keer terug opgebouwd
+ * (n × hellingen × vakken). De vorige versie rekende per grens en per helling
+ * een modus uit en deed over een segment van twintig minuten 4 s.
+ * Tussen de twee kanten mag een rest liggen (twee grenzen): een versnelling
+ * waarin de muziek een tel wegloopt en daarna weer op het grid valt, past
+ * links noch rechts, en met één grens bleef de helft ervan aan elke kant
+ * hangen. Bij gelijke kosten liever één grens dan een rest.
+ * Goedkoop: geen verfijning per grens, en een lijn past op een kort stuk
+ * bijna altijd (ook over een sprong heen); de aanroeper toetst de kandidaten
+ * met echte grids (analyseerGrid). Bij gelijke kosten de middelste grens van
+ * de eerste reeks: vensters zonder puls rond een sprong tellen niet mee, dus
+ * daar zijn de kosten vlak.
+ * Geeft { kandidaten: [{ links, rechts, kosten, model }] (goedkoopste eerst;
+ * de rest ligt tussen links en rechts, bij één grens is links = rechts),
+ * heel }: `heel` = wat het beste model over alles kost, zonder grens.
+ */
+export function faseSprongen(fasen, van, tot, bpm, { minR = 0.15, maxAfwijking = 0.1, minSec = 20, tolerantie = 0.04,
+  maxHellingen = 401, restKosten = 0.5 } = {}) {
+  const tel = fasen.filter((f) => f.R >= minR || f.anders).sort((a, b) => a.tijd - b.tijd);
+  const n = tel.length;
+  if (n < 2) return { kandidaten: [], heel: 0 };
+  const B = Math.max(8, Math.round(4 / maxAfwijking));   // vakken per tel
+  const w = Math.max(1, Math.round(maxAfwijking * B));    // ± vakken
+  // Hellingen (tel per seconde): een tempo tot `tolerantie` naast het grid, zo
+  // fijn dat de lijn over het hele stuk hooguit maxAfwijking verschuift (en
+  // niet meer dan maxHellingen).
+  const bMax = tolerantie * bpm / 60;
+  const stap = Math.max(2 * bMax / (maxHellingen - 1), maxAfwijking / Math.max(1, tot - van));
+  const hellingen = [0];
+  for (let b = stap; b <= bMax + 1e-12; b += stap) hellingen.push(b, -b);
+  // Het grootste aantal in 2w+1 opeenvolgende vakken (rond).
+  const meeste = (h) => {
+    let s = 0;
+    for (let j = -w; j <= w; j++) s += h[(j + B) % B];
+    let m = s;
+    for (let c = 1; c < B; c++) { s += h[(c + w) % B] - h[(c - w - 1 + B) % B]; if (s > m) m = s; }
+    return m;
+  };
+  // Per model: links[k] = wat tel[0..k) kost, rechts[k] = wat tel[k..n) kost.
+  const lijn = { links: new Float64Array(n + 1).fill(Infinity), rechts: new Float64Array(n + 1).fill(Infinity) };
+  let vast = null;
+  const h = new Float64Array(B);
+  for (const b of hellingen) {
+    const vak = tel.map((f) => (f.anders ? -1 : ((Math.floor((f.fase - b * (f.tijd - van)) * B) % B) + B) % B));
+    const L = new Float64Array(n + 1), R = new Float64Array(n + 1);
+    h.fill(0);
+    for (let k = 1; k <= n; k++) { if (vak[k - 1] >= 0) h[vak[k - 1]]++; L[k] = k - meeste(h); }
+    h.fill(0);
+    for (let k = n - 1; k >= 0; k--) { if (vak[k] >= 0) h[vak[k]]++; R[k] = n - k - meeste(h); }
+    for (let k = 0; k <= n; k++) { lijn.links[k] = Math.min(lijn.links[k], L[k]); lijn.rechts[k] = Math.min(lijn.rechts[k], R[k]); }
+    if (b === 0) vast = { links: L, rechts: R };
+  }
+  const grensTijd = (k) => (tel[k - 1].tijd + tel[k].tijd) / 2;
+  // Twee grenzen k1 ≤ k2: links tel[0..k1), een rest tel[k1..k2), rechts
+  // tel[k2..n). De rest korter dan minSec: wat langer is kan een eigen stuk
+  // zijn, en als rest (de helft per venster) was het te goedkoop (een mix
+  // van twintig minuten: eerst één rest van tien minuten over drie nummers).
+  const kies = ({ links, rechts }, model) => {
+    const A = (k) => (grensTijd(k) - van < minSec ? restKosten * k : links[k]);
+    const C = (k) => (tot - grensTijd(k) < minSec ? restKosten * (n - k) : rechts[k]);
+    let beste = Infinity, gelijk = [];
+    for (let k2 = 1; k2 < n; k2++) {
+      // Bij gelijke stand de k1 het dichtst bij k2: liever één grens dan een rest.
+      let M = Infinity, k1 = k2;
+      for (let k = k2; k >= 1 && grensTijd(k2) - grensTijd(k) < minSec; k--) {
+        const x = A(k) - restKosten * k;
+        if (x < M - 1e-9) { M = x; k1 = k; }
+      }
+      const c = M + restKosten * k2 + C(k2);
+      if (c < beste - 1e-9) { beste = c; gelijk = [[k1, k2]]; } else if (c < beste + 1e-9) gelijk.push([k1, k2]);
+    }
+    // Van de goedkoopste: de kortste rest, en daarvan de middelste van de eerste reeks.
+    const kort = Math.min(...gelijk.map(([a, b]) => b - a));
+    const kandidaat = gelijk.filter(([a, b]) => b - a === kort);
+    let eind = 1;
+    while (eind < kandidaat.length && kandidaat[eind][1] === kandidaat[eind - 1][1] + 1) eind++;
+    const [a, b] = kandidaat[Math.floor((eind - 1) / 2)];
+    return { links: grensTijd(a), rechts: grensTijd(b), kosten: beste, model };
+  };
+  const kandidaten = [kies(vast, 'vast')];
+  const l = kies(lijn, 'lijn');
+  if (l.links !== kandidaten[0].links || l.rechts !== kandidaten[0].rechts) kandidaten.push(l);
+  return { kandidaten: kandidaten.sort((a, b) => a.kosten - b.kosten), heel: lijn.links[n] };
+}
+
+/**
+ * Waar gaat grid L over in grid R? De fasen per venster zien een grens maar
+ * op een venster (4 s) nauwkeurig, en bij een tempowissel is de grens op de
+ * fasen alleen vaag (vlak bij de wissel passen beide). Op de envelope zelf is
+ * hij scherper: de grens t in [van, tot] waarvoor L vóór t en R vanaf t samen
+ * het best op de envelope passen. "Passen" is per frame de envelope (afgetopt
+ * op p95, zoals faseOpGrid) maal de cosinus van de fase op dat grid: een tel
+ * die raak is telt +1, een tel een halve tel naast -1, en een grid dat 40 ms
+ * naast een klap ligt telt nog 0,8 op 150 bpm. Het anker van L en R is dus
+ * het zwaartepunt van de envelope op dat grid (fase 0 van faseOpGrid), niet
+ * per se de klap: de aanroeper verschuift het. Een eerdere versie las de
+ * envelope alleen OP elke tel: een grid dat 40 ms naast lag las dan vlak naast
+ * een smalle piek en vond niets, zodat de grens bij toeval ergens in het
+ * bereik viel (synthetisch 16 s te laat, in het volgende nummer).
+ *
+ * Tussen L en R mag een REST liggen: een stuk waar geen van beide past. De
+ * rest heeft geen grid, dus hij krijgt wat het BESTE grid daar zou halen (de
+ * lengte van de som over `restSec` s rond elk frame, op het tempo van L of R)
+ * maal `restFactor`: cos(0,15 tel). Waar de puls binnen 0,15 tel van L of R
+ * ligt wint dat grid, verder de rest. Zonder R (de andere kant wordt geen
+ * stuk) is alles na de grens rest; zonder L alles ervoor. Met "de rest telt
+ * 0" won het toeval: een nummer 2,7% sneller schuift binnen 15 s een hele tel
+ * door, en de cosinus middelt dan naar nul (de grens kwam 15 s te laat). En
+ * met L en R zonder rest ertussen viel de grens bij een versnelling
+ * (synthetisch: in 16 s een hele tel voor, daarna weer op het grid) ergens in
+ * de versnelling, waar geen van beide past: de helft ervan zat in een zeker
+ * stuk.
+ * Geeft { links, rechts }: L tot links, rest tot rechts, R vanaf rechts; een
+ * rest korter dan `minRest` s wordt één grens (links = rechts). Per frame (~12 ms).
+ */
+export function verfijnGrens(env, envRate, tijdOffset, L, R, van, tot,
+  { restSec = 2, restFactor = Math.cos(2 * Math.PI * 0.15), minRest = 2 } = {}) {
+  const fA = Math.max(0, Math.floor((van - tijdOffset) * envRate));
+  const fB = Math.min(env.length, Math.ceil((tot - tijdOffset) * envRate));
+  const n = fB - fA;
+  if (n < 2 || (!L && !R)) return { links: (van + tot) / 2, rechts: (van + tot) / 2 };
+  const gesorteerd = env.slice(fA, fB).sort();
+  const kap = gesorteerd[Math.floor(0.95 * (gesorteerd.length - 1))] || 1e-9;
+  // Per frame wat een grid haalt: envelope maal de cosinus van zijn fase.
+  const winst = (g) => {
+    const w = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const f = fA + i, e = env[f] < kap ? env[f] : kap;
+      w[i] = e * Math.cos(2 * Math.PI * (f / envRate + tijdOffset - g.anker) * g.bpm / 60);
+    }
+    return w;
+  };
+  // De rest: per frame het aandeel van de lengte van de som rond dat frame.
+  const restWinst = (g) => {
+    const C = new Float64Array(n + 1), S = new Float64Array(n + 1);
+    for (let i = 0; i < n; i++) {
+      const f = fA + i, e = env[f] < kap ? env[f] : kap;
+      const h = 2 * Math.PI * (f / envRate + tijdOffset - g.anker) * g.bpm / 60;
+      C[i + 1] = C[i] + e * Math.cos(h); S[i + 1] = S[i] + e * Math.sin(h);
+    }
+    const half = Math.max(1, Math.round(restSec * envRate / 2));
+    const w = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const lo = Math.max(0, i - half), hi = Math.min(n, i + half + 1);
+      w[i] = restFactor * Math.hypot(C[hi] - C[lo], S[hi] - S[lo]) / (hi - lo);
+    }
+    return w;
+  };
+  const wM = restWinst(L || R);
+  const wL = L ? winst(L) : wM, wR = R ? winst(R) : wM;
+  // Grenzen i ≤ j (vóór frame i, vóór frame j): L op [0, i), rest op [i, j),
+  // R op [j, n). Som = SL(i) - SM(i) + SM(j) - SR(j) + SR(n): per j de beste
+  // i ≤ j bijhouden.
+  let SL = 0, SM = 0, SR = 0, totR = 0;
+  for (let i = 0; i < n; i++) totR += wR[i];
+  let besteI = 0, besteLinks = 0;                  // max over i ≤ j van SL(i) - SM(i)
+  let beste = -Infinity, iB = 0, jB = 0;
+  for (let j = 0; j <= n; j++) {
+    if (SL - SM > besteLinks) { besteLinks = SL - SM; besteI = j; }
+    const som = besteLinks + SM - SR + totR;
+    if (som > beste + 1e-12) { beste = som; iB = besteI; jB = j; }
+    if (j < n) { SL += wL[j]; SM += wM[j]; SR += wR[j]; }
+  }
+  const tijd = (i) => Math.max(van, Math.min(tot, (fA + i) / envRate + tijdOffset));
+  let links = tijd(iB), rechts = tijd(jB);
+  if (L && R && rechts - links < minRest) links = rechts = (links + rechts) / 2;
+  return { links, rechts };
+}
+
 /**
  * Een grid-voorstel voor een hele track: een lijst stukken in tracktijd,
  * [{ van, tot, bpm, anker, zekerheid }], aaneengesloten van 0 tot het einde.
@@ -1134,6 +1511,8 @@ export function eenGridPast(env, envRate, tijdOffset, grid, vensters,
  * - een tweede kans voor brokjes die anders wegvallen (tweedeKans): de
  *   vensters tussen twee brokjes met hetzelfde tempo opnieuw op dat tempo;
  * - segmenteren (geen stuk over een gat), per stuk tempo en fase verfijnen;
+ * - per stuk toetsen of dat ene grid past (stukPast), en zo niet: splitsen
+ *   waar de fase verspringt, of onzeker (zie "Past het grid op elk stuk");
  * - wat tussen de stukken overblijft wordt ook een stuk: het tempo van de
  *   buur, het grid loopt door, maar de zekerheid is wat er gemeten wordt
  *   (bij geen puls: ~0). Onzeker betekent: niet op vertrouwen.
@@ -1228,11 +1607,200 @@ export function analyseerGrid(env, envRate, tijdOffset = 0, opties = {}) {
     }
   }
 
-  const segmenten = segmenteer(curve, { tolerantie, minSec, minZekerheid });
+  /*
+   * Past het grid van elk stuk op zijn vensters (stukPast)? Een stuk dat
+   * meteen past, krijgt precies het grid van vroeger. Zo niet: splitsen waar
+   * de fase verspringt (faseSprongen kiest kandidaten, die worden met echte
+   * grids getoetst, verfijnGrens zet de grens op de envelope), elke kant
+   * opnieuw verfijnen en toetsen, en zo verder (splits, recursief). Een kant
+   * korter dan minSec wordt geen stuk (te weinig om een grid op te zetten)
+   * maar een REST, net als wat tussen twee kanten in geen van beide past: die
+   * blijft een gat. Levert splitsen niets op, dan het grid bijstellen op de
+   * helling (bijgesteld), of het stuk blijft heel en onzeker: een grid dat
+   * nergens past is geen grens die je kunt aanwijzen (rubato, een tempo dat
+   * zwalkt). Rest en onzeker stuk: hun vensters krijgen `pastNiet`, en tellen
+   * hieronder hooguit PAST_NIET mee in de zekerheid. Daarna worden buren uit
+   * hetzelfde segment die samen ook passen weer één stuk.
+   * `opties.diag` (een array) krijgt onderweg wat er getoetst en besloten is,
+   * en aan het eind de vensters: voor de metingen in tools/beatmeting.
+   */
+  const vensterOpties = { minR: 0.15, maxAfwijking: 0.1, maxAandeel: 0.1, maxReeks: 3, ver: 0.25, maxVerReeks: 2 };
+  // Hoe vaak een segment hooguit doormidden gaat (2^6 = 64 delen): een mix van
+  // een uur op één tempo zonder gat is één segment met tientallen nummers.
+  const MAX_DIEPTE = 6;
+  // Een kandidaat-grens wordt beoordeeld op hooguit zoveel seconden aan elke kant.
+  const LOKAAL = 120;
+  const vanDeel = (deel) => curve.filter((c) => c.tijd >= deel.van && c.tijd < deel.tot && c.bpm && c.zekerheid >= minZekerheid);
+  // Een deel verfijnen en toetsen: { van, tot, bpm, r, fasen, oordeel }.
+  const meet = (deel, r) => {
+    const fasen = vensterFasen(env, envRate, tijdOffset, { bpm: r.bpm, anker: r.firstBeat }, vanDeel(deel),
+      { vensterSec, van: deel.van, tot: deel.tot, minR: vensterOpties.minR, tolerantie });
+    return { ...deel, r, fasen, oordeel: stukPast(fasen, vensterOpties) };
+  };
+  /*
+   * Zit het grid alleen net naast het tempo, dan liggen de fasen per venster
+   * op een schuine lijn: let it all go 15:06-15:45 liep met 170,27 (van
+   * verfijnTempoFase) in 36 s een kwart tel weg. Dan één keer bijstellen met
+   * de helling (faseHelling; daar 169,72), met de tel in het midden van het
+   * stuk op zijn plek, en opnieuw toetsen; alleen overnemen als het dan past.
+   * Niet opnieuw verfijnTempoFase: die koos daar binnen ±0,4% weer 170,27.
+   * Maar een sprong van een kwart tel (let it all go 31:40) of een tempowissel
+   * (Sakamoto 37:25) is ook "schuin", en bijgesteld paste die binnen de marge
+   * op een tempo dat nergens klopte. Daarom in toets alleen als ELK venster
+   * binnen de halve marge van de lijn ligt (echt een rechte lijn: Sakamoto
+   * 2:28-2:49, 128,10 -> 127,29), en anders pas als splitsen niets opleverde
+   * (opgegeven in splits).
+   */
+  const bijgesteld = (t, { recht = false } = {}) => {
+    const lijn = faseHelling(t.fasen, { minR: vensterOpties.minR, rest: true });
+    if (!lijn || Math.abs(lijn.helling) * (t.tot - t.van) < vensterOpties.maxAfwijking) return null;
+    if (recht && lijn.rest > vensterOpties.maxAfwijking / 2) return null;
+    const { bpm, firstBeat } = t.r;
+    const nieuwBpm = bpm - 60 * lijn.helling;
+    if (Math.abs(Math.log(nieuwBpm / bpm)) > tolerantie) return null;
+    const p = 60 / bpm, midden = (t.van + t.tot) / 2;
+    const x = meet(t, { bpm: nieuwBpm, firstBeat: firstBeat + Math.round((midden - firstBeat) / p) * p });
+    return x.oordeel.past ? x : null;
+  };
+  // Een stuk dat meteen past blijft precies zoals het was (hetzelfde grid als vroeger).
+  const toets = (deel) => {
+    const eerste = meet(deel, gridVan(deel));
+    if (eerste.oordeel.past) return eerste;
+    const x = bijgesteld(eerste, { recht: true });
+    if (x && Array.isArray(opties.diag)) opties.diag.push({ bijgesteld: { van: deel.van, tot: deel.tot, bpm: x.r.bpm, oud: eerste.r.bpm, recht: true } });
+    return x || eerste;
+  };
+  // Het tempo van een kant: de mediaan van zijn vensters rond het tempo van het hele deel.
+  const tempoVan = (kant, bpm) => {
+    const bpms = vanDeel(kant).map((c) => c.bpm).filter((b) => Math.abs(Math.log(b / bpm)) <= tolerantie);
+    return bpms.length ? mediaanVan(bpms) : bpm;
+  };
+  const splits = (t, diepte) => {
+    const heel = [{ van: t.van, tot: t.tot, bpm: t.bpm, r: t.r, pastNiet: !t.oordeel.past }];
+    if (Array.isArray(opties.diag)) opties.diag.push({ deel: { van: t.van, tot: t.tot }, diepte, oordeel: t.oordeel, bpm: t.r.bpm, anker: t.r.firstBeat, fasen: t.fasen });
+    if (t.oordeel.past) return heel;
+    // Niet (verder) te splitsen: het grid bijstellen (bijgesteld), of heel en onzeker.
+    const opgegeven = () => {
+      const x = bijgesteld(t);
+      if (x && Array.isArray(opties.diag)) opties.diag.push({ bijgesteld: { van: t.van, tot: t.tot, bpm: x.r.bpm, oud: t.r.bpm } });
+      return x ? [{ van: t.van, tot: t.tot, bpm: t.bpm, r: x.r, pastNiet: false }] : heel;
+    };
+    if (diepte >= MAX_DIEPTE) return opgegeven();
+    // Elke kandidaat-grens met echte grids per kant; de grens die de meeste
+    // vensters in een passend stuk brengt wint, bij gelijke stand de goedkoopste.
+    // Passen bij de goedkoopste beide kanten al, dan hoeft de tweede niet.
+    // Om een grens te KIEZEN telt alleen wat er vlak bij gebeurt: elke kant
+    // wordt hooguit `LOKAAL` s vanaf de grens verfijnd en getoetst (proef).
+    // Een segment van twintig minuten met zes nummers werd anders bij elke
+    // kandidaat helemaal verfijnd; de gekozen kanten worden hieronder alsnog
+    // helemaal verfijnd.
+    const { kandidaten, heel: zonderGrens } = faseSprongen(t.fasen, t.van, t.tot, t.r.bpm,
+      { minR: vensterOpties.minR, maxAfwijking: vensterOpties.maxAfwijking, minSec, tolerantie });
+    if (Array.isArray(opties.diag)) opties.diag.push({ kand: kandidaten, heel: zonderGrens });
+    let keus = null;
+    for (const k of kandidaten) {
+      const kanten = [{ van: t.van, tot: k.links }, { van: k.rechts, tot: t.tot }].map((kant, i) => {
+        if (kant.tot - kant.van < minSec) return { ...kant, rest: true };
+        // Links het stuk vlak vóór de grens, rechts het stuk vlak erna.
+        const deel = i === 0 ? { van: Math.max(kant.van, kant.tot - LOKAAL), tot: kant.tot }
+          : { van: kant.van, tot: Math.min(kant.tot, kant.van + LOKAAL) };
+        const proef = toets({ ...deel, bpm: tempoVan(deel, t.bpm) });
+        return { ...kant, proef, heel: deel.van === kant.van && deel.tot === kant.tot };
+      });
+      const dekking = kanten.reduce((s, x) => s + (!x.rest && x.proef.oordeel.past ? x.proef.oordeel.n : 0), 0);
+      if (!keus || dekking > keus.dekking || (dekking === keus.dekking && k.kosten < keus.kosten)) keus = { kanten, dekking, kosten: k.kosten };
+      if (kanten.every((x) => !x.rest && x.proef.oordeel.past)) break;
+    }
+    // Past geen van beide kanten, dan alleen verder splitsen als de grens echt
+    // iets uitlegt (minstens twee vensters minder naast dan zonder grens): drie
+    // nummers op hetzelfde tempo hebben twee grenzen, en de eerste laat aan
+    // beide kanten nog een sprong over. Anders is het geen sprong maar een
+    // grid dat nergens past (rubato, een tempo dat zwalkt): heel en onzeker.
+    if (!keus || (keus.dekking === 0 && keus.kosten > zonderGrens - 2)) return opgegeven();
+    // De grens op de envelope scherp zetten (verfijnGrens), binnen 16 s van
+    // waar de vensters hem legden. Daarna BEIDE kanten over hun hele lengte
+    // opnieuw verfijnen en toetsen: hun proef hoorde bij de oude grens (een
+    // kant die "paste" met 4 s van het volgende nummer erbij, past op zijn
+    // nieuwe plek misschien niet meer, of andersom). Alleen een proef over de
+    // hele kant, met een grens die bleef staan, hoeft niet opnieuw.
+    const [pa, pb] = keus.kanten;
+    // Het grid van een kant, met het anker verschoven naar waar de envelope
+    // er zelf op valt: het anker ligt op de klap, maar het zwaartepunt van de
+    // envelope per tel ligt daar vaak een vast stuk naast (let it all go
+    // 31:20: 0,2 tel), en verfijnGrens vergelijkt zwaartepunten.
+    const gridVanKant = (x) => {
+      if (x.rest) return null;
+      const { bpm, firstBeat } = x.proef.r;
+      const f = faseOpGrid(env, envRate, tijdOffset, bpm, firstBeat, x.proef.van, x.proef.tot);
+      return { bpm, anker: firstBeat + (f ? f.fase : 0) * 60 / bpm };
+    };
+    const lo = Math.max(pa.van, pa.tot - 16), hi = Math.min(pb.tot, pb.van + 16);
+    const L = gridVanKant(pa), R = gridVanKant(pb);
+    // L tot `links`, een rest (waar geen van beide past) tot `rechts`, R vanaf daar.
+    let { links, rechts } = verfijnGrens(env, envRate, tijdOffset, L, R, lo, hi);
+    if (!L) links = rechts;
+    if (!R) rechts = links;
+    // Een kant die daardoor korter wordt dan minSec is een rest; worden het er
+    // twee, dan blijven de grenzen waar ze waren (anders verdwijnt alles).
+    const kort = (x, v, t) => x.rest || t - v < minSec;
+    if (kort(pa, pa.van, links) && kort(pb, rechts, pb.tot)) { links = pa.tot; rechts = pb.van; }
+    if (Array.isArray(opties.diag)) opties.diag.push({ grens: { voor: pa.tot, voorR: pb.van, links, rechts, L, R, van: lo, tot: hi } });
+    const bleef = Math.abs(links - pa.tot) <= 1e-9 && Math.abs(rechts - pb.van) <= 1e-9;
+    const definitief = (x, van, tot) => {
+      if (kort(x, van, tot)) return { van, tot, rest: true };
+      if (bleef && x.heel) return x.proef;
+      return toets({ van, tot, bpm: tempoVan({ van, tot }, t.bpm) });
+    };
+    // Een rest in het midden die zelf lang genoeg is, kan een eigen stuk zijn
+    // (een eigen tempo tussen twee nummers: Sakamoto 36:35-36:59 op 123).
+    const midden = rechts - links >= minSec ? toets({ van: links, tot: rechts, bpm: tempoVan({ van: links, tot: rechts }, t.bpm) })
+      : { van: links, tot: rechts, rest: true };
+    const drie = [definitief(pa, pa.van, links), midden, definitief(pb, rechts, pb.tot)].filter((x) => x.tot - x.van >= 1);
+    // Bleef er maar één stuk over dat bijna het hele stuk is (de grens schoof
+    // tot vlak bij de rand), dan is dat het stuk zelf nog eens: klaar.
+    const echte = drie.filter((x) => !x.rest);
+    if (echte.length === 1 && echte[0].tot - echte[0].van > t.tot - t.van - stapSec) return opgegeven();
+    const uit = [];
+    for (const deel of drie) uit.push(...(deel.rest ? [deel] : splits(deel, diepte + 1)));
+    return uit;
+  };
+  const delen = [];
+  segmenteer(curve, { tolerantie, minSec, minZekerheid }).forEach((sg, s) => {
+    for (const deel of splits(toets(sg), 0)) delen.push({ ...deel, segment: s });
+  });
+  // Twee buurdelen uit hetzelfde segment die elk passen, en samen op één grid
+  // ook: weer één stuk. Splitsen kiest per stap één grens, en die ligt niet
+  // altijd op de echte (synthetisch, drie nummers op 150: het middelste in
+  // 100-176 en 176-200). Alleen wat hier gesplitst werd: segmenteer houdt
+  // stukken met een verschillende zekerheid soms bewust apart (jungle-mix
+  // 4:16, 0,56 naast 0,73), en samenvoegen zou het zwakke deel zeker maken.
+  // Eerst goedkoop: liggen de twee grids bij de grens minder dan een kwart tel
+  // uit elkaar, op minder dan 0,5% tempo? Pas dan het hele stuk verfijnen.
+  for (let i = 0; i + 1 < delen.length; i++) {
+    const a = delen[i], b = delen[i + 1];
+    if (a.segment !== b.segment) continue;
+    if (a.rest || b.rest || a.pastNiet || b.pastNiet || Math.abs(a.tot - b.van) > 1e-6) continue;
+    if (Math.abs(Math.log(a.r.bpm / b.r.bpm)) > 0.005) continue;
+    const pa = 60 / a.r.bpm, pb = 60 / b.r.bpm;
+    const telA = a.r.firstBeat + Math.round((b.van - a.r.firstBeat) / pa) * pa;
+    const telB = b.r.firstBeat + Math.round((b.van - b.r.firstBeat) / pb) * pb;
+    if (Math.abs(telWrap((telB - telA) / pa)) > 0.25) continue;
+    const samen = toets({ van: a.van, tot: b.tot, bpm: tempoVan({ van: a.van, tot: b.tot }, a.r.bpm) });
+    if (Array.isArray(opties.diag)) opties.diag.push({ samen: { van: a.van, tot: b.tot, past: samen.oordeel.past } });
+    if (!samen.oordeel.past) continue;
+    delen.splice(i, 2, { van: a.van, tot: b.tot, bpm: samen.bpm, r: samen.r, pastNiet: false, segment: a.segment });
+    i--;
+  }
+  for (const deel of delen) {
+    if (deel.rest || deel.pastNiet) for (const c of curve) if (c.tijd >= deel.van && c.tijd < deel.tot) c.pastNiet = true;
+  }
+
   const stukken = [];
-  for (const sg of segmenten) {
+  let restErvoor = false;
+  for (const sg of delen) {
+    if (sg.rest) { restErvoor = true; if (stukken.length) stukken.at(-1).restNa = true; continue; }
     const midden = (sg.van + sg.tot) / 2;
-    const r = gridVan(sg);
+    const r = sg.r;
     const p = 60 / r.bpm;
     let anker = r.firstBeat + Math.ceil((sg.van - r.firstBeat) / p - 1e-9) * p;
     if (pcm) {
@@ -1242,7 +1810,8 @@ export function analyseerGrid(env, envRate, tijdOffset = 0, opties = {}) {
       const f = fijneFase(pcm.subarray(a, b), sampleRate, r.bpm, telMidden, { t0: a / sampleRate });
       if (f !== null && Math.abs(f - telMidden) < 0.03) anker += f - telMidden;
     }
-    stukken.push({ van: sg.van, tot: sg.tot, bpm: r.bpm, anker });
+    stukken.push({ van: sg.van, tot: sg.tot, bpm: r.bpm, anker, restVoor: restErvoor });
+    restErvoor = false;
   }
   if (!stukken.length) {
     // Nergens een puls: één onzeker stuk over alles.
@@ -1254,13 +1823,16 @@ export function analyseerGrid(env, envRate, tijdOffset = 0, opties = {}) {
    * Aaneensluiten. Een gat korter dan een venster is geen gat maar de rand
    * van wat de curve kan zien (het eerste venster heeft zijn midden pas op
    * 6 s): de buren schuiven er tegenaan. Langere gaten worden stukken met
-   * het grid van de buur.
+   * het grid van de buur. Behalve waar een REST lag (hierboven afgesplitst
+   * omdat het grid er niet past): die blijft een gat, hoe kort ook. Anders
+   * schoof de buur er weer overheen (synthetisch: een versnelling van 10 s
+   * tussen twee stukken, weer half in elk zeker stuk).
    */
   const heel = [];
   for (const sk of stukken) {
     const vorige = heel.at(-1);
     const t = vorige ? vorige.tot : 0;
-    if (sk.van - t < vensterSec) {
+    if (sk.van - t < vensterSec && !(sk.restVoor && sk.van - t > 1e-9)) {
       // Klein gat of overlap: de grens in het midden; aan het begin: vanaf 0.
       if (vorige) { const m = Math.max(vorige.van, (t + sk.van) / 2); vorige.tot = m; sk.van = m; } else sk.van = 0;
     } else {
@@ -1270,14 +1842,17 @@ export function analyseerGrid(env, envRate, tijdOffset = 0, opties = {}) {
     heel.push(sk);
   }
   const laatste = heel.at(-1);
-  if (duur - laatste.tot < vensterSec) laatste.tot = duur;
+  if (duur - laatste.tot < vensterSec && !(laatste.restNa && duur - laatste.tot > 1e-9)) laatste.tot = duur;
   else heel.push({ van: laatste.tot, tot: duur, bpm: laatste.bpm, anker: laatste.anker, gat: true });
 
+  if (Array.isArray(opties.diag)) opties.diag.push(...curve);
   // Zekerheid per stuk: het gemiddelde van de vensters waarvan het midden erin
-  // valt. Een gat heeft alleen vensters onder de nul, en dus ~0.
+  // valt. Een gat heeft alleen vensters onder de nul, en dus ~0. Een venster
+  // waar het grid niet past (pastNiet) telt hooguit PAST_NIET: puls, geen grid.
   return heel.map((sk) => {
     const binnen = curve.filter((c) => c.tijd >= sk.van && c.tijd < sk.tot);
-    const zekerheid = binnen.length ? binnen.reduce((a, c) => a + c.zekerheid, 0) / binnen.length : 0;
+    const z = (c) => (c.pastNiet ? Math.min(c.zekerheid, PAST_NIET) : c.zekerheid);
+    const zekerheid = binnen.length ? binnen.reduce((a, c) => a + z(c), 0) / binnen.length : 0;
     const p = sk.bpm ? 60 / sk.bpm : null;
     // Anker = eerste tel in het stuk (voor een gat: het grid van de buur doorgetrokken).
     const anker = p && sk.anker !== null ? sk.anker + Math.ceil((sk.van - sk.anker) / p - 1e-9) * p : null;
