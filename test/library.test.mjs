@@ -264,6 +264,15 @@ lib.bewaarPeaks('abc123', { bestand: 'media/abc123/peaks.bin', buckets: 8192, pe
 ok('peaks onthouden', lib.peaks('abc123').buckets === 8192);
 lib.bewaarPeaks('abc123', { bestand: 'media/abc123/peaks.bin', buckets: 4096, perBucket: 512 });
 ok('peaks overschrijven in plaats van verdubbelen', lib.peaks('abc123').buckets === 4096);
+// De ingest-wachtrij zoekt "staat al in de library" op de link (trackMetUrl);
+// dat nummer laadt de strook meteen. Het moet dus dezelfde vorm hebben als
+// track(): met peaks (anders geen golfvorm) en het aantal racks.
+{
+  const opUrl = lib.trackMetUrl(lib.track('abc123').url);
+  ok(`trackMetUrl geeft hetzelfde nummer als track(), met peaks en racks (${opUrl?.peaks?.buckets}, ${opUrl?.racks})`,
+    JSON.stringify(opUrl) === JSON.stringify(lib.track('abc123')) && opUrl.peaks?.buckets === 4096 && opUrl.racks > 0);
+  ok('trackMetUrl met een onbekende link: null', lib.trackMetUrl('https://example.com/niets') === null);
+}
 
 // ---- instellingen ---------------------------------------------------------
 

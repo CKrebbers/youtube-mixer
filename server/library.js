@@ -479,7 +479,10 @@ export class Library {
 
   /** Het nummer met precies deze link (url is UNIQUE), of null. Voor "staat al in de library". */
   trackMetUrl(url) {
-    const r = this.db.prepare('SELECT * FROM tracks WHERE url = ?').get(String(url ?? ''));
+    // Dezelfde rij als track() (RIJ: racks en peaks erbij): met `SELECT *`
+    // kwam een nummer dat al binnen was zonder peaks terug, en laadde het
+    // uit de ingest-strook zonder golfvorm.
+    const r = this._q(`${RIJ} WHERE t.url = ?`).get(String(url ?? ''));
     return r ? this._verrijk(r) : null;
   }
 
