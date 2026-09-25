@@ -163,6 +163,16 @@ console.log('uitvoer');
   // hier de nieuwe hash; zonder die bedoeling is een andere hash een fout.
   ok(`acht decks, 3000 blokken met overgangen, naden, een gat en het einde: hash ${hash} = die van vóór de ombouw`, hash === '9dfaeb73');
   ok(`trackeinde gemeld (${eindes}x), één keer per segment`, eindes > 0);
+
+  // Het kladblok ontstaat bij het eerste blok. Een eerste blok van 0 frames
+  // (een vers exemplaar van de module, dus nog geen klad) mag niet vallen.
+  const vers = await import('../src/engine/stream-kern.js?leeg');
+  let r = 'fout';
+  try {
+    r = vers.renderBlok({ seg: { T: 0, P: 1, R: 1, loop: null, speelt: true }, paginas, uit: [new Float32Array(0), new Float32Array(0)],
+      frames: 0, t0: 0, ctxRate: SR, trackRate: SR, duur: DUUR });
+  } catch (e) { r = e.message; }
+  ok('een eerste blok van 0 frames geeft niets en valt niet', r === null);
 }
 
 // ---- 2. afval ------------------------------------------------------------------

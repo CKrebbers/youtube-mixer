@@ -237,7 +237,7 @@ const klad = {
 
 /** Eén keer (de worklet: 128 frames), of als een blok groter is dan ooit. */
 function groei(frames) {
-  if (frames <= klad.n) return;
+  if (klad.nu && frames <= klad.n) return;
   klad.n = frames;
   klad.nu = segKlad(frames);
   klad.oud = segKlad(frames);
