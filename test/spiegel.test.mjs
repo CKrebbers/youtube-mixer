@@ -54,7 +54,44 @@ lagen.zet('grid', 'hotcues');
 ok('scene 2 kiest het mapje loops, in cyaan', lees('note:0:83')?.action === 'layer.grid.loops' && lees('note:0:83').modus === 'loops');
 ok('shift zelf doet niets op de bus', lees('note:0:98') === null);
 ok('APC-shift ingedrukt: de gewone action wordt de shift-variant', lees('note:0:52', 1, true)?.action === 'track.1.loop.exit');
-ok('lege plek geeft null', lees('note:0:87') === null);
+ok('lege plek geeft null (Bank: vrij voor keylock)', lees('note:0:103') === null);
+
+// ---- de indeling "Voorstel A" (Clay 25 sep): klank en rechts ---------------
+
+ok('Pan / Sends / User = loop in / out / reloop van de focus',
+  lees('note:0:87', 3)?.action === 'track.3.loop.in' && lees('note:0:88', 3)?.action === 'track.3.loop.out'
+  && lees('note:0:89', 3)?.action === 'track.3.loop.reloop' && lees('note:0:87', 3).kort === 'loop in');
+ok('Bank ◀ ▶ = beatjump van de focus, met shift de lengte',
+  lees('note:0:60', 5)?.action === 'track.5.beatjump.back' && lees('note:0:61', 5)?.actionShift === 'track.5.beatjump.double');
+ok('shift + Bank ▶: het lampje is omgekeerd (brandt zolang verdubbelen kan), zoals de LED',
+  lees('note:0:61', 5, true)?.lampOm === true && lees('note:0:61', 5)?.lampOm === false);
+ok('Lock = quantize, Stop All = rem van de focus',
+  lees('note:0:63', 2)?.action === 'transport.quantize' && lees('note:0:81', 2)?.action === 'track.2.brake' && lees('note:0:81', 2).kort === 'rem');
+ok('2×2: shift + nummer = op de maat starten', lees('note:4:50')?.actionShift === 'track.5.play.quant');
+ok('scene 5 met shift = modus klank, in de kleur van klank',
+  lees('note:0:86', 1, true)?.action === 'layer.grid.klank' && lees('note:0:86', 1, true).modus === 'klank' && P.MODUS_KLEUR.klank === 'magenta');
+lagen.zet('grid', 'klank');
+ok('modus klank: pad linksboven = kill hoog track 1 (vasthouden), shift+klik = aan/uit',
+  lees('note:0:32')?.action === 'track.1.kill.high.hold' && lees('note:0:32').actionShift === 'track.1.kill.high' && lees('note:0:32').modus === 'klank');
+ok('modus klank: kolom 5 rij 4 = rem track 5, rij 5 = op de maat',
+  lees(`note:0:${apc.gridNote(5, 4)}`)?.action === 'track.5.brake' && lees(`note:0:${apc.gridNote(5, 5)}`)?.action === 'track.5.play.quant');
+ok('modus klank: scene 5 blijft loop weg, maar zijn lampje leest "klank open" (zoals de LED)',
+  lees('note:0:86', 4)?.action === 'track.4.loop.exit' && lees('note:0:86', 4).lamp === 'layer.grid.klank' && lees('note:0:86', 4).modus === 'klank');
+ok('een gewone knop leest zijn eigen action als lampje', lees('note:0:32').lamp === 'track.1.kill.high.hold');
+lagen.zet('grid', 'hotcues');
+
+// De mapje-balk: bij een wissel naar een grid-modus wat elke rij doet.
+{
+  const { gridRijen } = await import('../src/ui/mapje-balk.js');
+  const r = gridRijen([...m.rules.values()], 'grid.klank');
+  ok('mapje-balk klank: vijf rijen, rij 1 kill hoog vasthouden (shift: aan/uit), rij 4 rem, rij 5 op de maat',
+    r.length === 5 && r[0].gewoon === 'track.1.kill.high.hold' && r[0].shift === 'track.1.kill.high'
+    && r[3].gewoon === 'track.1.brake' && !r[3].shift && r[4].gewoon === 'track.1.play.quant');
+  ok('mapje-balk hotcues: ook per rij (hotcue 1–4 met wissen, loop)',
+    gridRijen([...m.rules.values()], 'grid.hotcues').map((x) => x.gewoon).join() === 'track.1.hotcue.1,track.1.hotcue.2,track.1.hotcue.3,track.1.hotcue.4,track.1.loop.toggle');
+  ok('mapje-balk sampler/video: per kolom anders, dus geen rij-uitleg', gridRijen([...m.rules.values()], 'grid.sampler').length === 0
+    && gridRijen([...m.rules.values()], 'grid.video').length === 0);
+}
 
 ok('korte tekst zonder het kolomnummer', P.kortInKolom('3·cue 1') === 'cue 1' && P.kortInKolom('play') === 'play');
 ok('licht: vol, half, uit, onbekend',

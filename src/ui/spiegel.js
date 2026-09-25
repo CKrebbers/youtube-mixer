@@ -292,9 +292,11 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
         continue;
       }
       // On/Off brandt als het effect AAN staat (zoals de LED op de APC), terwijl
-      // de read van fx.bypass 1 = uit is.
-      const ruw = r ? readAction(r.action) : null;
-      const licht = r ? lichtVan(/\.fx\.bypass$/.test(r.action) && ruw != null ? 1 - ruw : ruw) : null;
+      // de read van fx.bypass 1 = uit is. `lamp`/`lampOm`: led.lees en
+      // led.invert uit de regel, net als de LED-laag.
+      const ruw = r ? readAction(r.lamp) : null;
+      const om = r && (r.lampOm || /\.fx\.bypass$/.test(r.action));
+      const licht = r ? lichtVan(om && ruw != null ? 1 - ruw : ruw) : null;
       const want = licht ?? '';
       if (el.dataset.licht !== want) el.dataset.licht = want;
     }

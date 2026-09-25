@@ -166,5 +166,30 @@ ok('inclusief de geleerde modus', m2.rules.get('cc:0:20').mode === 'relative-2c'
   ok('een verschil zonder standaard eronder wordt geweigerd, niet als 3 regels geladen', !!fout);
 }
 
+// ---- leren in de modus klank (Clay 25 sep, "Voorstel A") ----------------------
+// Koppelen komt in het mapje dat open staat: met klank open wordt een pad een
+// klank-regel, de andere modi blijven zoals ze waren; en het verschil met de
+// standaard is precies die ene regel.
+{
+  const { readFileSync } = await import('node:fs');
+  const { Lagen } = await import('../src/control/lagen.js');
+  const std = JSON.parse(readFileSync(new URL('../mappings/apc40mk2.json', import.meta.url), 'utf8'));
+  const lg = new Lagen();
+  const mk = new Mapping({ read: () => 0, invoke: () => {}, vars: () => ({ focus: 1 }), lagen: () => lg.actief() });
+  mk.laadStandaard(std);
+  lg.zet('grid', 'klank');
+  const leerK = new MidiLearn({ mapping: mk, device: apc, now: () => klok });
+  klok += 1000;
+  leerK.start('track.1.kill.mid');           // rij 1 wordt de schakelaar in plaats van de drukknop
+  leerK.feed(note(apc.gridNote(1, 1), true));
+  const r = mk.rules.get('note:0:32@grid.klank');
+  ok('leren met klank open: de pad krijgt een klank-regel', r?.action === 'track.1.kill.mid' && r.laag === 'grid.klank');
+  ok('de andere modi op die pad blijven staan', mk.rules.get('note:0:32@grid.hotcues')?.action === 'track.1.hotcue.1'
+    && mk.rules.get('note:0:32#shift@grid.klank')?.action === 'track.1.kill.high');
+  const v = mk.verschil();
+  ok('het verschil met de standaard is die ene regel', v.rules.length === 1 && v.rules[0].in === 'note:0:32' && v.rules[0].laag === 'grid.klank' && v.removed.length === 0);
+  lg.zet('grid', 'hotcues');
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

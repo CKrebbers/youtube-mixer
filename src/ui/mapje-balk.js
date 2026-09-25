@@ -1,6 +1,7 @@
 import { resolveTarget } from '../control/mapping.js';
 import { metaOf } from '../control/actions.js';
 import { GROEPEN, LAAGNAAM } from '../control/lagen.js';
+import apc from '../control/devices/apc40mk2.js';
 import { esc } from './dom.js';
 
 /**
@@ -18,6 +19,29 @@ const DUUR = 2500;
 
 /** "Track 3 FX plek 2" -> "FX plek 2": het tracknummer staat al in de kop. */
 const kort = (label) => String(label ?? '').replace(/^Track \d+ /, '');
+
+/**
+ * Een grid-mapje per RIJ: wat de vijf rijen doen, met shift erbij. Alleen als
+ * elke kolom in die rij hetzelfde doet voor zijn eigen track (kolom 3 =
+ * `track.3.…`), zoals hotcues, loops en klank; anders (sampler, video) is er
+ * geen rij-uitleg. Bij klank: "1 kill hoog zolang je drukt · shift: aan/uit".
+ */
+export function gridRijen(regels, id) {
+  const per = new Map(regels.filter((r) => r.laag === id).map((r) => [`${r.in}${r.shift ? '#shift' : ''}`, r]));
+  const rest = (r, kolom) => r && new RegExp(`^track\\.${kolom}\\.(.+)$`).exec(r.action)?.[1];
+  const zelfde = (rij, sh) => {
+    const lijst = [1, 2, 3, 4, 5, 6, 7, 8].map((k) => rest(per.get(`note:0:${apc.gridNote(k, rij)}${sh}`), k));
+    return lijst[0] && lijst.every((x) => x === lijst[0]) ? lijst[0] : null;
+  };
+  const uit = [];
+  for (let rij = 1; rij <= 5; rij++) {
+    const gewoon = zelfde(rij, '');
+    if (!gewoon) continue;
+    const metShift = zelfde(rij, '#shift');
+    uit.push({ rij, gewoon: `track.1.${gewoon}`, shift: metShift ? `track.1.${metShift}` : null });
+  }
+  return uit;
+}
 
 export function opzetMapjeBalk({ lagen, mapping, vars }) {
   const el = document.createElement('div');
@@ -75,6 +99,11 @@ export function opzetMapjeBalk({ lagen, mapping, vars }) {
       knoppen = regels.filter((r) => r.in.startsWith('cc:'))
         .map((r) => `<span><b>${Number(r.in.split(':')[2]) - 15}</b> ${naam(r)}</span>`).join('')
         + regels.filter((r) => !r.in.startsWith('cc:')).map((r) => `<span>${naam(r)}</span>`).join('');
+    } else if (groep === 'grid') {
+      // Per rij, voor elke kolom (= track) gelijk. Rij 1 is de bovenste.
+      const label = (a) => esc(kort(metaOf(a)?.label ?? a));
+      knoppen = gridRijen([...mapping.rules.values()], id)
+        .map((x) => `<span><b>${x.rij}</b> ${label(x.gewoon)}${x.shift ? ` <i>· shift: ${label(x.shift)}</i>` : ''}</span>`).join('');
     } else if (groep === 'top' && regels[0]) {
       knoppen = `<span>${esc(kort(metaOf(resolveTarget(regels[0].action, vars()))?.label ?? ''))} — per track, knop 1–8</span>`;
     }

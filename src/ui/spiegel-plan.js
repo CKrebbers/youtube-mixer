@@ -83,7 +83,7 @@ export const ALLE = [...[1, 2, 3, 4, 5, 6, 7, 8].flatMap(kolomControls), ...FOCU
 // ---- wat een control nu doet -----------------------------------------------
 
 /** Kleur per grid-mapje, zoals de LED's op de APC (docs/APC40.md). */
-export const MODUS_KLEUR = { hotcues: 'geel', loops: 'cyaan', sampler: 'violet', video: 'blauw' };
+export const MODUS_KLEUR = { hotcues: 'geel', loops: 'cyaan', sampler: 'violet', video: 'blauw', klank: 'magenta' };
 
 /** De naam van de fysieke control, uit het device-profiel. */
 export const naamVan = (sig) => apc.label(sig) ?? sig;
@@ -96,9 +96,13 @@ export const naamVan = (sig) => apc.label(sig) ?? sig;
  * @param shift    staat shift nu ingedrukt (de APC-shift, niet het toetsenbord)
  * @param vars     { focus: <tracknummer> } voor `{focus}` in een action
  * @returns null als hij niets doet, anders
- *   { action, actionShift, regel, modus, kort, lang, titel }
+ *   { action, actionShift, regel, modus, kort, lang, titel, lamp, lampOm }
  *   `actionShift` is wat shift+klik op het scherm doet (null als dat hetzelfde is).
  *   `modus` is het grid-mapje waar deze regel bij hoort (hotcues/loops/…), of null.
+ *   `lamp` is de action waarvan het lampje de stand toont (`led.lees` in de
+ *   regel, anders de action zelf), `lampOm` = omgekeerd (`led.invert`): zoals
+ *   de LED op de APC. Scene 5 blijft in de modus klank "loop weg", maar zijn
+ *   lampje zegt "klank open".
  */
 export function leesControl(mapping, sig, { shift = false, vars = {} } = {}) {
   const regel = mapping.kies(sig, { shift });
@@ -110,7 +114,9 @@ export function leesControl(mapping, sig, { shift = false, vars = {} } = {}) {
   const modus = modusVan(regel, action);
   const titel = `APC: ${naamVan(sig)} — ${b.lang}`
     + (actionShift && actionShift !== action ? ` · met shift: ${beschrijf(actionShift).lang}` : '');
-  return { action, actionShift: actionShift !== action ? actionShift : null, regel, modus, kort: b.kort, lang: b.lang, titel };
+  const lamp = regel.led?.lees ? resolveTarget(regel.led.lees, vars) : action;
+  return { action, actionShift: actionShift !== action ? actionShift : null, regel, modus, kort: b.kort, lang: b.lang, titel,
+    lamp, lampOm: !!regel.led?.invert };
 }
 
 /**
