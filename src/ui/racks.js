@@ -15,8 +15,12 @@ import { RackEditor } from './rack-editor.js';
  *
  * Een rack hoort bij het NUMMER, niet bij het deck. Laad je hetzelfde nummer
  * morgen op een ander deck, dan komen zijn racks mee.
+ *
+ * `naRack(deckId)` hoort elke rackwissel die hier gebeurt, meteen: het
+ * handelingenlog (logboek.js) legt hem dan op het juiste moment vast. Wat de
+ * rack-editor verandert ziet het log zelf, binnen 100 ms.
  */
-export function opzetRacks({ engine, staat }) {
+export function opzetRacks({ engine, staat, naRack = () => {} }) {
   const { deckTrack } = staat;
   const rackCache = Object.fromEntries(DECK_IDS.map((id) => [id, []]));
 
@@ -52,6 +56,7 @@ export function opzetRacks({ engine, staat }) {
       // houden: dan schreef "bewaar" daar overheen. Terug naar het standaardeffect.
       fx.standaard();
     }
+    naRack(deckId);
     vulRackKiezer(deckId);
   }
 
@@ -136,6 +141,7 @@ export function opzetRacks({ engine, staat }) {
       if (kiezer.value.startsWith('s:')) {
         const sjabloon = sjablonen[Number(kiezer.value.slice(2))];
         if (sjabloon) engine.deck(id).fx.zetRack(sjabloon, { herkomst: kiezer.value }).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
+        naRack(id);
         kiezer.blur();
         return;
       }
@@ -194,13 +200,14 @@ export function opzetRacks({ engine, staat }) {
   function zetRackVan(id, rack) {
     rackCache[id].forEach((x) => { x.actief = x === rack; });
     engine.deck(id).fx.zetRack(rack.data, { herkomst: rack.id }).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
+    naRack(id);
     fetch(`/api/library/${deckTrack[id]}/racks/${rack.id}`, { method: 'POST' }).catch(() => {});
   }
 
   // Door de racks bladeren (APC): eerst die van het nummer, dan de kant-en-klare.
   function rackStap(id, stap) {
     const lijst = [...rackCache[id].map((r) => ({ herkomst: r.id, zet: () => zetRackVan(id, r) })),
-      ...sjablonen.map((r, i) => ({ herkomst: `s:${i}`, zet: () => engine.deck(id).fx.zetRack(r, { herkomst: `s:${i}` }) }))];
+      ...sjablonen.map((r, i) => ({ herkomst: `s:${i}`, zet: () => { engine.deck(id).fx.zetRack(r, { herkomst: `s:${i}` }); naRack(id); } }))];
     if (!lijst.length) return;
     const nu = lijst.findIndex((x) => x.herkomst === engine.deck(id).fx.herkomst);
     lijst[(nu + stap + lijst.length) % lijst.length].zet();

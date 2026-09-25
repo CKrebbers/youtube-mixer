@@ -19,6 +19,8 @@
         <option value="audio">audio</option>
         <option value="video">audio + video</option>
       </select>
+      <button id="log-btn" class="ghost log-knop" title="handelingenlog: wat je doet, met de tijd, om de set terug te spelen (loopt vanzelf mee met een opname)">○ log</button>
+      <button id="terug-btn" class="ghost log-knop" title="een handelingenlog terugspelen">↺</button>
     </span>
     <button id="video-btn" class="ghost" title="video-mixer (V)">video</button>
     <a id="apc-btn" class="ghost" href="apc.html" target="varve-apc" title="wat elke knop van de APC doet, per mapje">APC-kaart</a>
@@ -27,6 +29,8 @@
     <button id="audio-btn" class="primary">audio starten</button>
   </div>
 </header>
+<!-- De lijst met handelingenlogs om terug te spelen (logboek.js). -->
+<div id="log-lijst" class="log-lijst hidden"></div>
 
 <main class="spiegel">
   <!-- ================= BOVEN: DE TRACK MET FOCUS ================= -->

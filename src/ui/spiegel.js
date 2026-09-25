@@ -1,5 +1,5 @@
 import { DECK_IDS } from '../engine/engine.js';
-import { read as readAction, metaOf, trackVanDeck } from '../control/actions.js';
+import { read as readAction, invoke as invokeAction, metaOf, trackVanDeck } from '../control/actions.js';
 import { Mapping } from '../control/mapping.js';
 import { knobVan } from './controls.js';
 import { BaanView } from './waveform.js';
@@ -107,7 +107,8 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
       const d = engine.deck(id);
       if (!cv || !d.buffer) return;
       const r = cv.getBoundingClientRect();
-      d.seek(((e.clientX - r.left) / r.width) * d.duration);
+      // Via de bus, zodat het handelingenlog de sprong ziet.
+      invokeAction(`track.${trackVanDeck(id)}.seek`, Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
     });
   }
 

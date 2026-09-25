@@ -13,6 +13,9 @@ import { meld } from './meldingen.js';
  */
 export function opzetSamplerOpslag({ engine, staat }) {
   const { deckTrack } = staat;
+  // Tijdens terugspelen (logboek.js) niets naar de library: de pads van
+  // toen horen niet over die van nu heen. In het geheugen gewoon wel.
+  const nietBewaren = (deckId) => !!staat.terugspeelDecks?.has(deckId);
   const sampler = engine.sampler;
   // Een track die iets anders laadt, neemt zijn herinneringen mee weg.
   for (const id of DECK_IDS) {
@@ -36,6 +39,7 @@ export function opzetSamplerOpslag({ engine, staat }) {
     const trackId = deckTrack[info.deckId];
     if (!trackId) return;                               // los bestand of demo: niets te bewaren
     sampler.herinneringen[n] = { ...info, bron: trackVanDeck(info.deckId) };
+    if (nietBewaren(info.deckId)) return;
     fetch(`/api/library/${trackId}/samples`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pad: n + 1, van: info.van, tot: info.tot, tellen: info.tellen, bpm: info.bpm }),
@@ -44,7 +48,7 @@ export function opzetSamplerOpslag({ engine, staat }) {
   };
   sampler.onVergeet = (n, h) => {
     const trackId = deckTrack[h.deckId];
-    if (!trackId) return;
+    if (!trackId || nietBewaren(h.deckId)) return;
     fetch(`/api/library/${trackId}/samples/${n + 1}`, { method: 'DELETE' })
       .then((r) => { if (!r.ok) throw new Error(`${r.status}`); meld(`pad ${n + 1} vergeten`); })
       .catch((err) => meld(`pad ${n + 1} niet vergeten (${err.message})`, 'fout'));
