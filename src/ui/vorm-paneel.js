@@ -5,7 +5,7 @@ import { voegVormMapjeToe } from '../control/lagen.js';
 import { meld } from './meldingen.js';
 import { Luisteraar } from '../analysis/luisteraar.js';
 import { uitgangsVertraging } from '../engine/hoorbaar.js';
-import { MaatLezer, engineTracks } from '../analysis/maat.js';
+import { engineMaatLezer } from '../analysis/maat.js';
 import { Router, MIX_BRONNEN, MAAT_BRONNEN, BRON_NAAM, DOEL_PLEKKEN, leesKenmerken } from '../analysis/router.js';
 
 /**
@@ -44,10 +44,11 @@ export function opzetVormen({ videoMixer }) {
   // heeft wordt gelezen; alle sterktes dicht = niets.
   const engine = videoMixer.engine;
   const luisteraar = new Luisteraar({ analyser: () => engine.master?.analyser, sampleRate: () => engine.ctx.sampleRate });
-  // De maat: klappen en tel van de track die het hardst klinkt (dezelfde als
-  // de video-puls), op wat je hoort. Dezelfde vertraging als de mixer voor t.
+  // De maat: klappen en tel van de maatgever van de engine (hysterese; dezelfde
+  // als de video-puls en de MAAT-badge), op wat je hoort. Dezelfde vertraging
+  // als de mixer voor t.
   const vertraging = () => uitgangsVertraging(engine.ctx);
-  const maat = new MaatLezer({ tracks: () => engineTracks(engine, videoMixer.decks), vertraging });
+  const maat = engineMaatLezer(engine, videoMixer.decks, vertraging);
   const router = new Router(vormen.lagen.length);
   let wasActief = false;
   for (const laag of vormen.lagen) {
@@ -143,7 +144,8 @@ export function opzetVormen({ videoMixer }) {
     const badge = tr ? null : engine.syncMaster?.();
     const tekst = tr ? (b === 'maatklap' && !tr.deck.onsets?.length ? `maat ${nr(tr.id)} · geen klappen` : `maat ${nr(tr.id)}`)
       : !badge ? 'geen maat'
-        : `geen maat · track ${nr(badge.id)} ${badge.playing ? 'hoor je niet' : 'staat stil'}`;
+        : `geen maat · track ${nr(badge.id)} ${badge.wacht ? 'wacht op de maat' : badge.remt ? 'remt'
+          : badge.playing ? 'hoor je niet' : 'staat stil'}`;
     if (maatTekst.textContent !== tekst) maatTekst.textContent = tekst;
   }
   vormen.on('change', volg);

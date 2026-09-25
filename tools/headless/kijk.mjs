@@ -239,6 +239,77 @@ try {
   const dicht = await meet(1);
   ok('reageer dicht: offset terug op 0', dicht.uit.length > 0 && dicht.uit[dicht.uit.length - 1] === 0);
   ok('geen fouten tijdens reageren', meldingen.length === 0, meldingen.join(' | '));
+
+  // ---- kill en rem in de echte worklet (ROADMAP 16, spoor C) ---------------
+  // De demo speelt nog (via de StreamBron). Het remsegment gaat per bericht
+  // naar de echte AudioWorklet; hier meten we wat er uit de master komt.
+  console.log('kill en rem (echte AudioContext en worklet)');
+  // Eerst de automatisering zelf, in Chrome: killEqBand en setEqBand op een
+  // parameter in een OfflineAudioContext, met suspend precies op een blok.
+  // Kill aan en een blok (2,7 ms, binnen de 5 ms) later weer uit, of aan de
+  // knop gedraaid: met setValueCurveAtTime + cancelAndHoldAtTime speelde
+  // Chrome de afgekapte curve opnieuw af, een sprong van 0,55 in amplitude.
+  const killStap = await evalueer(`(async () => {
+    const { killEqBand, setEqBand } = await import('/src/engine/audio-graph.js');
+    const SR = 48000, Q = 128 / SR, uit = [];
+    for (const stappen of [
+      [[1, (p, t) => setEqBand(p, 0.5, t)], [2, (p, t) => killEqBand(p, 0.5, true, t)], [3, (p, t) => killEqBand(p, 0.5, false, t)]],
+      [[1, (p, t) => setEqBand(p, 0.5, t)], [2, (p, t) => killEqBand(p, 0.5, true, t)], [3, (p, t) => setEqBand(p, 0.8, t, true)], [8, (p, t) => killEqBand(p, 0.8, false, t)]],
+      [[1, (p, t) => setEqBand(p, 0.5, t, true)], [8, (p, t) => killEqBand(p, 0.5, false, t)], [9, (p, t) => setEqBand(p, 0.3, t)]],
+    ]) {
+      const ctx = new OfflineAudioContext(1, SR * 0.06, SR);
+      const c = new ConstantSourceNode(ctx, { offset: 0 });
+      c.connect(ctx.destination); c.start();
+      for (const [q, doe] of stappen) ctx.suspend(q * Q).then(() => { doe(c.offset, q * Q); ctx.resume(); });
+      const d = (await ctx.startRendering()).getChannelData(0);
+      let m = 0;
+      for (let i = 1; i < d.length; i++) m = Math.max(m, Math.abs(Math.pow(10, d[i] / 20) - Math.pow(10, d[i - 1] / 20)));
+      uit.push(m);
+    }
+    return uit;
+  })()`);
+  ok('kill: snel aan/uit en knop tijdens de overgang, in Chrome\'s automatisering geen sprong', killStap.every((m) => m < 0.05),
+    `grootste stap in amplitude ${killStap.map((m) => m.toFixed(3)).join(' / ')}`);
+  const bas = (s) => evalueer(`(async () => {
+    const { Luisteraar } = await import('/src/analysis/luisteraar.js');
+    const e = window.engine, l = new Luisteraar({ analyser: () => e.master.analyser, sampleRate: () => e.ctx.sampleRate });
+    let laag = 0, m = 0; const eind = e.ctx.currentTime + ${s};
+    await new Promise((ok) => { const f = () => { const w = l.lees(e.ctx.currentTime); if (w) { laag += w.laag; m++; } e.ctx.currentTime < eind ? setTimeout(f, 16) : ok(); }; f(); });
+    return laag / Math.max(1, m);
+  })()`);
+  const basVoor = await bas(1);
+  await evalueer("__act.invoke('track.1.kill.low', true); __act.invoke('track.1.kill.low', false)");
+  await wacht(100);
+  const basKill = await bas(1);
+  await evalueer("__act.invoke('track.1.kill.low', true); __act.invoke('track.1.kill.low', false)");
+  await wacht(100);
+  const basNa = await bas(1);
+  ok('kill laag: de bas verdwijnt, en komt terug als de kill eraf gaat', basKill < basVoor * 0.5 && basNa > basVoor * 0.7,
+    `${basVoor.toFixed(2)} -> ${basKill.toFixed(2)} -> ${basNa.toFixed(2)}`);
+  const rem = await evalueer(`(async () => {
+    const d = window.engine.deck('A'), c = window.engine.ctx, a = window.engine.master.analyser, b = new Float32Array(a.fftSize);
+    __act.invoke('track.1.brake.time', Math.log(4) / Math.log(50));          // 0,4 s
+    const t0 = c.currentTime, p0 = d.position, R = d.rate;
+    __act.invoke('track.1.brake', true); __act.invoke('track.1.brake', false);
+    const remt = d.remt, uit = [];
+    await new Promise((ok) => { const f = () => {
+      a.getFloatTimeDomainData(b); let m = 0; for (const x of b) m = Math.max(m, Math.abs(x));
+      uit.push({ t: c.currentTime - t0, p: d.position, piek: m });
+      c.currentTime - t0 < 0.9 ? setTimeout(f, 10) : ok(); }; f(); });
+    return { remt, p0, R, D: d.remTijd, uit, speelt: d.playing, remtNog: d.remt, eind: d.position };
+  })()`);
+  const vroeg = rem.uit.filter((m) => m.t < 0.15), laat = rem.uit.filter((m) => m.t > 0.6);
+  let oplopend = true;
+  for (let i = 1; i < rem.uit.length; i++) if (rem.uit[i].p < rem.uit[i - 1].p - 1e-9) oplopend = false;
+  ok('rem: remt, klinkt eerst nog', rem.remt && vroeg.length > 0 && Math.max(...vroeg.map((m) => m.piek)) > 0.05,
+    `piek vroeg ${Math.max(...vroeg.map((m) => m.piek)).toFixed(3)}`);
+  ok('… stil na stilstand, en gepauzeerd op P + R·D/2', !rem.speelt && !rem.remtNog && laat.length > 0
+    && Math.max(...laat.map((m) => m.piek)) < 1e-3 && Math.abs(rem.eind - (rem.p0 + rem.R * rem.D / 2)) < 0.01,
+  `piek laat ${Math.max(...laat.map((m) => m.piek)).toExponential(1)}, ${(rem.eind - rem.p0).toFixed(4)} s afgelegd (verwacht ${(rem.R * rem.D / 2).toFixed(4)})`);
+  ok('… de positie loopt nooit terug', oplopend);
+  ok('geen fouten bij kill en rem', meldingen.length === 0, meldingen.join(' | '));
+  await evalueer("__act.invoke('track.1.play', true); __act.invoke('track.1.play', false)");     // weer spelen, zoals hiervoor
+
   await evalueer("__act.invoke('track.1.play', true); __act.invoke('track.1.play', false)");
 
   await evalueer("window.vormen.lagen.forEach((l) => { l.aan = false; })");

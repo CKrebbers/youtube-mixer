@@ -6,6 +6,11 @@ const LIVE = new Set();   // bronnen die nu geluid maken
 // en verborg zo precies de fout die live je hele aanroepketen meenam.
 const overlapFout = () => Object.assign(new Error('NotSupportedError: overlapt met een lopende setValueCurveAtTime'), { name: 'NotSupportedError' });
 let OVERLAP_FOUTEN = 0;
+// En net zo slordig als Chrome (gemeten op 153, offline én realtime):
+// cancelAndHoldAtTime MIDDEN in een lopende setValueCurveAtTime houdt niet
+// vast, maar speelt het afgekapte stuk opnieuw af vanaf het begin van de
+// curve — een sprong. Chrome gooit niet, dus de mock ook niet; hij telt het.
+let CURVE_BREUK = 0;
 const param = (v=0) => ({ value:v, _curves:[],
   _check(t){ const tt = t ?? NOW; for (const c of this._curves) if (tt >= c.a && tt < c.b) { OVERLAP_FOUTEN++; throw overlapFout(); } },
   setTargetAtTime(x,t){ this._check(t); this.value=x; },
@@ -18,7 +23,10 @@ const param = (v=0) => ({ value:v, _curves:[],
   // Volgens de spec: alleen wat op of na t BEGINT verdwijnt. Een curve die al
   // loopt blijft staan — daarom bestaat cancelAndHoldAtTime.
   cancelScheduledValues(t=NOW){ this._curves = this._curves.filter((c) => c.a < t); },
-  cancelAndHoldAtTime(t=NOW){ this._curves = this._curves.filter((c) => c.a < t).map((c) => ({ a:c.a, b:Math.min(c.b, t) })); },
+  cancelAndHoldAtTime(t=NOW){
+    if (this._curves.some((c) => c.a < t && t < c.b)) CURVE_BREUK++;
+    this._curves = this._curves.filter((c) => c.a < t).map((c) => ({ a:c.a, b:Math.min(c.b, t) }));
+  },
 });
 const node = (type) => ({
   type, gain:param(1), frequency:param(1000), Q:param(1), detune:param(0),
@@ -1254,8 +1262,13 @@ console.log('\nacht tracks');
   e8.deck('C').togglePlay();
   e8.deck('D').togglePlay();
   e8.deck('C').set('fader', 0.6);
+  // Hysterese (G2): de maat wisselt pas als een ander 250 ms (audioklok)
+  // minstens 3 dB harder klinkt. Hier 13,5 dB, dus na 250 ms.
+  ok('meteen na de fader: de maat blijft nog even (hysterese)', e8.syncMaster('A').id === 'C');
+  NOW += 0.3;
   ok('speelt er iets: de luidste die speelt', e8.syncMaster('A').id === 'D');
   e8.deck('D').set('fader', 0.3);
+  NOW += 0.3;
   ok('fader omlaag: de ander wordt master', e8.syncMaster('A').id === 'C');
   e8.setXfader(1);              // C staat op kant B: nu vol open
   e8.deck('D').set('fader', 1);
@@ -1286,6 +1299,252 @@ console.log('\nacht tracks');
   ok('nog eens B blijft B', eng.kant.C === 'B');
   invoke('track.3.xfade.thru', true);
   ok('thru-knop', eng.kant.C === 'thru' && leesAction('track.3.xfade.thru') === 1);
+}
+
+// ---- EQ-kill, rem en de maatgever (ROADMAP 16, spoor C) -------------------------
+
+console.log('\nEQ-kill');
+{
+  const { EQ_KILL_DB, KILL_FADE, eqDb } = await import('../src/engine/audio-graph.js');
+  const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+  const dK = eng.deck('H');
+  NOW = 300;
+  const fouten0 = OVERLAP_FOUTEN, breuk0 = CURVE_BREUK;
+  const p = dK.chain.eqLow.gain;
+  // De kill-overgangen op de lage band, om hun vorm na te lopen: een
+  // beginpunt (setValueAtTime) en de hellingen erna.
+  const curves = [];
+  const origZet = p.setValueAtTime, origHelling = p.linearRampToValueAtTime;
+  p.setValueAtTime = function (x, t) { curves.push({ t, d: 0, c: [x] }); return origZet.call(this, x, t); };
+  p.linearRampToValueAtTime = function (x, t) {
+    const k = curves[curves.length - 1];
+    if (k) { k.c.push(x); k.d = t - k.t; }
+    return origHelling.call(this, x, t);
+  };
+
+  ok('lege track: kill-lampje uit (niets te doen)', read('track.8.kill.low') === null);
+  dK.load(buf, 'kill');
+  invoke('track.8.low', 0.7);
+  const stand = eqDb(0.7);
+  ok('kill-lampje 0: open, bruikbaar', read('track.8.kill.low') === 0 && read('track.8.kill.low.hold') === 0);
+  invoke('track.8.kill.low', true); invoke('track.8.kill.low', false);
+  ok('kill aan: de lage band naar −70 dB (lampje 1)', p.value === EQ_KILL_DB && dK.gekild('low') && read('track.8.kill.low') === 1);
+  ok('… met een overgang van 5 ms vanaf nu, niet hard', curves.length === 1 && Math.abs(curves[0].d - KILL_FADE) < 1e-9
+    && curves[0].t === NOW && curves[0].c.length === 33);
+  // Klikvrij: in AMPLITUDE een zachte S. Een rechte lijn in dB doet bijna
+  // alle amplitude in de eerste stapjes, en dat is een tik.
+  const amp = (db) => Math.pow(10, db / 20);
+  const stapMax = (c) => { let m = 0; for (let i = 1; i < c.length; i++) m = Math.max(m, Math.abs(amp(c[i]) - amp(c[i - 1]))); return m; };
+  const recht = Float64Array.from({ length: 33 }, (_, i) => stand + (EQ_KILL_DB - stand) * i / 32);
+  const weg = Math.abs(amp(stand) - amp(EQ_KILL_DB));
+  const vorm = curves[0]?.c ?? [];
+  ok(`… in amplitude zacht: grootste stap ${(100 * stapMax(vorm) / weg).toFixed(1)}% van de weg (recht in dB: ${(100 * stapMax(recht) / weg).toFixed(0)}%)`,
+    vorm.length === 33 && stapMax(vorm) < 0.06 * weg && stapMax(recht) > 0.15 * weg && Math.abs(vorm[0] - stand) < 1e-6);
+  ok('de EQ-knop blijft staan', dK.ui.low === 0.7 && read('track.8.low') === 0.7);
+
+  // Meteen aan de knop draaien, terwijl de kill-overgang nog loopt. Met een
+  // setValueCurveAtTime gooide setTargetAtTime daar NotSupportedError, en
+  // cancelAndHoldAtTime ertegen gaf in Chrome een sprong (CURVE_BREUK).
+  let gegooid = null;
+  NOW += 0.001;
+  try { invoke('track.8.low', 0.3); } catch (e) { gegooid = e; }
+  ok('1 ms later aan de knop draaien, tijdens de kill-overgang: geen NotSupportedError, geen afgebroken curve',
+    gegooid === null && OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
+  ok('… de band blijft weg, de knop onthoudt 0,3', p.value === EQ_KILL_DB && dK.ui.low === 0.3);
+  NOW += 0.001;
+  invoke('track.8.kill.low', true);
+  ok('kill uit: precies terug op de knopstand (0,3)', Math.abs(p.value - eqDb(0.3)) < 1e-5 && !dK.gekild('low') && read('track.8.kill.low') === 0);
+  ok('… met weer een overgang, van −70 naar de knop', curves.length === 2 && curves[1].c[0] === EQ_KILL_DB && Math.abs(curves[1].c[32] - eqDb(0.3)) < 1e-5);
+
+  // Twee keer drukken binnen de 5 ms: de tweede overgang begint waar de eerste nu is.
+  NOW += 1;
+  const m = dK.chain.eqMid.gain;
+  invoke('track.8.kill.mid', true);
+  NOW += 0.002;
+  gegooid = null;
+  try { invoke('track.8.kill.mid', true); } catch (e) { gegooid = e; }
+  ok('kill aan en 2 ms later weer uit (overgang loopt nog): geen NotSupportedError, geen afgebroken curve (sprong in Chrome)',
+    gegooid === null && OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
+  ok('… en terug op de knopstand', Math.abs(m.value - eqDb(dK.ui.mid)) < 1e-5 && !dK.gekild('mid'));
+
+  // Drukvariant.
+  const hoog = dK.chain.eqHigh.gain;
+  NOW += 1;
+  invoke('track.8.kill.high.hold', true);
+  ok('drukknop: weg zolang je drukt (beide lampjes 1)', dK.gekild('high') && hoog.value === EQ_KILL_DB
+    && read('track.8.kill.high.hold') === 1 && read('track.8.kill.high') === 1);
+  NOW += 0.2;
+  invoke('track.8.kill.high.hold', false);
+  ok('loslaten: terug op de knopstand', !dK.gekild('high') && Math.abs(hoog.value - eqDb(dK.ui.high)) < 1e-5);
+  invoke('track.8.kill.high', true);
+  NOW += 0.2;
+  invoke('track.8.kill.high.hold', true); NOW += 0.2; invoke('track.8.kill.high.hold', false);
+  ok('schakelaar aan, dan drukken en loslaten: blijft weg (de schakelaar staat nog aan)', dK.gekild('high') && hoog.value === EQ_KILL_DB);
+  NOW += 0.2;
+  invoke('track.8.kill.high', true);
+  ok('schakelaar uit: terug', !dK.gekild('high') && Math.abs(hoog.value - eqDb(dK.ui.high)) < 1e-5);
+  invoke('track.8.kill.low', true);
+  ok('per band: laag weg, midden en hoog niet', dK.gekild('low') && !dK.gekild('mid') && !dK.gekild('high')
+    && m.value !== EQ_KILL_DB && hoog.value !== EQ_KILL_DB);
+  NOW += 0.2;
+  invoke('track.8.kill.low', true);
+  p.setValueAtTime = origZet; p.linearRampToValueAtTime = origHelling;
+  ok('elke kill- en rem-action heeft een uitleg op de APC-kaart',
+    ['kill.low', 'kill.mid', 'kill.high', 'kill.low.hold', 'kill.high.hold', 'brake', 'brake.time']
+      .every((a) => !beschrijf(`track.8.${a}`).lang.startsWith('?') && beschrijf(`track.8.${a}`).kort !== a));
+  ok('geen overlappende automatisering en geen afgebroken curve bij al dat schakelen',
+    OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
+}
+
+console.log('\nrem (vinylstop)');
+{
+  const { REM_STANDAARD } = await import('../src/engine/deck.js');
+  const { REM_UIT } = await import('../src/engine/stream-kern.js');
+  const dR = eng.deck('H');
+  NOW = 400;
+  dR.load(buf, 'rem');
+  dR.seek(0.5);
+  ok('stilstaand: rem doet niets (lampje uit: niets te remmen)', !dR.rem() && !dR.remt && read('track.8.brake') === null);
+  ok(`remtijd standaard ${REM_STANDAARD} s`, dR.remTijd === REM_STANDAARD && Math.abs(read('track.8.brake.time') - Math.log(10) / Math.log(50)) < 1e-9);
+  invoke('track.8.brake.time', 1);
+  const vijf = dR.remTijd;
+  invoke('track.8.brake.time', 0.5);
+  const midden = dR.remTijd;
+  invoke('track.8.brake.time', 0);
+  ok(`remtijd-knop: 0 = ${dR.remTijd} s, midden = ${midden.toFixed(2)} s, 1 = ${vijf} s`,
+    Math.abs(dR.remTijd - 0.1) < 1e-12 && Math.abs(vijf - 5) < 1e-9 && Math.abs(midden - Math.sqrt(0.5)) < 1e-9 && read('track.8.brake.time') === 0);
+
+  dR.play();
+  ok('speelt: rem-lampje 0 (er valt te remmen)', read('track.8.brake') === 0);
+  NOW += 0.2;
+  const P0 = dR.position, D = 0.1;
+  const pr = dR.bron.source.playbackRate, g = dR.bron.bronGain.gain;
+  invoke('track.8.brake', true); invoke('track.8.brake', false);
+  ok('rem: het deck remt en speelt nog (lampje 1)', dR.remt && dR.playing && read('track.8.brake') === 1);
+  NOW += 0.05;
+  ok('halverwege: positie = P + R·t − R·t²/(2D), snelheid gehalveerd',
+    Math.abs(dR.position - (P0 + 0.05 - 0.05 * 0.05 / (2 * D))) < 1e-9 && Math.abs(dR.snelheid - 0.5) < 1e-9);
+  ok('de reserve (BufferBron): playbackRate glijdt naar 0, volume dooft in het laatste stuk',
+    pr.value === 0 && g.value === 0 && REM_UIT > 0 && REM_UIT < 1);
+  ok('een remmende track geeft geen maat (fxKlok leeg)', dR.fxKlok() === null);
+  NOW += 0.1;
+  ok('na de remtijd: stil op P + R·D/2', Math.abs(dR.position - (P0 + D / 2)) < 1e-9 && dR.snelheid === 0);
+  let klaar = 0;
+  dR.on('change', () => { if (!dR.playing) klaar++; });
+  await new Promise((r) => setTimeout(r, 200));
+  ok('daarna een gewone pauze op die plek (en gemeld)', !dR.playing && !dR.remt && klaar > 0
+    && Math.abs(dR.position - (P0 + D / 2)) < 1e-9 && read('track.8.brake') === null);
+
+  invoke('track.8.play', true);
+  NOW += 0.1;
+  ok('play: gewoon verder vanaf daar, op tempo', dR.playing && !dR.remt && Math.abs(dR.position - (P0 + D / 2 + 0.1)) < 1e-9);
+
+  // Tweede druk tijdens het remmen = los.
+  invoke('track.8.brake.time', 1);                  // 5 s
+  const P1 = dR.position;
+  invoke('track.8.brake', true);
+  NOW += 1;
+  const P2 = dR.position;
+  ok('5 s remmen, na 1 s: 0,9 s afgelegd', Math.abs(P2 - (P1 + 1 - 1 / 10)) < 1e-9);
+  invoke('track.8.brake', true);
+  ok('nog eens drukken tijdens het remmen: los, weer op tempo', !dR.remt && dR.playing && dR.snelheid === dR.rate);
+  NOW += 0.5;
+  ok('… en verder vanaf waar hij was', Math.abs(dR.position - (P2 + 0.5)) < 1e-9);
+
+  invoke('track.8.brake', true);
+  NOW += 0.2;
+  invoke('track.8.play', true);
+  ok('play tijdens het remmen: los, niet pauzeren', dR.playing && !dR.remt);
+
+  // Tempo tijdens het remmen: onthouden, de rem loopt door.
+  invoke('track.8.brake', true);
+  const P3 = dR.position;
+  NOW += 0.5;
+  dR.setRate(1.1);
+  ok('tempo tijdens het remmen: de rem loopt gewoon door, het tempo wordt onthouden',
+    dR.remt && Math.abs(dR.position - (P3 + 0.5 - 0.25 / 10)) < 1e-9 && dR.rate === 1.1);
+  dR.pause();
+  ok('pauze tijdens het remmen: meteen stil, rem eraf', !dR.playing && !dR.remt);
+  dR.setRate(1);
+  NOW = 0;
+}
+
+console.log('\nmaatgever met hysterese');
+{
+  const { volgMaatgever, MAAT_WACHT, MAAT_MARGE_DB } = await import('../src/engine/engine.js');
+  const { Beatgrid: BG } = await import('../src/engine/beatgrid.js');
+  // Nep-niveaus op een nep-klok: de regel zelf.
+  const dB = (x) => Math.pow(10, x / 20);
+  const st = { id: null, sinds: null };
+  let r = volgMaatgever(st, [['A', dB(-10)], ['B', dB(-10)]], 0);
+  ok('begin: meteen de luidste (gelijk: de eerste)', r.id === 'A' && r.wacht === null);
+  let wissels = 0;
+  for (let i = 0; i < 200; i++) {
+    const was = st.id;
+    volgMaatgever(st, [['A', dB(-10)], ['B', dB(-10 + 2 * Math.sin(i / 3))]], i * 0.05);
+    if (st.id !== was) wissels++;
+  }
+  ok(`twee even harde tracks (±2 dB om elkaar heen, 10 s): ${wissels} wissels`, wissels === 0 && st.id === 'A');
+  r = volgMaatgever(st, [['A', dB(-10)], ['B', dB(-10 + MAAT_MARGE_DB + 0.5)]], 20);
+  ok(`${MAAT_MARGE_DB + 0.5} dB harder: nog niet, wacht ${MAAT_WACHT * 1000} ms`, r.id === 'A' && Math.abs(r.wacht - MAAT_WACHT) < 1e-9);
+  r = volgMaatgever(st, [['A', dB(-10)], ['B', dB(-6.5)]], 20.2);
+  ok('na 200 ms nog A', r.id === 'A' && Math.abs(r.wacht - 0.05) < 1e-9);
+  r = volgMaatgever(st, [['A', dB(-10)], ['B', dB(-6.5)]], 20.25);
+  ok('na 250 ms: B', r.id === 'B' && r.wacht === null);
+  volgMaatgever(st, [['A', dB(-2)], ['B', dB(-6.5)]], 21);
+  volgMaatgever(st, [['A', dB(-6)], ['B', dB(-6.5)]], 21.2);            // even niet meer 3 dB
+  r = volgMaatgever(st, [['A', dB(-2)], ['B', dB(-6.5)]], 21.3);
+  ok('even onder de drempel: het wachten begint opnieuw', r.id === 'B' && Math.abs(r.wacht - MAAT_WACHT) < 1e-9);
+  r = volgMaatgever(st, [['A', dB(-2)], ['B', dB(-6.5)]], 21.55);
+  ok('… en na 250 ms aaneen: A', r.id === 'A');
+  r = volgMaatgever(st, [['B', dB(-40)]], 21.56);
+  ok('maatgever stopt: meteen de volgende, ook als die zacht is', r.id === 'B' && r.wacht === null);
+  r = volgMaatgever(st, [], 22);
+  ok('niets speelt: geen maatgever', r.id === null);
+
+  // In de engine: faders zijn de niveaus, de audioklok is die van de mock,
+  // en de timer is echt (niemand hoeft te vragen).
+  NOW = 500;
+  const em = new Engine();
+  for (const [id, bpm] of [['A', 124], ['B', 130], ['C', 120]]) {
+    const d = em.deck(id); d.load(buf, id); d.setGrid(new BG({ bpm, firstBeat: 0 }));
+  }
+  em.setKant('A', 'thru'); em.setKant('B', 'thru');
+  em.deck('A').play(); em.deck('B').play();
+  ok('twee tracks, even hard: de eerste geeft de maat', em.snapshot().maat === 'A');
+  let meldingen = 0;
+  em.on('change', () => meldingen++);
+  em.deck('A').set('fader', 0.94);                  // −2,7 dB
+  em.deck('B').set('fader', 0.97);                  // −1,35 dB: B iets harder
+  NOW += 1;
+  ok('B 1,35 dB harder, een seconde lang: de maat blijft bij A', em.snapshot().maat === 'A' && em.syncMaster().id === 'A');
+  ok('… en de bussen lopen op A (124 bpm)', Math.abs(em.sends.A.klok().beatLengte - 60 / 124) < 1e-9);
+  const rs = em.sync('C');
+  ok('sync gaat naar de maatgever (de badge), niet naar wie nét harder staat', rs.ok && rs.master === 'A');
+  em.deck('C').setRate(1);
+  em.deck('A').set('fader', 0.6);                   // −18 dB: B nu 16,6 dB harder
+  ok('B duidelijk harder: niet meteen', em.snapshot().maat === 'A');
+  NOW += 0.3;
+  await new Promise((res) => setTimeout(res, 300));
+  ok('na 250 ms op de audioklok: B, door de timer, en gemeld (bussen haken aan)',
+    em._maat.id === 'B' && meldingen > 0 && Math.abs(em.sends.A.klok().beatLengte - 60 / 130) < 1e-9);
+  em.deck('B').pause();
+  ok('maatgever pauzeert: meteen de ander', em.snapshot().maat === 'A');
+  em.deck('B').play();
+  NOW += 0.3;
+  ok('B speelt weer en is harder: na 250 ms weer B', em.snapshot().maat === 'B');
+  em.deck('B').rem();
+  ok('maatgever remt: meteen de ander (een remmende track geeft geen maat)', em.snapshot().maat === 'A');
+  // Sync op de track die remt: alleen het tempo. De fase zetten is een
+  // sprong, en die haalde de rem eraf: de track stond dan meteen weer op
+  // volle snelheid.
+  const pB = em.deck('B').position;
+  const rsRem = em.sync('B');
+  ok('sync tijdens het remmen: alleen het tempo, de rem loopt door', rsRem.ok && !rsRem.fase && rsRem.master === 'A'
+    && em.deck('B').remt && Math.abs(em.deck('B').rate - 124 / 130) < 1e-9 && em.deck('B').position === pB);
+  em.deck('B').pause(); em.deck('A').pause();
+  ok('niets speelt: MAAT (stil) op de eerste met grid, zoals altijd', em.snapshot().maat === 'A' && !em.deck('A').playing);
+  NOW = 0;
 }
 
 // ---- toetsenbord ------------------------------------------------------------
@@ -1323,6 +1582,16 @@ console.log('\ntoetsenbord');
   toets('Space');
   ok('spatie speelt de track met focus', dC.playing !== voorSpatie);
   if (dC.playing) toets('Space');
+
+  // Rem op de toets links van 1 (Backquote, op een Mac-ISO-toetsenbord soms
+  // IntlBackslash): linkerhand = focus. Nog eens = los.
+  toets('KeyQ'); toets('KeyQ', 'keyup');
+  toets('Backquote'); toets('Backquote', 'keyup');
+  ok('` remt de track in het linkervenster', dC.remt);
+  toets('IntlBackslash'); toets('IntlBackslash', 'keyup');
+  ok('nog eens (ook via IntlBackslash): los, speelt door', !dC.remt && dC.playing);
+  ok('= remt de rechterhand', KEYMAP.Equal === 'track.{R}.brake');
+  dC.pause();
 }
 
 {
@@ -1695,7 +1964,7 @@ console.log('\ntempokaart');
 console.log('\ntransport');
 {
   const { Beatgrid } = await import('../src/engine/beatgrid.js');
-  const { ONZEKER } = await import('../src/engine/engine.js');
+  const { ONZEKER, MAAT_WACHT } = await import('../src/engine/engine.js');
   const { SPRONG_TELLEN } = await import('../src/engine/deck.js');
   const lang = eng.ctx.createBuffer(2, 48000 * 40, 48000);      // 40 s stilte
   const meldingen = [];
@@ -2019,7 +2288,11 @@ console.log('\ntransport');
     let gemeld = 0;
     dF.on('change', () => { gemeld++; });
     NOW = 807.75;                                               // voorbij zijn start
-    ok('na zijn start geeft hij de maat wel (hardste fader)', !dF.wacht && eng.syncMaster()?.id === 'F');
+    // Hysterese (dj-klank): hij is 3 dB harder, maar neemt de maat pas over
+    // als dat MAAT_WACHT lang zo blijft. Bedoeld gedrag, geen regressie.
+    ok('na zijn start: eerst nog H (hysterese: pas na MAAT_WACHT)', !dF.wacht && eng.syncMaster()?.id === 'H');
+    NOW += MAAT_WACHT + 0.01;
+    ok('na zijn start geeft hij de maat wel (hardste fader), na MAAT_WACHT', !dF.wacht && eng.syncMaster()?.id === 'F');
     // Op zijn start meldt hij zich zelf (timer op de audioklok, zoals bij een
     // stukgrens): echo en sampler herankeren dan op de nieuwe maatgever.
     await new Promise((r) => setTimeout(r, 150));

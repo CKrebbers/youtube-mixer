@@ -331,9 +331,11 @@ export class VideoMixer {
   volgendPulsDoel() { this.pulsDoel = PULS_DOELEN[(PULS_DOELEN.indexOf(this.pulsDoel) + 1) % PULS_DOELEN.length]; }
 
   /**
-   * Waar in de tel we nu zijn, als vorm 0..1 — van de track die het hardst
-   * klinkt (dezelfde als de MAAT-badge, zie klinkt() in puls.js), op het
-   * moment dat je hem HOORT. 0 als er geen maat is.
+   * Waar in de tel we nu zijn, als vorm 0..1 — van de track die de maat
+   * geeft (Engine.maatgever via maatgever() in puls.js: de luidste, met
+   * hysterese, dezelfde als de MAAT-badge, sync, sampler en de vormen), op
+   * het moment dat je hem HOORT. 0 als er geen maat is, of als je die track
+   * niet hoort (fader of crossfader dicht, wacht op de maat, remt).
    */
   _pulsNu(vertraging) {
     if (this.puls <= 0) return 0;
@@ -538,9 +540,11 @@ export class VideoMixer {
     const r = synchroniseer({
       videoTijd: v.currentTime,
       // Ook stilstaand min de vertraging (niet hoorbaar()): zo blijft het
-      // beeld bij een pauze staan waar het was, zonder seek.
-      doel: Math.max(0, naVertraging(deck.position, vertraging, deck.rate)),
-      rate: deck.rate,
+      // beeld bij een pauze staan waar het was, zonder seek. Met de snelheid
+      // van NU (bend, rem), niet de pitchfader: anders loopt een rem het
+      // beeld voorbij en springt het terug.
+      doel: Math.max(0, naVertraging(deck.position, vertraging, deck.snelheid ?? deck.rate)),
+      rate: deck.snelheid ?? deck.rate,
       // Wacht het deck op zijn start op de maat, dan staat de positie stil:
       // het beeld ook, anders loopt het weg en springt het terug.
       speelt: deck.playing && !deck.wacht,

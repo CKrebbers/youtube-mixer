@@ -3,10 +3,11 @@ import { faderGain } from '../engine/audio-graph.js';
 /**
  * Video-effecten op de tel. Puur rekenwerk: geen DOM, geen WebGL.
  *
- * De maat komt van wat je HOORT: de track die het hardst klinkt, speelt en een
- * beatgrid heeft. Zelfde gedachte als sync — er is geen "het andere deck".
- * De puls komt bovenop de stand van de knop: RGB op 30% springt op de tel
- * omhoog en zakt terug naar 30%.
+ * De maat komt van wat je HOORT: de maatgever van de engine (de track die het
+ * hardst klinkt, speelt en een beatgrid heeft, met hysterese; zie
+ * Engine.maatgever). Dezelfde als sync, sampler en de MAAT-badge. De puls
+ * komt bovenop de stand van de knop: RGB op 30% springt op de tel omhoog en
+ * zakt terug naar 30%.
  */
 
 /** Wat er kan pulsen. "flits" is geen effectknop maar een lichtflits op de tel. */
@@ -44,12 +45,34 @@ export function klokTrack(tracks) {
   return beste;
 }
 
-/** De maatgever uit de engine (alleen uitlezen, duck-typed): klokTrack op klinkt(). */
+/**
+ * De maatgever uit de engine (alleen uitlezen, duck-typed): de track met de
+ * MAAT-badge, dus engine.syncMaster() met zijn HYSTERESE (3 dB, 250 ms,
+ * Engine.maatgever). Puls, vormen (maat.js), badge, sync, sampler en bussen
+ * volgen zo allemaal dezelfde track en flapperen niet: eerst koos dit zelf de
+ * hardste (klokTrack), zonder geduld, en sprong de puls bij twee tracks die
+ * ongeveer even hard klonken los van de badge heen en weer.
+ *
+ * Maar alleen als je hem HOORT (vorm-bronnen): speelt, wacht niet op zijn
+ * start op de maat, remt niet, heeft een grid en klinkt (klinkt() > 0,001).
+ * Anders null: een track die je niet hoort geeft geen tel, ook al staat MAAT
+ * erop (de badge zegt dan "(stil)", of de fader is dicht).
+ *
+ * Zonder syncMaster (een kale nep-engine): klokTrack op klinkt(), zoals vroeger.
+ */
 export function maatgever(engine, ids) {
+  if (typeof engine.syncMaster === 'function') {
+    const d = engine.syncMaster();
+    if (!d || !ids.includes(d.id)) return null;
+    const hoor = !!d.buffer && d.playing && !d.wacht && !d.remt && !!d.grid
+      && klinkt(d.ui.fader, engine.xfadeGain(d.id)) > 0.001;
+    return hoor ? d.id : null;
+  }
   return klokTrack(ids.map((id) => {
     const d = engine.deck(id);
-    // Een track die op zijn start op de maat WACHT, klinkt nog niet: geen tel.
-    return { id, speelt: !!d.playing && !d.wacht, heeftGrid: !!d.grid, zicht: d.buffer ? klinkt(d.ui.fader, engine.xfadeGain(id)) : 0 };
+    // Een track die op zijn start op de maat WACHT of remt, geeft geen tel.
+    return { id, speelt: !!d.playing && !d.wacht && !d.remt, heeftGrid: !!d.grid,
+      zicht: d.buffer ? klinkt(d.ui.fader, engine.xfadeGain(id)) : 0 };
   }));
 }
 

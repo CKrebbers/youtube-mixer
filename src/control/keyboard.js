@@ -12,6 +12,9 @@ import { invoke, trackVanDeck } from './actions.js';
 export const KEYMAP = {
   // linkerhand: de track met focus
   KeyQ: 'track.{L}.play',      KeyW: 'track.{L}.cue',
+  // Rem op de toets links van 1. Op een ISO-toetsenbord (Mac) heet die per
+  // browser Backquote of IntlBackslash; beide, dan werkt het overal.
+  Backquote: 'track.{L}.brake', IntlBackslash: 'track.{L}.brake',
   KeyA: 'track.{L}.hotcue.1',  KeyS: 'track.{L}.hotcue.2',
   KeyD: 'track.{L}.hotcue.3',  KeyF: 'track.{L}.hotcue.4',
   Digit1: 'track.{L}.loop.1',  Digit2: 'track.{L}.loop.2',
@@ -24,6 +27,7 @@ export const KEYMAP = {
 
   // rechterhand: de vorige focus
   KeyP: 'track.{R}.play',       KeyO: 'track.{R}.cue',
+  Equal: 'track.{R}.brake',
   KeyJ: 'track.{R}.hotcue.1',   KeyK: 'track.{R}.hotcue.2',
   KeyL: 'track.{R}.hotcue.3',   Semicolon: 'track.{R}.hotcue.4',
   Digit7: 'track.{R}.loop.1',   Digit8: 'track.{R}.loop.2',

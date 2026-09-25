@@ -22,6 +22,7 @@ import { hoorbaar as hoorbaarVan, uitgangsVertraging } from '../engine/hoorbaar.
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
 import { FITS } from '../video/passen.js';
+import { EQ_BANDEN, REM_MIN, REM_MAX } from '../engine/deck.js';
 import { GROEPEN, LAAGNAAM } from './lagen.js';
 
 const registry = new Map();
@@ -365,6 +366,16 @@ export function bindEngine(engine) {
     define(`${n}.bend.back`, 'trigger', (on) => d.bend(on ? -1 : 0), { label: `Track ${nr} even trager (zolang je drukt)`, read: () => (d.buigt < 0 ? 1 : 0) });
     define(`${n}.bend.fwd`, 'trigger', (on) => d.bend(on ? 1 : 0), { label: `Track ${nr} even sneller (zolang je drukt)`, read: () => (d.buigt > 0 ? 1 : 0) });
 
+    // Rem (vinylstop): in de remtijd naar stilstand, dan gepauzeerd op die
+    // plek. Nog eens drukken tijdens het remmen = los (meteen weer op tempo).
+    // Lampje: 1 = remt, 0 = speelt (er valt te remmen), null = staat stil.
+    define(`${n}.brake`, 'trigger', (on) => { if (on) d.rem(); },
+      { label: `Track ${nr} rem (vinylstop); tijdens het remmen nog eens = los`,
+        read: () => (d.remt ? 1 : d.playing ? 0 : null) });
+    // Remtijd in seconden, exponentieel (de engine schaalt, regel 2).
+    define(`${n}.brake.time`, 'value', (v) => d.setRemTijd(v),
+      { label: `Track ${nr} remtijd (${REM_MIN}–${REM_MAX} s)`, read: () => d.remKnop });
+
     // Het bereik (±8/16/50%) zit in het deck; de fader blijft 0..1. De read
     // is geklemd: sync mag verder dan het bereik, en dan staat hij tegen de aanslag.
     define(`${n}.pitch`, 'value', (v) => d.setPitch(v),
@@ -388,6 +399,19 @@ export function bindEngine(engine) {
       define(`${n}.${p}`, 'value', (v) => d.set(p, v),
         { label: `Track ${nr} ${p}`, bipolar: ['low', 'mid', 'high', 'filter'].includes(p),
           read: () => d.ui[p] });
+    }
+
+    // EQ-kill per band: een schakelaar (aan/uit) en een drukknop (weg zolang
+    // je drukt). De knopstand blijft staan, dus kill uit is precies terug.
+    // Lampje, voor beide: 1 = de band is weg (door schakelaar of drukknop),
+    // 0 = open, null = lege track zonder kill (niets te doen).
+    for (const band of EQ_BANDEN) {
+      const naam = { low: 'laag', mid: 'midden', high: 'hoog' }[band];
+      const stand = () => (d.gekild(band) ? 1 : d.buffer ? 0 : null);
+      define(`${n}.kill.${band}`, 'trigger', (on) => { if (on) d.toggleKill(band); },
+        { label: `Track ${nr} kill ${naam} aan/uit`, read: stand });
+      define(`${n}.kill.${band}.hold`, 'trigger', (on) => d.houdKill(band, !!on),
+        { label: `Track ${nr} kill ${naam} zolang je drukt`, read: stand });
     }
 
     // Sends: na de fader naar de gedeelde echo (A) en galm (B).

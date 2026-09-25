@@ -493,11 +493,15 @@ console.log('de maat: klappen uit de onset-analyse en de tel van de maatgever');
         playing: !!stand[id]?.speelt, position: 1, rate: 1, onsets: null, ui: { fader: stand[id]?.fader ?? 1 } }]));
       const e = { decks, kant, deck: (id) => decks[id],
         xfadeGain: (id) => { const g = xfaderGains(xfader); return kant[id] === 'A' ? g.a : kant[id] === 'B' ? g.b : 1; } };
-      e.syncMaster = Engine.prototype.syncMaster;
+      // De echte syncMaster met zijn hysterese (Engine.maatgever, dj-klank):
+      // wat hij van de engine nodig heeft, en een audioklok om mee te wachten.
+      for (const k of ['syncMaster', 'maatgever', '_kanMaat', '_maatGain']) e[k] = Engine.prototype[k];
+      Object.assign(e, { _maat: { id: null, sinds: null }, _maatTimer: null, ctx: { currentTime: 0 }, emit: () => {} });
       return e;
     };
     const badge = (e) => { const m = e.syncMaster(); return m?.playing ? m.id : null; };
-    const vorm = (e) => new M.MaatLezer({ tracks: () => M.engineTracks(e, DECK_IDS) }).kies().tr?.id ?? null;
+    // Het vormpaneel maakt zijn lezer zo (engineMaatLezer): met de maatgever van de engine.
+    const vorm = (e) => M.engineMaatLezer(e, DECK_IDS).kies().tr?.id ?? null;
     const e1 = nep(0.5, { A: { speelt: true, fader: 1 }, C: { speelt: true, fader: 0.8 } });
     ok(`track 1 fader 1 (A-kant), track 3 fader 0,8 (thru), crossfader midden: badge, vorm en video-puls kiezen dezelfde (${badge(e1)} · ${vorm(e1)} · ${maatgever(e1, DECK_IDS)})`,
       badge(e1) === 'A' && vorm(e1) === 'A' && maatgever(e1, DECK_IDS) === 'A');
@@ -518,6 +522,35 @@ console.log('de maat: klappen uit de onset-analyse en de tel van de maatgever');
       if (vorm(e) !== verwacht || maatgever(e, DECK_IDS) !== verwacht) anders++;
     }
     ok(`${n} willekeurige standen: vorm en video-puls volgen de MAAT-badge zolang je die track hoort (${anders} keer anders)`, anders === 0);
+
+    // Hysterese (integratie ronde 3): badge, vorm en puls wisselen SAMEN, pas
+    // als de ander 3 dB harder klinkt en dat MAAT_WACHT lang volhoudt. Eerst
+    // kozen vorm en puls zelf de hardste (klokTrack) en sprongen ze bij twee
+    // ongeveer even harde tracks los van de badge heen en weer.
+    const { MAAT_WACHT } = await import('../src/engine/engine.js');
+    const e = nep(0, { A: { speelt: true, fader: 1 }, C: { speelt: true, fader: 0.9 } });   // crossfader op A: A 0 dB
+    const lezer = M.engineMaatLezer(e, DECK_IDS);
+    const wie = () => [badge(e), lezer.kies().tr?.id ?? null, maatgever(e, DECK_IDS)].join(' ');
+    const alle = (id) => wie() === [id, id, id].join(' ');
+    const stap = [alle('A')];
+    e.decks.C.ui.fader = 1; e.decks.A.ui.fader = 0.95;             // C 2,25 dB harder: te weinig
+    e.ctx.currentTime += 1;
+    stap.push(alle('A'));
+    e.decks.A.ui.fader = 0.9;                                        // C 4,5 dB harder: wachten
+    stap.push(alle('A'));
+    e.ctx.currentTime += MAAT_WACHT - 0.05;
+    stap.push(alle('A'));
+    e.ctx.currentTime += 0.06;
+    stap.push(alle('C'));
+    ok(`hysterese: badge, vorm en puls blijven samen op A tot C 3 dB harder is en ${MAAT_WACHT * 1000} ms volhoudt, dan samen naar C (${stap.map((x) => (x ? 'ja' : 'nee')).join(' ')})`,
+      stap.every(Boolean), wie());
+    e.decks.C.ui.fader = 0;                                          // C hoor je niet meer
+    ok(`maatgever die je niet hoort: badge blijft (hysterese), vorm en puls geven geen tel (${wie()})`,
+      badge(e) === 'C' && lezer.kies().tr === null && maatgever(e, DECK_IDS) === null);
+    e.decks.C.ui.fader = 1; e.decks.C.wacht = true;
+    ok(`een wachtende track (start op de maat) geeft geen maat: meteen terug naar A (${wie()})`, alle('A'));
+    e.decks.C.wacht = false; e.decks.C.remt = true;
+    ok(`een remmende track ook niet (${wie()})`, alle('A'));
   }
 }
 

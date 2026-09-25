@@ -1,5 +1,5 @@
 import { clamp } from '../lib/emitter.js';
-import { klokTrack, klinkt, pulsVorm } from '../video/puls.js';
+import { klokTrack, klinkt, pulsVorm, maatgever as engineMaatgever } from '../video/puls.js';
 import { hoorbaar } from '../engine/hoorbaar.js';
 
 /**
@@ -15,10 +15,14 @@ import { hoorbaar } from '../engine/hoorbaar.js';
  *   tel       de tel van de maatgever, dezelfde vorm als video.pulse
  *             (pulsVorm uit puls.js): vol op de tel, na een halve tel 8%.
  *
- * Maatgever = de track die het hardst klinkt, speelt en een grid heeft:
- * klokTrack uit puls.js, dezelfde keuze als de video-puls, zodat vorm en
- * video op dezelfde tel slaan. "Hardst" op het echte volume (klinkt()), dus
- * ook de track met de MAAT-badge (engine.syncMaster) zolang je hem hoort.
+ * Maatgever = de maatgever van de ENGINE (Engine.maatgever, met hysterese:
+ * 3 dB en 250 ms), via maatgever() uit puls.js: dezelfde track als de
+ * video-puls, de MAAT-badge, sync, sampler en de bussen, zodat vorm en video
+ * op dezelfde tel slaan en niet heen en weer springen als twee tracks
+ * ongeveer even hard klinken. Maar alleen zolang je hem HOORT (speelt, wacht
+ * niet op de maat, remt niet, klinkt()): een track die je niet hoort geeft
+ * geen tel. Zonder engine (`maatgever` niet meegegeven): klokTrack op de
+ * lijst, de hardste zonder geduld.
  *
  * Tijd (regel 3): alles volgt uit de POSITIE van het deck, en die komt van de
  * audioklok (bron.positie). Hoorbaar = positie min uitgangsvertraging × rate,
@@ -122,6 +126,16 @@ export const engineTracks = (engine, ids) => ids.map((id) => {
   return { id, deck, zicht: deck.buffer ? klinkt(deck.ui.fader, engine.xfadeGain(id)) : 0 };
 });
 
+/**
+ * Een MaatLezer op de engine: tracks uit engineTracks, de maatgever van de
+ * engine (hysterese), zoals de video-puls. Voor het vormpaneel en de proeven.
+ */
+export const engineMaatLezer = (engine, ids, vertraging = () => 0) => new MaatLezer({
+  tracks: () => engineTracks(engine, ids),
+  maatgever: () => engineMaatgever(engine, ids),
+  vertraging,
+});
+
 const leeg = () => ({ id: null, data: null, vanaf: -Infinity, tau: null });
 
 /**
@@ -133,10 +147,13 @@ export class MaatLezer {
   /**
    * @param tracks     () -> [{ id, zicht, deck }], deck: { playing, grid, onsets, position, rate }
    * @param vertraging () -> seconden tussen de positie en wat je hoort (outputLatency + baseLatency)
+   * @param maatgever  () -> id of null: wie de maat geeft (engineMaatgever(engine, ids)).
+   *                   Zonder: de hardste uit `tracks` (klokTrack), zonder hysterese.
    */
-  constructor({ tracks, vertraging = () => 0 } = {}) {
+  constructor({ tracks, vertraging = () => 0, maatgever = null } = {}) {
     this.tracks = tracks;
     this.vertraging = vertraging;
+    this.kiesMaatgever = maatgever;
     this.reset();
   }
 
@@ -151,10 +168,11 @@ export class MaatLezer {
   /** Wie geeft de maat, en de lijst waaruit gekozen werd. */
   kies() {
     const lijst = this.tracks?.() ?? [];
-    const id = klokTrack(lijst.map((tr) => ({
-      id: tr.id, speelt: !!tr.deck?.playing && !tr.deck?.wacht, heeftGrid: !!tr.deck?.grid, zicht: tr.zicht ?? 0,
+    const id = this.kiesMaatgever ? this.kiesMaatgever() : klokTrack(lijst.map((tr) => ({
+      id: tr.id, speelt: !!tr.deck?.playing && !tr.deck?.wacht && !tr.deck?.remt, heeftGrid: !!tr.deck?.grid, zicht: tr.zicht ?? 0,
     })));
-    return { tr: id === null ? null : lijst.find((x) => x.id === id), lijst };
+    const tr = id === null ? null : lijst.find((x) => x.id === id) ?? null;
+    return { tr, lijst };
   }
 
   /** De waarden op tijd t (seconden, audioklok, wat je hoort). */
@@ -185,7 +203,9 @@ export class MaatLezer {
       return { v, tau: lengte > 0 ? lengte / (TEL_STEIL * rate) : null };
     }, w.tel);
 
-    this.speelden = new Set(lijst.filter((x) => x.deck?.playing).map((x) => x.id));
+    // Een track die op zijn start op de maat wacht, speelt voor het oor nog
+    // niet: begint hij, dan is dat starten (alles telt), geen overnemen.
+    this.speelden = new Set(lijst.filter((x) => x.deck?.playing && !x.deck?.wacht).map((x) => x.id));
     this.waarden = nw;
     return nw;
   }
