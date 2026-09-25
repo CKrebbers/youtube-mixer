@@ -1,5 +1,6 @@
 import { clamp } from '../lib/emitter.js';
 import { klokTrack, klinkt, pulsVorm } from '../video/puls.js';
+import { hoorbaar } from '../engine/hoorbaar.js';
 
 /**
  * De maat als bron voor de vormlagen (router.js), naast de banden uit de
@@ -168,7 +169,7 @@ export class MaatLezer {
     const id = tr?.id ?? null;
     this.maatgever = id;
     const rate = d && d.rate > 0 ? d.rate : 1;
-    const pos = d ? d.position - this.vertraging() * rate : NaN;
+    const pos = d ? hoorbaar(d, this.vertraging()) : NaN;         // de maatgever speelt altijd
     // Een wissel naar een track die al speelde = overnemen: alleen wat sinds
     // het vorige beeld komt telt (een klap in dat laatste beeld verschijnt
     // zoals elke klap: één beeld later, nog bijna vol). Naar een track die

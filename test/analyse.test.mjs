@@ -562,8 +562,26 @@ console.log('regel 1 en de vormen-regels');
   ok('features, router, luisteraar en maat: geen DOM, geen eigen klok, geen timer', vies.length === 0);
   if (vies.length) console.log('      vies:', vies.join(', '));
   const imp = [...readFileSync(new URL('../src/analysis/maat.js', import.meta.url), 'utf8').matchAll(/from '([^']+)'/g)].map((m) => m[1]);
-  ok(`maat.js importeert alleen pure modules, niet de engine (${imp.join(', ')})`,
-    imp.every((x) => ['../lib/emitter.js', '../video/puls.js', '../video/volg.js'].includes(x)));
+  ok(`maat.js importeert alleen pure modules, niet de engine zelf (${imp.join(', ')})`,
+    imp.every((x) => ['../lib/emitter.js', '../video/puls.js', '../video/volg.js', '../engine/hoorbaar.js'].includes(x)));
+}
+
+console.log('wat je HOORT: één formule (engine/hoorbaar.js)');
+{
+  const H = await import('../src/engine/hoorbaar.js');
+  ok('uitgangsvertraging = outputLatency + baseLatency; ontbreekt iets, dan 0',
+    bij(H.uitgangsVertraging({ outputLatency: 0.03, baseLatency: 0.005 }), 0.035) && H.uitgangsVertraging({}) === 0 && H.uitgangsVertraging(null) === 0);
+  ok('spelend: positie min vertraging × rate (de positie loopt in tracktijd)',
+    bij(H.hoorbaar({ playing: true, position: 10, rate: 1.25 }, 0.04), 10 - 0.05) && bij(H.hoorbaar({ playing: true, position: 10 }, 0.04), 9.96));
+  ok('stilstaand: de positie zelf', H.hoorbaar({ playing: false, position: 10, rate: 1.25 }, 0.04) === 10);
+  ok('naVertraging (de video, ook stilstaand): dezelfde formule', bij(H.naVertraging(10, 0.04, 1.25), 9.95));
+  // Geen vijfde kopie: de vertraging van de geluidskaart wordt alleen hier opgeteld.
+  const { readdirSync } = await import('node:fs');
+  const alle = (map) => readdirSync(new URL(map, import.meta.url), { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory() ? alle(`${map}${e.name}/`) : e.name.endsWith('.js') ? [`${map}${e.name}`] : []));
+  const kopie = alle('../src/').filter((f) => !f.endsWith('engine/hoorbaar.js')
+    && /outputLatency/.test(readFileSync(new URL(f, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
+  ok(`outputLatency staat alleen in engine/hoorbaar.js${kopie.length ? ` (ook in ${kopie.join(', ')})` : ''}`, kopie.length === 0);
 }
 
 function nepCanvas(w, h) {

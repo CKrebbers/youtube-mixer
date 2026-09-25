@@ -4,6 +4,7 @@ import { bindVormen, VORM_KNOPPEN } from '../control/actions.js';
 import { voegVormMapjeToe } from '../control/lagen.js';
 import { meld } from './meldingen.js';
 import { Luisteraar } from '../analysis/luisteraar.js';
+import { uitgangsVertraging } from '../engine/hoorbaar.js';
 import { MaatLezer, engineTracks } from '../analysis/maat.js';
 import { Router, MIX_BRONNEN, MAAT_BRONNEN, BRON_NAAM, DOEL_PLEKKEN, leesKenmerken } from '../analysis/router.js';
 
@@ -45,7 +46,7 @@ export function opzetVormen({ videoMixer }) {
   const luisteraar = new Luisteraar({ analyser: () => engine.master?.analyser, sampleRate: () => engine.ctx.sampleRate });
   // De maat: klappen en tel van de track die het hardst klinkt (dezelfde als
   // de video-puls), op wat je hoort. Dezelfde vertraging als de mixer voor t.
-  const vertraging = () => (engine.ctx.outputLatency || 0) + (engine.ctx.baseLatency || 0);
+  const vertraging = () => uitgangsVertraging(engine.ctx);
   const maat = new MaatLezer({ tracks: () => engineTracks(engine, videoMixer.decks), vertraging });
   const router = new Router(vormen.lagen.length);
   let wasActief = false;

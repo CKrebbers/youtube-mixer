@@ -17,6 +17,7 @@ import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/b
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
 import { PITCH_BEREIKEN } from '../engine/deck.js';
+import { hoorbaar as hoorbaarVan, uitgangsVertraging } from '../engine/hoorbaar.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
 import { FITS } from '../video/passen.js';
@@ -130,11 +131,8 @@ export function bindEngine(engine) {
     // Wat je NU hoort, in tracktijd: tijdens spelen de positie min de
     // uitgangsvertraging (× rate, want de positie loopt in tracktijd), net als
     // de video-puls. Stilstaand is de positie zelf wat je hoort en ziet.
-    const hoorbaar = () => {
-      if (!d.playing) return d.position;
-      const c = engine.ctx;
-      return d.position - ((c?.outputLatency || 0) + (c?.baseLatency || 0)) * (d.rate || 1);
-    };
+    // Eén formule voor de hele app: engine/hoorbaar.js.
+    const hoorbaar = () => hoorbaarVan(d, uitgangsVertraging(engine.ctx));
 
     define(`${n}.play`, 'trigger', (on) => { if (on) d.togglePlay(); },
       { label: `Track ${nr} play/pause`, read: bool(() => d.playing) });
