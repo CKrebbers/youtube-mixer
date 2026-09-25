@@ -180,6 +180,28 @@ try {
   await fetch(`${B}/api/mapping`, { method: 'DELETE' });
   ok('standaard herstellen: weer geen eigen mapping', (await (await fetch(`${B}/api/mapping`)).json()).mapping === null);
   ok('zonder rules geweigerd', (await status('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mapping: {} }) })) === 400);
+  // Een JSON-body komt in pakketten binnen. leesJson plakte die als TEKST aan
+  // elkaar (`data += d`): een UTF-8-teken dat over de grens viel werd twee
+  // keer U+FFFD. Hier valt de grens midden in de é en midden in de “.
+  {
+    const naam = 'café — “zoned out”';
+    const body = Buffer.from(JSON.stringify({ mapping: { version: 3, name: naam, rules: [] } }));
+    const e = body.indexOf(Buffer.from('é')) + 1;
+    const q = body.indexOf(Buffer.from('“')) + 2;
+    const inStukken = (delen) => new Promise((klaar) => {
+      const rq = request({ host: '127.0.0.1', port: poort, path: '/api/mapping', method: 'POST',
+        headers: { Host: `localhost:${poort}`, 'Content-Type': 'application/json' } }, (res) => { res.resume(); res.on('end', () => klaar(res.statusCode)); });
+      rq.on('error', () => klaar(0));
+      (async () => {
+        for (const d of delen) { rq.write(d); await new Promise((z) => setTimeout(z, 30)); }
+        rq.end();
+      })();
+    });
+    const code = await inStukken([body.subarray(0, e), body.subarray(e, q), body.subarray(q)]);
+    const terug = (await (await fetch(`${B}/api/mapping`)).json()).mapping;
+    ok(`JSON in stukken met een teken over de grens: heel (${JSON.stringify(terug?.name)})`, code === 200 && terug?.name === naam);
+    await fetch(`${B}/api/mapping`, { method: 'DELETE' });
+  }
 
   console.log('\ngrid-route (tempokaart)');
   const postGrid = (id, body) => fetch(`${B}/api/library/${id}/grid`, { method: 'POST',

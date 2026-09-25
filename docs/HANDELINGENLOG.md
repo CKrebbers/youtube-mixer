@@ -178,8 +178,10 @@ tekst op byte `van`, niet achter het bestand. Zoals de WAV met `?frame=N`
 De server keurt elk stuk: alleen afdrukbare ASCII en `\n`, eindigt op `\n`, elke
 regel JSON, hooguit 4 MB, `van` een heel getal ≥ 0 en niet meer dan 256 MB
 voorbij het eind. Het id moet `YYYYMMDD-HHMMSS(-n)` zijn (geen `../`). De body
-wordt rauw gelezen en pas dan gedecodeerd (leesJson plakt pakketten als tekst
-aan elkaar, en dan kan een teken over een grens stuk gaan).
+wordt rauw gelezen (tot 8 MB) en pas dan gedecodeerd, zodat "te groot" (413)
+iets anders is dan kapot (400). `leesJson` plakte pakketten vroeger als tekst
+aan elkaar, zodat een teken over een pakketgrens stuk ging; sinds de controle
+van 25 sep verzamelt die ook bytes (`server.test.mjs` stuurt een é over de grens).
 
 ## Routes
 

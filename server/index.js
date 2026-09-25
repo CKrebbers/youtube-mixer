@@ -74,14 +74,25 @@ const json = (res, code, data) => {
   res.end(body);
 };
 
+/**
+ * Een JSON-body. De pakketten worden als BYTES verzameld en pas aan het eind
+ * één keer gedecodeerd: `data += d` decodeerde elk pakket los, en een
+ * UTF-8-teken dat over een pakketgrens viel werd dan twee keer U+FFFD (een
+ * racknaam met een é, een mapping met een “). `max` telt bytes.
+ */
 async function leesJson(req, max = 64 * 1024) {
   return new Promise((klaar) => {
-    let data = '';
+    const delen = [];
+    let n = 0;
     req.on('data', (d) => {
-      data += d;
-      if (data.length > max) { req.destroy(); klaar(null); }
+      n += d.length;
+      if (n > max) { req.destroy(); klaar(null); return; }
+      delen.push(d);
     });
-    req.on('end', () => { try { klaar(JSON.parse(data || '{}')); } catch { klaar(null); } });
+    req.on('end', () => {
+      const data = Buffer.concat(delen).toString('utf8');
+      try { klaar(JSON.parse(data || '{}')); } catch { klaar(null); }
+    });
     req.on('error', () => klaar(null));
   });
 }
@@ -682,8 +693,8 @@ const server = createServer(async (req, res) => {
     }
     const mLog = /^\/api\/handelingen\/([\w-]+)(\/stuk)?$/.exec(pad);
     if (mLog?.[2] && req.method === 'POST') {
-      // Rauw lezen en dan pas decoderen: leesJson plakt stukken als tekst
-      // aan elkaar, en dan kan een teken over een pakketgrens stuk gaan.
+      // Rauw lezen (tot 8 MB: een stuk van 4 MB kan in JSON verdubbelen) en
+      // dan pas decoderen; zo is "te groot" (413) te onderscheiden van kapot (400).
       const ruw = await leesRuw(req, 2 * handelingen.MAX_STUK + 1024);
       if (!ruw) return json(res, 413, { ok: false, fout: 'stuk te groot' });
       let body;
