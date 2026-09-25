@@ -256,7 +256,7 @@ export const MAX_TOON_STUKKEN = 4096;
 /**
  * Een toonsoortkaart uit de buitenwereld netjes maken (docs/TOONSOORT.md §3):
  *
- *   { versie, stemming, stukken: [{ van, toonsoort, stemming, zekerheid? }], bron, slot }
+ *   { versie, stemming, stukken: [{ van, toonsoort, stemming, zekerheid?, tweede? }], bron, slot }
  *
  * - `toonsoort`: de vaste spelling `C Db D Eb E F F# G Ab A Bb B`, `m` erachter
  *   voor mineur; een andere schrijfwijze van dezelfde toon ('C#', 'G#m') wordt
@@ -267,6 +267,11 @@ export const MAX_TOON_STUKKEN = 4096;
  * - `zekerheid` 0..1 blijft staan als hij er is (ook in een met de hand
  *   bewerkte kaart: stukken die je niet aanraakte houden de hunne, zoals bij
  *   het grid); een stuk zonder zekerheid is met de hand gezet en dus zeker.
+ * - `tweede`: de tweede kandidaat van de analyse (server/toon.js), in dezelfde
+ *   vaste spelling; alleen voor de tooltip. Hij hoort bij de ZEKERHEID: een
+ *   stuk zonder zekerheid (met de hand gezet) of zonder toonsoort heeft er
+ *   geen, en een tweede die gelijk is aan de toonsoort zegt niets; die vallen
+ *   weg. Een onleesbare naam maakt de kaart ongeldig, zoals bij `toonsoort`.
  * - `bron`: 'auto' of 'hand'. Ontbreekt hij, dan 'hand': wat van buiten komt
  *   zonder te zeggen wat het is, mag de achtergrond niet overschrijven.
  * - `slot`: true = met de hand bevestigd, nooit automatisch overschreven.
@@ -296,6 +301,12 @@ export function normaliseerToon(t) {
     if (s.zekerheid != null) {
       if (!getal(s.zekerheid)) return null;
       stuk.zekerheid = Math.max(0, Math.min(1, s.zekerheid));
+    }
+    if (s.tweede != null) {
+      const k2 = leesToonsoort(s.tweede);
+      if (k2 == null) return null;
+      // Alleen naast een toonsoort uit de analyse (met zekerheid), en niet dezelfde.
+      if ('zekerheid' in stuk && toonsoort !== null && toonsoortNaam(k2) !== toonsoort) stuk.tweede = toonsoortNaam(k2);
     }
     stukken.push(stuk);
   }
