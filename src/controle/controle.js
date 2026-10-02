@@ -1,10 +1,12 @@
 import { SPEELLIJST, allePunten } from './speellijst.js';
 import { KANAAL } from '../ui/status-zender.js';
 import { LOCK_NAAM } from '../ui/tabblad.js';
+import { backupTegel } from './backup-tegel.js';
 
 /**
  * De Controlekamer (controle.html, docs/CONTROLEKAMER.md). Leest:
- * - de server: /api/tooling, /api/library (aantal), /api/ingest, /api/proef;
+ * - de server: /api/tooling, /api/library (aantal), /api/ingest, /api/proef,
+ *   /api/backups (de laatste kopie van library.db);
  * - de Web Lock van de mixer (tabblad.js): is er een mixer open, wacht er een tweede;
  * - het kanaal van de mixer (status-zender.js): APC, audio, wat er speelt.
  * Opent zelf GEEN MIDI: de APC heeft maar één tabblad, de mixer.
@@ -18,6 +20,7 @@ const stand = {
   tooling: null,       // antwoord van /api/tooling
   nummers: null,       // aantal in de library
   ingest: [],          // open opdrachten
+  backup: null,        // antwoord van /api/backups
   mixer: null,         // { open, wachtend } uit de Web Lock
   status: null,        // laatste bericht van de mixer
   proef: { begonnen: null, items: {} },
@@ -46,6 +49,8 @@ async function leesServer() {
     stand.ingest = (ingest.opdrachten ?? []).filter((o) => o.status === 'wacht' || o.status === 'bezig');
     stand.server = true;
   } catch { stand.server = false; }
+  // Los: een oudere server zonder /api/backups is nog steeds een draaiende server.
+  try { stand.backup = await haal('/api/backups'); } catch { stand.backup = null; }
 }
 
 async function leesTooling() {
@@ -89,6 +94,8 @@ function tegels() {
   t.push({ naam: 'Ingest-rij', licht: stand.ingest.length ? 'half' : 'ok',
            waarde: stand.ingest.length ? `${bezig} bezig, ${wacht} wacht` : 'leeg',
            sub: stand.ingest.find((o) => o.status === 'bezig')?.titel ?? '' });
+
+  t.push(backupTegel(stand.server === false ? null : stand.backup));
 
   const m = stand.mixer;
   t.push(!m ? { naam: 'Mixer', licht: 'uit', waarde: 'onbekend', sub: 'deze browser kent geen Web Locks' }
