@@ -17,7 +17,7 @@ import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/b
 import { ToonKaart, WIJZER } from '../engine/toonsoort.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
-import { PITCH_BEREIKEN, SPRONG_TELLEN } from '../engine/deck.js';
+import { PITCH_BEREIKEN, SPRONG_TELLEN, GLIJ } from '../engine/deck.js';
 import { hoorbaar as hoorbaarVan, uitgangsVertraging } from '../engine/hoorbaar.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
@@ -427,6 +427,17 @@ export function bindEngine(engine) {
     for (const bus of ['A', 'B']) {
       define(`${n}.send.${bus.toLowerCase()}`, 'value', (v) => d.set(`send${bus}`, v),
         { label: `Track ${nr} send ${bus} (${bus === 'A' ? 'echo' : 'galm'})`, read: () => d.ui[`send${bus}`] });
+    }
+
+    // Glijdend naar een stand (Deck.glide): in GLIJ s als helling op de
+    // audioklok, voor de auto-DJ (docs/AUTO-DJ.md §2b). Zelfde 0..1 als de
+    // knop zelf (regel 2), en dus ook gewoon in het handelingenlog en terug
+    // te spelen. Bewust GEEN read: de stand lees je van de knop zelf
+    // (track.N.fader), en zonder read komt een glijdende kopie niet in de
+    // beginstand van het log (die zou bij terugspelen nog eens glijden).
+    for (const [p, naam] of [['fader', 'fader'], ['filter', 'filter'], ['sendA', 'send.a'], ['sendB', 'send.b']]) {
+      define(`${n}.${naam}.glide`, 'value', (v) => d.glide(p, v),
+        { label: `Track ${nr} ${naam} glijdend (${String(GLIJ).replace('.', ',')} s, auto-DJ)` });
     }
 
     // ---- effecten ---------------------------------------------------------

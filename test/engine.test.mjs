@@ -2733,6 +2733,112 @@ console.log('\ntransport');
   uit();
 }
 
+// ---- glijden (Deck.glide, de auto-DJ: AUTO-DJ.md §2b) ------------------------
+// Een deck met een TIJDLIJN op zijn AudioParams (test/nep-tijdlijn.mjs): zo is
+// te zien wat de parameter op elk moment doet, niet alleen zijn laatste doel.
+{
+  const { Deck, GLIJ } = await import('../src/engine/deck.js');
+  const { faderGain, filterDoelen } = await import('../src/engine/audio-graph.js');
+  const { maakTijdlijn } = await import('./nep-tijdlijn.mjs');
+  const TLE = maakTijdlijn(() => NOW);
+  const tctx = new AudioContext();
+  for (const m of ['createGain', 'createBiquadFilter']) {
+    const orig = tctx[m].bind(tctx);
+    tctx[m] = () => { const n = orig(); for (const k of ['gain', 'frequency', 'Q']) n[k] = TLE.param(n[k].value); return n; };
+  }
+  const dt = new Deck(tctx, 'T');
+  const fp = dt.chain.fader.gain;
+  const knopDb = (u) => 20 * Math.log10(faderGain(u));
+  const db = (g) => 20 * Math.log10(g);
+  dt.set('fader', 0.2);
+  NOW += 1;
+  const t = NOW;
+  const lin0 = fp.n.lin, doel0 = fp.n.target;
+  dt.glide('fader', 0.8);
+  ok(`glide: de knop staat meteen op zijn doel in de opslag, maar ui.fader leest de stand van NU (${dt.ui.fader})`,
+    dt._ui.fader === 0.8 && dt.ui.fader === 0.2);
+  ok(`... als lineaire hellingen op de AudioParam, geen setTarget en geen curve (${fp.n.lin - lin0} hellingen)`,
+    fp.n.lin - lin0 >= 4 && fp.n.target === doel0 && fp.n.curve === 0);
+  // Knop en geluid lopen samen, elke 10 ms over de hele glijbeurt.
+  let afwijking = 0, stijgt = true, vorige = -1;
+  for (let x = 0; x <= GLIJ + 0.05; x += 0.01) {
+    NOW = t + x;
+    const u = dt.ui.fader;
+    afwijking = Math.max(afwijking, Math.abs(knopDb(u) - db(fp.waarde(NOW))));
+    if (u < vorige) stijgt = false;
+    vorige = u;
+  }
+  ok(`read() volgt de audioklok: de knop loopt in ${GLIJ} s van 0,2 naar 0,8 en het geluid wijkt hooguit ${afwijking.toFixed(3)} dB af`,
+    stijgt && afwijking < 0.2 && dt.ui.fader === 0.8);
+  // Halverwege opnieuw richten: de oude helling loopt door tot na startDrempel,
+  // de nieuwe begint precies daar. Geen sprong en geen plateau.
+  dt.set('fader', 0.2);
+  NOW += 1;
+  dt.glide('fader', 0.8);
+  NOW += GLIJ / 2;
+  const t1 = NOW;
+  const oud = Array.from({ length: 40 }, (_, k) => fp.waarde(t1 + k * 0.001));
+  const knopOud = Array.from({ length: 40 }, (_, k) => dt._stand('fader', t1 + k * 0.001));
+  dt.glide('fader', 0.3);
+  const nieuw = Array.from({ length: 40 }, (_, k) => fp.waarde(t1 + k * 0.001));
+  const knopNieuw = Array.from({ length: 40 }, (_, k) => dt._stand('fader', t1 + k * 0.001));
+  const g = dt._glij.fader;
+  const nVoor = oud.findIndex((_, k) => t1 + k * 0.001 >= g.t0);
+  ok(`opnieuw richten midden in een glijbeurt: tot ${((g.t0 - t1) * 1000).toFixed(1)} ms loopt de oude door, geluid en knop precies`,
+    nVoor > 2 && oud.slice(0, nVoor).every((v, k) => v === nieuw[k]) && knopOud.slice(0, nVoor).every((v, k) => v === knopNieuw[k]));
+  let sprong = 0, plateau = 0;
+  for (let k = 1; k < 40; k++) {
+    sprong = Math.max(sprong, Math.abs(db(nieuw[k]) - db(nieuw[k - 1])));
+    if (k > nVoor + 1 && Math.abs(nieuw[k] - nieuw[k - 1]) < 1e-12) plateau++;
+  }
+  ok(`... en daarna de nieuwe kant op zonder sprong (hooguit ${sprong.toFixed(3)} dB per ms) en zonder stilstand (${plateau})`,
+    sprong < 0.2 && plateau === 0 && nieuw[39] < nieuw[nVoor] && knopNieuw[39] < knopNieuw[nVoor]);
+  // Ingrijpen (een gewone set, Clay's fader) midden in een glijbeurt.
+  NOW += 0.02;
+  const t2 = NOW, voor = fp.waarde(t2), gepland = fp.waarde(t2 + GLIJ);
+  dt.set('fader', 1);
+  ok(`set midden in een glijbeurt: het geluid gaat verder waar het NU is (${db(voor).toFixed(3)} dB), geen sprong`,
+    Math.abs(fp.waarde(t2) / voor - 1) < 1e-12 &&fp.waarde(t2 + 0.001) > voor && fp.waarde(t2 + 0.001) < faderGain(1));
+  ok(`... de rest van de glijbeurt is weg: na ${GLIJ} s op de nieuwe stand, niet op ${db(gepland).toFixed(2)} dB; de knop meteen`,
+    Math.abs(fp.waarde(t2 + GLIJ) / faderGain(1) - 1) < 1e-6 && dt.ui.fader === 1 && !dt._glij.fader);
+  // Filter: vier parameters, in Hz langs de knop (exponentieel, dus in octaven gelijkmatig).
+  NOW += 1;
+  const t3 = NOW;
+  dt.glide('filter', 0.15);
+  let oct = 0;
+  for (let x = 0.02; x <= GLIJ; x += 0.02) {
+    const [, , lf] = filterDoelen(dt._stand('filter', t3 + x));
+    oct = Math.max(oct, Math.abs(Math.log2(dt.chain.lpf.frequency.waarde(t3 + x) / lf)));
+  }
+  const eindF = filterDoelen(0.15);
+  ok(`filter glijdt: lowpass langs de knop (hooguit ${oct.toFixed(3)} octaaf ernaast), en eindigt op ${Math.round(eindF[2])} Hz, Q ${eindF[3].toFixed(2)}`,
+    oct < 0.05 && Math.abs(dt.chain.lpf.frequency.waarde(t3 + GLIJ + 0.01) - eindF[2]) < 1e-6 && Math.abs(dt.chain.lpf.Q.waarde(t3 + GLIJ) - eindF[3]) < 1e-9);
+  dt.glide('sendB', 0.6);
+  ok('send glijdt kwadratisch, zoals de knop (0,6 → gain 0,36)', Math.abs(dt.sendB.gain.waarde(NOW + GLIJ) - 0.36) < 1e-9 && dt.ui.sendB < 0.6);
+  dt.glide('low', 0.3);
+  ok('een knop die niet glijdt (de bas: een schakelaar in de overgang) wordt een gewone set', dt.ui.low === 0.3 && dt._glij && !dt._glij.low);
+  const sn = { ...dt.ui };
+  ok(`snapshot van ui (spreiden) geeft de tussenstand als getal (${sn.sendB})`, typeof sn.sendB === 'number' && sn.sendB < 0.6 && sn.sendB >= 0);
+  dt.ui.sendB = 0.1;
+  ok('schrijven in ui (zoals tests doen) stopt het glijden', dt.ui.sendB === 0.1 && dt._glij && !dt._glij.sendB);
+  ok(`geen curve, geen breuk, geen NotSupportedError op het glijdende deck (${TLE.stats.CURVE_BREUK} / ${TLE.stats.OVERLAP_FOUTEN}), en er werd geglijd`,
+    TLE.stats.CURVE_BREUK === 0 && TLE.stats.OVERLAP_FOUTEN === 0 && fp.n.curve === 0 && fp.n.lin > 0);
+  // Via de bus, op de echte engine (de strenge mock van deze test).
+  const dE = eng.deck('E');
+  invoke('track.5.fader', 0.1);
+  NOW += 1;
+  invoke('track.5.fader.glide', 0.9);
+  NOW += 0.1;
+  invoke('track.5.filter.glide', 0.3); invoke('track.5.send.a.glide', 0.4); invoke('track.5.send.b.glide', 0.2);
+  invoke('track.5.fader.glide', 0.7);
+  const r = read('track.5.fader');
+  NOW += GLIJ;
+  ok(`de bus: track.5.fader.glide (en filter, send.a, send.b): read volgt (${r.toFixed(3)} → ${read('track.5.fader')}), zonder read op de glijactie zelf`,
+    r > 0.1 && r < 0.9 && read('track.5.fader') === 0.7 && dE.ui.filter === 0.3 && dE.ui.sendA === 0.4 && dE.ui.sendB === 0.2
+    && read('track.5.fader.glide') === null);
+  invoke('track.5.fader', 1); invoke('track.5.filter', 0.5); invoke('track.5.send.a', 0); invoke('track.5.send.b', 0);
+}
+
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);
 ok(`geen enkele afgebroken curve in de hele test (${CURVE_BREUK}): in Chrome een sprong`, CURVE_BREUK === 0);
 

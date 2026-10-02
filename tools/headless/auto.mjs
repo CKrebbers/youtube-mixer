@@ -141,6 +141,18 @@ try {
       if (!window.auto.aan || !window.auto.hoofd) return;
       if (p < 0.003) { s.sinds ??= nu; s.max = Math.max(s.max, nu - s.sinds); } else s.sinds = null;
     }, 50);
+    // Glijden (AUTO-DJ.md §2b): wat de fader van track 2 echt doet tijdens de
+    // blend (AudioParam.value, elke ~10 ms) naast de knop (ui.fader, read), en
+    // hoeveel glijregels de automaat op de bus zet.
+    window.__glij = { proef: [], regels: 0 };
+    const busOud = a._invoke;
+    a._invoke = (id, v) => { if (/\.glide$/.test(id)) window.__glij.regels++; return busOud(id, v); };
+    setInterval(() => {
+      if (a.fase !== 'bezig' || a.volgende?.deckId !== 'B') return;
+      const d = e.deck('B');
+      if (!d.playing || d.wacht) return;
+      window.__glij.proef.push([e.ctx.currentTime, d.chain.fader.gain.value, d.ui.fader]);
+    }, 10);
     await e.resume();
     return true;
   })()`);
@@ -165,6 +177,31 @@ try {
   const eerste = await (async () => { for (let i = 0; i < 600; i++) { const n = await evalueer('window.__stil.overgangen.length'); if (n >= 1) return true; await wacht(250); } return false; })();
   ok('overgang 1 (blend) is klaar: track 2 speelt alleen', eerste && await evalueer("window.auto.hoofd === 'B' && window.engine.deck('B').playing && !window.engine.deck('A').playing"));
   ok('... op het tempo van track 1 gesynct (124)', Math.abs(await evalueer("window.engine.deck('B').bpm") - 124) < 0.05);
+  {
+    // Glad: tijdens het opengaan stijgt de AudioParam gelijkmatig (een trapje
+    // springt na elke tik van 40 ms en staat dan stil), en knop en geluid
+    // lopen samen (read() = wat de AudioParam doet, op een renderblok na).
+    const { proef, regels } = await evalueer('window.__glij');
+    const open = proef.filter(([, , u]) => u > 0.2 && u < 0.95);
+    const helling = [];
+    let verschil = 0;
+    for (let i = 1; i < open.length; i++) {
+      const dt = open[i][0] - open[i - 1][0];
+      if (dt > 0) helling.push((20 * Math.log10(open[i][1] / open[i - 1][1])) / dt);
+      const knopDb = (1 - open[i][2]) * -45, echtDb = 20 * Math.log10(open[i][1]);
+      verschil = Math.max(verschil, Math.abs(knopDb - echtDb));
+    }
+    let stil = 0, gemeten = 0;
+    for (let i = 10; i < helling.length - 10; i++) {
+      const gem = helling.slice(i - 10, i + 10).reduce((x, y) => x + y, 0) / 20;
+      if (!(gem > 0)) continue;
+      gemeten++;
+      if (helling[i] < 0.25 * gem) stil++;
+    }
+    ok(`blend: de fader van track 2 glijdt (${gemeten} metingen, ${stil} keer (bijna) stil; ${regels} glijregels)`,
+      gemeten > 100 && stil <= gemeten * 0.05 && regels > 10);
+    ok(`... read() en de AudioParam lopen samen (hooguit ${verschil.toFixed(2)} dB verschil)`, verschil < 0.5);
+  }
   for (let i = 0; i < 50; i++) { if (await evalueer("window.auto.fase === 'klaar'")) break; await wacht(200); }
   let r2 = await rij();
   for (let i = 0; i < 50 && !/mist/.test(r2.volgende); i++) { await wacht(200); r2 = await rij(); }
