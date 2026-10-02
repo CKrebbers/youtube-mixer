@@ -125,8 +125,10 @@ soort overgang, over hoeveel maten (of mm:ss), "plan" · tooltip = waarom ·
 **ok** (bevestigd) · **overslaan** · **langer** (+8 maten, beatloos +30 s) ·
 **nu** (eerstvolgende 4 maten) · het plan en de stap.
 
-Actions: `auto.aan`, `auto.ok`, `auto.skip`, `auto.langer`, `auto.nu`. Geen
-plek op de standaard-APC (AU1); koppelen werkt.
+Actions: `auto.aan`, `auto.ok`, `auto.skip`, `auto.langer`, `auto.nu`.
+Op de APC: modus auto (Shift + scene 4 of ▲ ▼), bovenste rij ok · overslaan ·
+langer · nu en pad 8 aan/uit, met lampjes die tonen of er een voorstel klaarstaat
+(docs/APC40.md, "Modus auto"; gebouwd 2 okt, AU1).
 
 ## 5. Het setplan (Claude schrijft, de app volgt)
 
@@ -202,8 +204,8 @@ seek naar een beginpunt midden in een uur), met de APC, op de M1. Niet beluister
 
 ## 9. Open vragen (VRAGEN blok L)
 
-- **AU1 🎛** Welke APC-knoppen voor ok/overslaan/langer/nu? Advies: een eigen
-  mapje "auto" als fragment (zoals "vorm"), één rij met de vier in kleur.
+- ~~**AU1 🎛** Welke APC-knoppen voor ok/overslaan/langer/nu?~~ Gebouwd 2 okt als
+  zesde grid-modus (geen fragment: de auto-DJ hangt niet aan een vlag), zie §4.
 - **AU2 👂** Klinkt overvloeien in 24 s goed bij jouw muziek, of langer (32–48 s)?
 - **AU3 👂** Moet "nu" bij beatloos echt meteen, of 4 s later zodat je het ziet aankomen?
 - **AU4 💬** Mag de automaat tracks laden op een lege track als jij daar straks iets wilt? (Nu: eerst zijn eigen twee, dan een lege.)

@@ -121,11 +121,13 @@ src/
                     beamer.js       wie mengt: hoofdvenster of los venster (de beamer), en de inloop. Puur.
                     beamer-venster.js video.html: het losse venster mengt ZELF (eigen <video>'s, WebGL, lus)
                     fouten.js       video ontbreekt of laadt niet: tekst en wachtregel. Puur.
+                    eindbeeld.js    beeld-noodknoppen: zwart, bevriezen, master, flits (laatste stap). Puur.
   plan/             plan-model.js   het setplan als data: formaat v2, normaliseerPlan, bewerk, verschil. Puur (ook door de server gebruikt)
                     tijdlijn.js     voorspel: set-tijden en de overgang die de app echt kiest. Puur.
                     plan-venster.js het planvenster (plan.html): lijst, strook, bewerken, opslaan met versie, live via opener
   controle/         controle.js     de Controlekamer: tegels (server, ingest, mixer via de Web Lock, APC via het kanaal), speellijst
                     speellijst.js   de punten van een proefsessie, in blokken. Puur data; de stand staat in proef/sessie.json
+                    backup-tegel.js de tegel "Backup" (laatste kopie, of de fout). Puur.
   auto/             planner.js      de auto-DJ, puur: welk fragment, welke overgang (bewakers), wanneer (frasegrens), de curves
                     automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
@@ -136,6 +138,7 @@ server/             draait apart: `node server/index.js`
   ingest.js         yt-dlp (of een eigen bestand) -> ffmpeg -> media/<id>/. Gooit nooit.
   links.js          links netjes maken (TikTok), bron van een nummer, id's, bestandsnamen
   library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren), peaks, racks, grid, toonsoort, hotcues.
+  backup.js         backups van library.db: wanneer, hoeveel, opruimen; het werk in backup-werker.js (worker)
   analyze.js        golfvorm-peaks, onset-envelope en toonsoort vooraf, streamend uit ffmpeg
   analyse-werker.js peaks, onset, tap-verfijning en toonsoort in een worker_thread (server blijft vrij)
   detect.js         FFT, onset-envelope, tempo, segmentatie (+ tweede kans). Geen dependencies.
@@ -168,6 +171,7 @@ test/
   learn.test.mjs    MIDI-learn, modusherkenning, export/import-rondje
   midi.test.mjs     parsen, poortkeuze op naam, echodetectie
   library.test.mjs  database, effect-racks per link, cascade bij verwijderen, migraties (SCHEMA.length)
+  backup.test.mjs   backups: geldige kopie uit de WAL, niet dubbel, opruimen, mislukken, niet via HTTP
   library-lijst.test.mjs  virtuele lijst, pagina-cache (ook de race bij een nieuwe sortering), kolommen
   ingest.test.mjs   pipeline zonder netwerk; ffmpeg maakt zijn eigen testmateriaal
   wachtrij.test.mjs wachtrij, annuleren (ook midden in een nep-download), playlist, dubbel, voortgang, strook
@@ -197,7 +201,8 @@ test/
                     (ms per stap in THREADtijd, beste van 3: de wandklok telde onder load de planner mee)
   werker.test.mjs   Worker-logica zonder Worker, budget met nep-klok, noodrem, terugval
   plan.test.mjs     setplan: formaat, bewerken, verschil, voorspelling, opslag met versies (409, .versies)
-  auto.test.mjs     auto-DJ: planner (bewakers, frasegrenzen, curves, kiezer) en de automaat op een engine (blend, beatloos, overnemen)
+  auto.test.mjs     auto-DJ: planner (bewakers, frasegrenzen, curves, kiezer) en de automaat op een engine (blend, beatloos, overnemen, glijden)
+  nep-tijdlijn.mjs  nep-AudioParam die uitrekent wat de param op elk moment doet (geen test zelf)
   klankschaal.test.mjs  stemming (24 toonsoorten × ladders), toonhoogte gemeten, slapen, wrijven, afval, engine en bus
   analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions, maatbronnen
   alles.mjs         alle tests in één keer met overzicht
@@ -720,6 +725,42 @@ docs/
     server (`/api/mapping`, instellingen-tabel) en in localStorage als reserve;
     bij opstarten gaat de server voor (E3; sinds 25 sep als VERSCHIL, zie onder
     MAPJES). MAAT-badge toont wie de maat geeft.
+- BEELD-NOODKNOPPEN (2 okt, ONTBREEKT A4, `docs/BEAMER.md`): `video.black` (fade
+  250 ms), `.black.hold` (direct), `video.freeze`, `video.master` (0..1) en
+  `video.flash` (300 ms) werken in de LAATSTE stap (tonen, `src/video/eindbeeld.js`):
+  zaal, los venster en opname zien hetzelfde, de sporen onthouden er niets van.
+  Zwart wint van alles en is precies 0. De klok is `performance.timeOrigin +
+  performance.now()`, NIET de audioklok: een fade op een stilstaande AudioContext
+  wordt nooit klaar, en de absolute klok is in beide vensters dezelfde. Het losse
+  venster neemt de stand over in `neemOver`; `toonBeeld` (inloop) zet de toon
+  neutraal, want het geleende beeld heeft hem al. Bevroren toont het laatste
+  eindbeeld van NA het indrukken; de video's lopen door. Zwart en bevriezen staan
+  in de beginstand van het log. APC: de master-knop (`note:0:80`) = zwart in elk
+  mapje; in de modus video rechts flits, zwart vasthouden, zwart, bevriezen.
+- BACKUP VAN DE LIBRARY (2 okt, ONTBREEKT A6, `server/backup.js`, docs/LIBRARY.md
+  "Backup"): `VACUUM INTO` op een eigen alleen-lezen verbinding in een
+  worker_thread, NOOIT het bestand kopiëren (in WAL staat recent werk alleen in
+  `-wal`). Bij het opstarten en elk uur als `lib.wijzigingen()` veranderde; alleen
+  bewaard als de SHA-256 afwijkt van de nieuwste kopie; fsync en quick_check vóór
+  het hernoemen. Bewaard: de laatste 12 plus de nieuwste per dag van 30 dagen,
+  alleen namen `library-JJJJ-MM-DD_UU-MM-SS.db`. Standaard `media/backups/`,
+  `VARVE_BACKUPS` om te verleggen. Mislukt = `[backup] MISLUKT` in het log en een
+  rode tegel in de Controlekamer; de server draait door. `GET /api/backups` geeft
+  alleen de stand; de kopieën staan niet op de witte lijst. Terugzetten met de
+  hand: server stoppen, `library.db` plus `-wal`/`-shm` opzij, kopie als `library.db`.
+- RANDGEVALLEN (2 okt, ONTBREEKT A9, VERBETERINGEN ronde 4):
+  - Hotcues: van 'load' tot het antwoord van de server is een gezette hotcue
+    VOORLOPIG en gaat niet naar de server. Een bewaarde op die plek wint, en het
+    deck springt erheen als de druk ≤ `HOTCUE_VERS` (1 s) oud is; een lege plek
+    houdt de jouwe. Mislukt het ophalen, dan blijft de voorlopige alleen op het
+    deck. (De sprong naar de bewaarde gaat niet via de bus.)
+  - Geen enkele trap van `syncMaster` kiest een track die remt.
+  - `speelt` en `remt` komen van de audioklok (`remVoorbij` in bron.js): vanaf de
+    stilstand is het een pauze, ook als de timer nog niet vuurde; tempo, loop of
+    pauze in dat gat maken de pauze eerst af (`_remAfAlsStil`).
+  - Gate zonder maat: de poort gaat open via `zetHellingen` na `startDrempel`,
+    elke puls met een eigen gain die uitvloeit voordat de bron stopt. Op nu staat
+    alleen nog de declick van de BufferBron.
 - OVERAL OPENEN (2 okt, `docs/TAILSCALE.md`): niet publiek, via Tailscale.
   `tailscale serve --bg 8777` zet HTTPS voor de server; `VARVE_HOSTS=<naam>.ts.net`
   laat die naam door `vreemdVerzoek` (Host zonder poort of :443, Origin
@@ -834,7 +875,7 @@ docs/
   dat open staat, en met shift vast in de shift-laag. De LED's volgen
   `mapping.actieveRegels()`; wat bij een dicht mapje hoort gaat uit, en het
   ringtype wisselt mee. `mapje-balk.js` toont bij elke wissel wat de knoppen
-  doen. De standaardmapping (374 regels sinds voorstel A, 25 sep) volgt de
+  doen. De standaardmapping (374 regels sinds voorstel A, 25 sep; 387 sinds 2 okt: modus auto en beeld-noodknoppen) volgt de
   tabel in `docs/APC40.md`; aanpassen mag gewoon in de JSON of met koppelen.
   Grid-modus KLANK (magenta): Shift + scene 5 (scene 5 zelf blijft één druk
   "loop weg") of ▲ ▼. Per kolom rij 1–3 kill hoog/mid/laag zolang je drukt
@@ -842,6 +883,13 @@ docs/
   brandt scene 5 magenta via `led.lees` (lees bepaalt ook KLEUR en tel). Kill
   fel rood = weg, donkerrood = open; rem fel oranje = remt, donker = speelt. De
   spiegel licht op zoals de LED (`lamp`/`lampOm` = led.lees/led.invert).
+  MODUS AUTO (2 okt, VRAGEN AU1, `docs/APC40.md` "Modus auto"): zesde grid-modus
+  `grid.auto` (limoen) in de STANDAARDmapping, geen fragment: de auto-DJ hangt niet
+  aan een vlag. Openen: Shift + scene 4 of ▲ ▼ (na klank); in auto brandt scene 4
+  fel limoen via `led.lees`, de knop blijft video. Bovenste rij: pad 1 ok, 2
+  overslaan, 3 langer, 4 nu, 8 aan/uit; lampjes uit de reads van `bindAuto`. In de
+  grid-modus blijft Shift + scene 4 "halve tel" (eigen regel
+  `note:0:85#shift@edit.aan`). Standaardmapping 387 regels (met de noodknoppen).
   `apc.html` is een interactieve kaart: één APC met de knoppen op hun ECHTE
   plek (uitgemeten op de Features-tekening, User Guide p4: apparaat x 70–1040,
   y 392–970 → procenten). Schakelaars voor grid-modus, strip/rack en shift;
@@ -1095,6 +1143,16 @@ Volledig in `docs/AUTO-DJ.md`. Wat een bouwer niet mag missen:
   Nieuwe knoppen op een deck die de mix raken: daar ook bij zetten.
 - Waar de overgang is komt van de POSITIE van de uitgaande (regel 3); de timer
   van 40 ms beslist alleen wanneer er gekeken wordt.
+- Fades GLIJDEN (2 okt, ONTBREEKT A7, AUTO-DJ.md §2b):
+  `track.N.{fader,filter,send.a,send.b}.glide` = "glijd hierheen in GLIJ = 0,5 s"
+  (0..1, geen read, dus niet in de beginstand van het log). De automaat stuurt het
+  punt van de curve dat GLIJ verderop ligt (vanaf de positie van de uitgaande),
+  opnieuw zodra er nog 0,1 s te gaan is. De bas (wissel) en het einde blijven
+  directe standen. `Deck.glide`: lineaire hellingen na startDrempel; een nieuwe
+  glijbeurt laat de lopende doorlopen tot daar (`zetVervolg`, cancelAndHold in de
+  TOEKOMST op lineaire hellingen, geen curve), een gewone set houdt vast waar het
+  geluid nu is. `deck.ui` leest via getters de stand van NU (ctx.currentTime);
+  schrijven stopt het glijden. Test met `test/nep-tijdlijn.mjs`.
 
 ## Het planvenster (fase 1, gebouwd 30 sep)
 

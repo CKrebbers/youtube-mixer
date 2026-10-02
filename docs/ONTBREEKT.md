@@ -18,12 +18,12 @@ Wat je bij een live set merkbaar mist of wat je handwerk beschermt. Op belang.
 | A1 | **Koptelefoon-cue (PFL, cue-mix)** | Een volgend nummer voorbeluisteren zonder dat de zaal het hoort. Eén geluidskaart met uitgang 3/4 houdt één klok (regel 3); twee apparaten geven twee klokken. Eerst de hardware kiezen. Dezelfde meerkanaals-uitgang is later de weg naar Logic. | ROADMAP 25 · VRAGEN F1 · alle DJ-software | M–L |
 | A2 | **Keylock en toon verschuiven** | Bij sync schuift nu de toon mee met het tempo, en daardoor staat de auto-DJ veel blends niet toe. Ontwerp en metingen liggen klaar (Signalsmith in de streamlezer). Wacht op luistertest A3. | ROADMAP 15 · KEYLOCK.md · VRAGEN I1–I4 | L |
 | A3 | **Sync die blijft volgen (sync-lock)** | Sync zet het tempo nu één keer gelijk (engine.js:437). Wisselt de maatgever van tempo (een nieuw stuk in zijn tempokaart), dan loopt elke gesyncte track weg. | VERBETERINGEN ronde 3 · alle DJ-software | M |
-| A4 | **Beeld-noodknoppen: zwart, bevriezen, master-dekking, flits** | Basisgereedschap voor de beamer; zwart moet altijd kunnen. Bestaat nu niet (alleen de zes video-effecten). | ROADMAP 23 · blauwdruk | S |
+| A4 | **Beeld-noodknoppen: zwart, bevriezen, master-dekking, flits (gebouwd 2 okt)** | Basisgereedschap voor de beamer; zwart moet altijd kunnen. Bestaat nu niet (alleen de zes video-effecten). | ROADMAP 23 · blauwdruk | S |
 | A5 | **Herstel na crash of herladen** | Welke nummers op welke track stonden, posities, loops. Nu weg na een herlaad; Chrome crashte al eens in de MIDI-dienst. De beginstand van het handelingenlog is herbruikbaar. | DJ-vergelijking | M |
-| A6 | **Backup van de library** | library.db bevat handwerk: grids op slot, hotcues, racks, toonsoorten. Er is geen backup en geen Time Machine. | DJ-vergelijking | S |
-| A7 | **Auto-DJ: vloeiende fades** | Overgangen lopen nu in stapjes van ~0,45 dB per 40 ms over de bus; een opname bewaart die trapjes. Wordt een helling op de audioklok. | AUTO-DJ.md §7 | S–M |
-| A8 | **APC-knoppen voor de auto-DJ** | ok, overslaan, langer en nu als eigen mapje, zodat je zonder muis bijstuurt. De actions bestaan al. | VRAGEN AU1 | S |
-| A9 | **Vier live-randgevallen** | Een lege hotcue vlak na het laden overschrijft de bewaarde · sync kan terugvallen op een remmende track · na stilstand telt een track nog even als remmend · gate zonder maat start op "nu". | VERBETERINGEN ronde 4 | S |
+| A6 | **Backup van de library (gebouwd 2 okt)** | library.db bevat handwerk: grids op slot, hotcues, racks, toonsoorten. Er is geen backup en geen Time Machine. | DJ-vergelijking | S |
+| A7 | **Auto-DJ: vloeiende fades (gebouwd 2 okt)** | Overgangen lopen nu in stapjes van ~0,45 dB per 40 ms over de bus; een opname bewaart die trapjes. Wordt een helling op de audioklok. | AUTO-DJ.md §7 | S–M |
+| A8 | **APC-knoppen voor de auto-DJ (gebouwd 2 okt)** | ok, overslaan, langer en nu als eigen mapje, zodat je zonder muis bijstuurt. De actions bestaan al. | VRAGEN AU1 | S |
+| A9 | **Vier live-randgevallen (gebouwd 2 okt)** | Een lege hotcue vlak na het laden overschrijft de bewaarde · sync kan terugvallen op een remmende track · na stilstand telt een track nog even als remmend · gate zonder maat start op "nu". | VERBETERINGEN ronde 4 | S |
 | A10 | **Luistertests A2 en A3 (jij)** | Streamen, loops en springen beluisteren (A2), en de keylock-proef (A3). Geen bouwwerk, wel nodig vóór een echte set. | ROADMAP 19 · VRAGEN A2, A3 | — |
 
 ## B. Later
@@ -118,6 +118,8 @@ Botst met een vastgelegde keuze (CLAUDE.md, VRAGEN).
 | D5 | **Link als native module, eigen Syphon/NDI-helper, VARVE in TouchDesigner draaien, Link Audio** | GPL of native code in het serverproces, of een tweede beamer over het netwerk. Pas heroverwegen als de goedkope routes tekortschieten. | onderzoek Logic/TD | — |
 
 ## Voorstel voor de volgorde
+
+**Stand 2 okt (avond):** stap 1 is gebouwd (A4, A6, A7, A8, A9), zie HANDOFF.
 
 1. Eén sessie "klein en veilig": A6 backup, A4 beeld-noodknoppen, A8 auto-DJ op de APC,
    A9 de vier randgevallen, A7 vloeiende fades.

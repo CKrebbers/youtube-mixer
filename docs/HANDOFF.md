@@ -14,6 +14,27 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 2 OKT (laat): DE KLEINE VEILIGE PUNTEN GEBOUWD (cloudsessie)
+
+Clay: "begin met de kleine veilige punten" (stap 1 van docs/ONTBREEKT.md). Vijf
+agenten in eigen worktrees, daarna samengevoegd op `claude/ecstatic-feynman-sm6x58`:
+- **A4 beeld-noodknoppen** (`src/video/eindbeeld.js`): zwart, zwart vasthouden,
+  bevriezen, master, flits; ook in het losse venster en de opname. APC: de
+  master-knop = zwart in elk mapje; modus video rechts de vier. Gemeten in headless
+  Chromium (pixels, fade-tijden), niet in Clay's Chrome met een beamer.
+- **A6 backup** (`server/backup.js`): VACUUM INTO in een worker, bij opstarten en
+  elk uur als er iets veranderde, 12 + 30 dagen, `media/backups/`; tegel Backup
+  in de Controlekamer. **De server moet herstarten** (nieuwe route `/api/backups`).
+- **A7 vloeiende fades** in de auto-DJ (`*.glide`-actions, `Deck.glide`, hellingen
+  op de audioklok). Headless gemeten; **niet beluisterd**.
+- **A8 modus auto** op de APC (Shift + scene 4): ok, overslaan, langer, nu, aan/uit.
+- **A9** hotcue vlak na laden, rem-gat, syncMaster-terugval, gate zonder maat.
+Tests: 41 bestanden, 3845 checks; `ingest.test` groen met yt-dlp, `wachtrij.test`
+rood in de cloudcontainer (weesprocessen; was vóór dit werk al zo). De speellijst
+van de Controlekamer heeft 7 punten erbij (auto-APC, glad, zwart, nood, hotcue,
+gate, backup). Eerst doen (Clay): `git pull`, server herstarten, mixer herladen,
+de nieuwe punten in de speellijst.
+
 ## 2 OKT (avond): WAT ER NOG ONTBREEKT (cloudsessie, docs/ONTBREEKT.md)
 
 Drie agenten: open punten in de eigen docs (tegen de code), vergelijking met
