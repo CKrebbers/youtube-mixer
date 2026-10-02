@@ -652,6 +652,22 @@ export function bindVideo(mixer) {
     { label: 'Video: puls op de tel', read: () => mixer.puls });
   define('video.pulse.target', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
     { label: 'Video: wat er pulst', read: () => PULS_DOELEN.indexOf(mixer.pulsDoel) / (PULS_DOELEN.length - 1) });
+
+  // De noodknoppen van de beamer (src/video/eindbeeld.js), op het EINDbeeld:
+  // de zaal, het losse venster en de video-opname zien hetzelfde.
+  // Zwart als schakelaar dooft in 250 ms; de drukvariant is direct en laat
+  // bij loslaten de schakelaar beslissen. read = de stand van de SCHAKELAAR
+  // (niet hoe ver de fade is), zodat een LED meteen zegt wat je deed.
+  define('video.black', 'trigger', (on) => { if (on) mixer.zetZwart(!mixer.eindbeeld.zwartAan); },
+    { label: 'Video: zwart (aan/uit)', read: () => (mixer.eindbeeld.zwartAan ? 1 : 0) });
+  define('video.black.hold', 'trigger', (on) => mixer.zetZwartVast(!!on),
+    { label: 'Video: zwart zolang je drukt', read: () => (mixer.eindbeeld.zwartVast ? 1 : 0) });
+  define('video.freeze', 'trigger', (on) => { if (on) mixer.zetBevroren(!mixer.eindbeeld.bevroren); },
+    { label: 'Video: beeld bevriezen (aan/uit)', read: () => (mixer.eindbeeld.bevroren ? 1 : 0) });
+  define('video.master', 'value', (v) => mixer.zetMaster(v),
+    { label: 'Video: master (helderheid van het eindbeeld)', read: () => mixer.eindbeeld.master });
+  define('video.flash', 'trigger', (on) => { if (on) mixer.flits(); },
+    { label: 'Video: witte flits', read: () => (mixer.flitsNu() > 0 ? 1 : 0) });
 }
 
 /**

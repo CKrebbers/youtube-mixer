@@ -1,5 +1,5 @@
 import { DECK_IDS } from '../engine/engine.js';
-import { trackVanDeck } from '../control/actions.js';
+import { trackVanDeck, read as leesAction } from '../control/actions.js';
 import { isTypen } from '../control/keyboard.js';
 import { VideoMixer } from '../video/video-mixer.js';
 import { Beamer } from '../video/beamer.js';
@@ -86,6 +86,11 @@ export function opzetVideo({ engine }) {
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) zetVoorbeeld(null); });
 
+  // De noodknoppen (zwart, bevries, flits): hun stand komt van de bus
+  // (read), zoals bij elke knop die ook via de APC of een log kan wisselen.
+  const noodKnoppen = [...videoPaneel.querySelectorAll('.vid-nood [data-kind="button"]')];
+  const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
+
   /** Eén frame: mengen als het hier moet, en de statusregel bijwerken. */
   const teken = () => {
     const w = wie();
@@ -105,6 +110,11 @@ export function opzetVideo({ engine }) {
     if (fitEl && fitEl.textContent !== videoMixer.fit) fitEl.textContent = videoMixer.fit;
     const doelEl = videoPaneel.querySelector('.vid-pulsdoel');
     if (doelEl.textContent !== videoMixer.pulsDoel) doelEl.textContent = videoMixer.pulsDoel;
+    for (const b of noodKnoppen) {
+      // Zwart brandt ook zolang de drukvariant vastzit (shift + vasthouden).
+      const extra = b.dataset.actionShift ? leesAction(b.dataset.actionShift) === 1 : false;
+      klasse(b, 'on', leesAction(b.dataset.action) === 1 || extra);
+    }
     const statusEl = videoPaneel.querySelector('.vid-status');
     if (statusEl.textContent !== tekst) statusEl.textContent = tekst;
     const titel = w.los ? 'het losse venster mengt (het loopt door als dit tabblad verborgen is)'

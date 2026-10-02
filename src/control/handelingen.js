@@ -218,9 +218,13 @@ export function leesLog(tekst) {
  * Trigger-actions waarvan de read een STAND is die je terugzet door te
  * drukken tot hij klopt: een knop die rondloopt (curve, tellen, mengvorm), of
  * een schakelaar voor de hele engine (quantize, dj-transport: anders snapt
- * een teruggespeelde hotcue anders dan toen).
+ * een teruggespeelde hotcue anders dan toen). Ook zwart en bevriezen van de
+ * beamer (eindbeeld.js): een set die zwart begon, begint teruggespeeld ook
+ * zwart. Niet de drukvariant (video.black.hold) en niet de flits: die zijn
+ * een gebaar, geen stand. De video-master is een value en gaat vanzelf mee.
  */
-export const RONDLOPERS = ['mixer.xfader.curve', 'sampler.length', 'video.mode', 'video.fit', 'video.pulse.target', 'transport.quantize'];
+export const RONDLOPERS = ['mixer.xfader.curve', 'sampler.length', 'video.mode', 'video.fit', 'video.pulse.target', 'transport.quantize',
+  'video.black', 'video.freeze'];
 
 /**
  * Value-actions die NIET in de beginstand staan: positie, tempo en grid

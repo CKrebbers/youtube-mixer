@@ -137,6 +137,11 @@ export function beschrijf(action) {
     'auto.skip': ['overslaan', 'auto-DJ: niet deze, de volgende kandidaat (lampje = er staat een overgang klaar)'],
     'auto.langer': ['langer', 'auto-DJ: nog 8 maten (beatloos 30 s) langer op de track die nu klinkt'],
     'auto.nu': ['nu', 'auto-DJ: de overgang nu, op de eerstvolgende 4 maten (beatloos: meteen)'],
+    'video.black': ['zwart', 'video: zwart aan/uit, met een korte fade (250 ms) — voor de zaal, het losse venster en de opname'],
+    'video.black.hold': ['zwart!', 'video: zwart zolang je drukt, direct (loslaten = terug)'],
+    'video.freeze': ['bevries', 'video: het beeld bevriezen aan/uit (de video\'s lopen door, loslaten = meteen het goede beeld)'],
+    'video.master': ['beeld', 'video: master, de helderheid van het eindbeeld (dicht = zwart)'],
+    'video.flash': ['flits', 'video: een witte flits die snel uitdooft'],
   };
   if (vast[action]) return { kort: vast[action][0], lang: vast[action][1] };
   return { kort: action, lang: action };

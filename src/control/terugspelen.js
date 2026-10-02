@@ -413,8 +413,10 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
       else d.clearLoop();
     }
     for (const [a, v] of Object.entries(st.waarden || {})) if (has(a)) invoke(a, v);
-    // Quantize bestond vóór ronde 3 niet: een ouder log begon zonder.
-    for (const [a, v] of Object.entries({ 'transport.quantize': 0, ...(st.rond || {}) })) rondTot(a, v);
+    // Quantize bestond vóór ronde 3 niet: een ouder log begon zonder. Zwart
+    // en bevriezen (A4) ook niet: toen was het beeld gewoon te zien.
+    const rondVroeger = { 'transport.quantize': 0, 'video.black': 0, 'video.freeze': 0 };
+    for (const [a, v] of Object.entries({ ...rondVroeger, ...(st.rond || {}) })) rondTot(a, v);
     if (deckVan(st.focus)) engine.setFocus(deckVan(st.focus));
     herinneringen(st.herinneringen);
     await pads(st.pads);
