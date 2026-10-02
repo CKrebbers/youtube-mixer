@@ -62,6 +62,10 @@
         </span>
       </span>
       <span class="fase" title="hoe ver deze track voor of achter loopt"><b></b><i></i></span>
+      <label class="pitch">PITCH <span class="pitch-val">0.0%</span>
+        <button data-kind="button" data-action="track.1.pitch.range" class="btn sm pitch-bereik" title="bereik van de pitchfader: ±8, ±16 of ±50% (het tempo blijft staan)">±16</button>
+        <input type="range" class="hfader" min="0" max="1" step="0.0005" value="0.5" data-action="track.1.pitch">
+      </label>
       <span class="deck-time"><b class="t-pos">0:00.00</b> <i class="t-rem">-0:00.00</i></span>
       <button class="link demo-btn" title="een synthetische testtrack van 124 bpm op deze track">demo</button>
     </div>
@@ -100,10 +104,6 @@
         <button data-kind="button" data-action="track.1.loop.double" class="btn sm">x2</button>
         <button data-kind="button" data-action="track.1.loop.exit" class="btn sm warn">uit</button>
       </div>
-      <label class="pitch">PITCH <span class="pitch-val">0.0%</span>
-        <button data-kind="button" data-action="track.1.pitch.range" class="btn sm pitch-bereik" title="bereik van de pitchfader: ±8, ±16 of ±50% (het tempo blijft staan)">±16</button>
-        <input type="range" class="hfader" min="0" max="1" step="0.0005" value="0.5" data-action="track.1.pitch">
-      </label>
     </div>
     <!-- Acht dunne banen, één per track, in kolomvolgorde. Gevuld door spiegel.js. -->
     <div class="banen" id="banen" title="klik = focus op die track en springen · sleep een audiobestand op een baan om daar te laden"></div>
@@ -158,6 +158,22 @@
         </div>
       </div>
     </div>
+    <!-- de sampler: onderin het focusdeel, waar ruimte over was (laptopmaat) -->
+    <section id="sampler" class="sampler-rij">
+      <span class="sampler-kop">SAMPLER</span>
+      <button data-kind="button" data-action="sampler.length" class="btn sm sampler-lengte" title="hoeveel tellen een lege pad pakt">4 tellen</button>
+      <div class="pads">
+        <button data-kind="button" data-action="sampler.1" data-action-shift="sampler.1.clear" class="pad" data-pad="1" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>1</b><span></span></button>
+        <button data-kind="button" data-action="sampler.2" data-action-shift="sampler.2.clear" class="pad" data-pad="2" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>2</b><span></span></button>
+        <button data-kind="button" data-action="sampler.3" data-action-shift="sampler.3.clear" class="pad" data-pad="3" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>3</b><span></span></button>
+        <button data-kind="button" data-action="sampler.4" data-action-shift="sampler.4.clear" class="pad" data-pad="4" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>4</b><span></span></button>
+        <button data-kind="button" data-action="sampler.5" data-action-shift="sampler.5.clear" class="pad" data-pad="5" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>5</b><span></span></button>
+        <button data-kind="button" data-action="sampler.6" data-action-shift="sampler.6.clear" class="pad" data-pad="6" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>6</b><span></span></button>
+        <button data-kind="button" data-action="sampler.7" data-action-shift="sampler.7.clear" class="pad" data-pad="7" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>7</b><span></span></button>
+        <button data-kind="button" data-action="sampler.8" data-action-shift="sampler.8.clear" class="pad" data-pad="8" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>8</b><span></span></button>
+      </div>
+      <div class="knob sm" data-action="sampler.volume" data-label="VOL" data-value="0.8"></div>
+    </section>
   </section>
   <!-- ================= VIDEO: inklapbare kolom rechts ================= -->
   <section id="video-panel" class="video-panel hidden">
@@ -187,22 +203,6 @@
   </section>
 </main>
 
-<!-- ================= SAMPLER ================= -->
-<section id="sampler" class="sampler-rij">
-  <span class="sampler-kop">SAMPLER</span>
-  <button data-kind="button" data-action="sampler.length" class="btn sm sampler-lengte" title="hoeveel tellen een lege pad pakt">4 tellen</button>
-  <div class="pads">
-    <button data-kind="button" data-action="sampler.1" data-action-shift="sampler.1.clear" class="pad" data-pad="1" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>1</b><span></span></button>
-    <button data-kind="button" data-action="sampler.2" data-action-shift="sampler.2.clear" class="pad" data-pad="2" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>2</b><span></span></button>
-    <button data-kind="button" data-action="sampler.3" data-action-shift="sampler.3.clear" class="pad" data-pad="3" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>3</b><span></span></button>
-    <button data-kind="button" data-action="sampler.4" data-action-shift="sampler.4.clear" class="pad" data-pad="4" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>4</b><span></span></button>
-    <button data-kind="button" data-action="sampler.5" data-action-shift="sampler.5.clear" class="pad" data-pad="5" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>5</b><span></span></button>
-    <button data-kind="button" data-action="sampler.6" data-action-shift="sampler.6.clear" class="pad" data-pad="6" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>6</b><span></span></button>
-    <button data-kind="button" data-action="sampler.7" data-action-shift="sampler.7.clear" class="pad" data-pad="7" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>7</b><span></span></button>
-    <button data-kind="button" data-action="sampler.8" data-action-shift="sampler.8.clear" class="pad" data-pad="8" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>8</b><span></span></button>
-  </div>
-  <div class="knob sm" data-action="sampler.volume" data-label="VOL" data-value="0.8"></div>
-</section>
 
 <!-- ================= AUTO-DJ ================= -->
 <section id="auto" class="auto-rij hidden">
