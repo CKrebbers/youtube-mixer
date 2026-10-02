@@ -18,6 +18,8 @@
  *   onEinde = fn      alleen bij een ECHT trackeinde
  *   rem(duur) · remt · snelheid   vinylstop, zie "REMMEN" onder de BufferBron
  *   onRemKlaar = fn   de rem is uitgelopen: de bron staat nu gepauzeerd
+ *   (speelt en remt komen van de audioklok: vanaf de stilstand is een rem
+ *   een pauze, ook als de timer die hem afmaakt nog moet komen)
  *
  * Regel 3 van CLAUDE.md geldt hier onverkort: positie komt van ctx.currentTime,
  * nooit van een eigen teller. Elke bron moet dat waarmaken.
@@ -46,13 +48,23 @@ export const DECLICK = 0.004;
  */
 const gepland = (op, nu) => Number.isFinite(op) && op > nu;
 
+/**
+ * Staat dit remmende segment op audiokloktijd `nu` al stil? Dan is de rem
+ * voorbij en is het een pauze, ook als de timer die hem afmaakt (planRem) nog
+ * niet gevuurd heeft: een timer loopt niet op de audioklok, en in een
+ * achtergrondtabblad komt hij tot een seconde te laat. In dat gat telde een
+ * track nog als remmend én spelend (VERBETERINGEN ronde 4). Regel 3: de stand
+ * komt van de klok, de timer zegt alleen wanneer het segment wordt opgeruimd.
+ */
+const remVoorbij = (seg, nu) => !!(seg.speelt && seg.rem) && nu >= remStil(seg);
+
 export class BufferBron {
   constructor(ctx, uitgang) {
     this.ctx = ctx;
     this.uitgang = uitgang;      // node waar deze bron op aansluit
     this.buffer = null;
     this.source = null;
-    this.speelt = false;
+    this._aan = false;           // er loopt een bron (ook een rem die al stilstaat maar nog niet is afgemaakt)
     this.rate = 1;
     this.loop = null;            // {start, end} in tracktijd
     this.onEinde = null;
@@ -63,6 +75,8 @@ export class BufferBron {
 
   get naam() { return 'buffer'; }
   get duur() { return this.buffer ? this.buffer.duration : 0; }
+  /** Speelt hij? Een rem die op de audioklok al stilstaat is een pauze (remVoorbij). */
+  get speelt() { return this._aan && !this._remVoorbij(); }
   get keylock() { return false; }
 
   laad(buffer) {
@@ -78,8 +92,9 @@ export class BufferBron {
    */
   get positie() {
     if (!this.buffer) return 0;
-    if (this.remt) return Math.min(positieOp(this._remSeg(), this.ctx.currentTime), this.buffer.duration);
-    if (!this.speelt) return this._offset;
+    // Remmen, ook als hij al stilstaat maar nog niet is afgemaakt: de formule staat daar stil.
+    if (this._aan && this._rem) return Math.min(positieOp(this._remSeg(), this.ctx.currentTime), this.buffer.duration);
+    if (!this._aan) return this._offset;
     // Vóór een geplande start staat hij stil op zijn beginpunt.
     let p = this._offset + Math.max(0, this.ctx.currentTime - this._startedAt) * this.rate;
     if (this.loop) {
@@ -133,7 +148,7 @@ export class BufferBron {
     // eraf, want een afgedankte bron die 'einde' roept terwijl zijn opvolger
     // al speelt zet het hele deck op zijn kop.
     src.onended = () => {
-      this.speelt = false;
+      this._aan = false;
       this._offset = this.duur;
       this.onEinde?.();
     };
@@ -141,7 +156,7 @@ export class BufferBron {
     this.source = src;
     this._offset = vanaf;
     this._startedAt = wanneer;
-    this.speelt = true;
+    this._aan = true;
     return true;
   }
 
@@ -162,13 +177,14 @@ export class BufferBron {
       this.source = null;
       this.bronGain = null;
     }
-    this.speelt = false;
+    this._aan = false;
     this._rem = null;
     clearTimeout(this._remTimer);
   }
 
   /** Stoppen én de positie onthouden waar je was. */
   pauzeer() {
+    this._remAfAlsStil();
     if (!this.speelt) return;
     const p = this.positie;
     this.stop();
@@ -179,9 +195,25 @@ export class BufferBron {
   plaats(p) { this._offset = p; }
 
   get remt() { return this.speelt && !!this._rem; }
-  /** Hoe snel de positie nu loopt (tracktijd per seconde); tijdens een rem minder. */
-  get snelheid() { return this.remt ? snelheidOp(this._remSeg(), this.ctx.currentTime) : this.rate; }
+  /** Hoe snel de positie nu loopt (tracktijd per seconde); tijdens een rem minder, stil na de rem 0. */
+  get snelheid() { return this._aan && this._rem ? snelheidOp(this._remSeg(), this.ctx.currentTime) : this.rate; }
   _remSeg() { const r = this._rem; return { T: r.T, P: r.P, R: r.R, loop: this.loop, speelt: true, rem: { a: r.a } }; }
+  _remVoorbij() { return this._aan && !!this._rem && remVoorbij(this._remSeg(), this.ctx.currentTime); }
+
+  /**
+   * Staat de rem op de audioklok al stil, dan hem nu afmaken: een gewone
+   * pauze op die plek, en melden. Dat doet de timer; wie de bron eerder
+   * aanraakt (tempo, loop, pauze) doet het zelf, anders werkte die op een
+   * bron die "speelt" met snelheid 0. True als hij hem afmaakte.
+   */
+  _remAfAlsStil() {
+    if (!this._remVoorbij()) return false;
+    const p = this.positie;                 // de formule staat nu stil
+    this.stop();
+    this._offset = p;
+    this.onRemKlaar?.();
+    return true;
+  }
 
   /**
    * Remmen tot stilstand in `duur` seconden (zie REMMEN hieronder, na deze klasse). De reserve
@@ -204,13 +236,10 @@ export class BufferBron {
       g.linearRampToValueAtTime(1, nu + duur * (1 - REM_UIT));
       g.linearRampToValueAtTime(0, nu + duur);
     } catch (_) {}
-    planRem(this, nu + duur, () => {
-      if (this._rem !== rem || !this.speelt) return;   // intussen gestart, gestopt, gepauzeerd of het einde
-      const p = this.positie;                 // de formule staat nu stil
-      this.stop();
-      this._offset = p;
-      this.onRemKlaar?.();
-    });
+    // Intussen gestart, gestopt, gepauzeerd of het einde: dan is er geen rem
+    // meer en doet dit niets. Na een loopwissel (_remVerder) valt de stilstand
+    // op hetzelfde moment, dus ook die rem wordt hier afgemaakt.
+    planRem(this, nu + duur, () => this._remAfAlsStil());
     return true;
   }
 
@@ -236,6 +265,7 @@ export class BufferBron {
   vernietig() { this.stop(); this.buffer = null; }
 
   setRate(r) {
+    this._remAfAlsStil();
     if (this.remt) { this.rate = r; return; }   // de rem loopt door; na de rem geldt dit tempo
     if (this.speelt && this.source) {
       if (this.wachtTot !== null) {
@@ -253,6 +283,7 @@ export class BufferBron {
   }
 
   setLoop(start, end) {
+    this._remAfAlsStil();
     this.loop = { start, end };
     if (this.source) {
       this.source.loop = true;
@@ -262,6 +293,7 @@ export class BufferBron {
   }
 
   clearLoop() {
+    this._remAfAlsStil();
     if (this.remt && this.loop) this._remVerder();   // eerst de gevouwen plek vastleggen
     if (!this.loop) return;
     const p = this.positie;
@@ -286,7 +318,10 @@ export class BufferBron {
  * `rem`), op de hoofdthread en in de worklet dezelfde. In het laatste stuk
  * dooft hij uit (REM_UIT), en op stilstand wordt het een gewone pauze op de
  * plek waar hij stilviel; `onRemKlaar` meldt dat. Een timer bepaalt alleen
- * WANNEER dat gebeurt, de plek komt uit de formule (regel 3).
+ * WANNEER dat gebeurt, de plek komt uit de formule (regel 3). Of hij nog
+ * remt komt ook van de klok (remVoorbij): vanaf de stilstand zeggen speelt
+ * en remt "nee", ook als de timer er nog niet was; tempo, loop of pauze in
+ * dat gat maken de pauze eerst zelf af.
  *
  * Tijdens het remmen: tempo (pitchfader, bend, sync) wordt onthouden maar
  * remt niet anders; een loop aan of uit remt gewoon door; start (play,
@@ -381,12 +416,13 @@ export class StreamBron {
   get naam() { return 'stream'; }
   get keylock() { return false; }
   get duur() { return this.bestand ? this.bestand.duur : 0; }
-  get speelt() { return this.seg.speelt; }
+  /** Speelt hij? Een rem die op de audioklok al stilstaat is een pauze (remVoorbij). */
+  get speelt() { return this.seg.speelt && !remVoorbij(this.seg, this.ctx.currentTime); }
   /** Het deck vraagt alleen "is er iets geladen"; een echte AudioBuffer is er niet. */
   get buffer() { return this.bestand ? { duration: this.duur, stream: true } : null; }
   get geheugen() { let n = 0; for (const b of this.geladen.values()) n += b; return n; }
-  get remt() { return this.seg.speelt && !!this.seg.rem; }
-  /** Hoe snel de positie nu loopt (tracktijd per seconde); tijdens een rem minder, stil = de rate. */
+  get remt() { return this.speelt && !!this.seg.rem; }
+  /** Hoe snel de positie nu loopt (tracktijd per seconde); tijdens een rem minder (0 na stilstand), stil = de rate. */
   get snelheid() { return this.seg.speelt ? snelheidOp(this.seg, this.ctx.currentTime) : this.rate; }
 
   get positie() {
@@ -589,7 +625,7 @@ export class StreamBron {
    * dezelfde formule afspelen. Op stilstand een pauze op die plek.
    */
   rem(duur) {
-    if (!this.bestand || !this.seg.speelt || this.remt || !(duur > 0)) return false;
+    if (!this.bestand || !this.speelt || this.remt || !(duur > 0)) return false;
     const nu = this.ctx.currentTime;
     const R = this.seg.R;
     this.seg = { T: nu, P: this.positie, R, loop: this.loop, speelt: true, rem: { a: -R / duur } };
@@ -619,14 +655,29 @@ export class StreamBron {
     const seg = this.seg;
     planRem(this, remStil(seg), () => {
       if (this.seg !== seg) return;          // intussen een ander segment: die rem is er niet meer
-      this.seg = { T: this.ctx.currentTime, P: Math.min(positieOp(seg, remStil(seg)), this.duur),
-        R: this.rate, loop: this.loop, speelt: false, rem: null };
-      this._stuur();
-      this.onRemKlaar?.();
+      this._remAfAlsStil();
     });
   }
 
+  /**
+   * Staat de rem op de audioklok al stil, dan hem nu afmaken: een gewoon
+   * pauzesegment op de plek waar hij stilviel, en melden. Dat doet de timer;
+   * wie het segment eerder aanraakt (tempo, loop) doet het zelf, anders
+   * begon setRate of setLoop in dat gat een SPELEND segment. True als hij
+   * hem afmaakte.
+   */
+  _remAfAlsStil() {
+    const seg = this.seg;
+    if (!remVoorbij(seg, this.ctx.currentTime)) return false;
+    this.seg = { T: this.ctx.currentTime, P: Math.min(positieOp(seg, remStil(seg)), this.duur),
+      R: this.rate, loop: this.loop, speelt: false, rem: null };
+    this._stuur();
+    this.onRemKlaar?.();
+    return true;
+  }
+
   setRate(r) {
+    this._remAfAlsStil();
     if (this.remt) { this.rate = r; return; }   // de rem loopt door; na de rem geldt dit tempo
     const p = this.positie;
     this.rate = r;
@@ -635,6 +686,7 @@ export class StreamBron {
   }
 
   setLoop(start, end) {
+    this._remAfAlsStil();
     if (this.remt) { this.loop = { start, end }; this._remVerder(); return; }
     const p = this.positie;
     this.loop = { start, end };
@@ -643,6 +695,7 @@ export class StreamBron {
   }
 
   clearLoop() {
+    this._remAfAlsStil();
     if (this.remt) { if (this.loop) { this.loop = null; this._remVerder(); } return; }
     if (!this.loop) return;
     const p = this.positie;
