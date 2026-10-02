@@ -1368,16 +1368,18 @@ console.log('\nmodus auto (auto-DJ)');
     vorige?.rules.length === 374 && vorigeE?.rules.length === 0);
   const nieuw = vorigeE ? vorigeE.removed.slice().sort() : [];
   const wilNieuw = ['note:0:32@grid.auto', 'note:0:33@grid.auto', 'note:0:34@grid.auto', 'note:0:35@grid.auto', 'note:0:39@grid.auto',
-    'note:0:85#shift', 'note:0:85@grid.auto', 'note:0:85#shift@edit.aan'].sort();
-  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4 en scene 4 met shift in de grid-modus (${nieuw.join(' ')})`,
+    'note:0:85#shift', 'note:0:85@grid.auto', 'note:0:85#shift@edit.aan',
+    // Beeld-noodknoppen (2 okt, A4): master-knop = zwart, en vier pads in de modus video.
+    'note:0:80', 'note:0:38@grid.video', 'note:0:39@grid.video', 'note:0:30@grid.video', 'note:0:31@grid.video'].sort();
+  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4, scene 4 met shift in de grid-modus, en de vijf beeld-noodknoppen (${nieuw.join(' ')})`,
     JSON.stringify(nieuw) === JSON.stringify(wilNieuw));
   const tel = (d) => { const c = {}; for (const r of d.rules) { const k = `${r.laag ?? '-'}${r.shift ? '#shift' : ''}`; c[k] = (c[k] || 0) + 1; } return c; };
   const voor = vorige ? tel(vorige) : {}, na = tel(doc);
   const anders = Object.keys({ ...voor, ...na }).filter((k) => voor[k] !== na[k]).sort();
-  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1) erbij, en één shift-regel zonder mapje en één in de grid-modus (${anders.join(' ')})`,
-    anders.join() === '-#shift,edit.aan#shift,grid.auto' && na['grid.auto'] === 6 && na['-#shift'] === voor['-#shift'] + 1
-    && na['edit.aan#shift'] === voor['edit.aan#shift'] + 1
-    && ['grid.hotcues', 'grid.loops', 'grid.sampler', 'grid.video', 'grid.klank', 'device.strip', 'device.rack', '-']
+  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1) erbij, één shift-regel zonder mapje en één in de grid-modus, en de noodknoppen (1 zonder mapje, 4 in video) (${anders.join(' ')})`,
+    anders.join() === '-,-#shift,edit.aan#shift,grid.auto,grid.video' && na['grid.auto'] === 6 && na['-#shift'] === voor['-#shift'] + 1
+    && na['edit.aan#shift'] === voor['edit.aan#shift'] + 1 && na['-'] === voor['-'] + 1 && na['grid.video'] === voor['grid.video'] + 4
+    && ['grid.hotcues', 'grid.loops', 'grid.sampler', 'grid.klank', 'device.strip', 'device.rack']
       .every((k) => voor[k] === na[k] && voor[k] > 0));
 
   // Clay's eigen mapping zoals hij sinds 25 sep op de server staat: een
@@ -1401,9 +1403,25 @@ console.log('\nmodus auto (auto-DJ)');
   const kopie25 = JSON.parse(JSON.stringify(vorige));
   for (const r of kopie25.rules) if (r.laag === 'device.rack' && VIDEO_KNOPPEN[r.in]) { r.action = VIDEO_KNOPPEN[r.in]; r.mode = 'absolute'; }
   const vk = verschilVanKopie(doc, kopie25);
-  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 8 x "weggehaald")',
+  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 13 x "weggehaald")',
     vk.basis === 'e2bef131-374' && vk.verschil.rules.length === 4 && vk.verschil.removed.length === 0
-    && maakVerschil(doc, kopie25).removed.length === 8);
+    && maakVerschil(doc, kopie25).removed.length === 13);
+  lg.zet('grid', 'hotcues');
+
+  // Beeld-noodknoppen (2 okt, ONTBREEKT A4): de master-knop (Track Select boven
+  // de masterfader) is zwart, in ELK mapje en zonder mapje; in de modus video
+  // rij 1 pad 7 flits, pad 8 zwart zolang je drukt, rij 2 pad 7 zwart, pad 8 bevriezen.
+  const zwartOveral = [['grid', 'hotcues'], ['grid', 'loops'], ['grid', 'sampler'], ['grid', 'video'], ['grid', 'klank'], ['grid', 'auto']]
+    .every(([g, k]) => { lg.zet(g, k); return am.kies('note:0:80')?.action === 'video.black'; });
+  lg.zet('edit', 'aan');
+  const zwartGrid = am.kies('note:0:80')?.action === 'video.black';
+  lg.zet('edit', 'uit');
+  ok('noodknop: de master-knop is zwart in elke grid-modus en in de grid-modus (geen mapje)', zwartOveral && zwartGrid);
+  lg.zet('grid', 'video');
+  ok('modus video: rij 1 pad 7 flits, pad 8 zwart vasthouden, rij 2 pad 7 zwart, pad 8 bevriezen; de effecten op 1–6 blijven',
+    am.kies(`note:0:${apc.gridNote(7, 1)}`)?.action === 'video.flash' && am.kies(`note:0:${apc.gridNote(8, 1)}`)?.action === 'video.black.hold'
+    && am.kies(`note:0:${apc.gridNote(7, 2)}`)?.action === 'video.black' && am.kies(`note:0:${apc.gridNote(8, 2)}`)?.action === 'video.freeze'
+    && am.kies(`note:0:${apc.gridNote(1, 1)}`)?.action === 'video.fx.pixel.hold');
   lg.zet('grid', 'hotcues');
 }
 

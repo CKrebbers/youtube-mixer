@@ -68,6 +68,10 @@ const KLEURSCHEMA = [
   // altijd gedimd: bruikbaar, niets actief.
   [/^sampler\.length$/, { aan: 'violetdonker', half: 'violetdonker', uit: 'violetdonker' }],
   [/^video\.(mode|pulse\.target)$/, { aan: 'blauwdonker', half: 'blauwdonker', uit: 'blauwdonker' }],
+  // Beeld-noodknoppen (2 okt, ONTBREEKT A4): zwart in rood, zodat je in het
+  // donker ziet dat de zaal niets ziet; bevriezen en flits wit.
+  [/^video\.black(\.hold)?$/, { aan: 'rood', uit: 'rooddonker' }],
+  [/^video\.(freeze|flash)$/, { aan: 'wit', uit: 'donkergrijs' }],
   [/^video\./,        { aan: 'blauw', half: 'blauwdonker', uit: 'donkergrijs' }],
   // Grid-modi op de scene-knoppen: elke modus zijn eigen kleur, gedimd als hij
   // dicht is — zo zie je altijd welke er zijn én welke open is.

@@ -91,7 +91,8 @@ focus- of mapjewissel.
 (kleur fel = open, donker = dicht): hotcues (geel: rij 1–4 hotcue per track, shift = wissen (rood zolang
 shift vastzit), rij 5 loop aan/uit) · loops (cyaan: 1 · 2 · 4 · 8 · 16 tellen) ·
 sampler (violet: rij 1 pads, rij 2 leegmaken, linksonder samplerlengte) · video
-(blauw: effect vasthouden, mengvorm, puls-doel) · klank (magenta, per kolom =
+(blauw: effect vasthouden, mengvorm, puls-doel; rechts de beeld-noodknoppen: rij 1 pad 7
+flits, pad 8 zwart zolang je drukt, rij 2 pad 7 zwart aan/uit, pad 8 bevriezen) · klank (magenta, per kolom =
 track: rij 1 kill hoog, 2 kill mid, 3 kill laag — vasthouden = weg zolang je
 drukt, shift + pad = vastzetten/losmaken; rij 4 rem; rij 5 op de maat starten) ·
 auto (limoen: de auto-DJ, zie "Modus auto" onderaan).
@@ -107,6 +108,16 @@ klank brandt scene 5 fel magenta (`led.lees: layer.grid.klank`, zoals Metronome
 in de grid-modus); de knop blijft loop weg. Nadeel: in klank zie je op scene 5
 niet of er een loop loopt (Clip Stop per kolom toont dat wel). Magenta en geen
 rood: rood is loop weg op dezelfde knop, en wissen.
+
+**Beeld-noodknoppen (2 okt, ONTBREEKT A4, `docs/BEAMER.md`):** de **master-knop**
+(Track Select boven de masterfader, `note:0:80`, was vrij) = beeld zwart aan/uit
+(`video.black`, fade 250 ms), in elk mapje: zwart moet altijd met één druk kunnen.
+Het lampje brandt zolang het zwart is. In de modus video rechts: flits (wit), zwart
+zolang je drukt (rood), zwart aan/uit (rood: fel = zwart, donker = beeld), bevriezen
+(wit). Rood omdat je in het donker moet zien dat de zaal niets ziet. Niet gebouwd:
+de master van het beeld (`video.master`) op Shift + masterfader (vrij), omdat je dan
+met shift vast per ongeluk het beeld in plaats van het geluid dichtdraait; hij
+staat als knop MASTER in het videopaneel.
 
 **Kleuren (B4, gebouwd `5e297f4`):** uit = niets te doen · donkergrijs = leeg ·
 DONKERE tint (paletindex n+1, de #59xxxx-kleuren, niet de pastels) = gevuld/dicht ·
