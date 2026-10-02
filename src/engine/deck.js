@@ -1,12 +1,12 @@
 import { Emitter, clamp, piek } from '../lib/emitter.js';
-import { createDeckChain, setEqBand, killEqBand, setBipolarFilter, faderGain } from './audio-graph.js';
+import { createDeckChain, setEqBand, killEqBand, setBipolarFilter, filterDoelen, faderGain } from './audio-graph.js';
 import { Beatgrid } from './beatgrid.js';
 import { ToonKaart } from './toonsoort.js';
 import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
 import { maakWav } from './stream-kern.js';
 import { InsertSlot } from './fx.js';
 import { hoorbaar, uitgangsVertraging } from './hoorbaar.js';
-import { startDrempel } from './overgang.js';
+import { startDrempel, houdVast, zetVervolg } from './overgang.js';
 
 /**
  * Hoe ver de pitchfader reikt, naar elke kant. Kiesbaar per track; sync mag
@@ -30,6 +30,31 @@ export const EQ_BANDEN = ['low', 'mid', 'high'];
 export const BEND = 0.04;
 /** Beatjump-lengtes in tellen, te halveren en te verdubbelen. Standaard 4. */
 export const SPRONG_TELLEN = [1, 2, 4, 8, 16, 32];
+/**
+ * Glijden (Deck.glide, de auto-DJ): in zoveel seconden naar een nieuwe stand,
+ * als helling op de audioklok. Wie glijdt, richt hem steeds opnieuw (elke
+ * ~0,4 s een punt dat GLIJ verderop op zijn curve ligt): zo volgt de knop
+ * een gladde lijn, met een paar regels per seconde in het handelingenlog in
+ * plaats van een trapje per tik. Een overgang duurt 15–30 s: over een halve
+ * seconde wijkt de rechte lijn minder dan 0,05 dB van de curve af, en een
+ * timer die een paar tikken hapert geeft geen stilstand.
+ */
+export const GLIJ = 0.5;
+/** De knoppen die kunnen glijden: wat de automaat als curve stuurt. */
+export const GLIJDERS = ['fader', 'filter', 'sendA', 'sendB'];
+/** Zoveel lineaire stukken per glijbeurt op de AudioParam (dB, Hz en kwadraat zijn niet lineair). */
+const GLIJ_STUKKEN = 8;
+
+/**
+ * Waar een glijdende knop staat op audiokloktijd `t` (regel 3: geen teller).
+ * Vóór `t0` loopt de vorige helling nog (zetVervolg laat hem doorlopen),
+ * daarna lineair van `van` naar `naar` tot `t1`.
+ */
+function glijStand(g, t) {
+  if (t >= g.t1) return g.naar;
+  if (t < g.t0) return g.vorige ? glijStand(g.vorige, t) : g.van;
+  return g.van + (g.naar - g.van) * (t - g.t0) / (g.t1 - g.t0);
+}
 
 /**
  * Eén deck: transport, cues, loops, beatgrid, kanaalstrip.
@@ -114,7 +139,17 @@ export class Deck extends Emitter {
     this.chain.fader.connect(this.sendB);
 
     // UI-state, genormaliseerd 0..1 — precies wat MIDI later ook levert.
-    this.ui = { trim: 0.5, low: 0.5, mid: 0.5, high: 0.5, filter: 0.5, fader: 1, sendA: 0, sendB: 0 };
+    // `ui.x` LEEST de stand van nu: tijdens het glijden (glide) de tussenstand
+    // op de audioklok, zodat scherm, LED's, soft-takeover, maatgever en video
+    // meelopen. Schrijven zet de stand zonder geluid (zoals vroeger) en stopt
+    // het glijden; via set() gaat het ook naar de audio.
+    this._ui = { trim: 0.5, low: 0.5, mid: 0.5, high: 0.5, filter: 0.5, fader: 1, sendA: 0, sendB: 0 };
+    this._glij = {};            // knop -> { van, naar, t0, t1, vorige } zolang hij glijdt
+    this.ui = {};
+    for (const p of Object.keys(this._ui)) {
+      Object.defineProperty(this.ui, p, { enumerable: true,
+        get: () => this._stand(p), set: (v) => { this._ui[p] = v; this._glij[p] = null; } });
+    }
     this.applyUi();
   }
 
@@ -847,10 +882,71 @@ export class Deck extends Emitter {
   // ---- mixer-parameters (alles genormaliseerd 0..1) ----------------------
 
   set(param, norm) {
-    if (!(param in this.ui)) return;
-    this.ui[param] = clamp(norm);
+    if (!(param in this._ui)) return;
+    // Glijdt hij nog, dan eerst vasthouden waar het geluid NU is: anders
+    // lopen de geplande hellingen na de nieuwe stand gewoon door. Vandaar
+    // gaat setTargetAtTime verder, zonder sprong (Clay grijpt in).
+    if (this._glij[param]) {
+      this._glij[param] = null;
+      const nu = this.ctx.currentTime;
+      for (const ap of this._glijParams(param)) houdVast(ap, nu);
+    }
+    this._ui[param] = clamp(norm);
     this.applyUi(param);
     this.emit('change', this);
+  }
+
+  /** De stand van een knop op audiokloktijd `t` (standaard nu), ook midden in het glijden. */
+  _stand(p, t = this.ctx.currentTime) {
+    const g = this._glij[p];
+    return g ? glijStand(g, t) : this._ui[p];
+  }
+
+  /**
+   * Glijden naar `norm` (0..1, regel 2) in GLIJ seconden, als lineaire
+   * hellingen op de audioklok. Voor de auto-DJ: een overgang is een curve,
+   * en die stuurt hij zo als een reeks gladde stukken in plaats van een
+   * trapje van 0,01 per tik. Een nieuwe glijbeurt (of set()) midden in een
+   * oude gaat verder vanaf waar het geluid dan is: de oude loopt door tot
+   * na startDrempel en de nieuwe begint daar (zetVervolg), nooit een curve
+   * (overgang.js). Alleen de GLIJDERS; een andere knop wordt een gewone set.
+   */
+  glide(param, norm) {
+    if (!GLIJDERS.includes(param)) { this.set(param, norm); return; }
+    const nu = this.ctx.currentTime;
+    const t0 = nu + startDrempel(this.ctx), t1 = Math.max(t0 + 0.001, nu + GLIJ);
+    const oud = this._glij[param];
+    // Vóór `nu` vraagt niemand meer iets: de keten erachter mag weg.
+    if (oud?.vorige && oud.t0 <= nu) oud.vorige = null;
+    const van = this._stand(param, t0), naar = clamp(norm);
+    this._glij[param] = { van, naar, t0, t1, vorige: oud || null };
+    this._ui[param] = naar;
+    const params = this._glijParams(param);
+    const reeksen = params.map(() => []);
+    for (let i = 1; i <= GLIJ_STUKKEN; i++) {
+      const doel = this._glijDoelen(param, van + (naar - van) * i / GLIJ_STUKKEN);
+      for (let k = 0; k < params.length; k++) reeksen[k].push(doel[k]);
+    }
+    const begin = this._glijDoelen(param, van);
+    for (let k = 0; k < params.length; k++) zetVervolg(params[k], reeksen[k], t0, t1, begin[k]);
+    this.emit('change', this);
+  }
+
+  /** De AudioParams achter een glijdende knop. */
+  _glijParams(p) {
+    const c = this.chain;
+    if (p === 'fader') return [c.fader.gain];
+    if (p === 'filter') return [c.hpf.frequency, c.hpf.Q, c.lpf.frequency, c.lpf.Q];
+    if (p === 'sendA') return [this.sendA.gain];
+    if (p === 'sendB') return [this.sendB.gain];
+    return [];
+  }
+
+  /** Wat een knopstand op die AudioParams zet: dezelfde formules als applyUi. */
+  _glijDoelen(p, u) {
+    if (p === 'fader') return [faderGain(u)];
+    if (p === 'filter') return filterDoelen(u);
+    return [u * u];             // sends: kwadratisch, zie applyUi
   }
 
   applyUi(only) {
