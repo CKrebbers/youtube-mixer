@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { stat, rm } from 'node:fs/promises';
-import { join, extname, resolve, relative, isAbsolute, sep } from 'node:path';
+import { join, extname, resolve, relative, isAbsolute, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, stappenVoor, YTDLP_GETEST_OP } from './ingest.js';
@@ -18,6 +18,7 @@ import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
 import { Proef } from './proef.js';
+import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -76,7 +77,22 @@ const wachtrij = new Wachtrij();
  */
 const SERVER_RUN = randomUUID();
 // Instelbaar voor de tests: een eigen database en opnamemap, niet de jouwe.
-const lib = new Library(process.env.VARVE_DB || join(WORTEL, 'media', 'library.db'));
+const DB = process.env.VARVE_DB || join(WORTEL, 'media', 'library.db');
+const lib = new Library(DB);
+
+/*
+ * Backups van de library (server/backup.js, docs/LIBRARY.md "Backup"):
+ * bij het opstarten en elk uur als er iets veranderde, in een worker. Standaard
+ * in de map `backups/` naast de database (media/backups/, buiten git), met
+ * VARVE_BACKUPS naar een andere schijf. VARVE_BACKUP_ELKE (ms) alleen voor de
+ * tests. NIET via de witte lijst te lezen: alleen GET /api/backups (naam, tijd).
+ */
+const BACKUPS = process.env.VARVE_BACKUPS || join(dirname(DB), 'backups');
+const backupElke = Number(process.env.VARVE_BACKUP_ELKE);
+const backups = new Backups({
+  db: DB, map: BACKUPS, wijzigingen: () => lib.wijzigingen(),
+  elke: Number.isFinite(backupElke) && backupElke >= 100 ? backupElke : BACKUP_ELKE,
+});
 
 /**
  * Cross-origin isolation. Nodig zodra de decks via een AudioWorklet met
@@ -664,6 +680,10 @@ const server = createServer(async (req, res) => {
     }
 
     // ---- speellijst van de Controlekamer (docs/CONTROLEKAMER.md) ----------
+    // GET /api/backups: wanneer de laatste backup van library.db was, hoeveel er
+    // staan, een fout (server/backup.js). Alleen de stand; de kopieën zelf zijn
+    // via HTTP nooit te lezen.
+    if (pad === '/api/backups' && req.method === 'GET') return json(res, 200, backups.stand());
     // GET /api/proef: { begonnen, items }. PUT /api/proef/<id> { status, notitie }:
     // één punt. POST /api/proef/nieuw: de sessie naar proef/archief/, dan leeg.
     if (pad === '/api/proef' && req.method === 'GET') return json(res, 200, await proef.lees());
@@ -1059,6 +1079,8 @@ server.listen(POORT, '127.0.0.1', () => {
   for (const naam of EXTRA_HOSTS) console.log(`ook via  ·  https://${naam}  (Tailscale, docs/TAILSCALE.md)`);
   console.log(`library: ${lib.aantalTracks()} nummers  ·  schema v${lib.versie}`);
   console.log(`yt-dlp ${tooling.ytdlp}  ·  ffmpeg ${tooling.ffmpeg ? 'ok' : 'ONTBREEKT'}`);
+  // Meteen een backup (in een worker; gooit nooit), daarna elk uur als er iets veranderde.
+  backups.start();
   const her = process.env.VARVE_HERANALYSE;
   if (her !== 'uit') {
     setTimeout(() => heranalyseOpAchtergrond().catch((err) => console.error('[analyse] achtergrond:', err?.message || err)),
