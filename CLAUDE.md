@@ -47,6 +47,7 @@ als een feature erom lijkt te vragen, is dat bijna altijd een ontwerpfout elders
 index.html          geen build-stap, plain ES-modules
 plan.html           het planvenster: de programmering zien, inrichten, live volgen (src/plan/plan-venster.js)
 apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze doen (src/ui/apc-kaart.js)
+controle.html       de Controlekamer (/controle): stand van alles, mixer openen, speellijst (docs/CONTROLEKAMER.md)
 styles.css
 src/
   engine/           audio-graph.js  kanaalstrip, EQ (+ kill), bipolair filter, master, xfader
@@ -93,6 +94,7 @@ src/
                     spiegel.js      acht kolommen, focusdeel, acht banen; data-actions uit de mapping
                     vensters.js     de track met focus bovenaan + vensters als model (L/R)
                     tabblad.js      Web Lock 'varve-mixer': maar één tabblad praat met de APC
+                    status-zender.js de stand voor de Controlekamer: BroadcastChannel 'varve-status', alleen het eerste tabblad
                     apc-kaart.js    apc.html: de APC met knoppen op hun echte plek, klik = uitleg
                     apc-beschrijf.js elke action in gewone taal (de test eist er een voor de hele standaardmapping)
                     toon-weergave.js toonsoort als tekst: kolomkop, focus, library, tooltip. Puur.
@@ -122,6 +124,8 @@ src/
   plan/             plan-model.js   het setplan als data: formaat v2, normaliseerPlan, bewerk, verschil. Puur (ook door de server gebruikt)
                     tijdlijn.js     voorspel: set-tijden en de overgang die de app echt kiest. Puur.
                     plan-venster.js het planvenster (plan.html): lijst, strook, bewerken, opslaan met versie, live via opener
+  controle/         controle.js     de Controlekamer: tegels (server, ingest, mixer via de Web Lock, APC via het kanaal), speellijst
+                    speellijst.js   de punten van een proefsessie, in blokken. Puur data; de stand staat in proef/sessie.json
   auto/             planner.js      de auto-DJ, puur: welk fragment, welke overgang (bewakers), wanneer (frasegrens), de curves
                     automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
@@ -138,6 +142,7 @@ server/             draait apart: `node server/index.js`
   toon.js           toonsoort: stemming per stuk, chroma, Temperley 2005, kaart (Viterbi). Puur.
   wachtrij.js       de ingest-wachtrij: één tegelijk (links en uploads), annuleren met een AbortSignal
   opname.js         opnames: WAV dat groeit, kop herstellen na een crash
+  proef.js          de speellijst van de Controlekamer: proef/sessie.json, per punt, atomisch; archief per ronde
   handelingen.js    handelingenlogs naast de opnames: stukken op hun plek, lijst, lezen
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,

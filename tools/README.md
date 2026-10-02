@@ -67,6 +67,10 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   server op 8793, tijdelijke database). Laadt de worklet, zet een demotrack in A mineur +43 ct
   op track 1, meet de toonhoogte van een veld achter de schaal (AnalyserNode), transponeert met
   de hand, wrijft, en kijkt of de rij op laptopmaat past. Werkt ook op Linux (`chromium` op het pad).
+- `controle.mjs` — de Controlekamer (docs/CONTROLEKAMER.md) naast een echte mixer in een tweede tabblad van
+  dezelfde headless Chromium (Web Lock en BroadcastChannel zoals bij Clay): mixer open/dicht, een tweede mixer
+  rood, de knop "mixer openen", wat er in de mixer staat, afvinken en notities na herladen. Eigen server
+  (8796), tijdelijke database en speellijst, MIDI eruit vóór elke pagina. Schermafdruk `controle.png`.
 - `kijk.mjs` — de app in een headless Chromium (uit de Playwright-cache, geen npm-pakket;
   het DevTools-protocol over Node's eigen WebSocket). Eigen server op poort 8791 met een
   tijdelijke database. **Veilig met de APC aangesloten:** `navigator.requestMIDIAccess`

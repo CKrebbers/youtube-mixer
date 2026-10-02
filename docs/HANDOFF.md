@@ -14,6 +14,35 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 2 OKT: ALLES GETEST, LAYOUT, CONTROLEKAMER (vanaf de Omarchy-machine)
+
+Clay: VARVE wordt het overkoepelende AV-project; eerst standalone helemaal
+kloppend, daarna Logic en TouchDesigner. Er is budget tot zo 4 okt 12:00 en dan
+nog één volle week (t/m 11 okt).
+
+- **Getest** (alles wat zonder Clay kan): `alles.mjs` groen op de Mac (na
+  `brew install yt-dlp`: die was weg sinds de opruiming van 30 sep), op Linux
+  alleen de bekende timer in vormen-isomorf. Headless 11/11 groen op een kopie;
+  `beamer.mjs` op de Mac groen (één keer 18,8 ms tegen 17, daarna 3,8 ms).
+- **Gecommit**: `a59f548` (het werk van 26-30 sep: VRAGEN J, klankschaal,
+  auto-DJ, planvenster) en `649b555` (laptopmaat).
+- **Laptopmaat** (`649b555`): op de MacBook (1440x790 in Chrome) vielen de
+  faders eraf. Nu: sampler onderin het focusdeel, pitch in de kopregel, de
+  fader krimpt in plaats van te verdwijnen. Terugweg: `~/.varve-voor-layout-2okt/`.
+- **Controlekamer** (`docs/CONTROLEKAMER.md`): `localhost:8777/controle`. Stand
+  van alles, de mixer openen (nooit twee), en de speellijst van de proefsessie
+  (33 punten). **De uitkomst van een sessie staat in `proef/sessie.json`: lees
+  die eerst.** De server moest herstarten (nieuwe routes).
+- **Niet gedaan, wacht op Clay**: VARVE uit iCloud halen. iCloud maakt bij
+  bijna elke schrijfactie in deze map een conflictkopie (`index 2.html`,
+  `styles 2.css`, `test/regels.test 2.mjs` op 2 okt: alle drie de oude versie,
+  nooit committen). Maar volgens de opruimregel van 2 okt (Mac-geheugen
+  `mappenstructuur`, er is geen Time Machine) gaat code pas uit iCloud als hij
+  gepusht is, en hier is nog geen GitHub-repo, en media/opnames (4,3 GB) staan
+  niet in git.
+- **Eerst doen (Clay)**: de mixer herladen, `localhost:8777/controle` openen,
+  de speellijst spelen.
+
 ## 30 SEP (avond): PLANVENSTER FASE 1 (docs/PLAN.md)
 
 Clay: een pagina met de hele programmering, helemaal in te richten, en er live

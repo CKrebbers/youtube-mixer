@@ -1,0 +1,96 @@
+// De Controlekamer zonder browser: de opslag van de speellijst
+// (server/proef.js), de speellijst zelf (src/controle/speellijst.js) en het
+// bericht dat de mixer stuurt (src/ui/status-zender.js). Op een tijdelijke map.
+// Draai met: node test/controle.test.mjs
+import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const fails = [];
+const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
+
+const { Proef, ID, STATUSSEN } = await import('../server/proef.js');
+const { SPEELLIJST, allePunten } = await import('../src/controle/speellijst.js');
+const { maakStatus } = await import('../src/ui/status-zender.js');
+
+console.log('de speellijst');
+{
+  const punten = allePunten();
+  const ids = punten.map((p) => p.id);
+  ok(`elk punt-id is uniek (${ids.length} punten)`, new Set(ids).size === ids.length);
+  ok('elk punt-id past op de server (letters, cijfers, - en _)', ids.every((id) => ID.test(id)));
+  ok('elk punt heeft een doe en een let', punten.every((p) => p.doe && p.let));
+  ok('elk blok heeft een titel, minuten en punten', SPEELLIJST.every((b) => b.titel && b.minuten > 0 && b.punten.length));
+  ok('blok-ids zijn uniek', new Set(SPEELLIJST.map((b) => b.id)).size === SPEELLIJST.length);
+}
+
+console.log('\nde opslag (proef/sessie.json)');
+{
+  const map = mkdtempSync(join(tmpdir(), 'varve-proef-'));
+  try {
+    const p = new Proef(map);
+    const leeg = await p.lees();
+    ok('zonder bestand: leeg, niet begonnen', leeg.begonnen === null && Object.keys(leeg.items).length === 0);
+
+    let r = await p.zet('dr-rem', { status: 'fout', notitie: '  klikt aan het eind  ' });
+    ok('fout met notitie: 200, notitie zonder witruimte eromheen', r.code === 200 && r.antwoord.item.notitie === 'klikt aan het eind');
+    const d = JSON.parse(readFileSync(join(map, 'sessie.json'), 'utf8'));
+    ok('op schijf: begonnen gezet, het punt met status, notitie en tijd', d.begonnen && d.items['dr-rem'].status === 'fout'
+      && typeof d.items['dr-rem'].tijd === 'string');
+
+    r = await p.zet('dr-rem', { status: 'open', notitie: '' });
+    ok('open zonder notitie haalt het punt weg', r.code === 200 && r.antwoord.item === null && !(await p.lees()).items['dr-rem']);
+    r = await p.zet('dr-loop', { status: 'open', notitie: 'nog niet geprobeerd, wel een vraag' });
+    ok('open MET notitie blijft staan', (await p.lees()).items['dr-loop']?.notitie.startsWith('nog niet'));
+
+    ok('verkeerde status: 400', (await p.zet('x', { status: 'misschien' })).code === 400);
+    ok('verkeerd id: 400', (await p.zet('../x', { status: 'ok' })).code === 400 && (await p.zet('', { status: 'ok' })).code === 400);
+    ok('notitie geen tekst: 400', (await p.zet('x', { status: 'ok', notitie: 5 })).code === 400);
+    ok('notitie te lang: 413', (await p.zet('x', { status: 'ok', notitie: 'a'.repeat(2001) })).code === 413);
+    ok(`statussen: ${STATUSSEN.join(', ')}`, STATUSSEN.join() === 'open,ok,fout,overslaan');
+
+    // twintig punten tegelijk (twee tabbladen, snel klikken): niets gaat verloren
+    await Promise.all(Array.from({ length: 20 }, (_, i) => p.zet(`p${i}`, { status: 'ok' })));
+    const veel = await p.lees();
+    ok('twintig tegelijk gezet: alle twintig staan erin', Array.from({ length: 20 }, (_, i) => veel.items[`p${i}`]?.status === 'ok').every(Boolean));
+    ok('geen tijdelijke bestanden achtergebleven', !readdirSync(map).some((f) => f.endsWith('.tmp')));
+
+    writeFileSync(join(map, 'sessie.json'), '{ kapot');
+    ok('kapot bestand: leeg in plaats van een fout', Object.keys((await p.lees()).items).length === 0);
+    await p.zet('a', { status: 'ok' });
+
+    const n = await p.nieuw();
+    ok('nieuwe ronde: de oude sessie in archief/', n.gearchiveerd?.startsWith('archief/') && readdirSync(join(map, 'archief')).length === 1);
+    const na = await p.lees();
+    ok('... en daarna leeg', na.begonnen === null && Object.keys(na.items).length === 0);
+    ok('nieuwe ronde op een lege sessie bewaart niets', (await p.nieuw()).gearchiveerd === null && readdirSync(join(map, 'archief')).length === 1);
+  } finally { rmSync(map, { recursive: true, force: true }); }
+}
+
+console.log('\nhet bericht van de mixer (status-zender.js)');
+{
+  const snap = {
+    focus: 'A', maat: 'B',
+    decks: {
+      A: { id: 'A', loaded: true, playing: true, title: 'let it all go', bpm: 169.62, toon: { camelot: '2B', kort: 'F#' } },
+      B: { id: 'B', loaded: true, playing: false, title: 'zoned out', bpm: null, toon: null },
+      C: { id: 'C', loaded: false, playing: false, title: null, bpm: null, toon: null },
+    },
+  };
+  const midi = { supported: true, enabled: true, error: null, input: { name: 'APC40 mkII' }, output: { name: 'APC40 mkII' },
+    rx: 12, echoes: 0, verkeerdePoort: false };
+  const s = maakStatus({ snap, midi, audio: 'running', auto: true, opname: false, nu: 1000 });
+  ok('alleen geladen tracks', s.tracks.map((t) => t.id).join() === 'A,B');
+  ok('bpm op één decimaal, toonsoort als "2B F#"', s.tracks[0].bpm === 169.6 && s.tracks[0].toon === '2B F#');
+  ok('geen bpm of toon: null', s.tracks[1].bpm === null && s.tracks[1].toon === null);
+  ok('APC: invoer, echo-teller en geen verkeerde poort', s.midi.invoer === 'APC40 mkII' && s.midi.echoes === 0 && s.midi.verkeerdePoort === false);
+  ok('focus, maat, audio, auto, tijd', s.focus === 'A' && s.maat === 'B' && s.audio === 'running' && s.auto === true && s.t === 1000);
+  ok('het bericht is te klonen (BroadcastChannel)', JSON.stringify(structuredClone(s)) === JSON.stringify(s));
+  const zonder = maakStatus({ snap: null, midi: null });
+  ok('zonder engine en MIDI: lege lijst, midi null', zonder.tracks.length === 0 && zonder.midi === null);
+  const fout = maakStatus({ snap, midi: { ...midi, enabled: false, error: new Error('geweigerd'), input: null } });
+  ok('een MIDI-fout wordt tekst', fout.midi.fout === 'Error: geweigerd' && fout.midi.invoer === null);
+}
+
+console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
+process.exit(fails.length ? 1 : 0);

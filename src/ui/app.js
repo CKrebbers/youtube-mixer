@@ -21,6 +21,7 @@ import { opzetOnderpanelen } from './onderpanelen.js';
 import { opzetMidi } from './midi-opzet.js';
 import { startRenderloop } from './renderloop.js';
 import { tabblad } from './tabblad.js';
+import { startStatusZender } from './status-zender.js';
 import { vormenAan } from './vlag.js';
 
 /**
@@ -188,6 +189,13 @@ window.latency = midiDelen.latency;
 window.midiMonitor = midiDelen.monitor;
 window.leerModus = midiDelen.leerModus;
 window.mapPanel = midiDelen.mapPanel;
+
+// ---- de Controlekamer (controle.html) leest mee: APC, audio, wat er speelt ----
+startStatusZender({
+  isEerste: () => tabblad().eerste,
+  lees: () => ({ snap: engine.snapshot(), midi: midiDelen.midi.status(), audio: engine.ctx.state,
+                 auto: auto.aan, opname: !!opname.opnemer.bezig }),
+});
 
 // ---- renderloop -----------------------------------------------------------
 startRenderloop({

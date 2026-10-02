@@ -17,6 +17,7 @@ import { toonSamenvatting } from './toon.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
+import { Proef } from './proef.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -37,7 +38,10 @@ const MEDIA = process.env.VARVE_MEDIA || join(WORTEL, 'media');
 const OPNAMES = process.env.VARVE_OPNAMES || join(WORTEL, 'opnames');
 /** Setplannen van de auto-DJ (docs/PLAN.md). Eigen map voor de tests: VARVE_PLANNEN. */
 const PLANNEN = process.env.VARVE_PLANNEN || join(WORTEL, 'plannen');
+// De speellijst van de Controlekamer (proef/sessie.json, docs/CONTROLEKAMER.md).
+const PROEF = process.env.VARVE_PROEF || join(WORTEL, 'proef');
 const plannen = new Plannen(PLANNEN);
+const proef = new Proef(PROEF);
 
 /**
  * Paden in de database zijn relatief ("media/<id>/audio.wav"), zoals de browser
@@ -455,7 +459,7 @@ async function heranalyseOpAchtergrond() {
  * Wat de browser mag ophalen. Een witte lijst in plaats van "alles in de
  * projectmap": anders kon /.git/config of /media/library.db gewoon mee.
  */
-const MAG = [/^\/$/, /^\/(index|video|apc|plan)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
+const MAG = [/^\/$/, /^\/(index|video|apc|plan|controle)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
   /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
   /^\/plannen\/[\w-]+\.json$/, /^\/favicon\.ico$/];
 
@@ -640,6 +644,21 @@ const server = createServer(async (req, res) => {
         return json(res, r.code, r.antwoord);
       }
       return json(res, 405, { fout: 'GET of PUT' });
+    }
+
+    // ---- speellijst van de Controlekamer (docs/CONTROLEKAMER.md) ----------
+    // GET /api/proef: { begonnen, items }. PUT /api/proef/<id> { status, notitie }:
+    // één punt. POST /api/proef/nieuw: de sessie naar proef/archief/, dan leeg.
+    if (pad === '/api/proef' && req.method === 'GET') return json(res, 200, await proef.lees());
+    if (pad === '/api/proef/nieuw' && req.method === 'POST') return json(res, 200, await proef.nieuw());
+    const mProef = /^\/api\/proef\/([^/]+)$/.exec(pad);
+    if (mProef) {
+      if (req.method !== 'PUT') return json(res, 405, { fout: 'PUT' });
+      if (mediatype !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
+      const body = await leesJson(req, 16 * 1024);
+      if (!body || typeof body !== 'object') return json(res, 400, { fout: 'stuur { status, notitie }' });
+      const r = await proef.zet(mProef[1], body);
+      return json(res, r.code, r.antwoord);
     }
 
     // ---- library ---------------------------------------------------------
@@ -989,7 +1008,7 @@ const server = createServer(async (req, res) => {
 
     if (pad.startsWith('/api/')) return json(res, 404, { fout: 'onbekend eindpunt' });
 
-    await statisch(req, res, pad === '/' ? 'index.html' : pad);
+    await statisch(req, res, pad === '/' ? 'index.html' : pad === '/controle' ? 'controle.html' : pad);
   } catch (err) {
     // Eén kapot verzoek mag de server niet meenemen.
     try { json(res, 500, { fout: String(err?.message || err) }); } catch {}

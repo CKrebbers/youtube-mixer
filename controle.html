@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VARVE Controlekamer</title>
+<link rel="stylesheet" href="/src/controle/controle.css">
+</head>
+<body>
+<!-- De Controlekamer (docs/CONTROLEKAMER.md): de stand van alles, de mixer
+     openen, en de speellijst van een proefsessie. Opent zelf GEEN MIDI. -->
+<header class="kop">
+  <span class="brand">VARVE<b>DJ</b></span>
+  <h1>Controlekamer</h1>
+  <span class="kop-tijd" id="tijd"></span>
+</header>
+
+<main>
+  <section class="blok" aria-labelledby="h-stand">
+    <h2 id="h-stand">Stand</h2>
+    <div class="tegels" id="tegels"></div>
+    <div class="spelen" id="spelen" hidden></div>
+  </section>
+
+  <section class="blok" aria-labelledby="h-open">
+    <h2 id="h-open">Openen</h2>
+    <div class="openen">
+      <button class="knop hoofd" id="mixer-open">mixer openen</button>
+      <a class="knop" href="/apc.html" target="_blank" rel="noopener">APC-kaart</a>
+      <p class="uitleg" id="mixer-uitleg">Open de mixer altijd hier, zodat er nooit twee tegelijk naar de APC luisteren.
+        Planvenster en los venster (beamer) open je vanuit de mixer: knop <b>plan</b> en, in het videopaneel, <b>los venster</b>.</p>
+    </div>
+  </section>
+
+  <section class="blok" aria-labelledby="h-lijst">
+    <div class="lijst-kop">
+      <h2 id="h-lijst">Speellijst</h2>
+      <span class="voortgang" id="voortgang"></span>
+      <button class="knop klein" id="nieuw" title="de huidige sessie naar proef/archief/ en opnieuw beginnen">nieuwe ronde</button>
+    </div>
+    <p class="uitleg">Per punt: <b>ok</b>, <b>fout</b> of <b>overslaan</b>, en een notitie als iets niet klopt.
+      Alles wordt meteen bewaard in <code>proef/sessie.json</code>; daar leest Claude het na de sessie.</p>
+    <div id="lijst"></div>
+  </section>
+</main>
+
+<div class="meldingen" id="meldingen" aria-live="polite"></div>
+<script type="module" src="/src/controle/controle.js"></script>
+</body>
+</html>

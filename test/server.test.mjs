@@ -88,7 +88,7 @@ const server = spawn(process.execPath, ['server/index.js'], {
   // Zonder achtergrondanalyse: die meet test/gridauto.test.mjs apart; hier
   // zou hij door de tap-tests heen lopen.
   env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_MEDIA: media,
-    VARVE_HERANALYSE: 'uit', VARVE_PLANNEN: join(map, 'plannen') },
+    VARVE_HERANALYSE: 'uit', VARVE_PLANNEN: join(map, 'plannen'), VARVE_PROEF: join(map, 'proef') },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 const B = `http://localhost:${poort}`;
@@ -147,6 +147,24 @@ try {
   ok('geen JSON: 415', (await fetch(`${B}/api/plannen/x`, { method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: '{}' })).status === 415);
   ok('van een vreemde site: 403', (await rauw('/api/plannen/x', { method: 'PUT', headers: { Origin: 'http://evil.example', 'Content-Type': 'application/json' }, body: '{"plan":{"stappen":[]}}' })).status === 403);
   ok('lijst: auto-plan', (await (await fetch(`${B}/api/plannen`)).json()).plannen.map((p) => p.naam).join() === 'auto-plan');
+
+  console.log('\nde Controlekamer (docs/CONTROLEKAMER.md)');
+  ok('/controle en /controle.html geven de pagina', (await status('/controle')) === 200 && (await status('/controle.html')) === 200
+    && (await (await fetch(`${B}/controle`)).text()).includes('Controlekamer'));
+  ok('zijn script en opmaak komen door', (await status('/src/controle/controle.js')) === 200 && (await status('/src/controle/controle.css')) === 200);
+  ok('proef/sessie.json zelf niet (alleen via de API)', (await status('/proef/sessie.json')) === 404);
+  const zetPunt = (id, body, type = 'application/json') => fetch(`${B}/api/proef/${id}`, { method: 'PUT', headers: { 'content-type': type }, body: JSON.stringify(body) });
+  ok('nog niets: leeg', Object.keys((await (await fetch(`${B}/api/proef`)).json()).items).length === 0);
+  let rp = await zetPunt('dr-rem', { status: 'fout', notitie: 'klikt' });
+  ok('een punt zetten: 200 met het punt', rp.status === 200 && (await rp.json()).item.status === 'fout');
+  ok('... en terug te lezen', (await (await fetch(`${B}/api/proef`)).json()).items['dr-rem']?.notitie === 'klikt');
+  ok('verkeerde status: 400', (await zetPunt('dr-rem', { status: 'raar' })).status === 400);
+  ok('geen JSON: 415', (await zetPunt('dr-rem', { status: 'ok' }, 'text/plain')).status === 415);
+  ok('GET op een punt: 405', (await status('/api/proef/dr-rem')) === 405);
+  ok('nieuwe ronde zonder JSON: 415 (zoals elke POST)', (await status('/api/proef/nieuw', { method: 'POST' })) === 415);
+  const rn = await (await fetch(`${B}/api/proef/nieuw`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).json();
+  ok('nieuwe ronde: gearchiveerd en leeg', rn.gearchiveerd?.startsWith('archief/')
+    && Object.keys((await (await fetch(`${B}/api/proef`)).json()).items).length === 0);
 
   console.log('\nRange');
   const r1 = await fetch(`${B}/styles.css`, { headers: { Range: 'bytes=0-99999999' } });
