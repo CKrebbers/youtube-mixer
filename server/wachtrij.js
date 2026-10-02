@@ -54,15 +54,22 @@ export class Wachtrij {
    *
    * @param bijAnnuleren  opruimen als hij geannuleerd wordt vóór hij begon
    *                      (een upload heeft zijn werkmap dan al)
+   * @param vooraan       vóór alles wat gewoon wacht, achter eerdere vooraan-
+   *                      opdrachten (Clay 26 sep, VRAGEN J12: een bestand dat
+   *                      je op een TRACK sleept wil je nu spelen). Wat al loopt
+   *                      blijft lopen.
    * @returns {{ opdracht, dubbel: boolean }}
    */
-  voegToe({ sleutel, url, soort = 'link', titel = null, stappen = [], werk, bijAnnuleren = null }) {
+  voegToe({ sleutel, url, soort = 'link', titel = null, stappen = [], werk, bijAnnuleren = null, vooraan = false }) {
     const al = this.zoek(sleutel);
     if (al) return { opdracht: al, dubbel: true };
     const o = this._nieuw({ sleutel, url, soort, titel, stappen,
       status: 'wacht', stap: 'wachten', tekst: 'in de wachtrij' });
-    this.intern.set(o.id, { werk, bijAnnuleren, ac: null });
-    this.rij.push(o.id);
+    this.intern.set(o.id, { werk, bijAnnuleren, ac: null, vooraan });
+    if (vooraan) {
+      const i = this.rij.findIndex((id) => !this.intern.get(id)?.vooraan);
+      this.rij.splice(i < 0 ? this.rij.length : i, 0, o.id);
+    } else this.rij.push(o.id);
     this._nummer();
     this._volgende();
     return { opdracht: o, dubbel: false };

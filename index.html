@@ -23,6 +23,9 @@
       <button id="terug-btn" class="ghost log-knop" title="een handelingenlog terugspelen">↺</button>
     </span>
     <button id="video-btn" class="ghost" title="video-mixer (V)">video</button>
+    <button id="plan-btn" class="ghost" title="de programmering: het hele setplan zien, inrichten en live volgen (apart venster)">plan</button>
+    <button id="auto-btn" class="ghost" title="auto-DJ: de app kiest en mixt, jij stuurt bij">auto</button>
+    <button id="klankschaal-btn" class="ghost" title="klankschaal: speel mee op de toon van wat je hoort">klankschaal</button>
     <a id="apc-btn" class="ghost" href="apc.html" target="varve-apc" title="wat elke knop van de APC doet, per mapje">APC-kaart</a>
     <button id="midi-btn" class="ghost">MIDI</button>
     <button id="help-btn" class="ghost">? toetsen</button>
@@ -199,6 +202,55 @@
     <button data-kind="button" data-action="sampler.8" data-action-shift="sampler.8.clear" class="pad" data-pad="8" title="leeg: pak de laatste tellen van de track met focus · gevuld: start/stop op de tel · shift: leegmaken"><b>8</b><span></span></button>
   </div>
   <div class="knob sm" data-action="sampler.volume" data-label="VOL" data-value="0.8"></div>
+</section>
+
+<!-- ================= AUTO-DJ ================= -->
+<section id="auto" class="auto-rij hidden">
+  <span class="sampler-kop">AUTO</span>
+  <button data-kind="button" data-action="auto.aan" class="btn sm au-aan" title="auto-DJ aan/uit. Raak je een fader, EQ, filter of play aan van een track in de overgang, dan neem jij hem over">uit</button>
+  <span class="au-nu" title="wat nu klinkt">zet aan: ik kies, mix en leg uit</span>
+  <span class="au-volgende" title=""><b></b><small></small><span class="au-balk"><i></i></span></span>
+  <button data-kind="button" data-action="auto.ok" class="btn sm" title="goed zo">ok</button>
+  <button data-kind="button" data-action="auto.skip" class="btn sm" title="niet deze: de volgende kandidaat">overslaan</button>
+  <button data-kind="button" data-action="auto.langer" class="btn sm" title="nog 8 maten (beatloos: 30 s) langer op deze track">langer</button>
+  <button data-kind="button" data-action="auto.nu" class="btn sm" title="de overgang nu, op de eerstvolgende 4 maten">nu</button>
+  <span class="au-plan" title="het setplan (plannen/auto-plan.json): Claude schrijft het, de app volgt het binnen zijn regels">geen plan</span>
+</section>
+
+<!-- ================= KLANKSCHAAL ================= -->
+<section id="klankschaal" class="klankschaal-rij hidden">
+  <span class="sampler-kop">KLANKSCHAAL</span>
+  <div class="ks-stemming">
+    <button data-kind="button" data-action="klankschaal.volg" class="btn sm ks-volg" title="waar de schaal zijn toon vandaan haalt: de track die de maat geeft → de track met focus → met de hand (vast)">volgt maat</button>
+    <span class="ks-toon" title="de toon van de schaal"><b>–</b><small></small></span>
+    <button data-kind="button" data-action="klankschaal.transpose.down" class="btn sm" title="een halve toon lager">−</button>
+    <button data-kind="button" data-action="klankschaal.transpose.up" class="btn sm" title="een halve toon hoger">+</button>
+    <button data-kind="button" data-action="klankschaal.transpose.reset" class="btn sm ks-nul" title="transpositie en fijnstemmen terug op nul">0</button>
+    <button data-kind="button" data-action="klankschaal.toonladder" class="btn sm ks-ladder" title="toonladder van de acht velden. auto: Kurd bij mineur, majeur bij majeur. Past hij niet bij de toonsoort, dan de relatieve (Kurd op C = A Kurd)">auto</button>
+    <button data-kind="button" data-action="klankschaal.klank" class="btn sm ks-klank" title="soort schaal: brons, kristal, glas, gong">brons</button>
+  </div>
+  <div class="ks-pads">
+    <button data-kind="button" data-action="klankschaal.kern" class="ks-pad ks-kern" title="de kern aanslaan: de grondtoon"><b>●</b><span></span></button>
+    <button data-kind="button" data-action="klankschaal.veld.1" class="ks-pad" title="toonveld 1 aanslaan"><b>1</b><span></span></button>
+    <button data-kind="button" data-action="klankschaal.veld.2" class="ks-pad" title="toonveld 2 aanslaan"><b>2</b><span></span></button>
+    <button data-kind="button" data-action="klankschaal.veld.3" class="ks-pad" title="toonveld 3 aanslaan"><b>3</b><span></span></button>
+    <button data-kind="button" data-action="klankschaal.veld.4" class="ks-pad" title="toonveld 4 aanslaan"><b>4</b><span></span></button>
+    <button data-kind="button" data-action="klankschaal.veld.5" class="ks-pad" title="toonveld 5 aanslaan"><b>5</b><span></span></button>
+    <button data-kind="button" data-action="klankschaal.veld.6" class="ks-pad" title="toonveld 6 aanslaan"><b>6</b><span></span></button>
+    <button data-kind="button" data-action="klankschaal.veld.7" class="ks-pad" title="toonveld 7 aanslaan"><b>7</b><span></span></button>
+    <button data-kind="button" data-action="klankschaal.veld.8" class="ks-pad" title="toonveld 8 aanslaan"><b>8</b><span></span></button>
+  </div>
+  <button data-kind="button" data-action="klankschaal.wrijf" class="btn sm ks-wrijf" title="wrijven zolang je drukt: de schaal gaat zingen">wrijf</button>
+  <button data-kind="button" data-action="klankschaal.demp" class="btn sm" title="dempen zolang je drukt">demp</button>
+  <div class="ks-knoppen">
+    <div class="knob sm" data-action="klankschaal.toon" data-label="TOON" data-value="0.5" title="toonsoort met de hand (zet volgen op hand)"></div>
+    <div class="knob sm" data-action="klankschaal.fijn" data-label="FIJN" data-value="0.5" data-bipolar="true" title="fijnstemmen, −50..+50 cent"></div>
+    <div class="knob sm" data-action="klankschaal.karakter" data-label="KAR" data-value="0.1" data-default="0.1" title="karakter: handpan ↔ schaal"></div>
+    <div class="knob sm" data-action="klankschaal.uitklank" data-label="UIT" data-value="0.375" data-default="0.375" title="uitklank: kort ↔ lang"></div>
+    <div class="knob sm" data-action="klankschaal.kracht" data-label="KRACHT" data-value="0.7" data-default="0.7" title="hoe hard je aanslaat en wrijft"></div>
+    <div class="knob sm" data-action="klankschaal.send.b" data-label="GALM" data-value="0.35" data-default="0.35" title="naar send B (galm)"></div>
+    <div class="knob sm" data-action="klankschaal.volume" data-label="VOL" data-value="0.8" data-default="0.8"></div>
+  </div>
 </section>
 
 <!-- ================= LIBRARY ================= -->

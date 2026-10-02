@@ -24,6 +24,7 @@ import { PULS_DOELEN } from '../video/puls.js';
 import { FITS } from '../video/passen.js';
 import { EQ_BANDEN, REM_MIN, REM_MAX } from '../engine/deck.js';
 import { GROEPEN, LAAGNAAM } from './lagen.js';
+import { VOLGEN, LADDERS, KLANKSOORTEN, TRANSPOSITIE_MAX } from '../engine/klankschaal.js';
 
 const registry = new Map();
 
@@ -331,6 +332,7 @@ export function bindEngine(engine) {
       onzeker: ONZEKER,
       rand: 'beatjump: de loop komt dan buiten het nummer te liggen',
       einde: 'beatjump: dat valt voorbij het einde van het nummer — niet gesprongen',
+      begin: 'beatjump: dat valt vóór het begin van het nummer — niet gesprongen',
     };
     for (const [richting, naam, tekst] of [[-1, 'back', 'terug'], [1, 'fwd', 'vooruit']]) {
       let ingedrukt = false;
@@ -550,6 +552,53 @@ export function bindEngine(engine) {
       { label: 'Sampler volume', read: () => sampler.volume });
   }
 
+  // ---- klankschaal: meespelen op de toon van wat je hoort -----------------
+  // Geen plek op de standaard-APC: koppel wat je wilt met "koppelen" (MIDI-learn).
+  // Reads: 1 = klinkt/ingedrukt, 0 = rust; keuzes als index 0..1.
+  const ks = engine.klankschaal;
+  if (ks) {
+    const fout = (err) => engine.emit('melding', { tekst: `klankschaal: ${err.message}`, soort: 'fout' });
+    const keuze = (lijst, waarde) => lijst.indexOf(waarde) / (lijst.length - 1);
+    define('klankschaal.kern', 'trigger', (on) => { if (on) ks.slaKern().catch(fout); },
+      { label: 'Klankschaal: de kern aanslaan (de grondtoon)', read: () => (ks.klinkt(0) ? 1 : 0) });
+    for (let i = 0; i < 8; i++) {
+      define(`klankschaal.veld.${i + 1}`, 'trigger', (on) => { if (on) ks.slaVeld(i).catch(fout); },
+        { label: `Klankschaal: toonveld ${i + 1} aanslaan`, read: () => (ks.klinkt(i + 1) ? 1 : 0) });
+    }
+    define('klankschaal.wrijf', 'trigger', (on) => { ks.wrijf(!!on).catch(fout); },
+      { label: 'Klankschaal: wrijven zolang je drukt (de schaal gaat zingen)', read: () => (ks.wrijft ? 1 : 0) });
+    define('klankschaal.demp', 'trigger', (on) => ks.demp(!!on),
+      { label: 'Klankschaal: dempen zolang je drukt', read: () => (ks.dempt ? 1 : 0) });
+    define('klankschaal.volg', 'trigger', (on) => { if (on) ks.volgendeVolg(); },
+      { label: 'Klankschaal: volgt de maat → de focus → met de hand', read: () => keuze(VOLGEN, ks.volg) });
+    define('klankschaal.toon', 'value', (v) => ks.zetToon(WIJZER[Math.round(Math.min(1, Math.max(0, v)) * (WIJZER.length - 1))]),
+      { label: 'Klankschaal: toonsoort met de hand (24 standen; zet volgen op hand)', read: () => WIJZER.indexOf(ks.bron().k) / (WIJZER.length - 1) });
+    define('klankschaal.transpose.up', 'trigger', (on) => { if (on) ks.transponeer(1); },
+      { label: 'Klankschaal: een halve toon hoger', read: () => (ks.transpositie >= TRANSPOSITIE_MAX ? null : 0) });
+    define('klankschaal.transpose.down', 'trigger', (on) => { if (on) ks.transponeer(-1); },
+      { label: 'Klankschaal: een halve toon lager', read: () => (ks.transpositie <= -TRANSPOSITIE_MAX ? null : 0) });
+    define('klankschaal.transpose.reset', 'trigger', (on) => { if (on) ks.herstelToon(); },
+      { label: 'Klankschaal: transpositie en fijn terug op nul', read: () => (ks.transpositie || ks.fijn ? 0.5 : 0) });
+    define('klankschaal.fijn', 'value', (v) => ks.setFijn(v),
+      { label: 'Klankschaal: fijnstemmen (−50..+50 cent)', read: () => 0.5 + ks.fijn / 100 });
+    define('klankschaal.toonladder', 'trigger', (on) => { if (on) ks.volgendeLadder(); },
+      { label: 'Klankschaal: toonladder (auto, Kurd, Celtic, penta, Hijaz, majeur, penta majeur)', read: () => keuze(LADDERS, ks.ladder) });
+    define('klankschaal.klank', 'trigger', (on) => { if (on) ks.volgendeKlank(); },
+      { label: 'Klankschaal: soort schaal (brons, kristal, glas, gong)', read: () => keuze(KLANKSOORTEN, ks.klank) });
+    define('klankschaal.karakter', 'value', (v) => ks.setKarakter(v),
+      { label: 'Klankschaal: karakter (handpan ↔ schaal)', read: () => ks.karakter });
+    define('klankschaal.uitklank', 'value', (v) => ks.setUitklank(v),
+      { label: 'Klankschaal: uitklank (kort ↔ lang)', read: () => ks.uitklank });
+    define('klankschaal.kracht', 'value', (v) => ks.setKracht(v),
+      { label: 'Klankschaal: hoe hard je aanslaat en wrijft', read: () => ks.kracht });
+    define('klankschaal.volume', 'value', (v) => ks.setVolume(v),
+      { label: 'Klankschaal volume', read: () => ks.volume });
+    for (const bus of ['A', 'B']) {
+      define(`klankschaal.send.${bus.toLowerCase()}`, 'value', (v) => ks.setSend(bus, v),
+        { label: `Klankschaal naar send ${bus} (${bus === 'A' ? 'echo' : 'galm'})`, read: () => ks.send[bus] ?? 0 });
+    }
+  }
+
   // Focus door de tracks: de pijlen op de APC.
   const focusStap = (stap) => {
     const i = DECK_IDS.indexOf(engine.focus);
@@ -687,6 +736,25 @@ export function bindLog({ log, wissel, terugspeler }) {
  * device knobs, en de grid-pagina's. Een kiesknop is een gewone action, dus
  * ook te koppelen aan een andere knop of te bedienen met de muis.
  */
+/**
+ * De auto-DJ op de bus (src/auto/automaat.js, docs/AUTO-DJ.md). Nog geen plek
+ * op de standaard-APC: koppelen werkt. Reads: aan 1/0; ok 1 = bevestigd,
+ * 0,5 = er staat iets klaar; de rest null zolang er niets te doen is.
+ */
+export function bindAuto(auto) {
+  const klaar = () => auto.fase === 'klaar' && !!auto.volgende;
+  define('auto.aan', 'trigger', (on) => { if (on) auto.zetAan(); },
+    { label: 'Auto-DJ aan/uit', read: () => (auto.aan ? 1 : 0) });
+  define('auto.ok', 'trigger', (on) => { if (on) auto.ok(); },
+    { label: 'Auto-DJ: de volgende overgang is goed', read: () => (!auto.volgende ? null : auto.volgende.bevestigd ? 1 : 0.5) });
+  define('auto.skip', 'trigger', (on) => { if (on) auto.overslaan(); },
+    { label: 'Auto-DJ: niet deze, de volgende kandidaat', read: () => (klaar() ? 0 : null) });
+  define('auto.langer', 'trigger', (on) => { if (on) auto.langer(); },
+    { label: 'Auto-DJ: nog 8 maten (of 30 s) langer op deze track', read: () => (klaar() ? 0 : null) });
+  define('auto.nu', 'trigger', (on) => { if (on) auto.nu(); },
+    { label: 'Auto-DJ: de overgang nu (op de eerstvolgende 4 maten)', read: () => (klaar() ? 0 : null) });
+}
+
 export function bindLagen(lagen) {
   for (const [groep, g] of Object.entries(GROEPEN)) {
     for (const knop of Object.keys(g.knoppen)) {

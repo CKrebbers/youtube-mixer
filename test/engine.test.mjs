@@ -2149,7 +2149,14 @@ console.log('\ntransport');
   dG.seek(37.9);
   ok('... wat nog past, springt gewoon (37,9 -> 39,9)', dG.beatjump(1).ok && Math.abs(dG.position - 39.9) < 1e-9);
   dG.seek(1);
-  ok('terug voorbij het begin: klemt op 0 en speelt door vanaf het begin', dG.beatjump(-1).ok && dG.position === 0 && dG.playing);
+  const nBegin = meldingen.length;
+  druk('track.7.beatjump.back');
+  ok('terug voorbij het begin (J4): niet gesprongen, hij speelt door', Math.abs(dG.position - 1) < 1e-9 && dG.playing);
+  ok('... met een melding', meldingen.length === nBegin + 1 && /begin/.test(meldingen.at(-1).tekst));
+  const rBegin = dG.beatjump(-1);
+  ok('... waarom = begin (niet onzeker)', !rBegin.ok && rBegin.waarom === 'begin');
+  dG.seek(2);
+  ok('... precies op 0 landen mag (2 − 2 = 0)', dG.beatjump(-1).ok && Math.abs(dG.position) < 1e-9 && dG.playing);
   dG.stop();
 
   // Onzeker stuk (niet op slot): weigeren, zoals beat-loops.

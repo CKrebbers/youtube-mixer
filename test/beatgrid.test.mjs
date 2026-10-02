@@ -309,6 +309,16 @@ ok('en het tempo klopt nog steeds', Math.abs(tt4.tap(31 * 480, 0).bpm - 125) < 0
   b.zetStuk(27.06, { bpm: 124.5, anker: 27.07 });
   ok('tap/verfijning (zetStuk): de tel bij de tap houdt zijn plek in de maat', b.telInMaat(27.07) === 4 && b.isDownbeat(27.07 + 60 / 124.5) && Number.isFinite(voorBpm));
 
+  // ½ op tel 2 of 4 houdt de "1" als tel (VRAGEN J26): de tellen op 1 en 3 blijven.
+  const h = Beatgrid.van({ stukken: [{ van: 0, bpm: 120, anker: 0, maat: 0 }] });
+  h.halveer(0.5);
+  ok('½ op tel 2: de "1" blijft een "1" en een tel (J26)', h.bpmAt(1) === 60 && h.isDownbeat(0) && bij(h.nearest(0.02), 0, 1e-9));
+  ok('... de tellen liggen op 1 en 3 (1,0 s), niet op 2 en 4 (0,5 s)', bij(h.nearest(1.02), 1, 1e-9) && !bij(h.nearest(0.5), 0.5, 1e-6));
+  h.verdubbel(0.5);
+  ok('... ×2 daarna geeft het oude grid terug, "1" en al', h.bpmAt(1) === 120 && h.isDownbeat(0) && h.isDownbeat(2) && bij(h.nearest(0.52), 0.5, 1e-9));
+  h.halveer(1.5);
+  ok('... ½ op tel 4 ook (een maat is nu 4 s: "1" op 0 en 4)', h.isDownbeat(0) && h.isDownbeat(4) && bij(h.nearest(1.02), 1, 1e-9) && !bij(h.nearest(1.5), 1.5, 1e-6));
+
   // Een eerder stuk bewerken verschuift de maten van het volgende niet meer
   // (vroeger telden die door, en een andere bpm vooraan gaf ze een andere "1").
   const c = Beatgrid.van({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 10, bpm: 150, anker: 10.1 }] });

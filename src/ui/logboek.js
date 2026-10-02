@@ -178,6 +178,29 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
 
   bindLog({ log, wissel, terugspeler });
 
+  // ---- altijd aan (Clay 26 sep, VRAGEN J18) -----------------------------------
+  // Een keuze die deze browser onthoudt (vinkje in de lijst achter ↺). Het log
+  // begint vanzelf zodra de audio loopt: de klok van het log is de audioklok,
+  // en die staat stil tot "audio starten". Eén keer per pagina: ○ log stopt
+  // hem voor deze keer, herladen begint weer. Kost ~1–8 MB per uur in opnames/.
+  const ALTIJD = 'varve.log.altijd';
+  let altijd = false;
+  try { altijd = localStorage.getItem(ALTIJD) === '1'; } catch {}
+  let vanzelfGedaan = false;
+  function vanzelf() {
+    if (!altijd || vanzelfGedaan || log.bezig || engine.ctx.state !== 'running') return;
+    vanzelfGedaan = true;
+    startLog();
+  }
+  engine.ctx.addEventListener('statechange', vanzelf);
+  vanzelf();
+  function zetAltijd(aan) {
+    altijd = aan;
+    try { localStorage.setItem(ALTIJD, aan ? '1' : '0'); } catch {}
+    // Aanzetten begint meteen (als de audio loopt); uitzetten laat een lopend log lopen.
+    if (aan) { vanzelfGedaan = false; vanzelf(); }
+  }
+
   // ---- knoppen en lijst -------------------------------------------------------
 
   const logKnop = document.getElementById('log-btn');
@@ -209,6 +232,8 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
       return;
     }
     lijstEl.innerHTML = '<div class="log-kop">HANDELINGENLOGS · terugspelen laadt dezelfde nummers op dezelfde tracks</div>'
+      + `<label class="log-rij log-klein" title="begint vanzelf zodra de audio loopt; deze browser onthoudt het (~1–8 MB per uur)">
+          <input type="checkbox" data-altijd ${altijd ? 'checked' : ''}> log altijd aan, vanaf het openen</label>`
       + (logs.length ? logs.map((l) => `<div class="log-rij">
           <span class="log-wanneer">${esc(wanneer(l.id))}</span>
           <span class="log-klein">${mmss(l.duur)} · ${grootte(l.bytes)}</span>
@@ -217,6 +242,10 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
           <button class="btn sm" data-speel="${esc(l.id)}" ${log.id === l.id ? 'disabled title="dit log loopt nu"' : ''}>speel</button>
         </div>`).join('') : '<div class="log-rij log-klein">nog geen — ○ log zet er een aan, en een opname neemt er vanzelf een mee</div>');
   }
+
+  lijstEl.addEventListener('change', (e) => {
+    if (e.target.matches('[data-altijd]')) zetAltijd(e.target.checked);
+  });
 
   lijstEl.addEventListener('click', (e) => {
     const knop = e.target.closest('[data-speel]');
@@ -244,7 +273,7 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
     logKnop.classList.toggle('bezig', log.bezig);
     titel(logKnop, log.bezig
       ? `handelingenlog loopt${log.opname ? ` (hoort bij opname ${log.opname})` : ''} — klik om te stoppen`
-      : 'handelingenlog: wat je doet, met de tijd, om de set terug te spelen (loopt vanzelf mee met een opname)');
+      : 'handelingenlog: wat je doet, met de tijd, om de set terug te spelen (loopt vanzelf mee met een opname; altijd aan: vinkje achter ↺)');
     tekst(terugKnop, terugspeler.bezig ? `■ ${mmss(terugspeler.seconden)} / ${mmss(terugspeler.duur)}` : '↺');
     terugKnop.classList.toggle('bezig', terugspeler.bezig);
     titel(terugKnop, terugspeler.bezig ? `terugspelen: set-${speelt?.id ?? '?'} — klik om te stoppen (de tracks spelen door)` : 'een handelingenlog terugspelen');

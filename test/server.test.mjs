@@ -88,7 +88,7 @@ const server = spawn(process.execPath, ['server/index.js'], {
   // Zonder achtergrondanalyse: die meet test/gridauto.test.mjs apart; hier
   // zou hij door de tap-tests heen lopen.
   env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_MEDIA: media,
-    VARVE_HERANALYSE: 'uit' },
+    VARVE_HERANALYSE: 'uit', VARVE_PLANNEN: join(map, 'plannen') },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 const B = `http://localhost:${poort}`;
@@ -123,6 +123,30 @@ try {
   for (const p of uitstapjes) uitkomsten.push((await rauw(p)).status);
   ok(`gecodeerde slash of .. letterlijk: nooit 200 (${uitkomsten.join(' ')})`, uitkomsten.every((c) => c !== 200 && c !== 0));
   ok('een gewoon bestand in /src komt letterlijk nog wel door', (await rauw('/src/ui/app.js')).status === 200);
+  // Het setplan (plannen/*.json uit VARVE_PLANNEN): alleen JSON, alleen direct in de map.
+  console.log('\nsetplannen');
+  ok('plan.html komt door', (await status('/plan.html')) === 200);
+  ok('nog geen plannen: lijst leeg, plan 404', (await (await fetch(`${B}/api/plannen`)).json()).plannen.length === 0
+    && (await status('/api/plannen/auto-plan')) === 404);
+  const zet = (naam, body, headers = {}) => fetch(`${B}/api/plannen/${naam}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
+  const p1 = await zet('auto-plan', { plan: { naam: 'auto-plan', stappen: [{ track: 'a', waarom: 'begin' }] }, versie: null });
+  const j1 = await p1.json();
+  ok('nieuw plan opslaan: 200, genormaliseerd (id s1), met versie', p1.status === 200 && j1.plan.stappen[0].id === 's1' && !!j1.versie);
+  ok('... en statisch te lezen onder /plannen/', (await status('/plannen/auto-plan.json')) === 200);
+  ok('in plannen/ alleen .json, geen submappen of uitstapjes', (await status('/plannen/x.js')) === 404
+    && (await status('/plannen/a/b.json')) === 404 && (await rauw('/plannen/..%2fserver%2findex.js')).status !== 200
+    && (await status('/plannen/.versies/auto-plan')) === 404);
+  const oudPlan = await zet('auto-plan', { plan: { stappen: [{ track: 'b' }] }, versie: 'oud' });
+  const oudJ = await oudPlan.json();
+  ok('opslaan op een oude versie: 409 met wat er nu staat', oudPlan.status === 409 && oudJ.plan.stappen[0].track === 'a' && oudJ.versie === j1.versie);
+  const p2 = await zet('auto-plan', { plan: { stappen: [{ track: 'b' }] }, versie: j1.versie });
+  ok('opslaan op de goede versie: 200, nieuwe versie', p2.status === 200 && (await p2.json()).versie !== j1.versie);
+  const g = await (await fetch(`${B}/api/plannen/auto-plan`)).json();
+  ok('lezen: plan, versie, fouten', g.plan.stappen[0].track === 'b' && typeof g.versie === 'string' && Array.isArray(g.fouten));
+  ok('rare naam: 400', (await zet('..%2fx', { plan: { stappen: [] } })).status === 400 && (await status('/api/plannen/a%20b')) === 400);
+  ok('geen JSON: 415', (await fetch(`${B}/api/plannen/x`, { method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: '{}' })).status === 415);
+  ok('van een vreemde site: 403', (await rauw('/api/plannen/x', { method: 'PUT', headers: { Origin: 'http://evil.example', 'Content-Type': 'application/json' }, body: '{"plan":{"stappen":[]}}' })).status === 403);
+  ok('lijst: auto-plan', (await (await fetch(`${B}/api/plannen`)).json()).plannen.map((p) => p.naam).join() === 'auto-plan');
 
   console.log('\nRange');
   const r1 = await fetch(`${B}/styles.css`, { headers: { Range: 'bytes=0-99999999' } });

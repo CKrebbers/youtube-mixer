@@ -208,6 +208,12 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
         tekst(el.lastElementChild, p.gevuld ? `track ${p.bron} · ${p.tellen}` : p.bewaard ? `↺ track ${p.bewaardBron} · ${p.bewaardTellen ?? '?'}` : '');
       }
     });
+    veilig('auto', () => {
+      stappen.auto?.();
+    });
+    veilig('klankschaal', () => {
+      stappen.klankschaal?.();
+    });
     veilig('opnemen', () => {
       stappen.opnemen();
     });

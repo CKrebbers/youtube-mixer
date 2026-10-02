@@ -435,14 +435,21 @@ export class Beatgrid {
     });
   }
 
-  /** ×2 en ½ voor het stuk rond `bij`; de tel het dichtst bij `bij` blijft liggen. */
+  /**
+   * ×2 en ½ voor het stuk rond `bij`. ×2: de tel het dichtst bij `bij` blijft
+   * liggen. ½: de "1" blijft een tel, dus de tellen op 1 en 3 blijven (zoals
+   * DJ-software halveert; Clay 26 sep, VRAGEN J26). Vroeger bleef de tel bij
+   * `bij`: op tel 2 of 4 schoof de "1" dan een tel op, en ×2 daarna gaf hem
+   * niet terug. Zonder maat-anker de oude regel.
+   */
   verdubbel(bij = null) { return this._schaal(2, bij); }
   halveer(bij = null) { return this._schaal(0.5, bij); }
   _schaal(f, bij) {
     return this._pas(this._i(bij), (s) => {
-      if (bij !== null) s.anker = this._roosterTel(s, bij);
+      if (f < 1 && eindig(s.maat)) s.anker = this._roosterTel(s, s.maat);
+      else if (bij !== null) s.anker = this._roosterTel(s, bij);
       s.bpm = klem(s.bpm * f);
-      // De "1" blijft waar hij was: bij ×2 ligt hij nog op het rooster, bij ½ de dichtstbijzijnde tel.
+      // De "1" blijft waar hij was: bij ×2 ligt hij nog op het rooster, bij ½ is hij het anker.
       if (eindig(s.maat)) s.maat = this._roosterTel(s, s.maat);
     });
   }

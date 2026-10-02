@@ -279,53 +279,80 @@ Elk spoor bouwde met een keuze die Clay kan omdraaien. Wat er nu staat is het
 advies van de bouwer of controleur, tenzij anders vermeld. Alleen wat echt een
 keuze is; de rest staat in `docs/HANDOFF.md` (wat niet getest is).
 
+**Clay 26 sep: alle adviezen overgenomen** (afgevinkt). Daarvoor gebouwd: J4
+(beatjump vóór het begin geweigerd), J12 (op een track gesleept = vooraan in de
+rij), J18 (vinkje "log altijd aan" achter ↺), J24 (rack-knoppen 5–8 endless in
+zijn verschil), J26 (½ houdt de "1"). Nog open, op gevoel of met de APC: J7, J16,
+J19, J20, J27, J28, J30.
+
 Transport (beatjump, loop in/out, quantize, op de maat):
-- [ ] **J1. Starten op de maat: volgende MAAT of volgende tel?** 🎧 Nu: maat. **Advies:** maat (blauwdruk, plan en Ableton doen het zo); een tel-knop erbij is één regel.
-- [ ] **J2. Quantize voor alle tracks of per track?** 💬 Nu: één schakelaar voor alle tracks. **Advies:** zo laten (één knop, zoals rekordbox, Traktor en Serato).
-- [ ] **J3. Hotcue met quantize: meteen of op de volgende tel?** 🎧 Nu: meteen, fasebehoudend. **Advies:** meteen (klinkt hetzelfde, reageert tot een tel sneller).
-- [ ] **J4. Beatjump terug voorbij het begin: klemmen of weigeren?** 💬 Nu: klemmen op 0 (voorbij het einde wordt al geweigerd). **Advies:** weigeren, net als het einde: klemmen breekt de beatmatch van een track die je net inmixt. Eén regel.
+- [x] **J1. Starten op de maat: volgende MAAT of volgende tel?** 🎧 Nu: maat. **Advies:** maat (blauwdruk, plan en Ableton doen het zo); een tel-knop erbij is één regel.
+- [x] **J2. Quantize voor alle tracks of per track?** 💬 Nu: één schakelaar voor alle tracks. **Advies:** zo laten (één knop, zoals rekordbox, Traktor en Serato).
+- [x] **J3. Hotcue met quantize: meteen of op de volgende tel?** 🎧 Nu: meteen, fasebehoudend. **Advies:** meteen (klinkt hetzelfde, reageert tot een tel sneller).
+- [x] **J4. Beatjump terug voorbij het begin: klemmen of weigeren?** 💬 Nu: klemmen op 0 (voorbij het einde wordt al geweigerd). **Advies:** weigeren, net als het einde: klemmen breekt de beatmatch van een track die je net inmixt. Eén regel.
 
 Klank (rem, kill, maatgever):
-- [ ] **J5. Remtijd in seconden of in tellen?** 🎧 Nu: seconden, 0,1–5 s, standaard 1 s. **Advies:** seconden (een gebaar van de draaitafel, werkt ook zonder grid).
-- [ ] **J6. Tweede druk op rem tijdens het remmen: los of meteen stil?** 🎧 Nu: los, meteen weer op tempo (tape stop die op de drop invalt); pauze = meteen stil. **Advies:** zo laten.
+- [x] **J5. Remtijd in seconden of in tellen?** 🎧 Nu: seconden, 0,1–5 s, standaard 1 s. **Advies:** seconden (een gebaar van de draaitafel, werkt ook zonder grid).
+- [x] **J6. Tweede druk op rem tijdens het remmen: los of meteen stil?** 🎧 Nu: los, meteen weer op tempo (tape stop die op de drop invalt); pauze = meteen stil. **Advies:** zo laten.
 - [ ] **J7. Klinkt het uitdoven als een vinylstop, en wil je een spin-up na loslaten?** 🎧 Nu: uitdoven in het laatste kwart van de snelheid, loslaten = meteen op tempo. **Advies:** eerst luisteren; eerder/later uitdoven is één getal, een spin-up ~een uur werk.
-- [ ] **J8. Maatgever-hysterese: 3 dB en 250 ms goed?** 🎛 Nu: een andere track neemt de maat pas over na 3 dB harder gedurende 250 ms. **Advies:** zo laten tot het in een set opvalt.
+- [x] **J8. Maatgever-hysterese: 3 dB en 250 ms goed?** 🎛 Nu: een andere track neemt de maat pas over na 3 dB harder gedurende 250 ms. **Advies:** zo laten tot het in een set opvalt.
 
 Toonsoort:
-- [ ] **J9. Toonsoort in de kolomkop onder de bpm (`9B G`), of alleen Camelot?** 👀 Nu: onder de bpm (naast het nummer drukte de MAAT-badge hem weg). **Advies:** zo laten (T2).
-- [ ] **J10. Sneltoetsen om de toonsoort te corrigeren?** 💬 Nu: alleen het menu in de focuskop en de kiezer in de library. **Advies:** geen toetsen: een per ongeluk verzette kwint wordt als "met de hand" bewaard.
-- [ ] **J11. Library "+N": aantal andere toonsoorten of aantal stukken?** 💬 Nu: andere toonsoorten (ADRIANA: 18 stukken in 6 toonsoorten = +5). **Advies:** zo laten.
+- [x] **J9. Toonsoort in de kolomkop onder de bpm (`9B G`), of alleen Camelot?** 👀 Nu: onder de bpm (naast het nummer drukte de MAAT-badge hem weg). **Advies:** zo laten (T2).
+- [x] **J10. Sneltoetsen om de toonsoort te corrigeren?** 💬 Nu: alleen het menu in de focuskop en de kiezer in de library. **Advies:** geen toetsen: een per ongeluk verzette kwint wordt als "met de hand" bewaard.
+- [x] **J11. Library "+N": aantal andere toonsoorten of aantal stukken?** 💬 Nu: andere toonsoorten (ADRIANA: 18 stukken in 6 toonsoorten = +5). **Advies:** zo laten.
 
 Library en ingest:
-- [ ] **J12. Voorrang in de ingest-rij voor een bestand dat je op een TRACK sleept?** 💬 Nu: achteraan, dus een video voor track 3 wacht achter een lange download. Geen advies van de bouwer; **voorstel:** alleen wat je op een track sleept vooraan (dat wil je nu spelen).
-- [ ] **J13. Een hele playlist in de wachtrij zetten?** 💬 Nu: geweigerd, zoals gevraagd. **Advies:** blijven weigeren tot je erom vraagt (met `--flat-playlist` is het daarna een klein stapje).
-- [ ] **J14. Tweede klik voor "opnieuw binnenhalen" en voor × op een lopende download: goed, of te voorzichtig?** 💬 **Advies:** zo laten (dezelfde regel als elke destructieve knop); een ↻-knop bij "al binnen" kan ook.
+- [x] **J12. Voorrang in de ingest-rij voor een bestand dat je op een TRACK sleept?** 💬 Nu: achteraan, dus een video voor track 3 wacht achter een lange download. Geen advies van de bouwer; **voorstel:** alleen wat je op een track sleept vooraan (dat wil je nu spelen).
+- [x] **J13. Een hele playlist in de wachtrij zetten?** 💬 Nu: geweigerd, zoals gevraagd. **Advies:** blijven weigeren tot je erom vraagt (met `--flat-playlist` is het daarna een klein stapje).
+- [x] **J14. Tweede klik voor "opnieuw binnenhalen" en voor × op een lopende download: goed, of te voorzichtig?** 💬 **Advies:** zo laten (dezelfde regel als elke destructieve knop); een ↻-knop bij "al binnen" kan ook.
 
 Beamer:
-- [ ] **J15. Dubbele menging in het randgeval "opname begon zonder los venster, daarna open"?** 💬 Nu: dan mengen beide tijdelijk. **Advies:** laten (het alternatief bevriest de beamer weer met het hoofdtabblad naar achteren).
+- [x] **J15. Dubbele menging in het randgeval "opname begon zonder los venster, daarna open"?** 💬 Nu: dan mengen beide tijdelijk. **Advies:** laten (het alternatief bevriest de beamer weer met het hoofdtabblad naar achteren).
 - [ ] **J16. De vertraging tussen canvas en beamer meten?** 🎛 Telefooncamera op 240 fps, beamer en luidspreker in beeld, een klik met een witte flits. **Advies:** eerst meten, pas daarna het beeld een vaste voorsprong geven (nu aangenomen: 16–33 ms).
-- [ ] **J17. Melding als een nummer zonder video op de beamer staat?** 💬 Nu: alleen een ontbrekend of kapot bestand is een fout. **Advies:** geen melding.
+- [x] **J17. Melding als een nummer zonder video op de beamer staat?** 💬 Nu: alleen een ontbrekend of kapot bestand is een fout. **Advies:** geen melding.
 - [ ] **J27. Inloop: hoe snel neemt het losse venster over?** 👀 Nu: als alle zichtbare video's 0,3 s binnen 50 ms van het geluid lopen, uiterlijk na 20 s; tot dan toont het het beeld van het hoofdvenster ("beamer loopt in"). Gemeten onder belasting: acht tracks 8–9,4 s. **Advies:** zo laten; kijk op je M1 hoe lang "beamer loopt in" blijft staan.
 - [ ] **J28. Tijdens de inloop mengen beide vensters (bij acht tracks zestien video's).** 🎛 Hapert het hoofdvenster in die seconden? **Advies:** eerst kijken; zo ja, dan is de bovengrens van 20 s korter zetten één getal.
 
 Handelingenlog:
-- [ ] **J18. Log altijd aan, vanaf het openen?** 💬 Nu: met ○ log en vanzelf met elke opname. Altijd aan kost ~1–8 MB per uur in `opnames/`, en dan is ook een onverwachte fout na te spelen. **Advies:** ja, als keuze die onthouden wordt.
+- [x] **J18. Log altijd aan, vanaf het openen?** 💬 Nu: met ○ log en vanzelf met elke opname. Altijd aan kost ~1–8 MB per uur in `opnames/`, en dan is ook een onverwachte fout na te spelen. **Advies:** ja, als keuze die onthouden wordt.
 - [ ] **J19. Opnieuw renderen in één knop, een "alleen kijken"-stand (MIDI uit tijdens terugspelen), logs weghalen uit de lijst?** 💬 Geen van drie gebouwd; geen advies van de bouwer. Eerst gebruiken en dan kiezen.
 
 Vormen 16:9:
 - [ ] **J20. tv (Trommelvlies): de "lucht" naast het ronde vel.** 👀 Een golf die van het vel naar buiten loopt. Bevalt hij, rustiger (`LUCHT_FEL` lager), of alleen het vel op zwart? Geen advies (een beeldvondst).
-- [ ] **J21. dw (Korrelwolk): smaller stereobeeld?** 🎧 Beeld = geluid: een samengetrokken wolk bestrijkt nu ×0,56 van de korrelbuffer en het stereobeeld. Of het geluid over de oude breedte, minder letterlijk isomorf? **Advies:** zo laten; het geluid is in Varve nog nergens aangesloten (H6).
-- [ ] **J22. ls, if (en cl): heel in het midden, of breder?** 👀 Nu: heel in het midden (valt onder "Midden"). Anders: een rij planten/varens, groter en bijgesneden zoals op 24 sep, of cl tot 18% groter over de hele breedte. **Advies:** zo houden.
-- [ ] **J23. Roosters (gs, ln, cc, ec, …): vlekken ~25% kleiner dan op 24 sep.** 👀 Nu: evenveel cellen, dus zelfde rekentijd. Even groot als 24 sep is goedkoper maar grover. **Advies:** zo laten.
+- [x] **J21. dw (Korrelwolk): smaller stereobeeld?** 🎧 Beeld = geluid: een samengetrokken wolk bestrijkt nu ×0,56 van de korrelbuffer en het stereobeeld. Of het geluid over de oude breedte, minder letterlijk isomorf? **Advies:** zo laten; het geluid is in Varve nog nergens aangesloten (H6).
+- [x] **J22. ls, if (en cl): heel in het midden, of breder?** 👀 Nu: heel in het midden (valt onder "Midden"). Anders: een rij planten/varens, groter en bijgesneden zoals op 24 sep, of cl tot 18% groter over de hele breedte. **Advies:** zo houden.
+- [x] **J23. Roosters (gs, ln, cc, ec, …): vlekken ~25% kleiner dan op 24 sep.** 👀 Nu: evenveel cellen, dus zelfde rekentijd. Even groot als 24 sep is goedkoper maar grover. **Advies:** zo laten.
 
 Mapping en beatgrid:
-- [ ] **J24. Rack-knoppen 5–8 (video-effecten) op "endless" zetten?** 🎛 Koppelen raadt een CC altijd als absoluut (soft-takeover); de andere ringknoppen staan op endless (meteen doordraaien vanaf de ring). **Advies:** ja, in je verschil.
-- [ ] **J25. Bij een nieuwe standaardmapping zien WELKE regels erbij kwamen?** 💬 Nu alleen de melding "de standaardmapping is bijgewerkt". **Advies:** nog niet (dan moet het verschil per regel onthouden wat de standaard had).
-- [ ] **J26. ½ op tel 2 of 4 schuift de "1" een tel op.** 🎛 Moet ½ de "1" houden? **Advies:** ja (`docs/BEATGRID.md`, open punt; eerst jouw ja).
+- [x] **J24. Rack-knoppen 5–8 (video-effecten) op "endless" zetten?** 🎛 Koppelen raadt een CC altijd als absoluut (soft-takeover); de andere ringknoppen staan op endless (meteen doordraaien vanaf de ring). **Advies:** ja, in je verschil.
+- [x] **J25. Bij een nieuwe standaardmapping zien WELKE regels erbij kwamen?** 💬 Nu alleen de melding "de standaardmapping is bijgewerkt". **Advies:** nog niet (dan moet het verschil per regel onthouden wat de standaard had).
+- [x] **J26. ½ op tel 2 of 4 schuift de "1" een tel op.** 🎛 Moet ½ de "1" houden? **Advies:** ja (`docs/BEATGRID.md`, open punt; eerst jouw ja).
 
 APC-indeling (voorstel A):
-- [ ] **J29. Modus klank op Shift + scene 5?** 🎛 Scene 5 blijft één druk "loop weg"; in klank brandt hij magenta, dus daar zie je niet of er een loop loopt (Clip Stop per kolom wel). **Advies:** zo laten; ▲ ▼ werkt ook.
+- [x] **J29. Modus klank op Shift + scene 5?** 🎛 Scene 5 blijft één druk "loop weg"; in klank brandt hij magenta, dus daar zie je niet of er een loop loopt (Clip Stop per kolom wel). **Advies:** zo laten; ▲ ▼ werkt ook.
 - [ ] **J30. Zijn de nieuwe kleuren op het apparaat uit elkaar te houden?** 🎛 Magenta 53/54 (klank), donkerrood 6 (kill: open), donkeroranje 10 (rem: speelt), donkergroen 22 (op de maat: speelt) tegen donkergrijs (stil); Pan/Sends/User knipperen op de tel. **Advies:** eerst kijken; een kleur wisselen is één regel in `feedback.js`.
-- [ ] **J31. Rij 5 (op de maat) als de track al speelt: donkergroen of uit?** 👀 De APC-indeling koos "uit" (rij 5 toont alleen wat je nog kunt inzetten). Sinds shift+Q op een spelende track pauzeert, volgt het lampje de read: fel = wacht, donkergroen = speelt (drukken = pauze), donkergrijs = stil. **Advies:** zo laten: drukken doet iets, dus het lampje brandt.
-- [ ] **J32. Stop All Clips = rem van de focus-track?** 💬 Die knop heeft geen lampje op de APC. **Advies:** zo laten.
-- [ ] **J33. Met `?vormen=1` in het mapje vorm: shift + Bank ◀ ▶ = beatjump-lengte, niet de vormlaag.** 💬 Een shift-regel gaat overal voor het open mapje; Bank ◀ ▶ zonder shift kiest daar de laag. **Advies:** zo laten.
+- [x] **J31. Rij 5 (op de maat) als de track al speelt: donkergroen of uit?** 👀 De APC-indeling koos "uit" (rij 5 toont alleen wat je nog kunt inzetten). Sinds shift+Q op een spelende track pauzeert, volgt het lampje de read: fel = wacht, donkergroen = speelt (drukken = pauze), donkergrijs = stil. **Advies:** zo laten: drukken doet iets, dus het lampje brandt.
+- [x] **J32. Stop All Clips = rem van de focus-track?** 💬 Die knop heeft geen lampje op de APC. **Advies:** zo laten.
+- [x] **J33. Met `?vormen=1` in het mapje vorm: shift + Bank ◀ ▶ = beatjump-lengte, niet de vormlaag.** 💬 Een shift-regel gaat overal voor het open mapje; Bank ◀ ▶ zonder shift kiest daar de laag. **Advies:** zo laten.
+
+## K. Klankschaal (29 sep, docs/KLANKSCHAAL.md)
+
+- [ ] **KS1. Waar komt de klankschaal op de APC?** 🎛 Nu nergens (koppelen werkt wel). **Advies:** een eigen mapje "klankschaal" als fragment (zoals "vorm"): acht velden op grid-rij 1, kern en wrijf/demp op rij 2, FIJN en KRACHT op de device knobs. Eerst luisteren.
+- [ ] **KS2. Een ringende schaal die van toonsoort wisselt: meteen mee, of pas bij de volgende aanslag?** 👂 Nu meteen mee (glijdt direct). **Advies:** eerst horen met een mix die van toonsoort wisselt.
+- [ ] **KS3. Is VOL 0,8 de goede standaard naast je tracks?** 👂 Gemeten: velden pieken ~−12..−17 dBFS, tracks staan op −14 LUFS.
+- [ ] **KS4. Aanslagen op de tel als quantize aan staat?** 💬 Niet gebouwd (niet gevraagd). **Advies:** alleen als je het mist bij het spelen.
+- [ ] **KS5. Je eigen schaal meten (zoals in de Waterschaal) als vijfde soort?** 💬 Niet gebouwd.
+
+## L. Auto-DJ (30 sep, docs/AUTO-DJ.md)
+
+- [ ] **AU1. Welke APC-knoppen voor ok/overslaan/langer/nu?** 🎛 Nu nergens (koppelen werkt). **Advies:** een eigen mapje "auto" als fragment (zoals "vorm"), één rij met de vier in kleur.
+- [ ] **AU2. Is 24 s overvloeien goed bij jouw muziek, of langer (32–48 s)?** 👂
+- [ ] **AU3. "Nu" bij beatloos: meteen, of een paar seconden later zodat je het ziet aankomen?** 👂 Nu: na ~0,5 s.
+- [ ] **AU4. Mag de automaat een lege track gebruiken?** 💬 Nu: eerst zijn eigen twee tracks, dan een lege, nooit wat speelt. **Advies:** zo laten.
+
+## M. Planvenster (30 sep, docs/PLAN.md)
+
+- [ ] **PL1. Mag jij een bewaker bewust breken?** 💬 Bijvoorbeeld een blend afdwingen over een onzeker grid, met een "ik weet het"-vinkje per stap. Nu winnen de bewakers altijd. **Advies:** toestaan, maar alleen vanuit het venster (door jou), nooit door Claude.
+- [ ] **PL2. Per stap: automatisch, of wachten op jouw GO?** 🎛 Voor fase 2 (live-stand). **Advies:** standaard automatisch, per stap om te zetten.
+- [ ] **PL3. Past het venster op je tweede scherm, en mist er iets in de lijst?** 👀

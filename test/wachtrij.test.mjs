@@ -69,6 +69,26 @@ try {
     ok('bestond: "al in de library", en de rij is stil', oc.status === 'klaar' && oc.bestond === true && /al in de library/.test(oc.tekst) && !q.open);
   }
 
+  console.log('\nwachtrij: vooraan (op een track gesleept, VRAGEN J12)');
+  {
+    const q = new Wachtrij();
+    const w = { a: handWerk(), b: handWerk(), c: handWerk(), d: handWerk(), e: handWerk() };
+    const o = {};
+    o.a = q.voegToe({ sleutel: 'a', werk: w.a.werk }).opdracht;
+    o.b = q.voegToe({ sleutel: 'b', werk: w.b.werk }).opdracht;
+    o.c = q.voegToe({ sleutel: 'c', werk: w.c.werk }).opdracht;
+    o.d = q.voegToe({ sleutel: 'd', werk: w.d.werk, vooraan: true }).opdracht;
+    o.e = q.voegToe({ sleutel: 'e', werk: w.e.werk, vooraan: true }).opdracht;
+    ok(`vooraan: vóór wat gewoon wacht, achter een eerdere vooraan; wat loopt blijft lopen (${['b', 'c', 'd', 'e'].map((k) => k + o[k].plek).join(' ')})`,
+      o.a.status === 'bezig' && o.d.plek === 1 && o.e.plek === 2 && o.b.plek === 3 && o.c.plek === 4);
+    await wacht(0);
+    w.a.klaar({ ok: true, track: track('A') });
+    await wacht(5);
+    ok('... en daarna begint de vooraan-opdracht, niet de oudste', o.d.status === 'bezig' && w.d.gestart && !w.b.gestart);
+    for (const k of ['d', 'e', 'b', 'c']) { w[k].klaar({ ok: true, track: track(k) }); await wacht(5); }
+    await q.stil();
+  }
+
   console.log('\nwachtrij: annuleren');
   {
     const q = new Wachtrij();

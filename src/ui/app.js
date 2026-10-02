@@ -1,5 +1,5 @@
 import { Engine, DECK_IDS } from '../engine/engine.js';
-import { bindEngine, bindVideo, bindApp, bindLagen } from '../control/actions.js';
+import { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, invoke, bijInvoke } from '../control/actions.js';
 import { Lagen } from '../control/lagen.js';
 import { opzetMapjeBalk } from './mapje-balk.js';
 import { attachKeyboard } from '../control/keyboard.js';
@@ -11,6 +11,10 @@ import { opzetVensters } from './vensters.js';
 import { opzetSpiegel } from './spiegel.js';
 import { opzetRacks } from './racks.js';
 import { opzetSamplerOpslag } from './sampler-opslag.js';
+import { opzetKlankschaal } from './klankschaal-paneel.js';
+import { opzetAuto } from './auto-paneel.js';
+import { Automaat } from '../auto/automaat.js';
+import { opzetPlanKoppeling } from './plan-koppeling.js';
 import { opzetHotcueOpslag } from './hotcue-opslag.js';
 import { opzetLaden } from './laden.js';
 import { opzetOnderpanelen } from './onderpanelen.js';
@@ -102,6 +106,7 @@ const vensters = opzetVensters({
 // ---- effect-racks, sampler-pads, laden en library -------------------------
 const racks = opzetRacks({ engine, staat, naRack: (id) => logboek.naRack(id) });
 const samplerOpslag = opzetSamplerOpslag({ engine, staat });
+const klankschaal = opzetKlankschaal({ engine });
 const hotcueOpslag = opzetHotcueOpslag({ engine, meld });
 const laden = opzetLaden({
   engine, staat, videoMixer,
@@ -114,6 +119,26 @@ window.library = laden.library;
 // Loopt vanzelf mee met een opname (zelfde id). docs/HANDELINGENLOG.md.
 const logboek = opzetLogboek({ engine, staat, laden, opnemer: opname.opnemer });
 window.logboek = logboek;
+
+// ---- auto-DJ: de app kiest en mixt, Clay stuurt bij, Claude schrijft het plan
+// (docs/AUTO-DJ.md). Het plan staat in plannen/auto-plan.json (mag ontbreken).
+const auto = new Automaat({
+  engine, invoke, bijInvoke,
+  laad: (deckId, track) => laden.laadLibrary(deckId, track),
+  haalLibrary: async () => {
+    const r = await fetch('/api/library?aantal=500');
+    if (!r.ok) throw new Error(`library ${r.status}`);
+    return (await r.json()).tracks || [];
+  },
+  haalPlan: () => planKoppeling.haal(),
+  welkNummer: (deckId) => staat.deckTrack[deckId] ?? null,
+});
+auto.on('melding', ({ tekst, soort }) => meld(`auto-dj: ${tekst}`, soort === 'fout' ? 'fout' : 'info'));
+bindAuto(auto);
+// Het setplan: ophalen met versie, live bijwerken, en window.varvePlan voor plan.html.
+const planKoppeling = opzetPlanKoppeling({ auto, engine, invoke });
+const autoPaneel = opzetAuto({ auto });
+window.auto = auto;
 
 const onderpanelen = opzetOnderpanelen({ library: laden.library, rackEditor: racks.rackEditor });
 
@@ -175,6 +200,8 @@ startRenderloop({
     opnemen: opname.teken,
     logboek: logboek.teken,
     video: video.teken,
+    klankschaal: klankschaal.teken,
+    auto: autoPaneel.teken,
   },
 });
 

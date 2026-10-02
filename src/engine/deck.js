@@ -596,10 +596,11 @@ export class Deck extends Emitter {
    * een tel later alsnog, en de sprong is ongemerkt korter dan de lengte die
    * je koos (weg frase). Weigeren laat de muziek gewoon doorspelen, met een
    * melding; wat er nog over is, kun je zelf met een kortere sprong nemen.
-   * Voorbij het BEGIN blijft het klemmen op 0: de track speelt dan door
-   * vanaf het begin, alleen de fase verspringt (zoals een CDJ).
+   * Voorbij het BEGIN ook weigeren ('begin', Clay 26 sep, VRAGEN J4): klemmen
+   * op 0 liet de fase verspringen, en dat breekt de beatmatch van een track
+   * die je net inmixt.
    *
-   * @returns {{ ok: boolean, waarom?: 'leeg'|'geengrid'|'onzeker'|'rand'|'einde' }}
+   * @returns {{ ok: boolean, waarom?: 'leeg'|'geengrid'|'onzeker'|'rand'|'einde'|'begin' }}
    */
   beatjump(richting, tellen = this.sprongTellen) {
     if (!this.buffer) return { ok: false, waarom: 'leeg' };
@@ -607,8 +608,11 @@ export class Deck extends Emitter {
     const g = this.grid, p = this.position;
     const n = Math.sign(richting) * tellen;
     const doel = g.verschuif(p, n);
-    if (!this._opGrid(p) || !this._opGrid(doel)) return { ok: false, waarom: 'onzeker' };
     const l = this.loop;
+    // Vóór de grid-controle: een doel vóór 0 ligt buiten elk stuk en zou
+    // anders als 'onzeker' gemeld worden.
+    if (!l && n < 0 && doel < -1e-9) return { ok: false, waarom: 'begin' };
+    if (!this._opGrid(p) || !this._opGrid(doel)) return { ok: false, waarom: 'onzeker' };
     if (!l) {
       // Precies OP het einde landen is ook eindigen: dan stopt hij meteen.
       if (n > 0 && doel >= this.duration) return { ok: false, waarom: 'einde' };

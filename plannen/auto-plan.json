@@ -1,0 +1,74 @@
+{
+  "versie": 2,
+  "naam": "auto-plan",
+  "door": "Claude, 30 sep 2026",
+  "uitleg": "Een boog van ~33 minuten: rustig met piano in G, via D opbouwen, de sprong naar 170–174 bpm, en uitlopen in B♭. De meeste grids in deze library zijn onzeker, dus de meeste overgangen worden beatloos; de app beslist dat zelf, het plan zegt alleen wat en waarom. Zet je een grid op slot, dan kan hij daar blenden.",
+  "stappen": [
+    {
+      "id": "s7",
+      "track": "1W1-nPXEVKk",
+      "van": 1347,
+      "speelduur": 180,
+      "overgang": "auto",
+      "lengte": null,
+      "waarom": "uitlopen in B♭ (zeker, 0,74), rustiger; het hele zekere stuk",
+      "notitie": "",
+      "door": "claude"
+    },
+    {
+      "id": "s5",
+      "track": "CVeYI-gmX00",
+      "van": 996,
+      "speelduur": 300,
+      "overgang": "ambient",
+      "lengte": null,
+      "waarom": "de sprong naar F♯ en 170: ver van D op het wiel, dus bewust beatloos overvloeien",
+      "notitie": "",
+      "door": "claude"
+    },
+    {
+      "id": "s3",
+      "track": "HGv_ySHXtYI",
+      "van": null,
+      "speelduur": null,
+      "overgang": "auto",
+      "lengte": null,
+      "waarom": "blijft in D (zeker), meer licht en luider",
+      "notitie": "",
+      "door": "claude"
+    },
+    {
+      "id": "s4",
+      "track": "f3a7DiCsm8k",
+      "van": 177,
+      "speelduur": 300,
+      "overgang": "auto",
+      "lengte": null,
+      "waarom": "begint in D (het stuk vanaf 2:57), het tempo gaat naar ~150: de opbouw",
+      "notitie": "",
+      "door": "claude"
+    },
+    {
+      "id": "s2",
+      "track": "tiktok-7031697544472251694",
+      "van": null,
+      "speelduur": null,
+      "overgang": "auto",
+      "lengte": null,
+      "waarom": "D is de dominant van G, één stap op het wiel; na de piano een stem",
+      "notitie": "",
+      "door": "claude"
+    },
+    {
+      "id": "s6",
+      "track": "_x5K5Ihutbw",
+      "van": 587,
+      "speelduur": 300,
+      "overgang": "auto",
+      "lengte": null,
+      "waarom": "de piek: jungle op 174; het grid is hier zeker (1,0), en eindigt in een zeker stuk, zodat hij met een filter-uit kan stoppen",
+      "notitie": "",
+      "door": "claude"
+    }
+  ]
+}

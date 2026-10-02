@@ -16,6 +16,7 @@ import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon } from './
 import { toonSamenvatting } from './toon.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
+import { Plannen, NAAM as PLANNAAM } from './plannen.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -34,6 +35,9 @@ const MEDIA = process.env.VARVE_MEDIA || join(WORTEL, 'media');
 // Opnames en handelingenlogs. Ook de statische /opnames/-paden komen hieruit,
 // anders las een testserver (of een andere opnamemap) uit de projectmap.
 const OPNAMES = process.env.VARVE_OPNAMES || join(WORTEL, 'opnames');
+/** Setplannen van de auto-DJ (docs/PLAN.md). Eigen map voor de tests: VARVE_PLANNEN. */
+const PLANNEN = process.env.VARVE_PLANNEN || join(WORTEL, 'plannen');
+const plannen = new Plannen(PLANNEN);
 
 /**
  * Paden in de database zijn relatief ("media/<id>/audio.wav"), zoals de browser
@@ -302,9 +306,11 @@ async function upload(req, res, url) {
     return json(res, 202, loopt);
   }
   const titel = info.tags.titel || naam.titel;
-  // Achter in de rij, net als een link. De werkmap met het bestand staat er
+  // Achter in de rij, net als een link; met ?vooraan=1 (op een track gesleept,
+  // VRAGEN J12) vóór wat gewoon wacht. De werkmap met het bestand staat er
   // al: annuleer je vóór hij begint, dan gaat die weg (bijAnnuleren).
   const { opdracht } = wachtrij.voegToe({
+    vooraan: url.searchParams.get('vooraan') === '1',
     sleutel: id, url: `bestand:${naam.naam}`, soort: 'bestand', titel,
     stappen: stappenVoor({ link: false, video: info.video }),
     werk: async (onStap, signal) => {
@@ -449,9 +455,9 @@ async function heranalyseOpAchtergrond() {
  * Wat de browser mag ophalen. Een witte lijst in plaats van "alles in de
  * projectmap": anders kon /.git/config of /media/library.db gewoon mee.
  */
-const MAG = [/^\/$/, /^\/(index|video|apc)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
+const MAG = [/^\/$/, /^\/(index|video|apc|plan)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
   /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
-  /^\/favicon\.ico$/];
+  /^\/plannen\/[\w-]+\.json$/, /^\/favicon\.ico$/];
 
 /**
  * Het pad dat de witte lijst te zien krijgt, of null.
@@ -484,6 +490,7 @@ async function statisch(req, res, pad) {
   // submap, dus `join` blijft binnen OPNAMES.
   const veilig = schoon.startsWith('/media/') ? opSchijf(schoon)
     : schoon.startsWith('/opnames/') ? join(OPNAMES, schoon.slice('/opnames/'.length))
+      : schoon.startsWith('/plannen/') ? join(PLANNEN, schoon.slice('/plannen/'.length))
       : join(WORTEL, schoon);
 
   let info;
@@ -610,6 +617,29 @@ const server = createServer(async (req, res) => {
         return json(res, 200, { ok: r.ok, opdracht: r.opdracht });
       }
       return json(res, 200, { ok: wachtrij.vergeet(o.id), weg: true });
+    }
+
+    // ---- setplannen (docs/PLAN.md) --------------------------------------
+    // GET /api/plannen: de lijst. GET /api/plannen/<naam>: { plan, versie, fouten }.
+    // PUT /api/plannen/<naam> { plan, versie }: opslaan als `versie` nog klopt
+    // (null = nieuw bestand), anders 409 met wat er nu staat.
+    if (pad === '/api/plannen' && req.method === 'GET') return json(res, 200, { plannen: await plannen.lijst() });
+    const mPlan = /^\/api\/plannen\/([^/]+)$/.exec(pad);
+    if (mPlan) {
+      const naam = mPlan[1];
+      if (!PLANNAAM.test(naam)) return json(res, 400, { fout: 'een plannaam is letters, cijfers, - en _' });
+      if (req.method === 'GET') {
+        const p = await plannen.lees(naam);
+        return p ? json(res, 200, p) : json(res, 404, { fout: 'geen plan met die naam' });
+      }
+      if (req.method === 'PUT') {
+        if (mediatype !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
+        const body = await leesJson(req, 600 * 1024);
+        if (!body || typeof body !== 'object' || !body.plan) return json(res, 400, { fout: 'stuur { plan, versie }' });
+        const r = await plannen.schrijf(naam, body.plan, typeof body.versie === 'string' ? body.versie : null);
+        return json(res, r.code, r.antwoord);
+      }
+      return json(res, 405, { fout: 'GET of PUT' });
     }
 
     // ---- library ---------------------------------------------------------

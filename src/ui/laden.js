@@ -394,5 +394,5 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
   // onderaan melden, want met het paneel dicht zie je de strook niet.
   library.strook.meldBuiten = (tekst) => meld(tekst, 'fout');
 
-  return { laadBuffer, loadFile, library, libPaneel, laadVoorTerugspelen };
+  return { laadBuffer, loadFile, library, libPaneel, laadVoorTerugspelen, laadLibrary };
 }

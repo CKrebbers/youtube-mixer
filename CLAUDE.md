@@ -45,6 +45,7 @@ als een feature erom lijkt te vragen, is dat bijna altijd een ontwerpfout elders
 
 ```
 index.html          geen build-stap, plain ES-modules
+plan.html           het planvenster: de programmering zien, inrichten, live volgen (src/plan/plan-venster.js)
 apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze doen (src/ui/apc-kaart.js)
 styles.css
 src/
@@ -60,6 +61,9 @@ src/
                     rack.js         racks als data: macro's, curves, migratie
                     deck.js         transport, cues, loops, beatjump, quantize, rem, beatgrid (geluid zit in bron.js)
                     sampler.js      acht pads: knippen op het grid, loopen op de maat van wat je hoort
+                    klankschaal.js  instrument op de toon van wat je hoort: stemming(), volgen (maat/focus/hand), aanslaan, wrijven
+                    klankschaal-kern.js  het modale model van de Waterschaal, per sample, afvalvrij. Puur.
+                    klankschaal-worklet.js  de AudioWorklet eromheen (laadt pas bij gebruik)
                     engine.js       decks + mixer + maatgever (hysterese) + starten op de maat + snapshot()
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
                     keyboard.js     toetsen -> actions
@@ -97,6 +101,9 @@ src/
                     mapping-opslag.js je eigen mapping als verschil: standaard ophalen, omzetten, bewaren, herstellen
                     ingest-strook.js de ingest-wachtrij in het library-paneel: plakken, voortgang, ×, laadknoppen
                     logboek.js      ○ log en ↺ naast de opname: vastleggen, vergelijken, lijst, terugspelen
+                    klankschaal-paneel.js de KLANKSCHAAL-rij: openen, instellingen bewaren, per frame tonen
+                    plan-koppeling.js in de mixer: actief plan, ophalen met versie, live naar de automaat, window.varvePlan, knop plan
+                    auto-paneel.js  de AUTO-rij: wat er klinkt, wat er komt en waarom, ok/overslaan/langer/nu
   vormen/           hulp.js         paletten, toeval met zaad, ruis, tekenhulp (gedeeld door de systemen)
                     systemen.js     de Vormmachines (Clay's artifact): 10 lichte + de lijst van alle 26
                     systemen-zwaar.js / -meer.js / -isomorf.js  de andere 16 (zwaar · middel · beeld = geluid)
@@ -112,6 +119,11 @@ src/
                     beamer.js       wie mengt: hoofdvenster of los venster (de beamer), en de inloop. Puur.
                     beamer-venster.js video.html: het losse venster mengt ZELF (eigen <video>'s, WebGL, lus)
                     fouten.js       video ontbreekt of laadt niet: tekst en wachtregel. Puur.
+  plan/             plan-model.js   het setplan als data: formaat v2, normaliseerPlan, bewerk, verschil. Puur (ook door de server gebruikt)
+                    tijdlijn.js     voorspel: set-tijden en de overgang die de app echt kiest. Puur.
+                    plan-venster.js het planvenster (plan.html): lijst, strook, bewerken, opslaan met versie, live via opener
+  auto/             planner.js      de auto-DJ, puur: welk fragment, welke overgang (bewakers), wanneer (frasegrens), de curves
+                    automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
                     opnemer-worklet.js  telt frames, zet om naar 16-bit, geeft per seconde door
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
@@ -140,6 +152,8 @@ mappings/
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
 racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
+plannen/
+  auto-plan.json    het setplan (v2, docs/PLAN.md); lezen/opslaan via /api/plannen met versie; .versies/ = oude versies
 media/              binnengehaalde bestanden + library.db (niet in git)
 opnames/            je opgenomen sets als WAV (niet in git)
 test/
@@ -177,6 +191,9 @@ test/
   vormen-zwaar/-meer/-isomorf.test.mjs  de 16 extra systemen: puur, zaad, g.kwaliteit, ms per stap, nep-sink
                     (ms per stap in THREADtijd, beste van 3: de wandklok telde onder load de planner mee)
   werker.test.mjs   Worker-logica zonder Worker, budget met nep-klok, noodrem, terugval
+  plan.test.mjs     setplan: formaat, bewerken, verschil, voorspelling, opslag met versies (409, .versies)
+  auto.test.mjs     auto-DJ: planner (bewakers, frasegrenzen, curves, kiezer) en de automaat op een engine (blend, beatloos, overnemen)
+  klankschaal.test.mjs  stemming (24 toonsoorten × ladders), toonhoogte gemeten, slapen, wrijven, afval, engine en bus
   analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions, maatbronnen
   alles.mjs         alle tests in één keer met overzicht
 docs/
@@ -195,6 +212,9 @@ docs/
   HANDELINGENLOG.md formaat, keuzes en grenzen van het handelingenlog
   AUDIOPAD.md       audiopad zonder afval: waar het zat, de regels, cijfers vóór/na
   VORMEN-16x9.md    vormen op 640 × 360: API, per systeem, Clay's keuze, uitzonderingen
+  PLAN.md           het planvenster: formaat v2, opslaan met versie, samenwerken met Claude, live, fases
+  AUTO-DJ.md        auto-DJ: drie partijen, bewakers, overgangen, bediening, het setplan, grenzen, volgende fases
+  KLANKSCHAAL.md    de klankschaal: stemming, bouw, bediening, metingen, open vragen (KS1–KS5)
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -257,7 +277,8 @@ docs/
     (`Beatgrid.verschuif`): fase exact, ook over een stukgrens; in een loop
     schuift de LOOP mee. Weigeren met een melding: zonder grid, onzeker stuk
     zonder slot, loop buiten het nummer, voorbij het einde (klemmen liet de
-    track midden in een set stoppen). Voorbij het begin: klemmen op 0.
+    track midden in een set stoppen), en vóór het begin ('begin', Clay 26 sep,
+    J4: klemmen op 0 brak de beatmatch). Precies op 0 landen mag.
   - Loop in/out/reloop: out zet de loop meteen aan; reloop = eraf, of de vorige
     loop (`vorigeLoop`) terug. In-punt en vorige loop zijn vastpunten.
   - Quantize is ÉÉN schakelaar voor de hele engine (`transport.quantize`): zetten
@@ -603,6 +624,10 @@ docs/
   (`staat.terugspeelDecks`). Opnieuw renderen (● dan speel): de beginstand gaat
   buiten de bus om, dus `Terugspeler.onStand` schrijft een `stand` midden in het
   lopende log. Klikken op golfvorm/baan springt via de bus (`track.N.seek`).
+  ALTIJD AAN (Clay 26 sep, J18): vinkje in de lijst achter ↺, onthouden in
+  localStorage `varve.log.altijd`; het log begint vanzelf zodra de AudioContext
+  loopt (niet eerder: de klok van het log staat dan stil), één keer per pagina,
+  dus ○ log stopt hem voor deze keer.
 - Sends: per track A (echo) en B (galm), getapt NA de fader en vóór de
   crossfader, naar twee gedeelde bussen in de engine (`engine.sends`). Een bus
   is een gewone InsertSlot met een rack (`SEND_RACKS`), maar helemaal nat: het
@@ -714,7 +739,9 @@ docs/
   schaalt naar hooguit 720 op de korte kant (4K eigen video's ook).
 - INGEST-WACHTRIJ (25 sep, ROADMAP 21, `server/wachtrij.js`): één opdracht
   tegelijk, links én eigen bestanden in één rij; `POST /api/ingest` met `{ url }`
-  of `{ urls }` (≤ 100), `DELETE /api/ingest/<id>` annuleert. Annuleren met
+  of `{ urls }` (≤ 100), `DELETE /api/ingest/<id>` annuleert. Een bestand dat
+  je op een TRACK sleept gaat vooraan (`/api/upload?…&vooraan=1`, achter eerdere
+  vooraan-opdrachten; wat loopt blijft lopen; Clay 26 sep, J12). Annuleren met
   SIGINT, niet SIGTERM: yt-dlp (Python) valt op SIGTERM om en laat de ffmpeg
   staan die hij bij live/HLS start; die erft onze pijpen, dus `run()` hing en de
   rij stond stil. Na 3 s SIGKILL voor de hele familie. Een analyse-worker ruimt
@@ -1041,6 +1068,49 @@ de luistertest A3 en I1–I3. Wat een bouwer niet mag missen:
   een dip tot −15 dB (ontworpen, niet gebouwd).
 - Namen op het deck, gedeeld door beide ontwerpen: `deck.keylock` (boolean) en
   `deck.transpositie` (halve tonen). Transponeren mag ook zonder keylock (K8).
+
+## Auto-DJ (fase 1, gebouwd 30 sep)
+
+Volledig in `docs/AUTO-DJ.md`. Wat een bouwer niet mag missen:
+- De automaat is een extra BRON van actions (zoals terugspelen): alles via de
+  bus, dus in het handelingenlog. Laden via `laden.laadLibrary`. Nooit in de
+  engine, nooit Claude in het audiopad: Claude levert alleen het setplan.
+- De bewakers (`kiesOvergang`) gaan boven het plan: blend alleen met twee zekere
+  grids, tempo ≤ 6% en toon ≤ 1 stap NA de sync; anders filter-uit of beatloos.
+  Beatloos is in Clay's library de hoofdroute, geen noodgeval.
+- Wat Clay aanraakt tijdens een overgang is van hem (`OVERNEEM` in automaat.js).
+  Nieuwe knoppen op een deck die de mix raken: daar ook bij zetten.
+- Waar de overgang is komt van de POSITIE van de uitgaande (regel 3); de timer
+  van 40 ms beslist alleen wanneer er gekeken wordt.
+
+## Het planvenster (fase 1, gebouwd 30 sep)
+
+Volledig in `docs/PLAN.md`. Wat een bouwer niet mag missen:
+- `plan.html` is een VENSTER van de mixer (window.opener.varvePlan, zoals de
+  beamer): geen AudioContext, geen MIDI, geen Web Lock. Knoppen gaan over de
+  bus van de mixer. Los geopend = alleen editor.
+- Eén definitie van een plan: `src/plan/plan-model.js` (puur), gebruikt door
+  venster, automaat, server en tests. Stap-id's zijn vast en worden nooit
+  hergebruikt; tijden in tracktijd, null = de app kiest.
+- Opslaan alleen met `versie` (hash van de inhoud): 409 bij een botsing, nooit
+  stil overschrijven. Claude mag het bestand direct schrijven; venster en
+  mixer zien het binnen 3 s. `vervangPlan` laat klinken wat klinkt.
+
+## Klankschaal (gebouwd 29 sep)
+
+Volledig in `docs/KLANKSCHAAL.md`. Wat een bouwer niet mag missen:
+- Geen pluginsysteem: een instrument naast de sampler (`engine.klankschaal`),
+  actions `klankschaal.*`, een rij op het scherm (standaard dicht). Geen plek op
+  de standaard-APC (KS1): koppelen werkt.
+- De toon komt van `deck.toonsoort` (wat je HOORT, met stemming in cent) van de
+  maatgever of de focus-track; `stemming()` is puur en getest over alle 24
+  toonsoorten. Past de ladder niet bij majeur/mineur: de RELATIEVE toonsoort.
+  Zonder toonsoort: de laatste toon blijven houden, nooit terug naar D.
+- De kern (`klankschaal-kern.js`) volgt de regels van het audiopad: geen afval
+  per blok, geen Math.random op de audiothread, slapen bij stilte. De test
+  meet het (GCProfiler) en meet de toonhoogte (Goertzel).
+- Luidheid is gemeten tegen −14 LUFS (`UIT_OPHOGING`, `VELD_OPHOGING`): verander
+  je het model, meet dan opnieuw.
 
 ## Werkwijze die hier werkt
 

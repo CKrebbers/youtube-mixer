@@ -176,14 +176,14 @@ Nu heeft elk stuk `maat`: de tracktijd van een tel 1 op zijn eigen rooster.
 - Tel 1 hier (grid-modus scene 1) zet de tel én de "1". Schuiven, halve tel en
   uitlijnen nemen de "1" mee; een tempo bijstellen (encoder, tap, verfijning) houdt de
   tel bij de plek waar je bent op dezelfde plek in de maat; ×2 houdt de "1" waar hij
-  was, ½ neemt de dichtstbijzijnde tel (×2 en daarna ½ geeft de oude terug); een
+  was, ½ houdt de "1" als tel: de tellen op 1 en 3 blijven (26 sep, VRAGEN J26;
+  ×2 en ½ geven elkaar in beide volgordes het oude grid terug); een
   nieuw stuk neemt de maten mee (op zijn eigen rooster: in de laatste maat vóór een
   stuk op een ander tempo werd tel 3 anders een "1"; hersteld door de controleur).
-- Open (controleur, niet gebouwd): ½ laat de tel het dichtst bij de speelkop liggen,
-  ook als dat tel 2 of 4 is. Dan liggen de nieuwe tellen op 2 en 4, de "1" moet een
-  tel opschuiven, en ½ gevolgd door ×2 geeft de "1" niet terug (op tel 1 en 3 wel).
-  Met een maat-anker kan ½ de "1" als tel houden (tellen op 1 en 3, zoals
-  DJ-software halveert); dat verandert welke tellen blijven, dus eerst vragen.
+- Gebouwd 26 sep (Clay: advies J26): ½ liet de tel het dichtst bij de speelkop
+  liggen, ook op tel 2 of 4; dan schoof de "1" een tel op en gaf ×2 hem niet terug.
+  Nu begint het nieuwe rooster op de "1" (`_schaal` in beatgrid.js; zonder
+  maat-anker de oude regel). Getest in beatgrid.test.mjs, faalt op de oude code.
 - Een overgangstel (de laatste tel van het vorige stuk) telt nog in de maat van het
   vorige stuk.
 - Wat ermee rekent: `barPhase`, `isDownbeat`, `beatsBetween` (maatbegin, ook ver

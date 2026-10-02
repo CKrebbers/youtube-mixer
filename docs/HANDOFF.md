@@ -14,6 +14,122 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 30 SEP (avond): PLANVENSTER FASE 1 (docs/PLAN.md)
+
+Clay: een pagina met de hele programmering, helemaal in te richten, en er live
+mee spelen. Onderzocht met vier agenten; Clay koos "fase 1, apart venster".
+
+- NIEUW: `plan.html`, `src/plan/plan-model.js`, `src/plan/tijdlijn.js`,
+  `src/plan/plan-venster.js`, `src/ui/plan-koppeling.js`, `server/plannen.js`,
+  `test/plan.test.mjs`, `tools/headless/plan.mjs`, `docs/PLAN.md`.
+- GEWIJZIGD: `automaat.js` (stap-id's, vervangPlan, geschiedenis),
+  `planner.js` (eigen overgangslengte), `server/index.js` (/api/plannen,
+  plan.html, VARVE_PLANNEN; de server moest herstarten), `app.js`,
+  `index.html` (knop plan), `plannen/auto-plan.json` (omgezet naar v2, door
+  Claude), `auto.test`, `server.test`, CLAUDE.md, AUTO-DJ.md, VRAGEN blok M.
+- Getest: alles groen behalve de bekende tijdmeting; headless het hele
+  venster (bewerken, opslaan, live, Claude's wijziging, botsing).
+- Eerst doen: mixer herladen, "plan" klikken, het venster naar het tweede
+  scherm, auto aanzetten vanuit het venster. Dan VRAGEN M.
+
+## 30 SEP: AUTO-DJ FASE 1 (vanaf de Omarchy-machine, docs/AUTO-DJ.md)
+
+Clay wil een auto-DJ als basis van het programma: de app kiest en mixt zelf (en
+klinkt altijd), Clay stuurt bij, Claude schrijft het setplan. Eerst onderzocht
+met vier agenten, toen gebouwd ("laten we het gewoon gaan proberen").
+
+- NIEUW: `src/auto/planner.js`, `src/auto/automaat.js`, `src/ui/auto-paneel.js`,
+  `plannen/auto-plan.json` (eerste plan: "piano naar piek", 7 nummers, ~28 min),
+  `test/auto.test.mjs`, `tools/headless/auto.mjs`, `docs/AUTO-DJ.md`.
+- GEWIJZIGD (toevoegingen): `actions.js` (`bindAuto`), `laden.js` (`laadLibrary`
+  naar buiten), `app.js`, `renderloop.js`, `index.html` (knop auto + AUTO-rij),
+  `styles.css`, `server/index.js` (witte lijst: `plannen/*.json`, dus de server
+  moest herstarten), `server.test`, CLAUDE.md, VRAGEN blok L, tools/README.
+- Getest op een kopie: alle tests groen behalve de bekende tijdmeting; headless
+  een hele set van drie (blend + filter-uit), langste stilte 0 ms. **Niet met de
+  echte library in Clay's Chrome, niet beluisterd.** Droog doorgerekend op de
+  echte library: vijf keer overvloeien, één filter-uit (grids bijna overal onzeker).
+- Eerst doen: tabblad herladen, "auto" openen, aanzetten, luisteren. Dan VRAGEN L.
+
+## 29 SEP: KLANKSCHAAL (vanaf de Omarchy-machine, docs/KLANKSCHAAL.md)
+
+Clay vroeg de klankschalen (de Waterschaal) als "een soort plugin" in Varve,
+gestemd op de audio van de andere tracks en met de hand te veranderen. Gebouwd
+als instrument naast de sampler: knop **klankschaal** in de balk opent een rij
+onder de sampler. Volgt de toonsoort die je hoort van de maatgever (of de
+focus-track, of met de hand), met de cent van de plaat en de pitch erbij.
+
+- NIEUW: `src/engine/klankschaal.js`, `klankschaal-kern.js`, `klankschaal-worklet.js`,
+  `src/ui/klankschaal-paneel.js`, `test/klankschaal.test.mjs`,
+  `tools/headless/klankschaal.mjs`, `docs/KLANKSCHAAL.md`.
+- GEWIJZIGD (alleen toevoegingen): `engine.js` (klankschaal naast de sampler, stemt mee
+  in volgMaat), `actions.js` (blok `klankschaal.*` na de sampler, één import),
+  `app.js`, `renderloop.js` (één stap), `index.html` (knop + rij), `styles.css`
+  (blok "klankschaal"), CLAUDE.md, tools/README.md, VRAGEN (blok K), dit blok.
+- Getest op een kopie op de Omarchy-machine: alle tests groen behalve de bekende
+  tijdmeting in vormen-isomorf (Linux-timer); headless Chromium groen (toonhoogte
+  gemeten, +44,5 ct voor +43). **Niet beluisterd, niet op de APC, niet op de M1.**
+- Op de Mac zelf ook groen (klankschaal.test, headless). `alles.mjs` op de Mac: alleen
+  `ingest.test` rood: **yt-dlp staat niet op de Mac** (los hiervan; links binnenhalen werkt
+  zo niet). Terugweg: `~/.varve-voor-klankschaal-29sep/` (bestanden.tar = de 10 bestanden
+  van vóór, nieuwe-bestanden.txt = wat erbij kwam).
+- NIET gecommit: dit staat naast het ongecommitte werk van na 25 sep.
+- Eerst doen: tabblad herladen, "klankschaal" openen, een track laden en een veld
+  aanslaan. Dan VRAGEN blok K.
+
+
+APC los, dus een eigen tabblad via de Chrome-extensie (`?vormen=1`), via de
+action-bus en de library-knoppen. Goed bevonden:
+- opstarten zonder fouten; mapping op de server = verschil met 4 eigen regels
+  (omzetting was al gebeurd), 388 regels actief (374 + 4 eigen + vorm-fragment);
+- laden uit de library (48 kHz, grid, toonsoort); pitch +8% schuift D → E♭;
+- beatjump exact 4 tellen (1,382 s tegen 1,379 s op 174 bpm), op een zeker stuk;
+- loop in/out/reloop, quantize aan/uit, kill-lampje, rem tot stilstand = pauze;
+- starten op de maat: wacht (lamp 1) → speelt (0,5), tel-fase gelijk op 0,002;
+  maatgever = de spelende track;
+- hotcue bewaard op de server en terug op een andere track;
+- ingest: playlist geweigerd met uitleg, bestaand nummer "al in de library";
+- library sorteren op bpm/titel, beide richtingen;
+- handelingenlog: aan/uit, bewaard, acties en hotcues staan erin.
+Grenzen van deze test: het tabblad van de extensie staat voor Chrome op de
+ACHTERGROND (timers geknepen tot 1 s, rAF stil), dus video, vormen en beamer
+zijn hier niet te beoordelen; niets beluisterd. Testsporen opgeruimd (hotcues
+gewist, twee testlogs weg, tabblad dicht).
+
+Bevinding: de meeste grids waren nog de OUDE analyse (Bay Ledges 6 stukken,
+0 zeker), dus beatjump/sync/op de maat weigerden daar ("grid hier onzeker").
+Daarom ↻ (`POST /api/library/<id>/grid/analyseer`) op alle 10 nummers gedraaid,
+na een back-up: `~/.varve-library-voor-herberekening-26sep.db`. Stukken (zeker ≥ 0,65):
+
+| Nummer | vóór | na |
+|---|---|---|
+| jungle-mix (53 min) | 31 (13 zeker) | 35 (16 zeker) |
+| Sakamoto (60 min) | 45 (3) | 55 (10) |
+| album "I will delete…" | 7 (0) | 13 (4), met het 156-bpm-stuk |
+| let it all go | 6 (1) | 7 (2) |
+| zoned out | 1 (0) | 3 (0) |
+| Bay Ledges | 6 (0) | 6 (0) |
+| drie eigen sets, no surprises | 1 (0) | 1–3 (0) |
+
+Een geladen track houdt zijn oude grid tot je hem opnieuw laadt (of herlaadt).
+Bay Ledges blijft onzeker: tik daar het tempo (4× tap) of zet het grid op slot.
+
+Daarna Clay in zijn eigen tabblad (zonder APC): "tot nu toe werkt alles".
+
+VRAGEN blok J: Clay nam alle adviezen over. Gebouwd (tests 36 bestanden, 3411
+checks groen; elke nieuwe check faalt op de oude code; server herstart):
+- J4 beatjump vóór het begin: geweigerd met een melding (deck.js, actions.js);
+- J26 ½ houdt de "1" als tel (beatgrid.js `_schaal`);
+- J12 een bestand op een track gesleept gaat vooraan in de ingest-rij
+  (wachtrij.js `vooraan`, `/api/upload?…&vooraan=1`, ingest-strook.js);
+- J18 vinkje "log altijd aan" in de lijst achter ↺ (logboek.js); in Chrome
+  nagelopen, en in dit Chrome-profiel AAN gezet (Clay's keuze);
+- J24 rack-knoppen 5–8 (video-effecten) op endless in Clay's verschil op de server;
+  back-up van het vorige verschil: `~/.varve-mapping-verschil-voor-J24.json`.
+  Clay's open tabblad moet HERLADEN, anders kan het de oude regels terugschrijven.
+Nog open (op gevoel of met de APC): J7, J16, J19, J20, J27, J28, J30.
+Niets gecommit.
+
 ## HERVATTEN (opgeruimd 25 sep, avond)
 
 De repo is schoon: alleen `main`, geen andere branches of worktrees, niets

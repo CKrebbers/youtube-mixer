@@ -589,6 +589,40 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .pad.bewaard{border-style:dashed;border-color:var(--warn);color:var(--dim)}
 @keyframes knipper{50%{opacity:.4}}
 
+/* ---- auto-dj ---- */
+.auto-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px;min-width:0}
+.auto-rij.hidden{display:none}
+.au-aan{min-width:92px}
+.au-nu{flex:0 1 280px;min-width:0;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.au-volgende{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:2px;line-height:1.15}
+.au-volgende b{font-size:12px;font-weight:600;color:var(--a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.au-volgende small{font-size:10px;color:var(--klein);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.au-balk{display:block;height:2px;background:var(--line);border-radius:1px;overflow:hidden}
+.au-balk i{display:block;height:100%;width:0;background:var(--a)}
+.au-plan{font-size:11px;color:var(--klein);white-space:nowrap}
+#auto-btn.au-actief{border-color:var(--a);color:var(--a)}
+
+/* ---- klankschaal ---- */
+.klankschaal-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px;min-width:0}
+.klankschaal-rij.hidden{display:none}
+.ks-stemming{display:flex;align-items:center;gap:4px}
+.ks-volg{min-width:86px}
+.ks-toon{width:112px;display:flex;flex-direction:column;line-height:1.15;font-family:ui-monospace,monospace;white-space:nowrap;overflow:hidden}
+.ks-toon b{font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis}
+.ks-toon small{font-size:10px;color:var(--klein);overflow:hidden;text-overflow:ellipsis}
+.ks-toon.geen b{color:var(--warn)}
+.ks-ladder,.ks-klank{min-width:58px}
+.ks-pads{flex:1 1 0;display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:5px;min-width:0}
+.ks-pad{display:flex;align-items:center;justify-content:center;gap:4px;height:30px;padding:0 4px;border:1px solid var(--line);
+  border-radius:15px;color:var(--text);font-size:11px;background:var(--panel2);min-width:0;transition:background .12s}
+.ks-pad b{font-family:ui-monospace,monospace;color:var(--m-sampler);font-weight:600}
+.ks-pad span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ks-pad.ks-kern{border-color:var(--m-sampler)}
+.ks-pad.raak{background:var(--m-sampler);border-color:var(--m-sampler);color:#140a22}
+.ks-pad.raak b{color:#140a22}
+.btn.ks-wrijf.on{background:var(--m-sampler);border-color:var(--m-sampler);color:#140a22}
+.ks-knoppen{display:flex;align-items:center;gap:6px}
+
 /* ---- meldingen ---- */
 .meldingen{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:60;
   display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}

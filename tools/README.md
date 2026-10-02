@@ -56,6 +56,17 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   bewaking dat het afvalvrij blijft zit niet hier maar in `test/renderblok.test.mjs`.
 
 ## headless/
+- `plan.mjs` — het planvenster in headless Chromium (server op 8795, eigen VARVE_PLANNEN): de knop
+  "plan" opent plan.html, voorspelling, bewerken, ongedaan maken, opslaan (vorige versie bewaard),
+  nummer erbij, auto aan over de bus van de mixer, live "speelt nu", een wijziging van buitenaf
+  (het bestand) komt binnen, een botsing wordt gemeld, en de lijst past op 1280 en 900 px.
+- `auto.mjs` — de auto-DJ in headless Chromium (eigen server op 8794): drie demotracks als library
+  (in het geheugen), een set via de AUTO-rij en de knoppen (blend, dan filter-uit naar een onzeker
+  grid), meet de master: nooit dode lucht. Duurt ~2 minuten, de set speelt echt.
+- `klankschaal.mjs` — de klankschaal in headless Chromium, zoals `kijk.mjs` (geen MIDI, eigen
+  server op 8793, tijdelijke database). Laadt de worklet, zet een demotrack in A mineur +43 ct
+  op track 1, meet de toonhoogte van een veld achter de schaal (AnalyserNode), transponeert met
+  de hand, wrijft, en kijkt of de rij op laptopmaat past. Werkt ook op Linux (`chromium` op het pad).
 - `kijk.mjs` — de app in een headless Chromium (uit de Playwright-cache, geen npm-pakket;
   het DevTools-protocol over Node's eigen WebSocket). Eigen server op poort 8791 met een
   tijdelijke database. **Veilig met de APC aangesloten:** `navigator.requestMIDIAccess`

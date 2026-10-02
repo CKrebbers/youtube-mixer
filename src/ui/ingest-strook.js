@@ -243,7 +243,8 @@ export class IngestStrook {
     return new Promise((klaar) => {
       const xhr = new XMLHttpRequest();
       up.xhr = xhr;
-      xhr.open('POST', `/api/upload?naam=${encodeURIComponent(up.naam)}`);
+      // Op een track gesleept: vooraan in de rij, die wil je nu spelen (VRAGEN J12).
+      xhr.open('POST', `/api/upload?naam=${encodeURIComponent(up.naam)}${up.naDeck ? '&vooraan=1' : ''}`);
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) { up.pct = (e.loaded / e.total) * 100; this.teken(); }

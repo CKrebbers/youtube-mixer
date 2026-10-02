@@ -3,6 +3,7 @@ import { Deck } from './deck.js';
 import { createMasterChain, xfaderGains, faderGain } from './audio-graph.js';
 import { InsertSlot, startDrempel } from './fx.js';
 import { Sampler } from './sampler.js';
+import { Klankschaal } from './klankschaal.js';
 
 /**
  * Acht tracks, één per fader van de APC40 mkII. De engine noemt ze A t/m H;
@@ -140,6 +141,17 @@ export class Engine extends Emitter {
     // De sampler speelt op de maat van wat je hoort: dezelfde klok als sync.
     this.sampler = new Sampler(this.ctx, this.master.input, { klok: maatKlok });
 
+    // De klankschaal speelt op de toon van wat je hoort: van de track die de
+    // maat geeft (zoals de sampler), of van de track met focus. Galm en echo
+    // krijgt hij van de send-bussen. De worklet laadt pas bij het eerste gebruik.
+    this.klankschaal = new Klankschaal(this.ctx, this.master.input, {
+      sends: { A: this.sends.A.in, B: this.sends.B.in },
+      toon: (volg) => {
+        const d = volg === 'focus' ? this.focused() : this.syncMaster();
+        return d?.buffer ? { nr: nrVan(d.id), toonsoort: d.toonsoort } : null;
+      },
+    });
+
     /*
      * Bussen en sampler horen bij geen enkel deck, dus niemand herankert ze
      * vanzelf. Elke wijziging aan een deck (tempo, grid, play, seek, fader)
@@ -151,6 +163,9 @@ export class Engine extends Emitter {
       this.maatgever();               // eerst bijwerken wie de maat geeft
       for (const s of Object.values(this.sends)) s.heranker();
       this.sampler.heranker();
+      // De klankschaal stemt mee (tempo, pitch, andere maatgever), ook als je
+      // hem wrijft en de rij dicht is. Zonder worklet is er niets te stemmen.
+      if (this.klankschaal?.node) this.klankschaal.bijwerken();
       this._volgWachtenden();
     };
     for (const id of DECK_IDS) this.decks[id].on('change', volgMaat);
