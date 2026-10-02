@@ -522,5 +522,86 @@ ok('blackout zet alles op nul', bus.every((b) => b[2] === 0));
   A.grid = null; A.hotcues[0] = null;
 }
 
+// ---- modus auto: de auto-DJ op de APC (2 okt, VRAGEN AU1): LED's ---------------
+// De echte read() uit bindAuto op een nep-automaat met dezelfde velden
+// (aan, fase, volgende.bevestigd): de lampjes volgen wat de automaat zegt.
+{
+  const { bindAuto } = await import('../src/control/actions.js');
+  const auto = {
+    aan: false, fase: 'uit', volgende: null,
+    zetAan() { this.aan = !this.aan; this.fase = this.aan ? 'wacht' : 'uit'; },
+    ok() { if (this.volgende) this.volgende.bevestigd = true; },
+    overslaan() { this.volgende = null; this.fase = 'wacht'; }, langer() {}, nu() {},
+  };
+  bindAuto(auto);
+  const standen = {};
+  const lees = (a) => (a.startsWith('auto.') ? read(a) : a in standen ? standen[a] : null);
+  const lg = new Lagen();
+  const m = new Mapping({ read: lees, invoke: () => {}, vars: () => ({ focus: 1 }), lagen: () => lg.actief() });
+  m.load(standaard);
+  const busA = [];
+  const fbA = new Feedback({ device: apc, mapping: m, read: lees, meta: () => null, send: (b) => { busA.push([...b]); return true; } });
+  fbA.klaar = true;
+  const led = (sig) => fbA.desired().get(sig)?.[2] ?? null;
+  const noot = (n, on, ch = 0) => ({ type: 'note', channel: ch, number: n, sig: `note:${ch}:${n}`, on, value: on ? 127 : 0, norm: on ? 1 : 0 });
+  const P = apc.palette;
+  const pad = (kol) => `note:0:${apc.gridNote(kol, 1)}`;
+
+  // Scene 4: zonder shift video (blauw), met shift de modus auto (limoen).
+  standen['layer.grid.hotcues'] = 1; standen['layer.grid.video'] = 0; standen['layer.grid.auto'] = 0;
+  const zonder = led('note:0:85');
+  m.handle(noot(98, true));
+  ok('auto: scene 4 zonder shift video (dicht = donkerblauw), met shift de modus auto (dicht = donker limoen)',
+    zonder === P.blauwdonker && led('note:0:85') === P.limoendonker);
+  m.handle(noot(98, false));
+  lg.zet('grid', 'auto'); standen['layer.grid.hotcues'] = 0; standen['layer.grid.auto'] = 1;
+  ok('auto open: scene 4 fel limoen (lampje = modus, knop blijft video), de andere modi gedimd (scene 1 donkergeel)',
+    led('note:0:85') === P.limoen && led('note:0:82') === P.geeldonker);
+
+  // Automaat uit: alleen aan/uit brandt (donker), de vier hebben niets te doen.
+  ok('auto uit: pad 8 donker limoen, ok · overslaan · langer · nu uit',
+    led(pad(8)) === P.limoendonker && [1, 2, 3, 4].every((k) => led(pad(k)) === null));
+  invoke('auto.aan', true); invoke('auto.aan', false);
+  ok('auto aan (via de bus): pad 8 fel limoen, nog geen voorstel: de vier uit',
+    auto.aan && led(pad(8)) === P.limoen && [1, 2, 3, 4].every((k) => led(pad(k)) === null));
+  ok('de rest van het grid doet niets in de modus auto (geen lampje)',
+    m.kies(pad(8))?.action === 'auto.aan' && [5, 6, 7].every((k) => led(pad(k)) === null) && [2, 3, 4, 5].every((rij) => !fbA.desired().has(`note:0:${apc.gridNote(1, rij)}`)));
+
+  // Er staat een overgang klaar: ok donkergroen, de andere drie in hun donkere kleur.
+  auto.fase = 'klaar'; auto.volgende = { bevestigd: false };
+  ok('voorstel klaar: ok donkergroen, overslaan donker oranje, langer donker cyaan, nu donkergeel',
+    led(pad(1)) === P.groendonker && led(pad(2)) === P.oranjedonker && led(pad(3)) === P.cyaandonker && led(pad(4)) === P.geeldonker);
+  // Donker = paletindex n+1 van de volle kleur (de #59-tinten waar het palet ze
+  // heeft; cyaan heeft er geen), niet de pastels: die zijn even fel als vol.
+  const gebruikt = [[pad(1), 'groen'], [pad(2), 'oranje'], [pad(3), 'cyaan'], [pad(4), 'geel'], ['note:0:85', null]];
+  standen['layer.grid.auto'] = 0;
+  ok('auto-kleuren: elk donker lampje is n+1 van zijn volle kleur, geen pastel',
+    gebruikt.every(([sig, k]) => !k || led(sig) === P[k] + 1) && led('note:0:85') === P.limoen + 1
+    && [P.groendonker, P.oranjedonker, P.geeldonker, P.limoendonker].every((v) => /59/.test(apc.paletteHex[v])));
+  standen['layer.grid.auto'] = 1;
+  invoke('auto.ok', true); invoke('auto.ok', false);
+  ok('ok gedrukt: bevestigd = fel groen', auto.volgende.bevestigd && led(pad(1)) === P.groen);
+  auto.fase = 'bezig';
+  ok('tijdens de overgang: ok blijft fel (bevestigd), overslaan · langer · nu uit (kan niet meer)',
+    led(pad(1)) === P.groen && [2, 3, 4].every((k) => led(pad(k)) === null));
+  auto.fase = 'klaar';
+  const voorSkip = led(pad(2));
+  invoke('auto.skip', true); invoke('auto.skip', false);
+  ok('overslaan: het voorstel is weg, ok · overslaan · langer · nu uit',
+    voorSkip === P.oranjedonker && [1, 2, 3, 4].every((k) => led(pad(k)) === null));
+
+  // De bytes zelf: wat de APC krijgt, en dat een andere modus ze weer overneemt.
+  auto.fase = 'klaar'; auto.volgende = { bevestigd: false };
+  fbA.tick(999);
+  ok('naar de APC: pad 1 (noot 0x20) donkergroen, pad 8 (0x27) fel limoen, kanaal 0',
+    busA.some((b) => b[0] === 0x90 && b[1] === 0x20 && b[2] === P.groendonker) && busA.some((b) => b[0] === 0x90 && b[1] === 0x27 && b[2] === P.limoen));
+  busA.length = 0;
+  lg.zet('grid', 'hotcues'); standen['layer.grid.auto'] = 0; standen['layer.grid.hotcues'] = 1;
+  fbA.tick(999);
+  ok('auto dicht: de pads gaan uit (hotcues op een lege track = uit), scene 4 weer donkerblauw',
+    busA.some((b) => b[1] === 0x20 && b[2] === 0) && busA.some((b) => b[1] === 0x27 && b[2] === 0) && led('note:0:85') === P.blauwdonker);
+  invoke('auto.aan', true); invoke('auto.aan', false);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

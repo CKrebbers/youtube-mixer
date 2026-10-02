@@ -346,7 +346,7 @@ APC-indeling (voorstel A):
 
 ## L. Auto-DJ (30 sep, docs/AUTO-DJ.md)
 
-- [ ] **AU1. Welke APC-knoppen voor ok/overslaan/langer/nu?** 🎛 Nu nergens (koppelen werkt). **Advies:** een eigen mapje "auto" als fragment (zoals "vorm"), één rij met de vier in kleur.
+- [x] **AU1. Welke APC-knoppen voor ok/overslaan/langer/nu?** 🎛 Nu nergens (koppelen werkt). **Advies:** een eigen mapje "auto" als fragment (zoals "vorm"), één rij met de vier in kleur. **Gebouwd 2 okt, als zesde grid-modus "auto" (limoen) in de standaardmapping, niet als fragment:** de auto-DJ hangt niet aan een vlag, en zo staat hij vanzelf op apc.html, op het scherm en in je eigen mapping (verschil). Openen met Shift + scene 4 of ▲ ▼ (na klank). Bovenste rij: pad 1 ok (groen), 2 overslaan (oranje), 3 langer (cyaan), 4 nu (geel), pad 8 aan/uit (limoen). Donker = er staat een voorstel klaar, fel = bevestigd / aan, uit = niets te doen. In de grid-modus blijft Shift + scene 4 "halve tel". Zie docs/APC40.md, "Modus auto". Nog op het apparaat nalopen.
 - [ ] **AU2. Is 24 s overvloeien goed bij jouw muziek, of langer (32–48 s)?** 👂
 - [ ] **AU3. "Nu" bij beatloos: meteen, of een paar seconden later zodat je het ziet aankomen?** 👂 Nu: na ~0,5 s.
 - [ ] **AU4. Mag de automaat een lege track gebruiken?** 💬 Nu: eerst zijn eigen twee tracks, dan een lege, nooit wat speelt. **Advies:** zo laten.

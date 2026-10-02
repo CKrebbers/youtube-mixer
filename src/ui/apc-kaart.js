@@ -77,6 +77,7 @@ export const SOORTEN = [
   ['sampler', 'sampler', /^sampler\./],
   ['video', 'video', /^video\./],
   ['opname', 'opname', /^record\./],
+  ['auto', 'auto-DJ', /^auto\./],
   // Vóór "mixer": track.1.kill.high eindigt op .high, en dat is geen EQ-knop.
   ['klank', 'kill & rem', /\.(kill\.(low|mid|high)(\.hold)?|brake(\.time)?)$/],
   ['fx', 'effecten & sends', /\.(fx\.\w+|fx\.knob\.\d|send\.[ab]|rack\.\w+)$|^send\.[ab]\./],
