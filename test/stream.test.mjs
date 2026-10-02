@@ -382,6 +382,13 @@ console.log('\nrem (vinylstop)');
   ok(`het laatste deel (${Math.round(D * REM_UIT * 1000)} ms) dooft uit tot 0`, daalt && Math.abs(uit[0][stilVanaf - 2]) < 1e-3);
   ctx.currentTime = 1.1 + D + 0.01;
   ok('hoofdthread: stil op P + R·D/2', dichtbij(bron.positie, 0.8 + D / 2) && bron.snelheid === 0);
+  // Tussen stilstand en de timer (die loopt niet op de audioklok): de stand
+  // komt van de klok. Geen rem meer, geen spelen; tempo zetten in dat gat
+  // start hem niet, maar maakt de pauze (met de melding).
+  ok('stil, de timer heeft nog niet gevuurd: remt niet meer en speelt niet', !bron.remt && !bron.speelt && klaar === 0);
+  bron.setRate(1);
+  ok('tempo zetten in dat gat start hem niet: het wordt de pauze, met de melding',
+    !bron.speelt && !laatsteSeg().speelt && klaar === 1 && dichtbij(laatsteSeg().P, 0.8 + D / 2) && dichtbij(bron.positie, 0.8 + D / 2));
 
   // Stilstand wordt een pauze op die plek (een timer zegt WANNEER, de
   // formule WAAR). Daarna gewoon play.
