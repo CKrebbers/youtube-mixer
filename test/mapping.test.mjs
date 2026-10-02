@@ -225,7 +225,7 @@ ok('export -> import geeft exact dezelfde staat',
 // ---- de standaardmapping tegen de werkelijkheid ---------------------------
 // Een deck-dubbel: genoeg om bindEngine zijn werk te laten doen, zonder audio.
 
-const { bindEngine, bindVideo, bindApp, bindLagen, list, read } = await import('../src/control/actions.js');
+const { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, list, read } = await import('../src/control/actions.js');
 const { Lagen } = await import('../src/control/lagen.js');
 const { sleutelVan } = await import('../src/control/mapping.js');
 const dubbeldeck = (id) => ({
@@ -252,6 +252,8 @@ bindEngine(nepEngine);
 bindVideo({ fx: {}, modus: 'mix', puls: 0, pulsDoel: 'rgb', zetFx() {}, volgendeModus() {}, zetPuls() {}, volgendPulsDoel() {} });
 bindApp({ toon() {}, venster: () => ({ L: 'A', R: 'B' }), opnemer: {}, opnameStart() {}, opnameStop() {}, opnameSoort() {}, rackStap() {} });
 bindLagen(new Lagen());
+// De auto-DJ (modus auto, Shift + scene 4): zijn actions bestaan pas met een automaat.
+bindAuto({ aan: false, fase: 'uit', volgende: null, zetAan() {}, ok() {}, overslaan() {}, langer() {}, nu() {} });
 const acties = new Set(list().map((a) => a.id));
 ok('actions geregistreerd voor deze controle', acties.size > 60);
 
@@ -377,7 +379,7 @@ console.log('\nmapjes en shift');
   lg.stap('grid', 1);
   ok('bladeren door het grid', lg.stand.grid === 'loops');
   lg.stap('grid', -2);
-  ok('en rond (vijf modi: van loops twee terug is klank)', lg.stand.grid === 'klank');
+  ok('en rond (zes modi: van loops twee terug is auto)', lg.stand.grid === 'auto');
   lg.zet('grid', 'hotcues');
 
   const gestuurd = [];
@@ -669,14 +671,16 @@ console.log('\nmodus klank en de nieuwe knoppen rechts');
   km.load(doc);
   const actie = (sig, shift = false) => km.kies(sig, { shift })?.action ?? null;
 
-  ok('klank is de vijfde grid-modus, na video', GROEPEN.grid.volgorde.join() === 'hotcues,loops,sampler,video,klank'
+  ok('klank is de vijfde grid-modus, na video (auto erachter, 2 okt)', GROEPEN.grid.volgorde.join() === 'hotcues,loops,sampler,video,klank,auto'
     && GROEPEN.grid.knoppen.klank?.join() === 'klank');
   lg.zet('grid', 'video'); lg.stap('grid', 1);
   ok('▼ vanuit video = klank', lg.stand.grid === 'klank');
   lg.stap('grid', 1);
-  ok('▼ vanuit klank = weer hotcues (rondlopen)', lg.stand.grid === 'hotcues');
-  lg.stap('grid', -1);
-  ok('▲ vanuit hotcues = klank', lg.stand.grid === 'klank');
+  ok('▼ vanuit klank = auto', lg.stand.grid === 'auto');
+  lg.stap('grid', 1);
+  ok('▼ vanuit auto = weer hotcues (rondlopen)', lg.stand.grid === 'hotcues');
+  lg.stap('grid', -2);
+  ok('▲ ▲ vanuit hotcues = klank', lg.stand.grid === 'klank');
   lg.zet('grid', 'hotcues');
 
   // Direct: Shift + scene 5. Scene 5 zelf blijft "loop weg" (één druk, geen shift).
@@ -1269,6 +1273,138 @@ console.log('eerdere standaarden (eerder in het standaardbestand)');
     v.omgezet && v.standaardNieuw && v.eigen === 4 && v.weg === 0 && srv.posts === 1
     && srv.inDb().rules.length === 4 && srv.inDb().removed.length === 0 && srv.inDb().base === vingerafdruk(doc));
   ok('en de APC heeft de modus klank (shift + scene 5)', ms.kies('note:0:86', { shift: true })?.action === 'layer.grid.klank');
+}
+
+// ---- modus auto: de auto-DJ op de APC (2 okt, VRAGEN AU1) -------------------
+// Een zesde grid-modus, Shift + scene 4 of ▲ ▼. Bovenste rij: ok · overslaan ·
+// langer · nu, pad 8 = aan/uit. In de standaardmapping (geen fragment: de
+// auto-DJ is er altijd), dus ook op apc.html, het scherm en in een verschil.
+console.log('\nmodus auto (auto-DJ)');
+{
+  const { Lagen, GROEPEN, LAAGNAAM, GLUREN: GLUREN_MS } = await import('../src/control/lagen.js');
+  const { eerdereStandaarden, verschilVanKopie } = await import('../src/control/mapping.js');
+  let t = 0;
+  const lg = new Lagen({ now: () => t });
+  const am = new Mapping({ read: () => 0, invoke: () => {}, lagen: () => lg.actief() });
+  am.load(doc);
+  const actie = (sig, shift = false) => am.kies(sig, { shift })?.action ?? null;
+
+  ok('auto is een grid-modus met een eigen naam, achteraan in ▲ ▼',
+    GROEPEN.grid.knoppen.auto?.join() === 'auto' && GROEPEN.grid.volgorde.at(-1) === 'auto' && /auto-dj/.test(LAAGNAAM['grid.auto']));
+  lg.zet('grid', 'hotcues'); lg.stap('grid', -1);
+  ok('▲ vanuit hotcues = auto', lg.stand.grid === 'auto');
+  lg.zet('grid', 'hotcues');
+
+  ok('scene 4 zonder shift = video (zoals altijd), met shift = modus auto',
+    actie('note:0:85') === 'layer.grid.video' && actie('note:0:85', true) === 'layer.grid.auto');
+  const viaBus = new Mapping({ read: () => 0, invoke: (a, on) => { const x = /^layer\.grid\.(\w+)$/.exec(a); if (x) lg.druk('grid', x[1], on); },
+    lagen: () => lg.actief() });
+  viaBus.load(doc);
+  viaBus.handle(note(98, true)); viaBus.handle(note(85, true)); t += 100; viaBus.handle(note(98, false)); viaBus.handle(note(85, false));
+  const naShift = lg.stand.grid;
+  ok('Shift + scene 4 kort: auto staat vast open (shift eerder los maakt niet uit)', naShift === 'auto');
+  viaBus.handle(note(85, true)); t += 100; viaBus.handle(note(85, false));
+  ok('scene 4 zonder shift vanuit auto: video', naShift === 'auto' && lg.stand.grid === 'video');
+  lg.zet('grid', 'hotcues');
+  viaBus.handle(note(98, true)); viaBus.handle(note(85, true)); t += GLUREN_MS + 10;
+  const tijdens = lg.stand.grid;
+  viaBus.handle(note(85, false)); viaBus.handle(note(98, false));
+  ok('Shift + scene 4 vasthouden = even gluren: auto zolang je vasthoudt, loslaten is terug naar hotcues',
+    tijdens === 'auto' && lg.stand.grid === 'hotcues');
+
+  // De pads: bovenste rij, van links naar rechts. De rest van het grid doet niets.
+  lg.zet('grid', 'auto');
+  const RIJ1 = { 1: 'auto.ok', 2: 'auto.skip', 3: 'auto.langer', 4: 'auto.nu', 8: 'auto.aan' };
+  const mis = [];
+  for (let kol = 1; kol <= 8; kol++) {
+    for (let rij = 1; rij <= 5; rij++) {
+      const sig = `note:0:${apc.gridNote(kol, rij)}`;
+      const wil = rij === 1 ? RIJ1[kol] ?? null : null;
+      if (actie(sig) !== wil) mis.push(`${kol}/${rij}`);
+      if (actie(sig, true) !== wil) mis.push(`${kol}/${rij}+shift`);
+    }
+  }
+  ok(`auto: bovenste rij ok · overslaan · langer · nu, pad 8 aan/uit, de rest vrij (ook met shift)${mis.length ? ' — mis: ' + mis.join() : ''}`, mis.length === 0);
+  ok('auto: scene 4 blijft video kiezen, zijn lampje toont "auto open"',
+    actie('note:0:85') === 'layer.grid.video' && am.kies('note:0:85').led?.lees === 'layer.grid.auto');
+  const autoOpen = actie('note:0:32') === 'auto.ok';     // de modus is echt open (anders zeggen de checks hieronder niets)
+  ok('auto: scene 5 blijft loop weg (zonder klank-lampje), met shift klank',
+    autoOpen && actie('note:0:86') === 'track.{focus}.loop.exit' && !am.kies('note:0:86').led && actie('note:0:86', true) === 'layer.grid.klank');
+  ok('auto: de kern zit niet in het mapje (fader, play, filter, Clip Stop, Track Select, device knobs, ▲ ▼)',
+    autoOpen && actie('cc:0:7') === 'track.1.fader' && actie('note:0:50') === 'track.1.play' && actie('cc:0:48') === 'track.1.filter'
+    && actie('note:0:52') === 'track.1.loop.toggle' && actie('note:2:51') === 'track.3.focus' && actie('cc:0:16') === 'track.{focus}.trim'
+    && actie('note:0:94') === 'layer.grid.prev' && actie('note:0:95') === 'layer.grid.next');
+
+  // Indrukken en loslaten gaan naar dezelfde action, ook als shift of het
+  // mapje ertussen wisselt.
+  const gestuurd = [];
+  const ab = new Mapping({ read: () => 0, invoke: (a, v) => gestuurd.push(`${a}=${v}`), vars: () => ({ focus: 2 }), lagen: () => lg.actief() });
+  ab.load(doc);
+  for (const kol of [1, 2, 3, 4, 8]) { ab.handle(note(apc.gridNote(kol, 1), true)); ab.handle(note(apc.gridNote(kol, 1), false)); }
+  ok('auto: de pads roepen auto.* aan, indrukken true en loslaten false',
+    gestuurd.join() === 'auto.ok=true,auto.ok=false,auto.skip=true,auto.skip=false,auto.langer=true,auto.langer=false,'
+      + 'auto.nu=true,auto.nu=false,auto.aan=true,auto.aan=false');
+  gestuurd.length = 0;
+  ab.handle(note(apc.gridNote(4, 1), true)); lg.zet('grid', 'hotcues'); ab.handle(note(98, true)); ab.handle(note(apc.gridNote(4, 1), false)); ab.handle(note(98, false));
+  ok('auto: loslaten gaat naar de action van het indrukken, ook als mapje en shift intussen wisselden',
+    gestuurd.join() === 'auto.nu=true,auto.nu=false');
+  lg.zet('grid', 'hotcues');
+
+  // De grid-modus (Shift + Metronome) houdt scene 4, ook met shift: daar
+  // verandert Shift + scene 4 niets (anders opende shift + nudge, dan scene 4,
+  // de modus auto in plaats van "halve tel").
+  const buiten = actie('note:0:85', true);
+  lg.zet('edit', 'aan');
+  ok('grid-modus: scene 4 = halve tel, ook met shift (Shift + scene 4 opent alleen BUITEN de grid-modus auto); Shift + scene 5 blijft klank',
+    buiten === 'layer.grid.auto' && actie('note:0:85') === 'track.{focus}.grid.halfbeat' && actie('note:0:85', true) === 'track.{focus}.grid.halfbeat'
+    && actie('note:0:86', true) === 'layer.grid.klank');
+  lg.zet('edit', 'uit');
+
+  // Niets bestaands veranderd: de standaard van 25 sep (e2bef131-374) staat als
+  // voorganger in `eerder` en verschilt ALLEEN in regels die erbij kwamen.
+  const vorige = eerdereStandaarden(doc).find((e) => e.vingerafdruk === 'e2bef131-374')?.doc;
+  const vorigeE = doc.eerder.find((e) => e.vingerafdruk === 'e2bef131-374');
+  ok('de standaard van 25 sep (374 regels) is een voorganger, en er is niets aan veranderd (alleen bijgekomen)',
+    vorige?.rules.length === 374 && vorigeE?.rules.length === 0);
+  const nieuw = vorigeE ? vorigeE.removed.slice().sort() : [];
+  const wilNieuw = ['note:0:32@grid.auto', 'note:0:33@grid.auto', 'note:0:34@grid.auto', 'note:0:35@grid.auto', 'note:0:39@grid.auto',
+    'note:0:85#shift', 'note:0:85@grid.auto', 'note:0:85#shift@edit.aan'].sort();
+  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4 en scene 4 met shift in de grid-modus (${nieuw.join(' ')})`,
+    JSON.stringify(nieuw) === JSON.stringify(wilNieuw));
+  const tel = (d) => { const c = {}; for (const r of d.rules) { const k = `${r.laag ?? '-'}${r.shift ? '#shift' : ''}`; c[k] = (c[k] || 0) + 1; } return c; };
+  const voor = vorige ? tel(vorige) : {}, na = tel(doc);
+  const anders = Object.keys({ ...voor, ...na }).filter((k) => voor[k] !== na[k]).sort();
+  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1) erbij, en één shift-regel zonder mapje en één in de grid-modus (${anders.join(' ')})`,
+    anders.join() === '-#shift,edit.aan#shift,grid.auto' && na['grid.auto'] === 6 && na['-#shift'] === voor['-#shift'] + 1
+    && na['edit.aan#shift'] === voor['edit.aan#shift'] + 1
+    && ['grid.hotcues', 'grid.loops', 'grid.sampler', 'grid.video', 'grid.klank', 'device.strip', 'device.rack', '-']
+      .every((k) => voor[k] === na[k] && voor[k] > 0));
+
+  // Clay's eigen mapping zoals hij sinds 25 sep op de server staat: een
+  // VERSCHIL van vier regels tegen de standaard van toen. Het blijft werken.
+  const clay = { kind: 'diff', version: 3, device: 'apc40mk2', base: 'e2bef131-374', top: {},
+    rules: Object.entries(VIDEO_KNOPPEN).map(([sig, a], i) => ({ in: sig, action: a, mode: 'absolute', laag: 'device.rack', label: `device knob ${5 + i}` })),
+    removed: [] };
+  const mc = new Mapping({ read: () => 0, invoke: () => {}, lagen: () => lg.actief() });
+  mc.laadStandaard(doc);
+  const u = mc.load(clay);
+  lg.zet('grid', 'auto');
+  ok('Clay\'s verschil (4 rack-knoppen, base e2bef131-374): geladen op de nieuwe standaard, niets weggehaald, de modus auto erop',
+    u.verschil && u.standaardNieuw && u.eigen === 4 && u.weg === 0 && mc.rules.size === doc.rules.length
+    && mc.kies('note:0:85', { shift: true })?.action === 'layer.grid.auto' && mc.kies('note:0:32')?.action === 'auto.ok'
+    && mc.rules.get('cc:0:22@device.rack').action === 'video.fx.trails');
+  const opnieuw = mc.verschil();
+  ok('en opnieuw bewaard: nog steeds alleen zijn 4, tegen de nieuwe standaard',
+    mc.rules.has('note:0:32@grid.auto') && opnieuw.rules.length === 4 && opnieuw.removed.length === 0 && opnieuw.base === vingerafdruk(doc));
+  // Een oude VOLLEDIGE kopie van de standaard van 25 sep (zoals export die geeft)
+  // wordt tegen die voorganger afgezet: de nieuwe regels komen erbij.
+  const kopie25 = JSON.parse(JSON.stringify(vorige));
+  for (const r of kopie25.rules) if (r.laag === 'device.rack' && VIDEO_KNOPPEN[r.in]) { r.action = VIDEO_KNOPPEN[r.in]; r.mode = 'absolute'; }
+  const vk = verschilVanKopie(doc, kopie25);
+  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 8 x "weggehaald")',
+    vk.basis === 'e2bef131-374' && vk.verschil.rules.length === 4 && vk.verschil.removed.length === 0
+    && maakVerschil(doc, kopie25).removed.length === 8);
+  lg.zet('grid', 'hotcues');
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

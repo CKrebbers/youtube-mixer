@@ -56,9 +56,10 @@ Na het onderzoek in `docs/APC40-onderzoek.md`: de eerste versie met mapjes
 voor alles (B3) voelde niet logisch. Nu: één kolom = één track, de kern nooit
 in een mapje. Fysieke plaatsing volgens de User Guide. Volledig en actueel op
 `apc.html` (leest de mapping zelf); de mapping zelf is `mappings/apc40mk2.json`
-(374 regels, versie 3; tot 25 sep 291). Op 25 september kwamen de DJ-functies van
-ronde 3 erbij, zoals Clay koos ("Voorstel A"): zie hieronder, en de tabel
-"Voorstel A".
+(382 regels, versie 3; tot 25 sep 291, tot 2 okt 374). Op 25 september kwamen de
+DJ-functies van ronde 3 erbij, zoals Clay koos ("Voorstel A"): zie hieronder, en de
+tabel "Voorstel A". Op 2 oktober de modus auto (auto-DJ, VRAGEN AU1): zie
+"Modus auto" onderaan.
 
 **Per kolom (track 1–8)** — knob: filter (endless) · grid: zie modi · Clip
 Stop: loop aan/uit (shift: loop weg) · Track Select: focus (shift: als tweede
@@ -86,16 +87,17 @@ mapje vorm).
 knop geeft het verschil, de software houdt de stand. Geen overpakken na een
 focus- of mapjewissel.
 
-**Grid-modi op scene 1–4, klank op Shift + scene 5** (kleur fel = open, donker
-= dicht): hotcues (geel: rij 1–4 hotcue per track, shift = wissen (rood zolang
+**Grid-modi op scene 1–4, klank op Shift + scene 5, auto op Shift + scene 4**
+(kleur fel = open, donker = dicht): hotcues (geel: rij 1–4 hotcue per track, shift = wissen (rood zolang
 shift vastzit), rij 5 loop aan/uit) · loops (cyaan: 1 · 2 · 4 · 8 · 16 tellen) ·
 sampler (violet: rij 1 pads, rij 2 leegmaken, linksonder samplerlengte) · video
 (blauw: effect vasthouden, mengvorm, puls-doel) · klank (magenta, per kolom =
 track: rij 1 kill hoog, 2 kill mid, 3 kill laag — vasthouden = weg zolang je
-drukt, shift + pad = vastzetten/losmaken; rij 4 rem; rij 5 op de maat starten).
-Scene 5 = loop weg. ▲ ▼ loopt rond door alle vijf (hotcues → loops → sampler →
-video → klank → hotcues). Vasthouden van een modusknop (ook Shift + scene 5)
-vanuit een andere modus = even gluren.
+drukt, shift + pad = vastzetten/losmaken; rij 4 rem; rij 5 op de maat starten) ·
+auto (limoen: de auto-DJ, zie "Modus auto" onderaan).
+Scene 5 = loop weg. ▲ ▼ loopt rond door alle zes (hotcues → loops → sampler →
+video → klank → auto → hotcues). Vasthouden van een modusknop (ook Shift + scene 5
+en Shift + scene 4) vanuit een andere modus = even gluren.
 
 Waarom klank op **Shift + scene 5**: scene 5 is al "loop weg", en dat moet één
 druk blijven (een loop moet je snel kwijt kunnen). Shift + scene 5 was vrij, zit
@@ -155,3 +157,63 @@ worden; `PALETTE_HEX` heeft nog 60 van de 128 paletkleuren.
 
 **Echofilter:** staat voor de APC nog aan (`echoFilter` in het profiel) tot
 gemeten is dat hij in 0x42 niets terugkaatst.
+
+## Modus auto (2 oktober 2026, VRAGEN AU1, GEBOUWD, niet op het apparaat nagelopen)
+
+De auto-DJ bijsturen zonder muis (`docs/AUTO-DJ.md` §4). Een zesde grid-modus,
+`grid.auto`, in limoen.
+
+| waar | knop | doet | lampje |
+|---|---|---|---|
+| scene-knoppen | Shift + scene 4 | modus auto openen (vasthouden = gluren) | met shift: donker limoen = dicht, fel = open |
+| | scene 4 (in auto) | blijft video kiezen | fel limoen = auto open (`led.lees: layer.grid.auto`) |
+| pijlen | ▲ ▼ | rondlopen, auto komt na klank | — |
+| grid, bovenste rij | pad 1 | ok (`auto.ok`) | donkergroen = voorstel klaar, fel groen = bevestigd, uit = geen voorstel |
+| | pad 2 | overslaan (`auto.skip`) | donker oranje = er staat een overgang klaar, anders uit |
+| | pad 3 | langer: +8 maten, beatloos +30 s (`auto.langer`) | donker cyaan = klaar, anders uit |
+| | pad 4 | nu: eerstvolgende 4 maten (`auto.nu`) | donkergeel = klaar, anders uit |
+| | pad 8 | auto-DJ aan/uit (`auto.aan`) | fel limoen = aan, donker limoen = uit |
+
+Pad 5–7 en rij 2–5 doen in deze modus niets (geen lampje); geen shift-varianten.
+De lampjes komen uit de reads die `bindAuto` al had (geen nieuwe read nodig):
+`auto.ok` null / 0,5 / 1, de andere drie 0 zolang er een overgang klaarstaat
+(`fase === 'klaar'`), anders null. Tijdens de overgang zelf (fase `bezig`) kunnen
+overslaan, langer en nu niet meer, en zijn ze uit. Kleuren uit het bestaande palet,
+donker = paletindex n+1: limoen 17/18 (de enige vrije kleur met een donkere tint
+die nog geen modus is), groen 21/22, oranje 9/10, cyaan 37/38, geel 13/14. Ok links
+en aan/uit helemaal rechts: de vier bijstuurknoppen liggen onder je vingers, aan/uit
+druk je niet per ongeluk mee.
+
+**Waarom een grid-modus en geen fragment zoals "vorm".** Het advies in AU1 was een
+fragment, maar een fragment bestaat voor iets achter een vlag (`?vormen=1`): het
+gaat niet mee in de standaardmapping, dus ook niet vanzelf op `apc.html`, en
+koppelen eroverheen maakt het jouw regel. De auto-DJ is er altijd. Als gewone
+grid-modus in de standaard: altijd bereikbaar, `apc.html` en het scherm tonen hem
+uit de mapping (modusknop op de kaart, kleur `--m-auto` op het scherm), de
+mapje-balk noemt de vijf knoppen, en een eigen mapping (een VERSCHIL) krijgt de
+nieuwe regels vanzelf (`docs/MAPPING-VERSCHIL.md`). De kern zit er niet in: wat de
+modus niet definieert (faders, play, filter, Clip Stop, device knobs) werkt gewoon.
+
+**Waarom Shift + scene 4.** Scene 1–4 zijn de modusknoppen, scene 5 is loop weg,
+Shift + scene 5 is klank. Shift + scene 1–4 deed hetzelfde als zonder shift (geen
+eigen regel): vrij. Scene 4 zit direct boven klank, en met shift vast branden scene
+4 en 5 in de kleuren van de twee extra modi. In de modus auto brandt scene 4 fel
+limoen, zoals scene 5 in klank magenta brandt; de knop zelf blijft video kiezen.
+
+**Wat er bewust NIET verandert.** In de grid-modus (Shift + Metronome) is scene 4
+"halve tel"; zonder eigen regel zou Shift + scene 4 daar de modus auto openen
+(een shift-regel gaat voor het open mapje), en wie shift vasthoudt voor nudge ±1 ms
+en dan scene 4 drukt, kreeg ineens de auto-DJ. Daarom een expliciete regel
+`note:0:85#shift@edit.aan` = halve tel: de grid-modus doet precies wat hij deed.
+Shift + scene 5 blijft daar klank, zoals sinds 25 sep. Alle bestaande regels zijn
+ongewijzigd (de voorganger `e2bef131-374` in `eerder` heeft 0 veranderde regels en
+alleen de 8 nieuwe sleutels als "weggehaald"); per bestaande modus evenveel regels.
+
+**Eigen mapping.** Clay's verschil op de server (4 rack-knoppen op video-effecten,
+base `e2bef131-374`) laadt op de nieuwe standaard met 4 eigen regels, 0 weggehaald,
+en de modus auto erop; geen van de nieuwe sleutels valt op een van zijn sleutels
+(cc:0:20–23 in het rack). Een oude volledige kopie van 25 sep wordt tegen de
+voorganger afgezet (anders 8 x "weggehaald"). `test/mapping.test.mjs` rekent het na.
+
+Niet getest: de echte APC (kleuren limoen naast groen en geel op de pads, of
+Shift + scene 4 lekker ligt), en de auto-DJ zelf op het apparaat.
