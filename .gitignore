@@ -11,3 +11,6 @@ tools/stems/uit/
 tools/toonsoort/uit/
 tools/keylock/uit/
 tools/keylock/pakket/
+# iCloud-conflictkopieën ("index 2.html", "styles 2.css"): nooit meenemen
+* 2.*
+* 2/
