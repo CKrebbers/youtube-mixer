@@ -220,6 +220,7 @@ docs/
   PLAN.md           het planvenster: formaat v2, opslaan met versie, samenwerken met Claude, live, fases
   AUTO-DJ.md        auto-DJ: drie partijen, bewakers, overgangen, bediening, het setplan, grenzen, volgende fases
   KLANKSCHAAL.md    de klankschaal: stemming, bouw, bediening, metingen, open vragen (KS1–KS5)
+  TAILSCALE.md      overal openen via Tailscale: VARVE_HOSTS, tailscale serve, wat waar werkt
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -718,6 +719,12 @@ docs/
     server (`/api/mapping`, instellingen-tabel) en in localStorage als reserve;
     bij opstarten gaat de server voor (E3; sinds 25 sep als VERSCHIL, zie onder
     MAPJES). MAAT-badge toont wie de maat geeft.
+- OVERAL OPENEN (2 okt, `docs/TAILSCALE.md`): niet publiek, via Tailscale.
+  `tailscale serve --bg 8777` zet HTTPS voor de server; `VARVE_HOSTS=<naam>.ts.net`
+  laat die naam door `vreemdVerzoek` (Host zonder poort of :443, Origin
+  `https://<naam>`); de server blijft op 127.0.0.1. Nooit `tailscale funnel`.
+  `localhost` en de ts.net-naam zijn twee oorsprongen: de Web Lock beschermt
+  daartussen NIET, dus op de Mac zelf altijd localhost.
 - Eigen bestanden (24 september 2026): `POST /api/upload?naam=…` met het
   bestand als body (application/octet-stream, audio/* of video/*; de enige
   uitzondering op de JSON-regel, Host/Origin blijft). GESTREAMD naar een

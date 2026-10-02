@@ -88,7 +88,8 @@ const server = spawn(process.execPath, ['server/index.js'], {
   // Zonder achtergrondanalyse: die meet test/gridauto.test.mjs apart; hier
   // zou hij door de tap-tests heen lopen.
   env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_MEDIA: media,
-    VARVE_HERANALYSE: 'uit', VARVE_PLANNEN: join(map, 'plannen'), VARVE_PROEF: join(map, 'proef') },
+    VARVE_HERANALYSE: 'uit', VARVE_PLANNEN: join(map, 'plannen'), VARVE_PROEF: join(map, 'proef'),
+    VARVE_HOSTS: 'varve.proef-net.ts.net, https://fout.ts.net' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 const B = `http://localhost:${poort}`;
@@ -202,6 +203,28 @@ try {
   ok('POST vanaf de eigen pagina: gewoon 200', (await rauw('/api/mapping', { method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: `http://localhost:${poort}` }, body: mapJson })).status === 200);
   ok('zonder Origin (curl, tests): toegestaan', (await rauw('/api/mapping', { method: 'DELETE' })).status === 200);
+
+  // Tailscale (VARVE_HOSTS, docs/TAILSCALE.md): `tailscale serve` levert de
+  // naam zonder poort af, de pagina komt van https://<naam>.
+  const TS = 'varve.proef-net.ts.net';
+  const tsHosts = [];
+  for (const h of [TS, `${TS}:443`, 'VARVE.Proef-Net.ts.net']) tsHosts.push((await rauw('/api/opnames', { headers: { Host: h } })).status);
+  ok(`de Tailscale-naam uit VARVE_HOSTS (zonder poort, :443, hoofdletters): 200 (${tsHosts.join(' ')})`, tsHosts.every((c) => c === 200));
+  const tsVreemd = [];
+  for (const h of [`${TS}:${poort}`, `${TS}:80`, `evil.${TS}`, `${TS}.evil.example`, 'proef-net.ts.net', 'fout.ts.net', 'https://fout.ts.net']) {
+    tsVreemd.push((await rauw('/api/opnames', { headers: { Host: h } })).status);
+  }
+  ok(`andere poort, sub- of bovendomein, of een ongeldige regel uit VARVE_HOSTS: 403 (${tsVreemd.join(' ')})`, tsVreemd.every((c) => c === 403));
+  ok('Tailscale: POST van https://<naam>: 200', (await rauw('/api/mapping', { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Host: TS, Origin: `https://${TS}` }, body: mapJson })).status === 200);
+  ok('Tailscale: ook als de proxy de Host op localhost zette', (await rauw('/api/mapping', { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: `https://${TS}` }, body: mapJson })).status === 200);
+  const tsOrigin = [];
+  for (const o of [`http://${TS}`, `https://evil.example`, `https://${TS}.evil.example`, `https://${TS}:8443`, `http://localhost:${poort}`]) {
+    tsOrigin.push((await rauw('/api/mapping', { method: 'DELETE', headers: { Host: TS, Origin: o } })).status);
+  }
+  ok(`Tailscale: een andere oorsprong (http, vreemd, andere poort, of localhost op de Tailscale-naam): 403 (${tsOrigin.join(' ')})`, tsOrigin.every((c) => c === 403));
+  await rauw('/api/mapping', { method: 'DELETE' });
   // De routes van de sporen die samen integratie-r2 werden (toonsoort,
   // library-pagina's, hotcues, handelingenlog, ingest-wachtrij): allemaal
   // achter dezelfde controles, want die staan vóór elke route.

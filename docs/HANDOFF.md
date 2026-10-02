@@ -14,6 +14,16 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 2 OKT (avond): OVERAL OPENEN VIA TAILSCALE (cloudsessie)
+
+Clay wilde VARVE "overal altijd" kunnen openen. Na uitleg (geen openbare server:
+distributie van YouTube-media, geen login, yt-dlp geblokkeerd op datacenters)
+koos hij Tailscale met de server op de Mac. Gebouwd: `VARVE_HOSTS` in
+`server/index.js` (`vreemdVerzoek`), checks in `server.test.mjs` (falen op de
+oude code), `docs/TAILSCALE.md`. **Niet getest met een echte Tailscale.**
+Eerst doen (Clay): de stappen in `docs/TAILSCALE.md`, server herstarten met
+`VARVE_HOSTS`. Op de Mac zelf localhost blijven gebruiken.
+
 ## 2 OKT: ALLES GETEST, LAYOUT, CONTROLEKAMER (vanaf de Omarchy-machine)
 
 Clay: VARVE wordt het overkoepelende AV-project; eerst standalone helemaal

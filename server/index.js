@@ -541,17 +541,34 @@ async function statisch(req, res, pad) {
  * eigen pagina komen. Stuurt de client geen Origin (curl, de tests), dan is
  * het geen browser op een vreemde site en mag het. "null" (sandbox, file://)
  * is wél een browser en mag niet.
+ *
+ * TAILSCALE (docs/TAILSCALE.md): `VARVE_HOSTS=mac.tail1234.ts.net` laat die
+ * namen er ook in, alleen zoals `tailscale serve` ze aflevert: Host zonder
+ * poort (of :443), Origin `https://<naam>`. Wat erbij staat is een naam die
+ * alleen je eigen apparaten kunnen bereiken; DNS-rebinding blijft dicht,
+ * want een vreemde naam staat er nooit in.
  */
 const EIGEN_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+const EXTRA_HOSTS = new Set();
+for (const naam of String(process.env.VARVE_HOSTS || '').split(',')) {
+  const n = naam.trim().toLowerCase();
+  if (!n) continue;
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(n)) EXTRA_HOSTS.add(n);
+  else console.warn(`[server] VARVE_HOSTS: "${naam.trim()}" is geen hostnaam (zonder https:// en zonder poort), genegeerd`);
+}
 function vreemdVerzoek(req) {
   const host = String(req.headers.host || '').toLowerCase();
   const m = /^(localhost|127\.0\.0\.1|\[::1\]):(\d+)$/.exec(host);
-  if (!m || !EIGEN_HOSTS.has(m[1]) || Number(m[2]) !== POORT) return 'onbekende host';
+  const lokaal = !!m && EIGEN_HOSTS.has(m[1]) && Number(m[2]) === POORT;
+  if (!lokaal && !EXTRA_HOSTS.has(host.replace(/:443$/, ''))) return 'onbekende host';
   if (req.method === 'GET' || req.method === 'HEAD') return null;
   const origin = req.headers.origin;
   if (origin === undefined) return null;
-  if (String(origin).toLowerCase() !== `http://${host}`) return 'verzoek van een andere oorsprong';
-  return null;
+  const o = String(origin).toLowerCase();
+  if (lokaal && o === `http://${host}`) return null;
+  // Ook als de proxy de Host op localhost had gezet: de oorsprong telt.
+  if (o.startsWith('https://') && EXTRA_HOSTS.has(o.slice(8))) return null;
+  return 'verzoek van een andere oorsprong';
 }
 
 const server = createServer(async (req, res) => {
@@ -1039,6 +1056,7 @@ if (tooling.verouderd) console.warn(`[server] yt-dlp is verouderd (nieuwste ${to
 
 server.listen(POORT, '127.0.0.1', () => {
   console.log(`VARVE DJ  ·  http://localhost:${POORT}`);
+  for (const naam of EXTRA_HOSTS) console.log(`ook via  ·  https://${naam}  (Tailscale, docs/TAILSCALE.md)`);
   console.log(`library: ${lib.aantalTracks()} nummers  ·  schema v${lib.versie}`);
   console.log(`yt-dlp ${tooling.ytdlp}  ·  ffmpeg ${tooling.ffmpeg ? 'ok' : 'ONTBREEKT'}`);
   const her = process.env.VARVE_HERANALYSE;
