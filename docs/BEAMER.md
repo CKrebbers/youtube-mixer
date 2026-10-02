@@ -43,6 +43,7 @@ Bestanden:
 | `src/video/beamer-venster.js` | het losse venster: mixer maken, aanmelden, elk beeld `neemOver` + `teken` (of tijdens de inloop `loopIn`) |
 | `video.html` | alleen nog een canvas en het hulpje; de module doet de rest |
 | `src/video/video-mixer.js` | `neemOver(hoofd)`, `bron(id)`, `maakVideo`, `onFout`, `beelden`, `loopIn()`, `toonBeeld(canvas)` |
+| `src/video/eindbeeld.js` | puur: de noodknoppen (zwart, bevriezen, master, flits) en hun klok, zie "Noodknoppen" |
 | `src/video/volg.js` | `inDePas()`: lopen de zichtbare video's in de pas (voor het einde van de inloop) |
 | `src/ui/video-paneel.js` | `window.varveBeamer` (via app.js), wie er mengt, het voorbeeld in het paneel |
 
@@ -203,6 +204,64 @@ gebouwd bij de eerste laag.
   het losse venster werkt: dezelfde isolate, gemeten in de proef.
 - **Reageren op de mix**: de luisteraar leest de master-analyser van het
   hoofdvenster, vanuit de lus van het losse venster.
+
+## Noodknoppen: zwart, bevriezen, master, flits (A4, 2 okt)
+
+Basisgereedschap voor de beamer: "zwart moet altijd kunnen". Op de bus
+(`bindVideo`), zodat scherm, APC en het handelingenlog ze kennen:
+
+| action | soort | wat |
+|---|---|---|
+| `video.black` | trigger (schakelaar) | zwart met een lineaire fade van 250 ms (`ZWART_FADE`), uit even snel terug |
+| `video.black.hold` | trigger | zwart zolang je drukt, DIRECT; loslaten = direct terug naar wat de schakelaar zegt |
+| `video.freeze` | trigger (schakelaar) | het eerste beeld na het indrukken blijft staan; de video's lopen door |
+| `video.master` | value 0..1 | helderheid van het eindbeeld, standaard 1; 0 = zwart |
+| `video.flash` | trigger | wit, kwadratisch uitdovend in 300 ms (`FLITS_DUUR`) |
+
+**Waar**: in de LAATSTE stap (tonen), `src/video/eindbeeld.js` rekent, de
+toonshader doet `mix(beeld, wit, flits) × master × (1 − zwart)`. Zo zien de zaal,
+het losse venster en een video-opname (MediaRecorder op het canvas van wie mengt)
+hetzelfde, en onthouden de sporen er niets van (die lezen het eindbeeld vóór de
+toonstap). Zwart wint van alles, ook van een flits; helemaal zwart is precies 0.
+
+**Bevriezen**: de mixer slaat mengen, lagen en effecten over en toont het
+laatste eindbeeld (`eind[1 − beurt]`) elk beeld opnieuw (zonder
+`preserveDrawingBuffer` is het canvas na elk getoond beeld leeg). De video's
+worden intussen bijgestuurd en geüpload, dus loslaten geeft meteen het beeld van
+nu. Alleen een eindbeeld van NA het indrukken telt (`laatsteEindMs >=
+bevrorenSinds`): een mixer die toen niet mengde (het andere venster deed het)
+maakt eerst één vers beeld en houdt dat vast, in plaats van een oud beeld of een
+leeg canvas te tonen.
+
+**De klok**: `performance.timeOrigin + performance.now()` (`wandklok`). Niet de
+audioklok: die staat stil zolang de AudioContext niet loopt, en een fade op een
+stilstaande klok wordt nooit klaar. Absoluut, omdat het losse venster een eigen
+`performance.now()` met een ander nulpunt heeft: zo rekenen beide vensters met
+dezelfde overgangen. Een verborgen tabblad houdt deze klok bij.
+
+**Het losse venster**: `neemOver` kopieert de stand (`Eindbeeld.neemOver`), elk
+beeld. Een fade die het hoofdvenster begon loopt in het losse venster af, ook als
+het hoofdtabblad verborgen is. Tijdens de INLOOP zet het hoofdvenster zijn canvas
+op het losse (`toonBeeld`): daar zitten zwart, master en flits al in, dus
+`toonBeeld` zet de toonshader op neutraal (helder 1, flits 0).
+
+**Handelingenlog**: zwart en bevriezen staan als stand in de beginstand
+(`RONDLOPERS`), de master als waarde; de drukvariant en de flits niet (een
+gebaar, geen stand). Een log van vóór A4 begint met zwart en bevriezen uit.
+
+**Op het scherm**: rij BEELD onder de video-effecten: MASTER-knop, zwart (shift +
+vasthouden = de drukvariant), bevries, flits; de knoppen lezen hun stand terug.
+Geen sneltoets: elke letter en elk cijfer is al bezet (V opent het paneel).
+
+Gemeten: `node test/video.test.mjs` (38 checks, symbolische WebGL) en
+`node tools/headless/noodknoppen.mjs` (31 controles, echte pixels in headless
+Chromium 141 met swiftshader, hoofdvenster én video.html; de rij past op 1440 × 790,
+kolomfader 81 px, gelijk aan wat 649b555 met het videopaneel open mat). Fade per beeld:
+255 · 230 · 191 · 128 · 64 · 26 · 1 · 0 op 0 · 25 · 62,5 · 125 · 187,5 · 225 ·
+249 · 250 ms; flits 255 · 207 · 143 · 64 · 16 · 3 · 0 op 0 · 30 · 75 · 150 · 225 ·
+270 · 299 ms. Niet gemeten: in een video-opname (de mp4) en met het
+hoofdtabblad echt verborgen (vraagt Chrome for Testing met `--headless=new`,
+zoals `beamer.mjs`).
 
 ## requestVideoFrameCallback: gemeten, NIET gebruikt
 

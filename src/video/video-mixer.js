@@ -4,6 +4,7 @@ import { VIDEO_FX, MODI } from './instellingen.js';
 import { PULS_DOELEN, pulsVorm, maatgever, metPuls } from './puls.js';
 import { FITS, schaalVoor, maatVan } from './passen.js';
 import { actieveLagen, lagenUniforms, MAX_BEELDLAGEN } from './lagen.js';
+import { Eindbeeld, wandklok } from './eindbeeld.js';
 import { hoorbaar, naVertraging, uitgangsVertraging } from '../engine/hoorbaar.js';
 
 /**
@@ -36,7 +37,12 @@ import { hoorbaar, naVertraging, uitgangsVertraging } from '../engine/hoorbaar.j
  *   effecten  pixel, spiegel, RGB, kleur, sporen, korrel. Sporen heeft het
  *             VORIGE eindbeeld nodig, dus dit schrijft naar een van twee
  *             buffers die om de beurt wisselen (ping-pong).
- *   tonen     het eindbeeld op het canvas
+ *   tonen     het eindbeeld op het canvas, met de noodknoppen erop
+ *             (eindbeeld.js): flits, master, zwart. Hier en nergens eerder,
+ *             zodat de zaal, het losse venster en een video-opname hetzelfde
+ *             zien, en de sporen (die het vorige EINDbeeld lezen, vóór deze
+ *             stap) er niets van onthouden. Bevroren slaat de eerste drie
+ *             stappen over en toont het laatste eindbeeld nog eens.
  */
 
 const MAX = 8;
@@ -183,12 +189,18 @@ void main() {
   kleur = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
 
+// helder = master × (1 − zwart): precies 0 is precies zwart (0 × wat dan ook).
+// De flits gaat eerst naar wit en valt dus ook onder master en zwart.
 const TOON = `#version 300 es
 precision mediump float;
 in vec2 uv;
 out vec4 kleur;
 uniform sampler2D beeld;
-void main() { kleur = vec4(texture(beeld, uv).rgb, 1.0); }`;
+uniform float helder, flits;
+void main() {
+  vec3 c = mix(texture(beeld, uv).rgb, vec3(1.0), flits);
+  kleur = vec4(clamp(c * helder, 0.0, 1.0), 1.0);
+}`;
 
 export class VideoMixer {
   /**
@@ -208,6 +220,10 @@ export class VideoMixer {
     this.onFout = null;              // (deckId, tekst): de video van een nummer ontbreekt of laadt niet
     this.beelden = 0;                // getekende beelden, voor de status en de tests
     this.vorigBeeldMs = -Infinity;   // performance.now() van het vorige teken()
+    // Zwart, bevriezen, master, flits (eindbeeld.js, de laatste stap). Ook
+    // zonder WebGL: de knoppen op de bus moeten hun stand kunnen lezen.
+    this.eindbeeld = new Eindbeeld();
+    this.laatsteEindMs = -Infinity;  // wandklok van het laatst gemaakte eindbeeld (bevriezen)
     canvas.width = BREEDTE;
     canvas.height = HOOGTE;
 
@@ -245,6 +261,8 @@ export class VideoMixer {
     gl.uniform1i(this.loc(this.effect, 'vorig'), 1);
     gl.useProgram(this.toon);
     gl.uniform1i(this.loc(this.toon, 'beeld'), 0);
+    gl.uniform1f(this.loc(this.toon, 'helder'), 1);
+    gl.uniform1f(this.loc(this.toon, 'flits'), 0);
 
     // Eén zwart pixel voor lege plekken: een sampler zonder texture is ongeldig.
     this.zwart = this._texture();
@@ -317,6 +335,8 @@ export class VideoMixer {
     this.puls = hoofd.puls;
     this.pulsDoel = hoofd.pulsDoel;
     this.fit = hoofd.fit;
+    // De noodknoppen: zonder dit zag de zaal geen zwart zodra het losse venster mengt.
+    this.eindbeeld.neemOver(hoofd.eindbeeld);
     this.beeldlagen = hoofd.beeldlagen;
     if (this.beeldlagen.length) this._maakLagenStap();
     for (const id of this.decks) this.zetBron(id, hoofd.bron(id));
@@ -330,6 +350,15 @@ export class VideoMixer {
   zetPuls(v) { this.puls = Math.max(0, Math.min(1, v)); }
   volgendeFit() { this.fit = FITS[(FITS.indexOf(this.fit) + 1) % FITS.length]; }
   volgendPulsDoel() { this.pulsDoel = PULS_DOELEN[(PULS_DOELEN.indexOf(this.pulsDoel) + 1) % PULS_DOELEN.length]; }
+
+  // De noodknoppen (eindbeeld.js), op de wandklok: die loopt ook als de
+  // AudioContext stilstaat, en is in beide vensters dezelfde.
+  zetZwart(aan) { this.eindbeeld.zetZwart(aan, wandklok()); }
+  zetZwartVast(aan) { this.eindbeeld.zetZwartVast(aan, wandklok()); }
+  zetBevroren(aan) { this.eindbeeld.zetBevroren(aan, wandklok()); }
+  zetMaster(v) { this.eindbeeld.zetMaster(v); }
+  flits() { this.eindbeeld.flits(wandklok()); }
+  flitsNu() { return this.eindbeeld.flitsNu(wandklok()); }
 
   /**
    * Waar in de tel we nu zijn, als vorm 0..1 — van de track die de maat
@@ -438,6 +467,9 @@ export class VideoMixer {
     gl.bindTexture(gl.TEXTURE_2D, this.leenTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bron);
     gl.useProgram(this.toon);
+    // Zwart, master en flits zitten al in het geleende beeld: niet nog eens.
+    gl.uniform1f(this.loc(this.toon, 'helder'), 1);
+    gl.uniform1f(this.loc(this.toon, 'flits'), 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, BREEDTE, HOOGTE);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -503,9 +535,26 @@ export class VideoMixer {
     if (!gl || !this.prog) return;
     this.beelden++;
     const vertraging = this._vertraging();
+    // Ook bevroren: de video's blijven de audio volgen en worden geüpload
+    // (een <video> die niemand uitleest krijgt geen vers beeld), zodat het
+    // beeld bij loslaten meteen klopt.
     const { w, schaal } = this._bijwerken(vertraging);
+    const klok = wandklok();
 
     gl.viewport(0, 0, BREEDTE, HOOGTE);
+
+    // Bevroren: het laatste eindbeeld nog eens tonen. Maar alleen een beeld
+    // dat NA het indrukken gemaakt is: een mixer die toen niet mengde (het
+    // andere venster deed het, of het paneel was dicht) heeft nog een oud
+    // beeld in zijn buffer. Die maakt eerst één vers beeld en houdt dat vast.
+    // Zonder preserveDrawingBuffer is het canvas na elk getoond beeld leeg,
+    // dus elk beeld opnieuw tekenen; het eindbeeld zelf staat in een buffer
+    // (eind[]) die bevroren niet meer beschreven wordt.
+    const eb = this.eindbeeld;
+    if (eb.bevroren && this.laatsteEindMs >= eb.bevrorenSinds) {
+      this._toon(this.eind[1 - this.beurt].tex, eb.uniforms(klok));
+      return;
+    }
 
     // 1. mengen -> gemengd
     gl.useProgram(this.meng);
@@ -534,13 +583,22 @@ export class VideoMixer {
     gl.uniform1f(this.loc(this.effect, 'korrel'), f.korrel);
     gl.uniform1f(this.loc(this.effect, 'tijd'), (performance.now() / 1000) % 1000);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    this.laatsteEindMs = klok;
 
     // 3. tonen
+    this._toon(nu.tex, eb.uniforms(klok));
+    this.beurt = 1 - this.beurt;
+  }
+
+  /** De laatste stap: een eindbeeld op het canvas, met flits, master en zwart. */
+  _toon(tex, { helder, flits }) {
+    const gl = this.gl;
     gl.useProgram(this.toon);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, nu.tex);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1f(this.loc(this.toon, 'helder'), helder);
+    gl.uniform1f(this.loc(this.toon, 'flits'), flits);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    this.beurt = 1 - this.beurt;
   }
 
   /**

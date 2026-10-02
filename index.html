@@ -200,6 +200,13 @@
       <div class="knob sm" data-action="video.pulse" data-label="PULS" data-value="0" data-default="0"></div>
       <button data-kind="button" data-action="video.pulse.target" class="btn sm vid-pulsdoel" title="wat er op de tel pulst">rgb</button>
     </div>
+    <div class="vid-nood" title="noodknoppen op het eindbeeld: de zaal, het losse venster en de opname zien hetzelfde">
+      <span class="vid-nood-kop">BEELD</span>
+      <div class="knob sm" data-action="video.master" data-label="MASTER" data-value="1" data-default="1" title="video-master: helderheid van het eindbeeld (dicht = zwart)"></div>
+      <button data-kind="button" data-action="video.black" data-action-shift="video.black.hold" class="btn sm vid-zwart" title="zwart aan/uit, met een fade van 250 ms · shift + vasthouden: zwart zolang je drukt, direct">zwart</button>
+      <button data-kind="button" data-action="video.freeze" class="btn sm vid-bevries" title="het beeld bevriezen aan/uit; de video's lopen door, dus loslaten geeft meteen het goede beeld">bevries</button>
+      <button data-kind="button" data-action="video.flash" class="btn sm vid-flits" title="een witte flits die in 300 ms uitdooft">flits</button>
+    </div>
   </section>
 </main>
 

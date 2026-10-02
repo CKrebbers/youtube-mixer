@@ -544,6 +544,11 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .vid-fx{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px}
 .vid-modus,.vid-pulsdoel{min-width:64px;text-transform:uppercase;letter-spacing:.08em}
 .vid-sep{width:1px;align-self:stretch;background:var(--line)}
+.vid-nood{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:0 10px 8px}
+.vid-nood-kop{font-size:10px;letter-spacing:.16em;font-weight:700;color:var(--a);margin-right:2px}
+.vid-nood .btn{min-width:56px;text-transform:uppercase;letter-spacing:.08em}
+.btn.vid-zwart.on{background:var(--red);border-color:var(--red);color:#fff}
+.btn.vid-bevries.on{background:var(--warn);border-color:var(--warn);color:#03100e}
 
 /* ---- opnemen ---- */
 .opname{font-variant-numeric:tabular-nums}
