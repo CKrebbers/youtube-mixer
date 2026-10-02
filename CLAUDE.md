@@ -221,6 +221,7 @@ docs/
   AUTO-DJ.md        auto-DJ: drie partijen, bewakers, overgangen, bediening, het setplan, grenzen, volgende fases
   KLANKSCHAAL.md    de klankschaal: stemming, bouw, bediening, metingen, open vragen (KS1–KS5)
   TAILSCALE.md      overal openen via Tailscale: VARVE_HOSTS, tailscale serve, wat waar werkt
+  ONTBREEKT.md      wat er nog ontbreekt (2 okt): eigen docs, DJ-software, Logic/TD; voorstel en vragen
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 

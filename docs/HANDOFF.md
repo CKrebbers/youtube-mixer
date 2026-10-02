@@ -14,6 +14,14 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 2 OKT (avond): WAT ER NOG ONTBREEKT (cloudsessie, docs/ONTBREEKT.md)
+
+Drie agenten: open punten in de eigen docs (tegen de code), vergelijking met
+rekordbox/Traktor/Serato/Mixxx/VirtualDJ, koppeling met Logic en TouchDesigner.
+49 punten in vier groepen (standalone-nodig, later, Logic/TD, niet), een
+voorstel voor de volgorde en zeven vragen. Wacht op Clay's keuzes. Kernfeit voor
+later: Logic volgt geen MIDI clock, wel Ableton Link (via Carabiner, GPL los).
+
 ## 2 OKT (avond): OVERAL OPENEN VIA TAILSCALE (cloudsessie)
 
 Clay wilde VARVE "overal altijd" kunnen openen. Na uitleg (geen openbare server:
