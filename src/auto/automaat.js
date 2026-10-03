@@ -31,7 +31,7 @@ import {
 
 const ZELF = Symbol('auto');
 /** Actions waarmee Clay een overgang overneemt (op een track in de overgang). */
-const OVERNEEM = /^track\.(\d)\.(fader|low|mid|high|filter|play|play\.quant|sync|seek|tempo|pitch|send\.[ab]|kill\.\w+(\.hold)?|brake|cue|hotcue\.\d)$/;
+const OVERNEEM = /^track\.(\d)\.(fader|low|mid|high|filter|play|play\.quant|sync|seek|tempo|pitch|send\.[ab]|kill\.\w+(\.hold)?|stem\.(vocals|inst|drums|bass|other)(\.(kill|hold))?|brake|cue|hotcue\.\d)$/;
 const nrVan = (id) => DECK_IDS.indexOf(id) + 1;
 const deckVanNr = (nr) => DECK_IDS[nr - 1];
 const eindig = (x) => typeof x === 'number' && Number.isFinite(x);
