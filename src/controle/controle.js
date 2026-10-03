@@ -1,10 +1,11 @@
 import { SPEELLIJST, allePunten } from './speellijst.js';
 import { KANAAL } from '../ui/status-zender.js';
 import { LOCK_NAAM } from '../ui/tabblad.js';
+import { stemsTegel } from '../ui/stems-weergave.js';
 
 /**
  * De Controlekamer (controle.html, docs/CONTROLEKAMER.md). Leest:
- * - de server: /api/tooling, /api/library (aantal), /api/ingest, /api/proef;
+ * - de server: /api/tooling, /api/library (aantal), /api/ingest, /api/stems, /api/proef;
  * - de Web Lock van de mixer (tabblad.js): is er een mixer open, wacht er een tweede;
  * - het kanaal van de mixer (status-zender.js): APC, audio, wat er speelt.
  * Opent zelf GEEN MIDI: de APC heeft maar één tabblad, de mixer.
@@ -18,6 +19,7 @@ const stand = {
   tooling: null,       // antwoord van /api/tooling
   nummers: null,       // aantal in de library
   ingest: [],          // open opdrachten
+  stems: null,         // antwoord van /api/stems, { ontbreekt: true } bij een server zonder stems, null = onbekend
   mixer: null,         // { open, wachtend } uit de Web Lock
   status: null,        // laatste bericht van de mixer
   proef: { begonnen: null, items: {} },
@@ -46,6 +48,18 @@ async function leesServer() {
     stand.ingest = (ingest.opdrachten ?? []).filter((o) => o.status === 'wacht' || o.status === 'bezig');
     stand.server = true;
   } catch { stand.server = false; }
+}
+
+/**
+ * De stems-rij (docs/STEMS.md §2): wat loopt, wat wacht, of de splitter er is.
+ * Los van leesServer: een server van vóór de stems kent de route niet (404),
+ * en dat is geen reden om de server als "weg" te tonen.
+ */
+async function leesStems() {
+  try {
+    const r = await fetch('/api/stems', { cache: 'no-store' });
+    stand.stems = r.status === 404 ? { ontbreekt: true } : r.ok ? await r.json() : null;
+  } catch { stand.stems = null; }
 }
 
 async function leesTooling() {
@@ -89,6 +103,8 @@ function tegels() {
   t.push({ naam: 'Ingest-rij', licht: stand.ingest.length ? 'half' : 'ok',
            waarde: stand.ingest.length ? `${bezig} bezig, ${wacht} wacht` : 'leeg',
            sub: stand.ingest.find((o) => o.status === 'bezig')?.titel ?? '' });
+
+  t.push(stand.server === false ? { naam: 'Stems', licht: 'uit', waarde: '—', sub: '' } : stemsTegel(stand.stems));
 
   const m = stand.mixer;
   t.push(!m ? { naam: 'Mixer', licht: 'uit', waarde: 'onbekend', sub: 'deze browser kent geen Web Locks' }
@@ -257,7 +273,7 @@ $('nieuw').addEventListener('click', async () => {
 
 function klok() { $('tijd').textContent = new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }); }
 
-async function ververs() { await Promise.all([leesServer(), leesMixer()]); tekenStand(); }
+async function ververs() { await Promise.all([leesServer(), leesMixer(), leesStems()]); tekenStand(); }
 
 klok(); setInterval(klok, 10000);
 try { stand.proef = await haal('/api/proef'); } catch (_) { meld('speellijst niet geladen: is de server er?', 'fout'); }

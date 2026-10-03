@@ -40,7 +40,7 @@ const QUANTIZE_TITEL = {
  * in vensters.js. Die lezen hun action bij het indrukken, dus herschrijven
  * van `data-action` is genoeg.
  */
-export function opzetSpiegel({ engine, staat, loadFile }) {
+export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null }) {
   const items = [];          // { el, sig, soort, kolom?, r (leesControl) }
   const perSig = new Map();  // sig -> [el]
 
@@ -60,7 +60,7 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
     const nr = trackVanDeck(id);
     const c = Object.fromEntries(kolomControls(nr).map((x) => [x.rol, x]));
     return `<div class="kol" data-deck="${id}" data-kolom="${nr}">
-      <div class="kol-kop"><b class="kol-nr">${nr}</b><span class="kol-maat hidden" title="deze track geeft de maat (sync, sampler, video-puls)">MAAT</span></div>
+      <div class="kol-kop"><span class="kol-kop-l"><b class="kol-nr">${nr}</b><i class="kol-stems hidden"></i></span><span class="kol-maat hidden" title="deze track geeft de maat (sync, sampler, video-puls)">MAAT</span></div>
       <div class="kol-titel">— leeg —</div>
       <div class="kol-info"><span class="kol-rest" title="resterende tijd">—</span><span class="kol-tempo"><span class="kol-bpm" title="bpm die je hoort (grid × pitch)">—</span><span class="kol-toon leeg" title="toonsoort die je hoort">—</span></span><i class="kol-speelt">▶</i></div>
       ${html(c.knob)}
@@ -252,7 +252,7 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
     const root = kolommenEl.querySelector(`.kol[data-deck="${id}"]`);
     return [id, { root, titel: root.querySelector('.kol-titel'), meter: root.querySelector('.kol-meter i'),
       maat: root.querySelector('.kol-maat'), rest: root.querySelector('.kol-rest'), bpm: root.querySelector('.kol-bpm'),
-      toon: root.querySelector('.kol-toon'), hoogte: '' }];
+      toon: root.querySelector('.kol-toon'), stems: root.querySelector('.kol-stems'), stemsSoort: '', hoogte: '' }];
   }));
   const fdTrack = document.querySelector('.fd-track');
   const fdTitel = document.querySelector('.fd-titel');
@@ -300,6 +300,12 @@ export function opzetSpiegel({ engine, staat, loadFile }) {
       tekst(k.toon, toon.tekst);
       for (const soort of ['zeker', 'onzeker', 'geen', 'leeg']) klasse(k.toon, soort, toon.soort === soort);
       if (k.toon.title !== toon.titel) k.toon.title = toon.titel;
+      // Stems: een klein teken naast het nummer (S2/S4; gestippeld = klaar,
+      // herladen geeft ze; S! = laden mislukte). stems-paneel.js weet hoe.
+      const st = stemsVan(id);
+      const soort = st ? st.soort : '';
+      if (k.stemsSoort !== soort) { k.stemsSoort = soort; k.stems.dataset.soort = soort; klasse(k.stems, 'hidden', !st); }
+      if (st) { tekst(k.stems, st.tekst); if (k.stems.title !== st.titel) k.stems.title = st.titel; }
       b.view.draw(d, analysis[id]);
     }
 

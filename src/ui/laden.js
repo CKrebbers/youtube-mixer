@@ -1,10 +1,11 @@
 import { DECK_IDS } from '../engine/engine.js';
 import { Beatgrid } from '../engine/beatgrid.js';
-import { trackVanDeck } from '../control/actions.js';
+import { trackVanDeck, read as readAction } from '../control/actions.js';
 import { LibraryPanel, isVideoBestand, isMediaBestand } from './library-panel.js';
 import { computePeaks, rmsDb, laadPeaks } from '../analysis/peaks.js';
 import { renderDemoTrack } from '../analysis/demo-track.js';
 import { meld } from './meldingen.js';
+import { aantalOpBus } from './stems-weergave.js';
 
 /**
  * Laden en wat bij het geladen nummer hoort: de demotrack en losse bestanden
@@ -21,9 +22,18 @@ import { meld } from './meldingen.js';
  * in `staat.terugspeelDecks` tot er gewoon iets anders op geladen wordt:
  * grid, toonsoort, hotcues, tap-verfijning en sampler-pads van een set van
  * toen mogen niet over wat er nu in de library staat heen.
+ *
+ * Stems (docs/STEMS.md §4): heeft het nummer stems, dan speelt het deck
+ * `stems.wav` (de engine krijgt `{ namen, schaal }`); lukt dat niet, dan
+ * `audio.wav` met een melding. `staat.deckStems` onthoudt per track wat de
+ * library zei en of het mislukte (voor de STEMS-rij en de kolomkop). `stems`
+ * = de stems-rij van de server (stems-wachtrij.js), voor de library-kolom.
  */
-export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haalHotcues = () => {}, naLaad = () => {} }) {
+export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haalHotcues = () => {}, naLaad = () => {},
+  stems = null }) {
   const { deckTrack, analysis } = staat;
+  staat.deckStems ??= Object.fromEntries(DECK_IDS.map((id) => [id, null]));
+  const deckStems = staat.deckStems;
   const terugspeelDecks = staat.terugspeelDecks;
   const deckHerkomst = staat.deckHerkomst;
   const perDeck = (maak) => Object.fromEntries(DECK_IDS.map((id) => [id, maak(id)]));
@@ -44,6 +54,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
   function losVanLibrary(id) {
     nieuweLaad(id);
     deckTrack[id] = null;
+    deckStems[id] = null;
     gridBewaard[id] = null;
     toonBewaard[id] = null;
     terugspeelDecks.delete(id);
@@ -274,7 +285,28 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     // laad mag daarna niets meer zetten: geen titel, golfvorm, grid of video
     // van het verkeerde nummer.
     const mijnLaad = nieuweLaad(deckId);
-    if (!(await engine.deck(deckId).laadStream(url, track.titel))) return null;
+    const nr = trackVanDeck(deckId);
+    // Stems: dan speelt het deck stems.wav (golfvorm, grid, toonsoort en
+    // onsets blijven van audio.wav). Weigert de engine het bestand (ander
+    // aantal kanalen), ontbreekt het, of kent deze engine geen stems: dan
+    // gewoon audio.wav, en dat zeggen we. Het nummer moet blijven spelen.
+    const st = track.stems && track.stems.bestand && Array.isArray(track.stems.namen) ? track.stems : null;
+    let mislukt = null;
+    let geladen = false;
+    if (st) {
+      try {
+        geladen = await engine.deck(deckId).laadStream('/' + st.bestand.replace(/^\//, ''), track.titel,
+          { stems: { namen: st.namen, schaal: st.schaal } });
+        if (!geladen) return null;           // er kwam een nieuwere laad overheen: die wint
+      } catch (err) {
+        if (!nogDeLaatste(deckId, mijnLaad)) return null;
+        mislukt = err.message || String(err);
+        meld(`track ${nr}: stems van "${track.titel}" niet geladen (${mislukt}) — hij speelt zonder stems (audio.wav)`, 'fout');
+      }
+    }
+    if (!geladen && !(await engine.deck(deckId).laadStream(url, track.titel))) return null;
+    if (!nogDeLaatste(deckId, mijnLaad)) return null;
+    deckStems[deckId] = st ? { aantal: Number(st.aantal) || st.namen.length, mislukt } : null;
     // Vanaf hier staat het NIEUWE nummer op het deck, zonder grid en
     // toonsoort (_naLaden), maar deckTrack wijst nog naar het vorige. Liep
     // de bewaarlus (om de 1,5 s) in dat gat, terwijl de golfvorm hieronder
@@ -318,17 +350,20 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     // toen staan er al in); bewaarToon slaat terugspeelDecks over.
     toonBewaard[deckId] = toonTekst(engine.deck(deckId).setToonKaart(track.toon ?? null));
     haalOnsets(deckId, track.id, mijnLaad);
+    // Hoeveel stems er echt spelen zegt de bus (de engine), niet de library.
+    const metStems = aantalOpBus(readAction, nr);
     console.log(`[deck ${deckId}] ${track.titel} — ${duur.toFixed(1)}s — streamt`
-      + (terugspelen ? ' — terugspelen' : '') + (uitCache ? '' : ' — LET OP: geen peaks.bin, dus geen golfvorm'));
+      + (metStems ? ` — ${metStems} stems` : '') + (terugspelen ? ' — terugspelen' : '')
+      + (uitCache ? '' : ' — LET OP: geen peaks.bin, dus geen golfvorm'));
     const g = engine.deck(deckId).grid;
     naLaad({ deckId, bron: 'library', nummer: track.id, titel: track.titel,
       duur: (performance.now() - begon) / 1000, grid: g ? g.toJSON() : null });
 
     engine.resume().catch(() => {});
     if (engine.ctx.state !== 'running') {
-      return { hint: 'druk op "audio starten" om geluid te krijgen' };
+      return { hint: 'druk op "audio starten" om geluid te krijgen', stems: metStems };
     }
-    return null;
+    return metStems ? { stems: metStems } : null;
   }
 
   /**
@@ -389,6 +424,12 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
       }
     },
     onLaad: (deckId, track) => laadLibrary(deckId, track),
+    // De stems-kolom: de stems-rij van de server, en welke tracks dit nummer
+    // nu MET stems spelen (opnieuw splitsen vervangt het bestand onder ze).
+    stems,
+    stemsInGebruik: (trackId) => DECK_IDS
+      .filter((id) => deckTrack[id] === trackId && aantalOpBus(readAction, trackVanDeck(id)) > 0)
+      .map((id) => trackVanDeck(id)),
   });
   // Opdrachten die bij een herstart van de server uit de rij vielen: ook
   // onderaan melden, want met het paneel dicht zie je de strook niet.
