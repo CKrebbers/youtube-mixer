@@ -89,8 +89,11 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   playwright-core uit de AV-app-hub (`VARVE_HUB_REPO`, standaard `../av-app-hub`). Zonder vlag:
   Web MIDI zoals altijd, geen WebSocket, hub.js niet geladen. Met vlag: `toetsApp` (de
   conformiteitstoets van de hub) als TWEEDE tabblad, requestMIDIAccess nooit, LED's toch naar de
-  hub; daarna de echte hub (`startHub`) met nep-APC en nep-LPD8: masterfader en LPD8 K1 zetten de
-  master. requestMIDIAccess is overal een spion die weigert: veilig met de APC aangesloten.
+  hub, en de APC-kaart (via de knop, met de vlag) vraagt ook geen MIDI; daarna de echte hub
+  (`startHub`) met nep-APC, nep-LPD8 en eerst een andere app met `macro.intensiteit`: masterfader
+  zet de master, K1 laat hem staan, K2 zet de video-master, P1 (paniek) maakt het beeld zwart, en een
+  tweede hub-tabblad laat het oude "vervangen" melden. requestMIDIAccess is overal een spion die
+  weigert: veilig met de APC aangesloten.
 - `noodknoppen.mjs` — zwart, bevriezen, master en flits (A4) pixel voor pixel, in het hoofdvenster én
   in het losse venster (video.html, dat zelf mengt). Geen ingest: een canvas met vier gekleurde kwarten
   als nep-video op track 1 (demotrack eronder, stil). De fade en de flits worden op EXACTE tijden gemeten

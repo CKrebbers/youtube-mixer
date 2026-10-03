@@ -7,7 +7,12 @@
 //      hartslag, onbekende berichten, geen mode-SysEx, herverbinden). Het
 //      hub-tabblad is hier het TWEEDE tabblad (een gewoon VARVE-tabblad heeft
 //      de Web Lock): toch gaan de LED's naar de hub, want de lock beslist met
-//      de vlag niets over MIDI. requestMIDIAccess wordt NOOIT aangeroepen.
+//      de vlag niets over MIDI. requestMIDIAccess wordt NOOIT aangeroepen, ook
+//      niet door de APC-kaart (de knop geeft de vlag door).
+//   3. De echte hub (startHub) met nep-APC en nep-LPD8, en eerst een andere app
+//      die macro.intensiteit als beeld gebruikt: APC-masterfader -> master, K1
+//      laat master staan, K2 -> video.master, P1 (paniek) -> beeld zwart, en
+//      een tweede hub-tabblad: het oude meldt dat het vervangen is.
 //
 // VEILIG MET DE APC AANGESLOTEN: requestMIDIAccess is in elke pagina een spion
 // die telt en weigert (er komt nooit een MIDI-client). Eigen server op een
@@ -99,6 +104,18 @@ try {
   ok('tweede tabblad (geen lock) en toch LED\'s naar de hub: de lock beslist niets over MIDI', !h.eerste && h.tx > 0, `${h.tx} LED-berichten`);
   ok('init-SysEx ingeslikt, niet verstuurd', h.ingeslikt >= 1);
   ok('hub.js geladen', hub.verzoeken.some((u) => u.includes('/control/hub.js')));
+  const apcLink = await hub.page.evaluate(() => document.getElementById('apc-btn')?.getAttribute('href'));
+  ok('de knop APC-kaart geeft de vlag door', /^apc\.html\?hub=/.test(apcLink || ''), apcLink);
+  {
+    const kaart = await context.newPage();
+    await kaart.goto(new URL(apcLink, BASIS).href);
+    await kaart.waitForFunction(() => document.getElementById('live')?.textContent.length > 3, null, { timeout: 10000 });
+    await kaart.click('#live').catch(() => {});
+    await wacht(300);
+    const k = await kaart.evaluate(() => ({ midi: window.__midi, tekst: document.getElementById('live').textContent }));
+    ok('APC-kaart met de vlag: geen requestMIDIAccess, ook niet na een klik op live', k.midi === 0 && /hub/.test(k.tekst), `${k.midi}×, "${k.tekst}"`);
+    await kaart.close();
+  }
 
   console.log('\nde echte hub (startHub) met een nep-APC en een nep-LPD8');
   const { startHub } = await import(join(HUB, 'src/hub.js'));
@@ -109,9 +126,28 @@ try {
   const lpd8 = systeem.voegToe('LPD8 mk2');
   lpd8.antwoord = (b) => { if (b[1] === 0x7e) setTimeout(() => lpd8.injecteer([0xf0, 0x7e, 0, 6, 2, 0x47, 0x4c, 0, 0xf7]), 1); };
   const echt = await startHub({ config: { ...laadConfig(), hotplug_ms: 20 }, systeem, poort: 0, drivers: false });
+  const { default: WebSocket } = await import(join(HUB, 'node_modules/ws/index.js'));
+  const andere = [];
   try {
     const tot = async (fn, ms = 10000) => { const eind = Date.now() + ms; while (Date.now() < eind) { const x = await fn(); if (x) return x; await wacht(50); } return fn(); };
-    const { page } = await open(`${BASIS}?hub=${encodeURIComponent(echt.adres.replace('http', 'ws') + '/app')}`);
+    const appUrl = echt.adres.replace('http', 'ws') + '/app';
+    // Eerst een andere app die macro.intensiteit als BEELDintensiteit gebruikt (zoals
+    // av-scene-kit, emission 0,35). De pickup van K1 volgt de eerste app met die rol.
+    {
+      const ws = new WebSocket(appUrl);
+      andere.push(ws);
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ t: 'hallo', app: 'scene', inst: 'x', v: 1 }));
+        ws.send(JSON.stringify({ t: 'manifest', manifest: { v: 1, app: 'scene', naam: 'Scene', params: [{ id: 'emission', naam: 'E', soort: 'waarde', standaard: 0.35, rol: 'macro.intensiteit' }] } }));
+        ws.send(JSON.stringify({ t: 'staat', waarden: { emission: 0.35 } }));
+      });
+      const hb = setInterval(() => { if (ws.readyState === 1) ws.send('{"t":"hb"}'); }, 500);
+      ws.on('close', () => clearInterval(hb));
+      await tot(() => echt.kern.beeld().apps.some((a) => a.app === 'scene'));
+    }
+    const { page } = await open(`${BASIS}?hub=${encodeURIComponent(appUrl)}`);
+    await tot(() => echt.kern.beeld().apps.some((a) => a.app === 'varve-dj' && a.status === 'actief'));
+    echt.kern.focus('varve-dj');   // de eerste app (scene) kreeg de focus; Clay kiest VARVE (Bank + Track Select)
     ok('varve-dj aangemeld en heeft de focus', await tot(() => echt.kern.beeld().focus === 'varve-dj' && echt.apparaten.apc.verbonden));
     const leds = await tot(() => apc.verstuurd.filter((b) => b[0] >= 0x80 && b[0] < 0xc0).length > 100);
     ok('LED\'s van VARVE staan op de APC', leds, `${apc.verstuurd.length} berichten naar de APC`);
@@ -120,11 +156,37 @@ try {
     for (const r of [0, 32, 64, 96, 110, 127, 100, 80, 64]) { apc.injecteer([0xb0, 14, r]); await wacht(30); }
     ok('APC-masterfader -> mapping (soft-takeover) -> mixer.master', await tot(async () => Math.abs((await master()) - 64 / 127) < 0.01), (await master()).toFixed(3));
     await tot(() => echt.apparaten.lpd8.model === 'mk2');
-    for (let r = 20; r <= 110; r += 5) { lpd8.injecteer([0xb0, 70, r]); await wacht(20); }   // K1 = macro.intensiteit, kruist 0,5
-    ok('LPD8 K1 (macro.intensiteit) -> master, met pickup en slew', await tot(async () => Math.abs((await master()) - 110 / 127) < 0.02), (await master()).toFixed(3));
+    // K1 (macro.intensiteit) door de stand van de andere app (0,35) en verder: het
+    // audio-eindvolume van VARVE mag daar niet van bewegen (vroeger 0,80 -> 0,43).
+    const m0 = await master();
+    let laagste = m0;
+    for (let r = 20; r <= 110; r += 5) { lpd8.injecteer([0xb0, 70, r]); await wacht(20); laagste = Math.min(laagste, await master()); }
+    await wacht(600);
+    laagste = Math.min(laagste, await master());
+    ok('LPD8 K1 (macro.intensiteit, beeld van een andere app) laat VARVE\'s master staan', Math.abs(laagste - m0) < 1e-3 && Math.abs((await master()) - m0) < 1e-3,
+      `${m0.toFixed(3)} -> laagste ${laagste.toFixed(3)}`);
+    // K2 = macro.helderheid -> video.master (beeld). Pickup tegen 1: eerst omhoog tot de aanslag, dan terug naar 64.
+    const beeld = () => page.evaluate(() => window.videoMixer.eindbeeld.master);
+    for (let r = 60; r <= 127; r += 5) { lpd8.injecteer([0xb0, 71, Math.min(r, 127)]); await wacht(20); }
+    lpd8.injecteer([0xb0, 71, 127]); await wacht(30);
+    for (let r = 120; r >= 64; r -= 4) { lpd8.injecteer([0xb0, 71, r]); await wacht(20); }
+    lpd8.injecteer([0xb0, 71, 64]);
+    ok('LPD8 K2 (macro.helderheid) -> video.master, met pickup en slew', await tot(async () => Math.abs((await beeld()) - 64 / 127) < 0.02), (await beeld()).toFixed(3));
+    // P1 = paniek (1 s vasthouden) -> video.black.hold zolang hij vastzit.
+    const zwart = () => page.evaluate(() => window.videoMixer.eindbeeld.zwartVast);
+    lpd8.injecteer([0x99, 36, 100]);
+    ok('LPD8 P1 1 s vast (paniek) -> beeld zwart', await tot(zwart, 4000));
+    lpd8.injecteer([0x89, 36, 0]);
+    ok('P1 los -> zwart los, master onaangeroerd', await tot(async () => !(await zwart()), 4000) && Math.abs((await master()) - m0) < 1e-3);
     const nu = await page.evaluate(() => ({ midi: window.__midi, hub: window.midi.status().hub }));
     ok('ook hier geen requestMIDIAccess', nu.midi === 0);
-  } finally { await echt.stop(); }
+    // Een tweede VARVE-tabblad met de hub: de hub laat het nieuwste winnen (4001); het oude MELDT dat.
+    const tweede = await open(`${BASIS}?hub=${encodeURIComponent(appUrl)}`);
+    const oud = await tot(() => page.evaluate(() => window.midi.status().hub.vervangen && [...document.querySelectorAll('#meldingen .fout')].some((m) => /nieuwer VARVE-tabblad/.test(m.textContent))));
+    ok('twee tabbladen: het oude meldt dat het vervangen is', !!oud);
+    ok('… en het nieuwe heeft de hub', await tot(() => tweede.page.evaluate(() => window.midi.status().hub.verbonden)));
+    await tweede.page.close();
+  } finally { for (const ws of andere) ws.close(); await echt.stop(); }
 } finally {
   await browser.close().catch(() => {});
   server.kill();

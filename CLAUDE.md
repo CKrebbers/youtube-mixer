@@ -216,7 +216,7 @@ test/
   nep-tijdlijn.mjs  nep-AudioParam die uitrekent wat de param op elk moment doet (geen test zelf)
   klankschaal.test.mjs  stemming (24 toonsoorten × ladders), toonhoogte gemeten, slapen, wrijven, afval, engine en bus
   analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions, maatbronnen
-  hub.test.mjs      AV-app-hub: nep-WebSocket + nep-klok; manifest, LED's per beeld, focus, zet, hartslag, 0,5→5 s, 4001→30 s
+  hub.test.mjs      AV-app-hub: nep-WebSocket + nep-klok (ook verborgen tabblad: 1×/s, 1×/min); vlag (lokaal), manifest, LED's per beeld, focus, zet, paniek, hartslag, 0,5→5 s, open-en-dicht, 4001→30 s
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -969,15 +969,44 @@ docs/
   LEASE-app: `HubMidi` (src/control/hub.js) is een MidiHub met één nep-poort
   "APC40 mkII (hub)", dus mapping, LED-laag, mapjes en leren blijven gelijk.
   Invoer = `{t:'midi'}` (alleen met focus; loslaten altijd), LED's gaan per
-  beeld gebundeld als `{t:'led'}`. Met de vlag: GEEN requestMIDIAccess, de
-  Web Lock beslist niets over MIDI (twee tabbladen: de hub laat de nieuwste
-  winnen, de oude krijgt 4001 en wacht 30 s), de init-SysEx wordt ingeslikt
-  (de hub zet 0x42), en Clay's bewaarde poortkeuze blijft onaangeroerd.
-  LPD8-macro's via de bus: K1 intensiteit = `mixer.master`, K2 helderheid =
-  `video.master`, K4 beweging = `video.pulse`; crossfader zonder rol (slew 2 s).
-  Geen `paniek`: er is geen veilige stop-alles-action. Zonder vlag wordt
-  hub.js niet geladen. Toets: `node tools/headless/hub.mjs` (toetsApp van de hub
-  + de echte hub met nep-APC/LPD8; `VARVE_HUB_REPO`).
+  beeld gebundeld als `{t:'led'}`. Met de vlag: GEEN requestMIDIAccess (ook
+  niet in de APC-kaart: de knop geeft de vlag door en apc.html kijkt dan niet
+  live mee; vanuit de Controlekamer opent hij zonder vlag), de Web Lock
+  beslist niets over MIDI, de init-SysEx wordt ingeslikt (de hub zet 0x42),
+  en Clay's bewaarde poortkeuze blijft onaangeroerd.
+  - Twee tabbladen: de hub laat de nieuwste winnen, de oude krijgt 4001, wacht
+    30 s en MELDT dat (fout-melding, weg na een stabiele herverbinding). De
+    status voor de Controlekamer komt van het tabblad dat met de hub verbonden
+    is (geen: de lockhouder, tenzij vervangen).
+  - Hartslag op de TIJD (`HB_MS` 0,6 s stilte), niet op tikken: in een
+    verborgen, stil tabblad lopen timers 1×/s (na 5 min 1×/min). Elk bericht
+    van de hub (`globaal`/adem ~10×/s; WebSocket-events worden niet geknepen)
+    kijkt ook of er een hb moet. Anders wordt een gepauzeerde DJ op de
+    achtergrond `stil`/`weg` en zet de hub de APC uit.
+  - Herverbinden 0,5 → 1 → 2 → 5 s; terug naar 0,5 s pas na 3 s stabiel open
+    (een hub die aanneemt en meteen sluit: geen lus van 0,5 s); een socket die
+    na 5 s nog niet open is, sluiten we zelf.
+  - `?hub=` alleen naar deze machine, het privé-LAN (10/8, 172.16/12,
+    192.168/16) of de tailnet (100.64/10, *.ts.net, *.local); een andere host
+    alleen met `&hub_extern=1`, anders een fout-melding en gewoon Web MIDI.
+  - Rollen ALLEEN op het beeld: K2 helderheid = `video.master` (slew 0,25 s),
+    K4 beweging = `video.pulse`. K1 (`macro.intensiteit`) NIET op
+    `mixer.master`: de pickup van een LPD8-knop volgt de EERSTE app met die
+    rol, en andere apps gebruiken intensiteit als beeld (av-scene-kit 0,35);
+    dat gaf een hoorbare dip 0,80 → 0,43. Master en crossfader staan zonder
+    rol en zonder slew in de cockpit (de hub laat alleen rol-zets glijden;
+    snapshots slaan lease-apps over). K1 in VARVE: VRAGEN O1.
+  - `paniek` (LPD8 P1, 1 s vasthouden) = `video.black.hold`: het eindbeeld
+    zwart zolang hij vastzit, loslaten = de schakelaar beslist weer; de audio
+    blijft. Valt de verbinding weg terwijl hij vastzit, dan laat VARVE zelf los.
+  - De hubtoets is Bank (0x67, config.json `hubtoets`): met de vlag komt Bank
+    (en alles wat je indrukt terwijl hij vastzit) nooit bij VARVE aan. Bank
+    was bedoeld voor keylock (VRAGEN I4): open vraag N2.
+  Zonder vlag wordt hub.js niet geladen. Toets: `node tools/headless/hub.mjs`
+  (toetsApp van de hub + de echte hub met nep-APC/LPD8 en een andere app met
+  intensiteit; `VARVE_HUB_REPO`). `test/hub.test.mjs` valideert het manifest
+  met de hub als die naast deze map staat; anders meldt `alles.mjs` het als
+  overgeslagen (een fout als `VARVE_HUB_REPO` gezet is maar niet klopt).
 
 - VORMLAGEN (24 september 2026, docs/plugins/01-plan.md, stap 1): de
   Vormmachines uit Clay's artifact als generatief beeld over de video. Alleen

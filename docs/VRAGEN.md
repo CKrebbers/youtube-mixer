@@ -271,6 +271,8 @@ Open:
   - Shift + Tap = toon terug naar 0.
 
   Eerst op `apc.html` bekijken of het in de hand ligt.
+  **Let op (3 okt):** met de AV-app-hub (`?hub=`) is Bank de hubtoets en komt
+  hij nooit bij VARVE aan. Zie N2.
 
 ---
 
@@ -372,3 +374,22 @@ APC-indeling (voorstel A):
 - [x] **S1. Koptelefoonvolume en mix op de APC?** — 5 okt: Cue Level = volume, shift + Cue Level = mix; sampler-volume en puls naar shift + Cue Level in hun grid-modus. 🎛 De cue zelf zit op ● (zonder shift). VOL en MIX staan nu alleen in de KOPTELEFOON-rij; koppelen werkt. Cue Level is het voor de hand liggende label, maar dat is nu het sampler-volume (shift: puls). **Advies:** eerst een avond met de rij spelen; mis je hem, dan Cue Level = koptelefoonvolume en shift + Cue Level = mix, en krijgen sampler-volume en puls een andere plek.
 - [x] **S2. Een instrument of patroon: een van de acht tracks, of eigen kolommen?** — 5 okt: op een van de acht tracks. 💬 Beslissen vóór S3. Acht tracks = acht kolommen op de APC; een instrument erbij kost een kolom of een mapje. **Advies:** een track kan een nummer OF een instrument dragen (dezelfde strip, fader, sends en cue), zodat de APC-indeling niet verandert.
 - [ ] **S3. Zonder enige cue hoort de koptelefoon de zaal.** 🎧 Gekozen zodat je altijd iets hoort. Alternatief: stil tot je een cue aanzet. **Advies:** zo laten.
+
+---
+
+## O. AV-app-hub (3 okt, `?hub=`, CLAUDE.md AV-APP-HUB)
+
+- [ ] **O1. LPD8 K1 (intensiteit) in VARVE?** 🎛 K1 hing eerst aan het
+  audio-eindvolume (master). Weggehaald: de pickup van K1 volgt de EERSTE app met
+  die rol, en andere apps gebruiken intensiteit als beeld (av-scene-kit 0,35);
+  wie K1 dichtdraait om het beeld rustig te maken, zette ook de mix stil (gemeten
+  0,80 → 0,43). Nu doet K1 niets in VARVE. Wil je hem wel: aan een BEELD-param
+  (bv. de video-fx-intensiteit of de puls), of zo laten? **Advies:** zo laten;
+  K2 (helderheid = video-master) en K4 (beweging = puls) doen al het beeld.
+- [ ] **O2. Bank: keylock of hubtoets?** 🎛 Je koos 25 sep (I4) Bank voor keylock,
+  met Shift + Bank = pitchbereik. De hub gebruikt Bank als hubtoets
+  (`config.json` → `hubtoets`): met `?hub=` komt Bank nooit bij VARVE aan.
+  Kiezen: keylock krijgt een andere toets (bv. Detail View, nu vrij zonder
+  `?vormen=1`), óf de hubtoets van de hub wordt een andere (dat raakt alle
+  apps, PROTOCOL §5/§7). **Advies:** keylock naar een andere toets; de hubtoets
+  is voor elke app hetzelfde.

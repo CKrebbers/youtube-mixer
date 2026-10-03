@@ -25,7 +25,7 @@ import { opzetMidi } from './midi-opzet.js';
 import { startRenderloop } from './renderloop.js';
 import { tabblad } from './tabblad.js';
 import { startStatusZender } from './status-zender.js';
-import { vormenAan, hubAdres } from './vlag.js';
+import { vormenAan, hubAdres, hubGeweigerd } from './vlag.js';
 
 /**
  * Het instappunt van de schermlaag: maakt de engine en zet de modules in
@@ -55,8 +55,10 @@ window.meld = meld;
 // LED's. Wie de lock heeft is het eerste (zie tabblad.js); midi-opzet.js
 // vraagt het met isEersteTabblad().
 // Met ?hub= bezit de AV-app-hub de APC (src/control/hub.js): dan beslist de
-// lock niets over MIDI (de hub laat het nieuwste tabblad winnen) en past deze melding niet.
+// lock niets over MIDI (de hub laat het nieuwste tabblad winnen) en past deze melding niet;
+// de hub-melding ("vervangen") staat bij de MIDI hieronder.
 const hubUrl = hubAdres();
+if (hubGeweigerd()) meld(`hub ${hubGeweigerd()} niet gebruikt: niet op deze machine, het LAN of de tailnet (bewust: voeg &hub_extern=1 toe)`, 'fout');
 {
   const t = tabblad();
   let melding = null;
@@ -201,6 +203,21 @@ if (vormen) {
     .catch((err) => meld(`vormlagen: APC-indeling niet geladen (${err.message})`, 'fout'));
 }
 opzetMapjeBalk({ lagen, mapping: midiDelen.mapping, vars: () => midiDelen.mapping.vars() });
+if (hubUrl) {
+  // Twee tabbladen met ?hub=: de hub laat het nieuwste winnen, het oude krijgt 4001.
+  let melding = null;
+  midiDelen.midi.on('hub', ({ vervangen }) => {
+    if (vervangen && !melding) melding = meld('een nieuwer VARVE-tabblad heeft de hub — dit tabblad luistert niet naar de APC', 'fout');
+    else if (!vervangen && melding) { melding.remove(); melding = null; meld('hub: dit tabblad luistert weer naar de APC'); }
+  });
+  // De APC-kaart luistert dan niet zelf via Web MIDI mee (de hub bezit de APC).
+  const apcKnop = document.getElementById('apc-btn');
+  if (apcKnop) {
+    const q = new URLSearchParams({ hub: hubUrl });
+    if (new URLSearchParams(location.search).get('hub_extern') === '1') q.set('hub_extern', '1');
+    apcKnop.href = `apc.html?${q}`;
+  }
+}
 window.midi = midiDelen.midi;         // handig in de console tijdens bouwen
 window.mapping = midiDelen.mapping;
 window.feedback = midiDelen.feedback;
@@ -211,8 +228,15 @@ window.leerModus = midiDelen.leerModus;
 window.mapPanel = midiDelen.mapPanel;
 
 // ---- de Controlekamer (controle.html) leest mee: APC, audio, wat er speelt ----
+// Met ?hub= heeft het tabblad dat met de hub verbonden is de APC (niet per se dat met de lock);
+// is geen enkel tabblad verbonden, dan meldt de lockhouder (tenzij die vervangen is).
+const statusVanMij = () => {
+  if (!hubUrl) return tabblad().eerste;
+  const h = midiDelen.midi.status().hub;
+  return h.verbonden || (!h.vervangen && tabblad().eerste);
+};
 startStatusZender({
-  isEerste: () => tabblad().eerste,
+  isEerste: statusVanMij,
   lees: () => ({ snap: engine.snapshot(), midi: midiDelen.midi.status(), audio: engine.ctx.state,
                  auto: auto.aan, opname: !!opname.opnemer.bezig }),
 });
