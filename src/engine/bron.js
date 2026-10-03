@@ -24,7 +24,7 @@
  */
 
 import {
-  STIL, PAGINA, PAGINA_BYTES, BYTES_PER_FRAME, positieOp, ctxTijdVan, leesWavKop, controleerWav, plan, reeksen,
+  STIL, PAGINA, KANALEN, UITGANGEN, bytesPerFrame, positieOp, ctxTijdVan, leesWavKop, controleerWav, plan, reeksen,
   snelheidOp, remStil, REM_UIT,
 } from './stream-kern.js';
 
@@ -220,8 +220,8 @@ export class BufferBron {
     this._rem = { T: nu, P: positieOp(seg, nu), R: snelheidOp(seg, nu), a: seg.rem.a };
   }
 
-  /** Een stuk tracktijd als losse AudioBuffer, voor de sampler. */
-  async knip(van, tot) {
+  /** Een stuk tracktijd als losse AudioBuffer, voor de sampler. (Geen stems: `gewichten` doet hier niets.) */
+  async knip(van, tot, _gewichten = null) {
     if (!this.buffer) throw new Error('niets geladen');
     const sr = this.buffer.sampleRate;
     const a = Math.max(0, Math.round(van * sr)), b = Math.min(this.buffer.length, Math.round(tot * sr));
@@ -356,11 +356,18 @@ export function laadStreamModule(ctx) {
  *
  * Een sprong naar een plek die er nog niet is, geeft een paar tientallen
  * milliseconden stilte. Daarom zijn hotcues en het cuepunt vastgepind.
+ *
+ * STEMS (docs/STEMS.md §3): het bestand mag 2, 4 of 8 kanalen hebben
+ * (stereo, of twee of vier stems als stereoparen). De worklet heeft altijd
+ * vier uitgangen; uitgang k speelt paar k. `uitgang` is een ARRAY van vier
+ * nodes (uitgang k → uitgang[k], het deck geeft zijn stemIn), of één node:
+ * dan gaan alle uitgangen daarheen, en klinkt de som. Bytes per frame en
+ * paginagrootte komen uit de kop.
  */
 export class StreamBron {
   constructor(ctx, uitgang, { haal = (url, init) => fetch(url, init), interval = 100 } = {}) {
     this.ctx = ctx;
-    this.uitgang = uitgang;
+    this.uitgang = uitgang;         // één node, of [vier nodes]: per uitgang van de worklet
     this.haal = haal;
     this.standaardHaal = haal;      // per laad te vervangen (geheugenHaal voor losse bestanden)
     this.interval = interval;
@@ -381,6 +388,8 @@ export class StreamBron {
   get naam() { return 'stream'; }
   get keylock() { return false; }
   get duur() { return this.bestand ? this.bestand.duur : 0; }
+  /** Kanalen van wat er geladen is: 2 (stereo), 4 of 8 (stems als paren); 0 als er niets is. */
+  get kanalen() { return this.bestand ? this.bestand.kop.kanalen : 0; }
   get speelt() { return this.seg.speelt; }
   /** Het deck vraagt alleen "is er iets geladen"; een echte AudioBuffer is er niet. */
   get buffer() { return this.bestand ? { duration: this.duur, stream: true } : null; }
@@ -409,8 +418,13 @@ export class StreamBron {
    * Een WAV-bestand openen. Leest alleen de kop, en haalt dan de eerste
    * pagina's en de vaste punten op voordat hij teruggeeft: zo speelt play
    * direct na het laden meteen.
+   *
+   * `kanalen`: wat de aanroeper verwacht (2 = stereo, 4 of 8 = stems × 2).
+   * Heeft het bestand er een ander aantal, dan weigeren met een reden, vóór
+   * er iets verandert: drums op de plek van de zang is erger dan geen stems.
+   * Zonder `kanalen`: alles wat controleerWav goed vindt.
    */
-  async laad({ url, haal = null }) {
+  async laad({ url, haal = null, kanalen = null }) {
     this.stop();
     this.haal = haal || this.standaardHaal;
     this.fouten = 0;
@@ -424,11 +438,17 @@ export class StreamBron {
     await laadStreamModule(this.ctx);
     nogActueel();
     if (!this.node) {
+      // Altijd vier uitgangen van twee kanalen (stems), ook voor stereo: dan
+      // hoeft de node nooit opnieuw gebouwd te worden als een volgend nummer
+      // wel stems heeft. Uitgang k naar uitgang[k], of allemaal naar die ene.
       this.node = new AudioWorkletNode(this.ctx, 'stream-lezer', {
-        numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
+        numberOfInputs: 0, numberOfOutputs: UITGANGEN, outputChannelCount: Array(UITGANGEN).fill(KANALEN),
       });
       this.node.port.onmessage = ({ data: m }) => { if (m.type === 'einde' && (m.id === undefined || m.id === this._segId)) this._einde(); };
-      this.node.connect(this.uitgang);
+      for (let k = 0; k < UITGANGEN; k++) {
+        const doel = Array.isArray(this.uitgang) ? this.uitgang[k] : this.uitgang;
+        if (doel) this.node.connect(doel, k);
+      }
     }
     const res = await this.haal(url, { headers: { Range: 'bytes=0-65535' } });
     nogActueel();
@@ -437,13 +457,19 @@ export class StreamBron {
     nogActueel();
     const fout = controleerWav(kop);
     if (fout) throw new Error(fout);
+    if (kanalen && kop.kanalen !== kanalen) {
+      throw new Error(kanalen === KANALEN
+        ? `het bestand heeft ${kop.kanalen} kanalen, verwacht stereo (er zijn geen stems opgegeven)`
+        : `het bestand heeft ${kop.kanalen} kanalen, verwacht ${kanalen} (${kanalen / 2} stems × 2)`);
+    }
 
-    this.bestand = { url, kop, duur: kop.dataLengte / BYTES_PER_FRAME / kop.sampleRate };
+    const bpf = bytesPerFrame(kop);
+    this.bestand = { url, kop, bpf, paginaBytes: PAGINA * bpf, duur: kop.dataLengte / bpf / kop.sampleRate };
     this.geladen.clear();
     this.onderweg.clear();
     this.loop = null;
     this.seg = STIL;
-    this.node.port.postMessage({ type: 'bron', duur: this.duur, sr: kop.sampleRate });
+    this.node.port.postMessage({ type: 'bron', duur: this.duur, sr: kop.sampleRate, kanalen: kop.kanalen });
     this._stuur();
     await this.bijvullen();
     nogActueel();
@@ -472,24 +498,24 @@ export class StreamBron {
   }
 
   async _haalReeks({ van, tot }) {
-    const { url, kop } = this.bestand;
+    const { url, kop, paginaBytes } = this.bestand;
     // Het BESTAND vastpakken, niet een getal: bij een snelle tweede laad
     // was het getal al opgehoogd voordat deze reeks begon.
     const bestand = this.bestand;
     for (let i = van; i <= tot; i++) this.onderweg.add(i);
     try {
-      const a = kop.dataStart + van * PAGINA_BYTES;
-      const b = Math.min(kop.dataStart + kop.dataLengte, kop.dataStart + (tot + 1) * PAGINA_BYTES) - 1;
+      const a = kop.dataStart + van * paginaBytes;
+      const b = Math.min(kop.dataStart + kop.dataLengte, kop.dataStart + (tot + 1) * paginaBytes) - 1;
       const res = await this.haal(url, { headers: { Range: `bytes=${a}-${b}` } });
       if (res.status !== 206) throw new Error(`geen deelantwoord (${res.status})`);
       const bytes = await res.arrayBuffer();
       if (this.bestand !== bestand || !this.node) return;   // intussen een ander nummer
       for (let i = van; i <= tot; i++) {
-        const o = (i - van) * PAGINA_BYTES;
+        const o = (i - van) * paginaBytes;
         if (o >= bytes.byteLength) break;
         // Kopie per pagina, zodat hij los overgedragen en later los
         // weggegooid kan worden. Int16 is little-endian, net als de WAV.
-        const stuk = bytes.slice(o, Math.min(bytes.byteLength, o + PAGINA_BYTES));
+        const stuk = bytes.slice(o, Math.min(bytes.byteLength, o + paginaBytes));
         const data = new Int16Array(stuk);
         this.geladen.set(i, stuk.byteLength);
         this.node.port.postMessage({ type: 'pagina', i, data }, [data.buffer]);
@@ -508,20 +534,36 @@ export class StreamBron {
    * Een stuk tracktijd als losse AudioBuffer, voor de sampler. Opnieuw van
    * schijf gelezen: de pagina's zitten in de worklet, en wat er achter de
    * positie ligt is misschien al opgeruimd.
+   *
+   * Stems: de som van de paren, paar k maal `gewichten[k]` (het deck geeft
+   * mee wat je NU hoort vóór de EQ: niveau, kill en 1/schaal per uitgang),
+   * zodat een pad die je knipt terwijl de zang weg is, ook zonder zang
+   * klinkt. Zonder gewichten telt elk paar voor 1. Een stereobestand zonder
+   * gewichten: de samples zelf, zoals altijd.
    */
-  async knip(van, tot) {
+  async knip(van, tot, gewichten = null) {
     if (!this.bestand) throw new Error('niets geladen');
-    const { url, kop } = this.bestand;
-    const sr = kop.sampleRate;
-    const a0 = Math.max(0, Math.round(van * sr)), b0 = Math.min(kop.dataLengte / BYTES_PER_FRAME, Math.round(tot * sr));
+    const { url, kop, bpf } = this.bestand;
+    const sr = kop.sampleRate, ch = kop.kanalen;
+    const a0 = Math.max(0, Math.round(van * sr)), b0 = Math.min(kop.dataLengte / bpf, Math.round(tot * sr));
     if (b0 <= a0) throw new Error('leeg stuk');
-    const res = await this.haal(url, { headers: { Range: `bytes=${kop.dataStart + a0 * BYTES_PER_FRAME}-${kop.dataStart + b0 * BYTES_PER_FRAME - 1}` } });
+    const res = await this.haal(url, { headers: { Range: `bytes=${kop.dataStart + a0 * bpf}-${kop.dataStart + b0 * bpf - 1}` } });
     if (res.status !== 206) throw new Error(`knippen mislukt (${res.status})`);
     const pcm = new Int16Array(await res.arrayBuffer());
-    const n = pcm.length / 2;
+    const n = Math.floor(pcm.length / ch);
     const uit = this.ctx.createBuffer(2, n, sr);
     const L = uit.getChannelData(0), R = uit.getChannelData(1);
-    for (let i = 0; i < n; i++) { L[i] = pcm[i * 2] / 32768; R[i] = pcm[i * 2 + 1] / 32768; }
+    if (ch === KANALEN && !gewichten) {
+      for (let i = 0; i < n; i++) { L[i] = pcm[i * 2] / 32768; R[i] = pcm[i * 2 + 1] / 32768; }
+      return uit;
+    }
+    const paren = ch / 2;
+    const w = Array.from({ length: paren }, (_, k) => (gewichten && Number.isFinite(gewichten[k]) ? gewichten[k] : 1) / 32768);
+    for (let i = 0; i < n; i++) {
+      let l = 0, r = 0;
+      for (let k = 0; k < paren; k++) { l += pcm[i * ch + 2 * k] * w[k]; r += pcm[i * ch + 2 * k + 1] * w[k]; }
+      L[i] = l; R[i] = r;
+    }
     return uit;
   }
 

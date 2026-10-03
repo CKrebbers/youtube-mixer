@@ -134,7 +134,10 @@ export class Sampler {
     try {
       if (tot - van < 0.05) throw new Error('te kort: speel eerst een stukje');
       const voorSec = Math.min(NAAD, van);
-      const ruw = await deck.bron.knip(van - voorSec, tot);
+      // Met stems: wat je NU hoort vóór de EQ (niveau en kill per stem), zodat
+      // een pad die je knipt terwijl de zang weg is ook zonder zang klinkt.
+      // Een herstelde pad knipt met de stand van het moment van herstellen.
+      const ruw = await deck.bron.knip(van - voorSec, tot, deck.knipGewichten?.() ?? null);
       const voor = Math.round(voorSec * ruw.sampleRate);
       const kanalen = naadloos([ruw.getChannelData(0), ruw.getChannelData(1)], voor);
       const buf = this.ctx.createBuffer(2, kanalen[0].length, ruw.sampleRate);

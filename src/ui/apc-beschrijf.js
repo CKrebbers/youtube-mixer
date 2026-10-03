@@ -11,6 +11,12 @@ const SEND_B = ['grootte', 'toon', 'vasthouden'];
 const VIDEO = { pixel: 'pixel', mirror: 'spiegel', rgb: 'RGB', color: 'kleur', trails: 'sporen', grain: 'korrel' };
 const EQ = { trim: 'trim', high: 'high', mid: 'mid', low: 'low', filter: 'filter', fader: 'volume', pitch: 'pitch' };
 const KILL = { low: 'laag', mid: 'midden', high: 'hoog' };
+// Zelfde namen als STEM_LABELS in actions.js (hier los, zodat apc.html de bus niet hoeft te laden).
+const STEM = { vocals: 'zang', inst: 'rest', drums: 'drums', bass: 'bas', other: 'overig' };
+const STEM_UITLEG = {
+  vocals: 'de zang', inst: 'de rest: alles behalve de zang (bij vier stems drums, bas en overig samen)',
+  drums: 'de drums (alleen bij vier stems)', bass: 'de bas (alleen bij vier stems)', other: 'overig: wat geen zang, drums of bas is (alleen bij vier stems)',
+};
 
 /** { kort, lang }: kort past op de tekening, lang staat in de tabel. */
 export function beschrijf(action) {
@@ -54,6 +60,9 @@ export function beschrijf(action) {
     if (rest === 'nudge.fwd') return r('nudge +', 'even vooruitduwen');
     if ((m = /^kill\.(low|mid|high)$/.exec(rest))) return r(`kill ${KILL[m[1]]}`, `kill ${KILL[m[1]]} aan/uit (de knopstand blijft; lampje = band weg)`);
     if ((m = /^kill\.(low|mid|high)\.hold$/.exec(rest))) return r(`kill ${KILL[m[1]]}!`, `kill ${KILL[m[1]]} zolang je drukt`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)$/.exec(rest))) return r(STEM[m[1]], `stem-niveau: ${STEM_UITLEG[m[1]]}, vóór de EQ (vol = 1, dicht = weg; alleen als het nummer stems heeft)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.kill$/.exec(rest))) return r(`${STEM[m[1]]} weg`, `stem weg aan/uit: ${STEM_UITLEG[m[1]]} (het niveau blijft staan; lampje = weg)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.hold$/.exec(rest))) return r(`${STEM[m[1]]} weg!`, `stem weg zolang je drukt: ${STEM_UITLEG[m[1]]}`);
     if (rest === 'brake') return r('rem', 'rem (vinylstop): in de remtijd naar stilstand, dan pauze; tijdens het remmen nog eens = los');
     if (rest === 'brake.time') return r('remtijd', 'remtijd: 0,1 tot 5 seconden tot stilstand');
     if (rest === 'grid.here') return r('tel 1 hier', 'tel 1 hier: de tel komt op wat je hoort, gesnapt naar een klap binnen 30 ms, en is de "1" van de maat in dit stuk');

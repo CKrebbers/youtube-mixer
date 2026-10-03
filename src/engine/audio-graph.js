@@ -1,5 +1,6 @@
 import { clamp, expMap, dbToGain } from '../lib/emitter.js';
 import { houdVast, zetHellingen } from './overgang.js';
+import { UITGANGEN } from './stream-kern.js';
 
 export const EQ_MIN_DB = -30;   // onder deze waarde snappen we naar 'kill'
 export const EQ_MAX_DB = 8;
@@ -9,13 +10,27 @@ export const EQ_MAX_DB = 8;
  *
  *   source -> trim -> EQ(low,mid,high) -> HPF -> LPF -> fader -> xfade -> master
  *                                                                  `-> analyser (tap)
+ *   stream uitgang k -> stemIn[k] -> trim     (k = 0..3, één per stem)
  *
  * De filtersectie is bipolair: één HPF en één LPF in serie. In het midden staan
  * beide buiten het hoorbare bereik, dus effectief bypass. Dat is goedkoper en
  * stabieler dan een filtertype live omschakelen (dat klikt).
+ *
+ * STEMS (docs/STEMS.md): de streamende bron heeft vier uitgangen, en elk
+ * gaat via een eigen versterking (`stemIn`) naar trim. Daar zit het niveau en
+ * de kill per stem, VÓÓR de EQ: de EQ, het filter en het effect werken op de
+ * som, zoals op elke DJ-mixer met stems. Zonder stems staan ze alle vier op 1
+ * en draagt uitgang 0 de hele mix (de andere drie zijn stil): bit voor bit het
+ * oude pad. `input` blijft trim, voor de BufferBron.
  */
 export function createDeckChain(ctx) {
   const trim = ctx.createGain();
+  const stemIn = [];
+  for (let k = 0; k < UITGANGEN; k++) {
+    const g = ctx.createGain();
+    g.connect(trim);
+    stemIn.push(g);
+  }
 
   const eqLow = ctx.createBiquadFilter();
   eqLow.type = 'lowshelf'; eqLow.frequency.value = 200;
@@ -47,7 +62,7 @@ export function createDeckChain(ctx) {
       .connect(hpf).connect(lpf).connect(fader).connect(xfade);
   xfade.connect(analyser); // tap, loopt nergens heen
 
-  return { input: trim, trim, eqLow, eqMid, eqHigh, hpf, lpf, fader, xfade, analyser, output: xfade };
+  return { input: trim, trim, stemIn, eqLow, eqMid, eqHigh, hpf, lpf, fader, xfade, analyser, output: xfade };
 }
 
 /** Zo diep gaat een kill (knop in de onderste 3%, of de kill-schakelaar). */
@@ -108,6 +123,28 @@ export function killEqBand(param, norm, kill, now, wacht = 0) {
         return 20 * Math.log10(Math.max(vloer, ga + (gb - ga) * s));
       });
     }, now, KILL_FADE, wacht);
+  } catch (_) {
+    // Laatste vangnet: nooit de aanroeper laten struikelen.
+    try { param.setTargetAtTime(naar, now, KILL_FADE / 3); } catch (__) { try { param.value = naar; } catch (___) {} }
+  }
+}
+
+/**
+ * Een versterking (een gain in amplitude, zoals stemIn) klikvrij naar
+ * `naar`: in KILL_FADE, als een zachte S in amplitude, na `wacht` (de deck
+ * geeft startDrempel mee). Dezelfde vorm en dezelfde regels als killEqBand,
+ * maar hier IS de parameter al amplitude, dus de punten liggen direct op de
+ * S. Lineaire hellingen tussen de punten, NOOIT setValueCurveAtTime (zie
+ * overgang.js); een lopende overgang wordt vastgehouden en gaat van daar.
+ */
+export function killVersterking(param, naar, now, wacht = 0) {
+  try {
+    zetHellingen(param, (van) => Array.from({ length: KILL_N }, (_, i) => {
+      if (i === 0) return van;
+      if (i === KILL_N - 1) return naar;
+      const s = (1 - Math.cos(Math.PI * i / (KILL_N - 1))) / 2;
+      return van + (naar - van) * s;
+    }), now, KILL_FADE, wacht);
   } catch (_) {
     // Laatste vangnet: nooit de aanroeper laten struikelen.
     try { param.setTargetAtTime(naar, now, KILL_FADE / 3); } catch (__) { try { param.value = naar; } catch (___) {} }

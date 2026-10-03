@@ -22,11 +22,14 @@ import { hoorbaar as hoorbaarVan, uitgangsVertraging } from '../engine/hoorbaar.
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
 import { FITS } from '../video/passen.js';
-import { EQ_BANDEN, REM_MIN, REM_MAX } from '../engine/deck.js';
+import { EQ_BANDEN, REM_MIN, REM_MAX, STEM_NAMEN } from '../engine/deck.js';
 import { GROEPEN, LAAGNAAM } from './lagen.js';
 import { VOLGEN, LADDERS, KLANKSOORTEN, TRANSPOSITIE_MAX } from '../engine/klankschaal.js';
 
 const registry = new Map();
+
+/** De stems op het scherm en in labels: Nederlands, de action-namen blijven Engels. */
+export const STEM_LABELS = { vocals: 'zang', inst: 'rest', drums: 'drums', bass: 'bas', other: 'overig' };
 
 /** Het rate-bereik van `track.N.tempo`; gelijk aan de klem in deck.setRate. */
 const RATE_MIN = 0.5;
@@ -421,6 +424,23 @@ export function bindEngine(engine) {
         { label: `Track ${nr} kill ${naam} aan/uit`, read: stand });
       define(`${n}.kill.${band}.hold`, 'trigger', (on) => d.houdKill(band, !!on),
         { label: `Track ${nr} kill ${naam} zolang je drukt`, read: stand });
+    }
+
+    // Stems (docs/STEMS.md): per stem een niveau (0..1, 1 = vol; vóór de EQ)
+    // en een kill als schakelaar en als drukknop, zoals de EQ-kill: het
+    // niveau blijft staan, kill uit = precies terug. `inst` is de rest (bij
+    // vier stems: drums + bas + overig samen). Read null als de track geen
+    // stems heeft, of deze stem in deze stand niet bestaat (drums bij twee):
+    // dan is er niets te doen (B4: lampje uit). Kill-lampje: 1 = weg, 0 = open.
+    for (const st of STEM_NAMEN) {
+      const naam = STEM_LABELS[st];
+      const weg = () => (!d.stemBestaat(st) ? null : d.stemGekild(st) ? 1 : 0);
+      define(`${n}.stem.${st}`, 'value', (v) => d.setStemNiveau(st, v),
+        { label: `Track ${nr} stem ${naam}: niveau`, read: () => d.stemNiveau(st) });
+      define(`${n}.stem.${st}.kill`, 'trigger', (on) => { if (on) d.toggleStemKill(st); },
+        { label: `Track ${nr} stem ${naam} weg aan/uit`, read: weg });
+      define(`${n}.stem.${st}.hold`, 'trigger', (on) => d.houdStemKill(st, !!on),
+        { label: `Track ${nr} stem ${naam} weg zolang je drukt`, read: weg });
     }
 
     // Sends: na de fader naar de gedeelde echo (A) en galm (B).

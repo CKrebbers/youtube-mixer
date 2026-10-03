@@ -1,12 +1,12 @@
 import { Emitter, clamp, piek } from '../lib/emitter.js';
-import { createDeckChain, setEqBand, killEqBand, setBipolarFilter, faderGain } from './audio-graph.js';
+import { createDeckChain, setEqBand, killEqBand, killVersterking, setBipolarFilter, faderGain } from './audio-graph.js';
 import { Beatgrid } from './beatgrid.js';
 import { ToonKaart } from './toonsoort.js';
 import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
-import { maakWav } from './stream-kern.js';
+import { maakWav, KANALEN } from './stream-kern.js';
 import { InsertSlot } from './fx.js';
 import { hoorbaar, uitgangsVertraging } from './hoorbaar.js';
-import { startDrempel } from './overgang.js';
+import { startDrempel, houdVast } from './overgang.js';
 
 /**
  * Hoe ver de pitchfader reikt, naar elke kant. Kiesbaar per track; sync mag
@@ -30,6 +30,34 @@ export const EQ_BANDEN = ['low', 'mid', 'high'];
 export const BEND = 0.04;
 /** Beatjump-lengtes in tellen, te halveren en te verdubbelen. Standaard 4. */
 export const SPRONG_TELLEN = [1, 2, 4, 8, 16, 32];
+
+/**
+ * De stems die een track kan hebben (docs/STEMS.md). `inst` is alles behalve
+ * de zang: bij twee stems een eigen paar, bij vier de groep drums + bas +
+ * overig (één knop voor alle drie, zodat "zonder zang" en "alleen zang" in
+ * beide standen dezelfde knoppen zijn).
+ */
+export const STEM_NAMEN = ['vocals', 'inst', 'drums', 'bass', 'other'];
+/** Welke namen bij welk aantal horen (de volgorde in het bestand mag anders). */
+export const STEM_STANDEN = { 2: ['vocals', 'inst'], 4: ['drums', 'bass', 'other', 'vocals'] };
+
+/**
+ * Klopt `{ namen, schaal }` van een stems-bestand? Null als het klopt,
+ * anders de reden. Twee of vier namen, precies die van één stand, elk één
+ * keer; schaal (ontbreekt = 1) groter dan 0 en hooguit 1.
+ */
+export function controleerStems(stems) {
+  if (!stems || !Array.isArray(stems.namen)) return 'stems zonder namen';
+  const { namen } = stems;
+  const stand = STEM_STANDEN[namen.length];
+  if (!stand) return `${namen.length} stems wordt niet ondersteund (alleen 2 of 4)`;
+  if (new Set(namen).size !== namen.length || !stand.every((n) => namen.includes(n))) {
+    return `stems ${namen.join(', ')}: verwacht ${stand.join(', ')}`;
+  }
+  const schaal = stems.schaal ?? 1;
+  if (!(typeof schaal === 'number' && schaal > 0 && schaal <= 1)) return `stems: schaal ${schaal} moet tussen 0 en 1 liggen`;
+  return null;
+}
 
 /**
  * Eén deck: transport, cues, loops, beatgrid, kanaalstrip.
@@ -75,6 +103,15 @@ export class Deck extends Emitter {
     this.kill = { low: false, mid: false, high: false };
     this.killVast = { low: false, mid: false, high: false };
     this._killHoorbaar = { low: false, mid: false, high: false };   // wat er nu op de EQ staat
+    // Stems (docs/STEMS.md): null, of { namen, aantal, schaal } van wat er
+    // geladen is. Niveau 0..1 per stem en een kill (schakelaar + drukknop),
+    // zoals de EQ-kill. Ze horen bij het NUMMER: elke laad zet ze terug op
+    // open (_naLaden). `_stemNu` = wat er nu op stemIn[k] staat (het doel).
+    this.stems = null;
+    this.stemNiveaus = Object.fromEntries(STEM_NAMEN.map((n) => [n, 1]));
+    this.stemKill = Object.fromEntries(STEM_NAMEN.map((n) => [n, false]));
+    this.stemKillVast = Object.fromEntries(STEM_NAMEN.map((n) => [n, false]));
+    this._stemNu = this.chain.stemIn.map(() => 1);
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.loop = null;           // {start, end}
@@ -157,21 +194,31 @@ export class Deck extends Emitter {
   /**
    * Streamen vanaf de server: wat uit de library komt. Een paar MB in het
    * geheugen in plaats van 23 MB per minuut.
+   *
+   * `opties.stems = { namen, schaal }`: het bestand is een stems.wav (twee of
+   * vier stems als stereoparen, docs/STEMS.md). Het aantal kanalen moet dan
+   * namen × 2 zijn, anders weigert de bron met een reden en blijft de oude
+   * track staan (de app valt terug op audio.wav). Zonder stems: stereo.
    */
   async laadStream(url, title, opties) {
-    if (!(this.bron instanceof StreamBron)) this._zetBron(new StreamBron(this.ctx, this.chain.input, opties));
+    const stems = opties?.stems ?? null;
+    if (stems) {
+      const fout = controleerStems(stems);
+      if (fout) throw new Error(fout);
+    }
+    if (!(this.bron instanceof StreamBron)) this._zetBron(new StreamBron(this.ctx, this.chain.stemIn, opties));
     // Cue en hotcues NIET hier wissen maar pas in _naLaden: mislukt de laad
     // (404, verkeerd formaat), dan staat de oude track er nog, met zijn punten.
     this._laadt = (this._laadt || 0) + 1;
     try {
-      await this.bron.laad({ url, haal: opties?.haal });
+      await this.bron.laad({ url, haal: opties?.haal, kanalen: stems ? stems.namen.length * 2 : KANALEN });
     } catch (err) {
       if (err.vervangen) return false;      // er kwam een nieuwere laad overheen: die wint
       throw err;
     } finally {
       this._laadt--;
     }
-    this._naLaden(title);
+    this._naLaden(title, stems);
     return true;
   }
 
@@ -188,8 +235,9 @@ export class Deck extends Emitter {
     return this.laadStream(`geheugen:${this.id}:${this._geheugenNr}`, title, { haal: geheugenHaal(wav) });
   }
 
-  _naLaden(title) {
+  _naLaden(title, stems = null) {
     this.title = title || 'untitled';
+    this._zetStems(stems);
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.grid = null;
@@ -901,6 +949,120 @@ export class Deck extends Emitter {
       killEqBand(param, this.ui[band], weg, this.ctx.currentTime, startDrempel(this.ctx));
     }
     this.emit('change', this);
+  }
+
+  // ---- stems (docs/STEMS.md) -------------------------------------------------
+
+  /**
+   * Na elke laad: de stems van het nieuwe nummer (of null), alle niveaus op
+   * 1 en alle kills uit. Stems horen bij het NUMMER, niet bij het kanaal (de
+   * EQ-knoppen wel): een nummer dat stil zonder zang begint omdat het vorige
+   * zonder zang speelde, is erger dan opnieuw drukken. Klikvrij, voor het
+   * geval de vorige nog uitvloeit.
+   */
+  _zetStems(stems) {
+    this.stems = stems ? Object.freeze({
+      namen: Object.freeze([...stems.namen]), aantal: stems.namen.length, schaal: stems.schaal ?? 1,
+    }) : null;
+    for (const n of STEM_NAMEN) { this.stemNiveaus[n] = 1; this.stemKill[n] = false; this.stemKillVast[n] = false; }
+    this._pasStemsToe('kill');
+  }
+
+  /** Heeft deze track deze stem, in deze stand? (`inst` ook bij vier: de groep.) */
+  stemBestaat(s) {
+    if (!this.stems) return false;
+    return this.stems.namen.includes(s) || (s === 'inst' && this.stems.aantal === 4);
+  }
+
+  /** Niveau 0..1 van een stem, of null als die er niet is. */
+  stemNiveau(s) { return this.stemBestaat(s) ? this.stemNiveaus[s] : null; }
+
+  /** Is deze stem nu weg (schakelaar of drukknop)? */
+  stemGekild(s) { return !!(this.stemKill[s] || this.stemKillVast[s]); }
+
+  /** Niveau 0..1 (1 = vol, 0 = uit). Een stem die er niet is: niets. */
+  setStemNiveau(s, norm) {
+    if (!this.stemBestaat(s)) return;
+    this.stemNiveaus[s] = clamp(norm);
+    this._pasStemsToe('niveau');
+    this.emit('change', this);
+  }
+
+  /** De kill-schakelaar van een stem. Het niveau blijft staan: uit = precies terug. */
+  setStemKill(s, aan) {
+    if (!this.stemBestaat(s)) return;
+    this.stemKill[s] = !!aan;
+    this._pasStemsToe('kill');
+    this.emit('change', this);
+  }
+
+  toggleStemKill(s) { if (this.stemBestaat(s)) this.setStemKill(s, !this.stemKill[s]); }
+
+  /** De drukvariant: weg zolang `aan`, loslaten = terug (tenzij de schakelaar aan staat). */
+  houdStemKill(s, aan) {
+    if (!this.stemBestaat(s)) return;
+    this.stemKillVast[s] = !!aan;
+    this._pasStemsToe('kill');
+    this.emit('change', this);
+  }
+
+  /**
+   * Wat er op uitgang k hoort te staan (docs/STEMS.md §3), voor stem n = namen[k]:
+   *   (1 / schaal) × niveau(n) × kill(n) × (vier stems en n ≠ vocals ? niveau(inst) × kill(inst) : 1)
+   * kill = 0 als hij weg is, anders 1. `inst` werkt zo in beide standen, en
+   * drums/bas/overig doen niets bij twee (die bestaan dan niet). 1/schaal
+   * maakt goed wat de splitter eraf deed om niet te clippen: de som klinkt
+   * even hard als audio.wav. Zonder stems, en op een uitgang zonder stem: 1.
+   */
+  stemVersterking(k) {
+    const st = this.stems;
+    if (!st || k >= st.aantal) return 1;
+    const deel = (n) => (this.stemGekild(n) ? 0 : this.stemNiveaus[n]);
+    const n = st.namen[k];
+    return (1 / st.schaal) * deel(n) * (st.aantal === 4 && n !== 'vocals' ? deel('inst') : 1);
+  }
+
+  /**
+   * Gewichten per paar voor bron.knip (de sampler): wat je NU hoort vóór de
+   * EQ, zodat een pad zonder zang ook zonder zang klinkt. Null zonder stems.
+   */
+  knipGewichten() {
+    if (!this.stems) return null;
+    return Array.from({ length: this.stems.aantal }, (_, k) => this.stemVersterking(k));
+  }
+
+  /**
+   * De versterking van elke uitgang die anders moet, naar zijn doel. Een
+   * KILL (aan, uit, laden) als klikvrije S in ~5 ms na startDrempel, zoals de
+   * EQ-kill (killVersterking: hellingen, nooit een curve); een NIVEAU als
+   * doelwaarde (vasthouden + setTargetAtTime, zoals een EQ-knop). Wat niet
+   * verandert, wordt niet aangeraakt: een niveauknop op een stem die weg is
+   * laat zijn kill-overgang gewoon uitlopen.
+   */
+  _pasStemsToe(soort) {
+    const nu = this.ctx.currentTime;
+    this.chain.stemIn.forEach((g, k) => {
+      const doel = this.stemVersterking(k);
+      if (doel === this._stemNu[k]) return;
+      this._stemNu[k] = doel;
+      if (soort === 'kill') killVersterking(g.gain, doel, nu, startDrempel(this.ctx));
+      else {
+        try { houdVast(g.gain, nu); } catch (_) {}
+        try { g.gain.setTargetAtTime(doel, nu, 0.01); } catch (_) { try { g.gain.value = doel; } catch (__) {} }
+      }
+    });
+  }
+
+  /** Voor de snapshot: per stem die er is het niveau en of hij weg is. Null zonder stems. */
+  stemStand() {
+    if (!this.stems) return null;
+    const niveau = {}, weg = {};
+    for (const n of STEM_NAMEN) {
+      if (!this.stemBestaat(n)) continue;
+      niveau[n] = this.stemNiveaus[n];
+      weg[n] = this.stemGekild(n);
+    }
+    return { namen: [...this.stems.namen], niveau, weg };
   }
 
   level() { return piek(this.chain.analyser); }
