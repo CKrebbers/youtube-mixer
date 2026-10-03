@@ -134,6 +134,12 @@ export const SCHEMA = [
   CREATE INDEX tracks_toegevoegd ON tracks(toegevoegd);
   CREATE INDEX tracks_gespeeld ON tracks(laatst_geladen, toegevoegd);
   `,
+  // versie 8 — stems (docs/STEMS.md): de inhoud van media/<id>/stems.json plus
+  // `bestand`, als JSON. Gezet als een split slaagt, gewist als audio.wav
+  // opnieuw binnengehaald wordt (dan passen de frames niet meer).
+  `
+  ALTER TABLE tracks ADD COLUMN stems_json TEXT;
+  `,
 ];
 
 /** Zoveel hotcues per nummer neemt de library aan; het deck gebruikt er nu 4. */
@@ -348,6 +354,26 @@ export function autoToonWeigert(huidig, { overHand = false, overSlot = false, al
 export const moetToonAnalyse = (toon, versie = TOON_VERSIE) =>
   !toon || (!toon.slot && toon.bron === 'auto' && !((toon.versie ?? 0) >= versie));
 
+// ---- stems: zang en rest (of vier) per nummer, docs/STEMS.md ----------------
+
+/**
+ * Wat een library-rij over de stems zegt, of null:
+ *   { aantal: 2|4, namen: [...], schaal, bestand: "media/<id>/stems.wav" }
+ * Uit de bewaarde stems.json (plus `bestand`). Null als het geen bruikbare set
+ * is: dan speelt de app audio.wav, nooit een half begrepen bestand.
+ * `namen` alleen als het aantal klopt: de engine zet kanaalpaar k op namen[k].
+ */
+export function normaliseerStems(s) {
+  if (!s || typeof s !== 'object' || Array.isArray(s)) return null;
+  const { aantal, namen, schaal, bestand } = s;
+  if (aantal !== 2 && aantal !== 4) return null;
+  if (!Array.isArray(namen) || namen.length !== aantal
+    || !namen.every((n) => typeof n === 'string' && /^[a-z]{1,16}$/.test(n)) || new Set(namen).size !== aantal) return null;
+  if (!(typeof schaal === 'number' && schaal > 0 && schaal <= 1)) return null;
+  if (typeof bestand !== 'string' || !/^media\/[\w-]+\/stems\.wav$/.test(bestand)) return null;
+  return { aantal, namen: [...namen], schaal, bestand };
+}
+
 export class Library {
   constructor(pad) {
     mkdirSync(dirname(pad), { recursive: true });
@@ -462,13 +488,15 @@ export class Library {
    * rij (één query per pagina in plaats van twee per nummer): het aantal
    * racks wil je in het paneel zien zonder tweede vraag.
    */
-  _verrijk({ titel_sleutel: _s, _rij, _racks, _p_bestand, _p_buckets, _p_per, ...r }) {
+  _verrijk({ titel_sleutel: _s, _rij, _racks, _p_bestand, _p_buckets, _p_per, stems_json, ...r }) {
     const grid = this._grid(r);
     const onset = r.onset_bestand
       ? { bestand: r.onset_bestand, frames: r.onset_frames, envRate: r.onset_rate, tijdOffset: r.onset_offset }
       : null;
     // bron: 'youtube' | 'tiktok' | 'bestand' | 'web' — het label in de lijst.
+    // stems: alleen wat de app nodig heeft; de hele stems.json staat in stems_json.
     return { ...r, racks: _racks, grid, toon: this._toon(r), onset, bron: bronVan(r.url),
+      stems: stems_json != null ? normaliseerStems(veiligJson(stems_json, null)) : null,
       peaks: _p_bestand != null ? { bestand: _p_bestand, buckets: _p_buckets, perBucket: _p_per } : null };
   }
 
@@ -596,6 +624,25 @@ export class Library {
   teToonAnalyseren({ versie = TOON_VERSIE } = {}) {
     return this.db.prepare('SELECT id, toon_json FROM tracks ORDER BY toegevoegd').all()
       .filter((r) => moetToonAnalyse(this._toon(r), versie)).map((r) => r.id);
+  }
+
+  // ---- stems -------------------------------------------------------------
+
+  /**
+   * De stems van een nummer: de inhoud van stems.json plus `bestand`, of null
+   * (wissen). Een set die normaliseerStems niet aanneemt gooit, zodat er nooit
+   * stilletjes iets onbruikbaars in de library komt. Geeft wat de rij nu zegt.
+   */
+  bewaarStems(trackId, stems) {
+    if (stems != null && !normaliseerStems(stems)) throw new Error('ongeldige stems');
+    this._q('UPDATE tracks SET stems_json = ? WHERE id = ?').run(stems == null ? null : JSON.stringify(stems), trackId);
+    return this.track(trackId)?.stems ?? null;
+  }
+
+  /** De hele bewaarde stems.json (met model, frames, rekentijd…), of null. */
+  stemsInfo(trackId) {
+    const r = this._q('SELECT stems_json FROM tracks WHERE id = ?').get(trackId);
+    return r?.stems_json != null ? veiligJson(r.stems_json, null) : null;
   }
 
   bewaarOnset(trackId, onset) {
