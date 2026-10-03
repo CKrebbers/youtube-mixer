@@ -904,6 +904,38 @@ console.log('\nstems: meer kanalen');
   const st = await b1.knip(1, 1.001);
   ok('stereo knippen zonder gewichten: de samples zelf, zoals altijd', st.getChannelData(0)[5] === new Int16Array(maakWav([paren[0][0], paren[0][1]], SR), 44)[(a0 + 5) * 2] / 32768);
   b1.vernietig();
+
+  // Vervangen onder het spelen: de server zet een nieuwe stems.wav neer (2 -> 4)
+  // terwijl dit deck de oude streamt. Elk Range-verzoek opent het bestand
+  // opnieuw; de totale grootte in Content-Range verraadt het nieuwe bestand.
+  // Dan geen pagina's meer (dat zou ruis zijn), één melding, en wat er al was
+  // speelt uit.
+  let huidig = wav4;
+  const serverHaal = async (_url, init) => {
+    const r = await geheugenHaal(huidig)(_url, init);
+    const m = /bytes=(\d+)-(\d*)/.exec(init.headers.Range);
+    const totaal = huidig.byteLength, eind = Math.min(Number(m[2] || totaal - 1), totaal - 1);
+    return new Response(await r.arrayBuffer(), { status: 206, headers: { 'Content-Range': `bytes ${m[1]}-${eind}/${totaal}` } });
+  };
+  const b2 = new StreamBron(ctx, ingangen, { interval: 1e9, haal: serverHaal });
+  const meldingen = [];
+  b2.onFout = (t) => meldingen.push(t);
+  await b2.laad({ url: '/media/x/stems.wav', kanalen: 4 });
+  ok('het totaal uit Content-Range wordt bij de laad onthouden', b2.bestand.totaal === wav4.byteLength && !b2.bestand.vervangen);
+  const voor = berichten.filter((m) => m.type === 'pagina').length;
+  huidig = wav8;                                   // de server verving het bestand
+  b2.geladen.clear();                              // alsof de pagina's weg moesten (verder gesprongen)
+  await b2.bijvullen();
+  ok('een ander totaal: geen pagina\'s uit het nieuwe bestand', berichten.filter((m) => m.type === 'pagina').length === voor && b2.bestand.vervangen);
+  ok(`één melding ("${meldingen[0]}")`, meldingen.length === 1 && /vervangen/.test(meldingen[0]) && /opnieuw/.test(meldingen[0]));
+  await b2.bijvullen();
+  ok('daarna haalt hij niets meer op en meldt niets meer', meldingen.length === 1 && berichten.filter((m) => m.type === 'pagina').length === voor);
+  let knipFout = null;
+  await b2.knip(1, 1.01).catch((e) => { knipFout = e.message; });
+  ok('knippen uit een vervangen bestand weigert met de reden', /vervangen/.test(knipFout || ''));
+  await b2.laad({ url: '/media/x/stems.wav', kanalen: 8 });
+  ok('opnieuw laden neemt het nieuwe bestand gewoon', b2.kanalen === 8 && !b2.bestand.vervangen && b2.bestand.totaal === wav8.byteLength);
+  b2.vernietig();
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

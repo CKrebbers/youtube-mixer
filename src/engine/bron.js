@@ -337,6 +337,25 @@ export function geheugenHaal(wav) {
   };
 }
 
+/*
+ * VERVANGEN ONDER HET SPELEN. De server kan een bestand vervangen terwijl een
+ * deck het streamt: stems.wav als je opnieuw splitst (2 -> 4), audio.wav als
+ * je een nummer opnieuw binnenhaalt. Elk Range-verzoek opent het bestand
+ * opnieuw, dus de volgende pagina komt uit het NIEUWE bestand, en met een
+ * ander aantal kanalen is dat ruis. De totale grootte uit `Content-Range`
+ * (bytes a-b/TOTAAL) verraadt het: bij de laad onthouden, bij elk antwoord
+ * vergelijken. Weet een `haal` geen totaal (geheugenHaal), dan geldt het niet.
+ */
+function totaalUit(res) {
+  const m = /\/(\d+)\s*$/.exec(res.headers?.get?.('Content-Range') || '');
+  return m ? Number(m[1]) : null;
+}
+
+function isVervangen(res, bestand) {
+  const t = totaalUit(res);
+  return bestand.totaal !== null && t !== null && t !== bestand.totaal;
+}
+
 /** De worklet-module één keer per AudioContext laden. */
 const modules = new WeakMap();
 export function laadStreamModule(ctx) {
@@ -453,6 +472,7 @@ export class StreamBron {
     const res = await this.haal(url, { headers: { Range: 'bytes=0-65535' } });
     nogActueel();
     if (!res.ok) throw new Error(`audio niet gevonden (${res.status})`);
+    const totaal = totaalUit(res);
     const kop = leesWavKop(await res.arrayBuffer());
     nogActueel();
     const fout = controleerWav(kop);
@@ -464,7 +484,7 @@ export class StreamBron {
     }
 
     const bpf = bytesPerFrame(kop);
-    this.bestand = { url, kop, bpf, paginaBytes: PAGINA * bpf, duur: kop.dataLengte / bpf / kop.sampleRate };
+    this.bestand = { url, kop, bpf, paginaBytes: PAGINA * bpf, duur: kop.dataLengte / bpf / kop.sampleRate, totaal, vervangen: false };
     this.geladen.clear();
     this.onderweg.clear();
     this.loop = null;
@@ -478,7 +498,7 @@ export class StreamBron {
 
   /** Vergelijkt wat er moet zijn met wat er is, haalt op en ruimt op. */
   async bijvullen() {
-    if (!this.bestand || !this.node) return;
+    if (!this.bestand || !this.node || this.bestand.vervangen) return;
     const { kop } = this.bestand;
     const nodig = plan({
       positie: this.positie, rate: this.seg.speelt ? this.seg.R : this.rate,
@@ -508,6 +528,14 @@ export class StreamBron {
       const b = Math.min(kop.dataStart + kop.dataLengte, kop.dataStart + (tot + 1) * paginaBytes) - 1;
       const res = await this.haal(url, { headers: { Range: `bytes=${a}-${b}` } });
       if (res.status !== 206) throw new Error(`geen deelantwoord (${res.status})`);
+      if (this.bestand !== bestand || !this.node) return;   // intussen een ander nummer
+      if (isVervangen(res, bestand)) {
+        // Niets meer ophalen: wat er al is speelt uit, daarna is het stil
+        // (een gat is stilte). Eén melding, geen reeks fouten.
+        bestand.vervangen = true;
+        this.onFout?.('het bestand is op de server vervangen (bv. stems opnieuw gesplitst): laad het nummer opnieuw');
+        return;
+      }
       const bytes = await res.arrayBuffer();
       if (this.bestand !== bestand || !this.node) return;   // intussen een ander nummer
       for (let i = van; i <= tot; i++) {
@@ -549,6 +577,7 @@ export class StreamBron {
     if (b0 <= a0) throw new Error('leeg stuk');
     const res = await this.haal(url, { headers: { Range: `bytes=${kop.dataStart + a0 * bpf}-${kop.dataStart + b0 * bpf - 1}` } });
     if (res.status !== 206) throw new Error(`knippen mislukt (${res.status})`);
+    if (isVervangen(res, this.bestand)) throw new Error('het bestand is op de server vervangen: laad het nummer opnieuw');
     const pcm = new Int16Array(await res.arrayBuffer());
     const n = Math.floor(pcm.length / ch);
     const uit = this.ctx.createBuffer(2, n, sr);
