@@ -760,6 +760,31 @@ console.log('\nstems: meer kanalen');
     ok('8 kanalen, trackeinde: gemeld, daarna stilte', eind.eindes === 1 && eind.L.slice(70).every((v) => v === 0));
   }
 
+  // Hergebruik (de worklet, paar 1–3): waar elk frame leest en de gat-envelop
+  // komen van het paar ervoor in hetzelfde blok. Bit voor bit hetzelfde als
+  // zelf rekenen; en een paar dat met een ANDERE envelop begint rekent zelf.
+  {
+    const p = zonder(pag[8], 1);
+    const sg2 = seg((PAGINA - 200) / SR, 1.08, { loop: { start: (PAGINA - 200) / SR, end: (PAGINA + 9000) / SR } });
+    const blok = (paar, staat, hergebruik) => {
+      const L = new Float32Array(128), R = new Float32Array(128);
+      renderBlok({ seg: sg2, paginas: p, uit: [L, R], frames: 128, t0: 0.05, ctxRate: SR, trackRate: SR, duur: DUUR,
+        vorig: seg(1, 1), wisselT: 0.049, staat, stride: 8, paar, hergebruik });
+      return { L, R, env: staat.env };
+    };
+    let gelijk = true, eigen = true;
+    for (const env0 of [1, 0.4, 0]) {
+      blok(0, { env: env0 }, false);
+      const her = blok(4, { env: env0 }, true), zelf = blok(4, { env: env0 }, false);
+      if (!bitGelijk(her.L, zelf.L) || !bitGelijk(her.R, zelf.R) || her.env !== zelf.env) gelijk = false;
+      blok(0, { env: env0 }, false);
+      const anders = blok(2, { env: 0.7 }, true), zelf2 = blok(2, { env: 0.7 }, false);
+      if (!bitGelijk(anders.L, zelf2.L) || anders.env !== zelf2.env) eigen = false;
+    }
+    ok('hergebruik (paar 1–3 van hetzelfde blok): bit voor bit gelijk aan zelf rekenen, ook in een gat en een overgang', gelijk);
+    ok('… een paar dat met een andere envelop begint, rekent zijn envelop zelf', eigen);
+  }
+
   // ---- de worklet: vier uitgangen -------------------------------------------
   let Lezer = null;
   globalThis.sampleRate = SR;

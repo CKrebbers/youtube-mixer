@@ -62,7 +62,7 @@ class StreamLezer extends AudioWorkletProcessor {
     this.blok = {
       seg: STIL, paginas: this.paginas, uit: null, frames: 0,
       t0: NaN, ctxRate: sampleRate, trackRate: sampleRate, duur: NaN,
-      vorig: null, wisselT: -Infinity, staat: this.staat, stride: KANALEN, paar: 0,
+      vorig: null, wisselT: -Infinity, staat: this.staat, stride: KANALEN, paar: 0, hergebruik: false,
     };
     this.port.onmessage = ({ data: m }) => {
       if (m.type === 'segment') {
@@ -109,9 +109,13 @@ class StreamLezer extends AudioWorkletProcessor {
     b.seg = this.seg; b.frames = uit[0].length;
     b.t0 = currentFrame / sampleRate; b.trackRate = this.trackRate; b.duur = this.duur;
     b.vorig = this.vorig; b.wisselT = this.wisselT; b.stride = this.kanalen;
-    // Paar 0 eerst: zijn antwoord ('einde') geldt voor alle paren.
-    b.uit = uit; b.paar = 0; b.staat = this.staten[0];
+    // Paar 0 eerst: zijn antwoord ('einde') geldt voor alle paren. De paren
+    // erna lezen op precies dezelfde plekken (zelfde segment, zelfde klok):
+    // `hergebruik` laat renderBlok dat rekenwerk overslaan. Er zit niets
+    // tussen (geen ander deck), dus wat in klad staat is nog van dit blok.
+    b.uit = uit; b.paar = 0; b.staat = this.staten[0]; b.hergebruik = false;
     const r = renderBlok(b);
+    b.hergebruik = true;
     const n = outputs.length < UITGANGEN ? outputs.length : UITGANGEN;
     for (let k = 1; k < n; k++) {
       const o = outputs[k];

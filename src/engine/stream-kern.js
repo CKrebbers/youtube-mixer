@@ -317,6 +317,7 @@ function segKlad(n) {
     gl: new Float64Array(n),      // wat er op g staat
     gr: new Float64Array(n),
     soort: new Uint8Array(n),     // VOORBIJ (na het trackeinde), GEWOON of NAAD
+    metNaad: false,               // valt er een frame in de naad (dan een tweede lezing)
   };
 }
 
@@ -335,6 +336,10 @@ const klad = {
   // het paar. Hele getallen vanaf het begin (geen NaN zoals t0): dan blijven
   // het kleine gehele getallen en kost lezen niets.
   stride: KANALEN, paar: 0,
+  // Stems: de gat-envelop per frame van het eerste paar van dit blok, voor
+  // de paren erna (zelfde pagina's, dus dezelfde envelop als ze met dezelfde
+  // stand begonnen). envVan/envNa: de stand ervoor en erna.
+  envs: null, envVan: NaN, envNa: NaN,
 };
 
 /** Eén keer (de worklet: 128 frames), of als een blok groter is dan ooit. */
@@ -343,6 +348,7 @@ function groei(frames) {
   klad.n = frames;
   klad.nu = segKlad(frames);
   klad.oud = segKlad(frames);
+  klad.envs = new Float64Array(frames);
 }
 
 /**
@@ -452,32 +458,41 @@ function posities(seg, pos, tot) {
  * S.soort zegt welke frames voorbij het trackeinde vallen (VOORBIJ). Met de
  * loop-naad: in de laatste LOOP_NAAD van een loop overvloeien naar wat er
  * vlak vóór het begin staat.
+ *
+ * `hergebruik`: dit is een volgend paar van hetzelfde blok (stems). Waar
+ * elk frame leest (pos, f, soort, en in de naad g en w) hangt alleen van het
+ * segment en de klok af, niet van het paar: dat staat nog in S van het paar
+ * ervoor. Alleen het lezen zelf (en naad en rem) wordt dan nog gedaan.
  */
-function leesSegment(seg, paginas, S, tot) {
-  posities(seg, S.pos, tot);
-  const loop = seg.loop;
-  // De naad: hooguit een kwart van de loop, en nooit langer dan er vóór het
-  // loopbegin staat. Een loop die op 0 s begint heeft daar niets, en de naad
-  // vloeide dan naar stilte (een dip vlak voor elke herhaling). Liever dan
-  // geen naad.
-  const naad = loop ? Math.max(0, Math.min(LOOP_NAAD, (loop.end - loop.start) / 4, loop.start)) : 0;
-  const trackRate = klad.trackRate, duur = klad.duur;
-  const pos = S.pos, soort = S.soort;
-  let metNaad = false;
-  for (let i = 0; i < tot; i++) {
-    const p = pos[i];
-    if (!loop && p >= duur) { soort[i] = VOORBIJ; continue; }
-    S.f[i] = p * trackRate;
-    const rest = loop ? loop.end - p : Infinity;
-    if (rest < naad && rest > 0) {
-      S.w[i] = 1 - rest / naad;
-      S.g[i] = (loop.start - rest) * trackRate;
-      soort[i] = NAAD;
-      metNaad = true;
-    } else soort[i] = GEWOON;
+function leesSegment(seg, paginas, S, tot, hergebruik) {
+  const soort = S.soort;
+  if (!hergebruik) {
+    posities(seg, S.pos, tot);
+    const loop = seg.loop;
+    // De naad: hooguit een kwart van de loop, en nooit langer dan er vóór het
+    // loopbegin staat. Een loop die op 0 s begint heeft daar niets, en de naad
+    // vloeide dan naar stilte (een dip vlak voor elke herhaling). Liever dan
+    // geen naad.
+    const naad = loop ? Math.max(0, Math.min(LOOP_NAAD, (loop.end - loop.start) / 4, loop.start)) : 0;
+    const trackRate = klad.trackRate, duur = klad.duur;
+    const pos = S.pos;
+    let metNaad = false;
+    for (let i = 0; i < tot; i++) {
+      const p = pos[i];
+      if (!loop && p >= duur) { soort[i] = VOORBIJ; continue; }
+      S.f[i] = p * trackRate;
+      const rest = loop ? loop.end - p : Infinity;
+      if (rest < naad && rest > 0) {
+        S.w[i] = 1 - rest / naad;
+        S.g[i] = (loop.start - rest) * trackRate;
+        soort[i] = NAAD;
+        metNaad = true;
+      } else soort[i] = GEWOON;
+    }
+    S.metNaad = metNaad;
   }
   leesKubisch(paginas, S.f, S.l, S.r, soort, GEWOON, tot);
-  if (metNaad) {
+  if (S.metNaad) {
     leesKubisch(paginas, S.g, S.gl, S.gr, soort, NAAD, tot);
     for (let i = 0; i < tot; i++) {
       if (soort[i] !== NAAD) continue;
@@ -541,10 +556,17 @@ function remUit(seg, S, tot) {
  * van het stereopaar, 0/2/4/6): met stems één aanroep per paar, elk met een
  * eigen `staat`. Zonder: stereo, zoals altijd.
  *
+ * `hergebruik` (stems): dit is het volgende paar van HETZELFDE blok, direct
+ * na het vorige, met dezelfde seg, vorig, wisselT, t0, frames, rates en
+ * duur; alleen paar, uit en staat zijn anders. Dan staat in `klad` nog waar
+ * elk frame leest, en hoeft dat niet opnieuw (posities, soort, naad). Alleen
+ * de worklet zet dit, voor paar 1–3. Een andere aanroep ertussen (ander
+ * deck) en dan hergebruik zetten is een fout van de aanroeper.
+ *
  * @returns 'einde' als het trackeinde binnen dit blok viel, anders null.
  */
 export function renderBlok({ seg, paginas, uit, frames, t0, ctxRate, trackRate, duur,
-  vorig = null, wisselT = -Infinity, staat = { env: 1 }, stride = KANALEN, paar = 0 }) {
+  vorig = null, wisselT = -Infinity, staat = { env: 1 }, stride = KANALEN, paar = 0, hergebruik = false }) {
   const L = uit[0], R = uit[1];
   // Hoeveel frames vallen in de overgang? Altijd het begin van het blok: t loopt op.
   let wissel = 0;
@@ -555,23 +577,35 @@ export function renderBlok({ seg, paginas, uit, frames, t0, ctxRate, trackRate, 
   klad.t0 = t0; klad.ctxRate = ctxRate; klad.trackRate = trackRate; klad.duur = duur;
   klad.stride = stride; klad.paar = paar;
   const nu = klad.nu, oud = klad.oud;
-  if (seg.speelt) leesSegment(seg, paginas, nu, frames);
-  if (wissel > 0 && vorig.speelt) leesSegment(vorig, paginas, oud, wissel);
+  if (seg.speelt) leesSegment(seg, paginas, nu, frames, hergebruik);
+  if (wissel > 0 && vorig.speelt) leesSegment(vorig, paginas, oud, wissel, hergebruik);
 
   const vooruit = GAT_FADE * trackRate * Math.max(0.5, Math.abs(seg.R || 1));
   const stap = 1 / (GAT_FADE * ctxRate);
   klad.k0 = -1; klad.k1 = -1;             // heeftPagina: niets onthouden van een vorig blok
   let env = staat.env;
+  // Stems: een volgend paar dat met dezelfde envelop begint als het eerste,
+  // krijgt per frame dezelfde envelop (zelfde frames, zelfde pagina's): die
+  // staat in klad.envs, de gat-controle hoeft niet nog eens. Begon het eerste
+  // paar dit blok (geen hergebruik), dan vult het klad.envs.
+  const envs = klad.envs;
+  const leesEnv = hergebruik && env === klad.envVan;
+  const schrijfEnv = !hergebruik;
+  if (schrijfEnv) klad.envVan = env;
   let einde = null;
   for (let i = 0; i < frames; i++) {
     let l = 0, r = 0;
     if (seg.speelt) {
       if (nu.soort[i] === VOORBIJ) { einde = 'einde'; }
       else {
-        // Gat vooruit? Dan uitvloeien; data er weer? Dan invloeien.
-        const n = Math.floor(nu.f[i]);
-        const doel = heeftFrame(paginas, n) && heeftFrame(paginas, Math.floor(n + vooruit)) ? 1 : 0;
-        env = doel > env ? Math.min(1, env + stap) : Math.max(doel, env - stap);
+        if (leesEnv) env = envs[i];
+        else {
+          // Gat vooruit? Dan uitvloeien; data er weer? Dan invloeien.
+          const n = Math.floor(nu.f[i]);
+          const doel = heeftFrame(paginas, n) && heeftFrame(paginas, Math.floor(n + vooruit)) ? 1 : 0;
+          env = doel > env ? Math.min(1, env + stap) : Math.max(doel, env - stap);
+          if (schrijfEnv) envs[i] = env;
+        }
         l = nu.l[i] * env; r = nu.r[i] * env;
       }
     }
@@ -585,6 +619,8 @@ export function renderBlok({ seg, paginas, uit, frames, t0, ctxRate, trackRate, 
     }
     L[i] = l; R[i] = r;
   }
+  if (leesEnv) env = klad.envNa;          // (ook als het laatste frame voorbij het einde viel)
+  if (schrijfEnv) klad.envNa = env;
   staat.env = env;
   return einde;
 }
