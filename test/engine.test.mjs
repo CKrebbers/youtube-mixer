@@ -60,6 +60,33 @@ globalThis.AudioContext = class {
   resume(){ return Promise.resolve(); }
 };
 
+/**
+ * AudioWorkletNode zoals de echte (de streamende bron): numberOfOutputs
+ * (standaard 1), outputChannelCount even lang (anders IndexSizeError), en
+ * connect(doel, uitgang) gooit IndexSizeError bij een uitgang die er niet
+ * is. Wat hij verbindt staat in `verbindingen`, wat hij stuurt in `port.berichten`.
+ */
+const indexFout = (w) => Object.assign(new Error(`IndexSizeError: ${w}`), { name: 'IndexSizeError' });
+const nepWorkletNode = (nodes = []) => class {
+  constructor(_ctx, naam, opties = {}) {
+    this.naam = naam;
+    this.numberOfInputs = opties.numberOfInputs ?? 1;
+    this.numberOfOutputs = opties.numberOfOutputs ?? 1;
+    if (opties.outputChannelCount && opties.outputChannelCount.length !== this.numberOfOutputs) throw indexFout('outputChannelCount past niet bij numberOfOutputs');
+    this.outputChannelCount = opties.outputChannelCount ?? Array(this.numberOfOutputs).fill(1);
+    this.verbindingen = [];
+    const berichten = [];
+    this.port = { berichten, postMessage: (m) => berichten.push(m), onmessage: null };
+    nodes.push(this);
+  }
+  connect(doel, uitgang = 0) {
+    if (!(Number.isInteger(uitgang) && uitgang >= 0 && uitgang < this.numberOfOutputs)) throw indexFout(`uitgang ${uitgang} bestaat niet`);
+    this.verbindingen.push({ doel, uitgang });
+    return doel;
+  }
+  disconnect() { this.verbindingen = []; }
+};
+
 const { Engine } = await import('../src/engine/engine.js');
 const { bindEngine, invoke, list, read } = await import('../src/control/actions.js');
 const { computePeaks } = await import('../src/analysis/peaks.js');
@@ -1072,10 +1099,7 @@ console.log('\nloops, tellen en laden');
   // Hetzelfde voor de streamende bron.
   const oudCtxWorklet = eng.ctx.audioWorklet;
   eng.ctx.audioWorklet = { addModule: async () => {} };
-  globalThis.AudioWorkletNode = class {
-    constructor() { this.port = { postMessage: () => {}, onmessage: null }; }
-    connect() {} disconnect() {}
-  };
+  globalThis.AudioWorkletNode = nepWorkletNode();
   const dSt = eng.deck('G');
   await dSt.laadGeheugen(buf, 'stream-loop');
   dSt.seek(0.5); dSt.play();
@@ -2601,6 +2625,231 @@ console.log('\ntransport');
   invoke('track.6.hotcue.1', true); invoke('track.6.hotcue.1', false);
   ok('zonder quantize: de positie van het indrukken', dF.hotcues[0] === 3.1 && meldingen[2]?.tijd === 3.1);
   uit();
+}
+
+// ---- stems (docs/STEMS.md §3) ---------------------------------------------------
+// Een stems.wav: twee of vier stereoparen; uitgang k van de worklet gaat via
+// stemIn[k] naar trim. Per stem een niveau en een kill, met de formule uit
+// het contract, klikvrij (hellingen na startDrempel, nooit een curve), alles
+// terug op open bij elke laad, en zonder stems precies het oude pad.
+
+console.log('\nstems');
+{
+  const { STEM_NAMEN, controleerStems } = await import('../src/engine/deck.js');
+  const { KILL_FADE } = await import('../src/engine/audio-graph.js');
+  const { startDrempel } = await import('../src/engine/overgang.js');
+  const { geheugenHaal } = await import('../src/engine/bron.js');
+  const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+  const { OVERSLAAN } = await import('../src/control/terugspelen.js');
+  const { bijInvoke, metaOf } = await import('../src/control/actions.js');
+
+  /** Een WAV met stereoparen naast elkaar (16 bit, interleaved), zoals stems.wav. */
+  const maakWavParen = (paren, sr) => {
+    const ch = paren.length * 2, n = paren[0][0].length;
+    const b = new ArrayBuffer(44 + n * ch * 2), v = new DataView(b);
+    const zet = (o, t) => { for (let i = 0; i < 4; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+    zet(0, 'RIFF'); v.setUint32(4, 36 + n * ch * 2, true); zet(8, 'WAVE');
+    zet(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true);
+    v.setUint32(24, sr, true); v.setUint32(28, sr * ch * 2, true); v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true);
+    zet(36, 'data'); v.setUint32(40, n * ch * 2, true);
+    const pcm = new Int16Array(b, 44);
+    for (let i = 0; i < n; i++) for (let k = 0; k < paren.length; k++) {
+      pcm[i * ch + 2 * k] = Math.round(paren[k][0][i] * 32767); pcm[i * ch + 2 * k + 1] = Math.round(paren[k][1][i] * 32767);
+    }
+    return b;
+  };
+  /** Elke aanroep op een AudioParam bijhouden: [naam, waarde, tijd]. */
+  const bespioneer = (prm) => {
+    const log = [];
+    for (const m of ['setValueAtTime', 'linearRampToValueAtTime', 'setTargetAtTime', 'setValueCurveAtTime', 'cancelAndHoldAtTime']) {
+      const orig = prm[m];
+      prm[m] = function (...a) { log.push([m, ...a]); return orig.apply(this, a); };
+    }
+    return log;
+  };
+
+  const oudWorklet = eng.ctx.audioWorklet;
+  eng.ctx.audioWorklet = { addModule: async () => {} };
+  const nodes = [];
+  globalThis.AudioWorkletNode = nepWorkletNode(nodes);
+  NOW = 1000;
+  const fouten0 = OVERLAP_FOUTEN, breuk0 = CURVE_BREUK;
+  const WACHT = startDrempel(eng.ctx);
+  const dS = eng.deck('D');                                 // track 4
+  const gIn = dS.chain.stemIn;
+  const g = (k) => gIn[k].gain.value;
+  const dicht = (a, b) => Math.abs(a - b) < 1e-9;
+  const SR = 48000, N = SR * 4;
+  const toon = (f, a) => new Float32Array(N).map((_, i) => a * Math.sin(2 * Math.PI * f * i / SR));
+  const paren = [[toon(60, 0.2), toon(61, 0.2)], [toon(100, 0.15), toon(101, 0.15)], [toon(440, 0.1), toon(441, 0.1)], [toon(880, 0.25), toon(881, 0.25)]];
+  const wav8 = maakWavParen(paren, SR), wav4 = maakWavParen(paren.slice(0, 2), SR);
+  const pcm8 = new Int16Array(wav8, 44);
+  const STEMS4 = { namen: ['drums', 'bass', 'other', 'vocals'], schaal: 0.8 };
+  const STEMS2 = { namen: ['vocals', 'inst'], schaal: 0.9 };
+
+  // 0. Zonder stems: precies het oude pad.
+  ok('de kanaalstrip heeft vier stem-ingangen, allemaal op 1', gIn.length === 4 && gIn.every((x) => x.gain.value === 1));
+  const spion = gIn.map((x) => bespioneer(x.gain));
+  await dS.laadGeheugen(buf, 'zonder stems');
+  const node = nodes.at(-1);
+  ok('streamen: een node met vier uitgangen van twee kanalen, uitgang k naar stemIn[k]', node.numberOfOutputs === 4
+    && node.outputChannelCount.join() === '2,2,2,2' && node.verbindingen.length === 4 && node.verbindingen.every((v, k) => v.doel === gIn[k] && v.uitgang === k));
+  ok('zonder stems: alle versterkingen op 1, niet eens aangeraakt (bit voor bit het oude pad)',
+    gIn.every((x) => x.gain.value === 1) && spion.every((l) => l.length === 0));
+  ok('zonder stems: deck.stems null, elke stem-read null, snapshot null', dS.stems === null && eng.snapshot().decks.D.stems === null
+    && STEM_NAMEN.every((st) => ['', '.kill', '.hold'].every((x) => read(`track.4.stem.${st}${x}`) === null)));
+  invoke('track.4.stem.vocals', 0.2); invoke('track.4.stem.vocals.kill', true); invoke('track.4.stem.inst.hold', true);
+  invoke('track.4.stem.inst.hold', false);
+  ok('… en een stem-action doet dan niets', gIn.every((x) => x.gain.value === 1) && spion.every((l) => l.length === 0) && !dS.stemGekild('vocals'));
+
+  // 1. Vier stems.
+  NOW = 1001;
+  const geladen = await dS.laadStream('/media/x/stems.wav', 'vier stems', { haal: geheugenHaal(wav8), stems: STEMS4 });
+  ok('laden met vier stems: deck.stems, 8 kanalen, dezelfde node', geladen && dS.stems?.aantal === 4 && dS.stems.schaal === 0.8
+    && dS.stems.namen.join() === 'drums,bass,other,vocals' && dS.bron.kanalen === 8 && nodes.length === 1
+    && node.port.berichten.filter((m) => m.type === 'bron').at(-1).kanalen === 8);
+  ok('… alle uitgangen op 1/schaal (1,25: de som even hard als audio.wav)', [0, 1, 2, 3].every((k) => dicht(g(k), 1.25)));
+  ok('… met een klikvrije overgang (hellingen na de startdrempel), geen curve',
+    spion.every((l) => l.some((c) => c[0] === 'linearRampToValueAtTime') && !l.some((c) => c[0] === 'setValueCurveAtTime')));
+  ok('reads: elke stem van de stand op 1, inst (de groep) ook, drums/bas/overig bestaan; kill 0', ['drums', 'bass', 'other', 'vocals', 'inst']
+    .every((st) => read(`track.4.stem.${st}`) === 1 && read(`track.4.stem.${st}.kill`) === 0 && read(`track.4.stem.${st}.hold`) === 0));
+
+  spion.forEach((l) => { l.length = 0; });
+  invoke('track.4.stem.inst', 0.5);
+  ok('inst bij vier stems: drums, bas en overig samen ×0,5; de zang niet', [0, 1, 2].every((k) => dicht(g(k), 0.625)) && dicht(g(3), 1.25));
+  ok('… een niveau is een doelwaarde (setTargetAtTime, geen helling), en de zang wordt niet aangeraakt',
+    spion[0].some((c) => c[0] === 'setTargetAtTime' && dicht(c[1], 0.625)) && !spion[0].some((c) => c[0] === 'linearRampToValueAtTime') && spion[3].length === 0);
+  invoke('track.4.stem.drums', 0.4);
+  ok('drums ×0,4 bovenop inst ×0,5: 1,25 × 0,4 × 0,5', dicht(g(0), 0.25) && dicht(g(1), 0.625) && read('track.4.stem.drums') === 0.4);
+
+  // Kill: de vorm van de overgang, in amplitude een zachte S, na de startdrempel.
+  spion.forEach((l) => { l.length = 0; });
+  invoke('track.4.stem.inst.kill', true); invoke('track.4.stem.inst.kill', false);
+  ok('kill inst: drums, bas en overig weg, de zang blijft', [0, 1, 2].every((k) => g(k) === 0) && dicht(g(3), 1.25) && spion[3].length === 0);
+  ok('… lampjes: inst weg (1), de niveaus blijven staan', read('track.4.stem.inst.kill') === 1 && read('track.4.stem.inst.hold') === 1
+    && read('track.4.stem.inst') === 0.5 && read('track.4.stem.drums') === 0.4 && read('track.4.stem.drums.kill') === 0);
+  {
+    const l = spion[1];
+    const zet = l.filter((c) => c[0] === 'setValueAtTime'), hel = l.filter((c) => c[0] === 'linearRampToValueAtTime');
+    const van = zet[0]?.[1], punten = [van, ...hel.map((c) => c[1])];
+    const weg = Math.abs(van - 0);
+    let grootste = 0, eerste = Math.abs(punten[1] - punten[0]), laatste = Math.abs(punten[32] - punten[31]), daalt = true;
+    for (let i = 1; i < punten.length; i++) { grootste = Math.max(grootste, Math.abs(punten[i] - punten[i - 1])); if (punten[i] > punten[i - 1] + 1e-12) daalt = false; }
+    ok(`… de overgang: vasthouden op nu, ${hel.length} hellingen vanaf nu + ${(WACHT * 1000).toFixed(1)} ms, ${KILL_FADE * 1000} ms lang`,
+      l[0][0] === 'cancelAndHoldAtTime' && zet.length === 2 && zet[0][2] === NOW && dicht(zet[1][2], NOW + WACHT)
+      && hel.length === 32 && dicht(hel.at(-1)[2], NOW + WACHT + KILL_FADE) && hel.at(-1)[1] === 0);
+    ok(`… in amplitude een zachte S: eerste en laatste stap ${(100 * eerste / weg).toFixed(2)}% / ${(100 * laatste / weg).toFixed(2)}%, grootste ${(100 * grootste / weg).toFixed(1)}% van de weg`,
+      daalt && eerste < 0.005 * weg && laatste < 0.005 * weg && grootste < 0.06 * weg && dicht(van, 0.625));
+  }
+  spion.forEach((l) => { l.length = 0; });
+  invoke('track.4.stem.bass', 0.3);
+  ok('niveau draaien op een stem die weg is: de overgang loopt gewoon uit (niets aangeraakt), het niveau onthouden',
+    spion[1].length === 0 && g(1) === 0 && read('track.4.stem.bass') === 0.3);
+  NOW += WACHT + 0.001;                                       // midden in de kill-overgang
+  let gegooid = null;
+  try { invoke('track.4.stem.inst.kill', true); } catch (e) { gegooid = e; }
+  ok('kill uit, 1 ms na het begin van de overgang: geen fout, geen afgebroken curve, precies terug op de niveaus',
+    gegooid === null && OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0
+    && dicht(g(0), 1.25 * 0.4 * 0.5) && dicht(g(1), 1.25 * 0.3 * 0.5) && dicht(g(2), 0.625) && read('track.4.stem.inst.kill') === 0);
+
+  // Drukknop en schakelaar samen, zoals de EQ-kill.
+  NOW += 1;
+  invoke('track.4.stem.vocals.hold', true);
+  ok('zang weg zolang je drukt (beide lampjes 1)', g(3) === 0 && read('track.4.stem.vocals.hold') === 1 && read('track.4.stem.vocals.kill') === 1);
+  NOW += 0.2;
+  invoke('track.4.stem.vocals.hold', false);
+  ok('loslaten: terug', dicht(g(3), 1.25) && read('track.4.stem.vocals.kill') === 0);
+  invoke('track.4.stem.vocals.kill', true);
+  NOW += 0.2; invoke('track.4.stem.vocals.hold', true); NOW += 0.2; invoke('track.4.stem.vocals.hold', false);
+  ok('schakelaar aan, dan drukken en loslaten: blijft weg', g(3) === 0 && dS.stemGekild('vocals'));
+
+  // De snapshot.
+  const sn = eng.snapshot().decks.D.stems;
+  ok('snapshot: namen, niveau en weg per stem (bij vier ook inst)', sn && sn.namen.join() === 'drums,bass,other,vocals'
+    && sn.niveau.inst === 0.5 && sn.niveau.drums === 0.4 && sn.niveau.bass === 0.3 && sn.weg.vocals === true && sn.weg.inst === false
+    && Object.keys(sn.niveau).length === 5);
+
+  // Knippen voor de sampler: wat je hoort vóór de EQ (de zang is weg).
+  const gew = dS.knipGewichten();
+  ok('knipGewichten: per paar de versterking van nu (zang 0)', gew.length === 4 && dicht(gew[0], 0.25) && dicht(gew[1], 0.1875) && dicht(gew[2], 0.625) && gew[3] === 0);
+  dS.seek(3);
+  const sm = eng.sampler;
+  const oudeTellen = sm.tellen;
+  sm.tellen = 4;
+  await sm.neem(5, dS);
+  const pad = sm.pads[5];
+  let afw = 0, zangErin = 0;
+  for (const i of [1000, 20000, 60123]) {             // (op 2,25 s staan alle vier de tonen op nul)
+    let l = 0, metZang = 0;
+    for (let k = 0; k < 4; k++) { const x = pcm8[(SR + i) * 8 + 2 * k] / 32768; l += gew[k] * x; metZang += (k === 3 ? 1.25 : gew[k]) * x; }
+    afw = Math.max(afw, Math.abs(pad.buffer.getChannelData(0)[i] - l));
+    zangErin = Math.max(zangErin, Math.abs(metZang - l));
+  }
+  ok(`sampler: een pad geknipt terwijl de zang weg is, klinkt zonder zang (afwijking ${afw.toExponential(1)}, de zang was ${zangErin.toFixed(2)})`,
+    pad && afw < 1e-6 && zangErin > 0.05);
+  sm.wis(5);
+  sm.tellen = oudeTellen;
+
+  // 2. Twee stems: inst is een eigen paar; drums, bas en overig bestaan niet.
+  NOW += 1;
+  ok('laden met twee stems', await dS.laadStream('/media/x/stems2.wav', 'twee stems', { haal: geheugenHaal(wav4), stems: STEMS2 }));
+  ok('… bij elke laad alles terug op open: niveaus 1, geen kill (ook de zang die weg stond)',
+    !dS.stemGekild('vocals') && read('track.4.stem.vocals') === 1 && read('track.4.stem.inst') === 1 && read('track.4.stem.vocals.kill') === 0);
+  ok('… uitgang 0 en 1 op 1/0,9, de ongebruikte op 1', dicht(g(0), 1 / 0.9) && dicht(g(1), 1 / 0.9) && g(2) === 1 && g(3) === 1);
+  ok('… drums, bas en overig: read null (bestaan niet in deze stand)', ['drums', 'bass', 'other'].every((st) => ['', '.kill', '.hold'].every((x) => read(`track.4.stem.${st}${x}`) === null)));
+  invoke('track.4.stem.drums', 0.1); invoke('track.4.stem.bass.kill', true);
+  ok('… en doen niets', dicht(g(0), 1 / 0.9) && dicht(g(1), 1 / 0.9));
+  invoke('track.4.stem.inst', 0);
+  ok('inst bij twee stems: het eigen paar (uitgang 1) dicht, de zang niet', g(1) === 0 && dicht(g(0), 1 / 0.9));
+  invoke('track.4.stem.vocals.kill', true);
+  ok('zang weg bij twee stems: uitgang 0', g(0) === 0);
+  ok('snapshot bij twee: alleen vocals en inst', Object.keys(eng.snapshot().decks.D.stems.niveau).join() === 'vocals,inst');
+
+  // 3. Weigeren: het aantal kanalen past niet, of de stems kloppen niet. De oude track blijft.
+  NOW += 1;
+  let reden = null;
+  await dS.laadStream('/media/x/stems2.wav', 'fout', { haal: geheugenHaal(wav4), stems: STEMS4 }).catch((e) => { reden = e.message; });
+  ok(`4 kanalen voor vier stems: geweigerd met een reden ("${reden}")`, /4 kanalen/.test(reden || '') && /verwacht 8/.test(reden));
+  ok('… de oude track blijft, met zijn stems en zijn stand', dS.title === 'twee stems' && dS.stems?.aantal === 2 && g(0) === 0 && read('track.4.stem.inst') === 0);
+  reden = null;
+  await dS.laadStream('/media/x/stems.wav', 'fout', { haal: geheugenHaal(wav8) }).catch((e) => { reden = e.message; });
+  ok(`een stems.wav zonder stems opgegeven: geweigerd ("${reden}")`, /verwacht stereo/.test(reden || ''));
+  for (const [st, wat] of [[{ namen: ['vocals', 'drums'] }, 'verkeerde namen'], [{ namen: ['vocals', 'inst', 'bass'] }, 'drie stems'],
+    [{ namen: ['vocals', 'vocals'] }, 'dubbel'], [{ namen: ['vocals', 'inst'], schaal: 0 }, 'schaal 0'], [{ namen: ['vocals', 'inst'], schaal: 1.5 }, 'schaal 1,5']]) {
+    reden = null;
+    const voor = node.port.berichten.length;
+    await dS.laadStream('/media/x/stems2.wav', 'fout', { haal: geheugenHaal(wav4), stems: st }).catch((e) => { reden = e.message; });
+    ok(`stems met ${wat}: geweigerd vóór er iets gebeurt ("${reden}")`, !!reden && controleerStems(st) === reden && node.port.berichten.length === voor && dS.title === 'twee stems');
+  }
+  ok('controleerStems: de twee standen in elke volgorde zijn goed', controleerStems(STEMS4) === null && controleerStems({ namen: ['inst', 'vocals'] }) === null);
+
+  // 4. Weer een nummer zonder stems: alles terug op 1, het oude pad.
+  NOW += 1;
+  await dS.laadGeheugen(buf, 'weer zonder');
+  ok('een nummer zonder stems na stems: versterkingen terug op 1, stems null, reads null',
+    gIn.every((x) => x.gain.value === 1) && dS.stems === null && read('track.4.stem.vocals') === null);
+
+  // 5. De actions: bestaan, soort, uitleg; terugspelen en het log.
+  const ids = new Set(list().map((a) => a.id));
+  const stemActies = STEM_NAMEN.flatMap((st) => [`track.4.stem.${st}`, `track.4.stem.${st}.kill`, `track.4.stem.${st}.hold`]);
+  ok(`15 stem-actions per track (vocals, inst, drums, bass, other × niveau/kill/hold), op alle acht tracks`,
+    stemActies.every((a) => ids.has(a)) && [1, 2, 3, 5, 6, 7, 8].every((t) => ids.has(`track.${t}.stem.other.hold`)));
+  ok('niveau = value, kill en hold = trigger, met een Nederlands label', STEM_NAMEN.every((st) => metaOf(`track.4.stem.${st}`).type === 'value'
+    && metaOf(`track.4.stem.${st}.kill`).type === 'trigger' && metaOf(`track.4.stem.${st}.hold`).type === 'trigger')
+    && /zang/.test(metaOf('track.4.stem.vocals').label) && /bas/.test(metaOf('track.4.stem.bass.kill').label));
+  const kaal = stemActies.filter((a) => beschrijf(a).kort === a || beschrijf(a).lang.startsWith('?') || beschrijf(a).lang === a);
+  ok(`elke stem-action heeft een uitleg op de APC-kaart${kaal.length ? ': ' + kaal.join(', ') : ''}`, kaal.length === 0);
+  ok('terugspelen slaat stem-actions niet over', stemActies.every((a) => !OVERSLAAN.test(a)));
+  const gehoord = [];
+  const stop = bijInvoke((id, v) => gehoord.push([id, v]));
+  invoke('track.4.stem.vocals', 0.7); invoke('track.4.stem.drums.kill', true); invoke('track.4.stem.inst.hold', false);
+  stop();
+  ok('het handelingenlog hoort ze via de bus', gehoord.length === 3 && gehoord[0][0] === 'track.4.stem.vocals' && gehoord[0][1] === 0.7);
+
+  ok('geen overlappende automatisering en geen afgebroken curve bij al dat schakelen', OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
+  dS.load(buf, 'terug naar buffer');
+  eng.ctx.audioWorklet = oudWorklet;
+  NOW = 0;
 }
 
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);

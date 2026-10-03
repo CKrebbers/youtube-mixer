@@ -512,6 +512,9 @@ export class Engine extends Emitter {
       grid: d.grid ? d.grid.toJSON() : null, gridZeker: d.gridZekerHier, bpm: d.bpm, loopBeats: d.loopBeats ?? null,
       // Toonsoort die je HOORT op de positie (of null): zie deck.toonsoort.
       toon: d.toonsoort,
+      // Stems (docs/STEMS.md): null, of { namen, niveau: {stem: 0..1}, weg: {stem: bool} }
+      // voor elke stem die deze track heeft (bij vier ook de groep inst).
+      stems: d.stemStand(),
       fx: { effect: d.fx.effectId, naam: d.fx.rackNaam ?? null,
             mix: d.fx.mix, bypass: d.fx.bypass,
             plekken: [1, 2, 3, 4, 5, 6, 7, 8]
