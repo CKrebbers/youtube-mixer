@@ -30,6 +30,9 @@ Waarom zo:
 - Normaliseren (zoals demucs.separate: gemiddelde eraf, delen door de
   spreiding van de mono-mix) met de cijfers van het HELE nummer, niet per
   stuk: anders krijgt elk stuk een andere versterking het model in.
+- De som van de stems is audio.wav (op 16-bit afronding na): wat het model
+  nergens onderbracht gaat naar inst/other. Demucs zelf telt maar op tot
+  -25..-38 dB onder het origineel (gemeten op Clay's nummers, 3 okt).
 - `schaal` exact uit de grootste piek: eerst alles als float32 naar een
   tijdelijk bestand (en de piek bijhouden), dan pas naar 16 bit. Een uur met
   vier stems is ~5,5 GB tijdelijk; daarom vooraf de vrije schijfruimte.
@@ -50,6 +53,7 @@ from datetime import datetime, timezone
 
 SR = 48000
 NAMEN = {2: ['vocals', 'inst'], 4: ['drums', 'bass', 'other', 'vocals']}
+REST_NAAR = {2: 'inst', 4: 'other'}   # waar de rest van het model heen gaat (zie splits())
 FADE_S = 2.0            # kruisfade op een stukgrens
 MARGE_S = 1.0           # context aan weerskanten van de kruisfade
 STUK_STRIDES = 8        # stuklengte in strides van het model: htdemucs 8 × 5,85 s ≈ 46,8 s
@@ -327,7 +331,19 @@ def splits(a, tijdelijk):
                     y = AF.resample(y, sr_model, SR)
                 if y.shape[1] < lengte:
                     y = torch.nn.functional.pad(y, (0, lengte - y.shape[1]))
-                blok = y[:, :lengte].T.contiguous().numpy()   # (frames, kanalen), interleaved
+                y = y[:, :lengte]
+                # De REST: wat het model aan geen enkele bron toewees, plus het
+                # verlies van het hersamplen (alles boven ~21,8 kHz). Gemeten
+                # -25 tot -38 dB onder het origineel; die gaat naar inst (bij
+                # twee: inst = mix - zang) of other (bij vier). Dan is "alle
+                # stems vol" precies audio.wav, en klinkt een nummer met stems
+                # dat je niet aanraakt als het nummer. De kruisfade is lineair,
+                # dus dat geldt ook over de stukgrenzen.
+                rest = x - y.reshape(aantal, 2, lengte).sum(0)
+                k = NAMEN[aantal].index(REST_NAAR[aantal])
+                y[2 * k:2 * k + 2] += rest
+                del rest
+                blok = y.T.contiguous().numpy()   # (frames, kanalen), interleaved
                 del y, stems
                 if apparaat == 'mps':
                     mps_piek = max(mps_piek, torch.mps.driver_allocated_memory())

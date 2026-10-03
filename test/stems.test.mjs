@@ -546,7 +546,8 @@ if (!ECHT) {
     const dB = 10 * Math.log10(e / p);
     ok(`frames gelijk (${s.kop.frames}), 4 kanalen, schaal ${info.schaal.toFixed(4)}, model ${info.model} op ${info.apparaat}`,
       s.kop.frames === a.kop.frames && s.kop.kanalen === 4 && info.schaal > 0 && info.schaal <= 1 && info.model === 'htdemucs');
-    ok(`som(stems)/schaal tegen het origineel: ${dB.toFixed(1)} dB (< -15)`, dB < -15);
+    // De rest van het model gaat naar inst: de som is audio.wav op 16-bit afronding na.
+    ok(`som(stems)/schaal tegen het origineel: ${dB.toFixed(1)} dB (< -60: de rest zit in inst)`, dB < -60);
   }
   // Annuleren midden in een echte split: Python stopt op SIGINT binnen de 3 s.
   const lang = join(media2, 'echt-lang', 'audio.wav');
