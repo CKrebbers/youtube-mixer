@@ -48,7 +48,7 @@ export const OVERSLAAN = /^(record\.|log\.|layer\.|track\.\d+\.rack\.(next|prev)
  * die horen bij de track, niet bij het nummer, en gelden ook voor wat er
  * later in het log op geladen wordt.
  */
-export const NUMMER_NODIG = /^track\.\d+\.(play|cue|sync|tap|hotcue\.|beatloop\.|loop\.|nudge\.|grid\.|seek$|beatjump\.(back|fwd)$|brake$)/;
+export const NUMMER_NODIG = /^track\.\d+\.(play|cue|sync|tap|hotcue\.|beatloop\.|loop\.|nudge\.|grid\.|stem\.|seek$|beatjump\.(back|fwd)$|brake$)/;
 
 /** Het tracknummer van een action (`track.3.fader` -> 3), of null. */
 export function trackVanActie(a) {
@@ -411,6 +411,12 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
       d.seek(Number.isFinite(t.positie) ? t.positie : 0);
       if (t.loop && d.setLoopRange(t.loop.start, t.loop.end)) d.loopBeats = t.loop.tellen ?? null;
       else d.clearLoop();
+      // Stem-kills van toen (schakelaars, bij het nummer). Ook UIT zetten: een
+      // nummer dat er al stond (zelfdeNummer) kan nog een kill aan hebben.
+      for (const s of new Set(d.stems ? [...d.stems.namen, 'inst'] : [])) {
+        const aan = !!t.stemKill?.[s];
+        if (d.stemBestaat?.(s) && d.stemKill[s] !== aan) d.setStemKill(s, aan);
+      }
     }
     for (const [a, v] of Object.entries(st.waarden || {})) if (has(a)) invoke(a, v);
     // Quantize bestond vóór ronde 3 niet: een ouder log begon zonder.

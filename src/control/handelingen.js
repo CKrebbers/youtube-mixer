@@ -275,6 +275,10 @@ export function leesStand({ engine, tracks, herkomst, acties, lees }) {
       // log dat met een kill aan begint speelde anders omgekeerd terug. De
       // drukvariant (killVast) is loslaten = weg, die hoort niet in een stand.
       kill: { ...(d.kill || {}) },
+      // Stem-kills (docs/STEMS.md): ook schakelaars, dus om dezelfde reden in
+      // de stand. Ze horen bij het NUMMER (een laad zet ze open), dus alleen
+      // als er stems zijn; de niveaus staan als value-action in `waarden`.
+      stemKill: d.stems ? { ...d.stemKill } : null,
       // Beatjump-lengte (dj-transport): halve/double zijn geen rondlopers.
       sprong: d.sprongTellen ?? null,
     });

@@ -660,6 +660,43 @@ try {
       for (const d of DECK_IDS.map((id) => eng.deck(id))) d.pause();
       a.setKill('low', false);
     }
+    // Stems (docs/STEMS.md): de stem-kills zijn ook toggles op de bus, dus ook
+    // in de beginstand; ze horen bij het NUMMER (NUMMER_NODIG). Het deck krijgt
+    // zijn stems hier rechtstreeks (`_zetStems`, wat laadStream na een geslaagde
+    // laad doet): dit test de stand, niet het streamen.
+    {
+      const demo = { seed: 0, bars: 4 };
+      const a = eng.deck('A');
+      for (const d of DECK_IDS.map((id) => eng.deck(id))) d.pause();
+      a.load(renderDemoTrack(eng.ctx, demo), 'demo 1');
+      a._zetStems({ namen: ['vocals', 'inst'], schaal: 1 });
+      const herk = { A: { bron: 'demo', demo } };
+      A.invoke('track.1.stem.vocals.kill', true);
+      A.invoke('track.1.stem.inst', 0.4);
+      const st = H.leesStand({ engine: eng, tracks: A.TRACKS, herkomst: (id) => herk[id] ?? null, acties: A.list(), lees: A.read });
+      const s1 = st.tracks[0];
+      ok(`beginstand stems: de kill-schakelaars (${JSON.stringify(s1.stemKill)}) en het niveau als waarde`,
+        s1.stemKill?.vocals === true && s1.stemKill?.inst === false && Math.abs(st.waarden['track.1.stem.inst'] - 0.4) < 1e-9
+        && st.tracks[1].stemKill === null);
+      ok('stem-actions horen bij het nummer (NUMMER_NODIG)', T.NUMMER_NODIG.test('track.1.stem.vocals.kill')
+        && T.NUMMER_NODIG.test('track.1.stem.inst') && T.NUMMER_NODIG.test('track.2.stem.drums.hold'));
+      // Alles anders; terugspelen met een log dat zang weer AAN zet (toggle).
+      A.invoke('track.1.stem.vocals.kill', true);           // weer open
+      A.invoke('track.1.stem.inst.kill', true);
+      A.invoke('track.1.stem.inst', 1);
+      const ts = nepTimers();
+      const doeS = T.maakUitvoerder({ engine: eng, tracks: A.TRACKS, invoke: A.invoke, read: A.read, has: A.has,
+        huidig: (id) => herk[id] ?? null, laad: async () => true });
+      const sps = new T.Terugspeler({ klok: () => NOW, invoke: A.invoke, doe: doeS, elke: ts.elke, stopElke: ts.stopElke });
+      await sps.start({ stand: st, regels: [[0.05, 'track.1.stem.vocals.kill', true]], duur: 0.1 });
+      ok(`na de beginstand: zang weg, rest open, rest op 0,4 (${JSON.stringify(a.stemKill)})`,
+        a.stemKill.vocals === true && a.stemKill.inst === false && Math.abs(a.stemNiveau('inst') - 0.4) < 1e-9);
+      const Ts = sps.T0;
+      while (NOW < Ts + 0.11) { NOW = Math.round((NOW + 0.01) * 1000) / 1000; ts.tik(); }
+      ok(`na het log: de toggle zette de zang terug, zoals toen (niet omgekeerd) (${JSON.stringify(a.stemKill)})`, a.stemKill.vocals === false);
+      for (const d of DECK_IDS.map((id) => eng.deck(id))) d.pause();
+      a._zetStems(null);
+    }
     ok('DECK_IDS en TRACKS horen bij elkaar (acht tracks)', DECK_IDS.length === A.TRACKS.length);
   }
 
