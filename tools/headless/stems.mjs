@@ -444,7 +444,7 @@ async function doorloopEcht() {
   ok('GET /api/stems: de opdracht is klaar, met 2', opd?.status === 'klaar' && opd?.aantal === 2, JSON.stringify(opd));
   await evalueer(`${knopInRij('Nep stems-twee', 'button[data-deck="A"]')}.click()`);
   ok('op track 1, met stems op de bus', await totdat("window.engine.deck('A').duration > 13 && window.__act.read('track.1.stem.vocals') !== null", 20000));
-  ok('de melding zegt "met 2 stems"', /met 2 stems/.test(await status()), await status());
+  ok('de melding zegt "met 2 stems"', await totdat("/met 2 stems/.test(document.querySelector('#lib-panel .lib-status').textContent)", 15000), await status());
   await evalueer("document.getElementById('lib-btn').click()");
   await evalueer("document.getElementById('stems-btn').click(); window.engine.setFocus('A')");
   await rijWordt("r.stems.length === 2");
@@ -452,29 +452,36 @@ async function doorloopEcht() {
   ok(`STEMS-rij: zang en rest (${r.stems.map((s) => s.naam).join(', ')})`, r.stems.map((s) => s.naam).join() === 'zang,rest');
   ok('kolomkop: S2', await totdat(`(${teken('A')})?.tekst === 'S2'`, 15000));
   await evalueer("__act.invoke('track.1.fader', 1); __act.invoke('mixer.xfader', 0); __act.invoke('track.1.play', true); __act.invoke('track.1.play', false)");
-  await wacht(600);
+  await wacht(800);
   const basis = await rms();
   ok(`het speelt: niveau aan de master ${basis.toFixed(4)}`, basis > 0.01);
-  const meet = async (naam, verwacht) => {
-    await wacht(200);
-    const v = (await rms()) / basis;
+  const meet = async (naam, verwacht, b = basis) => {
+    await wacht(150);
+    const v = (await rms()) / b;
     ok(`${naam}: ${v.toFixed(3)} van het niveau (verwacht ${verwacht})`, verwacht === 0 ? v < 0.02 : bijna(v, verwacht));
     return v;
   };
-  await muis('#stems .st-stem[data-stem="vocals"] .st-kill');
+  // Met de muis op kill, en wachten tot de BUS het zegt (een drukke machine
+  // verwerkt de klik soms pas na een paar honderd ms); dan pas meten.
+  const klik = async (nr, s, verwacht) => {
+    await muis(`#stems .st-stem[data-stem="${s}"] .st-kill`);
+    await totdat(`__act.read('track.${nr}.stem.${s}.kill') === ${verwacht}`, 15000);
+  };
+  await klik(1, 'vocals', 1);
   await meet('zang weg (muis)', 0.25);
   await rijWordt('r.stems[0].kill', 15000);
   r = await evalueer(RIJ);
   ok('de kill-knop brandt en de bus zegt weg', r.stems[0].kill && (await evalueer("__act.read('track.1.stem.vocals.kill')")) === 1);
-  await muis('#stems .st-stem[data-stem="inst"] .st-kill');
+  await klik(1, 'inst', 1);
   await meet('zang én rest weg', 0);
-  await muis('#stems .st-stem[data-stem="vocals"] .st-kill');
+  await klik(1, 'vocals', 0);
   await meet('zang terug, rest nog weg', 0.75);
-  await muis('#stems .st-stem[data-stem="inst"] .st-kill');
+  await klik(1, 'inst', 0);
   await meet('alles terug', 1);
   const tijdens = await muis('#stems .st-stem[data-stem="vocals"] .st-kill', { shift: true,
-    tijdens: async () => { await wacht(150); return (await rms(300)) / basis; } });
+    tijdens: async () => { await totdat("__act.read('track.1.stem.vocals.kill') === 1", 15000); await wacht(100); return (await rms(300)) / basis; } });
   ok(`shift + vasthouden: zang weg zolang je drukt (${tijdens.toFixed(3)})`, bijna(tijdens, 0.25));
+  await totdat("__act.read('track.1.stem.vocals.kill') === 0", 15000);
   await meet('losgelaten: terug', 1);
   await evalueer("__act.invoke('track.1.stem.vocals', 0.5)");
   await rijWordt('Math.abs(r.stems[0].niveau - 0.5) < 0.002', 15000);
@@ -515,26 +522,21 @@ async function doorloopEcht() {
   ok(`STEMS-rij: drums, bas, overig, zang, rest als groep (${r.stems.map((s) => s.naam).join(', ')})`,
     r.stems.map((s) => s.naam).join() === 'drums,bas,overig,zang,rest' && r.stems.at(-1).groep);
   ok('kolomkop 2: S4', await totdat(`(${teken('B')})?.tekst === 'S4'`, 15000));
-  await wacht(400);
+  await wacht(600);
   const basis4 = await rms();
-  const meet4 = async (naam, verwacht) => {
-    await wacht(200);
-    const v = (await rms()) / basis4;
-    ok(`${naam}: ${v.toFixed(3)} (verwacht ${verwacht})`, verwacht === 0 ? v < 0.02 : bijna(v, verwacht));
-  };
-  await muis('#stems .st-stem[data-stem="drums"] .st-kill');
-  await meet4('drums weg', 0.9);
-  await muis('#stems .st-stem[data-stem="bass"] .st-kill');
-  await meet4('drums en bas weg', 0.7);
-  await muis('#stems .st-stem[data-stem="drums"] .st-kill');
-  await muis('#stems .st-stem[data-stem="bass"] .st-kill');
-  await muis('#stems .st-stem[data-stem="inst"] .st-kill');
-  await meet4('rest (groep) weg: alleen de zang', 0.4);
-  await muis('#stems .st-stem[data-stem="vocals"] .st-kill');
-  await meet4('en de zang ook: stilte', 0);
-  await muis('#stems .st-stem[data-stem="vocals"] .st-kill');
-  await muis('#stems .st-stem[data-stem="inst"] .st-kill');
-  await meet4('alles terug', 1);
+  await klik(2, 'drums', 1);
+  await meet('drums weg', 0.9, basis4);
+  await klik(2, 'bass', 1);
+  await meet('drums en bas weg', 0.7, basis4);
+  await klik(2, 'drums', 0);
+  await klik(2, 'bass', 0);
+  await klik(2, 'inst', 1);
+  await meet('rest (groep) weg: alleen de zang', 0.4, basis4);
+  await klik(2, 'vocals', 1);
+  await meet('en de zang ook: stilte', 0, basis4);
+  await klik(2, 'vocals', 0);
+  await klik(2, 'inst', 0);
+  await meet('alles terug', 1, basis4);
   await maat(1440, 790);
   await layout('vier stems, 1440×790');
   await foto(`${voor}-vier-1440.png`);
