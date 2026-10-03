@@ -1,6 +1,7 @@
 // De Controlekamer zonder browser: de opslag van de speellijst
-// (server/proef.js), de speellijst zelf (src/controle/speellijst.js) en het
-// bericht dat de mixer stuurt (src/ui/status-zender.js). Op een tijdelijke map.
+// (server/proef.js), de speellijst zelf (src/controle/speellijst.js), het
+// bericht dat de mixer stuurt (src/ui/status-zender.js) en de tegel Stems
+// (src/ui/stems-weergave.js). Op een tijdelijke map.
 // Draai met: node test/controle.test.mjs
 import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -90,6 +91,30 @@ console.log('\nhet bericht van de mixer (status-zender.js)');
   ok('zonder engine en MIDI: lege lijst, midi null', zonder.tracks.length === 0 && zonder.midi === null);
   const fout = maakStatus({ snap, midi: { ...midi, enabled: false, error: new Error('geweigerd'), input: null } });
   ok('een MIDI-fout wordt tekst', fout.midi.fout === 'Error: geweigerd' && fout.midi.invoer === null);
+}
+
+console.log('\nde tegel Stems (stems-weergave.js)');
+{
+  const { stemsTegel } = await import('../src/ui/stems-weergave.js');
+  const t = (a) => stemsTegel(a);
+  ok('nog niets: uit, "…"', t(null).licht === 'uit' && t(null).waarde === '…' && t(null).naam === 'Stems');
+  ok('een server zonder stems (404): onbekend, met uitleg', t({ ontbreekt: true }).waarde === 'onbekend' && /\/api\/stems/.test(t({ ontbreekt: true }).sub));
+  const weg = t({ opdrachten: [], beschikbaar: false, reden: 'demucs ontbreekt in ~/.varve/stems-venv' });
+  ok('splitter weg: rood, met de reden', weg.licht === 'fout' && weg.waarde === 'splitter ontbreekt' && /demucs ontbreekt/.test(weg.sub));
+  ok('splitter weg zonder reden: toch een uitleg', t({ opdrachten: [], beschikbaar: false }).sub.length > 0);
+  const druk = t({ beschikbaar: true, opdrachten: [
+    { id: 'a', track: 'x', titel: 'een album', aantal: 4, status: 'bezig', voortgang: 0.31 },
+    { id: 'b', track: 'y', aantal: 2, status: 'wacht' }, { id: 'c', track: 'z', aantal: 2, status: 'wacht' },
+    { id: 'd', track: 'q', aantal: 2, status: 'klaar' }] });
+  ok(`wat loopt en wat wacht ("${druk.waarde}", "${druk.sub}")`, druk.licht === 'half' && druk.waarde === '1 bezig, 2 wacht'
+    && druk.sub === 'een album · in 4 · 31%');
+  ok('alleen wachtend: half, "wacht op de splitter"', /wacht op de splitter/.test(t({ opdrachten: [{ id: 'b', status: 'wacht', aantal: 2 }] }).sub));
+  const leeg = t({ opdrachten: [{ id: 'd', status: 'klaar', aantal: 2 }], beschikbaar: true });
+  ok('niets open: groen, "splitter klaar"', leeg.licht === 'ok' && leeg.waarde === 'leeg' && leeg.sub === 'splitter klaar');
+  const mis = t({ opdrachten: [{ id: 'e', track: 't', titel: 'oud', status: 'fout', fout: 'kapot', klaar: 1 },
+    { id: 'f', track: 't2', titel: 'nieuw', status: 'fout', fout: 'geheugen op', klaar: 2 }] });
+  ok('de laatste mislukte staat erbij (half)', mis.licht === 'half' && /nieuw \(geheugen op\)/.test(mis.sub));
+  ok('de tegel is te klonen zoals de andere (gewone data)', JSON.stringify(structuredClone(druk)) === JSON.stringify(druk));
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
