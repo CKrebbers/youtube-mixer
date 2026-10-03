@@ -33,8 +33,30 @@
 
 export const PAGINA = 65536;           // frames per pagina, ~1,37 s op 48 kHz
 export const KANALEN = 2;
-export const BYTES_PER_FRAME = 4;      // 16 bit stereo
+export const BYTES_PER_FRAME = 4;      // 16 bit stereo (audio.wav); stems: zie bytesPerFrame
 export const PAGINA_BYTES = PAGINA * BYTES_PER_FRAME;
+
+/**
+ * Hoeveel kanalen een bestand mag hebben: stereo (audio.wav), of twee of
+ * vier stems als stereoparen naast elkaar (stems.wav, docs/STEMS.md §1).
+ * Kanaalpaar k (kanalen 2k, 2k+1) is één stem. Meer dan vier paren kan de
+ * worklet niet afspelen: hij heeft vier uitgangen.
+ */
+export const KANALEN_TOEGESTAAN = [2, 4, 8];
+
+/**
+ * Bytes per frame uit de kop: 16 bit maal het aantal kanalen. Een pagina is
+ * altijd PAGINA FRAMES, dus PAGINA × bytesPerFrame bytes: met stems even veel
+ * muziek per pagina als zonder, alleen breder.
+ */
+export const bytesPerFrame = (kop) => kop.kanalen * (kop.bits / 8);
+
+/**
+ * Zoveel uitgangen heeft de worklet (stream-lezer.js), altijd, elk van twee
+ * kanalen: uitgang k speelt kanaalpaar k. Een stereobestand speelt op
+ * uitgang 0, de rest is stil.
+ */
+export const UITGANGEN = 4;
 
 export const STIL = Object.freeze({ T: 0, P: 0, R: 1, loop: null, speelt: false, rem: null });
 
@@ -188,11 +210,15 @@ export function maakWav(kanalen, sampleRate) {
   return buf;
 }
 
-/** Alleen wat de worklet kan lezen. Liever nu een duidelijke fout dan straks ruis. */
+/**
+ * Alleen wat de worklet kan lezen. Liever nu een duidelijke fout dan straks ruis.
+ * 2, 4 of 8 kanalen: stereo, of stereoparen voor stems. Of het aantal past
+ * bij wat de aanroeper verwacht (stems of niet), zegt de StreamBron.
+ */
 export function controleerWav(kop) {
   if (kop.formaat !== 1 && kop.formaat !== 0xfffe) return `WAV-formaat ${kop.formaat} wordt niet ondersteund (alleen PCM)`;
   if (kop.bits !== 16) return `${kop.bits}-bit WAV wordt niet ondersteund (alleen 16-bit)`;
-  if (kop.kanalen !== 2) return `${kop.kanalen} kanalen wordt niet ondersteund (alleen stereo)`;
+  if (!KANALEN_TOEGESTAAN.includes(kop.kanalen)) return `${kop.kanalen} kanalen wordt niet ondersteund (alleen 2, 4 of 8: stereo of stereoparen)`;
   return null;
 }
 
@@ -268,6 +294,13 @@ export function reeksen(paginas, max = 8) {
  *
  * Eén klad voor alle decks: de worklet rendert ze na elkaar, nooit door
  * elkaar heen, en renderBlok roept niets aan dat terugroept.
+ *
+ * STEMS (docs/STEMS.md §3): een pagina mag meer dan twee kanalen per frame
+ * hebben (`stride`: 2, 4 of 8), en renderBlok leest er één stereopaar uit
+ * (`paar`: het eerste kanaal, 0, 2, 4 of 6). De worklet roept hem per paar
+ * aan, elk met zijn eigen `staat`. Stride en paar zijn hele getallen en
+ * staan per blok op `klad`, zoals t0: geen afval, en voor stereo (stride 2,
+ * paar 0) precies dezelfde indexen en dus bit voor bit dezelfde uitvoer.
  */
 
 const VOORBIJ = 0, GEWOON = 1, NAAD = 2;        // soort frame, zie segKlad
@@ -298,6 +331,10 @@ const klad = {
   yr: new Float64Array(4),
   k0: -1, v0: false,              // heeftPagina: de laatste twee antwoorden (per blok)
   k1: -1, v1: false,
+  // Per blok gezet: kanalen per frame in de pagina en het eerste kanaal van
+  // het paar. Hele getallen vanaf het begin (geen NaN zoals t0): dan blijven
+  // het kleine gehele getallen en kost lezen niets.
+  stride: KANALEN, paar: 0,
 };
 
 /** Eén keer (de worklet: 128 frames), of als een blok groter is dan ooit. */
@@ -309,16 +346,16 @@ function groei(frames) {
 }
 
 /**
- * Frame n (beide kanalen) naar L[i] en R[i], of 0 als die pagina er (nog)
- * niet is. Stilte is het eerlijke antwoord op een gat; de vorige pagina
- * herhalen klinkt als een haperende cd.
+ * Frame n (beide kanalen van het paar) naar L[i] en R[i], of 0 als die
+ * pagina er (nog) niet is. Stilte is het eerlijke antwoord op een gat; de
+ * vorige pagina herhalen klinkt als een haperende cd.
  */
 function leesFrame(paginas, n, L, R, i) {
   L[i] = 0; R[i] = 0;
   if (n < 0) return;
   const p = paginas.get(Math.floor(n / PAGINA));
   if (!p) return;
-  const j = (n % PAGINA) * KANALEN;
+  const j = (n % PAGINA) * klad.stride + klad.paar;
   if (j < p.length) L[i] = p[j] * (1 / 32768);
   if (j + 1 < p.length) R[i] = p[j + 1] * (1 / 32768);
 }
@@ -329,6 +366,7 @@ function leesFrame(paginas, n, L, R, i) {
  */
 function leesKubisch(paginas, F, L, R, soort, vanaf, tot) {
   const yl = klad.yl, yr = klad.yr;
+  const s = klad.stride, paar = klad.paar;      // kanalen per frame, eerste kanaal van het paar
   for (let i = 0; i < tot; i++) {
     if (soort[i] < vanaf) continue;
     const f = F[i];
@@ -342,12 +380,13 @@ function leesKubisch(paginas, F, L, R, soort, vanaf, tot) {
     // een afgekapte laatste pagina) frame voor frame, met dezelfde uitkomst.
     const k = Math.floor((n - 1) / PAGINA);
     const p = n >= 1 && k === Math.floor((n + 2) / PAGINA) ? paginas.get(k) : undefined;
-    const j = ((n - 1) % PAGINA) * KANALEN;
-    if (p && j + 7 < p.length) {
+    // Stereo: s = 2 en paar = 0, dus j, j+1 … j+7: dezelfde indexen als altijd.
+    const j = ((n - 1) % PAGINA) * s + paar;
+    if (p && j + 3 * s + 1 < p.length) {
       yl[0] = p[j] * (1 / 32768); yr[0] = p[j + 1] * (1 / 32768);
-      yl[1] = p[j + 2] * (1 / 32768); yr[1] = p[j + 3] * (1 / 32768);
-      yl[2] = p[j + 4] * (1 / 32768); yr[2] = p[j + 5] * (1 / 32768);
-      yl[3] = p[j + 6] * (1 / 32768); yr[3] = p[j + 7] * (1 / 32768);
+      yl[1] = p[j + s] * (1 / 32768); yr[1] = p[j + s + 1] * (1 / 32768);
+      yl[2] = p[j + 2 * s] * (1 / 32768); yr[2] = p[j + 2 * s + 1] * (1 / 32768);
+      yl[3] = p[j + 3 * s] * (1 / 32768); yr[3] = p[j + 3 * s + 1] * (1 / 32768);
     } else {
       leesFrame(paginas, n - 1, yl, yr, 0);
       leesFrame(paginas, n, yl, yr, 1);
@@ -498,10 +537,14 @@ function remUit(seg, S, tot) {
  * met de argumenten (zoals stream-lezer.js): een nieuw object per blok is
  * weer afval.
  *
+ * `stride` (kanalen per frame in de pagina, 2/4/8) en `paar` (eerste kanaal
+ * van het stereopaar, 0/2/4/6): met stems één aanroep per paar, elk met een
+ * eigen `staat`. Zonder: stereo, zoals altijd.
+ *
  * @returns 'einde' als het trackeinde binnen dit blok viel, anders null.
  */
 export function renderBlok({ seg, paginas, uit, frames, t0, ctxRate, trackRate, duur,
-  vorig = null, wisselT = -Infinity, staat = { env: 1 } }) {
+  vorig = null, wisselT = -Infinity, staat = { env: 1 }, stride = KANALEN, paar = 0 }) {
   const L = uit[0], R = uit[1];
   // Hoeveel frames vallen in de overgang? Altijd het begin van het blok: t loopt op.
   let wissel = 0;
@@ -510,6 +553,7 @@ export function renderBlok({ seg, paginas, uit, frames, t0, ctxRate, trackRate, 
 
   groei(frames);
   klad.t0 = t0; klad.ctxRate = ctxRate; klad.trackRate = trackRate; klad.duur = duur;
+  klad.stride = stride; klad.paar = paar;
   const nu = klad.nu, oud = klad.oud;
   if (seg.speelt) leesSegment(seg, paginas, nu, frames);
   if (wissel > 0 && vorig.speelt) leesSegment(vorig, paginas, oud, wissel);

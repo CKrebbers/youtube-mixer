@@ -12,6 +12,54 @@ const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
 const dichtbij = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 
+/**
+ * Een AudioWorkletNode zoals de echte: numberOfOutputs (standaard 1),
+ * outputChannelCount moet even lang zijn (anders IndexSizeError), en
+ * connect(doel, uitgang) gooit IndexSizeError bij een uitgang die er niet is.
+ * Wat hij stuurt komt in `berichten`; wat hij verbindt in `verbindingen`.
+ * Een mock die makkelijker is dan de echte API verbergt bugs.
+ */
+const indexFout = (w) => Object.assign(new Error(`IndexSizeError: ${w}`), { name: 'IndexSizeError' });
+function nepWorkletNode(berichten, nodes = []) {
+  return class {
+    constructor(_ctx, naam, opties = {}) {
+      this.naam = naam;
+      this.numberOfInputs = opties.numberOfInputs ?? 1;
+      this.numberOfOutputs = opties.numberOfOutputs ?? 1;
+      if (opties.outputChannelCount && opties.outputChannelCount.length !== this.numberOfOutputs) throw indexFout('outputChannelCount past niet bij numberOfOutputs');
+      this.outputChannelCount = opties.outputChannelCount ?? Array(this.numberOfOutputs).fill(1);
+      this.verbindingen = [];
+      this.port = { postMessage: (m) => berichten.push(m), onmessage: null };
+      nodes.push(this);
+    }
+    connect(doel, uitgang = 0) {
+      if (!(Number.isInteger(uitgang) && uitgang >= 0 && uitgang < this.numberOfOutputs)) throw indexFout(`uitgang ${uitgang} bestaat niet`);
+      this.verbindingen.push({ doel, uitgang });
+      return doel;
+    }
+    disconnect() { this.verbindingen = []; }
+  };
+}
+
+/** Een WAV met `paren` stereoparen (16 bit, interleaved), zoals stems.wav. */
+function maakWavParen(paren, sr) {
+  const ch = paren.length * 2, n = paren[0][0].length;
+  const buf = new ArrayBuffer(44 + n * ch * 2);
+  const v = new DataView(buf);
+  const zet = (o, t) => { for (let i = 0; i < 4; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  zet(0, 'RIFF'); v.setUint32(4, 36 + n * ch * 2, true); zet(8, 'WAVE');
+  zet(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * ch * 2, true); v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true);
+  zet(36, 'data'); v.setUint32(40, n * ch * 2, true);
+  const pcm = new Int16Array(buf, 44);
+  const naar16 = (x) => { const c = Math.max(-1, Math.min(1, x)); return Math.round(c < 0 ? c * 32768 : c * 32767); };
+  for (let i = 0; i < n; i++) for (let k = 0; k < paren.length; k++) {
+    pcm[i * ch + 2 * k] = naar16(paren[k][0][i]);
+    pcm[i * ch + 2 * k + 1] = naar16(paren[k][1][i]);
+  }
+  return buf;
+}
+
 // ---- het segment ------------------------------------------------------------
 
 console.log('segment');
@@ -223,10 +271,7 @@ console.log('\nStreamBron');
   };
 
   const berichten = [];
-  globalThis.AudioWorkletNode = class {
-    constructor() { this.port = { postMessage: (m) => berichten.push(m), onmessage: null }; }
-    connect() {} disconnect() {}
-  };
+  globalThis.AudioWorkletNode = nepWorkletNode(berichten);
   const ctx = { currentTime: 0, audioWorklet: { addModule: async () => {} } };
   const { StreamBron } = await import('../src/engine/bron.js');
   const bron = new StreamBron(ctx, {}, { haal, interval: 1e9 });
@@ -332,10 +377,7 @@ console.log('\nrem (vinylstop)');
   // Een StreamBron met een nagemaakte worklet: wat hij stuurt vangen we op.
   const { StreamBron, geheugenHaal } = await import('../src/engine/bron.js');
   const berichten = [];
-  globalThis.AudioWorkletNode = class {
-    constructor() { this.port = { postMessage: (m) => berichten.push(m), onmessage: null }; }
-    connect() {} disconnect() {}
-  };
+  globalThis.AudioWorkletNode = nepWorkletNode(berichten);
   const ctx = { currentTime: 0, audioWorklet: { addModule: async () => {} } };
   const bron = new StreamBron(ctx, {}, { interval: 1e9, haal: async () => { throw new Error('mag niet naar het netwerk'); } });
   const haal = geheugenHaal(maakWav([helling], SR));
@@ -505,10 +547,7 @@ console.log('\nlos bestand via de streamkern');
   ok('voorbij het einde: 416', (await haal('x', { headers: { Range: `bytes=${wav.byteLength}-` } })).status === 416);
 
   const berichten = [];
-  globalThis.AudioWorkletNode = class {
-    constructor() { this.port = { postMessage: (m) => berichten.push(m), onmessage: null }; }
-    connect() {} disconnect() {}
-  };
+  globalThis.AudioWorkletNode = nepWorkletNode(berichten);
   const ctx = {
     currentTime: 0, audioWorklet: { addModule: async () => {} },
     createBuffer: (k, len, sr) => { const d = Array.from({ length: k }, () => new Float32Array(len)); return { length: len, sampleRate: sr, duration: len / sr, getChannelData: (c) => d[c] }; },
@@ -539,10 +578,7 @@ console.log('\ngepland starten (starten op de maat)');
   const pcm = new Int16Array(wav, 44);
 
   const berichten = [];
-  globalThis.AudioWorkletNode = class {
-    constructor() { this.port = { postMessage: (m) => berichten.push(m), onmessage: null }; }
-    connect() {} disconnect() {}
-  };
+  globalThis.AudioWorkletNode = nepWorkletNode(berichten);
   const ctx = { currentTime: 10, audioWorklet: { addModule: async () => {} } };
   const bron = new StreamBron(ctx, {}, { interval: 1e9 });
   await bron.laad({ url: 'geheugen:G:1', haal: geheugenHaal(wav) });
@@ -617,6 +653,232 @@ console.log('\ngepland starten (starten op de maat)');
   ok('worklet: startpunt verzet tijdens het wachten (hotcue): stil tot T, dan het nieuwe punt',
     verzet.slice(0, Tf + 1).every((v) => v === 0) && afw2 < 1e-6);
   delete globalThis.registerProcessor; delete globalThis.AudioWorkletProcessor;
+}
+
+// ---- stems: 4 en 8 kanalen (docs/STEMS.md §3) ---------------------------------
+// Een stems-bestand heeft twee of vier stereoparen naast elkaar. renderBlok
+// leest er één paar per aanroep uit (stride, paar). De stereoweg is de gouden
+// (renderblok.test.mjs), dus elk paar moet bit voor bit gelijk zijn aan
+// hetzelfde paar als los stereobestand: exact, cubisch, over een paginagrens,
+// loop-naad, gat (uit en weer in), rem, overgang en trackeinde.
+
+console.log('\nstems: meer kanalen');
+{
+  const { maakWav, bytesPerFrame, UITGANGEN } = K;
+  ok('controleerWav: 2, 4 en 8 kanalen mogen (stereo, twee of vier stems)',
+    [2, 4, 8].every((c) => controleerWav({ formaat: 1, bits: 16, kanalen: c }) === null));
+  ok('… 1, 6 en 16 niet, met een reden', [1, 6, 16].every((c) => /kanalen/.test(controleerWav({ formaat: 1, bits: 16, kanalen: c }) || '')));
+  ok('bytes per frame uit de kop (16 bit × kanalen)', bytesPerFrame({ kanalen: 8, bits: 16 }) === 16 && bytesPerFrame({ kanalen: 2, bits: 16 }) === 4);
+
+  // Vier verschillende stereoparen (tonen + ruis), iets meer dan drie
+  // pagina's: de laatste is afgekapt.
+  const SR = 48000, N = 3 * PAGINA + 1234, DUUR = N / SR;
+  let zaad = 7;
+  const ruis = () => { zaad = (Math.imul(zaad, 1103515245) + 12345) >>> 0; return ((zaad >>> 8) / 16777216 - 0.5) * 0.05; };
+  const tonen = [[55, 82.5], [331, 517], [1200, 1800], [97, 3001]];
+  const pcmParen = tonen.map(([fl, fr], k) => {
+    const p = new Int16Array(N * 2);
+    for (let i = 0; i < N; i++) {
+      p[2 * i] = Math.round((0.3 * Math.sin(2 * Math.PI * fl * i / SR) + ruis()) * 32767 * (1 - 0.1 * k));
+      p[2 * i + 1] = Math.round((0.25 * Math.sin(2 * Math.PI * fr * i / SR) + ruis()) * 32767);
+    }
+    return p;
+  });
+  const vlecht = (aantal) => {
+    const ch = aantal * 2, p = new Int16Array(N * ch);
+    for (let i = 0; i < N; i++) for (let k = 0; k < aantal; k++) { p[i * ch + 2 * k] = pcmParen[k][2 * i]; p[i * ch + 2 * k + 1] = pcmParen[k][2 * i + 1]; }
+    return p;
+  };
+  const pagineer = (pcm, ch) => {
+    const m = new Map();
+    for (let q = 0; q * PAGINA < N; q++) m.set(q, pcm.slice(q * PAGINA * ch, Math.min(N, (q + 1) * PAGINA) * ch));
+    return m;
+  };
+  const stereoPag = pcmParen.map((p) => pagineer(p, 2));
+  const pcm4 = vlecht(2), pcm8 = vlecht(4);
+  const pag = { 4: pagineer(pcm4, 4), 8: pagineer(pcm8, 8) };
+  ok(`de laatste pagina is afgekapt (${pag[8].get(3).length / 8} frames)`, pag[8].get(3).length === 1234 * 8);
+
+  // In blokken van 128 met één staat, zoals de worklet; met `vorig` alleen in het eerste blok.
+  const render = (paginas, seg, { frames = 4096, t0 = 0, stride = 2, paar = 0, vorig = null, wisselT = -Infinity } = {}) => {
+    const L = new Float32Array(frames), R = new Float32Array(frames);
+    const staat = { env: 1 };
+    let eindes = 0;
+    for (let i = 0; i < frames; i += 128) {
+      const f = Math.min(128, frames - i);
+      const r = renderBlok({ seg, paginas, uit: [L.subarray(i, i + f), R.subarray(i, i + f)], frames: f, t0: t0 + i / SR,
+        ctxRate: SR, trackRate: SR, duur: DUUR, vorig, wisselT, staat, stride, paar });
+      if (r === 'einde') eindes++;
+    }
+    return { L, R, eindes };
+  };
+  const bitGelijk = (a, b) => {
+    if (a.length !== b.length) return false;
+    const x = new Uint32Array(a.buffer, a.byteOffset, a.length), y = new Uint32Array(b.buffer, b.byteOffset, b.length);
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return false;
+    return true;
+  };
+  const zonder = (m, q) => { const k = new Map(m); k.delete(q); return k; };
+  const seg = (P, R, extra = {}) => ({ T: 0, P, R, loop: null, speelt: true, rem: null, ...extra });
+  const gevallen = [
+    ['exact (rate 1, heel frame)', seg(1, 1), {}],
+    ['cubisch (1,0004)', seg(0.7, 1.0004), {}],
+    ['cubisch over een paginagrens (0,97)', seg((PAGINA - 300) / SR, 0.97), {}],
+    ['loop met naad (krom, 0,92)', seg(1.2, 0.92, { loop: { start: 1.2, end: 1.2 + 0.3017 } }), { frames: 40000 }],
+    ['loop vanaf 1 ms (naad geklemd)', seg(0.001, 1.08, { loop: { start: 0.001, end: 0.0615 } }), { frames: 9000 }],
+    ['een gat: uitvloeien', seg((PAGINA - 400) / SR, 1.08), { frames: 2000, gat: 1 }],
+    ['een gat: weer invloeien', seg((2 * PAGINA - 300) / SR, 1), { frames: 2000, gat: 1 }],
+    ['rem tot stilstand', seg(2, 1.1, { rem: { a: -1.1 / 0.3 } }), { frames: Math.round(0.35 * SR) }],
+    ['overgang (seek)', seg(2.00731, 1.03, { T: 0.01 }), { t0: 0.01, vorig: seg(1, 1), wisselT: 0.01 }],
+    ['trackeinde (afgekapte pagina)', seg(DUUR - 0.01, 1), { frames: 1024 }],
+  ];
+  for (const ch of [4, 8]) {
+    let allesGelijk = true, mis = [];
+    for (const [naam, sg, opt] of gevallen) {
+      for (let k = 0; k < ch / 2; k++) {
+        const p = opt.gat ? zonder(pag[ch], opt.gat) : pag[ch];
+        const sp = opt.gat ? zonder(stereoPag[k], opt.gat) : stereoPag[k];
+        const a = render(p, sg, { ...opt, stride: ch, paar: 2 * k });
+        const b = render(sp, sg, opt);
+        if (!bitGelijk(a.L, b.L) || !bitGelijk(a.R, b.R) || a.eindes !== b.eindes) { allesGelijk = false; mis.push(`${naam}/paar ${k}`); }
+      }
+    }
+    ok(`${ch} kanalen: elk paar bit voor bit gelijk aan dat paar als stereobestand, in ${gevallen.length} gevallen${mis.length ? ` (anders: ${mis.join(', ')})` : ''}`, allesGelijk);
+  }
+  // En rechtstreeks tegen de samples: op rate 1 en een heel frame het sample zelf, ook over een paginagrens.
+  {
+    const n0 = PAGINA - 40;
+    let exact = true;
+    for (let k = 0; k < 4; k++) {
+      const { L, R } = render(pag[8], seg(n0 / SR, 1), { frames: 256, stride: 8, paar: 2 * k });
+      for (let i = 0; i < 256; i++) if (L[i] !== pcm8[(n0 + i) * 8 + 2 * k] / 32768 || R[i] !== pcm8[(n0 + i) * 8 + 2 * k + 1] / 32768) exact = false;
+    }
+    ok('8 kanalen, rate 1: per paar exact de samples uit het bestand, ook over een paginagrens', exact);
+    const gat = render(zonder(pag[8], 1), seg((PAGINA + 10) / SR, 1), { frames: 128, stride: 8, paar: 6 });
+    ok('8 kanalen, ontbrekende pagina: stilte op elk paar', gat.L.every((v) => v === 0) && gat.R.every((v) => v === 0));
+    const eind = render(pag[8], seg(DUUR - 64 / SR, 1), { frames: 128, stride: 8, paar: 4 });
+    ok('8 kanalen, trackeinde: gemeld, daarna stilte', eind.eindes === 1 && eind.L.slice(70).every((v) => v === 0));
+  }
+
+  // ---- de worklet: vier uitgangen -------------------------------------------
+  let Lezer = null;
+  globalThis.sampleRate = SR;
+  globalThis.currentFrame = 0;
+  globalThis.AudioWorkletProcessor = class { constructor() { const uit = []; this.port = { uit, postMessage: (m) => uit.push(m), onmessage: null }; } };
+  globalThis.registerProcessor = (_naam, kl) => { Lezer = kl; };
+  await import('../src/engine/stream-lezer.js?stems');
+  ok('de worklet kent vier uitgangen', UITGANGEN === 4 && typeof Lezer === 'function');
+  const draaiLezer = (kanalen, pcm, sg, frames = 2048) => {
+    globalThis.currentFrame = 0;                   // de berichten komen op 0 binnen, zoals de referentie
+    const w = new Lezer();
+    const zend = (m) => w.port.onmessage({ data: m });
+    zend({ type: 'bron', duur: DUUR, sr: SR, ...(kanalen ? { kanalen } : {}) });
+    const ch = kanalen || 2;
+    for (let q = 0; q * PAGINA < N; q++) zend({ type: 'pagina', i: q, data: pcm.slice(q * PAGINA * ch, Math.min(N, (q + 1) * PAGINA) * ch) });
+    zend({ type: 'segment', id: 1, seg: sg });
+    const uit = Array.from({ length: 4 }, () => [new Float32Array(frames), new Float32Array(frames)]);
+    for (let f = 0; f < frames; f += 128) {
+      globalThis.currentFrame = f;
+      // Vuilnis vooraf: een uitgang zonder paar moet de worklet zelf op nul zetten.
+      const blok = Array.from({ length: 4 }, () => [new Float32Array(128).fill(0.5), new Float32Array(128).fill(-0.5)]);
+      w.process([], blok);
+      for (let k = 0; k < 4; k++) { uit[k][0].set(blok[k][0], f); uit[k][1].set(blok[k][1], f); }
+    }
+    return { uit, eindes: w.port.uit.filter((m) => m.type === 'einde').length, w };
+  };
+  const sg = seg(0.5, 1.03);
+  // De worklet vloeit het eerste segment in vanuit stilte (vorig = STIL op 0): de referentie ook.
+  const ref = (k) => render(stereoPag[k], sg, { frames: 2048, vorig: K.STIL, wisselT: 0 });
+  const acht = draaiLezer(8, pcm8, sg);
+  ok('worklet, 8 kanalen: uitgang k = paar k, bit voor bit (vier uitgangen)',
+    [0, 1, 2, 3].every((k) => { const b = ref(k); return bitGelijk(acht.uit[k][0], b.L) && bitGelijk(acht.uit[k][1], b.R); }));
+  const vier = draaiLezer(4, pcm4, sg);
+  ok('worklet, 4 kanalen: uitgang 0 en 1 de twee stems, 2 en 3 op nul (ook met vuilnis erin)',
+    [0, 1].every((k) => { const b = ref(k); return bitGelijk(vier.uit[k][0], b.L) && bitGelijk(vier.uit[k][1], b.R); })
+    && [2, 3].every((k) => vier.uit[k][0].every((v) => v === 0) && vier.uit[k][1].every((v) => v === 0)));
+  const stereo = draaiLezer(null, pcmParen[0], sg);
+  ok('worklet, stereo (bron zonder kanalen): uitgang 0 zoals altijd, 1–3 op nul',
+    bitGelijk(stereo.uit[0][0], ref(0).L) && bitGelijk(stereo.uit[0][1], ref(0).R) && [1, 2, 3].every((k) => stereo.uit[k][0].every((v) => v === 0)));
+  const einde = draaiLezer(8, pcm8, seg(DUUR - 0.01, 1), 1024);
+  ok('worklet, 8 kanalen: één einde-melding (van paar 0), niet vier', einde.eindes === 1);
+  // Een volgend nummer zonder stems op dezelfde node: de paren gaan terug naar één.
+  {
+    const w = acht.w;
+    w.port.onmessage({ data: { type: 'bron', duur: DUUR, sr: SR, kanalen: 2 } });
+    for (let q = 0; q * PAGINA < N; q++) w.port.onmessage({ data: { type: 'pagina', i: q, data: stereoPag[0].get(q) } });
+    w.port.onmessage({ data: { type: 'segment', id: 2, seg: seg(0.5, 1, { T: 4096 / SR }) } });
+    globalThis.currentFrame = 4096;
+    const blok = Array.from({ length: 4 }, () => [new Float32Array(128).fill(0.5), new Float32Array(128).fill(0.5)]);
+    w.process([], blok);
+    ok('daarna een stereonummer op dezelfde node: alleen uitgang 0 klinkt', blok[0][0].some((v) => v !== 0 && v !== 0.5)
+      && [1, 2, 3].every((k) => blok[k][0].every((v) => v === 0) && blok[k][1].every((v) => v === 0)));
+  }
+  delete globalThis.registerProcessor; delete globalThis.AudioWorkletProcessor;
+
+  // ---- de StreamBron met een stems-bestand -----------------------------------
+  const { StreamBron, geheugenHaal } = await import('../src/engine/bron.js');
+  const kort = 2 * PAGINA + 500;                  // drie pagina's, de laatste afgekapt
+  const vlak = (k, c) => new Float32Array(kort).map((_, i) => (c ? -1 : 1) * (0.05 * (k + 1)) + 0.2 * Math.sin(i / (30 + 7 * k + 3 * c)));
+  const paren = [0, 1, 2, 3].map((k) => [vlak(k, 0), vlak(k, 1)]);
+  const wav8 = maakWavParen(paren, SR), wav4 = maakWavParen(paren.slice(0, 2), SR);
+  const p8 = new Int16Array(wav8, 44);
+  const berichten = [], nodes = [];
+  globalThis.AudioWorkletNode = nepWorkletNode(berichten, nodes);
+  const ctx = {
+    currentTime: 0, audioWorklet: { addModule: async () => {} },
+    createBuffer: (k, len, sr) => { const d = Array.from({ length: k }, () => new Float32Array(len)); return { length: len, sampleRate: sr, duration: len / sr, getChannelData: (c) => d[c] }; },
+  };
+  const ingangen = [{ naam: 'g0' }, { naam: 'g1' }, { naam: 'g2' }, { naam: 'g3' }];
+  const bron = new StreamBron(ctx, ingangen, { interval: 1e9, haal: async () => { throw new Error('mag niet naar het netwerk'); } });
+  await bron.laad({ url: 'geheugen:stems8', haal: geheugenHaal(wav8), kanalen: 8 });
+  const node = nodes.at(-1);
+  ok('de node: vier uitgangen van twee kanalen', node.numberOfOutputs === 4 && node.outputChannelCount.join() === '2,2,2,2' && node.numberOfInputs === 0);
+  ok('uitgang k naar ingang k (de stemIn van het deck)', node.verbindingen.length === 4 && node.verbindingen.every((v, k) => v.doel === ingangen[k] && v.uitgang === k));
+  ok('kanalen en duur uit de kop (16 bytes per frame)', bron.kanalen === 8 && dichtbij(bron.duur, kort / SR));
+  const bronBericht = berichten.find((m) => m.type === 'bron');
+  ok('de worklet hoort hoeveel kanalen', bronBericht?.kanalen === 8);
+  const pag0 = berichten.find((m) => m.type === 'pagina' && m.i === 0), pag2 = berichten.find((m) => m.type === 'pagina' && m.i === 2);
+  ok('een pagina is PAGINA frames × 8 kanalen', pag0?.data.length === PAGINA * 8 && pag0.data[7 * 8 + 5] === p8[7 * 8 + 5]);
+  ok('de laatste pagina afgekapt op hele frames', pag2?.data.length === 500 * 8 && pag2.data[499 * 8 + 7] === p8[(2 * PAGINA + 499) * 8 + 7]);
+  ok(`geheugen: ${(bron.geheugen / 1e6).toFixed(1)} MB voor drie pagina's van 8 kanalen`, bron.geheugen === (2 * PAGINA + 500) * 16);
+
+  // Knippen voor de sampler: de som van de paren met de gewichten van het deck.
+  const w = [0.5, 0, 1.25, 2];
+  const stuk = await bron.knip(1, 1.01, w);
+  const a0 = Math.round(1 * SR);
+  let fout = 0;
+  for (let i = 0; i < stuk.length; i++) {
+    let l = 0, r = 0;
+    for (let k = 0; k < 4; k++) { l += w[k] * p8[(a0 + i) * 8 + 2 * k] / 32768; r += w[k] * p8[(a0 + i) * 8 + 2 * k + 1] / 32768; }
+    fout = Math.max(fout, Math.abs(stuk.getChannelData(0)[i] - l), Math.abs(stuk.getChannelData(1)[i] - r));
+  }
+  ok(`knip met gewichten per paar (zang weg = 0): de gewogen som (afwijking ${fout.toExponential(1)})`, stuk.length === 480 && fout < 1e-6);
+  const som = await bron.knip(1, 1.001);
+  ok('knip zonder gewichten: elk paar telt voor 1', Math.abs(som.getChannelData(0)[3] - [0, 1, 2, 3].reduce((t, k) => t + p8[(a0 + 3) * 8 + 2 * k] / 32768, 0)) < 1e-6);
+
+  // Verkeerd aantal kanalen: weigeren met een reden, vóór er iets verandert.
+  let reden = null;
+  await bron.laad({ url: 'geheugen:stems8b', haal: geheugenHaal(wav8), kanalen: 4 }).catch((e) => { reden = e.message; });
+  ok(`8 kanalen waar er 4 verwacht worden: geweigerd ("${reden}")`, /8 kanalen/.test(reden || '') && /verwacht 4/.test(reden));
+  reden = null;
+  await bron.laad({ url: 'geheugen:stems4', haal: geheugenHaal(wav4), kanalen: 2 }).catch((e) => { reden = e.message; });
+  ok(`stems.wav zonder stems opgegeven: geweigerd ("${reden}")`, /verwacht stereo/.test(reden || ''));
+  reden = null;
+  await bron.laad({ url: 'geheugen:stereo', haal: geheugenHaal(maakWav([paren[0][0], paren[0][1]], SR)), kanalen: 8 }).catch((e) => { reden = e.message; });
+  ok('een stereobestand waar 4 stems verwacht worden: geweigerd', /2 kanalen/.test(reden || ''));
+  await bron.laad({ url: 'geheugen:stems4', haal: geheugenHaal(wav4), kanalen: 4 });
+  ok('daarna gewoon twee stems laden: kanalen 4, dezelfde node', bron.kanalen === 4 && nodes.length === 1 && berichten.filter((m) => m.type === 'bron').at(-1).kanalen === 4);
+  bron.vernietig();
+
+  // Eén node als uitgang: alle vier uitgangen daarheen (de som).
+  const een = { naam: 'som' };
+  const b1 = new StreamBron(ctx, een, { interval: 1e9 });
+  await b1.laad({ url: 'geheugen:stereo2', haal: geheugenHaal(maakWav([paren[0][0], paren[0][1]], SR)) });
+  ok('één node als uitgang: alle vier de uitgangen gaan erheen', nodes.at(-1).verbindingen.length === 4
+    && nodes.at(-1).verbindingen.every((v, k) => v.doel === een && v.uitgang === k));
+  const st = await b1.knip(1, 1.001);
+  ok('stereo knippen zonder gewichten: de samples zelf, zoals altijd', st.getChannelData(0)[5] === new Int16Array(maakWav([paren[0][0], paren[0][1]], SR), 44)[(a0 + 5) * 2] / 32768);
+  b1.vernietig();
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
