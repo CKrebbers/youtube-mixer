@@ -13,6 +13,8 @@ import { opzetRacks } from './racks.js';
 import { opzetSamplerOpslag } from './sampler-opslag.js';
 import { opzetKlankschaal } from './klankschaal-paneel.js';
 import { opzetAuto } from './auto-paneel.js';
+import { opzetStems } from './stems-paneel.js';
+import { StemsWachtrij } from './stems-wachtrij.js';
 import { Automaat } from '../auto/automaat.js';
 import { opzetPlanKoppeling } from './plan-koppeling.js';
 import { opzetHotcueOpslag } from './hotcue-opslag.js';
@@ -73,7 +75,13 @@ const staat = {
   deckHerkomst: perDeck(() => null),    // waar de track vandaan komt: library, demo of los (voor het handelingenlog)
   terugspeelDecks: new Set(),           // tracks die terugspelen laadde: daarvan wordt niets in de library bewaard
   analysis: perDeck(() => null),        // golfvorm-peaks per track
+  deckStems: perDeck(() => null),       // stems volgens de library bij het laden: { aantal, mislukt } of null (laden.js)
 };
+
+// De stems-rij van de server (docs/STEMS.md §2): één keer voor de library-kolom,
+// de STEMS-rij en het teken in de kolomkop.
+const stemsWachtrij = new StemsWachtrij();
+window.stemsWachtrij = stemsWachtrij;
 
 // ---- video ----------------------------------------------------------------
 const video = opzetVideo({ engine });
@@ -94,7 +102,8 @@ window.opnemer = opname.opnemer;
 // ---- het scherm als spiegel van de APC, en de track met focus -------------
 // Eerst de spiegel: die zet de kolommen en het focusdeel neer, en pas daarna
 // kan opzetVensters alle knoppen en faders binden.
-const spiegel = opzetSpiegel({ engine, staat, loadFile: (...a) => laden.loadFile(...a) });
+const spiegel = opzetSpiegel({ engine, staat, loadFile: (...a) => laden.loadFile(...a),
+  stemsVan: (id) => stemsPaneel.kolomTeken(id) });
 window.spiegel = spiegel;
 const vensters = opzetVensters({
   engine,
@@ -112,9 +121,12 @@ const hotcueOpslag = opzetHotcueOpslag({ engine, meld });
 const laden = opzetLaden({
   engine, staat, videoMixer,
   racks, haalSamples: samplerOpslag.haalSamples, haalHotcues: hotcueOpslag.haalHotcues,
-  naLaad: (info) => logboek.naLaad(info),
+  naLaad: (info) => logboek.naLaad(info), stems: stemsWachtrij,
 });
 window.library = laden.library;
+// De STEMS-rij voor de track met focus (standaard dicht, knop "stems").
+const stemsPaneel = opzetStems({ engine, staat, wachtrij: stemsWachtrij, library: laden.library });
+stemsWachtrij.peil();
 
 // ---- handelingenlog: wat er op de bus gebeurt, om terug te spelen ---------
 // Loopt vanzelf mee met een opname (zelfde id). docs/HANDELINGENLOG.md.
@@ -210,6 +222,7 @@ startRenderloop({
     video: video.teken,
     klankschaal: klankschaal.teken,
     auto: autoPaneel.teken,
+    stems: stemsPaneel.teken,
   },
 });
 

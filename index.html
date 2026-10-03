@@ -26,6 +26,7 @@
     <button id="plan-btn" class="ghost" title="de programmering: het hele setplan zien, inrichten en live volgen (apart venster)">plan</button>
     <button id="auto-btn" class="ghost" title="auto-DJ: de app kiest en mixt, jij stuurt bij">auto</button>
     <button id="klankschaal-btn" class="ghost" title="klankschaal: speel mee op de toon van wat je hoort">klankschaal</button>
+    <button id="stems-btn" class="ghost" title="stems van de track met focus: zang en rest (of vier), niveau en kill per stem">stems</button>
     <a id="apc-btn" class="ghost" href="apc.html" target="varve-apc" title="wat elke knop van de APC doet, per mapje">APC-kaart</a>
     <button id="midi-btn" class="ghost">MIDI</button>
     <button id="help-btn" class="ghost">? toetsen</button>
@@ -204,6 +205,52 @@
 </main>
 
 
+<!-- ================= STEMS (docs/STEMS.md §4) ================= -->
+<!-- Voor de track met focus. De actions staan hier op track 1; stems-paneel.js
+     schrijft ze om naar de focus. Per stem: naam, niveau (schuif) en kill.
+     Welke stems er zijn zegt read(): null = niet in deze stand. -->
+<section id="stems" class="stems-rij hidden">
+  <span class="sampler-kop">STEMS</span>
+  <span class="st-track" title="de track met focus">track 1</span>
+  <div class="st-stemmen">
+    <div class="st-stem hidden" data-stem="drums">
+      <span class="st-naam">drums</span>
+      <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.drums" title="niveau van de drums (dubbelklik: vol)">
+      <button data-kind="button" data-action="track.1.stem.drums.kill" data-action-shift="track.1.stem.drums.hold" class="btn sm st-kill" title="drums weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+    </div>
+    <div class="st-stem hidden" data-stem="bass">
+      <span class="st-naam">bas</span>
+      <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.bass" title="niveau van de bas (dubbelklik: vol)">
+      <button data-kind="button" data-action="track.1.stem.bass.kill" data-action-shift="track.1.stem.bass.hold" class="btn sm st-kill" title="bas weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+    </div>
+    <div class="st-stem hidden" data-stem="other">
+      <span class="st-naam">overig</span>
+      <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.other" title="niveau van overig (dubbelklik: vol)">
+      <button data-kind="button" data-action="track.1.stem.other.kill" data-action-shift="track.1.stem.other.hold" class="btn sm st-kill" title="overig weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+    </div>
+    <div class="st-stem hidden" data-stem="vocals">
+      <span class="st-naam">zang</span>
+      <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.vocals" title="niveau van de zang (dubbelklik: vol)">
+      <button data-kind="button" data-action="track.1.stem.vocals.kill" data-action-shift="track.1.stem.vocals.hold" class="btn sm st-kill" title="zang weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+    </div>
+    <div class="st-stem hidden" data-stem="inst">
+      <span class="st-naam">rest</span>
+      <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.inst" title="niveau van de rest (dubbelklik: vol)">
+      <button data-kind="button" data-action="track.1.stem.inst.kill" data-action-shift="track.1.stem.inst.hold" class="btn sm st-kill" title="rest weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+    </div>
+  </div>
+  <!-- zonder stems: wat er is, splitsen (2 · 4), of de voortgang met × -->
+  <span class="st-geen hidden">
+    <span class="st-tekst">geen stems</span>
+    <span class="st-splitsen">splitsen in
+      <button class="btn sm st-splits" data-aantal="2" title="zang en rest">2</button>
+      <button class="btn sm st-splits" data-aantal="4" title="drums · bas · overig · zang">4</button>
+    </span>
+    <span class="st-balk lib-job-balk hidden"><i></i></span>
+    <button class="btn sm st-x hidden" title="splitsen stoppen">×</button>
+  </span>
+</section>
+
 <!-- ================= AUTO-DJ ================= -->
 <section id="auto" class="auto-rij hidden">
   <span class="sampler-kop">AUTO</span>
@@ -261,6 +308,10 @@
     <button class="btn sm lib-haal">haal binnen</button>
     <button class="btn sm lib-bestand" title="eigen audio of video (ook meerdere) — of sleep bestanden op dit paneel">bestand…</button>
     <input class="lib-bestanden" type="file" hidden multiple accept="audio/*,video/*,.mkv,.mov,.m4v,.flac,.aiff,.aif,.ogg,.opus">
+    <!-- stems bij het binnenhalen (docs/STEMS.md §4): onthouden, standaard 2 -->
+    <span class="lib-stems-keuze" title="stems bij het binnenhalen: zang + rest (2), vier, of niet splitsen (onthouden)">stems
+      <button class="btn sm" data-stems-keuze="2" title="zang en rest">2</button><button class="btn sm" data-stems-keuze="4" title="drums · bas · overig · zang">4</button><button class="btn sm" data-stems-keuze="0" title="niet splitsen">geen</button>
+    </span>
     <input class="lib-zoek" type="text" placeholder="zoeken…">
     <button class="btn sm lib-close">sluit</button>
   </div>
