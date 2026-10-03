@@ -13,7 +13,7 @@
 //   node tools/headless/stems.mjs --nep [uitmap]   alleen de ui: /api/stems en de stem-actions
 //                                                  nagebootst IN de pagina (layout, kolom, rij)
 // Poorten:  VARVE_KIJK_POORT (8793) en VARVE_KIJK_DEBUG (9339).
-// Splitter: VARVE_STEMS_CMD (standaard "node test/nep-stems.mjs", de server draait in de repo).
+// Splitter: VARVE_STEMS_CMD (standaard het startscript van maakNepStems uit test/nep-stems.mjs).
 // Foto's:   1440×790 (laptop) en 1920×1080 in de uitmap (standaard tools/headless/uit).
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readdirSync, writeFileSync, rmSync, existsSync, mkdirSync } from 'node:fs';
@@ -22,6 +22,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run } from '../../server/ingest.js';
 import { maakNepYtdlp } from '../../test/nep-ytdlp.mjs';
+import { maakNepStems } from '../../test/nep-stems.mjs';
 
 const NEP = process.argv.includes('--nep');
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
@@ -47,9 +48,10 @@ const bron = join(tmp, 'bron.wav');
 await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi',
   '-i', "aevalsrc='0.5*sin(2*PI*440*t)':s=48000:d=14", '-ac', '2', bron]);
 const nepYtdlp = maakNepYtdlp(tmp);
-// De server start in de repo (cwd), zodat een relatief commando werkt, ook als
-// het pad van de repo spaties heeft (Clay's Bureaublad: "1. Projects").
-const STEMS_CMD = process.env.VARVE_STEMS_CMD || 'node test/nep-stems.mjs';
+// VARVE_STEMS_CMD is één uitvoerbaar bestand (de server splitst niet op
+// spaties): het startscript van maakNepStems, zoals stems.test.mjs. Werkt ook
+// als het pad van de repo spaties heeft (Clay's Bureaublad: "1. Projects").
+const STEMS_CMD = process.env.VARVE_STEMS_CMD || maakNepStems(tmp);
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   cwd: WORTEL,
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
