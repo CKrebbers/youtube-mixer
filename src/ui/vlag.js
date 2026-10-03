@@ -17,3 +17,12 @@ export function vormenAan(url = location.href) {
   }
 }
 
+/**
+ * De vlag voor de AV-app-hub (?hub=ws://localhost:7700/app): de APC komt dan
+ * van de hub (src/control/hub.js), niet van Web MIDI. Niet onthouden: zonder
+ * de vlag in de adresbalk is het gewoon VARVE, en wordt hub.js niet geladen.
+ */
+export function hubAdres(url = location.href) {
+  const v = new URL(url).searchParams.get('hub');
+  return v && /^wss?:\/\//.test(v) ? v : null;
+}

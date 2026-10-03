@@ -25,7 +25,7 @@ import { opzetMidi } from './midi-opzet.js';
 import { startRenderloop } from './renderloop.js';
 import { tabblad } from './tabblad.js';
 import { startStatusZender } from './status-zender.js';
-import { vormenAan } from './vlag.js';
+import { vormenAan, hubAdres } from './vlag.js';
 
 /**
  * Het instappunt van de schermlaag: maakt de engine en zet de modules in
@@ -54,14 +54,17 @@ window.meld = meld;
 // Een tweede tabblad krijgt anders elke knopdruk ook, en stuurt zijn eigen
 // LED's. Wie de lock heeft is het eerste (zie tabblad.js); midi-opzet.js
 // vraagt het met isEersteTabblad().
+// Met ?hub= bezit de AV-app-hub de APC (src/control/hub.js): dan beslist de
+// lock niets over MIDI (de hub laat het nieuwste tabblad winnen) en past deze melding niet.
+const hubUrl = hubAdres();
 {
   const t = tabblad();
   let melding = null;
-  t.on('tweede', () => {
+  if (!hubUrl) t.on('tweede', () => {
     document.body.classList.add('tweede-tabblad');
     melding = meld('er is al een VARVE-tabblad open — dit tabblad luistert niet naar de APC (sluit het andere, dan neemt dit het over)', 'fout');
   });
-  t.on('eerste', () => {
+  if (!hubUrl) t.on('eerste', () => {
     if (!document.body.classList.contains('tweede-tabblad')) return;
     document.body.classList.remove('tweede-tabblad');
     melding?.remove();
@@ -185,7 +188,9 @@ attachKeyboard(engine, { onHelp: toggleHelp, venster: (v) => staat.venster[v] })
 const lagen = new Lagen();
 bindLagen(lagen);
 window.lagen = lagen;
-const midiDelen = opzetMidi({ engine, sluitOnderpanelen: onderpanelen.sluitOnderpanelen, lagen,
+// AV-app-hub: alleen met ?hub=ws://… wordt hub.js geladen (zie hierboven).
+const hub = hubUrl ? { url: hubUrl, HubMidi: (await import('../control/hub.js')).HubMidi } : null;
+const midiDelen = opzetMidi({ engine, sluitOnderpanelen: onderpanelen.sluitOnderpanelen, lagen, hub,
   geraakt: (sig, regelSig) => spiegel.markeer(sig, regelSig) });
 spiegel.koppel({ mapping: midiDelen.mapping, lagen });
 // Het mapje "vorm" op de APC komt als fragment BIJ de mapping, niet erin:

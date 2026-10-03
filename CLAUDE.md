@@ -77,6 +77,7 @@ src/
                     handelingen.js  het handelingenlog: [t, action, waarde] op de audioklok, per seconde weg
                     terugspelen.js  een log terugspelen: beginstand, dan elke regel op T0 + t
                     devices/        apc40mk2.js, generic.js — wat er op het apparaat zit
+                    hub.js          AV-app-hub (alleen ?hub=ws://…): HubMidi = MidiHub met de hub als poort (lease), manifest, herverbinden
   analysis/         peaks.js        golfvorm-peaks + ruwe RMS
                     features.js     banden laag/midden/hoog, rms, zwaartepunt, onsets uit een spectrum. Puur, tijd van buiten.
                     luisteraar.js   leest de master-AnalyserNode uit (alleen lezen) -> features
@@ -88,6 +89,7 @@ src/
                     onderpanelen, midi-opzet, opname-knop, video-paneel,
                     renderloop, mapje-balk — elk een opzet…()-functie
                     vlag.js + vorm-paneel.js: ?vormen=1 en de VORM-rij (paneel pas geladen als de vlag aan staat)
+                    vlag.js ook ?hub=ws://… (hubAdres): dan laadt app.js control/hub.js, anders niet
                     waveform.js, controls.js, midi-monitor.js,
                     mapping-panel.js (de lijst), learn-mode.js (aanwijzen op het scherm),
                     rack-editor.js (racks bouwen met de muis, werkt op een kopie)
@@ -214,6 +216,7 @@ test/
   nep-tijdlijn.mjs  nep-AudioParam die uitrekent wat de param op elk moment doet (geen test zelf)
   klankschaal.test.mjs  stemming (24 toonsoorten × ladders), toonhoogte gemeten, slapen, wrijven, afval, engine en bus
   analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions, maatbronnen
+  hub.test.mjs      AV-app-hub: nep-WebSocket + nep-klok; manifest, LED's per beeld, focus, zet, hartslag, 0,5→5 s, 4001→30 s
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -960,6 +963,21 @@ docs/
   (`track.{focus}.fx.knob.1-8`). Controls per trackstrip (fader, activator,
   solo, clip stop, track select) melden via het KANAAL welke strip.
   Na loskoppelen staat hij weer in generic (0x40): init opnieuw bij elke hotplug.
+
+- AV-APP-HUB (3 okt 2026, repo AV-app-hub, PROTOCOL.md §5): alleen met
+  `?hub=ws://localhost:7700/app`. De hub bezit APC40 en LPD8; VARVE is een
+  LEASE-app: `HubMidi` (src/control/hub.js) is een MidiHub met één nep-poort
+  "APC40 mkII (hub)", dus mapping, LED-laag, mapjes en leren blijven gelijk.
+  Invoer = `{t:'midi'}` (alleen met focus; loslaten altijd), LED's gaan per
+  beeld gebundeld als `{t:'led'}`. Met de vlag: GEEN requestMIDIAccess, de
+  Web Lock beslist niets over MIDI (twee tabbladen: de hub laat de nieuwste
+  winnen, de oude krijgt 4001 en wacht 30 s), de init-SysEx wordt ingeslikt
+  (de hub zet 0x42), en Clay's bewaarde poortkeuze blijft onaangeroerd.
+  LPD8-macro's via de bus: K1 intensiteit = `mixer.master`, K2 helderheid =
+  `video.master`, K4 beweging = `video.pulse`; crossfader zonder rol (slew 2 s).
+  Geen `paniek`: er is geen veilige stop-alles-action. Zonder vlag wordt
+  hub.js niet geladen. Toets: `node tools/headless/hub.mjs` (toetsApp van de hub
+  + de echte hub met nep-APC/LPD8; `VARVE_HUB_REPO`).
 
 - VORMLAGEN (24 september 2026, docs/plugins/01-plan.md, stap 1): de
   Vormmachines uit Clay's artifact als generatief beeld over de video. Alleen
