@@ -18,6 +18,7 @@ import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
 import { Proef } from './proef.js';
+import { Splitter, StemsRij, maakStems, wisStemsBestanden, isAantal, isStemsKeuze, STEMS_STANDAARD } from './stems.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -75,6 +76,13 @@ const wachtrij = new Wachtrij();
  * ook (in een ander tabblad) weggeklikt zijn.
  */
 const SERVER_RUN = randomUUID();
+/*
+ * Stems (docs/STEMS.md): een eigen rij naast de ingest, ook één tegelijk. De
+ * ingest-rij wacht er nooit op: een nummer is speelbaar zodra audio.wav er
+ * staat, de stems komen erna.
+ */
+const splitter = new Splitter();
+const stemsRij = new StemsRij();
 // Instelbaar voor de tests: een eigen database en opnamemap, niet de jouwe.
 const lib = new Library(process.env.VARVE_DB || join(WORTEL, 'media', 'library.db'));
 
@@ -161,6 +169,9 @@ function bewaarInLibrary(r) {
   if (r.onset) track.onset = { ...r.onset, bestand: alsPad(r.onset.bestand) };
   try {
     lib.bewaarTrack(track);
+    // Nieuwe audio.wav = oude stems passen niet meer (andere frames, ander
+    // geluid). De rij hier, de bestanden in stemsNaIngest.
+    lib.bewaarStems(track.id, null);
     if (track.peaks) lib.bewaarPeaks(track.id, track.peaks);
     // De ingest rekende de envelope al uit; zonder dit deed de eerste tap
     // het hele werk nog een keer.
@@ -186,6 +197,60 @@ function bewaarInLibrary(r) {
 }
 
 /**
+ * Een nummer de stems-rij in (POST /api/stems, en na een ingest). Geeft
+ * { code, antwoord } zoals docs/STEMS.md het zegt:
+ * - 404: geen nummer, of zijn audio staat niet op schijf;
+ * - 200 + dubbel: het staat al in de rij (die opdracht, ook met een ander aantal);
+ * - 200 + al: het heeft al stems met dit aantal (tenzij `opnieuw`);
+ * - 503: de splitter is er niet (met de reden);
+ * - 202: nieuw in de rij.
+ * `hercontrole`: was de splitter er niet, kijk dan nog eens (de route; na een
+ * ingest niet, dat zou elke ingest een paar seconden Python kosten).
+ */
+async function nieuweStems(trackId, aantal, { opnieuw = false, hercontrole = false } = {}) {
+  const track = await metAudio(typeof trackId === 'string' && /^[\w-]{1,64}$/.test(trackId) ? lib.track(trackId) : null);
+  if (!track) return { code: 404, antwoord: { fout: 'onbekend nummer, of zijn audio staat niet op schijf' } };
+  const loopt = stemsRij.zoek(track.id);
+  if (loopt) return { code: 200, antwoord: { opdracht: loopt, dubbel: true } };
+  if (!opnieuw && track.stems?.aantal === aantal) return { code: 200, antwoord: { al: true, stems: track.stems } };
+  const s = await splitter.controleer({ hercontrole });
+  if (!s.ok) return { code: 503, antwoord: { fout: s.reden, reden: s.reden } };
+  const { opdracht } = stemsRij.voegToe({
+    track: track.id, titel: track.titel, aantal, opnieuw,
+    werk: (onVoortgang, signal) => maakStems({ lib, media: MEDIA, splitter, trackId: track.id, aantal,
+      audio: opSchijf(track.audio), onVoortgang, signal }),
+  });
+  return { code: 202, antwoord: { opdracht } };
+}
+
+/**
+ * Na een GESLAAGDE ingest (nieuwe audio.wav): de oude stems weg (de rij in de
+ * library wiste bewaarInLibrary al), een split van de OUDE audio die nog
+ * loopt stoppen, en zo gevraagd het nummer de stems-rij in. Gooit nooit: de
+ * ingest is gelukt, dat mag hier niet alsnog omvallen. Is de splitter er
+ * niet, dan een opdracht met 'fout' en de reden — nooit stil niets.
+ * Wacht niet op de controle van de splitter als die nog loopt (vlak na het
+ * opstarten): de ingest-rij moet door.
+ */
+async function stemsNaIngest(track, aantal) {
+  try {
+    await wisStemsBestanden(MEDIA, track.id);
+    const loopt = stemsRij.zoek(track.id);
+    if (loopt?.status === 'bezig') stemsRij.annuleer(loopt.id);
+    if (!aantal) return;
+    const zetInRij = async () => {
+      const r = await nieuweStems(track.id, aantal);
+      if (r.code === 503) stemsRij.voegFoutToe({ track: track.id, titel: track.titel, aantal, fout: r.antwoord.fout });
+      else if (r.code >= 400) console.warn(`[stems] ${track.titel}: niet in de rij (${r.antwoord.fout})`);
+    };
+    if (splitter.bekend) await zetInRij();
+    else zetInRij().catch((err) => console.error('[stems] na de ingest:', err?.message || err));
+  } catch (err) {
+    console.error('[stems] na de ingest:', err?.message || err);
+  }
+}
+
+/**
  * Een geplakte link de wachtrij in. Geeft { code, antwoord }:
  * - 400: geen link, of een playlist/kanaal (playlist: true);
  * - 200 + dubbel: hij staat al in de wachtrij (die opdracht);
@@ -193,8 +258,12 @@ function bewaarInLibrary(r) {
  *   het nummer, zodat de browser hem meteen kan laden);
  * - 202: nieuw in de rij.
  * `opnieuw`: toch binnenhalen, ook al staat hij in de library.
+ * `stems`: 0, 2 of 4 — na een geslaagde download de stems-rij in (0 = niet).
+ * Wat al in de library stond (bestond) wordt NIET gesplitst: er is niets
+ * binnengehaald, en een lijst opnieuw plakken zou anders de hele library
+ * door Demucs halen. Splitsen kan daar met POST /api/stems.
  */
-async function nieuweLink(tekst, { opnieuw = false } = {}) {
+async function nieuweLink(tekst, { opnieuw = false, stems = STEMS_STANDAARD } = {}) {
   const b = bekijkLink(tekst);
   if (!b.ok) {
     return { code: 400, antwoord: { url: String(tekst ?? '').trim().slice(0, 500), fout: b.fout, ...(b.playlist ? { playlist: true } : {}) } };
@@ -211,7 +280,10 @@ async function nieuweLink(tekst, { opnieuw = false } = {}) {
       const r = await ingest(b.link, { mediaDir: MEDIA, onStap, signal,
         // Tweede controle, als de id bekend is: een andere link naar hetzelfde nummer.
         bestaat: opnieuw ? null : async (id) => metAudio(lib.track(id)) });
-      if (r.ok && !r.bestond) r.track = bewaarInLibrary(r.track);
+      if (r.ok && !r.bestond) {
+        r.track = bewaarInLibrary(r.track);
+        await stemsNaIngest(r.track, stems);
+      }
       return r;
     },
   });
@@ -244,6 +316,10 @@ const UPLOAD_MAX = Number(process.env.VARVE_UPLOAD_MAX) > 0 ? Number(process.env
 async function upload(req, res, url) {
   const naam = ontsmetNaam(url.searchParams.get('naam'));
   if (!naam) return weigerUpload(req, res, 415, { fout: `geen audio- of videobestand — ik neem ${BESTAND_EXT.join(', ')}` });
+  // ?stems=0|2|4 (standaard 2), zoals { stems } bij POST /api/ingest.
+  const stemsQ = url.searchParams.get('stems');
+  const stems = stemsQ === null ? STEMS_STANDAARD : /^[024]$/.test(stemsQ) ? Number(stemsQ) : null;
+  if (stems === null) return weigerUpload(req, res, 400, { fout: 'stems is 0, 2 of 4' });
   const lengte = Number(req.headers['content-length']);
   if (Number.isFinite(lengte) && lengte > UPLOAD_MAX) {
     return weigerUpload(req, res, 413, { fout: `te groot: ${gb(lengte)}, de grens is ${gb(UPLOAD_MAX)}` });
@@ -322,7 +398,10 @@ async function upload(req, res, url) {
         id, map, mediaDir: MEDIA, onStap, signal, heeftVideo: info.video,
         info: { url: `bestand:${id.slice('lokaal-'.length)}:${naam.naam}`, titel, uploader: info.tags.artiest, duur: info.duur },
       });
-      if (r.ok) r.track = bewaarInLibrary(r.track);
+      if (r.ok) {
+        r.track = bewaarInLibrary(r.track);
+        await stemsNaIngest(r.track, stems);
+      }
       return r;
     },
     bijAnnuleren: () => rm(map, { recursive: true, force: true }),
@@ -460,7 +539,7 @@ async function heranalyseOpAchtergrond() {
  * projectmap": anders kon /.git/config of /media/library.db gewoon mee.
  */
 const MAG = [/^\/$/, /^\/(index|video|apc|plan|controle)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
-  /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
+  /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin|stems\.wav)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
   /^\/plannen\/[\w-]+\.json$/, /^\/favicon\.ico$/];
 
 /**
@@ -563,7 +642,11 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const pad = url.pathname;
 
-    if (pad === '/api/tooling') return json(res, 200, await controleerTooling());
+    // De splitter erbij: { ok, reden?, python? } (plus apparaat en versies als hij er is).
+    if (pad === '/api/tooling') {
+      const [t, s] = await Promise.all([controleerTooling(), splitter.controleer({ hercontrole: true })]);
+      return json(res, 200, { ...t, stems: s });
+    }
 
     // Alleen JSON: een gewoon formulier of text/plain van een willekeurige
     // website komt zo niet zonder CORS-vraag binnen. Het mediatype zelf moet
@@ -594,16 +677,19 @@ const server = createServer(async (req, res) => {
     if (pad === '/api/ingest' && req.method === 'POST') {
       const body = await leesJson(req);
       const opnieuw = body?.opnieuw === true;
+      // { stems: 0|2|4 }: na een geslaagde ingest de stems-rij in (docs/STEMS.md). Standaard 2.
+      const stems = body?.stems === undefined ? STEMS_STANDAARD : body.stems;
+      if (!isStemsKeuze(stems)) return json(res, 400, { fout: 'stems is 0, 2 of 4' });
       if (Array.isArray(body?.urls)) {
         if (!body.urls.length || body.urls.length > MAX_LINKS) return json(res, 400, { fout: `geef 1 tot ${MAX_LINKS} links` });
         const resultaten = [];
         for (const u of body.urls) {
-          const r = await nieuweLink(u, { opnieuw });
+          const r = await nieuweLink(u, { opnieuw, stems });
           resultaten.push({ code: r.code, ...r.antwoord });
         }
         return json(res, 202, { resultaten });
       }
-      const r = await nieuweLink(body?.url, { opnieuw });
+      const r = await nieuweLink(body?.url, { opnieuw, stems });
       return json(res, r.code, r.antwoord);
     }
 
@@ -621,6 +707,32 @@ const server = createServer(async (req, res) => {
         return json(res, 200, { ok: r.ok, opdracht: r.opdracht });
       }
       return json(res, 200, { ok: wachtrij.vergeet(o.id), weg: true });
+    }
+
+    // ---- stems (docs/STEMS.md §2) ---------------------------------------
+    // GET: de rij, welke run, en of de splitter er is. POST { track, aantal,
+    // opnieuw? }: zie nieuweStems. DELETE: annuleren, of een afgelopen
+    // opdracht uit de lijst halen — zoals bij de ingest.
+    if (pad === '/api/stems' && req.method === 'GET') {
+      const s = await splitter.controleer();
+      return json(res, 200, { opdrachten: stemsRij.lijst(), server: SERVER_RUN, beschikbaar: s.ok, ...(s.ok ? {} : { reden: s.reden }) });
+    }
+    if (pad === '/api/stems' && req.method === 'POST') {
+      const body = await leesJson(req);
+      if (!body || typeof body !== 'object') return json(res, 400, { fout: 'stuur { track, aantal: 2|4 } als JSON' });
+      if (!isAantal(body.aantal)) return json(res, 400, { fout: 'aantal is 2 (zang en rest) of 4 (drums, bas, overig, zang)' });
+      const r = await nieuweStems(body.track, body.aantal, { opnieuw: body.opnieuw === true, hercontrole: true });
+      return json(res, r.code, r.antwoord);
+    }
+    const mStemsOpdracht = /^\/api\/stems\/([\w-]+)$/.exec(pad);
+    if (mStemsOpdracht && req.method === 'DELETE') {
+      const o = stemsRij.opdrachten.get(mStemsOpdracht[1]);
+      if (!o) return json(res, 404, { fout: 'onbekende opdracht' });
+      if (o.status === 'wacht' || o.status === 'bezig') {
+        const r = stemsRij.annuleer(o.id);
+        return json(res, 200, { ok: r.ok, opdracht: r.opdracht });
+      }
+      return json(res, 200, { ok: stemsRij.vergeet(o.id), weg: true });
     }
 
     // ---- setplannen (docs/PLAN.md) --------------------------------------
@@ -697,6 +809,8 @@ const server = createServer(async (req, res) => {
         return t ? json(res, 200, { track: t, racks: lib.racks(t.id) }) : json(res, 404, { fout: 'niet in de library' });
       }
       if (req.method === 'DELETE') {
+        // Een split van een nummer dat weggaat heeft geen zin meer.
+        stemsRij.annuleerTrack(mTrack[1]);
         return json(res, 200, { weg: lib.verwijderTrack(mTrack[1]) });
       }
     }
@@ -1023,8 +1137,29 @@ server.requestTimeout = 60 * 60 * 1000;
 process.on('unhandledRejection', (r) => console.error('[server] losse promise:', r));
 process.on('uncaughtException', (e) => console.error('[server] onafgevangen:', e?.message || e));
 
-// Werkmappen van een ingest die nooit afkwam (server gestopt midden in een
-// download): opruimen. Een goede track staat nooit in zo'n map.
+/*
+ * Stoppen (SIGTERM, SIGINT): een split die loopt eerst netjes laten stoppen.
+ * Ctrl-C in de terminal raakt de hele procesgroep, Demucs ook; maar na
+ * `kill <server>` bleef Demucs, een eigen proces, anders nog een half uur de
+ * GPU gebruiken voor een werkmap die bij de volgende start toch weggaat. Loopt er niets, dan meteen
+ * weg zoals altijd (het signaal opnieuw, met de gewone afloop). Hooguit 5 s
+ * (run() geeft SIGKILL na 3 s); een tweede signaal = meteen.
+ */
+let afsluiten = false;
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    const weg = () => { process.removeAllListeners(sig); process.kill(process.pid, sig); };
+    if (afsluiten || !stemsRij.open) return weg();
+    afsluiten = true;
+    console.log(`[stems] ${sig}: de splitter wordt eerst gestopt…`);
+    Promise.race([stemsRij.stop(), new Promise((z) => setTimeout(z, 5000))]).finally(weg);
+  });
+}
+
+// Werkmappen van een ingest of een split die nooit afkwam (server gestopt
+// midden in een download, .bezig-stems-* van een onderbroken split): opruimen.
+// Een goede track of een goede set stems staat nooit in zo'n map. Alleen
+// binnen MEDIA (VARVE_MEDIA voor een testserver).
 try {
   const { readdir, rm: weg } = await import('node:fs/promises');
   for (const n of await readdir(MEDIA).catch(() => [])) {
@@ -1036,6 +1171,12 @@ const tooling = await controleerTooling();
 if (!tooling.ok) console.warn(`[server] LET OP: ${tooling.ontbreekt.join(', ')} ontbreekt — ingest werkt niet`);
 if (tooling.versieWijkt) console.warn(`[server] yt-dlp is ${tooling.ytdlp}, getest op ${YTDLP_GETEST_OP}`);
 if (tooling.verouderd) console.warn(`[server] yt-dlp is verouderd (nieuwste ${tooling.nieuwsteYtdlp}) — ${tooling.bijwerken}`);
+// De splitter op de achtergrond controleren (Python + torch importeren kost
+// een paar seconden): de server luistert al terwijl dat loopt.
+splitter.controleer().then((s) => {
+  if (s.ok) console.log(`stems: Demucs klaar (${s.python ?? s.commando}, ${s.apparaat ?? '?'})`);
+  else console.warn(`[stems] geen stems: ${s.reden}`);
+});
 
 server.listen(POORT, '127.0.0.1', () => {
   console.log(`VARVE DJ  ·  http://localhost:${POORT}`);

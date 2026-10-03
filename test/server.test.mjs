@@ -211,6 +211,8 @@ try {
       ['POST', '/api/library/nummerX/hotcues', { nr: 1, tijd: 2 }], ['DELETE', '/api/library/nummerX/hotcues/1'],
       ['POST', '/api/handelingen/start', {}], ['POST', '/api/handelingen/20260925-120000/stuk', { van: 0, tekst: '[0,"a",1]\n' }],
       ['POST', '/api/ingest', { url: 'https://www.youtube.com/watch?v=abcdefghijk' }], ['DELETE', '/api/ingest/abc'],
+      // stems (docs/STEMS.md): de rij en annuleren
+      ['POST', '/api/stems', { track: 'nummerX', aantal: 2 }], ['DELETE', '/api/stems/abc'],
     ];
     const vreemdeOrigin = [], vreemdeHost = [], tekst = [];
     for (const [method, pad, body] of wijzigend) {
@@ -223,14 +225,17 @@ try {
     ok(`nieuwe routes: een vreemde Host krijgt 403 (${vreemdeHost.join(' ')})`, vreemdeHost.every((c) => c === 403));
     ok(`nieuwe POST-routes: text/plain van de eigen pagina krijgt 415 (${tekst.join(' ')})`, tekst.every((c) => c === 415));
     const lezen = [];
-    for (const pad of ['/api/library?sorteer=titel&van=0&aantal=2', '/api/library/nummerX/hotcues', '/api/library/nummerX/toon', '/api/handelingen', '/api/ingest']) {
+    for (const pad of ['/api/library?sorteer=titel&van=0&aantal=2', '/api/library/nummerX/hotcues', '/api/library/nummerX/toon', '/api/handelingen', '/api/ingest',
+      '/api/stems', '/media/nummerX/stems.wav']) {
       lezen.push((await rauw(pad, { headers: { Host: `evil.example:${poort}` } })).status);
     }
-    ok(`ook lezen (pagina's, hotcues, toon, logs, wachtrij) met een vreemde Host: 403 (${lezen.join(' ')})`, lezen.every((c) => c === 403));
+    ok(`ook lezen (pagina's, hotcues, toon, logs, wachtrij, stems) met een vreemde Host: 403 (${lezen.join(' ')})`, lezen.every((c) => c === 403));
     const hot = await (await fetch(`${B}/api/library/nummerX/hotcues`)).json();
     const logs = await (await fetch(`${B}/api/handelingen`)).json();
     const rij = await (await fetch(`${B}/api/ingest`)).json();
-    ok('en er is niets veranderd: geen hotcue, geen log, niets in de wachtrij', hot.hotcues?.length === 0 && logs.logs?.length === 0 && rij.opdrachten?.length === 0);
+    const stemsRij = await (await fetch(`${B}/api/stems`)).json();
+    ok('en er is niets veranderd: geen hotcue, geen log, niets in de wachtrij of de stems-rij', hot.hotcues?.length === 0 && logs.logs?.length === 0
+      && rij.opdrachten?.length === 0 && stemsRij.opdrachten?.length === 0);
   }
 
   console.log('\nracks horen bij hun eigen nummer');
