@@ -111,6 +111,25 @@ Een eerdere meting bij lagere belasting (16–17): vóór 156,7 ms/s, 548 GC's.
   "klein geheel getal" van V8, en dan kost elke niet-ingelijfde aanroep met een
   framenummer toch een object. Nu niet aan de orde.
 
+## Stems (3 okt)
+
+Met stems (`docs/STEMS.md`) leest de streamkern één stereopaar per
+renderBlok-aanroep uit een pagina met 4 of 8 kanalen (`stride`, `paar`: hele
+getallen op `klad`, dus geen HeapNumbers). De worklet heeft altijd vier
+uitgangen en zet de ongebruikte elk blok op nul (`fill`, geen afval).
+`hergebruik`: paar 1–3 nemen van paar 0 over wat niet van het paar afhangt
+(posities, soort, naad, en de gat-envelop als het paar met dezelfde stand
+begon); alleen de worklet zet die vlag, direct na paar 0 van hetzelfde deck.
+Stereo blijft bit voor bit (9dfaeb73, bench a6c215d9); de stems-variant van
+`renderblok.test` (8 decks × 4 paren) eist ook 0 GC, en uitgang 0 geeft de
+gouden hash.
+
+Bench (8 decks, 60 s, M1, belasting ~10, beste van 3): stereo 19,7 ms per s audio
+(2,0% van een kern), 2 stems 34,6 (3,5%), 4 stems 63,9 (6,4%); zonder
+`hergebruik` was 4 stems 79,3. Wat overblijft is vooral het lezen zelf
+(`leesKubisch`/`leesFrame`), en dat is per paar echt werk. `renderblok.mjs
+--stems 2,4` (standaard aan) en `--ref-stems` meten het.
+
 ## Meten en bewaken
 
 - `node test/renderblok.test.mjs` (zit in `test/alles.mjs`): de echte worklet in een

@@ -54,8 +54,16 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   git, alleen lezen). Draai met `nice -n 10 node --expose-gc tools/bench/renderblok.mjs`.
   Cijfers: `docs/AUDIOPAD.md` (25 sep: 194 → 57,5 ms/s, 12,7 kB → 0 afval per blok). De
   bewaking dat het afvalvrij blijft zit niet hier maar in `test/renderblok.test.mjs`.
+  Met stems (3 okt): `--stems 2,4` (standaard aan) meet ook 8 decks × 2 en × 4 stems,
+  `--ref-stems` de oude kern ernaast; cijfers in `docs/AUDIOPAD.md` ("Stems").
 
 ## headless/
+- `stems.mjs [--nep] [uitmap]` — de stems van binnenhalen tot horen (eigen server op 8793, nep-yt-dlp,
+  nep-splitter via `maakNepStems`): binnenhalen met stems=2, de kolom, laden, de STEMS-rij, kill
+  per stem met de muis GEMETEN aan de master (zang weg 0,25 · alles weg 0 · terug 1; vier stems:
+  drums weg 0,9 · rest weg 0,4), opnieuw splitsen geweigerd terwijl het speelt, herladen-teken,
+  layout op 1440×790 en 1920×1080, de tegel in de Controlekamer. `--nep` = alleen de ui
+  (/api/stems en de stem-actions nagebootst in de pagina).
 - `plan.mjs` — het planvenster in headless Chromium (server op 8795, eigen VARVE_PLANNEN): de knop
   "plan" opent plan.html, voorspelling, bewerken, ongedaan maken, opslaan (vorige versie bewaard),
   nummer erbij, auto aan over de bus van de mixer, live "speelt nu", een wijziging van buitenaf
@@ -164,6 +172,10 @@ niet in git; met `LUISTER.md` als leeswijzer).
   (GPU via MPS of CPU) en het energie-aandeel per stem. Leest `media/<id>/audio.wav`, schrijft
   fragment + vier stems naar `tools/stems/uit/` (niet in git). Draait in een eigen venv met
   `demucs` (geen dependency van de app). Uitkomst 24 sep: zie docs/plugins of HANDOFF.
+  De splitter van de app zelf staat in `server/stems/splits.py` (docs/STEMS.md).
+- `vergelijk.py` — een split nameten: som van de stems tegen audio.wav (dB), de stukgrenzen
+  tegen een split zonder stukken, de grootste samplestap rond een grens, het energie-aandeel per
+  stem. Draait met de Python van `~/.varve/stems-venv`.
 
 ## toonsoort/
 Toonsoort (key) meten op Clay's library (docs/TOONSOORT.md). Leest alleen: `media/<id>/audio.wav`

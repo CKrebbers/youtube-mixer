@@ -73,11 +73,10 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     klank (kill/rem/op de maat per kolom), Bank ◀ ▶ beatjump, Pan/Sends/User
     loop, Lock quantize, Stop All rem; 374 regels, `eerder` voor oude kopieën.
     Nog door Clay op het apparaat te proberen (kleuren).
-17. Stems, kiesbaar per nummer (H2):
-    - standaard twee, vier op verzoek;
-    - splitsen bij de ingest;
-    - stem-fader vóór de EQ;
-    - eventueel op de Omarchy-machine (H3).
+17. ~~Stems, kiesbaar per nummer (H2)~~ — gebouwd 3 okt (`docs/STEMS.md`), in drie
+    parallelle sporen: Demucs bij de ingest (standaard twee, vier op verzoek, of met
+    de knop in de library), stem-niveau en kill vóór de EQ, de STEMS-rij. Nog open:
+    H3 (splitsen op de Omarchy-machine) en VRAGEN N1–N4 (o.a. een plek op de APC).
 18. ~~Video mengen in het losse venster~~ — gedaan 25 sep: het losse venster mengt
     zelf (`docs/BEAMER.md`), met inloop: tot zijn video's in de pas lopen toont
     het het beeld van het hoofdvenster; seekduur klopt onder belasting.
@@ -104,7 +103,7 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
 2. 15 keylock (na A3 en I1–I3).
-3. 17 stems (H3 nog open).
+3. ~~17 stems~~ (gebouwd 3 okt; nog H3 en VRAGEN N).
 4. AV-kern 6–11 (7 alleen nog het overnemen in AV-kern).
 5. 23 rest (vormbus na 8, routes per nummer, beeldscènes).
 6. 25 koptelefoon-cue (eerst hardware).

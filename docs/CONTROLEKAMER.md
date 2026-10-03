@@ -6,10 +6,12 @@ de mixer.
 
 ## Wat erop staat
 
-1. **Stand**, zes tegels met een lampje:
+1. **Stand**, zeven tegels met een lampje:
    - **Server** draait, met het aantal nummers in de library.
    - **Binnenhalen**: yt-dlp en ffmpeg (`/api/tooling`).
    - **Ingest-rij**: hoeveel er bezig is en wacht (`/api/ingest`).
+   - **Stems** (3 okt): wat er gesplitst wordt en wacht, de laatste fout, of de
+     splitter (Demucs) er is (`/api/stems`, `stemsTegel` in `src/ui/stems-weergave.js`).
    - **Mixer**: open of niet, uit de Web Lock `varve-mixer` (`src/ui/tabblad.js`).
      Rood als er een tweede mixer-tabblad wacht.
    - **Audio** en **APC40**: uit wat de mixer zelf meldt (zie hieronder). Bij de

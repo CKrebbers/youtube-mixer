@@ -1,9 +1,10 @@
-# Stems — zang en rest (of vier) per nummer
+# Stems: zang en rest (of vier) per nummer
 
-Status: **contract voor de bouw (3 okt 2026)**. Drie sporen bouwen hier tegelijk
-tegenaan (server, engine, ui); na de integratie wordt dit het naslagdocument.
-ROADMAP 17, besluiten in VRAGEN H1–H3. De proef van 24 sep staat in
-`docs/HANDOFF.md` ("Stems splitsen — proef") en `tools/stems/meet.py`.
+**Gebouwd 3 okt 2026** (ROADMAP 17), in drie parallelle sporen (server, engine,
+ui) op een gedeeld contract, daarna samengevoegd (`stems/integratie`). Besluiten
+in VRAGEN H1–H3 en blok N. Details per spoor: `docs/verslagen/2026-10-03/`
+(server.md, engine.md, ui.md). De proef van 24 sep: `tools/stems/meet.py` en
+`docs/HANDOFF.md` ("Stems splitsen — proef").
 
 ## Wat Clay besliste
 
@@ -13,20 +14,49 @@ ROADMAP 17, besluiten in VRAGEN H1–H3. De proef van 24 sep staat in
 - Advies van 24 sep, overgenomen: splitsen bij de ingest (vooraf rekenen, live
   bedienen, zoals Serato/rekordbox/djay), de stem-fader VÓÓR de EQ. Geen
   realtime splitsen in de browser.
-- 3 okt: Clay laat het nu bouwen (eerder dan "na 25 okt").
-- H3 (splitsen op de Omarchy-machine) blijft open. De splitter kent daarom
-  `--apparaat cuda`, maar er komt geen netwerkdienst.
+- 3 okt: "bouw met meerdere subagenten tegelijk aan de stem splitter" (eerder
+  dan "na 25 okt").
+- H3 (splitsen op de Omarchy-machine) blijft open. De splitter kent
+  `--apparaat cuda`, maar er is geen netwerkdienst.
+
+## Gebruiken
+
+- **Binnenhalen**: in het library-paneel staat naast de invoer `stems 2 · 4 · geen`
+  (onthouden, standaard 2). Na een geslaagde ingest gaat het nummer vanzelf de
+  stems-rij in; de ingest wacht daar niet op.
+- **Bestaande nummers**: library-kolom `stems`: `—` met knoppen **2 · 4**, `wacht`,
+  `42%` met **×**, `2`/`4` als ze er zijn (bij 2 een knop **4**: opnieuw in vier),
+  `fout` met de reden in de tooltip.
+- **Spelen**: een nummer met stems laadt `stems.wav` in plaats van `audio.wav`.
+  Kolomkop **S2/S4** = speelt met stems; gestippeld = klaar, herlaad het nummer om
+  ze te horen (een spelend deck wisselt nooit vanzelf); **S!** = laden mislukt,
+  je hoort audio.wav.
+- **De STEMS-rij** (knop `stems` in de balk, standaard dicht) voor de track met
+  focus: per stem een niveauschuif (dubbelklik = vol) en **kill** (klik =
+  aan/uit, shift + vasthouden = weg zolang je drukt). Twee: zang · rest. Vier:
+  drums · bas · overig · zang, en **rest** als groepsknop (drums + bas + overig).
+- **Koppelen**: alle stem-actions staan op de bus (zie Actions); een vaste plek
+  op de APC is er nog niet (VRAGEN N1), koppelen werkt wel.
+- **Controlekamer**: tegel Stems (wat loopt, wat wacht, of de splitter er is).
 
 ## Model en meting
 
-Demucs `htdemucs` (4.1.0, MIT), op de M1 via MPS 1,9–2,4× realtime, op de CPU
-0,85×. Een uur muziek ≈ 27 min rekenen. Het model levert altijd vier bronnen
-(drums, bass, other, vocals) op 44,1 kHz. Twee stems = vocals + (drums + bass +
-other): even veel rekenwerk, de helft van de opslag.
+Demucs `htdemucs` (4.1.0, MIT). Het model levert altijd vier bronnen (drums,
+bass, other, vocals) op 44,1 kHz; twee stems = vocals + de rest, even veel
+rekenwerk, de helft van de opslag.
+
+Gemeten op de M1 (MPS, `docs/verslagen/2026-10-03/server.md`): **2,6–3,2×
+realtime** op een rustige machine (79 s en 214 s), 1–1,8× als de GPU gedeeld wordt
+met WebGL van een ander proces. Geheugen **~1 GB RSS, hoe lang het nummer ook is**
+(in stukken; zonder stukken 640 s al 3,5 GB / 8 GB footprint). Opslag: 2 stems ≈
+22 MB per minuut, 4 stems ≈ 44 MB per minuut, naast audio.wav. Tijdelijk tijdens
+het splitsen: float32 = 2× de uiteindelijke stems.wav.
 
 Python: een venv BUITEN de repo, `~/.varve/stems-venv` (met
-`--system-site-packages`, torch 2.9.1 staat systeembreed; `pip install demucs`).
-Het model staat in `~/.cache/torch/hub/checkpoints/`. Opnieuw opzetten:
+`--system-site-packages`, torch 2.9.1 staat systeembreed). Het model staat in
+`~/.cache/huggingface/hub/models--adefossez--HTDemucs` (84 MB; demucs 4.1 haalt
+het van Hugging Face, de eerste split op een nieuwe machine heeft internet nodig).
+Opnieuw opzetten:
 
 ```
 python3 -m venv --system-site-packages ~/.varve/stems-venv
@@ -38,222 +68,183 @@ python3 -m venv --system-site-packages ~/.varve/stems-venv
 Naast `audio.wav` in `media/<id>/`:
 
 **`stems.wav`**: RIFF/WAVE, PCM 16-bit, 48 000 Hz, INTERLEAVED, `kanalen = 2 ×
-aantal stems` (4 of 8). Kanaalpaar k (kanalen 2k, 2k+1 = links, rechts) is stem
-k in de volgorde van `stems.json.namen`. Precies evenveel frames als
-`audio.wav` (bijknippen of aanvullen met stilte). Formaatcode 1 (PCM) of
-0xFFFE (extensible) mag; de kop mag een LIST-chunk hebben (`leesWavKop` zoekt
-de data-chunk zelf).
+aantal stems` (4 of 8). Kanaalpaar k (kanalen 2k, 2k+1) is stem k in de volgorde
+van `stems.json.namen`. Precies evenveel frames als `audio.wav`. Hooguit 4 GB
+data (geen RF64): 4 stems tot ~3,1 uur, 2 stems tot ~6,2 uur; daarboven weigert
+de splitter met een reden.
 
-**`stems.json`**:
+**`stems.json`**: `{ versie: 1, model, aantal, namen, schaal, frames, sr,
+apparaat, rekentijd_s, gemaakt }`.
 
-```json
-{
-  "versie": 1,
-  "model": "htdemucs",
-  "aantal": 2,
-  "namen": ["vocals", "inst"],
-  "schaal": 0.93,
-  "frames": 3801600,
-  "sr": 48000,
-  "apparaat": "mps",
-  "rekentijd_s": 34.6,
-  "gemaakt": "2026-10-03T14:00:00Z"
-}
-```
-
-- `namen`: twee stems = `["vocals", "inst"]` (inst = drums + bass + other);
-  vier = `["drums", "bass", "other", "vocals"]` (de volgorde van Demucs).
-- `schaal` (0 < schaal ≤ 1): alle stems zijn met dezelfde factor
-  vermenigvuldigd zodat geen enkele stem clipt in 16 bit. De engine zet er
-  `1 / schaal` bovenop, zodat de som van de stems even hard klinkt als
-  `audio.wav`.
+- `namen`: twee = `["vocals", "inst"]`; vier = `["drums", "bass", "other", "vocals"]`.
+- **De som van de stems is audio.wav** (op 16-bit afronding na, −111 dB): wat het
+  model nergens onderbrengt gaat naar `inst` (twee) of `other` (vier). Zonder dat
+  klonk "alles open" net anders dan het nummer (Demucs telt op Clay's muziek op tot
+  −25 dB (ambient) à −38 dB). Prijs: wat het model miste, ook een beetje zang, zit
+  in de rest en blijft hoorbaar als de zang uit staat, zoals bij "instrumentaal =
+  mix − zang" in karaoke-tools. Terugdraaien is één regel in splits.py (VRAGEN N2).
+- `schaal` (0 < schaal ≤ 1): alle stems met dezelfde factor, zodat geen stem clipt
+  in 16 bit; de engine zet `1 / schaal` erbovenop. In alle metingen 1,0000.
 
 `audio.wav` blijft de bron van golfvorm, beatgrid, toonsoort en onsets. Alleen
-het AFSPELEN gaat via `stems.wav` als die er is.
+het AFSPELEN gaat via `stems.wav`.
 
-## 2. Server (spoor server)
+## 2. Server
 
 ### De splitter: `server/stems/splits.py`
 
 ```
 <python> server/stems/splits.py --in <audio.wav> --uit <map> --aantal 2|4
          [--apparaat auto|mps|cuda|cpu] [--model htdemucs]
+         [--controle] [--threads N] [--stuk-s S]
 ```
 
-- Schrijft `<map>/stems.wav` en `<map>/stems.json`, verder niets in `<map>`
-  (tijdelijke bestanden worden opgeruimd).
-- Stdout: regels `voortgang <0..1>` (minstens één per stuk), als laatste
-  `klaar`. Fouten naar stderr, exitcode ≠ 0. SIGINT = netjes stoppen (exit 130).
-- In STUKKEN (orde 30–60 s met overlap en kruisfade), zodat een album van een
-  uur niet in één keer in het geheugen hoeft (16 GB RAM). 48 → 44,1 kHz voor het
-  model, terug naar 48 kHz erna (torchaudio.functional; NIET torchaudio.load/save,
-  die vragen in 2.9 torchcodec — zie `tools/stems/meet.py`).
-- `schaal` exact uit de grootste piek over alle stems (twee passen mag, met een
-  tijdelijk float-bestand in `<map>`).
-- `--apparaat auto` = cuda als die er is, anders mps, anders cpu.
+- **In stukken** van 46,8 s (8 strides van htdemucs) met 4 s overlap: 1 s context
+  aan weerskanten en een lineaire kruisfade van 2 s (de twee stukken schatten
+  hetzelfde signaal, dan telt lineair op tot 1). Aan de grenzen is niets te meten:
+  het verschil met de versie zonder stukken is daar even groot als midden in een
+  stuk (`tools/stems/vergelijk.py`).
+- 48 → 44,1 → 48 kHz met `torchaudio.functional.resample` (niet torchaudio.load/save:
+  die vragen in 2.9 torchcodec); elk stuk begint op een veelvoud van 160 frames, dan
+  ligt het rooster gelijk met dat van het hele nummer. Normaliseren zoals
+  `demucs.separate`, maar met de cijfers van het HELE nummer.
+- Twee passen: float32 naar `<map>/.stems-tmp.f32` met de grootste piek, dan één
+  keer naar 16 bit met de exacte `schaal`. `stems.wav` en `stems.json` onder een
+  tijdelijke naam en dan `os.replace`: wie stems.json ziet, ziet een complete set.
+- Stdout `voortgang x` (hooguit 2× per seconde), als laatste `klaar`; stderr:
+  laatste regel = de reden, `info:`-regels zijn meetwaarden. Exit 0 / 1 / 130.
+  SIGINT én SIGTERM = netjes stoppen (gemeten: weg na 1,1 s).
+- `--controle`: importeert torch/torchaudio/demucs en geeft JSON (laadt het model
+  niet). `--threads` standaard de helft van de kernen, hooguit 4.
 
 ### De wachtrij: `server/stems.js`
 
-- Eén opdracht tegelijk, zoals `server/wachtrij.js` (annuleren met een
-  AbortSignal; SIGINT, na 3 s SIGKILL voor de hele procesfamilie). Lage
-  prioriteit (`nice`): het mag de server, die de pagina's van spelende decks
-  levert, nooit ophouden.
-- Werkmap `media/.bezig-stems-<id>-*`, pas bij succes `stems.wav` en
-  `stems.json` naar `media/<id>/` verhuizen (een bestaande set stems wordt dan
-  vervangen, bv. 2 → 4). Opruimen van achtergebleven werkmappen bij het
-  opstarten, alleen binnen `VARVE_MEDIA`.
-- Python: `VARVE_STEMS_PY` (standaard `~/.varve/stems-venv/bin/python`).
-  `VARVE_STEMS_CMD` vervangt het hele commando voor de tests (een nep-splitter,
-  `test/nep-stems.mjs`, zoals `VARVE_YTDLP` met `nep-ytdlp.mjs`); die krijgt
-  dezelfde argumenten.
-- Ontbreekt Python of Demucs, dan zegt de wachtrij dat (`beschikbaar: false,
-  reden`) en weigert hij opdrachten met die reden. Nooit stil niets doen.
-- `/api/tooling` meldt de splitter erbij (`stems: { ok, reden?, python? }`).
-
-### De nep-splitter: `test/nep-stems.mjs`
-
-Voor tests en headless (ook het ui-spoor rekent erop). Zelfde argumenten als
-splits.py, geen Python. Schrijft stem k = `audio.wav × gewicht[k]`, zodat de som
-precies het origineel is en je aan het NIVEAU ziet welke uitgang welke stem is:
-
-- twee: `vocals` 0,75 · `inst` 0,25
-- vier: `drums` 0,1 · `bass` 0,2 · `other` 0,3 · `vocals` 0,4
-
-`schaal` 1, `model` `"nep"`, `apparaat` `"nep"`. Voortgangsregels zoals de echte.
-Extra's voor de wachtrijtests via omgevingsvariabelen (traag, laten mislukken)
-mag het serverspoor zelf kiezen.
+- **`Splitter`**: welk commando. `VARVE_STEMS_CMD` (één uitvoerbaar bestand, krijgt
+  dezelfde argumenten; de tests: het startscript van `maakNepStems`), anders
+  `VARVE_STEMS_PY` + splits.py, anders `~/.varve/stems-venv/bin/python`. **Een
+  testserver (`VARVE_MEDIA` gezet) zonder een van beide splitst niet**, met die
+  reden: anders zette elke test die iets binnenhaalt (2 is de standaard) de echte
+  Demucs aan. `controleer()` één keer, na 30 s opnieuw als het niet klaar was.
+  Draait via `run()` uit ingest.js (SIGINT → 3 s → SIGKILL voor de procesfamilie)
+  met `nice -n 10` ervoor; time-out `max(30 min, 10 min + 4 × duur)`.
+- **`StemsRij`**: één tegelijk, zoals `wachtrij.js`. Opdracht
+  `{ id, track, titel, aantal, status, voortgang, fout, toegevoegd, begon, klaar, plek, stoppen?, opnieuw?, stems? }`,
+  status `wacht|bezig|klaar|fout|geannuleerd`. Overleeft geen herstart (zoals de
+  ingest-rij); de ui ziet een andere `server`-id.
+- **`maakStems`**: werkmap `media/.bezig-stems-<id>-<hex>`, splitsen, nalopen
+  (kanalen, 16-bit, 48 kHz, frames = audio.wav), dan pas naar `media/<id>/` en
+  `lib.bewaarStems`. Is audio.wav intussen vervangen of het nummer weg: de set
+  gaat weg met die reden.
+- Afsluiten (SIGTERM/SIGINT) met een lopende split: eerst de split stoppen
+  (hooguit 5 s), anders rekende Demucs als wees door.
 
 ### Database
 
-Schema-versie erbij: `ALTER TABLE tracks ADD COLUMN stems_json TEXT` (de inhoud
-van stems.json plus `bestand`). Tests rekenen met `SCHEMA.length`. Gezet als
-een split slaagt; gewist als `audio.wav` opnieuw binnengehaald wordt (dan
-passen de frames niet meer: oude stems weg, en opnieuw splitsen als daarom
-gevraagd is).
-
-Een library-rij krijgt:
-
-```
-stems: null | { aantal: 2|4, namen: [...], schaal, bestand: "media/<id>/stems.wav" }
-```
+Schema **v8**: `tracks.stems_json` (stems.json plus `bestand`). Elke rij krijgt
+`stems: null | { aantal, namen, schaal, bestand }`. Gewist (met de bestanden) als
+audio.wav opnieuw binnengehaald wordt; een split van de oude audio die nog loopt
+wordt geannuleerd.
 
 ### Routes
 
-- `GET /api/stems` → `{ opdrachten: [...], server: <run-id>, beschikbaar, reden? }`
-  met per opdracht
-  `{ id, track, titel, aantal, status: 'wacht'|'bezig'|'klaar'|'fout'|'geannuleerd', voortgang: 0..1, fout?, begon?, klaar? }`.
-- `POST /api/stems` `{ track: "<id>", aantal: 2|4, opnieuw?: true }`
-  → 202 `{ opdracht }`. 400 bij een ander aantal, 404 bij een onbekend nummer,
-  503 als de splitter er niet is (met reden). Staat dat nummer al in de rij:
-  200 met die opdracht. Heeft het al stems met dat aantal (en geen `opnieuw`):
-  200 `{ al: true, stems }`.
-- `DELETE /api/stems/<opdracht-id>` → annuleren (wacht of bezig) of, als hij
-  klaar is, uit de lijst halen. Zoals `DELETE /api/ingest/<id>`.
-- Witte lijst: `/media/<id>/stems.wav` erbij (Range, zoals audio.wav).
-- Ingest: `POST /api/ingest` met `{ url | urls, stems?: 0|2|4 }` (standaard 2)
-  en `/api/upload?…&stems=0|2|4`. Na een GESLAAGDE ingest gaat het nummer in
-  de stems-rij met dat aantal (0 = niet). De ingest-rij wacht daar niet op.
-- Alle bestaande regels gelden: POST alleen JSON, Host/Origin-controle,
-  `leesJson`, geen paden van buiten.
+- `GET /api/stems` → `{ opdrachten, server, beschikbaar, reden? }`.
+- `POST /api/stems { track, aantal: 2|4, opnieuw? }` → 202 `{ opdracht }`; 400 (ander
+  aantal), 404 (onbekend of geen audio), 503 `{ fout, reden }` (geen splitter);
+  200 `{ opdracht, dubbel: true }` als het nummer al in de rij staat; 200
+  `{ al: true, stems }` als het die stems al heeft.
+- `DELETE /api/stems/<opdracht-id>` → annuleren of wegklikken.
+- Witte lijst: `/media/<id>/stems.wav` (Range). `stems.json` en `.bezig-*` niet.
+- `POST /api/ingest { url | urls, stems?: 0|2|4 }` (standaard 2) en
+  `/api/upload?…&stems=0|2|4`. Een nummer dat al in de library stond wordt na een
+  ingest niet gesplitst (een lijst opnieuw plakken zou anders de hele library door
+  Demucs halen). Is de splitter er niet: een opdracht met `fout` en de reden.
+- `DELETE /api/library/<id>` annuleert een open split. `/api/tooling` meldt de splitter.
 
-## 3. Engine (spoor engine)
+## 3. Engine
 
-Regel 1: `src/engine/` weet niets van de server of de library. Het krijgt een
+Regel 1: `src/engine/` weet niets van de server of de library; het krijgt een
 url en `{ namen, schaal }`.
 
-### Streamen met meer kanalen
+- **Streamkern**: een bestand mag 2, 4 of 8 kanalen hebben (`controleerWav`).
+  `renderBlok` leest één STEREOPAAR per aanroep (`stride`, `paar`, op `klad` als
+  hele getallen). Voor stereo bit voor bit als vroeger (gouden hash `9dfaeb73`,
+  bench `a6c215d9`). `hergebruik`: paar 1–3 nemen van paar 0 over wat niet van het
+  paar afhangt (posities, soort, naad, en de gat-envelop als het paar met dezelfde
+  stand begon); alleen de worklet zet die vlag.
+- **Worklet**: ALTIJD vier uitgangen van twee kanalen, ook voor stereo (de node
+  hoeft nooit opnieuw gebouwd te worden). Ongebruikte uitgangen elk blok op nul
+  (Chrome belooft dat niet hard, en vuilnis van een vorig nummer hoor je). 'einde'
+  van paar 0.
+- **StreamBron**: uitgang k → `stemIn[k]` (of alles naar één node = de som); bytes
+  per frame uit de kop; `laad({ …, kanalen })` weigert een ander aantal vóór er
+  iets verandert; `knip(van, tot, gewichten)` voor de sampler (wat je hoort vóór
+  de EQ: een pad die je knipt terwijl de zang weg is, klinkt zonder zang).
+  **Vervangen onder het spelen**: de totale grootte uit `Content-Range` wordt bij
+  de laad onthouden; verandert die (opnieuw gesplitst 2 → 4, opnieuw
+  binnengehaald), dan haalt hij niets meer op en meldt het één keer. Wat er al
+  was speelt uit, daarna stilte, nooit ruis.
+- **Deck**: `createDeckChain` geeft `stemIn: [g0…g3]` naar `trim` (vóór de EQ).
+  `deck.laadStream(url, titel, { stems: { namen, schaal } })`, `deck.stems`.
+  Versterking van uitgang k (stem n):
+  `(1 / schaal) × niveau(n) × kill(n) × (vier en n ≠ vocals ? niveau(inst) × kill(inst) : 1)`.
+  Kill = 0 (niet −70 dB), klikvrij in 5 ms als een zachte S in AMPLITUDE na
+  `startDrempel` (`killVersterking` in audio-graph.js, via `zetHellingen`). Niveau:
+  vasthouden + setTargetAtTime. Zonder stems: alles 1, uitgang 0 draagt de mix.
+  **Bij elke laad alles open** (stems horen bij het NUMMER, niet bij het kanaal;
+  afwijkend van de EQ-knoppen). `snapshot().decks[X].stems`.
 
-- `stream-kern.js`: een bestand mag 2, 4 of 8 kanalen hebben (16-bit PCM).
-  `renderBlok` leest één STEREOPAAR per aanroep: nieuwe velden `stride`
-  (kanalen per frame in de pagina, standaard 2) en `paar` (eerste kanaal van
-  het paar: 0, 2, 4, 6). `PAGINA` blijft 65 536 FRAMES; een pagina is dan
-  `PAGINA × kanalen × 2` bytes. Voor stereo moet alles bit voor bit blijven:
-  de gouden hash in `renderblok.test.mjs` verandert NIET en het blijft
-  afvalvrij (0 GC), ook met stems (zie de regels bovenaan "samples lezen").
-  `controleerWav` accepteert 2, 4 en 8 kanalen.
-- `stream-lezer.js`: de node heeft ALTIJD vier uitgangen van twee kanalen
-  (`numberOfOutputs: 4, outputChannelCount: [2,2,2,2]`). Bericht
-  `{ type: 'bron', duur, sr, kanalen }`. Per blok `renderBlok` voor elk paar
-  dat er is, elk met een eigen `staat` (env); ongebruikte uitgangen op nul
-  zetten (zonder afval). 'einde' komt van paar 0.
-- `bron.js` (StreamBron): `new StreamBron(ctx, uitgangen)` met een ARRAY van
-  vier nodes (uitgang k → uitgangen[k]); een losse node mag nog (dan gaan alle
-  uitgangen daarheen: de som). Bytes per frame uit de kop. `bron.kanalen`
-  (getter). `knip()` van een stems-bestand geeft de som van de paren met
-  gewichten die het deck meegeeft (wat je HOORT vóór de EQ), zodat een pad
-  zonder zang ook zonder zang klinkt.
+### Actions
 
-### Het deck
-
-- `createDeckChain` krijgt `stemIn: [g0, g1, g2, g3]` (GainNodes), die allemaal
-  op `trim` aansluiten. `chain.input` blijft `trim` (BufferBron).
-- `deck.laadStream(url, title, { haal?, stems? })` met
-  `stems = { namen, schaal }`. Klopt het aantal kanalen van het bestand niet
-  met `namen.length × 2`: weigeren met een reden (de ui valt dan terug op
-  audio.wav).
-- `deck.stems`: `null | { namen, aantal, schaal }`.
-- Per stem een niveau 0..1 (1 = vol, 0 = uit) en een kill (schakelaar + drukknop,
-  zoals de EQ-kill: weg zolang je drukt, de niveaustand blijft staan, kill uit
-  = precies terug, klikvrij in ~5 ms als een zachte S in amplitude, na
-  `startDrempel`, met `zetHellingen` uit `overgang.js`; NOOIT
-  `setValueCurveAtTime`).
-- Effectieve versterking van uitgang k (stem `n = namen[k]`):
-  `(1 / schaal) × niveau(n) × kill(n) × (aantal = 4 en n ≠ 'vocals' ? niveau('inst') × kill('inst') : 1)`.
-  Dus `inst` werkt in beide standen (bij vier: drums, bass en other samen), en
-  drums/bass/other doen niets bij twee.
-- Zonder stems: alle `stemIn` op 1, uitgang 0 draagt de hele mix, bit voor bit
-  zoals nu.
-- Bij elke laad: alle niveaus terug op 1, alle kills uit. (Keuze: stems horen
-  bij het NUMMER, niet bij het kanaal. Een nieuw nummer dat stil zonder zang
-  begint, omdat het vorige zonder zang speelde, is erger dan opnieuw drukken.
-  Afwijkend van de EQ-knoppen, die bij het kanaal horen.)
-- `snapshot()` krijgt per deck `stems: null | { namen, niveau: {…}, weg: {…} }`.
-
-### Actions (eerst `define()`, dan pas ui)
-
-Voor elke track N en elke stem `s` uit `vocals, inst, drums, bass, other`:
+Voor elke track N en `s` uit `vocals, inst, drums, bass, other`:
 
 | action | type | wat | read |
 |---|---|---|---|
-| `track.N.stem.<s>` | value | niveau 0..1 | het niveau, of `null` als de track geen stems heeft of deze stem in deze stand niet bestaat |
+| `track.N.stem.<s>` | value | niveau 0..1 | het niveau, of `null` zonder stems of als de stem in deze stand niet bestaat |
 | `track.N.stem.<s>.kill` | trigger | kill aan/uit | 1 = weg, 0 = open, `null` = n.v.t. |
 | `track.N.stem.<s>.hold` | trigger | weg zolang je drukt | idem |
 
-Labels in het Nederlands: zang (`vocals`), rest (`inst`), drums, bas (`bass`),
-overig (`other`). Elke nieuwe action krijgt een uitleg in
-`src/ui/apc-beschrijf.js`. De auto-DJ: stem-actions horen bij `OVERNEEM`
-(`src/auto/automaat.js`): wat Clay aanraakt tijdens een overgang is van hem.
-Geen plek in de standaard-APC-mapping in deze ronde (eerst VRAGEN; koppelen
-werkt wel).
+Labels (`STEM_LABELS`): zang, rest, drums, bas, overig. Uitleg in
+`apc-beschrijf.js`. Auto-DJ: in `OVERNEEM`. Handelingenlog: de kill-schakelaars
+staan in de beginstand (`stemKill`, alleen met stems), terugspelen zet ze na het
+laden; `track.N.stem.*` hoort bij het nummer (`NUMMER_NODIG`).
 
-## 4. Ui (spoor ui)
+## 4. Ui
 
-- `laden.js` / `laadLibrary`: heeft de rij `stems`, dan `stems.bestand` laden
-  met `{ stems: { namen, schaal } }`; mislukt dat, dan `audio.wav` met een
-  `meld()`. Komen er stems binnen terwijl het nummer al op een track staat:
-  NIET vanzelf wisselen (het speelt misschien), wel laten zien dat herladen ze
-  geeft.
-- Een STEMS-rij voor de track met focus (zoals KLANKSCHAAL en AUTO: standaard
-  dicht, een knop om te openen). Per stem: naam, een niveauknop/schuif en een
-  kill-knop, via de bus en elke frame teruggelezen met `read()`. Zonder stems:
-  "geen stems" met splitsknoppen (2 · 4) als het een library-nummer is, en de
-  voortgang als het in de rij staat. Past op 1440×790 (laptopmaat, `649b555`).
-- Library: een kolom `stems`: `—`, `2`, `4`, `wacht`, `42%`, `fout` (tooltip
-  met reden), en een knop om te splitsen (2 of 4) of te annuleren. Peilen op
-  `GET /api/stems` zolang er iets open staat.
-- Ingest-strook: keuze stems `2 · 4 · geen` (onthouden in localStorage
-  `varve.stems.standaard`, standaard 2), mee in `POST /api/ingest` en de upload.
-- Controlekamer: een tegel voor de stems-rij (wat loopt, wat wacht, of de
-  splitter er is).
-- Kolomkop of baan: een klein teken als de track stems heeft.
+- `laden.js`: met `track.stems` → `stems.bestand` met `{ stems }`; mislukt dat →
+  `audio.wav` met een melding. `staat.deckStems[id] = { aantal, mislukt } | null`.
+  Hoeveel stems er ECHT spelen komt van de bus (`aantalOpBus`).
+- `stems-paneel.js` (de rij), `stems-wachtrij.js` (één `StemsWachtrij`, peilt
+  `GET /api/stems` elke 1,5 s zolang er iets open staat of iemand kijkt),
+  `stems-weergave.js` (puur: namen, cel, rijstand, kolomteken, tegel).
+- De rij staat onder de mixer zoals AUTO en KLANKSCHAAL, één regel van 40 px; op
+  1440×790 houden de kolommen faders van 124 px. Meldingen staan boven een open
+  rij onderaan (gold ook al voor auto en klankschaal).
+- Opnieuw splitsen wordt geweigerd zolang een track het nummer MET stems speelt
+  (het vervangt het bestand waar hij uit leest). De StreamBron vangt het ook af
+  als het toch gebeurt (zie Engine).
 
-## 5. Wie raakt wat aan (tegen botsingen)
+## Tests en meten
 
-| spoor | bestanden |
-|---|---|
-| server | `server/**`, `test/stems.test.mjs`, `test/nep-stems.mjs`, toevoegingen in `test/server.test.mjs`, `test/library.test.mjs`, `test/ingest.test.mjs`, `test/wachtrij*.test.mjs`, `tools/stems/` |
-| engine | `src/engine/**`, `src/control/actions.js`, `src/auto/automaat.js`, `src/ui/apc-beschrijf.js`, `test/stream.test.mjs`, `test/engine.test.mjs`, `test/renderblok.test.mjs`, `test/auto.test.mjs`, `test/regels.test.mjs`, `tools/bench/` |
-| ui | `src/ui/**` (behalve `apc-beschrijf.js`), `src/controle/**`, `index.html`, `controle.html`, `styles.css`, `test/library-lijst.test.mjs`, `test/controle.test.mjs`, `test/spiegel.test.mjs`, `tools/headless/stems.mjs` |
-| integratie | `docs/STEMS.md`, `CLAUDE.md`, `ROADMAP.md`, `docs/VRAGEN.md`, `docs/HANDOFF.md`, `tools/README.md` |
+- `test/stems.test.mjs` (wachtrij, routes, ingest-koppeling, schema, annuleren,
+  herstart; met `VARVE_STEMS_ECHT=1` ook de echte Demucs), `test/nep-stems.mjs`
+  (stem k = audio × gewicht: twee 0,75/0,25, vier 0,1/0,2/0,3/0,4; som bit voor bit
+  audio.wav), streamkern 4/8 kanalen in `stream.test`, stems-variant in
+  `renderblok.test` (0 GC, uitgang 0 = gouden hash), `engine.test`, `auto.test`,
+  `handelingenlog.test`, `library.test`, `library-lijst.test`, `spiegel.test`,
+  `controle.test`. `node test/alles.mjs`: 41 bestanden, alles groen.
+- `node tools/headless/stems.mjs`: van binnenhalen tot kill, gemeten aan de master
+  (zang weg 0,250 · alles weg 0 · terug 1,000; vier: drums weg 0,90 · rest weg 0,40),
+  layout op 1440×790 en 1920×1080, de Controlekamer. `--nep` = alleen de ui.
+- CPU (bench, 8 decks, M1): stereo 19,7 ms per s audio (2,0% van een kern), 2 stems
+  34,6 (3,5%), 4 stems 63,9 (6,4%); 0 GC. Geheugen per deck ×2 / ×4 (een typisch
+  pagina-plan: 9,2 / 18,4 / 36,7 MB).
 
-Elk spoor schrijft zijn verslag in `docs/verslagen/2026-10-03/<spoor>.md`.
+## Grenzen (niet als bug melden)
+
+- De GPU kent geen `nice`: splitsen tijdens een set met veel video deelt de GPU met
+  WebGL (Demucs zakt dan naar 1–1,8×; of beelden haperen is niet gemeten). VRAGEN N3.
+- De stems-rij overleeft geen serverherstart; de werkmap wordt opgeruimd.
+- Een split van een uur heeft tijdelijk 2× de stems.wav aan schijf nodig (4 stems:
+  5,5 GB + 2,8 GB).
+- Niet getest: een album van een uur van begin tot eind, CUDA (H3), splitsen met een
+  volle schijf.

@@ -1,4 +1,4 @@
-# Overdracht — waar we staan (25 september 2026)
+# Overdracht — waar we staan (3 oktober 2026)
 
 Lees in deze volgorde:
 1. `CLAUDE.md`: architectuur, regels, valkuilen. Nieuw sinds 25 sep: transport,
@@ -7,12 +7,37 @@ Lees in deze volgorde:
    mapping als verschil, vormen 16:9, toonsoort.
 2. Dit bestand.
 3. `ROADMAP.md`: bovenaan staat DE TAKENLIJST OP VOLGORDE.
-4. `docs/VRAGEN.md`: open vragen, nieuw is blok J.
+4. `docs/VRAGEN.md`: open vragen, nieuw is blok N (stems).
 5. Per onderdeel: `docs/TOONSOORT.md` (§13), `MAPPING-VERSCHIL.md`, `LIBRARY.md`,
    `BEAMER.md`, `HANDELINGENLOG.md`, `AUDIOPAD.md`, `VORMEN-16x9.md`,
    `BEATGRID.md` (restpunten), `APC40.md`.
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
+
+## 3 OKT: STEMS GEBOUWD (docs/STEMS.md)
+
+Clay: "de proefstems waren goed, bouw met meerdere subagenten tegelijk aan de stem
+splitter in varve dj". Gebouwd in drie parallelle sporen (server, engine, ui) op
+een gedeeld contract, elk in een worktree buiten iCloud (`~/Projects/varve-stems/`),
+daarna samengevoegd op `stems/integratie`, nagelopen door een reviewer en een
+end-to-end-controle met de echte Demucs, en op `main` gezet.
+
+- NIEUW: `server/stems.js`, `server/stems/splits.py`, `src/ui/stems-paneel.js`,
+  `stems-wachtrij.js`, `stems-weergave.js`, `test/stems.test.mjs`,
+  `test/nep-stems.mjs`, `tools/headless/stems.mjs`, `tools/stems/vergelijk.py`,
+  `docs/STEMS.md`, verslagen in `docs/verslagen/2026-10-03/`.
+- GEWIJZIGD: streamkern/worklet/StreamBron (2, 4 of 8 kanalen), deck en
+  kanaalstrip (`stemIn`), actions (`track.N.stem.*`), auto-DJ (`OVERNEEM`),
+  handelingenlog (stem-kills in de beginstand), server (routes, schema v8,
+  ingest met `stems`), library-kolom, ingest-strook, Controlekamer, CLAUDE.md,
+  ROADMAP 17, VRAGEN blok N, AUDIOPAD, LIBRARY, CONTROLEKAMER, tools/README.
+- Python met Demucs staat in `~/.varve/stems-venv` (buiten de repo); het model
+  in `~/.cache/huggingface/hub/`.
+- De server is herstart (nieuwe routes, schema v8 migreert bij de eerste start).
+- **Eerst doen (Clay)**: de mixer herladen; in de library bij een nummer op **2**
+  klikken (of iets nieuws binnenhalen, standaard 2 stems); als de kolom `2` zegt
+  het nummer laden, knop **stems** in de balk, zang weg/terug. Dan VRAGEN N
+  (vooral N1: waar op de APC, en N2: luister naar zang weg).
 
 ## 2 OKT: ALLES GETEST, LAYOUT, CONTROLEKAMER (vanaf de Omarchy-machine)
 

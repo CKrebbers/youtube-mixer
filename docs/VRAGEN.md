@@ -356,3 +356,10 @@ APC-indeling (voorstel A):
 - [ ] **PL1. Mag jij een bewaker bewust breken?** 💬 Bijvoorbeeld een blend afdwingen over een onzeker grid, met een "ik weet het"-vinkje per stap. Nu winnen de bewakers altijd. **Advies:** toestaan, maar alleen vanuit het venster (door jou), nooit door Claude.
 - [ ] **PL2. Per stap: automatisch, of wachten op jouw GO?** 🎛 Voor fase 2 (live-stand). **Advies:** standaard automatisch, per stap om te zetten.
 - [ ] **PL3. Past het venster op je tweede scherm, en mist er iets in de lijst?** 👀
+
+## N. Stems (3 okt, docs/STEMS.md)
+
+- [ ] **N1. Waar op de APC?** 🎛 Nu nergens (koppelen werkt: `track.N.stem.vocals.kill` enz.). **Advies:** een grid-modus STEMS naast KLANK (eigen kleur, bereikbaar met ▲ ▼ zoals de andere grid-modi): per kolom rij 1 zang weg zolang je drukt, rij 2 rest weg (shift + pad = schakelaar, zoals de kill in KLANK), rij 3–5 bij vier stems drums/bas/overig. Eerst zelf een avond met koppelen proberen.
+- [ ] **N2. De rest van het model naar "rest"?** 👂 Nu: rest = mix − zang (bij vier: overig krijgt wat het model nergens onderbracht), zodat alles open precies klinkt als het nummer. Prijs: wat Demucs miste (ook een beetje zang) blijft hoorbaar als de zang weg is. Alternatief: rest = alleen drums + bas + overig; dan is zang weg schoner, maar alles open klinkt tot −25 dB (ambient) anders dan het origineel. **Advies:** zo laten; luister naar zang weg bij No Surprises en Bay Ledges.
+- [ ] **N3. Splitsen tijdens een set?** 💬 Demucs deelt de GPU met de video (WebGL); `nice` helpt alleen de CPU. Nu splitst hij gewoon door (na elke ingest standaard 2). **Advies:** zo laten tot het hapert; dan een knop "stems pauzeren" in de Controlekamer, of splitsen op de Omarchy-machine (H3).
+- [ ] **N4. Standaard 2 bij elke ingest, ook als je even snel iets binnenhaalt?** 💬 Een nummer van 5 minuten kost ~2 minuten rekenen en ~110 MB. De keuze `2 · 4 · geen` staat naast de invoer en wordt onthouden. **Advies:** zo laten (H2).

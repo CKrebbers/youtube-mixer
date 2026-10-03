@@ -106,6 +106,9 @@ src/
                     klankschaal-paneel.js de KLANKSCHAAL-rij: openen, instellingen bewaren, per frame tonen
                     plan-koppeling.js in de mixer: actief plan, ophalen met versie, live naar de automaat, window.varvePlan, knop plan
                     auto-paneel.js  de AUTO-rij: wat er klinkt, wat er komt en waarom, ok/overslaan/langer/nu
+                    stems-paneel.js de STEMS-rij voor de focus-track: niveau + kill per stem, splitsen, voortgang
+                    stems-wachtrij.js de stems-rij van de server (GET /api/stems): peilen zolang iets open staat of iemand kijkt
+                    stems-weergave.js stems als tekst: namen, library-cel, rijstand, kolomteken, tegel. Puur.
   vormen/           hulp.js         paletten, toeval met zaad, ruis, tekenhulp (gedeeld door de systemen)
                     systemen.js     de Vormmachines (Clay's artifact): 10 lichte + de lijst van alle 26
                     systemen-zwaar.js / -meer.js / -isomorf.js  de andere 16 (zwaar · middel · beeld = geluid)
@@ -135,7 +138,7 @@ server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
   ingest.js         yt-dlp (of een eigen bestand) -> ffmpeg -> media/<id>/. Gooit nooit.
   links.js          links netjes maken (TikTok), bron van een nummer, id's, bestandsnamen
-  library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren), peaks, racks, grid, toonsoort, hotcues.
+  library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren), peaks, racks, grid, toonsoort, hotcues, stems.
   analyze.js        golfvorm-peaks, onset-envelope en toonsoort vooraf, streamend uit ffmpeg
   analyse-werker.js peaks, onset, tap-verfijning en toonsoort in een worker_thread (server blijft vrij)
   detect.js         FFT, onset-envelope, tempo, segmentatie (+ tweede kans). Geen dependencies.
@@ -144,11 +147,13 @@ server/             draait apart: `node server/index.js`
   opname.js         opnames: WAV dat groeit, kop herstellen na een crash
   proef.js          de speellijst van de Controlekamer: proef/sessie.json, per punt, atomisch; archief per ronde
   handelingen.js    handelingenlogs naast de opnames: stukken op hun plek, lijst, lezen
+  stems.js          de stems-rij: Demucs starten (nice), één tegelijk, annuleren, werkmap, nalopen, verhuizen
+  stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
-                    stems/ (Demucs-proef), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
+                    stems/ (Demucs-proef meet.py, vergelijk.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
@@ -173,6 +178,8 @@ test/
   wachtrij.test.mjs wachtrij, annuleren (ook midden in een nep-download), playlist, dubbel, voortgang, strook
   wachtrij-server.test.mjs  eigen server + nep-yt-dlp: urls, volgorde, DELETE, dubbel, upload in de rij, herstart
   nep-ytdlp.mjs     nep-yt-dlp voor de tests (VARVE_YTDLP), geen netwerk — geen test zelf
+  stems.test.mjs    stems-rij, routes, ingest-koppeling, schema v8, annuleren, herstart (VARVE_STEMS_ECHT=1: echte Demucs)
+  nep-stems.mjs     nep-splitter (VARVE_STEMS_CMD via maakNepStems): stem k = audio × gewicht — geen test zelf
   toon.test.mjs     toonsoort van de server: synthetisch via ffmpeg + worker, gelijk aan het meetinstrument
   toonsoort.test.mjs ToonKaart, wat je hoort, key-actions, weergave; elke bewerking door normaliseerToon
   handelingenlog.test.mjs  vastleggen (nep-klok), haperend netwerk, terugspelen, paden, grootte, eigen server
@@ -220,6 +227,7 @@ docs/
   PLAN.md           het planvenster: formaat v2, opslaan met versie, samenwerken met Claude, live, fases
   AUTO-DJ.md        auto-DJ: drie partijen, bewakers, overgangen, bediening, het setplan, grenzen, volgende fases
   KLANKSCHAAL.md    de klankschaal: stemming, bouw, bediening, metingen, open vragen (KS1–KS5)
+  STEMS.md          stems per nummer: Demucs bij de ingest, stems.wav, de engine, de rij, metingen
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -251,9 +259,13 @@ docs/
   beantwoordt. Kost ~11 MB per minuut (de hele WAV staat in RAM, maar als
   16-bit: de helft van een AudioBuffer). `deck.load()` met de BufferBron
   bestaat nog als reserve, voor de engine-tests en straks keylock.
-- Streamen leest `audio.wav` rechtstreeks met Range-verzoeken, en kan daarom
-  alleen 16-bit PCM stereo. De ingest zet dat formaat expliciet. Verander je
-  het formaat van `audio.wav`, dan weigert de StreamBron het met een reden.
+- Streamen leest `audio.wav` (of `stems.wav`) rechtstreeks met Range-verzoeken,
+  en kan daarom alleen 16-bit PCM met 2, 4 of 8 kanalen (stereo, of 2/4 stems
+  interleaved). De ingest zet dat formaat expliciet. Verander je het formaat van
+  `audio.wav`, dan weigert de StreamBron het met een reden. Met stems kost een
+  deck ×2 (twee) of ×4 (vier) aan geheugen en netwerk. Wordt het bestand op de
+  server vervangen terwijl een deck het streamt (Content-Range-totaal anders),
+  dan haalt de StreamBron niets meer op: stilte en een melding, nooit ruis.
 - Springen naar een plek die nog niet binnen is, geeft een paar tientallen ms
   stilte (een gat is stilte, nooit een herhaling). Hotcues en cuepunt zijn
   vastgepind en klinken direct.
@@ -1116,6 +1128,31 @@ Volledig in `docs/KLANKSCHAAL.md`. Wat een bouwer niet mag missen:
   meet het (GCProfiler) en meet de toonhoogte (Goertzel).
 - Luidheid is gemeten tegen −14 LUFS (`UIT_OPHOGING`, `VELD_OPHOGING`): verander
   je het model, meet dan opnieuw.
+
+## Stems (gebouwd 3 okt)
+
+Volledig in `docs/STEMS.md`. Wat een bouwer niet mag missen:
+- Splitsen gebeurt VOORAF, bij de ingest of met de knop in de library, door
+  Demucs (`server/stems/splits.py`, Python in `~/.varve/stems-venv`), nooit
+  realtime. De engine speelt alleen `stems.wav`: 16-bit, 48 kHz, 4 of 8 kanalen
+  interleaved, kanaalpaar k = `namen[k]`, evenveel frames als audio.wav. De SOM
+  van de stems is audio.wav (de rest van het model zit in inst/other).
+- ÉÉN worklet per deck met ALTIJD vier stereo-uitgangen naar `chain.stemIn`
+  (vóór trim en EQ); de streamkern leest één paar per renderBlok-aanroep
+  (`stride`/`paar`, `hergebruik` voor paar 1–3). Stereo blijft bit voor bit (de
+  gouden hash), stems blijven afvalvrij (0 GC). Geen tweede afspeelmotor per stem.
+- Stem-kill is 0 in amplitude met de zachte S van de EQ-kill (`killVersterking`,
+  na `startDrempel`, nooit setValueCurveAtTime). Bij elke laad alles open: stems
+  horen bij het NUMMER. `inst` werkt in beide standen (bij vier: drums + bas +
+  overig samen).
+- Een testserver (`VARVE_MEDIA`) splitst alleen met `VARVE_STEMS_CMD` (één
+  uitvoerbaar bestand: `maakNepStems(map)`) of `VARVE_STEMS_PY`. Na een
+  serverwijziging: server herstarten; schema v8 migreert vanzelf.
+- Opnieuw splitsen vervangt `stems.wav`: de ui weigert het zolang een track dat
+  nummer met stems speelt, en de StreamBron vangt het af (zie Bekende grenzen).
+- Geen vaste APC-plek (VRAGEN N1); koppelen werkt. Een nieuwe stem-knop op een
+  deck: ook in `OVERNEEM` (auto-DJ) en, als het een schakelaar is, in de
+  beginstand van het handelingenlog (`stemKill`).
 
 ## Werkwijze die hier werkt
 
