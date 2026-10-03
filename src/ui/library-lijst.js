@@ -2,6 +2,7 @@ import { fmtTime } from '../lib/emitter.js';
 import { esc } from './dom.js';
 import { gridStatus, libraryBpm, STATUS_TEKST } from './grid-strook.js';
 import { libraryToon } from './toon-weergave.js';
+import { stemsCel } from './stems-weergave.js';
 
 /*
  * De lijst van de library, voor 5000 nummers net zo goed als voor 50.
@@ -207,12 +208,31 @@ function toonInfo(t) {
 }
 
 /**
+ * De stems-cel (docs/STEMS.md §4): de stand ("—", "2", "4", "wacht", "42%",
+ * "fout") en de knoppen om te splitsen (2 · 4) of te annuleren (×). Los van
+ * KOLOMMEN, want het paneel werkt alleen deze cel bij als de stems-rij van de
+ * server verandert (voortgang): de hele rij hertekenen kan een klik op een
+ * laadknop kosten. `staat.stems` = Map track-id -> opdracht, `staat.stemsUit`
+ * = waarom er niet gesplitst kan worden (de splitter ontbreekt), of null.
+ */
+export function stemsCelHtml(t, staat = {}) {
+  const c = stemsCel(t, staat?.stems?.get?.(t.id) ?? null, { uit: staat?.stemsUit ?? null });
+  const id = esc(t.id);
+  const knoppen = c.knoppen.map((k) => (k.doe === 'annuleer'
+    ? `<button class="btn sm lib-st lib-st-x" data-stems="annuleer" data-opdracht="${esc(k.opdracht)}" data-id="${id}" title="${esc(k.titel)}">×</button>`
+    : `<button class="btn sm lib-st" data-stems="splits" data-aantal="${k.aantal}" data-id="${id}" title="${esc(k.titel)}"${k.uit ? ' disabled' : ''}>${k.aantal}</button>`)).join('');
+  // De INHOUD van de cel (cellenHtml zet er de <span> van de kolom omheen):
+  // het paneel vervangt die inhoud, en vindt hem terug aan data-st-id.
+  return `<b class="lib-stems ${c.soort}" data-st-id="${id}" title="${esc(c.titel)}">${esc(c.tekst)}</b>${knoppen}`;
+}
+
+/**
  * De kolommen, links naar rechts (de knoppen komen er in het paneel achter).
  * `sorteer` = sleutel voor de server (SORTERINGEN); zonder = niet sorteerbaar.
  * Een kolom erbij = een regel hier, en als hij sorteerbaar is een sleutel in
  * SORTERINGEN en in SORTERING van server/library.js.
  * `cel(t, nu, staat)`: `staat` komt van het paneel (`kiezer` = id van de rij
- * waarvan de toonsoortkiezer open staat).
+ * waarvan de toonsoortkiezer open staat; `stems` en `stemsUit`, zie stemsCelHtml).
  */
 export const KOLOMMEN = [
   {
@@ -246,6 +266,9 @@ export const KOLOMMEN = [
     },
     cel: (t) => esc(STATUS_TEKST[gridInfo(t).gs.status]),
   },
+  // Stems: zang + rest (2) of vier, met splitsen/annuleren in de cel. Niet
+  // sorteerbaar (niet gevraagd, en de server kent er geen sleutel voor).
+  { id: 'stems', kop: 'stems', breedte: '84px', klasse: 'lib-stems-cel', cel: (t, nu, staat) => stemsCelHtml(t, staat) },
   {
     id: 'lufs', kop: 'LUFS', breedte: '104px', klasse: 'lib-lufs',
     cel: (t) => esc(t.loudness_i != null ? `${t.loudness_i.toFixed(1)} → ${t.doel_loudness} LUFS` : '—'),

@@ -4,7 +4,7 @@ import { libraryToon, KIEZER } from './toon-weergave.js';
 import { ToonKaart, camelot, kortNaam, volleNaam } from '../engine/toonsoort.js';
 import {
   RIJ_H, PaginaCache, lijstUrl, zichtbaar, volgendeSortering, leesSortering, bewaarSortering,
-  kolomSjabloon, kopHtml, cellenHtml, standaardOpslag,
+  kolomSjabloon, kopHtml, cellenHtml, standaardOpslag, stemsCelHtml,
 } from './library-lijst.js';
 import { IngestStrook } from './ingest-strook.js';
 
@@ -26,11 +26,13 @@ export const isVideoBestand = (file) => /^video\//.test(file?.type || '') || ['m
 
 export class LibraryPanel {
   constructor({ root, onLaad, onGrid = () => {}, onToon = () => {}, decks = ['A', 'B'], label = (d) => d,
-    stand = () => 'leeg', opslag = standaardOpslag() }) {
+    stand = () => 'leeg', opslag = standaardOpslag(), stems = null, stemsInGebruik = () => [] }) {
     this.root = root;
     this.onLaad = onLaad;
     this.onGrid = onGrid;        // (trackId, grid) na "opnieuw analyseren": op de decks zetten
     this.onToon = onToon;        // (trackId, toon) na kiezen in de library: op de decks zetten
+    this.stems = stems;          // de stems-rij van de server (stems-wachtrij.js), of null
+    this.stemsInGebruik = stemsInGebruik;   // (trackId) => tracks die dit nummer MET stems spelen
     this.kiezer = null;          // track-id waarvan de toonsoortkiezer open staat
     this.decks = decks;
     this.label = label;
@@ -59,20 +61,42 @@ export class LibraryPanel {
       status: root.querySelector('.lib-status'),
       jobs: root.querySelector('.lib-jobs'),
       rijen: root.querySelector('.lib-rijen'),
+      stemsKeuze: root.querySelector('.lib-stems-keuze'),
     };
 
     // Binnenhalen, wachtrij en voortgang: de strook (ingest-strook.js). Hij
     // luistert zelf naar het invoerveld en "haal binnen". Is er een nummer
-    // binnen, dan ververst de lijst zonder te verspringen (onNieuw).
+    // binnen, dan ververst de lijst zonder te verspringen (onNieuw), en gaat
+    // het (met de keuze 2 · 4) in de stems-rij van de server: meteen peilen.
     this.strook = new IngestStrook({
-      el: this.el.jobs, url: this.el.url, haal: this.el.haal,
+      el: this.el.jobs, url: this.el.url, haal: this.el.haal, stemsKeuze: this.el.stemsKeuze, opslag,
       decks, label, stand, open: () => this.open,
       meld: (tekst, goed) => { this.melding = { tekst, goed }; this.tekenStatus(); },
       bevestigd: (soort, sleutel) => this._bevestigd(soort, sleutel),
       laad: (track, deck) => this._laadTrack(track, deck),
       laadNaIngest: (track, deck) => this._laadNaIngest(track, deck),
-      onNieuw: () => this.ververs(),
+      onNieuw: () => { this.ververs(); this.stems?.peil(); },
     });
+    // De stems-kolom volgt de stems-rij van de server: peilen zolang het paneel
+    // open staat, en bij elke verandering alleen de stems-cellen bijwerken.
+    if (this.stems) {
+      this.stems.kijk(() => this.open);
+      this.stems.on('change', () => this._stemsBijwerken());
+      this.stems.on('klaar', () => this.ververs());
+    }
+    // Niet bijwerken terwijl je in de lijst drukt: een knop die tussen
+    // indrukken en loslaten vervangen wordt krijgt geen klik (zie de strook).
+    this._vast = false;
+    this._later = false;
+    this._stemsHtml = new Map();   // track-id -> de stems-cel zoals hij er nu staat
+    this.el.rijen.addEventListener('pointerdown', () => { this._vast = true; });
+    const los = () => {
+      if (!this._vast) return;
+      this._vast = false;
+      if (this._later) { this._later = false; setTimeout(() => this._stemsBijwerken(), 0); }
+    };
+    globalThis.addEventListener?.('pointerup', los, true);
+    globalThis.addEventListener?.('pointercancel', los, true);
     // Eigen bestanden: de knop opent de kiezer, of sleep ze op het paneel.
     this.el.bestand?.addEventListener('click', () => this.el.bestanden.click());
     this.el.bestanden?.addEventListener('change', () => {
@@ -129,6 +153,8 @@ export class LibraryPanel {
         if (tk.dataset.tk === 'sluit') { this.kiezer = null; return this.tekenRijen(); }
         return this.kiesToon(tk.dataset.id, tk.dataset.tk);
       }
+      const st = e.target.closest('button[data-stems]');
+      if (st) return this.stemsKlik(st.dataset);
       const knop = e.target.closest('button[data-deck]');
       if (knop) {
         // Over een track die SPEELT laden valt de zaal stil. Dan eerst vragen:
@@ -273,7 +299,7 @@ export class LibraryPanel {
     try {
       const r = await this.onLaad(deck, track);
       this.melding = { tekst: `${track.titel} staat op track ${this.label(deck)}`
-        + (r?.hint ? ` — ${r.hint}` : ''), goed: true };
+        + (r?.stems ? `, met ${r.stems} stems` : '') + (r?.hint ? ` — ${r.hint}` : ''), goed: true };
       fetch(`/api/library/${id}/geladen`, { method: 'POST' }).catch(() => {});
       // "gespeeld" meteen bijwerken, maar NIET opnieuw sorteren: de lijst
       // springt dan niet onder je muis weg terwijl je de volgende zoekt.
@@ -411,6 +437,84 @@ export class LibraryPanel {
     </div>`;
   }
 
+  /**
+   * Een knop in de stems-kolom: splitsen in 2 of 4, of annuleren (×).
+   *
+   * Splitsen gaat NIET als een track dit nummer nu MET stems speelt: de server
+   * vervangt stems.wav bij succes (2 → 4), terwijl het deck daar nog met
+   * Range-verzoeken uit leest — met een ander aantal kanalen is dat ruis.
+   * Een lopende split stoppen gooit werk weg: tweede klik, zoals de ingest.
+   */
+  async stemsKlik({ stems: doe, id, aantal, opdracht }) {
+    if (!this.stems) return;
+    const t = this._track(id);
+    const titel = t?.titel ?? id;
+    if (doe === 'splits') {
+      const n = Number(aantal);
+      const bezet = this.stemsInGebruik(id);
+      if (bezet.length) {
+        this.melding = { tekst: `"${titel}" speelt met stems op track ${bezet.join(', ')} — laad daar eerst iets anders, opnieuw splitsen vervangt het bestand waar hij uit leest`, goed: false };
+        return this.tekenStatus();
+      }
+      const r = await this.stems.splits(id, n);
+      this.melding = !r.ok ? { tekst: `"${titel}" niet gesplitst: ${r.fout}`, goed: false }
+        : r.al ? { tekst: `"${titel}" heeft al ${n} stems`, goed: true }
+          : { tekst: `"${titel}" gaat in ${n === 4 ? 'vier stems (drums · bas · overig · zang)' : 'zang en rest'} — ${r.opdracht?.status === 'bezig' ? 'splitsen begonnen' : 'in de rij'}`, goed: true };
+      if (r.al) this.ververs();   // de lijst wist het nog niet
+      this.tekenStatus();
+      return this._stemsBijwerken();
+    }
+    if (doe === 'annuleer') {
+      const o = this.stems.opdrachten.find((x) => x.id === opdracht);
+      if (!o) return;
+      if (o.status === 'bezig' && !this._bevestigd('stems-x', o.id)) {
+        this.melding = { tekst: `"${titel}" wordt gesplitst — klik nog eens op × om te stoppen (het werk tot nu toe gaat weg)`, goed: false };
+        return this.tekenStatus();
+      }
+      const r = await this.stems.annuleer(o.id);
+      this.melding = r.ok ? { tekst: `splitsen van "${titel}" ${o.status === 'bezig' ? 'gestopt' : 'uit de rij'}`, goed: true }
+        : { tekst: `annuleren lukte niet: ${r.fout}`, goed: false };
+      this.tekenStatus();
+      return this._stemsBijwerken();
+    }
+  }
+
+  /** Wat de stems-cellen nodig hebben uit de stems-rij van de server. */
+  _stemsStaat() {
+    const s = this.stems;
+    return { stems: s?.perNummer() ?? new Map(), stemsUit: s && s.beschikbaar === false ? (s.reden || 'de splitter ontbreekt') : null };
+  }
+
+  /**
+   * De stems-rij veranderde (voortgang, klaar, splitter weg): alleen de
+   * stems-cellen die in beeld zijn, en alleen wat anders is. Niet terwijl je
+   * in de lijst drukt (`_vast`): dan na het loslaten.
+   */
+  _stemsBijwerken() {
+    const s = this.stems;
+    if (this.el.stemsKeuze && s) {
+      const uit = s.beschikbaar === false;
+      this.el.stemsKeuze.classList.toggle('uit', uit);
+      const titel = uit ? `de splitter ontbreekt${s.reden ? `: ${s.reden}` : ''} — binnenhalen werkt wel, splitsen niet`
+        : 'stems bij het binnenhalen: zang + rest (2), vier, of niet splitsen (onthouden)';
+      if (this.el.stemsKeuze.title !== titel) this.el.stemsKeuze.title = titel;
+    }
+    if (!this.open || !this.el.venster) return;
+    if (this._vast) { this._later = true; return; }
+    const staat = this._stemsStaat();
+    // Vergelijken met wat WIJ schreven, niet met outerHTML: de browser schrijft
+    // attributen anders terug (disabled="", ' in plaats van &#39;) en dan zou
+    // elke cel bij elke peiling vervangen worden.
+    for (const el of this.el.venster.querySelectorAll('[data-st-id]')) {
+      const t = this._track(el.dataset.stId);
+      if (!t || !el.parentElement) continue;
+      const html = stemsCelHtml(t, staat);
+      if (this._stemsHtml.get(t.id) === html) continue;
+      this._stemsHtml.set(t.id, html);
+      el.parentElement.innerHTML = html;
+    }
+  }
+
   async verwijder(id) {
     const track = this._track(id);
     if (!track) return;
@@ -488,7 +592,8 @@ export class LibraryPanel {
     const nu = Date.now();
     // Per deck één keer vragen, niet per rij.
     const standen = this.decks.map((d) => this.stand(d));
-    const staat = { kiezer: this.kiezer };
+    const staat = { kiezer: this.kiezer, ...this._stemsStaat() };
+    this._stemsHtml.clear();
     const rijen = [];
     let kiezer = '';
     for (let i = van; i < tot; i++) {
@@ -496,6 +601,7 @@ export class LibraryPanel {
       if (!t) { rijen.push('<div class="lib-rij laadt"><span class="lib-titel">…</span></div>'); continue; }
       const laadt = this.bezig.has(t.id);
       const her = this.analyseert.has(t.id);
+      this._stemsHtml.set(t.id, stemsCelHtml(t, staat));
       rijen.push(`<div class="lib-rij">${cellenHtml(t, nu, staat)}
         <span class="lib-knoppen">
           ${this.decks.map((d, k) => `<button class="btn sm lib-trk ${standen[k]}" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)} (${standen[k]})"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}

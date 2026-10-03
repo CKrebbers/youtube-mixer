@@ -59,6 +59,35 @@ export function stappenStand(o) {
   }));
 }
 
+/**
+ * Stems bij het binnenhalen (docs/STEMS.md §2 en §4): 2 = zang + rest, 4 =
+ * drums · bas · overig · zang, 0 = niet splitsen. Onthouden in localStorage;
+ * standaard 2 (Clay, H2). De server zet het nummer na een GESLAAGDE ingest in
+ * de stems-rij; de ingest wacht daar niet op.
+ */
+export const STEMS_SLEUTEL = 'varve.stems.standaard';
+export const STEMS_KEUZES = [2, 4, 0];
+export const STEMS_STANDAARD = 2;
+
+/** localStorage, of null als de browser hem niet geeft (geblokkeerde sitedata gooit al bij het lezen). */
+function opslagVanBrowser() {
+  try { return globalThis.localStorage ?? null; } catch { return null; }
+}
+
+/** De bewaarde keuze; leeg, onzin of een opslag die gooit: de standaard (2). */
+export function leesStemsKeuze(opslag) {
+  try {
+    // Number(null) en Number('') zijn 0, en 0 is een geldige keuze: eerst kijken of er iets staat.
+    const v = opslag?.getItem(STEMS_SLEUTEL);
+    if (v != null && v !== '' && STEMS_KEUZES.includes(Number(v))) return Number(v);
+  } catch {}
+  return STEMS_STANDAARD;
+}
+
+export function bewaarStemsKeuze(opslag, n) {
+  try { opslag?.setItem(STEMS_SLEUTEL, String(n)); } catch {}
+}
+
 /** Een link kort genoeg voor één regel: zonder https://www. */
 const kortUrl = (u) => String(u || '').replace(/^https?:\/\/(www\.)?/i, '');
 
@@ -88,11 +117,22 @@ export class IngestStrook {
    * @param opties.meldBuiten (tekst) => een melding BUITEN het paneel (de strook onderaan het
    *                          scherm), voor wat je niet mag missen als het paneel dicht is. Geeft
    *                          hij het element terug, dan haalt de strook het weg zodra je kiest.
+   * @param opties.stemsKeuze de knoppen "stems 2 · 4 · geen" (data-stems-keuze), of niets
+   * @param opties.opslag     waar de keuze bewaard wordt (localStorage; mag ontbreken)
    */
   constructor({ el, url, haal, decks = [], label = (d) => d, stand = () => 'leeg', open = () => true,
     meld = () => {}, bevestigd = () => true, laad = () => {}, laadNaIngest = () => {}, onNieuw = () => {},
-    meldBuiten = () => {} }) {
+    meldBuiten = () => {}, stemsKeuze = null, opslag = opslagVanBrowser() }) {
     Object.assign(this, { el, url, haal, decks, label, stand, isOpen: open, meld, bevestigd, laad, laadNaIngest, onNieuw, meldBuiten });
+    // Stems bij het binnenhalen: gaat mee in elke POST /api/ingest en upload.
+    this.opslag = opslag;
+    this.stemsKeuze = stemsKeuze;
+    this.stems = leesStemsKeuze(opslag);
+    stemsKeuze?.addEventListener('click', (e) => {
+      const b = e.target.closest?.('[data-stems-keuze]');
+      if (b) this.zetStems(Number(b.dataset.stemsKeuze));
+    });
+    this._tekenStems();
     this.opdrachten = [];        // zoals de server ze geeft
     this.uploads = [];           // { sleutel, naam, pct, status: 'wacht'|'bezig', xhr, file, naDeck, gestopt }
     this.naLaden = new Map();    // opdracht-id -> deck (een bestand op een track gesleept)
@@ -150,6 +190,22 @@ export class IngestStrook {
     this.meld(alles.length > 1 ? `${alles.length} links — enter zet ze allemaal in de wachtrij, één voor één` : 'één link gevonden in wat je plakte', true);
   }
 
+  /** De stems-keuze voor wat je hierna binnenhaalt (2, 4 of 0 = niet splitsen), onthouden. */
+  zetStems(n) {
+    if (!STEMS_KEUZES.includes(n)) return;
+    this.stems = n;
+    bewaarStemsKeuze(this.opslag, n);
+    this._tekenStems();
+  }
+
+  _tekenStems() {
+    for (const b of this.stemsKeuze?.querySelectorAll?.('[data-stems-keuze]') ?? []) {
+      const aan = Number(b.dataset.stemsKeuze) === this.stems;
+      b.classList.toggle('on', aan);
+      b.setAttribute('aria-pressed', String(aan));
+    }
+  }
+
   /** Wat in het veld staat naar de server: één link, of een lijst. */
   async haalBinnen() {
     const tekst = this.url.value.trim();
@@ -164,7 +220,7 @@ export class IngestStrook {
     try {
       const r = await fetch('/api/ingest', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(een ? { url: link, ...(opnieuw ? { opnieuw: true } : {}) } : { urls: links }),
+        body: JSON.stringify(een ? { url: link, stems: this.stems, ...(opnieuw ? { opnieuw: true } : {}) } : { urls: links, stems: this.stems }),
       });
       const j = await r.json();
       if (!een && !r.ok) this.meld(j.fout || 'kon de links niet in de wachtrij zetten', false);
@@ -244,7 +300,7 @@ export class IngestStrook {
       const xhr = new XMLHttpRequest();
       up.xhr = xhr;
       // Op een track gesleept: vooraan in de rij, die wil je nu spelen (VRAGEN J12).
-      xhr.open('POST', `/api/upload?naam=${encodeURIComponent(up.naam)}${up.naDeck ? '&vooraan=1' : ''}`);
+      xhr.open('POST', `/api/upload?naam=${encodeURIComponent(up.naam)}${up.naDeck ? '&vooraan=1' : ''}&stems=${this.stems}`);
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) { up.pct = (e.loaded / e.total) * 100; this.teken(); }
@@ -396,7 +452,8 @@ export class IngestStrook {
         for (let i = 0; i < links.length; i += 100) {
           const r = await fetch('/api/ingest', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ urls: links.slice(i, i + 100), ...(opnieuw ? { opnieuw: true } : {}) }),
+            // De stems-keuze van NU: de server zegt in zijn lijst niet wat er toen gekozen was.
+            body: JSON.stringify({ urls: links.slice(i, i + 100), stems: this.stems, ...(opnieuw ? { opnieuw: true } : {}) }),
           });
           const j = await r.json();
           if (!r.ok) throw new Error(j.fout || `code ${r.status}`);
