@@ -48,8 +48,11 @@ globalThis.AudioContext = class {
   createDelay() { return node('delay'); }
   createWaveShaper() { return node('shaper'); }
   createChannelMerger() { return node('merger'); }
-  createOscillator() { const o = bron('osc'); o.type = 'sine'; o.frequency.value = 440; OSCS.push(o); return o; }
+  createOscillator() { const o = bron('osc'); o.type = 'sine'; o.frequency.value = 440; o.setPeriodicWave = (w) => { o.type = 'custom'; o.golf = w; }; OSCS.push(o); return o; }
   createConstantSource() { return bron('constant'); }
+  // Wat FM (MediSynth) gebruikt: een eigen golfvorm en een panner per stem.
+  createPeriodicWave(re, im) { return { re, im }; }
+  createStereoPanner() { const n = node('panner'); n.pan = param(0); return n; }
   createBufferSource() {
     const s = bron('src'); s.playbackRate = param(1); s.loop = false; s.loopStart = 0; s.loopEnd = 0;
     const stop = s.stop; s.stop = (t) => { stop(t); queueMicrotask(() => s.onended?.()); };
