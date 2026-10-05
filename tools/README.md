@@ -70,6 +70,12 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   op 1000 Hz, per kanaal gemeten (Goertzel). Zaal 1/2 alleen track 2; koptelefoon 3/4 met de cue op
   track 1 alleen track 1 (−9 dB tegen −156 dB); mix, volume (13,5 dB) en omgewisseld. Raakt de
   geluidsinstellingen van de Mac niet.
+- `effecten.mjs [--snel]` — de tien effecten uit de filter app (docs/EFFECTEN.md) in de echte Web Audio
+  van Chrome, OfflineAudioContext, geen app en geen MIDI (pagina /styles.css, alleen de modules),
+  Chrome gedempt; server op `VARVE_KIJK_POORT` (standaard 8813), Chrome op `VARVE_KIJK_DEBUG` (9413).
+  Per effect: 20 s met elke knop op 0 en 1 (eindig, niet aanzwellend), bypass bit voor bit, hoorbaar
+  op de standaard, stil na `staart()`, klikvrij (elke knop, een wissel, herankeren), plus toonhoogte,
+  wah, compressor-meng, luidheid en aliasing van de distortion, en de sjablonen. `--snel` = 6 s.
 - `plan.mjs` — het planvenster in headless Chromium (server op 8795, eigen VARVE_PLANNEN): de knop
   "plan" opent plan.html, voorspelling, bewerken, ongedaan maken, opslaan (vorige versie bewaard),
   nummer erbij, auto aan over de bus van de mixer, live "speelt nu", een wijziging van buitenaf

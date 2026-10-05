@@ -59,6 +59,10 @@ src/
                     stream-kern.js  streamen als puur rekenwerk: segment, pagina's, WAV, rem; afvalvrij
                     stream-lezer.js de AudioWorklet die pagina's afspeelt
                     fx.js           insert-slot: ketens bouwen, klikvrij wisselen
+                    fx-meer.js      tien effecten uit de filter app (distortion … breedte), in EFFECTEN achter de zeven van fx.js
+                    fx-lfo.js       LFO van tremolo/autopan: vrij of op de maat (buffer + playbackRate, fase op de audioklok)
+                    fx-kern.js      rekenkernen van de effect-worklets (toonhoogte, omhullende), afvalvrij. Puur.
+                    fx-worklet.js   de AudioWorklet eromheen (laadt pas bij gebruik, één keer per context)
                     rack.js         racks als data: macro's, curves, migratie
                     deck.js         transport, cues, loops, beatjump, quantize, rem, beatgrid (geluid zit in bron.js)
                     sampler.js      acht pads: knippen op het grid, loopen op de maat van wat je hoort
@@ -156,7 +160,7 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, effecten.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
@@ -195,6 +199,7 @@ test/
   beatgrid.test.mjs beatrekenen, grid bewerken, tap tempo met een misser erin
   detect.test.mjs   beatdetectie op materiaal waarvan het antwoord bekend is
   rack.test.mjs     macro-resolutie met een gouden bestand, migratie, onbekende effecten
+  effecten.test.mjs de effecten uit de filter app: contract, eenheden = zet(), lussen, inloop, twee koppen, LFO op de maat, worklets, 0 GC
   stream.test.mjs   streamkern tegen ffmpeg (bit voor bit), pagina-plan, StreamBron
   video.test.mjs    video volgt audio: bijsturen, springen, zichtbaarheid
   server.test.mjs   eigen server op eigen poort + tijdelijke db: witte lijst, Range, racks per nummer
@@ -238,6 +243,7 @@ docs/
   TAILSCALE.md      overal openen via Tailscale: VARVE_HOSTS, tailscale serve, wat waar werkt
   ONTBREEKT.md      wat er nog ontbreekt (2 okt): eigen docs, DJ-software, Logic/TD; voorstel en vragen
   STUDIO.md         VARVE als muziekprogramma (5 okt): hergebruik, vier controllers, fasen S0–S5; §3 de koptelefoon
+  EFFECTEN.md       effecten uit de filter app (S2c): per effect herkomst, eenheden, staart, metingen, wat niet
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -1244,6 +1250,32 @@ Volledig in `docs/STUDIO.md` §3. Wat een bouwer niet mag missen:
   sampler-volume en puls op shift + Cue Level in grid-modus sampler en video.
 - Gemeten met `tools/headless/koptelefoon.mjs` (echte Chrome, OfflineAudioContext van
   vier kanalen); de mock in engine.test kent geen echte splitter/merger.
+
+## Effecten uit de filter app (gebouwd 5 okt)
+
+Volledig in `docs/EFFECTEN.md` (STUDIO S2c). Wat een bouwer niet mag missen:
+- Tien effecten in `fx-meer.js` (distortion, chorus, flanger, vibrato, tremolo,
+  autopan, auto-wah, pitch, compressor, breedte), in `EFFECTEN` achter de zeven van
+  fx.js. Geheugen (90 s) bewust niet: in een insert-rack begint hij bij elke
+  ketenwissel leeg. Wat dubbel was (filter, delay, galm, crush, ringmod, phaser) niet.
+- Alles met een vertraging of een andere vorm verzet je met TWEE PADEN
+  (`wisselaar`: de twee koppen van de delay, lineair, de laatste stand wint), ook
+  drempel/ratio van de compressor (Chrome rekent die per blok: trapjes).
+- Alles met geheugen zit achter een INLOOP (30 ms): een nieuwe keten begint met
+  lege vertragingen, en de vertraagde kopie begon anders abrupt (×21 gemeten).
+  De delay van fx.js heeft dat niet (×46 bij een wissel).
+- Tijdens het bouwen (klok niet verder) zet `zet()` direct (`zetter`), daarna glijdt hij.
+- Worklets: `laadFxWorklet(ctx)` één keer per context, pas bij gebruik; tot dan droog,
+  daarna invloeien; was hij er al, dan meteen. `vernietig()` stuurt 'stop'.
+- Tremolo/autopan op de maat via `fx-lfo.js`: één cyclus als buffer, start METEEN op
+  de fase die hij hoort te hebben en vloeit 20 ms over. Op de "1" van de maat kan
+  niet (fxKlok kent alleen de tel).
+- Chrome-feiten (gemeten): WaveShaper 2x/4x = 128/192 samples later (daarom geen
+  oversampling: met de mix-knop is dat een kam); DynamicsCompressor kijkt 288 samples
+  (6 ms) vooruit en doet zelf make-up ((1/curve(1))^0,6, `chromeMakeup`), die wordt
+  eruit gedeeld; een DelayNode op 0 is bit voor bit door.
+- Een effect dat een oudere versie niet kent, bewaart zijn eigen `bypass` (`_bypass`
+  in rack.js); vroeger kwam het er na één keer bewaren als `bypass: true` uit.
 
 ## Werkwijze die hier werkt
 
