@@ -425,7 +425,8 @@ console.log('\nde actions');
     && read('track.7.inst.stil') === null && read('track.7.inst.next') === null);
   invoke('track.7.inst', true); invoke('track.7.inst', false);
   const g = eng.deck('G');
-  ok('track.7.inst: geen -> poly (read 1, het laatste in de lijst)', eng.instrumentOp('G')?.soort === 'poly' && read('track.7.inst') === 1);
+  ok(`track.7.inst: geen -> poly (het eerste in de lijst; read 1/${INSTRUMENTEN.length})`, eng.instrumentOp('G')?.soort === 'poly'
+    && dicht(read('track.7.inst'), 1 / INSTRUMENTEN.length));
   invoke('track.7.inst.knob.3', 0.4);
   ok('instrumentknop 3 = plek 3 van het instrument, read terug', dicht(read('track.7.inst.knob.3'), 0.4) && dicht(eng.instrumentOp('G').leesParam(3), 0.4));
   ok('knoppen lezen de standaard van het instrument', dicht(read('track.7.inst.knob.8'), 0.7));
@@ -436,9 +437,14 @@ console.log('\nde actions');
   invoke('track.7.inst.stil', false);
   ok('… daarna 0', read('track.7.inst.stil') === 0);
   invoke('track.7.inst.next', true);
-  ok('bladeren met één instrument: hij blijft poly (geen "geen")', eng.instrumentOp('G')?.soort === 'poly');
-  invoke('track.7.inst', true);
-  ok('track.7.inst nog eens: terug naar geen', eng.instrumentOp('G') === null && read('track.7.inst') === 0);
+  ok(`bladeren: van poly naar ${INSTRUMENTEN[1 % INSTRUMENTEN.length].soort} (nooit naar "geen")`,
+    eng.instrumentOp('G')?.soort === INSTRUMENTEN[1 % INSTRUMENTEN.length].soort);
+  invoke('track.7.inst.prev', true);
+  ok('en terug: weer poly', eng.instrumentOp('G')?.soort === 'poly');
+  let drukken = 0;
+  while (eng.instrumentOp('G') && drukken <= INSTRUMENTEN.length) { invoke('track.7.inst', true); drukken++; }
+  ok(`track.7.inst rondlopend: na het laatste instrument terug naar geen (${drukken}× vanaf poly)`,
+    eng.instrumentOp('G') === null && read('track.7.inst') === 0 && drukken === INSTRUMENTEN.length);
 
   // Een nummer dat SPEELT: pas bij een tweede druk binnen 3 s.
   g.load(buf, 'speelt');
@@ -458,7 +464,7 @@ console.log('\nde actions');
   ok('(een nummer laden haalde hem weer weg)', eng.instrumentOp('G') === null);
   invoke('track.7.inst.next', true);
   ok('op een track met een nummer dat NIET speelt: meteen (niet destructief)', eng.instrumentOp('G')?.soort === 'poly' && !g.buffer);
-  invoke('track.7.inst', true);
+  eng.zetInstrument('G', null);              // opruimen (met meer instrumenten gaat track.7.inst naar het volgende)
 
   ok('terugspelen slaat instrument-actions over; hun knoppen staan niet in de beginstand',
     ['track.3.inst', 'track.3.inst.knob.2', 'track.3.inst.stil', 'track.3.inst.next'].every((a) => OVERSLAAN.test(a))
