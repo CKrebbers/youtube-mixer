@@ -487,8 +487,9 @@ console.log('\nnoten.js: MIDI-noten naar de speeltrack');
   const noten = new Noten({ engine: eng, read, invoke, nu: () => nu });
   const doc = JSON.parse(readFileSync(new URL('../mappings/xboard49.json', import.meta.url), 'utf8'));
   const uitMap = noten.laadMapping(doc);
+  // Sinds het spoor speelapparaten (5 okt) ook knop 9–16 (FX) en de schuif: test/maschine.test.mjs.
   ok('mappings/xboard49.json laadt: knop 1–8 (CC 21–28, elk kanaal) -> track.{speel}.inst.knob.1–8, absoluut (pickup)',
-    uitMap.aantal === 8 && uitMap.fouten.length === 0 && doc.rules.every((r, i) => r.in === `cc:*:${21 + i}` && r.action === `track.{speel}.inst.knob.${i + 1}` && r.mode === 'absolute')
+    uitMap.aantal === 17 && uitMap.fouten.length === 0 && doc.rules.slice(0, 8).every((r, i) => r.in === `cc:*:${21 + i}` && r.action === `track.{speel}.inst.knob.${i + 1}` && r.mode === 'absolute')
     && /TE CONTROLEREN/.test(doc.aanname));
 
   // Een nep-poort zoals de hub hem straks levert: alleen onmidimessage.
@@ -585,8 +586,9 @@ console.log('\nnoten.js: MIDI-noten naar de speeltrack');
 
   // Een echte MIDIInput heeft addEventListener: dan blijft de onmidimessage van de hub staan.
   const lijst = [];
+  // Per soort event, zoals een echte MIDIPort (koppel luistert ook naar 'statechange').
   const echt = { id: 'echt', name: 'E-MU Xboard49', onmidimessage: () => lijst.push('hub'),
-    addEventListener(t, f) { this._f = f; }, removeEventListener() { this._f = null; } };
+    addEventListener(t, f) { if (t === 'midimessage') this._f = f; }, removeEventListener(t) { if (t === 'midimessage') this._f = null; } };
   noten.koppel(echt);
   echt.onmidimessage({ data: Uint8Array.of(0x90, 52, 90) });
   echt._f({ data: Uint8Array.of(0x90, 52, 90), timeStamp: 1 });

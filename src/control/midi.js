@@ -99,6 +99,15 @@ const portInfo = (p) => ({
 /** Virtuele doorgeefpoorten zijn zelden wat je zoekt bij automatisch kiezen. */
 const isThrough = (name) => /through|iac|virtual/i.test(name || '');
 
+/**
+ * Een SPEELAPPARAAT (E-MU Xboard49, Maschine MK2; docs/MASCHINE.md) is NOOIT
+ * "de controller": het speelt noten via noten.js (en de Maschine via
+ * maschine.js), niet de APC-mapping. Zonder deze regel pakte de MidiHub het
+ * keyboard als de APC ontbrak, en dan werden zijn noten 36–39 grid-pads van de
+ * APC-mapping. Ook een bewaarde keuze (localStorage) voor zo'n poort telt niet.
+ */
+export const isSpeelapparaat = (name) => /xboard|maschine/i.test(name || '');
+
 const STORE_KEY = 'varve.midi.ports';
 
 /**
@@ -121,8 +130,8 @@ const ECHO_MS = 60;
  * boven wat DIN-MIDI zelf aankan — en een volledige LED-overname van 110
  * berichten is daarmee in 30 ms klaar. Dat ziet niemand.
  */
-const PER_TIK = 16;
-const TIK_MS = 4;
+export const PER_TIK = 16;
+export const TIK_MS = 4;
 
 export class MidiHub extends Emitter {
   constructor({ preferred = /apc40/i } = {}) {
@@ -265,9 +274,18 @@ export class MidiHub extends Emitter {
    * in plaats van zomaar op een andere poort over te springen.
    */
   _autoPick() {
+    // Een speelapparaat is nooit de controller (isSpeelapparaat): ook een keuze
+    // uit localStorage, het paneel of een oude versie voor zo'n poort vervalt.
+    const speelt = (map, id, naam) => isSpeelapparaat(map.get(id)?.name ?? naam);
+    if (this.inputId || this.inputName) {
+      if (speelt(this.access.inputs, this.inputId, this.inputName)) { this.inputId = null; this.inputName = null; this._save(); }
+    }
+    if (this.outputId || this.outputName) {
+      if (speelt(this.access.outputs, this.outputId, this.outputName)) { this.outputId = null; this.outputName = null; this._save(); }
+    }
     const kies = (map, id, naam) => {
       if (id && aanwezig(map.get(id))) return null;        // keuze staat goed
-      const list = [...map.values()].filter(aanwezig);
+      const list = [...map.values()].filter((p) => aanwezig(p) && !isSpeelapparaat(p.name));
       if (naam) return list.find((p) => p.name === naam) || null;
       return list.find((p) => this.preferred.test(p.name || ''))
           || list.find((p) => !isThrough(p.name))

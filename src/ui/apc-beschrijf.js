@@ -21,8 +21,9 @@ const STEM_UITLEG = {
 /** { kort, lang }: kort past op de tekening, lang staat in de tabel. */
 export function beschrijf(action) {
   let m;
-  const wie = (t) => (t === '{focus}' ? 'focus-track' : `track ${t}`);
-  const kortWie = (t) => (t === '{focus}' ? 'F' : t);
+  // {speel} = de speeltrack (waar noten heen gaan: Xboard49 en Maschine, docs/MASCHINE.md).
+  const wie = (t) => (t === '{focus}' ? 'focus-track' : t === '{speel}' ? 'speeltrack' : `track ${t}`);
+  const kortWie = (t) => (t === '{focus}' ? 'F' : t === '{speel}' ? 'S' : t);
   if ((m = /^track\.([^.]+)\.(.+)$/.exec(action))) {
     const [, t, rest] = m;
     const w = wie(t), k = kortWie(t);
@@ -67,6 +68,7 @@ export function beschrijf(action) {
     if (rest === 'inst') return r('instrument', 'instrument kiezen, rondlopend: geen → Poly → … → geen (een nummer dat speelt gaat er pas af bij een tweede druk binnen 3 s)');
     if (rest === 'inst.next') return r('instr ▶', 'volgend instrument op deze track (een nummer dat speelt: tweede druk binnen 3 s)');
     if (rest === 'inst.prev') return r('◀ instr', 'vorig instrument op deze track (een nummer dat speelt: tweede druk binnen 3 s)');
+    if (rest === 'inst.choose') return r('instr kies', 'instrument kiezen in één keer: 0 = geen, dan de instrumenten op volgorde (het masterwiel van de Maschine: draaien = kiezen, indrukken = zetten; een nummer dat speelt: tweede druk binnen 3 s)');
     if ((m = /^inst\.knob\.(\d)$/.exec(rest))) return r(`instr ${m[1]}`, `instrumentknop ${m[1]} (wat die doet hangt van het instrument af; de namen staan in de INSTRUMENT-rij)`);
     if (rest === 'inst.stil') return r('stil', 'instrument meteen stil (paniek), met een korte fade; lampje = er klinkt iets');
     // Stemkanalen (docs/STEMS.md §5). Bij vier stems werkt `inst` op de groep: filter in serie, sends en cue samen.
@@ -75,6 +77,9 @@ export function beschrijf(action) {
     if ((m = /^stem\.(vocals|inst|drums|bass|other)\.send\.b$/.exec(rest))) return r(`${STEM[m[1]]} galm`, `galm-send van één stem: ${STEM_UITLEG[m[1]]}; volgt de fader van de track (fader dicht = niets meer insturen)`);
     if ((m = /^stem\.(vocals|inst|drums|bass|other)\.pfl$/.exec(rest))) return r(`${STEM[m[1]]} PFL`, `één stem in de koptelefoon aan/uit: ${STEM_UITLEG[m[1]]}, na zijn filter en vóór de fader; de zaal hoort het niet (uit = geen koptelefoonuitgang of geen stems)`);
     // Patronen (docs/PATRONEN.md): vijf plekken per track, de rijen van het grid in de modus patronen.
+    // {plek} = het gekozen patroon van die track (de Maschine: PATTERN + pad kiest het, docs/MASCHINE.md).
+    if (rest === 'pattern.{plek}') return r('pat ▶', 'het gekozen patroon: starten op de maat van de maatgever; speelt hij: stoppen op de maat; leeg: alleen kiezen (met opnemen aan: beginnen)');
+    if (rest === 'pattern.{plek}.now') return r('pat ▶!', 'het gekozen patroon meteen: starten op de volgende tel, of meteen stoppen');
     if ((m = /^pattern\.([1-5])$/.exec(rest))) return r(`pat ${m[1]}`, `patroon ${m[1]}: starten op de maat van de maatgever (zonder maatgever op het eigen tempo); speelt hij: stoppen op de maat; speelt er een ander: wisselen op de maat; een lege plek: kiezen om te bewerken (met opnemen aan: beginnen). Lampje oranje: donker = gevuld, fel = speelt, knippert = wacht op de maat, donkergrijs = leeg, uit = geen instrument`);
     if ((m = /^pattern\.([1-5])\.now$/.exec(rest))) return r(`pat ${m[1]}!`, `patroon ${m[1]} meteen: starten op de volgende tel in plaats van de maat, of meteen stoppen (binnen ~0,1 s)`);
     if (rest === 'pattern.stop') return r('pat stop', 'patroon stoppen op de maat (alles los op het maatbegin)');

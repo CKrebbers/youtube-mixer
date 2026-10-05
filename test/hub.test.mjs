@@ -82,6 +82,21 @@ console.log('\nzonder vlag geen byte van hub.js');
     }
   }
   ok(`niemand importeert hub.js statisch${statisch.length ? ` (${statisch.join(', ')})` : ''}`, statisch.length === 0);
+  // De speelapparaten (Xboard49, Maschine) laden ook alleen met de vlag: app.js haalt
+  // ui/speelapparaten.js dynamisch binnen; alleen die keten importeert de rest statisch.
+  const MAG = { 'ui/speelapparaten.js': ['maschine'], 'control/maschine.js': ['maschine-scherm', 'devices/maschine-mk2'] };
+  const fout = [];
+  for (const d of ['ui', 'control', 'control/devices', 'engine', 'video', 'auto', 'plan', 'controle', 'analysis', 'vormen', 'lib', 'opname']) {
+    if (!existsSync(map + d)) continue;
+    for (const f of readdirSync(map + d).filter((x) => x.endsWith('.js'))) {
+      const tekst = readFileSync(`${map}${d}/${f}`, 'utf8');
+      for (const m of tekst.matchAll(/^\s*import\s[^;]*?['"]([^'"]*(speelapparaten|maschine-scherm|devices\/maschine-mk2|\/maschine)\.js)['"]/gm)) {
+        const doel = m[1].replace(/^.*?((devices\/)?[\w-]+)\.js$/, '$1');
+        if (!(MAG[`${d}/${f}`] ?? []).includes(doel)) fout.push(`${d}/${f} -> ${m[1]}`);
+      }
+    }
+  }
+  ok(`speelapparaten.js, maschine.js en maschine-scherm.js: nergens statisch geladen buiten hun eigen keten${fout.length ? ` (${fout.join(', ')})` : ''}`, fout.length === 0);
 }
 
 console.log('\nhet manifest');
@@ -94,6 +109,7 @@ ok('geen audio-action aan een LPD8-rol (alleen beeld)', PARAMS.filter((p) => p.r
 ok('master en crossfader: wel in de cockpit, zonder rol', ['master', 'xfader'].every((id) => PARAMS.some((p) => p.id === id && !p.rol)));
 ok('geen slew_s zonder rol (de hub laat alleen rol-zets glijden)', PARAMS.every((p) => !('slew_s' in p) || !!p.rol));
 ok('paniek = trigger op video.black.hold', PARAMS.some((p) => p.id === 'paniek' && p.soort === 'trigger' && p.action === 'video.black.hold'));
+ok('speelt: de Xboard49 en de Maschine MK2 (PROTOCOL §17), alleen met lease', JSON.stringify(MANIFEST.speelt) === '["xboard49","maschine-mk2"]' && MANIFEST.lease === true);
 {
   const gezet = process.env.VARVE_HUB_REPO;
   const hubRepo = gezet || fileURLToPath(new URL('../../av-app-hub', import.meta.url));
@@ -197,6 +213,70 @@ console.log('\npaniek (LPD8 P1)');
   ok('een zet op de trigger doet niets', aangeroepen.length === voor + 2);
 }
 
+console.log('\nspeelapparaten (PROTOCOL §17)');
+{
+  const ws = laatste();
+  const xb = midi.speelPoort('xboard49'), mm = midi.speelPoort('maschine-mk2');
+  ok('eigen nep-poorten: "Xboard49 (hub)" (alleen een ingang), "Maschine MK2 (hub)" (ingang, uitgang, scherm)',
+    xb?.in.name === 'Xboard49 (hub)' && xb.uit === null && xb.scherm === null && mm?.in.name === 'Maschine MK2 (hub)' && typeof mm.uit.send === 'function' && typeof mm.scherm === 'function'
+    && midi.speelPoort('apc40') === null);
+  ok('niet in de lijst van de MidiHub: de APC-mapping en het echofilter zien ze nooit', midi.ports().inputs.length === 1 && midi.ports().outputs.length === 1);
+  ok('verbonden zolang de hub verbonden is', xb.in.state === 'connected' && mm.in.state === 'connected' && mm.uit.state === 'connected');
+  const xIn = [], mIn = [];
+  let standen = 0;
+  xb.in.onmidimessage = (e) => xIn.push([...e.data]);
+  mm.in.onmidimessage = (e) => mIn.push([...e.data]);
+  xb.in.onstatechange = () => standen++;
+  const apcVoor = invoer.length;
+  ws.krijg({ t: 'focus', aan: false });
+  ws.krijg({ t: 'midi', dev: 'xboard49', bytes: [0x90, 60, 100] });
+  ws.krijg({ t: 'midi', dev: 'maschine-mk2', bytes: [0x90, 36, 100] });
+  ws.krijg({ t: 'midi', dev: 'xboard49', bytes: [0xf0, 0x7f, 0x7f, 0x04, 0x01, 0, 0x40, 0xf7] });
+  ws.krijg({ t: 'midi', dev: 'maschine-mk2', bytes: [0x91, 39, 127] });
+  ok('routering per dev: elk naar zijn eigen poort, ook ZONDER APC-focus (de hub beslist wie speelt), SysEx van de schuif ook',
+    JSON.stringify(xIn) === '[[144,60,100],[240,127,127,4,1,0,64,247]]' && JSON.stringify(mIn) === '[[144,36,100],[145,39,127]]');
+  ok('… niets daarvan bij de APC-mapping', invoer.length === apcVoor);
+  ws.krijg({ t: 'midi', dev: 'apparaat-uit-de-toekomst', bytes: [0x90, 1, 1] });
+  ws.krijg({ t: 'midi', dev: 'maschine-mk2', bytes: [0x90, 999, 1] });
+  ws.krijg({ t: 'midi', dev: 'xboard49' });
+  ok('onbekend apparaat en kapotte bytes: genegeerd', xIn.length === 2 && mIn.length === 2 && invoer.length === apcVoor);
+  ok('status: per speelapparaat verbonden en hoeveel er binnenkwam', midi.status().hub.speelt.xboard49.verbonden && midi.status().hub.speelt.xboard49.rx === 2 && midi.status().hub.speelt['maschine-mk2'].rx === 2);
+  ws.krijg({ t: 'focus', aan: true });
+
+  // Lampjes van de Maschine: door de wachtrij (16 per 4 ms), dan per beeld gebundeld met dev.
+  vooruit(100);
+  const ledVoor = ws.soort('led').length;
+  for (let i = 0; i < 40; i++) mm.uit.send([0x90, 36 + (i % 16), i]);
+  ok('lampjes eerst in de wachtrij (niets synchroon naar buiten)', midi.uitRij.length === 40 && ws.soort('led').length === ledVoor);
+  vooruit(0);
+  ok('… hooguit 16 per 4 ms eruit (CLAUDE.md: alles naar buiten door een wachtrij)', midi.uitRij.length === 24);
+  vooruit(4);
+  ok('… en 4 ms later weer 16', midi.uitRij.length === 8);
+  ok('SysEx, ongeldige bytes en een lampje van 4 bytes: geweigerd en geteld', !mm.uit.send([0xf0, 0x47, 0x7f, 0x29, 0x60, 0, 4, 0x42, 0, 0, 0, 0xf7]) && !mm.uit.send([0x90, 200, 1]) && !mm.uit.send([0x90, 1, 2, 3])
+    && midi.status().hub.speelt['maschine-mk2'].geweigerd === 3);
+  vooruit(100);
+  const mLed = ws.soort('led').slice(ledVoor).filter((b) => b.dev === 'maschine-mk2');
+  ok('{t:\'led\', dev:\'maschine-mk2\', bytes}: per beeld gebundeld, alle 40 aangekomen, in volgorde', mLed.length >= 1 && mLed.length <= 3
+    && JSON.stringify(mLed.flatMap((b) => b.bytes)) === JSON.stringify(Array.from({ length: 40 }, (_, i) => [0x90, 36 + (i % 16), i])));
+  ok('… de lampjes van de APC blijven zoals ze waren: zonder dev', ws.soort('led').every((b) => b.dev === undefined || b.dev === 'maschine-mk2'));
+  ok('… de Xboard ontvangt niets: geen led met dev xboard49', !ws.soort('led').some((b) => b.dev === 'xboard49'));
+
+  // Schermen: base64 van precies 2048 bytes, door dezelfde wachtrij.
+  const beeld = new Uint8Array(2048); beeld[0] = 0x80; beeld[2047] = 1;
+  const ander = new Uint8Array(2048); ander[5] = 0xff;
+  const schVoor = ws.soort('scherm').length;
+  ok('scherm(nr, bytes): 2048 bytes en nr 0/1, anders geweigerd', mm.scherm(0, ander) && mm.scherm(1, new Uint8Array(2048)) && mm.scherm(0, beeld)
+    && !mm.scherm(2, beeld) && !mm.scherm(0, new Uint8Array(100)) && !mm.scherm(1, null));
+  vooruit(50);
+  const sch = ws.soort('scherm').slice(schVoor);
+  const terug = sch.map((b) => Uint8Array.from(Buffer.from(b.data, 'base64')));
+  ok('{t:\'scherm\', dev:\'maschine-mk2\', nr, data}: base64 van 2048 bytes', sch.length === 2 && sch.every((b) => b.dev === 'maschine-mk2') && terug.every((d) => d.length === 2048));
+  ok('… een nieuwer beeld voor hetzelfde scherm vervangt het oudere in de rij (alleen het laatste gaat weg)', sch[0].nr === 0 && terug[0][0] === 0x80 && terug[0][2047] === 1 && terug[0][5] === 0 && sch[1].nr === 1);
+  ok('status: lampjes en schermen geteld', midi.status().hub.speelt['maschine-mk2'].leds === 40 && midi.status().hub.speelt['maschine-mk2'].schermen === 2);
+  ok('nog geen statechange zolang de verbinding blijft', standen === 0);
+  globalThis.__speelStanden = () => standen;
+}
+
 console.log('\nhartslag');
 {
   const ws = laatste();
@@ -236,6 +316,9 @@ console.log('\nherverbinden');
   const wachttijden = [];
   laatste().close(1006);
   ok('verbinding weg: poort weg (mapping laat shift en knoppen los)', midi.output() === null && midi.input() === null);
+  ok('… de speelpoorten ook: disconnected, met een statechange (noten.js en maschine.js laten dan los)',
+    midi.speelPoort('xboard49').in.state === 'disconnected' && midi.speelPoort('maschine-mk2').uit.state === 'disconnected' && globalThis.__speelStanden() === 1);
+  ok('… en een lampje of scherm voor de Maschine wordt niet aangenomen', !midi.speelPoort('maschine-mk2').uit.send([0x90, 36, 5]) && !midi.speelPoort('maschine-mk2').scherm(0, new Uint8Array(2048)));
   for (let i = 0; i < 5; i++) {
     wachttijden.push(volgende());
     if (i < 4) laatste().close(1006);   // weer niet gelukt
@@ -244,6 +327,7 @@ console.log('\nherverbinden');
   laatste().open();
   ok('terug: opnieuw hallo/manifest/staat en de LED-laag opnieuw', laatste().uit[0].t === 'hallo' && laatste().uit[1].t === 'manifest' && uitvoer === 2);
   ok('focus begint weer uit tot de hub hem geeft', midi.focus === false);
+  ok('terug: de speelpoorten weer connected (statechange: maschine.js tekent alles opnieuw)', midi.speelPoort('maschine-mk2').in.state === 'connected' && globalThis.__speelStanden() === 2);
   vooruit(100);
   ok('alle LED\'s opnieuw naar de hub', laatste().soort('led').reduce((n, b) => n + b.bytes.length, 0) >= apc40mk2.allLeds().length);
   vooruit(STABIEL_MS);

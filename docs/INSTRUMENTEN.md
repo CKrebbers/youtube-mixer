@@ -141,7 +141,8 @@ tweede klik. Noten gaan NIET over de bus.
 - De knoppen: `mappings/xboard49.json`, een gewone Mapping met `{speel}` = de
   speeltrack: CC 21–28 (elk kanaal) → `track.{speel}.inst.knob.1–8`, absoluut, dus
   soft-takeover zoals een fader (eerst oppakken). **AANNAME uit Ardour's xboard-map, te
-  controleren met een proef**; knop 9–16 (CC 31–38) zijn nog vrij.
+  controleren met een proef**; knop 9–16 (CC 31–38) sturen sinds 5 okt de FX-knoppen van de speeltrack en de schuif
+  (SysEx Master Volume) zijn volume: `docs/MASCHINE.md` §6.
 - Het schermtoetsenbord gebruikt dezelfde weg: `noten.speel(noot, v)` / `noten.laat(noot)`.
 
 ### 6.4 Het scherm en de APC

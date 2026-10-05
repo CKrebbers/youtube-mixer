@@ -128,6 +128,16 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   zet de master, K1 laat hem staan, K2 zet de video-master, P1 (paniek) maakt het beeld zwart, en een
   tweede hub-tabblad laat het oude "vervangen" melden. requestMIDIAccess is overal een spion die
   weigert: veilig met de APC aangesloten.
+- `speelapparaten.mjs` — de Xboard49 en de Maschine MK2 via de echte hub (`startHub` uit
+  `VARVE_HUB_REPO`, op een vrije poort, nooit 7700): NepSysteem met nep-APC en nep-Xboard,
+  NepHidSysteem met de nep-Maschine uit de hub-tests (echte HID-rapporten). Zonder vlag niets van
+  dit alles geladen; met vlag: het masterwiel zet Poly en Drums, een Xboard-noot en een pad klinken
+  (niveau gemeten), groep B zet de focus, een draaiknop (en SHIFT fijn) draait een instrumentknop,
+  de schuif zet de fader, en lampjes en schermen komen als HID-rapporten aan (schermen bit voor bit
+  gelijk aan `tekenScherm`). Ook de vertraging injecteren → noteOn. Dan de patronen: STEP + pads
+  zetten stappen, PLAY speelt (de lopende stap wit), REC + pad neemt op, PATTERN + pad kiest,
+  RESTART stopt. Eigen VARVE-server (`VARVE_KIJK_POORT`, standaard 8818) met tijdelijke
+  database en `VARVE_PATRONEN`. docs/MASCHINE.md.
 - `noodknoppen.mjs` — zwart, bevriezen, master en flits (A4) pixel voor pixel, in het hoofdvenster én
   in het losse venster (video.html, dat zelf mengt). Geen ingest: een canvas met vier gekleurde kwarten
   als nep-video op track 1 (demotrack eronder, stil). De fade en de flits worden op EXACTE tijden gemeten

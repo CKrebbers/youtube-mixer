@@ -504,6 +504,14 @@ export function bindEngine(engine) {
         kiesInstrument(INSTRUMENTEN[j].soort);
       }, { label: `Track ${nr} ${stap > 0 ? 'volgend' : 'vorig'} instrument`, read: () => (inst() ? 0 : null) });
     }
+    // Eén keuze in één keer (het masterwiel van de Maschine: draaien = kiezen op het
+    // scherm, indrukken = dit): 0 = geen, dan de instrumenten op hun plek in de rij,
+    // dezelfde schaal als de read van `track.N.inst`. Zelfde regel voor een spelend nummer.
+    define(`${n}.inst.choose`, 'value', (v) => {
+      const i = Math.round(Math.min(1, Math.max(0, Number(v) || 0)) * (keuzes.length - 1));
+      if (i !== keuzeNu()) kiesInstrument(keuzes[i]);
+    }, { label: `Track ${nr} instrument kiezen in één keer (0 = geen, dan ${INSTRUMENTEN.map((x) => x.naam).join(', ')})`,
+      read: () => (keuzes.length > 1 ? Math.max(0, keuzeNu()) / (keuzes.length - 1) : 0) });
     // Acht knoppen: een PLEK, zoals de FX-knoppen; wat hij doet hangt van het instrument af.
     for (let k = 1; k <= 8; k++) {
       define(`${n}.inst.knob.${k}`, 'value', (v) => inst()?.zetParam(k, v),
