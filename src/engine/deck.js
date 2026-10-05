@@ -29,6 +29,8 @@ export const REM_STANDAARD = 1;
 export const EQ_BANDEN = ['low', 'mid', 'high'];
 /** Hoeveel een nudge (bend) versnelt of vertraagt zolang je drukt. */
 export const BEND = 0.04;
+/** Toonverschuiving: halve tonen, ±12 (K5, docs/KEYLOCK.md). */
+export const TOON_MAX = 12;
 /** Beatjump-lengtes in tellen, te halveren en te verdubbelen. Standaard 4. */
 export const SPRONG_TELLEN = [1, 2, 4, 8, 16, 32];
 /**
@@ -166,11 +168,12 @@ export class Deck extends Emitter {
     // Toonsoortkaart (src/engine/toonsoort.js) of null. Van de PLAAT, in
     // tracktijd, en net als het grid van de app: het deck kent geen library.
     this.toonKaart = null;
-    // Afspraak met het keylock-spoor (TOONSOORT.md §6, KEYLOCK.md): zolang er
-    // geen keylock is klinkt de toon mee met de pitch, en klopt de formule in
-    // `toonsoort` al voor de pitchfader. Keylock en transponeren komen hier.
-    this.keylock = false;
-    this.transpositie = 0;      // halve tonen, mag een breuk zijn
+    // Keylock en transponeren (docs/KEYLOCK.md, gebouwd 5 okt): een keuze van
+    // de DJ op het deck; de StreamBron speelt ze (door een stretcher). Keylock
+    // blijft staan bij een nieuw nummer (K4, een voorkeur zoals het
+    // pitchbereik), de toon gaat terug naar 0 (K5, zoals de pitch).
+    this._keylock = false;
+    this._toon = 0;             // halve tonen, −12..+12
 
     /*
      * Sends: na de fader, vóór de crossfader. Fader dicht = er gaat niets
@@ -246,6 +249,7 @@ export class Deck extends Emitter {
     if (this.bron === bron) return;
     this.bron?.vernietig();
     this.bron = bron;
+    bron.zetRek?.({ keylock: this._keylock, toon: this._toon });
     bron.onEinde = () => this.emit('change', this);
     bron.onFout = (tekst) => this.emit('fout', tekst);
     // De rem is uitgelopen: de bron staat nu stil op die plek (een pauze).
@@ -359,6 +363,7 @@ export class Deck extends Emitter {
     this.vorigeLoop = null;
     this.buigt = 0;
     this.setRate(1);
+    this.setTranspositie(0);
     this.fx.heranker();
     this.emit('load', this);
   }
@@ -375,9 +380,34 @@ export class Deck extends Emitter {
     this.loopInPunt = null;
     this.vorigeLoop = null;
     // Een nieuw nummer begint op 0%: de pitch van het vorige zegt niets over
-    // dit nummer. Het bereik blijft staan, dat is een keuze van de DJ.
+    // dit nummer. Het bereik blijft staan, dat is een keuze van de DJ. Zo ook
+    // de toon (K5); keylock blijft staan (K4).
     this.setRate(1);
+    this.setTranspositie(0);
     this.emit('load', this);
+  }
+
+  // ---- keylock en toon (docs/KEYLOCK.md) -----------------------------------
+
+  /** Keylock: het tempo verandert, de toon blijft staan. */
+  get keylock() { return this._keylock; }
+  /** Toonverschuiving in halve tonen (−12..+12), met of zonder keylock (K8). */
+  get transpositie() { return this._toon; }
+
+  setKeylock(aan) {
+    const v = !!aan;
+    if (v === this._keylock) return;
+    this._keylock = v;
+    this.bron.zetRek?.({ keylock: v, toon: this._toon });
+    this.emit('change', this);
+  }
+
+  setTranspositie(n) {
+    const v = Math.max(-TOON_MAX, Math.min(TOON_MAX, Math.round(Number(n) || 0)));
+    if (v === this._toon) return;
+    this._toon = v;
+    this.bron.zetRek?.({ keylock: this._keylock, toon: v });
+    this.emit('change', this);
   }
 
   // ---- transport ---------------------------------------------------------
@@ -447,7 +477,7 @@ export class Deck extends Emitter {
    * fractie van een tel die over de loopgrens valt, wordt teruggevouwen in de
    * loop in plaats van hem te verlaten.
    */
-  seek(pos, { binnenLoop = false } = {}) {
+  seek(pos, { binnenLoop = false, doorlopend = false } = {}) {
     if (!this.buffer) return;
     let p = clamp(pos, 0, this.duration);
     const l = this.loop;
@@ -458,13 +488,14 @@ export class Deck extends Emitter {
     }
     // Wacht het deck op de maat, dan blijft die start staan: alleen het punt
     // waar hij begint verschuift (hotcue, beatjump, nudge tijdens het wachten).
-    if (this.playing) this.bron.start(p, this._startOpties());
+    if (this.playing) this.bron.start(p, this._startOpties(doorlopend ? { doorlopend } : undefined));
     else this.bron.plaats(p);
     this._heranker();
     this.emit('change', this);
   }
 
-  nudge(seconds) { this.seek(this.position + seconds, { binnenLoop: true }); }
+  /** Een duwtje in de fase: met keylock fasebehoudend gepland (KEYLOCK EN TOON in bron.js). */
+  nudge(seconds) { this.seek(this.position + seconds, { binnenLoop: true, doorlopend: true }); }
 
   /** Loop eraf zonder 'change' te melden: de aanroeper meldt zelf. */
   _verlaatLoop() {
@@ -709,7 +740,9 @@ export class Deck extends Emitter {
     const l = this.loop;
     const binnen = !!l && h >= l.start && h < l.end;
     if (l && !binnen) this._verlaatLoop();
-    this.seek(doel, { binnenLoop: binnen });
+    // Gequantiseerd (doel ≠ h): fasebehoudend, ook met keylock. Anders de
+    // aanslag van de hotcue zelf, exact (op T, K3).
+    this.seek(doel, { binnenLoop: binnen, doorlopend: doel !== h });
   }
 
   // ---- quantize ----------------------------------------------------------
@@ -792,14 +825,14 @@ export class Deck extends Emitter {
     if (!l) {
       // Precies OP het einde landen is ook eindigen: dan stopt hij meteen.
       if (n > 0 && doel >= this.duration) return { ok: false, waarom: 'einde' };
-      this.seek(doel);
+      this.seek(doel, { doorlopend: true });
       return { ok: true };
     }
     const start = g.verschuif(l.start, n), eind = g.verschuif(l.end, n);
     if (!this._opGrid(start) || !this._opGrid(eind)) return { ok: false, waarom: 'onzeker' };
     if (start < 0 || eind > this.duration + 1e-9) return { ok: false, waarom: 'rand' };
     // Begin en einde schuiven evenveel tellen: loopBeats blijft kloppen.
-    this._spring(doel, { start, end: eind });
+    this._spring(doel, { start, end: eind }, true);
     return { ok: true };
   }
 
@@ -807,9 +840,9 @@ export class Deck extends Emitter {
    * Loop en positie in één keer: één segment voor de streamkern, één nieuwe
    * bron voor de BufferBron. Klikvrij via de gewone overgang van een sprong.
    */
-  _spring(p, loop) {
+  _spring(p, loop, doorlopend = false) {
     const pos = clamp(p, 0, this.duration);
-    if (this.playing) this.bron.start(pos, this._startOpties({ loop }));
+    if (this.playing) this.bron.start(pos, this._startOpties(doorlopend ? { loop, doorlopend } : { loop }));
     else { this.bron.setLoop(loop.start, loop.end); this.bron.plaats(pos); }
     this._heranker();
     this.emit('change', this);
@@ -874,7 +907,7 @@ export class Deck extends Emitter {
   get toonsoort() {
     if (!this.toonKaart) return null;
     return this.toonKaart.hoorbaarBij(hoorbaar(this, uitgangsVertraging(this.ctx)),
-      { rate: this.rate, transpositie: this.transpositie, keylock: this.keylock });
+      { rate: this.rate, transpositie: this._toon, keylock: this._keylock });
   }
 
   /**

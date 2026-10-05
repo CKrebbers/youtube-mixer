@@ -720,6 +720,27 @@
       "label": "tap tempo"
     },
     {
+      "in": "note:0:99",
+      "action": "track.{focus}.keylock",
+      "mode": "trigger",
+      "label": "tap tempo + shift (keylock aan/uit)",
+      "shift": true
+    },
+    {
+      "in": "note:0:100",
+      "action": "track.{focus}.transpose.down",
+      "mode": "trigger",
+      "label": "nudge - + shift (toon −1)",
+      "shift": true
+    },
+    {
+      "in": "note:0:101",
+      "action": "track.{focus}.transpose.up",
+      "mode": "trigger",
+      "label": "nudge + + shift (toon +1)",
+      "shift": true
+    },
+    {
       "in": "note:0:93",
       "action": "record.start",
       "mode": "trigger",
@@ -4251,10 +4272,23 @@
   ],
   "eerder": [
     {
+      "vingerafdruk": "1add1e20-593",
+      "tot": "2026-10-05",
+      "rules": [],
+      "removed": [
+        "note:0:99#shift",
+        "note:0:100#shift",
+        "note:0:101#shift"
+      ]
+    },
+    {
       "vingerafdruk": "2adef1fd-504",
       "tot": "2026-10-05",
       "rules": [],
       "removed": [
+        "note:0:99#shift",
+        "note:0:100#shift",
+        "note:0:101#shift",
         "note:0:83#shift",
         "note:0:32@grid.patronen",
         "note:0:32#shift@grid.patronen",
@@ -4351,6 +4385,9 @@
       "tot": "2026-10-05",
       "rules": [],
       "removed": [
+        "note:0:99#shift",
+        "note:0:100#shift",
+        "note:0:101#shift",
         "note:0:84#shift",
         "note:0:84@grid.stems",
         "note:0:84#shift@edit.aan",
@@ -4530,6 +4567,9 @@
       "tot": "2026-10-05",
       "rules": [],
       "removed": [
+        "note:0:99#shift",
+        "note:0:100#shift",
+        "note:0:101#shift",
         "note:0:64#shift",
         "cc:0:16@device.master",
         "cc:0:17@device.master",
@@ -4722,6 +4762,9 @@
       "tot": "2026-10-05",
       "rules": [],
       "removed": [
+        "note:0:99#shift",
+        "note:0:100#shift",
+        "note:0:101#shift",
         "cc:0:16@device.inst",
         "cc:0:17@device.inst",
         "cc:0:18@device.inst",
@@ -4939,6 +4982,9 @@
         }
       ],
       "removed": [
+        "note:0:99#shift",
+        "note:0:100#shift",
+        "note:0:101#shift",
         "cc:0:47#shift@grid.sampler",
         "cc:0:47#shift@grid.video",
         "cc:0:16@device.inst",
@@ -5166,6 +5212,9 @@
         "note:5:48",
         "note:6:48",
         "note:7:48",
+        "note:0:99#shift",
+        "note:0:100#shift",
+        "note:0:101#shift",
         "cc:0:47#shift@grid.sampler",
         "cc:0:47#shift@grid.video",
         "cc:0:16@device.inst",
@@ -5393,6 +5442,9 @@
         "note:5:48",
         "note:6:48",
         "note:7:48",
+        "note:0:99#shift",
+        "note:0:100#shift",
+        "note:0:101#shift",
         "cc:0:47#shift@grid.sampler",
         "cc:0:47#shift@grid.video",
         "note:0:80",
@@ -5625,6 +5677,9 @@
         "note:5:48",
         "note:6:48",
         "note:7:48",
+        "note:0:99#shift",
+        "note:0:100#shift",
+        "note:0:101#shift",
         "cc:0:47#shift@grid.sampler",
         "cc:0:47#shift@grid.video",
         "note:0:80",
@@ -5873,6 +5928,9 @@
         "note:6:48",
         "note:7:50#shift",
         "note:7:48",
+        "note:0:99#shift",
+        "note:0:100#shift",
+        "note:0:101#shift",
         "cc:0:47#shift@grid.sampler",
         "cc:0:47#shift@grid.video",
         "note:0:60",

@@ -265,6 +265,25 @@ const FIXTURE = {
   bindEngine(eng);
   const d = eng.deck('A');
   ok('het deck: keylock uit en transpositie 0 (namen uit CLAUDE.md, voor het keylock-spoor)', d.keylock === false && d.transpositie === 0);
+  // Keylock en toon op de bus (docs/KEYLOCK.md, gebouwd 5 okt).
+  invoke('track.1.keylock', true);
+  ok('track.N.keylock: aan, en het lampje brandt', d.keylock === true && read('track.1.keylock') === 1);
+  invoke('track.1.transpose.up', true); invoke('track.1.transpose.up', true);
+  ok('toon +1 +1 = +2; lampjes: hoger brandt, lager niet', d.transpositie === 2 && read('track.1.transpose.up') === 1 && read('track.1.transpose.down') === 0
+    && read('track.1.transpose.reset') === 1);
+  invoke('track.1.transpose', 0);
+  ok('toon als draaiknop: 0 = −12 (de grens: lager kan niet, lampje uit)', d.transpositie === -12 && read('track.1.transpose.down') === null && read('track.1.transpose') === 0);
+  d.setTranspositie(40.4);
+  ok('setTranspositie klemt op ±12 en rondt af', d.transpositie === 12);
+  invoke('track.1.transpose', 0.5);
+  ok('draaiknop in het midden = 0', d.transpositie === 0 && bij(read('track.1.transpose'), 0.5));
+  d.setTranspositie(3);
+  d.load(eng.ctx.createBuffer(2, 48000, 48000), 'een ander nummer');
+  ok('nieuw nummer: de toon terug naar 0 (K5), keylock blijft staan (K4)', d.transpositie === 0 && d.keylock === true);
+  ok('elke nieuwe action heeft een uitleg op de APC-kaart', ['keylock', 'transpose', 'transpose.up', 'transpose.down', 'transpose.reset']
+    .every((a) => beschrijf(`track.{focus}.${a}`)?.lang?.length > 10));
+  invoke('track.1.keylock', true);
+  ok('nog eens: keylock uit', d.keylock === false && read('track.1.keylock') === 0);
   ok('zonder kaart: toonsoort null, en de actions hebben niets te doen (read null)',
     d.toonsoort === null && read('track.1.key.fifth.up') === null && read('track.1.key.lock') === null && read('track.1.key') === null);
 
@@ -279,11 +298,11 @@ const FIXTURE = {
   d.bend(1);
   ok('bend (nudge) telt NIET mee: de weergave flikkert niet zolang je duwt', d.toonsoort.camelot === '11B' && Math.abs(d.toonsoort.cent - (8 + 100 * (12 * Math.log2(1.06) - 1))) < 1e-6);
   d.bend(0);
-  d.keylock = true;
-  ok('keylock (straks): de pitch telt niet meer mee', d.toonsoort.camelot === '4B');
-  d.transpositie = -1;
+  d.setKeylock(true);
+  ok('keylock: de pitch telt niet meer mee', d.toonsoort.camelot === '4B');
+  d.setTranspositie(-1);
   ok('transpositie telt ook met keylock: As − 1 = G', d.toonsoort.toonsoort === 'G');
-  d.keylock = false; d.transpositie = 0;
+  d.setKeylock(false); d.setTranspositie(0);
   d.setRate(1);
   // Wat je HOORT (engine/hoorbaar.js): spelend de positie min de
   // uitgangsvertraging (hier 5 ms), dezelfde plek waar track.1.key.* een stuk

@@ -24,6 +24,7 @@ export const KEYMAP = {
   KeyE: 'track.{L}.focus',
   KeyR: 'track.{L}.beatjump.back', KeyT: 'track.{L}.beatjump.fwd',
   KeyG: 'track.{L}.loop.in',       KeyC: 'track.{L}.loop.out',
+  KeyV: 'track.{L}.keylock',
 
   // rechterhand: de vorige focus
   KeyP: 'track.{R}.play',       KeyO: 'track.{R}.cue',
@@ -37,6 +38,7 @@ export const KEYMAP = {
   KeyI: 'track.{R}.focus',
   KeyY: 'track.{R}.beatjump.back', KeyU: 'track.{R}.beatjump.fwd',
   KeyH: 'track.{R}.loop.in',       KeyN: 'track.{R}.loop.out',
+  KeyM: 'track.{R}.keylock',
 
   // midden: voor alle tracks
   Digit6: 'transport.quantize',
@@ -45,9 +47,11 @@ export const KEYMAP = {
 /**
  * Shift als ingebouwde modifier, geen aparte tabel: hotcue -> wissen, play ->
  * starten op de maat, beatjump terug/vooruit -> lengte halveren/verdubbelen,
- * loop in -> reloop/exit.
+ * loop in -> reloop/exit, nudge −/+ -> toon −1/+1 (zoals Shift + Nudge op de APC).
  */
 const SHIFT_VARIANT = [
+  [/\.nudge\.back$/, (id) => id.replace(/nudge\.back$/, 'transpose.down')],
+  [/\.nudge\.fwd$/, (id) => id.replace(/nudge\.fwd$/, 'transpose.up')],
   [/\.hotcue\.\d+$/, (id) => `${id}.delete`],
   [/\.play$/, (id) => `${id}.quant`],
   [/\.beatjump\.back$/, (id) => id.replace(/back$/, 'halve')],

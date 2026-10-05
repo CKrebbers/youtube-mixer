@@ -57,6 +57,11 @@ export function beschrijf(action) {
     if (rest === 'bend.fwd') return r('sneller', 'even sneller zolang je drukt (bend +4%)');
     if (rest === 'tempo') return r('tempo', 'tempo: 0,1% per tik, met shift 0,01% (ook buiten het pitchbereik)');
     if (rest === 'pitch.range') return r('bereik', 'pitchbereik ±8 / ±16 / ±50%');
+    if (rest === 'keylock') return r('keylock', 'keylock aan/uit: het tempo verandert, de toon blijft staan (een sprong klinkt dan ~95 ms later, exact)');
+    if (rest === 'transpose') return r('toon', 'toon verschuiven, ±12 halve tonen (midden = niets)');
+    if (rest === 'transpose.up') return r('toon +', 'toon een halve toon hoger');
+    if (rest === 'transpose.down') return r('toon −', 'toon een halve toon lager');
+    if (rest === 'transpose.reset') return r('toon 0', 'toon terug naar 0');
     if (rest === 'nudge.back') return r('nudge −', 'even terugduwen');
     if (rest === 'nudge.fwd') return r('nudge +', 'even vooruitduwen');
     if ((m = /^kill\.(low|mid|high)$/.exec(rest))) return r(`kill ${KILL[m[1]]}`, `kill ${KILL[m[1]]} aan/uit (de knopstand blijft; lampje = band weg)`);

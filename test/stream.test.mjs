@@ -662,6 +662,81 @@ console.log('\ngepland starten (starten op de maat)');
   delete globalThis.registerProcessor; delete globalThis.AudioWorkletProcessor;
 }
 
+// ---- keylock en toon: de StreamBron plant sprongen (docs/KEYLOCK.md, K3) -------------
+// Met rek is elke start een sprong op het zoekrooster van de stretcher: tot T
+// speelt wat er speelde (positieIn), daarna exact de nieuwe plek. Doorlopend
+// (sync, nudge, beatjump) landt waar hij met een sprong NU op T zou zijn.
+
+console.log('\nkeylock en toon (StreamBron)');
+{
+  const { maakWav } = K;
+  const { StreamBron, geheugenHaal } = await import('../src/engine/bron.js');
+  const { rekPlanT, rekUitLatStandaard, REK_MARGE } = await import('../src/engine/rek-kern.js');
+  const L = new Float32Array(48000 * 30);
+  const wav = maakWav([L, L], 48000);
+  const berichten = [];
+  const nodes = [];
+  globalThis.AudioWorkletNode = nepWorkletNode(berichten, nodes);
+  const ctx = { currentTime: 20, sampleRate: 48000, audioWorklet: { addModule: async () => {} } };
+  const bron = new StreamBron(ctx, {}, { interval: 1e9 });
+  await bron.laad({ url: 'geheugen:K:1', haal: geheugenHaal(wav) });
+  const segmenten = () => berichten.filter((m) => m.type === 'segment');
+  const VELDEN = 'T,P,R,loop,speelt,rem,rek';
+  ok('elk segment heeft zeven velden in vaste volgorde (één vorm voor de worklet)', Object.keys(bron.seg).join() === VELDEN);
+  ok('zonder keylock en toon: rek null', bron.seg.rek === null && !bron.keylock && bron.toon === 0);
+  bron.start(5);
+  const s0 = segmenten().at(-1);
+  ok('zonder rek: een start is meteen (T = nu), zoals altijd', !s0.gepland && s0.seg.T === 20 && s0.seg.rek === null);
+  ctx.currentTime = 21;
+  bron.zetRek({ keylock: true });
+  const s1 = segmenten().at(-1);
+  ok('keylock aan tijdens het spelen: een segment op T = nu, vanaf waar hij is, met rek (geen sprong)',
+    !s1.gepland && s1.seg.T === 21 && dichtbij(s1.seg.P, 6) && s1.seg.rek?.keylock === true && s1.seg.rek.toon === 0
+    && Object.keys(s1.seg).join() === VELDEN && bron.keylock);
+  ctx.currentTime = 22;
+  const uitLat = rekUitLatStandaard(48000);
+  bron.start(15);
+  const s2 = segmenten().at(-1);
+  const T = rekPlanT(22 + uitLat / 48000 + REK_MARGE, uitLat, 48000);
+  ok(`een sprong met keylock: gepland op het zoekrooster (${((s2.seg.T - 22) * 1000).toFixed(1)} ms later), exact naar P`,
+    s2.gepland === true && s2.seg.T === T && s2.seg.P === 15 && dichtbij(((s2.seg.T * 48000 - uitLat) / 128) % 1, 0, 1e-6)
+    && s2.seg.T - 22 > 0.09 && s2.seg.T - 22 < 0.105);
+  ok('… geen start op de maat: wachtTot blijft null', bron.wachtTot === null && bron.speelt);
+  ctx.currentTime = 22.05;
+  ok('… tot T speelt het vorige segment (de positie loopt door)', dichtbij(bron.positie, 7.05));
+  ok('… ctxTimeOf: een plek die vóór T nog langskomt op het vorige', dichtbij(bron.ctxTimeOf(7.06), 22.06));
+  bron.start(16, { doorlopend: true });
+  const s3 = segmenten().at(-1);
+  ok('nog een sprong tijdens het wachten: het vorige blijft wat je hoort; doorlopend landt op P + (T − nu)·R',
+    dichtbij(bron.positie, 7.05) && dichtbij(s3.seg.P, 16 + (s3.seg.T - 22.05)));
+  bron.setRate(1.05);
+  const s4 = segmenten().at(-1);
+  ok('tempo tijdens het wachten: het moment blijft (geen sprong verloren)', s4.gepland && s4.seg.T === s3.seg.T && s4.seg.R === 1.05);
+  ctx.currentTime = s4.seg.T + 0.1;
+  ok('na T: de nieuwe plek', dichtbij(bron.positie, s3.seg.P + 0.1 * 1.05));
+  bron.pauzeer();
+  const pauzePos = bron.positie;
+  bron.start(pauzePos);
+  const s5 = segmenten().at(-1);
+  ctx.currentTime += 0.03;
+  ok('play met keylock vanuit pauze: gepland, en tot T stil op P (er speelde niets)', s5.gepland && !bron._vorig && bron.positie === pauzePos);
+  ctx.currentTime += 0.2;
+  // De worklet meldt zijn gemeten uitvoerlatentie: die gebruikt de planning.
+  nodes.at(-1).port.onmessage({ data: { type: 'rek', uitLat: 4448, sr: 48000 } });
+  bron.start(3);
+  const s6 = segmenten().at(-1);
+  ok('de gemeten latentie van de worklet bepaalt het rooster', dichtbij(((s6.seg.T * 48000 - 4448) / 128) % 1, 0, 1e-6));
+  ctx.currentTime = s6.seg.T - 0.05;
+  bron.pauzeer();
+  ok('pauze tijdens een geplande sprong: stil op de plek die je hoorde (het vorige segment)', !bron.speelt && !bron._vorig
+    && segmenten().at(-1).seg.speelt === false);
+  bron.zetRek({ keylock: false, toon: -2 });
+  ok('toon zonder keylock (K8): rek met toon, keylock uit', bron.seg.rek?.toon === -2 && bron.seg.rek.keylock === false && bron.toon === -2);
+  bron.zetRek({ toon: 0 });
+  ok('keylock uit en toon 0: rek weer null', bron.seg.rek === null);
+  bron.vernietig();
+}
+
 // ---- stems: 4 en 8 kanalen (docs/STEMS.md §3) ---------------------------------
 // Een stems-bestand heeft twee of vier stereoparen naast elkaar. renderBlok
 // leest er één paar per aanroep uit (stride, paar). De stereoweg is de gouden
