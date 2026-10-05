@@ -6,6 +6,7 @@
  *
  * Bron (2 okt): de proeflijst in docs/HANDOFF.md, de "Eerst doen" van de
  * blokken van 29 en 30 sep, en de vragen op gevoel uit docs/VRAGEN.md K, L, M.
+ * Erbij (2 okt, avond): de vijf kleine punten uit docs/ONTBREEKT.md (A4, A6–A9).
  * Elk punt: `doe` = wat je doet, `let` = waar je op let.
  */
 export const SPEELLIJST = [
@@ -50,6 +51,10 @@ export const SPEELLIJST = [
     { id: 'au-overgang', doe: 'Luister naar een overgang (24 s overvloeien).', let: 'Goed zo, of liever 32–48 s? (VRAGEN AU2)' },
     { id: 'au-knoppen', doe: 'Probeer ok, overslaan, langer en nu.',
       let: 'Doen ze wat je verwacht? Komt "nu" bij een nummer zonder beat snel genoeg? (AU3)' },
+    { id: 'au-apc', doe: 'Shift + scene 4: modus auto. Bovenste rij: ok, overslaan, langer, nu; pad 8 = aan/uit.',
+      let: 'Is limoen te onderscheiden van groen en geel? Licht ok op als er een voorstel klaarstaat?' },
+    { id: 'au-glad', doe: 'Luister naar een overgang van de auto-DJ, en grijp midden erin een fader.',
+      let: 'Gaat de fade glad (geen trapjes)? Neem je het over zonder sprong?' },
   ] },
   { id: 'plan', titel: 'Planvenster', minuten: 5, punten: [
     { id: 'pl-open', doe: 'Knop plan in de mixer; zet het venster op je tweede scherm.', let: 'Past het venster daar? (PL3)' },
@@ -67,6 +72,16 @@ export const SPEELLIJST = [
       let: 'Eerst "beamer loopt in", dan "beamer": niets verspringt of ontbreekt.' },
     { id: 'be-achter', doe: 'Zet in het mixervenster een ander tabblad vooraan.', let: 'Loopt het beeld op de beamer door?' },
     { id: 'be-vormen', doe: 'Vormen aan; Device ◀ ▶ door alle 26 systemen.', let: 'Niets uitgerekt: rond blijft rond, breed blijft breed.' },
+    { id: 'be-zwart', doe: 'Master-knop (boven de masterfader) = zwart; nog eens = terug. Ook in het losse venster.',
+      let: 'Wordt de beamer echt zwart, met een korte fade? Brandt het lampje?' },
+    { id: 'be-nood', doe: 'Modus video (scene 4), rechts: flits, zwart vasthouden, zwart, bevriezen. MASTER in het videopaneel.',
+      let: 'Bevriest het beeld terwijl de muziek doorloopt? Is de flits niet te fel?' },
+  ] },
+  { id: 'rand', titel: 'Kleine dingen', minuten: 5, punten: [
+    { id: 'ra-hotcue', doe: 'Laad een nummer met hotcues en druk METEEN hotcue 1.',
+      let: 'Springt hij naar de bewaarde hotcue, en is die er na herladen nog?' },
+    { id: 'ra-gate', doe: 'Zet een gate aan op een track zonder grid.', let: 'Opent hij zonder tikken?' },
+    { id: 'ra-backup', doe: 'Kijk in de Controlekamer naar de tegel Backup.', let: 'Groen, met een tijd van vandaag?' },
   ] },
 ];
 

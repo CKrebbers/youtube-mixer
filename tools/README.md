@@ -79,6 +79,12 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   dezelfde headless Chromium (Web Lock en BroadcastChannel zoals bij Clay): mixer open/dicht, een tweede mixer
   rood, de knop "mixer openen", wat er in de mixer staat, afvinken en notities na herladen. Eigen server
   (8796), tijdelijke database en speellijst, MIDI eruit vóór elke pagina. Schermafdruk `controle.png`.
+- `noodknoppen.mjs` — zwart, bevriezen, master en flits (A4) pixel voor pixel, in het hoofdvenster én
+  in het losse venster (video.html, dat zelf mengt). Geen ingest: een canvas met vier gekleurde kwarten
+  als nep-video op track 1 (demotrack eronder, stil). De fade en de flits worden op EXACTE tijden gemeten
+  (performance.now even zelf gezet: met swiftshader duurt één beeld lezen tot seconden). Eigen server
+  (8797), MIDI eruit vóór elke pagina. Headless shell uit de Playwright-cache (ook
+  PLAYWRIGHT_BROWSERS_PATH en ~/.cache) of VARVE_CHROME.
 - `kijk.mjs` — de app in een headless Chromium (uit de Playwright-cache, geen npm-pakket;
   het DevTools-protocol over Node's eigen WebSocket). Eigen server op poort 8791 met een
   tijdelijke database. **Veilig met de APC aangesloten:** `navigator.requestMIDIAccess`

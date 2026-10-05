@@ -3,7 +3,7 @@
   --text:#dfe7ee; --dim:#7b8794; --a:#4ad9c4; --b:#c48cff;
   --warn:#ffbe3c; --red:#ff3b30;
   /* grid-mapjes, zoals de LED's op de APC: hotcues geel, loops cyaan, sampler violet, video blauw */
-  --m-hotcues:#ffd23c; --m-loops:#3cd6ff; --m-sampler:#b07cff; --m-video:#4c7dff; --m-klank:#ff4fe0;
+  --m-hotcues:#ffd23c; --m-loops:#3cd6ff; --m-sampler:#b07cff; --m-video:#4c7dff; --m-klank:#ff4fe0; --m-auto:#8cff3c;
   /* crossfaderkant, zoals de tweekleurige LED van de A|B-knop: geel A, oranje B, thru grijs */
   --kant-a:#ffd23c; --kant-b:#ff8a2a;
   /* kleine grijze tekst die toch leesbaar moet zijn: 5,5:1 op --panel2 */
@@ -544,6 +544,11 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .vid-fx{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px}
 .vid-modus,.vid-pulsdoel{min-width:64px;text-transform:uppercase;letter-spacing:.08em}
 .vid-sep{width:1px;align-self:stretch;background:var(--line)}
+.vid-nood{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:0 10px 8px}
+.vid-nood-kop{font-size:10px;letter-spacing:.16em;font-weight:700;color:var(--a);margin-right:2px}
+.vid-nood .btn{min-width:56px;text-transform:uppercase;letter-spacing:.08em}
+.btn.vid-zwart.on{background:var(--red);border-color:var(--red);color:#fff}
+.btn.vid-bevries.on{background:var(--warn);border-color:var(--warn);color:#03100e}
 
 /* ---- opnemen ---- */
 .opname{font-variant-numeric:tabular-nums}
@@ -767,6 +772,13 @@ body.leermodus .spg-naam{display:block}
 .spg[data-modus="klank"][data-action*=".kill."]{--kleur:var(--red)}
 .spg[data-modus="klank"][data-action$=".brake"]{--kleur:#ff9d2e}
 .spg[data-modus="klank"][data-action$=".play.quant"]{--kleur:#3ddc84}
+/* Modus auto (auto-DJ): de modus limoen (scene 4, aan/uit), de knoppen in de
+   kleur van hun LED: ok groen, overslaan oranje, langer cyaan, nu geel. */
+.spg[data-modus="auto"]{--kleur:var(--m-auto)}
+.spg[data-modus="auto"][data-action="auto.ok"]{--kleur:#3ddc84}
+.spg[data-modus="auto"][data-action="auto.skip"]{--kleur:#ff9d2e}
+.spg[data-modus="auto"][data-action="auto.langer"]{--kleur:var(--m-loops)}
+.spg[data-modus="auto"][data-action="auto.nu"]{--kleur:var(--m-hotcues)}
 button.spg[data-modus]{border-color:color-mix(in srgb,var(--kleur) 30%,var(--line));
   color:color-mix(in srgb,var(--kleur) 55%,var(--dim))}
 button.spg[data-licht="half"]{border-color:var(--kleur);color:var(--text);

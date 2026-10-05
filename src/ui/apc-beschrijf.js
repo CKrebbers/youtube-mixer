@@ -140,6 +140,17 @@ export function beschrijf(action) {
     'video.mode': ['mengvorm', 'video: volgende mengvorm'], 'video.pulse': ['puls', 'video: puls op de tel'],
     'video.pulse.target': ['puls-doel', 'video: wat er op de tel pulst'],
     'video.fit': ['passend', 'video: passend (randen) of vullen (bijsnijden)'],
+    // Auto-DJ (docs/AUTO-DJ.md §4): de modus auto op de APC, Shift + scene 4.
+    'auto.aan': ['auto', 'auto-DJ aan/uit (lampje: fel limoen = aan, donker = uit)'],
+    'auto.ok': ['ok', 'auto-DJ: de volgende overgang is goed (lampje: donkergroen = voorstel klaar, fel = bevestigd, uit = geen voorstel)'],
+    'auto.skip': ['overslaan', 'auto-DJ: niet deze, de volgende kandidaat (lampje = er staat een overgang klaar)'],
+    'auto.langer': ['langer', 'auto-DJ: nog 8 maten (beatloos 30 s) langer op de track die nu klinkt'],
+    'auto.nu': ['nu', 'auto-DJ: de overgang nu, op de eerstvolgende 4 maten (beatloos: meteen)'],
+    'video.black': ['zwart', 'video: zwart aan/uit, met een korte fade (250 ms) — voor de zaal, het losse venster en de opname'],
+    'video.black.hold': ['zwart!', 'video: zwart zolang je drukt, direct (loslaten = terug)'],
+    'video.freeze': ['bevries', 'video: het beeld bevriezen aan/uit (de video\'s lopen door, loslaten = meteen het goede beeld)'],
+    'video.master': ['beeld', 'video: master, de helderheid van het eindbeeld (dicht = zwart)'],
+    'video.flash': ['flits', 'video: een witte flits die snel uitdooft'],
   };
   if (vast[action]) return { kort: vast[action][0], lang: vast[action][1] };
   return { kort: action, lang: action };

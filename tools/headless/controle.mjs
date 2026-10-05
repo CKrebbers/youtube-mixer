@@ -88,6 +88,8 @@ try {
   await ctl.cdp('Page.navigate', { url: `http://localhost:${POORT}/controle` });
   ok('de Controlekamer start', await tot(() => ctl.ev('!!window.controle && document.querySelectorAll(".tegel").length >= 4')));
   ok('server: draait, met het aantal nummers', await tot(async () => { const t = await tegel('Server'); return t?.licht === 'ok' && /library: \d+ nummers/.test(t.sub); }));
+  ok('backup: groen, met het tijdstip van de kopie bij het opstarten',
+    await tot(async () => { const t = await tegel('Backup'); return t?.licht === 'ok' && /^\d\d:\d\d$/.test(t.waarde); }));
   ok('mixer: niet open', (await tegel('Mixer'))?.waarde === 'niet open');
   ok('de knop "mixer openen" is aan', await ctl.ev("!document.getElementById('mixer-open').disabled"));
   const nPunten = await ctl.ev("document.querySelectorAll('.punt').length");

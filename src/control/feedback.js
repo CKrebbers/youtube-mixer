@@ -68,6 +68,10 @@ const KLEURSCHEMA = [
   // altijd gedimd: bruikbaar, niets actief.
   [/^sampler\.length$/, { aan: 'violetdonker', half: 'violetdonker', uit: 'violetdonker' }],
   [/^video\.(mode|pulse\.target)$/, { aan: 'blauwdonker', half: 'blauwdonker', uit: 'blauwdonker' }],
+  // Beeld-noodknoppen (2 okt, ONTBREEKT A4): zwart in rood, zodat je in het
+  // donker ziet dat de zaal niets ziet; bevriezen en flits wit.
+  [/^video\.black(\.hold)?$/, { aan: 'rood', uit: 'rooddonker' }],
+  [/^video\.(freeze|flash)$/, { aan: 'wit', uit: 'donkergrijs' }],
   [/^video\./,        { aan: 'blauw', half: 'blauwdonker', uit: 'donkergrijs' }],
   // Grid-modi op de scene-knoppen: elke modus zijn eigen kleur, gedimd als hij
   // dicht is — zo zie je altijd welke er zijn én welke open is.
@@ -78,6 +82,19 @@ const KLEURSCHEMA = [
   // Klank: magenta. Niet rood: dat is "loop weg" op dezelfde scene-knop, en
   // wissen. Niet violet of blauw: dat zijn sampler en video, er vlak boven.
   [/^layer\.grid\.klank$/,   { aan: 'magenta', uit: 'magentadonker' }],
+  // Auto-DJ (2 okt, VRAGEN AU1): limoen, de enige vrije kleur met een donkere
+  // tint (18) die niet al een modus is. Op de bovenste rij van de modus auto
+  // elke knop zijn eigen kleur, uit de read in bindAuto:
+  //   ok       null = geen voorstel (uit), 0,5 = voorstel klaar (donkergroen),
+  //            1 = bevestigd (fel groen)
+  //   overslaan · langer · nu   0 = er staat een overgang klaar (donker), null = uit
+  //   aan      1 = aan (fel limoen), 0 = uit (donker limoen)
+  [/^layer\.grid\.auto$/,    { aan: 'limoen', uit: 'limoendonker' }],
+  [/^auto\.aan$/,     { aan: 'limoen', uit: 'limoendonker' }],
+  [/^auto\.ok$/,      { aan: 'groen', half: 'groendonker', uit: 'groendonker' }],
+  [/^auto\.skip$/,    { aan: 'oranje', uit: 'oranjedonker' }],
+  [/^auto\.langer$/,  { aan: 'cyaan', uit: 'cyaandonker' }],
+  [/^auto\.nu$/,      { aan: 'geel', uit: 'geeldonker' }],
   [/^layer\./,        { aan: 'wit', uit: 'donkergrijs' }],
 ];
 

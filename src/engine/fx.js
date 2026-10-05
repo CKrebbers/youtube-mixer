@@ -26,6 +26,8 @@ import { startDrempel, houdVast, zetHellingen } from './overgang.js';
 
 export const FADE = 0.04;      // 40 ms kruisfade
 const TIJD_FADE = 0.08;        // delaytijd wisselen: iets langer, echo's zijn lang
+/** Gate zonder maat: zo snel gaat de poort open (na startDrempel, zie overgang.js). */
+const GATE_OPEN = 0.005;
 
 /**
  * Muzikale delingen. Een rack slaat een DELING op, nooit seconden — anders
@@ -403,6 +405,7 @@ export const EFFECTEN = [
       poort.gain.value = 1;
 
       let bron = null;
+      let bronGain = null;      // eigen gain per puls: zo kan een puls uitvloeien (zonder maat)
       let cyclus = null;        // { buf, n, vorm, diepte }: de laatst gebouwde buffer
       const staat = { deling: 0.6, vorm: 0.5, diepte: 1 };
 
@@ -439,15 +442,29 @@ export const EFFECTEN = [
       const herstart = () => {
         const k = klok();
         const nu = ctx.currentTime;
-        const oud = bron;
+        const oud = bron, oudGain = bronGain;
         bron = null;
+        bronGain = null;
         if (!k || !k.beatLengte) {
-          // Geen maat: poort open. De oude puls pas stoppen als de poort
-          // weer 1 is, anders klikt het.
-          poort.gain.cancelScheduledValues?.(nu);
-          poort.gain.setValueAtTime(oud ? 0 : poort.gain.value, nu);
-          poort.gain.linearRampToValueAtTime(1, nu + 0.005);
-          if (oud) { try { oud.stop(nu + 0.006); } catch (_) {} }
+          /*
+           * Geen maat: poort open, in GATE_OPEN (5 ms). Als de kill
+           * (overgang.js): vasthouden, en de helling pas na startDrempel. Op
+           * `nu` viel hij samen tot één stap, want de renderthread loopt tot
+           * ~7,5 ms voor (VERBETERINGEN ronde 4). De puls telt bij de poort
+           * op (intrinsiek 0 + puls), dus tegelijk vloeit zijn eigen gain
+           * naar 0: samen gaat het zacht van de puls naar open. Pas als dat
+           * klaar is stopt de oude bron; eerder stoppen, terwijl hij nog
+           * meetelt, is een sprong in de gain.
+           */
+          const wacht = startDrempel(ctx);
+          try {
+            zetHellingen(poort.gain, (van) => [van, 1], nu, GATE_OPEN, wacht);
+            if (oudGain) zetHellingen(oudGain.gain, (van) => [van, 0], nu, GATE_OPEN, wacht);
+          } catch (_) {
+            // Laatste vangnet: nooit de aanroeper laten struikelen.
+            try { poort.gain.setTargetAtTime(1, nu, GATE_OPEN / 3); } catch (__) {}
+          }
+          if (oud) { try { oud.stop(nu + wacht + GATE_OPEN + 0.001); } catch (_) {} }
           return;
         }
         const periode = k.beatLengte * delingVan(staat.deling).tellen;
@@ -471,7 +488,9 @@ export const EFFECTEN = [
         src.buffer = cyclus.buf;
         src.playbackRate.value = cyclus.n / exact;
         src.loop = true;
-        src.connect(poort.gain);
+        const g = ctx.createGain();
+        src.connect(g).connect(poort.gain);
+        src.onended = () => { try { src.disconnect(); g.disconnect(); } catch (_) {} };
         // De gain van de poort wordt volledig door de buffer bepaald — vanaf
         // `start`. Tot dan draait de oude puls, of (eerste keer) staat hij open.
         poort.gain.cancelScheduledValues?.(nu);
@@ -480,6 +499,7 @@ export const EFFECTEN = [
         try { src.start(start); } catch (_) { src.start(); }
         if (oud) { try { oud.stop(start); } catch (_) {} }
         bron = src;
+        bronGain = g;
       };
 
       return {
@@ -495,7 +515,7 @@ export const EFFECTEN = [
         },
         heranker: herstart,
         staart: () => 0,
-        vernietig: () => { if (bron) { try { bron.stop(); } catch (_) {} bron = null; } },
+        vernietig: () => { if (bron) { try { bron.stop(); } catch (_) {} bron = null; bronGain = null; } },
       };
     },
   },

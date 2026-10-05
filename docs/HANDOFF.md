@@ -20,7 +20,8 @@ Clay: "de proefstems waren goed, bouw met meerdere subagenten tegelijk aan de st
 splitter in varve dj". Gebouwd in drie parallelle sporen (server, engine, ui) op
 een gedeeld contract, elk in een worktree buiten iCloud (`~/Projects/varve-stems/`),
 daarna samengevoegd op `stems/integratie`, nagelopen door een reviewer en een
-end-to-end-controle met de echte Demucs, en op `main` gezet.
+end-to-end-controle met de echte Demucs. Op 5 okt gepusht en als PR #3 naar `main`
+(na het samenvoegen met de cloudsessies van 2 okt).
 
 - NIEUW: `server/stems.js`, `server/stems/splits.py`, `src/ui/stems-paneel.js`,
   `stems-wachtrij.js`, `stems-weergave.js`, `test/stems.test.mjs`,
@@ -38,6 +39,45 @@ end-to-end-controle met de echte Demucs, en op `main` gezet.
   klikken (of iets nieuws binnenhalen, standaard 2 stems); als de kolom `2` zegt
   het nummer laden, knop **stems** in de balk, zang weg/terug. Dan VRAGEN N
   (vooral N1: waar op de APC, en N2: luister naar zang weg).
+
+## 2 OKT (laat): DE KLEINE VEILIGE PUNTEN GEBOUWD (cloudsessie)
+
+Clay: "begin met de kleine veilige punten" (stap 1 van docs/ONTBREEKT.md). Vijf
+agenten in eigen worktrees, daarna samengevoegd op `claude/ecstatic-feynman-sm6x58`:
+- **A4 beeld-noodknoppen** (`src/video/eindbeeld.js`): zwart, zwart vasthouden,
+  bevriezen, master, flits; ook in het losse venster en de opname. APC: de
+  master-knop = zwart in elk mapje; modus video rechts de vier. Gemeten in headless
+  Chromium (pixels, fade-tijden), niet in Clay's Chrome met een beamer.
+- **A6 backup** (`server/backup.js`): VACUUM INTO in een worker, bij opstarten en
+  elk uur als er iets veranderde, 12 + 30 dagen, `media/backups/`; tegel Backup
+  in de Controlekamer. **De server moet herstarten** (nieuwe route `/api/backups`).
+- **A7 vloeiende fades** in de auto-DJ (`*.glide`-actions, `Deck.glide`, hellingen
+  op de audioklok). Headless gemeten; **niet beluisterd**.
+- **A8 modus auto** op de APC (Shift + scene 4): ok, overslaan, langer, nu, aan/uit.
+- **A9** hotcue vlak na laden, rem-gat, syncMaster-terugval, gate zonder maat.
+Tests: 41 bestanden, 3845 checks; `ingest.test` groen met yt-dlp, `wachtrij.test`
+rood in de cloudcontainer (weesprocessen; was vóór dit werk al zo). De speellijst
+van de Controlekamer heeft 7 punten erbij (auto-APC, glad, zwart, nood, hotcue,
+gate, backup). Eerst doen (Clay): `git pull`, server herstarten, mixer herladen,
+de nieuwe punten in de speellijst.
+
+## 2 OKT (avond): WAT ER NOG ONTBREEKT (cloudsessie, docs/ONTBREEKT.md)
+
+Drie agenten: open punten in de eigen docs (tegen de code), vergelijking met
+rekordbox/Traktor/Serato/Mixxx/VirtualDJ, koppeling met Logic en TouchDesigner.
+49 punten in vier groepen (standalone-nodig, later, Logic/TD, niet), een
+voorstel voor de volgorde en zeven vragen. Wacht op Clay's keuzes. Kernfeit voor
+later: Logic volgt geen MIDI clock, wel Ableton Link (via Carabiner, GPL los).
+
+## 2 OKT (avond): OVERAL OPENEN VIA TAILSCALE (cloudsessie)
+
+Clay wilde VARVE "overal altijd" kunnen openen. Na uitleg (geen openbare server:
+distributie van YouTube-media, geen login, yt-dlp geblokkeerd op datacenters)
+koos hij Tailscale met de server op de Mac. Gebouwd: `VARVE_HOSTS` in
+`server/index.js` (`vreemdVerzoek`), checks in `server.test.mjs` (falen op de
+oude code), `docs/TAILSCALE.md`. **Niet getest met een echte Tailscale.**
+Eerst doen (Clay): de stappen in `docs/TAILSCALE.md`, server herstarten met
+`VARVE_HOSTS`. Op de Mac zelf localhost blijven gebruiken.
 
 ## 2 OKT: ALLES GETEST, LAYOUT, CONTROLEKAMER (vanaf de Omarchy-machine)
 

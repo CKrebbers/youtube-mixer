@@ -1,6 +1,7 @@
 import { Emitter } from '../lib/emitter.js';
 import { normaliseerPlan } from '../plan/plan-model.js';
 import { DECK_IDS } from '../engine/engine.js';
+import { GLIJ } from '../engine/deck.js';
 import { kortNaam } from '../engine/toonsoort.js';
 import {
   OVERGANGEN, SPEELDUUR, VOORUIT, fragment, kenmerken, kiesVolgende, kiesOvergang, planMoment, standen, klaarStand,
@@ -32,6 +33,19 @@ import {
 const ZELF = Symbol('auto');
 /** Actions waarmee Clay een overgang overneemt (op een track in de overgang). */
 const OVERNEEM = /^track\.(\d)\.(fader|low|mid|high|filter|play|play\.quant|sync|seek|tempo|pitch|send\.[ab]|kill\.\w+(\.hold)?|stem\.(vocals|inst|drums|bass|other)(\.(kill|hold))?|brake|cue|hotcue\.\d)$/;
+/**
+ * De curve van een overgang gaat als GLIJDENDE knoppen (track.N.<knop>.glide,
+ * Deck.glide): elke beurt een doel dat GLIJ seconden verderop op de curve ligt,
+ * en de engine legt er een helling naartoe op de audioklok. Een nieuw doel
+ * zodra de lopende helling nog zo lang (s) te gaan heeft: ruim twee tikken,
+ * zodat een timer die een tik hapert geen stilstand geeft. Met GLIJ = 0,5 s
+ * is dat een regel per ~0,4 s per knop die beweegt.
+ */
+const HERRICHT = 0.1;
+/** Wat glijdt: [sleutel in standen(), action]. De bas (low) is een SCHAKELAAR (de wissel), die gaat direct. */
+const GLIJ_ACTIES = [['fader', 'fader'], ['filter', 'filter'], ['sendA', 'send.a'], ['sendB', 'send.b']];
+/** Net vóór het einde: op p = 1 springt de filter-uit (fader dicht, de nieuwe valt in); dat doet _rondAf direct. */
+const BIJNA = 1 - 1e-9;
 const nrVan = (id) => DECK_IDS.indexOf(id) + 1;
 const deckVanNr = (nr) => DECK_IDS[nr - 1];
 const eindig = (x) => typeof x === 'number' && Number.isFinite(x);
@@ -70,6 +84,7 @@ export class Automaat extends Emitter {
     this._zelf = false;
     this._bezigLaden = false;
     this._timer = null;
+    this._glijdt = new Map();     // 'A.fader' -> { doel, tot }: de lopende glijbeurt van de automaat
     this._los = bijInvoke((id) => this._bijBus(id));
   }
 
@@ -179,6 +194,9 @@ export class Automaat extends Emitter {
     if (id === 'mixer.xfader' || raakt) {
       if (this.fase === 'bezig' || (this.fase === 'klaar' && deck === this.volgende?.deckId)) {
         this.fase = 'overgenomen';
+        // Wat nog glijdt loopt hooguit GLIJ s uit; wat Clay aanraakt houdt
+        // de engine meteen vast (Deck.set) en gaat van daar verder.
+        this._glijdt.clear();
         this._meld('je nam de overgang over — ik ga verder als er weer één track speelt');
         this.emit('change');
       }
@@ -329,7 +347,6 @@ export class Automaat extends Emitter {
     const v = this.volgende;
     const m = v.moment;
     const p = d.playing ? (d.position - m.start) / m.lengte : 1;
-    const st = standen(v.overgang.type, p, v.basis);
     const uitN = nrVan(this.hoofd), inN = nrVan(v.deckId);
     // Filter: de nieuwe start op de laatste maat, zodat hij op de "1" invalt.
     if (v.overgang.type === 'filter' && !v.gestart && d.grid) {
@@ -339,9 +356,38 @@ export class Automaat extends Emitter {
         v.gestart = true;
       }
     }
-    this._zet(uitN, st.uit, this.hoofd);
-    this._zet(inN, st.in, v.deckId);
-    if (p >= 1) this._rondAf();
+    if (p >= 1) { this._rondAf(); return; }
+    // Schakelaars (de bas) op de stand van NU; de curve glijdend naar waar
+    // hij over GLIJ seconden is. Regel 3: dat komt van de POSITIE van de
+    // uitgaande (GLIJ s klok = GLIJ × rate tracktijd), niet van de timer.
+    const st = standen(v.overgang.type, p, v.basis);
+    const vooruit = p < 0 ? p : Math.min(BIJNA, p + GLIJ * d.rate / m.lengte);
+    const doel = standen(v.overgang.type, vooruit, v.basis);
+    this._zet(uitN, { low: st.uit.low }, this.hoofd);
+    this._zet(inN, { low: st.in.low }, v.deckId);
+    this._glij(uitN, doel.uit, this.hoofd);
+    this._glij(inN, doel.in, v.deckId);
+  }
+
+  /**
+   * De curve als glijbeurten: een nieuw doel als de lopende helling bijna
+   * aankomt (HERRICHT), en alleen als het doel verandert. Zo is er geen
+   * trapje per tik op de AudioParam, en een paar regels per seconde in het
+   * log in plaats van een per tik.
+   */
+  _glij(n, stand, deckId) {
+    const d = this.engine.deck(deckId);
+    const nu = this.engine.ctx.currentTime;
+    for (const [k, actie] of GLIJ_ACTIES) {
+      const doel = stand[k];
+      if (!eindig(doel)) continue;
+      const sleutel = `${deckId}.${k}`;
+      const vorig = this._glijdt.get(sleutel);
+      if (vorig && nu < vorig.tot - HERRICHT) continue;     // nog onderweg
+      if (Math.abs(doel - (vorig ? vorig.doel : d.ui[k])) < 1e-4) continue;
+      this._doe(`track.${n}.${actie}.glide`, doel);
+      this._glijdt.set(sleutel, { doel, tot: nu + GLIJ });
+    }
   }
 
   /** Alleen zetten wat echt verandert: een stap per tik vult het log anders met ruis. */
@@ -367,6 +413,7 @@ export class Automaat extends Emitter {
 
   /** De nieuwe klinkt nu alleen: hij wordt de hoofdtrack, en de volgende mag gekozen worden. */
   _wordtHoofd(v) {
+    this._glijdt.clear();
     this.hoofd = v.deckId;
     this.eind = v.tot;
     this.hoofdVan = v.van;

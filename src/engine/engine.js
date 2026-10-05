@@ -352,7 +352,7 @@ export class Engine extends Emitter {
    * De track die je het HARDST hoort: fader maal crossfader, en hij moet
    * spelen, een grid hebben en niet remmen; een wissel pas met 3 dB verschil
    * en 250 ms geduld (maatgever). Speelt er niets, dan de eerste geladen
-   * track met een grid. Gelijke stand: het laagste nummer. Saai en
+   * track met een grid die niet remt. Gelijke stand: het laagste nummer. Saai en
    * voorspelbaar, en in de praktijk precies de track waar je op wilt landen.
    *
    * Een track die op zijn start op de maat WACHT (deck.wacht) speelt al, maar
@@ -381,9 +381,13 @@ export class Engine extends Emitter {
     // Dan de luidste andere die klinkt; klinkt er verder niets, dan de luidste
     // die op zijn start op de maat wacht (een keten van play.quant blijft zo
     // werken als de maatgever stopt); anders de eerste geladen met een grid.
+    // Nooit een track die REMT, ook niet als laatste: zijn tempo zakt naar 0,
+    // en sync nam anders de rate van een track die net stilvalt over
+    // (VERBETERINGEN ronde 4). Staat hij stil, dan is het een pauze en telt
+    // hij weer mee zoals elke stilstaande track.
     return hardste((d) => this._kanMaat(d))
       || hardste((d) => !!(d.buffer && d.grid && d.playing && d.wacht && !d.remt))
-      || DECK_IDS.map((k) => this.decks[k]).find((d) => d.id !== id && d.buffer && d.grid) || null;
+      || DECK_IDS.map((k) => this.decks[k]).find((d) => d.id !== id && d.buffer && d.grid && !d.remt) || null;
   }
 
   /**

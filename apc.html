@@ -20,6 +20,7 @@
   .k-knop[data-modus="grid.sampler"].aan{background:#a57cff;border-color:#a57cff}
   .k-knop[data-modus="grid.video"].aan{background:#4c7dff;border-color:#4c7dff;color:#fff}
   .k-knop[data-modus="grid.klank"].aan{background:#ff4fe0;border-color:#ff4fe0}
+  .k-knop[data-modus="grid.auto"].aan{background:#8cff3c;border-color:#8cff3c}
   #shift.aan{background:var(--warn);border-color:var(--warn)}
   #gridmodus.aan{background:#e6edf3;border-color:#e6edf3}
   #zoek{background:var(--panel2);border:1px solid var(--line);border-radius:5px;color:var(--text);padding:5px 10px;font:inherit;width:190px}
@@ -72,7 +73,7 @@
   /* soorten: dezelfde kleur op de kaart, in de legenda en in de lijst */
   .s-transport{--kl:#3ddc84} .s-mixer{--kl:#4ad9c4} .s-hotcue{--kl:#ffd23c} .s-loop{--kl:#35c6ff}
   .s-fx{--kl:#c48cff} .s-sampler{--kl:#ff5fd2} .s-video{--kl:#4c7dff} .s-opname{--kl:#ff3b30}
-  .s-mapje{--kl:#e6edf3} .s-klank{--kl:#ff8a3d} .s-vrij{--kl:#3a444e}
+  .s-mapje{--kl:#e6edf3} .s-klank{--kl:#ff8a3d} .s-auto{--kl:#8cff3c} .s-vrij{--kl:#3a444e}
   .stip{display:inline-block;width:.8em;height:.8em;border-radius:3px;background:var(--kl);margin-right:6px;vertical-align:-1px}
   #legenda{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 2px 0;font-size:11px;color:var(--dim)}
   .paneel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;position:sticky;top:64px}
@@ -103,6 +104,7 @@
     <button class="k-knop" data-modus="grid.sampler">sampler</button>
     <button class="k-knop" data-modus="grid.video">video</button>
     <button class="k-knop" data-modus="grid.klank" title="Shift + scene 5, of ▲ ▼">klank</button>
+    <button class="k-knop" data-modus="grid.auto" title="Shift + scene 4, of ▲ ▼">auto</button>
   </div>
   <div class="k-groep"><span>rechts</span>
     <button class="k-knop" data-modus="device.strip">strip</button>
@@ -123,7 +125,8 @@
 </main>
 <p class="uitleg"><b>Elke kolom is een track</b>: filter bovenaan, fader onderaan, play · cue · sync · crossfaderkant in het blokje van vier.
   <b>Track Select</b> kiest welke track de <b>rechterkant</b> bedient. De <b>scene-knoppen</b> naast het grid kiezen de grid-modus
-  (<b>Shift + scene 5</b> = klank: kill hoog · mid · laag, rem en op de maat starten per track; ▲ ▼ loopt ze allemaal rond),
+  (<b>Shift + scene 5</b> = klank: kill hoog · mid · laag, rem en op de maat starten per track; <b>Shift + scene 4</b> = auto:
+  de auto-DJ bijsturen op de bovenste rij, ok · overslaan · langer · nu, en rechts aan/uit; ▲ ▼ loopt ze allemaal rond),
   <b>Clip/Device View</b> wisselt rechts tussen strip en rack. Vasthouden van een modusknop = even gluren. Plaatsing volgens de officiële
   handleiding; wat een knop doet komt rechtstreeks uit de mapping. <span id="bron"></span></p>
 <div id="lijst"></div>

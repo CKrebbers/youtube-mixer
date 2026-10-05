@@ -407,6 +407,12 @@ export class Library {
   get versie() { return this.db.prepare('PRAGMA user_version').get().user_version; }
   sluit() { this.db.close(); }
 
+  /**
+   * Hoeveel rijen deze verbinding veranderde sinds het openen (SQLite's
+   * total_changes()). Goedkoop; de backup kijkt hiermee of er iets te doen is.
+   */
+  wijzigingen() { return this._q('SELECT total_changes() AS n').get().n; }
+
   /** Een voorbereide query, hergebruikt: per rij opnieuw voorbereiden kostte meer dan de query zelf. */
   _q(sql) {
     let st = this._stmts.get(sql);

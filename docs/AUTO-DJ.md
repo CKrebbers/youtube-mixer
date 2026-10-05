@@ -46,6 +46,63 @@ staat dus in het handelingenlog en speelt terug. Laden gaat via de laadlaag
   een track in de overgang (of de crossfader) = overgenomen. De automaat laat
   los en gaat verder als er weer één track duidelijk klinkt.
 
+## 2b. Hoe hij aan de knoppen draait: glijdend (A7, 2 okt)
+
+Een overgang is een curve (`standen()` in planner.js). Die gaat niet meer als
+een trapje van 0,01 per tik van 40 ms over de bus, maar als **glijbeurten**:
+
+- **Actions** `track.N.fader.glide`, `track.N.filter.glide`, `track.N.send.a.glide`,
+  `track.N.send.b.glide`: een gewone value-action (0..1, regel 2) met als
+  betekenis "glijd hierheen in `GLIJ` = 0,5 s". Geen `read` (de stand lees je
+  van de knop zelf), dus niet in de beginstand van het handelingenlog.
+- **De automaat** (`_glij`) stuurt per knop het punt van de curve dat GLIJ
+  seconden verderop ligt, gerekend vanaf de POSITIE van de uitgaande (GLIJ s
+  klok = GLIJ × rate tracktijd, regel 3), en een nieuw punt zodra de lopende
+  helling nog 0,1 s te gaan heeft (`HERRICHT`). Zo volgt de knop de curve als
+  een reeks rechte stukken van ~0,4 s (afwijking van de curve < 0,05 dB), en
+  hapert de timer een paar tikken, dan komt de helling aan en staat hij even
+  stil: nooit een sprong. Net vóór het einde kijkt hij niet voorbij p = 1
+  (`BIJNA`): het einde zelf (filter-uit: fader dicht op de "1"; alles terug
+  naar neutraal) blijft een directe stand van `_rondAf`.
+- **De bas** (`low`) glijdt NIET: in de curves is hij een schakelaar (de
+  baswissel in het midden van de blend), en die gaat direct en voor beide
+  tracks in dezelfde tik, zoals vroeger. Zo blijft "nooit twee bassen" waar
+  en ontstaat er geen gat in de bas. De crossfader stuurt de automaat niet
+  (alleen de kant per track bij het klaarzetten).
+- **De engine** (`Deck.glide`, deck.js): per glijbeurt acht lineaire
+  hellingen op de AudioParams (fader in gain langs de dB-schaal van de knop,
+  filter in Hz langs `filterDoelen()`, sends kwadratisch), beginnend na
+  `startDrempel`. Een nieuwe glijbeurt laat de lopende helling DOORLOPEN tot
+  dat beginpunt en gaat daar verder (`zetVervolg` in overgang.js:
+  `cancelAndHoldAtTime` in de toekomst): geen sprong en geen plateau.
+  Nooit `setValueCurveAtTime`.
+- **Ingrijpen**: een gewone `set` (Clay's fader, of een directe stand van de
+  automaat) midden in een glijbeurt houdt de parameter vast waar het geluid NU
+  is (`houdVast`) en gaat van daar met `setTargetAtTime` naar de nieuwe stand;
+  de rest van de glijbeurt is weg. Overneemt Clay, dan stuurt de automaat
+  niets meer; wat op de andere track nog glijdt loopt hooguit 0,5 s uit.
+- **read()** van fader, filter en sends geeft tijdens het glijden de stand van
+  NU, afgeleid van `ctx.currentTime` (`deck.ui` leest via een getter
+  `_stand()`), dus scherm, LED-ringen, soft-takeover, maatgever en
+  video-zichtbaarheid lopen mee zonder extra bus-acties.
+- **Handelingenlog en terugspelen**: de glijregels staan in het log als elke
+  andere action (`[t, "track.2.fader.glide", 0.37]`), een paar per seconde per
+  knop die beweegt (in auto.test een hele blend 84 bus-acties, was 174; een
+  beatloze overgang met klaarzetten 209, was 291). Terugspelen zet ze op
+  T0 + t opnieuw op de bus en legt dezelfde hellingen (getest: hetzelfde
+  aantal, en hooguit 0,02 dB ernaast, binnen één tik van 10 ms).
+- **Headless Chromium** (`tools/headless/auto.mjs`, 2 okt): tijdens de blend
+  steeg de fader van track 2 gelijkmatig (1 van 987 metingen van ~10 ms
+  bijna stil; met de oude trapjes 762 van 982), read() en AudioParam hooguit
+  0,04 dB uit elkaar (was 0,63), langste stilte op de master 0 ms, geen
+  consolefouten. Niet beluisterd.
+
+Waarom zo en niet anders: een tweede getal (de duur) past niet in een
+value-action; een "glijtijd" per track als losse instelling zou ook Clay's
+eigen fader laten glijden zolang hij aan stond, en in het log zou de volgorde
+van die twee regels ertoe doen. Een vaste duur in de engine houdt elke regel
+op zichzelf terug te spelen, en de automaat hoeft niets van dB of Hz te weten.
+
 ## 3. Wat hij speelt
 
 - Met een plan: de stappen op volgorde (onbekende of overgeslagen nummers eruit).
@@ -68,8 +125,10 @@ soort overgang, over hoeveel maten (of mm:ss), "plan" · tooltip = waarom ·
 **ok** (bevestigd) · **overslaan** · **langer** (+8 maten, beatloos +30 s) ·
 **nu** (eerstvolgende 4 maten) · het plan en de stap.
 
-Actions: `auto.aan`, `auto.ok`, `auto.skip`, `auto.langer`, `auto.nu`. Geen
-plek op de standaard-APC (AU1); koppelen werkt.
+Actions: `auto.aan`, `auto.ok`, `auto.skip`, `auto.langer`, `auto.nu`.
+Op de APC: modus auto (Shift + scene 4 of ▲ ▼), bovenste rij ok · overslaan ·
+langer · nu en pad 8 aan/uit, met lampjes die tonen of er een voorstel klaarstaat
+(docs/APC40.md, "Modus auto"; gebouwd 2 okt, AU1).
 
 ## 5. Het setplan (Claude schrijft, de app volgt)
 
@@ -94,12 +153,18 @@ vijf keer overvloeien en één filter-uit (uit de jungle-piek, waar het grid zek
 
 ## 6. Getest
 
-- `test/auto.test.mjs` (65 checks): de planner (Camelot, soort, sync-verschuiving,
+- `test/auto.test.mjs` (91 checks): de planner (Camelot, soort, sync-verschuiving,
   frasegrenzen, curves, fragment, kiezer) en de automaat op een echte engine met
   nep-Web Audio: van stilte, klaarzetten, langer/nu/ok, een hele blend (sync, op
   de maat, nooit twee bassen, netjes terug), de volgende op de andere track,
   overslaan naar de kiezer, overnemen, dode lucht, en een hele beatloze overgang
-  (nooit een gat).
+  (nooit een gat). Sinds A7 op een nep-Web Audio met een TIJDLIJN per
+  AudioParam (`test/nep-tijdlijn.mjs`, net zo streng als engine.test): de fader
+  gaat open als helling (0 van ~2450 stukjes van 5 ms staan stil; met de oude
+  trapjes 2023), read() geeft de tussenstand, Clay grijpt midden in een
+  glijbeurt in zonder sprong, en terugspelen op een tweede engine legt dezelfde
+  hellingen. `engine.test` test `Deck.glide` zelf (opnieuw richten zonder
+  plateau, set breekt af, filter in octaven, sends kwadratisch, de bus).
 - `tools/headless/auto.mjs` in headless Chromium (Linux): een set van drie
   demotracks via de rij en de knoppen: blend (gesynct op 124), dan filter-uit naar
   een track met een onzeker grid; langste stilte op de master **0 ms**; geen
@@ -111,9 +176,11 @@ seek naar een beginpunt midden in een uur), met de APC, op de M1. Niet beluister
 
 ## 7. Bekende grenzen (fase 1)
 
-- Fades gaan in stapjes van 0,01 over de bus (~0,45 dB, elke tik van 40 ms),
-  niet als helling op de audioklok: goed genoeg om te horen, niet mooi genoeg om
-  te bewaren. Beter: een geplande helling per fader (klein, ~0,5 sessie).
+- Fades zijn sinds 2 okt (A7) glijbeurten: rechte stukken van ~0,4 s op de
+  audioklok (§2b), geen trapjes meer. Nog niet: de baswissel is een directe
+  stand (setTarget, ~30 ms) op de tik waarop p ≥ 0,5, dus tot één tik (40 ms)
+  na het midden, niet sample-exact op de tel. Niet beluisterd: alleen gemeten
+  in de nep-Web Audio en headless.
 - Geen frase-, intro/outro- of energieanalyse: frasegrenzen tellen vanaf het
   maat-anker, niet vanaf de muziek. Hotcues als mix-in/mix-out: nog niet.
 - Na een blend blijft de nieuwe op het tempo van de oude (geen "tempo terug").
@@ -137,8 +204,8 @@ seek naar een beginpunt midden in een uur), met de APC, op de M1. Niet beluister
 
 ## 9. Open vragen (VRAGEN blok L)
 
-- **AU1 🎛** Welke APC-knoppen voor ok/overslaan/langer/nu? Advies: een eigen
-  mapje "auto" als fragment (zoals "vorm"), één rij met de vier in kleur.
+- ~~**AU1 🎛** Welke APC-knoppen voor ok/overslaan/langer/nu?~~ Gebouwd 2 okt als
+  zesde grid-modus (geen fragment: de auto-DJ hangt niet aan een vlag), zie §4.
 - **AU2 👂** Klinkt overvloeien in 24 s goed bij jouw muziek, of langer (32–48 s)?
 - **AU3 👂** Moet "nu" bij beatloos echt meteen, of 4 s later zodat je het ziet aankomen?
 - **AU4 💬** Mag de automaat tracks laden op een lege track als jij daar straks iets wilt? (Nu: eerst zijn eigen twee, dan een lege.)

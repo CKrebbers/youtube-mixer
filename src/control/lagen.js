@@ -13,11 +13,17 @@ import { Emitter } from '../lib/emitter.js';
  *           oplichtende knop wisselt; twee standen, niet meer. Detail View
  *           opent een derde: de gekozen VORMLAAG (Vormmachines, alleen met
  *           ?vormen=1; zonder dat staan er geen regels in en doet hij niets).
- *   grid    het 5×8-grid: hotcues · loops · sampler · video · klank, gekozen
- *           met de scene-knoppen ernaast (klank: Shift + scene 5, want scene 5
- *           zelf is "loop weg"), of rondlopend met ▲ ▼. Elk een eigen kleur.
+ *   grid    het 5×8-grid: hotcues · loops · sampler · video · klank · auto,
+ *           gekozen met de scene-knoppen ernaast (klank: Shift + scene 5, want
+ *           scene 5 zelf is "loop weg"; auto: Shift + scene 4), of rondlopend
+ *           met ▲ ▼. Elk een eigen kleur.
  *           Klank (Clay 25 sep, "Voorstel A"): per kolom kill hoog · mid ·
  *           laag (vasthouden; met shift vastzetten) · rem · op de maat starten.
+ *           Auto (2 okt, VRAGEN AU1): de auto-DJ bijsturen zonder muis, op de
+ *           bovenste rij: ok · overslaan · langer · nu, en rechts aan/uit.
+ *           Geen vlag zoals de vormen: de auto-DJ is er altijd, dus de regels
+ *           staan in de standaardmapping (en komen zo ook op apc.html, het
+ *           scherm en bij een eigen mapping als verschil vanzelf binnen).
  *
  *   edit    de grid-modus (stap D, docs/BEATGRID.md): Shift + Metronome zet
  *           hem aan of uit. Aan = scene-knoppen, nudge, cue level en Lock
@@ -51,8 +57,8 @@ export const GROEPEN = {
   },
   grid: {
     naam: 'grid', standaard: 'hotcues',
-    knoppen: { hotcues: ['hotcues'], loops: ['loops'], sampler: ['sampler'], video: ['video'], klank: ['klank'] },
-    volgorde: ['hotcues', 'loops', 'sampler', 'video', 'klank'],
+    knoppen: { hotcues: ['hotcues'], loops: ['loops'], sampler: ['sampler'], video: ['video'], klank: ['klank'], auto: ['auto'] },
+    volgorde: ['hotcues', 'loops', 'sampler', 'video', 'klank', 'auto'],
   },
 };
 
@@ -70,6 +76,7 @@ export const LAAGNAAM = {
   'edit.aan': 'grid-modus (beatgrid bewerken)', 'edit.uit': 'uit',
   'grid.hotcues': 'hotcues', 'grid.loops': 'loops', 'grid.sampler': 'sampler', 'grid.video': 'video',
   'grid.klank': 'klank (kill · rem · op de maat)',
+  'grid.auto': 'auto-dj (ok · overslaan · langer · nu · aan/uit)',
 };
 
 export class Lagen extends Emitter {

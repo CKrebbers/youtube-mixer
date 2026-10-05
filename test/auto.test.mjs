@@ -4,11 +4,12 @@
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
 
-// ---- nep-Web Audio (zoals engine.test, zonder curves-controle) --------------------
+// ---- nep-Web Audio met een tijdlijn per AudioParam (test/nep-tijdlijn.mjs) ------------
+// Zo streng als engine.test (overlappende curves gooien, CURVE_BREUK telt), en
+// hij rekent uit wat een parameter op elk moment doet: trapje of helling.
 let NOW = 0;
-const param = (v = 0) => ({ value: v, setTargetAtTime(x) { this.value = x; }, setValueAtTime(x) { this.value = x; },
-  linearRampToValueAtTime(x) { this.value = x; }, exponentialRampToValueAtTime(x) { this.value = x; },
-  setValueCurveAtTime(c) { this.value = c[c.length - 1]; }, cancelScheduledValues() {}, cancelAndHoldAtTime() {} });
+const { maakTijdlijn } = await import('./nep-tijdlijn.mjs');
+const { param, stats: TL } = maakTijdlijn(() => NOW);
 const node = (type) => ({
   type, gain: param(1), frequency: param(1000), Q: param(1), detune: param(0), threshold: param(0), knee: param(0),
   ratio: param(1), attack: param(0), release: param(0), fftSize: 1024, smoothingTimeConstant: 0, delayTime: param(0),
@@ -124,6 +125,7 @@ const { bindEngine, bindAuto, invoke, read, bijInvoke } = await import('../src/c
 const { renderDemoTrack } = await import('../src/analysis/demo-track.js');
 const { Automaat } = await import('../src/auto/automaat.js');
 const { ToonKaart } = await import('../src/engine/toonsoort.js');
+const { faderGain } = await import('../src/engine/audio-graph.js');
 const eng = new Engine();
 bindEngine(eng);
 
@@ -185,14 +187,30 @@ ok(`nu: de eerstvolgende 4-maatsgrens na ~1,5 s (${nuStart.toFixed(2)} bij posit
 invoke('auto.ok', true);
 ok('ok: bevestigd (read 1)', read('auto.ok') === 1);
 
-// De overgang laten lopen, en onderweg de bassen bekijken.
+// De overgang laten lopen, en onderweg de bassen bekijken. En de fader van
+// de nieuwe zoals de AudioParam hem doet (de tijdlijn): elke 5 ms, alleen
+// wat na de tik vastligt (de volgende tik verandert pas vanaf zijn eigen nu).
 vanMij.length = 0;
 let tweeBassen = false, gestart = false;
+const faderB = eng.deck('B').chain.fader.gain;
+const nB0 = { ...faderB.n };
+const opening = [];        // fader van track 2 in dB-knopstand (0..1), elke 5 ms, terwijl hij opengaat
+let tussen = null;          // read() tussen twee tikken in
+const knop = (g) => 1 + 20 * Math.log10(Math.max(g, 1e-9)) / 45;     // faderGain omgekeerd (boven 0,001)
 const klaar = await loop(60, 0.05, () => {
   const a = eng.deck('A'), b = eng.deck('B');
   if (auto.fase === 'bezig' && b.playing && !b.wacht) {
     gestart = true;
     if (a.ui.low > 0.01 && b.ui.low > 0.01 && a.ui.fader > 0.05 && b.ui.fader > 0.05) tweeBassen = true;
+    const m = auto.volgende?.moment;
+    const q = m ? (a.position - m.start) / m.lengte : -1;
+    if (q > 0.05 && q < 0.45) for (let i = 0; i < 10; i++) opening.push(knop(faderB.waarde(NOW + i * 0.005)));
+    if (!tussen && q > 0.2) {
+      const n0 = vanMij.length, r1 = read('track.2.fader');
+      NOW += 0.02;
+      tussen = { r1, r2: read('track.2.fader'), g: faderB.value, bus: vanMij.length - n0 };
+      NOW -= 0.02;
+    }
   }
   return auto.hoofd === 'B' && auto.fase !== 'bezig';
 });
@@ -203,6 +221,28 @@ ok('track 1 staat stil, fader dicht, EQ terug op 0 dB', !A.playing && A.ui.fader
 ok('track 2 vol open, bas terug', eng.deck('B').ui.fader === 1 && eng.deck('B').ui.low === 0.5);
 ok('alles ging over de bus (en dus het handelingenlog)', vanMij.includes('track.2.play.quant') && vanMij.includes('track.2.sync') && vanMij.some((x) => x === 'track.1.fader'));
 ok(`niet elke tik een regel: ${vanMij.length} bus-acties voor een hele blend`, vanMij.length < 400);
+
+// Vloeiend (AUTO-DJ.md §2b): de curve als glijbeurten, een helling op de audioklok.
+{
+  const stap = opening.slice(1).map((x, i) => x - opening[i]);
+  let stil = 0, gemeten = 0;
+  for (let i = 10; i < stap.length - 10; i++) {
+    const gem = stap.slice(i - 10, i + 10).reduce((s, x) => s + x, 0) / 20;
+    if (!(gem > 0)) continue;
+    gemeten++;
+    if (stap[i] < 0.25 * gem) stil++;          // een trapje: na de stap staat hij stil tot de volgende tik
+  }
+  ok(`de fader van de nieuwe gaat open als helling, geen trapje: ${stil} van ${gemeten} stukjes van 5 ms staan (bijna) stil`,
+    gemeten > 200 && stil === 0);
+  const nLin = faderB.n.lin - nB0.lin, nDoel = faderB.n.target - nB0.target;
+  const glij = vanMij.filter((x) => x === 'track.2.fader.glide').length;
+  ok(`op de AudioParam: ${nLin} lineaire hellingen, ${nDoel} keer setTarget (alleen de standen aan het eind), via ${glij} keer track.2.fader.glide`,
+    nLin >= 8 * glij && glij >= 10 && nDoel <= 3 && faderB.n.curve === 0);
+  ok(`read() geeft de tussenstand op de audioklok: ${tussen?.r1.toFixed(4)} → ${tussen?.r2.toFixed(4)} in 20 ms, zonder bus-actie`,
+    tussen && tussen.bus === 0 && tussen.r1 > 0 && tussen.r2 > tussen.r1 && tussen.r2 < 1);
+  ok(`... en dat is wat de AudioParam doet (${(20 * Math.log10(faderGain(tussen.r2))).toFixed(2)} dB / ${(20 * Math.log10(tussen.g)).toFixed(2)} dB)`,
+    tussen.r2 > tussen.r1 && Math.abs(20 * Math.log10(faderGain(tussen.r2)) - 20 * Math.log10(tussen.g)) < 0.1);
+}
 
 // De volgende (drie, C op Em = 2 stappen: geen blend) komt klaar op track 1.
 await loop(1, 0.05, () => auto.fase === 'klaar');
@@ -246,7 +286,36 @@ console.log('\nautomaat: beatloos');
     _bpm: 110, _seed: 5 + i }));
   const au = new Automaat({ engine: eng, invoke, bijInvoke, laad, haalLibrary: async () => vaag, haalPlan: async () => null,
     welkNummer: (id) => opDeck[id] ?? null, rnd: () => 0, tik: 1e7 });
-  const loop2 = async (sec, stop = () => false) => { for (let t = 0; t < sec; t += 0.05) { NOW += 0.05; au.tik(); await wacht(); if (stop()) return true; } return false; };
+  // Meeschrijven zoals het handelingenlog (Handelingenlog.neem: [t op 1 µs, action, waarde]),
+  // en wat de AudioParams doen (elke 10 ms, wat na de tik vastligt), om het straks terug te spelen.
+  const L0 = NOW, regels = [], origineel = new Map();
+  const beginMixer = {};
+  for (let nr = 1; nr <= 8; nr++) for (const k of ['fader', 'filter', 'send.a', 'send.b', 'low', 'mid', 'high', 'trim']) beginMixer[`track.${nr}.${k}`] = read(`track.${nr}.${k}`);
+  for (let nr = 1; nr <= 8; nr++) beginMixer[`track.${nr}.xfade.${eng.kant[['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'][nr - 1]].toLowerCase()}`] = true;
+  const opMicro = (t) => Math.round(t * 1e6) / 1e6;
+  const losLog = bijInvoke((id, v) => regels.push([opMicro(NOW - L0), id, v === undefined ? null : v]));
+  const params = (e) => ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].flatMap((id) => {
+    const d = e.deck(id);
+    return [d.chain.fader.gain, d.chain.lpf.frequency, d.chain.hpf.frequency, d.sendB.gain];
+  });
+  const hellingen = (e) => params(e).reduce((s, p) => s + p.n.lin, 0);
+  const lin0 = hellingen(eng);
+  const meet = (e, sleutel) => {
+    const uit = [];
+    for (const id of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
+      const d = e.deck(id);
+      uit.push(d.chain.fader.gain.waarde(sleutel), d.chain.lpf.frequency.waarde(sleutel), d.chain.hpf.frequency.waarde(sleutel), d.sendB.gain.waarde(sleutel));
+    }
+    return uit;
+  };
+  const loop2 = async (sec, stop = () => false) => {
+    for (let t = 0; t < sec; t += 0.05) {
+      NOW += 0.05; au.tik(); await wacht();
+      for (let j = 0; j < 5; j++) origineel.set(Math.round((NOW - L0) * 100) + j, meet(eng, NOW + j * 0.01));
+      if (stop()) return true;
+    }
+    return false;
+  };
   await au.zetAan();
   await loop2(1, () => au.fase === 'klaar');
   const hoofd = au.hoofd, vol = au.volgende;
@@ -266,6 +335,98 @@ console.log('\nautomaat: beatloos');
   ok('de nieuwe begint meteen onder de oude (geen start op de maat), en neemt het over', klaar2);
   ok(`nooit een gat: samen minstens 0,5 (laagst ${laagst.toFixed(2)})`, !gat);
   ok('de oude sloot met een lowpass en galm, en staat nu weer neutraal', eng.deck(hoofd).ui.filter === 0.5 && !eng.deck(hoofd).playing);
+  au.vernietig();
+  losLog();
+
+  // Terugspelen (het echte terugspelen.js) op een tweede engine met een eigen
+  // bus: dezelfde regels op T0 + t, elke 10 ms gekeken. Faders, filters en
+  // sends moeten hetzelfde doen als toen; laden en transport gaan buiten deze
+  // proef om (lege tracks), want die zijn niet wat hier verandert.
+  const glijRegels = regels.filter((r) => /\.glide$/.test(r[1]));
+  ok(`in het log: ${glijRegels.length} glijregels (fader, filter, galm) tussen ${regels.length} regels`,
+    glijRegels.some((r) => /fader\.glide/.test(r[1])) && glijRegels.some((r) => /filter\.glide/.test(r[1])) && glijRegels.some((r) => /send\.b\.glide/.test(r[1])));
+  const A2 = await import('../src/control/actions.js?tweede');
+  const T = await import('../src/control/terugspelen.js');
+  const eng2 = new Engine();
+  A2.bindEngine(eng2);
+  ok('een glijdende knop staat niet in de beginstand van het log (geen read)', A2.read('track.1.fader.glide') === null && A2.has('track.1.fader.glide'));
+  // De beginstand van toen (alleen de mixer): zoals terugspelen hem via de bus zet.
+  for (const [a, v] of Object.entries(beginMixer)) A2.invoke(a, v);
+  NOW += 1;
+  const timers = new Set();
+  const sp = new T.Terugspeler({ klok: () => NOW, invoke: A2.invoke, doe: { stand: async () => ({ zonder: [] }) },
+    elke: (fn) => { const h = { fn }; timers.add(h); return h; }, stopElke: (h) => timers.delete(h) });
+  let klaarT = null;
+  sp.onKlaar = (x) => { klaarT = x; };
+  const linOrigineel = hellingen(eng) - lin0, lin2 = hellingen(eng2);
+  await sp.start({ regels, duur: Math.max(...regels.map((r) => r[0])) + 0.5 });
+  const T0 = NOW;
+  let verschil = 0, vergeleken = 0;
+  while (!klaarT && NOW < T0 + 300) {
+    NOW = T0 + Math.round((NOW - T0 + 0.01) * 100) / 100;
+    for (const h of [...timers]) h.fn();
+    const k = Math.round((NOW - T0) * 100), o = origineel.get(k), o1 = origineel.get(k - 1) || o;
+    if (!o) continue;
+    const n = meet(eng2, NOW);
+    for (let i = 0; i < n.length; i++) {
+      // In dB (gain, vloer −60 dB) en octaven (Hz): wat je hoort, niet de ruwe getallen.
+      // Terugspelen kijkt elke 10 ms, dus een regel mag één tik later komen dan toen:
+      // de stand moet dan tussen die van toen en die van een tik eerder liggen.
+      const maat = (a, b) => (i % 4 === 0 || i % 4 === 3
+        ? Math.abs(20 * Math.log10(Math.max(b, 1e-3) / Math.max(a, 1e-3))) : Math.abs(Math.log2(b / a)));
+      const lo = Math.min(o[i], o1[i]), hi = Math.max(o[i], o1[i]);
+      const d = n[i] >= lo && n[i] <= hi ? 0 : Math.min(maat(lo, n[i]), maat(hi, n[i]));
+      verschil = Math.max(verschil, d);
+    }
+    vergeleken++;
+  }
+  const linTerug = hellingen(eng2) - lin2;
+  ok(`terugspelen (${klaarT?.gedaan} regels, ${klaarT?.laat} te laat) legt dezelfde hellingen op de AudioParams (${linTerug} / ${linOrigineel})`,
+    klaarT?.reden === 'klaar' && klaarT.laat === 0 && linOrigineel > 100 && linTerug === linOrigineel);
+  ok(`terugspelen klinkt hetzelfde: fader, filters en galm van alle tracks over ${vergeleken} momenten hooguit ${verschil.toFixed(3)} dB (of octaaf) ernaast, met hooguit één tik van 10 ms later`,
+    linTerug > 0 && vergeleken > 1000 && verschil < 0.05);
+  const eind = (e) => ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((id) => { const u = e.deck(id).ui; return [u.fader, u.filter, u.sendA, u.sendB, u.low].join(); }).join('|');
+  ok('... en dezelfde eindstanden (fader, filter, sends, bas op elke track)', glijRegels.length > 0 && eind(eng2) === eind(eng));
+}
+
+// ---- 3b. ingrijpen midden in een helling ---------------------------------------
+console.log('\nautomaat: ingrijpen midden in een helling');
+{
+  const ALLE = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  for (const id of ALLE) { const d = eng.deck(id); if (d.playing) d.togglePlay(); }
+  const vaag = ['nevel', 'rijp'].map((id, i) => ({ id, titel: id, audio: `media/${id}/audio.wav`, duur: 48 * 4 * 60 / 110, loudness_i: -18,
+    grid: { stukken: [{ van: 0, bpm: 110, anker: 0, zekerheid: 0.1 }] }, toon: { stukken: [{ van: 0, toonsoort: i ? 'G' : 'Dm', zekerheid: 0.05 }] },
+    _bpm: 110, _seed: 7 + i }));
+  const au = new Automaat({ engine: eng, invoke, bijInvoke, laad, haalLibrary: async () => vaag, haalPlan: async () => null,
+    welkNummer: (id) => opDeck[id] ?? null, rnd: () => 0, tik: 1e7 });
+  const voortgang = () => { const v = au.volgende, d = au.hoofd && eng.deck(au.hoofd); return v?.moment && d ? (d.position - v.moment.start) / v.moment.lengte : -1; };
+  const loop4 = async (sec, stop = () => false) => { for (let t = 0; t < sec; t += 0.05) { NOW += 0.05; au.tik(); await wacht(); if (stop()) return true; } return false; };
+  await au.zetAan();
+  await loop4(120, () => au.fase === 'bezig' && voortgang() > 0.3);
+  const uitId = au.hoofd, inId = au.volgende.deckId, n = ALLE.indexOf(inId) + 1;
+  const fp = eng.deck(inId).chain.fader.gain, uitFilter = eng.deck(uitId).chain.lpf.frequency;
+  const voor = fp.waarde(NOW), gepland = fp.waarde(NOW + 0.4), knopVoor = read(`track.${n}.fader`);
+  // Alles hieronder gaat over een LOPENDE glijbeurt: zonder is er niets af te breken.
+  const glijdt = au.fase === 'bezig' && gepland > voor * 1.001;
+  ok(`midden in de overgang (${(voortgang() * 100).toFixed(0)}%): de nieuwe glijdt open (${knopVoor.toFixed(3)} → ${(1 + 20 * Math.log10(gepland) / 45).toFixed(3)} over 0,4 s)`,
+    glijdt);
+  const naClay = [];
+  const los = bijInvoke((id) => naClay.push(id));
+  invoke(`track.${n}.fader`, 0.9);                       // Clay pakt de fader
+  const doel = faderGain(0.9);
+  ok('Clay pakt de fader van de nieuwe: de overgang is van hem', glijdt && au.fase === 'overgenomen');
+  ok(`geen sprong: het geluid gaat verder waar het NU is (${(20 * Math.log10(voor)).toFixed(3)} → ${(20 * Math.log10(fp.waarde(NOW))).toFixed(3)} dB)`,
+    glijdt && Math.abs(fp.waarde(NOW) - voor) <= 1e-9 * Math.max(1, voor));
+  const vlak = fp.waarde(NOW + 0.002);
+  ok('... en beweegt van daar naar Clay\'s stand (geen klik: na 2 ms nog onderweg)', glijdt && vlak > voor && vlak < doel && vlak - voor < 0.5 * (doel - voor));
+  ok(`de rest van de glijbeurt is weg: na 0,4 s staat hij op Clay's stand (${(20 * Math.log10(fp.waarde(NOW + 0.4))).toFixed(2)} dB, de glijbeurt wilde ${(20 * Math.log10(gepland)).toFixed(2)} dB)`,
+    glijdt && Math.abs(fp.waarde(NOW + 0.4) / doel - 1) < 1e-4 && read(`track.${n}.fader`) === 0.9);
+  await loop4(1);
+  ok(`daarna glijdt de automaat niets meer (${naClay.filter((x) => /\.glide$/.test(x)).length} glijregels na het ingrijpen)`,
+    glijdt && !naClay.some((x) => /\.glide$/.test(x)));
+  ok('wat nog glijdt op de andere track loopt hooguit één glijbeurt uit en staat dan stil',
+    glijdt && uitFilter.waarde(NOW) === uitFilter.waarde(NOW + 5) && eng.deck(uitId).ui.filter === read(`track.${ALLE.indexOf(uitId) + 1}.filter`));
+  los();
   au.vernietig();
 }
 
@@ -333,6 +494,9 @@ console.log('\nautomaat: stems overnemen');
   ok('geen stem (stem.foo, stems.vocals): niet overgenomen', proef('track.2.stem.foo', 1, false) === 'bezig'
     && proef('track.2.stems.vocals', 1, false) === 'bezig' && proef('track.2.stem.vocals.kill.x', 1, false) === 'bezig');
 }
+
+ok(`de hele proef zonder setValueCurveAtTime, zonder CURVE_BREUK en zonder NotSupportedError (${TL.CURVE_BREUK} / ${TL.OVERLAP_FOUTEN}), met ${vanMij.filter((x) => /\.glide$/.test(x)).length} glijregels`,
+  TL.CURVE_BREUK === 0 && TL.OVERLAP_FOUTEN === 0 && vanMij.some((x) => /\.glide$/.test(x)));
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

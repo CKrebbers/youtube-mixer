@@ -12,6 +12,10 @@ de mixer.
    - **Ingest-rij**: hoeveel er bezig is en wacht (`/api/ingest`).
    - **Stems** (3 okt): wat er gesplitst wordt en wacht, de laatste fout, of de
      splitter (Demucs) er is (`/api/stems`, `stemsTegel` in `src/ui/stems-weergave.js`).
+   - **Backup**: wanneer de laatste kopie van `library.db` gemaakt is, hoeveel er
+     staan en hoe groot (`/api/backups`, `src/controle/backup-tegel.js`). Rood met de
+     reden als de laatste poging mislukte. Een oude datum is geen fout: zonder
+     wijziging komt er bewust geen nieuwe kopie. Zie docs/LIBRARY.md, "Backup".
    - **Mixer**: open of niet, uit de Web Lock `varve-mixer` (`src/ui/tabblad.js`).
      Rood als er een tweede mixer-tabblad wacht.
    - **Audio** en **APC40**: uit wat de mixer zelf meldt (zie hieronder). Bij de
@@ -43,6 +47,10 @@ de mixer.
   - Bestand: `proef/sessie.json` (`VARVE_PROEF` om te verleggen). Niet via de
     witte lijst te lezen, alleen via de API. Per punt opslaan en na elkaar
     schrijven: twee tabbladen overschrijven elkaar niet.
+- **De backup-stand** (`GET /api/backups`, alleen GET, achter dezelfde Host-controle):
+  `{ laatste: { naam, tijd, bytes } | null, aantal, gekeken, fout, foutTijd, bezig }`.
+  Los opgehaald: een oudere server zonder die route geeft een grijze tegel, geen
+  "server weg". De kopieën zelf zijn via HTTP niet te lezen.
 - **Claude leest na een sessie** `proef/sessie.json` (fout + notitie = eerst repareren).
 
 ## Een punt toevoegen of veranderen
@@ -56,8 +64,12 @@ op de server passen.
 - `test/controle.test.mjs`: opslag (fouten, gelijktijdig, kapot bestand,
   archief), de speellijst, het bericht van de mixer.
 - `test/server.test.mjs`: de routes, de witte lijst, 415 zonder JSON.
+- `test/backup.test.mjs`: de backup-tegel (vandaag, gisteren, langer geleden, fout,
+  nog geen, geen server) en `/api/backups` op een echte server.
 - `tools/headless/controle.mjs`: Controlekamer en een echte mixer in twee
   tabbladen van één headless Chromium. Mixer open/dicht, een tweede mixer, de
-  knop, de demotrack in "in de mixer", afvinken en notities na herladen.
+  knop, de demotrack in "in de mixer", afvinken en notities na herladen. De check
+  op de Backup-tegel (2 okt) is er bijgezet maar nog niet gedraaid (geen Chromium
+  in de container waar hij gebouwd is).
 - NIET getest: met de echte APC (de headless mixer heeft geen MIDI), en op de
   Mac in Clay's Chrome.

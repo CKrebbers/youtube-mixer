@@ -151,23 +151,25 @@ export function killVersterking(param, naar, now, wacht = 0) {
   }
 }
 
+/**
+ * Wat de bipolaire filterknop 0..1 op de twee filters zet: [hpf-frequentie,
+ * hpf-Q, lpf-frequentie, lpf-Q]. Midden = bypass, links = LPF omlaag,
+ * rechts = HPF omhoog. Eén plek voor de draaiknop en voor het glijden
+ * (Deck.glide), zodat die twee nooit uit elkaar lopen.
+ */
+export function filterDoelen(norm) {
+  const d = (clamp(norm) - 0.5) * 2; // -1..1
+  if (d < 0) return [20, 0.7, expMap(1 + d, 250, 22050), 0.7 - d * 6];
+  return [expMap(d, 20, 9000), 0.7 + d * 6, 22050, 0.7];
+}
+
 /** Bipolaire filterknop 0..1. Midden = bypass, links = LPF omlaag, rechts = HPF omhoog. */
 export function setBipolarFilter(hpf, lpf, norm, now) {
-  const t = clamp(norm);
-  const d = (t - 0.5) * 2; // -1..1
-  if (d < 0) {
-    const depth = -d;
-    lpf.frequency.setTargetAtTime(expMap(1 - depth, 250, 22050), now, 0.01);
-    lpf.Q.setTargetAtTime(0.7 + depth * 6, now, 0.01);
-    hpf.frequency.setTargetAtTime(20, now, 0.01);
-    hpf.Q.setTargetAtTime(0.7, now, 0.01);
-  } else {
-    const depth = d;
-    hpf.frequency.setTargetAtTime(expMap(depth, 20, 9000), now, 0.01);
-    hpf.Q.setTargetAtTime(0.7 + depth * 6, now, 0.01);
-    lpf.frequency.setTargetAtTime(22050, now, 0.01);
-    lpf.Q.setTargetAtTime(0.7, now, 0.01);
-  }
+  const [hf, hq, lf, lq] = filterDoelen(norm);
+  lpf.frequency.setTargetAtTime(lf, now, 0.01);
+  lpf.Q.setTargetAtTime(lq, now, 0.01);
+  hpf.frequency.setTargetAtTime(hf, now, 0.01);
+  hpf.Q.setTargetAtTime(hq, now, 0.01);
 }
 
 /**

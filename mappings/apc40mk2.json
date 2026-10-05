@@ -1004,6 +1004,12 @@
       "label": "device lock (quantize; in de grid-modus: slot)"
     },
     {
+      "in": "note:0:80",
+      "action": "video.black",
+      "mode": "trigger",
+      "label": "master (beeld zwart)"
+    },
+    {
       "in": "note:0:81",
       "action": "track.{focus}.brake",
       "mode": "trigger",
@@ -1167,6 +1173,66 @@
       "led": {
         "lees": "layer.grid.klank"
       }
+    },
+    {
+      "in": "note:0:85",
+      "action": "layer.grid.auto",
+      "mode": "trigger",
+      "label": "scene launch 4 + shift (modus auto)",
+      "shift": true
+    },
+    {
+      "in": "note:0:85",
+      "action": "layer.grid.video",
+      "mode": "trigger",
+      "label": "scene launch 4 (auto: lampje = auto open)",
+      "laag": "grid.auto",
+      "led": {
+        "lees": "layer.grid.auto"
+      }
+    },
+    {
+      "in": "note:0:85",
+      "action": "track.{focus}.grid.halfbeat",
+      "mode": "trigger",
+      "label": "scene launch 4 + shift (grid-modus)",
+      "shift": true,
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:32",
+      "action": "auto.ok",
+      "mode": "trigger",
+      "label": "pad 1/1",
+      "laag": "grid.auto"
+    },
+    {
+      "in": "note:0:33",
+      "action": "auto.skip",
+      "mode": "trigger",
+      "label": "pad 2/1",
+      "laag": "grid.auto"
+    },
+    {
+      "in": "note:0:34",
+      "action": "auto.langer",
+      "mode": "trigger",
+      "label": "pad 3/1",
+      "laag": "grid.auto"
+    },
+    {
+      "in": "note:0:35",
+      "action": "auto.nu",
+      "mode": "trigger",
+      "label": "pad 4/1",
+      "laag": "grid.auto"
+    },
+    {
+      "in": "note:0:39",
+      "action": "auto.aan",
+      "mode": "trigger",
+      "label": "pad 8/1",
+      "laag": "grid.auto"
     },
     {
       "in": "note:0:32",
@@ -2160,6 +2226,34 @@
       "laag": "grid.video"
     },
     {
+      "in": "note:0:38",
+      "action": "video.flash",
+      "mode": "trigger",
+      "label": "pad 7/1",
+      "laag": "grid.video"
+    },
+    {
+      "in": "note:0:39",
+      "action": "video.black.hold",
+      "mode": "trigger",
+      "label": "pad 8/1",
+      "laag": "grid.video"
+    },
+    {
+      "in": "note:0:30",
+      "action": "video.black",
+      "mode": "trigger",
+      "label": "pad 7/2",
+      "laag": "grid.video"
+    },
+    {
+      "in": "note:0:31",
+      "action": "video.freeze",
+      "mode": "trigger",
+      "label": "pad 8/2",
+      "laag": "grid.video"
+    },
+    {
       "in": "note:0:32",
       "action": "track.1.kill.high.hold",
       "mode": "trigger",
@@ -2634,6 +2728,38 @@
   ],
   "eerder": [
     {
+      "vingerafdruk": "87508318-382",
+      "tot": "2026-10-02",
+      "rules": [],
+      "removed": [
+        "note:0:80",
+        "note:0:38@grid.video",
+        "note:0:39@grid.video",
+        "note:0:30@grid.video",
+        "note:0:31@grid.video"
+      ]
+    },
+    {
+      "vingerafdruk": "e2bef131-374",
+      "tot": "2026-10-02",
+      "rules": [],
+      "removed": [
+        "note:0:80",
+        "note:0:85#shift",
+        "note:0:85@grid.auto",
+        "note:0:85#shift@edit.aan",
+        "note:0:32@grid.auto",
+        "note:0:33@grid.auto",
+        "note:0:34@grid.auto",
+        "note:0:35@grid.auto",
+        "note:0:39@grid.auto",
+        "note:0:38@grid.video",
+        "note:0:39@grid.video",
+        "note:0:30@grid.video",
+        "note:0:31@grid.video"
+      ]
+    },
+    {
       "vingerafdruk": "35823dda-291",
       "tot": "2026-09-25",
       "rules": [],
@@ -2654,9 +2780,22 @@
         "note:0:88",
         "note:0:89",
         "note:0:63",
+        "note:0:80",
         "note:0:81",
         "note:0:86#shift",
         "note:0:86@grid.klank",
+        "note:0:85#shift",
+        "note:0:85@grid.auto",
+        "note:0:85#shift@edit.aan",
+        "note:0:32@grid.auto",
+        "note:0:33@grid.auto",
+        "note:0:34@grid.auto",
+        "note:0:35@grid.auto",
+        "note:0:39@grid.auto",
+        "note:0:38@grid.video",
+        "note:0:39@grid.video",
+        "note:0:30@grid.video",
+        "note:0:31@grid.video",
         "note:0:32@grid.klank",
         "note:0:32#shift@grid.klank",
         "note:0:24@grid.klank",

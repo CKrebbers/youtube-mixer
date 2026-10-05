@@ -3,6 +3,7 @@ import { metaOf } from '../control/actions.js';
 import { GROEPEN, LAAGNAAM } from '../control/lagen.js';
 import apc from '../control/devices/apc40mk2.js';
 import { esc } from './dom.js';
+import { beschrijf } from './apc-beschrijf.js';
 
 /**
  * Het balkje dat zegt wat de knoppen NU doen. De APC heeft geen scherm; bij
@@ -41,6 +42,21 @@ export function gridRijen(regels, id) {
     uit.push({ rij, gewoon: `track.1.${gewoon}`, shift: metShift ? `track.1.${metShift}` : null });
   }
   return uit;
+}
+
+/**
+ * Een grid-mapje dat op ÉÉN rij staat en per pad iets anders doet (auto:
+ * ok · overslaan · langer · nu · aan/uit): per pad zijn kolom en action, van
+ * links naar rechts. Leeg als het mapje meer rijen gebruikt (sampler, video)
+ * of per rij al uitgelegd wordt (gridRijen).
+ */
+export function gridPads(regels, id) {
+  const eigen = regels.filter((r) => r.laag === id && !r.shift);
+  const plek = new Map();
+  for (let rij = 1; rij <= 5; rij++) for (let kol = 1; kol <= 8; kol++) plek.set(`note:0:${apc.gridNote(kol, rij)}`, { rij, kol });
+  const pads = eigen.map((r) => ({ ...plek.get(r.in), action: r.action })).filter((p) => p.rij);
+  if (!pads.length || new Set(pads.map((p) => p.rij)).size !== 1 || gridRijen(regels, id).length) return [];
+  return pads.sort((a, b) => a.kol - b.kol).map(({ kol, action }) => ({ kolom: kol, action }));
 }
 
 export function opzetMapjeBalk({ lagen, mapping, vars }) {
@@ -103,7 +119,10 @@ export function opzetMapjeBalk({ lagen, mapping, vars }) {
       // Per rij, voor elke kolom (= track) gelijk. Rij 1 is de bovenste.
       const label = (a) => esc(kort(metaOf(a)?.label ?? a));
       knoppen = gridRijen([...mapping.rules.values()], id)
-        .map((x) => `<span><b>${x.rij}</b> ${label(x.gewoon)}${x.shift ? ` <i>· shift: ${label(x.shift)}</i>` : ''}</span>`).join('');
+        .map((x) => `<span><b>${x.rij}</b> ${label(x.gewoon)}${x.shift ? ` <i>· shift: ${label(x.shift)}</i>` : ''}</span>`).join('')
+        // Eén rij met per pad iets anders (auto): pad voor pad, op zijn kolom.
+        || gridPads([...mapping.rules.values()], id)
+          .map((x) => `<span><b>${x.kolom}</b> ${esc(beschrijf(x.action).kort)}</span>`).join('');
     } else if (groep === 'top' && regels[0]) {
       knoppen = `<span>${esc(kort(metaOf(resolveTarget(regels[0].action, vars()))?.label ?? ''))} — per track, knop 1–8</span>`;
     }

@@ -17,7 +17,7 @@ import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/b
 import { ToonKaart, WIJZER } from '../engine/toonsoort.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
-import { PITCH_BEREIKEN, SPRONG_TELLEN } from '../engine/deck.js';
+import { PITCH_BEREIKEN, SPRONG_TELLEN, GLIJ } from '../engine/deck.js';
 import { hoorbaar as hoorbaarVan, uitgangsVertraging } from '../engine/hoorbaar.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
@@ -449,6 +449,17 @@ export function bindEngine(engine) {
         { label: `Track ${nr} send ${bus} (${bus === 'A' ? 'echo' : 'galm'})`, read: () => d.ui[`send${bus}`] });
     }
 
+    // Glijdend naar een stand (Deck.glide): in GLIJ s als helling op de
+    // audioklok, voor de auto-DJ (docs/AUTO-DJ.md §2b). Zelfde 0..1 als de
+    // knop zelf (regel 2), en dus ook gewoon in het handelingenlog en terug
+    // te spelen. Bewust GEEN read: de stand lees je van de knop zelf
+    // (track.N.fader), en zonder read komt een glijdende kopie niet in de
+    // beginstand van het log (die zou bij terugspelen nog eens glijden).
+    for (const [p, naam] of [['fader', 'fader'], ['filter', 'filter'], ['sendA', 'send.a'], ['sendB', 'send.b']]) {
+      define(`${n}.${naam}.glide`, 'value', (v) => d.glide(p, v),
+        { label: `Track ${nr} ${naam} glijdend (${String(GLIJ).replace('.', ',')} s, auto-DJ)` });
+    }
+
     // ---- effecten ---------------------------------------------------------
     // De knoppen wijzen naar een PLEK, niet naar een parameter. Wissel je van
     // effect, dan doet plek 1 iets anders en hoef je niets opnieuw te koppelen.
@@ -672,6 +683,22 @@ export function bindVideo(mixer) {
     { label: 'Video: puls op de tel', read: () => mixer.puls });
   define('video.pulse.target', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
     { label: 'Video: wat er pulst', read: () => PULS_DOELEN.indexOf(mixer.pulsDoel) / (PULS_DOELEN.length - 1) });
+
+  // De noodknoppen van de beamer (src/video/eindbeeld.js), op het EINDbeeld:
+  // de zaal, het losse venster en de video-opname zien hetzelfde.
+  // Zwart als schakelaar dooft in 250 ms; de drukvariant is direct en laat
+  // bij loslaten de schakelaar beslissen. read = de stand van de SCHAKELAAR
+  // (niet hoe ver de fade is), zodat een LED meteen zegt wat je deed.
+  define('video.black', 'trigger', (on) => { if (on) mixer.zetZwart(!mixer.eindbeeld.zwartAan); },
+    { label: 'Video: zwart (aan/uit)', read: () => (mixer.eindbeeld.zwartAan ? 1 : 0) });
+  define('video.black.hold', 'trigger', (on) => mixer.zetZwartVast(!!on),
+    { label: 'Video: zwart zolang je drukt', read: () => (mixer.eindbeeld.zwartVast ? 1 : 0) });
+  define('video.freeze', 'trigger', (on) => { if (on) mixer.zetBevroren(!mixer.eindbeeld.bevroren); },
+    { label: 'Video: beeld bevriezen (aan/uit)', read: () => (mixer.eindbeeld.bevroren ? 1 : 0) });
+  define('video.master', 'value', (v) => mixer.zetMaster(v),
+    { label: 'Video: master (helderheid van het eindbeeld)', read: () => mixer.eindbeeld.master });
+  define('video.flash', 'trigger', (on) => { if (on) mixer.flits(); },
+    { label: 'Video: witte flits', read: () => (mixer.flitsNu() > 0 ? 1 : 0) });
 }
 
 /**

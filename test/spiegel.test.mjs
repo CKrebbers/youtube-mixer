@@ -97,6 +97,44 @@ lagen.zet('grid', 'hotcues');
     && gridRijen([...m.rules.values()], 'grid.video').length === 0);
 }
 
+// ---- modus auto: de auto-DJ (2 okt, VRAGEN AU1) ------------------------------
+ok('scene 4 met shift = modus auto, in limoen; zonder shift video',
+  lees('note:0:85', 1, true)?.action === 'layer.grid.auto' && lees('note:0:85', 1, true).modus === 'auto' && P.MODUS_KLEUR.auto === 'limoen'
+  && lees('note:0:85')?.action === 'layer.grid.video' && lees('note:0:85').actionShift === 'layer.grid.auto');
+lagen.zet('grid', 'auto');
+ok('modus auto: bovenste rij ok · overslaan · langer · nu, kolom 8 aan/uit, in de kleur van auto',
+  ['auto.ok', 'auto.skip', 'auto.langer', 'auto.nu'].every((a, i) => lees(`note:0:${32 + i}`)?.action === a && lees(`note:0:${32 + i}`).modus === 'auto')
+  && lees('note:0:39')?.action === 'auto.aan' && lees('note:0:32').kort === 'ok' && lees('note:0:33').kort === 'overslaan');
+ok('modus auto: geen shift-variant op de pads, het lampje is de action zelf',
+  lees('note:0:32').actionShift === null && lees('note:0:32').lamp === 'auto.ok');
+ok('modus auto: kolom 5–7 en de rijen eronder zijn leeg (vrij)',
+  lees('note:0:36') === null && lees('note:0:38') === null && lees(`note:0:${apc.gridNote(1, 2)}`) === null && lees(`note:0:${apc.gridNote(8, 5)}`) === null);
+ok('modus auto: scene 4 blijft video kiezen, maar zijn lampje leest "auto open" (zoals de LED)',
+  lees('note:0:85')?.action === 'layer.grid.video' && lees('note:0:85').lamp === 'layer.grid.auto' && lees('note:0:85').modus === 'auto');
+ok('modus auto: de kern blijft (fader, play, filter van de kolom)',
+  lees('cc:2:7')?.action === 'track.3.fader' && lees('note:2:50')?.action === 'track.3.play' && lees('cc:0:50')?.action === 'track.3.filter');
+lagen.zet('grid', 'hotcues');
+{
+  const { gridPads, gridRijen } = await import('../src/ui/mapje-balk.js');
+  const regels = [...m.rules.values()];
+  ok('mapje-balk auto: één rij, per pad (1 ok · 2 overslaan · 3 langer · 4 nu · 8 aan/uit)',
+    gridPads(regels, 'grid.auto').map((x) => `${x.kolom}:${x.action}`).join() === '1:auto.ok,2:auto.skip,3:auto.langer,4:auto.nu,8:auto.aan'
+    && gridRijen(regels, 'grid.auto').length === 0);
+  ok('mapje-balk: de andere modi krijgen geen per-pad-uitleg (hotcues/klank per rij, sampler/video niets, zoals eerst)',
+    ['grid.hotcues', 'grid.loops', 'grid.sampler', 'grid.video', 'grid.klank'].every((id) => gridPads(regels, id).length === 0));
+}
+// Scherm en apc.html kennen elke grid-modus: een kleur op het scherm, een knop op de kaart.
+{
+  const { GROEPEN } = await import('../src/control/lagen.js');
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  const kaart = readFileSync(new URL('../apc.html', import.meta.url), 'utf8');
+  const modi = GROEPEN.grid.volgorde;
+  const mis = modi.filter((g) => !P.MODUS_KLEUR[g] || !css.includes(`--m-${g}:`) || !css.includes(`.spg[data-modus="${g}"]{--kleur:var(--m-${g})}`)
+    || !kaart.includes(`data-modus="grid.${g}"`));
+  ok(`elke grid-modus (${modi.join(' ')}) heeft een kleur op het scherm en een knop op apc.html${mis.length ? ' — mis: ' + mis.join() : ''}`,
+    modi.includes('auto') && mis.length === 0);
+}
+
 ok('korte tekst zonder het kolomnummer', P.kortInKolom('3·cue 1') === 'cue 1' && P.kortInKolom('play') === 'play');
 ok('licht: vol, half, uit, onbekend',
   P.lichtVan(1) === 'aan' && P.lichtVan(0.5) === 'half' && P.lichtVan(0) === 'uit' && P.lichtVan(null) === null);

@@ -58,3 +58,23 @@ export function zetHellingen(param, punten, nu, duur, wacht = 0) {
   if (t0 > nu) param.setValueAtTime(van, t0);
   for (let i = 1; i < p.length; i++) param.linearRampToValueAtTime(p[i], t0 + duur * i / (p.length - 1));
 }
+
+/**
+ * Een lopende overgang laten DOORLOPEN tot `t0` en vandaar langs `punten`
+ * (zonder beginpunt; op gelijke afstanden, de laatste op `t1`). Voor een
+ * helling die steeds opnieuw gericht wordt (Deck.glide): zetHellingen houdt
+ * vast op `nu` en wacht dan tot `nu + wacht`, en dat is bij elke nieuwe
+ * richting een plateau van een paar ms. Hier loopt de oude helling door tot
+ * `t0` (dat ligt na startDrempel, dus nog niet gerenderd) en begint de
+ * nieuwe precies waar die dan is: geen sprong, geen stilstand.
+ *
+ * Ook hier alleen lineaire hellingen (geen curve, zie boven). Zonder
+ * cancelAndHoldAtTime haalt cancelScheduledValues een lopende helling weg:
+ * dan een punt op `van` (de stand op t0 zoals de aanroeper hem uitrekent).
+ */
+export function zetVervolg(param, punten, t0, t1, van) {
+  if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(t0);
+  else { param.cancelScheduledValues?.(t0); param.setValueAtTime(van, t0); }
+  const n = punten.length;
+  for (let i = 0; i < n; i++) param.linearRampToValueAtTime(punten[i], t0 + (t1 - t0) * (i + 1) / n);
+}

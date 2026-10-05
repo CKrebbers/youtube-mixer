@@ -71,14 +71,21 @@ vonden en bewust niet herstelden.
 ## Ronde 4 — open uit de controles van 25 sep (klein, bewust niet hersteld)
 - Toonsoort: hetzelfde nummer op twee tracks; na een correctie op de ene houdt de andere de oude
   kaart en post die bij zijn volgende bewerking terug (het grid heeft hetzelfde patroon).
-- Library: een lege hotcue indrukken in de tientallen ms tussen laden en terugzetten overschrijft
-  de bewaarde; een mislukte tweede laad terwijl de eerste nog op de golfvorm wacht.
+- ~~Library: een lege hotcue indrukken in de tientallen ms tussen laden en terugzetten overschrijft
+  de bewaarde~~ — gedaan 2 okt (40111ee, A9): tot het terugzetten is een gezette hotcue voorlopig;
+  een bewaarde op die plek wint en het deck springt erheen als de druk vers is (≤ 1 s,
+  `HOTCUE_VERS`), een lege plek houdt de jouwe. Open: een mislukte tweede laad terwijl de eerste
+  nog op de golfvorm wacht.
 - Mapping: code van vóór 25 sep leest een verschil als volledige mapping (bescherming: eigen regels
   in een apart veld, `rules: []` houden); een oud exportbestand importeren markeert nieuwe
   standaardregels als weggehaald.
-- Transport en klank: tussen stilstand en de pauze-timer telt een track nog als remmend; de
-  terugval van `syncMaster` kan een remmende track zijn; gate zonder maat (5 ms) en de declick van
-  de BufferBron (4 ms) staan nog op nu (zie de hellingen-regel in CLAUDE.md).
+- ~~Transport en klank: tussen stilstand en de pauze-timer telt een track nog als remmend; de
+  terugval van `syncMaster` kan een remmende track zijn; gate zonder maat (5 ms) staat nog op
+  nu~~ — gedaan 2 okt (40111ee, A9): speelt/remt komen van de audioklok (`remVoorbij` in bron.js;
+  tempo, loop of pauze in het gat maken de pauze eerst af), de terugval slaat een remmende track
+  over, de gate gaat open via `zetHellingen` na `startDrempel` en de oude puls vloeit uit (eigen
+  gain) voordat hij stopt. Open: de declick van de BufferBron (4 ms, reserve) staat nog op nu;
+  bewust gelaten: na `startDrempel` zou elke start ~8 ms later klinken.
 - Handelingenlog: korte stilte bij de start van terugspelen op streamende tracks (wacht niet op de
   pagina's); vormlagen staan niet in de beginstand.
 - Vormen: na een pauze kort na een klap flitst die klap bij hervatten (maatbron `maatklap`).

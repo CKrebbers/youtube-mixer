@@ -538,5 +538,243 @@ console.log('\nde mixer in het losse venster neemt alles over van die in het hoo
 
 }
 
+console.log('\nnoodknoppen op het eindbeeld: zwart, bevriezen, master, flits (A4)');
+{
+  const { Eindbeeld, standOp, flitsOp, ZWART_FADE, FLITS_DUUR, wandklok } = await import('../src/video/eindbeeld.js');
+  const { VideoMixer } = await import('../src/video/video-mixer.js');
+  const { bindVideo, invoke, read, list, metaOf, has } = await import('../src/control/actions.js');
+
+  // ---- het rekenwerk, puur --------------------------------------------------
+  const eb = new Eindbeeld();
+  ok('standaard: niets aan, master 1, beeld ongemoeid', eb.isNeutraal(0) && eb.uniforms(0).helder === 1 && eb.uniforms(0).flits === 0);
+  eb.zetZwart(true, 1000);
+  const half = eb.uniforms(1000 + ZWART_FADE * 500).helder;
+  ok(`zwart (schakelaar) fadet: na de helft van ${ZWART_FADE * 1000} ms half (${half.toFixed(2)}), daarna PRECIES 0`,
+    bij(half, 0.5) && eb.uniforms(1000 + ZWART_FADE * 1000).helder === 0 && eb.uniforms(1e9).helder === 0);
+  eb.zetZwart(false, 1000 + ZWART_FADE * 250);
+  ok('halverwege de fade weer uit: van waar hij stond terug, geen sprong',
+    bij(eb.zwartNu(1000 + ZWART_FADE * 250), 0.25) && eb.zwartNu(1000 + ZWART_FADE * 250 + ZWART_FADE * 1000) === 0);
+  const e2 = new Eindbeeld();
+  e2.zetZwartVast(true, 50);
+  ok('drukvariant: direct zwart (geen fade)', e2.uniforms(50).helder === 0);
+  e2.zetZwartVast(false, 60);
+  ok('loslaten: direct terug', e2.uniforms(60).helder === 1);
+  e2.zetZwart(true, 100); e2.zetZwartVast(true, 110); e2.zetZwartVast(false, 120);
+  ok('loslaten met de schakelaar aan: blijft zwart', e2.uniforms(120 + ZWART_FADE * 1000).helder === 0 && e2.zwartNu(120) === 1);
+  const e3 = new Eindbeeld();
+  e3.zetMaster(0.4);
+  const masterOk = bij(e3.uniforms(0).helder, 0.4);
+  e3.zetMaster(7); const boven = e3.master;
+  e3.zetMaster(-1);
+  ok('master schaalt, en wordt geklemd', masterOk && boven === 1 && e3.uniforms(0).helder === 0);
+  e3.zetMaster(1);
+  e3.flits(500);
+  ok(`flits: vol wit, dooft uit, na ${FLITS_DUUR * 1000} ms precies weg`,
+    e3.uniforms(500).flits === 1 && e3.flitsNu(500 + FLITS_DUUR * 500) > 0 && e3.flitsNu(500 + FLITS_DUUR * 500) < 0.5
+    && e3.flitsNu(500 + FLITS_DUUR * 1000) === 0 && flitsOp(null, 0) === 0);
+  e3.zetZwartVast(true, 510);
+  ok('zwart wint van een flits (zwart moet altijd kunnen)', e3.uniforms(510).helder === 0 && e3.uniforms(510).flits > 0);
+  ok('standOp zonder duur = meteen het doel', standOp({ van: 0, naar: 1, t0: 5, duur: 0 }, 0) === 1);
+  ok('de klok is absoluut (timeOrigin + now): het losse venster heeft een ander nulpunt voor performance.now()',
+    Math.abs(wandklok() - Date.now()) < 1000);
+
+  // ---- de mixer, met een SYMBOLISCHE WebGL ----------------------------------
+  // Elke texture houdt bij welk beeld erin staat; een tekenstap schrijft wat
+  // hij leest naar zijn framebuffer, en de toonstap zet op het canvas
+  // (beeld, flits, helder) zoals de shader. Zo is "wat ziet de zaal" per
+  // beeld af te lezen, zonder browser. Elk testbeeld heeft een eigen naam en
+  // helderheid; de echte pixels meet tools/headless/noodknoppen.mjs.
+  const maakGL = () => {
+    let id = 0, cur = null, fb = null, unit = 0;
+    const inhoud = new Map(), fbs = new Map(), units = [], u = {}, bronnen = new Map();
+    const tel = { meng: 0, effect: 0, toon: 0, lagen: 0, upload: 0 };
+    const canvas = { beeld: null, helder: null, flits: null };
+    const soort = (p) => { const f = p.frag || ''; return f.includes('vorig') ? 'effect' : f.includes('modus') ? 'meng' : f.includes('basis') ? 'lagen' : 'toon'; };
+    const gl = new Proxy({
+      TEXTURE0: 1000, TEXTURE_2D: 1, FRAMEBUFFER: 2, ARRAY_BUFFER: 3, FRAGMENT_SHADER: 'f', VERTEX_SHADER: 'v',
+      createTexture: () => ({ tex: ++id }), createFramebuffer: () => ({ fb: ++id }),
+      createProgram: () => ({ prog: ++id }), createShader: (type) => ({ type }),
+      shaderSource: (sh, src) => { bronnen.set(sh, src); },
+      attachShader: (p, sh) => { if (sh.type === 'f') p.frag = bronnen.get(sh); },
+      getShaderParameter: () => true, getProgramParameter: () => true, getAttribLocation: () => 0,
+      getUniformLocation: (p, n) => `${p.prog}:${n}`,
+      useProgram: (p) => { cur = p; },
+      uniform1f: (loc, v) => { u[loc] = v; },
+      activeTexture: (x) => { unit = x - 1000; },
+      bindTexture: (_, t) => { units[unit] = t; },
+      bindFramebuffer: (_, f) => { fb = f; },
+      framebufferTexture2D: (a, b, c, tex) => { fbs.set(fb, tex); },
+      texImage2D: (...a) => { const bron = a.at(-1); tel.upload++; inhoud.set(units[unit], bron && bron.beeld ? { ...bron.beeld } : null); },
+      drawArrays: () => {
+        const k = soort(cur);
+        tel[k]++;
+        const leest = inhoud.get(units[0]) ?? null;
+        if (k === 'toon' && fb === null) {
+          canvas.beeld = leest; canvas.helder = u[`${cur.prog}:helder`] ?? 1; canvas.flits = u[`${cur.prog}:flits`] ?? 0;
+        } else if (fb) inhoud.set(fbs.get(fb), leest);
+      },
+    }, { get(t, k) { return k in t ? t[k] : () => {}; } });
+    // Wat de zaal ziet: de helderheid van het beeld op het canvas, door de toonstap.
+    const pixel = () => (canvas.beeld ? Math.min(1, Math.max(0, (canvas.beeld.w * (1 - canvas.flits) + canvas.flits) * canvas.helder)) : 0);
+    return { gl, canvas, tel, pixel };
+  };
+  const nepVideo = (beeld) => {
+    const luister = {};
+    return { paused: true, currentTime: 0, readyState: 4, seeking: false, playbackRate: 1, luister, src: '', beeld,
+      addEventListener: (n, f) => { (luister[n] ??= []).push(f); }, removeAttribute() {}, load() {},
+      pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); } };
+  };
+  const deck = { buffer: {}, ui: { fader: 1 }, position: 0, rate: 1, playing: false, grid: null };
+  const engine = { ctx: { currentTime: 1, outputLatency: 0, baseLatency: 0 }, deck: () => deck, xfadeGain: () => 1 };
+  const maakMixer = (G) => {
+    let v = null;
+    const m = new VideoMixer({ canvas: { getContext: () => G.gl }, engine, decks: ['A'], maakVideo: () => (v = nepVideo({ naam: 'beeld 1', w: 0.6 })) });
+    m.zetBron('A', '/media/a/video.mp4');
+    v.luister.loadeddata.forEach((f) => f());
+    return { m, video: () => v };
+  };
+  const druk = (a) => { invoke(a, true); invoke(a, false); };
+
+  const echteNu = performance.now;
+  let klok = 1000;
+  performance.now = () => klok;
+  try {
+    const H = maakGL();
+    const { m: hoofd, video: hv } = maakMixer(H);
+    bindVideo(hoofd);
+    hoofd.teken();
+    const gewoon = H.canvas.beeld?.naam === 'beeld 1' && bij(H.pixel(), 0.6);
+    ok('de vijf actions staan op de bus, met een read (en zonder noodknop is het beeld zoals het was)', gewoon &&
+      ['video.black', 'video.black.hold', 'video.freeze', 'video.master', 'video.flash'].every((a) => list().some((x) => x.id === a) && read(a) !== null)
+      && metaOf('video.master')?.type === 'value' && metaOf('video.black')?.type === 'trigger' && read('video.master') === 1);
+
+    // zwart via de bus
+    druk('video.black');
+    ok('video.black: de schakelaar staat aan (read 1)', read('video.black') === 1);
+    hoofd.teken();
+    ok('meteen na het indrukken: nog het beeld — een fade, geen klap', bij(H.pixel(), 0.6) && read('video.black') === 1);
+    klok += ZWART_FADE * 500; hoofd.teken();
+    ok('halverwege de fade: half', bij(H.pixel(), 0.3, 1e-6));
+    klok += ZWART_FADE * 500; hoofd.teken();
+    ok('na de fade: ECHT 0 op het canvas (helder = 0)', H.pixel() === 0 && H.canvas.helder === 0);
+    druk('video.flash');
+    hoofd.teken();
+    ok('een flits tijdens zwart: blijft zwart', H.pixel() === 0 && H.canvas.flits === 1);
+    druk('video.black');
+    klok += 1000; hoofd.teken();                                 // ook de flits is dan uit
+    ok('weer uit: na de fade het hele beeld terug', read('video.black') === 0 && bij(H.pixel(), 0.6));
+
+    invoke('video.black.hold', true);
+    hoofd.teken();
+    ok('video.black.hold: direct 0 zolang je drukt (read 1)', H.pixel() === 0 && read('video.black.hold') === 1);
+    invoke('video.black.hold', false);
+    hoofd.teken();
+    ok('loslaten: direct terug', bij(H.pixel(), 0.6) && read('video.black.hold') === 0);
+
+    // master
+    invoke('video.master', 0.5);
+    hoofd.teken();
+    ok('video.master 0,5: het eindbeeld half zo helder (read 0,5)', bij(H.pixel(), 0.3) && read('video.master') === 0.5);
+    invoke('video.master', 0);
+    hoofd.teken();
+    ok('video.master 0: zwart', H.pixel() === 0 && H.canvas.beeld?.naam === 'beeld 1');
+    invoke('video.master', 1);
+
+    // flits
+    klok += 1000;
+    druk('video.flash');
+    hoofd.teken();
+    ok('video.flash: meteen wit (read 1 zolang hij brandt)', H.pixel() === 1 && read('video.flash') === 1);
+    klok += FLITS_DUUR * 500; hoofd.teken();
+    const tussen = H.pixel();
+    ok(`en dooft uit (${tussen.toFixed(2)} na ${FLITS_DUUR * 500} ms)`, tussen < 1 && tussen > 0.6);
+    klok += FLITS_DUUR * 500; hoofd.teken();
+    ok('na de flits: precies het beeld weer (read 0)', bij(H.pixel(), 0.6) && H.canvas.flits === 0 && read('video.flash') === 0);
+
+    // bevriezen
+    hv().beeld = { naam: 'beeld 2', w: 0.7 };
+    klok += 16; hoofd.teken();
+    const volgt = H.canvas.beeld?.naam === 'beeld 2';
+    druk('video.freeze');
+    klok += 16; hoofd.teken();                                   // het eerste beeld NA het indrukken blijft staan
+    hv().beeld = { naam: 'beeld 3', w: 0.2 };
+    const voor = { ...H.tel };
+    klok += 16; hoofd.teken(); klok += 16; hoofd.teken();
+    ok('video.freeze: het beeld (eerst beeld 2, zoals de video) blijft staan terwijl de video verandert (read 1)',
+      volgt && H.canvas.beeld?.naam === 'beeld 2' && read('video.freeze') === 1);
+    ok('bevroren: niet mengen en geen effecten, wel elke keer tonen (canvas zonder preserveDrawingBuffer); de video wordt wel geüpload',
+      H.tel.meng === voor.meng && H.tel.effect === voor.effect && H.tel.toon === voor.toon + 2 && H.tel.upload >= voor.upload + 2);
+    invoke('video.black.hold', true); hoofd.teken();
+    ok('zwart werkt ook op een bevroren beeld', H.pixel() === 0 && H.canvas.beeld?.naam === 'beeld 2');
+    invoke('video.black.hold', false);
+    druk('video.freeze');
+    klok += 16; hoofd.teken();
+    ok('los: meteen het beeld van NU (beeld 3), niet eerst nog het oude', H.canvas.beeld?.naam === 'beeld 3' && read('video.freeze') === 0);
+
+    // ---- het losse venster neemt alles over ---------------------------------
+    const L = maakGL();
+    const { m: los, video: lv } = maakMixer(L);
+    lv().beeld = { naam: 'los 1', w: 0.8 };
+    invoke('video.master', 0.5);
+    los.neemOver(hoofd); los.teken();
+    const losMaster = bij(L.pixel(), 0.4);
+    // Tijdens de inloop toont het het beeld van het hoofdvenster, waar master
+    // en zwart al in zitten: niet nog eens toepassen.
+    los.toonBeeld({ beeld: { naam: 'hoofdcanvas', w: 0.3 } });
+    ok('los venster: de master van het hoofdvenster; het geleende beeld van de inloop (toonBeeld) NIET nog eens erdoor',
+      losMaster && L.canvas.helder === 1 && L.canvas.flits === 0 && bij(L.pixel(), 0.3));
+    invoke('video.master', 1);
+    druk('video.black');
+    klok += 10; los.neemOver(hoofd); los.teken();
+    ok('los venster: zwart fadet ook daar (zelfde klok)', L.pixel() > 0 && L.pixel() < 0.8);
+    klok += ZWART_FADE * 1000; los.neemOver(hoofd); los.teken();
+    ok('... en is na de fade ECHT 0, zonder dat het hoofdvenster tekent', L.pixel() === 0);
+    druk('video.black');
+    klok += ZWART_FADE * 1000; los.neemOver(hoofd); los.teken();
+    druk('video.flash');
+    los.neemOver(hoofd); los.teken();
+    ok('los venster: de flits', L.pixel() === 1);
+    klok += FLITS_DUUR * 1000; los.neemOver(hoofd); los.teken();
+    druk('video.freeze');
+    klok += 16; los.neemOver(hoofd); los.teken();
+    lv().beeld = { naam: 'los 2', w: 0.1 };
+    klok += 16; los.neemOver(hoofd); los.teken();
+    const losVast = L.canvas.beeld?.naam === 'los 1';
+    druk('video.freeze');
+    klok += 16; los.neemOver(hoofd); los.teken();
+    ok('los venster: bevroren terwijl zijn eigen video verandert, en weer los', losVast && L.canvas.beeld?.naam === 'los 2');
+
+    // Een mixer die nog nooit getekend heeft (het losse venster neemt over
+    // terwijl bevriezen al aan staat): eerst één vers beeld, dan dat vasthouden.
+    druk('video.freeze');
+    const N = maakGL();
+    const { m: nieuw, video: nv } = maakMixer(N);
+    nv().beeld = { naam: 'vers', w: 0.5 };
+    klok += 16; nieuw.neemOver(hoofd); nieuw.teken();
+    nv().beeld = { naam: 'later', w: 0.9 };
+    klok += 16; nieuw.neemOver(hoofd); nieuw.teken();
+    ok('bevroren bij de overname: eerst één eigen beeld (geen leeg canvas), dan vast', N.canvas.beeld?.naam === 'vers' && nieuw.eindbeeld.bevroren);
+    druk('video.freeze');
+
+    // ---- handelingenlog: beginstand en terugspelen ---------------------------
+    const { leesStand } = await import('../src/control/handelingen.js');
+    const { maakUitvoerder } = await import('../src/control/terugspelen.js');
+    druk('video.black');
+    invoke('video.master', 0.4);
+    const st = leesStand({ engine: { deck: () => deck, focus: null }, tracks: [], herkomst: () => null, acties: list(), lees: read });
+    ok('beginstand: zwart en bevriezen als stand, de master als waarde; drukvariant en flits niet',
+      st.rond['video.black'] === 1 && st.rond['video.freeze'] === 0 && st.waarden['video.master'] === 0.4
+      && !('video.black.hold' in st.rond) && !('video.flash' in st.rond) && !('video.black.hold' in st.waarden));
+    druk('video.black');
+    invoke('video.master', 1);
+    const doe = maakUitvoerder({ engine: {}, tracks: [], laad: async () => false, invoke, read, has });
+    await doe.stand(st);
+    ok('terugspelen: de beginstand zet zwart en de master terug', read('video.black') === 1 && read('video.master') === 0.4);
+    druk('video.freeze');
+    await doe.stand({ tracks: [], waarden: {}, rond: {} });          // een log van vóór A4
+    ok('een log van vóór de noodknoppen: beeld gewoon te zien (zwart en bevriezen uit)', read('video.black') === 0 && read('video.freeze') === 0);
+  } finally { performance.now = echteNu; }
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
