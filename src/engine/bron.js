@@ -571,13 +571,16 @@ export class StreamBron {
    */
   async knip(van, tot, gewichten = null) {
     if (!this.bestand) throw new Error('niets geladen');
-    const { url, kop, bpf } = this.bestand;
+    // Het BESTAND van nu vastpakken: na de await kan er een ander nummer staan
+    // (of geen, na vernietig), en dan hoort dit antwoord bij het oude.
+    const bestand = this.bestand;
+    const { url, kop, bpf } = bestand;
     const sr = kop.sampleRate, ch = kop.kanalen;
     const a0 = Math.max(0, Math.round(van * sr)), b0 = Math.min(kop.dataLengte / bpf, Math.round(tot * sr));
     if (b0 <= a0) throw new Error('leeg stuk');
     const res = await this.haal(url, { headers: { Range: `bytes=${kop.dataStart + a0 * bpf}-${kop.dataStart + b0 * bpf - 1}` } });
     if (res.status !== 206) throw new Error(`knippen mislukt (${res.status})`);
-    if (isVervangen(res, this.bestand)) throw new Error('het bestand is op de server vervangen: laad het nummer opnieuw');
+    if (isVervangen(res, bestand)) throw new Error('het bestand is op de server vervangen: laad het nummer opnieuw');
     const pcm = new Int16Array(await res.arrayBuffer());
     const n = Math.floor(pcm.length / ch);
     const uit = this.ctx.createBuffer(2, n, sr);

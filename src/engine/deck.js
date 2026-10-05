@@ -206,7 +206,12 @@ export class Deck extends Emitter {
       const fout = controleerStems(stems);
       if (fout) throw new Error(fout);
     }
-    if (!(this.bron instanceof StreamBron)) this._zetBron(new StreamBron(this.ctx, this.chain.stemIn, opties));
+    // De bron NIET met de opties van deze laad maken: een `haal` daarin werd
+    // zijn standaard, en na een los bestand of de demo (laadGeheugen, de eerste
+    // laad op een vers deck) las elke library-laad dan uit dat geheugen in
+    // plaats van van de server: het verkeerde nummer onder de goede titel.
+    // `haal` gaat per laad mee, hieronder.
+    if (!(this.bron instanceof StreamBron)) this._zetBron(new StreamBron(this.ctx, this.chain.stemIn));
     // Cue en hotcues NIET hier wissen maar pas in _naLaden: mislukt de laad
     // (404, verkeerd formaat), dan staat de oude track er nog, met zijn punten.
     this._laadt = (this._laadt || 0) + 1;

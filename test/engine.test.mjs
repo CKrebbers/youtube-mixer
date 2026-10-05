@@ -2702,6 +2702,19 @@ console.log('\nstems');
   invoke('track.4.stem.inst.hold', false);
   ok('… en een stem-action doet dan niets', gIn.every((x) => x.gain.value === 1) && spion.every((l) => l.length === 0) && !dS.stemGekild('vocals'));
 
+  // Na een los bestand (laadGeheugen was de eerste laad van dit deck) haalt een
+  // library-laad zonder eigen `haal` van de SERVER, niet uit dat geheugen.
+  // Eerst werd de `haal` van de eerste laad de standaard van de bron, en speelde
+  // het library-nummer het losse bestand onder de goede titel (review 3 okt).
+  const oudeFetch = globalThis.fetch;
+  const gevraagd = [];
+  const wavLib = maakWavParen([paren[0]].map(([l, r]) => [l.subarray(0, SR * 2), r.subarray(0, SR * 2)]), SR);
+  globalThis.fetch = async (url, init) => { gevraagd.push(url); return geheugenHaal(wavLib)(url, init); };
+  await dS.laadStream('/media/lib/audio.wav', 'library-nummer');
+  globalThis.fetch = oudeFetch;
+  ok(`na een los bestand: een library-laad haalt van de server (${gevraagd.length} verzoeken, ${dS.duration} s)`,
+    gevraagd.length > 0 && gevraagd.every((u) => u === '/media/lib/audio.wav') && dicht(dS.duration, 2) && dS.title === 'library-nummer');
+
   // 1. Vier stems.
   NOW = 1001;
   const geladen = await dS.laadStream('/media/x/stems.wav', 'vier stems', { haal: geheugenHaal(wav8), stems: STEMS4 });
