@@ -63,10 +63,9 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 14. ~~Toonsoort per nummer~~ — gedaan 25 sep: server, weergave van wat je HOORT,
     met de hand corrigeren, tweede kandidaat; geen APC-knoppen (T6).
     `docs/TOONSOORT.md` §13.
-15. Keylock en toon verschuiven (`docs/KEYLOCK.md`, 2,5–4 sessies):
-    - Signalsmith in `stream-lezer.js` (optie A), na A3 en I1–I3;
-    - een sprong duurt ~95 ms (K3), transponeren mag ook zonder keylock (K8);
-    - APC: Clay 25 sep, keylock krijgt later Bank (I4).
+15. ~~Keylock en toon verschuiven~~ — gedaan 5 okt (`docs/KEYLOCK.md` §9): Signalsmith
+    in `stream-lezer.js` (optie A), een sprong ~98 ms en exact (K3), toon ook zonder
+    keylock (K8); APC Shift + Tap / Shift + Nudge (I4, niet op het apparaat nagelopen).
 16. ~~Spoor C, DJ-functies~~ — gedaan 25 sep: beatjump, loop in/out/reloop,
     quantize, starten op de maat, EQ-kill, rem, hysterese op de maatgever.
     ~~APC-plekken: voorstel A~~ — gebouwd 25 sep (`docs/APC40.md`): grid-modus
@@ -109,7 +108,7 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
-2. 15 keylock (na A3 en I1–I3).
+2. ~~15 keylock~~ (gebouwd 5 okt; nog I4 op het apparaat).
 3. ~~17 stems~~ (gebouwd 3 okt; nog H3 en VRAGEN N).
 4. AV-kern 6–11 (7 alleen nog het overnemen in AV-kern).
 5. 23 rest (vormbus na 8, routes per nummer, beeldscènes).
@@ -126,7 +125,7 @@ knel door 15 en 17, dan gaat AV-kern voor; dat is de vraag van H5.
 | 1 | **klaar** | Audio-engine, 2 decks, EQ/filter/xfader, waveform, toetsenbord |
 | 2 | **klaar** | MIDI-laag, MIDI-learn, APC40 mkII-mapping, LED-feedback; eigen mapping als verschil met de standaard (25 sep) |
 | 0 | **klaar** | Ingest: yt-dlp + ffmpeg + library; sinds 25 sep een wachtrij met voortgang en annuleren, en een library voorbij 200 nummers met sorteren en hotcues per nummer |
-| 3 | **bijna klaar** | Beatgrid als tempokaart (tweede kans, maat-anker), BPM (tap-hybride), sync naar de maatgever (hysterese), beat-loops, beatjump en quantize draaien; toonsoort per nummer gebouwd (25 sep, `docs/TOONSOORT.md` §13). Open: keylock, ontworpen en gemeten (`docs/KEYLOCK.md`), wacht op de luistertest A3 (ROADMAP 15) |
+| 3 | **bijna klaar** | Beatgrid als tempokaart (tweede kans, maat-anker), BPM (tap-hybride), sync naar de maatgever (hysterese), beat-loops, beatjump en quantize draaien; toonsoort per nummer gebouwd (25 sep, `docs/TOONSOORT.md` §13). Keylock en toon verschuiven gebouwd (5 okt, `docs/KEYLOCK.md` §9) |
 | 4 | **klaar** | Video volgt audio per track, WebGL-mix op fader × crossfader, vier mengvormen, zes effecten en een puls op de tel, alles op de action-bus en op het APC-grid. Het losse venster mengt zelf (25 sep): de beamer loopt door met het hoofdtabblad naar achteren (`docs/BEAMER.md`). Vormlagen 16:9 bovenop (`?vormen=1`) |
 | 5 | **begonnen** | FX-racks per link met zes effecten en een rack-editor op het gehoor; acht tracks (het scherm spiegelt de APC); streamen vanaf schijf, audiopad zonder afval (25 sep); opname (WAV, of WAV + 720p-video) met handelingenlog en terugspelen (25 sep); sends naar echo en galm; sampler met acht pads; DJ-functies (25 sep: beatjump, loop in/out, quantize, starten op de maat, EQ-kill, rem); APC-indeling in mode 0x42 (`docs/APC40.md`). Nog: testen op het apparaat en in Clay's Chrome, de APC-plekken van voorstel A, de rest van ronde 3 (`docs/VERBETERINGEN.md`) |
 

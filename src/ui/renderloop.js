@@ -2,7 +2,7 @@ import { read as readAction, trackVanDeck } from '../control/actions.js';
 import { fmtTime } from '../lib/emitter.js';
 import { BIJNA_EINDE } from './spiegel-plan.js';
 import { bpmTekst } from './grid-strook.js';
-import { focusToon } from './toon-weergave.js';
+import { focusToon, verschuivingTekst } from './toon-weergave.js';
 
 /**
  * De renderloop: één rAF voor de hele UI. De engine wordt alleen uitgelezen,
@@ -25,6 +25,8 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     play: r.querySelector('.play'),
     pitch: r.querySelector('.pitch-val'),
     pitchBereik: r.querySelector('.pitch-bereik'),
+    keylock: r.querySelector('.rek .keylock'),
+    rekToon: r.querySelector('.rek-toon'),
     hotcues: [...r.querySelectorAll('.hc')],
     loopBtns: [...r.querySelectorAll('.loops .btn:not(.bl)')],
     beatBtns: [...r.querySelectorAll('.loops .btn.bl')],
@@ -136,6 +138,10 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       klasse(e.play, 'on', d.playing);
       tekst(e.pitch, ((d.rate - 1) * 100).toFixed(1) + '%');
       tekst(e.pitchBereik, `±${Math.round(engine.deck(id).pitchBereik * 100)}`);
+      // Keylock en toon (docs/KEYLOCK.md): wat er op het deck staat.
+      const dk = engine.deck(id);
+      if (e.keylock) klasse(e.keylock, 'on', dk.keylock);
+      if (e.rekToon) { tekst(e.rekToon, verschuivingTekst(dk.transpositie) || '0'); klasse(e.rekToon, 'on', dk.transpositie !== 0); }
       // bpm: wat je HOORT, dus inclusief pitch.
       tekst(e.bpm, bpmTekst(d.bpm, d.gridZeker));
       klasse(e.bpm, 'leeg', !d.bpm);

@@ -25,7 +25,8 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 👀 kijken · 💬 al
   springen in de golfvorm, hotcues, loops van 4 tellen, pitch schuiven.
   Hoor je ergens nog een tik of gat?
 
-- [ ] **A3. Luistertest: keylock (Signalsmith-demo).** 🎧
+- [x] **A3. Luistertest: keylock (Signalsmith-demo).** 🎧 — 5 okt, Clay: "klinkt goed".
+  Keylock is gebouwd (`docs/KEYLOCK.md` §9).
   Staat al sinds fase 3 open. Een kwartier met de demo op je eigen ambient,
   ±5% en ±8%. Beslist of keylock Signalsmith wordt. Daarmee is fase 3 af.
   **Klaar om te luisteren (24 sep):** niet de demo maar je eigen nummers, door
@@ -256,14 +257,17 @@ Beslist:
   - K7: de sampler blijft zoals hij is.
 
 Open:
-- [ ] **I1 (= K1). Wordt het Signalsmith?** 🎧 Na A3. Scoort ±5% op sakamoto en zoned-out
+- [x] **I1 (= K1). Wordt het Signalsmith?** 🎧 — JA (A3 klinkt goed), gebouwd 5 okt. Na A3. Scoort ±5% op sakamoto en zoned-out
   een 0 of 1 op de scorekaart, dan ja.
-- [ ] **I2 (= K2). Welke instelling?** 🎧 Standaard, goedkoper of kort. Luister naar
+- [x] **I2 (= K2). Welke instelling?** 🎧 — volgens advies: standaard, gespreid (5 okt). Standaard, goedkoper of kort. Luister naar
   13 en 14 tegen 08. **Advies:** standaard, gespreid; goedkoper als je 13 niet van 08
   onderscheidt.
-- [ ] **I3 (= K4). Keylock standaard aan of uit?** 🎧 Luister naar 01 tegen 04.
+- [x] **I3 (= K4). Keylock standaard aan of uit?** 🎧 — volgens advies: uit, en hij blijft staan bij een nieuw nummer (5 okt). Luister naar 01 tegen 04.
   **Advies:** uit, en keylock blijft staan bij een nieuw nummer.
-- [ ] **I4 (= K6). Waar op de APC?** 🎛 Clay 25 sep (voorstel A): keylock krijgt
+- [ ] **I4 (= K6). Waar op de APC?** 🎛 GEBOUWD 5 okt, niet op het apparaat nagelopen:
+  **Shift + Tap = keylock, Shift + Nudge −/+ = toon −1/+1** (focus-track); toon terug
+  naar 0 op het scherm (en vanzelf bij een nieuw nummer). Niet Bank: met de hub is
+  dat de hubtoets. **Advies:** zo proberen. Was: Clay 25 sep (voorstel A): keylock krijgt
   later Bank. De rest van het voorstel hieronder staat nog open. **Voorstel:**
   - Bank = keylock;
   - Shift + Bank = pitchbereik;

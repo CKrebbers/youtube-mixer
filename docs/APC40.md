@@ -77,17 +77,18 @@ sindsdien op shift + Cue Level in hun eigen grid-modus (sampler, video).
 low / echo · galm · fx-mix · fx 1; Clip/Device View (licht op) wisselt naar het
 RACK (fx 1–8). Device ◀ ▶ = rack, On/Off = effect aan/uit (brandt als het
 effect aan staat). Tempo = `track.{focus}.tempo`, lineair over de hele rate,
-0,1% per tik (shift: 0,01%). Nudge ± = bend zolang je drukt, Tap = tap tempo,
+0,1% per tik (shift: 0,01%). Nudge ± = bend zolang je drukt (shift: toon −1 / +1),
+Tap = tap tempo (shift: keylock aan/uit; 5 okt, `docs/KEYLOCK.md`),
 Play = play, Record = opname (shift: stop), Session = samplerlengte (shift:
 opnamesoort), Metronome = crossfadercurve, pijlen ◀ ▶ = focus, ▲ ▼ = grid-modus.
 Bank ◀ ▶ = beatjump terug/vooruit (shift: lengte ½ / ×2, 1–32 tellen) · Pan /
 Sends / User = loop in / loop out / reloop · Lock = quantize aan/uit voor alle
 tracks (brandt als aan; in de grid-modus blijft Lock het grid-slot, want het
 open mapje wint) · Stop All Clips = rem (vinylstop; geen lampje op het apparaat).
-Vrij: Bank (0x67, voor keylock, VRAGEN I4) en Detail View (met `?vormen=1` het
-mapje vorm). **Met `?hub=` is Bank van de AV-app-hub** (de hubtoets: Bank +
-Track Select = focus, Bank + Scene = snapshot) en komt hij nooit bij VARVE aan;
-keylock op Bank botst dan (VRAGEN O2).
+Vrij: Bank (0x67) en Detail View (met `?vormen=1` het mapje vorm). **Met `?hub=` is
+Bank van de AV-app-hub** (de hubtoets: Bank + Track Select = focus, Bank + Scene =
+snapshot) en komt hij nooit bij VARVE aan; daarom zit keylock niet op Bank maar op
+Shift + Tap (VRAGEN I4).
 
 **Ringknoppen:** alle 16 (track knobs en device knobs) in modus `endless`: de
 knop geeft het verschil, de software houdt de stand. Geen overpakken na een
@@ -160,7 +161,8 @@ Select van de track die de maat geeft knippert omgekeerd.
 | | Pan · Sends · User | loop in · loop out · reloop | — |
 | | Lock | quantize aan/uit (in de grid-modus: grid-slot) | idem |
 | | Stop All Clips | rem | — |
-| | Bank | vrij (keylock, VRAGEN I4) | vrij |
+| | Bank | vrij (met de hub: de hubtoets) | vrij |
+| | Tap · Nudge ± | tap tempo · bend | keylock · toon −1 / +1 (5 okt, VRAGEN I4) |
 
 Eigen mapping: een nieuwe regel in de standaard komt vanzelf binnen (verschil,
 `docs/MAPPING-VERSCHIL.md`). Clay's server had op 25 sep nog zijn VOLLEDIGE kopie

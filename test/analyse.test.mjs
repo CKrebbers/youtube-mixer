@@ -623,7 +623,9 @@ console.log('wat je HOORT: één formule (engine/hoorbaar.js)');
   const alle = (map) => readdirSync(new URL(map, import.meta.url), { withFileTypes: true })
     .flatMap((e) => (e.isDirectory() ? alle(`${map}${e.name}/`) : e.name.endsWith('.js') ? [`${map}${e.name}`] : []));
   const kopie = alle('../src/').filter((f) => !f.endsWith('engine/hoorbaar.js')
-    && /outputLatency/.test(readFileSync(new URL(f, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
+    // Alleen de eigenschap (ctx.outputLatency): Signalsmith's `_outputLatency()` in
+    // rek-kern.js (keylock) is de latentie van de stretcher, iets anders.
+    && /(?<![\w$])outputLatency/.test(readFileSync(new URL(f, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
   ok(`outputLatency staat alleen in engine/hoorbaar.js${kopie.length ? ` (ook in ${kopie.join(', ')})` : ''}`, kopie.length === 0);
 }
 

@@ -42,6 +42,11 @@ parallelle sporen (elk een worktree in `~/Projects/varve-stems/`), samengevoegd 
   een verandering, **S15** (de patronenset zet zijn instrumenten met hun knoppen terug na
   herladen) en **S7** (de Schaal volgt de cent van de plaat). De server moet na S15 opnieuw
   starten (hij normaliseert de set met dezelfde code), niet alleen het tabblad.
+- **Keylock en toon verschuiven** (5 okt, na Clay's luistertest "klinkt goed"; `docs/KEYLOCK.md`
+  §9): Signalsmith in de streamworklet; APC Shift + Tap = keylock, Shift + Nudge ± =
+  toon; toetsen V / M en Shift + Z/X; knoppen in de focuskop. Een sprong met keylock
+  duurt ~98 ms en komt exact uit. Getest in Node en in Chrome (offline), niet op het
+  gehoor in een set en niet op de APC.
 - De stems-rij overleeft nu een herstart van de server (`stems-rij.json` naast de library;
   `docs/STEMS.md` §2): herstarten voor een merge of na de verhuizing kost alleen de split
   die op dat moment liep (die begint opnieuw).

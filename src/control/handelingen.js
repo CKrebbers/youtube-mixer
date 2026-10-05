@@ -275,6 +275,9 @@ export function leesStand({ engine, tracks, herkomst, acties, lees }) {
       // Een track die op zijn start op de maat WACHT (dj-transport) speelt nog
       // niet: `wacht`, en terugspelen start hem opnieuw op de maat.
       positie: d.position, speelt: !!d.playing && !d.wacht, wacht: !!d.wacht, rate: d.rate, bereik: d.pitchBereik,
+      // Keylock en toon (docs/KEYLOCK.md): track.N.keylock is een toggle, dus
+      // zonder beginstand speelde een log dat met keylock begon omgekeerd terug.
+      keylock: !!d.keylock, toon: d.transpositie ?? 0,
       cue: d.cuePoint ?? 0, hotcues: [...(d.hotcues || [])],
       loop: d.loop ? { start: d.loop.start, end: d.loop.end, tellen: d.loopBeats ?? null } : null,
       grid: d.grid ? d.grid.toJSON() : null,

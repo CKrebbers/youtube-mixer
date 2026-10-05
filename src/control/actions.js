@@ -17,7 +17,7 @@ import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/b
 import { ToonKaart, WIJZER } from '../engine/toonsoort.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
-import { PITCH_BEREIKEN, SPRONG_TELLEN, GLIJ } from '../engine/deck.js';
+import { PITCH_BEREIKEN, SPRONG_TELLEN, GLIJ, TOON_MAX } from '../engine/deck.js';
 import { hoorbaar as hoorbaarVan, uitgangsVertraging } from '../engine/hoorbaar.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
@@ -406,6 +406,21 @@ export function bindEngine(engine) {
       { label: `Track ${nr} pitchbereik ±8 / ±16 / ±50%`, read: () => PITCH_BEREIKEN.indexOf(d.pitchBereik) / (PITCH_BEREIKEN.length - 1) });
     define(`${n}.seek`, 'value', (v) => d.seek(v * d.duration),
       { label: `Track ${nr} scrub`, read: () => (d.duration ? d.position / d.duration : 0) });
+
+    // Keylock en toon (docs/KEYLOCK.md): het tempo los van de toon. Keylock
+    // blijft staan bij een nieuw nummer, de toon gaat terug naar 0. Een sprong
+    // met keylock (play, hotcue, seek) klinkt ~95 ms later, exact (K3).
+    define(`${n}.keylock`, 'trigger', (on) => { if (on) d.setKeylock(!d.keylock); },
+      { label: `Track ${nr} keylock aan/uit (het tempo verandert, de toon blijft)`, read: () => (d.keylock ? 1 : 0) });
+    define(`${n}.transpose`, 'value', (v) => d.setTranspositie(Math.round(Math.min(1, Math.max(0, v)) * 2 * TOON_MAX) - TOON_MAX),
+      { label: `Track ${nr} toon verschuiven (±${TOON_MAX} halve tonen, 0,5 = niets)`, bipolar: true,
+        read: () => (d.transpositie + TOON_MAX) / (2 * TOON_MAX) });
+    define(`${n}.transpose.up`, 'trigger', (on) => { if (on) d.setTranspositie(d.transpositie + 1); },
+      { label: `Track ${nr} toon een halve toon hoger`, read: () => (d.transpositie >= TOON_MAX ? null : d.transpositie > 0 ? 1 : 0) });
+    define(`${n}.transpose.down`, 'trigger', (on) => { if (on) d.setTranspositie(d.transpositie - 1); },
+      { label: `Track ${nr} toon een halve toon lager`, read: () => (d.transpositie <= -TOON_MAX ? null : d.transpositie < 0 ? 1 : 0) });
+    define(`${n}.transpose.reset`, 'trigger', (on) => { if (on) d.setTranspositie(0); },
+      { label: `Track ${nr} toon terug naar 0`, read: () => (d.transpositie !== 0 ? 1 : 0) });
 
     // bipolar: staat in het midden in rust. De LED-ring hoort dan pan-stijl te
     // zijn in plaats van volume-stijl; dat is het enige wat de LED-laag hoeft

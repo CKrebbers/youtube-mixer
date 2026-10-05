@@ -409,6 +409,9 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
       const d = deck(t.track);
       if (!d) continue;
       if (PITCH_BEREIKEN.includes(t.bereik)) d.pitchBereik = t.bereik;
+      // Keylock en toon: een log van vóór keylock had ze niet (dan uit en 0).
+      d.setKeylock?.(t.keylock === true);
+      d.setTranspositie?.(Number.isFinite(t.toon) ? t.toon : 0);
       if (t.kant) engine.setKant(d.id, t.kant);
       // Kill en beatjump-lengte horen bij de TRACK (mixer), niet bij het
       // nummer. Een log van vóór de kill: toen stond er geen kill aan.

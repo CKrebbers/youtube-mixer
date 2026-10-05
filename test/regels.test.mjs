@@ -30,10 +30,19 @@ for (const f of engineBestanden) {
 // streamworklet kreeg vier uitgangen, maar rekent nog steeds alleen met
 // stream-kern.js).
 console.log('\nworklets importeren alleen hun kern');
-for (const [f, kern] of [['stream-lezer.js', './stream-kern.js'], ['klankschaal-worklet.js', './klankschaal-kern.js'], ['fx-worklet.js', './fx-kern.js']]) {
+// Keylock (5 okt, docs/KEYLOCK.md): de streamworklet rekent ook met het rekpad
+// (rek-kern.js, zelf alleen op stream-kern.js) en de gevendorde Signalsmith-
+// fabriek (WASM, geen imports): allebei gemaakt voor de audiothread.
+for (const [f, kernen] of [['stream-lezer.js', ['./stream-kern.js', './rek-kern.js', './vendor/signalsmith-stretch.js']],
+  ['rek-kern.js', ['./stream-kern.js']], ['klankschaal-worklet.js', ['./klankschaal-kern.js']], ['fx-worklet.js', ['./fx-kern.js']]]) {
   const bron = readFileSync(engineMap + f, 'utf8');
   const imports = [...bron.matchAll(/^\s*import\s[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1]);
-  ok(`${f}: importeert alleen ${kern}`, imports.length === 1 && imports[0] === kern);
+  ok(`${f}: importeert alleen ${kernen.join(', ')}`, imports.join() === kernen.join());
+}
+{
+  const bron = readFileSync(engineMap + 'vendor/signalsmith-stretch.js', 'utf8');
+  ok('vendor/signalsmith-stretch.js: geen imports, de MIT-licentie bovenin, gemaakt met tools/keylock/vendor.mjs',
+    !/^\s*import\s/m.test(bron) && /MIT License[\s\S]*Copyright \(c\) 2022 Geraint Luff/.test(bron.slice(0, 3000)) && /tools\/keylock\/vendor\.mjs/.test(bron.slice(0, 600)));
 }
 
 // De opmaak van het spiegel-scherm is één keer per ongeluk meegewist met een

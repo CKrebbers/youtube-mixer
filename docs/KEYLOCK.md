@@ -1,7 +1,10 @@
 # Keylock en toonsoort verschuiven
 
-Stand: 24 september 2026. Onderzoek op branch `onderzoek/keylock`; er is niets in
-`src/` gebouwd. Meetinstrument: `tools/keylock/` (`proef.mjs`, `kern.mjs`), uitkomst in
+**GEBOUWD 5 oktober 2026** (Clay: "de luistertest klinkt goed"): zie §9 voor wat er
+staat en waar het afwijkt van het ontwerp hieronder. Hoofdstuk 1–8 zijn het onderzoek
+en het ontwerp van 24 september, ongewijzigd.
+
+Stand van het onderzoek: 24 september 2026, branch `onderzoek/keylock`. Meetinstrument: `tools/keylock/` (`proef.mjs`, `kern.mjs`), uitkomst in
 `tools/keylock/metingen-2026-09-24.txt`, luisterbestanden in `tools/keylock/uit/` met
 `tools/keylock/LUISTER.md` als leeswijzer (VRAGEN A3). Toonsoort-DETECTIE hoort hier
 niet bij (andere agent).
@@ -554,3 +557,77 @@ Advies: toestaan; het is dezelfde stretcher en het is voorspelbaar.
 - ROADMAP noemde "2,91% per deck, ~23% voor acht" en "plan ~150 ms vooruit". Gemeten:
   2,0% / 16% (rustig) tot 5% / 30% (belast); vooruit plannen is alleen nodig voor
   sprongen, en dan uitLat + één blok (63–93 ms), niet voor tempo.
+
+---
+
+## 9. Gebouwd (5 oktober 2026)
+
+Clay deed de luistertest (A3): "klinkt goed". Daarmee K1 = Signalsmith; K2 en K4 volgens
+het advies: **standaard, gespreid** en **keylock standaard uit**. K3, K5, K7 en K8 zoals
+besloten.
+
+### 9.1 Wat er staat
+
+| waar | wat |
+|---|---|
+| `src/engine/vendor/signalsmith-stretch.js` | alleen de Emscripten-fabriek (WASM + glue), met de MIT-tekst uit de bronrepo bovenin; gemaakt met `tools/keylock/vendor.mjs` (controleert de tarball tegen de integriteit uit het npm-register). `process`, `require`, `window` en `document` zijn binnen de fabriek verborgen: overal "shell", ook in Node |
+| `src/engine/rek-kern.js` | het rekpad, puur (geen Web Audio): `Rekker` (één stretcher per deck, met alle kanalen van het bestand: stems lopen samen), `leesInvoer` (hele frames, loop uitgerold met LOOP_NAAD, gat = stilte), `rekToon`, `rekPlanT` (zoekrooster), `wilRek` |
+| `src/engine/stream-lezer.js` | twee paden: A = renderBlok zoals altijd, B = de stretcher. Segmenten zonder `rek` komen nooit bij B (gouden hash ongewijzigd). A → B zodra B geldig is (A speelt door: keylock aanzetten tijdens het spelen geeft geen gat), B → A meteen (keylock uit, een rem), met de gewone overgang en een **polariteitskeuze** |
+| `src/engine/bron.js` (StreamBron) | `zetRek({ keylock, toon })`; elk segment heeft zeven velden (`rek` erbij); met rek is elke start een **geplande sprong** op het zoekrooster (~98 ms), tot T speelt het vorige (`positieIn`); `doorlopend` voor fasebehoudende sprongen |
+| `src/engine/deck.js` | `keylock`, `transpositie` (−12..+12), `setKeylock`, `setTranspositie`; toon terug naar 0 bij een nieuw nummer en bij leeg, keylock blijft. `seek(p, { doorlopend })`: nudge, sync, beatjump en een gequantiseerde hotcue landen fasebehoudend |
+| actions | `track.N.keylock` (aan/uit), `track.N.transpose` (draaiknop, 0,5 = 0), `.transpose.up/down/reset` |
+| APC | **Shift + Tap = keylock**, **Shift + Nudge −/+ = toon −1/+1** (focus-track). Niet Bank (I4): met de hub is Bank de hubtoets |
+| toetsenbord | V (focus) en M (vorige focus) = keylock; Shift + Z/X en Shift + , / . = toon |
+| scherm | in de focuskop naast PITCH: `keylock` (brandt) en ♭ · toon · ♯ (klik op de toon = 0). De toonsoort die je hoort rekende al met keylock en transpositie (T3) |
+| handelingenlog | `keylock` en `toon` in de beginstand; terugspelen zet ze terug |
+
+### 9.2 Waar het afwijkt van het ontwerp (en waarom)
+
+- **Zoeken een blok vroeger.** Doorlopen gaat met het doel op t0 + uitLat + één blok
+  (zoals gemeten), maar na een `_seek` klonk de nieuwe plek één blok (128 frames) te
+  vroeg; de klikken erna klopten weer. Dus zoekt hij met het doel op t0 + uitLat, in
+  het blok waarin dát moment het nieuwe segment is. Gemeten: 0,00 ms.
+- **Het zoekrooster.** Zoeken kan alleen op een blokgrens; ligt T daartussen, dan mist
+  de hotcue tot 2,7 ms van zijn aanslag. Daarom legt de StreamBron T op het rooster
+  (`rekPlanT`: T − uitLat op een blokgrens; de worklet meldt zijn gemeten uitLat).
+  Een sprong met keylock duurt zo 98–101 ms (K3: ~95).
+- **Tempo, toon en loop zonder zoeken.** Een segment met T = nu dat begint waar het
+  oude nu is, krijgt geen seek maar een verschoven telling van de invoer (`zet`).
+  Gemeten: tempo 1,00 → 1,05 → 0,96 → 1,00 en loop eraf, één keer gezocht (het begin).
+- **Fasebehoudend springen.** Een sprong landt ~98 ms later. Voor sync, nudge, beatjump
+  en een gequantiseerde hotcue landt hij op P + (T − nu)·R: waar hij met een sprong NU
+  op T zou zijn, dus in de fase. Een hotcue zonder quantize, cue, play en een klik in
+  de golfvorm landen exact op P (je hoort de aanslag), ~98 ms later.
+- **Een rem gaat via renderBlok**: hij zakt in toon, zoals vinyl (ook met keylock).
+- **Stems**: één stretcher met 4 of 8 kanalen in plaats van één per paar.
+- **APC**: Shift + Tap en Shift + Nudge, niet Bank (hubtoets).
+
+### 9.3 Gemeten
+
+| | |
+|---|---|
+| toon, keylock op 0,92 / 1,00 / 1,08 (Node en Chrome) | 440,00 Hz |
+| toon +2 / −1 / +1 zonder keylock (K8) | binnen 2 cent (Chrome: +2 = 494,48 Hz tegen 493,88) |
+| bestand op 44,1 kHz in een context van 48 kHz | 439,94 Hz |
+| hoorbare positie (klikken, Node) | ±0,7 ms op 0,92 / 1,00 / 1,08 |
+| hotcue met keylock (Chrome, offline, door de hele master) | de klik 20 ms na het doel op T + 20 ms + limiter: 0,000 ms, volle sterkte |
+| keylock aan en uit op 1,00 | geen dip (−0,0 dB tegen dezelfde run zonder wissel); een opzettelijk omgekeerde stretcher wordt gezien (zonder keuze: −9,2 dB) |
+| rekenwerk (Chrome-WASM, offline, acht tracks) | **1,3% van een kern per track** met keylock (acht: ~10%) |
+| afval op de audiothread | 0,02 bytes per blok; per sprong of toonwissel ~48 bytes (een WASM-aanroep met een niet-geheel getal) |
+
+Tests: `test/rek.test.mjs` (kern en worklet met de echte WASM), `test/renderblok.test.mjs`
+(gouden hash ongewijzigd; keylock zonder afval), `test/stream.test.mjs` (de StreamBron),
+`test/toonsoort.test.mjs` (deck en actions), `tools/headless/keylock.mjs` (Chrome).
+
+### 9.4 Nog niet
+
+- **Op Clay's oren en hardware**: keylock in een set, hotcues met keylock (voelt 98 ms
+  traag?), Shift + Tap / Nudge op de APC (VRAGEN I4).
+- S2 (een tweede stretcher, sprong in ~20 ms): pas als 98 ms in een set stoort.
+- De sampler volgt keylock en toon niet (K7a).
+- `_heranker` (gate, echo, sampler) haakt bij een sprong met keylock aan bij het
+  drukken, niet op T: tot 98 ms te vroeg. Niet gemerkt; zo nodig op T zetten.
+- Een gat (pagina nog niet binnen) is met keylock ook stilte, maar de stretcher
+  smeert de randen over zijn blok. Hotcues en cue zijn vastgepind, het doel van een
+  geplande sprong ook.
+

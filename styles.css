@@ -85,6 +85,8 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 390px;grid-template
 .pitch{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.1em;color:var(--dim);margin-left:auto}
 .pitch-val{font-family:ui-monospace,monospace;color:var(--text);min-width:46px;text-align:right}
 .pitch-bereik{min-width:34px;font-family:ui-monospace,monospace}
+.rek{display:inline-flex;gap:2px;align-items:center}
+.rek .rek-toon{min-width:30px;font-family:ui-monospace,monospace}
 
 .dropzone{margin-top:auto;border:1px dashed var(--line);border-radius:6px;padding:10px;
   text-align:center;color:var(--dim);font-size:11px}
