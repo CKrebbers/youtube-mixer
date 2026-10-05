@@ -268,7 +268,7 @@ docs/
   plugins/          AV-kern × Varve: inventaris, plan (01-plan.md), negen analyses
   BEATGRID.md       beatgrid: meting, plan, restpunten (tweede kans, maat-anker)
   TOONSOORT.md      toonsoort per nummer: meting, ontwerp, en wat gebouwd is (§13)
-  KEYLOCK.md        keylock en toon verschuiven met Signalsmith: meting + ontwerp (nog niet gebouwd)
+  KEYLOCK.md        keylock en toon verschuiven met Signalsmith: meting, ontwerp, gebouwd (§9)
   MAPPING-VERSCHIL.md  eigen mapping als verschil: vorm, gedrag, Clay's echte verschil
   LIBRARY.md        library: pagina's, sorteren, hotcues per nummer, schema v6/v7
   BEAMER.md         het losse venster mengt zelf: wie mengt, opname, herladen, rVFC-meting
@@ -381,7 +381,7 @@ docs/
   - Op de APC (voorstel A, 25 sep, `docs/APC40.md`), rechts voor de focus-track:
     Bank ◀ ▶ beatjump (shift: lengte ½/×2), Pan/Sends/User loop in/out/reloop,
     Lock quantize, Stop All Clips rem (geen LED op het apparaat); shift + nummer
-    (2×2) = op de maat. Bank (0x67) blijft vrij voor keylock (VRAGEN I4). Kill,
+    (2×2) = op de maat. Keylock = Shift + Tap, toon = Shift + Nudge ± (VRAGEN I4; Bank is met de hub de hubtoets). Kill,
     rem en op de maat per kolom: de grid-modus klank (MAPJES).
 - REM (vinylstop, 25 sep): `track.N.brake` remt in `track.N.brake.time`
   (SECONDEN 0,1–5, standaard 1: een gebaar van de draaitafel, ook zonder grid)
@@ -397,7 +397,7 @@ docs/
   zoals de knop-kill. De knopstand blijft staan (kill uit = precies terug), ook
   bij een nieuw nummer, zoals de EQ-knoppen. Klikvrij met hellingen van 5 ms die
   in AMPLITUDE een zachte S volgen (zie overgangen). Lampje 1 = weg, 0 = open.
-- Pitch schuift mee met tempo. Dat is `playbackRate`. Keylock hoort bij fase 3.
+- Pitch schuift mee met tempo (zonder keylock). Keylock en toon: `docs/KEYLOCK.md` §9.
 - Nudge op de APC = BEND (`deck.bend`, actions `track.N.bend.back/fwd`): zolang
   je drukt draait alleen de BRON 4% trager/sneller; `deck.rate` (pitchfader,
   bpm, sync) blijft staan, dus loslaten is precies terug. `nudge.back/fwd`
@@ -1189,12 +1189,13 @@ De uitkomsten van het onderzoek van 22 september 2026 staan in ROADMAP.md onder
   voor hotcues, geen ringbuffer. Een ringbuffer gaat uit van vooruit consumeren;
   een deck springt en gaat achteruit.
 
-## Toonsoort (gebouwd 25 sep) en keylock (ontwerp, nog niet gebouwd)
+## Toonsoort (gebouwd 25 sep) en keylock (gebouwd 5 okt)
 
 Volledig in `docs/TOONSOORT.md` (§13: wat gebouwd is) en `docs/KEYLOCK.md`,
 besluiten in VRAGEN blok I. Toonsoort is op 25 sep gebouwd (ROADMAP 14), eerder
-dan "na 25 okt" (Clay 24 sep avond: zoveel mogelijk met agenten). Keylock wacht op
-de luistertest A3 en I1–I3. Wat een bouwer niet mag missen:
+dan "na 25 okt" (Clay 24 sep avond: zoveel mogelijk met agenten). Keylock is op
+5 okt gebouwd na de luistertest (Clay: "klinkt goed"; `docs/KEYLOCK.md` §9). Wat
+een bouwer niet mag missen:
 - **Toonsoort is een KAART** in tracktijd, van de plaat, zoals het grid:
   `{stukken:[{van, toonsoort, stemming, zekerheid, tweede?}], bron, slot, versie}`
   per link (schema v6, kolom `toon_json`). Een stemming PER STUK (zoned out +43 ct,
@@ -1243,6 +1244,22 @@ de luistertest A3 en I1–I3. Wat een bouwer niet mag missen:
   een dip tot −15 dB (ontworpen, niet gebouwd).
 - Namen op het deck, gedeeld door beide ontwerpen: `deck.keylock` (boolean) en
   `deck.transpositie` (halve tonen). Transponeren mag ook zonder keylock (K8).
+- **Gebouwd (5 okt), regels voor wie eraan komt:**
+  - Een segment heeft ZEVEN velden in vaste volgorde (`StreamBron._maak`, `rek`
+    erbij): één hidden class voor de worklet. Een segment in een andere vorm liet
+    in de test renderBlok weer afval maken (polymorf).
+  - Segmenten zonder `rek` gaan door renderBlok zoals altijd: de gouden hash in
+    renderblok.test mag niet veranderen. Een rem gaat ook met keylock via renderBlok.
+  - Een sprong met keylock = een GEPLAND segment op het zoekrooster (`rekPlanT`,
+    ~98 ms): tot T speelt het vorige (`StreamBron._vorig`, `positieIn`). Dat is geen
+    start op de maat: `wachtTot` blijft null, `_wacht` is "er ligt iets in de
+    toekomst". Fasebehoudende sprongen (sync, nudge, beatjump, gequantiseerde
+    hotcue) met `doorlopend`.
+  - Zoeken: doel op t0 + uitLat; doorlopen: t0 + uitLat + één blok (gemeten, §9.2).
+  - In het hete pad van de worklet geen double als argument (ook niet naar de WASM
+    per blok): `_mengB` leest de klok uit `this.t0`. Een WASM-aanroep met een
+    niet-geheel getal kost ~48 bytes; alleen per sprong of toonwissel.
+  - `src/engine/vendor/` wordt gemaakt door `tools/keylock/vendor.mjs`, niet met de hand.
 
 ## Auto-DJ (fase 1, gebouwd 30 sep)
 
