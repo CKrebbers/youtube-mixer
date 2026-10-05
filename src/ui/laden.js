@@ -192,6 +192,19 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
   }
   setInterval(() => { bewaarGrid(); bewaarToon(); }, 1500);
 
+  /*
+   * Een instrument op een track (docs/INSTRUMENTEN.md §6): het nummer is eraf
+   * (deck.leeg), dus deze track hoort bij geen library-nummer meer, heeft geen
+   * golfvorm en geen video. Een laad die nog loopt telt niet meer.
+   */
+  engine.on('instrument', ({ id, soort }) => {
+    if (!soort) return;
+    losVanLibrary(id);
+    analysis[id] = null;
+    deckHerkomst[id] = null;
+    videoMixer.zetBron(id, null);
+  });
+
   /**
    * De tap-hybride.
    *
@@ -405,7 +418,12 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     root: libPaneel,
     decks: DECK_IDS,
     label: (id) => String(trackVanDeck(id)),
-    stand: (id) => { const d = engine.deck(id); return !d.buffer ? 'leeg' : d.playing ? 'speelt' : 'geladen'; },
+    // Een instrument dat klinkt telt als spelend: laden erover (het instrument eraf) vraagt dan een tweede klik.
+    stand: (id) => {
+      const d = engine.deck(id), inst = engine.instrumentOp?.(id);
+      if (inst) return inst.stand().klinkt > 0 ? 'speelt' : 'geladen';
+      return !d.buffer ? 'leeg' : d.playing ? 'speelt' : 'geladen';
+    },
     // "Opnieuw analyseren" in de lijst: staat dat nummer op een track, dan
     // krijgt die het nieuwe grid meteen (en de bewaarlus ziet het als bewaard).
     onGrid: (trackId, grid) => {

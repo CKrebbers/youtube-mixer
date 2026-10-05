@@ -70,6 +70,14 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   op 1000 Hz, per kanaal gemeten (Goertzel). Zaal 1/2 alleen track 2; koptelefoon 3/4 met de cue op
   track 1 alleen track 1 (−9 dB tegen −156 dB); mix, volume (13,5 dB) en omgewisseld. Raakt de
   geluidsinstellingen van de Mac niet.
+- `instrument.mjs [uitmap]` — instrumenten op een track (docs/INSTRUMENTEN.md §6), eigen server op 8814
+  (debug 9414; `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`), geen MIDI: de INSTRUMENT-rij (openen, Poly kiezen
+  op de focus-track, knopnamen, kolom en focuskop, een toets met de muis), en de echte Web Audio op een
+  OfflineAudioContext: A4 = 440 Hz ± 2 ct (nuldoorgangen), de standaardklank symmetrisch om 440,
+  noteOff klinkt uit tot stilte, een akkoord van drie op 0,8 rond −14 LUFS (BS.1770, gegate; zegt welke
+  OPHOGING het precies −14 maakt), stemroof zonder tik (tweede afgeleide, gepland én live, met een hard
+  afgekapte stem als controle), en door de echte engine (fader dicht, filterknop). Schermafdruk
+  `instrument-rij.png`. Raakt de geluidsinstellingen van de Mac niet.
 - `plan.mjs` — het planvenster in headless Chromium (server op 8795, eigen VARVE_PLANNEN): de knop
   "plan" opent plan.html, voorspelling, bewerken, ongedaan maken, opslaan (vorige versie bewaard),
   nummer erbij, auto aan over de bus van de mixer, live "speelt nu", een wijziging van buitenaf

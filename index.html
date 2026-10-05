@@ -28,6 +28,7 @@
     <button id="klankschaal-btn" class="ghost" title="klankschaal: speel mee op de toon van wat je hoort">klankschaal</button>
     <button id="stems-btn" class="ghost" title="stems van de track met focus: zang en rest (of vier), niveau en kill per stem">stems</button>
     <button id="koptelefoon-btn" class="ghost" title="koptelefoon: tracks voorbeluisteren zonder dat de zaal ze hoort, volume en mix">koptelefoon</button>
+    <button id="instrument-btn" class="ghost" title="instrument op de track met focus: kiezen, acht knoppen, een toetsenbord om te proberen, en welk MIDI-keyboard er binnenkomt">instrument</button>
     <a id="apc-btn" class="ghost" href="apc.html" target="varve-apc" title="wat elke knop van de APC doet, per mapje">APC-kaart</a>
     <button id="midi-btn" class="ghost">MIDI</button>
     <button id="help-btn" class="ghost">? toetsen</button>
@@ -281,6 +282,35 @@
     <div class="knob sm" data-action="headphone.level" data-label="VOL" data-value="0.8" data-default="0.8" title="koptelefoonvolume (APC: Cue Level)"></div>
   </div>
   <button class="btn sm kp-wissel" title="zaal en koptelefoon omwisselen (kanaal 1/2 ↔ 3/4); geldt na herladen">⇄</button>
+</section>
+
+<!-- ================= INSTRUMENT (docs/INSTRUMENTEN.md §6) ================= -->
+<!-- Voor de track met focus. De actions staan hier op track 1; instrument-paneel.js
+     schrijft ze om naar de focus. Kiezen, acht knoppen (plekken: wat ze doen hangt
+     van het instrument af), paniek, een toetsenbord van twee octaven om met de muis
+     te proberen (speelt op de speeltrack, zoals een MIDI-keyboard), en welk
+     MIDI-keyboard er binnenkomt. -->
+<section id="instrument" class="instrument-rij hidden">
+  <span class="sampler-kop">INSTRUMENT</span>
+  <span class="in-track" title="de track met focus">track 1</span>
+  <button data-kind="button" data-action="track.1.inst" class="btn sm in-kies" title="instrument kiezen: geen → Poly → … → geen. Speelt er een nummer op deze track, dan gaat het er pas af bij een tweede klik binnen 3 s">geen</button>
+  <div class="in-knoppen">
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.1" data-label="1" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.2" data-label="2" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.3" data-label="3" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.4" data-label="4" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.5" data-label="5" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.6" data-label="6" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.7" data-label="7" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.8" data-label="8" data-value="0" data-default="0"></div>
+  </div>
+  <button data-kind="button" data-action="track.1.inst.stil" class="btn sm in-stil" title="meteen stil (paniek), met een korte fade">stil</button>
+  <div class="in-toetsen" title="klik om te spelen (lager op de toets = harder); speelt op de speeltrack, zoals een MIDI-keyboard">
+    <button class="btn sm in-oct" data-stap="-12" title="een octaaf lager">◀</button>
+    <div class="in-klavier"></div>
+    <button class="btn sm in-oct" data-stap="12" title="een octaaf hoger">▶</button>
+  </div>
+  <span class="in-keyboard" title="welk MIDI-keyboard er binnenkomt (elke ingang behalve de APC)">geen MIDI-keyboard</span>
 </section>
 
 <!-- ================= AUTO-DJ ================= -->

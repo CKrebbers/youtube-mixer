@@ -15,6 +15,7 @@ import { opzetKlankschaal } from './klankschaal-paneel.js';
 import { opzetAuto } from './auto-paneel.js';
 import { opzetStems } from './stems-paneel.js';
 import { opzetKoptelefoon, koptelefoonOpties } from './koptelefoon-paneel.js';
+import { opzetInstrument } from './instrument-paneel.js';
 import { StemsWachtrij } from './stems-wachtrij.js';
 import { Automaat } from '../auto/automaat.js';
 import { opzetPlanKoppeling } from './plan-koppeling.js';
@@ -182,7 +183,9 @@ attachKeyboard(engine, { onHelp: toggleHelp, venster: (v) => staat.venster[v] })
 
 // ---- MIDI -----------------------------------------------------------------
 // Mapjes op de controller (VRAGEN B3): welke laag van de knoppen open staat.
-const lagen = new Lagen();
+// Het mapje inst (Clip/Device View: strip → rack → inst) alleen als de
+// focus-track een instrument heeft (docs/INSTRUMENTEN.md §6).
+const lagen = new Lagen({ beschikbaar: (groep, laag) => groep === 'device' && laag === 'inst' && !!engine.instrumentOp(engine.focus) });
 bindLagen(lagen);
 window.lagen = lagen;
 const midiDelen = opzetMidi({ engine, sluitOnderpanelen: onderpanelen.sluitOnderpanelen, lagen,
@@ -196,6 +199,10 @@ if (vormen) {
     .catch((err) => meld(`vormlagen: APC-indeling niet geladen (${err.message})`, 'fout'));
 }
 opzetMapjeBalk({ lagen, mapping: midiDelen.mapping, vars: () => midiDelen.mapping.vars() });
+// De INSTRUMENT-rij en de noten van MIDI-keyboards (noten.js luistert mee op de hub,
+// vraagt zelf geen MIDI aan: alleen het eerste tabblad, net als de APC).
+const instrumentPaneel = opzetInstrument({ engine, midi: midiDelen.midi, lagen });
+window.noten = instrumentPaneel.noten;
 window.midi = midiDelen.midi;         // handig in de console tijdens bouwen
 window.mapping = midiDelen.mapping;
 window.feedback = midiDelen.feedback;
@@ -227,6 +234,7 @@ startRenderloop({
     auto: autoPaneel.teken,
     stems: stemsPaneel.teken,
     koptelefoon: koptelefoonPaneel.teken,
+    instrument: instrumentPaneel.teken,
   },
 });
 

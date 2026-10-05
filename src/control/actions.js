@@ -25,6 +25,7 @@ import { FITS } from '../video/passen.js';
 import { EQ_BANDEN, REM_MIN, REM_MAX, STEM_NAMEN } from '../engine/deck.js';
 import { GROEPEN, LAAGNAAM } from './lagen.js';
 import { VOLGEN, LADDERS, KLANKSOORTEN, TRANSPOSITIE_MAX } from '../engine/klankschaal.js';
+import { INSTRUMENTEN } from '../engine/instrumenten/index.js';
 
 const registry = new Map();
 
@@ -450,6 +451,54 @@ export function bindEngine(engine) {
     define(`${n}.pfl`, 'trigger', (on) => { if (on) kt.wisselPfl(id); },
       { label: `Track ${nr} in de koptelefoon (voorbeluisteren) aan/uit`,
         read: () => (kt.heeft(id) ? (kt.pflAan(id) ? 1 : 0) : null) });
+
+    // ---- instrument op deze track (docs/INSTRUMENTEN.md §6) -----------------
+    // Een track draagt een nummer óf een instrument (ST7). Kiezen loopt rond:
+    // geen → elk instrument uit INSTRUMENTEN → geen. Staat er een nummer dat
+    // SPEELT, dan gaat het er pas af bij een tweede druk binnen 3 s (destructief,
+    // zoals laden over een spelende track): ook op de APC en het toetsenbord.
+    // Noten gaan NIET over de bus (een noot is geen 0..1): src/control/noten.js.
+    const inst = () => engine.instrumentOp?.(id) ?? null;
+    const keuzes = [null, ...INSTRUMENTEN.map((x) => x.soort)];
+    let zekerTot = 0;
+    const kiesInstrument = (soort) => {
+      if (soort && !inst() && d.playing) {
+        const nu = performance.now();
+        if (!(nu < zekerTot)) {
+          zekerTot = nu + 3000;
+          engine.emit('melding', { tekst: `track ${nr} speelt — druk nog eens (binnen 3 s) om het nummer eraf te halen voor een instrument`, soort: 'info' });
+          return;
+        }
+      }
+      zekerTot = 0;
+      const r = engine.zetInstrument(id, soort);
+      if (!r.ok) engine.emit('melding', { tekst: `track ${nr}: ${r.reden}`, soort: 'fout' });
+    };
+    const keuzeNu = () => keuzes.indexOf(inst()?.soort ?? null);
+    define(`${n}.inst`, 'trigger', (on) => { if (on) kiesInstrument(keuzes[(Math.max(0, keuzeNu()) + 1) % keuzes.length]); },
+      { label: `Track ${nr} instrument kiezen (geen → ${INSTRUMENTEN.map((x) => x.naam).join(' → ')} → geen)`,
+        read: () => (keuzes.length > 1 ? Math.max(0, keuzeNu()) / (keuzes.length - 1) : 0) });
+    // Door de instrumenten bladeren zonder "geen" (Device ◀ ▶ in het mapje inst).
+    for (const [naam, stap] of [['next', 1], ['prev', -1]]) {
+      define(`${n}.inst.${naam}`, 'trigger', (on) => {
+        if (!on || !INSTRUMENTEN.length) return;
+        const i = INSTRUMENTEN.findIndex((x) => x.soort === inst()?.soort);
+        const j = i < 0 ? (stap > 0 ? 0 : INSTRUMENTEN.length - 1) : (i + stap + INSTRUMENTEN.length) % INSTRUMENTEN.length;
+        kiesInstrument(INSTRUMENTEN[j].soort);
+      }, { label: `Track ${nr} ${stap > 0 ? 'volgend' : 'vorig'} instrument`, read: () => (inst() ? 0 : null) });
+    }
+    // Acht knoppen: een PLEK, zoals de FX-knoppen; wat hij doet hangt van het instrument af.
+    for (let k = 1; k <= 8; k++) {
+      define(`${n}.inst.knob.${k}`, 'value', (v) => inst()?.zetParam(k, v),
+        { label: `Track ${nr} instrumentknop ${k}`, read: () => inst()?.leesParam(k) ?? null });
+    }
+    // Paniek: meteen stil (korte fade). Lampje: 1 = ingedrukt, 0,5 = er klinkt iets, 0 = stil, null = geen instrument.
+    {
+      let ingedrukt = false;
+      define(`${n}.inst.stil`, 'trigger', (on) => { ingedrukt = !!on; if (on) inst()?.stil(); },
+        { label: `Track ${nr} instrument meteen stil (paniek)`,
+          read: () => { const i = inst(); return !i ? null : ingedrukt ? 1 : i.stand().klinkt > 0 ? 0.5 : 0; } });
+    }
 
     // Sends: na de fader naar de gedeelde echo (A) en galm (B).
     for (const bus of ['A', 'B']) {

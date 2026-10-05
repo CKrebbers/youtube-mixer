@@ -40,8 +40,12 @@ import { PITCH_BEREIKEN, SPRONG_TELLEN, EQ_BANDEN } from '../engine/deck.js';
  * - headphone.* en track.N.pfl: de koptelefoon. De zaal hoort hem niet, dus
  *   voor wat er klinkt doet hij niets, en terugspelen zou de koptelefoon van
  *   nu omzetten. Ze staan wel in het log (docs/STUDIO.md §3).
+ * - track.N.inst en track.N.inst.*: een instrument op de track. De noten
+ *   gaan niet over de bus en staan dus niet in het log: terugspelen zou een
+ *   stil instrument neerzetten, en het nummer dat er nu staat eraf halen.
+ *   Ze staan wel in het log (docs/INSTRUMENTEN.md §6).
  */
-export const OVERSLAAN = /^(record\.|log\.|layer\.|headphone\.|track\.\d+\.rack\.(next|prev)$|track\.\d+\.key(\.|$)|track\.\d+\.pfl$)/;
+export const OVERSLAAN = /^(record\.|log\.|layer\.|headphone\.|track\.\d+\.rack\.(next|prev)$|track\.\d+\.key(\.|$)|track\.\d+\.pfl$|track\.\d+\.inst(\.|$))/;
 
 /**
  * Actions die over het NUMMER gaan (transport, cues, loops, grid). Staat het

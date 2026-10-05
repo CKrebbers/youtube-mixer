@@ -127,7 +127,8 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       views.zoom.draw(d, analysis[id], engine.deck(id).onsets);
       views.overview.draw(d, analysis[id]);
 
-      tekst(e.title, d.title || '— leeg —');
+      // Een instrument op de track (docs/INSTRUMENTEN.md §6): zijn naam, geen golfvorm.
+      tekst(e.title, d.instrument ? `♪ ${d.instrument.naam}` : (d.title || '— leeg —'));
       tekst(e.pos, fmtTime(d.position));
       const rest = Math.max(0, d.duration - d.position);
       tekst(e.rem, '-' + fmtTime(rest));
@@ -219,6 +220,9 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     });
     veilig('koptelefoon', () => {
       stappen.koptelefoon?.();
+    });
+    veilig('instrument', () => {
+      stappen.instrument?.();
     });
     veilig('opnemen', () => {
       stappen.opnemen();
