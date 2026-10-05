@@ -4,6 +4,7 @@ import apc from '../control/devices/apc40mk2.js';
 import { esc } from './dom.js';
 import { beschrijf } from './apc-beschrijf.js';
 import { laadEigen } from './mapping-opslag.js';
+import { hubAdres } from './vlag.js';
 
 /**
  * De interactieve APC-kaart (apc.html).
@@ -235,6 +236,8 @@ document.getElementById('legenda').innerHTML = [...SOORTEN.map(([id, naam]) => [
  */
 async function luisterMee() {
   const status = document.getElementById('live');
+  // Met ?hub= bezit de AV-app-hub de APC: geen tweede Web MIDI-client ernaast.
+  if (hubAdres()) { status.textContent = 'de APC is van de AV-app-hub: de kaart kijkt niet live mee'; return; }
   if (!navigator.requestMIDIAccess) { status.textContent = 'geen Web MIDI in deze browser'; return; }
   let toegang;
   try { toegang = await navigator.requestMIDIAccess({ sysex: false }); } catch (_) { status.textContent = 'MIDI niet toegestaan'; return; }
@@ -295,6 +298,10 @@ alles();
 // Meekijken met de APC pas na een klik: dan opent deze pagina nooit
 // ongevraagd MIDI naast de mixer (zie CLAUDE.md, Chrome-crash 23 sep).
 const live = document.getElementById('live');
-live.textContent = 'live meekijken met de APC';
-live.classList.add('klikbaar');
-live.addEventListener('click', () => { live.classList.remove('klikbaar'); live.textContent = '…'; luisterMee(); }, { once: true });
+if (hubAdres()) {
+  live.textContent = 'de APC is van de AV-app-hub: de kaart kijkt niet live mee';
+} else {
+  live.textContent = 'live meekijken met de APC';
+  live.classList.add('klikbaar');
+  live.addEventListener('click', () => { live.classList.remove('klikbaar'); live.textContent = '…'; luisterMee(); }, { once: true });
+}
