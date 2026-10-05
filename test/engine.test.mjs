@@ -712,6 +712,27 @@ console.log('\ndelaytijd zonder gejank');
     k.tijden[0] === k.tijden[1] && Math.abs(k.tijden[0] - 0.02 * Math.pow(60, 0.9)) < 1e-9);
   NOW = 0;
 }
+// Een wachtende stand mag een nieuwere niet overschrijven. In een verborgen tabblad
+// knijpt Chrome de timer: dan kan er een directe wissel tussen komen, en daarna
+// zette de oude timer alsnog de oude tijd (gevonden door het spoor effecten, 5 okt).
+{
+  const { effectVan } = await import('../src/engine/fx.js');
+  const ctx = new AudioContext();
+  const d = effectVan('delay').bouw(ctx);
+  NOW = 200;
+  d.zet('tijd', 0.35, NOW);
+  d.zet('tijd', 0.8, NOW);                    // een fade loopt
+  d.zet('tijd', 0.2, NOW + 0.01);             // wacht op het einde van die fade
+  NOW += 1;                                   // de (geknepen) timer is nog niet geweest
+  d.zet('tijd', 0.6, NOW);                    // en nu meteen een nieuwere stand
+  NOW += 1;
+  await new Promise((r) => setTimeout(r, 400));
+  const k = d._kop();
+  ok('een geknepen timer zet geen oude delaytijd over een nieuwere heen',
+    Math.abs(k.tijden[k.actief] - 0.02 * Math.pow(60, 0.6)) < 1e-9);
+  d.vernietig?.();
+  NOW = 0;
+}
 
 // ---- reverb met freeze --------------------------------------------------------
 

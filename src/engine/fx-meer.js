@@ -245,8 +245,8 @@ function metWorklet(ctx, naam, opties, klaar) {
  * vertraagde kopie na een rackwissel abrupt, midden in een golf (gemeten in
  * Chrome: chorus ×21, compressor ×23 boven de gewone tweede afgeleide).
  */
-const INLOOP = 0.03;
-function inloop(ctx) {
+export const INLOOP = 0.03;
+export function inloop(ctx) {
   const g = ctx.createGain();
   g.gain.value = 0;
   lineair(g.gain, 1, ctx, INLOOP);

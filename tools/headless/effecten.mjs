@@ -480,7 +480,7 @@ try {
   ok(`distortion: luidheid bij drive 0 / ½ / 1 (dB t.o.v. de invoer): ${verloop}`, Object.values(vl).every((r) => r.every((x) => Math.abs(x) < 6)));
   const al = await roep('aliasing');
   console.log(`      distortion hard, drive 1, 3150 Hz: aliasing ${f1(-al)} dB onder de harmonischen (geen oversampling, zie docs/EFFECTEN.md)`);
-  console.log('      ter vergelijking, de zeven van fx.js gewisseld vanaf het filter (geen eis, de oude hebben geen inloop):');
+  console.log('      ter vergelijking, de zeven van fx.js gewisseld vanaf het filter (geen eis; alleen de delay kreeg een inloop, 5 okt):');
   for (const id of ['delay', 'crush', 'gate', 'phaser', 'ringmod', 'reverb']) {
     const w = await roep('klikWissel', id);
     console.log(`        ${id}: ×${f2(w.ratio)} (${w.tijdens.toExponential(1)})`);

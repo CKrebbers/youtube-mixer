@@ -255,8 +255,9 @@ Chrome (`tools/headless/effecten.mjs`, 75 checks): zie de getallen hierboven; ve
   −54 dBFS). Alleen door het glijden zelf erboven: flanger meng ×5,3 (6,3e-4),
   compressor makeup ×4,4 (3,5e-4), pitch interval ×3,1 (9,9e-4), tremolo
   herankeren ×2,7 (2,8e-4);
-- Ter vergelijking de oude: de **delay** van fx.js gewisseld vanaf het filter geeft
-  ×46 (4,9e-3): zijn echo begint abrupt na de echotijd (geen inloop).
+- Ter vergelijking de oude: de **delay** van fx.js gewisseld vanaf het filter gaf
+  ×46 (4,9e-3): zijn echo begon abrupt na de echotijd. Sinds 5 okt heeft hij dezelfde
+  `inloop()`: ×1,61 (1,7e-4).
 
 ## Wat NIET getest is (oren nodig)
 
@@ -293,6 +294,6 @@ Chrome (`tools/headless/effecten.mjs`, 75 checks): zie de getallen hierboven; ve
    Mag een insert dat, of moet zo'n effect alleen op de bussen/master?
 4. Tremolo en autopan op de "1" van de maat: dan moet `fxKlok` de maatfase meegeven.
 5. Tremolo en autopan staan standaard op de maat. Goed zo?
-6. De delay van fx.js: zijn echo begint na een wissel abrupt (×46), en een tijd die
-   wacht kan na een nieuwere alsnog gezet worden (`wissel()` wist `wachtend` niet).
-   Allebei een paar regels; niet gedaan, want niet van dit spoor.
+6. ~~De delay van fx.js: zijn echo begon na een wissel abrupt (×46), en een tijd die
+   wachtte kon na een nieuwere alsnog gezet worden.~~ Allebei opgelost op 5 okt (inloop,
+   `wachtend = null` bij een directe wissel; check in engine.test).

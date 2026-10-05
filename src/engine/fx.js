@@ -1,7 +1,7 @@
 import { clamp, expMap } from '../lib/emitter.js';
 import { leesRack, schrijfRack, resolveMacros, rackVanEffect, LEEG_RACK } from './rack.js';
 import { startDrempel, houdVast, zetHellingen } from './overgang.js';
-import { MEER_EFFECTEN } from './fx-meer.js';
+import { MEER_EFFECTEN, inloop } from './fx-meer.js';
 
 /**
  * De insert-slot: één effectketen per deck, klikvrij verwisselbaar.
@@ -206,7 +206,10 @@ export const EFFECTEN = [
       // Let op: een lus MOET een DelayNode bevatten, anders mute de browser het
       // hele lusgedeelte. En delayTime in een lus wordt geklemd op minimaal één
       // render quantum (128 samples, ~2,7 ms bij 48 kHz).
-      ingang.connect(som);
+      // Een nieuwe keten begint met een LEEG geheugen: zonder inloop begint de eerste
+      // echo na een rackwissel abrupt, midden in een golf (gemeten door het spoor
+      // effecten: ×46 boven de gewone tweede afgeleide). Zie inloop() in fx-meer.js.
+      ingang.connect(inloop(ctx)).connect(som);
       for (let k = 0; k < 2; k++) som.connect(koppen[k]).connect(gains[k]).connect(mix);
       mix.connect(uitgang);
       mix.connect(toon).connect(fb).connect(som);
@@ -234,6 +237,9 @@ export const EFFECTEN = [
           }, (klaarOm - nu) * 1000 + 5);
           return;
         }
+        // Een stand die nog op een fade wachtte is hiermee achterhaald: zonder dit
+        // zette een (in een verborgen tabblad geknepen) timer hem er later alsnog over.
+        wachtend = null;
         if (Math.abs(koppen[actief].delayTime.value - sec) < 1e-4) return;
         const nieuw = 1 - actief;
         koppen[nieuw].delayTime.cancelScheduledValues?.(nu);
