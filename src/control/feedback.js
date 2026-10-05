@@ -103,6 +103,16 @@ const KLEURSCHEMA = [
   [/^auto\.skip$/,    { aan: 'oranje', uit: 'oranjedonker' }],
   [/^auto\.langer$/,  { aan: 'cyaan', uit: 'cyaandonker' }],
   [/^auto\.nu$/,      { aan: 'geel', uit: 'geeldonker' }],
+  // Patronen (5 okt, docs/PATRONEN.md): oranje (stems hadden zeegroen al), een vrije kleur met
+  // een donkere tint (34) die geen modus is. Een plek (en een rij op de
+  // scene-knoppen): donkergrijs = leeg, donker = gevuld, fel = speelt, uit =
+  // geen instrument. Wacht hij op de maat (starten of stoppen), dan knippert
+  // de READ zelf tussen 1 en 0,5 op de tel van de patroonklok (de klok van
+  // een instrumenttrack is niet `track.N.phase`, dus `tel` kan het niet).
+  [/\.pattern\.[1-5](\.now)?$|^patterns\.row\.[1-5]$/, { aan: 'oranje', half: 'oranjedonker', uit: 'donkergrijs' }],
+  [/\.pattern\.stop(\.now)?$|^patterns\.stop(\.now)?$/, { aan: 'rood', half: 'rooddonker', uit: 'uit' }],
+  [/^patterns\.record$/, { aan: 'rood', uit: 'rooddonker' }],
+  [/^layer\.grid\.patronen$/, { aan: 'oranje', uit: 'oranjedonker' }],
   [/^layer\./,        { aan: 'wit', uit: 'donkergrijs' }],
 ];
 

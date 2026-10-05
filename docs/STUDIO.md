@@ -160,27 +160,33 @@ Klaar als (op de Mac):
 - [ ] zonder het samengestelde apparaat: VARVE werkt als vroeger en de rij zegt waarom
       er geen cue is.
 
-### S2 — Stems als kanalen, effecten overal
-- Per stem een eigen strip vóór de som: EQ, insert-rack en cue (`track.N.stem.<s>.pfl`).
-  Kost per deck vier extra strips; meten met `renderblok` (0 GC blijft de eis).
-- Een insert-rack op de master, en een echte limiter (oversampled, als AudioWorklet)
-  in plaats van de DynamicsCompressor.
-- De effecten van de filter app als ES-module erbij in `fx.js`, met hun contract.
-- VRAGEN N1 (waar stems op de APC staan) eerst beslissen.
+### S2 — Stems als kanalen, effecten overal (gebouwd 5 okt, niet beluisterd)
+Drie sporen, elk met eigen tests en metingen in echte Chrome:
+- **Master** (`docs/MASTER.md`): een insert-rack op de hele mix en een echte limiter
+  (AudioWorklet, 1,5 ms vooruitblik, −1 dBTP met 4× oversampling, 0 GC). Pieken van +6 dB
+  komen uit op −1,04 dBTP; onder het plafond verandert er niets. APC: Shift + Clip/Device
+  View = mapje master. De cue in de koptelefoon schuift mee met de vooruitblik.
+- **Stemkanalen** (`docs/STEMS.md` §5): per stem filter, echo, galm en cue; de sends volgen
+  de trackfader. Alles pas aangemaakt bij het eerste gebruik (stil kost het niets). Grid-modus
+  STEMS op de APC (Shift + scene 3): per kolom zang/rest/drums/bas/overig weg zolang je drukt.
+  Een insert-effect per stem bewust NIET (5,5 ms CPU per seconde per slot, ook stil).
+- **Effecten** (`docs/EFFECTEN.md`): tien uit de filter app (distortion, chorus, flanger,
+  vibrato, tremolo, autopan, auto-wah, pitch, compressor, breedte) en vijf sjablonen.
 
-Klaar als: zang met echo terwijl de drums droog blijven; alleen de bas in de
-koptelefoon; de limiter vangt een piek zonder te pompen (gemeten).
+Klaar als (op de Mac): zang met echo terwijl de drums droog blijven; alleen de bas in de
+koptelefoon; de limiter vangt een piek zonder te pompen; de nieuwe effecten klinken goed.
 
-### S3 — Spelen
-- Hub: profiel Xboard49 (proef: poortnaam, elke knop één keer) en noten in het protocol
-  (`noot`: nummer, snelheid 0..1, druk, buiging).
-- VARVE wordt een app van de hub (hub-fase 1, gepland na 25 okt).
-- Instrumentkanalen: een strip zonder transport (EQ, insert, fader, sends, cue) met
-  één interface: `noteOn(noot, snelheid, t)`, `noteOff(noot, t)`, `druk(w)`,
-  `buig(w)`, `zetParam(i, 0..1)`. De klankschaal wordt het eerste; dan de FM-stemmen
-  van MediSynth (chromatisch, ST4) en de polysynth van de filter app.
-- De knoppen van de Xboard volgen het gekozen instrument, zoals de device knobs de
-  focus-track.
+### S3 — Spelen (gebouwd 5 okt, niet beluisterd, niet op de echte Xboard/Maschine)
+- **Een track draagt een nummer óf een instrument** (`docs/INSTRUMENTEN.md`): Poly (filter
+  app), FM (MediSynth), Schaal (de klankschaal, elke noot een eigen veld) en Drums (kit uit
+  Elektronlearn op pad 1–8, eigen stukken op 9–16). Elk gemeten: toonhoogte binnen 2 ct,
+  ~−14 LUFS, uitklinken tot stilte, stemroof zonder tik. Het hele kanaal werkt: EQ,
+  effect, filter, fader, sends, cue.
+- **Noten**: `src/control/noten.js` (elke MIDI-ingang behalve de APC) naar de speeltrack;
+  INSTRUMENT-rij met een toetsenbord om met de muis te proberen; APC-mapje inst.
+- **Hub** (AV-app-hub PR #11, gemerged): Xboard49 als MIDI-invoer, Maschine MK2 via HID met
+  een virtuele MIDI-indeling, proefstappen voor beide. De Varve-kant (Xboard/Maschine via de
+  hub, schermen, pad-LED's) is in de maak.
 
 Klaar als: op de Xboard49 de FM-synth spelen over een lopend nummer, eerst alleen in de
 koptelefoon; velocity en aftertouch hoorbaar; toets → geluid gemeten (doel < 15 ms).

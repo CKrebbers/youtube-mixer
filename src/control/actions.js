@@ -26,6 +26,7 @@ import { EQ_BANDEN, REM_MIN, REM_MAX, STEM_NAMEN } from '../engine/deck.js';
 import { GROEPEN, LAAGNAAM } from './lagen.js';
 import { VOLGEN, LADDERS, KLANKSOORTEN, TRANSPOSITIE_MAX } from '../engine/klankschaal.js';
 import { INSTRUMENTEN } from '../engine/instrumenten/index.js';
+import { PLEKKEN, MAX_LENGTE, STANDAARD_LENGTE, TEMPO, SWING, gevuld, volgendeLengte } from '../engine/patronen/model.js';
 
 const registry = new Map();
 
@@ -764,6 +765,120 @@ export function bindEngine(engine) {
   define('transport.quantize', 'trigger', (on) => { if (on) engine.setQuantize(!engine.quantize); },
     { label: 'Quantize aan/uit: cue, hotcues en loop in/out op de tel, hotcues springen in de maat',
       read: () => (engine.quantize ? 1 : 0) });
+
+  bindPatronen(engine);
+}
+
+/** Een speler die er niet is: alles doet niets, alles leest null. */
+const GEEN_PATRONEN = {
+  druk: () => ({ ok: false }), stop() {}, stopAlles() {}, rij() {}, wisselStap() {}, zetLengte() {}, zetSwing() {}, wis() {},
+  zetTempo() {}, neemOp() {}, lamp: () => null, rijLamp: () => null, stapLamp: () => null, stand: () => null,
+  patroon: () => null, gekozen: () => 1, spelend: () => [], tempo: null, opnemen: false,
+};
+
+/**
+ * Patronen (docs/PATRONEN.md, STUDIO S4): een sequencer op de maat van de
+ * maatgever die de instrumenten op de tracks speelt (engine.patronen,
+ * src/engine/patronen/). Per track vijf plekken, de vijf rijen van het grid.
+ *
+ *   track.N.pattern.K        starten op de maat; speelt hij: stoppen op de maat;
+ *                            een ander op dezelfde track: wisselen op de maat;
+ *                            een lege plek: alleen kiezen (met opnemen aan: beginnen)
+ *   track.N.pattern.K.now    hetzelfde, maar starten op de volgende TEL en meteen stoppen (shift)
+ *   track.N.pattern.stop(.now)  stoppen op de maat (meteen)
+ *   track.N.pattern.step.S   stap S (1–64) van de gekozen plek: de laatst gespeelde noot erop of eraf
+ *   track.N.pattern.length / .length.up / .length.down / .swing / .clear   de gekozen plek
+ *   patterns.row.K           rij K op alle tracks (scene launch); patterns.stop(.now) alles
+ *   patterns.tempo           het eigen tempo zonder maatgever (40–240 bpm); patterns.tap tikt het
+ *   patterns.record          live opnemen aan/uit (de noten zelf gaan niet over de bus: noten.js)
+ *
+ * Reads (VRAGEN B4): null = geen instrument op de track (niets te doen),
+ * 0 = leeg, 0,5 = gevuld, 1 = speelt; een plek die op de maat wacht
+ * (starten of stoppen) knippert op de tel van de klok tussen 1 en 0,5.
+ * Bewerken (stappen, lengte, swing, wissen, opnemen) slaat terugspelen over:
+ * het patroon is al bewaard (zie OVERSLAAN in terugspelen.js).
+ */
+export function bindPatronen(engine) {
+  // Altijd gedefinieerd, ook op een engine zonder speler (een dubbel in de
+  // tests): dan doen ze niets en lezen ze null, zoals master.fx.*.
+  const pt = engine.patronen ?? GEEN_PATRONEN;
+  const k01 = (v) => Math.min(1, Math.max(0, Number(v) || 0));
+  const melding = (r, nr) => { if (r && !r.ok && r.reden) engine.emit('melding', { tekst: `track ${nr}, patroon: ${r.reden}`, soort: 'fout' }); };
+  for (const [nr, id] of TRACKS) {
+    const n = `track.${nr}.pattern`;
+    const inst = () => engine.instrumentOp?.(id) ?? null;
+    const gekozenP = () => pt.patroon(id, pt.gekozen(id));
+    for (let k = 1; k <= PLEKKEN; k++) {
+      define(`${n}.${k}`, 'trigger', (on) => { if (on) melding(pt.druk(id, k), nr); },
+        { label: `Track ${nr} patroon ${k}: starten op de maat (speelt hij: stoppen op de maat)`, read: () => pt.lamp(id, k) });
+      define(`${n}.${k}.now`, 'trigger', (on) => { if (on) melding(pt.druk(id, k, { meteen: true }), nr); },
+        { label: `Track ${nr} patroon ${k} meteen: starten op de volgende tel, stoppen meteen`, read: () => pt.lamp(id, k) });
+    }
+    // 0,5 = er speelt (of wacht) iets om te stoppen, 1 = hij stopt al op de maat, 0 = niets.
+    const stopLamp = () => {
+      if (!inst()) return null;
+      const st = pt.stand(id);
+      return !st ? null : st.stopt ? 1 : st.speelt || st.wacht ? 0.5 : 0;
+    };
+    define(`${n}.stop`, 'trigger', (on) => { if (on) pt.stop(id); },
+      { label: `Track ${nr} patroon stoppen op de maat`, read: stopLamp });
+    define(`${n}.stop.now`, 'trigger', (on) => { if (on) pt.stop(id, { meteen: true }); },
+      { label: `Track ${nr} patroon meteen stoppen`, read: stopLamp });
+    for (let s = 1; s <= MAX_LENGTE; s++) {
+      define(`${n}.step.${s}`, 'trigger', (on) => { if (on && inst()) pt.wisselStap(id, pt.gekozen(id), s - 1); },
+        { label: `Track ${nr} patroon: stap ${s} aan/uit (de laatst gespeelde noot)`, read: () => pt.stapLamp(id, s - 1) });
+    }
+    define(`${n}.length`, 'value', (v) => { if (inst()) pt.zetLengte(id, pt.gekozen(id), 1 + Math.round(k01(v) * (MAX_LENGTE - 1))); },
+      { label: `Track ${nr} patroon: lengte (1–${MAX_LENGTE} stappen)`,
+        read: () => (!inst() ? null : ((gekozenP()?.lengte ?? STANDAARD_LENGTE) - 1) / (MAX_LENGTE - 1)) });
+    for (const [naam, r] of [['up', 1], ['down', -1]]) {
+      define(`${n}.length.${naam}`, 'trigger', (on) => {
+        if (on && inst()) pt.zetLengte(id, pt.gekozen(id), volgendeLengte(gekozenP()?.lengte ?? STANDAARD_LENGTE, r));
+      }, { label: `Track ${nr} patroon: ${r > 0 ? 'langer' : 'korter'}`, read: () => (inst() ? 0 : null) });
+    }
+    define(`${n}.swing`, 'value', (v) => { if (inst()) pt.zetSwing(id, pt.gekozen(id), SWING.min + k01(v) * (SWING.max - SWING.min)); },
+      { label: `Track ${nr} patroon: swing (${SWING.min} = recht, ${SWING.max} = een halve stap)`,
+        read: () => (!inst() ? null : ((gekozenP()?.swing ?? SWING.min) - SWING.min) / (SWING.max - SWING.min)) });
+    // Leegmaken is destructief: pas bij een tweede druk binnen 3 s (zoals een instrument kiezen over een spelend nummer).
+    let zekerTot = 0;
+    define(`${n}.clear`, 'trigger', (on) => {
+      if (!on || !inst()) return;
+      const plek = pt.gekozen(id);
+      if (!gevuld(pt.patroon(id, plek))) return;
+      const nu = performance.now();
+      if (!(nu < zekerTot)) {
+        zekerTot = nu + 3000;
+        engine.emit('melding', { tekst: `track ${nr}: druk nog eens (binnen 3 s) om patroon ${plek} leeg te maken`, soort: 'info' });
+        return;
+      }
+      zekerTot = 0;
+      pt.wis(id, plek);
+    }, { label: `Track ${nr} patroon leegmaken (de gekozen plek; tweede druk binnen 3 s)`,
+         read: () => (!inst() ? null : gevuld(gekozenP()) ? 0.5 : 0) });
+  }
+
+  const naarV = (bpm) => (bpm - TEMPO.min) / (TEMPO.max - TEMPO.min);
+  define('patterns.tempo', 'value', (v) => pt.zetTempo(TEMPO.min + k01(v) * (TEMPO.max - TEMPO.min)),
+    { label: `Patronen: eigen tempo zonder maatgever (${TEMPO.min}–${TEMPO.max} bpm)`, read: () => naarV(pt.tempo) });
+  // Tikken zet het tempo via de bus (patterns.tempo): zo staat het als getal in
+  // het handelingenlog en speelt terugspelen hetzelfde tempo terug.
+  const tap = new TapTempo();
+  define('patterns.tap', 'trigger', (on) => {
+    if (!on) return;
+    const r = tap.tap(performance.now());
+    if (r) invoke('patterns.tempo', naarV(Math.min(TEMPO.max, Math.max(TEMPO.min, r.bpm))));
+  }, { label: 'Patronen: tempo tikken (zonder maatgever)', read: () => 0 });
+  define('patterns.record', 'trigger', (on) => { if (on) pt.neemOp(!pt.opnemen); },
+    { label: 'Patronen: live opnemen aan/uit (wat je speelt komt in het patroon dat speelt)', read: () => (pt === GEEN_PATRONEN ? null : pt.opnemen ? 1 : 0) });
+  for (let k = 1; k <= PLEKKEN; k++) {
+    define(`patterns.row.${k}`, 'trigger', (on) => { if (on) pt.rij(k); },
+      { label: `Patronen: rij ${k} op alle tracks (op de maat; leeg = die track stopt)`, read: () => pt.rijLamp(k) });
+  }
+  const iets = () => (pt.spelend().length ? 0.5 : 0);
+  define('patterns.stop', 'trigger', (on) => { if (on) pt.stopAlles(); },
+    { label: 'Patronen: alles stoppen op de maat', read: iets });
+  define('patterns.stop.now', 'trigger', (on) => { if (on) pt.stopAlles({ meteen: true }); },
+    { label: 'Patronen: alles meteen stoppen', read: iets });
 }
 
 /**

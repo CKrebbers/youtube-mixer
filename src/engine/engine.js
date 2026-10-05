@@ -6,6 +6,7 @@ import { instrumentDef } from './instrumenten/index.js';
 import { Sampler } from './sampler.js';
 import { Klankschaal } from './klankschaal.js';
 import { Koptelefoon } from './koptelefoon.js';
+import { PatroonSpeler, maatVan } from './patronen/speler.js';
 
 /**
  * Acht tracks, één per fader van de APC40 mkII. De engine noemt ze A t/m H;
@@ -188,6 +189,13 @@ export class Engine extends Emitter {
         return d?.buffer ? { nr: nrVan(d.id), toonsoort: d.toonsoort } : null;
       },
     });
+
+    // Patronen (docs/PATRONEN.md): een sequencer op de maat van de maatgever,
+    // die de instrumenten op de tracks speelt. Gaat een instrument weg, dan
+    // stopt zijn patroon (de engine liet de noten al los).
+    this.patronen = new PatroonSpeler({ ctx: this.ctx, ids: DECK_IDS,
+      instrument: (id) => this.instrumentOp(id), maat: () => maatVan(this.syncMaster()) });
+    this.on('instrument', ({ id, soort }) => { if (!soort) this.patronen.weg(id); });
 
     /*
      * Bussen en sampler horen bij geen enkel deck, dus niemand herankert ze

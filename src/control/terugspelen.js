@@ -45,8 +45,15 @@ import { PITCH_BEREIKEN, SPRONG_TELLEN, EQ_BANDEN } from '../engine/deck.js';
  *   gaan niet over de bus en staan dus niet in het log: terugspelen zou een
  *   stil instrument neerzetten, en het nummer dat er nu staat eraf halen.
  *   Ze staan wel in het log (docs/INSTRUMENTEN.md §6).
+ * - patronen BEWERKEN: track.N.pattern.step.*, .length*, .swing, .clear en
+ *   patterns.record/tap. Het patroon is al bewaard bij de set (docs/PATRONEN.md),
+ *   dus terugspelen zou een stap nog eens omzetten (eraf in plaats van erop), en
+ *   live opnemen gaat over noten die niet op de bus staan. Starten en stoppen
+ *   (track.N.pattern.K, .stop, patterns.row.K, patterns.stop) en het eigen tempo
+ *   gaan wel door: dat is wat je hoorde. Een tap zet zijn tempo zelf via
+ *   patterns.tempo, en dat staat ook in het log.
  */
-export const OVERSLAAN = /^(record\.|log\.|layer\.|headphone\.|track\.\d+\.rack\.(next|prev)$|track\.\d+\.key(\.|$)|track\.\d+\.pfl$|track\.\d+\.inst(\.|$)|track\.\d+\.stem\.\w+\.pfl$)/;
+export const OVERSLAAN = /^(record\.|log\.|layer\.|headphone\.|track\.\d+\.rack\.(next|prev)$|track\.\d+\.key(\.|$)|track\.\d+\.pfl$|track\.\d+\.inst(\.|$)|track\.\d+\.pattern\.(step\.|length|swing|clear)|patterns\.(record|tap)$|track\.\d+\.stem\.\w+\.pfl$)/;
 
 /**
  * Actions die over het NUMMER gaan (transport, cues, loops, grid). Staat het
@@ -396,6 +403,8 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
     // Intussen gestopt: wat geladen is blijft staan, maar er wordt niets meer
     // gezet en niets gestart.
     if (!nogBezig()) return { zonder, gestopt: true };
+    // Patronen die nu spelen spelen niet mee (zoals de tracks hierboven gepauzeerd zijn).
+    engine.patronen?.stopAlles({ meteen: true });
     for (const t of lijst) {
       const d = deck(t.track);
       if (!d) continue;
@@ -446,6 +455,13 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
       if (t.wacht && !t.speelt && d && geladen.has(d.id) && !d.playing) engine.startOpDeMaat?.(d.id);
     }
     (st.pads || []).forEach((p, i) => { if (p?.speelt && engine.sampler?.pads[i] && !engine.sampler.pads[i].speelt) engine.sampler.wissel(i); });
+    // De patronen van toen: opnieuw op de maat (nu de tracks spelen, dus op hun
+    // maat), op een track die nu een instrument heeft. De noten zijn die van de
+    // set van NU (docs/PATRONEN.md): een patroon hoort bij de set, niet bij het log.
+    for (const p of st.patronen?.speelt || []) {
+      const id = deckVan(p.track);
+      if (id && engine.instrumentOp?.(id)) engine.patronen?.start(id, p.plek);
+    }
     return { zonder };
   }
 
