@@ -81,7 +81,9 @@ Sends / User = loop in / loop out / reloop · Lock = quantize aan/uit voor alle
 tracks (brandt als aan; in de grid-modus blijft Lock het grid-slot, want het
 open mapje wint) · Stop All Clips = rem (vinylstop; geen lampje op het apparaat).
 Vrij: Bank (0x67, voor keylock, VRAGEN I4) en Detail View (met `?vormen=1` het
-mapje vorm).
+mapje vorm). **Met `?hub=` is Bank van de AV-app-hub** (de hubtoets: Bank +
+Track Select = focus, Bank + Scene = snapshot) en komt hij nooit bij VARVE aan;
+keylock op Bank botst dan (VRAGEN N2).
 
 **Ringknoppen:** alle 16 (track knobs en device knobs) in modus `endless`: de
 knop geeft het verschil, de software houdt de stand. Geen overpakken na een
