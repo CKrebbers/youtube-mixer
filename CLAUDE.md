@@ -69,6 +69,10 @@ src/
                     koptelefoon.js  de koptelefoon (PFL): uitgang met vier kanalen, cue vóór de fader, mix en volume
                     instrumenten/   index.js (INSTRUMENTEN, instrumentDef) · poly.js de polysynth: twee oscillatoren, 12 stemmen (docs/INSTRUMENTEN.md)
                     instrumenten/drums.js  drumcomputer: 16 pads op noot 36–51, kit met zaad op 1–8, eigen buffers op 9–16 (INSTRUMENTEN.md §8)
+                    instrumenten/fm.js  FM-stemmen van MediSynth als track-instrument: 12 stemmen, harmonische FM, unison, droog (INSTRUMENTEN.md §7)
+                    instrumenten/schaal.js  de klankschaal als track-instrument: elke noot een eigen veld op zijn toon, kern op de toon van wat je hoort
+                    instrumenten/schaal-kern.js  tien notenvelden + kern op SchaalKern, berichten op hun sample, omstemmen houdt de amplitude. Puur.
+                    instrumenten/schaal-worklet.js  de AudioWorklet van schaal (één per track, laadt bij start())
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
                     keyboard.js     toetsen -> actions
                     midi.js         Web MIDI: poorten, parsen, sysex. Kent geen actions.
@@ -160,7 +164,7 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, instrument.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
@@ -218,6 +222,7 @@ test/
   auto.test.mjs     auto-DJ: planner (bewakers, frasegrenzen, curves, kiezer) en de automaat op een engine (blend, beatloos, overnemen, glijden)
   nep-tijdlijn.mjs  nep-AudioParam die uitrekent wat de param op elk moment doet (geen test zelf)
   klankschaal.test.mjs  stemming (24 toonsoorten × ladders), toonhoogte gemeten, slapen, wrijven, afval, engine en bus
+  instrumenten-fm-schaal.test.mjs  fm en schaal tegen het contract: tijdlijnen (geen curves, stemroof, stil), berichten op hun sample, toonhoogte, 0 GC
   analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions, maatbronnen
   instrumenten.test.mjs  Poly (contract, ADSR, stemroof, pedaal), engine (nummer óf instrument, speeltrack, maatgever), actions, noten.js met nep-poorten, mapje inst
   alles.mjs         alle tests in één keer met overzicht
