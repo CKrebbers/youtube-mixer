@@ -265,10 +265,14 @@ export const isOpen = (o) => o.status === 'wacht' || o.status === 'bezig';
  * Het werk is een functie `werk(onVoortgang, signal)` die geeft wat
  * maakStems() geeft. Annuleren = het signal; de opdracht blijft 'bezig'
  * (stoppen: true) tot het werk echt klaar is (proces weg, werkmap weg).
+ *
+ * `bijWijziging(openLijst())` na elke verandering van wat er open staat: de
+ * server bewaart dat, zodat de rij een herstart overleeft (docs/STEMS.md §2).
  */
 export class StemsRij {
-  constructor({ bewaar = 200 } = {}) {
+  constructor({ bewaar = 200, bijWijziging = null } = {}) {
     this.bewaar = bewaar;
+    this.bijWijziging = bijWijziging;
     this.opdrachten = new Map();   // id -> opdracht (publiek)
     this.intern = new Map();       // id -> { werk, ac }
     this.rij = [];                 // ids die wachten, in volgorde
@@ -316,6 +320,7 @@ export class StemsRij {
     if (vooraan) this.naarVoren(o.id);
     else this._sorteer();
     this._volgende();
+    this._meld();
     return { opdracht: o, dubbel: false };
   }
 
@@ -325,7 +330,24 @@ export class StemsRij {
     if (!o || o.status !== 'wacht' || !this.rij.includes(id)) return false;
     o.vooraan = ++this._teller;
     this._sorteer();
+    this._meld();
     return true;
+  }
+
+  /**
+   * Wat er open staat, in de volgorde waarin het loopt (wat nu loopt eerst;
+   * wat gestopt wordt niet): genoeg om het na een herstart terug te zetten.
+   * @returns {{ track, aantal, opnieuw?, vooraan? }[]}
+   */
+  openLijst() {
+    return [...(this.huidig ? [this.huidig] : []), ...this.rij]
+      .map((id) => this.opdrachten.get(id))
+      .filter((o) => o && isOpen(o) && !o.stoppen)
+      .map((o) => ({ track: o.track, aantal: o.aantal, ...(o.opnieuw ? { opnieuw: true } : {}), ...(o.vooraan ? { vooraan: true } : {}) }));
+  }
+
+  _meld() {
+    try { this.bijWijziging?.(this.openLijst()); } catch (err) { console.error('[stems] bijWijziging:', err?.message || err); }
   }
 
   /** De wachtrij op volgorde: vooraan (op volgorde van vragen), dan kortste eerst, dan zoals ze kwamen. */
@@ -379,11 +401,13 @@ export class StemsRij {
       Object.assign(o, { status: 'geannuleerd', plek: null, klaar: Date.now() });
       this._nummer();
       this._stilMisschien();
+      this._meld();
       return { ok: true, opdracht: o };
     }
     if (o.status === 'bezig') {
       const i = this.intern.get(id);
       if (i?.ac && !i.ac.signal.aborted) { o.stoppen = true; i.ac.abort(); }
+      this._meld();
       return { ok: true, opdracht: o };
     }
     return { ok: false, opdracht: o, reden: 'al afgelopen' };
@@ -440,7 +464,7 @@ export class StemsRij {
     if (this.huidig !== null) return;
     const id = this.rij.shift();
     this._nummer();
-    if (id === undefined) { this._stilMisschien(); return; }
+    if (id === undefined) { this._stilMisschien(); this._meld(); return; }
     const o = this.opdrachten.get(id);
     const i = this.intern.get(id);
     if (!o || !i || o.status !== 'wacht') { this._volgende(); return; }
@@ -449,6 +473,7 @@ export class StemsRij {
     i.ac = new AbortController();
     const signaal = i.ac.signal;
     Object.assign(o, { status: 'bezig', plek: null, begon: Date.now(), voortgang: 0 });
+    this._meld();
     // Voortgang loopt alleen op (een late regel na annuleren telt niet).
     const onVoortgang = (x) => {
       if (o.status !== 'bezig' || signaal.aborted || !Number.isFinite(x)) return;

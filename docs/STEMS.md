@@ -130,8 +130,14 @@ het AFSPELEN gaat via `stems.wav`.
   met `nice -n 10` ervoor; time-out `max(30 min, 10 min + 4 × duur)`.
 - **`StemsRij`**: één tegelijk, zoals `wachtrij.js`. Opdracht
   `{ id, track, titel, aantal, status, voortgang, fout, toegevoegd, begon, klaar, plek, stoppen?, opnieuw?, stems? }`,
-  status `wacht|bezig|klaar|fout|geannuleerd`. Overleeft geen herstart (zoals de
-  ingest-rij); de ui ziet een andere `server`-id.
+  status `wacht|bezig|klaar|fout|geannuleerd`. **Overleeft een herstart** (5 okt; eerst
+  niet, en dan ging een uur Demucs-werk weg): na elke verandering gaat wat open staat
+  (`openLijst()`: wat loopt eerst, dan de rij; `{ track, aantal, opnieuw?, vooraan? }`)
+  naar `stems-rij.json` naast de library, behalve tijdens het afsluiten (dan wordt alles
+  geannuleerd). Bij het opstarten, vóór de server luistert, komt het terug in de rij: wat
+  liep begint opnieuw (een split kan niet verder waar hij stopte); een nummer dat weg is
+  of de stems al heeft wordt overgeslagen. De opdrachten krijgen nieuwe id's; de ui ziet
+  een andere `server`-id en meldt alleen wat er echt niet terugkwam (per nummer).
 - **`maakStems`**: werkmap `media/.bezig-stems-<id>-<hex>`, splitsen, nalopen
   (kanalen, 16-bit, 48 kHz, frames = audio.wav), dan pas naar `media/<id>/` en
   `lib.bewaarStems`. Is audio.wav intussen vervangen of het nummer weg: de set
@@ -419,7 +425,8 @@ maken (zoals hier filter en sends), en de keuze welk effect bij de stem bewaren.
 
 - De GPU kent geen `nice`: splitsen tijdens een set met veel video deelt de GPU met
   WebGL (Demucs zakt dan naar 1–1,8×; of beelden haperen is niet gemeten). VRAGEN N3.
-- De stems-rij overleeft geen serverherstart; de werkmap wordt opgeruimd.
+- Na een serverherstart begint de split die liep opnieuw (de rij zelf blijft); de halve
+  werkmap wordt opgeruimd.
 - Een split van een uur heeft tijdelijk 2× de stems.wav aan schijf nodig (4 stems:
   5,5 GB + 2,8 GB).
 - Niet getest: een album van een uur van begin tot eind, CUDA (H3), splitsen met een
