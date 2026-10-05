@@ -100,6 +100,7 @@ export class WaveformView {
     this.color = color;
     this.cache = null;
     this.sleutel = null;
+    this._getekend = null;     // de tekensleutel van wat er nu op het canvas staat (zie zelfde())
     this.resize();
     new ResizeObserver(() => this.resize()).observe(canvas);
   }
@@ -133,7 +134,29 @@ export class WaveformView {
     this.canvas.width = this.w * dpr;
     this.canvas.height = this.h * dpr;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this._getekend = null;     // een nieuwe maat wist het canvas: opnieuw tekenen
   }
+
+  /**
+   * Staat precies dit al op het canvas? Dan niet opnieuw tekenen.
+   *
+   * Elke teken-actie op een canvas is een volledige upload naar de GPU. De
+   * renderloop roept draw() elke frame aan, ook als er niets verandert: in rust
+   * kostte dat ~29 Mpx/s (gemeten 5 okt, zoom + overzicht + acht banen) en hield
+   * het de GPU van de M1 bezig, tot Demucs (stems) op de helft van zijn snelheid
+   * liep. De sleutel bevat alles wat een draw() tekent, de positie in HELE
+   * apparaatpixels; speelt er iets, dan verandert hij elke frame en tekent hij gewoon.
+   */
+  zelfde(analysis, onsets, ...delen) {
+    const k = this._getekend;
+    if (k && k.analysis === analysis && k.onsets === onsets && k.delen.length === delen.length
+      && k.delen.every((x, i) => x === delen[i])) return true;
+    this._getekend = { analysis, onsets, delen };
+    return false;
+  }
+
+  /** De grid-sleutel (dezelfde tekst als _grid() gebruikt), of '' zonder grid. */
+  _gridTekst(json) { return json ? JSON.stringify(json) : ''; }
 
   /**
    * De snapshot geeft het grid als JSON; rekenen doet de Beatgrid-klasse.
@@ -189,6 +212,13 @@ export class WaveformView {
   /** `onsets`: de klappen van het deck (deck.onsets), alleen voor de zoom. */
   draw(deckState, analysis, onsets = null) {
     const g = this.ctx, w = this.w, h = this.h, mid = h / 2;
+    const dpr = window.devicePixelRatio || 1;
+    const d = deckState;
+    const kop = this.mode === 'overview'
+      ? (d.duration ? Math.round((d.position / d.duration) * w * dpr) : 0)
+      : Math.round(d.position * this.pxPerSecond * dpr);
+    if (this.zelfde(d.loaded ? analysis : null, this.mode === 'zoom' ? onsets : null, this.mode, this.pxPerSecond, dpr, w, h, d.loaded, d.duration, kop,
+      d.loop ? `${d.loop.start}|${d.loop.end}` : '', d.cuePoint, d.hotcues.join(','), this._gridTekst(d.grid))) return;
     g.clearRect(0, 0, w, h);
     g.fillStyle = '#0b0e11';
     g.fillRect(0, 0, w, h);
@@ -281,6 +311,10 @@ export class BaanView extends WaveformView {
 
   draw(d, analysis) {
     const g = this.ctx, w = this.w, h = this.h;
+    const dpr = window.devicePixelRatio || 1;
+    const kop = d.duration ? Math.round((d.position / d.duration) * w * dpr) : 0;
+    if (this.zelfde(d.loaded ? analysis : null, null, 'baan', dpr, w, h, d.loaded, d.duration, kop,
+      d.loop ? `${d.loop.start}|${d.loop.end}` : '', d.hotcues.join(','), this._gridTekst(d.grid))) return;
     g.fillStyle = '#0b0e11';
     g.fillRect(0, 0, w, h);
     if (!analysis || !d.loaded || !d.duration) {
