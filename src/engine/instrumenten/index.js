@@ -7,8 +7,12 @@
  * van welke module toevallig al geladen is.
  */
 
+import { DRUMS } from './drums.js';
+
 /** @type {{ soort: string, naam: string, maak: Function }[]} */
-export const INSTRUMENTEN = [];
+export const INSTRUMENTEN = [
+  DRUMS,
+];
 
 /** De definitie van een soort, of null. */
 export const instrumentDef = (soort) => INSTRUMENTEN.find((d) => d.soort === soort) ?? null;
