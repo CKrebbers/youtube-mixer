@@ -231,18 +231,19 @@ export class WaveformView {
     g.fillStyle = '#0b0e11';
     g.fillRect(0, 0, w, h);
 
+    const pos = deckState.position;
+    const range = this.mode === 'overview'
+      ? { t0: 0, t1: deckState.duration }
+      : { t0: pos - (w / 2) / this.pxPerSecond, t1: pos + (w / 2) / this.pxPerSecond };
+    // Voor tijdBij (een klik in de golfvorm), ook als er (nog) geen golfvorm is:
+    // een nummer zonder analyse moet je net zo goed kunnen aanwijzen.
+    this._range = deckState.loaded ? range : null;
+
     if (!analysis || !deckState.loaded) {
       g.fillStyle = '#2a3138';
       g.fillRect(0, mid - 0.5, w, 1);
       return;
     }
-
-    const pos = deckState.position;
-
-    const range = this.mode === 'overview'
-      ? { t0: 0, t1: deckState.duration }
-      : { t0: pos - (w / 2) / this.pxPerSecond, t1: pos + (w / 2) / this.pxPerSecond };
-    this._range = range;                // voor tijdBij (een klik in de golfvorm)
 
     const span = range.t1 - range.t0;
 
