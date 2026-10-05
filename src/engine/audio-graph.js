@@ -176,8 +176,11 @@ export function setBipolarFilter(hpf, lpf, norm, now) {
  * Master: gain -> soft limiter -> analyser -> out.
  * Let op: een DynamicsCompressor is geen echte look-ahead limiter. Hij vangt
  * pieken af, maar hij is geen excuus om je gainstaging te verwaarlozen.
+ *
+ * `uit` is waar de zaal heen gaat: de uitgang zelf, of met een koptelefoon
+ * (koptelefoon.js) kanaal 1/2 van een uitgang met vier kanalen.
  */
-export function createMasterChain(ctx) {
+export function createMasterChain(ctx, uit = ctx.destination) {
   const gain = ctx.createGain();
   const limiter = ctx.createDynamicsCompressor();
   limiter.threshold.value = -1.5;
@@ -190,7 +193,7 @@ export function createMasterChain(ctx) {
   analyser.fftSize = 2048;             // zie createDeckChain; de vormlagen lezen deze uit
   analyser.smoothingTimeConstant = 0;
 
-  gain.connect(limiter).connect(analyser).connect(ctx.destination);
+  gain.connect(limiter).connect(analyser).connect(uit);
   return { input: gain, gain, limiter, analyser };
 }
 

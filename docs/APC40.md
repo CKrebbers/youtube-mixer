@@ -64,8 +64,10 @@ tabel "Voorstel A". Op 2 oktober de modus auto (auto-DJ, VRAGEN AU1): zie
 **Per kolom (track 1–8)** — knob: filter (endless) · grid: zie modi · Clip
 Stop: loop aan/uit (shift: loop weg) · Track Select: focus (shift: als tweede
 track, de "vorige focus") · 2×2: nummer = play (shift: op de maat starten), S = sync (shift: tap), A|B =
-crossfaderkant A → B → thru (LED geel = A, oranje = B, uit = thru), ● = cue,
-ALLEEN met shift (rondlopen of per ongeluk cue zette een hoorbare track stil) ·
+crossfaderkant A → B → thru (LED geel = A, oranje = B, uit = thru), ● = koptelefoon
+(PFL, sinds 5 okt: voorbeluisteren vóór de fader, rood = je hoort hem, uit = geen
+koptelefoonuitgang; docs/STUDIO.md §3), shift + ● = cue (alleen met shift: rondlopen
+of per ongeluk cue zette een hoorbare track stil) ·
 fader: volume (soft-takeover). Masterfader, crossfader, Cue Level =
 sampler-volume (shift: puls).
 
@@ -162,9 +164,8 @@ erbij komen en alleen zijn 4 rack-knoppen (video-effecten) van hem blijven.
 Nagerekend met zijn echte kopie (GET, niets gepost): 374 regels, 4 eigen, 0
 weggehaald, geen nieuwe regel op een van zijn sleutels.
 
-Nog open: koptelefoon-cue (PFL) bestaat niet in VARVE (vraagt een tweede
-audio-uitgang, VRAGEN F1); welke vrije knoppen de drukknoppen (`.hold`, D3)
-worden; `PALETTE_HEX` heeft nog 60 van de 128 paletkleuren.
+Nog open: koptelefoonvolume en -mix op de APC (VRAGEN S1; de cue zelf zit op ●
+sinds 5 okt); welke vrije knoppen de drukknoppen (`.hold`, D3) worden; `PALETTE_HEX` heeft nog 60 van de 128 paletkleuren.
 
 **Echofilter:** staat voor de APC nog aan (`echoFilter` in het profiel) tot
 gemeten is dat hij in 0x42 niets terugkaatst.

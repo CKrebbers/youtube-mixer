@@ -659,6 +659,19 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .st-x{color:var(--dim)}
 .st-x:hover{color:var(--red);border-color:var(--red)}
 
+/* ---- koptelefoon (docs/STUDIO.md §3): cue per track, volume en mix ----
+   Eén regel zoals stems en klankschaal. Cue aan = rood, zoals ● op de APC. */
+.kopt-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px;min-width:0}
+.kopt-rij.hidden{display:none}
+.kp-stand{font:600 12px ui-monospace,monospace;color:var(--a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+.kp-stand.geen{color:var(--warn)}
+.kp-tracks{flex:1 1 0;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:5px;min-width:0;max-width:420px}
+.kp-pfl{min-width:0}
+.kp-pfl.on{background:var(--red);border-color:var(--red);color:#fff}
+.kp-pfl.dood{opacity:.35}
+.kp-knoppen{display:flex;align-items:center;gap:6px}
+.kp-wissel.on{color:var(--warn);border-color:var(--warn)}
+
 /* het teken in de kolomkop: S2/S4 = speelt met stems; gestippeld = klaar, herladen geeft ze; S! = mislukt */
 .kol-kop-l{display:flex;align-items:center;gap:5px;min-width:0}
 .kol-stems{font:700 11px/1 ui-monospace,monospace;font-style:normal;padding:2px 3px;border-radius:3px;

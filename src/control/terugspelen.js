@@ -37,8 +37,11 @@ import { PITCH_BEREIKEN, SPRONG_TELLEN, EQ_BANDEN } from '../engine/deck.js';
  *   bij de plaat in de library (TOONSOORT.md §7), en de correctie van toen
  *   is toen al bewaard: terugspelen laadt de kaart van nu, en er nog eens
  *   een kwint bij doen zou hem twee keer toepassen. Ze staan wel in het log.
+ * - headphone.* en track.N.pfl: de koptelefoon. De zaal hoort hem niet, dus
+ *   voor wat er klinkt doet hij niets, en terugspelen zou de koptelefoon van
+ *   nu omzetten. Ze staan wel in het log (docs/STUDIO.md §3).
  */
-export const OVERSLAAN = /^(record\.|log\.|layer\.|track\.\d+\.rack\.(next|prev)$|track\.\d+\.key(\.|$))/;
+export const OVERSLAAN = /^(record\.|log\.|layer\.|headphone\.|track\.\d+\.rack\.(next|prev)$|track\.\d+\.key(\.|$)|track\.\d+\.pfl$)/;
 
 /**
  * Actions die over het NUMMER gaan (transport, cues, loops, grid). Staat het

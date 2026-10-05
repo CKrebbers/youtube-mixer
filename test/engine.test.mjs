@@ -3101,6 +3101,134 @@ console.log('\nstems');
   invoke('track.5.fader', 1); invoke('track.5.filter', 0.5); invoke('track.5.send.a', 0); invoke('track.5.send.b', 0);
 }
 
+// ---- koptelefoon (docs/STUDIO.md §3, ROADMAP 27 S1) ---------------------------
+// Eén uitgang met vier kanalen: 1/2 de zaal, 3/4 de koptelefoon. Zonder vier
+// kanalen bestaat er niets van: het oude pad. De cue tapt vóór de fader, gaat
+// klikvrij aan en uit, en de zaal merkt er niets van.
+console.log('\nkoptelefoon');
+{
+  const { KANALEN, kanApart } = await import('../src/engine/koptelefoon.js');
+  const { faderGain } = await import('../src/engine/audio-graph.js');
+  const { DECK_IDS } = await import('../src/engine/engine.js');
+  const { startDrempel } = await import('../src/engine/overgang.js');
+  const { OVERSLAAN } = await import('../src/control/terugspelen.js');
+  const { NIET_IN_WAARDEN } = await import('../src/control/handelingen.js');
+  const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+  const { readFileSync } = await import('node:fs');
+  const dicht = (a, b) => Math.abs(a - b) < 1e-9;
+  const NOW0 = NOW;
+  const TRACKNRS = [1, 2, 3, 4, 5, 6, 7, 8];
+  const fouten0 = OVERLAP_FOUTEN, breuk0 = CURVE_BREUK;
+
+  // 0. Zonder vier kanalen (deze mock heeft geen maxChannelCount): het oude pad.
+  const k0 = eng.koptelefoon;
+  ok('zonder vier kanalen: geen koptelefoon, de zaal gaat gewoon naar de uitgang', !k0.beschikbaar && k0.zaalIn === eng.ctx.destination);
+  ok('… elke cue en de koptelefoonknoppen lezen null (lampje uit)', TRACKNRS.every((t) => read(`track.${t}.pfl`) === null)
+    && read('headphone.level') === null && read('headphone.mix') === null);
+  invoke('track.2.pfl', true); invoke('track.2.pfl', false);
+  ok('… en een cue doet dan niets', !k0.iets && read('track.2.pfl') === null && eng.snapshot().koptelefoon.beschikbaar === false);
+  const vak = (max, splitter = true) => ({ destination: { maxChannelCount: max }, createChannelMerger() {}, ...(splitter ? { createChannelSplitter() {} } : {}) });
+  ok('kanApart: pas vanaf vier kanalen, en alleen met splitter en merger', !kanApart(vak(2)) && kanApart(vak(4)) && kanApart(vak(8)) && !kanApart(vak(4, false)));
+
+  // 1. Met vier kanalen: een mock die bijhoudt wat waarheen gaat.
+  const Oud = globalThis.AudioContext;
+  const lijnen = [];                                        // [van, naar, uitgang, ingang]
+  const volg = (n) => { n.connect = (doel, uit = 0, inn = 0) => { lijnen.push([n, doel, uit, inn]); return doel; }; return n; };
+  const Vier = class extends Oud {
+    constructor(o) { super(o); this.destination.maxChannelCount = 4; volg(this.destination); }
+    createGain() { return volg(super.createGain()); }
+    createBiquadFilter() { return volg(super.createBiquadFilter()); }
+    createDynamicsCompressor() { return volg(super.createDynamicsCompressor()); }
+    createAnalyser() { return volg(super.createAnalyser()); }
+    createChannelMerger(n) { return Object.assign(volg(super.createChannelMerger(n)), { numberOfInputs: n }); }
+    createChannelSplitter(n) { return Object.assign(volg(node('splitter')), { numberOfOutputs: n }); }
+  };
+  const heeft = (van, doel, uit, inn) => lijnen.some((l) => l[0] === van && l[1] === doel
+    && (uit === undefined || l[2] === uit) && (inn === undefined || l[3] === inn));
+  globalThis.AudioContext = Vier;
+  const e4 = new Engine();
+  globalThis.AudioContext = Oud;
+  const kt = e4.koptelefoon, dst = e4.ctx.destination;
+  const kop = lijnen.find((l) => l[0] === kt.uit)?.[1];
+  ok('met vier kanalen: de koptelefoon bestaat, de uitgang op 4 kanalen, explicit, discrete', kt.beschikbaar && kt.kanalen === 4
+    && dst.channelCount === KANALEN && dst.channelCountMode === 'explicit' && dst.channelInterpretation === 'discrete');
+  ok('… de zaal op kanaal 1/2, de koptelefoon op 3/4, samen naar de uitgang', heeft(kt.zaalIn, kt.merger, 0, 0) && heeft(kt.zaalIn, kt.merger, 1, 1)
+    && heeft(kop, kt.merger, 0, 2) && heeft(kop, kt.merger, 1, 3) && heeft(kt.merger, dst) && kt.merger.numberOfInputs === 4);
+  ok('… de master na de limiter naar de zaal én de zaalkant van de koptelefoon, niet meer rechtstreeks naar de uitgang',
+    heeft(e4.master.limiter, e4.master.analyser) && heeft(e4.master.analyser, kt.zaalIn) && heeft(e4.master.analyser, kt.zaalKant) && !heeft(e4.master.analyser, dst));
+  const pfls = DECK_IDS.map((id) => kt._pfl.get(id)?.gain);
+  ok('… per track een cue vóór de fader: filter → cue (dicht) → som; de fader blijft gewoon', DECK_IDS.every((id, i) => {
+    const ch = e4.deck(id).chain;
+    return pfls[i] && heeft(ch.lpf, pfls[i]) && heeft(pfls[i], kt.cue) && heeft(ch.lpf, ch.fader) && pfls[i].gain.value === 0;
+  }));
+  ok('… zonder cue hoort de koptelefoon de zaal (zaalkant 1); volume als een fader op 0,8', kt.zaalKant.gain.value === 1
+    && dicht(kt.uit.gain.value, faderGain(0.8)) && heeft(kt.cue, kt.cueKant) && heeft(kt.cueKant, kt.uit) && heeft(kt.zaalKant, kt.uit));
+
+  // 2. Via de bus.
+  bindEngine(e4);
+  NOW = 3000;
+  const WACHT = startDrempel(e4.ctx);
+  ok('reads: elke cue 0, volume 0,8, mix 0', TRACKNRS.every((t) => read(`track.${t}.pfl`) === 0) && read('headphone.level') === 0.8 && read('headphone.mix') === 0);
+  const spion = [];
+  for (const m of ['setValueAtTime', 'linearRampToValueAtTime', 'setTargetAtTime', 'setValueCurveAtTime', 'cancelAndHoldAtTime']) {
+    const orig = pfls[1].gain[m];
+    pfls[1].gain[m] = function (...a) { spion.push([m, ...a]); return orig.apply(this, a); };
+  }
+  const master0 = e4.master.gain.gain.value;
+  invoke('track.2.pfl', true); invoke('track.2.pfl', false);
+  ok('● op track 2: de cue aan (lampje 1), de rest niet', read('track.2.pfl') === 1 && read('track.1.pfl') === 0 && kt.iets);
+  ok(`… klikvrij: vasthouden, dan hellingen vanaf nu + ${(WACHT * 1000).toFixed(1)} ms naar 1, geen curve`,
+    spion[0]?.[0] === 'cancelAndHoldAtTime' && spion.some((c) => c[0] === 'linearRampToValueAtTime' && c[1] === 1 && c[2] > NOW + WACHT)
+    && !spion.some((c) => c[0] === 'setValueCurveAtTime') && pfls[1].gain.value === 1);
+  ok('… mix 0: alleen de cue in de koptelefoon, de zaal eruit', dicht(kt.cueKant.gain.value, 1) && dicht(kt.zaalKant.gain.value, 0));
+  invoke('headphone.mix', 0.5);
+  ok('mix in het midden: cue en zaal elk −3 dB (equal power)', dicht(kt.cueKant.gain.value, Math.SQRT1_2) && dicht(kt.zaalKant.gain.value, Math.SQRT1_2) && read('headphone.mix') === 0.5);
+  invoke('headphone.mix', 1);
+  ok('mix rechts: alleen de zaal', dicht(kt.cueKant.gain.value, 0) && dicht(kt.zaalKant.gain.value, 1));
+  invoke('headphone.mix', 0);
+  invoke('headphone.level', 0.5);
+  ok('volume: de curve van een fader', dicht(kt.uit.gain.value, faderGain(0.5)) && read('headphone.level') === 0.5);
+  NOW += 1;
+  invoke('track.5.pfl', true);
+  ok('twee cues tegelijk', read('track.2.pfl') === 1 && read('track.5.pfl') === 1 && pfls[4].gain.value === 1);
+  NOW += WACHT + 0.001;                                     // midden in de overgang van track 5
+  let gegooid = null;
+  try { invoke('track.5.pfl', true); } catch (e) { gegooid = e; }
+  ok('cue uit, 1 ms na het begin van de overgang: geen fout, geen afgebroken curve', gegooid === null && read('track.5.pfl') === 0
+    && OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
+  NOW += 1;
+  invoke('track.2.pfl', true);
+  ok('alles uit: de koptelefoon hoort de zaal weer, vol', !kt.iets && kt.zaalKant.gain.value === 1 && pfls[1].gain.value === 0 && pfls[4].gain.value === 0);
+  ok('de zaal merkt niets: de master niet aangeraakt', e4.master.gain.gain.value === master0);
+  const sn = e4.snapshot().koptelefoon;
+  ok('snapshot: beschikbaar, 4 kanalen, volume, mix en de cue per track', sn.beschikbaar && sn.kanalen === 4 && sn.niveau === 0.5 && sn.mix === 0
+    && !sn.iets && Object.keys(sn.pfl).join() === DECK_IDS.join() && Object.values(sn.pfl).every((v) => v === false));
+  bindEngine(eng);
+
+  // 3. Omgewisseld (een samengesteld apparaat in de andere volgorde).
+  lijnen.length = 0;
+  globalThis.AudioContext = Vier;
+  const e5 = new Engine({ koptelefoon: { omgewisseld: true } });
+  globalThis.AudioContext = Oud;
+  const k5 = e5.koptelefoon, kop5 = lijnen.find((l) => l[0] === k5.uit)?.[1];
+  ok('omgewisseld: de zaal op 3/4, de koptelefoon op 1/2', k5.stand().omgewisseld && heeft(k5.zaalIn, k5.merger, 0, 2) && heeft(k5.zaalIn, k5.merger, 1, 3)
+    && heeft(kop5, k5.merger, 0, 0) && heeft(kop5, k5.merger, 1, 1));
+
+  // 4. Log, terugspelen, uitleg en de APC.
+  ok('terugspelen slaat de koptelefoon over, en hij staat niet in de beginstand van het log',
+    ['track.3.pfl', 'headphone.level', 'headphone.mix'].every((a) => OVERSLAAN.test(a))
+    && ['headphone.level', 'headphone.mix'].every((a) => NIET_IN_WAARDEN.test(a))
+    && !OVERSLAAN.test('track.3.play') && !OVERSLAAN.test('track.3.pfl.x') && !NIET_IN_WAARDEN.test('track.3.fader'));
+  ok('elke koptelefoon-action heeft een uitleg op de APC-kaart', ['track.1.pfl', 'headphone.level', 'headphone.mix']
+    .every((a) => beschrijf(a).kort !== a && !beschrijf(a).lang.startsWith('?')));
+  const std = JSON.parse(readFileSync(new URL('../mappings/apc40mk2.json', import.meta.url), 'utf8'));
+  const pflRegels = std.rules.filter((r) => /\.pfl$/.test(r.action));
+  ok('APC: ● zonder shift = cue, in elke kolom; ● met shift blijft het cuepunt', pflRegels.length === 8
+    && pflRegels.every((r, i) => r.in === `note:${i}:48` && !r.shift && !r.laag && r.action === `track.${i + 1}.pfl` && r.mode === 'trigger')
+    && TRACKNRS.every((t) => std.rules.some((r) => r.in === `note:${t - 1}:48` && r.shift && r.action === `track.${t}.cue`)));
+  NOW = NOW0;
+}
+
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);
 ok(`geen enkele afgebroken curve in de hele test (${CURVE_BREUK}): in Chrome een sprong`, CURVE_BREUK === 0);
 

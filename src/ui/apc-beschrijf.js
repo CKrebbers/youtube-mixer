@@ -63,6 +63,7 @@ export function beschrijf(action) {
     if ((m = /^stem\.(vocals|inst|drums|bass|other)$/.exec(rest))) return r(STEM[m[1]], `stem-niveau: ${STEM_UITLEG[m[1]]}, vóór de EQ (vol = 1, dicht = weg; alleen als het nummer stems heeft)`);
     if ((m = /^stem\.(vocals|inst|drums|bass|other)\.kill$/.exec(rest))) return r(`${STEM[m[1]]} weg`, `stem weg aan/uit: ${STEM_UITLEG[m[1]]} (het niveau blijft staan; lampje = weg)`);
     if ((m = /^stem\.(vocals|inst|drums|bass|other)\.hold$/.exec(rest))) return r(`${STEM[m[1]]} weg!`, `stem weg zolang je drukt: ${STEM_UITLEG[m[1]]}`);
+    if (rest === 'pfl') return r('PFL', 'in de koptelefoon aan/uit: voorbeluisteren vóór de fader, de zaal hoort het niet (lampje rood = je hoort hem; uit = geen koptelefoonuitgang, docs/STUDIO.md §3)');
     if (rest === 'brake') return r('rem', 'rem (vinylstop): in de remtijd naar stilstand, dan pauze; tijdens het remmen nog eens = los');
     if (rest === 'brake.time') return r('remtijd', 'remtijd: 0,1 tot 5 seconden tot stilstand');
     if (rest === 'grid.here') return r('tel 1 hier', 'tel 1 hier: de tel komt op wat je hoort, gesnapt naar een klap binnen 30 ms, en is de "1" van de maat in dit stuk');
@@ -136,6 +137,8 @@ export function beschrijf(action) {
     'log.replay.stop': ['stop terug', 'terugspelen van een handelingenlog stoppen (de tracks spelen door)'],
     'sampler.length': ['tellen', 'sampler: hoeveel tellen een lege pad pakt (1/2/4/8)'],
     'sampler.volume': ['sampler', 'sampler-volume'],
+    'headphone.level': ['kopt. vol', 'koptelefoon: volume'],
+    'headphone.mix': ['kopt. mix', 'koptelefoon: mix, links alleen wat je voorbeluistert, rechts alleen de zaal'],
     'focus.next': ['focus ▶', 'focus naar de volgende track'], 'focus.prev': ['◀ focus', 'focus naar de vorige track'],
     'video.mode': ['mengvorm', 'video: volgende mengvorm'], 'video.pulse': ['puls', 'video: puls op de tel'],
     'video.pulse.target': ['puls-doel', 'video: wat er op de tel pulst'],

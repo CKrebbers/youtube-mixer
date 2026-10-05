@@ -217,6 +217,9 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     veilig('stems', () => {
       stappen.stems?.();
     });
+    veilig('koptelefoon', () => {
+      stappen.koptelefoon?.();
+    });
     veilig('opnemen', () => {
       stappen.opnemen();
     });

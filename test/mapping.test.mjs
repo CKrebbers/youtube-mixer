@@ -609,12 +609,13 @@ console.log('\nendless');
   const faders = [...st.rules.values()].filter((r) => /^cc:\d:7$|^cc:0:1[45]$/.test(r.in));
   ok('standaard: faders blijven absolute (soft-takeover)', faders.length === 10 && faders.every((r) => r.mode === 'absolute'));
 
-  // Het 2×2-blok: A|B = crossfaderkant, ● = cue alleen met shift.
-  ok('2×2: A|B = crossfaderkant, ● doet zonder shift niets, ● + shift = cue (alle 8 kolommen)',
+  // Het 2×2-blok: A|B = crossfaderkant, ● = de koptelefoon (5 okt, docs/STUDIO.md §3),
+  // ● + shift = cue (alleen met shift: per ongeluk cue zette een hoorbare track stil).
+  ok('2×2: A|B = crossfaderkant, ● zonder shift = koptelefoon, ● + shift = cue (alle 8 kolommen)',
     [0, 1, 2, 3, 4, 5, 6, 7].every((ch) => st.kies(`note:${ch}:66`, { shift: false })?.action === `track.${ch + 1}.xfade.side`
-      && st.kies(`note:${ch}:48`, { shift: false }) === null && st.kies(`note:${ch}:48`, { shift: true })?.action === `track.${ch + 1}.cue`));
+      && st.kies(`note:${ch}:48`, { shift: false })?.action === `track.${ch + 1}.pfl` && st.kies(`note:${ch}:48`, { shift: true })?.action === `track.${ch + 1}.cue`));
   ok('actieveRegels volgt shift', st.actieveRegels({ shift: true }).get('note:0:48')?.action === 'track.1.cue'
-    && !st.actieveRegels({ shift: false }).has('note:0:48'));
+    && st.actieveRegels({ shift: false }).get('note:0:48')?.action === 'track.1.pfl');
 }
 
 // ---- grid-modus (stap D) ------------------------------------------------------
@@ -1370,15 +1371,17 @@ console.log('\nmodus auto (auto-DJ)');
   const wilNieuw = ['note:0:32@grid.auto', 'note:0:33@grid.auto', 'note:0:34@grid.auto', 'note:0:35@grid.auto', 'note:0:39@grid.auto',
     'note:0:85#shift', 'note:0:85@grid.auto', 'note:0:85#shift@edit.aan',
     // Beeld-noodknoppen (2 okt, A4): master-knop = zwart, en vier pads in de modus video.
-    'note:0:80', 'note:0:38@grid.video', 'note:0:39@grid.video', 'note:0:30@grid.video', 'note:0:31@grid.video'].sort();
-  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4, scene 4 met shift in de grid-modus, en de vijf beeld-noodknoppen (${nieuw.join(' ')})`,
+    'note:0:80', 'note:0:38@grid.video', 'note:0:39@grid.video', 'note:0:30@grid.video', 'note:0:31@grid.video',
+    // Koptelefoon (5 okt, docs/STUDIO.md §3): ● zonder shift in elke kolom.
+    'note:0:48', 'note:1:48', 'note:2:48', 'note:3:48', 'note:4:48', 'note:5:48', 'note:6:48', 'note:7:48'].sort();
+  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4, scene 4 met shift in de grid-modus, de vijf beeld-noodknoppen en de acht koptelefoonknoppen (${nieuw.join(' ')})`,
     JSON.stringify(nieuw) === JSON.stringify(wilNieuw));
   const tel = (d) => { const c = {}; for (const r of d.rules) { const k = `${r.laag ?? '-'}${r.shift ? '#shift' : ''}`; c[k] = (c[k] || 0) + 1; } return c; };
   const voor = vorige ? tel(vorige) : {}, na = tel(doc);
   const anders = Object.keys({ ...voor, ...na }).filter((k) => voor[k] !== na[k]).sort();
-  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1) erbij, één shift-regel zonder mapje en één in de grid-modus, en de noodknoppen (1 zonder mapje, 4 in video) (${anders.join(' ')})`,
+  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1) erbij, één shift-regel zonder mapje en één in de grid-modus, de noodknoppen (1 zonder mapje, 4 in video) en de koptelefoon (8 zonder mapje) (${anders.join(' ')})`,
     anders.join() === '-,-#shift,edit.aan#shift,grid.auto,grid.video' && na['grid.auto'] === 6 && na['-#shift'] === voor['-#shift'] + 1
-    && na['edit.aan#shift'] === voor['edit.aan#shift'] + 1 && na['-'] === voor['-'] + 1 && na['grid.video'] === voor['grid.video'] + 4
+    && na['edit.aan#shift'] === voor['edit.aan#shift'] + 1 && na['-'] === voor['-'] + 1 + 8 && na['grid.video'] === voor['grid.video'] + 4
     && ['grid.hotcues', 'grid.loops', 'grid.sampler', 'grid.klank', 'device.strip', 'device.rack']
       .every((k) => voor[k] === na[k] && voor[k] > 0));
 
@@ -1403,9 +1406,9 @@ console.log('\nmodus auto (auto-DJ)');
   const kopie25 = JSON.parse(JSON.stringify(vorige));
   for (const r of kopie25.rules) if (r.laag === 'device.rack' && VIDEO_KNOPPEN[r.in]) { r.action = VIDEO_KNOPPEN[r.in]; r.mode = 'absolute'; }
   const vk = verschilVanKopie(doc, kopie25);
-  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 13 x "weggehaald")',
+  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 21 x "weggehaald": 13 + de 8 koptelefoonknoppen)',
     vk.basis === 'e2bef131-374' && vk.verschil.rules.length === 4 && vk.verschil.removed.length === 0
-    && maakVerschil(doc, kopie25).removed.length === 13);
+    && maakVerschil(doc, kopie25).removed.length === 21);
   lg.zet('grid', 'hotcues');
 
   // Beeld-noodknoppen (2 okt, ONTBREEKT A4): de master-knop (Track Select boven

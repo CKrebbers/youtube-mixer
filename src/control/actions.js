@@ -141,6 +141,7 @@ export function bindEngine(engine) {
   // De bus spreekt in TRACKS, de engine nog in decks A en B. Track 1 = A,
   // track 2 = B. Zo hoeven mappings niet opnieuw als er acht tracks komen:
   // dan groeit deze lijst, en veranderen de namen niet nog een keer.
+  const kt = engine.koptelefoon;
   for (const [nr, id] of TRACKS) {
     const d = engine.deck(id);
     const n = `track.${nr}`;
@@ -443,6 +444,13 @@ export function bindEngine(engine) {
         { label: `Track ${nr} stem ${naam} weg zolang je drukt`, read: weg });
     }
 
+    // Koptelefoon (docs/STUDIO.md §3): deze track voorbeluisteren, vóór de
+    // fader. Lampje: 1 = je hoort hem in de koptelefoon, 0 = niet, null = er
+    // is geen koptelefoonuitgang (de uitgang heeft geen vier kanalen).
+    define(`${n}.pfl`, 'trigger', (on) => { if (on) kt.wisselPfl(id); },
+      { label: `Track ${nr} in de koptelefoon (voorbeluisteren) aan/uit`,
+        read: () => (kt.heeft(id) ? (kt.pflAan(id) ? 1 : 0) : null) });
+
     // Sends: na de fader naar de gedeelde echo (A) en galm (B).
     for (const bus of ['A', 'B']) {
       define(`${n}.send.${bus.toLowerCase()}`, 'value', (v) => d.set(`send${bus}`, v),
@@ -642,6 +650,13 @@ export function bindEngine(engine) {
     { label: 'Crossfader', bipolar: true, read: () => engine.xfader });
   define('mixer.master', 'value', (v) => engine.setMaster(v),
     { label: 'Master', read: () => engine.masterLevel });
+
+  // De koptelefoon (docs/STUDIO.md §3): volume en de mix cue ↔ zaal. Read
+  // null zonder koptelefoonuitgang: dan is er niets te draaien.
+  define('headphone.level', 'value', (v) => kt.zetNiveau(v),
+    { label: 'Koptelefoon: volume', read: () => (kt.beschikbaar ? kt.niveau : null) });
+  define('headphone.mix', 'value', (v) => kt.zetMix(v),
+    { label: 'Koptelefoon: mix (links alleen de cue, rechts alleen de zaal)', read: () => (kt.beschikbaar ? kt.mix : null) });
   define('mixer.xfader.curve', 'trigger', (on) => {
     if (on) engine.setXfaderCurve(engine.xfaderCurve === 'smooth' ? 'sharp' : 'smooth');
   }, { label: 'Crossfader-curve wisselen', read: () => (engine.xfaderCurve === 'sharp' ? 1 : 0) });

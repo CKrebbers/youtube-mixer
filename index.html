@@ -27,6 +27,7 @@
     <button id="auto-btn" class="ghost" title="auto-DJ: de app kiest en mixt, jij stuurt bij">auto</button>
     <button id="klankschaal-btn" class="ghost" title="klankschaal: speel mee op de toon van wat je hoort">klankschaal</button>
     <button id="stems-btn" class="ghost" title="stems van de track met focus: zang en rest (of vier), niveau en kill per stem">stems</button>
+    <button id="koptelefoon-btn" class="ghost" title="koptelefoon: tracks voorbeluisteren zonder dat de zaal ze hoort, volume en mix">koptelefoon</button>
     <a id="apc-btn" class="ghost" href="apc.html" target="varve-apc" title="wat elke knop van de APC doet, per mapje">APC-kaart</a>
     <button id="midi-btn" class="ghost">MIDI</button>
     <button id="help-btn" class="ghost">? toetsen</button>
@@ -256,6 +257,30 @@
     <span class="st-balk lib-job-balk hidden"><i></i></span>
     <button class="btn sm st-x hidden" title="splitsen stoppen">×</button>
   </span>
+</section>
+
+<!-- ================= KOPTELEFOON (docs/STUDIO.md §3) ================= -->
+<!-- Voorbeluisteren vóór de fader: per track een cue (op de APC ● zonder shift),
+     het volume en de mix cue ↔ zaal. koptelefoon-paneel.js tekent de lampjes
+     en zegt of er een koptelefoonuitgang is (een uitgang met vier kanalen). -->
+<section id="koptelefoon" class="kopt-rij hidden">
+  <span class="sampler-kop">KOPTELEFOON</span>
+  <span class="kp-stand">–</span>
+  <div class="kp-tracks">
+    <button data-kind="button" data-action="track.1.pfl" class="btn sm kp-pfl" title="track 1 in de koptelefoon aan/uit (● op de APC)">1</button>
+    <button data-kind="button" data-action="track.2.pfl" class="btn sm kp-pfl" title="track 2 in de koptelefoon aan/uit (● op de APC)">2</button>
+    <button data-kind="button" data-action="track.3.pfl" class="btn sm kp-pfl" title="track 3 in de koptelefoon aan/uit (● op de APC)">3</button>
+    <button data-kind="button" data-action="track.4.pfl" class="btn sm kp-pfl" title="track 4 in de koptelefoon aan/uit (● op de APC)">4</button>
+    <button data-kind="button" data-action="track.5.pfl" class="btn sm kp-pfl" title="track 5 in de koptelefoon aan/uit (● op de APC)">5</button>
+    <button data-kind="button" data-action="track.6.pfl" class="btn sm kp-pfl" title="track 6 in de koptelefoon aan/uit (● op de APC)">6</button>
+    <button data-kind="button" data-action="track.7.pfl" class="btn sm kp-pfl" title="track 7 in de koptelefoon aan/uit (● op de APC)">7</button>
+    <button data-kind="button" data-action="track.8.pfl" class="btn sm kp-pfl" title="track 8 in de koptelefoon aan/uit (● op de APC)">8</button>
+  </div>
+  <div class="kp-knoppen">
+    <div class="knob sm" data-action="headphone.mix" data-label="MIX" data-value="0" data-default="0" title="mix: links alleen wat je voorbeluistert, rechts alleen de zaal"></div>
+    <div class="knob sm" data-action="headphone.level" data-label="VOL" data-value="0.8" data-default="0.8" title="koptelefoonvolume"></div>
+  </div>
+  <button class="btn sm kp-wissel" title="zaal en koptelefoon omwisselen (kanaal 1/2 ↔ 3/4); geldt na herladen">⇄</button>
 </section>
 
 <!-- ================= AUTO-DJ ================= -->

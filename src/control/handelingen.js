@@ -233,9 +233,10 @@ export const RONDLOPERS = ['mixer.xfader.curve', 'sampler.length', 'video.mode',
  * `track.N.key` (de toonsoort van de plaat hier) zou de toonsoortkaart
  * bewerken en een automatische kaart "met de hand" maken: die kaart hoort
  * bij het nummer in de library, niet bij de set (zie OVERSLAAN in
- * terugspelen.js).
+ * terugspelen.js). `headphone.*` (de koptelefoon) hoort niet bij wat er
+ * klinkt en wordt bij terugspelen overgeslagen.
  */
-export const NIET_IN_WAARDEN = /^track\.\d+\.(seek|pitch|tempo|grid\.bpm|key)$/;
+export const NIET_IN_WAARDEN = /^(track\.\d+\.(seek|pitch|tempo|grid\.bpm|key)|headphone\..+)$/;
 
 /** Het rack van een track zoals het log het bewaart: inhoud én live standen. */
 export function rackStand(fx) {

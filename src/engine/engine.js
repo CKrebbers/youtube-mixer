@@ -4,6 +4,7 @@ import { createMasterChain, xfaderGains, faderGain } from './audio-graph.js';
 import { InsertSlot, startDrempel } from './fx.js';
 import { Sampler } from './sampler.js';
 import { Klankschaal } from './klankschaal.js';
+import { Koptelefoon } from './koptelefoon.js';
 
 /**
  * Acht tracks, één per fader van de APC40 mkII. De engine noemt ze A t/m H;
@@ -95,7 +96,11 @@ export function volgMaatgever(staat, niveaus, nu) {
  * Hij kent decks, een mixer en een klok. Alles daarbuiten praat via actions.js.
  */
 export class Engine extends Emitter {
-  constructor() {
+  /**
+   * @param {{ koptelefoon?: { omgewisseld?: boolean } }} [opties]
+   *   koptelefoon: zie koptelefoon.js (alleen bij het maken; de app bewaart het)
+   */
+  constructor(opties = {}) {
     super();
     /*
      * Vraag expliciet om 48 kHz, de snelheid waarop de ingest levert.
@@ -111,12 +116,18 @@ export class Engine extends Emitter {
     } catch (_) {
       this.ctx = new AudioContext({ latencyHint: 'interactive' });
     }
-    this.master = createMasterChain(this.ctx);
+    // De koptelefoon eerst: hij bepaalt waar de zaal heen gaat (kanaal 1/2 van
+    // vier, of zonder vier kanalen gewoon de uitgang, zoals altijd).
+    this.koptelefoon = new Koptelefoon(this.ctx, opties.koptelefoon);
+    this.master = createMasterChain(this.ctx, this.koptelefoon.zaalIn);
+    this.koptelefoon.hoorZaal(this.master.analyser);
     this.decks = {};
     this.kant = {};
     for (const id of DECK_IDS) {
       this.decks[id] = new Deck(this.ctx, id);
       this.decks[id].chain.output.connect(this.master.input);
+      // Voorbeluisteren tapt vóór de fader: na trim, EQ, effect en filter.
+      this.koptelefoon.voegToe(id, this.decks[id].chain.lpf);
       this.kant[id] = STANDAARD_KANT[id] || 'thru';
     }
 
@@ -539,6 +550,8 @@ export class Engine extends Emitter {
       fase, decks,
       // Welke track geeft nu de maat (sync, sampler, video-puls)?
       maat: this.syncMaster()?.id ?? null,
+      // De koptelefoon: { beschikbaar, kanalen, omgewisseld, niveau, mix, iets, pfl: {deck: bool} }.
+      koptelefoon: this.koptelefoon.stand(),
     };
   }
 }

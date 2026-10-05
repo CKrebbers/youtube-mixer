@@ -77,6 +77,15 @@ export const SPEELLIJST = [
     { id: 'be-nood', doe: 'Modus video (scene 4), rechts: flits, zwart vasthouden, zwart, bevriezen. MASTER in het videopaneel.',
       let: 'Bevriest het beeld terwijl de muziek doorloopt? Is de flits niet te fel?' },
   ] },
+  { id: 'koptelefoon', titel: 'Koptelefoon', minuten: 10, punten: [
+    { id: 'kp-apparaat', doe: 'Audio-MIDI-configuratie: samengesteld apparaat, eerst de Scarlett, dan de koptelefoonuitgang van de Mac (driftcorrectie aan). Zet het als uitvoer en herlaad de mixer (docs/STUDIO.md §3).',
+      let: 'De rij KOPTELEFOON zegt "zaal 1/2 · koptelefoon 3/4". Komt de zaal uit de Scarlett en de koptelefoon uit de Mac?' },
+    { id: 'kp-cue', doe: 'Track 1 speelt. Laad track 2, fader 2 dicht, ● (zonder shift) op kolom 2.',
+      let: 'Hoor je track 2 in de koptelefoon en niet in de zaal? Brandt ● rood?' },
+    { id: 'kp-mix', doe: 'Draai MIX en VOL in de rij; zet ● weer uit.',
+      let: 'MIX gaat van cue naar zaal; geen tik bij aan en uit; zonder cue hoor je de zaal.' },
+    { id: 'kp-opname', doe: 'Neem 30 s op met een cue aan.', let: 'Staat de cue NIET in de opname?' },
+  ] },
   { id: 'rand', titel: 'Kleine dingen', minuten: 5, punten: [
     { id: 'ra-hotcue', doe: 'Laad een nummer met hotcues en druk METEEN hotcue 1.',
       let: 'Springt hij naar de bewaarde hotcue, en is die er na herladen nog?' },

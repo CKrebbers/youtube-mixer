@@ -14,6 +14,7 @@ import { opzetSamplerOpslag } from './sampler-opslag.js';
 import { opzetKlankschaal } from './klankschaal-paneel.js';
 import { opzetAuto } from './auto-paneel.js';
 import { opzetStems } from './stems-paneel.js';
+import { opzetKoptelefoon, koptelefoonOpties } from './koptelefoon-paneel.js';
 import { StemsWachtrij } from './stems-wachtrij.js';
 import { Automaat } from '../auto/automaat.js';
 import { opzetPlanKoppeling } from './plan-koppeling.js';
@@ -39,7 +40,8 @@ import { vormenAan } from './vlag.js';
  * aanroepen, krijgt een ReferenceError (TDZ).
  */
 
-const engine = new Engine();
+// De koptelefoon (zaal en koptelefoon omgewisseld?) is bedrading: alleen bij het maken.
+const engine = new Engine({ koptelefoon: koptelefoonOpties() });
 bindEngine(engine);
 window.engine = engine;   // handig in de console tijdens bouwen
 
@@ -126,6 +128,7 @@ const laden = opzetLaden({
 window.library = laden.library;
 // De STEMS-rij voor de track met focus (standaard dicht, knop "stems").
 const stemsPaneel = opzetStems({ engine, staat, wachtrij: stemsWachtrij, library: laden.library });
+const koptelefoonPaneel = opzetKoptelefoon({ engine });
 stemsWachtrij.peil();
 
 // ---- handelingenlog: wat er op de bus gebeurt, om terug te spelen ---------
@@ -223,6 +226,7 @@ startRenderloop({
     klankschaal: klankschaal.teken,
     auto: autoPaneel.teken,
     stems: stemsPaneel.teken,
+    koptelefoon: koptelefoonPaneel.teken,
   },
 });
 

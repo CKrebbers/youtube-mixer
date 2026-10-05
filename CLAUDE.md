@@ -66,6 +66,7 @@ src/
                     klankschaal-kern.js  het modale model van de Waterschaal, per sample, afvalvrij. Puur.
                     klankschaal-worklet.js  de AudioWorklet eromheen (laadt pas bij gebruik)
                     engine.js       decks + mixer + maatgever (hysterese) + starten op de maat + snapshot()
+                    koptelefoon.js  de koptelefoon (PFL): uitgang met vier kanalen, cue vóór de fader, mix en volume
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
                     keyboard.js     toetsen -> actions
                     midi.js         Web MIDI: poorten, parsen, sysex. Kent geen actions.
@@ -109,6 +110,7 @@ src/
                     stems-paneel.js de STEMS-rij voor de focus-track: niveau + kill per stem, splitsen, voortgang
                     stems-wachtrij.js de stems-rij van de server (GET /api/stems): peilen zolang iets open staat of iemand kijkt
                     stems-weergave.js stems als tekst: namen, library-cel, rijstand, kolomteken, tegel. Puur.
+                    koptelefoon-paneel.js de KOPTELEFOON-rij: cue per track, VOL, MIX, ⇄ (zaal en koptelefoon wisselen, na herladen)
   vormen/           hulp.js         paletten, toeval met zaad, ruis, tekenhulp (gedeeld door de systemen)
                     systemen.js     de Vormmachines (Clay's artifact): 10 lichte + de lijst van alle 26
                     systemen-zwaar.js / -meer.js / -isomorf.js  de andere 16 (zwaar · middel · beeld = geluid)
@@ -154,7 +156,7 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
@@ -235,6 +237,7 @@ docs/
   STEMS.md          stems per nummer: Demucs bij de ingest, stems.wav, de engine, de rij, metingen
   TAILSCALE.md      overal openen via Tailscale: VARVE_HOSTS, tailscale serve, wat waar werkt
   ONTBREEKT.md      wat er nog ontbreekt (2 okt): eigen docs, DJ-software, Logic/TD; voorstel en vragen
+  STUDIO.md         VARVE als muziekprogramma (5 okt): hergebruik, vier controllers, fasen S0–S5; §3 de koptelefoon
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -1219,6 +1222,26 @@ Volledig in `docs/STEMS.md`. Wat een bouwer niet mag missen:
 - Geen vaste APC-plek (VRAGEN N1); koppelen werkt. Een nieuwe stem-knop op een
   deck: ook in `OVERNEEM` (auto-DJ) en, als het een schakelaar is, in de
   beginstand van het handelingenlog (`stemKill`).
+
+## Koptelefoon (gebouwd 5 okt, ROADMAP 27 S1)
+
+Volledig in `docs/STUDIO.md` §3. Wat een bouwer niet mag missen:
+- Eén AudioContext, één uitgang met VIER kanalen (op de Mac een samengesteld
+  apparaat: Scarlett 2i2 = 1/2 de zaal, koptelefoonuitgang van de Mac = 3/4). Eén
+  klok, regel 3. Geen tweede AudioContext met setSinkId: dat zijn twee klokken.
+- Zonder vier kanalen (`kanApart(ctx)` false) bestaat de koptelefoon niet: geen node
+  erbij, `createMasterChain(ctx, koptelefoon.zaalIn)` gaat dan naar `ctx.destination`
+  zoals altijd, en `track.N.pfl`/`headphone.*` lezen null.
+- De cue tapt `chain.lpf` (vóór de fader, na trim/EQ/effect/filter); aan en uit met
+  `killVersterking` (zachte S na startDrempel). Volume en mix via `zetDoel`. De zaal in
+  de koptelefoon tapt `master.analyser` (na de limiter), zoals de opname.
+- Zaal en koptelefoon omwisselen is BEDRADING: alleen bij het maken
+  (`new Engine({ koptelefoon: { omgewisseld } })`, de app leest localStorage).
+- `headphone.*` en `track.N.pfl` horen niet bij wat er klinkt: OVERSLAAN in
+  terugspelen.js, NIET_IN_WAARDEN in handelingen.js, niet in OVERNEEM (auto-DJ).
+- APC: ● (record arm) zonder shift = `track.N.pfl`; shift + ● blijft het cuepunt.
+- Gemeten met `tools/headless/koptelefoon.mjs` (echte Chrome, OfflineAudioContext van
+  vier kanalen); de mock in engine.test kent geen echte splitter/merger.
 
 ## Werkwijze die hier werkt
 

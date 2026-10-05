@@ -1,4 +1,4 @@
-# Overdracht — waar we staan (3 oktober 2026)
+# Overdracht — waar we staan (5 oktober 2026)
 
 Lees in deze volgorde:
 1. `CLAUDE.md`: architectuur, regels, valkuilen. Nieuw sinds 25 sep: transport,
@@ -7,12 +7,41 @@ Lees in deze volgorde:
    mapping als verschil, vormen 16:9, toonsoort.
 2. Dit bestand.
 3. `ROADMAP.md`: bovenaan staat DE TAKENLIJST OP VOLGORDE.
-4. `docs/VRAGEN.md`: open vragen, nieuw is blok N (stems).
+4. `docs/VRAGEN.md`: open vragen, nieuw zijn blok S (studio) en N (stems).
 5. Per onderdeel: `docs/TOONSOORT.md` (§13), `MAPPING-VERSCHIL.md`, `LIBRARY.md`,
    `BEAMER.md`, `HANDELINGENLOG.md`, `AUDIOPAD.md`, `VORMEN-16x9.md`,
    `BEATGRID.md` (restpunten), `APC40.md`.
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
+
+## 5 OKT: HET STUDIOPLAN EN DE KOPTELEFOON (docs/STUDIO.md)
+
+Clay: een nieuw soort muziekprogramma (stems mixen, effecten op het geheel en per stem,
+stukken programmeren, synths spelen en programmeren, alles voorbeluisteren), met de APC40,
+LPD8, Maschine MK2 en Xboard49, en hergebruik van wat er al is. Besluit: VARVE groeit
+uit (STUDIO.md §0, ST1–ST5; ROADMAP 27).
+- STEMS: de zes `stems/*`-takken gepusht; de losse fix uit de stems-worktree gecommit
+  (696ac4b); `origin/main` (de cloudsessies van 2 okt) samengevoegd in `stems/integratie`
+  (c0a9930: elf botsingen, overal beide kanten gehouden). PR #3 naar `main` is schoon:
+  42 bestanden, 4165 checks groen.
+- KOPTELEFOON (S1) op de tak `studio/koptelefoon` (worktree `~/Projects/varve-stems/studio`):
+  `src/engine/koptelefoon.js`, ● zonder shift = cue, de KOPTELEFOON-rij, blok Koptelefoon in
+  de speellijst. Gemeten in headless Chrome (`tools/headless/koptelefoon.mjs`: de echte engine
+  op een OfflineAudioContext van vier kanalen). **Niet gehoord** op het samengestelde apparaat.
+- **Eerst doen (Clay):**
+  1. PR #3 mergen, daarna de PR van de koptelefoon.
+  2. De repo uit iCloud (Claude's auto-modus weigerde de verhuizing als onomkeerbaar).
+     Mixer en server dicht, dan:
+     ```
+     [ -L ~/Projects/"Youtube mixer" ] && rm ~/Projects/"Youtube mixer"   # alleen de snelkoppeling
+     mv ~/Desktop/"1. Projects/Youtube mixer" ~/Projects/"Youtube mixer"
+     cd ~/Projects/"Youtube mixer" && git worktree repair ~/Projects/varve-stems/*
+     mkdir -p ~/.claude/projects/-Users-claykrebbers-Projects-Youtube-mixer
+     cp -R ~/.claude/projects/-Users-claykrebbers-Desktop-1--Projects-Youtube-mixer/memory \
+           ~/.claude/projects/-Users-claykrebbers-Projects-Youtube-mixer/
+     ```
+     Daarna de Git-regel in CLAUDE.md ("de repo staat op het Bureaublad (iCloud)") bijwerken.
+  3. Het samengestelde apparaat maken (STUDIO.md §3) en het blok Koptelefoon in de speellijst.
 
 ## 3 OKT: STEMS GEBOUWD (docs/STEMS.md)
 
