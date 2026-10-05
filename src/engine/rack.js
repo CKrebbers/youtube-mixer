@@ -131,7 +131,11 @@ export function leesRack(data, { bekendType = () => true } = {}) {
     slots.add(slot);
     const onbekend = !bekendType(node?.type);
     if (onbekend) fouten.push(`effect "${node?.type}" ken ik niet — blijft bewaard, staat uit`);
-    return { ...node, slot, onbekend, bypass: onbekend ? true : !!node.bypass,
+    // Uit zetten mag, maar alleen hier: wat er in het bestand stond gaat er
+    // weer zo uit (`_bypass`). Anders stond een effect dat deze versie niet
+    // kent na één keer bewaren voorgoed uit, ook in de versie die hem wel kent.
+    const eigen = onbekend ? { _bypass: node && '_bypass' in node ? node._bypass : node?.bypass } : {};
+    return { ...node, slot, onbekend, ...eigen, bypass: onbekend ? true : !!node.bypass,
       params: node?.params && typeof node.params === 'object' ? node.params : {} };
   });
 
@@ -173,7 +177,12 @@ export function schrijfRack(rack) {
     name: rack.name || 'naamloos',
     tags: rack.tags || [],
     from: rack.from ?? null,
-    chain: (rack.chain || []).map(({ onbekend, ...node }) => node),
+    chain: (rack.chain || []).map(({ onbekend, _bypass, ...node }) => {
+      if (!onbekend) return node;
+      // Een onbekend effect gaat terug zoals het binnenkwam, ook zijn bypass.
+      const { bypass, ...rest } = node;
+      return _bypass === undefined ? rest : { ...rest, bypass: _bypass };
+    }),
     macros: (rack.macros || []).map((m) => ({
       place: m.place, label: m.label, default: m.default,
       ...(m.bipolar ? { bipolar: true } : {}),
