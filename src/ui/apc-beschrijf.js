@@ -69,6 +69,11 @@ export function beschrijf(action) {
     if (rest === 'inst.prev') return r('◀ instr', 'vorig instrument op deze track (een nummer dat speelt: tweede druk binnen 3 s)');
     if ((m = /^inst\.knob\.(\d)$/.exec(rest))) return r(`instr ${m[1]}`, `instrumentknop ${m[1]} (wat die doet hangt van het instrument af; de namen staan in de INSTRUMENT-rij)`);
     if (rest === 'inst.stil') return r('stil', 'instrument meteen stil (paniek), met een korte fade; lampje = er klinkt iets');
+    // Stemkanalen (docs/STEMS.md §5). Bij vier stems werkt `inst` op de groep: filter in serie, sends en cue samen.
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.filter$/.exec(rest))) return r(`${STEM[m[1]]} filter`, `stemfilter: ${STEM_UITLEG[m[1]]}; midden = open, links lowpass, rechts highpass (alleen deze stem)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.send\.a$/.exec(rest))) return r(`${STEM[m[1]]} echo`, `echo-send van één stem: ${STEM_UITLEG[m[1]]}; volgt de fader van de track (fader dicht = niets meer insturen)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.send\.b$/.exec(rest))) return r(`${STEM[m[1]]} galm`, `galm-send van één stem: ${STEM_UITLEG[m[1]]}; volgt de fader van de track (fader dicht = niets meer insturen)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.pfl$/.exec(rest))) return r(`${STEM[m[1]]} PFL`, `één stem in de koptelefoon aan/uit: ${STEM_UITLEG[m[1]]}, na zijn filter en vóór de fader; de zaal hoort het niet (uit = geen koptelefoonuitgang of geen stems)`);
     if (rest === 'pfl') return r('PFL', 'in de koptelefoon aan/uit: voorbeluisteren vóór de fader, de zaal hoort het niet (lampje rood = je hoort hem; uit = geen koptelefoonuitgang, docs/STUDIO.md §3)');
     if (rest === 'brake') return r('rem', 'rem (vinylstop): in de remtijd naar stilstand, dan pauze; tijdens het remmen nog eens = los');
     if (rest === 'brake.time') return r('remtijd', 'remtijd: 0,1 tot 5 seconden tot stilstand');

@@ -78,6 +78,8 @@ export const SOORTEN = [
   ['video', 'video', /^video\./],
   ['opname', 'opname', /^record\./],
   ['auto', 'auto-DJ', /^auto\./],
+  // Vóór klank, fx en mixer: track.1.stem.vocals.filter eindigt op .filter, .send.a op een send.
+  ['stems', 'stems', /\.stem\./],
   // Vóór "mixer": track.1.kill.high eindigt op .high, en dat is geen EQ-knop.
   ['klank', 'kill & rem', /\.(kill\.(low|mid|high)(\.hold)?|brake(\.time)?)$/],
   // Een instrument op de track (docs/INSTRUMENTEN.md §6): het mapje inst.

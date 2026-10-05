@@ -26,7 +26,7 @@
     <button id="plan-btn" class="ghost" title="de programmering: het hele setplan zien, inrichten en live volgen (apart venster)">plan</button>
     <button id="auto-btn" class="ghost" title="auto-DJ: de app kiest en mixt, jij stuurt bij">auto</button>
     <button id="klankschaal-btn" class="ghost" title="klankschaal: speel mee op de toon van wat je hoort">klankschaal</button>
-    <button id="stems-btn" class="ghost" title="stems van de track met focus: zang en rest (of vier), niveau en kill per stem">stems</button>
+    <button id="stems-btn" class="ghost" title="stems van de track met focus: zang en rest (of vier), per stem niveau, kill, filter, echo, galm en cue">stems</button>
     <button id="koptelefoon-btn" class="ghost" title="koptelefoon: tracks voorbeluisteren zonder dat de zaal ze hoort, volume en mix">koptelefoon</button>
     <button id="instrument-btn" class="ghost" title="instrument op de track met focus: kiezen, acht knoppen, een toetsenbord om te proberen, en welk MIDI-keyboard er binnenkomt">instrument</button>
     <button id="master-btn" class="ghost" title="master: effecten op de hele mix en de limiter (hoeveel hij afneemt)">master</button>
@@ -217,36 +217,59 @@
 
 <!-- ================= STEMS (docs/STEMS.md §4) ================= -->
 <!-- Voor de track met focus. De actions staan hier op track 1; stems-paneel.js
-     schrijft ze om naar de focus. Per stem: naam, niveau (schuif) en kill.
-     Welke stems er zijn zegt read(): null = niet in deze stand. -->
+     schrijft ze om naar de focus. Per stem: naam, niveau (schuif), kill, en
+     het stemkanaal (docs/STEMS.md §5): filter (geel), echo (cyaan), galm
+     (violet) en cue. Welke stems er zijn zegt read(): null = niet in deze stand. -->
 <section id="stems" class="stems-rij hidden">
   <span class="sampler-kop">STEMS</span>
   <span class="st-track" title="de track met focus">track 1</span>
+  <!-- wat de kleine knoppen per stem zijn (de kleur van de wijzer); bij vier stems op een smal scherm alleen de tooltips -->
+  <span class="st-legenda" title="per stem: filter (midden = open, links lowpass, rechts highpass) · echo · galm (volgen de fader van de track) · cue (koptelefoon)"><i class="f"></i>filter<i class="e"></i>echo<i class="g"></i>galm</span>
   <div class="st-stemmen">
     <div class="st-stem hidden" data-stem="drums">
       <span class="st-naam">drums</span>
       <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.drums" title="niveau van de drums (dubbelklik: vol)">
       <button data-kind="button" data-action="track.1.stem.drums.kill" data-action-shift="track.1.stem.drums.hold" class="btn sm st-kill" title="drums weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+      <div class="knob sm st-knop st-filter" data-action="track.1.stem.drums.filter" data-value="0.5" data-bipolar="true" title="filter van de drums: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
+      <div class="knob sm st-knop st-echo" data-action="track.1.stem.drums.send.a" data-value="0" data-default="0" title="echo van de drums: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-galm" data-action="track.1.stem.drums.send.b" data-value="0" data-default="0" title="galm van de drums: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <button data-kind="button" data-action="track.1.stem.drums.pfl" class="btn sm st-cue" title="de drums in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
     </div>
     <div class="st-stem hidden" data-stem="bass">
       <span class="st-naam">bas</span>
       <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.bass" title="niveau van de bas (dubbelklik: vol)">
       <button data-kind="button" data-action="track.1.stem.bass.kill" data-action-shift="track.1.stem.bass.hold" class="btn sm st-kill" title="bas weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+      <div class="knob sm st-knop st-filter" data-action="track.1.stem.bass.filter" data-value="0.5" data-bipolar="true" title="filter van de bas: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
+      <div class="knob sm st-knop st-echo" data-action="track.1.stem.bass.send.a" data-value="0" data-default="0" title="echo van de bas: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-galm" data-action="track.1.stem.bass.send.b" data-value="0" data-default="0" title="galm van de bas: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <button data-kind="button" data-action="track.1.stem.bass.pfl" class="btn sm st-cue" title="de bas in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
     </div>
     <div class="st-stem hidden" data-stem="other">
       <span class="st-naam">overig</span>
       <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.other" title="niveau van overig (dubbelklik: vol)">
       <button data-kind="button" data-action="track.1.stem.other.kill" data-action-shift="track.1.stem.other.hold" class="btn sm st-kill" title="overig weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+      <div class="knob sm st-knop st-filter" data-action="track.1.stem.other.filter" data-value="0.5" data-bipolar="true" title="filter van overig: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
+      <div class="knob sm st-knop st-echo" data-action="track.1.stem.other.send.a" data-value="0" data-default="0" title="echo van overig: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-galm" data-action="track.1.stem.other.send.b" data-value="0" data-default="0" title="galm van overig: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <button data-kind="button" data-action="track.1.stem.other.pfl" class="btn sm st-cue" title="overig in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
     </div>
     <div class="st-stem hidden" data-stem="vocals">
       <span class="st-naam">zang</span>
       <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.vocals" title="niveau van de zang (dubbelklik: vol)">
       <button data-kind="button" data-action="track.1.stem.vocals.kill" data-action-shift="track.1.stem.vocals.hold" class="btn sm st-kill" title="zang weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+      <div class="knob sm st-knop st-filter" data-action="track.1.stem.vocals.filter" data-value="0.5" data-bipolar="true" title="filter van de zang: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
+      <div class="knob sm st-knop st-echo" data-action="track.1.stem.vocals.send.a" data-value="0" data-default="0" title="echo van de zang: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-galm" data-action="track.1.stem.vocals.send.b" data-value="0" data-default="0" title="galm van de zang: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <button data-kind="button" data-action="track.1.stem.vocals.pfl" class="btn sm st-cue" title="de zang in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
     </div>
     <div class="st-stem hidden" data-stem="inst">
       <span class="st-naam">rest</span>
       <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.inst" title="niveau van de rest (dubbelklik: vol)">
       <button data-kind="button" data-action="track.1.stem.inst.kill" data-action-shift="track.1.stem.inst.hold" class="btn sm st-kill" title="rest weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+      <div class="knob sm st-knop st-filter" data-action="track.1.stem.inst.filter" data-value="0.5" data-bipolar="true" title="filter van de rest (bij vier stems: drums, bas en overig samen): midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
+      <div class="knob sm st-knop st-echo" data-action="track.1.stem.inst.send.a" data-value="0" data-default="0" title="echo van de rest (bij vier stems: drums, bas en overig samen): naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-galm" data-action="track.1.stem.inst.send.b" data-value="0" data-default="0" title="galm van de rest (bij vier stems: drums, bas en overig samen): naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <button data-kind="button" data-action="track.1.stem.inst.pfl" class="btn sm st-cue" title="de rest (bij vier stems: drums, bas en overig samen) in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
     </div>
   </div>
   <!-- zonder stems: wat er is, splitsen (2 · 4), of de voortgang met × -->

@@ -653,12 +653,13 @@ console.log('\nhet mapje inst op de APC');
   const vorige = eerdereStandaarden(doc).find((x) => x.vingerafdruk === 'a067b3f2-397')?.doc;
   const oud = new Map((vorige?.rules ?? []).map((r) => [sleutelVan(r), JSON.stringify(r)]));
   const nu = new Map(normaliseer(doc).doc.rules.map((r) => [sleutelVan(r), JSON.stringify(r)]));
-  // Wat er sinds a067b3f2-397 bijkwam: de 11 van device.inst, en (spoor master) het mapje master.
+  // Wat er sinds a067b3f2-397 bijkwam: de 11 van device.inst, en (andere sporen) het mapje
+  // master en de grid-modus stems met zijn kiesknop (Shift + scene 3).
   const erbij = [...nu.keys()].filter((k) => !oud.has(k));
-  ok(`de vorige standaard (a067b3f2-397) is een voorganger: geen enkele bestaande regel veranderd of weg; erbij de 11 van inst (en het mapje master: ${erbij.length - 11})`,
+  ok(`de vorige standaard (a067b3f2-397) is een voorganger: geen enkele bestaande regel veranderd of weg; erbij de 11 van inst (en van master en stems: ${erbij.length - 11})`,
     vorige?.rules.length === 397 && [...oud].every(([k, t]) => nu.get(k) === t)
     && erbij.filter((k) => k.endsWith('@device.inst')).length === 11
-    && erbij.every((k) => /@device\.(inst|master)$/.test(k) || k === 'note:0:64#shift'));
+    && erbij.every((k) => /@(device\.(inst|master)|grid\.stems)$/.test(k) || ['note:0:64#shift', 'note:0:84#shift', 'note:0:84#shift@edit.aan'].includes(k)));
   const lg = new Lagen({ beschikbaar: () => true });
   const m = new Mapping({ read: () => null, invoke: () => {}, vars: () => ({ focus: 3 }), lagen: () => lg.actief() });
   m.load(doc);

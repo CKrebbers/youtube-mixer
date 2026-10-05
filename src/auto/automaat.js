@@ -32,7 +32,7 @@ import {
 
 const ZELF = Symbol('auto');
 /** Actions waarmee Clay een overgang overneemt (op een track in de overgang). */
-const OVERNEEM = /^track\.(\d)\.(fader|low|mid|high|filter|play|play\.quant|sync|seek|tempo|pitch|send\.[ab]|kill\.\w+(\.hold)?|stem\.(vocals|inst|drums|bass|other)(\.(kill|hold))?|brake|cue|hotcue\.\d)$/;
+const OVERNEEM = /^track\.(\d)\.(fader|low|mid|high|filter|play|play\.quant|sync|seek|tempo|pitch|send\.[ab]|kill\.\w+(\.hold)?|stem\.(vocals|inst|drums|bass|other)(\.(kill|hold|filter|send\.[ab]))?|brake|cue|hotcue\.\d)$/;
 /**
  * De curve van een overgang gaat als GLIJDENDE knoppen (track.N.<knop>.glide,
  * Deck.glide): elke beurt een doel dat GLIJ seconden verderop op de curve ligt,

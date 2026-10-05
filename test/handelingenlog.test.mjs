@@ -679,7 +679,16 @@ try {
         s1.stemKill?.vocals === true && s1.stemKill?.inst === false && Math.abs(st.waarden['track.1.stem.inst'] - 0.4) < 1e-9
         && st.tracks[1].stemKill === null);
       ok('stem-actions horen bij het nummer (NUMMER_NODIG)', T.NUMMER_NODIG.test('track.1.stem.vocals.kill')
-        && T.NUMMER_NODIG.test('track.1.stem.inst') && T.NUMMER_NODIG.test('track.2.stem.drums.hold'));
+        && T.NUMMER_NODIG.test('track.1.stem.inst') && T.NUMMER_NODIG.test('track.2.stem.drums.hold')
+        && T.NUMMER_NODIG.test('track.2.stem.vocals.filter') && T.NUMMER_NODIG.test('track.2.stem.inst.send.a'));
+      // Stemkanalen (docs/STEMS.md §5): filter en sends zijn value-actions, dus
+      // vanzelf in de beginstand (alleen voor stems die er zijn); de cue niet:
+      // een trigger, en terugspelen slaat hem over (de zaal hoort hem niet).
+      ok('beginstand stemkanalen: filter en sends van elke stem die er is als waarde, de cue niet',
+        st.waarden['track.1.stem.vocals.filter'] === 0.5 && st.waarden['track.1.stem.inst.send.a'] === 0
+        && st.waarden['track.1.stem.inst.send.b'] === 0 && !('track.1.stem.drums.filter' in st.waarden)
+        && !('track.2.stem.vocals.filter' in st.waarden) && !Object.keys(st.waarden).some((k) => /\.pfl$/.test(k))
+        && T.OVERSLAAN.test('track.1.stem.vocals.pfl') && !T.OVERSLAAN.test('track.1.stem.vocals.filter'));
       // Alles anders; terugspelen met een log dat zang weer AAN zet (toggle).
       A.invoke('track.1.stem.vocals.kill', true);           // weer open
       A.invoke('track.1.stem.inst.kill', true);
