@@ -653,9 +653,12 @@ console.log('\nhet mapje inst op de APC');
   const vorige = eerdereStandaarden(doc).find((x) => x.vingerafdruk === 'a067b3f2-397')?.doc;
   const oud = new Map((vorige?.rules ?? []).map((r) => [sleutelVan(r), JSON.stringify(r)]));
   const nu = new Map(normaliseer(doc).doc.rules.map((r) => [sleutelVan(r), JSON.stringify(r)]));
-  ok('de vorige standaard (a067b3f2-397) is een voorganger: geen enkele bestaande regel veranderd of weg, alleen de 11 erbij',
-    vorige?.rules.length === 397 && [...oud].every(([k, t]) => nu.get(k) === t) && nu.size - oud.size === 11
-    && [...nu.keys()].filter((k) => !oud.has(k)).every((k) => k.endsWith('@device.inst')));
+  // Wat er sinds a067b3f2-397 bijkwam: de 11 van device.inst, en (spoor master) het mapje master.
+  const erbij = [...nu.keys()].filter((k) => !oud.has(k));
+  ok(`de vorige standaard (a067b3f2-397) is een voorganger: geen enkele bestaande regel veranderd of weg; erbij de 11 van inst (en het mapje master: ${erbij.length - 11})`,
+    vorige?.rules.length === 397 && [...oud].every(([k, t]) => nu.get(k) === t)
+    && erbij.filter((k) => k.endsWith('@device.inst')).length === 11
+    && erbij.every((k) => /@device\.(inst|master)$/.test(k) || k === 'note:0:64#shift'));
   const lg = new Lagen({ beschikbaar: () => true });
   const m = new Mapping({ read: () => null, invoke: () => {}, vars: () => ({ focus: 3 }), lagen: () => lg.actief() });
   m.load(doc);
