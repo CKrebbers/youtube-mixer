@@ -12,6 +12,11 @@
  *   vier kolommen van 64 px: de naam van de knop, zijn waarde in echte eenheden
  *            (zoals de INSTRUMENT-rij) en een balk 0..1; links knop 1–4, rechts 5–8
  *   onderregel klein: SHIFT = fijn, of wat het wiel doet
+ *   STAPMODUS (links): het gekozen patroon: 16 vakjes van deze bladzijde
+ *            (leeg = rand, een andere noot = blokje, de laatst gespeelde noot =
+ *            vol, voorbij de lengte = niets), een streep onder de stap die je
+ *            hoort, en stap/lengte, noot, speelt/wacht, REC
+ *   PATTERN vast (links): de vijf plekken, de gekozen onderstreept
  *
  * Het lettertype is een klassiek 5×7-font (kolom voor kolom, onderste bit =
  * bovenste pixel), ASCII 32–126 plus ±. Wat er niet in staat wordt eerst
@@ -109,6 +114,45 @@ export function balk(buf, x, y, b, h, waarde) {
   for (let yy = y + 2; yy <= y + h - 3; yy++) lijn(buf, x + 2, x + 1 + vol, yy);
 }
 
+/** Een leeg vak met rand. */
+function vak(buf, x, y, b, h) {
+  lijn(buf, x, x + b - 1, y); lijn(buf, x, x + b - 1, y + h - 1);
+  staander(buf, x, y, y + h - 1); staander(buf, x + b - 1, y, y + h - 1);
+}
+function vul(buf, x, y, b, h) { for (let yy = y; yy < y + h; yy++) lijn(buf, x, x + b - 1, yy); }
+
+/** Stapmodus, het linkerscherm (onder de kop): 16 vakjes, de lopende stap, en wat erbij hoort. */
+function tekenStappen(buf, p) {
+  const van = p.bladzijde * 16 + 1;
+  const tot = Math.min(p.lengte, van + 15);
+  const status = p.speelt ? 'speelt' : p.wacht ? 'wacht' : 'stil';
+  tekst(buf, 2, 20, pasIn(`stap ${van}-${tot}/${p.lengte} noot ${p.noot} ${status}${p.opnemen ? ' REC' : ''}`, 42));
+  for (let i = 0; i < 16; i++) {
+    const x = i * 16 + 1, y = 30;
+    const r = p.stappen?.[i];
+    if (i % 4 === 0) lijn(buf, x + 6, x + 7, 28);   // de tellen
+    if (r === null || r === undefined) continue;    // voorbij de lengte
+    vak(buf, x, y, 14, 14);
+    if (r >= 0.75) vul(buf, x + 2, y + 2, 10, 10);
+    else if (r >= 0.25) vul(buf, x + 4, y + 4, 6, 6);
+  }
+  if (p.hoort !== null && p.hoort !== undefined && p.hoort >= 0 && p.hoort < 16) vul(buf, p.hoort * 16 + 1, 46, 14, 3);
+}
+
+/** PATTERN vast, het linkerscherm: de vijf plekken (read: null = geen, 0 = leeg, 0,5 = gevuld, 1 = speelt). */
+function tekenPlekken(buf, p) {
+  for (let i = 0; i < 5; i++) {
+    const r = p.plekken?.[i];
+    const x = i * 51 + 3, y = 22, b = 46, h = 24;
+    if (r === null || r === undefined) continue;
+    vak(buf, x, y, b, h);
+    if (r >= 0.25) vak(buf, x + 1, y + 1, b - 2, h - 2);   // gevuld: dikke rand
+    tekst(buf, x + 4, y + 5, String(i + 1), 2);
+    if (r >= 0.75) tekst(buf, x + 20, y + 5, '>', 2);       // speelt
+    if (p.plek === i + 1) vul(buf, x, y + h + 2, b, 3);      // de gekozen
+  }
+}
+
 /**
  * Een tekst die in `max` letters moet passen (1×): eerst zonder spatie vóór een
  * eenheid ("1,2 kHz" -> "1,2kHz"), lange woorden korter ("halve tonen" -> "ht"),
@@ -148,6 +192,18 @@ export function tekenScherm(stand, nr) {
   const buf = leegScherm();
   const s = stand || {};
   // ---- kop ----
+  // Links in de stapmodus of met PATTERN vast: het gekozen patroon in plaats van knop 1–4.
+  if (nr === 0 && s.speel && s.patroon && (s.patroonVast || s.modus === 'stappen')) {
+    const p = s.patroon;
+    kop(buf, 2, 1, s.patroonVast ? `T${s.speel.nr} kies patroon` : `T${s.speel.nr} ${s.speel.naam} P${p.plek}`, BREED - 4);
+    lijn(buf, 0, BREED - 1, 17);
+    if (s.patroonVast) tekenPlekken(buf, p); else tekenStappen(buf, p);
+    lijn(buf, 0, BREED - 1, 53, true);
+    const onder = s.melding || (s.patroonVast ? 'pad 1-5 = kiezen, PLAY = starten'
+      : p.bladzijden > 1 ? `< > blad ${p.bladzijde + 1}/${p.bladzijden}, SHIFT < > lengte` : 'pad = stap, SHIFT < > = lengte');
+    tekst(buf, 2, 56, pasIn(onder, Math.floor((BREED - 4) / STAP)));
+    return buf;
+  }
   if (nr === 0) {
     kop(buf, 2, 1, s.speel ? `T${s.speel.nr} ${s.speel.naam}` : 'geen instrument', BREED - 4);
   } else if (s.kandidaat) {

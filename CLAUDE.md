@@ -92,7 +92,7 @@ src/
                     feedback.js     engine-stand -> LED's, met diffing. Leest de mapping.
                     midi-learn.js   action kiezen, control bewegen, gekoppeld
                     noten.js        MIDI-noten (elke ingang behalve de APC) naar het instrument op de speeltrack; knoppen en de schuif (SysEx Master Volume) via een apparaatmapping
-                    maschine.js     de Maschine MK2 via de hub (alleen ?hub=): pads -> noten.js, groepen/draaiknoppen (mapping), masterwiel, lampjes, schermen
+                    maschine.js     de Maschine MK2 via de hub (alleen ?hub=): pads -> noten.js of stappen (STEP), PATTERN, transport, groepen/draaiknoppen (mapping), masterwiel, lampjes, schermen
                     maschine-scherm.js  de twee schermen van de Maschine: stand -> 2048 bytes (256×64, 1 bit), eigen 5×7-font. Puur.
                     handelingen.js  het handelingenlog: [t, action, waarde] op de audioklok, per seconde weg
                     terugspelen.js  een log terugspelen: beginstand, dan elke regel op T0 + t
@@ -197,7 +197,7 @@ mappings/
   generic.json      leeg startpunt
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
   xboard49.json     E-MU Xboard49: knop 1–8 -> instrument, 9–16 -> FX, schuif -> fader van de speeltrack (AANNAME, te controleren met een proef)
-  maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn)
+  maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn), transport van de patronen ({plek})
 racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 plannen/
@@ -1492,7 +1492,12 @@ Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag mis
   niet automatisch, niet uit localStorage, niet met de hand.
 - De schuif van de Xboard is SysEx Master Volume: signature `master-volume` in een
   apparaatmapping (noten.js). Knop 9–16 = FX van de speeltrack. CC's: AANNAME.
-- De stapmodus wacht op het patronen-spoor: wat hij gebruikt staat in `docs/MASCHINE.md` §5.
+- Patronen op de Maschine (`docs/MASCHINE.md` §5): STEP = stapmodus (pad = `track.{speel}.pattern.step.S`,
+  lampje = die read, de lopende stap wit via `engine.patronen.stand/stapNu`), PATTERN + pad 1–5 =
+  `engine.patronen.kies` (geen action voor kiezen), PLAY/RESTART/REC/ERASE en SHIFT + ◄ ► via de
+  mapping met `{plek}` (= de gekozen plek van de speeltrack). Live opnemen gaat vanzelf: de pads
+  spelen via noten.js. Een pad laat los waar hij indrukte, ook na een moduswissel (`padVast`).
+  Headless: `VARVE_PATRONEN` naar een tijdelijke map, anders schrijft de testserver `patronen/set.json`.
 - Toetsen: `node test/maschine.test.mjs`, `node test/hub.test.mjs`, en headless
   `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
   HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een

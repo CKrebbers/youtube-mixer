@@ -134,8 +134,10 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   dit alles geladen; met vlag: het masterwiel zet Poly en Drums, een Xboard-noot en een pad klinken
   (niveau gemeten), groep B zet de focus, een draaiknop (en SHIFT fijn) draait een instrumentknop,
   de schuif zet de fader, en lampjes en schermen komen als HID-rapporten aan (schermen bit voor bit
-  gelijk aan `tekenScherm`). Ook de vertraging injecteren → noteOn. Eigen VARVE-server
-  (`VARVE_KIJK_POORT`, standaard 8818). docs/MASCHINE.md.
+  gelijk aan `tekenScherm`). Ook de vertraging injecteren → noteOn. Dan de patronen: STEP + pads
+  zetten stappen, PLAY speelt (de lopende stap wit), REC + pad neemt op, PATTERN + pad kiest,
+  RESTART stopt. Eigen VARVE-server (`VARVE_KIJK_POORT`, standaard 8818) met tijdelijke
+  database en `VARVE_PATRONEN`. docs/MASCHINE.md.
 - `noodknoppen.mjs` — zwart, bevriezen, master en flits (A4) pixel voor pixel, in het hoofdvenster én
   in het losse venster (video.html, dat zelf mengt). Geen ingest: een canvas met vier gekleurde kwarten
   als nep-video op track 1 (demotrack eronder, stil). De fade en de flits worden op EXACTE tijden gemeten

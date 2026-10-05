@@ -1,8 +1,8 @@
 # Maschine MK2 en Xboard49 in VARVE (via de AV-app-hub)
 
-*5 oktober 2026 · spoor speelapparaten (tak `studio/speelapparaten`). Gebouwd en getest in Node
-en in een headless Chromium tegen de echte hub met een nep-Maschine op HID-niveau; nog niet op
-Clay's toestellen.*
+*5 oktober 2026 · spoor speelapparaten (tak `studio/speelapparaten`, op `studio/integratie` met
+de patronen). Gebouwd en getest in Node en in een headless Chromium tegen de echte hub met een
+nep-Maschine op HID-niveau; nog niet op Clay's toestellen.*
 
 De AV-app-hub opent de **E-MU Xboard49** (MIDI) en de **Maschine MK2** (USB-HID, zonder
 NI-software) en geeft ze door aan de lease-app die ze "speelt" (AV-app-hub: PROTOCOL §17,
@@ -35,10 +35,10 @@ NI-software) en geeft ze door aan de lease-app die ze "speelt" (AV-app-hub: PROT
   niet en ook met de hand gekozen valt hij terug. Vroeger pakte hij de Xboard als de APC
   ontbrak, en dan werden zijn noten 36–39 grid-pads van de APC-mapping.
 
-## 2. De Maschine: de speelmodus
+## 2. De Maschine: wat elke knop doet
 
-Wat elke knop doet. Data in `mappings/maschine-mk2.json` (groepen, draaiknoppen, shift),
-de rest in `src/control/maschine.js`. Het profiel (welke knop welk bericht stuurt) staat in
+Data in `mappings/maschine-mk2.json` (groepen, draaiknoppen, shift, transport), de rest in
+`src/control/maschine.js` (pads, STEP, PATTERN, ◄ ►, het wiel, lampjes, schermen). Het profiel (welke knop welk bericht stuurt) staat in
 `src/control/devices/maschine-mk2.js`.
 
 | Knop | Doet in VARVE |
@@ -49,12 +49,23 @@ de rest in `src/control/maschine.js`. Het profiel (welke knop welk bericht stuur
 | **SHIFT** + draaiknop | fijn: vijf omwentelingen voor de hele knop |
 | **masterwiel** draaien | een ander instrument KIEZEN voor de **focus-track** (geen → Poly → FM → Schaal → Drums, rondlopend): het staat alleen op het scherm, er verandert nog niets |
 | **masterwiel** indrukken of **ENTER** | de keuze zetten (`track.N.inst.choose`). Speelt daar een nummer: eerst "druk nog eens" (de bus wil een tweede druk binnen 3 s, zoals overal), de keuze blijft staan. Een keuze vervalt na 8 s of als de focus wisselt |
-| PLAY, REC, RESTART, ERASE, STEP, PATTERN, F1–F8, … | nog vrij: voor de stapmodus en de patronen (§5) |
+| **STEP** | stapmodus aan/uit (§5); lampje fel = aan |
+| **PATTERN** vast + pad 1–5 | patroon (plek) 1–5 kiezen op de speeltrack; de pads tonen zolang de vijf plekken |
+| **PLAY** | het gekozen patroon op de speeltrack starten op de maat, of stoppen als het speelt (`track.{speel}.pattern.{plek}`); **SHIFT + PLAY** meteen (`.now`) |
+| **RESTART** | het patroon op de speeltrack stoppen op de maat (`track.{speel}.pattern.stop`; de MK2 heeft geen STOP-knop); **SHIFT** = meteen |
+| **REC** | live opnemen aan/uit (`patterns.record`): wat je op de pads (of het keyboard) speelt komt in het patroon dat speelt |
+| **ERASE** | het gekozen patroon leegmaken (`track.{speel}.pattern.clear`, tweede druk binnen 3 s) |
+| **◄ ►** (transport) | in de stapmodus: de bladzijde (stap 1–16, 17–32, …); **SHIFT + ◄ ►** = korter/langer (`.pattern.length.down/up`) |
+| F1–F8, GRID, NOTE REPEAT, BROWSE, … | vrij |
 
 **Waarom het wiel kiest en niet meteen wisselt:** een tik tegen het wiel zou anders je
 instrument (met zijn knopstanden) vervangen. Kiezen werkt op de FOCUS-track en niet op de
 speeltrack: zo zet je ook een instrument op een lege track (groep C, wiel, indrukken), en
 die wordt dan de speeltrack.
+
+Alles van de patronen gaat over de bus (in het handelingenlog), op de **gekozen plek van de
+speeltrack** (`{plek}` in de mapping = `engine.patronen.gekozen(speeltrack)`). Alleen kiezen
+(PATTERN + pad) roept `engine.patronen.kies` aan: daar is geen action voor.
 
 **Waar de speeltrack is:** de focus-track als die een instrument heeft, anders de laatste
 focus-track met een instrument (`engine.speeltrack()`). Pads, Xboard en draaiknoppen spelen
@@ -78,7 +89,16 @@ kleur. Gedimd = de "donker"-tint (index + 1, #59xxxx), zoals op de APC.
   donkergrijs. Geen instrument ergens: uit.
 - **Groep A–H**: track met een instrument = zijn kleur (vol als het de focus is, anders
   gedimd); met een nummer = wit gedimd (grijs; de focus wit); leeg = uit (de focus donkergrijs).
+- **Stapmodus**: elke pad = de read van zijn stap: de laatst gespeelde noot staat erop = de
+  volle kleur, een andere noot = gedimd, leeg = donkergrijs, voorbij de lengte = uit; de stap
+  die je nu HOORT (`stapNu`, alleen als het gekozen patroon speelt) wit.
+- **PATTERN vast**: pad 1–5 = de plekken (speelt = vol, gevuld = gedimd, leeg = donkergrijs),
+  de gekozen wit; 6–16 uit.
 - **SHIFT**: zacht aan, fel zolang hij vastzit. **ENTER**: fel zolang het wiel een keuze heeft.
+- **STEP**, **PATTERN**: zacht aan, fel als ze aan/vast zijn. **PLAY**/**RESTART**/**ERASE**:
+  hun read als helderheid (speelt = fel, gevuld/iets te stoppen = half, knippert vanzelf als het
+  op de maat wacht). **REC** fel tijdens opnemen. **◄ ►** half als er een bladzijde die kant op
+  is. Zonder instrument op de speeltrack zijn de patroonknoppen uit.
 - Alleen wat verandert gaat weg (~30× per seconde gekeken, `TIK_MS` 33 in
   `ui/speelapparaten.js`), door de wachtrij van hub.js.
 
@@ -99,6 +119,11 @@ kleur. Gedimd = de "donker"-tint (index + 1, #59xxxx), zoals op de APC.
  pads + keyboard spelen hier / SHIFT: …           wiel = instrument kiezen / druk op het wiel = zetten
 ```
 
+- **Stapmodus** (links, in plaats van knop 1–4): kop `T2 Drums P1`, een regel met stap
+  van–tot/lengte, de noot die erop komt, speelt/wacht/stil en REC, dan 16 vakjes (rand = leeg,
+  blokje = een andere noot, vol = de laatst gespeelde noot, niets = voorbij de lengte) met een
+  streep onder de stap die je hoort. **PATTERN vast**: de vijf plekken als grote vakken (dikke
+  rand = gevuld, `>` = speelt), de gekozen onderstreept. Rechts blijft knop 5–8.
 - Kop links: de speeltrack en zijn instrument (waar pads, keyboard en draaiknoppen heen gaan);
   kop rechts: de keuze van het wiel, of de focus-track als die anders is dan de speeltrack.
 - Per knop (vier per scherm, 64 px): de naam, de waarde in echte eenheden (dezelfde `eenheid()`
@@ -107,25 +132,24 @@ kleur. Gedimd = de "donker"-tint (index + 1, #59xxxx), zoals op de APC.
 - Alleen opnieuw als de stand veranderde (en dan alleen het scherm dat anders is), hooguit
   eens per 100 ms per scherm (`SCHERM_MS`). De hub stuurt daarna alleen de stukken die veranderden.
 
-## 5. De stapmodus (nog niet gebouwd: wacht op het patronen-spoor)
+## 5. De stapmodus en de patronen (gebouwd 5 okt, op het patronen-spoor)
 
-Het patronen-spoor (S4, tak `studio/patronen`, `docs/PATRONEN.md`) zat bij het bouwen niet in
-`studio/integratie`. Wat de stapmodus straks gebruikt (namen zoals op die tak, 5 okt):
+Op `engine.patronen` (docs/PATRONEN.md §7), na het samenvoegen van `studio/integratie` met de
+patronen. Werkwijze op de Maschine:
 
-| Maschine | wordt |
-|---|---|
-| **STEP** (noot 9) | stapmodus aan/uit (lampje fel = aan) |
-| **pads 1–16** in de stapmodus | stap 1–16 van de gekozen plek op de speeltrack: `track.{speel}.pattern.step.S` (de laatst gespeelde noot erop, of eraf). Lampje = de read van die action (stap gezet = de kleur van het instrument, de lopende stap fel) |
-| **PLAY** | het gekozen patroon op de speeltrack starten/stoppen op de maat (`track.{speel}.pattern.K`; met SHIFT meteen: `.now`) |
-| **REC** | live opnemen aan/uit (`patterns.record`); de pads in de speelmodus nemen dan op via noten.js, zoals het keyboard |
-| **ERASE** / **RESTART** | `track.{speel}.pattern.clear` / `track.{speel}.pattern.stop` |
-| ◄ ► (transport) | stap 17–32, 33–48, 49–64 (patronen tot 64 stappen) |
-| scherm | het patroon: 16 vakjes, de lopende stap, lengte en swing |
+1. Speel de noot die je wilt (een pad, of het keyboard): dat is "de laatst gespeelde noot" van
+   de speeltrack (`engine.patronen.laatsteNoot`).
+2. **STEP**: de pads zijn nu stap 1–16 van het gekozen patroon. Een pad zet die noot op zijn stap
+   (of haalt hem eraf): `track.{speel}.pattern.step.S` over de bus. Langer dan 16 stappen:
+   SHIFT + ► (per 16, tot 64), en ◄ ► bladeren.
+3. **PLAY** start het op de maat (zonder maatgever meteen, op het eigen tempo), en de lopende stap
+   licht wit op. Nog eens PLAY (of RESTART) = stoppen op de maat.
+4. **REC** + spelen in de speelmodus (STEP uit): wat je speelt komt erbij, op de dichtstbijzijnde
+   stap van wat je hoorde (overdub; noten.js → `engine.patronen.noot`, zoals het keyboard).
+5. **PATTERN** vast + pad 1–5: een andere plek kiezen; PLAY start die (wisselen op de maat).
 
-Waar het in de code komt: `Maschine.ontvang()` (de tak voor de pads: in de stapmodus naar de
-bus in plaats van naar noten.js), `Maschine.ledBeeld()` (de padkleuren uit de reads) en
-`stand()`/`tekenScherm()`. De knoppen erbij in `mappings/maschine-mk2.json`. De pads in de
-speelmodus gaan al via noten.js, dus live opnemen werkt daar vanzelf zodra noten.js opneemt.
+Wisselt de modus terwijl een pad vastzit, dan gaat zijn loslaten naar waar het indrukken heen
+ging (noten.js of de stap-action): er blijft nooit een noot hangen.
 
 ## 6. De Xboard49
 
@@ -149,7 +173,9 @@ hub via Web MIDI binnenkomt (noten.js hoort beide).
 - `test/maschine.test.mjs` (Node, nep-engine, de echte Noten en Mapping): profiel, indeling,
   pads → noten, groepen, draaiknoppen en SHIFT, het wiel (kiezen, zetten, verlopen, focus
   weg, "druk nog eens"), lampjes (kleuren, flits, diff), schermen (tempo, alleen wat
-  veranderde), hub weg en terug, het scherm als pure functie (pixels teruglezen, tekst in zijn
+  veranderde), hub weg en terug, de stapmodus met een nep-patroonspeler (stappen over de bus,
+  lampjes uit de reads, bladeren, lengte, loslaten na een moduswissel, PATTERN + pad, het
+  transport, het scherm), het scherm als pure functie (pixels teruglezen, tekst in zijn
   kolom, elke eenheid van Poly/FM/Drums past), Xboard knop 9–16 en de schuif, en
   `isSpeelapparaat` in de MidiHub.
 - `test/hub.test.mjs`: `speelt` in het manifest (geldig volgens de hub), routering per `dev`,
@@ -158,12 +184,16 @@ hub via Web MIDI binnenkomt (noten.js hoort beide).
   modules nergens statisch geladen worden.
 - `tools/headless/speelapparaten.mjs`: de ECHTE hub (startHub, NepSysteem met nep-APC en
   nep-Xboard, NepHidSysteem met de nep-Maschine uit de hub-tests) en VARVE in Chromium: het
-  wiel zet de Poly, een Xboard-noot laat hem klinken (piek −12,6 dBFS op de track), groep B
+  wiel zet de Poly, een Xboard-noot laat hem klinken (piek −12 dBFS op de track), groep B
   zet de focus, het wiel zet de drums, pad 1 slaat de kick aan (−1,9 dBFS), draaiknop +0,2 en
   met SHIFT −0,04, de schuif zet de fader, lampjes en schermen komen als HID-rapporten aan
-  (schermen bit voor bit gelijk aan `tekenScherm(stand)`), nooit `requestMIDIAccess`.
-  Gemeten (JS-deel, zelfde machine): Xboard-noot ingespoten → noteOn in VARVE 4,4 ms; eerste
-  padrapport → noteOn 3,1 ms. Plus de uitgangsbuffer van de AudioContext.
+  (schermen bit voor bit gelijk aan `tekenScherm(stand)`), nooit `requestMIDIAccess`. En op
+  de echte patroonspeler: STEP + pad 1, 5, 9, 13 zet de kick op stap 1, 5, 9, 13; PLAY speelt
+  het (4 noten in 1,5 s op 120 bpm, de lopende stap wit op de pads); REC + pad 2 neemt de
+  clap op in het lopende patroon; PATTERN + pad 2 kiest plek 2; RESTART stopt op de maat.
+  Gemeten (JS-deel, zelfde machine, vier runs): Xboard-noot ingespoten → noteOn in VARVE
+  3,5–4,4 ms; eerste padrapport → noteOn 2,6–3,1 ms (de hub wacht twee frames op een slag).
+  Plus de uitgangsbuffer van de AudioContext.
 - `tools/headless/hub.mjs`: de conformiteitstoets van de hub slaagt ook met `speelt` (hun MIDI,
   LED's met `dev`, schermen).
 
@@ -172,6 +202,8 @@ hub via Web MIDI binnenkomt (noten.js hoort beide).
 - Het echte toestel: oriëntatie van pads en lampjes, of de kleuren op de Maschine lijken op
   de APC (de "donker"-tinten kunnen te zwak of te fel zijn; dan een andere index in `KLEUREN`
   of de hub-instelling `led_max`), of de groepknoppen echt twee zones hebben.
+- Of de stapmodus prettig werkt: de pads als stappen, wit voor de lopende stap (te druk of
+  te zwak?), PATTERN vasthouden om te kiezen, RESTART als stopknop.
 - Hoe de draaiknoppen voelen (één omwenteling voor de hele knop, vijf met SHIFT) en of de
   drempel van de hub (12 tellen) langzaam draaien niet dood maakt.
 - Of de schermen leesbaar zijn (5×7, kop 2×), links/rechts goed, en hoe snel ze bijwerken.

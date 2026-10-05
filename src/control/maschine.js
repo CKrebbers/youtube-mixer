@@ -14,7 +14,7 @@ import { tekenScherm } from './maschine-scherm.js';
  * schermen via `scherm(nr, bytes)`. Alleen met `?hub=`: zonder de vlag wordt
  * dit bestand niet geladen.
  *
- * SPEELMODUS (de enige tot het patronen-spoor er is, zie docs/MASCHINE.md):
+ * SPEELMODUS (standaard):
  *   pads 1–16        noten 36–51 naar de speeltrack, via noten.js (zoals een
  *                    keyboard: loslaten gaat naar waar de aanslag heen ging);
  *                    de drums liggen precies op 36–51, elk ander instrument
@@ -32,8 +32,21 @@ import { tekenScherm } from './maschine-scherm.js';
  *                    nummer = wit gedimd (focus wit), leeg = uit (focus donkergrijs)
  *   schermen         maschine-scherm.js: speeltrack + instrument, de acht knoppen
  *
- * Wat de engine doet gaat over de bus (focus, knoppen, instrument kiezen);
- * noten niet (een noot is geen 0..1: noten.js). De engine kent geen MIDI.
+ * PATRONEN (docs/PATRONEN.md; altijd op de speeltrack en zijn GEKOZEN plek):
+ *   STEP             stapmodus aan/uit: pad S = `track.{speel}.pattern.step.S`
+ *                    (de laatst gespeelde noot erop of eraf), lampje = de read
+ *                    van die stap, de stap die je hoort wit; ◄ ► (transport) =
+ *                    de bladzijde (stap 1–16, 17–32, …)
+ *   PATTERN + pad    plek 1–5 kiezen (engine.patronen.kies: kiezen staat niet op
+ *                    de bus); de pads tonen zolang de vijf plekken
+ *   PLAY, RESTART, REC, ERASE, SHIFT + ◄ ►   de mapping: het gekozen patroon
+ *                    starten/stoppen, stoppen, opnemen, leegmaken, korter/langer
+ *   live opnemen     vanzelf: de pads spelen via noten.js, en daar luistert de
+ *                    patroonspeler op (patronen-paneel.js)
+ *
+ * Wat de engine doet gaat over de bus (focus, knoppen, instrument kiezen,
+ * stappen, transport); noten niet (een noot is geen 0..1: noten.js). De engine
+ * kent geen MIDI.
  */
 
 /** De bron van de pads in noten.js (sleutel van vastgehouden noten). */
@@ -56,8 +69,17 @@ const DONKER = (soort) => (PALETTE[`${KLEUREN[soort]}donker`] ?? PALETTE.grijs);
 
 /** De keuzes van het masterwiel: geen, dan elk instrument (zelfde volgorde als track.N.inst). */
 export const KEUZES = [null, ...INSTRUMENTEN.map((x) => x.soort)];
+/** Stappen per bladzijde in de stapmodus: de 16 pads. */
+export const STAPPEN = 16;
+/** Zoveel plekken (patronen) per track kies je met PATTERN + pad 1..5. */
+export const PLEKKEN = 5;
+/** Helderheid (0..127) van een knoplampje: uit, iets te doen, gevuld/klaar, aan. */
+export const HELDER = { uit: 0, zacht: 8, half: 32, aan: 127, beschikbaar: 16 };
 
 const sleutel = (kanaal, noot) => `${kanaal}:${noot}`;
+const NAMEN = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+/** MIDI-noot als naam (60 = C4). */
+export const nootNaam = (n) => `${NAMEN[((n % 12) + 12) % 12]}${Math.floor(n / 12) - 1}`;
 
 export class Maschine extends Emitter {
   /**
@@ -71,7 +93,7 @@ export class Maschine extends Emitter {
     super();
     Object.assign(this, { engine, noten, read, invoke, nu });
     this.mapping = new Mapping({ read, invoke, now: nu,
-      vars: () => ({ focus: trackVanDeck(engine.focus), speel: trackVanDeck(engine.speeltrack?.() ?? null) }) });
+      vars: () => ({ focus: trackVanDeck(engine.focus), speel: trackVanDeck(engine.speeltrack?.() ?? null), plek: this.plek() }) });
     this.poort = null;              // { in, uit, scherm } van HubMidi.speelPoort('maschine-mk2')
     this.leds = new Map();          // 'kanaal:noot' -> velocity zoals het laatst verstuurd
     this.schermen = [null, null];   // laatst verstuurde bytes per scherm
@@ -79,7 +101,30 @@ export class Maschine extends Emitter {
     this.flits = new Map();         // pad-noot -> tot (ms)
     this.kandidaat = null;          // { id, index, tot }: het masterwiel, nog niet gezet
     this.melding = null;            // { tekst, tot }
+    this.modus = 'spelen';          // 'spelen' of 'stappen' (STEP)
+    this.bladzijde = 0;             // stapmodus: pads = stap 16·b + 1 .. 16·b + 16
+    this.patroonVast = false;       // PATTERN ingedrukt: pads 1–5 kiezen een plek
+    this.padVast = new Map();       // pad-noot -> waar het indrukken heen ging ('noten', 'kies' of een action)
     this.rx = 0;
+  }
+
+  /** De gekozen plek (1..5) op de speeltrack, of 1. */
+  plek() {
+    const id = this.engine.speeltrack?.() ?? null;
+    return (id && this.engine.patronen?.gekozen?.(id)) || 1;
+  }
+
+  /** Lengte van het gekozen patroon op de speeltrack (16 als het er nog niet is). */
+  _lengte() {
+    const id = this.engine.speeltrack?.() ?? null;
+    return (id && this.engine.patronen?.patroon?.(id, this.plek())?.lengte) || STAPPEN;
+  }
+
+  /** Aantal bladzijden van 16 stappen; houdt de bladzijde binnen het patroon. */
+  _bladzijden() {
+    const n = Math.max(1, Math.ceil(this._lengte() / STAPPEN));
+    if (this.bladzijde > n - 1) this.bladzijde = n - 1;
+    return n;
   }
 
   laadMapping(doc) { return this.mapping.load(doc); }
@@ -114,6 +159,9 @@ export class Maschine extends Emitter {
     if (this.poort?.in?.state === 'connected') return;
     // Weg: wat de pads vasthielden los, shift los; bij terugkomen alles opnieuw.
     this.noten?.los(BRON);
+    for (const waar of this.padVast.values()) if (waar !== 'noten' && waar !== 'kies') this.invoke(waar, false);
+    this.padVast.clear();
+    this.patroonVast = false;
     this.mapping.losgekoppeld();
     this.vergeet();
   }
@@ -127,10 +175,18 @@ export class Maschine extends Emitter {
   ontvang(msg) {
     if (!msg || !(msg.channel >= 0)) return false;
     this.rx++;
-    // Pads: noten (en polyfone aftertouch) naar de speeltrack, zoals een keyboard.
-    if (msg.channel === PAD_KANAAL && (msg.type === 'note' || msg.type === 'poly') && padVanNoot(msg.number) !== null) {
-      if (msg.type === 'note' && msg.on) this.flits.set(msg.number, this.nu() + FLITS_MS);
-      return !!this.noten?.ontvang({ ...msg, port: BRON, portName: BRON_NAAM });
+    // Pads: spelen (noten.js), een stap (stapmodus) of een plek kiezen (PATTERN).
+    if (msg.channel === PAD_KANAAL && (msg.type === 'note' || msg.type === 'poly') && padVanNoot(msg.number) !== null) return this._pad(msg);
+    // STEP en PATTERN: de modus van de pads (hier, niet op de bus: het is wat de pads betekenen).
+    if (msg.type === 'note' && msg.channel === KNOP_KANAAL) {
+      if (msg.number === knopNoot('step')) { if (msg.on) this.zetModus(this.modus === 'stappen' ? 'spelen' : 'stappen'); return true; }
+      if (msg.number === knopNoot('pattern')) { this.patroonVast = !!msg.on; return true; }
+      // ◄ ► (transport) zonder SHIFT: de bladzijde van de stappen. Met SHIFT: de mapping (korter/langer).
+      const stap = msg.number === knopNoot('stapL') ? -1 : msg.number === knopNoot('stapR') ? 1 : 0;
+      if (stap && !this.mapping.shift && !this.mapping.vast.has(msg.sig)) {
+        if (msg.on && this.modus === 'stappen') this.bladzijde = Math.max(0, Math.min(this._bladzijden() - 1, this.bladzijde + stap));
+        return msg.on && this.modus === 'stappen';
+      }
     }
     // Het masterwiel: draaien = kiezen, indrukken (of ENTER) = zetten.
     if (msg.sig === WIEL_SIG) {
@@ -147,6 +203,49 @@ export class Maschine extends Emitter {
       if (regel?.action.includes('{speel}') && !this.engine.speeltrack?.()) return false;
     }
     return !!this.mapping.handle(msg)?.taken;
+  }
+
+  /** STEP: spelen of stappen. */
+  zetModus(modus) {
+    this.modus = modus === 'stappen' ? 'stappen' : 'spelen';
+    this._bladzijden();
+  }
+
+  /**
+   * Eén pad. Het loslaten gaat naar waar het indrukken heen ging (noten.js,
+   * een stap-action, of niets na een keuze), ook als de modus intussen wisselde:
+   * een noot blijft zo nooit hangen.
+   */
+  _pad(msg) {
+    const noot = msg.number;
+    const naarNoten = () => !!this.noten?.ontvang({ ...msg, port: BRON, portName: BRON_NAAM });
+    if (msg.type === 'poly') return this.padVast.get(noot) === 'noten' ? naarNoten() : false;
+    if (!msg.on) {
+      const waar = this.padVast.get(noot);
+      this.padVast.delete(noot);
+      if (waar === undefined || waar === 'noten') return naarNoten();
+      if (waar !== 'kies') this.invoke(waar, false);
+      return true;
+    }
+    if (this.padVast.has(noot)) this._pad({ ...msg, on: false, value: 0 });   // twee keer aan zonder uit
+    const pad = padVanNoot(noot);
+    const id = this.engine.speeltrack?.() ?? null;
+    if (this.patroonVast) {
+      this.padVast.set(noot, 'kies');
+      if (id && pad <= PLEKKEN && this.engine.patronen?.kies) { this.engine.patronen.kies(id, pad); this.bladzijde = 0; return true; }
+      return false;
+    }
+    if (this.modus === 'stappen') {
+      if (!id) return false;
+      const stap = this.bladzijde * STAPPEN + pad;
+      const action = `track.${trackVanDeck(id)}.pattern.step.${stap}`;
+      this.padVast.set(noot, action);
+      this.invoke(action, true);
+      return true;
+    }
+    this.flits.set(noot, this.nu() + FLITS_MS);
+    this.padVast.set(noot, 'noten');
+    return naarNoten();
   }
 
   /** Index in KEUZES van wat er nu op track `id` staat. */
@@ -202,17 +301,39 @@ export class Maschine extends Emitter {
     const nu = this.nu();
     const speel = this.engine.speeltrack?.() ?? null;
     const inst = speel ? this.engine.instrumentOp(speel) : null;
-    const vast = speel && this.noten ? this.noten.ingedrukt(speel) : new Set();
-    const pads = inst?.stand?.().pads ?? null;
-    for (let i = 0; i < 16; i++) {
-      const noot = PAD_NOOT + i;
-      let v = PALETTE.uit;
-      if (inst) {
-        const fel = vast.has(noot) || (this.flits.get(noot) ?? -Infinity) > nu;
-        const leeg = pads && pads[i] && !pads[i].gevuld;
-        v = fel ? VOL(inst.soort) : leeg ? PALETTE.donkergrijs : DONKER(inst.soort);
+    const nr = speel ? trackVanDeck(speel) : null;
+    const plek = this.plek();
+    // Een read 0..1 als paletkleur: null = uit, 0 = leeg (donkergrijs), 0,5 = gevuld (gedimd), 1 = aan (vol).
+    const kleurVan = (r) => (r === null || r === undefined ? PALETTE.uit : r >= 0.75 ? VOL(inst.soort) : r >= 0.25 ? DONKER(inst.soort) : PALETTE.donkergrijs);
+    if (inst && this.patroonVast) {
+      // PATTERN vast: pad 1–5 = de vijf plekken (zoals de APC-modus patronen), de gekozen wit als hij niet speelt.
+      for (let i = 0; i < 16; i++) {
+        const r = i < PLEKKEN ? this.read(`track.${nr}.pattern.${i + 1}`) : null;
+        const v = i >= PLEKKEN ? PALETTE.uit : i + 1 === plek && !(r >= 0.75) ? PALETTE.wit : kleurVan(r);
+        uit.set(sleutel(PAD_KANAAL, PAD_NOOT + i), v);
       }
-      uit.set(sleutel(PAD_KANAAL, noot), v);
+    } else if (inst && this.modus === 'stappen') {
+      // Stapmodus: de read van elke stap; de stap die je nu hoort wit (alleen als het gekozen patroon speelt).
+      const st = this.engine.patronen?.stand?.(speel) ?? null;
+      const hoort = st && st.speelt === st.gekozen ? st.stap : null;
+      for (let i = 0; i < 16; i++) {
+        const stap = this.bladzijde * STAPPEN + i + 1;
+        const r = this.read(`track.${nr}.pattern.step.${stap}`);
+        uit.set(sleutel(PAD_KANAAL, PAD_NOOT + i), r !== null && hoort === stap - 1 ? PALETTE.wit : kleurVan(r));
+      }
+    } else {
+      const vast = speel && this.noten ? this.noten.ingedrukt(speel) : new Set();
+      const pads = inst?.stand?.().pads ?? null;
+      for (let i = 0; i < 16; i++) {
+        const noot = PAD_NOOT + i;
+        let v = PALETTE.uit;
+        if (inst) {
+          const fel = vast.has(noot) || (this.flits.get(noot) ?? -Infinity) > nu;
+          const leeg = pads && pads[i] && !pads[i].gevuld;
+          v = fel ? VOL(inst.soort) : leeg ? PALETTE.donkergrijs : DONKER(inst.soort);
+        }
+        uit.set(sleutel(PAD_KANAAL, noot), v);
+      }
     }
     for (const [nr, id] of TRACKS) {
       if (nr > GROEPEN.length) break;
@@ -224,8 +345,22 @@ export class Maschine extends Emitter {
       uit.set(sleutel(KNOP_KANAAL, knopNoot(GROEPEN[nr - 1])), v);
     }
     // Knoppen die iets doen: zacht aan, fel als ze iets betekenen.
-    uit.set(sleutel(KNOP_KANAAL, knopNoot('shift')), this.mapping.shift ? 127 : 16);
-    uit.set(sleutel(KNOP_KANAAL, knopNoot('enter')), this._kandidaat() ? 127 : 0);
+    const knop = (naam, v) => uit.set(sleutel(KNOP_KANAAL, knopNoot(naam)), v);
+    knop('shift', this.mapping.shift ? HELDER.aan : HELDER.beschikbaar);
+    knop('enter', this._kandidaat() ? HELDER.aan : HELDER.uit);
+    // Patronen: alleen met een instrument op de speeltrack (en een patroonspeler).
+    const pt = !!(inst && this.engine.patronen);
+    // Een read als helderheid: null = uit, 1 = aan, 0,5 = half (gevuld, of knipperend: de read wisselt zelf), 0 = zacht.
+    const helder = (r) => (r === null || r === undefined ? HELDER.uit : r >= 0.75 ? HELDER.aan : r >= 0.25 ? HELDER.half : HELDER.zacht);
+    knop('step', !pt ? HELDER.uit : this.modus === 'stappen' ? HELDER.aan : HELDER.beschikbaar);
+    knop('pattern', !pt ? HELDER.uit : this.patroonVast ? HELDER.aan : HELDER.beschikbaar);
+    knop('play', pt ? helder(this.read(`track.${nr}.pattern.${plek}`)) : HELDER.uit);
+    knop('restart', pt ? helder(this.read(`track.${nr}.pattern.stop`)) : HELDER.uit);
+    knop('rec', pt ? (this.read('patterns.record') === 1 ? HELDER.aan : HELDER.beschikbaar) : HELDER.uit);
+    knop('erase', pt ? helder(this.read(`track.${nr}.pattern.clear`)) : HELDER.uit);
+    const bladen = pt && this.modus === 'stappen' ? this._bladzijden() : 0;
+    knop('stapL', bladen && this.bladzijde > 0 ? HELDER.half : HELDER.uit);
+    knop('stapR', bladen && this.bladzijde < bladen - 1 ? HELDER.half : HELDER.uit);
     return uit;
   }
 
@@ -245,7 +380,27 @@ export class Maschine extends Emitter {
     const fi = this.engine.instrumentOp(f);
     const k = this._kandidaat();
     const nu = this.nu();
+    // Het gekozen patroon op de speeltrack (stapmodus en PATTERN), uit de reads en de speler.
+    let patroon = null;
+    const pt = this.engine.patronen;
+    if (inst && pt && (this.modus === 'stappen' || this.patroonVast)) {
+      const nr = trackVanDeck(speel);
+      const st = pt.stand?.(speel) ?? {};
+      const plek = this.plek();
+      const p = pt.patroon?.(speel, plek) ?? null;
+      const bladen = this._bladzijden();
+      patroon = {
+        plek, lengte: p?.lengte ?? STAPPEN, swing: p?.swing ?? null,
+        speelt: st.speelt === plek, wacht: st.wacht === plek, opnemen: this.read('patterns.record') === 1,
+        bladzijde: this.bladzijde, bladzijden: bladen,
+        stappen: Array.from({ length: STAPPEN }, (_, i) => this.read(`track.${nr}.pattern.step.${this.bladzijde * STAPPEN + i + 1}`)),
+        hoort: st.speelt === st.gekozen && st.stap != null ? st.stap - this.bladzijde * STAPPEN : null,
+        noot: nootNaam(st.laatsteNoot ?? pt.laatsteNoot?.(speel) ?? 60),
+        plekken: Array.from({ length: PLEKKEN }, (_, i) => this.read(`track.${nr}.pattern.${i + 1}`)),
+      };
+    }
     return {
+      modus: this.modus, patroonVast: this.patroonVast, patroon,
       speel: inst ? { nr: trackVanDeck(speel), naam: inst.naam } : null,
       focus: { nr: trackVanDeck(f), wat: fi ? fi.naam : this.engine.deck?.(f)?.buffer ? 'nummer' : 'leeg' },
       knoppen,

@@ -74,12 +74,14 @@ const invoke = (id, v) => {
   else if ((m = /^track\.(\d)\.inst\.choose$/.exec(id))) {
     if (eng.weiger > 0) { eng.weiger--; return true; }   // een spelend nummer: eerst een melding
     eng.zet(trackId(+m[1]), KEUZES[Math.round(v * (KEUZES.length - 1))]);
-  } else stand[id] = v;
+  } else if (!globalThis.__busPatronen?.(id, v)) stand[id] = v;
   return true;
 };
 const read = (id) => {
   let m;
   if ((m = /^track\.(\d)\.inst\.knob\.(\d)$/.exec(id))) return eng.inst[trackId(+m[1])]?.leesParam(+m[2]) ?? null;
+  const pv = globalThis.__leesPatronen?.(id);
+  if (pv !== undefined) return pv;
   return id in stand ? stand[id] : null;
 };
 
@@ -101,10 +103,19 @@ ok('het profiel noemt elk element (label), geen enkele action', M.maschineMk2.la
 const kaart = lees('../mappings/maschine-mk2.json');
 const ms0 = new Maschine({ engine: eng, noten, read, invoke, nu: () => nu });
 const uitKaart = ms0.laadMapping(kaart);
-ok('mappings/maschine-mk2.json laadt zonder fouten: 24 regels, shift = note:1:39', uitKaart.aantal === 24 && !uitKaart.fouten.length && ms0.mapping.shiftSig === 'note:1:39');
+ok('mappings/maschine-mk2.json laadt zonder fouten: 32 regels, shift = note:1:39', uitKaart.aantal === 32 && !uitKaart.fouten.length && ms0.mapping.shiftSig === 'note:1:39');
 ok('groep A–H -> track.1–8.focus (trigger)', kaart.rules.slice(0, 8).every((r, i) => r.in === `note:1:${24 + i}` && r.action === `track.${i + 1}.focus` && r.mode === 'trigger'));
 ok('draaiknop 1–8 -> track.{speel}.inst.knob.1–8, relatief (tweecomplement), 1/1000 per tel, met shift 1/5000',
-  kaart.rules.slice(8).every((r) => r.mode === 'relative-2c' && /^track\.\{speel\}\.inst\.knob\.[1-8]$/.test(r.action) && r.step === (r.shift ? 0.0002 : 0.001)));
+  kaart.rules.slice(8, 24).every((r) => r.mode === 'relative-2c' && /^track\.\{speel\}\.inst\.knob\.[1-8]$/.test(r.action) && r.step === (r.shift ? 0.0002 : 0.001)));
+{
+  const regel = (sig, shift = false) => kaart.rules.find((r) => r.in === sig && !!r.shift === shift)?.action;
+  ok('transport: PLAY = track.{speel}.pattern.{plek} (SHIFT: .now), RESTART = .pattern.stop (SHIFT: .now), REC = patterns.record, ERASE = .pattern.clear, SHIFT + ◄ ► = korter/langer',
+    regel('note:1:36') === 'track.{speel}.pattern.{plek}' && regel('note:1:36', true) === 'track.{speel}.pattern.{plek}.now'
+    && regel('note:1:32') === 'track.{speel}.pattern.stop' && regel('note:1:32', true) === 'track.{speel}.pattern.stop.now'
+    && regel('note:1:37') === 'patterns.record' && regel('note:1:38') === 'track.{speel}.pattern.clear'
+    && regel('note:1:33', true) === 'track.{speel}.pattern.length.down' && regel('note:1:34', true) === 'track.{speel}.pattern.length.up'
+    && !regel('note:1:33') && !regel('note:1:34') && !regel('note:1:9') && !regel('note:1:41'));
+}
 ok('elke action in de indeling bestaat in de uitleg (apc-beschrijf), ook {speel}', kaart.rules.every((r) => !beschrijf(r.action).lang.startsWith('?') && beschrijf(r.action).kort !== r.action)
   && /speeltrack/.test(beschrijf('track.{speel}.inst.knob.1').lang) && !/\?/.test(beschrijf('track.3.inst.choose').lang));
 
@@ -221,14 +232,15 @@ ok('SHIFT: zacht aan, fel zolang hij vastzit', ms.ledBeeld().get(`1:${M.knopNoot
 knop('shift', false);
 ok('… los: zacht', ms.ledBeeld().get(`1:${M.knopNoot('shift')}`) === 16);
 ok('elke kleur is een geldige paletindex, elke helderheid 0..127', [...ms.ledBeeld().values()].every((v) => Number.isInteger(v) && v >= 0 && v <= 127));
+ok('zonder patroonspeler: STEP, PATTERN, PLAY, REC, ERASE, ◄ ► uit', ['step', 'pattern', 'play', 'rec', 'erase', 'restart', 'stapL', 'stapR'].every((k) => ms.ledBeeld().get(`1:${M.knopNoot(k)}`) === 0));
 
 // tik(): alleen wat veranderde, via de uitgang van de nep-poort.
 leds.length = 0;
 ms.vergeet();
 ms.tik();
 const eerste = leds.length;
-ok(`eerste tik: alle lampjes (16 pads, 8 groepen, shift, enter = 26), als noot aan op hun nummer (${eerste})`,
-  eerste === 26 && leds.every((m) => m.length === 3 && (m[0] === 0x90 || m[0] === 0x91) && m[2] <= 127));
+ok(`eerste tik: alle lampjes (16 pads, 8 groepen, 10 knoppen = 34), als noot aan op hun nummer (${eerste})`,
+  eerste === 34 && leds.every((m) => m.length === 3 && (m[0] === 0x90 || m[0] === 0x91) && m[2] <= 127));
 leds.length = 0;
 ms.tik();
 ok('tweede tik zonder verandering: niets', leds.length === 0);
@@ -281,7 +293,131 @@ poort.in.state = 'connected'; poort.uit.state = 'connected';
 poort.in.onstatechange({});
 nu += 1000;
 ms.tik();
-ok('terug: alle lampjes en beide schermen opnieuw', leds.length === 26 && schermen.length === 2);
+ok('terug: alle lampjes en beide schermen opnieuw', leds.length === 34 && schermen.length === 2);
+
+
+// ---- 5b. patronen: de stapmodus en het transport ------------------------------------------------
+console.log('\npatronen op de Maschine (stapmodus, PATTERN, transport)');
+{
+  // Een nep-patroonspeler en zijn actions (de echte: test/patronen*.test.mjs, en samen met de
+  // Maschine in tools/headless/speelapparaten.mjs).
+  const pats = {};
+  const spoor = (id) => (pats[id] ??= { gekozen: 1, plekken: [null, null, null, null, null], speelt: null, stap: null, rec: false });
+  const pt = (id, plek) => spoor(id).plekken[plek - 1];
+  eng.patronen = {
+    gekozen: (id) => spoor(id).gekozen,
+    kies: (id, plek) => { spoor(id).gekozen = plek; },
+    patroon: (id, plek) => pt(id, plek),
+    stand: (id) => ({ gekozen: spoor(id).gekozen, speelt: spoor(id).speelt, wacht: null, stopt: false, stap: spoor(id).stap, laatsteNoot: 36 }),
+    laatsteNoot: () => 36,
+  };
+  let rec = false;
+  const vorigInvoke = invoke;
+  const busPatronen = (id, v) => {
+    let m;
+    if ((m = /^track\.(\d)\.pattern\.step\.(\d+)$/.exec(id))) {
+      if (!v) return true;
+      const d = trackId(+m[1]), sp = spoor(d), s0 = +m[2] - 1;
+      const p = (sp.plekken[sp.gekozen - 1] ??= { lengte: 16, stappen: new Set() });
+      if (s0 < p.lengte) { if (p.stappen.has(s0)) p.stappen.delete(s0); else p.stappen.add(s0); }
+      return true;
+    }
+    if ((m = /^track\.(\d)\.pattern\.length\.(up|down)$/.exec(id)) && v) {
+      const sp = spoor(trackId(+m[1]));
+      const p = (sp.plekken[sp.gekozen - 1] ??= { lengte: 16, stappen: new Set() });
+      p.lengte = Math.max(16, Math.min(64, p.lengte + (m[2] === 'up' ? 16 : -16)));
+      return true;
+    }
+    if (id === 'patterns.record') { if (v) rec = !rec; return true; }
+    return false;
+  };
+  globalThis.__busPatronen = busPatronen;
+  const leesPatronen = (id) => {
+    let m;
+    if ((m = /^track\.(\d)\.pattern\.step\.(\d+)$/.exec(id))) {
+      const d = trackId(+m[1]); if (!eng.inst[d]) return null;
+      const p = pt(d, spoor(d).gekozen), s0 = +m[2] - 1;
+      if (s0 >= (p?.lengte ?? 16)) return null;
+      return p?.stappen.has(s0) ? 1 : 0;
+    }
+    if ((m = /^track\.(\d)\.pattern\.([1-5])$/.exec(id))) { const d = trackId(+m[1]); return !eng.inst[d] ? null : spoor(d).speelt === +m[2] ? 1 : pt(d, +m[2])?.stappen.size ? 0.5 : 0; }
+    if ((m = /^track\.(\d)\.pattern\.stop$/.exec(id))) { const d = trackId(+m[1]); return !eng.inst[d] ? null : spoor(d).speelt ? 0.5 : 0; }
+    if ((m = /^track\.(\d)\.pattern\.clear$/.exec(id))) { const d = trackId(+m[1]); return !eng.inst[d] ? null : pt(d, spoor(d).gekozen)?.stappen.size ? 0.5 : 0; }
+    if (id === 'patterns.record') return rec ? 1 : 0;
+    return undefined;
+  };
+  globalThis.__leesPatronen = leesPatronen;
+  const lamp = (naam) => ms.ledBeeld().get(`1:${M.knopNoot(naam)}`);
+  const padLamp = (pad) => ms.ledBeeld().get(`0:${35 + pad}`);
+  tik('groepB');                                   // speeltrack: de drums op track 2
+  ok('met een patroonspeler: STEP en PATTERN zacht aan, REC zacht, PLAY/ERASE zacht (leeg)', lamp('step') === 16 && lamp('pattern') === 16 && lamp('rec') === 16 && lamp('play') === 8 && lamp('erase') === 8);
+  const voor = aangeroepen.length;
+  const dlog = dr.log.length;
+  tik('step');
+  ok('STEP: stapmodus, lampje fel', ms.modus === 'stappen' && lamp('step') === 127 && aangeroepen.length === voor);
+  stuur(0x90, 36, 100); stuur(0x80, 36, 0);
+  ok('pad 1 in de stapmodus -> track.2.pattern.step.1 (indrukken en los, over de bus), geen noot',
+    JSON.stringify(aangeroepen.slice(voor)) === JSON.stringify([['track.2.pattern.step.1', true], ['track.2.pattern.step.1', false]]) && dr.log.length === dlog);
+  ok('… lampje stap 1 = de read (1: de laatste noot staat erop) = de volle kleur; stap 2 leeg = donkergrijs', padLamp(1) === PALETTE[KLEUREN.drums] && padLamp(2) === PALETTE.donkergrijs);
+  spoor('B').speelt = 1; spoor('B').stap = 2;
+  ok('het gekozen patroon speelt: de stap die je hoort (3) is wit, PLAY fel', padLamp(3) === PALETTE.wit && lamp('play') === 127 && lamp('restart') === 32);
+  spoor('B').speelt = null; spoor('B').stap = null;
+  ok('16 stappen: ◄ ► uit (geen andere bladzijde)', lamp('stapL') === 0 && lamp('stapR') === 0);
+  knop('shift', true); tik('stapR'); knop('shift', false);
+  ok('SHIFT + ► -> track.2.pattern.length.up (de mapping): 32 stappen', aangeroepen.some(([a, v]) => a === 'track.2.pattern.length.up' && v === true) && pt('B', 1).lengte === 32 && ms.stand().patroon.bladzijden === 2);
+  ok('… ► brandt nu (er is een tweede bladzijde)', lamp('stapR') === 32 && lamp('stapL') === 0);
+  tik('stapR');
+  stuur(0x90, 36, 100); stuur(0x80, 36, 0);
+  ok('► : bladzijde 2, pad 1 = stap 17', ms.bladzijde === 1 && aangeroepen.some(([a]) => a === 'track.2.pattern.step.17') && pt('B', 1).stappen.has(16));
+  tik('stapR');
+  ok('… voorbij de laatste bladzijde: blijft staan', ms.bladzijde === 1);
+  tik('stapL');
+  ok('◄ : terug naar bladzijde 1', ms.bladzijde === 0);
+  // Modus wisselen terwijl een pad vastzit: het loslaten gaat naar waar het indrukken heen ging.
+  stuur(0x90, 37, 100);
+  tik('step');
+  const n0 = dr.log.length;
+  stuur(0x80, 37, 0);
+  ok('pad 2 vast in de stapmodus, STEP, los: het loslaten gaat naar de stap-action, niet naar noten', aangeroepen.at(-1)?.[0] === 'track.2.pattern.step.2' && aangeroepen.at(-1)[1] === false && dr.log.length === n0);
+  stuur(0x90, 38, 90);
+  tik('step');
+  stuur(0x80, 38, 0);
+  ok('pad 3 vast in de speelmodus, STEP, los: noteOff naar de drums (niets blijft hangen)', JSON.stringify(dr.log.at(-1)) === JSON.stringify(['uit', 38]) && ms.modus === 'stappen');
+  stuur(0xa0, 39, 50);
+  ok('aftertouch van een pad in de stapmodus: niet naar noten', dr.log.at(-1)[0] !== 'druk' || dr.log.at(-1)[2] !== 39);
+  tik('step');
+  ok('STEP nog eens: weer spelen', ms.modus === 'spelen');
+  // PATTERN + pad = een plek kiezen.
+  knop('pattern', true);
+  ok('PATTERN vast: lampje fel; pads 1–5 = de plekken (1 gevuld = gedimd, de gekozen wit), 6–16 uit',
+    lamp('pattern') === 127 && padLamp(1) === PALETTE.wit && padLamp(2) === PALETTE.donkergrijs && padLamp(6) === PALETTE.uit && padLamp(16) === PALETTE.uit);
+  const voorKies = aangeroepen.length;
+  stuur(0x90, 38, 100); stuur(0x80, 38, 0);
+  ok('PATTERN + pad 3: plek 3 gekozen (engine.patronen.kies), niets gespeeld, niets op de bus', eng.patronen.gekozen('B') === 3 && aangeroepen.length === voorKies && JSON.stringify(dr.log.at(-1)) === JSON.stringify(['uit', 38]));
+  ok('… het scherm: "kies patroon" met de vijf plekken', ms.stand().patroonVast && ms.stand().patroon?.plekken.length === 5 && ms.stand().patroon.plek === 3);
+  stuur(0x90, 50, 100); stuur(0x80, 50, 0);
+  ok('… pad 15 met PATTERN vast: niets', eng.patronen.gekozen('B') === 3);
+  knop('pattern', false);
+  // Transport via de mapping, op de gekozen plek van de speeltrack.
+  const t0 = aangeroepen.length;
+  tik('play');
+  knop('shift', true); tik('play'); tik('restart'); knop('shift', false);
+  tik('restart'); tik('rec'); tik('erase');
+  const aan = aangeroepen.slice(t0).filter(([, v]) => v === true).map(([a]) => a);
+  ok(`PLAY, SHIFT+PLAY, SHIFT+RESTART, RESTART, REC, ERASE -> de actions van het gekozen patroon (${aan.join(', ')})`,
+    JSON.stringify(aan) === JSON.stringify(['track.2.pattern.3', 'track.2.pattern.3.now', 'track.2.pattern.stop.now', 'track.2.pattern.stop', 'patterns.record', 'track.2.pattern.clear']));
+  ok('REC fel zolang er opgenomen wordt (de read)', lamp('rec') === 127);
+  // Het scherm in de stapmodus.
+  tik('step');
+  const st = ms.stand();
+  ok('stand in de stapmodus: plek, lengte, 16 stappen van deze bladzijde (voorbij de lengte null), noot, REC',
+    st.modus === 'stappen' && st.patroon.plek === 3 && st.patroon.lengte === 16 && st.patroon.stappen.length === 16 && st.patroon.stappen.every((x) => x === 0) && st.patroon.noot === 'C2' && st.patroon.opnemen === true);
+  const links = S.tekenScherm(st, 0), spelen = S.tekenScherm({ ...st, modus: 'spelen', patroon: null }, 0);
+  ok('… het linkerscherm toont het patroon (16 vakjes), niet de knoppen', !links.every((x, i) => x === spelen[i]) && S.leesPixel(links, 1, 30) && S.leesPixel(links, 241, 43));
+  ok('… het rechterscherm blijft knop 5–8', S.tekenScherm(st, 1).every((x, i) => x === S.tekenScherm({ ...st, modus: 'spelen', patroon: null }, 1)[i]));
+  tik('step');
+  eng.patronen = undefined;
+}
 
 // ---- 6. het scherm als pure functie ---------------------------------------------------------
 console.log('\nmaschine-scherm.js');

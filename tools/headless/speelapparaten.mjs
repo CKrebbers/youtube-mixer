@@ -12,6 +12,9 @@
 //     - de schuif (SysEx Master Volume) zet het volume van de speeltrack
 //     - lampjes en schermen komen als HID-rapporten bij de nep-Maschine aan, en het
 //       scherm is bit voor bit wat maschine-scherm.js van de stand maakt
+//     - patronen: in de stapmodus zetten pads stappen, PLAY start het patroon (de drums
+//       klinken, de lopende stap licht wit op), REC + een pad neemt live op, PATTERN + pad
+//       kiest een plek, RESTART stopt
 //     - zonder ?hub= laadt niets hiervan; met ?hub= nooit requestMIDIAccess
 //
 // VEILIG MET DE APC (en een echte hub op 7700) AANGESLOTEN: requestMIDIAccess is een spion
@@ -61,7 +64,7 @@ const SPIONNEN = () => {
 
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
-    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_HERANALYSE: 'uit' },
+    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_HERANALYSE: 'uit' },
   stdio: 'ignore',
 });
 const browser = await chromium.launch({ executablePath: CHROME, args: ['--autoplay-policy=no-user-gesture-required'] });
@@ -213,6 +216,50 @@ try {
   ok('beide schermen als HID-rapporten aangekomen (8 stukken van 9 + 256 bytes elk)', !!links && !!rechts);
   ok('linkerscherm bit voor bit tekenScherm(stand, 0): "T2 Drums" en knop 1–4', gelijk(links, tekenScherm(stand, 0)), `T${stand.speel?.nr} ${stand.speel?.naam}`);
   ok('rechterscherm bit voor bit tekenScherm(stand, 1): knop 5–8', gelijk(rechts, tekenScherm(stand, 1)));
+  // ---- patronen: stapmodus, PLAY, REC, PATTERN, RESTART (de echte patroonspeler) ----
+  // Stap voor stap zet de LAATST GESPEELDE noot: eerst de kick spelen (pad 1), dan STEP.
+  m.pad(1);
+  await tot(() => doe(() => window.engine.patronen.laatsteNoot('B') === 36));
+  m.tik('step');
+  ok('STEP: de stapmodus', await tot(() => doe(() => window.maschine.modus === 'stappen')));
+  for (const pad of [1, 5, 9, 13]) m.pad(pad);
+  const stappen = () => doe(() => (window.engine.patronen.patroon('B', 1)?.noten ?? []).map((n) => `${n.stap}:${n.noot}`).join(' '));
+  ok('pads 1, 5, 9, 13 in de stapmodus: de kick (de laatst gespeelde noot, 36) op stap 1, 5, 9, 13 van patroon 1',
+    await tot(async () => (await stappen()) === '0:36 4:36 8:36 12:36'), await stappen());
+  await wacht(300);
+  const kleurPad = (pad, idx) => isKleur(padRgb(m.laatste()['80'], pad), idx);
+  ok('… hun lampjes: de volle kleur van de drums, de lege stappen donkergrijs', kleurPad(1, PALETTE[KLEUREN.drums]) && kleurPad(5, PALETTE[KLEUREN.drums]) && kleurPad(2, PALETTE.donkergrijs));
+  await wacht(1200);                     // de kick van daarnet laten uitklinken
+  const stilP = await piek('B', 300);
+  const noten0 = await doe(() => window.engine.patronen.stats.noten);
+  const tPlay = m.poort.verstuurd.length;
+  m.tik('play');
+  ok('PLAY: patroon 1 speelt (zonder maatgever meteen, op het eigen tempo)', await tot(() => doe(() => window.engine.patronen.stand('B').speelt === 1)));
+  const piekPatroon = await piek('B', 1500);
+  const noten1 = await doe(() => window.engine.patronen.stats.noten);
+  ok('… de drums klinken uit het patroon (fader van de speeltrack op 0,55 door de schuif)', piekPatroon > 0.01 && piekPatroon > stilP * 10 && noten1 - noten0 >= 2,
+    `${noten1 - noten0} noten in 1,5 s, stil ${db(stilP)}, piek ${db(piekPatroon)} dBFS`);
+  ok('… de lopende stap licht wit op (lampje van de pad die je hoort)', await tot(() => m.poort.verstuurd.slice(tPlay).some((x) => x[0] === 0x80
+    && [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].some((pad) => isKleur(padRgb(x, pad), PALETTE.wit)))));
+  // Live opnemen: REC, terug naar spelen, een snare op pad 2 terwijl het patroon loopt.
+  m.tik('rec');
+  ok('REC: live opnemen aan (patterns.record)', await tot(() => doe(() => window.engine.patronen.opnemen === true)));
+  m.tik('step');
+  await tot(() => doe(() => window.maschine.modus === 'spelen'));
+  m.pad(2, 'hard');
+  ok('… een pad in de speelmodus komt in het lopende patroon (via noten.js, op de dichtstbijzijnde stap)',
+    await tot(async () => (await stappen()).includes(':37') && (await stappen()).startsWith('0:36')), await stappen());
+  m.tik('rec');
+  await tot(() => doe(() => window.engine.patronen.opnemen === false));
+  // PATTERN + pad 2: plek 2 kiezen; RESTART: stoppen.
+  m.druk('pattern');
+  await wacht(100);
+  m.pad(2);
+  m.los('pattern');
+  ok('PATTERN + pad 2: plek 2 gekozen, patroon 1 speelt door', await tot(() => doe(() => window.engine.patronen.gekozen('B') === 2 && window.engine.patronen.stand('B').speelt === 1)));
+  m.tik('restart');
+  ok('RESTART: het patroon stopt op de maat', await tot(() => doe(() => window.engine.patronen.stand('B').speelt === null && !window.engine.patronen.stand('B').wacht), 6000));
+
   const h = await doe(() => ({ midi: window.__midi, st: window.midi.status().hub.speelt }));
   ok('requestMIDIAccess NOOIT aangeroepen', h.midi === 0, `${h.midi}×`);
   ok('status: lampjes en schermen geteld, niets geweigerd', h.st['maschine-mk2'].leds > 20 && h.st['maschine-mk2'].schermen >= 2 && h.st['maschine-mk2'].geweigerd === 0,

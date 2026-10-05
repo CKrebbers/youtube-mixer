@@ -77,6 +77,9 @@ export function beschrijf(action) {
     if ((m = /^stem\.(vocals|inst|drums|bass|other)\.send\.b$/.exec(rest))) return r(`${STEM[m[1]]} galm`, `galm-send van één stem: ${STEM_UITLEG[m[1]]}; volgt de fader van de track (fader dicht = niets meer insturen)`);
     if ((m = /^stem\.(vocals|inst|drums|bass|other)\.pfl$/.exec(rest))) return r(`${STEM[m[1]]} PFL`, `één stem in de koptelefoon aan/uit: ${STEM_UITLEG[m[1]]}, na zijn filter en vóór de fader; de zaal hoort het niet (uit = geen koptelefoonuitgang of geen stems)`);
     // Patronen (docs/PATRONEN.md): vijf plekken per track, de rijen van het grid in de modus patronen.
+    // {plek} = het gekozen patroon van die track (de Maschine: PATTERN + pad kiest het, docs/MASCHINE.md).
+    if (rest === 'pattern.{plek}') return r('pat ▶', 'het gekozen patroon: starten op de maat van de maatgever; speelt hij: stoppen op de maat; leeg: alleen kiezen (met opnemen aan: beginnen)');
+    if (rest === 'pattern.{plek}.now') return r('pat ▶!', 'het gekozen patroon meteen: starten op de volgende tel, of meteen stoppen');
     if ((m = /^pattern\.([1-5])$/.exec(rest))) return r(`pat ${m[1]}`, `patroon ${m[1]}: starten op de maat van de maatgever (zonder maatgever op het eigen tempo); speelt hij: stoppen op de maat; speelt er een ander: wisselen op de maat; een lege plek: kiezen om te bewerken (met opnemen aan: beginnen). Lampje oranje: donker = gevuld, fel = speelt, knippert = wacht op de maat, donkergrijs = leeg, uit = geen instrument`);
     if ((m = /^pattern\.([1-5])\.now$/.exec(rest))) return r(`pat ${m[1]}!`, `patroon ${m[1]} meteen: starten op de volgende tel in plaats van de maat, of meteen stoppen (binnen ~0,1 s)`);
     if (rest === 'pattern.stop') return r('pat stop', 'patroon stoppen op de maat (alles los op het maatbegin)');
