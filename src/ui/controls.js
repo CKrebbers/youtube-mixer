@@ -76,7 +76,13 @@ export class Knob {
 
 
 export function bindButtons(root) {
-  root.querySelectorAll('[data-action][data-kind="button"]').forEach((btn) => {
+  // ELKE knop van soort "button", ook zonder data-action: de spiegel van de APC
+  // krijgt zijn actions pas als de mapping er is (spiegel.js zet), en die
+  // wordt hieronder toch pas bij het indrukken gelezen. Met '[data-action]'
+  // erbij in de selector bleven alle 119 spiegelknoppen ongebonden: ze lichtten
+  // op onder de muis en deden niets (Clay, 5 okt: "heel veel knoppen zijn wel
+  // in te klikken … maar ze werken niet").
+  root.querySelectorAll('[data-kind="button"]').forEach((btn) => {
     // De action wordt gelezen op het moment van indrukken, niet bij het
     // opstarten: een venster kan intussen een andere track tonen. Loslaten
     // gaat naar dezelfde action als indrukken, ook als het venster tussendoor

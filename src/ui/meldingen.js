@@ -26,22 +26,36 @@ const weg = (el) => { el.classList.add('weg'); setTimeout(() => el.remove(), 400
  */
 export function meld(tekst, soort = 'info', duur = 5000) {
   // Dezelfde fout die al staat (een stream die blijft haperen): niet stapelen.
-  const al = soort === 'fout' && [...meldingen.children].find((m) => m.classList.contains('fout') && m.textContent === tekst);
-  if (al) return al;
+  const al = [...meldingen.children].find((m) => !m.classList.contains('weg') && m.classList.contains(soort) && m.firstChild?.textContent === tekst);
+  if (al) {
+    // Dezelfde melding staat er al (dezelfde knop nog eens, een stream die blijft
+    // haperen): niet stapelen, maar hem opnieuw laten oplichten en (info) langer laten staan.
+    al.classList.remove('flits');
+    void al.offsetWidth;
+    al.classList.add('flits');
+    if (soort !== 'fout') { clearTimeout(al._weg); al._weg = setTimeout(() => weg(al), duur); }
+    return al;
+  }
   const el = document.createElement('div');
   el.className = `melding ${soort}`;
-  el.textContent = tekst;
+  el.append(document.createTextNode(tekst));
   meldingen.append(el);
   while (meldingen.children.length > MAX) {
     const oudste = [...meldingen.children].find((m) => !m.classList.contains('fout')) ?? meldingen.firstElementChild;
     oudste.remove();
   }
   if (soort === 'fout') {
-    el.title = 'klik om weg te halen';
-    el.addEventListener('click', () => weg(el), { once: true });
+    // Alleen het kruisje vangt de klik: een melding die over een knop ligt,
+    // mag die knop nooit onklikbaar maken (5 okt: de PATROON-rij zat eronder).
+    const x = document.createElement('button');
+    x.className = 'melding-x';
+    x.title = 'weghalen';
+    x.textContent = '✕';
+    x.addEventListener('click', () => weg(el), { once: true });
+    el.append(x);
     console.warn('[melding]', tekst);
   } else {
-    setTimeout(() => weg(el), duur);
+    el._weg = setTimeout(() => weg(el), duur);
   }
   return el;
 }
@@ -64,7 +78,7 @@ export function meldOpKnop(knop, tekst, goed) {
  * vult, een stream die hapert, een action die faalt.
  */
 export function koppelMeldingen(engine) {
-  engine.on('melding', ({ tekst, soort }) => meld(tekst, soort));
+  engine.on('melding', ({ tekst, soort, duur }) => meld(tekst, soort, duur));
   for (const id of DECK_IDS) engine.deck(id).on('fout', (tekst) => meld(`track ${trackVanDeck(id)}: ${tekst}`, 'fout'));
   bijFout((id, err) => meld(`${id} faalde: ${err.message}`, 'fout'));
 }

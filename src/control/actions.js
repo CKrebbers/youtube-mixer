@@ -177,7 +177,8 @@ export function bindEngine(engine) {
     define(`${n}.tap`, 'trigger', (on) => {
       if (!on || !d.buffer) return;
       const r = tap.tap(performance.now(), d.position);
-      if (!r) return;
+      // De eerste tik doet nog niets zichtbaars: zeg dat hij geteld is.
+      if (!r) { engine.emit('melding', { tekst: `track ${nr}: tap — tik verder op de tel; vanaf de tweede tik schuift het grid mee, na vier staat hij op slot`, soort: 'info' }); return; }
       // Speelt de track, dan gaat de lijn door de TRACKTIJDEN van de tikken en
       // is het tempo meteen in tracktijd. Staat hij stil, dan door de klok:
       // je tikt mee met wat je HOORT (grid × rate), dus delen door de rate.
@@ -782,6 +783,67 @@ export function bindEngine(engine) {
       read: () => (engine.quantize ? 1 : 0) });
 
   bindPatronen(engine);
+  waaromNiet(engine);
+}
+
+/*
+ * WAAROM NIET (Clay, 5 okt: "heel veel knoppen zijn wel in te klikken ... maar
+ * ze werken niet"). Een knop die stil niets doet, is voor wie hem indrukt een
+ * kapotte knop. Kan een track-action op dit moment niets, dan zegt een
+ * melding waarom en wat wel kan: een lege track, een instrument in plaats van
+ * een nummer, geen grid, geen stems, geen koptelefoonuitgang. Alleen bij
+ * INDRUKKEN van een drukknop (niet bij loslaten, niet voor draaiknoppen); staat
+ * dezelfde melding er al, dan licht die opnieuw op. De action zelf verandert niet: hij
+ * doet in die gevallen nog steeds niets (dat is goed), alleen niet meer stil.
+ */
+const NUMMER_NODIG = /^(play|cue|sync|tap|brake|hotcue\.\d$|loop\.|beatloop\.|beatjump\.|nudge\.|bend\.|grid\.|stem\.)/;
+const GRID_NODIG = /^(grid\.(?!here$)|beatloop\.|beatjump\.)/;
+const KOPTELEFOON_NODIG = /^(pfl$|stem\.\w+\.pfl$)/;
+
+function waaromNiet(engine) {
+  const kt = engine.koptelefoon;
+  // Elke druk zegt het: staat dezelfde melding er nog, dan licht die opnieuw op (meldingen.js).
+  const zeg = (tekst) => engine.emit('melding', { tekst, soort: 'info', duur: 8000 });
+  for (const [nr, id] of TRACKS) {
+    const d = engine.deck(id);
+    const n = `track.${nr}.`;
+    /** Waarom deze action op deze track nu niets kan, of null. */
+    const reden = (rest) => {
+      if (KOPTELEFOON_NODIG.test(rest) && !kt?.beschikbaar) {
+        return `koptelefoon: de audio-uitgang heeft ${kt?.kanalen ?? 2} kanalen, er is er geen voor de koptelefoon. `
+          + 'Maak in Audio-MIDI-configuratie een samengesteld apparaat (eerst de Scarlett, dan de koptelefoonuitgang van de Mac), '
+          + 'kies het in Systeeminstellingen → Geluid en herlaad VARVE (docs/STUDIO.md §3).';
+      }
+      if (!NUMMER_NODIG.test(rest)) return null;
+      if (!d.buffer) {
+        const inst = engine.instrumentOp?.(id);
+        return inst
+          ? `track ${nr} speelt een instrument (${inst.naam ?? inst.soort}), geen nummer: ${rest.split('.')[0]} hoort bij een nummer. `
+            + 'Speel het instrument met een keyboard of start een patroon (PATROON-rij).'
+          : `track ${nr} is leeg: laad eerst een nummer (library, of sleep een bestand op de kolom).`;
+      }
+      if (rest.startsWith('stem.') && !KOPTELEFOON_NODIG.test(rest) && !d.stems) {
+        return `track ${nr} heeft (nog) geen stems: splits hem in de STEMS-rij of in de library.`;
+      }
+      if (GRID_NODIG.test(rest) && !d.grid) {
+        return `track ${nr} heeft nog geen beatgrid: tik mee op de tel met TAP (vier tikken), of zet tel 1 met "1".`;
+      }
+      return null;
+    };
+    for (const [aid, a] of registry) {
+      if (!aid.startsWith(n) || a.type !== 'trigger') continue;
+      const rest = aid.slice(n.length);
+      if (!NUMMER_NODIG.test(rest) && !KOPTELEFOON_NODIG.test(rest)) continue;
+      const fn = a.fn;
+      a.fn = (on) => {
+        if (on) {
+          const r = reden(rest);
+          if (r) { zeg(r); return; }
+        }
+        return fn(on);
+      };
+    }
+  }
 }
 
 /** Een speler die er niet is: alles doet niets, alles leest null. */
@@ -1037,15 +1099,22 @@ export function bindLog({ log, wissel, terugspeler }) {
  */
 export function bindAuto(auto) {
   const klaar = () => auto.fase === 'klaar' && !!auto.volgende;
+  // Waarom een knop van de auto-DJ nu niets doet (WAAROM NIET, bindEngine): uit, of nog niets klaar.
+  const kan = (doe) => (on) => {
+    if (!on) return;
+    if (!auto.aan) { auto.emit?.('melding', { tekst: 'staat uit — zet hem eerst aan (knop "uit/aan" in de AUTO-rij)', soort: 'info' }); return; }
+    if (!auto.volgende) { auto.emit?.('melding', { tekst: 'er staat nog geen overgang klaar: hij kiest nog (of de library is leeg)', soort: 'info' }); return; }
+    doe();
+  };
   define('auto.aan', 'trigger', (on) => { if (on) auto.zetAan(); },
     { label: 'Auto-DJ aan/uit', read: () => (auto.aan ? 1 : 0) });
-  define('auto.ok', 'trigger', (on) => { if (on) auto.ok(); },
+  define('auto.ok', 'trigger', kan(() => auto.ok()),
     { label: 'Auto-DJ: de volgende overgang is goed', read: () => (!auto.volgende ? null : auto.volgende.bevestigd ? 1 : 0.5) });
-  define('auto.skip', 'trigger', (on) => { if (on) auto.overslaan(); },
+  define('auto.skip', 'trigger', kan(() => auto.overslaan()),
     { label: 'Auto-DJ: niet deze, de volgende kandidaat', read: () => (klaar() ? 0 : null) });
-  define('auto.langer', 'trigger', (on) => { if (on) auto.langer(); },
+  define('auto.langer', 'trigger', kan(() => auto.langer()),
     { label: 'Auto-DJ: nog 8 maten (of 30 s) langer op deze track', read: () => (klaar() ? 0 : null) });
-  define('auto.nu', 'trigger', (on) => { if (on) auto.nu(); },
+  define('auto.nu', 'trigger', kan(() => auto.nu()),
     { label: 'Auto-DJ: de overgang nu (op de eerstvolgende 4 maten)', read: () => (klaar() ? 0 : null) });
 }
 

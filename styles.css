@@ -804,13 +804,19 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .melding{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--a);
   color:var(--text);padding:7px 12px;border-radius:5px;font-size:12px;max-width:560px;
   box-shadow:0 6px 18px rgba(0,0,0,.45);transition:opacity .4s}
-.melding.fout{border-left-color:var(--red);pointer-events:auto;cursor:pointer}
-.melding.fout::after{content:"  ✕";color:var(--klein)}
+.melding.fout{border-left-color:var(--red)}
+/* Alleen het kruisje vangt een klik: de melding zelf is doorklikbaar, ook als hij
+   over een knop ligt (5 okt: de knoppen van de PATROON-rij waren onklikbaar). */
+.melding-x{pointer-events:auto;cursor:pointer;margin-left:10px;padding:0 4px;border:0;background:none;color:var(--klein);font:inherit}
+.melding-x:hover{color:var(--text)}
 .melding.weg{opacity:0}
-/* Een rij onderaan open (stems, auto, klankschaal): de meldingen erboven, niet
-   over de knoppen van de rij heen (een foutmelding blijft staan tot je klikt). */
+.melding.flits{animation:melding-flits .35s ease-out}
+@keyframes melding-flits{from{background:var(--line)}to{background:var(--panel2)}}
+/* Een rij onderaan open: de meldingen erboven, niet over de knoppen van de rij. */
 body:has(#stems:not(.hidden)) .meldingen,body:has(#auto:not(.hidden)) .meldingen,
-body:has(#klankschaal:not(.hidden)) .meldingen{bottom:58px}
+body:has(#klankschaal:not(.hidden)) .meldingen,body:has(#koptelefoon:not(.hidden)) .meldingen{bottom:58px}
+body:has(#instrument:not(.hidden)) .meldingen,body:has(#patronen:not(.hidden)) .meldingen,
+body:has(#master:not(.hidden)) .meldingen{bottom:150px}
 
 .fx-naam{font-size:11px;color:var(--b);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
 .fx-volgend{min-width:22px}
