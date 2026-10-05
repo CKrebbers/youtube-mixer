@@ -67,6 +67,7 @@ src/
                     klankschaal-worklet.js  de AudioWorklet eromheen (laadt pas bij gebruik)
                     engine.js       decks + mixer + maatgever (hysterese) + starten op de maat + snapshot()
                     koptelefoon.js  de koptelefoon (PFL): uitgang met vier kanalen, cue vóór de fader, mix en volume
+                    instrumenten/drums.js  drumcomputer: 16 pads op noot 36–51, kit met zaad op 1–8, eigen buffers op 9–16 (INSTRUMENTEN.md §8)
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
                     keyboard.js     toetsen -> actions
                     midi.js         Web MIDI: poorten, parsen, sysex. Kent geen actions.

@@ -70,6 +70,13 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   op 1000 Hz, per kanaal gemeten (Goertzel). Zaal 1/2 alleen track 2; koptelefoon 3/4 met de cue op
   track 1 alleen track 1 (−9 dB tegen −156 dB); mix, volume (13,5 dB) en omgewisseld. Raakt de
   geluidsinstellingen van de Mac niet.
+- `drums.mjs` — het drum-instrument (docs/INSTRUMENTEN.md §8) in de echte Web Audio van Chrome:
+  een OfflineAudioContext van twee kanalen, het instrument op de uitgang. Elke pad van de kit klinkt
+  (piek, luidheid per slag), kick < 120 Hz, hat > 5 kHz, choke (open + gesloten − gesloten = de open
+  hat maal een helling), een maat vier-op-de-vloer in LUFS (BS.1770, hier uitgerekend), plannen op de
+  sample, stil() midden in een DECAY-helling (via suspend), een eigen buffer op pad 9. Pagina is
+  /styles.css (de app start niet), geen MIDI, eigen server. Poorten `VARVE_KIJK_POORT` (8816) en
+  `VARVE_KIJK_DEBUG` (9416). Raakt de geluidsinstellingen van de Mac niet.
 - `plan.mjs` — het planvenster in headless Chromium (server op 8795, eigen VARVE_PLANNEN): de knop
   "plan" opent plan.html, voorspelling, bewerken, ongedaan maken, opslaan (vorige versie bewaard),
   nummer erbij, auto aan over de bus van de mixer, live "speelt nu", een wijziging van buitenaf
