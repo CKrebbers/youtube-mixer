@@ -64,7 +64,7 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   drums weg 0,9 · rest weg 0,4), opnieuw splitsen geweigerd terwijl het speelt, herladen-teken,
   layout op 1440×790 en 1920×1080, de tegel in de Controlekamer. `--nep` = alleen de ui
   (/api/stems en de stem-actions nagebootst in de pagina).
-- `koptelefoon.mjs` — de koptelefoon (docs/STUDIO.md §3), eigen server op 8798, geen MIDI: de
+- `koptelefoon.mjs` — de koptelefoon (docs/STUDIO.md §3), eigen server op 8799, geen MIDI: de
   KOPTELEFOON-rij (zonder vier kanalen: "geen koptelefoonuitgang", cue-knoppen uit), en de echte
   engine op een OfflineAudioContext van VIER kanalen: track 1 op 440 Hz met de fader dicht, track 2
   op 1000 Hz, per kanaal gemeten (Goertzel). Zaal 1/2 alleen track 2; koptelefoon 3/4 met de cue op

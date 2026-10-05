@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
 const UIT = process.argv[2] || join(WORTEL, 'tools/headless/uit');
 mkdirSync(UIT, { recursive: true });
-const POORT = Number(process.env.VARVE_KIJK_POORT) || 8798, DEBUG = Number(process.env.VARVE_KIJK_DEBUG) || 9342;
+const POORT = Number(process.env.VARVE_KIJK_POORT) || 8799, DEBUG = Number(process.env.VARVE_KIJK_DEBUG) || 9343;
 const tmp = mkdtempSync(join(tmpdir(), 'varve-koptelefoon-'));
 
 function zoekChrome() {
