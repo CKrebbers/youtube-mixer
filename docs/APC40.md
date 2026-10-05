@@ -229,3 +229,15 @@ voorganger afgezet (anders 8 x "weggehaald"). `test/mapping.test.mjs` rekent het
 
 Niet getest: de echte APC (kleuren limoen naast groen en geel op de pads, of
 Shift + scene 4 lekker ligt), en de auto-DJ zelf op het apparaat.
+
+## Mapje inst (5 oktober 2026, instrumenten, GEBOUWD, niet op het apparaat nagelopen)
+
+Een track kan een instrument dragen in plaats van een nummer (`docs/INSTRUMENTEN.md` §6).
+Heeft de focus-track er een, dan loopt **Clip/Device View** strip → rack → **inst** →
+strip; zonder instrument blijft het strip ↔ rack, precies als vroeger (het mapje is "op
+aanvraag", `OP_AANVRAAG` in lagen.js). In inst: device knobs 1–8 = de acht plekken van het
+instrument (`track.{focus}.inst.knob.1–8`, endless), **Device ◀ ▶** = vorig/volgend
+instrument, **On/Off** = stil (paniek; lampje = er klinkt iets). Gaat het instrument weg
+terwijl inst open staat, dan terug naar de strip. Elf regels erbij in `device.inst`, geen
+enkele bestaande veranderd (voorganger `a067b3f2-397` in `eerder`). Noten spelen kan de APC
+niet: dat doet een keyboard (`src/control/noten.js`).

@@ -1,0 +1,56 @@
+{
+  "name": "E-MU Xboard49 — knoppen naar het instrument",
+  "device": "xboard49",
+  "version": 3,
+  "aanname": "TE CONTROLEREN MET EEN PROEF. De CC-nummers komen uit Ardour's xboard-map (de handleiding noemt ze niet): de 16 knoppen sturen CC 21–28 (knop 1–8) en CC 31–38 (knop 9–16), op elk kanaal. Knop 1–8 gaan naar plek 1–8 van het instrument op de speeltrack ({speel}); knop 9–16 zijn nog vrij. Noten, pitchbend, aftertouch, modwiel (CC 1), sustain (CC 64) en CC 120/123 doet src/control/noten.js zelf, niet deze mapping.",
+  "rules": [
+    {
+      "in": "cc:*:21",
+      "action": "track.{speel}.inst.knob.1",
+      "mode": "absolute",
+      "label": "knop 1"
+    },
+    {
+      "in": "cc:*:22",
+      "action": "track.{speel}.inst.knob.2",
+      "mode": "absolute",
+      "label": "knop 2"
+    },
+    {
+      "in": "cc:*:23",
+      "action": "track.{speel}.inst.knob.3",
+      "mode": "absolute",
+      "label": "knop 3"
+    },
+    {
+      "in": "cc:*:24",
+      "action": "track.{speel}.inst.knob.4",
+      "mode": "absolute",
+      "label": "knop 4"
+    },
+    {
+      "in": "cc:*:25",
+      "action": "track.{speel}.inst.knob.5",
+      "mode": "absolute",
+      "label": "knop 5"
+    },
+    {
+      "in": "cc:*:26",
+      "action": "track.{speel}.inst.knob.6",
+      "mode": "absolute",
+      "label": "knop 6"
+    },
+    {
+      "in": "cc:*:27",
+      "action": "track.{speel}.inst.knob.7",
+      "mode": "absolute",
+      "label": "knop 7"
+    },
+    {
+      "in": "cc:*:28",
+      "action": "track.{speel}.inst.knob.8",
+      "mode": "absolute",
+      "label": "knop 8"
+    }
+  ]
+}

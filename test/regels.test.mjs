@@ -9,10 +9,14 @@ const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? ' 
 const engineMap = fileURLToPath(new URL('../src/engine/', import.meta.url));
 
 console.log('regel 1: de engine kent geen MIDI, geen DOM en geen YouTube');
-for (const f of readdirSync(engineMap).filter((x) => x.endsWith('.js'))) {
+// Ook de instrumenten (src/engine/instrumenten/, docs/INSTRUMENTEN.md): een
+// map dieper, dus `../../ui` is net zo goed verboden.
+const engineBestanden = [...readdirSync(engineMap).filter((x) => x.endsWith('.js')),
+  ...readdirSync(engineMap + 'instrumenten/').filter((x) => x.endsWith('.js')).map((x) => `instrumenten/${x}`)];
+for (const f of engineBestanden) {
   const bron = readFileSync(engineMap + f, 'utf8');
   const imports = [...bron.matchAll(/^\s*import\s[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1]);
-  const fout = imports.filter((i) => /\/(ui|control|server|video|opname)\//.test(i) || i.startsWith('../ui') || i.startsWith('../control'));
+  const fout = imports.filter((i) => /\/(ui|control|server|video|opname)\//.test(i) || /^(\.\.\/)+(ui|control)/.test(i));
   ok(`${f}: importeert alleen uit engine en lib`, fout.length === 0);
   // Ook geen DOM: document/window horen hier niet.
   const dom = /\b(document|window)\./.test(bron.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ''));

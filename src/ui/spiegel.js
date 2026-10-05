@@ -177,7 +177,8 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
     el.classList.toggle('stuurt-niet', !!r && !past);
     el.title = r ? r.titel : `APC: ${naamVan(item.sig)} — (niets gekoppeld)`;
     item.fxPlek = r ? Number(/^track\.\d+\.fx\.knob\.(\d)$/.exec(r.action)?.[1]) || null : null;
-    if (!item.fxPlek) el.classList.remove('dof');
+    item.instPlek = r ? Number(/^track\.\d+\.inst\.knob\.(\d)$/.exec(r.action)?.[1]) || null : null;
+    if (!item.fxPlek && !item.instPlek) el.classList.remove('dof');
     // De A|B-knop toont de KANT (A / thru / B), geen aan/uit-licht; zie teken().
     item.kant = !!r && isKantKnop(r.action);
     if (!item.kant) delete el.dataset.kant;
@@ -191,7 +192,7 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
         k.bipolar = !!meta?.bipolar;
       }
       const lab = el.querySelector('.knob-label');
-      if (lab && !item.fxPlek && lab.textContent !== tekst) lab.textContent = tekst;
+      if (lab && !item.fxPlek && !item.instPlek && lab.textContent !== tekst) lab.textContent = tekst;
     } else if (!isFader && !item.kant) {
       const t = el.querySelector('.spg-t');
       if (t && t.textContent !== tekst) t.textContent = tekst;
@@ -270,7 +271,8 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
     const { venster, analysis } = staat;
     for (const id of DECK_IDS) {
       const d = s.decks[id], k = kolEls[id], b = banen[id];
-      const titel = d.title || '— leeg —';
+      // Een instrument op de track (docs/INSTRUMENTEN.md §6): zijn naam in plaats van een titel.
+      const titel = d.instrument ? `♪ ${d.instrument.naam}` : (d.title || '— leeg —');
       tekst(k.titel, titel);
       tekst(b.titel, titel);
       const hoogte = (d.level * 100).toFixed(1) + '%';
@@ -280,7 +282,9 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
       const maat = s.maat === id, stil = maat && !d.playing;
       for (const root of [k.root, b.root]) {
         klasse(root, 'speelt', d.playing);
-        klasse(root, 'leeg', !d.loaded);
+        klasse(root, 'leeg', !d.loaded && !d.instrument);
+        klasse(root, 'instrument', !!d.instrument);
+        klasse(root, 'klinkt', !!d.instrument?.klinkt);
         klasse(root, 'focused', s.focus === id);
         klasse(root, 'tweede', venster.R === id && s.focus !== id);
         klasse(root, 'maat', maat);
@@ -351,12 +355,23 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
       klasse(item.el, 'dof', !p);
     }
 
+    // In het mapje inst: de naam van de plek van het instrument, en dof als hij niets doet.
+    const fdInst = engine.instrumentOp?.(s.focus) ?? null;
+    for (const item of items) {
+      if (!item.instPlek) continue;
+      const p = fdInst?.params?.[item.instPlek - 1];
+      item.lab ??= item.el.querySelector('.knob-label');
+      if (item.lab) tekst(item.lab, p?.label || `instr ${item.instPlek}`);
+      klasse(item.el, 'dof', !p);
+    }
+
     const nr = trackVanDeck(s.focus);
     tekst(fdTrack, `track ${nr}`);
-    tekst(fdTitel, fd?.title || '— leeg —');
+    tekst(fdTitel, fd?.instrument ? `♪ ${fd.instrument.naam}` : (fd?.title || '— leeg —'));
     const laag = lagen?.stand.device ?? 'strip';
     tekst(fdLaag, laag.toUpperCase());
-    tekst(fdLaagUitleg, laag === 'rack' ? 'de acht knoppen van het rack' : 'trim · high · mid · low / echo · galm · fx');
+    tekst(fdLaagUitleg, laag === 'rack' ? 'de acht knoppen van het rack'
+      : laag === 'inst' ? `de acht knoppen van het instrument${fdInst ? ` (${fdInst.naam})` : ''}` : 'trim · high · mid · low / echo · galm · fx');
     if (focusdeel.dataset.laag !== laag) focusdeel.dataset.laag = laag;
   }
 

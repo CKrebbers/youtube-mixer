@@ -250,14 +250,17 @@ export class Deck extends Emitter {
     // Cue en hotcues NIET hier wissen maar pas in _naLaden: mislukt de laad
     // (404, verkeerd formaat), dan staat de oude track er nog, met zijn punten.
     this._laadt = (this._laadt || 0) + 1;
+    const bron = this.bron;
     try {
-      await this.bron.laad({ url, haal: opties?.haal, kanalen: stems ? stems.namen.length * 2 : KANALEN });
+      await bron.laad({ url, haal: opties?.haal, kanalen: stems ? stems.namen.length * 2 : KANALEN });
     } catch (err) {
       if (err.vervangen) return false;      // er kwam een nieuwere laad overheen: die wint
       throw err;
     } finally {
       this._laadt--;
     }
+    // Intussen leeggemaakt (er kwam een instrument op, leeg()): dit nummer hoort hier niet meer.
+    if (this.bron !== bron) return false;
     this._naLaden(title, stems);
     return true;
   }
@@ -273,6 +276,50 @@ export class Deck extends Emitter {
     const wav = maakWav(kanalen, buffer.sampleRate);
     this._geheugenNr = (this._geheugenNr || 0) + 1;
     return this.laadStream(`geheugen:${this.id}:${this._geheugenNr}`, title, { haal: geheugenHaal(wav) });
+  }
+
+  /** Wordt er nu iets geladen (laadStream loopt nog)? */
+  get laadt() { return !!this._laadt; }
+
+  /**
+   * Het nummer eraf: de track is daarna leeg, zoals bij het opstarten. Voor
+   * een instrument op deze track (ST7: een track draagt een nummer óf een
+   * instrument, docs/INSTRUMENTEN.md §6). Ook een laad die nog loopt telt
+   * niet meer (laadStream ziet een andere bron en geeft false).
+   *
+   * Klikvrij: de oude bron stopt met zijn eigen uitvloeien (DECLICK, of de
+   * overgang van de streamkern) en wordt pas daarna opgeruimd; losmaken
+   * terwijl er nog signaal loopt tikt. De strip (EQ, effect, fader, sends)
+   * blijft zoals hij is: die is van de track, niet van het nummer.
+   * Meldt 'load' (iets anders op deze track: hotcue-opslag en sampler laten
+   * het oude nummer los) en 'change'.
+   */
+  leeg() {
+    const oud = this.bron;
+    try { oud.stop(); } catch (_) {}
+    oud.onEinde = null;
+    oud.onFout = null;
+    oud.onRemKlaar = null;
+    this.bron = null;                       // _zetBron ruimt de oude dan niet meteen op
+    this._zetBron(new BufferBron(this.ctx, this.chain.input));
+    const t = setTimeout(() => { try { oud.vernietig(); } catch (_) {} }, 100);
+    t?.unref?.();
+    clearTimeout(this._wisselTimer);
+    this._wisselTimer = null;
+    this.title = '— leeg —';
+    this._zetStems(null);
+    this.cuePoint = 0;
+    this.hotcues = [null, null, null, null];
+    this.grid = null;
+    this.onsets = null;
+    this.toonKaart = null;
+    this.loopBeats = null;
+    this.loopInPunt = null;
+    this.vorigeLoop = null;
+    this.buigt = 0;
+    this.setRate(1);
+    this.fx.heranker();
+    this.emit('load', this);
   }
 
   _naLaden(title, stems = null) {

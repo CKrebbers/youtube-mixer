@@ -1192,6 +1192,83 @@
       "laag": "device.rack"
     },
     {
+      "in": "cc:0:16",
+      "action": "track.{focus}.inst.knob.1",
+      "mode": "endless",
+      "label": "device knob 1",
+      "laag": "device.inst"
+    },
+    {
+      "in": "cc:0:17",
+      "action": "track.{focus}.inst.knob.2",
+      "mode": "endless",
+      "label": "device knob 2",
+      "laag": "device.inst"
+    },
+    {
+      "in": "cc:0:18",
+      "action": "track.{focus}.inst.knob.3",
+      "mode": "endless",
+      "label": "device knob 3",
+      "laag": "device.inst"
+    },
+    {
+      "in": "cc:0:19",
+      "action": "track.{focus}.inst.knob.4",
+      "mode": "endless",
+      "label": "device knob 4",
+      "laag": "device.inst"
+    },
+    {
+      "in": "cc:0:20",
+      "action": "track.{focus}.inst.knob.5",
+      "mode": "endless",
+      "label": "device knob 5",
+      "laag": "device.inst"
+    },
+    {
+      "in": "cc:0:21",
+      "action": "track.{focus}.inst.knob.6",
+      "mode": "endless",
+      "label": "device knob 6",
+      "laag": "device.inst"
+    },
+    {
+      "in": "cc:0:22",
+      "action": "track.{focus}.inst.knob.7",
+      "mode": "endless",
+      "label": "device knob 7",
+      "laag": "device.inst"
+    },
+    {
+      "in": "cc:0:23",
+      "action": "track.{focus}.inst.knob.8",
+      "mode": "endless",
+      "label": "device knob 8",
+      "laag": "device.inst"
+    },
+    {
+      "in": "note:0:58",
+      "action": "track.{focus}.inst.prev",
+      "mode": "trigger",
+      "label": "device left",
+      "laag": "device.inst"
+    },
+    {
+      "in": "note:0:59",
+      "action": "track.{focus}.inst.next",
+      "mode": "trigger",
+      "label": "device right",
+      "laag": "device.inst"
+    },
+    {
+      "in": "note:0:62",
+      "action": "track.{focus}.inst.stil",
+      "mode": "trigger",
+      "label": "device on/off",
+      "laag": "device.inst"
+    },
+    {
       "in": "note:0:82",
       "action": "layer.grid.hotcues",
       "mode": "trigger",
@@ -2792,6 +2869,24 @@
   ],
   "eerder": [
     {
+      "vingerafdruk": "a067b3f2-397",
+      "tot": "2026-10-05",
+      "rules": [],
+      "removed": [
+        "cc:0:16@device.inst",
+        "cc:0:17@device.inst",
+        "cc:0:18@device.inst",
+        "cc:0:19@device.inst",
+        "cc:0:20@device.inst",
+        "cc:0:21@device.inst",
+        "cc:0:22@device.inst",
+        "cc:0:23@device.inst",
+        "note:0:58@device.inst",
+        "note:0:59@device.inst",
+        "note:0:62@device.inst"
+      ]
+    },
+    {
       "vingerafdruk": "9ba78a49-395",
       "tot": "2026-10-05",
       "rules": [
@@ -2811,7 +2906,18 @@
       ],
       "removed": [
         "cc:0:47#shift@grid.sampler",
-        "cc:0:47#shift@grid.video"
+        "cc:0:47#shift@grid.video",
+        "cc:0:16@device.inst",
+        "cc:0:17@device.inst",
+        "cc:0:18@device.inst",
+        "cc:0:19@device.inst",
+        "cc:0:20@device.inst",
+        "cc:0:21@device.inst",
+        "cc:0:22@device.inst",
+        "cc:0:23@device.inst",
+        "note:0:58@device.inst",
+        "note:0:59@device.inst",
+        "note:0:62@device.inst"
       ]
     },
     {
@@ -2842,7 +2948,18 @@
         "note:6:48",
         "note:7:48",
         "cc:0:47#shift@grid.sampler",
-        "cc:0:47#shift@grid.video"
+        "cc:0:47#shift@grid.video",
+        "cc:0:16@device.inst",
+        "cc:0:17@device.inst",
+        "cc:0:18@device.inst",
+        "cc:0:19@device.inst",
+        "cc:0:20@device.inst",
+        "cc:0:21@device.inst",
+        "cc:0:22@device.inst",
+        "cc:0:23@device.inst",
+        "note:0:58@device.inst",
+        "note:0:59@device.inst",
+        "note:0:62@device.inst"
       ]
     },
     {
@@ -2875,6 +2992,17 @@
         "cc:0:47#shift@grid.sampler",
         "cc:0:47#shift@grid.video",
         "note:0:80",
+        "cc:0:16@device.inst",
+        "cc:0:17@device.inst",
+        "cc:0:18@device.inst",
+        "cc:0:19@device.inst",
+        "cc:0:20@device.inst",
+        "cc:0:21@device.inst",
+        "cc:0:22@device.inst",
+        "cc:0:23@device.inst",
+        "note:0:58@device.inst",
+        "note:0:59@device.inst",
+        "note:0:62@device.inst",
         "note:0:38@grid.video",
         "note:0:39@grid.video",
         "note:0:30@grid.video",
@@ -2911,6 +3039,17 @@
         "cc:0:47#shift@grid.sampler",
         "cc:0:47#shift@grid.video",
         "note:0:80",
+        "cc:0:16@device.inst",
+        "cc:0:17@device.inst",
+        "cc:0:18@device.inst",
+        "cc:0:19@device.inst",
+        "cc:0:20@device.inst",
+        "cc:0:21@device.inst",
+        "cc:0:22@device.inst",
+        "cc:0:23@device.inst",
+        "note:0:58@device.inst",
+        "note:0:59@device.inst",
+        "note:0:62@device.inst",
         "note:0:85#shift",
         "note:0:85@grid.auto",
         "note:0:85#shift@edit.aan",
@@ -2972,6 +3111,17 @@
         "note:0:63",
         "note:0:80",
         "note:0:81",
+        "cc:0:16@device.inst",
+        "cc:0:17@device.inst",
+        "cc:0:18@device.inst",
+        "cc:0:19@device.inst",
+        "cc:0:20@device.inst",
+        "cc:0:21@device.inst",
+        "cc:0:22@device.inst",
+        "cc:0:23@device.inst",
+        "note:0:58@device.inst",
+        "note:0:59@device.inst",
+        "note:0:62@device.inst",
         "note:0:86#shift",
         "note:0:86@grid.klank",
         "note:0:85#shift",

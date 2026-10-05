@@ -7,12 +7,11 @@
  * van welke module toevallig al geladen is.
  */
 
+import { POLY } from './poly.js';
 import { DRUMS } from './drums.js';
 
 /** @type {{ soort: string, naam: string, maak: Function }[]} */
-export const INSTRUMENTEN = [
-  DRUMS,
-];
+export const INSTRUMENTEN = [POLY, DRUMS];
 
 /** De definitie van een soort, of null. */
 export const instrumentDef = (soort) => INSTRUMENTEN.find((d) => d.soort === soort) ?? null;

@@ -10,7 +10,10 @@ import { Emitter } from '../lib/emitter.js';
  * EQ — zit NOOIT in een mapje; alleen wat je niet bij elke overgang nodig hebt):
  *   device  de acht device knobs rechts, voor de track met focus: de strip
  *           (trim · high · mid · low / sends · fx) of het rack. Eén
- *           oplichtende knop wisselt; twee standen, niet meer. Detail View
+ *           oplichtende knop wisselt; twee standen, niet meer. Heeft de
+ *           focus-track een INSTRUMENT (docs/INSTRUMENTEN.md §6), dan komt er
+ *           een derde bij: strip → rack → inst (de acht knoppen van het
+ *           instrument). Zonder instrument blijft het strip ↔ rack. Detail View
  *           opent een derde: de gekozen VORMLAAG (Vormmachines, alleen met
  *           ?vormen=1; zonder dat staan er geen regels in en doet hij niets).
  *   grid    het 5×8-grid: hotcues · loops · sampler · video · klank · auto,
@@ -53,7 +56,8 @@ export const GROEPEN = {
   },
   device: {
     naam: 'device knobs', standaard: 'strip',
-    knoppen: { view: ['strip', 'rack'] },
+    // inst alleen als de focus-track een instrument heeft (zie OP_AANVRAAG).
+    knoppen: { view: ['strip', 'rack', 'inst'] },
   },
   grid: {
     naam: 'grid', standaard: 'hotcues',
@@ -69,9 +73,18 @@ export const GROEPEN = {
  */
 export function voegVormMapjeToe() { GROEPEN.device.knoppen.detail = ['vorm']; }
 
+/**
+ * Mapjes die alleen meedoen als ze er nu iets te doen hebben: rondlopen met
+ * de kiesknop slaat ze over, tenzij `beschikbaar` (een optie van Lagen) ja
+ * zegt. Het mapje inst (instrument) hoort alleen bij een track met een
+ * instrument: zonder dat blijft Clip/Device View strip ↔ rack, zoals altijd.
+ */
+export const OP_AANVRAAG = new Set(['device.inst']);
+
 /** Hoe een mapje op het scherm heet. */
 export const LAAGNAAM = {
   'device.strip': 'strip (trim · high · mid · low / echo · galm · fx)', 'device.rack': 'rack (fx 1–8)',
+  'device.inst': 'instrument (de acht knoppen van het instrument · ◀ ▶ kiezen · On/Off stil)',
   'device.vorm': 'vormlaag (knoppen 1–6 · dekking)',
   'edit.aan': 'grid-modus (beatgrid bewerken)', 'edit.uit': 'uit',
   'grid.hotcues': 'hotcues', 'grid.loops': 'loops', 'grid.sampler': 'sampler', 'grid.video': 'video',
@@ -80,9 +93,15 @@ export const LAAGNAAM = {
 };
 
 export class Lagen extends Emitter {
-  constructor({ now = () => (globalThis.performance?.now() ?? Date.now()) } = {}) {
+  /**
+   * @param beschikbaar  (groep, laag) => boolean: doet een mapje uit OP_AANVRAAG
+   *                     nu mee met rondlopen? Standaard nee (app.js: alleen
+   *                     met een instrument op de focus-track).
+   */
+  constructor({ now = () => (globalThis.performance?.now() ?? Date.now()), beschikbaar = () => false } = {}) {
     super();
     this.now = now;
+    this.beschikbaar = beschikbaar;
     this.stand = Object.fromEntries(Object.entries(GROEPEN).map(([g, d]) => [g, d.standaard]));
     this.ingedrukt = {};      // groep -> { knop, vorige, t0 }
   }
@@ -112,8 +131,14 @@ export class Lagen extends Emitter {
     if (on) {
       const vorige = this.stand[groep];
       const i = lijst.indexOf(vorige);
-      // Al open: het volgende mapje onder dezelfde knop (of blijven staan).
-      this.zet(groep, i >= 0 ? lijst[(i + 1) % lijst.length] : lijst[0]);
+      // Al open: het volgende mapje onder dezelfde knop (of blijven staan),
+      // maar niet een mapje op aanvraag dat er nu niets te doen heeft.
+      const mag = (l) => !OP_AANVRAAG.has(`${groep}.${l}`) || !!this.beschikbaar(groep, l);
+      let volgende = lijst[0];
+      if (i >= 0) {
+        for (let s = 1; s <= lijst.length; s++) { const l = lijst[(i + s) % lijst.length]; if (mag(l)) { volgende = l; break; } }
+      }
+      this.zet(groep, volgende);
       this.ingedrukt[groep] = { knop, vorige, t0: this.now(), wasOpen: i >= 0 };
     } else {
       const d = this.ingedrukt[groep];

@@ -672,6 +672,32 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .kp-knoppen{display:flex;align-items:center;gap:6px}
 .kp-wissel.on{color:var(--warn);border-color:var(--warn)}
 
+/* ---- instrument (docs/INSTRUMENTEN.md §6): kiezen, acht knoppen, toetsenbord ----
+   Eén regel zoals stems en koptelefoon. Violet zoals de klankschaal: een instrument. */
+.instrument-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px;min-width:0}
+.instrument-rij.hidden{display:none}
+.in-track{font:600 12px ui-monospace,monospace;color:var(--a);white-space:nowrap;min-width:52px}
+.in-kies{min-width:92px}
+.in-kies.gekozen{border-color:var(--m-sampler);color:var(--m-sampler);font-weight:600}
+.in-knoppen{display:flex;align-items:center;gap:6px}
+.knob.in-knop.dood{opacity:.25;pointer-events:none}
+.in-stil.dood{opacity:.35}
+.in-stil.klinkt{border-color:var(--warn);color:var(--warn)}
+.in-toetsen{flex:1 1 0;display:flex;align-items:center;gap:4px;min-width:180px;max-width:460px}
+.in-klavier{position:relative;flex:1 1 0;height:44px;min-width:0;touch-action:none;user-select:none}
+.in-klavier.dood{opacity:.4}
+.in-toets{position:absolute;top:0;box-sizing:border-box;display:flex;align-items:flex-end;justify-content:center;cursor:pointer}
+.in-toets.wit{height:100%;background:#cfd7de;border:1px solid #0b0e11;border-radius:0 0 3px 3px;z-index:1}
+.in-toets.zwart{height:60%;background:#1b2229;border:1px solid #0b0e11;border-radius:0 0 2px 2px;z-index:2}
+.in-toets b{font:600 9px ui-monospace,monospace;color:#3c4650;padding-bottom:2px;pointer-events:none}
+.in-toets.wit.aan{background:var(--m-sampler)}
+.in-toets.zwart.aan{background:#6d48b0}
+.in-keyboard{flex:0 1 auto;min-width:0;font-size:11px;color:var(--klein);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.in-keyboard.actief{color:var(--m-sampler)}
+/* een instrument op een track: in de kolom en de baan zijn naam (violet) in plaats van de titel */
+.kol.instrument .kol-titel,.baan.instrument .baan-titel{color:var(--m-sampler)}
+.kol.instrument.klinkt .kol-speelt{visibility:visible;color:var(--m-sampler)}
+
 /* het teken in de kolomkop: S2/S4 = speelt met stems; gestippeld = klaar, herladen geeft ze; S! = mislukt */
 .kol-kop-l{display:flex;align-items:center;gap:5px;min-width:0}
 .kol-stems{font:700 11px/1 ui-monospace,monospace;font-style:normal;padding:2px 3px;border-radius:3px;

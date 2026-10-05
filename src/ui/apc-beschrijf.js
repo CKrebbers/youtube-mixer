@@ -63,6 +63,12 @@ export function beschrijf(action) {
     if ((m = /^stem\.(vocals|inst|drums|bass|other)$/.exec(rest))) return r(STEM[m[1]], `stem-niveau: ${STEM_UITLEG[m[1]]}, vóór de EQ (vol = 1, dicht = weg; alleen als het nummer stems heeft)`);
     if ((m = /^stem\.(vocals|inst|drums|bass|other)\.kill$/.exec(rest))) return r(`${STEM[m[1]]} weg`, `stem weg aan/uit: ${STEM_UITLEG[m[1]]} (het niveau blijft staan; lampje = weg)`);
     if ((m = /^stem\.(vocals|inst|drums|bass|other)\.hold$/.exec(rest))) return r(`${STEM[m[1]]} weg!`, `stem weg zolang je drukt: ${STEM_UITLEG[m[1]]}`);
+    // Instrument op de track (docs/INSTRUMENTEN.md §6): een nummer óf een instrument.
+    if (rest === 'inst') return r('instrument', 'instrument kiezen, rondlopend: geen → Poly → … → geen (een nummer dat speelt gaat er pas af bij een tweede druk binnen 3 s)');
+    if (rest === 'inst.next') return r('instr ▶', 'volgend instrument op deze track (een nummer dat speelt: tweede druk binnen 3 s)');
+    if (rest === 'inst.prev') return r('◀ instr', 'vorig instrument op deze track (een nummer dat speelt: tweede druk binnen 3 s)');
+    if ((m = /^inst\.knob\.(\d)$/.exec(rest))) return r(`instr ${m[1]}`, `instrumentknop ${m[1]} (wat die doet hangt van het instrument af; de namen staan in de INSTRUMENT-rij)`);
+    if (rest === 'inst.stil') return r('stil', 'instrument meteen stil (paniek), met een korte fade; lampje = er klinkt iets');
     if (rest === 'pfl') return r('PFL', 'in de koptelefoon aan/uit: voorbeluisteren vóór de fader, de zaal hoort het niet (lampje rood = je hoort hem; uit = geen koptelefoonuitgang, docs/STUDIO.md §3)');
     if (rest === 'brake') return r('rem', 'rem (vinylstop): in de remtijd naar stilstand, dan pauze; tijdens het remmen nog eens = los');
     if (rest === 'brake.time') return r('remtijd', 'remtijd: 0,1 tot 5 seconden tot stilstand');

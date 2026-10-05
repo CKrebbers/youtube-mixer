@@ -67,6 +67,7 @@ src/
                     klankschaal-worklet.js  de AudioWorklet eromheen (laadt pas bij gebruik)
                     engine.js       decks + mixer + maatgever (hysterese) + starten op de maat + snapshot()
                     koptelefoon.js  de koptelefoon (PFL): uitgang met vier kanalen, cue vóór de fader, mix en volume
+                    instrumenten/   index.js (INSTRUMENTEN, instrumentDef) · poly.js de polysynth: twee oscillatoren, 12 stemmen (docs/INSTRUMENTEN.md)
                     instrumenten/drums.js  drumcomputer: 16 pads op noot 36–51, kit met zaad op 1–8, eigen buffers op 9–16 (INSTRUMENTEN.md §8)
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
                     keyboard.js     toetsen -> actions
@@ -75,6 +76,7 @@ src/
                     lagen.js        mapjes (lagen): welk mapje open staat, vastzetten en gluren
                     feedback.js     engine-stand -> LED's, met diffing. Leest de mapping.
                     midi-learn.js   action kiezen, control bewegen, gekoppeld
+                    noten.js        MIDI-noten (elke ingang behalve de APC) naar het instrument op de speeltrack; knoppen via een apparaatmapping
                     handelingen.js  het handelingenlog: [t, action, waarde] op de audioklok, per seconde weg
                     terugspelen.js  een log terugspelen: beginstand, dan elke regel op T0 + t
                     devices/        apc40mk2.js, generic.js — wat er op het apparaat zit
@@ -112,6 +114,7 @@ src/
                     stems-wachtrij.js de stems-rij van de server (GET /api/stems): peilen zolang iets open staat of iemand kijkt
                     stems-weergave.js stems als tekst: namen, library-cel, rijstand, kolomteken, tegel. Puur.
                     koptelefoon-paneel.js de KOPTELEFOON-rij: cue per track, VOL, MIX, ⇄ (zaal en koptelefoon wisselen, na herladen)
+                    instrument-paneel.js de INSTRUMENT-rij: kiezen, acht knoppen, toetsenbord (via noten.js), welk MIDI-keyboard
   vormen/           hulp.js         paletten, toeval met zaad, ruis, tekenhulp (gedeeld door de systemen)
                     systemen.js     de Vormmachines (Clay's artifact): 10 lichte + de lijst van alle 26
                     systemen-zwaar.js / -meer.js / -isomorf.js  de andere 16 (zwaar · middel · beeld = geluid)
@@ -157,7 +160,7 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, instrument.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
@@ -166,6 +169,7 @@ mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
   generic.json      leeg startpunt
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
+  xboard49.json     knoppen 1–8 van de E-MU Xboard49 naar het instrument op de speeltrack (AANNAME, te controleren met een proef)
 racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 plannen/
@@ -215,6 +219,7 @@ test/
   nep-tijdlijn.mjs  nep-AudioParam die uitrekent wat de param op elk moment doet (geen test zelf)
   klankschaal.test.mjs  stemming (24 toonsoorten × ladders), toonhoogte gemeten, slapen, wrijven, afval, engine en bus
   analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions, maatbronnen
+  instrumenten.test.mjs  Poly (contract, ADSR, stemroof, pedaal), engine (nummer óf instrument, speeltrack, maatgever), actions, noten.js met nep-poorten, mapje inst
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -239,6 +244,7 @@ docs/
   TAILSCALE.md      overal openen via Tailscale: VARVE_HOSTS, tailscale serve, wat waar werkt
   ONTBREEKT.md      wat er nog ontbreekt (2 okt): eigen docs, DJ-software, Logic/TD; voorstel en vragen
   STUDIO.md         VARVE als muziekprogramma (5 okt): hergebruik, vier controllers, fasen S0–S5; §3 de koptelefoon
+  INSTRUMENTEN.md   het contract van een instrument (§1–5) en hoe het op een track woont (§6: engine, actions, noten, scherm, APC, metingen)
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -1245,6 +1251,33 @@ Volledig in `docs/STUDIO.md` §3. Wat een bouwer niet mag missen:
   sampler-volume en puls op shift + Cue Level in grid-modus sampler en video.
 - Gemeten met `tools/headless/koptelefoon.mjs` (echte Chrome, OfflineAudioContext van
   vier kanalen); de mock in engine.test kent geen echte splitter/merger.
+
+## Instrumenten op een track (gebouwd 5 okt)
+
+Volledig in `docs/INSTRUMENTEN.md` (§3 het contract, §6 de track). Wat een bouwer niet mag missen:
+- Een track draagt een nummer óf een instrument (ST7). `engine.zetInstrument(id, soort|null)`,
+  `instrumentOp(id)`, `speeltrack()`. Het instrument sluit via een eigen GainNode aan op
+  `chain.input`: EQ, effect, filter, fader, sends en cue werken vanzelf. Een instrument erop =
+  `deck.leeg()` (het nummer eraf, een lopende laad geeft false); een nummer laden haalt het
+  instrument weg. Weghalen: aansluiting klikvrij dicht, dan pas `vernietig()` en losmaken.
+- Een instrumenttrack heeft geen buffer: geen maatgever, geen sync of op de maat, de auto-DJ
+  laadt er niet op (`_vrijDeck`). Nieuwe code die "een lege track" zoekt: kijk ook naar
+  `instrumentOp(id)`.
+- Noten gaan NIET over de bus (`src/control/noten.js`): elke MIDI-ingang behalve de APC, via de
+  MidiHub (geen eigen requestMIDIAccess, dus alleen het eerste tabblad); een poort van buiten
+  (de hub, straks) met `koppel(poort)`. Noot-uit en pedaal gaan naar waar de noot-aan heen ging.
+  Knoppen van het keyboard via `mappings/xboard49.json` (`{speel}`, absoluut = soft-takeover);
+  de CC-nummers zijn een AANNAME.
+- Actions `track.N.inst` (rondlopend; een SPELEND nummer eraf pas bij een tweede druk binnen
+  3 s, ook op de APC), `.inst.next/.prev`, `.inst.knob.1–8`, `.inst.stil`. Terugspelen slaat ze
+  over, de knoppen staan niet in de beginstand.
+- APC: het mapje `device.inst` (Clip/Device View strip → rack → inst) bestaat alleen als de
+  focus-track een instrument heeft (`OP_AANVRAAG` + `beschikbaar` in lagen.js); zonder blijft het
+  strip ↔ rack.
+- De Poly plant zijn envelopes op de audioklok en kent zijn eigen stand (`_envOp`): in Chrome
+  begon een lineaire helling na `cancelAndHoldAtTime` midden in een `setTargetAtTime` op 0 (een
+  tik bij een GEPLANDE stemroof). Luidheid gemeten: `OPHOGING` 0,52 = −14 LUFS voor een akkoord
+  van drie op 0,8; verander je de klank, meet opnieuw (`tools/headless/instrument.mjs`).
 
 ## Werkwijze die hier werkt
 

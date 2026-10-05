@@ -80,6 +80,9 @@ export const SOORTEN = [
   ['auto', 'auto-DJ', /^auto\./],
   // Vóór "mixer": track.1.kill.high eindigt op .high, en dat is geen EQ-knop.
   ['klank', 'kill & rem', /\.(kill\.(low|mid|high)(\.hold)?|brake(\.time)?)$/],
+  // Een instrument op de track (docs/INSTRUMENTEN.md §6): het mapje inst.
+  // (Niet `track.N.stem.inst`: dat is de stem "rest".)
+  ['instrument', 'instrument', /^track\.[^.]+\.inst(\.|$)/],
   ['fx', 'effecten & sends', /\.(fx\.\w+|fx\.knob\.\d|send\.[ab]|rack\.\w+)$|^send\.[ab]\./],
   ['mixer', 'mixer', /\.(fader|filter|trim|high|mid|low|xfade\.\w+)$|^mixer\./],
   ['transport', 'transport & focus', /\.(play|play\.quant|cue|sync|tap|focus|pitch|bend\.\w+|nudge\.\w+|pitch\.range|beatjump\.\w+)$|^focus\.|^window\.|^transport\./],

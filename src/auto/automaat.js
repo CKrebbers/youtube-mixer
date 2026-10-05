@@ -543,7 +543,9 @@ export class Automaat extends Emitter {
    * Nooit de hoofdtrack, nooit iets wat speelt.
    */
   _vrijDeck() {
-    const vrij = DECK_IDS.filter((id) => id !== this.hoofd && !this.engine.deck(id).playing && !this.engine.deck(id).wacht);
+    // Nooit een track met een instrument (docs/INSTRUMENTEN.md §6): laden zou het eraf halen.
+    const vrij = DECK_IDS.filter((id) => id !== this.hoofd && !this.engine.deck(id).playing && !this.engine.deck(id).wacht
+      && !this.engine.instrumentOp?.(id));
     return vrij.find((id) => this.eigen.has(id))
       || vrij.find((id) => !this.engine.deck(id).buffer)
       || vrij[vrij.length - 1] || null;
