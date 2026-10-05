@@ -102,10 +102,11 @@ flits, pad 8 zwart zolang je drukt, rij 2 pad 7 zwart aan/uit, pad 8 bevriezen) 
 track: rij 1 kill hoog, 2 kill mid, 3 kill laag — vasthouden = weg zolang je
 drukt, shift + pad = vastzetten/losmaken; rij 4 rem; rij 5 op de maat starten) ·
 auto (limoen: de auto-DJ, zie "Modus auto" onderaan) · stems (zeegroen, Shift +
-scene 3: per kolom een stem weg, zie "Modus stems" onderaan).
-Scene 5 = loop weg. ▲ ▼ loopt rond door alle zeven (hotcues → loops → sampler →
-video → klank → auto → stems → hotcues). Vasthouden van een modusknop (ook Shift +
-scene 5, 4 en 3) vanuit een andere modus = even gluren.
+scene 3: per kolom een stem weg, zie "Modus stems" onderaan) · patronen (oranje, Shift +
+scene 2: clips per track, zie "Modus patronen" onderaan).
+Scene 5 = loop weg. ▲ ▼ loopt rond door alle acht (hotcues → loops → sampler →
+video → klank → auto → stems → patronen → hotcues). Vasthouden van een modusknop (ook
+Shift + scene 5, 4, 3 en 2) vanuit een andere modus = even gluren.
 
 Waarom klank op **Shift + scene 5**: scene 5 is al "loop weg", en dat moet één
 druk blijven (een loop moet je snel kwijt kunnen). Shift + scene 5 was vrij, zit
@@ -310,3 +311,42 @@ voorganger afgezet (anders 106 × "weggehaald"). `test/mapping.test.mjs` rekent 
 
 Niet getest: de echte APC (zeegroen naast cyaan en groen, of Shift + scene 3 lekker
 ligt, rood op 40 pads tegelijk).
+
+## Modus patronen (5 oktober 2026, STUDIO S4, GEBOUWD, niet op het apparaat nagelopen)
+
+Patronen starten als clips (`docs/PATRONEN.md`): de achtste grid-modus, `grid.patronen`, in
+**oranje** (paletindex 9, donker 10). Het spoor koos eerst zeegroen en Shift + scene 3, maar die
+had de modus stems al (samengevoegd 5 okt): daarom oranje en Shift + scene 2.
+
+| waar | knop | doet | lampje |
+|---|---|---|---|
+| scene-knoppen | Shift + scene 2 | modus patronen openen (vasthouden = gluren) | met shift: donker oranje = dicht, fel = open |
+| pijlen | ▲ ▼ | rondlopen, patronen komt na stems (▼ vanuit patronen = hotcues) | — |
+| grid | pad (kolom k, rij r) | plek r van track k: starten op het volgende maatbegin; speelt hij: stoppen op de maat; speelt er een ander op die track: wisselen op de maat; een lege plek: kiezen (met opnemen aan: beginnen en erin opnemen) | uit = geen instrument · donkergrijs = leeg · donker = gevuld · fel = speelt · knippert = wacht op de maat |
+| | shift + pad | hetzelfde **meteen**: starten op de volgende tel, stoppen meteen | idem |
+| scene-knoppen (in patronen) | scene 1–5 | die rij op alle tracks met een instrument; een lege plek in die rij: die track stopt | fel = er speelt iets in die rij, knippert = er wacht iets, donker = gevuld |
+| rechts | Stop All Clips | alle patronen stoppen op de maat (shift: meteen) | (geen LED op het apparaat) |
+
+**Waarom Shift + scene 2.** Scene 1–4 kiezen een modus, scene 5 is loop weg, Shift + scene 5 =
+klank, Shift + scene 4 = auto en Shift + scene 3 = stems. Shift + scene 2 deed hetzelfde als
+zonder shift: vrij. In de
+modus zelf zijn de scene-knoppen RIJEN (zoals scene launch in Ableton), dus daar kies je geen
+modus meer met scene 1–4: weg met ▲ ▼ (één druk ▼ = hotcues), Shift + scene 4 (auto) of
+Shift + scene 5 (klank).
+
+**Wat er bewust NIET verandert.** In de grid-modus (Shift + Metronome) is scene 2 "bpm ×2"; zonder
+eigen regel zou Shift + scene 2 daar patronen openen (een shift-regel gaat voor het open mapje),
+dus een expliciete regel `note:0:83#shift@edit.aan` = bpm ×2, zoals auto dat voor scene 4 en stems
+voor scene 3 deden. De
+kern zit nooit in een mapje: fader, play, filter, Clip Stop (loop), Track Select, de master-knop
+(zwart) en de device knobs doen in de modus patronen wat ze altijd doen. Stop All Clips is buiten
+de modus de rem, zoals sinds voorstel A. 89 regels erbij (40 pads + 40 met shift, 5 scenes, Stop
+All Clips + shift, Shift + scene 2, en die ene in de grid-modus), geen enkele bestaande veranderd
+(voorganger `914391f9-421` in `eerder`).
+
+**Knipperen.** Een plek die op de maat wacht knippert op de tel van de patroonklok: de READ
+wisselt zelf tussen 1 en 0,5 (de `tel`-instelling van een LED leest `track.N.phase`, en die heeft
+een track zonder nummer niet). Het scherm knippert zo vanzelf mee.
+
+Niet getest: de echte APC (oranje naast groen en cyaan op de pads; of Shift + scene 2 lekker
+ligt; of het knipperen op de tel goed te zien is).

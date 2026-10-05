@@ -3,7 +3,7 @@
   --text:#dfe7ee; --dim:#7b8794; --a:#4ad9c4; --b:#c48cff;
   --warn:#ffbe3c; --red:#ff3b30;
   /* grid-mapjes, zoals de LED's op de APC: hotcues geel, loops cyaan, sampler violet, video blauw */
-  --m-hotcues:#ffd23c; --m-loops:#3cd6ff; --m-sampler:#b07cff; --m-video:#4c7dff; --m-klank:#ff4fe0; --m-auto:#8cff3c; --m-stems:#2ee8a6;
+  --m-hotcues:#ffd23c; --m-loops:#3cd6ff; --m-sampler:#b07cff; --m-video:#4c7dff; --m-klank:#ff4fe0; --m-auto:#8cff3c; --m-stems:#2ee8a6; --m-patronen:#ff6a1a;
   /* crossfaderkant, zoals de tweekleurige LED van de A|B-knop: geel A, oranje B, thru grijs */
   --kant-a:#ffd23c; --kant-b:#ff8a2a;
   /* kleine grijze tekst die toch leesbaar moet zijn: 5,5:1 op --panel2 */
@@ -720,6 +720,40 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .kol.instrument .kol-titel,.baan.instrument .baan-titel{color:var(--m-sampler)}
 .kol.instrument.klinkt .kol-speelt{visibility:visible;color:var(--m-sampler)}
 
+/* ---- patronen (docs/PATRONEN.md): plekken, stappen, lengte, swing, opnemen ----
+   Eén regel zoals instrument; oranje zoals de modus patronen op de APC. Een plek
+   licht op zoals zijn pad (data-licht uit de read: aan = speelt, half = gevuld,
+   uit = leeg, dood = geen instrument; wacht hij op de maat, dan knippert de read). */
+.patroon-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px;min-width:0;flex-wrap:wrap}
+.patroon-rij.hidden{display:none}
+.pt-track{font:600 12px ui-monospace,monospace;color:var(--a);white-space:nowrap;min-width:52px}
+.pt-plekken{display:flex;gap:4px}
+.pt-plek{min-width:26px}
+.pt-plek[data-licht="dood"]{opacity:.3}
+.pt-plek[data-licht="half"]{border-color:var(--m-patronen);color:var(--m-patronen);background:color-mix(in srgb,var(--m-patronen) 14%,var(--panel2))}
+.pt-plek[data-licht="aan"]{background:var(--m-patronen);border-color:var(--m-patronen);color:#03140e}
+.pt-plek.gekozen{box-shadow:0 0 0 1px var(--text) inset}
+.pt-stappen{flex:1 1 320px;display:grid;grid-template-columns:repeat(16,minmax(0,1fr));gap:3px;min-width:240px;max-width:560px;touch-action:none;user-select:none}
+.pt-stap{display:block;height:16px;border:1px solid var(--line);border-radius:3px;background:var(--panel2);cursor:pointer}
+.pt-stap.tel{border-color:#3c4b58}
+.pt-stap.weg{display:none}
+.pt-stap.dood{opacity:.35;cursor:default}
+.pt-stap.half{background:color-mix(in srgb,var(--m-patronen) 35%,var(--panel2));border-color:var(--m-patronen)}
+.pt-stap.aan{background:var(--m-patronen);border-color:var(--m-patronen)}
+.pt-stap.kop{box-shadow:0 0 0 2px var(--text)}
+.pt-lengte{display:flex;align-items:center;gap:4px}
+.pt-lengte-tekst{font:600 12px ui-monospace,monospace;color:var(--text);min-width:20px;text-align:center}
+.pt-rec.on{background:var(--red);border-color:var(--red);color:#fff}
+.pt-wis.dood{opacity:.35}
+.pt-klok{font-size:11px;color:var(--klein);white-space:nowrap}
+.pt-tempo{display:flex;align-items:center;gap:6px}
+.pt-tempo.hidden{display:none}
+.pt-noot{font:600 11px ui-monospace,monospace;color:var(--m-patronen);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.pt-noot.leeg{color:var(--warn);font-family:inherit;font-weight:400}
+.pt-opslag{font-size:11px;color:var(--klein);white-space:nowrap}
+.pt-opslag.fout{color:var(--red)}
+.pt-hun.hidden,.pt-mijn.hidden{display:none}
+
 /* ---- master (docs/MASTER.md): het insert-rack op de mix en de limiter ----
    Eén regel zoals koptelefoon en stems. Gain reduction = rood, groeit naar rechts. */
 .master-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px;min-width:0}
@@ -863,6 +897,8 @@ body.leermodus .spg-naam{display:block}
 .spg[data-modus="auto"][data-action="auto.skip"]{--kleur:#ff9d2e}
 .spg[data-modus="auto"][data-action="auto.langer"]{--kleur:var(--m-loops)}
 .spg[data-modus="auto"][data-action="auto.nu"]{--kleur:var(--m-hotcues)}
+/* Modus patronen (docs/PATRONEN.md): oranje, pad = plek per track, scene = rij. */
+.spg[data-modus="patronen"]{--kleur:var(--m-patronen)}
 button.spg[data-modus]{border-color:color-mix(in srgb,var(--kleur) 30%,var(--line));
   color:color-mix(in srgb,var(--kleur) 55%,var(--dim))}
 button.spg[data-licht="half"]{border-color:var(--kleur);color:var(--text);

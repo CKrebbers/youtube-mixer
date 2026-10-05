@@ -17,6 +17,7 @@ import { toonSamenvatting } from './toon.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
+import { Patronen, NAAM as SETNAAM } from './patronen.js';
 import { Proef } from './proef.js';
 import { Splitter, StemsRij, maakStems, wisStemsBestanden, isAantal, isStemsKeuze, STEMS_STANDAARD } from './stems.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
@@ -43,6 +44,8 @@ const PLANNEN = process.env.VARVE_PLANNEN || join(WORTEL, 'plannen');
 // De speellijst van de Controlekamer (proef/sessie.json, docs/CONTROLEKAMER.md).
 const PROEF = process.env.VARVE_PROEF || join(WORTEL, 'proef');
 const plannen = new Plannen(PLANNEN);
+/** Patronen per set (docs/PATRONEN.md). Eigen map voor de tests: VARVE_PATRONEN. */
+const patronen = new Patronen(process.env.VARVE_PATRONEN || join(WORTEL, 'patronen'));
 const proef = new Proef(PROEF);
 
 /**
@@ -786,6 +789,29 @@ const server = createServer(async (req, res) => {
         const body = await leesJson(req, 600 * 1024);
         if (!body || typeof body !== 'object' || !body.plan) return json(res, 400, { fout: 'stuur { plan, versie }' });
         const r = await plannen.schrijf(naam, body.plan, typeof body.versie === 'string' ? body.versie : null);
+        return json(res, r.code, r.antwoord);
+      }
+      return json(res, 405, { fout: 'GET of PUT' });
+    }
+
+    // ---- patronen per set (docs/PATRONEN.md) -------------------------------
+    // GET /api/patronen: de lijst. GET /api/patronen/<naam>: { set, versie, fouten }.
+    // PUT /api/patronen/<naam> { set, versie }: opslaan als `versie` nog klopt
+    // (null = nieuw bestand), anders 409 met wat er nu staat. Zoals de setplannen.
+    if (pad === '/api/patronen' && req.method === 'GET') return json(res, 200, { sets: await patronen.lijst() });
+    const mSet = /^\/api\/patronen\/([^/]+)$/.exec(pad);
+    if (mSet) {
+      const naam = mSet[1];
+      if (!SETNAAM.test(naam)) return json(res, 400, { fout: 'een setnaam is letters, cijfers, - en _' });
+      if (req.method === 'GET') {
+        const p = await patronen.lees(naam);
+        return p ? json(res, 200, p) : json(res, 404, { fout: 'geen set met die naam' });
+      }
+      if (req.method === 'PUT') {
+        if (mediatype !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
+        const body = await leesJson(req, 3 * 1024 * 1024);
+        if (!body || typeof body !== 'object' || !body.set || typeof body.set !== 'object') return json(res, 400, { fout: 'stuur { set, versie }' });
+        const r = await patronen.schrijf(naam, body.set, typeof body.versie === 'string' ? body.versie : null);
         return json(res, r.code, r.antwoord);
       }
       return json(res, 405, { fout: 'GET of PUT' });

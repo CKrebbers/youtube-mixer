@@ -77,6 +77,10 @@ src/
                     instrumenten/schaal.js  de klankschaal als track-instrument: elke noot een eigen veld op zijn toon, kern op de toon van wat je hoort
                     instrumenten/schaal-kern.js  tien notenvelden + kern op SchaalKern, berichten op hun sample, omstemmen houdt de amplitude. Puur.
                     instrumenten/schaal-worklet.js  de AudioWorklet van schaal (één per track, laadt bij start())
+                    patronen/model.js  patroon en set als data: normaliseerPatroon/-Set, bewerkingen (docs/PATRONEN.md). Puur, ook de server
+                    patronen/venster.js  uit Elektronlearn: 384 PPQN, swing, micro, omlopen, notenInVenster. Puur.
+                    patronen/klok.js  klok-tellen <-> audioklok (gebroken lijn), richten op de maatgever zonder sprong, maten. Puur.
+                    patronen/speler.js  de sequencer (engine.patronen): 120 ms vooruit plannen, op de maat starten/wisselen/stoppen, opnemen
                     master.js       de master: gain -> insert-rack -> limiter (compressor tot de worklet er is) -> analyser
                     limiter-kern.js de limiter als rekenwerk: vooruitblik 1,5 ms, −1 dBTP (4×), gekoppeld, afvalvrij. Puur.
                     limiter-worklet.js  de AudioWorklet eromheen (uitgang 1 = de gain, voor de gain reduction)
@@ -130,6 +134,8 @@ src/
                     instrument-paneel.js de INSTRUMENT-rij: kiezen, acht knoppen, toetsenbord (via noten.js), welk MIDI-keyboard
                     master-paneel.js de MASTER-rij: rack kiezen en onthouden, MIX, acht knoppen, gain reduction (ook bij de mastermeter)
                     master-weergave.js de master als tekst en getal (gain reduction, kiezer, opslag). Puur.
+                    patronen-paneel.js de PATROON-rij: plekken, stappen, lengte, swing, opnemen, tempo; noten.js naar de speler
+                    patronen-opslag.js de set op de server: ophalen en bewaren met versie, van buiten overnemen, botsing (geen DOM)
   vormen/           hulp.js         paletten, toeval met zaad, ruis, tekenhulp (gedeeld door de systemen)
                     systemen.js     de Vormmachines (Clay's artifact): 10 lichte + de lijst van alle 26
                     systemen-zwaar.js / -meer.js / -isomorf.js  de andere 16 (zwaar · middel · beeld = geluid)
@@ -169,13 +175,14 @@ server/             draait apart: `node server/index.js`
   toon.js           toonsoort: stemming per stuk, chroma, Temperley 2005, kaart (Viterbi). Puur.
   wachtrij.js       de ingest-wachtrij: één tegelijk (links en uploads), annuleren met een AbortSignal
   opname.js         opnames: WAV dat groeit, kop herstellen na een crash
+  patronen.js       patronen per set: patronen/<naam>.json met versie (409), .versies (docs/PATRONEN.md)
   proef.js          de speellijst van de Controlekamer: proef/sessie.json, per punt, atomisch; archief per ronde
   handelingen.js    handelingenlogs naast de opnames: stukken op hun plek, lijst, lezen
   stems.js          de stems-rij: Demucs starten (nice), één tegelijk, annuleren, werkmap, nalopen, verhuizen
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
@@ -189,6 +196,8 @@ racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 plannen/
   auto-plan.json    het setplan (v2, docs/PLAN.md); lezen/opslaan via /api/plannen met versie; .versies/ = oude versies
+patronen/
+  set.json          de patronen van de set (docs/PATRONEN.md); lezen/opslaan via /api/patronen met versie; .versies/ = oude versies
 media/              binnengehaalde bestanden + library.db (niet in git)
 opnames/            je opgenomen sets als WAV (niet in git)
 test/
@@ -239,6 +248,8 @@ test/
   analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions, maatbronnen
   instrumenten.test.mjs  Poly (contract, ADSR, stemroof, pedaal), engine (nummer óf instrument, speeltrack, maatgever), actions, noten.js met nep-poorten, mapje inst
   hub.test.mjs      AV-app-hub: nep-WebSocket + nep-klok (ook verborgen tabblad: 1×/s, 1×/min); vlag (lokaal), manifest, LED's per beeld, focus, zet, paniek, hartslag, 0,5→5 s, open-en-dicht, 4001→30 s
+  patronen.test.mjs model, venster (swing, micro, omlopen), klok, speler met nep-maatgever (op de maat, herankeren zonder dubbele/gemiste), opnemen, opslag (409), server
+  patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -266,6 +277,7 @@ docs/
   INSTRUMENTEN.md   het contract van een instrument (§1–5) en hoe het op een track woont (§6: engine, actions, noten, scherm, APC, metingen)
   MASTER.md         effecten op het geheel en de limiter (S2a, 5 okt): keten, algoritme, laden, opslag, APC, metingen
   EFFECTEN.md       effecten uit de filter app (S2c): per effect herkomst, eenheden, staart, metingen, wat niet
+  PATRONEN.md       patronen (S4): het contract (§1–6) en wat gebouwd is (§7: klok, opnemen, API, APC, opslag, metingen)
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -1424,6 +1436,30 @@ Volledig in `docs/STEMS.md` §5 (ROADMAP 27, STUDIO S2b). Wat een bouwer niet ma
 - Chrome offline is niet deterministisch op de bits als een ingang twee klinkende
   verbindingen optelt (een hashset: 1 ULP), of als er timers in het renderen vallen:
   vergelijk bit voor bit alleen met één klinkende bron per optelpunt.
+
+## Patronen (gebouwd 5 okt)
+
+Volledig in `docs/PATRONEN.md` (§1–6 het contract, §7 wat gebouwd is). Wat een bouwer niet mag missen:
+- `engine.patronen` (PatroonSpeler, `src/engine/patronen/`) speelt per track met een instrument vijf
+  plekken. Eén KLOK voor alle patronen: klok-tellen <-> audioklok als gebroken lijn (klok.js). Met een
+  maatgever (`syncMaster()`, `fxKlok()`) richt hij zich op diens tellen en maat-anker; zonder een eigen
+  tempo (`set.tempo`); valt de maatgever weg terwijl er iets speelt, dan het laatste tempo vasthouden.
+- Regel 3: de timer (25 ms) zegt alleen WANNEER; noten gaan met `t` op de audioklok, 120 ms vooruit.
+  Wat gepland is staat vast: de klok verandert alleen NA `geplandTot`, en dan zonder sprong (in een
+  tel naar de doellijn). Vensters zijn halfopen in klok-ticks (384 PPQN): elke noot precies één keer.
+  Verander je de klok of de vensters: `test/patronen.test.mjs` (doorlopend, op de tel) en
+  `tools/headless/patronen.mjs` (in Chrome, ook in de opname).
+- Starten/wisselen/stoppen staan in klok-TICKS, op het eerste maatbegin na wat al gepland is;
+  `alleUit(t)` op het maatbegin VÓÓR de eerste noot van het volgende patroon. Instrument weg = patroon
+  weg (engine `'instrument'`); een ander instrument = het patroon speelt daarop verder.
+- Noten gaan niet over de bus: live opnemen luistert op `noten.js` (`'noot'` met snelheid); stap voor
+  stap = de laatst gespeelde noot. Bewerken gaat wel over de bus (`track.N.pattern.step.S`, …) maar
+  terugspelen slaat het over (OVERSLAAN): de set is al bewaard. Starten/stoppen/rijen/tempo spelen terug.
+- De set staat op de server (`patronen/<naam>.json`, `/api/patronen`, versie + 409, zoals de plannen);
+  `server/patronen.js` gebruikt `model.js` (puur). Instrumenten staan er alleen als hint in.
+- APC: grid-modus `patronen` (oranje 9/10): Shift + scene 2 of ▲ ▼; pad = plek per track, shift =
+  meteen, scene = rij, Stop All Clips = alles stoppen. De read knippert zelf (een instrumenttrack heeft
+  geen `track.N.phase`). Alleen regels erbij.
 
 ## Werkwijze die hier werkt
 

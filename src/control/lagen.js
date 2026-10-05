@@ -21,9 +21,10 @@ import { Emitter } from '../lib/emitter.js';
  *           (shift + knop 8 = plek 8), Device ◀ ▶ = rack, On/Off = aan/uit.
  *           Clip/Device View zelf gaat daarna weer naar de strip.
  *   grid    het 5×8-grid: hotcues · loops · sampler · video · klank · auto ·
- *           stems, gekozen met de scene-knoppen ernaast (klank: Shift + scene
- *           5, want scene 5 zelf is "loop weg"; auto: Shift + scene 4; stems:
- *           Shift + scene 3), of rondlopend met ▲ ▼. Elk een eigen kleur.
+ *           stems · patronen, gekozen met de scene-knoppen ernaast (klank: Shift +
+ *           scene 5, want scene 5 zelf is "loop weg"; auto: Shift + scene 4; stems:
+ *           Shift + scene 3; patronen: Shift + scene 2), of rondlopend met ▲ ▼.
+ *           Elk een eigen kleur.
  *           Klank (Clay 25 sep, "Voorstel A"): per kolom kill hoog · mid ·
  *           laag (vasthouden; met shift vastzetten) · rem · op de maat starten.
  *           Auto (2 okt, VRAGEN AU1): de auto-DJ bijsturen zonder muis, op de
@@ -35,6 +36,10 @@ import { Emitter } from '../lib/emitter.js';
  *           zolang je drukt (shift: vastzetten), van boven naar onder zang ·
  *           rest · drums · bas · overig. Achteraan in de volgorde: wat er al
  *           was, blijft op zijn plek onder ▲ ▼.
+ *           Patronen (5 okt, docs/PATRONEN.md): Shift + scene 2, of ▲ ▼ (na
+ *           stems). Pad = plek (rij 1–5) op de track (kolom), zoals clips in
+ *           Ableton; scene 1–5 = die rij op alle tracks; Stop All Clips = alle
+ *           patronen stoppen (shift: meteen). Oranje.
  *
  *   edit    de grid-modus (stap D, docs/BEATGRID.md): Shift + Metronome zet
  *           hem aan of uit. Aan = scene-knoppen, nudge, cue level en Lock
@@ -69,8 +74,8 @@ export const GROEPEN = {
   },
   grid: {
     naam: 'grid', standaard: 'hotcues',
-    knoppen: { hotcues: ['hotcues'], loops: ['loops'], sampler: ['sampler'], video: ['video'], klank: ['klank'], auto: ['auto'], stems: ['stems'] },
-    volgorde: ['hotcues', 'loops', 'sampler', 'video', 'klank', 'auto', 'stems'],
+    knoppen: { hotcues: ['hotcues'], loops: ['loops'], sampler: ['sampler'], video: ['video'], klank: ['klank'], auto: ['auto'], stems: ['stems'], patronen: ['patronen'] },
+    volgorde: ['hotcues', 'loops', 'sampler', 'video', 'klank', 'auto', 'stems', 'patronen'],
   },
 };
 
@@ -100,6 +105,7 @@ export const LAAGNAAM = {
   'grid.klank': 'klank (kill · rem · op de maat)',
   'grid.auto': 'auto-dj (ok · overslaan · langer · nu · aan/uit)',
   'grid.stems': 'stems (zang · rest · drums · bas · overig weg)',
+  'grid.patronen': 'patronen (pad = plek per track · scene = rij op alle tracks · shift = meteen)',
 };
 
 export class Lagen extends Emitter {

@@ -9,10 +9,12 @@ const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? ' 
 const engineMap = fileURLToPath(new URL('../src/engine/', import.meta.url));
 
 console.log('regel 1: de engine kent geen MIDI, geen DOM en geen YouTube');
-// Ook de instrumenten (src/engine/instrumenten/, docs/INSTRUMENTEN.md): een
-// map dieper, dus `../../ui` is net zo goed verboden.
+// Ook de instrumenten (src/engine/instrumenten/, docs/INSTRUMENTEN.md) en de
+// patronen (src/engine/patronen/, docs/PATRONEN.md): een map dieper, dus
+// `../../ui` is net zo goed verboden.
 const engineBestanden = [...readdirSync(engineMap).filter((x) => x.endsWith('.js')),
-  ...readdirSync(engineMap + 'instrumenten/').filter((x) => x.endsWith('.js')).map((x) => `instrumenten/${x}`)];
+  ...readdirSync(engineMap + 'instrumenten/').filter((x) => x.endsWith('.js')).map((x) => `instrumenten/${x}`),
+  ...readdirSync(engineMap + 'patronen/').filter((x) => x.endsWith('.js')).map((x) => `patronen/${x}`)];
 for (const f of engineBestanden) {
   const bron = readFileSync(engineMap + f, 'utf8');
   const imports = [...bron.matchAll(/^\s*import\s[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1]);

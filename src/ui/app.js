@@ -16,6 +16,7 @@ import { opzetAuto } from './auto-paneel.js';
 import { opzetStems } from './stems-paneel.js';
 import { opzetKoptelefoon, koptelefoonOpties } from './koptelefoon-paneel.js';
 import { opzetInstrument } from './instrument-paneel.js';
+import { opzetPatronen } from './patronen-paneel.js';
 import { opzetMaster } from './master-paneel.js';
 import { StemsWachtrij } from './stems-wachtrij.js';
 import { Automaat } from '../auto/automaat.js';
@@ -228,6 +229,11 @@ if (hubUrl) {
     apcKnop.href = `apc.html?${q}`;
   }
 }
+// De PATROON-rij (docs/PATRONEN.md): plekken, stappen, opnemen, en de set op de server.
+// Wat je speelt (noten.js) gaat naar de speler: de laatste noot en live opnemen.
+const patronenPaneel = opzetPatronen({ engine, noten: instrumentPaneel.noten });
+window.patronen = engine.patronen;
+window.patronenPaneel = patronenPaneel;
 window.midi = midiDelen.midi;         // handig in de console tijdens bouwen
 window.mapping = midiDelen.mapping;
 window.feedback = midiDelen.feedback;
@@ -267,6 +273,7 @@ startRenderloop({
     stems: stemsPaneel.teken,
     koptelefoon: koptelefoonPaneel.teken,
     instrument: instrumentPaneel.teken,
+    patronen: patronenPaneel.teken,
     master: masterPaneel.teken,
   },
 });

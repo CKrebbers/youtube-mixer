@@ -29,6 +29,7 @@
     <button id="stems-btn" class="ghost" title="stems van de track met focus: zang en rest (of vier), per stem niveau, kill, filter, echo, galm en cue">stems</button>
     <button id="koptelefoon-btn" class="ghost" title="koptelefoon: tracks voorbeluisteren zonder dat de zaal ze hoort, volume en mix">koptelefoon</button>
     <button id="instrument-btn" class="ghost" title="instrument op de track met focus: kiezen, acht knoppen, een toetsenbord om te proberen, en welk MIDI-keyboard er binnenkomt">instrument</button>
+    <button id="patronen-btn" class="ghost" title="patronen: per track met een instrument vijf patronen, starten op de maat, stap voor stap of live opnemen">patronen</button>
     <button id="master-btn" class="ghost" title="master: effecten op de hele mix en de limiter (hoeveel hij afneemt)">master</button>
     <a id="apc-btn" class="ghost" href="apc.html" target="varve-apc" title="wat elke knop van de APC doet, per mapje">APC-kaart</a>
     <button id="midi-btn" class="ghost">MIDI</button>
@@ -335,6 +336,43 @@
     <button class="btn sm in-oct" data-stap="12" title="een octaaf hoger">▶</button>
   </div>
   <span class="in-keyboard" title="welk MIDI-keyboard er binnenkomt (elke ingang behalve de APC)">geen MIDI-keyboard</span>
+</section>
+
+<!-- ================= PATROON (docs/PATRONEN.md) ================= -->
+<!-- Voor de track met focus. De actions staan hier op track 1; patronen-paneel.js
+     schrijft ze om naar de focus. Vijf plekken (starten en stoppen op de maat, zoals
+     het grid in de modus patronen), de stappen van de gekozen plek (klik = de laatst
+     gespeelde noot erop of eraf), lengte, swing, opnemen, stoppen, wissen, en het
+     eigen tempo als er geen maatgever is. De stappen tekent patronen-paneel.js. -->
+<section id="patronen" class="patroon-rij hidden">
+  <span class="sampler-kop">PATROON</span>
+  <span class="pt-track" title="de track met focus">track 1</span>
+  <div class="pt-plekken">
+    <button data-kind="button" data-action="track.1.pattern.1" data-action-shift="track.1.pattern.1.now" class="btn sm pt-plek" title="patroon 1: starten op de maat (speelt hij: stoppen op de maat) · shift: meteen">1</button>
+    <button data-kind="button" data-action="track.1.pattern.2" data-action-shift="track.1.pattern.2.now" class="btn sm pt-plek" title="patroon 2: starten op de maat (speelt hij: stoppen op de maat) · shift: meteen">2</button>
+    <button data-kind="button" data-action="track.1.pattern.3" data-action-shift="track.1.pattern.3.now" class="btn sm pt-plek" title="patroon 3: starten op de maat (speelt hij: stoppen op de maat) · shift: meteen">3</button>
+    <button data-kind="button" data-action="track.1.pattern.4" data-action-shift="track.1.pattern.4.now" class="btn sm pt-plek" title="patroon 4: starten op de maat (speelt hij: stoppen op de maat) · shift: meteen">4</button>
+    <button data-kind="button" data-action="track.1.pattern.5" data-action-shift="track.1.pattern.5.now" class="btn sm pt-plek" title="patroon 5: starten op de maat (speelt hij: stoppen op de maat) · shift: meteen">5</button>
+  </div>
+  <div class="pt-stappen" title="klik = de laatst gespeelde noot op deze stap, of eraf (speel een noot op het keyboard of in de INSTRUMENT-rij om te kiezen welke)"></div>
+  <span class="pt-lengte">
+    <button data-kind="button" data-action="track.1.pattern.length.down" class="btn sm" title="korter">◀</button>
+    <b class="pt-lengte-tekst" title="lengte in stappen (zestienden)">16</b>
+    <button data-kind="button" data-action="track.1.pattern.length.up" class="btn sm" title="langer">▶</button>
+  </span>
+  <div class="knob sm" data-action="track.1.pattern.swing" data-label="SWING" data-value="0" data-default="0" title="swing: links recht, rechts een halve stap op de off-beats"></div>
+  <button data-kind="button" data-action="patterns.record" class="btn sm pt-rec" title="live opnemen: wat je speelt komt in het patroon dat op die track speelt, op de dichtstbijzijnde stap (erbij)">● op</button>
+  <button data-kind="button" data-action="track.1.pattern.stop" data-action-shift="track.1.pattern.stop.now" class="btn sm" title="stoppen op de maat · shift: meteen">■</button>
+  <button data-kind="button" data-action="track.1.pattern.clear" class="btn sm pt-wis" title="de gekozen plek leegmaken (tweede klik binnen 3 s)">wis</button>
+  <span class="pt-klok" title="waar de patronen op lopen">—</span>
+  <span class="pt-tempo hidden">
+    <div class="knob sm" data-action="patterns.tempo" data-label="TEMPO" data-value="0.4" data-default="0.4" title="het eigen tempo zonder maatgever (40–240 bpm)"></div>
+    <button data-kind="button" data-action="patterns.tap" class="btn sm" title="het eigen tempo tikken">tap</button>
+  </span>
+  <span class="pt-noot" title="de laatst gespeelde noot: die zet een klik op een stap erop">—</span>
+  <span class="pt-opslag" title="bewaard op de server (patronen/set.json), met versie">—</span>
+  <button class="btn sm pt-hun hidden" title="de versie op de server laden (jouw laatste wijzigingen gaan weg)">hun versie</button>
+  <button class="btn sm pt-mijn hidden" title="jouw versie bewaren, over de andere heen">mijn versie</button>
 </section>
 
 <!-- ================= MASTER (docs/MASTER.md) ================= -->

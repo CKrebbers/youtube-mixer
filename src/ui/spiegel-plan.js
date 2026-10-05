@@ -83,7 +83,7 @@ export const ALLE = [...[1, 2, 3, 4, 5, 6, 7, 8].flatMap(kolomControls), ...FOCU
 // ---- wat een control nu doet -----------------------------------------------
 
 /** Kleur per grid-mapje, zoals de LED's op de APC (docs/APC40.md). */
-export const MODUS_KLEUR = { hotcues: 'geel', loops: 'cyaan', sampler: 'violet', video: 'blauw', klank: 'magenta', auto: 'limoen', stems: 'zeegroen' };
+export const MODUS_KLEUR = { hotcues: 'geel', loops: 'cyaan', sampler: 'violet', video: 'blauw', klank: 'magenta', auto: 'limoen', stems: 'zeegroen', patronen: 'oranje' };
 
 /** De naam van de fysieke control, uit het device-profiel. */
 export const naamVan = (sig) => apc.label(sig) ?? sig;
