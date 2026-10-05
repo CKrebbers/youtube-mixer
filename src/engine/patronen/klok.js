@@ -10,7 +10,7 @@
  *
  * Wat ER AL GEPLAND IS, staat vast: de speler plant ~120 ms vooruit, en een
  * noot die op de audioklok staat haal je niet terug. Daarom verandert de klok
- * alleen vanaf een moment A dat na het geplande ligt (`knip`). Wat er
+ * alleen vanaf een moment A dat na het geplande ligt (`houd`, `richt`). Wat er
  * daarvóór lag, rekent hij precies zo uit als toen.
  *
  * VOLGEN (`richt`): de maatgever geeft zijn volgende tel `a` en de lengte van
@@ -64,14 +64,6 @@ export class Klok {
     let s = this.seg[0];
     for (const x of this.seg) { if (x.C <= c) s = x; else break; }
     return s.T + (c - s.C) / s.R;
-  }
-
-  /** Alles vanaf A weg; wat ervoor lag blijft precies zoals het was. Geeft de tel op A. */
-  knip(A) {
-    const c = this.tel(A);
-    this.seg = this.seg.filter((s) => s.T < A);
-    if (!this.seg.length) this.seg.push({ T: A, C: c, R: 1 });  // (alleen als er niets vóór A lag)
-    return c;
   }
 
   /** Vanaf A met R tellen per seconde verder (eigen tempo, of het laatste tempo vasthouden). */

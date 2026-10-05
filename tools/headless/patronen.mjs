@@ -290,6 +290,11 @@ try {
   ok(`audioklok, vóór de pitchwissel: elke kick op een tel van track 2 (${voor.length} kicks, grootste afwijking ${ms(max(voor))})`, voor.length >= 7 && max(voor) < 1e-6);
   ok(`audioklok, na +3% (vanaf de tweede tel): weer op de tel (${na.length}, ${ms(max(na))})`, na.length >= 6 && max(na) < 1e-6);
   ok(`audioklok, na een sprong van 0,37 tel: weer op de tel (${na2.length}, ${ms(max(na2))})`, na2.length >= 6 && max(na2) < 1e-6);
+  // Tijdens de overgang: wat al binnen de vooruitblik gepland stond, ligt nog op het oude tempo (pitch),
+  // en na een sprong glijdt de klok in een tel naar de nieuwe tellen. Alleen gemeld.
+  const overgang = (t0) => r.klok.filter((x) => x.t > t0 && x.t <= t0 + 0.12 + 2 * 0.5);
+  meld(`tijdens de overgang na +3%: ${overgang(6).map((x) => ms(x.d)).join(', ')} naast de tel van track 2`);
+  meld(`tijdens de overgang na de sprong (0,37 tel = ${ms(0.37 * 60 / 124 / 1.03)}): ${overgang(11).map((x) => ms(x.d)).join(', ')}`);
   ok('elke kick van het patroon precies één keer, ook rond de wissel en de sprong (geen dubbele, geen gemiste)',
     r.nominaal.length === r.gepland.length && r.nominaal.every((x, i) => i === 0 || x - r.nominaal[i - 1] === 384));
   // De opname: het begin van elke kick (drempel) tegen de geplande tijd.

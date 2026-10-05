@@ -99,8 +99,8 @@ flits, pad 8 zwart zolang je drukt, rij 2 pad 7 zwart aan/uit, pad 8 bevriezen) 
 track: rij 1 kill hoog, 2 kill mid, 3 kill laag — vasthouden = weg zolang je
 drukt, shift + pad = vastzetten/losmaken; rij 4 rem; rij 5 op de maat starten) ·
 auto (limoen: de auto-DJ, zie "Modus auto" onderaan).
-Scene 5 = loop weg. ▲ ▼ loopt rond door alle zes (hotcues → loops → sampler →
-video → klank → auto → hotcues). Vasthouden van een modusknop (ook Shift + scene 5
+Scene 5 = loop weg. ▲ ▼ loopt rond door alle zeven (hotcues → loops → sampler →
+video → klank → auto → patronen → hotcues; patronen sinds 5 okt, zie "Modus patronen" onderaan). Vasthouden van een modusknop (ook Shift + scene 5
 en Shift + scene 4) vanuit een andere modus = even gluren.
 
 Waarom klank op **Shift + scene 5**: scene 5 is al "loop weg", en dat moet één
@@ -264,3 +264,39 @@ mapje blijven Bank (beatjump), Lock (quantize) en de rest gewoon werken.
 Niet getest: de echte APC. Twee keuzes om te proberen: knop 8 = mix (de knop die je
 op de master het meest nodig hebt; geen sjabloon gebruikt plek 8), en dat
 Clip/Device View in het mapje master niet brandt (zijn lampje hoort bij strip/rack).
+
+## Modus patronen (5 oktober 2026, STUDIO S4, GEBOUWD, niet op het apparaat nagelopen)
+
+Patronen starten als clips (`docs/PATRONEN.md`): een zevende grid-modus, `grid.patronen`, in
+**zeegroen** (paletindex 33, donker 34; nieuw in het palet als `zeegroendonker`).
+
+| waar | knop | doet | lampje |
+|---|---|---|---|
+| scene-knoppen | Shift + scene 3 | modus patronen openen (vasthouden = gluren) | met shift: donker zeegroen = dicht, fel = open |
+| pijlen | ▲ ▼ | rondlopen, patronen komt na auto (▼ vanuit patronen = hotcues) | — |
+| grid | pad (kolom k, rij r) | plek r van track k: starten op het volgende maatbegin; speelt hij: stoppen op de maat; speelt er een ander op die track: wisselen op de maat; een lege plek: kiezen (met opnemen aan: beginnen en erin opnemen) | uit = geen instrument · donkergrijs = leeg · donker = gevuld · fel = speelt · knippert = wacht op de maat |
+| | shift + pad | hetzelfde **meteen**: starten op de volgende tel, stoppen meteen | idem |
+| scene-knoppen (in patronen) | scene 1–5 | die rij op alle tracks met een instrument; een lege plek in die rij: die track stopt | fel = er speelt iets in die rij, knippert = er wacht iets, donker = gevuld |
+| rechts | Stop All Clips | alle patronen stoppen op de maat (shift: meteen) | (geen LED op het apparaat) |
+
+**Waarom Shift + scene 3.** Scene 1–4 kiezen een modus, scene 5 is loop weg, Shift + scene 5 =
+klank en Shift + scene 4 = auto. Shift + scene 3 deed hetzelfde als zonder shift: vrij. In de
+modus zelf zijn de scene-knoppen RIJEN (zoals scene launch in Ableton), dus daar kies je geen
+modus meer met scene 1–4: weg met ▲ ▼ (één druk ▼ = hotcues), Shift + scene 4 (auto) of
+Shift + scene 5 (klank).
+
+**Wat er bewust NIET verandert.** In de grid-modus (Shift + Metronome) is scene 3 "bpm ½"; zonder
+eigen regel zou Shift + scene 3 daar patronen openen (een shift-regel gaat voor het open mapje),
+dus een expliciete regel `note:0:84#shift@edit.aan` = bpm ½, zoals auto dat voor scene 4 deed. De
+kern zit nooit in een mapje: fader, play, filter, Clip Stop (loop), Track Select, de master-knop
+(zwart) en de device knobs doen in de modus patronen wat ze altijd doen. Stop All Clips is buiten
+de modus de rem, zoals sinds voorstel A. 89 regels erbij (40 pads + 40 met shift, 5 scenes, Stop
+All Clips + shift, Shift + scene 3, en die ene in de grid-modus), geen enkele bestaande veranderd
+(voorganger `914391f9-421` in `eerder`).
+
+**Knipperen.** Een plek die op de maat wacht knippert op de tel van de patroonklok: de READ
+wisselt zelf tussen 1 en 0,5 (de `tel`-instelling van een LED leest `track.N.phase`, en die heeft
+een track zonder nummer niet). Het scherm knippert zo vanzelf mee.
+
+Niet getest: de echte APC (zeegroen naast groen en cyaan op de pads; of Shift + scene 3 lekker
+ligt; of het knipperen op de tel goed te zien is).

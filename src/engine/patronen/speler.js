@@ -4,7 +4,7 @@ import { uitgangsVertraging } from '../hoorbaar.js';
 import { Klok } from './klok.js';
 import { PPQN, stapTicks, omloopTicks, swingTicks, notenInVenster, stapOp } from './venster.js';
 import {
-  PLEKKEN, TEMPO, SWING, STANDAARD_LENGTE, leegSet, normaliseerSet, nieuwPatroon, idsVan, gevuld,
+  PLEKKEN, TEMPO, STANDAARD_LENGTE, leegSet, normaliseerSet, nieuwPatroon, idsVan, gevuld,
   metNoot, zonderNoot, wisselNoot, metDuur, metLengte, metSwing, leeg, notenOp,
 } from './model.js';
 
@@ -269,6 +269,10 @@ export class PatroonSpeler extends Emitter {
     if (!this.instrument(id)) return { ok: false, reden: 'er staat geen instrument op deze track' };
     sp.gekozen = plek;
     if (sp.spel?.plek === plek && sp.spel.stop == null && !sp.wacht) return { ok: true, al: true };
+    // Wachtte er al een andere wissel: die vervalt (anders stopte het oude patroon
+    // op diens maat en begon dit pas een maat later). Zolang een spel bestaat ligt
+    // zijn stop nog na het geplande, dus terugdraaien kan altijd.
+    this._annuleerWacht(sp);
     const nu = this.ctx.currentTime;
     if (!this._actief()) this._zetKlok(nu);
     const min = this._vroegst(nu) / PPQN;
@@ -565,7 +569,7 @@ export class PatroonSpeler extends Emitter {
 
   /** De klok: { bron: 'maat'|'eigen'|null, maatgever, bpm (wat hij nu loopt), tempo (het eigen tempo) }. */
   klokStand() {
-    return { bron: this._actief() ? this.bron : null, maatgever: this.maatId, bpm: this.klokBpm(), tempo: this.set.tempo, swing: SWING };
+    return { bron: this._actief() ? this.bron : null, maatgever: this.maatId, bpm: this.klokBpm(), tempo: this.set.tempo };
   }
 
   /** Welke plekken er nu spelen: [{ id, plek }] (de beginstand van het handelingenlog). */

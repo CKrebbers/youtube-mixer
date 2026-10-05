@@ -321,6 +321,14 @@ const doorlopend = (noten, per = PPQN) => noten.every((n, i) => i === 0 || n.nom
   ok('wissel: alleUit precies op het maatbegin, vóór de eerste noot van het nieuwe', iUit >= 0 && dicht(inst.log[iUit].t, tK) && iNieuw > iUit && dicht(inst.log[iNieuw].t, tK));
   ok('het oude patroon speelt niets meer vanaf het maatbegin', inst.log.filter((x) => x.w === 'aan' && x.noot === 42).every((x) => x.t < tK - 1e-9));
   ok('het nieuwe loopt rond (elke maat)', inst.log.filter((x) => x.w === 'aan' && x.noot === 48).length >= 2 && sp.stand('A').speelt === 2);
+  // Wisselen naar 3 terwijl een wissel naar 1 wacht: 1 vervalt, 3 komt op hetzelfde maatbegin.
+  sp.laadSet({ tracks: { 1: [ZESTIENDEN, { noten: [{ stap: 0, noot: 48, duur: 4 }] }, { noten: [{ stap: 0, noot: 50 }] }] } });
+  const r1 = sp.druk('A', 1);
+  const r3 = sp.druk('A', 3);
+  ok('een tweede wissel terwijl de eerste wacht: de eerste vervalt, het oude patroon stopt op het maatbegin van de tweede',
+    r3.op === r1.op && sp.sporen.A.wacht.plek === 3 && sp.sporen.A.spel.stop === r3.op * PPQN);
+  sp.druk('A', 3);
+  ok('… en nog eens op 3: niets wacht meer, 2 speelt gewoon door', !sp.sporen.A.wacht && sp.sporen.A.spel.stop === null && sp.stand('A').speelt === 2);
   // Nog eens op de wachtende: niet meer. Op de spelende: stoppen op de maat; nog eens: toch door.
   sp.druk('A', 1);
   sp.druk('A', 1);
