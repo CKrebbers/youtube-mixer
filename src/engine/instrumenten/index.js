@@ -6,9 +6,14 @@
  * Geen registratie via bijwerkingen van imports: dan hangt wat er bestaat af
  * van welke module toevallig al geladen is.
  */
+import { FM } from './fm.js';
+import { SCHAAL } from './schaal.js';
 
 /** @type {{ soort: string, naam: string, maak: Function }[]} */
-export const INSTRUMENTEN = [];
+export const INSTRUMENTEN = [
+  FM,
+  SCHAAL,
+];
 
 /** De definitie van een soort, of null. */
 export const instrumentDef = (soort) => INSTRUMENTEN.find((d) => d.soort === soort) ?? null;
