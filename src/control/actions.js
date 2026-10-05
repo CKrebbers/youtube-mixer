@@ -856,7 +856,8 @@ export function bindEngine(engine) {
  * doet in die gevallen nog steeds niets (dat is goed), alleen niet meer stil.
  */
 const NUMMER_NODIG = /^(play|cue|sync|tap|brake|hotcue\.\d$|loop\.|beatloop\.|beatjump\.|nudge\.|bend\.|grid\.|stem\.)/;
-const GRID_NODIG = /^(grid\.(?!here$)|beatloop\.|beatjump\.)/;
+// Zonder grid: tel 1 (here) kan nog steeds niets, maar zegt dat zelf; terug (undo) moet ook na wissen kunnen.
+const GRID_NODIG = /^(grid\.(?!here$|undo$)|beatloop\.|beatjump\.)/;
 const KOPTELEFOON_NODIG = /^(pfl$|stem\.\w+\.pfl$)/;
 
 function waaromNiet(engine) {
