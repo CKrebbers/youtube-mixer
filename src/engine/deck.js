@@ -31,6 +31,8 @@ export const EQ_BANDEN = ['low', 'mid', 'high'];
 export const BEND = 0.04;
 /** Toonverschuiving: halve tonen, ±12 (K5, docs/KEYLOCK.md). */
 export const TOON_MAX = 12;
+/** Zoveel bewerkingen van het grid kunnen terug (deck.gridTerug). */
+export const GRID_TERUG = 30;
 /** Beatjump-lengtes in tellen, te halveren en te verdubbelen. Standaard 4. */
 export const SPRONG_TELLEN = [1, 2, 4, 8, 16, 32];
 /**
@@ -174,6 +176,7 @@ export class Deck extends Emitter {
     // pitchbereik), de toon gaat terug naar 0 (K5, zoals de pitch).
     this._keylock = false;
     this._toon = 0;             // halve tonen, −12..+12
+    this._gridTerug = [];       // grids van vóór een bewerking met de hand (gridTerug)
 
     /*
      * Sends: na de fader, vóór de crossfader. Fader dicht = er gaat niets
@@ -362,6 +365,7 @@ export class Deck extends Emitter {
     this.loopInPunt = null;
     this.vorigeLoop = null;
     this.buigt = 0;
+    this._gridTerug = [];
     this.setRate(1);
     this.setTranspositie(0);
     this.fx.heranker();
@@ -382,6 +386,7 @@ export class Deck extends Emitter {
     // Een nieuw nummer begint op 0%: de pitch van het vorige zegt niets over
     // dit nummer. Het bereik blijft staan, dat is een keuze van de DJ. Zo ook
     // de toon (K5); keylock blijft staan (K4).
+    this._gridTerug = [];
     this.setRate(1);
     this.setTranspositie(0);
     this.emit('load', this);
@@ -868,6 +873,28 @@ export class Deck extends Emitter {
     if (this.grid) this.grid.bron = 'hand';
     this._heranker();
     this.emit('change', this);
+  }
+
+  /**
+   * TERUG (5 okt): vóór een bewerking met de hand het grid zoals het was
+   * (of `stand`, een toJSON van vlak ervoor), zodat een verkeerde tik, pin of
+   * ×2 terug kan. Hooguit GRID_TERUG stappen; leeg bij een nieuw nummer.
+   */
+  gridVoorBewerking(stand = this.grid ? this.grid.toJSON() : null) {
+    this._gridTerug.push(stand);
+    if (this._gridTerug.length > GRID_TERUG) this._gridTerug.shift();
+  }
+
+  /** Kan het grid een stap terug? */
+  get kanGridTerug() { return this._gridTerug.length > 0; }
+
+  /** Het grid van vóór de laatste bewerking terug. False als er niets is. */
+  gridTerug() {
+    if (!this._gridTerug.length) return false;
+    const vorig = this._gridTerug.pop();
+    this.grid = vorig ? new Beatgrid(vorig) : null;
+    this.gridGewijzigd();
+    return true;
   }
 
   /**

@@ -4,6 +4,7 @@ import { WaveformView } from './waveform.js';
 import { Knob, bindButtons } from './controls.js';
 import { renderDemoTrack } from '../analysis/demo-track.js';
 import { volgFocus, zetTweede } from './spiegel-plan.js';
+import { meld } from './meldingen.js';
 
 /**
  * De track met focus (bovenaan het scherm) en de vensters als MODEL.
@@ -32,7 +33,7 @@ export const VENSTERS = ['L', 'R'];
  * buiten: die module wordt pas na deze opgezet, maar zijn functies worden
  * alleen bij een klik aangeroepen.
  */
-export function opzetVensters({ engine, venster, laadBuffer, loadFile, naFocus }) {
+export function opzetVensters({ engine, venster, laadBuffer, loadFile, naFocus, gridModus = () => false }) {
   const root = document.getElementById('focus-deck');
   const knobs = [];
 
@@ -109,6 +110,37 @@ export function opzetVensters({ engine, venster, laadBuffer, loadFile, naFocus }
     const r = e.currentTarget.getBoundingClientRect();
     invoke(`track.${trackVanDeck(venster.L)}.seek`, Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
   });
+
+  /*
+   * De ingezoomde golfvorm (5 okt, het beatgrid zetten moest makkelijker):
+   * IN GRIDMODUS zet een klik de tel precies waar je klikt (gesnapt naar de
+   * klap binnen 30 ms, de streepjes onderin), shift + klik zet hem daar vast
+   * (pin: het tempo klopt dan vanaf het anker). Zonder reactietijd, ook als
+   * hij stilstaat. Buiten gridmodus doet een klik niets (een misklik tijdens
+   * een set), behalve zeggen hoe het werkt. Scrollen = in- en uitzoomen.
+   */
+  const zoomEl = root.querySelector('.wave-zoom');
+  let uitlegGegeven = 0;
+  zoomEl.addEventListener('pointerdown', (e) => {
+    const d = engine.deck(venster.L);
+    if (!d.buffer) return;
+    if (!gridModus()) {
+      if (Date.now() - uitlegGegeven > 8000) {
+        uitlegGegeven = Date.now();
+        meld('in gridmodus (knop grid, of Shift + Metronome op de APC) zet een klik in de golfvorm de tel: klik = tel 1 hier, shift + klik = vast (pin); scrollen = zoomen');
+      }
+      return;
+    }
+    const t = views.zoom.tijdBij(e.clientX);
+    if (t === null || !(d.duration > 0)) return;
+    const nr = trackVanDeck(venster.L);
+    invoke(`track.${nr}.grid.${e.shiftKey ? 'pin' : 'here'}.op`, Math.min(1, Math.max(0, t / d.duration)));
+  });
+  zoomEl.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const z = views.zoom;
+    z.pxPerSecond = Math.min(2400, Math.max(40, z.pxPerSecond * (e.deltaY < 0 ? 1.25 : 0.8)));
+  }, { passive: false });
 
   // drop op de grote weergave = laden op de track met focus
   const groot = [root.querySelector('.wave-zoom'), root.querySelector('.wave-overview')];

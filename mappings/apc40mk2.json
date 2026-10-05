@@ -4268,9 +4268,25 @@
       "label": "scene launch 2 + shift (grid-modus)",
       "shift": true,
       "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:82",
+      "action": "track.{focus}.grid.pin",
+      "mode": "trigger",
+      "label": "scene launch 1 + shift (grid-modus): vast",
+      "shift": true,
+      "laag": "edit.aan"
     }
   ],
   "eerder": [
+    {
+      "vingerafdruk": "db4069a7-596",
+      "tot": "2026-10-05",
+      "rules": [],
+      "removed": [
+        "note:0:82#shift@edit.aan"
+      ]
+    },
     {
       "vingerafdruk": "1add1e20-593",
       "tot": "2026-10-05",
@@ -4278,7 +4294,8 @@
       "removed": [
         "note:0:99#shift",
         "note:0:100#shift",
-        "note:0:101#shift"
+        "note:0:101#shift",
+        "note:0:82#shift@edit.aan"
       ]
     },
     {
@@ -4377,7 +4394,8 @@
         "note:0:86@grid.patronen",
         "note:0:81@grid.patronen",
         "note:0:81#shift@grid.patronen",
-        "note:0:83#shift@edit.aan"
+        "note:0:83#shift@edit.aan",
+        "note:0:82#shift@edit.aan"
       ]
     },
     {
@@ -4559,7 +4577,8 @@
         "note:0:86@grid.patronen",
         "note:0:81@grid.patronen",
         "note:0:81#shift@grid.patronen",
-        "note:0:83#shift@edit.aan"
+        "note:0:83#shift@edit.aan",
+        "note:0:82#shift@edit.aan"
       ]
     },
     {
@@ -4754,7 +4773,8 @@
         "note:0:86@grid.patronen",
         "note:0:81@grid.patronen",
         "note:0:81#shift@grid.patronen",
-        "note:0:83#shift@edit.aan"
+        "note:0:83#shift@edit.aan",
+        "note:0:82#shift@edit.aan"
       ]
     },
     {
@@ -4960,7 +4980,8 @@
         "note:0:86@grid.patronen",
         "note:0:81@grid.patronen",
         "note:0:81#shift@grid.patronen",
-        "note:0:83#shift@edit.aan"
+        "note:0:83#shift@edit.aan",
+        "note:0:82#shift@edit.aan"
       ]
     },
     {
@@ -5182,7 +5203,8 @@
         "note:0:86@grid.patronen",
         "note:0:81@grid.patronen",
         "note:0:81#shift@grid.patronen",
-        "note:0:83#shift@edit.aan"
+        "note:0:83#shift@edit.aan",
+        "note:0:82#shift@edit.aan"
       ]
     },
     {
@@ -5412,7 +5434,8 @@
         "note:0:86@grid.patronen",
         "note:0:81@grid.patronen",
         "note:0:81#shift@grid.patronen",
-        "note:0:83#shift@edit.aan"
+        "note:0:83#shift@edit.aan",
+        "note:0:82#shift@edit.aan"
       ]
     },
     {
@@ -5647,7 +5670,8 @@
         "note:0:86@grid.patronen",
         "note:0:81@grid.patronen",
         "note:0:81#shift@grid.patronen",
-        "note:0:83#shift@edit.aan"
+        "note:0:83#shift@edit.aan",
+        "note:0:82#shift@edit.aan"
       ]
     },
     {
@@ -5890,7 +5914,8 @@
         "note:0:86@grid.patronen",
         "note:0:81@grid.patronen",
         "note:0:81#shift@grid.patronen",
-        "note:0:83#shift@edit.aan"
+        "note:0:83#shift@edit.aan",
+        "note:0:82#shift@edit.aan"
       ]
     },
     {
@@ -6216,7 +6241,8 @@
         "note:0:86@grid.patronen",
         "note:0:81@grid.patronen",
         "note:0:81#shift@grid.patronen",
-        "note:0:83#shift@edit.aan"
+        "note:0:83#shift@edit.aan",
+        "note:0:82#shift@edit.aan"
       ]
     }
   ]

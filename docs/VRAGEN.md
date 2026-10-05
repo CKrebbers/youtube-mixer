@@ -393,6 +393,7 @@ APC-indeling (voorstel A):
 - [ ] **S17. Patronen op de APC: Shift + scene 2, en Stop All Clips = alles stoppen in die modus.** 🎛 (Shift + scene 3 werd stems, daarom 2.) **Advies:** zo proberen.
 - [ ] **S18. Maschine: zijn de gedimde padkleuren zichtbaar?** 👀 Poly gedimd is #190064 (heel donker violet). **Advies:** kijken op het apparaat; te zwak, dan een lichtere basiskleur per instrument.
 - [ ] **S19. Maschine-wiel: eerst kiezen, indrukken = zetten.** 🎛 Zo vervangt een tik tegen het wiel nooit per ongeluk je instrument. De eerste wielstap na het insteken telt niet (de hub kent dan nog geen beginstand). **Advies:** zo laten.
+- [ ] **S20. Beatgrid: vastzetten (pin) en terug zo proberen?** 🎛 (5 okt, docs/BEATGRID.md §10) Een correctie bevestigt nu het stuk (sync en loops mogen meteen), ↶/Cmd+Z zet terug, en "vast" haalt drift weg: "1" op een kick aan het begin, een paar minuten later "vast" op een kick. In grid-modus: klik in de golfvorm = tel 1, shift + klik = vast; scrollen = zoomen. Op de APC: grid-modus Shift + scene 1 = vast (terug niet op de APC: Shift + scene 5 blijft klank, Lock het slot). **Advies:** zo proberen op een lang nummer met drift; zeg het als vier tikken nog steeds niet het hele grid op slot moeten zetten.
 - [ ] **S14. Xboard49: knop 9–16 = de FX-knoppen van de speeltrack, de schuif = zijn fader.** 🎛 Voorstel; de CC-nummers van de knoppen komen uit de proef (`AV-app-hub`: proef speelapparaten).
 
 ---

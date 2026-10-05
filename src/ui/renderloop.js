@@ -26,6 +26,8 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     pitch: r.querySelector('.pitch-val'),
     pitchBereik: r.querySelector('.pitch-bereik'),
     keylock: r.querySelector('.rek .keylock'),
+    gridModus: r.querySelector('.grid-tools .grid-modus'),
+    gridTerug: r.querySelector('.grid-tools .grid-terug'),
     rekToon: r.querySelector('.rek-toon'),
     hotcues: [...r.querySelectorAll('.hc')],
     loopBtns: [...r.querySelectorAll('.loops .btn:not(.bl)')],
@@ -143,7 +145,10 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       if (e.keylock) klasse(e.keylock, 'on', dk.keylock);
       if (e.rekToon) { tekst(e.rekToon, verschuivingTekst(dk.transpositie) || '0'); klasse(e.rekToon, 'on', dk.transpositie !== 0); }
       // bpm: wat je HOORT, dus inclusief pitch.
-      tekst(e.bpm, bpmTekst(d.bpm, d.gridZeker));
+      // Twee decimalen: een encodertik of een pin verandert de bpm met honderdsten.
+      tekst(e.bpm, bpmTekst(d.bpm, d.gridZeker, 2));
+      if (e.gridModus) klasse(e.gridModus, 'on', readAction('layer.edit.toggle') === 1);
+      if (e.gridTerug) klasse(e.gridTerug, 'dood', !engine.deck(id).kanGridTerug);
       klasse(e.bpm, 'leeg', !d.bpm);
       // Onzeker stuk: gedimd met "?", sync en beat-loops weigeren hier.
       klasse(e.bpm, 'onzeker', !!d.bpm && d.gridZeker === false);

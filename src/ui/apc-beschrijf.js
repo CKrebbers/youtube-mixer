@@ -111,6 +111,12 @@ export function beschrijf(action) {
     if (rest === 'grid.bpm') return r('grid bpm', 'bpm van het gridstuk hier: 0,01 per tik, met shift 0,1');
     if (rest === 'grid.lock') return r('slot', 'grid op slot (lampje = op slot; de automatische analyse blijft er dan af)');
     if (rest === 'grid.clear') return r('grid weg', 'grid wissen');
+    if (rest === 'grid.pin') return r('vast', 'vastzetten: de tel hier hoort hier — het tempo van het stuk komt zo dat het vanaf het anker (tel 1, of de vorige pin) precies klopt; vanaf hier een nieuw stuk. Tegen drift: tel 1 aan het begin, vast een paar minuten later');
+    if (rest === 'grid.pin.op') return r('vast op', 'vastzetten op een aangewezen plek (klik in de golfvorm)');
+    if (rest === 'grid.here.op') return r('tel 1 op', 'tel 1 op een aangewezen plek (klik in de golfvorm)');
+    if (rest === 'grid.bar') return r('1 →', 'de "1" een tel verder: de tellen blijven liggen, de maat begint een tel later');
+    if (rest === 'grid.bar.back') return r('← 1', 'de "1" een tel terug');
+    if (rest === 'grid.undo') return r('↶ grid', 'de laatste bewerking van het grid terug (tik, vast, ×2, ‹ ›, tel 1 …)');
     if (rest === 'key') return r('toon', 'toonsoort van de plaat hier: 24 standen in wijzervolgorde (1A 1B … 12B), voor een encoder');
     if (rest === 'key.fifth.up') return r('toon kwint+', 'toonsoort hier een kwint omhoog (Camelot +1): de meest gemaakte fout van de analyse');
     if (rest === 'key.fifth.down') return r('toon kwint−', 'toonsoort hier een kwint omlaag (Camelot −1)');

@@ -121,6 +121,9 @@ const vensters = opzetVensters({
   laadBuffer: (...a) => laden.laadBuffer(...a),
   loadFile: (...a) => laden.loadFile(...a),
   naFocus: (deckId) => racks.volgFocus(deckId),
+  // De grid-modus (Shift + Metronome, of de knop grid): dan zet een klik in de golfvorm de tel.
+  // `lagen` bestaat pas verderop; dit wordt pas bij een klik gevraagd.
+  gridModus: () => lagen.actief().includes('edit.aan'),
 });
 
 // ---- effect-racks, sampler-pads, laden en library -------------------------

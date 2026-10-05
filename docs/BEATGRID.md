@@ -302,3 +302,31 @@ Wat niet opgelost is, of een keuze:
 - Een deel van net onder de 20 s wordt een rest (onzeker), ook als er een grid op past.
 - Niet gemeten op hele albums (bewust), niet in de browser, de server niet herstart. Grids
   met `bron: 'auto'` veranderen pas na ↻ in de library.
+
+## 10. Makkelijker gelijkzetten (5 oktober 2026)
+
+Clay: "het is heel lastig om de beatgrid goed te zetten". Wat er misging, gemeten in de
+code: een correctie met de hand telde niet (het stuk bleef onzeker, dus sync en beat-loops
+weigerden na het corrigeren nog steeds), drift (een tempo een fractie naast) kostte tientallen
+encodertikken met heen en weer lopen, een verkeerde tik was niet terug te draaien, en op het
+scherm kon je de tel niet aanwijzen.
+
+**Gebouwd:**
+
+| wat | hoe | waar |
+|---|---|---|
+| een correctie bevestigt | elke bewerking met de hand (‹ ›, 1, ½, ×2, halve tel, stuk, de encoder, tikken) maakt het stuk "met de hand gezet" = zeker: sync en beat-loops mogen meteen | `Beatgrid.bevestig`, `bewerk` in actions.js |
+| terug | ↶ (scherm), Cmd+Z: de laatste bewerking van het grid terug, tot 30 stappen; een tikreeks is één stap, een reeks encodertikken ook. Leeg bij een nieuw nummer | `deck.gridVoorBewerking` / `gridTerug`, `track.N.grid.undo` |
+| **vastzetten (pin)** | "de tel hier hoort HIER": het tempo van het stuk wordt zo dat er tussen zijn anker (waar je "1" zette, of de vorige pin) en hier precies een geheel aantal tellen ligt; vanaf hier begint een nieuw stuk met dit als anker. Tegen drift: **"1" op een kick aan het begin, verder spelen, een paar minuten later "vast" op een kick**. Een live mix die drijft: om de 16–32 maten vast. Weigert (met waarom) als het grid hier meer dan 0,4 tel naast ligt of het tempo meer dan 4% zou veranderen; vlak bij het anker (< 4 tellen) alleen de fase | `Beatgrid.pin`, `track.N.grid.pin`; scherm "vast"; APC grid-modus Shift + scene 1 |
+| de "1" verschuiven | 1→ (shift: terug): de "1" een tel verder, de tellen blijven liggen. De analyse vindt geen downbeat | `Beatgrid.maatSchuif`, `track.N.grid.bar` / `.bar.back` |
+| klikken in de golfvorm | in grid-modus (knop **grid** naast TAP, of Shift + Metronome): klik in de ingezoomde golfvorm = tel 1 daar, shift + klik = vast daar; gesnapt naar de klap binnen 30 ms. Ook stilstaand, zonder reactietijd. Buiten grid-modus doet een klik niets (een misklik in een set) behalve uitleggen. Scrollen in de golfvorm = in- en uitzoomen (40–2400 px/s) | vensters.js, `WaveformView.tijdBij`, `track.N.grid.here.op` / `.pin.op` (via de bus: het handelingenlog ziet het) |
+| bpm in honderdsten | de focuskop toont de bpm met twee decimalen (een encodertik of pin is 0,01) | renderloop.js |
+
+Gemeten (test/beatgrid.test.mjs): een plaat op 124,3 met een grid op 124,0: één pin op tel 64
+geeft 124,30 en elke tel tot tel 400 exact. Een live mix die in 5 minuten van 124 naar 126
+bpm drijft, met om de 32 tellen een pin: elke tel binnen 1,6 ms.
+
+**Niet gebouwd (nog):** een klik in de koptelefoon op de tellen (wacht op de
+koptelefoonuitgang, het samengestelde apparaat); slepen van het grid in de golfvorm;
+"verfijn dit stuk opnieuw" zonder tikken. De tap zet na vier tikken nog steeds het hele grid
+op slot (bestaand gedrag).
