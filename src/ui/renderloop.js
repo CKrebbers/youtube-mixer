@@ -224,6 +224,9 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     veilig('instrument', () => {
       stappen.instrument?.();
     });
+    veilig('patronen', () => {
+      stappen.patronen?.();
+    });
     veilig('master-rij', () => {
       stappen.master?.();
     });
