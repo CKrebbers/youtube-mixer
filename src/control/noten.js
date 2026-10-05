@@ -117,7 +117,8 @@ export class Noten extends Emitter {
     if (!s) { this.emit('geen', { bron, noot }); return false; }
     s.inst.noteOn(noot, snelheid);
     this.vast.set(sleutel, { id: s.id, inst: s.inst, noot });
-    this.emit('noot', { id: s.id, noot, aan: true });
+    // Met de snelheid: live opnemen in een patroon (docs/PATRONEN.md §4) luistert hier mee.
+    this.emit('noot', { id: s.id, noot, aan: true, snelheid });
     return true;
   }
 

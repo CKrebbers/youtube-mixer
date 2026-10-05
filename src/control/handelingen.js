@@ -235,9 +235,12 @@ export const RONDLOPERS = ['mixer.xfader.curve', 'sampler.length', 'video.mode',
  * bij het nummer in de library, niet bij de set (zie OVERSLAAN in
  * terugspelen.js). `headphone.*` (de koptelefoon) hoort niet bij wat er
  * klinkt en wordt bij terugspelen overgeslagen; `track.N.inst.knob.K` (een
- * instrument) ook (docs/INSTRUMENTEN.md §6).
+ * instrument) ook (docs/INSTRUMENTEN.md §6). `track.N.pattern.length/swing`
+ * bewerken een patroon, en dat is al bewaard bij de set (docs/PATRONEN.md):
+ * de beginstand zou het nog eens bewerken. Het eigen tempo (`patterns.tempo`)
+ * hoort wel bij wat je hoort en staat er wel in.
  */
-export const NIET_IN_WAARDEN = /^(track\.\d+\.(seek|pitch|tempo|grid\.bpm|key|inst\..+)|headphone\..+)$/;
+export const NIET_IN_WAARDEN = /^(track\.\d+\.(seek|pitch|tempo|grid\.bpm|key|inst\..+|pattern\..+)|headphone\..+)$/;
 
 /** Het rack van een track zoals het log het bewaart: inhoud én live standen. */
 export function rackStand(fx) {
@@ -303,5 +306,9 @@ export function leesStand({ engine, tracks, herkomst, acties, lees }) {
     ? { track: trackVan(p.deckId), van: p.van, tot: p.tot, bpm: p.bpm ?? null, tellen: p.tellen ?? null, speelt: !!p.speelt }
     : null));
   uit.herinneringen = herinneringenVan(sampler, trackVan);
+  // Patronen (docs/PATRONEN.md): welke plek er op welke track speelt (of op de
+  // maat wacht). Terugspelen start ze opnieuw op de maat; de noten zelf staan
+  // in de set op de server, niet in het log.
+  uit.patronen = engine.patronen ? { speelt: engine.patronen.spelend().map(({ id, plek }) => ({ track: trackVan(id), plek })) } : null;
   return uit;
 }
