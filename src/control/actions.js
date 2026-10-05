@@ -558,6 +558,32 @@ export function bindEngine(engine) {
     }
   }
 
+  // ---- de master: effecten op het geheel (docs/MASTER.md) ------------------
+  // Hetzelfde racksysteem als een track, dus dezelfde namen: track.N.fx.* wordt
+  // master.fx.*. Welk rack er in zit kiest master.rack.next/prev (bindApp: de
+  // lijst kent de schermlaag). Altijd gedefinieerd, ook op een engine zonder
+  // master (een dubbel in de tests): dan doen ze niets en lezen ze null.
+  const mfx = () => engine.master?.fx ?? null;
+  define('master.fx.mix', 'value', (v) => mfx()?.setMix(v),
+    { label: 'Master FX dry/wet', read: () => mfx()?.mix ?? null });
+  // read = bypass (1 = effect UIT), zoals bij een track; de LED draait dat om.
+  define('master.fx.bypass', 'trigger', (on) => { const f = mfx(); if (on && f) f.setBypass(!f.bypass); },
+    { label: 'Master FX uit', read: () => { const f = mfx(); return !f?.effectId ? null : f.bypass ? 1 : 0; } });
+  for (let k = 1; k <= 8; k++) {
+    define(`master.fx.knob.${k}`, 'value', (v) => mfx()?.setPlek(k, v),
+      { label: `Master FX plek ${k}`, bipolar: false, read: () => mfx()?.leesPlek(k) ?? null });
+    const druk = drukknop(mfx, k);
+    define(`master.fx.knob.${k}.hold`, 'trigger', druk.fn,
+      { label: `Master FX plek ${k} vasthouden (open zolang ingedrukt)`, read: druk.ingedrukt });
+  }
+  define('master.fx.next', 'trigger', (on) => {
+    const f = mfx();
+    if (!on || !f) return;
+    const lijst = EFFECTEN.map((e) => e.id);
+    f.zetEffect(lijst[(lijst.indexOf(f.effectId) + 1) % lijst.length]);
+    engine.emit?.('change');
+  }, { label: 'Master volgend effect' });
+
   // ---- sampler: acht pads -------------------------------------------------
   // Leeg: pak de laatste tellen van de track met focus — of, als er een
   // bewaard stuk op deze pad wacht, knip dat opnieuw. Gevuld: start op de
@@ -764,7 +790,7 @@ export function bindVormen(vormen, router = null) {
  * racks bladeren. De functies
  * komen van app.js; hier alleen de namen en de read.
  */
-export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnameSoort, rackStap }) {
+export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnameSoort, rackStap, masterRackStap = () => {} }) {
   for (const [nr, id] of TRACKS) {
     for (const v of ['L', 'R']) {
       define(`window.${v}.show.${nr}`, 'trigger', (on) => { if (on) toon(v, id); },
@@ -773,6 +799,9 @@ export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnam
     define(`track.${nr}.rack.next`, 'trigger', (on) => { if (on) rackStap(id, 1); }, { label: `Track ${nr} volgend rack` });
     define(`track.${nr}.rack.prev`, 'trigger', (on) => { if (on) rackStap(id, -1); }, { label: `Track ${nr} vorig rack` });
   }
+  // De master-racks: de kant-en-klare (racks/sjablonen.json), master-paneel.js.
+  define('master.rack.next', 'trigger', (on) => { if (on) masterRackStap(1); }, { label: 'Master volgend rack' });
+  define('master.rack.prev', 'trigger', (on) => { if (on) masterRackStap(-1); }, { label: 'Master vorig rack' });
   define('record.start', 'trigger', (on) => { if (on && !opnemer.bezig) opnameStart(); },
     { label: 'Opname starten', read: () => (opnemer.bezig ? 1 : 0) });
   define('record.stop', 'trigger', (on) => { if (on && opnemer.bezig) opnameStop(); },

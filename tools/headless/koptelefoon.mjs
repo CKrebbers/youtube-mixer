@@ -98,6 +98,9 @@ const meet = (scenario, opties = {}) => evalueer(`(async () => {
     const { Engine } = await import('/src/engine/engine.js');
     e = new Engine(${JSON.stringify(opties)});
   } finally { window.AudioContext = Echt; }
+  // De limiter-worklet laadt async (docs/MASTER.md): eerst erin, anders wisselt
+  // hij ergens midden in het renderen van de compressor naar de worklet.
+  await e.master.klaar;
   const ctx = e.ctx;
   const toon = (hz, deck) => { const o = ctx.createOscillator(); o.frequency.value = hz; o.connect(e.deck(deck).chain.input); o.start(0); };
   toon(440, 'A');

@@ -28,6 +28,7 @@
     <button id="klankschaal-btn" class="ghost" title="klankschaal: speel mee op de toon van wat je hoort">klankschaal</button>
     <button id="stems-btn" class="ghost" title="stems van de track met focus: zang en rest (of vier), niveau en kill per stem">stems</button>
     <button id="koptelefoon-btn" class="ghost" title="koptelefoon: tracks voorbeluisteren zonder dat de zaal ze hoort, volume en mix">koptelefoon</button>
+    <button id="master-btn" class="ghost" title="master: effecten op de hele mix en de limiter (hoeveel hij afneemt)">master</button>
     <a id="apc-btn" class="ghost" href="apc.html" target="varve-apc" title="wat elke knop van de APC doet, per mapje">APC-kaart</a>
     <button id="midi-btn" class="ghost">MIDI</button>
     <button id="help-btn" class="ghost">? toetsen</button>
@@ -281,6 +282,31 @@
     <div class="knob sm" data-action="headphone.level" data-label="VOL" data-value="0.8" data-default="0.8" title="koptelefoonvolume (APC: Cue Level)"></div>
   </div>
   <button class="btn sm kp-wissel" title="zaal en koptelefoon omwisselen (kanaal 1/2 ↔ 3/4); geldt na herladen">⇄</button>
+</section>
+
+<!-- ================= MASTER (docs/MASTER.md) ================= -->
+<!-- Effecten op de hele mix (een insert-rack vóór de limiter, zoals bij een
+     track) en de limiter zelf. master-paneel.js vult de rackkiezer, de namen
+     van de knoppen en de gain reduction; op de APC: Shift + Clip/Device View. -->
+<section id="master" class="master-rij hidden">
+  <span class="sampler-kop">MASTER</span>
+  <select class="ms-rack" title="rack op de hele mix: kant-en-klaar (racks/sjablonen.json) of een los effect; onthouden"></select>
+  <button data-kind="button" data-action="master.fx.next" class="btn sm" title="volgend los effect op de master">›</button>
+  <button data-kind="button" data-action="master.fx.bypass" class="btn sm ms-aan" title="master-effect aan/uit (APC: On/Off in het mapje master)">aan</button>
+  <div class="ms-knoppen">
+    <div class="knob sm" data-action="master.fx.mix" data-label="MIX" data-value="0" data-default="0" title="master dry/wet: dicht = droog (APC: knop 8 in het mapje master)"></div>
+    <div class="knob sm ms-plek" data-plek="1" data-action="master.fx.knob.1" data-label="1" data-value="0" title="master-rack knop 1 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="2" data-action="master.fx.knob.2" data-label="2" data-value="0" title="master-rack knop 2 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="3" data-action="master.fx.knob.3" data-label="3" data-value="0" title="master-rack knop 3 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="4" data-action="master.fx.knob.4" data-label="4" data-value="0" title="master-rack knop 4 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="5" data-action="master.fx.knob.5" data-label="5" data-value="0" title="master-rack knop 5 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="6" data-action="master.fx.knob.6" data-label="6" data-value="0" title="master-rack knop 6 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="7" data-action="master.fx.knob.7" data-label="7" data-value="0" title="master-rack knop 7 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="8" data-action="master.fx.knob.8" data-label="8" data-value="0" title="master-rack knop 8 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+  </div>
+  <span class="ms-limiter" title="gain reduction: hoeveel de limiter nu afneemt (0 dB = niets)">
+    <span class="ms-gr"><i></i></span><b class="ms-gr-tekst">0 dB</b><small class="ms-soort">limiter</small>
+  </span>
 </section>
 
 <!-- ================= AUTO-DJ ================= -->

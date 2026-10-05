@@ -2788,9 +2788,121 @@
       "mode": "trigger",
       "label": "pad 8/5",
       "laag": "grid.klank"
+    },
+    {
+      "in": "note:0:64",
+      "action": "layer.device.master",
+      "mode": "trigger",
+      "label": "clip/device view + shift: mapje master",
+      "shift": true
+    },
+    {
+      "in": "cc:0:16",
+      "action": "master.fx.knob.1",
+      "mode": "endless",
+      "label": "device knob 1 (master)",
+      "laag": "device.master"
+    },
+    {
+      "in": "cc:0:17",
+      "action": "master.fx.knob.2",
+      "mode": "endless",
+      "label": "device knob 2 (master)",
+      "laag": "device.master"
+    },
+    {
+      "in": "cc:0:18",
+      "action": "master.fx.knob.3",
+      "mode": "endless",
+      "label": "device knob 3 (master)",
+      "laag": "device.master"
+    },
+    {
+      "in": "cc:0:19",
+      "action": "master.fx.knob.4",
+      "mode": "endless",
+      "label": "device knob 4 (master)",
+      "laag": "device.master"
+    },
+    {
+      "in": "cc:0:20",
+      "action": "master.fx.knob.5",
+      "mode": "endless",
+      "label": "device knob 5 (master)",
+      "laag": "device.master"
+    },
+    {
+      "in": "cc:0:21",
+      "action": "master.fx.knob.6",
+      "mode": "endless",
+      "label": "device knob 6 (master)",
+      "laag": "device.master"
+    },
+    {
+      "in": "cc:0:22",
+      "action": "master.fx.knob.7",
+      "mode": "endless",
+      "label": "device knob 7 (master)",
+      "laag": "device.master"
+    },
+    {
+      "in": "cc:0:23",
+      "action": "master.fx.mix",
+      "mode": "endless",
+      "label": "device knob 8 (master): mix",
+      "laag": "device.master"
+    },
+    {
+      "in": "cc:0:23",
+      "action": "master.fx.knob.8",
+      "mode": "endless",
+      "label": "device knob 8 + shift (master)",
+      "shift": true,
+      "laag": "device.master"
+    },
+    {
+      "in": "note:0:58",
+      "action": "master.rack.prev",
+      "mode": "trigger",
+      "label": "device left (master)",
+      "laag": "device.master"
+    },
+    {
+      "in": "note:0:59",
+      "action": "master.rack.next",
+      "mode": "trigger",
+      "label": "device right (master)",
+      "laag": "device.master"
+    },
+    {
+      "in": "note:0:62",
+      "action": "master.fx.bypass",
+      "mode": "trigger",
+      "label": "device on/off (master)",
+      "laag": "device.master"
     }
   ],
   "eerder": [
+    {
+      "vingerafdruk": "a067b3f2-397",
+      "tot": "2026-10-05",
+      "rules": [],
+      "removed": [
+        "note:0:64#shift",
+        "cc:0:16@device.master",
+        "cc:0:17@device.master",
+        "cc:0:18@device.master",
+        "cc:0:19@device.master",
+        "cc:0:20@device.master",
+        "cc:0:21@device.master",
+        "cc:0:22@device.master",
+        "cc:0:23@device.master",
+        "cc:0:23#shift@device.master",
+        "note:0:58@device.master",
+        "note:0:59@device.master",
+        "note:0:62@device.master"
+      ]
+    },
     {
       "vingerafdruk": "9ba78a49-395",
       "tot": "2026-10-05",
@@ -2811,7 +2923,20 @@
       ],
       "removed": [
         "cc:0:47#shift@grid.sampler",
-        "cc:0:47#shift@grid.video"
+        "cc:0:47#shift@grid.video",
+        "note:0:64#shift",
+        "cc:0:16@device.master",
+        "cc:0:17@device.master",
+        "cc:0:18@device.master",
+        "cc:0:19@device.master",
+        "cc:0:20@device.master",
+        "cc:0:21@device.master",
+        "cc:0:22@device.master",
+        "cc:0:23@device.master",
+        "cc:0:23#shift@device.master",
+        "note:0:58@device.master",
+        "note:0:59@device.master",
+        "note:0:62@device.master"
       ]
     },
     {
@@ -2842,7 +2967,20 @@
         "note:6:48",
         "note:7:48",
         "cc:0:47#shift@grid.sampler",
-        "cc:0:47#shift@grid.video"
+        "cc:0:47#shift@grid.video",
+        "note:0:64#shift",
+        "cc:0:16@device.master",
+        "cc:0:17@device.master",
+        "cc:0:18@device.master",
+        "cc:0:19@device.master",
+        "cc:0:20@device.master",
+        "cc:0:21@device.master",
+        "cc:0:22@device.master",
+        "cc:0:23@device.master",
+        "cc:0:23#shift@device.master",
+        "note:0:58@device.master",
+        "note:0:59@device.master",
+        "note:0:62@device.master"
       ]
     },
     {
@@ -2878,7 +3016,20 @@
         "note:0:38@grid.video",
         "note:0:39@grid.video",
         "note:0:30@grid.video",
-        "note:0:31@grid.video"
+        "note:0:31@grid.video",
+        "note:0:64#shift",
+        "cc:0:16@device.master",
+        "cc:0:17@device.master",
+        "cc:0:18@device.master",
+        "cc:0:19@device.master",
+        "cc:0:20@device.master",
+        "cc:0:21@device.master",
+        "cc:0:22@device.master",
+        "cc:0:23@device.master",
+        "cc:0:23#shift@device.master",
+        "note:0:58@device.master",
+        "note:0:59@device.master",
+        "note:0:62@device.master"
       ]
     },
     {
@@ -2922,7 +3073,20 @@
         "note:0:38@grid.video",
         "note:0:39@grid.video",
         "note:0:30@grid.video",
-        "note:0:31@grid.video"
+        "note:0:31@grid.video",
+        "note:0:64#shift",
+        "cc:0:16@device.master",
+        "cc:0:17@device.master",
+        "cc:0:18@device.master",
+        "cc:0:19@device.master",
+        "cc:0:20@device.master",
+        "cc:0:21@device.master",
+        "cc:0:22@device.master",
+        "cc:0:23@device.master",
+        "cc:0:23#shift@device.master",
+        "note:0:58@device.master",
+        "note:0:59@device.master",
+        "note:0:62@device.master"
       ]
     },
     {
@@ -3049,7 +3213,20 @@
         "note:0:23@grid.klank",
         "note:0:23#shift@grid.klank",
         "note:0:15@grid.klank",
-        "note:0:7@grid.klank"
+        "note:0:7@grid.klank",
+        "note:0:64#shift",
+        "cc:0:16@device.master",
+        "cc:0:17@device.master",
+        "cc:0:18@device.master",
+        "cc:0:19@device.master",
+        "cc:0:20@device.master",
+        "cc:0:21@device.master",
+        "cc:0:22@device.master",
+        "cc:0:23@device.master",
+        "cc:0:23#shift@device.master",
+        "note:0:58@device.master",
+        "note:0:59@device.master",
+        "note:0:62@device.master"
       ]
     }
   ]

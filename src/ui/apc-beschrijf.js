@@ -117,6 +117,9 @@ export function beschrijf(action) {
       'react.target': ['reageer knop', 'vormlaag: welke knop (1–6) op de mix reageert'] }[m[1]];
     if (v) return { kort: v[0], lang: v[1] };
   }
+  // De master: het insert-rack op het geheel (docs/MASTER.md), mapje master.
+  if ((m = /^master\.fx\.knob\.(\d)$/.exec(action))) return { kort: `master ${m[1]}`, lang: `master-rack: knop ${m[1]} (wat die doet hangt van het rack af; voor de hele mix)` };
+  if ((m = /^master\.fx\.knob\.(\d)\.hold$/.exec(action))) return { kort: `master ${m[1]}!`, lang: `master-rack: knop ${m[1]} vol open zolang je drukt` };
   if ((m = /^video\.fx\.(\w+)\.hold$/.exec(action))) return { kort: `${VIDEO[m[1]] ?? m[1]}!`, lang: `video ${VIDEO[m[1]] ?? m[1]} vol aan zolang je drukt` };
   if ((m = /^video\.fx\.(\w+)$/.exec(action))) return { kort: VIDEO[m[1]] ?? m[1], lang: `video-effect ${VIDEO[m[1]] ?? m[1]}` };
   if ((m = /^layer\.(\w+)\.(\w+)$/.exec(action))) {
@@ -139,6 +142,11 @@ export function beschrijf(action) {
     'sampler.volume': ['sampler', 'sampler-volume'],
     'headphone.level': ['kopt. vol', 'koptelefoon: volume'],
     'headphone.mix': ['kopt. mix', 'koptelefoon: mix, links alleen wat je voorbeluistert, rechts alleen de zaal'],
+    'master.fx.mix': ['master mix', 'master-effect dry/wet, voor de hele mix (vóór de limiter)'],
+    'master.fx.bypass': ['master aan/uit', 'master-effect aan/uit (lampje brandt = effect aan)'],
+    'master.fx.next': ['master fx ▶', 'master: volgend los effect'],
+    'master.rack.next': ['master rack ▶', 'master: volgend rack (de kant-en-klare)'],
+    'master.rack.prev': ['◀ master rack', 'master: vorig rack (de kant-en-klare)'],
     'focus.next': ['focus ▶', 'focus naar de volgende track'], 'focus.prev': ['◀ focus', 'focus naar de vorige track'],
     'video.mode': ['mengvorm', 'video: volgende mengvorm'], 'video.pulse': ['puls', 'video: puls op de tel'],
     'video.pulse.target': ['puls-doel', 'video: wat er op de tel pulst'],

@@ -229,3 +229,26 @@ voorganger afgezet (anders 8 x "weggehaald"). `test/mapping.test.mjs` rekent het
 
 Niet getest: de echte APC (kleuren limoen naast groen en geel op de pads, of
 Shift + scene 4 lekker ligt), en de auto-DJ zelf op het apparaat.
+
+## Mapje master (5 oktober 2026, STUDIO S2a, GEBOUWD, niet op het apparaat nagelopen)
+
+Effecten op de hele mix (`docs/MASTER.md`): een derde mapje van de device-groep,
+`device.master`, zoals "vorm". **Shift + Clip/Device View** opent het (vasthouden =
+gluren); Clip/Device View zelf gaat daarna terug naar de strip.
+
+| knop | in het mapje master |
+|---|---|
+| device knob 1–7 | master-rack plek 1–7 (`master.fx.knob.1`–`7`) |
+| device knob 8 | master mix (`master.fx.mix`) |
+| shift + device knob 8 | master-rack plek 8 |
+| Device ◀ ▶ | vorig / volgend kant-en-klaar rack (`master.rack.prev/next`) |
+| Device On/Off | master-effect aan/uit (groen = aan) |
+
+Alleen regels ERBIJ (13; `note:0:64#shift` was vrij), niets bestaands veranderd:
+buiten het mapje doen device knobs, Device ◀ ▶ en On/Off wat ze deden, en in het
+mapje blijven Bank (beatjump), Lock (quantize) en de rest gewoon werken.
+`test/mapping.test.mjs` en `test/master.test.mjs` rekenen het na.
+
+Niet getest: de echte APC. Twee keuzes om te proberen: knop 8 = mix (de knop die je
+op de master het meest nodig hebt; geen sjabloon gebruikt plek 8), en dat
+Clip/Device View in het mapje master niet brandt (zijn lampje hoort bij strip/rack).

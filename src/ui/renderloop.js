@@ -220,6 +220,9 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     veilig('koptelefoon', () => {
       stappen.koptelefoon?.();
     });
+    veilig('master-rij', () => {
+      stappen.master?.();
+    });
     veilig('opnemen', () => {
       stappen.opnemen();
     });

@@ -176,7 +176,10 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
     el.classList.toggle('leeg', !r);
     el.classList.toggle('stuurt-niet', !!r && !past);
     el.title = r ? r.titel : `APC: ${naamVan(item.sig)} — (niets gekoppeld)`;
-    item.fxPlek = r ? Number(/^track\.\d+\.fx\.knob\.(\d)$/.exec(r.action)?.[1]) || null : null;
+    // Een rack-knop van de track (of, in het mapje master, van de master).
+    const plek = r ? /^(track\.\d+|master)\.fx\.knob\.(\d)$/.exec(r.action) : null;
+    item.fxPlek = plek ? Number(plek[2]) : null;
+    item.fxMaster = plek?.[1] === 'master';
     if (!item.fxPlek) el.classList.remove('dof');
     // De A|B-knop toont de KANT (A / thru / B), geen aan/uit-licht; zie teken().
     item.kant = !!r && isKantKnop(r.action);
@@ -345,7 +348,7 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
     const fd = s.decks[s.focus];
     for (const item of items) {
       if (!item.fxPlek) continue;
-      const p = fd?.fx.plekken.find((x) => x.plek === item.fxPlek);
+      const p = (item.fxMaster ? s.masterFx : fd?.fx)?.plekken.find((x) => x.plek === item.fxPlek);
       item.lab ??= item.el.querySelector('.knob-label');
       if (item.lab) tekst(item.lab, p?.naam || `fx ${item.fxPlek}`);
       klasse(item.el, 'dof', !p);
@@ -356,7 +359,8 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
     tekst(fdTitel, fd?.title || '— leeg —');
     const laag = lagen?.stand.device ?? 'strip';
     tekst(fdLaag, laag.toUpperCase());
-    tekst(fdLaagUitleg, laag === 'rack' ? 'de acht knoppen van het rack' : 'trim · high · mid · low / echo · galm · fx');
+    tekst(fdLaagUitleg, laag === 'rack' ? 'de acht knoppen van het rack'
+      : laag === 'master' ? 'het master-rack: 1–7, knop 8 = mix (shift: 8)' : 'trim · high · mid · low / echo · galm · fx');
     if (focusdeel.dataset.laag !== laag) focusdeel.dataset.laag = laag;
   }
 

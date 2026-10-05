@@ -67,6 +67,9 @@ src/
                     klankschaal-worklet.js  de AudioWorklet eromheen (laadt pas bij gebruik)
                     engine.js       decks + mixer + maatgever (hysterese) + starten op de maat + snapshot()
                     koptelefoon.js  de koptelefoon (PFL): uitgang met vier kanalen, cue vóór de fader, mix en volume
+                    master.js       de master: gain -> insert-rack -> limiter (compressor tot de worklet er is) -> analyser
+                    limiter-kern.js de limiter als rekenwerk: vooruitblik 1,5 ms, −1 dBTP (4×), gekoppeld, afvalvrij. Puur.
+                    limiter-worklet.js  de AudioWorklet eromheen (uitgang 1 = de gain, voor de gain reduction)
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
                     keyboard.js     toetsen -> actions
                     midi.js         Web MIDI: poorten, parsen, sysex. Kent geen actions.
@@ -111,6 +114,8 @@ src/
                     stems-wachtrij.js de stems-rij van de server (GET /api/stems): peilen zolang iets open staat of iemand kijkt
                     stems-weergave.js stems als tekst: namen, library-cel, rijstand, kolomteken, tegel. Puur.
                     koptelefoon-paneel.js de KOPTELEFOON-rij: cue per track, VOL, MIX, ⇄ (zaal en koptelefoon wisselen, na herladen)
+                    master-paneel.js de MASTER-rij: rack kiezen en onthouden, MIX, acht knoppen, gain reduction (ook bij de mastermeter)
+                    master-weergave.js de master als tekst en getal (gain reduction, kiezer, opslag). Puur.
   vormen/           hulp.js         paletten, toeval met zaad, ruis, tekenhulp (gedeeld door de systemen)
                     systemen.js     de Vormmachines (Clay's artifact): 10 lichte + de lijst van alle 26
                     systemen-zwaar.js / -meer.js / -isomorf.js  de andere 16 (zwaar · middel · beeld = geluid)
@@ -156,7 +161,7 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, master.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
@@ -213,6 +218,7 @@ test/
   auto.test.mjs     auto-DJ: planner (bewakers, frasegrenzen, curves, kiezer) en de automaat op een engine (blend, beatloos, overnemen, glijden)
   nep-tijdlijn.mjs  nep-AudioParam die uitrekent wat de param op elk moment doet (geen test zelf)
   klankschaal.test.mjs  stemming (24 toonsoorten × ladders), toonhoogte gemeten, slapen, wrijven, afval, engine en bus
+  master.test.mjs   limiter (plafond, true peak, vooruitblik, geen pompen, 0 GC), worklet, keten, wissel, actions, APC
   analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions, maatbronnen
   alles.mjs         alle tests in één keer met overzicht
 docs/
@@ -238,6 +244,7 @@ docs/
   TAILSCALE.md      overal openen via Tailscale: VARVE_HOSTS, tailscale serve, wat waar werkt
   ONTBREEKT.md      wat er nog ontbreekt (2 okt): eigen docs, DJ-software, Logic/TD; voorstel en vragen
   STUDIO.md         VARVE als muziekprogramma (5 okt): hergebruik, vier controllers, fasen S0–S5; §3 de koptelefoon
+  MASTER.md         effecten op het geheel en de limiter (S2a, 5 okt): keten, algoritme, laden, opslag, APC, metingen
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -362,7 +369,9 @@ docs/
   lineair over de hele rate (0,5–2×), 0,1% per tik (shift 0,01%), read niet
   geklemd. Via de geklemde pitch-read sprong één tik na een sync buiten het
   bereik van 1,30 naar 1,16.
-- De master-"limiter" is een `DynamicsCompressor`, geen look-ahead limiter.
+- De master-limiter is sinds 5 okt een AudioWorklet met vooruitblik (−1 dBTP,
+  `docs/MASTER.md`); tot hij geladen is (of als laden mislukt) de oude
+  `DynamicsCompressor`. Zie "Master en limiter" hieronder.
 - Er zijn twee soorten loops naast elkaar: in seconden en in tellen. De
   beat-loops klikken in op het grid; zonder grid doen ze niets.
 - Een loop wordt geklemd op het trackeinde, dus `loop 4s` vlak voor het eind geeft
@@ -1244,6 +1253,30 @@ Volledig in `docs/STUDIO.md` §3. Wat een bouwer niet mag missen:
   sampler-volume en puls op shift + Cue Level in grid-modus sampler en video.
 - Gemeten met `tools/headless/koptelefoon.mjs` (echte Chrome, OfflineAudioContext van
   vier kanalen); de mock in engine.test kent geen echte splitter/merger.
+
+## Master en limiter (gebouwd 5 okt)
+
+Volledig in `docs/MASTER.md`. Wat een bouwer niet mag missen:
+- `input (gain) -> fx (InsertSlot) -> limiter -> analyser -> uit`. `master.analyser`
+  blijft het EIND: opname, de zaal in de koptelefoon en de vormen tappen daar.
+  `master.limiter` is de uitgang van de limiterstap, niet de compressor.
+- De limiter (`limiter-kern.js`, puur) houdt zich aan de regels van het audiopad:
+  0 GC (`master.test` meet het). Onder het plafond is de gain PRECIES 1 (geen
+  pompen, de uitvoer is bit voor bit de invoer, 72 samples later). Verander je de
+  kern: `node test/master.test.mjs` en `tools/headless/master.mjs` (true peak 16×).
+- De vooruitblik is vertraging en telt mee in wat je hoort: `ctx.graafVertraging`
+  in `uitgangsVertraging` (hoorbaar.js), op de context zelf (het losse venster).
+- De worklet laadt async: nooit live herbedraden. Context stil = direct erin; de
+  audio loopt = equal-power kruisfade van 40 ms, het oude pad weg na de fade.
+  Op een OfflineAudioContext eerst `await engine.master.klaar`, dan renderen.
+- Het master-rack (`master.fx.*`, `master.rack.next/prev`) is een gewone
+  InsertSlot op de klok van de maatgever; welk rack bewaart de schermlaag in
+  localStorage (`varve.master.rack`, sjabloon op naam). MIX start altijd op 0.
+- APC: Shift + Clip/Device View = mapje `device.master` (knop 1–7, 8 = mix,
+  shift + 8 = knop 8, Device ◀ ▶ = rack, On/Off = aan/uit). Alleen regels erbij.
+- Open (docs/MASTER.md, "Grenzen"): de cue loopt 1,5 ms vóór de zaal in de
+  koptelefoon; de master klinkt ~0,8 dB zachter dan met de compressor (die tilde
+  op); het master-rack staat niet als gebeurtenis in het handelingenlog.
 
 ## Werkwijze die hier werkt
 
