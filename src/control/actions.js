@@ -442,6 +442,22 @@ export function bindEngine(engine) {
         { label: `Track ${nr} stem ${naam} weg aan/uit`, read: weg });
       define(`${n}.stem.${st}.hold`, 'trigger', (on) => d.houdStemKill(st, !!on),
         { label: `Track ${nr} stem ${naam} weg zolang je drukt`, read: weg });
+
+      // Stemkanalen (docs/STEMS.md §5): per stem een bipolair filter (midden
+      // = open, zoals het trackfilter), een echo- en galm-send (door een
+      // spiegel van de fader: fader dicht = ook de stem stuurt niets meer in)
+      // en een cue. Bij vier stems werkt `inst` op drums, bas en overig samen.
+      // Read null zonder die stem; de cue ook zonder koptelefoonuitgang.
+      define(`${n}.stem.${st}.filter`, 'value', (v) => d.setStemFilter(st, v),
+        { label: `Track ${nr} stem ${naam}: filter`, bipolar: true, read: () => d.stemFilter(st) });
+      for (const bus of ['A', 'B']) {
+        define(`${n}.stem.${st}.send.${bus.toLowerCase()}`, 'value', (v) => d.setStemSend(bus, st, v),
+          { label: `Track ${nr} stem ${naam}: send ${bus} (${bus === 'A' ? 'echo' : 'galm'})`, read: () => d.stemSend(bus, st) });
+      }
+      const stemCue = `${id}:stems`;
+      define(`${n}.stem.${st}.pfl`, 'trigger', (on) => { if (on && kt.heeft(stemCue)) d.toggleStemPfl(st); },
+        { label: `Track ${nr} stem ${naam} in de koptelefoon (voorbeluisteren) aan/uit`,
+          read: () => (!kt.heeft(stemCue) || !d.stemBestaat(st) ? null : d.stemPflAan(st) ? 1 : 0) });
     }
 
     // Koptelefoon (docs/STUDIO.md §3): deze track voorbeluisteren, vóór de

@@ -58,6 +58,11 @@ const KLEURSCHEMA = [
   // is weg, donkerrood = open (er valt te killen), uit = lege track. Rem:
   // fel oranje = remt, donker = speelt (er valt te remmen), uit = staat stil.
   [/\.kill\.(low|mid|high)(\.hold)?$/, { aan: 'rood', uit: 'rooddonker' }],
+  // Stem weg (modus stems, VRAGEN N1): zoals de EQ-kill in klank, fel rood =
+  // weg, donkerrood = er valt iets weg te drukken, uit = geen stems (read null).
+  // De cue van een stem rood zoals ● (track.N.pfl): aan = in de koptelefoon.
+  [/\.stem\.\w+\.(kill|hold)$/, { aan: 'rood', uit: 'rooddonker' }],
+  [/\.stem\.\w+\.pfl$/, { aan: 'rood', uit: 'donkergrijs' }],
   [/\.brake$/,       { aan: 'oranje', uit: 'oranjedonker' }],
   [/^mixer\./,       { aan: 'blauw', uit: 'donkergrijs' }],
   [/\.beatloop\./,   { aan: 'cyaan', half: 'cyaandonker', uit: 'donkergrijs', tel: 'aan' }],
@@ -90,6 +95,9 @@ const KLEURSCHEMA = [
   //   overslaan · langer · nu   0 = er staat een overgang klaar (donker), null = uit
   //   aan      1 = aan (fel limoen), 0 = uit (donker limoen)
   [/^layer\.grid\.auto$/,    { aan: 'limoen', uit: 'limoendonker' }],
+  // Stems (5 okt, VRAGEN N1): zeegroen, met zijn donkere tint (34); geen andere
+  // modus heeft hem. De pads zelf rood (weg), zoals de kill in klank.
+  [/^layer\.grid\.stems$/,   { aan: 'zeegroen', uit: 'zeegroendonker' }],
   [/^auto\.aan$/,     { aan: 'limoen', uit: 'limoendonker' }],
   [/^auto\.ok$/,      { aan: 'groen', half: 'groendonker', uit: 'groendonker' }],
   [/^auto\.skip$/,    { aan: 'oranje', uit: 'oranjedonker' }],

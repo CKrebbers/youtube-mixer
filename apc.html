@@ -21,6 +21,7 @@
   .k-knop[data-modus="grid.video"].aan{background:#4c7dff;border-color:#4c7dff;color:#fff}
   .k-knop[data-modus="grid.klank"].aan{background:#ff4fe0;border-color:#ff4fe0}
   .k-knop[data-modus="grid.auto"].aan{background:#8cff3c;border-color:#8cff3c}
+  .k-knop[data-modus="grid.stems"].aan{background:#2ee8a6;border-color:#2ee8a6}
   #shift.aan{background:var(--warn);border-color:var(--warn)}
   #gridmodus.aan{background:#e6edf3;border-color:#e6edf3}
   #zoek{background:var(--panel2);border:1px solid var(--line);border-radius:5px;color:var(--text);padding:5px 10px;font:inherit;width:190px}
@@ -73,7 +74,7 @@
   /* soorten: dezelfde kleur op de kaart, in de legenda en in de lijst */
   .s-transport{--kl:#3ddc84} .s-mixer{--kl:#4ad9c4} .s-hotcue{--kl:#ffd23c} .s-loop{--kl:#35c6ff}
   .s-fx{--kl:#c48cff} .s-sampler{--kl:#ff5fd2} .s-video{--kl:#4c7dff} .s-opname{--kl:#ff3b30}
-  .s-mapje{--kl:#e6edf3} .s-klank{--kl:#ff8a3d} .s-auto{--kl:#8cff3c} .s-vrij{--kl:#3a444e}
+  .s-mapje{--kl:#e6edf3} .s-klank{--kl:#ff8a3d} .s-auto{--kl:#8cff3c} .s-stems{--kl:#2ee8a6} .s-vrij{--kl:#3a444e}
   .stip{display:inline-block;width:.8em;height:.8em;border-radius:3px;background:var(--kl);margin-right:6px;vertical-align:-1px}
   #legenda{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 2px 0;font-size:11px;color:var(--dim)}
   .paneel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;position:sticky;top:64px}
@@ -105,6 +106,7 @@
     <button class="k-knop" data-modus="grid.video">video</button>
     <button class="k-knop" data-modus="grid.klank" title="Shift + scene 5, of ▲ ▼">klank</button>
     <button class="k-knop" data-modus="grid.auto" title="Shift + scene 4, of ▲ ▼">auto</button>
+    <button class="k-knop" data-modus="grid.stems" title="Shift + scene 3, of ▲ ▼">stems</button>
   </div>
   <div class="k-groep"><span>rechts</span>
     <button class="k-knop" data-modus="device.strip">strip</button>

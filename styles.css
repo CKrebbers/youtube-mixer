@@ -3,7 +3,7 @@
   --text:#dfe7ee; --dim:#7b8794; --a:#4ad9c4; --b:#c48cff;
   --warn:#ffbe3c; --red:#ff3b30;
   /* grid-mapjes, zoals de LED's op de APC: hotcues geel, loops cyaan, sampler violet, video blauw */
-  --m-hotcues:#ffd23c; --m-loops:#3cd6ff; --m-sampler:#b07cff; --m-video:#4c7dff; --m-klank:#ff4fe0; --m-auto:#8cff3c;
+  --m-hotcues:#ffd23c; --m-loops:#3cd6ff; --m-sampler:#b07cff; --m-video:#4c7dff; --m-klank:#ff4fe0; --m-auto:#8cff3c; --m-stems:#2ee8a6;
   /* crossfaderkant, zoals de tweekleurige LED van de A|B-knop: geel A, oranje B, thru grijs */
   --kant-a:#ffd23c; --kant-b:#ff8a2a;
   /* kleine grijze tekst die toch leesbaar moet zijn: 5,5:1 op --panel2 */
@@ -628,25 +628,47 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .btn.ks-wrijf.on{background:var(--m-sampler);border-color:var(--m-sampler);color:#140a22}
 .ks-knoppen{display:flex;align-items:center;gap:6px}
 
-/* ---- stems (docs/STEMS.md §4): de rij voor de track met focus ----
+/* ---- stems (docs/STEMS.md §4 en §5): de rij voor de track met focus ----
    Eén regel van ~30 px, zoals klankschaal en auto. Vijf strips (vier stems +
-   rest als groep) passen op 1440 px; de schuiven krimpen eerst. */
+   rest als groep), elk met niveau, kill, filter, echo, galm en cue, passen op
+   1440 px; de schuiven krimpen eerst. */
 .stems-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px;min-width:0}
 .stems-rij.hidden{display:none}
 .st-track{font:600 12px ui-monospace,monospace;color:var(--a);white-space:nowrap;min-width:52px}
 .st-stemmen{flex:1 1 0;display:flex;align-items:center;gap:14px;min-width:0}
 .st-stemmen.hidden{display:none}
-.st-stem{flex:1 1 0;max-width:320px;display:flex;align-items:center;gap:6px;min-width:0;height:30px;padding:0 8px;
+.st-stem{flex:1 1 0;max-width:440px;display:flex;align-items:center;gap:4px;min-width:0;height:30px;padding:0 6px;
   border:1px solid var(--line);border-radius:5px;background:var(--panel2)}
 .st-stem.hidden{display:none}
 /* bij vier: rest is de groepsknop (drums + bas + overig), apart gezet */
 .st-stem.groep{margin-left:10px;border-style:dashed}
-.st-naam{flex:0 0 auto;min-width:44px;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap}
-.st-niveau{flex:1 1 90px;min-width:50px;height:26px}
-.st-kill{flex:0 0 auto;min-width:38px}
+.st-naam{flex:0 0 auto;min-width:34px;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap}
+.st-niveau{flex:1 1 90px;min-width:34px;height:26px}
+.st-kill{flex:0 0 auto;min-width:0;padding:4px 5px}
 .st-kill.on{background:var(--red);border-color:var(--red);color:#fff}
 .st-stem.weg .st-naam{color:var(--klein);text-decoration:line-through}
 .st-stem.weg .st-niveau{opacity:.35}
+/* het stemkanaal (docs/STEMS.md §5): filter · echo · galm als kleine knoppen
+   zonder opschrift (de kleur van de wijzer zegt welke, de tooltip zegt het
+   voluit), en cue. Rood = die stem in de koptelefoon, zoals ● op de APC. */
+.st-knop{flex:0 0 auto;gap:0}
+.knob.sm.st-knop .knob-dial{width:22px;height:22px}
+.knob.sm.st-knop .knob-ind{height:8px;top:2px;transform-origin:50% 9px}
+.st-knop .knob-label{display:none}
+.st-filter .knob-ind{background:var(--warn)}
+.st-echo .knob-ind{background:var(--m-loops)}
+.st-galm .knob-ind{background:var(--m-sampler)}
+.st-cue{flex:0 0 auto;min-width:0;padding:4px 5px}
+.st-cue.on{background:var(--red);border-color:var(--red);color:#fff}
+.st-cue.dood{opacity:.35}
+.st-legenda{display:flex;align-items:center;gap:3px;font-size:11px;color:var(--klein);white-space:nowrap}
+.st-legenda i{display:inline-block;width:2px;height:9px;border-radius:1px;margin-left:6px}
+.st-legenda i:first-child{margin-left:0}
+.st-legenda .f{background:var(--warn)}
+.st-legenda .e{background:var(--m-loops)}
+.st-legenda .g{background:var(--m-sampler)}
+.stems-rij:has(.st-stemmen.hidden) .st-legenda{display:none}
+@media (max-width:1699px){ .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-legenda{display:none} }
 .st-geen{flex:1 1 0;display:flex;align-items:center;gap:10px;min-width:0;min-height:30px}   /* even hoog als de strips: geen sprong bij een focuswissel */
 .st-geen.hidden,.st-splitsen.hidden,.st-balk.hidden,.st-x.hidden{display:none}
 .st-tekst{font-size:12px;color:var(--klein);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -788,6 +810,9 @@ body.leermodus .spg-naam{display:block}
 /* Modus auto (auto-DJ): de modus limoen (scene 4, aan/uit), de knoppen in de
    kleur van hun LED: ok groen, overslaan oranje, langer cyaan, nu geel. */
 .spg[data-modus="auto"]{--kleur:var(--m-auto)}
+/* modus stems (VRAGEN N1): de pads zijn kills, dus rood zoals in klank; de modus zelf zeegroen */
+.spg[data-modus="stems"]{--kleur:var(--m-stems)}
+.spg[data-modus="stems"][data-action*=".stem."]{--kleur:var(--red)}
 .spg[data-modus="auto"][data-action="auto.ok"]{--kleur:#3ddc84}
 .spg[data-modus="auto"][data-action="auto.skip"]{--kleur:#ff9d2e}
 .spg[data-modus="auto"][data-action="auto.langer"]{--kleur:var(--m-loops)}

@@ -3202,8 +3202,11 @@ console.log('\nkoptelefoon');
   ok('alles uit: de koptelefoon hoort de zaal weer, vol', !kt.iets && kt.zaalKant.gain.value === 1 && pfls[1].gain.value === 0 && pfls[4].gain.value === 0);
   ok('de zaal merkt niets: de master niet aangeraakt', e4.master.gain.gain.value === master0);
   const sn = e4.snapshot().koptelefoon;
-  ok('snapshot: beschikbaar, 4 kanalen, volume, mix en de cue per track', sn.beschikbaar && sn.kanalen === 4 && sn.niveau === 0.5 && sn.mix === 0
-    && !sn.iets && Object.keys(sn.pfl).join() === DECK_IDS.join() && Object.values(sn.pfl).every((v) => v === false));
+  // Sinds de stemkanalen (5 okt) staat er per track ook `A:stems` in: de stem-cue.
+  ok('snapshot: beschikbaar, 4 kanalen, volume, mix en de cue per track (en per track de stem-cue)', sn.beschikbaar && sn.kanalen === 4 && sn.niveau === 0.5 && sn.mix === 0
+    && !sn.iets && Object.keys(sn.pfl).filter((k) => !k.includes(':')).join() === DECK_IDS.join()
+    && Object.keys(sn.pfl).filter((k) => k.includes(':')).join() === DECK_IDS.map((id) => `${id}:stems`).join()
+    && Object.values(sn.pfl).every((v) => v === false));
   bindEngine(eng);
 
   // 3. Omgewisseld (een samengesteld apparaat in de andere volgorde).
@@ -3227,6 +3230,343 @@ console.log('\nkoptelefoon');
   ok('APC: ● zonder shift = cue, in elke kolom; ● met shift blijft het cuepunt', pflRegels.length === 8
     && pflRegels.every((r, i) => r.in === `note:${i}:48` && !r.shift && !r.laag && r.action === `track.${i + 1}.pfl` && r.mode === 'trigger')
     && TRACKNRS.every((t) => std.rules.some((r) => r.in === `note:${t - 1}:48` && r.shift && r.action === `track.${t}.cue`)));
+  NOW = NOW0;
+}
+
+// ---- stemkanalen (docs/STEMS.md §5, 5 okt) -------------------------------------
+// Per stem een filter, een echo- en galm-send en een cue. De droge weg
+// stemIn[k] -> trim blijft wat hij was; het filter is een correctie ernaast
+// (x + H(g·x) − g·x, met g = 0 precies x), en elk deel van een stemkanaal komt
+// er pas bij als het voor het eerst iets moet doen, stil (zoals een nieuwe
+// keten in de insert-slot). Stem-sends gaan door een spiegel van de fader
+// (fader dicht = niets meer insturen, ook tijdens het glijden van de auto-DJ);
+// de groepsknop inst werkt op drums, bas en overig samen (filter in serie,
+// sends de grootste, cue of).
+console.log('\nstemkanalen');
+{
+  const { Deck, STEM_NAMEN, STEM_FILTER_TERUG, GLIJ } = await import('../src/engine/deck.js');
+  const { faderGain, filterDoelen, stemFilterDoelen, stemFilterOpen, STEM_MIDDEN } = await import('../src/engine/audio-graph.js');
+  const { startDrempel } = await import('../src/engine/overgang.js');
+  const { maakTijdlijn } = await import('./nep-tijdlijn.mjs');
+  const { geheugenHaal } = await import('../src/engine/bron.js');
+  const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+  const { OVERSLAAN, NUMMER_NODIG } = await import('../src/control/terugspelen.js');
+  const { NIET_IN_WAARDEN } = await import('../src/control/handelingen.js');
+  const { metaOf, has } = await import('../src/control/actions.js');
+  const dicht = (a, b, e = 1e-9) => Math.abs(a - b) < e;
+  const NOW0 = NOW;
+  const fouten0 = OVERLAP_FOUTEN, breuk0 = CURVE_BREUK;
+  const STEMS4 = { namen: ['drums', 'bass', 'other', 'vocals'], schaal: 1 };
+  const STEMS2 = { namen: ['vocals', 'inst'], schaal: 1 };
+
+  // 0. Het filter: per kant het sterkste, midden met een klik van een MIDI-knop.
+  ok('stemFilterDoelen: één knop = precies het trackfilter; de groep alleen = de groep', [0, 0.2, 0.5, 0.8, 1].every((v) =>
+    stemFilterDoelen(v).join() === filterDoelen(v).join() && stemFilterDoelen(0.5, v).join() === filterDoelen(v).join()));
+  ok('… beide dezelfde kant op: de sterkste (hoogste highpass, laagste lowpass)', stemFilterDoelen(0.9, 0.7).join() === filterDoelen(0.9).join()
+    && stemFilterDoelen(0.3, 0.1).join() === filterDoelen(0.1).join());
+  const band = stemFilterDoelen(0.2, 0.8);
+  ok('… tegenover elkaar: een bandfilter (highpass van de een, lowpass van de ander)', band[0] === filterDoelen(0.8)[0] && band[1] === filterDoelen(0.8)[1]
+    && band[2] === filterDoelen(0.2)[2] && band[3] === filterDoelen(0.2)[3]);
+  ok(`midden = 0,5 ± ${STEM_MIDDEN} (63 en 64 van 127 zijn allebei het midden)`, stemFilterOpen(0.5) && stemFilterOpen(63 / 127) && stemFilterOpen(64 / 127)
+    && !stemFilterOpen(62 / 127) && !stemFilterOpen(65 / 127) && stemFilterDoelen(64 / 127).join() === filterDoelen(0.5).join());
+
+  // 1. Een deck met een TIJDLIJN op elke AudioParam: wat doet elke parameter op elk moment.
+  const TLS = maakTijdlijn(() => NOW);
+  const sctx = new AudioContext();
+  let gemaakt = 0;
+  for (const m of ['createGain', 'createBiquadFilter']) {
+    const orig = sctx[m].bind(sctx);
+    sctx[m] = () => { gemaakt++; const n = orig(); for (const k of ['gain', 'frequency', 'Q']) n[k] = TLS.param(n[k].value); return n; };
+  }
+  NOW = 6000;
+  const ds = new Deck(sctx, 'S');
+  const c = ds.chain;
+  const kan = ds.stemKanalen;
+  const WACHT = startDrempel(sctx);
+  const n0 = gemaakt;
+  const leeg = () => kan.every((x) => !x.filter && !x.send.A && !x.send.B && !x.cue);
+  ds._zetStems(null);
+  ds.setStemFilter('vocals', 0.1); ds.setStemSend('A', 'vocals', 1); ds.setStemPfl('vocals', true);
+  ok('zonder stems: geen node van een stemkanaal (ook niet bij een laad of een stem-action); alleen de twee fader-spiegels',
+    leeg() && gemaakt === n0 && ['A', 'B'].every((b) => ds.stemSends[b].fader.gain.value === 1)
+    && ds.stemFilter('vocals') === null && ds.stemSend('A', 'vocals') === null && !ds.stemPflAan('vocals') && !ds.stemPflIets);
+  ds._zetStems(STEMS4);
+  ds._zetStems(STEMS4);
+  ok('vier stems geladen (twee keer), alles open: nog steeds geen enkele node erbij; filter, sends en cue van elke stem open',
+    leeg() && gemaakt === n0 && STEM_NAMEN.every((s) => ds.stemFilter(s) === 0.5 && ds.stemSend('A', s) === 0 && ds.stemSend('B', s) === 0));
+  ds.setStemFilter('vocals', 63 / 127); ds.setStemSend('A', 'bass', 0);
+  ok('een filter in het midden (63/127) of een send op 0: nog steeds niets', leeg() && gemaakt === n0);
+
+  // Het filter van de drums (uitgang 0): erdoor, klikvrij, de rest niet.
+  NOW += 1;
+  const t1 = NOW;
+  ds.setStemFilter('drums', 0.2);
+  const [, , lf02, lq02] = filterDoelen(0.2);
+  const k0 = kan[0].filter;
+  ok('het filter van de drums komt er nu pas bij: vier nodes (filterIn, highpass, lowpass, tegen), stil begonnen',
+    k0 && gemaakt === n0 + 4 && k0.filterIn.gain.waarde(t1) === 0 && k0.tegen.gain.waarde(t1) === 0 && [1, 2, 3].every((k) => !kan[k].filter));
+  let somFout = 0, stap = 0;
+  for (let x = 0; x <= 0.03; x += 0.0001) {
+    somFout = Math.max(somFout, Math.abs(k0.filterIn.gain.waarde(t1 + x) + k0.tegen.gain.waarde(t1 + x)));
+    stap = Math.max(stap, Math.abs(k0.filterIn.gain.waarde(t1 + x + 0.0001) - k0.filterIn.gain.waarde(t1 + x)));
+  }
+  ok(`drums filter 0,2: de lowpass van de drums gaat naar ${Math.round(lf02)} Hz (Q ${lq02.toFixed(2)}), als een knop (setTarget)`,
+    dicht(k0.lpf.frequency.waarde(t1 + 1), lf02, 1e-6) && dicht(k0.lpf.Q.waarde(t1 + 1), lq02, 1e-9) && k0.lpf.frequency.n.target === 1);
+  ok(`… en de drums gaan erdoor: filter → 1, tegen → −1 (x + H(x) − x), pas na de startdrempel (${(WACHT * 1000).toFixed(1)} ms), in 5 ms`,
+    k0.filterIn.gain.waarde(t1 + WACHT - 1e-4) === 0 && k0.tegen.gain.waarde(t1 + WACHT - 1e-4) === 0
+    && k0.filterIn.gain.waarde(t1 + WACHT + 0.0051) === 1 && k0.tegen.gain.waarde(t1 + WACHT + 0.0051) === -1);
+  ok(`… klikvrij: de twee takken heffen elkaar steeds op (hooguit ${somFout.toExponential(1)} ernaast: een kruisfade droog ↔ gefilterd), grootste stap per 0,1 ms ${stap.toFixed(3)}, geen curve`,
+    somFout < 1e-9 && stap < 0.05 && k0.filterIn.gain.n.curve === 0 && k0.filterIn.gain.n.lin > 10);
+  ok('… bas, overig en zang niet aangeraakt', [1, 2, 3].every((k) => !kan[k].filter) && ds.stemFilter('drums') === 0.2 && ds.stemFilter('bass') === 0.5);
+  // Terug naar het midden: eerst het filter terug, dan pas de takken dicht.
+  NOW += 1;
+  const t2 = NOW;
+  ds.setStemFilter('drums', 64 / 127);
+  ok(`terug in het midden: de lowpass loopt terug, de takken gaan pas na ${STEM_FILTER_TERUG * 1000} ms dicht`,
+    k0.filterIn.gain.waarde(t2 + STEM_FILTER_TERUG - 1e-4) === 1 && k0.filterIn.gain.waarde(t2 + STEM_FILTER_TERUG + 0.0051) === 0
+    && k0.tegen.gain.waarde(t2 + STEM_FILTER_TERUG + 0.0051) === 0 && k0.lpf.frequency.waarde(t2 + STEM_FILTER_TERUG) > 21000);
+  // Binnen die 50 ms weer draaien: de terugweg wordt afgebroken, de stem blijft in het filter.
+  NOW += 1;
+  ds.setStemFilter('drums', 0.3);
+  NOW += 1;
+  const t3 = NOW;
+  ds.setStemFilter('drums', 0.5);
+  NOW += 0.02;
+  ds.setStemFilter('drums', 0.7);
+  ok('binnen die 50 ms weer weg uit het midden: blijft in het filter (geen heen-en-weer)',
+    [0, 0.01, 0.03, 0.06, 0.2].every((x) => k0.filterIn.gain.waarde(t3 + x) === 1 && k0.tegen.gain.waarde(t3 + x) === -1)
+    && dicht(k0.hpf.frequency.waarde(NOW + 1), filterDoelen(0.7)[0], 1e-6));
+  ds.setStemFilter('drums', 0.5);
+  NOW += 1;
+
+  // De groepsknop inst bij vier: drums, bas en overig; de zang niet.
+  ds.setStemFilter('drums', 0.2);
+  ds.setStemFilter('inst', 0.8);
+  NOW += 1;
+  const hf = (k) => kan[k].filter.hpf.frequency.waarde(NOW), lf = (k) => kan[k].filter.lpf.frequency.waarde(NOW);
+  ok('inst (de groep) highpass: bas en overig precies het filter van de groep, drums een band (eigen lowpass + groep highpass)',
+    dicht(hf(1), filterDoelen(0.8)[0], 1e-6) && dicht(hf(2), filterDoelen(0.8)[0], 1e-6) && dicht(lf(1), 22050, 1e-6)
+    && dicht(hf(0), filterDoelen(0.8)[0], 1e-6) && dicht(lf(0), filterDoelen(0.2)[2], 1e-6)
+    && [0, 1, 2].every((k) => kan[k].filter.filterIn.gain.waarde(NOW) === 1));
+  ok('… de zang krijgt geen filter', !kan[3].filter);
+  ds.setStemFilter('drums', 0.5); ds.setStemFilter('inst', 0.5);
+  NOW += 1;
+  ok('alles weer in het midden: alle takken dicht (de filters blijven bestaan)', [0, 1, 2].every((k) => kan[k].filter.filterIn.gain.waarde(NOW) === 0
+    && kan[k].filter.tegen.gain.waarde(NOW) === 0));
+
+  // Sends: kwadratisch, de grootste van eigen knop en groep, × trim.
+  ds.setStemSend('A', 'vocals', 0.6);
+  ds.setStemSend('A', 'inst', 0.5);
+  ds.setStemSend('A', 'drums', 0.7);
+  ds.setStemSend('B', 'bass', 0.4);
+  NOW += 1;
+  const sA = (k) => kan[k].send.A?.gain.waarde(NOW) ?? 0, sB = (k) => kan[k].send.B?.gain.waarde(NOW) ?? 0;
+  ok('sends: zang 0,6 → 0,36 naar de echo; de groep 0,5 → bas en overig 0,25; drums eigen 0,7 > groep → 0,49',
+    dicht(sA(3), 0.36, 1e-6) && dicht(sA(1), 0.25, 1e-6) && dicht(sA(2), 0.25, 1e-6) && dicht(sA(0), 0.49, 1e-6));
+  ok('… bus B los daarvan: alleen de bas (0,16); een send die nooit open ging bestaat niet', dicht(sB(1), 0.16, 1e-6)
+    && [0, 2, 3].every((k) => !kan[k].send.B)
+    && ds.stemSend('A', 'inst') === 0.5 && ds.stemSend('B', 'bass') === 0.4 && ds.stemSend('B', 'vocals') === 0);
+  ds.set('trim', 0.7);
+  NOW += 1;
+  ok('trim 0,7 (×1,4): ook in de sends van elke stem (zang 0,36 × 1,4)', dicht(sA(3), 0.36 * 1.4, 1e-6) && dicht(sB(1), 0.16 * 1.4, 1e-6)
+    && dicht(c.trim.gain.waarde(NOW), 1.4, 1e-6));
+  ds.set('trim', 0.5);
+
+  // De spiegel: de fader, ook tijdens het glijden van de auto-DJ.
+  ds.set('fader', 0.3);
+  NOW += 1;
+  ok('fader 0,3: de spiegels van beide bussen precies de fader', ['A', 'B'].every((b) => ds.stemSends[b].fader.gain.waarde(NOW) === c.fader.gain.waarde(NOW))
+    && dicht(c.fader.gain.waarde(NOW), faderGain(0.3), 1e-6));
+  const tg = NOW;
+  ds.glide('fader', 0.9);
+  NOW += GLIJ / 2;
+  ds.glide('fader', 0.05);                                  // opnieuw richten midden in een glijbeurt
+  NOW += 0.1;
+  ds.set('fader', 0.6);                                     // en ingrijpen
+  let spiegelFout = 0;
+  for (let x = 0; x <= GLIJ * 2; x += 0.001) {
+    for (const b of ['A', 'B']) spiegelFout = Math.max(spiegelFout, Math.abs(ds.stemSends[b].fader.gain.waarde(tg + x) - c.fader.gain.waarde(tg + x)));
+  }
+  ok(`glijden, opnieuw richten en ingrijpen (Deck.glide, de auto-DJ): de spiegels volgen de fader sample voor sample (verschil ${spiegelFout})`,
+    spiegelFout === 0 && c.fader.gain.n.lin > 0 && ds.stemSends.A.fader.gain.n.lin === c.fader.gain.n.lin);
+  NOW += 1;
+  ds.set('fader', 0);
+  NOW += 1;
+  ok('fader dicht: de stem-sends sturen niets meer in (spiegel −70 dB), hun knop blijft staan',
+    dicht(ds.stemSends.A.fader.gain.waarde(NOW), faderGain(0), 1e-9) && ds.stemSend('A', 'vocals') === 0.6 && dicht(sA(3), 0.36, 1e-6));
+  ds.set('fader', 1);
+
+  // Een nieuw nummer: alles van de stemkanalen terug (ze horen bij het nummer).
+  ds.setStemFilter('vocals', 0.1);
+  NOW += 1;
+  const n2 = gemaakt;
+  ds._zetStems(STEMS2);
+  NOW += 1;
+  const dichtAlles = () => kan.every((x, k) => (!x.filter || (x.filter.filterIn.gain.waarde(NOW) === 0 && x.filter.tegen.gain.waarde(NOW) === 0))
+    && dicht(sA(k), 0) && dicht(sB(k), 0));
+  ok('een nieuw nummer (twee stems): filters, sends en cue terug (bij het NUMMER), geen nieuwe nodes', gemaakt === n2 && STEM_NAMEN.every((s) => !ds.stemBestaat(s)
+    || (ds.stemFilter(s) === 0.5 && ds.stemSend('A', s) === 0 && ds.stemSend('B', s) === 0 && !ds.stemPflAan(s))) && dichtAlles());
+  // Twee stems: inst is een eigen paar (uitgang 1), geen groep.
+  ds.setStemFilter('inst', 0.9);
+  ds.setStemSend('B', 'inst', 1);
+  NOW += 1;
+  ok('twee stems: inst is uitgang 1 (filter en galm), de zang (uitgang 0) niet; drums bestaat niet',
+    kan[1].filter.filterIn.gain.waarde(NOW) === 1 && dicht(hf(1), filterDoelen(0.9)[0], 1e-6) && kan[0].filter.filterIn.gain.waarde(NOW) === 0
+    && dicht(sB(1), 1, 1e-6) && sB(0) === 0 && ds.stemFilter('drums') === null);
+  ds._zetStems(null);
+  NOW += 1;
+  ok('weer zonder stems: wat er van de stemkanalen is blijft (er gaat nooit iets los), maar dicht', !!kan[0].filter && dichtAlles() && ds.stemStand() === null);
+  ok(`het tijdlijn-deck: geen curve, geen breuk, geen NotSupportedError (${TLS.stats.CURVE_BREUK} / ${TLS.stats.OVERLAP_FOUTEN})`,
+    TLS.stats.CURVE_BREUK === 0 && TLS.stats.OVERLAP_FOUTEN === 0);
+
+  // 2. De engine met vier kanalen (koptelefoon): bedrading, cue, de bus.
+  const Oud = globalThis.AudioContext;
+  const lijnen = [];
+  const volg = (n) => { n.connect = (doel, uit = 0, inn = 0) => { lijnen.push([n, doel, uit, inn]); return doel; }; return n; };
+  const Vier = class extends Oud {
+    constructor(o) { super(o); this.destination.maxChannelCount = 4; volg(this.destination); }
+    createGain() { return volg(super.createGain()); }
+    createBiquadFilter() { return volg(super.createBiquadFilter()); }
+    createDynamicsCompressor() { return volg(super.createDynamicsCompressor()); }
+    createAnalyser() { return volg(super.createAnalyser()); }
+    createChannelMerger(n) { return Object.assign(volg(super.createChannelMerger(n)), { numberOfInputs: n }); }
+    createChannelSplitter(n) { return Object.assign(volg(node('splitter')), { numberOfOutputs: n }); }
+  };
+  const heeft = (van, doel) => lijnen.some((l) => l[0] === van && l[1] === doel);
+  const uitVan = (van) => lijnen.filter((l) => l[0] === van).map((l) => l[1]);
+  globalThis.AudioContext = Vier;
+  const e6 = new Engine();
+  globalThis.AudioContext = Oud;
+  const kt = e6.koptelefoon;
+  const dD = e6.deck('D'), cD = dD.chain;
+  const ktGain = (sleutel) => kt._pfl.get(sleutel)?.gain;
+  const leegD = () => dD.stemKanalen.every((x) => !x.filter && !x.send.A && !x.send.B && !x.cue);
+  ok('zonder stems: stemIn → trim en verder niets (het oude pad); de fader-spiegels naar de bussen, de stem-cue naar de koptelefoon (D:stems)',
+    leegD() && [0, 1, 2, 3].every((k) => uitVan(cD.stemIn[k]).length === 1 && heeft(cD.stemIn[k], cD.trim))
+    && ['A', 'B'].every((b) => heeft(dD.stemSends[b].fader, e6.sends[b].in)) && heeft(dD.stemCue.som, ktGain('D:stems'))
+    && heeft(ktGain('D:stems'), kt.cue) && heeft(cD.lpf, ktGain('D')) && e6.decks.A.stemCue && kt.heeft('H:stems'));
+  bindEngine(e6);
+  NOW = 7000;
+  const W6 = startDrempel(e6.ctx);
+  // Laden zoals de app: stems.wav via de StreamBron (de worklet nagebootst).
+  const oudWorklet = e6.ctx.audioWorklet;
+  e6.ctx.audioWorklet = { addModule: async () => {} };
+  const oudNode = globalThis.AudioWorkletNode;
+  globalThis.AudioWorkletNode = nepWorkletNode([]);
+  const wavParen = (paren) => {
+    const n = 4800, ch = paren * 2, b = new ArrayBuffer(44 + n * ch * 2), v = new DataView(b);
+    const zet = (o, t) => { for (let i = 0; i < 4; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+    zet(0, 'RIFF'); v.setUint32(4, 36 + n * ch * 2, true); zet(8, 'WAVE'); zet(12, 'fmt '); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, ch, true); v.setUint32(24, 48000, true); v.setUint32(28, 48000 * ch * 2, true);
+    v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true); zet(36, 'data'); v.setUint32(40, n * ch * 2, true);
+    return b;
+  };
+  const r = (a) => read(`track.4.stem.${a}`);
+  await dD.laadGeheugen(buf, 'zonder stems');
+  ok('een stereo-laad: nog steeds geen stemkanaal; filter, sends en cue van elke stem lezen null',
+    leegD() && STEM_NAMEN.every((s) => ['filter', 'send.a', 'send.b', 'pfl'].every((x) => r(`${s}.${x}`) === null)));
+  invoke('track.4.stem.vocals.pfl', true); invoke('track.4.stem.vocals.filter', 0.1);
+  ok('… en ze doen niets', !dD.stemPflIets && !kt.iets && dD.stemFilters.vocals === 0.5);
+  const n6 = lijnen.length;
+  await dD.laadStream('/media/x/stems.wav', 'vier', { haal: geheugenHaal(wavParen(4)), stems: STEMS4 });
+  const kD = dD.stemKanalen;
+  ok('vier stems geladen: geen nieuwe verbinding van de stemkanalen (alles open); filter 0,5, sends 0, cue 0 voor elke stem (ook inst)',
+    leegD() && !lijnen.slice(n6).some((l) => cD.stemIn.includes(l[0]) && l[1] !== cD.trim) && ['drums', 'bass', 'other', 'vocals', 'inst']
+      .every((s) => r(`${s}.filter`) === 0.5 && r(`${s}.send.a`) === 0 && r(`${s}.send.b`) === 0 && r(`${s}.pfl`) === 0));
+  invoke('track.4.stem.vocals.filter', 0.25); invoke('track.4.stem.drums.send.a', 0.4); invoke('track.4.stem.inst.send.b', 0.8);
+  ok('de bus: filter en sends per stem (read volgt)', r('vocals.filter') === 0.25 && r('drums.send.a') === 0.4 && r('inst.send.b') === 0.8
+    && kD[3].filter.filterIn.gain.value === 1 && kD[3].filter.tegen.gain.value === -1 && dicht(kD[2].send.B.gain.value, 0.64));
+  const f3 = kD[3].filter;
+  ok('het filter van de zang: de droge weg zoals hij was, plus stemIn → filterIn → highpass → lowpass → trim en stemIn → tegen → trim',
+    heeft(cD.stemIn[3], cD.trim) && heeft(cD.stemIn[3], f3.filterIn) && heeft(f3.filterIn, f3.hpf) && heeft(f3.hpf, f3.lpf)
+    && heeft(f3.lpf, cD.trim) && heeft(cD.stemIn[3], f3.tegen) && heeft(f3.tegen, cD.trim) && !kD[0].filter);
+  ok('de sends: van de stem (zonder filter alleen stemIn) naar de fader-spiegel van de bus; alleen wat open ging (drums A, de groep B)',
+    heeft(cD.stemIn[0], kD[0].send.A) && heeft(kD[0].send.A, dD.stemSends.A.fader) && [0, 1, 2].every((k) => heeft(cD.stemIn[k], kD[k].send.B)
+      && heeft(kD[k].send.B, dD.stemSends.B.fader)) && !kD[1].send.A && !kD[3].send.A && !kD[3].send.B);
+  invoke('track.4.stem.drums.filter', 0.9);
+  ok('… komt er later een filter bij (drums), dan gaan zijn takken ook naar de sends die er al waren (na het filter)',
+    ['A', 'B'].every((b) => heeft(kD[0].filter.lpf, kD[0].send[b]) && heeft(kD[0].filter.tegen, kD[0].send[b])));
+  invoke('track.4.stem.drums.filter', 0.5);
+  // De cue: zang, dan de groep, dan drums erbij, dan alles uit.
+  const per = (k) => kD[k].cue?.gain.value ?? 0;
+  invoke('track.4.stem.vocals.pfl', true); invoke('track.4.stem.vocals.pfl', false);
+  ok('de cue van de zang komt er bij het eerste gebruik bij: na zijn filter (alle drie de takken) → de stem-cue',
+    kD[3].cue && [cD.stemIn[3], f3.lpf, f3.tegen].every((t) => heeft(t, kD[3].cue)) && heeft(kD[3].cue, dD.stemCue.som) && !kD[0].cue);
+  invoke('track.4.stem.vocals.pfl', true); invoke('track.4.stem.vocals.pfl', false);
+  NOW += 1;
+  const spion = [];
+  for (const m of ['setValueAtTime', 'linearRampToValueAtTime', 'setTargetAtTime', 'setValueCurveAtTime', 'cancelAndHoldAtTime']) {
+    const g = kD[3].cue.gain, orig = g[m];
+    g[m] = function (...a) { spion.push([m, ...a]); return orig.apply(this, a); };
+  }
+  invoke('track.4.stem.vocals.pfl', true); invoke('track.4.stem.vocals.pfl', false);
+  ok('cue op de zang: alleen de zang (uitgang 3) in de koptelefoon, de koptelefoon hoort een cue (D:stems aan)',
+    per(3) === 1 && [0, 1, 2].every((k) => per(k) === 0) && r('vocals.pfl') === 1 && r('inst.pfl') === 0 && kt.pflAan('D:stems') && kt.iets
+    && ktGain('D:stems').gain.value === 1 && read('track.4.pfl') === 0);
+  ok(`… klikvrij: vasthouden, dan hellingen vanaf nu + ${(W6 * 1000).toFixed(1)} ms, geen curve`, spion[0]?.[0] === 'cancelAndHoldAtTime'
+    && spion.some((x) => x[0] === 'linearRampToValueAtTime' && x[1] === 1 && x[2] > NOW + W6) && !spion.some((x) => x[0] === 'setValueCurveAtTime'));
+  NOW += 1;
+  invoke('track.4.stem.inst.pfl', true);
+  ok('cue op de groep (inst): drums, bas en overig erbij', [0, 1, 2, 3].every((k) => per(k) === 1) && r('inst.pfl') === 1 && r('drums.pfl') === 0);
+  NOW += 1;
+  invoke('track.4.stem.vocals.pfl', true); invoke('track.4.stem.drums.pfl', true);
+  ok('zang uit, drums eigen cue erbij terwijl de groep aan staat: drums blijft één keer aan (of, niet dubbel)',
+    per(3) === 0 && per(0) === 1 && r('drums.pfl') === 1 && kt.iets);
+  NOW += 1;
+  invoke('track.4.stem.inst.pfl', true);
+  ok('groep uit: alleen de drums blijven', per(0) === 1 && per(1) === 0 && per(2) === 0 && per(3) === 0 && kt.pflAan('D:stems'));
+  NOW += 1;
+  invoke('track.4.trim', 0.25);
+  ok('trim van de track (×0,5): ook in de cue van de stem die aan staat (en niet in de andere)', dicht(per(0), 0.5) && per(1) === 0
+    && dicht(cD.trim.gain.value, 0.5));
+  invoke('track.4.trim', 0.5);
+  NOW += 1;
+  invoke('track.4.stem.drums.pfl', true);
+  ok('alles uit: de koptelefoon hoort de zaal weer (D:stems uit)', [0, 1, 2, 3].every((k) => per(k) === 0) && !kt.pflAan('D:stems') && !kt.iets
+    && kt.zaalKant.gain.value === 1);
+  invoke('track.4.stem.vocals.pfl', true);
+  NOW += 1;
+  await dD.laadStream('/media/x/stems2.wav', 'twee', { haal: geheugenHaal(wavParen(2)), stems: STEMS2 });
+  ok('een nieuw nummer: de cue van de stems uit, de koptelefoon ook', !dD.stemPflIets && !kt.pflAan('D:stems') && per(0) === 0
+    && r('vocals.pfl') === 0 && r('drums.pfl') === null && r('vocals.filter') === 0.5);
+  ok('snapshot: per stem ook filter, sends (A, B) en cue', (() => {
+    invoke('track.4.stem.inst.send.a', 0.3); invoke('track.4.stem.vocals.pfl', true);
+    const sn = e6.snapshot().decks.D.stems;
+    return sn.filter.vocals === 0.5 && sn.send.A.inst === 0.3 && sn.send.B.vocals === 0 && sn.cue.vocals === true && sn.cue.inst === false
+      && !('drums' in sn.filter) && e6.snapshot().koptelefoon.pfl['D:stems'] === true;
+  })());
+  invoke('track.4.stem.vocals.pfl', true);
+  e6.ctx.audioWorklet = oudWorklet;
+  globalThis.AudioWorkletNode = oudNode;
+  bindEngine(eng);
+
+  // Zonder koptelefoonuitgang (de gewone mock): geen cue-nodes, read null, doet niets.
+  const dDe = eng.deck('D');
+  dDe._zetStems(STEMS2);
+  invoke('track.4.stem.vocals.pfl', true);
+  ok('zonder koptelefoonuitgang: geen stem-cue (geen node), de cue leest null en doet niets; filter en sends wel',
+    dDe.stemCue === null && dDe.stemKanalen.every((x) => !x.cue) && read('track.4.stem.vocals.pfl') === null
+    && !dDe.stemPflAan('vocals') && !eng.koptelefoon.heeft('D:stems')
+    && read('track.4.stem.vocals.filter') === 0.5 && read('track.4.stem.inst.send.b') === 0);
+  dDe._zetStems(null);
+
+  // 3. De actions: soort, label, uitleg, log en terugspelen.
+  const nieuw = STEM_NAMEN.flatMap((s) => ['filter', 'send.a', 'send.b', 'pfl'].map((x) => `track.4.stem.${s}.${x}`));
+  ok(`20 nieuwe stem-actions per track (vijf stems × filter/send.a/send.b/pfl), op alle acht tracks`, nieuw.every((a) => has(a))
+    && [1, 2, 3, 5, 6, 7, 8].every((t) => has(`track.${t}.stem.other.pfl`) && has(`track.${t}.stem.inst.send.b`)));
+  ok('filter (bipolair) en sends = value, pfl = trigger, met een Nederlands label', STEM_NAMEN.every((s) =>
+    metaOf(`track.4.stem.${s}.filter`).type === 'value' && metaOf(`track.4.stem.${s}.filter`).bipolar === true
+    && metaOf(`track.4.stem.${s}.send.a`).type === 'value' && metaOf(`track.4.stem.${s}.pfl`).type === 'trigger')
+    && /zang: filter/.test(metaOf('track.4.stem.vocals.filter').label) && /galm/.test(metaOf('track.4.stem.bass.send.b').label)
+    && /koptelefoon/.test(metaOf('track.4.stem.inst.pfl').label));
+  const kaal = nieuw.filter((a) => beschrijf(a).kort === a || beschrijf(a).lang.startsWith('?'));
+  ok(`elke nieuwe stem-action heeft een uitleg op de APC-kaart${kaal.length ? ': ' + kaal.join(', ') : ''}`, kaal.length === 0);
+  ok('terugspelen slaat alleen de stem-cue over (de zaal hoort hem niet); filter en sends horen bij het nummer',
+    STEM_NAMEN.every((s) => OVERSLAAN.test(`track.4.stem.${s}.pfl`) && !OVERSLAAN.test(`track.4.stem.${s}.filter`)
+      && !OVERSLAAN.test(`track.4.stem.${s}.send.a`) && NUMMER_NODIG.test(`track.4.stem.${s}.filter`))
+    && !OVERSLAAN.test('track.4.stem.vocals.pfl.x') && !NIET_IN_WAARDEN.test('track.4.stem.vocals.filter'));
+
+  ok('geen overlappende automatisering en geen afgebroken curve in de stemkanalen', OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
   NOW = NOW0;
 }
 

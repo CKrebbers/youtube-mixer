@@ -63,6 +63,11 @@ export function beschrijf(action) {
     if ((m = /^stem\.(vocals|inst|drums|bass|other)$/.exec(rest))) return r(STEM[m[1]], `stem-niveau: ${STEM_UITLEG[m[1]]}, vóór de EQ (vol = 1, dicht = weg; alleen als het nummer stems heeft)`);
     if ((m = /^stem\.(vocals|inst|drums|bass|other)\.kill$/.exec(rest))) return r(`${STEM[m[1]]} weg`, `stem weg aan/uit: ${STEM_UITLEG[m[1]]} (het niveau blijft staan; lampje = weg)`);
     if ((m = /^stem\.(vocals|inst|drums|bass|other)\.hold$/.exec(rest))) return r(`${STEM[m[1]]} weg!`, `stem weg zolang je drukt: ${STEM_UITLEG[m[1]]}`);
+    // Stemkanalen (docs/STEMS.md §5). Bij vier stems werkt `inst` op de groep: filter in serie, sends en cue samen.
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.filter$/.exec(rest))) return r(`${STEM[m[1]]} filter`, `stemfilter: ${STEM_UITLEG[m[1]]}; midden = open, links lowpass, rechts highpass (alleen deze stem)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.send\.a$/.exec(rest))) return r(`${STEM[m[1]]} echo`, `echo-send van één stem: ${STEM_UITLEG[m[1]]}; volgt de fader van de track (fader dicht = niets meer insturen)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.send\.b$/.exec(rest))) return r(`${STEM[m[1]]} galm`, `galm-send van één stem: ${STEM_UITLEG[m[1]]}; volgt de fader van de track (fader dicht = niets meer insturen)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.pfl$/.exec(rest))) return r(`${STEM[m[1]]} PFL`, `één stem in de koptelefoon aan/uit: ${STEM_UITLEG[m[1]]}, na zijn filter en vóór de fader; de zaal hoort het niet (uit = geen koptelefoonuitgang of geen stems)`);
     if (rest === 'pfl') return r('PFL', 'in de koptelefoon aan/uit: voorbeluisteren vóór de fader, de zaal hoort het niet (lampje rood = je hoort hem; uit = geen koptelefoonuitgang, docs/STUDIO.md §3)');
     if (rest === 'brake') return r('rem', 'rem (vinylstop): in de remtijd naar stilstand, dan pauze; tijdens het remmen nog eens = los');
     if (rest === 'brake.time') return r('remtijd', 'remtijd: 0,1 tot 5 seconden tot stilstand');

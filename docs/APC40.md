@@ -59,7 +59,8 @@ in een mapje. Fysieke plaatsing volgens de User Guide. Volledig en actueel op
 (382 regels, versie 3; tot 25 sep 291, tot 2 okt 374). Op 25 september kwamen de
 DJ-functies van ronde 3 erbij, zoals Clay koos ("Voorstel A"): zie hieronder, en de
 tabel "Voorstel A". Op 2 oktober de modus auto (auto-DJ, VRAGEN AU1): zie
-"Modus auto" onderaan.
+"Modus auto" onderaan. Op 5 oktober de modus stems (VRAGEN N1, 480 regels): zie
+"Modus stems" onderaan.
 
 **Per kolom (track 1–8)** — knob: filter (endless) · grid: zie modi · Clip
 Stop: loop aan/uit (shift: loop weg) · Track Select: focus (shift: als tweede
@@ -98,10 +99,11 @@ sampler (violet: rij 1 pads, rij 2 leegmaken, linksonder samplerlengte) · video
 flits, pad 8 zwart zolang je drukt, rij 2 pad 7 zwart aan/uit, pad 8 bevriezen) · klank (magenta, per kolom =
 track: rij 1 kill hoog, 2 kill mid, 3 kill laag — vasthouden = weg zolang je
 drukt, shift + pad = vastzetten/losmaken; rij 4 rem; rij 5 op de maat starten) ·
-auto (limoen: de auto-DJ, zie "Modus auto" onderaan).
-Scene 5 = loop weg. ▲ ▼ loopt rond door alle zes (hotcues → loops → sampler →
-video → klank → auto → hotcues). Vasthouden van een modusknop (ook Shift + scene 5
-en Shift + scene 4) vanuit een andere modus = even gluren.
+auto (limoen: de auto-DJ, zie "Modus auto" onderaan) · stems (zeegroen, Shift +
+scene 3: per kolom een stem weg, zie "Modus stems" onderaan).
+Scene 5 = loop weg. ▲ ▼ loopt rond door alle zeven (hotcues → loops → sampler →
+video → klank → auto → stems → hotcues). Vasthouden van een modusknop (ook Shift +
+scene 5, 4 en 3) vanuit een andere modus = even gluren.
 
 Waarom klank op **Shift + scene 5**: scene 5 is al "loop weg", en dat moet één
 druk blijven (een loop moet je snel kwijt kunnen). Shift + scene 5 was vrij, zit
@@ -229,3 +231,45 @@ voorganger afgezet (anders 8 x "weggehaald"). `test/mapping.test.mjs` rekent het
 
 Niet getest: de echte APC (kleuren limoen naast groen en geel op de pads, of
 Shift + scene 4 lekker ligt), en de auto-DJ zelf op het apparaat.
+
+## Modus stems (5 oktober 2026, VRAGEN N1, GEBOUWD, niet op het apparaat nagelopen)
+
+Stems op de APC zonder muis (`docs/STEMS.md` §5), volgens het advies in N1. Een
+zevende grid-modus, `grid.stems`, in zeegroen. Alleen regels ERBIJ (83): geen
+bestaande regel is veranderd.
+
+| waar | knop | doet | lampje |
+|---|---|---|---|
+| scene-knoppen | Shift + scene 3 | modus stems openen (vasthouden = gluren) | met shift: donker zeegroen = dicht, fel = open |
+| | scene 3 (in stems) | blijft sampler kiezen | fel zeegroen = stems open (`led.lees: layer.grid.stems`) |
+| pijlen | ▲ ▼ | rondlopen, stems komt na auto (achteraan) | — |
+| grid, per kolom = track | rij 1 | zang weg zolang je drukt (`track.N.stem.vocals.hold`); shift = aan/uit (`.kill`) | fel rood = weg, donkerrood = open, uit = geen stems |
+| | rij 2 | rest weg (bij vier: drums + bas + overig) | idem |
+| | rij 3 · 4 · 5 | drums · bas · overig weg (alleen bij vier stems) | idem; uit bij twee |
+
+**Waarom zo.** Zoals de kill in klank: indrukken = weg zolang je drukt, shift + pad =
+vastzetten (een stem die je kwijt wilt houden). Zang en rest bovenaan: die bestaan
+bij twee én vier stems, dus de bovenste twee rijen doen altijd iets. Rood, niet
+zeegroen, op de pads: rood = weg, zoals in klank; de modus zelf herken je aan scene 3.
+Zeegroen (33, donker 34, `zeegroendonker` in het palet erbij) is de enige kleur met
+een donkere tint die nog geen modus was.
+
+**Waarom Shift + scene 3.** Klank is Shift + scene 5, auto Shift + scene 4: Shift +
+scene 3 was vrij (geen eigen regel) en zit ernaast. In de grid-modus is scene 3
+"bpm ½"; net als bij scene 4 een expliciete regel `note:0:84#shift@edit.aan` = bpm ½,
+anders opende shift + scene 3 daar ineens de stems. Achteraan in ▲ ▼ zodat de
+bestaande modi op hun plek blijven (▲ vanuit hotcues is nu stems, ▲ ▲ auto).
+
+**Niet op de APC**: filter, echo, galm en cue per stem (in de rij op het scherm, en
+koppelen werkt). Daar is in de standaard geen plek voor zonder bestaande regels te
+veranderen. Voorstel (vraag voor Clay): een derde mapje onder Clip/Device View
+(strip → rack → stems) voor de focus-track, device knobs 1–4 = filter van zang ·
+rest · drums · bas (bij twee stems alleen 1–2), 5–8 = echo van dezelfde, shift +
+knob = galm.
+
+**Eigen mapping.** Geen van de nieuwe sleutels valt op Clay's verschil
+(cc:0:20–23 in het rack); een oude volledige kopie van 25 sep wordt tegen zijn
+voorganger afgezet (anders 106 × "weggehaald"). `test/mapping.test.mjs` rekent het na.
+
+Niet getest: de echte APC (zeegroen naast cyaan en groen, of Shift + scene 3 lekker
+ligt, rood op 40 pads tegelijk).

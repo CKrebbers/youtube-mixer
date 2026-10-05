@@ -50,7 +50,7 @@ apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze do
 controle.html       de Controlekamer (/controle): stand van alles, mixer openen, speellijst (docs/CONTROLEKAMER.md)
 styles.css
 src/
-  engine/           audio-graph.js  kanaalstrip, EQ (+ kill), bipolair filter, master, xfader
+  engine/           audio-graph.js  kanaalstrip, EQ (+ kill), bipolair filter, master, xfader, het stemfilter (maakStemFilter)
                     beatgrid.js     tempokaart + maat-anker per stuk, tap tempo, beatjump-rekenwerk. Puur.
                     toonsoort.js    ToonKaart: toonsoort per stuk, wat je hoort, bewerken. Puur.
                     hoorbaar.js     wat je HOORT: uitgangsVertraging(ctx), hoorbaar(deck, V). Eén plek.
@@ -60,7 +60,7 @@ src/
                     stream-lezer.js de AudioWorklet die pagina's afspeelt
                     fx.js           insert-slot: ketens bouwen, klikvrij wisselen
                     rack.js         racks als data: macro's, curves, migratie
-                    deck.js         transport, cues, loops, beatjump, quantize, rem, beatgrid (geluid zit in bron.js)
+                    deck.js         transport, cues, loops, beatjump, quantize, rem, beatgrid, stems + stemkanalen (geluid zit in bron.js)
                     sampler.js      acht pads: knippen op het grid, loopen op de maat van wat je hoort
                     klankschaal.js  instrument op de toon van wat je hoort: stemming(), volgen (maat/focus/hand), aanslaan, wrijven
                     klankschaal-kern.js  het modale model van de Waterschaal, per sample, afvalvrij. Puur.
@@ -107,7 +107,7 @@ src/
                     klankschaal-paneel.js de KLANKSCHAAL-rij: openen, instellingen bewaren, per frame tonen
                     plan-koppeling.js in de mixer: actief plan, ophalen met versie, live naar de automaat, window.varvePlan, knop plan
                     auto-paneel.js  de AUTO-rij: wat er klinkt, wat er komt en waarom, ok/overslaan/langer/nu
-                    stems-paneel.js de STEMS-rij voor de focus-track: niveau + kill per stem, splitsen, voortgang
+                    stems-paneel.js de STEMS-rij voor de focus-track: niveau, kill, filter, echo, galm, cue per stem, splitsen, voortgang
                     stems-wachtrij.js de stems-rij van de server (GET /api/stems): peilen zolang iets open staat of iemand kijkt
                     stems-weergave.js stems als tekst: namen, library-cel, rijstand, kolomteken, tegel. Puur.
                     koptelefoon-paneel.js de KOPTELEFOON-rij: cue per track, VOL, MIX, ⇄ (zaal en koptelefoon wisselen, na herladen)
@@ -156,7 +156,7 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, stemkanalen.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
@@ -234,7 +234,7 @@ docs/
   PLAN.md           het planvenster: formaat v2, opslaan met versie, samenwerken met Claude, live, fases
   AUTO-DJ.md        auto-DJ: drie partijen, bewakers, overgangen, bediening, het setplan, grenzen, volgende fases
   KLANKSCHAAL.md    de klankschaal: stemming, bouw, bediening, metingen, open vragen (KS1–KS5)
-  STEMS.md          stems per nummer: Demucs bij de ingest, stems.wav, de engine, de rij, metingen
+  STEMS.md          stems per nummer: Demucs bij de ingest, stems.wav, de engine, de rij, metingen; §5 de stemkanalen
   TAILSCALE.md      overal openen via Tailscale: VARVE_HOSTS, tailscale serve, wat waar werkt
   ONTBREEKT.md      wat er nog ontbreekt (2 okt): eigen docs, DJ-software, Logic/TD; voorstel en vragen
   STUDIO.md         VARVE als muziekprogramma (5 okt): hergebruik, vier controllers, fasen S0–S5; §3 de koptelefoon
@@ -1219,9 +1219,9 @@ Volledig in `docs/STEMS.md`. Wat een bouwer niet mag missen:
   serverwijziging: server herstarten; schema v8 migreert vanzelf.
 - Opnieuw splitsen vervangt `stems.wav`: de ui weigert het zolang een track dat
   nummer met stems speelt, en de StreamBron vangt het af (zie Bekende grenzen).
-- Geen vaste APC-plek (VRAGEN N1); koppelen werkt. Een nieuwe stem-knop op een
-  deck: ook in `OVERNEEM` (auto-DJ) en, als het een schakelaar is, in de
-  beginstand van het handelingenlog (`stemKill`).
+- Op de APC sinds 5 okt de grid-modus stems (zie Stemkanalen). Een nieuwe
+  stem-knop op een deck: ook in `OVERNEEM` (auto-DJ) en, als het een schakelaar
+  is, in de beginstand van het handelingenlog (`stemKill`).
 
 ## Koptelefoon (gebouwd 5 okt, ROADMAP 27 S1)
 
@@ -1244,6 +1244,35 @@ Volledig in `docs/STUDIO.md` §3. Wat een bouwer niet mag missen:
   sampler-volume en puls op shift + Cue Level in grid-modus sampler en video.
 - Gemeten met `tools/headless/koptelefoon.mjs` (echte Chrome, OfflineAudioContext van
   vier kanalen); de mock in engine.test kent geen echte splitter/merger.
+
+## Stemkanalen (gebouwd 5 okt)
+
+Volledig in `docs/STEMS.md` §5 (ROADMAP 27, STUDIO S2b). Wat een bouwer niet mag missen:
+- Per stem een filter (`track.N.stem.<s>.filter`, bipolair, zoals het trackfilter), een
+  echo en een galm (`.send.a/.b`) en een cue (`.pfl`); read null zonder die stem, de cue
+  ook zonder koptelefoonuitgang. Bij vier stems werkt `inst` op drums + bas + overig:
+  filter in serie (per kant het sterkste), sends de grootste, cue "of".
+- De droge weg `stemIn[k] -> trim` is NIET veranderd. Het filter is een correctie ernaast
+  (`maakStemFilter`: x + H(g·x) − g·x), en elk deel (filter, send, cue) komt er pas bij
+  als het voor het eerst iets doet, stil, zoals een nieuwe keten in de insert-slot. Er
+  gaat nooit iets los. Zonder stems of met alles open: bit voor bit het oude pad en
+  dezelfde CPU (gemeten met `tools/headless/stemkanalen.mjs --vergelijk`).
+- Stem-sends gaan door een SPIEGEL van de fader (`deck.stemSends[A|B].fader`): elke
+  nieuwe code die `chain.fader.gain` aanraakt, moet de spiegels mee nemen (`applyUi`,
+  `_glijParams`, `_glijDoelen`), anders blijft de echo van een stem open als de fader
+  dicht gaat. Trim zit in de versterking per stem. Niet door EQ, effect en trackfilter.
+- De cue van de stems is ÉÉN ingang per track in de koptelefoon (`A:stems`, de engine
+  volgt `deck.stemPflIets`); `track.N.stem.<s>.pfl` staat in OVERSLAAN, niet in OVERNEEM
+  en niet in de beginstand. Filter en sends wel in OVERNEEM; als value-action vanzelf
+  in de beginstand.
+- APC: grid-modus stems (zeegroen, Shift + scene 3 of ▲ ▼, achteraan): per kolom rij
+  1–5 zang · rest · drums · bas · overig weg zolang je drukt, shift = vastzetten. 83
+  regels erbij (480), geen bestaande veranderd; `note:0:84#shift@edit.aan` houdt bpm ½.
+- Een insert-effect per stem is gemeten en NIET gebouwd: ~5,5 ms CPU per s audio per
+  slot, ook stil (acht tracks × vier stems: +110%).
+- Chrome offline is niet deterministisch op de bits als een ingang twee klinkende
+  verbindingen optelt (een hashset: 1 ULP), of als er timers in het renderen vallen:
+  vergelijk bit voor bit alleen met één klinkende bron per optelpunt.
 
 ## Werkwijze die hier werkt
 

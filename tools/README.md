@@ -70,6 +70,13 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   op 1000 Hz, per kanaal gemeten (Goertzel). Zaal 1/2 alleen track 2; koptelefoon 3/4 met de cue op
   track 1 alleen track 1 (−9 dB tegen −156 dB); mix, volume (13,5 dB) en omgewisseld. Raakt de
   geluidsinstellingen van de Mac niet.
+- `stemkanalen.mjs [--vergelijk <revisie>] [--cpu] [uitmap]` — filter, sends en cue per stem
+  (docs/STEMS.md §5), eigen server op 8812 (`VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`), geen MIDI: een
+  stems.wav met een toon per stem door de echte worklet op een OfflineAudioContext, per toon
+  gemeten (filter van één stem, echo aan de ingang van de bus, fader dicht en dicht glijden, cue op
+  3/4, de groep inst); de STEMS-rij op 1440×900, 1440×790 en 1920×1080. `--vergelijk` = dezelfde
+  scènes op een oude revisie (git archive, zelfde poort na elkaar): bit voor bit. `--cpu` = CPU-tijd
+  van acht tracks × vier stems (met `--vergelijk` om en om met de oude code op één pagina).
 - `plan.mjs` — het planvenster in headless Chromium (server op 8795, eigen VARVE_PLANNEN): de knop
   "plan" opent plan.html, voorspelling, bewerken, ongedaan maken, opslaan (vorige versie bewaard),
   nummer erbij, auto aan over de bus van de mixer, live "speelt nu", een wijziging van buitenaf

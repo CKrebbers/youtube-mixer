@@ -603,5 +603,41 @@ ok('blackout zet alles op nul', bus.every((b) => b[2] === 0));
   invoke('auto.aan', true); invoke('auto.aan', false);
 }
 
+// ---- modus stems (5 okt, VRAGEN N1): LED's -------------------------------------
+// Zoals de kill in klank: fel rood = de stem is weg, donkerrood = er valt iets
+// weg te drukken, uit = de track heeft die stem niet (read null). Scene 3 met
+// shift zeegroen (de modus), en in de modus fel zeegroen.
+{
+  const standen = { 'layer.grid.hotcues': 1, 'layer.grid.sampler': 0, 'layer.grid.stems': 0 };
+  // Track 1 heeft twee stems (zang weg), track 2 vier, de rest geen.
+  const stems = { 1: { vocals: 1, inst: 0 }, 2: { vocals: 0, inst: 0, drums: 0, bass: 1, other: 0 } };
+  const lees = (a) => {
+    const m = /^track\.(\d)\.stem\.(\w+)\.(kill|hold)$/.exec(a);
+    if (m) return stems[m[1]]?.[m[2]] ?? null;
+    return a in standen ? standen[a] : null;
+  };
+  const lg = new Lagen();
+  const m = new Mapping({ read: lees, invoke: () => {}, vars: () => ({ focus: 1 }), lagen: () => lg.actief() });
+  m.load(standaard);
+  const fbS = new Feedback({ device: apc, mapping: m, read: lees, meta: () => null, send: () => true });
+  fbS.klaar = true;
+  const led = (sig) => fbS.desired().get(sig)?.[2] ?? null;
+  const pad = (kol, rij) => `note:0:${apc.gridNote(kol, rij)}`;
+  const noot = (n, on) => ({ type: 'note', channel: 0, number: n, sig: `note:0:${n}`, on, value: on ? 127 : 0, norm: on ? 1 : 0 });
+  const P = apc.palette;
+  const zonder = led('note:0:84');
+  m.handle(noot(98, true));
+  ok('stems: scene 3 zonder shift sampler (dicht = donkerviolet), met shift de modus stems (dicht = donker zeegroen)',
+    zonder === P.violetdonker && led('note:0:84') === P.zeegroendonker && P.zeegroendonker === P.zeegroen + 1
+    && /^#0059/.test(apc.paletteHex[P.zeegroendonker]));
+  m.handle(noot(98, false));
+  lg.zet('grid', 'stems'); standen['layer.grid.hotcues'] = 0; standen['layer.grid.stems'] = 1;
+  ok('stems open: scene 3 fel zeegroen (lampje = modus, knop blijft sampler)', led('note:0:84') === P.zeegroen);
+  ok('track 1 (twee stems, zang weg): rij 1 fel rood, rij 2 donkerrood, rij 3–5 uit (die stems bestaan niet)',
+    led(pad(1, 1)) === P.rood && led(pad(1, 2)) === P.rooddonker && [3, 4, 5].every((r) => led(pad(1, r)) === null));
+  ok('track 2 (vier stems, bas weg): rij 4 fel rood, de andere vier donkerrood; track 3 zonder stems: alles uit',
+    led(pad(2, 4)) === P.rood && [1, 2, 3, 5].every((r) => led(pad(2, r)) === P.rooddonker) && [1, 2, 3, 4, 5].every((r) => led(pad(3, r)) === null));
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

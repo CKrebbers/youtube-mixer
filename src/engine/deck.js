@@ -1,10 +1,11 @@
 import { Emitter, clamp, piek } from '../lib/emitter.js';
-import { createDeckChain, setEqBand, killEqBand, killVersterking, setBipolarFilter, filterDoelen, faderGain } from './audio-graph.js';
+import { createDeckChain, setEqBand, killEqBand, killVersterking, setBipolarFilter, filterDoelen, faderGain,
+  maakStemFilter, stemFilterOpen, stemFilterDoelen } from './audio-graph.js';
 import { Beatgrid } from './beatgrid.js';
 import { ToonKaart } from './toonsoort.js';
 import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
 import { maakWav, KANALEN } from './stream-kern.js';
-import { InsertSlot } from './fx.js';
+import { InsertSlot, zetDoel } from './fx.js';
 import { hoorbaar, uitgangsVertraging } from './hoorbaar.js';
 import { startDrempel, houdVast, zetVervolg } from './overgang.js';
 
@@ -65,6 +66,14 @@ function glijStand(g, t) {
 export const STEM_NAMEN = ['vocals', 'inst', 'drums', 'bass', 'other'];
 /** Welke namen bij welk aantal horen (de volgorde in het bestand mag anders). */
 export const STEM_STANDEN = { 2: ['vocals', 'inst'], 4: ['drums', 'bass', 'other', 'vocals'] };
+/** De send-bussen van een stem, zoals die van de track: A = echo, B = galm (engine.sends). */
+export const STEM_BUSSEN = ['A', 'B'];
+/**
+ * Een stemfilter dat terug in het midden komt: zo lang (s) mag het filter
+ * teruglopen (5 × de τ van 10 ms van de knop: 99%) voordat de stem er weer
+ * langs gaat. Wie eerder weer draait, haalt die overgang weg (houdVast).
+ */
+export const STEM_FILTER_TERUG = 0.05;
 
 /**
  * Klopt `{ namen, schaal }` van een stems-bestand? Null als het klopt,
@@ -174,6 +183,38 @@ export class Deck extends Emitter {
     this.sendB.gain.value = 0;
     this.chain.fader.connect(this.sendA);
     this.chain.fader.connect(this.sendB);
+
+    /*
+     * Stem-sends (docs/STEMS.md §5): per stem een eigen echo en galm, getapt
+     * na het stemfilter. Een track-send zit NA de fader; een stem heeft geen
+     * eigen fader, dus de stem-sends gaan door een SPIEGEL van de fader: een
+     * versterking per bus die in dezelfde codepaden dezelfde automatisering
+     * krijgt als de fader zelf (applyUi, set, glide via _glijParams). Fader
+     * dicht = ook de stems sturen niets meer in, echo-out zoals bij de track;
+     * de auto-DJ die de fader laat glijden, laat de spiegel sample voor sample
+     * mee glijden. Trim zit in de versterking per stem (die glijdt niet). EQ,
+     * effect en trackfilter horen bij de som: daar gaat een stem-send niet door.
+     *
+     *   stem k (na zijn filter) -> send (knop² × trim) -> spiegel van de fader -> bus
+     *
+     * De spiegels bestaan altijd (twee stille versterkingen per deck: zo volgen
+     * ze de fader vanaf het begin, ook midden in een glijbeurt).
+     */
+    this.stemSends = {};
+    for (const bus of STEM_BUSSEN) this.stemSends[bus] = { fader: ctx.createGain() };
+    // De ingang van de stem-cue in de koptelefoon (maakStemCue): alleen als er een koptelefoon is.
+    this.stemCue = null;
+    // Per uitgang k wat er van zijn stemkanaal bestaat: { filter, send: { A, B }, cue, nu }.
+    // Elk deel komt er pas bij als het voor het eerst iets moet doen, en
+    // begint stil; daarna blijft het (er gaat nooit iets los). `nu` = wat er op
+    // de nodes staat (de doelen), zodat alleen wat verandert wordt aangeraakt.
+    this.stemKanalen = this.chain.stemIn.map(() => ({ filter: null, send: { A: null, B: null }, cue: null,
+      nu: { filter: false, doelen: filterDoelen(0.5), send: { A: 0, B: 0 }, cue: 0 } }));
+    // Per stem (bij het NUMMER, zoals niveau en kill): filter 0..1 (0,5 = open),
+    // sends 0..1 per bus, cue aan/uit.
+    this.stemFilters = Object.fromEntries(STEM_NAMEN.map((n) => [n, 0.5]));
+    this.stemSendStand = Object.fromEntries(STEM_BUSSEN.map((b) => [b, Object.fromEntries(STEM_NAMEN.map((n) => [n, 0]))]));
+    this.stemPfl = Object.fromEntries(STEM_NAMEN.map((n) => [n, false]));
 
     // UI-state, genormaliseerd 0..1 — precies wat MIDI later ook levert.
     // `ui.x` LEEST de stand van nu: tijdens het glijden (glide) de tussenstand
@@ -985,10 +1026,13 @@ export class Deck extends Emitter {
     this.emit('change', this);
   }
 
-  /** De AudioParams achter een glijdende knop. */
+  /**
+   * De AudioParams achter een glijdende knop. De fader met zijn spiegels voor
+   * de stem-sends: die glijden zo sample voor sample mee.
+   */
   _glijParams(p) {
     const c = this.chain;
-    if (p === 'fader') return [c.fader.gain];
+    if (p === 'fader') return [c.fader.gain, ...this._faderSpiegels()];
     if (p === 'filter') return [c.hpf.frequency, c.hpf.Q, c.lpf.frequency, c.lpf.Q];
     if (p === 'sendA') return [this.sendA.gain];
     if (p === 'sendB') return [this.sendB.gain];
@@ -997,20 +1041,30 @@ export class Deck extends Emitter {
 
   /** Wat een knopstand op die AudioParams zet: dezelfde formules als applyUi. */
   _glijDoelen(p, u) {
-    if (p === 'fader') return [faderGain(u)];
+    if (p === 'fader') { const g = faderGain(u); return [g, ...this._faderSpiegels().map(() => g)]; }
     if (p === 'filter') return filterDoelen(u);
     return [u * u];             // sends: kwadratisch, zie applyUi
   }
 
+  /** De versterkingen die de fader volgen: de spiegels van de stem-sends. */
+  _faderSpiegels() { return STEM_BUSSEN.map((b) => this.stemSends[b].fader.gain); }
+
   applyUi(only) {
     const now = this.ctx.currentTime;
     const c = this.chain, u = this.ui;
-    if (!only || only === 'trim')   c.trim.gain.setTargetAtTime(u.trim * 2, now, 0.01);
+    if (!only || only === 'trim') {
+      c.trim.gain.setTargetAtTime(u.trim * 2, now, 0.01);
+      // Trim zit ook in de sends en de cue van elke stem (de stemkanalen).
+      if (this.stemSends) { this._pasStemSendsToe(); this._pasStemCueToe(); }
+    }
     if (!only || only === 'low')    setEqBand(c.eqLow.gain, u.low, now, this.gekild('low'));
     if (!only || only === 'mid')    setEqBand(c.eqMid.gain, u.mid, now, this.gekild('mid'));
     if (!only || only === 'high')   setEqBand(c.eqHigh.gain, u.high, now, this.gekild('high'));
     if (!only || only === 'filter') setBipolarFilter(c.hpf, c.lpf, u.filter, now);
-    if (!only || only === 'fader')  c.fader.gain.setTargetAtTime(faderGain(u.fader), now, 0.008);
+    if (!only || only === 'fader') {
+      c.fader.gain.setTargetAtTime(faderGain(u.fader), now, 0.008);
+      for (const g of this._faderSpiegels()) g.setTargetAtTime(faderGain(u.fader), now, 0.008);
+    }
     // Kwadratisch: het eerste stuk van de knop is subtiel, het laatste gooit.
     if (!only || only === 'sendA')  this.sendA.gain.setTargetAtTime(u.sendA * u.sendA, now, 0.01);
     if (!only || only === 'sendB')  this.sendB.gain.setTargetAtTime(u.sendB * u.sendB, now, 0.01);
@@ -1065,8 +1119,15 @@ export class Deck extends Emitter {
     this.stems = stems ? Object.freeze({
       namen: Object.freeze([...stems.namen]), aantal: stems.namen.length, schaal: stems.schaal ?? 1,
     }) : null;
-    for (const n of STEM_NAMEN) { this.stemNiveaus[n] = 1; this.stemKill[n] = false; this.stemKillVast[n] = false; }
+    for (const n of STEM_NAMEN) {
+      this.stemNiveaus[n] = 1; this.stemKill[n] = false; this.stemKillVast[n] = false;
+      this.stemFilters[n] = 0.5; this.stemPfl[n] = false;
+      for (const b of STEM_BUSSEN) this.stemSendStand[b][n] = 0;
+    }
     this._pasStemsToe('kill');
+    // De stemkanalen terug naar open (bij het nummer). Wat er nooit gebruikt
+    // werd, bestaat niet en blijft zo.
+    this._pasStemKanalenToe();
   }
 
   /** Heeft deze track deze stem, in deze stand? (`inst` ook bij vier: de groep.) */
@@ -1154,16 +1215,202 @@ export class Deck extends Emitter {
     });
   }
 
-  /** Voor de snapshot: per stem die er is het niveau en of hij weg is. Null zonder stems. */
+  // ---- stemkanalen: filter, sends en cue per stem (docs/STEMS.md §5) ----------
+  //
+  // Per stem een bipolair filter (zoals het trackfilter), een echo- en een
+  // galm-send (na het filter, × trim, door de spiegel van de fader) en een cue
+  // (voorbeluisteren, vóór de fader). Ze horen bij het NUMMER, zoals niveau en
+  // kill: elke laad zet ze terug (_zetStems). De groepsknop `inst` bij vier
+  // stems werkt op drums, bas en overig samen:
+  //   filter  in SERIE met het eigen filter: per kant het sterkste (stemFilterDoelen)
+  //   sends   de GROOTSTE van eigen en groep (twee keer insturen = niet dubbel)
+  //   cue     eigen OF groep aan (één keer in de koptelefoon, niet twee keer)
+  // Niveau en kill vermenigvuldigen (stemVersterking): die horen bij de klank
+  // van de stem; sends en cue zijn aftakkingen van hetzelfde signaal.
+
+  /** Uitgang k: welke stem (n) en hoort hij bij de groep `inst` (vier stems, niet de zang)? Null zonder stem. */
+  _stemOp(k) {
+    const st = this.stems;
+    if (!st || k >= st.aantal) return null;
+    const n = st.namen[k];
+    return { n, lid: st.aantal === 4 && n !== 'vocals' };
+  }
+
+  /** Filter 0..1 van een stem (0,5 = open), of null als die er niet is. */
+  stemFilter(s) { return this.stemBestaat(s) ? this.stemFilters[s] : null; }
+
+  /** Bipolair filter van een stem: midden = open, links lowpass, rechts highpass. Een stem die er niet is: niets. */
+  setStemFilter(s, norm) {
+    if (!this.stemBestaat(s)) return;
+    this.stemFilters[s] = clamp(norm);
+    this._pasStemFiltersToe();
+    this.emit('change', this);
+  }
+
+  /** Send A (echo) of B (galm) van een stem, 0..1, of null als die er niet is. */
+  stemSend(bus, s) { return this.stemBestaat(s) && STEM_BUSSEN.includes(bus) ? this.stemSendStand[bus][s] : null; }
+
+  /** Send van een stem naar bus A of B, 0..1 (kwadratisch, zoals de track-send). */
+  setStemSend(bus, s, norm) {
+    if (!this.stemBestaat(s) || !STEM_BUSSEN.includes(bus)) return;
+    this.stemSendStand[bus][s] = clamp(norm);
+    this._pasStemSendsToe();
+    this.emit('change', this);
+  }
+
+  /** Staat deze stem in de koptelefoon? */
+  stemPflAan(s) { return this.stemBestaat(s) && !!this.stemPfl[s]; }
+
+  /** Staat er van deze track een stem in de koptelefoon? (De engine zet daarmee de koptelefoon.) */
+  get stemPflIets() { return STEM_NAMEN.some((n) => this.stemPflAan(n)); }
+
+  /** Cue van een stem aan of uit. Zonder koptelefoon (geen maakStemCue) alleen de stand. */
+  setStemPfl(s, aan) {
+    if (!this.stemBestaat(s)) return;
+    this.stemPfl[s] = !!aan;
+    this._pasStemCueToe();
+    this.emit('change', this);
+  }
+
+  toggleStemPfl(s) { if (this.stemBestaat(s)) this.setStemPfl(s, !this.stemPfl[s]); }
+
+  /**
+   * De ingang van de stem-cue in de koptelefoon: één versterking (1), waar de
+   * cue per stem in uitkomt. De engine roept dit één keer aan, bij het maken,
+   * en alleen als er een koptelefoonuitgang is: anders geen node erbij. Geeft
+   * de tap voor `koptelefoon.voegToe`.
+   */
+  maakStemCue() {
+    if (!this.stemCue) this.stemCue = { som: this.ctx.createGain() };
+    return this.stemCue.som;
+  }
+
+  /** De stem van uitgang k NA zijn filter: stemIn, en (als het filter bestaat) lowpass en tegen. */
+  _takken(k) {
+    const f = this.stemKanalen[k].filter;
+    return f ? [this.chain.stemIn[k], f.lpf, f.tegen] : [this.chain.stemIn[k]];
+  }
+
+  /**
+   * Een aftakking van stem k na zijn filter (een send of de cue): een stille
+   * versterking (0) naar `doel`. Komt er later een filter bij, dan verbindt
+   * _filterVan zijn takken ook hiermee.
+   */
+  _tapNaar(k, doel) {
+    const g = this.ctx.createGain();
+    g.gain.value = 0;
+    for (const t of this._takken(k)) t.connect(g);
+    g.connect(doel);
+    return g;
+  }
+
+  /** Het filter van stem k, gemaakt bij het eerste gebruik (stil, zie maakStemFilter). */
+  _filterVan(k) {
+    const kan = this.stemKanalen[k];
+    if (!kan.filter) {
+      kan.filter = maakStemFilter(this.ctx, this.chain.stemIn[k], this.chain.trim);
+      for (const tap of [kan.send.A, kan.send.B, kan.cue]) {
+        if (tap) { kan.filter.lpf.connect(tap); kan.filter.tegen.connect(tap); }
+      }
+    }
+    return kan.filter;
+  }
+
+  /** Alles van de stemkanalen naar de stand (na een laad). */
+  _pasStemKanalenToe() {
+    this._pasStemFiltersToe();
+    this._pasStemSendsToe();
+    this._pasStemCueToe();
+  }
+
+  /**
+   * Het filter van elk stemkanaal. Staan eigen knop en groepsknop in het
+   * midden (stemFilterOpen), dan staan beide takken op 0: alleen de droge weg,
+   * bit voor bit zoals zonder stemfilter (en zolang het filter nooit uit het
+   * midden ging, bestaat het niet eens). Anders de takken op 1 en −1: de
+   * gefilterde stem. Wisselen is een klikvrije overgang van 5 ms
+   * (killVersterking: hellingen na startDrempel, nooit een curve); terug naar
+   * het midden pas na STEM_FILTER_TERUG, als het filter zelf (τ 10 ms, zoals
+   * de knop) weer open staat.
+   */
+  _pasStemFiltersToe() {
+    const nu = this.ctx.currentTime, wacht = startDrempel(this.ctx);
+    this.stemKanalen.forEach((kan, k) => {
+      const x = this._stemOp(k), stand = kan.nu;
+      const eigen = x ? this.stemFilters[x.n] : 0.5, groep = x?.lid ? this.stemFilters.inst : 0.5;
+      const aan = !(stemFilterOpen(eigen) && stemFilterOpen(groep));
+      if (!aan && !kan.filter) return;
+      const f = this._filterVan(k);
+      const doelen = aan ? stemFilterDoelen(eigen, groep) : filterDoelen(0.5);
+      if (doelen.some((v, i) => v !== stand.doelen[i])) {
+        stand.doelen = doelen;
+        const [hf, hq, lf, lq] = doelen;
+        for (const [p, v] of [[f.hpf.frequency, hf], [f.hpf.Q, hq], [f.lpf.frequency, lf], [f.lpf.Q, lq]]) {
+          try { p.setTargetAtTime(v, nu, 0.01); } catch (_) { try { p.value = v; } catch (__) {} }
+        }
+      }
+      if (aan === stand.filter) return;
+      stand.filter = aan;
+      const w = aan ? wacht : Math.max(wacht, STEM_FILTER_TERUG);
+      killVersterking(f.filterIn.gain, aan ? 1 : 0, nu, w);
+      killVersterking(f.tegen.gain, aan ? -1 : 0, nu, w);
+    });
+  }
+
+  /** De sends van elk stemkanaal: de grootste van eigen knop en groepsknop, kwadratisch, × trim. */
+  _pasStemSendsToe() {
+    const trim = this._ui.trim * 2;
+    this.stemKanalen.forEach((kan, k) => {
+      const x = this._stemOp(k);
+      for (const b of STEM_BUSSEN) {
+        const s = this.stemSendStand[b];
+        const v = x ? Math.max(s[x.n], x.lid ? s.inst : 0) : 0;
+        const doel = v * v * trim;
+        if (doel === kan.nu.send[b]) continue;
+        kan.nu.send[b] = doel;
+        kan.send[b] ??= this._tapNaar(k, this.stemSends[b].fader);
+        zetDoel(kan.send[b].gain, doel, this.ctx);
+      }
+    });
+  }
+
+  /**
+   * De cue van elk stemkanaal: aan (op trim, zoals de cue van de track die na
+   * trim tapt) als de stem of, bij vier, de groep aan staat. Aan en uit klikvrij
+   * zoals de cue van de track (killVersterking); een andere trim terwijl hij aan
+   * staat als een knop (zetDoel). Zonder koptelefoon (geen maakStemCue): niets.
+   */
+  _pasStemCueToe() {
+    if (!this.stemCue) return;
+    const nu = this.ctx.currentTime, wacht = startDrempel(this.ctx), trim = this._ui.trim * 2;
+    this.stemKanalen.forEach((kan, k) => {
+      const x = this._stemOp(k);
+      const doel = x && (this.stemPfl[x.n] || (x.lid && this.stemPfl.inst)) ? trim : 0;
+      const was = kan.nu.cue;
+      if (doel === was) return;
+      kan.nu.cue = doel;
+      kan.cue ??= this._tapNaar(k, this.stemCue.som);
+      if (doel === 0 || was === 0) killVersterking(kan.cue.gain, doel, nu, wacht);
+      else zetDoel(kan.cue.gain, doel, this.ctx);
+    });
+  }
+
+  /**
+   * Voor de snapshot: per stem die er is het niveau, of hij weg is, het
+   * filter, de sends (A echo, B galm) en de cue. Null zonder stems.
+   */
   stemStand() {
     if (!this.stems) return null;
-    const niveau = {}, weg = {};
+    const niveau = {}, weg = {}, filter = {}, send = { A: {}, B: {} }, cue = {};
     for (const n of STEM_NAMEN) {
       if (!this.stemBestaat(n)) continue;
       niveau[n] = this.stemNiveaus[n];
       weg[n] = this.stemGekild(n);
+      filter[n] = this.stemFilters[n];
+      for (const b of STEM_BUSSEN) send[b][n] = this.stemSendStand[b][n];
+      cue[n] = !!this.stemPfl[n];
     }
-    return { namen: [...this.stems.namen], niveau, weg };
+    return { namen: [...this.stems.namen], niveau, weg, filter, send, cue };
   }
 
   level() { return piek(this.chain.analyser); }

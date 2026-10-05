@@ -128,6 +128,14 @@ export class Engine extends Emitter {
       this.decks[id].chain.output.connect(this.master.input);
       // Voorbeluisteren tapt vóór de fader: na trim, EQ, effect en filter.
       this.koptelefoon.voegToe(id, this.decks[id].chain.lpf);
+      // En per stem (docs/STEMS.md §5): na het stemfilter, één ingang per
+      // track (`A:stems`) die aan staat zolang er een stem van die track in de
+      // koptelefoon staat. Zonder koptelefoonuitgang: geen node erbij.
+      if (this.koptelefoon.beschikbaar) {
+        const d = this.decks[id], sleutel = `${id}:stems`;
+        this.koptelefoon.voegToe(sleutel, d.maakStemCue());
+        d.on('change', () => this.koptelefoon.zetPfl(sleutel, d.stemPflIets));
+      }
       this.kant[id] = STANDAARD_KANT[id] || 'thru';
     }
 
@@ -145,7 +153,11 @@ export class Engine extends Emitter {
       slot.setMix(1);                        // helemaal nat
       slot.zetRack(rack);
       slot.out.connect(this.master.input);
-      for (const id of DECK_IDS) this.decks[id][`send${bus}`].connect(slot.in);
+      for (const id of DECK_IDS) {
+        this.decks[id][`send${bus}`].connect(slot.in);
+        // De stem-sends, na de spiegel van de fader (deck.js).
+        this.decks[id].stemSends[bus].fader.connect(slot.in);
+      }
       this.sends[bus] = slot;
     }
 

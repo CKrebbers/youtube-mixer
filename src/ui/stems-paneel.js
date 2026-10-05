@@ -1,12 +1,14 @@
 import { read as readAction, invoke, metaOf, trackVanDeck } from '../control/actions.js';
 import { DECK_IDS } from '../engine/engine.js';
+import { knobVan } from './controls.js';
 import { meld } from './meldingen.js';
 import { VOLGORDE, aantalOpBus, rijStand, kolomTeken, stemUitleg } from './stems-weergave.js';
 
 /*
  * De STEMS-rij (docs/STEMS.md §4): voor de track met focus per stem een naam,
- * een niveauschuif en een kill-knop. Openen en sluiten met de knop "stems" in
- * de balk (onthouden, standaard dicht), zoals KLANKSCHAAL en AUTO.
+ * een niveauschuif en een kill-knop, en het stemkanaal (§5): drie kleine
+ * draaiknoppen (filter, echo, galm) en een cue. Openen en sluiten met de knop
+ * "stems" in de balk (onthouden, standaard dicht), zoals KLANKSCHAAL en AUTO.
  *
  * Alles gaat over de bus (`track.N.stem.<s>`, `.kill`, `.hold`): vensters.js
  * bindt de knoppen en schuiven bij het opstarten (ze staan vast in index.html),
@@ -40,6 +42,7 @@ export function opzetStems({ engine, staat, wachtrij, library = null }) {
   const xKnop = rij.querySelector('.st-x');
   const strips = Object.fromEntries([...rij.querySelectorAll('.st-stem')].map((el) => [el.dataset.stem, {
     el, naam: el.querySelector('.st-naam'), niveau: el.querySelector('.st-niveau'), kill: el.querySelector('.st-kill'),
+    cue: el.querySelector('.st-cue'),
   }]));
 
   const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
@@ -66,6 +69,9 @@ export function opzetStems({ engine, staat, wachtrij, library = null }) {
     for (const el of rij.querySelectorAll('[data-action]')) {
       el.dataset.action = el.dataset.action.replace(/^track\.\d+\./, `track.${n}.`);
       if (el.dataset.actionShift) el.dataset.actionShift = el.dataset.actionShift.replace(/^track\.\d+\./, `track.${n}.`);
+      // Een draaiknop onthoudt zijn action (de renderloop volgt k.action): die ook.
+      const k = knobVan.get(el);
+      if (k) k.action = el.dataset.action;
     }
     tekst(trackEl, `track ${n}`);
   }
@@ -144,12 +150,16 @@ export function opzetStems({ engine, staat, wachtrij, library = null }) {
     const aantal = aantalOpBus(readAction, n);
     if (aantal !== vorigAantal) zetStand(aantal);
     if (aantal) {
-      // De schuiven volgt de renderloop (read() per frame); hier de kills.
+      // De schuiven en draaiknoppen volgt de renderloop (read() per frame);
+      // hier de kills en de cue (null = geen koptelefoonuitgang: dof).
       for (const s of VOLGORDE[aantal]) {
         const st = strips[s];
         const weg = readAction(`track.${n}.stem.${s}.kill`) === 1;
         klasse(st.kill, 'on', weg);
         klasse(st.el, 'weg', weg);
+        const cue = readAction(`track.${n}.stem.${s}.pfl`);
+        klasse(st.cue, 'on', cue === 1);
+        klasse(st.cue, 'dood', cue === null);
       }
       return;
     }

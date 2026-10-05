@@ -123,6 +123,25 @@ lagen.zet('grid', 'hotcues');
   ok('mapje-balk: de andere modi krijgen geen per-pad-uitleg (hotcues/klank per rij, sampler/video niets, zoals eerst)',
     ['grid.hotcues', 'grid.loops', 'grid.sampler', 'grid.video', 'grid.klank'].every((id) => gridPads(regels, id).length === 0));
 }
+// ---- modus stems (5 okt, VRAGEN N1, docs/STEMS.md §5) ---------------------------
+ok('scene 3 met shift = modus stems, in zeegroen; zonder shift sampler',
+  lees('note:0:84', 1, true)?.action === 'layer.grid.stems' && lees('note:0:84', 1, true).modus === 'stems' && P.MODUS_KLEUR.stems === 'zeegroen'
+  && lees('note:0:84')?.action === 'layer.grid.sampler' && lees('note:0:84').actionShift === 'layer.grid.stems');
+lagen.zet('grid', 'stems');
+ok('modus stems: pad linksboven = zang van track 1 weg zolang je drukt, shift+klik = aan/uit; kolom 4 rij 5 = overig van track 4',
+  lees('note:0:32')?.action === 'track.1.stem.vocals.hold' && lees('note:0:32').actionShift === 'track.1.stem.vocals.kill'
+  && lees('note:0:32').modus === 'stems' && lees(`note:0:${apc.gridNote(4, 5)}`)?.action === 'track.4.stem.other.hold'
+  && lees('note:0:32').kort === 'zang weg!');
+ok('modus stems: scene 3 blijft sampler, maar zijn lampje leest "stems open" (zoals de LED)',
+  lees('note:0:84')?.action === 'layer.grid.sampler' && lees('note:0:84').lamp === 'layer.grid.stems' && lees('note:0:84').modus === 'stems');
+lagen.zet('grid', 'hotcues');
+{
+  const { gridRijen } = await import('../src/ui/mapje-balk.js');
+  const r = gridRijen([...m.rules.values()], 'grid.stems');
+  ok('mapje-balk stems: vijf rijen, zang · rest · drums · bas · overig weg zolang je drukt (shift: aan/uit)',
+    r.map((x) => `${x.gewoon}|${x.shift}`).join() === ['vocals', 'inst', 'drums', 'bass', 'other']
+      .map((st) => `track.1.stem.${st}.hold|track.1.stem.${st}.kill`).join());
+}
 // Scherm en apc.html kennen elke grid-modus: een kleur op het scherm, een knop op de kaart.
 {
   const { GROEPEN } = await import('../src/control/lagen.js');

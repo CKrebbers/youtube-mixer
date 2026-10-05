@@ -35,8 +35,9 @@ in VRAGEN H1–H3 en blok N. Details per spoor: `docs/verslagen/2026-10-03/`
   focus: per stem een niveauschuif (dubbelklik = vol) en **kill** (klik =
   aan/uit, shift + vasthouden = weg zolang je drukt). Twee: zang · rest. Vier:
   drums · bas · overig · zang, en **rest** als groepsknop (drums + bas + overig).
-- **Koppelen**: alle stem-actions staan op de bus (zie Actions); een vaste plek
-  op de APC is er nog niet (VRAGEN N1), koppelen werkt wel.
+  Sinds 5 okt per stem ook een **filter**, **echo**, **galm** en **cue** (§5).
+- **Koppelen**: alle stem-actions staan op de bus (zie Actions). Op de APC sinds
+  5 okt de grid-modus **stems** (Shift + scene 3, of ▲ ▼; §5); koppelen werkt ook.
 - **Controlekamer**: tegel Stems (wat loopt, wat wacht, of de splitter er is).
 
 ## Model en meting
@@ -223,6 +224,177 @@ laden; `track.N.stem.*` hoort bij het nummer (`NUMMER_NODIG`).
   (het vervangt het bestand waar hij uit leest). De StreamBron vangt het ook af
   als het toch gebeurt (zie Engine).
 
+## 5. Stemkanalen: filter, sends en cue per stem (gebouwd 5 okt)
+
+Clay (STUDIO, 5 okt): *"effecten toepassen op het geheel maar ook op aparte stems"*,
+en alles voorbeluisteren. ROADMAP 27 / `docs/STUDIO.md` S2, spoor **S2b**. Per stem,
+naast niveau en kill: een **filter**, een **echo** en een **galm** (sends naar de
+gedeelde bussen) en een **cue** (de koptelefoon, `docs/STUDIO.md` §3). De meting:
+`node tools/headless/stemkanalen.mjs [--vergelijk <revisie>] [--cpu]`.
+
+### Gebruiken
+
+- **Rij**: per stem na kill drie kleine draaiknoppen en een knop **cue**. De kleur van
+  de wijzer zegt welke: geel = filter (midden = open, links lowpass, rechts
+  highpass; dubbelklik = open), cyaan = echo, violet = galm (dubbelklik = dicht).
+  Cue rood = die stem in de koptelefoon; dof = geen koptelefoonuitgang. Met twee
+  stems (of vanaf 1700 px breed) staat er een legenda naast "track N"; met vier op
+  1440 px alleen de tooltips. Past op 1440×900 en 1440×790 (gemeten, faders 200 en
+  124 px, zoals vóór de stemkanalen).
+- **APC: grid-modus stems** (VRAGEN N1, het advies van daar): **Shift + scene 3**
+  (scene 3 zelf blijft sampler; in de modus brandt scene 3 fel zeegroen) of ▲ ▼
+  (achteraan, na auto). Per kolom = track, van boven naar onder: **zang · rest ·
+  drums · bas · overig**, weg zolang je drukt, **shift + pad** = vastzetten (zoals de
+  kill in klank). Lampjes: fel rood = weg, donkerrood = open, uit = die stem heeft
+  de track niet (rij 3–5 bij twee stems). Filter, sends en cue per stem staan niet
+  op de APC (geen ruimte zonder bestaande regels te veranderen); koppelen werkt.
+
+### Actions
+
+Voor elke track N en `s` uit `vocals, inst, drums, bass, other`:
+
+| action | type | wat | read |
+|---|---|---|---|
+| `track.N.stem.<s>.filter` | value, bipolair | filter 0..1, 0,5 = open | de stand, `null` zonder die stem |
+| `track.N.stem.<s>.send.a` | value | echo 0..1 (kwadratisch, zoals de track-send) | idem |
+| `track.N.stem.<s>.send.b` | value | galm 0..1 | idem |
+| `track.N.stem.<s>.pfl` | trigger | die stem in de koptelefoon aan/uit | 1/0, `null` zonder die stem of zonder koptelefoonuitgang |
+
+Uitleg in `apc-beschrijf.js`. **Auto-DJ**: filter en sends staan in `OVERNEEM`
+(een stem filteren of insturen in een overgang = jij neemt hem over), de cue niet.
+**Handelingenlog**: filter en sends zijn value-actions, dus vanzelf in de beginstand
+(alleen voor stems die er zijn); de cue niet (een trigger). **Terugspelen** slaat
+`track.N.stem.<s>.pfl` over (`OVERSLAAN`, zoals `track.N.pfl`: de zaal hoort hem
+niet); de rest hoort bij het nummer (`NUMMER_NODIG`).
+
+### De groepsknop `inst` bij vier stems
+
+Bij twee stems is `inst` een gewone stem (uitgang 1). Bij vier werkt hij op drums,
+bas en overig samen, zoals niveau en kill al deden:
+
+| | eigen knop en groepsknop samen | waarom |
+|---|---|---|
+| niveau, kill | vermenigvuldigen (bestond) | de klank van de stem |
+| filter | in serie: per kant het sterkste (hoogste highpass, laagste lowpass; tegenover elkaar een band) | één filter op de groep = hetzelfde filter op elk lid (lineair), met één paar filters per stem |
+| sends | de grootste van de twee | twee keer dezelfde stem insturen mag niet dubbel klinken |
+| cue | aan als eigen OF groep aan staat | één keer in de koptelefoon, niet twee keer |
+
+### Hoe het klinkt en waarom zo
+
+**De droge weg blijft wat hij was.** `stemIn[k] -> trim` is niet veranderd. Het
+filter is een correctie ernaast (`maakStemFilter` in audio-graph.js):
+
+```
+stemIn[k] ---------------------------------------------> trim   x
+       |-> filterIn (g) -> highpass -> lowpass ---------> trim   H(g·x)
+       `-> tegen (−g) ------------------------------------> trim   −g·x
+```
+
+Samen `x + H(g·x) − g·x`: met g = 0 precies x, met g = 1 de gefilterde stem; van 0
+naar 1 in 5 ms (`killVersterking`, zachte S na startDrempel, nooit een curve) is een
+kruisfade droog ↔ gefilterd. Terug in het midden pas na `STEM_FILTER_TERUG` (50 ms,
+5 × de τ van het filter), zodat het filter eerst weer open staat; wie binnen die
+50 ms weer draait, blijft gewoon in het filter. "Midden" is 0,5 ± 0,004 (63 en 64
+van 127: een MIDI-knop landt nooit precies op 0,5). Formules: `filterDoelen`, zoals
+het trackfilter.
+
+**Elk deel komt er pas bij als het iets moet doen, stil.** Het filter van een stem
+als zijn filter voor het eerst uit het midden gaat, een send als hij voor het eerst
+open gaat, een cue als hij voor het eerst aan gaat: versterking 0, en dan een
+overgang. Precies zoals een nieuwe keten in de insert-slot (`zetRack`): er komt
+alleen iets BIJ dat stil begint, er gaat nooit iets los (geen `disconnect()`, dat
+klikt). Een deck zonder stems, of met stems en alles open, heeft er geen enkele node
+van: bit voor bit het oude pad, en dezelfde CPU (gemeten, zie onder). Eerst bestonden
+alle delen altijd: dat kostte stil al +50% CPU voor de hele graaf (acht tracks).
+
+**Stem-sends en de fader.** Een track-send zit NA de fader (echo-out: fader dicht =
+niets meer insturen, de staart sterft uit). Een stem heeft geen eigen fader, dus de
+stem-sends van een track gaan samen door een **spiegel van de fader**: per bus één
+versterking (`deck.stemSends[A|B].fader`) die in dezelfde codepaden dezelfde
+automatisering krijgt als `chain.fader.gain`: `applyUi` (set), `_glijParams` en
+`_glijDoelen` (`Deck.glide`, de auto-DJ, ook opnieuw richten en ingrijpen). Gemeten
+in de test: de spiegel volgt de fader sample voor sample (verschil 0), ook midden in
+een glijbeurt. De spiegels bestaan altijd (twee stille versterkingen per deck): zo
+volgen ze de fader vanaf het begin, ook als een stem-send pas later open gaat.
+Overwogen en niet gekozen: één ConstantSource die fader én spiegels stuurt (dan
+verandert het oude pad, en de tests die de fader-tijdlijn meten), of de stem-sends
+door de fader zelf (meer kanalen door de strip: verandert EQ en filter mee).
+**Trim** zit in de versterking per stem (send = knop² × trim; trim glijdt niet).
+Een stem-send gaat NIET door EQ, insert-effect en trackfilter: die horen bij de som.
+Vóór de crossfader, zoals de track-send.
+
+**De cue.** Per stem een versterking (0, of trim als hij aan staat), samen in één
+ingang per track in de koptelefoon: `koptelefoon.voegToe('A:stems', …)`, die aan staat
+zolang er van die track een stem in de koptelefoon staat (de engine volgt
+`deck.stemPflIets` op 'change'). Niet één ingang per stemnaam (`A:vocals`, …): welke
+uitgang welke stem is hangt van het bestand af (`namen`), en de groep `inst` is drie
+uitgangen; met één ingang per track blijft `koptelefoon.js` onveranderd en werkt "of"
+voor de groep vanzelf. Tapt na het stemfilter en vóór de fader (de koptelefoon hoort
+een stem ook met de fader dicht), na trim zoals de cue van de track; niet door EQ,
+effect en trackfilter. `snapshot().koptelefoon.pfl` noemt nu ook `A:stems` … `H:stems`.
+
+**Bij het nummer.** Filter, sends en cue van de stems gaan bij elke laad terug naar
+open (zoals niveau en kill, `_zetStems`); de nodes blijven.
+
+### Gemeten (headless, 5 okt)
+
+`tools/headless/stemkanalen.mjs`: de echte engine op een OfflineAudioContext, een
+stems.wav met een toon per stem (drums 2000 Hz, bas 2700, overig 3600, zang 5100,
+elk 0,2) via laadStream en de echte worklet. Amplitude per toon over de tweede seconde:
+
+| | |
+|---|---|
+| alles open | elke stem −25,1 dB in de zaal |
+| filter drums dicht (lowpass 250 Hz) | drums −36 dB zachter; bas, overig, zang op 0,01 dB gelijk |
+| filter zang helemaal rechts (highpass 9 kHz) | zang −9 dB; de rest gelijk |
+| filter van de groep dicht | drums −36, bas −41, overig −47 dB; zang gelijk |
+| echo van de zang | aan de ingang van de echobus alleen de zang (−14,0 dB = 0,2), de rest onder −110 dB; niets op de galmbus |
+| … en de trackfader dicht | −84 dB (−70 dB: de spiegel); ook als de fader in 0,5 s dicht GLIJDT (de auto-DJ) |
+| echo van de groep | drums, bas, overig op de bus, zang −124 dB |
+| cue op de zang (vier kanalen) | op 3/4 alleen de zang (−23 dB), de rest onder −120 dB; de zaal (1/2) precies als zonder cue |
+| cue op de groep, drums gefilterd | op 3/4 bas en overig, drums −59 dB (na hun filter), zang −133 dB |
+
+**Bit voor bit** (`--vergelijk 481f17a`: dezelfde scène op de oude code en op deze,
+eerst de oude server, dan deze, op dezelfde poort): een track zonder stems (zaal en
+cue, vier kanalen), een track met vier stems alles open (zaal en cue), en de ingang
+van echo- en galmbus: dezelfde hash. Twee valkuilen van Chrome die de scène daarvoor
+vermijdt (gemeten: anders verschilt de oude code al van zichzelf): een ingang met
+twee of meer klinkende verbindingen telt in een willekeurige volgorde op (1 ULP), en
+de natte kant van een insert op mix 0 is cos(π/2) = 6e-17 met een delay die op
+timers herankert. De gouden hash en 0 GC van het audiopad (`renderblok.test`) zijn
+niet geraakt: de worklet en de streamkern zijn niet veranderd.
+
+**CPU** (`--cpu --vergelijk 481f17a`: offline, één thread, CPU-tijd van het
+renderproces, oud en nu om en om op dezelfde pagina, mediaan van vijf; acht tracks
+× vier stems; de machine had belasting 15–25 van andere agenten, dus ±10%):
+
+| | ms CPU per s audio |
+|---|---|
+| niets speelt: oud / nu | 132 / 129 |
+| alle stems spelen, stemkanalen open: oud / nu | 164 / 170 |
+| alle 32 stemfilters aan | 246 (≈ 2,5 ms per filter) |
+| alle 64 stem-sends open | 171 (bijna niets) |
+| een insert-slot per stem (delay, mix 0) | 345 (≈ 5,5 ms per slot) |
+
+**Een insert-effect per stem: NIET gebouwd.** Een insert-slot kost ook als hij niets
+doet ~5,5 ms per s audio per stem (32 slots: +110%), en vraagt per stem een rack,
+knoppen, actions en een plek op het scherm. Als Clay het wil: alleen op aanvraag
+maken (zoals hier filter en sends), en de keuze welk effect bij de stem bewaren.
+
+### Grenzen (niet als bug melden)
+
+- Stem-sends en stem-cue gaan niet door EQ, insert-effect en trackfilter van de
+  track; een stem-echo blijft dus helder als je het trackfilter dichtdraait.
+- De sampler knipt met niveau en kill per stem (`knipGewichten`), niet met het
+  stemfilter.
+- Een deel van een stemkanaal blijft bestaan als het ooit gebruikt is (er gaat niets
+  los): na een avond met overal filters kost dat de CPU van de filters die er zijn,
+  ook in het midden (dan stil, en Chrome rekent stille filters niet).
+- Niet gehoord: het filter op echte stems (klinkt een snelle draai door het midden
+  goed, met de overgang van 5 ms en het terugkeren na 50 ms?), echo en galm per stem
+  in een set, de cue per stem op het samengestelde apparaat, en de grid-modus stems
+  op de APC (zeegroen naast de andere kleuren, Shift + scene 3).
+
 ## Tests en meten
 
 - `test/stems.test.mjs` (wachtrij, routes, ingest-koppeling, schema, annuleren,
@@ -232,6 +404,10 @@ laden; `track.N.stem.*` hoort bij het nummer (`NUMMER_NODIG`).
   `renderblok.test` (0 GC, uitgang 0 = gouden hash), `engine.test`, `auto.test`,
   `handelingenlog.test`, `library.test`, `library-lijst.test`, `spiegel.test`,
   `controle.test`. `node test/alles.mjs`: 41 bestanden, alles groen.
+- Stemkanalen (§5): `test/engine.test.mjs` (blok "stemkanalen", 51 checks: bedrading
+  op aanvraag, filter/sends/cue per stem, de groep, de spiegel tijdens het glijden,
+  klikvrij), `mapping.test`, `spiegel.test`, `feedback.test` (modus stems), `auto.test`
+  (OVERNEEM), `handelingenlog.test` (beginstand); `tools/headless/stemkanalen.mjs`.
 - `node tools/headless/stems.mjs`: van binnenhalen tot kill, gemeten aan de master
   (zang weg 0,250 · alles weg 0 · terug 1,000; vier: drums weg 0,90 · rest weg 0,40),
   layout op 1440×790 en 1920×1080, de Controlekamer. `--nep` = alleen de ui.
