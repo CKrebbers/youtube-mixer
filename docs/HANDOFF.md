@@ -33,8 +33,14 @@ parallelle sporen (elk een worktree in `~/Projects/varve-stems/`), samengevoegd 
   los opnieuw gedraaid: klankschaal-rekentijd en gridauto groen).
 - S4 patronen (`docs/PATRONEN.md`), samengevoegd: grid-modus PATRONEN op Shift + scene 2
   (oranje), want Shift + scene 3 (zeegroen) was al stems.
-- **In de maak:** Xboard/Maschine via de hub in Varve (`studio/speelapparaten`), met de
-  Maschine-stapmodus op de patronen.
+- Xboard49 en Maschine MK2 via de hub in Varve, met de Maschine-stapmodus (`docs/MASCHINE.md`),
+  samengevoegd. AV-app-hub PR #12 (gemerged): `npm start -- studio` start Varve en opent hem
+  met `?hub=`.
+- `node test/alles.mjs` op `studio/integratie`: 51 bestanden, 5359 checks, groen.
+- **Starten (Clay, na het mergen en de verhuizing):** in AV-app-hub `cp sets/paden.voorbeeld.json
+  sets/paden.json` (youtube-mixer staat daar al op `~/Projects/Youtube mixer`), dan
+  `npm start -- studio`. Zonder hub werkt Varve zoals altijd (APC rechtstreeks, Xboard ook;
+  de Maschine alleen via de hub).
 - **Eerst doen (Clay):** zie hieronder (PR's, iCloud, samengesteld apparaat), dan de
   speellijst; open vragen: VRAGEN blok S (S3–S14).
 

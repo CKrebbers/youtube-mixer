@@ -104,8 +104,8 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     S0 veiligstellen (stems PR #3, uit iCloud) · S1 koptelefoon (gebouwd) · S2 stems als kanalen,
     master-insert, echte limiter, effecten van de filter app (gebouwd 5 okt) · S3 spelen: instrumenten
     op een track, Poly/FM/Schaal/Drums, noten van een keyboard, Xboard49 en Maschine MK2 in de hub
-    (gebouwd 5 okt; de Varve-kant van Xboard/Maschine via de hub in de maak) · S4 programmeren
-    (patronen, gebouwd 5 okt; de Maschine-stapmodus in de maak) · S5 later. Alles op `studio/integratie`, niets op de hardware geprobeerd.
+    en de Varve-kant ervan (gebouwd 5 okt) · S4 programmeren (patronen + Maschine-stapmodus,
+    gebouwd 5 okt) · S5 later. Starten: `npm start -- studio` in AV-app-hub. Alles op `studio/integratie`, niets op de hardware geprobeerd.
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
@@ -115,7 +115,7 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 5. 23 rest (vormbus na 8, routes per nummer, beeldscènes).
 6. ~~25 koptelefoon-cue~~ (gebouwd 5 okt, STUDIO S1; proberen met de Scarlett en de Mac).
 7. 26 PALETTE_HEX en RF64.
-8. 27 STUDIO: S1–S3 gebouwd (5 okt), S4 en de Varve-kant van Xboard/Maschine in de maak. Eerst proberen
+8. 27 STUDIO: S1–S4 gebouwd (5 okt), met Xboard/Maschine via de hub. Eerst proberen
    (speellijst van de Controlekamer), dan VRAGEN blok S.
 
 Aanname: publicatie 1 van AV-kern (25 okt) blijft staan. Komt die datum in de

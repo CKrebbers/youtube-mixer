@@ -185,8 +185,13 @@ koptelefoon; de limiter vangt een piek zonder te pompen; de nieuwe effecten klin
 - **Noten**: `src/control/noten.js` (elke MIDI-ingang behalve de APC) naar de speeltrack;
   INSTRUMENT-rij met een toetsenbord om met de muis te proberen; APC-mapje inst.
 - **Hub** (AV-app-hub PR #11, gemerged): Xboard49 als MIDI-invoer, Maschine MK2 via HID met
-  een virtuele MIDI-indeling, proefstappen voor beide. De Varve-kant (Xboard/Maschine via de
-  hub, schermen, pad-LED's) is in de maak.
+  een virtuele MIDI-indeling, proefstappen voor beide.
+- **Varve via de hub** (`docs/MASCHINE.md`): Xboard knop 1–8 = instrument, 9–16 = FX, schuif =
+  fader. Maschine: pads = noten (drums op 36–51) of stappen (STEP), groep A–H = focus,
+  draaiknoppen = instrumentknoppen, wiel = instrument kiezen (indrukken = zetten), PLAY/RESTART/
+  REC/ERASE/PATTERN op de patronen, schermen met track, instrument en knoppen. Gemeten in JS:
+  toets → noteOn 3,5–4,4 ms (Xboard), pad → noteOn 2,6–3,1 ms.
+- **Alles in één keer** (AV-app-hub PR #12, gemerged): `npm start -- studio` in AV-app-hub.
 
 Klaar als: op de Xboard49 de FM-synth spelen over een lopend nummer, eerst alleen in de
 koptelefoon; velocity en aftertouch hoorbaar; toets → geluid gemeten (doel < 15 ms).
@@ -198,7 +203,7 @@ nummer op een eigen tempo), live en stap voor stap opnemen, opslag op de server 
 versie. APC: grid-modus PATRONEN (oranje, Shift + scene 2): pad = plek per track, scene = rij,
 Stop All Clips = alles stoppen. Gemeten in Chrome: de kicks van een patroon vallen op de
 audioklok precies op de tellen van de track (0,000 ms), ook na +3% pitch en een sprong.
-De Maschine-stapmodus komt met het spoor Xboard/Maschine.
+De Maschine-stapmodus is erbij (STEP, `docs/MASCHINE.md`).
 
 Het oorspronkelijke voorstel:
 - De sequencer van Elektronlearn (transport, patronen, p-locks) op de klok van de

@@ -387,6 +387,8 @@ APC-indeling (voorstel A):
 - [ ] **S15. Patronen: de instrumenten vanzelf terug bij het laden van de set?** 💬 Nu staat er alleen een hint als een patroon op een track zonder instrument staat. **Advies:** ja: de set onthoudt welk instrument op welke track stond.
 - [ ] **S16. Patronen na een sprong (hotcue, beatjump) die geen hele maat is.** 🎧 Lopende patronen blijven in hun eigen fase en de klok glijdt in één à twee tellen terug (geen dubbele of gemiste noot). Alternatief: een korte stilte en dan op de nieuwe tel. **Advies:** glijden laten.
 - [ ] **S17. Patronen op de APC: Shift + scene 2, en Stop All Clips = alles stoppen in die modus.** 🎛 (Shift + scene 3 werd stems, daarom 2.) **Advies:** zo proberen.
+- [ ] **S18. Maschine: zijn de gedimde padkleuren zichtbaar?** 👀 Poly gedimd is #190064 (heel donker violet). **Advies:** kijken op het apparaat; te zwak, dan een lichtere basiskleur per instrument.
+- [ ] **S19. Maschine-wiel: eerst kiezen, indrukken = zetten.** 🎛 Zo vervangt een tik tegen het wiel nooit per ongeluk je instrument. De eerste wielstap na het insteken telt niet (de hub kent dan nog geen beginstand). **Advies:** zo laten.
 - [ ] **S14. Xboard49: knop 9–16 = de FX-knoppen van de speeltrack, de schuif = zijn fader.** 🎛 Voorstel; de CC-nummers van de knoppen komen uit de proef (`AV-app-hub`: proef speelapparaten).
 
 ---
