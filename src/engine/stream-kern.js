@@ -103,6 +103,19 @@ export function positieOp(seg, t) {
 }
 
 /**
+ * Positie op audiokloktijd t als er een segment in de toekomst ligt (T > t):
+ * tot T geldt `vorig` (een sprong met keylock wordt gepland, docs/KEYLOCK.md
+ * §4.4: tot dan klinkt wat er klonk), zonder vorig staat hij stil op P (een
+ * geplande start). Daarna gewoon positieOp. Hoofdthread (StreamBron) en
+ * worklet (rek-kern.js) rekenen hiermee hetzelfde. Niet in het hete pad van
+ * renderBlok: dat kent alleen positieOp.
+ */
+export function positieIn(seg, vorig, t) {
+  if (t < seg.T) return vorig ? positieOp(vorig, t) : seg.P;
+  return positieOp(seg, t);
+}
+
+/**
  * Hoe snel de positie loopt op audiokloktijd t, in tracktijd per seconde:
  * R, of tijdens een rem wat daarvan over is (0 na stilstand). Niet voor het
  * audiopad; de video volgt hiermee een rem zonder te springen.

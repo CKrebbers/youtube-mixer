@@ -334,5 +334,72 @@ console.log('\nstems: afval');
   besteB.gcs === 0 && besteB.bytes < DREMPEL + 16 * n);
 }
 
+// ---- 5. keylock (het rekpad, docs/KEYLOCK.md): ook zonder afval ---------------
+// Acht decks door de Signalsmith-stretcher (rek-kern.js): toon, tempo, loops
+// en een gat, met berichten die het rekpad laten doorlopen (tempo, T = nu),
+// gepland laten springen (T in de toekomst) en terug naar renderBlok en weer
+// erheen laten wisselen (keylock uit en aan). Een bericht mag iets kosten, een
+// blok niet.
+
+console.log('\nkeylock: afval');
+{
+  const rekVan = (d, b) => ({ keylock: (d + b) % 5 !== 0, toon: ((d + b) % 3) - 1 });
+  const w = maakDecks();
+  // Elk deck meteen een segment met keylock, en wachten tot de WASM er is.
+  for (let d = 0; d < DECKS; d++) {
+    const s = DECK_SEGS[d];
+    w.decks[d].port.onmessage({ data: { type: 'segment', id: 2, seg: { T: 0, P: s.P, R: s.R, loop: s.loop, speelt: s.speelt ?? true, rem: null, rek: rekVan(d, 0) } } });
+  }
+  for (let i = 0; i < 400 && !w.decks.every((d) => d.rek); i++) await new Promise((r) => setTimeout(r, 5));
+  ok('acht stretchers geladen', w.decks.every((d) => d.rek));
+  // Elk segment in de vorm die de StreamBron stuurt (één letterlijk object met
+  // alle zeven velden, rek: null of { keylock, toon }): de worklet ziet dan één
+  // vorm, zoals in de browser.
+  const rekBerichten = (van, stappen, elke) => {
+    const lijst = maakBerichten(van, stappen, elke);
+    lijst.forEach((ev, d) => {
+      for (const e of ev) {
+        const o = e.event.data.seg, b = e.blok;
+        let T = o.T, P = o.P;
+        if ((b % 4) === 2) { T = (b * Q) / SR + 0.1; e.event.data.gepland = true; }
+        if ((b % 4) === 3) { T = (b * Q) / SR; P = DECK_SEGS[(d + b) % DECKS].P; }
+        e.event.data.seg = { T, P, R: o.R, loop: o.loop, speelt: o.speelt, rem: null, rek: (b % 4) === 1 ? null : rekVan(d, b) };
+      }
+    });
+    return lijst;
+  };
+  draai(w, 4000, rekBerichten(0, 4000, 41));          // opwarmen, met alle paden en overgangen
+  const inB = w.decks.filter((d) => d.inB || d.naarB).length;
+  const STAPPEN = 1500, BLOKKEN = STAPPEN * DECKS, DREMPEL = 1024;
+  const beter = (a, b) => !a || b.gcs < a.gcs || (b.gcs === a.gcs && b.bytes < a.bytes);
+  let beste = null, pogingen = 0;
+  for (; pogingen < 30; pogingen++) {
+    const r = venster(w, STAPPEN);
+    if (beter(beste, r)) beste = r;
+    if (r.gcs === 0 && r.bytes < DREMPEL) break;
+  }
+  console.log(`      stabiel (${inB} decks op het rekpad): ${beste.bytes} bytes over ${BLOKKEN} blokken, ${beste.gcs} GC's (venster ${pogingen + 1})`);
+  ok(beste.gcs ? `keylock, stabiel: ${beste.gcs} GC's in het schoonste venster (er is afval)`
+    : `keylock, stabiel: ${(beste.bytes / BLOKKEN).toFixed(3)} bytes per blok, geen GC`,
+  inB > 0 && beste.gcs === 0 && beste.bytes < DREMPEL);
+  // Per bericht mag het rekpad meer kosten dan renderBlok: een sprong is een
+  // `_seek(n, rate)` en een andere toon `_setTransposeSemitones`, en een WASM-
+  // functie met een niet-geheel getal als argument pakt dat in (gemeten 48 bytes
+  // per aanroep). Eén keer per sprong of toonwissel, nooit per blok.
+  const PER_BERICHT = 64;
+  let besteB = null, n = 0;
+  for (pogingen = 0; pogingen < 30; pogingen++) {
+    const ber = rekBerichten(w.blok, STAPPEN, 37);
+    n = ber.reduce((s, ev) => s + ev.length, 0);
+    const r = venster(w, STAPPEN, ber);
+    if (beter(besteB, r)) besteB = r;
+    if (r.gcs === 0 && r.bytes < DREMPEL + PER_BERICHT * n) break;
+  }
+  console.log(`      met ${n} wissels (tempo, geplande sprong, keylock uit en aan): ${besteB.bytes} bytes, ${besteB.gcs} GC's (venster ${pogingen + 1})`);
+  ok(besteB.gcs ? `keylock met wissels: ${besteB.gcs} GC's in het schoonste venster (er is afval)`
+    : `keylock met wissels: ${(besteB.bytes / n).toFixed(1)} bytes per bericht (zoeken en toon in de WASM), geen GC`,
+  besteB.gcs === 0 && besteB.bytes < DREMPEL + PER_BERICHT * n);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
