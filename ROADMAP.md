@@ -97,8 +97,13 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     maat-anker per stuk; verfijnen na "tel 1 hier" gemeten en NIET gebouwd; elk
     stuk moet op zijn grid passen (splitsen of onzeker, `docs/BEATGRID.md` punt 4;
     bestaande grids pas na ↻).
-25. Koptelefoon-cue (F1): eerst hardware.
+25. ~~Koptelefoon-cue (F1)~~: gebouwd 5 okt als STUDIO S1 (27), `docs/STUDIO.md` §3. Nog op de Mac proberen.
 26. Klein: PALETTE_HEX 60 → 128, RF64 afspelen in de browser testen.
+27. STUDIO (5 okt, Clay: "grow Varve DJ"): VARVE groeit uit tot een muziekprogramma met stems als
+    kanalen, effecten overal, instrumenten en patronen, vier controllers (`docs/STUDIO.md`).
+    S0 veiligstellen (stems PR #3, uit iCloud) · S1 koptelefoon (gebouwd) · S2 stems als kanalen,
+    master-insert, echte limiter, effecten van de filter app · S3 spelen (Xboard49 via de hub,
+    instrumentkanalen) · S4 programmeren (sequencer van Elektronlearn, Maschine MK2 via HID) · S5 later.
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
@@ -106,8 +111,9 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 3. ~~17 stems~~ (gebouwd 3 okt; nog H3 en VRAGEN N).
 4. AV-kern 6–11 (7 alleen nog het overnemen in AV-kern).
 5. 23 rest (vormbus na 8, routes per nummer, beeldscènes).
-6. 25 koptelefoon-cue (eerst hardware).
+6. ~~25 koptelefoon-cue~~ (gebouwd 5 okt, STUDIO S1; proberen met de Scarlett en de Mac).
 7. 26 PALETTE_HEX en RF64.
+8. 27 STUDIO S2–S4, één fase per keer. S3 en S4 wachten op de hub (lease, na 25 okt).
 
 Aanname: publicatie 1 van AV-kern (25 okt) blijft staan. Komt die datum in de
 knel door 15 en 17, dan gaat AV-kern voor; dat is de vraag van H5.
