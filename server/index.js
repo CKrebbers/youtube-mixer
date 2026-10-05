@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { stat, rm } from 'node:fs/promises';
 import { join, extname, resolve, relative, isAbsolute, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -85,10 +85,30 @@ const SERVER_RUN = randomUUID();
  * ingest-rij wacht er nooit op: een nummer is speelbaar zodra audio.wav er
  * staat, de stems komen erna.
  */
-const splitter = new Splitter();
-const stemsRij = new StemsRij();
 // Instelbaar voor de tests: een eigen database en opnamemap, niet de jouwe.
 const DB = process.env.VARVE_DB || join(WORTEL, 'media', 'library.db');
+const splitter = new Splitter();
+/*
+ * De stems-rij overleeft een herstart (5 okt: een uur Demucs-werk in de rij
+ * ging weg bij elke herstart). Wat er open staat gaat bij elke verandering
+ * naar stems-rij.json naast de library; bij het opstarten komt het terug
+ * (herstelStemsRij). Tijdens het afsluiten niet: dan wordt alles geannuleerd,
+ * en dat is geen keuze van Clay.
+ */
+const STEMS_RIJ = join(dirname(DB), 'stems-rij.json');
+let stemsRijBewaren = true;
+let stemsRijGeschreven = null;
+function bewaarStemsRij(lijst) {
+  if (!stemsRijBewaren) return;
+  const tekst = JSON.stringify({ versie: 1, opdrachten: lijst }, null, 1);
+  if (tekst === stemsRijGeschreven) return;
+  try {
+    writeFileSync(`${STEMS_RIJ}.tmp`, tekst);
+    renameSync(`${STEMS_RIJ}.tmp`, STEMS_RIJ);
+    stemsRijGeschreven = tekst;
+  } catch (err) { console.warn(`[stems] de rij niet bewaard: ${err.message}`); }
+}
+const stemsRij = new StemsRij({ bijWijziging: bewaarStemsRij });
 const lib = new Library(DB);
 
 /*
@@ -237,12 +257,38 @@ async function nieuweStems(trackId, aantal, { opnieuw = false, hercontrole = fal
   if (!opnieuw && track.stems?.aantal === aantal) return { code: 200, antwoord: { al: true, stems: track.stems } };
   const s = await splitter.controleer({ hercontrole });
   if (!s.ok) return { code: 503, antwoord: { fout: s.reden, reden: s.reden } };
-  const { opdracht } = stemsRij.voegToe({
+  const { opdracht } = zetInStemsRij(track, aantal, { opnieuw, vooraan });
+  return { code: 202, antwoord: { opdracht } };
+}
+
+function zetInStemsRij(track, aantal, { opnieuw = false, vooraan = false } = {}) {
+  return stemsRij.voegToe({
     track: track.id, titel: track.titel, aantal, opnieuw, duur: track.duur, vooraan,
     werk: (onVoortgang, signal) => maakStems({ lib, media: MEDIA, splitter, trackId: track.id, aantal,
       audio: opSchijf(track.audio), onVoortgang, signal }),
   });
-  return { code: 202, antwoord: { opdracht } };
+}
+
+/**
+ * Wat er voor de herstart open stond weer in de rij, in zijn volgorde (wat
+ * liep eerst: het begint opnieuw, een split kan niet verder waar hij stopte).
+ * Vóór de server luistert, zodat de ui bij de eerste peiling ziet dat het er
+ * nog is. Niet via de controle van de splitter (die kost seconden): is
+ * Demucs er niet, dan wordt de opdracht 'fout' met de reden, nooit stil
+ * niets. Een nummer dat weg is, of de stems al heeft: overgeslagen.
+ */
+async function herstelStemsRij() {
+  let d;
+  try { d = JSON.parse(readFileSync(STEMS_RIJ, 'utf8')); } catch (_) { return; }
+  let n = 0;
+  for (const x of Array.isArray(d?.opdrachten) ? d.opdrachten : []) {
+    if (typeof x?.track !== 'string' || !/^[\w-]{1,64}$/.test(x.track) || !isAantal(x.aantal)) continue;
+    const track = await metAudio(lib.track(x.track));
+    if (!track || (!x.opnieuw && track.stems?.aantal === x.aantal)) continue;
+    zetInStemsRij(track, x.aantal, { opnieuw: x.opnieuw === true, vooraan: x.vooraan === true });
+    n++;
+  }
+  if (n) console.log(`[stems] ${n} opdracht${n === 1 ? '' : 'en'} van voor de herstart weer in de rij`);
 }
 
 /**
@@ -1217,6 +1263,7 @@ for (const sig of ['SIGTERM', 'SIGINT']) {
     const weg = () => { process.removeAllListeners(sig); process.kill(process.pid, sig); };
     if (afsluiten || !stemsRij.open) return weg();
     afsluiten = true;
+    stemsRijBewaren = false;   // wat open staat blijft in stems-rij.json voor de volgende start
     console.log(`[stems] ${sig}: de splitter wordt eerst gestopt…`);
     Promise.race([stemsRij.stop(), new Promise((z) => setTimeout(z, 5000))]).finally(weg);
   });
@@ -1243,6 +1290,8 @@ splitter.controleer().then((s) => {
   if (s.ok) console.log(`stems: Demucs klaar (${s.python ?? s.commando}, ${s.apparaat ?? '?'})`);
   else console.warn(`[stems] geen stems: ${s.reden}`);
 });
+
+await herstelStemsRij().catch((err) => console.error('[stems] de rij van voor de herstart:', err?.message || err));
 
 server.listen(POORT, '127.0.0.1', () => {
   console.log(`VARVE DJ  ·  http://localhost:${POORT}`);

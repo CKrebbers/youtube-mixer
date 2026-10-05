@@ -9,7 +9,7 @@
 // Draai met: node test/stems.test.mjs
 import { mkdtempSync, rmSync, readFileSync, readdirSync, existsSync, mkdirSync, copyFileSync, renameSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { request } from 'node:http';
 
@@ -136,6 +136,49 @@ try {
     await wacht(5);
     ok('na de lange mix: eerst F, dan de rest op volgorde', oF.status === 'bezig' && oB.plek === 1 && oC.plek === 2 && oE.plek === 3 && oD.plek === 4);
     await q.stop();
+  }
+
+  // ======================================================================
+  // De rij overleeft een herstart (5 okt): na elke verandering geeft hij door wat er open staat.
+  console.log('\nde rij doorgeven (voor na een herstart)');
+  {
+    const gemeld = [];
+    const q = new st.StemsRij({ bijWijziging: (l) => gemeld.push(l.map((x) => `${x.track}${x.aantal}${x.opnieuw ? '!' : ''}${x.vooraan ? '^' : ''}`).join(' ')) });
+    const w = {};
+    const voeg = (track, duur, extra = {}) => { w[track] = handWerk(); return q.voegToe({ track, aantal: 4, werk: w[track].werk, duur, ...extra }); };
+    const oA = voeg('A', 3000).opdracht;
+    voeg('B', 300);
+    voeg('C', 60, { opnieuw: true });
+    ok(`na elke opdracht erbij: wat loopt eerst, dan de rij op volgorde (${gemeld.at(-1)})`, gemeld.at(-1) === 'A4 C4! B4');
+    q.voegToe({ track: 'B', aantal: 4, werk: w.B.werk, duur: 300, vooraan: true });
+    ok(`vooraan gevraagd: doorgegeven, met vooraan (${gemeld.at(-1)})`, gemeld.at(-1) === 'A4 B4^ C4!');
+    const oC = q.zoek('C');
+    q.annuleer(oC.id);
+    ok(`een wachtende geannuleerd: weg uit wat er open staat (${gemeld.at(-1)})`, gemeld.at(-1) === 'A4 B4^');
+    await wacht(0);
+    q.annuleer(oA.id);
+    ok(`wat loopt wordt gestopt: meteen niet meer open (geen keuze om terug te zetten) (${gemeld.at(-1)})`, gemeld.at(-1) === 'B4^');
+    w.A.klaar({ ok: false, fout: 'gestopt' });
+    await wacht(5);
+    ok(`daarna begint B: nog steeds alleen B (${gemeld.at(-1)})`, gemeld.at(-1) === 'B4^' && q.zoek('B')?.status === 'bezig');
+    w.B.klaar({ ok: true, stems: { aantal: 4 } });
+    await wacht(5);
+    ok('alles af: een lege lijst', gemeld.at(-1) === '' && !q.open);
+    const n = gemeld.length;
+    const qq = new st.StemsRij({ bijWijziging: () => { throw new Error('schijf vol'); } });
+    const hx = handWerk();
+    const fouten = [];
+    const echt = console.error;
+    console.error = (...a) => fouten.push(a.join(' '));
+    let gooit = false;
+    try { qq.voegToe({ track: 'X', aantal: 2, werk: hx.werk }); } catch (_) { gooit = true; }
+    await wacht(0);
+    const stil = qq.stop();
+    hx.klaar({ ok: false, fout: 'gestopt' });
+    await stil;
+    console.error = echt;
+    ok('een bijWijziging die gooit breekt de rij niet (wel een fout in het log)', !gooit && fouten.some((f) => /schijf vol/.test(f))
+      && !qq.open && gemeld.length === n);
   }
 
   // ======================================================================
@@ -504,7 +547,8 @@ try {
   ok(`upload met ?stems=4: na de ingest gesplitst in 4 (${sup?.status}, ${sup?.aantal})`, up.status === 202 && sup?.status === 'klaar' && sup.aantal === 4);
   ok('geen werkmap over', werkmappen().length === 0);
 
-  // Herstart: een lopende split wordt eerst gestopt (geen wees), de rij is daarna leeg.
+  // Herstart: een lopende split wordt eerst gestopt (geen wees), en komt daarna terug in de rij
+  // (5 okt: eerst was de rij na een herstart leeg, en ging een uur Demucs-werk verloren).
   console.log('\nserver herstart');
   const ph = await post('/api/stems', { track: 'nummer-herstart-traag', aantal: 2 });
   await wachtOp(ph.j?.opdracht?.id, (o) => o.voortgang > 0);
@@ -518,16 +562,32 @@ try {
   ok(`SIGTERM met een lopende split: de server stopte hem eerst (${Date.now() - t0} ms), geen wees`, !!pidH && !leeft(pidH)
     && regels().some((x) => x.wat === 'gestopt' && x.pid === pidH));
   if (pidH) opruimen.push(pidH);
+  const achtergebleven = werkmappen();
+  const bewaard = JSON.parse(readFileSync(join(dirname(db), 'stems-rij.json'), 'utf8'));
+  ok('wat open stond staat in stems-rij.json naast de library (het afsluiten wiste het niet)',
+    bewaard.opdrachten.map((x) => `${x.track}:${x.aantal}`).join() === 'nummer-herstart-traag:2');
+  // Rommel en een nummer dat er niet meer is: overgeslagen.
+  writeFileSync(join(dirname(db), 'stems-rij.json'), JSON.stringify({ versie: 1, opdrachten: [...bewaard.opdrachten,
+    { track: 'bestaat-niet', aantal: 2 }, { track: '../x', aantal: 2 }, { track: 'nummerB', aantal: 3 }, 'rommel', { track: 'nummerA', aantal: 4 }] }));
   server = startServer();
   ok('de server start opnieuw', await klaarVoorGebruik());
   const na = await lijst();
-  ok(`een andere run (${na.server}), de rij is leeg`, na.server !== g0.server && na.opdrachten.length === 0 && na.beschikbaar === true);
-  ok('achtergebleven werkmappen (.bezig-stems-*) zijn opgeruimd', werkmappen().length === 0);
+  const terug = na.opdrachten.find((o) => o.track === 'nummer-herstart-traag');
+  ok(`een andere run (${na.server}), en de split is terug in de rij (opnieuw, een nieuwe id)`, na.server !== g0.server && na.beschikbaar === true
+    && !!terug && ['wacht', 'bezig'].includes(terug.status) && terug.id !== ph.j?.opdracht?.id);
+  ok('… en alleen die: een onbekend nummer, een raar pad, een raar aantal en een nummer dat de stems al heeft niet',
+    na.opdrachten.length === 1);
+  ok(`achtergebleven werkmappen (.bezig-stems-*) zijn opgeruimd (${achtergebleven.length}); alleen die van de teruggezette split`,
+    achtergebleven.length >= 1 && !werkmappen().some((n) => achtergebleven.includes(n))
+    && werkmappen().every((n) => n.startsWith('.bezig-stems-nummer-herstart-traag-')));
   ok('de stems in de library zijn er nog', (await json('/api/library/nummerA')).j.track.stems?.aantal === 4);
-  const terug = await post('/api/stems', { track: 'nummer-herstart-traag', aantal: 2 });
-  ok('en het nummer kan gewoon opnieuw de rij in', terug.status === 202);
-  await weg(terug.j?.opdracht?.id);
-  await wachtOp(terug.j?.opdracht?.id, afgelopen, 8000);
+  await weg(terug?.id);
+  await wachtOp(terug?.id, afgelopen, 8000);
+  ok('geannuleerd: niet meer in stems-rij.json', JSON.parse(readFileSync(join(dirname(db), 'stems-rij.json'), 'utf8')).opdrachten.length === 0);
+  const opnieuw = await post('/api/stems', { track: 'nummer-herstart-traag', aantal: 2 });
+  ok('en het nummer kan gewoon opnieuw de rij in', opnieuw.status === 202);
+  await weg(opnieuw.j?.opdracht?.id);
+  await wachtOp(opnieuw.j?.opdracht?.id, afgelopen, 8000);
   server.kill();
   server = null;
 } finally {

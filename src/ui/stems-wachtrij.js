@@ -13,8 +13,9 @@ import { isOpen, perNummer } from './stems-weergave.js';
  * Gebeurtenissen: 'change' na elke peiling; 'klaar' en 'fout' (de opdracht)
  * als een opdracht dat werd terwijl deze pagina meekeek — niet bij de eerste
  * peiling, want wat al af was hoeft niemand nog te horen; 'herstart' (aantal)
- * als de server herstartte terwijl er opdrachten open stonden (die rij staat
- * in zijn geheugen, dus die zijn weg).
+ * als de server herstartte terwijl er opdrachten open stonden die hij niet
+ * terugzette (hij bewaart zijn rij, maar een nummer kan weg zijn; een
+ * teruggezette opdracht heeft een nieuwe id, dus we kijken naar het nummer).
  */
 export class StemsWachtrij extends Emitter {
   constructor({ haal = (url, init) => fetch(url, init), interval = 1500 } = {}) {
@@ -86,8 +87,8 @@ export class StemsWachtrij extends Emitter {
     const vorige = this._gezien;
     // Herstart: een andere run, en er stond iets open dat de nieuwe niet kent.
     if (vorige && this.server && j.server && j.server !== this.server) {
-      const nu = new Set(lijst.map((o) => o.id));
-      const weg = this.opdrachten.filter((o) => isOpen(o) && !nu.has(o.id)).length;
+      const nu = new Set(lijst.filter(isOpen).map((o) => o.track));
+      const weg = this.opdrachten.filter((o) => isOpen(o) && !nu.has(o.track)).length;
       if (weg) this.emit('herstart', weg);
     }
     this.server = j.server ?? this.server;
