@@ -1985,7 +1985,7 @@ console.log('\ntempokaart');
   nt(98, true); nt(90, true); nt(90, false); nt(98, false);
   ok('Shift + Metronome nog eens: grid-modus uit', lg.stand.edit === 'uit');
   const g0 = JSON.stringify(dE.grid.toJSON());
-  const bpmVol = read('sampler.volume');
+  const kopVol = eng.koptelefoon.niveau, samplerVol = read('sampler.volume');
   enc(1);
   nt(101, true);
   ok('buiten grid-modus: nudge + is weer bend', dE.buigt > 0);
@@ -1993,7 +1993,8 @@ console.log('\ntempokaart');
   nt(82, true); nt(82, false); nt(63, true); nt(63, false);
   ok('buiten grid-modus: scene 1 kiest hotcues, lock doet niets aan het grid',
     lg.stand.grid === 'hotcues' && JSON.stringify(dE.grid.toJSON()) === g0);
-  ok('buiten grid-modus: cue level is weer sampler-volume', bpmVol === null || read('sampler.volume') !== bpmVol);
+  ok('buiten grid-modus: cue level is weer het koptelefoonvolume (sinds 5 okt), het sampler-volume blijft staan',
+    eng.koptelefoon.niveau !== kopVol && read('sampler.volume') === samplerVol);
   dE.setGrid(null);
 }
 

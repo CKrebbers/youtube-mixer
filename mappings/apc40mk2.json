@@ -963,16 +963,32 @@
     },
     {
       "in": "cc:0:47",
+      "action": "headphone.level",
+      "mode": "relative-2c",
+      "label": "cue level (koptelefoonvolume)"
+    },
+    {
+      "in": "cc:0:47",
       "action": "sampler.volume",
       "mode": "relative-2c",
-      "label": "cue level"
+      "label": "cue level + shift (modus sampler): sampler-volume",
+      "shift": true,
+      "laag": "grid.sampler"
+    },
+    {
+      "in": "cc:0:47",
+      "action": "headphone.mix",
+      "mode": "relative-2c",
+      "label": "cue level + shift (koptelefoonmix)",
+      "shift": true
     },
     {
       "in": "cc:0:47",
       "action": "video.pulse",
       "mode": "relative-2c",
-      "label": "cue level + shift",
-      "shift": true
+      "label": "cue level + shift (modus video): puls",
+      "shift": true,
+      "laag": "grid.video"
     },
     {
       "in": "note:0:64",
@@ -2776,24 +2792,46 @@
   ],
   "eerder": [
     {
-      "vingerafdruk": "7164b0fb-387",
+      "vingerafdruk": "9ba78a49-395",
       "tot": "2026-10-05",
-      "rules": [],
+      "rules": [
+        {
+          "in": "cc:0:47",
+          "action": "sampler.volume",
+          "mode": "relative-2c",
+          "label": "cue level"
+        },
+        {
+          "in": "cc:0:47",
+          "action": "video.pulse",
+          "mode": "relative-2c",
+          "shift": true,
+          "label": "cue level + shift"
+        }
+      ],
       "removed": [
-        "note:0:48",
-        "note:1:48",
-        "note:2:48",
-        "note:3:48",
-        "note:4:48",
-        "note:5:48",
-        "note:6:48",
-        "note:7:48"
+        "cc:0:47#shift@grid.sampler",
+        "cc:0:47#shift@grid.video"
       ]
     },
     {
-      "vingerafdruk": "87508318-382",
-      "tot": "2026-10-02",
-      "rules": [],
+      "vingerafdruk": "7164b0fb-387",
+      "tot": "2026-10-05",
+      "rules": [
+        {
+          "in": "cc:0:47",
+          "action": "sampler.volume",
+          "mode": "relative-2c",
+          "label": "cue level"
+        },
+        {
+          "in": "cc:0:47",
+          "action": "video.pulse",
+          "mode": "relative-2c",
+          "shift": true,
+          "label": "cue level + shift"
+        }
+      ],
       "removed": [
         "note:0:48",
         "note:1:48",
@@ -2803,6 +2841,39 @@
         "note:5:48",
         "note:6:48",
         "note:7:48",
+        "cc:0:47#shift@grid.sampler",
+        "cc:0:47#shift@grid.video"
+      ]
+    },
+    {
+      "vingerafdruk": "87508318-382",
+      "tot": "2026-10-02",
+      "rules": [
+        {
+          "in": "cc:0:47",
+          "action": "sampler.volume",
+          "mode": "relative-2c",
+          "label": "cue level"
+        },
+        {
+          "in": "cc:0:47",
+          "action": "video.pulse",
+          "mode": "relative-2c",
+          "shift": true,
+          "label": "cue level + shift"
+        }
+      ],
+      "removed": [
+        "note:0:48",
+        "note:1:48",
+        "note:2:48",
+        "note:3:48",
+        "note:4:48",
+        "note:5:48",
+        "note:6:48",
+        "note:7:48",
+        "cc:0:47#shift@grid.sampler",
+        "cc:0:47#shift@grid.video",
         "note:0:80",
         "note:0:38@grid.video",
         "note:0:39@grid.video",
@@ -2813,7 +2884,21 @@
     {
       "vingerafdruk": "e2bef131-374",
       "tot": "2026-10-02",
-      "rules": [],
+      "rules": [
+        {
+          "in": "cc:0:47",
+          "action": "sampler.volume",
+          "mode": "relative-2c",
+          "label": "cue level"
+        },
+        {
+          "in": "cc:0:47",
+          "action": "video.pulse",
+          "mode": "relative-2c",
+          "shift": true,
+          "label": "cue level + shift"
+        }
+      ],
       "removed": [
         "note:0:48",
         "note:1:48",
@@ -2823,6 +2908,8 @@
         "note:5:48",
         "note:6:48",
         "note:7:48",
+        "cc:0:47#shift@grid.sampler",
+        "cc:0:47#shift@grid.video",
         "note:0:80",
         "note:0:85#shift",
         "note:0:85@grid.auto",
@@ -2841,7 +2928,21 @@
     {
       "vingerafdruk": "35823dda-291",
       "tot": "2026-09-25",
-      "rules": [],
+      "rules": [
+        {
+          "in": "cc:0:47",
+          "action": "sampler.volume",
+          "mode": "relative-2c",
+          "label": "cue level"
+        },
+        {
+          "in": "cc:0:47",
+          "action": "video.pulse",
+          "mode": "relative-2c",
+          "shift": true,
+          "label": "cue level + shift"
+        }
+      ],
       "removed": [
         "note:0:50#shift",
         "note:0:48",
@@ -2859,6 +2960,8 @@
         "note:6:48",
         "note:7:50#shift",
         "note:7:48",
+        "cc:0:47#shift@grid.sampler",
+        "cc:0:47#shift@grid.video",
         "note:0:60",
         "note:0:60#shift",
         "note:0:61",

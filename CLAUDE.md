@@ -1240,6 +1240,8 @@ Volledig in `docs/STUDIO.md` §3. Wat een bouwer niet mag missen:
 - `headphone.*` en `track.N.pfl` horen niet bij wat er klinkt: OVERSLAAN in
   terugspelen.js, NIET_IN_WAARDEN in handelingen.js, niet in OVERNEEM (auto-DJ).
 - APC: ● (record arm) zonder shift = `track.N.pfl`; shift + ● blijft het cuepunt.
+  Cue Level = `headphone.level`, shift + Cue Level = `headphone.mix` (Clay 5 okt);
+  sampler-volume en puls op shift + Cue Level in grid-modus sampler en video.
 - Gemeten met `tools/headless/koptelefoon.mjs` (echte Chrome, OfflineAudioContext van
   vier kanalen); de mock in engine.test kent geen echte splitter/merger.
 

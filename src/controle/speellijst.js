@@ -82,7 +82,7 @@ export const SPEELLIJST = [
       let: 'De rij KOPTELEFOON zegt "zaal 1/2 · koptelefoon 3/4". Komt de zaal uit de Scarlett en de koptelefoon uit de Mac?' },
     { id: 'kp-cue', doe: 'Track 1 speelt. Laad track 2, fader 2 dicht, ● (zonder shift) op kolom 2.',
       let: 'Hoor je track 2 in de koptelefoon en niet in de zaal? Brandt ● rood?' },
-    { id: 'kp-mix', doe: 'Draai MIX en VOL in de rij; zet ● weer uit.',
+    { id: 'kp-mix', doe: 'Draai Cue Level (volume) en shift + Cue Level (mix); zet ● weer uit.',
       let: 'MIX gaat van cue naar zaal; geen tik bij aan en uit; zonder cue hoor je de zaal.' },
     { id: 'kp-opname', doe: 'Neem 30 s op met een cue aan.', let: 'Staat de cue NIET in de opname?' },
   ] },

@@ -24,6 +24,8 @@ Maschine MK2 en E-MU Xboard49. Onderdelen die al gebouwd zijn hergebruiken.
 | ST3 | De stems-takken | Gepusht en als PR #3 naar `main` (5 okt). |
 | ST4 | Regels van de oorspronkelijke instrumenten | **Gelden niet in VARVE.** MediSynth (geen tempo, alleen pentatonisch, aanslag ≥ 200 ms), het toonladderslot van AVBRNC en de filter-app: in hun eigen app blijven ze, hier spelen instrumenten chromatisch en op de maat. |
 | ST5 | Repo uit iCloud | Ja (§6, de commando's staan in HANDOFF). |
+| ST6 | Koptelefoon op de APC | Cue Level = volume, shift + Cue Level = mix. |
+| ST7 | Waar een instrument woont | **Op een van de acht tracks**: een track draagt een nummer óf een instrument, met dezelfde strip, fader, sends en cue. De APC-indeling verandert niet. |
 
 **De controllers** komen via de hub (`~/Projects/AV-app-hub`), die als enige een
 controller opent. VARVE wordt een app van de hub (hub-fase 1, "lease"); tot dan
@@ -103,8 +105,10 @@ de cue niet: geen enkele node erbij, de master gaat bit voor bit zoals altijd na
 uitgang, de cue-knoppen staan uit (lampje uit, read `null`) en de rij zegt waarom.
 
 **Op de APC:** ● (record arm) in het 2×2-blok van elke kolom, ZONDER shift = cue aan/uit
-(rood lampje = je hoort hem). Met shift blijft ● het cuepunt. Koptelefoonvolume en
-mix staan nog niet op de APC (VRAGEN S1); koppelen werkt.
+(rood lampje = je hoort hem). Met shift blijft ● het cuepunt. **Cue Level** = het
+koptelefoonvolume, **shift + Cue Level** = de mix (Clay, 5 okt). Het sampler-volume en de
+puls, die op Cue Level stonden, zitten nu op shift + Cue Level in de grid-modus sampler
+en video.
 
 **Actions:** `track.N.pfl` (trigger, aan/uit; read 1/0, null zonder cue-uitgang),
 `headphone.level` en `headphone.mix` (value 0..1). Terugspelen slaat ze over (de zaal
@@ -202,8 +206,8 @@ Patronen opnemen naar audio in de library; Sediment naar JS/AudioWorklet (eerst
 
 ## 6. Open vragen (VRAGEN blok S)
 
-- S1: koptelefoonvolume en mix op de APC.
-- S2: een instrument of patroon: een van de acht tracks, of eigen kolommen? (vóór S3)
+- ~~S1~~: Cue Level = volume, shift = mix (ST6).
+- ~~S2~~: een instrument op een van de acht tracks (ST7).
 - S3: zonder enige cue hoort de koptelefoon de zaal. Goed zo?
 - Uit iCloud: zie HANDOFF.
 

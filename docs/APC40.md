@@ -69,7 +69,8 @@ crossfaderkant A → B → thru (LED geel = A, oranje = B, uit = thru), ● = ko
 koptelefoonuitgang; docs/STUDIO.md §3), shift + ● = cue (alleen met shift: rondlopen
 of per ongeluk cue zette een hoorbare track stil) ·
 fader: volume (soft-takeover). Masterfader, crossfader, Cue Level =
-sampler-volume (shift: puls).
+koptelefoonvolume (shift: koptelefoonmix; Clay 5 okt). Sampler-volume en puls staan
+sindsdien op shift + Cue Level in hun eigen grid-modus (sampler, video).
 
 **Rechts (track met focus)** — device knobs in de STRIP: trim · high · mid ·
 low / echo · galm · fx-mix · fx 1; Clip/Device View (licht op) wisselt naar het
@@ -164,8 +165,7 @@ erbij komen en alleen zijn 4 rack-knoppen (video-effecten) van hem blijven.
 Nagerekend met zijn echte kopie (GET, niets gepost): 374 regels, 4 eigen, 0
 weggehaald, geen nieuwe regel op een van zijn sleutels.
 
-Nog open: koptelefoonvolume en -mix op de APC (VRAGEN S1; de cue zelf zit op ●
-sinds 5 okt); welke vrije knoppen de drukknoppen (`.hold`, D3) worden; `PALETTE_HEX` heeft nog 60 van de 128 paletkleuren.
+Nog open: welke vrije knoppen de drukknoppen (`.hold`, D3) worden; `PALETTE_HEX` heeft nog 60 van de 128 paletkleuren.
 
 **Echofilter:** staat voor de APC nog aan (`echoFilter` in het profiel) tot
 gemeten is dat hij in 0x42 niets terugkaatst.

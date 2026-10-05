@@ -589,7 +589,7 @@ export class Mapping extends Emitter {
    * de shiftstand van NU: houd je shift vast, dan tonen de lampjes wat de
    * knoppen met shift doen (hotcue wissen in rood). Een knop zonder
    * shift-variant houdt zijn gewone regel; een knop die ALLEEN met shift iets
-   * doet (● = cue) valt zonder shift weg en blijft donker.
+   * doet valt zonder shift weg en blijft donker.
    */
   actieveRegels({ shift = this.shift } = {}) {
     const uit = new Map();
