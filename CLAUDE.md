@@ -498,7 +498,11 @@ docs/
   zaal. Labels ≥ 11 px. APC-knopnamen alleen in de KOPPELMODUS (anders ruis).
   MAAT-badge zegt "(stil)" als de maatgever stilstaat; hotcues overal geel met
   nummer; foutmeldingen blijven staan tot je ze wegklikt. De renderloop leest
-  het focusoverzicht uit een cache en schrijft alleen wat verandert.
+  het focusoverzicht uit een cache en schrijft alleen wat verandert. De golfvormen (zoom,
+  overzicht, de acht banen) TEKENEN alleen als hun sleutel verandert (`zelfde()` in waveform.js:
+  analyse, maat, positie in hele apparaatpixels, loop, cue, hotcues, grid, zoom). Elke teken-actie
+  is een upload naar de GPU: zonder sleutel tekende VARVE in rust ~29 Mpx/s en liep Demucs (stems)
+  op de helft (gemeten 5 okt). Tekent een nieuw element iets in een draw(), zet het in de sleutel.
 - Vensters bestaan nog, maar als MODEL (`staat.venster`), niet als UI:
   L = de track met focus (volgt engine.focus), R = de VORIGE focus-track
   (`volgFocus`/`zetTweede` in spiegel-plan.js). Het toetsenbord volgt dat
