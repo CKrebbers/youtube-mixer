@@ -3,6 +3,7 @@ import { knobVan } from './controls.js';
 import { meld } from './meldingen.js';
 import { opzetPatronenOpslag } from './patronen-opslag.js';
 import { STANDAARD_LENGTE, MAX_LENGTE } from '../engine/patronen/model.js';
+import { instrumentDef } from '../engine/instrumenten/index.js';
 
 /*
  * De PATROON-rij (docs/PATRONEN.md §5): voor de track met focus de vijf
@@ -153,7 +154,8 @@ export function opzetPatronen({ engine, noten }) {
     // De noot die een klik op een stap zet; bij drums de naam van de pad.
     if (!inst) {
       const voor = pt.set.instrumenten?.[String(nr)];
-      tekst(nootEl, voor ? `geen instrument (de patronen hier zijn voor ${voor})` : 'geen instrument — kies er een in de INSTRUMENT-rij');
+      const naam = voor && (instrumentDef(voor.soort)?.naam ?? voor.soort);
+      tekst(nootEl, naam ? `geen instrument (de patronen hier zijn voor ${naam})` : 'geen instrument — kies er een in de INSTRUMENT-rij');
       klasse(nootEl, 'leeg', true);
     } else {
       const noot = st.laatsteNoot;

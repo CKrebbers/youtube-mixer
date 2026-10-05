@@ -37,6 +37,11 @@ parallelle sporen (elk een worktree in `~/Projects/varve-stems/`), samengevoegd 
   samengevoegd. AV-app-hub PR #12 (gemerged): `npm start -- studio` start Varve en opent hem
   met `?hub=`.
 - `node test/alles.mjs` op `studio/integratie`: 51 bestanden, 5359 checks, groen.
+- Daarna (5 okt, tijdens Clay's eerste test): de stems-rij op volgorde (wat je in het
+  paneel vraagt eerst, dan kortste eerst; `docs/STEMS.md` §6), golfvormen tekenen alleen bij
+  een verandering, **S15** (de patronenset zet zijn instrumenten met hun knoppen terug na
+  herladen) en **S7** (de Schaal volgt de cent van de plaat). De server moet na S15 opnieuw
+  starten (hij normaliseert de set met dezelfde code), niet alleen het tabblad.
 - **Starten (Clay, na het mergen en de verhuizing):** in AV-app-hub `cp sets/paden.voorbeeld.json
   sets/paden.json` (youtube-mixer staat daar al op `~/Projects/Youtube mixer`), dan
   `npm start -- studio`. Zonder hub werkt Varve zoals altijd (APC rechtstreeks, Xboard ook;

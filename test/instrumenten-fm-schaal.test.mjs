@@ -293,6 +293,8 @@ const { NOOTVELDEN, VELD_STEM, SchaalInstrumentKern, LIJF, VELD0, RIJ } = await 
   sc.noteOn(69, 0.8, 100.5);
   const slag = BERICHTEN.find((m) => m.t === 'slag');
   ok('noteOn: kern eerst op de toon van de maatgever (A2), in A440', Math.abs(BERICHTEN.find((m) => m.t === 'kern').hz - 110) < 1e-9);
+  ok('… en alles op de stemming van de plaat (+43 ct, S7): via fijn, vóór de slag', BERICHTEN.find((m) => m.t === 'param')?.fijn === 43
+    && BERICHTEN.findIndex((m) => m.t === 'param') < BERICHTEN.findIndex((m) => m.t === 'slag'));
   ok('noteOn: een slag op tijd t, A4 = 440 Hz, een notenveld', slag && slag.tijd === 100.5 && slag.hz === 440 && slag.j >= 0 && slag.j < NOOTVELDEN && slag.v === VELD_STEM[slag.j]);
   ok('... met vier amplitudes, een klop in ms en het lichaam', slag.a.length === 4 && slag.a.every((x) => x > 0) && slag.ms > 0 && slag.lijf > 0);
   BERICHTEN.length = 0;
@@ -301,6 +303,22 @@ const { NOOTVELDEN, VELD_STEM, SchaalInstrumentKern, LIJF, VELD0, RIJ } = await 
   const nog = BERICHTEN.find((m) => m.t === 'slag');
   ok('dezelfde noot nog eens: hetzelfde veld (geen zweving tegen een kopie)', nog.j === slag.j);
   ok('track zonder toonsoort: de kern blijft op A2 (geen sprong naar D)', !BERICHTEN.some((m) => m.t === 'kern'));
+  ok('… en op zijn laatste stemming (+43 ct: geen sprong naar A440)', !BERICHTEN.some((m) => m.t === 'param'));
+  BERICHTEN.length = 0;
+  sc.zetParam(5, 0.6);
+  ok('FIJN komt erbij: +10 ct op een plaat van +43 = +53', BERICHTEN.find((m) => m.t === 'param')?.fijn === 53);
+  toon = { k: 21, cent: 43.3 };
+  BERICHTEN.length = 0;
+  sc.noteOn(69, 0.4, 101.1);
+  ok('een verschil van minder dan een halve cent: niets opnieuw (de pitch-fader schuift niet bij elke noot de stemming)', !BERICHTEN.some((m) => m.t === 'param'));
+  toon = { k: 21, cent: -80 };
+  BERICHTEN.length = 0;
+  sc.noteOn(69, 0.4, 101.2);
+  ok('buiten ±50 ct: begrensd (zoals de globale schaal)', BERICHTEN.find((m) => m.t === 'param')?.fijn === -40);
+  sc.zetParam(5, 0.5);
+  toon = { k: 21, cent: 0 };
+  sc.noteOn(69, 0.4, 101.3);
+  toon = null;
   ok('zachter = minder: snelheid 0,4 slaat zachter dan 0,8', nog.a[0] < slag.a[0] * 0.6);
 
   // Tien velden, dan stemroof.

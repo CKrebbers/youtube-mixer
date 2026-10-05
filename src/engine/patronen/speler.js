@@ -69,6 +69,9 @@ export function maatVan(d) {
   return { id: d.id, a: k.ankerCtx, L: k.beatLengte, n, q, per };
 }
 
+const zelfdeKlank = (a, b) => !!b && a.soort === b.soort && (a.params?.length ?? 0) === (b.params?.length ?? 0)
+  && (a.params ?? []).every((v, i) => v === b.params[i]);
+
 export class PatroonSpeler extends Emitter {
   /**
    * @param ctx         de AudioContext (alleen currentTime en de vertraging)
@@ -121,9 +124,46 @@ export class PatroonSpeler extends Emitter {
   _zet(id, plek, p) {
     const nr = this.nr(id);
     this.set.tracks[nr][plek - 1] = p;
-    const soort = this.instrument(id)?.soort;
-    if (soort && p) this.set.instrumenten[nr] = soort;
+    const k = this._klank(id);
+    if (k && p) this.set.instrumenten[nr] = k;
     this.emit('bewerkt', { id, plek });
+  }
+
+  /**
+   * Wat de set onthoudt van het instrument op track `id` (model.js):
+   * { soort, params } of null. Een knop die een gebaar is (`gebaar: true`,
+   * zoals wrijven op de Schaal: hij maakt zelf klank) wordt niet onthouden.
+   */
+  _klank(id) {
+    const inst = this.instrument(id);
+    if (!inst?.soort) return null;
+    const lijst = Array.isArray(inst.params) && typeof inst.leesParam === 'function' ? inst.params.slice(0, 8) : [];
+    const params = lijst.map((p, i) => {
+      const v = p?.gebaar ? null : inst.leesParam(i + 1);
+      return Number.isFinite(v) ? Math.round(v * 1e4) / 1e4 : null;
+    });
+    return { soort: inst.soort, params: params.length ? params : null };
+  }
+
+  /**
+   * De knoppen bijhouden (VRAGEN S15): heeft het instrument op een track met
+   * patronen een andere soort of knopstand dan de set onthoudt, dan komt dat
+   * in de set en volgt 'bewerkt' (de opslag bewaart). Een instrument meldt
+   * zelf niets, dus de opslag roept dit elke paar seconden aan. Gaat het
+   * instrument weg (er komt een nummer), dan blijft het onthouden.
+   */
+  onthoudKlank() {
+    let anders = false;
+    for (const id of this.ids) {
+      const nr = this.nr(id);
+      if (!this.set.tracks[nr].some(Boolean)) continue;
+      const k = this._klank(id);
+      if (!k || zelfdeKlank(k, this.set.instrumenten[nr])) continue;
+      this.set.instrumenten[nr] = k;
+      anders = true;
+    }
+    if (anders) this.emit('bewerkt', { klank: true });
+    return anders;
   }
 
   /** Het patroon om te bewerken; bestaat het niet, dan een nieuw (leeg). */

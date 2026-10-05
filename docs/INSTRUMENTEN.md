@@ -37,7 +37,7 @@ export const POLY = {
 | Lid | Betekenis |
 |---|---|
 | `soort`, `naam` | zoals de definitie |
-| `params` | `[{ id, label, standaard, eenheid? }]`, hooguit 8; plek `k` (1..8) = `params[k-1]`. `standaard` 0..1, `eenheid(v)` → tekst in echte eenheden (zoals `eenheid` in `fx.js`) |
+| `params` | `[{ id, label, standaard, eenheid?, gebaar? }]`, hooguit 8; plek `k` (1..8) = `params[k-1]`. `standaard` 0..1, `eenheid(v)` → tekst in echte eenheden (zoals `eenheid` in `fx.js`). `gebaar: true` = een knop die zelf klank maakt (wrijven op de Schaal): de patronenset onthoudt hem niet, zodat er na het laden niets vanzelf klinkt (PATRONEN.md §7.6) |
 | `start()` | `Promise`, laadt wat er lazy moet (een worklet). Idempotent. Een `noteOn` vóór `start()` klaar is mag stil blijven, nooit gooien |
 | `noteOn(noot, snelheid, t?)` | `noot` 0..127 (MIDI, A4 = 69 = 440 Hz), `snelheid` 0..1 (> 0), `t` = ctx-tijd; `undefined` of in het verleden = nu |
 | `noteOff(noot, t?)` | los; de stem klinkt uit volgens zijn release |
@@ -286,7 +286,10 @@ veld is vier resonatoren, en een resonator stemmen is één coëfficiënt. Dus:
   amplitude en fase bij de nieuwe frequentie (`_coef`). Geldt ook voor buigen en fijn.
 - **De kern** staat op de grondtoon van wat je hoort (`toon()` = `deck.toonsoort` van de
   maatgever, rond D3 via `stemming()`; zonder toonsoort de laatste, nooit terug naar D), in
-  dezelfde stemming als de noten (A440 + FIJN, niet de cent van de plaat). Hij zingt als
+  dezelfde stemming als de noten: A440 + de cent van de plaat (`toonsoort.cent`, met de
+  pitch erbij, begrensd op ±50 zoals de globale schaal; VRAGEN S7) + FIJN. De cent gaat
+  mee in de `fijn` van het `param`-bericht (op alles: kern en velden), pas bij een halve
+  cent verschil; zonder toonsoort blijft de laatste. Hij zingt als
   je wrijft, en klinkt mee met noten die binnen 2% op zijn boventonen vallen (zoals
   `_meeresoneer`). Het lichaam klopt zacht mee met elke noot.
 - **Tijd**: elk bericht heeft een `tijd` op de audioklok; de kern zet ze in een vaste,
@@ -338,9 +341,8 @@ weg, 0,1 s later weer open: wat in die 0,1 s gespeeld wordt klinkt niet.
   van het lichaam onder elke noot (op de toon van de kern).
 - **Live stemroof bij de schaal**: de staart van het gestolen veld gaat mee in de nieuwe
   toon (geen tik, wel even zijn klank). Pas bij een elfde noot binnen ~4 s.
-- **Kern en de cent van de plaat**: de kern volgt de grondtoon van de maatgever maar staat
-  in A440 + fijn. Een plaat die 43 cent hoog staat: FIJN op +43, of moet het instrument de
-  stemming van de plaat volgen (zoals de globale klankschaal)? Vraag voor Clay.
+- **De cent van de plaat** (S7, gebouwd 5 okt): de Schaal volgt hem nu, zoals de globale
+  klankschaal. Nog niet beluisterd: een plaat die 43 cent hoog staat, en de Schaal erop.
 - Op een echte track (de API van §6 bestond nog niet), met de Xboard49 (toets → geluid),
   in een realtime AudioContext naast acht streamende decks: alleen offline gemeten.
 

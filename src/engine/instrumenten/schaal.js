@@ -23,7 +23,8 @@ import { NOOTVELDEN, VELD_STEM, KLANK_NAMEN } from './schaal-kern.js';
  *
  * De KERN staat op de grondtoon van wat je hoort (`toon()`: de toonsoort van
  * de maatgever, rond D3 zoals de klankschaal), in dezelfde stemming als de
- * noten (A440 + fijn). Wrijven laat hem zingen: aftertouch, modwiel of de
+ * noten: A440 + de cent van wat je hoort (de plaat staat bv. −12 ct, met de
+ * pitch erbij; VRAGEN S7, zoals de globale schaal) + FIJN. Wrijven laat hem zingen: aftertouch, modwiel of de
  * knop WRIJF (de sterkste telt). Noten op zijn boventonen klinken mee.
  *
  * Snelheid = hoe hard de stok raakt: luidheid (snelheid^1,5 × kracht), maar
@@ -96,7 +97,7 @@ export class Schaal {
         eenheid: (v) => { const c = fijnVan(v); return c === 0 ? '0 ct' : `${c > 0 ? '+' : '−'}${komma(Math.abs(c))} ct`; } },
       { id: 'slag', label: 'slag', standaard: 0.3, eenheid: (v) => (clamp(v) < 0.03 ? 'midden' : `${pct(v)} rand`) },
       { id: 'loslaten', label: 'loslaten', standaard: 0.5, eenheid: (v) => (loslatenVan(v) ? tijd(loslatenVan(v)) : 'vrij') },
-      { id: 'wrijf', label: 'wrijf', standaard: 0, eenheid: (v) => (clamp(v) < 0.02 ? 'uit' : pct(v)) },
+      { id: 'wrijf', label: 'wrijf', standaard: 0, gebaar: true, eenheid: (v) => (clamp(v) < 0.02 ? 'uit' : pct(v)) },
     ];
     this._w = this.params.map((p) => p.standaard);
 
@@ -110,6 +111,8 @@ export class Schaal {
     this._buig = 0;              // cent
     this._kernLos = false;       // kern en lichaam zijn losgelaten (korte uitklank)
     this._toon = STANDAARD_TOON; // de laatste toonsoort die hij kon volgen (nooit terug naar D)
+    this._cent = 0;              // de stemming van wat je hoort (cent), ook de laatste die er was
+    this._centWorklet = 0;       // de cent die de worklet in zijn fijn heeft
     this._kernHz = 0;
   }
 
@@ -327,9 +330,10 @@ export class Schaal {
   }
 
   _stuurParams() {
+    this._centWorklet = this._cent;
     this._post({
       t: 'param', karakter: this._waarde('karakter'), uitklank: uitklankVan(this._waarde('uitklank')),
-      klank: klankVan(this._waarde('klank')), fijn: fijnVan(this._waarde('fijn')),
+      klank: klankVan(this._waarde('klank')), fijn: fijnVan(this._waarde('fijn')) + this._cent,
     });
   }
 
@@ -349,12 +353,19 @@ export class Schaal {
     if (p === 0) this._misschienKernLos();
   }
 
-  /** De kern op de grondtoon van wat de maatgever laat horen; zonder toonsoort de laatste die er was. */
+  /**
+   * De kern op de grondtoon van wat de maatgever laat horen, en alles op zijn
+   * stemming (cent); zonder toonsoort de laatste die er was.
+   */
   _volgToon() {
     let h = null;
     try { h = this.toonVan ? this.toonVan() : null; } catch (_) { h = null; }
     const ts = h && typeof h.toonsoort === 'object' && h.toonsoort !== null ? h.toonsoort : h;
-    if (ts && isSleutel(ts.k)) this._toon = ts.k;
+    if (ts && isSleutel(ts.k)) {
+      this._toon = ts.k;
+      this._cent = Number.isFinite(ts.cent) ? Math.max(-50, Math.min(50, ts.cent)) : 0;
+    }
+    if (Math.abs(this._cent - this._centWorklet) >= 0.5) this._stuurParams();
     const hz = stemming({ k: this._toon }).kernHz;
     if (this._kernHz > 0 && Math.abs(1200 * Math.log2(hz / this._kernHz)) < 0.5) return;
     this._kernHz = hz;

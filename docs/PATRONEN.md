@@ -95,9 +95,9 @@ Chrome; niemand heeft het nog gehoord of op de APC gedrukt.*
 | `server/patronen.js`, `server/index.js` | `patronen/<naam>.json` met versie (409), `.versies/`, `/api/patronen` |
 | `src/ui/patronen-paneel.js`, `patronen-opslag.js` | de PATROON-rij; ophalen/bewaren met versie, van buiten overnemen, botsing |
 | `index.html`, `styles.css`, `app.js`, `renderloop.js`, `apc.html`, `apc-kaart.js`, `apc-beschrijf.js`, `spiegel-plan.js` | knop en rij, kleuren (`--m-patronen`), uitleg, modus op de kaart en het scherm |
-| `test/patronen.test.mjs` | model, venster, klok, speler (nep-maatgever, nep-instrumenten), opslag, server en `patronen-opslag.js` tegen de echte server: 118 checks |
-| `test/patronen-engine.test.mjs` | de echte engine (mock van Web Audio): actions en reads, een echt deck als maatgever, instrument weg/wisselen, log, terugspelen, de mapping, LED's, uitleg: 55 checks |
-| `tools/headless/patronen.mjs` | Chrome: de rij in de app, en de meting op een OfflineAudioContext (§7.7): 22 checks |
+| `test/patronen.test.mjs` | model, venster, klok, speler (nep-maatgever, nep-instrumenten), opslag, server en `patronen-opslag.js` tegen de echte server: 131 checks |
+| `test/patronen-engine.test.mjs` | de echte engine (mock van Web Audio): actions en reads, een echt deck als maatgever, instrument weg/wisselen, log, terugspelen, de mapping, LED's, uitleg, de instrumenten van de set terug: 62 checks |
+| `tools/headless/patronen.mjs` | Chrome: de rij in de app, en herladen (de drums komen terug), de meting op een OfflineAudioContext (§7.7): 24 checks |
 
 ### 7.2 De klok, en waar hij van het contract afwijkt
 
@@ -201,9 +201,15 @@ auto voor scene 4). De kern blijft: fader, play, filter, Clip Stop, master-knop.
   bestand van buiten veranderde (Claude mag het gewoon schrijven) en neemt dat zonder eigen
   wijzigingen over; met eigen wijzigingen: een botsing in de rij, **hun versie** of **mijn
   versie**. Het bestand staat in de werkmap (`patronen/set.json`), niet in de library.
-- `set.instrumenten` onthoudt welk instrument er stond toen er een patroon bij kwam; het
-  scherm zegt het als de track nu geen instrument heeft. Instrumenten worden bij het laden
-  NIET vanzelf teruggezet (zie de vragen).
+- `set.instrumenten` onthoudt per track met patronen welk instrument erop staat, met zijn
+  acht knoppen: `{ '1': { soort: 'drums', params: [0.5, 0.375, …] } }` (0..1; `null` = een
+  gebaar of onbekend; een oude set met alleen `'drums'` leest gewoon). De opslag kijkt elke
+  3 s of een knop gedraaid is en bewaart dat (`speler.onthoudKlank`). **Na elke geladen set
+  (opstarten, van buiten, hun versie) komt het instrument terug** op een lege track met
+  patronen, met zijn knoppen (`engine.herstelInstrumenten`, VRAGEN S15), en meldt de mixer
+  op welke tracks. Een track met een nummer houdt zijn nummer; daar zegt het scherm voor wie
+  de patronen zijn. Gebaren (`gebaar: true` in de params, zoals wrijven op de Schaal) worden
+  niet onthouden: na het laden klinkt er niets vanzelf.
 - **Handelingenlog**: starten, stoppen, rijen en het tempo gaan over de bus en staan in het
   log; de beginstand weet welke plek er speelt (`stand.patronen.speelt`). **Terugspelen**
   stopt eerst wat er nu speelt, start de plekken van toen op de maat (op een track met een

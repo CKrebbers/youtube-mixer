@@ -350,6 +350,34 @@ console.log('\nnoten.js en opnemen');
   tik(85);
 }
 
+// ---- de instrumenten van de set terug (VRAGEN S15) ---------------------------------------------
+console.log('\nde instrumenten van de set terug (S15)');
+{
+  NOW = 90;
+  const KORT = { noten: [{ stap: 0, noot: 60 }] };
+  // D: poly met twee knoppen; E: schaal (wrijven is een gebaar); F: heeft een nummer; H: een onbekend instrument; G: geen patronen.
+  for (const id of ['D', 'E', 'G', 'H']) eng.zetInstrument(id, null);
+  eng.deck('F').load(buf, 'een nummer');
+  pt.laadSet({ tracks: { 4: [KORT], 5: [KORT], 6: [KORT], 8: [KORT] }, instrumenten: { 7: 'poly',
+    4: { soort: 'poly', params: [0.25, 0.5] }, 5: { soort: 'schaal', params: [0.6, null, null, null, null, null, null, 0.9] }, 6: 'fm', 8: 'theremin' } });
+  const m0 = meldingen.length;
+  const terug = eng.herstelInstrumenten();
+  ok('terug op de lege tracks met patronen (D, E); niet op een track met een nummer (F) of zonder patronen (G)',
+    terug.join() === 'D,E' && eng.instrumentOp('D')?.soort === 'poly' && eng.instrumentOp('E')?.soort === 'schaal'
+    && !eng.instrumentOp('F') && !!eng.deck('F').buffer && !eng.instrumentOp('G'));
+  ok('met de knoppen uit de set; wat de set niet weet blijft op zijn standaard',
+    dicht(eng.instrumentOp('D').leesParam(1), 0.25) && dicht(eng.instrumentOp('D').leesParam(2), 0.5)
+    && dicht(eng.instrumentOp('D').leesParam(3), eng.instrumentOp('D').params[2].standaard) && dicht(eng.instrumentOp('E').leesParam(1), 0.6));
+  ok('een gebaar (wrijven op de Schaal) niet: na het laden klinkt er niets vanzelf', eng.instrumentOp('E').leesParam(8) === 0);
+  ok('een onbekend instrument: een melding, verder niets', meldingen.slice(m0).some((m) => m.soort === 'fout'
+    && /track 8: instrument van de patronen niet terug \(onbekend instrument "theremin"\)/.test(m.tekst)) && !eng.instrumentOp('H'));
+  ok('nog eens: niets (er staat al een instrument)', eng.herstelInstrumenten().length === 0);
+  ok('de set vult de knoppen aan die hij niet wist (het gebaar blijft null)', pt.onthoudKlank()
+    && pt.set.instrumenten['4'].params.length === 8 && pt.set.instrumenten['4'].params[0] === 0.25 && pt.set.instrumenten['5'].params[7] === null);
+  ok('… en daarna geen wijziging meer zonder dat er iets gedraaid wordt (geen bewaren om niets)', !pt.onthoudKlank());
+  for (const id of ['D', 'E']) eng.zetInstrument(id, null);
+}
+
 ok('nergens setValueCurveAtTime', CURVES === 0);
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
