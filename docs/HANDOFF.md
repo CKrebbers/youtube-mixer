@@ -14,6 +14,28 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 5 OKT (middag): STUDIO S2 EN S3 GEBOUWD, OP `studio/integratie`
+
+Clay: "headphone level is cue level rotary knob. yes instruments can be mapped on 1 of the 8
+channels. try to do everything you can to make the app work the way it should". Gebouwd in
+parallelle sporen (elk een worktree in `~/Projects/varve-stems/`), samengevoegd op
+`studio/integratie` (gepusht), elk met tests en metingen in headless Chrome:
+- Cue Level = koptelefoonvolume, shift = mix (PR #4, `studio/koptelefoon`).
+- S2: master-insert + limiter (`docs/MASTER.md`), stemkanalen + grid-modus STEMS
+  (`docs/STEMS.md` §5), tien effecten uit de filter app (`docs/EFFECTEN.md`).
+- S3: instrumenten op een track: Poly, FM, Schaal, Drums (`docs/INSTRUMENTEN.md`), noten van
+  een keyboard (`src/control/noten.js`), INSTRUMENT-rij, APC-mapje inst.
+- De hub-koppeling van 3 okt (de patches uit AV-app-hub) als commits (`studio/hub`, erin).
+- AV-app-hub PR #11 (Xboard49 + Maschine MK2, CI groen) gemerged.
+- Twee fouten in de delay hersteld (inloop, achterhaalde wachtende tijd); de cue in de
+  koptelefoon schuift mee met de vooruitblik van de limiter.
+- `node test/alles.mjs` op de integratietak: groen (tijdmetingen onder zware belasting
+  los opnieuw gedraaid: klankschaal-rekentijd en gridauto groen).
+- **In de maak:** S4 patronen (`studio/patronen`) en Xboard/Maschine via de hub in Varve
+  (`studio/speelapparaten`).
+- **Eerst doen (Clay):** zie hieronder (PR's, iCloud, samengesteld apparaat), dan de
+  speellijst; open vragen: VRAGEN blok S (S3–S14).
+
 ## 5 OKT: HET STUDIOPLAN EN DE KOPTELEFOON (docs/STUDIO.md)
 
 Clay: een nieuw soort muziekprogramma (stems mixen, effecten op het geheel en per stem,

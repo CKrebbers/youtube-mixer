@@ -102,8 +102,10 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 27. STUDIO (5 okt, Clay: "grow Varve DJ"): VARVE groeit uit tot een muziekprogramma met stems als
     kanalen, effecten overal, instrumenten en patronen, vier controllers (`docs/STUDIO.md`).
     S0 veiligstellen (stems PR #3, uit iCloud) · S1 koptelefoon (gebouwd) · S2 stems als kanalen,
-    master-insert, echte limiter, effecten van de filter app · S3 spelen (Xboard49 via de hub,
-    instrumentkanalen) · S4 programmeren (sequencer van Elektronlearn, Maschine MK2 via HID) · S5 later.
+    master-insert, echte limiter, effecten van de filter app (gebouwd 5 okt) · S3 spelen: instrumenten
+    op een track, Poly/FM/Schaal/Drums, noten van een keyboard, Xboard49 en Maschine MK2 in de hub
+    (gebouwd 5 okt; de Varve-kant van Xboard/Maschine via de hub in de maak) · S4 programmeren
+    (patronen, in de maak) · S5 later. Alles op `studio/integratie`, niets op de hardware geprobeerd.
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
@@ -113,7 +115,8 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 5. 23 rest (vormbus na 8, routes per nummer, beeldscènes).
 6. ~~25 koptelefoon-cue~~ (gebouwd 5 okt, STUDIO S1; proberen met de Scarlett en de Mac).
 7. 26 PALETTE_HEX en RF64.
-8. 27 STUDIO S2–S4, één fase per keer. S3 en S4 wachten op de hub (lease, na 25 okt).
+8. 27 STUDIO: S1–S3 gebouwd (5 okt), S4 en de Varve-kant van Xboard/Maschine in de maak. Eerst proberen
+   (speellijst van de Controlekamer), dan VRAGEN blok S.
 
 Aanname: publicatie 1 van AV-kern (25 okt) blijft staan. Komt die datum in de
 knel door 15 en 17, dan gaat AV-kern voor; dat is de vraag van H5.

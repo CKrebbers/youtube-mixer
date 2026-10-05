@@ -374,6 +374,17 @@ APC-indeling (voorstel A):
 - [x] **S1. Koptelefoonvolume en mix op de APC?** — 5 okt: Cue Level = volume, shift + Cue Level = mix; sampler-volume en puls naar shift + Cue Level in hun grid-modus. 🎛 De cue zelf zit op ● (zonder shift). VOL en MIX staan nu alleen in de KOPTELEFOON-rij; koppelen werkt. Cue Level is het voor de hand liggende label, maar dat is nu het sampler-volume (shift: puls). **Advies:** eerst een avond met de rij spelen; mis je hem, dan Cue Level = koptelefoonvolume en shift + Cue Level = mix, en krijgen sampler-volume en puls een andere plek.
 - [x] **S2. Een instrument of patroon: een van de acht tracks, of eigen kolommen?** — 5 okt: op een van de acht tracks. 💬 Beslissen vóór S3. Acht tracks = acht kolommen op de APC; een instrument erbij kost een kolom of een mapje. **Advies:** een track kan een nummer OF een instrument dragen (dezelfde strip, fader, sends en cue), zodat de APC-indeling niet verandert.
 - [ ] **S3. Zonder enige cue hoort de koptelefoon de zaal.** 🎧 Gekozen zodat je altijd iets hoort. Alternatief: stil tot je een cue aanzet. **Advies:** zo laten.
+- [ ] **S4. Drums: −14 LUFS of iets zachter?** 🎧 Een maat vier-op-de-vloer op −14 LUFS piekt op +3,5 dBFS (kick en snare samen); de limiter knijpt dan op 2 en 4. **Advies:** eerst luisteren; pompt het, dan `UIT_OPHOGING` in drums.js omlaag (−16 LUFS).
+- [ ] **S5. Stems op de APC: filter, echo en cue per stem?** 🎛 Nu alleen op het scherm (en weg/terug in de grid-modus STEMS). **Advies:** een derde mapje onder Clip/Device View (strip → rack → stems): device knobs 1–4 = filter, 5–8 = echo, shift = galm.
+- [ ] **S6. Een stem-echo door het trackfilter?** 🎧 De echo en galm van een stem gaan nu NIET door EQ, effect en filter van de track (wel door de fader). **Advies:** zo laten; zeg het als je het filter-dichtdraaien ook op de echo wilt horen.
+- [ ] **S7. Schaal: de cent van de plaat volgen?** 🎧 De Schaal staat op A440 + FIJN; de globale klankschaal volgt de stemming van wat je hoort (bv. −12 ct). **Advies:** ja, net als de globale schaal, als je hem over nummers speelt.
+- [ ] **S8. FM: zachter inzetten?** 🎧 Standaard aanslag 8 ms en release 1,2 s (MediSynth's Glass: 280 ms en 4,5 s). **Advies:** luisteren; het zijn knoppen 3 en 5.
+- [ ] **S9. Effecten: oversampling voor de distortion?** 🎧 Zonder: aliasing (−14,8 dB bij hard, drive vol). Met: 128–192 samples vertraging en dus een kamfilter met de mix-knop. **Advies:** zonder laten.
+- [ ] **S10. Compressor en pitch als insert schuiven de track op** (6 ms, pitch op meng 1 ~45 ms). 🎧 **Advies:** acceptabel voor een effect; niet voor de beatmatch-track zelf.
+- [ ] **S11. Tremolo en autopan standaard op de maat?** 🎧 **Advies:** ja. Op de "1" van de maat beginnen vraagt dat `fxKlok` ook de maatfase meegeeft (later).
+- [ ] **S12. Geheugen (90 s buffer uit de filter app)** niet als insert gebouwd (begint leeg bij elke wissel, 17 MB). 💬 **Advies:** later als instrument of op de master, als je het mist.
+- [ ] **S13. Master: knop 8 = mix in het mapje master, release 80 ms.** 🎛🎧 Proberen op de APC; vervormt de limiter als je hem hard raakt, zeg het. De master klinkt ~0,8 dB zachter dan met de oude compressor (die tilde op).
+- [ ] **S14. Xboard49: knop 9–16 = de FX-knoppen van de speeltrack, de schuif = zijn fader.** 🎛 Voorstel; de CC-nummers van de knoppen komen uit de proef (`AV-app-hub`: proef speelapparaten).
 
 ---
 
