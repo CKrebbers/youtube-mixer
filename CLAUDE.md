@@ -1319,8 +1319,8 @@ Volledig in `docs/MASTER.md`. Wat een bouwer niet mag missen:
   localStorage (`varve.master.rack`, sjabloon op naam). MIX start altijd op 0.
 - APC: Shift + Clip/Device View = mapje `device.master` (knop 1–7, 8 = mix,
   shift + 8 = knop 8, Device ◀ ▶ = rack, On/Off = aan/uit). Alleen regels erbij.
-- Open (docs/MASTER.md, "Grenzen"): de cue loopt 1,5 ms vóór de zaal in de
-  koptelefoon; de master klinkt ~0,8 dB zachter dan met de compressor (die tilde
+- De cue in de koptelefoon is even laat als de zaal: `koptelefoon.zetVertraging(master.vertraging)`
+  (de engine zet hem, ook na `master.klaar`). Open (docs/MASTER.md, "Grenzen"): de master klinkt ~0,8 dB zachter dan met de compressor (die tilde
   op); het master-rack staat niet als gebeurtenis in het handelingenlog.
 
 ## Effecten uit de filter app (gebouwd 5 okt)

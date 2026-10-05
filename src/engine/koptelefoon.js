@@ -1,6 +1,6 @@
 import { clamp } from '../lib/emitter.js';
 import { faderGain, killVersterking } from './audio-graph.js';
-import { startDrempel } from './overgang.js';
+import { startDrempel, houdVast } from './overgang.js';
 import { zetDoel } from './fx.js';
 
 /*
@@ -29,6 +29,10 @@ import { zetDoel } from './fx.js';
 export const KANALEN = 4;
 /** Tijdconstante (s) waarmee volume en mix hun doel volgen: zoals een knop. */
 const TAU = 0.02;
+/** Hooguit zoveel vertraging (s) op de cue: genoeg voor de vooruitblik van elke master. */
+export const MAX_VERTRAGING = 0.05;
+/** Zo lang schuift de cue mee als de master wisselt terwijl er geluid loopt (zoals zijn kruisfade). */
+const VERTRAGING_GLIJ = 0.04;
 /** Standaardstanden: volume als een fader op 0,8 (−9 dB), mix helemaal cue. */
 export const NIVEAU_STANDAARD = 0.8;
 export const MIX_STANDAARD = 0;
@@ -79,10 +83,15 @@ export class Koptelefoon {
     merger.connect(d);
 
     this.cue = ctx.createGain();        // de som van alle tracks met cue aan
+    // De zaal komt NA de limiter (vooruitblik), de cue vóór de master: zonder
+    // deze vertraging loopt de cue voor en geeft MIX in het midden een kamfilter.
+    // De engine zet hem op de vertraging van de master (zetVertraging).
+    this.cueVertraging = ctx.createDelay(MAX_VERTRAGING);
+    this.cueVertraging.delayTime.value = 0;
     this.cueKant = ctx.createGain();
     this.zaalKant = ctx.createGain();
     this.uit = ctx.createGain();        // het koptelefoonvolume
-    this.cue.connect(this.cueKant).connect(this.uit);
+    this.cue.connect(this.cueVertraging).connect(this.cueKant).connect(this.uit);
     this.zaalKant.connect(this.uit);
     this.uit.connect(kop);
     const { cue, zaal: zk } = kanten(this.mix, false);
@@ -144,11 +153,27 @@ export class Koptelefoon {
     zetDoel(this.zaalKant.gain, zaal, this.ctx, TAU);
   }
 
+  /**
+   * De cue even laat als de zaal: de vertraging van de master (de vooruitblik van de
+   * limiter, docs/MASTER.md). Staat de audio stil, dan meteen; loopt hij, dan glijdt
+   * hij in VERTRAGING_GLIJ mee (een korte toonhoogtezwiep in de koptelefoon, alleen als
+   * de limiter-worklet pas laadt terwijl er al geluid is).
+   */
+  zetVertraging(sec) {
+    if (!this.beschikbaar) return;
+    const v = Math.min(MAX_VERTRAGING, Math.max(0, Number(sec) || 0));
+    const p = this.cueVertraging.delayTime;
+    if (this.ctx.state !== 'running') { p.value = v; return; }
+    const nu = this.ctx.currentTime;
+    try { houdVast(p, nu); p.linearRampToValueAtTime(v, nu + VERTRAGING_GLIJ); } catch (_) { p.value = v; }
+  }
+
   /** Platte stand, voor de snapshot en het scherm. */
   stand() {
     const pfl = {};
     for (const [id, p] of this._pfl) pfl[id] = p.aan;
     return { beschikbaar: this.beschikbaar, kanalen: this.kanalen, omgewisseld: this.omgewisseld,
-      niveau: this.niveau, mix: this.mix, iets: this.iets, pfl };
+      niveau: this.niveau, mix: this.mix, iets: this.iets, pfl,
+      vertraging: this.beschikbaar ? this.cueVertraging.delayTime.value : 0 };
   }
 }

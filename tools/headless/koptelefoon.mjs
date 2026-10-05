@@ -110,6 +110,7 @@ const meet = (scenario, opties = {}) => evalueer(`(async () => {
   const kt = e.koptelefoon;
   const s = ${JSON.stringify(scenario)};
   if (s.cue) kt.zetPfl('A', true);
+  if (s.cueB) kt.zetPfl('B', true);
   if (s.mix != null) kt.zetMix(s.mix);
   if (s.niveau != null) kt.zetNiveau(s.niveau);
   const buf = await ctx.startRendering();
@@ -200,6 +201,14 @@ try {
   const r3 = await meet({ cue: true, mix: 0, niveau: 0.5 });
   const verschil = db(r1.k[2].a440) - db(r3.k[2].a440);
   ok('volume 0,8 → 0,5: zachter met de curve van een fader (13,5 dB)', Math.abs(verschil - 13.5) < 0.3, `${verschil.toFixed(2)} dB`);
+
+  // Uitgelijnd: track 2 klinkt in de zaal (NA de limiter, 1,5 ms vooruitblik) én als cue (vóór
+  // de master, met de cue-vertraging erbij). Met MIX in het midden tellen ze dan precies op; liep
+  // de cue 1,5 ms voor, dan stond 1000 Hz 1,5 periode verschoven en doofden ze elkaar bijna uit.
+  const c0 = await meet({ cueB: true, mix: 0 }), c1 = await meet({ cueB: true, mix: 1 }), c5 = await meet({ cueB: true, mix: 0.5 });
+  const samen = Math.SQRT1_2 * (c0.k[2].a1000 + c1.k[2].a1000), verhouding = c5.k[2].a1000 / samen;
+  ok('cue en zaal van dezelfde track tellen in de koptelefoon precies op (uitgelijnd op de vooruitblik van de limiter)',
+    Math.abs(verhouding - 1) < 0.01, `mix ½ ${db(c5.k[2].a1000).toFixed(2)} dB, coherent verwacht ${db(samen).toFixed(2)} dB, verhouding ${verhouding.toFixed(4)}`);
 
   const r4 = await meet({ cue: true, mix: 0 }, { koptelefoon: { omgewisseld: true } });
   ok('omgewisseld: de koptelefoon op 1/2 (track 1), de zaal op 3/4 (track 2)',

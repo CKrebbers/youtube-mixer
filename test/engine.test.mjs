@@ -3176,6 +3176,7 @@ console.log('\nkoptelefoon');
     createBiquadFilter() { return volg(super.createBiquadFilter()); }
     createDynamicsCompressor() { return volg(super.createDynamicsCompressor()); }
     createAnalyser() { return volg(super.createAnalyser()); }
+    createDelay(max) { const n = volg(super.createDelay(max)); n.delayTime = n.delayTime ?? param(0); return n; }
     createChannelMerger(n) { return Object.assign(volg(super.createChannelMerger(n)), { numberOfInputs: n }); }
     createChannelSplitter(n) { return Object.assign(volg(node('splitter')), { numberOfOutputs: n }); }
   };
@@ -3198,7 +3199,10 @@ console.log('\nkoptelefoon');
     return pfls[i] && heeft(ch.lpf, pfls[i]) && heeft(pfls[i], kt.cue) && heeft(ch.lpf, ch.fader) && pfls[i].gain.value === 0;
   }));
   ok('… zonder cue hoort de koptelefoon de zaal (zaalkant 1); volume als een fader op 0,8', kt.zaalKant.gain.value === 1
-    && dicht(kt.uit.gain.value, faderGain(0.8)) && heeft(kt.cue, kt.cueKant) && heeft(kt.cueKant, kt.uit) && heeft(kt.zaalKant, kt.uit));
+    && dicht(kt.uit.gain.value, faderGain(0.8)) && heeft(kt.cue, kt.cueVertraging) && heeft(kt.cueVertraging, kt.cueKant)
+    && heeft(kt.cueKant, kt.uit) && heeft(kt.zaalKant, kt.uit));
+  ok(`… de cue even laat als de zaal: vertraging = die van de master (${(e4.master.vertraging * 1000).toFixed(2)} ms, de vooruitblik)`,
+    e4.master.vertraging > 0 && dicht(kt.cueVertraging.delayTime.value, e4.master.vertraging) && dicht(kt.stand().vertraging, e4.master.vertraging));
 
   // 2. Via de bus.
   bindEngine(e4);

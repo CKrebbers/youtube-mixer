@@ -122,6 +122,9 @@ export class Engine extends Emitter {
     this.koptelefoon = new Koptelefoon(this.ctx, opties.koptelefoon);
     this.master = createMasterChain(this.ctx, this.koptelefoon.zaalIn);
     this.koptelefoon.hoorZaal(this.master.analyser);
+    // De cue even laat als de zaal: eerst de compressor, dan de limiter-worklet.
+    this.koptelefoon.zetVertraging(this.master.vertraging);
+    this.master.klaar?.then?.(() => this.koptelefoon.zetVertraging(this.master.vertraging));
     this.decks = {};
     this.kant = {};
     for (const id of DECK_IDS) {

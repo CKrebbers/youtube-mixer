@@ -216,11 +216,12 @@ AudioWorkletGlobalScope, keten en bus op een nep-Web Audio):
   limiter staat (bij een korte release gaat de gain mee met de bas: vervorming) is
   aan Clay's oren. Programma-afhankelijke release is niet gebouwd; de release is
   een optie van de kern (`release`), dus proberen kost één getal.
-- **De cue in de koptelefoon loopt 1,5 ms vóór de zaal.** De cue tapt vóór de fader
-  en gaat niet door de limiter. Met MIX in het midden en dezelfde track in cue én
-  zaal: een kamfilter (eerste gat bij 333 Hz). Was met de compressor 6 ms (gat bij
-  83 Hz). Voorstel: een DelayNode van `master.vertraging` op de cue-som in
-  koptelefoon.js (na het stems-spoor, dat daar ook bouwt).
+- ~~De cue in de koptelefoon liep 1,5 ms vóór de zaal~~ (kamfilter met MIX in het
+  midden). Opgelost op 5 okt: een DelayNode van `master.vertraging` op de cue-som in
+  koptelefoon.js (`zetVertraging`, ook na de wissel compressor → worklet). Gemeten in
+  Chrome: cue en zaal van dezelfde track tellen precies op (verhouding 1,0000).
+  Effecten met eigen vertraging in het MASTER-rack (compressor 6 ms, pitch) zitten daar
+  niet in: dan loopt de cue weer iets voor.
 - **Breedbandig materiaal op volle sterkte tot de Nyquist** (een bitcrush op de
   master, ruis): 4× ziet de top tussen de punten niet altijd; tot ~0,25 dB over het
   plafond gemeten op gealiaste ruis, 0,02 dB op een blokgolf zonder bandbegrenzing.
