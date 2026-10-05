@@ -1,0 +1,403 @@
+// De speelapparaten in VARVE (docs/MASCHINE.md): de Maschine MK2 zoals de AV-app-hub
+// hem doorgeeft (src/control/maschine.js, devices/maschine-mk2.js, mappings/maschine-mk2.json),
+// de schermen (maschine-scherm.js), de Xboard49 (knop 9–16, de schuif) en de regel dat een
+// speelapparaat nooit "de controller" wordt (midi.js). Nep-engine, nep-instrumenten, nep-klok;
+// de echte Noten en Mapping. Hub en Chromium: tools/headless/speelapparaten.mjs.
+// Draai met: node test/maschine.test.mjs
+import { readFileSync } from 'node:fs';
+
+const fails = [];
+const ok = (naam, cond) => { if (!cond) fails.push(naam); console.log((cond ? '  ok  ' : 'FAIL  ') + naam); };
+const dicht = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
+
+const { parseMessage, MidiHub, isSpeelapparaat } = await import('../src/control/midi.js');
+const { Noten, leesMasterVolume } = await import('../src/control/noten.js');
+const { Maschine, BRON, FLITS_MS, SCHERM_MS, KANDIDAAT_MS, KEUZES, KLEUREN } = await import('../src/control/maschine.js');
+const M = await import('../src/control/devices/maschine-mk2.js');
+const S = await import('../src/control/maschine-scherm.js');
+const { PALETTE } = await import('../src/control/devices/apc40mk2.js');
+const { INSTRUMENTEN } = await import('../src/engine/instrumenten/index.js');
+const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+const lees = (pad) => JSON.parse(readFileSync(new URL(pad, import.meta.url), 'utf8'));
+
+// ---- nep-engine met nep-instrumenten (het contract van docs/INSTRUMENTEN.md §3) ------
+const DECKS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+const PARAMS = {
+  poly: ['golf', 'ontstem', 'filter', 'reso', 'env', 'attack', 'decay/rel', 'sustain'],
+  drums: ['TOON', 'DECAY', 'FILTER', 'DRIVE', 'KICK', 'SNARE', 'HATS', 'NIVEAU'],
+  fm: ['index', 'ratio', 'aanslag', 'verval', 'release', 'zweving', 'filter', 'warmte'],
+  schaal: ['karakter', 'uitklank', 'kracht', 'klank', 'fijn', 'slag', 'loslaten', 'wrijf'],
+};
+class NepInst {
+  constructor(soort) {
+    this.soort = soort;
+    this.naam = INSTRUMENTEN.find((x) => x.soort === soort).naam;
+    this.params = PARAMS[soort].map((label, i) => ({ id: label, label, standaard: 0.5, eenheid: i === 2 ? (v) => `${Math.round(60 + v * 17940)} Hz` : undefined }));
+    this.w = this.params.map(() => 0.5);
+    this.log = [];
+    this.vast = new Set();
+  }
+  noteOn(n, v) { this.log.push(['aan', n, v]); this.vast.add(n); }
+  noteOff(n) { this.log.push(['uit', n]); this.vast.delete(n); }
+  druk(w, n) { this.log.push(['druk', w, n]); }
+  buig(w) { this.log.push(['buig', w]); }
+  mod(w) { this.log.push(['mod', w]); }
+  houd(a) { this.log.push(['houd', a]); }
+  stil() { this.log.push(['stil']); }
+  alleUit() { this.log.push(['alleUit']); }
+  zetParam(k, v) { if (k >= 1 && k <= 8) this.w[k - 1] = v; }
+  leesParam(k) { return k >= 1 && k <= this.params.length ? this.w[k - 1] : null; }
+  stand() {
+    const s = { soort: this.soort, naam: this.naam, klinkt: this.vast.size, params: [...this.w] };
+    if (this.soort === 'drums') s.pads = Array.from({ length: 16 }, (_, i) => ({ pad: i + 1, noot: 36 + i, gevuld: i < 8, kit: i < 8 }));
+    return s;
+  }
+}
+const eng = {
+  focus: 'A', inst: {}, _speel: null, weiger: 0,
+  decks: Object.fromEntries(DECKS.map((d) => [d, { buffer: null }])),
+  speeltrack() { if (this.inst[this.focus]) return this.focus; if (this._speel && this.inst[this._speel]) return this._speel; return DECKS.find((d) => this.inst[d]) ?? null; },
+  instrumentOp(id) { return this.inst[id] ?? null; },
+  deck(id) { return this.decks[id]; },
+  setFocus(id) { this.focus = id; if (this.inst[id]) this._speel = id; },
+  zet(id, soort) { if (soort) this.inst[id] = new NepInst(soort); else delete this.inst[id]; if (soort && this.focus === id) this._speel = id; },
+};
+// De bus, zoveel als hier nodig: focus, instrumentknoppen, kiezen, FX-knoppen, fader.
+const aangeroepen = [];
+const stand = {};
+const trackId = (nr) => DECKS[nr - 1];
+const invoke = (id, v) => {
+  aangeroepen.push([id, v]);
+  let m;
+  if ((m = /^track\.(\d)\.focus$/.exec(id)) && v) eng.setFocus(trackId(+m[1]));
+  else if ((m = /^track\.(\d)\.inst\.knob\.(\d)$/.exec(id))) eng.inst[trackId(+m[1])]?.zetParam(+m[2], v);
+  else if ((m = /^track\.(\d)\.inst\.choose$/.exec(id))) {
+    if (eng.weiger > 0) { eng.weiger--; return true; }   // een spelend nummer: eerst een melding
+    eng.zet(trackId(+m[1]), KEUZES[Math.round(v * (KEUZES.length - 1))]);
+  } else stand[id] = v;
+  return true;
+};
+const read = (id) => {
+  let m;
+  if ((m = /^track\.(\d)\.inst\.knob\.(\d)$/.exec(id))) return eng.inst[trackId(+m[1])]?.leesParam(+m[2]) ?? null;
+  return id in stand ? stand[id] : null;
+};
+
+let nu = 1000;
+const noten = new Noten({ engine: eng, read, invoke, nu: () => nu });
+noten.laadMapping(lees('../mappings/xboard49.json'));
+
+// ---- 1. het profiel en de indeling --------------------------------------------------------
+console.log('het profiel (virtuele MIDI van de hub) en mappings/maschine-mk2.json');
+ok('48 knoppen; groep A–H = noot 24–31, SHIFT 39, PLAY 36, het wiel 23, ENTER 21 (kanaal 1)',
+  M.KNOPPEN.length === 48 && M.GROEPEN.join() === 'groepA,groepB,groepC,groepD,groepE,groepF,groepG,groepH'
+  && M.knopNoot('groepA') === 24 && M.knopNoot('shift') === 39 && M.knopNoot('play') === 36 && M.knopNoot('wiel') === 23 && M.knopNoot('enter') === 21);
+ok('pads 36–51 op kanaal 0, pad 1 = 36; draaiknoppen CC 16–23, het wiel CC 24',
+  M.padNoot(1) === 36 && M.padNoot(16) === 51 && M.padVanNoot(35) === null && M.padVanNoot(52) === null
+  && M.encoderSig(1) === 'cc:0:16' && M.encoderSig(8) === 'cc:0:23' && M.WIEL_SIG === 'cc:0:24');
+ok('de namen bij de bits zijn die van de hub (src/devices/maschine-mk2.js)', M.KNOPPEN[0] === 'f1' && M.KNOPPEN[9] === 'step' && M.KNOPPEN[37] === 'rec' && M.KNOPPEN[47] === 'mute');
+ok('het profiel noemt elk element (label), geen enkele action', M.maschineMk2.label('note:1:39') === 'SHIFT' && M.maschineMk2.label('note:0:36') === 'pad 1'
+  && !JSON.stringify([...M.maschineMk2.controls.values()]).includes('track.'));
+const kaart = lees('../mappings/maschine-mk2.json');
+const ms0 = new Maschine({ engine: eng, noten, read, invoke, nu: () => nu });
+const uitKaart = ms0.laadMapping(kaart);
+ok('mappings/maschine-mk2.json laadt zonder fouten: 24 regels, shift = note:1:39', uitKaart.aantal === 24 && !uitKaart.fouten.length && ms0.mapping.shiftSig === 'note:1:39');
+ok('groep A–H -> track.1–8.focus (trigger)', kaart.rules.slice(0, 8).every((r, i) => r.in === `note:1:${24 + i}` && r.action === `track.${i + 1}.focus` && r.mode === 'trigger'));
+ok('draaiknop 1–8 -> track.{speel}.inst.knob.1–8, relatief (tweecomplement), 1/1000 per tel, met shift 1/5000',
+  kaart.rules.slice(8).every((r) => r.mode === 'relative-2c' && /^track\.\{speel\}\.inst\.knob\.[1-8]$/.test(r.action) && r.step === (r.shift ? 0.0002 : 0.001)));
+ok('elke action in de indeling bestaat in de uitleg (apc-beschrijf), ook {speel}', kaart.rules.every((r) => !beschrijf(r.action).lang.startsWith('?') && beschrijf(r.action).kort !== r.action)
+  && /speeltrack/.test(beschrijf('track.{speel}.inst.knob.1').lang) && !/\?/.test(beschrijf('track.3.inst.choose').lang));
+
+// ---- 2. de Maschine: pads, groepen, draaiknoppen, wiel ---------------------------------------
+console.log('\nde Maschine in de speelmodus');
+const leds = [], schermen = [];
+const poort = {
+  in: { id: BRON, name: 'Maschine MK2 (hub)', state: 'connected', onmidimessage: null, onstatechange: null },
+  uit: { id: 'uit', name: 'Maschine MK2 (hub)', state: 'connected', send: (b) => leds.push([...b]) },
+  scherm: (nr, data) => schermen.push({ nr, data, t: nu }),
+};
+const ms = new Maschine({ engine: eng, noten, read, invoke, nu: () => nu });
+ms.laadMapping(kaart);
+ms.koppel(poort);
+const stuur = (...b) => poort.in.onmidimessage({ data: Uint8Array.from(b), timeStamp: nu });
+const knop = (naam, aan = true) => stuur(aan ? 0x91 : 0x81, M.knopNoot(naam), aan ? 127 : 0);
+const tik = (naam) => { knop(naam, true); knop(naam, false); };
+
+stuur(0x90, 36, 100);
+ok('pad zonder instrument ergens: niets (noten meldt "geen")', noten.vast.size === 0);
+stuur(0x80, 36, 0);
+eng.zet('B', 'drums');
+tik('groepB');
+ok('groep B -> track.2.focus (over de bus), loslaten naar dezelfde action', eng.focus === 'B'
+  && JSON.stringify(aangeroepen.slice(-2)) === JSON.stringify([['track.2.focus', true], ['track.2.focus', false]]));
+const dr = eng.inst.B;
+stuur(0x90, 36, 102);
+ok('pad 1 (noot 36, velocity 102) -> noteOn(36, 102/127) op de speeltrack (de drums)', JSON.stringify(dr.log.at(-1)) === JSON.stringify(['aan', 36, 102 / 127]) && noten.ingedrukt('B').has(36));
+stuur(0xa0, 36, 64);
+ok('polyfone aftertouch -> druk(64/127, 36)', dr.log.at(-1)[0] === 'druk' && dicht(dr.log.at(-1)[1], 64 / 127) && dr.log.at(-1)[2] === 36);
+stuur(0x80, 36, 0);
+ok('pad los -> noteOff(36)', JSON.stringify(dr.log.at(-1)) === JSON.stringify(['uit', 36]) && !noten.ingedrukt('B').has(36));
+stuur(0x90, 51, 90);
+ok('pad 16 = noot 51 (de drums liggen precies op 36–51)', dr.log.at(-1)[1] === 51);
+eng.zet('A', 'poly');
+tik('groepA');
+stuur(0x80, 51, 0);
+ok('focus wisselt met pad 16 nog vast: zijn loslaten gaat naar de drums (track 2), niet naar de Poly', dr.log.at(-1)[0] === 'uit' && dr.log.at(-1)[1] === 51 && !eng.inst.A.log.length);
+stuur(0x90, 40, 80);
+ok('een ander instrument (Poly op track 1) krijgt dezelfde noten (40 = E2)', eng.inst.A.log.at(-1)[0] === 'aan' && eng.inst.A.log.at(-1)[1] === 40);
+stuur(0x80, 40, 0);
+
+// Draaiknoppen: relatief, in tellen van de hub (pas na 12 tellen, ±1000 per omwenteling).
+const p = eng.inst.A;
+stuur(0xb0, 16, 12);
+ok('draaiknop 1 rechtsom 12 tellen: knop 1 van de speeltrack 0,5 -> 0,512', dicht(p.leesParam(1), 0.512));
+stuur(0xb0, 23, 128 - 50);
+ok('draaiknop 8 linksom 50 tellen (tweecomplement 78): knop 8 0,5 -> 0,45', dicht(p.leesParam(8), 0.45));
+knop('shift', true);
+stuur(0xb0, 16, 50);
+ok('met SHIFT fijn: 50 tellen = +0,01', dicht(p.leesParam(1), 0.522));
+knop('shift', false);
+ok('SHIFT gaat niet over de bus', !aangeroepen.some(([id]) => id === 'shift'));
+for (let i = 0; i < 100; i++) stuur(0xb0, 16, 63);
+ok('een hele omwenteling en meer: geklemd op 1', p.leesParam(1) === 1);
+tik('groepC');
+stuur(0xb0, 17, 20);
+ok('focus op een lege track: de draaiknoppen blijven op de speeltrack (track 1)', eng.focus === 'C' && dicht(p.leesParam(2), 0.52));
+
+// Het masterwiel: kiezen op het scherm, indrukken = zetten.
+const voor = aangeroepen.length;
+stuur(0xb0, 24, 1);
+ok('wiel één klik: een keuze voor de focus-track (track 3: Poly), nog niets gezet', ms.stand().kandidaat?.naam === INSTRUMENTEN[0].naam && aangeroepen.length === voor && !eng.inst.C);
+stuur(0xb0, 24, 2);
+ok('nog twee klikken: het derde instrument in de rij', ms.stand().kandidaat?.naam === INSTRUMENTEN[2].naam);
+ok('… ENTER brandt zolang er een keuze staat', ms.ledBeeld().get(`1:${M.knopNoot('enter')}`) === 127);
+tik('wiel');
+ok('wiel indrukken -> track.3.inst.choose = 3/(n-1): het instrument staat erop, de keuze is weg',
+  aangeroepen.some(([id, v]) => id === 'track.3.inst.choose' && dicht(v, 3 / (KEUZES.length - 1))) && eng.inst.C?.soort === INSTRUMENTEN[2].soort && ms.stand().kandidaat === null);
+stuur(0xb0, 24, 127);
+ok('wiel linksom vanaf het derde: het tweede', ms.stand().kandidaat?.naam === INSTRUMENTEN[1].naam);
+nu += KANDIDAAT_MS + 1;
+ok(`een keuze verloopt na ${KANDIDAAT_MS / 1000} s`, ms.stand().kandidaat === null && !ms.zetKeuze());
+stuur(0xb0, 24, 1);
+tik('groepA');
+ok('focus wisselt: de keuze voor de oude focus vervalt', ms.stand().kandidaat === null);
+tik('groepC');
+stuur(0xb0, 24, 127 - 2);   // drie terug: -3 -> 'geen'
+ok('wiel tot "geen"', ms.stand().kandidaat?.naam === 'geen');
+eng.weiger = 1;            // er speelt een nummer: de bus wil een tweede druk binnen 3 s
+tik('enter');
+ok('ENTER zet ook; speelt er een nummer: "druk nog eens" op het scherm, de keuze blijft', ms.stand().melding?.includes('nog eens') && ms.stand().kandidaat?.naam === 'geen' && !!eng.inst.C);
+tik('enter');
+ok('… tweede druk: weg (geen instrument meer op track 3)', !eng.inst.C && ms.stand().kandidaat === null);
+ok('wiel en ENTER zonder keuze: niets', !ms.zetKeuze());
+
+// ---- 3. lampjes ------------------------------------------------------------------------
+console.log('\nlampjes');
+tik('groepB');                      // focus en speeltrack: de drums
+let b = ms.ledBeeld();
+const pad = (n) => b.get(`0:${35 + n}`);
+const groep = (l) => b.get(`1:${M.knopNoot(`groep${l}`)}`);
+ok(`pads: de kleur van het instrument gedimd (drums = ${KLEUREN.drums}donker), lege pads 9–16 donkergrijs`,
+  pad(1) === PALETTE[`${KLEUREN.drums}donker`] && pad(8) === PALETTE[`${KLEUREN.drums}donker`] && pad(9) === PALETTE.donkergrijs && pad(16) === PALETTE.donkergrijs);
+stuur(0x90, 37, 100);
+b = ms.ledBeeld();
+ok('een aanslag: fel (de volle kleur)', pad(2) === PALETTE[KLEUREN.drums]);
+stuur(0x80, 37, 0);
+b = ms.ledBeeld();
+ok(`… en na het loslaten nog even (minstens ${FLITS_MS} ms: een drumslag duurt op de pad maar ~15 ms)`, pad(2) === PALETTE[KLEUREN.drums]);
+nu += FLITS_MS + 1;
+b = ms.ledBeeld();
+ok('… daarna weer gedimd', pad(2) === PALETTE[`${KLEUREN.drums}donker`]);
+eng.decks.D.buffer = {};            // een nummer op track 4
+b = ms.ledBeeld();
+ok('groepen: instrument = zijn kleur (focus vol, anders gedimd), nummer = wit gedimd, leeg = uit',
+  groep('B') === PALETTE[KLEUREN.drums] && groep('A') === PALETTE[`${KLEUREN.poly}donker`] && groep('D') === PALETTE.grijs && groep('E') === PALETTE.uit);
+tik('groepD');
+b = ms.ledBeeld();
+ok('… de focus op een nummer: wit; een lege focus: donkergrijs', groep('D') === PALETTE.wit && (tik('groepE'), ms.ledBeeld().get(`1:${M.knopNoot('groepE')}`) === PALETTE.donkergrijs));
+ok('pads volgen de SPEELTRACK (focus op een lege track: de laatste met een instrument)', ms.ledBeeld().get('0:36') === PALETTE[`${KLEUREN.drums}donker`]);
+knop('shift', true);
+ok('SHIFT: zacht aan, fel zolang hij vastzit', ms.ledBeeld().get(`1:${M.knopNoot('shift')}`) === 127);
+knop('shift', false);
+ok('… los: zacht', ms.ledBeeld().get(`1:${M.knopNoot('shift')}`) === 16);
+ok('elke kleur is een geldige paletindex, elke helderheid 0..127', [...ms.ledBeeld().values()].every((v) => Number.isInteger(v) && v >= 0 && v <= 127));
+
+// tik(): alleen wat veranderde, via de uitgang van de nep-poort.
+leds.length = 0;
+ms.vergeet();
+ms.tik();
+const eerste = leds.length;
+ok(`eerste tik: alle lampjes (16 pads, 8 groepen, shift, enter = 26), als noot aan op hun nummer (${eerste})`,
+  eerste === 26 && leds.every((m) => m.length === 3 && (m[0] === 0x90 || m[0] === 0x91) && m[2] <= 127));
+leds.length = 0;
+ms.tik();
+ok('tweede tik zonder verandering: niets', leds.length === 0);
+stuur(0x90, 38, 100);
+ms.tik();
+ok('een aanslag: precies één lampje (pad 3 fel)', leds.length === 1 && JSON.stringify(leds[0]) === JSON.stringify([0x90, 38, PALETTE[KLEUREN.drums]]));
+stuur(0x80, 38, 0);
+
+// ---- 4. de schermen ------------------------------------------------------------------------
+console.log('\nde schermen');
+schermen.length = 0;
+ms.vergeet();
+nu += 1000;
+ms.tik();
+ok('na vergeet: beide schermen, elk 2048 bytes', schermen.length === 2 && schermen.every((s) => s.data instanceof Uint8Array && s.data.length === 2048) && schermen[0].nr === 0 && schermen[1].nr === 1);
+nu += 500;
+ms.tik();
+ok('niets veranderd: niets opnieuw', schermen.length === 2);
+tik('groepB');                          // de focus wissel verandert de kop rechts: eerst laten bijwerken
+nu += 1000;
+ms.tik();
+const n0 = schermen.length;
+ok('een focuswissel: alleen het rechterscherm (focus-kop), links blijft', n0 === 3 && schermen.at(-1).nr === 1);
+nu += 1000;
+stuur(0xb0, 16, 30);
+ms.tik();
+ok('een knop draaien: het linkerscherm opnieuw (knop 1 staat links), het rechter niet', schermen.length === n0 + 1 && schermen.at(-1).nr === 0);
+stuur(0xb0, 16, 30);
+nu += SCHERM_MS / 2;
+ms.tik();
+ok(`binnen ${SCHERM_MS} ms nog eens gedraaid: wacht (tempo begrensd)`, schermen.length === n0 + 1);
+nu += SCHERM_MS;
+ms.tik();
+ok('… daarna wel', schermen.length === n0 + 2);
+const st = ms.stand();
+ok('stand: speeltrack + instrument, acht knoppen met naam, waarde en tekst in eenheden', st.speel.nr === 2 && st.speel.naam === 'Drums' && st.knoppen.length === 8
+  && st.knoppen[0].label === 'TOON' && dicht(st.knoppen[0].waarde, 0.56) && st.knoppen[2].tekst === `${Math.round(60 + 0.5 * 17940)} Hz` && st.knoppen[1].tekst === '50%');
+
+// ---- 5. de verbinding valt weg ------------------------------------------------------------
+console.log('\nde hub weg en terug');
+stuur(0x90, 36, 100);
+knop('shift', true);
+poort.in.state = 'disconnected'; poort.uit.state = 'disconnected';
+poort.in.onstatechange({});
+ok('weg: de pad die vastzat laat los (noten), shift los', JSON.stringify(dr.log.at(-1)) === JSON.stringify(['uit', 36]) && !ms.mapping.shift);
+leds.length = 0; schermen.length = 0;
+ms.tik();
+ok('weg: niets sturen', leds.length === 0 && schermen.length === 0);
+poort.in.state = 'connected'; poort.uit.state = 'connected';
+poort.in.onstatechange({});
+nu += 1000;
+ms.tik();
+ok('terug: alle lampjes en beide schermen opnieuw', leds.length === 26 && schermen.length === 2);
+
+// ---- 6. het scherm als pure functie ---------------------------------------------------------
+console.log('\nmaschine-scherm.js');
+{
+  const buf = S.leegScherm();
+  S.tekst(buf, 0, 0, 'T');
+  ok('2048 bytes; een T op (0,0): bovenbalk aan, eronder alleen het midden', buf.length === 2048 && S.BYTES === 2048
+    && [0, 1, 2, 3, 4].every((x) => S.leesPixel(buf, x, 0)) && S.leesPixel(buf, 2, 6) && !S.leesPixel(buf, 0, 6) && !S.leesPixel(buf, 5, 0));
+  ok('hoogste bit = meest linkse pixel, 32 bytes per rij', buf[0] === 0xf8 && buf[32] === 0x20);
+  const b2 = S.leegScherm();
+  S.zetPixel(b2, 255, 63);
+  ok('pixel (255, 63) = laatste byte, laagste bit', b2[2047] === 1 && S.leesPixel(b2, 255, 63));
+  S.tekst(b2, 0, 10, 'A', 2);
+  ok('schaal 2: een A van 10 × 14 pixels', S.leesPixel(b2, 2, 10) && S.leesPixel(b2, 3, 11) && !S.leesPixel(b2, 0, 10) && S.leesPixel(b2, 0, 12) && S.leesPixel(b2, 9, 23));
+  ok('normaliseer: é -> e, − -> -, × -> x, ± blijft, onbekend -> ?', S.normaliseer('é−×±☃') === 'e-x±?');
+  ok('pasIn: past al; spatie voor de eenheid weg; "halve tonen" kort; afkappen op een woord',
+    S.pasIn('70%') === '70%' && S.pasIn('1,2 kHz bij A4') === '1,2kHz bij' && S.pasIn('+12 halve tonen') === '+12ht' && S.pasIn('open 550 ms') === 'open 550ms' && S.pasIn('abcdefghijklmn') === 'abcdefghij');
+  // Elke echte eenheid van de instrumenten (poly, fm, drums) past in een kolom.
+  const { PARAMS: POLY } = await import('../src/engine/instrumenten/poly.js');
+  const { PARAMS: FM } = await import('../src/engine/instrumenten/fm.js');
+  const { PARAMS: DR } = await import('../src/engine/instrumenten/drums.js');
+  const teksten = [];
+  for (const lijst of [POLY, FM, DR]) for (const q of lijst) { teksten.push(q.label); for (let i = 0; i <= 20; i++) teksten.push(q.eenheid(i / 20)); }
+  const te = teksten.filter((t) => S.pasIn(t).length > S.KOLOM_TEKENS || !S.pasIn(t).length);
+  ok(`elke naam en waarde van Poly, FM en Drums past in ${S.KOLOM_TEKENS} tekens (${teksten.length} teksten)${te.length ? `: ${te.slice(0, 3).join(' | ')}` : ''}`, te.length === 0);
+  // Een volle stand: tekst blijft in zijn kolom, de balk volgt de waarde.
+  const vol = { speel: { nr: 2, naam: 'Drums' }, focus: { nr: 2, wat: 'Drums' }, shift: true, kandidaat: null, melding: null,
+    knoppen: Array.from({ length: 8 }, (_, i) => ({ label: 'WWWWWWWWWWWWWW', waarde: i / 7, tekst: '+12 halve tonen en meer' })) };
+  const l = S.tekenScherm(vol, 0), r = S.tekenScherm(vol, 1);
+  let buiten = 0;
+  for (const s of [l, r]) for (let i = 0; i < 4; i++) for (let y = 21; y <= 38; y++) for (const x of [i * 64 + 61, i * 64 + 62]) if (S.leesPixel(s, x, y)) buiten++;
+  ok('lange tekst blijft binnen zijn kolom (geen pixel op x+61/x+62)', buiten === 0);
+  // De balk: rand op x+2 en x+60, de vulling ertussen (x+4 .. x+58).
+  const vul = (s, i) => { let n = 0; for (let x = i * 64 + 4; x < i * 64 + 60; x++) if (S.leesPixel(s, x, 45)) n++; return n; };
+  ok('de balk volgt de waarde: knop 1 (0) leeg, knop 8 (1) vol, ertussen oplopend', vul(l, 0) === 0 && vul(r, 3) >= 55 && vul(l, 1) < vul(l, 2) && vul(l, 2) < vul(l, 3));
+  ok('kop: "T2 Drums" groot links bovenaan (pixels in rij 1–14), streep op rij 17', S.leesPixel(l, 2, 1) && S.leesPixel(l, 6, 14) && [0, 100, 255].every((x) => S.leesPixel(l, x, 17)));
+  const leeg = S.tekenScherm({ speel: null, focus: { nr: 1, wat: 'leeg' }, knoppen: [] }, 0);
+  let aan = 0; for (let y = 19; y < 52; y++) for (let x = 0; x < 256; x++) if (S.leesPixel(leeg, x, y)) aan++;
+  let kopAan = 0; for (let y = 1; y < 16; y++) for (let x = 0; x < 256; x++) if (S.leesPixel(leeg, x, y)) kopAan++;
+  ok('zonder instrument: kop "geen instrument", in de kolommen alleen de nummers (geen balken)', aan > 0 && aan < 200 && kopAan > 200 && !S.leesPixel(leeg, 30, 45));
+  const kand = S.tekenScherm({ ...vol, kandidaat: { naam: 'FM' } }, 1);
+  ok('een keuze van het wiel staat rechts groot, en verandert het scherm', !S.alsTekst(kand).split('\n').slice(1, 15).every((rij, y) => rij === S.alsTekst(r).split('\n')[y + 1]));
+  ok('alsTekst: 64 regels van 256 tekens', S.alsTekst(l).split('\n').filter(Boolean).every((x) => x.length === 256) && S.alsTekst(l).split('\n').filter(Boolean).length === 64);
+}
+
+// ---- 7. de Xboard49: knop 9–16, de schuif, en een poort die wegvalt ----------------------------
+console.log('\nde Xboard49 (noten.js, mappings/xboard49.json)');
+{
+  const doc = lees('../mappings/xboard49.json');
+  ok('knop 9–16 = CC 31–38 (elk kanaal) -> track.{speel}.fx.knob.1–8, absoluut; de schuif -> track.{speel}.fader',
+    doc.rules.length === 17 && doc.rules.slice(8, 16).every((r, i) => r.in === `cc:*:${31 + i}` && r.action === `track.{speel}.fx.knob.${i + 1}` && r.mode === 'absolute')
+    && doc.rules[16].in === 'master-volume' && doc.rules[16].action === 'track.{speel}.fader' && doc.rules[16].mode === 'absolute');
+  ok('leesMasterVolume: F0 7F 7F 04 01 ll mm F7 (14 bit), al het andere null', leesMasterVolume([0xf0, 0x7f, 0x7f, 0x04, 0x01, 0, 0x40, 0xf7]) === 8192 / 16383
+    && leesMasterVolume([0xf0, 0x7f, 0x7f, 0x04, 0x01, 0x7f, 0x7f, 0xf7]) === 1 && leesMasterVolume([0xf0, 0x7f, 0x7f, 0x04, 0x02, 0, 0x40, 0xf7]) === null && leesMasterVolume([0xf0, 0x47, 0xf7]) === null);
+  const xb = { id: 'xb', name: 'Xboard49 (hub)', state: 'connected', onmidimessage: null, onstatechange: null };
+  noten.koppel(xb);
+  const zend = (...b) => xb.onmidimessage({ data: Uint8Array.from(b), timeStamp: nu });
+  tik('groepB');                         // speeltrack: track 2 (drums)
+  stand['track.2.fx.knob.3'] = 0.5;
+  nu += 2000;
+  zend(0xb0, 33, 64);
+  ok('knop 11 (CC 33) dicht bij de stand -> track.2.fx.knob.3 (opgepakt)', dicht(stand['track.2.fx.knob.3'], 64 / 127));
+  stand['track.2.fader'] = 0.8;
+  const mv = (w) => zend(0xf0, 0x7f, 0x7f, 0x04, 0x01, w & 0x7f, (w >> 7) & 0x7f, 0xf7);
+  nu += 10; mv(2000);
+  ok('de schuif ver van de fader (0,12 tegen 0,8): nog niet opgepakt (geen sprong)', stand['track.2.fader'] === 0.8);
+  nu += 10; mv(16000);
+  ok('… door de stand heen: opgepakt, de fader van de speeltrack volgt (14 bit)', dicht(stand['track.2.fader'], 16000 / 16383));
+  zend(0x90, 60, 100);
+  ok('een noot van het keyboard speelt op de speeltrack', dr.log.at(-1)[0] === 'aan' && dr.log.at(-1)[1] === 60);
+  xb.state = 'disconnected';
+  xb.onstatechange({});
+  ok('de poort valt weg (de hub-verbinding): zijn noot laat los', JSON.stringify(dr.log.at(-1)) === JSON.stringify(['uit', 60]));
+  noten.ontkoppel(xb);
+  ok('ontkoppelen zet onmidimessage en onstatechange terug', xb.onmidimessage === null && xb.onstatechange === null);
+}
+
+// ---- 8. een speelapparaat is nooit de controller (midi.js, ook zonder hub) ----------------------
+console.log('\nmidi.js: een speelapparaat is nooit "de controller"');
+{
+  ok('isSpeelapparaat: Xboard49 en Maschine (ook de hub-poorten), de APC niet',
+    isSpeelapparaat('E-MU Xboard49') && isSpeelapparaat('Xboard49 (hub)') && isSpeelapparaat('Maschine MK2 Virtual Input') && !isSpeelapparaat('APC40 mkII') && !isSpeelapparaat('LPD8'));
+  const poortje = (id, name) => ({ id, name, state: 'connected', connection: 'open', onmidimessage: null, send() {} });
+  const maak = (ins, outs = []) => {
+    const h = new MidiHub();
+    h.access = { inputs: new Map(ins.map((x) => [x.id, x])), outputs: new Map(outs.map((x) => [x.id, x])), onstatechange: null };
+    h.enabled = true;
+    return h;
+  };
+  const h1 = maak([poortje('x', 'E-MU Xboard49')]);
+  h1._sync();
+  ok('alleen de Xboard aangesloten (geen APC): geen controller gekozen', h1.inputId === null && h1.input() === null);
+  const h2 = maak([poortje('x', 'E-MU Xboard49'), poortje('m', 'Maschine MK2 Virtual Input'), poortje('i', 'IAC Driver 1')]);
+  h2._sync();
+  ok('Xboard, Maschine en een doorgeefpoort: de doorgeefpoort, nooit een speelapparaat', h2.inputId === 'i');
+  const h3 = maak([poortje('x', 'E-MU Xboard49'), poortje('a', 'APC40 mkII')]);
+  h3.inputId = 'x'; h3.inputName = 'E-MU Xboard49';     // zoals een oude bewaarde keuze
+  h3._sync();
+  ok('een bewaarde keuze voor de Xboard vervalt: de APC', h3.inputId === 'a');
+  h3.selectInput('x');
+  ok('ook met de hand kiezen maakt hem niet de controller', h3.inputId === 'a');
+  const gehoord = [];
+  h3.onInput((m) => gehoord.push(m));
+  h3.access.inputs.get('x').onmidimessage({ data: Uint8Array.of(0x90, 36, 100), timeStamp: 0 });
+  ok('… zijn noten (36!) gaan dus nooit door de APC-mapping', gehoord.length === 0);
+}
+
+// ---- 9. regels: zonder ?hub= laadt niets hiervan ------------------------------------------------
+console.log('\nalleen met ?hub=');
+{
+  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
+  const statisch = /^\s*import\s[^;]*['"][./]*(speelapparaten|control\/maschine|maschine-scherm)[^'"]*['"]/m.test(app);
+  ok('app.js importeert speelapparaten.js / maschine.js niet statisch', !statisch && /await import\('\.\/speelapparaten\.js'\)/.test(app));
+  const blok = app.slice(app.indexOf('if (hubUrl) {'), app.indexOf('window.midi = midiDelen.midi'));
+  ok('… alleen binnen if (hubUrl)', /await import\('\.\/speelapparaten\.js'\)/.test(blok));
+}
+
+console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
+process.exit(fails.length ? 1 : 0);

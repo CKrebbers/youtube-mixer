@@ -169,6 +169,8 @@ export function opzetInstrument({ engine, midi, lagen }) {
       return keyboardTekst;
     }
     const namen = midi.ports().inputs.filter((p) => p.state === 'connected' && !noten.isApc(p.name)).map((p) => p.name);
+    // Met ?hub=: de speelapparaten van de hub (eigen nep-poorten, niet in de lijst van de MidiHub).
+    for (const s of Object.values(midi.status?.().hub?.speelt ?? {})) if (s.verbonden) namen.push(s.naam);
     keyboardTekst = namen.length ? `keyboard: ${namen.join(', ')}` : 'geen MIDI-keyboard aangesloten';
     return keyboardTekst;
   }
@@ -218,7 +220,7 @@ export function opzetInstrument({ engine, midi, lagen }) {
     tekst(keyboardEl, `${keyboards()}${doel ? ` · ${doel}` : ''}`);
     klasse(keyboardEl, 'actief', !!actief);
     titel(keyboardEl, actief ? `${actief.naam}${actief.laatsteNoot != null ? ` · laatste noot ${nootNaam(actief.laatsteNoot)}` : ''}`
-      : 'welk MIDI-keyboard er binnenkomt (elke ingang behalve de APC); de knoppen 1–8 van een Xboard49 sturen de acht plekken (te controleren met een proef)');
+      : 'welk MIDI-keyboard er binnenkomt (elke ingang behalve de APC); de knoppen 1–8 van een Xboard49 sturen de acht plekken, 9–16 de FX-knoppen en de schuif het volume van de speeltrack (te controleren met een proef)');
   }
 
   return { teken, noten };

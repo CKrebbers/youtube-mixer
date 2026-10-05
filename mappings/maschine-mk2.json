@@ -1,0 +1,177 @@
+{
+  "name": "Maschine MK2 — speelmodus",
+  "device": "maschine-mk2",
+  "version": 3,
+  "uitleg": "De knoppen en draaiknoppen van de Maschine MK2 zoals de AV-app-hub ze doorgeeft (virtuele MIDI, src/control/devices/maschine-mk2.js). Groep A–H = focus op track 1–8; de acht draaiknoppen = de acht instrumentknoppen van de speeltrack ({speel}), relatief: één omwenteling (±1000 tellen) is de hele knop, met SHIFT vijf omwentelingen (fijn). De pads (noten 36–51 naar de speeltrack), het masterwiel (instrument kiezen op de focus-track: draaien = kiezen op het scherm, indrukken of ENTER = zetten), de lampjes en de schermen doet src/control/maschine.js. Wat elke knop doet: docs/MASCHINE.md.",
+  "shift": "note:1:39",
+  "rules": [
+    {
+      "in": "note:1:24",
+      "action": "track.1.focus",
+      "mode": "trigger",
+      "label": "groep A"
+    },
+    {
+      "in": "note:1:25",
+      "action": "track.2.focus",
+      "mode": "trigger",
+      "label": "groep B"
+    },
+    {
+      "in": "note:1:26",
+      "action": "track.3.focus",
+      "mode": "trigger",
+      "label": "groep C"
+    },
+    {
+      "in": "note:1:27",
+      "action": "track.4.focus",
+      "mode": "trigger",
+      "label": "groep D"
+    },
+    {
+      "in": "note:1:28",
+      "action": "track.5.focus",
+      "mode": "trigger",
+      "label": "groep E"
+    },
+    {
+      "in": "note:1:29",
+      "action": "track.6.focus",
+      "mode": "trigger",
+      "label": "groep F"
+    },
+    {
+      "in": "note:1:30",
+      "action": "track.7.focus",
+      "mode": "trigger",
+      "label": "groep G"
+    },
+    {
+      "in": "note:1:31",
+      "action": "track.8.focus",
+      "mode": "trigger",
+      "label": "groep H"
+    },
+    {
+      "in": "cc:0:16",
+      "action": "track.{speel}.inst.knob.1",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "label": "draaiknop 1"
+    },
+    {
+      "in": "cc:0:17",
+      "action": "track.{speel}.inst.knob.2",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "label": "draaiknop 2"
+    },
+    {
+      "in": "cc:0:18",
+      "action": "track.{speel}.inst.knob.3",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "label": "draaiknop 3"
+    },
+    {
+      "in": "cc:0:19",
+      "action": "track.{speel}.inst.knob.4",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "label": "draaiknop 4"
+    },
+    {
+      "in": "cc:0:20",
+      "action": "track.{speel}.inst.knob.5",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "label": "draaiknop 5"
+    },
+    {
+      "in": "cc:0:21",
+      "action": "track.{speel}.inst.knob.6",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "label": "draaiknop 6"
+    },
+    {
+      "in": "cc:0:22",
+      "action": "track.{speel}.inst.knob.7",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "label": "draaiknop 7"
+    },
+    {
+      "in": "cc:0:23",
+      "action": "track.{speel}.inst.knob.8",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "label": "draaiknop 8"
+    },
+    {
+      "in": "cc:0:16",
+      "action": "track.{speel}.inst.knob.1",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "label": "draaiknop 1 fijn"
+    },
+    {
+      "in": "cc:0:17",
+      "action": "track.{speel}.inst.knob.2",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "label": "draaiknop 2 fijn"
+    },
+    {
+      "in": "cc:0:18",
+      "action": "track.{speel}.inst.knob.3",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "label": "draaiknop 3 fijn"
+    },
+    {
+      "in": "cc:0:19",
+      "action": "track.{speel}.inst.knob.4",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "label": "draaiknop 4 fijn"
+    },
+    {
+      "in": "cc:0:20",
+      "action": "track.{speel}.inst.knob.5",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "label": "draaiknop 5 fijn"
+    },
+    {
+      "in": "cc:0:21",
+      "action": "track.{speel}.inst.knob.6",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "label": "draaiknop 6 fijn"
+    },
+    {
+      "in": "cc:0:22",
+      "action": "track.{speel}.inst.knob.7",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "label": "draaiknop 7 fijn"
+    },
+    {
+      "in": "cc:0:23",
+      "action": "track.{speel}.inst.knob.8",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "label": "draaiknop 8 fijn"
+    }
+  ]
+}

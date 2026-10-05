@@ -15,10 +15,13 @@ import { trackVanDeck } from './actions.js';
  * Welke ingangen: elke MIDI-ingang die niet de APC is. Deze module vraagt
  * ZELF GEEN MIDI-toegang aan: `hoorHub(midi)` luistert mee op de MidiHub
  * (midi.js), die alleen in het eerste VARVE-tabblad bestaat (Web Lock,
- * tabblad.js). Een poortobject van buiten (straks de nep-poorten van de
- * AV-app-hub, "Xboard49 (hub)") sluit aan met `koppel(poort)`: alles met de
- * interface van een MIDIInput (`onmidimessage` of `addEventListener`,
- * berichten `{ data, timeStamp }`) werkt.
+ * tabblad.js). Een poortobject van buiten (met ?hub= de nep-poort
+ * "Xboard49 (hub)" van de AV-app-hub, ui/speelapparaten.js) sluit aan met
+ * `koppel(poort)`: alles met de interface van een MIDIInput (`onmidimessage`
+ * of `addEventListener`, berichten `{ data, timeStamp }`) werkt; gaat zijn
+ * `state` van 'connected' af (statechange), dan laten zijn noten los. De
+ * Maschine NIET koppelen: zijn knoppen zijn noten op kanaal 1 (maschine.js
+ * geeft alleen de pads door, via `ontvang`).
  *
  * De speeltrack zegt de engine (`speeltrack()`: de focus-track als die een
  * instrument heeft, anders de laatste focus-track met een instrument). Een
@@ -34,13 +37,26 @@ import { trackVanDeck } from './actions.js';
  *   CC 120 (all sound off)              stil()
  *   CC 123 (all notes off)              alleUit()
  *   andere CC's                         de apparaatmapping (knoppen)
+ *   SysEx Master Volume (de schuif      de apparaatmapping, signature `master-volume`
+ *     van de Xboard49)                  (absoluut, 14 bit; mappings/xboard49.json: het volume van de speeltrack)
  */
 export const CC_MOD = 1;
 export const CC_PEDAAL = 64;
 export const CC_STIL = 120;
 export const CC_ALLES_UIT = 123;
+/** De signature van de schuif in een apparaatmapping (geen type:kanaal:nummer: het is SysEx). */
+export const SIG_MASTER_VOLUME = 'master-volume';
 
 const isApcNaam = (naam) => /apc40/i.test(naam || '');
+
+/**
+ * Universal Real Time SysEx, Device Control, Master Volume: F0 7F <dev> 04 01 ll mm F7
+ * (zo stuurt de Xboard49 zijn schuif, PROTOCOL §17 van de hub). → 0..1, of null.
+ */
+export function leesMasterVolume(raw) {
+  if (!raw || raw.length !== 8 || raw[0] !== 0xf0 || raw[1] !== 0x7f || raw[3] !== 0x04 || raw[4] !== 0x01 || raw[7] !== 0xf7) return null;
+  return ((raw[6] << 7) | raw[5]) / 16383;
+}
 
 export class Noten extends Emitter {
   /**
@@ -81,8 +97,11 @@ export class Noten extends Emitter {
    * Geeft true als het iets deed (een instrument raakte of een knop).
    */
   ontvang(msg) {
+    if (!msg || this.isApc(msg.portName)) return false;
+    // De schuif van de Xboard49 is SysEx: een eigen signature in de apparaatmapping.
+    if (msg.type === 'sysex') return this._masterVolume(msg);
     // Systeemberichten (clock, active sensing: veel keyboards sturen dat elke 300 ms) doen niets.
-    if (!msg || this.isApc(msg.portName) || !(msg.channel >= 0)) return false;
+    if (!(msg.channel >= 0)) return false;
     const bron = String(msg.port ?? msg.portName ?? '?');
     const kanaal = msg.channel;
     const p = this._zie(bron, msg);
@@ -148,6 +167,15 @@ export class Noten extends Emitter {
     // De knoppen: alleen als er een speeltrack is ({speel} moet iets worden).
     if (!this._speel()) return false;
     return !!this.mapping.handle(msg)?.taken;
+  }
+
+  /** SysEx Master Volume -> de apparaatmapping (`master-volume`, absoluut: soft-takeover zoals een fader). */
+  _masterVolume(msg) {
+    const v = leesMasterVolume(msg.raw);
+    if (v === null || !this._speel()) return false;
+    this._zie(String(msg.port ?? msg.portName ?? '?'), msg);
+    const m = { type: SIG_MASTER_VOLUME, sig: SIG_MASTER_VOLUME, channel: -1, number: -1, value: Math.round(v * 127), norm: v, raw: msg.raw };
+    return !!this.mapping.handle(m)?.taken;
   }
 
   _pedaal(bron, kanaal, aan) {
@@ -225,13 +253,20 @@ export class Noten extends Emitter {
       m.time = e.timeStamp;
       this.ontvang(m);
     };
-    let vorige = null;
-    if (typeof poort.addEventListener === 'function') poort.addEventListener('midimessage', fn);
-    else {
+    // Valt de poort weg (state niet meer 'connected': de hub-verbinding weg, of
+    // een MIDIPort die losgaat), dan laten zijn noten en zijn pedaal los.
+    const st = () => { if (poort.state !== undefined && poort.state !== 'connected') this.los(String(bron)); };
+    let vorige = null, vorigeSt = null;
+    if (typeof poort.addEventListener === 'function') {
+      poort.addEventListener('midimessage', fn);
+      poort.addEventListener('statechange', st);
+    } else {
       vorige = poort.onmidimessage || null;
+      vorigeSt = poort.onstatechange || null;
       poort.onmidimessage = function (e) { try { vorige?.call(this, e); } finally { fn(e); } };
+      poort.onstatechange = function (e) { try { vorigeSt?.call(this, e); } finally { st(); } };
     }
-    this._gekoppeld.set(poort, { fn, vorige, bron: String(bron) });
+    this._gekoppeld.set(poort, { fn, st, vorige, vorigeSt, bron: String(bron) });
     return () => this.ontkoppel(poort);
   }
 
@@ -239,8 +274,13 @@ export class Noten extends Emitter {
     const g = this._gekoppeld.get(poort);
     if (!g) return;
     this._gekoppeld.delete(poort);
-    if (typeof poort.removeEventListener === 'function' && typeof poort.addEventListener === 'function') poort.removeEventListener('midimessage', g.fn);
-    else poort.onmidimessage = g.vorige;
+    if (typeof poort.removeEventListener === 'function' && typeof poort.addEventListener === 'function') {
+      poort.removeEventListener('midimessage', g.fn);
+      poort.removeEventListener('statechange', g.st);
+    } else {
+      poort.onmidimessage = g.vorige;
+      poort.onstatechange = g.vorigeSt;
+    }
     this.los(g.bron);
   }
 

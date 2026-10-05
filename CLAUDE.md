@@ -87,11 +87,14 @@ src/
                     lagen.js        mapjes (lagen): welk mapje open staat, vastzetten en gluren
                     feedback.js     engine-stand -> LED's, met diffing. Leest de mapping.
                     midi-learn.js   action kiezen, control bewegen, gekoppeld
-                    noten.js        MIDI-noten (elke ingang behalve de APC) naar het instrument op de speeltrack; knoppen via een apparaatmapping
+                    noten.js        MIDI-noten (elke ingang behalve de APC) naar het instrument op de speeltrack; knoppen en de schuif (SysEx Master Volume) via een apparaatmapping
+                    maschine.js     de Maschine MK2 via de hub (alleen ?hub=): pads -> noten.js, groepen/draaiknoppen (mapping), masterwiel, lampjes, schermen
+                    maschine-scherm.js  de twee schermen van de Maschine: stand -> 2048 bytes (256×64, 1 bit), eigen 5×7-font. Puur.
                     handelingen.js  het handelingenlog: [t, action, waarde] op de audioklok, per seconde weg
                     terugspelen.js  een log terugspelen: beginstand, dan elke regel op T0 + t
-                    devices/        apc40mk2.js, generic.js — wat er op het apparaat zit
-                    hub.js          AV-app-hub (alleen ?hub=ws://…): HubMidi = MidiHub met de hub als poort (lease), manifest, herverbinden
+                    devices/        apc40mk2.js, generic.js, maschine-mk2.js (de virtuele MIDI van de hub) — wat er op het apparaat zit
+                    hub.js          AV-app-hub (alleen ?hub=ws://…): HubMidi = MidiHub met de hub als poort (lease), manifest, herverbinden;
+                                    speelt Xboard49 en Maschine (eigen nep-poorten, speelPoort(dev)), lampjes/schermen door een wachtrij
   analysis/         peaks.js        golfvorm-peaks + ruwe RMS
                     features.js     banden laag/midden/hoog, rms, zwaartepunt, onsets uit een spectrum. Puur, tijd van buiten.
                     luisteraar.js   leest de master-AnalyserNode uit (alleen lezen) -> features
@@ -128,6 +131,7 @@ src/
                     stems-weergave.js stems als tekst: namen, library-cel, rijstand, kolomteken, tegel. Puur.
                     koptelefoon-paneel.js de KOPTELEFOON-rij: cue per track, VOL, MIX, ⇄ (zaal en koptelefoon wisselen, na herladen)
                     instrument-paneel.js de INSTRUMENT-rij: kiezen, acht knoppen, toetsenbord (via noten.js), welk MIDI-keyboard
+                    speelapparaten.js alleen met ?hub= (app.js laadt hem dynamisch): Xboard49 -> noten.koppel, Maschine -> maschine.js + tik
                     master-paneel.js de MASTER-rij: rack kiezen en onthouden, MIX, acht knoppen, gain reduction (ook bij de mastermeter)
                     master-weergave.js de master als tekst en getal (gain reduction, kiezer, opslag). Puur.
   vormen/           hulp.js         paletten, toeval met zaad, ruis, tekenhulp (gedeeld door de systemen)
@@ -175,7 +179,8 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs: headless zonder MIDI;
+                    hub.mjs en speelapparaten.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
@@ -184,7 +189,8 @@ mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
   generic.json      leeg startpunt
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
-  xboard49.json     knoppen 1–8 van de E-MU Xboard49 naar het instrument op de speeltrack (AANNAME, te controleren met een proef)
+  xboard49.json     E-MU Xboard49: knop 1–8 -> instrument, 9–16 -> FX, schuif -> fader van de speeltrack (AANNAME, te controleren met een proef)
+  maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn)
 racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 plannen/
@@ -238,7 +244,9 @@ test/
   master.test.mjs   limiter (plafond, true peak, vooruitblik, geen pompen, 0 GC), worklet, keten, wissel, actions, APC
   analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions, maatbronnen
   instrumenten.test.mjs  Poly (contract, ADSR, stemroof, pedaal), engine (nummer óf instrument, speeltrack, maatgever), actions, noten.js met nep-poorten, mapje inst
-  hub.test.mjs      AV-app-hub: nep-WebSocket + nep-klok (ook verborgen tabblad: 1×/s, 1×/min); vlag (lokaal), manifest, LED's per beeld, focus, zet, paniek, hartslag, 0,5→5 s, open-en-dicht, 4001→30 s
+  hub.test.mjs      AV-app-hub: nep-WebSocket + nep-klok (ook verborgen tabblad: 1×/s, 1×/min); vlag (lokaal), manifest, LED's per beeld, focus, zet, paniek, hartslag, 0,5→5 s, open-en-dicht, 4001→30 s;
+                    speelapparaten: speelt, routering per dev, lampjes/schermen met dev door de wachtrij, statechange, niets statisch geladen
+  maschine.test.mjs de Maschine (pads, groepen, draaiknoppen, wiel, lampjes, schermtempo), maschine-scherm (pixels), Xboard knop 9–16 en schuif, isSpeelapparaat
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -264,6 +272,7 @@ docs/
   ONTBREEKT.md      wat er nog ontbreekt (2 okt): eigen docs, DJ-software, Logic/TD; voorstel en vragen
   STUDIO.md         VARVE als muziekprogramma (5 okt): hergebruik, vier controllers, fasen S0–S5; §3 de koptelefoon
   INSTRUMENTEN.md   het contract van een instrument (§1–5) en hoe het op een track woont (§6: engine, actions, noten, scherm, APC, metingen)
+  MASCHINE.md       Maschine MK2 en Xboard49 via de hub (5 okt): wat elke knop doet, lampjes, schermen, de stapmodus straks, metingen
   MASTER.md         effecten op het geheel en de limiter (S2a, 5 okt): keten, algoritme, laden, opslag, APC, metingen
   EFFECTEN.md       effecten uit de filter app (S2c): per effect herkomst, eenheden, staart, metingen, wat niet
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
@@ -1424,6 +1433,34 @@ Volledig in `docs/STEMS.md` §5 (ROADMAP 27, STUDIO S2b). Wat een bouwer niet ma
 - Chrome offline is niet deterministisch op de bits als een ingang twee klinkende
   verbindingen optelt (een hashset: 1 ULP), of als er timers in het renderen vallen:
   vergelijk bit voor bit alleen met één klinkende bron per optelpunt.
+
+## Xboard49 en Maschine via de hub (gebouwd 5 okt)
+
+Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag missen:
+- Alleen met `?hub=`: `MANIFEST.speelt = ['xboard49', 'maschine-mk2']`; app.js laadt
+  `ui/speelapparaten.js` (en daarmee maschine.js, maschine-scherm.js, het profiel en
+  `mappings/maschine-mk2.json`) pas binnen `if (hubUrl)`. hub.test controleert dat niemand ze
+  statisch importeert.
+- Elk speelapparaat heeft een EIGEN nep-poort (`midi.speelPoort(dev)`: "Xboard49 (hub)",
+  "Maschine MK2 (hub)", interface van een MIDIInput), NIET in `access.inputs`: de MidiHub, de
+  APC-mapping en het echofilter zien ze nooit. Geen focusfilter (de hub beslist wie speelt).
+  Weg/terug = `state` + `onstatechange`: noten.koppel en maschine.js laten dan los.
+- Wat naar de Maschine gaat (lampjes `{t:'led', dev:'maschine-mk2'}`, schermen
+  `{t:'scherm', dev, nr, data}`) loopt door een eigen wachtrij in hub.js (16 per 4 ms, zoals de
+  MidiHub), lampjes daarna per beeld gebundeld. De APC-lease is ongewijzigd (LED's zonder `dev`).
+- Pads = noten via noten.js (`noten.ontvang` met bron `hub-maschine-mk2-input`), nooit over de
+  bus. Knoppen 0–47 zitten op kanaal 1: NOOIT de Maschine-poort aan noten.koppel hangen.
+- Het masterwiel KIEST voor de focus-track (scherm), indrukken/ENTER ZET (`track.N.inst.choose`,
+  value 0..1 zoals de read van `track.N.inst`; terugspelen slaat hem over zoals alle `inst`).
+- Een speelapparaat is nooit "de controller" (`isSpeelapparaat` in midi.js, OOK zonder hub):
+  niet automatisch, niet uit localStorage, niet met de hand.
+- De schuif van de Xboard is SysEx Master Volume: signature `master-volume` in een
+  apparaatmapping (noten.js). Knop 9–16 = FX van de speeltrack. CC's: AANNAME.
+- De stapmodus wacht op het patronen-spoor: wat hij gebruikt staat in `docs/MASCHINE.md` §5.
+- Toetsen: `node test/maschine.test.mjs`, `node test/hub.test.mjs`, en headless
+  `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
+  HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een
+  beginstand).
 
 ## Werkwijze die hier werkt
 

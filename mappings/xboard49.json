@@ -1,8 +1,8 @@
 {
-  "name": "E-MU Xboard49 — knoppen naar het instrument",
+  "name": "E-MU Xboard49 — knoppen en schuif naar de speeltrack",
   "device": "xboard49",
   "version": 3,
-  "aanname": "TE CONTROLEREN MET EEN PROEF. De CC-nummers komen uit Ardour's xboard-map (de handleiding noemt ze niet): de 16 knoppen sturen CC 21–28 (knop 1–8) en CC 31–38 (knop 9–16), op elk kanaal. Knop 1–8 gaan naar plek 1–8 van het instrument op de speeltrack ({speel}); knop 9–16 zijn nog vrij. Noten, pitchbend, aftertouch, modwiel (CC 1), sustain (CC 64) en CC 120/123 doet src/control/noten.js zelf, niet deze mapping.",
+  "aanname": "TE CONTROLEREN MET EEN PROEF (proef speelapparaten van de hub). De CC-nummers komen uit Ardour's xboard-map (de handleiding noemt ze niet): de 16 knoppen sturen CC 21–28 (knop 1–8) en CC 31–38 (knop 9–16), op elk kanaal; de schuif stuurt SysEx Master Volume (F0 7F <dev> 04 01 ll mm F7, signature master-volume). Knop 1–8 gaan naar plek 1–8 van het instrument op de speeltrack ({speel}), knop 9–16 naar de acht FX-knoppen van die track, de schuif naar zijn volume (fader). Alles absoluut: eerst oppakken (soft-takeover). Noten, pitchbend, aftertouch, modwiel (CC 1), sustain (CC 64) en CC 120/123 doet src/control/noten.js zelf, niet deze mapping.",
   "rules": [
     {
       "in": "cc:*:21",
@@ -51,6 +51,60 @@
       "action": "track.{speel}.inst.knob.8",
       "mode": "absolute",
       "label": "knop 8"
+    },
+    {
+      "in": "cc:*:31",
+      "action": "track.{speel}.fx.knob.1",
+      "mode": "absolute",
+      "label": "knop 9"
+    },
+    {
+      "in": "cc:*:32",
+      "action": "track.{speel}.fx.knob.2",
+      "mode": "absolute",
+      "label": "knop 10"
+    },
+    {
+      "in": "cc:*:33",
+      "action": "track.{speel}.fx.knob.3",
+      "mode": "absolute",
+      "label": "knop 11"
+    },
+    {
+      "in": "cc:*:34",
+      "action": "track.{speel}.fx.knob.4",
+      "mode": "absolute",
+      "label": "knop 12"
+    },
+    {
+      "in": "cc:*:35",
+      "action": "track.{speel}.fx.knob.5",
+      "mode": "absolute",
+      "label": "knop 13"
+    },
+    {
+      "in": "cc:*:36",
+      "action": "track.{speel}.fx.knob.6",
+      "mode": "absolute",
+      "label": "knop 14"
+    },
+    {
+      "in": "cc:*:37",
+      "action": "track.{speel}.fx.knob.7",
+      "mode": "absolute",
+      "label": "knop 15"
+    },
+    {
+      "in": "cc:*:38",
+      "action": "track.{speel}.fx.knob.8",
+      "mode": "absolute",
+      "label": "knop 16"
+    },
+    {
+      "in": "master-volume",
+      "action": "track.{speel}.fader",
+      "mode": "absolute",
+      "label": "schuif"
     }
   ]
 }

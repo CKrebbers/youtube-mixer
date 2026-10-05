@@ -227,6 +227,9 @@ if (hubUrl) {
     if (new URLSearchParams(location.search).get('hub_extern') === '1') q.set('hub_extern', '1');
     apcKnop.href = `apc.html?${q}`;
   }
+  // De speelapparaten van de hub (Xboard49, Maschine MK2; docs/MASCHINE.md): ook alleen met de vlag geladen.
+  const { opzetSpeelapparaten } = await import('./speelapparaten.js');
+  window.maschine = opzetSpeelapparaten({ engine, midi: midiDelen.midi, noten: instrumentPaneel.noten }).maschine;
 }
 window.midi = midiDelen.midi;         // handig in de console tijdens bouwen
 window.mapping = midiDelen.mapping;
