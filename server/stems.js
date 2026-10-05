@@ -291,19 +291,55 @@ export class StemsRij {
   }
 
   /**
-   * Achteraan in de rij. Staat dit nummer er al (wacht of bezig), dan die,
-   * met dubbel: true. Loopt er niets, dan begint hij meteen.
+   * De rij in. Staat dit nummer er al (wacht of bezig), dan die, met dubbel:
+   * true (en met `vooraan` schuift een wachtende naar voren). Loopt er niets,
+   * dan begint hij meteen.
+   *
+   * VOLGORDE (5 okt, docs/STEMS.md §6): eerst wat VOORAAN gevraagd is (het nummer
+   * waar je mee bezig bent: splitsen vanuit de STEMS-rij), in de volgorde van
+   * vragen; daarna de KORTSTE eerst (`duur` in seconden; onbekend achteraan).
+   * Demucs haalt op de M1 ~3× realtime: een mix van een uur hield vijf korte
+   * nummers drie kwartier vast. Wat al loopt, loopt door (een split kan niet
+   * verder waar hij stopte).
    * @returns {{ opdracht, dubbel: boolean }}
    */
-  voegToe({ track, titel = null, aantal, werk, opnieuw = false }) {
+  voegToe({ track, titel = null, aantal, werk, opnieuw = false, duur = null, vooraan = false }) {
     const al = this.zoek(track);
-    if (al) return { opdracht: al, dubbel: true };
-    const o = this._nieuw({ track, titel, aantal, ...(opnieuw ? { opnieuw: true } : {}) });
+    if (al) {
+      if (vooraan) this.naarVoren(al.id);
+      return { opdracht: al, dubbel: true };
+    }
+    const o = this._nieuw({ track, titel, aantal, duur: Number.isFinite(duur) && duur > 0 ? duur : null,
+      ...(opnieuw ? { opnieuw: true } : {}) });
     this.intern.set(o.id, { werk, ac: null });
     this.rij.push(o.id);
-    this._nummer();
+    if (vooraan) this.naarVoren(o.id);
+    else this._sorteer();
     this._volgende();
     return { opdracht: o, dubbel: false };
+  }
+
+  /** Een wachtende opdracht vooraan zetten (na eerdere vooraan-opdrachten). @returns of het lukte */
+  naarVoren(id) {
+    const o = this.opdrachten.get(id);
+    if (!o || o.status !== 'wacht' || !this.rij.includes(id)) return false;
+    o.vooraan = ++this._teller;
+    this._sorteer();
+    return true;
+  }
+
+  /** De wachtrij op volgorde: vooraan (op volgorde van vragen), dan kortste eerst, dan zoals ze kwamen. */
+  _sorteer() {
+    const sleutel = (id) => {
+      const o = this.opdrachten.get(id);
+      return [o?.vooraan ? 0 : 1, o?.vooraan || 0, o?.duur ?? Infinity, this._volgnr.get(id) ?? 0];
+    };
+    this.rij.sort((a, b) => {
+      const x = sleutel(a), y = sleutel(b);
+      for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+      return 0;
+    });
+    this._nummer();
   }
 
   /**

@@ -189,7 +189,7 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs: headless zonder MIDI;
                     hub.mjs en speelapparaten.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
-                    stems/ (Demucs-proef meet.py, vergelijk.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
+                    stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
@@ -1296,6 +1296,9 @@ Volledig in `docs/KLANKSCHAAL.md`. Wat een bouwer niet mag missen:
 ## Stems (gebouwd 3 okt)
 
 Volledig in `docs/STEMS.md`. Wat een bouwer niet mag missen:
+- De rij (`StemsRij`) gaat niet op aankomst maar op VOLGORDE (5 okt, STEMS.md §6): eerst `vooraan`
+  (de STEMS-rij, in de volgorde van vragen), dan de kortste eerst; wat loopt, loopt door. htdemucs
+  haalt op de M1 ~3× realtime; fp16 en minder overlap zijn gemeten en NIET de moeite (of hoorbaar).
 - Splitsen gebeurt VOORAF, bij de ingest of met de knop in de library, door
   Demucs (`server/stems/splits.py`, Python in `~/.varve/stems-venv`), nooit
   realtime. De engine speelt alleen `stems.wav`: 16-bit, 48 kHz, 4 of 8 kanalen

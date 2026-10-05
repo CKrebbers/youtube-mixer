@@ -226,16 +226,19 @@ function bewaarInLibrary(r) {
  * `hercontrole`: was de splitter er niet, kijk dan nog eens (de route; na een
  * ingest niet, dat zou elke ingest een paar seconden Python kosten).
  */
-async function nieuweStems(trackId, aantal, { opnieuw = false, hercontrole = false } = {}) {
+async function nieuweStems(trackId, aantal, { opnieuw = false, hercontrole = false, vooraan = false } = {}) {
   const track = await metAudio(typeof trackId === 'string' && /^[\w-]{1,64}$/.test(trackId) ? lib.track(trackId) : null);
   if (!track) return { code: 404, antwoord: { fout: 'onbekend nummer, of zijn audio staat niet op schijf' } };
   const loopt = stemsRij.zoek(track.id);
-  if (loopt) return { code: 200, antwoord: { opdracht: loopt, dubbel: true } };
+  if (loopt) {
+    if (vooraan) stemsRij.naarVoren(loopt.id);
+    return { code: 200, antwoord: { opdracht: loopt, dubbel: true } };
+  }
   if (!opnieuw && track.stems?.aantal === aantal) return { code: 200, antwoord: { al: true, stems: track.stems } };
   const s = await splitter.controleer({ hercontrole });
   if (!s.ok) return { code: 503, antwoord: { fout: s.reden, reden: s.reden } };
   const { opdracht } = stemsRij.voegToe({
-    track: track.id, titel: track.titel, aantal, opnieuw,
+    track: track.id, titel: track.titel, aantal, opnieuw, duur: track.duur, vooraan,
     werk: (onVoortgang, signal) => maakStems({ lib, media: MEDIA, splitter, trackId: track.id, aantal,
       audio: opSchijf(track.audio), onVoortgang, signal }),
   });
@@ -757,7 +760,7 @@ const server = createServer(async (req, res) => {
       const body = await leesJson(req);
       if (!body || typeof body !== 'object') return json(res, 400, { fout: 'stuur { track, aantal: 2|4 } als JSON' });
       if (!isAantal(body.aantal)) return json(res, 400, { fout: 'aantal is 2 (zang en rest) of 4 (drums, bas, overig, zang)' });
-      const r = await nieuweStems(body.track, body.aantal, { opnieuw: body.opnieuw === true, hercontrole: true });
+      const r = await nieuweStems(body.track, body.aantal, { opnieuw: body.opnieuw === true, hercontrole: true, vooraan: body.vooraan === true });
       return json(res, r.code, r.antwoord);
     }
     const mStemsOpdracht = /^\/api\/stems\/([\w-]+)$/.exec(pad);

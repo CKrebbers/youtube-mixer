@@ -111,13 +111,15 @@ export class StemsWachtrij extends Emitter {
    * Een nummer splitsen (POST /api/stems). Geeft
    * `{ ok, opdracht?, al?, stems?, fout? }`: `al` = het had al stems met dat
    * aantal (de server doet niets). Gooit niet: een fout is tekst voor meld().
+   * `vooraan`: het nummer waar je mee bezig bent, vóór de rest van de rij
+   * (anders gaat de server op duur: kortste eerst; docs/STEMS.md §6).
    */
-  async splits(trackId, aantal, { opnieuw = false } = {}) {
+  async splits(trackId, aantal, { opnieuw = false, vooraan = false } = {}) {
     let uit;
     try {
       const r = await this.haal('/api/stems', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ track: trackId, aantal, ...(opnieuw ? { opnieuw: true } : {}) }),
+        body: JSON.stringify({ track: trackId, aantal, ...(opnieuw ? { opnieuw: true } : {}), ...(vooraan ? { vooraan: true } : {}) }),
       });
       const j = await r.json().catch(() => ({}));
       if (r.status === 404 && !j.fout) uit = { ok: false, fout: 'deze server kent /api/stems niet' };
