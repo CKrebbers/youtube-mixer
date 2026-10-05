@@ -663,7 +663,7 @@ console.log('\nhet mapje inst op de APC');
     vorige?.rules.length === 397 && [...oud].every(([k, t]) => nu.get(k) === t)
     && erbij.filter((k) => k.endsWith('@device.inst')).length === 11
     && erbij.every((k) => /@(device\.(inst|master)|grid\.(stems|patronen))$/.test(k) || ['note:0:64#shift', 'note:0:84#shift', 'note:0:84#shift@edit.aan', 'note:0:83#shift', 'note:0:83#shift@edit.aan',
-      'note:0:99#shift', 'note:0:100#shift', 'note:0:101#shift'].includes(k)));
+      'note:0:99#shift', 'note:0:100#shift', 'note:0:101#shift', 'note:0:82#shift@edit.aan'].includes(k)));
   const lg = new Lagen({ beschikbaar: () => true });
   const m = new Mapping({ read: () => null, invoke: () => {}, vars: () => ({ focus: 3 }), lagen: () => lg.actief() });
   m.load(doc);

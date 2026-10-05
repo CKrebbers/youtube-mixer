@@ -87,12 +87,16 @@
       <button data-kind="button" data-action="track.1.play" class="btn play">PLAY</button>
       <button data-kind="button" data-action="track.1.sync" class="btn sm sync" title="tempo en fase gelijk aan de track die je het hardst hoort">SYNC</button>
       <div class="grid-tools">
+        <button data-kind="button" data-action="layer.edit.toggle" class="btn sm grid-modus" title="gridmodus aan/uit (APC: Shift + Metronome): klik in de golfvorm = tel 1 hier, shift + klik = vast; scrollen in de golfvorm = zoomen">grid</button>
         <button data-kind="button" data-action="track.1.tap" class="btn sm tap">TAP</button>
         <button data-kind="button" data-action="track.1.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
         <button data-kind="button" data-action="track.1.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
         <button data-kind="button" data-action="track.1.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
         <button data-kind="button" data-action="track.1.grid.halve" class="btn sm" title="bpm van het grid halveren">bpm½</button>
         <button data-kind="button" data-action="track.1.grid.double" class="btn sm" title="bpm van het grid verdubbelen">bpm×2</button>
+        <button data-kind="button" data-action="track.1.grid.bar" data-action-shift="track.1.grid.bar.back" class="btn sm" title="de &quot;1&quot; een tel verder (shift: terug) — de tellen blijven liggen">1→</button>
+        <button data-kind="button" data-action="track.1.grid.pin" class="btn sm grid-vast" title="vastzetten: de tel hier hoort hier. Tegen drift: zet &quot;1&quot; op een tel aan het begin, speel verder en druk een paar minuten later op een kick op vast — het tempo klopt dan over het hele stuk (APC gridmodus: shift + scene 1). Of klik in de golfvorm (gridmodus: klik = tel 1, shift + klik = vast)">vast</button>
+        <button data-kind="button" data-action="track.1.grid.undo" class="btn sm grid-terug" title="de laatste bewerking van het grid terug (Cmd+Z)">↶</button>
       </div>
       <div class="hotcues">
         <button data-kind="button" data-action="track.1.hotcue.1" data-action-shift="track.1.hotcue.1.delete" class="hc hc1">1</button>
@@ -553,6 +557,7 @@
           <tr><td>R / T</td><td>beatjump − / + (shift: lengte ½ / ×2)</td></tr>
           <tr><td>Z / X</td><td>nudge − / + (shift: toon een halve toon lager / hoger)</td></tr>
           <tr><td>V</td><td>keylock aan/uit (het tempo verandert, de toon blijft)</td></tr>
+          <tr><td>Cmd+Z</td><td>de laatste bewerking van het grid terug</td></tr>
           <tr><td>E</td><td>(focus blijft hier)</td></tr>
           <tr><td>` (links van 1)</td><td>rem (vinylstop); tijdens het remmen nog eens = los</td></tr>
         </table>

@@ -1920,6 +1920,69 @@ console.log('\ntempokaart');
   NOW = 0;
 }
 
+// 5 okt (docs/BEATGRID.md §10): een bewerking met de hand bevestigt het stuk en
+// kan terug; vastzetten (pin) haalt drift weg, ook op een aangewezen plek.
+{
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  const dE = eng.deck('E');
+  dE.load(buf, 'bevestig');
+  dE.onsets = null;
+  const meld = [];
+  const opMeld = (m) => meld.push(m);
+  eng.on('melding', opMeld);
+  dE.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.4 }] }));
+  dE.seek(1.0);
+  ok('vooraf onzeker (sync en beat-loops weigeren)', dE.gridZekerHier === false);
+  invoke('track.5.grid.fwd', true);
+  ok('grid 5 ms vooruit BEVESTIGT het stuk: nu zeker', dE.gridZekerHier === true);
+  ok('… en kan terug (lampje: er is iets terug te zetten)', dE.kanGridTerug && read('track.5.grid.undo') === 0.5);
+  invoke('track.5.grid.undo', true); invoke('track.5.grid.undo', false);
+  ok('terug: het grid van vóór (niet geschoven, weer onzeker)', Math.abs(dE.grid.nearest(1.01) - 1.0) < 1e-9 && dE.gridZekerHier === false
+    && !dE.kanGridTerug);
+  invoke('track.5.grid.undo', true); invoke('track.5.grid.undo', false);
+  ok('niets meer terug: dat zegt een melding', /niets om terug te zetten/.test(meld.at(-1)?.tekst ?? ''));
+  dE.seek(0);
+  invoke('track.5.grid.bar', true); invoke('track.5.grid.bar', false);
+  ok('1→: de "1" een tel later, de tellen liggen er nog', dE.grid.telInMaat(0.5) === 1 && dE.grid.telInMaat(0) === 4
+    && Math.abs(dE.grid.nearest(0.51) - 0.5) < 1e-9);
+
+  // Een plaat op 121 bpm, het grid op 120: vast op tel 7.
+  const L = 60 / 121;
+  dE.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.4 }] }));
+  dE.seek(7 * L);
+  invoke('track.5.grid.pin', true); invoke('track.5.grid.pin', false);
+  ok(`vast: 121 bpm over 7 tellen, met een melding ("${meld.at(-1)?.tekst.slice(0, 60)}…")`, Math.abs(dE.grid.bpmAt(0.5) - 121) < 1e-6
+    && /vastgezet — 121,00 bpm \(was 120,00\) over 7 tellen/.test(meld.at(-1)?.tekst ?? '') && dE.gridZekerHier === true);
+  invoke('track.5.grid.undo', true);
+  ok('… en terug: weer 120 en één stuk', dE.grid.bpmAt(0.5) === 120 && dE.grid.aantalStukken === 1);
+  invoke('track.5.grid.pin.op', (7 * L) / dE.duration);
+  ok('vast op een aangewezen plek (klik in de golfvorm): hetzelfde', Math.abs(dE.grid.bpmAt(0.5) - 121) < 1e-6);
+  invoke('track.5.grid.here.op', 0.3 / dE.duration);
+  ok('tel 1 op een aangewezen plek', Math.abs(dE.grid.stukken[0].anker - 0.3) < 1e-9 && dE.grid.telInMaat(0.3) === 1);
+  dE.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }] }));
+  invoke('track.5.grid.pin.op', (5.45 * 0.5) / dE.duration);
+  ok('een pin die niet kan (0,45 tel naast): een foutmelding met waarom, grid onveranderd', meld.at(-1)?.soort === 'fout'
+    && /naast/.test(meld.at(-1)?.tekst ?? '') && dE.grid.bpm === 120 && dE.grid.aantalStukken === 1);
+
+  // Tikken kan terug: de reeks als één stap, terug naar het grid van vóór de eerste tik.
+  dE.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 100, anker: 0 }] }));
+  NOW = 330;                                   // ruim na de tikken hierboven: een nieuwe reeks
+  dE.seek(0.5); dE.play();
+  const echtNu = performance.now;
+  for (let i = 0; i < 4; i++) {
+    performance.now = () => (NOW - 300) * 1000;
+    invoke('track.5.tap', true); invoke('track.5.tap', false);
+    NOW += 0.5;
+  }
+  performance.now = echtNu;
+  dE.stop();
+  ok('vier tikken: 120 bpm', Math.abs(dE.grid.bpmAt(1) - 120) < 0.01);
+  invoke('track.5.grid.undo', true);
+  ok('terug: het grid van vóór de tikken (100 bpm), in één stap', dE.grid.bpmAt(1) === 100);
+  NOW = 0;
+  eng.off?.('melding', opMeld);
+}
+
 // Stap D: grid-modus op de APC. Tel 1 hier snapt naar een klap, halve tel,
 // fijn schuiven en bpm per stuk — via de echte mapping, shift en mapjes.
 {

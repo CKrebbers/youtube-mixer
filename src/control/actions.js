@@ -185,6 +185,8 @@ export function bindEngine(engine) {
       // Zonder die deling stond het grid op +5% pitch 5% fout.
       const bpm = r.bpmTrack ?? r.bpm / (d.rate || 1);
       const anker = r.anker ?? d.position;
+      // De tweede tik is de eerste die het grid verandert: daarvóór kan het terug (↶).
+      if (r.taps === 2) d.gridVoorBewerking();
       // Alleen het stuk waar je tikte; zonder grid een nieuw grid van één stuk.
       if (d.grid) d.grid.zetStuk(anker, { bpm, anker });
       else d.setGrid(new Beatgrid({ bpm, firstBeat: anker }));
@@ -200,7 +202,17 @@ export function bindEngine(engine) {
     // Grid bewerken "vanaf hier": alles raakt alleen het STUK waar je bent.
     // "Hier" is wat je HOORT (hoorbaar()), anders zet je een tel een
     // uitgangsvertraging te laat. Met één stuk is dat het hele grid.
-    const bewerk = (fn) => (on) => { if (on && d.grid) { fn(d.grid, hoorbaar()); d.gridGewijzigd(); } };
+    // Een bewerking met de hand kan terug (↶, deck.gridTerug) en BEVESTIGT het
+    // stuk: wie het hier gelijkzet heeft het gecontroleerd, dus sync en
+    // beat-loops mogen meteen (5 okt; daarvoor bleef het onzeker tot "slot").
+    const bewerk = (fn) => (on) => {
+      if (!on || !d.grid) return;
+      const p = hoorbaar();
+      d.gridVoorBewerking();
+      fn(d.grid, p);
+      d.grid.bevestig(p);
+      d.gridGewijzigd();
+    };
     // Voor de scene-knoppen in de grid-modus: read null zonder grid (niets te
     // doen), 1 zolang ingedrukt (je ziet dat hij het deed), anders `rust()`.
     const gridKnop = (id, fn, label, rust = () => 0) => {
@@ -225,12 +237,59 @@ export function bindEngine(engine) {
     // (regel 2: de mapping weet niets van bpm). Lineair, zodat een encoder-tik
     // overal even groot is: 0,01 bpm = step 0,01 / 260. De tel die het dichtst
     // bij wat je hoort ligt blijft liggen (setBpm met `bij`).
+    let bpmDraai = -Infinity;           // een reeks encoder-tikken is één stap terug
     define(`${n}.grid.bpm`, 'value', (v) => {
       if (!d.grid) return;
-      d.grid.setBpm(MIN_BPM + Math.min(1, Math.max(0, v)) * (MAX_BPM - MIN_BPM), { bij: hoorbaar() });
+      const p = hoorbaar(), nu = performance.now();
+      if (nu - bpmDraai > 1500) d.gridVoorBewerking();
+      bpmDraai = nu;
+      d.grid.setBpm(MIN_BPM + Math.min(1, Math.max(0, v)) * (MAX_BPM - MIN_BPM), { bij: p });
+      d.grid.bevestig(p);
       d.gridGewijzigd();
     }, { label: `Track ${nr} bpm van het gridstuk hier (${MIN_BPM}–${MAX_BPM}, voor een encoder)`,
          read: () => (!d.grid ? null : (d.grid.bpmAt(hoorbaar()) - MIN_BPM) / (MAX_BPM - MIN_BPM)) });
+    // De "1" een tel verder (of terug): de tellen blijven, alleen de maat begint
+    // een tel later. De analyse vindt geen downbeat; zo zet je hem zonder te tikken.
+    gridKnop('bar', (g, p) => g.maatSchuif(p, 1), `Track ${nr} de "1" een tel verder`);
+    gridKnop('bar.back', (g, p) => g.maatSchuif(p, -1), `Track ${nr} de "1" een tel terug`);
+
+    // VASTZETTEN (Beatgrid.pin): de tel hier hoort HIER. Het tempo van het stuk
+    // komt zo dat er tussen zijn anker en hier een geheel aantal tellen ligt,
+    // en vanaf hier begint een nieuw stuk. Tel 1 aan het begin + vast een paar
+    // minuten later = de drift is weg. Snapt naar een klap, zoals "tel 1 hier".
+    const pin = (t) => {
+      if (!d.grid) return;
+      const was = d.grid.toJSON();
+      const r = d.grid.pin(snapNaarOnset(d.onsets, t));
+      if (!r.ok) { engine.emit('melding', { tekst: `track ${nr}, vastzetten: ${r.reden}`, soort: 'fout' }); return; }
+      d.gridVoorBewerking(was);
+      d.gridGewijzigd();
+      const komma = (x) => x.toFixed(2).replace('.', ',');
+      engine.emit('melding', { soort: 'info', tekst: r.alleenFase
+        ? `track ${nr}: tel gelijkgelegd (te dicht bij het anker voor een tempo: zet "1" eerder, of vast verder weg)`
+        : `track ${nr}: vastgezet — ${komma(r.bpm)} bpm (was ${komma(r.was)}) over ${Math.abs(r.tellen)} tellen; vanaf hier een nieuw stuk` });
+    };
+    let pinDruk = false;
+    define(`${n}.grid.pin`, 'trigger', (on) => { pinDruk = !!on; if (on) pin(hoorbaar()); },
+      { label: `Track ${nr} vastzetten: de tel hier hoort hier (tempo tussen het anker en hier)`,
+        read: () => (!d.grid ? null : pinDruk ? 1 : 0) });
+    // Hetzelfde op een AANGEWEZEN plek (klik in de golfvorm): value = tracktijd / duur.
+    define(`${n}.grid.pin.op`, 'value', (v) => { if (d.buffer) pin(Math.min(1, Math.max(0, v)) * d.duration); },
+      { label: `Track ${nr} vastzetten op een plek (tracktijd / duur)` });
+    define(`${n}.grid.here.op`, 'value', (v) => {
+      if (!d.buffer) return;
+      const t = snapNaarOnset(d.onsets, Math.min(1, Math.max(0, v)) * d.duration);
+      if (!d.grid) { engine.emit('melding', { tekst: `track ${nr} heeft nog geen beatgrid: tik eerst mee op de tel met TAP`, soort: 'info' }); return; }
+      d.gridVoorBewerking(); d.grid.ankerHier(t); d.grid.bevestig(t); d.gridGewijzigd();
+    }, { label: `Track ${nr} tel 1 op een plek (tracktijd / duur)` });
+
+    // Terug: de laatste bewerking van het grid ongedaan (tik, pin, ×2, ‹ ›, …).
+    let terugDruk = false;
+    define(`${n}.grid.undo`, 'trigger', (on) => {
+      terugDruk = !!on;
+      if (on && !d.gridTerug()) engine.emit('melding', { tekst: `track ${nr}: niets om terug te zetten aan het grid`, soort: 'info' });
+    }, { label: `Track ${nr} grid: de laatste bewerking terug`, read: () => (!d.buffer ? null : terugDruk ? 1 : d.kanGridTerug ? 0.5 : 0) });
+
     define(`${n}.grid.merge`, 'trigger', bewerk((g, p) => g.voegSamen(p)),
       { label: `Track ${nr} gridstuk samenvoegen met het vorige` });
     define(`${n}.grid.lock`, 'trigger', bewerk((g) => { g.slot = !g.slot; }),

@@ -388,5 +388,66 @@ console.log('\ntransport-rekenwerk');
   ok('... per 1 blijft de volgende tel', eigen.volgendeVeelvoud(b1 + 0.3, 1) === b1 + 1);
 }
 
+// ---- 5 okt: bevestigen, de "1" verschuiven, vastzetten (docs/BEATGRID.md §10) ---------------
+console.log('\nbevestigen, maat, vastzetten');
+{
+  const g = new Beatgrid({ stukken: [{ van: 0, bpm: 124, anker: 1, zekerheid: 0.5 }, { van: 60, bpm: 124, anker: 60.2, zekerheid: 0.3 }] });
+  ok('vooraf: beide stukken onzeker', g.zekerheidBij(30) === 'onzeker' && g.zekerheidBij(90) === 'onzeker');
+  g.bevestig(30);
+  ok('bevestig: het stuk rond t telt als zeker (met de hand), het andere niet', g.zekerheidBij(30) === 'zeker' && g.zekerheidBij(90) === 'onzeker'
+    && !('zekerheid' in g.stukken[0]) && g.stukken[1].zekerheid === 0.3);
+
+  const m = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }] });
+  const tellenVoor = m.beatsBetween(0, 4).map((x) => x.tijd).join();
+  ok('zonder maat: tel 0 is de "1"', m.telInMaat(0) === 1 && m.telInMaat(0.5) === 2);
+  m.maatSchuif(0, 1);
+  ok('maatSchuif +1: de "1" ligt een tel later, de tellen liggen er nog', m.telInMaat(0.5) === 1 && m.telInMaat(0) === 4
+    && m.beatsBetween(0, 4).map((x) => x.tijd).join() === tellenVoor);
+  m.maatSchuif(0, -1);
+  ok('… en −1 weer terug', m.telInMaat(0) === 1);
+
+  // Een plaat op 124,3 bpm met een grid op 124,0 (het analyse-tempo een fractie naast).
+  const echt = 124.3, L = 60 / echt;
+  const p = new Beatgrid({ stukken: [{ van: 0, bpm: 124, anker: 1, zekerheid: 0.5 }] });
+  const t64 = 1 + 64 * L;
+  const naastVoor = t64 - p.timeOf(Math.round(p.beatAt(t64)));
+  const r = p.pin(t64);
+  ok(`pin op tel 64 (het grid lag ${Math.round(naastVoor * 1000)} ms naast): ${r.bpm} bpm, was ${r.was}, over ${r.tellen} tellen`,
+    r.ok && Math.abs(r.bpm - echt) < 1e-9 && r.tellen === 64 && r.was === 124);
+  const naast = (t) => Math.abs(t - p.timeOf(Math.round(p.beatAt(t))));
+  ok('daarna ligt elke tel op zijn plek, ook ver voorbij de pin (tel 400)', [0, 17, 64, 200, 400].every((k) => naast(1 + k * L) < 1e-9));
+  ok('vanaf de pin een nieuw stuk met de pin als anker; beide zeker', p.aantalStukken === 2 && Math.abs(p.stukken[1].anker - t64) < 1e-9
+    && p.zekerheidBij(10) === 'zeker' && p.zekerheidBij(t64 + 10) === 'zeker');
+  ok('de "1" telt gewoon door (tel 64 is een "1", 65 een 2)', p.telInMaat(t64) === 1 && p.telInMaat(t64 + L) === 2);
+
+  const w = new Beatgrid({ stukken: [{ van: 0, bpm: 124, anker: 0 }] });
+  const ver = w.pin(50.45 * 60 / 124);                     // 0,45 tel naast tel 50
+  ok(`pin waar het grid meer dan 0,4 tel naast ligt: geweigerd, met waarom ("${(ver.reden || '').slice(0, 40)}…")`, !ver.ok && /naast/.test(ver.reden) && w.bpm === 124);
+  const snel = new Beatgrid({ stukken: [{ van: 0, bpm: 124, anker: 0 }] });
+  const r2 = snel.pin(4.7 * 60 / 124);                     // 0,3 tel naast tel 5: 6% sneller
+  ok('pin die het tempo meer dan 4% zou veranderen: geweigerd (klopt het anker?)', !r2.ok && /tempo/.test(r2.reden) && snel.bpm === 124);
+  const dicht = new Beatgrid({ stukken: [{ van: 0, bpm: 124, anker: 0 }] });
+  const r3 = dicht.pin(2 * 60 / 124 + 0.01);
+  ok('pin vlak bij het anker (2 tellen): alleen de fase, geen tempo', r3.ok && r3.alleenFase && dicht.bpm === 124
+    && Math.abs(dicht.timeOf(Math.round(dicht.beatAt(2 * 60 / 124 + 0.01))) - (2 * 60 / 124 + 0.01)) < 1e-9);
+
+  // Een live opgenomen mix die drijft: 124 → 126 bpm in 5 minuten. Tel 1 aan het
+  // begin en dan om de 32 tellen een pin: hoe ver liggen de tellen ernaast?
+  const b0 = 124, b1 = 126, T = 300;
+  // tempo(t) = b0 + (b1 − b0)·t/T; tellen(t) = ∫ tempo/60 dt
+  const telVan = (t) => (b0 * t + (b1 - b0) * t * t / (2 * T)) / 60;
+  const tijdVanTel = (k) => { let lo = 0, hi = T + 30; for (let i = 0; i < 60; i++) { const mi = (lo + hi) / 2; if (telVan(mi) < k) lo = mi; else hi = mi; } return (lo + hi) / 2; };
+  const live = new Beatgrid({ stukken: [{ van: 0, bpm: 124, anker: 0, zekerheid: 0.4 }] });
+  let geweigerd = 0;
+  for (let k = 32; telVan(T) > k; k += 32) if (!live.pin(tijdVanTel(k)).ok) geweigerd++;
+  let slechtste = 0;
+  for (let k = 0; tijdVanTel(k) < T - 5; k++) {
+    const t = tijdVanTel(k);
+    slechtste = Math.max(slechtste, Math.abs(t - live.timeOf(Math.round(live.beatAt(t)))));
+  }
+  ok(`drijvende mix (124 → 126 bpm in 5 min), om de 32 tellen een pin: elke tel binnen ${(slechtste * 1000).toFixed(2)} ms (${live.aantalStukken} stukken, ${geweigerd} geweigerd)`,
+    geweigerd === 0 && slechtste < 0.005);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

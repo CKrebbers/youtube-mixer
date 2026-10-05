@@ -352,3 +352,11 @@ een track zonder nummer niet). Het scherm knippert zo vanzelf mee.
 
 Niet getest: de echte APC (oranje naast groen en cyaan op de pads; of Shift + scene 2 lekker
 ligt; of het knipperen op de tel goed te zien is).
+
+## Grid-modus: vastzetten (5 oktober 2026, docs/BEATGRID.md §10, niet op het apparaat nagelopen)
+
+In de grid-modus (Shift + Metronome) is **Shift + scene 1 = vast** (pin: de tel hier hoort
+hier; het tempo klopt dan vanaf "tel 1" of de vorige pin, en vanaf hier begint een nieuw
+stuk). Eén regel erbij (`note:0:82#shift@edit.aan`, was vrij), niets bestaands veranderd.
+Terug (↶) staat bewust niet op de APC: Shift + scene 5 blijft klank, Lock (ook met shift)
+blijft het grid-slot; terug gaat met ↶ op het scherm of Cmd+Z.

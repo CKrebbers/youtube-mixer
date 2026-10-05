@@ -97,6 +97,14 @@ export function attachKeyboard(engine, opts = {}) {
     // kreeg door een klik, zette eerder álle toetsen stil tot je ergens
     // anders klikte.
     if (isTypen(e.target)) return;
+    // Cmd+Z (Ctrl+Z): de laatste bewerking van het grid van de focus-track terug
+    // (5 okt). Alle letters zijn al van de decks; dit is de toets die iedereen kent.
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.code === 'KeyZ') {
+      const id = `track.${trackVanDeck(engine.focus)}.grid.undo`;
+      invoke(id, true); invoke(id, false);
+      e.preventDefault();
+      return;
+    }
     // Cmd/Ctrl/Alt horen bij de browser en het systeem (Cmd+W, Ctrl+Tab),
     // niet bij de decks. Shift wel: dat is de wis-variant.
     if (e.metaKey || e.ctrlKey || e.altKey) return;

@@ -92,6 +92,14 @@ function strookVan(view, grid, duur, w) {
  *   - zoom:     scrollend, playhead vast in het midden
  */
 export class WaveformView {
+  /** De tracktijd onder clientX, volgens wat er het laatst getekend is; null zonder tekening. */
+  tijdBij(clientX) {
+    const r = this.canvas.getBoundingClientRect();
+    const g = this._range;
+    if (!g || !(r.width > 0)) return null;
+    return g.t0 + ((clientX - r.left) / r.width) * (g.t1 - g.t0);
+  }
+
   constructor(canvas, { mode = 'zoom', pxPerSecond = 170, color = '#4ad9c4' } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
@@ -234,6 +242,7 @@ export class WaveformView {
     const range = this.mode === 'overview'
       ? { t0: 0, t1: deckState.duration }
       : { t0: pos - (w / 2) / this.pxPerSecond, t1: pos + (w / 2) / this.pxPerSecond };
+    this._range = range;                // voor tijdBij (een klik in de golfvorm)
 
     const span = range.t1 - range.t0;
 
