@@ -1,6 +1,7 @@
 import { clamp, expMap } from '../lib/emitter.js';
 import { leesRack, schrijfRack, resolveMacros, rackVanEffect, LEEG_RACK } from './rack.js';
 import { startDrempel, houdVast, zetHellingen } from './overgang.js';
+import { MEER_EFFECTEN } from './fx-meer.js';
 
 /**
  * De insert-slot: één effectketen per deck, klikvrij verwisselbaar.
@@ -741,6 +742,9 @@ export const EFFECTEN = [
       };
     },
   },
+  // Distortion, chorus, flanger, vibrato, tremolo, autopan, auto-wah, pitch,
+  // compressor en breedte: uit Clay's filter app (fx-meer.js, docs/EFFECTEN.md).
+  ...MEER_EFFECTEN,
 ];
 
 export const effectVan = (id) => EFFECTEN.find((e) => e.id === id) || null;

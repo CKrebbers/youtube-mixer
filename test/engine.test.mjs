@@ -45,6 +45,9 @@ globalThis.AudioContext = class {
   createDelay(){ const n = node('delay'); n.delayTime = param(0); return n; }
   createWaveShaper(){ const n = node('shaper'); n.curve = null; n.oversample = 'none'; return n; }
   createChannelMerger(){ return node('merger'); }
+  // De effecten uit de filter app (fx-meer.js) lopen ook langs in 'volgend effect'.
+  createChannelSplitter(){ return node('splitter'); }
+  createStereoPanner(){ const n = node('pan'); n.pan = param(0); return n; }
   createOscillator(){ const n = node('osc'); n.type='sine'; n.start=()=>{}; n.stop=()=>{}; return n; }
   createBufferSource(){ const s = node('src'); s.playbackRate=param(1); s.loop=false; s.loopStart=0; s.loopEnd=0;
     // De echte API vuurt onended ASYNCHROON na stop(), en houdt een bron in
@@ -463,10 +466,19 @@ fx.setMix(0);
 
 // via de bus
 const beginEffect = fx.effectId;
+const rondjeFouten = [];
+const { bijFout } = await import('../src/control/actions.js');
+const stopFouten = bijFout((id, err) => rondjeFouten.push(`${id}: ${err?.message}`));
 invoke('track.1.fx.next', true);
 ok('volgend effect via de bus', fx.effectId !== beginEffect);
-for (let i = 1; i < EFFECTEN.length; i++) invoke('track.1.fx.next', true);
+const rondje = [fx.effectId];
+for (let i = 1; i < EFFECTEN.length; i++) { invoke('track.1.fx.next', true); rondje.push(fx.effectId); }
+stopFouten();
 ok('en na een rondje sta je weer waar je begon', fx.effectId === beginEffect);
+// De bus slikt een fout (hij meldt hem alleen): een effect dat bij het bouwen
+// gooit, liet de slot achter met het nieuwe rack en de oude keten.
+ok(`elk effect bouwt onderweg zonder fout (${EFFECTEN.length} effecten${rondjeFouten.length ? ': ' + rondjeFouten.join(' | ') : ''})`,
+  rondjeFouten.length === 0 && new Set(rondje).size === EFFECTEN.length);
 invoke('track.1.fx.mix', 0.3);
 ok('mix via de bus', Math.abs(fx.mix - 0.3) < 1e-9);
 invoke('track.1.fx.knob.1', 0.7);

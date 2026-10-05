@@ -28,7 +28,7 @@ for (const f of engineBestanden) {
 // streamworklet kreeg vier uitgangen, maar rekent nog steeds alleen met
 // stream-kern.js).
 console.log('\nworklets importeren alleen hun kern');
-for (const [f, kern] of [['stream-lezer.js', './stream-kern.js'], ['klankschaal-worklet.js', './klankschaal-kern.js']]) {
+for (const [f, kern] of [['stream-lezer.js', './stream-kern.js'], ['klankschaal-worklet.js', './klankschaal-kern.js'], ['fx-worklet.js', './fx-kern.js']]) {
   const bron = readFileSync(engineMap + f, 'utf8');
   const imports = [...bron.matchAll(/^\s*import\s[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1]);
   ok(`${f}: importeert alleen ${kern}`, imports.length === 1 && imports[0] === kern);

@@ -106,7 +106,7 @@ handelingen (replay).
 | filter-resonantie | deels — alleen in het FX-filter, niet in de strip |
 | knop naar midden (reset) | niet |
 | 4 FX-slots per deck met typewissel, wet, beat-lengte, tempo-sync | **anders gebouwd** — één insert-rack per track met 8 knopplekken + twee sends (echo, galm); tempo-sync in delay en gate (CLAUDE.md, racks) |
-| flanger, roll | niet (wel phaser, delay, gate, bitcrush, ringmod, reverb) |
+| flanger, roll | flanger gebouwd (5 okt, met nog negen uit de filter app: docs/EFFECTEN.md); roll niet |
 | crossfader, curve, toewijzing kant/thru | gebouwd |
 | master | gebouwd |
 | koptelefoon: PFL, niveau, cue-mix, split | niet — één audio-uitgang, VRAGEN F1 open |
