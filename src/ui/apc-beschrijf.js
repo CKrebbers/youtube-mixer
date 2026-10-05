@@ -69,6 +69,17 @@ export function beschrijf(action) {
     if (rest === 'inst.prev') return r('◀ instr', 'vorig instrument op deze track (een nummer dat speelt: tweede druk binnen 3 s)');
     if ((m = /^inst\.knob\.(\d)$/.exec(rest))) return r(`instr ${m[1]}`, `instrumentknop ${m[1]} (wat die doet hangt van het instrument af; de namen staan in de INSTRUMENT-rij)`);
     if (rest === 'inst.stil') return r('stil', 'instrument meteen stil (paniek), met een korte fade; lampje = er klinkt iets');
+    // Patronen (docs/PATRONEN.md): vijf plekken per track, de rijen van het grid in de modus patronen.
+    if ((m = /^pattern\.([1-5])$/.exec(rest))) return r(`pat ${m[1]}`, `patroon ${m[1]}: starten op de maat van de maatgever (zonder maatgever op het eigen tempo); speelt hij: stoppen op de maat; speelt er een ander: wisselen op de maat; een lege plek: kiezen om te bewerken (met opnemen aan: beginnen). Lampje zeegroen: donker = gevuld, fel = speelt, knippert = wacht op de maat, donkergrijs = leeg, uit = geen instrument`);
+    if ((m = /^pattern\.([1-5])\.now$/.exec(rest))) return r(`pat ${m[1]}!`, `patroon ${m[1]} meteen: starten op de volgende tel in plaats van de maat, of meteen stoppen (binnen ~0,1 s)`);
+    if (rest === 'pattern.stop') return r('pat stop', 'patroon stoppen op de maat (alles los op het maatbegin)');
+    if (rest === 'pattern.stop.now') return r('pat stop!', 'patroon meteen stoppen (binnen ~0,1 s)');
+    if ((m = /^pattern\.step\.(\d+)$/.exec(rest))) return r(`stap ${m[1]}`, `stap ${m[1]} van het gekozen patroon: de laatst gespeelde noot erop, of eraf als hij er al staat`);
+    if (rest === 'pattern.length') return r('pat lengte', 'lengte van het gekozen patroon (1–64 stappen)');
+    if (rest === 'pattern.length.up') return r('langer', 'het gekozen patroon langer (per stap tot 16, dan per halve maat)');
+    if (rest === 'pattern.length.down') return r('korter', 'het gekozen patroon korter');
+    if (rest === 'pattern.swing') return r('swing', 'swing van het gekozen patroon (recht tot een halve stap op de off-beats)');
+    if (rest === 'pattern.clear') return r('pat wis', 'het gekozen patroon leegmaken (tweede druk binnen 3 s)');
     if (rest === 'pfl') return r('PFL', 'in de koptelefoon aan/uit: voorbeluisteren vóór de fader, de zaal hoort het niet (lampje rood = je hoort hem; uit = geen koptelefoonuitgang, docs/STUDIO.md §3)');
     if (rest === 'brake') return r('rem', 'rem (vinylstop): in de remtijd naar stilstand, dan pauze; tijdens het remmen nog eens = los');
     if (rest === 'brake.time') return r('remtijd', 'remtijd: 0,1 tot 5 seconden tot stilstand');
@@ -104,6 +115,7 @@ export function beschrijf(action) {
   // (de vorige focus, of wat je hiermee kiest). Zie src/ui/vensters.js.
   if ((m = /^window\.L\.show\.(\d)$/.exec(action))) return { kort: `focus ${m[1]}`, lang: `focus op track ${m[1]}` };
   if ((m = /^window\.R\.show\.(\d)$/.exec(action))) return { kort: `2e: ${m[1]}`, lang: `track ${m[1]} als tweede (rechterhand op het toetsenbord)` };
+  if ((m = /^patterns\.row\.([1-5])$/.exec(action))) return { kort: `rij ${m[1]}`, lang: `patronen: rij ${m[1]} op alle tracks met een instrument, op de maat (een lege plek in die rij: die track stopt); lampje fel = er speelt iets in deze rij, knippert = wacht, donker = gevuld` };
   if ((m = /^sampler\.(\d)$/.exec(action))) return { kort: `pad ${m[1]}`, lang: `sampler-pad ${m[1]}: leeg = pak de laatste tellen van de focus-track, gevuld = start/stop op de tel` };
   if ((m = /^sampler\.(\d)\.clear$/.exec(action))) return { kort: `leeg ${m[1]}`, lang: `sampler-pad ${m[1]} leegmaken (bewaard blijft bewaard)` };
   if ((m = /^send\.a\.knob\.(\d)$/.exec(action))) return { kort: `echo ${SEND_A[m[1] - 1] ?? m[1]}`, lang: `echo-bus: ${SEND_A[m[1] - 1] ?? `knop ${m[1]}`}` };
@@ -168,6 +180,12 @@ export function beschrijf(action) {
     'video.freeze': ['bevries', 'video: het beeld bevriezen aan/uit (de video\'s lopen door, loslaten = meteen het goede beeld)'],
     'video.master': ['beeld', 'video: master, de helderheid van het eindbeeld (dicht = zwart)'],
     'video.flash': ['flits', 'video: een witte flits die snel uitdooft'],
+    // Patronen (docs/PATRONEN.md): de modus patronen, Shift + scene 3.
+    'patterns.stop': ['pat stop', 'patronen: alles stoppen op de maat'],
+    'patterns.stop.now': ['pat stop!', 'patronen: alles meteen stoppen'],
+    'patterns.tempo': ['pat tempo', 'patronen: het eigen tempo als er geen maatgever is (40–240 bpm)'],
+    'patterns.tap': ['pat tap', 'patronen: het eigen tempo tikken'],
+    'patterns.record': ['pat rec', 'patronen: live opnemen aan/uit (wat je speelt komt in het patroon dat speelt, op de stap)'],
   };
   if (vast[action]) return { kort: vast[action][0], lang: vast[action][1] };
   return { kort: action, lang: action };
