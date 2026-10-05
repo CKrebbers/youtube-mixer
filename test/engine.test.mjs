@@ -1912,9 +1912,11 @@ console.log('\ntempokaart');
   ok('grid.here zonder onsets: de positie zelf', Math.abs(dE.grid.stukken[1].anker - 3.1) < 1e-9);
 
   // Speelt hij, dan is "hier" wat je HOORT: positie min uitgangsvertraging × rate.
+  // Die vertraging is baseLatency plus de vooruitblik van de master-limiter
+  // (hier, zonder worklet, die van de compressor: 6 ms; docs/MASTER.md).
   NOW = 500;
   dE.seek(3.2); dE.setRate(1.25); dE.play();
-  const hoor = dE.position - eng.ctx.baseLatency * 1.25;
+  const hoor = dE.position - (eng.ctx.baseLatency + eng.ctx.graafVertraging) * 1.25;
   invoke('track.5.grid.here', true);
   ok('grid.here tijdens spelen: de hoorbare positie, niet de deckpositie',
     Math.abs(dE.grid.stukken[1].anker - hoor) < 1e-9 && eng.ctx.baseLatency > 0);

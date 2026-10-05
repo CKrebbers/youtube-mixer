@@ -168,7 +168,9 @@ console.log('de luisteraar leest een analyser alleen uit');
   ok('geen audio (nog geen analyser): null', new Luisteraar({ analyser: () => null, sampleRate: () => SR }).lees(1) === null);
   const bron = readFileSync(new URL('../src/analysis/luisteraar.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
   ok('de luisteraar hangt niets aan de audiograaf (geen connect, geen create)', !/\.connect\(|create[A-Z]/.test(bron));
-  const graaf = readFileSync(new URL('../src/engine/audio-graph.js', import.meta.url), 'utf8');
+  // De strip staat in audio-graph.js, de master sinds 5 okt in master.js.
+  const graaf = readFileSync(new URL('../src/engine/audio-graph.js', import.meta.url), 'utf8')
+    + readFileSync(new URL('../src/engine/master.js', import.meta.url), 'utf8');
   ok('de analysers per strip en op de master staan op fftSize 2048', (graaf.match(/fftSize = 2048/g) || []).length === 2 && !/fftSize = 1024/.test(graaf));
 }
 

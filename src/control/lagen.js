@@ -16,6 +16,10 @@ import { Emitter } from '../lib/emitter.js';
  *           instrument). Zonder instrument blijft het strip ↔ rack. Detail View
  *           opent een derde: de gekozen VORMLAAG (Vormmachines, alleen met
  *           ?vormen=1; zonder dat staan er geen regels in en doet hij niets).
+ *           Shift + Clip/Device View opent de MASTER (5 okt, docs/MASTER.md):
+ *           het insert-rack op het geheel, knop 1–7 = plek 1–7, knop 8 = mix
+ *           (shift + knop 8 = plek 8), Device ◀ ▶ = rack, On/Off = aan/uit.
+ *           Clip/Device View zelf gaat daarna weer naar de strip.
  *   grid    het 5×8-grid: hotcues · loops · sampler · video · klank · auto,
  *           gekozen met de scene-knoppen ernaast (klank: Shift + scene 5, want
  *           scene 5 zelf is "loop weg"; auto: Shift + scene 4), of rondlopend
@@ -56,8 +60,8 @@ export const GROEPEN = {
   },
   device: {
     naam: 'device knobs', standaard: 'strip',
-    // inst alleen als de focus-track een instrument heeft (zie OP_AANVRAAG).
-    knoppen: { view: ['strip', 'rack', 'inst'] },
+    // inst alleen als de focus-track een instrument heeft (zie OP_AANVRAAG); master met Shift + Clip/Device View.
+    knoppen: { view: ['strip', 'rack', 'inst'], master: ['master'] },
   },
   grid: {
     naam: 'grid', standaard: 'hotcues',
@@ -86,6 +90,7 @@ export const LAAGNAAM = {
   'device.strip': 'strip (trim · high · mid · low / echo · galm · fx)', 'device.rack': 'rack (fx 1–8)',
   'device.inst': 'instrument (de acht knoppen van het instrument · ◀ ▶ kiezen · On/Off stil)',
   'device.vorm': 'vormlaag (knoppen 1–6 · dekking)',
+  'device.master': 'master (fx 1–7 · mix; shift + 8 = fx 8)',
   'edit.aan': 'grid-modus (beatgrid bewerken)', 'edit.uit': 'uit',
   'grid.hotcues': 'hotcues', 'grid.loops': 'loops', 'grid.sampler': 'sampler', 'grid.video': 'video',
   'grid.klank': 'klank (kill · rem · op de maat)',

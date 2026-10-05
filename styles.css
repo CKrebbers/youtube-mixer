@@ -698,6 +698,26 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .kol.instrument .kol-titel,.baan.instrument .baan-titel{color:var(--m-sampler)}
 .kol.instrument.klinkt .kol-speelt{visibility:visible;color:var(--m-sampler)}
 
+/* ---- master (docs/MASTER.md): het insert-rack op de mix en de limiter ----
+   Eén regel zoals koptelefoon en stems. Gain reduction = rood, groeit naar rechts. */
+.master-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px;min-width:0}
+.master-rij.hidden{display:none}
+.ms-rack{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:3px 5px;color:var(--text);
+  font:inherit;font-size:11px;max-width:170px;min-width:0}
+.ms-rack:focus{outline:none;border-color:var(--warn)}
+.ms-aan{min-width:44px}
+.ms-knoppen{display:flex;align-items:center;gap:6px;min-width:0}
+.ms-plek.dof{opacity:.28}
+.ms-limiter{display:flex;align-items:center;gap:8px;min-width:0;margin-left:auto}
+.ms-gr{display:block;width:120px;height:8px;background:#0b0e11;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.ms-gr i{display:block;height:100%;width:0;background:var(--red)}
+.ms-gr-tekst{font:600 12px ui-monospace,monospace;color:var(--text);min-width:64px;text-align:right}
+.ms-soort{font-size:11px;color:var(--klein);white-space:nowrap}
+.ms-soort.oud{color:var(--warn)}
+/* naast de mastermeter in het focusdeel: gain reduction van boven naar beneden */
+.meter.vmeter.gr-meter{width:4px;align-items:flex-start}
+.meter.vmeter.gr-meter i{background:var(--red)}
+
 /* het teken in de kolomkop: S2/S4 = speelt met stems; gestippeld = klaar, herladen geeft ze; S! = mislukt */
 .kol-kop-l{display:flex;align-items:center;gap:5px;min-width:0}
 .kol-stems{font:700 11px/1 ui-monospace,monospace;font-style:normal;padding:2px 3px;border-radius:3px;
@@ -902,6 +922,8 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
 .fd-device-kop{display:flex;align-items:baseline;gap:6px;font-size:11px;letter-spacing:.08em;color:var(--klein);min-width:0}
 .fd-laag{color:var(--a)}
 .focusdeel[data-laag="rack"] .fd-laag{color:var(--b)}
+.focusdeel[data-laag="master"] .fd-device{border-color:var(--warn)}
+.focusdeel[data-laag="master"] .fd-laag{color:var(--warn)}
 .fd-laag-uitleg{letter-spacing:0;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fd-knobs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 6px;margin:6px 0;justify-items:center}
 .fd-devknoppen{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;position:relative}

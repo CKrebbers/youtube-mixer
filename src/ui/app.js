@@ -16,6 +16,7 @@ import { opzetAuto } from './auto-paneel.js';
 import { opzetStems } from './stems-paneel.js';
 import { opzetKoptelefoon, koptelefoonOpties } from './koptelefoon-paneel.js';
 import { opzetInstrument } from './instrument-paneel.js';
+import { opzetMaster } from './master-paneel.js';
 import { StemsWachtrij } from './stems-wachtrij.js';
 import { Automaat } from '../auto/automaat.js';
 import { opzetPlanKoppeling } from './plan-koppeling.js';
@@ -130,6 +131,8 @@ window.library = laden.library;
 // De STEMS-rij voor de track met focus (standaard dicht, knop "stems").
 const stemsPaneel = opzetStems({ engine, staat, wachtrij: stemsWachtrij, library: laden.library });
 const koptelefoonPaneel = opzetKoptelefoon({ engine });
+// De MASTER-rij: effecten op de hele mix en de limiter (docs/MASTER.md).
+const masterPaneel = opzetMaster({ engine });
 stemsWachtrij.peil();
 
 // ---- handelingenlog: wat er op de bus gebeurt, om terug te spelen ---------
@@ -235,6 +238,7 @@ startRenderloop({
     stems: stemsPaneel.teken,
     koptelefoon: koptelefoonPaneel.teken,
     instrument: instrumentPaneel.teken,
+    master: masterPaneel.teken,
   },
 });
 
@@ -247,4 +251,5 @@ bindApp({
   opnameStop: opname.opnameStop,
   opnameSoort: opname.wisselSoort,
   rackStap: racks.rackStap,
+  masterRackStap: masterPaneel.rackStap,
 });

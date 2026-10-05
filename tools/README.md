@@ -85,6 +85,12 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   sample, stil() midden in een DECAY-helling (via suspend), een eigen buffer op pad 9. Pagina is
   /styles.css (de app start niet), geen MIDI, eigen server. Poorten `VARVE_KIJK_POORT` (8816) en
   `VARVE_KIJK_DEBUG` (9416). Raakt de geluidsinstellingen van de Mac niet.
+- `master.mjs` — de master (docs/MASTER.md), eigen server op 8811 (debug 9411), geen MIDI: de echte
+  engine op een OfflineAudioContext. Pieken tot +6 dB blijven ≤ −1 dBTP (true peak 16× gemeten),
+  stationair onder het plafond 0 dB gain reduction (uitvoer = invoer, 72 samples later), de
+  vertraging = `ctx.graafVertraging`, het insert-rack met delay en galm klinkt, de wissel
+  compressor → worklet midden in een toon zonder sprong; daarna de MASTER-rij in de app (kiezer,
+  onthouden na herladen, het mapje master op het scherm). Raakt de geluidsinstellingen van de Mac niet.
 - `plan.mjs` — het planvenster in headless Chromium (server op 8795, eigen VARVE_PLANNEN): de knop
   "plan" opent plan.html, voorspelling, bewerken, ongedaan maken, opslaan (vorige versie bewaard),
   nummer erbij, auto aan over de bus van de mixer, live "speelt nu", een wijziging van buitenaf

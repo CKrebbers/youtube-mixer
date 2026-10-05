@@ -148,6 +148,8 @@ export class Engine extends Emitter {
     this.sends = {};
     // De bussen lopen op de maat van wat je hoort: dezelfde klok als sync en sampler.
     const maatKlok = () => { const d = this.syncMaster(); return d ? d.fxKlok() : null; };
+    // Het insert-rack op de master (master.js) loopt op dezelfde maat.
+    this.master.fx.setKlok(maatKlok);
     for (const [bus, rack] of Object.entries(SEND_RACKS)) {
       const slot = new InsertSlot(this.ctx);
       slot.setKlok(maatKlok);
@@ -182,6 +184,7 @@ export class Engine extends Emitter {
     const volgMaat = () => {
       this.maatgever();               // eerst bijwerken wie de maat geeft
       for (const s of Object.values(this.sends)) s.heranker();
+      this.master.fx.heranker();
       this.sampler.heranker();
       // De klankschaal stemt mee (tempo, pitch, andere maatgever), ook als je
       // hem wrijft en de rij dicht is. Zonder worklet is er niets te stemmen.
@@ -643,6 +646,10 @@ export class Engine extends Emitter {
       speel: this.speeltrack(),
       // De koptelefoon: { beschikbaar, kanalen, omgewisseld, niveau, mix, iets, pfl: {deck: bool} }.
       koptelefoon: this.koptelefoon.stand(),
+      // De master (docs/MASTER.md): het insert-rack zoals `fx` van een track,
+      // en de limiter { soort, gr (dB, ≤ 0), vertraging, plafond, fout }.
+      masterFx: this.master.fxStand(),
+      limiter: this.master.limiterStand(),
     };
   }
 }
