@@ -270,6 +270,8 @@ Open:
   - Shift + Tap = toon terug naar 0.
 
   Eerst op `apc.html` bekijken of het in de hand ligt.
+  **Let op (3 okt):** met de AV-app-hub (`?hub=`) is Bank de hubtoets en komt
+  hij nooit bij VARVE aan. Zie N2.
 
 ---
 
@@ -356,3 +358,20 @@ APC-indeling (voorstel A):
 - [ ] **PL1. Mag jij een bewaker bewust breken?** 💬 Bijvoorbeeld een blend afdwingen over een onzeker grid, met een "ik weet het"-vinkje per stap. Nu winnen de bewakers altijd. **Advies:** toestaan, maar alleen vanuit het venster (door jou), nooit door Claude.
 - [ ] **PL2. Per stap: automatisch, of wachten op jouw GO?** 🎛 Voor fase 2 (live-stand). **Advies:** standaard automatisch, per stap om te zetten.
 - [ ] **PL3. Past het venster op je tweede scherm, en mist er iets in de lijst?** 👀
+
+## N. AV-app-hub (3 okt, `?hub=`, CLAUDE.md AV-APP-HUB)
+
+- [ ] **N1. LPD8 K1 (intensiteit) in VARVE?** 🎛 K1 hing eerst aan het
+  audio-eindvolume (master). Weggehaald: de pickup van K1 volgt de EERSTE app met
+  die rol, en andere apps gebruiken intensiteit als beeld (av-scene-kit 0,35);
+  wie K1 dichtdraait om het beeld rustig te maken, zette ook de mix stil (gemeten
+  0,80 → 0,43). Nu doet K1 niets in VARVE. Wil je hem wel: aan een BEELD-param
+  (bv. de video-fx-intensiteit of de puls), of zo laten? **Advies:** zo laten;
+  K2 (helderheid = video-master) en K4 (beweging = puls) doen al het beeld.
+- [ ] **N2. Bank: keylock of hubtoets?** 🎛 Je koos 25 sep (I4) Bank voor keylock,
+  met Shift + Bank = pitchbereik. De hub gebruikt Bank als hubtoets
+  (`config.json` → `hubtoets`): met `?hub=` komt Bank nooit bij VARVE aan.
+  Kiezen: keylock krijgt een andere toets (bv. Detail View, nu vrij zonder
+  `?vormen=1`), óf de hubtoets van de hub wordt een andere (dat raakt alle
+  apps, PROTOCOL §5/§7). **Advies:** keylock naar een andere toets; de hubtoets
+  is voor elke app hetzelfde.
