@@ -42,6 +42,9 @@ parallelle sporen (elk een worktree in `~/Projects/varve-stems/`), samengevoegd 
   een verandering, **S15** (de patronenset zet zijn instrumenten met hun knoppen terug na
   herladen) en **S7** (de Schaal volgt de cent van de plaat). De server moet na S15 opnieuw
   starten (hij normaliseert de set met dezelfde code), niet alleen het tabblad.
+- De stems-rij overleeft nu een herstart van de server (`stems-rij.json` naast de library;
+  `docs/STEMS.md` §2): herstarten voor een merge of na de verhuizing kost alleen de split
+  die op dat moment liep (die begint opnieuw).
 - **Starten (Clay, na het mergen en de verhuizing):** in AV-app-hub `cp sets/paden.voorbeeld.json
   sets/paden.json` (youtube-mixer staat daar al op `~/Projects/Youtube mixer`), dan
   `npm start -- studio`. Zonder hub werkt Varve zoals altijd (APC rechtstreeks, Xboard ook;
