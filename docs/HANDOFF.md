@@ -14,6 +14,23 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 3 OKT: AV-APP-HUB (cloudsessie, CLAUDE.md AV-APP-HUB, repo AV-app-hub)
+
+VARVE als LEASE-app van de AV-app-hub, alleen met de vlag. Openen: hub starten
+(`varve-hub start` in de AV-app-hub), dan `http://localhost:8777/?hub=ws://localhost:7700/app`.
+Zonder vlag is alles zoals het was (hub.js wordt niet eens geladen).
+- **Headless groen** (`node tools/headless/hub.mjs`, `VARVE_HUB_REPO`): toetsApp
+  van de hub (conform PROTOCOL.md), nooit requestMIDIAccess (ook niet de APC-kaart),
+  de echte hub met nep-APC/LPD8: APC-masterfader → master, K1 laat master staan
+  (andere app met intensiteit eerst), K2 → video-master, P1 (paniek) → beeld zwart
+  en los, twee hub-tabbladen: het oude meldt "vervangen". `test/hub.test.mjs`:
+  hartslag ook in een verborgen tabblad (timers 1×/s en 1×/min), herverbinden.
+- **NIET getest:** Clay's echte APC en LPD8 via de hub (LED's, ringen, mapjes,
+  leren); twee echte tabbladen in Chrome; het gevoel van K2/K4 en P1 midden in
+  een set; een gepauzeerde VARVE langer dan 5 min in een verborgen tabblad (de
+  hartslag hangt dan aan de adem van de hub: nagebouwd, niet in Chrome gezien).
+- **Open voor Clay:** VRAGEN N1 (K1 in VARVE?) en N2 (Bank: keylock of hubtoets).
+
 ## 2 OKT (laat): DE KLEINE VEILIGE PUNTEN GEBOUWD (cloudsessie)
 
 Clay: "begin met de kleine veilige punten" (stap 1 van docs/ONTBREEKT.md). Vijf
