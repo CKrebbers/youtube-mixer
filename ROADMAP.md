@@ -105,7 +105,7 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     master-insert, echte limiter, effecten van de filter app (gebouwd 5 okt) · S3 spelen: instrumenten
     op een track, Poly/FM/Schaal/Drums, noten van een keyboard, Xboard49 en Maschine MK2 in de hub
     (gebouwd 5 okt; de Varve-kant van Xboard/Maschine via de hub in de maak) · S4 programmeren
-    (patronen, in de maak) · S5 later. Alles op `studio/integratie`, niets op de hardware geprobeerd.
+    (patronen, gebouwd 5 okt; de Maschine-stapmodus in de maak) · S5 later. Alles op `studio/integratie`, niets op de hardware geprobeerd.
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.

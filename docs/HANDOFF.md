@@ -31,8 +31,10 @@ parallelle sporen (elk een worktree in `~/Projects/varve-stems/`), samengevoegd 
   koptelefoon schuift mee met de vooruitblik van de limiter.
 - `node test/alles.mjs` op de integratietak: groen (tijdmetingen onder zware belasting
   los opnieuw gedraaid: klankschaal-rekentijd en gridauto groen).
-- **In de maak:** S4 patronen (`studio/patronen`) en Xboard/Maschine via de hub in Varve
-  (`studio/speelapparaten`).
+- S4 patronen (`docs/PATRONEN.md`), samengevoegd: grid-modus PATRONEN op Shift + scene 2
+  (oranje), want Shift + scene 3 (zeegroen) was al stems.
+- **In de maak:** Xboard/Maschine via de hub in Varve (`studio/speelapparaten`), met de
+  Maschine-stapmodus op de patronen.
 - **Eerst doen (Clay):** zie hieronder (PR's, iCloud, samengesteld apparaat), dan de
   speellijst; open vragen: VRAGEN blok S (S3–S14).
 

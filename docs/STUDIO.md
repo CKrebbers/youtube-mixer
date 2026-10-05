@@ -191,7 +191,16 @@ koptelefoon; de limiter vangt een piek zonder te pompen; de nieuwe effecten klin
 Klaar als: op de Xboard49 de FM-synth spelen over een lopend nummer, eerst alleen in de
 koptelefoon; velocity en aftertouch hoorbaar; toets → geluid gemeten (doel < 15 ms).
 
-### S4 — Programmeren
+### S4 — Programmeren (gebouwd 5 okt, niet beluisterd, niet op de APC/Maschine)
+Gebouwd (`docs/PATRONEN.md` §7): patronen van 1–64 stappen per instrumenttrack, vijf plekken
+(de rijen van het APC-grid), starten/wisselen/stoppen op de maat van de maatgever (zonder
+nummer op een eigen tempo), live en stap voor stap opnemen, opslag op de server met een
+versie. APC: grid-modus PATRONEN (oranje, Shift + scene 2): pad = plek per track, scene = rij,
+Stop All Clips = alles stoppen. Gemeten in Chrome: de kicks van een patroon vallen op de
+audioklok precies op de tellen van de track (0,000 ms), ook na +3% pitch en een sprong.
+De Maschine-stapmodus komt met het spoor Xboard/Maschine.
+
+Het oorspronkelijke voorstel:
 - De sequencer van Elektronlearn (transport, patronen, p-locks) op de klok van de
   maatgever: tempo en tel uit `fxKlok()`, nooit een eigen teller (regel 3).
 - Een patroon is een clip: per instrumentkanaal patronen, starten op de maat vanaf het

@@ -384,6 +384,9 @@ APC-indeling (voorstel A):
 - [ ] **S11. Tremolo en autopan standaard op de maat?** 🎧 **Advies:** ja. Op de "1" van de maat beginnen vraagt dat `fxKlok` ook de maatfase meegeeft (later).
 - [ ] **S12. Geheugen (90 s buffer uit de filter app)** niet als insert gebouwd (begint leeg bij elke wissel, 17 MB). 💬 **Advies:** later als instrument of op de master, als je het mist.
 - [ ] **S13. Master: knop 8 = mix in het mapje master, release 80 ms.** 🎛🎧 Proberen op de APC; vervormt de limiter als je hem hard raakt, zeg het. De master klinkt ~0,8 dB zachter dan met de oude compressor (die tilde op).
+- [ ] **S15. Patronen: de instrumenten vanzelf terug bij het laden van de set?** 💬 Nu staat er alleen een hint als een patroon op een track zonder instrument staat. **Advies:** ja: de set onthoudt welk instrument op welke track stond.
+- [ ] **S16. Patronen na een sprong (hotcue, beatjump) die geen hele maat is.** 🎧 Lopende patronen blijven in hun eigen fase en de klok glijdt in één à twee tellen terug (geen dubbele of gemiste noot). Alternatief: een korte stilte en dan op de nieuwe tel. **Advies:** glijden laten.
+- [ ] **S17. Patronen op de APC: Shift + scene 2, en Stop All Clips = alles stoppen in die modus.** 🎛 (Shift + scene 3 werd stems, daarom 2.) **Advies:** zo proberen.
 - [ ] **S14. Xboard49: knop 9–16 = de FX-knoppen van de speeltrack, de schuif = zijn fader.** 🎛 Voorstel; de CC-nummers van de knoppen komen uit de proef (`AV-app-hub`: proef speelapparaten).
 
 ---
