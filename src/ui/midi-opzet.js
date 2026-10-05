@@ -27,12 +27,14 @@ import { uitgangsVertraging } from '../engine/hoorbaar.js';
  * @param geraakt  (sig, regelSig) -> void: een control op de controller is
  *                 aangeraakt en deed iets. De spiegel op het scherm licht dan
  *                 het bijbehorende element even op.
+ * @param hub      null, of { url, HubMidi } met ?hub= (app.js): dan is de APC
+ *                 van de AV-app-hub: geen Web MIDI, en de lock beslist niets over MIDI.
  */
-export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) {
+export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null, hub = null }) {
   const DEVICES = [apc40mk2, generic];   // generic matcht alles, dus als laatste
   const pickDevice = (naam) => DEVICES.find((d) => d.match.test(naam || '')) || generic;
 
-  const midi = new MidiHub();
+  const midi = hub ? new hub.HubMidi({ url: hub.url, invoke, read: readAction }) : new MidiHub();
   /*
    * Maar één VARVE-tabblad praat met de APC (tabblad.js, Web Lock). Een tweede
    * tabblad vraagt helemaal GEEN MIDI-toegang aan: dan kan het ook niets
@@ -41,9 +43,11 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
    * vier crashes op 22 sep). Wordt dit tabblad later het eerste (het andere
    * sloot), dan pas MIDI openen.
    */
-  const echteInit = midi.init.bind(midi);
-  midi.init = (...a) => (isEersteTabblad() ? echteInit(...a) : Promise.resolve(false));
-  tabblad().on('eerste', () => { echteInit().catch(() => {}); });
+  if (!hub) {
+    const echteInit = midi.init.bind(midi);
+    midi.init = (...a) => (isEersteTabblad() ? echteInit(...a) : Promise.resolve(false));
+    tabblad().on('eerste', () => { echteInit().catch(() => {}); });
+  }
   const mapping = new Mapping({
     read: readAction,
     invoke,
@@ -82,7 +86,7 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null }) 
   // LED's lopen op hun eigen klok, niet op de renderloop. requestAnimationFrame
   // staat stil zodra het venster naar de achtergrond gaat, en dan zouden de
   // lampjes op de controller bevriezen terwijl de muziek doorspeelt.
-  setInterval(() => { if (isEersteTabblad()) feedback.tick(); }, 33);
+  setInterval(() => { if (hub || isEersteTabblad()) feedback.tick(); }, 33);
 
   // Laat de controller niet met oude lampjes achter. Bij het sluiten is er geen
   // volgende tik meer, dus dit gaat direct — en alleen wat echt brandt, niet de
