@@ -10,7 +10,10 @@
  *     bewaren;
  *   - elke paar seconden kijken of het bestand van buiten veranderde, en dat
  *     (zonder eigen wijzigingen) live overnemen: wat speelt blijft spelen, met
- *     de nieuwe noten.
+ *     de nieuwe noten;
+ *   - na elke geladen set de instrumenten terug op lege tracks met patronen
+ *     (engine.herstelInstrumenten, VRAGEN S15), en elke paar seconden de
+ *     knoppen van die instrumenten in de set bijhouden (pt.onthoudKlank).
  * De engine weet hier niets van: hij meldt 'bewerkt', deze module bewaart.
  * Geen DOM (de meldingen komen van buiten): zo is hij in Node te testen tegen
  * de echte server.
@@ -41,12 +44,19 @@ export function opzetPatronenOpslag({ engine, haal = (...a) => fetch(...a), elke
       const d = await r.json();
       versie = d.versie;
       geladen = true;
-      if (d.set) pt.laadSet(d.set);
+      if (d.set) zetSet(d.set);
       if (d.fouten?.length) melding(`patronen "${naam}": ${d.fouten.slice(0, 2).join('; ')}`, 'info');
     } catch (err) {
       fout = `patronen niet opgehaald (${err.message}) — bewaren staat uit tot herladen`;
       melding(fout, 'fout');
     }
+  }
+
+  /** Een set in de speler, en de instrumenten die erbij horen terug op hun (lege) tracks. */
+  function zetSet(set) {
+    pt.laadSet(set);
+    const terug = engine.herstelInstrumenten?.() ?? [];
+    if (terug.length) melding(`patronen: ${terug.length === 1 ? 'het instrument' : 'de instrumenten'} terug op track ${terug.map((id) => pt.nr(id)).join(', ')}`, 'info');
   }
 
   function plan() {
@@ -89,18 +99,18 @@ export function opzetPatronenOpslag({ engine, haal = (...a) => fetch(...a), elke
       const d = await r.json();
       if (d.versie && d.versie !== versie && d.set && !vuil && !bezig) {
         versie = d.versie;
-        pt.laadSet(d.set);
+        zetSet(d.set);
         melding(`patronen bijgewerkt (de set "${naam}" veranderde op de server)`, 'info');
       }
     } catch (_) {}
   }
-  elke(kijk, KIJK_MS);
+  elke(() => { if (geladen && !botsing) pt.onthoudKlank(); return kijk(); }, KIJK_MS);
 
   /** Botsing: de versie van de server laden (mijn wijzigingen sinds de vorige opslag gaan weg). */
   function hunVersie() {
     if (!botsing) return;
     versie = botsing.versie;
-    if (botsing.set) pt.laadSet(botsing.set);
+    if (botsing.set) zetSet(botsing.set);
     botsing = null;
     vuil = false;
   }

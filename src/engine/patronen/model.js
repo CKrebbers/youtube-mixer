@@ -26,12 +26,15 @@
  *
  *   { versie: 1, naam: 'set', tempo: 120,
  *     tracks: { '1': [p|null, p|null, p|null, p|null, p|null], …, '8': […] },
- *     instrumenten: { '3': 'drums', … } }
+ *     instrumenten: { '3': { soort: 'drums', params: [0.5, …] }, … } }
  *
  *   tempo         het eigen tempo als er geen maatgever is (bpm)
- *   instrumenten  welk instrument er op de track stond toen er een patroon bij
- *                 kwam: alleen een hint voor het scherm. Het instrument zelf
- *                 kies je op de track (docs/INSTRUMENTEN.md §6).
+ *   instrumenten  welk instrument er op een track met patronen staat, met zijn
+ *                 acht knoppen (0..1; null = een gebaar, of niet bewaard). Bij
+ *                 het laden komt het terug op een lege track (VRAGEN S15,
+ *                 Engine.herstelInstrumenten); staat er een nummer, dan alleen
+ *                 een hint op het scherm. Een oude set met alleen de soort
+ *                 ('drums') leest als { soort: 'drums', params: null }.
  *
  * normaliseer…() gooit nooit: wat niet klopt wordt weggelaten of begrensd en
  * staat in `fouten` (zoals normaliseerPlan).
@@ -127,6 +130,14 @@ const trackSleutels = () => Array.from({ length: TRACKS }, (_, i) => String(i + 
  * precies vijf plekken (patroon of null).
  * @returns {{ set, fouten: string[] }}
  */
+/** Het instrument van een track in de set: { soort, params: [0..1|null, …≤8] | null }, of null. */
+export function normaliseerInstrument(x) {
+  const soort = typeof x === 'string' ? x : x?.soort;
+  if (typeof soort !== 'string' || !/^[a-z0-9-]{1,30}$/.test(soort)) return null;
+  const ruw = typeof x === 'object' && Array.isArray(x.params) ? x.params.slice(0, 8) : null;
+  return { soort, params: ruw && ruw.map((v) => (eindig(v) ? klem(v, 0, 1) : null)) };
+}
+
 export function normaliseerSet(invoer) {
   const fouten = [];
   const d = invoer && typeof invoer === 'object' ? invoer : {};
@@ -143,8 +154,11 @@ export function normaliseerSet(invoer) {
   }
   const instrumenten = {};
   for (const nr of trackSleutels()) {
-    const s = d.instrumenten?.[nr];
-    if (typeof s === 'string' && /^[a-z0-9-]{1,30}$/.test(s)) instrumenten[nr] = s;
+    const x = d.instrumenten?.[nr];
+    if (x == null) continue;
+    const w = normaliseerInstrument(x);
+    if (w) instrumenten[nr] = w;
+    else fouten.push(`track ${nr}: geen instrument (verwacht { soort, params })`);
   }
   const tempo = eindig(d.tempo) ? klem(d.tempo, TEMPO.min, TEMPO.max) : TEMPO.standaard;
   return {

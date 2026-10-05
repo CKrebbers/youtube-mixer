@@ -301,6 +301,30 @@ export class Engine extends Emitter {
   instrumentOp(id) { return this._inst[id]?.obj ?? null; }
 
   /**
+   * De instrumenten van de patronenset terug (VRAGEN S15, docs/PATRONEN.md
+   * §7.6): op elke track met patronen waarvan de set een instrument onthoudt
+   * en die nu leeg is (geen instrument, geen nummer), met zijn knoppen. Een
+   * track met een nummer houdt dat: daar zegt het scherm alleen voor welk
+   * instrument de patronen zijn. Gebaren (null in de set) blijven op hun
+   * standaard: na het laden klinkt er niets vanzelf.
+   * @returns {string[]} de tracks die hun instrument terugkregen
+   */
+  herstelInstrumenten() {
+    const pt = this.patronen;
+    const terug = [];
+    for (const id of DECK_IDS) {
+      const d = this.decks[id], nr = pt.nr(id), w = pt.set.instrumenten[nr];
+      if (!w || this._inst[id] || d.buffer || d.laadt || !pt.set.tracks[nr].some(Boolean)) continue;
+      const r = this.zetInstrument(id, w.soort);
+      if (!r.ok) { this.emit('melding', { tekst: `track ${nrVan(id)}: instrument van de patronen niet terug (${r.reden})`, soort: 'fout' }); continue; }
+      const inst = this.instrumentOp(id);
+      w.params?.forEach((v, i) => { if (v != null && !inst.params?.[i]?.gebaar) inst.zetParam(i + 1, v); });
+      terug.push(id);
+    }
+    return terug;
+  }
+
+  /**
    * Waar noten van een toetsenbord heen gaan: de focus-track als die een
    * instrument heeft, anders de laatste focus-track met een instrument, anders
    * de eerste track met een instrument. Null als er nergens een is.

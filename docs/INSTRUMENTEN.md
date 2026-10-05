@@ -37,7 +37,7 @@ export const POLY = {
 | Lid | Betekenis |
 |---|---|
 | `soort`, `naam` | zoals de definitie |
-| `params` | `[{ id, label, standaard, eenheid? }]`, hooguit 8; plek `k` (1..8) = `params[k-1]`. `standaard` 0..1, `eenheid(v)` → tekst in echte eenheden (zoals `eenheid` in `fx.js`) |
+| `params` | `[{ id, label, standaard, eenheid?, gebaar? }]`, hooguit 8; plek `k` (1..8) = `params[k-1]`. `standaard` 0..1, `eenheid(v)` → tekst in echte eenheden (zoals `eenheid` in `fx.js`). `gebaar: true` = een knop die zelf klank maakt (wrijven op de Schaal): de patronenset onthoudt hem niet, zodat er na het laden niets vanzelf klinkt (PATRONEN.md §7.6) |
 | `start()` | `Promise`, laadt wat er lazy moet (een worklet). Idempotent. Een `noteOn` vóór `start()` klaar is mag stil blijven, nooit gooien |
 | `noteOn(noot, snelheid, t?)` | `noot` 0..127 (MIDI, A4 = 69 = 440 Hz), `snelheid` 0..1 (> 0), `t` = ctx-tijd; `undefined` of in het verleden = nu |
 | `noteOff(noot, t?)` | los; de stem klinkt uit volgens zijn release |

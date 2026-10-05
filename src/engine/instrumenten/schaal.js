@@ -96,7 +96,7 @@ export class Schaal {
         eenheid: (v) => { const c = fijnVan(v); return c === 0 ? '0 ct' : `${c > 0 ? '+' : '−'}${komma(Math.abs(c))} ct`; } },
       { id: 'slag', label: 'slag', standaard: 0.3, eenheid: (v) => (clamp(v) < 0.03 ? 'midden' : `${pct(v)} rand`) },
       { id: 'loslaten', label: 'loslaten', standaard: 0.5, eenheid: (v) => (loslatenVan(v) ? tijd(loslatenVan(v)) : 'vrij') },
-      { id: 'wrijf', label: 'wrijf', standaard: 0, eenheid: (v) => (clamp(v) < 0.02 ? 'uit' : pct(v)) },
+      { id: 'wrijf', label: 'wrijf', standaard: 0, gebaar: true, eenheid: (v) => (clamp(v) < 0.02 ? 'uit' : pct(v)) },
     ];
     this._w = this.params.map((p) => p.standaard);
 

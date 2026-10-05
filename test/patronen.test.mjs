@@ -46,6 +46,15 @@ console.log('het model');
     lijst.set.tracks['1'][0].lengte === 8 && lijst.set.tracks['3'].length === 5 && lijst.fouten.some((f) => /meer dan 5/.test(f)) && lijst.set.tempo === 240);
   ok('nog eens normaliseren verandert niets', JSON.stringify(M.normaliseerSet(lijst.set).set) === JSON.stringify(lijst.set));
   ok('rommel: een lege set met een fout, geen crash', M.normaliseerSet('rommel').fouten.length === 1 && M.normaliseerSet(null).set.tracks['8'].length === 5);
+  const ins = M.normaliseerSet({ instrumenten: { 1: 'poly', 2: { soort: 'fm', params: [0.5, 2, -1, 'x', null, 0.25, 0, 1, 0.9] },
+    3: { soort: 'Rare Soort!' }, 4: { soort: 'drums' } } });
+  ok('instrumenten (S15): een oude set met alleen de soort leest als { soort, params: null }',
+    ins.set.instrumenten['1'].soort === 'poly' && ins.set.instrumenten['1'].params === null);
+  ok('… knoppen geklemd op 0..1, onzin wordt null, hooguit acht',
+    JSON.stringify(ins.set.instrumenten['2'].params) === JSON.stringify([0.5, 1, 0, null, null, 0.25, 0, 1]));
+  ok('… een rare soort weg, met een fout; zonder knoppen: params null', !ins.set.instrumenten['3']
+    && ins.fouten.some((f) => /track 3: geen instrument/.test(f)) && ins.set.instrumenten['4'].params === null);
+  ok('… nog eens normaliseren verandert niets', JSON.stringify(M.normaliseerSet(ins.set).set) === JSON.stringify(ins.set));
   let r = M.nieuwPatroon();
   r = M.wisselNoot(r, 4, 36);
   r = M.wisselNoot(r, 4, 42);
@@ -485,6 +494,33 @@ const doorlopend = (noten, per = PPQN) => noten.every((n, i) => i === 0 || n.nom
   ok('… en zijn maten: een nieuwe start valt op zijn "1"', (() => { const K = sp.klok.volgendeMaat(sp.klok.tel(ctx.currentTime) + 0.3); const b = d2.grid.beatAt(d2.P0 + (sp.klok.tijd(K) - d2.T0)); return dicht(b, Math.round(b), 1e-6) && Math.round(b) % 4 === 0; })());
 }
 
+{
+  // S15: de set onthoudt het instrument op een track met patronen, met zijn knoppen (een gebaar niet).
+  const ctx = maakCtx();
+  const inst = maakInst(ctx, 'schaal');
+  inst.params = [{ id: 'a' }, { id: 'b' }, { id: 'wrijf', gebaar: true }];
+  inst.w = [0.1, 1 / 3, 0.8];
+  inst.leesParam = (k) => inst.w[k - 1];
+  const { sp, w } = maakSpeler(ctx, { inst: { B: inst } });
+  let bewerkt = 0;
+  sp.on('bewerkt', () => bewerkt++);
+  ok('S15: zonder patronen onthoudt de set geen instrument', !sp.onthoudKlank() && !sp.set.instrumenten['2'] && bewerkt === 0);
+  sp.wisselStap('B', 1, 0, 60);
+  ok('een patroon erbij: de soort en de knoppen (afgerond; het gebaar niet)',
+    JSON.stringify(sp.set.instrumenten['2']) === JSON.stringify({ soort: 'schaal', params: [0.1, 0.3333, null] }));
+  bewerkt = 0;
+  inst.w[2] = 0.2;
+  ok('wrijven (een gebaar) verandert niets aan de set', !sp.onthoudKlank() && bewerkt === 0);
+  inst.w[1] = 0.75;
+  ok('een knop gedraaid: onthouden, en "bewerkt" (dus bewaren)', sp.onthoudKlank() && sp.set.instrumenten['2'].params[1] === 0.75 && bewerkt === 1);
+  ok('… nog eens kijken: niets nieuws', !sp.onthoudKlank() && bewerkt === 1);
+  delete w.inst.B;
+  ok('instrument weg (er komt een nummer): de set onthoudt het nog', !sp.onthoudKlank() && sp.set.instrumenten['2'].soort === 'schaal');
+  w.inst.B = maakInst(ctx, 'fm');
+  ok('een ander instrument op de track: dat wordt het (zonder knoppen: params null)', sp.onthoudKlank()
+    && sp.set.instrumenten['2'].soort === 'fm' && sp.set.instrumenten['2'].params === null);
+}
+
 // ---- 5. de opslag: met versie, 409 bij een botsing (zoals de plannen) -----------------------
 console.log('\nde opslag');
 {
@@ -583,6 +619,22 @@ console.log('\nde server');
     await rustig();
     o.hunVersie();
     ok('hun versie: geladen in de speler, de botsing weg', !o.stand().botsing && sp.tempo === 77 && !sp.patroon('A', 1).noten.some((n) => n.noot === 52));
+
+    // S15: na het laden zet de engine de instrumenten terug; elke tik worden de knoppen bijgehouden.
+    const herst = [];
+    const { sp: sp2, w: w2 } = maakSpeler(ctx);
+    let kijk2 = null;
+    const meld2 = [];
+    const o2 = opzetPatronenOpslag({ engine: { patronen: sp2, herstelInstrumenten: () => { herst.push(sp2.set.instrumenten['1']?.soort); return ['A']; } },
+      haal: (url, init) => fetch(B + url, init), naam: 'set', elke: (fn) => { kijk2 = fn; return 1; }, later: () => 1, stopLater: () => {},
+      melding: (t, s) => meld2.push([t, s]) });
+    await o2.laad();
+    ok('S15: na het laden zet de engine de instrumenten terug (de set staat dan al in de speler), met een melding',
+      herst.join() === 'poly' && meld2.some(([t]) => /het instrument terug op track 1/.test(t)));
+    const knop = Object.assign(maakInst(ctx), { params: [{ id: 'a' }], leesParam: () => 0.6 });
+    w2.inst.A = knop;
+    await kijk2();
+    ok('… en elke tik: een gedraaide knop komt in de set en maakt hem vuil (bewaren)', o2.stand().vuil && sp2.set.instrumenten['1'].params?.[0] === 0.6);
   } finally {
     server.kill('SIGINT');
     await new Promise((r) => setTimeout(r, 200));

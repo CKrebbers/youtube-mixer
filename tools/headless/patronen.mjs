@@ -255,7 +255,7 @@ try {
   await wacht(1500);
   const opServer = await fetch(`http://localhost:${POORT}/api/patronen/set`).then((r) => r.json()).catch(() => null);
   ok('de set staat op de server (met versie), de snare erin', !!opServer?.versie && opServer.set.tracks['1'][0].noten.some((n) => n.stap === 4 && n.noot === 37)
-    && opServer.set.instrumenten['1'] === 'drums');
+    && opServer.set.instrumenten['1']?.soort === 'drums' && opServer.set.instrumenten['1'].params?.length === 8);
   ok('… en de rij zegt "bewaard"', /bewaard/.test(await evalueer("document.querySelector('#patronen .pt-opslag').textContent")));
   // Starten met de plek-knop (zonder maatgever: meteen), dan stoppen.
   await evalueer(`(() => { const b = document.querySelector('#patronen .pt-plek');
@@ -280,6 +280,20 @@ try {
   await wacht(300);
   ok('alles stoppen', await evalueer("window.patronen.spelend().length === 0"));
   await evalueer("window.lagen.zet('grid', 'hotcues'), true");
+
+  // S15: een knop draaien, herladen: de drums staan weer op track 1, met die knop en de patronen.
+  await evalueer("window.engine.instrumentOp('A').zetParam(2, 0.375), true");
+  await wacht(3000 + 600 + 1000);   // de kijkbeurt (3 s) ziet de knop, dan bewaren (0,6 s)
+  const knopBewaard = await fetch(`http://localhost:${POORT}/api/patronen/set`).then((r) => r.json()).catch(() => null);
+  ok('een gedraaide knop van de drums staat binnen een paar seconden in de set op de server', knopBewaard?.set.instrumenten['1']?.params?.[1] === 0.375,
+    JSON.stringify(knopBewaard?.set.instrumenten));
+  await cdp('Page.reload');
+  await wacht(500);
+  for (let i = 0; i < 100; i++) { if (await evalueer("!!(window.engine && window.patronen && window.engine.instrumentOp('A'))").catch(() => false)) break; await wacht(200); }
+  const terug = await evalueer(`(() => { const i = window.engine.instrumentOp('A');
+    return { soort: i?.soort ?? null, knop: i?.leesParam(2) ?? null, noten: JSON.stringify(window.patronen.patroon('A', 1)?.noten) }; })()`);
+  ok('herladen: de drums staan vanzelf weer op track 1, met die knop, en het patroon erbij (S15)', terug.soort === 'drums' && terug.knop === 0.375
+    && /"stap":4,"noot":37/.test(terug.noten), JSON.stringify(terug));
 
   // ---- 2. de meting -----------------------------------------------------------------------
   console.log('\nChrome, OfflineAudioContext 48 kHz: drums op de tellen van de demotrack');
