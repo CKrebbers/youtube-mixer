@@ -92,7 +92,8 @@ export function opzetStems({ engine, staat, wachtrij, library = null }) {
       const id = staat.deckTrack[engine.focus];
       if (!id) return;
       const aantal = Number(b.dataset.aantal);
-      const r = await wachtrij.splits(id, aantal);
+      // Het nummer op de track met focus: daar ben je mee bezig, dus vooraan in de rij.
+      const r = await wachtrij.splits(id, aantal, { vooraan: true });
       if (!r.ok) meld(`stems: niet gesplitst — ${r.fout}`, 'fout');
       else if (r.al) {
         meld(`dit nummer heeft al ${aantal} stems — laad het opnieuw om ze te horen`);

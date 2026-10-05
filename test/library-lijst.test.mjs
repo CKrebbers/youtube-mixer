@@ -318,6 +318,10 @@ console.log('\nde stems-rij van de server (stems-wachtrij.js)');
   ok('splitsen geeft de opdracht', r.ok && r.opdracht?.id === 'o-t9' && !r.al);
   ok('een peiling die al onderweg was telt niet: daarna staat de nieuwe opdracht in de rij', w.voor('t9')?.id === 'o-t9');
   ok('opnieuw: { opnieuw: true } erbij', (await w.splits('t8', 2, { opnieuw: true })).ok && JSON.parse(verzoeken.filter((v) => v.method === 'POST').at(-1).body).opnieuw === true);
+  const laatstePost = () => JSON.parse(verzoeken.filter((v) => v.method === 'POST').at(-1).body);
+  ok('vooraan: { vooraan: true } erbij (vanuit de STEMS-rij); zonder: niet in het verzoek',
+    (await w.splits('t7', 4, { vooraan: true })).ok && laatstePost().vooraan === true
+    && (await w.splits('t6', 4)).ok && !('vooraan' in laatstePost()));
   const al = await w.splits('heeft', 2);
   ok('had al stems: { al: true }', al.ok && al.al && al.stems?.aantal === 2);
   const weg = await w.splits('weg', 2);

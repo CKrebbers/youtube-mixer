@@ -113,6 +113,32 @@ try {
   }
 
   // ======================================================================
+  // Volgorde (5 okt, docs/STEMS.md §6): vooraan wat je vanuit de STEMS-rij vraagt, dan de
+  // kortste eerst. Een mix van een uur hield vijf korte nummers drie kwartier vast.
+  console.log('\nde rij: vooraan, dan kortste eerst');
+  {
+    const q = new st.StemsRij();
+    const w = {};
+    const voeg = (track, duur, extra = {}) => { w[track] = handWerk(); return q.voegToe({ track, aantal: 4, werk: w[track].werk, duur, ...extra }); };
+    const oA = voeg('A', 3184).opdracht;                       // de lange mix: begint meteen
+    const oB = voeg('B', 300).opdracht, oC = voeg('C', 60).opdracht, oD = voeg('D', null).opdracht, oE = voeg('E', 120).opdracht;
+    const volgorde = () => [...q.rij].map((id) => q.opdrachten.get(id).track).join('');
+    ok(`kortste eerst, onbekende duur achteraan (${volgorde()}); de duur staat op de opdracht`, volgorde() === 'CEBD'
+      && oC.plek === 1 && oE.plek === 2 && oB.plek === 3 && oD.plek === 4 && oC.duur === 60 && oD.duur === null);
+    ok('wat al loopt, loopt door (geen gemiste rekentijd)', oA.status === 'bezig');
+    const oF = voeg('F', 500, { vooraan: true }).opdracht;
+    ok(`vooraan (vanuit de STEMS-rij) gaat voor, ook voor kortere (${volgorde()})`, volgorde() === 'FCEBD' && oF.plek === 1);
+    const dub = voeg('B', 300, { vooraan: true });
+    ok(`een wachtend nummer nog eens vooraan gevraagd: dezelfde opdracht, nu na F (${volgorde()})`, dub.dubbel && dub.opdracht === oB && volgorde() === 'FBCED');
+    ok('naarVoren op iets dat al loopt of niet bestaat: niets', !q.naarVoren(oA.id) && !q.naarVoren('bestaatniet') && volgorde() === 'FBCED');
+    await wacht(0);                                            // het werk van A is pas dan echt begonnen
+    w.A.klaar({ ok: true, stems: { aantal: 4 } });
+    await wacht(5);
+    ok('na de lange mix: eerst F, dan de rest op volgorde', oF.status === 'bezig' && oB.plek === 1 && oC.plek === 2 && oE.plek === 3 && oD.plek === 4);
+    await q.stop();
+  }
+
+  // ======================================================================
   console.log('\nwelk commando, en staat het klaar');
   {
     const c1 = st.stemsCommando({ VARVE_STEMS_CMD: '/x/nep', VARVE_STEMS_PY: '/y/python', VARVE_MEDIA: '/m' });

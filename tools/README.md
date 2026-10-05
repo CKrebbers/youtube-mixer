@@ -241,6 +241,8 @@ niet in git; met `LUISTER.md` als leeswijzer).
 - `vergelijk.py` — een split nameten: som van de stems tegen audio.wav (dB), de stukgrenzen
   tegen een split zonder stukken, de grootste samplestap rond een grens, het energie-aandeel per
   stem. Draait met de Python van `~/.varve/stems-venv`.
+- `snelheid.py <audio.wav>` — de snelheid van htdemucs op MPS: één minuut, fp32 met overlap 0,25 (wat
+  splits.py doet) tegen fp16 (autocast) en overlap 0,10, met de SDR per bron t.o.v. fp32 (docs/STEMS.md §6).
 
 ## toonsoort/
 Toonsoort (key) meten op Clay's library (docs/TOONSOORT.md). Leest alleen: `media/<id>/audio.wav`

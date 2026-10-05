@@ -424,3 +424,30 @@ maken (zoals hier filter en sends), en de keuze welk effect bij de stem bewaren.
   5,5 GB + 2,8 GB).
 - Niet getest: een album van een uur van begin tot eind, CUDA (H3), splitsen met een
   volle schijf.
+
+## 6. Volgorde en snelheid (5 okt)
+
+**Waarom het traag kan zijn.** htdemucs draait op de GPU van de M1 (MPS). Op een rustige
+machine is dat **3,1× realtime** (gemeten 5 okt met `tools/stems/snelheid.py`: één minuut in
+19,2 s; eerder 2,6–3,2×). Op 5 okt liep het op 1,1–1,4×: een vergeten headless Chrome van een
+testsessie (twee dagen oud, ~110% CPU) en het VARVE-tabblad zelf (video, WebGL: de GPU stond op
+95–97%) deelden de machine. Een mix van 53 minuten kostte zo ~40 minuten.
+
+**Wat niet helpt** (zelfde meting, één minuut, SDR per bron t.o.v. fp32):
+
+| Instelling | Sneller | Verschil met fp32 | Besluit |
+|---|---|---|---|
+| fp16 via `torch.autocast` | ×1,09 | bas 25,8 dB, drums 40 dB | niet: te weinig winst, de bas verandert |
+| het model in fp16 (`model.half()`) | — | Demucs' STFT wil hogere precisie (RuntimeError) | kan niet |
+| overlap 0,10 in plaats van 0,25 | ×1,22 | drums 3,5 dB, bas 2,2 dB | niet: duidelijk hoorbaar anders |
+
+**Wat wel helpt: de volgorde** (`StemsRij`, server/stems.js). Eerst wat VOORAAN gevraagd is (de
+knoppen 2 · 4 in de STEMS-rij: het nummer op de track met focus, waar je mee bezig bent), in de
+volgorde van vragen; daarna de **kortste eerst** (onbekende duur achteraan). Wat al loopt, loopt
+door: een split kan niet verder waar hij stopte, afbreken gooit rekentijd weg. Vraag je een
+nummer dat al wacht nog eens vooraan, dan schuift die opdracht naar voren (`naarVoren`).
+POST /api/stems kent daarvoor `vooraan: true`; de library en de ingest vragen het niet.
+
+**Wat je zelf kunt doen** als het haast heeft: het videopaneel en de vormen dicht (of het
+tabblad op de achtergrond) zolang er gesplitst wordt. Sneller dan ~3× realtime gaat het op deze
+Mac niet; een machine met een NVIDIA-kaart haalt 20× of meer (VRAGEN H3).
