@@ -510,8 +510,14 @@ function leesPcmKanalen(bestand, sampleRate, kanalen) {
 
 async function maakSectiesHier(audioBestand, grid, stems) {
   const { sectieKaart, frameKenmerken, stemNiveaus, SECTIE_SR, STEMS_SR } = await import('./secties.js');
+  const { SECTIE_VERSIE, gridSleutel } = await import('./secties.js');
   const pcm = await leesPcm(audioBestand, SECTIE_SR);
-  if (!pcm || pcm.length < SECTIE_SR * 8) return { ok: false, fout: pcm ? 'te kort voor secties' : 'kon de audio niet lezen voor de secties' };
+  if (!pcm || !pcm.length) return { ok: false, fout: 'kon de audio niet lezen voor de secties' };
+  // Te kort om in stukken te delen: één sectie (en bewaard, anders rekent hij bij elke laad opnieuw).
+  if (pcm.length < SECTIE_SR * 8) {
+    return { ok: true, secties: { versie: SECTIE_VERSIE, opGrid: !!grid, grid: grid ? gridSleutel(grid) : null, bron: 'auto', slot: false,
+      stemsGeprobeerd: !!stems, stukken: [{ van: 0, label: 'deel', groep: 'A', energie: 0.5 }] } };
+  }
   const fk = frameKenmerken(pcm, SECTIE_SR);
   let niveaus = null, namen = [];
   // Stems zijn een verbetering, geen voorwaarde: lukt lezen niet, dan zonder.
@@ -519,7 +525,10 @@ async function maakSectiesHier(audioBestand, grid, stems) {
     const st = await leesPcmKanalen(stems.bestand, STEMS_SR, stems.namen.length * 2);
     if (st && st.length) { niveaus = stemNiveaus(st, stems.namen.length * 2, STEMS_SR); namen = stems.namen; }
   }
-  return { ok: true, secties: sectieKaart({ fk, stems: niveaus, stemNamen: namen, grid, duur: pcm.length / SECTIE_SR }) };
+  const k = sectieKaart({ fk, stems: niveaus, stemNamen: namen, grid, duur: pcm.length / SECTIE_SR });
+  // Geprobeerd telt, ook als stems.wav onleesbaar was: anders rekent hij bij elke laad opnieuw.
+  k.stemsGeprobeerd = !!stems;
+  return { ok: true, secties: k };
 }
 
 /** Voor de worker. Niet rechtstreeks aanroepen vanuit de server. */

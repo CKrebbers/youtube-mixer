@@ -96,13 +96,22 @@ export class SectieKaart {
 export function sectieDoel(grid, p, begin, zeker = () => true) {
   if (!grid || !zeker(p) || !zeker(begin)) return begin;
   const bpb = grid.beatsPerBar;
+  // De "1" van de sectie: haar begin, of (de eerste sectie begint op 0, vóór
+  // een opmaat) de eerste "1" daarna. Alles rekent vanaf die "1".
+  const een = grid.timeOf(grid.volgendeVeelvoud(grid.beatAt(begin) - 1e-6));
   const tellenInMaat = grid.barPhase(p) * bpb;               // tellen sinds de "1"
   if (tellenInMaat < 0.02 || tellenInMaat > bpb - 0.02) {
     // Op de "1" (of er vlak voor): de sectie meteen, met de fase in de tel.
-    return grid.metFaseVan(begin, p);
+    const d = grid.metFaseVan(een, p);
+    return d < 0 ? een : d;
   }
-  const doel = grid.verschuif(begin, -(bpb - tellenInMaat));
+  const doel = grid.verschuif(een, -(bpb - tellenInMaat));
   // Vóór het begin van het nummer is er geen aanloop: dan in de maat zelf, op dezelfde plek.
-  if (doel < 0 || !zeker(doel)) return grid.verschuif(begin, tellenInMaat);
+  if (doel < 0 || !zeker(doel)) return grid.verschuif(een, tellenInMaat);
   return doel;
+}
+
+/** De "1" waarop sectie-begin `begin` invalt (zie sectieDoel), of `begin` zonder grid. */
+export function sectieEen(grid, begin) {
+  return grid ? grid.timeOf(grid.volgendeVeelvoud(grid.beatAt(begin) - 1e-6)) : begin;
 }

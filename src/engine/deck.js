@@ -4,7 +4,7 @@ import { createDeckChain, setEqBand, killEqBand, killVersterking, setBipolarFilt
 import { Beatgrid } from './beatgrid.js';
 import { meetGrid } from './tellen.js';
 import { ToonKaart } from './toonsoort.js';
-import { SectieKaart, sectieDoel } from './secties.js';
+import { SectieKaart, sectieDoel, sectieEen } from './secties.js';
 import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
 import { maakWav, KANALEN } from './stream-kern.js';
 import { InsertSlot, zetDoel } from './fx.js';
@@ -178,6 +178,7 @@ export class Deck extends Emitter {
     // tracktijd, en net als het grid van de app: het deck kent geen library.
     this.toonKaart = null;
     this.sectieKaart = null;
+    this._sectieSprong = null;
     // Keylock en transponeren (docs/KEYLOCK.md, gebouwd 5 okt): een keuze van
     // de DJ op het deck; de StreamBron speelt ze (door een stretcher). Keylock
     // blijft staan bij een nieuw nummer (K4, een voorkeur zoals het
@@ -372,6 +373,7 @@ export class Deck extends Emitter {
     this.tellen = null;
     this.toonKaart = null;
     this.sectieKaart = null;
+    this._sectieSprong = null;
     this.loopBeats = null;
     this.loopInPunt = null;
     this.vorigeLoop = null;
@@ -394,6 +396,7 @@ export class Deck extends Emitter {
     this.tellen = null;
     this.toonKaart = null;
     this.sectieKaart = null;
+    this._sectieSprong = null;
     this.loopBeats = null;
     this.loopInPunt = null;
     this.vorigeLoop = null;
@@ -972,6 +975,7 @@ export class Deck extends Emitter {
   /** De sectiekaart van de server (JSON of SectieKaart), of null. */
   setSectieKaart(kaart) {
     this.sectieKaart = kaart ? SectieKaart.van(kaart) : null;
+    this._sectieSprong = null;
     this.emit('change', this);
     return this.sectieKaart;
   }
@@ -991,6 +995,10 @@ export class Deck extends Emitter {
   get sectieOpDeMaat() {
     if (!this.sectieKaart || !this.buffer) return -1;
     const p = this.position, g = this.grid;
+    // Tijdens de aanloop van een sprong: de sectie waar hij heen gaat. Het grid
+    // ziet daar de maat van het stuk ervóór, en die kan een andere "1" hebben.
+    const s = this._sectieSprong;
+    if (s && p >= s.van - 1e-3 && p < s.tot) return s.i;
     if (!g || !this.sectieKaart.opGrid || !this._opGrid(p)) return this.sectieKaart.index(p);
     const tellen = g.barPhase(p) * g.beatsPerBar;
     return this.sectieKaart.index(tellen < 0.02 ? p : g.verschuif(p, g.beatsPerBar - tellen));
@@ -1026,16 +1034,20 @@ export class Deck extends Emitter {
     const p = this.position;
     const zeker = (t) => this.sectieKaart.opGrid && this._opGrid(t);
     const doel = this.playing ? sectieDoel(this.grid, p, r.start, zeker) : r.start;
+    const een = this.playing && zeker(r.start) ? sectieEen(this.grid, r.start) : r.start;
+    const sprong = doel < een ? { i, van: doel, tot: een } : null;
     if (loop) {
       if (this.loopIsSectie(i)) { this.clearLoop(); return { ok: true }; }
       const tellen = this.grid && zeker(r.start) ? Math.round(this.grid.beatAt(r.end) - this.grid.beatAt(r.start)) : null;
       if (p >= r.start && p < r.end) { this._zetLoop(r.start, r.end, tellen); return { ok: true }; }
       this._onthoudLoop();
       this.loopBeats = tellen;
+      this._sectieSprong = sprong;
       this._spring(doel, { start: r.start, end: r.end }, doel !== r.start);
       return { ok: true };
     }
     if (this.loop) this._verlaatLoop();
+    this._sectieSprong = sprong;
     this.seek(doel, { doorlopend: doel !== r.start });
     return { ok: true };
   }

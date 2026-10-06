@@ -106,6 +106,13 @@ const edm = synthNummer();
     && S.gridSleutel(g) === S.gridSleutel(Beatgrid.van(g)));
   const { maten } = S.maatGrenzen(g, edm.duur);
   ok('maatGrenzen: de opmaat (0–0,3 s) als eigen maat, dan elke "1"', maten[0] === 0 && Math.abs(maten[1] - 0.3) < 1e-9 && Math.abs(maten[2] - maten[1] - 4 * 60 / 124) < 1e-9);
+  {
+    // Review #4: stems.wav korter dan audio.wav: de lege maten aan het eind nemen de laatste gevulde over.
+    const fk = { tijd: Float32Array.of(0.5, 1.5, 2.5), chroma: new Float32Array(36).fill(1), banden: new Float32Array(15).fill(1),
+      rms: Float32Array.of(0.1, 0.1, 0.1), flux: new Float32Array(3), fluxLaag: new Float32Array(3), fluxHoog: new Float32Array(3) };
+    const v = S.maatVectoren(fk, [0, 1, 2, 3, 4], 5, { tijd: Float32Array.of(0.5, 1.5), niveau: [Float32Array.of(-10, -10)] });
+    ok(`maten zonder frame: de vorige gevulde (stems ${v.stemDb.map((x) => x[0].toFixed(0)).join(' ')})`, v.stemDb.every((x) => Math.abs(x[0] + 10) < 1e-6));
+  }
   ok('labels: een luid couplet naast een luider refrein heet geen drop', S.labels(
     [{ energie: 0.1, drums: null, stijging: 0 }, { energie: 0.82, drums: null, stijging: 0 }, { energie: 1, drums: null, stijging: 0 }, { energie: 0.82, drums: null, stijging: 0 }, { energie: 1, drums: null, stijging: 0 }],
     [0, 1, 2, 1, 2]).join() === 'intro,deel,drop,deel,drop');
@@ -149,7 +156,10 @@ const { maakSecties } = await import('../server/analyze.js');
   const z = await maakSecties(audio, edm48.grid, null);
   ok('zonder stems: dezelfde grenzen, geen stems per sectie', z.ok && zelfde(z.secties.stukken.map((x) => x.van), edm48.grenzen) && !z.secties.stukken.some((x) => x.stems));
   const kapot = await maakSecties(audio, edm48.grid, { bestand: join(media, 'edm', 'bestaatniet.wav'), namen: NAMEN });
-  ok('stems.wav onleesbaar: dan zonder stems, geen fout', kapot.ok && !kapot.secties.stukken.some((x) => x.stems));
+  ok('stems.wav onleesbaar: dan zonder stems, geen fout, wel "geprobeerd"', kapot.ok && !kapot.secties.stukken.some((x) => x.stems) && kapot.secties.stemsGeprobeerd === true);
+  const kort = schrijfWav(join(media, 'kort', 'audio.wav'), [edm48.mix.subarray(0, BR * 5)], BR);
+  const k5 = await maakSecties(kort, null, null);
+  ok('een nummer van 5 s: één sectie, wel een kaart (anders bij elke laad opnieuw)', k5.ok && k5.secties.stukken.length === 1);
   const weg = await maakSecties(join(media, 'niets.wav'), null, null);
   ok(`audio onleesbaar: { ok: false, fout } (${weg.fout})`, weg.ok === false && /lezen/.test(weg.fout));
 }
@@ -190,6 +200,12 @@ const { Library, normaliseerSecties, moetSectieAnalyse, SCHEMA } = await import(
   let gooit = false;
   try { lib.bewaarSecties('t1', { stukken: [] }); } catch { gooit = true; }
   ok('een ongeldige kaart bewaren gooit; null wist', gooit && lib.bewaarSecties('t1', null) === null && lib.moetSecties('t1'));
+  // Review #2: stems.wav onleesbaar = een kaart zonder stems, maar wel geprobeerd: dan niet steeds opnieuw.
+  lib.bewaarStems('t1', { aantal: 2, namen: ['vocals', 'inst'], schaal: 1, bestand: 'media/edm/stems.wav' });
+  lib.bewaarAutoSecties('t1', { ...goed, grid: S.gridSleutel(edm.grid), stukken: goed.stukken.map(({ stems, ...x }) => x) });
+  const zonder = lib.moetSecties('t1');
+  lib.bewaarAutoSecties('t1', { ...goed, grid: S.gridSleutel(edm.grid), stukken: goed.stukken.map(({ stems, ...x }) => x), stemsGeprobeerd: true });
+  ok('stems erbij maar niet gelezen (stemsGeprobeerd): niet steeds opnieuw berekenen', zonder === true && lib.moetSecties('t1') === false);
   lib.sluit();
 }
 
@@ -243,6 +259,18 @@ const KAART = { versie: 1, opGrid: true, grid: null, bron: 'auto', slot: false, 
   ok('… vlak vóór de "1" ook de sectie zelf (geen hele maat aanloop)', Math.abs(sectieDoel(g, 7.99, 16) - 15.99) < 1e-9);
   ok('… een sectie op 0 heeft geen aanloop: dan in haar eerste maat, op dezelfde plek', Math.abs(sectieDoel(g, 5, 0) - 1) < 1e-9);
   ok('… zonder grid of onzeker: het begin zelf', sectieDoel(null, 5, 16) === 16 && sectieDoel(g, 5, 16, () => false) === 16);
+  // Review 6 okt (#1): de eerste sectie begint op 0, vóór een opmaat; haar "1" is het anker.
+  const op = Beatgrid.van({ stukken: [{ van: 0, bpm: 96, anker: 1.1 }], slot: true });   // tel 0,625 s, maat 2,5 s
+  const pOp = op.timeOf(21.5), dOp = sectieDoel(op, pOp, 0);
+  const fase = (t) => op.barPhase(t) * 4;
+  ok(`… sectie 1 met een opmaat: op dezelfde plek in de maat als nu (tel ${fase(pOp).toFixed(2)} → ${fase(dOp).toFixed(2)}), niet uit de tel`,
+    Math.abs(fase(dOp) - fase(pOp)) < 1e-6 && dOp >= 0 && dOp < 1.1 + 2.5);
+  const dEen = sectieDoel(op, op.timeOf(20), 0);
+  ok(`… en precies op de "1": de eerste "1" van het nummer (${dEen.toFixed(3)})`, Math.abs(dEen - 1.1) < 1e-6);
+  const g2 = Beatgrid.van({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 60, bpm: 120, anker: 60, maat: 61 }], slot: true });
+  const d2 = sectieDoel(g2, 10.25, 61);
+  ok(`… over een stukgrens met een eigen "1" (maat-anker 61): de sectie valt in op 61 (aanloop vanaf ${d2.toFixed(2)})`,
+    Math.abs(g2.beatAt(61) - g2.beatAt(d2) - (4 - g2.barPhase(10.25) * 4)) < 1e-6);
 }
 const eng = new Engine();
 bindEngine(eng);
@@ -281,6 +309,13 @@ d.load(eng.ctx.createBuffer(2, 48000 * 60, 48000), 'zestig');
   invoke('track.1.section.prev', true);
   ok('vorige: weer sectie 2', d.sectieOpDeMaat === 1);
   ok('een pad voorbij de laatste sectie: null en geen sprong', read('track.1.section.6') === null && d.naarSectie(5).waarom === 'geen');
+  // Review #3: een tempokaart waar het stuk van de sectie een andere "1" heeft dan het stuk ervóór.
+  d.setGrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 31, bpm: 120, anker: 31, maat: 33 }], slot: true });
+  d.setSectieKaart({ ...KAART, stukken: [KAART.stukken[0], KAART.stukken[1], { ...KAART.stukken[2], van: 33 }, KAART.stukken[3]] });
+  d.seek(10.25);
+  d.naarSectie(2);
+  ok(`aanloop naar een sectie in een stuk met een eigen "1": volgende/vorige weten waar hij heen gaat (op de maat: ${d.sectieOpDeMaat + 1})`,
+    d.sectieOpDeMaat === 2 && d.position < 33);
   d.setGrid(null);
   const p0 = d.position;
   d.naarSectie(3);

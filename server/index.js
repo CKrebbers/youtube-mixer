@@ -219,6 +219,8 @@ function bewaarInLibrary(r) {
     // geluid). De rij hier, de bestanden in stemsNaIngest.
     lib.bewaarStems(track.id, null);
     // Nieuwe audio: automatische secties horen bij de oude (bij het laden komen ze opnieuw).
+    sectiesGeneratie.set(track.id, (sectiesGeneratie.get(track.id) ?? 0) + 1);
+    sectiesBezig.delete(track.id);
     if (lib.secties(track.id)?.bron === 'auto') lib.bewaarSecties(track.id, null);
     if (track.peaks) lib.bewaarPeaks(track.id, track.peaks);
     // De ingest rekende de envelope al uit; zonder dit deed de eerste tap
@@ -678,20 +680,26 @@ function analyseerToon(track) {
  * Geeft { ok, secties, bewaard } of { ok: false, fout }.
  */
 const sectiesBezig = new Map();
+// Nieuwe audio (opnieuw binnenhalen) = een nieuwe generatie: een analyse die
+// nog op de oude audio rekende, bewaart dan niets.
+const sectiesGeneratie = new Map();
 function analyseerSecties(id) {
   if (!sectiesBezig.has(id)) {
-    sectiesBezig.set(id, (async () => {
+    const generatie = sectiesGeneratie.get(id) ?? 0;
+    const p = (async () => {
       const t = lib.track(id);
       if (!t) return { ok: false, fout: 'onbekend nummer' };
       const stems = t.stems ? { bestand: opSchijf(t.stems.bestand), namen: t.stems.namen } : null;
       const t0 = Date.now();
       const r = await maakSecties(opSchijf(t.audio), t.grid ?? null, stems);
       if (!r.ok) { console.log(`[secties] ${t.titel}: overgeslagen (${r.fout})`); return r; }
+      if ((sectiesGeneratie.get(id) ?? 0) !== generatie) return { ok: false, fout: 'het nummer is intussen opnieuw binnengehaald' };
       const b = lib.bewaarAutoSecties(id, r.secties);
       console.log(`[secties] ${t.titel}: ${b.bewaard ? sectieSamenvatting(b.secties) : `niet bewaard (${b.reden})`}`
         + ` — ${((Date.now() - t0) / 1000).toFixed(1)} s`);
       return { ok: true, secties: b.secties, bewaard: b.bewaard };
-    })().finally(() => sectiesBezig.delete(id)));
+    })().finally(() => { if (sectiesBezig.get(id) === p) sectiesBezig.delete(id); });
+    sectiesBezig.set(id, p);
   }
   return sectiesBezig.get(id);
 }
@@ -718,7 +726,9 @@ const onsetCache = new Map();
 async function heranalyseOpAchtergrond() {
   const grids = lib.teAnalyseren();
   const tonen = lib.teToonAnalyseren();
-  const secties = lib.teSectieAnalyseren();
+  // De secties mogen de rest niet meenemen (bv. een library.db met een andere v9).
+  let secties = [];
+  try { secties = lib.teSectieAnalyseren(); } catch (err) { console.error('[secties] lijst niet te lezen:', err?.message || err); }
   const ids = [...new Set([...grids, ...tonen, ...secties])];
   if (!ids.length) return;
   const n = (x) => `${x.length} nummer${x.length === 1 ? '' : 's'}`;
@@ -758,7 +768,7 @@ async function heranalyseOpAchtergrond() {
     }
     // De secties als laatste: ze rekenen op het grid (en de stems) van hierboven.
     await geenIngest();
-    if (lib.moetSecties(id)) await analyseerSecties(id);
+    try { if (lib.moetSecties(id)) await analyseerSecties(id); } catch (err) { console.error('[secties]', err?.message || err); }
   }
   console.log('[analyse] achtergrondanalyse klaar');
 }

@@ -410,21 +410,23 @@ export function normaliseerSecties(k) {
     stukken,
     bron: k.bron === 'hand' ? 'hand' : 'auto',
     slot: !!k.slot,
+    stemsGeprobeerd: !!k.stemsGeprobeerd,
   };
 }
 
 /**
  * Moet deze kaart (opnieuw) berekend worden? Leeg; of AUTOMATISCH en dan:
  * een oudere analyseversie, op een ander grid gerekend dan het grid van nu
- * (`gridSleutel`), of zonder stems terwijl het nummer ze nu heeft. Met de
- * hand of op slot: nooit.
+ * (`gridSleutel`), of zonder stems terwijl het nummer ze nu heeft (en ze nog
+ * niet geprobeerd zijn: een onleesbare stems.wav geeft anders een lus). Met
+ * de hand of op slot: nooit.
  */
 export function moetSectieAnalyse(k, { versie = SECTIE_VERSIE, grid = null, metStems = false } = {}) {
   if (!k) return true;
   if (k.slot || k.bron !== 'auto') return false;
   if (!((k.versie ?? 0) >= versie)) return true;
   if ((k.grid ?? null) !== (grid ?? null)) return true;
-  return metStems && !k.stukken.some((s) => s.stems);
+  return metStems && !k.stemsGeprobeerd && !k.stukken.some((s) => s.stems);
 }
 
 // ---- stems: zang en rest (of vier) per nummer, docs/STEMS.md ----------------

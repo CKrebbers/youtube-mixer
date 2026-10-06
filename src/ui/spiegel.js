@@ -330,6 +330,16 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
       // On/Off brandt als het effect AAN staat (zoals de LED op de APC), terwijl
       // de read van fx.bypass 1 = uit is. `lamp`/`lampOm`: led.lees en
       // led.invert uit de regel, net als de LED-laag.
+      // Modus secties (docs/SECTIES.md): op de pad de NAAM van de sectie
+      // ("drop D"), zoals de strook boven de golfvorm; zonder sectie leeg en gedimd.
+      const sec = r ? /^track\.(\d+)\.section\.(\d+)$/.exec(r.action) : null;
+      if (sec) {
+        const k = engine.deck(DECK_IDS[Number(sec[1]) - 1])?.sectieKaart;
+        const i = Number(sec[2]) - 1;
+        const naam = k && i < k.aantal ? k.naam(i) : null;
+        tekst(item.t, naam ?? '');
+        if (el.classList.contains('leeg') !== (naam === null)) el.classList.toggle('leeg', naam === null);
+      }
       const ruw = r ? readAction(r.lamp) : null;
       const om = r && (r.lampOm || /\.fx\.bypass$/.test(r.action));
       const licht = r ? lichtVan(om && ruw != null ? 1 - ruw : ruw) : null;

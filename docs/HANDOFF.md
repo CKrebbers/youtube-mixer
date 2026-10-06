@@ -25,9 +25,15 @@ Lees in deze volgorde:
 - **Getest:** `node test/secties.test.mjs` (synthetische nummers met een bekend antwoord, worker,
   library, deck en actions, de server op een eigen poort): groen. Bestaande tests bijgewerkt waar ze
   de grid-modi of het aantal mappingregels tellen (mapping, instrumenten, patronen-engine, library):
-  groen. NIET getest: in Chrome (headless kon niet in de sessie), op de APC, op echte muziek.
+  groen. In echte Chrome: `node tools/headless/secties.mjs` (binnenhalen, laden, strook, modus,
+  pads met de sectienamen, sprong, loop): groen. NIET getest: op de APC en op echte muziek.
 - **Proberen:** speellijst, blok "Avond 1 · Secties" (6 punten), daarna VRAGEN blok SE. Server
   herstarten na het uitchecken (schema v9 migreert vanzelf).
+- **Review (tweede agent):** 7 bevindingen, allemaal verwerkt met een test erbij: de eerste sectie
+  (vóór een opmaat) sprong uit de tel; een onleesbare stems.wav of een nummer < 8 s gaf bij elke laad
+  opnieuw rekenen (`stemsGeprobeerd`, één sectie); de aanloop naar een stuk met een eigen "1";
+  lege maten werden −100 dB; opnieuw binnenhalen tijdens een analyse (generatie); > 26 groepen;
+  de achtergrondlus met try/catch. Checklist: `TASKS-SECTIES.md`.
 - **Let op:** draai geen server van een andere tak met een eigen schema v9 op dezelfde library.db.
 
 ## 6 OKT: ALLES PROBEREN IN TWEE AVONDEN (de speellijst)

@@ -184,11 +184,15 @@ function perMaat(tijd, waarden, dim, maten, duur) {
     for (let d = 0; d < dim; d++) uit[m * dim + d] += waarden(f, d);
     n[m]++;
   }
-  // Een maat zonder frame (heel kort, of het einde): neem de buur.
+  // Een maat zonder frame (heel kort, of stems.wav korter dan audio.wav):
+  // de vorige gevulde maat; vóór de eerste gevulde de eerste gevulde.
+  for (let i = 0; i < M; i++) if (n[i]) for (let d = 0; d < dim; d++) uit[i * dim + d] /= n[i];
+  const eerste = n.findIndex((x) => x > 0);
+  if (eerste < 0) return uit;
   for (let i = 0; i < M; i++) {
-    if (n[i]) { for (let d = 0; d < dim; d++) uit[i * dim + d] /= n[i]; continue; }
-    const j = i > 0 ? i - 1 : Math.min(M - 1, i + 1);
-    for (let d = 0; d < dim; d++) uit[i * dim + d] = n[j] ? uit[j * dim + d] / (j < i ? 1 : n[j]) : 0;
+    if (n[i]) continue;
+    const j = i < eerste ? eerste : i - 1;   // i − 1 is al gevuld (of overgenomen)
+    for (let d = 0; d < dim; d++) uit[i * dim + d] = uit[j * dim + d];
   }
   return uit;
 }
@@ -456,7 +460,9 @@ export function sectieKaart({ fk, stems = null, stemNamen = [], grid = null, duu
     const midden = (maten[s.a] + (s.b < M ? maten[s.b] : duur)) / 2;
     s.drums = di >= 0 ? s.stemGem[di] > stemMax[di] - 18 && s.stemGem[di] > -60 : (g && g.zekerBij(midden) ? null : false);
   }
-  const groep = groepeer(secs);
+  // Hooguit 26 groepen (A–Z): in een lange mix de drempel ruimer tot het past.
+  let groep = groepeer(secs);
+  for (let a = GROEP_AFSTAND + 0.05; Math.max(...groep) > 25 && a < 2; a += 0.05) groep = groepeer(secs, a);
   const lab = labels(secs, groep);
   const stukken = secs.slice(0, MAX_SECTIES).map((s, k) => {
     const stuk = { van: rond(maten[s.a], 4), label: lab[k], groep: String.fromCharCode(65 + Math.min(25, groep[k])), energie: rond(s.energie) };
@@ -465,7 +471,8 @@ export function sectieKaart({ fk, stems = null, stemNamen = [], grid = null, duu
     return stuk;
   });
   stukken[0].van = 0;
-  return { versie: SECTIE_VERSIE, opGrid, grid: opGrid ? gridSleutel(grid) : null, stukken, bron: 'auto', slot: false };
+  return { versie: SECTIE_VERSIE, opGrid, grid: opGrid ? gridSleutel(grid) : null, stukken, bron: 'auto', slot: false,
+    stemsGeprobeerd: stemNamen.length > 0 };
 }
 
 /** Eén regel voor het serverlog: "intro A · drop B · break C …". */

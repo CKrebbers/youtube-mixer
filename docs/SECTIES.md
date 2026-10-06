@@ -26,6 +26,8 @@ Proberen: speellijst, blok "Avond 1 · Secties".
   - shift + pad = die sectie als loop; nog eens = loop eraf
   - lampje: wit = die hoor je (knippert op de tel), donker hemelsblauw = er is
     een sectie, uit = geen sectie op die pad
+  - op het scherm-als-APC staat op elke pad de naam van de sectie ("drop D");
+    een pad zonder sectie is leeg en gedimd
   - scene 1 zonder shift blijft "modus hotcues"; zijn lampje zegt "secties open"
 - **Op de bus**: `track.N.section.1` … `.40` (trigger), `.section.K.loop`,
   `.section.next` en `.section.prev` (op de volgende maat, gerekend vanaf de
@@ -73,6 +75,13 @@ Gemeten (test/secties.test.mjs, synthetisch met een bekend antwoord):
 | ambient 70 bpm, geen drums | alle 5 | goed, geen drop |
 | EDM zonder grid | binnen 2,5 s | — |
 | mix van 62 minuten | 40 secties | 4,3 s rekenen |
+
+In echte Chrome (`tools/headless/secties.mjs`, 6 okt): het synthetische nummer
+via de ingest binnengehaald, het grid door de eigen analyse: alle zeven grenzen
+gevonden, maar 0,25–0,5 s te vroeg. Dat is het GRID (zijn "1" lag een tel vóór de
+echte), niet de secties: die volgen de maten van het grid. Klopt de "1" niet,
+zet hem dan eerst goed (grid-modus, "1"); bij het volgende laden schuiven de
+secties mee.
 
 Op Clay's library: nog niet gemeten (VRAGEN SE2). Rekentijd (worker, ffmpeg
 erbij, in de Linux-VM op de M1): een nummer van 2,5 minuten 0,3 s zonder stems,
@@ -143,7 +152,9 @@ Zie VRAGEN SE1.
 | `src/control/lagen.js`, `feedback.js`, `devices/apc40mk2.js` | de grid-modus, de kleuren (`hemelsblauwdonker` = 42) |
 | `mappings/apc40mk2.json` | 82 regels erbij (Shift + scene 1, het lampje, 40 + 40 pads); `eerder` bijgewerkt |
 | `src/ui/laden.js`, `waveform.js` | ophalen bij het laden, de strook boven het overzicht |
+| `src/ui/spiegel.js` | in de modus secties de NAAM van de sectie op de pad ("drop D"), een pad zonder sectie leeg en gedimd |
 | `test/secties.test.mjs`, `test/synth-nummer.mjs` | de metingen hierboven, worker, library, deck, server |
+| `tools/headless/secties.mjs` | in echte Chrome: binnenhalen (nep-yt-dlp), laden, kaart, strook, modus, pads, sprong, loop |
 
 ## 7. Volgende stappen (niet gebouwd)
 
