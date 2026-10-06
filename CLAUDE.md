@@ -99,7 +99,8 @@ src/
                     terugspelen.js  een log terugspelen: beginstand, dan elke regel op T0 + t
                     devices/        apc40mk2.js, generic.js, maschine-mk2.js (de virtuele MIDI van de hub) — wat er op het apparaat zit
                     hub.js          AV-app-hub (alleen ?hub=ws://…): HubMidi = MidiHub met de hub als poort (lease), manifest, herverbinden;
-                                    speelt Xboard49 en Maschine (eigen nep-poorten, speelPoort(dev)), lampjes/schermen door een wachtrij
+                                    speelt Xboard49 en Maschine (eigen nep-poorten, speelPoort(dev)), lampjes/schermen door een wachtrij;
+                                    de sectie naar de globale laag (§18, engineSecties)
   analysis/         peaks.js        golfvorm-peaks + ruwe RMS
                     features.js     banden laag/midden/hoog, rms, zwaartepunt, onsets uit een spectrum. Puur, tijd van buiten.
                     luisteraar.js   leest de master-AnalyserNode uit (alleen lezen) -> features
@@ -189,7 +190,7 @@ server/             draait apart: `node server/index.js`
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
                     vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
-                    hub.mjs, speelapparaten.mjs en sec-maschine.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
+                    hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
@@ -1042,6 +1043,14 @@ docs/
   live mee; vanuit de Controlekamer opent hij zonder vlag), de Web Lock
   beslist niets over MIDI, de init-SysEx wordt ingeslikt (de hub zet 0x42),
   en Clay's bewaarde poortkeuze blijft onaangeroerd.
+  - De sectie (PROTOCOL §18 van de hub, 7 okt, `studio/sec-hub`): `levert: ['sectie']`. `engineSecties` =
+    een SectieLezer op de maatgever die je hoort (dezelfde als vormbron en video-accent), plus een seintje
+    van elke deck. Elke grens die je hoort: één `globaal {sectie.nieuw: true, sectie.energie (die van de
+    sectie zelf), sectie.label}`, meteen; vangnet hooguit één per seconde; alles samen hooguit 10/s
+    (schuivend venster, de nieuw telt mee). Verder energie (stap ≥ 0,01) en label bij verandering. Na
+    (her)verbinden de sectie van nu ZONDER nieuw. t loopt nooit terug; een nieuwe sectie is een GROTERE
+    teller. Lezen elke 50 ms + een wekker op de grens of de hoorbare sprong + op hub-berichten (≥ 20 ms).
+    Een oude hub negeert het. Toets: `tools/headless/sec-hub.mjs` (8921/9521/7721, `opname: false`).
   - Twee tabbladen: de hub laat de nieuwste winnen, de oude krijgt 4001, wacht
     30 s en MELDT dat (fout-melding, weg na een stabiele herverbinding). De
     status voor de Controlekamer komt van het tabblad dat met de hub verbonden
@@ -1596,6 +1605,9 @@ Volledig in `docs/SECTIES.md`, vragen in VRAGEN blok SE. Wat een bouwer niet mag
     rondgaan), en `sectieOpDeMaat` geeft in de laatste maat van een loop wat er NA het rondgaan komt.
   - Controlekamer: `Library.sectieTelling()` gebruikt dezelfde helpers als `moetSecties`; verander je die
     regel, verander hem op één plek (sec-controle.test vergelijkt ze).
+  - `SectieLezer` (src/analysis/maat.js; vormbron, video-accent en hub): een stap terug in t kleiner dan
+    GAT (1 s) is geen nieuwe klok (de uitgangsvertraging kan groeien); hetzelfde sectiebegin binnen 0,99
+    maat is een herhaling, geen nieuwe sectie; zonder maatgever blijft de energie `HOUD` (0,5 s) staan.
   - Headless: elke `tools/headless/sec-*.mjs` zet VARVE_PATRONEN en VARVE_PLANNEN op zijn tmp-map. Anders
     leest de proefserver `patronen/` van de worktree, en in `sintegratie` is dat de map van de echte mixer.
 

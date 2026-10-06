@@ -1,4 +1,4 @@
-# Overdracht — waar we staan (5 oktober 2026)
+# Overdracht — waar we staan (7 oktober 2026)
 
 Lees in deze volgorde:
 1. `CLAUDE.md`: architectuur, regels, valkuilen. Nieuw sinds 25 sep: transport,
@@ -7,12 +7,41 @@ Lees in deze volgorde:
    mapping als verschil, vormen 16:9, toonsoort.
 2. Dit bestand.
 3. `ROADMAP.md`: bovenaan staat DE TAKENLIJST OP VOLGORDE.
-4. `docs/VRAGEN.md`: open vragen, nieuw zijn blok S (studio) en N (stems).
+4. `docs/VRAGEN.md`: open vragen, nieuw zijn blok SE en SV (secties), S (studio) en N (stems).
 5. Per onderdeel: `docs/TOONSOORT.md` (§13), `MAPPING-VERSCHIL.md`, `LIBRARY.md`,
    `BEAMER.md`, `HANDELINGENLOG.md`, `AUDIOPAD.md`, `VORMEN-16x9.md`,
    `BEATGRID.md` (restpunten), `APC40.md`.
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
+
+## 6–7 OKT (avond/nacht): SECTIES VERWEVEN (`studio/integratie`)
+
+- **Wat:** de secties zitten nu in het toetsenbord (shift+W/E en shift+I/O), de sampler (rij 3: een hele
+  sectie in een pad, start op de "1"), het planvenster (in/uit per stap, banden in de strook), het
+  handelingenlog (sectiedrukken spelen precies terug) en de auto-DJ (in op intro/sectiegrens, uit op
+  outro/break) — de MOET-punten. Daarbij de KAN-punten: vormbronnen `sectie.energie`/`sectie.nieuw` en een
+  accent op de video-puls, een telling in de Controlekamer, SCENE op de Maschine, en de sectie in de globale
+  laag van de hub (AV-app-hub PROTOCOL.md §18, PR #15). Alles in `docs/SECTIES.md` §7; plan, contract en
+  verantwoording in `TASKS-SECTIES.md` (blok "Verweven").
+- **Waar:** alles samengevoegd in `studio/integratie` en gepusht; per onderdeel een tak `studio/sec-*` (ook
+  gepusht), worktrees `~/Projects/varve-stems/sec-*`. Reservetak van vóór de eerste samenvoeging:
+  `backup/integratie-voor-sec-geheel` (5ef02f6). AV-app-hub: PR #15 gemerged op main (groene CI).
+- **Getest:** `node test/alles.mjs`: 60 bestanden, 6304 checks, alles groen met de hub van main (§18); met de oude hub 6303 en 1 bewust overgeslagen (basis 55 bestanden, 5759 checks). In echte Chrome per
+  onderdeel: `tools/headless/sec-{toets,sampler,plan,log,auto,vorm,controle,maschine,hub}.mjs`, allemaal
+  groen op integratie. NIET getest: op de APC, de Maschine, de beamer, en op echte muziek.
+- **Werkwijze:** per spoor bouwer → reviewer (fouten, geen stijl) → verwerker; elke bevinding met een test
+  die eerst faalde; één spoor tegelijk samengevoegd met de suite en de headless-proeven ertussen.
+- **Gerepareerd onderweg, ook in wat er al was:** een sectiebegin dat de server afrondde viel een maat te
+  laat in; in de laatste maat van een sectie-loop sloeg "volgende" een sectie over; na het rondgaan van een
+  loop toonden APC/Maschine 1–40 ms de vorige sectie; `controle.test` controleerde geen vraagcodes van 3
+  letters; `plan.mjs` en `vorm-maat.mjs` waren rood; headless-proeven met de echte hub namen op in
+  `~/Movies/varve-avonden`.
+- **Eerst doen:** de server herstarten (de live server op 8777 draait van vóór dit werk: `/api/secties`,
+  `kent`, de nieuwe planner); de hub bijwerken (`git pull` in `~/Projects/AV-app-hub`, die staat op een oude
+  main zonder §18) en opnieuw starten.
+- **Proberen:** speellijst. Avond 1: "Secties" (twee punten erbij), "Secties op het toetsenbord", "Een sectie
+  in de sampler", "Secties terugspelen". Avond 2: "Planvenster met secties", "Auto-DJ met secties",
+  "Secties in beeld", "Secties op de Maschine", "Secties naar de hub". Daarna VRAGEN blok SV.
 
 ## 6 OKT (middag): SECTIES — NUMMERS BESPELEN (`studio/secties`)
 
@@ -20,8 +49,7 @@ Lees in deze volgorde:
   de maat lanceert en loopt. Strook boven de golfvorm; APC: Shift + scene 1 = grid-modus SECTIES, 40
   pads = de secties van de focus-track, shift = als loop. Alles in `docs/SECTIES.md`.
 - **Waar:** tak `studio/secties`, worktree `~/Projects/varve-stems/secties`, van `studio/integratie`
-  (1770922). Nog NIET samengevoegd en nog niet gepusht (de sessie kon niet bij GitHub): `git push -u
-  origin studio/secties` op de Mac.
+  (1770922). Inmiddels gepusht en samengevoegd in `studio/integratie` (zie het blok hierboven).
 - **Getest:** `node test/secties.test.mjs` (synthetische nummers met een bekend antwoord, worker,
   library, deck en actions, de server op een eigen poort): groen. Bestaande tests bijgewerkt waar ze
   de grid-modi of het aantal mappingregels tellen (mapping, instrumenten, patronen-engine, library):

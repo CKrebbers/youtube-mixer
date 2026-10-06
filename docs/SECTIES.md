@@ -166,10 +166,11 @@ Zie VRAGEN SE1.
 | `src/auto/planner.js`, `automaat.js` | `fragment`/`planMoment` met secties, `momentArgs`, `vindSectie`, `sectieGrens`; OVERNEEM, wachten op de kaart (§7, docs/AUTO-DJ.md §3b) |
 | `src/plan/strook.js` | de strook van het planvenster zonder DOM: banden, en de witte strepen van in/uit als laatste |
 | `src/analysis/maat.js` (`SectieLezer`), `router.js`, `src/video/puls.js`, `video-mixer.js` | `sectie.energie`/`sectie.nieuw` als vormbron, het accent op de video-puls |
+| `src/control/hub.js` (`engineSecties`, `levert: ['sectie']`) | de sectie naar de globale laag van de hub (PROTOCOL §18 in AV-app-hub) |
 | `src/control/maschine.js`, `maschine-scherm.js` | SCENE = de pads zijn de secties van de focus-track, scherm met de namen (docs/MASCHINE.md §5b) |
 | `server/library.js` (`sectieTelling`), `src/controle/server-tegel.js` | de telling voor de Controlekamer, `GET /api/secties` |
 | `test/sec-sampler.test.mjs`, `test/secties-log.test.mjs`, `test/auto-secties.test.mjs`, `test/sec-maschine.test.mjs`, `test/sec-controle.test.mjs` | sampler, log en auto-DJ met secties |
-| `tools/headless/sec-toets.mjs`, `sec-sampler.mjs`, `sec-plan.mjs`, `sec-log.mjs`, `sec-auto.mjs`, `sec-vorm.mjs`, `sec-controle.mjs`, `sec-maschine.mjs` | elk onderdeel van §7 in echte Chrome |
+| `tools/headless/sec-toets.mjs`, `sec-sampler.mjs`, `sec-plan.mjs`, `sec-log.mjs`, `sec-auto.mjs`, `sec-vorm.mjs`, `sec-controle.mjs`, `sec-maschine.mjs`, `sec-hub.mjs` | elk onderdeel van §7 in echte Chrome |
 
 ## 7. Verweven in de rest van VARVE (6 okt, avond)
 
@@ -187,6 +188,9 @@ verantwoording: `TASKS-SECTIES.md` (blok "Verweven"). Vragen: VRAGEN blok SV.
 - Maschine (studio/sec-maschine, alleen met ?hub=): SCENE maakt van de 16 pads de secties van de focus-track (groep A–H kiest hem). Een pad is `track.N.section.K` over de bus en valt in op de maat; ◄ ► bladert boven de 16. Kleuren zoals op de APC; links op het scherm de sectie die je hoort en de namen zoals de pads liggen (docs/MASCHINE.md §5b). Nog niet: SHIFT + pad als loop (SVM3).
 - Vormen en video-puls (studio/sec-vorm, `SectieLezer` in src/analysis/maat.js): de vormlagen hebben twee bronnen van de maatgever erbij: `sectie.energie` (de energie van de sectie die je hoort; springt op de grens en glijdt bij een wissel van maatgever) en `sectie.nieuw` (een klap op elke sectiegrens, τ 0,2 s). Alleen van de maatgever, en alleen als je hem hoort. De video-puls slaat op een nieuwe sectie vol, op het gekozen doel (flits = een witte flits op de grens), maar alleen met de puls aan. Er is geen nieuw puls-doel en geen nieuwe knop. Na een sprong of het rondgaan van een loop staat de lezer stil tot je de sprong hoort (geen flikkering); een grens uit een gat (> 1 s niet gelezen) of van een track die net de maat overneemt telt niet.
 - Gerepareerd onderweg (spoor maschine, raakt APC, toetsenbord en Maschine): na het rondgaan van een loop gaf `deck.sectieHier` 1–40 ms de vorige sectie (de uitgangsvertraging; nu teruggevouwen in de loop), en in de laatste maat van een sectie-loop gaf `sectieOpDeMaat` al de volgende sectie, zodat volgende er één oversloeg (nu: wat er na het rondgaan komt).
+
+- AV-app-hub (studio/sec-hub, alleen met ?hub=, PROTOCOL §18 in AV-app-hub, PR #15): VARVE levert de sectie van de maatgever die je hoort aan de globale laag, met dezelfde `SectieLezer` als beeld en vormbron. Bij elke grens één `sectie.nieuw`, meteen, met de energie van de sectie zelf (op de voorgrond 2–5 ms na het horen, ook na een sprong); hooguit één per seconde en alles samen hooguit 10 per seconde; herverbinden zonder klap; pauze = de energie blijft 0,5 s staan en glijdt dan naar 0. Een loop korter dan een maat of een stutter op een sectiebegin geeft één klap; een sectie-loop (≥ 1 maat) klapt elke ronde. Een nummer dat de maat overneemt terwijl het andere doorspeelt, en een sprong midden in een sectie, geven geen klap (SVH1). De cockpit van de hub toont de sectie onder Globaal.
+- Gerepareerd onderweg (spoor hub, raakt ook beeld): de `SectieLezer` begon opnieuw als de uitgangsvertraging groeide (een valse klap en een dip), een korte loop of stutter op een sectiebegin gaf een klap per rondgang (tot 17/s: een stroboscoop), na een cut in de mix zakte de energie even, en als A stopte en B op zijn cue begon viel zijn grens weg. Nu: een kleine stap terug in t verandert niets; hetzelfde begin binnen een maat is een herhaling; de energie blijft `HOUD` (0,5 s) staan; B die begint terwijl A stilvalt telt als start.
 
 ## 8. Volgende stappen (niet gebouwd)
 

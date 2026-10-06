@@ -233,6 +233,8 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   - `sec-vorm.mjs` (8911/9511) — `sectie.nieuw`/`sectie.energie` op de grens, accent op de puls;
   - `sec-controle.mjs` (8913/9513) — de telling in de servertegel, 404/500/trage server;
   - `sec-maschine.mjs` (8915/9515, echte hub op 7715 met `opname: false`) — SCENE, pads als HID, scherm bit voor bit.
+  - `sec-hub.mjs` (8921/9521, echte hub op 7721 met `opname: false`; `VARVE_HUB_REPO` met PROTOCOL §18, of een oude hub) —
+    één `sectie.nieuw` per gehoorde grens, energie en label, herverbinden zonder klap, pauze, een korte loop op de "1".
 
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen

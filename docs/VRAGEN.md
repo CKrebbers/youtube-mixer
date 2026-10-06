@@ -414,7 +414,7 @@ APC-indeling (voorstel A):
 
 ## SV. Secties verweven (6 okt, avond; docs/SECTIES.md §7)
 
-De secties zitten nu ook in het toetsenbord, de sampler, het planvenster, het handelingenlog, de auto-DJ, de vormen en de video-puls, de Controlekamer en de Maschine.
+De secties zitten nu ook in het toetsenbord, de sampler, het planvenster, het handelingenlog, de auto-DJ, de vormen en de video-puls, de Controlekamer, de Maschine en de globale laag van de hub.
 Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 
 **Toetsenbord** (speellijst "Secties op het toetsenbord")
@@ -464,8 +464,17 @@ Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 **In beeld** (speellijst "Secties in beeld")
 - [ ] **SVV1. De video-puls slaat op een nieuwe sectie vol, ook als je de puls zacht hebt staan: goed zo?** 👀 Het accent komt op de puls die er al is: het gekozen doel gaat op elke nieuwe sectie VOL, wat de diepte ook is; alleen met de puls aan (PULS op 0 = ook geen accent). Bij doel flits is dat een witte flits op de grens. Bij pixel, spiegel en korrel is het bij elke grens het volle effect, ook met PULS op 0,01, en de hub-macro `macro.beweging` (K4 = PULS) geeft op een lage stand al volle flitsen of effecten op elke grens. Geen nieuw puls-doel en geen nieuwe knop (de doelen lopen rond in het handelingenlog). Alternatieven: (a) zo laten; (b) vol alleen bij flits, bij de effecten met de diepte mee (bv. 3 × de diepte); (c) een schakelaar "puls op: tel · sectie · beide" (één knop, als stand in het log). **Advies:** (b). Probeer eerst doel flits met de puls laag, en zeg wat je bij pixel ziet.
 - [ ] **SVV2. Hoe lang gloeit een nieuwe sectie na?** 👀 Als een klap, maar twee keer zo lang: vol op de grens, na 0,3 s nog 22 %, na ~1,8 s weg (`NIEUW_TAU` 0,2 s). Dezelfde vorm voor de vormlaag (bron "nieuwe sectie") en de video-puls. Niet op de beamer bekeken. **Advies:** zo laten, tenzij de flits te kort is om op de beamer te zien; dan 0,3–0,5 s (één getal).
-- [ ] **SVV3. Sectie-energie als bron: springen op de grens, glijden bij een wissel?** 👀 De vorm krijgt de energie van de sectie die je hoort (0..1 binnen het nummer, van de server). Op een grens, een sectiesprong of een loop springt hij mee. Neemt een andere track de maat over, valt de maatgever weg of komt de kaart later binnen, dan glijdt hij in ~0,75 s naar de nieuwe waarde. **Advies:** zo proberen. Kloppen de stappen niet met wat je hoort, dan ligt het waarschijnlijk aan de energie per sectie (SE2).
+- [ ] **SVV3. Sectie-energie als bron: springen op de grens, glijden bij een wissel?** 👀 De vorm krijgt de energie van de sectie die je hoort (0..1 binnen het nummer, van de server). Op een grens, een sectiesprong of een loop springt hij mee. Neemt een andere track de maat over of komt de kaart later binnen, dan glijdt hij in ~0,75 s naar de nieuwe waarde. Valt de maatgever weg, dan blijft de energie eerst 0,5 s staan (een cut in de mix) en glijdt dan in ~1,5 s naar 0. **Advies:** zo proberen. Kloppen de stappen niet met wat je hoort, dan ligt het waarschijnlijk aan de energie per sectie (SE2).
 - [ ] **SVV4. Op een nieuwe sectie ook de mengvorm wisselen?** 💬 Niet gebouwd: het verandert een stand die in het log staat (`video.mode`), en elke grens zou de mengvorm één plek doorschuiven. **Advies:** eerst de flits; wil je het, dan als eigen schakelaar.
+- [ ] **SVV5. Een korte loop of stutter op een sectiebegin: één accent?** 👀 Gekozen (7 okt): het rondgaan van een loop korter dan een maat, en hetzelfde sectiebegin binnen een maat (hotcue- of pad-stutter), is geen nieuwe sectie, in beeld én in de hub. Een sectie-loop (≥ 1 maat) klapt elke ronde. **Advies:** op de beamer kijken; mis je de flits per rondgang bij een korte loop, zeg het.
+- [ ] **SVV6. Energie vasthouden bij een cut?** 👀 Gekozen (7 okt): korter dan 0,5 s geen maatgever (een cut met de fader of crossfader) houdt de energie vast, in beeld en in de hub; daarna glijdt hij naar 0. **Advies:** proberen; is een halve seconde te kort of te lang, één getal (`HOUD`).
+
+
+**Hub** (speellijst "Secties naar de hub"; AV-app-hub PROTOCOL.md §18)
+- [ ] **SVH1. Een nieuw nummer: een klap of niet?** 👀 Stopt A en start B op zijn cue op een sectiebegin, dan een klap (dat is starten). Neemt een nummer dat al speelde de maat over in een mix, dan geen klap; label en energie gaan wel mee, en de volgende grens in dat nummer klapt wel. Spelen vanaf het begin van een nummer en een hotcue midden in een sectie geven geen klap (zoals in beeld). **Advies:** zo laten: een overname valt op de hysterese, niet op een "1".
+- [ ] **SVH2. Pauze: label laten staan?** 💬 Het label blijft staan met energie 0 ("drop, 0"). Energie 0 is ook een intro (de energie is relatief binnen het nummer): een beeld-app ziet geen verschil tussen pauze en intro. **Advies:** zo laten tot een beeld-app het verschil nodig heeft; anders een label `stil`.
+- [ ] **SVH3. Hoe vaak mag de hub een nieuwe sectie krijgen?** 💬 Gekozen (7 okt): hooguit één per seconde (vangnet in hub.js), en alles samen hooguit 10 per seconde in een schuivend venster waarin de `nieuw` meetelt; de `nieuw` gaat altijd meteen, gewone berichten wachten. **Advies:** zo laten.
+- [ ] **SVH4. Welke energie draagt een nieuwe sectie?** 💬 Gekozen (7 okt): die van de sectie zelf (het doel), niet die van het glijden; daarna glijdt de hub-energie niet van onderen op. **Advies:** zo laten.
 
 ---
 

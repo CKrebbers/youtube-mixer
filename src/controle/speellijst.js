@@ -269,6 +269,21 @@ export const SPEELLIJST = [
       let: 'Volgen vorm en flits de MAAT-badge (de grenzen van het nummer dat je hoort, niet van het andere)? Met de fader dicht geen flits meer?' },
   ] },
 
+  { id: 'sec-hub', titel: 'Avond 2 · Secties naar de hub', minuten: 12, punten: [
+    { id: 'sh-cockpit', doe: 'Met de hub (npm start -- studio): open de cockpit, laad Loving arms op track 1 en laat hem spelen.',
+      let: 'Staat de sectie onder Globaal (label, energie) met varve-dj als bron? Flitst hij bij elke nieuwe sectie, op het moment dat je hem hoort?' },
+    { id: 'sh-sprong', doe: 'Spring een paar keer naar een andere sectie (APC modus secties, shift+W/E, of een hotcue op een sectiebegin).',
+      let: 'Precies één flits per sprong, op de "1" waar hij invalt (of meteen bij de hotcue), niet bij het drukken?' },
+    { id: 'sh-loop', doe: 'Zet een beatloop van 1 tel (en daarna 1/8) op de "1" van de drop, en tik snel op een hotcue op dat begin.',
+      let: 'Eén flits, geen stroboscoop, in de cockpit en in beeld? En een sectie-loop (shift + pad): elke ronde een flits? (SVV5)' },
+    { id: 'sh-overgang', doe: 'Mix naar een tweede nummer tot dat de maat geeft. Stop daarna track 1 en start track 2 op een cue op zijn drop.',
+      let: 'Overnemen: label en energie gaan mee zonder flits. Stoppen en starten op de cue: wel een flits. Logisch zo? (SVH1)' },
+    { id: 'sh-cut', doe: 'Tijdens het mixen: trek de fader van de track die de maat geeft even dicht en weer open.',
+      let: 'Blijft de energie in de cockpit en in beeld staan, zonder dip? (SVV6)' },
+    { id: 'sh-pauze', doe: 'Pauzeer track 1. Herlaad daarna het mixer-tabblad, of stop en start de hub.',
+      let: 'Pauze: de energie blijft een halve seconde staan en zakt dan in ~1,5 s naar 0; het label blijft. Terugkomen: geen flits, wel de juiste sectie. (SVH2)' },
+  ] },
+
   // ---- Eerder werk (vóór 6 okt): als er tijd over is ------------------------------
   { id: 'draaien', titel: 'Eerder werk · Draaien op de APC', minuten: 15, punten: [
     { id: 'dr-laden', doe: 'Laad twee nummers op track 1 en 2 (library: B).', let: 'Grid en toonsoort staan erbij, geen foutmelding.' },
