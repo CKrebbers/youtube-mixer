@@ -282,6 +282,20 @@ const statusVanMij = () => {
   const h = midiDelen.midi.status().hub;
   return h.verbonden || (!h.vervangen && tabblad().eerste);
 };
+// Beeld (docs/BEELD.md): alleen het tabblad met de APC stuurt de Stroommachine,
+// net als de melding aan de Controlekamer. Twee tabbladen zouden allebei op elke
+// ping antwoorden (dan klopt haar klokverschil niet meer) en elkaars mix
+// overschrijven. De lock komt na het opstarten binnen, en met ?hub= wisselt
+// het per verbinding: bij elke verandering, en elke seconde voor de zekerheid.
+const beeldMag = () => beeld.magZenden(statusVanMij());
+tabblad().on('eerste', beeldMag);
+tabblad().on('tweede', beeldMag);
+if (hubUrl) midiDelen.midi.on('hub', beeldMag);
+setInterval(beeldMag, 1000);
+beeldMag();
+// Terug uit de bfcache (pagehide stopte de zender): weer starten als het mag.
+window.addEventListener('pageshow', (e) => { if (e.persisted) { beeldMag(); beeld.zet({}, { vanzelf: true }); } });
+
 startStatusZender({
   isEerste: statusVanMij,
   lees: () => ({ snap: engine.snapshot(), midi: midiDelen.midi.status(), audio: engine.ctx.state,

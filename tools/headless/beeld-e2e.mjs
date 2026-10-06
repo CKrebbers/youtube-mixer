@@ -251,6 +251,18 @@ try {
   await stroom.foto('beeld-e2e-stroom.png');
   await varve.foto('beeld-e2e-varve.png');
 
+  // ---- pauze: de kenmerken zakken naar stil, ze blijven niet hangen ----------------
+  // De klok (speelt:false) houdt de Stroommachine "vers", dus zonder dit bleven
+  // haar Mic-bronnen op de laatste luide waarde staan.
+  console.log('\npauze');
+  const srcSpeelt = await stroom.tot('(s => s.src[0] > -0.9 && s.src)(window.__stroom.dj())', 10000);
+  await varve.evalueer(`(async () => { const a = ${bus}; a.invoke('track.1.play', true); a.invoke('track.1.play', false); return true; })()`);
+  const srcStil = await stroom.tot('(s => s.src.every((v) => v < -0.9) && s.src)(window.__stroom.dj())', 15000);
+  ok('pauze: de bronnen van de Stroommachine zakken naar stil (Mic, Mic bas, Mic onset < −0,9)', Array.isArray(srcStil),
+    { speelt: srcSpeelt, stil: srcStil ?? await stroom.evalueer('window.__stroom.dj().src') });
+  await varve.evalueer(`(async () => { const a = ${bus}; a.invoke('track.1.play', true); a.invoke('track.1.play', false); return true; })()`);
+  await varve.tot("window.engine.deck('A').playing", 5000);
+
   // ---- 4. relay weg en terug ---------------------------------------------------------
   console.log('\nrelay weg en terug');
   const jsVoor = varve.js.length;

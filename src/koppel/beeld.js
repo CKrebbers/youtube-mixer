@@ -38,9 +38,18 @@ import { uitgangsVertraging, hoorbaar } from '../engine/hoorbaar.js';
  *   poort      de APC-pagina "Beeld" (mapje device.beeld).
  * Track en mix zijn TOESTAND, geen stroom: de relay gooit een bericht weg als
  * de Stroommachine er (nog) niet is, en een herladen Stroommachine weet niets
- * meer. Daarom gaan ze pas als ze er aantoonbaar is (een verse beeld-status,
- * die stuurt ze elke seconde), en opnieuw als ze na een stilte terugkomt of
- * VARVE zelf opnieuw verbond. Klok, kenmerken en poorten gaan altijd.
+ * meer. Daarom gaan ze pas als ze er aantoonbaar is (een verse beeld-status of
+ * ping), en opnieuw als VARVE zelf opnieuw verbond of als ze HERLADEN is. Dat
+ * laatste is exact te zien: haar ping-teller begint per pagina bij 1
+ * (09o-dj.js daar), dus een ping met een id die niet hoger is dan de vorige =
+ * een nieuwe pagina. De zender antwoordt zelf op pings; we luisteren mee op de
+ * socket (een eigen WebSocket-klasse rond die van de zender). Macro's die je
+ * zette gaan dan ook opnieuw: VARVE is de bron van waarheid voor wat de APC
+ * deed. Klok, kenmerken en regie gaan altijd.
+ *
+ * Eén tabblad: alleen het tabblad met de APC (de Web Lock, of met ?hub= het
+ * tabblad bij de hub) stuurt (magZenden). Twee tabbladen die allebei op elke
+ * ping antwoorden maken het klokverschil van de Stroommachine onzin.
  */
 
 /** Het relay-adres: zo lang mag het zijn (na trimmen). */
@@ -63,13 +72,25 @@ export const ONBEREIKBAAR_MS = 8000;
  */
 export const BEELD_VERS_MS = 3000;
 /**
- * Komt de beeld-status na een stilte (> BEELD_VERS_MS) terug, dan is de
- * Stroommachine (weer) open en gaan track en mix opnieuw, maar hooguit zo vaak
- * (ms): een track die opnieuw komt laat haar dezelfde scène opnieuw laden, en
- * kost dat meer dan 3 s (shaders compileren op een trage machine), dan zou dat
- * anders een lus worden.
+ * Is de Stroommachine herladen (haar ping-teller begon opnieuw), dan gaan track,
+ * mix en macro's opnieuw, maar hooguit zo vaak (ms); een tweede keer binnen die
+ * tijd wacht tot hij om is, hij gaat niet verloren. Een track die opnieuw komt
+ * laat haar dezelfde scène opnieuw laden: twee Stroommachines tegelijk (twee
+ * tellers door elkaar) zou anders elke ping een nieuwe scène geven.
  */
 export const OPNIEUW_MS = 10000;
+/** Kenmerken: zo stil (0..1) telt als niets, en zo lang stil (ms) voor ze stoppen. */
+export const STIL = 0.01;
+export const STIL_MS = 1000;
+/**
+ * Poorten die de browser nooit opent (de "bad ports" van de Fetch-standaard):
+ * een WebSocket daarheen mislukt altijd, en dan zou de zender eindeloos
+ * opnieuw proberen met de melding "antwoordt niet".
+ */
+export const SLECHTE_POORTEN = new Set([1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95,
+  101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514,
+  515, 526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723, 2049, 3659, 4045,
+  4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080]);
 
 /** De acht macro's (value, 0..1) en zes regieknoppen (trigger) van de Stroommachine (src/09d-poorten.js daar). */
 export const MACROS = ['macro.intensiteit', 'macro.snelheid', 'macro.helderheid', 'macro.feedback',
@@ -105,6 +126,7 @@ export function controleerAdres(invoer) {
   if (!u.hostname) return { ok: false, reden: 'er staat geen host in' };
   if (u.username || u.password) return { ok: false, reden: 'geen gebruikersnaam of wachtwoord in het adres' };
   if (u.hash) return { ok: false, reden: 'geen # in het adres' };
+  if (u.port && SLECHTE_POORTEN.has(Number(u.port))) return { ok: false, reden: `poort ${u.port} opent de browser nooit (kies bv. 7702)` };
   const adres = u.href;
   if (adres.length > ADRES_MAX) return { ok: false, reden: `langer dan ${ADRES_MAX} tekens` };
   return { ok: true, adres };
@@ -141,17 +163,21 @@ export function stabieleId({ bron, nummer, titel, demo } = {}) {
  * het protocol twee decks: deck A = kant A van de crossfader, deck B = kant B;
  * thru-tracks horen bij geen kant. Van de tracks op die kant met een nummer:
  * wie SPEELT, en daarvan wie het laatst begon; speelt er geen, dan wie het
- * laatst geladen of gestart werd. Zo wisselt een track die je klaarzet
- * (laden terwijl een andere op dezelfde kant speelt) de scène niet, en neemt
- * een track die je start hem over.
- * @param tracks [{ id, kant, geladen, speelt, laatst }]  laatst = ms van laden of starten
+ * laatst geladen of gestart werd. Van de spelende gaat wie met een open
+ * kanaalfader speelt voor: een track die je met de fader dicht voorbeluistert
+ * hoort de zaal niet. Zo wisselt een track die je klaarzet (laden of
+ * voorbeluisteren terwijl een andere op dezelfde kant klinkt) de scène niet,
+ * en neemt een track die je start en opendraait hem over.
+ * @param tracks [{ id, kant, geladen, speelt, open, laatst }]  open = kanaalfader open,
+ *               laatst = ms van laden of starten
  * @returns id of null
  */
 export function kiesKant(tracks, kant) {
+  const rang = (t) => (t.speelt ? (t.open === false ? 1 : 2) : 0);
   let beste = null;
   for (const t of tracks) {
     if (t.kant !== kant || !t.geladen) continue;
-    if (!beste || (t.speelt && !beste.speelt) || (t.speelt === beste.speelt && t.laatst > beste.laatst)) beste = t;
+    if (!beste || rang(t) > rang(beste) || (rang(t) === rang(beste) && t.laatst > beste.laatst)) beste = t;
   }
   return beste ? beste.id : null;
 }
@@ -194,9 +220,11 @@ export class BeeldKoppeling extends Emitter {
    * @param timers, nu, WebSocketImpl  voor de zender en de eigen tik (de test geeft nep)
    */
   constructor({ engine, ids, luisteraar = null, maakZender = maakBeeldZender, timers = standaardTimers(),
-    nu = () => globalThis.performance.now(), WebSocketImpl = globalThis.WebSocket } = {}) {
+    nu = () => globalThis.performance.now(), WebSocketImpl = globalThis.WebSocket, mag = true } = {}) {
     super();
     Object.assign(this, { engine, ids, maakZender, timers, nu, WebSocketImpl });
+    this.mag = !!mag;                     // mag dit tabblad zenden (magZenden)?
+    this.vanzelf = false;                 // kwam de laatste start uit de bewaarde instellingen (niet van Clay zelf)?
     this.luisteraar = luisteraar ?? new Luisteraar({
       analyser: () => engine.master?.analyser ?? null, sampleRate: () => engine.ctx.sampleRate });
     this.instellingen = { aan: false, adres: '', latentie: 0 };
@@ -217,7 +245,13 @@ export class BeeldKoppeling extends Emitter {
     this.zonderStatus = null;             // afmelden bij de zender
     this.beeldObj = null;                 // de laatste beeld-status van de zender (een nieuw object per bericht)
     this.beeldAt = -Infinity;             // nu() toen die binnenkwam
-    this.opnieuwAt = -Infinity;           // nu() toen track en mix voor het laatst opnieuw moesten
+    this.pingAt = -Infinity;              // nu() van de laatste ping van de Stroommachine
+    this.pingId = null;                   // haar laatste ping-id sinds onze verbinding (null = nog geen)
+    this.moetOpnieuw = false;             // ze is herladen: track, mix en macro's opnieuw (zodra OPNIEUW_MS om is)
+    this.opnieuwAt = -Infinity;           // nu() toen dat voor het laatst gebeurde
+    this.gezet = new Set();               // macro's die via VARVE gezet zijn (met verbinding)
+    this.teSturen = new Set();            // macro's die nog naar de Stroommachine moeten
+    this.klonkAt = -Infinity;             // nu() toen er voor het laatst iets klonk (kenmerken)
   }
 
   // ---- instellingen en levensloop ------------------------------------------
@@ -228,7 +262,7 @@ export class BeeldKoppeling extends Emitter {
    * lopende stopt), en het antwoord zegt waarom.
    * @returns { ok: true } | { ok: false, reden }
    */
-  zet(nieuw = {}) {
+  zet(nieuw = {}, { vanzelf = false } = {}) {
     const i = { ...this.instellingen };
     if ('aan' in nieuw) i.aan = !!nieuw.aan;
     if ('latentie' in nieuw) i.latentie = klemLatentie(nieuw.latentie);
@@ -250,11 +284,22 @@ export class BeeldKoppeling extends Emitter {
     const herstart = i.adres !== this.instellingen.adres;
     this.instellingen = i;
     this.fout = null;
-    const moet = i.aan && !!i.adres;
+    const moet = i.aan && !!i.adres && this.mag;
     if (!moet) this._stop();
-    else if (!this.zender || herstart) { this._stop(); this._start(); }
+    else if (!this.zender || herstart) { this._stop(); this.vanzelf = vanzelf; this._start(); }
     this._meldStatus();
     return antwoord;
+  }
+
+  /**
+   * Mag dit tabblad zenden? Alleen het tabblad met de APC (app.js:
+   * statusVanMij). Nee = de zender stopt; ja = hij start weer als aan en
+   * adres dat zeggen. De instellingen blijven staan.
+   */
+  magZenden(mag) {
+    if (this.mag === !!mag) return;
+    this.mag = !!mag;
+    if (!this.mag) { this._stop(); this._meldStatus(); } else this.zet({}, { vanzelf: true });
   }
 
   /** Loopt de zender (aan, met een geldig adres)? */
@@ -265,17 +310,33 @@ export class BeeldKoppeling extends Emitter {
 
   /**
    * Voor het scherm en de Controlekamer: { aan, adres, latentie, loopt,
-   * verbonden, fout, beeld: { regime, scene, fps, volgt, bpm } | null,
-   * verstuurd, ontvangen }. `beeld` is null zonder verse beeld-status (lees
+   * verbonden, fout, elders (een ander tabblad stuurt), beeld: { regime,
+   * scene, fps, volgt, bpm } | null, verstuurd, ontvangen }. `beeld` is null zonder verse beeld-status (lees
    * hem dus af en toe opnieuw, niet alleen bij 'status').
    */
   status() {
     const z = this.zender?.status;
     return {
       aan: this.instellingen.aan, adres: this.instellingen.adres, latentie: this.instellingen.latentie,
-      loopt: !!this.zender, verbonden: !!z?.verbonden, fout: this.fout,
+      loopt: !!this.zender, verbonden: !!z?.verbonden, fout: this.fout, elders: !this.mag,
       beeld: z?.verbonden && z.beeld && this.nu() - this.beeldAt < BEELD_VERS_MS ? { ...z.beeld } : null,
       verstuurd: z?.verstuurd ?? 0, ontvangen: z?.ontvangen ?? 0,
+    };
+  }
+
+  /**
+   * De WebSocket-klasse voor de zender: dezelfde, maar we luisteren mee op
+   * wat er binnenkomt (de pings van de Stroommachine, zie hoorBericht). De
+   * zender zelf blijft ongewijzigd.
+   */
+  _meeluisterWS() {
+    const Basis = this.WebSocketImpl, k = this;
+    if (typeof Basis !== 'function') return Basis;
+    return class extends Basis {
+      constructor(...a) {
+        super(...a);
+        if (typeof this.addEventListener === 'function') this.addEventListener('message', (e) => k.hoorBericht(e.data));
+      }
     };
   }
 
@@ -284,7 +345,7 @@ export class BeeldKoppeling extends Emitter {
     try {
       z = this.maakZender({
         url: this.instellingen.adres, klok: () => this.klok(), kenmerken: () => this.kenmerken(),
-        WebSocketImpl: this.WebSocketImpl, timers: this.timers, nu: this.nu,
+        WebSocketImpl: this._meeluisterWS(), timers: this.timers, nu: this.nu,
       });
     } catch (err) {
       this.fout = err.message;
@@ -293,6 +354,9 @@ export class BeeldKoppeling extends Emitter {
     this.zender = z;
     this.ooitVerbonden = false;
     this.wasVerbonden = false;
+    // Een nieuwe start weet niets van de vorige verbinding.
+    this.beeldObj = null; this.beeldAt = -Infinity; this.pingAt = -Infinity; this.pingId = null;
+    this.moetOpnieuw = false;
     this._vergeetVerstuurd();
     this.zonderStatus = z.on('status', () => this._opStatus());
     z.start();
@@ -300,8 +364,15 @@ export class BeeldKoppeling extends Emitter {
     this.onbereikbaarTimer = this.timers.setTimeout(() => {
       this.onbereikbaarTimer = null;
       if (this.zender === z && !this.ooitVerbonden) {
-        this._melding(`beeld: de relay op ${this.instellingen.adres} antwoordt niet — draait hij op de pc, en klopt het adres? `
-          + 'VARVE probeert het elke 10 s opnieuw, zonder verdere meldingen.', 'fout');
+        // Uit de bewaarde instellingen (de pc staat uit, je speelt alleen): een
+        // melding die vanzelf weggaat. Zelf aangezet of een adres getypt: rood.
+        if (this.vanzelf) {
+          this._melding(`beeld: geen relay op ${this.instellingen.adres} (staat de pc uit?). VARVE blijft het rustig proberen; `
+            + 'zonder pc kun je beeld uitzetten in de BEELD-rij.', 'info');
+        } else {
+          this._melding(`beeld: de relay op ${this.instellingen.adres} antwoordt niet — draait hij op de pc, en klopt het adres? `
+            + 'VARVE probeert het elke 10 s opnieuw, zonder verdere meldingen.', 'fout');
+        }
       }
     }, ONBEREIKBAAR_MS);
   }
@@ -318,7 +389,28 @@ export class BeeldKoppeling extends Emitter {
   /** Helemaal stoppen (de pagina gaat dicht); de instellingen blijven. */
   stop() { this._stop(); this._meldStatus(); }
 
-  _vergeetVerstuurd() { this.verstuurd = { A: null, B: null }; this.vorigeMix = null; }
+  /** De Stroommachine weet (misschien) niets meer: track, mix en de gezette macro's opnieuw. */
+  _vergeetVerstuurd() {
+    this.verstuurd = { A: null, B: null };
+    this.vorigeMix = null;
+    this.teSturen = new Set(this.gezet);
+  }
+
+  /**
+   * Een bericht van de relay (we luisteren mee, de zender handelt het af).
+   * Alleen pings tellen hier: haar ping-teller begint per pagina bij 1, dus
+   * een id die niet hoger is dan de vorige = de Stroommachine is herladen.
+   */
+  hoorBericht(data) {
+    if (typeof data !== 'string' || data.length > 16384 || !data.includes('"ping"')) return;
+    let m;
+    try { m = JSON.parse(data); } catch { return; }
+    if (!m || m.type !== 'ping' || !Number.isFinite(Number(m.id))) return;
+    const id = Number(m.id);
+    if (this.pingId !== null && id <= this.pingId) this.moetOpnieuw = true;
+    this.pingId = id;
+    this.pingAt = this.nu();
+  }
 
   /**
    * De zender meldt (her)verbinden, verbreken en beeld-status. Track en mix
@@ -328,19 +420,12 @@ export class BeeldKoppeling extends Emitter {
   _opStatus() {
     const v = this.verbonden;
     const b = this.zender?.status.beeld ?? null;
-    if (b && b !== this.beeldObj) {
-      // De eerste beeld-status, of de eerste na een stilte: de Stroommachine is
-      // (weer) open, misschien herladen. Dan weet ze onze tracks niet meer.
-      const terug = this.nu() - this.beeldAt > BEELD_VERS_MS;
-      this.beeldObj = b;
-      this.beeldAt = this.nu();
-      if (terug && this.nu() - this.opnieuwAt >= OPNIEUW_MS) { this.opnieuwAt = this.nu(); this._vergeetVerstuurd(); }
-    }
+    if (b && b !== this.beeldObj) { this.beeldObj = b; this.beeldAt = this.nu(); }
     if (v && !this.ooitVerbonden) {
       this.ooitVerbonden = true;
       this._melding(`beeld: verbonden met de relay (${this.instellingen.adres})`);
     }
-    if (!v && this.wasVerbonden) this._vergeetVerstuurd();
+    if (!v && this.wasVerbonden) { this._vergeetVerstuurd(); this.pingId = null; }
     this.wasVerbonden = v;
     this._meldStatus();
   }
@@ -369,14 +454,20 @@ export class BeeldKoppeling extends Emitter {
   }
 
   /**
-   * De zeven kenmerken (0..1), of null als er niets speelt. Zonder verbinding
-   * ook null: de zender vraagt ze dan nog steeds 30× per seconde, maar
-   * versturen kan niet, en de analyser uitlezen kost iets.
+   * De zeven kenmerken (0..1), of null als er niets KLINKT: geen track die
+   * speelt en de master al STIL_MS stil. Zolang de master nog iets geeft (een
+   * staart van echo of galm, de sampler, de klankschaal, een instrument) gaan
+   * ze door, en na een pauze zakken ze eerst naar ~0 voor ze stoppen; anders
+   * bleef de Stroommachine op de laatste luide waarde staan, want de klok
+   * (speelt:false) houdt haar "vers". Zonder verbinding: null, en de analyser
+   * wordt niet gelezen.
    */
   kenmerken() {
     if (this.zender && !this.verbonden) return null;
-    if (!this.speeltIets()) return null;
     const mix = this.luisteraar.lees(this.engine.ctx.currentTime);
+    const klinkt = this.speeltIets() || !!(mix && Math.max(mix.laag, mix.midden, mix.hoog, mix.rms) > STIL);
+    if (klinkt) this.klonkAt = this.nu();
+    else if (this.nu() - this.klonkAt > STIL_MS) return null;
     const tel = engineTel(this.engine, this.ids, this.vertraging());
     return kenmerkenVan(mix, tel);
   }
@@ -407,8 +498,9 @@ export class BeeldKoppeling extends Emitter {
       const speelt = !!d.buffer && d.playing && !d.wacht;
       if (speelt && !this.speelde[id]) this.laatst[id] = nu;
       this.speelde[id] = speelt;
+      // Kanaalfader open: zoals faderGain (−70 dB onder 0,001), zonder de crossfader (die kiest de kant).
       return { id, kant: this.engine.kant?.[id] ?? 'thru', geladen: !!d.buffer && !!this.nummers[id], speelt,
-        laatst: this.laatst[id] ?? 0 };
+        open: (d.ui?.fader ?? 1) > 0.001, laatst: this.laatst[id] ?? 0 };
     });
   }
 
@@ -420,8 +512,8 @@ export class BeeldKoppeling extends Emitter {
     return { speelt, pos: r2(hoorbaar(d, uitgangsVertraging(this.engine.ctx))), rate: r3(d.remt ? d.snelheid : d.rate) };
   }
 
-  /** Is de Stroommachine er (een verse beeld-status)? Dan pas hebben track en mix zin. */
-  get aanwezig() { return this.verbonden && this.nu() - this.beeldAt < BEELD_VERS_MS; }
+  /** Is de Stroommachine er (een verse beeld-status of ping)? Dan pas hebben track en mix zin. */
+  get aanwezig() { return this.verbonden && this.nu() - Math.max(this.beeldAt, this.pingAt) < BEELD_VERS_MS; }
 
   /**
    * Eén tik (elke TIK_MS zolang de zender loopt): staat er op een kant een
@@ -432,6 +524,14 @@ export class BeeldKoppeling extends Emitter {
   tik() {
     const tracks = this._tracks();
     if (!this.zender || !this.aanwezig) return;
+    const nu = this.nu();
+    if (this.moetOpnieuw && nu - this.opnieuwAt >= OPNIEUW_MS) {
+      this.moetOpnieuw = false;
+      this.opnieuwAt = nu;
+      this._vergeetVerstuurd();
+    }
+    for (const p of this.teSturen) this.zender.poort(p, this.macros[p]);
+    this.teSturen.clear();
     const kanten = { A: kiesKant(tracks, 'A'), B: kiesKant(tracks, 'B') };
     for (const kant of ['A', 'B']) {
       const n = kanten[kant] === null ? null : this.nummers[kanten[kant]];
@@ -441,7 +541,7 @@ export class BeeldKoppeling extends Emitter {
     const a = this._deckStand(kanten.A), b = this._deckStand(kanten.B);
     const xfader = r3(this.engine.xfader ?? 0.5);
     const sleutel = JSON.stringify([xfader, kanten.A, a?.speelt, a?.rate, kanten.B, b?.speelt, b?.rate]);
-    const nu = this.nu(), v = this.vorigeMix;
+    const v = this.vorigeMix;
     // Een sprong (seek, hotcue, loop terug) is ook een transportverandering:
     // een spelende track staat dan ver van waar hij na `dt` zou zijn.
     const gesprongen = (stand, vorig) => !!(stand && vorig && stand.speelt
@@ -454,12 +554,19 @@ export class BeeldKoppeling extends Emitter {
 
   // ---- de APC-pagina "Beeld" -------------------------------------------------
 
-  /** Een macro (0..1) naar de Stroommachine; de stand blijft hier voor de ring. */
+  /**
+   * Een macro (0..1) naar de Stroommachine; de stand blijft hier voor de ring.
+   * Alleen met verbinding (anders kreeg de ring een stand die nooit aankwam).
+   * Is de Stroommachine er even niet, dan gaat hij zodra ze er is.
+   */
   zetWaarde(poort, waarde) {
-    if (!MACROS.includes(poort)) return false;
+    if (!MACROS.includes(poort) || !this.verbonden) return false;
     const v = Number.isFinite(waarde) ? Math.min(1, Math.max(0, waarde)) : 0;
     this.macros[poort] = v;
-    return this.zender ? this.zender.poort(poort, v) : false;
+    this.gezet.add(poort);
+    if (!this.aanwezig) { this.teSturen.add(poort); return false; }
+    this.teSturen.delete(poort);
+    return this.zender.poort(poort, v);
   }
 
   /** De stand van een macro voor read(): null zonder verbinding (er is dan niets te doen). */
@@ -470,7 +577,7 @@ export class BeeldKoppeling extends Emitter {
     if (!REGIE.includes(poort)) return false;
     if (!on) { this.ingedrukt.delete(poort); return false; }
     this.ingedrukt.add(poort);
-    return this.zender ? this.zender.poort(poort) : false;
+    return this.verbonden ? this.zender.poort(poort) : false;
   }
 
   /** Het lampje van een regieknop: 1 ingedrukt, 0 bruikbaar, null zonder verbinding. */

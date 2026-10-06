@@ -11,11 +11,12 @@
  * @param geweigerd  de reden waarom het adres in het veld geweigerd werd, of null
  * @returns { tekst, soort, lamp }
  *   soort  uit | geen | fout | zoekt | half | ok (de kleur van de regel)
- *   lamp   null (beeld staat uit: de knop ziet eruit als altijd) | geen | fout | zoekt | verbonden | volgt
+ *   lamp   null (beeld staat uit: de knop ziet eruit als altijd) | geen (ook: een ander tabblad stuurt) | fout | zoekt | verbonden | volgt
  */
 export function beeldStand(s, geweigerd = null) {
   if (geweigerd) return { tekst: `adres geweigerd: ${geweigerd}`, soort: 'fout', lamp: s?.aan ? 'fout' : null };
   if (!s?.aan) return { tekst: 'uit', soort: 'uit', lamp: null };
+  if (s.elders) return { tekst: 'aan, maar een ander VARVE-tabblad heeft de APC: dat stuurt het beeld', soort: 'geen', lamp: 'geen' };
   if (s.fout) return { tekst: `loopt niet: ${s.fout}`, soort: 'fout', lamp: 'fout' };
   if (!s.adres) return { tekst: 'geen adres', soort: 'geen', lamp: 'geen' };
   if (!s.verbonden) return { tekst: `zoekt de relay op ${s.adres}`, soort: 'zoekt', lamp: 'zoekt' };

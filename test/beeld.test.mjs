@@ -6,8 +6,9 @@
 import { Beatgrid } from '../src/engine/beatgrid.js';
 import {
   BeeldKoppeling, controleerAdres, klemLatentie, stabieleId, kiesKant, kenmerkenVan,
-  MACROS, REGIE, MACRO_STANDAARD, ADRES_MAX, TIK_MS, ONBEREIKBAAR_MS, BEELD_VERS_MS, OPNIEUW_MS,
+  MACROS, REGIE, MACRO_STANDAARD, ADRES_MAX, TIK_MS, ONBEREIKBAAR_MS, BEELD_VERS_MS, OPNIEUW_MS, STIL_MS,
 } from '../src/koppel/beeld.js';
+import { OVERSLAAN } from '../src/control/terugspelen.js';
 import { hoorbareTel, engineTel } from '../src/analysis/maat.js';
 import { bindBeeld, invoke, read } from '../src/control/actions.js';
 import { existsSync, readFileSync } from 'node:fs';
@@ -84,14 +85,23 @@ function nepZenderMaker() {
 
 /**
  * De Stroommachine is er: elke seconde een beeld-status (een nieuw object per
- * bericht, zoals de zender het maakt), alleen zolang de zender verbonden is.
- * Geeft een functie terug die haar weer weghaalt.
+ * bericht, zoals de zender het maakt) en, met een koppeling erbij, een ping met
+ * haar oplopende teller (zoals 09o-dj.js; de koppeling luistert mee op de
+ * socket). Alleen zolang de zender verbonden is. Geeft een functie terug die
+ * haar weghaalt; `.herlaad()` = een nieuwe pagina (de teller begint bij 1).
  */
-function stroomLeeft(z, scene = 'Ruimte') {
-  const zeg = () => { if (z.status.verbonden) z.beeld({ regime: 'Diepte', scene, fps: 60, volgt: true, bpm: 124 }); };
+function stroomLeeft(z, k = null, scene = 'Ruimte') {
+  let teller = 0;
+  const zeg = () => {
+    if (!z.status.verbonden) return;
+    if (k) k.hoorBericht(JSON.stringify({ naar: 'varvedj', type: 'ping', id: ++teller, t0: 1, van: 'stroommachine' }));
+    z.beeld({ regime: 'Diepte', scene, fps: 60, volgt: true, bpm: 124 });
+  };
   zeg();
   const taak = timers.setInterval(zeg, 1000);
-  return () => timers.clearInterval(taak);
+  const weg = () => timers.clearInterval(taak);
+  weg.herlaad = () => { teller = 0; zeg(); };
+  return weg;
 }
 
 const nepLuisteraar = { waarden: { laag: 0.5, midden: 0.2, hoog: 0.9, onset: 1, rms: 0.3 }, lees() { return this.waarden; } };
@@ -111,6 +121,9 @@ console.log('het adres en de latentie');
     const r = controleerAdres(invoer);
     ok(`geweigerd: ${waarom} (${r.reden})`, r.ok === false && !r.leeg && typeof r.reden === 'string');
   }
+  const slecht = controleerAdres('ws://pc:6000/app');
+  ok(`een poort die de browser nooit opent (6000): geweigerd met een eigen reden (${slecht.reden})`, slecht.ok === false && /6000/.test(slecht.reden));
+  ok('poort 7702 en zonder poort mogen', controleerAdres('ws://pc:7702/app').ok && controleerAdres('ws://pc/app').ok);
   const lang = 'ws://pc/' + 'a'.repeat(ADRES_MAX);
   ok(`langer dan ${ADRES_MAX} tekens geweigerd`, controleerAdres(lang).ok === false);
   ok(`precies ${ADRES_MAX} tekens mag`, controleerAdres('ws://pc/' + 'a'.repeat(ADRES_MAX - 8)).ok);
@@ -141,6 +154,11 @@ console.log('\nwelke track een kant vertegenwoordigt');
     kiesKant([t('A', 'A', true, true, 1), t('C', 'A', true, false, 5)], 'A') === 'A');
   ok('van twee spelende: wie het laatst begon', kiesKant([t('A', 'A', true, true, 1), t('C', 'A', true, true, 5)], 'A') === 'C');
   ok('niemand speelt: wie het laatst geladen of gestart werd', kiesKant([t('A', 'A', true, false, 7), t('C', 'A', true, false, 5)], 'A') === 'A');
+  const o = (id, open, laatst) => ({ id, kant: 'A', geladen: true, speelt: true, open, laatst });
+  ok('van twee spelende: wie met de fader open speelt gaat voor (voorbeluisteren met de fader dicht wisselt niets)',
+    kiesKant([o('A', true, 1), o('C', false, 5)], 'A') === 'A');
+  ok('speelt alleen een track met de fader dicht: die (spelen gaat voor stilstaan)',
+    kiesKant([o('C', false, 5), t('A', 'A', true, false, 9)], 'A') === 'C');
 }
 
 console.log('\nkenmerken');
@@ -212,9 +230,17 @@ console.log('\nde klok voor de zender');
 console.log('\nkenmerken voor de zender');
 {
   const e = maakEngine();
-  const k = new BeeldKoppeling({ engine: e, ids: IDS, luisteraar: nepLuisteraar, maakZender: nepZenderMaker().maak, timers, nu: () => T });
+  const stil = { waarden: { laag: 0, midden: 0.002, hoog: 0, onset: 0, rms: 0.001 }, lees() { return this.waarden; } };
+  const k = new BeeldKoppeling({ engine: e, ids: IDS, luisteraar: stil, maakZender: nepZenderMaker().maak, timers, nu: () => T });
   laad(e, 'A');
-  ok('er speelt niets: null', k.kenmerken() === null);
+  ok('er speelt niets en de master is stil: null', k.kenmerken() === null);
+  k.luisteraar = nepLuisteraar;
+  ok('er speelt geen track, maar de master klinkt (sampler, klankschaal, een staart): kenmerken', k.kenmerken()?.['mix.laag'] === 0.5);
+  k.luisteraar = stil;
+  ok('de master net stil: nog even door (de waarden zakken naar ~0, niet blijven hangen)', k.kenmerken()?.['mix.laag'] === 0);
+  T += STIL_MS + 1;
+  ok(`${STIL_MS / 1000} s stil: null`, k.kenmerken() === null);
+  k.luisteraar = nepLuisteraar;
   Object.assign(e.deck('A'), { playing: true, position: 0.5 + 0.03 });   // hoorbaar op 0,5 s = tel 1,0
   const w = k.kenmerken();
   ok('speelt: zeven kenmerken uit analyse en tel', Object.keys(w).length === 7 && w['mix.hoog'] === 0.9 && w['maat.klap'] === 1 && dicht(w['maat.tel'], 0, 1e-6));
@@ -222,7 +248,9 @@ console.log('\nkenmerken voor de zender');
   const w2 = k.kenmerken();
   ok('zonder grid: alleen de vijf uit de analyse', Object.keys(w2).length === 5);
   e.deck('A').wacht = true;
-  ok('alleen een track die op de maat wacht: null', k.kenmerken() === null);
+  k.luisteraar = stil;
+  T += STIL_MS + 1;
+  ok('alleen een track die op de maat wacht (en de master stil): null', k.kenmerken() === null);
   e.deck('A').wacht = false;
   e.deck('A').grid = new Beatgrid({ bpm: 120, firstBeat: 0 });
   let gelezen = 0;
@@ -304,6 +332,31 @@ console.log('\nmeldingen: hooguit één per start, geen regen bij herverbinden')
   nz.gemaakt[1].verbind(true);
   ok('een nieuw adres mag weer één keer "verbonden" melden', meldingen.length === 3);
   k.zet({ aan: false });
+  // Uit de bewaarde instellingen (een avond zonder pc): de melding gaat vanzelf weg.
+  k.zet({ aan: true }, { vanzelf: true });
+  loop(ONBEREIKBAAR_MS + 1);
+  ok('start uit de bewaarde instellingen zonder relay: één melding, maar info (geen rode die blijft staan)',
+    meldingen.length === 4 && meldingen[3].soort === 'info' && /staat de pc uit/.test(meldingen[3].tekst));
+  k.zet({ aan: false });
+}
+
+console.log('\néén tabblad zendt (de Web Lock)');
+{
+  taken = [];
+  const e = maakEngine();
+  const nz = nepZenderMaker();
+  const k = new BeeldKoppeling({ engine: e, ids: IDS, luisteraar: nepLuisteraar, maakZender: nz.maak, timers, nu: () => T, mag: false });
+  k.zet({ aan: true, adres: ADRES }, { vanzelf: true });
+  ok('een tweede tabblad (mag niet): geen zender, geen timer, status zegt "elders"', nz.gemaakt.length === 0 && levend() === 0 && k.status().elders === true);
+  k.magZenden(true);
+  ok('het wordt het eerste (de lock komt vrij): de zender start met de bewaarde instellingen', nz.gemaakt.length === 1 && nz.gemaakt[0].gestart && !k.status().elders);
+  k.magZenden(true);
+  ok('nog eens ja: niet opnieuw starten', nz.gemaakt.length === 1);
+  k.magZenden(false);
+  ok('weer nee (de hub gaf de APC aan een ander tabblad): zender gestopt, 0 timers, instellingen blijven',
+    nz.gemaakt[0].gestopt && levend() === 0 && k.instellingen.aan === true && k.instellingen.adres === ADRES);
+  k.zet({ adres: 'ws://10.0.0.5:7702/app' });
+  ok('een ander adres terwijl dit tabblad niet mag: bewaard, niet gestart', nz.gemaakt.length === 1 && k.instellingen.adres === 'ws://10.0.0.5:7702/app');
 }
 
 console.log('\ntrack bij laden, met een stabiele id');
@@ -322,7 +375,7 @@ console.log('\ntrack bij laden, met een stabiele id');
   ok('verbonden: niet meteen in het statusbericht (de zender stuurt eerst zijn manifest)', z.tracks.length === 0);
   loop(TIK_MS * 5);
   ok('verbonden, maar de Stroommachine is er nog niet (geen beeld-status): geen track (de relay zou hem weggooien)', z.tracks.length === 0 && z.mixen.length === 0);
-  const weg = stroomLeeft(z);
+  const weg = stroomLeeft(z, k);
   loop(TIK_MS);
   ok('haar eerste beeld-status, de volgende tik: track A met yt:<id>, titel, bpm en toonsoort',
     z.tracks.length === 1 && z.tracks[0][0] === 'A' && z.tracks[0][1].id === 'yt:dQw4w9WgXcQ'
@@ -361,23 +414,60 @@ console.log('\ntrack bij laden, met een stabiele id');
   z.verbind(true);
   loop(1000);
   ok('weer verbonden (en de Stroommachine is er): beide kanten en de mix opnieuw', z.tracks.length === voor + 2 && z.mixen.length === mixVoor + 1);
-  // De Stroommachine herladen terwijl de relay blijft: VARVE merkt niets aan de
-  // verbinding, alleen aan haar beeld-status (stil, dan weer terug).
-  weg();
+  // De Stroommachine herladen terwijl relay en VARVE verbonden blijven: haar
+  // ping-teller begint weer bij 1. Ook een snelle F5 (geen gat in de status).
   loop(OPNIEUW_MS);
   const n2 = z.tracks.length;
-  const weg2 = stroomLeeft(z);
+  weg.herlaad();
   loop(TIK_MS);
-  ok('de Stroommachine weer terug na een stilte (herladen): beide kanten opnieuw', z.tracks.length === n2 + 2);
-  weg2();
-  loop(BEELD_VERS_MS + 500);
-  const n3 = z.tracks.length;
-  const weg3 = stroomLeeft(z);
+  ok('snel herladen (de ping-teller begint opnieuw, geen gat): beide kanten opnieuw', z.tracks.length === n2 + 2);
+  loop(5000);
+  ok('daarna, zolang ze er is: geen herhaling', z.tracks.length === n2 + 2);
+  weg.herlaad();
   loop(TIK_MS);
-  ok(`nog eens binnen ${OPNIEUW_MS / 1000} s: niet opnieuw (een trage Stroommachine geeft zo geen lus)`, z.tracks.length === n3);
+  ok(`nog eens herladen binnen ${OPNIEUW_MS / 1000} s: nog niet (twee Stroommachines door elkaar geven zo geen scène per ping)`, z.tracks.length === n2 + 2);
   loop(OPNIEUW_MS);
-  ok('zolang ze er is: geen herhaling', z.tracks.length === n3);
-  weg3();
+  ok('… maar niet verloren: na de wachttijd alsnog', z.tracks.length === n2 + 4);
+  // Laden terwijl ze herlaadt: de track gaat de lucht in (aanwezig klopt nog even), daarna opnieuw.
+  loop(OPNIEUW_MS);
+  laad(e, 'A', { titel: 'Tijdens' });
+  T += 5;
+  k.naLaad({ deckId: 'A', bron: 'library', nummer: 'ddddddddddd', titel: 'Tijdens' });
+  e.deck('C').playing = false;
+  loop(TIK_MS);
+  const nTijdens = z.tracks.length;
+  ok('laden tijdens het herladen: gaat (de relay gooit hem weg, dat weet VARVE niet)', z.tracks.at(-1)?.[1].id === 'yt:ddddddddddd');
+  weg.herlaad();
+  loop(TIK_MS);
+  ok('de nieuwe pagina pingt: het nummer gaat opnieuw, niet verloren', z.tracks.length === nTijdens + 2
+    && z.tracks.slice(-2).some(([kant, n]) => kant === 'A' && n.id === 'yt:ddddddddddd'));
+  weg();
+  k.zet({ aan: false });
+}
+
+console.log('\nvoorbeluisteren met de fader dicht wisselt de scène niet');
+{
+  taken = [];
+  const e = maakEngine();
+  const nz = nepZenderMaker();
+  const k = new BeeldKoppeling({ engine: e, ids: IDS, luisteraar: nepLuisteraar, maakZender: nz.maak, timers, nu: () => T });
+  laad(e, 'A'); k.naLaad({ deckId: 'A', bron: 'library', nummer: 'aaaaaaaaaaa', titel: 'Een' });
+  e.kant.C = 'A';
+  laad(e, 'C'); k.naLaad({ deckId: 'C', bron: 'library', nummer: 'ccccccccccc', titel: 'Drie' });
+  e.deck('A').playing = true;
+  k.zet({ aan: true, adres: ADRES });
+  const z = nz.gemaakt[0];
+  z.verbind(true);
+  const weg = stroomLeeft(z, k);
+  loop(TIK_MS);
+  ok('track 1 speelt op kant A: track A = Een', z.tracks.at(-1)?.[1].id === 'yt:aaaaaaaaaaa');
+  Object.assign(e.deck('C'), { playing: true }); e.deck('C').ui.fader = 0;
+  loop(TIK_MS * 3);
+  ok('track 3 (ook kant A) starten met de fader dicht: geen nieuwe track A', z.tracks.length === 1);
+  e.deck('C').ui.fader = 0.8;
+  loop(TIK_MS);
+  ok('zijn fader open: nu neemt hij kant A over', z.tracks.length === 2 && z.tracks[1][1].id === 'yt:ccccccccccc');
+  weg();
   k.zet({ aan: false });
 }
 
@@ -392,7 +482,7 @@ console.log('\nmix bij crossfader en transport');
   k.zet({ aan: true, adres: ADRES });
   const z = nz.gemaakt[0];
   z.verbind(true);
-  const weg = stroomLeeft(z);
+  const weg = stroomLeeft(z, k);
   loop(TIK_MS);
   ok('na verbinden één mix met crossfader en beide kanten',
     z.mixen.length === 1 && z.mixen[0].xfader === 0.5 && z.mixen[0].a.speelt === false && z.mixen[0].b.rate === 1);
@@ -436,6 +526,8 @@ console.log('\npoort bij een APC-actie (de bus)');
   k.zet({ aan: true, adres: ADRES });
   const z = nz.gemaakt[0];
   z.verbind(true);
+  ok('zonder verbinding gezet = niet onthouden (de ring liegt niet)', read('beeld.macro.tint') === MACRO_STANDAARD['macro.tint']);
+  const weg = stroomLeeft(z, k);
   ok('verbonden: read = de stand (de neutrale stand van de Stroommachine tot je draait)',
     read('beeld.macro.helderheid') === MACRO_STANDAARD['macro.helderheid'] && read('beeld.macro.glitch') === 0);
   invoke('beeld.macro.tint', 0.61234);
@@ -463,6 +555,17 @@ console.log('\npoort bij een APC-actie (de bus)');
       && !(p.startsWith('macro.') && poorten.includes("knop('macro.' + m[0]") && live.includes(`['${p.slice(6)}',`)));
     ok(`elke poort-id bestaat in de Stroommachine (${repo}/src/09d-poorten.js${mist.length ? `; mist: ${mist.join(', ')}` : ''})`, !mist.length);
   } else console.log(`  -- poort-id's niet nagelopen: geen Stroommachine in ${repo} (zet VARVE_STROOM_REPO)`);
+  // De Stroommachine herladen: ze begint neutraal, VARVE zet de macro's die je zette terug.
+  const voorHerladen = z.poorten.length;
+  loop(OPNIEUW_MS);
+  weg.herlaad();
+  loop(TIK_MS);
+  const terug = z.poorten.slice(voorHerladen);
+  ok('herladen: de macro\'s die je zette gaan opnieuw (met hun stand), de regie niet',
+    terug.length === MACROS.length && terug.every(([p, w]) => MACROS.includes(p) && w === k.macros[p]));
+  ok('terugspelen slaat de regie over (vasthouden en paniek zijn schakelaars), de macro\'s niet',
+    OVERSLAAN.test('beeld.regie.paniek') && OVERSLAAN.test('beeld.regie.ontdek') && !OVERSLAAN.test('beeld.macro.tint'));
+  weg();
   z.verbind(false);
   ok('verbinding weg: read weer null', read('beeld.macro.tint') === null && read('beeld.regie.paniek') === null);
   k.zet({ aan: false });
@@ -496,12 +599,14 @@ console.log('\nde echte zender op een nep-WebSocket');
 {
   taken = [];
   const socks = [];
+  // Zoals een echte WebSocket: onmessage én addEventListener (daarop luistert de koppeling mee).
   class NepWS {
-    constructor(url) { this.url = url; this.readyState = 0; this.uit = []; socks.push(this); }
+    constructor(url) { this.url = url; this.readyState = 0; this.uit = []; this.luister = []; socks.push(this); }
+    addEventListener(type, f) { if (type === 'message') this.luister.push(f); }
     send(s) { this.uit.push(JSON.parse(s)); }
     close() { this.readyState = 3; }
     open() { this.readyState = 1; this.onopen && this.onopen(); }
-    krijg(o) { this.onmessage && this.onmessage({ data: JSON.stringify(o) }); }
+    krijg(o) { const e = { data: JSON.stringify(o) }; for (const f of this.luister) f(e); this.onmessage && this.onmessage(e); }
     sluit() { this.readyState = 3; this.onclose && this.onclose(); }
   }
   const e = maakEngine();
@@ -513,7 +618,13 @@ console.log('\nde echte zender op een nep-WebSocket');
   ok('één WebSocket naar het adres', socks.length === 1 && socks[0].url === ADRES);
   // De Stroommachine via de relay: elke seconde een beeld-status op de open socket.
   const status = () => ({ type: 'beeld-status', naar: 'varvedj', van: 'stroommachine', regime: 'Gloed', scene: 'Filament', bpm: 124, volgt: true, fps: 60 });
-  const stroomTaak = timers.setInterval(() => { const s = socks[socks.length - 1]; if (s.readyState === 1) s.krijg(status()); }, 1000);
+  let pingTeller = 0;
+  const stroomTaak = timers.setInterval(() => {
+    const s = socks[socks.length - 1];
+    if (s.readyState !== 1) return;
+    s.krijg({ naar: 'varvedj', type: 'ping', id: ++pingTeller, t0: 1, van: 'stroommachine' });
+    s.krijg(status());
+  }, 1000);
   socks[0].open();
   loop(TIK_MS + 5);
   ok('nog geen beeld-status: klok wel, track nog niet', socks[0].uit.some((m) => m.type === 'klok') && !socks[0].uit.some((m) => m.type === 'track'));
@@ -539,8 +650,18 @@ console.log('\nde echte zender op een nep-WebSocket');
   ok('herverbindt vanzelf', socks.length === 2);
   socks[1].open();
   loop(1000 + TIK_MS + 5);
+  ok('de koppeling luistert mee op de socket van de zender (de pings)', socks[1].luister.length === 1 && k.pingId === pingTeller);
   ok('na herverbinden: weer eerst het manifest, dan opnieuw track A',
     socks[1].uit[0]?.app === 'varvedj' && socks[1].uit.some((m) => m.type === 'track' && m.id === 'yt:dQw4w9WgXcQ'));
+  // De Stroommachine herladen (haar ping-teller begint opnieuw), over de echte zender.
+  loop(OPNIEUW_MS);
+  const voor = socks[1].uit.filter((m) => m.type === 'track').length;
+  pingTeller = 0;
+  loop(1000 + TIK_MS + 5);
+  ok('de Stroommachine herladen (haar ping-teller begint weer bij 1): track A gaat opnieuw over de lijn',
+    socks[1].uit.filter((m) => m.type === 'track').length === voor + 1);
+  ok('de zender antwoordde ook op die pings (pong), de koppeling stuurt zelf geen pong',
+    socks[1].uit.filter((m) => m.type === 'pong').length >= 2);
   k.zet({ aan: false });
   timers.clearInterval(stroomTaak);
   const n = socks[1].uit.length;

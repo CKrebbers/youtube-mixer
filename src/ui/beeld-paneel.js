@@ -34,7 +34,9 @@ const schrijf = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
 const HERLEES_MS = 500;
 
 export function opzetBeeld({ engine }) {
-  const beeld = new BeeldKoppeling({ engine, ids: DECK_IDS });
+  // Pas zenden als app.js zegt dat dit het tabblad met de APC is (magZenden):
+  // een tweede tabblad deelt localStorage en zou anders ook verbinden.
+  const beeld = new BeeldKoppeling({ engine, ids: DECK_IDS, mag: false });
   const rij = document.getElementById('beeld');
   const knop = document.getElementById('beeld-btn');
   const aanKnop = rij.querySelector('.bd-aan');
@@ -74,7 +76,8 @@ export function opzetBeeld({ engine }) {
   // geldig adres geweest; is het dat toch niet (met de hand veranderd), dan
   // staat het rood in het veld, zonder melding: dat was geen poging van jou.
   const bewaardAdres = lees(ADRES) ?? '';
-  const begin = beeld.zet({ aan: lees(AAN) === '1', adres: bewaardAdres, latentie: lees(LATENTIE) ?? 0 });
+  // `vanzelf`: geen relay bij het opstarten (de pc staat uit) = een melding die weggaat, geen rode.
+  const begin = beeld.zet({ aan: lees(AAN) === '1', adres: bewaardAdres, latentie: lees(LATENTIE) ?? 0 }, { vanzelf: true });
   if (!begin.ok) geweigerd = begin.reden;
   adresVeld.value = begin.ok ? beeld.instellingen.adres : bewaardAdres;
   latentieVeld.value = String(beeld.instellingen.latentie);
@@ -110,6 +113,9 @@ export function opzetBeeld({ engine }) {
     beeld.zet({ latentie: v });
     schrijf(LATENTIE, String(v));
     vies = true;
+    // Ook na een klik op de pijltjes: de focus eruit, anders doen de sneltoetsen
+    // (spatie = play, cijfers = loops) niets tot je ergens anders klikt.
+    latentieVeld.blur();
   });
 
   /**

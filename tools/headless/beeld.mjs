@@ -428,16 +428,49 @@ try {
   await tab.tot('!!(window.engine && window.beeld && window.meld)', 30000);
   await tab.evalueer(HULP);
   const t8 = Date.now();
-  while (Date.now() - t8 < 40000) { await tab.beeld(); await wacht(500); }
+  let meld10 = null;   // een info-melding gaat na 5 s weg: kijk na ~10 s (de melding komt na 8 s)
+  while (Date.now() - t8 < 40000) {
+    await tab.beeld(); await wacht(500);
+    if (!meld10 && Date.now() - t8 > 10000) meld10 = (await tab.evalueer('__b.meldingen()')).filter((m) => /beeld/.test(m));
+  }
   const st8 = await tab.evalueer(`({ stand: __b.stand(), lamp: __b.lamp(), ws: window.__ws.length, meld: __b.meldingen(), verbonden: window.beeld.status().verbonden })`);
   ok(`start met een onbereikbaar adres: de mixer werkt, de regel zegt "zoekt de relay op …" (${st8.stand})`,
     st8.stand === `zoekt de relay op ${LEEG_ADRES}` && st8.lamp === 'zoekt' && !st8.verbonden);
   ok(`40 s: 0 uitzonderingen en 0 console.error (${tab.js.length - jsVoor8})`, tab.js.length === jsVoor8, tab.js.slice(jsVoor8, jsVoor8 + 3).join(' | '));
   const beeldMeld = st8.meld.filter((m) => /beeld/.test(m));
-  ok(`40 s: precies één melding, "de relay antwoordt niet" (${beeldMeld.length})`, beeldMeld.length === 1 && /antwoordt niet/.test(beeldMeld[0]), beeldMeld);
+  ok(`na 10 s: precies één melding, een info ("geen relay … staat de pc uit?"), geen rode (${meld10?.length})`,
+    meld10?.length === 1 && /^info/.test(meld10[0]) && /staat de pc uit/.test(meld10[0]), meld10);
+  ok(`na 40 s: geen melding meer over (de info ging vanzelf weg, er kwam niets bij) (${beeldMeld.length})`, beeldMeld.length === 0, beeldMeld);
   ok(`40 s: rustig opnieuw proberen, hooguit 9 verbindingen (${st8.ws})`, st8.ws >= 3 && st8.ws <= 9);
   info(`wat Chrome zelf logde in die 40 s (Log-domein, niet te onderdrukken): ${tab.log.length - logVoor8} regels`);
   ok(`de hele run: 0 uitzonderingen en 0 console.error in de mixer (${tab.js.length})`, tab.js.length === 0, tab.js.slice(0, 3).join(' | '));
+
+  // ---- 9. een tweede VARVE-tabblad (zelfde localStorage: ook "aan") ------------
+  // Alleen het tabblad met de Web Lock mag zenden: twee tabbladen zouden allebei
+  // op elke ping antwoorden. Sluit het eerste, dan neemt het tweede het over.
+  console.log('\neen tweede VARVE-tabblad');
+  const nieuw2 = await fetch(`http://127.0.0.1:${DEBUG}/json/new?about:blank`, { method: 'PUT' }).then((r) => r.json());
+  const tab2 = new Tab(nieuw2.webSocketDebuggerUrl);
+  await tab2.verbind();
+  await tab2.cdp('Page.addScriptToEvaluateOnNewDocument', { source: `delete Navigator.prototype.requestMIDIAccess; delete navigator.requestMIDIAccess;
+    (() => { const W = window.WebSocket; window.__ws = []; window.WebSocket = class extends W { constructor(...a) { super(...a); window.__ws.push(String(a[0])); } }; })();` });
+  await tab2.cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 790, deviceScaleFactor: 1, mobile: false });
+  await tab2.cdp('Page.navigate', { url: `http://localhost:${POORT}/` });
+  await tab2.tot('!!(window.engine && window.beeld && window.meld)', 30000);
+  await tab2.evalueer(HULP);
+  for (let i = 0; i < 12; i++) { await tab2.beeld(); await wacht(500); }
+  const t2 = await tab2.evalueer(`({ ws: window.__ws.length, elders: window.beeld.status().elders, loopt: window.beeld.status().loopt, stand: __b.stand(), aan: window.beeld.status().aan })`);
+  ok(`tweede tabblad (het eerste heeft de lock): aan, maar 0 WebSockets en "een ander VARVE-tabblad" (${JSON.stringify(t2)})`,
+    t2.aan && t2.ws === 0 && t2.elders === true && !t2.loopt && /ander VARVE-tabblad/.test(t2.stand));
+  const wsEerste = await tab.evalueer('window.__ws.length');
+  ok(`het eerste tabblad zendt intussen gewoon (${wsEerste} pogingen)`, wsEerste >= 1);
+  await tab.cdp('Page.close').catch(() => null);
+  try { tab.ws.close(); } catch (_) {}
+  const overgenomen = await tab2.tot("window.beeld.status().loopt && !window.beeld.status().elders && window.__ws.length > 0", 10000);
+  ok('het eerste tabblad dicht: het tweede neemt het over en zoekt de relay', overgenomen === true,
+    await tab2.evalueer(`({ ws: window.__ws.length, s: window.beeld.status(), stand: __b.stand() })`));
+  ok(`tweede tabblad: 0 uitzonderingen en 0 console.error (${tab2.js.length})`, tab2.js.length === 0, tab2.js.slice(0, 3).join(' | '));
+  tab = tab2;
 } catch (err) {
   console.error(err);
   uitkomst.push(['uitvoering', false]);

@@ -159,6 +159,9 @@ console.log('\nbeeld: tegel, statusregel en lampje (beeld-weergave.js)');
   ok('regel: geweigerd adres = de reden, rood lampje als beeld aan staat', sWeg.tekst === 'adres geweigerd: alleen ws:// of wss://'
     && sWeg.soort === 'fout' && sWeg.lamp === 'fout');
   ok('regel: geweigerd adres met beeld uit = de reden, maar geen lampje', st({ ...basis, aan: false }, 'geen geldig adres').lamp === null);
+  const sElders = st({ ...basis, loopt: false, elders: true });
+  ok('regel: aan in een tweede tabblad = "een ander VARVE-tabblad … stuurt", grijze ring (dit tabblad zendt niet)',
+    /ander VARVE-tabblad/.test(sElders.tekst) && sElders.lamp === 'geen');
   const sZoekt = st(basis);
   ok(`regel: "${sZoekt.tekst}", oranje lampje`, sZoekt.tekst === 'zoekt de relay op ws://192.168.1.20:7702/app' && sZoekt.lamp === 'zoekt');
   const sWacht = st({ ...basis, verbonden: true });
