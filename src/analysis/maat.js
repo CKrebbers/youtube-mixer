@@ -175,11 +175,35 @@ const SPRONG_MARGE = 0.01;
  * verleden), en een sprong in het gat is geen sprong.
  */
 export const GAT = 1;
+/**
+ * Zo lang (s, kloktijd) zonder maatgever blijft de energie staan: korter is
+ * meestal een cut in de mix (fader of crossfader van de maatgever dicht: de
+ * hysterese van Engine.maatgever geeft dan ~250 ms niemand) en de muziek
+ * speelt door. Pas daarna (pauze, stop) glijdt hij naar 0 (review sec-hub).
+ */
+export const HOUD = 0.5;
+/**
+ * Hetzelfde sectiebegin opnieuw horen binnen zoveel van een maat na de vorige
+ * keer (een loop korter dan een maat, een hotcue- of pad-stutter) is GEEN
+ * nieuwe sectie: anders een klap per rondgang, een stroboscoop op de beamer
+ * (17 per seconde bij een loop van 1/8 tel). Een sectie-loop (minstens een
+ * maat) telt wel, elke ronde. 0,99: een loop van precies een maat telt.
+ */
+const HERHAAL_MAAT = 0.99;
 
 // De getallen van een SectieLezer staan in een Float64Array: een double in een
 // gewoon veld kost in V8 bij elke keer opslaan een HeapNumber (16 B), in een
 // Float64Array niets.
-const G_T = 0, G_POSITIE = 1, G_HOOR = 2, G_SPRONG = 3, G_MARGE = 4, G_GRENS = 5, G_NIEUW = 6, G_ENERGIE = 7;
+const G_T = 0, G_POSITIE = 1, G_HOOR = 2, G_SPRONG = 3, G_MARGE = 4, G_GRENS = 5, G_NIEUW = 6, G_ENERGIE = 7,
+  G_V = 8, G_LEEG = 9, G_HERHAAL = 10, G_DOEL = 11;
+
+/** Een maat in kloktijd rond tracktijd `b` (zonder grid: 2 s tracktijd, een maat van 120 bpm). Alleen bij een grens. */
+function maatKlok(d, b, r) {
+  const gr = d.grid;
+  if (!gr) return 2 / r;
+  const m = gr.timeOf(gr.beatAt(b) + (gr.beatsPerBar || 4)) - b;
+  return (m > 0 ? m : 2) / r;
+}
 
 /**
  * De secties van één track zoals je ze HOORT: de sectie, haar energie en
@@ -210,20 +234,32 @@ const G_T = 0, G_POSITIE = 1, G_HOOR = 2, G_SPRONG = 3, G_MARGE = 4, G_GRENS = 5
  *   - een sprong wordt hoorbaar en het nieuwe stuk begint op (of vlak voor) het
  *     begin van de sectie (een hotcue of een sectie-loop op het begin); een
  *     sprong midden in een sectie is geen nieuwe sectie;
- *   - de track begint te spelen op het begin van een sectie.
- *   Niet: een grens van een track die net de maat overneemt (`deck` of zijn
- *   kaart wisselt), of uit een gat. De klap dooft uit in kloktijd vanaf het
- *   moment dat je de grens hoorde. De opkomst (KLAP_OP vóór de grens) alleen
- *   als je hem ook haalt: niet als de loop vóór die grens rondgaat (de opbouw
- *   loopen tot de drop: de drop hoor je nooit).
+ *   - de track begint te spelen op het begin van een sectie, ook een NIEUWE
+ *     maatgever terwijl de vorige stilvalt (A stopt, B start op zijn cue, in
+ *     dezelfde lezing): de grens telt als hij binnen het laatste beeld ligt.
+ *   Niet: een grens van een track die de maat overneemt van een maatgever die
+ *   doorspeelt (overnemen), een kaart die later binnenkomt, of uit
+ *   een gat. En niet: hetzelfde sectiebegin opnieuw binnen een maat na de
+ *   vorige keer (HERHAAL_MAAT: een korte loop, een stutter). De klap dooft uit
+ *   in kloktijd vanaf het moment dat je de grens hoorde. De opkomst (KLAP_OP
+ *   vóór de grens) alleen als je hem ook haalt: niet als de loop vóór die
+ *   grens rondgaat (de opbouw loopen tot de drop: de drop hoor je nooit).
  *
  * Energie: de sectie die je hoort; zelfde deck en kaart = meteen, anders
- * glijden (ENERGIE_TAU) tot hij er bijna is.
+ * glijden (ENERGIE_TAU) tot hij er bijna is. Zonder maatgever blijft hij eerst
+ * HOUD staan (een cut in de mix), daarna glijdt hij naar 0. `energieDoel` =
+ * waar hij heen glijdt (de energie van de sectie zelf).
+ *
+ * De tijd: t = audioklok − vertraging. Wordt de vertraging groter (een ander
+ * uitgangsapparaat, de limiter), dan loopt t even terug: dat is geen nieuwe
+ * klok (geen reset, alles blijft staan tot t weer verder is) en geen sprong
+ * (de verwachte positie rekent met de audioklok, t + V). Alleen een sprong
+ * terug van meer dan GAT is een nieuwe klok.
  *
  * Gebruik: `lees(t)` vraagt de track aan `deck()` (de maatgever die je hoort,
  * of null); `stap(t, deck, V?)` als je hem (en de vertraging) zelf al hebt
  * (MaatLezer, de video-mixer). Dezelfde t
- * twee keer = niets veranderd. Voor een teller-gebruiker (de hub): onthoud
+ * twee keer (of een kleine stap terug) = niets veranderd. Voor een teller-gebruiker (de hub): onthoud
  * `grenzen` en meld een nieuwe sectie als hij veranderd is. Lees hem geregeld
  * (vaker dan GAT): wat in een gat gebeurt, telt niet.
  */
@@ -235,7 +271,7 @@ export class SectieLezer {
   constructor({ deck = () => null, vertraging = () => 0 } = {}) {
     this.deckVan = deck;
     this.vertraging = vertraging;
-    this.g = new Float64Array(8);
+    this.g = new Float64Array(12);
     this.reset();
   }
 
@@ -244,6 +280,9 @@ export class SectieLezer {
     g.fill(0);
     g[G_HOOR] = NaN;            // wat je bij het vorige beeld hoorde (tracktijd)
     g[G_GRENS] = -Infinity;     // de t waarop je de laatste nieuwe sectie hoorde
+    g[G_LEEG] = -Infinity;      // de t waarop de maatgever wegviel (voor HOUD)
+    g[G_HERHAAL] = -Infinity;   // de t waarop je het laatste sectiebegin hoorde (ook een herhaling)
+    this.herhaalI = -1;         // en welk (index)
     this.begonnen = false;      // al een beeld gelezen? (G_T = de t van het vorige beeld)
     this.deck = null;           // de track van het vorige beeld, of null
     this.kaart = null;          // zijn sectiekaart
@@ -258,6 +297,10 @@ export class SectieLezer {
   get nieuw() { return this.g[G_NIEUW]; }
   /** 0..1: de energie van de sectie die je hoort. */
   get energie() { return this.g[G_ENERGIE]; }
+  /** 0..1: waar de energie heen glijdt (de energie van de sectie zelf; zonder maatgever na HOUD 0). */
+  get energieDoel() { return this.g[G_DOEL]; }
+  /** De t waarop je een sprong hoort die nog moet komen, of NaN. */
+  get sprongOp() { return this.sprongWacht ? this.g[G_SPRONG] : NaN; }
   /** Wat je hoort (tracktijd), of NaN zonder track. */
   get hoor() { return this.g[G_HOOR]; }
   /** Het label van de sectie die je hoort ('drop', 'deel', …), of null. */
@@ -265,20 +308,41 @@ export class SectieLezer {
 
   lees(t) { return this.stap(t, this.deckVan()); }
 
+  /**
+   * Is er met dit deck iets gebeurd sinds de vorige lezing: een sprong (hotcue,
+   * seek, sectie), stilvallen of starten? Goedkoop, zonder iets te veranderen:
+   * voor een seintje van de deck ('change' komt ook bij elke fader- of
+   * EQ-beweging). `klok` = de audioklok nu (zonder vertraging).
+   */
+  veranderd(d, klok) {
+    if (!this.begonnen || d !== this.deck) return false;
+    const speelt = !!d.playing && !d.wacht;
+    if (speelt !== this.speelde) return true;
+    if (!speelt) return false;
+    const g = this.g, r = d.remt ? d.snelheid : d.rate;
+    return Math.abs(d.position - (g[G_POSITIE] + (klok - g[G_T] - g[G_V]) * (r > 0 ? r : 0))) > SPRONG_MARGE;
+  }
+
   /** `V` = de vertraging als je hem al hebt (anders vertraging()). */
   stap(t, d, V = d ? this.vertraging() : 0) {
     const g = this.g;
-    if (this.begonnen && t === g[G_T]) return this;
-    if (this.begonnen && t < g[G_T]) this.reset();                  // een nieuwe klok
+    if (this.begonnen && t <= g[G_T]) {
+      // Dezelfde t, of een kleine stap terug (de vertraging werd groter): niets veranderd.
+      if (t > g[G_T] - GAT) return this;
+      this.reset();                                                  // een echte sprong terug: een nieuwe klok
+    }
     const dt = this.begonnen ? t - g[G_T] : 0;
+    const dk = this.begonnen ? dt + V - g[G_V] : 0;                  // hoe ver de audioklok liep (t = klok − V)
     const gat = !this.begonnen || dt > GAT;
     this.begonnen = true;
     g[G_T] = t;
+    g[G_V] = V;
     const kaart = d ? d.sectieKaart ?? null : null;
     const st = kaart && kaart.stukken && kaart.stukken.length ? kaart.stukken : null;
     const vorige = this.deck;
     const wissel = d !== this.deck || kaart !== this.kaart;
-    if (wissel) { this.deck = d; this.kaart = kaart; this.glijd = true; }
+    if (wissel) { this.deck = d; this.kaart = kaart; this.glijd = true; this.herhaalI = -1; }
+    if (!d && vorige !== null) g[G_LEEG] = t;                        // de maatgever viel net weg
 
     // Wat je hoort, en een sprong die je nog niet hoort.
     let h = NaN, r = 0, speelt = false;
@@ -290,7 +354,7 @@ export class SectieLezer {
       h = speelt ? naVertraging(p, V, d.remt ? d.snelheid : d.rate) : p;   // = hoorbaar(d, V), met de positie één keer gelezen
       if (!speelt || wissel || gat) this.sprongWacht = false;
       else if (this.speelde) {
-        const verwacht = g[G_POSITIE] + dt * r;
+        const verwacht = g[G_POSITIE] + dk * r;
         if (Math.abs(p - verwacht) > SPRONG_MARGE) {
           const l = d.loop;
           const rond = !!l && r > 0 && p >= l.start && p < l.end && verwacht >= l.end - SPRONG_MARGE;
@@ -302,7 +366,11 @@ export class SectieLezer {
       g[G_POSITIE] = p;
       if (this.sprongWacht && t < g[G_SPRONG]) h = g[G_HOOR] + dt * r;   // nog het stuk van vóór de sprong
     } else this.sprongWacht = false;
-    const start = speelt && (!this.speelde || vorige === null);
+    // Starten: deze track begon net, of hij nam het over van een maatgever die nu stilvalt (A stopt, B start
+    // op zijn cue). Een track die de maat overneemt van een maatgever die doorspeelt, speelde al: dat is
+    // overnemen, geen starten.
+    const start = speelt && (!this.speelde || vorige === null
+      || (d !== vorige && !(vorige.playing && !vorige.wacht && !vorige.remt)));
     this.speelde = speelt;
     // Tot de sprong te horen is, staat alles stil: dezelfde sectie en energie,
     // geen nieuwe sectie en geen opkomst (alleen de klap dooft verder uit). Het
@@ -320,7 +388,13 @@ export class SectieLezer {
       if (hoorbaarNu) over = b >= h - (t - g[G_SPRONG]) * r - g[G_MARGE] && b <= h;   // het nieuwe stuk begon op (of vlak voor) het begin
       else if (start) over = b <= h && h - b <= dt * r + 1e-3;      // net begonnen, op het begin
       else if (!wissel) over = g[G_HOOR] < b && b <= h;             // doorlopend erover
-      if (over) { this.grenzen++; g[G_GRENS] = t - (h - b) / rr; }
+      if (over) {
+        const tb = t - (h - b) / rr;                                 // wanneer je het begin hoorde
+        // Hetzelfde begin binnen een maat na de vorige keer: een korte loop of een stutter, geen nieuwe sectie.
+        const herhaling = i === this.herhaalI && tb - g[G_HERHAAL] < HERHAAL_MAAT * maatKlok(d, b, rr);
+        g[G_HERHAAL] = tb; this.herhaalI = i;
+        if (!herhaling) { this.grenzen++; g[G_GRENS] = tb; }
+      }
     }
     if (hoorbaarNu) this.sprongWacht = false;
 
@@ -336,15 +410,21 @@ export class SectieLezer {
     }
     g[G_NIEUW] = n < NUL ? 0 : n > 1 ? 1 : n;
 
-    // De energie: meteen, of glijden na een wissel.
-    const ruw = st ? st[i < 0 ? 0 : i].energie : 0;
-    const doel = ruw > 0 ? (ruw < 1 ? ruw : 1) : 0;                    // clamp, ook NaN of zonder energie -> 0
-    let e = doel;
-    if (this.glijd) {
-      e = doel + (g[G_ENERGIE] - doel) * (dt > 0 ? Math.exp(-dt / ENERGIE_TAU) : 1);
-      if (Math.abs(e - doel) < GLIJ_KLAAR) { e = doel; this.glijd = false; }
+    // De energie: meteen, of glijden na een wissel. Zonder maatgever eerst HOUD vasthouden.
+    if (!d && t - g[G_LEEG] < HOUD) {
+      g[G_DOEL] = g[G_ENERGIE];                                      // glijd blijft staan: daarna glijdt hij vanaf hier
+    } else {
+      const ruw = st ? st[i < 0 ? 0 : i].energie : 0;
+      const doel = ruw > 0 ? (ruw < 1 ? ruw : 1) : 0;                  // clamp, ook NaN of zonder energie -> 0
+      let e = doel;
+      if (this.glijd) {
+        const dg = d ? dt : Math.min(dt, t - g[G_LEEG] - HOUD);          // na HOUD: glijden vanaf het eind van het vasthouden
+        e = doel + (g[G_ENERGIE] - doel) * (dg > 0 ? Math.exp(-dg / ENERGIE_TAU) : 1);
+        if (Math.abs(e - doel) < GLIJ_KLAAR) { e = doel; this.glijd = false; }
+      }
+      g[G_ENERGIE] = e < NUL ? 0 : e > 1 ? 1 : e;
+      g[G_DOEL] = doel;
     }
-    g[G_ENERGIE] = e < NUL ? 0 : e > 1 ? 1 : e;
 
     g[G_HOOR] = h;
     this.sectie = i;
