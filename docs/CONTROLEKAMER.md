@@ -6,7 +6,7 @@ de mixer.
 
 ## Wat erop staat
 
-1. **Stand**, zeven tegels met een lampje:
+1. **Stand**, acht tegels met een lampje:
    - **Server** draait, met het aantal nummers in de library. Daaronder (6 okt) een regel
      over de secties (`docs/SECTIES.md` §4, `/api/secties`, `src/controle/server-tegel.js`):
      "secties: 12 nog zonder · 3 verouderd", of "secties: alles actueel". *Nog zonder* = er is
@@ -14,7 +14,8 @@ de mixer.
      nieuwere `SECTIE_VERSIE`, een ander grid, stems erbij). Met de hand of op slot telt als
      actueel. Dat gebeurt vanzelf: bij het laden van dat nummer, of na een herstart van de
      server op de achtergrond; daar hoef je niets voor te doen. Een nieuw binnengehaald nummer
-     staat hier dus als "nog zonder" tot je het laadt. Een oudere server zonder de route:
+     staat hier dus als "nog zonder" tot je het laadt. Een nummer waarvan het rekenen mislukt
+     (audio weg of onleesbaar) blijft "nog zonder" staan. Een oudere server zonder de route:
      "secties: onbekend (oudere server)"; herstarten lost dat op. Lege library: geen regel.
    - **Binnenhalen**: yt-dlp en ffmpeg (`/api/tooling`).
    - **Ingest-rij**: hoeveel er bezig is en wacht (`/api/ingest`).
