@@ -71,16 +71,24 @@ function drukknop(slotVan, k) {
   return { fn, ingedrukt: () => (vast ? 1 : 0) };
 }
 
-export function invoke(id, value) {
+/**
+ * Een action uitvoeren. `opties` is er alleen voor terugspelen
+ * (terugspelen.js): `{ laat, van }` = deze regel komt zoveel seconden audioklok
+ * na zijn moment (tot een tik), en (een sectiedruk) de tracktijd waar de
+ * speelkop toen stond. Het log zet hem dan op zijn bedoelde moment, en een
+ * sectiesprong rekent vanaf die plek (deck.drukPlek). De waarde blijft 0..1
+ * of een boolean (regel 2); de rest van de bus negeert het.
+ */
+export function invoke(id, value, opties) {
   const a = registry.get(id);
   if (!a) { console.warn('[actions] onbekend:', id); return false; }
   // Wie meeluistert (het handelingenlog) hoort het vóór de action draait:
   // dan staat de handeling in het log vóór wat eruit volgt.
-  for (const f of busLuisteraars) { try { f(id, value); } catch (_) {} }
+  for (const f of busLuisteraars) { try { f(id, value, opties); } catch (_) {} }
   // Een action die gooit mag de aanroeper niet meenemen: de MIDI-hub stuurt
   // het bericht daarna nog naar de monitor, en juist dán wil je het zien.
   try {
-    a.fn(value);
+    a.fn(value, opties);
   } catch (err) {
     console.error(`[actions] ${id} faalde:`, err);
     for (const f of foutLuisteraars) { try { f(id, err); } catch (_) {} }
@@ -91,9 +99,9 @@ export function invoke(id, value) {
 
 const busLuisteraars = new Set();
 /**
- * Meeluisteren op de bus: (id, waarde) bij elke action die bestaat, van
- * MIDI, toetsenbord, muis of terugspelen. Voor het handelingenlog. Geeft een
- * functie terug die weer ophoudt.
+ * Meeluisteren op de bus: (id, waarde, opties) bij elke action die bestaat,
+ * van MIDI, toetsenbord, muis of terugspelen (opties: zie invoke). Voor het
+ * handelingenlog. Geeft een functie terug die weer ophoudt.
  */
 export function bijInvoke(fn) { busLuisteraars.add(fn); return () => busLuisteraars.delete(fn); }
 
@@ -460,22 +468,23 @@ export function bindEngine(engine) {
     // die sectie, die invalt op de volgende maat (deck.naarSectie); shift =
     // de sectie als loop (nog eens = loop eraf). Reads: null = er is geen
     // sectie op die plek (of geen kaart), 0,5 = er is er een, 1 = die hoor je
-    // nu (de LED knippert op de tel) of je drukt hem in.
+    // nu (de LED knippert op de tel) of je drukt hem in. `o` komt van
+    // terugspelen: { laat, van } = hoe laat de druk is en waar de speelkop toen
+    // stond (deck.drukPlek); dezelfde sprong als toen.
     for (let i = 0; i < SECTIE_PADS; i++) {
       let ingedrukt = false;
       const bestaat = () => !!d.sectieKaart && d.buffer && i < d.sectieKaart.aantal;
-      define(`${n}.section.${i + 1}`, 'trigger', (on) => { ingedrukt = !!on; if (on) d.naarSectie(i); },
+      define(`${n}.section.${i + 1}`, 'trigger', (on, o) => { ingedrukt = !!on; if (on) d.naarSectie(i, { laat: o?.laat, van: o?.van }); },
         { label: `Track ${nr} sectie ${i + 1}: daarheen, op de volgende maat`,
           read: () => (!bestaat() ? null : ingedrukt || d.sectieHier === i ? 1 : 0.5) });
-      define(`${n}.section.${i + 1}.loop`, 'trigger', (on) => { if (on) d.naarSectie(i, { loop: true }); },
+      define(`${n}.section.${i + 1}.loop`, 'trigger', (on, o) => { if (on) d.naarSectie(i, { loop: true, laat: o?.laat, van: o?.van }); },
         { label: `Track ${nr} sectie ${i + 1} als loop (nog eens: loop eraf)`,
           read: () => (!bestaat() ? null : d.loopIsSectie(i) ? 1 : 0.5) });
     }
     for (const [stap, naam, tekst] of [[1, 'next', 'volgende'], [-1, 'prev', 'vorige']]) {
-      define(`${n}.section.${naam}`, 'trigger', (on) => {
+      define(`${n}.section.${naam}`, 'trigger', (on, o) => {
         if (!on || !d.sectieKaart) return;
-        const i = d.sectieOpDeMaat + stap;
-        if (i >= 0 && i < d.sectieKaart.aantal) d.naarSectie(i);
+        d.naarSectieStap(stap, { laat: o?.laat, van: o?.van });
       }, { label: `Track ${nr} naar de ${tekst} sectie, op de volgende maat`,
            read: () => (!d.sectieKaart || !d.buffer ? null : 0) });
     }
@@ -1033,12 +1042,12 @@ function waaromNiet(engine) {
       const rest = aid.slice(n.length);
       if (!NUMMER_NODIG.test(rest) && !KOPTELEFOON_NODIG.test(rest)) continue;
       const fn = a.fn;
-      a.fn = (on) => {
+      a.fn = (on, o) => {
         if (on) {
           const r = reden(rest);
           if (r) { zeg(r); return; }
         }
-        return fn(on);
+        return fn(on, o);
       };
     }
   }

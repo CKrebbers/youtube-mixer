@@ -38,6 +38,12 @@ export const GRID_TERUG = 30;
 /** Beatjump-lengtes in tellen, te halveren en te verdubbelen. Standaard 4. */
 export const SPRONG_TELLEN = [1, 2, 4, 8, 16, 32];
 /**
+ * Hoe ver (tracktijd, s) een teruggespeelde druk naast zijn plek uit het log mag
+ * liggen om die plek te gebruiken (drukPlek): een tik plus een paar stappen van
+ * de audioklok. Verder ernaast greep iemand in, en geldt de plek van nu.
+ */
+export const DRUK_NAAST = 0.05;
+/**
  * Glijden (Deck.glide, de auto-DJ): in zoveel seconden naar een nieuwe stand,
  * als helling op de audioklok. Wie glijdt, richt hem steeds opnieuw (elke
  * ~0,4 s een punt dat GLIJ verderop op zijn curve ligt): zo volgt de knop
@@ -1030,13 +1036,18 @@ export class Deck extends Emitter {
    * nog de maat ervóór). Volgende/vorige rekenen hiervanaf. Zonder zeker grid:
    * de sectie op de positie.
    */
-  get sectieOpDeMaat() {
+  get sectieOpDeMaat() { return this.buffer ? this._sectieOpDeMaatVan(this.position) : -1; }
+
+  /** sectieOpDeMaat, gerekend vanaf tracktijd p (waar de speelkop stond bij een druk, drukPlek). */
+  _sectieOpDeMaatVan(p) {
     if (!this.sectieKaart || !this.buffer) return -1;
-    const p = this.position, g = this.grid;
+    const g = this.grid;
     // Tijdens de aanloop van een sprong: de sectie waar hij heen gaat. Het grid
     // ziet daar de maat van het stuk ervóór, en die kan een andere "1" hebben.
+    // (De aanloop zelf ligt bij terugspelen een paar ms naast: daarom het begin
+    // ervan tegen de positie van nu.)
     const s = this._sectieSprong;
-    if (s && p >= s.van - 1e-3 && p < s.tot) return s.i;
+    if (s && this.position >= s.van - 1e-3 && p < s.tot) return s.i;
     if (!g || !this.sectieKaart.opGrid || !this._opGrid(p)) return this.sectieKaart.index(p);
     const tellen = g.barPhase(p) * g.beatsPerBar;
     return this.sectieKaart.index(tellen < 0.02 ? p : g.verschuif(p, g.beatsPerBar - tellen));
@@ -1062,16 +1073,52 @@ export class Deck extends Emitter {
    * speel je er al in, dan blijft de speelkop waar hij is.
    * Zonder zeker grid (of een kaart zonder grid) springt hij gewoon naar het
    * begin, zoals een hotcue zonder quantize.
+   *
+   * Terugspelen (`laat`, `van`, docs/HANDELINGENLOG.md): de druk komt tot een
+   * tik te laat. Dan beslissen vanaf waar de speelkop stond toen je drukte
+   * (drukPlek), en het doel even ver doorschuiven als hij sindsdien speelde.
+   * Zonder dat viel een druk binnen de marge net na de "1" (0,02 tel) bij
+   * terugspelen soms buiten die marge: dezelfde sectie een maat later.
    * @returns {{ ok: boolean, waarom?: 'leeg'|'geensecties'|'geen' }}
    */
-  naarSectie(i, { loop = false } = {}) {
+  naarSectie(i, { loop = false, laat = 0, van = null } = {}) {
+    return this._naarSectie(i, loop, () => this.drukPlek({ laat, van }));
+  }
+
+  /**
+   * Naar de volgende (stap 1) of vorige (−1) sectie, gerekend vanaf de sectie
+   * op de maat (sectieOpDeMaat): tijdens een aanloop gaat "volgende" verder
+   * dan de sectie waar je al heen sprong. Eén plek voor beide beslissingen
+   * (welke sectie, en welke "1"): `druk` zoals bij naarSectie.
+   */
+  naarSectieStap(stap, druk = {}) {
+    if (!this.buffer) return { ok: false, waarom: 'leeg' };
+    if (!this.sectieKaart) return { ok: false, waarom: 'geensecties' };
+    const p = this.drukPlek(druk);
+    const i = this._sectieOpDeMaatVan(p) + stap;
+    if (i < 0 || i >= this.sectieKaart.aantal) return { ok: false, waarom: 'geen' };
+    return this._naarSectie(i, false, () => p);
+  }
+
+  /**
+   * De sprong zelf, vanaf tracktijd plek() (pas gelezen na de controles).
+   * Meldt 'sectiedruk' { i, van } als hij speelt: de plek waarvan hij rekende.
+   * Het handelingenlog zet die bij de druk (logboek.js), zodat terugspelen
+   * precies dezelfde beslissing neemt; ook als de audioklok tussen twee
+   * lezingen in dezelfde taak een stap (2,67 ms) verder ging.
+   */
+  _naarSectie(i, loop, plek) {
     if (!this.buffer) return { ok: false, waarom: 'leeg' };
     if (!this.sectieKaart) return { ok: false, waarom: 'geensecties' };
     const r = this.sectieBereik(i);
     if (!r || !this._loopMag(r.start, r.end)) return { ok: false, waarom: 'geen' };
-    const p = this.position;
+    const p = plek();                                // waar de speelkop stond bij de druk
+    if (this.playing) this.emit('sectiedruk', { i, van: p });
+    const terug = this.position - p;
     const zeker = (t) => this.sectieKaart.opGrid && this._opGrid(t);
-    const doel = this.playing ? sectieDoel(this.grid, p, r.start, zeker) : r.start;
+    const doelToen = this.playing ? sectieDoel(this.grid, p, r.start, zeker) : r.start;
+    const doel = doelToen + terug;                   // waar hij nu zou zijn, na die sprong
+    const doorlopend = doelToen !== r.start;
     const een = this.playing && zeker(r.start) ? sectieEen(this.grid, r.start) : r.start;
     const sprong = doel < een ? { i, van: doel, tot: een } : null;
     if (loop) {
@@ -1081,13 +1128,31 @@ export class Deck extends Emitter {
       this._onthoudLoop();
       this.loopBeats = tellen;
       this._sectieSprong = sprong;
-      this._spring(doel, { start: r.start, end: r.end }, doel !== r.start);
+      this._spring(doel, { start: r.start, end: r.end }, doorlopend);
       return { ok: true };
     }
     if (this.loop) this._verlaatLoop();
     this._sectieSprong = sprong;
-    this.seek(doel, { doorlopend: doel !== r.start });
+    this.seek(doel, { doorlopend });
     return { ok: true };
+  }
+
+  /**
+   * Waar de speelkop stond toen je drukte: daarvan rekent een sectiesprong.
+   * Live is dat nu. Terugspelen komt tot een tik (10 ms) te laat en ligt een
+   * paar ms naast het origineel (de beginstand: een stap van de audioklok):
+   * - `van`: de plek uit het log, waar de sprong TOEN van rekende. Dezelfde
+   *   beslissing (welke "1"), ook als het terugspelen een paar ms naast ligt;
+   *   alleen als hij past bij waar de track nu is (DRUK_NAAST).
+   * - anders `laat` (s audioklok te laat): zoveel tracktijd terug.
+   * Stilstaand, wachtend op de maat of remmend: nu.
+   */
+  drukPlek({ laat = 0, van = null } = {}) {
+    const p = this.position;
+    if (!this.playing || this.wacht || this.remt) return p;
+    const s = laat > 0 ? laat * this.rate : 0;
+    if (Number.isFinite(van) && Math.abs(p - s - van) <= DRUK_NAAST) return van;
+    return p - s >= 0 ? p - s : p;
   }
 
   /**

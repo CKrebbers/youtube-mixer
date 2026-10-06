@@ -341,9 +341,11 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
    * Een library-nummer op een track, streamend. Voor de library (onLaad) en
    * voor terugspelen (`terugspelen: true`, met het grid uit het log): dan
    * worden racks en pads NIET uit de library gehaald (die komen uit het log)
-   * en wordt er niets bewaard.
+   * en wordt er niets bewaard. `sectiesUitLog`: de sectiekaart ook niet (de
+   * beginstand of een 'secties'-gebeurtenis zet hem); anders zou de kaart van
+   * nu, misschien opnieuw gerekend op een ander grid, die van toen overschrijven.
    */
-  async function laadLibrary(deckId, track, { terugspelen = false, grid } = {}) {
+  async function laadLibrary(deckId, track, { terugspelen = false, grid, sectiesUitLog = false } = {}) {
     const begon = performance.now();
     // NIET wachten op engine.resume(): zonder gebruikersgebaar lost die belofte
     // nooit in en blijft het laden eeuwig hangen. Laden kan prima op een
@@ -421,7 +423,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     // toen staan er al in); bewaarToon slaat terugspeelDecks over.
     toonBewaard[deckId] = toonTekst(engine.deck(deckId).setToonKaart(track.toon ?? null));
     haalOnsets(deckId, track.id, mijnLaad);
-    haalSecties(deckId, track.id, mijnLaad);
+    if (!(terugspelen && sectiesUitLog)) haalSecties(deckId, track.id, mijnLaad);
     if (!terugspelen) haalTellen(deckId, track.id, mijnLaad);
     // Hoeveel stems er echt spelen zegt de bus (de engine), niet de library.
     const metStems = aantalOpBus(readAction, nr);
@@ -443,8 +445,10 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
    * Laden voor terugspelen (logboek.js), uit een laad-gebeurtenis of de
    * beginstand van een log: { bron, nummer, titel, grid, demo }. True als het
    * lukte. Een los bestand is niet terug te halen: dat zeggen we.
+   * `sectiesUitLog`: het log draagt de sectiekaart (terugspelen.kentSecties),
+   * dus niet van de server halen. Een ouder log niet: dan zoals voorheen.
    */
-  async function laadVoorTerugspelen(deckId, e) {
+  async function laadVoorTerugspelen(deckId, e, { sectiesUitLog = false } = {}) {
     const nr = trackVanDeck(deckId);
     if (e.bron === 'demo') {
       await engine.resume().catch(() => {});
@@ -465,7 +469,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
       meld(`terugspelen: "${e.titel || e.nummer}" op track ${nr}: ${err.message}`, 'fout');
       return false;
     }
-    await laadLibrary(deckId, track, { terugspelen: true, grid: e.grid ?? null });
+    await laadLibrary(deckId, track, { terugspelen: true, grid: e.grid ?? null, sectiesUitLog });
     return deckTrack[deckId] === track.id;
   }
 

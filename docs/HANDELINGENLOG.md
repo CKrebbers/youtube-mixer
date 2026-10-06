@@ -20,9 +20,10 @@ hun moment.
 |---|---|---|
 | bus | `src/control/actions.js` | `bijInvoke(fn)`: meeluisteren, vóór de action draait. `bindLog`: `log.toggle`, `log.replay.stop` |
 | log | `src/control/handelingen.js` | `Handelingenlog` (vastleggen, per seconde wegschrijven), `leesLog`, `leesStand` |
-| terugspelen | `src/control/terugspelen.js` | `maakPlan`, `Terugspeler` (klok, volgorde, laden), `maakUitvoerder` (wat een gebeurtenis voor de engine betekent) |
-| scherm | `src/ui/logboek.js` | knop en lijst, rack/grid/pads vergelijken, focus, koppeling met de opname |
+| terugspelen | `src/control/terugspelen.js` | `maakPlan`, `Terugspeler` (klok, volgorde, laden), `maakUitvoerder` (wat een gebeurtenis voor de engine betekent), `kentSecties` |
+| scherm | `src/ui/logboek.js` | knop en lijst, rack/grid/hotcues/sectiekaart/pads vergelijken, focus, koppeling met de opname |
 | laden | `src/ui/laden.js` | `naLaad` (wat er geladen werd), `laadVoorTerugspelen`, `staat.terugspeelDecks` |
+| sectiesprong | `src/engine/deck.js` | `drukPlek` (vanaf waar een sprong rekent), meldt `sectiedruk` |
 | server | `server/handelingen.js` + routes in `server/index.js` | start, stuk op zijn plek, lijst, lezen |
 
 De engine weet van niets (regel 1). Het log hangt aan de bus en aan de laadlaag.
@@ -88,6 +89,27 @@ terugspelen: `value`-actions 0..1 in volle precisie (regel 2), triggers
 `true`/`false`. Niets uitgedund: elke fader-stap staat erin. Een onbekende
 action (niet in het register) komt er niet in.
 
+Een regel die terugspelen de bus op zette, staat op het moment waarop hij
+BEDOELD was: terugspelen komt tot een tik te laat en geeft dat mee
+(`invoke(id, waarde, { laat })`), `neem` trekt het eraf. Zo schuift een
+opname van een terugspelen (opnieuw renderen) niet per generatie een tik op.
+
+**Een sectiedruk** (`track.N.section.*`, indrukken, terwijl de track speelt)
+heeft een VIERDE element: de tracktijd waarvan de sprong rekende.
+```
+[12.4,"track.1.section.5",true,{"van":63.66128}]
+```
+Een sectie valt in op de "1" vanaf waar de speelkop staat, met een marge van
+0,02 tel na de "1" (docs/SECTIES.md §3). Terugspelen komt tot een tik (10 ms)
+te laat en ligt een stap van de audioklok (2,67 ms) naast het origineel; een
+druk vlak na de "1" viel dan buiten die marge en landde een maat later
+(gemeten, zie "Terugspelen"). Met deze plek neemt het terugspelen dezelfde
+beslissing. De deck meldt hem zelf (`sectiedruk`, tijdens de action) en
+logboek.js zet hem bij de regel die de bus net schreef
+(`Handelingenlog.vulAan`): de plek waarvan de sprong ECHT rekende, ook als de
+audioklok tussen het log en de sprong een stap verder ging. Een oudere
+terugspeler leest alleen de eerste drie elementen.
+
 ### Gebeurtenissen
 
 **`kop`** (eerste regel, klein, zodat de lijst hem uit de eerste 4 kB leest):
@@ -106,6 +128,7 @@ het midden in een set begint. ~10 kB met acht tracks.
             "cue":12.1,"hotcues":[30.5,null,null,null],
             "loop":{"start":64,"end":72,"tellen":16}|null,
             "grid":{"stukken":[...],"beatsPerBar":4,...}|null,
+            "secties":{"versie":1,"opGrid":true,"grid":"c94b3270","stukken":[...],...}|null,
             "kant":"A",
             "rack":{"data":{...rack-JSON...},"standen":{"1":0.4},"herkomst":17,"mix":0.5,"bypass":false},
             "kill":{"low":false,"mid":false,"high":false},"sprong":4},
@@ -136,6 +159,14 @@ het midden in een set begint. ~10 kB met acht tracks.
     loop-in-punt en de vorige loop (reloop).
   Een ouder log zonder `kill` of `transport.quantize`: die bestonden toen niet,
   dus terugspelen zet ze UIT, wat er nu ook aan staat.
+- Sinds de secties (6 okt) per track ook `secties`: de sectiekaart
+  (`SectieKaart.toJSON()`, docs/SECTIES.md), of null. `section.5` betekent
+  wat DEZE kaart zegt; de server kan de kaart intussen opnieuw rekenen (een
+  ander grid, stems erbij), en dan lag sectie 5 ergens anders. Een
+  sectie-loop heeft geen eigen veld: het is een gewone loop van het deck en
+  staat in `loop` (met `tellen`); met de kaart erbij herkent `section.K.loop`
+  hem weer (lampje aan, nog eens drukken = eraf). Een log zonder `secties`
+  (van vóór 6 okt): terugspelen haalt de kaart dan van de server, zoals toen.
 - Een `stand` kan ook MIDDEN in een log staan: daar begon een terugspelen terwijl
   dit log liep (opnieuw renderen). De beginstand daarvan zet posities, tempo,
   cues, loops en wat speelt buiten de bus om; zonder die regel was de opname van
@@ -167,18 +198,24 @@ hotcue-knop bij terugspelen een nieuwe hotcue waar hij toen naar een bewaarde
 sprong. Een hotcue-knop geeft er ook een (direct achter de action, zelfde
 tijden). Sinds integratie-r2; een oudere terugspeler telt hem als onbekend.
 
+**`secties`**: de sectiekaart van een track veranderde, meestal vlak na een
+laad (laden.js haalt hem van de server, die hem misschien eerst uitrekent):
+`{"t":..,"e":"secties","track":1,"secties":{...}|null}`. Zoals `grid`: een
+gebeurtenis over het NUMMER. Een oudere terugspeler telt hem als onbekend.
+
 **`pads`**: de bewaarde sampler-pads (herinneringen) veranderden:
 `{"t":..,"e":"pads","herinneringen":[...8]}`.
 
 **`eind`**: `{"t":..,"e":"eind","regels":N}` (N = alle regels, deze erbij), of
 met `"afgebroken":"pagina dicht"`. Zonder `eind` is het log afgebroken (crash).
 
-Rack, grid, hotcues en pads worden VERGELEKEN, niet gemeld: na elke knopdruk
-(een microtask, dus direct achter de action) en elke 100 ms. Zo komen ook de
-rack-editor, de server-verfijning en de library erin, zonder dat die modules
-van het log weten. Rack op identiteit (`zetRack` maakt een nieuw object,
-`bewerkMacros` een nieuwe lijst, `zetParam` nieuwe params), grid, hotcues en
-pads op JSON. Knopstanden horen NIET bij de rack-vergelijking: die staan al als actions
+Rack, grid, hotcues, sectiekaart en pads worden VERGELEKEN, niet gemeld: na
+elke knopdruk (een microtask, dus direct achter de action) en elke 100 ms. Zo
+komen ook de rack-editor, de server-verfijning en de library erin, zonder dat
+die modules van het log weten. Rack op identiteit (`zetRack` maakt een nieuw
+object, `bewerkMacros` een nieuwe lijst, `zetParam` nieuwe params), de
+sectiekaart ook (`setSectieKaart` maakt er altijd een nieuwe), grid, hotcues
+en pads op JSON. Knopstanden horen NIET bij de rack-vergelijking: die staan al als actions
 in het log (anders een rack van 2 kB bij elke knopdraai).
 
 ### Lezen
@@ -231,7 +268,7 @@ klik = stoppen (de tracks spelen door). Op de bus: `log.replay.stop`.
 
 1. **Beginstand**: alle nummers tegelijk laden (library streamend, demo opnieuw
    uit zijn zaad), dan per track bereik, kant, rack, kill, beatjump-lengte,
-   rate, cue, hotcues, positie, loop; dan `waarden` via de bus, `rond` door te
+   grid, sectiekaart, rate, cue, hotcues, positie, loop; dan `waarden` via de bus, `rond` door te
    drukken, focus, pads; als laatste alles wat speelde in ÉÉN keer aan, zodat
    de tracks onderling liggen zoals toen, en daarna wie op de maat wachtte
    opnieuw op de maat. De klok loopt dan nog niet.
@@ -248,7 +285,9 @@ klik = stoppen (de tracks spelen door). Op de bus: `log.replay.stop`.
    of gestart (`nogBezig`).
 5. **Een stand midden in het log** (zie het formaat) is een nieuwe beginstand:
    alles wacht, eerst op wat nog laadt, dan wordt de stand gezet, en de klok van
-   het log staat zolang stil (T0 schuift op), net als bij het begin. Een nummer
+   het log staat zolang stil (T0 schuift op), net als bij het begin: vanaf het
+   moment van de stand in het log, niet vanaf de tik die hem oppikte (tot 10 ms
+   later; de stand zet de posities van dat moment). Een nummer
    dat er al staat (net door terugspelen geladen, of dezelfde demo) wordt niet
    nog eens geladen (`huidig`). Na elke stand roept de Terugspeler `onStand`;
    loopt er een log, dan schrijft logboek.js de stand van dat moment erin.
@@ -267,12 +306,38 @@ Wat NIET opnieuw de bus op gaat (`OVERSLAAN`):
 
 Een track zonder zijn nummer van toen (niet meer in de library, een los
 bestand, laden mislukt, of leeg): transport, cues, loops, grid en seek, en
-sinds ronde 3 ook beatjump en rem (`NUMMER_NODIG`) worden overgeslagen en
-geteld, anders speelt `play` wat er toevallig staat. Faders, EQ (ook kill),
-focus en kant gaan wel door. Ook de `grid`- en
-`hotcues`-gebeurtenissen worden dan overgeslagen: anders kreeg een gewoon
+sinds ronde 3 ook beatjump en rem, sinds 6 okt ook de secties
+(`NUMMER_NODIG`) worden overgeslagen en geteld, anders speelt `play` wat er
+toevallig staat en springt `section.5` in een ander nummer. Faders, EQ (ook
+kill), focus en kant gaan wel door. Ook de `grid`-, `hotcues`- en
+`secties`-gebeurtenissen worden dan overgeslagen: anders kreeg een gewoon
 geladen nummer (laden bij terugspelen mislukt) het grid van een ander nummer,
 en de bewaarlus zette dat in de library.
+
+**Secties** (6 okt, docs/SECTIES.md):
+- De kaart komt uit het log (beginstand en `secties`-gebeurtenissen), NIET van
+  de server: laden voor terugspelen roept `haalSecties` niet aan
+  (`sectiesUitLog`, als `kentSecties(log)`). Anders overschreef de kaart van nu
+  (misschien opnieuw gerekend op een ander grid) die van toen, en sprong
+  `section.5` ergens anders heen. Een log zonder secties: de kaart van de
+  server, zoals voorheen.
+- Een sectiesprong is fasebehoudend (`seek` met `doorlopend`): een tik later
+  geeft dezelfde plek. Behalve vlak na de "1": binnen 0,02 tel valt de sectie
+  meteen in, daarna pas op de volgende "1". Een tik te laat kon daar een maat
+  verschil maken (gemeten in echte Chrome, `sec-log.mjs` zonder `laat`/`van`:
+  beide drukken vlak na de "1" landden een maat later, 1,93 s naast; met alleen
+  `laat` nog eens één van de twee, door de stap van de audioklok naast het
+  origineel). Daarom geeft terugspelen
+  `{ laat, van }` mee (`invoke`, derde argument; `LAAT_MEE` = 50 ms, wat langer
+  op een laad wachtte niet) en rekent de deck vanaf `drukPlek`: de plek uit het
+  log (als die hooguit 50 ms naast ligt, `DRUK_NAAST`), anders nu min `laat`.
+  `section.next/prev` beslissen op dezelfde plek welke sectie
+  (`naarSectieStap`).
+- Gemeten (`test/secties-log.test.mjs`, nep-klok): vijf sprongen, een
+  sectie-loop, drukken vlak na de "1", 3 ms naast, drie generaties: op elk
+  meetmoment dezelfde positie (verschil < 1 µs, of precies de 3 ms naast). In
+  echte Chrome (`tools/headless/sec-log.mjs`): dezelfde positie op de audioklok
+  op 0 tot 5,3 ms na, zie Grenzen.
 
 Rack-, grid- en padgebeurtenissen worden alleen toegepast als ze verschillen
 van wat er al is (een rack dat de replay zelf al zette via `fx.next` geeft dus
@@ -322,6 +387,19 @@ op 1 µs).
 
 ## Grenzen
 
+- **Een sectiesprong landt op een stap van de audioklok na hetzelfde** (128
+  frames = 2,67 ms bij 48 kHz): de beginstand ligt een stap naast (de klok tikt
+  tussen het lezen van de stand en T0), en een sprong soms ook (de klok tikt
+  tussen het lezen van de positie en het zetten van het segment, in de engine).
+  Gemeten in Chrome: 0, 2,7 of 5,3 ms, nooit een maat. Andere sprongen op de
+  maat of de tel (een hotcue of beatloop met quantize, start op de maat)
+  rekenen niet met `laat`/`van`: daar kan een tik te laat op de rand van hun
+  marge nog een tel schelen.
+- Een log dat begint TIJDENS de aanloop van een sectiesprong (minder dan een
+  maat): positie, loop en kaart staan in de stand, de aanloop zelf niet
+  (`_sectieSprong`); "volgende/vorige" rekent dan vanaf de positie, niet vanaf
+  de sectie waar hij heen ging. Alleen anders als die sectie een andere "1"
+  heeft (een stukgrens in het grid).
 - **Niet hash-exact.** Een regel komt hooguit een tik (10 ms) na zijn moment;
   tap tempo meet met `performance.now()`, dus een replay van een tap kan een
   fractie van een bpm afwijken — de `grid`-gebeurtenis erna zet het grid van
