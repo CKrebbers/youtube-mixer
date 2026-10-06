@@ -116,7 +116,7 @@ const naamVan = (combi) => {
   return v + (r.length === 0 ? 'geen' : r.length === RIJEN.length ? 'alle' : r.join('+'));
 };
 /** Van deze combinaties een schermafdruk (per maat en stand). */
-const FOTO = new Set(['geen', 'patronen', 'alle', 'video+alle']);
+const FOTO = new Set(['geen', 'patronen', 'instrument+patronen+master', 'alle', 'video+alle']);
 
 /** In de pagina: meten. */
 const METEN = `window.__rijen = (() => {
