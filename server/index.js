@@ -994,8 +994,9 @@ const server = createServer(async (req, res) => {
 
     // ---- setplannen (docs/PLAN.md) --------------------------------------
     // GET /api/plannen: de lijst. GET /api/plannen/<naam>: { plan, versie, fouten }.
-    // PUT /api/plannen/<naam> { plan, versie }: opslaan als `versie` nog klopt
-    // (null = nieuw bestand), anders 409 met wat er nu staat.
+    // PUT /api/plannen/<naam> { plan, versie, kent? }: opslaan als `versie` nog klopt
+    // (null = nieuw bestand), anders 409 met wat er nu staat. `kent` = de optionele
+    // velden die de schrijver kent (['in', 'uit']); zie plannen.js.
     if (pad === '/api/plannen' && req.method === 'GET') return json(res, 200, { plannen: await plannen.lijst() });
     const mPlan = /^\/api\/plannen\/([^/]+)$/.exec(pad);
     if (mPlan) {
@@ -1009,7 +1010,8 @@ const server = createServer(async (req, res) => {
         if (mediatype !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
         const body = await leesJson(req, 600 * 1024);
         if (!body || typeof body !== 'object' || !body.plan) return json(res, 400, { fout: 'stuur { plan, versie }' });
-        const r = await plannen.schrijf(naam, body.plan, typeof body.versie === 'string' ? body.versie : null);
+        const kent = Array.isArray(body.kent) ? body.kent.filter((k) => typeof k === 'string') : [];
+        const r = await plannen.schrijf(naam, body.plan, typeof body.versie === 'string' ? body.versie : null, { kent });
         return json(res, r.code, r.antwoord);
       }
       return json(res, 405, { fout: 'GET of PUT' });

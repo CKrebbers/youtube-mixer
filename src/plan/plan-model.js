@@ -7,7 +7,7 @@
  * wordt vanzelf omgezet:
  *
  *   { versie: 2, naam, door, uitleg,
- *     stappen: [{ id, track, van, speelduur, overgang, lengte, waarom, notitie, door }] }
+ *     stappen: [{ id, track, van, in?, speelduur, uit?, overgang, lengte, waarom, notitie, door }] }
  *
  *   id         vast en uniek ("s1", …): zo vindt de automaat terug waar hij is,
  *              ook als het plan tijdens het spelen verandert
@@ -17,6 +17,14 @@
  *              De bewakers van de planner gaan voor: dit is een wens.
  *   lengte     lengte van die overgang: { maten } of { sec }; null = standaard
  *   door       wie de stap (het laatst) zette: 'clay' | 'claude' | null
+ *   in, uit    OPTIONEEL (6 okt, docs/SECTIES.md): een sectie van de sectiekaart
+ *              van het nummer, { sectie: K (vanaf 1, zoals track.N.section.K),
+ *              label, groep }. `in` = de stap begint op die sectie (het
+ *              inmixpunt); `uit` = de overgang naar de volgende BEGINT op die
+ *              sectie. Label en groep zijn er om de sectie terug te vinden als
+ *              de kaart opnieuw berekend is. `van` blijft de waarheid en de
+ *              terugval: wie een sectie als `in` kiest, zet ook `van` op haar
+ *              begin. Zonder in/uit staan de velden er niet (v2 blijft v2).
  *
  * Tijd in tracktijd en seconden, niet in maten: een maatnummer verschuift als
  * het grid bewerkt wordt, en de meeste grids in Clay's library zijn onzeker.
@@ -27,6 +35,10 @@ export const SOORTEN = ['auto', 'blend', 'filter', 'ambient'];
 /** Grenzen voor een eigen overgangslengte. */
 export const LENGTE = { maten: [4, 64], sec: [4, 120] };
 export const MAX_STAPPEN = 200;
+/** Hoogste sectienummer in een stap (zoveel stukken mag een kaart hebben, server/library.js). */
+export const MAX_SECTIE = 64;
+/** De optionele sectievelden van een stap. */
+export const SECTIE_VELDEN = ['in', 'uit'];
 const MAX_TEKST = 500;
 
 const eindig = (x) => typeof x === 'number' && Number.isFinite(x);
@@ -39,6 +51,20 @@ export function normaliseerLengte(l) {
   if (eindig(l.maten)) return { maten: Math.round(klem(l.maten, ...LENGTE.maten)) };
   if (eindig(l.sec)) return { sec: Math.round(klem(l.sec, ...LENGTE.sec) * 10) / 10 };
   return null;
+}
+
+/**
+ * Een sectiekeuze (in of uit) netjes maken: { sectie, label, groep } met
+ * sectie een geheel getal 1..MAX_SECTIE, label een kort woord en groep één
+ * hoofdletter (anders null). Geen sectie: null.
+ */
+export function normaliseerSectie(x) {
+  if (!x || typeof x !== 'object' || !Number.isInteger(x.sectie) || x.sectie < 1 || x.sectie > MAX_SECTIE) return null;
+  return {
+    sectie: x.sectie,
+    label: typeof x.label === 'string' && /^[a-z]{1,16}$/.test(x.label) ? x.label : null,
+    groep: typeof x.groep === 'string' && /^[A-Z]$/.test(x.groep) ? x.groep : null,
+  };
 }
 
 /** Een nieuwe id die nog niet in `bezet` zit (voor een plan zonder id's: s1, s2, …). */
@@ -87,10 +113,21 @@ export function normaliseerPlan(invoer, { trackIds = null } = {}) {
     bezet.add(id);
     const overgang = SOORTEN.includes(s.overgang) ? s.overgang : 'auto';
     if (s.overgang !== undefined && s.overgang !== overgang) fouten.push(`stap ${i + 1}: onbekende overgang "${s.overgang}", auto`);
+    // In en uit: optioneel. Rommel weg (met een fout); uit moet ná in liggen.
+    const inn = normaliseerSectie(s.in);
+    let uit = normaliseerSectie(s.uit);
+    if (s.in != null && !inn) fouten.push(`stap ${i + 1}: "in" is geen sectie (weggelaten)`);
+    if (s.uit != null && !uit) fouten.push(`stap ${i + 1}: "uit" is geen sectie (weggelaten)`);
+    if (inn && uit && uit.sectie <= inn.sectie) {
+      fouten.push(`stap ${i + 1}: uit (sectie ${uit.sectie}) ligt niet na in (sectie ${inn.sectie}): uit weggelaten`);
+      uit = null;
+    }
     const stap = {
       id, track: s.track.slice(0, 200),
       van: eindig(s.van) && s.van >= 0 ? s.van : null,
+      ...(inn ? { in: inn } : {}),
       speelduur: eindig(s.speelduur) && s.speelduur > 0 ? klem(s.speelduur, 5, 4 * 3600) : null,
+      ...(uit ? { uit } : {}),
       overgang,
       lengte: normaliseerLengte(s.lengte),
       waarom: tekst(s.waarom),
@@ -161,10 +198,13 @@ export function bewerk(plan, b, { door = 'clay' } = {}) {
   }
 }
 
-/** Alleen de velden die een bewerking mag zetten. */
+/** De velden van een stap die bewerkt mogen worden (en die `verschil` vergelijkt). */
+const BEWERKBAAR = ['track', 'van', 'in', 'speelduur', 'uit', 'overgang', 'lengte', 'waarom', 'notitie'];
+
+/** Alleen de velden die een bewerking mag zetten (in/uit: null = weg). */
 function pak(v) {
   const uit = {};
-  for (const k of ['track', 'van', 'speelduur', 'overgang', 'lengte', 'waarom', 'notitie']) if (k in v) uit[k] = v[k];
+  for (const k of BEWERKBAAR) if (k in v) uit[k] = v[k];
   return uit;
 }
 
@@ -176,12 +216,11 @@ function pak(v) {
 export function verschil(oud, nieuw) {
   const o = new Map(oud.stappen.map((s) => [s.id, s]));
   const n = new Map(nieuw.stappen.map((s) => [s.id, s]));
-  const velden = ['track', 'van', 'speelduur', 'overgang', 'lengte', 'waarom', 'notitie'];
   const anders = [];
   for (const [id, s] of n) {
     const t = o.get(id);
     if (!t) continue;
-    const v = velden.filter((k) => JSON.stringify(s[k]) !== JSON.stringify(t[k]));
+    const v = BEWERKBAAR.filter((k) => JSON.stringify(s[k] ?? null) !== JSON.stringify(t[k] ?? null));
     if (v.length) anders.push({ id, velden: v });
   }
   const gedeeld = (l, m) => l.stappen.map((s) => s.id).filter((id) => m.has(id));
@@ -191,4 +230,35 @@ export function verschil(oud, nieuw) {
     anders,
     volgorde: gedeeld(oud, n).join() !== gedeeld(nieuw, o).join(),
   };
+}
+
+/**
+ * In/uit terugzetten die een schrijver weggooide omdat hij ze niet kent: een
+ * planvenster van vóór de secties dat nog open stond tijdens een update. Zijn
+ * normaliseerPlan gooit onbekende velden weg zodra hij een stap bewerkt, dus
+ * die stap komt zonder in/uit terug. De server roept dit aan bij elke opslag;
+ * wie de velden kent zegt dat (`kent: ['in', 'uit']`) en mag ze weghalen.
+ *
+ * Terug alleen bij een stap die er nu staat (zelfde id) met hetzelfde nummer;
+ * `in` bovendien alleen als het begin (`van`) niet veranderde, want van is de
+ * waarheid: een ander begin is een ander inmixpunt.
+ *
+ * @param nu     het plan zoals het nu bewaard is (genormaliseerd)
+ * @param nieuw  wat er bewaard gaat worden (genormaliseerd)
+ * @returns { plan, hersteld: [tekst] }
+ */
+export function herstelSecties(nu, nieuw, { kent = [] } = {}) {
+  const terugbaar = SECTIE_VELDEN.filter((k) => !kent.includes(k));
+  if (!terugbaar.length || !nu?.stappen?.length || !nieuw?.stappen?.length) return { plan: nieuw, hersteld: [] };
+  const oud = new Map(nu.stappen.map((s) => [s.id, s]));
+  const hersteld = [];
+  const stappen = nieuw.stappen.map((s) => {
+    const o = oud.get(s.id);
+    if (!o || o.track !== s.track) return s;
+    const terug = terugbaar.filter((k) => o[k] && !s[k] && (k !== 'in' || o.van === s.van));
+    if (!terug.length) return s;
+    hersteld.push(`stap ${s.id}: ${terug.join(' en ')} bewaard (opgeslagen door een venster dat ze niet kent: herlaad dat venster)`);
+    return { ...s, ...Object.fromEntries(terug.map((k) => [k, o[k]])) };
+  });
+  return hersteld.length ? { plan: normaliseerPlan({ ...nieuw, stappen }).plan, hersteld } : { plan: nieuw, hersteld };
 }

@@ -1,7 +1,7 @@
 import { readFile, writeFile, rename, mkdir, readdir, stat, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { normaliseerPlan } from '../src/plan/plan-model.js';
+import { normaliseerPlan, herstelSecties } from '../src/plan/plan-model.js';
 
 /**
  * Setplannen op schijf: plannen/<naam>.json. Eén bestand per plan, zodat Claude
@@ -16,6 +16,13 @@ import { normaliseerPlan } from '../src/plan/plan-model.js';
  * Elke opslag bewaart de vorige inhoud in plannen/.versies/<naam>/ (buiten de
  * witte lijst: alleen via de API). Schrijven is atomisch (tijdelijk bestand +
  * rename): een crash halverwege laat nooit een half plan achter.
+ *
+ * In/uit (secties in een stap, 6 okt): een venster van vóór de secties dat
+ * nog open stond tijdens een update gooit ze weg bij een stap die het bewerkt.
+ * Wie ze kent zegt dat (`kent: ['in', 'uit']`, het planvenster doet dat);
+ * zonder komen in/uit van een stap die verder hetzelfde is terug, met een
+ * opmerking in `fouten` (plan-model.js herstelSecties). Het formaat blijft
+ * v2, en een oude schrijver wordt niet geweigerd.
  *
  * De validatie is dezelfde als in de browser: src/plan/plan-model.js (puur).
  * Het is de enige plek waar de server iets uit src/ importeert; bewust, zodat
@@ -59,15 +66,21 @@ export class Plannen {
 
   /**
    * Opslaan. `versie` = waar de schrijver op verder werkte (null = het bestand
-   * mag nog niet bestaan). Geeft { code, antwoord }.
+   * mag nog niet bestaan). `kent` = welke optionele velden de schrijver kent
+   * (['in', 'uit']); wat hij niet kent en weggooide komt terug. Geeft { code, antwoord }.
    */
-  async schrijf(naam, invoer, versie) {
+  async schrijf(naam, invoer, versie, { kent = [] } = {}) {
     const nu = await this.lees(naam);
     if (nu && nu.versie !== versie) return { code: 409, antwoord: { fout: 'het plan is intussen gewijzigd', versie: nu.versie, plan: nu.plan } };
     if (!nu && versie) return { code: 409, antwoord: { fout: 'het plan bestaat niet (meer)', versie: null, plan: null } };
-    const { plan, fouten } = normaliseerPlan(invoer);
+    let { plan, fouten } = normaliseerPlan(invoer);
     if (!plan.stappen.length && Array.isArray(invoer?.stappen) && invoer.stappen.length) {
       return { code: 400, antwoord: { fout: 'geen enkele bruikbare stap', fouten } };
+    }
+    if (nu?.plan) {
+      const h = herstelSecties(nu.plan, plan, { kent });
+      plan = h.plan;
+      fouten = [...fouten, ...h.hersteld];
     }
     const tekst = JSON.stringify(plan, null, 2) + '\n';
     if (Buffer.byteLength(tekst) > MAX_BYTES) return { code: 413, antwoord: { fout: 'plan te groot' } };

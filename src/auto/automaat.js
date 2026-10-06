@@ -475,12 +475,18 @@ export class Automaat extends Emitter {
    * Een nieuw plan terwijl hij speelt (de planpagina of Claude sloeg op). Wat
    * klinkt blijft klinken; wat een overgang is die al loopt, loopt door. Het
    * plan gaat verder na de stap die nu klinkt (op id). Staat de volgende al
-   * klaar en is die stap veranderd (ander nummer of beginpunt, of weg), dan
-   * wordt hij opnieuw gekozen; alleen de overgang anders: opnieuw gepland.
+   * klaar en is die stap veranderd (ander nummer of beginpunt, een andere
+   * in- of uitsectie, of weg), dan wordt hij opnieuw gekozen; alleen de
+   * overgang anders: opnieuw gepland.
    * Een nieuwe speelduur van wat nu klinkt verschuift het einde.
    */
   vervangPlan(p) {
     const oudeVolgende = this.volgende;
+    // De klaarstaande stap zoals hij in het OUDE plan stond: daarmee werd hij gekozen
+    // (in/uit staan niet in `volgende`). Beide plannen zijn genormaliseerd: in/uit
+    // hebben een vaste vorm, dus JSON vergelijkt ze (ontbrekend = null).
+    const oudeStap = oudeVolgende?.stapId ? (this.plan?.stappen || []).find((x) => x.id === oudeVolgende.stapId) ?? null : null;
+    const zelfdeSectie = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
     this._zetPlan(p);
     if (!this.plan) { this.planIndex = 0; this.emit('change'); return; }
     const i = this._index(this.hoofdStap);
@@ -496,7 +502,8 @@ export class Automaat extends Emitter {
     if (this.aan && oudeVolgende && this.fase === 'klaar' && oudeVolgende.bron === 'plan') {
       const s = this.plan.stappen[this.planIndex];
       const zelfde = s && s.id === oudeVolgende.stapId && s.track === oudeVolgende.track.id
-        && (s.van === null || Math.abs(s.van - oudeVolgende.van) < 1);
+        && (s.van === null || Math.abs(s.van - oudeVolgende.van) < 1)
+        && zelfdeSectie(s.in, oudeStap?.in) && zelfdeSectie(s.uit, oudeStap?.uit);
       if (!zelfde) {
         this.volgende = null;
         this.fase = 'wacht';
