@@ -148,6 +148,19 @@ try {
   ok('geen JSON: 415', (await fetch(`${B}/api/plannen/x`, { method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: '{}' })).status === 415);
   ok('van een vreemde site: 403', (await rauw('/api/plannen/x', { method: 'PUT', headers: { Origin: 'http://evil.example', 'Content-Type': 'application/json' }, body: '{"plan":{"stappen":[]}}' })).status === 403);
   ok('lijst: auto-plan', (await (await fetch(`${B}/api/plannen`)).json()).plannen.map((p) => p.naam).join() === 'auto-plan');
+  // In en uit (secties in een stap, docs/PLAN.md §2): heen en terug over HTTP, en een oud venster wist ze niet.
+  {
+    const IN = { sectie: 2, label: 'drop', groep: 'B' }, UIT = { sectie: 4, label: 'break', groep: 'C' };
+    const s1 = await zet('secties', { plan: { stappen: [{ id: 's1', track: 'a', van: 31, in: IN, uit: UIT }] }, versie: null, kent: ['in', 'uit'] });
+    const sj = await s1.json();
+    const sg = await (await fetch(`${B}/api/plannen/secties`)).json();
+    ok('in en uit: opgeslagen en weer gelezen', s1.status === 200 && sg.plan.stappen[0].in?.sectie === 2 && sg.plan.stappen[0].uit?.label === 'break' && sg.versie === sj.versie);
+    const s2 = await zet('secties', { plan: { stappen: [{ id: 's1', track: 'a', van: 31, waarom: 'oud venster' }] }, versie: sj.versie });
+    const s2j = await s2.json();
+    ok('een oud venster (zonder kent) slaat op: in/uit bewaard, met een opmerking', s2.status === 200 && s2j.plan.stappen[0].in?.sectie === 2
+      && s2j.plan.stappen[0].waarom === 'oud venster' && s2j.fouten.some((f) => /bewaard/.test(f)));
+    ok('... de 409-regel blijft: op de oude versie botst het', (await zet('secties', { plan: sj.plan, versie: sj.versie, kent: ['in', 'uit'] })).status === 409);
+  }
 
   console.log('\nde Controlekamer (docs/CONTROLEKAMER.md)');
   ok('/controle en /controle.html geven de pagina', (await status('/controle')) === 200 && (await status('/controle.html')) === 200

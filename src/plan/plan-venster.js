@@ -1,5 +1,6 @@
-import { normaliseerPlan, bewerk, verschil } from './plan-model.js';
+import { normaliseerPlan, bewerk, verschil, SECTIE_VELDEN } from './plan-model.js';
 import { voorspel, toonKleur } from './tijdlijn.js';
+import { groepKleur, LABEL_TEKST } from '../engine/secties.js';
 
 /*
  * Het planvenster (plan.html): de hele programmering zien, inrichten en live
@@ -14,6 +15,12 @@ import { voorspel, toonKleur } from './tijdlijn.js';
  * Opslaan gaat met versie (PUT /api/plannen/<naam>): heeft iemand anders
  * (Claude, een ander venster) het intussen gewijzigd, dan zegt het dat en kies
  * jij. Is er hier niets gewijzigd, dan komt een nieuwe versie vanzelf binnen.
+ *
+ * Secties (docs/PLAN.md §2): per nummer de sectiekaart (GET
+ * /api/library/<id>/secties, ZONDER ?maak=1: een plan van dertig nummers zou
+ * anders dertig nummers tegelijk laten rekenen). De strook toont ze als
+ * banden in de groepskleur; per stap kies je een sectie als in- en als
+ * uitpunt. Geen kaart = geen keuze, de rest werkt zoals altijd.
  */
 
 const $ = (s) => document.querySelector(s);
@@ -35,11 +42,17 @@ function leesTijd(t) {
 }
 const koppeling = () => { try { const o = window.opener; return o && !o.closed ? o.varvePlan ?? null : null; } catch (_) { return null; } };
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/** "drop B", "B" voor een gewoon deel; werkt voor een stuk van de kaart en voor een keuze { sectie, label, groep }. */
+const sectieNaam = (x) => [LABEL_TEKST[x?.label] ?? x?.label ?? '', x?.groep ?? ''].filter(Boolean).join(' ');
+/** Hoeveel stappen in/uit hebben (om te zien of de server ze bewaarde). */
+const metSecties = (p) => (p?.stappen || []).filter((s) => s.in || s.uit).length;
 
 const staat = {
   naam: 'auto-plan', plan: normaliseerPlan({ stappen: [] }).plan, versie: null, bewaard: '',
   terug: [], vooruit: [], gekozen: null, tracks: new Map(), bieb: [], v: { stappen: [], totaal: 0 },
   flits: new Set(), conflict: null,
+  secties: new Map(),         // track-id → sectiekaart, of null (geen kaart)
+  banden: [],                 // wat de strook tekende: [{ id, sectie, groep, x0, x1 }] (voor de console en de headless proef)
 };
 
 // ---- server ----------------------------------------------------------------
@@ -67,6 +80,8 @@ async function laad(naam) {
   staat.bewaard = JSON.stringify(staat.plan);
   staat.terug = []; staat.vooruit = [];
   staat.conflict = null;
+  // Alle kaarten opnieuw vragen: de mixer kan ze intussen (opnieuw) berekend hebben.
+  haalSecties({ opnieuw: true });
   $('.pl-naam').value = naam;
   $('.pl-uitleg textarea').value = staat.plan.uitleg || '';
   render();
@@ -81,6 +96,38 @@ async function vulKiezer() {
     + '<option value="">+ nieuw plan…</option>';
 }
 
+/**
+ * De sectiekaarten van de nummers in het plan. ZONDER ?maak=1: alleen wat er
+ * al is (de mixer rekent bij het laden). Gewoon: alleen nummers die we nog
+ * niet hebben. `opnieuw` (bij het laden van een plan en als het venster de
+ * focus krijgt): alle, zodat een kaart die de mixer intussen opnieuw
+ * berekende binnenkomt (en "kaart opnieuw berekend" kan afgaan); de oude
+ * blijft staan tot de nieuwe er is. Veranderde er iets, dan opnieuw tekenen.
+ */
+const sectiesBezig = new Set();
+let sectiesVers = 0;
+function haalSecties({ opnieuw = false } = {}) {
+  const ids = [...new Set(staat.plan.stappen.map((s) => s.track))]
+    .filter((id) => staat.tracks.has(id) && !sectiesBezig.has(id) && (opnieuw || !staat.secties.has(id)));
+  if (opnieuw) sectiesVers = Date.now();
+  if (!ids.length) return;
+  for (const id of ids) sectiesBezig.add(id);
+  let veranderd = false;
+  Promise.all(ids.map(async (id) => {
+    let k = null, gelukt = false;
+    try {
+      const r = await fetch(`/api/library/${encodeURIComponent(id)}/secties`);
+      if (r.ok) { k = (await r.json()).secties ?? null; gelukt = true; }
+    } catch (_) { /* geen kaart: dan geen keuze */ }
+    sectiesBezig.delete(id);
+    if (!gelukt && staat.secties.get(id)) return;      // niet bereikbaar: de kaart die we hadden blijft
+    const nieuw = Array.isArray(k?.stukken) && k.stukken.length ? k : null;
+    if (!staat.secties.has(id) || JSON.stringify(nieuw) !== JSON.stringify(staat.secties.get(id))) veranderd = true;
+    staat.secties.set(id, nieuw);
+  })).then(() => { if (veranderd) render(); });
+}
+window.addEventListener('focus', () => { if (Date.now() - sectiesVers > 10000) haalSecties({ opnieuw: true }); });
+
 const gewijzigd = () => JSON.stringify(staat.plan) !== staat.bewaard;
 
 async function opslaan({ versie = staat.versie } = {}) {
@@ -90,7 +137,8 @@ async function opslaan({ versie = staat.versie } = {}) {
   const plan = { ...staat.plan, naam };
   const r = await fetch(`/api/plannen/${encodeURIComponent(naam)}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ plan, versie: nieuweNaam ? null : versie }),
+    // `kent`: dit venster kent in/uit; zonder zet de server ze terug (een oud venster, server/plannen.js).
+    body: JSON.stringify({ plan, versie: nieuweNaam ? null : versie, kent: SECTIE_VELDEN }),
   });
   const d = await r.json().catch(() => ({}));
   if (r.status === 409) {
@@ -106,11 +154,18 @@ async function opslaan({ versie = staat.versie } = {}) {
   }
   if (!r.ok) { melding(`opslaan mislukt: ${d.fout || r.status}`); return; }
   staat.naam = naam;
-  staat.plan = d.plan;
   staat.versie = d.versie;
   staat.bewaard = JSON.stringify(d.plan);
   staat.conflict = null;
-  melding(d.fouten?.length ? `opgeslagen, met opmerkingen: ${d.fouten.slice(0, 3).join('; ')}` : null);
+  if (metSecties(plan) && !metSecties(d.plan)) {
+    // Een server van vóór de secties (nog niet herstart na een update) gooit in/uit weg:
+    // dan houden we ze HIER, als niet opgeslagen, zodat je na een herstart opnieuw opslaat.
+    staat.plan = { ...staat.plan, naam };
+    melding('de server bewaarde in en uit niet: draait er nog een server van vóór de secties? Herstart hem en sla opnieuw op');
+  } else {
+    staat.plan = d.plan;
+    melding(d.fouten?.length ? `opgeslagen, met opmerkingen: ${d.fouten.slice(0, 3).join('; ')}` : null);
+  }
   koppeling()?.bewaard?.(d.plan, d.versie, naam);
   if (nieuweNaam) vulKiezer();
   render();
@@ -138,8 +193,7 @@ async function kijkServer() {
   staat.versie = d.versie;
   staat.bewaard = JSON.stringify(d.plan);
   $('.pl-uitleg textarea').value = d.plan.uitleg || '';
-  melding(`het plan is bijgewerkt (van buiten dit venster): ${beschrijf(vs)}`);
-  setTimeout(() => melding(null), 8000);
+  wisLater(melding(`het plan is bijgewerkt (van buiten dit venster): ${beschrijf(vs)}`), 8000);
   render();
 }
 
@@ -169,7 +223,8 @@ function opnieuw() { if (!staat.vooruit.length) return; staat.terug.push(staat.p
 // ---- tekenen: de lijst ---------------------------------------------------------
 
 function render() {
-  staat.v = voorspel(staat.plan, staat.tracks);
+  staat.v = voorspel(staat.plan, staat.tracks, { secties: staat.secties });
+  haalSecties();
   const n = staat.plan.stappen.length;
   $('.pl-info').textContent = n ? `${n} stappen · ~${mmss(staat.v.totaal)}` : 'nog leeg: zoek rechts een nummer';
   const st = $('.pl-status');
@@ -219,11 +274,18 @@ function rij(r, i) {
     <span class="pl-greep" draggable="true" title="slepen om te verplaatsen">⋮⋮</span>
     <span class="pl-nr">${i + 1}</span>
     <span class="pl-titel" title="${esc(r.titel)}">${esc(r.titel)}${r.ontbreekt ? ' (niet in de library)'
-      : `<small>${mmss(r.start)} in de set · stuk ${mmss(r.van)}–${mmss(r.tot)}${r.duurNummer ? ` van ${mmss(r.duurNummer)}` : ''}</small>`}</span>
+      : `<small>${mmss(r.start)} in de set · stuk ${mmss(r.van)}–${mmss(r.tot)}${r.duurNummer ? ` van ${mmss(r.duurNummer)}` : ''}${
+        s.in ? ` · in ${s.in.sectie} ${esc(sectieNaam(s.in))}` : ''}${s.uit ? ` · uit ${s.uit.sectie} ${esc(sectieNaam(s.uit))}` : ''}</small>`}</span>
     <span class="pl-toon ${r.toonZeker ? '' : 'pl-onzeker'}" title="${r.camelot ? `Camelot ${r.camelot}` : ''}${r.toonZeker ? '' : ' (onzeker)'}">${esc(r.toon ?? '–')}${r.toon && !r.toonZeker ? '?' : ''}</span>
     <span class="${r.gridZeker ? '' : 'pl-onzeker'}" title="${r.gridZeker ? 'grid zeker' : 'grid onzeker: geen blend'}">${r.bpm ? Math.round(r.bpm) : '–'}${r.bpm && !r.gridZeker ? '?' : ''}</span>
-    <input class="pl-van" value="${s.van === null ? '' : mmss(s.van)}" placeholder="${r.ontbreekt ? '' : `auto ${mmss(r.van)}`}" title="beginpunt in het nummer (m:ss); leeg = de app kiest">
-    <input class="pl-duur" value="${s.speelduur === null ? '' : mmss(s.speelduur)}" placeholder="${r.ontbreekt ? '' : `auto ${mmss(r.duur)}`}" title="hoe lang (m:ss); leeg = de app kiest">
+    <span class="pl-tijd">
+      <input class="pl-van" value="${s.van === null ? '' : mmss(s.van)}" placeholder="${r.ontbreekt ? '' : `auto ${mmss(r.van)}`}" title="beginpunt in het nummer (m:ss); leeg = de app kiest">
+      ${r.ontbreekt ? '' : sectieKeuze('in', s, r)}
+    </span>
+    <span class="pl-tijd">
+      <input class="pl-duur" value="${s.speelduur === null ? '' : mmss(s.speelduur)}" placeholder="${r.ontbreekt ? '' : `auto ${mmss(r.duur)}`}" title="hoe lang (m:ss); leeg = de app kiest">
+      ${r.ontbreekt ? '' : sectieKeuze('uit', s, r)}
+    </span>
     <span class="pl-overgang">
       <span class="rij2">
         <select class="pl-soort"${i === 0 ? ' disabled title="de eerste stap begint de set"' : ''}>
@@ -244,10 +306,32 @@ function rij(r, i) {
   const tijdVeld = (sel, veld) => el.querySelector(sel).addEventListener('change', (e) => {
     const t = leesTijd(e.target.value);
     if (t === undefined) { melding('tijd als m:ss (bv. 2:57) of seconden; leeg = de app kiest'); render(); return; }
+    if (veld === 'van' && s.in) {
+      // Het begin staat op een sectie (in): op de seconde gelijk = niets veranderd (het veld rondt af);
+      // een ander begin is een ander inmixpunt, dan vervalt in (van is de waarheid).
+      if (t !== null && s.van !== null && Math.abs(t - s.van) < 0.5) { render(); return; }
+      zet({ van: t, in: null });
+      return;
+    }
     zet({ [veld]: t });
   });
   tijdVeld('.pl-van', 'van');
   tijdVeld('.pl-duur', 'speelduur');
+  // In en uit: een sectie van de kaart. In zet ook van op haar begin (de terugval).
+  for (const veld of SECTIE_VELDEN) el.querySelector(`.pl-${veld}`)?.addEventListener('change', (e) => {
+    const k = Number(e.target.value) || 0;
+    if (!k) { zet({ [veld]: null }); return; }
+    const x = r.secties?.[k - 1];
+    if (!x) { render(); return; }
+    const keuze = { sectie: k, label: x.label ?? null, groep: x.groep ?? null };
+    if (veld === 'uit') { zet({ uit: keuze }); return; }
+    const velden = { in: keuze, van: x.van };
+    if (s.uit && s.uit.sectie <= k) {
+      velden.uit = null;
+      melding(`uit (${s.uit.sectie} ${sectieNaam(s.uit)}) viel weg: die lag niet meer na het nieuwe begin`);
+    }
+    zet(velden);
+  });
   el.querySelector('.pl-soort').addEventListener('change', (e) => zet({ overgang: e.target.value }));
   el.querySelector('.pl-lengte').addEventListener('change', (e) => {
     const x = Number(String(e.target.value).replace(',', '.'));
@@ -272,6 +356,47 @@ function rij(r, i) {
     wijzig({ soort: 'verplaats', id, naar: van < naar ? naar - 1 : naar });
   });
   return el;
+}
+
+/**
+ * Een keuzelijst voor in of uit: de secties van de kaart ("3 drop B"; de tijd in de tooltip).
+ * Uit alleen na het begin (na in, of na van). Geen kaart en niets gekozen:
+ * geen lijst. Een keuze die de kaart niet (meer) kent, die nu anders heet
+ * (de kaart is opnieuw berekend), of een uit die niet meer na het begin ligt
+ * (een later begin getypt) blijft staan, oranje: de planner zoekt hem terug
+ * op label en groep, of valt terug op van.
+ */
+function sectieKeuze(veld, s, r) {
+  const st = r.secties;
+  const keuze = s[veld] ?? null;
+  if (!st && !keuze) return '';
+  const opties = [`<option value="">${veld}: —</option>`];
+  let gevonden = false, waarschuwing = '';
+  if (st) {
+    const naIn = veld === 'uit' && s.in ? s.in.sectie : 0;
+    const begin = veld === 'uit' ? (s.in ? st[s.in.sectie - 1]?.van ?? 0 : r.van ?? 0) : -Infinity;
+    st.forEach((x, i) => {
+      const k = i + 1, gekozen = keuze?.sectie === k;
+      if (!gekozen && veld === 'uit' && (k <= naIn || x.van <= begin + 0.01)) return;
+      if (gekozen) gevonden = true;
+      opties.push(`<option value="${k}"${gekozen ? ' selected' : ''} title="begint op ${mmss(x.van)}">${k} ${esc(sectieNaam(x))}</option>`);
+    });
+    const x = gevonden ? st[keuze.sectie - 1] : null;
+    if (x && ((keuze.label && x.label !== keuze.label) || (keuze.groep && x.groep !== keuze.groep))) {
+      waarschuwing = `de kaart is opnieuw berekend: sectie ${keuze.sectie} is nu ${sectieNaam(x)}, gekozen was ${sectieNaam(keuze)}`;
+    } else if (x && veld === 'uit' && (keuze.sectie <= naIn || x.van <= begin + 0.01)) {
+      // Een later begin getypt (of in verschoven): de overgang kan niet beginnen vóór de stap begint.
+      waarschuwing = `uit (${keuze.sectie} ${sectieNaam(x)}, ${mmss(x.van)}) ligt niet na het begin (${mmss(begin)}): kies een latere of haal hem weg`;
+    }
+  }
+  if (keuze && !gevonden) {
+    opties.push(`<option value="${keuze.sectie}" selected>${keuze.sectie} ${esc(sectieNaam(keuze))}${st ? ' ?' : ''}</option>`);
+    waarschuwing = st ? `sectie ${keuze.sectie} staat niet (meer) op de kaart: de planner valt terug op het begin (van)`
+      : 'de secties van dit nummer zijn er (nog) niet: laad het eens in de mixer';
+  }
+  const uitleg = veld === 'in' ? 'in: deze stap begint op die sectie (het begin wordt haar begin)'
+    : 'uit: de overgang naar de volgende begint op die sectie';
+  return `<select class="pl-${veld}${waarschuwing ? ' pl-onzeker' : ''}" title="${esc(waarschuwing || uitleg)}">${opties.join('')}</select>`;
 }
 
 function kies(id, scroll = true) {
@@ -320,10 +445,12 @@ function tekenStrook() {
   const tot = Math.max(1, staat.v.totaal), pad = 10, sx = (t) => pad + (t / tot) * (w - 2 * pad);
   const baan = (i) => (i % 2 ? 40 : 12);
   g.font = '11px system-ui';
+  staat.banden = [];
   staat.v.stappen.forEach((r, i) => {
     const x0 = sx(r.start), x1 = sx(r.start + r.duur), y = baan(i);
     g.fillStyle = r.ontbreekt ? '#3a1d1d' : '#1b242d';
     g.fillRect(x0, y, Math.max(2, x1 - x0), 24);
+    if (!r.ontbreekt && r.secties) tekenBanden(g, r, y, sx);
     if (r.overgang && r.overlap > 0) {
       g.fillStyle = (KLEUR[r.overgang.gekozen] || '#888') + '55';
       g.fillRect(x0, 8, Math.max(2, sx(r.start + r.overlap) - x0), 60);
@@ -337,8 +464,11 @@ function tekenStrook() {
     g.strokeRect(x0 + 0.5, y + 0.5, Math.max(2, x1 - x0) - 1, 23);
     g.save();
     g.beginPath(); g.rect(x0 + 3, y, Math.max(0, x1 - x0 - 6), 24); g.clip();
+    // Een donkere rand om de letters: leesbaar op de gekleurde banden.
+    g.strokeStyle = '#0d1217'; g.lineWidth = 3; g.lineJoin = 'round';
+    g.strokeText(`${i + 1} ${r.titel}`, x0 + 5, y + 15);
     g.fillStyle = '#dfe7ee';
-    g.fillText(`${i + 1} ${r.titel}`, x0 + 5, y + 16);
+    g.fillText(`${i + 1} ${r.titel}`, x0 + 5, y + 15);
     g.restore();
   });
   // Tijd onderaan, en de afspeelkop.
@@ -351,6 +481,32 @@ function tekenStrook() {
     g.fillRect(x - 1, 0, 2, h);
   }
 }
+/**
+ * De secties van één stap in zijn balk: per sectie (voor zover in het
+ * gespeelde stuk) een band in de groepskleur, onderaan een vol streepje.
+ * Een gekozen in of uit: een witte streep op haar begin.
+ */
+function tekenBanden(g, r, y, sx) {
+  const st = r.secties;
+  const opSet = (t) => sx(r.start + (t - r.van));
+  st.forEach((x, k) => {
+    const a = Math.max(r.van, x.van), b = Math.min(r.tot, st[k + 1]?.van ?? r.duurNummer ?? r.tot);
+    if (!(b > a)) return;
+    const xa = opSet(a), xb = opSet(b), kleur = groepKleur(x.groep);
+    g.fillStyle = `${kleur}59`;
+    g.fillRect(xa, y, Math.max(1, xb - xa), 24);
+    g.fillStyle = kleur;
+    g.fillRect(xa, y + 20, Math.max(1, xb - xa - 1), 4);
+    staat.banden.push({ id: r.id, sectie: k + 1, groep: x.groep, x0: xa, x1: xb });
+  });
+  for (const veld of SECTIE_VELDEN) {
+    const t = st[(r.stap[veld]?.sectie ?? 0) - 1]?.van;
+    if (!Number.isFinite(t) || t < r.van - 0.01 || t > r.tot + 0.01) continue;
+    g.fillStyle = '#ffffff';
+    g.fillRect(opSet(t) - 1, y - 3, 2, 30);
+  }
+}
+
 doek.addEventListener('click', (e) => {
   const x = e.offsetX, w = doek.clientWidth, tot = Math.max(1, staat.v.totaal), t = ((x - 10) / (w - 20)) * tot;
   const r = staat.v.stappen.find((s) => t >= s.start && t <= s.start + s.duur) ?? null;
@@ -423,7 +579,10 @@ function lus(t) {
 
 // ---- meldingen ------------------------------------------------------------------------
 
+let meldingNr = 0;
+/** Een melding (null = weg). Geeft haar nummer: zie wisLater. */
 function melding(tekst, knoppen = []) {
+  meldingNr++;
   const el = $('.pl-melding');
   el.classList.toggle('aan', !!tekst);
   $('.pl-melding-tekst').textContent = tekst || '';
@@ -435,7 +594,13 @@ function melding(tekst, knoppen = []) {
     b.addEventListener('click', fn);
     el.append(b);
   }
+  return meldingNr;
 }
+/**
+ * Een melding na een tijdje weghalen, maar alleen als zij er nog staat: een
+ * latere (een botsing met haar keuzeknoppen) mag een oude timer niet wissen.
+ */
+const wisLater = (nr, ms) => setTimeout(() => { if (meldingNr === nr) melding(null); }, ms);
 
 // ---- knoppen en toetsen ----------------------------------------------------------------
 
@@ -448,8 +613,7 @@ $('.pl-gebruik').addEventListener('click', async () => {
   if (gewijzigd() || !staat.versie) await opslaan();
   if (gewijzigd()) return;
   await k.gebruik(staat.naam);
-  melding(`de auto-DJ gebruikt nu "${staat.naam}"${k.auto.aan ? '' : ' (zet auto aan om te spelen)'}`);
-  setTimeout(() => melding(null), 5000);
+  wisLater(melding(`de auto-DJ gebruikt nu "${staat.naam}"${k.auto.aan ? '' : ' (zet auto aan om te spelen)'}`), 5000);
 });
 $('.pl-kies').addEventListener('change', async (e) => {
   const n = e.target.value;

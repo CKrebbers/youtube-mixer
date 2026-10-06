@@ -116,8 +116,9 @@ const tot = async (fn, ms = 10000) => { const t0 = Date.now(); while (Date.now()
 
 let pv = null;
 try {
+  // Een koude start van Chromium (nieuw profiel, een drukke machine) kan ruim 10 s duren: tot 30 s wachten op een pagina.
   let doelen = null;
-  for (let i = 0; i < 50 && !doelen; i++) {
+  for (let i = 0; i < 150 && !doelen?.some((d) => d.type === 'page'); i++) {
     await wacht(200);
     doelen = await fetch(`http://127.0.0.1:${DEBUG}/json/list`).then((r) => r.json()).catch(() => null);
   }
