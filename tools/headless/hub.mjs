@@ -125,7 +125,8 @@ try {
   const apc = systeem.voegToe('APC40 mkII');
   const lpd8 = systeem.voegToe('LPD8 mk2');
   lpd8.antwoord = (b) => { if (b[1] === 0x7e) setTimeout(() => lpd8.injecteer([0xf0, 0x7e, 0, 6, 2, 0x47, 0x4c, 0, 0xf7]), 1); };
-  const echt = await startHub({ config: { ...laadConfig(), hotplug_ms: 20 }, systeem, poort: 0, drivers: false });
+  // opname: false: de config van de Mac heeft een avondmap; anders nam deze proef daar een "avond" op.
+  const echt = await startHub({ config: { ...laadConfig(), hotplug_ms: 20 }, systeem, poort: 0, drivers: false, opname: false });
   const { default: WebSocket } = await import(join(HUB, 'node_modules/ws/index.js'));
   const andere = [];
   try {

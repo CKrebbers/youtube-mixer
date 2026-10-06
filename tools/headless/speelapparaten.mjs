@@ -91,7 +91,8 @@ const xb = systeem.voegToe(XBOARD_NAAM, { uitgang: false });
 const hid = new NepHidSysteem();
 const m = nepMaschine(hid);
 hid.bijOpen = (p) => setTimeout(() => p.injecteer(rustFrame()), 1);
-const echt = await startHub({ config, systeem, hid, poort: 0, drivers: false });
+// opname: false: de config van de Mac heeft een avondmap; anders nam deze proef daar een "avond" op.
+const echt = await startHub({ config, systeem, hid, poort: 0, drivers: false, opname: false });
 const appUrl = echt.adres.replace('http', 'ws') + '/app';
 
 try {
