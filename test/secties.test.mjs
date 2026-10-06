@@ -238,7 +238,7 @@ globalThis.AudioContext = class {
     return { numberOfChannels: ch, length: len, sampleRate: sr, duration: len / sr, getChannelData: (i) => d[i] }; }
   resume() { return Promise.resolve(); }
 };
-const { SectieKaart, sectieDoel, groepKleur } = await import('../src/engine/secties.js');
+const { SectieKaart, sectieDoel, sectieEen, groepKleur } = await import('../src/engine/secties.js');
 const { Engine } = await import('../src/engine/engine.js');
 const { bindEngine, invoke, read, has } = await import('../src/control/actions.js');
 
@@ -271,6 +271,16 @@ const KAART = { versie: 1, opGrid: true, grid: null, bron: 'auto', slot: false, 
   const d2 = sectieDoel(g2, 10.25, 61);
   ok(`… over een stukgrens met een eigen "1" (maat-anker 61): de sectie valt in op 61 (aanloop vanaf ${d2.toFixed(2)})`,
     Math.abs(g2.beatAt(61) - g2.beatAt(d2) - (4 - g2.barPhase(10.25) * 4)) < 1e-6);
+  // Gevonden met tools/headless/sec-toets.mjs (6 okt): de server bewaart het begin
+  // afgerond op 0,1 ms. Ligt dat een fractie NA de "1" (in Chrome: 2,7e-5 tel), dan
+  // werd de volgende "1" die van de sectie: de sprong landde een maat te laat, midden
+  // in haar eerste maat in plaats van ervóór (geen aanloop, niet op de maat).
+  const g3 = Beatgrid.van({ stukken: [{ van: 0, bpm: 124, anker: 0.3 }], slot: true });
+  const na = Math.ceil(g3.timeOf(64) * 1e4) / 1e4, voor = Math.floor(g3.timeOf(64) * 1e4) / 1e4;   // afgerond, net na / net vóór de "1"
+  const p3 = g3.timeOf(41), d3 = sectieDoel(g3, p3, na), d3v = sectieDoel(g3, p3, voor);
+  ok(`… een begin dat afgerond net NA de "1" ligt: toch die "1", drie tellen aanloop (tel ${(g3.beatAt(d3)).toFixed(3)}, verwacht 61)`,
+    Math.abs(g3.beatAt(d3) - 61) < 1e-3 && Math.abs(g3.beatAt(sectieEen(g3, na)) - 64) < 1e-3);
+  ok('… en net VÓÓR de "1" ook (zoals het al ging)', Math.abs(g3.beatAt(d3v) - 61) < 1e-3 && Math.abs(g3.beatAt(sectieEen(g3, voor)) - 64) < 1e-3);
 }
 const eng = new Engine();
 bindEngine(eng);
