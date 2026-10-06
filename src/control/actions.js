@@ -1288,7 +1288,7 @@ export function bindVormen(vormen, router = null) {
   define('video.layer.react', 'value', (v) => router.zetSterkte(vormen.gekozen, v),
     { label: 'Vormlaag: reageren op de mix (sterkte)', read: () => router.route(vormen.gekozen).sterkte });
   define('video.layer.react.source', 'trigger', (on) => { if (on) router.volgendeBron(vormen.gekozen); },
-    { label: 'Vormlaag: reageren op laag · midden · hoog · klap · luid (de zaal) · klap · tel (de maatgever)' });
+    { label: 'Vormlaag: reageren op laag · midden · hoog · klap · luid (de zaal) · klap · tel · sectie · nieuwe sectie (de maatgever)' });
   define('video.layer.react.target', 'trigger', (on) => { if (on) router.volgendDoel(vormen.gekozen); },
     { label: 'Vormlaag: reageren, welke knop (1–6)' });
 }

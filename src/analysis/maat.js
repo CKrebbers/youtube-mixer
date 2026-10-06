@@ -4,7 +4,7 @@ import { hoorbaar } from '../engine/hoorbaar.js';
 
 /**
  * De maat als bron voor de vormlagen (router.js), naast de banden uit de
- * master-analyse (luisteraar.js). Twee bronnen, allebei 0..1 (regel 2):
+ * master-analyse (luisteraar.js). Vier bronnen, allemaal 0..1 (regel 2):
  *
  *   maatklap  de KLAPPEN van de maatgever uit de offline onset-analyse
  *             (deck.onsets, tracktijd, de server heeft de ijking van 68,5 ms
@@ -14,6 +14,16 @@ import { hoorbaar } from '../engine/hoorbaar.js';
  *             hoort, niet een beeld later.
  *   tel       de tel van de maatgever, dezelfde vorm als video.pulse
  *             (pulsVorm uit puls.js): vol op de tel, na een halve tel 8%.
+ *   sectie.energie
+ *             de energie (0..1 binnen het nummer, server/secties.js) van de
+ *             sectie van de maatgever die je HOORT (deck.sectieKaart,
+ *             docs/SECTIES.md). Springt mee op een grens, een sectie-loop of
+ *             een hotcue: wat je hoort, zie je.
+ *   sectie.nieuw
+ *             een nieuwe sectie begint: de vorm van een klap op elk
+ *             sectiebegin behalve het eerste (het begin van het nummer is
+ *             geen grens), met NIEUW_TAU: een accent, langer dan een klap.
+ *             Ook de video-puls slaat erop (video-mixer.js, _accentNu).
  *
  * Maatgever = de maatgever van de ENGINE (Engine.maatgever, met hysterese:
  * 3 dB en 250 ms), via maatgever() uit puls.js: dezelfde track als de
@@ -47,9 +57,19 @@ import { hoorbaar } from '../engine/hoorbaar.js';
  *     maatgever net te spelen, dan telt alles: zijn eerste tel ligt dan nog
  *     vóór wat je hoort, en die wil je zien.
  *   - Komen de klappen van de maatgever later binnen (ze worden na het laden
- *     opgehaald), dan geldt hetzelfde als bij een wissel.
+ *     opgehaald), dan geldt hetzelfde als bij een wissel. Ook de sectiekaart
+ *     (laden.js haalt hem na het laden op): een grens van net telt dan niet.
+ *   - De sectie-energie is een stand, geen klap. Bij dezelfde maatgever en
+ *     kaart volgt hij meteen; bij een andere maatgever, geen maatgever of een
+ *     andere kaart glijdt hij (ENERGIE_TAU) naar de nieuwe waarde.
  *
- * Zonder maatgever, zonder grid of zonder klappen: 0, geen fout.
+ * Afval: `lees` draait elk beeld. De sectiebronnen maken niets aan (getallen
+ * erin, getallen eruit, geen closures); het zoeken van de sectie begint bij de
+ * vorige index (laatsteBegin). analyse.test controleert dat op de bron. (Klap
+ * en tel maken wel per beeld een paar objecten: `nw`, de closures en hun
+ * { v, tau }, de Set van wie speelde.)
+ *
+ * Zonder maatgever, zonder grid, zonder klappen of zonder secties: 0, geen fout.
  */
 
 /** Opkomst van een klap, VÓÓR de klap (seconden kloktijd). */
@@ -64,6 +84,16 @@ export const TEL_STEIL = 5;
  * (pulsVorm zakt tot exp(-5) = 0,007); een klap na ~0,9 s.
  */
 export const NUL = 1e-4;
+/**
+ * Uitdoven van een nieuwe sectie (seconden kloktijd). Een accent: twee keer
+ * een klap, na 300 ms nog 22% (de flits-noodknop is dan weg), ver onder een
+ * maat. Een aanname, niet op Clay's beamer bekeken (VRAGEN SVV).
+ */
+export const NIEUW_TAU = 0.2;
+/** Glijden van de sectie-energie bij een wissel van maatgever of kaart (seconden kloktijd). */
+export const ENERGIE_TAU = 0.25;
+/** Zo dicht bij zijn doel stopt het glijden: daarna volgt de energie weer meteen. */
+const GLIJ_KLAAR = 1e-3;
 
 /** Index van de laatste klap op of vóór `pos`, of -1. Binair zoeken: een uur is ~18.000 klappen. */
 export function laatsteKlap(onsets, pos) {
@@ -116,6 +146,44 @@ export function telPuls(grid, pos, vanaf = -Infinity) {
 }
 
 /**
+ * Index van de sectie waarin tracktijd `pos` valt (het laatste begin op of
+ * vóór pos), of −1 ervóór. `gok` = de index van het vorige beeld: meestal is
+ * het dezelfde of de volgende, dan hoeft er niets gezocht te worden; anders
+ * binair. De gok wordt altijd nagekeken, dus een gok van een andere kaart of
+ * van vóór een sprong kan geen kwaad. Getal erin, getal eruit: geen afval.
+ * Zonder marge (anders dan SectieKaart.index): dit is wat je HOORT.
+ */
+export function laatsteBegin(stukken, pos, gok = -1) {
+  const n = stukken?.length ?? 0;
+  if (!n || !(pos >= stukken[0].van)) return -1;               // ook NaN
+  if (gok >= 0 && gok < n && stukken[gok].van <= pos) {
+    if (gok + 1 >= n || pos < stukken[gok + 1].van) return gok;
+    if (gok + 2 >= n || pos < stukken[gok + 2].van) return gok + 1;
+  }
+  let lo = 0, hi = n - 1;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (stukken[m].van <= pos) lo = m; else hi = m - 1; }
+  return lo;
+}
+
+/**
+ * Een nieuwe sectie op tracktijd `pos` voor een deck op `rate`: de vorm van
+ * een klap (klapVorm, met NIEUW_TAU) op het laatste sectiebegin (uitdovend)
+ * en het volgende (opkomend). Alleen GRENZEN: het eerste stuk (op 0, het begin
+ * van het nummer) telt niet. Een begin vóór `vanaf` (tracktijd) ook niet: zie
+ * de wissel van maatgever bovenaan. `i` = laatsteBegin(stukken, pos), als je
+ * hem al hebt.
+ */
+export function sectieOmhullende(stukken, pos, rate = 1, vanaf = -Infinity, i = laatsteBegin(stukken, pos)) {
+  if (!stukken?.length || !Number.isFinite(pos)) return 0;
+  const r = rate > 0 ? rate : 1;
+  let v = 0;
+  if (i >= 1 && stukken[i].van >= vanaf) v = klapVorm((pos - stukken[i].van) / r, KLAP_OP, NIEUW_TAU);
+  const k = i + 1;
+  if (k >= 1 && k < stukken.length && stukken[k].van >= vanaf) v = Math.max(v, klapVorm((pos - stukken[k].van) / r, KLAP_OP, NIEUW_TAU));
+  return v;
+}
+
+/**
  * De tracks zoals de maatlezer ze wil zien, uit de engine (alleen uitlezen,
  * duck-typed: deze module importeert de engine niet). `zicht` = hoe hard hij
  * klinkt (klinkt() uit puls.js, zoals de video-puls en engine.syncMaster), dus
@@ -136,16 +204,16 @@ export const engineMaatLezer = (engine, ids, vertraging = () => 0) => new MaatLe
   vertraging,
 });
 
-const leeg = () => ({ id: null, data: null, vanaf: -Infinity, tau: null });
+const leeg = (tau = null) => ({ id: null, data: null, vanaf: -Infinity, tau, glijd: false });
 
 /**
- * Leest klappen en tel van de maatgever uit, met toestand voor de wissels.
- * Eén `lees(t)` per beeld; dezelfde t twee keer (twee lagen in één beeld)
- * geeft hetzelfde terug zonder iets te veranderen.
+ * Leest klappen, tel en secties van de maatgever uit, met toestand voor de
+ * wissels. Eén `lees(t)` per beeld; dezelfde t twee keer (twee lagen in één
+ * beeld) geeft hetzelfde terug zonder iets te veranderen.
  */
 export class MaatLezer {
   /**
-   * @param tracks     () -> [{ id, zicht, deck }], deck: { playing, grid, onsets, position, rate }
+   * @param tracks     () -> [{ id, zicht, deck }], deck: { playing, grid, onsets, sectieKaart, position, rate }
    * @param vertraging () -> seconden tussen de positie en wat je hoort (outputLatency + baseLatency)
    * @param maatgever  () -> id of null: wie de maat geeft (engineMaatgever(engine, ids)).
    *                   Zonder: de hardste uit `tracks` (klokTrack), zonder hysterese.
@@ -161,8 +229,9 @@ export class MaatLezer {
     this.t = null;
     this.maatgever = null;             // id, of null
     this.speelden = new Set();         // wie speelde bij de vorige lees
-    this.bronnen = { maatklap: leeg(), tel: leeg() };
-    this.waarden = { maatklap: 0, tel: 0 };
+    this.bronnen = { maatklap: leeg(), tel: leeg(), 'sectie.energie': leeg(), 'sectie.nieuw': leeg(NIEUW_TAU) };
+    this.waarden = { maatklap: 0, tel: 0, 'sectie.energie': 0, 'sectie.nieuw': 0 };
+    this.sectie = -1;                  // de sectie-index van het vorige beeld: de gok voor laatsteBegin
   }
 
   /** Wie geeft de maat, en de lijst waaruit gekozen werd. */
@@ -195,13 +264,20 @@ export class MaatLezer {
     const vanaf = id !== null && this.speelden.has(id) ? pos - dt * rate : -Infinity;
 
     const w = this.waarden;
-    const nw = {};
+    const nw = { maatklap: 0, tel: 0, 'sectie.energie': 0, 'sectie.nieuw': 0 };
     nw.maatklap = this._bron('maatklap', id, d?.onsets ?? null, vanaf, pos, dt,
       (v0) => ({ v: klapOmhullende(d.onsets, pos, rate, v0), tau: KLAP_TAU }), w.maatklap);
     nw.tel = this._bron('tel', id, d?.grid ?? null, vanaf, pos, dt, (v0) => {
       const { v, lengte } = telPuls(d.grid, pos, v0);
       return { v, tau: lengte > 0 ? lengte / (TEL_STEIL * rate) : null };
     }, w.tel);
+    // De secties (docs/SECTIES.md): zonder closures en zonder objecten, dit
+    // draait elk beeld. Eén keer zoeken voor beide bronnen.
+    const kaart = d?.sectieKaart ?? null;
+    const st = kaart?.stukken?.length ? kaart.stukken : null;
+    const i = st && Number.isFinite(pos) ? (this.sectie = laatsteBegin(st, pos, this.sectie)) : -1;
+    nw['sectie.nieuw'] = this._nieuw(id, kaart, st, i, vanaf, pos, dt, rate, w['sectie.nieuw']);
+    nw['sectie.energie'] = this._energie(id, kaart, st, i, dt, w['sectie.energie']);
 
     // Een track die op zijn start op de maat wacht, speelt voor het oor nog
     // niet: begint hij, dan is dat starten (alles telt), geen overnemen.
@@ -219,21 +295,62 @@ export class MaatLezer {
    */
   _bron(naam, id, data, vanaf, pos, dt, reken, vorige) {
     const b = this.bronnen[naam];
-    if (id !== b.id || data !== b.data) {
-      b.vanaf = Number.isFinite(vanaf) ? vanaf : -Infinity;
-      b.id = id;
-      b.data = data;
-    } else if (pos < b.vanaf) b.vanaf = -Infinity;
+    this._wissel(b, id, data, vanaf, pos);
     let nieuw = 0;
     if (id !== null && data) {
       const r = reken(b.vanaf);
       nieuw = r.v;
       if (r.tau > 0) b.tau = r.tau;
     }
-    // De staart: nooit sneller omlaag dan de puls zelf uitdooft.
+    return this._staart(b, nieuw, dt, vorige);
+  }
+
+  /** Is het een wissel (andere maatgever of andere data)? Zet de grens `b.vanaf` (zie _bron). */
+  _wissel(b, id, data, vanaf, pos) {
+    if (id !== b.id || data !== b.data) {
+      b.vanaf = Number.isFinite(vanaf) ? vanaf : -Infinity;
+      b.id = id;
+      b.data = data;
+    } else if (pos < b.vanaf) b.vanaf = -Infinity;
+  }
+
+  /** De staart: nooit sneller omlaag dan de puls zelf uitdooft. */
+  _staart(b, nieuw, dt, vorige) {
     const tau = b.tau ?? KLAP_TAU;
     const staart = dt > 0 ? vorige * Math.exp(-dt / tau) : vorige;
     const v = Math.max(nieuw, staart);
+    return v < NUL ? 0 : clamp(v);
+  }
+
+  /**
+   * Een nieuwe sectie: als een klap (dezelfde wissel en staart als maatklap),
+   * met de sectiekaart als data. `st` = de stukken (of null), `i` hun index op
+   * `pos` (laatsteBegin).
+   */
+  _nieuw(id, kaart, st, i, vanaf, pos, dt, rate, vorige) {
+    const b = this.bronnen['sectie.nieuw'];
+    this._wissel(b, id, kaart, vanaf, pos);
+    const nieuw = id !== null && st ? sectieOmhullende(st, pos, rate, b.vanaf, i) : 0;
+    return this._staart(b, nieuw, dt, vorige);
+  }
+
+  /**
+   * De energie van de sectie die je hoort: een stand, geen klap. Zelfde
+   * maatgever en kaart: meteen (een grens, een sectie-loop, een hotcue: wat je
+   * hoort, zie je). Een andere maatgever, geen maatgever of een andere kaart
+   * (die van de server komt na het laden): glijden met ENERGIE_TAU tot hij er
+   * bijna is, daarna weer meteen. Vóór de eerste sectie (positie net onder 0
+   * door de uitgangsvertraging): de eerste.
+   */
+  _energie(id, kaart, st, i, dt, vorige) {
+    const b = this.bronnen['sectie.energie'];
+    if (id !== b.id || kaart !== b.data) { b.id = id; b.data = kaart; b.glijd = true; }
+    const doel = id !== null && st ? clamp(st[i < 0 ? 0 : i].energie) : 0;
+    let v = doel;
+    if (b.glijd) {
+      v = doel + (vorige - doel) * (dt > 0 ? Math.exp(-dt / ENERGIE_TAU) : 1);
+      if (Math.abs(v - doel) < GLIJ_KLAAR) { v = doel; b.glijd = false; }
+    }
     return v < NUL ? 0 : clamp(v);
   }
 }

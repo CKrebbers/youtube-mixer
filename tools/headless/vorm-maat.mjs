@@ -127,13 +127,15 @@ try {
   await wacht(1000);
   ok('geen MIDI in dit tabblad', await evalueer('!navigator.requestMIDIAccess'));
   const opties = await evalueer(`[...document.querySelectorAll('.vorm-reageer-bron optgroup')].map((g) => g.label + ': ' + [...g.children].map((o) => o.value).join(','))`);
-  ok('de bronkeuze toont de maatgever: klap (maat) en tel', opties.length === 2 && opties[1] === 'de maatgever: maatklap,tel', opties.join(' | '));
+  ok('de bronkeuze toont de maatgever: klap (maat), tel, sectie en nieuwe sectie', opties.length === 2
+    && opties[1] === 'de maatgever: maatklap,tel,sectie.energie,sectie.nieuw', opties.join(' | '));
 
   // Twee demotracks: A op de tel, B een halve tel later. Grid en klappen met de
   // hand (de demo komt niet uit de library, dus laden.js haalt er niets voor op).
   await evalueer(`(async () => {
     window.__act = await import('/src/control/actions.js');
     window.__maat = await import('/src/analysis/maat.js');
+    window.__vertraging = (await import('/src/engine/hoorbaar.js')).uitgangsVertraging;
     window.__MAAT_WACHT = (await import('/src/engine/engine.js')).MAAT_WACHT;
     const { Beatgrid } = await import('/src/engine/beatgrid.js');
     const { renderDemoTrack } = await import('/src/analysis/demo-track.js');
@@ -167,7 +169,10 @@ try {
   const basis = await evalueer('window.vormen.lagen[0].leesKnop(0)');
   const haak = (s) => evalueer(`(async () => {
     const e = window.engine, M = window.__maat, mx = window.videoMixer, l = window.vormen.lagen[0];
-    const vertraging = () => (e.ctx.outputLatency || 0) + (e.ctx.baseLatency || 0);
+    // Dezelfde vertraging als het vormpaneel (uitgangsVertraging: ook de vooruitblik
+    // van de master-limiter, 1,5 ms). Zonder die liep de eigen lezer 1,5 ms voor
+    // op die van het paneel: afwijking ~0,015 (en ~1 als er een tel tussen viel).
+    const vertraging = () => window.__vertraging(e.ctx);
     const eigen = M.engineMaatLezer(e, mx.decks, vertraging);
     const uit = []; const eind = e.ctx.currentTime + ${s};
     await new Promise((ok) => {
@@ -222,8 +227,10 @@ try {
   ok('het paneel zegt: maat 2', (await status()) === 'maat 2', await status());
 
   // Bron klap (maat) op een track zonder klappen: het paneel zegt het.
-  await evalueer("__act.invoke('video.layer.react.source', true); __act.invoke('video.layer.react.source', false)");   // tel -> laag
-  for (let k = 0; k < 5; k++) await evalueer("__act.invoke('video.layer.react.source', true); __act.invoke('video.layer.react.source', false)");
+  // Rondlopen tot klap (maat): na tel komen sinds 6 okt eerst de sectiebronnen, dan laag.
+  for (let k = 0; k < 9 && await evalueer("document.querySelector('.vorm-reageer-bron').value") !== 'maatklap'; k++) {
+    await evalueer("__act.invoke('video.layer.react.source', true); __act.invoke('video.layer.react.source', false)");
+  }
   ok('bron klap (maat)', await evalueer("document.querySelector('.vorm-reageer-bron').value === 'maatklap'"));
   await evalueer("window.engine.deck('B').onsets = null");
   await wacht(700);
