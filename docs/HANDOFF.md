@@ -14,6 +14,25 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 6 OKT: ALLES PROBEREN IN TWEE AVONDEN (de speellijst)
+
+- **Eerst doen (Clay):** de speellijst in de Controlekamer (`localhost:8777/controle`),
+  van boven naar beneden; per punt ok, fout of `—` en een notitie
+  (`docs/CONTROLEKAMER.md`, "De speellijst").
+  - **Avond 1, mixen** (APC + koptelefoon, zonder hub, ~1 uur): opstarten, koptelefoon
+    (eerst zonder, dan het samengestelde apparaat maken), beatgrid (controle op Loving
+    arms en Ciel, de jungle-mix vóór en na ↻, vastzetten), keylock en toon, stems,
+    master en effecten.
+  - **Avond 2, spelen en programmeren** (met de hub: in AV-app-hub `npm start -- studio`,
+    ~1 uur): FM op de Xboard49 eerst in de koptelefoon, de Maschine, drums, patronen
+    (stappen op de Maschine, een baslijn van de Xboard, starten vanaf de APC, herladen).
+  - De open vragen staan bij hun punt (VRAGEN S3–S22 behalve S12, I4, N1–N3, O1–O2): je antwoord in
+    de notitie. Het werk van vóór 6 okt staat achteraan ("Eerder werk").
+  - Staat de nieuwe lijst er niet, dan serveert de server een map zonder deze versie
+    (`git pull` daar; herstarten hoeft niet).
+- Daarna leest Claude `proef/sessie.json` (in de map van de server): fout + notitie = eerst
+  repareren, de antwoorden gaan naar VRAGEN.
+
 ## 5 OKT (middag): STUDIO S2 EN S3 GEBOUWD, OP `studio/integratie`
 
 Clay: "headphone level is cue level rotary knob. yes instruments can be mapped on 1 of the 8
@@ -54,8 +73,8 @@ parallelle sporen (elk een worktree in `~/Projects/varve-stems/`), samengevoegd 
   sets/paden.json` (youtube-mixer staat daar al op `~/Projects/Youtube mixer`), dan
   `npm start -- studio`. Zonder hub werkt Varve zoals altijd (APC rechtstreeks, Xboard ook;
   de Maschine alleen via de hub).
-- **Eerst doen (Clay):** zie hieronder (PR's, iCloud, samengesteld apparaat), dan de
-  speellijst; open vragen: VRAGEN blok S (S3–S14).
+- **Eerst doen (Clay):** zie hieronder (PR's, iCloud; het samengestelde apparaat zit nu in
+  avond 1), dan de speellijst in twee avonden (6 okt, hierboven); open vragen: VRAGEN blok S.
 
 ## 5 OKT: HET STUDIOPLAN EN DE KOPTELEFOON (docs/STUDIO.md)
 
