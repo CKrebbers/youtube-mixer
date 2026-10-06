@@ -14,7 +14,7 @@ import {
 import { ZEKER_VANAF } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon, maakSecties } from './analyze.js';
 import { toonSamenvatting } from './toon.js';
-import { sectieSamenvatting } from './secties.js';
+import { sectieSamenvatting, SECTIE_VERSIE } from './secties.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
@@ -1045,6 +1045,11 @@ const server = createServer(async (req, res) => {
     // staan, een fout (server/backup.js). Alleen de stand; de kopieën zelf zijn
     // via HTTP nooit te lezen.
     if (pad === '/api/backups' && req.method === 'GET') return json(res, 200, backups.stand());
+    // GET /api/secties: { totaal, zonder, verouderd, versie }: hoeveel nummers (nog)
+    // geen actuele secties hebben (Library.sectieTelling, docs/SECTIES.md §4). De
+    // Controlekamer vraagt het elke 2 s; zonder wijziging in de database is het
+    // een antwoord uit de cache.
+    if (pad === '/api/secties' && req.method === 'GET') return json(res, 200, { ...lib.sectieTelling(), versie: SECTIE_VERSIE });
     // GET /api/proef: { begonnen, items }. PUT /api/proef/<id> { status, notitie }:
     // één punt. POST /api/proef/nieuw: de sessie naar proef/archief/, dan leeg.
     if (pad === '/api/proef' && req.method === 'GET') return json(res, 200, await proef.lees());

@@ -758,6 +758,39 @@ export class Library {
     return this.alleIds().filter((id) => this.moetSecties(id, { versie }));
   }
 
+  /**
+   * Hoeveel nummers (nog) geen actuele secties hebben, voor de Controlekamer
+   * (GET /api/secties): { totaal, zonder, verouderd }. `zonder` = geen
+   * (leesbare) kaart; `verouderd` = wel een kaart, maar moetSecties zegt
+   * "opnieuw" (oudere SECTIE_VERSIE, een ander grid, stems erbij). Dezelfde
+   * regel als moetSecties en teSectieAnalyseren; met de hand of op slot telt
+   * als actueel.
+   *
+   * De Controlekamer vraagt dit elke 2 s. Daarom gecachet op de stand van de
+   * database: total_changes() van deze verbinding (`wijzigingen`, zoals de
+   * backup) plus PRAGMA data_version (een andere verbinding). Zonder wijziging
+   * kost een vraag twee kleine queries; na een wijziging één query over de
+   * kolommen die ertoe doen, en per nummer de vingerafdruk van het grid.
+   */
+  sectieTelling({ versie = SECTIE_VERSIE } = {}) {
+    const sleutel = `${versie}:${this.wijzigingen()}:${this._q('PRAGMA data_version').get().data_version}`;
+    if (this._sectieTelling?.sleutel === sleutel) return this._sectieTelling.telling;
+    const rijen = this._q(`SELECT grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar, stems_json, secties_json
+      FROM tracks`).all();
+    let zonder = 0, verouderd = 0;
+    for (const r of rijen) {
+      const k = r.secties_json != null ? normaliseerSecties(veiligJson(r.secties_json, null)) : null;
+      if (!k) { zonder++; continue; }
+      // Zoals moetSecties, maar zonder track(): alleen het grid en de stems.
+      const grid = this._grid(r);
+      const stems = r.stems_json != null ? normaliseerStems(veiligJson(r.stems_json, null)) : null;
+      if (moetSectieAnalyse(k, { versie, grid: grid ? gridSleutel(grid) : null, metStems: !!stems })) verouderd++;
+    }
+    const telling = Object.freeze({ totaal: rijen.length, zonder, verouderd });
+    this._sectieTelling = { sleutel, telling };
+    return telling;
+  }
+
   // ---- stems -------------------------------------------------------------
 
   /**

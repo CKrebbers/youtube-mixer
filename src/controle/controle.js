@@ -3,11 +3,13 @@ import { KANAAL } from '../ui/status-zender.js';
 import { LOCK_NAAM } from '../ui/tabblad.js';
 import { stemsTegel } from '../ui/stems-weergave.js';
 import { backupTegel } from './backup-tegel.js';
+import { serverTegel } from './server-tegel.js';
 
 /**
  * De Controlekamer (controle.html, docs/CONTROLEKAMER.md). Leest:
  * - de server: /api/tooling, /api/library (aantal), /api/ingest, /api/stems, /api/proef,
- *   /api/backups (de laatste kopie van library.db);
+ *   /api/backups (de laatste kopie van library.db), /api/secties (hoeveel nummers nog
+ *   geen actuele secties hebben);
  * - de Web Lock van de mixer (tabblad.js): is er een mixer open, wacht er een tweede;
  * - het kanaal van de mixer (status-zender.js): APC, audio, wat er speelt.
  * Opent zelf GEEN MIDI: de APC heeft maar één tabblad, de mixer.
@@ -23,6 +25,7 @@ const stand = {
   ingest: [],          // open opdrachten
   stems: null,         // antwoord van /api/stems, { ontbreekt: true } bij een server zonder stems, null = onbekend
   backup: null,        // antwoord van /api/backups
+  secties: null,       // antwoord van /api/secties, { ontbreekt: true } bij een server zonder die route, null = onbekend
   mixer: null,         // { open, wachtend } uit de Web Lock
   status: null,        // laatste bericht van de mixer
   proef: { begonnen: null, items: {} },
@@ -67,6 +70,18 @@ async function leesStems() {
   } catch { stand.stems = null; }
 }
 
+/**
+ * Hoeveel nummers (nog) geen actuele secties hebben (docs/SECTIES.md §4). Los,
+ * zoals de stems: een oudere server kent de route niet (404) en draait toch.
+ * De server cachet de telling, dus elke 2 s vragen kost hem niets.
+ */
+async function leesSecties() {
+  try {
+    const r = await fetch('/api/secties', { cache: 'no-store' });
+    stand.secties = r.status === 404 ? { ontbreekt: true } : r.ok ? await r.json() : null;
+  } catch { stand.secties = null; }
+}
+
 async function leesTooling() {
   try { stand.tooling = await haal('/api/tooling'); } catch { stand.tooling = null; }
 }
@@ -86,16 +101,13 @@ const kanaal = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(KA
 if (kanaal) kanaal.onmessage = (e) => { if (e.data && e.data.t) { stand.status = e.data; tekenStand(); } };
 const vraagStatus = () => kanaal?.postMessage({ vraag: 'status' });
 
-/** Eén tegel: { naam, licht: 'ok'|'half'|'fout'|'uit', waarde, sub }. */
+/** Eén tegel: { naam, licht: 'ok'|'half'|'fout'|'uit', waarde, sub, regel? }. */
 function tegels() {
   const s = stand.status;
   const vers = s && Date.now() - s.t < 5000;
   const t = [];
 
-  t.push(stand.server === false
-    ? { naam: 'Server', licht: 'fout', waarde: 'niet bereikbaar', sub: 'start hem op de Mac (docs/HANDOFF.md)' }
-    : { naam: 'Server', licht: stand.server ? 'ok' : 'uit', waarde: stand.server ? 'draait' : '…',
-        sub: stand.nummers === null ? '' : `library: ${stand.nummers} nummers` });
+  t.push(serverTegel(stand));
 
   const tl = stand.tooling;
   t.push(!tl ? { naam: 'Binnenhalen', licht: 'uit', waarde: '…', sub: '' }
@@ -142,7 +154,8 @@ function tekenStand() {
     <div class="tegel" data-licht="${g.licht}">
       <span class="tegel-naam"><i class="led"></i>${esc(g.naam)}</span>
       <span class="tegel-waarde">${esc(g.waarde)}</span>
-      <span class="tegel-sub">${esc(g.sub)}</span>
+      <span class="tegel-sub">${esc(g.sub)}</span>${g.regel ? `
+      <span class="tegel-regel">${esc(g.regel)}</span>` : ''}
     </div>`).join('');
 
   const s = stand.status;
@@ -280,7 +293,7 @@ $('nieuw').addEventListener('click', async () => {
 
 function klok() { $('tijd').textContent = new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }); }
 
-async function ververs() { await Promise.all([leesServer(), leesMixer(), leesStems()]); tekenStand(); }
+async function ververs() { await Promise.all([leesServer(), leesMixer(), leesStems(), leesSecties()]); tekenStand(); }
 
 klok(); setInterval(klok, 10000);
 try { stand.proef = await haal('/api/proef'); } catch (_) { meld('speellijst niet geladen: is de server er?', 'fout'); }

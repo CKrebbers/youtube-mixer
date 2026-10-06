@@ -7,7 +7,15 @@ de mixer.
 ## Wat erop staat
 
 1. **Stand**, zeven tegels met een lampje:
-   - **Server** draait, met het aantal nummers in de library.
+   - **Server** draait, met het aantal nummers in de library. Daaronder (6 okt) een regel
+     over de secties (`docs/SECTIES.md` §4, `/api/secties`, `src/controle/server-tegel.js`):
+     "secties: 12 nog zonder · 3 verouderd", of "secties: alles actueel". *Nog zonder* = er is
+     nog geen kaart; *verouderd* = er is er een, maar de server rekent hem opnieuw (een
+     nieuwere `SECTIE_VERSIE`, een ander grid, stems erbij). Met de hand of op slot telt als
+     actueel. Dat gebeurt vanzelf: bij het laden van dat nummer, of na een herstart van de
+     server op de achtergrond; daar hoef je niets voor te doen. Een nieuw binnengehaald nummer
+     staat hier dus als "nog zonder" tot je het laadt. Een oudere server zonder de route:
+     "secties: onbekend (oudere server)"; herstarten lost dat op. Lege library: geen regel.
    - **Binnenhalen**: yt-dlp en ffmpeg (`/api/tooling`).
    - **Ingest-rij**: hoeveel er bezig is en wacht (`/api/ingest`).
    - **Stems** (3 okt): wat er gesplitst wordt en wacht, de laatste fout, of de
@@ -90,6 +98,15 @@ alleen via de hub).
   `{ laatste: { naam, tijd, bytes } | null, aantal, gekeken, fout, foutTijd, bezig }`.
   Los opgehaald: een oudere server zonder die route geeft een grijze tegel, geen
   "server weg". De kopieën zelf zijn via HTTP niet te lezen.
+- **De secties-telling** (`GET /api/secties`, alleen GET, achter dezelfde Host-controle):
+  `{ totaal, zonder, verouderd, versie }` uit `Library.sectieTelling()`: dezelfde regel als
+  `moetSecties` (wat de achtergrond en het laden opnieuw zouden rekenen). De Controlekamer
+  vraagt het elke 2 s, dus gecachet op de stand van de database: `total_changes()` van de
+  serververbinding (zoals de backup) plus `PRAGMA data_version` (een andere verbinding).
+  Zonder wijziging twee kleine queries (~3–5 µs); na een wijziging één query over grid,
+  stems en kaart en per nummer de vingerafdruk van het grid (gemeten: 2000 nummers
+  17–37 ms, waar `teSectieAnalyseren` 137 ms deed). Los opgehaald, zoals de stems: een 404
+  is "onbekend", geen "server weg".
 - **Claude leest na een sessie** `proef/sessie.json` (fout + notitie = eerst repareren).
 
 ## Een punt toevoegen of veranderen
@@ -97,7 +114,8 @@ alleen via de hub).
 In `src/controle/speellijst.js`. Verander geen bestaande `id`: de stand op de
 server hangt eraan. `test/controle.test.mjs` controleert dat ids uniek zijn en
 op de server passen, dat de punten van vóór 6 okt er nog zijn, en dat elke
-vraagcode in een let-tekst in `docs/VRAGEN.md` staat. Een punt is één handeling
+vraagcode in een let-tekst in `docs/VRAGEN.md` staat (één tot drie hoofdletters en een
+getal, zoals `S21` of `SVC1`; een lijst als `(I4, O2)`). Een punt is één handeling
 met één ding om op te letten; zet er alleen knoppen in die in de mapping, de
 actions of `index.html` bestaan.
 
@@ -109,6 +127,16 @@ actions of `index.html` bestaan.
 - `test/server.test.mjs`: de routes, de witte lijst, 415 zonder JSON.
 - `test/backup.test.mjs`: de backup-tegel (vandaag, gisteren, langer geleden, fout,
   nog geen, geen server) en `/api/backups` op een echte server.
+- `test/sec-controle.test.mjs`: de tegel Server met de regel secties (elke stand, ook 404 en
+  een lege library), `Library.sectieTelling` (zonder, oudere versie, ander grid, zonder grid
+  gerekend, stems erbij, hand en slot; gelijk aan `teSectieAnalyseren`; de cache, ook bij een
+  andere verbinding; 2000 nummers) en `/api/secties` op een echte server.
+- `tools/headless/sec-controle.mjs` (6 okt, echte Chrome, poorten 8913/9513): een library
+  van zeven nummers met, zonder en met een verouderde kaart geeft "3 nog zonder · 2
+  verouderd"; een nummer krijgt een kaart zoals bij het laden (`?maak=1`, de worker met
+  ffmpeg) → "2 nog zonder"; een ander grid → een verouderde meer; nummers weg → "alles
+  actueel"; een oudere server (404 via de Fetch-laag) → "onbekend"; 390 px breed zonder
+  zijwaarts scrollen en de regel niet afgekapt; server weg → geen regel. 16 ok.
 - `tools/headless/controle.mjs`: Controlekamer en een echte mixer in twee
   tabbladen van één headless Chromium. Mixer open/dicht, een tweede mixer, de
   knop, de demotrack in "in de mixer", afvinken en notities na herladen, de
