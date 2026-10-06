@@ -78,6 +78,10 @@ console.log('\nsecties in een stap: in en uit (docs/PLAN.md §2)');
     && r.fouten.length === 5 && r.fouten.every((f) => /(in|uit)/.test(f)));
   ok('een vreemd label of groep: null, de sectie blijft', JSON.stringify(r.plan.stappen[5].in) === '{"sectie":3,"label":null,"groep":null}');
   ok('in/uit null: gewoon niets, geen fout', !('in' in r.plan.stappen[6]) && !('uit' in r.plan.stappen[6]));
+  const mv = M.normaliseerPlan({ stappen: [{ track: 'a', uit: { ...UIT, van: 123.87 } }, { track: 'b', uit: { ...UIT, van: -3 } }, { track: 'c', uit: { ...UIT, van: '12' } }] });
+  ok('uit mag van hebben (de tijd van de sectie bij het plannen); een rare van valt weg, de sectie blijft',
+    mv.plan.stappen[0].uit.van === 123.87 && !('van' in mv.plan.stappen[1].uit) && !('van' in mv.plan.stappen[2].uit) && mv.fouten.length === 0
+    && JSON.stringify(M.normaliseerPlan(mv.plan).plan) === JSON.stringify(mv.plan));
   const v = M.normaliseerPlan({ stappen: [{ track: 'a', in: { sectie: 4 }, uit: { sectie: 4 } }, { track: 'b', in: { sectie: 4 }, uit: { sectie: 2 } }] });
   ok('uit niet na in: uit weg, met een fout', v.plan.stappen.every((s) => s.in && !('uit' in s)) && v.fouten.filter((f) => /uit/.test(f)).length === 2);
 
@@ -106,10 +110,19 @@ console.log('\nvoorspelling');
     { track: 'zz' }, { track: 'd', speelduur: 60, overgang: 'blend' }] });
   const v = T.voorspel(plan, tracks);
   const [a, b, c, zz, d] = v.stappen;
-  ok('eerste: begint op 0, geen overgang', a.start === 0 && a.overgang === null && a.duur === 120);
+  // Het moment zoals de automaat het plant (planMoment(momentArgs(…)), _overgangVoor), zonder secties:
+  // de blend begint op de laatste 16-maatsgrens die nog past (opDeFrase), niet zo dat hij op het eind
+  // van het stuk eindigt. a: 124 bpm vanaf 0, eind 120 s → begin op 128 tellen = 61,9 s, klaar op 92,9 s.
+  const P = await import('../src/auto/planner.js');
+  const mAB = P.planMoment(P.momentArgs({ type: 'blend', grid: tracks.get('a').grid, uit: tracks.get('a'), inn: P.kenmerken(tracks.get('b'), 0),
+    positie: 0, eind: 120, rate: 1, vooruit: 0 }));
+  ok(`eerste: begint op 0, geen overgang; klaar waar de blend klaar is (${a.duur.toFixed(1)} s)`, a.start === 0 && a.overgang === null
+    && Math.abs(a.duur - (mAB.start + mAB.lengte)) < 1e-9);
   ok(`a → b: blend (zekere grids, toon naast elkaar), 16 maten ≈ ${b.overgang.sec.toFixed(1)} s`, b.overgang.gekozen === 'blend' && Math.abs(b.overgang.sec - 16 * 4 * 60 / 124) < 0.01);
-  ok('b begint waar de blend begint: 120 − overlap', Math.abs(b.start - (120 - b.overlap)) < 1e-9 && b.overlap > 30);
-  ok('b → c (onzeker grid): filter-uit, de nieuwe valt in op het eind (overlap 0)', c.overgang.gekozen === 'filter' && c.overlap === 0 && Math.abs(c.start - (b.start + 120)) < 1e-9);
+  ok(`b begint waar de AUTOMAAT de blend begint: ${b.start.toFixed(1)} s (16-maatsgrens; de oude schatting was 120 − overlap = 89,0 s)`,
+    Math.abs(b.start - mAB.start) < 1e-9 && Math.abs(mAB.start - 128 * 60 / 124) < 1e-9 && Math.abs(b.overlap - mAB.lengte) < 1e-9);
+  ok('b → c (onzeker grid): filter-uit, de nieuwe valt in op het eind van de overgang (overlap 0)', c.overgang.gekozen === 'filter' && c.overlap === 0
+    && Math.abs(c.start - (b.start + b.duur)) < 1e-9 && !!c.moment && Math.abs(b.duur - (c.moment.start + c.moment.lengte - b.van)) < 1e-9);
   ok('onbekend nummer: gemarkeerd, telt niet mee', zz.ontbreekt && zz.duur === 0);
   ok(`c → d, plan vraagt blend: de app kiest ${d.overgang.naam}, en dat staat erbij`, d.overgang.gekozen !== 'blend' && d.overgang.afgewezen && d.overgang.gevraagd === 'blend');
   ok('toonafstand tussen stappen (Am → Em = 1)', b.afstand === 1 && T.toonKleur(1) === 'goed' && T.toonKleur(3) === 'botst' && T.toonKleur(null) === null);
@@ -143,13 +156,15 @@ console.log('\nvoorspelling: secties naar de planner (contract)');
   T.voorspel(plan, tracks, { secties, planner: spion });
   const fA = frag.find((x) => x.id === 'a')?.o, fB = frag.find((x) => x.id === 'b')?.o, fC = frag.find((x) => x.id === 'c')?.o;
   ok('fragment krijgt van, speelduur en rnd zoals altijd', fB?.van === 15.5 && fB.speelduur === 120 && typeof fB.rnd === 'function');
-  ok('fragment krijgt de stukken van ZIJN kaart als secties', fA?.secties === kA.stukken && fB?.secties === kB.stukken);
+  const zelfde = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  ok('fragment krijgt de stukken van ZIJN kaart als secties', zelfde(fA?.secties, kA.stukken) && zelfde(fB?.secties, kB.stukken));
   ok('fragment krijgt in als inSectie (null zonder in)', JSON.stringify(fB?.inSectie) === JSON.stringify(IN) && fA?.inSectie === null);
   ok('een nummer zonder kaart: secties null', fC?.secties === null && fC.inSectie === null);
   ok(`planMoment per overgang (${mom.length}×), met type, grid, positie en eind van de uitgaande`, mom.length === 2
     && mom[0].type === 'blend' && !!mom[0].grid && mom[0].positie === 0 && mom[0].eind === 120);
-  ok('planMoment krijgt de stukken van de UITGAANDE en haar uit', mom[0].secties === kA.stukken && JSON.stringify(mom[0].uitSectie) === JSON.stringify(UIT));
-  ok('... de tweede overgang: de kaart van b, zonder uit (null)', mom[1].secties === kB.stukken && mom[1].uitSectie === null);
+  ok('planMoment krijgt de stukken van de UITGAANDE en haar uit', zelfde(mom[0].secties, kA.stukken) && JSON.stringify(mom[0].uitSectie) === JSON.stringify(UIT));
+  ok('... de tweede overgang: de kaart van b, zonder uit (null)', zelfde(mom[1].secties, kB.stukken) && mom[1].uitSectie === null);
+  ok('planMoment krijgt ook zeker en mag (de bewakers), zoals bij de automaat (momentArgs)', typeof mom[0].zeker === 'function' && typeof mom[0].mag === 'function');
   frag.length = 0; mom.length = 0;
   T.voorspel(plan, tracks, { planner: spion });
   ok('zonder secties (los venster zonder kaarten): overal null', frag.every((x) => x.o.secties === null) && mom.every((x) => x.secties === null));
@@ -164,11 +179,106 @@ console.log('\nvoorspelling: secties naar de planner (contract)');
   ok(`... en de uitgaande is klaar aan het eind van de overgang (tot ${a.tot}, duur ${a.duur})`, a.tot === 70 && a.duur === 70);
   const zonderUit = M.bewerk(plan, { soort: 'zet', id: 's1', velden: { uit: null } });
   const w = T.voorspel(zonderUit, tracks, { secties, planner: nep });
-  ok('zonder uit: de oude schatting (de overgang eindigt op het eind van het stuk)', w.stappen[0].duur === 120 && Math.abs(w.stappen[1].start - (120 - w.stappen[1].overlap)) < 1e-9);
+  ok('zonder uit: OOK het moment van de planner (SVP4), niet meer de schatting op het eind van het stuk', w.stappen[1].start === 50 && w.stappen[0].duur === 70);
   const echt = T.voorspel(plan, tracks, { secties });
   ok('met de echte planner: geen fout, een moment per overgang', echt.stappen[1].moment && Number.isFinite(echt.stappen[1].moment.start) && echt.stappen[1].start >= 0);
   const stuk = T.voorspel(plan, tracks, { secties, planner: { planMoment: () => { throw new Error('boem'); } } });
   ok('een planner die gooit: de oude schatting, geen crash', stuk.stappen[1].moment === null && stuk.stappen[0].duur === 120);
+}
+
+// Dezelfde argumenten als de automaat (review 7 okt, momentArgs): ook bij
+// beatloos de secties (zeker op het grid van de uitgaande), en de bewakers
+// (mag) die een sectie kunnen weigeren. De verwachting rekent de test zelf
+// uit zoals de automaat (_overgangVoor): planMoment(momentArgs(…)).
+console.log('\nvoorspelling: hetzelfde moment als de automaat');
+{
+  const P = await import('../src/auto/planner.js');
+  const nummer = (id, stukken, toon = 'Am') => ({ id, titel: id, duur: 300, loudness_i: -14, grid: { stukken },
+    toon: { stukken: [{ van: 0, toonsoort: toon, zekerheid: 0.9 }] } });
+  const kaart = (delen) => ({ versie: 1, opGrid: true, grid: 'abcd1234', bron: 'hand', slot: false,
+    stukken: delen.map(([van, label, groep]) => ({ van, label, groep, energie: 0.5 })) });
+  const automaat = (uit, nieuw, type, kaartUit, uitSectie = null) => P.planMoment(P.momentArgs({ type, grid: uit.grid, uit,
+    inn: P.kenmerken(nieuw, 0), positie: 0, eind: 200, rate: 1, vooruit: 0, kaart: kaartUit, uitSectie }));
+
+  // 1. Beatloos: het grid van de uitgaande wordt onzeker na 160 s (het eind), maar de outro (150 s) ligt nog op zeker grid.
+  const mist = nummer('mist', [{ van: 0, bpm: 124, anker: 0, zekerheid: 0.9 }, { van: 160, bpm: 124, anker: 160, zekerheid: 0.1 }]);
+  const b = nummer('b', [{ van: 0, bpm: 124, anker: 0, zekerheid: 0.9 }]);
+  const kMist = kaart([[0, 'intro', 'A'], [62, 'drop', 'B'], [150, 'outro', 'C']]);
+  const p1 = M.normaliseerPlan({ stappen: [{ id: 's1', track: 'mist', speelduur: 200 }, { id: 's2', track: 'b' }] }).plan;
+  const v1 = T.voorspel(p1, new Map([['mist', mist], ['b', b]]), { secties: new Map([['mist', kMist]]) });
+  const a1 = automaat(mist, b, 'ambient', kMist);
+  ok(`beatloos (onzeker grid op het eind): ${v1.stappen[1].overgang.gekozen}, de automaat begint op de outro (${a1.start} s)`,
+    v1.stappen[1].overgang.gekozen === 'ambient' && a1.sectie?.label === 'outro' && a1.start === 150);
+  ok(`... en het venster voorspelt hetzelfde moment (${v1.stappen[1].moment?.start} s, was het oude: 176 s)`,
+    JSON.stringify(v1.stappen[1].moment) === JSON.stringify(a1));
+  ok(`... de strook: de nieuwe begint op de outro (${v1.stappen[1].start} s in de set)`, v1.stappen[1].start === 150);
+
+  // 2. De bewakers weigeren: de outro ligt in een stuk op 110 bpm, de blend mag alleen waar het tempo past (128).
+  const wissel = nummer('wissel', [{ van: 0, bpm: 110, anker: 0, zekerheid: 0.9 }, { van: 160, bpm: 128, anker: 160, zekerheid: 0.9 }]);
+  const snel = nummer('snel', [{ van: 0, bpm: 128, anker: 0, zekerheid: 0.9 }]);
+  const kWissel = kaart([[0, 'intro', 'A'], [68 * 240 / 110, 'outro', 'B']]);
+  const p2 = M.normaliseerPlan({ stappen: [{ id: 's1', track: 'wissel', speelduur: 200 }, { id: 's2', track: 'snel', overgang: 'blend' }] }).plan;
+  const v2 = T.voorspel(p2, new Map([['wissel', wissel], ['snel', snel]]), { secties: new Map([['wissel', kWissel]]) });
+  const a2 = automaat(wissel, snel, 'blend', kWissel);
+  const zonderMag = P.planMoment({ ...P.momentArgs({ type: 'blend', grid: wissel.grid, uit: wissel, inn: P.kenmerken(snel, 0), positie: 0, eind: 200,
+    rate: 1, vooruit: 0, kaart: kWissel }), mag: null });
+  ok(`blend; zonder de bewakers zou hij op de outro (110 bpm) beginnen (${zonderMag.sectie?.label}), de automaat niet (${a2.sectie?.label ?? 'geen sectie'}, ${a2.start.toFixed(1)} s)`,
+    v2.stappen[1].overgang.gekozen === 'blend' && zonderMag.sectie?.label === 'outro' && a2.sectie?.label !== 'outro');
+  ok(`... en het venster ook niet: hetzelfde moment als de automaat (${v2.stappen[1].moment?.start?.toFixed(1)} s)`,
+    JSON.stringify(v2.stappen[1].moment) === JSON.stringify(a2));
+
+  // 3. Een kaart die op het grid gerekend is telt; een zonder (opGrid: false) niet (sectiesVan), net als in de automaat.
+  const v3 = T.voorspel(p1, new Map([['mist', mist], ['b', b]]), { secties: new Map([['mist', { ...kMist, opGrid: false }]]) });
+  ok(`een kaart zonder grid (opGrid: false): geen sectie, het moment zonder secties (${v3.stappen[1].moment?.start} s)`,
+    !v3.stappen[1].moment?.sectie && JSON.stringify(v3.stappen[1].moment) === JSON.stringify(automaat(mist, b, 'ambient', null)));
+
+  // 4. `van` in uit (het begin van die sectie bij het plannen): na een herberekening met een stuk extra vooraan
+  //    vindt de planner zo de goede van twee "drop C"'s terug (vindSectie), niet de eerste.
+  const een = nummer('een', [{ van: 0, bpm: 124, anker: 0, zekerheid: 0.9 }]);
+  const maat = (m) => m * 240 / 124;
+  const toen = kaart([[0, 'intro', 'A'], [maat(16), 'drop', 'C'], [maat(32), 'break', 'D'], [maat(48), 'drop', 'C'], [maat(64), 'outro', 'E']]);
+  const nu = kaart([[0, 'intro', 'A'], [maat(8), 'deel', 'F'], [maat(16), 'drop', 'C'], [maat(32), 'break', 'D'], [maat(48), 'drop', 'C'], [maat(64), 'outro', 'E']]);
+  const UIT = { sectie: 4, label: 'drop', groep: 'C' };
+  const metVan = M.normaliseerPlan({ stappen: [{ id: 's1', track: 'een', speelduur: 200, uit: { ...UIT, van: toen.stukken[3].van } }, { id: 's2', track: 'b', overgang: 'blend' }] });
+  ok('normaliseerPlan houdt van in uit (een getal ≥ 0), zonder fout', metVan.fouten.length === 0 && metVan.plan.stappen[0].uit.van === maat(48));
+  const v4 = T.voorspel(metVan.plan, new Map([['een', een], ['b', b]]), { secties: new Map([['een', nu]]) });
+  ok(`met van in uit: na de herberekening de tweede drop C (sectie ${v4.stappen[1].moment?.sectie?.sectie}, ${v4.stappen[1].moment?.start.toFixed(1)} s)`,
+    v4.stappen[1].moment?.sectie?.sectie === 5 && Math.abs(v4.stappen[1].moment.start - maat(48)) < 1e-6);
+  const zonderVan = M.normaliseerPlan({ stappen: [{ id: 's1', track: 'een', speelduur: 200, uit: UIT }, { id: 's2', track: 'b', overgang: 'blend' }] }).plan;
+  ok(`... zonder van: de eerste drop C (sectie ${T.voorspel(zonderVan, new Map([['een', een], ['b', b]]), { secties: new Map([['een', nu]]) }).stappen[1].moment?.sectie?.sectie}): daarom zet het venster van erbij`,
+    T.voorspel(zonderVan, new Map([['een', een], ['b', b]]), { secties: new Map([['een', nu]]) }).stappen[1].moment?.sectie?.sectie === 3);
+}
+
+// De strook (strook.js) op een nep-2D-context: de witte strepen van in en uit
+// liggen BOVENOP. Begint de volgende stap precies op de uit van de vorige (zo
+// plant de planner hem), dan verfde zijn overgang (en zijn banden) over de streep.
+console.log('\nde strook: in en uit bovenop');
+{
+  const { tekenStrook } = await import('../src/plan/strook.js');
+  const tr = (id, bpm, toon) => ({ id, titel: id, duur: 128 * 240 / bpm, loudness_i: -14,
+    grid: { stukken: [{ van: 0, bpm, anker: 0, zekerheid: 0.9 }] }, toon: { stukken: [{ van: 0, toonsoort: toon, zekerheid: 0.9 }] } });
+  const tracks = new Map([tr('een', 124, 'Am'), tr('twee', 125, 'Em')].map((t) => [t.id, t]));
+  const kaart = (bpm, delen) => ({ versie: 1, opGrid: true, grid: 'abcd1234', bron: 'hand', slot: false,
+    stukken: delen.map(([m, label, groep]) => ({ van: m * 240 / bpm, label, groep, energie: 0.5 })) });
+  const secties = new Map([['een', kaart(124, [[0, 'intro', 'A'], [16, 'opbouw', 'B'], [32, 'drop', 'C'], [64, 'break', 'D'], [80, 'drop', 'C'], [112, 'outro', 'E']])],
+    ['twee', kaart(125, [[0, 'intro', 'A'], [8, 'deel', 'B'], [24, 'drop', 'C'], [56, 'break', 'D'], [72, 'outro', 'E']])]]);
+  const { plan } = M.normaliseerPlan({ stappen: [
+    { id: 's1', track: 'een', speelduur: 200, uit: { sectie: 4, label: 'break', groep: 'D' } },
+    { id: 's2', track: 'twee', van: 24 * 240 / 125, in: { sectie: 3, label: 'drop', groep: 'C' }, overgang: 'blend' }] });
+  const v = T.voorspel(plan, tracks, { secties });
+  const ops = [];
+  const g = new Proxy({}, {
+    get: (o, k) => (k in o ? o[k] : k === 'fillRect' ? (x, y, w, h) => ops.push({ x, y, w, h, kleur: o.fillStyle }) : () => {}),
+    set: (o, k, w) => { o[k] = w; return true; },
+  });
+  const banden = tekenStrook(g, { v, w: 1000, h: 74 });
+  const wit = ops.map((o, i) => ({ ...o, i })).filter((o) => o.kleur === '#ffffff');
+  const over = wit.filter((m) => ops.slice(m.i + 1).some((o) => o.kleur !== '#ffffff'
+    && o.x < m.x + m.w && o.x + o.w > m.x && o.y < m.y + m.h && o.y + o.h > m.y));
+  ok(`de tweede stap begint op de uit van de eerste (${v.stappen[1].start.toFixed(1)} s = break D ${(64 * 240 / 124).toFixed(1)} s)`,
+    Math.abs(v.stappen[1].start - 64 * 240 / 124) < 0.01);
+  ok(`banden voor beide stappen (${banden.length})`, banden.some((b) => b.id === 's1') && banden.some((b) => b.id === 's2'));
+  ok(`witte strepen (in en uit) liggen bovenop: ${wit.length} strepen, ${over.length} overgeschilderd`, wit.length === 2 && over.length === 0);
 }
 
 console.log('\nopslag met versies');
@@ -309,6 +419,16 @@ console.log('\nautomaat: vervangPlan kent in en uit');
   ok('uit van de klaarstaande weg: niet herladen', uitWeg.fase === 'klaar' && uitWeg.volgende);
   const uitNu = proef((s) => { s.uit = { sectie: 3, label: 'break', groep: 'C' }; }, 0);
   ok('een uit op de stap die NU klinkt: opnieuw gepland (_planOvergang), niet herladen', uitNu.fase === 'klaar' && uitNu.volgende && uitNu.gepland === 1);
+  // De automaat geeft uit van de stap die nu klinkt door aan de planner, MET van (vindSectie: de goede herhaalde sectie).
+  {
+    const au = new Automaat({ engine: { deck: () => ({ position: 10, rate: 1, duration: 300, grid: null, ui: {} }) }, invoke: () => {}, laad: async () => {}, haalLibrary: async () => [] });
+    const uitMetVan = { sectie: 5, label: 'drop', groep: 'C', van: 92.9 };
+    au._zetPlan({ plan: { stappen: [{ id: 's1', track: 'een', uit: uitMetVan }, { id: 's2', track: 'twee' }] }, versie: 'v1' });
+    Object.assign(au, { hoofd: 'A', hoofdStap: 's1', eind: 200 });
+    const { args } = au._overgangVoor({ deckId: 'B', track: { id: 'twee', duur: 300 }, van: 0, lengte: null });
+    ok(`de automaat geeft uit MET van door aan planMoment (${JSON.stringify(args.uitSectie)})`, JSON.stringify(args.uitSectie) === JSON.stringify(uitMetVan));
+    au.vernietig();
+  }
   const anderLabel = proef((s) => { s.in = { ...IN, label: 'break' }; });
   ok('alleen het label van in anders: ook opnieuw kiezen', anderLabel.fase === 'wacht');
 }

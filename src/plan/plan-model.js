@@ -19,7 +19,8 @@
  *   door       wie de stap (het laatst) zette: 'clay' | 'claude' | null
  *   in, uit    OPTIONEEL (6 okt, docs/SECTIES.md): een sectie van de sectiekaart
  *              van het nummer, { sectie: K (vanaf 1, zoals track.N.section.K),
- *              label, groep }. `in` = de stap begint op die sectie (het
+ *              label, groep, van? } (van: waar ze toen begon; het venster zet
+ *              hem bij uit). `in` = de stap begint op die sectie (het
  *              inmixpunt); `uit` = de overgang naar de volgende BEGINT op die
  *              sectie. Label en groep zijn er om de sectie terug te vinden als
  *              de kaart opnieuw berekend is. `van` blijft de waarheid en de
@@ -56,9 +57,12 @@ export function normaliseerLengte(l) {
 }
 
 /**
- * Een sectiekeuze (in of uit) netjes maken: { sectie, label, groep } met
+ * Een sectiekeuze (in of uit) netjes maken: { sectie, label, groep, van? } met
  * sectie een geheel getal 1..MAX_SECTIE, label een kort woord en groep één
- * hoofdletter (anders null). Geen sectie: null.
+ * hoofdletter (anders null). `van` (optioneel, tracktijd ≥ 0) = waar die
+ * sectie begon toen ze gekozen werd: zo vindt de planner na een herberekening
+ * de goede terug als een label vaker voorkomt (vindSectie). Voor `uit`; bij
+ * `in` is de `van` van de stap al die tijd. Geen sectie: null.
  */
 export function normaliseerSectie(x) {
   if (!x || typeof x !== 'object' || !Number.isInteger(x.sectie) || x.sectie < 1 || x.sectie > MAX_SECTIE) return null;
@@ -66,6 +70,7 @@ export function normaliseerSectie(x) {
     sectie: x.sectie,
     label: typeof x.label === 'string' && /^[a-z]{1,16}$/.test(x.label) ? x.label : null,
     groep: typeof x.groep === 'string' && /^[A-Z]$/.test(x.groep) ? x.groep : null,
+    ...(eindig(x.van) && x.van >= 0 ? { van: x.van } : {}),
   };
 }
 

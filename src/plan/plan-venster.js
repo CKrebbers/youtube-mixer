@@ -1,6 +1,7 @@
 import { normaliseerPlan, bewerk, verschil, SECTIE_VELDEN } from './plan-model.js';
 import { voorspel, toonKleur } from './tijdlijn.js';
-import { groepKleur, LABEL_TEKST } from '../engine/secties.js';
+import { LABEL_TEKST } from '../engine/secties.js';
+import { tekenStrook as tekenOp, mmss } from './strook.js';
 
 /*
  * Het planvenster (plan.html): de hele programmering zien, inrichten en live
@@ -26,12 +27,6 @@ import { groepKleur, LABEL_TEKST } from '../engine/secties.js';
 const $ = (s) => document.querySelector(s);
 const NAAM = /^[\w-]{1,60}$/;
 const SOORT_NAAM = { auto: 'auto', blend: 'lange blend', filter: 'filter-uit', ambient: 'overvloeien' };
-const KLEUR = { blend: '#4ad9c4', filter: '#ffbe3c', ambient: '#c48cff' };
-const mmss = (s) => {
-  if (!Number.isFinite(s)) return '–';
-  const t = Math.max(0, Math.round(s)), u = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), x = t % 60;
-  return u ? `${u}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`;
-};
 /** "2:57", "1:02:03", "177" → seconden; "" → null; onzin → undefined. */
 function leesTijd(t) {
   const s = String(t ?? '').trim().replace(',', '.');
@@ -324,7 +319,8 @@ function rij(r, i) {
     const x = r.secties?.[k - 1];
     if (!x) { render(); return; }
     const keuze = { sectie: k, label: x.label ?? null, groep: x.groep ?? null };
-    if (veld === 'uit') { zet({ uit: keuze }); return; }
+    // Uit krijgt ook de tijd van de sectie nu: zo vindt de planner na een herberekening de goede (vindSectie).
+    if (veld === 'uit') { zet({ uit: { ...keuze, van: x.van } }); return; }
     const velden = { in: keuze, van: x.van };
     if (s.uit && s.uit.sectie <= k) {
       velden.uit = null;
@@ -441,70 +437,7 @@ function tekenStrook() {
   if (doek.width !== Math.round(w * dpr)) { doek.width = Math.round(w * dpr); doek.height = Math.round(h * dpr); }
   const g = doek.getContext('2d');
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.clearRect(0, 0, w, h);
-  const tot = Math.max(1, staat.v.totaal), pad = 10, sx = (t) => pad + (t / tot) * (w - 2 * pad);
-  const baan = (i) => (i % 2 ? 40 : 12);
-  g.font = '11px system-ui';
-  staat.banden = [];
-  staat.v.stappen.forEach((r, i) => {
-    const x0 = sx(r.start), x1 = sx(r.start + r.duur), y = baan(i);
-    g.fillStyle = r.ontbreekt ? '#3a1d1d' : '#1b242d';
-    g.fillRect(x0, y, Math.max(2, x1 - x0), 24);
-    if (!r.ontbreekt && r.secties) tekenBanden(g, r, y, sx);
-    if (r.overgang && r.overlap > 0) {
-      g.fillStyle = (KLEUR[r.overgang.gekozen] || '#888') + '55';
-      g.fillRect(x0, 8, Math.max(2, sx(r.start + r.overlap) - x0), 60);
-    } else if (r.overgang?.gekozen === 'filter') {
-      g.fillStyle = KLEUR.filter;
-      g.fillRect(x0 - 1, 8, 2, 60);
-    }
-    const gekozen = staat.gekozen === r.id, speelt = live?.stap === r.id;
-    g.strokeStyle = speelt ? '#4ad9c4' : gekozen ? '#dfe7ee' : '#2c3844';
-    g.lineWidth = speelt || gekozen ? 2 : 1;
-    g.strokeRect(x0 + 0.5, y + 0.5, Math.max(2, x1 - x0) - 1, 23);
-    g.save();
-    g.beginPath(); g.rect(x0 + 3, y, Math.max(0, x1 - x0 - 6), 24); g.clip();
-    // Een donkere rand om de letters: leesbaar op de gekleurde banden.
-    g.strokeStyle = '#0d1217'; g.lineWidth = 3; g.lineJoin = 'round';
-    g.strokeText(`${i + 1} ${r.titel}`, x0 + 5, y + 15);
-    g.fillStyle = '#dfe7ee';
-    g.fillText(`${i + 1} ${r.titel}`, x0 + 5, y + 15);
-    g.restore();
-  });
-  // Tijd onderaan, en de afspeelkop.
-  g.fillStyle = '#8a96a2';
-  const stap = tot > 3600 ? 600 : tot > 1200 ? 300 : 60;
-  for (let t = 0; t <= tot; t += stap) g.fillText(mmss(t), sx(t) + 2, h - 3);
-  if (live && Number.isFinite(live.setTijd)) {
-    const x = sx(live.setTijd);
-    g.fillStyle = '#4ad9c4';
-    g.fillRect(x - 1, 0, 2, h);
-  }
-}
-/**
- * De secties van één stap in zijn balk: per sectie (voor zover in het
- * gespeelde stuk) een band in de groepskleur, onderaan een vol streepje.
- * Een gekozen in of uit: een witte streep op haar begin.
- */
-function tekenBanden(g, r, y, sx) {
-  const st = r.secties;
-  const opSet = (t) => sx(r.start + (t - r.van));
-  st.forEach((x, k) => {
-    const a = Math.max(r.van, x.van), b = Math.min(r.tot, st[k + 1]?.van ?? r.duurNummer ?? r.tot);
-    if (!(b > a)) return;
-    const xa = opSet(a), xb = opSet(b), kleur = groepKleur(x.groep);
-    g.fillStyle = `${kleur}59`;
-    g.fillRect(xa, y, Math.max(1, xb - xa), 24);
-    g.fillStyle = kleur;
-    g.fillRect(xa, y + 20, Math.max(1, xb - xa - 1), 4);
-    staat.banden.push({ id: r.id, sectie: k + 1, groep: x.groep, x0: xa, x1: xb });
-  });
-  for (const veld of SECTIE_VELDEN) {
-    const t = st[(r.stap[veld]?.sectie ?? 0) - 1]?.van;
-    if (!Number.isFinite(t) || t < r.van - 0.01 || t > r.tot + 0.01) continue;
-    g.fillStyle = '#ffffff';
-    g.fillRect(opSet(t) - 1, y - 3, 2, 30);
-  }
+  staat.banden = tekenOp(g, { v: staat.v, w, h, gekozen: staat.gekozen, live });
 }
 
 doek.addEventListener('click', (e) => {
