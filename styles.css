@@ -628,7 +628,7 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .pad.bewaard{border-style:dashed;border-color:var(--warn);color:var(--dim)}
 @keyframes knipper{50%{opacity:.4}}
 
-/* ---- de rijen (stems, koptelefoon, instrument, patronen, master, auto, klankschaal) ----
+/* ---- de rijen (stems, koptelefoon, instrument, patronen, master, auto, klankschaal, beeld) ----
    Samen onder main, in één gebied dat zelf scrolt: main houdt zijn minimale
    hoogte (de faders op 56 px, de sampler heel) en de rijen krijgen de rest.
    Staat er een open, dan blijft er minstens één lage rij (35 px) te zien. */
@@ -831,6 +831,35 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 /* naast de mastermeter in het focusdeel: gain reduction van boven naar beneden */
 .meter.vmeter.gr-meter{width:4px;align-items:flex-start}
 .meter.vmeter.gr-meter i{background:var(--red)}
+
+/* ---- beeld (de Stroommachine op de pc, docs/BEELD.md) ----
+   Even hoog als KOPTELEFOON en MASTER (hun draaiknoppen), ook zonder draaiknop. */
+.beeld-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px;min-width:0;min-height:54px}
+.beeld-rij.hidden{display:none}
+.bd-aan{min-width:44px}
+.bd-veld{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.04em;color:var(--klein);white-space:nowrap;min-width:0}
+.bd-veld input{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:3px 6px;
+  color:var(--text);font:12px ui-monospace,monospace;min-width:0}
+.bd-veld input:focus{outline:none;border-color:var(--warn)}
+.bd-veld input.fout{border-color:var(--red);color:var(--red)}
+.bd-adres{width:250px;flex:0 1 250px}
+.bd-latentie{width:62px;color-scheme:dark}
+.bd-stand{font:600 12px ui-monospace,monospace;color:var(--klein);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+.bd-stand[data-soort="fout"]{color:var(--red)}
+.bd-stand[data-soort="zoekt"],.bd-stand[data-soort="geen"]{color:var(--warn)}
+.bd-stand[data-soort="half"],.bd-stand[data-soort="ok"]{color:var(--a)}
+/* Het lampje op de knop in de balk, alleen als beeld aan staat (data-lamp, beeld-paneel.js).
+   Op de hoek, buiten de tekst: de knop wordt er niet breder van. Oranje = zoekt de relay,
+   cyaan ring = verbonden (de Stroommachine nog niet, of op haar eigen klok), cyaan = volgt
+   de klok, rood = adres geweigerd, grijze ring = aan maar geen adres. */
+#beeld-btn{position:relative}
+#beeld-btn[data-lamp]::after{content:"";position:absolute;top:-3px;right:-3px;width:8px;height:8px;border-radius:50%;
+  background:var(--dim);border:1px solid var(--panel);pointer-events:none}
+#beeld-btn[data-lamp="zoekt"]::after{background:var(--warn)}
+#beeld-btn[data-lamp="verbonden"]::after{background:var(--panel);border:2px solid var(--a)}
+#beeld-btn[data-lamp="volgt"]::after{background:var(--a)}
+#beeld-btn[data-lamp="fout"]::after{background:var(--red)}
+#beeld-btn[data-lamp="geen"]::after{background:var(--panel);border:2px solid var(--dim)}
 
 /* het teken in de kolomkop: S2/S4 = speelt met stems; gestippeld = klaar, herladen geeft ze; S! = mislukt */
 .kol-kop-l{display:flex;align-items:center;gap:5px;min-width:0}
@@ -1053,6 +1082,9 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
 .focusdeel[data-laag="rack"] .fd-laag{color:var(--b)}
 .focusdeel[data-laag="master"] .fd-device{border-color:var(--warn)}
 .focusdeel[data-laag="master"] .fd-laag{color:var(--warn)}
+/* het mapje beeld (de Stroommachine, docs/BEELD.md): roze, zoals de regie op de scene-knoppen (paletindex 57) */
+.focusdeel[data-laag="beeld"] .fd-device{border-color:#ff4f8b}
+.focusdeel[data-laag="beeld"] .fd-laag{color:#ff4f8b}
 .fd-laag-uitleg{letter-spacing:0;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fd-knobs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 6px;margin:6px 0;justify-items:center}
 .fd-devknoppen{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;position:relative}

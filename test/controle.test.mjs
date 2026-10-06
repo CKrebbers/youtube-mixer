@@ -1,7 +1,9 @@
 // De Controlekamer zonder browser: de opslag van de speellijst
 // (server/proef.js), de speellijst zelf (src/controle/speellijst.js), het
-// bericht dat de mixer stuurt (src/ui/status-zender.js) en de tegel Stems
-// (src/ui/stems-weergave.js). Op een tijdelijke map.
+// bericht dat de mixer stuurt (src/ui/status-zender.js), de tegel Stems
+// (src/ui/stems-weergave.js) en beeld: de tegel, de statusregel van de
+// BEELD-rij en het lampje op de knop (src/ui/beeld-weergave.js). Op een
+// tijdelijke map.
 // Draai met: node test/controle.test.mjs
 import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -107,6 +109,89 @@ console.log('\nhet bericht van de mixer (status-zender.js)');
   ok('zonder engine en MIDI: lege lijst, midi null', zonder.tracks.length === 0 && zonder.midi === null);
   const fout = maakStatus({ snap, midi: { ...midi, enabled: false, error: new Error('geweigerd'), input: null } });
   ok('een MIDI-fout wordt tekst', fout.midi.fout === 'Error: geweigerd' && fout.midi.invoer === null);
+
+  // beeld (docs/BEELD.md): status() van de BeeldKoppeling, mag ontbreken.
+  ok('zonder beeld: beeld null', s.beeld === null && zonder.beeld === null);
+  const beeldStatus = { aan: true, adres: 'ws://192.168.1.20:7702/app', latentie: 80, loopt: true, verbonden: true, fout: null,
+    beeld: { regime: 'drift', scene: 'golven', fps: 59.7, volgt: true, bpm: 124 }, verstuurd: 120, ontvangen: 9 };
+  const mb = maakStatus({ snap, midi, beeld: beeldStatus, nu: 1000 });
+  ok('met beeld: { aan, loopt, verbonden, regime, scene, volgt }, zonder adres of tellers',
+    JSON.stringify(mb.beeld) === JSON.stringify({ aan: true, loopt: true, verbonden: true, regime: 'drift', scene: 'golven', volgt: true }));
+  ok('met beeld: het bericht is nog steeds te klonen', JSON.stringify(structuredClone(mb)) === JSON.stringify(mb));
+  const wacht = maakStatus({ snap, midi, beeld: { ...beeldStatus, beeld: null } });
+  ok('verbonden zonder beeld-status: regime, scene en volgt null', wacht.beeld.verbonden === true
+    && wacht.beeld.regime === null && wacht.beeld.scene === null && wacht.beeld.volgt === null);
+  const uit = maakStatus({ snap, midi, beeld: { aan: false, adres: '', latentie: 0, loopt: false, verbonden: false, fout: null, beeld: null } });
+  ok('beeld uit: aan, loopt en verbonden false', uit.beeld.aan === false && uit.beeld.loopt === false && uit.beeld.verbonden === false);
+}
+
+console.log('\nbeeld: tegel, statusregel en lampje (beeld-weergave.js)');
+{
+  const { beeldTegel, beeldStand, beeldBericht } = await import('../src/ui/beeld-weergave.js');
+  const basis = { aan: true, adres: 'ws://192.168.1.20:7702/app', latentie: 0, loopt: true, verbonden: false, fout: null, beeld: null };
+  const tegel = (s) => beeldTegel(beeldBericht(s));
+
+  ok('tegel: een mixer zonder beeld (oud bericht): uit, "—"', beeldTegel(null).licht === 'uit' && beeldTegel(null).waarde === '—'
+    && beeldTegel(undefined).naam === 'Beeld');
+  const tUit = tegel({ ...basis, aan: false, loopt: false });
+  ok('tegel: uit = grijs (mag ontbreken), geen fout', tUit.licht === 'uit' && tUit.waarde === 'uit'
+    && tUit.sub === 'de Stroommachine op de pc (mag ontbreken)');
+  const tZoekt = tegel(basis);
+  ok('tegel: aan, niet verbonden = half, "zoekt de relay"', tZoekt.licht === 'half' && tZoekt.waarde === 'zoekt de relay');
+  const tGeen = tegel({ ...basis, adres: '', loopt: false });
+  ok('tegel: aan zonder (geldig) adres = half, "geen adres"', tGeen.licht === 'half' && tGeen.waarde === 'geen adres');
+  const tWacht = tegel({ ...basis, verbonden: true });
+  ok('tegel: verbonden zonder beeld-status = half, "relay verbonden", wacht op de Stroommachine', tWacht.licht === 'half'
+    && tWacht.waarde === 'relay verbonden' && tWacht.sub === 'wacht op de Stroommachine');
+  const tVolgt = tegel({ ...basis, verbonden: true, beeld: { regime: 'drift', scene: 'golven', fps: 60, volgt: true, bpm: 124 } });
+  ok(`tegel: verbonden met beeld = groen, "volgt de klok", "${tVolgt.sub}"`, tVolgt.licht === 'ok'
+    && tVolgt.waarde === 'volgt de klok' && tVolgt.sub === 'drift · golven');
+  const tEigen = tegel({ ...basis, verbonden: true, beeld: { regime: '', scene: 'golven', fps: 60, volgt: false, bpm: 0 } });
+  ok('tegel: eigen klok = groen, "eigen klok"; een leeg regime valt weg', tEigen.licht === 'ok' && tEigen.waarde === 'eigen klok' && tEigen.sub === 'golven');
+  ok('tegel: een bericht van vóór "loopt" (zonder dat veld) zoekt gewoon', beeldTegel({ aan: true, verbonden: false }).waarde === 'zoekt de relay');
+
+  const st = (s, g) => beeldStand(s, g);
+  const sUit = st({ ...basis, aan: false });
+  ok('regel: uit = "uit", geen lampje (de knop ziet eruit als altijd)', sUit.tekst === 'uit' && sUit.lamp === null);
+  ok('regel: aan zonder adres = "geen adres", grijze ring', st({ ...basis, adres: '', loopt: false }).tekst === 'geen adres'
+    && st({ ...basis, adres: '', loopt: false }).lamp === 'geen');
+  const sWeg = st({ ...basis, adres: '', loopt: false }, 'alleen ws:// of wss://');
+  ok('regel: geweigerd adres = de reden, rood lampje als beeld aan staat', sWeg.tekst === 'adres geweigerd: alleen ws:// of wss://'
+    && sWeg.soort === 'fout' && sWeg.lamp === 'fout');
+  ok('regel: geweigerd adres met beeld uit = de reden, maar geen lampje', st({ ...basis, aan: false }, 'geen geldig adres').lamp === null);
+  const sZoekt = st(basis);
+  ok(`regel: "${sZoekt.tekst}", oranje lampje`, sZoekt.tekst === 'zoekt de relay op ws://192.168.1.20:7702/app' && sZoekt.lamp === 'zoekt');
+  const sWacht = st({ ...basis, verbonden: true });
+  ok('regel: "verbonden, wacht op de Stroommachine", cyaan ring', sWacht.tekst === 'verbonden, wacht op de Stroommachine' && sWacht.lamp === 'verbonden');
+  const sVolgt = st({ ...basis, verbonden: true, beeld: { regime: 'drift', scene: 'golven', fps: 60, volgt: true, bpm: 124 } });
+  ok(`regel: "${sVolgt.tekst}", cyaan lampje`, sVolgt.tekst === 'verbonden · drift · golven · volgt de klok' && sVolgt.lamp === 'volgt');
+  const sEigen = st({ ...basis, verbonden: true, beeld: { regime: 'drift', scene: 'golven', fps: 60, volgt: false, bpm: 0 } });
+  ok('regel: eigen klok = "… · eigen klok", cyaan ring (verbonden)', sEigen.tekst === 'verbonden · drift · golven · eigen klok' && sEigen.lamp === 'verbonden');
+  ok('regel: een zender die niet startte (fout) = rood', st({ ...basis, fout: 'kapot' }).lamp === 'fout' && /kapot/.test(st({ ...basis, fout: 'kapot' }).tekst));
+
+  // De echte koppeling (src/koppel/beeld.js) met een nep-zender: past status() op deze functies?
+  const { BeeldKoppeling } = await import('../src/koppel/beeld.js');
+  let opStatus = null;
+  const nepZender = { status: { verbonden: false, beeld: null, verstuurd: 0, ontvangen: 0 },
+    on: (e, f) => { if (e === 'status') opStatus = f; return () => { opStatus = null; }; }, start() {}, stop() {} };
+  const k = new BeeldKoppeling({ engine: {}, ids: [], maakZender: () => nepZender });
+  ok('echte koppeling, net gemaakt: uit, geen lampje, tegel uit', beeldStand(k.status()).lamp === null
+    && beeldTegel(beeldBericht(k.status())).waarde === 'uit');
+  const r = k.zet({ aan: true, adres: 'http://192.168.1.20:7702' });
+  ok('echte koppeling, http-adres: geweigerd met een reden, loopt niet', !r.ok && r.reden && !k.loopt
+    && beeldStand(k.status(), r.reden).lamp === 'fout');
+  k.zet({ adres: 'ws://192.168.1.20:7702/app' });
+  ok('echte koppeling, ws-adres: loopt en zoekt', k.loopt && beeldStand(k.status()).lamp === 'zoekt'
+    && beeldTegel(beeldBericht(k.status())).waarde === 'zoekt de relay');
+  nepZender.status.verbonden = true; opStatus?.();
+  ok('echte koppeling, verbonden: wacht op de Stroommachine', beeldStand(k.status()).lamp === 'verbonden'
+    && beeldTegel(beeldBericht(k.status())).sub === 'wacht op de Stroommachine');
+  nepZender.status.beeld = { regime: 'drift', scene: 'golven', fps: 60, volgt: true, bpm: 124 }; opStatus?.();
+  const kStatus = maakStatus({ snap: null, midi: null, beeld: k.status() });
+  ok('echte koppeling, beeld-status: volgt de klok, in het bericht en op de tegel', beeldStand(k.status()).lamp === 'volgt'
+    && kStatus.beeld.volgt === true && beeldTegel(kStatus.beeld).waarde === 'volgt de klok');
+  k.stop();
+  ok('echte koppeling, gestopt: loopt niet meer', !k.loopt);
 }
 
 console.log('\nde tegel Stems (stems-weergave.js)');

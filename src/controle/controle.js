@@ -2,6 +2,7 @@ import { SPEELLIJST, allePunten } from './speellijst.js';
 import { KANAAL } from '../ui/status-zender.js';
 import { LOCK_NAAM } from '../ui/tabblad.js';
 import { stemsTegel } from '../ui/stems-weergave.js';
+import { beeldTegel } from '../ui/beeld-weergave.js';
 import { backupTegel } from './backup-tegel.js';
 
 /**
@@ -9,7 +10,7 @@ import { backupTegel } from './backup-tegel.js';
  * - de server: /api/tooling, /api/library (aantal), /api/ingest, /api/stems, /api/proef,
  *   /api/backups (de laatste kopie van library.db);
  * - de Web Lock van de mixer (tabblad.js): is er een mixer open, wacht er een tweede;
- * - het kanaal van de mixer (status-zender.js): APC, audio, wat er speelt.
+ * - het kanaal van de mixer (status-zender.js): APC, audio, wat er speelt, beeld.
  * Opent zelf GEEN MIDI: de APC heeft maar één tabblad, de mixer.
  */
 
@@ -123,6 +124,7 @@ function tegels() {
   if (!m?.open || !vers) {
     t.push({ naam: 'Audio', licht: 'uit', waarde: '—', sub: '' });
     t.push({ naam: 'APC40', licht: 'uit', waarde: '—', sub: m?.open ? 'mixer op de achtergrond? klik hem even aan' : '' });
+    t.push({ naam: 'Beeld', licht: 'uit', waarde: '—', sub: '' });
   } else {
     t.push(s.audio === 'running' ? { naam: 'Audio', licht: 'ok', waarde: 'aan', sub: '' }
       : { naam: 'Audio', licht: 'half', waarde: 'staat stil', sub: 'klik "audio starten" in de mixer' });
@@ -133,6 +135,8 @@ function tegels() {
         : md.verkeerdePoort ? { naam: 'APC40', licht: 'fout', waarde: 'verkeerde poort', sub: 'kies de APC in het MIDI-paneel' }
           : apc ? { naam: 'APC40', licht: 'ok', waarde: 'verbonden', sub: `echo's: ${md.echoes}` }
             : { naam: 'APC40', licht: 'half', waarde: md.invoer ? md.invoer : 'niet aangesloten', sub: 'sluit hem aan en herlaad de mixer' });
+    // De Stroommachine op de pc (docs/BEELD.md): mag ontbreken, dus uit is grijs, geen fout.
+    t.push(beeldTegel(s.beeld));
   }
   return t;
 }

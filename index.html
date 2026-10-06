@@ -25,6 +25,7 @@
       <button id="terug-btn" class="ghost log-knop" title="een handelingenlog terugspelen">↺</button>
     </span>
     <button id="video-btn" class="ghost" title="video-mixer (V)">video</button>
+    <button id="beeld-btn" class="ghost" title="beeld: de Stroommachine op de pc sturen via de Varve-relay (klok, mix en nummers) — aan/uit, adres, latentie en de stand">beeld</button>
     <button id="plan-btn" class="ghost" title="de programmering: het hele setplan zien, inrichten en live volgen (apart venster)">plan</button>
     <button id="auto-btn" class="ghost" title="auto-DJ: de app kiest en mixt, jij stuurt bij">auto</button>
     <button id="klankschaal-btn" class="ghost" title="klankschaal: speel mee op de toon van wat je hoort">klankschaal</button>
@@ -482,6 +483,21 @@
     <div class="knob sm" data-action="klankschaal.send.b" data-label="GALM" data-value="0.35" data-default="0.35" title="naar send B (galm)"></div>
     <div class="knob sm" data-action="klankschaal.volume" data-label="VOL" data-value="0.8" data-default="0.8"></div>
   </div>
+</section>
+
+<!-- ================= BEELD (docs/BEELD.md) ================= -->
+<!-- De Stroommachine op de pc, via de Varve-relay: aan/uit, het adres, een
+     extra latentie voor beamer of scherm, en de stand. beeld-paneel.js past
+     een veld toe bij Enter of bij het verlaten ervan, niet per toets. Uit of
+     zonder adres gaat er niets het netwerk op. -->
+<section id="beeld" class="beeld-rij hidden">
+  <span class="sampler-kop">BEELD</span>
+  <button class="btn sm bd-aan" title="beeld aan/uit: de klok, de mix en de nummers naar de Stroommachine op de pc (uit = er gaat niets het netwerk op)">uit</button>
+  <label class="bd-veld" title="het adres van de Varve-relay op de pc (poort 7702); toepassen met Enter of door het veld te verlaten">relay
+    <input class="bd-adres" type="text" maxlength="200" placeholder="ws://192.168.1.20:7702/app" spellcheck="false" autocomplete="off"></label>
+  <label class="bd-veld" title="extra latentie in ms (−200…500): + = het beeld eerder, voor een beamer die achterloopt">latentie
+    <input class="bd-latentie" type="number" min="-200" max="500" step="10" value="0"> ms</label>
+  <span class="bd-stand" data-soort="uit">uit</span>
 </section>
 </div>
 

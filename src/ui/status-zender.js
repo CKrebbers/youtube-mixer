@@ -1,8 +1,8 @@
 /**
  * De mixer meldt zijn stand aan de Controlekamer (controle.html) over een
- * BroadcastChannel: APC, audio, wat er speelt. Alleen lezen, en in één
- * richting: de Controlekamer opent zelf nooit MIDI, dus er komt nooit een
- * tweede client op de APC.
+ * BroadcastChannel: APC, audio, wat er speelt, en of de Stroommachine (beeld)
+ * meekijkt. Alleen lezen, en in één richting: de Controlekamer opent zelf
+ * nooit MIDI, dus er komt nooit een tweede client op de APC.
  *
  * Alleen het tabblad met de Web Lock (tabblad.js) meldt; een tweede
  * mixer-tabblad zwijgt. Elke seconde, en meteen als de Controlekamer erom
@@ -10,12 +10,18 @@
  * timers (na 5 min tot één keer per minuut als er niets klinkt), een bericht
  * komt wel meteen binnen.
  */
+import { beeldBericht } from './beeld-weergave.js';
+
 export const KANAAL = 'varve-status';
 
 const toonTekst = (t) => (t?.camelot ? `${t.camelot} ${t.kort ?? ''}`.trim() : null);
 
-/** Het bericht, uit een engine-snapshot en de MIDI-status. Puur. */
-export function maakStatus({ snap, midi, audio = null, auto = false, opname = false, nu = Date.now() }) {
+/**
+ * Het bericht, uit een engine-snapshot en de MIDI-status. Puur.
+ * `beeld` = status() van de BeeldKoppeling (src/koppel/beeld.js), mag
+ * ontbreken: dan staat er beeld: null in het bericht (beeld-weergave.js).
+ */
+export function maakStatus({ snap, midi, audio = null, auto = false, opname = false, beeld = null, nu = Date.now() }) {
   const tracks = Object.values(snap?.decks ?? {})
     .filter((d) => d.loaded)
     .map((d) => ({ id: d.id, titel: d.title ?? null, speelt: !!d.playing,
@@ -28,12 +34,13 @@ export function maakStatus({ snap, midi, audio = null, auto = false, opname = fa
       rx: midi.rx ?? 0, echoes: midi.echoes ?? 0, verkeerdePoort: !!midi.verkeerdePoort,
     } : null,
     tracks, focus: snap?.focus ?? null, maat: snap?.maat ?? null, auto: !!auto, opname: !!opname,
+    beeld: beeldBericht(beeld),
   };
 }
 
 /**
  * @param {object} o
- * @param {() => object} o.lees     geeft { snap, midi, audio, auto, opname }
+ * @param {() => object} o.lees     geeft { snap, midi, audio, auto, opname, beeld? }
  * @param {() => boolean} o.isEerste  heeft dit tabblad de Web Lock?
  */
 export function startStatusZender({ lees, isEerste = () => true, interval = 1000 }) {
