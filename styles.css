@@ -28,7 +28,12 @@ body{overflow-y:auto}
 .brand{font-weight:700;letter-spacing:.14em;font-size:13px}
 .brand span{color:var(--a)}
 .brand em{font-style:normal;font-weight:400;letter-spacing:0;color:var(--dim);margin-left:10px;font-size:11px}
-.topbar-right{display:flex;align-items:center;gap:12px}
+/* Eén regel, ook op een laptop: op 1440 px was de balk 1534 px breed (knoppen
+   rechts buiten beeld, tekst op twee regels; 6 okt). Krappere tussenruimte,
+   nooit afbreken; kleinere knoppen pas als het echt niet past. */
+.topbar-right{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.topbar-right .ghost{padding:5px 8px}
+@media (max-width:1500px){.topbar-right .ghost,.topbar-right .primary{padding:4px 6px;font-size:12px}.topbar-right{gap:4px}}
 .master-knob{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.1em;color:var(--dim)}
 
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
