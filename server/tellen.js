@@ -176,7 +176,16 @@ export async function wisTellen(media, id) {
  * Wat al loopt maakt altijd af.
  */
 export class GpuSlot {
-  constructor() { this.bezet = false; this.wachtend = []; }
+  constructor() { this.bezet = false; this.wachtend = []; this.dicht = false; }
+
+  /**
+   * Even niemand erop (het opstarten: de herstelde stems-rij zou de GPU
+   * pakken vóór de tellen in hun rij staan). Wie wacht, blijft wachten;
+   * `open()` laat de eerste in de rij (met voorrang eerst) los.
+   */
+  sluit() { this.dicht = true; }
+  open() { this.dicht = false; this._volgende(); }
+
   pak(signal = null, { voorrang = false } = {}) {
     if (signal?.aborted) return Promise.resolve(null);
     return new Promise((klaar) => {
@@ -194,7 +203,7 @@ export class GpuSlot {
     });
   }
   _volgende() {
-    if (this.bezet || !this.wachtend.length) return;
+    if (this.bezet || this.dicht || !this.wachtend.length) return;
     const w = this.wachtend.shift();
     w.signal?.removeEventListener('abort', w.weg);
     this.bezet = true;
@@ -213,8 +222,10 @@ export class GpuSlot {
  * zoeken en het grid maken); fouten worden gelogd, nooit gegooid.
  */
 export class TellenRij {
-  constructor({ werk }) {
+  /** `bijLeeg()`: de rij is leeg (de laatste is klaar, of alles is geannuleerd). */
+  constructor({ werk, bijLeeg = null }) {
     this.werk = werk;
+    this.bijLeeg = bijLeeg;
     this.rij = [];
     this.huidig = null;    // { id, ctrl }
   }
@@ -244,10 +255,12 @@ export class TellenRij {
       this.huidig.ctrl.abort();
       await this._bezig;
     }
+    this.bijLeeg?.();
   }
 
   _loop() {
-    if (this.huidig || !this.rij.length) return;
+    if (this.huidig) return;
+    if (!this.rij.length) { this.bijLeeg?.(); return; }
     const id = this.rij.shift();
     const ctrl = new AbortController();
     this.huidig = { id, ctrl };

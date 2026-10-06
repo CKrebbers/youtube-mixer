@@ -120,6 +120,17 @@ try {
     loopt();
     (await t1)(); (await t2)(); (await s1)();
     ok('voorrang: de tellen vóór de wachtende split, in hun eigen volgorde', v.join() === 'tel1,tel2,split1' && !slot.bezet);
+    // Dicht (het opstarten): niemand erop; open = de eerste met voorrang.
+    const w = [];
+    slot.sluit();
+    const s2 = slot.pak().then((l) => { w.push('split'); return l; });
+    await wacht(5);
+    const t3 = slot.pak(null, { voorrang: true }).then((l) => { w.push('tel'); return l; });
+    await wacht(5);
+    ok('dicht: wie vraagt, wacht', w.length === 0 && !slot.bezet);
+    slot.open();
+    (await t3)(); (await s2)();
+    ok('open: de tellen eerst, ook al vroeg de split eerder', w.join() === 'tel,split');
 
     const gedaan = [];
     let los = null;
@@ -137,6 +148,11 @@ try {
     ok('klaar: de volgende', gedaan.join() === 'x,z' && rij.bevat('z'));
     rij.annuleer('z'); await wacht(5);
     ok('annuleren van de lopende: gestopt, rij leeg', !rij.open);
+    let leeg = 0;
+    const rij2 = new tl.TellenRij({ werk: async () => {}, bijLeeg: () => { leeg++; } });
+    rij2.voegToe('a'); rij2.voegToe('b');
+    await wacht(10);
+    ok('bijLeeg: één keer, als de laatste klaar is (de GPU gaat dan pas los)', leeg === 1 && !rij2.open);
   }
 
   // ======================================================================
