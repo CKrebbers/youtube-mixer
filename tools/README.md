@@ -64,6 +64,14 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   drums weg 0,9 · rest weg 0,4), opnieuw splitsen geweigerd terwijl het speelt, herladen-teken,
   layout op 1440×790 en 1920×1080, de tegel in de Controlekamer. `--nep` = alleen de ui
   (/api/stems en de stem-actions nagebootst in de pagina).
+- `rijen.mjs [uitmap] [--label voor|na]` — de rijen onder de mixer (stems, koptelefoon, instrument,
+  patronen, master, auto, klankschaal; eigen server op 8863, debug 9463, geen MIDI): op 1440×790 en
+  1920×1080 met geen, elke rij apart, drie, alle rijen open, en met de videokolom erbij. Per stand:
+  elke fader, knop en knob van de acht kolommen en de hele sampler binnen het scherm, niet weggeknipt
+  en niet bedekt (elementFromPoint), faders ≥ 56 px, de pagina en main scrollen niet, elke open rij
+  helemaal te zien (zo nodig door het rij-gebied te scrollen), en een melding boven de rijen.
+  Schermafdrukken `rijen-<label>-<maat>-<rijen>.png`, cijfers in `rijen-<label>.json`.
+  `VARVE_WORTEL=<map>` draait de app uit een andere map (`git archive` van oude code: de stand vóór).
 - `tekenen.mjs` — hoeveel VARVE op zijn canvassen tekent (eigen server op 8823, geen MIDI): in rust ~0 Mpx/s
   (zonder de sleutel in waveform.js was het ~29 Mpx/s, en liep Demucs op de helft), een sprong in stilstand
   tekent zoom en overzicht wel opnieuw; plus de duurste functies van de hoofdthread per toestand.
