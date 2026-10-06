@@ -233,6 +233,13 @@ ok('rommel in de invoer wordt overgeslagen', gridUitTellen([NaN, ...tellen(0, 30
   ok('alles: elk stuk dat nog niet goedgekeurd is', teControleren(g, null, { alles: true }).join() === '0,1,2,3');
   ok('het volgende na stuk 1: stuk 3; na het laatste: rondom', volgendTeControleren(g, null, 12) === 3 && volgendTeControleren(g, null, 35) === 1);
   ok('het vorige', volgendTeControleren(g, null, 35, { stap: -1 }) === 1);
+  const { plekkenTeControleren, PLEK_GAT } = await import('../src/engine/tellen.js');
+  const gp = new Beatgrid({ stukken: [0, 10, 14, 18, 40, 44].map((van) => ({ van, bpm: 120, anker: van, zekerheid: van < 40 ? 0.5 : 0.9, twijfel: van < 40 ? 'rubato' : undefined }))
+    .concat([{ van: 50, bpm: 120, anker: 50, zekerheid: 0.5, twijfel: 'drift' }]) });
+  ok('plekken: aaneengesloten stukken samen, een gat van PLEK_GAT of meer = een nieuwe plek',
+    JSON.stringify(plekkenTeControleren(gp)) === JSON.stringify([{ van: 0, tot: 3 }, { van: 6, tot: 6 }]) && PLEK_GAT === 8,
+    JSON.stringify(plekkenTeControleren(gp)));
+  ok('volgende = het begin van de volgende plek, ook vanuit het midden van een plek', volgendTeControleren(gp, null, 15) === 6);
   g.keurGoed(12); g.keurGoed(32);
   ok('alles goedgekeurd: niets meer (null)', volgendTeControleren(g, null, 12) === null);
   ok('goedkeuren onthoudt het (toJSON → Beatgrid)', new Beatgrid(g.toJSON()).stukken[1].ok === true && !new Beatgrid(g.toJSON()).stukken[1].twijfel);

@@ -610,14 +610,35 @@ export function teControleren(grid, meting = null, { alles = false } = {}) {
   return uit;
 }
 
+/** Te controleren stukken met minder dan zoveel seconden ertussen horen bij dezelfde plek. */
+export const PLEK_GAT = 8;
+
 /**
- * Het volgende stuk om te controleren na het stuk rond t (`stap` 1), of het
- * vorige (`stap` -1); rondom. Null als er niets (meer) te controleren is.
+ * De te controleren stukken samengenomen tot PLEKKEN: aaneengesloten, of met
+ * minder dan PLEK_GAT s ertussen. [{ van, tot }] (indexen van stukken). Een
+ * live opname gaf 100 losse stukken om na te lopen, de meeste korter dan
+ * 20 s (6 okt); als plekken 55, en binnen een plek luister je gewoon door.
+ */
+export function plekkenTeControleren(grid, meting = null, opties = {}) {
+  const st = grid.stukken;
+  const uit = [];
+  for (const i of teControleren(grid, meting, opties)) {
+    const p = uit[uit.length - 1];
+    if (p && (i === p.tot + 1 || st[i].van - st[p.tot + 1].van < PLEK_GAT)) p.tot = i;
+    else uit.push({ van: i, tot: i });
+  }
+  return uit;
+}
+
+/**
+ * Het eerste stuk van de volgende plek om te controleren na het stuk rond t
+ * (`stap` 1), of van de vorige (`stap` -1); rondom. Null als er niets (meer)
+ * te controleren is.
  */
 export function volgendTeControleren(grid, meting, t, { stap = 1, alles = false } = {}) {
-  const lijst = teControleren(grid, meting, { alles });
-  if (!lijst.length) return null;
+  const plekken = plekkenTeControleren(grid, meting, { alles });
+  if (!plekken.length) return null;
   const hier = grid.stukIndex(t);
-  if (stap > 0) return lijst.find((i) => i > hier) ?? lijst[0];
-  return [...lijst].reverse().find((i) => i < hier) ?? lijst[lijst.length - 1];
+  if (stap > 0) return (plekken.find((p) => p.van > hier) ?? plekken[0]).van;
+  return ([...plekken].reverse().find((p) => p.tot < hier) ?? plekken[plekken.length - 1]).van;
 }
