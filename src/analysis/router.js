@@ -28,6 +28,11 @@ export const MIX_BRONNEN = ['laag', 'midden', 'hoog', 'onset', 'rms'];
  * Van de maatgever (maat.js): geen analyser nodig, alleen positie, grid,
  * klappen en sectiekaart. De secties achteraan (6 okt): de volgorde van de
  * eerste zeven blijft, dus react.source loopt tot "tel" zoals vroeger.
+ * Bekend: het handelingenlog bewaart de drukken op video.layer.react.source
+ * (geen stand in de beginstand, de bron is sessietoestand). Een log van vóór
+ * 6 okt dat voorbij "tel" rondliep, komt nu op een sectiebron uit in plaats
+ * van op "laag". Niet hersteld: een read en een plek in RONDLOPERS zouden de
+ * beginstand veranderen.
  */
 export const MAAT_BRONNEN = ['maatklap', 'tel', 'sectie.energie', 'sectie.nieuw'];
 /** In deze volgorde lopen ze rond (video.layer.react.source). */

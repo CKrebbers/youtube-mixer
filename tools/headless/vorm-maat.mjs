@@ -62,7 +62,7 @@ const ok = (naam, cond, extra = '') => { uitkomst.push([naam, !!cond]); console.
 // meting een klap of tel had (dan mag het omhoog, anders niet).
 const meetMaat = (s, stap = '') => evalueer(`(async () => {
   const e = window.engine, M = window.__maat, mx = window.videoMixer;
-  const vertraging = () => (e.ctx.outputLatency || 0) + (e.ctx.baseLatency || 0);
+  const vertraging = () => window.__vertraging(e.ctx);            // zoals het vormpaneel (ook de vooruitblik van de limiter)
   const l = window.__lezer ??= M.engineMaatLezer(e, mx.decks, vertraging);
   const uit = []; const eind = e.ctx.currentTime + ${s};
   let vorig = null;
@@ -211,7 +211,7 @@ try {
   }`);
   const i = w.findIndex((r) => r.wie === 'B');
   ok('crossfader naar B: track 2 geeft de maat', i > 0 && w.slice(i).every((r) => r.wie === 'B'), i > 0 ? `wissel op meting ${i}` : 'geen wissel');
-  const gezetT = await evalueer('window.__gezetT - ((window.engine.ctx.outputLatency || 0) + (window.engine.ctx.baseLatency || 0))');
+  const gezetT = await evalueer('window.__gezetT - window.__vertraging(window.engine.ctx)');
   const wachtte = i > 0 ? w[i].t - gezetT : NaN;
   const MAAT_WACHT = await evalueer('window.__MAAT_WACHT');
   ok(`de vormen wisselen pas na MAAT_WACHT, zoals de MAAT-badge (hysterese van de engine): ${(wachtte * 1000).toFixed(0)} ms`,

@@ -187,6 +187,42 @@ console.log('\nde puls op een nieuwe sectie (secties verweven, docs/SECTIES.md)'
   ok('maatgever zonder sectiekaart: geen accent', reeks().every((x) => x.a === 0));
   A.sectieKaart = { stukken: ST };
 
+  // Afval (review 6 okt): met de puls open draaide _accentNu elk beeld een hele
+  // MaatLezer (tracks-array, klap, tel, closures, een Set): ~1,6 KB per beeld.
+  // Nu een SectieLezer die alleen de secties rekent, en de maatgever wordt per
+  // beeld één keer gezocht (puls en accent samen): bovenop de puls (_pulsNu,
+  // die er al was) geen objecten meer, hooguit een paar doubles over een
+  // functiegrens. De nep-syncMaster maakt zelf een array, zoals de echte
+  // (Engine.maatgever): twee keer zoeken zou hier dus ook tellen.
+  {
+    const v8 = await import('node:v8');
+    const bytes = (stap, n = 40000) => {
+      for (let i = 0; i < n; i++) stap(i);
+      const a = v8.getHeapStatistics().total_allocated_bytes;
+      for (let i = n; i < 2 * n; i++) stap(i);
+      return (v8.getHeapStatistics().total_allocated_bytes - a) / n;
+    };
+    if (v8.getHeapStatistics().total_allocated_bytes === undefined) console.log('  -- afval: deze Node kent v8 total_allocated_bytes niet');
+    else {
+      const veel = { stukken: Array.from({ length: 200 }, (_, k) => ({ van: k * 8, label: 'deel', groep: 'A', energie: (k % 5) / 4 })) };
+      A.sectieKaart = veel;
+      vm.zetPuls(0.2);
+      let laatste = null;
+      const echteSync = engine.syncMaster;
+      engine.syncMaster = () => { laatste = [meester]; return laatste[0]; };   // maakt een array, zoals Engine.maatgever
+      let som = 0;
+      const puls = bytes((i) => { ctx.currentTime = 10 + i / 60; som += vm._pulsNu(V); });
+      let accenten = 0;
+      // Zoals teken(): de maatgever één keer, voor puls en accent samen.
+      const beide = bytes((i) => { ctx.currentTime = 10 + i / 60; const m = vm._maatDeck(); const a = vm._accentNu(V, m); som += vm._pulsNu(V, m) + a; if (a > 0.5) accenten++; });
+      ok(`video met de puls open: het accent kost bovenop de puls ${(beide - puls).toFixed(1)} B per beeld (puls alleen ${puls.toFixed(1)}, met accent ${beide.toFixed(1)}; ${accenten} beelden met een accent)`,
+        beide - puls < 128 && accenten > 10);
+      A.sectieKaart = { stukken: ST };
+      engine.syncMaster = echteSync;
+      ctx.currentTime = 0;
+    }
+  }
+
   // teken(): het accent komt in de effectstap. Doel flits, diepte 0,1: op een
   // gewone tel een zachte flits, op de sectiegrens een volle.
   const maak = (eng) => {
