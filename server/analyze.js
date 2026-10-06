@@ -119,6 +119,17 @@ export const maakOnsets = (onsetBestand, envRate, tijdOffset) =>
 export const maakToon = (audioBestand, { signal } = {}) => inWerker('toon', [audioBestand], signal);
 
 /**
+ * De sectiekaart van een track (docs/SECTIES.md): de audio mono op 11025 Hz,
+ * de maten uit `grid` (JSON, of null: dan stukken van 2 s), en als het nummer
+ * stems heeft ook het niveau per stem uit stems.wav (`stems`: { bestand,
+ * namen }). Een nummer van 5 minuten kost ~0,5 s, een uur ~5 s: in de worker.
+ * Geeft { ok, secties } met secties = { versie, opGrid, grid, stukken, bron:
+ * 'auto', slot: false }, of { ok: false, fout }.
+ */
+export const maakSecties = (audioBestand, grid, stems = null, { signal } = {}) =>
+  inWerker('secties', [audioBestand, grid, stems], signal);
+
+/**
  * Zekerheid vanaf waar een stuk ZEKER heet: sync en beat-loops mogen daar,
  * het grid wordt vol getekend. Zelfde getal als ZEKER_VANAF in de engine
  * (beatgrid.js); de server kent de engine niet, server.test vergelijkt ze.
@@ -474,6 +485,43 @@ async function maakToonHier(audioBestand) {
   return toon ? { ok: true, toon } : { ok: false, fout: 'te kort voor een toonsoort' };
 }
 
+/**
+ * Alle kanalen van een bestand als interleaved floats op `sampleRate`
+ * (stems.wav: stem k = kanaalpaar k), of null. Voor het niveau per stem.
+ */
+function leesPcmKanalen(bestand, sampleRate, kanalen) {
+  return new Promise((klaar) => {
+    let kind;
+    try {
+      kind = startFfmpeg(['-hide_banner', '-nostats', '-loglevel', 'error', '-i', bestand,
+        '-f', 'f32le', '-acodec', 'pcm_f32le', '-ac', String(kanalen), '-ar', String(sampleRate), '-']);
+    } catch { klaar(null); return; }
+    if (!kind) { klaar(null); return; }
+    const stukken = [];
+    kind.stdout.on('data', (c) => stukken.push(c));
+    kind.on('error', () => klaar(null));
+    kind.on('close', (code) => {
+      if (code !== 0) { klaar(null); return; }
+      const b = Buffer.concat(stukken);
+      klaar(new Float32Array(b.buffer, b.byteOffset, Math.floor(b.byteLength / 4)));
+    });
+  });
+}
+
+async function maakSectiesHier(audioBestand, grid, stems) {
+  const { sectieKaart, frameKenmerken, stemNiveaus, SECTIE_SR, STEMS_SR } = await import('./secties.js');
+  const pcm = await leesPcm(audioBestand, SECTIE_SR);
+  if (!pcm || pcm.length < SECTIE_SR * 8) return { ok: false, fout: pcm ? 'te kort voor secties' : 'kon de audio niet lezen voor de secties' };
+  const fk = frameKenmerken(pcm, SECTIE_SR);
+  let niveaus = null, namen = [];
+  // Stems zijn een verbetering, geen voorwaarde: lukt lezen niet, dan zonder.
+  if (stems?.bestand && Array.isArray(stems.namen) && stems.namen.length) {
+    const st = await leesPcmKanalen(stems.bestand, STEMS_SR, stems.namen.length * 2);
+    if (st && st.length) { niveaus = stemNiveaus(st, stems.namen.length * 2, STEMS_SR); namen = stems.namen; }
+  }
+  return { ok: true, secties: sectieKaart({ fk, stems: niveaus, stemNamen: namen, grid, duur: pcm.length / SECTIE_SR }) };
+}
+
 /** Voor de worker. Niet rechtstreeks aanroepen vanuit de server. */
 export const hier = { peaks: maakPeaksHier, onset: maakOnsetHier, verfijn: verfijnHier,
-  grid: maakGridHier, onsets: maakOnsetsHier, toon: maakToonHier };
+  grid: maakGridHier, onsets: maakOnsetsHier, toon: maakToonHier, secties: maakSectiesHier };

@@ -14,6 +14,22 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 6 OKT (middag): SECTIES — NUMMERS BESPELEN (`studio/secties`)
+
+- **Wat:** het nummer in secties (intro, opbouw, drop, break, outro + een letter per groep) die je op
+  de maat lanceert en loopt. Strook boven de golfvorm; APC: Shift + scene 1 = grid-modus SECTIES, 40
+  pads = de secties van de focus-track, shift = als loop. Alles in `docs/SECTIES.md`.
+- **Waar:** tak `studio/secties`, worktree `~/Projects/varve-stems/secties`, van `studio/integratie`
+  (1770922). Nog NIET samengevoegd en nog niet gepusht (de sessie kon niet bij GitHub): `git push -u
+  origin studio/secties` op de Mac.
+- **Getest:** `node test/secties.test.mjs` (synthetische nummers met een bekend antwoord, worker,
+  library, deck en actions, de server op een eigen poort): groen. Bestaande tests bijgewerkt waar ze
+  de grid-modi of het aantal mappingregels tellen (mapping, instrumenten, patronen-engine, library):
+  groen. NIET getest: in Chrome (headless kon niet in de sessie), op de APC, op echte muziek.
+- **Proberen:** speellijst, blok "Avond 1 · Secties" (6 punten), daarna VRAGEN blok SE. Server
+  herstarten na het uitchecken (schema v9 migreert vanzelf).
+- **Let op:** draai geen server van een andere tak met een eigen schema v9 op dezelfde library.db.
+
 ## 6 OKT: ALLES PROBEREN IN TWEE AVONDEN (de speellijst)
 
 - **Eerst doen (Clay):** de speellijst in de Controlekamer (`localhost:8777/controle`),

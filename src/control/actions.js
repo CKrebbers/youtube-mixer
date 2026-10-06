@@ -38,6 +38,9 @@ export const STEM_LABELS = { vocals: 'zang', inst: 'rest', drums: 'drums', bass:
 const RATE_MIN = 0.5;
 const RATE_MAX = 2;
 
+/** Zoveel secties per track op de bus: de 40 pads van het APC-grid (docs/SECTIES.md). */
+export const SECTIE_PADS = 40;
+
 export function define(id, type, fn, meta = {}) {
   registry.set(id, { id, type, fn, meta });
 }
@@ -450,6 +453,31 @@ export function bindEngine(engine) {
       define(`${n}.hotcue.${i + 1}.delete`, 'trigger', (on) => { if (on) d.hotcue(i, { del: true }); },
         { label: `Track ${nr} hotcue ${i + 1} wissen`,
           read: () => (!d.buffer ? null : d.hotcues[i] !== null ? 1 : 0) });
+    }
+
+    // ---- secties (docs/SECTIES.md) ----------------------------------------
+    // Het nummer in stukken (intro, drop, break …) die je speelt: een pad =
+    // die sectie, die invalt op de volgende maat (deck.naarSectie); shift =
+    // de sectie als loop (nog eens = loop eraf). Reads: null = er is geen
+    // sectie op die plek (of geen kaart), 0,5 = er is er een, 1 = die hoor je
+    // nu (de LED knippert op de tel) of je drukt hem in.
+    for (let i = 0; i < SECTIE_PADS; i++) {
+      let ingedrukt = false;
+      const bestaat = () => !!d.sectieKaart && d.buffer && i < d.sectieKaart.aantal;
+      define(`${n}.section.${i + 1}`, 'trigger', (on) => { ingedrukt = !!on; if (on) d.naarSectie(i); },
+        { label: `Track ${nr} sectie ${i + 1}: daarheen, op de volgende maat`,
+          read: () => (!bestaat() ? null : ingedrukt || d.sectieHier === i ? 1 : 0.5) });
+      define(`${n}.section.${i + 1}.loop`, 'trigger', (on) => { if (on) d.naarSectie(i, { loop: true }); },
+        { label: `Track ${nr} sectie ${i + 1} als loop (nog eens: loop eraf)`,
+          read: () => (!bestaat() ? null : d.loopIsSectie(i) ? 1 : 0.5) });
+    }
+    for (const [stap, naam, tekst] of [[1, 'next', 'volgende'], [-1, 'prev', 'vorige']]) {
+      define(`${n}.section.${naam}`, 'trigger', (on) => {
+        if (!on || !d.sectieKaart) return;
+        const i = d.sectieOpDeMaat + stap;
+        if (i >= 0 && i < d.sectieKaart.aantal) d.naarSectie(i);
+      }, { label: `Track ${nr} naar de ${tekst} sectie, op de volgende maat`,
+           read: () => (!d.sectieKaart || !d.buffer ? null : 0) });
     }
 
     for (const sec of [0.5, 1, 2, 4, 8]) {
@@ -945,7 +973,7 @@ export function bindEngine(engine) {
  * dezelfde melding er al, dan licht die opnieuw op. De action zelf verandert niet: hij
  * doet in die gevallen nog steeds niets (dat is goed), alleen niet meer stil.
  */
-const NUMMER_NODIG = /^(play|cue|sync|tap|brake|hotcue\.\d$|loop\.|beatloop\.|beatjump\.|nudge\.|bend\.|grid\.|stem\.)/;
+const NUMMER_NODIG = /^(play|cue|sync|tap|brake|hotcue\.\d$|loop\.|beatloop\.|beatjump\.|nudge\.|bend\.|grid\.|stem\.|section\.)/;
 // Zonder grid: tel 1 (here) kan nog steeds niets, maar zegt dat zelf; terug (undo) moet ook na wissen kunnen.
 const GRID_NODIG = /^(grid\.(?!here$|undo$)|beatloop\.|beatjump\.)/;
 const KOPTELEFOON_NODIG = /^(pfl$|stem\.\w+\.pfl$)/;
@@ -974,6 +1002,12 @@ function waaromNiet(engine) {
       }
       if (rest.startsWith('stem.') && !KOPTELEFOON_NODIG.test(rest) && !d.stems) {
         return `track ${nr} heeft (nog) geen stems: splits hem in de STEMS-rij of in de library.`;
+      }
+      if (rest.startsWith('section.') && !d.sectieKaart) {
+        return `track ${nr} heeft (nog) geen secties: die worden bij het laden berekend (een paar seconden; met stems en een grid worden ze beter).`;
+      }
+      if (rest.startsWith('section.') && /^section\.\d+/.test(rest) && Number(rest.split('.')[1]) > d.sectieKaart.aantal) {
+        return `track ${nr} heeft ${d.sectieKaart.aantal} secties; pad ${rest.split('.')[1]} is er niet.`;
       }
       if (GRID_NODIG.test(rest) && !d.grid) {
         return `track ${nr} heeft nog geen beatgrid: tik mee op de tel met TAP (vier tikken), of zet tel 1 met "1".`;

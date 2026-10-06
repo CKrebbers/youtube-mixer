@@ -53,6 +53,7 @@ src/
   engine/           audio-graph.js  kanaalstrip, EQ (+ kill), bipolair filter, master, xfader, het stemfilter (maakStemFilter)
                     beatgrid.js     tempokaart + maat-anker per stuk, tap tempo, beatjump-rekenwerk. Puur.
                     toonsoort.js    ToonKaart: toonsoort per stuk, wat je hoort, bewerken. Puur.
+                    secties.js      SectieKaart (het nummer in secties) + sectieDoel: de sprong die op de volgende "1" invalt. Puur.
                     hoorbaar.js     wat je HOORT: uitgangsVertraging(ctx), hoorbaar(deck, V). Eén plek.
                     overgang.js     overgangen op een AudioParam: hellingen na startDrempel (geen curves)
                     bron.js         HOE een track geluid wordt: BufferBron en StreamBron (ook gepland starten, rem)
@@ -177,6 +178,7 @@ server/             draait apart: `node server/index.js`
   analyse-werker.js peaks, onset, tap-verfijning en toonsoort in een worker_thread (server blijft vrij)
   detect.js         FFT, onset-envelope, tempo, segmentatie (+ tweede kans). Geen dependencies.
   toon.js           toonsoort: stemming per stuk, chroma, Temperley 2005, kaart (Viterbi). Puur.
+  secties.js        secties per maat: kenmerken, nieuwheid (Foote, energie, stems), grenzen, groepen, labels. Puur (docs/SECTIES.md)
   wachtrij.js       de ingest-wachtrij: één tegelijk (links en uploads), annuleren met een AbortSignal
   opname.js         opnames: WAV dat groeit, kop herstellen na een crash
   patronen.js       patronen per set: patronen/<naam>.json met versie (409), .versies (docs/PATRONEN.md)
@@ -279,6 +281,7 @@ docs/
   AUTO-DJ.md        auto-DJ: drie partijen, bewakers, overgangen, bediening, het setplan, grenzen, volgende fases
   KLANKSCHAAL.md    de klankschaal: stemming, bouw, bediening, metingen, open vragen (KS1–KS5)
   STEMS.md          stems per nummer: Demucs bij de ingest, stems.wav, de engine, de rij, metingen; §5 de stemkanalen
+  SECTIES.md        secties per nummer (6 okt): rekenwerk, de sprong op de maat, opslag, grid-modus SECTIES, grenzen
   TAILSCALE.md      overal openen via Tailscale: VARVE_HOSTS, tailscale serve, wat waar werkt
   ONTBREEKT.md      wat er nog ontbreekt (2 okt): eigen docs, DJ-software, Logic/TD; voorstel en vragen
   STUDIO.md         VARVE als muziekprogramma (5 okt): hergebruik, vier controllers, fasen S0–S5; §3 de koptelefoon
@@ -1530,6 +1533,27 @@ Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag mis
   `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
   HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een
   beginstand).
+
+## Secties (gebouwd 6 okt, tak `studio/secties`)
+
+Volledig in `docs/SECTIES.md`, vragen in VRAGEN blok SE. Wat een bouwer niet mag missen:
+- Een SECTIEKAART zoals de toonsoortkaart: `{ versie, opGrid, grid, stukken: [{ van, label, groep,
+  energie, zeker?, stems? }], bron, slot }` in tracktijd, kolom `secties_json` (schema v9). NIET in
+  `/api/library` (de lijst blijft klein): laden.js haalt hem met `GET /api/library/<id>/secties?maak=1`,
+  en de server rekent dan eerst als `moetSecties` ja zegt (geen kaart, oudere `SECTIE_VERSIE`, een ander
+  grid — `grid` is een FNV-vingerafdruk van het grid — of stems erbij). 'hand' en slot: nooit overschrijven.
+- Grenzen liggen op maatbegins van het grid van TOEN. Verandert het grid, dan wordt de kaart bij het
+  volgende laden opnieuw berekend; tijdens een sessie blijft hij staan.
+- De sprong (`sectieDoel`): NU springen naar vlak vóór de sectie, zo ver vóór haar "1" als je van de
+  volgende "1" af zit (fasebehoudend, `seek` met `doorlopend`); geen timer, geen wachten (regel 3).
+  `sectieOpDeMaat` = de sectie op de volgende "1": volgende/vorige rekenen daarvanaf (tijdens een
+  aanloop hoor je nog de maat ervóór: `sectieHier` is wat je HOORT).
+- APC: grid-modus `secties` (Shift + scene 1, achteraan in ▲ ▼), 40 pads = secties van de FOCUS-track,
+  shift = als loop. Kleuren: wit (hoor je, `tel: 'aan'`) / `hemelsblauwdonker` (42) / uit. 82 regels
+  erbij, geen bestaande veranderd; `eerder` bijgewerkt met `tools/mapping/eerder.mjs`.
+- Labels zijn een gok uit energie en drums (intro · opbouw · drop · break · outro · `deel`); gemeten
+  op synthetisch materiaal (`test/synth-nummer.mjs`), nog niet op Clay's library (SE2). Een beter
+  algoritme = `SECTIE_VERSIE` omhoog; dan rekent alles vanzelf opnieuw.
 
 ## Werkwijze die hier werkt
 

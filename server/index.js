@@ -12,8 +12,9 @@ import {
   SORTERING, isSortering, MAX_PER_PAGINA, MAX_HOTCUES,
 } from './library.js';
 import { ZEKER_VANAF } from './analyze.js';
-import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon } from './analyze.js';
+import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon, maakSecties } from './analyze.js';
 import { toonSamenvatting } from './toon.js';
+import { sectieSamenvatting } from './secties.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
@@ -217,6 +218,8 @@ function bewaarInLibrary(r) {
     // Nieuwe audio.wav = oude stems passen niet meer (andere frames, ander
     // geluid). De rij hier, de bestanden in stemsNaIngest.
     lib.bewaarStems(track.id, null);
+    // Nieuwe audio: automatische secties horen bij de oude (bij het laden komen ze opnieuw).
+    if (lib.secties(track.id)?.bron === 'auto') lib.bewaarSecties(track.id, null);
     if (track.peaks) lib.bewaarPeaks(track.id, track.peaks);
     // De ingest rekende de envelope al uit; zonder dit deed de eerste tap
     // het hele werk nog een keer.
@@ -667,6 +670,32 @@ function analyseerToon(track) {
   return toonBezig.get(track.id);
 }
 
+/**
+ * De sectiekaart voor een nummer (docs/SECTIES.md), in een worker, op het
+ * grid en de stems van NU, en meteen bewaard (niet over een kaart met de hand
+ * of op slot). Eén tegelijk per nummer: het laden en de achtergrond die
+ * hetzelfde nummer vragen, krijgen dezelfde uitkomst.
+ * Geeft { ok, secties, bewaard } of { ok: false, fout }.
+ */
+const sectiesBezig = new Map();
+function analyseerSecties(id) {
+  if (!sectiesBezig.has(id)) {
+    sectiesBezig.set(id, (async () => {
+      const t = lib.track(id);
+      if (!t) return { ok: false, fout: 'onbekend nummer' };
+      const stems = t.stems ? { bestand: opSchijf(t.stems.bestand), namen: t.stems.namen } : null;
+      const t0 = Date.now();
+      const r = await maakSecties(opSchijf(t.audio), t.grid ?? null, stems);
+      if (!r.ok) { console.log(`[secties] ${t.titel}: overgeslagen (${r.fout})`); return r; }
+      const b = lib.bewaarAutoSecties(id, r.secties);
+      console.log(`[secties] ${t.titel}: ${b.bewaard ? sectieSamenvatting(b.secties) : `niet bewaard (${b.reden})`}`
+        + ` — ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+      return { ok: true, secties: b.secties, bewaard: b.bewaard };
+    })().finally(() => sectiesBezig.delete(id)));
+  }
+  return sectiesBezig.get(id);
+}
+
 /*
  * Onset-pieken per nummer, in het geheugen: ze veranderen alleen als de
  * envelope verandert (opnieuw binnenhalen). Een uur is ~18.000 tijden.
@@ -689,11 +718,13 @@ const onsetCache = new Map();
 async function heranalyseOpAchtergrond() {
   const grids = lib.teAnalyseren();
   const tonen = lib.teToonAnalyseren();
-  const ids = [...grids, ...tonen.filter((id) => !grids.includes(id))];
+  const secties = lib.teSectieAnalyseren();
+  const ids = [...new Set([...grids, ...tonen, ...secties])];
   if (!ids.length) return;
   const n = (x) => `${x.length} nummer${x.length === 1 ? '' : 's'}`;
   if (grids.length) console.log(`[grid] ${n(grids)} zonder automatisch grid — analyse op de achtergrond, één tegelijk`);
   if (tonen.length) console.log(`[toon] ${n(tonen)} zonder (actuele) toonsoort — analyse op de achtergrond, één tegelijk`);
+  if (secties.length) console.log(`[secties] ${n(secties)} zonder (actuele) secties — op de achtergrond, na grid en toonsoort`);
   // Niet terwijl er iets in de ingest-wachtrij staat (ook wachtende, niet alleen de lopende).
   const geenIngest = async () => {
     while (wachtrij.open) await new Promise((z) => setTimeout(z, 2000));
@@ -725,6 +756,9 @@ async function heranalyseOpAchtergrond() {
           + ` — ${((Date.now() - t0) / 1000).toFixed(1)} s`);
       }
     }
+    // De secties als laatste: ze rekenen op het grid (en de stems) van hierboven.
+    await geenIngest();
+    if (lib.moetSecties(id)) await analyseerSecties(id);
   }
   console.log('[analyse] achtergrondanalyse klaar');
 }
@@ -1082,6 +1116,23 @@ const server = createServer(async (req, res) => {
      * verschillen: een body zonder `toon` (of geen JSON) is 400 in plaats van
      * "wissen", en de body mag groter zijn (512 kB: lange opnames).
      */
+    /*
+     * De secties van een nummer (docs/SECTIES.md): { secties } (null = nog
+     * geen). Met ?maak=1 eerst (opnieuw) berekenen als dat moet (geen kaart,
+     * een ander grid, stems erbij, een nieuwe versie) en dan pas antwoorden:
+     * zo laadt de app ze bij het laden, ook voor een nummer van vóór de secties.
+     */
+    const mSecties = /^\/api\/library\/([\w-]+)\/secties$/.exec(pad);
+    if (mSecties && req.method === 'GET') {
+      const id = mSecties[1];
+      if (!lib.track(id)) return json(res, 404, { fout: 'onbekend nummer' });
+      if (url.searchParams.get('maak') === '1' && lib.moetSecties(id)) {
+        const r = await analyseerSecties(id);
+        if (!r.ok) return json(res, 200, { secties: lib.secties(id), fout: r.fout });
+      }
+      return json(res, 200, { secties: lib.secties(id) });
+    }
+
     const mToon = /^\/api\/library\/([\w-]+)\/toon$/.exec(pad);
     if (mToon && req.method === 'GET') {
       const t = lib.track(mToon[1]);

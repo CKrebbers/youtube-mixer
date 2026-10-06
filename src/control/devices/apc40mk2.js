@@ -45,7 +45,7 @@ export const PALETTE = {
   limoen: 17, limoendonker: 18, groen: 21, groenzacht: 20, groendonker: 22,
   mint: 29, zeegroen: 33, zeegroendonker: 34,
   cyaan: 37, cyaanzacht: 36, cyaandonker: 38,
-  blauw: 45, blauwzacht: 44, blauwdonker: 46, hemelsblauw: 41,
+  blauw: 45, blauwzacht: 44, blauwdonker: 46, hemelsblauw: 41, hemelsblauwdonker: 42,
   violet: 49, violetzacht: 48, violetdonker: 50,
   magenta: 53, magentadonker: 54, roze: 57,
 };

@@ -280,6 +280,25 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
   }
 
   /**
+   * De secties van het nummer (docs/SECTIES.md) op het deck. Met ?maak=1:
+   * heeft het nummer ze nog niet (of horen ze bij een ander grid, of kwamen
+   * er stems bij), dan rekent de server ze eerst uit (~0,5 s voor 5 minuten).
+   * Mislukt het, dan speelt het nummer gewoon, zonder secties.
+   */
+  async function haalSecties(deckId, trackId, mijnLaad) {
+    try {
+      const r = await fetch(`/api/library/${trackId}/secties?maak=1`);
+      if (!r.ok) throw new Error(`${r.status}`);
+      const { secties, fout } = await r.json();
+      if (!nogDeLaatste(deckId, mijnLaad)) return;
+      engine.deck(deckId).setSectieKaart(secties ?? null);
+      if (fout) console.warn(`[deck ${deckId}] secties: ${fout}`);
+    } catch (err) {
+      console.warn(`[deck ${deckId}] secties niet opgehaald:`, err.message);
+    }
+  }
+
+  /**
    * De tellen van het nummer (Beat This!, docs/BEATGRID.md §11) op het deck:
    * de zoom tekent ze, het scherm meet het grid ermee en bewaakt het tijdens
    * het spelen. Staan ze nog in de rij van de server, dan later nog eens
@@ -402,6 +421,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     // toen staan er al in); bewaarToon slaat terugspeelDecks over.
     toonBewaard[deckId] = toonTekst(engine.deck(deckId).setToonKaart(track.toon ?? null));
     haalOnsets(deckId, track.id, mijnLaad);
+    haalSecties(deckId, track.id, mijnLaad);
     if (!terugspelen) haalTellen(deckId, track.id, mijnLaad);
     // Hoeveel stems er echt spelen zegt de bus (de engine), niet de library.
     const metStems = aantalOpBus(readAction, nr);

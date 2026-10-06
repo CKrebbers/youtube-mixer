@@ -247,9 +247,9 @@ lib.bewaarGrid('abc123', kaart);            // voor het opruimen hieronder
   const l = new Library(pad5);
   ok(`v5 met data wordt de nieuwste (v${SCHEMA.length})`, l.versie === SCHEMA.length);
   const na = l.db.prepare('SELECT * FROM tracks ORDER BY id').all();
-  // stems_json (v8) is ook een nieuwe kolom: die komt er leeg bij.
-  ok('elke rij ongeschonden, op de nieuwe kolommen (toon_json, titelsleutel, stems_json) na', na.length === voor.length
-    && na.every(({ titel_sleutel: _s, toon_json: _t, stems_json: _st, ...r }, i) => JSON.stringify(r) === JSON.stringify(voor[i])));
+  // stems_json (v8) en secties_json (v9) zijn ook nieuwe kolommen: die komen er leeg bij.
+  ok('elke rij ongeschonden, op de nieuwe kolommen (toon_json, titelsleutel, stems_json, secties_json) na', na.length === voor.length
+    && na.every(({ titel_sleutel: _s, toon_json: _t, stems_json: _st, secties_json: _sec, ...r }, i) => JSON.stringify(r) === JSON.stringify(voor[i])));
   ok('toon_json en stems_json leeg en geen hotcues na de migratie', na.every((r) => r.toon_json === null && r.stems_json === null)
     && l.db.prepare('SELECT COUNT(*) AS n FROM hotcues').get().n === 0);
   ok('elk gemigreerd nummer moet een toonsoort krijgen (achtergrond)', na.every((r) => l.teToonAnalyseren().includes(r.id)));

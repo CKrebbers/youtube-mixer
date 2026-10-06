@@ -12,6 +12,7 @@
  * docs/BEATGRID.md §10–11, KEYLOCK.md §9, STEMS.md §5, MASTER.md, EFFECTEN.md,
  * INSTRUMENTEN.md, MASCHINE.md en PATRONEN.md §7. Elke open vraag uit
  * docs/VRAGEN.md staat met zijn code bij het punt waar je hem beantwoordt.
+ * Erbij (6 okt, studio/secties): het blok Secties (docs/SECTIES.md, VRAGEN SE).
  * Avond 1 = mixen (APC + koptelefoon, zonder hub), avond 2 = spelen en
  * programmeren (met de hub: Xboard49 en Maschine). De blokken van vóór 6 okt
  * staan achteraan ("Eerder werk").
@@ -156,6 +157,22 @@ export const SPEELLIJST = [
     { id: 'pa-maschine', doe: 'Maschine: PATTERN vasthouden + pad 2 = plek 2 kiezen; RESTART = stoppen op de maat.',
       let: 'Logisch zo, ook RESTART als stopknop (de MK2 heeft geen STOP)?' },
     { id: 'pa-herladen', doe: 'Herlaad de mixer (Cmd+R).', let: 'Staan drums en baslijn er nog, met hun instrument en knoppen? (S15)' },
+  ] },
+
+  // ---- Secties (6 okt, docs/SECTIES.md): op studio/secties ----------------------
+  { id: 'secties', titel: 'Avond 1 · Secties', minuten: 15, punten: [
+    { id: 'se-strook', doe: 'Laad Loving arms op track 1 en kijk boven de golfvorm in het overzicht (de eerste keer rekent de server ze even uit).',
+      let: 'Zie je gekleurde stukken met namen (intro, drop, break …)? Dezelfde letter = dezelfde kleur. Kloppen de grenzen met wat je hoort? (SE2)' },
+    { id: 'se-apc', doe: 'APC: Shift + scene 1 = modus secties. De pads zijn de secties van de focus-track, op volgorde (rij 1 = 1–8).',
+      let: 'Brandt de sectie die je hoort wit en knippert hij op de tel; de andere donker hemelsblauw; pads zonder sectie uit? Genoeg te zien, of liever de groepskleuren zoals op het scherm? (SE4)' },
+    { id: 'se-sprong', doe: 'Laat het nummer spelen en druk midden in een maat op een andere sectie, een paar keer, ook terug.',
+      let: 'Valt de sectie in op de volgende "1", zonder hapering of struikelende maat? De rest van de maat hoor je de aanloop uit het nummer zelf. Goed zo, of liever wachten (stil) tot de maat om is? (SE1)' },
+    { id: 'se-loop', doe: 'Shift + pad = die sectie als loop. Nog eens shift + dezelfde pad = loop eraf. Daarna een gewone pad.',
+      let: 'Loopt hij netjes rond op de maat? Haalt een gewone pad de loop eraf?' },
+    { id: 'se-mashup', doe: 'Laad een tweede nummer op track 2 (sync), wissel de focus met Track Select en lanceer om de beurt secties op beide tracks.',
+      let: 'Logisch dat de pads de focus-track volgen, of liever per kolom een track (dan 5 secties per track)? (SE3)' },
+    { id: 'se-stems', doe: 'Library: splits een nummer dat nog geen stems heeft (2 of 4) en laad het daarna opnieuw.',
+      let: 'Rekent hij de secties opnieuw uit (kijk naar de namen), en kloppen de labels beter met stems? (SE2)' },
   ] },
 
   // ---- Eerder werk (vóór 6 okt): als er tijd over is ------------------------------

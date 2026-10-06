@@ -83,6 +83,11 @@ export function beschrijf(action) {
     if ((m = /^stem\.(vocals|inst|drums|bass|other)\.pfl$/.exec(rest))) return r(`${STEM[m[1]]} PFL`, `één stem in de koptelefoon aan/uit: ${STEM_UITLEG[m[1]]}, na zijn filter en vóór de fader; de zaal hoort het niet (uit = geen koptelefoonuitgang of geen stems)`);
     // Patronen (docs/PATRONEN.md): vijf plekken per track, de rijen van het grid in de modus patronen.
     // {plek} = het gekozen patroon van die track (de Maschine: PATTERN + pad kiest het, docs/MASCHINE.md).
+    // Secties (docs/SECTIES.md): de pads van de modus secties.
+    if ((m = /^section\.(\d+)$/.exec(rest))) return r(`sectie ${m[1]}`, `sectie ${m[1]} van het nummer (intro, drop, break … zie de strook boven de golfvorm): daarheen, en hij valt in op de volgende maat — de rest van deze maat hoor je de aanloop uit het nummer zelf; stilstaand: de speelkop naar het begin. Lampje: donker hemelsblauw = er is een sectie, wit = die hoor je nu (knippert op de tel), uit = geen sectie op deze pad`);
+    if ((m = /^section\.(\d+)\.loop$/.exec(rest))) return r(`sectie ${m[1]} ⟲`, `sectie ${m[1]} als loop: speel je er al in, dan blijft de speelkop staan; anders erheen op de volgende maat. Nog eens = loop eraf. Lampje cyaan = deze loop staat aan`);
+    if (rest === 'section.next') return r('sectie ▶', 'naar de volgende sectie, op de volgende maat');
+    if (rest === 'section.prev') return r('◀ sectie', 'naar de vorige sectie, op de volgende maat');
     if (rest === 'pattern.{plek}') return r('pat ▶', 'het gekozen patroon: starten op de maat van de maatgever; speelt hij: stoppen op de maat; leeg: alleen kiezen (met opnemen aan: beginnen)');
     if (rest === 'pattern.{plek}.now') return r('pat ▶!', 'het gekozen patroon meteen: starten op de volgende tel, of meteen stoppen');
     if ((m = /^pattern\.([1-5])$/.exec(rest))) return r(`pat ${m[1]}`, `patroon ${m[1]}: starten op de maat van de maatgever (zonder maatgever op het eigen tempo); speelt hij: stoppen op de maat; speelt er een ander: wisselen op de maat; een lege plek: kiezen om te bewerken (met opnemen aan: beginnen). Lampje oranje: donker = gevuld, fel = speelt, knippert = wacht op de maat, donkergrijs = leeg, uit = geen instrument`);

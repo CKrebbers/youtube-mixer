@@ -84,6 +84,8 @@ export const SOORTEN = [
   // Patronen (docs/PATRONEN.md): de modus patronen. Vóór "transport": anders viel
   // een plek in de grootste groep.
   ['patroon', 'patronen', /\.pattern(\.|$)|^patterns\./],
+  // Secties (docs/SECTIES.md): de modus secties (pad = sectie, shift = als loop).
+  ['sectie', 'secties', /\.section\./],
   // Vóór "mixer": track.1.kill.high eindigt op .high, en dat is geen EQ-knop.
   ['klank', 'kill & rem', /\.(kill\.(low|mid|high)(\.hold)?|brake(\.time)?)$/],
   // Een instrument op de track (docs/INSTRUMENTEN.md §6): het mapje inst.

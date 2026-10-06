@@ -4,6 +4,7 @@ import { createDeckChain, setEqBand, killEqBand, killVersterking, setBipolarFilt
 import { Beatgrid } from './beatgrid.js';
 import { meetGrid } from './tellen.js';
 import { ToonKaart } from './toonsoort.js';
+import { SectieKaart, sectieDoel } from './secties.js';
 import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
 import { maakWav, KANALEN } from './stream-kern.js';
 import { InsertSlot, zetDoel } from './fx.js';
@@ -176,6 +177,7 @@ export class Deck extends Emitter {
     // Toonsoortkaart (src/engine/toonsoort.js) of null. Van de PLAAT, in
     // tracktijd, en net als het grid van de app: het deck kent geen library.
     this.toonKaart = null;
+    this.sectieKaart = null;
     // Keylock en transponeren (docs/KEYLOCK.md, gebouwd 5 okt): een keuze van
     // de DJ op het deck; de StreamBron speelt ze (door een stretcher). Keylock
     // blijft staan bij een nieuw nummer (K4, een voorkeur zoals het
@@ -369,6 +371,7 @@ export class Deck extends Emitter {
     this.onsets = null;
     this.tellen = null;
     this.toonKaart = null;
+    this.sectieKaart = null;
     this.loopBeats = null;
     this.loopInPunt = null;
     this.vorigeLoop = null;
@@ -390,6 +393,7 @@ export class Deck extends Emitter {
     this.onsets = null;
     this.tellen = null;
     this.toonKaart = null;
+    this.sectieKaart = null;
     this.loopBeats = null;
     this.loopInPunt = null;
     this.vorigeLoop = null;
@@ -961,6 +965,79 @@ export class Deck extends Emitter {
     if (!this.toonKaart) return null;
     return this.toonKaart.hoorbaarBij(hoorbaar(this, uitgangsVertraging(this.ctx)),
       { rate: this.rate, transpositie: this._toon, keylock: this._keylock });
+  }
+
+  // ---- secties (docs/SECTIES.md) ---------------------------------------
+
+  /** De sectiekaart van de server (JSON of SectieKaart), of null. */
+  setSectieKaart(kaart) {
+    this.sectieKaart = kaart ? SectieKaart.van(kaart) : null;
+    this.emit('change', this);
+    return this.sectieKaart;
+  }
+
+  /** De sectie die je HOORT (index vanaf 0), of −1 zonder kaart. Zelfde plek als de toonsoort. */
+  get sectieHier() {
+    if (!this.sectieKaart || !this.buffer) return -1;
+    return this.sectieKaart.index(hoorbaar(this, uitgangsVertraging(this.ctx)));
+  }
+
+  /**
+   * De sectie op de eerstvolgende "1" (index), of −1 zonder kaart: daar staat
+   * de speelkop straks echt, ook tijdens de aanloop van een sprong (dan hoor je
+   * nog de maat ervóór). Volgende/vorige rekenen hiervanaf. Zonder zeker grid:
+   * de sectie op de positie.
+   */
+  get sectieOpDeMaat() {
+    if (!this.sectieKaart || !this.buffer) return -1;
+    const p = this.position, g = this.grid;
+    if (!g || !this.sectieKaart.opGrid || !this._opGrid(p)) return this.sectieKaart.index(p);
+    const tellen = g.barPhase(p) * g.beatsPerBar;
+    return this.sectieKaart.index(tellen < 0.02 ? p : g.verschuif(p, g.beatsPerBar - tellen));
+  }
+
+  /** Begin en einde van sectie i, of null. */
+  sectieBereik(i) {
+    const k = this.sectieKaart, b = k?.begin(i);
+    return b == null ? null : { start: b, end: k.eind(i, this.duration) };
+  }
+
+  /** Is de loop nu precies sectie i? */
+  loopIsSectie(i) {
+    const r = this.sectieBereik(i), l = this.loop;
+    return !!(r && l && Math.abs(l.start - r.start) < 1e-3 && Math.abs(l.end - r.end) < 1e-3);
+  }
+
+  /**
+   * Naar sectie i (vanaf 0). Tijdens het spelen valt hij in op de
+   * eerstvolgende maat (sectieDoel: de aanloop uit het nummer zelf, geen
+   * wachten, geen struikelende fase); stilstaand op het begin. Met `loop`:
+   * de sectie wordt de loop (staat die loop er al, dan gaat hij eraf), en
+   * speel je er al in, dan blijft de speelkop waar hij is.
+   * Zonder zeker grid (of een kaart zonder grid) springt hij gewoon naar het
+   * begin, zoals een hotcue zonder quantize.
+   * @returns {{ ok: boolean, waarom?: 'leeg'|'geensecties'|'geen' }}
+   */
+  naarSectie(i, { loop = false } = {}) {
+    if (!this.buffer) return { ok: false, waarom: 'leeg' };
+    if (!this.sectieKaart) return { ok: false, waarom: 'geensecties' };
+    const r = this.sectieBereik(i);
+    if (!r || !this._loopMag(r.start, r.end)) return { ok: false, waarom: 'geen' };
+    const p = this.position;
+    const zeker = (t) => this.sectieKaart.opGrid && this._opGrid(t);
+    const doel = this.playing ? sectieDoel(this.grid, p, r.start, zeker) : r.start;
+    if (loop) {
+      if (this.loopIsSectie(i)) { this.clearLoop(); return { ok: true }; }
+      const tellen = this.grid && zeker(r.start) ? Math.round(this.grid.beatAt(r.end) - this.grid.beatAt(r.start)) : null;
+      if (p >= r.start && p < r.end) { this._zetLoop(r.start, r.end, tellen); return { ok: true }; }
+      this._onthoudLoop();
+      this.loopBeats = tellen;
+      this._spring(doel, { start: r.start, end: r.end }, doel !== r.start);
+      return { ok: true };
+    }
+    if (this.loop) this._verlaatLoop();
+    this.seek(doel, { doorlopend: doel !== r.start });
+    return { ok: true };
   }
 
   /**

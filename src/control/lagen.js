@@ -40,6 +40,10 @@ import { Emitter } from '../lib/emitter.js';
  *           stems). Pad = plek (rij 1–5) op de track (kolom), zoals clips in
  *           Ableton; scene 1–5 = die rij op alle tracks; Stop All Clips = alle
  *           patronen stoppen (shift: meteen). Oranje.
+ *           Secties (6 okt, docs/SECTIES.md): Shift + scene 1, of ▲ ▼ (na
+ *           patronen). De 40 pads = de secties van de FOCUS-track op volgorde
+ *           (rij 1 = 1–8, rij 2 = 9–16 …): drukken = daarheen, en hij valt in
+ *           op de volgende maat; shift = die sectie als loop. Hemelsblauw.
  *
  *   edit    de grid-modus (stap D, docs/BEATGRID.md): Shift + Metronome zet
  *           hem aan of uit. Aan = scene-knoppen, nudge, cue level en Lock
@@ -74,8 +78,8 @@ export const GROEPEN = {
   },
   grid: {
     naam: 'grid', standaard: 'hotcues',
-    knoppen: { hotcues: ['hotcues'], loops: ['loops'], sampler: ['sampler'], video: ['video'], klank: ['klank'], auto: ['auto'], stems: ['stems'], patronen: ['patronen'] },
-    volgorde: ['hotcues', 'loops', 'sampler', 'video', 'klank', 'auto', 'stems', 'patronen'],
+    knoppen: { hotcues: ['hotcues'], loops: ['loops'], sampler: ['sampler'], video: ['video'], klank: ['klank'], auto: ['auto'], stems: ['stems'], patronen: ['patronen'], secties: ['secties'] },
+    volgorde: ['hotcues', 'loops', 'sampler', 'video', 'klank', 'auto', 'stems', 'patronen', 'secties'],
   },
 };
 
@@ -106,6 +110,7 @@ export const LAAGNAAM = {
   'grid.auto': 'auto-dj (ok · overslaan · langer · nu · aan/uit)',
   'grid.stems': 'stems (zang · rest · drums · bas · overig weg)',
   'grid.patronen': 'patronen (pad = plek per track · scene = rij op alle tracks · shift = meteen)',
+  'grid.secties': 'secties van de focus-track (pad = sectie, valt in op de maat · shift = als loop)',
 };
 
 export class Lagen extends Emitter {

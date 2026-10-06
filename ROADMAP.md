@@ -105,6 +105,10 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     op een track, Poly/FM/Schaal/Drums, noten van een keyboard, Xboard49 en Maschine MK2 in de hub
     en de Varve-kant ervan (gebouwd 5 okt) · S4 programmeren (patronen + Maschine-stapmodus,
     gebouwd 5 okt) · S5 later. Starten: `npm start -- studio` in AV-app-hub. Alles op `studio/integratie`, niets op de hardware geprobeerd.
+28. SECTIES (6 okt, Clay: "nummers bespelen precies zoals ik wil"): het nummer in secties (intro,
+    opbouw, drop, break, outro) die je op de maat lanceert en loopt; grid-modus SECTIES op Shift +
+    scene 1, de strook boven de golfvorm (`docs/SECTIES.md`). Gebouwd op `studio/secties` (van
+    `studio/integratie`), gemeten op synthetisch materiaal; nog proberen (speellijst, VRAGEN SE).
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
@@ -116,6 +120,8 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 7. 26 PALETTE_HEX en RF64.
 8. 27 STUDIO: S1–S4 gebouwd (5 okt), met Xboard/Maschine via de hub. Eerst proberen
    (speellijst van de Controlekamer), dan VRAGEN blok S.
+9. 28 SECTIES: gebouwd op `studio/secties` (6 okt). Proberen (speellijst, blok Secties), dan VRAGEN
+   blok SE; daarna samenvoegen in `studio/integratie`.
 
 Aanname: publicatie 1 van AV-kern (25 okt) blijft staan. Komt die datum in de
 knel door 15 en 17, dan gaat AV-kern voor; dat is de vraag van H5.

@@ -113,6 +113,14 @@ const KLEURSCHEMA = [
   [/\.pattern\.stop(\.now)?$|^patterns\.stop(\.now)?$/, { aan: 'rood', half: 'rooddonker', uit: 'uit' }],
   [/^patterns\.record$/, { aan: 'rood', uit: 'rooddonker' }],
   [/^layer\.grid\.patronen$/, { aan: 'oranje', uit: 'oranjedonker' }],
+  // Secties (6 okt, docs/SECTIES.md): hemelsblauw (41, donker 42), een vrije
+  // kleur met een donkere tint. Mint (29) lag te dicht bij het groen van play.
+  // Een pad: donker hemelsblauw = er is een sectie, WIT = die hoor je nu, en
+  // die knippert op de tel (de maat loopt door: je ziet waar je bent), uit =
+  // geen sectie. Als loop (shift): cyaan zoals de andere loops = deze loop staat aan.
+  [/\.section\.\d+$/, { aan: 'wit', half: 'hemelsblauwdonker', uit: 'uit', tel: 'aan' }],
+  [/\.section\.\d+\.loop$/, { aan: 'cyaan', half: 'hemelsblauwdonker', uit: 'uit' }],
+  [/^layer\.grid\.secties$/, { aan: 'hemelsblauw', uit: 'hemelsblauwdonker' }],
   [/^layer\./,        { aan: 'wit', uit: 'donkergrijs' }],
 ];
 

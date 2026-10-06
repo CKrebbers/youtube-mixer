@@ -696,6 +696,8 @@ export class Engine extends Emitter {
       grid: d.grid ? d.grid.toJSON() : null, gridZeker: d.gridZekerHier, bpm: d.bpm, loopBeats: d.loopBeats ?? null,
       // Toonsoort die je HOORT op de positie (of null): zie deck.toonsoort.
       toon: d.toonsoort,
+      // Secties (docs/SECTIES.md): de stukken van de kaart (dezelfde array zolang de kaart blijft) en welke je hoort.
+      secties: d.sectieKaart ? d.sectieKaart.stukken : null, sectie: d.sectieHier,
       // Stems (docs/STEMS.md): null, of { namen, niveau: {stem: 0..1}, weg: {stem: bool} }
       // voor elke stem die deze track heeft (bij vier ook de groep inst).
       stems: d.stemStand(),

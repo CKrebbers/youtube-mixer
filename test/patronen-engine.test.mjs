@@ -273,8 +273,9 @@ console.log('\nde modus patronen op de APC');
   const m = new Mapping({ read: () => 0, invoke: () => {}, lagen: () => lg.actief() });
   m.load(doc);
   const actie = (sig, shift = false) => m.kies(sig, { shift })?.action ?? null;
-  ok('patronen is een grid-modus met een naam, de laatste in ▲ ▼', GROEPEN.grid.knoppen.patronen?.join() === 'patronen'
-    && GROEPEN.grid.volgorde.at(-1) === 'patronen' && /patronen/.test(LAAGNAAM['grid.patronen']));
+  // Sinds 6 okt staan de secties erachter (docs/SECTIES.md): patronen is de voorlaatste.
+  ok('patronen is een grid-modus met een naam, in ▲ ▼ na stems (secties erachter, 6 okt)', GROEPEN.grid.knoppen.patronen?.join() === 'patronen'
+    && GROEPEN.grid.volgorde.at(-2) === 'patronen' && GROEPEN.grid.volgorde.at(-1) === 'secties' && /patronen/.test(LAAGNAAM['grid.patronen']));
   ok('Shift + scene 2 opent hem (Shift + scene 3 is stems); scene 2 zonder shift blijft loops', actie('note:0:83', true) === 'layer.grid.patronen' && actie('note:0:83') === 'layer.grid.loops');
   lg.zet('edit', 'aan');
   ok('in de grid-modus blijft Shift + scene 2 "bpm ×2" (zoals scene 2)', actie('note:0:83', true) === 'track.{focus}.grid.double' && actie('note:0:83') === 'track.{focus}.grid.double');

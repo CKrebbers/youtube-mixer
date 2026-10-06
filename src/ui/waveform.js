@@ -1,5 +1,6 @@
 import { Beatgrid } from '../engine/beatgrid.js';
 import { strookPixels } from './grid-strook.js';
+import { groepKleur, LABEL_TEKST } from '../engine/secties.js';
 
 /**
  * De golfvorm zelf: per pixel het minimum en maximum van de peaks eronder.
@@ -99,6 +100,34 @@ function tekenTellen(g, tellen, range, span, w, h) {
     const x = Math.round(((B[i] - range.t0) / span) * w);
     g.fillRect(x, 0, een ? 2 : 1, een ? lang : kort);
   }
+}
+
+/**
+ * De sectiestrook boven het overzicht (docs/SECTIES.md): een band per sectie
+ * in de kleur van zijn groep (dezelfde letter = dezelfde kleur), met de naam
+ * erin als hij past. De sectie die je hoort vol, de rest gedimd.
+ */
+export const SECTIE_HOOGTE = 12;
+function tekenSecties(g, stukken, hier, duur, w) {
+  if (!stukken?.length || !duur) return;
+  g.save();
+  g.font = '9px system-ui, sans-serif';
+  g.textBaseline = 'middle';
+  for (let i = 0; i < stukken.length; i++) {
+    const s = stukken[i];
+    const x0 = Math.round((s.van / duur) * w), x1 = Math.round(((stukken[i + 1]?.van ?? duur) / duur) * w);
+    g.globalAlpha = i === hier ? 0.9 : 0.4;
+    g.fillStyle = groepKleur(s.groep);
+    g.fillRect(x0, 0, Math.max(1, x1 - x0 - 1), SECTIE_HOOGTE);
+    const l = LABEL_TEKST[s.label] ?? '';
+    const tekst = l ? `${l} ${s.groep}` : s.groep;
+    if (x1 - x0 > g.measureText(tekst).width + 6) {
+      g.globalAlpha = 1;
+      g.fillStyle = '#0b0e11';
+      g.fillText(tekst, x0 + 3, SECTIE_HOOGTE / 2 + 0.5);
+    }
+  }
+  g.restore();
 }
 
 /** De strook onder een overzicht, in de cache per grid en maat. */
@@ -252,7 +281,8 @@ export class WaveformView {
       : Math.round(d.position * this.pxPerSecond * dpr);
     if (this.zelfde(d.loaded ? analysis : null, this.mode === 'zoom' ? onsets : null, this.mode === 'zoom' ? tellen : null,
       this.mode, this.pxPerSecond, dpr, w, h, d.loaded, d.duration, kop,
-      d.loop ? `${d.loop.start}|${d.loop.end}` : '', d.cuePoint, d.hotcues.join(','), this._gridTekst(d.grid))) return;
+      d.loop ? `${d.loop.start}|${d.loop.end}` : '', d.cuePoint, d.hotcues.join(','), this._gridTekst(d.grid),
+      this.mode === 'overview' ? d.secties ?? null : null, this.mode === 'overview' ? d.sectie ?? -1 : -1)) return;
     g.clearRect(0, 0, w, h);
     g.fillStyle = '#0b0e11';
     g.fillRect(0, 0, w, h);
@@ -303,6 +333,8 @@ export class WaveformView {
     // Klappen in de zoom; de zekerheidsstrook onder het overzicht.
     if (this.mode === 'zoom') { tekenOnsets(g, onsets, range, span, w, h); tekenTellen(g, tellen, range, span, w, h); }
     else if (grid) tekenStrook(g, strookVan(this, grid, deckState.duration, w), h - 3, 3);
+    // De secties boven het overzicht.
+    if (this.mode === 'overview') tekenSecties(g, deckState.secties, deckState.sectie ?? -1, deckState.duration, w);
 
     // hotcues
     deckState.hotcues.forEach((t, i) => {

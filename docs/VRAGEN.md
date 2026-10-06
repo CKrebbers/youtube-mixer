@@ -400,6 +400,17 @@ APC-indeling (voorstel A):
 
 ---
 
+## SE. Secties (6 okt, docs/SECTIES.md, tak `studio/secties`)
+
+- [ ] **SE1. Een sectie valt in op de volgende "1" met een aanloop uit het nummer zelf.** 🎧 Druk je midden in een maat, dan springt hij naar vlak vóór de sectie, precies zo ver als jij van de volgende "1" af zit: de rest van de maat hoor je het einde van de maat vóór die sectie (vaak een fill), en op de maatstreep valt hij in. Geen wachten en de groove struikelt nooit. Alternatief: blijven spelen tot de maat om is en dan springen (zoals Ableton). Dat vraagt een geplande sprong in de streamkern; die bestaat nu alleen voor keylock. **Advies:** zo proberen; mis je "eerst de maat afmaken", zeg het.
+- [ ] **SE2. Kloppen de grenzen en de namen op je eigen muziek?** 👂 Gemeten op synthetische nummers (EDM, pop met opmaat, ambient): elke grens op zijn maat, groepen en labels goed. Op echte muziek nog niet: de drempels zijn een eerste keuze. Labels: intro · opbouw · drop · break · outro, de rest alleen een letter. **Advies:** speel vijf verschillende nummers en noteer per nummer wat niet klopt (een gemiste grens, een grens te veel, een verkeerde naam). Dan stel ik bij en verhoog ik `SECTIE_VERSIE` (alles wordt vanzelf opnieuw berekend).
+- [ ] **SE3. De 40 pads = de secties van de FOCUS-track.** 🎛 Zo past een heel nummer (tot 40 secties) op het grid en blijft de volgorde vast. Alternatief: per kolom een track met 5 secties (zoals stems en patronen), maar dan moet je bladeren. **Advies:** zo laten; wisselen met Track Select.
+- [ ] **SE4. Kleur op de pads: wit = die hoor je (knippert op de tel), donker hemelsblauw = er is een sectie.** 👀 Op het scherm heeft elke groep (A, B, C …) een eigen kleur. Op de APC kan dat ook, maar de lampjes kennen nu alleen een vaste kleur per soort knop. **Advies:** eerst zo; mis je de groepen, dan bouw ik groepskleuren op de pads.
+- [ ] **SE5. Secties met de hand verschuiven, splitsen of hernoemen?** 💬 Niet gebouwd. De kaart kent al `bron: 'hand'` en `slot` (dan rekent de server er nooit overheen). **Advies:** eerst een paar avonden zonder; als je steeds dezelfde grens mist, dan een bewerkmodus zoals bij het grid.
+- [ ] **SE6. Labels uit een getraind model (all-in-one-infer, MIT, draait op Apple Silicon)?** 💬 Python in de venv van de stems, zoals Demucs. Beter op popstructuren (couplet/refrein), niet getest op jouw ambient en jungle. **Advies:** alleen als SE2 tegenvalt.
+
+---
+
 ## O. AV-app-hub (3 okt, `?hub=`, CLAUDE.md AV-APP-HUB)
 
 - [ ] **O1. LPD8 K1 (intensiteit) in VARVE?** 🎛 K1 hing eerst aan het
