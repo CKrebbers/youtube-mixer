@@ -97,6 +97,11 @@ console.log('\nzonder vlag geen byte van hub.js');
     }
   }
   ok(`speelapparaten.js, maschine.js en maschine-scherm.js: nergens statisch geladen buiten hun eigen keten${fout.length ? ` (${fout.join(', ')})` : ''}`, fout.length === 0);
+  // De sectie (PROTOCOL §18): app.js maakt de bron (engineSecties, uit het dynamisch geladen hub.js)
+  // en midi-opzet.js geeft hem aan HubMidi. Of het echt werkt: tools/headless/sec-hub.mjs.
+  const appJs = readFileSync(`${map}ui/app.js`, 'utf8'), opzet = readFileSync(`${map}ui/midi-opzet.js`, 'utf8');
+  ok('met de vlag: app.js geeft de sectiebron van de engine mee (engineSecties), midi-opzet.js geeft hem aan HubMidi',
+    /engineSecties\(engine, DECK_IDS\)/.test(appJs) && /new hub\.HubMidi\(\{[^}]*secties: hub\.secties/.test(opzet));
 }
 
 console.log('\nhet manifest');
@@ -110,6 +115,7 @@ ok('master en crossfader: wel in de cockpit, zonder rol', ['master', 'xfader'].e
 ok('geen slew_s zonder rol (de hub laat alleen rol-zets glijden)', PARAMS.every((p) => !('slew_s' in p) || !!p.rol));
 ok('paniek = trigger op video.black.hold', PARAMS.some((p) => p.id === 'paniek' && p.soort === 'trigger' && p.action === 'video.black.hold'));
 ok('speelt: de Xboard49 en de Maschine MK2 (PROTOCOL §17), alleen met lease', JSON.stringify(MANIFEST.speelt) === '["xboard49","maschine-mk2"]' && MANIFEST.lease === true);
+ok('levert: de sectie van het nummer (PROTOCOL §18)', JSON.stringify(MANIFEST.levert) === '["sectie"]');
 {
   const gezet = process.env.VARVE_HUB_REPO;
   const hubRepo = gezet || fileURLToPath(new URL('../../av-app-hub', import.meta.url));
@@ -118,6 +124,9 @@ ok('speelt: de Xboard49 en de Maschine MK2 (PROTOCOL §17), alleen met lease', J
     const { valideerManifest } = await import(pad);
     const v = valideerManifest(MANIFEST);
     ok(`geldig volgens de hub (valideerManifest)${v.ok ? '' : `: ${JSON.stringify(v.fouten ?? v)}`}`, v.ok);
+    // Een hub van vóór PROTOCOL §18 kent `levert` niet en laat hem weg (grondregel 5): geldig, de sectie wordt daar genegeerd.
+    if (v.ok && 'levert' in v.manifest) ok('de hub neemt levert: ["sectie"] aan', JSON.stringify(v.manifest.levert) === '["sectie"]');
+    else if (v.ok) console.log('  --  levert niet getoetst: deze hub kent PROTOCOL §18 nog niet (hij negeert levert en globaal van een app)');
   } else if (gezet) ok(`VARVE_HUB_REPO=${gezet} bevat geen src/protocol/manifest.js`, false);
   else console.log('  --  valideerManifest overgeslagen (geen av-app-hub naast deze map; zet VARVE_HUB_REPO)');
 }
@@ -387,6 +396,181 @@ console.log('\nherverbinden');
   ok('stop: dicht en geen nieuwe pogingen', NepWS.alle.length === n && laatste().readyState === 3);
 }
 ok('requestMIDIAccess ook daarna nooit aangeroepen', midiGevraagd === 0);
+
+console.log('\nde sectie naar de hub (PROTOCOL §18)');
+{
+  const H = await import('../src/control/hub.js');
+  ok('zonder sectiebron (zoals hierboven) nooit een globaal', NepWS.alle.every((ws) => ws.soort('globaal').length === 0));
+  const V = 0.04;
+  const ST = [
+    { van: 0, label: 'intro', groep: 'A', energie: 0.3 }, { van: 4, label: 'opbouw', groep: 'B', energie: 0.55 },
+    { van: 8, label: 'drop', groep: 'C', energie: 0.9 }, { van: 12, label: 'break', groep: 'D', energie: 0.35 },
+    { van: 16, label: 'outro', groep: 'E', energie: 0.15 }];
+  // Een deck zoals de SectieLezer (analysis/maat.js) het leest: duck-typed, de positie op de (nep-)klok.
+  const nepDeck = (stukken) => ({ playing: false, rate: 1, wacht: false, remt: false, loop: null, P0: 0, c0: 0,
+    sectieKaart: stukken ? { stukken } : null,
+    get position() { return this.playing ? this.P0 + (nu / 1000 - this.c0) * this.rate : this.P0; } });
+  const deck = nepDeck(ST);
+  const speel = (d, vanaf) => { d.P0 = vanaf ?? d.position; d.c0 = nu / 1000; d.playing = true; };
+  const pauze = (d) => { d.P0 = d.position; d.playing = false; };
+  /** Op de nep-klok (ms): wanneer je tracktijd `van` HOORT (positie min vertraging), zolang het deck doorspeelt. */
+  const gehoord = (van) => (deck.c0 + (van - deck.P0) / deck.rate + V) * 1000;
+  const naar = (ms) => vooruit(Math.max(0, ms - nu));
+  const sec = (ws) => ws.uit.map((b, i) => ({ b, t: ws.uitT[i] })).filter((x) => x.b.t === 'globaal');
+  const nieuwe = (ws) => sec(ws).filter((x) => 'sectie.nieuw' in x.b.waarden);
+  const w = (x, k) => x?.b.waarden[`sectie.${k}`];
+  const perS = (lijst) => { let max = 0; for (let i = 0, j = 0; i < lijst.length; i++) { while (lijst[i].t - lijst[j].t >= 1000) j++; max = Math.max(max, i - j + 1); } return max; };
+  const laat = (x, van) => (x ? x.t - gehoord(van) : NaN);
+  const volgendeSocket = () => { const n = NepWS.alle.length, t = nu; while (NepWS.alle.length === n && nu - t < 60000) vooruit(10); return laatste(); };
+  // De maatgever is alleen een deck als je hem hoort (maatgever() in puls.js): gepauzeerd = null.
+  const hm = new HubMidi({ url: 'ws://hub.test/app', invoke, read, WS: NepWS, klok: () => nu,
+    secties: { deck: () => (deck.playing ? deck : null), vertraging: () => V, tijd: () => nu / 1000 } });
+  await hm.init();
+  const ws1 = laatste();
+  ws1.open();
+  vooruit(1000);
+  ok('verbonden terwijl er niets speelt: geen globaal (de hub weet zo dat er geen sectie bekend is)', sec(ws1).length === 0);
+
+  speel(deck, 0);
+  vooruit(2500);
+  const g1 = sec(ws1);
+  ok('spelen vanaf het begin: de sectie naar de hub (intro), zonder nieuw: het begin van het nummer is geen nieuwe sectie (zoals in beeld)',
+    w(g1[0], 'label') === 'intro' && nieuwe(ws1).length === 0);
+  ok('alleen sleutels van de groep sectie (levert), en pas na het manifest', g1.every((x) => Object.keys(x.b.waarden).every((k) => k.startsWith('sectie.')))
+    && ws1.uit.findIndex((b) => b.t === 'globaal') > ws1.uit.findIndex((b) => b.t === 'manifest'));
+  const e1 = g1.map((x) => w(x, 'energie'));
+  ok(`de energie glijdt op naar precies 0,3, zoals de vormbron (${e1.join(' ')})`, e1.at(-1) === 0.3 && e1.every((e, i) => i === 0 || e > e1[i - 1]));
+  ok('… in stappen van minstens 0,01 (alleen de laatste mag kleiner: daar staat hij stil)', e1.slice(1, -1).every((e, i) => e - e1[i] >= 0.01 - 1e-9));
+  ok(`… hooguit 10×/s (${perS(g1)} binnen 1 s)`, perS(g1) <= 10);
+  ok('het label alleen als het anders is', g1.filter((x) => w(x, 'label') !== undefined).length === 1);
+
+  naar(gehoord(4.5));
+  const n1 = nieuwe(ws1);
+  ok('de grens naar opbouw: precies één sectie.nieuw', n1.length === 1);
+  ok('… nieuw is true (niet 1), met de energie en het label van de nieuwe sectie in hetzelfde bericht',
+    w(n1[0], 'nieuw') === true && w(n1[0], 'energie') === 0.55 && w(n1[0], 'label') === 'opbouw');
+  ok(`… op het moment dat je hem HOORT (positie min vertraging): ${laat(n1[0], 4).toFixed(1)} ms erna, niet een tik van ${H.SECTIE_MS} ms`,
+    laat(n1[0], 4) >= 0 && laat(n1[0], 4) <= 5);
+  const voorDrop = sec(ws1).length;
+  naar(gehoord(7.9));
+  ok('binnen een sectie (de energie blijft gelijk): niets naar de hub', sec(ws1).length === voorDrop);
+  naar(gehoord(13));
+  const n2 = nieuwe(ws1);
+  ok(`elke grens precies één keer (${n2.map((x) => w(x, 'label')).join(', ')})`, n2.map((x) => w(x, 'label')).join() === 'opbouw,drop,break');
+  ok('… elk met de energie van zijn sectie', n2.map((x) => w(x, 'energie')).join() === '0.55,0.9,0.35');
+  ok(`… elk binnen 5 ms nadat je hem hoort (${n2.map((x, i) => laat(x, [4, 8, 12][i]).toFixed(1)).join(', ')} ms)`,
+    n2.length === 3 && n2.every((x, i) => laat(x, [4, 8, 12][i]) >= 0 && laat(x, [4, 8, 12][i]) <= 5));
+  ok(`hooguit 10×/s, de hele tijd (${perS(sec(ws1))})`, perS(sec(ws1)) <= 10);
+
+  // Herverbinden (de hub of het netwerk hapert): de sectie die speelt, zonder nieuw.
+  ws1.close(1006);
+  const ws2 = volgendeSocket();
+  ws2.open();
+  const [a, b, c, d] = ws2.uit;
+  ok('herverbinden: hallo, manifest, staat en dan meteen de sectie die speelt (break, 0,35)',
+    a?.t === 'hallo' && b?.t === 'manifest' && c?.t === 'staat' && d?.t === 'globaal' && d.waarden['sectie.label'] === 'break' && d.waarden['sectie.energie'] === 0.35);
+  ok('… ZONDER sectie.nieuw (anders klapt elk beeld bij elke hapering)', !!d && !('sectie.nieuw' in d.waarden));
+  // Een grens in het gat (de outro begint terwijl de verbinding weg is).
+  naar(gehoord(15.8));
+  ws2.close(1006);
+  const ws3 = volgendeSocket();
+  ok('(de verbinding kwam pas na de grens naar de outro terug)', nu > gehoord(16));
+  ws3.open();
+  const g3 = sec(ws3);
+  ok('een grens in het gat: na herverbinden de sectie die nu speelt (outro, 0,15), zonder nieuw',
+    w(g3[0], 'label') === 'outro' && w(g3[0], 'energie') === 0.15 && w(g3[0], 'nieuw') === undefined);
+  vooruit(1000);
+  ok('… en ook daarna geen nieuw voor een grens van toen', nieuwe(ws3).length === 0);
+
+  // Pauze: de maatgever valt weg. De energie naar 0 (glijdend, zoals in beeld), het label blijft staan.
+  pauze(deck);
+  const p0 = sec(ws3).length;
+  vooruit(3000);
+  const p = sec(ws3).slice(p0);
+  ok(`pauze: de energie naar precies 0 (${p.map((x) => w(x, 'energie')).join(' ')})`, p.length >= 1 && w(p.at(-1), 'energie') === 0);
+  ok('… zonder nieuw en zonder (leeg) label', p.every((x) => w(x, 'nieuw') === undefined && w(x, 'label') === undefined));
+  ok(`… hooguit 10×/s (${perS(p)})`, perS(p) <= 10);
+  const stil = sec(ws3).length;
+  vooruit(2000);
+  ok('… daarna stil: niets meer naar de hub', sec(ws3).length === stil);
+  ws3.close(1006);
+  const ws4 = volgendeSocket();
+  ws4.open();
+  const g4 = sec(ws4);
+  ok('herverbinden in de pauze: energie 0 en het laatste label (een hub die ons nog kende, toonde anders de oude energie), zonder nieuw',
+    g4.length === 1 && w(g4[0], 'energie') === 0 && w(g4[0], 'label') === 'outro' && w(g4[0], 'nieuw') === undefined);
+
+  // Een cue op de "1" van de drop, en spelen: die nieuwe sectie hoor je (zoals in beeld).
+  vooruit(STABIEL_MS);
+  deck.P0 = 8;
+  vooruit(500);
+  speel(deck, 8);
+  vooruit(1000);
+  const n4 = nieuwe(ws4);
+  ok('spelen vanaf het begin van de drop: één nieuw (label drop)', n4.length === 1 && w(n4[0], 'label') === 'drop' && w(n4[0], 'nieuw') === true);
+  // De eerste `vertraging` na play ligt positie min vertraging vóór de cue (in de opbouw): een plek die je nooit hoort.
+  ok('… en niet eerst even het label van vóór de cue (opbouw): wat net begint, hoor je pas na de vertraging',
+    sec(ws4).slice(1).every((x) => w(x, 'label') !== 'opbouw') && w(sec(ws4)[1], 'nieuw') === true);
+  ok(`… binnen een tik nadat je hem hoort (${laat(n4[0], 8).toFixed(1)} ms)`, laat(n4[0], 8) >= 0 && laat(n4[0], 8) <= H.SECTIE_MS);
+  vooruit(1000);   // glijden van 0 naar 0,9 duurt ~1,7 s (ENERGIE_TAU 0,25 s tot op 0,001)
+  ok(`… de energie glijdt daarna op naar 0,9 (${sec(ws4).slice(-1).map((x) => w(x, 'energie'))})`, w(sec(ws4).at(-1), 'energie') === 0.9);
+
+  // Verborgen tabblad: timers 1×/s (na 5 min 1×/min). De hub stuurt globaal (adem) ~10×/s, en
+  // WebSocket-events worden niet geknepen: daarop lezen we de sectie ook.
+  const adem = (ms) => { const eind = nu + ms; let i = 0; while (nu < eind) { vooruit(100); ws4.krijg({ t: 'globaal', waarden: { adem: (i++ % 100) / 100 } }); } };
+  uitlijn = 1000;
+  adem(gehoord(12.5) - nu);
+  const n5 = nieuwe(ws4).slice(1);
+  ok(`verborgen tabblad (timers 1×/s): de grens naar break precies één keer, hooguit 0,1 s te laat (${laat(n5[0], 12).toFixed(0)} ms: op de adem van de hub)`,
+    n5.length === 1 && w(n5[0], 'label') === 'break' && laat(n5[0], 12) >= 0 && laat(n5[0], 12) <= 101);
+  uitlijn = 60000;
+  adem(gehoord(16.5) - nu);
+  const n6 = nieuwe(ws4).slice(2);
+  ok(`na 5 min verborgen (timers 1×/min): de grens naar outro ook (${laat(n6[0], 16).toFixed(0)} ms)`,
+    n6.length === 1 && w(n6[0], 'label') === 'outro' && laat(n6[0], 16) >= 0 && laat(n6[0], 16) <= 101);
+  uitlijn = 0;
+  vooruit(1000);
+  const st = hm.status().hub.sectie;
+  ok(`status: wat er speelt en hoeveel nieuwe secties de hub van ons kreeg (${JSON.stringify(st)})`,
+    st?.label === 'outro' && st.energie === 0.15 && st.nieuw === NepWS.alle.slice(-4).reduce((n, s) => n + nieuwe(s).length, 0));
+
+  // Een hub die de globaal weigert (fout): niets aan de hand, geen "vervangen".
+  ws4.krijg({ t: 'fout', reden: 'globaal: sectie.label moet tekst van 1..32 tekens zijn' });
+  ok('een fout van de hub over globaal: geen melding vervangen, verbinding blijft', hm.status().hub.vervangen === false && hm.status().hub.verbonden);
+  hm.stop();
+  const na = NepWS.alle.reduce((n, s) => n + s.uit.length, 0);
+  vooruit(5000);
+  ok('stop: geen sectie-tik meer', NepWS.alle.reduce((n, s) => n + s.uit.length, 0) === na);
+
+  // Een track zonder secties, en een kaart die later binnenkomt (laden.js) met een label dat de hub niet aanneemt.
+  const kaal = nepDeck(null);
+  const hk = new HubMidi({ url: 'ws://hub.test/app', invoke, read, WS: NepWS, klok: () => nu,
+    secties: { deck: () => (kaal.playing ? kaal : null), vertraging: () => V, tijd: () => nu / 1000 } });
+  await hk.init();
+  const wk = laatste();
+  wk.open();
+  speel(kaal, 30);
+  vooruit(2000);
+  ok('een track zonder sectiekaart: geen globaal', sec(wk).length === 0);
+  kaal.sectieKaart = { stukken: [{ van: 0, label: 'x'.repeat(40), groep: 'A', energie: 0.5 }, { van: kaal.position + 1, label: 'drop', groep: 'B', energie: 1 }] };
+  vooruit(3000);
+  const gk = sec(wk);
+  ok('de kaart komt later: de energie (glijdend), maar geen label van 40 tekens (de hub neemt 1..32)',
+    gk.length >= 2 && w(gk[0], 'label') === undefined && gk.filter((x) => w(x, 'label') !== undefined).every((x) => w(x, 'label') === 'drop'));
+  ok('… de grens naar de drop: één nieuw met label drop', nieuwe(wk).length === 1 && w(nieuwe(wk)[0], 'label') === 'drop');
+  hk.stop();
+
+  // De bron in de browser: de maatgever van de engine (puls.js), de uitgangsvertraging, de audioklok.
+  const fader = { A: 1 };
+  const dA = { id: 'A', buffer: {}, playing: true, wacht: false, remt: false, grid: {}, ui: { get fader() { return fader.A; } } };
+  const engine = { syncMaster: () => dA, deck: (id) => (id === 'A' ? dA : null), xfadeGain: () => 1,
+    ctx: { currentTime: 12.5, outputLatency: 0.02, baseLatency: 0.005 } };
+  const bron = H.engineSecties?.(engine, ['A', 'B', 'C', 'D']);
+  ok('engineSecties: de maatgever die je hoort, de uitgangsvertraging en de audioklok',
+    bron?.deck() === dA && Math.abs(bron.vertraging() - 0.025) < 1e-12 && bron.tijd() === 12.5);
+  fader.A = 0;
+  ok('… met de fader dicht hoor je hem niet: geen deck (dus geen sectie)', bron?.deck() === null);
+}
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
