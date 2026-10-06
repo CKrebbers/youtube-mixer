@@ -4,7 +4,7 @@ import { createDeckChain, setEqBand, killEqBand, killVersterking, setBipolarFilt
 import { Beatgrid } from './beatgrid.js';
 import { meetGrid } from './tellen.js';
 import { ToonKaart } from './toonsoort.js';
-import { SectieKaart, sectieDoel, sectieEen } from './secties.js';
+import { SectieKaart, sectieDoel, sectieEen, BEGIN_MARGE } from './secties.js';
 import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
 import { maakWav, KANALEN } from './stream-kern.js';
 import { InsertSlot, zetDoel } from './fx.js';
@@ -1036,10 +1036,25 @@ export class Deck extends Emitter {
     return this.sectieKaart;
   }
 
-  /** De sectie die je HOORT (index vanaf 0), of −1 zonder kaart. Zelfde plek als de toonsoort. */
+  /**
+   * De sectie die je HOORT (index vanaf 0), of −1 zonder kaart. Zelfde plek als de toonsoort.
+   * In een loop: vlak na het rondgaan staat de speelkop al op het loopbegin, maar
+   * je hoort nog een uitgangsvertraging lang het EINDE van de loop (hoorbaar.js,
+   * "Bekend"); positie min vertraging valt dan vóór het loopbegin. Dat vouwen we
+   * terug in de loop, anders flitste de sectie ervóór op (lampjes, het scherm
+   * van de Maschine). Niet tot in de laatste BEGIN_MARGE: index() telt een begin
+   * zo ver verderop al mee, en het einde van een sectie-loop IS het begin van de
+   * volgende sectie (die hoor je in de loop nooit). Alleen getallen: dit draait
+   * elk beeld.
+   */
   get sectieHier() {
     if (!this.sectieKaart || !this.buffer) return -1;
-    return this.sectieKaart.index(hoorbaar(this, uitgangsVertraging(this.ctx)));
+    let t = hoorbaar(this, uitgangsVertraging(this.ctx));
+    const l = this.loop, len = l ? l.end - l.start : 0;
+    if (len > 0 && t < l.start && this.position >= l.start) {
+      t = Math.max(l.start, Math.min(l.start + ((((t - l.start) % len) + len) % len), l.end - 2 * BEGIN_MARGE));
+    }
+    return this.sectieKaart.index(t);
   }
 
   /**

@@ -266,7 +266,7 @@ async function doorloop() {
   const sprongen = await evalueer('window.__sprongen.length');
   m.pad(16);
   ok(`pad 16 (er zijn er ${n}) -> track.1.section.16 over de bus; de bus zegt waarom niet en er springt niets`,
-    await totdat(`window.__bus.some(([a]) => a === 'track.1.section.16') && document.getElementById('meldingen').textContent.includes('pad 16 is er niet')`, 3000)
+    await totdat(`window.__bus.some(([a]) => a === 'track.1.section.16') && document.getElementById('meldingen').textContent.includes('sectie 16 is er niet')`, 3000)
     && await evalueer(`window.__sprongen.length === ${sprongen}`), await evalueer("document.getElementById('meldingen').textContent.slice(0, 120)"));
 
   console.log('\nSCENE nog eens: weer spelen');

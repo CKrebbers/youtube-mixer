@@ -1064,7 +1064,7 @@ function waaromNiet(engine) {
         return `track ${nr} heeft (nog) geen secties: die worden bij het laden berekend (een paar seconden; met stems en een grid worden ze beter).`;
       }
       if (rest.startsWith('section.') && /^section\.\d+/.test(rest) && Number(rest.split('.')[1]) > d.sectieKaart.aantal) {
-        return `track ${nr} heeft ${d.sectieKaart.aantal} secties; pad ${rest.split('.')[1]} is er niet.`;
+        return `track ${nr} heeft ${d.sectieKaart.aantal} secties; sectie ${rest.split('.')[1]} is er niet.`;
       }
       // Volgende/vorige aan het eind: dat meldt de action zelf (naarSectieStap), vanaf
       // dezelfde plek als de sprong. Hier vanaf de positie van NU zette dat een

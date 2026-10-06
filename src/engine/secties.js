@@ -26,7 +26,7 @@ export const groepKleur = (groep) => GROEP_KLEUREN[(String(groep).charCodeAt(0) 
  * Ruim boven de afronding van de server (0,05 ms), en 1 ms te vroeg is onhoorbaar
  * (het lampje van de sectie die je hoort, sectieHier).
  */
-const BEGIN_MARGE = 1e-3;
+export const BEGIN_MARGE = 1e-3;
 
 export class SectieKaart {
   /** @param {any} data  de kaart als JSON (zie boven) */
