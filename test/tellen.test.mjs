@@ -247,6 +247,28 @@ ok('rommel in de invoer wordt overgeslagen', gridUitTellen([NaN, ...tellen(0, 30
   ok('een onbekende twijfel valt weg', !new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, twijfel: 'raar' }] }).stukken[0].twijfel);
 }
 
+// ---- de library neemt elk grid aan -------------------------------------------
+
+{
+  const { normaliseerGrid } = await import('../server/library.js');
+  // Heel traag (rubato piano kwam op 31 bpm): het dubbele, binnen MIN_BPM..MAX_BPM.
+  const traag = tellen(0, 200, 32, 0);
+  const k = gridUitTellen(traag, [], { duur: 200 });
+  const g = new Beatgrid(k);
+  ok('32 bpm wordt 64 (de library kent niets onder 40)', Math.abs(k.stukken[0].bpm - 64) < 0.05, k.stukken[0].bpm);
+  ok('… en elke gevonden tel ligt nog op een lijn', meetGrid(g, traag).totaal.raak > 0.9);
+  // Allerlei rommel: de library weigert het grid nooit (6 okt: Sakamoto werd "ongeldig grid").
+  let slecht = 0;
+  for (let n = 0; n < 40; n++) {
+    const B = [];
+    let t = rnd() * 5, L = 0.3 + rnd() * 1.8;
+    while (t < 300) { B.push(t); L = Math.min(2.5, Math.max(0.15, L * (1 + (rnd() - 0.5) * 0.5))); t += L * (rnd() < 0.05 ? 6 : 1); }
+    const kaart = gridUitTellen(B, B.filter(() => rnd() < 0.25), { duur: 300 });
+    if (!normaliseerGrid(kaart)) slecht++;
+  }
+  ok('veertig rommelige nummers: de library neemt elk grid aan', slecht === 0, `${slecht} geweigerd`);
+}
+
 // ---- snel genoeg voor een uur ----------------------------------------------
 
 {
