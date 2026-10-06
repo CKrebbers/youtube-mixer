@@ -177,6 +177,53 @@ export const SPEELLIJST = [
       let: 'Rekent hij de secties opnieuw uit (kijk naar de namen), en kloppen de labels beter met stems? (SE2)' },
   ] },
 
+  // ---- Secties verweven (6 okt, avond, docs/SECTIES.md §7) --------------------
+  { id: 'sec-toets', titel: 'Avond 1 · Secties op het toetsenbord', minuten: 10, punten: [
+    { id: 'st2-leeg', doe: 'Zonder nummer op de focus-track: druk shift+E.',
+      let: 'Komt er onderaan een melding ("track 1 is leeg …") in plaats van stil niets?' },
+    { id: 'st2-links', doe: 'Laad Loving arms op track 1 (focus), laat hem spelen en druk midden in een maat shift+E; een paar maten later shift+W.',
+      let: 'Valt de volgende (en daarna de vorige) sectie in op de volgende "1", net als met de pads op de APC? Liggen W en E goed onder je hand: terug links, vooruit rechts? (SVT1)' },
+    { id: 'st2-rechts', doe: 'Laad een tweede nummer op track 2. Klik kolom 2 en daarna kolom 1: de rechterhand is nu track 2. Druk shift+O en daarna shift+I.',
+      let: 'Springt track 2 en blijft track 1 waar hij was? Mis je shift+I als "wisselen" (I zonder shift wisselt nog)? (SVT2)' },
+    { id: 'st2-eind', doe: 'Druk op de laatste sectie nog eens shift+E (en op de eerste shift+W).',
+      let: 'Blijft hij staan, met onderaan een melding ("track 1: al bij de laatste sectie (8 van 8)")? Goed zo, of liever rondgaan naar de eerste sectie? (SVT3)' },
+    { id: 'st2-kaart', doe: 'Druk / (of klik "? toetsen").',
+      let: 'Staan shift+W / E en shift+I / O erin, en is het duidelijk? Esc sluit.' },
+  ] },
+  { id: 'sec-sampler', titel: 'Avond 1 · Een sectie in de sampler', minuten: 15, punten: [
+    { id: 'ss-knip', doe: 'Laad een nummer met secties op track 1 (focus) en speel het. Open de modus sampler (scene 3) en druk in rij 3 op pad 2 terwijl je de drop hoort.',
+      let: 'Pad 2 (rij 1) wordt donkerviolet, het scherm zegt "track 1 · 64" (16 maten) en het lampje van pad 2 in rij 3 gaat uit. Is het precies de drop die je hoorde, van begin tot eind? (SVS1)' },
+    { id: 'ss-start', doe: 'Druk pad 2 (rij 1) op verschillende plekken in de maat, ook vlak na een "1".',
+      let: 'Valt hij steeds in op de volgende "1" van de track die de maat geeft, niet op de volgende tel? Is wachten (tot bijna een maat) goed? (SVS2)' },
+    { id: 'ss-mee', doe: 'Laat pad 2 lopen. Doe op track 1 een beatjump van 1 tel, daarna van 4 tellen, en zet de pitch een paar procent anders.',
+      let: 'Bij 1 tel schuift de pad mee en blijft zijn "1" op de "1" van de track. Bij 4 tellen en bij pitch geen sprong. (SVS3)' },
+    { id: 'ss-grens', doe: 'Probeer rij 3 op een gevulde pad, op een lange sectie (een mix of een traag nummer) en op een nummer waar het grid onzeker is (strook onder de golfvorm).',
+      let: 'Is het lampje van rij 3 daar uit, en zegt een druk waarom (eerst leegmaken; te lang: hooguit 32 maten en 90 s; grid onzeker)? Is dat de goede grens? (SVS4, SVS6)' },
+    { id: 'ss-terug', doe: 'Herlaad VARVE, laad het nummer opnieuw en klik de bewaarde pad 2 (↺). Speel de track en start de pad.',
+      let: 'Is het dezelfde sectie, en start hij weer op de "1"? Vind je rij 3 de goede plek? (SVS5)' },
+  ] },
+  { id: 'sec-log', titel: 'Avond 1 · Secties terugspelen', minuten: 10, punten: [
+    { id: 'sl-opnemen', doe: 'Laat een nummer met secties spelen op track 1. ○ log aan. APC modus secties: druk een paar secties, één precies op de "1", dan shift + pad (loop) en daarna een gewone pad. ○ log uit.',
+      let: 'Staat het log in de lijst achter ↺?' },
+    { id: 'sl-terug', doe: '↺ en speel dat log (tweede klik vervangt de tracks). Luister mee. Neem ook eens op met een "volgende" (shift+E of de APC) precies op de "1" van de maat vóór de laatste sectie.',
+      let: 'Valt elke sectie op dezelfde maat in als toen, ook die op de "1" en die vóór de laatste sectie (geen melding "al bij de laatste sectie" die er toen niet was), en duurt de loop even lang? (SVL1)' },
+    { id: 'sl-herreken', doe: 'Grid-modus: zet tel 1 van dat nummer een tel verder en laad het opnieuw (de secties worden opnieuw gerekend). Speel het log nog eens terug. Zet daarna tel 1 terug (grid-modus, terug).',
+      let: 'Springt het terugspelen naar de plekken van toen, niet naar de nieuwe secties? (SVL1, SVL2)' },
+    { id: 'sl-loop', doe: 'Zet eerst shift + pad (sectie-loop) aan, dan pas ○ log. Na een paar maten shift + dezelfde pad (loop eraf), ○ log uit, en terugspelen.',
+      let: 'Begint het terugspelen in die loop (pad wit) en gaat hij er op dezelfde maat af? Hoor je ergens anders een tel of maat verschil, ook bij hotcues of start op de maat? (SVL3)' },
+  ] },
+  { id: 'sec-plan', titel: 'Avond 2 · Planvenster met secties', minuten: 15, punten: [
+    { id: 'sp-strook', doe: 'Open het planvenster (knop plan in de mixer) op een plan met nummers die je al eens geladen hebt.',
+      let: 'Zie je per nummer gekleurde banden in de strook bovenaan (zelfde letter = zelfde kleur, zoals boven de golfvorm)? Een nummer dat nog nooit geladen is heeft er geen. (SVP1)' },
+    { id: 'sp-in', doe: 'Kies bij een stap onder "begin" een sectie als in (bijvoorbeeld de drop).',
+      let: 'Springt het begin naar die sectie en staat "in … drop" in de rij? Werkt een keuzelijst, of liever klikken op een band in de strook? (SVP2)' },
+    { id: 'sp-uit', doe: 'Kies bij de stap ervóór onder "duur" een sectie als uit (break of outro), sla op en zet auto aan.',
+      let: 'Begint de overgang op die sectie (witte streep in de strook)? Typ je daarna een later begin, wordt uit dan oranje? Wat moet er met de duur gebeuren als je een uit kiest? (SVP3)' },
+    { id: 'sp-herladen', doe: 'Sla op, sluit het venster en open het opnieuw.', let: 'Staan in en uit er nog?' },
+    { id: 'sp-claude', doe: 'Vraag Claude om een plan met in en uit per stap ("begin elk nummer op de eerste drop").',
+      let: 'Kiest hij logische secties, en toont het venster ze? Waar tekent de strook de overgangen zonder uit? (SVP4)' },
+  ] },
+
   // ---- Eerder werk (vóór 6 okt): als er tijd over is ------------------------------
   { id: 'draaien', titel: 'Eerder werk · Draaien op de APC', minuten: 15, punten: [
     { id: 'dr-laden', doe: 'Laad twee nummers op track 1 en 2 (library: B).', let: 'Grid en toonsoort staan erbij, geen foutmelding.' },
