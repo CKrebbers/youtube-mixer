@@ -15,7 +15,7 @@
  */
 import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/beatgrid.js';
 import { ToonKaart, WIJZER } from '../engine/toonsoort.js';
-import { teControleren, volgendTeControleren, oordeelStuk } from '../engine/tellen.js';
+import { teControleren, plekkenTeControleren, volgendTeControleren, oordeelStuk } from '../engine/tellen.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
 import { PITCH_BEREIKEN, SPRONG_TELLEN, GLIJ, TOON_MAX } from '../engine/deck.js';
@@ -293,10 +293,12 @@ export function bindEngine(engine) {
 
     // ---- controleren (docs/BEATGRID.md §11) -----------------------------
     // De controleklik: een tik op elke gridlijn (accent op de "1"), in de
-    // koptelefoon. Je loopt de stukken langs waar twijfel over is — of, als
-    // alles er goed uitziet, alle stukken. ✓ keurt het stuk dat je HOORT goed
-    // en springt naar het volgende; is alles goedgekeurd, dan gaat het grid
-    // op slot. ✎ (de gridmodus) om bij te stellen terwijl de tik doorloopt.
+    // koptelefoon. Je loopt de PLEKKEN langs waar twijfel over is (stukken
+    // die aan elkaar liggen horen bij één plek) — of, als alles er goed
+    // uitziet, alle stukken. ✓ = "klopt tot hier": de plek tot waar je HOORT
+    // is goed, en je luistert door; is de plek helemaal goed, dan springt hij
+    // naar de volgende. Alles goed = het grid op slot. ✎ (de gridmodus) om bij
+    // te stellen terwijl de tik doorloopt.
     let controleAlles = false;
     const komma = (x) => x.toFixed(2).replace('.', ',');
     const naarStuk = (i) => {
@@ -304,38 +306,55 @@ export function bindEngine(engine) {
       // Net na het begin van het stuk, vóór zijn eerste tel: dan hoor je die tel, en ✓ keurt DIT stuk goed.
       d.seek(Math.max(0, s.van + Math.min(0.05, 15 / s.bpm)), { doorlopend: d.playing });
     };
+    const plekBij = (i) => plekkenTeControleren(d.grid, d.gridMeting, { alles: controleAlles }).find((p) => p.van <= i && i <= p.tot) ?? null;
+    const minuten = (s) => (s < 60 ? `${Math.round(s)} s` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
     const meldStuk = (i, voor = '') => {
-      const s = d.grid.stukken[i];
+      const st = d.grid.stukken, s = st[i];
       const o = oordeelStuk(s, d.gridMeting?.stukken[i] ?? null, d.grid.slot);
-      const rest = teControleren(d.grid, d.gridMeting, { alles: controleAlles }).length;
-      engine.emit('melding', { soort: 'info', duur: 9000, tekst: `${voor}track ${nr}, stuk ${i + 1} van ${d.grid.aantalStukken} `
-        + `(${komma(s.bpm)} bpm; nog ${rest} te controleren): ${o.uitleg}` });
+      const plekken = plekkenTeControleren(d.grid, d.gridMeting, { alles: controleAlles });
+      const p = plekken.find((x) => x.van <= i && i <= x.tot);
+      const lang = p ? (st[p.tot + 1]?.van ?? d.duration) - st[p.van].van : null;
+      engine.emit('melding', { soort: 'info', duur: 9000, tekst: `${voor}track ${nr}: `
+        + (p ? `plek ${plekken.indexOf(p) + 1} van ${plekken.length} (${minuten(lang)})` : `stuk ${i + 1} van ${st.length}`)
+        + ` · ${komma(s.bpm)} bpm: ${o.uitleg}` });
     };
     define(`${n}.grid.controle`, 'trigger', (on) => {
       if (!on || !d.buffer) return;
       if (engine.gridControleDeck === id) { engine.gridControle(null); return; }
       if (!d.grid) { engine.emit('melding', { tekst: `track ${nr} heeft nog geen beatgrid om te controleren`, soort: 'info' }); return; }
-      const lijst = teControleren(d.grid, d.gridMeting);
-      controleAlles = lijst.length === 0;
+      const plekken = plekkenTeControleren(d.grid, d.gridMeting);
+      controleAlles = plekken.length === 0;
       engine.gridControle(id);
       const hier = d.grid.stukIndex(hoorbaar());
-      const i = controleAlles ? hier : (lijst.find((x) => x >= hier) ?? lijst[0]);
+      // Vanaf hier: je controleert wat je gaat spelen, niet per se de hele opname.
+      const i = controleAlles ? hier : (plekken.find((p) => p.tot >= hier) ?? plekken[0]).van;
       // Staat hij stil, dan meteen naar het eerste stuk en spelen; speelt hij, dan tikt hij mee waar je bent.
       if (!d.playing) { naarStuk(i); d.play(); }
       engine.emit('melding', { soort: 'info', duur: 12000, tekst: controleAlles
         ? `track ${nr}: alles lijkt te kloppen — luister mee of de tik op de tel valt (hoog = de "1"). ✓ keurt een stuk goed; is alles goed, dan gaat het grid op slot`
-        : `track ${nr}: ${lijst.length} ${lijst.length === 1 ? 'stuk' : 'stukken'} om te controleren — luister of de tik op de tel valt (hoog = de "1"). `
-          + '✓ = klopt (en door), ▶ = sla over, ✎ = bijstellen' });
+        : `track ${nr}: ${plekken.length} ${plekken.length === 1 ? 'plek' : 'plekken'} om te controleren — luister of de tik op de tel valt (hoog = de "1"). `
+          + '✓ = klopt tot hier (luister door; is de plek goed, dan door naar de volgende), ▶ = sla over, ✎ = bijstellen' });
     }, { label: `Track ${nr} grid controleren: tik op de tellen, stuk voor stuk`,
          read: () => (!d.buffer ? null : engine.gridControleDeck === id ? 1 : 0) });
     define(`${n}.grid.ok`, 'trigger', (on) => {
       if (!on || !d.grid) return;
       const p = hoorbaar();
+      const hier = d.grid.stukIndex(p);
+      const controle = engine.gridControleDeck === id;
+      // In de controle: de plek tot hier (wat je gehoord hebt); anders alleen het stuk hier.
+      const plek = controle ? plekBij(hier) : null;
       d.gridVoorBewerking();
-      d.grid.keurGoed(p);
+      const st = d.grid.stukken;
+      for (let k = plek ? plek.van : hier; k <= hier; k++) d.grid.keurGoed(st[k].van);
       d.gridGewijzigd();
-      if (engine.gridControleDeck !== id) {
+      if (!controle) {
         engine.emit('melding', { soort: 'info', tekst: `track ${nr}: dit stuk van het grid is goedgekeurd` });
+        return;
+      }
+      // Ligt de rest van de plek nog voor je: doorluisteren.
+      if (plek && plek.tot > hier && plekBij(hier + 1)) {
+        const nog = (st[plek.tot + 1]?.van ?? d.duration) - p;
+        engine.emit('melding', { soort: 'info', tekst: `✓ tot hier — luister door, nog ${minuten(nog)} in deze plek` });
         return;
       }
       const volgende = volgendTeControleren(d.grid, d.gridMeting, p, { alles: controleAlles });
@@ -348,7 +367,7 @@ export function bindEngine(engine) {
       }
       naarStuk(volgende);
       meldStuk(volgende, '✓ — ');
-    }, { label: `Track ${nr} grid: dit stuk klopt (goedkeuren, en in de controle door naar het volgende)`,
+    }, { label: `Track ${nr} grid: klopt tot hier (goedkeuren; in de controle door naar de volgende plek)`,
          read: () => (!d.grid ? null : d.grid.stukBij(hoorbaar()).ok ? 1 : 0) });
     for (const [naam, stap] of [['next', 1], ['prev', -1]]) {
       define(`${n}.grid.check.${naam}`, 'trigger', (on) => {
@@ -358,7 +377,7 @@ export function bindEngine(engine) {
           ?? Math.min(d.grid.aantalStukken - 1, Math.max(0, hier + stap));
         naarStuk(i);
         meldStuk(i);
-      }, { label: `Track ${nr} grid controleren: ${stap > 0 ? 'volgende' : 'vorige'} stuk`, read: () => (!d.grid ? null : 0) });
+      }, { label: `Track ${nr} grid controleren: ${stap > 0 ? 'volgende' : 'vorige'} plek`, read: () => (!d.grid ? null : 0) });
     }
 
     define(`${n}.grid.merge`, 'trigger', bewerk((g, p) => g.voegSamen(p)),

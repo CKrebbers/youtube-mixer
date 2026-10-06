@@ -2000,7 +2000,7 @@ console.log('\ntempokaart');
   invoke('track.5.grid.controle', true); invoke('track.5.grid.controle', false);
   ok('controle aan: dit deck, en het speelt vanaf het stuk dat twijfelt', eng.gridControleDeck === 'E' && read('track.5.grid.controle') === 1
     && dE.playing && dE.grid.stukIndex(dE.position) === 1);
-  ok('… met een melding hoeveel er te controleren is', /1 stuk om te controleren/.test(meld.at(-1)?.tekst ?? ''));
+  ok('… met een melding hoeveel er te controleren is', /1 plek om te controleren/.test(meld.at(-1)?.tekst ?? ''));
   ok('de klik loopt op dit deck', eng.gridKlik.aan && eng.gridKlik.deck === dE);
   ok('in de snapshot', eng.snapshot().gridControle === 'E');
   // De klik plant tikken op de audioklok, op de gridlijnen: de eerste tel van het stuk (1,5) ligt 0,2 s verder.
@@ -2026,14 +2026,16 @@ console.log('\ntempokaart');
   dE.seek(0);
   invoke('track.5.grid.controle', true);
   ok('niets om te controleren: je luistert alles na', /alles lijkt te kloppen/.test(meld.at(-1)?.tekst ?? ''));
+  // De twee stukken liggen aan elkaar: één plek. ✓ in het eerste = "klopt tot hier", en je luistert door.
+  const was = dE.position;
   invoke('track.5.grid.ok', true);
-  ok('✓ op het eerste stuk: door naar het tweede', dE.grid.stukken[0].ok && !dE.grid.slot && dE.grid.stukIndex(dE.position) === 1
-    && /stuk 2 van 2/.test(meld.at(-1)?.tekst ?? ''));
-  invoke('track.5.grid.check.prev', true);
-  ok('◀: terug naar het eerste (rondom)', dE.grid.stukIndex(dE.position) === 1 || dE.grid.stukIndex(dE.position) === 0);
+  ok('✓ halverwege een plek: tot hier goedgekeurd, geen sprong, doorluisteren', dE.grid.stukken[0].ok && !dE.grid.stukken[1].ok
+    && !dE.grid.slot && Math.abs(dE.position - was) < 0.01 && /luister door/.test(meld.at(-1)?.tekst ?? ''));
+  invoke('track.5.grid.check.next', true);
+  ok('▶: naar de volgende plek (rondom: de rest van deze)', dE.grid.stukIndex(dE.position) === 1 && /plek 1 van 1/.test(meld.at(-1)?.tekst ?? ''));
   dE.seek(2.3, { doorlopend: true });
   invoke('track.5.grid.ok', true);
-  ok('✓ op het laatste: op slot', dE.grid.slot === true && eng.gridControleDeck === null);
+  ok('✓ aan het eind: alles gecontroleerd, op slot', dE.grid.slot === true && eng.gridControleDeck === null);
   // Een bewerking na het goedkeuren haalt het "ok" weg: dan is het een ander grid.
   dE.grid.slot = false;
   dE.seek(0.3);

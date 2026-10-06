@@ -394,10 +394,13 @@ Beat This! (CPJKU, MIT-code en -gewichten) is een neuraal netwerk dat tellen
   langer). Vallen de gridlijnen erop, dan klopt het.
 - **Controleren** (klik op het oordeel): een tik op elke gridlijn (hoog = de
   "1"), in de koptelefoon met de cue van dat deck aan (zonder koptelefoon in
-  de zaal). Het deck springt naar het eerste stuk met twijfel; **✓ klopt**
-  keurt het stuk dat je hoort goed en springt door, ◀ ▶ lopen de stukken
-  langs, ✎ (grid) om bij te stellen terwijl de tik doorloopt. Is alles
-  goedgekeurd, dan gaat het grid **op slot**. Is er niets te controleren, dan
+  de zaal). Het deck springt naar de eerste **plek** met twijfel vanaf de
+  speelkop (stukken die aan elkaar liggen, of met minder dan 8 s ertussen,
+  zijn één plek: een live opname gaf 100 losse stukken, als plekken 55).
+  **✓ klopt** = klopt tot hier: de plek tot waar je luistert is goedgekeurd
+  en je luistert door; is de plek helemaal goed, dan springt hij naar de
+  volgende. ◀ ▶ lopen de plekken langs, ✎ (grid) om bij te stellen terwijl
+  de tik doorloopt. Is alles goedgekeurd, dan gaat het grid **op slot**. Is er niets te controleren, dan
   loop je alle stukken langs. Een goedgekeurd stuk (`ok`) is zeker, ook waar
   de tellen het oneens zijn (rubato: jouw oor wint); een bewerking daarna
   haalt `ok` weer weg.
