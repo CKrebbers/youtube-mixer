@@ -238,7 +238,7 @@ globalThis.AudioContext = class {
     return { numberOfChannels: ch, length: len, sampleRate: sr, duration: len / sr, getChannelData: (i) => d[i] }; }
   resume() { return Promise.resolve(); }
 };
-const { SectieKaart, sectieDoel, groepKleur } = await import('../src/engine/secties.js');
+const { SectieKaart, sectieDoel, sectieEen, groepKleur } = await import('../src/engine/secties.js');
 const { Engine } = await import('../src/engine/engine.js');
 const { bindEngine, invoke, read, has } = await import('../src/control/actions.js');
 
@@ -271,6 +271,16 @@ const KAART = { versie: 1, opGrid: true, grid: null, bron: 'auto', slot: false, 
   const d2 = sectieDoel(g2, 10.25, 61);
   ok(`… over een stukgrens met een eigen "1" (maat-anker 61): de sectie valt in op 61 (aanloop vanaf ${d2.toFixed(2)})`,
     Math.abs(g2.beatAt(61) - g2.beatAt(d2) - (4 - g2.barPhase(10.25) * 4)) < 1e-6);
+  // Gevonden met tools/headless/sec-toets.mjs (6 okt): de server bewaart het begin
+  // afgerond op 0,1 ms. Ligt dat een fractie NA de "1" (in Chrome: 2,7e-5 tel), dan
+  // werd de volgende "1" die van de sectie: de sprong landde een maat te laat, midden
+  // in haar eerste maat in plaats van ervóór (geen aanloop, niet op de maat).
+  const g3 = Beatgrid.van({ stukken: [{ van: 0, bpm: 124, anker: 0.3 }], slot: true });
+  const na = Math.ceil(g3.timeOf(64) * 1e4) / 1e4, voor = Math.floor(g3.timeOf(64) * 1e4) / 1e4;   // afgerond, net na / net vóór de "1"
+  const p3 = g3.timeOf(41), d3 = sectieDoel(g3, p3, na), d3v = sectieDoel(g3, p3, voor);
+  ok(`… een begin dat afgerond net NA de "1" ligt: toch die "1", drie tellen aanloop (tel ${(g3.beatAt(d3)).toFixed(3)}, verwacht 61)`,
+    Math.abs(g3.beatAt(d3) - 61) < 1e-3 && Math.abs(g3.beatAt(sectieEen(g3, na)) - 64) < 1e-3);
+  ok('… en net VÓÓR de "1" ook (zoals het al ging)', Math.abs(g3.beatAt(d3v) - 61) < 1e-3 && Math.abs(g3.beatAt(sectieEen(g3, voor)) - 64) < 1e-3);
 }
 const eng = new Engine();
 bindEngine(eng);
@@ -322,6 +332,37 @@ d.load(eng.ctx.createBuffer(2, 48000 * 60, 48000), 'zestig');
   ok(`zonder grid springt hij gewoon naar het begin (${p0.toFixed(2)} → ${d.position.toFixed(2)})`, Math.abs(d.position - 48) < 1e-6);
   d.load(eng.ctx.createBuffer(2, 48000 * 10, 48000), 'ander');
   ok('een ander nummer laden: de kaart is weg', d.sectieKaart === null && eng.snapshot().decks.A.secties === null && d.naarSectie(0).waarom === 'geensecties');
+}
+{
+  // Review 6 okt (spoor toets): de server bewaart elk begin afgerond op 0,1 ms (rond(…, 4)).
+  // Ligt dat net NA de "1", dan viel de "1" zelf met een marge van 1e-6 s nog in de sectie
+  // ervóór: in de hele laatste maat vóór zo'n grens deed "volgende" niets (een sprong naar
+  // dezelfde plek) en landde "vorige" een sectie te ver terug.
+  const dB = eng.deck('B');
+  dB.load(eng.ctx.createBuffer(2, 48000 * 120, 48000), 'afgerond');
+  dB.setGrid({ stukken: [{ van: 0, bpm: 124, anker: 0.3 }], slot: true });
+  const g = dB.grid, rond4 = (x) => Math.round(x * 1e4) / 1e4;
+  const vans = [0, 8, 16, 24, 32, 40, 48].map((m) => (m ? rond4(g.timeOf(4 * m)) : 0));    // een sectie per 8 maten
+  dB.setSectieKaart({ versie: 1, opGrid: true, stukken: vans.map((van, i) => ({ van, label: 'deel', groep: 'ABCDEFG'[i] })) });
+  const na = [1, 2, 3, 4, 5, 6].filter((i) => vans[i] > g.timeOf(32 * i));
+  ok(`SectieKaart.index: op de "1" zelf is het die sectie, ook als het afgeronde begin er net na ligt (na de "1": ${na.join(', ')})`,
+    na.length >= 2 && [1, 2, 3, 4, 5, 6].every((i) => dB.sectieKaart.index(g.timeOf(32 * i)) === i));
+  const fout = [];
+  for (let i = 1; i <= 5; i++) {
+    NOW += 100; dB.stop(); dB.seek(g.timeOf(32 * i - 2)); dB.play();    // tel 3 van de laatste maat vóór sectie i
+    const opDeMaat = dB.sectieOpDeMaat;
+    invoke('track.2.section.next', true); invoke('track.2.section.next', false);
+    const volgende = dB.sectieOpDeMaat, tel = g.beatAt(dB.position);
+    NOW += 100; dB.stop(); dB.seek(g.timeOf(32 * i - 2)); dB.play();
+    invoke('track.2.section.prev', true); invoke('track.2.section.prev', false);
+    const vorige = dB.sectieOpDeMaat;
+    if (opDeMaat !== i || volgende !== i + 1 || Math.abs(tel - (32 * (i + 1) - 2)) > 1e-3 || vorige !== i - 1) {
+      fout.push(`${i}: op de maat ${opDeMaat}, volgende ${volgende} (tel ${tel.toFixed(2)}), vorige ${vorige}`);
+    }
+  }
+  ok(`laatste maat vóór elke grens (tel 3): op de maat = de nieuwe sectie, volgende = die erna (twee tellen aanloop), vorige = die ervóór${fout.length ? ': ' + fout.join(' · ') : ''}`,
+    fout.length === 0);
+  dB.stop();
 }
 
 // ---- 5. de server -----------------------------------------------------------------------

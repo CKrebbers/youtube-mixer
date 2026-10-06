@@ -1032,6 +1032,13 @@ function waaromNiet(engine) {
       if (rest.startsWith('section.') && /^section\.\d+/.test(rest) && Number(rest.split('.')[1]) > d.sectieKaart.aantal) {
         return `track ${nr} heeft ${d.sectieKaart.aantal} secties; pad ${rest.split('.')[1]} is er niet.`;
       }
+      // Volgende/vorige aan het eind: niet stil niets (vanaf de sectie op de maat, zoals de action).
+      if (rest === 'section.next' && d.sectieOpDeMaat + 1 >= d.sectieKaart.aantal) {
+        return `track ${nr}: al bij de laatste sectie (${d.sectieKaart.aantal} van ${d.sectieKaart.aantal})`;
+      }
+      if (rest === 'section.prev' && d.sectieOpDeMaat <= 0) {
+        return `track ${nr}: al bij de eerste sectie (1 van ${d.sectieKaart.aantal})`;
+      }
       if (GRID_NODIG.test(rest) && !d.grid) {
         return `track ${nr} heeft nog geen beatgrid: tik mee op de tel met TAP (vier tikken), of zet tel 1 met "1".`;
       }
