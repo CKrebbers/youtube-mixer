@@ -67,7 +67,7 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
 - `tekenen.mjs` — hoeveel VARVE op zijn canvassen tekent (eigen server op 8823, geen MIDI): in rust ~0 Mpx/s
   (zonder de sleutel in waveform.js was het ~29 Mpx/s, en liep Demucs op de helft), een sprong in stilstand
   tekent zoom en overzicht wel opnieuw; plus de duurste functies van de hoofdthread per toestand.
-- `koptelefoon.mjs` — de koptelefoon (docs/STUDIO.md §3), eigen server op 8798, geen MIDI: de
+- `koptelefoon.mjs` — de koptelefoon (docs/STUDIO.md §3), eigen server op 8799, geen MIDI: de
   KOPTELEFOON-rij (zonder vier kanalen: "geen koptelefoonuitgang", cue-knoppen uit), en de echte
   engine op een OfflineAudioContext van VIER kanalen: track 1 op 440 Hz met de fader dicht, track 2
   op 1000 Hz, per kanaal gemeten (Goertzel). Zaal 1/2 alleen track 2; koptelefoon 3/4 met de cue op
