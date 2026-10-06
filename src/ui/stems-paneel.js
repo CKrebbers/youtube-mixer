@@ -3,6 +3,7 @@ import { DECK_IDS } from '../engine/engine.js';
 import { knobVan } from './controls.js';
 import { meld } from './meldingen.js';
 import { VOLGORDE, aantalOpBus, rijStand, kolomTeken, stemUitleg } from './stems-weergave.js';
+import { verschuivingTekst } from './toon-weergave.js';
 
 /*
  * De STEMS-rij (docs/STEMS.md §4): voor de track met focus per stem een naam,
@@ -42,7 +43,7 @@ export function opzetStems({ engine, staat, wachtrij, library = null }) {
   const xKnop = rij.querySelector('.st-x');
   const strips = Object.fromEntries([...rij.querySelectorAll('.st-stem')].map((el) => [el.dataset.stem, {
     el, naam: el.querySelector('.st-naam'), niveau: el.querySelector('.st-niveau'), kill: el.querySelector('.st-kill'),
-    cue: el.querySelector('.st-cue'),
+    cue: el.querySelector('.st-cue'), toon: el.querySelector('.st-toon'), toonw: el.querySelector('.st-toonw'),
   }]));
 
   const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
@@ -82,6 +83,13 @@ export function opzetStems({ engine, staat, wachtrij, library = null }) {
     niveau.addEventListener('dblclick', () => {
       const a = niveau.dataset.action;
       if (metaOf(a)?.type === 'value') invoke(a, 1);
+    });
+  }
+  // Een klik op het getal naast de toonknop: terug naar 0 (zoals de dubbelklik op de knop).
+  for (const { toon, toonw } of Object.values(strips)) {
+    toonw?.addEventListener('click', () => {
+      const a = toon?.dataset.action;
+      if (a) invoke(`${a}.reset`, true);
     });
   }
 
@@ -161,6 +169,16 @@ export function opzetStems({ engine, staat, wachtrij, library = null }) {
         const cue = readAction(`track.${n}.stem.${s}.pfl`);
         klasse(st.cue, 'on', cue === 1);
         klasse(st.cue, 'dood', cue === null);
+        // De eigen toon (halve tonen) en de toonsoort die je van deze stem hoort.
+        if (st.toonw) {
+          const d = engine.deck(engine.focus);
+          const t = d.stemToon?.(s) ?? 0;
+          tekst(st.toonw, verschuivingTekst(t) || '0');
+          klasse(st.toonw, 'on', t !== 0);
+          const k = t ? d.stemToonsoort?.(s) : null;
+          titel(st.toonw, t ? `toon ${verschuivingTekst(t)} halve tonen${k?.naam ? ` — je hoort ${k.camelot} · ${k.naam}` : ''} (klik: terug naar 0)`
+            : 'toon van deze stem (halve tonen; draai de knop ernaast, klik hier: terug naar 0)');
+        }
       }
       return;
     }

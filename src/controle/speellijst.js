@@ -70,7 +70,7 @@ export const SPEELLIJST = [
     { id: 'ky-sprong', doe: 'Keylock aan: zet en druk een hotcue (pad in modus hotcues, scene 1) en spring met Bank ◀ ▶.',
       let: 'Landt hij precies (beatjump in de maat)? Voelt het traag dat de sprong ~0,1 s later klinkt?' },
   ] },
-  { id: 'stems', titel: 'Avond 1 · Stems', minuten: 12, punten: [
+  { id: 'stems', titel: 'Avond 1 · Stems', minuten: 14, punten: [
     { id: 'st-zang', doe: 'Laad Loving arms (vier stems), knop stems in de balk, kill bij de zang aan en weer uit.',
       let: 'Valt de zang helemaal weg en komt hij precies terug? Hoor je nog resten zang? (N2)' },
     { id: 'st-apc', doe: 'APC: Shift + scene 3 = modus stems. Houd in de kolom van die track de bovenste pad vast (zang weg); shift + pad = vast.',
@@ -83,6 +83,8 @@ export const SPEELLIJST = [
       let: 'De echo blijft helder: hij gaat niet door het trackfilter. Goed zo? (S6)' },
     { id: 'st-galm', doe: 'Draai de galm (violet) van de zang open en na een paar maten weer dicht.',
       let: 'Galm alleen op de zang, en sterft hij netjes uit?' },
+    { id: 'st-toon', doe: 'STEMS-rij: draai de witte toonknop van de zang twee halve tonen omhoog, dan die van de rest een paar omlaag; klik daarna op de getallen.',
+      let: 'Verschuift alleen die stem, blijft het tempo en lopen ze samen? Klinkt het bruikbaar? Klik op het getal = terug naar 0. Ook op de APC? (S24, S23)' },
     { id: 'st-bas', doe: 'Cue bij de bas aan in de STEMS-rij (de andere cues uit), fader van de track dicht.',
       let: 'Alleen de bas in de koptelefoon, en niets van deze track in de zaal?' },
     { id: 'st-splits', doe: 'Library: klik bij een nummer zonder stems op 2, en mix intussen door.',

@@ -458,3 +458,47 @@ POST /api/stems kent daarvoor `vooraan: true`; de library en de ingest vragen he
 **Wat je zelf kunt doen** als het haast heeft: het videopaneel en de vormen dicht (of het
 tabblad op de achtergrond) zolang er gesplitst wordt. Sneller dan ~3× realtime gaat het op deze
 Mac niet; een machine met een NVIDIA-kaart haalt 20× of meer (VRAGEN H3).
+
+## 7. Een eigen toon per stem (6 oktober 2026)
+
+Clay: *"per stem ook de toonhoogte kiezen"*. Elke stem kan een eigen toon krijgen,
+in halve tonen (−12..+12), **bovenop** de toon van de track (KEYLOCK.md); het tempo
+blijft, en de stems blijven samen lopen.
+
+**Gebruiken.** In de STEMS-rij per stem een witte draaiknop (toon) met het aantal
+halve tonen ernaast. Dubbelklik op de knop of een klik op het getal: terug naar 0.
+In de tooltip van het getal de toonsoort die je van die stem hoort. Bij vier stems
+telt de groepsknop `rest` op bij drums, bas en overig. Een nieuw nummer begint op 0,
+net als de toon van de track (K5). Op een laptopscherm met vier stems staat het getal
+er alleen als de stem verschoven is (anders past de rij niet). Op de APC nog nergens
+(VRAGEN S23).
+
+**Actions:** `track.N.stem.<s>.transpose` (value 0..1 over ±12, 0,5 = niets),
+`.transpose.up`, `.transpose.down`, `.transpose.reset` (trigger). Read null als de
+stem er niet is. Het handelingenlog neemt ze mee als waarde (beginstand) en als
+handeling.
+
+**Hoe.** Het rekpad van de keylock (rek-kern.js, KEYLOCK.md §9) had één stretcher
+met alle kanalen; die kent één toon. Nu één stretcher per stem-paar (één
+Signalsmith-instantie per paar: de glue heeft één globaal object). Ze krijgen dezelfde
+invoer op hetzelfde moment en hebben dezelfde instellingen en dus dezelfde latentie.
+Rekenwerk is per kanaal, dus vier stereostretchers kosten wat één met acht kanalen
+kostte; geheugen 1,7 MB per paar. Een stem met een eigen toon zet het rekpad aan,
+ook zonder keylock en op tempo 1 (`wilRek`). Laadt een deck na stereo een bestand
+met stems, dan worden de extra stretchers bijgeladen (tot dan één met alles, zonder
+eigen toon per stem). Een andere toon terwijl hij speelt: geen sprong, geen gat.
+
+**Gemeten.**
+- Node, de echte Signalsmith (`test/rek.test.mjs`): vier paren op 0, +12, −5, +7 halve
+  tonen bij keylock 1,07: elk op zijn toon (verschoven binnen 5 cent, zoals de toon van
+  de track; onverschoven binnen 1). Klikken op alle paren tegelijk, drie verschoven:
+  elke klik binnen 0,75 ms van de onverschoven stem.
+- Chrome, de echte worklet (`tools/headless/stemkanalen.mjs`): zang +12 → op 5100 Hz
+  weg (−109 dB), op 10200 Hz −29,8 dB (de andere stems −26,0, precies als zonder);
+  de groep −12 → drums, bas en overig een octaaf lager (−25,7 / −26,9 / −29,6 dB), de
+  zang gelijk. De stretcher verliest op een zuivere sinus dus 0–4 dB; op muziek valt
+  dat weg in de klankverandering.
+
+**Grenzen.** Drums en bas klinken verschoven al snel "anders" (transiënten, formanten):
+dat is de stretcher, niet een fout. Een octaaf of meer op zang is een effect, geen
+natuurlijke stem.

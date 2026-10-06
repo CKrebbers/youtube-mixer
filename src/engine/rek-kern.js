@@ -37,8 +37,16 @@
  * tussen de samplefrequentie van het bestand en die van de AudioContext (een
  * stretcher houdt de toon per SAMPLE vast).
  *
- * STEMS. Eén stretcher met alle kanalen van het bestand (2, 4 of 8): de paren
- * lopen sample voor sample samen, zoals in renderBlok.
+ * STEMS. Per stem (stereopaar) een eigen stretcher, zodat elke stem zijn eigen
+ * toon kan hebben (`rek.stems`, halve tonen per paar, bovenop `toon`; 6 okt,
+ * Clay: "per stem ook de toonhoogte kiezen"). Eén stretcher per WASM-instantie
+ * (de glue heeft één globaal object), dus één module per paar. Ze krijgen
+ * dezelfde invoer op hetzelfde moment en hebben dezelfde instellingen, dus
+ * dezelfde latentie: de paren lopen sample voor sample samen, zoals in
+ * renderBlok. Rekenwerk is per kanaal, dus vier stereostretchers kosten
+ * hetzelfde als één met acht kanalen; geheugen 1,7 MB per paar. Zijn er
+ * minder modules dan paren (ze worden nog geladen), dan één stretcher met
+ * alle kanalen: zonder eigen toon per stem.
  *
  * GEEN AFVAL OP DE AUDIOTHREAD (zie stream-kern.js): blok() en leesInvoer()
  * maken per blok niets aan. De views in het WASM-geheugen worden één keer
@@ -77,8 +85,14 @@ export function rekPlanT(vroegst, uitLat, sr) {
   return (k * BLOK + uitLat) / sr;
 }
 
-/** Moet dit segment door de stretcher? Keylock of een toon; een rem nooit (die zakt in toon, zoals vinyl). */
-export const wilRek = (seg) => !!(seg && seg.rek && (seg.rek.keylock || seg.rek.toon) && !seg.rem);
+/**
+ * Moet dit segment door de stretcher? Keylock, een toon of een stem met een
+ * eigen toon; een rem nooit (die zakt in toon, zoals vinyl). `rek.stems` is
+ * null tenzij een stem een eigen toon heeft (StreamBron.zetRek), dus een
+ * waarheidstest volstaat. Klein houden: dit draait bij elk bericht in de
+ * worklet (met een hulpfunctie erin kostte elk bericht afval, 6 okt).
+ */
+export const wilRek = (seg) => !!(seg && seg.rek && (seg.rek.keylock || seg.rek.toon || seg.rek.stems) && !seg.rem);
 
 /** Halve tonen voor de stretcher (zie TOON boven). Niet op het hete pad: blok() rekent het zelf uit. */
 export function rekToon(rek, R, trackRate, ctxRate) {
@@ -138,18 +152,29 @@ export function leesInvoer(seg, paginas, van, n, kanalen, stride, trackRate, tot
   }
 }
 
+/** Hooguit zoveel stretchers per deck: vier stems. */
+export const MAX_GROEPEN = 4;
+
 /**
- * Eén stretcher voor één deck, op de ruwe exports van de module (zoals Kern
+ * De stretchers van één deck, op de ruwe exports van de modules (zoals Kern
  * in tools/keylock/kern.mjs). `zet()` per bericht, `blok()` per render-quantum.
- * Na blok() staat de uitvoer in `uit[c][0..frames)`; geldig vanaf
+ * Na blok() staat de uitvoer in `uit[c][0..frames)`, alle kanalen achter
+ * elkaar (de groepen na elkaar, zoals in het bestand); geldig vanaf
  * audiokloktijd `geldig` (een stretcher die net begon, heeft eerst zijn
- * latentie te vullen).
+ * latentie te vullen). Per GROEP één module: per stereopaar als er genoeg
+ * modules zijn (zie STEMS), anders één groep met alle kanalen.
  */
 export class Rekker {
-  /** @param M een module van fabriek() · @param sr de samplefrequentie van de AudioContext */
+  /** @param M een module van fabriek(), of een lijst (één per paar) · @param sr de samplefrequentie van de AudioContext */
   constructor(M, sr) {
-    this.M = M;
+    this.modules = Array.isArray(M) ? [...M] : [M];
+    this.M = this.modules[0];
     this.sr = sr;
+    this.groepen = 0;            // zoveel modules rekenen nu (1, of één per paar)
+    this.perGroep = 0;           // kanalen per module
+    this.ptrs = [];
+    this._bufs = [];
+    this.toonG = new Float64Array(MAX_GROEPEN).fill(NaN);
     this.kanalen = 0;
     this.inLat = 0;
     this.uitLat = 0;
@@ -169,17 +194,36 @@ export class Rekker {
     this.zoeken = 0;             // hoe vaak er gezocht is (tests, metingen)
   }
 
-  /** Voor 2, 4 of 8 kanalen (stereo of stems). Alles opnieuw; bij hetzelfde aantal niets. */
+  /** Er kwamen modules bij (geladen voor een bestand met meer stems); configureer() verdeelt opnieuw. */
+  voegToe(modules) {
+    for (const M of modules) if (this.modules.length < MAX_GROEPEN) this.modules.push(M);
+  }
+
+  /**
+   * Voor 2, 4 of 8 kanalen (stereo of stems). Per paar een module als die er
+   * zijn, anders één met alles. Alles opnieuw; bij dezelfde verdeling niets.
+   */
   configureer(kanalen) {
-    if (kanalen === this.kanalen) return;
-    const M = this.M, sr = this.sr;
-    M._configure(kanalen, Math.round(REK.blokMs / 1000 * sr), Math.round(REK.intervalMs / 1000 * sr), REK.gespreid);
-    M._reset();
-    this.inLat = M._inputLatency();
-    this.uitLat = M._outputLatency();
-    this.interval = M._intervalSamples();
-    this.lengte = Math.max(MIN_BUFFER, this.inLat + this.uitLat + 4 * BLOK);
-    this.ptr = M._setBuffers(kanalen, this.lengte);
+    const paren = Math.max(1, kanalen >> 1);
+    const groepen = paren <= this.modules.length ? paren : 1;
+    if (kanalen === this.kanalen && groepen === this.groepen) return;
+    const sr = this.sr, per = kanalen / groepen;
+    this.ptrs = [];
+    for (let g = 0; g < groepen; g++) {
+      const M = this.modules[g];
+      M._configure(per, Math.round(REK.blokMs / 1000 * sr), Math.round(REK.intervalMs / 1000 * sr), REK.gespreid);
+      M._reset();
+      if (g === 0) {
+        this.inLat = M._inputLatency();
+        this.uitLat = M._outputLatency();
+        this.interval = M._intervalSamples();
+        this.lengte = Math.max(MIN_BUFFER, this.inLat + this.uitLat + 4 * BLOK);
+      }
+      this.ptrs.push(M._setBuffers(per, this.lengte));
+    }
+    this.ptr = this.ptrs[0];
+    this.groepen = groepen;
+    this.perGroep = per;
     this.kanalen = kanalen;
     this._views();
     this.stil();
@@ -189,17 +233,26 @@ export class Rekker {
   get vooruit() { return this.uitLat / this.sr; }
 
   _views() {
-    const buf = this.M.HEAP8.buffer;
-    this._buf = buf;
     this.in = []; this.uit = [];
-    for (let c = 0; c < this.kanalen; c++) {
-      this.in.push(new Float32Array(buf, this.ptr + this.lengte * 4 * c, this.lengte));
-      this.uit.push(new Float32Array(buf, this.ptr + this.lengte * 4 * (c + this.kanalen), this.lengte));
+    this._bufs = [];
+    const per = this.perGroep;
+    for (let g = 0; g < this.groepen; g++) {
+      const buf = this.modules[g].HEAP8.buffer, ptr = this.ptrs[g];
+      this._bufs.push(buf);
+      for (let c = 0; c < per; c++) {
+        this.in.push(new Float32Array(buf, ptr + this.lengte * 4 * c, this.lengte));
+        this.uit.push(new Float32Array(buf, ptr + this.lengte * 4 * (c + per), this.lengte));
+      }
     }
+    this._buf = this._bufs[0];
   }
 
-  /** Groeide het WASM-geheugen, dan zijn de oude views leeg: opnieuw maken (zelden). */
-  _check() { if (this.M.HEAP8.buffer !== this._buf) this._views(); }
+  /** Groeide het WASM-geheugen van een module, dan zijn de oude views leeg: opnieuw maken (zelden). */
+  _check() {
+    for (let g = 0; g < this.groepen; g++) {
+      if (this.modules[g].HEAP8.buffer !== this._bufs[g]) { this._views(); return; }
+    }
+  }
 
   /** Niets meer te doen (pauze, terug naar renderBlok): de volgende keer begint hij leeg. */
   stil() {
@@ -244,6 +297,10 @@ export class Rekker {
    * segment speelt niet), de uitvoer is dan niet bijgewerkt.
    */
   blok(b) {
+    // Stems met een stretcher per paar: apart (zie _blokPerPaar). Deze functie
+    // blijft zoals hij was: kleiner gaf geen afval per blok (test/renderblok,
+    // 6 okt: met de lussen per paar erin 4 bytes per blok, ook voor stereo).
+    if (this.groepen > 1) return this._blokPerPaar(b);
     const M = this.M, sr = this.sr, frames = b.frames, tr = b.trackRate;
     // Doorlopen: de invoer loopt tot de positie op t0 + uitLat + één blok.
     // Zoeken: de nieuwe plek klinkt al één blok eerder (gemeten: met tZoek =
@@ -286,6 +343,70 @@ export class Rekker {
       this.eind = doel;
     } else {
       M._process(0, frames);                                // wachten: de invoer ligt al voor
+    }
+    this._check();
+    this.loopt = true;
+    return true;
+  }
+  /**
+   * blok() met een stretcher per stem-paar (groepen > 1): hetzelfde, maar de
+   * toon per groep (de toon van de track plus die van de stem, rek.stems) en
+   * elke stretcher dezelfde invoer, op hetzelfde moment.
+   * Eén blok. `b` = { paginas, frames, t0, trackRate, totaal, stride }, één
+   * object per deck dat elk blok wordt bijgewerkt (geen afval). De uitvoer
+   * staat daarna in uit[c][0..frames). False: er was niets te doen (het
+   * segment speelt niet), de uitvoer is dan niet bijgewerkt.
+   */
+  _blokPerPaar(b) {
+    const sr = this.sr, frames = b.frames, tr = b.trackRate;
+    // Doorlopen: de invoer loopt tot de positie op t0 + uitLat + één blok.
+    // Zoeken: de nieuwe plek klinkt al één blok eerder (gemeten: met tZoek =
+    // tDoel kwam de eerste klik na een sprong 128 frames te vroeg, de klikken
+    // erna weer exact), dus doel op t0 + uitLat, en pas zoeken als DAT moment
+    // het nieuwe segment is.
+    const tZoek = b.t0 + this.uitLat / sr;
+    const tDoel = tZoek + frames / sr;
+    const seg = this.seg;
+    if (seg === null) return false;
+    const s = this.vorig !== null && tZoek < seg.T ? this.vorig : seg;
+    if (!s.speelt) { this.stil(); return false; }
+    if (s !== this.lees) { this.lees = s; this.eind = NaN; }
+    const doel = Math.round((s.P + (tDoel - s.T) * s.R) * tr) + this.inLat;
+    const rate = s.R * tr / sr;
+    const n = doel - this.eind;                              // NaN als hij moet zoeken
+    const zoek = !(n >= -this.interval && n <= frames * rate + this.interval);
+    const G = this.groepen, mods = this.modules, tg = this.toonG;
+    if (zoek && !this.loopt) {
+      // Een stretcher die stillag: eerst leeg (anders klinkt er een rest van
+      // vóór de pauze), en zijn uitvoer telt pas na zijn latentie.
+      for (let g = 0; g < G; g++) { mods[g]._reset(); tg[g] = NaN; }
+      this.toon = NaN;
+      this.geldig = tZoek;
+    }
+    const rek = s.rek;
+    const toon = (rek.keylock ? 0 : 12 * Math.log2(s.R)) + rek.toon + 12 * Math.log2(tr / sr);
+    // Per groep: de toon van het deck plus die van zijn stem (alleen als elke stem een eigen module heeft).
+    const st = G > 1 ? rek.stems : null;
+    for (let g = 0; g < G; g++) {
+      const t = st && g < st.length ? toon + st[g] : toon;
+      if (t !== tg[g]) { mods[g]._setTransposeSemitones(t, TONALITEIT_HZ / sr); tg[g] = t; }
+    }
+    this.toon = tg[0];
+    if (zoek) {
+      const len = this.inLat + this.uitLat;
+      const doelZoek = Math.round((s.P + (tZoek - s.T) * s.R) * tr) + this.inLat;
+      leesInvoer(s, b.paginas, doelZoek - len, len, this.in, b.stride, tr, b.totaal);
+      for (let g = 0; g < G; g++) mods[g]._seek(len, rate);
+      this._check();
+      for (let g = 0; g < G; g++) mods[g]._process(0, frames);
+      this.zoeken++;
+      this.eind = doelZoek;
+    } else if (n > 0) {
+      leesInvoer(s, b.paginas, this.eind, n, this.in, b.stride, tr, b.totaal);
+      for (let g = 0; g < G; g++) mods[g]._process(n, frames);
+      this.eind = doel;
+    } else {
+      for (let g = 0; g < G; g++) mods[g]._process(0, frames);   // wachten: de invoer ligt al voor
     }
     this._check();
     this.loopt = true;

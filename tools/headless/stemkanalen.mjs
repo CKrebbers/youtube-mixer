@@ -171,7 +171,7 @@ const VOORAF = `
  * worklet. `stappen` (in de pagina, krijgt d en e) zet filters, sends, cue,
  * fader; `bus` meet de INGANG van een send-bus in plaats van de zaal.
  */
-const meetStems = (stappen, { kanalen = 2, bus = null } = {}) => evalueer(`(async () => {
+const meetStems = (stappen, { kanalen = 2, bus = null, lucht = false, extra = [] } = {}) => evalueer(`(async () => {
   ${VOORAF}
   const e = await maakEngine(${kanalen}, SR * 2);
   const ctx = e.ctx, d = e.deck('A');
@@ -182,8 +182,16 @@ const meetStems = (stappen, { kanalen = 2, bus = null } = {}) => evalueer(`(asyn
   (${stappen})(d, e);
   // De pagina's en het segment moeten in de worklet staan voordat de klok loopt.
   await new Promise((r) => setTimeout(r, 400));
+  // Lucht: om de 25 ms even stil, zodat de worklet tussendoor zijn stretchers
+  // kan laden (WASM, async), zoals tools/headless/keylock.mjs.
+  ${lucht ? `for (let i = 1; i * 0.025 < 1.95; i++) ctx.suspend(i * 0.025).then(() => new Promise((r) => setTimeout(r, 5)).then(() => ctx.resume()));` : ''}
   const buf = await ctx.startRendering();
-  return { k: tonenPerKanaal(buf), beschikbaar: e.koptelefoon.beschikbaar, stand: d.stemStand() };
+  const extra = Array.from({ length: buf.numberOfChannels }, (_, k) => {
+    const x = buf.getChannelData(k).subarray(SR, SR * 2);
+    // Het sterkste in een band van ±0,6% (een verschoven toon ligt een paar cent naast het doel; de bin is 1 Hz).
+    return ${JSON.stringify(extra)}.map((hz) => { let m = 0; for (let f = hz * 0.994; f <= hz * 1.006; f += 1) m = Math.max(m, goertzel(x, f)); return m; });
+  });
+  return { k: tonenPerKanaal(buf), extra, beschikbaar: e.koptelefoon.beschikbaar, stand: d.stemStand(), rek: d.bron.rek };
 })()`);
 
 const db = (a) => (a > 0 ? 20 * Math.log10(a) : -Infinity);
@@ -385,6 +393,18 @@ try {
     ok('alles open: elke stem even hard in de zaal', Object.values(zaal0).every(hoor)
       && Math.max(...Object.values(zaal0).map(db)) - Math.min(...Object.values(zaal0).map(db)) < 0.1, fmt(zaal0));
 
+    // Een eigen toon per stem (6 okt): de zang een octaaf hoger, de rest blijft.
+    const rT = await meetStems("(d) => d.setStemToon('vocals', 12)", { lucht: true, extra: [10200] });
+    const zaalT = rT.k[0];
+    ok('toon per stem: de zang +12 — op 5100 Hz weg, op 10200 Hz bijna even hard (±5 dB: de stretcher verliest 0–4 dB op een zuivere sinus); drums, bas en overig blijven (±1,5 dB)',
+      weg(zaalT.vocals) && Math.abs(db(rT.extra[0][0]) - db(zaal0.vocals)) < 5 && ['drums', 'bass', 'other'].every((n) => Math.abs(db(zaalT[n]) - db(zaal0[n])) < 1.5),
+      `${fmt(zaalT)} · 10200 Hz ${db(rT.extra[0][0]).toFixed(1)} · rek ${JSON.stringify(rT.rek)}`);
+    ok('… en de stand zegt het (toon zang +12)', rT.stand?.toon?.vocals === 12 && rT.stand.toon.drums === 0);
+    const rG = await meetStems("(d) => d.setStemToon('inst', -12)", { lucht: true, extra: [1000, 1350, 1800] });
+    ok('toon van de groep (inst, bij vier stems) −12: drums, bas en overig een octaaf lager (±5 dB), de zang blijft',
+      ['drums', 'bass', 'other'].every((n) => weg(rG.k[0][n])) && rG.extra[0].every((a) => Math.abs(db(a) - db(zaal0.drums)) < 5) && Math.abs(db(rG.k[0].vocals) - db(zaal0.vocals)) < 1.5,
+      `${fmt(rG.k[0])} · octaaf lager ${rG.extra[0].map((a) => db(a).toFixed(1)).join('/')}`);
+
     const r1 = await meetStems("(d) => d.setStemFilter('drums', 0)");
     const zaal1 = r1.k[0];
     ok('filter van de drums dicht (lowpass 250 Hz): alleen de drums gedempt, de rest precies gelijk',
@@ -483,8 +503,8 @@ try {
     for (const [b, h] of [[1440, 900], [1440, 790], [1920, 1080]]) {
       await maat(b, h);
       const l = await evalueer(LAYOUT);
-      ok(`${b}×${h}: vijf strips (drums · bas · overig · zang · rest), elk met filter, echo, galm en cue`,
-        l.strips === 'drums,bass,other,vocals,inst' && l.knoppen === 15 && l.cues === 5, `${l.strips}, ${l.knoppen} knoppen, ${l.cues} cue`);
+      ok(`${b}×${h}: vijf strips (drums · bas · overig · zang · rest), elk met filter, echo, galm, toon en cue`,
+        l.strips === 'drums,bass,other,vocals,inst' && l.knoppen === 20 && l.cues === 5, `${l.strips}, ${l.knoppen} knoppen, ${l.cues} cue`);
       ok(`${b}×${h}: de rij past (niets erbuiten, niets buiten zijn strip, geen overloop, ${l.rijH} px hoog, schuiven ${l.schuif.join('/')} px)`,
         !l.buiten.length && !l.uitStrip.length && !l.over && l.rijOnder <= l.H && Math.min(...l.schuif) >= 30,
         [...l.buiten, ...l.uitStrip].slice(0, 6).join(', '));
@@ -508,8 +528,8 @@ try {
     await wacht(400);
     const l2 = await evalueer(LAYOUT);
     const legenda = await evalueer(`getComputedStyle(document.querySelector('#stems .st-legenda')).display !== 'none'`);
-    ok('1440×790, twee stems: zang · rest, elk met filter, echo, galm en cue, de legenda erbij, en alles past',
-      l2.strips === 'vocals,inst' && l2.knoppen === 6 && l2.cues === 2 && legenda && !l2.buiten.length && !l2.uitStrip.length && !l2.over && !l2.klein.length,
+    ok('1440×790, twee stems: zang · rest, elk met filter, echo, galm, toon en cue, de legenda erbij, en alles past',
+      l2.strips === 'vocals,inst' && l2.knoppen === 8 && l2.cues === 2 && legenda && !l2.buiten.length && !l2.uitStrip.length && !l2.over && !l2.klein.length,
       `${l2.strips}, schuiven ${l2.schuif.join('/')} px${l2.buiten.length ? ', buiten: ' + l2.buiten.join() : ''}`);
     await foto('stemkanalen-rij-twee-1440x790.png');
     await maat(1440, 900);

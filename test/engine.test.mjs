@@ -2049,6 +2049,43 @@ console.log('\ntempokaart');
   eng.off?.('melding', opMeld);
 }
 
+// 6 okt: een eigen toon per stem (bovenop de toon van de track; het tempo blijft).
+{
+  const dT = eng.deck('E');
+  dT.load(buf, 'stemtoon');
+  const naar = [];
+  const echtRek = dT.bron.zetRek;
+  dT.bron.zetRek = (r) => naar.push(r);
+  dT.setStemToon('vocals', 3);
+  ok('zonder stems: geen toon per stem (read null, niets naar de bron)', dT.stemToon('vocals') === null && naar.length === 0
+    && read('track.5.stem.vocals.transpose') === null);
+  dT._zetStems({ namen: ['drums', 'bass', 'other', 'vocals'], schaal: 1 });
+  invoke('track.5.stem.vocals.transpose.up', true); invoke('track.5.stem.vocals.transpose.up', true); invoke('track.5.stem.vocals.transpose.up', true);
+  ok('zang 3× hoger: +3, per paar naar de bron (drums · bas · overig · zang)', dT.stemToon('vocals') === 3
+    && JSON.stringify(naar.at(-1)?.stems) === '[0,0,0,3]' && naar.at(-1).toon === 0);
+  ok('read: 0,5 + 3/24, en het lampje van hoger brandt', Math.abs(read('track.5.stem.vocals.transpose') - 15 / 24) < 1e-9
+    && read('track.5.stem.vocals.transpose.up') === 1 && read('track.5.stem.vocals.transpose.reset') === 1);
+  invoke('track.5.stem.inst.transpose', 10 / 24);
+  ok('de groep (inst) −2: telt op bij drums, bas en overig, niet bij de zang', dT.stemToon('inst') === -2
+    && JSON.stringify(naar.at(-1).stems) === '[-2,-2,-2,3]');
+  dT.setStemToon('drums', 40);
+  ok('hooguit +12 per stem', dT.stemToon('drums') === 12);
+  dT.setTranspositie(2);
+  ok('de toon van de track verandert: de stems gaan mee in hetzelfde bericht', naar.at(-1).toon === 2 && JSON.stringify(naar.at(-1).stems) === '[10,-2,-2,3]');
+  ok('de stand van de stems zegt het', JSON.stringify(dT.stemStand().toon) === JSON.stringify({ vocals: 3, inst: -2, drums: 12, bass: 0, other: 0 }));
+  for (const st of ['vocals', 'inst', 'drums']) invoke(`track.5.stem.${st}.transpose.reset`, true);
+  ok('alles terug op 0: geen toon per stem meer (null naar de bron)', naar.at(-1).stems === null && dT.stemToon('vocals') === 0);
+  dT.setStemToon('vocals', -5);
+  dT._zetStems({ namen: ['vocals', 'inst'], schaal: 1 });
+  ok('een nieuw nummer: de toon per stem terug naar 0 (hoort bij het nummer)', dT.stemToon('vocals') === 0 && naar.at(-1).stems === null);
+  dT.setStemToon('inst', 5);
+  ok('twee stems: de rest is één paar (geen dubbele optelling)', JSON.stringify(naar.at(-1).stems) === '[0,5]'
+    && read('track.5.stem.drums.transpose') === null);
+  dT._zetStems(null);
+  dT.setTranspositie(0);
+  dT.bron.zetRek = echtRek;
+}
+
 // Stap D: grid-modus op de APC. Tel 1 hier snapt naar een klap, halve tel,
 // fijn schuiven en bpm per stuk — via de echte mapping, shift en mapjes.
 {

@@ -105,22 +105,32 @@ class StreamLezer extends AudioWorkletProcessor {
       if (m.type === 'segment') this._segment(m);
       else if (m.type === 'pagina') this.paginas.set(m.i, m.data);
       else if (m.type === 'weg') this.paginas.delete(m.i);
-      else if (m.type === 'bron') {
-        this.paginas.clear();
-        this.seg = STIL;
-        this.startT = -Infinity;
-        this.duur = m.duur;
-        this.trackRate = m.sr;
-        this.kanalen = m.kanalen || KANALEN;
-        this.totaal = Math.round(m.duur * m.sr);
-        this.paren = Math.max(1, Math.min(UITGANGEN, this.kanalen >> 1));
-        // Alle paren lopen in de pas: dezelfde envelop als paar 0, ook een
-        // paar dat bij het vorige nummer niet meedeed.
-        for (let k = 1; k < UITGANGEN; k++) this.staten[k].env = this.staten[0].env;
-        this.inB = false; this.naarB = false; this.bTot = Infinity; this.aTeken = 1;
-        if (this.rek) { this.rek.configureer(this.kanalen); this.rek.stil(); }
-      }
+      else if (m.type === 'bron') this._bron(m);
     };
+    // (Klein houden: deze functie krijgt ELK bericht, ook elke segmentwissel.
+    // Toen het bijladen van stretchers hier in stond, kostte elk bericht 7
+    // bytes meer afval: test/renderblok, 6 okt.)
+  }
+
+  /** Een nieuw bestand (de kop): alles terug, de stretchers verdeeld over zijn paren. */
+  _bron(m) {
+    this.paginas.clear();
+    this.seg = STIL;
+    this.startT = -Infinity;
+    this.duur = m.duur;
+    this.trackRate = m.sr;
+    this.kanalen = m.kanalen || KANALEN;
+    this.totaal = Math.round(m.duur * m.sr);
+    this.paren = Math.max(1, Math.min(UITGANGEN, this.kanalen >> 1));
+    // Alle paren lopen in de pas: dezelfde envelop als paar 0, ook een
+    // paar dat bij het vorige nummer niet meedeed.
+    for (let k = 1; k < UITGANGEN; k++) this.staten[k].env = this.staten[0].env;
+    this.inB = false; this.naarB = false; this.bTot = Infinity; this.aTeken = 1;
+    if (this.rek) {
+      // Meer stems dan stretchers: de rest erbij laden (per stem een eigen toon).
+      if (this.rek.modules.length < this.paren) this._meerRek();
+      this.rek.configureer(this.kanalen); this.rek.stil();
+    }
   }
 
   /**
@@ -177,6 +187,7 @@ class StreamLezer extends AudioWorkletProcessor {
    */
   _startB(seg, gepland, nu, warm) {
     const r = this.rek;
+    if (this.rekHerverdeel) { r.configureer(this.kanalen); this.rekHerverdeel = false; }
     r.stil();
     r.zet(seg, gepland, nu, this.trackRate);
     this.bTot = Infinity;
@@ -203,19 +214,53 @@ class StreamLezer extends AudioWorkletProcessor {
     this.seg = seg;
   }
 
-  /** De stretcher maken (één keer; de WASM laadt async). Vraagt wat er nu speelt erom, dan meteen erheen. */
+  /**
+   * De stretchers maken (één keer; de WASM laadt async): één per stem-paar
+   * (rek-kern.js, STEMS). Vraagt wat er nu speelt erom, dan meteen erheen.
+   */
   _laadRek() {
     if (this.rek || this.rekLaadt) return;
     this.rekLaadt = true;
-    fabriek().then((M) => {
-      const r = new Rekker(M, sampleRate);
+    const n = this.paren;
+    const modules = [];
+    for (let k = 0; k < n; k++) modules.push(fabriek());
+    Promise.all(modules).then((Ms) => {
+      const r = new Rekker(Ms, sampleRate);
       r.configureer(this.kanalen);
       this.rek = r;
+      if (r.modules.length < this.paren) this._meerRek();      // intussen een bestand met meer stems
       this.port.postMessage({ type: 'rek', uitLat: r.uitLat, sr: sampleRate });
       const nu = currentFrame / sampleRate, s = this.seg;
       if (!this.inB && wilRek(s) && s.speelt) this._startB(s, nu < s.T, nu, nu >= this.startT);
     }).catch((err) => {
       this.rekLaadt = false;
+      this.port.postMessage({ type: 'rekfout', fout: String(err?.message || err) });
+    });
+  }
+
+  /**
+   * Stretchers erbij tot er één per paar is (een bestand met meer stems dan
+   * het vorige). Tot ze er zijn rekent er één met alle kanalen (zonder eigen
+   * toon per stem). Komen ze terwijl het rekpad klinkt, dan wachten ze op
+   * het volgende bestand of de volgende keer dat het rekpad begint; anders
+   * meteen verdeeld.
+   */
+  _meerRek() {
+    // rekMeer (er worden stretchers bijgeladen) en rekHerverdeel (ze zijn er,
+    // maar het rekpad klonk: verdelen bij de volgende start) ontstaan pas hier,
+    // niet in de constructor: twee velden meer op elke worklet maakte de test
+    // op afval per bericht wisselvallig (test/renderblok, 6 okt). Zelden nodig.
+    if (this.rekMeer || !this.rek) return;
+    this.rekMeer = true;
+    const r = this.rek, extra = [];
+    for (let k = r.modules.length; k < this.paren; k++) extra.push(fabriek());
+    Promise.all(extra).then((Ms) => {
+      this.rekMeer = false;
+      r.voegToe(Ms);
+      if (!this.inB && !this.naarB) { r.configureer(this.kanalen); r.stil(); }
+      else this.rekHerverdeel = true;
+    }).catch((err) => {
+      this.rekMeer = false;
       this.port.postMessage({ type: 'rekfout', fout: String(err?.message || err) });
     });
   }

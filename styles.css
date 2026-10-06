@@ -699,6 +699,10 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .st-filter .knob-ind{background:var(--warn)}
 .st-echo .knob-ind{background:var(--m-loops)}
 .st-galm .knob-ind{background:var(--m-sampler)}
+/* toon per stem (6 okt): wit, met de halve tonen ernaast; groen als hij niet op 0 staat */
+.st-toon .knob-ind{background:var(--text)}
+.st-toonw{flex:0 0 auto;min-width:20px;font:600 11px/1 ui-monospace,monospace;color:var(--klein);text-align:center;cursor:pointer}
+.st-toonw.on{color:var(--a)}
 .st-cue{flex:0 0 auto;min-width:0;padding:4px 5px}
 .st-cue.on{background:var(--red);border-color:var(--red);color:#fff}
 .st-cue.dood{opacity:.35}
@@ -708,8 +712,21 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .st-legenda .f{background:var(--warn)}
 .st-legenda .e{background:var(--m-loops)}
 .st-legenda .g{background:var(--m-sampler)}
+.st-legenda .t{background:var(--text)}
 .stems-rij:has(.st-stemmen.hidden) .st-legenda{display:none}
 @media (max-width:1699px){ .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-legenda{display:none} }
+/* Vier stems op een laptop (vijf strips, elk met vier knoppen sinds de toon
+   per stem, 6 okt): het getal naast de toonknop alleen als de stem verschoven
+   is, en alles iets krapper, anders valt de cue van elke strip af. */
+@media (max-width:1699px){
+  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-toonw:not(.on){display:none}
+  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-stemmen{gap:8px}
+  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-stem{gap:2px;padding:0 4px}
+  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-stem.groep{margin-left:6px}
+  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-niveau{min-width:30px}
+  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .knob.sm.st-knop .knob-dial{width:20px;height:20px}
+  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .knob.sm.st-knop .knob-ind{height:7px;transform-origin:50% 8px}
+}
 .st-geen{flex:1 1 0;display:flex;align-items:center;gap:10px;min-width:0;min-height:30px}   /* even hoog als de strips: geen sprong bij een focuswissel */
 .st-geen.hidden,.st-splitsen.hidden,.st-balk.hidden,.st-x.hidden{display:none}
 .st-tekst{font-size:12px;color:var(--klein);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
