@@ -891,6 +891,33 @@ export function bindEngine(engine) {
            // 0,5: er valt iets te wissen (gedimd rood); dit staat niet achter
            // shift, dus vol rood zou de hele tijd schreeuwen.
            read: () => (sampler.pads[i] || sampler.herinneringen?.[i] ? 0.5 : 0) });
+      // Een hele SECTIE (6 okt, docs/SECTIES.md): de sectie die je HOORT op de
+      // focus-track, van haar "1" tot de "1" van de volgende, in deze pad; hij
+      // start daarna op de "1". Een eigen action en geen shift: shift op een
+      // lege pad is al "vergeten" (.clear). Alleen op een lege pad; kan het
+      // niet, dan zegt een melding waarom (WAAROM NIET). Read: null = kan niet
+      // (dezelfde regels als de melding: pad bezet, geen secties of grid,
+      // onzeker, te lang), 0,5 = kan, 1 = ingedrukt.
+      let sectieDruk = false;
+      const zeg = (tekst, soort = 'info') => engine.emit('melding', { tekst: `sampler pad ${i + 1}: ${tekst}`, soort, duur: 8000 });
+      define(`sampler.${i + 1}.section`, 'trigger', (on) => {
+        sectieDruk = !!on;
+        if (!on) return;
+        const deck = engine.focused();
+        const nr = trackVanDeck(deck?.id);
+        const naam = `track ${nr}`;
+        const s = deck?.sectieHier ?? -1;
+        const waarom = sampler.waaromGeenSectie(i, deck, s, naam);
+        if (waarom) { zeg(waarom); return; }
+        sampler.neemSectie(i, deck, s, { bron: nr, naam })
+          .then((r) => { if (r?.letOp) zeg(r.letOp); })
+          .catch((err) => zeg(err.message, 'fout'));
+      }, { label: `Sampler pad ${i + 1}: de sectie die je hoort (focus-track), in hele maten`,
+           read: () => {
+             if (sectieDruk) return 1;
+             const d = engine.focused();
+             return sampler.waaromGeenSectie(i, d, d?.sectieHier ?? -1) ? null : 0.5;
+           } });
     }
     define('sampler.length', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },
       { label: 'Sampler: hoeveel tellen', read: () => [1, 2, 4, 8].indexOf(sampler.tellen) / 3 });
@@ -1022,6 +1049,13 @@ function waaromNiet(engine) {
       }
       if (rest.startsWith('section.') && /^section\.\d+/.test(rest) && Number(rest.split('.')[1]) > d.sectieKaart.aantal) {
         return `track ${nr} heeft ${d.sectieKaart.aantal} secties; pad ${rest.split('.')[1]} is er niet.`;
+      }
+      // Volgende/vorige aan het eind: niet stil niets (vanaf de sectie op de maat, zoals de action).
+      if (rest === 'section.next' && d.sectieOpDeMaat + 1 >= d.sectieKaart.aantal) {
+        return `track ${nr}: al bij de laatste sectie (${d.sectieKaart.aantal} van ${d.sectieKaart.aantal})`;
+      }
+      if (rest === 'section.prev' && d.sectieOpDeMaat <= 0) {
+        return `track ${nr}: al bij de eerste sectie (1 van ${d.sectieKaart.aantal})`;
       }
       if (GRID_NODIG.test(rest) && !d.grid) {
         return `track ${nr} heeft nog geen beatgrid: tik mee op de tel met TAP (vier tikken), of zet tel 1 met "1".`;

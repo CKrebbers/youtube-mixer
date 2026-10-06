@@ -21,6 +21,13 @@ export const LABEL_TEKST = { intro: 'intro', opbouw: 'opbouw', drop: 'drop', bre
 export const GROEP_KLEUREN = ['#4fd1c5', '#f6ad55', '#b794f4', '#68d391', '#fc8181', '#63b3ed', '#f6e05e', '#ed64a6'];
 export const groepKleur = (groep) => GROEP_KLEUREN[(String(groep).charCodeAt(0) - 65 + GROEP_KLEUREN.length * 4) % GROEP_KLEUREN.length];
 
+/**
+ * Seconden: hoe ver een sectiebegin na t mag liggen en toch al "hier" is (index).
+ * Ruim boven de afronding van de server (0,05 ms), en 1 ms te vroeg is onhoorbaar
+ * (het lampje van de sectie die je hoort, sectieHier).
+ */
+const BEGIN_MARGE = 1e-3;
+
 export class SectieKaart {
   /** @param {any} data  de kaart als JSON (zie boven) */
   constructor(data) {
@@ -51,14 +58,20 @@ export class SectieKaart {
   /** Einde van sectie i: het begin van de volgende, of `duur`. */
   eind(i, duur) { return i + 1 < this.stukken.length ? this.stukken[i + 1].van : duur; }
 
-  /** De sectie op tracktijd t (index), of −1 zonder stukken. */
+  /**
+   * De sectie op tracktijd t (index), of −1 zonder stukken. Een begin tot
+   * BEGIN_MARGE na t telt al mee: de server bewaart elk begin afgerond op 0,1 ms,
+   * en ligt dat net NA de "1" van het grid, dan hoort die "1" toch bij de nieuwe
+   * sectie (anders deed "volgende" in de laatste maat ervóór niets, en sprong
+   * "vorige" een sectie te ver terug).
+   */
   index(t) {
     const s = this.stukken;
     if (!s.length) return -1;
     let lo = 0, hi = s.length - 1;
     while (lo < hi) {
       const m = (lo + hi + 1) >> 1;
-      if (s[m].van <= t + 1e-6) lo = m; else hi = m - 1;
+      if (s[m].van <= t + BEGIN_MARGE) lo = m; else hi = m - 1;
     }
     return lo;
   }
@@ -98,7 +111,7 @@ export function sectieDoel(grid, p, begin, zeker = () => true) {
   const bpb = grid.beatsPerBar;
   // De "1" van de sectie: haar begin, of (de eerste sectie begint op 0, vóór
   // een opmaat) de eerste "1" daarna. Alles rekent vanaf die "1".
-  const een = grid.timeOf(grid.volgendeVeelvoud(grid.beatAt(begin) - 1e-6));
+  const een = sectieEen(grid, begin);
   const tellenInMaat = grid.barPhase(p) * bpb;               // tellen sinds de "1"
   if (tellenInMaat < 0.02 || tellenInMaat > bpb - 0.02) {
     // Op de "1" (of er vlak voor): de sectie meteen, met de fase in de tel.
@@ -111,7 +124,15 @@ export function sectieDoel(grid, p, begin, zeker = () => true) {
   return doel;
 }
 
+/**
+ * Hoe ver (in tellen) een sectiebegin NA zijn "1" mag liggen. Het begin ligt op een
+ * maatbegin, maar de server bewaart het afgerond (0,1 ms); met 1e-6 tel werd een
+ * begin net na de "1" (in Chrome gemeten: 2,7e-5 tel) de VOLGENDE "1", een maat te
+ * laat. 0,01 tel is ~5 ms op 120 bpm, ruim boven die afronding en ver onder een tel.
+ */
+const EEN_MARGE = 0.01;
+
 /** De "1" waarop sectie-begin `begin` invalt (zie sectieDoel), of `begin` zonder grid. */
 export function sectieEen(grid, begin) {
-  return grid ? grid.timeOf(grid.volgendeVeelvoud(grid.beatAt(begin) - 1e-6)) : begin;
+  return grid ? grid.timeOf(grid.volgendeVeelvoud(grid.beatAt(begin) - EEN_MARGE)) : begin;
 }
