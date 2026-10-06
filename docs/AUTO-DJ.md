@@ -39,12 +39,15 @@ staat dus in het handelingenlog en speelt terug. Laden gaat via de laadlaag
 - **Moment** (`planMoment`): blend en filter op een frasegrens (veelvouden van
   16 maten vanaf het maat-anker, anders de eerstvolgende 4-maatsgrens), zo laat
   mogelijk vóór het einde van het fragment. Beatloos: 24 s vóór het einde.
+  Met een sectiekaart bij voorkeur op een sectiegrens: de outro, een break,
+  nooit midden in een drop als het anders kan (§3b).
 - **Nooit twee bassen** tegelijk (blend: getest over de hele curve).
 - **Nooit een gat**: speelt er niets meer (einde, of Clay zette alles stil),
   dan start de klaarstaande meteen, of wordt er meteen iets gekozen.
-- **Clay wint**: fader, EQ, filter, play, sync, seek, tempo, sends of hotcue van
-  een track in de overgang (of de crossfader) = overgenomen. De automaat laat
-  los en gaat verder als er weer één track duidelijk klinkt.
+- **Clay wint**: fader, EQ, filter, play, sync, seek, tempo, sends, hotcue of
+  een sectie (`section.K`, `.K.loop`, `.next`, `.prev`) van een track in de
+  overgang (of de crossfader) = overgenomen. De automaat laat los en gaat
+  verder als er weer één track duidelijk klinkt.
 
 ## 2b. Hoe hij aan de knoppen draait: glijdend (A7, 2 okt)
 
@@ -111,10 +114,97 @@ op zichzelf terug te spelen, en de automaat hoeft niets van dB of Hz te weten.
   zeker), luidheid dichtbij, en wat toeval.
 - **Fragmenten**: een nummer tot 12 minuten helemaal (of zo lang als het plan
   zegt); een mix of album in een stuk van 6 minuten, bij voorkeur waar een zeker
-  toon- of gridstuk begint. Het plan kan `van` en `speelduur` geven.
+  toon- of gridstuk begint. Het plan kan `van` en `speelduur` geven. Met een
+  sectiekaart: in op de intro, of op een sectiegrens (§3b).
 - Laden: heen en weer tussen de tracks die de automaat al gebruikt (zoals twee
   decks), anders een lege. Nooit een track die speelt. De nieuwe krijgt dezelfde
   crossfaderkant als de uitgaande.
+
+## 3b. Secties als frasegrenzen (6 okt, tak `studio/sec-auto`)
+
+Met de sectiekaart van een nummer (docs/SECTIES.md) mixt de automaat op de
+vorm van het nummer in plaats van op een teller vanaf het maat-anker. Puur in
+`planner.js` (`fragment`, `planMoment`, `sectieGrens`); de automaat haalt de
+kaarten en geeft ze mee.
+
+**Wanneer telt een kaart.** Alleen een kaart die op het grid gerekend is
+(`opGrid`, `sectiesVan`), en een sectiebegin alleen als het grid daar zeker is.
+Een sectiebegin ligt op een maat; afgerond (4 decimalen) telt 0,02 tel ervoor
+nog als die maat. Zonder kaart, of zonder zeker grid: precies het oude gedrag
+(`test/auto.test.mjs` is ongewijzigd groen).
+
+**Inmixen** (`fragment`, de nieuwe). De voorrang:
+1. `in` van de planstap van de nieuwe (`{ sectie: K, label, groep }`, het spoor
+   plan): stuk K als label en groep kloppen, anders het eerste stuk met die
+   label en groep (de kaart kan opnieuw berekend zijn);
+2. `van` uit het plan;
+3. een keuze uit de secties: een nummer tot 12 minuten op de **intro**; een mix
+   op een sectiegrens met ruimte voor een heel fragment, de rustigste soort
+   eerst (intro, break, opbouw, deel, drop, outro), daaruit de zekerste helft
+   (`zeker` van de grens) en daaruit een willekeurige;
+4. het oude gedrag.
+
+**Uitmixen** (`planMoment`, de uitgaande). De voorrang:
+1. `uit` van de planstap die NU klinkt: de overgang BEGINT op het begin van die
+   sectie (als hij tussen "vroegst" en het einde past; een plan mag verder
+   naar voren dan het venster hieronder);
+2. zelf kiezen, binnen 32 maten (beatloos 60 s) vóór het laatste moment dat nog
+   past (anders trekt een vroege break de overgang minuten naar voren):
+   waar de **outro** begint → de laatste **break** → het oude moment, als dat
+   niet midden in een drop valt → het laatste begin van iets anders dan een drop
+   → het begin van een drop → het oude moment.
+De overgang begint altijd op de "1" van de sectie en duurt even lang als
+zonder secties (16 of 8 maten, of de lengte uit het plan); past hij niet vóór
+het einde, dan telt die sectie niet. Voorbeeld (`test/auto-secties`, 120 bpm,
+einde op 190 s): zonder secties begint de blend op 128 s, midden in de tweede
+drop; met secties op 144 s, waar de outro begint.
+
+**De bewakers gaan voor.** Eerst kiest `kiesOvergang` de soort, op het eind
+van het fragment, zoals altijd. Secties veranderen die soort nooit en maken
+niets onveiliger: een sectiebegin telt alleen als dezelfde soort daar OOK mag
+(`mag`: `kiesOvergang` met de kenmerken van de uitgaande op dat begin, dus
+tempo, toon en grid dáár). Ligt een break in een stuk met een ander tempo, dan
+mixt hij daar niet, ook niet als het plan het vraagt.
+
+**De race.** `/api/library` geeft geen secties; `laden.js` haalt de kaart pas
+NA het laden op, zonder te wachten. Daarom krijgt de automaat een eigen
+`haalSecties(trackId)` (app.js: `GET /api/library/<id>/secties?maak=1`; twee
+vragen tegelijk rekent de server één keer):
+- `_bereidVoor` vraagt de kaart tegelijk met het laden, en wacht daarna nog
+  hooguit 3 s (`wachtSecties`); komt hij niet, dan het oude beginpunt. Speelt
+  er niets (meteen starten), of valt wat klinkt stil terwijl hij wacht, dan
+  wacht hij niet (langer): nooit dode lucht voor een kaart.
+- Wat later binnenkomt wordt toch bewaard (per track, de laatste vraag wint).
+- De kaart van de UITGAANDE: die van het deck (laden.js), anders die de
+  automaat zelf ophaalde. Komt er een andere binnen terwijl de volgende
+  klaarstaat (en de overgang nog niet bijna begint, en Clay geen langer/nu
+  drukte), dan plant hij het moment opnieuw. Dezelfde kaart nog eens (laden.js
+  na de automaat) doet niets.
+- Gemeten in Chrome (`tools/headless/sec-auto.mjs`, eerste versie zonder de
+  kaarten vooraf te rekenen, op een drukke machine): de kaart van de eerste
+  track kwam 5,3 s na het laden. De automaat plande eerst zonder (147,4 s),
+  plande opnieuw toen hij binnenkwam, en de nieuwe viel in op de outro (~139,7 s).
+
+**Clay springt.** Een sectie, sectie-loop, volgende of vorige op een track in
+de overgang = overgenomen (OVERNEEM). Op de track die nu klinkt terwijl de
+volgende klaarstaat is het geen overnemen: de positie verspringt, dus plant hij
+bij de volgende tik opnieuw (op de bus komt de druk vóór de sprong).
+
+**Langer en nu.** `langer` gaat naar de volgende sectiegrens als die binnen 16
+maten (beatloos 60 s, alleen op een zeker grid) komt; anders 8 maten (30 s)
+zoals altijd. `nu` gaat naar de volgende sectiegrens als die binnen 8 maten
+komt; anders de eerstvolgende 4-maatsgrens. Beatloos blijft `nu` meteen.
+
+**Uitleg.** De tooltip van de AUTO-rij zegt erbij "uit op outro F (sectie 7)"
+en "in op intro A (sectie 1)" (`stand().volgende.redenen`).
+
+**Planstappen.** `in` en `uit` worden defensief gelezen (`{ sectie ≥ 1 }` of
+een label/groep; anders genegeerd): in deze tak gooit `normaliseerPlan` ze nog
+weg, het spoor plan voegt ze toe. Lezing: `in` van stap i = waar het nummer van
+stap i begint; `uit` van stap i = waar het nummer van stap i eruit gaat (de
+overgang naar stap i+1 begint daar). `uit` past alleen binnen het einde van
+het fragment (`van` + `speelduur`): wie later uit wil, geeft een langere
+speelduur.
 
 ## 4. Bediening
 
@@ -165,6 +255,22 @@ vijf keer overvloeien en één filter-uit (uit de jungle-piek, waar het grid zek
   glijbeurt in zonder sprong, en terugspelen op een tweede engine legt dezelfde
   hellingen. `engine.test` test `Deck.glide` zelf (opnieuw richten zonder
   plateau, set breekt af, filter in octaven, sends kwadratisch, de bus).
+- `test/auto-secties.test.mjs` (6 okt, §3b): de planner met secties (outro,
+  break, het venster, niet midden in een drop, uitSectie/inSectie en hun
+  terugval, alleen op een zeker grid, `mag`) en de automaat op een engine: uit
+  op de outro en in op de intro, een kaart die later komt (opnieuw plannen;
+  dezelfde nog eens niet), de race (wachten, nooit, mislukt, stil terwijl hij
+  wacht), `uit` uit de
+  planstap, langer en nu naar de volgende grens, een sectiesprong van Clay
+  (opnieuw plannen, niet meteen beginnen), de bewakers boven de secties, en
+  OVERNEEM voor `section.*`.
+- `tools/headless/sec-auto.mjs` (6 okt) in Chrome (headless shell): twee
+  synthetische nummers (`test/synth-nummer.mjs`, outro van 24 maten) via de
+  ingest, het grid op het bekende antwoord, de kaarten van de server. Blend uit
+  op de outro van A (139,65 s; zonder secties 124,17 s, midden in de tweede
+  drop), in op de intro van B (0,30 s, de eerste "1"); B begon te spelen toen A
+  op 139,67 s was, daarna klinkt B alleen; langste stilte op de master 59 ms;
+  geen consolefouten. Eigen lege plannenmap (`VARVE_PLANNEN`), poorten 8901/9501.
 - `tools/headless/auto.mjs` in headless Chromium (Linux): een set van drie
   demotracks via de rij en de knoppen: blend (gesynct op 124), dan filter-uit naar
   een track met een onzeker grid; langste stilte op de master **0 ms**; geen
@@ -181,8 +287,11 @@ seek naar een beginpunt midden in een uur), met de APC, op de M1. Niet beluister
   stand (setTarget, ~30 ms) op de tik waarop p ≥ 0,5, dus tot één tik (40 ms)
   na het midden, niet sample-exact op de tel. Niet beluisterd: alleen gemeten
   in de nep-Web Audio en headless.
-- Geen frase-, intro/outro- of energieanalyse: frasegrenzen tellen vanaf het
-  maat-anker, niet vanaf de muziek. Hotcues als mix-in/mix-out: nog niet.
+- Frasegrenzen uit de muziek alleen met een sectiekaart op een ZEKER grid
+  (§3b). In Clay's library zijn de meeste grids onzeker: daar blijft het
+  overvloeien op tijd (24 s vóór het einde), zonder secties. Labels zijn een gok
+  uit energie en drums (SECTIES.md §5): "drop" is de luidste groep, ook in een
+  popnummer. Hotcues als mix-in/mix-out: nog niet.
 - Na een blend blijft de nieuwe op het tempo van de oude (geen "tempo terug").
 - De timer (40 ms) kijkt alleen wanneer; in een achtergrondtab zonder geluid
   knijpt Chrome timers (HANDELINGENLOG "Grenzen"), maar er speelt dan altijd iets.
