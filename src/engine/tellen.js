@@ -27,7 +27,7 @@
  * van de gevonden tellen erop.
  */
 
-import { Beatgrid, ZEKER_VANAF } from './beatgrid.js';
+import { Beatgrid, ZEKER_VANAF, GEEN_PULS, TWIJFELS } from './beatgrid.js';
 
 /** Een tel valt "raak" als hij hooguit zo ver van een gridlijn ligt (s): de ruis van de detector. */
 export const RAAK = 0.025;
@@ -529,4 +529,90 @@ export const TWIJFEL_TEKST = {
   maat: 'de "1" is niet zeker: de downbeats zijn het onderling oneens',
   oneens: 'twee analyses zijn het hier oneens: controleer even',
 };
-export const TWIJFELS = Object.keys(TWIJFEL_TEKST);
+export { TWIJFELS };
+
+// ---- het oordeel, voor op het scherm ------------------------------------------
+
+/** Live: vanaf zoveel (s) mediane afwijking van de laatste tellen ligt het grid hier naast de muziek. */
+export const LIVE_DRIFT = 0.015;
+
+const procent = (x) => `${Math.round(x * 100)}%`;
+const OCTAAF_TEKST = { 2: ' (de oude analyse hoorde het dubbele tempo)', 0.5: ' (de oude analyse hoorde het halve tempo)' };
+
+/**
+ * Wat het scherm over één stuk zegt: { soort, kort, uitleg }.
+ *   vast       op slot (met de hand gecontroleerd), en de tellen spreken het niet tegen;
+ *   zeker      gemeten: de tellen vallen erop (of met de hand gezet, zonder tellen om te meten);
+ *   controleer er is een reden om te twijfelen (die staat in de uitleg);
+ *   geenpuls   hier hoort de analyse geen puls.
+ * `stuk`: een stuk van het grid (met zekerheid/twijfel/octaaf), `m`: zijn
+ * meting (meetGrid(...).stukken[i]) of null, `slot`: het grid staat op slot.
+ * Een met de hand gezet stuk (geen zekerheid) wordt aan de tellen gemeten:
+ * Clay wil zeker weten dat het klopt, ook als hij het zelf zette.
+ */
+export function oordeelStuk(stuk, m = null, slot = false) {
+  const gemeten = !!m && m.n >= MIN_TELLEN && m.raak != null;
+  const raak = gemeten ? `${procent(m.raak)} van de gevonden tellen valt op het grid` : null;
+  const naast = gemeten && m.afwijking != null && m.afwijking > DRIFT ? `, en een stuk ligt ${Math.round(m.afwijking * 1000)} ms naast de tellen` : '';
+  const klopt = gemeten && m.raak >= ZEKER_VANAF && !naast;
+  const octaaf = OCTAAF_TEKST[stuk.octaaf] ?? '';
+  if (slot) {
+    if (gemeten && !klopt) return { soort: 'controleer', kort: '🔒?', uitleg: `op slot, maar ${raak}${naast}` };
+    return { soort: 'vast', kort: '🔒', uitleg: `op slot: met de hand gecontroleerd${raak ? ` — ${raak}` : ''}` };
+  }
+  if (stuk.ok) return { soort: 'zeker', kort: '✓', uitleg: `door jou gecontroleerd${raak ? ` — ${raak}` : ''}` };
+  const z = stuk.zekerheid;
+  if (Number.isFinite(z) && z < GEEN_PULS) return { soort: 'geenpuls', kort: '–', uitleg: TWIJFEL_TEKST['geen puls'] };
+  if (stuk.twijfel && TWIJFEL_TEKST[stuk.twijfel]) {
+    return { soort: 'controleer', kort: '?', uitleg: `${TWIJFEL_TEKST[stuk.twijfel]}${octaaf}${raak ? ` — ${raak}` : ''}` };
+  }
+  if (Number.isFinite(z) && z < ZEKER_VANAF) return { soort: 'controleer', kort: '?', uitleg: `onzeker: ${raak ?? 'de analyse is er niet zeker van'}` };
+  if (!Number.isFinite(z)) {
+    if (!gemeten) return { soort: 'zeker', kort: '✓', uitleg: 'met de hand gezet' };
+    if (klopt) return { soort: 'zeker', kort: '✓', uitleg: `met de hand gezet, en het klopt: ${raak}` };
+    return { soort: 'controleer', kort: '?', uitleg: `met de hand gezet, maar ${raak}${naast}` };
+  }
+  return { soort: 'zeker', kort: '✓', uitleg: `${raak ?? `zeker (${procent(z)})`}${octaaf}` };
+}
+
+/**
+ * Het oordeel op tracktijd t: dat van het stuk daar, tenzij de live bewaking
+ * (`live`: afwijkingBij rond de speelkop) ziet dat het grid hier naast de
+ * gevonden tellen ligt — dan 'wijkt', met hoeveel en welke kant op.
+ */
+export function oordeelBij(grid, t, meting = null, live = null) {
+  const i = grid.stukIndex(t);
+  const o = oordeelStuk(grid.stukBij(t), meting?.stukken[i] ?? null, grid.slot);
+  if (live && o.soort !== 'geenpuls' && Math.abs(live.mediaan) > LIVE_DRIFT && live.raak < 0.5) {
+    const ms = Math.round(Math.abs(live.mediaan) * 1000);
+    return { soort: 'wijkt', kort: `⚠ ${ms} ms`, index: i,
+      uitleg: `het grid wijkt hier ${ms} ms af van de gevonden tellen: de tel komt ${live.mediaan < 0 ? 'vóór' : 'na'} de lijn` };
+  }
+  return { ...o, index: i };
+}
+
+/**
+ * De stukken om te controleren (indexen, op volgorde): waar het oordeel
+ * 'controleer' is. Met `alles`: elk stuk met een puls dat je nog niet
+ * goedkeurde (ook als het er goed uitziet: je luistert alles na).
+ */
+export function teControleren(grid, meting = null, { alles = false } = {}) {
+  const uit = [];
+  grid.stukken.forEach((s, i) => {
+    const o = oordeelStuk(s, meting?.stukken[i] ?? null, grid.slot);
+    if (o.soort === 'controleer' || (alles && !s.ok && o.soort !== 'geenpuls')) uit.push(i);
+  });
+  return uit;
+}
+
+/**
+ * Het volgende stuk om te controleren na het stuk rond t (`stap` 1), of het
+ * vorige (`stap` -1); rondom. Null als er niets (meer) te controleren is.
+ */
+export function volgendTeControleren(grid, meting, t, { stap = 1, alles = false } = {}) {
+  const lijst = teControleren(grid, meting, { alles });
+  if (!lijst.length) return null;
+  const hier = grid.stukIndex(t);
+  if (stap > 0) return lijst.find((i) => i > hier) ?? lijst[0];
+  return [...lijst].reverse().find((i) => i < hier) ?? lijst[lijst.length - 1];
+}

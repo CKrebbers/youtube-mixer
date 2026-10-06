@@ -211,6 +211,42 @@ ok('rommel in de invoer wordt overgeslagen', gridUitTellen([NaN, ...tellen(0, 30
   ok('zonder tweede mening blijft alles staan', JSON.stringify(vergelijk(kaart(), B, null)) === JSON.stringify(kaart()));
 }
 
+// ---- het oordeel op het scherm ---------------------------------------------
+
+{
+  const { oordeelStuk, oordeelBij, teControleren, volgendTeControleren } = await import('../src/engine/tellen.js');
+  const goed = { n: 40, raak: 0.95, afwijking: 0.004 }, slecht = { n: 40, raak: 0.3, afwijking: 0.03 };
+  ok('zeker: gemeten, met hoeveel er raak is', (() => { const o = oordeelStuk({ zekerheid: 0.95 }, goed); return o.soort === 'zeker' && /95%/.test(o.uitleg); })());
+  ok('twijfel: controleer, met de reden', (() => { const o = oordeelStuk({ zekerheid: 0.6, twijfel: 'oneens' }, goed); return o.soort === 'controleer' && /oneens/.test(o.uitleg); })());
+  ok('geen puls', oordeelStuk({ zekerheid: 0, twijfel: 'geen puls' }).soort === 'geenpuls');
+  ok('met de hand gezet en het klopt met de tellen: zeker', oordeelStuk({}, goed).soort === 'zeker');
+  ok('met de hand gezet maar de tellen vallen ernaast: controleer, met hoeveel', (() => { const o = oordeelStuk({}, slecht); return o.soort === 'controleer' && /30%/.test(o.uitleg) && /30 ms/.test(o.uitleg); })());
+  ok('met de hand, zonder tellen: zeker (niets om mee te meten)', oordeelStuk({}, null).soort === 'zeker');
+  ok('door jou goedgekeurd: zeker, ook als de tellen het oneens zijn (rubato)', oordeelStuk({ ok: true }, slecht).soort === 'zeker');
+  ok('op slot en het klopt: vast', oordeelStuk({}, goed, true).soort === 'vast');
+  ok('op slot maar de tellen vallen ernaast: toch controleer', oordeelStuk({}, slecht, true).soort === 'controleer');
+  ok('het octaaf staat erbij', /dubbele tempo/.test(oordeelStuk({ zekerheid: 0.9, octaaf: 2 }, goed).uitleg));
+
+  const g = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 }, { van: 10, bpm: 120, anker: 10, zekerheid: 0.6, twijfel: 'drift' },
+    { van: 20, bpm: 120, anker: 20, zekerheid: 0.9 }, { van: 30, bpm: 120, anker: 30, zekerheid: 0.5, twijfel: 'rubato' }] });
+  ok('te controleren: de stukken met twijfel', teControleren(g).join() === '1,3');
+  ok('alles: elk stuk dat nog niet goedgekeurd is', teControleren(g, null, { alles: true }).join() === '0,1,2,3');
+  ok('het volgende na stuk 1: stuk 3; na het laatste: rondom', volgendTeControleren(g, null, 12) === 3 && volgendTeControleren(g, null, 35) === 1);
+  ok('het vorige', volgendTeControleren(g, null, 35, { stap: -1 }) === 1);
+  g.keurGoed(12); g.keurGoed(32);
+  ok('alles goedgekeurd: niets meer (null)', volgendTeControleren(g, null, 12) === null);
+  ok('goedkeuren onthoudt het (toJSON → Beatgrid)', new Beatgrid(g.toJSON()).stukken[1].ok === true && !new Beatgrid(g.toJSON()).stukken[1].twijfel);
+  const live = { mediaan: -0.022, raak: 0.2, n: 16 };
+  const w = oordeelBij(g, 5, null, live);
+  ok('live: wijkt, met hoeveel en welke kant', w.soort === 'wijkt' && /22 ms/.test(w.kort) && /vóór/.test(w.uitleg));
+  ok('live binnen de marge: het gewone oordeel', oordeelBij(g, 5, null, { mediaan: 0.006, raak: 0.9, n: 16 }).soort === 'zeker');
+  const k = gridUitTellen(tellen(0, 60, 120, 0), []);
+  const terug = new Beatgrid({ ...k, stukken: k.stukken.map((s) => ({ ...s, twijfel: 'maat', octaaf: 2 })) }).toJSON();
+  ok('methode, versie, twijfel en octaaf blijven bewaard (Beatgrid heen en terug)', terug.methode === 'tellen' && terug.versie === 1
+    && terug.stukken[0].twijfel === 'maat' && terug.stukken[0].octaaf === 2);
+  ok('een onbekende twijfel valt weg', !new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, twijfel: 'raar' }] }).stukken[0].twijfel);
+}
+
 // ---- snel genoeg voor een uur ----------------------------------------------
 
 {

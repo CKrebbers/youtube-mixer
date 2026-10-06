@@ -4,7 +4,7 @@ import { stat, rm } from 'node:fs/promises';
 import { join, extname, resolve, relative, isAbsolute, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
-import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, stappenVoor, YTDLP_GETEST_OP } from './ingest.js';
+import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, stappenVoor, YTDLP_GETEST_OP, GEANNULEERD } from './ingest.js';
 import { bekijkLink, ontsmetNaam, BESTAND_EXT } from './links.js';
 import { Wachtrij, isOpen } from './wachtrij.js';
 import {
@@ -20,6 +20,9 @@ import { Plannen, NAAM as PLANNAAM } from './plannen.js';
 import { Patronen, NAAM as SETNAAM } from './patronen.js';
 import { Proef } from './proef.js';
 import { Splitter, StemsRij, maakStems, wisStemsBestanden, isAantal, isStemsKeuze, STEMS_STANDAARD } from './stems.js';
+import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, TELLEN_BESTAND, TELLEN_VERSIE } from './tellen.js';
+import { gridUitTellen, vergelijk, meetGrid, VERSIE as KAART_VERSIE } from '../src/engine/tellen.js';
+import { Beatgrid } from '../src/engine/beatgrid.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
 
 /**
@@ -88,6 +91,9 @@ const SERVER_RUN = randomUUID();
 // Instelbaar voor de tests: een eigen database en opnamemap, niet de jouwe.
 const DB = process.env.VARVE_DB || join(WORTEL, 'media', 'library.db');
 const splitter = new Splitter();
+// De tellen (Beat This!) en de stems (Demucs) gebruiken allebei de GPU: om de beurt (server/tellen.js).
+const gpu = new GpuSlot();
+const tellenzoeker = new Tellenzoeker();
 /*
  * De stems-rij overleeft een herstart (5 okt: een uur Demucs-werk in de rij
  * ging weg bij elke herstart). Wat er open staat gaat bij elke verandering
@@ -264,8 +270,14 @@ async function nieuweStems(trackId, aantal, { opnieuw = false, hercontrole = fal
 function zetInStemsRij(track, aantal, { opnieuw = false, vooraan = false } = {}) {
   return stemsRij.voegToe({
     track: track.id, titel: track.titel, aantal, opnieuw, duur: track.duur, vooraan,
-    werk: (onVoortgang, signal) => maakStems({ lib, media: MEDIA, splitter, trackId: track.id, aantal,
-      audio: opSchijf(track.audio), onVoortgang, signal }),
+    werk: async (onVoortgang, signal) => {
+      const laat = await gpu.pak(signal);
+      if (!laat) return { ok: false, fout: GEANNULEERD, afgebroken: true };
+      try {
+        return await maakStems({ lib, media: MEDIA, splitter, trackId: track.id, aantal,
+          audio: opSchijf(track.audio), onVoortgang, signal });
+      } finally { laat(); }
+    },
   });
 }
 
@@ -318,6 +330,109 @@ async function stemsNaIngest(track, aantal) {
   }
 }
 
+// ---- tellen: het grid uit Beat This! (docs/BEATGRID.md §11) ------------------
+
+const ms = (x) => (x == null ? '–' : `${(x * 1000).toFixed(1)} ms`);
+const pct = (x) => (x == null ? '–' : `${Math.round(x * 100)}%`);
+
+/**
+ * Het grid uit de tellen van een nummer (tellen.json moet er zijn): de
+ * tempokaart (gridUitTellen), getoetst aan een tweede mening (de oude
+ * analyse: het grid dat er staat als dat er een van de oude analyse is,
+ * anders nu uitgerekend), en bewaard als het mag (autoGridWeigert: nooit over
+ * een grid op slot of met de hand bewerkt, tenzij `overHand`/`overSlot`, de
+ * knop ↻). Mag het niet, dan meten we het grid dat er staat en zeggen hoe
+ * het op de tellen valt. Geeft { ok, kaart?, bewaard?, grid?, reden?, fout? }.
+ */
+async function pasTellenToe(id, { overHand = false, overSlot = false } = {}) {
+  const track = lib.track(id);
+  if (!track) return { ok: false, fout: 'onbekend nummer' };
+  const t = await leesTellen(MEDIA, id);
+  if (!t) return { ok: false, fout: 'nog geen tellen voor dit nummer' };
+  const kaart = gridUitTellen(t.beats, t.downbeats, { duur: track.duur });
+  let ander = null;
+  if (track.grid?.bron === 'auto' && track.grid.methode !== 'tellen') ander = new Beatgrid(track.grid);
+  else {
+    const a = await analyseer(track);
+    if (a.ok) ander = new Beatgrid(a.grid);
+  }
+  vergelijk(kaart, t.beats, ander);
+  const b = lib.bewaarAutoGrid(id, kaart, { overHand, overSlot });
+  if (b.bewaard) console.log(`[tellen] ${track.titel}: ${gridSamenvatting(b.grid)}`);
+  else if (track.grid) {
+    const m = meetGrid(new Beatgrid(track.grid), t.beats, t.downbeats).totaal;
+    console.log(`[tellen] ${track.titel}: niet bewaard (${b.reden}); het grid dat er staat: `
+      + `${pct(m.raak)} van de tellen raak, slechtste blok ${ms(m.afwijking)}, "1" ${pct(m.een)}`);
+  }
+  return { ok: true, kaart, bewaard: b.bewaard, grid: b.grid, ...(b.reden ? { reden: b.reden } : {}) };
+}
+
+/** Eén nummer in de tellenrij: Beat This! draaien (om de beurt met de stems), dan het grid. */
+async function maakTellen(id, signal) {
+  const track = lib.track(id);
+  if (!track?.audio) return;
+  const laat = await gpu.pak(signal);
+  if (!laat) return;
+  const t0 = Date.now();
+  let r;
+  try {
+    r = await tellenzoeker.zoek({ audio: opSchijf(track.audio), uit: join(MEDIA, id, TELLEN_BESTAND), signal, duur: track.duur });
+  } finally { laat(); }
+  if (!r.ok) {
+    if (!r.afgebroken) console.warn(`[tellen] ${track.titel}: ${r.fout}`);
+    return;
+  }
+  const t = await leesTellen(MEDIA, id);
+  console.log(`[tellen] ${track.titel}: ${t?.beats.length ?? '?'} tellen, ${t?.downbeats.length ?? '?'} downbeats `
+    + `— ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  if (signal.aborted) return;
+  await pasTellenToe(id);
+}
+
+const tellenRij = new TellenRij({ werk: maakTellen });
+
+/**
+ * Na een geslaagde ingest: de oude tellen weg (nieuwe audio) en het nummer
+ * vooraan in de tellenrij. Gooit nooit. Staat de tellenzoeker niet klaar,
+ * dan zegt de controle bij het opstarten dat al; hier niets dubbel.
+ */
+async function tellenNaIngest(track) {
+  try {
+    tellenRij.annuleer(track.id);
+    await wisTellen(MEDIA, track.id);
+    const z = await tellenzoeker.controleer();
+    if (z.ok) tellenRij.voegToe(track.id, { vooraan: true });
+  } catch (err) {
+    console.error('[tellen] na de ingest:', err?.message || err);
+  }
+}
+
+/** Moet het grid van dit nummer (opnieuw) uit de tellen komen? Leeg, oud, of automatisch van een oudere methode. */
+const wilTellenGrid = (grid) => !grid
+  || (!grid.slot && grid.bron !== 'hand' && (grid.methode !== 'tellen' || (grid.versie ?? 0) < KAART_VERSIE));
+
+/**
+ * Op de achtergrond: elk nummer zonder (actuele) tellen.json de rij in, het
+ * laatst geladen eerst (daar speel je mee). Waar de tellen er al zijn maar
+ * het grid nog van de oude analyse (of een oudere methode) is: alleen het
+ * grid opnieuw, zonder GPU. Met de hand gezette grids en grids op slot
+ * blijven staan; die worden alleen gemeten (pasTellenToe zegt hoe ze vallen).
+ */
+async function tellenOpAchtergrond() {
+  const z = await tellenzoeker.controleer();
+  if (!z.ok) return;
+  const ids = lib.alleIds({ volgorde: 'laatst_geladen' });
+  let rij = 0, grids = 0;
+  for (const id of ids) {
+    const track = lib.track(id);
+    if (!track?.audio) continue;
+    const t = await leesTellen(MEDIA, id);
+    if (!t || t.versie < TELLEN_VERSIE) { tellenRij.voegToe(id); rij++; continue; }
+    if (wilTellenGrid(track.grid)) { await pasTellenToe(id).catch((err) => console.error(`[tellen] ${id}:`, err?.message || err)); grids++; }
+  }
+  if (rij || grids) console.log(`[tellen] ${rij} nummer${rij === 1 ? '' : 's'} in de rij, ${grids} grid${grids === 1 ? '' : 's'} uit bestaande tellen`);
+}
+
 /**
  * Een geplakte link de wachtrij in. Geeft { code, antwoord }:
  * - 400: geen link, of een playlist/kanaal (playlist: true);
@@ -350,6 +465,7 @@ async function nieuweLink(tekst, { opnieuw = false, stems = STEMS_STANDAARD } = 
         bestaat: opnieuw ? null : async (id) => metAudio(lib.track(id)) });
       if (r.ok && !r.bestond) {
         r.track = bewaarInLibrary(r.track);
+        await tellenNaIngest(r.track);
         await stemsNaIngest(r.track, stems);
       }
       return r;
@@ -468,6 +584,7 @@ async function upload(req, res, url) {
       });
       if (r.ok) {
         r.track = bewaarInLibrary(r.track);
+        await tellenNaIngest(r.track);
         await stemsNaIngest(r.track, stems);
       }
       return r;
@@ -729,8 +846,9 @@ const server = createServer(async (req, res) => {
 
     // De splitter erbij: { ok, reden?, python? } (plus apparaat en versies als hij er is).
     if (pad === '/api/tooling') {
-      const [t, s] = await Promise.all([controleerTooling(), splitter.controleer({ hercontrole: true })]);
-      return json(res, 200, { ...t, stems: s });
+      const [t, s, z] = await Promise.all([controleerTooling(), splitter.controleer({ hercontrole: true }),
+        tellenzoeker.controleer({ hercontrole: true })]);
+      return json(res, 200, { ...t, stems: s, tellen: z });
     }
 
     // Alleen JSON: een gewoon formulier of text/plain van een willekeurige
@@ -923,6 +1041,7 @@ const server = createServer(async (req, res) => {
       if (req.method === 'DELETE') {
         // Een split van een nummer dat weggaat heeft geen zin meer.
         stemsRij.annuleerTrack(mTrack[1]);
+        tellenRij.annuleer(mTrack[1]);
         return json(res, 200, { weg: lib.verwijderTrack(mTrack[1]) });
       }
     }
@@ -1012,11 +1131,36 @@ const server = createServer(async (req, res) => {
       const track = lib.track(mAnalyseer[1]);
       if (!track) return json(res, 404, { fout: 'onbekend nummer' });
       const body = await leesJson(req);
+      const overSlot = body?.forceer === true;
+      // Met tellen (Beat This!) het grid daaruit; zonder de oude analyse, en de tellen vooraan in de rij.
+      if (await leesTellen(MEDIA, track.id)) {
+        const t = await pasTellenToe(track.id, { overHand: true, overSlot });
+        if (!t.ok) return json(res, 500, { fout: t.fout });
+        return json(res, 200, { voorstel: t.kaart, bewaard: t.bewaard, grid: t.grid, methode: 'tellen', ...(t.reden ? { reden: t.reden } : {}) });
+      }
+      if (tellenzoeker.bekend?.ok) tellenRij.voegToe(track.id, { vooraan: true });
+      const inRij = tellenRij.bevat(track.id) ? { tellen: 'in de rij' } : {};
       const r = await analyseer(track);
-      if (!r.ok) return json(res, 500, { fout: r.fout });
-      const b = lib.bewaarAutoGrid(track.id, r.grid, { overHand: true, overSlot: body?.forceer === true });
+      if (!r.ok) return json(res, 500, { fout: r.fout, ...inRij });
+      const b = lib.bewaarAutoGrid(track.id, r.grid, { overHand: true, overSlot });
       console.log(`[grid] opnieuw: ${track.titel}: ${b.bewaard ? gridSamenvatting(b.grid) : `niet bewaard (${b.reden})`}`);
-      return json(res, 200, { voorstel: r.grid, bewaard: b.bewaard, grid: b.grid, ...(b.reden ? { reden: b.reden } : {}) });
+      return json(res, 200, { voorstel: r.grid, bewaard: b.bewaard, grid: b.grid, ...inRij, ...(b.reden ? { reden: b.reden } : {}) });
+    }
+
+    /*
+     * De tellen van een nummer (Beat This!): { beats, downbeats } in
+     * tracktijd, gesorteerd; of { beats: null } met waarom niet (nog in de
+     * rij, of de tellenzoeker staat niet klaar). Voor de streepjes in de zoom,
+     * het controleren en de bewaking tijdens het spelen.
+     */
+    const mTellen = /^\/api\/library\/([\w-]+)\/tellen$/.exec(pad);
+    if (mTellen && req.method === 'GET') {
+      const track = lib.track(mTellen[1]);
+      if (!track) return json(res, 404, { fout: 'onbekend nummer' });
+      const t = await leesTellen(MEDIA, track.id);
+      if (t) return json(res, 200, { beats: t.beats, downbeats: t.downbeats, versie: t.versie });
+      const z = tellenzoeker.bekend;
+      return json(res, 200, { beats: null, reden: tellenRij.bevat(track.id) ? 'in de rij' : z && !z.ok ? z.reden : 'nog niet gezocht' });
     }
 
     /*
@@ -1261,11 +1405,11 @@ let afsluiten = false;
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, () => {
     const weg = () => { process.removeAllListeners(sig); process.kill(process.pid, sig); };
-    if (afsluiten || !stemsRij.open) return weg();
+    if (afsluiten || (!stemsRij.open && !tellenRij.open)) return weg();
     afsluiten = true;
     stemsRijBewaren = false;   // wat open staat blijft in stems-rij.json voor de volgende start
-    console.log(`[stems] ${sig}: de splitter wordt eerst gestopt…`);
-    Promise.race([stemsRij.stop(), new Promise((z) => setTimeout(z, 5000))]).finally(weg);
+    console.log(`[server] ${sig}: de splitter en de tellenzoeker worden eerst gestopt…`);
+    Promise.race([Promise.all([stemsRij.stop(), tellenRij.stop()]), new Promise((z) => setTimeout(z, 5000))]).finally(weg);
   });
 }
 
@@ -1291,6 +1435,11 @@ splitter.controleer().then((s) => {
   else console.warn(`[stems] geen stems: ${s.reden}`);
 });
 
+tellenzoeker.controleer().then((z) => {
+  if (z.ok) console.log(`tellen: Beat This! klaar (${z.python ?? z.commando}, ${z.apparaat ?? '?'})`);
+  else console.warn(`[tellen] geen tellen (het grid komt dan van de oude analyse): ${z.reden}`);
+});
+
 await herstelStemsRij().catch((err) => console.error('[stems] de rij van voor de herstart:', err?.message || err));
 
 server.listen(POORT, '127.0.0.1', () => {
@@ -1302,7 +1451,9 @@ server.listen(POORT, '127.0.0.1', () => {
   backups.start();
   const her = process.env.VARVE_HERANALYSE;
   if (her !== 'uit') {
-    setTimeout(() => heranalyseOpAchtergrond().catch((err) => console.error('[analyse] achtergrond:', err?.message || err)),
-      Number.isFinite(Number(her)) && her !== '' && her !== undefined ? Number(her) : 5000);
+    setTimeout(() => {
+      heranalyseOpAchtergrond().catch((err) => console.error('[analyse] achtergrond:', err?.message || err));
+      tellenOpAchtergrond().catch((err) => console.error('[tellen] achtergrond:', err?.message || err));
+    }, Number.isFinite(Number(her)) && her !== '' && her !== undefined ? Number(her) : 5000);
   }
 });

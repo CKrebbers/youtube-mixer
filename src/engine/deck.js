@@ -2,6 +2,7 @@ import { Emitter, clamp, piek } from '../lib/emitter.js';
 import { createDeckChain, setEqBand, killEqBand, killVersterking, setBipolarFilter, filterDoelen, faderGain,
   maakStemFilter, stemFilterOpen, stemFilterDoelen } from './audio-graph.js';
 import { Beatgrid } from './beatgrid.js';
+import { meetGrid } from './tellen.js';
 import { ToonKaart } from './toonsoort.js';
 import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
 import { maakWav, KANALEN } from './stream-kern.js';
@@ -162,6 +163,11 @@ export class Deck extends Emitter {
     this.vorigeLoop = null;     // voor reloop: de laatste loop die eraf ging
 
     this.grid = null;           // Beatgrid, of null als de track nog niet uitgemeten is
+    this.gridVersie = 0;        // telt bij elke wijziging van het grid (setGrid, gridGewijzigd): voor caches
+    // De tellen van Beat This! (docs/BEATGRID.md §11): { beats, downbeats }
+    // als gesorteerde Float64Arrays, of null. Alleen data, zoals de onsets: de
+    // UI zet ze na het laden; de zoom tekent ze, het scherm meet er het grid mee.
+    this.tellen = null;
     // Onset-pieken (tracktijd, s), gesorteerde Float64Array, of null. Alleen
     // data: de UI zet ze na het laden van een library-nummer, "tel 1 hier"
     // snapt ernaar en de zoom tekent ze. Het deck rekent er zelf niet mee.
@@ -359,7 +365,9 @@ export class Deck extends Emitter {
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.grid = null;
+    this.gridVersie++;
     this.onsets = null;
+    this.tellen = null;
     this.toonKaart = null;
     this.loopBeats = null;
     this.loopInPunt = null;
@@ -378,7 +386,9 @@ export class Deck extends Emitter {
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.grid = null;
+    this.gridVersie++;
     this.onsets = null;
+    this.tellen = null;
     this.toonKaart = null;
     this.loopBeats = null;
     this.loopInPunt = null;
@@ -857,6 +867,7 @@ export class Deck extends Emitter {
 
   setGrid(grid) {
     this.grid = grid instanceof Beatgrid ? grid : Beatgrid.van(grid);
+    this.gridVersie++;
     this._heranker();
     this.emit('change', this);
     return this.grid;
@@ -871,8 +882,23 @@ export class Deck extends Emitter {
     // Met de hand bewerkt: geen automatisch voorstel meer, dus de server
     // analyseert hem bij het opstarten niet opnieuw (zie Beatgrid.bron).
     if (this.grid) this.grid.bron = 'hand';
+    this.gridVersie++;
     this._heranker();
     this.emit('change', this);
+  }
+
+  /**
+   * Hoe het grid op de tellen valt (meetGrid, src/engine/tellen.js), per stuk.
+   * Null zonder grid of zonder tellen. Onthouden tot het grid of de tellen
+   * veranderen: een uur is ~9.000 tellen, de renderloop vraagt elke frame.
+   */
+  get gridMeting() {
+    if (!this.grid || !this.tellen) return null;
+    const k = this._meting;
+    if (k && k.versie === this.gridVersie && k.grid === this.grid && k.tellen === this.tellen) return k.meting;
+    const meting = meetGrid(this.grid, this.tellen.beats, this.tellen.downbeats);
+    this._meting = { versie: this.gridVersie, grid: this.grid, tellen: this.tellen, meting };
+    return meting;
   }
 
   /**

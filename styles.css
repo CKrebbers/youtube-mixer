@@ -381,6 +381,20 @@ button.lib-kopcel:hover{color:var(--text)}
 .grid-tools .tap.grid-bekend{color:var(--text);box-shadow:inset 0 -2px 0 #5d6b78}
 .bpm-val{font-family:ui-monospace,monospace;font-size:12px;color:var(--text);min-width:58px;text-align:center}
 .bpm-val.leeg{color:var(--dim)}
+/* Klopt het grid HIER (BEATGRID.md §11): gemeten aan de gevonden tellen.
+   Groen ✓ = zeker, 🔒 = op slot, oranje ? = controleer (de reden in de
+   tooltip), rood ⚠ = loopt live weg, gestreept – = geen puls. Klik = controle. */
+.grid-oordeel{font:600 11px/1 ui-monospace,monospace;padding:3px 6px;border-radius:4px;border:1px solid var(--line);
+  background:transparent;color:var(--dim);cursor:pointer;white-space:nowrap}
+.grid-oordeel.zeker{color:#6ef0a0;border-color:rgba(110,240,160,.45)}
+.grid-oordeel.vast{color:#6ef0a0;border-color:#6ef0a0;background:rgba(110,240,160,.12)}
+.grid-oordeel.controleer{color:var(--warn);border-color:rgba(255,190,60,.6)}
+.grid-oordeel.wijkt{color:#03100e;background:var(--warn);border-color:var(--warn)}
+.grid-oordeel.geenpuls{color:var(--dim);border-style:dashed}
+.grid-oordeel.on{box-shadow:0 0 0 2px rgba(110,240,160,.35)}
+.grid-controle{display:inline-flex;gap:3px;margin-left:6px;padding-left:6px;border-left:1px solid var(--line)}
+.grid-controle.hidden{display:none}
+.grid-controle .grid-ok{color:#6ef0a0;border-color:rgba(110,240,160,.6)}
 .btn.bl{min-width:22px}
 .btn.bl.dood{opacity:.35}
 

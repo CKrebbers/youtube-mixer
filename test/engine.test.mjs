@@ -1983,6 +1983,70 @@ console.log('\ntempokaart');
   eng.off?.('melding', opMeld);
 }
 
+// 6 okt (docs/BEATGRID.md §11): het grid CONTROLEREN met een tik op de tellen,
+// stuk voor stuk; ✓ keurt goed en gaat door, alles goed = op slot.
+{
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  const dE = eng.deck('E');
+  dE.load(buf, 'controle');
+  const meld = [];
+  const opMeld = (m) => meld.push(m);
+  eng.on('melding', opMeld);
+  // Drie stukken; het tweede twijfelt (de demotrack duurt 3,9 s).
+  dE.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 },
+    { van: 1.25, bpm: 120, anker: 1.5, zekerheid: 0.6, twijfel: 'oneens' }, { van: 2.75, bpm: 120, anker: 3, zekerheid: 0.9 }] }));
+  dE.seek(0);
+  ok('controle uit: read 0', read('track.5.grid.controle') === 0 && eng.gridControleDeck === null);
+  invoke('track.5.grid.controle', true); invoke('track.5.grid.controle', false);
+  ok('controle aan: dit deck, en het speelt vanaf het stuk dat twijfelt', eng.gridControleDeck === 'E' && read('track.5.grid.controle') === 1
+    && dE.playing && dE.grid.stukIndex(dE.position) === 1);
+  ok('… met een melding hoeveel er te controleren is', /1 stuk om te controleren/.test(meld.at(-1)?.tekst ?? ''));
+  ok('de klik loopt op dit deck', eng.gridKlik.aan && eng.gridKlik.deck === dE);
+  ok('in de snapshot', eng.snapshot().gridControle === 'E');
+  // De klik plant tikken op de audioklok, op de gridlijnen: de eerste tel van het stuk (1,5) ligt 0,2 s verder.
+  const NOW1 = NOW;
+  NOW += 0.1;
+  eng.gridKlik._plan();
+  const tik = eng.gridKlik._gepland[0];
+  ok('een tik ingepland op de audioklok, op een gridlijn (de eerste tel van het stuk)', !!tik && Math.abs(tik.op - dE.ctxTimeOf(1.5)) < 1e-6
+    && eng.gridKlik._gepland.length === 1);
+  eng.gridKlik._plan();
+  ok('nog eens plannen: niet dubbel', eng.gridKlik._gepland.length === 1);
+  NOW = NOW1;
+  invoke('track.5.grid.ok', true); invoke('track.5.grid.ok', false);
+  ok('✓: het laatste te controleren stuk goedgekeurd → alles gecontroleerd, op slot, controle uit', dE.grid.slot === true
+    && eng.gridControleDeck === null && dE.grid.stukken[1].ok === true && !dE.grid.stukken[1].twijfel
+    && /alles gecontroleerd/.test(meld.at(-1)?.tekst ?? ''));
+  ok('… en kan terug', dE.kanGridTerug);
+  ok('de klik is uit', !eng.gridKlik.aan && eng.gridKlik._gepland.length === 0);
+
+  // Alles ziet er goed uit: dan loop je ALLE stukken langs.
+  dE.stop();
+  dE.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 }, { van: 2, bpm: 120, anker: 2.25, zekerheid: 0.9 }] }));
+  dE.seek(0);
+  invoke('track.5.grid.controle', true);
+  ok('niets om te controleren: je luistert alles na', /alles lijkt te kloppen/.test(meld.at(-1)?.tekst ?? ''));
+  invoke('track.5.grid.ok', true);
+  ok('✓ op het eerste stuk: door naar het tweede', dE.grid.stukken[0].ok && !dE.grid.slot && dE.grid.stukIndex(dE.position) === 1
+    && /stuk 2 van 2/.test(meld.at(-1)?.tekst ?? ''));
+  invoke('track.5.grid.check.prev', true);
+  ok('◀: terug naar het eerste (rondom)', dE.grid.stukIndex(dE.position) === 1 || dE.grid.stukIndex(dE.position) === 0);
+  dE.seek(2.3, { doorlopend: true });
+  invoke('track.5.grid.ok', true);
+  ok('✓ op het laatste: op slot', dE.grid.slot === true && eng.gridControleDeck === null);
+  // Een bewerking na het goedkeuren haalt het "ok" weg: dan is het een ander grid.
+  dE.grid.slot = false;
+  dE.seek(0.3);
+  invoke('track.5.grid.fwd', true);
+  ok('een bewerking na ✓: het stuk is niet meer "door jou gecontroleerd"', !dE.grid.stukken[0].ok);
+  // Een nieuw nummer laden zet de controle uit.
+  invoke('track.5.grid.controle', true);
+  dE.load(buf, 'ander');
+  ok('nieuw nummer: controle uit', eng.gridControleDeck === null && !eng.gridKlik.aan);
+  dE.stop();
+  eng.off?.('melding', opMeld);
+}
+
 // Stap D: grid-modus op de APC. Tel 1 hier snapt naar een klap, halve tel,
 // fijn schuiven en bpm per stuk — via de echte mapping, shift en mapjes.
 {

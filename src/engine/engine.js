@@ -6,6 +6,7 @@ import { instrumentDef } from './instrumenten/index.js';
 import { Sampler } from './sampler.js';
 import { Klankschaal } from './klankschaal.js';
 import { Koptelefoon } from './koptelefoon.js';
+import { GridKlik } from './grid-klik.js';
 import { PatroonSpeler, maatVan } from './patronen/speler.js';
 
 /**
@@ -225,7 +226,38 @@ export class Engine extends Emitter {
 
     this.applyXfader();
     this.master.gain.gain.value = faderGain(this.masterLevel);
+
+    // De controleklik (docs/BEATGRID.md §11): een tik op het grid van één deck,
+    // in de koptelefoon als die er is (met de cue van dat deck aan), anders in de zaal.
+    this.gridKlik = new GridKlik(this.ctx, this.koptelefoon.beschikbaar ? this.koptelefoon.cue : this.master.input);
+    this._controle = null;       // { id, pflWas }
+    for (const id of DECK_IDS) this.decks[id].on('load', () => { if (this._controle?.id === id) this.gridControle(null); });
   }
+
+  /**
+   * Het grid van een deck CONTROLEREN: tikken op elke gridlijn (accent op de
+   * "1") en, met een koptelefoon, de cue van dat deck aan zodat je track en
+   * tik samen hoort. Null = uit; de cue gaat terug naar hoe hij stond. Eén
+   * deck tegelijk.
+   */
+  gridControle(id = null) {
+    if ((this._controle?.id ?? null) === id) return;
+    if (this._controle) {
+      const { id: oud, pflWas } = this._controle;
+      if (!pflWas) this.koptelefoon.zetPfl(oud, false);
+      this.gridKlik.stop();
+      this._controle = null;
+    }
+    if (id && this.decks[id]) {
+      this._controle = { id, pflWas: this.koptelefoon.pflAan(id) };
+      this.koptelefoon.zetPfl(id, true);
+      this.gridKlik.start(this.decks[id]);
+    }
+    this.emit('change');
+  }
+
+  /** Welk deck er gecontroleerd wordt, of null. */
+  get gridControleDeck() { return this._controle?.id ?? null; }
 
   async resume() { if (this.ctx.state !== 'running') await this.ctx.resume(); }
 
@@ -693,6 +725,8 @@ export class Engine extends Emitter {
       speel: this.speeltrack(),
       // De koptelefoon: { beschikbaar, kanalen, omgewisseld, niveau, mix, iets, pfl: {deck: bool} }.
       koptelefoon: this.koptelefoon.stand(),
+      // Welk deck er met de controleklik gecontroleerd wordt (docs/BEATGRID.md §11), of null.
+      gridControle: this.gridControleDeck,
       // De master (docs/MASTER.md): het insert-rack zoals `fx` van een track,
       // en de limiter { soort, gr (dB, ≤ 0), vertraging, plafond, fout }.
       masterFx: this.master.fxStand(),
