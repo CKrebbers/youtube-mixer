@@ -3,8 +3,10 @@ import { normaliseerPlan } from '../plan/plan-model.js';
 import { DECK_IDS } from '../engine/engine.js';
 import { GLIJ } from '../engine/deck.js';
 import { kortNaam } from '../engine/toonsoort.js';
+import { SectieKaart } from '../engine/secties.js';
 import {
   OVERGANGEN, SPEELDUUR, VOORUIT, fragment, kenmerken, kiesVolgende, kiesOvergang, planMoment, standen, klaarStand,
+  sectiesVan, sectieGrens, sectieNaam,
 } from './planner.js';
 
 /**
@@ -32,7 +34,13 @@ import {
 
 const ZELF = Symbol('auto');
 /** Actions waarmee Clay een overgang overneemt (op een track in de overgang). */
-const OVERNEEM = /^track\.(\d)\.(fader|low|mid|high|filter|play|play\.quant|sync|seek|tempo|pitch|send\.[ab]|kill\.\w+(\.hold)?|stem\.(vocals|inst|drums|bass|other)(\.(kill|hold|filter|send\.[ab]))?|brake|cue|hotcue\.\d)$/;
+const OVERNEEM = /^track\.(\d)\.(fader|low|mid|high|filter|play|play\.quant|sync|seek|tempo|pitch|send\.[ab]|kill\.\w+(\.hold)?|stem\.(vocals|inst|drums|bass|other)(\.(kill|hold|filter|send\.[ab]))?|brake|cue|hotcue\.\d|section\.(\d+(\.loop)?|next|prev))$/;
+/** Een sectiesprong (docs/SECTIES.md): op de track die nu klinkt verspringt de positie, dus opnieuw plannen. */
+const SECTIE = /^track\.\d\.section\./;
+/** Zo lang (ms) wacht het klaarzetten op de sectiekaart van de nieuwe (laden.js haalt hem pas NA het laden). */
+const WACHT_SECTIES = 3000;
+/** "nu" en "langer" mogen naar de volgende sectiegrens als die binnen zoveel maten komt (beatloos: seconden). */
+const NU_SECTIE_MATEN = 8, LANGER_SECTIE_MATEN = 16, LANGER_SECTIE_SEC = 60;
 /**
  * De curve van een overgang gaat als GLIJDENDE knoppen (track.N.<knop>.glide,
  * Deck.glide): elke beurt een doel dat GLIJ seconden verderop op de curve ligt,
@@ -59,11 +67,13 @@ export class Automaat extends Emitter {
    * @param haalLibrary () => Promise<tracks[]>
    * @param haalPlan    () => Promise<plan|{ plan, versie }|null> (v1 of v2, zie plan-model.js)
    * @param welkNummer  (deckId) => library-id van wat er op een track staat (of null)
+   * @param haalSecties (trackId) => Promise<sectiekaart|null>: de kaart van een nummer (docs/SECTIES.md §4)
+   * @param wachtSecties zo lang (ms) wacht het klaarzetten op die kaart; daarna zonder (het oude gedrag)
    */
   constructor({ engine, invoke, bijInvoke = () => () => {}, laad, haalLibrary, haalPlan = async () => null,
-    welkNummer = () => null, rnd = Math.random, tik = 40 } = {}) {
+    welkNummer = () => null, haalSecties = async () => null, wachtSecties = WACHT_SECTIES, rnd = Math.random, tik = 40 } = {}) {
     super();
-    Object.assign(this, { engine, _invoke: invoke, laad, haalLibrary, haalPlan, welkNummer, rnd, tikMs: tik });
+    Object.assign(this, { engine, _invoke: invoke, laad, haalLibrary, haalPlan, welkNummer, haalSecties, wachtSecties, rnd, tikMs: tik });
     this.aan = false;
     this.fase = 'uit';
     this.hoofd = null;            // deckId van wat nu klinkt
@@ -85,7 +95,10 @@ export class Automaat extends Emitter {
     this._bezigLaden = false;
     this._timer = null;
     this._glijdt = new Map();     // 'A.fader' -> { doel, tot }: de lopende glijbeurt van de automaat
-    this._los = bijInvoke((id) => this._bijBus(id));
+    this._kaarten = {};           // deckId -> { trackId, kaart }: sectiekaarten die de automaat zelf ophaalde
+    this._kaartVraag = {};        // deckId -> volgnummer van de laatste vraag om een kaart
+    this._sprong = false;         // Clay sprong naar een sectie op de hoofdtrack: opnieuw plannen bij de volgende tik
+    this._los = bijInvoke((id, waarde) => this._bijBus(id, waarde));
   }
 
   // ---- aan en uit ------------------------------------------------------------
@@ -146,12 +159,27 @@ export class Automaat extends Emitter {
     this.emit('change');
   }
 
-  /** Nog 8 maten (of 30 s bij beatloos) langer op de huidige. */
+  /**
+   * Nog 8 maten (of 30 s bij beatloos) langer op de huidige. Met secties:
+   * naar de volgende sectiegrens als die binnen 16 maten (60 s) komt.
+   */
   langer() {
     const v = this.volgende;
     if (!v?.moment || this.fase !== 'klaar') return;
     const d = this.engine.deck(this.hoofd);
     const g = v.overgang.type === 'ambient' ? null : d.grid;
+    const grens = sectieGrens({ secties: sectiesVan(this._kaartVan(this.hoofd)), grid: g, zeker: (t) => !!d.grid && d.grid.zekerBij(t),
+      na: v.moment.start, tot: g ? g.timeOf(v.moment.tel + LANGER_SECTIE_MATEN * g.beatsPerBar) : v.moment.start + LANGER_SECTIE_SEC * d.rate });
+    const opGrens = grens && (g
+      ? { ...v.moment, tel: grens.tel, start: grens.start, lengte: g.timeOf(grens.tel + v.moment.maten * g.beatsPerBar) - grens.start, sectie: grens.sectie }
+      : { ...v.moment, start: grens.start, sectie: grens.sectie });
+    if (opGrens && opGrens.start + opGrens.lengte <= d.duration - 2) {
+      this.eind += opGrens.start - v.moment.start;
+      v.langer = (v.langer || 0) + 1;
+      v.moment = opGrens;
+      this.emit('change');
+      return;
+    }
     const extra = g ? g.timeOf(v.moment.tel + 8 * g.beatsPerBar) - v.moment.start : 30 * d.rate;
     if (v.moment.start + extra + v.moment.lengte > d.duration - 2) { this._meld('langer kan niet: de track is bijna op'); return; }
     this.eind += extra;
@@ -163,10 +191,14 @@ export class Automaat extends Emitter {
     } else {
       v.moment = { ...v.moment, start: v.moment.start + extra };
     }
+    delete v.moment.sectie;
     this.emit('change');
   }
 
-  /** Zo snel het mooi kan: de eerstvolgende 4-maatsgrens (beatloos: meteen). */
+  /**
+   * Zo snel het mooi kan: de eerstvolgende 4-maatsgrens (beatloos: meteen).
+   * Met secties: de volgende sectiegrens als die binnen 8 maten komt.
+   */
   nu() {
     const v = this.volgende;
     if (!v || this.fase !== 'klaar') return;
@@ -176,21 +208,30 @@ export class Automaat extends Emitter {
     this.eind = d.position + vooruit * d.rate + (v.moment?.lengte ?? 0);
     v.moment = planMoment({ type: v.overgang.type, grid: g, positie: d.position, eind: this.eind, rate: d.rate, vooruit });
     if (g) {
-      // Eerstvolgende 4-maatsgrens, niet de laatste vóór `eind`.
+      // Eerstvolgende 4-maatsgrens, niet de laatste vóór `eind`; of de volgende sectiegrens als die dichtbij is.
       const bpb = g.beatsPerBar;
-      const b = g.volgendeVeelvoud(g.beatAt(d.position + vooruit * d.rate), 4 * bpb);
+      const vroegst = d.position + vooruit * d.rate;
+      const grens = sectieGrens({ secties: sectiesVan(this._kaartVan(this.hoofd)), grid: g, na: vroegst - 2e-3,
+        tot: g.timeOf(g.beatAt(vroegst) + NU_SECTIE_MATEN * bpb) });
+      const b = grens ? grens.tel : g.volgendeVeelvoud(g.beatAt(vroegst), 4 * bpb);
       const tellen = v.moment.maten * bpb;
       v.moment = { ...v.moment, tel: b, start: g.timeOf(b), lengte: g.timeOf(b + tellen) - g.timeOf(b) };
+      if (grens) v.moment.sectie = grens.sectie; else delete v.moment.sectie;
     }
+    v.nu = true;
     this.emit('change');
   }
 
   /** Iemand anders (Clay, MIDI, muis, toetsenbord) raakte de bus aan. */
-  _bijBus(id) {
+  _bijBus(id, waarde) {
     if (this._zelf || !this.aan) return;
     const m = OVERNEEM.exec(id);
     const deck = m ? deckVanNr(Number(m[1])) : null;
     const raakt = deck && (deck === this.hoofd || deck === this.volgende?.deckId);
+    // Een sectiesprong op wat nu klinkt terwijl de volgende klaarstaat: de
+    // positie verspringt, dus de overgang opnieuw plannen (bij de volgende
+    // tik: de bus hoort het vóór de sprong).
+    if (raakt && this.fase === 'klaar' && deck === this.hoofd && SECTIE.test(id) && waarde !== false) this._sprong = true;
     if (id === 'mixer.xfader' || raakt) {
       if (this.fase === 'bezig' || (this.fase === 'klaar' && deck === this.volgende?.deckId)) {
         this.fase = 'overgenomen';
@@ -235,20 +276,31 @@ export class Automaat extends Emitter {
       if (!keuze) { this._meld('niets meer om te spelen', 'fout'); this._stop(); return; }
       const deckId = this._vrijDeck();
       if (!deckId) { this._meld('geen vrije track om te laden', 'fout'); this.fase = 'wacht'; return; }
+      // De sectiekaart tegelijk met het laden ophalen: laden.js haalt hem
+      // ook, maar pas NA het laden en zonder te wachten (de race).
+      const kaartP = this._haalKaart(deckId, keuze.track.id);
       await this.laad(deckId, keuze.track);
       if (!this.aan) return;
       const nd = this.engine.deck(deckId);
       if (!nd.buffer) throw new Error(`${keuze.track.titel} laadde niet`);
       this.nummers[deckId] = keuze.track;
       this.eigen.add(deckId);
-      // Beginnen op een maatbegin van de nieuwe als zijn grid daar zeker is.
-      let van = keuze.van;
-      if (nd.grid && nd.grid.zekerBij(van)) van = nd.grid.timeOf(nd.grid.volgendeVeelvoud(nd.grid.beatAt(van), nd.grid.beatsPerBar));
+      // Op de kaart wachten, met een grens. Niets klinkt (meteen), of wat
+      // klinkt valt stil terwijl hij wacht: niet (langer) wachten, nooit een gat.
+      const kaart = await binnen(kaartP, meteen ? 0 : this.wachtSecties,
+        () => !this.aan || !this.hoofd || !this.engine.deck(this.hoofd).playing);
+      if (!this.aan) return;
+      const f = fragment(keuze.track, { ...keuze.stuk, rnd: this.rnd, secties: sectiesVan(kaart), inSectie: keuze.in });
+      // Beginnen op een maatbegin van de nieuwe als zijn grid daar zeker is
+      // (een sectiebegin ligt op een maat, afgerond: die maat zelf).
+      let van = f.van;
+      if (nd.grid && nd.grid.zekerBij(van)) van = nd.grid.timeOf(nd.grid.volgendeVeelvoud(nd.grid.beatAt(van) - (f.sectie ? 0.02 : 0), nd.grid.beatsPerBar));
       this._doe(`track.${nrVan(deckId)}.seek`, nd.duration ? van / nd.duration : 0);
-      this.volgende = { deckId, track: keuze.track, van, tot: keuze.tot, bron: keuze.bron, waarom: keuze.waarom,
-        stapId: keuze.stapId ?? null, voorkeur: keuze.overgang, lengte: keuze.lengte ?? null,
+      this.volgende = { deckId, track: keuze.track, van, tot: f.tot, bron: keuze.bron, waarom: keuze.waarom,
+        stapId: keuze.stapId ?? null, voorkeur: keuze.overgang, lengte: keuze.lengte ?? null, inSectie: f.sectie ?? null,
         bevestigd: false, gestart: false, overgang: null, moment: null };
       if (meteen || !this.hoofd || !this.engine.deck(this.hoofd).playing) { this.fase = 'klaar'; this._startMeteen(); return; }
+      this._sprong = false;
       this._planOvergang(keuze.overgang);
       this.fase = 'klaar';
     } catch (err) {
@@ -260,15 +312,19 @@ export class Automaat extends Emitter {
     }
   }
 
-  /** Uit het plan (overgeslagen en onbekende nummers overslaan), anders de kiezer. */
+  /**
+   * Uit het plan (overgeslagen en onbekende nummers overslaan), anders de
+   * kiezer. Het fragment (waar hij begint) volgt pas als de sectiekaart er is
+   * (_bereidVoor): `stuk` en `in` zijn wat het plan daarvoor zegt.
+   */
   _kies() {
     const stappen = this.plan?.stappen || [];
     while (this.planIndex < stappen.length) {
       const s = stappen[this.planIndex];
       const track = this.tracks.find((t) => t.id === s.track);
       if (track && !this.overgeslagen.has(track.id) && track.id !== this.welkNummer(this.hoofd)) {
-        const f = fragment(track, { van: s.van ?? null, speelduur: s.speelduur ?? null, rnd: this.rnd });
-        return { track, ...f, bron: 'plan', stapId: s.id, overgang: s.overgang || 'auto', lengte: s.lengte ?? null, waarom: s.waarom || '' };
+        return { track, stuk: { van: s.van ?? null, speelduur: s.speelduur ?? null }, in: sectieRef(s.in),
+          bron: 'plan', stapId: s.id, overgang: s.overgang || 'auto', lengte: s.lengte ?? null, waarom: s.waarom || '' };
       }
       this.planIndex++;
     }
@@ -276,8 +332,7 @@ export class Automaat extends Emitter {
     const gespeeld = new Set([...this.gespeeld, ...this.overgeslagen]);
     const k = kiesVolgende({ huidig, tracks: this.tracks, gespeeld, rnd: this.rnd });
     if (!k) return null;
-    const f = fragment(k.track, { rnd: this.rnd });
-    return { track: k.track, ...f, bron: 'kiezer', overgang: 'auto', waarom: k.redenen.join(', ') };
+    return { track: k.track, stuk: {}, in: null, bron: 'kiezer', overgang: 'auto', waarom: k.redenen.join(', ') };
   }
 
   _huidigKenmerk() {
@@ -291,21 +346,31 @@ export class Automaat extends Emitter {
       toonZeker: h?.soort === 'zeker', loudness: t?.loudness_i ?? null };
   }
 
-  /** De soort overgang en het moment, met de bewakers. */
+  /**
+   * De soort overgang en het moment, met de bewakers. Met de sectiekaart van
+   * de uitgaande begint het moment bij voorkeur op een sectiegrens (`uit` van
+   * de planstap die nu klinkt, anders de outro, een break, …: planMoment), maar
+   * alleen waar de gekozen soort ook mag: secties veranderen de soort nooit.
+   */
   _planOvergang(voorkeur = 'auto') {
     const v = this.volgende;
     const d = this.engine.deck(this.hoofd);
     const nd = this.engine.deck(v.deckId);
     const pos = Math.max(d.position, Math.min(this.eind, d.duration - 6));
-    const h = d.toonKaart?.hoorbaarBij(pos, { rate: d.rate, transpositie: d.transpositie, keylock: d.keylock });
-    const uit = { grid: d.grid, gridZeker: !!d.grid && d.grid.zekerBij(pos), bpm: d.grid ? d.grid.bpmAt(pos) * d.rate : null,
-      k: h?.k ?? null, toonZeker: h?.soort === 'zeker' };
+    const uit = this._uitKenmerken(d, pos);
     const kIn = kenmerken(v.track, v.van);
     const inn = { ...kIn, grid: nd.grid, gridZeker: !!nd.grid && nd.grid.zekerBij(v.van), bpm: nd.grid ? nd.grid.bpmAt(v.van) : kIn.bpm };
     v.overgang = kiesOvergang(uit, inn, { voorkeur });
-    const g = v.overgang.type === 'ambient' ? null : d.grid;
+    const type = v.overgang.type;
+    const g = type === 'ambient' ? null : d.grid;
     this.eind = Math.min(this.eind ?? d.duration, d.duration - 6);
-    v.moment = planMoment({ type: v.overgang.type, grid: g, positie: d.position, eind: this.eind, rate: d.rate, vooruit: Math.min(VOORUIT, 8), lengte: v.lengte });
+    const kaart = this._kaartVan(this.hoofd);
+    v.uitKaart = kaart;
+    v.moment = planMoment({ type, grid: g, positie: d.position, eind: this.eind, rate: d.rate, vooruit: Math.min(VOORUIT, 8), lengte: v.lengte,
+      secties: sectiesVan(kaart), uitSectie: sectieRef(this._stap(this.hoofdStap)?.uit),
+      zeker: (t) => !!d.grid && d.grid.zekerBij(t),
+      // De bewakers op dat begin: mag deze soort daar ook (tempo, toon, grid van de uitgaande)?
+      mag: (t) => kiesOvergang(this._uitKenmerken(d, t), inn, { voorkeur: type }).type === type });
     // Klaarzetten: fader, bas, filter zoals de overgang begint; dezelfde
     // crossfaderkant als de uitgaande (anders valt hij weg achter de crossfader).
     const n = nrVan(v.deckId);
@@ -321,11 +386,60 @@ export class Automaat extends Emitter {
     };
   }
 
+  /** Wat we van de uitgaande weten op tracktijd t, met `bpm` = wat je HOORT (rate, transpositie, keylock). */
+  _uitKenmerken(d, t) {
+    const h = d.toonKaart?.hoorbaarBij(t, { rate: d.rate, transpositie: d.transpositie, keylock: d.keylock });
+    return { grid: d.grid, gridZeker: !!d.grid && d.grid.zekerBij(t), bpm: d.grid ? d.grid.bpmAt(t) * d.rate : null,
+      k: h?.k ?? null, toonZeker: h?.soort === 'zeker' };
+  }
+
+  /**
+   * De sectiekaart van wat er op een track staat: die van het deck (laden.js
+   * zet hem), anders die de automaat zelf ophaalde voor DAT nummer. Of null.
+   */
+  _kaartVan(deckId) {
+    if (!deckId) return null;
+    const d = this.engine.deck(deckId);
+    if (d.sectieKaart) return d.sectieKaart;
+    const e = this._kaarten[deckId];
+    return e && e.trackId === this.welkNummer(deckId) ? e.kaart : null;
+  }
+
+  /**
+   * De kaart van een nummer ophalen (haalSecties). Wat binnenkomt wordt
+   * bewaard, ook als het klaarzetten er niet meer op wachtte: dan telt hij
+   * alsnog voor het moment van de overgang (_klaar). Nooit een fout.
+   */
+  _haalKaart(deckId, trackId) {
+    const vraag = (this._kaartVraag[deckId] = (this._kaartVraag[deckId] || 0) + 1);
+    let p;
+    try { p = Promise.resolve(this.haalSecties(trackId)); } catch (_) { p = Promise.resolve(null); }
+    return p.then((ruw) => {
+      const kaart = ruw ? SectieKaart.van(ruw) : null;
+      // Alleen de laatste vraag voor deze track telt (een trage oude kaart overschrijft geen nieuwe).
+      if (this._kaartVraag[deckId] === vraag) this._kaarten[deckId] = kaart ? { trackId, kaart } : null;
+      return kaart;
+    }, () => null);
+  }
+
+  /** De planstap met dit id, of null. */
+  _stap(stapId) { const i = this._index(stapId); return i >= 0 ? this.plan.stappen[i] : null; }
+
   _klaar(d) {
     const v = this.volgende;
+    // Clay sprong naar een sectie, of de sectiekaart van wat nu klinkt kwam
+    // later binnen (laden.js wacht er niet op): opnieuw plannen zolang het kan.
+    const maat = d.grid ? d.grid.beatLengthAt(d.position) * d.grid.beatsPerBar : 2;
+    const kaart = this._kaartVan(this.hoofd);
+    if (this._sprong) { this._sprong = false; if (!v.gestart) this._planOvergang(v.voorkeur ?? 'auto'); }
+    else if (kaart !== v.uitKaart) {
+      // Een andere kaart (of dezelfde opnieuw, van laden.js: dan niets doen).
+      const anders = kaartSleutel(kaart) !== kaartSleutel(v.uitKaart);
+      v.uitKaart = kaart;
+      if (anders && !v.gestart && !v.langer && !v.nu && d.position < v.moment.start - maat) this._planOvergang(v.voorkeur ?? 'auto');
+    }
     const m = v.moment;
     // Een tel vóór het begin: blend = sync en start op de maat, beatloos = meteen.
-    const maat = d.grid ? d.grid.beatLengthAt(d.position) * d.grid.beatsPerBar : 2;
     // De track is korter geworden (tempo) of het moment is voorbij: opnieuw plannen.
     if (m.start + m.lengte > d.duration - 1) this._planOvergang(v.overgang.type);
     if (v.overgang.type === 'blend' && d.position >= m.start - maat * 0.9) {
@@ -572,7 +686,9 @@ export class Automaat extends Emitter {
       nu: d?.buffer ? { nr: nrVan(this.hoofd), titel: d.title || this.nummers[this.hoofd]?.titel || '', rest: eindig(this.eind) ? Math.max(0, (this.eind - d.position) / uitRate) : null } : null,
       volgende: v ? {
         nr: nrVan(v.deckId), titel: v.track.titel, bron: v.bron, waarom: v.waarom, bevestigd: v.bevestigd,
-        soort: v.overgang?.naam ?? null, type: v.overgang?.type ?? null, redenen: v.overgang?.redenen ?? [],
+        soort: v.overgang?.naam ?? null, type: v.overgang?.type ?? null,
+        redenen: [...(v.overgang?.redenen ?? []), ...(v.moment?.sectie ? [`uit op ${sectieNaam(v.moment.sectie)} (sectie ${v.moment.sectie.sectie})`] : []),
+          ...(v.inSectie ? [`in op ${sectieNaam(v.inSectie)} (sectie ${v.inSectie.sectie})`] : [])],
         toon: kortNaam(kenmerken(v.track, v.van).k), over, maten, voortgang,
       } : null,
       plan: this.plan ? { naam: this.plan.naam || 'plan', stap: Math.min(this.planIndex + 1, this.plan.stappen?.length ?? 0), totaal: this.plan.stappen?.length ?? 0,
@@ -580,6 +696,36 @@ export class Automaat extends Emitter {
       melding: this.melding,
     };
   }
+}
+
+/**
+ * Een sectieverwijzing uit een planstap (`in` / `uit`, het spoor plan):
+ * { sectie: K (vanaf 1), label?, groep? }, defensief gelezen. Anders null.
+ */
+function sectieRef(x) {
+  if (!x || typeof x !== 'object') return null;
+  const sectie = Number.isInteger(x.sectie) && x.sectie >= 1 ? x.sectie : null;
+  const label = typeof x.label === 'string' ? x.label : null, groep = typeof x.groep === 'string' ? x.groep : null;
+  return sectie || label || groep ? { sectie, label, groep } : null;
+}
+
+/** Wat een sectiekaart voor het moment betekent (op het grid? waar, wat): om "dezelfde kaart opnieuw" te herkennen. */
+function kaartSleutel(k) {
+  const st = sectiesVan(k);
+  return st ? st.map((s) => `${s.van}:${s.label}:${s.groep}`).join('|') : '';
+}
+
+/**
+ * De uitkomst van een belofte, of null als die er na `ms` nog niet is (of
+ * faalt), of zodra `stop()` ja zegt (elke 50 ms gekeken).
+ */
+function binnen(p, ms, stop = null) {
+  let klok = null, kijk = null;
+  const tijd = new Promise((r) => {
+    klok = setTimeout(() => r(null), Math.max(0, ms));
+    if (stop && ms > 0) kijk = setInterval(() => { if (stop()) r(null); }, 50);
+  });
+  return Promise.race([Promise.resolve(p).catch(() => null), tijd]).finally(() => { clearTimeout(klok); clearInterval(kijk); });
 }
 
 export { OVERGANGEN };

@@ -1,5 +1,6 @@
 import { Beatgrid } from '../engine/beatgrid.js';
 import { ToonKaart, camelotGetal, isMineur, kortNaam, transponeer } from '../engine/toonsoort.js';
+import { SectieKaart, LABEL_TEKST } from '../engine/secties.js';
 
 /**
  * De auto-DJ, het rekenwerk: WAT er na deze track komt, HOE de overgang gaat
@@ -82,15 +83,55 @@ export function kenmerken(track, t) {
  * Lang (mix, album): een stuk, bij voorkeur waar de toonsoort of het grid een
  * nieuw stuk begint en zeker is; `van` uit het plan gaat voor.
  *
- * @param rnd  toeval 0..1 (injecteerbaar voor tests)
- * @returns { van, tot }
+ * Met secties (docs/AUTO-DJ.md §3b) is de voorrang: `inSectie` uit het plan
+ * (als die sectie te vinden is en het grid daar zeker is) → `van` uit het
+ * plan → een keuze uit de secties (kort: de intro; lang: een sectiegrens met
+ * ruimte voor een heel fragment, de rustigste soort eerst) → het oude gedrag.
+ *
+ * @param rnd       toeval 0..1 (injecteerbaar voor tests)
+ * @param secties   de stukken van de sectiekaart van dit nummer ([{ van, label, groep, energie, zeker? }]) of null;
+ *                  alleen een kaart op het grid (sectiesVan)
+ * @param inSectie  { sectie: K (vanaf 1), label?, groep? } uit een planstap, of null
+ * @returns { van, tot, sectie? }   sectie = { sectie, label, groep } als het begin een sectie is
  */
-export function fragment(track, { van = null, speelduur = null, rnd = Math.random } = {}) {
+export function fragment(track, { van = null, speelduur = null, rnd = Math.random, secties = null, inSectie = null } = {}) {
   const duur = eindig(track?.duur) ? track.duur : 0;
   const eind = Math.max(0, duur - MARGE_EINDE);
   const vast = eindig(speelduur);                 // het plan zegt hoe lang
   if (!vast) speelduur = SPEELDUUR;
-  if (eindig(van)) return { van: Math.max(0, Math.min(van, eind)), tot: Math.min(eind, Math.max(0, van) + speelduur) };
+  const st = Array.isArray(secties) && secties.length ? secties : null;
+  const zeker = st ? gridZeker(track) : null;
+  const vanaf = (v) => ({ van: Math.max(0, Math.min(v, eind)), tot: Math.min(eind, Math.max(0, v) + speelduur) });
+  // 1. De sectie uit het plan.
+  if (st && inSectie && zeker) {
+    const i = vindSectie(st, inSectie);
+    if (i >= 0 && st[i].van < eind && zeker(st[i].van)) return { ...vanaf(st[i].van), sectie: sectieInfo(st, i) };
+  }
+  // 2. Het beginpunt uit het plan.
+  if (eindig(van)) return vanaf(van);
+  // 3. Een keuze uit de secties.
+  if (st && zeker) {
+    if (duur <= LANG) {
+      const i = st.findIndex((s) => s.label === 'intro');
+      if (i >= 0 && st[i].van < eind && zeker(st[i].van)) {
+        const v = st[i].van;
+        return { van: v, tot: vast ? Math.min(eind, v + speelduur) : eind, sectie: sectieInfo(st, i) };
+      }
+    } else {
+      // Een sectiegrens met ruimte voor een heel fragment; de rustigste soort
+      // (intro, break, opbouw, deel; een drop of outro als laatste), daaruit de
+      // zekerste helft en daaruit een willekeurige.
+      const kand = st.map((s, i) => ({ i, van: s.van, z: s.zeker ?? 0, r: IN_RANG[s.label] ?? IN_RANG.deel }))
+        .filter((c) => c.van > 30 && c.van + speelduur <= eind && zeker(c.van));
+      if (kand.length) {
+        const r = Math.min(...kand.map((c) => c.r));
+        const top = kand.filter((c) => c.r === r).sort((a, b) => b.z - a.z);
+        const half = top.slice(0, Math.max(1, Math.ceil(top.length / 2)));
+        const c = half[Math.floor(rnd() * half.length) % half.length];
+        return { van: c.van, tot: Math.min(eind, c.van + speelduur), sectie: sectieInfo(st, c.i) };
+      }
+    }
+  }
   if (duur <= LANG) return { van: 0, tot: vast ? Math.min(eind, speelduur) : eind };
   // Beginpunten: waar een toon- of gridstuk begint, met ruimte voor een heel fragment.
   const kandidaten = [];
@@ -204,15 +245,78 @@ export function kiesOvergang(uit, inn, { voorkeur = 'auto' } = {}) {
  * van het stuk (Beatgrid.volgendeVeelvoud); past dat niet meer (te laat), dan
  * de eerstvolgende 4-maatsgrens. Ambient: op tijd.
  *
- * @param grid     Beatgrid van de uitgaande (null bij ambient mag)
- * @param positie  waar de uitgaande nu is (tracktijd)
- * @param eind     waar hij klaar moet zijn (tracktijd)
- * @param rate     afspeelsnelheid van de uitgaande (seconden → tracktijd)
- * @param vooruit  minstens zoveel seconden vanaf nu
- * @param lengte   eigen lengte uit het plan: { maten } of { sec } (null = standaard)
- * @returns { start, lengte, maten? }
+ * Met de secties van de uitgaande (docs/AUTO-DJ.md §3b) begint hij bij
+ * voorkeur op een sectiegrens: `uitSectie` uit het plan; anders zelf, binnen
+ * SECTIE_VENSTER vóór het eind: waar de outro begint, dan de laatste break,
+ * dan het oude moment als dat niet midden in een drop valt, dan het laatste
+ * begin van iets anders dan een drop, dan het begin van een drop. Een
+ * sectiebegin telt alleen als het grid daar zeker is (`zeker`) en de soort
+ * overgang daar nog mag (`mag`, de bewakers); de soort en de lengte blijven
+ * wat ze zonder secties waren. Lukt niets: het oude moment.
+ *
+ * @param grid       Beatgrid van de uitgaande (null bij ambient mag)
+ * @param positie    waar de uitgaande nu is (tracktijd)
+ * @param eind       waar hij klaar moet zijn (tracktijd)
+ * @param rate       afspeelsnelheid van de uitgaande (seconden → tracktijd)
+ * @param vooruit    minstens zoveel seconden vanaf nu
+ * @param lengte     eigen lengte uit het plan: { maten } of { sec } (null = standaard)
+ * @param secties    de stukken van de sectiekaart van de UITGAANDE (sectiesVan), of null
+ * @param uitSectie  { sectie: K (vanaf 1), label?, groep? } uit het plan: de overgang begint daar
+ * @param zeker      (t) => is het grid op t zeker (standaard grid.zekerBij; zonder grid: geen secties)
+ * @param mag        (t) => mag de soort overgang nog als hij op t begint (de bewakers), of null
+ * @returns { start, lengte, maten?, tel?, sectie? }   sectie = { sectie, label, groep } als hij op een sectie begint
  */
-export function planMoment({ type, grid = null, positie, eind, rate = 1, vooruit = VOORUIT, lengte: eigen = null }) {
+export function planMoment({ type, grid = null, positie, eind, rate = 1, vooruit = VOORUIT, lengte: eigen = null,
+  secties = null, uitSectie = null, zeker = null, mag = null }) {
+  const oud = opDeFrase({ type, grid, positie, eind, rate, vooruit, lengte: eigen });
+  const st = Array.isArray(secties) && secties.length ? secties : null;
+  const z = zeker ?? (grid ? (t) => grid.zekerBij(t) : null);
+  if (!st || !z) return oud;
+  const vroegst = positie + vooruit * rate;
+  const opTel = type !== 'ambient' && !!grid;
+  const bpb = grid?.beatsPerBar || 4;
+  // Elk sectiebegin als kandidaat: de overgang begint op zijn "1" en moet
+  // tussen vroegst en eind passen.
+  const kand = (i) => {
+    const s = st[i];
+    if (!eindig(s?.van) || !z(s.van)) return null;
+    let k;
+    if (opTel) {
+      const tel = grid.volgendeVeelvoud(grid.beatAt(s.van) - TEL_MARGE, bpb);
+      const start = grid.timeOf(tel);
+      k = { start, lengte: grid.timeOf(tel + oud.maten * bpb) - start, maten: oud.maten, tel };
+    } else {
+      k = { start: s.van, lengte: oud.lengte };
+    }
+    if (k.start < vroegst - 1e-6 || k.start + k.lengte > eind + 1e-6) return null;
+    if (mag && !mag(k.start)) return null;
+    return { ...k, sectie: sectieInfo(st, i) };
+  };
+  // 1. De sectie uit het plan: de overgang begint op haar begin.
+  if (uitSectie) {
+    const i = vindSectie(st, uitSectie);
+    const k = i >= 0 ? kand(i) : null;
+    if (k) return k;
+  }
+  // 2. Zelf kiezen, niet verder dan SECTIE_VENSTER vóór het laatste moment
+  //    dat nog past (anders trekt een vroege break de overgang minuten naar voren).
+  const vanaf = opTel
+    ? grid.timeOf(grid.beatAt(eind) - (oud.maten + SECTIE_VENSTER.maten) * bpb)
+    : eind - oud.lengte - SECTIE_VENSTER.sec * rate;
+  const alle = st.map((_, i) => kand(i)).filter((k) => k && k.start >= vanaf - 1e-6);
+  const soort = (label) => alle.filter((k) => k.sectie.label === label);
+  const outro = soort('outro')[0];
+  if (outro) return outro;
+  const brk = soort('break').at(-1);
+  if (brk) return brk;
+  if (!middenInDrop(st, oud.start)) return oud;
+  const rustig = alle.filter((k) => k.sectie.label !== 'drop').at(-1);
+  if (rustig) return rustig;
+  return soort('drop').at(-1) ?? oud;
+}
+
+/** Het moment zonder secties: op de frasegrens (blend, filter) of op tijd (ambient). */
+function opDeFrase({ type, grid, positie, eind, rate, vooruit, lengte: eigen }) {
   const vroegst = positie + vooruit * rate;
   if (type === 'ambient' || !grid) {
     const sec = overgangSec({ type: 'ambient', lengte: eigen, bpm: grid ? grid.bpmAt(eind) * rate : null });
@@ -250,6 +354,90 @@ export function overgangSec({ type, lengte = null, bpm = null, bpb = 4 }) {
     return OVERGANGEN.ambient.sec;
   }
   return overgangMaten({ type, lengte, bpm, bpb }) * bpb * 60 / bpm;
+}
+
+// ---- secties (docs/SECTIES.md, docs/AUTO-DJ.md §3b) ---------------------------
+
+/**
+ * Hoe ver vóór het laatste moment dat nog past een sectiebegin de overgang
+ * naar voren mag halen, als de planner zelf kiest: 32 maten (beatloos 60 s).
+ * Een plan (uitSectie) mag verder.
+ */
+export const SECTIE_VENSTER = { maten: 32, sec: 60 };
+/** Een sectiebegin ligt op een maatbegin, maar afgerond (4 decimalen): zoveel tellen ervoor telt nog als die maat. */
+const TEL_MARGE = 0.02;
+/** Inmixen in een lange mix: de rustigste soort eerst. */
+const IN_RANG = { intro: 0, break: 1, opbouw: 2, deel: 3, drop: 4, outro: 5 };
+
+/**
+ * De stukken van een sectiekaart (JSON of SectieKaart) als de auto-DJ ze mag
+ * gebruiken: alleen een kaart die op het grid gerekend is (`opGrid`). Anders null.
+ */
+export function sectiesVan(kaart) {
+  const k = kaart ? SectieKaart.van(kaart) : null;
+  return k && k.opGrid ? k.stukken : null;
+}
+
+/**
+ * Een sectie uit een planstap terugvinden: { sectie: K (vanaf 1), label?, groep? }.
+ * Eerst stuk K − 1 als label en groep kloppen (wat ontbreekt klopt altijd),
+ * anders het eerste stuk met dezelfde label en groep (de kaart kan opnieuw
+ * berekend zijn). Geeft de index (vanaf 0), of −1.
+ */
+export function vindSectie(secties, ref) {
+  if (!Array.isArray(secties) || !ref || typeof ref !== 'object') return -1;
+  const label = typeof ref.label === 'string' ? ref.label : null;
+  const groep = typeof ref.groep === 'string' ? ref.groep : null;
+  const klopt = (s) => !!s && (label === null || s.label === label) && (groep === null || s.groep === groep);
+  const K = Number.isInteger(ref.sectie) ? ref.sectie : null;
+  if (K !== null && K >= 1 && klopt(secties[K - 1])) return K - 1;
+  if (label === null && groep === null) return -1;
+  return secties.findIndex(klopt);
+}
+
+/** { sectie (vanaf 1), label, groep } van stuk i: voor de uitleg en het plan. */
+export function sectieInfo(secties, i) {
+  const s = secties[i] || {};
+  return { sectie: i + 1, label: s.label ?? null, groep: s.groep ?? null };
+}
+
+/** "outro F", of "B" voor een gewoon deel (zoals SectieKaart.naam). */
+export function sectieNaam(info) {
+  if (!info) return '';
+  const l = LABEL_TEKST[info.label] ?? info.label ?? '';
+  return l ? `${l} ${info.groep ?? ''}`.trim() : String(info.groep ?? '');
+}
+
+/**
+ * De eerste sectiegrens na `na` tot en met `tot` (tracktijd) waar het grid
+ * zeker is, op zijn "1" als er een grid is: { start, tel?, sectie } of null.
+ * Voor "langer" en "nu".
+ */
+export function sectieGrens({ secties, grid = null, zeker = null, na, tot }) {
+  const st = Array.isArray(secties) && secties.length ? secties : null;
+  const z = zeker ?? (grid ? (t) => grid.zekerBij(t) : null);
+  if (!st || !z) return null;
+  for (let i = 0; i < st.length; i++) {
+    const s = st[i];
+    if (!eindig(s?.van) || !z(s.van)) continue;
+    const tel = grid ? grid.volgendeVeelvoud(grid.beatAt(s.van) - TEL_MARGE, grid.beatsPerBar || 4) : null;
+    const start = grid ? grid.timeOf(tel) : s.van;
+    if (start > na + 1e-3 && start <= tot + 1e-6) return grid ? { start, tel, sectie: sectieInfo(st, i) } : { start, sectie: sectieInfo(st, i) };
+  }
+  return null;
+}
+
+/** Ligt t midden in een drop (niet op zijn begin)? */
+function middenInDrop(secties, t) {
+  let i = 0;
+  for (let k = 0; k < secties.length; k++) if (secties[k].van <= t + 1e-6) i = k;
+  return secties[i]?.label === 'drop' && t > secties[i].van + 1e-6;
+}
+
+/** (t) => is het grid van dit library-nummer op t zeker; null zonder grid. */
+function gridZeker(track) {
+  const g = track?.grid ? Beatgrid.van(track.grid) : null;
+  return g ? (t) => g.zekerBij(t) : null;
 }
 
 // ---- hoe: de curves ------------------------------------------------------------
