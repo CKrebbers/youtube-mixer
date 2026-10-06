@@ -11,8 +11,9 @@ live stems al (djay, Serato, Traktor, rekordbox). Geen ervan laat je secties per
 nummer lanceren zoals clips in Ableton's Session view. Dat is wat Varve hier
 erbij krijgt.
 
-Tak: `studio/secties` (van `studio/integratie`, 6 okt). Vragen: VRAGEN blok SE.
-Proberen: speellijst, blok "Avond 1 · Secties".
+Tak: `studio/secties` (van `studio/integratie`, 6 okt), samengevoegd in `studio/integratie`.
+Vragen: VRAGEN blok SE, en blok SV voor wat ermee verweven is (§7).
+Proberen: speellijst, blok "Avond 1 · Secties" en de blokken van §7.
 
 ## 1. Wat je krijgt
 
@@ -155,8 +156,26 @@ Zie VRAGEN SE1.
 | `src/ui/spiegel.js` | in de modus secties de NAAM van de sectie op de pad ("drop D"), een pad zonder sectie leeg en gedimd |
 | `test/secties.test.mjs`, `test/synth-nummer.mjs` | de metingen hierboven, worker, library, deck, server |
 | `tools/headless/secties.mjs` | in echte Chrome: binnenhalen (nep-yt-dlp), laden, kaart, strook, modus, pads, sprong, loop |
+| `src/control/keyboard.js` | `SHIFT_TOETS`: shift+W/E en shift+I/O = vorige/volgende sectie (§7) |
+| `src/engine/sampler.js`, `src/engine/fx.js` | `knipSectie`, `startOpDeEen`, `fxKlok().tellenTotEen` (§7) |
+| `src/plan/plan-model.js`, `plan-venster.js`, `tijdlijn.js`, `server/plannen.js` | `in`/`uit` per stap, `herstelSecties`, `kent`, banden in de strook (§7, docs/PLAN.md §2b) |
+| `src/control/handelingen.js`, `terugspelen.js`, `src/engine/deck.js` | de kaart in het log, `van` bij een sectiedruk, `drukPlek`, `naarSectieStap` (§7, docs/HANDELINGENLOG.md) |
+| `test/sec-sampler.test.mjs`, `test/secties-log.test.mjs` | sampler en log met secties |
+| `tools/headless/sec-toets.mjs`, `sec-sampler.mjs`, `sec-plan.mjs`, `sec-log.mjs` | elk onderdeel van §7 in echte Chrome |
 
-## 7. Volgende stappen (niet gebouwd)
+## 7. Verweven in de rest van VARVE (6 okt, avond)
+
+Doel (Clay): een bestaand nummer precies spelen zoals hij wil, en snel mixen en
+remixen tussen nummers. Elk onderdeel kwam als eigen tak van `studio/integratie`
+(`studio/sec-*`), met een review, en is één voor één samengevoegd. Plan en
+verantwoording: `TASKS-SECTIES.md` (blok "Verweven"). Vragen: VRAGEN blok SV.
+
+- Toetsenbord (studio/sec-toets): shift+W/E = vorige/volgende sectie van de focus-track, shift+I/O die van de rechterhand, op de maat (`SHIFT_TOETS` in keyboard.js; helpkaart `/`). Daarbij gerepareerd: een sectiebegin dat de server afrondde (0,1 ms) en net ná zijn "1" lag, viel een maat te laat in (`sectieEen`, marge nu 0,01 tel), en volgende/vorige rekenden in de laatste maat vóór zo'n grens met de verkeerde sectie (`SectieKaart.index`, marge nu 1 ms). Aan het eind van de kaart geven vorige/volgende een melding.
+- Sampler (studio/sec-sampler): rij 3 van de modus sampler knipt de sectie die je hoort op de focus-track heel in een pad (`sampler.N.section`): van haar "1" tot de "1" van de volgende, in hele maten (`knipSectie`), hooguit 32 maten en 90 s, bewaard bij het nummer zoals een gewone pad. Zo'n pad start op de "1" van de maatgever (`fxKlok().tellenTotEen`, `startOpDeEen`) en houdt bij herankeren ook de maat vast.
+- Planvenster (studio/sec-plan): een stap kan op een sectie beginnen (`in`) en zijn overgang op een sectie laten beginnen (`uit`), `{ sectie, label, groep }` naast `van` (de waarheid en de terugval). De strook toont de secties als banden in de groepskleur; het venster haalt de kaart zonder `maak=1`. Wat de auto-DJ ermee doet hangt aan de planner (`fragment`/`planMoment` krijgen `secties`, `inSectie`, `uitSectie`). docs/PLAN.md §2b.
+- Handelingenlog (studio/sec-log, docs/HANDELINGENLOG.md): de sectiekaart staat in de beginstand en als gebeurtenis `secties`; terugspelen haalt hem niet van de server, dus `section.5` landt ook na een herberekening waar hij toen landde. Een sectiedruk draagt in het log de plek waarvan hij rekende (`van`): een druk vlak na de "1" valt teruggespeeld niet een maat later. Een sectie-loop staat als gewone `loop` in de stand (niet apart als `section.K.loop`: de loop van het deck is al de waarheid). Een druk die tijdens een loop rond de terugsprong viel, wordt teruggespeeld herkend als een loop verder.
+
+## 8. Volgende stappen (niet gebouwd)
 
 1. Clay's oordeel op echte muziek (SE2), dan de drempels bijstellen.
 2. Groepskleuren op de pads (SE4).
