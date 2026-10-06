@@ -319,7 +319,8 @@ function rij(r, i) {
     const x = r.secties?.[k - 1];
     if (!x) { render(); return; }
     const keuze = { sectie: k, label: x.label ?? null, groep: x.groep ?? null };
-    if (veld === 'uit') { zet({ uit: keuze }); return; }
+    // Uit krijgt ook de tijd van de sectie nu: zo vindt de planner na een herberekening de goede (vindSectie).
+    if (veld === 'uit') { zet({ uit: { ...keuze, van: x.van } }); return; }
     const velden = { in: keuze, van: x.van };
     if (s.uit && s.uit.sectie <= k) {
       velden.uit = null;

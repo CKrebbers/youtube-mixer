@@ -766,13 +766,16 @@ export class Automaat extends Emitter {
 
 /**
  * Een sectieverwijzing uit een planstap (`in` / `uit`, het spoor plan):
- * { sectie: K (vanaf 1), label?, groep? }, defensief gelezen. Anders null.
+ * { sectie: K (vanaf 1), label?, groep?, van? }, defensief gelezen. Anders null.
+ * `van` = waar die sectie begon bij het plannen: vindSectie kiest daarmee de
+ * goede als een label na een herberekening vaker voorkomt.
  */
 function sectieRef(x) {
   if (!x || typeof x !== 'object') return null;
   const sectie = Number.isInteger(x.sectie) && x.sectie >= 1 ? x.sectie : null;
   const label = typeof x.label === 'string' ? x.label : null, groep = typeof x.groep === 'string' ? x.groep : null;
-  return sectie || label || groep ? { sectie, label, groep } : null;
+  const van = eindig(x.van) && x.van >= 0 ? { van: x.van } : {};
+  return sectie || label || groep ? { sectie, label, groep, ...van } : null;
 }
 
 /** Wat een sectiekaart voor het moment betekent (op het grid? waar, wat): om "dezelfde kaart opnieuw" te herkennen. */
