@@ -161,6 +161,14 @@ const auto = new Automaat({
   },
   haalPlan: () => planKoppeling.haal(),
   welkNummer: (deckId) => staat.deckTrack[deckId] ?? null,
+  // De sectiekaart (docs/SECTIES.md §4, AUTO-DJ.md §3b): de automaat wacht er
+  // bij het klaarzetten op (laden.js haalt hem ook, maar pas na het laden en
+  // zonder te wachten). Twee vragen tegelijk rekent de server maar één keer.
+  haalSecties: async (trackId) => {
+    const r = await fetch(`/api/library/${trackId}/secties?maak=1`);
+    if (!r.ok) return null;
+    return (await r.json()).secties ?? null;
+  },
 });
 auto.on('melding', ({ tekst, soort }) => meld(`auto-dj: ${tekst}`, soort === 'fout' ? 'fout' : 'info'));
 bindAuto(auto);

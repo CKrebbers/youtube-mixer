@@ -188,7 +188,7 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
                     hub.mjs en speelapparaten.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
@@ -260,6 +260,9 @@ test/
   maschine.test.mjs de Maschine (pads, groepen, draaiknoppen, wiel, lampjes, schermtempo), maschine-scherm (pixels), Xboard knop 9–16 en schuif, isSpeelapparaat
   patronen.test.mjs model, venster (swing, micro, omlopen), klok, speler met nep-maatgever (op de maat, herankeren zonder dubbele/gemiste), opnemen, opslag (409), server
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
+  secties.test.mjs  secties: synthetische nummers met een bekend antwoord, worker, library, deck, actions, server, marges op de "1"
+  sec-sampler.test.mjs  een sectie in een sampler-pad: knipSectie, start op de "1", herankeren (ook keylock), grenzen, meldingen
+  secties-log.test.mjs  secties in het handelingenlog: kaart in de stand, `van` bij een druk, volgorde, precies terugspelen
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -1534,7 +1537,7 @@ Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag mis
   HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een
   beginstand).
 
-## Secties (gebouwd 6 okt, tak `studio/secties`)
+## Secties (gebouwd 6 okt, tak `studio/secties`; verweven 6 okt avond, `studio/sec-*`)
 
 Volledig in `docs/SECTIES.md`, vragen in VRAGEN blok SE. Wat een bouwer niet mag missen:
 - Een SECTIEKAART zoals de toonsoortkaart: `{ versie, opGrid, grid, stukken: [{ van, label, groep,
@@ -1554,6 +1557,24 @@ Volledig in `docs/SECTIES.md`, vragen in VRAGEN blok SE. Wat een bouwer niet mag
 - Labels zijn een gok uit energie en drums (intro · opbouw · drop · break · outro · `deel`); gemeten
   op synthetisch materiaal (`test/synth-nummer.mjs`), nog niet op Clay's library (SE2). Een beter
   algoritme = `SECTIE_VERSIE` omhoog; dan rekent alles vanzelf opnieuw.
+- VERWEVEN (docs/SECTIES.md §7, TASKS-SECTIES.md, VRAGEN blok SV). Wat je niet mag breken:
+  - Marges: `sectieEen` 0,01 tel en `SectieKaart.index` 1 ms. De server rondt sectiebegins af op 0,1 ms;
+    zonder marge viel een begin net ná zijn "1" een maat te laat in. Niet weghalen.
+  - Toetsenbord: `SHIFT_TOETS` in keyboard.js (shift+W/E de focus-track, shift+I/O de rechterhand),
+    `toetsActie(code, shift)`. Aan het eind van de kaart een melding uit de action zelf (`naarSectieStap`
+    geeft `waarom`), niet uit `waaromNiet`.
+  - Sampler: `knipSectie` (hele maten van "1" tot "1", stopt vóór een maat die niet vol is; hooguit
+    `SECTIE_MAX_MATEN` 32 en `SECTIE_MAX_SEC` 90). Een pad van meer dan 8 tellen IS een sectie en start op
+    de "1" van de maatgever (`startOpDeEen`, `fxKlok().tellenTotEen`). Action `sampler.N.section`, rij 3.
+  - Plan: een stap mag `in`/`uit` = `{ sectie: K (vanaf 1), label, groep }` hebben; `van` blijft de
+    waarheid en de terugval. Een PUT zonder `kent` zet in/uit per stap terug (`herstelSecties`); Claude
+    stuurt `kent` ALTIJD mee (docs/PLAN.md §2b).
+  - Log: de kaart staat in de beginstand en als gebeurtenis `secties`; terugspelen haalt hem NIET van de
+    server. Een sectiedruk draagt `{ van }` (de plek waarvan hij rekende, 4e element van de logregel,
+    `invoke(id, v, { laat, van })`). `section.K.loop` staat niet apart in de stand: de loop van het deck
+    is de waarheid.
+  - Headless: elke `tools/headless/sec-*.mjs` zet VARVE_PATRONEN en VARVE_PLANNEN op zijn tmp-map. Anders
+    leest de proefserver `patronen/` van de worktree, en in `sintegratie` is dat de map van de echte mixer.
 
 ## Werkwijze die hier werkt
 
