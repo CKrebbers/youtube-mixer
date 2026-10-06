@@ -34,8 +34,11 @@ console.log('de speellijst');
   ok(`de ${EERDER.length} punten van vóór 6 okt bestaan nog${weg.length ? ` (weg: ${weg.join(', ')})` : ''}`, !weg.length);
   // Een vraagcode tussen haakjes in een let-tekst ("(S21)", "(I4, O2)", "(VRAGEN AU2)", "(SVT1)") bestaat in docs/VRAGEN.md.
   const vragen = readFileSync(new URL('../docs/VRAGEN.md', import.meta.url), 'utf8');
-  const codes = [...new Set(punten.flatMap((p) => [...p.let.matchAll(/\((?:VRAGEN )?([A-Z]{1,3}\d{1,2}(?:, [A-Z]{1,3}\d{1,2})*)\)/g)]
-    .flatMap((m) => m[1].split(', '))))];
+  const vraagcodes = (tekst) => [...tekst.matchAll(/\((?:VRAGEN )?([A-Z]{1,3}\d{1,2}(?:, [A-Z]{1,3}\d{1,2})*)\)/g)]
+    .flatMap((m) => m[1].split(', '));
+  // Ook codes van drie letters (de sporen van de secties: SVC1, …): anders liep een onbekende code er stil doorheen.
+  ok('vraagcodes: ook drie letters, en een lijst', JSON.stringify(vraagcodes('Klopt het? (SVC1) En (S21, SVC2)')) === '["SVC1","S21","SVC2"]');
+  const codes = [...new Set(punten.flatMap((p) => vraagcodes(p.let)))];
   const onbekend = codes.filter((c) => !new RegExp(`\\*\\*${c}[. ]`).test(vragen));
   ok(`elke vraagcode in de speellijst staat in docs/VRAGEN.md (${codes.length} codes${onbekend.length ? `; onbekend: ${onbekend.join(', ')}` : ''})`,
     codes.length > 0 && !onbekend.length);
