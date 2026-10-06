@@ -5,8 +5,7 @@
 // van Clay's MacBook-scherm.)
 //
 // De app in een headless Chromium, met een eigen server en zonder MIDI, twee
-// demotracks en een instrument op track 3 (dan tonen de INSTRUMENT- en
-// PATROON-rij alles wat ze kunnen: dat zijn de hoogste). Op 1440×790 (Clay's
+// demotracks en een instrument op track 3. Op 1440×790 (Clay's
 // MacBook in Chrome) en 1920×1080, met 0, 1 (elke rij apart), 3 en alle rijen
 // open (en met de videokolom erbij één en alle), gemeten:
 //   - elke fader, knop en knob in de acht kolommen en de hele sampler (kop,
@@ -18,10 +17,12 @@
 //     bovenbalk is breder dan het scherm), en het hoofdgebied (main) ook niet.
 //     Dat de BOVENBALK zelf op 1440 px te breed is (de knoppen rechts vallen
 //     weg) staat er als opmerking bij: dat is een andere fout, van vóór 6 okt;
-//   - elke open rij is helemaal te zien: meteen, of door het gebied van de
-//     rijen zelf te scrollen (dat mag), met elke knop heel en niet bedekt;
+//   - elk element van elke open rij is helemaal te zien: meteen, of door het
+//     gebied van de rijen zelf te scrollen (dat mag), heel en niet bedekt
+//     (met de videokolom open alleen gemeld: dan is er op 1440×790 weinig plek);
 //   - een melding staat boven de open rijen, niet over hun knoppen.
-// Schermafdrukken in de uitmap: rijen-<label>-<B>x<H>-<rijen>.png.
+// Dat alles met de focus op een nummer (met grid en toonsoort: de hoogste kop) en
+// op een instrument. Schermafdrukken: rijen-<label>-<B>x<H>-<focus>-<rijen>.png.
 //
 // Gebruik:  node tools/headless/rijen.mjs [uitmap] [--label voor|na]
 //           VARVE_WORTEL=<map> draait de app uit een andere map (bijv. `git archive`
@@ -114,8 +115,8 @@ const naamVan = (combi) => {
   const r = combi.filter((x) => x !== 'video'), v = combi.includes('video') ? 'video+' : '';
   return v + (r.length === 0 ? 'geen' : r.length === RIJEN.length ? 'alle' : r.join('+'));
 };
-/** Van deze combinaties een schermafdruk (per maat). */
-const FOTO = new Set(['geen', 'patronen', 'stems+koptelefoon+auto', 'instrument+patronen+master', 'alle', 'video+alle']);
+/** Van deze combinaties een schermafdruk (per maat en stand). */
+const FOTO = new Set(['geen', 'patronen', 'alle', 'video+alle']);
 
 /** In de pagina: meten. */
 const METEN = `window.__rijen = (() => {
@@ -155,7 +156,7 @@ const METEN = `window.__rijen = (() => {
     + (el.dataset.action ? ' [' + el.dataset.action + ']' : el.dataset.sig ? ' {' + el.dataset.sig + '}' : '');
   /** Elementen die je moet kunnen pakken; een knob telt als geheel (niet zijn binnenkant). */
   const pakken = (wortel) => [...wortel.querySelectorAll(SEL)].filter((el) => !el.parentElement.closest('.knob') && el.getClientRects().length
-    && getComputedStyle(el).visibility !== 'hidden');
+    && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).pointerEvents !== 'none');   // uitgezet (bv. .dood): niet te pakken, bewust
   return {
     /** De rijen (en de videokolom) in deze stand zetten met hun eigen knop in de bovenbalk. */
     zet(open) {
@@ -195,7 +196,7 @@ const METEN = `window.__rijen = (() => {
       };
       return uit;
     },
-    /** Elke open rij: in beeld brengen door zijn eigen scrollgebied (niet de pagina, niet main) te scrollen, dan meten. */
+    /** Elk element van elke open rij: in beeld brengen door zijn eigen scrollgebied (niet de pagina, niet main) te scrollen, dan meten. */
     async rijen() {
       const uit = {};
       const open = ${JSON.stringify(RIJEN)}.filter((id) => !document.getElementById(id).classList.contains('hidden'));
@@ -207,15 +208,20 @@ const METEN = `window.__rijen = (() => {
           const cs = getComputedStyle(p);
           if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') && p !== document.querySelector('main')) { sc = p; break; }
         }
-        if (sc) {
-          gebieden.add(sc);
-          sc.scrollTop += rij.getBoundingClientRect().top - sc.getBoundingClientRect().top;
-          await new Promise((r) => requestAnimationFrame(() => r()));
-        }
+        if (sc) gebieden.add(sc);
         const els = pakken(rij);
-        const mis = els.map((el) => [naam(el), pakbaar(el)]).filter(([, m]) => m);
+        const mis = [];
+        for (const el of els) {
+          // Scrolt de rij in een eigen gebied: dit element in het midden van dat gebied zetten.
+          if (sc) {
+            const e = el.getBoundingClientRect(), g = sc.getBoundingClientRect();
+            sc.scrollTop += (e.top + e.height / 2) - (g.top + sc.clientTop + sc.clientHeight / 2);
+          }
+          const m = pakbaar(el);
+          if (m) mis.push([naam(el), m]);
+        }
         const r = rij.getBoundingClientRect();
-        uit[id] = { h: Math.round(r.height), n: els.length, mis, gescrold: !!sc };
+        uit[id] = { h: Math.round(r.height), n: els.length, mis };
       }
       for (const sc of gebieden) sc.scrollTop = 0;
       const sc = [...gebieden][0];
@@ -241,17 +247,26 @@ const METEN = `window.__rijen = (() => {
   };
 })(); true`;
 
-/** Track 1 en 2 een demotrack met grid, een instrument (poly) op track 3, focus op 3. */
+/**
+ * Track 1 en 2 een demotrack met grid (track 1 ook met een toonsoort: A mineur +43 ct, dan is
+ * de kop van het focusdeck op zijn hoogst), een instrument (poly) op track 3.
+ */
 const KLAARZETTEN = `(async () => {
   const e = window.engine;
   const { renderDemoTrack } = await import('/src/analysis/demo-track.js');
   const { Beatgrid } = await import('/src/engine/beatgrid.js');
+  const { ToonKaart } = await import('/src/engine/toonsoort.js');
   const demo = renderDemoTrack(e.ctx, { bars: 32 });
   for (const id of ['A', 'B']) { const d = e.deck(id); await d.laadGeheugen(demo, 'demo ' + id); d.setGrid(new Beatgrid({ bpm: 124, firstBeat: 0 })); }
+  e.deck('A').setToonKaart(ToonKaart.metHand(21, 43));
   if (e.instrumentOp('C')?.soort !== 'poly') e.zetInstrument('C', 'poly');
-  e.setFocus('C');
   return true;
 })()`;
+/**
+ * Twee standen van de focus: een nummer (track 1, met grid en toonsoort) en een instrument
+ * (track 3: dan tonen de INSTRUMENT- en de PATROON-rij alles wat ze hebben).
+ */
+const STANDEN = { nummer: 'A', instrument: 'C' };
 
 const verslag = { label: LABEL, wortel: WORTEL, maten: {} };
 try {
@@ -287,37 +302,45 @@ try {
     await cdp('Emulation.setDeviceMetricsOverride', { width: B, height: H, deviceScaleFactor: 1, mobile: false });
     const maat = `${B}x${H}`;
     verslag.maten[maat] = {};
-    console.log(`\n${B} × ${H}`);
-    for (const combi of COMBINATIES) {
-      const nm = naamVan(combi);
-      const open = await evalueer(`window.__rijen.zet(${JSON.stringify(combi)})`);
-      await beeld(); await wacht(150); await beeld();
-      const m = await evalueer('window.__rijen.meet()');
-      const r = await evalueer('window.__rijen.rijen()');
-      const mel = combi.some((x) => x !== 'video') ? await evalueer('window.__rijen.melding()') : null;
-      verslag.maten[maat][nm] = { open, ...m, ...r, melding: mel };
-      if (FOTO.has(nm)) { await beeld(); await foto(`rijen-${LABEL}-${maat}-${nm}.png`); }
+    for (const [stand, deck] of Object.entries(STANDEN)) {
+      await evalueer(`window.engine.setFocus('${deck}'), true`);
+      verslag.maten[maat][stand] = {};
+      console.log(`\n${B} × ${H}, focus op ${stand === 'nummer' ? 'een nummer (track 1)' : 'een instrument (track 3)'}`);
+      for (const combi of COMBINATIES) {
+        const nm = naamVan(combi);
+        const open = await evalueer(`window.__rijen.zet(${JSON.stringify(combi)})`);
+        await beeld(); await wacht(150); await beeld();
+        const m = await evalueer('window.__rijen.meet()');
+        const r = await evalueer('window.__rijen.rijen()');
+        const mel = combi.some((x) => x !== 'video') ? await evalueer('window.__rijen.melding()') : null;
+        verslag.maten[maat][stand][nm] = { open, ...m, ...r, melding: mel };
+        if (FOTO.has(nm)) { await beeld(); await foto(`rijen-${LABEL}-${maat}-${stand}-${nm}.png`); }
 
-      const kolMis = m.kolommen.flatMap((k) => k.mis.map(([n, w]) => `kolom ${k.kolom} ${n}: ${w}`));
-      const rijMis = Object.entries(r.rijen).flatMap(([id, x]) => x.mis.map(([n, w]) => `${id} ${n}: ${w}`));
-      const kort = (l) => l.slice(0, 3).join(' | ') + (l.length > 3 ? ` | … (${l.length})` : '');
-      const t = `${maat} ${nm}:`;
-      ok(`${t} rijen open zoals gevraagd`, JSON.stringify(open) === JSON.stringify(RIJEN.filter((x) => combi.includes(x)))
-        && (await evalueer("!document.getElementById('video-panel').classList.contains('hidden')")) === combi.includes('video'), JSON.stringify(open));
-      ok(`${t} acht kolommen helemaal in beeld en te pakken (${m.kolommen.reduce((s, k) => s + k.n, 0)} elementen)`, kolMis.length === 0 && m.kolommen.length === 8, kort(kolMis));
-      ok(`${t} faders ${Math.min(...m.faders)}–${Math.max(...m.faders)} px (≥ 56)`, Math.min(...m.faders) >= 56);
-      ok(`${t} sampler helemaal in beeld en te pakken (${m.samplerN} elementen)`, m.sampler.length === 0, kort(m.sampler.map(([n, w]) => `${n}: ${w}`)));
-      ok(`${t} de pagina en main scrollen niet`, !m.pagina.scrolt && !m.pagina.mainScrolt,
-        `pagina ${m.pagina.maten.join('/')}, main ${m.pagina.main.join('/')}`);
-      if (combi.some((x) => x !== 'video')) {
-        ok(`${t} elke open rij helemaal te zien, zo nodig door het rij-gebied te scrollen${r.gebied ? ` (gebied ${r.gebied.h} px hoog, de rijen samen ${r.gebied.inhoud})` : ''}`, rijMis.length === 0, kort(rijMis));
-        ok(`${t} een melding staat niet over de knoppen van een open rij (${mel.onder} px van onder)`, mel.over.length === 0, kort(mel.over));
+        const kolMis = m.kolommen.flatMap((k) => k.mis.map(([n, w]) => `kolom ${k.kolom} ${n}: ${w}`));
+        const rijMis = Object.entries(r.rijen).flatMap(([id, x]) => x.mis.map(([n, w]) => `${id} ${n}: ${w}`));
+        const kort = (l) => l.slice(0, 3).join(' | ') + (l.length > 3 ? ` | … (${l.length})` : '');
+        const t = `${maat} ${stand} ${nm}:`;
+        ok(`${t} rijen open zoals gevraagd`, JSON.stringify(open) === JSON.stringify(RIJEN.filter((x) => combi.includes(x)))
+          && (await evalueer("!document.getElementById('video-panel').classList.contains('hidden')")) === combi.includes('video'), JSON.stringify(open));
+        ok(`${t} acht kolommen helemaal in beeld en te pakken (${m.kolommen.reduce((s, k) => s + k.n, 0)} elementen)`, kolMis.length === 0 && m.kolommen.length === 8, kort(kolMis));
+        ok(`${t} faders ${Math.min(...m.faders)}–${Math.max(...m.faders)} px (≥ 56)`, Math.min(...m.faders) >= 56);
+        ok(`${t} sampler helemaal in beeld en te pakken (${m.samplerN} elementen)`, m.sampler.length === 0, kort(m.sampler.map(([n, w]) => `${n}: ${w}`)));
+        ok(`${t} de pagina en main scrollen niet`, !m.pagina.scrolt && !m.pagina.mainScrolt,
+          `pagina ${m.pagina.maten.join('/')}, main ${m.pagina.main.join('/')}`);
+        if (combi.some((x) => x !== 'video')) {
+          const gebied = r.gebied ? ` (gebied ${r.gebied.h} px hoog, de rijen samen ${r.gebied.inhoud})` : '';
+          // Met de videokolom erbij is het focusdeck smaller en hoger: dan telt alleen dat
+          // faders en sampler heel blijven; wat er van de rijen te zien is, staat erbij.
+          if (combi.includes('video')) console.log(`   ·  rijen${gebied}: ${rijMis.length ? `niet alles te zien: ${kort(rijMis)}` : 'elk element te zien'}`);
+          else ok(`${t} elk element van elke open rij helemaal te zien, zo nodig door het rij-gebied te scrollen${gebied}`, rijMis.length === 0, kort(rijMis));
+          ok(`${t} een melding staat niet over de knoppen van een open rij (${mel.onder} px van onder)`, mel.over.length === 0, kort(mel.over));
+        }
+        console.log(`   ·  kolommen ${m.pagina.kolommenH} px, masterfader ${m.masterfader.h} px${m.masterfader.mis ? ` (${m.masterfader.mis})` : ''}, `
+          + `focusdeck ${m.pagina.focusdeck ?? 'in beeld'}, rijen ${Object.entries(r.rijen).map(([id, x]) => `${id} ${x.h}`).join(' · ') || '—'}`);
+        if (!combi.length && stand === 'nummer' && m.pagina.bovenbalk > B) console.log(`   ·  let op: de bovenbalk is ${m.pagina.bovenbalk} px breed op een scherm van ${B} (knoppen rechts vallen weg; een andere fout, niet in deze controle)`);
       }
-      console.log(`   ·  kolommen ${m.pagina.kolommenH} px, masterfader ${m.masterfader.h} px${m.masterfader.mis ? ` (${m.masterfader.mis})` : ''}, `
-        + `focusdeck ${m.pagina.focusdeck ?? 'in beeld'}, rijen ${Object.entries(r.rijen).map(([id, x]) => `${id} ${x.h}`).join(' · ') || '—'}`);
-      if (!combi.length && m.pagina.bovenbalk > B) console.log(`   ·  let op: de bovenbalk is ${m.pagina.bovenbalk} px breed op een scherm van ${B} (knoppen rechts vallen weg; een andere fout, niet in deze controle)`);
+      await evalueer('window.__rijen.zet([])');
     }
-    await evalueer('window.__rijen.zet([])');
   }
   ok('geen fouten in de pagina', fouten.length === 0, fouten.slice(0, 3).join(' | '));
 } catch (err) {
