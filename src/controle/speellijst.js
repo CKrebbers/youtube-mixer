@@ -256,6 +256,19 @@ export const SPEELLIJST = [
       let: 'Spelen de pads weer het instrument, en is STEP de stapmodus zoals eerst?' },
   ] },
 
+  { id: 'sec-vorm', titel: 'Avond 2 · Secties in beeld', minuten: 10, punten: [
+    { id: 'sv-nieuw', doe: 'Open de mixer met ?vormen=1 (blijft onthouden), laad Loving arms op track 1 en open het videopaneel (V). VORM-rij: laag 1 aan, REAGEER open (APC: mapje vorm, device knob 8), in de keuzelijst ernaast "nieuwe sectie". Laat het nummer over een grens spelen (zie de strook boven de golfvorm).',
+      let: 'Slaat de vorm aan precies als de nieuwe sectie invalt, niet een tel te vroeg of te laat? Gloeit hij lang genoeg na, of te lang? (SVV2)' },
+    { id: 'sv-energie', doe: 'Zelfde, maar kies in de keuzelijst "sectie". Speel een drop en een break, en mix daarna over naar een ander nummer.',
+      let: 'Is de vorm voller in de drop en rustiger in de break? Gaat het in één keer op de grens, en glijdt het rustig als het andere nummer de maat overneemt? (SVV3)' },
+    { id: 'sv-sprong', doe: 'APC: Shift + scene 1 (modus secties), druk midden in een maat op een andere sectie.',
+      let: 'Slaat de vorm aan op de "1" waar de sectie invalt, en niet al bij het indrukken?' },
+    { id: 'sv-puls', doe: 'Videopaneel: PULS zacht (APC: grid-modus video, shift + Cue Level), de knop naast PULS op "flits". Laat een nummer over een paar grenzen spelen; zet het doel daarna op "pixel".',
+      let: 'Op elke tel een zachte flits en op een nieuwe sectie een volle? Is een vol effect (pixel) op elke grens bij een lage PULS te veel? Of liever een andere mengvorm op de grens? (SVV1, SVV4)' },
+    { id: 'sv-maatgever', doe: 'Twee nummers op track 1 en 2: mix over met de crossfader, daarna de fader van de track met MAAT dicht.',
+      let: 'Volgen vorm en flits de MAAT-badge (de grenzen van het nummer dat je hoort, niet van het andere)? Met de fader dicht geen flits meer?' },
+  ] },
+
   // ---- Eerder werk (vóór 6 okt): als er tijd over is ------------------------------
   { id: 'draaien', titel: 'Eerder werk · Draaien op de APC', minuten: 15, punten: [
     { id: 'dr-laden', doe: 'Laad twee nummers op track 1 en 2 (library: B).', let: 'Grid en toonsoort staan erbij, geen foutmelding.' },

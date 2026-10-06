@@ -188,7 +188,7 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
                     hub.mjs, speelapparaten.mjs en sec-maschine.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
@@ -672,6 +672,9 @@ docs/
   Effecten op de tel (`video.pulse`, `video.pulse.target`): de maat komt van de
   maatgever van de engine (zie Sync), alleen als je hem hoort, op het moment dat
   je hem HOORT. De puls komt bovenop de knopstand en dooft binnen een halve tel.
+  Een nieuwe sectie van de maatgever is een ACCENT op de puls (6 okt, `metPuls(…, accent)`,
+  `VideoMixer._accentNu` met een `SectieLezer`): vol, wat de diepte ook is, alleen met de puls aan. Geen
+  nieuw PULS_DOEL: de doelen lopen rond in het handelingenlog.
   Meet je dit, meet dan NIET precies op de tel: door afronding val je dan op
   het einde van de vorige tel en zie je niets.
   Testen zonder zichtbaar venster: geef de mixer een canvas als nep-video,
@@ -1182,7 +1185,10 @@ docs/
     VÓÓR de klap op tot 1 op de klap (ze zijn vooraf bekend), τ 0,1 s in KLOKtijd.
     Geen sprong: de uitvoer zakt nooit sneller dan de puls uitdooft; neemt een
     track die al speelde de maat over, dan telt alleen wat sinds het vorige beeld
-    komt, tot hij terugspringt tot ervóór (loop rond, hotcue). Alleen de lezer die
+    komt, tot hij terugspringt tot ervóór (loop rond, hotcue). Sinds 6 okt ook `sectie.energie`
+    en `sectie.nieuw` (achteraan in BRONNEN, uit `SectieLezer`: geen objecten per beeld, stil na
+    een sprong tot je hem hoort, een grens uit een gat > 1 s telt niet; NIEUW_TAU 0,2 s,
+    ENERGIE_TAU 0,25 s). Alleen de lezer die
     een open route nodig heeft wordt gelezen (`router.nodig()`). Nog niet:
     `metPuls` zelf als route.
 

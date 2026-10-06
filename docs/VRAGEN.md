@@ -414,7 +414,7 @@ APC-indeling (voorstel A):
 
 ## SV. Secties verweven (6 okt, avond; docs/SECTIES.md §7)
 
-De secties zitten nu ook in het toetsenbord, de sampler, het planvenster, het handelingenlog, de auto-DJ, de Controlekamer en de Maschine.
+De secties zitten nu ook in het toetsenbord, de sampler, het planvenster, het handelingenlog, de auto-DJ, de vormen en de video-puls, de Controlekamer en de Maschine.
 Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 
 **Toetsenbord** (speellijst "Secties op het toetsenbord")
@@ -459,6 +459,13 @@ Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 - [ ] **SVM3. SHIFT + pad = die sectie als loop, zoals op de APC?** 💬 Niet gebouwd (niet gevraagd). De action `track.N.section.K.loop` bestaat al op de bus. **Advies:** ja, als je het op de APC gebruikt; het is een kleine stap.
 - [ ] **SVM4. Meer dan 16 secties: bladeren met ◄ ► (transport)?** 🎛 Bij een andere focus-track begint hij op de bladzijde met de sectie die je hoort; daarna loopt de bladzijde niet mee, dus de pads verspringen nooit onder je vingers. De kop noemt altijd wat je hoort, ook boven de 40. **Advies:** zo laten.
 - [ ] **SVM5. Het linkerscherm: de namen in een raster zoals de pads liggen, de sectie die je hoort omgekeerd, de kop groot?** 👀 Letters 5×7 in kolommen van 64 px; een naam is hooguit 8 tekens ("opbouw B"). **Advies:** op het echte toestel kijken; is het te klein, dan minder tekst en grotere letters.
+
+
+**In beeld** (speellijst "Secties in beeld")
+- [ ] **SVV1. De video-puls slaat op een nieuwe sectie vol, ook als je de puls zacht hebt staan: goed zo?** 👀 Het accent komt op de puls die er al is: het gekozen doel gaat op elke nieuwe sectie VOL, wat de diepte ook is; alleen met de puls aan (PULS op 0 = ook geen accent). Bij doel flits is dat een witte flits op de grens. Bij pixel, spiegel en korrel is het bij elke grens het volle effect, ook met PULS op 0,01, en de hub-macro `macro.beweging` (K4 = PULS) geeft op een lage stand al volle flitsen of effecten op elke grens. Geen nieuw puls-doel en geen nieuwe knop (de doelen lopen rond in het handelingenlog). Alternatieven: (a) zo laten; (b) vol alleen bij flits, bij de effecten met de diepte mee (bv. 3 × de diepte); (c) een schakelaar "puls op: tel · sectie · beide" (één knop, als stand in het log). **Advies:** (b). Probeer eerst doel flits met de puls laag, en zeg wat je bij pixel ziet.
+- [ ] **SVV2. Hoe lang gloeit een nieuwe sectie na?** 👀 Als een klap, maar twee keer zo lang: vol op de grens, na 0,3 s nog 22 %, na ~1,8 s weg (`NIEUW_TAU` 0,2 s). Dezelfde vorm voor de vormlaag (bron "nieuwe sectie") en de video-puls. Niet op de beamer bekeken. **Advies:** zo laten, tenzij de flits te kort is om op de beamer te zien; dan 0,3–0,5 s (één getal).
+- [ ] **SVV3. Sectie-energie als bron: springen op de grens, glijden bij een wissel?** 👀 De vorm krijgt de energie van de sectie die je hoort (0..1 binnen het nummer, van de server). Op een grens, een sectiesprong of een loop springt hij mee. Neemt een andere track de maat over, valt de maatgever weg of komt de kaart later binnen, dan glijdt hij in ~0,75 s naar de nieuwe waarde. **Advies:** zo proberen. Kloppen de stappen niet met wat je hoort, dan ligt het waarschijnlijk aan de energie per sectie (SE2).
+- [ ] **SVV4. Op een nieuwe sectie ook de mengvorm wisselen?** 💬 Niet gebouwd: het verandert een stand die in het log staat (`video.mode`), en elke grens zou de mengvorm één plek doorschuiven. **Advies:** eerst de flits; wil je het, dan als eigen schakelaar.
 
 ---
 
