@@ -701,10 +701,12 @@ console.log('de secties als bron: sectie.energie en sectie.nieuw van de maatgeve
   }
 
   // Een sectie-loop (shift + pad) die rondgaat: zijn begin hoor je opnieuw, dus dat is weer een nieuwe sectie.
+  // (Review sec-hub, 7 okt: een sectie is minstens een maat. Hier 240 bpm, een maat 1 s, de drop 2–3,5 = 1,5
+  // maat; eerder ging de "loop" al na 0,9 s rond, korter dan een maat van 120 bpm: dat is nu een stutter.)
   {
-    const d = deck({ secties: ST });
+    const d = deck({ secties: ST, bpm: 240 });
     const l = lezer([{ id: 'A', deck: d, zicht: 1 }], 0);
-    for (let i = 0; i <= 2.9 * 120; i++) { klok.c = i / 120; l.lees(klok.c); }
+    for (let i = 0; i <= 3.45 * 120; i++) { klok.c = i / 120; l.lees(klok.c); }
     const voor = { ...l.lees(klok.c) };
     klok.c += 1 / 120; d.P0 = 2.0; d.c0 = klok.c - 0.004;          // terug naar het begin van de sectie, 4 ms geleden
     const na = l.lees(klok.c);
@@ -713,16 +715,21 @@ console.log('de secties als bron: sectie.energie en sectie.nieuw van de maatgeve
   }
 
   // De maatgever stopt vlak na een nieuwe sectie: alles dooft uit, niets valt naar 0.
+  // (Review sec-hub, 7 okt: de energie blijft eerst HOUD staan, want korter dan dat zonder maatgever is
+  // meestal een cut in de mix; daarna glijdt hij.)
   {
     const d = deck({ secties: ST });
     const l = lezer([{ id: 'A', deck: d, zicht: 1 }], 0);
     for (let i = 0; i <= 2.05 * 120; i++) { klok.c = i / 120; l.lees(klok.c); }
     const voor = { ...l.lees(klok.c) };
     d.P0 = d.position; d.playing = false;
+    const stopT = klok.c;
     klok.c += 0.02; const na = { ...l.lees(klok.c) };
-    ok(`maatgever stopt: de staart dooft uit (${voor[N]?.toFixed(2)} -> ${na[N]?.toFixed(2)}), de energie glijdt omlaag (${voor[E]} -> ${na[E]?.toFixed(3)})`,
+    klok.c = stopT + 0.02 + M.HOUD; l.lees(klok.c);                  // HOUD vanaf de lezing die hem zag wegvallen
+    klok.c = stopT + 0.02 + M.HOUD + 0.02; const later = { ...l.lees(klok.c) };
+    ok(`maatgever stopt: de staart dooft uit (${voor[N]?.toFixed(2)} -> ${na[N]?.toFixed(2)}), de energie blijft ${M.HOUD} s staan (${na[E]}) en glijdt dan omlaag (${later[E]?.toFixed(3)})`,
       l.maatgever === null && voor[N] > 0.7 && bij(na[N], voor[N] * Math.exp(-0.02 / M.NIEUW_TAU), 1e-9) && voor[E] === 1
-      && bij(na[E], Math.exp(-0.02 / M.ENERGIE_TAU), 1e-9));
+      && na[E] === 1 && bij(later[E], Math.exp(-0.02 / M.ENERGIE_TAU), 1e-9));
     for (let k = 0; k < 30; k++) { klok.c += 0.1; l.lees(klok.c); }
     const laat = l.lees(klok.c);
     ok('…en staan na drie seconden op PRECIES 0 (geen eindeloze staart: geen parameterbericht per beeld)', laat[N] === 0 && laat[E] === 0);
@@ -898,6 +905,125 @@ console.log('de secties na een sprong, een loop en een gat (review 6 okt, met ui
     for (let c = 2.4; c < 2.6; c += 1 / 60) { klok.c = c; r.push(l3.lees(c - V)[N]); }
     ok(`een haper van 0,5 s over een grens: het beeld erna toont de klap uitgedoofd, daarna alleen omlaag (${r[0].toFixed(3)} …)`,
       bij(r[0], Math.exp(-(2.4 - V - 2) / M.NIEUW_TAU), 1e-9) && r.every((x, i) => i === 0 || x < r[i - 1]) && l3.secties?.grenzen === 1);
+  }
+
+  // Review sec-hub (7 okt). Een deck dat ook kan stilstaan (positie blijft dan staan).
+  const deck2 = ({ secties, P0 = 0, loop = null, speelt = true } = {}) => ({
+    playing: speelt, rate: 1, onsets: null, P0, c0: 0, loop, sectieKaart: secties ? { stukken: secties } : null,
+    grid: new Beatgrid({ bpm: 120, firstBeat: 0 }),
+    get position() {
+      if (!this.playing) return this.P0;
+      let p = this.P0 + (klok.c - this.c0) * this.rate;
+      const l = this.loop;
+      if (l && p >= l.end) p = l.start + ((p - l.start) % (l.end - l.start));
+      return p;
+    },
+    sprong(T) { this.P0 = T; this.c0 = klok.c; },
+    start(T) { this.P0 = T; this.c0 = klok.c; this.playing = true; },
+    stop() { this.P0 = this.position; this.playing = false; },
+  });
+
+  // 6. De uitgangsvertraging wordt groter (een ander uitgangsapparaat, de limiter): t = klok − V loopt
+  //    even TERUG. Dat is geen nieuwe klok: geen reset, geen valse grens, geen dip in de energie (vormbron).
+  {
+    const d = deck2({ secties: ST });
+    let v = V;
+    const s = new M.SectieLezer({ deck: () => d, vertraging: () => v });
+    const l = new M.MaatLezer({ tracks: () => [{ id: 'A', deck: d, zicht: 1 }], vertraging: () => v });
+    let minS = 1, minL = 1, maxN = 0;
+    for (let i = 0; i <= 4.6 * 120; i++) {
+      klok.c = i / 120 + 0.0003 * (i % 7);
+      if (klok.c >= 2.6) v = V + 0.06;                                 // midden in de drop (2..4): 60 ms erbij
+      s.lees(klok.c - v);
+      const w = l.lees(klok.c - v);
+      if (klok.c > 2.5 && klok.c < 3.9) { minS = Math.min(minS, s.energie); minL = Math.min(minL, w[E]); maxN = Math.max(maxN, s.nieuw); }
+    }
+    ok(`vertraging 60 ms groter midden in de drop: geen reset, geen valse grens (teller ${s.grenzen}, vormbron ${l.secties?.grenzen}), geen dip (energie ${minS}, vormbron ${minL}), geen klap (${maxN.toFixed(3)})`,
+      s.grenzen === 2 && l.secties?.grenzen === 2 && minS === 1 && minL === 1 && maxN < 0.1);
+    // Twee lezingen in één audioblok met 1 ms meer vertraging: dezelfde lezer terug, niets veranderd.
+    const g = s.grenzen, e = s.energie;
+    const zelfde = s.stap(klok.c - v - 0.001, d, v + 0.001);
+    ok('een stap van 1 ms terug: niets veranderd (geen reset)', zelfde === s && s.grenzen === g && s.energie === e);
+    s.stap(klok.c - v - 5, d, v);
+    ok(`een echte sprong terug (5 s, een nieuwe klok): wel opnieuw beginnen (teller ${s.grenzen})`, s.grenzen === 0);
+  }
+
+  // 7. Een korte loop op het begin van een sectie (beatloop, stutter): het rondgaan is GEEN nieuwe sectie
+  //    (anders een stroboscoop: 17 klappen per seconde bij 1/8 tel). Een loop van een maat of langer (een
+  //    sectie-loop) wel, elke ronde. 120 bpm: een tel 0,5 s, een maat 2 s.
+  for (const tellen of [0.125, 0.5, 1, 3, 4]) {
+    const d = deck2({ secties: ST, P0: 1.5, loop: { start: 2, end: 2 + tellen * 0.5 } });
+    const s = new M.SectieLezer({ deck: () => d, vertraging: () => V });
+    let max = 0;
+    for (let i = 0; i <= 6 * 120; i++) { klok.c = i / 120 + 0.0003 * (i % 7); s.lees(klok.c - V); if (klok.c > 1.5) max = Math.max(max, s.nieuw); }
+    // De loop begint op c 0,5 (positie 2): je hoort hem op 0,53, en daarna elke ronde.
+    const verwacht = tellen >= 4 ? 1 + Math.floor((6 - 0.5 - V) / (tellen * 0.5)) : 1;
+    ok(`loop van ${tellen} tel op het begin van de drop: ${verwacht} nieuwe sectie(s) in 6 s (${s.grenzen})${tellen < 4 ? `, na de eerste geen klap meer (max ${max.toFixed(3)})` : ''}`,
+      s.grenzen === verwacht && (tellen >= 4 || max < 0.05));
+  }
+  // Een hotcue-stutter (snel tikken op de hotcue op het begin van de drop): één nieuwe sectie, niet één per tik.
+  {
+    const d = deck2({ secties: ST });
+    const s = new M.SectieLezer({ deck: () => d, vertraging: () => V });
+    const tikken = [1.0, 1.15, 1.3, 1.45, 1.6, 1.75, 1.9, 4.5];          // zeven snel, dan na de break nog één
+    let k = 0;
+    for (let i = 0; i <= 5 * 120; i++) {
+      klok.c = i / 120;
+      if (k < tikken.length && klok.c >= tikken[k]) { d.sprong(2); k++; }
+      s.lees(klok.c - V);
+    }
+    ok(`hotcue-stutter op het begin van de drop (7 tikken in 0,9 s), dan de break, dan na 2,6 s nog een tik: drie nieuwe secties (${s.grenzen})`, s.grenzen === 3);
+  }
+
+  // 8. Een nieuwe maatgever die net begint (A stopt, B start op zijn cue op de drop, in dezelfde lezing): dat
+  //    is starten, geen overnemen. Ook als de eerste lezing pas na de vertraging komt.
+  for (const eerste of [0.01, 0.05]) {
+    const A = deck2({ secties: ST, P0: 4.5 }), B = deck2({ secties: ST, P0: 2, speelt: false });
+    let mg = A;
+    const s = new M.SectieLezer({ deck: () => mg, vertraging: () => V });
+    for (let i = 0; i <= 120; i++) { klok.c = i / 120; s.lees(klok.c - V); }
+    const g0 = s.grenzen, tS = klok.c;
+    A.stop(); B.start(2); mg = B;
+    const labels = [];
+    for (let c = tS + eerste; c <= tS + 1; c += 1 / 60) { klok.c = c; s.lees(c - V); labels.push(s.label); }
+    ok(`A stopt, B start op zijn cue (de drop), eerste lezing ${eerste * 1000} ms later: precies één nieuwe sectie (${s.grenzen - g0}), label drop`,
+      s.grenzen - g0 === 1 && s.label === 'drop');
+  }
+
+  // 9. Korter dan HOUD geen maatgever (een cut in de mix, de hysterese van Engine.maatgever, ~250 ms): de
+  //    energie blijft staan. Pas als hij langer weg is (pauze) glijdt hij naar 0.
+  {
+    const d = deck2({ secties: ST });
+    let weg = false;
+    const s = new M.SectieLezer({ deck: () => (weg ? null : d), vertraging: () => V });
+    for (let i = 0; i <= 3 * 120; i++) { klok.c = i / 120; s.lees(klok.c - V); }
+    let min = 1;
+    weg = true;
+    for (let c = 3 + 1 / 120; c <= 3.25; c += 1 / 120) { klok.c = c; s.lees(c - V); min = Math.min(min, s.energie); }
+    weg = false;
+    for (let c = 3.25 + 1 / 120; c <= 3.6; c += 1 / 120) { klok.c = c; s.lees(c - V); min = Math.min(min, s.energie); }
+    ok(`250 ms geen maatgever en dan weer: de energie blijft 1 (laagste ${min})`, min === 1 && s.grenzen === 1);
+    weg = true;
+    const t0 = klok.c, r = [];
+    for (let c = t0 + 1 / 120; c <= t0 + 3; c += 1 / 120) { klok.c = c; s.lees(c - V); r.push([c - t0, s.energie]); }
+    const H = M.HOUD ?? 0;
+    const daarna = r.find(([x]) => x > H + 0.1);
+    ok(`langer weg (pauze): eerst ${H} s vasthouden, dan glijden naar 0 (${daarna?.[1].toFixed(3)} op ${(H + 0.1).toFixed(1)} s, na 3 s ${r.at(-1)[1]})`,
+      H >= 0.4 && r.filter(([x]) => x < H - 0.01).every(([, e]) => e === 1) && daarna[1] < 1 && daarna[1] > 0.5 && r.at(-1)[1] === 0);
+  }
+
+  // 10. Het doel van de energie (de sectie zelf), ook tijdens het glijden: de hub stuurt dat bij een nieuwe sectie.
+  {
+    const d = deck2({ secties: ST, P0: 1.9, speelt: false });
+    let aan = false;
+    const s = new M.SectieLezer({ deck: () => (aan ? d : null), vertraging: () => V });
+    for (let i = 0; i <= 60; i++) { klok.c = i / 120; s.lees(klok.c - V); }
+    aan = true; d.start(1.9);
+    let opDeGrens = null;
+    const t0 = klok.c;
+    for (let c = t0 + 1 / 120; c <= t0 + 0.5; c += 1 / 120) { klok.c = c; s.lees(c - V); if (!opDeGrens && s.grenzen === 1) opDeGrens = { e: s.energie, doel: s.energieDoel }; }
+    ok(`energieDoel: de energie van de sectie zelf, ook als hij nog glijdt (${opDeGrens?.e.toFixed(3)} -> doel ${opDeGrens?.doel})`,
+      opDeGrens && opDeGrens.e < 0.9 && opDeGrens.doel === 1);
   }
 
   // Voor de hub (AV-app-hub PROTOCOL §18) en elk ander gebruik: een SectieLezer

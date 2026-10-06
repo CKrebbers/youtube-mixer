@@ -284,10 +284,12 @@ async function doorloop() {
     rond.length >= 10 && r2.every((x) => x.wie === null) && rond.every((x) => x.n === 0));
   ok(`…de energie gleed naar 0 (${r2.at(-1)?.e})`, r2.at(-1)?.e === 0);
   // De eerste beelden van run 2 kunnen nog de laatste staart van de grens uit
-  // run 1 hebben (die was na 1,2 s nog 0,0025 en dooft gewoon verder uit).
+  // run 1 hebben: die dooft alleen verder uit. Hoe hoog hij nog is, hangt af van
+  // de uitgangsvertraging (run 1 eindigt 1,2 s − V na die grens; headless op de
+  // Mac is V 175 ms: dan nog ~0,006), dus: alleen omlaag, en rond de grens 0.
   const ac2Rond = ac2.filter((x) => x.hoorA >= vk2 - OP - 0.004 && x.hoorA < vk2 + 1);
-  ok(`…en de video-puls geeft rond de grens geen accent (${ac2Rond.length} van ${ac2.length} beelden; daarvoor hooguit de staart van run 1: max ${Math.max(0, ...ac2.map((x) => x.a)).toExponential(1)})`,
-    ac2Rond.every((x) => x.a === 0) && ac2.every((x) => x.a < 0.003));
+  ok(`…en de video-puls geeft rond de grens geen accent (${ac2Rond.length} van ${ac2.length} beelden; daarvoor alleen de uitdovende staart van run 1: max ${Math.max(0, ...ac2.map((x) => x.a)).toExponential(1)})`,
+    ac2Rond.every((x) => x.a === 0) && ac2.every((x, i) => x.a < 0.01 && (i === 0 || x.a <= ac2[i - 1].a + 1e-12)));
   await druk('track.1.play');
 }
 
