@@ -1097,10 +1097,11 @@ body:has(#auto:not(.hidden)) .focusdeel .sampler-rij .pad,body:has(#klankschaal:
 body:has(#stems:not(.hidden)) .focusdeel .sampler-rij .pad{height:22px}
 /* Laptopmaat (6 okt) met welke rij ook open: hetzelfde voor de rijen die later
    kwamen (koptelefoon, instrument, patronen, master), en de knoppen in de
-   kolommen 2 px lager (18 px samen) en het focusdeel wat dichter op elkaar
-   (10 px). Anders past op 1440×790 geen rij van 54 px helemaal onder de faders
-   en de sampler. */
+   kolommen 2 px lager (18 px samen), het focusdeck en het focusdeel wat
+   dichter op elkaar (8 en 10 px). Anders past op 1440×790 geen rij van 54 px
+   helemaal onder de faders en de sampler. */
 @media (max-height:900px){
+  body:has(#rijen > section:not(.hidden)) .focus-deck{gap:4px}
   body:has(#rijen > section:not(.hidden)) .wave-zoom{height:52px}
   body:has(#rijen > section:not(.hidden)) .baan{height:15px}
   body:has(#rijen > section:not(.hidden)) .baan canvas{height:11px}
