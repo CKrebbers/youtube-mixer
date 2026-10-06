@@ -135,3 +135,17 @@ wachten → RACE in de automaat en bij terugspelen.
 | sampler | `studio/sec-sampler` | 6 (sampler, action, opslag) | 8909/9509 |
 
 Daarna, als er tijd is: vormen/router (7), Controlekamer (10), video (8), Maschine (9), AV-app-hub (11).
+
+## Contract tussen de sporen auto en plan
+
+- **Planstap, optioneel:** `in` en `uit` = `{ sectie: K (vanaf 1, zoals track.N.section.K), label, groep }`.
+  - `in` = de stap begint op die sectie. `uit` = de overgang naar de volgende BEGINT op die sectie.
+  - Label en groep dienen om de sectie terug te vinden na een herberekening.
+  - `van` blijft de waarheid en de terugval: bij een gekozen sectie ook `van` = haar begin.
+- **Planner:**
+  - `fragment(track, { van, speelduur, rnd, secties, inSectie })`, met als voorrang: `inSectie` (als hij te vinden is) → `van` → een keuze uit de secties → het oude gedrag.
+  - `planMoment({ …, secties, uitSectie })`, met de secties van de UITGAANDE. Zonder `uitSectie` eerst de outro, dan een break, nooit midden in een drop als het anders kan.
+- **Wie wat bouwt:**
+  - auto: de planner en de automaat, die de velden uit de stap meegeeft.
+  - plan: `plan-model` (`normaliseerPlan`, `pak`, `verschil`), het venster, `tijdlijn.voorspel` (geeft de parameters door), en `vervangPlan` `zelfde` in de automaat.
+- **Volgorde van samenvoegen:** auto vóór plan.
