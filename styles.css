@@ -17,6 +17,10 @@ body{
   display:flex; flex-direction:column; overflow:hidden;
   user-select:none; -webkit-user-select:none;
 }
+/* Past de mixer echt niet (een klein venster, DevTools open), dan scrolt de
+   pagina, zodat de faders bereikbaar blijven. Op 1440×790 en 1920×1080 nooit,
+   ook niet met alle rijen open (zie main en .rijen; tools/headless/rijen.mjs). */
+body{overflow-y:auto}
 
 /* ---- topbar ---- */
 .topbar{display:flex;align-items:center;justify-content:space-between;
@@ -40,9 +44,14 @@ a.ghost{text-decoration:none;font-size:13px}
 /* Rij 1 (de track met focus) krijgt altijd zijn volle hoogte; rij 2 (de
    kolommen) krijgt wat overblijft en krimpt in de faders. Zonder min-height:auto
    op het focusdeck mocht die rij tot 0 krimpen en schoven de kolommen over de
-   banen heen (gemeten op 1440×790: 211 px waar 350 nodig is). */
+   banen heen (gemeten op 1440×790: 211 px waar 350 nodig is).
+   main zelf wordt nooit lager dan zijn inhoud met de faders op hun ondergrens
+   (min-content, met .kol-onder op 56 px): wat er niet meer bij past, gaat van
+   het gebied met de rijen af (.rijen), niet van de faders. Tot 6 okt was dit
+   min-height:0, en scrolde main met een paar rijen open: de faders en de
+   sampler vielen van het scherm. */
 main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 390px;grid-template-rows:auto minmax(0,1fr);
-  gap:8px;padding:8px;min-height:0;overflow:auto}
+  gap:8px;padding:8px;min-height:min-content;overflow:auto}
 .focus-deck{grid-column:1;grid-row:1}
 .deck.focus-deck{min-height:auto}   /* wint van .deck{min-height:0} hieronder */
 .kolommen{grid-column:1;grid-row:2}
@@ -133,6 +142,10 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
   main,main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr);grid-template-rows:auto}
   .focus-deck,.kolommen,.focusdeel,.video-panel{grid-column:1;grid-row:auto}
   body{overflow:auto}
+  /* smal staat alles onder elkaar en scrolt main zelf, zoals vóór 6 okt; de
+     kolommen zijn dan zo hoog als hun inhoud, met de fader op 118 px */
+  main{min-height:0}
+  .kol .kol-onder{flex-basis:118px}
 }
 
 /* ---- MIDI-monitor ---- */
@@ -610,6 +623,13 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .pad.bewaard{border-style:dashed;border-color:var(--warn);color:var(--dim)}
 @keyframes knipper{50%{opacity:.4}}
 
+/* ---- de rijen (stems, koptelefoon, instrument, patronen, master, auto, klankschaal) ----
+   Samen onder main, in één gebied dat zelf scrolt: main houdt zijn minimale
+   hoogte (de faders op 56 px, de sampler heel) en de rijen krijgen de rest.
+   Staat er een open, dan blijft er minstens één lage rij (35 px) te zien. */
+.rijen{flex:0 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
+.rijen:has(> section:not(.hidden)){min-height:35px}
+
 /* ---- auto-dj ---- */
 .auto-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px;min-width:0}
 .auto-rij.hidden{display:none}
@@ -976,8 +996,10 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
 .spg-select[data-licht="aan"]{--kleur:var(--a)}
 .kol-2x2{display:grid;grid-template-columns:1fr 1fr;gap:3px}
 .spg-mini{height:20px}
-/* De fader krimpt als het scherm laag is (laptop), en groeit tot 200 px. */
-.kol-onder{display:flex;justify-content:center;align-items:stretch;gap:6px;flex:1 1 118px;min-height:56px;max-height:200px}
+/* De fader krimpt als het scherm laag is (laptop), en groeit tot 200 px. De
+   basis is de ondergrens (56 px): daaruit rekent main zijn minimale hoogte;
+   in een kolom met een vaste hoogte vult de fader toch alles tot 200 px. */
+.kol-onder{display:flex;justify-content:center;align-items:stretch;gap:6px;flex:1 1 56px;min-height:56px;max-height:200px}
 .kol-onder .vfader{flex:0 0 26px;height:100%;min-height:0}
 .meter.vmeter{width:6px;height:100%;display:flex;align-items:flex-end}
 .meter.vmeter i{width:100%;height:0;transition:height .04s linear;
