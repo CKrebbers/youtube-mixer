@@ -84,9 +84,11 @@ export function kenmerken(track, t) {
  * nieuw stuk begint en zeker is; `van` uit het plan gaat voor.
  *
  * Met secties (docs/AUTO-DJ.md §3b) is de voorrang: `inSectie` uit het plan
- * (als die sectie te vinden is en het grid daar zeker is) → `van` uit het
- * plan → een keuze uit de secties (kort: de intro; lang: een sectiegrens met
- * ruimte voor een heel fragment, de rustigste soort eerst) → het oude gedrag.
+ * (als die sectie te vinden is, binnen SECTIE_SPELING van `van` als het plan
+ * die geeft, het grid daar zeker is en er nog MIN_FRAGMENT te spelen valt) →
+ * `van` uit het plan → een keuze uit de secties (kort: de intro; lang: een
+ * sectiegrens met ruimte voor een heel fragment, de rustigste soort eerst) →
+ * het oude gedrag.
  *
  * @param rnd       toeval 0..1 (injecteerbaar voor tests)
  * @param secties   de stukken van de sectiekaart van dit nummer ([{ van, label, groep, energie, zeker? }]) of null;
@@ -102,10 +104,11 @@ export function fragment(track, { van = null, speelduur = null, rnd = Math.rando
   const st = Array.isArray(secties) && secties.length ? secties : null;
   const zeker = st ? gridZeker(track) : null;
   const vanaf = (v) => ({ van: Math.max(0, Math.min(v, eind)), tot: Math.min(eind, Math.max(0, v) + speelduur) });
-  // 1. De sectie uit het plan.
+  // 1. De sectie uit het plan (`van` is de waarheid: de sectie moet er vlakbij liggen),
+  //    met ruimte om nog te spelen (anders volgt meteen de volgende overgang, of past die niet).
   if (st && inSectie && zeker) {
-    const i = vindSectie(st, inSectie);
-    if (i >= 0 && st[i].van < eind && zeker(st[i].van)) return { ...vanaf(st[i].van), sectie: sectieInfo(st, i) };
+    const i = vindSectie(st, inSectie, { bij: eindig(van) ? van : null });
+    if (i >= 0 && st[i].van + Math.min(speelduur, MIN_FRAGMENT) <= eind && zeker(st[i].van)) return { ...vanaf(st[i].van), sectie: sectieInfo(st, i) };
   }
   // 2. Het beginpunt uit het plan.
   if (eindig(van)) return vanaf(van);
@@ -339,6 +342,36 @@ function opDeFrase({ type, grid, positie, eind, rate, vooruit, lengte: eigen }) 
   return { start, lengte: grid.timeOf(b + tellen) - start, maten, tel: b };
 }
 
+/**
+ * De argumenten voor planMoment zoals de automaat ze maakt (_planOvergang), uit
+ * wat ook het planvenster heeft. Puur. Zo voorspellen planvenster en automaat
+ * hetzelfde moment, ook bij beatloos (dan geen grid voor de timing, maar wel
+ * `zeker` op het grid van de uitgaande voor de secties) en ook waar de
+ * bewakers een sectie weigeren (`mag`).
+ *
+ * @param type       de soort overgang (uit kiesOvergang)
+ * @param grid       het grid van de UITGAANDE (Beatgrid of JSON), of null
+ * @param uit        de uitgaande: een library-nummer (dan kenmerken(uit, t), bpm × rate),
+ *                   of (t) => kenmerken op tracktijd t met `bpm` = wat je hoort
+ * @param inn        kenmerken van de nieuwe op zijn beginpunt ({ grid, gridZeker, bpm, k, toonZeker })
+ * @param kaart      de sectiekaart van de UITGAANDE (JSON of SectieKaart), of null
+ * @param uitSectie  `uit` van de planstap die nu klinkt, of null
+ * @returns de argumenten voor planMoment
+ */
+export function momentArgs({ type, grid = null, uit = null, inn = null, positie, eind, rate = 1, vooruit = Math.min(VOORUIT, 8),
+  lengte = null, kaart = null, uitSectie = null }) {
+  const g = grid instanceof Beatgrid ? grid : Beatgrid.van(grid);
+  const uitOp = typeof uit === 'function' ? uit
+    : uit ? (t) => { const k = kenmerken(uit, t); return { ...k, bpm: eindig(k.bpm) ? k.bpm * rate : null }; } : null;
+  return {
+    type, grid: type === 'ambient' ? null : g, positie, eind, rate, vooruit, lengte,
+    secties: sectiesVan(kaart), uitSectie,
+    zeker: (t) => !!g && g.zekerBij(t),
+    // De bewakers op dat begin: mag deze soort daar ook (tempo, toon, grid van de uitgaande dáár)?
+    mag: uitOp && inn ? (t) => kiesOvergang(uitOp(t), inn, { voorkeur: type }).type === type : null,
+  };
+}
+
 /** Maten van een blend of filter: uit het plan (maten, of seconden omgerekend), anders de standaard. */
 export function overgangMaten({ type, lengte = null, bpm = null, bpb = 4 }) {
   if (eindig(lengte?.maten)) return Math.max(2, Math.round(lengte.maten));
@@ -364,6 +397,13 @@ export function overgangSec({ type, lengte = null, bpm = null, bpb = 4 }) {
  * Een plan (uitSectie) mag verder.
  */
 export const SECTIE_VENSTER = { maten: 32, sec: 60 };
+/**
+ * Een sectie uit het plan (`in`/`uit`) met een tijd erbij (`van`) telt alleen als
+ * ze nu nog zo dicht (s) bij die tijd ligt; anders is `van` de waarheid.
+ */
+export const SECTIE_SPELING = 30;
+/** Een fragment dat op een sectie uit het plan begint, speelt minstens zo lang (s; of de kortere speelduur van het plan). */
+export const MIN_FRAGMENT = 60;
 /** Een sectiebegin ligt op een maatbegin, maar afgerond (4 decimalen): zoveel tellen ervoor telt nog als die maat. */
 const TEL_MARGE = 0.02;
 /** Inmixen in een lange mix: de rustigste soort eerst. */
@@ -379,20 +419,39 @@ export function sectiesVan(kaart) {
 }
 
 /**
- * Een sectie uit een planstap terugvinden: { sectie: K (vanaf 1), label?, groep? }.
- * Eerst stuk K − 1 als label en groep kloppen (wat ontbreekt klopt altijd),
- * anders het eerste stuk met dezelfde label en groep (de kaart kan opnieuw
- * berekend zijn). Geeft de index (vanaf 0), of −1.
+ * Een sectie uit een planstap terugvinden: { sectie: K (vanaf 1), label?, groep?, van? }.
+ * De kaart kan sinds het plannen opnieuw berekend zijn (een stuk erbij of eraf,
+ * dus andere nummers), en labels komen terug ("drop D" twee keer). Daarom:
+ * - de kandidaten zijn de stukken met die label en groep (wat ontbreekt klopt);
+ *   zonder label en groep alleen stuk K;
+ * - daarvan het stuk dat het dichtst ligt bij de tijd van toen (`bij`, de
+ *   `van` uit het plan, of `ref.van`); zonder tijd bij waar stuk K NU begint;
+ *   zonder stuk K bij plek K in de rij; gelijk: het dichtst bij plek K;
+ * - met een tijd van toen: alleen binnen SECTIE_SPELING, anders −1 (dan is
+ *   die tijd de waarheid).
+ * Geeft de index (vanaf 0), of −1.
  */
-export function vindSectie(secties, ref) {
+export function vindSectie(secties, ref, { bij = null } = {}) {
   if (!Array.isArray(secties) || !ref || typeof ref !== 'object') return -1;
   const label = typeof ref.label === 'string' ? ref.label : null;
   const groep = typeof ref.groep === 'string' ? ref.groep : null;
+  const K = Number.isInteger(ref.sectie) && ref.sectie >= 1 ? ref.sectie : null;
+  const tijd = eindig(bij) ? bij : eindig(ref.van) ? ref.van : null;
   const klopt = (s) => !!s && (label === null || s.label === label) && (groep === null || s.groep === groep);
-  const K = Number.isInteger(ref.sectie) ? ref.sectie : null;
-  if (K !== null && K >= 1 && klopt(secties[K - 1])) return K - 1;
-  if (label === null && groep === null) return -1;
-  return secties.findIndex(klopt);
+  const kand = label === null && groep === null
+    ? (K !== null && secties[K - 1] ? [K - 1] : [])
+    : secties.map((s, i) => (klopt(s) ? i : -1)).filter((i) => i >= 0);
+  if (!kand.length) return -1;
+  const doel = tijd ?? (K !== null && eindig(secties[K - 1]?.van) ? secties[K - 1].van : null);
+  const plek = (i) => Math.abs(i - ((K ?? 1) - 1));
+  const afstand = (i) => (doel !== null ? Math.abs(secties[i].van - doel) : plek(i));
+  let beste = kand[0];
+  for (const i of kand) {
+    const a = afstand(i), b = afstand(beste);
+    if (a < b - 1e-9 || (Math.abs(a - b) <= 1e-9 && plek(i) < plek(beste))) beste = i;
+  }
+  if (tijd !== null && Math.abs(secties[beste].van - tijd) > SECTIE_SPELING) return -1;
+  return beste;
 }
 
 /** { sectie (vanaf 1), label, groep } van stuk i: voor de uitleg en het plan. */

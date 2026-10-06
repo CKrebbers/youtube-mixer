@@ -6,7 +6,7 @@ import { kortNaam } from '../engine/toonsoort.js';
 import { SectieKaart } from '../engine/secties.js';
 import {
   OVERGANGEN, SPEELDUUR, VOORUIT, fragment, kenmerken, kiesVolgende, kiesOvergang, planMoment, standen, klaarStand,
-  sectiesVan, sectieGrens, sectieNaam,
+  sectiesVan, sectieGrens, sectieNaam, momentArgs,
 } from './planner.js';
 
 /**
@@ -41,6 +41,14 @@ const SECTIE = /^track\.\d\.section\./;
 const WACHT_SECTIES = 3000;
 /** "nu" en "langer" mogen naar de volgende sectiegrens als die binnen zoveel maten komt (beatloos: seconden). */
 const NU_SECTIE_MATEN = 8, LANGER_SECTIE_MATEN = 16, LANGER_SECTIE_SEC = 60;
+/** Zo ver (s klok) vooruit plant _planOvergang; ook de marge waarbinnen een late kaart het moment niet meer verschuift. */
+const VOORUIT_KLAAR = Math.min(VOORUIT, 8);
+/** Een late kaart verschuift het moment niet meer binnen zoveel maten vóór de start (of VOORUIT_KLAAR, wat langer is). */
+const HERPLAN_MATEN = 2;
+/** Zo ver (s tracktijd) moet de positie na een sectiedruk afwijken van gewoon doorspelen om als sprong te tellen. */
+const SPRONG_MIN = 0.1;
+/** Zo ruim (s klok) vóór het moment zonder kaart stopt het wachten op de kaart (de timer kijkt elke ~40 ms). */
+const WACHT_MARGE = 0.25;
 /**
  * De curve van een overgang gaat als GLIJDENDE knoppen (track.N.<knop>.glide,
  * Deck.glide): elke beurt een doel dat GLIJ seconden verderop op de curve ligt,
@@ -97,8 +105,9 @@ export class Automaat extends Emitter {
     this._glijdt = new Map();     // 'A.fader' -> { doel, tot }: de lopende glijbeurt van de automaat
     this._kaarten = {};           // deckId -> { trackId, kaart }: sectiekaarten die de automaat zelf ophaalde
     this._kaartVraag = {};        // deckId -> volgnummer van de laatste vraag om een kaart
-    this._sprong = false;         // Clay sprong naar een sectie op de hoofdtrack: opnieuw plannen bij de volgende tik
-    this._los = bijInvoke((id, waarde) => this._bijBus(id, waarde));
+    this._sprong = null;          // { pos, t }: Clay drukte een sectie op de hoofdtrack; sprong hij echt, dan opnieuw plannen
+    this._wachtKijk = null;       // () => void: bij elke tik kijken of het wachten op een kaart moet stoppen
+    this._los = bijInvoke((id) => this._bijBus(id));
   }
 
   // ---- aan en uit ------------------------------------------------------------
@@ -170,7 +179,7 @@ export class Automaat extends Emitter {
     const g = v.overgang.type === 'ambient' ? null : d.grid;
     const grens = sectieGrens({ secties: sectiesVan(this._kaartVan(this.hoofd)), grid: g, zeker: (t) => !!d.grid && d.grid.zekerBij(t),
       na: v.moment.start, tot: g ? g.timeOf(v.moment.tel + LANGER_SECTIE_MATEN * g.beatsPerBar) : v.moment.start + LANGER_SECTIE_SEC * d.rate });
-    const opGrens = grens && (g
+    const opGrens = grens && (!v.mag || v.mag(grens.start)) && (g
       ? { ...v.moment, tel: grens.tel, start: grens.start, lengte: g.timeOf(grens.tel + v.moment.maten * g.beatsPerBar) - grens.start, sectie: grens.sectie }
       : { ...v.moment, start: grens.start, sectie: grens.sectie });
     if (opGrens && opGrens.start + opGrens.lengte <= d.duration - 2) {
@@ -211,8 +220,10 @@ export class Automaat extends Emitter {
       // Eerstvolgende 4-maatsgrens, niet de laatste vóór `eind`; of de volgende sectiegrens als die dichtbij is.
       const bpb = g.beatsPerBar;
       const vroegst = d.position + vooruit * d.rate;
-      const grens = sectieGrens({ secties: sectiesVan(this._kaartVan(this.hoofd)), grid: g, na: vroegst - 2e-3,
+      const kandidaat = sectieGrens({ secties: sectiesVan(this._kaartVan(this.hoofd)), grid: g, na: vroegst - 2e-3,
         tot: g.timeOf(g.beatAt(vroegst) + NU_SECTIE_MATEN * bpb) });
+      // Alleen als de soort daar ook mag (de bewakers); anders de 4-maatsgrens zoals altijd.
+      const grens = kandidaat && (!v.mag || v.mag(kandidaat.start)) ? kandidaat : null;
       const b = grens ? grens.tel : g.volgendeVeelvoud(g.beatAt(vroegst), 4 * bpb);
       const tellen = v.moment.maten * bpb;
       v.moment = { ...v.moment, tel: b, start: g.timeOf(b), lengte: g.timeOf(b + tellen) - g.timeOf(b) };
@@ -223,15 +234,17 @@ export class Automaat extends Emitter {
   }
 
   /** Iemand anders (Clay, MIDI, muis, toetsenbord) raakte de bus aan. */
-  _bijBus(id, waarde) {
+  _bijBus(id) {
     if (this._zelf || !this.aan) return;
     const m = OVERNEEM.exec(id);
     const deck = m ? deckVanNr(Number(m[1])) : null;
     const raakt = deck && (deck === this.hoofd || deck === this.volgende?.deckId);
-    // Een sectiesprong op wat nu klinkt terwijl de volgende klaarstaat: de
-    // positie verspringt, dus de overgang opnieuw plannen (bij de volgende
-    // tik: de bus hoort het vóór de sprong).
-    if (raakt && this.fase === 'klaar' && deck === this.hoofd && SECTIE.test(id) && waarde !== false) this._sprong = true;
+    // Een sectiedruk op wat nu klinkt terwijl de volgende klaarstaat: springt
+    // de positie echt (_klaar kijkt bij de volgende tik; de bus hoort de druk
+    // vóór de sprong), dan de overgang opnieuw plannen. Onthoud waar hij was.
+    if (raakt && this.fase === 'klaar' && deck === this.hoofd && SECTIE.test(id)) {
+      this._sprong ??= { pos: this.engine.deck(deck).position, t: this.engine.ctx.currentTime };
+    }
     if (id === 'mixer.xfader' || raakt) {
       if (this.fase === 'bezig' || (this.fase === 'klaar' && deck === this.volgende?.deckId)) {
         this.fase = 'overgenomen';
@@ -248,6 +261,7 @@ export class Automaat extends Emitter {
 
   tik() {
     if (!this.aan) return;
+    this._wachtKijk?.();
     try { this._tik(); } catch (err) { console.error('[auto]', err); this._meld(`auto-dj: ${err.message}`, 'fout'); }
   }
 
@@ -285,22 +299,42 @@ export class Automaat extends Emitter {
       if (!nd.buffer) throw new Error(`${keuze.track.titel} laadde niet`);
       this.nummers[deckId] = keuze.track;
       this.eigen.add(deckId);
-      // Op de kaart wachten, met een grens. Niets klinkt (meteen), of wat
-      // klinkt valt stil terwijl hij wacht: niet (langer) wachten, nooit een gat.
-      const kaart = await binnen(kaartP, meteen ? 0 : this.wachtSecties,
-        () => !this.aan || !this.hoofd || !this.engine.deck(this.hoofd).playing);
+      // Het fragment zonder kaart: wat het zonder secties zou zijn (één keer
+      // gerekend, dus hetzelfde toeval als vroeger).
+      const f0 = fragment(keuze.track, { ...keuze.stuk, rnd: this.rnd });
+      const opMaat = (f) => {
+        // Beginnen op een maatbegin van de nieuwe als zijn grid daar zeker is
+        // (een sectiebegin ligt op een maat, afgerond: die maat zelf).
+        if (!nd.grid || !nd.grid.zekerBij(f.van)) return f.van;
+        return nd.grid.timeOf(nd.grid.volgendeVeelvoud(nd.grid.beatAt(f.van) - (f.sectie ? 0.02 : 0), nd.grid.beatsPerBar));
+      };
+      // Op de kaart wachten, met een grens (wachtSecties), maar nooit zo lang
+      // dat de overgang zonder kaart verschuift: de automaat rekent het moment
+      // uit dat hij NU zou plannen (met en zonder de secties van de uitgaande)
+      // en stopt met wachten voor "vroegst" (positie + VOORUIT_KLAAR × rate)
+      // daar aankomt. Niets klinkt (meteen), of wat klinkt valt stil: niet
+      // (langer) wachten, nooit een gat. Regel 3: dat leest de POSITIE.
+      let kaart = null;
+      if (!meteen && this.hoofd && this.engine.deck(this.hoofd).playing) {
+        const d = this.engine.deck(this.hoofd);
+        const v0 = { deckId, track: keuze.track, van: opMaat(f0), lengte: keuze.lengte ?? null };
+        const { args } = this._overgangVoor(v0, keuze.overgang);
+        const uiterst = Math.min(planMoment({ ...args, secties: null, uitSectie: null }).start, planMoment(args).start);
+        kaart = await binnen(kaartP, this.wachtSecties, (kijk) => { this._wachtKijk = kijk; },
+          () => !this.aan || !this.engine.deck(this.hoofd)?.playing || d.position + (VOORUIT_KLAAR + WACHT_MARGE) * d.rate >= uiterst);
+        this._wachtKijk = null;
+      } else {
+        kaart = await binnen(kaartP, 0);
+      }
       if (!this.aan) return;
-      const f = fragment(keuze.track, { ...keuze.stuk, rnd: this.rnd, secties: sectiesVan(kaart), inSectie: keuze.in });
-      // Beginnen op een maatbegin van de nieuwe als zijn grid daar zeker is
-      // (een sectiebegin ligt op een maat, afgerond: die maat zelf).
-      let van = f.van;
-      if (nd.grid && nd.grid.zekerBij(van)) van = nd.grid.timeOf(nd.grid.volgendeVeelvoud(nd.grid.beatAt(van) - (f.sectie ? 0.02 : 0), nd.grid.beatsPerBar));
+      const f = kaart ? fragment(keuze.track, { ...keuze.stuk, rnd: this.rnd, secties: sectiesVan(kaart), inSectie: keuze.in }) : f0;
+      const van = opMaat(f);
       this._doe(`track.${nrVan(deckId)}.seek`, nd.duration ? van / nd.duration : 0);
       this.volgende = { deckId, track: keuze.track, van, tot: f.tot, bron: keuze.bron, waarom: keuze.waarom,
         stapId: keuze.stapId ?? null, voorkeur: keuze.overgang, lengte: keuze.lengte ?? null, inSectie: f.sectie ?? null,
         bevestigd: false, gestart: false, overgang: null, moment: null };
       if (meteen || !this.hoofd || !this.engine.deck(this.hoofd).playing) { this.fase = 'klaar'; this._startMeteen(); return; }
-      this._sprong = false;
+      this._sprong = null;
       this._planOvergang(keuze.overgang);
       this.fase = 'klaar';
     } catch (err) {
@@ -347,30 +381,44 @@ export class Automaat extends Emitter {
   }
 
   /**
+   * De soort overgang en wat planMoment nodig heeft, voor klaarstaande v,
+   * zonder iets te doen. De argumenten komen van momentArgs (planner.js), net
+   * als in het planvenster: zelfde invoer, zelfde moment.
+   */
+  _overgangVoor(v, voorkeur = 'auto') {
+    const d = this.engine.deck(this.hoofd);
+    const nd = this.engine.deck(v.deckId);
+    const pos = Math.max(d.position, Math.min(this.eind, d.duration - 6));
+    const kIn = kenmerken(v.track, v.van);
+    const inn = { ...kIn, grid: nd.grid, gridZeker: !!nd.grid && nd.grid.zekerBij(v.van), bpm: nd.grid ? nd.grid.bpmAt(v.van) : kIn.bpm };
+    const overgang = kiesOvergang(this._uitKenmerken(d, pos), inn, { voorkeur });
+    const eind = Math.min(this.eind ?? d.duration, d.duration - 6);
+    const kaart = this._kaartVan(this.hoofd);
+    const args = momentArgs({ type: overgang.type, grid: d.grid, uit: (t) => this._uitKenmerken(d, t), inn, positie: d.position, eind,
+      rate: d.rate, vooruit: VOORUIT_KLAAR, lengte: v.lengte, kaart, uitSectie: sectieRef(this._stap(this.hoofdStap)?.uit) });
+    return { overgang, args, eind, kaart };
+  }
+
+  /**
    * De soort overgang en het moment, met de bewakers. Met de sectiekaart van
    * de uitgaande begint het moment bij voorkeur op een sectiegrens (`uit` van
    * de planstap die nu klinkt, anders de outro, een break, …: planMoment), maar
    * alleen waar de gekozen soort ook mag: secties veranderen de soort nooit.
+   * `alleenAlsHetPast`: past de nieuwe overgang niet meer vóór het einde van
+   * de track, dan blijft alles zoals het was (geeft false).
    */
-  _planOvergang(voorkeur = 'auto') {
+  _planOvergang(voorkeur = 'auto', { alleenAlsHetPast = false } = {}) {
     const v = this.volgende;
     const d = this.engine.deck(this.hoofd);
     const nd = this.engine.deck(v.deckId);
-    const pos = Math.max(d.position, Math.min(this.eind, d.duration - 6));
-    const uit = this._uitKenmerken(d, pos);
-    const kIn = kenmerken(v.track, v.van);
-    const inn = { ...kIn, grid: nd.grid, gridZeker: !!nd.grid && nd.grid.zekerBij(v.van), bpm: nd.grid ? nd.grid.bpmAt(v.van) : kIn.bpm };
-    v.overgang = kiesOvergang(uit, inn, { voorkeur });
-    const type = v.overgang.type;
-    const g = type === 'ambient' ? null : d.grid;
-    this.eind = Math.min(this.eind ?? d.duration, d.duration - 6);
-    const kaart = this._kaartVan(this.hoofd);
+    const { overgang, args, eind, kaart } = this._overgangVoor(v, voorkeur);
+    const moment = planMoment(args);
+    if (alleenAlsHetPast && v.moment && moment.start + moment.lengte > d.duration - 1) return false;
+    v.overgang = overgang;
+    this.eind = eind;
     v.uitKaart = kaart;
-    v.moment = planMoment({ type, grid: g, positie: d.position, eind: this.eind, rate: d.rate, vooruit: Math.min(VOORUIT, 8), lengte: v.lengte,
-      secties: sectiesVan(kaart), uitSectie: sectieRef(this._stap(this.hoofdStap)?.uit),
-      zeker: (t) => !!d.grid && d.grid.zekerBij(t),
-      // De bewakers op dat begin: mag deze soort daar ook (tempo, toon, grid van de uitgaande)?
-      mag: (t) => kiesOvergang(this._uitKenmerken(d, t), inn, { voorkeur: type }).type === type });
+    v.mag = args.mag;
+    v.moment = moment;
     // Klaarzetten: fader, bas, filter zoals de overgang begint; dezelfde
     // crossfaderkant als de uitgaande (anders valt hij weg achter de crossfader).
     const n = nrVan(v.deckId);
@@ -384,6 +432,7 @@ export class Automaat extends Emitter {
       uitA: d.ui.sendA ?? 0, uitB: d.ui.sendB ?? 0,
       inA: nd.ui.sendA ?? 0, inB: nd.ui.sendB ?? 0,
     };
+    return true;
   }
 
   /** Wat we van de uitgaande weten op tracktijd t, met `bpm` = wat je HOORT (rate, transpositie, keylock). */
@@ -431,12 +480,21 @@ export class Automaat extends Emitter {
     // later binnen (laden.js wacht er niet op): opnieuw plannen zolang het kan.
     const maat = d.grid ? d.grid.beatLengthAt(d.position) * d.grid.beatsPerBar : 2;
     const kaart = this._kaartVan(this.hoofd);
-    if (this._sprong) { this._sprong = false; if (!v.gestart) this._planOvergang(v.voorkeur ?? 'auto'); }
-    else if (kaart !== v.uitKaart) {
+    if (this._sprong) {
+      // Sprong hij echt? Dan staat de positie ergens anders dan gewoon doorspelen zou geven.
+      const s = this._sprong;
+      this._sprong = null;
+      const verwacht = s.pos + (this.engine.ctx.currentTime - s.t) * d.rate;
+      if (!v.gestart && Math.abs(d.position - verwacht) > SPRONG_MIN) this._planOvergang(v.voorkeur ?? 'auto', { alleenAlsHetPast: true });
+    } else if (kaart !== v.uitKaart) {
       // Een andere kaart (of dezelfde opnieuw, van laden.js: dan niets doen).
+      // Niet meer als Clay bevestigde, langer of nu drukte, of de start dichtbij is.
       const anders = kaartSleutel(kaart) !== kaartSleutel(v.uitKaart);
       v.uitKaart = kaart;
-      if (anders && !v.gestart && !v.langer && !v.nu && d.position < v.moment.start - maat) this._planOvergang(v.voorkeur ?? 'auto');
+      const marge = Math.max(HERPLAN_MATEN * maat, VOORUIT_KLAAR * d.rate);
+      if (anders && !v.gestart && !v.bevestigd && !v.langer && !v.nu && d.position < v.moment.start - marge) {
+        this._planOvergang(v.voorkeur ?? 'auto', { alleenAlsHetPast: true });
+      }
     }
     const m = v.moment;
     // Een tel vóór het begin: blend = sync en start op de maat, beatloos = meteen.
@@ -717,15 +775,17 @@ function kaartSleutel(k) {
 
 /**
  * De uitkomst van een belofte, of null als die er na `ms` nog niet is (of
- * faalt), of zodra `stop()` ja zegt (elke 50 ms gekeken).
+ * faalt), of zodra `stop()` ja zegt. Wanneer er gekeken wordt bepaalt de
+ * aanroeper: `kijker(kijk)` krijgt een functie die hij bij elke tik aanroept
+ * (de timer beslist wanneer er gekeken wordt, de positie wat er gebeurt).
  */
-function binnen(p, ms, stop = null) {
-  let klok = null, kijk = null;
+function binnen(p, ms, kijker = null, stop = null) {
+  let klok = null;
   const tijd = new Promise((r) => {
     klok = setTimeout(() => r(null), Math.max(0, ms));
-    if (stop && ms > 0) kijk = setInterval(() => { if (stop()) r(null); }, 50);
+    if (kijker && stop) { const kijk = () => { if (stop()) r(null); }; kijker(kijk); kijk(); }
   });
-  return Promise.race([Promise.resolve(p).catch(() => null), tijd]).finally(() => { clearTimeout(klok); clearInterval(kijk); });
+  return Promise.race([Promise.resolve(p).catch(() => null), tijd]).finally(() => clearTimeout(klok));
 }
 
 export { OVERGANGEN };

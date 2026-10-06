@@ -122,7 +122,10 @@ console.log('\nplanner: inmixen op de intro of een sectiegrens');
   const f1 = P.fragment(kort, { secties: ST, inSectie: { sectie: 5, label: 'break', groep: 'E' } });
   ok(`inSectie 5 (break E): vanaf 96 (${f1.van}–${f1.tot})`, f1.van === 96 && f1.tot === 190 && f1.sectie?.sectie === 5);
   ok('inSectie 3 heet geen "break E": het eerste stuk dat zo heet', P.fragment(kort, { secties: ST, inSectie: { sectie: 3, label: 'break', groep: 'E' } }).van === 96);
-  ok('inSectie gaat voor `van` uit het plan', P.fragment(kort, { secties: ST, van: 50, inSectie: { sectie: 5 } }).van === 96);
+  // `van` blijft de waarheid (review, bevinding 2): de sectie legt het begin op haar grens als
+  // ze in de buurt van `van` ligt (binnen SECTIE_SPELING), anders telt `van`.
+  ok('inSectie vlak bij `van` uit het plan: op de grens van de sectie', P.fragment(kort, { secties: ST, van: 95, inSectie: { sectie: 5 } }).van === 96);
+  ok('inSectie ver van `van` uit het plan (46 s): `van` is de waarheid', P.fragment(kort, { secties: ST, van: 50, inSectie: { sectie: 5 } }).van === 50);
   ok('inSectie onvindbaar: `van` uit het plan', P.fragment(kort, { secties: ST, van: 50, inSectie: { sectie: 30, label: 'drop', groep: 'Z' } }).van === 50);
   ok('inSectie met een speelduur: tot = begin + speelduur', P.fragment(kort, { secties: ST, speelduur: 40, inSectie: { sectie: 5 } }).tot === 136);
   const vaagKort = { ...kort, grid: { stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.1 }] } };
@@ -151,6 +154,56 @@ console.log('\nplanner: hulp');
   const gr = P.sectieGrens({ secties: ST, grid: g, na: 96, tot: 128 });
   ok(`sectieGrens: de eerste grens na 96 tot 128 is 112 (${gr?.start})`, gr?.start === 112 && gr.tel === 224 && gr.sectie.sectie === 6);
   ok('sectieGrens: na de outro geen grens meer', P.sectieGrens({ secties: ST, grid: g, na: 144, tot: 190 }) === null);
+}
+
+// ---- 3b. planner: review (bevindingen 2, 3, 6 en de testgaten) ---------------------
+console.log('\nplanner: review');
+{
+  // Bevinding 2: herhaalde labels. Het plan zei sectie 6 = "drop D" (de tweede drop, op 112);
+  // de kaart is opnieuw berekend met een stuk extra vooraan, dus die drop is nu sectie 7.
+  const NIEUW = [{ van: 0, label: 'intro', groep: 'A' }, { van: 8, label: 'deel', groep: 'B' }, { van: 16, label: 'deel', groep: 'B' },
+    { van: 48, label: 'opbouw', groep: 'C' }, { van: 64, label: 'drop', groep: 'D' }, { van: 96, label: 'break', groep: 'E' },
+    { van: 112, label: 'drop', groep: 'D' }, { van: 144, label: 'outro', groep: 'F' }];
+  const kort = { id: 'k', duur: 196, grid: { stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 }] } };
+  const u = P.planMoment({ type: 'blend', grid: g, positie: 10, eind: 190, secties: NIEUW, uitSectie: { sectie: 6, label: 'drop', groep: 'D' } });
+  ok(`uitSectie "6 = drop D" na een herberekening: de drop D die het dichtst bij waar sectie 6 nu ligt (${u.start}), niet de eerste (64)`, u.start === 112);
+  const uv = P.planMoment({ type: 'blend', grid: g, positie: 10, eind: 190, secties: NIEUW, uitSectie: { sectie: 6, label: 'drop', groep: 'D', van: 112 } });
+  ok(`uitSectie met \`van\` (het begin bij het plannen): die drop D (${uv.start})`, uv.start === 112);
+  const uver = P.planMoment({ type: 'blend', grid: g, positie: 10, eind: 190, secties: NIEUW, uitSectie: { sectie: 6, label: 'drop', groep: 'D', van: 30 } });
+  ok(`uitSectie met \`van\` en geen drop D in de buurt: zelf kiezen (${uver.start})`, uver.start === 144 && uver.sectie?.label === 'outro');
+  const fi = P.fragment(kort, { secties: NIEUW, van: 112, inSectie: { sectie: 6, label: 'drop', groep: 'D' } });
+  ok(`inSectie "6 = drop D" met van 112: de drop D bij 112 (${fi.van}), niet 64`, fi.van === 112 && fi.sectie?.sectie === 7);
+  ok('vindSectie: zonder tijd de treffer het dichtst bij de plek van stuk K', P.vindSectie(NIEUW, { sectie: 6, label: 'drop', groep: 'D' }) === 6
+    && P.vindSectie(NIEUW, { sectie: 4, label: 'drop', groep: 'D' }) === 4);
+
+  // Bevinding 6: inSectie zonder ruimte valt door.
+  const laat = P.fragment(kort, { secties: [...ST, { van: 188, label: 'outro', groep: 'G' }], inSectie: { sectie: 8 } });
+  ok(`inSectie op 188 in een nummer van 196: geen ruimte, dus niet daar (${laat.van}–${laat.tot})`, laat.van !== 188 && laat.tot - laat.van >= 60);
+
+  // Testgat: een sectiebegin net naast de maat (de server rondt op 0,1 ms af).
+  const naast = ST.map((x) => (x.label === 'outro' ? { ...x, van: 144.00004 } : x));
+  const n1 = P.planMoment({ type: 'blend', grid: g, positie: 10, eind: 190, secties: naast });
+  const voor = ST.map((x) => (x.label === 'outro' ? { ...x, van: 143.99996 } : x));
+  const n2 = P.planMoment({ type: 'blend', grid: g, positie: 10, eind: 190, secties: voor });
+  ok(`outro op 144,00004 en 143,99996: de overgang begint op de maat 144 (${n1.start}, ${n2.start})`, n1.start === 144 && n1.tel === 288 && n2.start === 144);
+  const gr = P.sectieGrens({ secties: ST.map((x) => (x.van === 112 ? { ...x, van: 112.00004 } : x)), grid: g, na: 96, tot: 128 });
+  ok(`sectieGrens op 112,00004: de maat 112 (${gr?.start})`, gr?.start === 112 && gr.tel === 224);
+
+  // Testgat: de ruimte-eis bij een lange mix (de zekerste break heeft geen 6 minuten meer).
+  const lang = { id: 'l', duur: 3600, grid: { stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 }] } };
+  const mix = [{ van: 0, label: 'intro', groep: 'A' }, { van: 1500, label: 'break', groep: 'C', zeker: 0.5 },
+    { van: 2000, label: 'drop', groep: 'B', zeker: 0.9 }, { van: 3300, label: 'break', groep: 'C', zeker: 0.95 }];
+  const fl = P.fragment(lang, { rnd: () => 0, secties: mix });
+  ok(`lange mix: de zekerste break (3300) heeft geen 6 minuten meer, dus de andere (${fl.van})`, fl.van === 1500);
+
+  // Bevinding 3: één functie voor de argumenten van planMoment, zoals de automaat ze maakt.
+  const tr = { id: 'x', duur: 196, grid: { stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 }] }, toon: { stukken: [{ van: 0, toonsoort: 'Am', zekerheid: 0.9 }] } };
+  const inn = P.kenmerken(tr, 0);
+  const args = P.momentArgs({ type: 'ambient', grid: tr.grid, uit: tr, inn, positie: 10, eind: 190, kaart: { opGrid: true, stukken: ST } });
+  ok(`momentArgs bij beatloos: grid null voor de timing, maar zeker en mag erbij: op de outro (${P.planMoment(args).start})`,
+    args.grid === null && typeof args.zeker === 'function' && typeof args.mag === 'function' && P.planMoment(args).start === 144);
+  const zonder = P.momentArgs({ type: 'blend', grid: tr.grid, uit: tr, inn, positie: 10, eind: 190 });
+  ok('momentArgs zonder kaart: het oude moment', zelfde(P.planMoment(zonder), P.planMoment({ type: 'blend', grid: g, positie: 10, eind: 190, vooruit: 8 })));
 }
 
 // ---- 4. de automaat op een engine ------------------------------------------------
@@ -321,6 +374,169 @@ async function scenario({ plan, haalSecties, wachtSecties, lib = LIB, opDeckKaar
   ok('geen sectie-action (section.x, sections.1): niet overgenomen', proef('track.2.section.x', 'bezig', false) === 'bezig' && proef('track.2.sections.1', 'bezig', false) === 'bezig');
   ok('klaar: een sectie op de klaarstaande track is overnemen (zoals seek en hotcue)', proef('track.2.section.2', 'klaar') === 'overgenomen');
   ok('klaar: een sectie op wat nu klinkt is geen overnemen (opnieuw plannen)', proef('track.1.section.2', 'klaar') === 'klaar');
+}
+
+// ---- 5. de automaat: review (bevindingen 1, 3, 4, 5 en de testgaten) ---------------
+console.log('\nautomaat: review');
+const { Beatgrid: BG } = await import('../src/engine/beatgrid.js');
+
+// Bevinding 1: wachten op een kaart die nooit (of te laat) komt, kort voor het eind. Zonder
+// kaart moet het precies het oude gedrag zijn, ook als de kaart traag is.
+{
+  const proef = async (haalSecties, wachtSecties) => {
+    for (const id of ALLE) { const d = eng.deck(id); if (d.playing) d.togglePlay(); if (d.buffer) d.setSectieKaart(null); }
+    kaartOpDeck = null;
+    const au = new Automaat({ engine: eng, invoke, bijInvoke, laad, haalLibrary: async () => LIB,
+      haalPlan: async () => ({ stappen: [{ track: 'x', van: 149 }, { track: 'y' }] }), welkNummer: (id) => opDeck[id] ?? null,
+      rnd: () => 0, tik: 1e7, haalSecties, wachtSecties });
+    await au.zetAan();
+    let regels = 0, moment = null, bezig = null;
+    const los = bijInvoke(() => { if (au.fase === 'klaar') regels++; });
+    const t0 = Date.now();
+    for (let i = 0; i < 1200 && au.geschiedenis.filter((x) => x.wat === 'gespeeld').length < 2; i++) {
+      NOW += 0.05; au.tik(); await wacht();
+      if (au.fase === 'klaar' && moment === null) moment = au.volgende.moment.start;
+      if (au.fase === 'bezig' && bezig === null) bezig = eng.deck(au.hoofd).position;
+    }
+    los();
+    const uit = { moment, bezig, regels, ms: Date.now() - t0, laatste: au.geschiedenis.at(-1)?.gekozen };
+    au.vernietig();
+    return uit;
+  };
+  const nul = await proef(async () => null, 3000);
+  const nooit = await proef(() => new Promise(() => {}), 3000);
+  ok(`x vanaf 149 (eind 190), geen kaart: blend op ${nul.moment}, begonnen op ${nul.bezig?.toFixed(1)}`, nul.moment === 160 && nul.laatste === 'blend');
+  ok(`de kaart komt nooit (3 s wachten mag): hetzelfde moment (${nooit.moment}), dezelfde blend (${nooit.laatste}), ${nooit.regels} regels op de bus terwijl hij klaarstond`,
+    nooit.moment === nul.moment && nooit.laatste === 'blend' && Math.abs(nooit.bezig - nul.bezig) < 0.2 && nooit.regels < 20);
+}
+
+// Bevinding 3: de automaat en momentArgs geven hetzelfde moment, ook bij beatloos.
+{
+  for (const [soort, voorkeur] of [['blend', 'auto'], ['ambient', 'ambient']]) {
+    const { au } = await scenario({ plan: { stappen: [{ id: 's1', track: 'x', van: 100 }, { id: 's2', track: 'y', overgang: voorkeur }] }, haalSecties: async () => KA });
+    const v = au.volgende, d = eng.deck(au.hoofd);
+    au._planOvergang(v.voorkeur);
+    const x = LIB[0];
+    const args = P.momentArgs({ type: v.overgang.type, grid: x.grid, uit: x, inn: P.kenmerken(LIB[1], v.van), positie: d.position, eind: au.eind,
+      rate: d.rate, lengte: v.lengte, kaart: KA, uitSectie: null });
+    const m = P.planMoment(args);
+    ok(`${soort}: de automaat (${v.moment.start}) en momentArgs (${m.start}) geven hetzelfde moment`, v.overgang.type === soort && zelfde(m, v.moment));
+    au.vernietig();
+  }
+}
+
+// Bevinding 4: een late kaart plant niet meer opnieuw na ok, na langer of nu, en niet vlak voor de start.
+{
+  const metLateKaart = async (doe) => {
+    const { au, loop } = await scenario({ plan: { stappen: [{ track: 'x', van: 100 }, { track: 'y' }] }, haalSecties: async () => null });
+    await doe(au, loop);
+    const voor = au.volgende.moment.start;
+    eng.deck(au.hoofd).setSectieKaart(KA);
+    await loop(0.2);
+    const na = au.volgende?.moment?.start;
+    au.vernietig();
+    return [voor, na];
+  };
+  const [o1, o2] = await metLateKaart(async () => invoke('auto.ok', true));
+  ok(`na ok: de late kaart verschuift het moment niet meer (${o1} → ${o2})`, o1 === 128 && o2 === 128);
+  // Langer (128 → 144) en dan een late kaart met de outro op 152: blijft 144.
+  const KL = { ...KA, stukken: KA.stukken.map((x) => (x.label === 'outro' ? { ...x, van: 152 } : x)) };
+  const metLater = async (haal, doe, laat) => {
+    const { au, loop } = await scenario({ plan: { stappen: [{ track: 'x', van: 100 }, { track: 'y' }] }, haalSecties: haal });
+    const a = au.volgende.moment.start;
+    doe();
+    const b = au.volgende.moment.start;
+    eng.deck(au.hoofd).setSectieKaart(laat);
+    await loop(0.2);
+    const c = au.volgende?.moment?.start;
+    au.vernietig();
+    return [a, b, c];
+  };
+  const [l0, l1, l2] = await metLater(async () => null, () => invoke('auto.langer', true), KL);
+  ok(`na langer (${l0} → ${l1}): een late kaart (outro op 152) verschuift hem niet (${l2})`, l0 === 128 && l1 === 144 && l2 === 144);
+  // Nu naar een grens 16 s verder (116, eigen kaart), dan een andere kaart op het deck: blijft 116.
+  const K116 = { ...KA, stukken: KA.stukken.map((x) => (x.van === 108 ? { ...x, van: 116 } : x)) };
+  const [u0, u1, u2] = await metLater(async () => K116, () => invoke('auto.nu', true), KA);
+  ok(`na nu (${u0} → ${u1}): een late andere kaart verschuift hem niet (${u2})`, u0 === 144 && u1 === 116 && u2 === 116);
+  const [v1, v2] = await metLateKaart(async (au, loop) => { await loop(40, () => eng.deck(au.hoofd).position > 121); });
+  ok(`vlak voor de start (positie > 121, start 128): niet opnieuw (${v1} → ${v2})`, v1 === 128 && v2 === 128);
+}
+
+// Bevinding 5: een sectiedruk op wat klinkt die niet springt, plant niet opnieuw.
+{
+  // Het deck heeft geen kaart (laden.js mislukte), de automaat wel: de pad doet niets.
+  const { au, loop } = await scenario({ plan: { stappen: [{ track: 'x', van: 100 }, { track: 'y' }] }, haalSecties: async () => KA });
+  invoke('auto.nu', true);
+  const n = ALLE.indexOf(au.hoofd) + 1, naNu = au.volgende.moment.start;
+  invoke(`track.${n}.section.3`, true); invoke(`track.${n}.section.3`, false);
+  await loop(0.1);
+  ok(`sectie 3 op een deck zonder kaart (geen sprong): het moment blijft (${naNu} → ${au.volgende.moment.start})`, naNu === 108 && au.volgende.moment.start === 108);
+  au.vernietig();
+  // Een sectie-loop om de sectie waar je al bent: geen sprong, niet opnieuw.
+  const s2 = await scenario({ plan: { stappen: [{ track: 'x', van: 100 }, { track: 'y' }] }, haalSecties: async () => KA, opDeckKaart: KA });
+  invoke('auto.nu', true);
+  const n2 = ALLE.indexOf(s2.au.hoofd) + 1, p0 = eng.deck(s2.au.hoofd).position;
+  invoke(`track.${n2}.section.5.loop`, true); invoke(`track.${n2}.section.5.loop`, false);
+  await s2.loop(0.1);
+  ok(`shift + pad van de sectie waar je al bent (loop, geen sprong): het moment blijft (${s2.au.volgende.moment.start})`,
+    p0 > 96 && p0 < 108 && s2.au.volgende.moment.start === 108);
+  invoke(`track.${n2}.section.5.loop`, true); invoke(`track.${n2}.section.5.loop`, false);
+  s2.au.vernietig();
+}
+
+// Een sprong waarna de overgang niet meer vóór het einde past: het oude moment blijft
+// (zoals bij seek en hotcue: de overgang loopt vanaf waar je bent), geen nieuwe planning elke tik.
+{
+  const KS = { ...KA, stukken: [...KA.stukken, { van: 160, label: 'deel', groep: 'G', energie: 0.4 }] };
+  const { au, loop } = await scenario({ plan: { stappen: [{ track: 'x', van: 100 }, { track: 'y' }] }, haalSecties: async () => KS, opDeckKaart: KS });
+  const m0 = au.volgende.moment.start, n = ALLE.indexOf(au.hoofd) + 1;
+  invoke(`track.${n}.section.8`, true); invoke(`track.${n}.section.8`, false);
+  const na = eng.deck(au.hoofd).position;
+  await loop(0.2);
+  ok(`sprong naar 160 (positie ${na.toFixed(1)}): een nieuw moment past niet meer vóór het einde, dus het oude (${m0}) blijft en de overgang loopt (${au.fase})`,
+    m0 === 144 && na > 156 && au.volgende?.moment?.start === 144 && au.fase === 'bezig');
+  au.vernietig();
+}
+
+// Testgaten: de inpunt-marge, het volgnummer per vraag, de trackId in _kaartVan, de duur bij langer, `mag` bij langer.
+{
+  const naast = { ...KA, stukken: KA.stukken.map((x) => (x.label === 'break' ? { ...x, van: 96.00004 } : x)) };
+  const { au } = await scenario({ plan: { stappen: [{ track: 'x', van: 100 }, { track: 'y' }] }, haalSecties: async () => naast,
+    voor: (a) => { a.plan.stappen[1].in = { sectie: 5, label: 'break', groep: 'E' }; } });
+  ok(`in op een break op 96,00004 (afgerond): de maat 96, niet de maat erna (${au.volgende?.van})`, au.volgende?.van === 96);
+  au.vernietig();
+
+  const a2 = new Automaat({ engine: eng, invoke, bijInvoke, laad, haalLibrary: async () => LIB, welkNummer: (id) => (id === 'C' ? 't2' : null), tik: 1e7,
+    haalSecties: (id) => new Promise((r) => setTimeout(() => r(KA), id === 't1' ? 40 : 0)) });
+  a2._haalKaart('C', 't1');
+  await a2._haalKaart('C', 't2');
+  await new Promise((r) => setTimeout(r, 80));
+  ok(`twee vragen voor dezelfde track: de trage oude overschrijft de nieuwe niet (${a2._kaarten.C?.trackId})`, a2._kaarten.C?.trackId === 't2');
+  const leeg = eng.deck('C').sectieKaart;
+  ok('_kaartVan: een kaart van een ander nummer dan wat er nu op staat telt niet',
+    !leeg && a2._kaartVan('C') !== null && (a2._kaarten.C = { trackId: 't1', kaart: a2._kaarten.C.kaart }, a2._kaartVan('C') === null));
+  a2.vernietig();
+
+  // langer: een grens die niet meer vóór het eind past telt niet (dan 8 maten).
+  const KC = { ...KA, stukken: [...KA.stukken, { van: 164, label: 'outro', groep: 'F', energie: 0.3 }] };
+  const s3 = await scenario({ plan: { stappen: [{ track: 'x', van: 100 }, { track: 'y' }] }, haalSecties: async () => KC });
+  const m0 = s3.au.volgende.moment.start;
+  invoke('auto.langer', true);
+  ok(`langer naar een grens (164) waar de blend niet meer vóór het eind past: 8 maten (${m0} → ${s3.au.volgende.moment.start})`, m0 === 144 && s3.au.volgende.moment.start === 160);
+  s3.au.vernietig();
+  // langer: de volgende grens alleen als de soort daar ook mag (de bewakers).
+  const s4 = await scenario({ plan: { stappen: [{ id: 's1', track: 'x', van: 70 }, { id: 's2', track: 'y' }] },
+    haalSecties: async () => KA, voor: (a) => { a.plan.stappen[0].uit = { sectie: 5, label: 'break', groep: 'E' }; } });
+  s4.au.volgende.mag = (t) => Math.abs(t - 108) > 0.01;          // de bewakers weigeren 108
+  invoke('auto.langer', true);
+  ok(`langer: de grens op 108 mag niet (bewakers), dus 8 maten (${s4.au.volgende.moment.start})`, s4.au.volgende.moment.start === 112);
+  s4.au.vernietig();
+  // nu: idem (vanaf 100: de grens op 108 mag niet, dus de 4-maatsgrens op 104).
+  const s5 = await scenario({ plan: { stappen: [{ track: 'x', van: 100 }, { track: 'y' }] }, haalSecties: async () => KA });
+  s5.au.volgende.mag = (t) => Math.abs(t - 108) > 0.01;
+  invoke('auto.nu', true);
+  ok(`nu: de grens op 108 mag niet (bewakers), dus de 4-maatsgrens (${s5.au.volgende.moment.start})`, s5.au.volgende.moment.start === 104);
+  s5.au.vernietig();
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
