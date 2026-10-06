@@ -134,6 +134,88 @@ console.log('\neffecten op de tel');
   ok('elk doel behalve flits is een echt effect', PULS_DOELEN.filter((d) => d !== 'flits').every((d) => d in { rgb: 0, pixel: 0, spiegel: 0, korrel: 0 }));
 }
 
+console.log('\nde puls op een nieuwe sectie (secties verweven, docs/SECTIES.md)');
+{
+  // Geen nieuw puls-doel (PULS_DOELEN loopt rond in het handelingenlog) en geen
+  // nieuwe knop: een nieuwe sectie van de maatgever (sectie.nieuw, dezelfde als
+  // de vormen) is een ACCENT op de puls die er al is. Vol, wat de diepte ook is.
+  const { metPuls, PULS_DOELEN } = await import('../src/video/puls.js');
+  const M = await import('../src/analysis/maat.js');
+  const { Beatgrid } = await import('../src/engine/beatgrid.js');
+  const { VideoMixer } = await import('../src/video/video-mixer.js');
+  const fx = { rgb: 0.3, pixel: 0 };
+  ok('PULS_DOELEN niet veranderd (een rondloper in het log, read = plek / 4)', PULS_DOELEN.join() === 'rgb,pixel,spiegel,korrel,flits');
+  ok('metPuls zonder accent: precies als vroeger', bij(metPuls(fx, 'rgb', 0.5, 1).fx.rgb, 0.8) && bij(metPuls(fx, 'flits', 0.6, 0.5).flits, 0.3)
+    && metPuls(fx, 'pixel', 0, 1).fx.pixel === 0);
+  ok('een nieuwe sectie (accent) slaat VOL, ook met de puls zacht: een flits',
+    metPuls(fx, 'flits', 0.1, 0, 1).flits === 1 && bij(metPuls(fx, 'flits', 0.1, 1, 0.5).flits, 0.5));
+  ok('…op elk doel (rgb: knop + accent, niet boven 1)', bij(metPuls(fx, 'rgb', 0.1, 0, 0.5).fx.rgb, 0.8) && metPuls(fx, 'rgb', 0.1, 0, 1).fx.rgb === 1);
+  ok('de tel wint als die sterker is', bij(metPuls(fx, 'flits', 0.8, 1, 0.3).flits, 0.8));
+  ok('puls dicht (diepte 0): ook geen accent, de knop op 0 is uit', metPuls(fx, 'flits', 0, 1, 1).flits === 0 && metPuls(fx, 'rgb', 0, 0, 1).fx.rgb === 0.3);
+  ok('een accent dat geen getal is doet niets', bij(metPuls(fx, 'flits', 0.4, 1, NaN).flits, 0.4) && bij(metPuls(fx, 'flits', 0.4, 1, undefined).flits, 0.4));
+
+  // De mixer: het accent van de maatgever op de audioklok, op wat je HOORT.
+  const ST = [{ van: 0, energie: 0.3 }, { van: 2, energie: 1 }, { van: 3.5, energie: 0.2 }];
+  const V = 0.02;                                                     // uitgangsvertraging
+  const ctx = { currentTime: 0, outputLatency: V, baseLatency: 0 };
+  const A = { id: 'A', playing: true, buffer: {}, ui: { fader: 1 }, rate: 1, onsets: null, grid: new Beatgrid({ bpm: 120, firstBeat: 0 }),
+    sectieKaart: { stukken: ST }, get position() { return ctx.currentTime; } };
+  let meester = A;
+  const engine = { ctx, deck: () => A, xfadeGain: () => 1, syncMaster: () => meester };
+  const gl = new Proxy({ TEXTURE0: 1000, getShaderParameter: () => true, getProgramParameter: () => true, getUniformLocation: (p, n) => n, getAttribLocation: () => 0 },
+    { get(t, k) { if (k in t) return t[k]; return () => ({}); } });
+  const vm = new VideoMixer({ canvas: { getContext: () => gl }, engine, decks: ['A'] });
+  const reeks = () => {
+    const r = [];
+    for (let i = Math.round(1.5 * 60); i <= Math.round(2.8 * 60); i++) { ctx.currentTime = i / 60; r.push({ hoor: ctx.currentTime - V, a: vm._accentNu?.(V) }); }
+    return r;
+  };
+  ok('puls dicht: geen accent (er wordt niets uitgelezen)', reeks().every((x) => x.a === 0) && !vm.sectieLezer);
+  vm.zetPuls(0.2);
+  const r = reeks();
+  const eerst = r.find((x) => x.hoor >= 2 - 1e-12);
+  ok(`puls open: het accent slaat op de sectiegrens zoals je hem HOORT (${eerst.a?.toFixed(2)} op ${eerst.hoor.toFixed(3)} s)`,
+    eerst.a >= Math.exp(-(1 / 60) / M.NIEUW_TAU) - 1e-9);
+  ok('ervóór niets; erna dooft hij uit zoals sectie.nieuw van de vormen (dezelfde vorm)',
+    r.filter((x) => x.hoor < 2 - M.KLAP_OP).every((x) => x.a === 0)
+    && r.filter((x) => x.hoor > 2).every((x) => x.a === 0 || bij(x.a, Math.exp(-(x.hoor - 2) / M.NIEUW_TAU), 1e-9)));
+  A.ui.fader = 0;
+  ok('maatgever die je niet hoort (fader dicht): geen accent', reeks().every((x) => x.a === 0));
+  A.ui.fader = 1; meester = null;
+  ok('geen maatgever: geen accent', reeks().every((x) => x.a === 0));
+  meester = A; A.sectieKaart = null;
+  ok('maatgever zonder sectiekaart: geen accent', reeks().every((x) => x.a === 0));
+  A.sectieKaart = { stukken: ST };
+
+  // teken(): het accent komt in de effectstap. Doel flits, diepte 0,1: op een
+  // gewone tel een zachte flits, op de sectiegrens een volle.
+  const maak = (eng) => {
+    const u = [];
+    const g = new Proxy({ TEXTURE0: 1000, getShaderParameter: () => true, getProgramParameter: () => true, getAttribLocation: () => 0,
+      createProgram: () => ({}), getUniformLocation: (p, n) => ({ p, n }), uniform1f: (loc, v) => { if (loc?.n === 'flits') u.push([loc.p, v]); } },
+    { get(t, k) { return k in t ? t[k] : () => ({}); } });
+    const m = new VideoMixer({ canvas: { getContext: () => g }, engine: eng, decks: ['A'] });
+    return { m, flits: () => u.find(([p]) => p === m.effect)?.[1], wis: () => { u.length = 0; } };
+  };
+  const H = maak(engine);
+  H.m.zetPuls(0.1);
+  while (H.m.pulsDoel !== 'flits') H.m.volgendPulsDoel();
+  const beelden = (X, m) => {
+    const fr = [];
+    for (let i = Math.round(1.4 * 60); i <= Math.round(2.4 * 60); i++) { ctx.currentTime = i / 60; X.wis(); m(); fr.push({ hoor: ctx.currentTime - V, f: X.flits() }); }
+    return fr;
+  };
+  const fr = beelden(H, () => H.m.teken());
+  const opTel = fr.find((x) => x.hoor >= 1.5 - 1e-12), opGrens = fr.find((x) => x.hoor >= 2 - 1e-12);
+  ok(`teken(): op een gewone tel flitst de puls zacht (${opTel.f?.toFixed(3)}), op de sectiegrens vol (${opGrens.f?.toFixed(3)})`,
+    opTel.f > 0.05 && opTel.f <= 0.1 + 1e-9 && opGrens.f > 0.9);
+  // Het losse venster (de beamer) mengt zelf: het rekent het accent zelf uit, op de engine die het overnam.
+  const L = maak({ ctx: { currentTime: 0 }, deck: () => ({}), xfadeGain: () => 1 });
+  const frL = beelden(L, () => { L.m.neemOver(H.m); L.m.teken(); });
+  const losGrens = frL.find((x) => x.hoor >= 2 - 1e-12);
+  ok(`het losse venster ook: vol op de sectiegrens (${losGrens.f?.toFixed(3)})`, losGrens.f > 0.9 && L.m.engine === engine);
+}
+
 console.log('\nbeeldverhouding per laag (staande video)');
 {
   const { schaalVoor, maatVan, leesLaag, FITS } = await import('../src/video/passen.js');

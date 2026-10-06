@@ -1230,7 +1230,7 @@ export function bindVideo(mixer) {
   define('video.fit', 'trigger', (on) => { if (on) mixer.volgendeFit(); },
     { label: 'Video: passend of vullen', read: () => FITS.indexOf(mixer.fit) / (FITS.length - 1) });
   define('video.pulse', 'value', (v) => mixer.zetPuls(v),
-    { label: 'Video: puls op de tel', read: () => mixer.puls });
+    { label: 'Video: puls op de tel (vol op een nieuwe sectie)', read: () => mixer.puls });
   define('video.pulse.target', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
     { label: 'Video: wat er pulst', read: () => PULS_DOELEN.indexOf(mixer.pulsDoel) / (PULS_DOELEN.length - 1) });
 
