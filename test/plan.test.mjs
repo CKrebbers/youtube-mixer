@@ -171,6 +171,38 @@ console.log('\nvoorspelling: secties naar de planner (contract)');
   ok('een planner die gooit: de oude schatting, geen crash', stuk.stappen[1].moment === null && stuk.stappen[0].duur === 120);
 }
 
+// De strook (strook.js) op een nep-2D-context: de witte strepen van in en uit
+// liggen BOVENOP. Begint de volgende stap precies op de uit van de vorige (zo
+// plant de planner hem), dan verfde zijn overgang (en zijn banden) over de streep.
+console.log('\nde strook: in en uit bovenop');
+{
+  const { tekenStrook } = await import('../src/plan/strook.js');
+  const tr = (id, bpm, toon) => ({ id, titel: id, duur: 128 * 240 / bpm, loudness_i: -14,
+    grid: { stukken: [{ van: 0, bpm, anker: 0, zekerheid: 0.9 }] }, toon: { stukken: [{ van: 0, toonsoort: toon, zekerheid: 0.9 }] } });
+  const tracks = new Map([tr('een', 124, 'Am'), tr('twee', 125, 'Em')].map((t) => [t.id, t]));
+  const kaart = (bpm, delen) => ({ versie: 1, opGrid: true, grid: 'abcd1234', bron: 'hand', slot: false,
+    stukken: delen.map(([m, label, groep]) => ({ van: m * 240 / bpm, label, groep, energie: 0.5 })) });
+  const secties = new Map([['een', kaart(124, [[0, 'intro', 'A'], [16, 'opbouw', 'B'], [32, 'drop', 'C'], [64, 'break', 'D'], [80, 'drop', 'C'], [112, 'outro', 'E']])],
+    ['twee', kaart(125, [[0, 'intro', 'A'], [8, 'deel', 'B'], [24, 'drop', 'C'], [56, 'break', 'D'], [72, 'outro', 'E']])]]);
+  const { plan } = M.normaliseerPlan({ stappen: [
+    { id: 's1', track: 'een', speelduur: 200, uit: { sectie: 4, label: 'break', groep: 'D' } },
+    { id: 's2', track: 'twee', van: 24 * 240 / 125, in: { sectie: 3, label: 'drop', groep: 'C' }, overgang: 'blend' }] });
+  const v = T.voorspel(plan, tracks, { secties });
+  const ops = [];
+  const g = new Proxy({}, {
+    get: (o, k) => (k in o ? o[k] : k === 'fillRect' ? (x, y, w, h) => ops.push({ x, y, w, h, kleur: o.fillStyle }) : () => {}),
+    set: (o, k, w) => { o[k] = w; return true; },
+  });
+  const banden = tekenStrook(g, { v, w: 1000, h: 74 });
+  const wit = ops.map((o, i) => ({ ...o, i })).filter((o) => o.kleur === '#ffffff');
+  const over = wit.filter((m) => ops.slice(m.i + 1).some((o) => o.kleur !== '#ffffff'
+    && o.x < m.x + m.w && o.x + o.w > m.x && o.y < m.y + m.h && o.y + o.h > m.y));
+  ok(`de tweede stap begint op de uit van de eerste (${v.stappen[1].start.toFixed(1)} s = break D ${(64 * 240 / 124).toFixed(1)} s)`,
+    Math.abs(v.stappen[1].start - 64 * 240 / 124) < 0.01);
+  ok(`banden voor beide stappen (${banden.length})`, banden.some((b) => b.id === 's1') && banden.some((b) => b.id === 's2'));
+  ok(`witte strepen (in en uit) liggen bovenop: ${wit.length} strepen, ${over.length} overgeschilderd`, wit.length === 2 && over.length === 0);
+}
+
 console.log('\nopslag met versies');
 {
   const map = mkdtempSync(join(tmpdir(), 'varve-plannen-'));
