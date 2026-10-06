@@ -38,7 +38,7 @@ varve-beeld-zender.js), sinds vandaag ook `github.com/CKrebbers/stroommachine` (
 - [x] 4.3 headless: `tools/headless/beeld.mjs`
 - [x] 4.4 eind-tot-eind: `tools/headless/beeld-e2e.mjs`
 - [x] 5 review, docs, commits
-- [ ] push `studio/beeld` (zie het verslag)
+- [x] push `studio/beeld` naar origin (gelukt, 7 okt)
 
 ## Review (tweede agent, 6 okt)
 - [x] 1 ernstig: een tweede tabblad zond ook (pong met een eigen klok, mix overschreven) → `magZenden`
