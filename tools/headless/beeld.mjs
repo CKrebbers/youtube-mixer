@@ -416,6 +416,27 @@ try {
   ok(`na herladen: adres, latentie en de open rij terug, uit blijft uit (${JSON.stringify(terug)})`,
     terug.adres === RELAY_ADRES && terug.lat === '80' && terug.open && !terug.aan && terug.lamp === null && terug.stand === 'uit', terug);
   ok('… en uit maakt geen WebSocket', terug.ws === 0, terug);
+
+  // ---- 8. opstarten met een onbereikbaar adres (de pc staat uit) -------------
+  // Zoals Clay het op een avond zonder pc tegenkomt: beeld staat nog aan, met
+  // het adres van de pc. 40 s lang: hooguit één melding, geen fouten van onze
+  // code, en de zender probeert het rustig opnieuw (1, 2, 4, 8, 10 s …).
+  console.log('\nopstarten met een onbereikbaar adres');
+  await tab.evalueer(`localStorage.setItem('varve.beeld.aan', '1'); localStorage.setItem('varve.beeld.adres', ${JSON.stringify(LEEG_ADRES)}); true`);
+  const jsVoor8 = tab.js.length, logVoor8 = tab.log.length;
+  await tab.cdp('Page.navigate', { url: `http://localhost:${POORT}/` });
+  await tab.tot('!!(window.engine && window.beeld && window.meld)', 30000);
+  await tab.evalueer(HULP);
+  const t8 = Date.now();
+  while (Date.now() - t8 < 40000) { await tab.beeld(); await wacht(500); }
+  const st8 = await tab.evalueer(`({ stand: __b.stand(), lamp: __b.lamp(), ws: window.__ws.length, meld: __b.meldingen(), verbonden: window.beeld.status().verbonden })`);
+  ok(`start met een onbereikbaar adres: de mixer werkt, de regel zegt "zoekt de relay op …" (${st8.stand})`,
+    st8.stand === `zoekt de relay op ${LEEG_ADRES}` && st8.lamp === 'zoekt' && !st8.verbonden);
+  ok(`40 s: 0 uitzonderingen en 0 console.error (${tab.js.length - jsVoor8})`, tab.js.length === jsVoor8, tab.js.slice(jsVoor8, jsVoor8 + 3).join(' | '));
+  const beeldMeld = st8.meld.filter((m) => /beeld/.test(m));
+  ok(`40 s: precies één melding, "de relay antwoordt niet" (${beeldMeld.length})`, beeldMeld.length === 1 && /antwoordt niet/.test(beeldMeld[0]), beeldMeld);
+  ok(`40 s: rustig opnieuw proberen, hooguit 9 verbindingen (${st8.ws})`, st8.ws >= 3 && st8.ws <= 9);
+  info(`wat Chrome zelf logde in die 40 s (Log-domein, niet te onderdrukken): ${tab.log.length - logVoor8} regels`);
   ok(`de hele run: 0 uitzonderingen en 0 console.error in de mixer (${tab.js.length})`, tab.js.length === 0, tab.js.slice(0, 3).join(' | '));
 } catch (err) {
   console.error(err);
