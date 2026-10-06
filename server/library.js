@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { bronVan } from './links.js';
 import { TOON_VERSIE, leesToonsoort, toonsoortNaam } from './toon.js';
+import { TWIJFELS } from '../src/engine/beatgrid.js';
 
 /**
  * De library: wat er binnengehaald is, en wat erbij hoort.
@@ -225,6 +226,10 @@ export function normaliseerGrid(g) {
     // zonder tellen de maten door zoals vroeger (de engine vult hem aan). Geen
     // schemawijziging, het staat in grid_json.
     if (getal(s.maat)) stuk.maat = Number(s.maat);
+    // Van de tellen (6 okt): waarom het stuk onzeker is, en het octaaf van de oude analyse.
+    if (TWIJFELS.includes(s.twijfel)) stuk.twijfel = s.twijfel;
+    if (s.octaaf === 2 || s.octaaf === 0.5) stuk.octaaf = s.octaaf;
+    if (s.ok === true) stuk.ok = true;          // met het oor gecontroleerd (Beatgrid.keurGoed)
     stukken.push(stuk);
   }
   if (!stukken.length) return null;
@@ -235,6 +240,9 @@ export function normaliseerGrid(g) {
   // 'auto' = voorstel van de analyse, 'hand' = daarna met de hand bewerkt.
   // Zonder: van vóór stap C (of gemigreerd) — die mag opnieuw geanalyseerd.
   if (g.bron === 'auto' || g.bron === 'hand') uit.bron = g.bron;
+  // 'tellen' = gemaakt uit de tellen van Beat This! (server/tellen.js), met de versie van de methode.
+  if (g.methode === 'tellen') uit.methode = 'tellen';
+  if (Number.isInteger(g.versie) && g.versie > 0) uit.versie = g.versie;
   return uit;
 }
 
@@ -481,6 +489,17 @@ export class Library {
     const perId = new Map(this.db.prepare(`${RIJ} WHERE t.rowid IN (${ids.map(() => '?').join(',')})`)
       .all(...ids).map((r) => [r._rij, r]));
     return ids.map((r) => this._verrijk(perId.get(r)));
+  }
+
+  /**
+   * Alle ids. `volgorde: 'laatst_geladen'`: wat je het laatst laadde eerst
+   * (daarna nooit geladen, nieuwste eerst) — voor achtergrondwerk dat het
+   * liefst begint bij wat je speelt.
+   */
+  alleIds({ volgorde = 'toegevoegd' } = {}) {
+    const orde = volgorde === 'laatst_geladen'
+      ? 'laatst_geladen IS NULL, laatst_geladen DESC, toegevoegd DESC' : 'toegevoegd';
+    return this.db.prepare(`SELECT id FROM tracks ORDER BY ${orde}`).all().map((r) => r.id);
   }
 
   /** Hoeveel nummers er zijn, of hoeveel op de zoekterm lijken. */

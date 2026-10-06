@@ -330,3 +330,87 @@ bpm drijft, met om de 32 tellen een pin: elke tel binnen 1,6 ms.
 koptelefoonuitgang, het samengestelde apparaat); slepen van het grid in de golfvorm;
 "verfijn dit stuk opnieuw" zonder tikken. De tap zet na vier tikken nog steeds het hele grid
 op slot (bestaand gedrag).
+
+## 11. Altijd zeker dat het klopt (6 oktober 2026)
+
+Clay: *"ik wil er eigenlijk altijd zeker van zijn dat het klopt"*. Daarom is
+"zeker" nu een **meting**, geen schatting, en kun je elk stuk met je oren
+controleren.
+
+### Wat er gemeten is (Beat This! op 11 nummers van Clay's library)
+
+Beat This! (CPJKU, MIT-code en -gewichten) is een neuraal netwerk dat tellen
+én downbeats hoort, getraind op 16 datasets. Naast het oude grid:
+
+| nummer | oude grid | Beat This! |
+|---|---|---|
+| Loving arms | 86% van de tellen binnen 50 ms, maar de "1" klopte in 1% | volgt de band (zonder klik: tot 170 ms tempoverschil), "1" 99% |
+| Ciel, album, Let it all go | ~154 / 140-156 / 170 bpm | 77 / 75 / 75: een octaaf |
+| jungle-mix (met de hand, op slot) | 80% eens | 90% van de mix zeker, 92% raak |
+| No Surprises | 17% eens (fase en drift) | 73% zeker, de rest rubato |
+| zoned out | grid op 157 | geen puls (94 tellen in 42 minuten): eerlijk |
+
+### Hoe het werkt
+
+1. **De tellen** (`server/tellen/tellen.py`, `server/tellen.js`): na elke
+   ingest en op de achtergrond voor wat er al staat (wat je het laatst laadde
+   eerst) zoekt Beat This! de tellen en downbeats → `media/<id>/tellen.json`.
+   In stukken van 4 minuten (een album van 31 minuten liep in één keer vol op
+   MPS), met het zwaartepunt van de piek (frames van 20 ms; mediaan ~7 → ~5
+   ms). ~1,5 s per minuut muziek op de GPU; de stems en de tellen gebruiken
+   de GPU om de beurt (`GpuSlot`: tegelijk duurde 2,8 minuut muziek 53 s).
+2. **Het grid uit de tellen** (`src/engine/tellen.js`, `gridUitTellen`):
+   stukken met één tempo die de tellen volgen. Een stuk stopt waar de
+   mediaan van 8 tellen meer dan 10 ms van de voorspelling ligt (geknipt waar
+   twee rechte lijnen samen het best passen), bij drie losse tellen op rij
+   (een sprong) of bij een gat; buren op hetzelfde rooster plakken weer aan
+   elkaar (een break is geen nieuw stuk). Korte stukjes samen = rubato. Een
+   gat vanaf 4 s = geen puls. De "1" uit de downbeats; drie of vier tellen
+   per maat ook.
+3. **Zeker = gemeten** (`meetGrid`): per stuk het deel van de gevonden
+   tellen binnen 25 ms van een gridlijn (de ruis van de detector), en de
+   grootste mediaan van een blok van 16 tellen (systematisch naast: > 12 ms
+   = drift). Daarnaast een **tweede mening** (`vergelijk`): de oude analyse.
+   Half of dubbel tempo telt als eens (het octaaf staat erbij); oneens is
+   alleen een ánder tempo, of een stabiele andere fase (de offbeat).
+   Grover is geen tegenspraak: de oude analyse lag op Loving arms 35-60 ms
+   naast een band zonder klik.
+4. **Waarom het niet zeker is** staat erbij: `geen puls`, `rubato`, `drift`,
+   `los` (veel tellen naast het grid), `maat` (de downbeats zijn het
+   onderling oneens; sync mag wel), `oneens`.
+5. **Met de hand gezet en op slot blijft staan.** De achtergrond meet zulke
+   grids alleen (in het logboek: hoeveel raak, slechtste blok, "1"). ↻ in de
+   library gebruikt de tellen (over een slot alleen met de tweede klik).
+
+### Op het scherm
+
+- **Naast de bpm** het oordeel over het stuk waar je bent: ✓ zeker (groen),
+  🔒 op slot, ? controleer (oranje, de reden in de tooltip), – geen puls, en
+  **⚠ N ms** als het grid tijdens het spelen van de tellen wegloopt (de
+  mediaan van de laatste 16 tellen vóór de speelkop ligt > 15 ms naast).
+  Een met de hand gezet stuk wordt ook gemeten: "met de hand gezet, maar 40%
+  van de tellen valt erop".
+- **In de zoom** de gevonden tellen als groene streepjes bovenin (de "1"
+  langer). Vallen de gridlijnen erop, dan klopt het.
+- **Controleren** (klik op het oordeel): een tik op elke gridlijn (hoog = de
+  "1"), in de koptelefoon met de cue van dat deck aan (zonder koptelefoon in
+  de zaal). Het deck springt naar het eerste stuk met twijfel; **✓ klopt**
+  keurt het stuk dat je hoort goed en springt door, ◀ ▶ lopen de stukken
+  langs, ✎ (grid) om bij te stellen terwijl de tik doorloopt. Is alles
+  goedgekeurd, dan gaat het grid **op slot**. Is er niets te controleren, dan
+  loop je alle stukken langs. Een goedgekeurd stuk (`ok`) is zeker, ook waar
+  de tellen het oneens zijn (rubato: jouw oor wint); een bewerking daarna
+  haalt `ok` weer weg.
+
+### Installeren (één keer)
+
+```
+~/.varve/stems-venv/bin/pip install beat-this==1.1.0
+curl -L -o ~/.varve/modellen/beat_this-final0.ckpt --create-dirs \
+  https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/final0.ckpt
+```
+
+Het model (81 MB) staat lokaal; de server haalt niets van internet. Ander
+pad: `VARVE_TELLEN_MODEL`; andere Python: `VARVE_TELLEN_PY` (anders die van
+de stems). Ontbreekt het, dan zegt de server dat bij het opstarten en komt
+het grid van de oude analyse, zoals eerst.

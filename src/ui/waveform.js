@@ -76,6 +76,31 @@ function tekenOnsets(g, onsets, range, span, w, h) {
   }
 }
 
+/**
+ * De gevonden tellen (Beat This!, BEATGRID.md §11) als streepjes BOVENIN de
+ * zoom, groen; de downbeats (de "1") langer. Vallen de gridlijnen erop, dan
+ * klopt het grid; liggen ze ernaast, dan zie je hoeveel en waar. In
+ * grid-modus groter, zoals de klappen.
+ */
+export const TEL_KLEUR = 'rgba(110,240,160,0.75)';
+function tekenTellen(g, tellen, range, span, w, h) {
+  const B = tellen?.beats;
+  if (!B?.length) return;
+  const grid = typeof document !== 'undefined' && document.body?.classList.contains('gridmodus');
+  const kort = grid ? Math.round(h * 0.16) : 6, lang = grid ? Math.round(h * 0.3) : 12;
+  const D = tellen.downbeats;
+  let j = 0;
+  let lo = 0, hi = B.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (B[m] < range.t0) lo = m + 1; else hi = m; }
+  g.fillStyle = TEL_KLEUR;
+  for (let i = lo; i < B.length && B[i] <= range.t1; i++) {
+    while (j < D.length && D[j] < B[i] - 1e-4) j++;
+    const een = j < D.length && Math.abs(D[j] - B[i]) < 1e-4;
+    const x = Math.round(((B[i] - range.t0) / span) * w);
+    g.fillRect(x, 0, een ? 2 : 1, een ? lang : kort);
+  }
+}
+
 /** De strook onder een overzicht, in de cache per grid en maat. */
 function strookVan(view, grid, duur, w) {
   const k = view._strookSleutel;
@@ -217,15 +242,16 @@ export class WaveformView {
     });
   }
 
-  /** `onsets`: de klappen van het deck (deck.onsets), alleen voor de zoom. */
-  draw(deckState, analysis, onsets = null) {
+  /** `onsets`: de klappen van het deck (deck.onsets); `tellen`: de gevonden tellen (deck.tellen). Alleen voor de zoom. */
+  draw(deckState, analysis, onsets = null, tellen = null) {
     const g = this.ctx, w = this.w, h = this.h, mid = h / 2;
     const dpr = window.devicePixelRatio || 1;
     const d = deckState;
     const kop = this.mode === 'overview'
       ? (d.duration ? Math.round((d.position / d.duration) * w * dpr) : 0)
       : Math.round(d.position * this.pxPerSecond * dpr);
-    if (this.zelfde(d.loaded ? analysis : null, this.mode === 'zoom' ? onsets : null, this.mode, this.pxPerSecond, dpr, w, h, d.loaded, d.duration, kop,
+    if (this.zelfde(d.loaded ? analysis : null, this.mode === 'zoom' ? onsets : null, this.mode === 'zoom' ? tellen : null,
+      this.mode, this.pxPerSecond, dpr, w, h, d.loaded, d.duration, kop,
       d.loop ? `${d.loop.start}|${d.loop.end}` : '', d.cuePoint, d.hotcues.join(','), this._gridTekst(d.grid))) return;
     g.clearRect(0, 0, w, h);
     g.fillStyle = '#0b0e11';
@@ -275,7 +301,7 @@ export class WaveformView {
     if (grid) this.tekenStukken(grid, range, span, w, h);
 
     // Klappen in de zoom; de zekerheidsstrook onder het overzicht.
-    if (this.mode === 'zoom') tekenOnsets(g, onsets, range, span, w, h);
+    if (this.mode === 'zoom') { tekenOnsets(g, onsets, range, span, w, h); tekenTellen(g, tellen, range, span, w, h); }
     else if (grid) tekenStrook(g, strookVan(this, grid, deckState.duration, w), h - 3, 3);
 
     // hotcues

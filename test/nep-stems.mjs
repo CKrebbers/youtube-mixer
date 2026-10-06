@@ -89,7 +89,7 @@ async function nep(args) {
     if (process.env.NEP_STEMS_LOG) {
       let nice = null;
       try { nice = getPriority(); } catch {}
-      appendFileSync(process.env.NEP_STEMS_LOG, JSON.stringify({ wat, pid: process.pid, nice, ...extra }) + '\n');
+      appendFileSync(process.env.NEP_STEMS_LOG, JSON.stringify({ wat, pid: process.pid, nice, t: Date.now(), ...extra }) + '\n');
     }
   };
 

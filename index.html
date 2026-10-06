@@ -50,6 +50,9 @@
       <span class="deck-title">— leeg —</span>
       <span class="maat-badge hidden" title="deze track geeft de maat (sync, sampler, video-puls)">MAAT</span>
       <span class="bpm-val" title="bpm van het beatgrid, meegerekend met de pitch">—</span>
+      <!-- Klopt het grid HIER? Gemeten aan de gevonden tellen (BEATGRID.md §11).
+           Klik = controleren: een tik op elke gridlijn, stuk voor stuk. -->
+      <button data-kind="button" data-action="track.1.grid.controle" class="grid-oordeel leeg" title="klopt het grid hier? klik om te controleren">—</button>
       <!-- Toonsoort die je HOORT (TOONSOORT.md §5, T3): groot, met de volle naam.
            Klik = corrigeren per stuk, op de positie (de actions uit §7). -->
       <span class="toon-val leeg">
@@ -97,6 +100,12 @@
         <button data-kind="button" data-action="track.1.grid.bar" data-action-shift="track.1.grid.bar.back" class="btn sm" title="de &quot;1&quot; een tel verder (shift: terug) — de tellen blijven liggen">1→</button>
         <button data-kind="button" data-action="track.1.grid.pin" class="btn sm grid-vast" title="vastzetten: de tel hier hoort hier. Tegen drift: zet &quot;1&quot; op een tel aan het begin, speel verder en druk een paar minuten later op een kick op vast — het tempo klopt dan over het hele stuk (APC gridmodus: shift + scene 1). Of klik in de golfvorm (gridmodus: klik = tel 1, shift + klik = vast)">vast</button>
         <button data-kind="button" data-action="track.1.grid.undo" class="btn sm grid-terug" title="de laatste bewerking van het grid terug (Cmd+Z)">↶</button>
+        <span class="grid-controle hidden" title="controle: een tik op elke gridlijn (hoog = de &quot;1&quot;)">
+          <button data-kind="button" data-action="track.1.grid.check.prev" class="btn sm" title="vorige stuk om te controleren">◀</button>
+          <button data-kind="button" data-action="track.1.grid.ok" class="btn sm grid-ok" title="dit stuk klopt: goedkeuren en door naar het volgende (alles goed = op slot)">✓ klopt</button>
+          <button data-kind="button" data-action="track.1.grid.check.next" class="btn sm" title="sla over: volgende stuk om te controleren">▶</button>
+          <button data-kind="button" data-action="track.1.grid.controle" class="btn sm" title="controle stoppen">✕</button>
+        </span>
       </div>
       <div class="hotcues">
         <button data-kind="button" data-action="track.1.hotcue.1" data-action-shift="track.1.hotcue.1.delete" class="hc hc1">1</button>

@@ -280,6 +280,45 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
   }
 
   /**
+   * De tellen van het nummer (Beat This!, docs/BEATGRID.md §11) op het deck:
+   * de zoom tekent ze, het scherm meet het grid ermee en bewaakt het tijdens
+   * het spelen. Staan ze nog in de rij van de server, dan later nog eens
+   * (hooguit tien keer, om de 20 s). Komen ze dan, en is het grid op het deck
+   * nog het automatische voorstel van vóór de tellen, dan het nieuwe grid van
+   * de server erbij; met de hand bewerkt blijft staan. Mislukt het: null, en
+   * het grid werkt gewoon zonder meting.
+   */
+  async function haalTellen(deckId, trackId, mijnLaad, poging = 0) {
+    try {
+      const r = await fetch(`/api/library/${trackId}/tellen`);
+      if (!r.ok) throw new Error(`${r.status}`);
+      const j = await r.json();
+      if (!nogDeLaatste(deckId, mijnLaad)) return;
+      const d = engine.deck(deckId);
+      if (!Array.isArray(j.beats)) {
+        if (j.reden === 'in de rij' && poging < 10) setTimeout(() => haalTellen(deckId, trackId, mijnLaad, poging + 1), 20000);
+        return;
+      }
+      d.tellen = { beats: Float64Array.from(j.beats), downbeats: Float64Array.from(j.downbeats || []) };
+      if (!poging || d.grid?.bron !== 'auto' || d.grid.methode === 'tellen') return;
+      // De server maakt het grid vlak na de tellen (met een tweede mening erbij): even wachten mag.
+      for (let i = 0; i < 4; i++) {
+        const g = (await (await fetch(`/api/library/${trackId}/grid`)).json())?.grid;
+        if (!nogDeLaatste(deckId, mijnLaad) || d.grid?.bron !== 'auto') return;
+        if (g?.methode === 'tellen') {
+          d.setGrid(g);
+          gridBewaard[deckId] = JSON.stringify(d.grid?.toJSON() ?? null);
+          meld(`track ${trackVanDeck(deckId)}: het grid komt nu uit de gevonden tellen`, 'info');
+          return;
+        }
+        await new Promise((z) => setTimeout(z, 4000));
+      }
+    } catch (err) {
+      console.warn(`[deck ${deckId}] tellen niet opgehaald:`, err.message);
+    }
+  }
+
+  /**
    * Een library-nummer op een track, streamend. Voor de library (onLaad) en
    * voor terugspelen (`terugspelen: true`, met het grid uit het log): dan
    * worden racks en pads NIET uit de library gehaald (die komen uit het log)
@@ -363,6 +402,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     // toen staan er al in); bewaarToon slaat terugspeelDecks over.
     toonBewaard[deckId] = toonTekst(engine.deck(deckId).setToonKaart(track.toon ?? null));
     haalOnsets(deckId, track.id, mijnLaad);
+    if (!terugspelen) haalTellen(deckId, track.id, mijnLaad);
     // Hoeveel stems er echt spelen zegt de bus (de engine), niet de library.
     const metStems = aantalOpBus(readAction, nr);
     console.log(`[deck ${deckId}] ${track.titel} — ${duur.toFixed(1)}s — streamt`

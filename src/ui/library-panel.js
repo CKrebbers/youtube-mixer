@@ -343,7 +343,8 @@ export class LibraryPanel {
       this._werkBij(track, 'grid', grid);
       this.onGrid(id, grid);
       const st = gridStatus(grid, track.duur);
-      delen.push(`grid ${grid.stukken.length} stuk${grid.stukken.length === 1 ? '' : 'ken'}, ${Math.round((st.aandeel ?? 0) * 100)}% zeker`);
+      delen.push(`grid${g.value.methode === 'tellen' ? ' uit de gevonden tellen' : ''}: ${grid.stukken.length} stuk${grid.stukken.length === 1 ? '' : 'ken'}, `
+        + `${Math.round((st.aandeel ?? 0) * 100)}% zeker${g.value.tellen === 'in de rij' ? ' (de tellen worden nog gezocht; daarna komt het grid daaruit)' : ''}`);
     }
     if (t.status === 'rejected') { delen.push(`toonsoort: analyseren mislukt (${t.reason?.message})`); goed = false; }
     else if (!t.value.bewaard) { delen.push(`toonsoort niet vervangen (${t.value.reden})`); goed = false; }

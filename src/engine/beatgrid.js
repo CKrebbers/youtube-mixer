@@ -76,8 +76,17 @@ function stukVan(s) {
   // Geen maat (oud grid) = niets; null telt niet als 0.
   const maat = s.maat === null || s.maat === undefined || s.maat === '' ? NaN : Number(s.maat);
   if (eindig(maat)) uit.maat = maat;
+  // Van de tellen (src/engine/tellen.js): waarom het stuk onzeker is, en of de
+  // oude analyse het dubbele of halve tempo hoorde. Alleen bekende waarden.
+  if (TWIJFELS.includes(s.twijfel)) uit.twijfel = s.twijfel;
+  if (s.octaaf === 2 || s.octaaf === 0.5) uit.octaaf = s.octaaf;
+  // Met het oor gecontroleerd (de controleklik, keurGoed): zeker, wat de tellen ook zeggen.
+  if (s.ok === true) uit.ok = true;
   return uit;
 }
+
+/** De redenen van twijfel die een stuk kan hebben (tellen.js, TWIJFEL_TEKST). */
+export const TWIJFELS = ['geen puls', 'rubato', 'drift', 'los', 'maat', 'oneens'];
 
 export class Beatgrid {
   /**
@@ -100,6 +109,10 @@ export class Beatgrid {
     // bewerkt (het deck zet dat bij elke bewerking), null = van vóór stap C.
     // De server analyseert bij het opstarten alleen null opnieuw.
     this.bron = d.bron === 'auto' || d.bron === 'hand' ? d.bron : null;
+    // `methode`: 'tellen' = gemaakt uit de tellen van Beat This! (versie: van
+    // de methode); zonder = de oude analyse, of met de hand.
+    this.methode = d.methode === 'tellen' ? 'tellen' : null;
+    this.versie = Number.isInteger(d.versie) && d.versie > 0 ? d.versie : null;
     this._bouw();
   }
 
@@ -112,6 +125,9 @@ export class Beatgrid {
       const k = { van: s.van, bpm: s.bpm, anker: s.anker };
       if (eindig(s.zekerheid)) k.zekerheid = s.zekerheid;
       if (eindig(s.maat)) k.maat = s.maat;
+      if (s.twijfel) k.twijfel = s.twijfel;
+      if (s.octaaf) k.octaaf = s.octaaf;
+      if (s.ok) k.ok = true;
       return k;
     });
   }
@@ -486,7 +502,16 @@ export class Beatgrid {
    * het stuk onzeker en weigerden sync en beat-loops na het corrigeren nog
    * steeds ("tik eerst … of zet op slot").
    */
-  bevestig(t) { return this._pas(this._i(t), (s) => { delete s.zekerheid; }); }
+  bevestig(t) { return this._pas(this._i(t), (s) => { delete s.zekerheid; delete s.twijfel; delete s.octaaf; delete s.ok; }); }
+
+  /**
+   * GOEDGEKEURD (de controle, docs/BEATGRID.md §11): je hebt het stuk rond t
+   * met de controleklik beluisterd en het klopt. Zeker, met `ok` erbij: ook
+   * waar de gevonden tellen het niet met het grid eens zijn (rubato, een live
+   * band) wint jouw oor. Een bewerking daarna (bevestig) haalt `ok` weer weg:
+   * dan is het een ander grid dan je hoorde.
+   */
+  keurGoed(t) { return this._pas(this._i(t), (s) => { delete s.zekerheid; delete s.twijfel; delete s.octaaf; s.ok = true; }); }
 
   /**
    * De "1" van het stuk rond t `tellen` tellen opschuiven. De tellen zelf
@@ -593,6 +618,8 @@ export class Beatgrid {
     if (this.slot) uit.slot = true;
     if (this.zeker !== null) uit.zeker = this.zeker;
     if (this.bron) uit.bron = this.bron;
+    if (this.methode) uit.methode = this.methode;
+    if (this.versie) uit.versie = this.versie;
     return uit;
   }
 
