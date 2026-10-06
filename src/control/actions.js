@@ -891,6 +891,32 @@ export function bindEngine(engine) {
            // 0,5: er valt iets te wissen (gedimd rood); dit staat niet achter
            // shift, dus vol rood zou de hele tijd schreeuwen.
            read: () => (sampler.pads[i] || sampler.herinneringen?.[i] ? 0.5 : 0) });
+      // Een hele SECTIE (6 okt, docs/SECTIES.md): de sectie die je HOORT op de
+      // focus-track, van haar "1" tot de "1" van de volgende, in deze pad; hij
+      // start daarna op de "1". Een eigen action en geen shift: shift op een
+      // lege pad is al "vergeten" (.clear). Alleen op een lege pad; kan het
+      // niet, dan zegt een melding waarom (WAAROM NIET). Read: null = kan niet
+      // (pad gevuld of bewaard, focus-track zonder secties of grid), 0,5 =
+      // kan, 1 = ingedrukt.
+      let sectieDruk = false;
+      define(`sampler.${i + 1}.section`, 'trigger', (on) => {
+        sectieDruk = !!on;
+        if (!on) return;
+        const deck = engine.focused();
+        const nr = trackVanDeck(deck?.id);
+        const naam = `track ${nr}`;
+        const s = deck?.sectieHier ?? -1;
+        const waarom = sampler.waaromGeenSectie(i, deck, s, naam);
+        if (waarom) { engine.emit('melding', { tekst: `sampler pad ${i + 1}: ${waarom}`, soort: 'info', duur: 8000 }); return; }
+        sampler.neemSectie(i, deck, s, { bron: nr, naam })
+          .catch((err) => engine.emit('melding', { tekst: `sampler pad ${i + 1}: ${err.message}`, soort: 'fout' }));
+      }, { label: `Sampler pad ${i + 1}: de sectie die je hoort (focus-track), in hele maten`,
+           read: () => {
+             if (sectieDruk) return 1;
+             if (sampler.pads[i] || sampler.herinneringen?.[i]) return null;
+             const d = engine.focused();
+             return d?.buffer && d.sectieKaart && d.grid ? 0.5 : null;
+           } });
     }
     define('sampler.length', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },
       { label: 'Sampler: hoeveel tellen', read: () => [1, 2, 4, 8].indexOf(sampler.tellen) / 3 });

@@ -1423,21 +1423,24 @@ console.log('\nmodus auto (auto-DJ)');
     // Secties (6 okt, docs/SECTIES.md): Shift + scene 1 opent de modus, het lampje van
     // scene 1 in de modus, en de 40 pads met en zonder shift (als loop).
     'note:0:82#shift', 'note:0:82@grid.secties',
-    ...Array.from({ length: 40 }, (_, n) => [`note:0:${n}@grid.secties`, `note:0:${n}#shift@grid.secties`]).flat()].sort();
-  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4, scene 4 met shift in de grid-modus, de vijf beeld-noodknoppen, de acht koptelefoonknoppen, de elf van het mapje inst, het mapje master, de modus stems, de modus patronen, keylock/toon, vast in de grid-modus en de modus secties (${nieuw.length} regels)`,
+    ...Array.from({ length: 40 }, (_, n) => [`note:0:${n}@grid.secties`, `note:0:${n}#shift@grid.secties`]).flat(),
+    // Sampler × secties (6 okt, tak studio/sec-sampler): rij 3 van de modus sampler (was
+    // leeg) = de sectie die je hoort in pad 1–8 (sampler.N.section). Shift blijft wat het was.
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map((k) => `note:0:${apc.gridNote(k, 3)}@grid.sampler`)].sort();
+  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4, scene 4 met shift in de grid-modus, de vijf beeld-noodknoppen, de acht koptelefoonknoppen, de elf van het mapje inst, het mapje master, de modus stems, de modus patronen, keylock/toon, vast in de grid-modus, de modus secties en rij 3 van de sampler (${nieuw.length} regels)`,
     JSON.stringify(nieuw) === JSON.stringify(wilNieuw));
   const tel = (d) => { const c = {}; for (const r of d.rules) { const k = `${r.laag ?? '-'}${r.shift ? '#shift' : ''}`; c[k] = (c[k] || 0) + 1; } return c; };
   const voor = vorige ? tel(vorige) : {}, na = tel(doc);
   const anders = Object.keys({ ...voor, ...na }).filter((k) => voor[k] !== na[k]).sort();
-  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1), stems (40 + 1, 40 met shift), patronen (45 + 1, 41 met shift) en secties (40 + 1, 40 met shift) erbij, acht shift-regels zonder mapje (auto, master, stems, patronen, secties, keylock, toon −/+) en vier in de grid-modus, de noodknoppen (1 zonder mapje, 4 in video), de koptelefoon (8 zonder mapje), het mapje inst (11) en het mapje master (11 + 1 met shift) (${anders.join(' ')})`,
-    anders.join() === '-,-#shift,device.inst,device.master,device.master#shift,edit.aan#shift,grid.auto,grid.patronen,grid.patronen#shift,grid.sampler#shift,grid.secties,grid.secties#shift,grid.stems,grid.stems#shift,grid.video,grid.video#shift'
+  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1), stems (40 + 1, 40 met shift), patronen (45 + 1, 41 met shift) en secties (40 + 1, 40 met shift) erbij, acht shift-regels zonder mapje (auto, master, stems, patronen, secties, keylock, toon −/+) en vier in de grid-modus, de noodknoppen (1 zonder mapje, 4 in video), de koptelefoon (8 zonder mapje), het mapje inst (11), het mapje master (11 + 1 met shift) en rij 3 van de sampler (8) (${anders.join(' ')})`,
+    anders.join() === '-,-#shift,device.inst,device.master,device.master#shift,edit.aan#shift,grid.auto,grid.patronen,grid.patronen#shift,grid.sampler,grid.sampler#shift,grid.secties,grid.secties#shift,grid.stems,grid.stems#shift,grid.video,grid.video#shift'
     && na['grid.auto'] === 6 && na['grid.stems'] === 41 && na['grid.stems#shift'] === 40 && na['grid.patronen'] === 46 && na['grid.patronen#shift'] === 41
     && na['grid.secties'] === 41 && na['grid.secties#shift'] === 40
     && na['-#shift'] === voor['-#shift'] + 8
     && na['device.inst'] === 11 && !voor['device.inst'] && na['device.master'] === 11 && na['device.master#shift'] === 1
-    && na['grid.sampler#shift'] === 1 && na['grid.video#shift'] === 1
+    && na['grid.sampler#shift'] === 1 && na['grid.video#shift'] === 1 && na['grid.sampler'] === voor['grid.sampler'] + 8
     && na['edit.aan#shift'] === voor['edit.aan#shift'] + 4 && na['-'] === voor['-'] + 1 + 8 && na['grid.video'] === voor['grid.video'] + 4
-    && ['grid.hotcues', 'grid.loops', 'grid.sampler', 'grid.klank', 'device.strip', 'device.rack']
+    && ['grid.hotcues', 'grid.loops', 'grid.klank', 'device.strip', 'device.rack']
       .every((k) => voor[k] === na[k] && voor[k] > 0));
 
   // Clay's eigen mapping zoals hij sinds 25 sep op de server staat: een
@@ -1461,9 +1464,9 @@ console.log('\nmodus auto (auto-DJ)');
   const kopie25 = JSON.parse(JSON.stringify(vorige));
   for (const r of kopie25.rules) if (r.laag === 'device.rack' && VIDEO_KNOPPEN[r.in]) { r.action = VIDEO_KNOPPEN[r.in]; r.mode = 'absolute'; }
   const vk = verschilVanKopie(doc, kopie25);
-  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 305 x "weggehaald": 13 + 8 koptelefoonknoppen + 2 Cue Level-regels in een grid-modus + 11 van het mapje inst + 13 van het mapje master + 83 van de modus stems + 89 van de modus patronen + 3 van keylock en toon + 1 van vast + 82 van de modus secties)',
+  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 313 x "weggehaald": 13 + 8 koptelefoonknoppen + 2 Cue Level-regels in een grid-modus + 11 van het mapje inst + 13 van het mapje master + 83 van de modus stems + 89 van de modus patronen + 3 van keylock en toon + 1 van vast + 82 van de modus secties + 8 van rij 3 van de sampler)',
     vk.basis === 'e2bef131-374' && vk.verschil.rules.length === 4 && vk.verschil.removed.length === 0
-    && maakVerschil(doc, kopie25).removed.length === 305);
+    && maakVerschil(doc, kopie25).removed.length === 313);
   lg.zet('grid', 'hotcues');
 
   // Beeld-noodknoppen (2 okt, ONTBREEKT A4): de master-knop (Track Select boven

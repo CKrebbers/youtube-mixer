@@ -1,5 +1,6 @@
 import { clamp } from '../lib/emitter.js';
-import { startOpDeTel } from './fx.js';
+import { startOpDeTel, startOpDeEen, startDrempel } from './fx.js';
+import { sectieEen } from './secties.js';
 
 /**
  * De sampler: acht pads die een stukje van een track vasthouden en het als
@@ -11,6 +12,10 @@ import { startOpDeTel } from './fx.js';
  * video-puls), en op diens tempo: een sample van 124 bpm in een set van
  * 120 bpm loopt 120/124 zo snel.
  *
+ * Een hele SECTIE (6 okt, docs/SECTIES.md): van haar "1" tot de "1" van de
+ * volgende, in hele maten (knipSectie). Zo'n pad start op de "1" van de
+ * maatgever, en houdt bij herankeren ook de maat vast, niet alleen de tel.
+ *
  * Alles op de audioklok (regel 3): de start wordt ingepland op ctx-tijd,
  * niet met een timer.
  */
@@ -19,6 +24,66 @@ export const TELLEN = [1, 2, 4, 8];
 export const AANTAL = 8;
 const NAAD = 0.005;          // zo lang wordt het einde in het begin overgevloeid
 const FADE_UIT = 0.02;
+
+/**
+ * De grens voor een sectie in een pad. Een pad houdt de audio vast: stereo
+ * float op 48 kHz is ~23 MB per minuut, en bij het knippen van een nummer met
+ * stems komt daar even het hele stuk stems.wav bij (vijf paren, ~20 bytes per
+ * frame). 32 maten is de langste sectie die de analyse maakt (langer splitst
+ * hij op een frasegrens, server/secties.js), dus elke automatische sectie
+ * past, tot 86 bpm ook in seconden. 90 s houdt één pad onder ~35 MB en acht
+ * volle pads onder ~280 MB. Langer (een mix, een traag nummer): een melding,
+ * en als loop op de track zelf kan het wel (secties-modus, shift + pad).
+ */
+export const SECTIE_MAX_MATEN = 32;
+export const SECTIE_MAX_SEC = 90;
+
+/**
+ * Is een pad van zoveel tellen een sectie (start op de "1", houdt de maat
+ * vast)? Een gewone pad komt nooit verder dan de lengteknop (TELLEN), een
+ * sectie is minstens 4 maten. Zo weet ook een pad die terugkomt uit de
+ * library of het log wat hij is, zonder extra veld: daar staan alleen van,
+ * tot, tellen en bpm. Een sectie van 2 maten of korter start op de tel.
+ */
+export const opDeMaat = (tellen) => Number.isFinite(tellen) && tellen > TELLEN[TELLEN.length - 1];
+
+/**
+ * Welk stuk tracktijd hoort bij sectie i, als pad? Puur.
+ *
+ *   van     de "1" van de sectie (sectieEen, dezelfde als waar de sprong
+ *           landt): bij de eerste sectie de eerste "1", niet 0 (de opmaat
+ *           hoort bij geen pad)
+ *   tot     de "1" van de volgende sectie, of het einde van het nummer, maar
+ *           altijd in HELE maten vanaf `van`: een loop van 5,75 maat loopt
+ *           uit de maat. Een stuk met een eigen "1" erin (een maat van 6
+ *           tellen): wat na de laatste hele maat komt valt weg.
+ *   tellen  hele maten × tellen per maat
+ *   bpm     zoals knipBereik: van het stuk van de sectie, of gemiddeld als
+ *           er een tempowissel in ligt. Van `van`, niet van `tot`: daar
+ *           begint vaak een nieuw stuk van de tempokaart.
+ *
+ * @param grid   Beatgrid
+ * @param kaart  SectieKaart
+ * @param i      sectie (vanaf 0)
+ * @param duur   lengte van het nummer (s)
+ * @returns {{ van: number, tot: number, tellen: number, bpm: number } | null}
+ *          null zonder grid, kaart of sectie, of korter dan een maat
+ */
+export function knipSectie(grid, kaart, i, duur) {
+  if (!grid || !kaart || !Number.isInteger(i) || i < 0 || i >= kaart.aantal) return null;
+  const per = grid.beatsPerBar;
+  const bVan = Math.round(grid.beatAt(sectieEen(grid, kaart.begin(i))));
+  const bNummer = grid.beatAt(duur);
+  const bEind = i + 1 < kaart.aantal ? Math.min(bNummer, grid.beatAt(sectieEen(grid, kaart.begin(i + 1)))) : bNummer;
+  const maten = Math.floor((bEind - bVan) / per + 1e-6);
+  if (!(maten >= 1)) return null;
+  const tellen = maten * per;
+  const van = grid.timeOf(bVan), tot = grid.timeOf(bVan + tellen);
+  const wissel = grid.volgendeWissel(van);
+  const eenStuk = wissel === null || wissel >= tot - 1e-9;
+  const bpm = eenStuk ? grid.bpmAt(van) : (60 * tellen) / (tot - van);
+  return { van, tot, tellen, bpm };
+}
 
 /**
  * Welk stuk tracktijd hoort bij "de laatste N tellen"?
@@ -111,6 +176,46 @@ export class Sampler {
     this.onGevuld?.(n, { deckId: deck.id, van: bereik.van, tot: bereik.tot, bpm: bereik.bpm, tellen: bereik.tellen, bron });
   }
 
+  /**
+   * Sectie i van een deck, heel, in pad n (sampler.N.section). Weigert met
+   * de reden van waaromGeenSectie; bewaard wordt hij zoals een gewone pad
+   * (onGevuld: van, tot, tellen, bpm), en terughalen knipt hem opnieuw.
+   */
+  async neemSectie(n, deck, i, { bron = null, naam } = {}) {
+    const { waarom, bereik } = this._sectie(n, deck, i, naam);
+    if (waarom) throw new Error(waarom);
+    if (!(await this._vul(n, deck, { ...bereik, bron }))) return;
+    this.onGevuld?.(n, { deckId: deck.id, van: bereik.van, tot: bereik.tot, bpm: bereik.bpm, tellen: bereik.tellen, bron });
+  }
+
+  /**
+   * Waarom sectie i van `deck` nu niet in pad n kan, in gewone taal, of null
+   * als het kan (WAAROM NIET: een knop die stil weigert is een kapotte knop).
+   * `naam` = hoe de track in de zin heet ("track 3").
+   */
+  waaromGeenSectie(n, deck, i, naam) { return this._sectie(n, deck, i, naam).waarom; }
+
+  _sectie(n, deck, i, naam = 'deze track') {
+    const nee = (waarom) => ({ waarom, bereik: null });
+    if (this.pads[n]) return nee('deze pad is al gevuld: maak hem eerst leeg (leegmaken), of kies een lege pad');
+    if (this.herinneringen[n]) return nee('deze pad bewaart nog een stuk (↺): haal het terug met de pad zelf, of vergeet het met leegmaken');
+    if (!deck?.buffer) return nee(`er staat niets op ${naam}: laad eerst een nummer`);
+    const kaart = deck.sectieKaart, grid = deck.grid;
+    if (!kaart) return nee(`${naam} heeft (nog) geen secties: die worden bij het laden berekend (een paar seconden)`);
+    if (!grid) return nee(`${naam} heeft nog geen beatgrid, en een sectie gaat in hele maten: tik mee met TAP (vier tikken), of zet tel 1 met "1"`);
+    if (!kaart.opGrid) return nee(`de secties van ${naam} zijn zonder grid berekend, dus niet op de maat: laad het nummer opnieuw, dan rekent hij ze op het grid`);
+    const b = knipSectie(grid, kaart, i, deck.duration);
+    if (!b) return nee(kaart.begin(i) == null ? `${naam} heeft geen sectie ${i + 1}` : `sectie ${i + 1} is korter dan een maat`);
+    const onzeker = grid.strook(b.tot).some((s) => s.tot > b.van + 1e-6 && s.van < b.tot - 1e-6 && s.soort !== 'zeker');
+    if (onzeker) return nee(`het grid van ${naam} is in deze sectie onzeker, en een pad die naast de tel loopt hoor je meteen: zet het grid eerst goed (grid-modus, Lock)`);
+    const maten = b.tellen / grid.beatsPerBar, sec = b.tot - b.van;
+    if (maten > SECTIE_MAX_MATEN || sec > SECTIE_MAX_SEC) {
+      return nee(`deze sectie is ${maten} maten (${Math.round(sec)} s): te lang voor een pad, hooguit ${SECTIE_MAX_MATEN} maten en ${SECTIE_MAX_SEC} s `
+        + '(een pad houdt de audio vast, ~23 MB per minuut). Als loop op de track zelf kan het wel: secties-modus, shift + pad');
+    }
+    return { waarom: null, bereik: b };
+  }
+
   /** Een bewaarde pad opnieuw knippen, van het deck waar zijn nummer op staat. */
   async herstel(n, deck) {
     const h = this.herinneringen[n];
@@ -151,7 +256,7 @@ export class Sampler {
     }
   }
 
-  /** Starten op de volgende tel, of stoppen als hij al speelt. */
+  /** Starten op de volgende tel (een sectie: op de volgende "1"), of stoppen als hij al speelt. */
   wissel(n) {
     const pad = this.pads[n];
     if (!pad) return false;
@@ -160,7 +265,8 @@ export class Sampler {
     // Op het tempo dat je hoort; zonder tempo van één van beide: gewoon zoals hij is.
     const rate = this._rate(pad, k);
     // Op de volgende tel; ligt die al binnen de uitgangsbuffer, de tel erna.
-    const start = startOpDeTel(this.ctx, k);
+    // Een sectie begint op haar "1", dus op de volgende "1" van de maatgever.
+    const start = opDeMaat(pad.tellen) ? startOpDeEen(this.ctx, k) : startOpDeTel(this.ctx, k);
     this._startBron(pad, start, 0, rate);
     pad.speelt = true;
     pad.start = start;
@@ -215,17 +321,34 @@ export class Sampler {
    * de maat; daar begint een nieuwe op het nieuwe tempo, op de dichtstbijzijnde
    * tel van het sample, en de oude vloeit er in 5 ms in over. Klopt alles al,
    * dan gebeurt er niets — dit wordt bij elke deckwijziging aangeroepen.
+   *
+   * Een sectie (opDeMaat) houdt ook de MAAT vast: op de tel van het sample die
+   * op dezelfde plek in de maat staat als de maatgever (springt die een tel,
+   * dan schuift de pad mee). Wacht hij nog op zijn eerste "1", dan opnieuw
+   * plannen op de "1" van nu, tot die start in de uitgangsbuffer zit.
    */
   heranker() {
     const k = this.klok();
     if (!k?.beatLengte) return;
     const A = startOpDeTel(this.ctx, k);
+    const grens = this.ctx.currentTime + startDrempel(this.ctx);
     for (const pad of this.pads) {
       if (!pad?.speelt || !pad.bpm || !pad.seg) continue;
       const rate = this._rate(pad, k);
+      const maat = opDeMaat(pad.tellen);
+      if (maat && pad.seg.T === pad.start && pad.seg.T >= grens) {
+        // Nog niet begonnen (het eerste segment, en dat ligt nog vóór ons).
+        const T = startOpDeEen(this.ctx, k);
+        if (Math.abs(T - pad.seg.T) < 1e-6 && Math.abs(rate - pad.seg.R) < 1e-6) continue;
+        this._ruimOud(pad);
+        try { pad.src.stop(); } catch (_) {}
+        this._startBron(pad, T, 0, rate);
+        pad.start = T;
+        continue;
+      }
       const tel = this._tel(pad);                            // een tel in het sample
       const daar = this._positie(pad, A);
-      const doel = (Math.round(daar / tel) * tel) % pad.buffer.duration;
+      const doel = maat ? this._maatDoel(pad, k, A, daar, tel) : (Math.round(daar / tel) * tel) % pad.buffer.duration;
       const faseGoed = Math.abs(daar - doel) < 0.001 || Math.abs(daar - doel) > pad.buffer.duration - 0.001;
       if (Math.abs(rate - pad.seg.R) < 1e-6 && faseGoed) continue;
       this._ruimOud(pad);
@@ -239,6 +362,21 @@ export class Sampler {
       pad.oud = oud;
       this._startBron(pad, A, doel, rate);
     }
+  }
+
+  /**
+   * Waar een sectie-pad op A hoort te zijn: de tel van het sample die het
+   * dichtst bij `daar` ligt en op dezelfde plek in de maat staat als de
+   * maatgever op A (het sample begon op een "1"). Zonder maat in de klok, of
+   * als de pad geen heel aantal maten van de maatgever is: alleen de tel.
+   */
+  _maatDoel(pad, k, A, daar, tel) {
+    const per = k.perMaat, duur = pad.buffer.duration;
+    if (!(per > 0) || !Number.isInteger(k.tellenTotEen) || pad.tellen % per !== 0) return (Math.round(daar / tel) * tel) % duur;
+    const j = Math.round((A - k.ankerCtx) / k.beatLengte);           // tellen van het anker tot A
+    const plek = (((j - k.tellenTotEen) % per) + per) % per;          // tel van de maat op A (0 = de "1")
+    const s = plek + per * Math.round((daar / tel - plek) / per);
+    return (((s * tel) % duur) + duur) % duur;
   }
 
   /** Een eerdere overgang die nog loopt: meteen weg, anders stapelen ze. */

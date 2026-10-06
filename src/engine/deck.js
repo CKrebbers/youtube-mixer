@@ -663,17 +663,29 @@ export class Deck extends Emitter {
    *
    * Null als er geen grid is of het deck stilstaat — dan loopt een gate gewoon
    * niet, en dat is eerlijker dan hem op een verzonnen tempo laten draaien.
+   *
+   * Ook de MAAT (6 okt, een sectie in de sampler): `tellenTotEen` = hoeveel
+   * tellen na die volgende tel de eerstvolgende "1" valt (0 = hij IS de "1",
+   * met het maat-anker per stuk: Beatgrid.volgendeVeelvoud), `perMaat` =
+   * tellen per maat. Wie alleen de tel nodig heeft leest ze niet. In een
+   * loop die geen heel aantal maten is komt die "1" niet: dan null.
    */
   fxKlok() {
     // Remmen: geen maat. Wat al op de tel loopt houdt zijn tempo.
     if (!this.grid || !this.playing || this.remt) return null;
     // De tel die komt, en hoe lang DIE duurt (tot de tel erna): met een
     // tempokaart is dat het tempo van het stuk waar je naartoe gaat.
-    const n = Math.ceil(this.grid.beatAt(this.position) - 1e-9);
-    const volgende = this.grid.timeOf(n);
+    const g = this.grid;
+    const n = Math.ceil(g.beatAt(this.position) - 1e-9);
+    const volgende = g.timeOf(n);
+    const per = g.beatsPerBar;
+    const lusMaten = this.loop ? (g.beatAt(this.loop.end) - g.beatAt(this.loop.start)) / per : 1;
+    const heleMaten = Math.abs(lusMaten - Math.round(lusMaten)) < 1e-3 && lusMaten > 0.5;
     return {
-      beatLengte: (this.grid.timeOf(n + 1) - volgende) / this.rate,
+      beatLengte: (g.timeOf(n + 1) - volgende) / this.rate,
       ankerCtx: this.ctxTimeOf(volgende),
+      tellenTotEen: heleMaten ? g.volgendeVeelvoud(n) - n : null,
+      perMaat: per,
     };
   }
 
