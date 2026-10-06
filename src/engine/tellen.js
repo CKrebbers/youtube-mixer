@@ -27,7 +27,7 @@
  * van de gevonden tellen erop.
  */
 
-import { Beatgrid, ZEKER_VANAF, GEEN_PULS, TWIJFELS } from './beatgrid.js';
+import { Beatgrid, ZEKER_VANAF, GEEN_PULS, TWIJFELS, MIN_BPM, MAX_BPM } from './beatgrid.js';
 
 /** Een tel valt "raak" als hij hooguit zo ver van een gridlijn ligt (s): de ruis van de detector. */
 export const RAAK = 0.025;
@@ -346,7 +346,12 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
     if (vorige && seg.eerste - vorige.laatste > Math.max(GEEN_PULS_S, GEEN_PULS_TELLEN * Math.max(L, vorige.L))) {
       stukken.push(geenPuls(vorige.laatste + vorige.L / 2, stukken[stukken.length - 1]));
     }
-    const stuk = { van: seg.eerste - L / 2, bpm: 60 / L, anker, maat };
+    // Trager dan MIN_BPM (rubato piano kwam op 31 bpm, 6 okt): het dubbele
+    // tempo. Elke gevonden tel ligt dan nog op een lijn; de library en de
+    // Beatgrid kennen niets onder MIN_BPM (de library weigerde het hele grid).
+    let bpm = 60 / L;
+    while (bpm < MIN_BPM) bpm *= 2;
+    const stuk = { van: seg.eerste - L / 2, bpm: Math.min(MAX_BPM, bpm), anker, maat };
     extra.set(stuk, { rubato, maatTwijfel: nDown >= 4 && stem < 0.6 });
     stukken.push(stuk);
   });
