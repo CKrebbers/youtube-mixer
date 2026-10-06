@@ -64,8 +64,23 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   drums weg 0,9 · rest weg 0,4), opnieuw splitsen geweigerd terwijl het speelt, herladen-teken,
   layout op 1440×790 en 1920×1080, de tegel in de Controlekamer. `--nep` = alleen de ui
   (/api/stems en de stem-actions nagebootst in de pagina).
+- `beeld.mjs [uitmap]` — spoor beeld zonder pc (docs/BEELD.md; eigen server op 8785, debug 9385, een
+  nep-relay op 8786, niemand op 8787, geen MIDI): opstarten zonder adres (0 fouten, geen WebSocket),
+  de bovenbalk met de knop beeld op 1440×790/900 en 1920×1080, de BEELD-rij (velden, geweigerd adres
+  = één melding, latentie geklemd), de stand (zoekt · verbonden · beeld-status · na 3 s weer
+  "wacht"), het manifest als eerste bericht, de tegel in de Controlekamer, relay weg, uit en herladen,
+  opstarten met een onbereikbaar adres (40 s: één info-melding, 0 fouten van onze code), en een tweede
+  VARVE-tabblad (zendt niet zolang het eerste open is, neemt het daarna over). Wat Chrome
+  zelf logt bij een mislukte WebSocket (Log-domein, niet te onderdrukken) wordt apart geteld.
+- `beeld-e2e.mjs [uitmap]` — eind-tot-eind met de ECHTE Stroommachine, op deze Mac zonder pc: de relay
+  uit `~/Projects/stroommachine` (`VARVE_STROOM_REPO`) op 7702, de Stroommachine headless
+  (swiftshader, `#vast`) en VARVE (eigen server op 8797, debug 9347/9348) in twee Chromes. Klok en
+  tempo (`window.__stroom.dj()`), rondetijd, de tel naast die van VARVE, de Live-tab ("varvedj · volgt
+  de klok · 124.0 BPM"), tracks met hun id, crossfader 0 → 0,8 = dom A → B, een macro van de
+  APC-pagina, de Stroommachine herladen (tracks terug), pauze (haar bronnen zakken naar stil), relay weg
+  en terug. Weigert als 7702 bezet is.
 - `rijen.mjs [uitmap] [--label voor|na]` — de rijen onder de mixer (stems, koptelefoon, instrument,
-  patronen, master, auto, klankschaal; eigen server op 8863, debug 9463, geen MIDI): op 1440×790 en
+  patronen, master, auto, klankschaal, beeld; eigen server op 8863, debug 9463, geen MIDI): op 1440×790 en
   1920×1080 met geen, elke rij apart, drie, alle rijen open, en met de videokolom erbij. Per stand:
   elke fader, knop en knob van de acht kolommen en de hele sampler binnen het scherm, niet weggeknipt
   en niet bedekt (elementFromPoint), faders ≥ 56 px, de pagina en main scrollen niet, elke open rij

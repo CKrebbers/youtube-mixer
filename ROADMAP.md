@@ -109,6 +109,12 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     opbouw, drop, break, outro) die je op de maat lanceert en loopt; grid-modus SECTIES op Shift +
     scene 1, de strook boven de golfvorm (`docs/SECTIES.md`). Gebouwd op `studio/secties` (van
     `studio/integratie`), gemeten op synthetisch materiaal; nog proberen (speellijst, VRAGEN SE).
+29. BEELD (6 okt, Clay: "Varve DJ stuurt de Stroommachine aan"): twee machines, één relay. VARVE
+    stuurt klok, kenmerken, tracks per crossfaderkant en de crossfader naar de Stroommachine op de
+    Omarchy-pc (protocol in de Stroommachine-repo, `koppel/PROTOCOL-dj.md`); BEELD-rij met adres en
+    latentie, APC-mapje beeld op Shift + Detail View (`docs/BEELD.md`). Gebouwd op `studio/beeld`
+    (van `studio/integratie`), eind-tot-eind gemeten op de Mac met de echte Stroommachine headless;
+    nog niet op LAN/wifi en niet op de APC (VRAGEN BE).
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
@@ -122,6 +128,8 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
    (speellijst van de Controlekamer), dan VRAGEN blok S.
 9. 28 SECTIES: gebouwd op `studio/secties` (6 okt). Proberen (speellijst, blok Secties), dan VRAGEN
    blok SE; daarna samenvoegen in `studio/integratie`.
+10. 29 BEELD: gebouwd op `studio/beeld` (6 okt). Proberen met de pc (`koppel/DJ-START.md` in de
+    Stroommachine-repo, docs/BEELD.md §1), dan VRAGEN blok BE; daarna samenvoegen.
 
 Aanname: publicatie 1 van AV-kern (25 okt) blijft staan. Komt die datum in de
 knel door 15 en 17, dan gaat AV-kern voor; dat is de vraag van H5.
