@@ -98,5 +98,60 @@ console.log('\nde melding bij een sectie die er niet is');
     m === 'track 1 heeft 5 secties; sectie 21 is er niet.');
 }
 
+// ---- 3. sectieOpDeMaat in een loop ------------------------------------------------------
+// De sectie op de volgende "1": ligt die "1" op of voorbij het loopeinde, dan is de speelkop
+// daar al rondgegaan. Gevonden in de review (7 okt): in de laatste maat van een loop om sectie 2
+// gaf hij sectie 3, dus sloeg volgende sectie 3 over (APC, toetsenbord, Maschine) en zei de
+// Maschine "op de 1: 3 …" terwijl de loop teruggaat naar 2.
+console.log('\nsectieOpDeMaat in een loop');
+{
+  const { Maschine } = await import('../src/control/maschine.js');
+  const ms = new Maschine({ engine: eng, noten: null, read, invoke, nu: () => NOW * 1000 });
+  ms.zetModus('secties');
+  const druk = (id) => { invoke(id, true); invoke(id, false); };
+  /** Speelt, zonder loop, vanaf `pos`; dan sectie 2 (16–32) als loop: de speelkop blijft staan. */
+  const loopOm2 = (pos) => {
+    if (d.loop) d.clearLoop();
+    d.seek(pos);
+    if (!d.playing) d.play();
+    druk('track.1.section.2.loop');
+    return d.loop?.start === 16 && d.loop?.end === 32 && Math.abs(d.position - pos) < 1e-6;
+  };
+  ok('loop om sectie 2, de speelkop op 30,5 (tel 2¼ van de laatste maat)', loopOm2(30.5));
+  ok(`… de sectie op de volgende "1" is sectie 2 (de loop gaat terug), niet 3: ${d.sectieOpDeMaat + 1}`, d.sectieOpDeMaat === 1 && d.sectieHier === 1);
+  const st = ms.stand().secties ?? {};
+  ok(`… de Maschine: je hoort "2 drop B", en geen "op de 1: 3 …" (naar ${JSON.stringify(st.naar)})`, st.hoort === '2 drop B' && st.naar === null);
+  druk('track.1.section.next');
+  ok(`volgende daar: sectie 3 (niet 4): op de maat ${d.sectieOpDeMaat + 1}, loop eraf`, d.sectieOpDeMaat === 2 && !d.loop);
+  NOW += 1.5 + V + 0.01;
+  ok(`… na de "1" speel en hoor je sectie 3 (positie ${d.position.toFixed(2)})`, d.position >= 32 && d.position < 34 && d.sectieHier === 2);
+  ok('weer de loop om sectie 2, op 30,5 (de sprong van daarnet, ook vanaf 30,5, telt in de nieuwe loop niet meer)', loopOm2(30.5));
+  druk('track.1.section.prev');
+  ok(`vorige daar: sectie 1 (niet 2): op de maat ${d.sectieOpDeMaat + 1}`, d.sectieOpDeMaat === 0);
+  NOW += 1.5 + V + 0.01;
+  ok(`… daarna hoor je sectie 1 (positie ${d.position.toFixed(2)})`, d.position < 16 && d.sectieHier === 0);
+
+  // Een beatloop van 2 tellen, de laatste twee van sectie 2 (31–32): hij komt nooit bij 32.
+  d.clearLoop(); d.seek(31); d.setBeatLoop(2);
+  const bl = d.loop;
+  NOW += 0.5;
+  ok(`beatloop 2 tellen (${bl?.start}–${bl?.end}) aan het eind van sectie 2, speelkop ${d.position.toFixed(2)}: op de "1" nog steeds sectie 2 (de loop haalt 32 nooit)`,
+    bl?.start === 31 && bl?.end === 32 && d.sectieOpDeMaat === 1 && (ms.stand().secties?.naar ?? null) === null);
+  // Dezelfde beatloop midden in sectie 2: daar was het al goed, en dat blijft zo.
+  d.clearLoop(); d.seek(21); d.setBeatLoop(2);
+  NOW += 0.5;
+  ok(`beatloop 2 tellen midden in sectie 2 (${d.loop?.start}–${d.loop?.end}): sectie 2 op de "1"`, d.loop?.start === 21 && d.sectieOpDeMaat === 1);
+  // Een loop die niet op een sectiegrens begint: 4 maten 28–36, over de grens 2 -> 3 (32) heen.
+  d.clearLoop(); d.seek(28); d.setBeatLoop(16);
+  const lg = d.loop;
+  NOW += 2.5;                                          // 30,5: de volgende "1" (32) ligt nog in de loop
+  ok(`loop 28–36 over een sectiegrens, op 30,5: op de "1" (32) sectie 3, zoals altijd (${d.sectieOpDeMaat + 1})`, lg?.start === 28 && lg?.end === 36 && d.sectieOpDeMaat === 2);
+  NOW += 4.5;                                          // 35: de volgende "1" is het loopeinde: terug naar 28, sectie 2
+  ok(`… op 35 (je hoort sectie 3, de loop gaat terug naar 28): op de "1" sectie 2 (${d.sectieOpDeMaat + 1})`,
+    Math.abs(d.position - 35) < 1e-6 && d.sectieHier === 2 && d.sectieOpDeMaat === 1);
+  d.clearLoop();
+  d.togglePlay();
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

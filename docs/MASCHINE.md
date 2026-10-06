@@ -136,8 +136,8 @@ kleur. Gedimd = de "donker"-tint (index + 1, #59xxxx), zoals op de APC.
   nummer`). Daaronder de namen van de 16 pads ZOALS ZE LIGGEN (pad 1 linksonder, 13–16
   bovenaan; een kolom van 64 px per pad): die je hoort of indrukt omgekeerd (wit vlak, zwarte
   letters), een pad zonder sectie leeg. Onderaan wat er op de volgende "1" komt (`op de 1: 4 drop
-  D`: in de aanloop van een sprong, of in de laatste maat vóór de volgende sectie), anders de uitleg
-  en de bladzijde. Rechts blijft knop 5–8 van de speeltrack.
+  D`: in de aanloop van een sprong, of in de laatste maat vóór de volgende sectie; in een loop wat
+  er na het rondgaan komt), anders de uitleg en de bladzijde. Rechts blijft knop 5–8 van de speeltrack.
 
 ```
  T1 4 drop D                                   (groot: de sectie die je hoort)

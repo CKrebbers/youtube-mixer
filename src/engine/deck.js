@@ -1073,11 +1073,25 @@ export class Deck extends Emitter {
     // ziet daar de maat van het stuk ervóór, en die kan een andere "1" hebben.
     // (De aanloop zelf ligt bij terugspelen een paar ms naast: daarom het begin
     // ervan tegen de positie van nu.)
+    // Staat p in een loop, dan kwam die loop NA elke sprong (een sprong haalt de
+    // loop eraf, een sprong naar een sectie-loop landt ervóór): die sprong telt niet meer.
+    const l = this.loop, len = l ? l.end - l.start : 0;
+    const inLoop = len > 0 && p >= l.start && p < l.end;
     const s = this._sectieSprong;
-    if (s && this.position >= s.van - 1e-3 && p < s.tot) return s.i;
+    if (s && !inLoop && this.position >= s.van - 1e-3 && p < s.tot) return s.i;
     if (!g || !this.sectieKaart.opGrid || !this._opGrid(p)) return this.sectieKaart.index(p);
     const tellen = g.barPhase(p) * g.beatsPerBar;
-    return this.sectieKaart.index(tellen < 0.02 ? p : g.verschuif(p, g.beatsPerBar - tellen));
+    let q = tellen < 0.02 ? p : g.verschuif(p, g.beatsPerBar - tellen);
+    // In een loop: valt de volgende "1" op of na het loopeinde, dan is de speelkop
+    // daar al rondgegaan. Terugvouwen (een loop om een sectie: naar het loopbegin;
+    // een beatloop of een loop over een grens: waar hij dan staat). Anders gaf de
+    // laatste maat van een loop om sectie 2 al sectie 3: "volgende" sloeg 3 over.
+    // Op de rand (binnen BEGIN_MARGE van het einde) is het het loopbegin.
+    if (inLoop && q > l.end - BEGIN_MARGE) {
+      q = l.start + ((((q - l.start) % len) + len) % len);
+      if (q > l.end - BEGIN_MARGE) q = l.start;
+    }
+    return this.sectieKaart.index(q);
   }
 
   /** Begin en einde van sectie i, of null. */
