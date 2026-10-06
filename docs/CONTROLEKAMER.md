@@ -104,14 +104,15 @@ actions of `index.html` bestaan.
 ## Getest
 
 - `test/controle.test.mjs`: opslag (fouten, gelijktijdig, kapot bestand,
-  archief), de speellijst, het bericht van de mixer.
+  archief), de speellijst (ook: de ids van vóór 6 okt, de vraagcodes), het bericht
+  van de mixer.
 - `test/server.test.mjs`: de routes, de witte lijst, 415 zonder JSON.
 - `test/backup.test.mjs`: de backup-tegel (vandaag, gisteren, langer geleden, fout,
   nog geen, geen server) en `/api/backups` op een echte server.
 - `tools/headless/controle.mjs`: Controlekamer en een echte mixer in twee
   tabbladen van één headless Chromium. Mixer open/dicht, een tweede mixer, de
-  knop, de demotrack in "in de mixer", afvinken en notities na herladen. De check
-  op de Backup-tegel (2 okt) is er bijgezet maar nog niet gedraaid (geen Chromium
-  in de container waar hij gebouwd is).
+  knop, de demotrack in "in de mixer", afvinken en notities na herladen, de
+  Backup-tegel. Gedraaid op 6 okt met de speellijst van twee avonden (99 punten):
+  alles groen, de lijst past op 1440 px en op 390 px breed zonder zijwaarts scrollen.
 - NIET getest: met de echte APC (de headless mixer heeft geen MIDI), en op de
   Mac in Clay's Chrome.

@@ -26,7 +26,7 @@ Lees in deze volgorde:
   - **Avond 2, spelen en programmeren** (met de hub: in AV-app-hub `npm start -- studio`,
     ~1 uur): FM op de Xboard49 eerst in de koptelefoon, de Maschine, drums, patronen
     (stappen op de Maschine, een baslijn van de Xboard, starten vanaf de APC, herladen).
-  - De open vragen staan bij hun punt (VRAGEN S3–S22, I4, N1–N3, O1–O2): je antwoord in
+  - De open vragen staan bij hun punt (VRAGEN S3–S22 behalve S12, I4, N1–N3, O1–O2): je antwoord in
     de notitie. Het werk van vóór 6 okt staat achteraan ("Eerder werk").
   - Staat de nieuwe lijst er niet, dan serveert de server een map zonder deze versie
     (`git pull` daar; herstarten hoeft niet).
