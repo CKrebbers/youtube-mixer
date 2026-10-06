@@ -136,6 +136,35 @@ export const engineMaatLezer = (engine, ids, vertraging = () => 0) => new MaatLe
   vertraging,
 });
 
+/**
+ * De DOORLOPENDE tel van een deck zoals je hem hoort (niet modulo de maat),
+ * met het tempo dat je hoort (grid × rate): voor de beeldmachine
+ * (src/koppel/beeld.js, docs/BEELD.md), die zelf verder telt tussen twee
+ * klokberichten. Dezelfde hoorbare positie als de klap en de tel hierboven
+ * (hoorbaar.js, regel 3). `vertraging` mag kleiner zijn dan de
+ * uitgangsvertraging: een beamer die achterloopt krijgt de tel iets vóór.
+ * Null zonder grid of zonder tel op die plek.
+ */
+export function hoorbareTel(deck, vertraging = 0) {
+  if (!deck?.grid) return null;
+  const pos = hoorbaar(deck, vertraging);
+  const beat = deck.grid.beatAt(pos);
+  const bpm = deck.grid.bpmAt(pos) * (Number.isFinite(deck.rate) ? deck.rate : 1);
+  return Number.isFinite(beat) && bpm > 0 ? { beat, bpm } : null;
+}
+
+/**
+ * De tel van de maatgever van de engine (maatgever() uit puls.js: met
+ * hysterese, en alleen als je hem HOORT), zoals hoorbareTel. Null als er
+ * geen maatgever is die je hoort.
+ */
+export function engineTel(engine, ids, vertraging = 0) {
+  const id = engineMaatgever(engine, ids);
+  if (id === null) return null;
+  const t = hoorbareTel(engine.deck(id), vertraging);
+  return t ? { id, ...t } : null;
+}
+
 const leeg = () => ({ id: null, data: null, vanaf: -Infinity, tau: null });
 
 /**

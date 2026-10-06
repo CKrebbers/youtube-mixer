@@ -25,6 +25,20 @@ for (const f of engineBestanden) {
   ok(`${f}: raakt geen DOM aan`, !dom);
 }
 
+// De koppeling met de Stroommachine (spoor beeld, docs/BEELD.md) staat buiten
+// de engine en buiten het scherm: ze leest de engine alleen en kent geen DOM, zodat
+// ze zonder browser te testen is (test/beeld.test.mjs).
+console.log('\nsrc/koppel: geen scherm, geen MIDI, geen DOM');
+{
+  const map = fileURLToPath(new URL('../src/koppel/', import.meta.url));
+  for (const f of readdirSync(map).filter((x) => x.endsWith('.js'))) {
+    const bron = readFileSync(map + f, 'utf8');
+    const imports = [...bron.matchAll(/^\s*import\s[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1]);
+    ok(`koppel/${f}: importeert niets uit ui, control, server of video`, !imports.some((i) => /(^|\/)(ui|control|server|video|opname)\//.test(i)));
+    ok(`koppel/${f}: raakt geen DOM aan`, !/\b(document|window)\./.test(bron.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
+  }
+}
+
 // De worklets draaien op de audiothread: daar is geen DOM, geen fetch en geen
 // engine. Ze mogen alleen hun eigen pure kern importeren (stems, 3 okt: de
 // streamworklet kreeg vier uitgangen, maar rekent nog steeds alleen met
