@@ -627,7 +627,7 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
    Samen onder main, in één gebied dat zelf scrolt: main houdt zijn minimale
    hoogte (de faders op 56 px, de sampler heel) en de rijen krijgen de rest.
    Staat er een open, dan blijft er minstens één lage rij (35 px) te zien. */
-.rijen{flex:0 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
+.rijen{flex:0 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;anchor-name:--rijen}
 .rijen:has(> section:not(.hidden)){min-height:35px}
 
 /* ---- auto-dj ---- */
@@ -846,11 +846,11 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .melding.weg{opacity:0}
 .melding.flits{animation:melding-flits .35s ease-out}
 @keyframes melding-flits{from{background:var(--line)}to{background:var(--panel2)}}
-/* Een rij onderaan open: de meldingen erboven, niet over de knoppen van de rij. */
-body:has(#stems:not(.hidden)) .meldingen,body:has(#auto:not(.hidden)) .meldingen,
-body:has(#klankschaal:not(.hidden)) .meldingen,body:has(#koptelefoon:not(.hidden)) .meldingen{bottom:58px}
-body:has(#instrument:not(.hidden)) .meldingen,body:has(#patronen:not(.hidden)) .meldingen,
-body:has(#master:not(.hidden)) .meldingen{bottom:150px}
+/* Een rij onderaan open: de meldingen erboven, niet over de knoppen van de rij.
+   Tot 6 okt een vaste afstand per rij (58 of 150 px); nu 16 px boven het gebied
+   met de rijen, hoeveel er ook open staan (CSS anchor positioning). Is dat gebied
+   weggescrold (een klein venster), dan gewoon onderaan. */
+.meldingen{bottom:max(16px,calc(anchor(--rijen top,0px) + 16px))}
 
 .fx-naam{font-size:11px;color:var(--b);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
 .fx-volgend{min-width:22px}
