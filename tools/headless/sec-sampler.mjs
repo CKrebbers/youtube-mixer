@@ -116,7 +116,7 @@ const opDeEen = (n) => evalueer(`(() => {
 let trackId = null;
 async function laadOpA() {
   await evalueer("document.getElementById('lib-btn').click()");
-  ok('het nummer staat in de lijst', await totdat(rij('sectieS'), 90000));
+  ok('het nummer staat in de lijst', await totdat(rij('sectieS'), 180000));
   await evalueer(`${rij('sectieS')}.querySelector('button[data-deck="A"]').click()`);
   ok('op track 1', await totdat("window.engine.deck('A').duration > 150", 30000));
   ok('de secties komen van de server op het deck', await totdat("window.engine.deck('A').sectieKaart?.aantal >= 4 && window.engine.deck('A').grid", 60000));
@@ -216,6 +216,51 @@ async function doorloop() {
   await foto('sec-sampler-1920.png');
   await druk('sampler.2');
   await druk('track.1.play');
+
+  // Review 6 okt (punt 1): de server bewaart elk begin afgerond (0,1 ms); ligt dat
+  // net NA de "1", dan knipte de pad een maat te laat. Daarom ALLE secties, en de
+  // "1"-en zelf uit het grid gerekend (isMaatbegin), niet via sectieEen.
+  console.log('\nalle secties: van en tot op de "1"-en van het grid zelf');
+  const alle = await evalueer(`import('/src/engine/sampler.js').then(async (S) => {
+    const d = window.engine.deck('A'), g = d.grid, k = d.sectieKaart, sm = window.engine.sampler;
+    const enen = [];
+    for (let b = Math.floor(g.beatAt(0)) - 1; g.timeOf(b) <= d.duration + 1e-9; b++) if (g.timeOf(b) >= -1e-9 && g.isMaatbegin(b)) enen.push(b);
+    const dichtst = (t) => enen.reduce((x, b) => (Math.abs(g.timeOf(b) - t) < Math.abs(g.timeOf(x) - t) ? b : x), enen[0]);
+    const uit = [];
+    for (let i = 0; i < Math.min(k.aantal, 8); i++) {
+      sm.wis(i); sm.herinneringen[i] = null;
+      const bVan = i === 0 ? enen[0] : dichtst(k.begin(i));
+      const bTot = i + 1 < k.aantal ? dichtst(k.begin(i + 1)) : enen[enen.length - 1];
+      const r = S.knipSectie(g, k, i, d.duration);             // het rekenwerk, ook waar het grid onzeker is
+      // Onzeker volgens de strook van het grid (niet volgens de sampler zelf).
+      const onzeker = g.strook(d.duration).some((x) => x.tot > g.timeOf(bVan) + 1e-6 && x.van < g.timeOf(bTot) - 1e-6 && x.soort !== 'zeker');
+      let fout = null;
+      await sm.neemSectie(i, d, i, { bron: 1 }).catch((e) => { fout = e.message; });
+      const p = sm.pads[i];
+      uit.push({ i, begin: k.begin(i), naNa: k.begin(i) - g.timeOf(bVan), onzeker,
+        r: r && { van: r.van, tot: r.tot, tellen: r.tellen },
+        pad: p ? { van: p.van, tot: p.tot, tellen: p.tellen, duur: p.buffer.duration, sr: p.buffer.sampleRate } : null,
+        wilVan: g.timeOf(bVan), wilTot: g.timeOf(bTot), wilTellen: bTot - bVan, fout });
+    }
+    return uit;
+  })`);
+  const klopt = (x, y) => !!y && Math.abs(y.van - x.wilVan) < 1e-6 && Math.abs(y.tot - x.wilTot) < 1e-6 && y.tellen === x.wilTellen;
+  for (const x of alle) {
+    console.log(`      sectie ${x.i + 1}: begin ${x.begin.toFixed(4)} (${(x.naNa * 1000).toFixed(3)} ms na de "1"), de "1"-en ${x.wilVan.toFixed(4)}–${x.wilTot.toFixed(4)} = ${x.wilTellen} tellen`
+      + ` → knipSectie ${x.r?.van.toFixed(4)}–${x.r?.tot.toFixed(4)} ${x.r?.tellen}; pad ${x.pad ? `${x.pad.tellen} tellen` : `geweigerd${x.onzeker ? ' (grid onzeker)' : ''}: ${x.fout}`}`);
+  }
+  ok(`knipSectie, alle ${alle.length} secties: van en tot op de "1"-en van het grid zelf, de tellen kloppen (${alle.filter((x) => klopt(x, x.r)).length}/${alle.length})`,
+    alle.length >= 7 && alle.every((x) => klopt(x, x.r)));
+  const naNa = alle.filter((x) => x.naNa > 0);
+  ok(`… ook de ${naNa.length} secties waarvan de server het begin NA de "1" afrondde`, naNa.length > 0 && naNa.every((x) => klopt(x, x.r)));
+  const zeker = alle.filter((x) => !x.onzeker);
+  ok(`als pad (neemSectie): de ${zeker.length} secties op een zeker grid geknipt zoals gerekend, de audio even lang`,
+    zeker.length > 0 && zeker.every((x) => klopt(x, x.pad) && Math.abs(x.pad.duur - (x.pad.tot - x.pad.van)) <= 1 / x.pad.sr + 1e-9));
+  ok(`… en de ${alle.length - zeker.length} waar het grid onzeker is geweigerd met die reden (geen pad die naast de tel loopt)`,
+    alle.filter((x) => x.onzeker).every((x) => !x.pad && /onzeker/.test(x.fout ?? '')));
+  const plan = s.plan.map((p) => p[2] * 4);
+  ok(`… en de lengtes van het plan van het nummer (${alle.map((x) => x.r?.tellen / 4).join(' · ')} maten; plan ${plan.map((t) => t / 4).join(' · ')})`,
+    alle.length === plan.length && alle.every((x, i) => x.r?.tellen === plan[i]));
 }
 
 try {

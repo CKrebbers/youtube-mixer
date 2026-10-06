@@ -896,9 +896,10 @@ export function bindEngine(engine) {
       // start daarna op de "1". Een eigen action en geen shift: shift op een
       // lege pad is al "vergeten" (.clear). Alleen op een lege pad; kan het
       // niet, dan zegt een melding waarom (WAAROM NIET). Read: null = kan niet
-      // (pad gevuld of bewaard, focus-track zonder secties of grid), 0,5 =
-      // kan, 1 = ingedrukt.
+      // (dezelfde regels als de melding: pad bezet, geen secties of grid,
+      // onzeker, te lang), 0,5 = kan, 1 = ingedrukt.
       let sectieDruk = false;
+      const zeg = (tekst, soort = 'info') => engine.emit('melding', { tekst: `sampler pad ${i + 1}: ${tekst}`, soort, duur: 8000 });
       define(`sampler.${i + 1}.section`, 'trigger', (on) => {
         sectieDruk = !!on;
         if (!on) return;
@@ -907,15 +908,15 @@ export function bindEngine(engine) {
         const naam = `track ${nr}`;
         const s = deck?.sectieHier ?? -1;
         const waarom = sampler.waaromGeenSectie(i, deck, s, naam);
-        if (waarom) { engine.emit('melding', { tekst: `sampler pad ${i + 1}: ${waarom}`, soort: 'info', duur: 8000 }); return; }
+        if (waarom) { zeg(waarom); return; }
         sampler.neemSectie(i, deck, s, { bron: nr, naam })
-          .catch((err) => engine.emit('melding', { tekst: `sampler pad ${i + 1}: ${err.message}`, soort: 'fout' }));
+          .then((r) => { if (r?.letOp) zeg(r.letOp); })
+          .catch((err) => zeg(err.message, 'fout'));
       }, { label: `Sampler pad ${i + 1}: de sectie die je hoort (focus-track), in hele maten`,
            read: () => {
              if (sectieDruk) return 1;
-             if (sampler.pads[i] || sampler.herinneringen?.[i]) return null;
              const d = engine.focused();
-             return d?.buffer && d.sectieKaart && d.grid ? 0.5 : null;
+             return sampler.waaromGeenSectie(i, d, d?.sectieHier ?? -1) ? null : 0.5;
            } });
     }
     define('sampler.length', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },

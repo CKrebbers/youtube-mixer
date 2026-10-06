@@ -93,15 +93,58 @@ await blok('knipSectie', () => {
   const gem = (60 * 36) / (41.6 - 24);
   ok(`over de tempowissel heen: gemiddeld over wat er geknipt is (${r?.bpm?.toFixed(3)} = ${gem.toFixed(3)}), 9 maten tot de "1" van 41,6`,
     dicht(r?.van, 24) && dicht(r.tot, 41.6, 1e-6) && r.tellen === 36 && dicht(r.bpm, gem, 1e-6));
-  // Een stuk met een eigen "1" (maat-anker 31): de maat ervoor is 6 tellen lang.
-  // Dan hele maten vanaf de "1" van de sectie: 5 maten (20 tellen), de rest valt weg.
+  // Een stuk met een eigen "1" (maat-anker 31): de maat 28–31 is 6 tellen lang.
+  // De pad stopt op de laatste "1" vóór die maat (28): tot daar lopen de maten van
+  // het nummer gelijk met die van de pad. (Tot 6 okt: 20 tellen tot 30, midden in
+  // die maat van 6; review sec-sampler, punt 3.)
   const m = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 30, bpm: 120, anker: 30, maat: 31 }], slot: true });
   r = knipSectie(m, kaart([0, 20, 31]), 1, 60);
-  ok(`een eigen "1" in het volgende stuk: hele maten vanaf de "1" (20 tellen tot 30, niet 22 tot 31: ${r?.tellen} tot ${r?.tot})`,
-    dicht(r?.van, 20) && dicht(r.tot, 30) && r.tellen === 20);
+  ok(`een eigen "1" aan het eind van de sectie: tot de laatste "1" ervóór (16 tellen tot 28, ${r?.afgekapt} tellen vallen weg: ${r?.tellen} tot ${r?.tot})`,
+    dicht(r?.van, 20) && dicht(r.tot, 28) && r.tellen === 16 && r.afgekapt === 6);
+  // Midden in de sectie (de proef van de review, b-eigen-een): na de verschoven "1"
+  // liepen de maten van het nummer 2 tellen anders dan die van de pad.
+  r = knipSectie(m, kaart([0, 20, 41, 57]), 1, 80);
+  const enen = r ? m.beatsBetween(r.van, r.tot - 1e-9).filter((b) => b.maatbegin).map((b) => Math.round((b.tijd - r.van) / 0.5)) : [];
+  ok(`een eigen "1" midden in de sectie: elke "1" van het nummer in de pad valt op een "1" van de pad (pad-tel ${enen.join(' ')}), tot 28`,
+    dicht(r?.tot, 28) && r.tellen === 16 && enen.length === 4 && enen.every((t) => t % 4 === 0) && r.afgekapt > 0);
+  ok('een gewone sectie: niets afgekapt', knipSectie(g, k, 1, 60)?.afgekapt === 0 && knipSectie(g, k, 3, 60)?.afgekapt === 0);
   ok('korter dan een maat (dezelfde "1" voor begin en eind): null', knipSectie(new Beatgrid({ bpm: 120, firstBeat: 0 }), kaart([0, 10.5, 11, 30]), 1, 60) === null);
   ok('de grens: hooguit 32 maten en 90 s (SECTIE_MAX_MATEN, SECTIE_MAX_SEC)', SM.SECTIE_MAX_MATEN === 32 && SM.SECTIE_MAX_SEC === 90);
   ok('een pad langer dan de lengteknop kan geven is een sectie: die start op de "1"', SM.opDeMaat?.(32) === true && SM.opDeMaat(8) === false && SM.opDeMaat(4) === false && SM.opDeMaat(null) === false);
+});
+
+// De server bewaart elk sectiebegin afgerond op 0,1 ms (rond(x, 4)). Ligt dat net NA
+// de "1", dan knipte de pad tot 6 okt (sectieEen met 1e-6 tel marge) een maat te laat:
+// gemeten bij ongeveer de helft van de secties (review sec-sampler, punt 1).
+await blok('afronding van de server', async () => {
+  const { knipSectie } = SM;
+  const { BPM, ANKER, PLAN } = await import('./synth-nummer.mjs');
+  const rond = (x) => Math.round(x * 1e4) / 1e4;
+  const maat = 4 * 60 / BPM;
+  const g = new Beatgrid({ stukken: [{ van: 0, bpm: BPM, anker: ANKER }], slot: true });
+  const echt = [];
+  let m = 0;
+  for (const p of PLAN) { echt.push(ANKER + m * maat); m += p[2]; }
+  const duur = ANKER + m * maat + 1;
+  const k = kaart(echt.map((t, i) => (i === 0 ? 0 : rond(t))));
+  const naDeEen = echt.filter((t, i) => i > 0 && rond(t) > t).length;
+  const r = PLAN.map((_, i) => knipSectie(g, k, i, duur));
+  const goed = r.map((x, i) => !!x && Math.abs(x.van - echt[i]) < 1e-6 && x.tellen === PLAN[i][2] * 4
+    && Math.abs(x.tot - (echt[i + 1] ?? ANKER + m * maat)) < 1e-6);
+  ok(`het synthetische nummer, begins afgerond zoals de server (${naDeEen} net NA hun "1"): elke pad op de echte "1", met de maten van het plan (${goed.filter(Boolean).length}/${PLAN.length} goed)`,
+    naDeEen > 0 && goed.every(Boolean));
+  // De proef van de review (a-afronding): 123 bpm, anker 0,3137, een sectie op elke 4e maat.
+  const g2 = new Beatgrid({ stukken: [{ van: 0, bpm: 123, anker: 0.3137 }], slot: true });
+  const maat2 = 4 * 60 / 123;
+  let te = 0, n = 0, na = 0;
+  for (let mm = 4; mm < 60; mm += 4) {
+    const een = 0.3137 + mm * maat2;
+    if (rond(een) > een) na++;
+    const x = knipSectie(g2, kaart([0, rond(een), rond(een + 8 * maat2)]), 1, 400);
+    n++;
+    if (!x || Math.abs(x.van - een) > 1e-6 || x.tellen !== 32) te++;
+  }
+  ok(`123 bpm, anker 0,3137: ${n} secties (${na} net na hun "1" afgerond), ${te} verkeerd geknipt`, na > 0 && te === 0);
 });
 
 // ---- 2. de klok kent de maat --------------------------------------------------------------
@@ -272,6 +315,55 @@ await blok('meelopen met de maat', async () => {
   NOW = 0;
 });
 
+// Keylock (StreamBron): een sprong wordt ~95 ms vooruit gepland en het oude segment
+// speelt zolang door (_vorig). In dat venster rekent fxKlok de volgende tel uit de
+// positie van het OUDE segment, maar zet hem op de audioklok met het NIEUWE: bij een
+// sprong terug wijst het anker ver vooruit. Een wachtende sectie-pad werd daarop
+// opnieuw gepland: 71,8 s te laat (review sec-sampler, punt 2, f-keylock).
+await blok('keylock: sprong terug terwijl een sectie-pad wacht', async () => {
+  const oudeKlok = sm.klok;
+  d.seek(20);
+  await sm.neemSectie(7, d, 1, { bron: 1 });
+  NOW = 1000;
+  let kl = { beatLengte: 0.5, ankerCtx: 1000.5, tellenTotEen: 3, perMaat: 4 };
+  sm.klok = () => kl;
+  sm.wissel(7);
+  const gepland = sm.pads[7].start;
+  let voor = bronnen.length;
+  kl = { beatLengte: 0.5, ankerCtx: 1070.5, tellenTotEen: 3, perMaat: 4 };
+  sm.heranker();
+  ok(`een klok die ineens 70 s vooruit wijst: de geplande "1" blijft staan (${sm.pads[7].start.toFixed(3)}, was ${gepland.toFixed(3)})`,
+    sm.pads[7].start === gepland && bronnen.length === voor);
+  kl = { beatLengte: 0.5, ankerCtx: 1000.2, tellenTotEen: 0, perMaat: 4 };
+  sm.heranker();
+  ok('een "1" die binnen een maat verschoof (een sprong vooruit, een seek) plant hij wel opnieuw', dicht(sm.pads[7].start, 1000.2) && bronnen.length === voor + 1);
+  sm.wis(7);
+
+  // Zoals gemeten: een echte StreamBron met keylock, en Deck.fxKlok erop.
+  const { StreamBron } = await import('../src/engine/bron.js');
+  const { Deck } = await import('../src/engine/deck.js');
+  const bron = new StreamBron(eng.ctx, {}, { interval: 1e9, haal: async () => { throw new Error('geen netwerk'); } });
+  bron.bestand = { duur: 300 };
+  bron._stuur = () => {}; bron.bijvullen = async () => {};
+  bron.rek = { keylock: true, toon: 0, stems: null };
+  const grid = new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }], slot: true });
+  const nep = { grid, playing: true, remt: false, rate: 1, loop: null, get position() { return bron.positie; }, ctxTimeOf: (t) => bron.ctxTimeOf(t) };
+  sm.klok = () => Deck.prototype.fxKlok.call(nep);
+  NOW = 990; bron.seg = bron._maak(990, 100, 1, null, true, null); bron._vorig = null;
+  NOW = 1000.2;                                          // positie 110,2
+  sm.pads[7] = { buffer: eng.ctx.createBuffer(2, 48000 * 16, 48000), bpm: 120, bron: 1, tellen: 32, van: 0, tot: 16, deckId: 'B', speelt: false, src: null, g: null };
+  sm.wissel(7);
+  const eerst = sm.pads[7].start;                        // de "1" van 112 s
+  bron.start(40.2, { doorlopend: true });                // sectiesprong 70 s terug, fasebehoudend
+  sm.heranker();                                         // zoals bij de 'change' van seek
+  const echteEen = bron.seg.T + (42 - bron.seg.P);       // de "1" na de sprong
+  ok(`keylock, sprong 70 s terug: de pad start nog steeds op de "1" (${(sm.pads[7].start - NOW).toFixed(2)} s vanaf nu, de "1" valt over ${(echteEen - NOW).toFixed(2)} s)`,
+    dicht(sm.pads[7].start, eerst) && dicht(sm.pads[7].start, echteEen, 1e-6));
+  sm.wis(7);
+  sm.klok = oudeKlok;
+  NOW = 0;
+});
+
 await blok('drift', async () => {
   // Zoals engine.test (≤ 1 ms per 10 minuten): de rate komt uit de bufferlengte.
   const oudeKlok = sm.klok;
@@ -326,6 +418,19 @@ await blok('waarom niet en de grens', async () => {
   ok('32 maten op 86 bpm (89 s): past', sm.waaromGeenSectie(0, c, 0) === null);
   c.setSectieKaart({ ...c.sectieKaart.toJSON(), opGrid: false });
   ok(`een kaart die zonder grid berekend is (${w(0, c, 0)})`, /zonder grid/.test(w(0, c, 0)));
+  // Nog bezig met knippen (review punt 5): niet stil weigeren.
+  d.seek(20);
+  const eerste = sm.neemSectie(1, d, 1, { bron: 1 });
+  ok(`terwijl pad 2 nog geknipt wordt: een reden (${w(1, d, 1)})`, /nog geknipt/.test(w(1, d, 1)));
+  await eerste;
+  sm.wis(1);
+  sm.tellen = 4;
+  const een = sm.neem(1, d, { bron: 1 });
+  let tweede = null;
+  await sm.neem(1, d, { bron: 1 }).catch((e) => { tweede = e.message; });
+  await een;
+  ok(`ook een gewone pad die nog geknipt wordt: een fout met een reden, niet stil (${tweede})`, /nog geknipt/.test(tweede ?? ''));
+  sm.wis(1);
 });
 
 // ---- 4. de action, de mapping en het lampje ----------------------------------------------------
@@ -367,6 +472,28 @@ await blok('action', async () => {
   invoke('sampler.7.section', false);
   ok(`focus-track zonder secties: lampje uit, een melding met de reden (${meldingen.at(-1)?.tekst})`,
     read('sampler.7.section') === null && meldingen.length === 1 && /track 4/.test(meldingen[0].tekst) && /geen secties/.test(meldingen[0].tekst) && sm.pads[6] === null);
+  // Het lampje is precies (review punt 5): 0,5 alleen als het echt kan.
+  const c = eng.deck('C');
+  eng.setFocus('C');
+  c.seek(1);
+  c.setGrid({ stukken: [{ van: 0, bpm: 160, anker: 0 }], slot: true });     // maat = 1,5 s
+  c.setSectieKaart({ stukken: [{ van: 0, label: 'deel', groep: 'A' }, { van: 60, label: 'deel', groep: 'B' }] });
+  const teLang = read('sampler.7.section');
+  c.setSectieKaart({ stukken: [{ van: 0, label: 'deel', groep: 'A' }, { van: 12, label: 'deel', groep: 'B' }] });
+  const past = read('sampler.7.section');
+  c.setGrid({ stukken: [{ van: 0, bpm: 160, anker: 0, zekerheid: 0.3 }] });
+  const onzeker = read('sampler.7.section');
+  ok(`lampje: een sectie van 40 maten = uit (${teLang}), 8 maten = 0,5 (${past}), onzeker grid = uit (${onzeker})`, teLang === null && past === 0.5 && onzeker === null);
+  // Een sectie die afgekapt wordt (een eigen "1" in het grid): de pad komt, met een melding waarom korter.
+  c.setGrid({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 10, bpm: 120, anker: 10, maat: 11 }], slot: true });
+  c.setSectieKaart({ stukken: [{ van: 0, label: 'deel', groep: 'A' }, { van: 21, label: 'deel', groep: 'B' }] });
+  meldingen.length = 0;
+  invoke('sampler.7.section', true);
+  invoke('sampler.7.section', false);
+  await new Promise((r) => setTimeout(r, 0));
+  ok(`afgekapt bij een eigen "1": pad 7 tot 8 s (16 tellen), met een melding (${meldingen.at(-1)?.tekst})`,
+    dicht(sm.pads[6]?.tot, 8) && sm.pads[6].tellen === 16 && meldingen.length === 1 && /pad 7/.test(meldingen[0].tekst) && /6 tellen/.test(meldingen[0].tekst));
+  sm.wis(6);
   eng.setFocus('A');
   sm.wis(5);
 });
@@ -382,6 +509,9 @@ await blok('mapping en lampje', async () => {
   const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
   const b = beschrijf('sampler.3.section');
   ok(`een uitleg op de APC-kaart (${b.kort}: ${b.lang.slice(0, 60)}…)`, b.kort !== 'sampler.3.section' && !b.lang.startsWith('?') && /sampler-pad 3/.test(b.lang));
+  // Eerlijk (review punt 4): een sectie van 2 maten of korter start op de tel.
+  ok('de uitleg zegt dat een sectie van 2 maten of korter op de tel start (pad én rij 3)',
+    /2 maten of korter/.test(b.lang) && /2 maten of korter/.test(beschrijf('sampler.3').lang));
   const { Mapping } = await import('../src/control/mapping.js');
   const { Feedback } = await import('../src/control/feedback.js');
   const { Lagen } = await import('../src/control/lagen.js');
