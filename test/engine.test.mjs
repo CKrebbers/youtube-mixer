@@ -2867,12 +2867,25 @@ console.log('\ntransport');
   }
 
   // Toetsen en uitleg.
-  const { KEYMAP, SHIFT_ALIAS } = await import('../src/control/keyboard.js');
+  const { KEYMAP, SHIFT_ALIAS, toetsActie } = await import('../src/control/keyboard.js');
   const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
   const ids = new Set(list().map((a) => a.id));
   const vul = (id) => id.replace('{L}', '3').replace('{R}', '2');
-  const metShift = Object.values(KEYMAP).map((id) => SHIFT_ALIAS(vul(id))).filter((id) => !ids.has(id));
+  const metShift = Object.keys(KEYMAP).map((code) => vul(toetsActie?.(code, true) ?? SHIFT_ALIAS(KEYMAP[code]))).filter((id) => !ids.has(id));
   ok('elke toets MET shift wijst ook naar een bestaande action', metShift.length === 0);
+  // Secties op het toetsenbord (TASKS-SECTIES, Verweven 5): shift per TOETS. W en O
+  // zijn allebei cue, maar shift+W = vorige sectie links en shift+O = volgende rechts;
+  // per action (SHIFT_ALIAS) kregen ze dezelfde richting.
+  const VIER = ['KeyW', 'KeyE', 'KeyI', 'KeyO'];
+  ok('shift+W/E = vorige/volgende sectie van de focus, shift+I/O van de rechterhand; zonder shift nog cue en focus',
+    toetsActie?.('KeyW', true) === 'track.{L}.section.prev' && toetsActie?.('KeyE', true) === 'track.{L}.section.next'
+    && toetsActie?.('KeyI', true) === 'track.{R}.section.prev' && toetsActie?.('KeyO', true) === 'track.{R}.section.next'
+    && toetsActie?.('KeyW') === 'track.{L}.cue' && toetsActie?.('KeyE') === 'track.{L}.focus'
+    && toetsActie?.('KeyI') === 'track.{R}.focus' && toetsActie?.('KeyO') === 'track.{R}.cue');
+  const anders = Object.keys(KEYMAP).filter((c) => !VIER.includes(c)
+    && (toetsActie?.(c, true) !== SHIFT_ALIAS(KEYMAP[c]) || toetsActie?.(c) !== KEYMAP[c]));
+  ok(`… en elke andere toets doet met en zonder shift precies wat hij deed${anders.length ? ': ' + anders.join(', ') : ''}`,
+    typeof toetsActie === 'function' && anders.length === 0 && toetsActie('Space', true) === null);
   ok('toetsen: R/T beatjump, G/C loop in/out, 6 quantize; shift: Q = op de maat, R/T = lengte, G = reloop',
     KEYMAP.KeyR === 'track.{L}.beatjump.back' && KEYMAP.KeyT === 'track.{L}.beatjump.fwd'
     && KEYMAP.KeyG === 'track.{L}.loop.in' && KEYMAP.KeyC === 'track.{L}.loop.out' && KEYMAP.Digit6 === 'transport.quantize'
@@ -2924,6 +2937,40 @@ console.log('\ntransport');
     toets('KeyQ', true);
     ok('toets shift+Q op een spelende track: pauze, zoals vroeger', !dG.playing && !dG.wacht);
     dG.stop(); dM.stop(); dG.clearLoop();
+
+    // Secties: echt drukken. Zonder kaart doet de toets wat de action dan doet:
+    // een melding, geen stille weigering.
+    const nS = meldingen.length;
+    toets('KeyE', true);
+    ok('toets shift+E zonder sectiekaart: een melding (track 7 heeft geen secties), niet stil',
+      meldingen.length === nS + 1 && /track 7 heeft \(nog\) geen secties/.test(meldingen.at(-1)?.tekst));
+    const kaart = { versie: 1, opGrid: true, stukken: [0, 8, 16, 24, 32].map((van, i) => ({ van, label: 'deel', groep: 'ABCDE'[i] })) };
+    dG.setSectieKaart(kaart); dM.setSectieKaart(kaart);
+    const focusVoor = eng.focus;
+    NOW = 1000;
+    dG.seek(17); dG.play(); dM.seek(25.5); dM.play();     // maat = 2 s · G: sectie 3, tel 3 · H: sectie 4, tel 4
+    toets('KeyE', true);
+    ok('toets shift+E: de focus (G) naar sectie 4, op de maat: een halve maat aanloop (17 → 23, valt in op 24)',
+      dG.sectieOpDeMaat === 3 && Math.abs(dG.position - 23) < 1e-9);
+    ok('… de rechterhand (H) blijft waar hij was', Math.abs(dM.position - 25.5) < 1e-9 && dM.sectieOpDeMaat === 3);
+    toets('KeyW', true);
+    ok('toets shift+W tijdens die aanloop: terug naar sectie 3, ook op de maat (23 → 15), geen cue',
+      dG.sectieOpDeMaat === 2 && Math.abs(dG.position - 15) < 1e-9 && dG.playing);
+    toets('KeyO', true);
+    ok('toets shift+O: de rechterhand (H) naar sectie 5, op de maat (25,5 → 31,5); de focus blijft staan',
+      dM.sectieOpDeMaat === 4 && Math.abs(dM.position - 31.5) < 1e-9 && Math.abs(dG.position - 15) < 1e-9);
+    toets('KeyI', true);
+    ok('toets shift+I: de rechterhand terug naar sectie 4 (31,5 → 23,5), en hij wisselt de focus niet meer',
+      dM.sectieOpDeMaat === 3 && Math.abs(dM.position - 23.5) < 1e-9 && eng.focus === focusVoor);
+    // De sectie valt in op de eerstvolgende "1" van elke track; even later hoor je hem (hoorbaar, na de uitgangsvertraging).
+    NOW = 1000.5;
+    const hOpDeEen = Math.abs(dM.position - 24) < 1e-9;
+    NOW = 1001;
+    ok('… bij H valt sectie 4 in op zijn eerstvolgende "1" (een halve seconde later: 24,0) en bij G sectie 3 op de zijne (16,0)',
+      hOpDeEen && Math.abs(dG.position - 16) < 1e-9);
+    NOW = 1001.1;
+    ok('… en dan hoor je ze ook', dM.sectieHier === 3 && dG.sectieHier === 2);
+    dG.stop(); dM.stop(); dG.setSectieKaart(null); dM.setSectieKaart(null);
   }
   const nieuw = ['track.7.beatjump.back', 'track.7.beatjump.fwd', 'track.7.beatjump.halve', 'track.7.beatjump.double',
     'track.7.loop.in', 'track.7.loop.out', 'track.7.loop.reloop', 'track.7.play.quant', 'transport.quantize'];
