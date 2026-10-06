@@ -115,6 +115,7 @@ export class Maschine extends Emitter {
     this.modus = 'spelen';          // 'spelen', 'stappen' (STEP) of 'secties' (SCENE)
     this.bladzijde = 0;             // stapmodus: pads = stap 16·b + 1 .. 16·b + 16
     this.sectieBlad = 0;            // modus secties: pads = sectie 16·b + 1 .. 16·b + 16
+    this._sectieFocus = undefined;  // de focus-track waar sectieBlad bij hoort
     this.patroonVast = false;       // PATTERN ingedrukt: pads 1–5 kiezen een plek
     this.padVast = new Map();       // pad-noot -> waar het indrukken heen ging ('noten', een action, of 'kies' = niets bij het loslaten)
     this.rx = 0;
@@ -152,9 +153,19 @@ export class Maschine extends Emitter {
     return d?.buffer && d.sectieKaart ? d.sectieKaart : null;
   }
 
-  /** Aantal bladzijden van 16 secties op de focus-track; houdt de bladzijde erbinnen. */
+  /**
+   * Aantal bladzijden van 16 secties op de focus-track; houdt de bladzijde erbinnen.
+   * Een andere focus-track: de bladzijde met de sectie die je daar HOORT, anders
+   * blad 1 (anders ging blad 2 mee en zag je op de nieuwe track meteen 17–32).
+   */
   _sectieBladen() {
-    const n = Math.max(1, Math.ceil(Math.min(this._sectieKaart()?.aantal ?? 0, SECTIE_PADS) / STAPPEN));
+    const t = this._sectieTrack(), k = this._sectieKaart();
+    if ((t?.id ?? null) !== this._sectieFocus) {
+      this._sectieFocus = t?.id ?? null;
+      const hier = k ? t.deck.sectieHier : -1;
+      this.sectieBlad = hier >= 0 && hier < SECTIE_PADS ? Math.floor(hier / STAPPEN) : 0;
+    }
+    const n = Math.max(1, Math.ceil(Math.min(k?.aantal ?? 0, SECTIE_PADS) / STAPPEN));
     if (this.sectieBlad > n - 1) this.sectieBlad = n - 1;
     return n;
   }
@@ -276,6 +287,7 @@ export class Maschine extends Emitter {
       // Voorbij de 40 (SECTIE_PADS, de laatste bladzijde) bestaat er geen action: niets.
       const t = this._sectieTrack();
       if (!t) return false;
+      this._sectieBladen();                                 // de focus kan net gewisseld zijn (groep A–H)
       const k = this.sectieBlad * STAPPEN + pad;
       if (k > SECTIE_PADS) { this.padVast.set(noot, 'kies'); return false; }
       const action = `track.${t.nr}.section.${k}`;
@@ -486,7 +498,8 @@ export class Maschine extends Emitter {
     const fi = this.engine.instrumentOp?.(t.id);
     const bladen = this._sectieBladen(), blad = this.sectieBlad;
     const bestaat = (i) => !!k && i >= 0 && i < Math.min(k.aantal, SECTIE_PADS);
-    const metNr = (i) => (bestaat(i) ? `${i + 1} ${k.naam(i)}` : null);
+    // Wat je hoort of wat er komt: ook boven de 40 (een kaart met de hand mag tot 64), al staat het op geen pad.
+    const metNr = (i) => (k && i >= 0 && i < k.aantal ? `${i + 1} ${k.naam(i)}` : null);
     const hier = k ? d.sectieHier : -1, opDeMaat = k ? d.sectieOpDeMaat : -1;
     return {
       nr: t.nr, wat: fi ? fi.naam : d?.buffer ? 'nummer' : 'leeg', aantal: k?.aantal ?? 0, blad, bladen,

@@ -184,13 +184,20 @@ maar met 16 pads:
 1. **Groep A–H** kiest de track (de focus). De secties horen bij een NUMMER; de speeltrack heeft
    altijd een instrument, daarom de **focus-track** (net als de APC).
 2. **SCENE**: de pads zijn de secties van die track op volgorde, pad 1 = sectie 1 (linksonder),
-   pad 16 = sectie 16. Meer dan 16 secties: **◄ ►** bladeren (1–16, 17–32, 33–40).
+   pad 16 = sectie 16. Meer dan 16 secties: **◄ ►** bladeren (1–16, 17–32, 33–40). Een andere
+   focus-track (of SCENE na een focuswissel) begint op de bladzijde met de sectie die je daar
+   HOORT, anders op blad 1; terug naar dezelfde track in dezelfde modus houdt je bladzijde.
+   Hoor je een sectie boven de 40 (een kaart met de hand mag tot 64), dan staat hij op geen pad,
+   maar de kop noemt hem wel ("T8 43 A").
 3. **Een pad** = `track.N.section.K` over de bus, precies wat de APC doet: speelt het nummer, dan
    valt de sectie in op de volgende "1" (de aanloop uit het nummer zelf, SECTIES.md §3);
    stilstaand staat de speelkop meteen op haar begin. Omdat het over de bus gaat, komt het in het
    handelingenlog (en speelt het terug) en ziet de auto-DJ het (OVERNEEM, na het spoor auto).
-4. Een pad zonder sectie, of een track zonder secties: de bus zegt waarom niet (melding in VARVE),
-   zoals op de APC; er springt niets.
+4. Een pad zonder sectie, of een track zonder secties: de bus zegt waarom niet (melding in VARVE:
+   "track 1 heeft 7 secties; sectie 21 is er niet", met het nummer van de SECTIE, dus blad 2 pad 5
+   = 21), zoals op de APC; er springt niets. De auto-DJ telt zo'n druk niet als overnemen.
+   Speelt een sectie als loop, dan flitst na het rondgaan niet meer de sectie ervóór op (lampjes
+   en scherm): `deck.sectieHier` vouwt wat je hoort terug in de loop (de uitgangsvertraging).
 5. **SCENE** nog eens = weer spelen; **STEP** = de stapmodus (één padmodus tegelijk). **PATTERN**
    vast + pad kiest ook hier een patroon. Een pad die vastzit tijdens een wissel (modus, focus, de
    hub weg) laat los waar hij indrukte.
@@ -245,6 +252,10 @@ hub via Web MIDI binnenkomt (noten.js hoort beide).
   Plus de uitgangsbuffer van de AudioContext.
 - `tools/headless/hub.mjs`: de conformiteitstoets van de hub slaagt ook met `speelt` (hun MIDI,
   LED's met `dev`, schermen).
+- `test/sec-maschine.test.mjs` (review 7 okt): `deck.sectieHier` vlak na het rondgaan van een
+  sectie-loop (geen flits van de sectie ervóór, ook de reads van de lampjes niet; zonder loop
+  niets teruggevouwen) en de melding "sectie 21 is er niet". De auto-DJ: een pad zonder sectie is
+  geen overname (`test/auto-secties.test.mjs`, 4f).
 - `tools/headless/sec-maschine.mjs` (6 okt): de echte hub (poort 7715) met de nep-Maschine en
   VARVE op een eigen server met het synthetische nummer (7 secties, 124 bpm) via de ingest:
   zonder `?hub=` niets geladen; SCENE fel (HID 0x82), pads als HID 0x80 (wit / donker
