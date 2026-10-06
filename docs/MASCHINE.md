@@ -2,7 +2,8 @@
 
 *5 oktober 2026 · spoor speelapparaten (tak `studio/speelapparaten`, op `studio/integratie` met
 de patronen). Gebouwd en getest in Node en in een headless Chromium tegen de echte hub met een
-nep-Maschine op HID-niveau; nog niet op Clay's toestellen.*
+nep-Maschine op HID-niveau; nog niet op Clay's toestellen. 6 okt: SCENE = padmodus secties (§5b,
+tak `studio/sec-maschine`).*
 
 De AV-app-hub opent de **E-MU Xboard49** (MIDI) en de **Maschine MK2** (USB-HID, zonder
 NI-software) en geeft ze door aan de lease-app die ze "speelt" (AV-app-hub: PROTOCOL §17,
@@ -38,7 +39,7 @@ NI-software) en geeft ze door aan de lease-app die ze "speelt" (AV-app-hub: PROT
 ## 2. De Maschine: wat elke knop doet
 
 Data in `mappings/maschine-mk2.json` (groepen, draaiknoppen, shift, transport), de rest in
-`src/control/maschine.js` (pads, STEP, PATTERN, ◄ ►, het wiel, lampjes, schermen). Het profiel (welke knop welk bericht stuurt) staat in
+`src/control/maschine.js` (pads, STEP, SCENE, PATTERN, ◄ ►, het wiel, lampjes, schermen). Het profiel (welke knop welk bericht stuurt) staat in
 `src/control/devices/maschine-mk2.js`.
 
 | Knop | Doet in VARVE |
@@ -50,12 +51,13 @@ Data in `mappings/maschine-mk2.json` (groepen, draaiknoppen, shift, transport), 
 | **masterwiel** draaien | een ander instrument KIEZEN voor de **focus-track** (geen → Poly → FM → Schaal → Drums, rondlopend): het staat alleen op het scherm, er verandert nog niets |
 | **masterwiel** indrukken of **ENTER** | de keuze zetten (`track.N.inst.choose`). Speelt daar een nummer: eerst "druk nog eens" (de bus wil een tweede druk binnen 3 s, zoals overal), de keuze blijft staan. Een keuze vervalt na 8 s of als de focus wisselt |
 | **STEP** | stapmodus aan/uit (§5); lampje fel = aan |
+| **SCENE** | padmodus secties aan/uit (§5b): pad K = sectie K van de **focus-track**, valt in op de volgende "1"; lampje zacht = de focus-track heeft secties, fel = aan |
 | **PATTERN** vast + pad 1–5 | patroon (plek) 1–5 kiezen op de speeltrack; de pads tonen zolang de vijf plekken |
 | **PLAY** | het gekozen patroon op de speeltrack starten op de maat, of stoppen als het speelt (`track.{speel}.pattern.{plek}`); **SHIFT + PLAY** meteen (`.now`) |
 | **RESTART** | het patroon op de speeltrack stoppen op de maat (`track.{speel}.pattern.stop`; de MK2 heeft geen STOP-knop); **SHIFT** = meteen |
 | **REC** | live opnemen aan/uit (`patterns.record`): wat je op de pads (of het keyboard) speelt komt in het patroon dat speelt |
 | **ERASE** | het gekozen patroon leegmaken (`track.{speel}.pattern.clear`, tweede druk binnen 3 s) |
-| **◄ ►** (transport) | in de stapmodus: de bladzijde (stap 1–16, 17–32, …); **SHIFT + ◄ ►** = korter/langer (`.pattern.length.down/up`) |
+| **◄ ►** (transport) | in de stapmodus: de bladzijde (stap 1–16, 17–32, …); in de modus secties: de bladzijde van de secties (1–16, 17–32, 33–40); **SHIFT + ◄ ►** = korter/langer (`.pattern.length.down/up`) |
 | F1–F8, GRID, NOTE REPEAT, BROWSE, … | vrij |
 
 **Waarom het wiel kiest en niet meteen wisselt:** een tik tegen het wiel zou anders je
@@ -94,11 +96,16 @@ kleur. Gedimd = de "donker"-tint (index + 1, #59xxxx), zoals op de APC.
   die je nu HOORT (`stapNu`, alleen als het gekozen patroon speelt) wit.
 - **PATTERN vast**: pad 1–5 = de plekken (speelt = vol, gevuld = gedimd, leeg = donkergrijs),
   de gekozen wit; 6–16 uit.
+- **Modus secties**: dezelfde kleuren als de grid-modus secties van de APC (de read van
+  `track.N.section.K`): wit = die hoor je (of drukt je in), donker hemelsblauw (42) = er is een
+  sectie, uit = geen sectie op die pad. Geen knipperen op de tel (de Maschine kent dat niet) en
+  geen groepskleuren (VRAGEN SE4).
 - **SHIFT**: zacht aan, fel zolang hij vastzit. **ENTER**: fel zolang het wiel een keuze heeft.
-- **STEP**, **PATTERN**: zacht aan, fel als ze aan/vast zijn. **PLAY**/**RESTART**/**ERASE**:
+- **STEP**, **PATTERN**: zacht aan, fel als ze aan/vast zijn. **SCENE**: zacht als de focus-track
+  secties heeft, fel in de modus secties, anders uit. **PLAY**/**RESTART**/**ERASE**:
   hun read als helderheid (speelt = fel, gevuld/iets te stoppen = half, knippert vanzelf als het
   op de maat wacht). **REC** fel tijdens opnemen. **◄ ►** half als er een bladzijde die kant op
-  is. Zonder instrument op de speeltrack zijn de patroonknoppen uit.
+  is (stappen, of secties). Zonder instrument op de speeltrack zijn de patroonknoppen uit.
 - Alleen wat verandert gaat weg (~30× per seconde gekeken, `TIK_MS` 33 in
   `ui/speelapparaten.js`), door de wachtrij van hub.js.
 
@@ -124,6 +131,24 @@ kleur. Gedimd = de "donker"-tint (index + 1, #59xxxx), zoals op de APC.
   blokje = een andere noot, vol = de laatst gespeelde noot, niets = voorbij de lengte) met een
   streep onder de stap die je hoort. **PATTERN vast**: de vijf plekken als grote vakken (dikke
   rand = gevuld, `>` = speelt), de gekozen onderstreept. Rechts blijft knop 5–8.
+- **Modus secties** (links, in plaats van knop 1–4): kop groot = de focus-track en de sectie die
+  je HOORT (`T1 4 drop D`; zonder secties `T1 nog geen secties`, `T3 leeg`, `T2 Drums: geen
+  nummer`). Daaronder de namen van de 16 pads ZOALS ZE LIGGEN (pad 1 linksonder, 13–16
+  bovenaan; een kolom van 64 px per pad): die je hoort of indrukt omgekeerd (wit vlak, zwarte
+  letters), een pad zonder sectie leeg. Onderaan wat er op de volgende "1" komt (`op de 1: 4 drop
+  D`: in de aanloop van een sprong, of in de laatste maat vóór de volgende sectie; in een loop wat
+  er na het rondgaan komt), anders de uitleg en de bladzijde. Rechts blijft knop 5–8 van de speeltrack.
+
+```
+ T1 4 drop D                                   (groot: de sectie die je hoort)
+ ─────────────────────────────────────
+                                               pad 13–16 (leeg: 7 secties)
+                                               pad 9–12
+ E        drop D    outro F                    pad 5–8
+ intro A  B         opbouw C  [drop D]         pad 1–4 ([…] = omgekeerd: die hoor je)
+ ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+ pad = sectie, valt in op de 1   /   op de 1: 6 drop D   /   pad = sectie op de 1, < > blad 1/3
+```
 - Kop links: de speeltrack en zijn instrument (waar pads, keyboard en draaiknoppen heen gaan);
   kop rechts: de keuze van het wiel, of de focus-track als die anders is dan de speeltrack.
 - Per knop (vier per scherm, 64 px): de naam, de waarde in echte eenheden (dezelfde `eenheid()`
@@ -151,6 +176,35 @@ patronen. Werkwijze op de Maschine:
 Wisselt de modus terwijl een pad vastzit, dan gaat zijn loslaten naar waar het indrukken heen
 ging (noten.js of de stap-action): er blijft nooit een noot hangen.
 
+## 5b. De padmodus secties (SCENE, gebouwd 6 okt, spoor `studio/sec-maschine`)
+
+Het nummer in secties (docs/SECTIES.md) op de pads, zoals de grid-modus secties van de APC,
+maar met 16 pads:
+
+1. **Groep A–H** kiest de track (de focus). De secties horen bij een NUMMER; de speeltrack heeft
+   altijd een instrument, daarom de **focus-track** (net als de APC).
+2. **SCENE**: de pads zijn de secties van die track op volgorde, pad 1 = sectie 1 (linksonder),
+   pad 16 = sectie 16. Meer dan 16 secties: **◄ ►** bladeren (1–16, 17–32, 33–40). Een andere
+   focus-track (of SCENE na een focuswissel) begint op de bladzijde met de sectie die je daar
+   HOORT, anders op blad 1; terug naar dezelfde track in dezelfde modus houdt je bladzijde.
+   Hoor je een sectie boven de 40 (een kaart met de hand mag tot 64), dan staat hij op geen pad,
+   maar de kop noemt hem wel ("T8 43 A").
+3. **Een pad** = `track.N.section.K` over de bus, precies wat de APC doet: speelt het nummer, dan
+   valt de sectie in op de volgende "1" (de aanloop uit het nummer zelf, SECTIES.md §3);
+   stilstaand staat de speelkop meteen op haar begin. Omdat het over de bus gaat, komt het in het
+   handelingenlog (en speelt het terug) en ziet de auto-DJ het (OVERNEEM, na het spoor auto).
+4. Een pad zonder sectie, of een track zonder secties: de bus zegt waarom niet (melding in VARVE:
+   "track 1 heeft 7 secties; sectie 21 is er niet", met het nummer van de SECTIE, dus blad 2 pad 5
+   = 21), zoals op de APC; er springt niets. De auto-DJ telt zo'n druk niet als overnemen.
+   Speelt een sectie als loop, dan flitst na het rondgaan niet meer de sectie ervóór op (lampjes
+   en scherm): `deck.sectieHier` vouwt wat je hoort terug in de loop (de uitgangsvertraging).
+5. **SCENE** nog eens = weer spelen; **STEP** = de stapmodus (één padmodus tegelijk). **PATTERN**
+   vast + pad kiest ook hier een patroon. Een pad die vastzit tijdens een wissel (modus, focus, de
+   hub weg) laat los waar hij indrukte.
+
+Niet gebouwd (VRAGEN SVM): SHIFT + pad = sectie als loop (de APC doet dat wel), groepskleuren
+(SE4), en een bladzijde die vanzelf meeloopt met wat je hoort.
+
 ## 6. De Xboard49
 
 Via de hub precies zoals een rechtstreeks aangesloten keyboard (`src/control/noten.js`):
@@ -175,7 +229,9 @@ hub via Web MIDI binnenkomt (noten.js hoort beide).
   weg, "druk nog eens"), lampjes (kleuren, flits, diff), schermen (tempo, alleen wat
   veranderde), hub weg en terug, de stapmodus met een nep-patroonspeler (stappen over de bus,
   lampjes uit de reads, bladeren, lengte, loslaten na een moduswissel, PATTERN + pad, het
-  transport, het scherm), het scherm als pure functie (pixels teruglezen, tekst in zijn
+  transport, het scherm), de modus secties met nep-decks en de echte `SectieKaart` (SCENE,
+  pads = de reads, `track.N.section.K` indrukken en los, de focus, bladeren tot 20 secties, een
+  track zonder secties, wisselen en de hub weg met een pad vast, het scherm pixel voor pixel), het scherm als pure functie (pixels teruglezen, tekst in zijn
   kolom, elke eenheid van Poly/FM/Drums past), Xboard knop 9–16 en de schuif, en
   `isSpeelapparaat` in de MidiHub.
 - `test/hub.test.mjs`: `speelt` in het manifest (geldig volgens de hub), routering per `dev`,
@@ -196,6 +252,17 @@ hub via Web MIDI binnenkomt (noten.js hoort beide).
   Plus de uitgangsbuffer van de AudioContext.
 - `tools/headless/hub.mjs`: de conformiteitstoets van de hub slaagt ook met `speelt` (hun MIDI,
   LED's met `dev`, schermen).
+- `test/sec-maschine.test.mjs` (review 7 okt): `deck.sectieHier` vlak na het rondgaan van een
+  sectie-loop (geen flits van de sectie ervóór, ook de reads van de lampjes niet; zonder loop
+  niets teruggevouwen) en de melding "sectie 21 is er niet". De auto-DJ: een pad zonder sectie is
+  geen overname (`test/auto-secties.test.mjs`, 4f).
+- `tools/headless/sec-maschine.mjs` (6 okt): de echte hub (poort 7715) met de nep-Maschine en
+  VARVE op een eigen server met het synthetische nummer (7 secties, 124 bpm) via de ingest:
+  zonder `?hub=` niets geladen; SCENE fel (HID 0x82), pads als HID 0x80 (wit / donker
+  hemelsblauw / uit); pad 2 stilstaand = het begin van sectie 2; pad 4 midden in een maat =
+  `track.1.section.4` over de bus en de sprong op de maat (fasebehoudend, sectie 4 valt in op de
+  "1"); het linkerscherm bit voor bit `tekenScherm`: in de aanloop "op de 1: 4 drop D", daarna
+  "T1 4 drop D"; pad 16 zonder sectie = de melding van de bus; nooit `requestMIDIAccess`.
 
 ## 8. Niet getest: dit vraagt Clay's handen en hardware
 
@@ -207,6 +274,8 @@ hub via Web MIDI binnenkomt (noten.js hoort beide).
 - Hoe de draaiknoppen voelen (één omwenteling voor de hele knop, vijf met SHIFT) en of de
   drempel van de hub (12 tellen) langzaam draaien niet dood maakt.
 - Of de schermen leesbaar zijn (5×7, kop 2×), links/rechts goed, en hoe snel ze bijwerken.
+- De modus secties op het echte toestel: of de pads goed liggen (pad 1 linksonder = sectie 1),
+  of het donker hemelsblauw op de Maschine te zien is, en of de namen in het raster leesbaar zijn.
 - De echte latency toets → geluid (Xboard en pads), en de velocity-curve van de pads.
 - De CC's van de Xboard-knoppen en of de schuif echt Master Volume stuurt (§6).
 - **Bekend, aan de kant van de hub:** het eerste knoppenrapport na het aansluiten zet daar

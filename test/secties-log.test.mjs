@@ -496,17 +496,19 @@ try {
 
   console.log('\nreview: in een loop over de terugsprong heen');
   {
-    // In de loop om sectie 3 (32–48), 4 ms vóór het loop-einde "volgende": sectie 5. Het
+    // In de loop om sectie 3 (32–48), 4 ms vóór het loop-einde "volgende": sectie 4. Het
     // terugspelen tikt 4 ms later; dan is de loop al rond (de speelkop op 32). De plek uit
     // het log ligt een loop verder dan "nu min laat": die moet hij herkennen.
+    // (Tot 7 okt werd dit sectie 5: in de laatste maat van een loop gaf sectieOpDeMaat al de
+    // sectie NA de loop, en sloeg "volgende" er een over. Review spoor maschine.)
     const meet = meetElke(9000);
     const acties = [[7.996, 'track.1.section.next', true], [8.05, 'track.1.section.next', false]];
     const { l, pos: toen } = await neemOp({ acties, meet, voor: () => zetKlaar({ vanaf: 40, loop: 'track.1.section.3.loop' }) });
-    ok(`live: in de loop tot de druk, daarna sectie 5 (${toen.get(7950).toFixed(3)} → ${toen.get(8200).toFixed(3)} s)`,
-      Math.abs(toen.get(7950) - 47.95) < 1e-6 && Math.abs(toen.get(8200) - 56.2) < 1e-6);
+    ok(`live: in de loop tot de druk, daarna sectie 4, de volgende na de loop (${toen.get(7950).toFixed(3)} → ${toen.get(8200).toFixed(3)} s)`,
+      Math.abs(toen.get(7950) - 47.95) < 1e-6 && Math.abs(toen.get(8200) - 48.2) < 1e-6);
     d.clearLoop(); d.pause(); d.seek(9);
     const { pos: nu } = await speelTerug({ l, meet });
-    ok(`teruggespeeld na de terugsprong: ook sectie 5 (${toen.get(8200).toFixed(3)} / ${nu.get(8200).toFixed(3)} s)`, verschil(toen, nu) < 1e-6);
+    ok(`teruggespeeld na de terugsprong: ook sectie 4 (${toen.get(8200).toFixed(3)} / ${nu.get(8200).toFixed(3)} s)`, verschil(toen, nu) < 1e-6);
   }
 
   console.log('\nde bus: `laat` van terugspelen');

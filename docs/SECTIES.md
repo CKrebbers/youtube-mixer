@@ -104,6 +104,9 @@ hotcue), dus ook met keylock exact.
 - Zonder (zeker) grid, of een kaart zonder grid: gewoon naar het begin.
 - Als loop: speel je er al in, dan blijft de speelkop staan en komt de loop om
   de sectie; anders dezelfde sprong met de loop er meteen om (`_spring`).
+- In een loop (gerepareerd 7 okt): valt de volgende "1" op of na het loopeinde, dan telt
+  waar de speelkop dan is (`sectieOpDeMaat` vouwt terug naar het loopbegin); tot dan gaf
+  de laatste maat van een loop om sectie 2 al sectie 3, en sloeg volgende er een over.
 
 Waarom niet wachten tot de maat om is (zoals Ableton)? Dat vraagt een GEPLANDE
 sprong terwijl het oude doorspeelt; de streamkern kan dat nu alleen voor

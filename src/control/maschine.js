@@ -1,7 +1,7 @@
 import { Emitter } from '../lib/emitter.js';
 import { parseMessage } from './midi.js';
 import { Mapping } from './mapping.js';
-import { trackVanDeck, TRACKS } from './actions.js';
+import { trackVanDeck, TRACKS, SECTIE_PADS } from './actions.js';
 import { PALETTE } from './devices/apc40mk2.js';
 import { INSTRUMENTEN } from '../engine/instrumenten/index.js';
 import { KNOP_KANAAL, PAD_KANAAL, PAD_NOOT, WIEL_SIG, GROEPEN, knopNoot, padVanNoot } from './devices/maschine-mk2.js';
@@ -43,6 +43,17 @@ import { tekenScherm } from './maschine-scherm.js';
  *                    starten/stoppen, stoppen, opnemen, leegmaken, korter/langer
  *   live opnemen     vanzelf: de pads spelen via noten.js, en daar luistert de
  *                    patroonspeler op (patronen-paneel.js)
+ *
+ * SECTIES (docs/SECTIES.md; de FOCUS-track, zoals de grid-modus secties van de APC):
+ *   SCENE            padmodus secties aan/uit (zoals STEP; één padmodus tegelijk):
+ *                    pad K = `track.{focus}.section.K` over de bus, de sectie valt
+ *                    in op de volgende "1" (deck.naarSectie). Lampje = de read
+ *                    (wit = die hoor je of drukt je in, donker hemelsblauw = er is
+ *                    een sectie, uit = geen); ◄ ► (transport) = de bladzijde bij
+ *                    meer dan 16 secties. Links op het scherm de sectie die je
+ *                    hoort en de namen zoals de pads liggen.
+ *                    Waarom de focus-track en niet de speeltrack: secties horen bij
+ *                    een NUMMER, de speeltrack heeft altijd een instrument.
  *
  * Wat de engine doet gaat over de bus (focus, knoppen, instrument kiezen,
  * stappen, transport); noten niet (een noot is geen 0..1: noten.js). De engine
@@ -101,10 +112,12 @@ export class Maschine extends Emitter {
     this.flits = new Map();         // pad-noot -> tot (ms)
     this.kandidaat = null;          // { id, index, tot }: het masterwiel, nog niet gezet
     this.melding = null;            // { tekst, tot }
-    this.modus = 'spelen';          // 'spelen' of 'stappen' (STEP)
+    this.modus = 'spelen';          // 'spelen', 'stappen' (STEP) of 'secties' (SCENE)
     this.bladzijde = 0;             // stapmodus: pads = stap 16·b + 1 .. 16·b + 16
+    this.sectieBlad = 0;            // modus secties: pads = sectie 16·b + 1 .. 16·b + 16
+    this._sectieFocus = undefined;  // de focus-track waar sectieBlad bij hoort
     this.patroonVast = false;       // PATTERN ingedrukt: pads 1–5 kiezen een plek
-    this.padVast = new Map();       // pad-noot -> waar het indrukken heen ging ('noten', 'kies' of een action)
+    this.padVast = new Map();       // pad-noot -> waar het indrukken heen ging ('noten', een action, of 'kies' = niets bij het loslaten)
     this.rx = 0;
   }
 
@@ -124,6 +137,36 @@ export class Maschine extends Emitter {
   _bladzijden() {
     const n = Math.max(1, Math.ceil(this._lengte() / STAPPEN));
     if (this.bladzijde > n - 1) this.bladzijde = n - 1;
+    return n;
+  }
+
+  /** De track van de modus secties: de FOCUS-track ({ id, nr, deck }), of null. */
+  _sectieTrack() {
+    const id = this.engine.focus ?? null;
+    const nr = id ? trackVanDeck(id) : null;
+    return nr ? { id, nr, deck: this.engine.deck?.(id) ?? null } : null;
+  }
+
+  /** De sectiekaart van de focus-track (alleen met een nummer erop), of null. */
+  _sectieKaart() {
+    const d = this._sectieTrack()?.deck;
+    return d?.buffer && d.sectieKaart ? d.sectieKaart : null;
+  }
+
+  /**
+   * Aantal bladzijden van 16 secties op de focus-track; houdt de bladzijde erbinnen.
+   * Een andere focus-track: de bladzijde met de sectie die je daar HOORT, anders
+   * blad 1 (anders ging blad 2 mee en zag je op de nieuwe track meteen 17–32).
+   */
+  _sectieBladen() {
+    const t = this._sectieTrack(), k = this._sectieKaart();
+    if ((t?.id ?? null) !== this._sectieFocus) {
+      this._sectieFocus = t?.id ?? null;
+      const hier = k ? t.deck.sectieHier : -1;
+      this.sectieBlad = hier >= 0 && hier < SECTIE_PADS ? Math.floor(hier / STAPPEN) : 0;
+    }
+    const n = Math.max(1, Math.ceil(Math.min(k?.aantal ?? 0, SECTIE_PADS) / STAPPEN));
+    if (this.sectieBlad > n - 1) this.sectieBlad = n - 1;
     return n;
   }
 
@@ -177,15 +220,17 @@ export class Maschine extends Emitter {
     this.rx++;
     // Pads: spelen (noten.js), een stap (stapmodus) of een plek kiezen (PATTERN).
     if (msg.channel === PAD_KANAAL && (msg.type === 'note' || msg.type === 'poly') && padVanNoot(msg.number) !== null) return this._pad(msg);
-    // STEP en PATTERN: de modus van de pads (hier, niet op de bus: het is wat de pads betekenen).
+    // STEP, SCENE en PATTERN: de modus van de pads (hier, niet op de bus: het is wat de pads betekenen).
     if (msg.type === 'note' && msg.channel === KNOP_KANAAL) {
       if (msg.number === knopNoot('step')) { if (msg.on) this.zetModus(this.modus === 'stappen' ? 'spelen' : 'stappen'); return true; }
+      if (msg.number === knopNoot('scene')) { if (msg.on) this.zetModus(this.modus === 'secties' ? 'spelen' : 'secties'); return true; }
       if (msg.number === knopNoot('pattern')) { this.patroonVast = !!msg.on; return true; }
-      // ◄ ► (transport) zonder SHIFT: de bladzijde van de stappen. Met SHIFT: de mapping (korter/langer).
+      // ◄ ► (transport) zonder SHIFT: de bladzijde van de stappen of de secties. Met SHIFT: de mapping (korter/langer).
       const stap = msg.number === knopNoot('stapL') ? -1 : msg.number === knopNoot('stapR') ? 1 : 0;
       if (stap && !this.mapping.shift && !this.mapping.vast.has(msg.sig)) {
         if (msg.on && this.modus === 'stappen') this.bladzijde = Math.max(0, Math.min(this._bladzijden() - 1, this.bladzijde + stap));
-        return msg.on && this.modus === 'stappen';
+        if (msg.on && this.modus === 'secties') this.sectieBlad = Math.max(0, Math.min(this._sectieBladen() - 1, this.sectieBlad + stap));
+        return msg.on && (this.modus === 'stappen' || this.modus === 'secties');
       }
     }
     // Het masterwiel: draaien = kiezen, indrukken (of ENTER) = zetten.
@@ -205,16 +250,17 @@ export class Maschine extends Emitter {
     return !!this.mapping.handle(msg)?.taken;
   }
 
-  /** STEP: spelen of stappen. */
+  /** STEP en SCENE: spelen, stappen of secties (één padmodus tegelijk). */
   zetModus(modus) {
-    this.modus = modus === 'stappen' ? 'stappen' : 'spelen';
+    this.modus = modus === 'stappen' || modus === 'secties' ? modus : 'spelen';
     this._bladzijden();
+    this._sectieBladen();
   }
 
   /**
    * Eén pad. Het loslaten gaat naar waar het indrukken heen ging (noten.js,
-   * een stap-action, of niets na een keuze), ook als de modus intussen wisselde:
-   * een noot blijft zo nooit hangen.
+   * een stap- of sectie-action, of niets na een keuze), ook als de modus of de
+   * focus intussen wisselde: een noot blijft zo nooit hangen.
    */
   _pad(msg) {
     const noot = msg.number;
@@ -234,6 +280,20 @@ export class Maschine extends Emitter {
       this.padVast.set(noot, 'kies');
       if (id && pad <= PLEKKEN && this.engine.patronen?.kies) { this.engine.patronen.kies(id, pad); this.bladzijde = 0; return true; }
       return false;
+    }
+    if (this.modus === 'secties') {
+      // De sectie op deze pad van de focus-track, over de bus (op de maat, in het log). Ook
+      // zonder sectie op die plek: dan zegt de bus waarom niet (actions.js, waaromNiet).
+      // Voorbij de 40 (SECTIE_PADS, de laatste bladzijde) bestaat er geen action: niets.
+      const t = this._sectieTrack();
+      if (!t) return false;
+      this._sectieBladen();                                 // de focus kan net gewisseld zijn (groep A–H)
+      const k = this.sectieBlad * STAPPEN + pad;
+      if (k > SECTIE_PADS) { this.padVast.set(noot, 'kies'); return false; }
+      const action = `track.${t.nr}.section.${k}`;
+      this.padVast.set(noot, action);
+      this.invoke(action, true);
+      return true;
     }
     if (this.modus === 'stappen') {
       if (!id) return false;
@@ -312,6 +372,15 @@ export class Maschine extends Emitter {
         const v = i >= PLEKKEN ? PALETTE.uit : i + 1 === plek && !(r >= 0.75) ? PALETTE.wit : kleurVan(r);
         uit.set(sleutel(PAD_KANAAL, PAD_NOOT + i), v);
       }
+    } else if (this.modus === 'secties' && !this.patroonVast) {
+      // Secties van de focus-track (zoals de APC): wit = die hoor je (of drukt je in),
+      // donker hemelsblauw = er is een sectie, uit = geen. Geen instrument nodig.
+      const t = this._sectieTrack();
+      this._sectieBladen();
+      for (let i = 0; i < 16; i++) {
+        const r = t ? this.read(`track.${t.nr}.section.${this.sectieBlad * STAPPEN + i + 1}`) : null;
+        uit.set(sleutel(PAD_KANAAL, PAD_NOOT + i), r === null || r === undefined ? PALETTE.uit : r >= 0.75 ? PALETTE.wit : PALETTE.hemelsblauwdonker);
+      }
     } else if (inst && this.modus === 'stappen') {
       // Stapmodus: de read van elke stap; de stap die je nu hoort wit (alleen als het gekozen patroon speelt).
       const st = this.engine.patronen?.stand?.(speel) ?? null;
@@ -358,9 +427,13 @@ export class Maschine extends Emitter {
     knop('restart', pt ? helder(this.read(`track.${nr}.pattern.stop`)) : HELDER.uit);
     knop('rec', pt ? (this.read('patterns.record') === 1 ? HELDER.aan : HELDER.beschikbaar) : HELDER.uit);
     knop('erase', pt ? helder(this.read(`track.${nr}.pattern.clear`)) : HELDER.uit);
-    const bladen = pt && this.modus === 'stappen' ? this._bladzijden() : 0;
-    knop('stapL', bladen && this.bladzijde > 0 ? HELDER.half : HELDER.uit);
-    knop('stapR', bladen && this.bladzijde < bladen - 1 ? HELDER.half : HELDER.uit);
+    // Secties: zacht aan als de focus-track ze heeft, fel in de modus.
+    knop('scene', this.modus === 'secties' ? HELDER.aan : this._sectieKaart() ? HELDER.beschikbaar : HELDER.uit);
+    const secties = this.modus === 'secties';
+    const bladen = secties ? this._sectieBladen() : pt && this.modus === 'stappen' ? this._bladzijden() : 0;
+    const blad = secties ? this.sectieBlad : this.bladzijde;
+    knop('stapL', bladen && blad > 0 ? HELDER.half : HELDER.uit);
+    knop('stapR', bladen && blad < bladen - 1 ? HELDER.half : HELDER.uit);
     return uit;
   }
 
@@ -401,12 +474,39 @@ export class Maschine extends Emitter {
     }
     return {
       modus: this.modus, patroonVast: this.patroonVast, patroon,
+      secties: this.modus === 'secties' ? this._sectieStand() : null,
       speel: inst ? { nr: trackVanDeck(speel), naam: inst.naam } : null,
       focus: { nr: trackVanDeck(f), wat: fi ? fi.naam : this.engine.deck?.(f)?.buffer ? 'nummer' : 'leeg' },
       knoppen,
       kandidaat: k ? { naam: k.index === 0 ? 'geen' : INSTRUMENTEN[k.index - 1].naam } : null,
       shift: !!this.mapping.shift,
       melding: this.melding && this.melding.tot > nu ? this.melding.tekst : null,
+    };
+  }
+
+  /**
+   * De modus secties voor het scherm: de focus-track, wat erop staat, de naam
+   * per pad van deze bladzijde (null = geen sectie), welke branden (de read: die
+   * je hoort of indrukt), de sectie die je HOORT (deck.sectieHier) en, als die
+   * anders is, de sectie op de volgende "1" (deck.sectieOpDeMaat: een sprong in
+   * de aanloop, of de volgende sectie in de laatste maat ervóór). "3 drop C".
+   */
+  _sectieStand() {
+    const t = this._sectieTrack();
+    if (!t) return null;
+    const d = t.deck, k = this._sectieKaart();
+    const fi = this.engine.instrumentOp?.(t.id);
+    const bladen = this._sectieBladen(), blad = this.sectieBlad;
+    const bestaat = (i) => !!k && i >= 0 && i < Math.min(k.aantal, SECTIE_PADS);
+    // Wat je hoort of wat er komt: ook boven de 40 (een kaart met de hand mag tot 64), al staat het op geen pad.
+    const metNr = (i) => (k && i >= 0 && i < k.aantal ? `${i + 1} ${k.naam(i)}` : null);
+    const hier = k ? d.sectieHier : -1, opDeMaat = k ? d.sectieOpDeMaat : -1;
+    return {
+      nr: t.nr, wat: fi ? fi.naam : d?.buffer ? 'nummer' : 'leeg', aantal: k?.aantal ?? 0, blad, bladen,
+      namen: Array.from({ length: STAPPEN }, (_, i) => (bestaat(blad * STAPPEN + i) ? k.naam(blad * STAPPEN + i) : null)),
+      aan: Array.from({ length: STAPPEN }, (_, i) => this.read(`track.${t.nr}.section.${blad * STAPPEN + i + 1}`) >= 0.75),
+      hoort: metNr(hier),
+      naar: opDeMaat !== hier ? metNr(opDeMaat) : null,
     };
   }
 
