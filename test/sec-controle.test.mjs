@@ -42,7 +42,11 @@ await blok('de tegel', async () => {
   ok('allebei', regel({ totaal: 40, zonder: 12, verouderd: 3 }) === 'secties: 12 nog zonder · 3 verouderd');
   ok('in een smalle tegel breekt hij alleen bij de " · " (harde spaties binnen een deel)',
     sectiesRegel({ totaal: 40, zonder: 12, verouderd: 3 }) === 'secties: 12\u00a0nog\u00a0zonder · 3\u00a0verouderd');
-  ok('een antwoord dat niet klopt: geen regel (geen "NaN")', sectiesRegel({ fout: 'x' }) === '' && sectiesRegel({ totaal: 3 }) === '');
+  ok('een fout van de server (500, bv. een library.db met de v9 van een andere tak): "onbekend (fout)"',
+    sectiesRegel({ fout: 500 }) === 'secties: onbekend (fout)');
+  ok('een antwoord dat niet klopt: geen regel (geen "NaN"): zonder of met NaN als totaal, zonder zonder',
+    sectiesRegel({ zonder: 1, verouderd: 0 }) === '' && sectiesRegel({ totaal: NaN, zonder: 1, verouderd: 0 }) === ''
+    && sectiesRegel({ totaal: '3', zonder: 1, verouderd: 0 }) === '' && sectiesRegel({ totaal: 3 }) === '');
 
   const draait = serverTegel({ server: true, nummers: 40, secties: { totaal: 40, zonder: 12, verouderd: 3 } });
   ok(`server draait: dezelfde tegel als eerst, plus de regel ("${draait.sub}" / "${draait.regel}")`, draait.naam === 'Server'
@@ -134,6 +138,45 @@ await blok('de telling', async () => {
     lib.db.prepare("UPDATE tracks SET secties_json = '{ kapot' WHERE id = 'oud'").run();
     ok('een onleesbare kaart telt als zonder (zoals moetSecties)', lib.sectieTelling().zonder === 2 && lib.sectieTelling().verouderd === 2
       && lib.moetSecties('oud'));
+    const zelfde = () => { const x = lib.sectieTelling(), te2 = lib.teSectieAnalyseren();
+      return x.zonder + x.verouderd === te2.length && x.zonder === te2.filter((id) => !lib.secties(id)).length; };
+
+    // Een nummer van vóór grid_json: alleen de oude kolommen (grid_bpm, grid_first_beat, grid_beats_per_bar).
+    nummer(lib, 'oudgrid');
+    lib.db.prepare("UPDATE tracks SET grid_json = NULL, grid_bpm = 124, grid_first_beat = 0.25, grid_beats_per_bar = 4 WHERE id = 'oudgrid'").run();
+    kaart(lib, 'oudgrid');
+    ok('alleen de oude gridkolommen: de kaart op dat grid is actueel (zoals moetSecties)', lib.track('oudgrid').grid
+      && !lib.moetSecties('oudgrid') && lib.sectieTelling().verouderd === 2 && zelfde());
+    // stems_json onleesbaar: dan heeft het nummer geen stems (zoals track()), dus een kaart zonder stems is actueel.
+    nummer(lib, 'stemskapot');
+    lib.bewaarGrid('stemskapot', GRID);
+    kaart(lib, 'stemskapot');
+    lib.db.prepare("UPDATE tracks SET stems_json = 'kapot' WHERE id = 'stemskapot'").run();
+    ok('stems_json kapot: geen stems, de kaart is actueel (zoals moetSecties)', !lib.moetSecties('stemskapot')
+      && lib.sectieTelling().verouderd === 2 && zelfde());
+
+    // Een miss parst alleen wat veranderde (review 1): tel JSON.parse tijdens de vraag.
+    const echteParse = JSON.parse;
+    const parses = (fn) => { let n = 0; JSON.parse = (...x) => { n++; return echteParse(...x); }; try { fn(); } finally { JSON.parse = echteParse; } return n; };
+    lib.sectieTelling();
+    lib.geladen('actueel');                                          // een schrijfactie die de secties niet raakt
+    const los = parses(() => lib.sectieTelling());
+    ok(`een schrijfactie buiten grid, stems en kaart: niets opnieuw geparst (${los}× JSON.parse)`, los === 0);
+    kaart(lib, 'geen1', { grid: gridSleutel(ANDER_GRID) });         // één nummer anders: nu verouderd
+    let telling;
+    const een = parses(() => { telling = lib.sectieTelling(); });
+    ok(`één nummer van de ${telling.totaal} anders: alleen dat nummer geparst (${een}× JSON.parse), telling klopt`, een > 0 && een <= 3
+      && telling.verouderd === 3 && zelfde());
+
+    // Een transactie die terugdraait (review 2): total_changes daalt niet en data_version blijft voor de eigen verbinding.
+    const voor = lib.sectieTelling();
+    lib.db.exec('BEGIN');
+    lib.db.prepare("UPDATE tracks SET secties_json = NULL WHERE id = 'hand'").run();
+    const tijdens = lib.sectieTelling();
+    lib.db.exec('ROLLBACK');
+    const na = lib.sectieTelling();
+    ok(`een transactie die terugdraait: daarna weer de telling van ervoor (zonder ${voor.zonder} → ${tijdens.zonder} → ${na.zonder})`,
+      tijdens.zonder === voor.zonder + 1 && na.zonder === voor.zonder && na.verouderd === voor.verouderd && zelfde());
   } finally { lib.sluit(); }
 });
 
@@ -158,6 +201,19 @@ await blok('wat het kost', async () => {
     const daarna = (performance.now() - t0) / 100;
     ok(`${N} nummers: ${t.zonder} zonder (eerste keer ${eerst.toFixed(0)} ms, daarna ${(daarna * 1000).toFixed(0)} µs per vraag)`,
       t.totaal === N && t.zonder === Math.ceil(N / 3) && t.verouderd === 0 && daarna < eerst / 5);
+    // Een miss na één schrijfactie (zoals de achtergrond die elke paar seconden iets bewaart): niet alles opnieuw.
+    const missen = [];
+    for (let i = 0; i < 10; i++) {
+      lib.bewaarSecties(`n${3 * i}`, { versie: SECTIE_VERSIE, opGrid: true, grid: gridSleutel(lib.track(`n${3 * i}`).grid), bron: 'auto',
+        stukken: [{ van: 0, label: 'intro', groep: 'A', energie: 0.2 }] });
+      t0 = performance.now();
+      lib.sectieTelling();
+      missen.push(performance.now() - t0);
+    }
+    missen.sort((a, b) => a - b);
+    const miss = missen[5];
+    ok(`na één schrijfactie: ${miss.toFixed(1)} ms (mediaan van 10), minder dan de helft van de eerste keer (${eerst.toFixed(0)} ms)`,
+      miss < eerst / 2 && lib.sectieTelling().zonder === Math.ceil(N / 3) - 10);
   } finally { lib.sluit(); }
 });
 

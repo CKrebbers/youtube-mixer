@@ -20,9 +20,11 @@ export function serverTegel({ server, nummers = null, secties = null } = {}) {
 /**
  * De regel over de secties, uit het antwoord van GET /api/secties:
  * { totaal, zonder, verouderd } (Library.sectieTelling).
- * - null (nog niets, of een fout): geen regel;
+ * - null (nog niets, of de server niet bereikbaar): geen regel;
  * - { ontbreekt: true }: een oudere server zonder de route (404), "onbekend";
- * - een lege library: geen regel.
+ * - { fout: status }: een fout van de server (bv. 500 op een library.db met de
+ *   v9 van een andere tak, zonder secties_json): "onbekend (fout)";
+ * - een lege library, of een antwoord dat niet klopt: geen regel.
  * `zonder` = nog geen kaart (komt bij het laden, of na een herstart op de
  * achtergrond); `verouderd` = wel een kaart, maar de server rekent hem opnieuw
  * (oudere SECTIE_VERSIE, een ander grid, stems erbij). Met de hand of op slot
@@ -33,6 +35,7 @@ export function serverTegel({ server, nummers = null, secties = null } = {}) {
 export function sectiesRegel(s) {
   if (!s) return '';
   if (s.ontbreekt) return 'secties: onbekend (oudere server)';
+  if (s.fout) return 'secties: onbekend (fout)';
   const heel = (x) => Number.isInteger(x) && x >= 0;
   if (!heel(s.totaal) || !heel(s.zonder) || !heel(s.verouderd) || s.totaal === 0) return '';
   const delen = [];
