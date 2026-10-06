@@ -97,7 +97,8 @@ focus- of mapjewissel.
 **Grid-modi op scene 1–4, klank op Shift + scene 5, auto op Shift + scene 4**
 (kleur fel = open, donker = dicht): hotcues (geel: rij 1–4 hotcue per track, shift = wissen (rood zolang
 shift vastzit), rij 5 loop aan/uit) · loops (cyaan: 1 · 2 · 4 · 8 · 16 tellen) ·
-sampler (violet: rij 1 pads, rij 2 leegmaken, linksonder samplerlengte) · video
+sampler (violet: rij 1 pads, rij 2 leegmaken, rij 3 de sectie die je hoort in die pad
+(hemelsblauw, zie SECTIES.md; de pad start dan op de "1"), linksonder samplerlengte) · video
 (blauw: effect vasthouden, mengvorm, puls-doel; rechts de beeld-noodknoppen: rij 1 pad 7
 flits, pad 8 zwart zolang je drukt, rij 2 pad 7 zwart aan/uit, pad 8 bevriezen) · klank (magenta, per kolom =
 track: rij 1 kill hoog, 2 kill mid, 3 kill laag — vasthouden = weg zolang je

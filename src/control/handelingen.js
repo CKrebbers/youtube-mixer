@@ -79,6 +79,7 @@ export class Handelingenlog {
     this.sessie = s;
     this.buffer = [];
     this.regels = 0;
+    this._tijd = 0;
     this.t0 = this.klok();
     this.gebeurtenis('kop', { versie: LOG_VERSIE, begon: this.datum().toISOString(), klok: opMicro(this.t0), opname, ...kop });
     if (stand) this.gebeurtenis('stand', stand);
@@ -98,17 +99,46 @@ export class Handelingenlog {
     return begin;
   }
 
-  /** Eén action van de bus. Heet pad: een regel maken en klaar. */
-  neem(actie, waarde) {
+  /**
+   * Eén action van de bus. Heet pad: een regel maken en klaar.
+   * `laat` (terugspelen, invoke-opties): de regel kwam zoveel seconden na zijn
+   * moment de bus op. Hij staat er dan op dat bedoelde moment, zodat een
+   * opname van een terugspelen (opnieuw renderen) niet per generatie een tik
+   * opschuift.
+   */
+  neem(actie, waarde, laat = 0) {
     if (!this.sessie) return;
-    this.buffer.push(asciiJson([opMicro(this.klok() - this.t0), actie, waarde === undefined ? null : waarde]));
+    // Nooit vóór de regel ervóór: de volgorde in het bestand blijft die van de bus.
+    const t = Math.max(this._tijd ?? 0, opMicro(this.klok() - this.t0 - (laat > 0 ? laat : 0)));
+    const w = waarde === undefined ? null : waarde;
+    this.buffer.push(asciiJson([t, actie, w]));
+    this._laatste = { buf: this.buffer, i: this.buffer.length - 1, t, actie, w };
+    this._tijd = t;
     this.regels++;
+  }
+
+  /**
+   * Een vierde element aan de LAATSTE actieregel: wat de action zelf bepaalde.
+   * Alleen als die regel met `voorvoegsel` begint, een druk is (true) en nog
+   * niet weg is. Voor een sectiedruk: `{ van }`, de tracktijd waarvan de sprong
+   * rekende (deck 'sectiedruk', logboek.js). Terugspelen neemt daarmee precies
+   * dezelfde beslissing (welke "1"); een oudere terugspeler leest alleen de
+   * eerste drie elementen. Geeft true als het gelukt is.
+   */
+  vulAan(voorvoegsel, extra) {
+    const l = this._laatste;
+    if (!this.sessie || !l || l.buf !== this.buffer || l.w !== true || !l.actie.startsWith(voorvoegsel)) return false;
+    this.buffer[l.i] = asciiJson([l.t, l.actie, l.w, extra]);
+    this._laatste = null;
+    return true;
   }
 
   /** Iets wat niet (alleen) op de bus staat: laden, focus, een rack- of gridwissel. */
   gebeurtenis(e, data = {}) {
     if (!this.sessie) return;
-    this.buffer.push(asciiJson({ t: opMicro(this.klok() - this.t0), e, ...data }));
+    const t = opMicro(this.klok() - this.t0);
+    this.buffer.push(asciiJson({ t, e, ...data }));
+    this._tijd = Math.max(this._tijd ?? 0, t);
     this.regels++;
   }
 
@@ -214,6 +244,42 @@ export function leesLog(tekst) {
   return { kop, stand, eind, regels, kapot, duur };
 }
 
+/** Een sectiedruk op de bus (track.N.section.*). */
+const SECTIEDRUK = /^track\.\d+\.section\./;
+
+/**
+ * De luisteraar op de bus (actions.bijInvoke) die het log vult, voor
+ * logboek.js. `kijk` vergelijkt wat buiten de bus om verandert (rack, grid,
+ * hotcues, sectiekaart, pads) en schrijft het als gebeurtenis.
+ * - Een knop (boolean) kan zelf een rack, grid of pad veranderen: kijk() als
+ *   microtask, dus direct ACHTER de action.
+ * - Een sectiedruk: kijk() eerst, synchroon. Een sectiekaart die net binnenkwam
+ *   (laden.js, haalSecties; kijk draait verder elke 100 ms) stond anders ná de
+ *   druk in het log, en bij terugspelen zag de druk nog geen kaart.
+ * - `o.laat` (terugspelen): de regel staat op zijn bedoelde moment (neem).
+ */
+export function busNaarLog(log, kijk) {
+  return (id, v, o) => {
+    if (!log.bezig) return;
+    if (v === true && SECTIEDRUK.test(id)) kijk();
+    log.neem(id, v, o?.laat);
+    if (typeof v === 'boolean') queueMicrotask(kijk);
+  };
+}
+
+/**
+ * De plek waarvan een sectiesprong rekende bij de druk in het log (een vierde
+ * element, Handelingenlog.vulAan). De deck meldt hem tijdens de action zelf
+ * ('sectiedruk'), dus direct na de regel die busNaarLog net schreef. Geeft een
+ * functie die weer ophoudt.
+ */
+export function koppelSectiedruk(engine, tracks, log) {
+  const af = tracks.map(([nr, id]) => engine.deck(id).on('sectiedruk', ({ van }) => {
+    try { if (log.bezig && Number.isFinite(van)) log.vulAan(`track.${nr}.section.`, { van }); } catch (_) {}
+  }));
+  return () => { for (const f of af) f(); };
+}
+
 /**
  * Trigger-actions waarvan de read een STAND is die je terugzet door te
  * drukken tot hij klopt: een knop die rondloopt (curve, tellen, mengvorm), of
@@ -281,6 +347,11 @@ export function leesStand({ engine, tracks, herkomst, acties, lees }) {
       cue: d.cuePoint ?? 0, hotcues: [...(d.hotcues || [])],
       loop: d.loop ? { start: d.loop.start, end: d.loop.end, tellen: d.loopBeats ?? null } : null,
       grid: d.grid ? d.grid.toJSON() : null,
+      // De sectiekaart (docs/SECTIES.md): `section.5` betekent wat deze kaart
+      // zegt. Terugspelen zet hem terug en haalt hem niet van de server, die
+      // kan intussen opnieuw gerekend hebben (een ander grid). Een sectie-loop
+      // staat hierboven als gewone `loop`.
+      secties: d.buffer && d.sectieKaart ? d.sectieKaart.toJSON() : null,
       kant: engine.kant?.[id] ?? null,
       rack: rackStand(d.fx),
       // De kill-SCHAKELAARS (dj-klank): track.N.kill.* zijn toggles, dus een

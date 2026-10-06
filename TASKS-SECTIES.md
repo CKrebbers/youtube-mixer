@@ -135,3 +135,24 @@ wachten → RACE in de automaat en bij terugspelen.
 | sampler | `studio/sec-sampler` | 6 (sampler, action, opslag) | 8909/9509 |
 
 Daarna, als er tijd is: vormen/router (7), Controlekamer (10), video (8), Maschine (9), AV-app-hub (11).
+
+## Contract tussen de sporen auto en plan
+
+- **Planstap, optioneel:** `in` en `uit` = `{ sectie: K (vanaf 1, zoals track.N.section.K), label, groep }`.
+  - `in` = de stap begint op die sectie. `uit` = de overgang naar de volgende BEGINT op die sectie.
+  - Label en groep dienen om de sectie terug te vinden na een herberekening.
+  - `van` blijft de waarheid en de terugval: bij een gekozen sectie ook `van` = haar begin.
+- **Planner:**
+  - `fragment(track, { van, speelduur, rnd, secties, inSectie })`, met als voorrang: `inSectie` (als hij te vinden is) → `van` → een keuze uit de secties → het oude gedrag. Geeft `{ van, tot, sectie? }`.
+  - `planMoment({ …, secties, uitSectie, zeker, mag })`, met de secties van de UITGAANDE. Zonder `uitSectie` eerst de outro, dan een break, nooit midden in een drop als het anders kan. Geeft `{ start, lengte, maten?, tel?, sectie? }`.
+  - **`momentArgs({ type, grid, uit, inn, positie, eind, rate = 1, vooruit = 8, lengte = null, kaart = null, uitSectie = null })`** (review 7 okt): de argumenten voor `planMoment` precies zoals de automaat ze maakt (`_planOvergang` gebruikt hem zelf). Het planvenster voorspelt met `planMoment(momentArgs({ … }))`:
+    - `type` = de soort uit `kiesOvergang`; `grid` = het grid van de UITGAANDE (JSON of Beatgrid; bij `ambient` geeft momentArgs zelf `grid: null` voor de timing, maar houdt `zeker` op dit grid);
+    - `uit` = het library-nummer van de uitgaande (dan `kenmerken(uit, t)`, bpm × rate) of `(t) => kenmerken op t`; `inn` = `kenmerken(nieuwNummer, zijnVan)`;
+    - `kaart` = de sectiekaart van de UITGAANDE (JSON of SectieKaart; alleen `opGrid` telt); `uitSectie` = `uit` van de stap die nu klinkt.
+    - Zonder `uit`/`inn` geen `mag` (de bewakers): dan kan het venster een sectie voorspellen die de automaat weigert.
+  - **Terugvinden** (`vindSectie`, review 7 okt): kandidaten = de stukken met dezelfde label en groep; daarvan het stuk het dichtst bij de tijd van toen (`van` uit de stap voor `in`, of `van` in de verwijzing zelf), anders bij waar stuk K nu begint. Met een tijd: alleen binnen 30 s (`SECTIE_SPELING`), anders telt die tijd. **Aanrader voor het spoor plan:** zet in `uit` ook `van` (het begin van die sectie bij het plannen); in `in` is `van` van de stap al genoeg.
+  - `in` telt alleen met nog minstens 60 s (`MIN_FRAGMENT`, of de kortere speelduur) tot het eind; `uit` alleen als de overgang tussen "vroegst" en het einde van het fragment past.
+- **Wie wat bouwt:**
+  - auto: de planner en de automaat, die de velden uit de stap meegeeft.
+  - plan: `plan-model` (`normaliseerPlan`, `pak`, `verschil`), het venster, `tijdlijn.voorspel` (geeft de parameters door), en `vervangPlan` `zelfde` in de automaat.
+- **Volgorde van samenvoegen:** auto vóór plan.

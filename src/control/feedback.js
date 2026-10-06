@@ -67,6 +67,10 @@ const KLEURSCHEMA = [
   [/^mixer\./,       { aan: 'blauw', uit: 'donkergrijs' }],
   [/\.beatloop\./,   { aan: 'cyaan', half: 'cyaandonker', uit: 'donkergrijs', tel: 'aan' }],
   [/^sampler\.\d+$/,  { aan: 'violet', half: 'violetdonker', uit: 'donkergrijs' }],
+  // Een sectie in een pad (rij 3 van de modus sampler): in de kleur van de
+  // secties, donker = kan (een lege pad, de focus-track heeft secties), fel =
+  // ingedrukt, uit = kan niet.
+  [/^sampler\.\d+\.section$/, { aan: 'hemelsblauw', half: 'hemelsblauwdonker', uit: 'uit' }],
   [/\.clear$|\.delete$/, { aan: 'rood', half: 'rooddonker', uit: 'uit' }],
   // Doorbladerknoppen (tellen, mengvorm, pulsdoel): hun read is een KEUZE
   // (index), geen niveau. Stand 0 als "uit" tonen zou liegen; ze branden
