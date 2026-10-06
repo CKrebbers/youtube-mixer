@@ -8,7 +8,7 @@ import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, stappenVo
 import { bekijkLink, ontsmetNaam, BESTAND_EXT } from './links.js';
 import { Wachtrij, isOpen } from './wachtrij.js';
 import {
-  Library, normaliseerGrid, normaliseerToon, moetAnalyse, moetToonAnalyse,
+  Library, normaliseerGrid, normaliseerToon, moetAnalyse, moetToonAnalyse, autoGridWeigert,
   SORTERING, isSortering, MAX_PER_PAGINA, MAX_HOTCUES,
 } from './library.js';
 import { ZEKER_VANAF } from './analyze.js';
@@ -350,9 +350,12 @@ async function pasTellenToe(id, { overHand = false, overSlot = false } = {}) {
   const t = await leesTellen(MEDIA, id);
   if (!t) return { ok: false, fout: 'nog geen tellen voor dit nummer' };
   const kaart = gridUitTellen(t.beats, t.downbeats, { duur: track.duur });
+  // Mag het grid toch niet vervangen worden (met de hand, op slot)? Dan geen
+  // tweede mening uitrekenen (minuten voor een lange mix): alleen meten.
+  const mag = !autoGridWeigert(track.grid, { overHand, overSlot });
   let ander = null;
-  if (track.grid?.bron === 'auto' && track.grid.methode !== 'tellen') ander = new Beatgrid(track.grid);
-  else {
+  if (mag && track.grid?.bron === 'auto' && track.grid.methode !== 'tellen') ander = new Beatgrid(track.grid);
+  else if (mag) {
     const a = await analyseer(track);
     if (a.ok) ander = new Beatgrid(a.grid);
   }
@@ -367,17 +370,24 @@ async function pasTellenToe(id, { overHand = false, overSlot = false } = {}) {
   return { ok: true, kaart, bewaard: b.bewaard, grid: b.grid, ...(b.reden ? { reden: b.reden } : {}) };
 }
 
+/*
+ * De tellenrij houdt de GPU vast tot hij leeg is: liet hij hem tussen twee
+ * nummers even los, dan pakte een wachtende split hem, en stonden de
+ * volgende tellen een half uur achter die split (6 okt).
+ */
+let tellenGpu = null;
+const laatTellenGpu = () => { const laat = tellenGpu; tellenGpu = null; laat?.(); };
+
 /** Eén nummer in de tellenrij: Beat This! draaien (om de beurt met de stems), dan het grid. */
 async function maakTellen(id, signal) {
   const track = lib.track(id);
   if (!track?.audio) return;
-  const laat = await gpu.pak(signal, { voorrang: true });
-  if (!laat) return;
+  if (!tellenGpu) {
+    tellenGpu = await gpu.pak(signal, { voorrang: true });
+    if (!tellenGpu) return;
+  }
   const t0 = Date.now();
-  let r;
-  try {
-    r = await tellenzoeker.zoek({ audio: opSchijf(track.audio), uit: join(MEDIA, id, TELLEN_BESTAND), signal, duur: track.duur });
-  } finally { laat(); }
+  const r = await tellenzoeker.zoek({ audio: opSchijf(track.audio), uit: join(MEDIA, id, TELLEN_BESTAND), signal, duur: track.duur });
   if (!r.ok) {
     if (!r.afgebroken) console.warn(`[tellen] ${track.titel}: ${r.fout}`);
     return;
@@ -389,7 +399,7 @@ async function maakTellen(id, signal) {
   await pasTellenToe(id);
 }
 
-const tellenRij = new TellenRij({ werk: maakTellen });
+const tellenRij = new TellenRij({ werk: maakTellen, bijLeeg: laatTellenGpu });
 
 /**
  * Na een geslaagde ingest: de oude tellen weg (nieuwe audio) en het nummer
@@ -1440,6 +1450,11 @@ tellenzoeker.controleer().then((z) => {
   else console.warn(`[tellen] geen tellen (het grid komt dan van de oude analyse): ${z.reden}`);
 });
 
+// Bij het opstarten de GPU even dicht: anders pakt de herstelde stems-rij hem
+// vóór de tellen in hun rij staan (die gaan voor, zie GpuSlot). Hooguit een minuut.
+const HER = process.env.VARVE_HERANALYSE;
+if (HER !== 'uit') { gpu.sluit(); setTimeout(() => gpu.open(), 60000).unref?.(); }
+
 await herstelStemsRij().catch((err) => console.error('[stems] de rij van voor de herstart:', err?.message || err));
 
 server.listen(POORT, '127.0.0.1', () => {
@@ -1453,7 +1468,8 @@ server.listen(POORT, '127.0.0.1', () => {
   if (her !== 'uit') {
     setTimeout(() => {
       heranalyseOpAchtergrond().catch((err) => console.error('[analyse] achtergrond:', err?.message || err));
-      tellenOpAchtergrond().catch((err) => console.error('[tellen] achtergrond:', err?.message || err));
+      tellenOpAchtergrond().catch((err) => console.error('[tellen] achtergrond:', err?.message || err))
+        .finally(() => gpu.open());
     }, Number.isFinite(Number(her)) && her !== '' && her !== undefined ? Number(her) : 5000);
   }
 });
