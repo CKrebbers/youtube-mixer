@@ -1095,6 +1095,21 @@ body:has(#auto:not(.hidden)) .baan,body:has(#klankschaal:not(.hidden)) .baan,bod
 body:has(#auto:not(.hidden)) .baan canvas,body:has(#klankschaal:not(.hidden)) .baan canvas,body:has(#stems:not(.hidden)) .baan canvas{height:11px}
 body:has(#auto:not(.hidden)) .focusdeel .sampler-rij .pad,body:has(#klankschaal:not(.hidden)) .focusdeel .sampler-rij .pad,
 body:has(#stems:not(.hidden)) .focusdeel .sampler-rij .pad{height:22px}
+/* Laptopmaat (6 okt) met welke rij ook open: hetzelfde voor de rijen die later
+   kwamen (koptelefoon, instrument, patronen, master), en de knoppen in de
+   kolommen 2 px lager (18 px samen) en het focusdeel wat dichter op elkaar
+   (10 px). Anders past op 1440×790 geen rij van 54 px helemaal onder de faders
+   en de sampler. */
+@media (max-height:900px){
+  body:has(#rijen > section:not(.hidden)) .wave-zoom{height:52px}
+  body:has(#rijen > section:not(.hidden)) .baan{height:15px}
+  body:has(#rijen > section:not(.hidden)) .baan canvas{height:11px}
+  body:has(#rijen > section:not(.hidden)) .focusdeel .sampler-rij .pad{height:22px}
+  body:has(#rijen > section:not(.hidden)) .kol .spg-pad{height:17px}
+  body:has(#rijen > section:not(.hidden)) .kol .spg-knop{min-height:19px}
+  body:has(#rijen > section:not(.hidden)) .kol .spg-mini{height:17px}
+  body:has(#rijen > section:not(.hidden)) .fd-rechts{gap:6px}
+}
 /* het focusdeel scrolt zelf als het echt niet past (nooit het hele scherm) */
 .focusdeel{min-height:0;overflow-y:auto}
 .focusdeel .sampler-rij{margin-top:auto;display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;
