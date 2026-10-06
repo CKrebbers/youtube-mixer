@@ -111,6 +111,15 @@ try {
     ok('twee keer vrijgeven telt één keer; dan de volgende', volgorde.join() === 'c-weg,b,d' && slot.bezet);
     ld();
     ok('alles vrij', !slot.bezet && slot.wachtend.length === 0);
+    // Voorrang (de tellen): vóór wie zonder voorrang wacht, achter wie al met voorrang wacht; wat loopt maakt af.
+    const v = [];
+    const loopt = await slot.pak();
+    const s1 = slot.pak().then((l) => { v.push('split1'); return l; });
+    const t1 = slot.pak(null, { voorrang: true }).then((l) => { v.push('tel1'); return l; });
+    const t2 = slot.pak(null, { voorrang: true }).then((l) => { v.push('tel2'); return l; });
+    loopt();
+    (await t1)(); (await t2)(); (await s1)();
+    ok('voorrang: de tellen vóór de wachtende split, in hun eigen volgorde', v.join() === 'tel1,tel2,split1' && !slot.bezet);
 
     const gedaan = [];
     let los = null;

@@ -371,7 +371,7 @@ async function pasTellenToe(id, { overHand = false, overSlot = false } = {}) {
 async function maakTellen(id, signal) {
   const track = lib.track(id);
   if (!track?.audio) return;
-  const laat = await gpu.pak(signal);
+  const laat = await gpu.pak(signal, { voorrang: true });
   if (!laat) return;
   const t0 = Date.now();
   let r;

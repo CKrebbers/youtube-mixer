@@ -18,8 +18,8 @@ import { STANDAARD_PY, NICE, redenUit } from './stems.js';
  *   wat er nog moet (geen tellen.json), dus niets te bewaren bij een herstart;
  * - het GPU-SLOT (`GpuSlot`): de tellen en de stems gebruiken allebei de GPU.
  *   Tegelijk maakt ze allebei trager (6 okt: 2,8 minuut muziek duurde 53 s
- *   naast een split, tegen 4 s alleen), dus om de beurt, in volgorde van
- *   aanvragen: een nummer dat net binnenkwam krijgt zijn tellen na de split
+ *   naast een split, tegen 4 s alleen), dus om de beurt; de tellen met
+ *   voorrang: een nummer dat net binnenkwam krijgt zijn tellen na de split
  *   die loopt, niet na de hele stems-rij.
  */
 
@@ -171,13 +171,16 @@ export async function wisTellen(media, id) {
  * Om de beurt de GPU. `pak(signal)` wacht tot het slot vrij is (wie eerst
  * vroeg, eerst) en geeft een functie die het weer vrijgeeft; met een
  * afgebroken signaal komt hij met null terug (niet meer in de rij).
+ * `voorrang`: vóór wie zonder voorrang wacht (de tellen: een paar seconden
+ * per nummer, en je wilt je grid; een split van een mix duurt een half uur).
+ * Wat al loopt maakt altijd af.
  */
 export class GpuSlot {
   constructor() { this.bezet = false; this.wachtend = []; }
-  pak(signal = null) {
+  pak(signal = null, { voorrang = false } = {}) {
     if (signal?.aborted) return Promise.resolve(null);
     return new Promise((klaar) => {
-      const w = { klaar, signal, weg: null };
+      const w = { klaar, signal, weg: null, voorrang };
       if (signal) {
         w.weg = () => {
           const i = this.wachtend.indexOf(w);
@@ -185,7 +188,8 @@ export class GpuSlot {
         };
         signal.addEventListener('abort', w.weg, { once: true });
       }
-      this.wachtend.push(w);
+      const plek = voorrang ? this.wachtend.findIndex((x) => !x.voorrang) : -1;
+      if (plek >= 0) this.wachtend.splice(plek, 0, w); else this.wachtend.push(w);
       this._volgende();
     });
   }
