@@ -78,7 +78,10 @@ const chrome = spawn(zoekChrome(), [
   `--remote-debugging-port=${DEBUG}`, `--user-data-dir=${join(tmp, 'profiel')}`,
   '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--window-size=1440,900',
   '--autoplay-policy=no-user-gesture-required', ...(process.getuid?.() === 0 ? ['--no-sandbox'] : []), 'about:blank',
-], { stdio: 'ignore' });
+], { stdio: ['ignore', 'ignore', 'pipe'], detached: true });     // een eigen procesgroep: zie het opruimen onderaan
+let chromeLog = '';
+chrome.stderr.on('data', (d) => { chromeLog = (chromeLog + d).slice(-4000); });
+chrome.on('exit', (code, sig) => { chromeLog += `\n[chrome stopte: ${code ?? sig}]`; });
 
 let ws, volg = 0;
 const wachtend = new Map();
@@ -109,8 +112,9 @@ const deck = (id) => `window.engine.deck(${JSON.stringify(id)})`;
 /**
  * Meten op de audioklok in de pagina, op ~60 Hz (setTimeout; de animatielus
  * haalt headless maar een paar beelden per seconde). Een EIGEN maatlezer op
- * de engine (engineMaatLezer, dezelfde als het vormpaneel maakt). Per meting:
- * t, wat je hoort van track 1 en 3, de waarden en wie de maat geeft.
+ * de engine (engineMaatLezer, dezelfde als het vormpaneel maakt), en per
+ * meting ook een echt beeld (videoMixer.teken()). Per meting: t, wat je hoort
+ * van track 1 en 3, de waarden en wie de maat geeft.
  * `stappen` = [[seconden na de start, js-code], ...] om onderweg iets te doen.
  */
 const meet = (s, stappen = []) => evalueer(`(async () => {
@@ -125,10 +129,16 @@ const meet = (s, stappen = []) => evalueer(`(async () => {
       while (stappen.length && nu - t0 >= stappen[0][0]) stappen.shift()[1]();
       const v = vertraging(), t = nu - v;
       const A = e.deck('A'), C = e.deck('C');
-      const hoorA = A.playing ? A.position - v * A.rate : A.position;
+      // Ook het echte beeld, op dezelfde ~60 Hz: de animatielus haalt headless
+      // onder belasting soms meer dan een seconde niets (en een grens in zo'n
+      // gat telt bewust niet, GAT). teken() loopt zo door de echte haken:
+      // vormlaag (router) en video-puls.
+      window.videoMixer.teken();
       const w = l.lees(t);
-      const hoorA2 = A.playing ? A.position - v * A.rate : A.position;
-      uit.push({ t, hoorA: (hoorA + hoorA2) / 2, dA: hoorA2 - hoorA, hoorC: C.playing ? C.position - v * C.rate : null,
+      // Wat je hoort zoals de lezer het rekende (SectieLezer.hoor): geen tweede
+      // lezing van de positie (currentTime kan binnen één taak een quantum verder zijn).
+      const hoorA = l.maatgever === 'A' ? l.secties.hoor : (A.playing ? A.position - v * A.rate : A.position);
+      uit.push({ t, hoorA, hoorC: C.playing ? C.position - v * C.rate : null,
         n: w['sectie.nieuw'], e: w['sectie.energie'], wie: l.maatgever });
       e.ctx.currentTime < eind ? setTimeout(f, 16) : klaar();
     };
@@ -181,9 +191,14 @@ async function doorloop() {
     const frame = laag.frame;
     laag.frame = (t) => { const r = frame(t); const A = e.deck('A');
       window.__frames.push({ t, hoorA: A.playing ? A.position - v() * A.rate : A.position, mod: laag.mod[0] }); return r; };
+    // De puls van DEZELFDE aanroep van teken() (eerst _pulsNu, dan _accentNu), niet opnieuw gerekend.
+    let puls = 0;
+    const pulsNu = mx._pulsNu.bind(mx);
+    mx._pulsNu = (vt, m) => (puls = pulsNu(vt, m));
     const accent = mx._accentNu.bind(mx);
-    mx._accentNu = (vt) => { const a = accent(vt); const A = e.deck('A');
-      window.__accent.push({ hoorA: A.playing ? A.position - v() * A.rate : A.position, a, puls: mx._pulsNu(vt) }); return a; };
+    mx._accentNu = (vt, m) => { const a = accent(vt, m); const A = e.deck('A');
+      const hoorA = mx.sectieLezer && mx.sectieLezer.deck === A ? mx.sectieLezer.hoor : (A.playing ? A.position - v() * A.rate : A.position);
+      window.__accent.push({ t: e.ctx.currentTime - v(), hoorA, a, puls }); return a; };
     const loc = mx.loc;
     mx.loc = (p, n) => { const l = loc(p, n); if (l) { l.__p = p; l.__n = n; } return l; };
     const gl = mx.gl, u1f = gl.uniform1f.bind(gl);
@@ -205,14 +220,13 @@ async function doorloop() {
   console.log(`      ${r1.length} metingen, ${fr1.length} beelden van de vormlaag, ${ac1.length} keer teken() met de puls`);
 
   ok('track 1 gaf de hele tijd de maat', r1.every((x) => x.wie === 'A'), [...new Set(r1.map((x) => x.wie))].join(','));
-  ok('de positie van track 1 is stabiel binnen een meting (audioklok)', r1.every((x) => Math.abs(x.dA) < 0.004), Math.max(...r1.map((x) => Math.abs(x.dA))).toFixed(4));
   const TAU = await evalueer('window.__maat.NIEUW_TAU'), OP = await evalueer('window.__maat.KLAP_OP');
   for (const [naam, van] of [['k', vk], ['k+1 (na een sprong)', vk1]]) {
     const na = r1.filter((x) => x.hoorA >= van && x.hoorA < van + 0.6 && x.n > 1e-3);
     const piek = na.map((x) => x.hoorA + TAU * Math.log(x.n));          // waar de piek lag, volgens elke meting
     const fout = Math.max(...piek.map((p) => Math.abs(p - van)));
     ok(`nieuwe sectie ${naam}: ${na.length} metingen na de grens, de piek ligt OP het begin in de kaart (max ${(fout * 1000).toFixed(1)} ms ernaast)`,
-      na.length >= 10 && fout < 0.005);
+      na.length >= 10 && fout < 0.008);                               // currentTime loopt per render-quantum (2,7 ms)
     const eerste = r1.find((x) => x.hoorA >= van);
     ok(`… de eerste meting erna staat bijna vol (${eerste?.n.toFixed(3)} op ${((eerste?.hoorA - van) * 1000).toFixed(1)} ms)`,
       eerste && eerste.n >= Math.exp(-(eerste.hoorA - van + 0.003) / TAU));
@@ -235,13 +249,19 @@ async function doorloop() {
   ok(`vormlaag: offset op knop 1 alleen rond een grens (${fMet.length} van ${fr1.length} beelden), na elke grens minstens één`,
     fr1.length > 0 && fMet.every((x) => grensBij(x.hoorA)) && [vk, vk1].every((v) => fr1.some((x) => x.hoorA >= v && x.hoorA < v + 1 && x.mod > 0)),
     fMet.map((x) => `${x.hoorA.toFixed(2)}:${x.mod.toFixed(2)}`).join(' '));
+  // Ter info: de beelden van de echte lus rond elke grens (hoor:waarde, en het gat ervoor in s).
+  const rondom = (lijst, v, veld) => lijst.map((x, j) => ({ ...x, gat: j ? x.t - lijst[j - 1].t : 0 }))
+    .filter((x) => x.hoorA > v - 1.5 && x.hoorA < v + 1.5).map((x) => `${(x.hoorA - v).toFixed(2)}:${x[veld].toFixed(2)}${x.gat > 0.5 ? `(gat ${x.gat.toFixed(2)})` : ''}`).join(' ');
+  for (const v of [vk, vk1]) console.log(`      rond ${v.toFixed(2)}: vormlaag ${rondom(fr1, v, 'mod')}`);
   const aMet = ac1.filter((x) => x.a > 0.01);
   ok(`video-puls: het accent alleen rond een grens (${aMet.length} van ${ac1.length} beelden), na elke grens minstens één`,
     ac1.length > 0 && aMet.every((x) => grensBij(x.hoorA)) && [vk, vk1].every((v) => ac1.some((x) => x.hoorA >= v && x.hoorA < v + 1 && x.a > 0)),
     aMet.map((x) => `${x.hoorA.toFixed(2)}:${x.a.toFixed(2)}`).join(' '));
-  const piekA = aMet.filter((x) => x.a > 0.05 && x.hoorA >= Math.min(vk, vk1)).map((x) => {
-    const van = [vk, vk1].filter((v) => v <= x.hoorA + 1e-3).at(-1);
-    return Math.abs(x.hoorA + TAU * Math.log(x.a) - van);
+  // Per beeld de grens waar het het dichtst bij ligt. Na de grens: uit de
+  // uitdoving volgt waar de piek lag; in de opkomst (vlak ervóór): 1 − afstand / 12 ms.
+  const piekA = aMet.filter((x) => x.a > 0.05).map((x) => {
+    const van = Math.abs(x.hoorA - vk) < Math.abs(x.hoorA - vk1) ? vk : vk1;
+    return x.hoorA >= van ? Math.abs(x.hoorA + TAU * Math.log(x.a) - van) : Math.abs(1 - (van - x.hoorA) / OP - x.a) * OP;
   });
   ok(`video-puls: ook in teken() ligt de piek op de grens (max ${(Math.max(0, ...piekA) * 1000).toFixed(1)} ms ernaast, ${piekA.length} beelden)`,
     piekA.length >= 1 && Math.max(...piekA) < 0.01);
@@ -273,7 +293,8 @@ async function doorloop() {
 
 try {
   let doelen = null;
-  for (let i = 0; i < 50 && !doelen; i++) {
+  // Onder zware belasting start Chrome traag: tot 60 s wachten op een pagina.
+  for (let i = 0; i < 300 && !doelen?.some((d) => d.type === 'page'); i++) {
     await wacht(200);
     doelen = await fetch(`http://127.0.0.1:${DEBUG}/json/list`).then((r) => r.json()).catch(() => null);
   }
@@ -298,9 +319,20 @@ try {
 } catch (err) {
   ok('script liep door', false, err.message);
   if (serverLog) console.log(serverLog.split('\n').slice(-15).join('\n'));
+  if (chromeLog) console.log('chrome:', chromeLog.split('\n').slice(-8).join('\n'));
 } finally {
   try { ws?.close(); } catch (_) {}
-  chrome.kill(); server.kill();
+  // Chrome met zijn hulpprocessen (de hele groep) en de server, en wachten tot
+  // ze echt weg zijn: anders hield een hulpproces van de vorige Chrome de
+  // debugpoort op 127.0.0.1 nog vast als je deze proef meteen opnieuw draaide
+  // (gemeten: elke tweede keer "bind() failed", dan alleen [::1]).
+  const weg = (p) => (p.exitCode !== null || p.signalCode !== null ? Promise.resolve()
+    : Promise.race([new Promise((r) => p.once('exit', r)), wacht(10000)]));
+  try { process.kill(-chrome.pid, 'SIGTERM'); } catch (_) { chrome.kill(); }
+  server.kill();
+  await Promise.all([weg(chrome), weg(server)]);
+  await wacht(500);
+  try { process.kill(-chrome.pid, 'SIGKILL'); } catch (_) {}
   await wacht(300);
   try { rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (_) {}
 }
