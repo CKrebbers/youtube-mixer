@@ -42,6 +42,8 @@ export const SECTIE_VELDEN = ['in', 'uit'];
 const MAX_TEKST = 500;
 
 const eindig = (x) => typeof x === 'number' && Number.isFinite(x);
+/** Een stap die normaliseerPlan houdt (de rest valt weg, met een fout). */
+const bruikbaar = (s) => !!s && typeof s === 'object' && typeof s.track === 'string' && !!s.track;
 const tekst = (s, max = MAX_TEKST) => (typeof s === 'string' ? s.slice(0, max) : '');
 const klem = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 
@@ -104,7 +106,7 @@ export function normaliseerPlan(invoer, { trackIds = null } = {}) {
   const bezet = new Set();
   const stappen = [];
   ruw.slice(0, MAX_STAPPEN).forEach((s, i) => {
-    if (!s || typeof s !== 'object' || typeof s.track !== 'string' || !s.track) {
+    if (!bruikbaar(s)) {
       fouten.push(`stap ${i + 1}: geen nummer`);
       return;
     }
@@ -235,30 +237,50 @@ export function verschil(oud, nieuw) {
 /**
  * In/uit terugzetten die een schrijver weggooide omdat hij ze niet kent: een
  * planvenster van vóór de secties dat nog open stond tijdens een update. Zijn
- * normaliseerPlan gooit onbekende velden weg zodra hij een stap bewerkt, dus
- * die stap komt zonder in/uit terug. De server roept dit aan bij elke opslag;
- * wie de velden kent zegt dat (`kent: ['in', 'uit']`) en mag ze weghalen.
+ * normaliseerPlan gooit in/uit weg bij de stap die hij BEWERKT; de andere
+ * stappen houden ze (hij kopieert ze ongezien). De server roept dit aan bij
+ * elke opslag. Wie de velden kent zegt dat (`kent: ['in', 'uit']`; het
+ * planvenster en Claude doen dat altijd) en dan gebeurt hier niets.
  *
- * Terug alleen bij een stap die er nu staat (zelfde id) met hetzelfde nummer;
- * `in` bovendien alleen als het begin (`van`) niet veranderde, want van is de
- * waarheid: een ander begin is een ander inmixpunt.
+ * Zonder `kent` alleen terug op een stap die:
+ *   - in de payload een EIGEN id had (geen nieuw plan zonder ids, geen id die
+ *     normaliseerPlan gaf: dat is een nieuwe stap);
+ *   - in de payload GEEN in- of uit-sleutel heeft (ook niet null of rommel):
+ *     wie er een schrijft, kent ze, en wat hij schreef is zijn keuze;
+ *   - er nu staat met hetzelfde nummer en hetzelfde begin (`van`): een ander
+ *     begin is een ander inmixpunt, en een uit kan dan vóór het begin liggen.
+ * Gemeld wordt alleen wat het normaliseren overleeft.
  *
  * @param nu     het plan zoals het nu bewaard is (genormaliseerd)
- * @param nieuw  wat er bewaard gaat worden (genormaliseerd)
+ * @param ruw    wat de schrijver stuurde (de payload, niet genormaliseerd)
+ * @param nieuw  normaliseerPlan(ruw).plan
  * @returns { plan, hersteld: [tekst] }
  */
-export function herstelSecties(nu, nieuw, { kent = [] } = {}) {
+export function herstelSecties(nu, ruw, nieuw, { kent = [] } = {}) {
+  const geen = { plan: nieuw, hersteld: [] };
   const terugbaar = SECTIE_VELDEN.filter((k) => !kent.includes(k));
-  if (!terugbaar.length || !nu?.stappen?.length || !nieuw?.stappen?.length) return { plan: nieuw, hersteld: [] };
+  if (!terugbaar.length || !nu?.stappen?.length || !nieuw?.stappen?.length || !Array.isArray(ruw?.stappen)) return geen;
+  // Payload en plan naast elkaar: normaliseerPlan houdt de bruikbare stappen, in volgorde.
+  const bron = ruw.stappen.slice(0, MAX_STAPPEN).filter(bruikbaar);
+  if (bron.length !== nieuw.stappen.length) return geen;
   const oud = new Map(nu.stappen.map((s) => [s.id, s]));
-  const hersteld = [];
-  const stappen = nieuw.stappen.map((s) => {
+  const gezet = new Map();                 // id → velden die terugkwamen
+  const stappen = nieuw.stappen.map((s, i) => {
+    const r = bron[i];
+    if (r.id !== s.id || SECTIE_VELDEN.some((k) => k in r)) return s;
     const o = oud.get(s.id);
-    if (!o || o.track !== s.track) return s;
-    const terug = terugbaar.filter((k) => o[k] && !s[k] && (k !== 'in' || o.van === s.van));
+    if (!o || o.track !== s.track || o.van !== s.van) return s;
+    const terug = terugbaar.filter((k) => o[k] && !s[k]);
     if (!terug.length) return s;
-    hersteld.push(`stap ${s.id}: ${terug.join(' en ')} bewaard (opgeslagen door een venster dat ze niet kent: herlaad dat venster)`);
+    gezet.set(s.id, terug);
     return { ...s, ...Object.fromEntries(terug.map((k) => [k, o[k]])) };
   });
-  return hersteld.length ? { plan: normaliseerPlan({ ...nieuw, stappen }).plan, hersteld } : { plan: nieuw, hersteld };
+  if (!gezet.size) return geen;
+  const plan = normaliseerPlan({ ...nieuw, stappen }).plan;
+  const hersteld = [];
+  for (const s of plan.stappen) {
+    const terug = (gezet.get(s.id) || []).filter((k) => JSON.stringify(s[k] ?? null) === JSON.stringify(oud.get(s.id)[k]));
+    if (terug.length) hersteld.push(`stap ${s.id}: ${terug.join(' en ')} bewaard (opgeslagen door een venster dat ze niet kent: herlaad dat venster)`);
+  }
+  return { plan, hersteld };
 }

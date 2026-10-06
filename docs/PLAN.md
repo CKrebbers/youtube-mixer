@@ -85,13 +85,20 @@ er niet, een oud plan verandert niet):
 - `normaliseerPlan` houdt ze in een vaste vorm `{ sectie, label, groep }` en
   gooit rommel weg; `bewerk` (`zet` met `in: null` = weg) en `verschil` kennen
   ze; de automaat (`vervangPlan`) kiest de klaarstaande stap opnieuw als zijn
-  in of uit verandert.
+  `in` verandert. Zijn `uit` bepaalt alleen de overgang DAARNA (die wordt
+  gepland als hij klinkt), dus die herlaadt niets; een `uit` van de stap die
+  nu klinkt komt via het opnieuw plannen van de overgang.
 
 Het venster haalt de kaart per nummer met `GET /api/library/<id>/secties`,
 ZONDER `?maak=1`: een plan van dertig nummers zou anders dertig nummers
 tegelijk laten rekenen. Alleen wat er al is (de mixer rekent bij het laden).
-Geen kaart = geen keuze; een keuze die er al stond blijft zichtbaar (oranje
-als de kaart hem niet meer kent of hij nu anders heet).
+Bij het laden van een plan, en als het venster de focus krijgt (hooguit eens
+per 10 s), vraagt het ALLE kaarten opnieuw: een kaart die de mixer intussen
+opnieuw berekende komt zo binnen. Geen kaart = geen keuze; een keuze die er
+al stond blijft zichtbaar, oranje met de reden als de kaart hem niet meer
+kent, als hij nu anders heet ("de kaart is opnieuw berekend: sectie 3 is nu
+break C, gekozen was drop C"), of als een `uit` niet meer na het begin ligt
+(een later begin getypt).
 
 **De voorspelling** (`tijdlijn.js voorspel`) geeft de secties door aan de
 planner, volgens het contract met het spoor auto:
@@ -123,16 +130,26 @@ plan zonder secties precies als voorheen. Het moment staat per stap in
   versie bewaren**. Niemand overschrijft stilletjes een ander.
 - **Een oud venster wist in/uit niet** (6 okt). Een planvenster dat nog open
   stond tijdens een update draait de oude code: zijn `normaliseerPlan` kent
-  in/uit niet en gooit ze weg bij elke stap die het bewerkt (de 409 dekt
-  alleen gelijktijdig werk, niet dit). Daarom: wie in/uit kent zegt dat bij
-  het opslaan (`PUT { plan, versie, kent: ['in', 'uit'] }`, het venster doet
-  dat). Zonder `kent` zet de server in/uit terug op elke stap die er nu staat
-  met hetzelfde id en nummer (`in` alleen als `van` niet veranderde), en zegt
-  dat in `fouten` ("stap s3: in bewaard (opgeslagen door een venster dat ze
-  niet kent: herlaad dat venster)"); het oude venster toont die opmerking na
-  het opslaan. Geen nieuwe versie, geen oude schrijver geweigerd, de 409-regel
-  precies zoals hij was. **Claude via `curl -X PUT`: stuur `kent` mee** als je
-  in/uit bewust weghaalt; het bestand direct schrijven kan altijd.
+  in/uit niet en gooit ze weg bij de stap die het bewerkt; de andere stappen
+  houden ze (het kopieert ze ongezien). De 409 dekt alleen gelijktijdig werk,
+  niet dit. Daarom: wie in/uit kent zegt dat bij het opslaan
+  (`PUT { plan, versie, kent: ['in', 'uit'] }`). Zonder `kent` zet de server
+  in/uit terug, maar alleen op een stap die
+  - in de payload een EIGEN id had (een nieuw plan zonder ids, of een stap
+    waarvan normaliseerPlan de id gaf, is nieuw: niets terug);
+  - in de payload GEEN `in`- of `uit`-sleutel heeft, ook niet `null` of
+    rommel (wie er een schrijft kent ze; wat hij schreef is zijn keuze);
+  - er nu staat met hetzelfde nummer en hetzelfde begin (`van`): een ander
+    begin is een ander inmixpunt, en een uit kan dan vóór het begin liggen.
+  De server zegt het in `fouten` ("stap s3: in bewaard (opgeslagen door een
+  venster dat ze niet kent: herlaad dat venster)"), en alleen voor wat het
+  normaliseren overleeft; het oude venster toont die opmerking na het
+  opslaan. Geen nieuwe versie, geen oude schrijver geweigerd, de 409-regel
+  precies zoals hij was.
+- **Claude stuurt `kent: ['in', 'uit']` ALTIJD mee** bij `curl -X PUT`, ook
+  als het plan geen in/uit heeft. Zonder komt een in/uit die Claude op een
+  verder ongewijzigde stap bewust weghaalt (beide sleutels weg) terug. Het
+  bestand direct schrijven gaat buiten de server om en kan altijd.
 - **Een oude server** (nog niet herstart na een update) gooit in/uit weg bij
   het opslaan. Het venster ziet dat (het stuurde in/uit, het antwoord heeft ze
   niet), houdt ze als niet opgeslagen en zegt: herstart de server en sla
@@ -171,12 +188,17 @@ botsing wordt gemeld; op 1280 en 900 px breed past de lijst. Niet: met de echte
 library in Clay's Chrome, op het tweede scherm, met de APC.
 
 Secties (6 okt): `plan.test` (in/uit in het formaat, bewerken, verschil, het
-contract met de planner via een spion, een oud venster, `vervangPlan`),
-`server.test` (in/uit over HTTP, `kent`), en `tools/headless/sec-plan.mjs` in
-headless Chromium: een library met twee sectiekaarten, de banden in de strook
-in de groepskleur, in en uit kiezen (van springt naar het begin van de
-sectie, uit alleen na in), opslaan en herladen (ze staan er nog), een 409
-bij een gelijktijdige wijziging, en "mijn versie eroverheen" houdt in/uit.
+contract met de planner via een spion, een oud venster en de bewuste
+wijzigingen die NIET terugkomen (review (a)–(e)), `vervangPlan`: in herlaadt,
+uit niet), `server.test` (in/uit over HTTP, `kent`), en
+`tools/headless/sec-plan.mjs` in headless Chromium en Google Chrome: een
+library met twee sectiekaarten, de banden in de strook in de groepskleur, in
+en uit kiezen (van springt naar het begin van de sectie, uit alleen na in),
+opslaan en herladen (ze staan er nog), een uit vóór een later begin wordt
+oranje, een 409 bij een gelijktijdige wijziging, "mijn versie eroverheen"
+houdt in/uit, een uit weghalen en opslaan blijft weg (op schijf), en een
+kaart die buiten het venster opnieuw berekend is komt bij het laden binnen
+("kaart opnieuw berekend").
 Niet: met de planner van het spoor auto (die negeert in/uit in deze tak), en
 niet op Clay's library.
 

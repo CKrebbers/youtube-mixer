@@ -80,8 +80,8 @@ async function laad(naam) {
   staat.bewaard = JSON.stringify(staat.plan);
   staat.terug = []; staat.vooruit = [];
   staat.conflict = null;
-  // Nummers zonder kaart: opnieuw vragen (de mixer kan ze intussen berekend hebben).
-  for (const [id, k] of staat.secties) if (!k) staat.secties.delete(id);
+  // Alle kaarten opnieuw vragen: de mixer kan ze intussen (opnieuw) berekend hebben.
+  haalSecties({ opnieuw: true });
   $('.pl-naam').value = naam;
   $('.pl-uitleg textarea').value = staat.plan.uitleg || '';
   render();
@@ -97,26 +97,36 @@ async function vulKiezer() {
 }
 
 /**
- * De sectiekaarten van de nummers in het plan die we nog niet hebben. ZONDER
- * ?maak=1: alleen wat er al is (de mixer rekent bij het laden). Zijn er nieuwe
- * kaarten, dan opnieuw tekenen.
+ * De sectiekaarten van de nummers in het plan. ZONDER ?maak=1: alleen wat er
+ * al is (de mixer rekent bij het laden). Gewoon: alleen nummers die we nog
+ * niet hebben. `opnieuw` (bij het laden van een plan en als het venster de
+ * focus krijgt): alle, zodat een kaart die de mixer intussen opnieuw
+ * berekende binnenkomt (en "kaart opnieuw berekend" kan afgaan); de oude
+ * blijft staan tot de nieuwe er is. Veranderde er iets, dan opnieuw tekenen.
  */
 const sectiesBezig = new Set();
-function haalSecties() {
+let sectiesVers = 0;
+function haalSecties({ opnieuw = false } = {}) {
   const ids = [...new Set(staat.plan.stappen.map((s) => s.track))]
-    .filter((id) => staat.tracks.has(id) && !staat.secties.has(id) && !sectiesBezig.has(id));
+    .filter((id) => staat.tracks.has(id) && !sectiesBezig.has(id) && (opnieuw || !staat.secties.has(id)));
+  if (opnieuw) sectiesVers = Date.now();
   if (!ids.length) return;
   for (const id of ids) sectiesBezig.add(id);
+  let veranderd = false;
   Promise.all(ids.map(async (id) => {
-    let k = null;
+    let k = null, gelukt = false;
     try {
       const r = await fetch(`/api/library/${encodeURIComponent(id)}/secties`);
-      if (r.ok) k = (await r.json()).secties ?? null;
+      if (r.ok) { k = (await r.json()).secties ?? null; gelukt = true; }
     } catch (_) { /* geen kaart: dan geen keuze */ }
-    staat.secties.set(id, Array.isArray(k?.stukken) && k.stukken.length ? k : null);
     sectiesBezig.delete(id);
-  })).then(() => { if (ids.some((id) => staat.secties.get(id))) render(); });
+    if (!gelukt && staat.secties.get(id)) return;      // niet bereikbaar: de kaart die we hadden blijft
+    const nieuw = Array.isArray(k?.stukken) && k.stukken.length ? k : null;
+    if (!staat.secties.has(id) || JSON.stringify(nieuw) !== JSON.stringify(staat.secties.get(id))) veranderd = true;
+    staat.secties.set(id, nieuw);
+  })).then(() => { if (veranderd) render(); });
 }
+window.addEventListener('focus', () => { if (Date.now() - sectiesVers > 10000) haalSecties({ opnieuw: true }); });
 
 const gewijzigd = () => JSON.stringify(staat.plan) !== staat.bewaard;
 
@@ -183,8 +193,7 @@ async function kijkServer() {
   staat.versie = d.versie;
   staat.bewaard = JSON.stringify(d.plan);
   $('.pl-uitleg textarea').value = d.plan.uitleg || '';
-  melding(`het plan is bijgewerkt (van buiten dit venster): ${beschrijf(vs)}`);
-  setTimeout(() => melding(null), 8000);
+  wisLater(melding(`het plan is bijgewerkt (van buiten dit venster): ${beschrijf(vs)}`), 8000);
   render();
 }
 
@@ -352,9 +361,10 @@ function rij(r, i) {
 /**
  * Een keuzelijst voor in of uit: de secties van de kaart ("3 drop B"; de tijd in de tooltip).
  * Uit alleen na het begin (na in, of na van). Geen kaart en niets gekozen:
- * geen lijst. Een keuze die de kaart niet (meer) kent of die nu anders heet
- * (de kaart is opnieuw berekend) blijft staan, gemarkeerd: de planner zoekt
- * hem terug op label en groep, of valt terug op van.
+ * geen lijst. Een keuze die de kaart niet (meer) kent, die nu anders heet
+ * (de kaart is opnieuw berekend), of een uit die niet meer na het begin ligt
+ * (een later begin getypt) blijft staan, oranje: de planner zoekt hem terug
+ * op label en groep, of valt terug op van.
  */
 function sectieKeuze(veld, s, r) {
   const st = r.secties;
@@ -374,6 +384,9 @@ function sectieKeuze(veld, s, r) {
     const x = gevonden ? st[keuze.sectie - 1] : null;
     if (x && ((keuze.label && x.label !== keuze.label) || (keuze.groep && x.groep !== keuze.groep))) {
       waarschuwing = `de kaart is opnieuw berekend: sectie ${keuze.sectie} is nu ${sectieNaam(x)}, gekozen was ${sectieNaam(keuze)}`;
+    } else if (x && veld === 'uit' && (keuze.sectie <= naIn || x.van <= begin + 0.01)) {
+      // Een later begin getypt (of in verschoven): de overgang kan niet beginnen vóór de stap begint.
+      waarschuwing = `uit (${keuze.sectie} ${sectieNaam(x)}, ${mmss(x.van)}) ligt niet na het begin (${mmss(begin)}): kies een latere of haal hem weg`;
     }
   }
   if (keuze && !gevonden) {
@@ -566,7 +579,10 @@ function lus(t) {
 
 // ---- meldingen ------------------------------------------------------------------------
 
+let meldingNr = 0;
+/** Een melding (null = weg). Geeft haar nummer: zie wisLater. */
 function melding(tekst, knoppen = []) {
+  meldingNr++;
   const el = $('.pl-melding');
   el.classList.toggle('aan', !!tekst);
   $('.pl-melding-tekst').textContent = tekst || '';
@@ -578,7 +594,13 @@ function melding(tekst, knoppen = []) {
     b.addEventListener('click', fn);
     el.append(b);
   }
+  return meldingNr;
 }
+/**
+ * Een melding na een tijdje weghalen, maar alleen als zij er nog staat: een
+ * latere (een botsing met haar keuzeknoppen) mag een oude timer niet wissen.
+ */
+const wisLater = (nr, ms) => setTimeout(() => { if (meldingNr === nr) melding(null); }, ms);
 
 // ---- knoppen en toetsen ----------------------------------------------------------------
 
@@ -591,8 +613,7 @@ $('.pl-gebruik').addEventListener('click', async () => {
   if (gewijzigd() || !staat.versie) await opslaan();
   if (gewijzigd()) return;
   await k.gebruik(staat.naam);
-  melding(`de auto-DJ gebruikt nu "${staat.naam}"${k.auto.aan ? '' : ' (zet auto aan om te spelen)'}`);
-  setTimeout(() => melding(null), 5000);
+  wisLater(melding(`de auto-DJ gebruikt nu "${staat.naam}"${k.auto.aan ? '' : ' (zet auto aan om te spelen)'}`), 5000);
 });
 $('.pl-kies').addEventListener('change', async (e) => {
   const n = e.target.value;

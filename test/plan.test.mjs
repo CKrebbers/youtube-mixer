@@ -206,31 +206,65 @@ console.log('\nopslag met versies');
 }
 
 // Een planvenster van vóór in/uit (nog open tijdens een update) gooit ze weg
-// bij een stap die het bewerkt (zijn normaliseerPlan kent ze niet). Wie ze kent
-// zegt dat (`kent`); wie dat niet zegt, krijgt in/uit terug van een stap die
-// verder hetzelfde is, met een melding. De 409-regel blijft precies zo.
+// bij een stap die het bewerkt (zijn normaliseerPlan kent ze niet); de andere
+// stappen houden ze (het kopieert ze ongezien). Wie ze kent zegt dat (`kent`).
+// Zonder: terug alleen op een stap die in de payload een id had en GEEN in- of
+// uit-sleutel (wie er een schrijft kent ze), met hetzelfde nummer en hetzelfde
+// begin. De 409-regel blijft precies zo.
 console.log('\nopslag: een oud venster wist in/uit niet');
 {
   const IN = { sectie: 2, label: 'drop', groep: 'B' }, UIT = { sectie: 5, label: 'break', groep: 'C' };
   const nu = M.normaliseerPlan({ stappen: [{ id: 's1', track: 'a', van: 31, in: IN, uit: UIT }, { id: 's2', track: 'b', uit: UIT }, { id: 's3', track: 'c', van: 10, in: IN }] }).plan;
+  const herstel = (ruw, opties) => M.herstelSecties(nu, ruw, M.normaliseerPlan(ruw).plan, opties);
   // Zo slaat een oud venster op: s1 bewerkt (waarom), s2 ander nummer, s3 ander begin.
   const oud = { ...nu, stappen: [{ ...nu.stappen[0], waarom: 'x' }, { ...nu.stappen[1], track: 'z' }, { ...nu.stappen[2], van: 12 }]
     .map(({ in: _i, uit: _u, ...s }) => s) };
-  const h = M.herstelSecties(nu, M.normaliseerPlan(oud).plan);
+  const h = herstel(oud);
   const [h1, h2, h3] = h.plan.stappen;
   ok('zelfde stap, zelfde nummer en begin: in en uit terug', JSON.stringify(h1.in) === JSON.stringify(IN) && JSON.stringify(h1.uit) === JSON.stringify(UIT) && h1.waarom === 'x');
   ok('ander nummer: niets terug', !('in' in h2) && !('uit' in h2));
   ok('ander begin: in niet terug (van is de waarheid)', !('in' in h3));
   ok(`een melding per herstelde stap (${h.hersteld.join(' | ')})`, h.hersteld.length === 1 && /s1/.test(h.hersteld[0]));
-  ok('wie in/uit kent: niets terug', M.herstelSecties(nu, M.normaliseerPlan(oud).plan, { kent: ['in', 'uit'] }).hersteld.length === 0);
-  ok('herstellen is idempotent', JSON.stringify(M.herstelSecties(nu, h.plan).plan) === JSON.stringify(h.plan));
+  ok('wie in/uit kent: niets terug', herstel(oud, { kent: ['in', 'uit'] }).hersteld.length === 0);
+  ok('herstellen is idempotent', JSON.stringify(M.herstelSecties(nu, h.plan, h.plan).plan) === JSON.stringify(h.plan));
+  // Het echte oude venster: alleen de BEWERKTE stap verloor in/uit, de andere hebben ze nog in de payload.
+  const echtOud = { ...nu, stappen: [(({ in: _i, uit: _u, ...s }) => ({ ...s, waarom: 'x' }))(nu.stappen[0]), nu.stappen[1], nu.stappen[2]] };
+  const he = herstel(echtOud);
+  ok('oud venster, andere stappen met in/uit in de payload: de bewerkte stap krijgt ze terug', he.plan.stappen[0].in?.sectie === 2
+    && he.plan.stappen[0].uit?.sectie === 5 && he.hersteld.length === 1);
+
+  // Bewuste wijzigingen (review 6 okt, (a)–(e)): nooit ongedaan maken.
+  const R = { sectie: 3, label: 'deel', groep: 'C' };
+  const nu2 = M.normaliseerPlan({ stappen: [{ id: 's1', track: 'x' }, { id: 's2', track: 'y' }, { id: 's3', track: 'a', van: 31, in: IN, uit: UIT }] }).plan;
+  const herstel2 = (ruw) => M.herstelSecties(nu2, ruw, M.normaliseerPlan(ruw).plan);
+  const xy = (s3) => ({ stappen: [{ id: 's1', track: 'x' }, { id: 's2', track: 'y' }, s3] });
+  const a = herstel2(xy({ id: 's3', track: 'a', van: 60, in: R }));
+  ok('(a) een nieuwe in en uit weg (curl, zonder kent): uit komt niet terug', !('uit' in a.plan.stappen[2]) && a.plan.stappen[2].in?.sectie === 3 && !a.hersteld.length);
+  const bRuw = xy({ id: 's3', track: 'a', van: 31, in: { sectie: '3' }, uit: UIT });
+  const b = herstel2(bRuw);
+  ok(`(b) een kapotte in: de oude komt niet terug, geen tegenstrijdige melding (${[...M.normaliseerPlan(bRuw).fouten, ...b.hersteld].join(' | ')})`,
+    !('in' in b.plan.stappen[2]) && !b.hersteld.length);
+  const c = herstel2({ stappen: [{ track: 'q' }, { track: 'r' }, { track: 'a', van: 31 }] });
+  ok('(c) een nieuw plan zonder ids: niets terug op het nummer op dezelfde plek', !('in' in c.plan.stappen[2]) && !('uit' in c.plan.stappen[2]) && !c.hersteld.length);
+  const dRuw = xy({ track: 'a', van: 31 });
+  const d = herstel2(dRuw);
+  ok(`(d) een stap zonder id die id ${M.normaliseerPlan(dRuw).plan.stappen[2].id} krijgt: niets terug`, !('in' in d.plan.stappen[2]) && !('uit' in d.plan.stappen[2]) && !d.hersteld.length);
+  const e = herstel2(xy({ id: 's3', track: 'a', van: 140, in: { sectie: 6, label: 'deel', groep: 'F' } }));
+  ok('(e) in voorbij de oude uit, uit weg: uit niet terug, geen "bewaard"', !('uit' in e.plan.stappen[2]) && !e.hersteld.length);
+  // (e) ook als het bewaarde plan zelf niet klopt: alleen melden wat het normaliseren overleeft.
+  const scheef = { stappen: [{ id: 's1', track: 'a', van: 31, in: { sectie: 4, label: null, groep: null }, uit: { sectie: 2, label: null, groep: null } }] };
+  const es = M.herstelSecties(scheef, { stappen: [{ id: 's1', track: 'a', van: 31 }] }, M.normaliseerPlan({ stappen: [{ id: 's1', track: 'a', van: 31 }] }).plan);
+  ok(`(e) een teruggezette uit die wegvalt, wordt niet "bewaard" gemeld (${es.hersteld.join(' | ')})`, !('uit' in es.plan.stappen[0]) && es.hersteld.every((t) => !/uit/.test(t)));
+  // Uit vóór het begin: een ander begin (oud venster typte een later begin) → uit niet terug.
+  const later = herstel({ stappen: [{ id: 's1', track: 'a', van: 200 }, { id: 's2', track: 'b' }, { id: 's3', track: 'c', van: 10 }] });
+  ok('ander begin: ook uit niet terug (hij kan nu vóór het begin liggen)', !('uit' in later.plan.stappen[0]) && !('in' in later.plan.stappen[0]));
 
   const map = mkdtempSync(join(tmpdir(), 'varve-plannen-'));
   try {
     const pl = new Plannen(map);
     const r1 = await pl.schrijf('set', nu, null, { kent: ['in', 'uit'] });
     ok('opslaan met in/uit: ze staan in het bestand', r1.code === 200 && JSON.parse(readFileSync(join(map, 'set.json'), 'utf8')).stappen[0].in?.sectie === 2);
-    const r2 = await pl.schrijf('set', oud, r1.antwoord.versie);
+    const r2 = await pl.schrijf('set', echtOud, r1.antwoord.versie);
     ok('een oud venster (zonder kent) slaat op: 200, in/uit van s1 bewaard, met een opmerking', r2.code === 200
       && r2.antwoord.plan.stappen[0].in?.sectie === 2 && r2.antwoord.plan.stappen[0].uit?.sectie === 5 && r2.antwoord.fouten.some((f) => /s1/.test(f)));
     const r3 = await pl.schrijf('set', { ...r2.antwoord.plan, stappen: r2.antwoord.plan.stappen.map(({ in: _i, ...s }) => s) }, r2.antwoord.versie, { kent: ['in', 'uit'] });
@@ -239,15 +273,17 @@ console.log('\nopslag: een oud venster wist in/uit niet');
   } finally { rmSync(map, { recursive: true, force: true }); }
 }
 
-// vervangPlan: staat de volgende klaar en veranderde zijn in of uit, dan
-// opnieuw kiezen (zoals bij een ander nummer of beginpunt). Alleen de beslissing;
-// de rest van de automaat zit in auto.test.
+// vervangPlan: staat de volgende klaar en veranderde zijn in, dan opnieuw
+// kiezen (zoals bij een ander nummer of beginpunt). Zijn uit bepaalt alleen de
+// overgang DAARNA (gepland als hij klinkt): niet herladen. Alleen de
+// beslissing; de rest van de automaat zit in auto.test.
 console.log('\nautomaat: vervangPlan kent in en uit');
 {
   const { Automaat } = await import('../src/auto/automaat.js');
   const IN = { sectie: 2, label: 'drop', groep: 'B' };
-  const basis = { naam: 'live', stappen: [{ id: 's1', track: 'een' }, { id: 's2', track: 'twee', van: 30, in: IN }, { id: 's3', track: 'drie' }] };
-  const proef = (wijzig) => {
+  const UIT = { sectie: 4, label: 'outro', groep: 'D' };
+  const basis = { naam: 'live', stappen: [{ id: 's1', track: 'een' }, { id: 's2', track: 'twee', van: 30, in: IN, uit: UIT }, { id: 's3', track: 'drie' }] };
+  const proef = (wijzig, welke = 1) => {
     const au = new Automaat({ engine: { deck: () => ({ position: 10, rate: 1, duration: 300 }) }, invoke: () => {}, laad: async () => {}, haalLibrary: async () => [] });
     au._zetPlan({ plan: basis, versie: 'v1' });
     Object.assign(au, { aan: true, fase: 'klaar', hoofd: 'A', hoofdStap: 's1', hoofdVan: 0, planIndex: 1,
@@ -255,7 +291,7 @@ console.log('\nautomaat: vervangPlan kent in en uit');
     let gepland = 0;
     au._planOvergang = () => { gepland++; };
     const p = JSON.parse(JSON.stringify(basis));
-    wijzig(p.stappen[1]);
+    wijzig(p.stappen[welke]);
     au.vervangPlan({ plan: p, versie: 'v2' });
     const uit = { fase: au.fase, volgende: !!au.volgende, gepland };
     au.vernietig();
@@ -267,8 +303,12 @@ console.log('\nautomaat: vervangPlan kent in en uit');
   ok('een andere in (zelfde van): opnieuw kiezen', anderIn.fase === 'wacht' && !anderIn.volgende);
   const inWeg = proef((s) => { delete s.in; });
   ok('in weg (zelfde van): opnieuw kiezen', inWeg.fase === 'wacht' && !inWeg.volgende);
-  const uitErbij = proef((s) => { s.uit = { sectie: 4, label: 'outro', groep: 'D' }; });
-  ok('uit erbij: opnieuw kiezen', uitErbij.fase === 'wacht' && !uitErbij.volgende);
+  const anderUit = proef((s) => { s.uit = { sectie: 5, label: 'outro', groep: 'E' }; });
+  ok('een andere uit van de klaarstaande: NIET herladen, alleen opnieuw gepland', anderUit.fase === 'klaar' && anderUit.volgende && anderUit.gepland === 1);
+  const uitWeg = proef((s) => { delete s.uit; });
+  ok('uit van de klaarstaande weg: niet herladen', uitWeg.fase === 'klaar' && uitWeg.volgende);
+  const uitNu = proef((s) => { s.uit = { sectie: 3, label: 'break', groep: 'C' }; }, 0);
+  ok('een uit op de stap die NU klinkt: opnieuw gepland (_planOvergang), niet herladen', uitNu.fase === 'klaar' && uitNu.volgende && uitNu.gepland === 1);
   const anderLabel = proef((s) => { s.in = { ...IN, label: 'break' }; });
   ok('alleen het label van in anders: ook opnieuw kiezen', anderLabel.fase === 'wacht');
 }

@@ -124,9 +124,10 @@ const opSchijf = () => JSON.parse(readFileSync(PLANPAD, 'utf8'));
 // Elke fetch van het venster bijhouden: welke URL's (secties ZONDER maak=1) en de status van elke PUT (de 409).
 const SPION = `(() => {
   const echt = window.fetch.bind(window);
-  window.__urls = []; window.__puts = [];
+  window.__urls = []; window.__puts = []; window.__bodies = [];
   window.fetch = async (url, init = {}) => {
     window.__urls.push(String(url));
+    if ((init.method || 'GET') === 'PUT') { try { window.__bodies.push(JSON.parse(init.body)); } catch (_) {} }
     const r = await echt(url, init);
     if ((init.method || 'GET') === 'PUT') window.__puts.push(r.status);
     return r;
@@ -204,13 +205,22 @@ async function doorloop() {
   const schijf = opSchijf();
   ok('op schijf: in en uit, en van = het begin van de drop', schijf.stappen[1].in?.sectie === 3 && Math.abs(schijf.stappen[1].van - beginDrop) < 1e-9
     && schijf.stappen[0].uit?.sectie === 4 && !schijf.stappen[2].in && !schijf.stappen[2].uit);
-  ok('de PUT zei dat het venster in/uit kent (geen herstelmelding)', !(await ev("document.querySelector('.pl-melding').classList.contains('aan')")));
+  ok('de PUT zegt dat het venster in/uit kent', await ev("window.__bodies.some((b) => JSON.stringify(b.kent) === JSON.stringify(['in', 'uit']))"));
   await cdp('Page.reload');
   ok('herladen', await tot("window.varvePlanVenster && document.querySelectorAll('.pl-rij').length === 3 && window.varvePlanVenster.secties.get('twee')", 15000));
   await tot(`${rij(1)}.querySelector('.pl-in')?.value === '3'`, 5000);
   const terug = await ev(`[${rij(0)}.querySelector('.pl-uit')?.value, ${rij(1)}.querySelector('.pl-in')?.value, ${rij(1)}.querySelector('.pl-van').value]`);
   ok(`na herladen staan ze er nog: uit van een = ${terug[0]}, in van twee = ${terug[1]}, begin ${terug[2]}`, terug.join() === '4,3,0:46');
   ok('... en de status is opgeslagen', (await status()) === 'opgeslagen');
+
+  console.log('\nuit vóór het begin');
+  // Een later begin typen dan de uit van een: de keuze blijft staan, maar oranje met de reden.
+  await ev(`(() => { const i = ${rij(0)}.querySelector('.pl-van'); i.value = '2:10'; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  const oranje = await ev(`(() => { const s = ${rij(0)}.querySelector('.pl-uit'); return { klas: s.className, titel: s.title, waarde: s.value }; })()`);
+  ok(`begin 2:10 na uit (break D, 2:04): uit blijft gekozen, oranje ("${oranje.titel}")`, oranje.waarde === '4' && /pl-onzeker/.test(oranje.klas) && /niet na het begin/.test(oranje.titel));
+  await ev("document.querySelector('.pl-ongedaan').click(), true");
+  ok('ongedaan maken: begin weer leeg, uit niet meer oranje', await ev(`${rij(0)}.querySelector('.pl-van').value === '' && !${rij(0)}.querySelector('.pl-uit').classList.contains('pl-onzeker')`)
+    && (await status()) === 'opgeslagen');
 
   console.log('\ntegelijk gewijzigd: 409');
   // Hier iets veranderen (niet opslaan), en Claude schrijft intussen het bestand.
@@ -226,6 +236,33 @@ async function doorloop() {
   await ev("[...document.querySelectorAll('.pl-melding button')].find((b) => /eroverheen|bewaren/.test(b.textContent)).click(), true");
   ok('"mijn versie eroverheen": opgeslagen, in en uit staan er nog', await tot("document.querySelector('.pl-status').textContent === 'opgeslagen'")
     && opSchijf().stappen[2].waarom === 'van mij' && opSchijf().stappen[1].in?.sectie === 3 && opSchijf().stappen[0].uit?.sectie === 4);
+
+  console.log('\nweghalen blijft weg');
+  // Het bestand HEEFT nu een uit op stap 1: weghalen in het venster en opslaan, dan moet hij weg blijven
+  // (het venster stuurt kent; zonder zou de server hem terugzetten).
+  ok('vooraf: op schijf heeft stap 1 een uit', opSchijf().stappen[0].uit?.sectie === 4);
+  await kiesIn(0, '.pl-uit', '');
+  await ev("document.querySelector('.pl-opslaan').click(), true");
+  ok('uit weg in het venster en opgeslagen', await tot("document.querySelector('.pl-status').textContent === 'opgeslagen'"));
+  const weg = opSchijf();
+  ok('op schijf: stap 1 zonder uit, stap 2 houdt zijn in', !('uit' in weg.stappen[0]) && weg.stappen[1].in?.sectie === 3);
+  ok('geen "bewaard"-melding van de server', !/bewaard/.test(await ev("document.querySelector('.pl-melding-tekst').textContent")));
+  ok('in het venster ook weg', (await ev(`${rij(0)}.querySelector('.pl-uit').value`)) === '');
+
+  console.log('\nde kaart opnieuw berekend');
+  // Buiten het venster om (zoals de mixer die opnieuw rekent): sectie 3 van twee heet nu "break C".
+  {
+    const lib = new Library(join(tmp, 'lib.db'));
+    const k = JSON.parse(JSON.stringify(KAARTEN.twee));
+    k.stukken[2].label = 'break';
+    lib.bewaarSecties('twee', k);
+    lib.sluit();
+  }
+  await ev(`(() => { const s = document.querySelector('.pl-kies'); s.value = 'sec-plan'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  ok('het plan opnieuw laden haalt ook bestaande kaarten opnieuw op', await tot(`${rij(1)}.querySelector('.pl-in')?.classList.contains('pl-onzeker')`, 8000));
+  const kaartTitel = await ev(`${rij(1)}.querySelector('.pl-in').title`);
+  ok(`in van twee: oranje, "kaart opnieuw berekend" ("${kaartTitel}")`, /opnieuw berekend/.test(kaartTitel) && /break C/.test(kaartTitel) && /drop C/.test(kaartTitel));
+  await foto('sec-plan-kaart-anders-1280.png');
 
   console.log('\nbreedte');
   for (const [w, h] of [[1280, 860], [900, 700]]) {

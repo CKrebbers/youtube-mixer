@@ -19,8 +19,9 @@ import { normaliseerPlan, herstelSecties } from '../src/plan/plan-model.js';
  *
  * In/uit (secties in een stap, 6 okt): een venster van vóór de secties dat
  * nog open stond tijdens een update gooit ze weg bij een stap die het bewerkt.
- * Wie ze kent zegt dat (`kent: ['in', 'uit']`, het planvenster doet dat);
- * zonder komen in/uit van een stap die verder hetzelfde is terug, met een
+ * Wie ze kent zegt dat (`kent: ['in', 'uit']`; het planvenster en Claude
+ * doen dat altijd); zonder komen in/uit terug op een stap met een eigen id,
+ * zonder in/uit in de payload, met hetzelfde nummer en begin, met een
  * opmerking in `fouten` (plan-model.js herstelSecties). Het formaat blijft
  * v2, en een oude schrijver wordt niet geweigerd.
  *
@@ -78,7 +79,7 @@ export class Plannen {
       return { code: 400, antwoord: { fout: 'geen enkele bruikbare stap', fouten } };
     }
     if (nu?.plan) {
-      const h = herstelSecties(nu.plan, plan, { kent });
+      const h = herstelSecties(nu.plan, invoer, plan, { kent });
       plan = h.plan;
       fouten = [...fouten, ...h.hersteld];
     }
