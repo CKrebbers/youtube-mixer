@@ -168,7 +168,8 @@ async function doorloop() {
   await evalueer("document.getElementById('lib-btn').click()");
   await evalueer(`(() => { const v = document.querySelector('#lib-panel .lib-url'); v.value = 'https://www.youtube.com/watch?v=sectieLog';
     v.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()`);
-  ok('het nummer staat in de lijst', await totdat(rij('sectieLog'), 90000));
+  // Ruim: onder belasting (andere bouwers, alles.mjs) duurt de ingest langer.
+  ok('het nummer staat in de lijst', await totdat(rij('sectieLog'), 240000));
   await evalueer(`${rij('sectieLog')}.querySelector('button[data-deck="A"]').click()`);
   ok('op track 1', await totdat("window.engine.deck('A').duration > 150", 30000));
   ok('de secties komen van de server op het deck', await totdat("window.engine.deck('A').sectieKaart?.aantal >= 6", 60000));
@@ -189,7 +190,10 @@ async function doorloop() {
   ok('○ log: het log loopt', await totdat('window.logboek.log.bezig', 3000));
   await evalueer('window.__monster.start()');
   await wacht(700);
-  await druk('track.1.section.4');                                  // aanloop, valt in op de volgende "1"
+  // Een kaart die net binnenkomt (zelfde inhoud, nieuw object, zoals haalSecties) en in
+  // dezelfde taak een sectiedruk: in het log moet de kaart vóór de druk staan (busNaarLog).
+  await evalueer(`import('/src/control/actions.js').then((a) => { const d = window.engine.deck('A');
+    d.setSectieKaart(d.sectieKaart.toJSON()); a.invoke('track.1.section.4', true); a.invoke('track.1.section.4', false); })`);   // aanloop, valt in op de volgende "1"
   await wacht(2600);
   const band1 = await drukNaDeEen('track.1.section.2');             // binnen de marge: sectie 2 meteen
   ok(`pad 2 vlak na de "1" (${band1 ? `${band1.tel.toFixed(4)} tel` : 'niet gelukt'})`, band1 && band1.tel < 0.02);
@@ -210,6 +214,8 @@ async function doorloop() {
   const regels = (await evalueer(`fetch('/api/handelingen/${id}').then((r) => r.text())`)).trim().split('\n').map((r) => JSON.parse(r));
   const kop = regels.find((r) => r.e === 'kop'), stand = regels.find((r) => r.e === 'stand');
   ok('het log: de kaart van track 1 in de beginstand', JSON.stringify(stand?.tracks[0].secties) === kaartToen);
+  const iKaart = regels.findIndex((r) => r?.e === 'secties'), iDruk = regels.findIndex((r) => Array.isArray(r) && r[1] === 'track.1.section.4');
+  ok(`een kaart die vlak vóór de druk binnenkwam staat ervóór in het log (regel ${iKaart} / ${iDruk})`, iKaart > 0 && iKaart < iDruk);
   const drukken = regels.filter((r) => Array.isArray(r) && /section/.test(r[1]) && r[2] === true);
   ok('de sectie-drukken staan erin, elk met de plek waarvan de sprong rekende', drukken.length === 5 && drukken.every((r) => Number.isFinite(r[3]?.van)),
     drukken.map((r) => `${r[0].toFixed(3)} ${r[1].replace('track.1.section.', '')} van ${r[3]?.van?.toFixed(3)}`).join(', '));
@@ -266,13 +272,15 @@ async function doorloop() {
   console.log(`      verschil nu − toen per stuk (ms): ${perStuk.join(' | ')}`);
   ok(`evenveel sprongen toen als nu (${sprongenToen.length} / ${sprongenNu.length})`, sprongenToen.length === sprongenNu.length && sprongenToen.length >= 5);
   // De sprongtijden zijn gemeten op de monsters (elke ~4 ms, en de audioklok loopt in
-  // stappen van 128 frames = 2,67 ms): een tik later plus die korrel.
+  // stappen van 128 frames = 2,67 ms; een monster kan ook wachten op de taak die drukt):
+  // een tik later plus die korrel.
   ok(`elke sprong nu op hetzelfde moment, op een tik en de meetkorrel na (${sprongenNu.map((x, i) => `${((x - sprongenToen[i]) * 1000).toFixed(1)}`).join(' ')} ms)`,
-    sprongenNu.every((x, i) => x - sprongenToen[i] > -0.01 && x - sprongenToen[i] < 0.025));
+    sprongenNu.every((x, i) => x - sprongenToen[i] > -0.02 && x - sprongenToen[i] < 0.025));
   // Een maat is hier 1,9 s. Wat overblijft is de korrel van de audioklok (2,67 ms): de
-  // beginstand, en per sprong als de klok tikt tussen positie lezen en het segment zetten.
+  // beginstand, en per sprong als de klok tikt tussen positie lezen en het segment zetten
+  // (gemeten: 0 tot 8 ms, het meest onder belasting). Grens: vijf stappen, spreiding drie.
   ok(`dezelfde positie op de audioklok: mediaan ${(mediaan * 1000).toFixed(2)} ms, hooguit ${(maxAbs * 1000).toFixed(2)} ms, spreiding ${(spreiding * 1000).toFixed(2)} ms`,
-    ds.length > 500 && maxAbs < 0.008 && spreiding < 0.006);
+    ds.length > 500 && maxAbs < 0.0135 && spreiding < 0.0081);
 
   console.log('\neen oud log (zonder secties): de kaart van de server, zoals voorheen');
   const serverKaart = await evalueer(`fetch('/api/library/${nummer}/secties?maak=1').then((r) => r.json()).then((j) => j.secties)`);

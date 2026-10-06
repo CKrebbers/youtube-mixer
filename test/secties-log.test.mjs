@@ -11,6 +11,9 @@
 //     druk draagt in het log de plek waarvan de sprong rekende (`van`), ook als het
 //     terugspelen een paar ms naast ligt of de klok tikte tussen log en sprong;
 //   - drie generaties (opnieuw renderen) blijven gelijk, ook met een stand midden in het log;
+//   - review (6 okt): "volgende" aan het eind beslist vanaf dezelfde plek als de sprong;
+//     een kaart vlak vóór een druk staat ervóór in het log; wat op een laad wachtte staat
+//     erna; in een loop die intussen rond ging herkent hij de plek uit het log;
 //   - een oud log (zonder secties) speelt terug zoals voorheen.
 // Draai met: node test/secties-log.test.mjs
 const fails = [];
@@ -100,9 +103,12 @@ function koppel(log) {
       if (k !== gezien[id]) { gezien[id] = k; log.gebeurtenis('secties', { track: nr, secties: k ? k.toJSON() : null }); }
     }
   };
-  const los = A.bijInvoke((id, v, o) => { log.neem(id, v, o?.laat); if (typeof v === 'boolean') queueMicrotask(kijk); });
+  // De luisteraars van logboek.js zelf (handelingen.js), zodat deze test die code raakt.
+  const los = A.bijInvoke(typeof H.busNaarLog === 'function' ? H.busNaarLog(log, kijk)
+    : (id, v, o) => { if (!log.bezig) return; log.neem(id, v, o?.laat); if (typeof v === 'boolean') queueMicrotask(kijk); });
   // De plek waarvan een sectiesprong rekende, bij de druk (de deck meldt hem tijdens de action).
-  const af = A.TRACKS.map(([nr, id]) => eng.deck(id).on('sectiedruk', ({ van }) => log.vulAan?.(`track.${nr}.section.`, { van })));
+  const af = typeof H.koppelSectiedruk === 'function' ? [H.koppelSectiedruk(eng, A.TRACKS, log)]
+    : A.TRACKS.map(([nr, id]) => eng.deck(id).on('sectiedruk', ({ van }) => log.vulAan?.(`track.${nr}.section.`, { van })));
   const weg = () => { los(); for (const f of af) f(); };
   // naLaad: wat er na een laad staat telt als gezien (de laad-gebeurtenis zegt het al).
   const naLaad = (id) => { gezien[id] = eng.deck(id).sectieKaart; };
@@ -400,6 +406,107 @@ try {
     const naast3 = meet3.map((ms) => p3.get(ms + na) - bandToen.get(ms));
     const v = Math.max(...naast3.map((x) => Math.abs(x - 0.0055)));
     ok(`generatie 3 = generatie 1, de hele tijd precies 5,5 ms naast (grootste afwijking ${v.toExponential(1)} s; eerste ${(naast3[0] * 1000).toFixed(3)} ms)`, v < 1e-6);
+  }
+
+  console.log('\nreview: "volgende" vlak na de "1" vóór de laatste sectie');
+  {
+    // Op 54,008 s (8 ms na de "1" op 54) "volgende": sectie 5 (op 56) meteen. Teruggespeeld
+    // een tik later staat de speelkop buiten de marge; de melding "al bij de laatste sectie"
+    // moet dan vanaf dezelfde plek beslissen als de sprong, anders zet hij de druk stil.
+    const meldingen = [];
+    const uit = eng.on('melding', (m) => meldingen.push(m.tekst));
+    const meet = meetElke(3000);
+    const acties = [[1.505, 'track.1.section.next', true], [1.56, 'track.1.section.next', false]];
+    const { l, pos: toen } = await neemOp({ acties, meet, voor: () => zetKlaar({ vanaf: 52.503 }) });
+    const live = [...meldingen];
+    d.pause(); d.seek(9);
+    const { pos: nu } = await speelTerug({ l, meet });
+    ok(`live sectie 5 meteen (${toen.get(1550).toFixed(3)} s), teruggespeeld ook (${nu.get(1550).toFixed(3)} s), zonder melding (${JSON.stringify(meldingen)})`,
+      live.length === 0 && Math.abs(toen.get(1550) - 56.053) < 1e-6 && verschil(toen, nu) < 1e-6 && meldingen.length === 0);
+    // In de laatste sectie zelf: live een melding en geen sprong, teruggespeeld net zo.
+    meldingen.length = 0;
+    const { l: l2, pos: toen2 } = await neemOp({ acties, meet, voor: () => zetKlaar({ vanaf: 55.495 }) });
+    const live2 = meldingen.length;
+    d.pause(); d.seek(9);
+    const { pos: nu2 } = await speelTerug({ l: l2, meet });
+    uit();
+    ok(`in de laatste sectie: live en teruggespeeld een melding, geen sprong (${JSON.stringify(meldingen)})`,
+      live2 === 1 && meldingen.length === 2 && /al bij de laatste sectie \(5 van 5\)/.test(meldingen[1]) && verschil(toen2, nu2) < 1e-6
+      && Math.abs(toen2.get(3000) - 58.495) < 1e-6);
+  }
+
+  console.log('\nreview: een kaart die vlak vóór een druk binnenkomt');
+  {
+    // De kaart komt binnen (haalSecties) en 30 ms later een sectiedruk, vóór de volgende
+    // kijk (elke 100 ms). In het log hoort de kaart vóór de druk, anders ziet het
+    // terugspelen bij de druk nog geen kaart.
+    NOW = 100;
+    zetKlaar({ vanaf: 4 });
+    d.setSectieKaart(null);
+    const g = geheugenLog();
+    const k = koppel(g.log);
+    await g.log.start({ stand: standNu() });
+    NOW = 100.53; d.setSectieKaart(KAART);
+    NOW = 100.56; A.invoke('track.1.section.3', true); await Promise.resolve(); A.invoke('track.1.section.3', false);
+    NOW = 100.6; k.kijk();
+    NOW = 101; const toen = d.position;
+    await g.log.stop(); k.weg();
+    const l = g.lees();
+    const iK = l.regels.findIndex((r) => r?.e === 'secties'), iD = l.regels.findIndex((r) => Array.isArray(r) && r[1] === 'track.1.section.3');
+    ok(`de kaart staat vóór de druk in het log (regel ${iK} / ${iD})`, iK >= 0 && iK < iD);
+    d.setSectieKaart(null); d.pause(); d.seek(0);
+    const { pos } = await speelTerug({ l, meet: [1000] });
+    ok(`teruggespeeld op dezelfde plek (toen ${toen.toFixed(3)} s, nu ${pos.get(1000).toFixed(3)} s)`, Math.abs(pos.get(1000) - toen) < 1e-6);
+  }
+
+  console.log('\nreview: regels die op een laad wachtten');
+  {
+    // Opnieuw renderen: terugspelen terwijl er een log loopt. Bij terugspelen duurt de laad
+    // langer dan toen; wat erop wachtte komt daarna, en mag in het nieuwe log niet vóór die
+    // laad staan (dan speelt de volgende generatie seek/play op het OUDE nummer).
+    const g = geheugenLog();
+    const k = koppel(g.log);
+    NOW = 50;
+    await g.log.start({});
+    const timers = nepTimers();
+    const sp = new T.Terugspeler({ klok: () => NOW, invoke: A.invoke, elke: timers.elke, stopElke: timers.stopElke,
+      doe: { laad: () => new Promise((z) => setTimeout(() => { NOW += 0.006; g.log.gebeurtenis('laad', { track: 2, bron: 'demo', demo: DEMO, duur: 0.001 }); z(true); }, 0)),
+        rack() {}, focus() {}, pads() {}, grid() {}, hotcues() {} } });
+    NOW = 50.0004;
+    await sp.start({ regels: [{ t: 1, e: 'laad', track: 2, bron: 'demo', demo: DEMO, duur: 0.002 }, [1, 'track.2.fader', 0.3], [1, 'track.2.cue', true]], duur: 1.1 });
+    for (let i = 1; i <= 110; i++) { NOW = 50.0004 + i / 100; timers.tik(); await new Promise((z) => setTimeout(z, 1)); }
+    sp.stop();
+    await g.log.stop(); k.weg();
+    const r = g.lees().regels;
+    const laad = r.find((x) => x?.e === 'laad'), na = r.filter((x) => Array.isArray(x) && /^track\.2\./.test(x[1]));
+    const plan = T.maakPlan(r, { beginstand: null }).plan;
+    ok(`wat op de laad wachtte staat erna (laad ${laad?.t}, daarna ${na.map((x) => `${x[1]} ${x[0]}`).join(', ')})`,
+      laad && na.length >= 2 && na.every((x) => x[0] >= laad.t)
+      && plan.findIndex((x) => x.soort === 'laad') < plan.findIndex((x) => x.a === 'track.2.cue' && x.v === true));
+    // En het log schrijft nooit eerder dan de regel ervóór (ook niet met `laat`).
+    const g2 = geheugenLog();
+    NOW = 10;
+    await g2.log.start({});
+    NOW = 11.002; g2.log.gebeurtenis('focus', { track: 2 });
+    g2.log.neem('track.2.fader', 0.5, 0.004);
+    await g2.log.stop();
+    const f = g2.lees().regels.find((x) => Array.isArray(x));
+    ok(`neem met \`laat\` niet vóór de regel ervóór (${f?.[0]})`, f && f[0] === 1.002);
+  }
+
+  console.log('\nreview: in een loop over de terugsprong heen');
+  {
+    // In de loop om sectie 3 (32–48), 4 ms vóór het loop-einde "volgende": sectie 5. Het
+    // terugspelen tikt 4 ms later; dan is de loop al rond (de speelkop op 32). De plek uit
+    // het log ligt een loop verder dan "nu min laat": die moet hij herkennen.
+    const meet = meetElke(9000);
+    const acties = [[7.996, 'track.1.section.next', true], [8.05, 'track.1.section.next', false]];
+    const { l, pos: toen } = await neemOp({ acties, meet, voor: () => zetKlaar({ vanaf: 40, loop: 'track.1.section.3.loop' }) });
+    ok(`live: in de loop tot de druk, daarna sectie 5 (${toen.get(7950).toFixed(3)} → ${toen.get(8200).toFixed(3)} s)`,
+      Math.abs(toen.get(7950) - 47.95) < 1e-6 && Math.abs(toen.get(8200) - 56.2) < 1e-6);
+    d.clearLoop(); d.pause(); d.seek(9);
+    const { pos: nu } = await speelTerug({ l, meet });
+    ok(`teruggespeeld na de terugsprong: ook sectie 5 (${toen.get(8200).toFixed(3)} / ${nu.get(8200).toFixed(3)} s)`, verschil(toen, nu) < 1e-6);
   }
 
   console.log('\nde bus: `laat` van terugspelen');

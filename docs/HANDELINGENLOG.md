@@ -93,6 +93,10 @@ Een regel die terugspelen de bus op zette, staat op het moment waarop hij
 BEDOELD was: terugspelen komt tot een tik te laat en geeft dat mee
 (`invoke(id, waarde, { laat })`), `neem` trekt het eraf. Zo schuift een
 opname van een terugspelen (opnieuw renderen) niet per generatie een tik op.
+Twee grenzen: een regel die op een laad of een stand wachtte krijgt geen
+`laat` (anders stond hij vóór die laad, en speelde de volgende generatie hem
+op het oude nummer), en geen regel komt eerder dan de regel ervóór: de
+volgorde in het bestand blijft die van de bus.
 
 **Een sectiedruk** (`track.N.section.*`, indrukken, terwijl de track speelt)
 heeft een VIERDE element: de tracktijd waarvan de sprong rekende.
@@ -107,7 +111,9 @@ druk vlak na de "1" viel dan buiten die marge en landde een maat later
 beslissing. De deck meldt hem zelf (`sectiedruk`, tijdens de action) en
 logboek.js zet hem bij de regel die de bus net schreef
 (`Handelingenlog.vulAan`): de plek waarvan de sprong ECHT rekende, ook als de
-audioklok tussen het log en de sprong een stap verder ging. Een oudere
+audioklok tussen het log en de sprong een stap verder ging. Ook een
+"volgende/vorige" aan het eind van de kaart (de melding "al bij de laatste
+sectie") draagt hem: terugspelen beslist dat vanaf dezelfde plek. Een oudere
 terugspeler leest alleen de eerste drie elementen.
 
 ### Gebeurtenissen
@@ -210,7 +216,9 @@ gebeurtenis over het NUMMER. Een oudere terugspeler telt hem als onbekend.
 met `"afgebroken":"pagina dicht"`. Zonder `eind` is het log afgebroken (crash).
 
 Rack, grid, hotcues, sectiekaart en pads worden VERGELEKEN, niet gemeld: na
-elke knopdruk (een microtask, dus direct achter de action) en elke 100 ms. Zo
+elke knopdruk (een microtask, dus direct achter de action), vóór elke
+sectiedruk (synchroon: een kaart die net binnenkwam staat dan vóór de druk;
+zonder dat zag de druk bij terugspelen nog geen kaart), en elke 100 ms. Zo
 komen ook de rack-editor, de server-verfijning en de library erin, zonder dat
 die modules van het log weten. Rack op identiteit (`zetRack` maakt een nieuw
 object, `bewerkMacros` een nieuwe lijst, `zetParam` nieuwe params), de
@@ -330,14 +338,17 @@ en de bewaarlus zette dat in de library.
   origineel). Daarom geeft terugspelen
   `{ laat, van }` mee (`invoke`, derde argument; `LAAT_MEE` = 50 ms, wat langer
   op een laad wachtte niet) en rekent de deck vanaf `drukPlek`: de plek uit het
-  log (als die hooguit 50 ms naast ligt, `DRUK_NAAST`), anders nu min `laat`.
-  `section.next/prev` beslissen op dezelfde plek welke sectie
-  (`naarSectieStap`).
+  log (als die hooguit 50 ms naast ligt, `DRUK_NAAST`; in een loop die
+  intussen rond ging, een loop verder), anders nu min `laat`.
+  `section.next/prev` beslissen op dezelfde plek welke sectie, en of je al aan
+  het eind bent (`naarSectieStap`; de melding komt van de action, niet meer
+  van `waaromNiet`, die rekende vanaf de positie van NU en zette zo een
+  teruggespeelde "volgende" stil die toen sprong).
 - Gemeten (`test/secties-log.test.mjs`, nep-klok): vijf sprongen, een
   sectie-loop, drukken vlak na de "1", 3 ms naast, drie generaties: op elk
   meetmoment dezelfde positie (verschil < 1 µs, of precies de 3 ms naast). In
   echte Chrome (`tools/headless/sec-log.mjs`): dezelfde positie op de audioklok
-  op 0 tot 5,3 ms na, zie Grenzen.
+  op 0 tot 8 ms na, zie Grenzen.
 
 Rack-, grid- en padgebeurtenissen worden alleen toegepast als ze verschillen
 van wat er al is (een rack dat de replay zelf al zette via `fx.next` geeft dus
@@ -391,10 +402,16 @@ op 1 µs).
   frames = 2,67 ms bij 48 kHz): de beginstand ligt een stap naast (de klok tikt
   tussen het lezen van de stand en T0), en een sprong soms ook (de klok tikt
   tussen het lezen van de positie en het zetten van het segment, in de engine).
-  Gemeten in Chrome: 0, 2,7 of 5,3 ms, nooit een maat. Andere sprongen op de
-  maat of de tel (een hotcue of beatloop met quantize, start op de maat)
-  rekenen niet met `laat`/`van`: daar kan een tik te laat op de rand van hun
-  marge nog een tel schelen.
+  Gemeten in Chrome: meestal 0, 2,7 of 5,3 ms; onder belasting (andere tests
+  ernaast) tot 8,0 ms (review, 6 okt). Nooit een maat. Per sprong kan er een
+  stap bij of af, dus een lange set met veel sprongen kan iets verder uitlopen
+  (niet gemeten). Andere sprongen op de maat of de tel (een hotcue of beatloop
+  met quantize, start op de maat) rekenen niet met `laat`/`van`: daar kan een
+  tik te laat op de rand van hun marge nog een tel schelen.
+- Een log zonder `van` (van vóór deze plek in het log): dan alleen `laat`. Een
+  druk vlak na de "1" kan dan nog een maat verschuiven (een stap van de
+  audioklok naast), en in een loop die tussen de druk en de tik rond ging,
+  rekent hij vanaf vóór het loop-begin (een andere sectie). Met `van` niet.
 - Een log dat begint TIJDENS de aanloop van een sectiesprong (minder dan een
   maat): positie, loop en kaart staan in de stand, de aanloop zelf niet
   (`_sectieSprong`); "volgende/vorige" rekent dan vanaf de positie, niet vanaf

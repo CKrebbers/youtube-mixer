@@ -484,7 +484,14 @@ export function bindEngine(engine) {
     for (const [stap, naam, tekst] of [[1, 'next', 'volgende'], [-1, 'prev', 'vorige']]) {
       define(`${n}.section.${naam}`, 'trigger', (on, o) => {
         if (!on || !d.sectieKaart) return;
-        d.naarSectieStap(stap, { laat: o?.laat, van: o?.van });
+        // Aan het eind niet stil niets (Clay, 5 okt): een melding. De deck beslist dat
+        // vanaf dezelfde plek als de sprong (drukPlek), ook bij terugspelen.
+        const r = d.naarSectieStap(stap, { laat: o?.laat, van: o?.van });
+        const k = d.sectieKaart.aantal;
+        if (r.waarom === 'laatste' || r.waarom === 'eerste') {
+          engine.emit('melding', { tekst: r.waarom === 'laatste' ? `track ${nr}: al bij de laatste sectie (${k} van ${k})`
+            : `track ${nr}: al bij de eerste sectie (1 van ${k})`, soort: 'info', duur: 8000 });
+        }
       }, { label: `Track ${nr} naar de ${tekst} sectie, op de volgende maat`,
            read: () => (!d.sectieKaart || !d.buffer ? null : 0) });
     }
@@ -1032,13 +1039,9 @@ function waaromNiet(engine) {
       if (rest.startsWith('section.') && /^section\.\d+/.test(rest) && Number(rest.split('.')[1]) > d.sectieKaart.aantal) {
         return `track ${nr} heeft ${d.sectieKaart.aantal} secties; pad ${rest.split('.')[1]} is er niet.`;
       }
-      // Volgende/vorige aan het eind: niet stil niets (vanaf de sectie op de maat, zoals de action).
-      if (rest === 'section.next' && d.sectieOpDeMaat + 1 >= d.sectieKaart.aantal) {
-        return `track ${nr}: al bij de laatste sectie (${d.sectieKaart.aantal} van ${d.sectieKaart.aantal})`;
-      }
-      if (rest === 'section.prev' && d.sectieOpDeMaat <= 0) {
-        return `track ${nr}: al bij de eerste sectie (1 van ${d.sectieKaart.aantal})`;
-      }
+      // Volgende/vorige aan het eind: dat meldt de action zelf (naarSectieStap), vanaf
+      // dezelfde plek als de sprong. Hier vanaf de positie van NU zette dat een
+      // teruggespeelde druk (een tik te laat, vlak na de "1") stil die toen sprong.
       if (GRID_NODIG.test(rest) && !d.grid) {
         return `track ${nr} heeft nog geen beatgrid: tik mee op de tel met TAP (vier tikken), of zet tel 1 met "1".`;
       }

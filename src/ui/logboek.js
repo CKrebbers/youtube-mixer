@@ -1,6 +1,6 @@
 import { DECK_IDS } from '../engine/engine.js';
 import { bijInvoke, invoke, read, has, list, TRACKS, trackVanDeck, bindLog } from '../control/actions.js';
-import { Handelingenlog, leesStand, leesLog, rackStand, herinneringenVan, LOG_VERSIE } from '../control/handelingen.js';
+import { Handelingenlog, leesStand, leesLog, rackStand, herinneringenVan, busNaarLog, koppelSectiedruk, LOG_VERSIE } from '../control/handelingen.js';
 import { Terugspeler, maakUitvoerder, kentSecties } from '../control/terugspelen.js';
 import { meld } from './meldingen.js';
 import { esc, mmss } from './dom.js';
@@ -86,24 +86,12 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
   }
   setInterval(kijk, 100);
 
-  bijInvoke((id, v, o) => {
-    if (!log.bezig) return;
-    // o.laat: een teruggespeelde regel die een tik na zijn moment kwam; hij
-    // staat er op zijn bedoelde moment (Handelingenlog.neem).
-    log.neem(id, v, o?.laat);
-    // Een knop (boolean) kan een rack, grid of pad veranderen. Die gebeurtenis
-    // hoort direct achter de action; een microtask draait na de action zelf.
-    if (typeof v === 'boolean') queueMicrotask(kijk);
-  });
-
-  // Een sectiedruk: de plek waarvan de sprong rekende bij de druk in het log
-  // (een vierde element, Handelingenlog.vulAan). De deck meldt hem tijdens de
-  // action zelf, dus direct na de regel die bijInvoke net schreef.
-  for (const [nr, id] of TRACKS) {
-    engine.deck(id).on('sectiedruk', ({ van }) => {
-      try { if (log.bezig && Number.isFinite(van)) log.vulAan(`track.${nr}.section.`, { van }); } catch (_) {}
-    });
-  }
+  // De bus in het log (handelingen.js, busNaarLog): een knop (boolean) kan een
+  // rack, grid of pad veranderen, die gebeurtenis komt direct achter de action;
+  // vóór een sectiedruk eerst kijken (een kaart die net binnenkwam staat ervóór).
+  bijInvoke(busNaarLog(log, kijk));
+  // Een sectiedruk: de plek waarvan de sprong rekende erbij (vierde element).
+  koppelSectiedruk(engine, TRACKS, log);
 
   engine.on('change', () => {
     if (!log.bezig || engine.focus === gezien.focus) return;

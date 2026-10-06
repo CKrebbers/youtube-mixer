@@ -90,8 +90,8 @@ const NUMMER_GEBEURTENIS = new Set(['grid', 'hotcues', 'secties']);
 /**
  * Hoe laat een regel nog "een tik te laat" is: dan krijgt de action `laat`
  * mee (invoke, opties) en rekent een sectiesprong vanaf waar de speelkop
- * toen was. Een regel die langer wachtte (op een laad) niet: dan stond de
- * track toen nog niet zoals in het log.
+ * toen was. Een regel die op een laad of stand wachtte nooit (Terugspeler._doe,
+ * `uitRij`): dan stond de track toen nog niet zoals in het log.
  */
 export const LAAT_MEE = 0.05;
 
@@ -219,7 +219,12 @@ export class Terugspeler {
     if (this.plan && this.i >= this.plan.length && !this.laadt.size && nu >= this.duur) this._eind('klaar');
   }
 
-  _doe(x, nu) {
+  /**
+   * Eén regel uitvoeren. `uitRij`: hij wachtte op een laad of een stand. Dan
+   * geen `laat`: het log van een opnieuw renderen zette hem anders vóór die
+   * laad (of stand), en de volgende generatie speelde hem op het oude nummer.
+   */
+  _doe(x, nu, uitRij = false) {
     // Er wordt een stand gezet: alles wacht. Deze track laadt nog: achteraan
     // in zijn rij, de rest loopt door.
     const rij = this.laadt.get(ALLES) ?? (x.track !== null ? this.laadt.get(x.track) : undefined);
@@ -238,12 +243,12 @@ export class Terugspeler {
         // Een tik te laat: dat zeggen (het log zet hem op zijn bedoelde moment),
         // en bij een sectiedruk waar de speelkop toen stond (de sprong rekent
         // daarvandaan, deck.drukPlek). Anders zonder opties.
-        const o = laat > 0 && laat <= LAAT_MEE ? { laat } : {};
+        const o = !uitRij && laat > 0 && laat <= LAAT_MEE ? { laat } : {};
         if (x.van !== null && x.van !== undefined) o.van = x.van;
         if (o.laat !== undefined || o.van !== undefined) this.invoke(x.a, x.v, o);
         else this.invoke(x.a, x.v);
       } else if (x.soort === 'laad') this._laad(x);
-      else if (x.soort === 'stand') this._stand(x, laat);
+      else if (x.soort === 'stand') this._stand(x, uitRij ? 0 : laat);
       else if (x.soort === 'rack') this.doe.rack(x.track, x.e.rack);
       else if (x.soort === 'grid') this.doe.grid(x.track, x.e.grid ?? null);
       else if (x.soort === 'hotcues') this.doe.hotcues(x.track, x.e.hotcues);
@@ -278,7 +283,7 @@ export class Terugspeler {
       // Wat er intussen voor deze track kwam, nu en in volgorde. Staat er
       // weer een laad tussen, dan wacht de rest daarop (_doe regelt dat).
       const nu = this.klok() - this.T0;
-      for (const y of rij) this._doe(y, nu);
+      for (const y of rij) this._doe(y, nu, true);
       this._tik();
     });
   }
@@ -311,7 +316,7 @@ export class Terugspeler {
       this.laadt.delete(ALLES);
       try { this.onStand?.(); } catch (_) {}
       const nu = this.klok() - this.T0;
-      for (const y of rij) this._doe(y, nu);
+      for (const y of rij) this._doe(y, nu, true);
       this._tik();
     });
   }
