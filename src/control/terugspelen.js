@@ -56,14 +56,14 @@ import { PITCH_BEREIKEN, SPRONG_TELLEN, EQ_BANDEN } from '../engine/deck.js';
 export const OVERSLAAN = /^(record\.|log\.|layer\.|headphone\.|track\.\d+\.rack\.(next|prev)$|track\.\d+\.key(\.|$)|track\.\d+\.pfl$|track\.\d+\.inst(\.|$)|track\.\d+\.pattern\.(step\.|length|swing|clear)|patterns\.(record|tap)$|track\.\d+\.stem\.\w+\.pfl$)/;
 
 /**
- * Actions die over het NUMMER gaan (transport, cues, loops, grid). Staat het
- * nummer van toen niet op de track (niet meer in de library, een los bestand,
- * laden mislukt), dan worden die overgeslagen: anders speelt `play` wat er
- * toevallig nog staat. Faders, EQ, focus en crossfaderkant gaan wel door:
- * die horen bij de track, niet bij het nummer, en gelden ook voor wat er
- * later in het log op geladen wordt.
+ * Actions die over het NUMMER gaan (transport, cues, loops, grid, secties).
+ * Staat het nummer van toen niet op de track (niet meer in de library, een los
+ * bestand, laden mislukt), dan worden die overgeslagen: anders speelt `play`
+ * wat er toevallig nog staat, en springt `section.5` in een ander nummer.
+ * Faders, EQ, focus en crossfaderkant gaan wel door: die horen bij de track,
+ * niet bij het nummer, en gelden ook voor wat er later in het log op geladen wordt.
  */
-export const NUMMER_NODIG = /^track\.\d+\.(play|cue|sync|tap|hotcue\.|beatloop\.|loop\.|nudge\.|grid\.|stem\.|seek$|beatjump\.(back|fwd)$|brake$)/;
+export const NUMMER_NODIG = /^track\.\d+\.(play|cue|sync|tap|hotcue\.|beatloop\.|loop\.|nudge\.|grid\.|stem\.|section\.|seek$|beatjump\.(back|fwd)$|brake$)/;
 
 /** Het tracknummer van een action (`track.3.fader` -> 3), of null. */
 export function trackVanActie(a) {
@@ -76,15 +76,36 @@ export function trackVanActie(a) {
  * geteld. Een `stand` midden in het log (na de beginstand) komt van een
  * terugspelen dat toen liep terwijl dit log opnam: zie Terugspeler._stand.
  */
-const SOORTEN = new Set(['laad', 'focus', 'rack', 'grid', 'hotcues', 'pads', 'stand']);
+const SOORTEN = new Set(['laad', 'focus', 'rack', 'grid', 'hotcues', 'pads', 'stand', 'secties']);
 
 /**
  * Gebeurtenissen die over het NUMMER gaan, net als NUMMER_NODIG: staat het
  * nummer van toen niet op de track, dan niet toepassen. Anders kreeg een
  * gewoon geladen nummer (een laad die bij terugspelen mislukte) het grid
- * van een ander nummer, en de bewaarlus zette dat in de library.
+ * van een ander nummer, en de bewaarlus zette dat in de library. De
+ * sectiekaart net zo: die van een ander nummer zegt hier niets.
  */
-const NUMMER_GEBEURTENIS = new Set(['grid', 'hotcues']);
+const NUMMER_GEBEURTENIS = new Set(['grid', 'hotcues', 'secties']);
+
+/**
+ * Hoe laat een regel nog "een tik te laat" is: dan krijgt de action `laat`
+ * mee (invoke, opties) en rekent een sectiesprong vanaf waar de speelkop
+ * toen was. Een regel die op een laad of stand wachtte nooit (Terugspeler._doe,
+ * `uitRij`): dan stond de track toen nog niet zoals in het log.
+ */
+export const LAAT_MEE = 0.05;
+
+/**
+ * Kent dit log de sectiekaart (sinds 6 okt: `secties` per track in de stand,
+ * of een `secties`-gebeurtenis)? Dan komt de kaart bij terugspelen uit het log
+ * en NIET van de server: die kan intussen opnieuw gerekend hebben (een ander
+ * grid), en dan landt `section.5` ergens anders. Een ouder log niet: dan haalt
+ * het laden de kaart van nu, zoals voorheen.
+ */
+export function kentSecties({ stand = null, regels = [] } = {}) {
+  if (stand?.tracks?.some((t) => t && typeof t === 'object' && 'secties' in t)) return true;
+  return regels.some((r) => r?.e === 'secties');
+}
 
 /** Sleutel in `laadt` voor een stand midden in het log: dan wacht ALLES. */
 const ALLES = '*';
@@ -102,10 +123,12 @@ export function maakPlan(regels, { beginstand } = {}) {
   let eersteStand = beginstand === undefined;
   for (const r of regels) {
     if (Array.isArray(r)) {
-      const [t, a, v] = r;
+      const [t, a, v, x] = r;
       if (!Number.isFinite(t) || typeof a !== 'string') { onbekend++; continue; }
       if (OVERSLAAN.test(a)) continue;
-      plan.push({ tijd: t, volg: volg++, soort: 'actie', a, v, track: trackVanActie(a) });
+      // Een sectiedruk draagt de plek waar de sprong toen van rekende (Handelingenlog.vulAan).
+      const van = Number.isFinite(x?.van) ? x.van : null;
+      plan.push({ tijd: t, volg: volg++, soort: 'actie', a, v, van, track: trackVanActie(a) });
     } else if (r && typeof r === 'object' && typeof r.e === 'string') {
       if (r.e === 'kop' || r.e === 'eind') continue;
       if (r.e === 'stand' && (r === beginstand || eersteStand)) { eersteStand = false; continue; }
@@ -122,9 +145,9 @@ export function maakPlan(regels, { beginstand } = {}) {
 export class Terugspeler {
   /**
    * @param klok    () => seconden op de audioklok
-   * @param invoke  (action, waarde) => void — de bus
+   * @param invoke  (action, waarde, opties?) => void — de bus; opties { laat, van } zie _doe
    * @param doe     { stand(stand, { nogBezig }), laad(track, e), rack(track, rack), grid(track, grid),
-   *                  hotcues(track, tijden), focus(track), pads(herinneringen) }
+   *                  hotcues(track, tijden), secties(track, kaart), focus(track), pads(herinneringen) }
    *                stand en laad mogen een Promise geven. laad: false = mislukt;
    *                stand: { zonder: [tracks zonder hun nummer van toen] }; nogBezig()
    *                wordt false als er intussen gestopt is (dan niets meer zetten)
@@ -196,7 +219,12 @@ export class Terugspeler {
     if (this.plan && this.i >= this.plan.length && !this.laadt.size && nu >= this.duur) this._eind('klaar');
   }
 
-  _doe(x, nu) {
+  /**
+   * Eén regel uitvoeren. `uitRij`: hij wachtte op een laad of een stand. Dan
+   * geen `laat`: het log van een opnieuw renderen zette hem anders vóór die
+   * laad (of stand), en de volgende generatie speelde hem op het oude nummer.
+   */
+  _doe(x, nu, uitRij = false) {
     // Er wordt een stand gezet: alles wacht. Deze track laadt nog: achteraan
     // in zijn rij, de rest loopt door.
     const rij = this.laadt.get(ALLES) ?? (x.track !== null ? this.laadt.get(x.track) : undefined);
@@ -212,12 +240,19 @@ export class Terugspeler {
       if (x.soort === 'actie') {
         if (x.v === true) this.ingedrukt.add(x.a);
         else if (x.v === false) this.ingedrukt.delete(x.a);
-        this.invoke(x.a, x.v);
+        // Een tik te laat: dat zeggen (het log zet hem op zijn bedoelde moment),
+        // en bij een sectiedruk waar de speelkop toen stond (de sprong rekent
+        // daarvandaan, deck.drukPlek). Anders zonder opties.
+        const o = !uitRij && laat > 0 && laat <= LAAT_MEE ? { laat } : {};
+        if (x.van !== null && x.van !== undefined) o.van = x.van;
+        if (o.laat !== undefined || o.van !== undefined) this.invoke(x.a, x.v, o);
+        else this.invoke(x.a, x.v);
       } else if (x.soort === 'laad') this._laad(x);
-      else if (x.soort === 'stand') this._stand(x);
+      else if (x.soort === 'stand') this._stand(x, uitRij ? 0 : laat);
       else if (x.soort === 'rack') this.doe.rack(x.track, x.e.rack);
       else if (x.soort === 'grid') this.doe.grid(x.track, x.e.grid ?? null);
       else if (x.soort === 'hotcues') this.doe.hotcues(x.track, x.e.hotcues);
+      else if (x.soort === 'secties') this.doe.secties?.(x.track, x.e.secties ?? null);
       else if (x.soort === 'focus') this.doe.focus(x.track);
       else if (x.soort === 'pads') this.doe.pads(x.e.herinneringen || []);
     } catch (err) {
@@ -248,7 +283,7 @@ export class Terugspeler {
       // Wat er intussen voor deze track kwam, nu en in volgorde. Staat er
       // weer een laad tussen, dan wacht de rest daarop (_doe regelt dat).
       const nu = this.klok() - this.T0;
-      for (const y of rij) this._doe(y, nu);
+      for (const y of rij) this._doe(y, nu, true);
       this._tik();
     });
   }
@@ -260,14 +295,16 @@ export class Terugspeler {
    * weer. Alles wacht, eerst op wat nog laadt (anders laadt de stand
    * hetzelfde nummer er nog eens overheen), dan de stand; de klok van het log
    * staat zolang stil, net als bij de beginstand, zodat wat erna komt op
-   * dezelfde plek in de muziek valt.
+   * dezelfde plek in de muziek valt. Stil vanaf het moment van de stand in het
+   * log, niet vanaf de tik die hem oppikte (`laat`, tot 10 ms later): de stand
+   * zet de posities van DAT moment.
    */
-  _stand(x) {
+  _stand(x, laat = 0) {
     const rij = [];
     this.laadt.set(ALLES, rij);
     const nr = this._nr;
     const nogBezig = () => nr === this._nr;
-    const begon = this.klok();
+    const begon = this.klok() - Math.max(0, laat);
     Promise.all([...this._bezig]).then(() => (nogBezig() ? this.doe.stand(x.e, { nogBezig }) : null)).then((r) => {
       if (nogBezig() && r) this.zonder = new Set(r.zonder || []);
     }, (err) => {
@@ -279,7 +316,7 @@ export class Terugspeler {
       this.laadt.delete(ALLES);
       try { this.onStand?.(); } catch (_) {}
       const nu = this.klok() - this.T0;
-      for (const y of rij) this._doe(y, nu);
+      for (const y of rij) this._doe(y, nu, true);
       this._tik();
     });
   }
@@ -317,6 +354,9 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
   const deckVan = (nr) => tracks.find(([n]) => n === nr)?.[1] ?? null;
   const deck = (nr) => (deckVan(nr) ? engine.deck(deckVan(nr)) : null);
   const gridTekst = (d) => (d.grid ? JSON.stringify(d.grid.toJSON()) : 'null');
+  const kaartTekst = (d) => (d.sectieKaart ? JSON.stringify(d.sectieKaart.toJSON()) : 'null');
+  /** De sectiekaart van toen, alleen als hij anders is (een nieuwe kaart vergeet een lopende aanloop). */
+  const zetKaart = (d, k) => { if (kaartTekst(d) !== JSON.stringify(k ?? null)) d.setSectieKaart(k ?? null); };
   const zelfdeNummer = (a, b) => !!a && !!b && a.bron === b.bron
     && (a.bron === 'library' ? !!a.nummer && a.nummer === b.nummer
       : a.bron === 'demo' && Number(a.demo?.seed) === Number(b.demo?.seed) && Number(a.demo?.bars) === Number(b.demo?.bars));
@@ -425,6 +465,10 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
       // Het grid van toen. Een library-nummer kreeg het al mee bij het laden,
       // maar de demo komt zonder grid uit zijn zaad (een getikt grid was weg).
       if (gridTekst(d) !== JSON.stringify(t.grid ?? null)) d.setGrid(t.grid ?? null);
+      // De sectiekaart van toen (na het grid: hij hoort bij dat grid). Een log
+      // van vóór de secties in het log heeft geen `secties`: dan blijft wat het
+      // laden van de server haalt, zoals voorheen.
+      if ('secties' in t) zetKaart(d, t.secties);
       if (Number.isFinite(t.rate)) d.setRate(t.rate);
       d.cuePoint = Number.isFinite(t.cue) ? t.cue : 0;
       if (Array.isArray(t.hotcues)) d.hotcues = [0, 1, 2, 3].map((i) => (Number.isFinite(t.hotcues[i]) ? t.hotcues[i] : null));
@@ -487,6 +531,8 @@ export function maakUitvoerder({ engine, tracks, laad, meld = () => {}, invoke, 
       d.hotcues = d.hotcues.map(() => null);
       d.restoreHotcues(nieuw);
     },
+    // De sectiekaart zoals hij toen binnenkwam (na het laden, of opnieuw gerekend).
+    secties: (track, k) => { const d = deck(track); if (d?.buffer) zetKaart(d, k); },
     focus: (track) => { const id = deckVan(track); if (id && engine.focus !== id) engine.setFocus(id); },
     pads: (lijst) => herinneringen(lijst),
   };

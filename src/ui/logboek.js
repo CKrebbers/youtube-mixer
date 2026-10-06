@@ -1,7 +1,7 @@
 import { DECK_IDS } from '../engine/engine.js';
 import { bijInvoke, invoke, read, has, list, TRACKS, trackVanDeck, bindLog } from '../control/actions.js';
-import { Handelingenlog, leesStand, leesLog, rackStand, herinneringenVan, LOG_VERSIE } from '../control/handelingen.js';
-import { Terugspeler, maakUitvoerder } from '../control/terugspelen.js';
+import { Handelingenlog, leesStand, leesLog, rackStand, herinneringenVan, busNaarLog, koppelSectiedruk, LOG_VERSIE } from '../control/handelingen.js';
+import { Terugspeler, maakUitvoerder, kentSecties } from '../control/terugspelen.js';
 import { meld } from './meldingen.js';
 import { esc, mmss } from './dom.js';
 
@@ -16,13 +16,15 @@ import { esc, mmss } from './dom.js';
  * - Laden (laden.js roept naLaad): welk nummer op welke track, met het grid.
  * - Focus: meteen, bij elke 'change' van de engine (de banen zetten focus
  *   buiten de bus om).
- * - Rack, grid, hotcues en bewaarde pads: VERGELEKEN, niet gemeld. Na elke
+ * - Rack, grid, hotcues, sectiekaart en bewaarde pads: VERGELEKEN, niet gemeld. Na elke
  *   knopdruk (een microtask, dus direct achter de action) en elke 100 ms: de
  *   rack-editor, de tap-verfijning van de server, "opnieuw analyseren" en de
  *   hotcues die na het laden uit de library terugkomen (hotcue-opslag.js)
  *   gaan buiten de bus om, en die wil je bij terugspelen ook terug. Zonder
  *   de hotcues ZETTE een hotcue-knop bij terugspelen een nieuwe hotcue waar
- *   hij toen naar een bewaarde sprong.
+ *   hij toen naar een bewaarde sprong. De sectiekaart komt na het laden van
+ *   de server (laden.js, haalSecties); zonder hem in het log sprong
+ *   `section.5` na een herberekening ergens anders heen.
  * - Loopt er een opname, dan hoort het log erbij met hetzelfde id: het begint
  *   en stopt met de opname. Een los log dat al liep wordt dan afgesloten en
  *   gaat na de opname als nieuw los log verder.
@@ -40,7 +42,7 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
 
   // ---- vastleggen -----------------------------------------------------------
 
-  const gezien = { rack: {}, grid: {}, hotcues: {}, pads: null, focus: null };
+  const gezien = { rack: {}, grid: {}, hotcues: {}, secties: {}, pads: null, focus: null };
   // Een rack verandert door zetRack (nieuw object), bewerkMacros (nieuwe lijst),
   // zetParam (nieuwe params), hernoem en aan/uit. Identiteit vergelijken is
   // goedkoop; de knopstanden horen er NIET bij, die staan als actions in het log.
@@ -57,6 +59,7 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
       gezien.rack[id] = rackSleutel(d.fx);
       gezien.grid[id] = gridTekst(d);
       gezien.hotcues[id] = hotcueTekst(d);
+      gezien.secties[id] = d.sectieKaart;
     }
     gezien.pads = padsTekst();
     gezien.focus = engine.focus;
@@ -72,19 +75,23 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
       if (g !== gezien.grid[id]) { gezien.grid[id] = g; log.gebeurtenis('grid', { track: nr, grid: JSON.parse(g) }); }
       const h = hotcueTekst(d);
       if (h !== gezien.hotcues[id]) { gezien.hotcues[id] = h; log.gebeurtenis('hotcues', { track: nr, hotcues: JSON.parse(h) }); }
+      // De sectiekaart op identiteit: setSectieKaart maakt altijd een nieuwe.
+      if (d.sectieKaart !== gezien.secties[id]) {
+        gezien.secties[id] = d.sectieKaart;
+        log.gebeurtenis('secties', { track: nr, secties: d.sectieKaart ? d.sectieKaart.toJSON() : null });
+      }
     }
     const p = padsTekst();
     if (p !== gezien.pads) { gezien.pads = p; log.gebeurtenis('pads', { herinneringen: JSON.parse(p) }); }
   }
   setInterval(kijk, 100);
 
-  bijInvoke((id, v) => {
-    if (!log.bezig) return;
-    log.neem(id, v);
-    // Een knop (boolean) kan een rack, grid of pad veranderen. Die gebeurtenis
-    // hoort direct achter de action; een microtask draait na de action zelf.
-    if (typeof v === 'boolean') queueMicrotask(kijk);
-  });
+  // De bus in het log (handelingen.js, busNaarLog): een knop (boolean) kan een
+  // rack, grid of pad veranderen, die gebeurtenis komt direct achter de action;
+  // vóór een sectiedruk eerst kijken (een kaart die net binnenkwam staat ervóór).
+  bijInvoke(busNaarLog(log, kijk));
+  // Een sectiedruk: de plek waarvan de sprong rekende erbij (vierde element).
+  koppelSectiedruk(engine, TRACKS, log);
 
   engine.on('change', () => {
     if (!log.bezig || engine.focus === gezien.focus) return;
@@ -97,6 +104,7 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
     if (!log.bezig) return;
     gezien.grid[deckId] = gridTekst(engine.deck(deckId));
     gezien.hotcues[deckId] = hotcueTekst(engine.deck(deckId));
+    gezien.secties[deckId] = engine.deck(deckId).sectieKaart;     // (nog) geen: die komt erna als 'secties'
     log.gebeurtenis('laad', { track: trackVanDeck(deckId), ...info, duur: Math.round(duur * 1000) / 1000 });
   }
 
@@ -133,9 +141,12 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
 
   // ---- terugspelen ------------------------------------------------------------
 
+  // Kent het log dat terugspeelt de sectiekaart (kentSecties), dan komt die
+  // uit het log en haalt het laden hem NIET van de server; een ouder log wel.
+  let sectiesUitLog = false;
   const terugspeler = new Terugspeler({
     klok, invoke,
-    doe: maakUitvoerder({ engine, tracks: TRACKS, laad: laden.laadVoorTerugspelen, meld, invoke, read, has,
+    doe: maakUitvoerder({ engine, tracks: TRACKS, laad: (deckId, e) => laden.laadVoorTerugspelen(deckId, e, { sectiesUitLog }), meld, invoke, read, has,
       // Wat terugspelen zelf laadde (of een demo, die de library niet raakt)
       // hoeft een stand niet opnieuw te laden. Een nummer dat gewoon geladen
       // is wel: dan komt het in terugspeelDecks en bewaart het niets.
@@ -172,6 +183,7 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
     await engine.resume().catch(() => {});
     if (engine.ctx.state !== 'running') { meld('terugspelen: de audio staat stil — klik eerst ergens op de pagina', 'fout'); return; }
     speelt = { id };
+    sectiesUitLog = kentSecties(l);
     meld(`terugspelen: set-${id} (${mmss(l.duur)}) — nummers laden…`);
     await terugspeler.start({ stand: l.stand, regels: l.regels, duur: l.duur });
   }
