@@ -23,6 +23,22 @@ console.log('de speellijst');
   ok('elk punt heeft een doe en een let', punten.every((p) => p.doe && p.let));
   ok('elk blok heeft een titel, minuten en punten', SPEELLIJST.every((b) => b.titel && b.minuten > 0 && b.punten.length));
   ok('blok-ids zijn uniek', new Set(SPEELLIJST.map((b) => b.id)).size === SPEELLIJST.length);
+  // De stand op de server hangt aan het id: een punt dat al bestond, blijft bestaan
+  // (anders raakt zijn notitie kwijt). De punten van vóór 6 okt:
+  const EERDER = ['start-apc', 'start-audio', 'start-scherm', 'dr-laden', 'dr-opdemaat', 'dr-beatjump', 'dr-loop',
+    'dr-quantize', 'dr-rem', 'dr-mix', 'kl-modus', 'kl-kill', 'kl-kleuren', 'kl-knipper', 'to-pitch', 'to-klopt',
+    'to-sorteer', 'to-hotcue', 'in-drie', 'in-dubbel', 'in-playlist', 'au-aan', 'au-overgang', 'au-knoppen', 'au-apc',
+    'au-glad', 'pl-open', 'pl-live', 'pl-mist', 'ks-toon', 'ks-vol', 'ks-wissel', 'be-los', 'be-achter', 'be-vormen',
+    'be-zwart', 'be-nood', 'kp-apparaat', 'kp-cue', 'kp-mix', 'kp-opname', 'ra-hotcue', 'ra-gate', 'ra-backup'];
+  const weg = EERDER.filter((id) => !ids.includes(id));
+  ok(`de ${EERDER.length} punten van vóór 6 okt bestaan nog${weg.length ? ` (weg: ${weg.join(', ')})` : ''}`, !weg.length);
+  // Een vraagcode tussen haakjes in een let-tekst ("(S21)", "(I4, O2)", "(VRAGEN AU2)") bestaat in docs/VRAGEN.md.
+  const vragen = readFileSync(new URL('../docs/VRAGEN.md', import.meta.url), 'utf8');
+  const codes = [...new Set(punten.flatMap((p) => [...p.let.matchAll(/\((?:VRAGEN )?([A-Z]{1,2}\d{1,2}(?:, [A-Z]{1,2}\d{1,2})*)\)/g)]
+    .flatMap((m) => m[1].split(', '))))];
+  const onbekend = codes.filter((c) => !new RegExp(`\\*\\*${c}[. ]`).test(vragen));
+  ok(`elke vraagcode in de speellijst staat in docs/VRAGEN.md (${codes.length} codes${onbekend.length ? `; onbekend: ${onbekend.join(', ')}` : ''})`,
+    codes.length > 0 && !onbekend.length);
 }
 
 console.log('\nde opslag (proef/sessie.json)');
