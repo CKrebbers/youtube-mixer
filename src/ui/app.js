@@ -177,7 +177,8 @@ const audioBtn = document.getElementById('audio-btn');
 const audioAan = async () => {
   await engine.resume();
   midiDelen.midi.init();
-  audioBtn.textContent = `audio actief · ${engine.ctx.sampleRate / 1000} kHz · ${Math.round(engine.ctx.baseLatency * 1000)} ms`;
+  audioBtn.textContent = `audio · ${engine.ctx.sampleRate / 1000} kHz · ${Math.round(engine.ctx.baseLatency * 1000)} ms`;
+  audioBtn.title = 'audio actief (samplefrequentie en uitgangsvertraging van de browser)';
   audioBtn.classList.remove('primary');
 };
 audioBtn.addEventListener('click', audioAan);
