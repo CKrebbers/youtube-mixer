@@ -36,8 +36,11 @@ import { uitgangsVertraging, hoorbaar } from '../engine/hoorbaar.js';
  *   mix        de crossfader en per kant { speelt, pos, rate } bij elke
  *              verandering (de zender begrenst zelf tot 20/s).
  *   poort      de APC-pagina "Beeld" (mapje device.beeld).
- * Na elke (her)verbinding gaan track en mix opnieuw: de Stroommachine kan
- * intussen herladen zijn en weet dan niets meer.
+ * Track en mix zijn TOESTAND, geen stroom: de relay gooit een bericht weg als
+ * de Stroommachine er (nog) niet is, en een herladen Stroommachine weet niets
+ * meer. Daarom gaan ze pas als ze er aantoonbaar is (een verse beeld-status,
+ * die stuurt ze elke seconde), en opnieuw als ze na een stilte terugkomt of
+ * VARVE zelf opnieuw verbond. Klok, kenmerken en poorten gaan altijd.
  */
 
 /** Het relay-adres: zo lang mag het zijn (na trimmen). */
@@ -59,6 +62,14 @@ export const ONBEREIKBAAR_MS = 8000;
  * haar eigen DJ_FRIS van 3 s).
  */
 export const BEELD_VERS_MS = 3000;
+/**
+ * Komt de beeld-status na een stilte (> BEELD_VERS_MS) terug, dan is de
+ * Stroommachine (weer) open en gaan track en mix opnieuw, maar hooguit zo vaak
+ * (ms): een track die opnieuw komt laat haar dezelfde scène opnieuw laden, en
+ * kost dat meer dan 3 s (shaders compileren op een trage machine), dan zou dat
+ * anders een lus worden.
+ */
+export const OPNIEUW_MS = 10000;
 
 /** De acht macro's (value, 0..1) en zes regieknoppen (trigger) van de Stroommachine (src/09d-poorten.js daar). */
 export const MACROS = ['macro.intensiteit', 'macro.snelheid', 'macro.helderheid', 'macro.feedback',
@@ -206,6 +217,7 @@ export class BeeldKoppeling extends Emitter {
     this.zonderStatus = null;             // afmelden bij de zender
     this.beeldObj = null;                 // de laatste beeld-status van de zender (een nieuw object per bericht)
     this.beeldAt = -Infinity;             // nu() toen die binnenkwam
+    this.opnieuwAt = -Infinity;           // nu() toen track en mix voor het laatst opnieuw moesten
   }
 
   // ---- instellingen en levensloop ------------------------------------------
@@ -316,7 +328,14 @@ export class BeeldKoppeling extends Emitter {
   _opStatus() {
     const v = this.verbonden;
     const b = this.zender?.status.beeld ?? null;
-    if (b && b !== this.beeldObj) { this.beeldObj = b; this.beeldAt = this.nu(); }
+    if (b && b !== this.beeldObj) {
+      // De eerste beeld-status, of de eerste na een stilte: de Stroommachine is
+      // (weer) open, misschien herladen. Dan weet ze onze tracks niet meer.
+      const terug = this.nu() - this.beeldAt > BEELD_VERS_MS;
+      this.beeldObj = b;
+      this.beeldAt = this.nu();
+      if (terug && this.nu() - this.opnieuwAt >= OPNIEUW_MS) { this.opnieuwAt = this.nu(); this._vergeetVerstuurd(); }
+    }
     if (v && !this.ooitVerbonden) {
       this.ooitVerbonden = true;
       this._melding(`beeld: verbonden met de relay (${this.instellingen.adres})`);
@@ -401,14 +420,18 @@ export class BeeldKoppeling extends Emitter {
     return { speelt, pos: r2(hoorbaar(d, uitgangsVertraging(this.engine.ctx))), rate: r3(d.remt ? d.snelheid : d.rate) };
   }
 
+  /** Is de Stroommachine er (een verse beeld-status)? Dan pas hebben track en mix zin. */
+  get aanwezig() { return this.verbonden && this.nu() - this.beeldAt < BEELD_VERS_MS; }
+
   /**
    * Eén tik (elke TIK_MS zolang de zender loopt): staat er op een kant een
    * ander nummer, of veranderde crossfader of transport, dan gaat dat naar de
-   * Stroommachine. Zonder verbinding wordt alleen bijgehouden.
+   * Stroommachine. Zonder verbinding of zonder Stroommachine wordt alleen
+   * bijgehouden.
    */
   tik() {
     const tracks = this._tracks();
-    if (!this.zender || !this.verbonden) return;
+    if (!this.zender || !this.aanwezig) return;
     const kanten = { A: kiesKant(tracks, 'A'), B: kiesKant(tracks, 'B') };
     for (const kant of ['A', 'B']) {
       const n = kanten[kant] === null ? null : this.nummers[kanten[kant]];

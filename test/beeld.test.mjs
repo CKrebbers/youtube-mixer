@@ -6,7 +6,7 @@
 import { Beatgrid } from '../src/engine/beatgrid.js';
 import {
   BeeldKoppeling, controleerAdres, klemLatentie, stabieleId, kiesKant, kenmerkenVan,
-  MACROS, REGIE, MACRO_STANDAARD, ADRES_MAX, TIK_MS, ONBEREIKBAAR_MS, BEELD_VERS_MS,
+  MACROS, REGIE, MACRO_STANDAARD, ADRES_MAX, TIK_MS, ONBEREIKBAAR_MS, BEELD_VERS_MS, OPNIEUW_MS,
 } from '../src/koppel/beeld.js';
 import { hoorbareTel, engineTel } from '../src/analysis/maat.js';
 import { bindBeeld, invoke, read } from '../src/control/actions.js';
@@ -80,6 +80,18 @@ function nepZenderMaker() {
     return z;
   };
   return { maak, gemaakt };
+}
+
+/**
+ * De Stroommachine is er: elke seconde een beeld-status (een nieuw object per
+ * bericht, zoals de zender het maakt), alleen zolang de zender verbonden is.
+ * Geeft een functie terug die haar weer weghaalt.
+ */
+function stroomLeeft(z, scene = 'Ruimte') {
+  const zeg = () => { if (z.status.verbonden) z.beeld({ regime: 'Diepte', scene, fps: 60, volgt: true, bpm: 124 }); };
+  zeg();
+  const taak = timers.setInterval(zeg, 1000);
+  return () => timers.clearInterval(taak);
 }
 
 const nepLuisteraar = { waarden: { laag: 0.5, midden: 0.2, hoog: 0.9, onset: 1, rms: 0.3 }, lees() { return this.waarden; } };
@@ -308,12 +320,15 @@ console.log('\ntrack bij laden, met een stabiele id');
   ok('niet verbonden: geen track (de laad is wel onthouden)', z.tracks.length === 0);
   z.verbind(true);
   ok('verbonden: niet meteen in het statusbericht (de zender stuurt eerst zijn manifest)', z.tracks.length === 0);
+  loop(TIK_MS * 5);
+  ok('verbonden, maar de Stroommachine is er nog niet (geen beeld-status): geen track (de relay zou hem weggooien)', z.tracks.length === 0 && z.mixen.length === 0);
+  const weg = stroomLeeft(z);
   loop(TIK_MS);
-  ok('de volgende tik: track A met yt:<id>, titel, bpm en toonsoort',
+  ok('haar eerste beeld-status, de volgende tik: track A met yt:<id>, titel, bpm en toonsoort',
     z.tracks.length === 1 && z.tracks[0][0] === 'A' && z.tracks[0][1].id === 'yt:dQw4w9WgXcQ'
     && z.tracks[0][1].titel === 'Eerste' && z.tracks[0][1].bpm === 124 && z.tracks[0][1].key === '8A');
-  loop(TIK_MS * 10);
-  ok('niet opnieuw zolang er niets verandert', z.tracks.length === 1);
+  loop(5000);
+  ok('niet opnieuw zolang er niets verandert (vijf beeld-statussen later)', z.tracks.length === 1);
   laad(e, 'B', { bpm: 128, titel: 'Tweede', camelot: '9A' });
   k.naLaad({ deckId: 'B', bron: 'library', nummer: 'tiktok-7300000000000000001', titel: 'Tweede' });
   loop(TIK_MS);
@@ -344,8 +359,25 @@ console.log('\ntrack bij laden, met een stabiele id');
   loop(TIK_MS * 5);
   ok('verbroken: niets', z.tracks.length === voor);
   z.verbind(true);
+  loop(1000);
+  ok('weer verbonden (en de Stroommachine is er): beide kanten en de mix opnieuw', z.tracks.length === voor + 2 && z.mixen.length === mixVoor + 1);
+  // De Stroommachine herladen terwijl de relay blijft: VARVE merkt niets aan de
+  // verbinding, alleen aan haar beeld-status (stil, dan weer terug).
+  weg();
+  loop(OPNIEUW_MS);
+  const n2 = z.tracks.length;
+  const weg2 = stroomLeeft(z);
   loop(TIK_MS);
-  ok('weer verbonden: beide kanten en de mix opnieuw', z.tracks.length === voor + 2 && z.mixen.length === mixVoor + 1);
+  ok('de Stroommachine weer terug na een stilte (herladen): beide kanten opnieuw', z.tracks.length === n2 + 2);
+  weg2();
+  loop(BEELD_VERS_MS + 500);
+  const n3 = z.tracks.length;
+  const weg3 = stroomLeeft(z);
+  loop(TIK_MS);
+  ok(`nog eens binnen ${OPNIEUW_MS / 1000} s: niet opnieuw (een trage Stroommachine geeft zo geen lus)`, z.tracks.length === n3);
+  loop(OPNIEUW_MS);
+  ok('zolang ze er is: geen herhaling', z.tracks.length === n3);
+  weg3();
   k.zet({ aan: false });
 }
 
@@ -360,6 +392,7 @@ console.log('\nmix bij crossfader en transport');
   k.zet({ aan: true, adres: ADRES });
   const z = nz.gemaakt[0];
   z.verbind(true);
+  const weg = stroomLeeft(z);
   loop(TIK_MS);
   ok('na verbinden één mix met crossfader en beide kanten',
     z.mixen.length === 1 && z.mixen[0].xfader === 0.5 && z.mixen[0].a.speelt === false && z.mixen[0].b.rate === 1);
@@ -386,6 +419,7 @@ console.log('\nmix bij crossfader en transport');
   e.deck('A').playing = false;
   loop(TIK_MS);
   ok('pauze: mix', z.mixen.length === 7 && z.mixen[6].a.speelt === false);
+  weg();
   k.zet({ aan: false });
 }
 
@@ -477,7 +511,13 @@ console.log('\nde echte zender op een nep-WebSocket');
   k.naLaad({ deckId: 'A', bron: 'library', nummer: 'dQw4w9WgXcQ', titel: 'Een' });
   k.zet({ aan: true, adres: ADRES });
   ok('één WebSocket naar het adres', socks.length === 1 && socks[0].url === ADRES);
+  // De Stroommachine via de relay: elke seconde een beeld-status op de open socket.
+  const status = () => ({ type: 'beeld-status', naar: 'varvedj', van: 'stroommachine', regime: 'Gloed', scene: 'Filament', bpm: 124, volgt: true, fps: 60 });
+  const stroomTaak = timers.setInterval(() => { const s = socks[socks.length - 1]; if (s.readyState === 1) s.krijg(status()); }, 1000);
   socks[0].open();
+  loop(TIK_MS + 5);
+  ok('nog geen beeld-status: klok wel, track nog niet', socks[0].uit.some((m) => m.type === 'klok') && !socks[0].uit.some((m) => m.type === 'track'));
+  socks[0].krijg(status());
   loop(TIK_MS + 5);
   const lijn = socks[0].uit;
   ok('eerste bericht = het manifest van varvedj (ook al luistert de koppeling op "verbonden")', lijn[0]?.app === 'varvedj' && Array.isArray(lijn[0].bronnen));
@@ -498,10 +538,11 @@ console.log('\nde echte zender op een nep-WebSocket');
   loop(1500);
   ok('herverbindt vanzelf', socks.length === 2);
   socks[1].open();
-  loop(TIK_MS + 5);
+  loop(1000 + TIK_MS + 5);
   ok('na herverbinden: weer eerst het manifest, dan opnieuw track A',
     socks[1].uit[0]?.app === 'varvedj' && socks[1].uit.some((m) => m.type === 'track' && m.id === 'yt:dQw4w9WgXcQ'));
   k.zet({ aan: false });
+  timers.clearInterval(stroomTaak);
   const n = socks[1].uit.length;
   loop(5000);
   ok('uit: geen berichten meer, geen timers, geen nieuwe WebSocket', socks[1].uit.length === n && levend() === 0 && socks.length === 2);
