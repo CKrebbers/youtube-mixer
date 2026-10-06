@@ -158,7 +158,8 @@ export function beschrijf(action) {
       'select.next': ['laag ▶', 'volgende vormlaag kiezen'], 'select.prev': ['◀ laag', 'vorige vormlaag kiezen'],
       react: ['reageer', 'vormlaag: hoe sterk de vorm op de mix reageert (standaard de bas op knop 1; dicht = niet)'],
       'react.source': ['reageer op', 'vormlaag: waarop de vorm reageert, rondlopend — wat de zaal hoort: laag · midden · hoog · klap · luid; '
-        + 'dan de maatgever (de track die het hardst klinkt, met grid): zijn klappen uit de analyse van het nummer · zijn tel'],
+        + 'dan de maatgever (de track die het hardst klinkt, met grid): zijn klappen uit de analyse van het nummer · zijn tel · '
+        + 'de energie van de sectie die je hoort · een nieuwe sectie'],
       'react.target': ['reageer knop', 'vormlaag: welke knop (1–6) op de mix reageert'] }[m[1]];
     if (v) return { kort: v[0], lang: v[1] };
   }
@@ -193,8 +194,8 @@ export function beschrijf(action) {
     'master.rack.next': ['master rack ▶', 'master: volgend rack (de kant-en-klare)'],
     'master.rack.prev': ['◀ master rack', 'master: vorig rack (de kant-en-klare)'],
     'focus.next': ['focus ▶', 'focus naar de volgende track'], 'focus.prev': ['◀ focus', 'focus naar de vorige track'],
-    'video.mode': ['mengvorm', 'video: volgende mengvorm'], 'video.pulse': ['puls', 'video: puls op de tel'],
-    'video.pulse.target': ['puls-doel', 'video: wat er op de tel pulst'],
+    'video.mode': ['mengvorm', 'video: volgende mengvorm'], 'video.pulse': ['puls', 'video: puls op de tel; op een nieuwe sectie vol (dicht = uit)'],
+    'video.pulse.target': ['puls-doel', 'video: wat er op de tel (en op een nieuwe sectie) pulst'],
     'video.fit': ['passend', 'video: passend (randen) of vullen (bijsnijden)'],
     // Auto-DJ (docs/AUTO-DJ.md §4): de modus auto op de APC, Shift + scene 4.
     'auto.aan': ['auto', 'auto-DJ aan/uit (lampje: fel limoen = aan, donker = uit)'],

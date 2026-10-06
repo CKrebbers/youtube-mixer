@@ -79,14 +79,14 @@ export function opzetVormen({ videoMixer }) {
     <span class="vid-sep"></span>
     <span class="vorm-reageer">
     <div class="knob sm" data-action="video.layer.react" data-label="REAGEER" data-value="0" data-default="0" title="hoe sterk de vorm op de mix reageert (APC: device knob 8 in het mapje vorm)"></div>
-    <select class="vorm-reageer-bron" title="waarop: wat de zaal hoort (de master), of de maatgever: zijn klappen uit de analyse van het nummer, of zijn tel">
+    <select class="vorm-reageer-bron" title="waarop: wat de zaal hoort (de master), of de maatgever: zijn klappen uit de analyse van het nummer, zijn tel, de energie van de sectie die je hoort, of een nieuwe sectie">
       <optgroup label="de zaal (master)">${MIX_BRONNEN.map((b) => `<option value="${b}">${BRON_NAAM[b]}</option>`).join('')}</optgroup>
       <optgroup label="de maatgever">${MAAT_BRONNEN.map((b) => `<option value="${b}">${BRON_NAAM[b]}</option>`).join('')}</optgroup>
     </select>
     <span class="vorm-pijl">→</span>
     <select class="vorm-reageer-doel" title="welke knop reageert">${Array.from({ length: DOEL_PLEKKEN }, (_, k) => `<option value="${k + 1}">${k + 1}</option>`).join('')}</select>
     <span class="vorm-reageer-maat" style="display:none;font-size:11px;opacity:.7"
-      title="de maatgever: de track die het hardst klinkt, speelt en een grid heeft (dezelfde als de video-puls). Zonder maatgever, of zonder klappen (een los bestand of de demo), blijft de knop op zijn stand."></span>
+      title="de maatgever: de track die het hardst klinkt, speelt en een grid heeft (dezelfde als de video-puls). Zonder maatgever, zonder klappen (een los bestand of de demo) of zonder secties, blijft de knop op zijn stand."></span>
     </span>
     <span class="vorm-metingen" style="display:flex;gap:10px;font-size:11px;font-variant-numeric:tabular-nums;opacity:.7">
       ${vormen.lagen.map((_, i) => `<span class="vorm-meting">${i + 1} uit</span>`).join('')}
@@ -142,7 +142,10 @@ export function opzetVormen({ videoMixer }) {
     // op een track staat: die staat stil, of speelt maar je hoort hem niet
     // (fader dicht, crossfader weg). Zeg dat, anders lijkt het een fout.
     const badge = tr ? null : engine.syncMaster?.();
-    const tekst = tr ? (b === 'maatklap' && !tr.deck.onsets?.length ? `maat ${nr(tr.id)} · geen klappen` : `maat ${nr(tr.id)}`)
+    // Zonder sectiekaart (een los bestand, de demo, of de server rekent nog)
+    // doet een sectiebron niets: zeg dat, net als bij de klappen.
+    const tekst = tr ? (b === 'maatklap' && !tr.deck.onsets?.length ? `maat ${nr(tr.id)} · geen klappen`
+      : b.startsWith('sectie.') && !tr.deck.sectieKaart?.aantal ? `maat ${nr(tr.id)} · geen secties` : `maat ${nr(tr.id)}`)
       : !badge ? 'geen maat'
         : `geen maat · track ${nr(badge.id)} ${badge.wacht ? 'wacht op de maat' : badge.remt ? 'remt'
           : badge.playing ? 'hoor je niet' : 'staat stil'}`;

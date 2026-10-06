@@ -78,10 +78,19 @@ export function maatgever(engine, ids) {
 
 /**
  * De effectstanden met de puls erbovenop.
+ *
+ * `accent` (0..1): een nieuwe sectie van de maatgever (sectie.nieuw uit
+ * analysis/maat.js, docs/SECTIES.md). Die slaat VOL, wat de diepte ook is:
+ * een sectiegrens is altijd te zien, ook als de puls op de tel zacht staat.
+ * Geen eigen doel en geen eigen knop: hetzelfde doel als de puls (flits = een
+ * witte flits op de grens), en alleen met de puls aan (diepte 0 = uit, ook
+ * voor het accent). PULS_DOELEN blijft zoals hij is: hij loopt rond in het
+ * handelingenlog (read = plek / 4).
  * @returns { fx, flits } — fx is een nieuw object, het origineel blijft staan
  */
-export function metPuls(fx, doel, diepte, vorm) {
-  const extra = Math.max(0, Math.min(1, diepte)) * vorm;
+export function metPuls(fx, doel, diepte, vorm, accent = 0) {
+  const d = Math.max(0, Math.min(1, diepte));
+  const extra = d > 0 ? Math.max(d * vorm, accent > 0 ? Math.min(1, accent) : 0) : 0;
   if (doel === 'flits') return { fx: { ...fx }, flits: extra };
   if (!(doel in fx)) return { fx: { ...fx }, flits: 0 };
   return { fx: { ...fx, [doel]: Math.min(1, fx[doel] + extra) }, flits: 0 };

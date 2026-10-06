@@ -1230,7 +1230,7 @@ export function bindVideo(mixer) {
   define('video.fit', 'trigger', (on) => { if (on) mixer.volgendeFit(); },
     { label: 'Video: passend of vullen', read: () => FITS.indexOf(mixer.fit) / (FITS.length - 1) });
   define('video.pulse', 'value', (v) => mixer.zetPuls(v),
-    { label: 'Video: puls op de tel', read: () => mixer.puls });
+    { label: 'Video: puls op de tel (vol op een nieuwe sectie)', read: () => mixer.puls });
   define('video.pulse.target', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
     { label: 'Video: wat er pulst', read: () => PULS_DOELEN.indexOf(mixer.pulsDoel) / (PULS_DOELEN.length - 1) });
 
@@ -1288,7 +1288,7 @@ export function bindVormen(vormen, router = null) {
   define('video.layer.react', 'value', (v) => router.zetSterkte(vormen.gekozen, v),
     { label: 'Vormlaag: reageren op de mix (sterkte)', read: () => router.route(vormen.gekozen).sterkte });
   define('video.layer.react.source', 'trigger', (on) => { if (on) router.volgendeBron(vormen.gekozen); },
-    { label: 'Vormlaag: reageren op laag · midden · hoog · klap · luid (de zaal) · klap · tel (de maatgever)' });
+    { label: 'Vormlaag: reageren op laag · midden · hoog · klap · luid (de zaal) · klap · tel · sectie · nieuwe sectie (de maatgever)' });
   define('video.layer.react.target', 'trigger', (on) => { if (on) router.volgendDoel(vormen.gekozen); },
     { label: 'Vormlaag: reageren, welke knop (1–6)' });
 }

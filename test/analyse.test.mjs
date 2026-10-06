@@ -181,8 +181,12 @@ console.log('de router: een offset bovenop de knop');
   ok('offset = kenmerk × sterkte op de doelplek', bij(offsets([{ bron: 'laag', doel: 2, sterkte: 0.5 }], kenm)[1], 0.4) && offsets([{ bron: 'laag', doel: 2, sterkte: 0.5 }], kenm)[0] === 0);
   ok('zonder kenmerken (geen audio): alles 0', offsets([{ bron: 'laag', doel: 1, sterkte: 1 }], null).every((x) => x === 0));
   ok('een doel buiten 1..6 doet niets', offsets([{ bron: 'laag', doel: 9, sterkte: 1 }], kenm).every((x) => x === 0));
-  ok('zeven bronnen: vijf uit de master, dan klap en tel van de maatgever',
-    BRONNEN.join() === 'laag,midden,hoog,onset,rms,maatklap,tel' && MIX_BRONNEN.length === 5 && MAAT_BRONNEN.join() === 'maatklap,tel');
+  // Bewust bijgewerkt (6 okt, secties verweven): de maatgever geeft er twee
+  // bronnen bij, achteraan, zodat de volgorde van de eerste zeven (en dus het
+  // rondlopen van react.source tot "tel") niet verandert.
+  ok('negen bronnen: vijf uit de master, dan klap, tel, sectie-energie en nieuwe sectie van de maatgever',
+    BRONNEN.join() === 'laag,midden,hoog,onset,rms,maatklap,tel,sectie.energie,sectie.nieuw' && MIX_BRONNEN.length === 5
+    && MAAT_BRONNEN.join() === 'maatklap,tel,sectie.energie,sectie.nieuw');
 
   const laag = new VormLaag({ maakCanvas: nepCanvas, systeem: 'bd' });
   laag.zetKnop(0, 0.3);
@@ -236,7 +240,10 @@ console.log('op de action-bus: sterkte, bron en doel op de gekozen laag');
   ok('uitleg voor react, react.source en react.target',
     ['video.layer.react', 'video.layer.react.source', 'video.layer.react.target'].every((a) => beschrijf(a).kort !== a && !beschrijf(a).lang.startsWith('?')));
   const uitleg = beschrijf('video.layer.react.source').lang;
-  ok('de uitleg van react.source noemt de nieuwe bronnen (maatgever, klappen, tel)', /maatgever/.test(uitleg) && /klappen/.test(uitleg) && / tel$/.test(uitleg));
+  ok('de uitleg van react.source noemt de bronnen van de maatgever (klappen, tel, sectie, nieuwe sectie)',
+    /maatgever/.test(uitleg) && /klappen/.test(uitleg) && / tel · /.test(uitleg) && /energie van de sectie die je hoort/.test(uitleg) && /nieuwe sectie$/.test(uitleg));
+  const label = actions.metaOf('video.layer.react.source').label;
+  ok(`het label van react.source noemt de secties (${label})`, /sectie · nieuwe sectie \(de maatgever\)$/.test(label));
 }
 
 console.log('de maat: klappen uit de onset-analyse en de tel van de maatgever');
@@ -556,6 +563,379 @@ console.log('de maat: klappen uit de onset-analyse en de tel van de maatgever');
   }
 }
 
+console.log('de secties als bron: sectie.energie en sectie.nieuw van de maatgever (docs/SECTIES.md)');
+{
+  // Nep-decks zoals hierboven, met een sectiekaart. maat.js kent de engine niet:
+  // deck.sectieKaart is duck-typed, alleen `.stukken` (tracktijd, eerste op 0).
+  const klok = { c: 0 };
+  const deck = ({ secties = null, bpm = 120, rate = 1, P0 = 0, c0 = 0, speelt = true } = {}) => ({
+    playing: speelt, rate, onsets: null, P0, c0, sectieKaart: secties ? { stukken: secties } : null,
+    grid: bpm ? new Beatgrid({ bpm, firstBeat: 0 }) : null,
+    get position() { return this.playing ? this.P0 + (klok.c - this.c0) * this.rate : this.P0; },
+  });
+  const lezer = (tracks, V = 0) => new M.MaatLezer({ tracks: () => tracks, vertraging: () => V });
+  const N = 'sectie.nieuw', E = 'sectie.energie';
+  const ST = [{ van: 0, label: 'intro', groep: 'A', energie: 0.3 }, { van: 2, label: 'drop', groep: 'B', energie: 1 },
+    { van: 3.5, label: 'break', groep: 'C', energie: 0.2 }];
+
+  // De vorm van een nieuwe sectie: als een klap (de begins zijn vooraf bekend,
+  // dus de opkomst ligt vóór het begin en de piek OP het begin), maar langer,
+  // en alleen op een GRENS. Gemeten met een lezer op 1000 beelden per seconde.
+  const fijn = (() => {
+    const d = deck({ secties: ST });
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }], 0);
+    const uit = new Map();
+    for (let i = 0; i <= 2600; i++) { klok.c = i / 1000; uit.set(i, l.lees(klok.c)[N]); }
+    return uit;
+  })();
+  ok('nieuwe sectie: 1 precies op het begin, de opkomst (12 ms) ervoor, exp(-d/τ) erna',
+    fijn.get(2000) === 1 && bij(fijn.get(1994), 0.5) && fijn.get(1987) === 0 && bij(fijn.get(2300), Math.exp(-0.3 / M.NIEUW_TAU)));
+  ok(`een accent: twee keer een klap (τ ${M.NIEUW_TAU} s tegen ${M.KLAP_TAU} s)`, M.NIEUW_TAU === 0.2 && M.KLAP_TAU === 0.1);
+  ok('het begin van het nummer (sectie 1 op 0) is geen nieuwe sectie', [...fijn].filter(([i]) => i < 1988).every(([, n]) => n === 0));
+  ok('laatsteBegin: de sectie waarin pos valt (−1 ervóór), met of zonder gok (de vorige index), ook als de gok ver weg is',
+    M.laatsteBegin?.(ST, -0.01) === -1 && M.laatsteBegin(ST, 0) === 0 && M.laatsteBegin(ST, 1.99) === 0 && M.laatsteBegin(ST, 2) === 1
+    && M.laatsteBegin(ST, 9) === 2 && M.laatsteBegin(ST, 2.5, 0) === 1 && M.laatsteBegin(ST, 0.5, 2) === 0 && M.laatsteBegin(ST, 3.6, 1) === 2
+    && M.laatsteBegin(ST, 1, 7) === 0 && M.laatsteBegin([], 1, 0) === -1);
+
+  // Een reeks beelden op fps; sleutel = beeldnummer op 120 fps (zelfde moment).
+  const V = 0.04;
+  const reeks = (fps) => {
+    const d = deck({ secties: ST });
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }], V);
+    const uit = [];
+    for (let i = 0; i <= 4.2 * fps; i++) {
+      klok.c = i / fps;
+      const w = l.lees(klok.c - V);
+      uit.push({ k: i * 120 / fps, hoor: d.position - V, n: w[N], e: w[E] });
+    }
+    return uit;
+  };
+  const r30 = reeks(30), r60 = reeks(60), r120 = reeks(120);
+  const m120 = new Map(r120.map((x) => [x.k, x]));
+  let dN = 0, dE = 0;
+  for (const r of [r30, r60]) for (const x of r) { const y = m120.get(x.k); dN = Math.max(dN, Math.abs(x.n - y.n)); dE = Math.max(dE, Math.abs(x.e - y.e)); }
+  ok(`30, 60 en 120 fps: de nieuwe sectie op hetzelfde moment even hoog (${dN.toExponential(1)}), de energie ook (${dE.toExponential(1)})`,
+    dN < 1e-9 && dE < 2e-3);
+  const eerstNa = (r, t) => r.find((x) => x.hoor >= t - 1e-12);
+  const laatstVoor = (r, t) => r.filter((x) => x.hoor < t - 1e-12).at(-1);
+  const gezien = (r, fps) => [2, 3.5].every((van) => eerstNa(r, van).n >= Math.exp(-(1 / fps) / M.NIEUW_TAU) - 1e-9);
+  ok('elke nieuwe sectie te zien op 30, 60 en 120 fps, op het moment dat je hem HOORT (positie min vertraging): het beeld erna staat nog bijna vol',
+    gezien(r30, 30) && gezien(r60, 60) && gezien(r120, 120));
+  ok('ervóór (verder dan de opkomst) precies 0: ook niet bij het begin van het nummer', r120.filter((x) => x.hoor < 2 - M.KLAP_OP).every((x) => x.n === 0));
+  const tussen = eerstNa(r120, 2.6);
+  ok('na de grens dooft hij uit (exp(-d/τ))', bij(tussen.n, Math.exp(-(tussen.hoor - 2) / M.NIEUW_TAU), 1e-9));
+  ok('energie = die van de sectie die je HOORT, en hij springt mee OP de grens (zelfde track: wat je hoort, zie je)',
+    laatstVoor(r120, 2)?.e === 0.3 && eerstNa(r120, 2).e === 1 && laatstVoor(r120, 3.5).e === 1 && eerstNa(r120, 3.5).e === 0.2);
+  ok(`bij het begin glijdt de energie op (τ ${M.ENERGIE_TAU} s), geen sprong van 0 naar 0,3`,
+    r120[0].e === 0 && bij(r120[1].e, 0.3 * (1 - Math.exp(-(1 / 120) / M.ENERGIE_TAU)), 1e-9));
+  {
+    const d = deck({ secties: ST, rate: 1.25 });
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }], V);
+    // Hoorbaar = 1,25·c - 0,04·1,25: het begin op 2,0 hoor je op c = 2,05 / 1,25 = 1,64.
+    const op = (c) => { klok.c = c; return { ...l.lees(c - V) }; };
+    op(1.0);
+    const piek = op(1.64), later = op(1.84);
+    ok('rate 1,25: de piek valt op wat je hoort, uitdoven in kloktijd', bij(piek[N], 1, 1e-9) && bij(later[N], Math.exp(-0.2 / M.NIEUW_TAU), 1e-9));
+  }
+
+  // Alleen van de maatgever, en alleen als je hem hoort (precies zoals maatklap).
+  {
+    const alleen = (d, zicht = 1) => {
+      const l = lezer([{ id: 'A', deck: d, zicht }]);
+      const uit = [];
+      for (let i = Math.round(1.9 * 120); i <= Math.round(2.3 * 120); i++) {
+        klok.c = i / 120;
+        const w = l.lees(klok.c);
+        uit.push({ n: w[N], e: w[E], tel: w.tel, wie: l.maatgever });
+      }
+      return uit;
+    };
+    ok('fader dicht (zicht 0): geen maatgever, dus geen nieuwe sectie en geen energie', alleen(deck({ secties: ST }), 0).every((x) => x.wie === null && x.n === 0 && x.e === 0));
+    ok('stilstaand op een sectiebegin: niets', alleen(deck({ secties: ST, speelt: false, P0: 2.0 })).every((x) => x.n === 0 && x.e === 0));
+    ok('geen grid: geen maatgever, dus niets (zoals klap en tel)', alleen(deck({ secties: ST, bpm: 0 })).every((x) => x.n === 0 && x.e === 0));
+    const zonder = alleen(deck({}));
+    ok('maatgever zonder sectiekaart: 0 en 0, de tel werkt gewoon', zonder.every((x) => x.wie === 'A' && x.n === 0 && x.e === 0) && zonder.some((x) => x.tel > 0.9));
+    const A = deck({ secties: ST }), B = deck({ secties: [{ van: 0, energie: 0.9 }, { van: 1.0, energie: 0.1 }] });
+    const l = lezer([{ id: 'A', deck: A, zicht: 1 }, { id: 'B', deck: B, zicht: 0.5 }]);
+    const uit = [];
+    for (let i = 0; i <= 1.5 * 120; i++) { klok.c = i / 120; const w = l.lees(klok.c); uit.push({ n: w[N], e: w[E], wie: l.maatgever }); }
+    ok('alleen de maatgever: de grens van de zachtere track B op 1,0 s geeft niets, de energie is die van A',
+      uit.every((x) => x.wie === 'A' && x.n === 0) && uit.at(-1).e === 0.3);
+  }
+
+  // Een wissel van maatgever: geen sprong (zoals klap en tel).
+  {
+    // A: grens op 2,0. B: grenzen op 2,55 en 3,0. Op 2,6 s neemt B de maat over, 50 ms na zijn grens.
+    const A = deck({ secties: ST }), B = deck({ secties: [{ van: 0, energie: 0.4 }, { van: 2.55, energie: 0.8 }, { van: 3.0, energie: 0.5 }] });
+    const tr = [{ id: 'A', deck: A, zicht: 1 }, { id: 'B', deck: B, zicht: 0.5 }];
+    const l = lezer(tr, 0);
+    const fps = 120, r = [];
+    const iw = Math.round(2.6 * fps);
+    for (let i = 0; i <= 3.4 * fps; i++) {
+      klok.c = i / fps;
+      if (i === iw) tr[0].zicht = 0.2;
+      const w = l.lees(klok.c);
+      r.push({ c: klok.c, n: w[N], e: w[E], wie: l.maatgever });
+    }
+    const [a, b] = [r[iw - 1], r[iw]];
+    const ruw = Math.exp(-(b.c - 2.55) / M.NIEUW_TAU);              // wat B zelf op dat moment gaf
+    ok(`wissel naar B, 50 ms na zijn grens: geen sprong omhoog (${a.n?.toFixed(2)} -> ${b.n?.toFixed(2)}; zonder de regel ${ruw.toFixed(2)})`,
+      a.wie === 'A' && b.wie === 'B' && b.n <= a.n + 1e-12 && ruw > 0.7);
+    ok(`…en de energie glijdt van A (1) naar B (0,8), springt niet (${b.e?.toFixed(3)})`,
+      a.e === 1 && bij(b.e, 0.8 + (1 - 0.8) * Math.exp(-(1 / fps) / M.ENERGIE_TAU), 1e-9));
+    const g3 = r.find((x) => x.c >= 3.0 - 1e-9);
+    ok(`de volgende grens van B (3,0 s) komt gewoon door (${g3.n?.toFixed(2)})`, g3.wie === 'B' && g3.n > 0.99);
+  }
+
+  // De kaart komt pas na het laden binnen (laden.js): geen sprong naar een grens van net.
+  {
+    const d = deck({});
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }], 0);
+    klok.c = 2.02; l.lees(2.02);
+    klok.c = 2.05; d.sectieKaart = { stukken: ST };
+    const w = { ...l.lees(2.05) };
+    let w2 = null;
+    for (let i = Math.round(2.05 * 120) + 1; i <= 3.5 * 120; i++) { klok.c = i / 120; w2 = { ...l.lees(klok.c) }; }   // gewoon verder, beeld voor beeld
+    ok(`kaart die later binnenkomt: geen sprong naar de grens van 50 ms geleden (${w[N]}), de energie glijdt op (${w[E]?.toFixed(3)}), de volgende grens komt door`,
+      w[N] === 0 && w[E] > 0 && w[E] < 0.5 && bij(w2[N], 1));
+  }
+
+  // Een sectie-loop (shift + pad) die rondgaat: zijn begin hoor je opnieuw, dus dat is weer een nieuwe sectie.
+  {
+    const d = deck({ secties: ST });
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }], 0);
+    for (let i = 0; i <= 2.9 * 120; i++) { klok.c = i / 120; l.lees(klok.c); }
+    const voor = { ...l.lees(klok.c) };
+    klok.c += 1 / 120; d.P0 = 2.0; d.c0 = klok.c - 0.004;          // terug naar het begin van de sectie, 4 ms geleden
+    const na = l.lees(klok.c);
+    ok(`sectie-loop rond: zijn begin is weer een nieuwe sectie (${voor[N]?.toFixed(2)} -> ${na[N]?.toFixed(2)}), de energie blijft staan`,
+      voor[N] < 0.05 && bij(na[N], Math.exp(-0.004 / M.NIEUW_TAU), 1e-9) && voor[E] === 1 && na[E] === 1);
+  }
+
+  // De maatgever stopt vlak na een nieuwe sectie: alles dooft uit, niets valt naar 0.
+  {
+    const d = deck({ secties: ST });
+    const l = lezer([{ id: 'A', deck: d, zicht: 1 }], 0);
+    for (let i = 0; i <= 2.05 * 120; i++) { klok.c = i / 120; l.lees(klok.c); }
+    const voor = { ...l.lees(klok.c) };
+    d.P0 = d.position; d.playing = false;
+    klok.c += 0.02; const na = { ...l.lees(klok.c) };
+    ok(`maatgever stopt: de staart dooft uit (${voor[N]?.toFixed(2)} -> ${na[N]?.toFixed(2)}), de energie glijdt omlaag (${voor[E]} -> ${na[E]?.toFixed(3)})`,
+      l.maatgever === null && voor[N] > 0.7 && bij(na[N], voor[N] * Math.exp(-0.02 / M.NIEUW_TAU), 1e-9) && voor[E] === 1
+      && bij(na[E], Math.exp(-0.02 / M.ENERGIE_TAU), 1e-9));
+    for (let k = 0; k < 30; k++) { klok.c += 0.1; l.lees(klok.c); }
+    const laat = l.lees(klok.c);
+    ok('…en staan na drie seconden op PRECIES 0 (geen eindeloze staart: geen parameterbericht per beeld)', laat[N] === 0 && laat[E] === 0);
+  }
+
+  // Afval: lees() draait elk beeld. Gemeten met v8 total_allocated_bytes, na
+  // opwarmen. De SectieLezer maakt geen objecten, arrays of closures en houdt
+  // zijn getallen in een Float64Array; wat overblijft zijn een paar doubles die
+  // over een functiegrens gaan (de t, de positie: HeapNumbers van 16 B), ook
+  // voor wie hem aanroept. Vóór de review: ~1,6 KB per beeld in het videopad.
+  {
+    const v8 = await import('node:v8');
+    const bytes = (stap, n = 40000) => {
+      if (v8.getHeapStatistics().total_allocated_bytes === undefined) return null;
+      for (let i = 0; i < n; i++) stap(i);
+      const a = v8.getHeapStatistics().total_allocated_bytes;
+      for (let i = n; i < 2 * n; i++) stap(i);
+      return (v8.getHeapStatistics().total_allocated_bytes - a) / n;
+    };
+    const veelST = Array.from({ length: 40 }, (_, k) => ({ van: k * 8, label: 'deel', groep: 'A', energie: (k % 5) / 4 }));
+    const maak = (secties) => {
+      const d = deck({ secties });
+      d.onsets = Float64Array.from({ length: 4000 }, (_, k) => k * 0.25);
+      const tr = [{ id: 'A', deck: d, zicht: 1 }];
+      return new M.MaatLezer({ tracks: () => tr, vertraging: () => 0.03 });
+    };
+    const leeg = bytes((i) => { klok.c = i / 120; });
+    const zonder = maak(null), met = maak(veelST);
+    const bZonder = bytes((i) => { klok.c = i / 120; zonder.lees(klok.c - 0.03); });
+    const bMet = bytes((i) => { klok.c = i / 120; met.lees(klok.c - 0.03); });
+    const d = deck({ secties: veelST });
+    const s = M.SectieLezer ? new M.SectieLezer({ deck: () => d, vertraging: () => 0.03 }) : null;
+    let tellen = 0;
+    const bSectie = s && bytes((i) => { klok.c = i / 120; s.lees(klok.c - 0.03); tellen += s.nieuw > 0.5 ? 1 : 0; });
+    if (leeg === null) console.log('  -- afval: deze Node kent v8 total_allocated_bytes niet');
+    else {
+      ok(`de SectieLezer maakt geen objecten: ${(bSectie - leeg).toFixed(1)} B per beeld (lege lus ${leeg.toFixed(1)} B; hooguit een paar doubles), ${tellen} beelden met een nieuwe sectie`,
+        s && tellen > 100 && bSectie - leeg < 64);
+      // Het vormpaneel: lees() maakte elk beeld een nieuw waarden-object, en de
+      // twee sectievelden kostten daar ~120 B per beeld bij (review). Nu hergebruikt
+      // hij er één (de router leest het meteen uit, niemand bewaart het).
+      const w1 = met.lees(1000), w2 = met.lees(1000 + 1 / 60);
+      ok(`het vormpaneel: lees() hergebruikt zijn waarden-object (${bMet.toFixed(0)} B per beeld met een kaart, ${bZonder.toFixed(0)} zonder)`,
+        w1 === w2 && bMet - bZonder < 16);
+    }
+    // De gok: met de index van het vorige beeld kijkt laatsteBegin naar drie
+    // stukken in plaats van binair te zoeken; lees() bewaart die index.
+    const veel = Array.from({ length: 40 }, (_, k) => ({ van: k * 8 }));
+    let gelezen = 0;
+    const tel = new Proxy(veel, { get(t, k) { if (typeof k === 'string' && /^\d+$/.test(k)) gelezen++; return t[k]; } });
+    gelezen = 0; const metGok = M.laatsteBegin(tel, 100, 12), nMet = gelezen;          // 100 s valt in sectie 13 (96–104)
+    gelezen = 0; const zonderGok = M.laatsteBegin(tel, 100), nZonder = gelezen;
+    gelezen = 0; const volgende = M.laatsteBegin(tel, 105, 12), nVolgende = gelezen;   // net de grens over
+    ok(`met de goede gok kijkt laatsteBegin naar ${nMet} stukken (ook net over de grens: ${nVolgende}), zonder gok zoekt hij binair (${nZonder})`,
+      metGok === 12 && zonderGok === 12 && volgende === 13 && nMet <= 3 && nVolgende <= 4 && nZonder > nVolgende);
+    const d2 = deck({ secties: ST });
+    const l = lezer([{ id: 'A', deck: d2, zicht: 1 }], 0);
+    for (let i = 0; i <= 3 * 120; i++) { klok.c = i / 120; l.lees(klok.c); }
+    ok(`lees() bewaart de index als gok voor het volgende beeld (${l.secties?.sectie} op 3,0 s = sectie 2)`, l.secties?.sectie === 1);
+  }
+}
+
+console.log('de secties na een sprong, een loop en een gat (review 6 okt, met uitgangsvertraging)');
+{
+  // Direct na een sprong ligt positie − vertraging vóór het doel: een plek die
+  // je nooit hoort (hoorbaar.js, "Bekend"). Je hoort dan nog V lang het oude
+  // stuk. Een nep-deck met een echte loop (zoals bron.js: de positie blijft in
+  // [start, end)) en sprongen (hotcue).
+  const klok = { c: 0 };
+  const deck = ({ secties, P0 = 0, c0 = 0, rate = 1, loop = null } = {}) => ({
+    playing: true, rate, onsets: null, P0, c0, loop, sectieKaart: secties ? { stukken: secties } : null,
+    grid: new Beatgrid({ bpm: 120, firstBeat: 0 }),
+    get position() {
+      let p = this.P0 + (klok.c - this.c0) * this.rate;
+      const l = this.loop;
+      if (l && p >= l.end) p = l.start + ((p - l.start) % (l.end - l.start));
+      return p;
+    },
+    sprong(T) { this.P0 = T; this.c0 = klok.c; },
+  });
+  const N = 'sectie.nieuw', E = 'sectie.energie';
+  const ST = [{ van: 0, label: 'intro', groep: 'A', energie: 0.3 }, { van: 2, label: 'drop', groep: 'B', energie: 1 },
+    { van: 4, label: 'break', groep: 'C', energie: 0.2 }, { van: 6, label: 'deel', groep: 'D', energie: 0.5 }];
+  const V = 0.03;
+  const lezer = (d, v = V) => new M.MaatLezer({ tracks: () => [{ id: 'A', deck: d, zicht: 1 }], vertraging: () => v });
+  // De beelden: klok c, t = c − V; wat je ECHT hoort op c is de positie van c − V.
+  const draai = (d, l, van, tot, fps, bij = () => {}) => {
+    const uit = [];
+    for (let i = Math.round(van * fps); i <= Math.round(tot * fps); i++) {
+      klok.c = i / fps + 0.0003 * (i % 7);                    // niet precies op het raster
+      bij(klok.c);
+      const w = l.lees(klok.c - V);
+      uit.push({ c: klok.c, n: w[N], e: w[E], grenzen: l.secties?.grenzen });
+    }
+    return uit;
+  };
+
+  // 1. Een sectie-loop over de drop [2, 4): de energie blijft 1, elke rondgang één nieuwe sectie.
+  for (const fps of [60, 120]) {
+    const d = deck({ secties: ST, P0: 1.5, loop: { start: 2, end: 4 } });
+    const l = lezer(d);
+    const r = draai(d, l, 0, 6.6, fps);
+    const naDeDrop = r.filter((x) => x.c > 2.4);                     // na het opglijden bij de start
+    const es = [...new Set(naDeDrop.map((x) => x.e))];
+    ok(`${fps} fps, V 30 ms: sectie-loop [2, 4) over de drop, drie rondgangen: de energie blijft 1 (${es.join(', ')})`, es.length === 1 && es[0] === 1);
+    // De loop begint op c 0,5 (positie 2) en gaat rond op c 2,5, 4,5 en 6,5: je hoort dat V later.
+    const pieken = [0.5, 2.5, 4.5, 6.5].map((c) => r.find((x) => x.c >= c + V - 1e-9));
+    ok(`…elke rondgang een nieuwe sectie, op het moment dat je het begin HOORT (${pieken.map((x) => x?.n.toFixed(2)).join(' ')})`,
+      pieken.every((x) => x && x.n >= Math.exp(-(1 / fps + 0.002) / M.NIEUW_TAU)) && r.filter((x) => x.c < 0.5 + V - 0.013).every((x) => x.n === 0));
+    ok(`…en de teller telt elke rondgang één keer (${r.at(-1).grenzen})`, r.at(-1).grenzen === 4);
+  }
+  // Dezelfde rondgang zonder loop-veld (een sprong terug, zoals de reviewer hem maakte).
+  {
+    const d = deck({ secties: ST, P0: 1.5 });
+    const l = lezer(d);
+    const r = draai(d, l, 0, 2.8, 60, (c) => { if (c >= 2.5 && d.position >= 4) d.sprong(2 + (d.position - 4)); });
+    const es = [...new Set(r.filter((x) => x.c > 2.3).map((x) => x.e))];
+    ok(`sprong terug van 4 naar 2 (zonder loop-veld): geen 0,3 of 0,2 ertussen (${es.join(', ')})`, es.length === 1 && es[0] === 1);
+  }
+
+  // 2. Een hotcue op het begin van een sectie (6, energie 0,5) vanuit de drop (energie 1); ervóór ligt de break (0,2).
+  {
+    // Start op 0: na het opglijden (1,4 s) intro 0,3, op 2 de drop (1), op c 3,0 de hotcue naar 6.
+    const d = deck({ secties: ST });
+    const l = lezer(d);
+    const r = draai(d, l, 0, 3.4, 60, (c) => { if (c >= 3.0 && !d.gesprongen) { d.gesprongen = c; d.sprong(6); } }).filter((x) => x.c > 1.6);
+    const es = r.map((x) => x.e).filter((e, i, a) => i === 0 || e !== a[i - 1]);
+    const eerst = r.find((x) => x.e === 0.5), nPiek = r.find((x) => x.n > 0.5 && x.c > 3.0);
+    ok(`hotcue op een sectiebegin: energie 1 → 0,5 zonder de 0,2 van de plek die je nooit hoort (${es.join(' → ')})`,
+      es.join() === '0.3,1,0.5');
+    ok(`…de wissel en de nieuwe sectie komen V na de druk, als je het HOORT (energie op ${((eerst.c - d.gesprongen) * 1000).toFixed(0)} ms, klap op ${((nPiek.c - d.gesprongen) * 1000).toFixed(0)} ms)`,
+      eerst.c - d.gesprongen >= V - 1e-9 && eerst.c - d.gesprongen < V + 1 / 60 + 1e-3 && nPiek === r.find((x) => x.c >= d.gesprongen + V - 1e-9));
+    ok(`…twee nieuwe secties: de drop en de hotcue (teller ${r.at(-1).grenzen})`, r.at(-1).grenzen === 2);
+    // Een hotcue midden in een sectie (6,5) is geen nieuwe sectie.
+    const d2 = deck({ secties: ST });
+    const l2 = lezer(d2);
+    const r2 = draai(d2, l2, 0, 3.6, 60, (c) => { if (c >= 3.0 && !d2.gesprongen) { d2.gesprongen = c; d2.sprong(6.5); } }).filter((x) => x.c > 3.0);
+    ok(`een hotcue midden in een sectie: geen nieuwe sectie, alleen de staart van de drop dooft verder uit (max ${Math.max(...r2.map((x) => x.n)).toFixed(4)}, teller ${r2.at(-1).grenzen})`,
+      r2.every((x, i) => x.n < 0.01 && (i === 0 || x.n <= r2[i - 1].n + 1e-12)) && r2.at(-1).grenzen === 1);
+  }
+
+  // 3. Een loop die precies OP een sectiegrens eindigt (de opbouw loopen tot de drop): de grens hoor je nooit.
+  for (const v of [0, 0.005, 0.01, 0.02]) for (const fps of [60, 120]) {
+    const ST2 = [{ van: 0, energie: 0.3 }, { van: 8, energie: 1 }];
+    const d = deck({ secties: ST2, loop: { start: 6, end: 8 } });
+    const l = lezer(d, v);
+    let max = 0;
+    for (let i = 0; i <= 40 * fps; i++) { klok.c = i / fps + 0.0007 * i; max = Math.max(max, l.lees(klok.c - v)[N]); }
+    ok(`loop [6, 8) eindigt op de grens, V ${v * 1000} ms, ${fps} fps: geen vals accent (max ${max.toFixed(2)}, teller ${l.secties?.grenzen})`,
+      max === 0 && l.secties?.grenzen === 0);
+  }
+
+  // 5. Een lezer die een tijd niet gelezen werd (puls dicht, route dicht): geen klap uit het gat.
+  {
+    const A = deck({ secties: ST }), B = deck({ secties: [{ van: 0, energie: 0.4 }, { van: 2.3, energie: 0.8 }] });
+    const tr = [{ id: 'A', deck: A, zicht: 1 }, { id: 'B', deck: B, zicht: 0.5 }];
+    const l = new M.MaatLezer({ tracks: () => tr, vertraging: () => V });
+    for (let c = 1.5; c <= 2.0; c += 1 / 60) { klok.c = c; l.lees(c - V); }
+    tr[0].zicht = 0.1;                                               // 0,45 s niet gelezen; B neemt de maat over
+    klok.c = 2.45;
+    const w = l.lees(2.45 - V)[N];
+    ok(`0,45 s niet gelezen en intussen een andere maatgever: zijn grens van vóór de wissel telt niet (${w.toFixed(3)})`, w === 0);
+    const d = deck({ secties: ST });
+    const l2 = lezer(d);
+    klok.c = 0.5; l2.lees(0.5 - V);
+    klok.c = 2.1; const w2 = l2.lees(2.1 - V)[N];
+    ok(`langer dan een seconde niet gelezen, open 70 ms na een grens: geen klap uit het gat (${w2.toFixed(3)})`, w2 === 0);
+    // Een haper van een halve seconde over een grens (de lus draait wel door): één keer, uitgedoofd, geen tweede piek.
+    const d3 = deck({ secties: ST });
+    const l3 = lezer(d3);
+    const r = [];
+    for (let c = 1.5; c < 1.9; c += 1 / 60) { klok.c = c; l3.lees(c - V); }
+    for (let c = 2.4; c < 2.6; c += 1 / 60) { klok.c = c; r.push(l3.lees(c - V)[N]); }
+    ok(`een haper van 0,5 s over een grens: het beeld erna toont de klap uitgedoofd, daarna alleen omlaag (${r[0].toFixed(3)} …)`,
+      bij(r[0], Math.exp(-(2.4 - V - 2) / M.NIEUW_TAU), 1e-9) && r.every((x, i) => i === 0 || x < r[i - 1]) && l3.secties?.grenzen === 1);
+  }
+
+  // Voor de hub (AV-app-hub PROTOCOL §18) en elk ander gebruik: een SectieLezer
+  // zonder DOM, met de tijd van buiten, die elke grens die je hoort precies één
+  // keer telt (`grenzen`), met de energie, het label en de index van de sectie.
+  {
+    const SL = M.SectieLezer;
+    const d = deck({ secties: ST });
+    const s = SL ? new SL({ deck: () => d, vertraging: () => V }) : null;
+    const gezien = [];
+    let vorige = s?.grenzen ?? 0;
+    for (let i = 0; i <= 6.5 * 60 && s; i++) {
+      klok.c = i / 60; s.lees(klok.c - V);
+      if (s.grenzen !== vorige) { vorige = s.grenzen; gezien.push(`${s.label}@${s.sectie}`); }
+    }
+    ok(`SectieLezer: elke grens die je hoort één keer (${gezien.join(' ')}), met label en index`,
+      gezien.join() === 'drop@1,break@2,deel@3');
+    ok('…energie en label van de sectie die je hoort', s && s.energie === 0.5 && s.label === 'deel' && s.sectie === 3);
+    // Op 1000 beelden per seconde precies even vaak.
+    const d2 = deck({ secties: ST });
+    const s2 = SL ? new SL({ deck: () => d2, vertraging: () => V }) : null;
+    for (let i = 0; i <= 6500 && s2; i++) { klok.c = i / 1000; s2.lees(klok.c - V); }
+    ok(`…ook op 1000 beelden per seconde drie keer (${s2?.grenzen})`, s2?.grenzen === 3);
+    // Starten op het begin van een sectie (stilstaand op de "1", dan play): die hoor je.
+    for (const v of [0, V]) {
+      const d3 = deck({ secties: ST, P0: 4 });
+      d3.playing = false;
+      const s3 = SL ? new SL({ deck: () => (d3.playing ? d3 : null), vertraging: () => v }) : null;
+      for (let i = 0; i < 30 && s3; i++) { klok.c = 1 + i / 60; s3.lees(klok.c - v); }
+      d3.playing = true; d3.c0 = klok.c + 0.004;
+      let piek = 0;
+      for (let i = 1; i < 30 && s3; i++) { klok.c = d3.c0 - 0.004 + i / 60; s3.lees(klok.c - v); piek = Math.max(piek, s3.nieuw); }
+      ok(`starten op het begin van een sectie (V ${v * 1000} ms): die nieuwe sectie zie je (${piek.toFixed(2)}, teller ${s3?.grenzen})`,
+        piek > 0.9 && s3?.grenzen === 1);
+    }
+  }
+}
+
 console.log('de router: alleen uitlezen wat een open route nodig heeft');
 {
   let mixGelezen = 0, maatGelezen = 0;
@@ -580,7 +960,14 @@ console.log('de router: alleen uitlezen wat een open route nodig heeft');
   const r2 = new Router(1);
   const langs = [];
   for (let i = 0; i < BRONNEN.length; i++) { r2.volgendeBron(0); langs.push(r2.route(0).bron); }
-  ok(`rondlopen: ${langs.join(' → ')}`, langs.join() === 'midden,hoog,onset,rms,maatklap,tel,laag');
+  ok(`rondlopen: ${langs.join(' → ')}`, langs.join() === 'midden,hoog,onset,rms,maatklap,tel,sectie.energie,sectie.nieuw,laag');
+  const r4 = new Router(1);
+  r4.zetBron(0, 'sectie.nieuw'); r4.zetSterkte(0, 1);
+  let mixN = 0, maatN = 0;
+  const k4 = leesKenmerken(6, r4.nodig(), { mix: { lees: () => { mixN++; return { laag: 1 }; } },
+    maat: { lees: () => { maatN++; return { 'sectie.nieuw': 0.5 }; } } });
+  ok('nieuwe sectie open: de maat gelezen, de analyser NIET, en de route geeft een offset',
+    maatN === 1 && mixN === 0 && offsets([r4.route(0)], k4)[0] === 0.5);
 
   const laag = new VormLaag({ maakCanvas: nepCanvas, systeem: 'bd' });
   laag.zetKnop(0, 0.2);

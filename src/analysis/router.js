@@ -10,6 +10,8 @@ import { Emitter, clamp } from '../lib/emitter.js';
  *              'laag' | 'midden' | 'hoog' | 'onset' (klap) | 'rms' (luid)
  *            of de maatgever (maat.js):
  *              'maatklap' (zijn klappen uit de onset-analyse) | 'tel' (zijn tel)
+ *              | 'sectie.energie' (de energie van de sectie die je hoort)
+ *              | 'sectie.nieuw' (een nieuwe sectie begint, docs/SECTIES.md)
  *   doel     knopplek 1..6 van de laag (een PLEK, zoals video.layer.knob.N:
  *            een andere vorm vraagt geen nieuwe route)
  *   sterkte  0..1
@@ -22,12 +24,21 @@ import { Emitter, clamp } from '../lib/emitter.js';
 
 /** Uit de master-analyser (luisteraar.js). */
 export const MIX_BRONNEN = ['laag', 'midden', 'hoog', 'onset', 'rms'];
-/** Van de maatgever (maat.js): geen analyser nodig, alleen positie, grid en klappen. */
-export const MAAT_BRONNEN = ['maatklap', 'tel'];
+/**
+ * Van de maatgever (maat.js): geen analyser nodig, alleen positie, grid,
+ * klappen en sectiekaart. De secties achteraan (6 okt): de volgorde van de
+ * eerste zeven blijft, dus react.source loopt tot "tel" zoals vroeger.
+ * Bekend: het handelingenlog bewaart de drukken op video.layer.react.source
+ * (geen stand in de beginstand, de bron is sessietoestand). Een log van vóór
+ * 6 okt dat voorbij "tel" rondliep, komt nu op een sectiebron uit in plaats
+ * van op "laag". Niet hersteld: een read en een plek in RONDLOPERS zouden de
+ * beginstand veranderen.
+ */
+export const MAAT_BRONNEN = ['maatklap', 'tel', 'sectie.energie', 'sectie.nieuw'];
 /** In deze volgorde lopen ze rond (video.layer.react.source). */
 export const BRONNEN = [...MIX_BRONNEN, ...MAAT_BRONNEN];
 export const BRON_NAAM = { laag: 'laag', midden: 'midden', hoog: 'hoog', onset: 'klap', rms: 'luid',
-  maatklap: 'klap (maat)', tel: 'tel' };
+  maatklap: 'klap (maat)', tel: 'tel', 'sectie.energie': 'sectie', 'sectie.nieuw': 'nieuwe sectie' };
 export const DOEL_PLEKKEN = 6;
 
 export const standaardRoute = () => ({ bron: 'laag', doel: 1, sterkte: 0 });
