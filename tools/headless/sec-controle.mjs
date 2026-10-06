@@ -8,9 +8,12 @@
 // een verouderde kaart, waarvan één met echte audio (het synthetische nummer
 // van test/synth-nummer.mjs, zeven secties op 124 bpm). Dat nummer krijgt een
 // kaart zoals bij het laden (GET …/secties?maak=1, de worker met ffmpeg), en
-// dan moet de regel meetellen. Daarna: een ander grid, nummers weg, een
-// oudere server (404, nagebootst met de Fetch-laag van Chrome), een smal
-// scherm en een server die weg is. Geen MIDI (Chromium zonder requestMIDIAccess).
+// dan moet de regel meetellen. Daarna: een ander grid, nummers weg, en met de
+// Fetch-laag van Chrome nagebootst: een trage server (geen stapel open
+// verzoeken), een fout (500) en een oudere server (404), die de pagina dan
+// hooguit eens per minuut opnieuw vraagt (duurt daarom ~2,5 minuut). Dan een
+// smal scherm en een server die weg is. Fouten in de console: Runtime én Log
+// (netwerkfouten). Geen MIDI (Chromium zonder requestMIDIAccess).
 //
 // Gebruik:  node tools/headless/sec-controle.mjs [uitmap]
 // Poorten:  VARVE_KIJK_POORT (8913) en VARVE_KIJK_DEBUG (9513). Chrome: VARVE_CHROME.
@@ -95,12 +98,14 @@ async function verbind(doel) {
   const ws = new WebSocket(doel.webSocketDebuggerUrl);
   await new Promise((r) => ws.addEventListener('open', r));
   let volg = 0;
-  const wachtend = new Map(), fouten = [], luisteraars = new Map();
+  const wachtend = new Map(), fouten = [], logFouten = [], luisteraars = new Map();
   ws.addEventListener('message', (e) => {
     const m = JSON.parse(e.data);
     if (m.id && wachtend.has(m.id)) { const w = wachtend.get(m.id); wachtend.delete(m.id); m.error ? w.f(new Error(m.error.message)) : w.ok(m.result); }
     if (m.method === 'Runtime.exceptionThrown') fouten.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') fouten.push(m.params.args.map((a) => a.value ?? a.description).join(' '));
+    // Wat Chrome zelf in de console zet: netwerkfouten (404, 500, afgebroken), ook bij een fetch die de pagina netjes afvangt.
+    if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') logFouten.push({ tekst: m.params.entry.text, url: m.params.entry.url ?? '' });
     if (m.method && luisteraars.has(m.method)) luisteraars.get(m.method)(m.params);
   });
   const cdp = (method, params = {}) => { const id = ++volg; ws.send(JSON.stringify({ id, method, params })); return new Promise((ok, f) => wachtend.set(id, { ok, f })); };
@@ -110,10 +115,10 @@ async function verbind(doel) {
     return r.result.value;
   };
   const op = (methode, fn) => luisteraars.set(methode, fn);
-  await cdp('Page.enable'); await cdp('Runtime.enable');
+  await cdp('Page.enable'); await cdp('Runtime.enable'); await cdp('Log.enable');
   await cdp('Page.addScriptToEvaluateOnNewDocument', { source: GEEN_MIDI });
   await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 790, deviceScaleFactor: 1, mobile: false });
-  return { ws, cdp, ev, op, fouten };
+  return { ws, cdp, ev, op, fouten, logFouten };
 }
 async function tot(fn, maxMs = 8000) {
   const t0 = Date.now();
@@ -164,14 +169,58 @@ try {
   ok('over: echt (net berekend) en hand (met de hand): alles actueel', await wordt('secties: alles actueel'), await regel());
   ok('... en de sub telt mee: library: 2 nummers', (await tegel())?.sub === 'library: 2 nummers');
 
-  console.log('\neen oudere server zonder /api/secties (404)');
-  ctl.op('Fetch.requestPaused', (p) => ctl.cdp('Fetch.fulfillRequest', { requestId: p.requestId, responseCode: 404,
-    responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body: Buffer.from('{"fout":"onbekend eindpunt"}').toString('base64') }).catch(() => {}));
+  ok(`tot hier geen fouten in de console, ook geen netwerkfouten (${ctl.fouten.length} + ${ctl.logFouten.length})`,
+    !ctl.fouten.length && !ctl.logFouten.length, [...ctl.fouten, ...ctl.logFouten.map((f) => f.tekst)].join(' | '));
+
+  // Elke vraag naar /api/secties gaat vanaf hier langs de Fetch-laag: `antwoord` beslist wat hij krijgt.
+  const vragen = [];
+  let antwoord = 'door';
+  const geef = (p, code, tekst) => ctl.cdp('Fetch.fulfillRequest', { requestId: p.requestId, responseCode: code,
+    responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body: Buffer.from(tekst).toString('base64') }).catch(() => {});
+  ctl.op('Fetch.requestPaused', (p) => {
+    vragen.push(Date.now());
+    if (antwoord === 'hangt') return;                                   // nooit antwoorden: een trage of hangende server
+    if (antwoord === '500') return geef(p, 500, '{"fout":"no such column: secties_json"}');
+    if (antwoord === '404') return geef(p, 404, '{"fout":"onbekend eindpunt"}');
+    if (antwoord === 'nep') return geef(p, 200, JSON.stringify({ totaal: 214, zonder: 12, verouderd: 3, versie: SECTIE_VERSIE }));
+    return ctl.cdp('Fetch.continueRequest', { requestId: p.requestId }).catch(() => {});
+  });
   await ctl.cdp('Fetch.enable', { patterns: [{ urlPattern: '*/api/secties*', requestStage: 'Request' }] });
-  ok('"onbekend (oudere server)", en de server draait gewoon', await wordt('secties: onbekend (oudere server)')
+  const vanaf = (t) => vragen.filter((x) => x >= t).length;
+
+  console.log('\neen trage server (antwoordt niet op /api/secties)');
+  antwoord = 'hangt';
+  const tHangt = Date.now();
+  await tot(async () => vanaf(tHangt) > 0, 4000);
+  await wacht(9000);
+  const nHangt = vanaf(tHangt);
+  ok(`geen stapel open verzoeken: ${nHangt} in ~10 s (één tegelijk, na de time-out de volgende)`, nHangt >= 1 && nHangt <= 2);
+  antwoord = 'door';
+  ok('server weer vlot: alles actueel', await wordt('secties: alles actueel', 12000), await regel());
+
+  console.log('\neen fout van de server (500, bv. een library.db met de v9 van een andere tak)');
+  const log500 = ctl.logFouten.length;
+  antwoord = '500';
+  const t500 = Date.now();
+  ok('"secties: onbekend (fout)", en de server draait gewoon', await wordt('secties: onbekend (fout)')
     && (await tegel())?.licht === 'ok' && (await tegel())?.waarde === 'draait', await regel());
-  await ctl.cdp('Fetch.disable');
-  ok('route terug: weer alles actueel', await wordt('secties: alles actueel'), await regel());
+  await wacht(8000);
+  const n500 = vanaf(t500), l500 = ctl.logFouten.length - log500;
+  ok(`daarna niet elke 2 s opnieuw: ${n500} vraag en ${l500} netwerkfout in ~10 s`, n500 === 1 && l500 <= 1,
+    ctl.logFouten.slice(log500).map((f) => f.tekst).join(' | '));
+
+  console.log('\neen oudere server zonder /api/secties (404), na een minuut opnieuw gevraagd');
+  antwoord = '404';
+  ok('"onbekend (oudere server)", en de server draait gewoon', await wordt('secties: onbekend (oudere server)', 70000)
+    && (await tegel())?.licht === 'ok' && (await tegel())?.waarde === 'draait', await regel());
+  const t404 = vragen.at(-1);
+  ok(`de 500 en de 404 lagen ~een minuut uit elkaar (${((t404 - t500) / 1000).toFixed(0)} s), ertussen niets gevraagd`,
+    t404 - t500 >= 55000 && vanaf(t500) === 2);
+  antwoord = 'door';
+  ok('route terug (na weer een minuut): alles actueel', await wordt('secties: alles actueel', 70000), await regel());
+  ok(`netwerkfouten alleen van de nagebootste storingen, één per vraag (${ctl.logFouten.length - log500})`,
+    ctl.logFouten.slice(log500).every((f) => /api\/secties/.test(f.url) || /api\/secties/.test(f.tekst)) && ctl.logFouten.length - log500 <= 2,
+    ctl.logFouten.slice(log500).map((f) => `${f.tekst} ${f.url}`).join(' | '));
 
   console.log('\nop een smal scherm');
   await ctl.cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
@@ -182,10 +231,7 @@ try {
   await ctl.cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 790, deviceScaleFactor: 1, mobile: false });
   await wacht(300);
   // Voor de schermafdruk: een stand met allebei (zoals op een echte avond), via de Fetch-laag.
-  ctl.op('Fetch.requestPaused', (p) => ctl.cdp('Fetch.fulfillRequest', { requestId: p.requestId, responseCode: 200,
-    responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
-    body: Buffer.from(JSON.stringify({ totaal: 214, zonder: 12, verouderd: 3, versie: SECTIE_VERSIE })).toString('base64') }).catch(() => {}));
-  await ctl.cdp('Fetch.enable', { patterns: [{ urlPattern: '*/api/secties*', requestStage: 'Request' }] });
+  antwoord = 'nep';
   await wordt('secties: 12 nog zonder · 3 verouderd');
   const foto = await ctl.cdp('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: 1440, height: 330, scale: 1 } });
   writeFileSync(join(UIT, 'sec-controle.png'), Buffer.from(foto.data, 'base64'));
@@ -194,7 +240,7 @@ try {
   console.log('\nde server weg');
   server.kill();
   ok('server: niet bereikbaar, en geen regel over secties', await tot(async () => { const t = await tegel(); return t?.licht === 'fout' && t.regel === null; }));
-  ok('geen fouten in de console van de Controlekamer', ctl.fouten.length === 0, ctl.fouten.join(' | '));
+  ok('geen fouten van de pagina zelf in de console (Runtime: uitzonderingen en console.error)', ctl.fouten.length === 0, ctl.fouten.join(' | '));
 } catch (err) {
   ok(`script liep door: ${err.message}`, false);
 } finally {
