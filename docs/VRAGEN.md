@@ -411,6 +411,36 @@ APC-indeling (voorstel A):
 - [ ] **SE5. Secties met de hand verschuiven, splitsen of hernoemen?** 💬 Niet gebouwd. De kaart kent al `bron: 'hand'` en `slot` (dan rekent de server er nooit overheen). **Advies:** eerst een paar avonden zonder; als je steeds dezelfde grens mist, dan een bewerkmodus zoals bij het grid.
 - [ ] **SE6. Labels uit een getraind model (all-in-one-infer, MIT, draait op Apple Silicon)?** 💬 Python in de venv van de stems, zoals Demucs. Beter op popstructuren (couplet/refrein), niet getest op jouw ambient en jungle. **Advies:** alleen als SE2 tegenvalt.
 
+
+## SV. Secties verweven (6 okt, avond; docs/SECTIES.md §7)
+
+De secties zitten nu ook in het toetsenbord, de sampler, het planvenster en het handelingenlog.
+Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
+
+**Toetsenbord** (speellijst "Secties op het toetsenbord")
+- [ ] **SVT1. Shift+W/E (links) en shift+I/O (rechts) voor vorige/volgende sectie.** 🎧 Links naar rechts = terug naar vooruit (zoals R/T, Y/U, , / .). Zonder modifier is geen letter of cijfer vrij; Cmd/Ctrl/Alt blijven van het systeem. **Advies:** zo proberen.
+- [ ] **SVT2. Shift+I wisselde eerst de focus (net als I), shift+W/O waren cue.** 💬 Nu springen ze naar een sectie; hou je shift nog vast na shift+Q/P (starten op de maat) en tik je dan W of O voor cue, dan spring je in plaats daarvan. **Advies:** zo laten; zonder shift doen ze wat ze deden.
+- [ ] **SVT3. Vorige/volgende op de eerste of laatste sectie geeft een melding** ("track 1: al bij de laatste sectie (8 van 8)"), de speelkop blijft staan. 💬 Liever rondgaan (na de laatste weer de eerste)? **Advies:** de melding laten; rondgaan springt ongemerkt terug naar de intro.
+
+**Sampler** (speellijst "Een sectie in de sampler")
+- [ ] **SVS1. Een sectie in een pad loopt van haar "1" tot de "1" van de volgende, in hele maten.** 🎧 De opmaat vóór de eerste "1" komt in geen pad; de laatste sectie stopt op de laatste hele maat. Verspringt de "1" van het grid binnen de sectie (een maat van bv. 6 tellen), dan stopt de pad op de "1" ervóór en zegt een melding hoeveel tellen wegvallen. **Advies:** zo; mis je een staartje (een fill), zeg het.
+- [ ] **SVS2. Een sectie-pad start op de volgende "1" van de maatgever, niet op de tel.** 🎧 Hij wacht dus tot bijna een maat. Gewone pads (1–8 tellen) starten zoals altijd op de volgende tel. Een pad is een sectie als hij meer dan 8 tellen heeft (ook een bewaarde pad weet het zo, zonder nieuw veld); een sectie van 2 maten of korter start daardoor op de tel (de APC-kaart zegt dat). **Advies:** zo; wil je soms meteen, dan een shift-variant.
+- [ ] **SVS3. Een sectie-pad houdt bij herankeren ook de maat vast.** 🎧 Springt de maatgever een tel (beatjump 1), dan schuift de pad tot twee tellen mee zodat de "1"-en gelijk blijven; in een loop die geen hele maten is alleen de tel. Ook met keylock en een sprong terug blijft een wachtende pad op zijn "1". **Advies:** proberen met beatjump 1 en 4, ook met keylock aan.
+- [ ] **SVS4. Grens 32 maten en 90 s per pad.** 💬 Een pad houdt de audio vast: ~23 MB per minuut, acht volle pads ~280 MB. 32 maten is de langste sectie van de analyse; tot 86 bpm past die in 90 s. Langer (een mix, ambient op 70 bpm): een melding en het lampje uit (als loop op de track kan het wel). **Advies:** zo; loop je er vaak tegenaan, naar 120 s.
+- [ ] **SVS5. Bediening: rij 3 van de modus sampler, zonder shift.** 🎛 Shift + een lege pad betekent al "vergeten" (scherm). Rij 3 was leeg, onder "leegmaken". Lampje: donker hemelsblauw = kan, uit = kan niet (een druk zegt waarom). Op het scherm-als-APC, niet in de SAMPLER-rij. **Advies:** zo laten; wil je hem ook in de SAMPLER-rij, zeg het.
+- [ ] **SVS6. Een sectie op een onzeker grid wordt geweigerd.** 🎧 Een pad die naast de tel loopt hoor je meteen; waar de analyse het grid onzeker vindt, komt een melding en blijft het lampje uit (zoals bij beat-loops). Op het synthetische nummer in Chrome 2 van de 7 secties. **Advies:** klinkt het grid goed, zet het op slot (Lock in grid-modus); daarna kan het.
+
+**Handelingenlog** (speellijst "Secties terugspelen")
+- [ ] **SVL1. Speelt een set met sectiesprongen precies zo terug?** 🎧 Het log bewaart de sectiekaart, en bij elke sectiedruk de plek waarvan de sprong rekende; dat geldt ook voor "volgende" aan het eind van het nummer. Terugspelen haalt de kaart niet van de server, dus na een herberekening (ander grid) landt `section.5` waar hij toen landde. Gemeten in Chrome: 0–8 ms naast, nooit een maat. **Advies:** speellijst "Secties terugspelen". Hoor je een sprong een maat te laat, op een andere plek, of een melding "al bij de laatste sectie" die er toen niet was, zeg welke.
+- [ ] **SVL2. Logs van vóór deze tak met sectiedrukken spelen terug met de kaart van nu.** 💬 Een log zonder sectiekaart speelt terug zoals voorheen, met de kaart die de server nu geeft; is die opnieuw gerekend, dan springt `section.5` ergens anders. **Advies:** zo laten (hooguit de logs van vandaag).
+- [ ] **SVL3. Ook hotcues met quantize, beatloops en starten op de maat zo exact terugspelen?** 💬 Een regel komt tot een tik (10 ms) te laat; voor secties is dat opgevangen, bij die andere sprongen kan een tik op de rand van hun marge nog een tel schelen (starten op de maat misschien een maat). Niet gemeten. **Advies:** pas bouwen als je het hoort.
+
+**Planvenster** (speellijst "Planvenster met secties")
+- [ ] **SVP1. Secties berekenen vanuit het planvenster?** 💬 Het venster vraagt alleen kaarten die er al zijn (zonder `maak=1`; anders gaan dertig nummers tegelijk rekenen); een nummer dat nooit geladen is krijgt geen in/uit-keuze. **Advies:** eerst zo; kom je vaak een nummer zonder kaart tegen, dan een knop "secties" per rij (één tegelijk).
+- [ ] **SVP2. In kiezen met een keuzelijst of in de strook?** 👀 Nu een lijst onder "begin" ("3 drop C"). **Advies:** zo; klikken op een band als de lijst te klein of te traag voelt.
+- [ ] **SVP3. Uit en duur samen: welke wint?** 🎧 Kies je een uit, dan blijft een ingevulde duur staan; de planner beslist. **Advies:** uit wint, de duur is alleen de terugval zonder kaart (zoals `van` bij `in`).
+- [ ] **SVP4. Strook altijd waar de auto-DJ de overgang echt begint?** 👀 Nu alleen bij een stap met uit; zonder uit de oude schatting (eind van het stuk), terwijl de automaat op een frasegrens begint (tot 16 maten eerder). **Advies:** ja, na samenvoegen met sec-auto (één regel in tijdlijn.js + de vaste test bijwerken).
+
 ---
 
 ## O. AV-app-hub (3 okt, `?hub=`, CLAUDE.md AV-APP-HUB)

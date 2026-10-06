@@ -32,7 +32,7 @@ console.log('de speellijst');
     'be-zwart', 'be-nood', 'kp-apparaat', 'kp-cue', 'kp-mix', 'kp-opname', 'ra-hotcue', 'ra-gate', 'ra-backup'];
   const weg = EERDER.filter((id) => !ids.includes(id));
   ok(`de ${EERDER.length} punten van vóór 6 okt bestaan nog${weg.length ? ` (weg: ${weg.join(', ')})` : ''}`, !weg.length);
-  // Een vraagcode tussen haakjes in een let-tekst ("(S21)", "(I4, O2)", "(VRAGEN AU2)") bestaat in docs/VRAGEN.md.
+  // Een vraagcode tussen haakjes in een let-tekst ("(S21)", "(I4, O2)", "(VRAGEN AU2)", "(SVT1)") bestaat in docs/VRAGEN.md.
   const vragen = readFileSync(new URL('../docs/VRAGEN.md', import.meta.url), 'utf8');
   const vraagcodes = (tekst) => [...tekst.matchAll(/\((?:VRAGEN )?([A-Z]{1,3}\d{1,2}(?:, [A-Z]{1,3}\d{1,2})*)\)/g)]
     .flatMap((m) => m[1].split(', '));
