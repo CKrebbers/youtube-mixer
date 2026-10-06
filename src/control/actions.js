@@ -653,6 +653,20 @@ export function bindEngine(engine) {
       define(`${n}.stem.${st}.pfl`, 'trigger', (on) => { if (on && kt.heeft(stemCue)) d.toggleStemPfl(st); },
         { label: `Track ${nr} stem ${naam} in de koptelefoon (voorbeluisteren) aan/uit`,
           read: () => (!kt.heeft(stemCue) || !d.stemBestaat(st) ? null : d.stemPflAan(st) ? 1 : 0) });
+
+      // Een eigen toon per stem (6 okt): halve tonen bovenop de toon van de
+      // track, het tempo blijft. Zoals track.N.transpose: value 0..1 over
+      // ±TOON_MAX (0,5 = niets), en hoger/lager/terug. Read null zonder die stem.
+      const toon = () => d.stemToon(st);
+      define(`${n}.stem.${st}.transpose`, 'value', (v) => d.setStemToon(st, Math.round(Math.min(1, Math.max(0, v)) * 2 * TOON_MAX) - TOON_MAX),
+        { label: `Track ${nr} stem ${naam}: toon (±${TOON_MAX} halve tonen, 0,5 = niets)`, bipolar: true,
+          read: () => (toon() === null ? null : (toon() + TOON_MAX) / (2 * TOON_MAX)) });
+      define(`${n}.stem.${st}.transpose.up`, 'trigger', (on) => { if (on && toon() !== null) d.setStemToon(st, toon() + 1); },
+        { label: `Track ${nr} stem ${naam}: een halve toon hoger`, read: () => (toon() === null || toon() >= TOON_MAX ? null : toon() > 0 ? 1 : 0) });
+      define(`${n}.stem.${st}.transpose.down`, 'trigger', (on) => { if (on && toon() !== null) d.setStemToon(st, toon() - 1); },
+        { label: `Track ${nr} stem ${naam}: een halve toon lager`, read: () => (toon() === null || toon() <= -TOON_MAX ? null : toon() < 0 ? 1 : 0) });
+      define(`${n}.stem.${st}.transpose.reset`, 'trigger', (on) => { if (on) d.setStemToon(st, 0); },
+        { label: `Track ${nr} stem ${naam}: toon terug naar 0`, read: () => (toon() === null ? null : toon() !== 0 ? 1 : 0) });
     }
 
     // Koptelefoon (docs/STUDIO.md §3): deze track voorbeluisteren, vóór de

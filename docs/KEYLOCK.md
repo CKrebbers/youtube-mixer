@@ -619,6 +619,11 @@ Tests: `test/rek.test.mjs` (kern en worklet met de echte WASM), `test/renderblok
 (gouden hash ongewijzigd; keylock zonder afval), `test/stream.test.mjs` (de StreamBron),
 `test/toonsoort.test.mjs` (deck en actions), `tools/headless/keylock.mjs` (Chrome).
 
+### 9.3b Een eigen toon per stem (6 okt)
+
+Eén stretcher per stem-paar in plaats van één met alle kanalen, zodat elke stem een
+eigen toon kan hebben (bovenop de toon van de track). Zie STEMS.md §7.
+
 ### 9.4 Nog niet
 
 - **Op Clay's oren en hardware**: keylock in een set, hotcues met keylock (voelt 98 ms

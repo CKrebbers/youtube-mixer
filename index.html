@@ -250,7 +250,7 @@
   <span class="sampler-kop">STEMS</span>
   <span class="st-track" title="de track met focus">track 1</span>
   <!-- wat de kleine knoppen per stem zijn (de kleur van de wijzer); bij vier stems op een smal scherm alleen de tooltips -->
-  <span class="st-legenda" title="per stem: filter (midden = open, links lowpass, rechts highpass) · echo · galm (volgen de fader van de track) · cue (koptelefoon)"><i class="f"></i>filter<i class="e"></i>echo<i class="g"></i>galm</span>
+  <span class="st-legenda" title="per stem: filter (midden = open, links lowpass, rechts highpass) · echo · galm (volgen de fader van de track) · toon (halve tonen, het tempo blijft) · cue (koptelefoon)"><i class="f"></i>filter<i class="e"></i>echo<i class="g"></i>galm<i class="t"></i>toon</span>
   <div class="st-stemmen">
     <div class="st-stem hidden" data-stem="drums">
       <span class="st-naam">drums</span>
@@ -259,6 +259,8 @@
       <div class="knob sm st-knop st-filter" data-action="track.1.stem.drums.filter" data-value="0.5" data-bipolar="true" title="filter van de drums: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
       <div class="knob sm st-knop st-echo" data-action="track.1.stem.drums.send.a" data-value="0" data-default="0" title="echo van de drums: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
       <div class="knob sm st-knop st-galm" data-action="track.1.stem.drums.send.b" data-value="0" data-default="0" title="galm van de drums: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-toon" data-action="track.1.stem.drums.transpose" data-value="0.5" data-bipolar="true" title="toon van de drums: halve tonen hoger of lager, bovenop de toon van de track; het tempo blijft (dubbelklik: terug naar 0)"></div>
+      <span class="st-toonw" title="toon van de drums (halve tonen)">0</span>
       <button data-kind="button" data-action="track.1.stem.drums.pfl" class="btn sm st-cue" title="de drums in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
     </div>
     <div class="st-stem hidden" data-stem="bass">
@@ -268,6 +270,8 @@
       <div class="knob sm st-knop st-filter" data-action="track.1.stem.bass.filter" data-value="0.5" data-bipolar="true" title="filter van de bas: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
       <div class="knob sm st-knop st-echo" data-action="track.1.stem.bass.send.a" data-value="0" data-default="0" title="echo van de bas: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
       <div class="knob sm st-knop st-galm" data-action="track.1.stem.bass.send.b" data-value="0" data-default="0" title="galm van de bas: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-toon" data-action="track.1.stem.bass.transpose" data-value="0.5" data-bipolar="true" title="toon van de bas: halve tonen hoger of lager, bovenop de toon van de track; het tempo blijft (dubbelklik: terug naar 0)"></div>
+      <span class="st-toonw" title="toon van de bas (halve tonen)">0</span>
       <button data-kind="button" data-action="track.1.stem.bass.pfl" class="btn sm st-cue" title="de bas in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
     </div>
     <div class="st-stem hidden" data-stem="other">
@@ -277,6 +281,8 @@
       <div class="knob sm st-knop st-filter" data-action="track.1.stem.other.filter" data-value="0.5" data-bipolar="true" title="filter van overig: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
       <div class="knob sm st-knop st-echo" data-action="track.1.stem.other.send.a" data-value="0" data-default="0" title="echo van overig: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
       <div class="knob sm st-knop st-galm" data-action="track.1.stem.other.send.b" data-value="0" data-default="0" title="galm van overig: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-toon" data-action="track.1.stem.other.transpose" data-value="0.5" data-bipolar="true" title="toon van overig: halve tonen hoger of lager, bovenop de toon van de track; het tempo blijft (dubbelklik: terug naar 0)"></div>
+      <span class="st-toonw" title="toon van overig (halve tonen)">0</span>
       <button data-kind="button" data-action="track.1.stem.other.pfl" class="btn sm st-cue" title="overig in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
     </div>
     <div class="st-stem hidden" data-stem="vocals">
@@ -286,6 +292,8 @@
       <div class="knob sm st-knop st-filter" data-action="track.1.stem.vocals.filter" data-value="0.5" data-bipolar="true" title="filter van de zang: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
       <div class="knob sm st-knop st-echo" data-action="track.1.stem.vocals.send.a" data-value="0" data-default="0" title="echo van de zang: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
       <div class="knob sm st-knop st-galm" data-action="track.1.stem.vocals.send.b" data-value="0" data-default="0" title="galm van de zang: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-toon" data-action="track.1.stem.vocals.transpose" data-value="0.5" data-bipolar="true" title="toon van de zang: halve tonen hoger of lager, bovenop de toon van de track; het tempo blijft (dubbelklik: terug naar 0)"></div>
+      <span class="st-toonw" title="toon van de zang (halve tonen)">0</span>
       <button data-kind="button" data-action="track.1.stem.vocals.pfl" class="btn sm st-cue" title="de zang in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
     </div>
     <div class="st-stem hidden" data-stem="inst">
@@ -295,6 +303,8 @@
       <div class="knob sm st-knop st-filter" data-action="track.1.stem.inst.filter" data-value="0.5" data-bipolar="true" title="filter van de rest (bij vier stems: drums, bas en overig samen): midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
       <div class="knob sm st-knop st-echo" data-action="track.1.stem.inst.send.a" data-value="0" data-default="0" title="echo van de rest (bij vier stems: drums, bas en overig samen): naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
       <div class="knob sm st-knop st-galm" data-action="track.1.stem.inst.send.b" data-value="0" data-default="0" title="galm van de rest (bij vier stems: drums, bas en overig samen): naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-toon" data-action="track.1.stem.inst.transpose" data-value="0.5" data-bipolar="true" title="toon van de rest (bij vier stems: bovenop drums, bas en overig): halve tonen hoger of lager, bovenop de toon van de track; het tempo blijft (dubbelklik: terug naar 0)"></div>
+      <span class="st-toonw" title="toon van de rest (halve tonen)">0</span>
       <button data-kind="button" data-action="track.1.stem.inst.pfl" class="btn sm st-cue" title="de rest (bij vier stems: drums, bas en overig samen) in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
     </div>
   </div>

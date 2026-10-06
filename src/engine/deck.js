@@ -185,6 +185,9 @@ export class Deck extends Emitter {
     // pitchbereik), de toon gaat terug naar 0 (K5, zoals de pitch).
     this._keylock = false;
     this._toon = 0;             // halve tonen, −12..+12
+    // Een eigen toon per stem (6 okt), bovenop die van de track: halve tonen
+    // per stemnaam (inst bij vier stems = drums, bas en overig samen).
+    this._stemToon = {};
     this._gridTerug = [];       // grids van vóór een bewerking met de hand (gridTerug)
 
     /*
@@ -261,7 +264,7 @@ export class Deck extends Emitter {
     if (this.bron === bron) return;
     this.bron?.vernietig();
     this.bron = bron;
-    bron.zetRek?.({ keylock: this._keylock, toon: this._toon });
+    bron.zetRek?.({ keylock: this._keylock, toon: this._toon, stems: this._stemToonPerPaar() });
     bron.onEinde = () => this.emit('change', this);
     bron.onFout = (tekst) => this.emit('fout', tekst);
     // De rem is uitgelopen: de bron staat nu stil op die plek (een pauze).
@@ -420,7 +423,7 @@ export class Deck extends Emitter {
     const v = !!aan;
     if (v === this._keylock) return;
     this._keylock = v;
-    this.bron.zetRek?.({ keylock: v, toon: this._toon });
+    this.bron.zetRek?.({ keylock: v, toon: this._toon, stems: this._stemToonPerPaar() });
     this.emit('change', this);
   }
 
@@ -428,8 +431,43 @@ export class Deck extends Emitter {
     const v = Math.max(-TOON_MAX, Math.min(TOON_MAX, Math.round(Number(n) || 0)));
     if (v === this._toon) return;
     this._toon = v;
-    this.bron.zetRek?.({ keylock: this._keylock, toon: v });
+    this.bron.zetRek?.({ keylock: this._keylock, toon: v, stems: this._stemToonPerPaar() });
     this.emit('change', this);
+  }
+
+  /**
+   * Een eigen toon voor één stem (halve tonen, −TOON_MAX..+TOON_MAX), bovenop
+   * de toon van de track; het tempo blijft (6 okt). `inst` bij vier stems
+   * telt op bij drums, bas en overig. Een stem die er niet is: niets. Een
+   * nieuw nummer begint weer op 0, zoals de toon van de track (K5).
+   */
+  setStemToon(s, n) {
+    if (!this.stemBestaat(s)) return;
+    const v = Math.max(-TOON_MAX, Math.min(TOON_MAX, Math.round(Number(n) || 0)));
+    if (v === (this._stemToon[s] ?? 0)) return;
+    if (v) this._stemToon[s] = v; else delete this._stemToon[s];
+    this.bron.zetRek?.({ keylock: this._keylock, toon: this._toon, stems: this._stemToonPerPaar() });
+    this.emit('change', this);
+  }
+
+  /** De eigen toon van een stem (halve tonen), of null als die stem er niet is. */
+  stemToon(s) { return this.stemBestaat(s) ? (this._stemToon[s] ?? 0) : null; }
+
+  /** De toonsoort die je van deze stem HOORT (zoals `toonsoort`, met zijn eigen toon erbij), of null. */
+  stemToonsoort(s) {
+    if (!this.toonKaart || !this.stemBestaat(s)) return null;
+    const vier = this.stems.aantal === 4;
+    const extra = (this._stemToon[s] ?? 0) + (vier && s !== 'vocals' && s !== 'inst' ? (this._stemToon.inst ?? 0) : 0);
+    return this.toonKaart.hoorbaarBij(hoorbaar(this, uitgangsVertraging(this.ctx)),
+      { rate: this.rate, transpositie: this._toon + extra, keylock: this._keylock });
+  }
+
+  /** Halve tonen per stereopaar van het bestand (de stems op volgorde), of null zonder stems of zonder eigen toon. */
+  _stemToonPerPaar() {
+    if (!this.stems) return null;
+    const vier = this.stems.aantal === 4, inst = this._stemToon.inst ?? 0;
+    const uit = this.stems.namen.map((n) => (this._stemToon[n] ?? 0) + (vier && n !== 'vocals' ? inst : 0));
+    return uit.some((x) => x !== 0) ? uit : null;
   }
 
   // ---- transport ---------------------------------------------------------
@@ -1341,6 +1379,11 @@ export class Deck extends Emitter {
     this.stems = stems ? Object.freeze({
       namen: Object.freeze([...stems.namen]), aantal: stems.namen.length, schaal: stems.schaal ?? 1,
     }) : null;
+    // De toon per stem hoort bij het nummer: een nieuw nummer begint op 0.
+    if (Object.keys(this._stemToon).length) {
+      this._stemToon = {};
+      this.bron.zetRek?.({ keylock: this._keylock, toon: this._toon, stems: null });
+    }
     for (const n of STEM_NAMEN) {
       this.stemNiveaus[n] = 1; this.stemKill[n] = false; this.stemKillVast[n] = false;
       this.stemFilters[n] = 0.5; this.stemPfl[n] = false;
@@ -1623,16 +1666,17 @@ export class Deck extends Emitter {
    */
   stemStand() {
     if (!this.stems) return null;
-    const niveau = {}, weg = {}, filter = {}, send = { A: {}, B: {} }, cue = {};
+    const niveau = {}, weg = {}, filter = {}, send = { A: {}, B: {} }, cue = {}, toon = {};
     for (const n of STEM_NAMEN) {
       if (!this.stemBestaat(n)) continue;
+      toon[n] = this._stemToon[n] ?? 0;
       niveau[n] = this.stemNiveaus[n];
       weg[n] = this.stemGekild(n);
       filter[n] = this.stemFilters[n];
       for (const b of STEM_BUSSEN) send[b][n] = this.stemSendStand[b][n];
       cue[n] = !!this.stemPfl[n];
     }
-    return { namen: [...this.stems.namen], niveau, weg, filter, send, cue };
+    return { namen: [...this.stems.namen], niveau, weg, filter, send, cue, toon };
   }
 
   level() { return piek(this.chain.analyser); }

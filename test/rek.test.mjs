@@ -244,6 +244,52 @@ console.log('\nstems');
     gemeten.map((f) => f.toFixed(1)).join(', '));
 }
 
+// ---- 6b. een eigen toon per stem (6 okt) ------------------------------------------------------
+console.log('\neen eigen toon per stem');
+{
+  const freqs = [220, 330, 440, 550];
+  const stToon = [0, 12, -5, 7];
+  const st = maakPaginas(10, SR, 8, (i, c) => 0.4 * Math.sin(2 * Math.PI * freqs[c >> 1] * i / SR));
+  const r = new Rekker(await Promise.all([fabriek(), fabriek(), fabriek(), fabriek()]), SR);
+  r.configureer(8);
+  ok('vier modules, acht kanalen: per paar een stretcher', r.groepen === 4 && r.perGroep === 2 && r.uit.length === 8);
+  r.zet(seg(2, 1.07, { rek: { keylock: true, toon: 0, stems: stToon } }), false, 0, SR);
+  const uit = draai(r, bv(st, { stride: 8 }), 0, 3);
+  const gemeten = [0, 2, 4, 6].map((c) => freq(uit[c], SR, 3 * SR));
+  const verwacht = freqs.map((f, k) => f * 2 ** (stToon[k] / 12));
+  // Verschoven binnen 5 cent (zoals de toon van de track, §2), onverschoven binnen 1.
+  ok('elk paar op zijn eigen toon: 220 · 660 · 330 · 824 Hz (0, +12, −5, +7 halve tonen, keylock 1,07)',
+    gemeten.every((f, k) => Math.abs(cent(f, verwacht[k])) < (stToon[k] ? 5 : 1)), gemeten.map((f) => f.toFixed(1)).join(', '));
+  // Samen blijven: klikken op alle paren tegelijk, drie paren verschoven, één niet.
+  const kl = maakPaginas(20, SR, 8, (i) => (i % (KLIK_ELKE * SR) < 24 ? 0.9 : 0));
+  const r2 = new Rekker(await Promise.all([fabriek(), fabriek(), fabriek(), fabriek()]), SR);
+  r2.configureer(8);
+  r2.zet(seg(3.21, 1, { rek: { keylock: true, toon: 0, stems: [0, 7, -7, 12] } }), false, 0, SR);
+  const u2 = draai(r2, bv(kl, { stride: 8 }), 0, 8);
+  const per = [0, 2, 4, 6].map((c) => klikken(u2[c], 0, 0.15).filter((x) => x > r2.geldig + 0.05));
+  const n = Math.min(...per.map((t) => t.length));
+  let max = 0;
+  for (let k = 1; k < 4; k++) for (let i = 0; i < n; i++) max = Math.max(max, Math.abs(per[k][i] - per[0][i]));
+  ok('de stems blijven samen: elke klik van een verschoven stem binnen 1 ms van de onverschoven', n >= 8 && max < 0.001,
+    `${n} klikken, grootste ${(max * 1000).toFixed(3)} ms`);
+  // Toon per stem veranderen terwijl hij speelt: geen zoekactie (geen gat).
+  const z0 = r.zoeken;
+  r.zet(seg(2 + 3 * 1.07, 1.07, { T: 3, rek: { keylock: true, toon: 0, stems: [3, 0, 0, 0] } }), false, 3, SR);
+  const u3 = draai(r, bv(st, { stride: 8 }), 3, 5);
+  const f3 = freq(u3[0], Math.round(0.5 * SR), 2 * SR);
+  ok('een andere toon voor een stem: hij loopt door zonder te zoeken', r.zoeken === z0 && Math.abs(cent(f3, 220 * 2 ** (3 / 12))) < 5,
+    `zoeken ${r.zoeken - z0}×, ${f3.toFixed(1)} Hz`);
+  // Te weinig modules (ze worden nog geladen): één stretcher met alles, geen eigen toon per stem.
+  const r4 = await nieuweRekker(8);
+  ok('één module voor acht kanalen: één groep (zonder eigen toon per stem)', r4.groepen === 1 && r4.perGroep === 8);
+  r4.voegToe([await fabriek(), await fabriek(), await fabriek()]);
+  r4.configureer(8);
+  ok('… modules erbij: opnieuw verdeeld, per paar een stretcher', r4.groepen === 4);
+  // rek.stems is null tenzij een stem een eigen toon heeft (StreamBron.zetRek).
+  ok('wilRek: ook alleen een stem met een eigen toon (zonder keylock, zonder toon)',
+    RK.wilRek({ rek: { keylock: false, toon: 0, stems: [0, 2, 0, 0] }, rem: null }) && !RK.wilRek({ rek: { keylock: false, toon: 0, stems: null }, rem: null }));
+}
+
 // ---- 7. de worklet: twee paden ---------------------------------------------------------------
 console.log('\nde worklet (stream-lezer.js, nagebouwde AudioWorkletGlobalScope)');
 globalThis.sampleRate = SR;
@@ -447,6 +493,32 @@ const sg = (d, P, R, extra = {}) => ({ T: nu(d), P, R, loop: null, speelt: true,
   const x = speel(d, 1, 0, true);
   const f = x.map((u) => freq(u, Math.round(0.3 * SR), u.length));
   ok('stems met keylock: vier uitgangen, elk zijn stem op zijn toon', f.every((v, k) => Math.abs(cent(v, freqs[k])) < 1), f.map((v) => v.toFixed(1)).join(', '));
+}
+
+{
+  // Een eigen toon per stem in de worklet: ook zonder keylock en op tempo 1 het rekpad.
+  const freqs = [220, 330, 440, 550];
+  const st = maakPaginas(10, SR, 8, (i, c) => 0.4 * Math.sin(2 * Math.PI * freqs[c >> 1] * i / SR));
+  const d = maakDeck(st, 8, 10);
+  const rek = { keylock: false, toon: 0, stems: [0, 0, 0, 12] };
+  stuur(d, sg(d, 2, 1, { rek }));
+  await totRek(d);
+  ok('de worklet laadt een stretcher per stem', d.rek.modules.length === 4 && d.rek.groepen === 4);
+  d.klok = 0;
+  stuur(d, sg(d, 2, 1, { rek }));
+  const x = speel(d, 1, 0, true);
+  const f = x.map((u) => freq(u, Math.round(0.3 * SR), u.length));
+  const verwacht = [220, 330, 440, 1100];
+  ok('stem 4 een octaaf hoger, de andere drie gewoon (tempo 1, zonder keylock)', d.inB && f.every((v, k) => Math.abs(cent(v, verwacht[k])) < (k === 3 ? 5 : 1)),
+    f.map((v) => v.toFixed(1)).join(', '));
+  // Eerst stereo (één stretcher), dan een bestand met vier stems: de rest wordt bijgeladen.
+  const e2 = maakDeck(maakPaginas(10, SR, 2, (i) => 0.4 * Math.sin(2 * Math.PI * 440 * i / SR)), 2, 10);
+  stuur(e2, sg(e2, 2, 1, { rek: KL }));
+  await totRek(e2);
+  const een = e2.rek.modules.length;
+  e2.port.onmessage({ data: { type: 'bron', duur: 10, sr: SR, kanalen: 8 } });
+  for (let i = 0; i < 200 && e2.rek.modules.length < 4; i++) await wacht(5);
+  ok('van stereo naar vier stems: de stretchers worden bijgeladen en verdeeld', een === 1 && e2.rek.modules.length === 4 && e2.rek.groepen === 4);
 }
 
 // ---- 8. de worklet-bron noemt document niet ----------------------------------------------------------

@@ -419,8 +419,9 @@ export function laadStreamModule(ctx) {
  * dan gaan alle uitgangen daarheen, en klinkt de som. Bytes per frame en
  * paginagrootte komen uit de kop.
  *
- * KEYLOCK EN TOON (docs/KEYLOCK.md, gebouwd 5 okt): zetRek({ keylock, toon })
- * geeft elk segment `rek` mee (null zonder keylock en zonder toon); de
+ * KEYLOCK EN TOON (docs/KEYLOCK.md, gebouwd 5 okt): zetRek({ keylock, toon, stems })
+ * geeft elk segment `rek` mee (null zonder keylock, zonder toon en zonder
+ * eigen toon per stem; `stems` = halve tonen per stereopaar, 6 okt); de
  * worklet speelt die door een stretcher (rek-kern.js). Elk segment heeft
  * daarom zeven velden in vaste volgorde (_maak): één vorm voor de worklet.
  * Met rek wordt een SPRONG (start terwijl hij speelt, play, hotcue, seek)
@@ -449,7 +450,7 @@ export class StreamBron {
     this.fouten = 0;
     this._timer = null;
     this._generatie = 0;            // oude antwoorden na een nieuwe laad() negeren
-    this.rek = null;                // { keylock, toon } of null (zie KEYLOCK EN TOON)
+    this.rek = null;                // { keylock, toon, stems } of null (zie KEYLOCK EN TOON)
     this._vorig = null;             // wat er speelt tot een geplande sprong met keylock (seg.T)
     this._opMaat = false;           // het wachtende segment is een start op de maat (wachtTot)
     this._uitLat = null;            // uitvoerlatentie van de stretcher (frames), van de worklet
@@ -461,6 +462,8 @@ export class StreamBron {
   get keylock() { return !!this.rek?.keylock; }
   /** Toonverschuiving in halve tonen (ook zonder keylock, K8). */
   get toon() { return this.rek?.toon ?? 0; }
+  /** Halve tonen per stereopaar (een eigen toon per stem), of null. */
+  get stemToon() { return this.rek?.stems ?? null; }
   get duur() { return this.bestand ? this.bestand.duur : 0; }
   /** Kanalen van wat er geladen is: 2 (stereo), 4 of 8 (stems als paren); 0 als er niets is. */
   get kanalen() { return this.bestand ? this.bestand.kop.kanalen : 0; }
@@ -507,10 +510,15 @@ export class StreamBron {
    * speelt door vanaf waar hij is (T = nu), of het wachtende segment krijgt
    * hem mee. Tijdens een rem pas na de rem (een rem zakt in toon, zoals vinyl).
    */
-  zetRek({ keylock = this.keylock, toon = this.toon } = {}) {
+  zetRek({ keylock = this.keylock, toon = this.toon, stems = this.stemToon } = {}) {
     const t = Number.isFinite(toon) ? toon : 0;
-    const rek = keylock || t ? { keylock: !!keylock, toon: t } : null;
-    if ((rek === null) === (this.rek === null) && (!rek || (rek.keylock === this.rek.keylock && rek.toon === this.rek.toon))) return;
+    // Per paar; alleen als er een stem met een eigen toon is (anders null: één vorm minder om te vergelijken).
+    const st = Array.isArray(stems) && stems.some((x) => Number.isFinite(x) && x !== 0)
+      ? Object.freeze(stems.map((x) => (Number.isFinite(x) ? x : 0))) : null;
+    const rek = keylock || t || st ? { keylock: !!keylock, toon: t, stems: st } : null;
+    const zelfde = (a, b) => a === b || (!!a && !!b && a.length === b.length && a.every((x, i) => x === b[i]));
+    if ((rek === null) === (this.rek === null)
+      && (!rek || (rek.keylock === this.rek.keylock && rek.toon === this.rek.toon && zelfde(rek.stems, this.rek.stems)))) return;
     this.rek = rek;
     if (!this.bestand) return;
     this._remAfAlsStil();
