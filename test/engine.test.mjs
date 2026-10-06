@@ -2970,6 +2970,30 @@ console.log('\ntransport');
       hOpDeEen && Math.abs(dG.position - 16) < 1e-9);
     NOW = 1001.1;
     ok('… en dan hoor je ze ook', dM.sectieHier === 3 && dG.sectieHier === 2);
+
+    // Review 6 okt: de server bewaart elk begin afgerond op 0,1 ms. Ligt het net NA de
+    // "1" (hier 0,04 ms), dan deed in de laatste maat ervóór de eerste shift+E niets
+    // (een sprong naar dezelfde plek) en landde shift+W een sectie te ver terug.
+    const afgerond = { versie: 1, opGrid: true, stukken: [0, 8.00004, 16.00004, 24.00004, 32.00004].map((van, i) => ({ van, label: 'deel', groep: 'ABCDE'[i] })) };
+    dG.stop(); dG.setSectieKaart(afgerond); NOW = 1100;
+    dG.seek(23); dG.play();                               // tel 3 van de laatste maat vóór sectie 4 (24,00004)
+    toets('KeyE', true);
+    ok('begin afgerond net na de "1": shift+E in de laatste maat ervóór gaat naar sectie 5 (23 → 31), niet nergens heen',
+      dG.sectieOpDeMaat === 4 && Math.abs(dG.position - 31) < 1e-3);
+    dG.stop(); dG.setSectieKaart(afgerond); dG.seek(23); dG.play();   // opnieuw: zonder de sprong van net
+    toets('KeyW', true);
+    ok('… en shift+W daar naar sectie 3 (23 → 15), niet naar sectie 2', dG.sectieOpDeMaat === 2 && Math.abs(dG.position - 15) < 1e-3);
+
+    // Aan het eind geen stille weigering (Clay, 5 okt): een melding, en de speelkop blijft.
+    const nE = meldingen.length;
+    dG.stop(); dG.seek(33); dG.play();                    // in de laatste sectie
+    toets('KeyE', true);
+    ok('shift+E in de laatste sectie: een melding "al bij de laatste sectie (5 van 5)", geen sprong',
+      meldingen.length === nE + 1 && /^track 7: al bij de laatste sectie \(5 van 5\)/.test(meldingen.at(-1)?.tekst) && Math.abs(dG.position - 33) < 1e-9);
+    dG.stop(); dG.seek(3); dG.play();
+    toets('KeyW', true);
+    ok('… en shift+W in de eerste: "al bij de eerste sectie (1 van 5)"',
+      meldingen.length === nE + 2 && /^track 7: al bij de eerste sectie \(1 van 5\)/.test(meldingen.at(-1)?.tekst) && Math.abs(dG.position - 3) < 1e-9);
     dG.stop(); dM.stop(); dG.setSectieKaart(null); dM.setSectieKaart(null);
   }
   const nieuw = ['track.7.beatjump.back', 'track.7.beatjump.fwd', 'track.7.beatjump.halve', 'track.7.beatjump.double',

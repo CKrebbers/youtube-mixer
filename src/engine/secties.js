@@ -21,6 +21,13 @@ export const LABEL_TEKST = { intro: 'intro', opbouw: 'opbouw', drop: 'drop', bre
 export const GROEP_KLEUREN = ['#4fd1c5', '#f6ad55', '#b794f4', '#68d391', '#fc8181', '#63b3ed', '#f6e05e', '#ed64a6'];
 export const groepKleur = (groep) => GROEP_KLEUREN[(String(groep).charCodeAt(0) - 65 + GROEP_KLEUREN.length * 4) % GROEP_KLEUREN.length];
 
+/**
+ * Seconden: hoe ver een sectiebegin na t mag liggen en toch al "hier" is (index).
+ * Ruim boven de afronding van de server (0,05 ms), en 1 ms te vroeg is onhoorbaar
+ * (het lampje van de sectie die je hoort, sectieHier).
+ */
+const BEGIN_MARGE = 1e-3;
+
 export class SectieKaart {
   /** @param {any} data  de kaart als JSON (zie boven) */
   constructor(data) {
@@ -51,14 +58,20 @@ export class SectieKaart {
   /** Einde van sectie i: het begin van de volgende, of `duur`. */
   eind(i, duur) { return i + 1 < this.stukken.length ? this.stukken[i + 1].van : duur; }
 
-  /** De sectie op tracktijd t (index), of −1 zonder stukken. */
+  /**
+   * De sectie op tracktijd t (index), of −1 zonder stukken. Een begin tot
+   * BEGIN_MARGE na t telt al mee: de server bewaart elk begin afgerond op 0,1 ms,
+   * en ligt dat net NA de "1" van het grid, dan hoort die "1" toch bij de nieuwe
+   * sectie (anders deed "volgende" in de laatste maat ervóór niets, en sprong
+   * "vorige" een sectie te ver terug).
+   */
   index(t) {
     const s = this.stukken;
     if (!s.length) return -1;
     let lo = 0, hi = s.length - 1;
     while (lo < hi) {
       const m = (lo + hi + 1) >> 1;
-      if (s[m].van <= t + 1e-6) lo = m; else hi = m - 1;
+      if (s[m].van <= t + BEGIN_MARGE) lo = m; else hi = m - 1;
     }
     return lo;
   }

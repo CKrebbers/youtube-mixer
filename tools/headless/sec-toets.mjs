@@ -236,6 +236,49 @@ async function doorloop() {
   ok('elke sprong was doorlopend (fasebehoudend, geen gat)', await evalueer('window.__sprongen.length === 4 && window.__sprongen.every((x) => x.doorlopend)'),
     String(await evalueer('window.__sprongen.length')));
 
+  // Review 6 okt: de server bewaart elk begin afgerond op 0,1 ms. Ligt het net NA de
+  // "1", dan deed in de laatste maat ervóór "volgende" niets en sprong "vorige" een
+  // sectie te ver terug. Dus: tel 3 van de laatste maat vóór een grens, beide kanten op.
+  console.log('\nde laatste maat vóór een grens (begins zoals de server ze afrondt)');
+  const grenzen = await evalueer(`(() => { const d = ${deck('A')}, g = d.grid;
+    return d.sectieKaart.stukken.map((x) => +((x.van - g.timeOf(Math.round(g.beatAt(x.van)))) * 1e6).toFixed(1)); })()`);
+  console.log('      begin min zijn "1", in µs: ' + grenzen.map((x, k) => `${k + 1}: ${x > 0 ? '+' : ''}${x}`).join(' · '));
+  // Twee tellen vóór de "1" van sectie k (tel 3 van de maat ervóór); speelt door.
+  const plaats = async (k) => {
+    await evalueer(`(() => { const d = ${deck('A')}, g = d.grid, van = d.sectieKaart.begin(${k});
+      d.seek(g.verschuif(g.timeOf(g.volgendeVeelvoud(g.beatAt(van) - 0.01)), -2)); })()`);
+    await wacht(60);
+  };
+  for (const k of [4, 5]) {
+    const na = grenzen[k] > 0 ? 'begin net NA de "1"' : 'begin op of net vóór de "1"';
+    await plaats(k);
+    ok(`tel 3 van de laatste maat vóór sectie ${k + 1} (${na}): op de maat is het al sectie ${k + 1}`, await opDeMaat('A') === k, String(await opDeMaat('A')));
+    await toets('KeyE', true);
+    ok(`… shift+E gaat naar sectie ${k + 2}`, await totdat(`${deck('A')}.sectieOpDeMaat === ${k + 1}`, 1500), String(await opDeMaat('A')));
+    const v = await sprongOpDeMaat('A', k + 1);
+    ok('… op de maat', v.ok, JSON.stringify(v));
+    await plaats(k);
+    await toets('KeyW', true);
+    ok(`… en shift+W daar gaat naar sectie ${k} (niet ${k - 1})`, await totdat(`${deck('A')}.sectieOpDeMaat === ${k - 1}`, 1500), String(await opDeMaat('A')));
+    const t = await sprongOpDeMaat('A', k - 1);
+    ok('… op de maat', t.ok, JSON.stringify(t));
+  }
+
+  console.log('\naan het eind: een melding, geen stille weigering');
+  const n = await evalueer(`${deck('A')}.sectieKaart.aantal`);
+  await plaats(n - 1);
+  let sprongen = await evalueer('window.__sprongen.length');
+  await toets('KeyE', true);
+  ok(`tel 3 vóór de laatste sectie: shift+E zegt "track 1: al bij de laatste sectie (${n} van ${n})" en springt niet`,
+    await totdat(`document.getElementById('meldingen').textContent.includes('track 1: al bij de laatste sectie (${n} van ${n})')`, 2000)
+    && await evalueer(`window.__sprongen.length === ${sprongen}`));
+  await evalueer(`${deck('A')}.seek(5)`);
+  sprongen = await evalueer('window.__sprongen.length');
+  await toets('KeyW', true);
+  ok(`in de eerste sectie: shift+W zegt "track 1: al bij de eerste sectie (1 van ${n})" en springt niet`,
+    await totdat(`document.getElementById('meldingen').textContent.includes('track 1: al bij de eerste sectie (1 van ${n})')`, 2000)
+    && await evalueer(`window.__sprongen.length === ${sprongen}`));
+
   await druk('layer.grid.secties');
   await wacht(800);
   await foto('sec-toets-spelend-1440.png');
