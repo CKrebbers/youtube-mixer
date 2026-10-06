@@ -33,6 +33,18 @@ Lees in deze volgorde:
 - Daarna leest Claude `proef/sessie.json` (in de map van de server): fout + notitie = eerst
   repareren, de antwoorden gaan naar VRAGEN.
 
+## 6 OKT: DE RIJEN SNIJDEN DE FADERS NIET MEER AF (`studio/rijen`)
+
+- **Fout:** met rijen open (stems, koptelefoon, instrument, patronen, master, auto, klankschaal)
+  scrolde main en vielen op 1440×790 de faders (al bij één rij van 54 px) en de sampler (vanaf
+  drie rijen) van het scherm; op 1920×1080 met alle rijen. **Oplossing:** de rijen staan samen in
+  `#rijen`, dat zelf scrolt; main wordt nooit lager dan zijn inhoud met de faders op 56 px
+  (`min-height:min-content`); op laptopmaat met een rij open alles iets compacter, zodat één rij
+  helemaal past; meldingen 16 px boven het rij-gebied. Past de mixer echt niet (venster lager dan
+  ~760 px), dan scrolt nu de pagina in plaats van main. Controle: `tools/headless/rijen.mjs`.
+  Niet gedaan: de bovenbalk is op 1440 px te breed (1534 px; "? toetsen" valt half en "audio starten"
+  helemaal buiten beeld, en knoppen breken af naar twee regels: de balk is 65 in plaats van 47 px hoog).
+
 ## 5 OKT (middag): STUDIO S2 EN S3 GEBOUWD, OP `studio/integratie`
 
 Clay: "headphone level is cue level rotary knob. yes instruments can be mapped on 1 of the 8

@@ -186,7 +186,7 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs: headless zonder MIDI;
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
                     hub.mjs en speelapparaten.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
@@ -493,7 +493,11 @@ docs/
   lezen hun action bij het INDRUKKEN, en loslaten gaat naar dezelfde action.
   Maat: past op 1440×900 (daar verdwenen eerst de banen achter de kolommen):
   het focusdeck houdt zijn hoogte, de banen staan in twee kolommen, faders
-  krimpen mee, onder 900 px hoogte compacter. Per kolom bovenaan resterende
+  krimpen mee, onder 900 px hoogte compacter. De rijen onder de mixer (stems …
+  klankschaal) staan samen in `#rijen`, dat zelf scrolt: main wordt nooit lager
+  dan zijn inhoud met de faders op 56 px (`min-height:min-content`), dus faders
+  en sampler blijven heel met welke rijen ook open (6 okt, `tools/headless/rijen.mjs`).
+  Een nieuwe rij hoort in `#rijen`. Per kolom bovenaan resterende
   tijd (14 px, rood onder 30 s als hij speelt) en BPM, groot genoeg voor de
   zaal. Labels ≥ 11 px. APC-knopnamen alleen in de KOPPELMODUS (anders ruis).
   MAAT-badge zegt "(stil)" als de maatgever stilstaat; hotcues overal geel met
