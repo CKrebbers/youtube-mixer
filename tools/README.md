@@ -221,6 +221,19 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`, standaard 8792/9338). De app start niet: een kaal document
   van de eigen server importeert `/src/vormen/`. Exit 1 als een systeem gooit.
 
+- Secties verweven (6 okt, docs/SECTIES.md §7). Allemaal met het synthetische nummer, nep-yt-dlp/-stems,
+  een eigen server en tmp-map (ook VARVE_PATRONEN en VARVE_PLANNEN), geen MIDI; poorten via
+  `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`, nooit 8777/7700:
+  - `secties.mjs` (8794/9340) — binnenhalen, laden, kaart, strook, modus SECTIES, pads, sprong, loop;
+  - `sec-toets.mjs` (8907/9507) — shift+W/E/I/O op de maat, de helpkaart, meldingen aan de randen;
+  - `sec-sampler.mjs` (8909/9509) — rij 3: een hele sectie in een pad, start op de "1", grenzen;
+  - `sec-plan.mjs` (8903/9503) — banden in de strook, in/uit kiezen, opslaan, `kent`, het moment van de planner;
+  - `sec-log.mjs` (8905/9505) — opnemen en terugspelen met sectiedrukken, afwijking in ms;
+  - `sec-auto.mjs` (8901/9501) — uit op de outro, in op de intro, stilte op de master;
+  - `sec-vorm.mjs` (8911/9511) — `sectie.nieuw`/`sectie.energie` op de grens, accent op de puls;
+  - `sec-controle.mjs` (8913/9513) — de telling in de servertegel, 404/500/trage server;
+  - `sec-maschine.mjs` (8915/9515, echte hub op 7715 met `opname: false`) — SCENE, pads als HID, scherm bit voor bit.
+
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen
 nummers. Ontwerp en uitkomst: `docs/KEYLOCK.md`. Leest alleen `media/<id>/audio.wav` en
