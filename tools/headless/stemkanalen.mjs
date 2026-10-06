@@ -66,7 +66,7 @@ async function startServer(wortel) {
   const s = spawn(process.execPath, [join(wortel, 'server/index.js')], {
     cwd: wortel,
     env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, `lib-${Date.now()}.db`), VARVE_MEDIA: join(tmp, 'media'),
-      VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_HERANALYSE: 'uit' },
+      VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_HERANALYSE: 'uit' },
     stdio: 'ignore',
   });
   for (let i = 0; i < 60; i++) { if (await fetch(`http://localhost:${POORT}/`).then((r) => r.ok).catch(() => false)) return s; await wacht(200); }

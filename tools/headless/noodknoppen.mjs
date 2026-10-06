@@ -48,7 +48,7 @@ const ok = (naam, cond, extra = '') => { uitkomst.push([naam, !!cond]); console.
 
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
-    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_HERANALYSE: 'uit' },
+    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_HERANALYSE: 'uit' },
   stdio: 'ignore',
 });
 const chrome = spawn(zoekChrome(), [`--remote-debugging-port=${DEBUG}`, `--user-data-dir=${join(tmp, 'profiel')}`,

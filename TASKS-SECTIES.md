@@ -183,7 +183,11 @@ Eindstand staat in HANDOFF.
 
 ## Gevonden onderweg (verweven)
 - `controle.test` controleerde alleen vraagcodes van 1–2 letters (SVT1 glipte erdoor): nu 1–3.
-- Headless sec-proeven lazen `patronen/` van de worktree; in `sintegratie` is dat de map van de echte mixer.
+- Headless-proeven zonder `VARVE_PATRONEN` lazen en schreven `patronen/` van de worktree; in `sintegratie` is dat
+  de map van de echte mixer. De eindronde (7 okt 01:32, `hub.mjs`) zette daar één knop van instrument 1 van 0,5
+  op 0,503; teruggezet uit `.versies/` (bytes gelijk). Nu zetten ALLE headless-proeven een eigen patronen- en
+  plannenmap. Niet van mij te herleiden: 13 schrijfacties op 6 okt 22:31–22:32 (instrument 1 schaal → drums,
+  noten op stap 5–7); Clay's set van daarvóór staat in `patronen/.versies/set/2026-10-06T20-31-07-…json`.
 - `tools/headless/speelapparaten.mjs` en `hub.mjs` startten de hub zonder `opname: false` en namen op in
   `~/Movies/varve-avonden` (zes mapjes van 8 KB, 5 okt 09:54 en 6 okt 14:18): nu niet meer.
 - `vorm-maat.mjs` was al rood (limiter-vooruitblik), `tools/headless/plan.mjs` faalde door een meldingstimer:

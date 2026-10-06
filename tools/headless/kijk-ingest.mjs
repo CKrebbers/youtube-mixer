@@ -38,7 +38,7 @@ const nepYtdlp = maakNepYtdlp(tmp), nepLog = join(tmp, 'nep.log');
 // Een functie: aan het eind wordt de server herstart (zelfde poort, database en media).
 const startServer = () => spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
-    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_HERANALYSE: 'uit',
+    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_HERANALYSE: 'uit',
     // Een trage download duurt 25 × 1,2 s: headless (swiftshader, drukke machine)
     // is traag, en er moet tijd zijn om hem te annuleren.
     VARVE_YTDLP: nepYtdlp, NEP_LOG: nepLog, NEP_BRON: bron, NEP_TRAAG_MS: '1200' },
