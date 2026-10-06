@@ -188,8 +188,8 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
-                    hub.mjs en speelapparaten.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
+                    hub.mjs, speelapparaten.mjs en sec-maschine.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
@@ -264,6 +264,8 @@ test/
   sec-sampler.test.mjs  een sectie in een sampler-pad: knipSectie, start op de "1", herankeren (ook keylock), grenzen, meldingen
   secties-log.test.mjs  secties in het handelingenlog: kaart in de stand, `van` bij een druk, volgorde, precies terugspelen
   auto-secties.test.mjs  auto-DJ met secties: fragment/planMoment/momentArgs, terugvinden, wachten op de kaart, OVERNEEM, langer/nu, zonder kaart identiek
+  sec-maschine.test.mjs  secties en loops: sectieHier na het rondgaan, sectieOpDeMaat in een loop, de melding, de Maschine
+  sec-controle.test.mjs  sectieTelling (zelfde regel als moetSecties, cache per rij, ROLLBACK), /api/secties, de tegel
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -1533,6 +1535,11 @@ Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag mis
   mapping met `{plek}` (= de gekozen plek van de speeltrack). Live opnemen gaat vanzelf: de pads
   spelen via noten.js. Een pad laat los waar hij indrukte, ook na een moduswissel (`padVast`).
   Headless: `VARVE_PATRONEN` naar een tijdelijke map, anders schrijft de testserver `patronen/set.json`.
+- Secties op de Maschine (`docs/MASCHINE.md` §5b, 6 okt): SCENE = padmodus secties, de 16 pads = de secties
+  van de FOCUS-track (groep A–H), pad = `track.N.section.K` via `invoke` (dus log en auto-DJ zien het), ◄ ►
+  bladert boven de 16, kleuren uit de read zoals de APC, links op het scherm wat je hoort + een 4×4-raster.
+  Eén padmodus tegelijk (STEP, SCENE). De hub in een headless-proef altijd met `opname: false`: de echte
+  config heeft een `avondmap`.
 - Toetsen: `node test/maschine.test.mjs`, `node test/hub.test.mjs`, en headless
   `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
   HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een
@@ -1579,6 +1586,10 @@ Volledig in `docs/SECTIES.md`, vragen in VRAGEN blok SE. Wat een bouwer niet mag
     overgang verandert nooit. `momentArgs` (planner.js) is DE rekenregel voor automaat én planvenster: geef
     planMoment nooit losse argumenten. `vindSectie`: dezelfde label+groep, het dichtst bij de tijd van toen
     (binnen `SECTIE_SPELING` 30 s, anders wint `van`).
+  - Loops: `sectieHier` vouwt wat je hoort terug in de loop (anders 1–40 ms de vorige sectie na het
+    rondgaan), en `sectieOpDeMaat` geeft in de laatste maat van een loop wat er NA het rondgaan komt.
+  - Controlekamer: `Library.sectieTelling()` gebruikt dezelfde helpers als `moetSecties`; verander je die
+    regel, verander hem op één plek (sec-controle.test vergelijkt ze).
   - Headless: elke `tools/headless/sec-*.mjs` zet VARVE_PATRONEN en VARVE_PLANNEN op zijn tmp-map. Anders
     leest de proefserver `patronen/` van de worktree, en in `sintegratie` is dat de map van de echte mixer.
 

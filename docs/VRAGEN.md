@@ -414,7 +414,7 @@ APC-indeling (voorstel A):
 
 ## SV. Secties verweven (6 okt, avond; docs/SECTIES.md §7)
 
-De secties zitten nu ook in het toetsenbord, de sampler, het planvenster, het handelingenlog en de auto-DJ.
+De secties zitten nu ook in het toetsenbord, de sampler, het planvenster, het handelingenlog, de auto-DJ, de Controlekamer en de Maschine.
 Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 
 **Toetsenbord** (speellijst "Secties op het toetsenbord")
@@ -448,6 +448,17 @@ Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 - [ ] **SVA3. Secties ook bij beatloos overvloeien op een onzeker grid?** 💬 Nu alleen op een zeker grid; in jouw library (overvloeien is de hoofdroute) doen ze bij het uitmixen dus bijna niets. **Advies:** ja, maar pas als SE2 laat zien dat de grenzen op onzekere grids kloppen.
 - [ ] **SVA4. langer en nu naar de volgende sectiegrens?** 🎛 langer = volgende grens binnen 16 maten (anders 8), nu = volgende grens binnen 8 maten (anders de eerstvolgende 4); beatloos blijft nu meteen. **Advies:** zo laten.
 - [ ] **SVA5. Een sectie drukken terwijl de volgende klaarstaat.** 🎛 Op wat nu klinkt: springt hij echt, dan plant hij opnieuw vanaf de nieuwe plek (geen overname); past de overgang daar niet meer vóór het einde, dan loopt hij vanaf waar je bent, zoals na een seek. Een druk die niets doet (geen sectie, loop om de sectie waar je al bent) verandert niets. Op de klaarstaande track: overname, zoals seek en hotcue. Alternatief: die sectie wordt het nieuwe beginpunt en de automaat mixt door. **Advies:** zo laten; het alternatief als je het mist.
+
+
+**Controlekamer** (speellijst "Avond 1 · Secties")
+- [ ] **SVC1. Secties meteen na het binnenhalen uitrekenen?** 💬 Nu krijgt een nieuw nummer pas secties als je het laadt (het laden wacht dan ~0,3–1 s op de server) of na een herstart van de server (de achtergrond). Tot dan staat het in de Controlekamer als "nog zonder". Na een split in stems of een ander grid staat de kaart als "verouderd" tot je het nummer laadt. Meteen rekenen, achter grid en toonsoort in de worker, kost de server ~1 s per nummer terwijl je mixt. **Advies:** ja, na het binnenhalen en na een split; dan hoeft het laden nooit te wachten.
+
+**Maschine** (speellijst "Secties op de Maschine")
+- [ ] **SVM1. De pads in de modus secties zijn de secties van de FOCUS-track?** 🎛 Groep A–H kiest de track, net als Track Select op de APC (SE3). De speeltrack kan niet: die heeft altijd een instrument en dus geen secties. **Advies:** zo laten.
+- [ ] **SVM2. Kleuren zoals op de APC: wit = die hoor je, donker hemelsblauw = er is een sectie, uit = geen?** 👀 De Maschine kan niet knipperen op de tel. De sectie waar je heen springt licht pas op bij de "1"; tot dan zegt het scherm "op de 1: …". **Advies:** eerst zo. Groepskleuren volgen SE4, dan op beide controllers tegelijk.
+- [ ] **SVM3. SHIFT + pad = die sectie als loop, zoals op de APC?** 💬 Niet gebouwd (niet gevraagd). De action `track.N.section.K.loop` bestaat al op de bus. **Advies:** ja, als je het op de APC gebruikt; het is een kleine stap.
+- [ ] **SVM4. Meer dan 16 secties: bladeren met ◄ ► (transport)?** 🎛 Bij een andere focus-track begint hij op de bladzijde met de sectie die je hoort; daarna loopt de bladzijde niet mee, dus de pads verspringen nooit onder je vingers. De kop noemt altijd wat je hoort, ook boven de 40. **Advies:** zo laten.
+- [ ] **SVM5. Het linkerscherm: de namen in een raster zoals de pads liggen, de sectie die je hoort omgekeerd, de kop groot?** 👀 Letters 5×7 in kolommen van 64 px; een naam is hooguit 8 tekens ("opbouw B"). **Advies:** op het echte toestel kijken; is het te klein, dan minder tekst en grotere letters.
 
 ---
 
