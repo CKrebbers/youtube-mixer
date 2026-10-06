@@ -409,7 +409,11 @@ console.log('\nde sectie naar de hub (PROTOCOL §18)');
   // Een deck zoals de SectieLezer (analysis/maat.js) het leest: duck-typed, de positie op de (nep-)klok.
   const nepDeck = (stukken) => ({ playing: false, rate: 1, wacht: false, remt: false, loop: null, P0: 0, c0: 0,
     sectieKaart: stukken ? { stukken } : null,
-    get position() { return this.playing ? this.P0 + (nu / 1000 - this.c0) * this.rate : this.P0; } });
+    get position() {
+      if (!this.playing) return this.P0;
+      const p = this.P0 + (nu / 1000 - this.c0) * this.rate, l = this.loop;   // een loop: de positie blijft in [start, end)
+      return l && p >= l.end ? l.start + ((p - l.start) % (l.end - l.start)) : p;
+    } });
   const deck = nepDeck(ST);
   const speel = (d, vanaf) => { d.P0 = vanaf ?? d.position; d.c0 = nu / 1000; d.playing = true; };
   const pauze = (d) => { d.P0 = d.position; d.playing = false; };
@@ -570,6 +574,222 @@ console.log('\nde sectie naar de hub (PROTOCOL §18)');
     bron?.deck() === dA && Math.abs(bron.vertraging() - 0.025) < 1e-12 && bron.tijd() === 12.5);
   fader.A = 0;
   ok('… met de fader dicht hoor je hem niet: geen deck (dus geen sectie)', bron?.deck() === null);
+
+  // ---- review sec-hub (7 okt) --------------------------------------------------------
+  console.log('\nde sectie naar de hub: review (vertraging, loops, tempo, wissel, cut, sprong)');
+  const sprong = (d, T) => { d.P0 = T; d.c0 = nu / 1000; };
+  const maakHub = async (bron) => {
+    const h = new HubMidi({ url: 'ws://hub.test/app', invoke, read, WS: NepWS, klok: () => nu, secties: bron });
+    await h.init();
+    const s = laatste();
+    s.open();
+    return { h, s };
+  };
+  const sinds = (ws, n) => sec(ws).slice(n);
+
+  // 1. De vertraging wordt groter (ander uitgangsapparaat, de limiter): t = klok − V loopt terug. Geen valse
+  //    nieuwe sectie (energie 0) en geen dip.
+  {
+    const d = nepDeck(ST);
+    let v = 0.04;
+    const { h, s } = await maakHub({ deck: () => (d.playing ? d : null), vertraging: () => v, tijd: () => nu / 1000 });
+    speel(d, 0);
+    vooruit(6000);                                                  // in de opbouw (4–8), ver van een grens
+    const n0 = sec(s).length;
+    v = 0.1;
+    vooruit(1500);
+    ok(`vertraging 60 ms groter midden in een sectie: niets naar de hub (geen valse nieuw, geen dip) (${JSON.stringify(sinds(s, n0).map((x) => x.b.waarden))})`,
+      sinds(s, n0).length === 0);
+    h.stop();
+    // currentTime in blokken van 512 frames (zoals Chrome), 8 ms meer vertraging tussen een berichtlezing en de tik.
+    const blok = 512 / 48000;
+    const d2 = nepDeck(ST);
+    let v2 = 0.04;
+    const { h: h2, s: s2 } = await maakHub({ deck: () => (d2.playing ? d2 : null), vertraging: () => v2, tijd: () => Math.floor(nu / 1000 / blok) * blok });
+    speel(d2, 0);
+    vooruit(5000);
+    const tik = Math.min(...rij.map((x) => x.op));
+    vooruit(Math.max(0, tik - nu - 1));
+    const m0 = sec(s2).length;
+    s2.krijg({ t: 'globaal', waarden: { adem: 0.5 } });
+    v2 = 0.048;
+    vooruit(1500);
+    ok(`8 ms meer vertraging tussen een berichtlezing en de tik: niets naar de hub (${JSON.stringify(sinds(s2, m0).map((x) => x.b.waarden))})`, sinds(s2, m0).length === 0);
+    h2.stop();
+  }
+
+  // 2. Een korte loop of stutter op de "1" van een sectie: één nieuwe sectie, niet één per rondgang (stroboscoop).
+  for (const tellen of [1, 0.125]) {
+    const d = nepDeck(ST);
+    const { h, s } = await maakHub({ deck: () => (d.playing ? d : null), vertraging: () => 0.02, tijd: () => nu / 1000 });
+    speel(d, 7);
+    vooruit(1100);                                                  // je hoort de drop (8): één nieuw
+    d.loop = { start: 8, end: 8 + tellen * 60 / 124 };
+    const n0 = nieuwe(s).length;
+    for (let i = 0; i < 40; i++) { vooruit(100); s.krijg({ t: 'globaal', waarden: { adem: i / 40 } }); }
+    ok(`loop van ${tellen} tel op de "1" van de drop, 4 s: geen nieuwe sectie per rondgang (${nieuwe(s).length - n0} erbij), hooguit ${perS(sec(s))} globaal per seconde`,
+      nieuwe(s).length === 1 && n0 === 1 && perS(sec(s)) <= 10);
+    h.stop();
+  }
+  {
+    const d = nepDeck(ST);
+    const { h, s } = await maakHub({ deck: () => (d.playing ? d : null), vertraging: () => 0.02, tijd: () => nu / 1000 });
+    speel(d, 6);
+    vooruit(500);
+    for (let i = 0; i < 7; i++) { sprong(d, 8); vooruit(150); }   // snel tikken op een hotcue op de drop
+    vooruit(500);
+    ok(`hotcue-stutter op het begin van de drop (7 tikken in 1 s): één nieuwe sectie (${nieuwe(s).length})`, nieuwe(s).length === 1);
+    // Het vangnet: hooguit één nieuw per seconde, ook bij twee echte grenzen vlak na elkaar.
+    vooruit(2000);
+    const n0 = nieuwe(s).length, g0 = sec(s).length;
+    sprong(d, 8); vooruit(300); sprong(d, 12); vooruit(1000);
+    const na = sinds(s, g0);
+    ok(`twee sprongen naar een sectiebegin binnen 0,3 s: één nieuw (${nieuwe(s).length - n0}), daarna label en energie van de break zonder nieuw`,
+      nieuwe(s).length - n0 === 1 && w(na.at(-1), 'label') === 'break' && w(na.at(-1), 'energie') === 0.35 && w(na.at(-1), 'nieuw') === undefined);
+    h.stop();
+  }
+
+  // 3. Een nieuwe sectie tijdens het glijden (spelen vanuit een pauze, 0,5 s vóór de drop): de nieuw gaat
+  //    ALTIJD meteen, en telt mee in de 10 per seconde (schuivend venster).
+  {
+    let max = 0, laatMax = 0, mis = 0;
+    for (let off = 0; off < 100; off += 7) {
+      const d = nepDeck(ST);
+      const { h, s } = await maakHub({ deck: () => (d.playing ? d : null), vertraging: () => 0.02, tijd: () => nu / 1000 });
+      vooruit(off);
+      speel(d, 7.5);
+      const grensOp = (d.c0 + 0.5 + 0.02) * 1000;
+      vooruit(3000);
+      const n = nieuwe(s);
+      if (n.length !== 1) mis++;
+      else laatMax = Math.max(laatMax, n[0].t - grensOp);
+      max = Math.max(max, perS(sec(s)));
+      h.stop();
+    }
+    ok(`een grens tijdens het glijden, 15 keer met een andere fase: altijd precies één nieuw (${mis} keer niet), meteen (hooguit ${laatMax.toFixed(1)} ms na het horen), hooguit ${max} globaal per seconde (de nieuw telt mee)`,
+      mis === 0 && laatMax <= 5 && max <= 10);
+  }
+
+  // 4. A stopt en B start op zijn cue (de drop), in dezelfde lezing: één nieuw, en geen "opbouw" ertussen.
+  for (const lezing of [null, 25]) {
+    const A = nepDeck(ST), B = nepDeck(ST);
+    let mg = A;
+    const { h, s } = await maakHub({ deck: () => (mg?.playing ? mg : null), vertraging: () => 0.04, tijd: () => nu / 1000 });
+    speel(A, 13);
+    vooruit(3000);
+    const g0 = sec(s).length;
+    pauze(A); speel(B, 8); mg = B;
+    if (lezing) { vooruit(lezing); s.krijg({ t: 'globaal', waarden: { adem: 0.3 } }); }
+    vooruit(2000);
+    const na = sinds(s, g0);
+    ok(`A stopt, B start op de drop${lezing ? `, een lezing na ${lezing} ms` : ''}: één nieuw met label drop, geen opbouw (${na.map((x) => w(x, 'label') ?? '·').join(' ')})`,
+      na.filter((x) => w(x, 'nieuw') === true).length === 1 && w(na[0], 'nieuw') === true && w(na[0], 'label') === 'drop' && !na.some((x) => w(x, 'label') === 'opbouw'));
+    h.stop();
+  }
+
+  // 5. De nieuw draagt de energie van de sectie zelf (niet die van het glijden), en de hub-energie glijdt
+  //    daarna niet meer omhoog vanaf de oude waarde.
+  {
+    const d = nepDeck(ST);
+    const { h, s } = await maakHub({ deck: () => (d.playing ? d : null), vertraging: () => 0.04, tijd: () => nu / 1000 });
+    speel(d, 13); vooruit(3000); pauze(d); vooruit(3000);           // break, dan pauze: energie 0
+    const g0 = sec(s).length;
+    d.P0 = 8; speel(d, 8); vooruit(2000);
+    const na = sinds(s, g0);
+    ok(`uit pauze, cue op de drop: de nieuw draagt 0,9 (de drop), daarna geen energie die van onderen opglijdt (${na.map((x) => w(x, 'energie')).join(' ')})`,
+      na.length === 1 && w(na[0], 'nieuw') === true && w(na[0], 'energie') === 0.9);
+    h.stop();
+  }
+
+  // 6. Een cut in de mix: ~250 ms geen maatgever (de hysterese) terwijl de muziek doorspeelt. De energie blijft;
+  //    pas na een halve seconde zonder maatgever (pauze) glijdt hij naar 0.
+  {
+    const d = nepDeck(ST);
+    let weg = false;
+    const { h, s } = await maakHub({ deck: () => (d.playing && !weg ? d : null), vertraging: () => 0.04, tijd: () => nu / 1000 });
+    speel(d, 8.05); vooruit(2500);                                  // de drop (8–12), na het opglijden
+    const g0 = sec(s).length;
+    weg = true; vooruit(250); weg = false; vooruit(1000);
+    ok(`250 ms geen maatgever (een cut): niets naar de hub, de energie blijft 0,9 (${JSON.stringify(sinds(s, g0).map((x) => x.b.waarden))})`, sinds(s, g0).length === 0);
+    const g1 = sec(s).length, t0 = nu;
+    pauze(d); vooruit(3000);
+    const p = sinds(s, g1);
+    ok(`pauze: de energie blijft eerst een halve seconde staan (eerste bericht na ${p[0] ? p[0].t - t0 : '?'} ms), dan naar 0 (${p.map((x) => w(x, 'energie')).join(' ')})`,
+      p.length >= 2 && p[0].t - t0 >= 450 && w(p.at(-1), 'energie') === 0);
+    h.stop();
+  }
+
+  // 7. Een sprong (hotcue, section.K): met een seintje van de deck (bij) lezen we meteen, dus de nieuw komt
+  //    op het moment dat je de sprong hoort (V later), niet tot 50 ms daarna.
+  {
+    const d = nepDeck(ST);
+    const luisteraars = new Set();
+    const V2 = 0.04;
+    const { h, s } = await maakHub({ deck: () => (d.playing ? d : null), vertraging: () => V2, tijd: () => nu / 1000,
+      bij: (fn) => { luisteraars.add(fn); return () => luisteraars.delete(fn); } });
+    speel(d, 8.5); vooruit(3000);                                   // midden in de drop
+    let laatst = 0;
+    for (let k = 0; k < 6; k++) {
+      vooruit(13 + 7 * k);                                          // een andere fase t.o.v. de tik
+      const n0 = nieuwe(s).length, druk = nu;
+      sprong(d, k % 2 ? 8 : 12);
+      for (const fn of luisteraars) fn(d);                          // deck.emit('change')
+      vooruit(1500);
+      const n = nieuwe(s).slice(n0);
+      laatst = Math.max(laatst, n.length === 1 ? n[0].t - (druk + V2 * 1000) : Infinity);
+    }
+    ok(`een sprong op een sectiebegin met een seintje van de deck: de nieuw hooguit ${laatst.toFixed(1)} ms nadat je de sprong hoort (zonder: tot ${H.SECTIE_MS} ms)`,
+      laatst >= 0 && laatst <= 3);
+    h.stop();
+    ok('stop: het seintje van de deck is weer los', luisteraars.size === 0);
+  }
+
+  // 8. Mutaties die bleven leven (review).
+  //   M1: een grens die precies in de lezing bij het openen valt, gaat zonder nieuw mee.
+  {
+    const d = nepDeck(ST);
+    const { h, s } = await maakHub({ deck: () => (d.playing ? d : null), vertraging: () => 0.04, tijd: () => nu / 1000 });
+    speel(d, 2);
+    const grensOp = (d.c0 + 2 + 0.04) * 1000;                       // je hoort 4 (opbouw)
+    vooruit(grensOp - 1000 - nu);
+    s.close(1006);
+    const s2 = volgendeSocket();                                    // nog niet open
+    vooruit(grensOp + 0.5 - nu);
+    const g0 = h.lezer.grenzen;
+    s2.open();
+    const eerste = sec(s2)[0];
+    ok(`een grens precies in de lezing bij het openen (teller ${g0} -> ${h.lezer.grenzen}): zonder nieuw, met het nieuwe label (${JSON.stringify(eerste?.b.waarden)})`,
+      h.lezer.grenzen === g0 + 1 && w(eerste, 'nieuw') === undefined && w(eerste, 'label') === 'opbouw');
+    vooruit(1000);
+    ok('… en ook daarna geen nieuw voor die grens', nieuwe(s2).length === 0);
+    h.stop();
+  }
+  //   M16: een lange reeks wijzigingen (de maatgever wisselt steeds, de energie glijdt steeds): nooit meer dan
+  //   10 per seconde, en gewone berichten minstens GLOBAAL_MS uit elkaar.
+  {
+    const A = nepDeck(ST), B = nepDeck([{ van: 0, label: 'intro', groep: 'A', energie: 0.1 }]);
+    let mg = A;
+    const { h, s } = await maakHub({ deck: () => mg, vertraging: () => 0.02, tijd: () => nu / 1000 });
+    speel(A, 2); speel(B, 0);
+    for (let i = 0; i < 30; i++) { mg = i % 2 ? B : A; vooruit(300); }
+    const g = sec(s), gewoon = g.filter((x) => w(x, 'nieuw') === undefined);
+    let kleinst = Infinity;
+    for (let i = 1; i < gewoon.length; i++) kleinst = Math.min(kleinst, gewoon[i].t - gewoon[i - 1].t);
+    ok(`9 s lang steeds een andere maatgever (${g.length} globaal, ${nieuwe(s).length} nieuw): hooguit ${perS(g)} per seconde, gewone berichten minstens ${kleinst} ms uit elkaar`,
+      g.length > 40 && perS(g) <= 10 && kleinst >= H.GLOBAAL_MS);
+    h.stop();
+  }
+  //   M21: lezen is begrensd, ook als de hub (of een fader) een stortvloed aan berichten stuurt.
+  {
+    const d = nepDeck(ST);
+    let lezingen = 0;
+    const { h, s } = await maakHub({ deck: () => (d.playing ? d : null), vertraging: () => 0.02, tijd: () => { lezingen++; return nu / 1000; } });
+    speel(d, 4.5); vooruit(1000);
+    const l0 = lezingen;
+    for (let i = 0; i < 500; i++) { vooruit(2); s.krijg({ t: 'midi', dev: 'apc40', bytes: [0xb0, 7, i % 128] }); }
+    ok(`500 berichten in 1 s: hooguit ~50 lezingen (${lezingen - l0})`, lezingen - l0 <= 52);
+    h.stop();
+  }
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

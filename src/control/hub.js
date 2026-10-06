@@ -38,16 +38,27 @@ import { uitgangsVertraging } from '../engine/hoorbaar.js';
  * (analysis/maat.js) op de maatgever zoals je hem HOORT (`engineSecties`):
  * dezelfde lezer als de vormbron en het accent van de video-puls, dus beeld en
  * hub zien dezelfde grens.
- *   een grens die je hoort -> één {t:'globaal', waarden:{'sectie.nieuw': true, 'sectie.energie', 'sectie.label'}}
- *   verder                 -> energie (stap ≥ 0,01) en label alleen als ze anders zijn, hooguit 10×/s
+ *   een grens die je hoort -> één {t:'globaal', waarden:{'sectie.nieuw': true, 'sectie.energie', 'sectie.label'}},
+ *                             meteen, met de energie van de sectie zelf; hooguit één per seconde
+ *   verder                 -> energie (stap ≥ 0,01) en label alleen als ze anders zijn
+ *   alles samen            -> hooguit 10 per seconde (schuivend venster); een nieuwe sectie gaat
+ *                             altijd voor, gewone berichten wachten
  *   (her)verbinden         -> na hallo/manifest/staat de sectie van nu, ZONDER nieuw
- *   pauze (geen maatgever) -> de energie glijdt naar 0 (zoals in beeld); het label blijft staan
- * Lezen: elke SECTIE_MS, met een wekker op de volgende grens (op de voorgrond
- * een paar ms na het horen), en bij elk bericht van de hub: in een verborgen,
- * stil tabblad lopen timers 1×/s (na 5 min 1×/min), maar de adem van de hub
- * komt ~10×/s binnen. Een grens uit een gat van meer dan 1 s (GAT in maat.js)
- * telt niet, net als in beeld. Een hub van vóór §18 negeert `levert` en de
- * globaal (grondregel 5); een `fout` erover verandert hier niets.
+ *   pauze (geen maatgever) -> de energie blijft een halve seconde staan (een cut in de mix,
+ *                             HOUD in maat.js), glijdt dan naar 0; het label blijft staan
+ * Wat telt als nieuwe sectie beslist de lezer, voor beeld en hub gelijk: niet
+ * het rondgaan van een loop korter dan een maat en geen stutter (hetzelfde
+ * sectiebegin binnen een maat), wel een sectie-loop (≥ 1 maat), elke ronde.
+ * Lezen: elke SECTIE_MS, met een wekker op de volgende grens of op het moment
+ * dat een sprong hoorbaar wordt (op de voorgrond een paar ms na het horen),
+ * meteen als de deck zegt dat de maatgever sprong, stilviel of begon, en bij
+ * elk bericht van de hub: in een verborgen, stil tabblad lopen timers 1×/s
+ * (na 5 min 1×/min), maar de adem van de hub komt ~10×/s binnen. Een grens
+ * uit een gat van meer dan 1 s (GAT in maat.js) telt niet, net als in beeld.
+ * De tijd (audioklok − vertraging) loopt nooit terug, ook niet als de
+ * vertraging groeit (een ander uitgangsapparaat). Een hub van vóór §18
+ * negeert `levert` en de globaal (grondregel 5); een `fout` erover verandert
+ * hier niets.
  */
 
 export const APP = 'varve-dj';
@@ -72,17 +83,25 @@ const BEELD_MS = 16;   // LED's bundelen per beeld (setTimeout, geen rAF: die st
 const TIK_MS = 200;    // eigen wijzigingen terugmelden, en kijken of er een hartslag moet
 
 /**
- * De sectie (PROTOCOL §18). Elke SECTIE_MS lezen (een grens die je niet zag
- * aankomen, zoals een sprong op een sectiebegin, hooguit zo laat), en een
- * wekker vlak na de volgende grens. Op berichten van de hub hooguit elke
- * SECTIE_MIN_MS. Een globaal hooguit elke GLOBAAL_MS (10×/s), behalve een
- * nieuwe sectie: die gaat meteen. De energie alleen bij een stap van minstens
- * ENERGIE_STAP, of als hij stilvalt (het eind van een glijden, 0).
+ * De sectie (PROTOCOL §18). Elke SECTIE_MS lezen, en een wekker vlak na de
+ * volgende grens of de sprong. Op berichten van de hub (en de tik) hooguit
+ * elke SECTIE_MIN_MS. Gewone berichten minstens GLOBAAL_MS uit elkaar, en
+ * samen met de nieuwe secties hooguit GLOBAAL_PER_S per seconde. De energie
+ * alleen bij een stap van minstens ENERGIE_STAP, of als hij stilvalt (het eind
+ * van een glijden, 0).
  */
 export const SECTIE_MS = 50;
 const SECTIE_MIN_MS = 20;
 export const GLOBAAL_MS = 100;
 export const ENERGIE_STAP = 0.01;
+/**
+ * Hooguit zoveel globaal in een schuivend venster van een seconde, een nieuwe
+ * sectie meegeteld (§18: hooguit 10×/s). Een nieuwe sectie gaat altijd meteen;
+ * gewone berichten wijken: ze laten in het venster één plek over.
+ */
+export const GLOBAAL_PER_S = 10;
+/** Vangnet: hooguit één nieuwe sectie per zoveel ms (de lezer laat korte loops en stutters al weg). */
+export const NIEUW_MIN_MS = 1000;
 /** Een label neemt de hub van 1 tot 32 tekens (§18); een ander gaat niet mee (de energie wel). */
 const isLabel = (s) => typeof s === 'string' && s.length >= 1 && s.length <= 32;
 const afgerond = (e) => Math.round(e * 1000) / 1000;
@@ -97,6 +116,8 @@ export const engineSecties = (engine, ids) => ({
   deck: () => { const id = maatgever(engine, ids); return id ? engine.deck(id) : null; },
   vertraging: () => uitgangsVertraging(engine.ctx),
   tijd: () => engine.ctx.currentTime,
+  // Een seintje bij elke verandering van een deck (sprong, play, pauze, maar ook elke fader): fn(deck).
+  bij: (fn) => { const los = ids.map((id) => engine.deck(id).on('change', fn)); return () => { for (const f of los) f(); }; },
 });
 
 /**
@@ -149,9 +170,11 @@ export class HubMidi extends MidiHub {
    * @param read    (actionId) -> 0..1 of null
    * @param WS      de WebSocket-klasse (de test geeft een nep)
    * @param klok    () -> ms (de test geeft een nep-klok)
-   * @param secties null, of { deck, vertraging, tijd } (engineSecties): de sectie
+   * @param secties null, of { deck, vertraging, tijd, bij? } (engineSecties): de sectie
    *                naar de hub (PROTOCOL §18). deck() = de maatgever die je hoort of
-   *                null, vertraging() en tijd() in seconden (de audioklok).
+   *                null, vertraging() en tijd() in seconden (de audioklok), bij(fn) =
+   *                fn(deck) bij een verandering van een deck (dan lezen we meteen als
+   *                de maatgever sprong, stilviel of begon).
    */
   constructor({ url, invoke, read, WS = globalThis.WebSocket, klok = () => performance.now(), secties = null,
     inst = Math.random().toString(36).slice(2, 10) + Date.now().toString(36) }) {
@@ -170,8 +193,19 @@ export class HubMidi extends MidiHub {
     this.laatsteLabel = null;        // het laatste label dat we stuurden, ook op een vorige verbinding
     this.sectieOoit = false;         // ooit een sectie gestuurd? (een hub die ons nog kent, heeft hem bewaard)
     this.globaalUit = -Infinity;     // klok() van de laatste globaal
+    this.uitTijden = new Float64Array(GLOBAAL_PER_S - 1).fill(-Infinity);   // ring: klok() van de laatste 9 globaal
+    this.uitI = 0;                   // de oudste in de ring (de volgende die overschreven wordt)
+    this.nieuwUit = -Infinity;       // klok() van de laatste nieuwe sectie
     this.nieuwGestuurd = 0;
-    this._sectieWek = () => { this.sectieTimer = null; this.sectieOp = Infinity; this._sectie('tik'); };
+    this.sectieT = 0;                // de t van de laatste lezing: loopt nooit terug (de vertraging kan groeien)
+    this.sectieWekker = false;       // is de lopende timer een wekker (grens, sprong)? dan altijd lezen
+    this.sectieLos = null;           // het seintje van de deck weer loslaten
+    this._sectieWek = () => {
+      const wek = this.sectieWekker;
+      this.sectieTimer = null; this.sectieOp = Infinity; this.sectieWekker = false;
+      this._sectie(wek ? 'wek' : 'tik');
+    };
+    this._deckSein = (d) => { if (this.lezer.veranderd(d, this.secties.tijd())) this._sectie('sprong'); };
     this.ws = null;
     this.stap = 0;               // index in WACHT_MS
     this.focus = false;          // heeft VARVE de APC? (de hub zegt het met {t:'focus'})
@@ -227,7 +261,10 @@ export class HubMidi extends MidiHub {
     this.access.onstatechange = () => this._sync();
     this._sync();
     this.tikker = setInterval(() => this._tik(), TIK_MS);
-    this._sectie('tik');   // en dan elke SECTIE_MS (of eerder: de wekker)
+    if (this.lezer) {
+      this._sectie('open');   // de eerste lezing, en dan elke SECTIE_MS (of eerder: de wekker)
+      this.sectieLos = this.secties.bij?.(this._deckSein) ?? null;
+    }
     this._verbind();
     return true;
   }
@@ -237,6 +274,7 @@ export class HubMidi extends MidiHub {
     clearInterval(this.tikker); clearTimeout(this.herverbind); clearTimeout(this.ledTimer);
     clearTimeout(this.openTimer); clearTimeout(this.stabielTimer); clearTimeout(this.uitTikker);
     clearTimeout(this.sectieTimer);
+    this.sectieLos?.(); this.sectieLos = null;
     this.ws?.close();
   }
 
@@ -400,39 +438,55 @@ export class HubMidi extends MidiHub {
   // ---- de sectie (PROTOCOL §18) ----------------------------------------------
 
   /**
-   * De sectie lezen en zo nodig naar de hub. `bron`: 'tik' (de timer), 'bericht'
-   * (iets van de hub; hooguit elke SECTIE_MIN_MS) of 'open' (net verbonden: een
-   * grens van nu gaat dan zonder nieuw mee, zoals alles na herverbinden).
-   * Geen afval behalve het bericht zelf (de lezer maakt niets).
+   * De sectie lezen en zo nodig naar de hub. `bron`: 'tik' (de timer) of
+   * 'bericht' (iets van de hub): overslaan als we minder dan SECTIE_MIN_MS
+   * geleden lazen (een stortvloed aan berichten of faders kost zo hooguit ~50
+   * lezingen per seconde). Altijd: 'wek' (de wekker op een grens of een sprong),
+   * 'sprong' (de deck zegt dat de maatgever sprong, stilviel of begon) en 'open'
+   * (net verbonden: een grens van nu gaat dan zonder nieuw mee, zoals alles na
+   * herverbinden). Geen afval behalve het bericht zelf (de lezer maakt niets).
    */
   _sectie(bron) {
     const l = this.lezer;
     if (!l || this.gestopt) return;
     const nu = this.klok();
-    if (bron === 'bericht' && nu - this.sectieGelezen < SECTIE_MIN_MS) return;
+    if ((bron === 'tik' || bron === 'bericht') && nu - this.sectieGelezen < SECTIE_MIN_MS) {
+      if (bron === 'tik') this._planSectie(nu);
+      return;
+    }
     this.sectieGelezen = nu;
     const V = this.secties.vertraging();
-    const t = Math.max(0, this.secties.tijd() - V);
+    // t loopt nooit terug: wordt de vertraging groter (een ander uitgangsapparaat, de limiter), dan blijft
+    // t staan tot hij weer verder is. De lezer zou een stap terug anders als een nieuwe klok kunnen zien.
+    const t = Math.max(this.sectieT, this.secties.tijd() - V);
+    this.sectieT = t;
     l.stap(t, this.secties.deck(), V);
-    // Een track die net begint te spelen (play, fader open) hoor je pas na de
-    // vertraging; tot dan ligt positie min vertraging vóór zijn startpunt (een
-    // cue op de drop: nog even "opbouw"), een plek die je nooit hoort. Daarover
-    // zeggen we de hub niets; een grens die de lezer telt, gaat wel.
-    if (l.deck !== this.sectieDeck) { if (this.sectieDeck === null) this.stilTot = t + V; this.sectieDeck = l.deck; }
+    // Een track die net maatgever werd (play, een andere track, fader open) hoor je pas na de vertraging;
+    // tot dan ligt positie min vertraging vóór zijn startpunt (een cue op de drop: nog even "opbouw"), een
+    // plek die je nooit hoort. Daarover zeggen we de hub niets; een grens die de lezer telt, gaat wel.
+    if (l.deck !== this.sectieDeck) { if (l.deck !== null) this.stilTot = t + V; this.sectieDeck = l.deck; }
     // Elke grens één keer: ook een grens zonder verbinding is daarna "gemeld" (te laat is erger dan niet).
-    const nieuw = l.grenzen !== this.grenzenGemeld && bron !== 'open';
+    // `>`: begint de lezer ooit opnieuw (teller 0), dan is dat geen nieuwe sectie.
+    const nieuw = l.grenzen > this.grenzenGemeld && bron !== 'open';
     this.grenzenGemeld = l.grenzen;
     if (this.open) this._sectieNaarHub(nu, nieuw, t < this.stilTot);
     this._planSectie(nu);
   }
 
-  /** Wat de hub van de sectie moet weten: een nieuwe meteen, de rest bij verandering en hooguit 10×/s. */
+  /**
+   * Wat de hub van de sectie moet weten. Een nieuwe sectie gaat ALTIJD meteen
+   * (hooguit één per NIEUW_MIN_MS), met de energie van de sectie zelf (niet die
+   * van het glijden): de ontvanger heeft klap, energie en label tegelijk. De
+   * rest bij verandering, minstens GLOBAAL_MS na de vorige globaal en zolang
+   * er in de laatste seconde nog een plek over blijft voor een nieuwe sectie.
+   */
   _sectieNaarHub(nu, nieuw, nogStil) {
     const l = this.lezer;
-    const e = afgerond(l.energie);
+    const doel = afgerond(l.energieDoel);
     const label = l.sectie >= 0 && isLabel(l.label) ? l.label : null;
-    if (nieuw) {
-      this._globaal(nu, label ? { 'sectie.nieuw': true, 'sectie.energie': e, 'sectie.label': label } : { 'sectie.nieuw': true, 'sectie.energie': e }, e, label);
+    if (nieuw && nu - this.nieuwUit >= NIEUW_MIN_MS) {
+      this._globaal(nu, label ? { 'sectie.nieuw': true, 'sectie.energie': doel, 'sectie.label': label } : { 'sectie.nieuw': true, 'sectie.energie': doel }, doel, label);
+      this.nieuwUit = nu;
       this.nieuwGestuurd++;
       return;
     }
@@ -443,38 +497,49 @@ export class HubMidi extends MidiHub {
     // Na (her)verbinden: ook in een pauze de energie (0) en het laatste label, want een
     // hub die ons nog kende, toonde anders wat hij het laatst van ons had.
     const metLabel = eerste ? label ?? this.laatsteLabel : label !== null && label !== this.hubLabel ? label : null;
+    // Heeft de hub het doel al (een nieuwe sectie draagt het doel), dan niet van onderen opglijden.
+    const e = !eerste && doel === this.hubEnergie ? doel : afgerond(l.energie);
     const verschil = eerste ? 1 : Math.abs(e - this.hubEnergie);
     const anders = verschil > 0 && (verschil >= ENERGIE_STAP - 1e-9 || e === 0 || !l.glijd);
     if (!metLabel && !anders) return;
-    if (!eerste && nu - this.globaalUit < GLOBAAL_MS) return;   // straks, bij de volgende lezing
+    if (!eerste && nu - this.globaalUit < GLOBAAL_MS) return;            // straks, bij een volgende lezing
+    if (nu - this.uitTijden[this.uitI] < 1000) return;                     // het venster is vol (op de plek voor een nieuwe na)
     this._globaal(nu, metLabel ? { 'sectie.energie': e, 'sectie.label': metLabel } : { 'sectie.energie': e }, e, metLabel);
   }
 
   _globaal(nu, waarden, e, label) {
     this._stuur({ t: 'globaal', waarden });
     this.globaalUit = nu;
+    this.uitTijden[this.uitI] = nu;
+    this.uitI = (this.uitI + 1) % this.uitTijden.length;
     this.hubEnergie = e;
     if (label) { this.hubLabel = label; this.laatsteLabel = label; }
     this.sectieOoit = true;
   }
 
-  /** De volgende lezing: over SECTIE_MS, of vlak nadat je de volgende grens hoort als dat eerder is. */
+  /**
+   * De volgende lezing: SECTIE_MS na de vorige, of vlak nadat je de volgende
+   * grens (of een sprong) hoort als dat eerder is: dan een wekker, die altijd leest.
+   */
   _planSectie(nu) {
-    const tot = this._totGrens() * 1000;
-    const ms = tot < SECTIE_MS ? Math.max(2, Math.ceil(tot) + 1) : SECTIE_MS;
-    if (this.sectieTimer !== null && this.sectieOp <= nu + ms) return;
+    const tot = this._totGrens() * 1000;                                  // vanaf de laatste lezing
+    const wek = tot < SECTIE_MS;
+    const op = Math.max(nu + 1, this.sectieGelezen + (wek ? Math.max(2, Math.ceil(tot) + 1) : SECTIE_MS));
+    if (this.sectieTimer !== null && this.sectieOp <= op && (this.sectieWekker || !wek)) return;
     clearTimeout(this.sectieTimer);
-    this.sectieOp = nu + ms;
-    this.sectieTimer = setTimeout(this._sectieWek, ms);
+    this.sectieOp = op;
+    this.sectieWekker = wek;
+    this.sectieTimer = setTimeout(this._sectieWek, op - nu);
   }
 
   /**
-   * Seconden (kloktijd) tot je de volgende grens van de maatgever hoort, of
-   * Infinity. Gaat er een loop vóór die grens rond, dan komt de wekker voor
-   * niets: één lezing extra.
+   * Seconden (kloktijd, vanaf de laatste lezing) tot je de volgende grens van de
+   * maatgever hoort, of een sprong die nog moet klinken; anders Infinity. Gaat er
+   * een loop vóór die grens rond, dan komt de wekker voor niets: één lezing extra.
    */
   _totGrens() {
     const l = this.lezer, d = l.deck, st = l.kaart?.stukken, k = l.sectie + 1;
+    if (l.sprongWacht) { const s = l.sprongOp - this.sectieT; return s > 0 ? s : 0; }
     if (!d || !d.playing || d.wacht || !st || k < 1 || k >= st.length || !(l.hoor === l.hoor)) return Infinity;
     const r = d.remt ? d.snelheid : d.rate;
     return r > 0 ? (st[k].van - l.hoor) / r : Infinity;
