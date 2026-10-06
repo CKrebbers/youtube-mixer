@@ -15,8 +15,11 @@ de mixer.
      actueel. Dat gebeurt vanzelf: bij het laden van dat nummer, of na een herstart van de
      server op de achtergrond; daar hoef je niets voor te doen. Een nieuw binnengehaald nummer
      staat hier dus als "nog zonder" tot je het laadt. Een nummer waarvan het rekenen mislukt
-     (audio weg of onleesbaar) blijft "nog zonder" staan. Een oudere server zonder de route:
-     "secties: onbekend (oudere server)"; herstarten lost dat op. Lege library: geen regel.
+     (audio weg of onleesbaar) blijft staan zoals het was: "nog zonder" zonder kaart,
+     "verouderd" met een oude kaart. Een oudere server zonder de route: "secties: onbekend
+     (oudere server)"; herstarten lost dat op. Een fout van de server (bv. een library.db met
+     de v9 van een andere tak, zonder `secties_json`): "secties: onbekend (fout)". Lege
+     library: geen regel.
    - **Binnenhalen**: yt-dlp en ffmpeg (`/api/tooling`).
    - **Ingest-rij**: hoeveel er bezig is en wacht (`/api/ingest`).
    - **Stems** (3 okt): wat er gesplitst wordt en wacht, de laatste fout, of de
@@ -95,6 +98,12 @@ alleen via de hub).
   - Bestand: `proef/sessie.json` (`VARVE_PROEF` om te verleggen). Niet via de
     witte lijst te lezen, alleen via de API. Per punt opslaan en na elkaar
     schrijven: twee tabbladen overschrijven elkaar niet.
+- **Vragen aan de server** (`ververs`, elke 2 s): pas een nieuwe ronde als de vorige klaar
+  is, en elk verzoek geeft het na 6 s op (`WACHT_MS`; de tooling-controle 60 s). Bij een
+  trage of hangende server (een telefoon via het LAN) stapelden de verzoeken zich anders op.
+  De losse routes (`/api/backups`, `/api/stems`, `/api/secties`) worden na een 404 of een
+  fout hooguit eens per minuut opnieuw gevraagd (`RUST_MS`, `haalLos`); intussen blijft het
+  laatste antwoord staan, en komt er niet elke 2 s een rode regel in de console.
 - **De backup-stand** (`GET /api/backups`, alleen GET, achter dezelfde Host-controle):
   `{ laatste: { naam, tijd, bytes } | null, aantal, gekeken, fout, foutTijd, bezig }`.
   Los opgehaald: een oudere server zonder die route geeft een grijze tegel, geen
@@ -102,12 +111,30 @@ alleen via de hub).
 - **De secties-telling** (`GET /api/secties`, alleen GET, achter dezelfde Host-controle):
   `{ totaal, zonder, verouderd, versie }` uit `Library.sectieTelling()`: dezelfde regel als
   `moetSecties` (wat de achtergrond en het laden opnieuw zouden rekenen). De Controlekamer
-  vraagt het elke 2 s, dus gecachet op de stand van de database: `total_changes()` van de
-  serververbinding (zoals de backup) plus `PRAGMA data_version` (een andere verbinding).
-  Zonder wijziging twee kleine queries (~3–5 µs); na een wijziging één query over grid,
-  stems en kaart en per nummer de vingerafdruk van het grid (gemeten: 2000 nummers
-  17–37 ms, waar `teSectieAnalyseren` 137 ms deed). Los opgehaald, zoals de stems: een 404
-  is "onbekend", geen "server weg".
+  vraagt het elke 2 s, dus in twee lagen gecachet:
+  - de telling, op de stand van de database: `total_changes()` van de serververbinding
+    (zoals de backup) plus `PRAGMA data_version` (een andere verbinding). Zonder wijziging
+    twee kleine queries (~3–5 µs). Midden in een transactie gaat er niets in de cache (na
+    een ROLLBACK zou hij blijven staan).
+  - per nummer de ruwe kolommen (grid, de oude gridkolommen, stems, kaart) en de uitkomst.
+    Elke schrijfactie, in welke tabel ook, is een miss; tijdens de achtergrondanalyse
+    gebeurt dat bijna elke 2 s. Dan haalt één query de kolommen op, en alleen de nummers
+    waarvan er een anders is worden opnieuw geparst.
+  - Gemeten (6 okt, op de Mac met andere agenten ernaast, mediaan van 20 missers, een
+    kaart van 40 stukken met stems op 2 van de 3 nummers):
+
+    | library | vóór (alles opnieuw) | na (alleen wat veranderde) |
+    | --- | --- | --- |
+    | 500 nummers, grid van 4 stukken | 10 ms | 1,4 ms |
+    | 5000 nummers, grid van 1 stuk | 117 ms | 18 ms |
+    | 5000 nummers, grid van 100 stukken | 365 ms | 45 ms |
+    | 5000 nummers, grid van 400 stukken (live-opnames) | 1062 ms | 98 ms |
+
+    Wat overblijft is het ophalen en vergelijken van de ruwe tekst. "Hooguit eens per
+    10 s" is daarom niet gebouwd.
+
+  Los opgehaald, zoals de stems: een 404 is "onbekend", een 500 "onbekend (fout)", geen
+  "server weg".
 - **Claude leest na een sessie** `proef/sessie.json` (fout + notitie = eerst repareren).
 
 ## Een punt toevoegen of veranderen
@@ -128,16 +155,22 @@ actions of `index.html` bestaan.
 - `test/server.test.mjs`: de routes, de witte lijst, 415 zonder JSON.
 - `test/backup.test.mjs`: de backup-tegel (vandaag, gisteren, langer geleden, fout,
   nog geen, geen server) en `/api/backups` op een echte server.
-- `test/sec-controle.test.mjs`: de tegel Server met de regel secties (elke stand, ook 404 en
-  een lege library), `Library.sectieTelling` (zonder, oudere versie, ander grid, zonder grid
-  gerekend, stems erbij, hand en slot; gelijk aan `teSectieAnalyseren`; de cache, ook bij een
-  andere verbinding; 2000 nummers) en `/api/secties` op een echte server.
+- `test/sec-controle.test.mjs`: de tegel Server met de regel secties (elke stand, ook 404,
+  500, een lege library en een antwoord zonder of met NaN als totaal),
+  `Library.sectieTelling` (zonder, oudere versie, ander grid, zonder grid gerekend, alleen
+  de oude gridkolommen, stems erbij, `stems_json` kapot, hand en slot; gelijk aan
+  `teSectieAnalyseren`; de cache, ook bij een andere verbinding en na een ROLLBACK; een
+  miss parst alleen het veranderde nummer, geteld met `JSON.parse`; 2000 nummers) en
+  `/api/secties` op een echte server.
 - `tools/headless/sec-controle.mjs` (6 okt, echte Chrome, poorten 8913/9513): een library
   van zeven nummers met, zonder en met een verouderde kaart geeft "3 nog zonder · 2
   verouderd"; een nummer krijgt een kaart zoals bij het laden (`?maak=1`, de worker met
   ffmpeg) → "2 nog zonder"; een ander grid → een verouderde meer; nummers weg → "alles
-  actueel"; een oudere server (404 via de Fetch-laag) → "onbekend"; 390 px breed zonder
-  zijwaarts scrollen en de regel niet afgekapt; server weg → geen regel. 16 ok.
+  actueel". Dan, nagebootst met de Fetch-laag: een hangende server → hooguit 2 verzoeken in
+  10 s (geen stapel); een 500 → "onbekend (fout)", daarna een minuut niets; een 404 →
+  "onbekend (oudere server)"; daarna weer "alles actueel". Ook 390 px breed zonder zijwaarts
+  scrollen en de regel niet afgekapt; server weg → geen regel. Fouten in de console: Runtime
+  én Log (netwerkfouten), alleen die van de nagebootste storingen. 23 ok, ~2,5 minuut.
 - `tools/headless/controle.mjs`: Controlekamer en een echte mixer in twee
   tabbladen van één headless Chromium. Mixer open/dicht, een tweede mixer, de
   knop, de demotrack in "in de mixer", afvinken en notities na herladen, de
