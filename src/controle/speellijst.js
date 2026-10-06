@@ -218,10 +218,25 @@ export const SPEELLIJST = [
     { id: 'sp-in', doe: 'Kies bij een stap onder "begin" een sectie als in (bijvoorbeeld de drop).',
       let: 'Springt het begin naar die sectie en staat "in … drop" in de rij? Werkt een keuzelijst, of liever klikken op een band in de strook? (SVP2)' },
     { id: 'sp-uit', doe: 'Kies bij de stap ervóór onder "duur" een sectie als uit (break of outro), sla op en zet auto aan.',
-      let: 'Begint de overgang op die sectie (witte streep in de strook)? Typ je daarna een later begin, wordt uit dan oranje? Wat moet er met de duur gebeuren als je een uit kiest? (SVP3)' },
+      let: 'Begint de overgang op die sectie (witte streep in de strook)? Typ je daarna een later begin, wordt uit dan oranje? Ligt de uit ná de duur, dan gebruikt de auto-DJ hem niet: wat moet er met de duur gebeuren als je een uit kiest? (SVP3)' },
     { id: 'sp-herladen', doe: 'Sla op, sluit het venster en open het opnieuw.', let: 'Staan in en uit er nog?' },
     { id: 'sp-claude', doe: 'Vraag Claude om een plan met in en uit per stap ("begin elk nummer op de eerste drop").',
-      let: 'Kiest hij logische secties, en toont het venster ze? Waar tekent de strook de overgangen zonder uit? (SVP4)' },
+      let: 'Kiest hij logische secties, en toont het venster ze? Begint de overgang in de strook op de plek waar de auto-DJ hem speelt, ook zonder uit?' },
+  ] },
+
+  { id: 'sec-auto', titel: 'Avond 2 · Auto-DJ met secties', minuten: 20, punten: [
+    { id: 'sa-tooltip', doe: 'Laad twee nummers met ✓ naast de bpm (zeker grid) en een duidelijke outro; track 1 speelt. Zet de auto-DJ aan en houd de muis op "→ 2 …" in de AUTO-rij.',
+      let: 'Staat in de tooltip "uit op outro … (sectie N)" en "in op intro …"? Valt het aftellen samen met het begin van de outro-band boven de golfvorm? (SVA1)' },
+    { id: 'sa-outro', doe: 'Laat de overgang lopen.',
+      let: 'Valt de nieuwe in op de "1" van de outro, niet midden in de laatste drop? Beter dan vroeger? (SVA1)' },
+    { id: 'sa-break', doe: 'Nu als eerste een nummer met een korte outro (of zonder).',
+      let: 'Hij kiest dan de laatste break binnen 32 maten van het eind (tooltip "uit op break …"). Goed zo, of liever later? (SVA2)' },
+    { id: 'sa-vaag', doe: 'Twee nummers met ? naast de bpm (onzeker grid), zoals de meeste in je library.',
+      let: 'Zonder zeker grid gebruikt hij geen secties: overvloeien 24 s vóór het eind, geen "uit op" in de tooltip. Mis je ze daar? (SVA3)' },
+    { id: 'sa-nu', doe: 'Met een overgang klaar: druk "nu"; een andere keer "langer".',
+      let: 'nu = volgende sectiegrens binnen 8 maten (anders 4 maten); langer = volgende grens binnen 16 maten (anders 8). Goed zo, of liever vaste maten? (SVA4)' },
+    { id: 'sa-spring', doe: 'Met een overgang klaar: APC modus secties (Shift + scene 1, focus op wat nu klinkt), druk een sectie. Daarna, tijdens een overgang, een sectie van een van beide tracks.',
+      let: 'Op wat nu klinkt: geen "jij mixt"; springt hij, dan springt het aftellen mee (vlak voor het eind: de overgang loopt vanaf waar je bent). Tijdens de overgang: "jij mixt", de automaat laat los. Logisch? (SVA5)' },
   ] },
 
   // ---- Eerder werk (vóór 6 okt): als er tijd over is ------------------------------

@@ -414,7 +414,7 @@ APC-indeling (voorstel A):
 
 ## SV. Secties verweven (6 okt, avond; docs/SECTIES.md §7)
 
-De secties zitten nu ook in het toetsenbord, de sampler, het planvenster en het handelingenlog.
+De secties zitten nu ook in het toetsenbord, de sampler, het planvenster, het handelingenlog en de auto-DJ.
 Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 
 **Toetsenbord** (speellijst "Secties op het toetsenbord")
@@ -438,8 +438,16 @@ Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 **Planvenster** (speellijst "Planvenster met secties")
 - [ ] **SVP1. Secties berekenen vanuit het planvenster?** 💬 Het venster vraagt alleen kaarten die er al zijn (zonder `maak=1`; anders gaan dertig nummers tegelijk rekenen); een nummer dat nooit geladen is krijgt geen in/uit-keuze. **Advies:** eerst zo; kom je vaak een nummer zonder kaart tegen, dan een knop "secties" per rij (één tegelijk).
 - [ ] **SVP2. In kiezen met een keuzelijst of in de strook?** 👀 Nu een lijst onder "begin" ("3 drop C"). **Advies:** zo; klikken op een band als de lijst te klein of te traag voelt.
-- [ ] **SVP3. Uit en duur samen: welke wint?** 🎧 Kies je een uit, dan blijft een ingevulde duur staan; de planner beslist. **Advies:** uit wint, de duur is alleen de terugval zonder kaart (zoals `van` bij `in`).
-- [ ] **SVP4. Strook altijd waar de auto-DJ de overgang echt begint?** 👀 Nu alleen bij een stap met uit; zonder uit de oude schatting (eind van het stuk), terwijl de automaat op een frasegrens begint (tot 16 maten eerder). **Advies:** ja, na samenvoegen met sec-auto (één regel in tijdlijn.js + de vaste test bijwerken).
+- [ ] **SVP3. Uit en duur samen: welke wint?** 🎧 Nu is de duur de grens: een uit telt alleen als de overgang vóór het einde van de duur past; anders kiest de auto-DJ zelf (outro, break, frasegrens). Het venster maakt zo'n uit niet oranje; je ziet het alleen doordat de overgang in de strook ergens anders begint. **Advies:** uit wint en de duur wordt alleen de terugval zonder kaart; dan moet het venster bij een gekozen uit de duur leeg laten of verlengen.
+- [x] **SVP4. Strook altijd waar de auto-DJ de overgang echt begint?** 👀 — gedaan 6 okt (avond): de strook toont het moment van de planner (`momentArgs`, dezelfde regel als de automaat), ook zonder uit. Een blend begint daardoor tot 16 maten eerder dan de oude tekening.
+
+
+**Auto-DJ** (speellijst "Auto-DJ met secties")
+- [ ] **SVA1. Uitmixen op de outro.** 👂 Met een sectiekaart op een zeker grid begint de overgang waar de outro van de uitgaande begint (als hij daar nog vóór het eind past), niet meer op een veelvoud van 16 maten vanaf het anker (vaak midden in de laatste drop); de nieuwe begint op zijn intro. **Advies:** zo laten; zeg het als hij bij een lange outro te vroeg weggaat.
+- [ ] **SVA2. Past de outro niet: de laatste break.** 👂 Volgorde: de laatste break binnen 32 maten van het eind → het oude moment als dat niet in een drop valt → het begin van iets anders dan een drop → het begin van een drop. **Advies:** proberen; is de break te vroeg, dan het venster naar 16 maten.
+- [ ] **SVA3. Secties ook bij beatloos overvloeien op een onzeker grid?** 💬 Nu alleen op een zeker grid; in jouw library (overvloeien is de hoofdroute) doen ze bij het uitmixen dus bijna niets. **Advies:** ja, maar pas als SE2 laat zien dat de grenzen op onzekere grids kloppen.
+- [ ] **SVA4. langer en nu naar de volgende sectiegrens?** 🎛 langer = volgende grens binnen 16 maten (anders 8), nu = volgende grens binnen 8 maten (anders de eerstvolgende 4); beatloos blijft nu meteen. **Advies:** zo laten.
+- [ ] **SVA5. Een sectie drukken terwijl de volgende klaarstaat.** 🎛 Op wat nu klinkt: springt hij echt, dan plant hij opnieuw vanaf de nieuwe plek (geen overname); past de overgang daar niet meer vóór het einde, dan loopt hij vanaf waar je bent, zoals na een seek. Een druk die niets doet (geen sectie, loop om de sectie waar je al bent) verandert niets. Op de klaarstaande track: overname, zoals seek en hotcue. Alternatief: die sectie wordt het nieuwe beginpunt en de automaat mixt door. **Advies:** zo laten; het alternatief als je het mist.
 
 ---
 

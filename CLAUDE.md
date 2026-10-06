@@ -188,7 +188,7 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
                     hub.mjs en speelapparaten.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
@@ -263,6 +263,7 @@ test/
   secties.test.mjs  secties: synthetische nummers met een bekend antwoord, worker, library, deck, actions, server, marges op de "1"
   sec-sampler.test.mjs  een sectie in een sampler-pad: knipSectie, start op de "1", herankeren (ook keylock), grenzen, meldingen
   secties-log.test.mjs  secties in het handelingenlog: kaart in de stand, `van` bij een druk, volgorde, precies terugspelen
+  auto-secties.test.mjs  auto-DJ met secties: fragment/planMoment/momentArgs, terugvinden, wachten op de kaart, OVERNEEM, langer/nu, zonder kaart identiek
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -1573,6 +1574,11 @@ Volledig in `docs/SECTIES.md`, vragen in VRAGEN blok SE. Wat een bouwer niet mag
     server. Een sectiedruk draagt `{ van }` (de plek waarvan hij rekende, 4e element van de logregel,
     `invoke(id, v, { laat, van })`). `section.K.loop` staat niet apart in de stand: de loop van het deck
     is de waarheid.
+  - Auto-DJ (AUTO-DJ.md §3b): secties alleen met een kaart op een ZEKER grid; zonder kaart precies het oude
+    gedrag (ook bij een trage kaart: het wachten stopt vóór het oude moment). De bewakers gaan voor, de soort
+    overgang verandert nooit. `momentArgs` (planner.js) is DE rekenregel voor automaat én planvenster: geef
+    planMoment nooit losse argumenten. `vindSectie`: dezelfde label+groep, het dichtst bij de tijd van toen
+    (binnen `SECTIE_SPELING` 30 s, anders wint `van`).
   - Headless: elke `tools/headless/sec-*.mjs` zet VARVE_PATRONEN en VARVE_PLANNEN op zijn tmp-map. Anders
     leest de proefserver `patronen/` van de worktree, en in `sintegratie` is dat de map van de echte mixer.
 
