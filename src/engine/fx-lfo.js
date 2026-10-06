@@ -18,7 +18,8 @@ import { startDrempel, zetHellingen } from './overgang.js';
  * (t − t0) / periode. Bij herankeren (tempo, seek, grid) houdt de LFO de tel
  * van de cyclus waar hij zat: een golf van vier tellen die op tel 3 zat,
  * staat na een sprong weer op tel 3 van de nieuwe tel. Op de "1" van de maat
- * kan hij niet liggen: fxKlok() kent alleen de volgende tel, geen maat.
+ * ligt hij niet: fxKlok() kent sinds 6 okt ook de maat (`tellenTotEen`, voor
+ * de sampler), maar de LFO gebruikt die niet.
  *
  * Zonder klok (de maat-track staat stil) loopt hij door op de laatst bekende
  * tel, zoals de delay: terugvallen op een vast tempo zou midden in een set

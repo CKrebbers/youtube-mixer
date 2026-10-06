@@ -72,6 +72,24 @@ export function startOpDeTel(ctx, k) {
 }
 
 /**
+ * Het moment om op de "1" te starten (een sectie in de sampler): de tel van
+ * het anker plus `tellenTotEen` tellen; ligt die "1" binnen de drempel, dan
+ * de maat erna. Een klok zonder maat (geen `tellenTotEen`): op de tel, zoals
+ * startOpDeTel. Gerekend met de lengte van de volgende tel; ligt er binnen
+ * deze maat een stukgrens van de tempokaart, dan herankert de sampler daar
+ * toch (Deck._heranker meldt de wissel).
+ */
+export function startOpDeEen(ctx, k) {
+  const per = k?.perMaat, tot = k?.tellenTotEen;
+  if (!k || !Number.isFinite(k.ankerCtx) || !(k.beatLengte > 0) || !(per > 0) || !Number.isInteger(tot)) return startOpDeTel(ctx, k);
+  const grens = ctx.currentTime + startDrempel(ctx);
+  const maat = per * k.beatLengte;
+  let t = k.ankerCtx + tot * k.beatLengte;
+  if (t < grens) t += Math.ceil((grens - t) / maat) * maat;
+  return t;
+}
+
+/**
  * Echotijden op de maat, van kort naar lang: knop rechts = langer, net als in
  * milliseconden. Los van DELINGEN (gate), die van lang naar kort loopt.
  */
