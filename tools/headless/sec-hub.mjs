@@ -13,7 +13,8 @@
 //      - energie en label = die van de sectie die je hoort (de kaart)
 //      - een sprong naar een andere sectie (track.1.section.K, valt in op de "1"): ook precies één
 //      - herverbinden: geen klap (de teller blijft staan), energie en label kloppen
-//      - pauze: de energie naar 0, geen klap
+//      - een loop van 1 tel op de "1" van een sectie: één klap, niet één per rondgang (geen stroboscoop)
+//      - pauze: de energie blijft eerst een halve seconde staan (een cut in de mix), dan naar 0, geen klap
 //   Met een hub van vóór §18 (geen src/core/bijdragen.js): VARVE stuurt de sectie toch, de hub negeert
 //   hem (grondregel 5): geen sectie bij de beeld-app, VARVE blijft op dezelfde socket, geen fout, de APC werkt.
 //
@@ -128,6 +129,9 @@ const BASIS = `http://localhost:${POORT}/`;
 async function openMetHub(url, binnenhalen) {
   await cdp('Page.navigate', { url: `${BASIS}?vormen=0&hub=${encodeURIComponent(url)}` });
   if (!await totdat('window.engine && window.midi && window.midi.lezer', 20000)) throw new Error('de app start niet met de hub');
+  // De audioklok moet lopen (headless start het apparaat soms pas seconden later): zoals sec-vorm.mjs.
+  await evalueer('window.engine.resume()');
+  if (!await totdat("window.engine.ctx.state === 'running' && window.engine.ctx.currentTime > 0.05", 10000)) throw new Error('de audioklok loopt niet');
   await evalueer("document.getElementById('lib-btn').click()");
   if (binnenhalen) {
     await evalueer(`(() => { const v = document.querySelector('#lib-panel .lib-url'); v.value = 'https://www.youtube.com/watch?v=secHub';
@@ -271,7 +275,7 @@ async function doorloop() {
 
   console.log('\nspelen, doorlopend over twee grenzen');
   await speelVanaf(st[1].van - 3);
-  ok('spelen: energie en label van de intro bij de beeld-app, zonder klap', await tot(() => weet()['sectie.label'] === st[0].label && weet().klap === 0, 3000),
+  ok('spelen: energie en label van de intro bij de beeld-app, zonder klap', await tot(() => weet()['sectie.label'] === st[0].label && weet().klap === 0, 5000),
     `${weet()['sectie.label']} ${weet()['sectie.energie']}`);
   await overGrens(1, 'doorlopend');
   await evalueer(`${D}.seek(${st[2].van - 2.5})`);   // een sprong midden in een sectie: geen nieuwe sectie
@@ -300,6 +304,22 @@ async function doorloop() {
     ok(`… energie en label kloppen bij de beeld-app (${na['sectie.label']}, ${na['sectie.energie']})`, na['sectie.label'] === st[g[0]?.i]?.label && na['sectie.energie'] === rond(st[g[0]?.i]?.energie ?? -1));
   }
 
+  console.log('\neen loop van 1 tel op de "1" van een sectie: één klap, geen stroboscoop');
+  {
+    const k = st.findIndex((x, i) => i > 3 && x.label === 'drop');
+    const voorKlap = weet().klap, voorGlob = (await glob()).length;
+    // Vlak vóór het begin van de drop, met een loop van één tel op zijn "1": je hoort de drop één keer
+    // beginnen, en daarna elke tel opnieuw (een stutter, ~8 keer in 4 s).
+    await evalueer(`(() => { const d = ${D}, g = d.grid, b = ${st[k].van}; d.seek(b - 0.6); d.setLoopRange(b, g.timeOf(g.beatAt(b) + 1)); })()`);
+    ok('de loop staat aan', await evalueer(`!!${D}.loop`));
+    await wacht(4200);
+    const rondes = await evalueer(`(${D}.loop ? 1 : 0)`);
+    const kl = klappen().slice(voorKlap), g = (await glob()).slice(voorGlob).filter((x) => x.w['sectie.nieuw'] === true);
+    ok(`4 s lang een loop van 1 tel op de "1" van de drop: één klap bij de beeld-app (${kl.length}) en één nieuw van VARVE (${g.length}), niet één per rondgang`,
+      rondes === 1 && kl.length === 1 && g.length === 1);
+    await evalueer(`${D}.clearLoop()`);
+  }
+
   console.log('\npauze: de energie naar 0');
   {
     const voor = { ...weet(), nu: Date.now() };
@@ -311,8 +331,8 @@ async function doorloop() {
       nul && weet().klap === voor.klap && weet()['sectie.label'] === voor['sectie.label']);
   }
   const h = await evalueer('window.midi.status().hub.sectie');
-  ok(`VARVE telt even veel nieuwe secties als de beeld-app klappen zag (${h?.nieuw} / ${weet().klap}): drie grenzen, drie klappen`,
-    h?.nieuw === weet().klap && weet().klap === 3);
+  ok(`VARVE telt even veel nieuwe secties als de beeld-app klappen zag (${h?.nieuw} / ${weet().klap}): vier grenzen, vier klappen`,
+    h?.nieuw === weet().klap && weet().klap === 4);
   {
     const g = (await glob()).map((x) => x.nu);
     let max = 0;
