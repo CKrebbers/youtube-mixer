@@ -56,11 +56,12 @@ Na het onderzoek in `docs/APC40-onderzoek.md`: de eerste versie met mapjes
 voor alles (B3) voelde niet logisch. Nu: één kolom = één track, de kern nooit
 in een mapje. Fysieke plaatsing volgens de User Guide. Volledig en actueel op
 `apc.html` (leest de mapping zelf); de mapping zelf is `mappings/apc40mk2.json`
-(382 regels, versie 3; tot 25 sep 291, tot 2 okt 374). Op 25 september kwamen de
+(702 regels, versie 3; tot 25 sep 291, tot 2 okt 374, tot 6 okt 687). Op 25 september kwamen de
 DJ-functies van ronde 3 erbij, zoals Clay koos ("Voorstel A"): zie hieronder, en de
 tabel "Voorstel A". Op 2 oktober de modus auto (auto-DJ, VRAGEN AU1): zie
 "Modus auto" onderaan. Op 5 oktober de modus stems (VRAGEN N1, 480 regels): zie
-"Modus stems" onderaan.
+"Modus stems" onderaan. Op 6 oktober het mapje beeld (de Stroommachine, spoor beeld,
+702 regels): zie "Mapje beeld" onderaan.
 
 **Per kolom (track 1–8)** — knob: filter (endless) · grid: zie modi · Clip
 Stop: loop aan/uit (shift: loop weg) · Track Select: focus (shift: als tweede
@@ -85,7 +86,9 @@ Bank ◀ ▶ = beatjump terug/vooruit (shift: lengte ½ / ×2, 1–32 tellen) ·
 Sends / User = loop in / loop out / reloop · Lock = quantize aan/uit voor alle
 tracks (brandt als aan; in de grid-modus blijft Lock het grid-slot, want het
 open mapje wint) · Stop All Clips = rem (vinylstop; geen lampje op het apparaat).
-Vrij: Bank (0x67) en Detail View (met `?vormen=1` het mapje vorm). **Met `?hub=` is
+Vrij: Bank (0x67) en Detail View zonder shift (met `?vormen=1` het mapje vorm).
+Shift + Clip/Device View = het mapje master, Shift + Detail View = het mapje beeld (de
+Stroommachine, zie "Mapje beeld" onderaan). **Met `?hub=` is
 Bank van de AV-app-hub** (de hubtoets: Bank + Track Select = focus, Bank + Scene =
 snapshot) en komt hij nooit bij VARVE aan; daarom zit keylock niet op Bank maar op
 Shift + Tap (VRAGEN I4).
@@ -361,3 +364,79 @@ hier; het tempo klopt dan vanaf "tel 1" of de vorige pin, en vanaf hier begint e
 stuk). Eén regel erbij (`note:0:82#shift@edit.aan`, was vrij), niets bestaands veranderd.
 Terug (↶) staat bewust niet op de APC: Shift + scene 5 blijft klank, Lock (ook met shift)
 blijft het grid-slot; terug gaat met ↶ op het scherm of Cmd+Z.
+
+## Mapje beeld (6 oktober 2026, spoor beeld, GEBOUWD, niet op het apparaat nagelopen)
+
+De Stroommachine op de pc bedienen (`docs/BEELD.md`): een mapje van de device-groep,
+`device.beeld`, naast strip, rack, inst en master. **Shift + Detail View** opent het
+(vasthouden = gluren, nog eens drukken laat het open); Clip/Device View gaat daarna terug
+naar de strip, zoals bij master. Zonder verbinding met de relay doet het mapje niets: de
+ringen en de lampjes van de regie zijn dan uit, en een draai stuurt niets.
+
+| knop | in het mapje beeld | lampje |
+|---|---|---|
+| device knob 1–8 | macro intensiteit · snelheid · helderheid · feedback · tint · dichtheid · glitch · balans (`beeld.macro.*`, endless) | de ring toont de laatst gezette stand (eerst de neutrale stand van de Stroommachine: helderheid 0,8, glitch 0, de rest 0,5, snelheid 0,375); uit zonder verbinding |
+| scene 1 | ontdek: een nieuwe scène (`beeld.regie.ontdek`) | donker roze = verbonden, fel roze zolang je drukt, uit = geen verbinding |
+| scene 2 | volgende scène | idem |
+| scene 3 | vasthouden aan/uit (de regisseur wisselt niet meer zelf) | idem; de stand van vasthouden zelf meldt de Stroommachine niet terug (BEELD.md §7) |
+| scene 4 | flits (hooguit 2 per seconde) | donkergrijs, wit zolang je drukt (zoals de flits in de modus video) |
+| scene 5 | vrij: alles weer automatisch | donker roze, fel zolang je drukt |
+| Stop All Clips | paniek aan/uit: rustig naar zwart | geen lampje op het apparaat; op het scherm en op `apc.html` rood |
+| Shift + scene 1–5 | blijft de grid-modi kiezen: secties · patronen · stems · auto · klank | met shift de kleuren van die modi |
+| Shift + Detail View | het mapje openen | brandt (met shift vast) als beeld open is |
+
+Een regieknop stuurt alleen bij INDRUKKEN iets; loslaten zet alleen het lampje terug.
+Kleur: **roze** (paletindex 57, donker 58, `rozedonker` erbij in het palet), de laatste
+kleur met een donkere tint die nog geen modus had (mint 29 ligt te dicht bij het groen
+van play). Paniek in rood en flits in wit, zoals zwart en flits in de modus video.
+
+**Waarom een device-mapje en geen grid-modus.** De opdracht noemde "8 faders" voor de acht
+macro's, maar de track-faders zijn de KERN (volume) en de kern zit nooit in een mapje. De
+acht device knobs zijn endless (de software houdt de stand, de ring toont hem: geen
+overpakken na een wissel) en de enige acht doorlopende regelaars die per mapje kunnen
+wisselen. Alleen de device-groep kan ze wisselen: `mapping.kies` zoekt de open mapjes in de
+volgorde edit → device → grid, dus een regel `cc:0:16@grid.x` verliest altijd van
+`@device.strip`. Om dezelfde reden wint een regel in een device-mapje ook op de
+scene-knoppen van elke grid-modus: de regie kan op de scene-knoppen zonder dat er aan een
+grid-modus iets verandert.
+
+**Waarom Shift + Detail View.** Detail View was in de standaard vrij (met `?vormen=1` opent
+hij zonder shift het mapje vorm; het fragment heeft geen shift-regel op Detail View, dus
+beide werken naast elkaar). Hij zit naast Clip/Device View, en het gebaar is dat van
+master: Shift + de knop ernaast. Detail View is daarmee de enige knop in de standaard die
+ALLEEN met shift iets doet; op het scherm staat hij als "⇧ ▣ beeld" (shift + klik opent het
+mapje, een gewone klik doet niets, geen lampje: zoals de LED zonder shift; `leesControl` in
+`spiegel-plan.js`).
+
+**Waarom de scene-knoppen de regie, en Stop All paniek.** Vijf knoppen onder elkaar naast
+het grid, met een lampje, blind te raken: zoals de modus patronen ze als rijen gebruikt.
+Stop All Clips = paniek, zoals in de eigen APC-indeling van de Stroommachine (daar is stop
+all = paniek); buiten het mapje is het de rem: op die plek zit dus altijd de noodknop.
+Let op: de Stroommachine zelf heeft op scene 1–5 ontdek · mutatie · kweek · volgende ·
+vasthouden, flits op Metronome en vrij op Lock (`src/09d-poorten.js` daar). VARVE geeft
+alleen de zes regieknoppen door en zet ze op een rij; Metronome en Lock blijven van VARVE.
+
+**Wat er bewust NIET verandert.** Alleen regels ERBIJ (15: Shift + Detail View en 14 in
+`device.beeld`, geen enkele met shift), geen bestaande regel veranderd (voorganger
+`a4d5af2f-687` in `eerder`, 0 regels anders). Buiten het mapje doen device knobs,
+scene-knoppen, Stop All Clips en Detail View precies wat ze deden, in elk mapje en elke
+grid-modus (`test/mapping.test.mjs` vergelijkt elke knop met de voorganger). In het mapje
+blijven fader, play, filter, Clip Stop, ●, Track Select, de master-knop (zwart), Bank
+(beatjump), Lock (quantize), Device ◀ ▶ (rack van de focus-track) en On/Off (effect) wat ze
+zijn. Gevolgen om te kennen:
+- In de grid-modus (Shift + Metronome) wint die op scene 1–5 (edit staat vooraan); device
+  knobs en Stop All blijven daar beeld.
+- In beeld kiezen scene 1–4 geen hotcues · loops · sampler · video: dat gaat met ▲ ▼ of
+  na Clip/Device View. De scene-lampjes tonen in beeld de regie, niet welke grid-modus open
+  is (met shift vast zie je de vijf extra modi).
+- In de modus patronen wint beeld op scene 1–5 en Stop All (rijen starten en alles stoppen
+  gaat buiten het mapje); Shift + Stop All blijft daar "alles meteen stoppen", want een
+  shift-regel gaat voor. Buiten patronen is Shift + Stop All in beeld ook paniek.
+
+**Eigen mapping.** Geen van de nieuwe sleutels valt op Clay's verschil (cc:0:20–23 in het
+rack); een oude volledige kopie van 25 sep wordt tegen zijn voorganger afgezet (anders 328
+× "weggehaald"). `test/mapping.test.mjs`, `test/feedback.test.mjs` en
+`test/spiegel.test.mjs` rekenen het na.
+
+Niet getest: de echte APC (roze naast rood op de scene-kolom, of Shift + Detail View en de
+regie op de scene-knoppen lekker liggen) en de ringen tegen een echte Stroommachine.

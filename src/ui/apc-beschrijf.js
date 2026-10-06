@@ -17,6 +17,27 @@ const STEM_UITLEG = {
   vocals: 'de zang', inst: 'de rest: alles behalve de zang (bij vier stems drums, bas en overig samen)',
   drums: 'de drums (alleen bij vier stems)', bass: 'de bas (alleen bij vier stems)', other: 'overig: wat geen zang, drums of bas is (alleen bij vier stems)',
 };
+// De Stroommachine (docs/BEELD.md): dezelfde namen als MACROS en REGIE in
+// src/koppel/beeld.js, hier los zodat apc.html de koppeling niet hoeft te laden.
+// Wat ze doen staat in de Stroommachine-repo (src/09c-live.js, 09d-poorten.js).
+const BEELD_MACRO = {
+  intensiteit: 'intensiteit, hoe wild het beeld is',
+  snelheid: 'snelheid van de beweging (glijdt in ~2 s)',
+  helderheid: 'helderheid (neutraal op 0,8, dicht = zwart)',
+  feedback: 'feedback, sporen van het vorige beeld (midden = neutraal)',
+  tint: 'tint, de kleur rond de kleurcirkel (midden = neutraal)',
+  dichtheid: 'dichtheid: schaal en vonken (midden = neutraal)',
+  glitch: 'glitch (dicht = geen)',
+  balans: 'balans geluid ↔ beeld van de Stroommachine zelf (links dimt haar beeld, rechts haar eigen geluid; midden = allebei)',
+};
+const BEELD_REGIE = {
+  ontdek: ['ontdek', 'ontdek, een nieuwe scène'],
+  volgende: ['volgende', 'volgende scène'],
+  vasthouden: ['vasthouden', 'vasthouden aan/uit: de regisseur wisselt niet meer zelf van scène'],
+  flits: ['flits', 'een flits (hooguit 2 per seconde)'],
+  paniek: ['paniek', 'paniek aan/uit: rustig naar zwart (~1,5 s), effecten en glitch weg'],
+  vrij: ['vrij', 'alles weer automatisch (vasthouden ook los)'],
+};
 
 /** { kort, lang }: kort past op de tekening, lang staat in de tabel. */
 export function beschrijf(action) {
@@ -165,6 +186,14 @@ export function beschrijf(action) {
   // De master: het insert-rack op het geheel (docs/MASTER.md), mapje master.
   if ((m = /^master\.fx\.knob\.(\d)$/.exec(action))) return { kort: `master ${m[1]}`, lang: `master-rack: knop ${m[1]} (wat die doet hangt van het rack af; voor de hele mix)` };
   if ((m = /^master\.fx\.knob\.(\d)\.hold$/.exec(action))) return { kort: `master ${m[1]}!`, lang: `master-rack: knop ${m[1]} vol open zolang je drukt` };
+  // Beeld: de Stroommachine op de pc via de relay (docs/BEELD.md), mapje beeld.
+  if ((m = /^beeld\.macro\.(\w+)$/.exec(action)) && BEELD_MACRO[m[1]]) {
+    return { kort: m[1], lang: `Stroommachine: ${BEELD_MACRO[m[1]]} (zonder verbinding met de relay doet hij niets en is de ring uit)` };
+  }
+  if ((m = /^beeld\.regie\.(\w+)$/.exec(action)) && BEELD_REGIE[m[1]]) {
+    const [kort, lang] = BEELD_REGIE[m[1]];
+    return { kort, lang: `Stroommachine: ${lang} (lampje: fel zolang je drukt, donker = verbonden, uit = geen verbinding)` };
+  }
   if ((m = /^video\.fx\.(\w+)\.hold$/.exec(action))) return { kort: `${VIDEO[m[1]] ?? m[1]}!`, lang: `video ${VIDEO[m[1]] ?? m[1]} vol aan zolang je drukt` };
   if ((m = /^video\.fx\.(\w+)$/.exec(action))) return { kort: VIDEO[m[1]] ?? m[1], lang: `video-effect ${VIDEO[m[1]] ?? m[1]}` };
   if ((m = /^layer\.(\w+)\.(\w+)$/.exec(action))) {

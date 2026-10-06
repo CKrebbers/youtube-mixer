@@ -225,7 +225,7 @@ ok('export -> import geeft exact dezelfde staat',
 // ---- de standaardmapping tegen de werkelijkheid ---------------------------
 // Een deck-dubbel: genoeg om bindEngine zijn werk te laten doen, zonder audio.
 
-const { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, list, read } = await import('../src/control/actions.js');
+const { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, bindBeeld, list, read } = await import('../src/control/actions.js');
 const { Lagen } = await import('../src/control/lagen.js');
 const { sleutelVan } = await import('../src/control/mapping.js');
 const dubbeldeck = (id) => ({
@@ -254,6 +254,8 @@ bindApp({ toon() {}, venster: () => ({ L: 'A', R: 'B' }), opnemer: {}, opnameSta
 bindLagen(new Lagen());
 // De auto-DJ (modus auto, Shift + scene 4): zijn actions bestaan pas met een automaat.
 bindAuto({ aan: false, fase: 'uit', volgende: null, zetAan() {}, ok() {}, overslaan() {}, langer() {}, nu() {} });
+// Het mapje beeld (Shift + Detail View): de actions van de Stroommachine bestaan pas met een koppeling.
+bindBeeld({ zetWaarde() {}, waarde: () => null, druk() {}, knopStand: () => null });
 const acties = new Set(list().map((a) => a.id));
 ok('actions geregistreerd voor deze controle', acties.size > 60);
 
@@ -1426,18 +1428,23 @@ console.log('\nmodus auto (auto-DJ)');
     ...Array.from({ length: 40 }, (_, n) => [`note:0:${n}@grid.secties`, `note:0:${n}#shift@grid.secties`]).flat(),
     // Sampler × secties (6 okt, tak studio/sec-sampler): rij 3 van de modus sampler (was
     // leeg) = de sectie die je hoort in pad 1–8 (sampler.N.section). Shift blijft wat het was.
-    ...[1, 2, 3, 4, 5, 6, 7, 8].map((k) => `note:0:${apc.gridNote(k, 3)}@grid.sampler`)].sort();
-  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4, scene 4 met shift in de grid-modus, de vijf beeld-noodknoppen, de acht koptelefoonknoppen, de elf van het mapje inst, het mapje master, de modus stems, de modus patronen, keylock/toon, vast in de grid-modus, de modus secties en rij 3 van de sampler (${nieuw.length} regels)`,
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map((k) => `note:0:${apc.gridNote(k, 3)}@grid.sampler`),
+    // Beeld (6 okt, spoor beeld, docs/BEELD.md): Shift + Detail View opent het mapje beeld,
+    // daarin device knob 1–8 = de acht macro's, scene 1–5 en Stop All Clips = de regie.
+    'note:0:65#shift', ...[16, 17, 18, 19, 20, 21, 22, 23].map((n) => `cc:0:${n}@device.beeld`),
+    ...[81, 82, 83, 84, 85, 86].map((n) => `note:0:${n}@device.beeld`)].sort();
+  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4, scene 4 met shift in de grid-modus, de vijf beeld-noodknoppen, de acht koptelefoonknoppen, de elf van het mapje inst, het mapje master, de modus stems, de modus patronen, keylock/toon, vast in de grid-modus, de modus secties, rij 3 van de sampler en het mapje beeld (${nieuw.length} regels)`,
     JSON.stringify(nieuw) === JSON.stringify(wilNieuw));
   const tel = (d) => { const c = {}; for (const r of d.rules) { const k = `${r.laag ?? '-'}${r.shift ? '#shift' : ''}`; c[k] = (c[k] || 0) + 1; } return c; };
   const voor = vorige ? tel(vorige) : {}, na = tel(doc);
   const anders = Object.keys({ ...voor, ...na }).filter((k) => voor[k] !== na[k]).sort();
-  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1), stems (40 + 1, 40 met shift), patronen (45 + 1, 41 met shift) en secties (40 + 1, 40 met shift) erbij, acht shift-regels zonder mapje (auto, master, stems, patronen, secties, keylock, toon −/+) en vier in de grid-modus, de noodknoppen (1 zonder mapje, 4 in video), de koptelefoon (8 zonder mapje), het mapje inst (11), het mapje master (11 + 1 met shift) en rij 3 van de sampler (8) (${anders.join(' ')})`,
-    anders.join() === '-,-#shift,device.inst,device.master,device.master#shift,edit.aan#shift,grid.auto,grid.patronen,grid.patronen#shift,grid.sampler,grid.sampler#shift,grid.secties,grid.secties#shift,grid.stems,grid.stems#shift,grid.video,grid.video#shift'
+  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1), stems (40 + 1, 40 met shift), patronen (45 + 1, 41 met shift) en secties (40 + 1, 40 met shift) erbij, negen shift-regels zonder mapje (auto, master, stems, patronen, secties, keylock, toon −/+, beeld) en vier in de grid-modus, de noodknoppen (1 zonder mapje, 4 in video), de koptelefoon (8 zonder mapje), het mapje inst (11), het mapje master (11 + 1 met shift), rij 3 van de sampler (8) en het mapje beeld (14) (${anders.join(' ')})`,
+    anders.join() === '-,-#shift,device.beeld,device.inst,device.master,device.master#shift,edit.aan#shift,grid.auto,grid.patronen,grid.patronen#shift,grid.sampler,grid.sampler#shift,grid.secties,grid.secties#shift,grid.stems,grid.stems#shift,grid.video,grid.video#shift'
     && na['grid.auto'] === 6 && na['grid.stems'] === 41 && na['grid.stems#shift'] === 40 && na['grid.patronen'] === 46 && na['grid.patronen#shift'] === 41
     && na['grid.secties'] === 41 && na['grid.secties#shift'] === 40
-    && na['-#shift'] === voor['-#shift'] + 8
+    && na['-#shift'] === voor['-#shift'] + 9
     && na['device.inst'] === 11 && !voor['device.inst'] && na['device.master'] === 11 && na['device.master#shift'] === 1
+    && na['device.beeld'] === 14 && !voor['device.beeld'] && !na['device.beeld#shift']
     && na['grid.sampler#shift'] === 1 && na['grid.video#shift'] === 1 && na['grid.sampler'] === voor['grid.sampler'] + 8
     && na['edit.aan#shift'] === voor['edit.aan#shift'] + 4 && na['-'] === voor['-'] + 1 + 8 && na['grid.video'] === voor['grid.video'] + 4
     && ['grid.hotcues', 'grid.loops', 'grid.klank', 'device.strip', 'device.rack']
@@ -1464,9 +1471,9 @@ console.log('\nmodus auto (auto-DJ)');
   const kopie25 = JSON.parse(JSON.stringify(vorige));
   for (const r of kopie25.rules) if (r.laag === 'device.rack' && VIDEO_KNOPPEN[r.in]) { r.action = VIDEO_KNOPPEN[r.in]; r.mode = 'absolute'; }
   const vk = verschilVanKopie(doc, kopie25);
-  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 313 x "weggehaald": 13 + 8 koptelefoonknoppen + 2 Cue Level-regels in een grid-modus + 11 van het mapje inst + 13 van het mapje master + 83 van de modus stems + 89 van de modus patronen + 3 van keylock en toon + 1 van vast + 82 van de modus secties + 8 van rij 3 van de sampler)',
+  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 328 x "weggehaald": 13 + 8 koptelefoonknoppen + 2 Cue Level-regels in een grid-modus + 11 van het mapje inst + 13 van het mapje master + 83 van de modus stems + 89 van de modus patronen + 3 van keylock en toon + 1 van vast + 82 van de modus secties + 8 van rij 3 van de sampler + 15 van het mapje beeld)',
     vk.basis === 'e2bef131-374' && vk.verschil.rules.length === 4 && vk.verschil.removed.length === 0
-    && maakVerschil(doc, kopie25).removed.length === 313);
+    && maakVerschil(doc, kopie25).removed.length === 328);
   lg.zet('grid', 'hotcues');
 
   // Beeld-noodknoppen (2 okt, ONTBREEKT A4): de master-knop (Track Select boven
@@ -1539,6 +1546,181 @@ console.log('\nmodus stems');
   const kaal = doc.rules.filter((r) => r.laag === 'grid.stems' || r.action === 'layer.grid.stems')
     .filter((r) => beschrijf(r.action).lang.startsWith('?') || beschrijf(r.action).kort === r.action);
   ok('elke regel van de modus stems heeft een uitleg op de APC-kaart', kaal.length === 0);
+}
+
+// ---- mapje beeld (6 okt, spoor beeld, docs/BEELD.md, docs/APC40.md) --------------
+// De Stroommachine op de pc als derde mapje van de device-groep, zoals master:
+// Shift + Detail View opent het; device knob 1–8 = de acht macro's, scene 1–5 =
+// ontdek · volgende · vasthouden · flits · vrij, Stop All Clips = paniek. Alleen
+// regels ERBIJ (15): buiten het mapje verandert er niets, met shift kiezen de
+// scene-knoppen nog de grid-modi, en de grid-modus (Shift + Metronome) wint.
+console.log('\nmapje beeld');
+{
+  const { Lagen, GROEPEN, LAAGNAAM, GLUREN: GLUREN_MS } = await import('../src/control/lagen.js');
+  const { eerdereStandaarden } = await import('../src/control/mapping.js');
+  const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+  const MACROS = ['intensiteit', 'snelheid', 'helderheid', 'feedback', 'tint', 'dichtheid', 'glitch', 'balans'];
+  const REGIE = { 82: 'ontdek', 83: 'volgende', 84: 'vasthouden', 85: 'flits', 86: 'vrij', 81: 'paniek' };
+  const DK = [16, 17, 18, 19, 20, 21, 22, 23].map((n) => `cc:0:${n}`);
+  const SCENES = [82, 83, 84, 85, 86].map((n) => `note:0:${n}`);
+  let t = 0;
+  const lg = new Lagen({ now: () => t, beschikbaar: () => true });
+  const bm = new Mapping({ read: () => 0, invoke: () => {}, lagen: () => lg.actief() });
+  bm.load(doc);
+  const actie = (sig, shift = false) => bm.kies(sig, { shift })?.action ?? null;
+
+  ok('beeld is een mapje van de device-groep met een eigen naam (en een eigen kiesknop, zoals master)',
+    GROEPEN.device.knoppen.beeld?.join() === 'beeld' && /Stroommachine/.test(LAAGNAAM['device.beeld'])
+    && GROEPEN.device.knoppen.view.join() === 'strip,rack,inst' && GROEPEN.device.knoppen.master?.join() === 'master');
+  ok('Shift + Detail View = layer.device.beeld; Detail View zonder shift doet in de standaard niets',
+    actie('note:0:65', true) === 'layer.device.beeld' && actie('note:0:65') === null
+    && doc.rules.filter((r) => r.in === 'note:0:65').length === 1);
+  const regels = doc.rules.filter((r) => r.laag === 'device.beeld');
+  ok('15 regels erbij: Shift + Detail View en 14 in het mapje (8 knoppen endless, 6 drukknoppen), geen enkele met shift',
+    regels.length === 14 && regels.every((r) => !r.shift)
+    && regels.filter((r) => r.in.startsWith('cc:')).every((r) => r.mode === 'endless')
+    && regels.filter((r) => r.in.startsWith('note:')).every((r) => r.mode === 'trigger')
+    && doc.rules.some((r) => r.in === 'note:0:65' && r.shift && !r.laag && r.action === 'layer.device.beeld' && r.mode === 'trigger'));
+
+  // Openen via de bus, zoals op het apparaat (shift is een gewone noot).
+  const viaBus = new Mapping({ read: () => 0, lagen: () => lg.actief(),
+    invoke: (a, on) => { const x = /^layer\.(\w+)\.(\w+)$/.exec(a); if (x) lg.druk(x[1], x[2], on); } });
+  viaBus.load(doc);
+  viaBus.handle(note(98, true)); viaBus.handle(note(65, true)); t += 100; viaBus.handle(note(98, false)); viaBus.handle(note(65, false));
+  const naKort = lg.stand.device;
+  viaBus.handle(note(64, true)); t += 100; viaBus.handle(note(64, false));
+  ok('Shift + Detail View kort: beeld staat vast open; Clip/Device View gaat daarna terug naar de strip',
+    naKort === 'beeld' && lg.stand.device === 'strip');
+  lg.zet('device', 'rack');
+  viaBus.handle(note(98, true)); viaBus.handle(note(65, true)); t += GLUREN_MS + 10;
+  const tijdens = lg.stand.device;
+  viaBus.handle(note(65, false)); viaBus.handle(note(98, false));
+  ok('Shift + Detail View vasthouden = even gluren: beeld zolang je vasthoudt, loslaten is terug naar het rack',
+    tijdens === 'beeld' && lg.stand.device === 'rack');
+  lg.zet('device', 'beeld');
+  viaBus.handle(note(98, true)); viaBus.handle(note(65, true)); t += 100; viaBus.handle(note(65, false)); viaBus.handle(note(98, false));
+  ok('nog eens Shift + Detail View in beeld: blijft beeld (zoals master)', lg.stand.device === 'beeld');
+
+  // In het mapje.
+  ok('in beeld: device knob 1–8 = intensiteit · snelheid · helderheid · feedback · tint · dichtheid · glitch · balans, ook met shift',
+    DK.every((sig, i) => actie(sig) === `beeld.macro.${MACROS[i]}` && actie(sig, true) === `beeld.macro.${MACROS[i]}`));
+  ok('in beeld: scene 1–5 = ontdek · volgende · vasthouden · flits · vrij, Stop All Clips = paniek',
+    Object.entries(REGIE).every(([n, naam]) => actie(`note:0:${n}`) === `beeld.regie.${naam}`));
+  ok('in beeld met shift: scene 1–5 kiezen nog de grid-modi secties · patronen · stems · auto · klank',
+    SCENES.map((sig) => actie(sig, true)).join() === 'layer.grid.secties,layer.grid.patronen,layer.grid.stems,layer.grid.auto,layer.grid.klank');
+  ok('in beeld blijven de kern en de rest rechts: fader, play, filter, Clip Stop, ● = cue, Bank (beatjump), Lock (quantize), Device ◀ ▶ (rack), On/Off, ▲ ▼, de master-knop (zwart)',
+    actie('cc:0:7') === 'track.1.fader' && actie('note:0:50') === 'track.1.play' && actie('cc:0:48') === 'track.1.filter'
+    && actie('note:0:52') === 'track.1.loop.toggle' && actie('note:0:48') === 'track.1.pfl'
+    && actie('note:0:60') === 'track.{focus}.beatjump.back' && actie('note:0:61') === 'track.{focus}.beatjump.fwd'
+    && actie('note:0:63') === 'transport.quantize' && actie('note:0:58') === 'track.{focus}.rack.prev'
+    && actie('note:0:59') === 'track.{focus}.rack.next' && actie('note:0:62') === 'track.{focus}.fx.bypass'
+    && actie('note:0:94') === 'layer.grid.prev' && actie('note:0:95') === 'layer.grid.next' && actie('note:0:80') === 'video.black');
+
+  // Een device-mapje wint op de scene-knoppen van elke grid-modus (de mapping
+  // zoekt edit → device → grid); alleen de grid-modus (edit) gaat ervoor.
+  const gridMis = [];
+  for (const modus of GROEPEN.grid.volgorde) {
+    lg.zet('grid', modus);
+    for (const [n, naam] of Object.entries(REGIE)) if (actie(`note:0:${n}`) !== `beeld.regie.${naam}`) gridMis.push(`${modus}/${n}`);
+  }
+  lg.zet('grid', 'patronen');
+  const patronenShift = actie('note:0:81', true);
+  lg.zet('grid', 'hotcues');
+  ok(`in beeld doen scene 1–5 en Stop All de regie, in elke grid-modus (ook patronen, secties, klank, auto, stems)${gridMis.length ? ' — mis: ' + gridMis.join() : ''}`,
+    gridMis.length === 0);
+  ok('… alleen shift + Stop All blijft in de modus patronen "alles meteen stoppen" (een shift-regel gaat voor)', patronenShift === 'patterns.stop.now');
+  lg.zet('edit', 'aan');
+  ok('grid-modus (Shift + Metronome) in beeld: scene 1–5 bewerken het grid, ook met shift (pin · ×2 · ½ · halve tel · klank)',
+    SCENES.map((sig) => actie(sig)).join() === ['here', 'double', 'halve', 'halfbeat', 'split'].map((x) => `track.{focus}.grid.${x}`).join()
+    && SCENES.map((sig) => actie(sig, true)).join() === [...['pin', 'double', 'halve', 'halfbeat'].map((x) => `track.{focus}.grid.${x}`), 'layer.grid.klank'].join());
+  ok('… en wat de grid-modus niet definieert blijft beeld: device knobs = macro\'s, Stop All = paniek',
+    actie('cc:0:16') === 'beeld.macro.intensiteit' && actie('note:0:81') === 'beeld.regie.paniek');
+  lg.zet('edit', 'uit');
+
+  // Indrukken en loslaten via de bus; een draai aan een device knob (endless) zet de macro vanaf zijn stand.
+  const gestuurd = [];
+  const stand = { 'beeld.macro.tint': 0.5 };
+  const vb = new Mapping({ read: (a) => (a in stand ? stand[a] : 0), invoke: (a, v) => gestuurd.push(`${a}=${typeof v === 'number' ? v.toFixed(4) : v}`),
+    lagen: () => lg.actief() });
+  vb.load(doc);
+  vb.handle(note(82, true)); vb.handle(note(82, false)); vb.handle(note(81, true)); vb.handle(note(81, false));
+  vb.handle(note(85, true)); lg.zet('device', 'strip'); vb.handle(note(85, false)); lg.zet('device', 'beeld');
+  vb.handle(cc(20, 64)); vb.handle(cc(20, 70));
+  ok('via de bus: scene 1 = ontdek, Stop All = paniek (indrukken true, loslaten false), loslaten van flits gaat naar flits ook als het mapje intussen dicht ging',
+    gestuurd.slice(0, 6).join() === 'beeld.regie.ontdek=true,beeld.regie.ontdek=false,beeld.regie.paniek=true,beeld.regie.paniek=false,beeld.regie.flits=true,beeld.regie.flits=false');
+  ok('device knob 5 (endless) in beeld: de tint vanaf zijn stand plus de draai (0,5 + 6/127)',
+    gestuurd.slice(6).join() === `beeld.macro.tint=${(0.5 + 6 / 127).toFixed(4)}`);
+  const leeg = new Mapping({ read: () => null, invoke: (a, v) => gestuurd.push(`${a}=${v}`), lagen: () => lg.actief() });
+  leeg.load(doc);
+  const voorLeeg = gestuurd.length;
+  leeg.handle(cc(16, 64)); leeg.handle(cc(16, 80));
+  ok('zonder verbinding (read null) doet een draai aan een macro niets', gestuurd.length === voorLeeg);
+  lg.zet('device', 'strip');
+
+  // Niets bestaands veranderd: in elk ander mapje (strip, rack, inst, master, en
+  // vorm met ?vormen=1), elke grid-modus, met en zonder grid-modus en shift, doet
+  // elke knop wat hij in de vorige standaard deed. Alleen Shift + Detail View is nieuw.
+  const vorige = eerdereStandaarden(doc).find((e) => e.vingerafdruk === 'a4d5af2f-687');
+  const vorigeE = doc.eerder.find((e) => e.vingerafdruk === 'a4d5af2f-687');
+  ok('de standaard van vóór het mapje beeld (a4d5af2f-687) is een voorganger: 0 regels anders, alleen de 15 nieuwe sleutels "weggehaald"',
+    vorige?.doc.rules.length === 687 && vorigeE?.rules.length === 0 && vorigeE.removed.length === 15
+    && vorigeE.removed.every((k) => k === 'note:0:65#shift' || k.endsWith('@device.beeld')));
+  const vm = new Mapping({ read: () => 0, invoke: () => {}, lagen: () => lg.actief() });
+  vm.load(vorige.doc);
+  const sigs = [...new Set(doc.rules.map((r) => r.in))];
+  const anders = [];
+  for (const dev of ['strip', 'rack', 'inst', 'master']) {
+    for (const modus of GROEPEN.grid.volgorde) {
+      for (const edit of ['uit', 'aan']) {
+        lg.zet('device', dev); lg.zet('grid', modus); lg.zet('edit', edit);
+        for (const sig of sigs) {
+          for (const sh of [false, true]) {
+            if (sig === 'note:0:65' && sh) continue;
+            const a = bm.kies(sig, { shift: sh }), b = vm.kies(sig, { shift: sh });
+            if ((a?.action ?? null) !== (b?.action ?? null) || (a?.mode ?? null) !== (b?.mode ?? null)) anders.push(`${dev}/${modus}/${edit}/${sig}${sh ? '#shift' : ''}`);
+          }
+        }
+      }
+    }
+  }
+  ok(`buiten het mapje beeld doet elke knop (${sigs.length}) wat hij deed, in elk mapje, elke grid-modus, met en zonder grid-modus en shift${anders.length ? ' — anders: ' + anders.slice(0, 6).join(', ') : ''}`,
+    anders.length === 0);
+  // In beeld zelf: alles behalve de device knobs, scene 1–5 en Stop All doet wat het in de strip doet.
+  const andersInBeeld = [];
+  const eigen = new Set([...DK, ...SCENES, 'note:0:81']);
+  for (const modus of GROEPEN.grid.volgorde) {
+    for (const edit of ['uit', 'aan']) {
+      lg.zet('grid', modus); lg.zet('edit', edit);
+      for (const sig of sigs) {
+        if (eigen.has(sig)) continue;
+        for (const sh of [false, true]) {
+          lg.zet('device', 'strip'); const a = actie(sig, sh);
+          lg.zet('device', 'beeld'); const b = actie(sig, sh);
+          if (a !== b) andersInBeeld.push(`${modus}/${edit}/${sig}${sh ? '#shift' : ''}`);
+        }
+      }
+    }
+  }
+  lg.zet('device', 'strip'); lg.zet('grid', 'hotcues'); lg.zet('edit', 'uit');
+  ok(`in beeld doet alles behalve de device knobs, scene 1–5 en Stop All wat het in de strip doet${andersInBeeld.length ? ' — anders: ' + andersInBeeld.slice(0, 6).join(', ') : ''}`,
+    andersInBeeld.length === 0);
+
+  // Met ?vormen=1 (fragment): Detail View zonder shift = het mapje vorm, met shift = beeld.
+  const fragmentV = JSON.parse(readFileSync(new URL('../mappings/apc40mk2-vormen.json', import.meta.url), 'utf8'));
+  const fv = new Mapping({ read: () => 0, invoke: () => {}, lagen: () => lg.actief() });
+  fv.load(doc);
+  fv.voegToe('vormen', fragmentV);
+  ok('met het fragment vorm: Detail View = mapje vorm, Shift + Detail View = mapje beeld (het fragment kent geen shift-regel op Detail View)',
+    fv.kies('note:0:65')?.action === 'layer.device.detail' && fv.kies('note:0:65', { shift: true })?.action === 'layer.device.beeld'
+    && !fragmentV.rules.some((r) => r.in === 'note:0:65' && r.shift));
+  lg.zet('device', 'vorm');
+  ok('… en in het mapje vorm doen device knobs en scene-knoppen wat ze deden (vorm · modus hotcues)',
+    fv.kies('cc:0:16')?.action === 'video.layer.knob.1' && fv.kies('note:0:82')?.action === 'layer.grid.hotcues');
+  lg.zet('device', 'strip');
+
+  const kaal = doc.rules.filter((r) => r.laag === 'device.beeld' || r.action === 'layer.device.beeld')
+    .filter((r) => { const b = beschrijf(r.action); return b.lang.startsWith('?') || b.kort === r.action || b.lang === r.action; });
+  ok('elke regel van het mapje beeld heeft een uitleg op de APC-kaart', kaal.length === 0);
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

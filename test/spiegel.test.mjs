@@ -251,5 +251,33 @@ const S = await import('../src/ui/stems-weergave.js');
   ok('kolomkop: geen stems, bezig of geen nummer = geen teken', k({}) === null && k({ opdracht: { status: 'bezig', aantal: 2 } }) === null && S.kolomTeken({}) === null);
 }
 
+// ---- mapje beeld (6 okt, spoor beeld): de Stroommachine op het scherm --------------
+// Detail View doet ALLEEN met shift iets (het mapje beeld): een gewone klik niets,
+// shift + klik opent het, het label zegt "⇧ …", geen lampje (zoals de LED zonder shift).
+{
+  lagen.zet('device', 'strip'); lagen.zet('grid', 'hotcues'); lagen.zet('edit', 'uit');
+  const dv = lees('note:0:65');
+  ok('Detail View op het scherm: geen gewone action, shift + klik = mapje beeld, label "⇧ …", geen lampje',
+    dv && dv.action === null && dv.actionShift === 'layer.device.beeld' && dv.kort.startsWith('⇧') && dv.lamp === null
+    && /met shift/.test(dv.titel));
+  ok('… met de APC-shift vast is het gewoon de kiesknop van beeld', lees('note:0:65', 1, true)?.action === 'layer.device.beeld');
+  ok('een knop zonder enige regel blijft null (ook zonder shift-regel)', lees('note:0:103') === null);
+  lagen.zet('device', 'beeld');
+  const MACROS = ['intensiteit', 'snelheid', 'helderheid', 'feedback', 'tint', 'dichtheid', 'glitch', 'balans'];
+  ok('in beeld tonen de device knobs de acht macro\'s, met hun naam als label',
+    P.DEVICE_KNOBS.every((c, i) => lees(c.sig, 3)?.action === `beeld.macro.${MACROS[i]}` && lees(c.sig, 3).kort === MACROS[i]));
+  const sc = (n) => lees(`note:0:${n}`, 3);
+  ok('in beeld: scene 1–5 = ontdek · volgende · vasthouden · flits · vrij (geen grid-modus-kleur), Stop All = paniek',
+    ['ontdek', 'volgende', 'vasthouden', 'flits', 'vrij'].every((naam, i) => sc(82 + i)?.action === `beeld.regie.${naam}` && sc(82 + i).kort === naam && sc(82 + i).modus === null)
+    && sc(81)?.action === 'beeld.regie.paniek' && sc(81).kort === 'paniek');
+  ok('in beeld: shift + klik op scene 1 = modus secties, op scene 5 = klank (zoals op de APC)',
+    sc(82)?.actionShift === 'layer.grid.secties' && sc(86)?.actionShift === 'layer.grid.klank');
+  ok('in beeld blijven Device ◀ ▶, On/Off, Bank en Lock wat ze waren (focus-track 3)',
+    lees('note:0:58', 3)?.action === 'track.3.rack.prev' && lees('note:0:62', 3)?.action === 'track.3.fx.bypass'
+    && lees('note:0:60', 3)?.action === 'track.3.beatjump.back' && lees('note:0:63', 3)?.action === 'transport.quantize');
+  lagen.zet('device', 'strip');
+  ok('mapje dicht: device knob 1 weer trim, scene 1 weer hotcues', lees('cc:0:16', 3)?.action === 'track.3.trim' && sc(82)?.action === 'layer.grid.hotcues');
+}
+
 if (fails.length) { console.log(`\n${fails.length} FAIL`); process.exit(1); }
 console.log('\nspiegel: alles groen');

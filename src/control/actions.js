@@ -1382,6 +1382,9 @@ export function bindLagen(lagen) {
   }
 }
 
+/** Macro's die in de Stroommachine op 0,5 neutraal staan (LIVE_MACROS in 09c-live.js daar; balans = geluid ↔ beeld). */
+const BEELD_BIPOLAIR = new Set(['macro.feedback', 'macro.tint', 'macro.dichtheid', 'macro.balans']);
+
 /** Wat een regieknop van de Stroommachine doet, voor het label (src/09d-poorten.js daar). */
 export const BEELD_REGIE_LABEL = {
   ontdek: 'ontdek (een nieuwe scène)', volgende: 'volgende scène', vasthouden: 'vasthouden aan/uit (de regisseur wisselt niet zelf)',
@@ -1399,7 +1402,9 @@ export function bindBeeld(beeld) {
   for (const poort of BEELD_MACROS) {
     const naam = poort.slice('macro.'.length);
     define(`beeld.${poort}`, 'value', (v) => { beeld.zetWaarde(poort, v); },
-      { label: `Beeld: ${naam}`, read: () => beeld.waarde(poort) });
+      { label: `Beeld: ${naam}`, read: () => beeld.waarde(poort),
+        // Neutraal in het midden in de Stroommachine: de ring toont dan vanuit het midden (pan-ring).
+        ...(BEELD_BIPOLAIR.has(poort) ? { bipolar: true } : {}) });
   }
   for (const poort of BEELD_REGIE) {
     const naam = poort.slice('regie!'.length);

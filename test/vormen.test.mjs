@@ -559,7 +559,11 @@ console.log('het mappingfragment voor de APC');
   const kaal = frag.rules.filter((r) => beschrijf(r.action).kort === r.action);
   ok('elke action in het fragment heeft een uitleg voor het scherm en de APC-kaart', kaal.length === 0);
   if (kaal.length) console.log('      zonder uitleg:', kaal.map((r) => r.action).join(', '));
-  ok('Detail View was vrij in de standaardmapping', !std.rules.some((r) => r.in === 'note:0:65'));
+  // Shift + Detail View is sinds 6 okt het mapje beeld (spoor beeld): een shift-regel,
+  // dus Detail View zelf (zonder shift, wat het fragment gebruikt) blijft vrij.
+  ok('Detail View (zonder shift) was vrij in de standaardmapping; met shift is het het mapje beeld',
+    !std.rules.some((r) => r.in === 'note:0:65' && !r.shift)
+    && std.rules.filter((r) => r.in === 'note:0:65').every((r) => r.shift && !r.laag && r.action === 'layer.device.beeld'));
   ok('device knobs 1–6 = vorm, 7 = dekking, endless (geen overpakken)',
     [16, 17, 18, 19, 20, 21].every((cc, i) => frag.rules.some((r) => r.in === `cc:0:${cc}` && r.action === `video.layer.knob.${i + 1}` && r.mode === 'endless'))
     && frag.rules.some((r) => r.in === 'cc:0:22' && r.action === 'video.layer.opacity' && r.mode === 'endless'));
