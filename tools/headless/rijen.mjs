@@ -1,5 +1,5 @@
 // De rijen onder de bovenbalk (stems, koptelefoon, instrument, patronen, master,
-// auto, klankschaal): blijven de acht trackkolommen met hun faders en de
+// auto, klankschaal, beeld): blijven de acht trackkolommen met hun faders en de
 // sampler in beeld, met welke rijen er ook open staan? (6 okt: met meerdere
 // rijen open ging het hoofdgebied scrollen en vielen de faders en de sampler
 // van Clay's MacBook-scherm.)
@@ -97,7 +97,7 @@ const beeld = () => cdp('Page.captureScreenshot', { format: 'png', clip: { x: 0,
 const uitkomst = [];
 const ok = (naam, cond, extra = '') => { uitkomst.push([naam, !!cond]); console.log(`${cond ? '  ok  ' : 'FAIL  '}${naam}${!cond && extra ? ` (${extra})` : ''}`); };
 
-const RIJEN = ['stems', 'koptelefoon', 'instrument', 'patronen', 'master', 'auto', 'klankschaal'];
+const RIJEN = ['stems', 'koptelefoon', 'instrument', 'patronen', 'master', 'auto', 'klankschaal', 'beeld'];
 /**
  * Welke rijen samen open: geen, elk apart, twee keer drie (de lage en de hoge), alle;
  * en met de videokolom open (die maakt het focusdeck hoger) één en alle.

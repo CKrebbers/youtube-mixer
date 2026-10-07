@@ -28,6 +28,7 @@ import { GROEPEN, LAAGNAAM } from './lagen.js';
 import { VOLGEN, LADDERS, KLANKSOORTEN, TRANSPOSITIE_MAX } from '../engine/klankschaal.js';
 import { INSTRUMENTEN } from '../engine/instrumenten/index.js';
 import { PLEKKEN, MAX_LENGTE, STANDAARD_LENGTE, TEMPO, SWING, gevuld, volgendeLengte } from '../engine/patronen/model.js';
+import { MACROS as BEELD_MACROS, REGIE as BEELD_REGIE } from '../koppel/beeld.js';
 
 const registry = new Map();
 
@@ -1378,5 +1379,36 @@ export function bindLagen(lagen) {
       define(`layer.${groep}.next`, 'trigger', (on) => { if (on) lagen.stap(groep, 1); }, { label: `Mapje ${g.naam}: volgende` });
       define(`layer.${groep}.prev`, 'trigger', (on) => { if (on) lagen.stap(groep, -1); }, { label: `Mapje ${g.naam}: vorige` });
     }
+  }
+}
+
+/** Macro's die in de Stroommachine op 0,5 neutraal staan (LIVE_MACROS in 09c-live.js daar; balans = geluid ↔ beeld). */
+const BEELD_BIPOLAIR = new Set(['macro.feedback', 'macro.tint', 'macro.dichtheid', 'macro.balans']);
+
+/** Wat een regieknop van de Stroommachine doet, voor het label (src/09d-poorten.js daar). */
+export const BEELD_REGIE_LABEL = {
+  ontdek: 'ontdek (een nieuwe scène)', volgende: 'volgende scène', vasthouden: 'vasthouden aan/uit (de regisseur wisselt niet zelf)',
+  flits: 'flits (hooguit 2 per seconde)', paniek: 'paniek aan/uit', vrij: 'alles weer automatisch',
+};
+
+/**
+ * De APC-pagina "Beeld" (docs/BEELD.md): de Stroommachine op de pc, via de
+ * relay (src/koppel/beeld.js). `beeld.macro.<naam>` is een value 0..1 naar de
+ * poort `macro.<naam>`, `beeld.regie.<naam>` een trigger naar `regie!<naam>`
+ * die alleen bij INDRUKKEN iets stuurt (loslaten zet alleen het lampje uit).
+ * Zonder verbinding doen ze niets en is hun read null: ring en lampje uit.
+ */
+export function bindBeeld(beeld) {
+  for (const poort of BEELD_MACROS) {
+    const naam = poort.slice('macro.'.length);
+    define(`beeld.${poort}`, 'value', (v) => { beeld.zetWaarde(poort, v); },
+      { label: `Beeld: ${naam}`, read: () => beeld.waarde(poort),
+        // Neutraal in het midden in de Stroommachine: de ring toont dan vanuit het midden (pan-ring).
+        ...(BEELD_BIPOLAIR.has(poort) ? { bipolar: true } : {}) });
+  }
+  for (const poort of BEELD_REGIE) {
+    const naam = poort.slice('regie!'.length);
+    define(`beeld.regie.${naam}`, 'trigger', (on) => { beeld.druk(poort, on); },
+      { label: `Beeld: ${BEELD_REGIE_LABEL[naam] ?? naam}`, read: () => beeld.knopStand(poort) });
   }
 }

@@ -164,13 +164,15 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
   function zet(item, r) {
     const { el } = item;
     item.r = r;
-    const meta = r ? metaOf(r.action) : null;
+    // Een knop die alleen met shift iets doet (Shift + Detail View) heeft geen
+    // action, wel een actionShift: die telt dan voor "past".
+    const meta = r ? metaOf(r.action ?? r.actionShift) : null;
     const isKnob = el.classList.contains('knob');
     const isFader = el.tagName === 'INPUT';
     // Een draaiknop of fader kan alleen een waarde sturen, een drukknop alleen
     // aan/uit. Past het niet, dan toont hij wat hij doet maar stuurt hij niets.
     const past = r && meta && ((isKnob || isFader) ? meta.type === 'value' : meta.type === 'trigger');
-    if (r) el.dataset.action = r.action; else delete el.dataset.action;
+    if (r?.action) el.dataset.action = r.action; else delete el.dataset.action;
     if (r?.actionShift) el.dataset.actionShift = r.actionShift; else delete el.dataset.actionShift;
     if (r?.modus) el.dataset.modus = r.modus; else delete el.dataset.modus;
     el.classList.toggle('leeg', !r);
@@ -385,7 +387,8 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
     tekst(fdLaag, laag.toUpperCase());
     tekst(fdLaagUitleg, laag === 'rack' ? 'de acht knoppen van het rack'
       : laag === 'inst' ? `de acht knoppen van het instrument${fdInst ? ` (${fdInst.naam})` : ''}`
-      : laag === 'master' ? 'het master-rack: 1–7, knop 8 = mix (shift: 8)' : 'trim · high · mid · low / echo · galm · fx');
+      : laag === 'master' ? 'het master-rack: 1–7, knop 8 = mix (shift: 8)'
+      : laag === 'beeld' ? 'de Stroommachine: acht macro\'s · scene 1–5 = regie · Stop All = paniek' : 'trim · high · mid · low / echo · galm · fx');
     if (focusdeel.dataset.laag !== laag) focusdeel.dataset.laag = laag;
   }
 

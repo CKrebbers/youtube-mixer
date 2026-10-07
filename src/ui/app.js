@@ -1,5 +1,5 @@
 import { Engine, DECK_IDS } from '../engine/engine.js';
-import { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, invoke, bijInvoke } from '../control/actions.js';
+import { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, bindBeeld, invoke, bijInvoke } from '../control/actions.js';
 import { Lagen } from '../control/lagen.js';
 import { opzetMapjeBalk } from './mapje-balk.js';
 import { attachKeyboard } from '../control/keyboard.js';
@@ -18,6 +18,7 @@ import { opzetKoptelefoon, koptelefoonOpties } from './koptelefoon-paneel.js';
 import { opzetInstrument } from './instrument-paneel.js';
 import { opzetPatronen } from './patronen-paneel.js';
 import { opzetMaster } from './master-paneel.js';
+import { opzetBeeld } from './beeld-paneel.js';
 import { StemsWachtrij } from './stems-wachtrij.js';
 import { Automaat } from '../auto/automaat.js';
 import { opzetPlanKoppeling } from './plan-koppeling.js';
@@ -126,6 +127,15 @@ const vensters = opzetVensters({
   gridModus: () => lagen.actief().includes('edit.aan'),
 });
 
+// ---- beeld: de Stroommachine op de pc, via de Varve-relay (docs/BEELD.md) ----
+// Vóór het laden (naLaad hieronder) en vóór de MIDI (de mapping kent dan de
+// beeld-actions al). Uit of zonder adres gaat er niets het netwerk op.
+const beeldPaneel = opzetBeeld({ engine });
+const { beeld } = beeldPaneel;
+bindBeeld(beeld);
+window.beeld = beeld;
+window.addEventListener('pagehide', () => beeld.stop());
+
 // ---- effect-racks, sampler-pads, laden en library -------------------------
 const racks = opzetRacks({ engine, staat, naRack: (id) => logboek.naRack(id) });
 const samplerOpslag = opzetSamplerOpslag({ engine, staat });
@@ -134,7 +144,13 @@ const hotcueOpslag = opzetHotcueOpslag({ engine, meld });
 const laden = opzetLaden({
   engine, staat, videoMixer,
   racks, haalSamples: samplerOpslag.haalSamples, haalHotcues: hotcueOpslag.haalHotcues,
-  naLaad: (info) => logboek.naLaad(info), stems: stemsWachtrij,
+  // Elke geslaagde laad: het beeld (welk nummer op welke kant) en het handelingenlog.
+  // Het beeld in een vangnet: een fout daar mag laden en log nooit storen.
+  naLaad: (info) => {
+    try { beeld.naLaad(info); } catch (err) { console.warn('[beeld] naLaad overgeslagen:', err); }
+    logboek.naLaad(info);
+  },
+  stems: stemsWachtrij,
 });
 window.library = laden.library;
 // De STEMS-rij voor de track met focus (standaard dicht, knop "stems").
@@ -268,10 +284,24 @@ const statusVanMij = () => {
   const h = midiDelen.midi.status().hub;
   return h.verbonden || (!h.vervangen && tabblad().eerste);
 };
+// Beeld (docs/BEELD.md): alleen het tabblad met de APC stuurt de Stroommachine,
+// net als de melding aan de Controlekamer. Twee tabbladen zouden allebei op elke
+// ping antwoorden (dan klopt haar klokverschil niet meer) en elkaars mix
+// overschrijven. De lock komt na het opstarten binnen, en met ?hub= wisselt
+// het per verbinding: bij elke verandering, en elke seconde voor de zekerheid.
+const beeldMag = () => beeld.magZenden(statusVanMij());
+tabblad().on('eerste', beeldMag);
+tabblad().on('tweede', beeldMag);
+if (hubUrl) midiDelen.midi.on('hub', beeldMag);
+setInterval(beeldMag, 1000);
+beeldMag();
+// Terug uit de bfcache (pagehide stopte de zender): weer starten als het mag.
+window.addEventListener('pageshow', (e) => { if (e.persisted) { beeldMag(); beeld.zet({}, { vanzelf: true }); } });
+
 startStatusZender({
   isEerste: statusVanMij,
   lees: () => ({ snap: engine.snapshot(), midi: midiDelen.midi.status(), audio: engine.ctx.state,
-                 auto: auto.aan, opname: !!opname.opnemer.bezig }),
+                 auto: auto.aan, opname: !!opname.opnemer.bezig, beeld: beeld.status() }),
 });
 
 // ---- renderloop -----------------------------------------------------------
@@ -292,6 +322,7 @@ startRenderloop({
     instrument: instrumentPaneel.teken,
     patronen: patronenPaneel.teken,
     master: masterPaneel.teken,
+    beeld: beeldPaneel.teken,
   },
 });
 

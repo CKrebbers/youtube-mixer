@@ -268,6 +268,9 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     veilig('master-rij', () => {
       stappen.master?.();
     });
+    veilig('beeld', () => {
+      stappen.beeld?.();
+    });
     veilig('opnemen', () => {
       stappen.opnemen();
     });

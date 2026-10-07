@@ -105,7 +105,8 @@ ok('het profiel noemt elk element (label), geen enkele action', M.maschineMk2.la
 const kaart = lees('../mappings/maschine-mk2.json');
 const ms0 = new Maschine({ engine: eng, noten, read, invoke, nu: () => nu });
 const uitKaart = ms0.laadMapping(kaart);
-ok('mappings/maschine-mk2.json laadt zonder fouten: 32 regels, shift = note:1:39', uitKaart.aantal === 32 && !uitKaart.fouten.length && ms0.mapping.shiftSig === 'note:1:39');
+// 64 regels sinds de knoppagina's (studio/maschine-dj): de 32 van spelen en patronen, plus Strip en Rack (elk 8 + 8 fijn).
+ok('mappings/maschine-mk2.json laadt zonder fouten: 64 regels, shift = note:1:39', uitKaart.aantal === 64 && !uitKaart.fouten.length && ms0.mapping.shiftSig === 'note:1:39');
 ok('groep A–H -> track.1–8.focus (trigger)', kaart.rules.slice(0, 8).every((r, i) => r.in === `note:1:${24 + i}` && r.action === `track.${i + 1}.focus` && r.mode === 'trigger'));
 ok('draaiknop 1–8 -> track.{speel}.inst.knob.1–8, relatief (tweecomplement), 1/1000 per tel, met shift 1/5000',
   kaart.rules.slice(8, 24).every((r) => r.mode === 'relative-2c' && /^track\.\{speel\}\.inst\.knob\.[1-8]$/.test(r.action) && r.step === (r.shift ? 0.0002 : 0.001)));
@@ -242,8 +243,9 @@ ms.vergeet();
 ms.tik();
 const eerste = leds.length;
 // 11 knoppen sinds de padmodus secties (6 okt): SCENE heeft nu ook een lampje (was 10, samen 34).
-ok(`eerste tik: alle lampjes (16 pads, 8 groepen, 11 knoppen = 35), als noot aan op hun nummer (${eerste})`,
-  eerste === 35 && leds.every((m) => m.length === 3 && (m[0] === 0x90 || m[0] === 0x91) && m[2] <= 127));
+// 14 sinds de knoppagina's (studio/maschine-dj): ◄ ► links boven en CONTROL (uitleg) erbij.
+ok(`eerste tik: alle lampjes (16 pads, 8 groepen, 14 knoppen = 38), als noot aan op hun nummer (${eerste})`,
+  eerste === 38 && leds.every((m) => m.length === 3 && (m[0] === 0x90 || m[0] === 0x91) && m[2] <= 127));
 leds.length = 0;
 ms.tik();
 ok('tweede tik zonder verandering: niets', leds.length === 0);
@@ -296,7 +298,7 @@ poort.in.state = 'connected'; poort.uit.state = 'connected';
 poort.in.onstatechange({});
 nu += 1000;
 ms.tik();
-ok('terug: alle lampjes (35, met SCENE) en beide schermen opnieuw', leds.length === 35 && schermen.length === 2);
+ok('terug: alle lampjes (38, met SCENE, ◄ ► en CONTROL) en beide schermen opnieuw', leds.length === 38 && schermen.length === 2);
 
 
 // ---- 5b. patronen: de stapmodus en het transport ------------------------------------------------
@@ -721,6 +723,101 @@ console.log('\nmidi.js: een speelapparaat is nooit "de controller"');
   h3.onInput((m) => gehoord.push(m));
   h3.access.inputs.get('x').onmidimessage({ data: Uint8Array.of(0x90, 36, 100), timeStamp: 0 });
   ok('… zijn noten (36!) gaan dus nooit door de APC-mapping', gehoord.length === 0);
+}
+
+// ---- 10. knoppagina's en uitleg (tak studio/maschine-dj) ---------------------------------------
+console.log("\nknoppagina's (◄ ► links boven) en uitleg (CONTROL)");
+{
+  const MS = await import('../src/control/maschine.js');
+  const gelijk = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  // Track 3 draagt een nummer, met een rack van zes plekken (plek 2 bipolair).
+  eng.decks.C = { buffer: {}, title: 'Proefnummer', duration: 200, position: 20, bpm: 124, toonsoort: { camelot: '8A', kort: 'Am' },
+    fx: { rackNaam: 'Oplossen', plekNaam: (k) => (k <= 6 ? ['ruimte', 'toon', 'duur', 'meng', 'diepte', 'snelheid'][k - 1] : null), plekBipolair: (k) => k === 2 } };
+  const p2 = {
+    in: { id: BRON, name: 'Maschine MK2 (hub)', state: 'connected', onmidimessage: null, onstatechange: null },
+    uit: { id: 'uit2', name: 'Maschine MK2 (hub)', state: 'connected', send: () => {} },
+    scherm: () => {},
+  };
+  const m2 = new Maschine({ engine: eng, noten, read, invoke, nu: () => nu, beschrijf });
+  m2.laadMapping(kaart);
+  m2.koppel(p2);
+  const st = (...b) => p2.in.onmidimessage({ data: Uint8Array.from(b), timeStamp: nu });
+  const kn = (naam, aan = true) => st(aan ? 0x91 : 0x81, M.knopNoot(naam), aan ? 127 : 0);
+  const tk = (naam) => { kn(naam, true); kn(naam, false); };
+  const draai = (k, tellen) => st(0xB0, 15 + k, tellen >= 0 ? tellen : 128 + tellen);
+  const led = (naam) => m2.ledBeeld().get(`1:${M.knopNoot(naam)}`);
+  const laatste = () => aangeroepen[aangeroepen.length - 1];
+
+  ok('begint op de pagina Instrument; ◄ uit, ► half, CONTROL zacht', m2.pagina === 'instrument' && led('browseL') === 0 && led('browseR') === 32 && led('control') === 16);
+  tk('groepC');
+  tk('browseR');
+  ok('► = de pagina Strip (een open mapje voor de mapping: pagina.strip); ◄ en ► nu allebei half', m2.pagina === 'strip' && led('browseL') === 32 && led('browseR') === 32);
+  delete stand['track.3.trim'];
+  draai(1, 20);
+  ok('Strip: knop 1 = track.{focus}.trim, relatief: 20 tellen = +0,02 vanaf het midden', laatste()[0] === 'track.3.trim' && dicht(laatste()[1], 0.52));
+  kn('shift', true); draai(1, 20); kn('shift', false);
+  ok('… met SHIFT fijn: 20 tellen = +0,004', laatste()[0] === 'track.3.trim' && dicht(laatste()[1], 0.524));
+  draai(8, -30);
+  ok('… knop 8 = het filter van de focus-track (op de APC zit dat op de trackknop)', laatste()[0] === 'track.3.filter' && dicht(laatste()[1], 0.47));
+  draai(2, 5);
+  ok('… knop 2 = hoog; de knop die je net draaide staat omgekeerd, tot GEDRAAID_MS voorbij is', laatste()[0] === 'track.3.high' && m2.stand().gedraaid === 1
+    && (nu += MS.GEDRAAID_MS + 1, m2.stand().gedraaid === null));
+  Object.assign(stand, { 'track.3.trim': 0.5, 'track.3.high': 0.01, 'track.3.mid': 1, 'track.3.low': 0.5, 'track.3.send.a': 0.25, 'track.3.send.b': 0, 'track.3.fx.mix': 0.4, 'track.3.filter': 0.5 });
+  let k = m2.stand().knoppen;
+  ok('Strip op het scherm: trim, hoog, mid, laag, echo, galm, fx-mix, filter', k.map((x) => x.label).join() === 'trim,hoog,mid,laag,echo,galm,fx-mix,filter');
+  ok('… in echte eenheden: 0 dB, kill, +8,0 dB (eqDb), 25%, open; EQ, trim en filter vanuit het midden',
+    k[0].tekst === '0 dB' && k[1].tekst === 'kill' && k[2].tekst === '+8,0 dB' && k[4].tekst === '25%' && k[7].tekst === 'open'
+    && k[0].bipolair && k[1].bipolair && k[7].bipolair && !k[4].bipolair);
+  ok('… het filter zoals de engine het zet: links lowpass, rechts highpass (filterDoelen)', /^LP /.test(MS.filterTekst(0.2)) && /^HP /.test(MS.filterTekst(0.8)) && MS.filterTekst(0.501) === 'open');
+  const dj = m2.stand().dj;
+  ok('… de kop: de focus-track met titel, bpm, toonsoort en resterende tijd', dj.nr === 3 && dj.titel === 'Proefnummer' && dj.bpm === '124,0' && dj.toon === '8A Am' && dj.rest === '-3:00' && dj.wat === 'nummer');
+  const schermStrip = S.tekenScherm(m2.stand(), 0);
+  tk('browseR');
+  Object.assign(stand, { 'track.3.fx.knob.1': 0.3, 'track.3.fx.knob.2': 0.75, 'track.3.fx.knob.3': 0.5, 'track.3.fx.knob.4': 1, 'track.3.fx.knob.5': 0, 'track.3.fx.knob.6': 0.6 });
+  k = m2.stand().knoppen;
+  ok('► = Rack: de namen die het rack zelf geeft (fx.plekNaam), plek 7 en 8 bestaan niet', m2.pagina === 'rack' && k[0].label === 'ruimte' && k[5].label === 'snelheid' && k[6].waarde === null && k[7].waarde === null);
+  ok('… procenten, bipolair met teken (plek 2: +50%)', k[0].tekst === '30%' && k[1].tekst === '+50%' && k[1].bipolair && !k[0].bipolair);
+  draai(3, 10);
+  ok('… knop 3 = track.{focus}.fx.knob.3', laatste()[0] === 'track.3.fx.knob.3' && dicht(laatste()[1], 0.51));
+  ok('… het scherm: de naam van het rack in de kop, en anders dan Strip', !gelijk([...schermStrip], [...S.tekenScherm(m2.stand(), 0)]));
+  tk('browseR');
+  ok('► op de laatste pagina: blijft Rack, ► uit', m2.pagina === 'rack' && led('browseR') === 0);
+  tk('browseL'); tk('browseL');
+  eng.zet('B', 'drums');
+  const voor = eng.inst.B.leesParam(1);
+  draai(1, 50);
+  ok('◄ ◄ = terug op Instrument: knop 1 = weer de instrumentknop van de speeltrack', m2.pagina === 'instrument' && laatste()[0] === 'track.2.inst.knob.1' && dicht(eng.inst.B.leesParam(1), voor + 0.05));
+
+  // Uitleg: CONTROL vasthouden.
+  const focusVoor = eng.focus, aantal = aangeroepen.length;
+  kn('control', true);
+  ok('CONTROL vast: de uitleg (nog niets aangeraakt), CONTROL fel', m2.stand().uitleg && m2.stand().uitleg.titel === null && led('control') === 127);
+  tk('groepA');
+  ok('… groep A: NIET uitgevoerd (geen focus, niets op de bus)', eng.focus === focusVoor && aangeroepen.length === aantal);
+  ok('… maar uitgelegd met de tekst van apc-beschrijf.js', m2.stand().uitleg.titel === 'groep A' && m2.stand().uitleg.tekst === beschrijf('track.1.focus').lang);
+  draai(5, 20);
+  ok('… een draaiknop: uitgelegd voor deze pagina, niets op de bus', aangeroepen.length === aantal && /draaiknop 5 \(Instrument\)/.test(m2.stand().uitleg.titel));
+  tk('browseR');
+  ok('… ◄ ► links boven: eigen uitleg, de pagina blijft staan', m2.pagina === 'instrument' && /knoppagina/.test(m2.stand().uitleg.tekst));
+  const vastVoor = noten.vast.size;
+  st(0x90, 40, 100);
+  ok('… een pad: wat hij speelt, en hij speelt niet', noten.vast.size === vastVoor && /speelt E2 op/.test(m2.stand().uitleg.tekst));
+  kn('control', false);
+  st(0x80, 40, 0);
+  ok('CONTROL los: geen uitleg meer; het loslaten van de pad uit de uitleg gaat nergens heen', m2.stand().uitleg === null && noten.vast.size === vastVoor && aangeroepen.length === aantal);
+  st(0x90, 41, 100);
+  kn('control', true);
+  st(0x80, 41, 0);
+  ok('een pad die al vóór CONTROL in zat, laat tijdens de uitleg gewoon los (niets blijft hangen)', noten.vast.size === vastVoor);
+  const fel = led('browseR');
+  nu += MS.KNIPPER_MS;
+  ok('tijdens de uitleg knippert wat iets doet (◄ ►, STEP, PLAY …), de groepen houden hun kleur',
+    fel !== led('browseR') && [fel, led('browseR')].sort((a, b) => a - b).join() === '8,127' && led('groepB') === PALETTE[`${KLEUREN.drums}donker`]);
+  const links = S.tekenScherm(m2.stand(), 0);
+  kn('control', false);
+  tk('groepA');
+  ok('… het scherm: UITLEG (anders dan spelen); daarna werkt groep A weer gewoon', !gelijk([...links], [...S.tekenScherm(m2.stand(), 0)]) && eng.focus === 'A');
+  ok('regels(): woorden over regels van hooguit n letters', S.regels('een twee drie vier', 9).join('|') === 'een twee|drie vier' && S.regels('abcdefghijk', 5).join() === 'abcde');
 }
 
 // ---- 9. regels: zonder ?hub= laadt niets hiervan ------------------------------------------------

@@ -93,7 +93,7 @@ src/
                     feedback.js     engine-stand -> LED's, met diffing. Leest de mapping.
                     midi-learn.js   action kiezen, control bewegen, gekoppeld
                     noten.js        MIDI-noten (elke ingang behalve de APC) naar het instrument op de speeltrack; knoppen en de schuif (SysEx Master Volume) via een apparaatmapping
-                    maschine.js     de Maschine MK2 via de hub (alleen ?hub=): pads -> noten.js of stappen (STEP), PATTERN, transport, groepen/draaiknoppen (mapping), masterwiel, lampjes, schermen
+                    maschine.js     de Maschine MK2 via de hub (alleen ?hub=): pads -> noten.js of stappen (STEP), PATTERN, transport, groepen/draaiknoppen (mapping), knoppagina's (◄ ►: Instrument/Strip/Rack als open mapje), uitleg (CONTROL), masterwiel, lampjes, schermen
                     maschine-scherm.js  de twee schermen van de Maschine: stand -> 2048 bytes (256×64, 1 bit), eigen 5×7-font. Puur.
                     handelingen.js  het handelingenlog: [t, action, waarde] op de audioklok, per seconde weg
                     terugspelen.js  een log terugspelen: beginstand, dan elke regel op T0 + t
@@ -132,6 +132,8 @@ src/
                     klankschaal-paneel.js de KLANKSCHAAL-rij: openen, instellingen bewaren, per frame tonen
                     plan-koppeling.js in de mixer: actief plan, ophalen met versie, live naar de automaat, window.varvePlan, knop plan
                     auto-paneel.js  de AUTO-rij: wat er klinkt, wat er komt en waarom, ok/overslaan/langer/nu
+                    beeld-paneel.js de BEELD-rij: aan/uit, relay-adres, latentie, de stand; het lampje op de knop beeld
+                    beeld-weergave.js de stand van beeld als tekst, lampje en tegel (rij, knop, Controlekamer). Puur.
                     stems-paneel.js de STEMS-rij voor de focus-track: niveau, kill, filter, echo, galm, cue per stem, splitsen, voortgang
                     stems-wachtrij.js de stems-rij van de server (GET /api/stems): peilen zolang iets open staat of iemand kijkt
                     stems-weergave.js stems als tekst: namen, library-cel, rijstand, kolomteken, tegel. Puur.
@@ -168,6 +170,8 @@ src/
                     automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
                     opnemer-worklet.js  telt frames, zet om naar 16-bit, geeft per seconde door
+  koppel/           varve-beeld-zender.js  de zender van de Stroommachine, ONGEWIJZIGD overgenomen (herkomstregel bovenaan; wijzigen in haar repo)
+                    beeld.js        spoor beeld: klok, kenmerken, track per crossfaderkant, mix, poorten naar de Stroommachine. Leest de engine alleen.
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
 server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
@@ -189,7 +193,8 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs, beeld.mjs: headless zonder MIDI;
+                    beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
                     hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
@@ -200,7 +205,7 @@ mappings/
   generic.json      leeg startpunt
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
   xboard49.json     E-MU Xboard49: knop 1–8 -> instrument, 9–16 -> FX, schuif -> fader van de speeltrack (AANNAME, te controleren met een proef)
-  maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn), transport van de patronen ({plek})
+  maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn), transport van de patronen ({plek}); laag pagina.strip / pagina.rack = de knoppagina's van de focus-track
 racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 plannen/
@@ -267,6 +272,8 @@ test/
   auto-secties.test.mjs  auto-DJ met secties: fragment/planMoment/momentArgs, terugvinden, wachten op de kaart, OVERNEEM, langer/nu, zonder kaart identiek
   sec-maschine.test.mjs  secties en loops: sectieHier na het rondgaan, sectieOpDeMaat in een loop, de melding, de Maschine
   sec-controle.test.mjs  sectieTelling (zelfde regel als moetSecties, cache per rij, ROLLBACK), /api/secties, de tegel
+  beeld.test.mjs    spoor beeld: adres, latentie, id's, kiesKant, de tel met latentie, track/mix/poort, aanwezig en opnieuw, de echte zender op een nep-WebSocket
+  varve-beeld-zender.test.mjs  de zendertest van de Stroommachine (overgenomen; alles.mjs telt zijn eigen formaat)
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -297,6 +304,7 @@ docs/
   MASTER.md         effecten op het geheel en de limiter (S2a, 5 okt): keten, algoritme, laden, opslag, APC, metingen
   EFFECTEN.md       effecten uit de filter app (S2c): per effect herkomst, eenheden, staart, metingen, wat niet
   PATRONEN.md       patronen (S4): het contract (§1–6) en wat gebouwd is (§7: klok, opnemen, API, APC, opslag, metingen)
+  BEELD.md          spoor beeld (6 okt): VARVE stuurt de Stroommachine via de relay; instellen, wat er gaat, APC-mapje, problemen, tests
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -1555,6 +1563,13 @@ Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag mis
   bladert boven de 16, kleuren uit de read zoals de APC, links op het scherm wat je hoort + een 4×4-raster.
   Eén padmodus tegelijk (STEP, SCENE). De hub in een headless-proef altijd met `opname: false`: de echte
   config heeft een `avondmap`.
+- Knoppagina's en uitleg (`docs/MASCHINE.md` §5c, 7 okt, tak `studio/maschine-dj`): ◄ ► links boven wisselt
+  Instrument · Strip · Rack. De pagina is een open MAPJE voor de mapping (`lagen` in maschine.js), dus wat een
+  knop doet staat in `mappings/maschine-mk2.json` (`"laag": "pagina.strip"`); een nieuwe pagina = regels erbij
+  plus een naam in `PAGINAS`. Strip en Rack werken op de FOCUS-track (Instrument op de speeltrack). Waarden in
+  echte eenheden uit de engine-formules (`eqDb`, `filterDoelen`), nooit zelf een tweede formule. CONTROL
+  vasthouden = uitleg: niets uitvoeren, wel uitleggen (`beschrijf` uit apc-beschrijf.js, meegegeven door
+  speelapparaten.js); het loslaten van wat tijdens de uitleg werd ingedrukt gaat nergens heen.
 - Toetsen: `node test/maschine.test.mjs`, `node test/hub.test.mjs`, en headless
   `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
   HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een
@@ -1610,6 +1625,44 @@ Volledig in `docs/SECTIES.md`, vragen in VRAGEN blok SE. Wat een bouwer niet mag
     maat is een herhaling, geen nieuwe sectie; zonder maatgever blijft de energie `HOUD` (0,5 s) staan.
   - Headless: elke `tools/headless/sec-*.mjs` zet VARVE_PATRONEN en VARVE_PLANNEN op zijn tmp-map. Anders
     leest de proefserver `patronen/` van de worktree, en in `sintegratie` is dat de map van de echte mixer.
+
+## Beeld: de Stroommachine (gebouwd 6 okt, tak `studio/beeld`)
+
+Volledig in `docs/BEELD.md`, vragen in VRAGEN blok BE. Het protocol is van de Stroommachine-repo
+(`~/Projects/stroommachine`, `github.com/CKrebbers/stroommachine`): `koppel/PROTOCOL-dj.md`. Wat een
+bouwer niet mag missen:
+- DE KOPPEL-LAAG (`src/koppel/`) staat buiten engine en scherm: geen DOM, geen import uit ui/control/
+  server/video (`regels.test.mjs`). `beeld.js` LEEST de engine (duck-typed, zoals maat.js) en schrijft
+  er nooit in; de bus roept hem aan via `bindBeeld` (actions.js), het scherm via `beeld-paneel.js`.
+- De zender (`varve-beeld-zender.js`) is ONGEWIJZIGD overgenomen (herkomstregel `stroommachine@<commit>`).
+  Wijzig hem in de Stroommachine-repo en neem hem opnieuw over, met zijn test (`test/varve-beeld-zender.test.mjs`,
+  alleen het importpad anders).
+- Ontwerpregel: uit, zonder adres of zonder relay verandert er NIETS (geen WebSocket, geen timer, geen
+  melding die terugkomt). Hooguit één melding "verbonden" en één "antwoordt niet" per start.
+- De tel = `engineTel` (maat.js): de maatgever die je HOORT, positie − (uitgangsvertraging − extra
+  latentie) × rate. + latentie = de tel vóór = het beeld eerder (beamer). Geen maatgever = `speelt:false`
+  met de laatste tel. `t` in de berichten is performance.now() (de zender): de Stroommachine rekent het
+  klokverschil zelf met ping/pong.
+- Track en mix zijn TOESTAND: pas sturen als de Stroommachine er is (verse `beeld-status` of ping,
+  < 3 s), en opnieuw na (her)verbinden of als ze HERLADEN is: haar ping-teller begint per pagina bij 1,
+  dus een ping-id die niet hoger is dan de vorige = een nieuwe pagina (`hoorBericht`; we luisteren mee
+  via een WebSocket-subklasse rond die van de zender, `_meeluisterWS`). Hooguit eens per 10 s
+  (`OPNIEUW_MS`), uitgesteld, nooit verloren. De gezette macro's gaan dan ook opnieuw. NOOIT in het
+  'status'-event van de zender: die meldt "verbonden" vóór zijn manifest, en de relay wil het manifest
+  eerst. Klok, kenmerken en regie gaan altijd.
+- EÉN TABBLAD zendt: `magZenden(statusVanMij())` in app.js (de Web Lock, met `?hub=` de hub), anders
+  antwoorden twee tabbladen op elke ping en is het klokverschil onzin. Het paneel maakt de koppeling met
+  `mag: false`; een start uit localStorage is `vanzelf` (de melding "geen relay" is dan info, niet rood).
+- Kenmerken: zolang er iets KLINKT (een track speelt of de master > `STIL`), daarna nog `STIL_MS` door
+  (naar ~0) en dan null; anders bevriezen de bronnen van de Stroommachine op de laatste luide waarde.
+- Deck A/B = de crossfaderKANT (`kiesKant`): wie speelt met de kanaalfader open, dan wie speelt (fader
+  dicht = voorbeluisteren), anders wie het laatst geladen of gestart werd; thru telt niet. Id per nummer: `yt:<videoId>`, `<site>:<id>`, `lokaal:<hash>`, `varve:demo-<zaad>`,
+  `bestand:<naam>` (`stabieleId`). De laad komt via `naLaad` van laden.js, net als het handelingenlog.
+- APC: mapje `device.beeld` op Shift + Detail View (een device-mapje, want de faders zijn de kern en alleen
+  de device-groep wisselt de device knobs). Knob 1–8 = `beeld.macro.*`, scene 1–5 = `beeld.regie.*`, Stop
+  All = paniek. Read null zonder verbinding (ring en lampje uit). 15 regels erbij, eerder.mjs gedraaid.
+- Een mislukte WebSocket logt Chrome zelf rood in de console (Log-domein); JavaScript kan dat niet
+  onderdrukken. Headless-tools tellen dat apart van fouten van onze code.
 
 ## Werkwijze die hier werkt
 

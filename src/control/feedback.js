@@ -125,6 +125,15 @@ const KLEURSCHEMA = [
   [/\.section\.\d+$/, { aan: 'wit', half: 'hemelsblauwdonker', uit: 'uit', tel: 'aan' }],
   [/\.section\.\d+\.loop$/, { aan: 'cyaan', half: 'hemelsblauwdonker', uit: 'uit' }],
   [/^layer\.grid\.secties$/, { aan: 'hemelsblauw', uit: 'hemelsblauwdonker' }],
+  // Beeld (6 okt, spoor beeld, docs/BEELD.md): de regie van de Stroommachine op
+  // de scene-knoppen, in het mapje device.beeld. Roze (57, donker 58), de laatste
+  // kleur met een donkere tint die nog geen modus had. Donker = verbonden en
+  // bruikbaar, fel = zolang je drukt, uit = geen verbinding met de relay (read
+  // null). Flits wit zoals video.flash; paniek rood (Stop All Clips heeft geen
+  // lampje, dus dat zie je alleen op het scherm en op apc.html).
+  [/^beeld\.regie\.flits$/,  { aan: 'wit', uit: 'donkergrijs' }],
+  [/^beeld\.regie\.paniek$/, { aan: 'rood', uit: 'rooddonker' }],
+  [/^beeld\.regie\./,        { aan: 'roze', uit: 'rozedonker' }],
   [/^layer\./,        { aan: 'wit', uit: 'donkergrijs' }],
 ];
 

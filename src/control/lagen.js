@@ -20,6 +20,14 @@ import { Emitter } from '../lib/emitter.js';
  *           het insert-rack op het geheel, knop 1–7 = plek 1–7, knop 8 = mix
  *           (shift + knop 8 = plek 8), Device ◀ ▶ = rack, On/Off = aan/uit.
  *           Clip/Device View zelf gaat daarna weer naar de strip.
+ *           Shift + Detail View opent BEELD (6 okt, spoor beeld, docs/BEELD.md):
+ *           de Stroommachine op de pc, knop 1–8 = de acht macro's, scene 1–5 =
+ *           ontdek · volgende · vasthouden · flits · vrij, Stop All Clips =
+ *           paniek. Een device-mapje en geen grid-modus: alleen de device-groep
+ *           kan de device knobs wisselen (de faders zijn de kern), en een regel
+ *           in een device-mapje wint ook op de scene-knoppen van elke grid-modus
+ *           (de mapping zoekt edit → device → grid). Shift + scene kiest nog
+ *           steeds een grid-modus; Clip/Device View gaat terug naar de strip.
  *   grid    het 5×8-grid: hotcues · loops · sampler · video · klank · auto ·
  *           stems · patronen, gekozen met de scene-knoppen ernaast (klank: Shift +
  *           scene 5, want scene 5 zelf is "loop weg"; auto: Shift + scene 4; stems:
@@ -73,8 +81,9 @@ export const GROEPEN = {
   },
   device: {
     naam: 'device knobs', standaard: 'strip',
-    // inst alleen als de focus-track een instrument heeft (zie OP_AANVRAAG); master met Shift + Clip/Device View.
-    knoppen: { view: ['strip', 'rack', 'inst'], master: ['master'] },
+    // inst alleen als de focus-track een instrument heeft (zie OP_AANVRAAG); master met Shift + Clip/Device View;
+    // beeld (de Stroommachine) met Shift + Detail View.
+    knoppen: { view: ['strip', 'rack', 'inst'], master: ['master'], beeld: ['beeld'] },
   },
   grid: {
     naam: 'grid', standaard: 'hotcues',
@@ -104,6 +113,7 @@ export const LAAGNAAM = {
   'device.inst': 'instrument (de acht knoppen van het instrument · ◀ ▶ kiezen · On/Off stil)',
   'device.vorm': 'vormlaag (knoppen 1–6 · dekking)',
   'device.master': 'master (fx 1–7 · mix; shift + 8 = fx 8)',
+  'device.beeld': 'beeld (Stroommachine: macro 1–8 · scene = regie · Stop All = paniek)',
   'edit.aan': 'grid-modus (beatgrid bewerken)', 'edit.uit': 'uit',
   'grid.hotcues': 'hotcues', 'grid.loops': 'loops', 'grid.sampler': 'sampler', 'grid.video': 'video',
   'grid.klank': 'klank (kill · rem · op de maat)',
