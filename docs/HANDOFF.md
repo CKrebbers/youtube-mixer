@@ -26,8 +26,9 @@ Lees in deze volgorde:
 - **Waar:** gebouwd op `studio/beeld` (worktree `~/Projects/varve-stems/beeld`, van 71e4450),
   op 7 okt samengevoegd in `studio/integratie` en gepusht (eerst integratie in beeld, de drie
   doc-conflicten opgelost, alles opnieuw getest). Checklist: `TASKS-BEELD.md`.
-- **Getest:** `node test/alles.mjs` 60 bestanden, 6286 checks, alles groen (basis 58 / 6032 / 1 rood
-  renderblok, de GC-meting). Nieuw: `test/beeld.test.mjs` (156), de zendertest van de Stroommachine (21).
+- **Getest:** op de tak `node test/alles.mjs` 60 bestanden, 6286 checks, alles groen (basis 58 / 6032 /
+  1 rood renderblok, de GC-meting). Na het samenvoegen met integratie (7 okt): 62 bestanden, 6556 checks,
+  alles groen; headless beeld 56, beeld-e2e 29, rijen 377, controle 26, sec-controle 23, sec-toets 43. Nieuw: `test/beeld.test.mjs` (156), de zendertest van de Stroommachine (21).
   Headless: `tools/headless/beeld.mjs` (56, met een nep-relay, ook een tweede tabblad) en
   `tools/headless/beeld-e2e.mjs` (29, de ECHTE relay en Stroommachine op de Mac): volgt de klok op
   124,0 BPM, rondetijd 3,3–3,7 ms, de tel 0,002–0,007 tel naast VARVE, crossfader wisselt de scène,

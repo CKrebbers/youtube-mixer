@@ -39,6 +39,10 @@ varve-beeld-zender.js), sinds vandaag ook `github.com/CKrebbers/stroommachine` (
 - [x] 4.4 eind-tot-eind: `tools/headless/beeld-e2e.mjs`
 - [x] 5 review, docs, commits
 - [x] push `studio/beeld` naar origin (gelukt, 7 okt)
+- [x] samengevoegd (7 okt, op Clay's vraag): eerst `studio/integratie` (19e3a1f) in `studio/beeld`, drie
+      doc-conflicten (CLAUDE.md, ROADMAP, HANDOFF) met beide kanten opgelost; daarna alles.mjs 62 / 6556
+      groen, headless beeld 56, beeld-e2e 29, rijen 377, controle 26, sec-controle 23, sec-toets 43; dan
+      `studio/beeld` in `studio/integratie` (sintegratie)
 
 ## Review (tweede agent, 6 okt)
 - [x] 1 ernstig: een tweede tabblad zond ook (pong met een eigen klok, mix overschreven) → `magZenden`
