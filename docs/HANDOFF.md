@@ -14,6 +14,35 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 7 OKT: BEELD — VARVE STUURT DE STROOMMACHINE (in `studio/integratie`)
+
+- **Wat:** twee machines, één relay. VARVE (MacBook) stuurt klok, kenmerken, de track per
+  crossfaderkant en de crossfader naar de Stroommachine (Omarchy-pc, beamer) via de Varve-relay
+  (poort 7702); zij volgt de tel en maakt per nummer een scène. Knop **beeld** in de balk = de
+  BEELD-rij (aan/uit, relay-adres, extra latentie, de stand); APC: Shift + Detail View = mapje beeld
+  (device knobs = 8 macro's, scene 1–5 = regie, Stop All = paniek). Tegel Beeld in de Controlekamer.
+  Alles in `docs/BEELD.md`; protocol en pc-kant in `~/Projects/stroommachine` (`koppel/PROTOCOL-dj.md`,
+  `koppel/DJ-START.md`), sinds 6 okt ook privé op GitHub (`CKrebbers/stroommachine`).
+- **Waar:** gebouwd op `studio/beeld` (worktree `~/Projects/varve-stems/beeld`, van 71e4450),
+  op 7 okt samengevoegd in `studio/integratie` en gepusht (eerst integratie in beeld, de drie
+  doc-conflicten opgelost, alles opnieuw getest). Checklist: `TASKS-BEELD.md`.
+- **Getest:** op de tak `node test/alles.mjs` 60 bestanden, 6286 checks, alles groen (basis 58 / 6032 /
+  1 rood renderblok, de GC-meting). Na het samenvoegen met integratie (7 okt): 62 bestanden, 6556 checks,
+  alles groen; headless beeld 56, beeld-e2e 29, rijen 377, controle 26, sec-controle 23, sec-toets 43. Nieuw: `test/beeld.test.mjs` (156), de zendertest van de Stroommachine (21).
+  Headless: `tools/headless/beeld.mjs` (56, met een nep-relay, ook een tweede tabblad) en
+  `tools/headless/beeld-e2e.mjs` (29, de ECHTE relay en Stroommachine op de Mac): volgt de klok op
+  124,0 BPM, rondetijd 3,3–3,7 ms, de tel 0,002–0,007 tel naast VARVE, crossfader wisselt de scène,
+  macro komt aan, herladen en relay weg/terug goed, na een pauze zakken haar bronnen naar stil.
+  Review door een tweede agent: 13 punten, de zware verwerkt (een tweede tabblad zond ook; herladen
+  zien aan haar ping-teller; kenmerken na een pauze; voorbeluisteren met de fader dicht; geen rode
+  melding bij opstarten zonder pc; regie niet terugspelen; geblokkeerde poorten), de rest in BEELD.md
+  §7 en VRAGEN BE. NIET getest: LAN/wifi naar de echte pc, de beamer-latentie, de APC zelf.
+- **Proberen:** op een avond met de pc: `koppel/DJ-START.md` (relay met `--host 0.0.0.0`, de
+  Stroommachine met `?hub=ws://127.0.0.1:7702/app&dj`), in VARVE de BEELD-rij op `ws://<ip-pc>:7702/app`
+  en aan. Dan VRAGEN blok BE (vooral BE6: de latentie van de beamer).
+- **Let op:** zonder pc kan beeld gewoon aan blijven (één melding, verder stil), maar Chrome logt elke
+  mislukte poging zelf rood in zijn console (BE7). De zender in `src/koppel/` NIET hier wijzigen.
+
 ## 6–7 OKT (avond/nacht): SECTIES VERWEVEN (`studio/integratie`)
 
 - **Wat:** de secties zitten nu in het toetsenbord (shift+W/E en shift+I/O), de sampler (rij 3: een hele

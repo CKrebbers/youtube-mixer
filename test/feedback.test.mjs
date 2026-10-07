@@ -639,5 +639,75 @@ ok('blackout zet alles op nul', bus.every((b) => b[2] === 0));
     led(pad(2, 4)) === P.rood && [1, 2, 3, 5].every((r) => led(pad(2, r)) === P.rooddonker) && [1, 2, 3, 4, 5].every((r) => led(pad(3, r)) === null));
 }
 
+// ---- mapje beeld (6 okt, spoor beeld, docs/BEELD.md): LED's -----------------------
+// De regie op de scene-knoppen in roze (57, donker 58): donker = verbonden met de
+// relay, fel = zolang je drukt, uit = geen verbinding (read null). Flits wit zoals
+// video.flash, paniek rood (maar Stop All Clips heeft geen lampje). De ringen van de
+// device knobs tonen de macro-stand (read), en niets zonder verbinding.
+{
+  const lg = new Lagen();
+  let verbonden = true;
+  const ingedrukt = new Set();
+  const macro = { 'beeld.macro.intensiteit': 0.5, 'beeld.macro.helderheid': 0.8, 'beeld.macro.glitch': 0 };
+  const standen = { 'layer.grid.hotcues': 1, 'layer.grid.secties': 0, 'layer.grid.klank': 0 };
+  const lees = (a) => {
+    if (a === 'layer.device.beeld') return lg.stand.device === 'beeld' ? 1 : 0;
+    if (/^beeld\.regie\./.test(a)) return verbonden ? (ingedrukt.has(a) ? 1 : 0) : null;
+    if (/^beeld\.macro\./.test(a)) return verbonden ? (macro[a] ?? 0.5) : null;
+    return a in standen ? standen[a] : null;
+  };
+  const m = new Mapping({ read: lees, invoke: () => {}, vars: () => ({ focus: 1 }), lagen: () => lg.actief() });
+  m.load(standaard);
+  const fbB = new Feedback({ device: apc, mapping: m, read: lees, meta: () => null, send: () => true });
+  fbB.klaar = true;
+  const led = (sig) => fbB.desired().get(sig)?.[2] ?? null;
+  const noot = (n, on) => ({ type: 'note', channel: 0, number: n, sig: `note:0:${n}`, on, value: on ? 127 : 0, norm: on ? 1 : 0 });
+  const P = apc.palette;
+
+  ok('palet: rozedonker = roze + 1, een #59-tint (geen pastel)', P.rozedonker === P.roze + 1 && P.rozedonker === 58 && /^#59/.test(apc.paletteHex[P.rozedonker]));
+  ok('buiten het mapje: scene 1 geel (hotcues open), Detail View zonder lampje, device knob 1 = trim (geen macro)',
+    led('note:0:82') === P.geel && led('note:0:65') === null && m.kies('cc:0:16')?.action === 'track.{focus}.trim');
+  m.handle(noot(98, true));
+  ok('shift vast: Detail View toont het mapje beeld (dicht = uit)', led('note:0:65') === 0);
+  m.handle(noot(98, false));
+  lg.zet('device', 'beeld');
+  m.handle(noot(98, true));
+  ok('beeld open, shift vast: Detail View brandt', led('note:0:65') === 127);
+  ok('… en de scene-knoppen tonen met shift de grid-modi, niet de regie (scene 1 secties donker hemelsblauw, scene 5 klank donker magenta)',
+    led('note:0:82') === P.hemelsblauwdonker && led('note:0:86') === P.magentadonker);
+  m.handle(noot(98, false));
+  ok('verbonden: scene 1–3 en 5 donker roze (ontdek · volgende · vasthouden · vrij), scene 4 flits donkergrijs',
+    [82, 83, 84, 86].every((n) => led(`note:0:${n}`) === P.rozedonker) && led('note:0:85') === P.donkergrijs);
+  ingedrukt.add('beeld.regie.ontdek'); ingedrukt.add('beeld.regie.flits');
+  ok('zolang je drukt: ontdek fel roze, flits wit', led('note:0:82') === P.roze && led('note:0:85') === P.wit);
+  ingedrukt.clear();
+  ok('Stop All Clips (paniek) heeft geen lampje op het apparaat', !fbB.desired().has('note:0:81'));
+  // Koppel je paniek (of flits, ontdek) aan een pad, dan krijgt die de kleur uit het schema.
+  const mp = new Mapping({ read: lees, invoke: () => {}, vars: () => ({ focus: 1 }) });
+  mp.load({ rules: [{ in: 'note:0:32', action: 'beeld.regie.paniek', mode: 'trigger' }, { in: 'note:0:33', action: 'beeld.regie.flits', mode: 'trigger' },
+    { in: 'note:0:34', action: 'beeld.regie.vasthouden', mode: 'trigger' }] });
+  const fbP = new Feedback({ device: apc, mapping: mp, read: lees, meta: () => null, send: () => true });
+  fbP.klaar = true;
+  const ledP = (sig) => fbP.desired().get(sig)?.[2] ?? null;
+  const losP = [ledP('note:0:32'), ledP('note:0:33'), ledP('note:0:34')];
+  ingedrukt.add('beeld.regie.paniek');
+  ok('paniek op een pad: donkerrood, fel rood zolang je drukt (flits donkergrijs, vasthouden donker roze)',
+    losP.join() === [P.rooddonker, P.donkergrijs, P.rozedonker].join() && ledP('note:0:32') === P.rood);
+  ingedrukt.clear();
+  const d = fbB.desired();
+  ok('ringen: device knob 1 = intensiteit 0,5 (64), knob 3 = helderheid 0,8 (102), knob 7 = glitch 0, ringtype volume',
+    d.get('cc:0:16')?.[2] === 64 && d.get('cc:0:18')?.[2] === 102 && d.get('cc:0:22')?.[2] === 0
+    && d.get('type:cc:0:24')?.[2] === apc.ring.volume);
+  verbonden = false;
+  const dz = fbB.desired();
+  ok('zonder verbinding: scene-knoppen uit, geen ring', [82, 83, 84, 85, 86].every((n) => !dz.has(`note:0:${n}`)) && !dz.has('cc:0:16') && !dz.has('cc:0:23'));
+  verbonden = true;
+  lg.zet('edit', 'aan'); standen['track.1.grid.here'] = 0;
+  ok('grid-modus in beeld: scene 1 wit (het grid), niet de regie', m.kies('note:0:82')?.action === 'track.{focus}.grid.here' && led('note:0:82') === P.wit);
+  lg.zet('edit', 'uit');
+  lg.zet('device', 'strip');
+  ok('mapje dicht: scene 1 weer geel, Detail View zonder lampje', led('note:0:82') === P.geel && led('note:0:65') === null);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

@@ -113,6 +113,12 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     planvenster, handelingenlog en auto-DJ; daarbij vormen/video-puls, Controlekamer, Maschine (SCENE) en
     de sectie in de globale laag van de hub (AV-app-hub PROTOCOL §18). Proberen: de speellijstblokken
     van §7, dan VRAGEN blok SV.
+29. BEELD (6 okt, Clay: "Varve DJ stuurt de Stroommachine aan"): twee machines, één relay. VARVE
+    stuurt klok, kenmerken, tracks per crossfaderkant en de crossfader naar de Stroommachine op de
+    Omarchy-pc (protocol in de Stroommachine-repo, `koppel/PROTOCOL-dj.md`); BEELD-rij met adres en
+    latentie, APC-mapje beeld op Shift + Detail View (`docs/BEELD.md`). Gebouwd op `studio/beeld`,
+    samengevoegd in `studio/integratie` (7 okt); eind-tot-eind gemeten op de Mac met de echte
+    Stroommachine headless; nog niet op LAN/wifi en niet op de APC (VRAGEN BE).
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
@@ -126,6 +132,8 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
    (speellijst van de Controlekamer), dan VRAGEN blok S.
 9. 28 SECTIES: gebouwd en verweven, alles in `studio/integratie` (6–7 okt). Server en hub herstarten,
    dan proberen (speellijst: blok Secties en de blokken van SECTIES §7), dan VRAGEN SE en SV.
+10. 29 BEELD: samengevoegd in `studio/integratie` (7 okt). Proberen met de pc (`koppel/DJ-START.md` in de
+    Stroommachine-repo, docs/BEELD.md §1), dan VRAGEN blok BE.
 
 Aanname: publicatie 1 van AV-kern (25 okt) blijft staan. Komt die datum in de
 knel door 15 en 17, dan gaat AV-kern voor; dat is de vraag van H5.

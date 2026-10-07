@@ -77,6 +77,9 @@ export const SOORTEN = [
   ['loop', 'loops', /\.(beatloop\.[\d.]+|loop\.\w+)$/],
   ['sampler', 'sampler', /^sampler\./],
   ['video', 'video', /^video\./],
+  // De Stroommachine op de pc (docs/BEELD.md): het mapje beeld. Anders vielen
+  // macro's en regie in de grootste groep (transport).
+  ['beeld', 'beeld (Stroommachine)', /^beeld\./],
   ['opname', 'opname', /^record\./],
   ['auto', 'auto-DJ', /^auto\./],
   // Vóór klank, fx en mixer: track.1.stem.vocals.filter eindigt op .filter, .send.a op een send.

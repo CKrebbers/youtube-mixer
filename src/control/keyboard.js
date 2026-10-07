@@ -99,8 +99,11 @@ const MELD_NA = {
  * @param opts.venster  (v: 'L'|'R') -> deck-id dat daar nu staat. Zonder:
  *                      links track 1, rechts track 2.
  */
-/** Is dit een veld waarin getypt wordt? Dan zijn letters letters, geen sneltoetsen. */
-export const isTypen = (el) => !!el?.matches?.('input[type=text], input[type=search], input[type=url], input:not([type]), textarea, [contenteditable]');
+/**
+ * Is dit een veld waarin getypt wordt? Dan zijn letters letters, geen sneltoetsen.
+ * Ook een getalveld (de latentie in de BEELD-rij): cijfers en min zijn anders loops.
+ */
+export const isTypen = (el) => !!el?.matches?.('input[type=text], input[type=search], input[type=url], input[type=number], input:not([type]), textarea, [contenteditable]');
 
 export function attachKeyboard(engine, opts = {}) {
   // Per toets de action die bij het INDRUKKEN gold: loslaten moet daar

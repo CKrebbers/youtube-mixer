@@ -4949,9 +4949,136 @@
       "label": "scene launch 1 + shift (grid-modus): vast",
       "shift": true,
       "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:65",
+      "action": "layer.device.beeld",
+      "mode": "trigger",
+      "label": "detail view + shift: mapje beeld",
+      "shift": true
+    },
+    {
+      "in": "cc:0:16",
+      "action": "beeld.macro.intensiteit",
+      "mode": "endless",
+      "label": "device knob 1 (beeld): intensiteit",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "cc:0:17",
+      "action": "beeld.macro.snelheid",
+      "mode": "endless",
+      "label": "device knob 2 (beeld): snelheid",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "cc:0:18",
+      "action": "beeld.macro.helderheid",
+      "mode": "endless",
+      "label": "device knob 3 (beeld): helderheid",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "cc:0:19",
+      "action": "beeld.macro.feedback",
+      "mode": "endless",
+      "label": "device knob 4 (beeld): feedback",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "cc:0:20",
+      "action": "beeld.macro.tint",
+      "mode": "endless",
+      "label": "device knob 5 (beeld): tint",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "cc:0:21",
+      "action": "beeld.macro.dichtheid",
+      "mode": "endless",
+      "label": "device knob 6 (beeld): dichtheid",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "cc:0:22",
+      "action": "beeld.macro.glitch",
+      "mode": "endless",
+      "label": "device knob 7 (beeld): glitch",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "cc:0:23",
+      "action": "beeld.macro.balans",
+      "mode": "endless",
+      "label": "device knob 8 (beeld): balans",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "note:0:82",
+      "action": "beeld.regie.ontdek",
+      "mode": "trigger",
+      "label": "scene launch 1 (beeld): ontdek",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "note:0:83",
+      "action": "beeld.regie.volgende",
+      "mode": "trigger",
+      "label": "scene launch 2 (beeld): volgende",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "note:0:84",
+      "action": "beeld.regie.vasthouden",
+      "mode": "trigger",
+      "label": "scene launch 3 (beeld): vasthouden",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "note:0:85",
+      "action": "beeld.regie.flits",
+      "mode": "trigger",
+      "label": "scene launch 4 (beeld): flits",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "note:0:86",
+      "action": "beeld.regie.vrij",
+      "mode": "trigger",
+      "label": "scene launch 5 (beeld): vrij",
+      "laag": "device.beeld"
+    },
+    {
+      "in": "note:0:81",
+      "action": "beeld.regie.paniek",
+      "mode": "trigger",
+      "label": "stop all clips (beeld): paniek",
+      "laag": "device.beeld"
     }
   ],
   "eerder": [
+    {
+      "vingerafdruk": "a4d5af2f-687",
+      "tot": "2026-10-06",
+      "rules": [],
+      "removed": [
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
+      ]
+    },
     {
       "vingerafdruk": "29cd0fa3-679",
       "tot": "2026-10-06",
@@ -4964,7 +5091,22 @@
         "note:0:20@grid.sampler",
         "note:0:21@grid.sampler",
         "note:0:22@grid.sampler",
-        "note:0:23@grid.sampler"
+        "note:0:23@grid.sampler",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -5061,7 +5203,22 @@
         "note:0:6@grid.secties",
         "note:0:6#shift@grid.secties",
         "note:0:7@grid.secties",
-        "note:0:7#shift@grid.secties"
+        "note:0:7#shift@grid.secties",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -5159,7 +5316,22 @@
         "note:0:6#shift@grid.secties",
         "note:0:7@grid.secties",
         "note:0:7#shift@grid.secties",
-        "note:0:82#shift@edit.aan"
+        "note:0:82#shift@edit.aan",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -5260,7 +5432,22 @@
         "note:0:6#shift@grid.secties",
         "note:0:7@grid.secties",
         "note:0:7#shift@grid.secties",
-        "note:0:82#shift@edit.aan"
+        "note:0:82#shift@edit.aan",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -5450,7 +5637,22 @@
         "note:0:7@grid.secties",
         "note:0:7#shift@grid.secties",
         "note:0:83#shift@edit.aan",
-        "note:0:82#shift@edit.aan"
+        "note:0:82#shift@edit.aan",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -5723,7 +5925,22 @@
         "note:0:7@grid.secties",
         "note:0:7#shift@grid.secties",
         "note:0:83#shift@edit.aan",
-        "note:0:82#shift@edit.aan"
+        "note:0:82#shift@edit.aan",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -6009,7 +6226,22 @@
         "note:0:7@grid.secties",
         "note:0:7#shift@grid.secties",
         "note:0:83#shift@edit.aan",
-        "note:0:82#shift@edit.aan"
+        "note:0:82#shift@edit.aan",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -6306,7 +6538,22 @@
         "note:0:7@grid.secties",
         "note:0:7#shift@grid.secties",
         "note:0:83#shift@edit.aan",
-        "note:0:82#shift@edit.aan"
+        "note:0:82#shift@edit.aan",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -6619,7 +6866,22 @@
         "note:0:7@grid.secties",
         "note:0:7#shift@grid.secties",
         "note:0:83#shift@edit.aan",
-        "note:0:82#shift@edit.aan"
+        "note:0:82#shift@edit.aan",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -6940,7 +7202,22 @@
         "note:0:7@grid.secties",
         "note:0:7#shift@grid.secties",
         "note:0:83#shift@edit.aan",
-        "note:0:82#shift@edit.aan"
+        "note:0:82#shift@edit.aan",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -7266,7 +7543,22 @@
         "note:0:7@grid.secties",
         "note:0:7#shift@grid.secties",
         "note:0:83#shift@edit.aan",
-        "note:0:82#shift@edit.aan"
+        "note:0:82#shift@edit.aan",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -7600,7 +7892,22 @@
         "note:0:7@grid.secties",
         "note:0:7#shift@grid.secties",
         "note:0:83#shift@edit.aan",
-        "note:0:82#shift@edit.aan"
+        "note:0:82#shift@edit.aan",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     },
     {
@@ -8017,7 +8324,22 @@
         "note:0:7@grid.secties",
         "note:0:7#shift@grid.secties",
         "note:0:83#shift@edit.aan",
-        "note:0:82#shift@edit.aan"
+        "note:0:82#shift@edit.aan",
+        "note:0:65#shift",
+        "cc:0:16@device.beeld",
+        "cc:0:17@device.beeld",
+        "cc:0:18@device.beeld",
+        "cc:0:19@device.beeld",
+        "cc:0:20@device.beeld",
+        "cc:0:21@device.beeld",
+        "cc:0:22@device.beeld",
+        "cc:0:23@device.beeld",
+        "note:0:82@device.beeld",
+        "note:0:83@device.beeld",
+        "note:0:84@device.beeld",
+        "note:0:85@device.beeld",
+        "note:0:86@device.beeld",
+        "note:0:81@device.beeld"
       ]
     }
   ]

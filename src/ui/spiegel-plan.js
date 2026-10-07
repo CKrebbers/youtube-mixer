@@ -103,9 +103,21 @@ export const naamVan = (sig) => apc.label(sig) ?? sig;
  *   regel, anders de action zelf), `lampOm` = omgekeerd (`led.invert`): zoals
  *   de LED op de APC. Scene 5 blijft in de modus klank "loop weg", maar zijn
  *   lampje zegt "klank open".
+ *   Een knop die ALLEEN met shift iets doet (Shift + Detail View = het mapje
+ *   beeld, 6 okt) krijgt `action: null` en wel een `actionShift`: een gewone
+ *   klik doet niets (zoals op de APC), shift + klik wel, en het label zegt
+ *   "⇧ …". Geen lampje: de LED op de APC brandt zonder shift ook niet.
  */
 export function leesControl(mapping, sig, { shift = false, vars = {} } = {}) {
   const regel = mapping.kies(sig, { shift });
+  if (!regel && !shift) {
+    const alleenShift = mapping.kies(sig, { shift: true });
+    if (!alleenShift || alleenShift.action === 'shift') return null;
+    const actionShift = resolveTarget(alleenShift.action, vars);
+    const b = beschrijf(actionShift);
+    return { action: null, actionShift, regel: null, modus: modusVan(alleenShift, actionShift), kort: `⇧ ${b.kort}`,
+      lang: `met shift: ${b.lang}`, titel: `APC: ${naamVan(sig)} — zonder shift niets · met shift: ${b.lang}`, lamp: null, lampOm: false };
+  }
   if (!regel || regel.action === 'shift') return null;
   const action = resolveTarget(regel.action, vars);
   const metShift = mapping.kies(sig, { shift: true });
