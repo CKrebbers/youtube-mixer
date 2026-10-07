@@ -13,6 +13,12 @@ import { opzetRacks } from './racks.js';
 import { opzetSamplerOpslag } from './sampler-opslag.js';
 import { opzetKlankschaal } from './klankschaal-paneel.js';
 import { opzetAuto } from './auto-paneel.js';
+import { opzetStems } from './stems-paneel.js';
+import { opzetKoptelefoon, koptelefoonOpties } from './koptelefoon-paneel.js';
+import { opzetInstrument } from './instrument-paneel.js';
+import { opzetPatronen } from './patronen-paneel.js';
+import { opzetMaster } from './master-paneel.js';
+import { StemsWachtrij } from './stems-wachtrij.js';
 import { Automaat } from '../auto/automaat.js';
 import { opzetPlanKoppeling } from './plan-koppeling.js';
 import { opzetHotcueOpslag } from './hotcue-opslag.js';
@@ -37,7 +43,8 @@ import { vormenAan, hubAdres, hubGeweigerd } from './vlag.js';
  * aanroepen, krijgt een ReferenceError (TDZ).
  */
 
-const engine = new Engine();
+// De koptelefoon (zaal en koptelefoon omgewisseld?) is bedrading: alleen bij het maken.
+const engine = new Engine({ koptelefoon: koptelefoonOpties() });
 bindEngine(engine);
 window.engine = engine;   // handig in de console tijdens bouwen
 
@@ -78,7 +85,13 @@ const staat = {
   deckHerkomst: perDeck(() => null),    // waar de track vandaan komt: library, demo of los (voor het handelingenlog)
   terugspeelDecks: new Set(),           // tracks die terugspelen laadde: daarvan wordt niets in de library bewaard
   analysis: perDeck(() => null),        // golfvorm-peaks per track
+  deckStems: perDeck(() => null),       // stems volgens de library bij het laden: { aantal, mislukt } of null (laden.js)
 };
+
+// De stems-rij van de server (docs/STEMS.md §2): één keer voor de library-kolom,
+// de STEMS-rij en het teken in de kolomkop.
+const stemsWachtrij = new StemsWachtrij();
+window.stemsWachtrij = stemsWachtrij;
 
 // ---- video ----------------------------------------------------------------
 const video = opzetVideo({ engine });
@@ -99,7 +112,8 @@ window.opnemer = opname.opnemer;
 // ---- het scherm als spiegel van de APC, en de track met focus -------------
 // Eerst de spiegel: die zet de kolommen en het focusdeel neer, en pas daarna
 // kan opzetVensters alle knoppen en faders binden.
-const spiegel = opzetSpiegel({ engine, staat, loadFile: (...a) => laden.loadFile(...a) });
+const spiegel = opzetSpiegel({ engine, staat, loadFile: (...a) => laden.loadFile(...a),
+  stemsVan: (id) => stemsPaneel.kolomTeken(id) });
 window.spiegel = spiegel;
 const vensters = opzetVensters({
   engine,
@@ -107,6 +121,9 @@ const vensters = opzetVensters({
   laadBuffer: (...a) => laden.laadBuffer(...a),
   loadFile: (...a) => laden.loadFile(...a),
   naFocus: (deckId) => racks.volgFocus(deckId),
+  // De grid-modus (Shift + Metronome, of de knop grid): dan zet een klik in de golfvorm de tel.
+  // `lagen` bestaat pas verderop; dit wordt pas bij een klik gevraagd.
+  gridModus: () => lagen.actief().includes('edit.aan'),
 });
 
 // ---- effect-racks, sampler-pads, laden en library -------------------------
@@ -117,9 +134,15 @@ const hotcueOpslag = opzetHotcueOpslag({ engine, meld });
 const laden = opzetLaden({
   engine, staat, videoMixer,
   racks, haalSamples: samplerOpslag.haalSamples, haalHotcues: hotcueOpslag.haalHotcues,
-  naLaad: (info) => logboek.naLaad(info),
+  naLaad: (info) => logboek.naLaad(info), stems: stemsWachtrij,
 });
 window.library = laden.library;
+// De STEMS-rij voor de track met focus (standaard dicht, knop "stems").
+const stemsPaneel = opzetStems({ engine, staat, wachtrij: stemsWachtrij, library: laden.library });
+const koptelefoonPaneel = opzetKoptelefoon({ engine });
+// De MASTER-rij: effecten op de hele mix en de limiter (docs/MASTER.md).
+const masterPaneel = opzetMaster({ engine });
+stemsWachtrij.peil();
 
 // ---- handelingenlog: wat er op de bus gebeurt, om terug te spelen ---------
 // Loopt vanzelf mee met een opname (zelfde id). docs/HANDELINGENLOG.md.
@@ -138,6 +161,14 @@ const auto = new Automaat({
   },
   haalPlan: () => planKoppeling.haal(),
   welkNummer: (deckId) => staat.deckTrack[deckId] ?? null,
+  // De sectiekaart (docs/SECTIES.md §4, AUTO-DJ.md §3b): de automaat wacht er
+  // bij het klaarzetten op (laden.js haalt hem ook, maar pas na het laden en
+  // zonder te wachten). Twee vragen tegelijk rekent de server maar één keer.
+  haalSecties: async (trackId) => {
+    const r = await fetch(`/api/library/${trackId}/secties?maak=1`);
+    if (!r.ok) return null;
+    return (await r.json()).secties ?? null;
+  },
 });
 auto.on('melding', ({ tekst, soort }) => meld(`auto-dj: ${tekst}`, soort === 'fout' ? 'fout' : 'info'));
 bindAuto(auto);
@@ -154,7 +185,8 @@ const audioBtn = document.getElementById('audio-btn');
 const audioAan = async () => {
   await engine.resume();
   midiDelen.midi.init();
-  audioBtn.textContent = `audio actief · ${engine.ctx.sampleRate / 1000} kHz · ${Math.round(engine.ctx.baseLatency * 1000)} ms`;
+  audioBtn.textContent = `audio · ${engine.ctx.sampleRate / 1000} kHz · ${Math.round(engine.ctx.baseLatency * 1000)} ms`;
+  audioBtn.title = 'audio actief (samplefrequentie en uitgangsvertraging van de browser)';
   audioBtn.classList.remove('primary');
 };
 audioBtn.addEventListener('click', audioAan);
@@ -172,11 +204,15 @@ attachKeyboard(engine, { onHelp: toggleHelp, venster: (v) => staat.venster[v] })
 
 // ---- MIDI -----------------------------------------------------------------
 // Mapjes op de controller (VRAGEN B3): welke laag van de knoppen open staat.
-const lagen = new Lagen();
+// Het mapje inst (Clip/Device View: strip → rack → inst) alleen als de
+// focus-track een instrument heeft (docs/INSTRUMENTEN.md §6).
+const lagen = new Lagen({ beschikbaar: (groep, laag) => groep === 'device' && laag === 'inst' && !!engine.instrumentOp(engine.focus) });
 bindLagen(lagen);
 window.lagen = lagen;
-// AV-app-hub: alleen met ?hub=ws://… wordt hub.js geladen (zie hierboven).
-const hub = hubUrl ? { url: hubUrl, HubMidi: (await import('../control/hub.js')).HubMidi } : null;
+// AV-app-hub: alleen met ?hub=ws://… wordt hub.js geladen (zie hierboven). De sectie
+// van de maatgever die je hoort gaat naar de globale laag (PROTOCOL §18, engineSecties).
+const hubJs = hubUrl ? await import('../control/hub.js') : null;
+const hub = hubJs ? { url: hubUrl, HubMidi: hubJs.HubMidi, secties: hubJs.engineSecties(engine, DECK_IDS) } : null;
 const midiDelen = opzetMidi({ engine, sluitOnderpanelen: onderpanelen.sluitOnderpanelen, lagen, hub,
   geraakt: (sig, regelSig) => spiegel.markeer(sig, regelSig) });
 spiegel.koppel({ mapping: midiDelen.mapping, lagen });
@@ -188,6 +224,10 @@ if (vormen) {
     .catch((err) => meld(`vormlagen: APC-indeling niet geladen (${err.message})`, 'fout'));
 }
 opzetMapjeBalk({ lagen, mapping: midiDelen.mapping, vars: () => midiDelen.mapping.vars() });
+// De INSTRUMENT-rij en de noten van MIDI-keyboards (noten.js luistert mee op de hub,
+// vraagt zelf geen MIDI aan: alleen het eerste tabblad, net als de APC).
+const instrumentPaneel = opzetInstrument({ engine, midi: midiDelen.midi, lagen });
+window.noten = instrumentPaneel.noten;
 if (hubUrl) {
   // Twee tabbladen met ?hub=: de hub laat het nieuwste winnen, het oude krijgt 4001.
   let melding = null;
@@ -202,7 +242,15 @@ if (hubUrl) {
     if (new URLSearchParams(location.search).get('hub_extern') === '1') q.set('hub_extern', '1');
     apcKnop.href = `apc.html?${q}`;
   }
+  // De speelapparaten van de hub (Xboard49, Maschine MK2; docs/MASCHINE.md): ook alleen met de vlag geladen.
+  const { opzetSpeelapparaten } = await import('./speelapparaten.js');
+  window.maschine = opzetSpeelapparaten({ engine, midi: midiDelen.midi, noten: instrumentPaneel.noten }).maschine;
 }
+// De PATROON-rij (docs/PATRONEN.md): plekken, stappen, opnemen, en de set op de server.
+// Wat je speelt (noten.js) gaat naar de speler: de laatste noot en live opnemen.
+const patronenPaneel = opzetPatronen({ engine, noten: instrumentPaneel.noten });
+window.patronen = engine.patronen;
+window.patronenPaneel = patronenPaneel;
 window.midi = midiDelen.midi;         // handig in de console tijdens bouwen
 window.mapping = midiDelen.mapping;
 window.feedback = midiDelen.feedback;
@@ -239,6 +287,11 @@ startRenderloop({
     video: video.teken,
     klankschaal: klankschaal.teken,
     auto: autoPaneel.teken,
+    stems: stemsPaneel.teken,
+    koptelefoon: koptelefoonPaneel.teken,
+    instrument: instrumentPaneel.teken,
+    patronen: patronenPaneel.teken,
+    master: masterPaneel.teken,
   },
 });
 
@@ -251,4 +304,5 @@ bindApp({
   opnameStop: opname.opnameStop,
   opnameSoort: opname.wisselSoort,
   rackStap: racks.rackStap,
+  masterRackStap: masterPaneel.rackStap,
 });

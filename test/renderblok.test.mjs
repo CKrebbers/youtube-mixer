@@ -39,12 +39,17 @@ globalThis.AudioWorkletProcessor = class {
 };
 globalThis.registerProcessor = (_naam, klasse) => { Lezer = klasse; };
 await import('../src/engine/stream-lezer.js');
-const { PAGINA } = await import('../src/engine/stream-kern.js');
+const { PAGINA, UITGANGEN } = await import('../src/engine/stream-kern.js');
 
 // ---- materiaal: 20 s, twee tonen en ruis, 16 bit stereo ----------------------
 
 const DUUR = 20;
 const paginas = new Map();
+// Stems (docs/STEMS.md): hetzelfde materiaal als vier stereoparen naast
+// elkaar (8 kanalen): paar 0 = (L, R) precies het stereomateriaal, paar 1 =
+// (R, L), paar 2 = (−L, −R), paar 3 = (L, L). Dan moet uitgang 0 de gouden
+// hash geven, en zijn de andere drie uitgangen exact af te leiden van uitgang 0.
+const paginas8 = new Map();
 {
   const n = DUUR * SR;
   const pcm = new Int16Array(n * 2);
@@ -56,6 +61,13 @@ const paginas = new Map();
     pcm[2 * i + 1] = Math.round((0.3 * Math.sin(2 * Math.PI * 82.5 * i / SR) + 0.25 * Math.sin(2 * Math.PI * 517 * i / SR) - ruis) * 32767);
   }
   for (let p = 0; p * PAGINA * 2 < pcm.length; p++) paginas.set(p, pcm.slice(p * PAGINA * 2, (p + 1) * PAGINA * 2));
+  const pcm8 = new Int16Array(n * 8);
+  for (let i = 0; i < n; i++) {
+    const l = pcm[2 * i], r = pcm[2 * i + 1], o = 8 * i;
+    pcm8[o] = l; pcm8[o + 1] = r; pcm8[o + 2] = r; pcm8[o + 3] = l;
+    pcm8[o + 4] = -l; pcm8[o + 5] = -r; pcm8[o + 6] = l; pcm8[o + 7] = l;
+  }
+  for (let p = 0; p * PAGINA * 8 < pcm8.length; p++) paginas8.set(p, pcm8.slice(p * PAGINA * 8, (p + 1) * PAGINA * 8));
 }
 const GAT = 6;                                         // deze pagina ontbreekt: een gat
 const grens = (GAT * PAGINA) / SR;                     // waar het gat begint, in s
@@ -77,16 +89,25 @@ const DECK_SEGS = [
   { P: 12, R: 0.92, loop: { start: 12, end: 12.3017 } },
 ];
 
-function maakDecks() {
+/**
+ * De node heeft altijd vier uitgangen van twee kanalen (zoals Chrome ze
+ * geeft met numberOfOutputs 4); stereo speelt op uitgang 0, de rest is stil.
+ * `kanalen` 8 = vier stems.
+ */
+function maakDecks(kanalen = 2) {
   const decks = [], uits = [];
+  const pag = kanalen === 8 ? paginas8 : paginas;
+  // De klok terug op 0: het eerste segment komt dan op 0 binnen (invloeien
+  // vanaf 0), ook als er eerder in dit bestand al decks gedraaid hebben.
+  globalThis.currentFrame = 0;
   for (let d = 0; d < DECKS; d++) {
     const n = new Lezer();
-    n.port.onmessage({ data: { type: 'bron', duur: DUUR, sr: SR } });
-    for (const [i, data] of paginas) if (i !== GAT) n.port.onmessage({ data: { type: 'pagina', i, data } });
+    n.port.onmessage({ data: { type: 'bron', duur: DUUR, sr: SR, kanalen } });
+    for (const [i, data] of pag) if (i !== GAT) n.port.onmessage({ data: { type: 'pagina', i, data } });
     const s = DECK_SEGS[d];
     n.port.onmessage({ data: { type: 'segment', id: 1, seg: { T: 0, P: s.P, R: s.R, loop: s.loop, speelt: s.speelt ?? true } } });
     decks.push(n);
-    uits.push([[new Float32Array(Q), new Float32Array(Q)]]);
+    uits.push(Array.from({ length: UITGANGEN }, () => [new Float32Array(Q), new Float32Array(Q)]));
   }
   return { decks, uits, blok: 0 };
 }
@@ -113,8 +134,11 @@ const LEEG = [];
 const wijzer = new Int32Array(DECKS);
 let h = 0;
 
-/** `stappen` keer acht decks één blok verder; met `hash` een FNV-1a over de bits. */
-function draai(w, stappen, berichten = null, hash = false) {
+/**
+ * `stappen` keer acht decks één blok verder; met `hash` een FNV-1a over de
+ * bits van uitgang 0; `controle(uit)` na elk blok (niet in een afvalvenster).
+ */
+function draai(w, stappen, berichten = null, hash = false, controle = null) {
   wijzer.fill(0);
   for (let s = 0; s < stappen; s++, w.blok++) {
     globalThis.currentFrame = w.blok * Q;
@@ -126,6 +150,7 @@ function draai(w, stappen, berichten = null, hash = false) {
         wijzer[d] = k;
       }
       w.decks[d].process(LEEG, w.uits[d], null);
+      if (controle) controle(w.uits[d]);
       if (hash) {
         for (let c = 0; c < 2; c++) {
           const u = new Uint32Array(w.uits[d][0][c].buffer);
@@ -173,6 +198,29 @@ console.log('uitvoer');
       frames: 0, t0: 0, ctxRate: SR, trackRate: SR, duur: DUUR });
   } catch (e) { r = e.message; }
   ok('een eerste blok van 0 frames geeft niets en valt niet', r === null);
+  ok('stereo: uitgang 1–3 stil', w.uits.every((u) => u.slice(1).every((o) => o[0].every((v) => v === 0) && o[1].every((v) => v === 0))));
+}
+
+// ---- 1b. stems: vier paren, uitgang 0 bit voor bit, de rest exact ernaast ----
+
+console.log('\nstems: acht decks × vier paren');
+{
+  const w = maakDecks(8);
+  h = 0x811c9dc5 | 0;
+  let mis = 0, klinkt = 0;
+  draai(w, 3000, maakBerichten(0, 3000, 53), true, (u) => {
+    const [o0, o1, o2, o3] = u;
+    for (let i = 0; i < Q; i++) {
+      const l = o0[0][i], r = o0[1][i];
+      if (o1[0][i] !== r || o1[1][i] !== l || o2[0][i] !== -l || o2[1][i] !== -r || o3[0][i] !== l || o3[1][i] !== l) mis++;
+      if (l !== 0) klinkt++;
+    }
+  });
+  const hash = (h >>> 0).toString(16).padStart(8, '0');
+  const eindes = w.decks.reduce((n, d) => n + d.port.uit.filter((m) => m.type === 'einde').length, 0);
+  ok(`8 kanalen, 3000 blokken met dezelfde overgangen: uitgang 0 (paar 0) hash ${hash} = de gouden`, hash === '9dfaeb73');
+  ok(`uitgang 1–3 sample voor sample het paar dat erin zit (R/L, −L/−R, L/L): ${mis} afwijkingen over ${klinkt} klinkende frames`, mis === 0 && klinkt > 100000);
+  ok(`trackeinde ${eindes}x, één keer per segment (van paar 0, niet per paar)`, eindes === 38);
 }
 
 // ---- 2. afval ------------------------------------------------------------------
@@ -250,6 +298,107 @@ console.log('\nrem');
   ok(beste.gcs ? `remmende decks: ${beste.gcs} GC's in het schoonste venster (er is afval)`
     : `remmende decks: ${(beste.bytes / n).toFixed(1)} bytes per bericht, geen GC`,
   beste.gcs === 0 && beste.bytes < DREMPEL + 16 * n);
+}
+
+// ---- 4. stems: acht decks × vier paren, ook zonder afval ---------------------
+// Vier renderBlok-aanroepen per deck per blok, elk met een eigen staat, en
+// uitgangen zonder paar op nul: niets daarvan mag per blok iets aanmaken.
+
+console.log('\nstems: afval');
+{
+  const w = maakDecks(8);
+  draai(w, 4000, maakBerichten(0, 4000, 41));          // opwarmen
+  const STAPPEN = 1500, BLOKKEN = STAPPEN * DECKS, DREMPEL = 1024;
+  const beter = (a, b) => !a || b.gcs < a.gcs || (b.gcs === a.gcs && b.bytes < a.bytes);
+  let beste = null, pogingen = 0;
+  for (; pogingen < 30; pogingen++) {
+    const r = venster(w, STAPPEN);
+    if (beter(beste, r)) beste = r;
+    if (r.gcs === 0 && r.bytes < DREMPEL) break;
+  }
+  console.log(`      stabiel: ${beste.bytes} bytes over ${BLOKKEN} blokken (× 4 paren), ${beste.gcs} GC's (venster ${pogingen + 1})`);
+  ok(beste.gcs ? `stems, stabiel: ${beste.gcs} GC's in het schoonste venster (er is afval)`
+    : `stems, stabiel: ${(beste.bytes / BLOKKEN).toFixed(3)} bytes per blok (vier paren), geen GC`,
+  beste.gcs === 0 && beste.bytes < DREMPEL);
+  let besteB = null, n = 0;
+  for (pogingen = 0; pogingen < 30; pogingen++) {
+    const ber = maakBerichten(w.blok, STAPPEN, 37);
+    n = ber.reduce((s, ev) => s + ev.length, 0);
+    const r = venster(w, STAPPEN, ber);
+    if (beter(besteB, r)) besteB = r;
+    if (r.gcs === 0 && r.bytes < DREMPEL + 16 * n) break;
+  }
+  console.log(`      met ${n} segmentwissels: ${besteB.bytes} bytes, ${besteB.gcs} GC's (venster ${pogingen + 1})`);
+  ok(besteB.gcs ? `stems met segmentwissels: ${besteB.gcs} GC's in het schoonste venster (er is afval)`
+    : `stems met segmentwissels: ${(besteB.bytes / n).toFixed(1)} bytes per bericht, geen GC`,
+  besteB.gcs === 0 && besteB.bytes < DREMPEL + 16 * n);
+}
+
+// ---- 5. keylock (het rekpad, docs/KEYLOCK.md): ook zonder afval ---------------
+// Acht decks door de Signalsmith-stretcher (rek-kern.js): toon, tempo, loops
+// en een gat, met berichten die het rekpad laten doorlopen (tempo, T = nu),
+// gepland laten springen (T in de toekomst) en terug naar renderBlok en weer
+// erheen laten wisselen (keylock uit en aan). Een bericht mag iets kosten, een
+// blok niet.
+
+console.log('\nkeylock: afval');
+{
+  const rekVan = (d, b) => ({ keylock: (d + b) % 5 !== 0, toon: ((d + b) % 3) - 1 });
+  const w = maakDecks();
+  // Elk deck meteen een segment met keylock, en wachten tot de WASM er is.
+  for (let d = 0; d < DECKS; d++) {
+    const s = DECK_SEGS[d];
+    w.decks[d].port.onmessage({ data: { type: 'segment', id: 2, seg: { T: 0, P: s.P, R: s.R, loop: s.loop, speelt: s.speelt ?? true, rem: null, rek: rekVan(d, 0) } } });
+  }
+  for (let i = 0; i < 400 && !w.decks.every((d) => d.rek); i++) await new Promise((r) => setTimeout(r, 5));
+  ok('acht stretchers geladen', w.decks.every((d) => d.rek));
+  // Elk segment in de vorm die de StreamBron stuurt (één letterlijk object met
+  // alle zeven velden, rek: null of { keylock, toon }): de worklet ziet dan één
+  // vorm, zoals in de browser.
+  const rekBerichten = (van, stappen, elke) => {
+    const lijst = maakBerichten(van, stappen, elke);
+    lijst.forEach((ev, d) => {
+      for (const e of ev) {
+        const o = e.event.data.seg, b = e.blok;
+        let T = o.T, P = o.P;
+        if ((b % 4) === 2) { T = (b * Q) / SR + 0.1; e.event.data.gepland = true; }
+        if ((b % 4) === 3) { T = (b * Q) / SR; P = DECK_SEGS[(d + b) % DECKS].P; }
+        e.event.data.seg = { T, P, R: o.R, loop: o.loop, speelt: o.speelt, rem: null, rek: (b % 4) === 1 ? null : rekVan(d, b) };
+      }
+    });
+    return lijst;
+  };
+  draai(w, 4000, rekBerichten(0, 4000, 41));          // opwarmen, met alle paden en overgangen
+  const inB = w.decks.filter((d) => d.inB || d.naarB).length;
+  const STAPPEN = 1500, BLOKKEN = STAPPEN * DECKS, DREMPEL = 1024;
+  const beter = (a, b) => !a || b.gcs < a.gcs || (b.gcs === a.gcs && b.bytes < a.bytes);
+  let beste = null, pogingen = 0;
+  for (; pogingen < 30; pogingen++) {
+    const r = venster(w, STAPPEN);
+    if (beter(beste, r)) beste = r;
+    if (r.gcs === 0 && r.bytes < DREMPEL) break;
+  }
+  console.log(`      stabiel (${inB} decks op het rekpad): ${beste.bytes} bytes over ${BLOKKEN} blokken, ${beste.gcs} GC's (venster ${pogingen + 1})`);
+  ok(beste.gcs ? `keylock, stabiel: ${beste.gcs} GC's in het schoonste venster (er is afval)`
+    : `keylock, stabiel: ${(beste.bytes / BLOKKEN).toFixed(3)} bytes per blok, geen GC`,
+  inB > 0 && beste.gcs === 0 && beste.bytes < DREMPEL);
+  // Per bericht mag het rekpad meer kosten dan renderBlok: een sprong is een
+  // `_seek(n, rate)` en een andere toon `_setTransposeSemitones`, en een WASM-
+  // functie met een niet-geheel getal als argument pakt dat in (gemeten 48 bytes
+  // per aanroep). Eén keer per sprong of toonwissel, nooit per blok.
+  const PER_BERICHT = 64;
+  let besteB = null, n = 0;
+  for (pogingen = 0; pogingen < 30; pogingen++) {
+    const ber = rekBerichten(w.blok, STAPPEN, 37);
+    n = ber.reduce((s, ev) => s + ev.length, 0);
+    const r = venster(w, STAPPEN, ber);
+    if (beter(besteB, r)) besteB = r;
+    if (r.gcs === 0 && r.bytes < DREMPEL + PER_BERICHT * n) break;
+  }
+  console.log(`      met ${n} wissels (tempo, geplande sprong, keylock uit en aan): ${besteB.bytes} bytes, ${besteB.gcs} GC's (venster ${pogingen + 1})`);
+  ok(besteB.gcs ? `keylock met wissels: ${besteB.gcs} GC's in het schoonste venster (er is afval)`
+    : `keylock met wissels: ${(besteB.bytes / n).toFixed(1)} bytes per bericht (zoeken en toon in de WASM), geen GC`,
+  besteB.gcs === 0 && besteB.bytes < DREMPEL + PER_BERICHT * n);
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

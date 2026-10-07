@@ -470,6 +470,39 @@ console.log('\nautomaat: vervangPlan');
   au.vernietig();
 }
 
+// ---- 5. stems: wat Clay aanraakt tijdens een overgang is van hem --------------------
+// Een stem dichtdraaien of wegdrukken op een track in de overgang is ingrijpen,
+// net als een EQ-kill (docs/STEMS.md §3, OVERNEEM). Een stem op een track die
+// niet meedoet, of een action die geen stem is, niet.
+console.log('\nautomaat: stems overnemen');
+{
+  // Via de bus; een id die geen action is komt de bus niet op, die gaat rechtstreeks naar de automaat.
+  const proef = (id, waarde, viaBus = true) => {
+    const au = new Automaat({ engine: eng, invoke, bijInvoke, laad, haalLibrary: async () => lib, tik: 1e7 });
+    Object.assign(au, { aan: true, fase: 'bezig', hoofd: 'A', volgende: { deckId: 'B' } });
+    if (viaBus) invoke(id, waarde); else au._bijBus(id);
+    const fase = au.fase;
+    au.vernietig();
+    return fase;
+  };
+  const neemt = [['track.2.stem.vocals', 0.4], ['track.2.stem.inst.kill', true], ['track.1.stem.vocals.hold', true],
+    ['track.1.stem.drums', 0.2], ['track.2.stem.bass.kill', true], ['track.1.stem.other.hold', true]];
+  const mis = neemt.filter(([id, v]) => proef(id, v) !== 'overgenomen').map(([id]) => id);
+  for (const id of ['track.1.stem.vocals.hold', 'track.1.stem.other.hold']) invoke(id, false);
+  ok(`niveau, kill en drukknop van een stem op een track in de overgang: overgenomen${mis.length ? ` (niet: ${mis.join(', ')})` : ''}`, mis.length === 0);
+  ok('een stem op een track die niet meedoet: niet overgenomen', proef('track.5.stem.vocals.kill', true) === 'bezig');
+  ok('geen stem (stem.foo, stems.vocals): niet overgenomen', proef('track.2.stem.foo', 1, false) === 'bezig'
+    && proef('track.2.stems.vocals', 1, false) === 'bezig' && proef('track.2.stem.vocals.kill.x', 1, false) === 'bezig');
+  // Stemkanalen (docs/STEMS.md §5): filter en sends van een stem raken de mix; de
+  // cue (pfl) niet: die hoort de zaal niet, net als track.N.pfl.
+  const neemtOok = [['track.1.stem.vocals.filter', 0.2], ['track.2.stem.inst.filter', 0.8], ['track.1.stem.drums.send.a', 0.5],
+    ['track.2.stem.other.send.b', 0.3]];
+  const misOok = neemtOok.filter(([id, v]) => proef(id, v, false) !== 'overgenomen').map(([id]) => id);
+  ok(`filter en sends van een stem op een track in de overgang: overgenomen${misOok.length ? ` (niet: ${misOok.join(', ')})` : ''}`, misOok.length === 0);
+  ok('de cue van een stem (en van de track): niet overgenomen', proef('track.2.stem.vocals.pfl', true, false) === 'bezig'
+    && proef('track.1.pfl', true, false) === 'bezig' && proef('track.2.stem.vocals.send.c', 1, false) === 'bezig');
+}
+
 ok(`de hele proef zonder setValueCurveAtTime, zonder CURVE_BREUK en zonder NotSupportedError (${TL.CURVE_BREUK} / ${TL.OVERLAP_FOUTEN}), met ${vanMij.filter((x) => /\.glide$/.test(x)).length} glijregels`,
   TL.CURVE_BREUK === 0 && TL.OVERLAP_FOUTEN === 0 && vanMij.some((x) => /\.glide$/.test(x)));
 

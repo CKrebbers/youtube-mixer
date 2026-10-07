@@ -3,6 +3,8 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { bronVan } from './links.js';
 import { TOON_VERSIE, leesToonsoort, toonsoortNaam } from './toon.js';
+import { SECTIE_VERSIE, gridSleutel } from './secties.js';
+import { TWIJFELS } from '../src/engine/beatgrid.js';
 
 /**
  * De library: wat er binnengehaald is, en wat erbij hoort.
@@ -134,6 +136,19 @@ export const SCHEMA = [
   CREATE INDEX tracks_toegevoegd ON tracks(toegevoegd);
   CREATE INDEX tracks_gespeeld ON tracks(laatst_geladen, toegevoegd);
   `,
+  // versie 8 — stems (docs/STEMS.md): de inhoud van media/<id>/stems.json plus
+  // `bestand`, als JSON. Gezet als een split slaagt, gewist als audio.wav
+  // opnieuw binnengehaald wordt (dan passen de frames niet meer).
+  `
+  ALTER TABLE tracks ADD COLUMN stems_json TEXT;
+  `,
+  // versie 9 — SECTIES (docs/SECTIES.md): de sectiekaart als JSON, zoals de
+  // toonsoort: { versie, opGrid, grid, stukken: [{ van, label, groep, energie,
+  // zeker?, stems? }], bron, slot }. Niet in de lijst (/api/library): de app
+  // haalt hem bij het laden op (GET /api/library/<id>/secties).
+  `
+  ALTER TABLE tracks ADD COLUMN secties_json TEXT;
+  `,
 ];
 
 /** Zoveel hotcues per nummer neemt de library aan; het deck gebruikt er nu 4. */
@@ -219,6 +234,10 @@ export function normaliseerGrid(g) {
     // zonder tellen de maten door zoals vroeger (de engine vult hem aan). Geen
     // schemawijziging, het staat in grid_json.
     if (getal(s.maat)) stuk.maat = Number(s.maat);
+    // Van de tellen (6 okt): waarom het stuk onzeker is, en het octaaf van de oude analyse.
+    if (TWIJFELS.includes(s.twijfel)) stuk.twijfel = s.twijfel;
+    if (s.octaaf === 2 || s.octaaf === 0.5) stuk.octaaf = s.octaaf;
+    if (s.ok === true) stuk.ok = true;          // met het oor gecontroleerd (Beatgrid.keurGoed)
     stukken.push(stuk);
   }
   if (!stukken.length) return null;
@@ -229,6 +248,9 @@ export function normaliseerGrid(g) {
   // 'auto' = voorstel van de analyse, 'hand' = daarna met de hand bewerkt.
   // Zonder: van vóór stap C (of gemigreerd) — die mag opnieuw geanalyseerd.
   if (g.bron === 'auto' || g.bron === 'hand') uit.bron = g.bron;
+  // 'tellen' = gemaakt uit de tellen van Beat This! (server/tellen.js), met de versie van de methode.
+  if (g.methode === 'tellen') uit.methode = 'tellen';
+  if (Number.isInteger(g.versie) && g.versie > 0) uit.versie = g.versie;
   return uit;
 }
 
@@ -348,6 +370,85 @@ export function autoToonWeigert(huidig, { overHand = false, overSlot = false, al
 export const moetToonAnalyse = (toon, versie = TOON_VERSIE) =>
   !toon || (!toon.slot && toon.bron === 'auto' && !((toon.versie ?? 0) >= versie));
 
+// ---- secties: het nummer in stukken die je speelt, docs/SECTIES.md ---------
+
+export const SECTIE_LABELS = ['intro', 'opbouw', 'drop', 'break', 'outro', 'deel'];
+export const MAX_SECTIE_STUKKEN = 64;
+
+/**
+ * Een sectiekaart uit de buitenwereld netjes maken, of null:
+ *   { versie, opGrid, grid, stukken: [{ van, label, groep, energie, zeker?, stems? }], bron, slot }
+ * - stukken: oplopend op `van` (s, ≥ 0, elk een eigen plek), de eerste op 0;
+ *   hooguit MAX_SECTIE_STUKKEN.
+ * - label: een van SECTIE_LABELS; groep: één hoofdletter A–Z; energie 0..1.
+ * - zeker 0..1 (optioneel); stems: { naam: 0..1 } (optioneel).
+ * - bron: 'auto' of 'hand'; slot: boolean.
+ */
+export function normaliseerSecties(k) {
+  if (!k || typeof k !== 'object' || !Array.isArray(k.stukken) || !k.stukken.length) return null;
+  if (k.stukken.length > MAX_SECTIE_STUKKEN) return null;
+  const getal = (x) => typeof x === 'number' && Number.isFinite(x);
+  const stukken = [];
+  for (const s of k.stukken) {
+    if (!s || !getal(s.van) || s.van < 0) return null;
+    if (stukken.length && s.van <= stukken.at(-1).van + 1e-6) return null;
+    if (!SECTIE_LABELS.includes(s.label) || typeof s.groep !== 'string' || !/^[A-Z]$/.test(s.groep)) return null;
+    const stuk = { van: s.van, label: s.label, groep: s.groep, energie: getal(s.energie) ? Math.min(1, Math.max(0, s.energie)) : 0.5 };
+    if (getal(s.zeker)) stuk.zeker = Math.min(1, Math.max(0, s.zeker));
+    if (s.stems && typeof s.stems === 'object') {
+      const st = {};
+      for (const [naam, v] of Object.entries(s.stems)) if (/^\w{1,16}$/.test(naam) && getal(v)) st[naam] = Math.min(1, Math.max(0, v));
+      if (Object.keys(st).length) stuk.stems = st;
+    }
+    stukken.push(stuk);
+  }
+  stukken[0].van = 0;
+  return {
+    versie: Number.isInteger(k.versie) && k.versie > 0 ? k.versie : null,
+    opGrid: k.opGrid !== false,
+    grid: typeof k.grid === 'string' && /^[0-9a-f]{8}$/.test(k.grid) ? k.grid : null,
+    stukken,
+    bron: k.bron === 'hand' ? 'hand' : 'auto',
+    slot: !!k.slot,
+    stemsGeprobeerd: !!k.stemsGeprobeerd,
+  };
+}
+
+/**
+ * Moet deze kaart (opnieuw) berekend worden? Leeg; of AUTOMATISCH en dan:
+ * een oudere analyseversie, op een ander grid gerekend dan het grid van nu
+ * (`gridSleutel`), of zonder stems terwijl het nummer ze nu heeft (en ze nog
+ * niet geprobeerd zijn: een onleesbare stems.wav geeft anders een lus). Met
+ * de hand of op slot: nooit.
+ */
+export function moetSectieAnalyse(k, { versie = SECTIE_VERSIE, grid = null, metStems = false } = {}) {
+  if (!k) return true;
+  if (k.slot || k.bron !== 'auto') return false;
+  if (!((k.versie ?? 0) >= versie)) return true;
+  if ((k.grid ?? null) !== (grid ?? null)) return true;
+  return metStems && !k.stemsGeprobeerd && !k.stukken.some((s) => s.stems);
+}
+
+// ---- stems: zang en rest (of vier) per nummer, docs/STEMS.md ----------------
+
+/**
+ * Wat een library-rij over de stems zegt, of null:
+ *   { aantal: 2|4, namen: [...], schaal, bestand: "media/<id>/stems.wav" }
+ * Uit de bewaarde stems.json (plus `bestand`). Null als het geen bruikbare set
+ * is: dan speelt de app audio.wav, nooit een half begrepen bestand.
+ * `namen` alleen als het aantal klopt: de engine zet kanaalpaar k op namen[k].
+ */
+export function normaliseerStems(s) {
+  if (!s || typeof s !== 'object' || Array.isArray(s)) return null;
+  const { aantal, namen, schaal, bestand } = s;
+  if (aantal !== 2 && aantal !== 4) return null;
+  if (!Array.isArray(namen) || namen.length !== aantal
+    || !namen.every((n) => typeof n === 'string' && /^[a-z]{1,16}$/.test(n)) || new Set(namen).size !== aantal) return null;
+  if (!(typeof schaal === 'number' && schaal > 0 && schaal <= 1)) return null;
+  if (typeof bestand !== 'string' || !/^media\/[\w-]+\/stems\.wav$/.test(bestand)) return null;
+  return { aantal, namen: [...namen], schaal, bestand };
+}
+
 export class Library {
   constructor(pad) {
     mkdirSync(dirname(pad), { recursive: true });
@@ -457,6 +558,17 @@ export class Library {
     return ids.map((r) => this._verrijk(perId.get(r)));
   }
 
+  /**
+   * Alle ids. `volgorde: 'laatst_geladen'`: wat je het laatst laadde eerst
+   * (daarna nooit geladen, nieuwste eerst) — voor achtergrondwerk dat het
+   * liefst begint bij wat je speelt.
+   */
+  alleIds({ volgorde = 'toegevoegd' } = {}) {
+    const orde = volgorde === 'laatst_geladen'
+      ? 'laatst_geladen IS NULL, laatst_geladen DESC, toegevoegd DESC' : 'toegevoegd';
+    return this.db.prepare(`SELECT id FROM tracks ORDER BY ${orde}`).all().map((r) => r.id);
+  }
+
   /** Hoeveel nummers er zijn, of hoeveel op de zoekterm lijken. */
   aantalTracks({ zoek = '' } = {}) {
     const { waar, args } = zoekFilter(zoek);
@@ -468,13 +580,15 @@ export class Library {
    * rij (één query per pagina in plaats van twee per nummer): het aantal
    * racks wil je in het paneel zien zonder tweede vraag.
    */
-  _verrijk({ titel_sleutel: _s, _rij, _racks, _p_bestand, _p_buckets, _p_per, ...r }) {
+  _verrijk({ titel_sleutel: _s, _rij, _racks, _p_bestand, _p_buckets, _p_per, stems_json, secties_json: _sec, ...r }) {
     const grid = this._grid(r);
     const onset = r.onset_bestand
       ? { bestand: r.onset_bestand, frames: r.onset_frames, envRate: r.onset_rate, tijdOffset: r.onset_offset }
       : null;
     // bron: 'youtube' | 'tiktok' | 'bestand' | 'web' — het label in de lijst.
+    // stems: alleen wat de app nodig heeft; de hele stems.json staat in stems_json.
     return { ...r, racks: _racks, grid, toon: this._toon(r), onset, bron: bronVan(r.url),
+      stems: stems_json != null ? normaliseerStems(veiligJson(stems_json, null)) : null,
       peaks: _p_bestand != null ? { bestand: _p_bestand, buckets: _p_buckets, perBucket: _p_per } : null };
   }
 
@@ -602,6 +716,124 @@ export class Library {
   teToonAnalyseren({ versie = TOON_VERSIE } = {}) {
     return this.db.prepare('SELECT id, toon_json FROM tracks ORDER BY toegevoegd').all()
       .filter((r) => moetToonAnalyse(this._toon(r), versie)).map((r) => r.id);
+  }
+
+  // ---- secties ------------------------------------------------------------
+
+  /** De sectiekaart van een nummer, of null (niet in track(): de lijst blijft klein). */
+  secties(trackId) {
+    const r = this._q('SELECT secties_json FROM tracks WHERE id = ?').get(trackId);
+    return r?.secties_json != null ? normaliseerSecties(veiligJson(r.secties_json, null)) : null;
+  }
+
+  /** Een kaart bewaren (of null: wissen). Gooit bij een ongeldige kaart. Geeft wat er nu staat. */
+  bewaarSecties(trackId, k) {
+    const n = k == null ? null : normaliseerSecties(k);
+    if (k != null && !n) throw new Error('ongeldige secties');
+    this._q('UPDATE tracks SET secties_json = ? WHERE id = ?').run(n ? JSON.stringify(n) : null, trackId);
+    return this.secties(trackId);
+  }
+
+  /**
+   * Een AUTOMATISCHE kaart bewaren, alleen als dat (nog) mag: niet over een
+   * kaart met de hand of op slot. Geeft { bewaard, secties, reden? }.
+   */
+  bewaarAutoSecties(trackId, k) {
+    if (!this.track(trackId)) return { bewaard: false, secties: null, reden: 'onbekend nummer' };
+    const huidig = this.secties(trackId);
+    if (huidig?.slot) return { bewaard: false, secties: huidig, reden: 'de secties staan op slot' };
+    if (huidig && huidig.bron === 'hand') return { bewaard: false, secties: huidig, reden: 'de secties zijn met de hand gezet' };
+    return { bewaard: true, secties: this.bewaarSecties(trackId, { ...k, bron: 'auto', slot: false }) };
+  }
+
+  /** Moeten de secties van dit nummer (opnieuw) berekend worden, met het grid en de stems van nu? */
+  moetSecties(trackId, { versie = SECTIE_VERSIE } = {}) {
+    const t = this.track(trackId);
+    if (!t) return false;
+    return moetSectieAnalyse(this.secties(trackId), { versie, grid: t.grid ? gridSleutel(t.grid) : null, metStems: !!t.stems });
+  }
+
+  /** Nummers waarvan de secties (opnieuw) berekend moeten worden, oudste eerst. */
+  teSectieAnalyseren({ versie = SECTIE_VERSIE } = {}) {
+    return this.alleIds().filter((id) => this.moetSecties(id, { versie }));
+  }
+
+  /**
+   * Hoeveel nummers (nog) geen actuele secties hebben, voor de Controlekamer
+   * (GET /api/secties): { totaal, zonder, verouderd }. `zonder` = geen
+   * (leesbare) kaart; `verouderd` = wel een kaart, maar moetSecties zegt
+   * "opnieuw" (oudere SECTIE_VERSIE, een ander grid, stems erbij). Dezelfde
+   * regel als moetSecties en teSectieAnalyseren; met de hand of op slot telt
+   * als actueel.
+   *
+   * De Controlekamer vraagt dit elke 2 s. Daarom in twee lagen gecachet:
+   * - de telling, op de stand van de database: total_changes() van deze
+   *   verbinding (`wijzigingen`, zoals de backup) plus PRAGMA data_version (een
+   *   andere verbinding). Zonder wijziging twee kleine queries.
+   * - per nummer de ruwe kolommen (grid, stems, kaart) en wat eruit kwam. Elke
+   *   schrijfactie, in welke tabel ook, is een miss (tijdens de achtergrond-
+   *   analyse bijna elke vraag); dan haalt één query de kolommen op en worden
+   *   alleen de nummers waarvan er een anders is opnieuw geparst. Gemeten in
+   *   docs/CONTROLEKAMER.md.
+   * Midden in een transactie gaat er niets IN de cache: na een ROLLBACK daalt
+   * total_changes niet en blijft data_version voor deze verbinding gelijk, dus
+   * een telling van tijdens de transactie zou blijven staan. (Nu onbereikbaar:
+   * alle transacties hier zijn synchroon.)
+   */
+  sectieTelling({ versie = SECTIE_VERSIE } = {}) {
+    const vast = !this.db.isTransaction;
+    const sleutel = `${versie}:${this.wijzigingen()}:${this._q('PRAGMA data_version').get().data_version}`;
+    if (this._sectieTelling?.sleutel === sleutel) return this._sectieTelling.telling;
+    const oud = this._sectieRijen?.versie === versie ? this._sectieRijen.rijen : null;
+    const rijen = new Map();
+    let zonder = 0, verouderd = 0;
+    for (const r of this._q(`SELECT id, grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar, stems_json, secties_json
+      FROM tracks`).all()) {
+      const o = oud?.get(r.id);
+      r.stand = o && o.secties_json === r.secties_json && o.grid_json === r.grid_json && o.stems_json === r.stems_json
+        && o.grid_bpm === r.grid_bpm && o.grid_first_beat === r.grid_first_beat && o.grid_beats_per_bar === r.grid_beats_per_bar
+        ? o.stand : this._sectieStand(r, versie);
+      if (r.stand === 'zonder') zonder++;
+      else if (r.stand === 'verouderd') verouderd++;
+      rijen.set(r.id, r);
+    }
+    const telling = Object.freeze({ totaal: rijen.size, zonder, verouderd });
+    if (vast) {
+      this._sectieTelling = { sleutel, telling };
+      this._sectieRijen = { versie, rijen };
+    }
+    return telling;
+  }
+
+  /**
+   * 'zonder', 'verouderd' of 'actueel' voor één rij van sectieTelling: zoals
+   * moetSecties, maar zonder track() (alleen de grid- en stemskolommen en de kaart).
+   */
+  _sectieStand(r, versie) {
+    const k = r.secties_json != null ? normaliseerSecties(veiligJson(r.secties_json, null)) : null;
+    if (!k) return 'zonder';
+    const grid = this._grid(r);
+    const stems = r.stems_json != null ? normaliseerStems(veiligJson(r.stems_json, null)) : null;
+    return moetSectieAnalyse(k, { versie, grid: grid ? gridSleutel(grid) : null, metStems: !!stems }) ? 'verouderd' : 'actueel';
+  }
+
+  // ---- stems -------------------------------------------------------------
+
+  /**
+   * De stems van een nummer: de inhoud van stems.json plus `bestand`, of null
+   * (wissen). Een set die normaliseerStems niet aanneemt gooit, zodat er nooit
+   * stilletjes iets onbruikbaars in de library komt. Geeft wat de rij nu zegt.
+   */
+  bewaarStems(trackId, stems) {
+    if (stems != null && !normaliseerStems(stems)) throw new Error('ongeldige stems');
+    this._q('UPDATE tracks SET stems_json = ? WHERE id = ?').run(stems == null ? null : JSON.stringify(stems), trackId);
+    return this.track(trackId)?.stems ?? null;
+  }
+
+  /** De hele bewaarde stems.json (met model, frames, rekentijd…), of null. */
+  stemsInfo(trackId) {
+    const r = this._q('SELECT stems_json FROM tracks WHERE id = ?').get(trackId);
+    return r?.stems_json != null ? veiligJson(r.stems_json, null) : null;
   }
 
   bewaarOnset(trackId, onset) {

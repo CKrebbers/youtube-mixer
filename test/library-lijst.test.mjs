@@ -175,6 +175,230 @@ ok('kop: niet-sorteerbare kolommen zijn geen knop', !/data-sorteer="lufs"/.test(
 ok('kop: de knoppen erachter (onzichtbaar, voor gelijke kolombreedtes)', kop.endsWith('<span class="lib-knoppen lib-kop-knoppen" aria-hidden="true"><b>k</b></span>'));
 ok('kolomkop omgekeerd: ▼', L.kopHtml({ sorteer: 'gespeeld', richting: 'af' }).includes('gespeeld<i>▼</i>'));
 
+// ---- stems (docs/STEMS.md §4) ------------------------------------------------
+console.log('\nde stems-kolom');
+{
+  ok('stems staat na grid, niet sorteerbaar', ids.indexOf('stems') === ids.indexOf('grid') + 1
+    && !L.KOLOMMEN.find((k) => k.id === 'stems').sorteer && !/data-sorteer="stems"/.test(L.kopHtml(L.STANDAARD_SORTERING)));
+  const cel = (track, opdracht = null, uit = null) =>
+    L.stemsCelHtml(track, { stems: new Map(opdracht ? [[track.id, opdracht]] : []), stemsUit: uit });
+  const knoppen = (html) => [...html.matchAll(/<button[^>]*data-stems="(\w+)"(?: data-aantal="(\d)")?[^>]*>([^<]*)<\/button>/g)].map((m) => m[3]);
+  const tekst = (html) => /<b class="lib-stems[^"]*"[^>]*>([^<]*)<\/b>/.exec(html)?.[1];
+  const geen = cel({ id: 'a"b' });
+  ok('zonder stems: "—" met knoppen 2 en 4', tekst(geen) === '—' && knoppen(geen).join() === '2,4');
+  ok('het id ontsnapt, in de cel en op de knoppen', geen.includes('data-st-id="a&quot;b"') && /data-stems="splits" data-aantal="2" data-id="a&quot;b"/.test(geen));
+  const twee = cel({ id: 'x', stems: { aantal: 2, namen: ['vocals', 'inst'], schaal: 0.9, bestand: 'media/x/stems.wav' } });
+  ok('twee stems: "2", en een knop 4 (opnieuw in vier)', tekst(twee) === '2' && knoppen(twee).join() === '4' && /class="lib-stems stems"/.test(twee));
+  const vier = cel({ id: 'x', stems: { aantal: 4, namen: ['drums', 'bass', 'other', 'vocals'], schaal: 1, bestand: 'b' } });
+  ok('vier stems: "4", geen knoppen', tekst(vier) === '4' && knoppen(vier).length === 0);
+  const wacht = cel({ id: 'x' }, { id: 'o<1>', track: 'x', aantal: 2, status: 'wacht', voortgang: 0 });
+  ok('in de rij: "wacht" met × (annuleren), opdracht-id ontsnapt', tekst(wacht) === 'wacht' && knoppen(wacht).join() === '×'
+    && wacht.includes('data-stems="annuleer" data-opdracht="o&lt;1&gt;"'));
+  ok('bezig: hele procenten ("42%")', tekst(cel({ id: 'x' }, { id: 'o', track: 'x', aantal: 4, status: 'bezig', voortgang: 0.427 })) === '42%');
+  ok('bezig zegt nooit 100% zolang hij niet klaar is', tekst(cel({ id: 'x' }, { id: 'o', track: 'x', aantal: 4, status: 'bezig', voortgang: 1 })) === '99%');
+  ok('opnieuw splitsen terwijl er al twee zijn: de voortgang, en de tooltip zegt "nu nog 2"',
+    /nu nog 2/.test(cel({ id: 'x', stems: { aantal: 2 } }, { id: 'o', track: 'x', aantal: 4, status: 'bezig', voortgang: 0.1 })));
+  const fout = cel({ id: 'x' }, { id: 'o', track: 'x', aantal: 2, status: 'fout', fout: '<b>geheugen</b> op' });
+  ok('mislukt: "fout", de reden ontsnapt in de tooltip, opnieuw 2 · 4', tekst(fout) === 'fout' && fout.includes('&lt;b&gt;geheugen&lt;/b&gt; op')
+    && !fout.includes('<b>geheugen') && knoppen(fout).join() === '2,4');
+  ok('klaar terwijl de rij nog van vóór de split is: telt al als stems', tekst(cel({ id: 'x' }, { id: 'o', track: 'x', aantal: 4, status: 'klaar' })) === '4');
+  ok('geannuleerd: weer "—" met 2 · 4', tekst(cel({ id: 'x' }, { id: 'o', track: 'x', aantal: 2, status: 'geannuleerd' })) === '—');
+  const uit = cel({ id: 'x' }, null, 'demucs ontbreekt');
+  ok('splitter weg: knoppen uit, de reden in de tooltip', (uit.match(/ disabled/g) || []).length === 2 && /kan niet splitsen: demucs ontbreekt/.test(uit));
+  ok('maar annuleren kan altijd', !/disabled/.test(cel({ id: 'x' }, { id: 'o', track: 'x', aantal: 2, status: 'wacht' }, 'weg')));
+  const rijHtml = L.cellenHtml(t, nu, { stems: new Map([['x', { id: 'o', track: 'x', aantal: 2, status: 'bezig', voortgang: 0.5 }]]), stemsUit: null });
+  ok('met stems in de staat nog steeds één cel per kolom', (rijHtml.match(/<span /g) || []).length === L.KOLOMMEN.length && rijHtml.includes('>50%<'));
+  ok('zonder staat (oude aanroep): "—", geen fout', /data-st-id="x"[^>]*>—<\/b>/.test(L.cellenHtml(t, nu)));
+}
+
+console.log('\nwelke opdracht telt');
+{
+  const S = await import('../src/ui/stems-weergave.js');
+  const lijst = [
+    { id: 'k1', track: 'a', status: 'klaar', aantal: 2, klaar: 100 },
+    { id: 'f1', track: 'a', status: 'fout', aantal: 4, klaar: 200 },
+    { id: 'w1', track: 'b', status: 'wacht', aantal: 2 },
+    { id: 'k2', track: 'b', status: 'klaar', aantal: 2, klaar: 900 },
+    null, { id: 'z' },
+  ];
+  ok('van de afgelopen opdrachten de laatste', S.opdrachtVoor(lijst, 'a')?.id === 'f1');
+  ok('een open opdracht gaat voor, ook voor een latere klare', S.opdrachtVoor(lijst, 'b')?.id === 'w1');
+  ok('onbekend nummer: null', S.opdrachtVoor(lijst, 'c') === null && S.opdrachtVoor(null, 'a') === null);
+  const m = S.perNummer(lijst);
+  ok('per nummer in één keer, gelijk aan opdrachtVoor; rommel genegeerd', m.size === 2 && m.get('a').id === 'f1' && m.get('b').id === 'w1');
+}
+
+console.log('\nde stems-rij van de server (stems-wachtrij.js)');
+{
+  const { StemsWachtrij } = await import('../src/ui/stems-wachtrij.js');
+  const antwoord = (code, j) => ({ ok: code >= 200 && code < 300, status: code, json: async () => j });
+  let server = { code: 200, j: { opdrachten: [], server: 'r1', beschikbaar: true } };
+  const verzoeken = [];
+  let vertraag = null;
+  const haal = async (url, init = {}) => {
+    verzoeken.push({ url, ...init });
+    if (init.method === 'POST') {
+      const b = JSON.parse(init.body);
+      if (b.aantal === 3) return antwoord(400, { fout: 'aantal moet 2 of 4 zijn' });
+      if (b.track === 'weg') return antwoord(503, { fout: 'de splitter ontbreekt: geen demucs' });
+      if (b.track === 'heeft') return antwoord(200, { al: true, stems: { aantal: 2 } });
+      const o = { id: `o-${b.track}`, track: b.track, aantal: b.aantal, status: 'wacht', voortgang: 0 };
+      server.j = { ...server.j, opdrachten: [...server.j.opdrachten, o] };
+      return antwoord(202, { opdracht: o });
+    }
+    if (init.method === 'DELETE') return antwoord(200, { ok: true });
+    if (vertraag) await vertraag;
+    return antwoord(server.code, server.j);
+  };
+  const w = new StemsWachtrij({ haal, interval: 0 });
+  const gebeurd = [];
+  for (const e of ['klaar', 'fout', 'herstart', 'change']) w.on(e, (x) => gebeurd.push([e, x?.id ?? x]));
+  const van = (e) => gebeurd.filter(([n]) => n === e).map(([, x]) => x);
+
+  server = { code: 404, j: { fout: 'onbekend pad' } };
+  await w.peil();
+  ok('een server zonder stems (404): "ontbreekt", niet beschikbaar, met reden', w.ontbreekt && w.beschikbaar === false && /kent \/api\/stems niet/.test(w.reden));
+  await w.peil();
+  ok('… en dat één keer gemeld (change), niet bij elke peiling', van('change').length === 1);
+
+  server = { code: 200, j: { opdrachten: [{ id: 'oud', track: 't0', status: 'klaar', aantal: 2 }], server: 'r1', beschikbaar: true } };
+  await w.peil();
+  ok('eerste echte peiling: wat al klaar was is geen nieuws', !w.ontbreekt && w.beschikbaar === true && van('klaar').length === 0);
+  ok('voor(): de opdracht van een nummer', w.voor('t0')?.id === 'oud' && w.voor('niets') === null);
+  server.j = { ...server.j, opdrachten: [...server.j.opdrachten, { id: 'a', track: 't1', status: 'bezig', voortgang: 0.3, aantal: 4 }] };
+  await w.peil();
+  ok('iets bezig: open', w.open);
+  server.j = { ...server.j, opdrachten: [server.j.opdrachten[0], { id: 'a', track: 't1', status: 'klaar', aantal: 4 },
+    { id: 'b', track: 't2', status: 'klaar', aantal: 2 }, { id: 'c', track: 't3', status: 'fout', fout: 'kapot', aantal: 2 }] };
+  await w.peil();
+  ok('klaar terwijl je keek: gemeld; ook een die tussen twee peilingen helemaal liep', van('klaar').join() === 'a,b');
+  ok('mislukt: gemeld', van('fout').join() === 'c');
+  await w.peil();
+  ok('nog eens peilen: niets dubbel gemeld', van('klaar').length === 2 && van('fout').length === 1 && !w.open);
+
+  server.j = { opdrachten: [{ id: 'd', track: 't4', status: 'wacht', aantal: 2 }], server: 'r1', beschikbaar: true };
+  await w.peil();
+  server.j = { opdrachten: [], server: 'r2', beschikbaar: true };
+  await w.peil();
+  ok('herstart van de server met een open opdracht: gemeld met het aantal', van('herstart').join() === '1');
+  server.j = { opdrachten: [{ id: 'e', track: 't5', status: 'bezig', aantal: 2 }, { id: 'f', track: 't6', status: 'wacht', aantal: 2 }], server: 'r2', beschikbaar: true };
+  await w.peil();
+  server.j = { opdrachten: [{ id: 'e2', track: 't5', status: 'bezig', aantal: 2 }], server: 'r3', beschikbaar: true };
+  await w.peil();
+  ok('herstart die de rij terugzette (nieuwe id, zelfde nummer): alleen wat echt weg is telt', van('herstart').join() === '1,1');
+  server.j = { opdrachten: [], server: 'r2', beschikbaar: false, reden: 'geen python' };
+  await w.peil();
+  ok('splitter weg: beschikbaar false, met de reden van de server', w.beschikbaar === false && w.reden === 'geen python');
+  server.j = { opdrachten: [], server: 'r2', beschikbaar: true };
+  await w.peil();
+  ok('en terug: reden weg', w.beschikbaar === true && w.reden === null);
+
+  // Peilen alleen als het ergens om gaat.
+  let n = verzoeken.length;
+  w._tik();
+  ok('niets open en niemand kijkt: niet peilen', verzoeken.length === n);
+  let kijkt = true;
+  const stop = w.kijk(() => kijkt);
+  w.kijk(() => { throw new Error('kapotte kijker'); });
+  w._tik(); await w._loopt;
+  ok('iemand kijkt (paneel open): peilen; een kapotte kijker stoort niet', verzoeken.length === n + 1);
+  stop(); kijkt = false;
+  n = verzoeken.length;
+  w._tik();
+  ok('kijker weg: weer stil', verzoeken.length === n);
+
+  // Splitsen terwijl er een peiling onderweg is: de nieuwe opdracht staat er daarna toch.
+  let laat;
+  vertraag = new Promise((z) => { laat = z; });
+  const onderweg = w.peil();
+  const splitsing = w.splits('t9', 4);
+  await new Promise((z) => setTimeout(z, 0));
+  vertraag = null;
+  laat();
+  await onderweg;
+  const r = await splitsing;
+  const post = verzoeken.find((v) => v.method === 'POST');
+  ok('POST /api/stems als JSON: { track, aantal }', post.url === '/api/stems' && post.headers['Content-Type'] === 'application/json'
+    && JSON.stringify(JSON.parse(post.body)) === '{"track":"t9","aantal":4}');
+  ok('splitsen geeft de opdracht', r.ok && r.opdracht?.id === 'o-t9' && !r.al);
+  ok('een peiling die al onderweg was telt niet: daarna staat de nieuwe opdracht in de rij', w.voor('t9')?.id === 'o-t9');
+  ok('opnieuw: { opnieuw: true } erbij', (await w.splits('t8', 2, { opnieuw: true })).ok && JSON.parse(verzoeken.filter((v) => v.method === 'POST').at(-1).body).opnieuw === true);
+  const laatstePost = () => JSON.parse(verzoeken.filter((v) => v.method === 'POST').at(-1).body);
+  ok('vooraan: { vooraan: true } erbij (vanuit de STEMS-rij); zonder: niet in het verzoek',
+    (await w.splits('t7', 4, { vooraan: true })).ok && laatstePost().vooraan === true
+    && (await w.splits('t6', 4)).ok && !('vooraan' in laatstePost()));
+  const al = await w.splits('heeft', 2);
+  ok('had al stems: { al: true }', al.ok && al.al && al.stems?.aantal === 2);
+  const weg = await w.splits('weg', 2);
+  ok('503: de reden van de server, geen uitzondering', !weg.ok && /geen demucs/.test(weg.fout));
+  ok('400: idem', /2 of 4/.test((await w.splits('x', 3)).fout));
+  const geenNet = new StemsWachtrij({ haal: async () => { throw new Error('weg'); }, interval: 0 });
+  ok('server weg: tekst voor meld(), geen uitzondering', /server niet bereikbaar: weg/.test((await geenNet.splits('x', 2)).fout));
+  await geenNet.peil();
+  ok('… en peilen zonder server laat alles staan', geenNet.beschikbaar === null && geenNet.opdrachten.length === 0);
+  const x = await w.annuleer('o/1 2');
+  ok('annuleren: DELETE /api/stems/<id>, het id gecodeerd', x.ok && verzoeken.some((v) => v.method === 'DELETE' && v.url === '/api/stems/o%2F1%202'));
+}
+
+console.log('\nstems bij het binnenhalen (ingest-strook.js)');
+{
+  const I = await import('../src/ui/ingest-strook.js');
+  const o = geheugen();
+  ok('niets bewaard: 2 (zang + rest)', I.leesStemsKeuze(o) === 2 && I.leesStemsKeuze(undefined) === 2);
+  for (const [v, n] of [['4', 4], ['0', 0], ['2', 2], ['3', 2], ['', 2], ['x', 2]]) {
+    o.setItem(I.STEMS_SLEUTEL, v);
+    ok(`bewaard "${v}": ${n}`, I.leesStemsKeuze(o) === n);
+  }
+  I.bewaarStemsKeuze(o, 0);
+  ok('bewaren: als tekst onder varve.stems.standaard', o.getItem('varve.stems.standaard') === '0' && I.STEMS_SLEUTEL === 'varve.stems.standaard');
+  let gegooid = null;
+  try { ok('opslag die gooit: lezen geeft 2', I.leesStemsKeuze(gooit) === 2); I.bewaarStemsKeuze(gooit, 4); } catch (e) { gegooid = e; }
+  ok('… en bewaren gooit niet door', gegooid === null);
+
+  // De strook stuurt de keuze mee: in POST /api/ingest en in de upload.
+  const [fetch0, interval0, xhr0] = [globalThis.fetch, globalThis.setInterval, globalThis.XMLHttpRequest];
+  const posts = [], uploads = [];
+  globalThis.fetch = async (u, init = {}) => {
+    if (init.method === 'POST') { posts.push(JSON.parse(init.body)); return { ok: true, status: 202, json: async () => ({ status: 'wacht', plek: 1, resultaten: [] }) }; }
+    return { json: async () => ({ opdrachten: [] }) };
+  };
+  globalThis.setInterval = () => 0;
+  globalThis.XMLHttpRequest = class {
+    constructor() { this.upload = {}; }
+    open(m, u) { uploads.push(u); } setRequestHeader() {} abort() {}
+    send() { setTimeout(() => { this.status = 202; this.responseText = '{"id":"u1","status":"wacht"}'; this.onload(); }, 0); }
+  };
+  const knop = (v) => ({ dataset: { stemsKeuze: v }, aan: false, classList: { toggle(n, a) { knop.staat[v] = a; } }, setAttribute() {} });
+  knop.staat = {};
+  const knoppen = ['2', '4', '0'].map(knop);
+  let klik = null;
+  const keuzeEl = { querySelectorAll: () => knoppen, addEventListener: (t, f) => { klik = f; } };
+  const el = { addEventListener() {}, classList: { toggle() {} }, innerHTML: '', contains: () => true };
+  const url = { value: '', addEventListener() {} };
+  const opslag = geheugen();
+  opslag.setItem(I.STEMS_SLEUTEL, '4');
+  const s = new I.IngestStrook({ el, url, stemsKeuze: keuzeEl, opslag });
+  ok('de strook begint met de bewaarde keuze (4), die knop brandt', s.stems === 4 && knop.staat['4'] === true && knop.staat['2'] === false);
+  url.value = 'https://youtu.be/abc';
+  await s.haalBinnen();
+  ok('één link: { url, stems: 4 }', posts.at(-1).url === 'https://youtu.be/abc' && posts.at(-1).stems === 4);
+  klik({ target: { closest: () => knoppen[2] } });
+  ok('klik "geen": stems 0, bewaard, die knop brandt', s.stems === 0 && opslag.getItem(I.STEMS_SLEUTEL) === '0' && knop.staat['0'] === true && knop.staat['4'] === false);
+  url.value = 'https://youtu.be/a https://youtu.be/b';
+  await s.haalBinnen();
+  ok('meer links: { urls, stems: 0 }', posts.at(-1).urls?.length === 2 && posts.at(-1).stems === 0);
+  s.zetStems(3);
+  ok('een onzinkeuze (3) verandert niets', s.stems === 0);
+  s.zetStems(2);
+  await s.uploadBestand({ name: 'eigen nummer.wav', size: 3 });
+  ok('upload: &stems=2 in de url', /^\/api\/upload\?naam=eigen%20nummer\.wav&stems=2$/.test(uploads.at(-1)), uploads.at(-1));
+  await s.uploadBestand({ name: 'op track.wav', size: 3 }, { naDeck: 'B' });
+  ok('upload op een track: vooraan én stems', /&vooraan=1&stems=2$/.test(uploads.at(-1)), uploads.at(-1));
+  const zonder = new I.IngestStrook({ el, url });
+  ok('zonder knoppen en zonder opslag (test, privévenster): 2, geen crash', zonder.stems === 2);
+  Object.assign(globalThis, { fetch: fetch0, setInterval: interval0, XMLHttpRequest: xhr0 });
+}
+
 console.log('\ndatum kort');
 const d = (j, m, dg, u = 12, mi = 0) => new Date(j, m - 1, dg, u, mi).getTime();
 ok('vandaag: uur en minuut', L.datumKort(d(2026, 9, 24, 9, 7), d(2026, 9, 24, 23)) === '09:07');

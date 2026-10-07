@@ -26,9 +26,10 @@
  */
 
 import {
-  STIL, PAGINA, PAGINA_BYTES, BYTES_PER_FRAME, positieOp, ctxTijdVan, leesWavKop, controleerWav, plan, reeksen,
+  PAGINA, KANALEN, UITGANGEN, bytesPerFrame, positieOp, positieIn, ctxTijdVan, leesWavKop, controleerWav, plan, reeksen,
   snelheidOp, remStil, REM_UIT,
 } from './stream-kern.js';
+import { rekPlanT, rekUitLatStandaard, REK_MARGE } from './rek-kern.js';
 
 /** Zo lang vloeit een bron in en uit bij start, seek en stop. Te kort om te horen, lang genoeg tegen een tik. */
 export const DECLICK = 0.004;
@@ -249,8 +250,8 @@ export class BufferBron {
     this._rem = { T: nu, P: positieOp(seg, nu), R: snelheidOp(seg, nu), a: seg.rem.a };
   }
 
-  /** Een stuk tracktijd als losse AudioBuffer, voor de sampler. */
-  async knip(van, tot) {
+  /** Een stuk tracktijd als losse AudioBuffer, voor de sampler. (Geen stems: `gewichten` doet hier niets.) */
+  async knip(van, tot, _gewichten = null) {
     if (!this.buffer) throw new Error('niets geladen');
     const sr = this.buffer.sampleRate;
     const a = Math.max(0, Math.round(van * sr)), b = Math.min(this.buffer.length, Math.round(tot * sr));
@@ -372,6 +373,25 @@ export function geheugenHaal(wav) {
   };
 }
 
+/*
+ * VERVANGEN ONDER HET SPELEN. De server kan een bestand vervangen terwijl een
+ * deck het streamt: stems.wav als je opnieuw splitst (2 -> 4), audio.wav als
+ * je een nummer opnieuw binnenhaalt. Elk Range-verzoek opent het bestand
+ * opnieuw, dus de volgende pagina komt uit het NIEUWE bestand, en met een
+ * ander aantal kanalen is dat ruis. De totale grootte uit `Content-Range`
+ * (bytes a-b/TOTAAL) verraadt het: bij de laad onthouden, bij elk antwoord
+ * vergelijken. Weet een `haal` geen totaal (geheugenHaal), dan geldt het niet.
+ */
+function totaalUit(res) {
+  const m = /\/(\d+)\s*$/.exec(res.headers?.get?.('Content-Range') || '');
+  return m ? Number(m[1]) : null;
+}
+
+function isVervangen(res, bestand) {
+  const t = totaalUit(res);
+  return bestand.totaal !== null && t !== null && t !== bestand.totaal;
+}
+
 /** De worklet-module één keer per AudioContext laden. */
 const modules = new WeakMap();
 export function laadStreamModule(ctx) {
@@ -391,16 +411,35 @@ export function laadStreamModule(ctx) {
  *
  * Een sprong naar een plek die er nog niet is, geeft een paar tientallen
  * milliseconden stilte. Daarom zijn hotcues en het cuepunt vastgepind.
+ *
+ * STEMS (docs/STEMS.md §3): het bestand mag 2, 4 of 8 kanalen hebben
+ * (stereo, of twee of vier stems als stereoparen). De worklet heeft altijd
+ * vier uitgangen; uitgang k speelt paar k. `uitgang` is een ARRAY van vier
+ * nodes (uitgang k → uitgang[k], het deck geeft zijn stemIn), of één node:
+ * dan gaan alle uitgangen daarheen, en klinkt de som. Bytes per frame en
+ * paginagrootte komen uit de kop.
+ *
+ * KEYLOCK EN TOON (docs/KEYLOCK.md, gebouwd 5 okt): zetRek({ keylock, toon, stems })
+ * geeft elk segment `rek` mee (null zonder keylock, zonder toon en zonder
+ * eigen toon per stem; `stems` = halve tonen per stereopaar, 6 okt); de
+ * worklet speelt die door een stretcher (rek-kern.js). Elk segment heeft
+ * daarom zeven velden in vaste volgorde (_maak): één vorm voor de worklet.
+ * Met rek wordt een SPRONG (start terwijl hij speelt, play, hotcue, seek)
+ * gepland op het zoekrooster van de stretcher (rekPlanT, ~95 ms; K3): tot T
+ * speelt wat er speelde (`_vorig`, positieIn), dan klinkt de nieuwe plek
+ * exact. `doorlopend` (sync, nudge, beatjump, een gequantiseerde hotcue):
+ * landen waar hij met een sprong NU op T zou zijn, P + (T − nu)·R, zodat de
+ * fase klopt. Zo'n sprong is geen start op de maat: `wachtTot` blijft null.
+ * Tempo, toon en loop gaan meteen (T = nu), zonder sprong.
  */
 export class StreamBron {
   constructor(ctx, uitgang, { haal = (url, init) => fetch(url, init), interval = 100 } = {}) {
     this.ctx = ctx;
-    this.uitgang = uitgang;
+    this.uitgang = uitgang;         // één node, of [vier nodes]: per uitgang van de worklet
     this.haal = haal;
     this.standaardHaal = haal;      // per laad te vervangen (geheugenHaal voor losse bestanden)
     this.interval = interval;
     this.node = null;
-    this.seg = STIL;
     this.rate = 1;
     this.loop = null;
     this.onEinde = null;
@@ -411,11 +450,23 @@ export class StreamBron {
     this.fouten = 0;
     this._timer = null;
     this._generatie = 0;            // oude antwoorden na een nieuwe laad() negeren
+    this.rek = null;                // { keylock, toon, stems } of null (zie KEYLOCK EN TOON)
+    this._vorig = null;             // wat er speelt tot een geplande sprong met keylock (seg.T)
+    this._opMaat = false;           // het wachtende segment is een start op de maat (wachtTot)
+    this._uitLat = null;            // uitvoerlatentie van de stretcher (frames), van de worklet
+    this.seg = this._maak(0, 0, 1, null, false, null);
   }
 
   get naam() { return 'stream'; }
-  get keylock() { return false; }
+  /** Staat keylock aan (de toon blijft staan als het tempo verandert)? */
+  get keylock() { return !!this.rek?.keylock; }
+  /** Toonverschuiving in halve tonen (ook zonder keylock, K8). */
+  get toon() { return this.rek?.toon ?? 0; }
+  /** Halve tonen per stereopaar (een eigen toon per stem), of null. */
+  get stemToon() { return this.rek?.stems ?? null; }
   get duur() { return this.bestand ? this.bestand.duur : 0; }
+  /** Kanalen van wat er geladen is: 2 (stereo), 4 of 8 (stems als paren); 0 als er niets is. */
+  get kanalen() { return this.bestand ? this.bestand.kop.kanalen : 0; }
   /** Speelt hij? Een rem die op de audioklok al stilstaat is een pauze (remVoorbij). */
   get speelt() { return this.seg.speelt && !remVoorbij(this.seg, this.ctx.currentTime); }
   /** Het deck vraagt alleen "is er iets geladen"; een echte AudioBuffer is er niet. */
@@ -427,26 +478,70 @@ export class StreamBron {
 
   get positie() {
     if (!this.bestand) return 0;
-    // Vóór een geplande start (T in de toekomst) staat hij stil op P.
-    return Math.min(positieOp(this.seg, Math.max(this.ctx.currentTime, this.seg.T)), this.duur);
+    // Vóór een geplande start (T in de toekomst) staat hij stil op P; vóór
+    // een geplande sprong met keylock speelt het vorige segment nog.
+    return Math.min(positieIn(this.seg, this._vorig, this.ctx.currentTime), this.duur);
   }
 
-  /** Wacht deze bron op een geplande start? Dan de audiokloktijd daarvan, anders null. */
-  get wachtTot() { return this.seg.speelt && this.ctx.currentTime < this.seg.T ? this.seg.T : null; }
+  /** Wacht deze bron op een geplande start (op de maat)? Dan de audiokloktijd daarvan, anders null. */
+  get wachtTot() { return this._opMaat && this._wacht ? this.seg.T : null; }
+
+  /** Ligt het segment in de toekomst (start op de maat, of een sprong met keylock)? */
+  get _wacht() { return this.seg.speelt && this.ctx.currentTime < this.seg.T; }
 
   /*
    * ctxTijdVan klopt ook vóór een geplande start: dan rekent hij vanaf T
    * (daar staat hij op P), dus T + (x − P) / R, en een punt in de loop vóór P
    * komt pas na een ronde langs.
    */
-  ctxTimeOf(x) { return ctxTijdVan(this.seg, x, this.ctx.currentTime); }
+  ctxTimeOf(x) {
+    const nu = this.ctx.currentTime;
+    // Vóór een geplande sprong met keylock: wat er nog langskomt op het
+    // vorige segment telt, als dat vóór de sprong is.
+    if (this._vorig && nu < this.seg.T) {
+      const t = ctxTijdVan(this._vorig, x, nu);
+      if (t !== null && t < this.seg.T) return t;
+    }
+    return ctxTijdVan(this.seg, x, nu);
+  }
+
+  /**
+   * Keylock en toon (zie KEYLOCK EN TOON). Een wijziging is geen sprong: hij
+   * speelt door vanaf waar hij is (T = nu), of het wachtende segment krijgt
+   * hem mee. Tijdens een rem pas na de rem (een rem zakt in toon, zoals vinyl).
+   */
+  zetRek({ keylock = this.keylock, toon = this.toon, stems = this.stemToon } = {}) {
+    const t = Number.isFinite(toon) ? toon : 0;
+    // Per paar; alleen als er een stem met een eigen toon is (anders null: één vorm minder om te vergelijken).
+    const st = Array.isArray(stems) && stems.some((x) => Number.isFinite(x) && x !== 0)
+      ? Object.freeze(stems.map((x) => (Number.isFinite(x) ? x : 0))) : null;
+    const rek = keylock || t || st ? { keylock: !!keylock, toon: t, stems: st } : null;
+    const zelfde = (a, b) => a === b || (!!a && !!b && a.length === b.length && a.every((x, i) => x === b[i]));
+    if ((rek === null) === (this.rek === null)
+      && (!rek || (rek.keylock === this.rek.keylock && rek.toon === this.rek.toon && zelfde(rek.stems, this.rek.stems)))) return;
+    this.rek = rek;
+    if (!this.bestand) return;
+    this._remAfAlsStil();
+    if (this.remt) return;
+    if (this._wacht) this._pasWachtendAan({});
+    else if (this.seg.speelt) this._segment(this.positie, true);
+    else { const s = this.seg; this.seg = this._maak(s.T, s.P, s.R, s.loop, false, s.rem); this._stuur(); }
+  }
+
+  /** Een segment, altijd in dezelfde vorm (zeven velden, rek erbij). */
+  _maak(T, P, R, loop, speelt, rem) { return { T, P, R, loop, speelt, rem, rek: this.rek }; }
 
   /**
    * Een WAV-bestand openen. Leest alleen de kop, en haalt dan de eerste
    * pagina's en de vaste punten op voordat hij teruggeeft: zo speelt play
    * direct na het laden meteen.
+   *
+   * `kanalen`: wat de aanroeper verwacht (2 = stereo, 4 of 8 = stems × 2).
+   * Heeft het bestand er een ander aantal, dan weigeren met een reden, vóór
+   * er iets verandert: drums op de plek van de zang is erger dan geen stems.
+   * Zonder `kanalen`: alles wat controleerWav goed vindt.
    */
-  async laad({ url, haal = null }) {
+  async laad({ url, haal = null, kanalen = null }) {
     this.stop();
     this.haal = haal || this.standaardHaal;
     this.fouten = 0;
@@ -460,26 +555,45 @@ export class StreamBron {
     await laadStreamModule(this.ctx);
     nogActueel();
     if (!this.node) {
+      // Altijd vier uitgangen van twee kanalen (stems), ook voor stereo: dan
+      // hoeft de node nooit opnieuw gebouwd te worden als een volgend nummer
+      // wel stems heeft. Uitgang k naar uitgang[k], of allemaal naar die ene.
       this.node = new AudioWorkletNode(this.ctx, 'stream-lezer', {
-        numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
+        numberOfInputs: 0, numberOfOutputs: UITGANGEN, outputChannelCount: Array(UITGANGEN).fill(KANALEN),
       });
-      this.node.port.onmessage = ({ data: m }) => { if (m.type === 'einde' && (m.id === undefined || m.id === this._segId)) this._einde(); };
-      this.node.connect(this.uitgang);
+      this.node.port.onmessage = ({ data: m }) => {
+        if (m.type === 'einde' && (m.id === undefined || m.id === this._segId)) this._einde();
+        else if (m.type === 'rek') this._uitLat = m.uitLat;
+        else if (m.type === 'rekfout') this.onFout?.(`keylock werkt niet: ${m.fout}`);
+      };
+      for (let k = 0; k < UITGANGEN; k++) {
+        const doel = Array.isArray(this.uitgang) ? this.uitgang[k] : this.uitgang;
+        if (doel) this.node.connect(doel, k);
+      }
     }
     const res = await this.haal(url, { headers: { Range: 'bytes=0-65535' } });
     nogActueel();
     if (!res.ok) throw new Error(`audio niet gevonden (${res.status})`);
+    const totaal = totaalUit(res);
     const kop = leesWavKop(await res.arrayBuffer());
     nogActueel();
     const fout = controleerWav(kop);
     if (fout) throw new Error(fout);
+    if (kanalen && kop.kanalen !== kanalen) {
+      throw new Error(kanalen === KANALEN
+        ? `het bestand heeft ${kop.kanalen} kanalen, verwacht stereo (er zijn geen stems opgegeven)`
+        : `het bestand heeft ${kop.kanalen} kanalen, verwacht ${kanalen} (${kanalen / 2} stems × 2)`);
+    }
 
-    this.bestand = { url, kop, duur: kop.dataLengte / BYTES_PER_FRAME / kop.sampleRate };
+    const bpf = bytesPerFrame(kop);
+    this.bestand = { url, kop, bpf, paginaBytes: PAGINA * bpf, duur: kop.dataLengte / bpf / kop.sampleRate, totaal, vervangen: false };
     this.geladen.clear();
     this.onderweg.clear();
     this.loop = null;
-    this.seg = STIL;
-    this.node.port.postMessage({ type: 'bron', duur: this.duur, sr: kop.sampleRate });
+    this.seg = this._maak(0, 0, this.rate, null, false, null);
+    this._vorig = null;
+    this._opMaat = false;
+    this.node.port.postMessage({ type: 'bron', duur: this.duur, sr: kop.sampleRate, kanalen: kop.kanalen });
     this._stuur();
     await this.bijvullen();
     nogActueel();
@@ -488,11 +602,13 @@ export class StreamBron {
 
   /** Vergelijkt wat er moet zijn met wat er is, haalt op en ruimt op. */
   async bijvullen() {
-    if (!this.bestand || !this.node) return;
+    if (!this.bestand || !this.node || this.bestand.vervangen) return;
     const { kop } = this.bestand;
+    // Een geplande sprong met keylock: zijn doel hoort er al te zijn.
+    const vast = this._vorig && this._wacht ? [...this.vastpunten(), this.seg.P] : this.vastpunten();
     const nodig = plan({
       positie: this.positie, rate: this.seg.speelt ? this.seg.R : this.rate,
-      duur: this.duur, sr: kop.sampleRate, vastpunten: this.vastpunten(), loop: this.loop,
+      duur: this.duur, sr: kop.sampleRate, vastpunten: vast, loop: this.loop,
     });
     const set = new Set(nodig);
     for (const i of [...this.geladen.keys()]) {
@@ -508,24 +624,32 @@ export class StreamBron {
   }
 
   async _haalReeks({ van, tot }) {
-    const { url, kop } = this.bestand;
+    const { url, kop, paginaBytes } = this.bestand;
     // Het BESTAND vastpakken, niet een getal: bij een snelle tweede laad
     // was het getal al opgehoogd voordat deze reeks begon.
     const bestand = this.bestand;
     for (let i = van; i <= tot; i++) this.onderweg.add(i);
     try {
-      const a = kop.dataStart + van * PAGINA_BYTES;
-      const b = Math.min(kop.dataStart + kop.dataLengte, kop.dataStart + (tot + 1) * PAGINA_BYTES) - 1;
+      const a = kop.dataStart + van * paginaBytes;
+      const b = Math.min(kop.dataStart + kop.dataLengte, kop.dataStart + (tot + 1) * paginaBytes) - 1;
       const res = await this.haal(url, { headers: { Range: `bytes=${a}-${b}` } });
       if (res.status !== 206) throw new Error(`geen deelantwoord (${res.status})`);
+      if (this.bestand !== bestand || !this.node) return;   // intussen een ander nummer
+      if (isVervangen(res, bestand)) {
+        // Niets meer ophalen: wat er al is speelt uit, daarna is het stil
+        // (een gat is stilte). Eén melding, geen reeks fouten.
+        bestand.vervangen = true;
+        this.onFout?.('het bestand is op de server vervangen (bv. stems opnieuw gesplitst): laad het nummer opnieuw');
+        return;
+      }
       const bytes = await res.arrayBuffer();
       if (this.bestand !== bestand || !this.node) return;   // intussen een ander nummer
       for (let i = van; i <= tot; i++) {
-        const o = (i - van) * PAGINA_BYTES;
+        const o = (i - van) * paginaBytes;
         if (o >= bytes.byteLength) break;
         // Kopie per pagina, zodat hij los overgedragen en later los
         // weggegooid kan worden. Int16 is little-endian, net als de WAV.
-        const stuk = bytes.slice(o, Math.min(bytes.byteLength, o + PAGINA_BYTES));
+        const stuk = bytes.slice(o, Math.min(bytes.byteLength, o + paginaBytes));
         const data = new Int16Array(stuk);
         this.geladen.set(i, stuk.byteLength);
         this.node.port.postMessage({ type: 'pagina', i, data }, [data.buffer]);
@@ -544,20 +668,40 @@ export class StreamBron {
    * Een stuk tracktijd als losse AudioBuffer, voor de sampler. Opnieuw van
    * schijf gelezen: de pagina's zitten in de worklet, en wat er achter de
    * positie ligt is misschien al opgeruimd.
+   *
+   * Stems: de som van de paren, paar k maal `gewichten[k]` (het deck geeft
+   * mee wat je NU hoort vóór de EQ: niveau, kill en 1/schaal per uitgang),
+   * zodat een pad die je knipt terwijl de zang weg is, ook zonder zang
+   * klinkt. Zonder gewichten telt elk paar voor 1. Een stereobestand zonder
+   * gewichten: de samples zelf, zoals altijd.
    */
-  async knip(van, tot) {
+  async knip(van, tot, gewichten = null) {
     if (!this.bestand) throw new Error('niets geladen');
-    const { url, kop } = this.bestand;
-    const sr = kop.sampleRate;
-    const a0 = Math.max(0, Math.round(van * sr)), b0 = Math.min(kop.dataLengte / BYTES_PER_FRAME, Math.round(tot * sr));
+    // Het BESTAND van nu vastpakken: na de await kan er een ander nummer staan
+    // (of geen, na vernietig), en dan hoort dit antwoord bij het oude.
+    const bestand = this.bestand;
+    const { url, kop, bpf } = bestand;
+    const sr = kop.sampleRate, ch = kop.kanalen;
+    const a0 = Math.max(0, Math.round(van * sr)), b0 = Math.min(kop.dataLengte / bpf, Math.round(tot * sr));
     if (b0 <= a0) throw new Error('leeg stuk');
-    const res = await this.haal(url, { headers: { Range: `bytes=${kop.dataStart + a0 * BYTES_PER_FRAME}-${kop.dataStart + b0 * BYTES_PER_FRAME - 1}` } });
+    const res = await this.haal(url, { headers: { Range: `bytes=${kop.dataStart + a0 * bpf}-${kop.dataStart + b0 * bpf - 1}` } });
     if (res.status !== 206) throw new Error(`knippen mislukt (${res.status})`);
+    if (isVervangen(res, bestand)) throw new Error('het bestand is op de server vervangen: laad het nummer opnieuw');
     const pcm = new Int16Array(await res.arrayBuffer());
-    const n = pcm.length / 2;
+    const n = Math.floor(pcm.length / ch);
     const uit = this.ctx.createBuffer(2, n, sr);
     const L = uit.getChannelData(0), R = uit.getChannelData(1);
-    for (let i = 0; i < n; i++) { L[i] = pcm[i * 2] / 32768; R[i] = pcm[i * 2 + 1] / 32768; }
+    if (ch === KANALEN && !gewichten) {
+      for (let i = 0; i < n; i++) { L[i] = pcm[i * 2] / 32768; R[i] = pcm[i * 2 + 1] / 32768; }
+      return uit;
+    }
+    const paren = ch / 2;
+    const w = Array.from({ length: paren }, (_, k) => (gewichten && Number.isFinite(gewichten[k]) ? gewichten[k] : 1) / 32768);
+    for (let i = 0; i < n; i++) {
+      let l = 0, r = 0;
+      for (let k = 0; k < paren; k++) { l += pcm[i * ch + 2 * k] * w[k]; r += pcm[i * ch + 2 * k + 1] * w[k]; }
+      L[i] = l; R[i] = r;
+    }
     return uit;
   }
 
@@ -572,31 +716,54 @@ export class StreamBron {
   }
 
   /** Het wachtende segment aanpassen zonder het startmoment te verliezen. */
-  _pasWachtendAan(wijziging) {
-    this.seg = { ...this.seg, ...wijziging };
+  /** Het wachtende segment aanpassen (tempo, loop, rek) zonder het moment te verliezen. */
+  _pasWachtendAan({ R = this.seg.R, loop = this.seg.loop } = {}) {
+    const s = this.seg;
+    this.seg = this._maak(s.T, s.P, R, loop, s.speelt, s.rem);
     this._stuur(true);
   }
 
   _segment(p, speelt) {
-    this.seg = { T: this.ctx.currentTime, P: p, R: this.rate, loop: this.loop, speelt, rem: null };
+    this.seg = this._maak(this.ctx.currentTime, p, this.rate, this.loop, speelt, null);
+    this._vorig = null;
+    this._opMaat = false;
     this._stuur();
   }
 
   _einde() {
     if (!this.seg.speelt) return;
-    this.seg = { ...STIL, P: this.duur };
+    this.seg = this._maak(0, this.duur, this.rate, null, false, null);
+    this._vorig = null;
+    this._opMaat = false;
     this._stuur();
     this.onEinde?.();
   }
 
-  start(vanaf, { op = null, loop } = {}) {
+  /**
+   * Spelen vanaf `vanaf`. `op` (later dan nu): een start op de maat. Met
+   * keylock of toon (rek) is elke start een geplande sprong (zie KEYLOCK EN
+   * TOON); `doorlopend`: fasebehoudend landen.
+   */
+  start(vanaf, { op = null, loop, doorlopend = false } = {}) {
     if (!this.bestand) return false;
     if (loop !== undefined) this.loop = loop;
-    if (gepland(op, this.ctx.currentTime)) {
-      // Zelfde vorm als _segment (rem: null): de worklet leest een object-
-      // veld zonder iets aan te maken, ook als het ontbreekt, maar een vaste
-      // vorm houdt de segmenten één hidden class.
-      this.seg = { T: op, P: vanaf, R: this.rate, loop: this.loop, speelt: true, rem: null };
+    const nu = this.ctx.currentTime;
+    if (gepland(op, nu)) {
+      // Zelfde vorm als _segment: één hidden class voor de worklet.
+      this.seg = this._maak(op, vanaf, this.rate, this.loop, true, null);
+      this._vorig = null;
+      this._opMaat = true;
+      this._stuur(true);
+    } else if (this.rek) {
+      const sr = this.ctx.sampleRate || 48000;
+      const uitLat = this._uitLat ?? rekUitLatStandaard(sr);
+      const T = rekPlanT(nu + uitLat / sr + REK_MARGE, uitLat, sr);
+      // Wat er nu klinkt speelt door tot T. Wacht er al een sprong, dan is
+      // dát vorige nog wat je hoort.
+      if (!(this._vorig && this._wacht)) this._vorig = this.seg.speelt && nu >= this.seg.T && !this.remt ? this.seg : null;
+      const P = doorlopend ? Math.min(vanaf + (T - nu) * this.rate, this.duur) : vanaf;
+      this.seg = this._maak(T, P, this.rate, this.loop, true, null);
+      this._opMaat = false;
       this._stuur(true);
     } else {
       this._segment(vanaf, true);
@@ -608,7 +775,10 @@ export class StreamBron {
   /** Zoals BufferBron: stoppen zonder de positie bij te werken. */
   stop() {
     if (!this.seg.speelt) return;
-    this.seg = { ...this.seg, speelt: false };
+    const s = this.seg;
+    this.seg = this._maak(s.T, s.P, s.R, s.loop, false, s.rem);
+    this._vorig = null;
+    this._opMaat = false;
     this._stuur();
   }
 
@@ -628,7 +798,9 @@ export class StreamBron {
     if (!this.bestand || !this.speelt || this.remt || !(duur > 0)) return false;
     const nu = this.ctx.currentTime;
     const R = this.seg.R;
-    this.seg = { T: nu, P: this.positie, R, loop: this.loop, speelt: true, rem: { a: -R / duur } };
+    this.seg = this._maak(nu, this.positie, R, this.loop, true, { a: -R / duur });
+    this._vorig = null;
+    this._opMaat = false;
     this._stuur();
     this._planRemKlaar();
     return true;
@@ -646,7 +818,7 @@ export class StreamBron {
   _remVerder() {
     const nu = this.ctx.currentTime, oud = this.seg;
     const weg = positieOp({ ...oud, loop: null }, nu) - oud.P;        // afgelegd sinds T, ongevouwen
-    this.seg = { T: oud.T, P: this.positie - weg, R: oud.R, loop: this.loop, speelt: true, rem: oud.rem };
+    this.seg = this._maak(oud.T, this.positie - weg, oud.R, this.loop, true, oud.rem);
     this._stuur();
     this._planRemKlaar();
   }
@@ -669,8 +841,8 @@ export class StreamBron {
   _remAfAlsStil() {
     const seg = this.seg;
     if (!remVoorbij(seg, this.ctx.currentTime)) return false;
-    this.seg = { T: this.ctx.currentTime, P: Math.min(positieOp(seg, remStil(seg)), this.duur),
-      R: this.rate, loop: this.loop, speelt: false, rem: null };
+    this.seg = this._maak(this.ctx.currentTime, Math.min(positieOp(seg, remStil(seg)), this.duur),
+      this.rate, this.loop, false, null);
     this._stuur();
     this.onRemKlaar?.();
     return true;
@@ -681,7 +853,7 @@ export class StreamBron {
     if (this.remt) { this.rate = r; return; }   // de rem loopt door; na de rem geldt dit tempo
     const p = this.positie;
     this.rate = r;
-    if (this.wachtTot !== null) this._pasWachtendAan({ R: r });
+    if (this._wacht) this._pasWachtendAan({ R: r });
     else if (this.seg.speelt) this._segment(p, true);
   }
 
@@ -690,7 +862,7 @@ export class StreamBron {
     if (this.remt) { this.loop = { start, end }; this._remVerder(); return; }
     const p = this.positie;
     this.loop = { start, end };
-    if (this.wachtTot !== null) this._pasWachtendAan({ loop: this.loop });
+    if (this._wacht) this._pasWachtendAan({ loop: this.loop });
     else this._segment(p, this.seg.speelt);
   }
 
@@ -700,7 +872,7 @@ export class StreamBron {
     if (!this.loop) return;
     const p = this.positie;
     this.loop = null;
-    if (this.wachtTot !== null) this._pasWachtendAan({ loop: null });
+    if (this._wacht) this._pasWachtendAan({ loop: null });
     else this._segment(p, this.seg.speelt);
   }
 

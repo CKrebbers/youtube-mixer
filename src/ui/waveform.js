@@ -1,5 +1,6 @@
 import { Beatgrid } from '../engine/beatgrid.js';
 import { strookPixels } from './grid-strook.js';
+import { groepKleur, LABEL_TEKST } from '../engine/secties.js';
 
 /**
  * De golfvorm zelf: per pixel het minimum en maximum van de peaks eronder.
@@ -76,6 +77,59 @@ function tekenOnsets(g, onsets, range, span, w, h) {
   }
 }
 
+/**
+ * De gevonden tellen (Beat This!, BEATGRID.md §11) als streepjes BOVENIN de
+ * zoom, groen; de downbeats (de "1") langer. Vallen de gridlijnen erop, dan
+ * klopt het grid; liggen ze ernaast, dan zie je hoeveel en waar. In
+ * grid-modus groter, zoals de klappen.
+ */
+export const TEL_KLEUR = 'rgba(110,240,160,0.75)';
+function tekenTellen(g, tellen, range, span, w, h) {
+  const B = tellen?.beats;
+  if (!B?.length) return;
+  const grid = typeof document !== 'undefined' && document.body?.classList.contains('gridmodus');
+  const kort = grid ? Math.round(h * 0.16) : 6, lang = grid ? Math.round(h * 0.3) : 12;
+  const D = tellen.downbeats;
+  let j = 0;
+  let lo = 0, hi = B.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (B[m] < range.t0) lo = m + 1; else hi = m; }
+  g.fillStyle = TEL_KLEUR;
+  for (let i = lo; i < B.length && B[i] <= range.t1; i++) {
+    while (j < D.length && D[j] < B[i] - 1e-4) j++;
+    const een = j < D.length && Math.abs(D[j] - B[i]) < 1e-4;
+    const x = Math.round(((B[i] - range.t0) / span) * w);
+    g.fillRect(x, 0, een ? 2 : 1, een ? lang : kort);
+  }
+}
+
+/**
+ * De sectiestrook boven het overzicht (docs/SECTIES.md): een band per sectie
+ * in de kleur van zijn groep (dezelfde letter = dezelfde kleur), met de naam
+ * erin als hij past. De sectie die je hoort vol, de rest gedimd.
+ */
+export const SECTIE_HOOGTE = 12;
+function tekenSecties(g, stukken, hier, duur, w) {
+  if (!stukken?.length || !duur) return;
+  g.save();
+  g.font = '9px system-ui, sans-serif';
+  g.textBaseline = 'middle';
+  for (let i = 0; i < stukken.length; i++) {
+    const s = stukken[i];
+    const x0 = Math.round((s.van / duur) * w), x1 = Math.round(((stukken[i + 1]?.van ?? duur) / duur) * w);
+    g.globalAlpha = i === hier ? 0.9 : 0.4;
+    g.fillStyle = groepKleur(s.groep);
+    g.fillRect(x0, 0, Math.max(1, x1 - x0 - 1), SECTIE_HOOGTE);
+    const l = LABEL_TEKST[s.label] ?? '';
+    const tekst = l ? `${l} ${s.groep}` : s.groep;
+    if (x1 - x0 > g.measureText(tekst).width + 6) {
+      g.globalAlpha = 1;
+      g.fillStyle = '#0b0e11';
+      g.fillText(tekst, x0 + 3, SECTIE_HOOGTE / 2 + 0.5);
+    }
+  }
+  g.restore();
+}
+
 /** De strook onder een overzicht, in de cache per grid en maat. */
 function strookVan(view, grid, duur, w) {
   const k = view._strookSleutel;
@@ -92,6 +146,14 @@ function strookVan(view, grid, duur, w) {
  *   - zoom:     scrollend, playhead vast in het midden
  */
 export class WaveformView {
+  /** De tracktijd onder clientX, volgens wat er het laatst getekend is; null zonder tekening. */
+  tijdBij(clientX) {
+    const r = this.canvas.getBoundingClientRect();
+    const g = this._range;
+    if (!g || !(r.width > 0)) return null;
+    return g.t0 + ((clientX - r.left) / r.width) * (g.t1 - g.t0);
+  }
+
   constructor(canvas, { mode = 'zoom', pxPerSecond = 170, color = '#4ad9c4' } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
@@ -100,6 +162,7 @@ export class WaveformView {
     this.color = color;
     this.cache = null;
     this.sleutel = null;
+    this._getekend = null;     // de tekensleutel van wat er nu op het canvas staat (zie zelfde())
     this.resize();
     new ResizeObserver(() => this.resize()).observe(canvas);
   }
@@ -133,7 +196,29 @@ export class WaveformView {
     this.canvas.width = this.w * dpr;
     this.canvas.height = this.h * dpr;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this._getekend = null;     // een nieuwe maat wist het canvas: opnieuw tekenen
   }
+
+  /**
+   * Staat precies dit al op het canvas? Dan niet opnieuw tekenen.
+   *
+   * Elke teken-actie op een canvas is een volledige upload naar de GPU. De
+   * renderloop roept draw() elke frame aan, ook als er niets verandert: in rust
+   * kostte dat ~29 Mpx/s (gemeten 5 okt, zoom + overzicht + acht banen) en hield
+   * het de GPU van de M1 bezig, tot Demucs (stems) op de helft van zijn snelheid
+   * liep. De sleutel bevat alles wat een draw() tekent, de positie in HELE
+   * apparaatpixels; speelt er iets, dan verandert hij elke frame en tekent hij gewoon.
+   */
+  zelfde(analysis, onsets, ...delen) {
+    const k = this._getekend;
+    if (k && k.analysis === analysis && k.onsets === onsets && k.delen.length === delen.length
+      && k.delen.every((x, i) => x === delen[i])) return true;
+    this._getekend = { analysis, onsets, delen };
+    return false;
+  }
+
+  /** De grid-sleutel (dezelfde tekst als _grid() gebruikt), of '' zonder grid. */
+  _gridTekst(json) { return json ? JSON.stringify(json) : ''; }
 
   /**
    * De snapshot geeft het grid als JSON; rekenen doet de Beatgrid-klasse.
@@ -186,24 +271,35 @@ export class WaveformView {
     });
   }
 
-  /** `onsets`: de klappen van het deck (deck.onsets), alleen voor de zoom. */
-  draw(deckState, analysis, onsets = null) {
+  /** `onsets`: de klappen van het deck (deck.onsets); `tellen`: de gevonden tellen (deck.tellen). Alleen voor de zoom. */
+  draw(deckState, analysis, onsets = null, tellen = null) {
     const g = this.ctx, w = this.w, h = this.h, mid = h / 2;
+    const dpr = window.devicePixelRatio || 1;
+    const d = deckState;
+    const kop = this.mode === 'overview'
+      ? (d.duration ? Math.round((d.position / d.duration) * w * dpr) : 0)
+      : Math.round(d.position * this.pxPerSecond * dpr);
+    if (this.zelfde(d.loaded ? analysis : null, this.mode === 'zoom' ? onsets : null, this.mode === 'zoom' ? tellen : null,
+      this.mode, this.pxPerSecond, dpr, w, h, d.loaded, d.duration, kop,
+      d.loop ? `${d.loop.start}|${d.loop.end}` : '', d.cuePoint, d.hotcues.join(','), this._gridTekst(d.grid),
+      this.mode === 'overview' ? d.secties ?? null : null, this.mode === 'overview' ? d.sectie ?? -1 : -1)) return;
     g.clearRect(0, 0, w, h);
     g.fillStyle = '#0b0e11';
     g.fillRect(0, 0, w, h);
+
+    const pos = deckState.position;
+    const range = this.mode === 'overview'
+      ? { t0: 0, t1: deckState.duration }
+      : { t0: pos - (w / 2) / this.pxPerSecond, t1: pos + (w / 2) / this.pxPerSecond };
+    // Voor tijdBij (een klik in de golfvorm), ook als er (nog) geen golfvorm is:
+    // een nummer zonder analyse moet je net zo goed kunnen aanwijzen.
+    this._range = deckState.loaded ? range : null;
 
     if (!analysis || !deckState.loaded) {
       g.fillStyle = '#2a3138';
       g.fillRect(0, mid - 0.5, w, 1);
       return;
     }
-
-    const pos = deckState.position;
-
-    const range = this.mode === 'overview'
-      ? { t0: 0, t1: deckState.duration }
-      : { t0: pos - (w / 2) / this.pxPerSecond, t1: pos + (w / 2) / this.pxPerSecond };
 
     const span = range.t1 - range.t0;
 
@@ -235,8 +331,10 @@ export class WaveformView {
     if (grid) this.tekenStukken(grid, range, span, w, h);
 
     // Klappen in de zoom; de zekerheidsstrook onder het overzicht.
-    if (this.mode === 'zoom') tekenOnsets(g, onsets, range, span, w, h);
+    if (this.mode === 'zoom') { tekenOnsets(g, onsets, range, span, w, h); tekenTellen(g, tellen, range, span, w, h); }
     else if (grid) tekenStrook(g, strookVan(this, grid, deckState.duration, w), h - 3, 3);
+    // De secties boven het overzicht.
+    if (this.mode === 'overview') tekenSecties(g, deckState.secties, deckState.sectie ?? -1, deckState.duration, w);
 
     // hotcues
     deckState.hotcues.forEach((t, i) => {
@@ -281,6 +379,10 @@ export class BaanView extends WaveformView {
 
   draw(d, analysis) {
     const g = this.ctx, w = this.w, h = this.h;
+    const dpr = window.devicePixelRatio || 1;
+    const kop = d.duration ? Math.round((d.position / d.duration) * w * dpr) : 0;
+    if (this.zelfde(d.loaded ? analysis : null, null, 'baan', dpr, w, h, d.loaded, d.duration, kop,
+      d.loop ? `${d.loop.start}|${d.loop.end}` : '', d.hotcues.join(','), this._gridTekst(d.grid))) return;
     g.fillStyle = '#0b0e11';
     g.fillRect(0, 0, w, h);
     if (!analysis || !d.loaded || !d.duration) {

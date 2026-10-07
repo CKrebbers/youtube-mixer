@@ -50,22 +50,41 @@ apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze do
 controle.html       de Controlekamer (/controle): stand van alles, mixer openen, speellijst (docs/CONTROLEKAMER.md)
 styles.css
 src/
-  engine/           audio-graph.js  kanaalstrip, EQ (+ kill), bipolair filter, master, xfader
+  engine/           audio-graph.js  kanaalstrip, EQ (+ kill), bipolair filter, master, xfader, het stemfilter (maakStemFilter)
                     beatgrid.js     tempokaart + maat-anker per stuk, tap tempo, beatjump-rekenwerk. Puur.
                     toonsoort.js    ToonKaart: toonsoort per stuk, wat je hoort, bewerken. Puur.
+                    secties.js      SectieKaart (het nummer in secties) + sectieDoel: de sprong die op de volgende "1" invalt. Puur.
                     hoorbaar.js     wat je HOORT: uitgangsVertraging(ctx), hoorbaar(deck, V). Eén plek.
                     overgang.js     overgangen op een AudioParam: hellingen na startDrempel (geen curves)
                     bron.js         HOE een track geluid wordt: BufferBron en StreamBron (ook gepland starten, rem)
                     stream-kern.js  streamen als puur rekenwerk: segment, pagina's, WAV, rem; afvalvrij
                     stream-lezer.js de AudioWorklet die pagina's afspeelt
                     fx.js           insert-slot: ketens bouwen, klikvrij wisselen
+                    fx-meer.js      tien effecten uit de filter app (distortion … breedte), in EFFECTEN achter de zeven van fx.js
+                    fx-lfo.js       LFO van tremolo/autopan: vrij of op de maat (buffer + playbackRate, fase op de audioklok)
+                    fx-kern.js      rekenkernen van de effect-worklets (toonhoogte, omhullende), afvalvrij. Puur.
+                    fx-worklet.js   de AudioWorklet eromheen (laadt pas bij gebruik, één keer per context)
                     rack.js         racks als data: macro's, curves, migratie
-                    deck.js         transport, cues, loops, beatjump, quantize, rem, beatgrid (geluid zit in bron.js)
+                    deck.js         transport, cues, loops, beatjump, quantize, rem, beatgrid, stems + stemkanalen (geluid zit in bron.js)
                     sampler.js      acht pads: knippen op het grid, loopen op de maat van wat je hoort
                     klankschaal.js  instrument op de toon van wat je hoort: stemming(), volgen (maat/focus/hand), aanslaan, wrijven
                     klankschaal-kern.js  het modale model van de Waterschaal, per sample, afvalvrij. Puur.
                     klankschaal-worklet.js  de AudioWorklet eromheen (laadt pas bij gebruik)
                     engine.js       decks + mixer + maatgever (hysterese) + starten op de maat + snapshot()
+                    koptelefoon.js  de koptelefoon (PFL): uitgang met vier kanalen, cue vóór de fader, mix en volume
+                    instrumenten/   index.js (INSTRUMENTEN, instrumentDef) · poly.js de polysynth: twee oscillatoren, 12 stemmen (docs/INSTRUMENTEN.md)
+                    instrumenten/drums.js  drumcomputer: 16 pads op noot 36–51, kit met zaad op 1–8, eigen buffers op 9–16 (INSTRUMENTEN.md §8)
+                    instrumenten/fm.js  FM-stemmen van MediSynth als track-instrument: 12 stemmen, harmonische FM, unison, droog (INSTRUMENTEN.md §7)
+                    instrumenten/schaal.js  de klankschaal als track-instrument: elke noot een eigen veld op zijn toon, kern op de toon van wat je hoort
+                    instrumenten/schaal-kern.js  tien notenvelden + kern op SchaalKern, berichten op hun sample, omstemmen houdt de amplitude. Puur.
+                    instrumenten/schaal-worklet.js  de AudioWorklet van schaal (één per track, laadt bij start())
+                    patronen/model.js  patroon en set als data: normaliseerPatroon/-Set, bewerkingen (docs/PATRONEN.md). Puur, ook de server
+                    patronen/venster.js  uit Elektronlearn: 384 PPQN, swing, micro, omlopen, notenInVenster. Puur.
+                    patronen/klok.js  klok-tellen <-> audioklok (gebroken lijn), richten op de maatgever zonder sprong, maten. Puur.
+                    patronen/speler.js  de sequencer (engine.patronen): 120 ms vooruit plannen, op de maat starten/wisselen/stoppen, opnemen
+                    master.js       de master: gain -> insert-rack -> limiter (compressor tot de worklet er is) -> analyser
+                    limiter-kern.js de limiter als rekenwerk: vooruitblik 1,5 ms, −1 dBTP (4×), gekoppeld, afvalvrij. Puur.
+                    limiter-worklet.js  de AudioWorklet eromheen (uitgang 1 = de gain, voor de gain reduction)
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
                     keyboard.js     toetsen -> actions
                     midi.js         Web MIDI: poorten, parsen, sysex. Kent geen actions.
@@ -73,10 +92,15 @@ src/
                     lagen.js        mapjes (lagen): welk mapje open staat, vastzetten en gluren
                     feedback.js     engine-stand -> LED's, met diffing. Leest de mapping.
                     midi-learn.js   action kiezen, control bewegen, gekoppeld
+                    noten.js        MIDI-noten (elke ingang behalve de APC) naar het instrument op de speeltrack; knoppen en de schuif (SysEx Master Volume) via een apparaatmapping
+                    maschine.js     de Maschine MK2 via de hub (alleen ?hub=): pads -> noten.js of stappen (STEP), PATTERN, transport, groepen/draaiknoppen (mapping), masterwiel, lampjes, schermen
+                    maschine-scherm.js  de twee schermen van de Maschine: stand -> 2048 bytes (256×64, 1 bit), eigen 5×7-font. Puur.
                     handelingen.js  het handelingenlog: [t, action, waarde] op de audioklok, per seconde weg
                     terugspelen.js  een log terugspelen: beginstand, dan elke regel op T0 + t
-                    devices/        apc40mk2.js, generic.js — wat er op het apparaat zit
-                    hub.js          AV-app-hub (alleen ?hub=ws://…): HubMidi = MidiHub met de hub als poort (lease), manifest, herverbinden
+                    devices/        apc40mk2.js, generic.js, maschine-mk2.js (de virtuele MIDI van de hub) — wat er op het apparaat zit
+                    hub.js          AV-app-hub (alleen ?hub=ws://…): HubMidi = MidiHub met de hub als poort (lease), manifest, herverbinden;
+                                    speelt Xboard49 en Maschine (eigen nep-poorten, speelPoort(dev)), lampjes/schermen door een wachtrij;
+                                    de sectie naar de globale laag (§18, engineSecties)
   analysis/         peaks.js        golfvorm-peaks + ruwe RMS
                     features.js     banden laag/midden/hoog, rms, zwaartepunt, onsets uit een spectrum. Puur, tijd van buiten.
                     luisteraar.js   leest de master-AnalyserNode uit (alleen lezen) -> features
@@ -108,6 +132,16 @@ src/
                     klankschaal-paneel.js de KLANKSCHAAL-rij: openen, instellingen bewaren, per frame tonen
                     plan-koppeling.js in de mixer: actief plan, ophalen met versie, live naar de automaat, window.varvePlan, knop plan
                     auto-paneel.js  de AUTO-rij: wat er klinkt, wat er komt en waarom, ok/overslaan/langer/nu
+                    stems-paneel.js de STEMS-rij voor de focus-track: niveau, kill, filter, echo, galm, cue per stem, splitsen, voortgang
+                    stems-wachtrij.js de stems-rij van de server (GET /api/stems): peilen zolang iets open staat of iemand kijkt
+                    stems-weergave.js stems als tekst: namen, library-cel, rijstand, kolomteken, tegel. Puur.
+                    koptelefoon-paneel.js de KOPTELEFOON-rij: cue per track, VOL, MIX, ⇄ (zaal en koptelefoon wisselen, na herladen)
+                    instrument-paneel.js de INSTRUMENT-rij: kiezen, acht knoppen, toetsenbord (via noten.js), welk MIDI-keyboard
+                    speelapparaten.js alleen met ?hub= (app.js laadt hem dynamisch): Xboard49 -> noten.koppel, Maschine -> maschine.js + tik
+                    master-paneel.js de MASTER-rij: rack kiezen en onthouden, MIX, acht knoppen, gain reduction (ook bij de mastermeter)
+                    master-weergave.js de master als tekst en getal (gain reduction, kiezer, opslag). Puur.
+                    patronen-paneel.js de PATROON-rij: plekken, stappen, lengte, swing, opnemen, tempo; noten.js naar de speler
+                    patronen-opslag.js de set op de server: ophalen en bewaren met versie, van buiten overnemen, botsing (geen DOM)
   vormen/           hulp.js         paletten, toeval met zaad, ruis, tekenhulp (gedeeld door de systemen)
                     systemen.js     de Vormmachines (Clay's artifact): 10 lichte + de lijst van alle 26
                     systemen-zwaar.js / -meer.js / -isomorf.js  de andere 16 (zwaar · middel · beeld = geluid)
@@ -139,31 +173,40 @@ server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
   ingest.js         yt-dlp (of een eigen bestand) -> ffmpeg -> media/<id>/. Gooit nooit.
   links.js          links netjes maken (TikTok), bron van een nummer, id's, bestandsnamen
-  library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren), peaks, racks, grid, toonsoort, hotcues.
+  library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren), peaks, racks, grid, toonsoort, hotcues, stems.
   backup.js         backups van library.db: wanneer, hoeveel, opruimen; het werk in backup-werker.js (worker)
   analyze.js        golfvorm-peaks, onset-envelope en toonsoort vooraf, streamend uit ffmpeg
   analyse-werker.js peaks, onset, tap-verfijning en toonsoort in een worker_thread (server blijft vrij)
   detect.js         FFT, onset-envelope, tempo, segmentatie (+ tweede kans). Geen dependencies.
   toon.js           toonsoort: stemming per stuk, chroma, Temperley 2005, kaart (Viterbi). Puur.
+  secties.js        secties per maat: kenmerken, nieuwheid (Foote, energie, stems), grenzen, groepen, labels. Puur (docs/SECTIES.md)
   wachtrij.js       de ingest-wachtrij: één tegelijk (links en uploads), annuleren met een AbortSignal
   opname.js         opnames: WAV dat groeit, kop herstellen na een crash
+  patronen.js       patronen per set: patronen/<naam>.json met versie (409), .versies (docs/PATRONEN.md)
   proef.js          de speellijst van de Controlekamer: proef/sessie.json, per punt, atomisch; archief per ronde
   handelingen.js    handelingenlogs naast de opnames: stukken op hun plek, lijst, lezen
+  stems.js          de stems-rij: Demucs starten (nice), één tegelijk, annuleren, werkmap, nalopen, verhuizen
+  stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs: headless zonder MIDI), bench/ (renderblok.mjs:
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs: headless zonder MIDI;
+                    hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
-                    stems/ (Demucs-proef), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
+                    stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
   generic.json      leeg startpunt
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
+  xboard49.json     E-MU Xboard49: knop 1–8 -> instrument, 9–16 -> FX, schuif -> fader van de speeltrack (AANNAME, te controleren met een proef)
+  maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn), transport van de patronen ({plek})
 racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 plannen/
   auto-plan.json    het setplan (v2, docs/PLAN.md); lezen/opslaan via /api/plannen met versie; .versies/ = oude versies
+patronen/
+  set.json          de patronen van de set (docs/PATRONEN.md); lezen/opslaan via /api/patronen met versie; .versies/ = oude versies
 media/              binnengehaalde bestanden + library.db (niet in git)
 opnames/            je opgenomen sets als WAV (niet in git)
 test/
@@ -179,6 +222,8 @@ test/
   wachtrij.test.mjs wachtrij, annuleren (ook midden in een nep-download), playlist, dubbel, voortgang, strook
   wachtrij-server.test.mjs  eigen server + nep-yt-dlp: urls, volgorde, DELETE, dubbel, upload in de rij, herstart
   nep-ytdlp.mjs     nep-yt-dlp voor de tests (VARVE_YTDLP), geen netwerk — geen test zelf
+  stems.test.mjs    stems-rij, routes, ingest-koppeling, schema v8, annuleren, herstart (VARVE_STEMS_ECHT=1: echte Demucs)
+  nep-stems.mjs     nep-splitter (VARVE_STEMS_CMD via maakNepStems): stem k = audio × gewicht — geen test zelf
   toon.test.mjs     toonsoort van de server: synthetisch via ffmpeg + worker, gelijk aan het meetinstrument
   toonsoort.test.mjs ToonKaart, wat je hoort, key-actions, weergave; elke bewerking door normaliseerToon
   handelingenlog.test.mjs  vastleggen (nep-klok), haperend netwerk, terugspelen, paden, grootte, eigen server
@@ -188,6 +233,7 @@ test/
   beatgrid.test.mjs beatrekenen, grid bewerken, tap tempo met een misser erin
   detect.test.mjs   beatdetectie op materiaal waarvan het antwoord bekend is
   rack.test.mjs     macro-resolutie met een gouden bestand, migratie, onbekende effecten
+  effecten.test.mjs de effecten uit de filter app: contract, eenheden = zet(), lussen, inloop, twee koppen, LFO op de maat, worklets, 0 GC
   stream.test.mjs   streamkern tegen ffmpeg (bit voor bit), pagina-plan, StreamBron
   video.test.mjs    video volgt audio: bijsturen, springen, zichtbaarheid
   server.test.mjs   eigen server op eigen poort + tijdelijke db: witte lijst, Range, racks per nummer
@@ -206,8 +252,21 @@ test/
   auto.test.mjs     auto-DJ: planner (bewakers, frasegrenzen, curves, kiezer) en de automaat op een engine (blend, beatloos, overnemen, glijden)
   nep-tijdlijn.mjs  nep-AudioParam die uitrekent wat de param op elk moment doet (geen test zelf)
   klankschaal.test.mjs  stemming (24 toonsoorten × ladders), toonhoogte gemeten, slapen, wrijven, afval, engine en bus
+  instrumenten-fm-schaal.test.mjs  fm en schaal tegen het contract: tijdlijnen (geen curves, stemroof, stil), berichten op hun sample, toonhoogte, 0 GC
+  master.test.mjs   limiter (plafond, true peak, vooruitblik, geen pompen, 0 GC), worklet, keten, wissel, actions, APC
   analyse.test.mjs  banden op nep-spectra, klapreeks op 30/60/120 fps, router-offset, react-actions, maatbronnen
-  hub.test.mjs      AV-app-hub: nep-WebSocket + nep-klok (ook verborgen tabblad: 1×/s, 1×/min); vlag (lokaal), manifest, LED's per beeld, focus, zet, paniek, hartslag, 0,5→5 s, open-en-dicht, 4001→30 s
+  instrumenten.test.mjs  Poly (contract, ADSR, stemroof, pedaal), engine (nummer óf instrument, speeltrack, maatgever), actions, noten.js met nep-poorten, mapje inst
+  hub.test.mjs      AV-app-hub: nep-WebSocket + nep-klok (ook verborgen tabblad: 1×/s, 1×/min); vlag (lokaal), manifest, LED's per beeld, focus, zet, paniek, hartslag, 0,5→5 s, open-en-dicht, 4001→30 s;
+                    speelapparaten: speelt, routering per dev, lampjes/schermen met dev door de wachtrij, statechange, niets statisch geladen
+  maschine.test.mjs de Maschine (pads, groepen, draaiknoppen, wiel, lampjes, schermtempo), maschine-scherm (pixels), Xboard knop 9–16 en schuif, isSpeelapparaat
+  patronen.test.mjs model, venster (swing, micro, omlopen), klok, speler met nep-maatgever (op de maat, herankeren zonder dubbele/gemiste), opnemen, opslag (409), server
+  patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
+  secties.test.mjs  secties: synthetische nummers met een bekend antwoord, worker, library, deck, actions, server, marges op de "1"
+  sec-sampler.test.mjs  een sectie in een sampler-pad: knipSectie, start op de "1", herankeren (ook keylock), grenzen, meldingen
+  secties-log.test.mjs  secties in het handelingenlog: kaart in de stand, `van` bij een druk, volgorde, precies terugspelen
+  auto-secties.test.mjs  auto-DJ met secties: fragment/planMoment/momentArgs, terugvinden, wachten op de kaart, OVERNEEM, langer/nu, zonder kaart identiek
+  sec-maschine.test.mjs  secties en loops: sectieHier na het rondgaan, sectieOpDeMaat in een loop, de melding, de Maschine
+  sec-controle.test.mjs  sectieTelling (zelfde regel als moetSecties, cache per rij, ROLLBACK), /api/secties, de tegel
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -218,7 +277,7 @@ docs/
   plugins/          AV-kern × Varve: inventaris, plan (01-plan.md), negen analyses
   BEATGRID.md       beatgrid: meting, plan, restpunten (tweede kans, maat-anker)
   TOONSOORT.md      toonsoort per nummer: meting, ontwerp, en wat gebouwd is (§13)
-  KEYLOCK.md        keylock en toon verschuiven met Signalsmith: meting + ontwerp (nog niet gebouwd)
+  KEYLOCK.md        keylock en toon verschuiven met Signalsmith: meting, ontwerp, gebouwd (§9)
   MAPPING-VERSCHIL.md  eigen mapping als verschil: vorm, gedrag, Clay's echte verschil
   LIBRARY.md        library: pagina's, sorteren, hotcues per nummer, schema v6/v7
   BEAMER.md         het losse venster mengt zelf: wie mengt, opname, herladen, rVFC-meting
@@ -228,8 +287,16 @@ docs/
   PLAN.md           het planvenster: formaat v2, opslaan met versie, samenwerken met Claude, live, fases
   AUTO-DJ.md        auto-DJ: drie partijen, bewakers, overgangen, bediening, het setplan, grenzen, volgende fases
   KLANKSCHAAL.md    de klankschaal: stemming, bouw, bediening, metingen, open vragen (KS1–KS5)
+  STEMS.md          stems per nummer: Demucs bij de ingest, stems.wav, de engine, de rij, metingen; §5 de stemkanalen
+  SECTIES.md        secties per nummer (6 okt): rekenwerk, de sprong op de maat, opslag, grid-modus SECTIES, grenzen
   TAILSCALE.md      overal openen via Tailscale: VARVE_HOSTS, tailscale serve, wat waar werkt
   ONTBREEKT.md      wat er nog ontbreekt (2 okt): eigen docs, DJ-software, Logic/TD; voorstel en vragen
+  STUDIO.md         VARVE als muziekprogramma (5 okt): hergebruik, vier controllers, fasen S0–S5; §3 de koptelefoon
+  INSTRUMENTEN.md   het contract van een instrument (§1–5) en hoe het op een track woont (§6: engine, actions, noten, scherm, APC, metingen)
+  MASCHINE.md       Maschine MK2 en Xboard49 via de hub (5 okt): wat elke knop doet, lampjes, schermen, de stapmodus straks, metingen
+  MASTER.md         effecten op het geheel en de limiter (S2a, 5 okt): keten, algoritme, laden, opslag, APC, metingen
+  EFFECTEN.md       effecten uit de filter app (S2c): per effect herkomst, eenheden, staart, metingen, wat niet
+  PATRONEN.md       patronen (S4): het contract (§1–6) en wat gebouwd is (§7: klok, opnemen, API, APC, opslag, metingen)
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -261,9 +328,13 @@ docs/
   beantwoordt. Kost ~11 MB per minuut (de hele WAV staat in RAM, maar als
   16-bit: de helft van een AudioBuffer). `deck.load()` met de BufferBron
   bestaat nog als reserve, voor de engine-tests en straks keylock.
-- Streamen leest `audio.wav` rechtstreeks met Range-verzoeken, en kan daarom
-  alleen 16-bit PCM stereo. De ingest zet dat formaat expliciet. Verander je
-  het formaat van `audio.wav`, dan weigert de StreamBron het met een reden.
+- Streamen leest `audio.wav` (of `stems.wav`) rechtstreeks met Range-verzoeken,
+  en kan daarom alleen 16-bit PCM met 2, 4 of 8 kanalen (stereo, of 2/4 stems
+  interleaved). De ingest zet dat formaat expliciet. Verander je het formaat van
+  `audio.wav`, dan weigert de StreamBron het met een reden. Met stems kost een
+  deck ×2 (twee) of ×4 (vier) aan geheugen en netwerk. Wordt het bestand op de
+  server vervangen terwijl een deck het streamt (Content-Range-totaal anders),
+  dan haalt de StreamBron niets meer op: stilte en een melding, nooit ruis.
 - Springen naar een plek die nog niet binnen is, geeft een paar tientallen ms
   stilte (een gat is stilte, nooit een herhaling). Hotcues en cuepunt zijn
   vastgepind en klinken direct.
@@ -320,7 +391,7 @@ docs/
   - Op de APC (voorstel A, 25 sep, `docs/APC40.md`), rechts voor de focus-track:
     Bank ◀ ▶ beatjump (shift: lengte ½/×2), Pan/Sends/User loop in/out/reloop,
     Lock quantize, Stop All Clips rem (geen LED op het apparaat); shift + nummer
-    (2×2) = op de maat. Bank (0x67) blijft vrij voor keylock (VRAGEN I4). Kill,
+    (2×2) = op de maat. Keylock = Shift + Tap, toon = Shift + Nudge ± (VRAGEN I4; Bank is met de hub de hubtoets). Kill,
     rem en op de maat per kolom: de grid-modus klank (MAPJES).
 - REM (vinylstop, 25 sep): `track.N.brake` remt in `track.N.brake.time`
   (SECONDEN 0,1–5, standaard 1: een gebaar van de draaitafel, ook zonder grid)
@@ -336,7 +407,7 @@ docs/
   zoals de knop-kill. De knopstand blijft staan (kill uit = precies terug), ook
   bij een nieuw nummer, zoals de EQ-knoppen. Klikvrij met hellingen van 5 ms die
   in AMPLITUDE een zachte S volgen (zie overgangen). Lampje 1 = weg, 0 = open.
-- Pitch schuift mee met tempo. Dat is `playbackRate`. Keylock hoort bij fase 3.
+- Pitch schuift mee met tempo (zonder keylock). Keylock en toon: `docs/KEYLOCK.md` §9.
 - Nudge op de APC = BEND (`deck.bend`, actions `track.N.bend.back/fwd`): zolang
   je drukt draait alleen de BRON 4% trager/sneller; `deck.rate` (pitchfader,
   bpm, sync) blijft staan, dus loslaten is precies terug. `nudge.back/fwd`
@@ -350,7 +421,9 @@ docs/
   lineair over de hele rate (0,5–2×), 0,1% per tik (shift 0,01%), read niet
   geklemd. Via de geklemde pitch-read sprong één tik na een sync buiten het
   bereik van 1,30 naar 1,16.
-- De master-"limiter" is een `DynamicsCompressor`, geen look-ahead limiter.
+- De master-limiter is sinds 5 okt een AudioWorklet met vooruitblik (−1 dBTP,
+  `docs/MASTER.md`); tot hij geladen is (of als laden mislukt) de oude
+  `DynamicsCompressor`. Zie "Master en limiter" hieronder.
 - Er zijn twee soorten loops naast elkaar: in seconden en in tellen. De
   beat-loops klikken in op het grid; zonder grid doen ze niets.
 - Een loop wordt geklemd op het trackeinde, dus `loop 4s` vlak voor het eind geeft
@@ -430,12 +503,20 @@ docs/
   lezen hun action bij het INDRUKKEN, en loslaten gaat naar dezelfde action.
   Maat: past op 1440×900 (daar verdwenen eerst de banen achter de kolommen):
   het focusdeck houdt zijn hoogte, de banen staan in twee kolommen, faders
-  krimpen mee, onder 900 px hoogte compacter. Per kolom bovenaan resterende
+  krimpen mee, onder 900 px hoogte compacter. De rijen onder de mixer (stems …
+  klankschaal) staan samen in `#rijen`, dat zelf scrolt: main wordt nooit lager
+  dan zijn inhoud met de faders op 56 px (`min-height:min-content`), dus faders
+  en sampler blijven heel met welke rijen ook open (6 okt, `tools/headless/rijen.mjs`).
+  Een nieuwe rij hoort in `#rijen`. Per kolom bovenaan resterende
   tijd (14 px, rood onder 30 s als hij speelt) en BPM, groot genoeg voor de
   zaal. Labels ≥ 11 px. APC-knopnamen alleen in de KOPPELMODUS (anders ruis).
   MAAT-badge zegt "(stil)" als de maatgever stilstaat; hotcues overal geel met
   nummer; foutmeldingen blijven staan tot je ze wegklikt. De renderloop leest
-  het focusoverzicht uit een cache en schrijft alleen wat verandert.
+  het focusoverzicht uit een cache en schrijft alleen wat verandert. De golfvormen (zoom,
+  overzicht, de acht banen) TEKENEN alleen als hun sleutel verandert (`zelfde()` in waveform.js:
+  analyse, maat, positie in hele apparaatpixels, loop, cue, hotcues, grid, zoom). Elke teken-actie
+  is een upload naar de GPU: zonder sleutel tekende VARVE in rust ~29 Mpx/s en liep Demucs (stems)
+  op de helft (gemeten 5 okt). Tekent een nieuw element iets in een draw(), zet het in de sleutel.
 - Vensters bestaan nog, maar als MODEL (`staat.venster`), niet als UI:
   L = de track met focus (volgt engine.focus), R = de VORIGE focus-track
   (`volgFocus`/`zetTweede` in spiegel-plan.js). Het toetsenbord volgt dat
@@ -592,6 +673,9 @@ docs/
   Effecten op de tel (`video.pulse`, `video.pulse.target`): de maat komt van de
   maatgever van de engine (zie Sync), alleen als je hem hoort, op het moment dat
   je hem HOORT. De puls komt bovenop de knopstand en dooft binnen een halve tel.
+  Een nieuwe sectie van de maatgever is een ACCENT op de puls (6 okt, `metPuls(…, accent)`,
+  `VideoMixer._accentNu` met een `SectieLezer`): vol, wat de diepte ook is, alleen met de puls aan. Geen
+  nieuw PULS_DOEL: de doelen lopen rond in het handelingenlog.
   Meet je dit, meet dan NIET precies op de tel: door afronding val je dan op
   het einde van de vorige tel en zie je niets.
   Testen zonder zichtbaar venster: geef de mixer een canvas als nep-video,
@@ -959,6 +1043,14 @@ docs/
   live mee; vanuit de Controlekamer opent hij zonder vlag), de Web Lock
   beslist niets over MIDI, de init-SysEx wordt ingeslikt (de hub zet 0x42),
   en Clay's bewaarde poortkeuze blijft onaangeroerd.
+  - De sectie (PROTOCOL §18 van de hub, 7 okt, `studio/sec-hub`): `levert: ['sectie']`. `engineSecties` =
+    een SectieLezer op de maatgever die je hoort (dezelfde als vormbron en video-accent), plus een seintje
+    van elke deck. Elke grens die je hoort: één `globaal {sectie.nieuw: true, sectie.energie (die van de
+    sectie zelf), sectie.label}`, meteen; vangnet hooguit één per seconde; alles samen hooguit 10/s
+    (schuivend venster, de nieuw telt mee). Verder energie (stap ≥ 0,01) en label bij verandering. Na
+    (her)verbinden de sectie van nu ZONDER nieuw. t loopt nooit terug; een nieuwe sectie is een GROTERE
+    teller. Lezen elke 50 ms + een wekker op de grens of de hoorbare sprong + op hub-berichten (≥ 20 ms).
+    Een oude hub negeert het. Toets: `tools/headless/sec-hub.mjs` (8921/9521/7721, `opname: false`).
   - Twee tabbladen: de hub laat de nieuwste winnen, de oude krijgt 4001, wacht
     30 s en MELDT dat (fout-melding, weg na een stabiele herverbinding). De
     status voor de Controlekamer komt van het tabblad dat met de hub verbonden
@@ -980,7 +1072,7 @@ docs/
     rol, en andere apps gebruiken intensiteit als beeld (av-scene-kit 0,35);
     dat gaf een hoorbare dip 0,80 → 0,43. Master en crossfader staan zonder
     rol en zonder slew in de cockpit (de hub laat alleen rol-zets glijden;
-    snapshots slaan lease-apps over). K1 in VARVE: VRAGEN N1.
+    snapshots slaan lease-apps over). K1 in VARVE: VRAGEN O1.
   - `paniek` (LPD8 P1, 1 s vasthouden) = `video.black.hold`: het eindbeeld
     zwart zolang hij vastzit, loslaten = de schakelaar beslist weer; de audio
     blijft. Valt de verbinding weg terwijl hij vastzit, dan laat VARVE zelf los.
@@ -1102,7 +1194,10 @@ docs/
     VÓÓR de klap op tot 1 op de klap (ze zijn vooraf bekend), τ 0,1 s in KLOKtijd.
     Geen sprong: de uitvoer zakt nooit sneller dan de puls uitdooft; neemt een
     track die al speelde de maat over, dan telt alleen wat sinds het vorige beeld
-    komt, tot hij terugspringt tot ervóór (loop rond, hotcue). Alleen de lezer die
+    komt, tot hij terugspringt tot ervóór (loop rond, hotcue). Sinds 6 okt ook `sectie.energie`
+    en `sectie.nieuw` (achteraan in BRONNEN, uit `SectieLezer`: geen objecten per beeld, stil na
+    een sprong tot je hem hoort, een grens uit een gat > 1 s telt niet; NIEUW_TAU 0,2 s,
+    ENERGIE_TAU 0,25 s). Alleen de lezer die
     een open route nodig heeft wordt gelezen (`router.nodig()`). Nog niet:
     `metPuls` zelf als route.
 
@@ -1122,12 +1217,13 @@ De uitkomsten van het onderzoek van 22 september 2026 staan in ROADMAP.md onder
   voor hotcues, geen ringbuffer. Een ringbuffer gaat uit van vooruit consumeren;
   een deck springt en gaat achteruit.
 
-## Toonsoort (gebouwd 25 sep) en keylock (ontwerp, nog niet gebouwd)
+## Toonsoort (gebouwd 25 sep) en keylock (gebouwd 5 okt)
 
 Volledig in `docs/TOONSOORT.md` (§13: wat gebouwd is) en `docs/KEYLOCK.md`,
 besluiten in VRAGEN blok I. Toonsoort is op 25 sep gebouwd (ROADMAP 14), eerder
-dan "na 25 okt" (Clay 24 sep avond: zoveel mogelijk met agenten). Keylock wacht op
-de luistertest A3 en I1–I3. Wat een bouwer niet mag missen:
+dan "na 25 okt" (Clay 24 sep avond: zoveel mogelijk met agenten). Keylock is op
+5 okt gebouwd na de luistertest (Clay: "klinkt goed"; `docs/KEYLOCK.md` §9). Wat
+een bouwer niet mag missen:
 - **Toonsoort is een KAART** in tracktijd, van de plaat, zoals het grid:
   `{stukken:[{van, toonsoort, stemming, zekerheid, tweede?}], bron, slot, versie}`
   per link (schema v6, kolom `toon_json`). Een stemming PER STUK (zoned out +43 ct,
@@ -1176,6 +1272,22 @@ de luistertest A3 en I1–I3. Wat een bouwer niet mag missen:
   een dip tot −15 dB (ontworpen, niet gebouwd).
 - Namen op het deck, gedeeld door beide ontwerpen: `deck.keylock` (boolean) en
   `deck.transpositie` (halve tonen). Transponeren mag ook zonder keylock (K8).
+- **Gebouwd (5 okt), regels voor wie eraan komt:**
+  - Een segment heeft ZEVEN velden in vaste volgorde (`StreamBron._maak`, `rek`
+    erbij): één hidden class voor de worklet. Een segment in een andere vorm liet
+    in de test renderBlok weer afval maken (polymorf).
+  - Segmenten zonder `rek` gaan door renderBlok zoals altijd: de gouden hash in
+    renderblok.test mag niet veranderen. Een rem gaat ook met keylock via renderBlok.
+  - Een sprong met keylock = een GEPLAND segment op het zoekrooster (`rekPlanT`,
+    ~98 ms): tot T speelt het vorige (`StreamBron._vorig`, `positieIn`). Dat is geen
+    start op de maat: `wachtTot` blijft null, `_wacht` is "er ligt iets in de
+    toekomst". Fasebehoudende sprongen (sync, nudge, beatjump, gequantiseerde
+    hotcue) met `doorlopend`.
+  - Zoeken: doel op t0 + uitLat; doorlopen: t0 + uitLat + één blok (gemeten, §9.2).
+  - In het hete pad van de worklet geen double als argument (ook niet naar de WASM
+    per blok): `_mengB` leest de klok uit `this.t0`. Een WASM-aanroep met een
+    niet-geheel getal kost ~48 bytes; alleen per sprong of toonwissel.
+  - `src/engine/vendor/` wordt gemaakt door `tools/keylock/vendor.mjs`, niet met de hand.
 
 ## Auto-DJ (fase 1, gebouwd 30 sep)
 
@@ -1229,6 +1341,275 @@ Volledig in `docs/KLANKSCHAAL.md`. Wat een bouwer niet mag missen:
   meet het (GCProfiler) en meet de toonhoogte (Goertzel).
 - Luidheid is gemeten tegen −14 LUFS (`UIT_OPHOGING`, `VELD_OPHOGING`): verander
   je het model, meet dan opnieuw.
+
+## Stems (gebouwd 3 okt)
+
+Volledig in `docs/STEMS.md`. Wat een bouwer niet mag missen:
+- De rij (`StemsRij`) gaat niet op aankomst maar op VOLGORDE (5 okt, STEMS.md §6): eerst `vooraan`
+  (de STEMS-rij, in de volgorde van vragen), dan de kortste eerst; wat loopt, loopt door. htdemucs
+  haalt op de M1 ~3× realtime; fp16 en minder overlap zijn gemeten en NIET de moeite (of hoorbaar).
+- Splitsen gebeurt VOORAF, bij de ingest of met de knop in de library, door
+  Demucs (`server/stems/splits.py`, Python in `~/.varve/stems-venv`), nooit
+  realtime. De engine speelt alleen `stems.wav`: 16-bit, 48 kHz, 4 of 8 kanalen
+  interleaved, kanaalpaar k = `namen[k]`, evenveel frames als audio.wav. De SOM
+  van de stems is audio.wav (de rest van het model zit in inst/other).
+- ÉÉN worklet per deck met ALTIJD vier stereo-uitgangen naar `chain.stemIn`
+  (vóór trim en EQ); de streamkern leest één paar per renderBlok-aanroep
+  (`stride`/`paar`, `hergebruik` voor paar 1–3). Stereo blijft bit voor bit (de
+  gouden hash), stems blijven afvalvrij (0 GC). Geen tweede afspeelmotor per stem.
+- Stem-kill is 0 in amplitude met de zachte S van de EQ-kill (`killVersterking`,
+  na `startDrempel`, nooit setValueCurveAtTime). Bij elke laad alles open: stems
+  horen bij het NUMMER. `inst` werkt in beide standen (bij vier: drums + bas +
+  overig samen).
+- Een testserver (`VARVE_MEDIA`) splitst alleen met `VARVE_STEMS_CMD` (één
+  uitvoerbaar bestand: `maakNepStems(map)`) of `VARVE_STEMS_PY`. Na een
+  serverwijziging: server herstarten; schema v8 migreert vanzelf.
+- Opnieuw splitsen vervangt `stems.wav`: de ui weigert het zolang een track dat
+  nummer met stems speelt, en de StreamBron vangt het af (zie Bekende grenzen).
+- Op de APC sinds 5 okt de grid-modus stems (zie Stemkanalen). Een nieuwe
+  stem-knop op een deck: ook in `OVERNEEM` (auto-DJ) en, als het een schakelaar
+  is, in de beginstand van het handelingenlog (`stemKill`).
+
+## Koptelefoon (gebouwd 5 okt, ROADMAP 27 S1)
+
+Volledig in `docs/STUDIO.md` §3. Wat een bouwer niet mag missen:
+- Eén AudioContext, één uitgang met VIER kanalen (op de Mac een samengesteld
+  apparaat: Scarlett 2i2 = 1/2 de zaal, koptelefoonuitgang van de Mac = 3/4). Eén
+  klok, regel 3. Geen tweede AudioContext met setSinkId: dat zijn twee klokken.
+- Zonder vier kanalen (`kanApart(ctx)` false) bestaat de koptelefoon niet: geen node
+  erbij, `createMasterChain(ctx, koptelefoon.zaalIn)` gaat dan naar `ctx.destination`
+  zoals altijd, en `track.N.pfl`/`headphone.*` lezen null.
+- De cue tapt `chain.lpf` (vóór de fader, na trim/EQ/effect/filter); aan en uit met
+  `killVersterking` (zachte S na startDrempel). Volume en mix via `zetDoel`. De zaal in
+  de koptelefoon tapt `master.analyser` (na de limiter), zoals de opname.
+- Zaal en koptelefoon omwisselen is BEDRADING: alleen bij het maken
+  (`new Engine({ koptelefoon: { omgewisseld } })`, de app leest localStorage).
+- `headphone.*` en `track.N.pfl` horen niet bij wat er klinkt: OVERSLAAN in
+  terugspelen.js, NIET_IN_WAARDEN in handelingen.js, niet in OVERNEEM (auto-DJ).
+- APC: ● (record arm) zonder shift = `track.N.pfl`; shift + ● blijft het cuepunt.
+  Cue Level = `headphone.level`, shift + Cue Level = `headphone.mix` (Clay 5 okt);
+  sampler-volume en puls op shift + Cue Level in grid-modus sampler en video.
+- Gemeten met `tools/headless/koptelefoon.mjs` (echte Chrome, OfflineAudioContext van
+  vier kanalen); de mock in engine.test kent geen echte splitter/merger.
+
+## Instrumenten op een track (gebouwd 5 okt)
+
+Volledig in `docs/INSTRUMENTEN.md` (§3 het contract, §6 de track). Wat een bouwer niet mag missen:
+- Een track draagt een nummer óf een instrument (ST7). `engine.zetInstrument(id, soort|null)`,
+  `instrumentOp(id)`, `speeltrack()`. Het instrument sluit via een eigen GainNode aan op
+  `chain.input`: EQ, effect, filter, fader, sends en cue werken vanzelf. Een instrument erop =
+  `deck.leeg()` (het nummer eraf, een lopende laad geeft false); een nummer laden haalt het
+  instrument weg. Weghalen: aansluiting klikvrij dicht, dan pas `vernietig()` en losmaken.
+- Een instrumenttrack heeft geen buffer: geen maatgever, geen sync of op de maat, de auto-DJ
+  laadt er niet op (`_vrijDeck`). Nieuwe code die "een lege track" zoekt: kijk ook naar
+  `instrumentOp(id)`.
+- Noten gaan NIET over de bus (`src/control/noten.js`): elke MIDI-ingang behalve de APC, via de
+  MidiHub (geen eigen requestMIDIAccess, dus alleen het eerste tabblad); een poort van buiten
+  (de hub, straks) met `koppel(poort)`. Noot-uit en pedaal gaan naar waar de noot-aan heen ging.
+  Knoppen van het keyboard via `mappings/xboard49.json` (`{speel}`, absoluut = soft-takeover);
+  de CC-nummers zijn een AANNAME.
+- Actions `track.N.inst` (rondlopend; een SPELEND nummer eraf pas bij een tweede druk binnen
+  3 s, ook op de APC), `.inst.next/.prev`, `.inst.knob.1–8`, `.inst.stil`. Terugspelen slaat ze
+  over, de knoppen staan niet in de beginstand.
+- APC: het mapje `device.inst` (Clip/Device View strip → rack → inst) bestaat alleen als de
+  focus-track een instrument heeft (`OP_AANVRAAG` + `beschikbaar` in lagen.js); zonder blijft het
+  strip ↔ rack.
+- De Poly plant zijn envelopes op de audioklok en kent zijn eigen stand (`_envOp`): in Chrome
+  begon een lineaire helling na `cancelAndHoldAtTime` midden in een `setTargetAtTime` op 0 (een
+  tik bij een GEPLANDE stemroof). Luidheid gemeten: `OPHOGING` 0,52 = −14 LUFS voor een akkoord
+  van drie op 0,8; verander je de klank, meet opnieuw (`tools/headless/instrument.mjs`).
+
+## Master en limiter (gebouwd 5 okt)
+
+Volledig in `docs/MASTER.md`. Wat een bouwer niet mag missen:
+- `input (gain) -> fx (InsertSlot) -> limiter -> analyser -> uit`. `master.analyser`
+  blijft het EIND: opname, de zaal in de koptelefoon en de vormen tappen daar.
+  `master.limiter` is de uitgang van de limiterstap, niet de compressor.
+- De limiter (`limiter-kern.js`, puur) houdt zich aan de regels van het audiopad:
+  0 GC (`master.test` meet het). Onder het plafond is de gain PRECIES 1 (geen
+  pompen, de uitvoer is bit voor bit de invoer, 72 samples later). Verander je de
+  kern: `node test/master.test.mjs` en `tools/headless/master.mjs` (true peak 16×).
+- De vooruitblik is vertraging en telt mee in wat je hoort: `ctx.graafVertraging`
+  in `uitgangsVertraging` (hoorbaar.js), op de context zelf (het losse venster).
+- De worklet laadt async: nooit live herbedraden. Context stil = direct erin; de
+  audio loopt = equal-power kruisfade van 40 ms, het oude pad weg na de fade.
+  Op een OfflineAudioContext eerst `await engine.master.klaar`, dan renderen.
+- Het master-rack (`master.fx.*`, `master.rack.next/prev`) is een gewone
+  InsertSlot op de klok van de maatgever; welk rack bewaart de schermlaag in
+  localStorage (`varve.master.rack`, sjabloon op naam). MIX start altijd op 0.
+- APC: Shift + Clip/Device View = mapje `device.master` (knop 1–7, 8 = mix,
+  shift + 8 = knop 8, Device ◀ ▶ = rack, On/Off = aan/uit). Alleen regels erbij.
+- De cue in de koptelefoon is even laat als de zaal: `koptelefoon.zetVertraging(master.vertraging)`
+  (de engine zet hem, ook na `master.klaar`). Open (docs/MASTER.md, "Grenzen"): de master klinkt ~0,8 dB zachter dan met de compressor (die tilde
+  op); het master-rack staat niet als gebeurtenis in het handelingenlog.
+
+## Effecten uit de filter app (gebouwd 5 okt)
+
+Volledig in `docs/EFFECTEN.md` (STUDIO S2c). Wat een bouwer niet mag missen:
+- Tien effecten in `fx-meer.js` (distortion, chorus, flanger, vibrato, tremolo,
+  autopan, auto-wah, pitch, compressor, breedte), in `EFFECTEN` achter de zeven van
+  fx.js. Geheugen (90 s) bewust niet: in een insert-rack begint hij bij elke
+  ketenwissel leeg. Wat dubbel was (filter, delay, galm, crush, ringmod, phaser) niet.
+- Alles met een vertraging of een andere vorm verzet je met TWEE PADEN
+  (`wisselaar`: de twee koppen van de delay, lineair, de laatste stand wint), ook
+  drempel/ratio van de compressor (Chrome rekent die per blok: trapjes).
+- Alles met geheugen zit achter een INLOOP (30 ms): een nieuwe keten begint met
+  lege vertragingen, en de vertraagde kopie begon anders abrupt (×21 gemeten).
+  De delay van fx.js heeft hem sinds 5 okt ook (was ×46 bij een wissel, nu ×1,6).
+- Tijdens het bouwen (klok niet verder) zet `zet()` direct (`zetter`), daarna glijdt hij.
+- Worklets: `laadFxWorklet(ctx)` één keer per context, pas bij gebruik; tot dan droog,
+  daarna invloeien; was hij er al, dan meteen. `vernietig()` stuurt 'stop'.
+- Tremolo/autopan op de maat via `fx-lfo.js`: één cyclus als buffer, start METEEN op
+  de fase die hij hoort te hebben en vloeit 20 ms over. Op de "1" van de maat kan
+  niet (fxKlok kent alleen de tel).
+- Chrome-feiten (gemeten): WaveShaper 2x/4x = 128/192 samples later (daarom geen
+  oversampling: met de mix-knop is dat een kam); DynamicsCompressor kijkt 288 samples
+  (6 ms) vooruit en doet zelf make-up ((1/curve(1))^0,6, `chromeMakeup`), die wordt
+  eruit gedeeld; een DelayNode op 0 is bit voor bit door.
+- Een effect dat een oudere versie niet kent, bewaart zijn eigen `bypass` (`_bypass`
+  in rack.js); vroeger kwam het er na één keer bewaren als `bypass: true` uit.
+
+## Stemkanalen (gebouwd 5 okt)
+
+Volledig in `docs/STEMS.md` §5 (ROADMAP 27, STUDIO S2b). Wat een bouwer niet mag missen:
+- Per stem een filter (`track.N.stem.<s>.filter`, bipolair, zoals het trackfilter), een
+  echo en een galm (`.send.a/.b`) en een cue (`.pfl`); read null zonder die stem, de cue
+  ook zonder koptelefoonuitgang. Bij vier stems werkt `inst` op drums + bas + overig:
+  filter in serie (per kant het sterkste), sends de grootste, cue "of".
+- De droge weg `stemIn[k] -> trim` is NIET veranderd. Het filter is een correctie ernaast
+  (`maakStemFilter`: x + H(g·x) − g·x), en elk deel (filter, send, cue) komt er pas bij
+  als het voor het eerst iets doet, stil, zoals een nieuwe keten in de insert-slot. Er
+  gaat nooit iets los. Zonder stems of met alles open: bit voor bit het oude pad en
+  dezelfde CPU (gemeten met `tools/headless/stemkanalen.mjs --vergelijk`).
+- Stem-sends gaan door een SPIEGEL van de fader (`deck.stemSends[A|B].fader`): elke
+  nieuwe code die `chain.fader.gain` aanraakt, moet de spiegels mee nemen (`applyUi`,
+  `_glijParams`, `_glijDoelen`), anders blijft de echo van een stem open als de fader
+  dicht gaat. Trim zit in de versterking per stem. Niet door EQ, effect en trackfilter.
+- De cue van de stems is ÉÉN ingang per track in de koptelefoon (`A:stems`, de engine
+  volgt `deck.stemPflIets`); `track.N.stem.<s>.pfl` staat in OVERSLAAN, niet in OVERNEEM
+  en niet in de beginstand. Filter en sends wel in OVERNEEM; als value-action vanzelf
+  in de beginstand.
+- APC: grid-modus stems (zeegroen, Shift + scene 3 of ▲ ▼, achteraan): per kolom rij
+  1–5 zang · rest · drums · bas · overig weg zolang je drukt, shift = vastzetten. 83
+  regels erbij (480), geen bestaande veranderd; `note:0:84#shift@edit.aan` houdt bpm ½.
+- Een insert-effect per stem is gemeten en NIET gebouwd: ~5,5 ms CPU per s audio per
+  slot, ook stil (acht tracks × vier stems: +110%).
+- Chrome offline is niet deterministisch op de bits als een ingang twee klinkende
+  verbindingen optelt (een hashset: 1 ULP), of als er timers in het renderen vallen:
+  vergelijk bit voor bit alleen met één klinkende bron per optelpunt.
+
+## Patronen (gebouwd 5 okt)
+
+Volledig in `docs/PATRONEN.md` (§1–6 het contract, §7 wat gebouwd is). Wat een bouwer niet mag missen:
+- `engine.patronen` (PatroonSpeler, `src/engine/patronen/`) speelt per track met een instrument vijf
+  plekken. Eén KLOK voor alle patronen: klok-tellen <-> audioklok als gebroken lijn (klok.js). Met een
+  maatgever (`syncMaster()`, `fxKlok()`) richt hij zich op diens tellen en maat-anker; zonder een eigen
+  tempo (`set.tempo`); valt de maatgever weg terwijl er iets speelt, dan het laatste tempo vasthouden.
+- Regel 3: de timer (25 ms) zegt alleen WANNEER; noten gaan met `t` op de audioklok, 120 ms vooruit.
+  Wat gepland is staat vast: de klok verandert alleen NA `geplandTot`, en dan zonder sprong (in een
+  tel naar de doellijn). Vensters zijn halfopen in klok-ticks (384 PPQN): elke noot precies één keer.
+  Verander je de klok of de vensters: `test/patronen.test.mjs` (doorlopend, op de tel) en
+  `tools/headless/patronen.mjs` (in Chrome, ook in de opname).
+- Starten/wisselen/stoppen staan in klok-TICKS, op het eerste maatbegin na wat al gepland is;
+  `alleUit(t)` op het maatbegin VÓÓR de eerste noot van het volgende patroon. Instrument weg = patroon
+  weg (engine `'instrument'`); een ander instrument = het patroon speelt daarop verder.
+- Noten gaan niet over de bus: live opnemen luistert op `noten.js` (`'noot'` met snelheid); stap voor
+  stap = de laatst gespeelde noot. Bewerken gaat wel over de bus (`track.N.pattern.step.S`, …) maar
+  terugspelen slaat het over (OVERSLAAN): de set is al bewaard. Starten/stoppen/rijen/tempo spelen terug.
+- De set staat op de server (`patronen/<naam>.json`, `/api/patronen`, versie + 409, zoals de plannen);
+  `server/patronen.js` gebruikt `model.js` (puur). Instrumenten staan er alleen als hint in.
+- APC: grid-modus `patronen` (oranje 9/10): Shift + scene 2 of ▲ ▼; pad = plek per track, shift =
+  meteen, scene = rij, Stop All Clips = alles stoppen. De read knippert zelf (een instrumenttrack heeft
+  geen `track.N.phase`). Alleen regels erbij.
+
+## Xboard49 en Maschine via de hub (gebouwd 5 okt)
+
+Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag missen:
+- Alleen met `?hub=`: `MANIFEST.speelt = ['xboard49', 'maschine-mk2']`; app.js laadt
+  `ui/speelapparaten.js` (en daarmee maschine.js, maschine-scherm.js, het profiel en
+  `mappings/maschine-mk2.json`) pas binnen `if (hubUrl)`. hub.test controleert dat niemand ze
+  statisch importeert.
+- Elk speelapparaat heeft een EIGEN nep-poort (`midi.speelPoort(dev)`: "Xboard49 (hub)",
+  "Maschine MK2 (hub)", interface van een MIDIInput), NIET in `access.inputs`: de MidiHub, de
+  APC-mapping en het echofilter zien ze nooit. Geen focusfilter (de hub beslist wie speelt).
+  Weg/terug = `state` + `onstatechange`: noten.koppel en maschine.js laten dan los.
+- Wat naar de Maschine gaat (lampjes `{t:'led', dev:'maschine-mk2'}`, schermen
+  `{t:'scherm', dev, nr, data}`) loopt door een eigen wachtrij in hub.js (16 per 4 ms, zoals de
+  MidiHub), lampjes daarna per beeld gebundeld. De APC-lease is ongewijzigd (LED's zonder `dev`).
+- Pads = noten via noten.js (`noten.ontvang` met bron `hub-maschine-mk2-input`), nooit over de
+  bus. Knoppen 0–47 zitten op kanaal 1: NOOIT de Maschine-poort aan noten.koppel hangen.
+- Het masterwiel KIEST voor de focus-track (scherm), indrukken/ENTER ZET (`track.N.inst.choose`,
+  value 0..1 zoals de read van `track.N.inst`; terugspelen slaat hem over zoals alle `inst`).
+- Een speelapparaat is nooit "de controller" (`isSpeelapparaat` in midi.js, OOK zonder hub):
+  niet automatisch, niet uit localStorage, niet met de hand.
+- De schuif van de Xboard is SysEx Master Volume: signature `master-volume` in een
+  apparaatmapping (noten.js). Knop 9–16 = FX van de speeltrack. CC's: AANNAME.
+- Patronen op de Maschine (`docs/MASCHINE.md` §5): STEP = stapmodus (pad = `track.{speel}.pattern.step.S`,
+  lampje = die read, de lopende stap wit via `engine.patronen.stand/stapNu`), PATTERN + pad 1–5 =
+  `engine.patronen.kies` (geen action voor kiezen), PLAY/RESTART/REC/ERASE en SHIFT + ◄ ► via de
+  mapping met `{plek}` (= de gekozen plek van de speeltrack). Live opnemen gaat vanzelf: de pads
+  spelen via noten.js. Een pad laat los waar hij indrukte, ook na een moduswissel (`padVast`).
+  Headless: `VARVE_PATRONEN` naar een tijdelijke map, anders schrijft de testserver `patronen/set.json`.
+- Secties op de Maschine (`docs/MASCHINE.md` §5b, 6 okt): SCENE = padmodus secties, de 16 pads = de secties
+  van de FOCUS-track (groep A–H), pad = `track.N.section.K` via `invoke` (dus log en auto-DJ zien het), ◄ ►
+  bladert boven de 16, kleuren uit de read zoals de APC, links op het scherm wat je hoort + een 4×4-raster.
+  Eén padmodus tegelijk (STEP, SCENE). De hub in een headless-proef altijd met `opname: false`: de echte
+  config heeft een `avondmap`.
+- Toetsen: `node test/maschine.test.mjs`, `node test/hub.test.mjs`, en headless
+  `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
+  HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een
+  beginstand).
+
+## Secties (gebouwd 6 okt, tak `studio/secties`; verweven 6 okt avond, `studio/sec-*`)
+
+Volledig in `docs/SECTIES.md`, vragen in VRAGEN blok SE. Wat een bouwer niet mag missen:
+- Een SECTIEKAART zoals de toonsoortkaart: `{ versie, opGrid, grid, stukken: [{ van, label, groep,
+  energie, zeker?, stems? }], bron, slot }` in tracktijd, kolom `secties_json` (schema v9). NIET in
+  `/api/library` (de lijst blijft klein): laden.js haalt hem met `GET /api/library/<id>/secties?maak=1`,
+  en de server rekent dan eerst als `moetSecties` ja zegt (geen kaart, oudere `SECTIE_VERSIE`, een ander
+  grid — `grid` is een FNV-vingerafdruk van het grid — of stems erbij). 'hand' en slot: nooit overschrijven.
+- Grenzen liggen op maatbegins van het grid van TOEN. Verandert het grid, dan wordt de kaart bij het
+  volgende laden opnieuw berekend; tijdens een sessie blijft hij staan.
+- De sprong (`sectieDoel`): NU springen naar vlak vóór de sectie, zo ver vóór haar "1" als je van de
+  volgende "1" af zit (fasebehoudend, `seek` met `doorlopend`); geen timer, geen wachten (regel 3).
+  `sectieOpDeMaat` = de sectie op de volgende "1": volgende/vorige rekenen daarvanaf (tijdens een
+  aanloop hoor je nog de maat ervóór: `sectieHier` is wat je HOORT).
+- APC: grid-modus `secties` (Shift + scene 1, achteraan in ▲ ▼), 40 pads = secties van de FOCUS-track,
+  shift = als loop. Kleuren: wit (hoor je, `tel: 'aan'`) / `hemelsblauwdonker` (42) / uit. 82 regels
+  erbij, geen bestaande veranderd; `eerder` bijgewerkt met `tools/mapping/eerder.mjs`.
+- Labels zijn een gok uit energie en drums (intro · opbouw · drop · break · outro · `deel`); gemeten
+  op synthetisch materiaal (`test/synth-nummer.mjs`), nog niet op Clay's library (SE2). Een beter
+  algoritme = `SECTIE_VERSIE` omhoog; dan rekent alles vanzelf opnieuw.
+- VERWEVEN (docs/SECTIES.md §7, TASKS-SECTIES.md, VRAGEN blok SV). Wat je niet mag breken:
+  - Marges: `sectieEen` 0,01 tel en `SectieKaart.index` 1 ms. De server rondt sectiebegins af op 0,1 ms;
+    zonder marge viel een begin net ná zijn "1" een maat te laat in. Niet weghalen.
+  - Toetsenbord: `SHIFT_TOETS` in keyboard.js (shift+W/E de focus-track, shift+I/O de rechterhand),
+    `toetsActie(code, shift)`. Aan het eind van de kaart een melding uit de action zelf (`naarSectieStap`
+    geeft `waarom`), niet uit `waaromNiet`.
+  - Sampler: `knipSectie` (hele maten van "1" tot "1", stopt vóór een maat die niet vol is; hooguit
+    `SECTIE_MAX_MATEN` 32 en `SECTIE_MAX_SEC` 90). Een pad van meer dan 8 tellen IS een sectie en start op
+    de "1" van de maatgever (`startOpDeEen`, `fxKlok().tellenTotEen`). Action `sampler.N.section`, rij 3.
+  - Plan: een stap mag `in`/`uit` = `{ sectie: K (vanaf 1), label, groep }` hebben; `van` blijft de
+    waarheid en de terugval. Een PUT zonder `kent` zet in/uit per stap terug (`herstelSecties`); Claude
+    stuurt `kent` ALTIJD mee (docs/PLAN.md §2b).
+  - Log: de kaart staat in de beginstand en als gebeurtenis `secties`; terugspelen haalt hem NIET van de
+    server. Een sectiedruk draagt `{ van }` (de plek waarvan hij rekende, 4e element van de logregel,
+    `invoke(id, v, { laat, van })`). `section.K.loop` staat niet apart in de stand: de loop van het deck
+    is de waarheid.
+  - Auto-DJ (AUTO-DJ.md §3b): secties alleen met een kaart op een ZEKER grid; zonder kaart precies het oude
+    gedrag (ook bij een trage kaart: het wachten stopt vóór het oude moment). De bewakers gaan voor, de soort
+    overgang verandert nooit. `momentArgs` (planner.js) is DE rekenregel voor automaat én planvenster: geef
+    planMoment nooit losse argumenten. `vindSectie`: dezelfde label+groep, het dichtst bij de tijd van toen
+    (binnen `SECTIE_SPELING` 30 s, anders wint `van`).
+  - Loops: `sectieHier` vouwt wat je hoort terug in de loop (anders 1–40 ms de vorige sectie na het
+    rondgaan), en `sectieOpDeMaat` geeft in de laatste maat van een loop wat er NA het rondgaan komt.
+  - Controlekamer: `Library.sectieTelling()` gebruikt dezelfde helpers als `moetSecties`; verander je die
+    regel, verander hem op één plek (sec-controle.test vergelijkt ze).
+  - `SectieLezer` (src/analysis/maat.js; vormbron, video-accent en hub): een stap terug in t kleiner dan
+    GAT (1 s) is geen nieuwe klok (de uitgangsvertraging kan groeien); hetzelfde sectiebegin binnen 0,99
+    maat is een herhaling, geen nieuwe sectie; zonder maatgever blijft de energie `HOUD` (0,5 s) staan.
+  - Headless: elke `tools/headless/sec-*.mjs` zet VARVE_PATRONEN en VARVE_PLANNEN op zijn tmp-map. Anders
+    leest de proefserver `patronen/` van de worktree, en in `sintegratie` is dat de map van de echte mixer.
 
 ## Werkwijze die hier werkt
 

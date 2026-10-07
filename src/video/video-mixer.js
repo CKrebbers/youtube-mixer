@@ -6,6 +6,7 @@ import { FITS, schaalVoor, maatVan } from './passen.js';
 import { actieveLagen, lagenUniforms, MAX_BEELDLAGEN } from './lagen.js';
 import { Eindbeeld, wandklok } from './eindbeeld.js';
 import { hoorbaar, naVertraging, uitgangsVertraging } from '../engine/hoorbaar.js';
+import { SectieLezer } from '../analysis/maat.js';
 
 /**
  * De video-mixer: per track een gedempte <video>, samen gemengd op een canvas
@@ -234,6 +235,7 @@ export class VideoMixer {
     this.modus = MODI[0];
     this.puls = 0;                   // hoe hard er op de tel gepulst wordt
     this.pulsDoel = PULS_DOELEN[0];
+    this.sectieLezer = null;         // een nieuwe sectie als accent op de puls (_accentNu), pas als de puls open gaat
     this.fit = FITS[0];              // passend: zwarte randen, niets valt weg
 
     this.beeldlagen = [];             // generatief beeld erover: voegBeeldlaagToe()
@@ -367,12 +369,36 @@ export class VideoMixer {
    * het moment dat je hem HOORT. 0 als er geen maat is, of als je die track
    * niet hoort (fader of crossfader dicht, wacht op de maat, remt).
    */
-  _pulsNu(vertraging) {
-    if (this.puls <= 0) return 0;
-    const id = maatgever(this.engine, this.decks);
-    if (!id) return 0;
-    const deck = this.engine.deck(id);
+  _pulsNu(vertraging, deck = this.puls > 0 ? this._maatDeck() : null) {
+    if (this.puls <= 0 || !deck) return 0;
     return pulsVorm(deck.grid.phase(hoorbaar(deck, vertraging)));
+  }
+
+  /**
+   * De maatgever (het deck) zoals je hem hoort, of null. teken() zoekt hem één
+   * keer per beeld, voor de puls en het accent samen: Engine.maatgever maakt
+   * bij elke vraag een paar objecten.
+   */
+  _maatDeck() {
+    const id = maatgever(this.engine, this.decks);
+    return id ? this.engine.deck(id) : null;
+  }
+
+  /**
+   * Een nieuwe sectie van de maatgever als ACCENT op de puls, 0..1 (metPuls):
+   * `nieuw` van een SectieLezer (analysis/maat.js), dus dezelfde vorm en
+   * regels als de vormbron sectie.nieuw: dezelfde maatgever, alleen als je hem
+   * hoort, op de audioklok en op wat je HOORT (ook vlak na een sprong of een
+   * loop die rondgaat); een grens van een track die net de maat overneemt of
+   * uit een gat (de puls stond dicht) telt niet. 0 met de puls dicht (dan
+   * wordt er niets uitgelezen) en zonder sectiekaart. Geen afval per beeld.
+   * Een eigen lezer per mixer: het losse venster rekent zelf, op de engine die
+   * het overnam (this.engine).
+   */
+  _accentNu(vertraging, deck = this.puls > 0 ? this._maatDeck() : null) {
+    if (this.puls <= 0) return 0;
+    this.sectieLezer ??= new SectieLezer();
+    return this.sectieLezer.stap(Math.max(0, this.engine.ctx.currentTime - vertraging), deck, vertraging).nieuw;
   }
 
   _programma(vs, fs) {
@@ -573,7 +599,8 @@ export class VideoMixer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, nu.fb);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, bron.tex);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, vorige.tex);
-    const { fx: f, flits } = metPuls(this.fx, this.pulsDoel, this.puls, this._pulsNu(vertraging));
+    const maat = this.puls > 0 ? this._maatDeck() : null;                    // één keer per beeld
+    const { fx: f, flits } = metPuls(this.fx, this.pulsDoel, this.puls, this._pulsNu(vertraging, maat), this._accentNu(vertraging, maat));
     gl.uniform1f(this.loc(this.effect, 'flits'), flits);
     gl.uniform1f(this.loc(this.effect, 'pixel'), f.pixel);
     gl.uniform1f(this.loc(this.effect, 'spiegel'), f.spiegel);

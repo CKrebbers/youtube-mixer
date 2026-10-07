@@ -27,7 +27,7 @@
   .pl-strook canvas{width:100%;height:100%;display:block;cursor:pointer}
   .pl-midden{flex:1;display:flex;min-height:0}
   .pl-lijst{flex:1;overflow:auto;padding:6px 10px 40px}
-  .pl-kop,.pl-rij{display:grid;grid-template-columns:18px 26px minmax(160px,1.6fr) 62px 44px 70px 70px 200px minmax(120px,1.2fr) 40px 22px;gap:6px;align-items:center}
+  .pl-kop,.pl-rij{display:grid;grid-template-columns:18px 26px minmax(160px,1.6fr) 62px 44px 84px 84px 200px minmax(120px,1.2fr) 40px 22px;gap:6px;align-items:center}
   .pl-kop{font-size:10px;letter-spacing:.08em;color:var(--klein);text-transform:uppercase;padding:4px 6px;position:sticky;top:0;background:var(--bg);z-index:2}
   .pl-rij{padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);margin-top:4px;position:relative}
   .pl-rij.gekozen{border-color:var(--a)}
@@ -47,6 +47,11 @@
   .pl-toon{font-family:ui-monospace,monospace;font-size:12px}
   .pl-onzeker{color:var(--klein)}
   .pl-overgang{display:flex;flex-direction:column;gap:2px}
+  /* begin + in, duur + uit: de tijd, en eronder de sectie (als het nummer een sectiekaart heeft) */
+  .pl-tijd{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .pl-tijd select{font-size:11px;color:var(--dim)}
+  .pl-tijd select:has(option:checked:not([value=""])){color:var(--text)}
+  .pl-rij select.pl-onzeker{border-color:var(--warn);color:var(--warn)}
   .pl-overgang .rij2{display:flex;gap:4px}
   .pl-overgang .rij2 select{flex:1}
   .pl-overgang .rij2 input{width:58px}
@@ -111,10 +116,10 @@
   <button class="btn sm" data-actie="auto.nu">nu</button>
 </header>
 <div class="pl-melding"><span class="pl-melding-tekst"></span><span class="pl-ruimte"></span></div>
-<section class="pl-strook"><canvas title="de set: klik = naar die stap"></canvas></section>
+<section class="pl-strook"><canvas title="de set: klik = naar die stap · banden = de secties (kleur = groep), wit = gekozen in/uit"></canvas></section>
 <div class="pl-midden">
   <section class="pl-lijst">
-    <div class="pl-kop"><span></span><span>#</span><span>nummer</span><span>toon</span><span>bpm</span><span>begin</span><span>duur</span><span>overgang ernaartoe</span><span>waarom</span><span>door</span><span></span></div>
+    <div class="pl-kop"><span></span><span>#</span><span>nummer</span><span>toon</span><span>bpm</span><span title="begin in het nummer · in: begin op een sectie">begin · in</span><span title="hoe lang · uit: de overgang begint op een sectie">duur · uit</span><span>overgang ernaartoe</span><span>waarom</span><span>door</span><span></span></div>
     <div class="pl-rijen"></div>
   </section>
   <aside class="pl-zij">
@@ -124,7 +129,7 @@
     <div class="pl-uitleg"><h3 style="padding:0 0 6px">UITLEG VAN DIT PLAN</h3><textarea spellcheck="false" placeholder="waar gaat deze set over?"></textarea></div>
     <div class="pl-hulp">
       ↑ ↓ kiezen · alt+↑ ↓ verplaatsen · slepen aan ⋮⋮ · Del weg<br>
-      begin en duur: m:ss, leeg = de app kiest · overgang: wat je wilt; "wordt" is wat de app doet (de bewakers gaan voor)<br>
+      begin en duur: m:ss, leeg = de app kiest · in/uit: een sectie (alleen als het nummer een sectiekaart heeft): begin daar, en begin daar de overgang naar de volgende · overgang: wat je wilt; "wordt" is wat de app doet (de bewakers gaan voor)<br>
       ctrl+z / ctrl+shift+z · ctrl+s opslaan
     </div>
   </aside>

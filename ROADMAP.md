@@ -63,21 +63,19 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 14. ~~Toonsoort per nummer~~ — gedaan 25 sep: server, weergave van wat je HOORT,
     met de hand corrigeren, tweede kandidaat; geen APC-knoppen (T6).
     `docs/TOONSOORT.md` §13.
-15. Keylock en toon verschuiven (`docs/KEYLOCK.md`, 2,5–4 sessies):
-    - Signalsmith in `stream-lezer.js` (optie A), na A3 en I1–I3;
-    - een sprong duurt ~95 ms (K3), transponeren mag ook zonder keylock (K8);
-    - APC: Clay 25 sep, keylock krijgt later Bank (I4).
+15. ~~Keylock en toon verschuiven~~ — gedaan 5 okt (`docs/KEYLOCK.md` §9): Signalsmith
+    in `stream-lezer.js` (optie A), een sprong ~98 ms en exact (K3), toon ook zonder
+    keylock (K8); APC Shift + Tap / Shift + Nudge (I4, niet op het apparaat nagelopen).
 16. ~~Spoor C, DJ-functies~~ — gedaan 25 sep: beatjump, loop in/out/reloop,
     quantize, starten op de maat, EQ-kill, rem, hysterese op de maatgever.
     ~~APC-plekken: voorstel A~~ — gebouwd 25 sep (`docs/APC40.md`): grid-modus
     klank (kill/rem/op de maat per kolom), Bank ◀ ▶ beatjump, Pan/Sends/User
     loop, Lock quantize, Stop All rem; 374 regels, `eerder` voor oude kopieën.
     Nog door Clay op het apparaat te proberen (kleuren).
-17. Stems, kiesbaar per nummer (H2):
-    - standaard twee, vier op verzoek;
-    - splitsen bij de ingest;
-    - stem-fader vóór de EQ;
-    - eventueel op de Omarchy-machine (H3).
+17. ~~Stems, kiesbaar per nummer (H2)~~ — gebouwd 3 okt (`docs/STEMS.md`), in drie
+    parallelle sporen: Demucs bij de ingest (standaard twee, vier op verzoek, of met
+    de knop in de library), stem-niveau en kill vóór de EQ, de STEMS-rij. Nog open:
+    H3 (splitsen op de Omarchy-machine) en VRAGEN N1–N4 (o.a. een plek op de APC).
 18. ~~Video mengen in het losse venster~~ — gedaan 25 sep: het losse venster mengt
     zelf (`docs/BEAMER.md`), met inloop: tot zijn video's in de pas lopen toont
     het het beeld van het hoofdvenster; seekduur klopt onder belasting.
@@ -98,17 +96,36 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     maat-anker per stuk; verfijnen na "tel 1 hier" gemeten en NIET gebouwd; elk
     stuk moet op zijn grid passen (splitsen of onzeker, `docs/BEATGRID.md` punt 4;
     bestaande grids pas na ↻).
-25. Koptelefoon-cue (F1): eerst hardware.
+25. ~~Koptelefoon-cue (F1)~~: gebouwd 5 okt als STUDIO S1 (27), `docs/STUDIO.md` §3. Nog op de Mac proberen.
 26. Klein: PALETTE_HEX 60 → 128, RF64 afspelen in de browser testen.
+27. STUDIO (5 okt, Clay: "grow Varve DJ"): VARVE groeit uit tot een muziekprogramma met stems als
+    kanalen, effecten overal, instrumenten en patronen, vier controllers (`docs/STUDIO.md`).
+    S0 veiligstellen (stems PR #3, uit iCloud) · S1 koptelefoon (gebouwd) · S2 stems als kanalen,
+    master-insert, echte limiter, effecten van de filter app (gebouwd 5 okt) · S3 spelen: instrumenten
+    op een track, Poly/FM/Schaal/Drums, noten van een keyboard, Xboard49 en Maschine MK2 in de hub
+    en de Varve-kant ervan (gebouwd 5 okt) · S4 programmeren (patronen + Maschine-stapmodus,
+    gebouwd 5 okt) · S5 later. Starten: `npm start -- studio` in AV-app-hub. Alles op `studio/integratie`, niets op de hardware geprobeerd.
+28. SECTIES (6 okt, Clay: "nummers bespelen precies zoals ik wil"): het nummer in secties (intro,
+    opbouw, drop, break, outro) die je op de maat lanceert en loopt; grid-modus SECTIES op Shift +
+    scene 1, de strook boven de golfvorm (`docs/SECTIES.md`). Gebouwd op `studio/secties` (van
+    `studio/integratie`), gemeten op synthetisch materiaal; nog proberen (speellijst, VRAGEN SE).
+    VERWEVEN (6–7 okt, `docs/SECTIES.md` §7, alles op `studio/integratie`): toetsenbord, sampler,
+    planvenster, handelingenlog en auto-DJ; daarbij vormen/video-puls, Controlekamer, Maschine (SCENE) en
+    de sectie in de globale laag van de hub (AV-app-hub PROTOCOL §18). Proberen: de speellijstblokken
+    van §7, dan VRAGEN blok SV.
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
-2. 15 keylock (na A3 en I1–I3).
-3. 17 stems (H3 nog open).
+2. ~~15 keylock~~ (gebouwd 5 okt; nog I4 op het apparaat).
+3. ~~17 stems~~ (gebouwd 3 okt; nog H3 en VRAGEN N).
 4. AV-kern 6–11 (7 alleen nog het overnemen in AV-kern).
 5. 23 rest (vormbus na 8, routes per nummer, beeldscènes).
-6. 25 koptelefoon-cue (eerst hardware).
+6. ~~25 koptelefoon-cue~~ (gebouwd 5 okt, STUDIO S1; proberen met de Scarlett en de Mac).
 7. 26 PALETTE_HEX en RF64.
+8. 27 STUDIO: S1–S4 gebouwd (5 okt), met Xboard/Maschine via de hub. Eerst proberen
+   (speellijst van de Controlekamer), dan VRAGEN blok S.
+9. 28 SECTIES: gebouwd en verweven, alles in `studio/integratie` (6–7 okt). Server en hub herstarten,
+   dan proberen (speellijst: blok Secties en de blokken van SECTIES §7), dan VRAGEN SE en SV.
 
 Aanname: publicatie 1 van AV-kern (25 okt) blijft staan. Komt die datum in de
 knel door 15 en 17, dan gaat AV-kern voor; dat is de vraag van H5.
@@ -118,7 +135,7 @@ knel door 15 en 17, dan gaat AV-kern voor; dat is de vraag van H5.
 | 1 | **klaar** | Audio-engine, 2 decks, EQ/filter/xfader, waveform, toetsenbord |
 | 2 | **klaar** | MIDI-laag, MIDI-learn, APC40 mkII-mapping, LED-feedback; eigen mapping als verschil met de standaard (25 sep) |
 | 0 | **klaar** | Ingest: yt-dlp + ffmpeg + library; sinds 25 sep een wachtrij met voortgang en annuleren, en een library voorbij 200 nummers met sorteren en hotcues per nummer |
-| 3 | **bijna klaar** | Beatgrid als tempokaart (tweede kans, maat-anker), BPM (tap-hybride), sync naar de maatgever (hysterese), beat-loops, beatjump en quantize draaien; toonsoort per nummer gebouwd (25 sep, `docs/TOONSOORT.md` §13). Open: keylock, ontworpen en gemeten (`docs/KEYLOCK.md`), wacht op de luistertest A3 (ROADMAP 15) |
+| 3 | **bijna klaar** | Beatgrid als tempokaart (tweede kans, maat-anker), BPM (tap-hybride), sync naar de maatgever (hysterese), beat-loops, beatjump en quantize draaien; toonsoort per nummer gebouwd (25 sep, `docs/TOONSOORT.md` §13). Keylock en toon verschuiven gebouwd (5 okt, `docs/KEYLOCK.md` §9) |
 | 4 | **klaar** | Video volgt audio per track, WebGL-mix op fader × crossfader, vier mengvormen, zes effecten en een puls op de tel, alles op de action-bus en op het APC-grid. Het losse venster mengt zelf (25 sep): de beamer loopt door met het hoofdtabblad naar achteren (`docs/BEAMER.md`). Vormlagen 16:9 bovenop (`?vormen=1`) |
 | 5 | **begonnen** | FX-racks per link met zes effecten en een rack-editor op het gehoor; acht tracks (het scherm spiegelt de APC); streamen vanaf schijf, audiopad zonder afval (25 sep); opname (WAV, of WAV + 720p-video) met handelingenlog en terugspelen (25 sep); sends naar echo en galm; sampler met acht pads; DJ-functies (25 sep: beatjump, loop in/out, quantize, starten op de maat, EQ-kill, rem); APC-indeling in mode 0x42 (`docs/APC40.md`). Nog: testen op het apparaat en in Clay's Chrome, de APC-plekken van voorstel A, de rest van ronde 3 (`docs/VERBETERINGEN.md`) |
 

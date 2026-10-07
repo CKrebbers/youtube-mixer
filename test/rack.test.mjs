@@ -126,7 +126,32 @@ ok('en staat uit', toekomst.rack.chain[0].bypass === true);
 ok('zijn parameters blijven bewaard', toekomst.rack.chain[0].params.grootte === 0.7);
 const terug = R.schrijfRack(toekomst.rack);
 ok('en komen er ongeschonden weer uit', terug.chain[0].type === 'spectral.freeze' && terug.chain[0].params.grootte === 0.7);
-ok('de interne markering lekt niet naar het bestand', !('onbekend' in terug.chain[0]));
+ok('de interne markering lekt niet naar het bestand', !('onbekend' in terug.chain[0]) && !('_bypass' in terug.chain[0]));
+
+// Een oudere versie die een nieuw effect (chorus, flanger, … uit fx-meer.js)
+// niet kent, zet hem uit, maar bewaart zijn eigen aan/uit zoals het was. Tot
+// 5 okt schreef hij `bypass: true` terug: na één keer bewaren in een oude
+// versie stond het effect ook in de nieuwe voorgoed uit.
+{
+  const oud = (t) => ['delay', 'filter', 'crush', 'gate', 'phaser', 'ringmod', 'reverb'].includes(t);
+  const nieuw = {
+    schema: 1, name: 'nieuw',
+    chain: [{ slot: 'a', type: 'chorus', params: { meng: 0.4 } }, { slot: 'b', type: 'flanger', bypass: false, params: {} },
+      { slot: 'c', type: 'tremolo', bypass: true, params: { diepte: 0.9 } }, { slot: 'd', type: 'delay', params: {} }],
+    macros: [{ place: 1, links: [{ target: 'a.meng', from: 0, to: 1 }] }],
+  };
+  const inOud = R.leesRack(JSON.parse(JSON.stringify(nieuw)), { bekendType: oud });
+  ok('oude versie: de nieuwe effecten staan uit, de delay niet',
+    inOud.rack.chain.slice(0, 3).every((n) => n.onbekend && n.bypass === true) && inOud.rack.chain[3].bypass === false);
+  // Bewaren, en in de oude versie nog eens openen en bewaren (de editor doet dat).
+  const tweeKeer = R.schrijfRack(R.leesRack(R.schrijfRack(inOud.rack), { bekendType: oud }).rack);
+  ok('… en schrijft ze terug zoals ze binnenkwamen (geen bypass, false, true), ook na twee keer',
+    !('bypass' in tweeKeer.chain[0]) && tweeKeer.chain[1].bypass === false && tweeKeer.chain[2].bypass === true
+    && tweeKeer.chain[0].params.meng === 0.4 && tweeKeer.chain[2].params.diepte === 0.9 && tweeKeer.macros[0].links[0].target === 'a.meng');
+  const weerNieuw = R.leesRack(tweeKeer, { bekendType: () => true });
+  ok('… zodat de nieuwe versie ze weer aan heeft (en tremolo bewust uit)',
+    weerNieuw.fouten.length === 0 && weerNieuw.rack.chain.map((n) => n.bypass).join() === 'false,false,true,false');
+}
 
 // ---- rondje: schrijven en opnieuw lezen ------------------------------------
 

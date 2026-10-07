@@ -1,23 +1,29 @@
 import { createServer } from 'node:http';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { stat, rm } from 'node:fs/promises';
 import { join, extname, resolve, relative, isAbsolute, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
-import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, stappenVoor, YTDLP_GETEST_OP } from './ingest.js';
+import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, stappenVoor, YTDLP_GETEST_OP, GEANNULEERD } from './ingest.js';
 import { bekijkLink, ontsmetNaam, BESTAND_EXT } from './links.js';
 import { Wachtrij, isOpen } from './wachtrij.js';
 import {
-  Library, normaliseerGrid, normaliseerToon, moetAnalyse, moetToonAnalyse,
+  Library, normaliseerGrid, normaliseerToon, moetAnalyse, moetToonAnalyse, autoGridWeigert,
   SORTERING, isSortering, MAX_PER_PAGINA, MAX_HOTCUES,
 } from './library.js';
 import { ZEKER_VANAF } from './analyze.js';
-import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon } from './analyze.js';
+import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon, maakSecties } from './analyze.js';
 import { toonSamenvatting } from './toon.js';
+import { sectieSamenvatting, SECTIE_VERSIE } from './secties.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
+import { Patronen, NAAM as SETNAAM } from './patronen.js';
 import { Proef } from './proef.js';
+import { Splitter, StemsRij, maakStems, wisStemsBestanden, isAantal, isStemsKeuze, STEMS_STANDAARD } from './stems.js';
+import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, TELLEN_BESTAND, TELLEN_VERSIE } from './tellen.js';
+import { gridUitTellen, vergelijk, meetGrid, VERSIE as KAART_VERSIE } from '../src/engine/tellen.js';
+import { Beatgrid } from '../src/engine/beatgrid.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
 
 /**
@@ -42,6 +48,8 @@ const PLANNEN = process.env.VARVE_PLANNEN || join(WORTEL, 'plannen');
 // De speellijst van de Controlekamer (proef/sessie.json, docs/CONTROLEKAMER.md).
 const PROEF = process.env.VARVE_PROEF || join(WORTEL, 'proef');
 const plannen = new Plannen(PLANNEN);
+/** Patronen per set (docs/PATRONEN.md). Eigen map voor de tests: VARVE_PATRONEN. */
+const patronen = new Patronen(process.env.VARVE_PATRONEN || join(WORTEL, 'patronen'));
 const proef = new Proef(PROEF);
 
 /**
@@ -76,8 +84,38 @@ const wachtrij = new Wachtrij();
  * ook (in een ander tabblad) weggeklikt zijn.
  */
 const SERVER_RUN = randomUUID();
+/*
+ * Stems (docs/STEMS.md): een eigen rij naast de ingest, ook één tegelijk. De
+ * ingest-rij wacht er nooit op: een nummer is speelbaar zodra audio.wav er
+ * staat, de stems komen erna.
+ */
 // Instelbaar voor de tests: een eigen database en opnamemap, niet de jouwe.
 const DB = process.env.VARVE_DB || join(WORTEL, 'media', 'library.db');
+const splitter = new Splitter();
+// De tellen (Beat This!) en de stems (Demucs) gebruiken allebei de GPU: om de beurt (server/tellen.js).
+const gpu = new GpuSlot();
+const tellenzoeker = new Tellenzoeker();
+/*
+ * De stems-rij overleeft een herstart (5 okt: een uur Demucs-werk in de rij
+ * ging weg bij elke herstart). Wat er open staat gaat bij elke verandering
+ * naar stems-rij.json naast de library; bij het opstarten komt het terug
+ * (herstelStemsRij). Tijdens het afsluiten niet: dan wordt alles geannuleerd,
+ * en dat is geen keuze van Clay.
+ */
+const STEMS_RIJ = join(dirname(DB), 'stems-rij.json');
+let stemsRijBewaren = true;
+let stemsRijGeschreven = null;
+function bewaarStemsRij(lijst) {
+  if (!stemsRijBewaren) return;
+  const tekst = JSON.stringify({ versie: 1, opdrachten: lijst }, null, 1);
+  if (tekst === stemsRijGeschreven) return;
+  try {
+    writeFileSync(`${STEMS_RIJ}.tmp`, tekst);
+    renameSync(`${STEMS_RIJ}.tmp`, STEMS_RIJ);
+    stemsRijGeschreven = tekst;
+  } catch (err) { console.warn(`[stems] de rij niet bewaard: ${err.message}`); }
+}
+const stemsRij = new StemsRij({ bijWijziging: bewaarStemsRij });
 const lib = new Library(DB);
 
 /*
@@ -177,6 +215,13 @@ function bewaarInLibrary(r) {
   if (r.onset) track.onset = { ...r.onset, bestand: alsPad(r.onset.bestand) };
   try {
     lib.bewaarTrack(track);
+    // Nieuwe audio.wav = oude stems passen niet meer (andere frames, ander
+    // geluid). De rij hier, de bestanden in stemsNaIngest.
+    lib.bewaarStems(track.id, null);
+    // Nieuwe audio: automatische secties horen bij de oude (bij het laden komen ze opnieuw).
+    sectiesGeneratie.set(track.id, (sectiesGeneratie.get(track.id) ?? 0) + 1);
+    sectiesBezig.delete(track.id);
+    if (lib.secties(track.id)?.bron === 'auto') lib.bewaarSecties(track.id, null);
     if (track.peaks) lib.bewaarPeaks(track.id, track.peaks);
     // De ingest rekende de envelope al uit; zonder dit deed de eerste tap
     // het hele werk nog een keer.
@@ -202,6 +247,208 @@ function bewaarInLibrary(r) {
 }
 
 /**
+ * Een nummer de stems-rij in (POST /api/stems, en na een ingest). Geeft
+ * { code, antwoord } zoals docs/STEMS.md het zegt:
+ * - 404: geen nummer, of zijn audio staat niet op schijf;
+ * - 200 + dubbel: het staat al in de rij (die opdracht, ook met een ander aantal);
+ * - 200 + al: het heeft al stems met dit aantal (tenzij `opnieuw`);
+ * - 503: de splitter is er niet (met de reden);
+ * - 202: nieuw in de rij.
+ * `hercontrole`: was de splitter er niet, kijk dan nog eens (de route; na een
+ * ingest niet, dat zou elke ingest een paar seconden Python kosten).
+ */
+async function nieuweStems(trackId, aantal, { opnieuw = false, hercontrole = false, vooraan = false } = {}) {
+  const track = await metAudio(typeof trackId === 'string' && /^[\w-]{1,64}$/.test(trackId) ? lib.track(trackId) : null);
+  if (!track) return { code: 404, antwoord: { fout: 'onbekend nummer, of zijn audio staat niet op schijf' } };
+  const loopt = stemsRij.zoek(track.id);
+  if (loopt) {
+    if (vooraan) stemsRij.naarVoren(loopt.id);
+    return { code: 200, antwoord: { opdracht: loopt, dubbel: true } };
+  }
+  if (!opnieuw && track.stems?.aantal === aantal) return { code: 200, antwoord: { al: true, stems: track.stems } };
+  const s = await splitter.controleer({ hercontrole });
+  if (!s.ok) return { code: 503, antwoord: { fout: s.reden, reden: s.reden } };
+  const { opdracht } = zetInStemsRij(track, aantal, { opnieuw, vooraan });
+  return { code: 202, antwoord: { opdracht } };
+}
+
+function zetInStemsRij(track, aantal, { opnieuw = false, vooraan = false } = {}) {
+  return stemsRij.voegToe({
+    track: track.id, titel: track.titel, aantal, opnieuw, duur: track.duur, vooraan,
+    werk: async (onVoortgang, signal) => {
+      const laat = await gpu.pak(signal);
+      if (!laat) return { ok: false, fout: GEANNULEERD, afgebroken: true };
+      try {
+        return await maakStems({ lib, media: MEDIA, splitter, trackId: track.id, aantal,
+          audio: opSchijf(track.audio), onVoortgang, signal });
+      } finally { laat(); }
+    },
+  });
+}
+
+/**
+ * Wat er voor de herstart open stond weer in de rij, in zijn volgorde (wat
+ * liep eerst: het begint opnieuw, een split kan niet verder waar hij stopte).
+ * Vóór de server luistert, zodat de ui bij de eerste peiling ziet dat het er
+ * nog is. Niet via de controle van de splitter (die kost seconden): is
+ * Demucs er niet, dan wordt de opdracht 'fout' met de reden, nooit stil
+ * niets. Een nummer dat weg is, of de stems al heeft: overgeslagen.
+ */
+async function herstelStemsRij() {
+  let d;
+  try { d = JSON.parse(readFileSync(STEMS_RIJ, 'utf8')); } catch (_) { return; }
+  let n = 0;
+  for (const x of Array.isArray(d?.opdrachten) ? d.opdrachten : []) {
+    if (typeof x?.track !== 'string' || !/^[\w-]{1,64}$/.test(x.track) || !isAantal(x.aantal)) continue;
+    const track = await metAudio(lib.track(x.track));
+    if (!track || (!x.opnieuw && track.stems?.aantal === x.aantal)) continue;
+    zetInStemsRij(track, x.aantal, { opnieuw: x.opnieuw === true, vooraan: x.vooraan === true });
+    n++;
+  }
+  if (n) console.log(`[stems] ${n} opdracht${n === 1 ? '' : 'en'} van voor de herstart weer in de rij`);
+}
+
+/**
+ * Na een GESLAAGDE ingest (nieuwe audio.wav): de oude stems weg (de rij in de
+ * library wiste bewaarInLibrary al), een split van de OUDE audio die nog
+ * loopt stoppen, en zo gevraagd het nummer de stems-rij in. Gooit nooit: de
+ * ingest is gelukt, dat mag hier niet alsnog omvallen. Is de splitter er
+ * niet, dan een opdracht met 'fout' en de reden — nooit stil niets.
+ * Wacht niet op de controle van de splitter als die nog loopt (vlak na het
+ * opstarten): de ingest-rij moet door.
+ */
+async function stemsNaIngest(track, aantal) {
+  try {
+    await wisStemsBestanden(MEDIA, track.id);
+    const loopt = stemsRij.zoek(track.id);
+    if (loopt?.status === 'bezig') stemsRij.annuleer(loopt.id);
+    if (!aantal) return;
+    const zetInRij = async () => {
+      const r = await nieuweStems(track.id, aantal);
+      if (r.code === 503) stemsRij.voegFoutToe({ track: track.id, titel: track.titel, aantal, fout: r.antwoord.fout });
+      else if (r.code >= 400) console.warn(`[stems] ${track.titel}: niet in de rij (${r.antwoord.fout})`);
+    };
+    if (splitter.bekend) await zetInRij();
+    else zetInRij().catch((err) => console.error('[stems] na de ingest:', err?.message || err));
+  } catch (err) {
+    console.error('[stems] na de ingest:', err?.message || err);
+  }
+}
+
+// ---- tellen: het grid uit Beat This! (docs/BEATGRID.md §11) ------------------
+
+const ms = (x) => (x == null ? '–' : `${(x * 1000).toFixed(1)} ms`);
+const pct = (x) => (x == null ? '–' : `${Math.round(x * 100)}%`);
+
+/**
+ * Het grid uit de tellen van een nummer (tellen.json moet er zijn): de
+ * tempokaart (gridUitTellen), getoetst aan een tweede mening (de oude
+ * analyse: het grid dat er staat als dat er een van de oude analyse is,
+ * anders nu uitgerekend), en bewaard als het mag (autoGridWeigert: nooit over
+ * een grid op slot of met de hand bewerkt, tenzij `overHand`/`overSlot`, de
+ * knop ↻). Mag het niet, dan meten we het grid dat er staat en zeggen hoe
+ * het op de tellen valt. Geeft { ok, kaart?, bewaard?, grid?, reden?, fout? }.
+ */
+async function pasTellenToe(id, { overHand = false, overSlot = false } = {}) {
+  const track = lib.track(id);
+  if (!track) return { ok: false, fout: 'onbekend nummer' };
+  const t = await leesTellen(MEDIA, id);
+  if (!t) return { ok: false, fout: 'nog geen tellen voor dit nummer' };
+  const kaart = gridUitTellen(t.beats, t.downbeats, { duur: track.duur });
+  // Mag het grid toch niet vervangen worden (met de hand, op slot)? Dan geen
+  // tweede mening uitrekenen (minuten voor een lange mix): alleen meten.
+  const mag = !autoGridWeigert(track.grid, { overHand, overSlot });
+  let ander = null;
+  if (mag && track.grid?.bron === 'auto' && track.grid.methode !== 'tellen') ander = new Beatgrid(track.grid);
+  else if (mag) {
+    const a = await analyseer(track);
+    if (a.ok) ander = new Beatgrid(a.grid);
+  }
+  vergelijk(kaart, t.beats, ander);
+  const b = lib.bewaarAutoGrid(id, kaart, { overHand, overSlot });
+  if (b.bewaard) console.log(`[tellen] ${track.titel}: ${gridSamenvatting(b.grid)}`);
+  else if (track.grid) {
+    const m = meetGrid(new Beatgrid(track.grid), t.beats, t.downbeats).totaal;
+    console.log(`[tellen] ${track.titel}: niet bewaard (${b.reden}); het grid dat er staat: `
+      + `${pct(m.raak)} van de tellen raak, slechtste blok ${ms(m.afwijking)}, "1" ${pct(m.een)}`);
+  }
+  return { ok: true, kaart, bewaard: b.bewaard, grid: b.grid, ...(b.reden ? { reden: b.reden } : {}) };
+}
+
+/*
+ * De tellenrij houdt de GPU vast tot hij leeg is: liet hij hem tussen twee
+ * nummers even los, dan pakte een wachtende split hem, en stonden de
+ * volgende tellen een half uur achter die split (6 okt).
+ */
+let tellenGpu = null;
+const laatTellenGpu = () => { const laat = tellenGpu; tellenGpu = null; laat?.(); };
+
+/** Eén nummer in de tellenrij: Beat This! draaien (om de beurt met de stems), dan het grid. */
+async function maakTellen(id, signal) {
+  const track = lib.track(id);
+  if (!track?.audio) return;
+  if (!tellenGpu) {
+    tellenGpu = await gpu.pak(signal, { voorrang: true });
+    if (!tellenGpu) return;
+  }
+  const t0 = Date.now();
+  const r = await tellenzoeker.zoek({ audio: opSchijf(track.audio), uit: join(MEDIA, id, TELLEN_BESTAND), signal, duur: track.duur });
+  if (!r.ok) {
+    if (!r.afgebroken) console.warn(`[tellen] ${track.titel}: ${r.fout}`);
+    return;
+  }
+  const t = await leesTellen(MEDIA, id);
+  console.log(`[tellen] ${track.titel}: ${t?.beats.length ?? '?'} tellen, ${t?.downbeats.length ?? '?'} downbeats `
+    + `— ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  if (signal.aborted) return;
+  await pasTellenToe(id);
+}
+
+const tellenRij = new TellenRij({ werk: maakTellen, bijLeeg: laatTellenGpu });
+
+/**
+ * Na een geslaagde ingest: de oude tellen weg (nieuwe audio) en het nummer
+ * vooraan in de tellenrij. Gooit nooit. Staat de tellenzoeker niet klaar,
+ * dan zegt de controle bij het opstarten dat al; hier niets dubbel.
+ */
+async function tellenNaIngest(track) {
+  try {
+    tellenRij.annuleer(track.id);
+    await wisTellen(MEDIA, track.id);
+    const z = await tellenzoeker.controleer();
+    if (z.ok) tellenRij.voegToe(track.id, { vooraan: true });
+  } catch (err) {
+    console.error('[tellen] na de ingest:', err?.message || err);
+  }
+}
+
+/** Moet het grid van dit nummer (opnieuw) uit de tellen komen? Leeg, oud, of automatisch van een oudere methode. */
+const wilTellenGrid = (grid) => !grid
+  || (!grid.slot && grid.bron !== 'hand' && (grid.methode !== 'tellen' || (grid.versie ?? 0) < KAART_VERSIE));
+
+/**
+ * Op de achtergrond: elk nummer zonder (actuele) tellen.json de rij in, het
+ * laatst geladen eerst (daar speel je mee). Waar de tellen er al zijn maar
+ * het grid nog van de oude analyse (of een oudere methode) is: alleen het
+ * grid opnieuw, zonder GPU. Met de hand gezette grids en grids op slot
+ * blijven staan; die worden alleen gemeten (pasTellenToe zegt hoe ze vallen).
+ */
+async function tellenOpAchtergrond() {
+  const z = await tellenzoeker.controleer();
+  if (!z.ok) return;
+  const ids = lib.alleIds({ volgorde: 'laatst_geladen' });
+  let rij = 0, grids = 0;
+  for (const id of ids) {
+    const track = lib.track(id);
+    if (!track?.audio) continue;
+    const t = await leesTellen(MEDIA, id);
+    if (!t || t.versie < TELLEN_VERSIE) { tellenRij.voegToe(id); rij++; continue; }
+    if (wilTellenGrid(track.grid)) { await pasTellenToe(id).catch((err) => console.error(`[tellen] ${id}:`, err?.message || err)); grids++; }
+  }
+  if (rij || grids) console.log(`[tellen] ${rij} nummer${rij === 1 ? '' : 's'} in de rij, ${grids} grid${grids === 1 ? '' : 's'} uit bestaande tellen`);
+}
+
+/**
  * Een geplakte link de wachtrij in. Geeft { code, antwoord }:
  * - 400: geen link, of een playlist/kanaal (playlist: true);
  * - 200 + dubbel: hij staat al in de wachtrij (die opdracht);
@@ -209,8 +456,12 @@ function bewaarInLibrary(r) {
  *   het nummer, zodat de browser hem meteen kan laden);
  * - 202: nieuw in de rij.
  * `opnieuw`: toch binnenhalen, ook al staat hij in de library.
+ * `stems`: 0, 2 of 4 — na een geslaagde download de stems-rij in (0 = niet).
+ * Wat al in de library stond (bestond) wordt NIET gesplitst: er is niets
+ * binnengehaald, en een lijst opnieuw plakken zou anders de hele library
+ * door Demucs halen. Splitsen kan daar met POST /api/stems.
  */
-async function nieuweLink(tekst, { opnieuw = false } = {}) {
+async function nieuweLink(tekst, { opnieuw = false, stems = STEMS_STANDAARD } = {}) {
   const b = bekijkLink(tekst);
   if (!b.ok) {
     return { code: 400, antwoord: { url: String(tekst ?? '').trim().slice(0, 500), fout: b.fout, ...(b.playlist ? { playlist: true } : {}) } };
@@ -227,7 +478,11 @@ async function nieuweLink(tekst, { opnieuw = false } = {}) {
       const r = await ingest(b.link, { mediaDir: MEDIA, onStap, signal,
         // Tweede controle, als de id bekend is: een andere link naar hetzelfde nummer.
         bestaat: opnieuw ? null : async (id) => metAudio(lib.track(id)) });
-      if (r.ok && !r.bestond) r.track = bewaarInLibrary(r.track);
+      if (r.ok && !r.bestond) {
+        r.track = bewaarInLibrary(r.track);
+        await tellenNaIngest(r.track);
+        await stemsNaIngest(r.track, stems);
+      }
       return r;
     },
   });
@@ -260,6 +515,10 @@ const UPLOAD_MAX = Number(process.env.VARVE_UPLOAD_MAX) > 0 ? Number(process.env
 async function upload(req, res, url) {
   const naam = ontsmetNaam(url.searchParams.get('naam'));
   if (!naam) return weigerUpload(req, res, 415, { fout: `geen audio- of videobestand — ik neem ${BESTAND_EXT.join(', ')}` });
+  // ?stems=0|2|4 (standaard 2), zoals { stems } bij POST /api/ingest.
+  const stemsQ = url.searchParams.get('stems');
+  const stems = stemsQ === null ? STEMS_STANDAARD : /^[024]$/.test(stemsQ) ? Number(stemsQ) : null;
+  if (stems === null) return weigerUpload(req, res, 400, { fout: 'stems is 0, 2 of 4' });
   const lengte = Number(req.headers['content-length']);
   if (Number.isFinite(lengte) && lengte > UPLOAD_MAX) {
     return weigerUpload(req, res, 413, { fout: `te groot: ${gb(lengte)}, de grens is ${gb(UPLOAD_MAX)}` });
@@ -338,7 +597,11 @@ async function upload(req, res, url) {
         id, map, mediaDir: MEDIA, onStap, signal, heeftVideo: info.video,
         info: { url: `bestand:${id.slice('lokaal-'.length)}:${naam.naam}`, titel, uploader: info.tags.artiest, duur: info.duur },
       });
-      if (r.ok) r.track = bewaarInLibrary(r.track);
+      if (r.ok) {
+        r.track = bewaarInLibrary(r.track);
+        await tellenNaIngest(r.track);
+        await stemsNaIngest(r.track, stems);
+      }
       return r;
     },
     bijAnnuleren: () => rm(map, { recursive: true, force: true }),
@@ -409,6 +672,38 @@ function analyseerToon(track) {
   return toonBezig.get(track.id);
 }
 
+/**
+ * De sectiekaart voor een nummer (docs/SECTIES.md), in een worker, op het
+ * grid en de stems van NU, en meteen bewaard (niet over een kaart met de hand
+ * of op slot). Eén tegelijk per nummer: het laden en de achtergrond die
+ * hetzelfde nummer vragen, krijgen dezelfde uitkomst.
+ * Geeft { ok, secties, bewaard } of { ok: false, fout }.
+ */
+const sectiesBezig = new Map();
+// Nieuwe audio (opnieuw binnenhalen) = een nieuwe generatie: een analyse die
+// nog op de oude audio rekende, bewaart dan niets.
+const sectiesGeneratie = new Map();
+function analyseerSecties(id) {
+  if (!sectiesBezig.has(id)) {
+    const generatie = sectiesGeneratie.get(id) ?? 0;
+    const p = (async () => {
+      const t = lib.track(id);
+      if (!t) return { ok: false, fout: 'onbekend nummer' };
+      const stems = t.stems ? { bestand: opSchijf(t.stems.bestand), namen: t.stems.namen } : null;
+      const t0 = Date.now();
+      const r = await maakSecties(opSchijf(t.audio), t.grid ?? null, stems);
+      if (!r.ok) { console.log(`[secties] ${t.titel}: overgeslagen (${r.fout})`); return r; }
+      if ((sectiesGeneratie.get(id) ?? 0) !== generatie) return { ok: false, fout: 'het nummer is intussen opnieuw binnengehaald' };
+      const b = lib.bewaarAutoSecties(id, r.secties);
+      console.log(`[secties] ${t.titel}: ${b.bewaard ? sectieSamenvatting(b.secties) : `niet bewaard (${b.reden})`}`
+        + ` — ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+      return { ok: true, secties: b.secties, bewaard: b.bewaard };
+    })().finally(() => { if (sectiesBezig.get(id) === p) sectiesBezig.delete(id); });
+    sectiesBezig.set(id, p);
+  }
+  return sectiesBezig.get(id);
+}
+
 /*
  * Onset-pieken per nummer, in het geheugen: ze veranderen alleen als de
  * envelope verandert (opnieuw binnenhalen). Een uur is ~18.000 tijden.
@@ -431,11 +726,15 @@ const onsetCache = new Map();
 async function heranalyseOpAchtergrond() {
   const grids = lib.teAnalyseren();
   const tonen = lib.teToonAnalyseren();
-  const ids = [...grids, ...tonen.filter((id) => !grids.includes(id))];
+  // De secties mogen de rest niet meenemen (bv. een library.db met een andere v9).
+  let secties = [];
+  try { secties = lib.teSectieAnalyseren(); } catch (err) { console.error('[secties] lijst niet te lezen:', err?.message || err); }
+  const ids = [...new Set([...grids, ...tonen, ...secties])];
   if (!ids.length) return;
   const n = (x) => `${x.length} nummer${x.length === 1 ? '' : 's'}`;
   if (grids.length) console.log(`[grid] ${n(grids)} zonder automatisch grid — analyse op de achtergrond, één tegelijk`);
   if (tonen.length) console.log(`[toon] ${n(tonen)} zonder (actuele) toonsoort — analyse op de achtergrond, één tegelijk`);
+  if (secties.length) console.log(`[secties] ${n(secties)} zonder (actuele) secties — op de achtergrond, na grid en toonsoort`);
   // Niet terwijl er iets in de ingest-wachtrij staat (ook wachtende, niet alleen de lopende).
   const geenIngest = async () => {
     while (wachtrij.open) await new Promise((z) => setTimeout(z, 2000));
@@ -467,6 +766,9 @@ async function heranalyseOpAchtergrond() {
           + ` — ${((Date.now() - t0) / 1000).toFixed(1)} s`);
       }
     }
+    // De secties als laatste: ze rekenen op het grid (en de stems) van hierboven.
+    await geenIngest();
+    try { if (lib.moetSecties(id)) await analyseerSecties(id); } catch (err) { console.error('[secties]', err?.message || err); }
   }
   console.log('[analyse] achtergrondanalyse klaar');
 }
@@ -476,7 +778,7 @@ async function heranalyseOpAchtergrond() {
  * projectmap": anders kon /.git/config of /media/library.db gewoon mee.
  */
 const MAG = [/^\/$/, /^\/(index|video|apc|plan|controle)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
-  /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
+  /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin|stems\.wav)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
   /^\/plannen\/[\w-]+\.json$/, /^\/favicon\.ico$/];
 
 /**
@@ -596,7 +898,12 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const pad = url.pathname;
 
-    if (pad === '/api/tooling') return json(res, 200, await controleerTooling());
+    // De splitter erbij: { ok, reden?, python? } (plus apparaat en versies als hij er is).
+    if (pad === '/api/tooling') {
+      const [t, s, z] = await Promise.all([controleerTooling(), splitter.controleer({ hercontrole: true }),
+        tellenzoeker.controleer({ hercontrole: true })]);
+      return json(res, 200, { ...t, stems: s, tellen: z });
+    }
 
     // Alleen JSON: een gewoon formulier of text/plain van een willekeurige
     // website komt zo niet zonder CORS-vraag binnen. Het mediatype zelf moet
@@ -627,16 +934,19 @@ const server = createServer(async (req, res) => {
     if (pad === '/api/ingest' && req.method === 'POST') {
       const body = await leesJson(req);
       const opnieuw = body?.opnieuw === true;
+      // { stems: 0|2|4 }: na een geslaagde ingest de stems-rij in (docs/STEMS.md). Standaard 2.
+      const stems = body?.stems === undefined ? STEMS_STANDAARD : body.stems;
+      if (!isStemsKeuze(stems)) return json(res, 400, { fout: 'stems is 0, 2 of 4' });
       if (Array.isArray(body?.urls)) {
         if (!body.urls.length || body.urls.length > MAX_LINKS) return json(res, 400, { fout: `geef 1 tot ${MAX_LINKS} links` });
         const resultaten = [];
         for (const u of body.urls) {
-          const r = await nieuweLink(u, { opnieuw });
+          const r = await nieuweLink(u, { opnieuw, stems });
           resultaten.push({ code: r.code, ...r.antwoord });
         }
         return json(res, 202, { resultaten });
       }
-      const r = await nieuweLink(body?.url, { opnieuw });
+      const r = await nieuweLink(body?.url, { opnieuw, stems });
       return json(res, r.code, r.antwoord);
     }
 
@@ -656,10 +966,37 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: wachtrij.vergeet(o.id), weg: true });
     }
 
+    // ---- stems (docs/STEMS.md §2) ---------------------------------------
+    // GET: de rij, welke run, en of de splitter er is. POST { track, aantal,
+    // opnieuw? }: zie nieuweStems. DELETE: annuleren, of een afgelopen
+    // opdracht uit de lijst halen — zoals bij de ingest.
+    if (pad === '/api/stems' && req.method === 'GET') {
+      const s = await splitter.controleer();
+      return json(res, 200, { opdrachten: stemsRij.lijst(), server: SERVER_RUN, beschikbaar: s.ok, ...(s.ok ? {} : { reden: s.reden }) });
+    }
+    if (pad === '/api/stems' && req.method === 'POST') {
+      const body = await leesJson(req);
+      if (!body || typeof body !== 'object') return json(res, 400, { fout: 'stuur { track, aantal: 2|4 } als JSON' });
+      if (!isAantal(body.aantal)) return json(res, 400, { fout: 'aantal is 2 (zang en rest) of 4 (drums, bas, overig, zang)' });
+      const r = await nieuweStems(body.track, body.aantal, { opnieuw: body.opnieuw === true, hercontrole: true, vooraan: body.vooraan === true });
+      return json(res, r.code, r.antwoord);
+    }
+    const mStemsOpdracht = /^\/api\/stems\/([\w-]+)$/.exec(pad);
+    if (mStemsOpdracht && req.method === 'DELETE') {
+      const o = stemsRij.opdrachten.get(mStemsOpdracht[1]);
+      if (!o) return json(res, 404, { fout: 'onbekende opdracht' });
+      if (o.status === 'wacht' || o.status === 'bezig') {
+        const r = stemsRij.annuleer(o.id);
+        return json(res, 200, { ok: r.ok, opdracht: r.opdracht });
+      }
+      return json(res, 200, { ok: stemsRij.vergeet(o.id), weg: true });
+    }
+
     // ---- setplannen (docs/PLAN.md) --------------------------------------
     // GET /api/plannen: de lijst. GET /api/plannen/<naam>: { plan, versie, fouten }.
-    // PUT /api/plannen/<naam> { plan, versie }: opslaan als `versie` nog klopt
-    // (null = nieuw bestand), anders 409 met wat er nu staat.
+    // PUT /api/plannen/<naam> { plan, versie, kent? }: opslaan als `versie` nog klopt
+    // (null = nieuw bestand), anders 409 met wat er nu staat. `kent` = de optionele
+    // velden die de schrijver kent (['in', 'uit']); zie plannen.js.
     if (pad === '/api/plannen' && req.method === 'GET') return json(res, 200, { plannen: await plannen.lijst() });
     const mPlan = /^\/api\/plannen\/([^/]+)$/.exec(pad);
     if (mPlan) {
@@ -673,7 +1010,31 @@ const server = createServer(async (req, res) => {
         if (mediatype !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
         const body = await leesJson(req, 600 * 1024);
         if (!body || typeof body !== 'object' || !body.plan) return json(res, 400, { fout: 'stuur { plan, versie }' });
-        const r = await plannen.schrijf(naam, body.plan, typeof body.versie === 'string' ? body.versie : null);
+        const kent = Array.isArray(body.kent) ? body.kent.filter((k) => typeof k === 'string') : [];
+        const r = await plannen.schrijf(naam, body.plan, typeof body.versie === 'string' ? body.versie : null, { kent });
+        return json(res, r.code, r.antwoord);
+      }
+      return json(res, 405, { fout: 'GET of PUT' });
+    }
+
+    // ---- patronen per set (docs/PATRONEN.md) -------------------------------
+    // GET /api/patronen: de lijst. GET /api/patronen/<naam>: { set, versie, fouten }.
+    // PUT /api/patronen/<naam> { set, versie }: opslaan als `versie` nog klopt
+    // (null = nieuw bestand), anders 409 met wat er nu staat. Zoals de setplannen.
+    if (pad === '/api/patronen' && req.method === 'GET') return json(res, 200, { sets: await patronen.lijst() });
+    const mSet = /^\/api\/patronen\/([^/]+)$/.exec(pad);
+    if (mSet) {
+      const naam = mSet[1];
+      if (!SETNAAM.test(naam)) return json(res, 400, { fout: 'een setnaam is letters, cijfers, - en _' });
+      if (req.method === 'GET') {
+        const p = await patronen.lees(naam);
+        return p ? json(res, 200, p) : json(res, 404, { fout: 'geen set met die naam' });
+      }
+      if (req.method === 'PUT') {
+        if (mediatype !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
+        const body = await leesJson(req, 3 * 1024 * 1024);
+        if (!body || typeof body !== 'object' || !body.set || typeof body.set !== 'object') return json(res, 400, { fout: 'stuur { set, versie }' });
+        const r = await patronen.schrijf(naam, body.set, typeof body.versie === 'string' ? body.versie : null);
         return json(res, r.code, r.antwoord);
       }
       return json(res, 405, { fout: 'GET of PUT' });
@@ -684,6 +1045,11 @@ const server = createServer(async (req, res) => {
     // staan, een fout (server/backup.js). Alleen de stand; de kopieën zelf zijn
     // via HTTP nooit te lezen.
     if (pad === '/api/backups' && req.method === 'GET') return json(res, 200, backups.stand());
+    // GET /api/secties: { totaal, zonder, verouderd, versie }: hoeveel nummers (nog)
+    // geen actuele secties hebben (Library.sectieTelling, docs/SECTIES.md §4). De
+    // Controlekamer vraagt het elke 2 s; zonder wijziging in de database is het
+    // een antwoord uit de cache.
+    if (pad === '/api/secties' && req.method === 'GET') return json(res, 200, { ...lib.sectieTelling(), versie: SECTIE_VERSIE });
     // GET /api/proef: { begonnen, items }. PUT /api/proef/<id> { status, notitie }:
     // één punt. POST /api/proef/nieuw: de sessie naar proef/archief/, dan leeg.
     if (pad === '/api/proef' && req.method === 'GET') return json(res, 200, await proef.lees());
@@ -734,6 +1100,9 @@ const server = createServer(async (req, res) => {
         return t ? json(res, 200, { track: t, racks: lib.racks(t.id) }) : json(res, 404, { fout: 'niet in de library' });
       }
       if (req.method === 'DELETE') {
+        // Een split van een nummer dat weggaat heeft geen zin meer.
+        stemsRij.annuleerTrack(mTrack[1]);
+        tellenRij.annuleer(mTrack[1]);
         return json(res, 200, { weg: lib.verwijderTrack(mTrack[1]) });
       }
     }
@@ -764,6 +1133,23 @@ const server = createServer(async (req, res) => {
      * verschillen: een body zonder `toon` (of geen JSON) is 400 in plaats van
      * "wissen", en de body mag groter zijn (512 kB: lange opnames).
      */
+    /*
+     * De secties van een nummer (docs/SECTIES.md): { secties } (null = nog
+     * geen). Met ?maak=1 eerst (opnieuw) berekenen als dat moet (geen kaart,
+     * een ander grid, stems erbij, een nieuwe versie) en dan pas antwoorden:
+     * zo laadt de app ze bij het laden, ook voor een nummer van vóór de secties.
+     */
+    const mSecties = /^\/api\/library\/([\w-]+)\/secties$/.exec(pad);
+    if (mSecties && req.method === 'GET') {
+      const id = mSecties[1];
+      if (!lib.track(id)) return json(res, 404, { fout: 'onbekend nummer' });
+      if (url.searchParams.get('maak') === '1' && lib.moetSecties(id)) {
+        const r = await analyseerSecties(id);
+        if (!r.ok) return json(res, 200, { secties: lib.secties(id), fout: r.fout });
+      }
+      return json(res, 200, { secties: lib.secties(id) });
+    }
+
     const mToon = /^\/api\/library\/([\w-]+)\/toon$/.exec(pad);
     if (mToon && req.method === 'GET') {
       const t = lib.track(mToon[1]);
@@ -823,11 +1209,36 @@ const server = createServer(async (req, res) => {
       const track = lib.track(mAnalyseer[1]);
       if (!track) return json(res, 404, { fout: 'onbekend nummer' });
       const body = await leesJson(req);
+      const overSlot = body?.forceer === true;
+      // Met tellen (Beat This!) het grid daaruit; zonder de oude analyse, en de tellen vooraan in de rij.
+      if (await leesTellen(MEDIA, track.id)) {
+        const t = await pasTellenToe(track.id, { overHand: true, overSlot });
+        if (!t.ok) return json(res, 500, { fout: t.fout });
+        return json(res, 200, { voorstel: t.kaart, bewaard: t.bewaard, grid: t.grid, methode: 'tellen', ...(t.reden ? { reden: t.reden } : {}) });
+      }
+      if (tellenzoeker.bekend?.ok) tellenRij.voegToe(track.id, { vooraan: true });
+      const inRij = tellenRij.bevat(track.id) ? { tellen: 'in de rij' } : {};
       const r = await analyseer(track);
-      if (!r.ok) return json(res, 500, { fout: r.fout });
-      const b = lib.bewaarAutoGrid(track.id, r.grid, { overHand: true, overSlot: body?.forceer === true });
+      if (!r.ok) return json(res, 500, { fout: r.fout, ...inRij });
+      const b = lib.bewaarAutoGrid(track.id, r.grid, { overHand: true, overSlot });
       console.log(`[grid] opnieuw: ${track.titel}: ${b.bewaard ? gridSamenvatting(b.grid) : `niet bewaard (${b.reden})`}`);
-      return json(res, 200, { voorstel: r.grid, bewaard: b.bewaard, grid: b.grid, ...(b.reden ? { reden: b.reden } : {}) });
+      return json(res, 200, { voorstel: r.grid, bewaard: b.bewaard, grid: b.grid, ...inRij, ...(b.reden ? { reden: b.reden } : {}) });
+    }
+
+    /*
+     * De tellen van een nummer (Beat This!): { beats, downbeats } in
+     * tracktijd, gesorteerd; of { beats: null } met waarom niet (nog in de
+     * rij, of de tellenzoeker staat niet klaar). Voor de streepjes in de zoom,
+     * het controleren en de bewaking tijdens het spelen.
+     */
+    const mTellen = /^\/api\/library\/([\w-]+)\/tellen$/.exec(pad);
+    if (mTellen && req.method === 'GET') {
+      const track = lib.track(mTellen[1]);
+      if (!track) return json(res, 404, { fout: 'onbekend nummer' });
+      const t = await leesTellen(MEDIA, track.id);
+      if (t) return json(res, 200, { beats: t.beats, downbeats: t.downbeats, versie: t.versie });
+      const z = tellenzoeker.bekend;
+      return json(res, 200, { beats: null, reden: tellenRij.bevat(track.id) ? 'in de rij' : z && !z.ok ? z.reden : 'nog niet gezocht' });
     }
 
     /*
@@ -1060,8 +1471,30 @@ server.requestTimeout = 60 * 60 * 1000;
 process.on('unhandledRejection', (r) => console.error('[server] losse promise:', r));
 process.on('uncaughtException', (e) => console.error('[server] onafgevangen:', e?.message || e));
 
-// Werkmappen van een ingest die nooit afkwam (server gestopt midden in een
-// download): opruimen. Een goede track staat nooit in zo'n map.
+/*
+ * Stoppen (SIGTERM, SIGINT): een split die loopt eerst netjes laten stoppen.
+ * Ctrl-C in de terminal raakt de hele procesgroep, Demucs ook; maar na
+ * `kill <server>` bleef Demucs, een eigen proces, anders nog een half uur de
+ * GPU gebruiken voor een werkmap die bij de volgende start toch weggaat. Loopt er niets, dan meteen
+ * weg zoals altijd (het signaal opnieuw, met de gewone afloop). Hooguit 5 s
+ * (run() geeft SIGKILL na 3 s); een tweede signaal = meteen.
+ */
+let afsluiten = false;
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    const weg = () => { process.removeAllListeners(sig); process.kill(process.pid, sig); };
+    if (afsluiten || (!stemsRij.open && !tellenRij.open)) return weg();
+    afsluiten = true;
+    stemsRijBewaren = false;   // wat open staat blijft in stems-rij.json voor de volgende start
+    console.log(`[server] ${sig}: de splitter en de tellenzoeker worden eerst gestopt…`);
+    Promise.race([Promise.all([stemsRij.stop(), tellenRij.stop()]), new Promise((z) => setTimeout(z, 5000))]).finally(weg);
+  });
+}
+
+// Werkmappen van een ingest of een split die nooit afkwam (server gestopt
+// midden in een download, .bezig-stems-* van een onderbroken split): opruimen.
+// Een goede track of een goede set stems staat nooit in zo'n map. Alleen
+// binnen MEDIA (VARVE_MEDIA voor een testserver).
 try {
   const { readdir, rm: weg } = await import('node:fs/promises');
   for (const n of await readdir(MEDIA).catch(() => [])) {
@@ -1073,6 +1506,24 @@ const tooling = await controleerTooling();
 if (!tooling.ok) console.warn(`[server] LET OP: ${tooling.ontbreekt.join(', ')} ontbreekt — ingest werkt niet`);
 if (tooling.versieWijkt) console.warn(`[server] yt-dlp is ${tooling.ytdlp}, getest op ${YTDLP_GETEST_OP}`);
 if (tooling.verouderd) console.warn(`[server] yt-dlp is verouderd (nieuwste ${tooling.nieuwsteYtdlp}) — ${tooling.bijwerken}`);
+// De splitter op de achtergrond controleren (Python + torch importeren kost
+// een paar seconden): de server luistert al terwijl dat loopt.
+splitter.controleer().then((s) => {
+  if (s.ok) console.log(`stems: Demucs klaar (${s.python ?? s.commando}, ${s.apparaat ?? '?'})`);
+  else console.warn(`[stems] geen stems: ${s.reden}`);
+});
+
+tellenzoeker.controleer().then((z) => {
+  if (z.ok) console.log(`tellen: Beat This! klaar (${z.python ?? z.commando}, ${z.apparaat ?? '?'})`);
+  else console.warn(`[tellen] geen tellen (het grid komt dan van de oude analyse): ${z.reden}`);
+});
+
+// Bij het opstarten de GPU even dicht: anders pakt de herstelde stems-rij hem
+// vóór de tellen in hun rij staan (die gaan voor, zie GpuSlot). Hooguit een minuut.
+const HER = process.env.VARVE_HERANALYSE;
+if (HER !== 'uit') { gpu.sluit(); setTimeout(() => gpu.open(), 60000).unref?.(); }
+
+await herstelStemsRij().catch((err) => console.error('[stems] de rij van voor de herstart:', err?.message || err));
 
 server.listen(POORT, '127.0.0.1', () => {
   console.log(`VARVE DJ  ·  http://localhost:${POORT}`);
@@ -1083,7 +1534,10 @@ server.listen(POORT, '127.0.0.1', () => {
   backups.start();
   const her = process.env.VARVE_HERANALYSE;
   if (her !== 'uit') {
-    setTimeout(() => heranalyseOpAchtergrond().catch((err) => console.error('[analyse] achtergrond:', err?.message || err)),
-      Number.isFinite(Number(her)) && her !== '' && her !== undefined ? Number(her) : 5000);
+    setTimeout(() => {
+      heranalyseOpAchtergrond().catch((err) => console.error('[analyse] achtergrond:', err?.message || err));
+      tellenOpAchtergrond().catch((err) => console.error('[tellen] achtergrond:', err?.message || err))
+        .finally(() => gpu.open());
+    }, Number.isFinite(Number(her)) && her !== '' && her !== undefined ? Number(her) : 5000);
   }
 });

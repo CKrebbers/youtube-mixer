@@ -59,31 +59,36 @@ in een mapje. Fysieke plaatsing volgens de User Guide. Volledig en actueel op
 (382 regels, versie 3; tot 25 sep 291, tot 2 okt 374). Op 25 september kwamen de
 DJ-functies van ronde 3 erbij, zoals Clay koos ("Voorstel A"): zie hieronder, en de
 tabel "Voorstel A". Op 2 oktober de modus auto (auto-DJ, VRAGEN AU1): zie
-"Modus auto" onderaan.
+"Modus auto" onderaan. Op 5 oktober de modus stems (VRAGEN N1, 480 regels): zie
+"Modus stems" onderaan.
 
 **Per kolom (track 1–8)** — knob: filter (endless) · grid: zie modi · Clip
 Stop: loop aan/uit (shift: loop weg) · Track Select: focus (shift: als tweede
 track, de "vorige focus") · 2×2: nummer = play (shift: op de maat starten), S = sync (shift: tap), A|B =
-crossfaderkant A → B → thru (LED geel = A, oranje = B, uit = thru), ● = cue,
-ALLEEN met shift (rondlopen of per ongeluk cue zette een hoorbare track stil) ·
+crossfaderkant A → B → thru (LED geel = A, oranje = B, uit = thru), ● = koptelefoon
+(PFL, sinds 5 okt: voorbeluisteren vóór de fader, rood = je hoort hem, uit = geen
+koptelefoonuitgang; docs/STUDIO.md §3), shift + ● = cue (alleen met shift: rondlopen
+of per ongeluk cue zette een hoorbare track stil) ·
 fader: volume (soft-takeover). Masterfader, crossfader, Cue Level =
-sampler-volume (shift: puls).
+koptelefoonvolume (shift: koptelefoonmix; Clay 5 okt). Sampler-volume en puls staan
+sindsdien op shift + Cue Level in hun eigen grid-modus (sampler, video).
 
 **Rechts (track met focus)** — device knobs in de STRIP: trim · high · mid ·
 low / echo · galm · fx-mix · fx 1; Clip/Device View (licht op) wisselt naar het
 RACK (fx 1–8). Device ◀ ▶ = rack, On/Off = effect aan/uit (brandt als het
 effect aan staat). Tempo = `track.{focus}.tempo`, lineair over de hele rate,
-0,1% per tik (shift: 0,01%). Nudge ± = bend zolang je drukt, Tap = tap tempo,
+0,1% per tik (shift: 0,01%). Nudge ± = bend zolang je drukt (shift: toon −1 / +1),
+Tap = tap tempo (shift: keylock aan/uit; 5 okt, `docs/KEYLOCK.md`),
 Play = play, Record = opname (shift: stop), Session = samplerlengte (shift:
 opnamesoort), Metronome = crossfadercurve, pijlen ◀ ▶ = focus, ▲ ▼ = grid-modus.
 Bank ◀ ▶ = beatjump terug/vooruit (shift: lengte ½ / ×2, 1–32 tellen) · Pan /
 Sends / User = loop in / loop out / reloop · Lock = quantize aan/uit voor alle
 tracks (brandt als aan; in de grid-modus blijft Lock het grid-slot, want het
 open mapje wint) · Stop All Clips = rem (vinylstop; geen lampje op het apparaat).
-Vrij: Bank (0x67, voor keylock, VRAGEN I4) en Detail View (met `?vormen=1` het
-mapje vorm). **Met `?hub=` is Bank van de AV-app-hub** (de hubtoets: Bank +
-Track Select = focus, Bank + Scene = snapshot) en komt hij nooit bij VARVE aan;
-keylock op Bank botst dan (VRAGEN N2).
+Vrij: Bank (0x67) en Detail View (met `?vormen=1` het mapje vorm). **Met `?hub=` is
+Bank van de AV-app-hub** (de hubtoets: Bank + Track Select = focus, Bank + Scene =
+snapshot) en komt hij nooit bij VARVE aan; daarom zit keylock niet op Bank maar op
+Shift + Tap (VRAGEN I4).
 
 **Ringknoppen:** alle 16 (track knobs en device knobs) in modus `endless`: de
 knop geeft het verschil, de software houdt de stand. Geen overpakken na een
@@ -92,15 +97,18 @@ focus- of mapjewissel.
 **Grid-modi op scene 1–4, klank op Shift + scene 5, auto op Shift + scene 4**
 (kleur fel = open, donker = dicht): hotcues (geel: rij 1–4 hotcue per track, shift = wissen (rood zolang
 shift vastzit), rij 5 loop aan/uit) · loops (cyaan: 1 · 2 · 4 · 8 · 16 tellen) ·
-sampler (violet: rij 1 pads, rij 2 leegmaken, linksonder samplerlengte) · video
+sampler (violet: rij 1 pads, rij 2 leegmaken, rij 3 de sectie die je hoort in die pad
+(hemelsblauw, zie SECTIES.md; de pad start dan op de "1"), linksonder samplerlengte) · video
 (blauw: effect vasthouden, mengvorm, puls-doel; rechts de beeld-noodknoppen: rij 1 pad 7
 flits, pad 8 zwart zolang je drukt, rij 2 pad 7 zwart aan/uit, pad 8 bevriezen) · klank (magenta, per kolom =
 track: rij 1 kill hoog, 2 kill mid, 3 kill laag — vasthouden = weg zolang je
 drukt, shift + pad = vastzetten/losmaken; rij 4 rem; rij 5 op de maat starten) ·
-auto (limoen: de auto-DJ, zie "Modus auto" onderaan).
-Scene 5 = loop weg. ▲ ▼ loopt rond door alle zes (hotcues → loops → sampler →
-video → klank → auto → hotcues). Vasthouden van een modusknop (ook Shift + scene 5
-en Shift + scene 4) vanuit een andere modus = even gluren.
+auto (limoen: de auto-DJ, zie "Modus auto" onderaan) · stems (zeegroen, Shift +
+scene 3: per kolom een stem weg, zie "Modus stems" onderaan) · patronen (oranje, Shift +
+scene 2: clips per track, zie "Modus patronen" onderaan).
+Scene 5 = loop weg. ▲ ▼ loopt rond door alle acht (hotcues → loops → sampler →
+video → klank → auto → stems → patronen → hotcues). Vasthouden van een modusknop (ook
+Shift + scene 5, 4, 3 en 2) vanuit een andere modus = even gluren.
 
 Waarom klank op **Shift + scene 5**: scene 5 is al "loop weg", en dat moet één
 druk blijven (een loop moet je snel kwijt kunnen). Shift + scene 5 was vrij, zit
@@ -154,7 +162,8 @@ Select van de track die de maat geeft knippert omgekeerd.
 | | Pan · Sends · User | loop in · loop out · reloop | — |
 | | Lock | quantize aan/uit (in de grid-modus: grid-slot) | idem |
 | | Stop All Clips | rem | — |
-| | Bank | vrij (keylock, VRAGEN I4) | vrij |
+| | Bank | vrij (met de hub: de hubtoets) | vrij |
+| | Tap · Nudge ± | tap tempo · bend | keylock · toon −1 / +1 (5 okt, VRAGEN I4) |
 
 Eigen mapping: een nieuwe regel in de standaard komt vanzelf binnen (verschil,
 `docs/MAPPING-VERSCHIL.md`). Clay's server had op 25 sep nog zijn VOLLEDIGE kopie
@@ -164,9 +173,7 @@ erbij komen en alleen zijn 4 rack-knoppen (video-effecten) van hem blijven.
 Nagerekend met zijn echte kopie (GET, niets gepost): 374 regels, 4 eigen, 0
 weggehaald, geen nieuwe regel op een van zijn sleutels.
 
-Nog open: koptelefoon-cue (PFL) bestaat niet in VARVE (vraagt een tweede
-audio-uitgang, VRAGEN F1); welke vrije knoppen de drukknoppen (`.hold`, D3)
-worden; `PALETTE_HEX` heeft nog 60 van de 128 paletkleuren.
+Nog open: welke vrije knoppen de drukknoppen (`.hold`, D3) worden; `PALETTE_HEX` heeft nog 60 van de 128 paletkleuren.
 
 **Echofilter:** staat voor de APC nog aan (`echoFilter` in het profiel) tot
 gemeten is dat hij in 0x42 niets terugkaatst.
@@ -230,3 +237,127 @@ voorganger afgezet (anders 8 x "weggehaald"). `test/mapping.test.mjs` rekent het
 
 Niet getest: de echte APC (kleuren limoen naast groen en geel op de pads, of
 Shift + scene 4 lekker ligt), en de auto-DJ zelf op het apparaat.
+
+## Mapje inst (5 oktober 2026, instrumenten, GEBOUWD, niet op het apparaat nagelopen)
+
+Een track kan een instrument dragen in plaats van een nummer (`docs/INSTRUMENTEN.md` §6).
+Heeft de focus-track er een, dan loopt **Clip/Device View** strip → rack → **inst** →
+strip; zonder instrument blijft het strip ↔ rack, precies als vroeger (het mapje is "op
+aanvraag", `OP_AANVRAAG` in lagen.js). In inst: device knobs 1–8 = de acht plekken van het
+instrument (`track.{focus}.inst.knob.1–8`, endless), **Device ◀ ▶** = vorig/volgend
+instrument, **On/Off** = stil (paniek; lampje = er klinkt iets). Gaat het instrument weg
+terwijl inst open staat, dan terug naar de strip. Elf regels erbij in `device.inst`, geen
+enkele bestaande veranderd (voorganger `a067b3f2-397` in `eerder`). Noten spelen kan de APC
+niet: dat doet een keyboard (`src/control/noten.js`).
+
+## Mapje master (5 oktober 2026, STUDIO S2a, GEBOUWD, niet op het apparaat nagelopen)
+
+Effecten op de hele mix (`docs/MASTER.md`): een derde mapje van de device-groep,
+`device.master`, zoals "vorm". **Shift + Clip/Device View** opent het (vasthouden =
+gluren); Clip/Device View zelf gaat daarna terug naar de strip.
+
+| knop | in het mapje master |
+|---|---|
+| device knob 1–7 | master-rack plek 1–7 (`master.fx.knob.1`–`7`) |
+| device knob 8 | master mix (`master.fx.mix`) |
+| shift + device knob 8 | master-rack plek 8 |
+| Device ◀ ▶ | vorig / volgend kant-en-klaar rack (`master.rack.prev/next`) |
+| Device On/Off | master-effect aan/uit (groen = aan) |
+
+Alleen regels ERBIJ (13; `note:0:64#shift` was vrij), niets bestaands veranderd:
+buiten het mapje doen device knobs, Device ◀ ▶ en On/Off wat ze deden, en in het
+mapje blijven Bank (beatjump), Lock (quantize) en de rest gewoon werken.
+`test/mapping.test.mjs` en `test/master.test.mjs` rekenen het na.
+
+Niet getest: de echte APC. Twee keuzes om te proberen: knop 8 = mix (de knop die je
+op de master het meest nodig hebt; geen sjabloon gebruikt plek 8), en dat
+Clip/Device View in het mapje master niet brandt (zijn lampje hoort bij strip/rack).
+
+## Modus stems (5 oktober 2026, VRAGEN N1, GEBOUWD, niet op het apparaat nagelopen)
+
+Stems op de APC zonder muis (`docs/STEMS.md` §5), volgens het advies in N1. Een
+zevende grid-modus, `grid.stems`, in zeegroen. Alleen regels ERBIJ (83): geen
+bestaande regel is veranderd.
+
+| waar | knop | doet | lampje |
+|---|---|---|---|
+| scene-knoppen | Shift + scene 3 | modus stems openen (vasthouden = gluren) | met shift: donker zeegroen = dicht, fel = open |
+| | scene 3 (in stems) | blijft sampler kiezen | fel zeegroen = stems open (`led.lees: layer.grid.stems`) |
+| pijlen | ▲ ▼ | rondlopen, stems komt na auto (achteraan) | — |
+| grid, per kolom = track | rij 1 | zang weg zolang je drukt (`track.N.stem.vocals.hold`); shift = aan/uit (`.kill`) | fel rood = weg, donkerrood = open, uit = geen stems |
+| | rij 2 | rest weg (bij vier: drums + bas + overig) | idem |
+| | rij 3 · 4 · 5 | drums · bas · overig weg (alleen bij vier stems) | idem; uit bij twee |
+
+**Waarom zo.** Zoals de kill in klank: indrukken = weg zolang je drukt, shift + pad =
+vastzetten (een stem die je kwijt wilt houden). Zang en rest bovenaan: die bestaan
+bij twee én vier stems, dus de bovenste twee rijen doen altijd iets. Rood, niet
+zeegroen, op de pads: rood = weg, zoals in klank; de modus zelf herken je aan scene 3.
+Zeegroen (33, donker 34, `zeegroendonker` in het palet erbij) is de enige kleur met
+een donkere tint die nog geen modus was.
+
+**Waarom Shift + scene 3.** Klank is Shift + scene 5, auto Shift + scene 4: Shift +
+scene 3 was vrij (geen eigen regel) en zit ernaast. In de grid-modus is scene 3
+"bpm ½"; net als bij scene 4 een expliciete regel `note:0:84#shift@edit.aan` = bpm ½,
+anders opende shift + scene 3 daar ineens de stems. Achteraan in ▲ ▼ zodat de
+bestaande modi op hun plek blijven (▲ vanuit hotcues is nu stems, ▲ ▲ auto).
+
+**Niet op de APC**: filter, echo, galm en cue per stem (in de rij op het scherm, en
+koppelen werkt). Daar is in de standaard geen plek voor zonder bestaande regels te
+veranderen. Voorstel (vraag voor Clay): een derde mapje onder Clip/Device View
+(strip → rack → stems) voor de focus-track, device knobs 1–4 = filter van zang ·
+rest · drums · bas (bij twee stems alleen 1–2), 5–8 = echo van dezelfde, shift +
+knob = galm.
+
+**Eigen mapping.** Geen van de nieuwe sleutels valt op Clay's verschil
+(cc:0:20–23 in het rack); een oude volledige kopie van 25 sep wordt tegen zijn
+voorganger afgezet (anders 106 × "weggehaald"). `test/mapping.test.mjs` rekent het na.
+
+Niet getest: de echte APC (zeegroen naast cyaan en groen, of Shift + scene 3 lekker
+ligt, rood op 40 pads tegelijk).
+
+## Modus patronen (5 oktober 2026, STUDIO S4, GEBOUWD, niet op het apparaat nagelopen)
+
+Patronen starten als clips (`docs/PATRONEN.md`): de achtste grid-modus, `grid.patronen`, in
+**oranje** (paletindex 9, donker 10). Het spoor koos eerst zeegroen en Shift + scene 3, maar die
+had de modus stems al (samengevoegd 5 okt): daarom oranje en Shift + scene 2.
+
+| waar | knop | doet | lampje |
+|---|---|---|---|
+| scene-knoppen | Shift + scene 2 | modus patronen openen (vasthouden = gluren) | met shift: donker oranje = dicht, fel = open |
+| pijlen | ▲ ▼ | rondlopen, patronen komt na stems (▼ vanuit patronen = hotcues) | — |
+| grid | pad (kolom k, rij r) | plek r van track k: starten op het volgende maatbegin; speelt hij: stoppen op de maat; speelt er een ander op die track: wisselen op de maat; een lege plek: kiezen (met opnemen aan: beginnen en erin opnemen) | uit = geen instrument · donkergrijs = leeg · donker = gevuld · fel = speelt · knippert = wacht op de maat |
+| | shift + pad | hetzelfde **meteen**: starten op de volgende tel, stoppen meteen | idem |
+| scene-knoppen (in patronen) | scene 1–5 | die rij op alle tracks met een instrument; een lege plek in die rij: die track stopt | fel = er speelt iets in die rij, knippert = er wacht iets, donker = gevuld |
+| rechts | Stop All Clips | alle patronen stoppen op de maat (shift: meteen) | (geen LED op het apparaat) |
+
+**Waarom Shift + scene 2.** Scene 1–4 kiezen een modus, scene 5 is loop weg, Shift + scene 5 =
+klank, Shift + scene 4 = auto en Shift + scene 3 = stems. Shift + scene 2 deed hetzelfde als
+zonder shift: vrij. In de
+modus zelf zijn de scene-knoppen RIJEN (zoals scene launch in Ableton), dus daar kies je geen
+modus meer met scene 1–4: weg met ▲ ▼ (één druk ▼ = hotcues), Shift + scene 4 (auto) of
+Shift + scene 5 (klank).
+
+**Wat er bewust NIET verandert.** In de grid-modus (Shift + Metronome) is scene 2 "bpm ×2"; zonder
+eigen regel zou Shift + scene 2 daar patronen openen (een shift-regel gaat voor het open mapje),
+dus een expliciete regel `note:0:83#shift@edit.aan` = bpm ×2, zoals auto dat voor scene 4 en stems
+voor scene 3 deden. De
+kern zit nooit in een mapje: fader, play, filter, Clip Stop (loop), Track Select, de master-knop
+(zwart) en de device knobs doen in de modus patronen wat ze altijd doen. Stop All Clips is buiten
+de modus de rem, zoals sinds voorstel A. 89 regels erbij (40 pads + 40 met shift, 5 scenes, Stop
+All Clips + shift, Shift + scene 2, en die ene in de grid-modus), geen enkele bestaande veranderd
+(voorganger `914391f9-421` in `eerder`).
+
+**Knipperen.** Een plek die op de maat wacht knippert op de tel van de patroonklok: de READ
+wisselt zelf tussen 1 en 0,5 (de `tel`-instelling van een LED leest `track.N.phase`, en die heeft
+een track zonder nummer niet). Het scherm knippert zo vanzelf mee.
+
+Niet getest: de echte APC (oranje naast groen en cyaan op de pads; of Shift + scene 2 lekker
+ligt; of het knipperen op de tel goed te zien is).
+
+## Grid-modus: vastzetten (5 oktober 2026, docs/BEATGRID.md §10, niet op het apparaat nagelopen)
+
+In de grid-modus (Shift + Metronome) is **Shift + scene 1 = vast** (pin: de tel hier hoort
+hier; het tempo klopt dan vanaf "tel 1" of de vorige pin, en vanaf hier begint een nieuw
+stuk). Eén regel erbij (`note:0:82#shift@edit.aan`, was vrij), niets bestaands veranderd.
+Terug (↶) staat bewust niet op de APC: Shift + scene 5 blijft klank, Lock (ook met shift)
+blijft het grid-slot; terug gaat met ↶ op het scherm of Cmd+Z.

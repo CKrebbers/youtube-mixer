@@ -29,9 +29,9 @@ export function strookPixels(strook, duur, w) {
 }
 
 /** De bpm-tekst voor een kolom of de kop: "?" erachter als het grid hier onzeker is. */
-export function bpmTekst(bpm, zeker) {
+export function bpmTekst(bpm, zeker, decimalen = 1) {
   if (!bpm) return '—';
-  return bpm.toFixed(1) + (zeker === false ? '?' : '');
+  return bpm.toFixed(decimalen) + (zeker === false ? '?' : '');
 }
 
 /**

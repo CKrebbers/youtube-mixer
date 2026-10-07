@@ -567,7 +567,9 @@ export class RackEditor {
           <span class="re-badges">${badges}</span>
         </div>`;
       }).join('');
-      return `<div class="re-kaart${n.bypass ? ' uit' : ''}">
+      // Een onbekend effect klinkt nooit (bouwKeten slaat het over), ook als
+      // zijn eigen bypass false is: die bewaart rack.js alleen voor later.
+      return `<div class="re-kaart${n.bypass || !eff ? ' uit' : ''}">
         <div class="re-kaart-kop">
           <span class="re-effect">${esc(this._slotNaam(n.slot))}${eff ? '' : ' <i>(onbekend)</i>'}</span>
           <button class="btn sm" data-doe="aanuit" data-i="${i}" title="${n.bypass ? 'effect aanzetten' : 'effect overslaan'}">${n.bypass ? 'aan' : 'uit'}</button>

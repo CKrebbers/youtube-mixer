@@ -54,8 +54,67 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   git, alleen lezen). Draai met `nice -n 10 node --expose-gc tools/bench/renderblok.mjs`.
   Cijfers: `docs/AUDIOPAD.md` (25 sep: 194 → 57,5 ms/s, 12,7 kB → 0 afval per blok). De
   bewaking dat het afvalvrij blijft zit niet hier maar in `test/renderblok.test.mjs`.
+  Met stems (3 okt): `--stems 2,4` (standaard aan) meet ook 8 decks × 2 en × 4 stems,
+  `--ref-stems` de oude kern ernaast; cijfers in `docs/AUDIOPAD.md` ("Stems").
 
 ## headless/
+- `stems.mjs [--nep] [uitmap]` — de stems van binnenhalen tot horen (eigen server op 8793, nep-yt-dlp,
+  nep-splitter via `maakNepStems`): binnenhalen met stems=2, de kolom, laden, de STEMS-rij, kill
+  per stem met de muis GEMETEN aan de master (zang weg 0,25 · alles weg 0 · terug 1; vier stems:
+  drums weg 0,9 · rest weg 0,4), opnieuw splitsen geweigerd terwijl het speelt, herladen-teken,
+  layout op 1440×790 en 1920×1080, de tegel in de Controlekamer. `--nep` = alleen de ui
+  (/api/stems en de stem-actions nagebootst in de pagina).
+- `rijen.mjs [uitmap] [--label voor|na]` — de rijen onder de mixer (stems, koptelefoon, instrument,
+  patronen, master, auto, klankschaal; eigen server op 8863, debug 9463, geen MIDI): op 1440×790 en
+  1920×1080 met geen, elke rij apart, drie, alle rijen open, en met de videokolom erbij. Per stand:
+  elke fader, knop en knob van de acht kolommen en de hele sampler binnen het scherm, niet weggeknipt
+  en niet bedekt (elementFromPoint), faders ≥ 56 px, de pagina en main scrollen niet, elke open rij
+  helemaal te zien (zo nodig door het rij-gebied te scrollen), en een melding boven de rijen.
+  Schermafdrukken `rijen-<label>-<maat>-<rijen>.png`, cijfers in `rijen-<label>.json`.
+  `VARVE_WORTEL=<map>` draait de app uit een andere map (`git archive` van oude code: de stand vóór).
+- `tekenen.mjs` — hoeveel VARVE op zijn canvassen tekent (eigen server op 8823, geen MIDI): in rust ~0 Mpx/s
+  (zonder de sleutel in waveform.js was het ~29 Mpx/s, en liep Demucs op de helft), een sprong in stilstand
+  tekent zoom en overzicht wel opnieuw; plus de duurste functies van de hoofdthread per toestand.
+- `koptelefoon.mjs` — de koptelefoon (docs/STUDIO.md §3), eigen server op 8799, geen MIDI: de
+  KOPTELEFOON-rij (zonder vier kanalen: "geen koptelefoonuitgang", cue-knoppen uit), en de echte
+  engine op een OfflineAudioContext van VIER kanalen: track 1 op 440 Hz met de fader dicht, track 2
+  op 1000 Hz, per kanaal gemeten (Goertzel). Zaal 1/2 alleen track 2; koptelefoon 3/4 met de cue op
+  track 1 alleen track 1 (−9 dB tegen −156 dB); mix, volume (13,5 dB) en omgewisseld. Raakt de
+  geluidsinstellingen van de Mac niet.
+- `instrument.mjs [uitmap]` — instrumenten op een track (docs/INSTRUMENTEN.md §6), eigen server op 8814
+  (debug 9414; `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`), geen MIDI: de INSTRUMENT-rij (openen, Poly kiezen
+  op de focus-track, knopnamen, kolom en focuskop, een toets met de muis), en de echte Web Audio op een
+  OfflineAudioContext: A4 = 440 Hz ± 2 ct (nuldoorgangen), de standaardklank symmetrisch om 440,
+  noteOff klinkt uit tot stilte, een akkoord van drie op 0,8 rond −14 LUFS (BS.1770, gegate; zegt welke
+  OPHOGING het precies −14 maakt), stemroof zonder tik (tweede afgeleide, gepland én live, met een hard
+  afgekapte stem als controle), en door de echte engine (fader dicht, filterknop). Schermafdruk
+  `instrument-rij.png`. Raakt de geluidsinstellingen van de Mac niet.
+- `drums.mjs` — het drum-instrument (docs/INSTRUMENTEN.md §8) in de echte Web Audio van Chrome:
+  een OfflineAudioContext van twee kanalen, het instrument op de uitgang. Elke pad van de kit klinkt
+  (piek, luidheid per slag), kick < 120 Hz, hat > 5 kHz, choke (open + gesloten − gesloten = de open
+  hat maal een helling), een maat vier-op-de-vloer in LUFS (BS.1770, hier uitgerekend), plannen op de
+  sample, stil() midden in een DECAY-helling (via suspend), een eigen buffer op pad 9. Pagina is
+  /styles.css (de app start niet), geen MIDI, eigen server. Poorten `VARVE_KIJK_POORT` (8816) en
+  `VARVE_KIJK_DEBUG` (9416). Raakt de geluidsinstellingen van de Mac niet.
+- `master.mjs` — de master (docs/MASTER.md), eigen server op 8811 (debug 9411), geen MIDI: de echte
+  engine op een OfflineAudioContext. Pieken tot +6 dB blijven ≤ −1 dBTP (true peak 16× gemeten),
+  stationair onder het plafond 0 dB gain reduction (uitvoer = invoer, 72 samples later), de
+  vertraging = `ctx.graafVertraging`, het insert-rack met delay en galm klinkt, de wissel
+  compressor → worklet midden in een toon zonder sprong; daarna de MASTER-rij in de app (kiezer,
+  onthouden na herladen, het mapje master op het scherm). Raakt de geluidsinstellingen van de Mac niet.
+- `effecten.mjs [--snel]` — de tien effecten uit de filter app (docs/EFFECTEN.md) in de echte Web Audio
+  van Chrome, OfflineAudioContext, geen app en geen MIDI (pagina /styles.css, alleen de modules),
+  Chrome gedempt; server op `VARVE_KIJK_POORT` (standaard 8813), Chrome op `VARVE_KIJK_DEBUG` (9413).
+  Per effect: 20 s met elke knop op 0 en 1 (eindig, niet aanzwellend), bypass bit voor bit, hoorbaar
+  op de standaard, stil na `staart()`, klikvrij (elke knop, een wissel, herankeren), plus toonhoogte,
+  wah, compressor-meng, luidheid en aliasing van de distortion, en de sjablonen. `--snel` = 6 s.
+- `stemkanalen.mjs [--vergelijk <revisie>] [--cpu] [uitmap]` — filter, sends en cue per stem
+  (docs/STEMS.md §5), eigen server op 8812 (`VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`), geen MIDI: een
+  stems.wav met een toon per stem door de echte worklet op een OfflineAudioContext, per toon
+  gemeten (filter van één stem, echo aan de ingang van de bus, fader dicht en dicht glijden, cue op
+  3/4, de groep inst); de STEMS-rij op 1440×900, 1440×790 en 1920×1080. `--vergelijk` = dezelfde
+  scènes op een oude revisie (git archive, zelfde poort na elkaar): bit voor bit. `--cpu` = CPU-tijd
+  van acht tracks × vier stems (met `--vergelijk` om en om met de oude code op één pagina).
 - `plan.mjs` — het planvenster in headless Chromium (server op 8795, eigen VARVE_PLANNEN): de knop
   "plan" opent plan.html, voorspelling, bewerken, ongedaan maken, opslaan (vorige versie bewaard),
   nummer erbij, auto aan over de bus van de mixer, live "speelt nu", een wijziging van buitenaf
@@ -80,6 +139,16 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   zet de master, K1 laat hem staan, K2 zet de video-master, P1 (paniek) maakt het beeld zwart, en een
   tweede hub-tabblad laat het oude "vervangen" melden. requestMIDIAccess is overal een spion die
   weigert: veilig met de APC aangesloten.
+- `speelapparaten.mjs` — de Xboard49 en de Maschine MK2 via de echte hub (`startHub` uit
+  `VARVE_HUB_REPO`, op een vrije poort, nooit 7700): NepSysteem met nep-APC en nep-Xboard,
+  NepHidSysteem met de nep-Maschine uit de hub-tests (echte HID-rapporten). Zonder vlag niets van
+  dit alles geladen; met vlag: het masterwiel zet Poly en Drums, een Xboard-noot en een pad klinken
+  (niveau gemeten), groep B zet de focus, een draaiknop (en SHIFT fijn) draait een instrumentknop,
+  de schuif zet de fader, en lampjes en schermen komen als HID-rapporten aan (schermen bit voor bit
+  gelijk aan `tekenScherm`). Ook de vertraging injecteren → noteOn. Dan de patronen: STEP + pads
+  zetten stappen, PLAY speelt (de lopende stap wit), REC + pad neemt op, PATTERN + pad kiest,
+  RESTART stopt. Eigen VARVE-server (`VARVE_KIJK_POORT`, standaard 8818) met tijdelijke
+  database en `VARVE_PATRONEN`. docs/MASCHINE.md.
 - `noodknoppen.mjs` — zwart, bevriezen, master en flits (A4) pixel voor pixel, in het hoofdvenster én
   in het losse venster (video.html, dat zelf mengt). Geen ingest: een canvas met vier gekleurde kwarten
   als nep-video op track 1 (demotrack eronder, stil). De fade en de flits worden op EXACTE tijden gemeten
@@ -152,6 +221,21 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`, standaard 8792/9338). De app start niet: een kaal document
   van de eigen server importeert `/src/vormen/`. Exit 1 als een systeem gooit.
 
+- Secties verweven (6 okt, docs/SECTIES.md §7). Allemaal met het synthetische nummer, nep-yt-dlp/-stems,
+  een eigen server en tmp-map (ook VARVE_PATRONEN en VARVE_PLANNEN), geen MIDI; poorten via
+  `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`, nooit 8777/7700:
+  - `secties.mjs` (8794/9340) — binnenhalen, laden, kaart, strook, modus SECTIES, pads, sprong, loop;
+  - `sec-toets.mjs` (8907/9507) — shift+W/E/I/O op de maat, de helpkaart, meldingen aan de randen;
+  - `sec-sampler.mjs` (8909/9509) — rij 3: een hele sectie in een pad, start op de "1", grenzen;
+  - `sec-plan.mjs` (8903/9503) — banden in de strook, in/uit kiezen, opslaan, `kent`, het moment van de planner;
+  - `sec-log.mjs` (8905/9505) — opnemen en terugspelen met sectiedrukken, afwijking in ms;
+  - `sec-auto.mjs` (8901/9501) — uit op de outro, in op de intro, stilte op de master;
+  - `sec-vorm.mjs` (8911/9511) — `sectie.nieuw`/`sectie.energie` op de grens, accent op de puls;
+  - `sec-controle.mjs` (8913/9513) — de telling in de servertegel, 404/500/trage server;
+  - `sec-maschine.mjs` (8915/9515, echte hub op 7715 met `opname: false`) — SCENE, pads als HID, scherm bit voor bit.
+  - `sec-hub.mjs` (8921/9521, echte hub op 7721 met `opname: false`; `VARVE_HUB_REPO` met PROTOCOL §18, of een oude hub) —
+    één `sectie.nieuw` per gehoorde grens, energie en label, herverbinden zonder klap, pauze, een korte loop op de "1".
+
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen
 nummers. Ontwerp en uitkomst: `docs/KEYLOCK.md`. Leest alleen `media/<id>/audio.wav` en
@@ -179,6 +263,12 @@ niet in git; met `LUISTER.md` als leeswijzer).
   (GPU via MPS of CPU) en het energie-aandeel per stem. Leest `media/<id>/audio.wav`, schrijft
   fragment + vier stems naar `tools/stems/uit/` (niet in git). Draait in een eigen venv met
   `demucs` (geen dependency van de app). Uitkomst 24 sep: zie docs/plugins of HANDOFF.
+  De splitter van de app zelf staat in `server/stems/splits.py` (docs/STEMS.md).
+- `vergelijk.py` — een split nameten: som van de stems tegen audio.wav (dB), de stukgrenzen
+  tegen een split zonder stukken, de grootste samplestap rond een grens, het energie-aandeel per
+  stem. Draait met de Python van `~/.varve/stems-venv`.
+- `snelheid.py <audio.wav>` — de snelheid van htdemucs op MPS: één minuut, fp32 met overlap 0,25 (wat
+  splits.py doet) tegen fp16 (autocast) en overlap 0,10, met de SDR per bron t.o.v. fp32 (docs/STEMS.md §6).
 
 ## toonsoort/
 Toonsoort (key) meten op Clay's library (docs/TOONSOORT.md). Leest alleen: `media/<id>/audio.wav`

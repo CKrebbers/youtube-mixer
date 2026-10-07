@@ -1,4 +1,4 @@
-# Overdracht — waar we staan (25 september 2026)
+# Overdracht — waar we staan (7 oktober 2026)
 
 Lees in deze volgorde:
 1. `CLAUDE.md`: architectuur, regels, valkuilen. Nieuw sinds 25 sep: transport,
@@ -7,12 +7,191 @@ Lees in deze volgorde:
    mapping als verschil, vormen 16:9, toonsoort.
 2. Dit bestand.
 3. `ROADMAP.md`: bovenaan staat DE TAKENLIJST OP VOLGORDE.
-4. `docs/VRAGEN.md`: open vragen, nieuw is blok J.
+4. `docs/VRAGEN.md`: open vragen, nieuw zijn blok SE en SV (secties), S (studio) en N (stems).
 5. Per onderdeel: `docs/TOONSOORT.md` (§13), `MAPPING-VERSCHIL.md`, `LIBRARY.md`,
    `BEAMER.md`, `HANDELINGENLOG.md`, `AUDIOPAD.md`, `VORMEN-16x9.md`,
    `BEATGRID.md` (restpunten), `APC40.md`.
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
+
+## 6–7 OKT (avond/nacht): SECTIES VERWEVEN (`studio/integratie`)
+
+- **Wat:** de secties zitten nu in het toetsenbord (shift+W/E en shift+I/O), de sampler (rij 3: een hele
+  sectie in een pad, start op de "1"), het planvenster (in/uit per stap, banden in de strook), het
+  handelingenlog (sectiedrukken spelen precies terug) en de auto-DJ (in op intro/sectiegrens, uit op
+  outro/break) — de MOET-punten. Daarbij de KAN-punten: vormbronnen `sectie.energie`/`sectie.nieuw` en een
+  accent op de video-puls, een telling in de Controlekamer, SCENE op de Maschine, en de sectie in de globale
+  laag van de hub (AV-app-hub PROTOCOL.md §18, PR #15). Alles in `docs/SECTIES.md` §7; plan, contract en
+  verantwoording in `TASKS-SECTIES.md` (blok "Verweven").
+- **Waar:** alles samengevoegd in `studio/integratie` en gepusht; per onderdeel een tak `studio/sec-*` (ook
+  gepusht), worktrees `~/Projects/varve-stems/sec-*`. Reservetak van vóór de eerste samenvoeging:
+  `backup/integratie-voor-sec-geheel` (5ef02f6). AV-app-hub: PR #15 gemerged op main (groene CI).
+- **Getest:** `node test/alles.mjs`: 60 bestanden, 6304 checks, alles groen met de hub van main (§18); met de oude hub 6303 en 1 bewust overgeslagen (basis 55 bestanden, 5759 checks). In echte Chrome per
+  onderdeel: `tools/headless/sec-{toets,sampler,plan,log,auto,vorm,controle,maschine,hub}.mjs`, allemaal
+  groen op integratie. NIET getest: op de APC, de Maschine, de beamer, en op echte muziek.
+- **Werkwijze:** per spoor bouwer → reviewer (fouten, geen stijl) → verwerker; elke bevinding met een test
+  die eerst faalde; één spoor tegelijk samengevoegd met de suite en de headless-proeven ertussen.
+- **Gerepareerd onderweg, ook in wat er al was:** een sectiebegin dat de server afrondde viel een maat te
+  laat in; in de laatste maat van een sectie-loop sloeg "volgende" een sectie over; na het rondgaan van een
+  loop toonden APC/Maschine 1–40 ms de vorige sectie; `controle.test` controleerde geen vraagcodes van 3
+  letters; `plan.mjs` en `vorm-maat.mjs` waren rood; headless-proeven met de echte hub namen op in
+  `~/Movies/varve-avonden`.
+- **Eerst doen:** de server herstarten (de live server op 8777 draait van vóór dit werk: `/api/secties`,
+  `kent`, de nieuwe planner); de hub bijwerken (`git pull` in `~/Projects/AV-app-hub`, die staat op een oude
+  main zonder §18) en opnieuw starten.
+- **Proberen:** speellijst. Avond 1: "Secties" (twee punten erbij), "Secties op het toetsenbord", "Een sectie
+  in de sampler", "Secties terugspelen". Avond 2: "Planvenster met secties", "Auto-DJ met secties",
+  "Secties in beeld", "Secties op de Maschine", "Secties naar de hub". Daarna VRAGEN blok SV.
+
+## 6 OKT (middag): SECTIES — NUMMERS BESPELEN (`studio/secties`)
+
+- **Wat:** het nummer in secties (intro, opbouw, drop, break, outro + een letter per groep) die je op
+  de maat lanceert en loopt. Strook boven de golfvorm; APC: Shift + scene 1 = grid-modus SECTIES, 40
+  pads = de secties van de focus-track, shift = als loop. Alles in `docs/SECTIES.md`.
+- **Waar:** tak `studio/secties`, worktree `~/Projects/varve-stems/secties`, van `studio/integratie`
+  (1770922). Inmiddels gepusht en samengevoegd in `studio/integratie` (zie het blok hierboven).
+- **Getest:** `node test/secties.test.mjs` (synthetische nummers met een bekend antwoord, worker,
+  library, deck en actions, de server op een eigen poort): groen. Bestaande tests bijgewerkt waar ze
+  de grid-modi of het aantal mappingregels tellen (mapping, instrumenten, patronen-engine, library):
+  groen. In echte Chrome: `node tools/headless/secties.mjs` (binnenhalen, laden, strook, modus,
+  pads met de sectienamen, sprong, loop): groen. NIET getest: op de APC en op echte muziek.
+- **Proberen:** speellijst, blok "Avond 1 · Secties" (6 punten), daarna VRAGEN blok SE. Server
+  herstarten na het uitchecken (schema v9 migreert vanzelf).
+- **Review (tweede agent):** 7 bevindingen, allemaal verwerkt met een test erbij: de eerste sectie
+  (vóór een opmaat) sprong uit de tel; een onleesbare stems.wav of een nummer < 8 s gaf bij elke laad
+  opnieuw rekenen (`stemsGeprobeerd`, één sectie); de aanloop naar een stuk met een eigen "1";
+  lege maten werden −100 dB; opnieuw binnenhalen tijdens een analyse (generatie); > 26 groepen;
+  de achtergrondlus met try/catch. Checklist: `TASKS-SECTIES.md`.
+- **Let op:** draai geen server van een andere tak met een eigen schema v9 op dezelfde library.db.
+
+## 6 OKT: ALLES PROBEREN IN TWEE AVONDEN (de speellijst)
+
+- **Eerst doen (Clay):** de speellijst in de Controlekamer (`localhost:8777/controle`),
+  van boven naar beneden; per punt ok, fout of `—` en een notitie
+  (`docs/CONTROLEKAMER.md`, "De speellijst").
+  - **Avond 1, mixen** (APC + koptelefoon, zonder hub, ~1 uur): opstarten, koptelefoon
+    (eerst zonder, dan het samengestelde apparaat maken), beatgrid (controle op Loving
+    arms en Ciel, de jungle-mix vóór en na ↻, vastzetten), keylock en toon, stems,
+    master en effecten.
+  - **Avond 2, spelen en programmeren** (met de hub: in AV-app-hub `npm start -- studio`,
+    ~1 uur): FM op de Xboard49 eerst in de koptelefoon, de Maschine, drums, patronen
+    (stappen op de Maschine, een baslijn van de Xboard, starten vanaf de APC, herladen).
+  - De open vragen staan bij hun punt (VRAGEN S3–S22 behalve S12, I4, N1–N3, O1–O2): je antwoord in
+    de notitie. Het werk van vóór 6 okt staat achteraan ("Eerder werk").
+  - Staat de nieuwe lijst er niet, dan serveert de server een map zonder deze versie
+    (`git pull` daar; herstarten hoeft niet).
+- Daarna leest Claude `proef/sessie.json` (in de map van de server): fout + notitie = eerst
+  repareren, de antwoorden gaan naar VRAGEN.
+
+## 6 OKT: DE RIJEN SNIJDEN DE FADERS NIET MEER AF (`studio/rijen`)
+
+- **Fout:** met rijen open (stems, koptelefoon, instrument, patronen, master, auto, klankschaal)
+  scrolde main en vielen op 1440×790 de faders (al bij één rij van 54 px) en de sampler (vanaf
+  drie rijen) van het scherm; op 1920×1080 met alle rijen. **Oplossing:** de rijen staan samen in
+  `#rijen`, dat zelf scrolt; main wordt nooit lager dan zijn inhoud met de faders op 56 px
+  (`min-height:min-content`); op laptopmaat met een rij open alles iets compacter, zodat één rij
+  helemaal past; meldingen 16 px boven het rij-gebied. Past de mixer echt niet (venster lager dan
+  ~760 px), dan scrolt nu de pagina in plaats van main. Controle: `tools/headless/rijen.mjs`.
+  Niet gedaan: de bovenbalk is op 1440 px te breed (1534 px; "? toetsen" valt half en "audio starten"
+  helemaal buiten beeld, en knoppen breken af naar twee regels: de balk is 65 in plaats van 47 px hoog).
+
+## 5 OKT (middag): STUDIO S2 EN S3 GEBOUWD, OP `studio/integratie`
+
+Clay: "headphone level is cue level rotary knob. yes instruments can be mapped on 1 of the 8
+channels. try to do everything you can to make the app work the way it should". Gebouwd in
+parallelle sporen (elk een worktree in `~/Projects/varve-stems/`), samengevoegd op
+`studio/integratie` (gepusht), elk met tests en metingen in headless Chrome:
+- Cue Level = koptelefoonvolume, shift = mix (PR #4, `studio/koptelefoon`).
+- S2: master-insert + limiter (`docs/MASTER.md`), stemkanalen + grid-modus STEMS
+  (`docs/STEMS.md` §5), tien effecten uit de filter app (`docs/EFFECTEN.md`).
+- S3: instrumenten op een track: Poly, FM, Schaal, Drums (`docs/INSTRUMENTEN.md`), noten van
+  een keyboard (`src/control/noten.js`), INSTRUMENT-rij, APC-mapje inst.
+- De hub-koppeling van 3 okt (de patches uit AV-app-hub) als commits (`studio/hub`, erin).
+- AV-app-hub PR #11 (Xboard49 + Maschine MK2, CI groen) gemerged.
+- Twee fouten in de delay hersteld (inloop, achterhaalde wachtende tijd); de cue in de
+  koptelefoon schuift mee met de vooruitblik van de limiter.
+- `node test/alles.mjs` op de integratietak: groen (tijdmetingen onder zware belasting
+  los opnieuw gedraaid: klankschaal-rekentijd en gridauto groen).
+- S4 patronen (`docs/PATRONEN.md`), samengevoegd: grid-modus PATRONEN op Shift + scene 2
+  (oranje), want Shift + scene 3 (zeegroen) was al stems.
+- Xboard49 en Maschine MK2 via de hub in Varve, met de Maschine-stapmodus (`docs/MASCHINE.md`),
+  samengevoegd. AV-app-hub PR #12 (gemerged): `npm start -- studio` start Varve en opent hem
+  met `?hub=`.
+- `node test/alles.mjs` op `studio/integratie`: 51 bestanden, 5359 checks, groen.
+- Daarna (5 okt, tijdens Clay's eerste test): de stems-rij op volgorde (wat je in het
+  paneel vraagt eerst, dan kortste eerst; `docs/STEMS.md` §6), golfvormen tekenen alleen bij
+  een verandering, **S15** (de patronenset zet zijn instrumenten met hun knoppen terug na
+  herladen) en **S7** (de Schaal volgt de cent van de plaat). De server moet na S15 opnieuw
+  starten (hij normaliseert de set met dezelfde code), niet alleen het tabblad.
+- **Keylock en toon verschuiven** (5 okt, na Clay's luistertest "klinkt goed"; `docs/KEYLOCK.md`
+  §9): Signalsmith in de streamworklet; APC Shift + Tap = keylock, Shift + Nudge ± =
+  toon; toetsen V / M en Shift + Z/X; knoppen in de focuskop. Een sprong met keylock
+  duurt ~98 ms en komt exact uit. Getest in Node en in Chrome (offline), niet op het
+  gehoor in een set en niet op de APC.
+- De stems-rij overleeft nu een herstart van de server (`stems-rij.json` naast de library;
+  `docs/STEMS.md` §2): herstarten voor een merge of na de verhuizing kost alleen de split
+  die op dat moment liep (die begint opnieuw).
+- **Starten (Clay, na het mergen en de verhuizing):** in AV-app-hub `cp sets/paden.voorbeeld.json
+  sets/paden.json` (youtube-mixer staat daar al op `~/Projects/Youtube mixer`), dan
+  `npm start -- studio`. Zonder hub werkt Varve zoals altijd (APC rechtstreeks, Xboard ook;
+  de Maschine alleen via de hub).
+- **Eerst doen (Clay):** zie hieronder (PR's, iCloud; het samengestelde apparaat zit nu in
+  avond 1), dan de speellijst in twee avonden (6 okt, hierboven); open vragen: VRAGEN blok S.
+
+## 5 OKT: HET STUDIOPLAN EN DE KOPTELEFOON (docs/STUDIO.md)
+
+Clay: een nieuw soort muziekprogramma (stems mixen, effecten op het geheel en per stem,
+stukken programmeren, synths spelen en programmeren, alles voorbeluisteren), met de APC40,
+LPD8, Maschine MK2 en Xboard49, en hergebruik van wat er al is. Besluit: VARVE groeit
+uit (STUDIO.md §0, ST1–ST5; ROADMAP 27).
+- STEMS: de zes `stems/*`-takken gepusht; de losse fix uit de stems-worktree gecommit
+  (696ac4b); `origin/main` (de cloudsessies van 2 okt) samengevoegd in `stems/integratie`
+  (c0a9930: elf botsingen, overal beide kanten gehouden). PR #3 naar `main` is schoon:
+  42 bestanden, 4165 checks groen.
+- KOPTELEFOON (S1) op de tak `studio/koptelefoon` (worktree `~/Projects/varve-stems/studio`):
+  `src/engine/koptelefoon.js`, ● zonder shift = cue, de KOPTELEFOON-rij, blok Koptelefoon in
+  de speellijst. Gemeten in headless Chrome (`tools/headless/koptelefoon.mjs`: de echte engine
+  op een OfflineAudioContext van vier kanalen). **Niet gehoord** op het samengestelde apparaat.
+- **Eerst doen (Clay):**
+  1. PR #3 mergen, daarna de PR van de koptelefoon.
+  2. De repo uit iCloud (Claude's auto-modus weigerde de verhuizing als onomkeerbaar).
+     Mixer en server dicht, dan:
+     ```
+     [ -L ~/Projects/"Youtube mixer" ] && rm ~/Projects/"Youtube mixer"   # alleen de snelkoppeling
+     mv ~/Desktop/"1. Projects/Youtube mixer" ~/Projects/"Youtube mixer"
+     cd ~/Projects/"Youtube mixer" && git worktree repair ~/Projects/varve-stems/*
+     mkdir -p ~/.claude/projects/-Users-claykrebbers-Projects-Youtube-mixer
+     cp -R ~/.claude/projects/-Users-claykrebbers-Desktop-1--Projects-Youtube-mixer/memory \
+           ~/.claude/projects/-Users-claykrebbers-Projects-Youtube-mixer/
+     ```
+     Daarna de Git-regel in CLAUDE.md ("de repo staat op het Bureaublad (iCloud)") bijwerken.
+  3. Het samengestelde apparaat maken (STUDIO.md §3) en het blok Koptelefoon in de speellijst.
+
+## 3 OKT: STEMS GEBOUWD (docs/STEMS.md)
+
+Clay: "de proefstems waren goed, bouw met meerdere subagenten tegelijk aan de stem
+splitter in varve dj". Gebouwd in drie parallelle sporen (server, engine, ui) op
+een gedeeld contract, elk in een worktree buiten iCloud (`~/Projects/varve-stems/`),
+daarna samengevoegd op `stems/integratie`, nagelopen door een reviewer en een
+end-to-end-controle met de echte Demucs. Op 5 okt gepusht en als PR #3 naar `main`
+(na het samenvoegen met de cloudsessies van 2 okt).
+
+- NIEUW: `server/stems.js`, `server/stems/splits.py`, `src/ui/stems-paneel.js`,
+  `stems-wachtrij.js`, `stems-weergave.js`, `test/stems.test.mjs`,
+  `test/nep-stems.mjs`, `tools/headless/stems.mjs`, `tools/stems/vergelijk.py`,
+  `docs/STEMS.md`, verslagen in `docs/verslagen/2026-10-03/`.
+- GEWIJZIGD: streamkern/worklet/StreamBron (2, 4 of 8 kanalen), deck en
+  kanaalstrip (`stemIn`), actions (`track.N.stem.*`), auto-DJ (`OVERNEEM`),
+  handelingenlog (stem-kills in de beginstand), server (routes, schema v8,
+  ingest met `stems`), library-kolom, ingest-strook, Controlekamer, CLAUDE.md,
+  ROADMAP 17, VRAGEN blok N, AUDIOPAD, LIBRARY, CONTROLEKAMER, tools/README.
+- Python met Demucs staat in `~/.varve/stems-venv` (buiten de repo); het model
+  in `~/.cache/huggingface/hub/`.
+- De server is herstart (nieuwe routes, schema v8 migreert bij de eerste start).
+- **Eerst doen (Clay)**: de mixer herladen; in de library bij een nummer op **2**
+  klikken (of iets nieuws binnenhalen, standaard 2 stems); als de kolom `2` zegt
+  het nummer laden, knop **stems** in de balk, zang weg/terug. Dan VRAGEN N
+  (vooral N1: waar op de APC, en N2: luister naar zang weg).
 
 ## 3 OKT: AV-APP-HUB (cloudsessie, CLAUDE.md AV-APP-HUB, repo AV-app-hub)
 
@@ -29,7 +208,7 @@ Zonder vlag is alles zoals het was (hub.js wordt niet eens geladen).
   leren); twee echte tabbladen in Chrome; het gevoel van K2/K4 en P1 midden in
   een set; een gepauzeerde VARVE langer dan 5 min in een verborgen tabblad (de
   hartslag hangt dan aan de adem van de hub: nagebouwd, niet in Chrome gezien).
-- **Open voor Clay:** VRAGEN N1 (K1 in VARVE?) en N2 (Bank: keylock of hubtoets).
+- **Open voor Clay:** VRAGEN O1 (K1 in VARVE?) en O2 (Bank: keylock of hubtoets).
 
 ## 2 OKT (laat): DE KLEINE VEILIGE PUNTEN GEBOUWD (cloudsessie)
 

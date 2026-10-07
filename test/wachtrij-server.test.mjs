@@ -128,6 +128,17 @@ try {
   const od = await wachtOp(rd.id, afgelopen);
   ok(`de volgende twee lopen gewoon (${ob?.status}, ${od?.status})`, ob?.status === 'klaar' && od?.status === 'klaar' && ob.track?.id === 'generic-nummer-b');
   ok('zonder video (de nep levert geen beeld), dat staat in de tekst', /zonder video/.test(ob?.tekst || ''));
+  // Stems (docs/STEMS.md): deze testserver heeft geen splitter (geen
+  // VARVE_STEMS_CMD of VARVE_STEMS_PY). Twee stems is de standaard bij het
+  // binnenhalen: dan een stems-opdracht met 'fout' en de reden, geen werkmap,
+  // en de ingest zelf gewoon klaar.
+  const stemsRij = await (await fetch(`${B}/api/stems`)).json();
+  ok(`stems: een testserver zonder splitter zegt dat, met de reden ("${stemsRij.reden?.slice(0, 40)}…")`,
+    stemsRij.beschikbaar === false && /testserver/.test(stemsRij.reden) && stemsRij.server === run1);
+  const sb = stemsRij.opdrachten.find((o) => o.track === 'generic-nummer-b');
+  ok('  na de ingest een stems-opdracht met fout en die reden (nooit stil niets)', sb?.status === 'fout' && sb.aantal === 2 && /testserver/.test(sb.fout));
+  const s503 = await fetch(`${B}/api/stems`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track: 'generic-nummer-b', aantal: 2 }) });
+  ok(`  POST /api/stems: 503 met de reden (${s503.status})`, s503.status === 503 && /testserver/.test((await s503.json()).fout));
   const downloads = regels().filter((x) => x.wat === 'download').map((x) => x.url);
   ok(`yt-dlp downloadde in volgorde, de geannuleerde wachtende nooit (${downloads.map((u) => u.split('/').pop()).join(', ')})`,
     downloads.join() === [A, Bl, D].join());

@@ -136,13 +136,21 @@ staan ze meteen op het deck.
 - Een mislukte laad laat de oude track met zijn hotcues staan (zoals al zo
   was); die blijven ook bij het oude nummer horen.
 
+Zo kwam de stems-kolom erbij (3 okt, `docs/STEMS.md`): kolom `stems` tussen grid
+en LUFS, 84 px, niet sorteerbaar. De cel (`stemsCelHtml`, puur) zegt `—`, `2`, `4`,
+`wacht`, `42%` of `fout` en heeft knoppen 2 · 4 · ×. Het paneel werkt bij elke
+peiling van `GET /api/stems` alleen de stems-cellen bij, en niet terwijl je in de
+lijst drukt (een knop die tussen indrukken en loslaten vervangen wordt, krijgt in
+Chrome geen klik).
+
 ## Schema
 
 Eén element achteraan `SCHEMA`: tabel `hotcues`, kolom `titel_sleutel` (gevuld
 bij de migratie met `sorteertitel()`, bijgehouden in `bewaarTrack`), en een
 index per sorteerkolom. Samengevoegd met het toonsoort-spoor (25 sep): v6 =
-`toon_json`, v7 = dit element. `library.test` bewaakt die volgorde; verder
-leunen de tests op `SCHEMA.length`, niet op een vast versienummer.
+`toon_json`, v7 = dit element, v8 = `stems_json` (3 okt, stems). `library.test`
+bewaakt die volgorde; verder leunen de tests op `SCHEMA.length`, niet op een
+vast versienummer.
 
 `sorteertitel` is een SQL-functie die de Library bij het openen registreert
 (`db.function`). Hij zit alleen in de migratie, niet in een index of trigger:

@@ -1,9 +1,13 @@
 import { Emitter, clamp, piek } from '../lib/emitter.js';
 import { Deck } from './deck.js';
-import { createMasterChain, xfaderGains, faderGain } from './audio-graph.js';
+import { createMasterChain, xfaderGains, faderGain, killVersterking, KILL_FADE } from './audio-graph.js';
 import { InsertSlot, startDrempel } from './fx.js';
+import { instrumentDef } from './instrumenten/index.js';
 import { Sampler } from './sampler.js';
 import { Klankschaal } from './klankschaal.js';
+import { Koptelefoon } from './koptelefoon.js';
+import { GridKlik } from './grid-klik.js';
+import { PatroonSpeler, maatVan } from './patronen/speler.js';
 
 /**
  * Acht tracks, één per fader van de APC40 mkII. De engine noemt ze A t/m H;
@@ -95,7 +99,11 @@ export function volgMaatgever(staat, niveaus, nu) {
  * Hij kent decks, een mixer en een klok. Alles daarbuiten praat via actions.js.
  */
 export class Engine extends Emitter {
-  constructor() {
+  /**
+   * @param {{ koptelefoon?: { omgewisseld?: boolean } }} [opties]
+   *   koptelefoon: zie koptelefoon.js (alleen bij het maken; de app bewaart het)
+   */
+  constructor(opties = {}) {
     super();
     /*
      * Vraag expliciet om 48 kHz, de snelheid waarop de ingest levert.
@@ -111,13 +119,38 @@ export class Engine extends Emitter {
     } catch (_) {
       this.ctx = new AudioContext({ latencyHint: 'interactive' });
     }
-    this.master = createMasterChain(this.ctx);
+    // De koptelefoon eerst: hij bepaalt waar de zaal heen gaat (kanaal 1/2 van
+    // vier, of zonder vier kanalen gewoon de uitgang, zoals altijd).
+    this.koptelefoon = new Koptelefoon(this.ctx, opties.koptelefoon);
+    this.master = createMasterChain(this.ctx, this.koptelefoon.zaalIn);
+    this.koptelefoon.hoorZaal(this.master.analyser);
+    // De cue even laat als de zaal: eerst de compressor, dan de limiter-worklet.
+    this.koptelefoon.zetVertraging(this.master.vertraging);
+    this.master.klaar?.then?.(() => this.koptelefoon.zetVertraging(this.master.vertraging));
     this.decks = {};
     this.kant = {};
     for (const id of DECK_IDS) {
       this.decks[id] = new Deck(this.ctx, id);
       this.decks[id].chain.output.connect(this.master.input);
+      // Voorbeluisteren tapt vóór de fader: na trim, EQ, effect en filter.
+      this.koptelefoon.voegToe(id, this.decks[id].chain.lpf);
+      // En per stem (docs/STEMS.md §5): na het stemfilter, één ingang per
+      // track (`A:stems`) die aan staat zolang er een stem van die track in de
+      // koptelefoon staat. Zonder koptelefoonuitgang: geen node erbij.
+      if (this.koptelefoon.beschikbaar) {
+        const d = this.decks[id], sleutel = `${id}:stems`;
+        this.koptelefoon.voegToe(sleutel, d.maakStemCue());
+        d.on('change', () => this.koptelefoon.zetPfl(sleutel, d.stemPflIets));
+      }
       this.kant[id] = STANDAARD_KANT[id] || 'thru';
+    }
+
+    // Instrumenten op een track (docs/INSTRUMENTEN.md §6): deck-id -> { obj, aansluiting }.
+    // Een nummer laden haalt het instrument weg (ST7: een nummer óf een instrument).
+    this._inst = {};
+    this._speel = null;          // de laatste focus-track met een instrument (speeltrack)
+    for (const id of DECK_IDS) {
+      this.decks[id].on('load', () => { if (this._inst[id] && this.decks[id].buffer) this.zetInstrument(id, null); });
     }
 
     // Wie de maat geeft (zie volgMaatgever): bijgehouden, niet elke keer opnieuw gekozen.
@@ -128,13 +161,19 @@ export class Engine extends Emitter {
     this.sends = {};
     // De bussen lopen op de maat van wat je hoort: dezelfde klok als sync en sampler.
     const maatKlok = () => { const d = this.syncMaster(); return d ? d.fxKlok() : null; };
+    // Het insert-rack op de master (master.js) loopt op dezelfde maat.
+    this.master.fx.setKlok(maatKlok);
     for (const [bus, rack] of Object.entries(SEND_RACKS)) {
       const slot = new InsertSlot(this.ctx);
       slot.setKlok(maatKlok);
       slot.setMix(1);                        // helemaal nat
       slot.zetRack(rack);
       slot.out.connect(this.master.input);
-      for (const id of DECK_IDS) this.decks[id][`send${bus}`].connect(slot.in);
+      for (const id of DECK_IDS) {
+        this.decks[id][`send${bus}`].connect(slot.in);
+        // De stem-sends, na de spiegel van de fader (deck.js).
+        this.decks[id].stemSends[bus].fader.connect(slot.in);
+      }
       this.sends[bus] = slot;
     }
 
@@ -152,6 +191,13 @@ export class Engine extends Emitter {
       },
     });
 
+    // Patronen (docs/PATRONEN.md): een sequencer op de maat van de maatgever,
+    // die de instrumenten op de tracks speelt. Gaat een instrument weg, dan
+    // stopt zijn patroon (de engine liet de noten al los).
+    this.patronen = new PatroonSpeler({ ctx: this.ctx, ids: DECK_IDS,
+      instrument: (id) => this.instrumentOp(id), maat: () => maatVan(this.syncMaster()) });
+    this.on('instrument', ({ id, soort }) => { if (!soort) this.patronen.weg(id); });
+
     /*
      * Bussen en sampler horen bij geen enkel deck, dus niemand herankert ze
      * vanzelf. Elke wijziging aan een deck (tempo, grid, play, seek, fader)
@@ -162,6 +208,7 @@ export class Engine extends Emitter {
     const volgMaat = () => {
       this.maatgever();               // eerst bijwerken wie de maat geeft
       for (const s of Object.values(this.sends)) s.heranker();
+      this.master.fx.heranker();
       this.sampler.heranker();
       // De klankschaal stemt mee (tempo, pitch, andere maatgever), ook als je
       // hem wrijft en de rij dicht is. Zonder worklet is er niets te stemmen.
@@ -179,13 +226,146 @@ export class Engine extends Emitter {
 
     this.applyXfader();
     this.master.gain.gain.value = faderGain(this.masterLevel);
+
+    // De controleklik (docs/BEATGRID.md §11): een tik op het grid van één deck,
+    // in de koptelefoon als die er is (met de cue van dat deck aan), anders in de zaal.
+    this.gridKlik = new GridKlik(this.ctx, this.koptelefoon.beschikbaar ? this.koptelefoon.cue : this.master.input);
+    this._controle = null;       // { id, pflWas }
+    for (const id of DECK_IDS) this.decks[id].on('load', () => { if (this._controle?.id === id) this.gridControle(null); });
   }
+
+  /**
+   * Het grid van een deck CONTROLEREN: tikken op elke gridlijn (accent op de
+   * "1") en, met een koptelefoon, de cue van dat deck aan zodat je track en
+   * tik samen hoort. Null = uit; de cue gaat terug naar hoe hij stond. Eén
+   * deck tegelijk.
+   */
+  gridControle(id = null) {
+    if ((this._controle?.id ?? null) === id) return;
+    if (this._controle) {
+      const { id: oud, pflWas } = this._controle;
+      if (!pflWas) this.koptelefoon.zetPfl(oud, false);
+      this.gridKlik.stop();
+      this._controle = null;
+    }
+    if (id && this.decks[id]) {
+      this._controle = { id, pflWas: this.koptelefoon.pflAan(id) };
+      this.koptelefoon.zetPfl(id, true);
+      this.gridKlik.start(this.decks[id]);
+    }
+    this.emit('change');
+  }
+
+  /** Welk deck er gecontroleerd wordt, of null. */
+  get gridControleDeck() { return this._controle?.id ?? null; }
 
   async resume() { if (this.ctx.state !== 'running') await this.ctx.resume(); }
 
   deck(id) { return this.decks[id]; }
   focused() { return this.decks[this.focus]; }
-  setFocus(id) { this.focus = id; this.emit('change'); }
+  setFocus(id) {
+    this.focus = id;
+    if (this._inst[id]) this._speel = id;
+    this.emit('change');
+  }
+
+  // ---- instrumenten (docs/INSTRUMENTEN.md §6) -------------------------------
+
+  /**
+   * Een instrument op track `id` zetten (`soort` uit INSTRUMENTEN), of weghalen
+   * (null). Een track draagt een nummer óf een instrument (ST7): staat er een
+   * nummer (of wordt er een geladen), dan gaat dat eraf (deck.leeg). Het
+   * instrument sluit aan op `chain.input` (trim) via een eigen aansluiting, en
+   * gaat dus door EQ, effect, filter, fader, crossfader, sends en de cue,
+   * net als een nummer.
+   *
+   * Weghalen: de aansluiting gaat klikvrij dicht (killVersterking, na
+   * startDrempel) en pas daarna `vernietig()` en losmaken: nooit bedrading
+   * veranderen terwijl er signaal door loopt.
+   *
+   * @returns {{ ok: boolean, reden?: string }}
+   */
+  zetInstrument(id, soort) {
+    const d = this.decks[id];
+    if (!d) return { ok: false, reden: `track ${id} bestaat niet` };
+    const def = soort == null ? null : instrumentDef(soort);
+    if (soort != null && !def) return { ok: false, reden: `onbekend instrument "${soort}"` };
+    const oud = this._inst[id];
+    if (oud && def && oud.obj.soort === def.soort) return { ok: true };
+    if (!oud && !def) return { ok: true };
+    if (oud) this._haalInstrumentWeg(id);
+    if (def) {
+      if (d.buffer || d.laadt) d.leeg();
+      const aansluiting = this.ctx.createGain();
+      aansluiting.connect(d.chain.input);
+      const obj = def.maak(this.ctx, {
+        uit: aansluiting,
+        // Op de maat en de toon van wat je hoort: dezelfde track als sync en de bussen.
+        klok: () => this.syncMaster(id)?.fxKlok() ?? null,
+        toon: () => this.syncMaster(id)?.toonsoort ?? null,
+      });
+      this._inst[id] = { obj, aansluiting };
+      if (this.focus === id) this._speel = id;
+      let klaar;
+      try { klaar = obj.start?.(); } catch (err) { klaar = Promise.reject(err); }
+      Promise.resolve(klaar).catch((err) => this.emit('melding', { tekst: `track ${nrVan(id)}: ${def.naam} laadt niet (${err?.message ?? err})`, soort: 'fout' }));
+    }
+    this.emit('instrument', { id, soort: def?.soort ?? null });
+    this.emit('change');
+    return { ok: true };
+  }
+
+  _haalInstrumentWeg(id) {
+    const { obj, aansluiting } = this._inst[id];
+    delete this._inst[id];
+    if (this._speel === id) this._speel = null;
+    try { obj.alleUit?.(); } catch (_) {}
+    const nu = this.ctx.currentTime, wacht = startDrempel(this.ctx);
+    killVersterking(aansluiting.gain, 0, nu, wacht);
+    const t = setTimeout(() => {
+      try { obj.vernietig(); } catch (_) {}
+      try { aansluiting.disconnect(); } catch (_) {}
+    }, (wacht + KILL_FADE) * 1000 + 100);
+    t?.unref?.();
+  }
+
+  /** Het instrument op track `id`, of null. */
+  instrumentOp(id) { return this._inst[id]?.obj ?? null; }
+
+  /**
+   * De instrumenten van de patronenset terug (VRAGEN S15, docs/PATRONEN.md
+   * §7.6): op elke track met patronen waarvan de set een instrument onthoudt
+   * en die nu leeg is (geen instrument, geen nummer), met zijn knoppen. Een
+   * track met een nummer houdt dat: daar zegt het scherm alleen voor welk
+   * instrument de patronen zijn. Gebaren (null in de set) blijven op hun
+   * standaard: na het laden klinkt er niets vanzelf.
+   * @returns {string[]} de tracks die hun instrument terugkregen
+   */
+  herstelInstrumenten() {
+    const pt = this.patronen;
+    const terug = [];
+    for (const id of DECK_IDS) {
+      const d = this.decks[id], nr = pt.nr(id), w = pt.set.instrumenten[nr];
+      if (!w || this._inst[id] || d.buffer || d.laadt || !pt.set.tracks[nr].some(Boolean)) continue;
+      const r = this.zetInstrument(id, w.soort);
+      if (!r.ok) { this.emit('melding', { tekst: `track ${nrVan(id)}: instrument van de patronen niet terug (${r.reden})`, soort: 'fout' }); continue; }
+      const inst = this.instrumentOp(id);
+      w.params?.forEach((v, i) => { if (v != null && !inst.params?.[i]?.gebaar) inst.zetParam(i + 1, v); });
+      terug.push(id);
+    }
+    return terug;
+  }
+
+  /**
+   * Waar noten van een toetsenbord heen gaan: de focus-track als die een
+   * instrument heeft, anders de laatste focus-track met een instrument, anders
+   * de eerste track met een instrument. Null als er nergens een is.
+   */
+  speeltrack() {
+    if (this._inst[this.focus]) return this.focus;
+    if (this._speel && this._inst[this._speel]) return this._speel;
+    return DECK_IDS.find((k) => this._inst[k]) ?? null;
+  }
 
   setXfader(norm) { this.xfader = clamp(norm); this.applyXfader(); this.emit('change'); }
   setXfaderCurve(c) { this.xfaderCurve = c; this.applyXfader(); this.emit('change'); }
@@ -516,6 +696,11 @@ export class Engine extends Emitter {
       grid: d.grid ? d.grid.toJSON() : null, gridZeker: d.gridZekerHier, bpm: d.bpm, loopBeats: d.loopBeats ?? null,
       // Toonsoort die je HOORT op de positie (of null): zie deck.toonsoort.
       toon: d.toonsoort,
+      // Secties (docs/SECTIES.md): de stukken van de kaart (dezelfde array zolang de kaart blijft) en welke je hoort.
+      secties: d.sectieKaart ? d.sectieKaart.stukken : null, sectie: d.sectieHier,
+      // Stems (docs/STEMS.md): null, of { namen, niveau: {stem: 0..1}, weg: {stem: bool} }
+      // voor elke stem die deze track heeft (bij vier ook de groep inst).
+      stems: d.stemStand(),
       fx: { effect: d.fx.effectId, naam: d.fx.rackNaam ?? null,
             mix: d.fx.mix, bypass: d.fx.bypass,
             plekken: [1, 2, 3, 4, 5, 6, 7, 8]
@@ -526,6 +711,8 @@ export class Engine extends Emitter {
       hotcues: d.hotcues.slice(), loop: d.loop ? { ...d.loop } : null,
       loopIn: d.loopInPunt, wacht: d.wacht, sprongTellen: d.sprongTellen,
       ui: { ...d.ui }, level: d.level(), kant: this.kant[d.id],
+      // Het instrument op deze track (docs/INSTRUMENTEN.md §6): { soort, naam, klinkt, params } of null.
+      instrument: this._inst[d.id]?.obj.stand() ?? null,
     });
     const decks = {}, fase = {};
     for (const id of DECK_IDS) { decks[id] = deckState(this.decks[id]); fase[id] = this.faseVerschil(id); }
@@ -536,6 +723,16 @@ export class Engine extends Emitter {
       fase, decks,
       // Welke track geeft nu de maat (sync, sampler, video-puls)?
       maat: this.syncMaster()?.id ?? null,
+      // Waar noten van een toetsenbord heen gaan (speeltrack), of null.
+      speel: this.speeltrack(),
+      // De koptelefoon: { beschikbaar, kanalen, omgewisseld, niveau, mix, iets, pfl: {deck: bool} }.
+      koptelefoon: this.koptelefoon.stand(),
+      // Welk deck er met de controleklik gecontroleerd wordt (docs/BEATGRID.md §11), of null.
+      gridControle: this.gridControleDeck,
+      // De master (docs/MASTER.md): het insert-rack zoals `fx` van een track,
+      // en de limiter { soort, gr (dB, ≤ 0), vertraging, plafond, fout }.
+      masterFx: this.master.fxStand(),
+      limiter: this.master.limiterStand(),
     };
   }
 }

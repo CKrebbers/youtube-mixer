@@ -2,7 +2,8 @@ import { read as readAction, trackVanDeck } from '../control/actions.js';
 import { fmtTime } from '../lib/emitter.js';
 import { BIJNA_EINDE } from './spiegel-plan.js';
 import { bpmTekst } from './grid-strook.js';
-import { focusToon } from './toon-weergave.js';
+import { focusToon, verschuivingTekst } from './toon-weergave.js';
+import { oordeelBij, afwijkingBij } from '../engine/tellen.js';
 
 /**
  * De renderloop: één rAF voor de hele UI. De engine wordt alleen uitgelezen,
@@ -25,6 +26,12 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     play: r.querySelector('.play'),
     pitch: r.querySelector('.pitch-val'),
     pitchBereik: r.querySelector('.pitch-bereik'),
+    keylock: r.querySelector('.rek .keylock'),
+    gridModus: r.querySelector('.grid-tools .grid-modus'),
+    gridTerug: r.querySelector('.grid-tools .grid-terug'),
+    gridOordeel: r.querySelector('.grid-oordeel'),
+    gridControle: r.querySelector('.grid-tools .grid-controle'),
+    rekToon: r.querySelector('.rek-toon'),
     hotcues: [...r.querySelectorAll('.hc')],
     loopBtns: [...r.querySelectorAll('.loops .btn:not(.bl)')],
     beatBtns: [...r.querySelectorAll('.loops .btn.bl')],
@@ -113,6 +120,18 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     requestAnimationFrame(frame);
   }
 
+  // De live bewaking (BEATGRID.md §11): hoe ver de laatste gevonden tellen
+  // vóór de speelkop van het grid liggen. Vier keer per seconde is genoeg.
+  const bewaking = {};
+  function liveVan(dk, id, positie) {
+    if (!dk.grid || !dk.tellen || !dk.playing) { bewaking[id] = null; return null; }
+    const nu = performance.now(), b = bewaking[id];
+    if (b && nu - b.t < 250 && b.versie === dk.gridVersie) return b.live;
+    const live = afwijkingBij(dk.grid, dk.tellen.beats, positie);
+    bewaking[id] = { t: nu, versie: dk.gridVersie, live };
+    return live;
+  }
+
   function tekenFrame() {
     const s = engine.snapshot();
     veilig('volgen', () => {
@@ -124,10 +143,11 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     veilig('focus', () => {
       const id = venster.L;
       const d = s.decks[id];
-      views.zoom.draw(d, analysis[id], engine.deck(id).onsets);
+      views.zoom.draw(d, analysis[id], engine.deck(id).onsets, engine.deck(id).tellen);
       views.overview.draw(d, analysis[id]);
 
-      tekst(e.title, d.title || '— leeg —');
+      // Een instrument op de track (docs/INSTRUMENTEN.md §6): zijn naam, geen golfvorm.
+      tekst(e.title, d.instrument ? `♪ ${d.instrument.naam}` : (d.title || '— leeg —'));
       tekst(e.pos, fmtTime(d.position));
       const rest = Math.max(0, d.duration - d.position);
       tekst(e.rem, '-' + fmtTime(rest));
@@ -135,13 +155,32 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       klasse(e.play, 'on', d.playing);
       tekst(e.pitch, ((d.rate - 1) * 100).toFixed(1) + '%');
       tekst(e.pitchBereik, `±${Math.round(engine.deck(id).pitchBereik * 100)}`);
+      // Keylock en toon (docs/KEYLOCK.md): wat er op het deck staat.
+      const dk = engine.deck(id);
+      if (e.keylock) klasse(e.keylock, 'on', dk.keylock);
+      if (e.rekToon) { tekst(e.rekToon, verschuivingTekst(dk.transpositie) || '0'); klasse(e.rekToon, 'on', dk.transpositie !== 0); }
       // bpm: wat je HOORT, dus inclusief pitch.
-      tekst(e.bpm, bpmTekst(d.bpm, d.gridZeker));
+      // Twee decimalen: een encodertik of een pin verandert de bpm met honderdsten.
+      tekst(e.bpm, bpmTekst(d.bpm, d.gridZeker, 2));
+      if (e.gridModus) klasse(e.gridModus, 'on', readAction('layer.edit.toggle') === 1);
+      if (e.gridTerug) klasse(e.gridTerug, 'dood', !engine.deck(id).kanGridTerug);
       klasse(e.bpm, 'leeg', !d.bpm);
       // Onzeker stuk: gedimd met "?", sync en beat-loops weigeren hier.
       klasse(e.bpm, 'onzeker', !!d.bpm && d.gridZeker === false);
       if (d.bpm && d.gridZeker === false) { if (e.bpm.title !== ONZEKER_TITEL) e.bpm.title = ONZEKER_TITEL; }
       else if (e.bpm.title) e.bpm.title = '';
+      // Klopt het grid HIER: gemeten aan de tellen, met de reden; ⚠ als het live wegloopt.
+      if (e.gridOordeel) {
+        const o = dk.grid ? oordeelBij(dk.grid, d.position, dk.gridMeting, liveVan(dk, id, d.position)) : null;
+        const controle = s.gridControle === id;
+        tekst(e.gridOordeel, o ? (controle ? `${o.kort} controle` : o.kort) : '—');
+        for (const soort of ['vast', 'zeker', 'controleer', 'geenpuls', 'wijkt']) klasse(e.gridOordeel, soort, o?.soort === soort);
+        klasse(e.gridOordeel, 'leeg', !o);
+        klasse(e.gridOordeel, 'on', controle);
+        const titel = o ? `${o.uitleg}${dk.tellen ? '' : ' (nog geen gevonden tellen om mee te meten)'}\nklik: ${controle ? 'controle stoppen' : 'controleren — een tik op elke gridlijn, stuk voor stuk'}` : 'geen grid';
+        if (e.gridOordeel.title !== titel) e.gridOordeel.title = titel;
+      }
+      if (e.gridControle) klasse(e.gridControle, 'hidden', s.gridControle !== id);
       // Toonsoort die je HOORT (T3), groot: "4B · As majeur", +1, −32 ct.
       const toon = focusToon(d.loaded ? d.toon : null);
       tekst(e.toonHoofd, toon.hoofd);
@@ -213,6 +252,21 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
     });
     veilig('klankschaal', () => {
       stappen.klankschaal?.();
+    });
+    veilig('stems', () => {
+      stappen.stems?.();
+    });
+    veilig('koptelefoon', () => {
+      stappen.koptelefoon?.();
+    });
+    veilig('instrument', () => {
+      stappen.instrument?.();
+    });
+    veilig('patronen', () => {
+      stappen.patronen?.();
+    });
+    veilig('master-rij', () => {
+      stappen.master?.();
     });
     veilig('opnemen', () => {
       stappen.opnemen();

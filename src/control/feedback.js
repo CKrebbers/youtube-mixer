@@ -58,10 +58,19 @@ const KLEURSCHEMA = [
   // is weg, donkerrood = open (er valt te killen), uit = lege track. Rem:
   // fel oranje = remt, donker = speelt (er valt te remmen), uit = staat stil.
   [/\.kill\.(low|mid|high)(\.hold)?$/, { aan: 'rood', uit: 'rooddonker' }],
+  // Stem weg (modus stems, VRAGEN N1): zoals de EQ-kill in klank, fel rood =
+  // weg, donkerrood = er valt iets weg te drukken, uit = geen stems (read null).
+  // De cue van een stem rood zoals ● (track.N.pfl): aan = in de koptelefoon.
+  [/\.stem\.\w+\.(kill|hold)$/, { aan: 'rood', uit: 'rooddonker' }],
+  [/\.stem\.\w+\.pfl$/, { aan: 'rood', uit: 'donkergrijs' }],
   [/\.brake$/,       { aan: 'oranje', uit: 'oranjedonker' }],
   [/^mixer\./,       { aan: 'blauw', uit: 'donkergrijs' }],
   [/\.beatloop\./,   { aan: 'cyaan', half: 'cyaandonker', uit: 'donkergrijs', tel: 'aan' }],
   [/^sampler\.\d+$/,  { aan: 'violet', half: 'violetdonker', uit: 'donkergrijs' }],
+  // Een sectie in een pad (rij 3 van de modus sampler): in de kleur van de
+  // secties, donker = kan (een lege pad, de focus-track heeft secties), fel =
+  // ingedrukt, uit = kan niet.
+  [/^sampler\.\d+\.section$/, { aan: 'hemelsblauw', half: 'hemelsblauwdonker', uit: 'uit' }],
   [/\.clear$|\.delete$/, { aan: 'rood', half: 'rooddonker', uit: 'uit' }],
   // Doorbladerknoppen (tellen, mengvorm, pulsdoel): hun read is een KEUZE
   // (index), geen niveau. Stand 0 als "uit" tonen zou liegen; ze branden
@@ -90,11 +99,32 @@ const KLEURSCHEMA = [
   //   overslaan · langer · nu   0 = er staat een overgang klaar (donker), null = uit
   //   aan      1 = aan (fel limoen), 0 = uit (donker limoen)
   [/^layer\.grid\.auto$/,    { aan: 'limoen', uit: 'limoendonker' }],
+  // Stems (5 okt, VRAGEN N1): zeegroen, met zijn donkere tint (34); geen andere
+  // modus heeft hem. De pads zelf rood (weg), zoals de kill in klank.
+  [/^layer\.grid\.stems$/,   { aan: 'zeegroen', uit: 'zeegroendonker' }],
   [/^auto\.aan$/,     { aan: 'limoen', uit: 'limoendonker' }],
   [/^auto\.ok$/,      { aan: 'groen', half: 'groendonker', uit: 'groendonker' }],
   [/^auto\.skip$/,    { aan: 'oranje', uit: 'oranjedonker' }],
   [/^auto\.langer$/,  { aan: 'cyaan', uit: 'cyaandonker' }],
   [/^auto\.nu$/,      { aan: 'geel', uit: 'geeldonker' }],
+  // Patronen (5 okt, docs/PATRONEN.md): oranje (stems hadden zeegroen al), een vrije kleur met
+  // een donkere tint (34) die geen modus is. Een plek (en een rij op de
+  // scene-knoppen): donkergrijs = leeg, donker = gevuld, fel = speelt, uit =
+  // geen instrument. Wacht hij op de maat (starten of stoppen), dan knippert
+  // de READ zelf tussen 1 en 0,5 op de tel van de patroonklok (de klok van
+  // een instrumenttrack is niet `track.N.phase`, dus `tel` kan het niet).
+  [/\.pattern\.[1-5](\.now)?$|^patterns\.row\.[1-5]$/, { aan: 'oranje', half: 'oranjedonker', uit: 'donkergrijs' }],
+  [/\.pattern\.stop(\.now)?$|^patterns\.stop(\.now)?$/, { aan: 'rood', half: 'rooddonker', uit: 'uit' }],
+  [/^patterns\.record$/, { aan: 'rood', uit: 'rooddonker' }],
+  [/^layer\.grid\.patronen$/, { aan: 'oranje', uit: 'oranjedonker' }],
+  // Secties (6 okt, docs/SECTIES.md): hemelsblauw (41, donker 42), een vrije
+  // kleur met een donkere tint. Mint (29) lag te dicht bij het groen van play.
+  // Een pad: donker hemelsblauw = er is een sectie, WIT = die hoor je nu, en
+  // die knippert op de tel (de maat loopt door: je ziet waar je bent), uit =
+  // geen sectie. Als loop (shift): cyaan zoals de andere loops = deze loop staat aan.
+  [/\.section\.\d+$/, { aan: 'wit', half: 'hemelsblauwdonker', uit: 'uit', tel: 'aan' }],
+  [/\.section\.\d+\.loop$/, { aan: 'cyaan', half: 'hemelsblauwdonker', uit: 'uit' }],
+  [/^layer\.grid\.secties$/, { aan: 'hemelsblauw', uit: 'hemelsblauwdonker' }],
   [/^layer\./,        { aan: 'wit', uit: 'donkergrijs' }],
 ];
 

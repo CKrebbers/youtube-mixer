@@ -76,8 +76,17 @@ function stukVan(s) {
   // Geen maat (oud grid) = niets; null telt niet als 0.
   const maat = s.maat === null || s.maat === undefined || s.maat === '' ? NaN : Number(s.maat);
   if (eindig(maat)) uit.maat = maat;
+  // Van de tellen (src/engine/tellen.js): waarom het stuk onzeker is, en of de
+  // oude analyse het dubbele of halve tempo hoorde. Alleen bekende waarden.
+  if (TWIJFELS.includes(s.twijfel)) uit.twijfel = s.twijfel;
+  if (s.octaaf === 2 || s.octaaf === 0.5) uit.octaaf = s.octaaf;
+  // Met het oor gecontroleerd (de controleklik, keurGoed): zeker, wat de tellen ook zeggen.
+  if (s.ok === true) uit.ok = true;
   return uit;
 }
+
+/** De redenen van twijfel die een stuk kan hebben (tellen.js, TWIJFEL_TEKST). */
+export const TWIJFELS = ['geen puls', 'rubato', 'drift', 'los', 'maat', 'oneens'];
 
 export class Beatgrid {
   /**
@@ -100,6 +109,10 @@ export class Beatgrid {
     // bewerkt (het deck zet dat bij elke bewerking), null = van vóór stap C.
     // De server analyseert bij het opstarten alleen null opnieuw.
     this.bron = d.bron === 'auto' || d.bron === 'hand' ? d.bron : null;
+    // `methode`: 'tellen' = gemaakt uit de tellen van Beat This! (versie: van
+    // de methode); zonder = de oude analyse, of met de hand.
+    this.methode = d.methode === 'tellen' ? 'tellen' : null;
+    this.versie = Number.isInteger(d.versie) && d.versie > 0 ? d.versie : null;
     this._bouw();
   }
 
@@ -112,6 +125,9 @@ export class Beatgrid {
       const k = { van: s.van, bpm: s.bpm, anker: s.anker };
       if (eindig(s.zekerheid)) k.zekerheid = s.zekerheid;
       if (eindig(s.maat)) k.maat = s.maat;
+      if (s.twijfel) k.twijfel = s.twijfel;
+      if (s.octaaf) k.octaaf = s.octaaf;
+      if (s.ok) k.ok = true;
       return k;
     });
   }
@@ -479,6 +495,85 @@ export class Beatgrid {
   lijnUitOp(t) { return this._pas(this._i(t), (s) => { const d = t - this._roosterTel(s, t); s.anker += d; s.maat += d; }); }
 
   /**
+   * Met de hand bevestigd: het stuk rond t telt als zeker. Een stuk zonder
+   * zekerheid is met de hand gezet (soortZekerheid), dus de zekerheid van de
+   * analyse gaat eraf. Na elke bewerking met de hand (actions, `bewerk`):
+   * wie het grid hier gelijkzet, heeft het gecontroleerd. Vóór 5 okt bleef
+   * het stuk onzeker en weigerden sync en beat-loops na het corrigeren nog
+   * steeds ("tik eerst … of zet op slot").
+   */
+  bevestig(t) { return this._pas(this._i(t), (s) => { delete s.zekerheid; delete s.twijfel; delete s.octaaf; delete s.ok; }); }
+
+  /**
+   * GOEDGEKEURD (de controle, docs/BEATGRID.md §11): je hebt het stuk rond t
+   * met de controleklik beluisterd en het klopt. Zeker, met `ok` erbij: ook
+   * waar de gevonden tellen het niet met het grid eens zijn (rubato, een live
+   * band) wint jouw oor. Een bewerking daarna (bevestig) haalt `ok` weer weg:
+   * dan is het een ander grid dan je hoorde.
+   */
+  keurGoed(t) { return this._pas(this._i(t), (s) => { delete s.zekerheid; delete s.twijfel; delete s.octaaf; s.ok = true; }); }
+
+  /**
+   * De "1" van het stuk rond t `tellen` tellen opschuiven. De tellen zelf
+   * blijven liggen: alleen welke tel de maat begint (de analyse vindt geen
+   * downbeat, dus de eerste tel van een stuk is de "1").
+   */
+  maatSchuif(t, tellen = 1) {
+    return this._pas(this._i(t), (s) => {
+      const L = 60 / s.bpm;
+      const een = eindig(s.maat) ? this._roosterTel(s, s.maat) : s.anker;
+      s.maat = een + Math.round(tellen) * L;
+    });
+  }
+
+  /**
+   * VASTZETTEN (een "pin", 5 okt): de tel hoort HIER. Het tempo van het stuk
+   * rond t wordt zo gezet dat er tussen zijn anker (waar je "1" zette, of de
+   * vorige pin) en t precies een geheel aantal tellen ligt, en vanaf t begint
+   * een nieuw stuk met t als anker: een volgende pin rekent vanaf hier. Zo
+   * haal je drift weg met twee drukken (tel 1 aan het begin, vast een paar
+   * minuten later), en zet je een live opgenomen mix stuk voor stuk vast.
+   *
+   * Weigert (ok: false, met een reden) als het grid hier meer dan 0,4 tel
+   * naast t ligt (dan is niet te zeggen welke tel het is) of als het tempo
+   * meer dan `maxAfwijking` zou veranderen. Dichter dan `minTellen` bij het
+   * anker: alleen de fase (lijnUitOp), een tempo valt daar niet uit te halen.
+   * @returns {{ ok: boolean, reden?: string, bpm?: number, was?: number, tellen?: number, naast?: number, alleenFase?: boolean }}
+   */
+  pin(t, { minTellen = 4, maxAfwijking = 0.04 } = {}) {
+    if (!eindig(t)) return { ok: false, reden: 'geen plek' };
+    const i = this._i(t), s = this._stukken[i];
+    const L = 60 / s.bpm;
+    const naast = (t - this._roosterTel(s, t)) / L;          // in tellen: hoe ver het grid hier ernaast ligt
+    if (Math.abs(naast) > 0.4) {
+      return { ok: false, naast, reden: `het grid ligt hier ${Math.round(Math.abs(naast) * 100)}% van een tel naast: dan is niet te zeggen welke tel dit is. Zet eerst een pin dichterbij, of schuif met ‹ ›` };
+    }
+    const tellen = Math.round((t - s.anker) / L);
+    if (Math.abs(tellen) < minTellen) {
+      this.lijnUitOp(t);
+      this.bevestig(t);
+      return { ok: true, alleenFase: true, tellen, naast, bpm: s.bpm, was: s.bpm };
+    }
+    const bpm = (60 * tellen) / (t - s.anker);
+    if (!(bpm > 0) || Math.abs(bpm / s.bpm - 1) > maxAfwijking) {
+      return { ok: false, naast, reden: `dat zou het tempo ${Math.round(Math.abs(bpm / s.bpm - 1) * 1000) / 10}% veranderen: klopt het anker van dit stuk (zet eerst "1" op een tel)?` };
+    }
+    const was = s.bpm;
+    this._pas(i, (st) => {
+      // De "1" blijft dezelfde tel (geteld vanaf het anker), op het nieuwe tempo.
+      const k = eindig(st.maat) ? Math.round((st.maat - st.anker) / L) : 0;
+      st.bpm = klem(bpm);
+      if (eindig(st.maat)) st.maat = st.anker + k * (60 / st.bpm);
+      delete st.zekerheid;
+    });
+    // Vanaf t een nieuw stuk met t als anker (zelfde tempo, dus hoorbaar niets anders).
+    if (t > this._stukken[i].van + EPS && this.splits(t)) {
+      this._pas(this.stukIndex(t), (st) => { const d = t - this._roosterTel(st, t); st.anker = t; if (eindig(st.maat)) st.maat += d; delete st.zekerheid; });
+    }
+    return { ok: true, bpm: klem(bpm), was, tellen, naast };
+  }
+
+  /**
    * Nieuw stuk vanaf t: zelfde tempo en fase als het stuk waar je in zat, dus
    * er verandert hoorbaar niets — pas je daarna iets aan, dan alleen vanaf hier.
    * False als er op t al een stuk begint.
@@ -523,6 +618,8 @@ export class Beatgrid {
     if (this.slot) uit.slot = true;
     if (this.zeker !== null) uit.zeker = this.zeker;
     if (this.bron) uit.bron = this.bron;
+    if (this.methode) uit.methode = this.methode;
+    if (this.versie) uit.versie = this.versie;
     return uit;
   }
 

@@ -379,7 +379,7 @@ console.log('\nmapjes en shift');
   lg.stap('grid', 1);
   ok('bladeren door het grid', lg.stand.grid === 'loops');
   lg.stap('grid', -2);
-  ok('en rond (zes modi: van loops twee terug is auto)', lg.stand.grid === 'auto');
+  ok('en rond (negen modi: van loops twee terug is secties, 6 okt)', lg.stand.grid === 'secties');
   lg.zet('grid', 'hotcues');
 
   const gestuurd = [];
@@ -609,12 +609,19 @@ console.log('\nendless');
   const faders = [...st.rules.values()].filter((r) => /^cc:\d:7$|^cc:0:1[45]$/.test(r.in));
   ok('standaard: faders blijven absolute (soft-takeover)', faders.length === 10 && faders.every((r) => r.mode === 'absolute'));
 
-  // Het 2×2-blok: A|B = crossfaderkant, ● = cue alleen met shift.
-  ok('2×2: A|B = crossfaderkant, ● doet zonder shift niets, ● + shift = cue (alle 8 kolommen)',
+  // Het 2×2-blok: A|B = crossfaderkant, ● = de koptelefoon (5 okt, docs/STUDIO.md §3),
+  // ● + shift = cue (alleen met shift: per ongeluk cue zette een hoorbare track stil).
+  ok('2×2: A|B = crossfaderkant, ● zonder shift = koptelefoon, ● + shift = cue (alle 8 kolommen)',
     [0, 1, 2, 3, 4, 5, 6, 7].every((ch) => st.kies(`note:${ch}:66`, { shift: false })?.action === `track.${ch + 1}.xfade.side`
-      && st.kies(`note:${ch}:48`, { shift: false }) === null && st.kies(`note:${ch}:48`, { shift: true })?.action === `track.${ch + 1}.cue`));
+      && st.kies(`note:${ch}:48`, { shift: false })?.action === `track.${ch + 1}.pfl` && st.kies(`note:${ch}:48`, { shift: true })?.action === `track.${ch + 1}.cue`));
   ok('actieveRegels volgt shift', st.actieveRegels({ shift: true }).get('note:0:48')?.action === 'track.1.cue'
-    && !st.actieveRegels({ shift: false }).has('note:0:48'));
+    && st.actieveRegels({ shift: false }).get('note:0:48')?.action === 'track.1.pfl');
+  // Cue Level = de koptelefoon (Clay, 5 okt): volume, shift = mix; in de grid-modus sampler en
+  // video met shift het sampler-volume en de puls (die stonden eerder op Cue Level zelf).
+  const cl = (shift, laag) => { const m = new Mapping({ read: () => 0.5, invoke: () => {}, lagen: () => (laag ? [laag] : []) }); m.load(doc); return m.kies('cc:0:47', { shift })?.action; };
+  ok('Cue Level = koptelefoonvolume, shift = koptelefoonmix; met shift in modus sampler/video het sampler-volume en de puls',
+    cl(false) === 'headphone.level' && cl(true) === 'headphone.mix' && cl(false, 'grid.sampler') === 'headphone.level'
+    && cl(true, 'grid.sampler') === 'sampler.volume' && cl(true, 'grid.video') === 'video.pulse' && cl(true, 'grid.klank') === 'headphone.mix');
 }
 
 // ---- grid-modus (stap D) ------------------------------------------------------
@@ -671,16 +678,22 @@ console.log('\nmodus klank en de nieuwe knoppen rechts');
   km.load(doc);
   const actie = (sig, shift = false) => km.kies(sig, { shift })?.action ?? null;
 
-  ok('klank is de vijfde grid-modus, na video (auto erachter, 2 okt)', GROEPEN.grid.volgorde.join() === 'hotcues,loops,sampler,video,klank,auto'
-    && GROEPEN.grid.knoppen.klank?.join() === 'klank');
+  ok('klank is de vijfde grid-modus, na video (auto erachter, 2 okt; stems en patronen daarachter, 5 okt; secties achteraan, 6 okt)',
+    GROEPEN.grid.volgorde.join() === 'hotcues,loops,sampler,video,klank,auto,stems,patronen,secties' && GROEPEN.grid.knoppen.klank?.join() === 'klank');
   lg.zet('grid', 'video'); lg.stap('grid', 1);
   ok('▼ vanuit video = klank', lg.stand.grid === 'klank');
   lg.stap('grid', 1);
   ok('▼ vanuit klank = auto', lg.stand.grid === 'auto');
   lg.stap('grid', 1);
-  ok('▼ vanuit auto = weer hotcues (rondlopen)', lg.stand.grid === 'hotcues');
-  lg.stap('grid', -2);
-  ok('▲ ▲ vanuit hotcues = klank', lg.stand.grid === 'klank');
+  ok('▼ vanuit auto = stems', lg.stand.grid === 'stems');
+  lg.stap('grid', 1);
+  ok('▼ vanuit stems = patronen', lg.stand.grid === 'patronen');
+  lg.stap('grid', 1);
+  ok('▼ vanuit patronen = secties', lg.stand.grid === 'secties');
+  lg.stap('grid', 1);
+  ok('▼ vanuit secties = weer hotcues (rondlopen)', lg.stand.grid === 'hotcues');
+  lg.stap('grid', -5);
+  ok('▲ × 5 vanuit hotcues = klank', lg.stand.grid === 'klank');
   lg.zet('grid', 'hotcues');
 
   // Direct: Shift + scene 5. Scene 5 zelf blijft "loop weg" (één druk, geen shift).
@@ -1223,6 +1236,12 @@ console.log('controleur: de reserve in de browser volgt de server');
   ok('en de reserve in de browser is nu hetzelfde verschil', comet.getItem(EIGEN_MAPPING) === JSON.stringify(goed));
 }
 
+// Eén bewuste wijziging aan bestaande standaardregels sinds de voorgangers (Clay, 5 okt):
+// Cue Level werd het koptelefoonvolume (shift: de mix); sampler-volume en puls gingen naar
+// shift in hun eigen grid-modus. Een voorganger verschilt dus alleen in die twee regels.
+const CUE_LEVEL_OUD = (e) => JSON.stringify((e?.rules || []).map((r) => `${r.in}${r.shift ? '#shift' : ''}=${r.action}`).sort())
+  === JSON.stringify(['cc:0:47#shift=video.pulse', 'cc:0:47=sampler.volume']);
+
 // ---- eerdere standaarden: een oude kopie krijgt de nieuwe regels -------------
 // Clay's server had op 25 sep nog zijn VOLLEDIGE kopie van 24 sep (291 regels:
 // de standaard 35823dda-291 + vier rack-knoppen op video). De standaard kreeg
@@ -1236,8 +1255,8 @@ console.log('eerdere standaarden (eerder in het standaardbestand)');
     Array.isArray(doc.eerder) && doc.eerder.length >= 1 && eerder.length === doc.eerder.length);
   const vorige = eerder.find((e) => e.vingerafdruk === '35823dda-291')?.doc;
   ok('de voorganger waar Clay\'s kopie van 24 sep op rust (35823dda-291, 291 regels) staat erin', vorige?.rules.length === 291);
-  ok('de voorganger is de huidige min de nieuwe regels (alleen toegevoegd, niets veranderd)',
-    doc.eerder.find((e) => e.vingerafdruk === '35823dda-291')?.rules.length === 0);
+  ok('de voorganger is de huidige min de nieuwe regels; alleen Cue Level is veranderd (koptelefoon, 5 okt)',
+    CUE_LEVEL_OUD(doc.eerder.find((e) => e.vingerafdruk === '35823dda-291')));
   ok('maakEerder rekent uit wat er staat',
     JSON.stringify(maakEerder(doc, vorige).removed) === JSON.stringify(doc.eerder.find((e) => e.vingerafdruk === '35823dda-291').removed));
   // Zo stond hij op Clay's server: de VORIGE standaard met de vier video-knoppen.
@@ -1289,10 +1308,11 @@ console.log('\nmodus auto (auto-DJ)');
   am.load(doc);
   const actie = (sig, shift = false) => am.kies(sig, { shift })?.action ?? null;
 
-  ok('auto is een grid-modus met een eigen naam, achteraan in ▲ ▼',
-    GROEPEN.grid.knoppen.auto?.join() === 'auto' && GROEPEN.grid.volgorde.at(-1) === 'auto' && /auto-dj/.test(LAAGNAAM['grid.auto']));
-  lg.zet('grid', 'hotcues'); lg.stap('grid', -1);
-  ok('▲ vanuit hotcues = auto', lg.stand.grid === 'auto');
+  ok('auto is een grid-modus met een eigen naam, in ▲ ▼ na klank (stems en patronen erachter, 5 okt; secties, 6 okt)',
+    GROEPEN.grid.knoppen.auto?.join() === 'auto' && GROEPEN.grid.volgorde.at(-4) === 'auto' && GROEPEN.grid.volgorde.at(-3) === 'stems'
+    && GROEPEN.grid.volgorde.at(-2) === 'patronen' && GROEPEN.grid.volgorde.at(-1) === 'secties' && /auto-dj/.test(LAAGNAAM['grid.auto']));
+  lg.zet('grid', 'hotcues'); lg.stap('grid', -4);
+  ok('▲ × 4 vanuit hotcues = auto (▲ = secties, ▲ ▲ = patronen, ▲ ▲ ▲ = stems)', lg.stand.grid === 'auto');
   lg.zet('grid', 'hotcues');
 
   ok('scene 4 zonder shift = video (zoals altijd), met shift = modus auto',
@@ -1364,22 +1384,63 @@ console.log('\nmodus auto (auto-DJ)');
   // voorganger in `eerder` en verschilt ALLEEN in regels die erbij kwamen.
   const vorige = eerdereStandaarden(doc).find((e) => e.vingerafdruk === 'e2bef131-374')?.doc;
   const vorigeE = doc.eerder.find((e) => e.vingerafdruk === 'e2bef131-374');
-  ok('de standaard van 25 sep (374 regels) is een voorganger, en er is niets aan veranderd (alleen bijgekomen)',
-    vorige?.rules.length === 374 && vorigeE?.rules.length === 0);
+  ok('de standaard van 25 sep (374 regels) is een voorganger; alleen bijgekomen, behalve Cue Level (koptelefoon, 5 okt)',
+    vorige?.rules.length === 374 && CUE_LEVEL_OUD(vorigeE));
   const nieuw = vorigeE ? vorigeE.removed.slice().sort() : [];
   const wilNieuw = ['note:0:32@grid.auto', 'note:0:33@grid.auto', 'note:0:34@grid.auto', 'note:0:35@grid.auto', 'note:0:39@grid.auto',
     'note:0:85#shift', 'note:0:85@grid.auto', 'note:0:85#shift@edit.aan',
     // Beeld-noodknoppen (2 okt, A4): master-knop = zwart, en vier pads in de modus video.
-    'note:0:80', 'note:0:38@grid.video', 'note:0:39@grid.video', 'note:0:30@grid.video', 'note:0:31@grid.video'].sort();
-  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4, scene 4 met shift in de grid-modus, en de vijf beeld-noodknoppen (${nieuw.join(' ')})`,
+    'note:0:80', 'note:0:38@grid.video', 'note:0:39@grid.video', 'note:0:30@grid.video', 'note:0:31@grid.video',
+    // Koptelefoon (5 okt, docs/STUDIO.md §3): ● zonder shift in elke kolom; sampler-volume
+    // en puls naar shift + Cue Level in hun eigen grid-modus (Cue Level = koptelefoon).
+    'note:0:48', 'note:1:48', 'note:2:48', 'note:3:48', 'note:4:48', 'note:5:48', 'note:6:48', 'note:7:48',
+    'cc:0:47#shift@grid.sampler', 'cc:0:47#shift@grid.video',
+    // Instrumenten op een track (5 okt, docs/INSTRUMENTEN.md §6): het mapje inst
+    // onder Clip/Device View, alleen met een instrument op de focus-track.
+    ...[16, 17, 18, 19, 20, 21, 22, 23].map((n) => `cc:0:${n}@device.inst`), 'note:0:58@device.inst', 'note:0:59@device.inst', 'note:0:62@device.inst',
+    // Master (5 okt, docs/MASTER.md): Shift + Clip/Device View opent het mapje master,
+    // daarin knop 1–7 + mix (shift + 8 = knop 8), Device ◀ ▶ = rack, On/Off = aan/uit.
+    'note:0:64#shift', 'cc:0:16@device.master', 'cc:0:17@device.master', 'cc:0:18@device.master', 'cc:0:19@device.master',
+    'cc:0:20@device.master', 'cc:0:21@device.master', 'cc:0:22@device.master', 'cc:0:23@device.master', 'cc:0:23#shift@device.master',
+    'note:0:58@device.master', 'note:0:59@device.master', 'note:0:62@device.master',
+    // Modus stems (5 okt, VRAGEN N1, docs/STEMS.md §5): Shift + scene 3, het lampje van
+    // scene 3, scene 3 met shift in de grid-modus, en de 40 pads met en zonder shift.
+    'note:0:84#shift', 'note:0:84@grid.stems', 'note:0:84#shift@edit.aan',
+    ...Array.from({ length: 40 }, (_, n) => [`note:0:${n}@grid.stems`, `note:0:${n}#shift@grid.stems`]).flat(),
+    // Patronen (5 okt, docs/PATRONEN.md): Shift + scene 2 opent de modus (en blijft in de
+    // grid-modus "bpm ×2"); daarin 40 pads (+ 40 met shift: meteen), 5 scene-knoppen (rij)
+    // en Stop All Clips (+ shift) = alle patronen stoppen.
+    'note:0:83#shift', 'note:0:83#shift@edit.aan',
+    ...[1, 2, 3, 4, 5, 6, 7, 8].flatMap((k) => [1, 2, 3, 4, 5].flatMap((r) => [`note:0:${apc.gridNote(k, r)}@grid.patronen`, `note:0:${apc.gridNote(k, r)}#shift@grid.patronen`])),
+    'note:0:82@grid.patronen', 'note:0:83@grid.patronen', 'note:0:84@grid.patronen', 'note:0:85@grid.patronen', 'note:0:86@grid.patronen',
+    'note:0:81@grid.patronen', 'note:0:81#shift@grid.patronen',
+    // Keylock en toon (5 okt, docs/KEYLOCK.md): Shift + Tap = keylock, Shift + Nudge −/+ =
+    // toon −1/+1, op de focus-track. Bank (het voorstel, I4) is met de hub de hubtoets.
+    'note:0:99#shift', 'note:0:100#shift', 'note:0:101#shift',
+    // Beatgrid (5 okt, docs/BEATGRID.md §10): in de grid-modus Shift + scene 1 = vast (pin).
+    // Terug (↶) niet op de APC: Shift + scene 5 blijft klank en Lock blijft het grid-slot.
+    'note:0:82#shift@edit.aan',
+    // Secties (6 okt, docs/SECTIES.md): Shift + scene 1 opent de modus, het lampje van
+    // scene 1 in de modus, en de 40 pads met en zonder shift (als loop).
+    'note:0:82#shift', 'note:0:82@grid.secties',
+    ...Array.from({ length: 40 }, (_, n) => [`note:0:${n}@grid.secties`, `note:0:${n}#shift@grid.secties`]).flat(),
+    // Sampler × secties (6 okt, tak studio/sec-sampler): rij 3 van de modus sampler (was
+    // leeg) = de sectie die je hoort in pad 1–8 (sampler.N.section). Shift blijft wat het was.
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map((k) => `note:0:${apc.gridNote(k, 3)}@grid.sampler`)].sort();
+  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4, scene 4 met shift in de grid-modus, de vijf beeld-noodknoppen, de acht koptelefoonknoppen, de elf van het mapje inst, het mapje master, de modus stems, de modus patronen, keylock/toon, vast in de grid-modus, de modus secties en rij 3 van de sampler (${nieuw.length} regels)`,
     JSON.stringify(nieuw) === JSON.stringify(wilNieuw));
   const tel = (d) => { const c = {}; for (const r of d.rules) { const k = `${r.laag ?? '-'}${r.shift ? '#shift' : ''}`; c[k] = (c[k] || 0) + 1; } return c; };
   const voor = vorige ? tel(vorige) : {}, na = tel(doc);
   const anders = Object.keys({ ...voor, ...na }).filter((k) => voor[k] !== na[k]).sort();
-  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1) erbij, één shift-regel zonder mapje en één in de grid-modus, en de noodknoppen (1 zonder mapje, 4 in video) (${anders.join(' ')})`,
-    anders.join() === '-,-#shift,edit.aan#shift,grid.auto,grid.video' && na['grid.auto'] === 6 && na['-#shift'] === voor['-#shift'] + 1
-    && na['edit.aan#shift'] === voor['edit.aan#shift'] + 1 && na['-'] === voor['-'] + 1 && na['grid.video'] === voor['grid.video'] + 4
-    && ['grid.hotcues', 'grid.loops', 'grid.sampler', 'grid.klank', 'device.strip', 'device.rack']
+  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1), stems (40 + 1, 40 met shift), patronen (45 + 1, 41 met shift) en secties (40 + 1, 40 met shift) erbij, acht shift-regels zonder mapje (auto, master, stems, patronen, secties, keylock, toon −/+) en vier in de grid-modus, de noodknoppen (1 zonder mapje, 4 in video), de koptelefoon (8 zonder mapje), het mapje inst (11), het mapje master (11 + 1 met shift) en rij 3 van de sampler (8) (${anders.join(' ')})`,
+    anders.join() === '-,-#shift,device.inst,device.master,device.master#shift,edit.aan#shift,grid.auto,grid.patronen,grid.patronen#shift,grid.sampler,grid.sampler#shift,grid.secties,grid.secties#shift,grid.stems,grid.stems#shift,grid.video,grid.video#shift'
+    && na['grid.auto'] === 6 && na['grid.stems'] === 41 && na['grid.stems#shift'] === 40 && na['grid.patronen'] === 46 && na['grid.patronen#shift'] === 41
+    && na['grid.secties'] === 41 && na['grid.secties#shift'] === 40
+    && na['-#shift'] === voor['-#shift'] + 8
+    && na['device.inst'] === 11 && !voor['device.inst'] && na['device.master'] === 11 && na['device.master#shift'] === 1
+    && na['grid.sampler#shift'] === 1 && na['grid.video#shift'] === 1 && na['grid.sampler'] === voor['grid.sampler'] + 8
+    && na['edit.aan#shift'] === voor['edit.aan#shift'] + 4 && na['-'] === voor['-'] + 1 + 8 && na['grid.video'] === voor['grid.video'] + 4
+    && ['grid.hotcues', 'grid.loops', 'grid.klank', 'device.strip', 'device.rack']
       .every((k) => voor[k] === na[k] && voor[k] > 0));
 
   // Clay's eigen mapping zoals hij sinds 25 sep op de server staat: een
@@ -1403,9 +1464,9 @@ console.log('\nmodus auto (auto-DJ)');
   const kopie25 = JSON.parse(JSON.stringify(vorige));
   for (const r of kopie25.rules) if (r.laag === 'device.rack' && VIDEO_KNOPPEN[r.in]) { r.action = VIDEO_KNOPPEN[r.in]; r.mode = 'absolute'; }
   const vk = verschilVanKopie(doc, kopie25);
-  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 13 x "weggehaald")',
+  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 313 x "weggehaald": 13 + 8 koptelefoonknoppen + 2 Cue Level-regels in een grid-modus + 11 van het mapje inst + 13 van het mapje master + 83 van de modus stems + 89 van de modus patronen + 3 van keylock en toon + 1 van vast + 82 van de modus secties + 8 van rij 3 van de sampler)',
     vk.basis === 'e2bef131-374' && vk.verschil.rules.length === 4 && vk.verschil.removed.length === 0
-    && maakVerschil(doc, kopie25).removed.length === 13);
+    && maakVerschil(doc, kopie25).removed.length === 313);
   lg.zet('grid', 'hotcues');
 
   // Beeld-noodknoppen (2 okt, ONTBREEKT A4): de master-knop (Track Select boven
@@ -1423,6 +1484,61 @@ console.log('\nmodus auto (auto-DJ)');
     && am.kies(`note:0:${apc.gridNote(7, 2)}`)?.action === 'video.black' && am.kies(`note:0:${apc.gridNote(8, 2)}`)?.action === 'video.freeze'
     && am.kies(`note:0:${apc.gridNote(1, 1)}`)?.action === 'video.fx.pixel.hold');
   lg.zet('grid', 'hotcues');
+}
+
+// ---- modus stems (5 okt, VRAGEN N1, docs/STEMS.md §5) ----------------------------
+// Een zevende grid-modus, alleen regels ERBIJ: per kolom een stem weg zolang je
+// drukt (shift: vastzetten), van boven naar onder zang · rest · drums · bas ·
+// overig. Shift + scene 3 opent hem (scene 3 zelf blijft sampler), en in de
+// grid-modus blijft Shift + scene 3 "bpm ½", zoals Shift + scene 4 "halve tel".
+console.log('\nmodus stems');
+{
+  const { Lagen, GROEPEN, LAAGNAAM } = await import('../src/control/lagen.js');
+  const lg = new Lagen({ now: () => 0 });
+  const sm = new Mapping({ read: () => 0, invoke: () => {}, lagen: () => lg.actief() });
+  sm.load(doc);
+  const actie = (sig, shift = false) => sm.kies(sig, { shift })?.action ?? null;
+  ok('stems is een grid-modus met een eigen naam, achteraan in ▲ ▼ vóór patronen en secties (wat er al was blijft op zijn plek)',
+    GROEPEN.grid.knoppen.stems?.join() === 'stems' && GROEPEN.grid.volgorde.at(-3) === 'stems' && /stems/.test(LAAGNAAM['grid.stems']));
+  lg.zet('grid', 'hotcues'); lg.stap('grid', -3);
+  ok('▲ ▲ ▲ vanuit hotcues = stems (▲ = secties, ▲ ▲ = patronen)', lg.stand.grid === 'stems');
+  lg.zet('grid', 'hotcues');
+  ok('scene 3 zonder shift = sampler (zoals altijd), met shift = modus stems',
+    actie('note:0:84') === 'layer.grid.sampler' && actie('note:0:84', true) === 'layer.grid.stems');
+  lg.zet('grid', 'stems');
+  const RIJEN = ['vocals', 'inst', 'drums', 'bass', 'other'];
+  const mis = [];
+  for (let kol = 1; kol <= 8; kol++) {
+    for (let rij = 1; rij <= 5; rij++) {
+      const sig = `note:0:${apc.gridNote(kol, rij)}`;
+      if (actie(sig) !== `track.${kol}.stem.${RIJEN[rij - 1]}.hold`) mis.push(`${kol}/${rij}`);
+      if (actie(sig, true) !== `track.${kol}.stem.${RIJEN[rij - 1]}.kill`) mis.push(`${kol}/${rij}+shift`);
+    }
+  }
+  ok(`stems: elke pad doet zijn stem weg op de track van zijn kolom (zang · rest · drums · bas · overig), met shift de schakelaar${mis.length ? ' — mis: ' + mis.join() : ''}`,
+    mis.length === 0);
+  ok('stems: scene 3 blijft sampler kiezen, zijn lampje toont "stems open"',
+    actie('note:0:84') === 'layer.grid.sampler' && sm.kies('note:0:84').led?.lees === 'layer.grid.stems');
+  ok('stems: de kern zit niet in het mapje (fader, play, filter, Clip Stop, ● = cue, ▲ ▼)',
+    actie('cc:0:7') === 'track.1.fader' && actie('note:0:50') === 'track.1.play' && actie('cc:0:48') === 'track.1.filter'
+    && actie('note:0:52') === 'track.1.loop.toggle' && actie('note:0:48') === 'track.1.pfl' && actie('note:0:94') === 'layer.grid.prev');
+  // Een pad is een drukknop: loslaten gaat naar het indrukken, ook als shift ertussen komt.
+  const gestuurd = [];
+  const sb = new Mapping({ read: () => 0, invoke: (a, v) => gestuurd.push(`${a}=${v}`), lagen: () => lg.actief() });
+  sb.load(doc);
+  sb.handle(note(apc.gridNote(2, 1), true)); sb.handle(note(98, true)); sb.handle(note(apc.gridNote(2, 1), false)); sb.handle(note(98, false));
+  sb.handle(note(98, true)); sb.handle(note(apc.gridNote(5, 3), true)); sb.handle(note(98, false)); sb.handle(note(apc.gridNote(5, 3), false));
+  ok('stems: zang-pad indrukken en loslaten naar de drukknop; shift + drums-pad naar de schakelaar (loslaten ook)',
+    gestuurd.join() === 'track.2.stem.vocals.hold=true,track.2.stem.vocals.hold=false,track.5.stem.drums.kill=true,track.5.stem.drums.kill=false');
+  lg.zet('grid', 'hotcues');
+  lg.zet('edit', 'aan');
+  ok('grid-modus: scene 3 = bpm ½, ook met shift (Shift + scene 3 opent alleen BUITEN de grid-modus stems)',
+    actie('note:0:84') === 'track.{focus}.grid.halve' && actie('note:0:84', true) === 'track.{focus}.grid.halve');
+  lg.zet('edit', 'uit');
+  const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+  const kaal = doc.rules.filter((r) => r.laag === 'grid.stems' || r.action === 'layer.grid.stems')
+    .filter((r) => beschrijf(r.action).lang.startsWith('?') || beschrijf(r.action).kort === r.action);
+  ok('elke regel van de modus stems heeft een uitleg op de APC-kaart', kaal.length === 0);
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

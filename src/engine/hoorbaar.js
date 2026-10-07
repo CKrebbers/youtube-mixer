@@ -20,8 +20,19 @@
  * wel moet, als het ooit nodig is.
  */
 
-/** Hoe ver wat je hoort achterloopt op de audioklok (seconden): outputLatency + baseLatency. */
-export const uitgangsVertraging = (ctx) => (ctx?.outputLatency || 0) + (ctx?.baseLatency || 0);
+/**
+ * Hoe ver wat je hoort achterloopt op de audioklok (seconden): outputLatency
+ * + baseLatency, plus de vertraging IN de graaf: de vooruitblik van de
+ * master-limiter (1,5 ms; de compressor van vroeger was 6 ms, docs/MASTER.md).
+ */
+export const uitgangsVertraging = (ctx) => (ctx?.outputLatency || 0) + (ctx?.baseLatency || 0) + (ctx?.graafVertraging || 0);
+
+/**
+ * De vertraging in de graaf vastleggen (de master doet dat als de limiter
+ * wisselt). Op de context zelf, niet in deze module: het losse videovenster
+ * (video.html) laadt zijn eigen kopie van deze module en leest dezelfde ctx.
+ */
+export const zetGraafVertraging = (ctx, seconden) => { if (ctx) ctx.graafVertraging = seconden; };
 
 /**
  * Positie min vertraging × rate: wat je hoort van een deck dat SPEELT. Rate 0

@@ -11,6 +11,8 @@
 <header class="topbar">
   <div class="brand">VARVE<span>DJ</span></div>
   <div class="topbar-right">
+    <!-- Vooraan: op een laptop (1440 px) viel hij rechts buiten beeld (6 okt). -->
+    <button id="audio-btn" class="primary">audio starten</button>
     <button id="lib-btn" class="ghost">library</button>
     <button id="leer-btn" class="ghost">koppelen</button>
     <span class="opname-groep">
@@ -26,10 +28,14 @@
     <button id="plan-btn" class="ghost" title="de programmering: het hele setplan zien, inrichten en live volgen (apart venster)">plan</button>
     <button id="auto-btn" class="ghost" title="auto-DJ: de app kiest en mixt, jij stuurt bij">auto</button>
     <button id="klankschaal-btn" class="ghost" title="klankschaal: speel mee op de toon van wat je hoort">klankschaal</button>
+    <button id="stems-btn" class="ghost" title="stems van de track met focus: zang en rest (of vier), per stem niveau, kill, filter, echo, galm en cue">stems</button>
+    <button id="koptelefoon-btn" class="ghost" title="koptelefoon: tracks voorbeluisteren zonder dat de zaal ze hoort, volume en mix">koptelefoon</button>
+    <button id="instrument-btn" class="ghost" title="instrument op de track met focus: kiezen, acht knoppen, een toetsenbord om te proberen, en welk MIDI-keyboard er binnenkomt">instrument</button>
+    <button id="patronen-btn" class="ghost" title="patronen: per track met een instrument vijf patronen, starten op de maat, stap voor stap of live opnemen">patronen</button>
+    <button id="master-btn" class="ghost" title="master: effecten op de hele mix en de limiter (hoeveel hij afneemt)">master</button>
     <a id="apc-btn" class="ghost" href="apc.html" target="varve-apc" title="wat elke knop van de APC doet, per mapje">APC-kaart</a>
     <button id="midi-btn" class="ghost">MIDI</button>
     <button id="help-btn" class="ghost">? toetsen</button>
-    <button id="audio-btn" class="primary">audio starten</button>
   </div>
 </header>
 <!-- De lijst met handelingenlogs om terug te spelen (logboek.js). -->
@@ -45,6 +51,9 @@
       <span class="deck-title">— leeg —</span>
       <span class="maat-badge hidden" title="deze track geeft de maat (sync, sampler, video-puls)">MAAT</span>
       <span class="bpm-val" title="bpm van het beatgrid, meegerekend met de pitch">—</span>
+      <!-- Klopt het grid HIER? Gemeten aan de gevonden tellen (BEATGRID.md §11).
+           Klik = controleren: een tik op elke gridlijn, stuk voor stuk. -->
+      <button data-kind="button" data-action="track.1.grid.controle" class="grid-oordeel leeg" title="klopt het grid hier? klik om te controleren">—</button>
       <!-- Toonsoort die je HOORT (TOONSOORT.md §5, T3): groot, met de volle naam.
            Klik = corrigeren per stuk, op de positie (de actions uit §7). -->
       <span class="toon-val leeg">
@@ -66,6 +75,12 @@
         <button data-kind="button" data-action="track.1.pitch.range" class="btn sm pitch-bereik" title="bereik van de pitchfader: ±8, ±16 of ±50% (het tempo blijft staan)">±16</button>
         <input type="range" class="hfader" min="0" max="1" step="0.0005" value="0.5" data-action="track.1.pitch">
       </label>
+      <span class="rek" title="keylock en toon verschuiven (docs/KEYLOCK.md)">
+        <button data-kind="button" data-action="track.1.keylock" class="btn sm keylock" title="keylock: het tempo verandert, de toon blijft staan (APC: Shift + Tap). Een sprong (play, hotcue, seek) klinkt dan ~95 ms later, exact.">keylock</button>
+        <button data-kind="button" data-action="track.1.transpose.down" class="btn sm" title="toon een halve toon lager (APC: Shift + Nudge −)">♭</button>
+        <button data-kind="button" data-action="track.1.transpose.reset" class="btn sm rek-toon" title="toon verschuiven in halve tonen; klik = terug naar 0 (bij een nieuw nummer vanzelf)">0</button>
+        <button data-kind="button" data-action="track.1.transpose.up" class="btn sm" title="toon een halve toon hoger (APC: Shift + Nudge +)">♯</button>
+      </span>
       <span class="deck-time"><b class="t-pos">0:00.00</b> <i class="t-rem">-0:00.00</i></span>
       <button class="link demo-btn" title="een synthetische testtrack van 124 bpm op deze track">demo</button>
     </div>
@@ -76,12 +91,22 @@
       <button data-kind="button" data-action="track.1.play" class="btn play">PLAY</button>
       <button data-kind="button" data-action="track.1.sync" class="btn sm sync" title="tempo en fase gelijk aan de track die je het hardst hoort">SYNC</button>
       <div class="grid-tools">
+        <button data-kind="button" data-action="layer.edit.toggle" class="btn sm grid-modus" title="gridmodus aan/uit (APC: Shift + Metronome): klik in de golfvorm = tel 1 hier, shift + klik = vast; scrollen in de golfvorm = zoomen">grid</button>
         <button data-kind="button" data-action="track.1.tap" class="btn sm tap">TAP</button>
         <button data-kind="button" data-action="track.1.grid.back" class="btn sm" title="grid 5 ms terug">&lsaquo;</button>
         <button data-kind="button" data-action="track.1.grid.fwd" class="btn sm" title="grid 5 ms vooruit">&rsaquo;</button>
         <button data-kind="button" data-action="track.1.grid.here" class="btn sm" title="leg tel 1 hier">1</button>
         <button data-kind="button" data-action="track.1.grid.halve" class="btn sm" title="bpm van het grid halveren">bpm½</button>
         <button data-kind="button" data-action="track.1.grid.double" class="btn sm" title="bpm van het grid verdubbelen">bpm×2</button>
+        <button data-kind="button" data-action="track.1.grid.bar" data-action-shift="track.1.grid.bar.back" class="btn sm" title="de &quot;1&quot; een tel verder (shift: terug) — de tellen blijven liggen">1→</button>
+        <button data-kind="button" data-action="track.1.grid.pin" class="btn sm grid-vast" title="vastzetten: de tel hier hoort hier. Tegen drift: zet &quot;1&quot; op een tel aan het begin, speel verder en druk een paar minuten later op een kick op vast — het tempo klopt dan over het hele stuk (APC gridmodus: shift + scene 1). Of klik in de golfvorm (gridmodus: klik = tel 1, shift + klik = vast)">vast</button>
+        <button data-kind="button" data-action="track.1.grid.undo" class="btn sm grid-terug" title="de laatste bewerking van het grid terug (Cmd+Z)">↶</button>
+        <span class="grid-controle hidden" title="controle: een tik op elke gridlijn (hoog = de &quot;1&quot;)">
+          <button data-kind="button" data-action="track.1.grid.check.prev" class="btn sm" title="vorige plek om te controleren">◀</button>
+          <button data-kind="button" data-action="track.1.grid.ok" class="btn sm grid-ok" title="klopt tot hier: goedgekeurd tot waar je nu luistert; is de plek helemaal goed, dan door naar de volgende (alles goed = op slot)">✓ klopt</button>
+          <button data-kind="button" data-action="track.1.grid.check.next" class="btn sm" title="sla over: volgende plek om te controleren">▶</button>
+          <button data-kind="button" data-action="track.1.grid.controle" class="btn sm" title="controle stoppen">✕</button>
+        </span>
       </div>
       <div class="hotcues">
         <button data-kind="button" data-action="track.1.hotcue.1" data-action-shift="track.1.hotcue.1.delete" class="hc hc1">1</button>
@@ -197,8 +222,8 @@
       <div class="knob sm" data-action="video.fx.trails" data-label="SPOREN" data-value="0" data-default="0"></div>
       <div class="knob sm" data-action="video.fx.grain" data-label="KORREL" data-value="0" data-default="0"></div>
       <span class="vid-sep"></span>
-      <div class="knob sm" data-action="video.pulse" data-label="PULS" data-value="0" data-default="0"></div>
-      <button data-kind="button" data-action="video.pulse.target" class="btn sm vid-pulsdoel" title="wat er op de tel pulst">rgb</button>
+      <div class="knob sm" data-action="video.pulse" data-label="PULS" data-value="0" data-default="0" title="puls op de tel van de maatgever; op een nieuwe sectie (secties) altijd vol, ook als de puls zacht staat"></div>
+      <button data-kind="button" data-action="video.pulse.target" class="btn sm vid-pulsdoel" title="wat er op de tel (en op een nieuwe sectie) pulst">rgb</button>
     </div>
     <div class="vid-nood" title="noodknoppen op het eindbeeld: de zaal, het losse venster en de opname zien hetzelfde">
       <span class="vid-nood-kop">BEELD</span>
@@ -210,6 +235,205 @@
   </section>
 </main>
 
+<!-- ================= DE RIJEN ONDER DE MIXER ================= -->
+<!-- Wat de knoppen stems … klankschaal in de bovenbalk openen. Samen in één gebied
+     dat zelf scrolt als ze niet passen: de kolommen met hun faders en de sampler
+     blijven altijd heel (styles.css, "de rijen"). -->
+<div id="rijen" class="rijen">
+
+<!-- ================= STEMS (docs/STEMS.md §4) ================= -->
+<!-- Voor de track met focus. De actions staan hier op track 1; stems-paneel.js
+     schrijft ze om naar de focus. Per stem: naam, niveau (schuif), kill, en
+     het stemkanaal (docs/STEMS.md §5): filter (geel), echo (cyaan), galm
+     (violet) en cue. Welke stems er zijn zegt read(): null = niet in deze stand. -->
+<section id="stems" class="stems-rij hidden">
+  <span class="sampler-kop">STEMS</span>
+  <span class="st-track" title="de track met focus">track 1</span>
+  <!-- wat de kleine knoppen per stem zijn (de kleur van de wijzer); bij vier stems op een smal scherm alleen de tooltips -->
+  <span class="st-legenda" title="per stem: filter (midden = open, links lowpass, rechts highpass) · echo · galm (volgen de fader van de track) · toon (halve tonen, het tempo blijft) · cue (koptelefoon)"><i class="f"></i>filter<i class="e"></i>echo<i class="g"></i>galm<i class="t"></i>toon</span>
+  <div class="st-stemmen">
+    <div class="st-stem hidden" data-stem="drums">
+      <span class="st-naam">drums</span>
+      <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.drums" title="niveau van de drums (dubbelklik: vol)">
+      <button data-kind="button" data-action="track.1.stem.drums.kill" data-action-shift="track.1.stem.drums.hold" class="btn sm st-kill" title="drums weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+      <div class="knob sm st-knop st-filter" data-action="track.1.stem.drums.filter" data-value="0.5" data-bipolar="true" title="filter van de drums: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
+      <div class="knob sm st-knop st-echo" data-action="track.1.stem.drums.send.a" data-value="0" data-default="0" title="echo van de drums: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-galm" data-action="track.1.stem.drums.send.b" data-value="0" data-default="0" title="galm van de drums: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-toon" data-action="track.1.stem.drums.transpose" data-value="0.5" data-bipolar="true" title="toon van de drums: halve tonen hoger of lager, bovenop de toon van de track; het tempo blijft (dubbelklik: terug naar 0)"></div>
+      <span class="st-toonw" title="toon van de drums (halve tonen)">0</span>
+      <button data-kind="button" data-action="track.1.stem.drums.pfl" class="btn sm st-cue" title="de drums in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
+    </div>
+    <div class="st-stem hidden" data-stem="bass">
+      <span class="st-naam">bas</span>
+      <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.bass" title="niveau van de bas (dubbelklik: vol)">
+      <button data-kind="button" data-action="track.1.stem.bass.kill" data-action-shift="track.1.stem.bass.hold" class="btn sm st-kill" title="bas weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+      <div class="knob sm st-knop st-filter" data-action="track.1.stem.bass.filter" data-value="0.5" data-bipolar="true" title="filter van de bas: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
+      <div class="knob sm st-knop st-echo" data-action="track.1.stem.bass.send.a" data-value="0" data-default="0" title="echo van de bas: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-galm" data-action="track.1.stem.bass.send.b" data-value="0" data-default="0" title="galm van de bas: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-toon" data-action="track.1.stem.bass.transpose" data-value="0.5" data-bipolar="true" title="toon van de bas: halve tonen hoger of lager, bovenop de toon van de track; het tempo blijft (dubbelklik: terug naar 0)"></div>
+      <span class="st-toonw" title="toon van de bas (halve tonen)">0</span>
+      <button data-kind="button" data-action="track.1.stem.bass.pfl" class="btn sm st-cue" title="de bas in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
+    </div>
+    <div class="st-stem hidden" data-stem="other">
+      <span class="st-naam">overig</span>
+      <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.other" title="niveau van overig (dubbelklik: vol)">
+      <button data-kind="button" data-action="track.1.stem.other.kill" data-action-shift="track.1.stem.other.hold" class="btn sm st-kill" title="overig weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+      <div class="knob sm st-knop st-filter" data-action="track.1.stem.other.filter" data-value="0.5" data-bipolar="true" title="filter van overig: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
+      <div class="knob sm st-knop st-echo" data-action="track.1.stem.other.send.a" data-value="0" data-default="0" title="echo van overig: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-galm" data-action="track.1.stem.other.send.b" data-value="0" data-default="0" title="galm van overig: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-toon" data-action="track.1.stem.other.transpose" data-value="0.5" data-bipolar="true" title="toon van overig: halve tonen hoger of lager, bovenop de toon van de track; het tempo blijft (dubbelklik: terug naar 0)"></div>
+      <span class="st-toonw" title="toon van overig (halve tonen)">0</span>
+      <button data-kind="button" data-action="track.1.stem.other.pfl" class="btn sm st-cue" title="overig in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
+    </div>
+    <div class="st-stem hidden" data-stem="vocals">
+      <span class="st-naam">zang</span>
+      <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.vocals" title="niveau van de zang (dubbelklik: vol)">
+      <button data-kind="button" data-action="track.1.stem.vocals.kill" data-action-shift="track.1.stem.vocals.hold" class="btn sm st-kill" title="zang weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+      <div class="knob sm st-knop st-filter" data-action="track.1.stem.vocals.filter" data-value="0.5" data-bipolar="true" title="filter van de zang: midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
+      <div class="knob sm st-knop st-echo" data-action="track.1.stem.vocals.send.a" data-value="0" data-default="0" title="echo van de zang: naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-galm" data-action="track.1.stem.vocals.send.b" data-value="0" data-default="0" title="galm van de zang: naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-toon" data-action="track.1.stem.vocals.transpose" data-value="0.5" data-bipolar="true" title="toon van de zang: halve tonen hoger of lager, bovenop de toon van de track; het tempo blijft (dubbelklik: terug naar 0)"></div>
+      <span class="st-toonw" title="toon van de zang (halve tonen)">0</span>
+      <button data-kind="button" data-action="track.1.stem.vocals.pfl" class="btn sm st-cue" title="de zang in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
+    </div>
+    <div class="st-stem hidden" data-stem="inst">
+      <span class="st-naam">rest</span>
+      <input type="range" class="st-niveau" min="0" max="1" step="0.001" value="1" data-action="track.1.stem.inst" title="niveau van de rest (dubbelklik: vol)">
+      <button data-kind="button" data-action="track.1.stem.inst.kill" data-action-shift="track.1.stem.inst.hold" class="btn sm st-kill" title="rest weg / terug · shift + vasthouden: weg zolang je drukt">kill</button>
+      <div class="knob sm st-knop st-filter" data-action="track.1.stem.inst.filter" data-value="0.5" data-bipolar="true" title="filter van de rest (bij vier stems: drums, bas en overig samen): midden = open, links lowpass, rechts highpass (dubbelklik: open)"></div>
+      <div class="knob sm st-knop st-echo" data-action="track.1.stem.inst.send.a" data-value="0" data-default="0" title="echo van de rest (bij vier stems: drums, bas en overig samen): naar de echo-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-galm" data-action="track.1.stem.inst.send.b" data-value="0" data-default="0" title="galm van de rest (bij vier stems: drums, bas en overig samen): naar de galm-bus, volgt de fader van de track (dubbelklik: dicht)"></div>
+      <div class="knob sm st-knop st-toon" data-action="track.1.stem.inst.transpose" data-value="0.5" data-bipolar="true" title="toon van de rest (bij vier stems: bovenop drums, bas en overig): halve tonen hoger of lager, bovenop de toon van de track; het tempo blijft (dubbelklik: terug naar 0)"></div>
+      <span class="st-toonw" title="toon van de rest (halve tonen)">0</span>
+      <button data-kind="button" data-action="track.1.stem.inst.pfl" class="btn sm st-cue" title="de rest (bij vier stems: drums, bas en overig samen) in de koptelefoon, na het stemfilter en vóór de fader (uit: geen koptelefoonuitgang, zie KOPTELEFOON)">cue</button>
+    </div>
+  </div>
+  <!-- zonder stems: wat er is, splitsen (2 · 4), of de voortgang met × -->
+  <span class="st-geen hidden">
+    <span class="st-tekst">geen stems</span>
+    <span class="st-splitsen">splitsen in
+      <button class="btn sm st-splits" data-aantal="2" title="zang en rest">2</button>
+      <button class="btn sm st-splits" data-aantal="4" title="drums · bas · overig · zang">4</button>
+    </span>
+    <span class="st-balk lib-job-balk hidden"><i></i></span>
+    <button class="btn sm st-x hidden" title="splitsen stoppen">×</button>
+  </span>
+</section>
+
+<!-- ================= KOPTELEFOON (docs/STUDIO.md §3) ================= -->
+<!-- Voorbeluisteren vóór de fader: per track een cue (op de APC ● zonder shift),
+     het volume en de mix cue ↔ zaal. koptelefoon-paneel.js tekent de lampjes
+     en zegt of er een koptelefoonuitgang is (een uitgang met vier kanalen). -->
+<section id="koptelefoon" class="kopt-rij hidden">
+  <span class="sampler-kop">KOPTELEFOON</span>
+  <span class="kp-stand">–</span>
+  <div class="kp-tracks">
+    <button data-kind="button" data-action="track.1.pfl" class="btn sm kp-pfl" title="track 1 in de koptelefoon aan/uit (● op de APC)">1</button>
+    <button data-kind="button" data-action="track.2.pfl" class="btn sm kp-pfl" title="track 2 in de koptelefoon aan/uit (● op de APC)">2</button>
+    <button data-kind="button" data-action="track.3.pfl" class="btn sm kp-pfl" title="track 3 in de koptelefoon aan/uit (● op de APC)">3</button>
+    <button data-kind="button" data-action="track.4.pfl" class="btn sm kp-pfl" title="track 4 in de koptelefoon aan/uit (● op de APC)">4</button>
+    <button data-kind="button" data-action="track.5.pfl" class="btn sm kp-pfl" title="track 5 in de koptelefoon aan/uit (● op de APC)">5</button>
+    <button data-kind="button" data-action="track.6.pfl" class="btn sm kp-pfl" title="track 6 in de koptelefoon aan/uit (● op de APC)">6</button>
+    <button data-kind="button" data-action="track.7.pfl" class="btn sm kp-pfl" title="track 7 in de koptelefoon aan/uit (● op de APC)">7</button>
+    <button data-kind="button" data-action="track.8.pfl" class="btn sm kp-pfl" title="track 8 in de koptelefoon aan/uit (● op de APC)">8</button>
+  </div>
+  <div class="kp-knoppen">
+    <div class="knob sm" data-action="headphone.mix" data-label="MIX" data-value="0" data-default="0" title="mix: links alleen wat je voorbeluistert, rechts alleen de zaal (APC: shift + Cue Level)"></div>
+    <div class="knob sm" data-action="headphone.level" data-label="VOL" data-value="0.8" data-default="0.8" title="koptelefoonvolume (APC: Cue Level)"></div>
+  </div>
+  <button class="btn sm kp-wissel" title="zaal en koptelefoon omwisselen (kanaal 1/2 ↔ 3/4); geldt na herladen">⇄</button>
+</section>
+
+<!-- ================= INSTRUMENT (docs/INSTRUMENTEN.md §6) ================= -->
+<!-- Voor de track met focus. De actions staan hier op track 1; instrument-paneel.js
+     schrijft ze om naar de focus. Kiezen, acht knoppen (plekken: wat ze doen hangt
+     van het instrument af), paniek, een toetsenbord van twee octaven om met de muis
+     te proberen (speelt op de speeltrack, zoals een MIDI-keyboard), en welk
+     MIDI-keyboard er binnenkomt. -->
+<section id="instrument" class="instrument-rij hidden">
+  <span class="sampler-kop">INSTRUMENT</span>
+  <span class="in-track" title="de track met focus">track 1</span>
+  <button data-kind="button" data-action="track.1.inst" class="btn sm in-kies" title="instrument kiezen: geen → Poly → … → geen. Speelt er een nummer op deze track, dan gaat het er pas af bij een tweede klik binnen 3 s">geen</button>
+  <div class="in-knoppen">
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.1" data-label="1" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.2" data-label="2" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.3" data-label="3" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.4" data-label="4" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.5" data-label="5" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.6" data-label="6" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.7" data-label="7" data-value="0" data-default="0"></div>
+    <div class="knob sm in-knop" data-action="track.1.inst.knob.8" data-label="8" data-value="0" data-default="0"></div>
+  </div>
+  <button data-kind="button" data-action="track.1.inst.stil" class="btn sm in-stil" title="meteen stil (paniek), met een korte fade">stil</button>
+  <div class="in-toetsen" title="klik om te spelen (lager op de toets = harder); speelt op de speeltrack, zoals een MIDI-keyboard">
+    <button class="btn sm in-oct" data-stap="-12" title="een octaaf lager">◀</button>
+    <div class="in-klavier"></div>
+    <button class="btn sm in-oct" data-stap="12" title="een octaaf hoger">▶</button>
+  </div>
+  <span class="in-keyboard" title="welk MIDI-keyboard er binnenkomt (elke ingang behalve de APC)">geen MIDI-keyboard</span>
+</section>
+
+<!-- ================= PATROON (docs/PATRONEN.md) ================= -->
+<!-- Voor de track met focus. De actions staan hier op track 1; patronen-paneel.js
+     schrijft ze om naar de focus. Vijf plekken (starten en stoppen op de maat, zoals
+     het grid in de modus patronen), de stappen van de gekozen plek (klik = de laatst
+     gespeelde noot erop of eraf), lengte, swing, opnemen, stoppen, wissen, en het
+     eigen tempo als er geen maatgever is. De stappen tekent patronen-paneel.js. -->
+<section id="patronen" class="patroon-rij hidden">
+  <span class="sampler-kop">PATROON</span>
+  <span class="pt-track" title="de track met focus">track 1</span>
+  <div class="pt-plekken">
+    <button data-kind="button" data-action="track.1.pattern.1" data-action-shift="track.1.pattern.1.now" class="btn sm pt-plek" title="patroon 1: starten op de maat (speelt hij: stoppen op de maat) · shift: meteen">1</button>
+    <button data-kind="button" data-action="track.1.pattern.2" data-action-shift="track.1.pattern.2.now" class="btn sm pt-plek" title="patroon 2: starten op de maat (speelt hij: stoppen op de maat) · shift: meteen">2</button>
+    <button data-kind="button" data-action="track.1.pattern.3" data-action-shift="track.1.pattern.3.now" class="btn sm pt-plek" title="patroon 3: starten op de maat (speelt hij: stoppen op de maat) · shift: meteen">3</button>
+    <button data-kind="button" data-action="track.1.pattern.4" data-action-shift="track.1.pattern.4.now" class="btn sm pt-plek" title="patroon 4: starten op de maat (speelt hij: stoppen op de maat) · shift: meteen">4</button>
+    <button data-kind="button" data-action="track.1.pattern.5" data-action-shift="track.1.pattern.5.now" class="btn sm pt-plek" title="patroon 5: starten op de maat (speelt hij: stoppen op de maat) · shift: meteen">5</button>
+  </div>
+  <div class="pt-stappen" title="klik = de laatst gespeelde noot op deze stap, of eraf (speel een noot op het keyboard of in de INSTRUMENT-rij om te kiezen welke)"></div>
+  <span class="pt-lengte">
+    <button data-kind="button" data-action="track.1.pattern.length.down" class="btn sm" title="korter">◀</button>
+    <b class="pt-lengte-tekst" title="lengte in stappen (zestienden)">16</b>
+    <button data-kind="button" data-action="track.1.pattern.length.up" class="btn sm" title="langer">▶</button>
+  </span>
+  <div class="knob sm" data-action="track.1.pattern.swing" data-label="SWING" data-value="0" data-default="0" title="swing: links recht, rechts een halve stap op de off-beats"></div>
+  <button data-kind="button" data-action="patterns.record" class="btn sm pt-rec" title="live opnemen: wat je speelt komt in het patroon dat op die track speelt, op de dichtstbijzijnde stap (erbij)">● op</button>
+  <button data-kind="button" data-action="track.1.pattern.stop" data-action-shift="track.1.pattern.stop.now" class="btn sm" title="stoppen op de maat · shift: meteen">■</button>
+  <button data-kind="button" data-action="track.1.pattern.clear" class="btn sm pt-wis" title="de gekozen plek leegmaken (tweede klik binnen 3 s)">wis</button>
+  <span class="pt-klok" title="waar de patronen op lopen">—</span>
+  <span class="pt-tempo hidden">
+    <div class="knob sm" data-action="patterns.tempo" data-label="TEMPO" data-value="0.4" data-default="0.4" title="het eigen tempo zonder maatgever (40–240 bpm)"></div>
+    <button data-kind="button" data-action="patterns.tap" class="btn sm" title="het eigen tempo tikken">tap</button>
+  </span>
+  <span class="pt-noot" title="de laatst gespeelde noot: die zet een klik op een stap erop">—</span>
+  <span class="pt-opslag" title="bewaard op de server (patronen/set.json), met versie">—</span>
+  <button class="btn sm pt-hun hidden" title="de versie op de server laden (jouw laatste wijzigingen gaan weg)">hun versie</button>
+  <button class="btn sm pt-mijn hidden" title="jouw versie bewaren, over de andere heen">mijn versie</button>
+</section>
+
+<!-- ================= MASTER (docs/MASTER.md) ================= -->
+<!-- Effecten op de hele mix (een insert-rack vóór de limiter, zoals bij een
+     track) en de limiter zelf. master-paneel.js vult de rackkiezer, de namen
+     van de knoppen en de gain reduction; op de APC: Shift + Clip/Device View. -->
+<section id="master" class="master-rij hidden">
+  <span class="sampler-kop">MASTER</span>
+  <select class="ms-rack" title="rack op de hele mix: kant-en-klaar (racks/sjablonen.json) of een los effect; onthouden"></select>
+  <button data-kind="button" data-action="master.fx.next" class="btn sm" title="volgend los effect op de master">›</button>
+  <button data-kind="button" data-action="master.fx.bypass" class="btn sm ms-aan" title="master-effect aan/uit (APC: On/Off in het mapje master)">aan</button>
+  <div class="ms-knoppen">
+    <div class="knob sm" data-action="master.fx.mix" data-label="MIX" data-value="0" data-default="0" title="master dry/wet: dicht = droog (APC: knop 8 in het mapje master)"></div>
+    <div class="knob sm ms-plek" data-plek="1" data-action="master.fx.knob.1" data-label="1" data-value="0" title="master-rack knop 1 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="2" data-action="master.fx.knob.2" data-label="2" data-value="0" title="master-rack knop 2 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="3" data-action="master.fx.knob.3" data-label="3" data-value="0" title="master-rack knop 3 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="4" data-action="master.fx.knob.4" data-label="4" data-value="0" title="master-rack knop 4 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="5" data-action="master.fx.knob.5" data-label="5" data-value="0" title="master-rack knop 5 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="6" data-action="master.fx.knob.6" data-label="6" data-value="0" title="master-rack knop 6 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="7" data-action="master.fx.knob.7" data-label="7" data-value="0" title="master-rack knop 7 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+    <div class="knob sm ms-plek" data-plek="8" data-action="master.fx.knob.8" data-label="8" data-value="0" title="master-rack knop 8 (wat die doet hangt van het rack af) · alt + vasthouden: vol open zolang je drukt"></div>
+  </div>
+  <span class="ms-limiter" title="gain reduction: hoeveel de limiter nu afneemt (0 dB = niets)">
+    <span class="ms-gr"><i></i></span><b class="ms-gr-tekst">0 dB</b><small class="ms-soort">limiter</small>
+  </span>
+</section>
 
 <!-- ================= AUTO-DJ ================= -->
 <section id="auto" class="auto-rij hidden">
@@ -259,6 +483,7 @@
     <div class="knob sm" data-action="klankschaal.volume" data-label="VOL" data-value="0.8" data-default="0.8"></div>
   </div>
 </section>
+</div>
 
 <!-- ================= LIBRARY ================= -->
 <section id="lib-panel" class="lib-panel hidden">
@@ -268,6 +493,10 @@
     <button class="btn sm lib-haal">haal binnen</button>
     <button class="btn sm lib-bestand" title="eigen audio of video (ook meerdere) — of sleep bestanden op dit paneel">bestand…</button>
     <input class="lib-bestanden" type="file" hidden multiple accept="audio/*,video/*,.mkv,.mov,.m4v,.flac,.aiff,.aif,.ogg,.opus">
+    <!-- stems bij het binnenhalen (docs/STEMS.md §4): onthouden, standaard 2 -->
+    <span class="lib-stems-keuze" title="stems bij het binnenhalen: zang + rest (2), vier, of niet splitsen (onthouden)">stems
+      <button class="btn sm" data-stems-keuze="2" title="zang en rest">2</button><button class="btn sm" data-stems-keuze="4" title="drums · bas · overig · zang">4</button><button class="btn sm" data-stems-keuze="0" title="niet splitsen">geen</button>
+    </span>
     <input class="lib-zoek" type="text" placeholder="zoeken…">
     <button class="btn sm lib-close">sluit</button>
   </div>
@@ -352,8 +581,11 @@
           <tr><td>5</td><td>loop uit</td></tr>
           <tr><td>G / C</td><td>loop in · loop out (shift+G: reloop/uit)</td></tr>
           <tr><td>R / T</td><td>beatjump − / + (shift: lengte ½ / ×2)</td></tr>
-          <tr><td>Z / X</td><td>nudge − / +</td></tr>
+          <tr><td>Z / X</td><td>nudge − / + (shift: toon een halve toon lager / hoger)</td></tr>
+          <tr><td>V</td><td>keylock aan/uit (het tempo verandert, de toon blijft)</td></tr>
+          <tr><td>Cmd+Z</td><td>de laatste bewerking van het grid terug</td></tr>
           <tr><td>E</td><td>(focus blijft hier)</td></tr>
+          <tr><td>shift+W / E</td><td>vorige · volgende sectie: valt in op de volgende "1" (zonder secties: een melding)</td></tr>
           <tr><td>` (links van 1)</td><td>rem (vinylstop); tijdens het remmen nog eens = los</td></tr>
         </table>
       </div>
@@ -366,8 +598,10 @@
           <tr><td>-</td><td>loop uit</td></tr>
           <tr><td>H / N</td><td>loop in · loop out (shift+H: reloop/uit)</td></tr>
           <tr><td>Y / U</td><td>beatjump − / + (shift: lengte ½ / ×2)</td></tr>
-          <tr><td>, / .</td><td>nudge − / +</td></tr>
+          <tr><td>, / .</td><td>nudge − / + (shift: toon een halve toon lager / hoger)</td></tr>
+          <tr><td>M</td><td>keylock aan/uit</td></tr>
           <tr><td>I</td><td>focus hierop (wisselen)</td></tr>
+          <tr><td>shift+I / O</td><td>vorige · volgende sectie: valt in op de volgende "1"</td></tr>
           <tr><td>=</td><td>rem (vinylstop); tijdens het remmen nog eens = los</td></tr>
         </table>
       </div>

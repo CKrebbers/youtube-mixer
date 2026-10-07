@@ -11,12 +11,19 @@ const SEND_B = ['grootte', 'toon', 'vasthouden'];
 const VIDEO = { pixel: 'pixel', mirror: 'spiegel', rgb: 'RGB', color: 'kleur', trails: 'sporen', grain: 'korrel' };
 const EQ = { trim: 'trim', high: 'high', mid: 'mid', low: 'low', filter: 'filter', fader: 'volume', pitch: 'pitch' };
 const KILL = { low: 'laag', mid: 'midden', high: 'hoog' };
+// Zelfde namen als STEM_LABELS in actions.js (hier los, zodat apc.html de bus niet hoeft te laden).
+const STEM = { vocals: 'zang', inst: 'rest', drums: 'drums', bass: 'bas', other: 'overig' };
+const STEM_UITLEG = {
+  vocals: 'de zang', inst: 'de rest: alles behalve de zang (bij vier stems drums, bas en overig samen)',
+  drums: 'de drums (alleen bij vier stems)', bass: 'de bas (alleen bij vier stems)', other: 'overig: wat geen zang, drums of bas is (alleen bij vier stems)',
+};
 
 /** { kort, lang }: kort past op de tekening, lang staat in de tabel. */
 export function beschrijf(action) {
   let m;
-  const wie = (t) => (t === '{focus}' ? 'focus-track' : `track ${t}`);
-  const kortWie = (t) => (t === '{focus}' ? 'F' : t);
+  // {speel} = de speeltrack (waar noten heen gaan: Xboard49 en Maschine, docs/MASCHINE.md).
+  const wie = (t) => (t === '{focus}' ? 'focus-track' : t === '{speel}' ? 'speeltrack' : `track ${t}`);
+  const kortWie = (t) => (t === '{focus}' ? 'F' : t === '{speel}' ? 'S' : t);
   if ((m = /^track\.([^.]+)\.(.+)$/.exec(action))) {
     const [, t, rest] = m;
     const w = wie(t), k = kortWie(t);
@@ -50,10 +57,50 @@ export function beschrijf(action) {
     if (rest === 'bend.fwd') return r('sneller', 'even sneller zolang je drukt (bend +4%)');
     if (rest === 'tempo') return r('tempo', 'tempo: 0,1% per tik, met shift 0,01% (ook buiten het pitchbereik)');
     if (rest === 'pitch.range') return r('bereik', 'pitchbereik ±8 / ±16 / ±50%');
+    if (rest === 'keylock') return r('keylock', 'keylock aan/uit: het tempo verandert, de toon blijft staan (een sprong klinkt dan ~95 ms later, exact)');
+    if (rest === 'transpose') return r('toon', 'toon verschuiven, ±12 halve tonen (midden = niets)');
+    if (rest === 'transpose.up') return r('toon +', 'toon een halve toon hoger');
+    if (rest === 'transpose.down') return r('toon −', 'toon een halve toon lager');
+    if (rest === 'transpose.reset') return r('toon 0', 'toon terug naar 0');
     if (rest === 'nudge.back') return r('nudge −', 'even terugduwen');
     if (rest === 'nudge.fwd') return r('nudge +', 'even vooruitduwen');
     if ((m = /^kill\.(low|mid|high)$/.exec(rest))) return r(`kill ${KILL[m[1]]}`, `kill ${KILL[m[1]]} aan/uit (de knopstand blijft; lampje = band weg)`);
     if ((m = /^kill\.(low|mid|high)\.hold$/.exec(rest))) return r(`kill ${KILL[m[1]]}!`, `kill ${KILL[m[1]]} zolang je drukt`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)$/.exec(rest))) return r(STEM[m[1]], `stem-niveau: ${STEM_UITLEG[m[1]]}, vóór de EQ (vol = 1, dicht = weg; alleen als het nummer stems heeft)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.kill$/.exec(rest))) return r(`${STEM[m[1]]} weg`, `stem weg aan/uit: ${STEM_UITLEG[m[1]]} (het niveau blijft staan; lampje = weg)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.hold$/.exec(rest))) return r(`${STEM[m[1]]} weg!`, `stem weg zolang je drukt: ${STEM_UITLEG[m[1]]}`);
+    // Instrument op de track (docs/INSTRUMENTEN.md §6): een nummer óf een instrument.
+    if (rest === 'inst') return r('instrument', 'instrument kiezen, rondlopend: geen → Poly → … → geen (een nummer dat speelt gaat er pas af bij een tweede druk binnen 3 s)');
+    if (rest === 'inst.next') return r('instr ▶', 'volgend instrument op deze track (een nummer dat speelt: tweede druk binnen 3 s)');
+    if (rest === 'inst.prev') return r('◀ instr', 'vorig instrument op deze track (een nummer dat speelt: tweede druk binnen 3 s)');
+    if (rest === 'inst.choose') return r('instr kies', 'instrument kiezen in één keer: 0 = geen, dan de instrumenten op volgorde (het masterwiel van de Maschine: draaien = kiezen, indrukken = zetten; een nummer dat speelt: tweede druk binnen 3 s)');
+    if ((m = /^inst\.knob\.(\d)$/.exec(rest))) return r(`instr ${m[1]}`, `instrumentknop ${m[1]} (wat die doet hangt van het instrument af; de namen staan in de INSTRUMENT-rij)`);
+    if (rest === 'inst.stil') return r('stil', 'instrument meteen stil (paniek), met een korte fade; lampje = er klinkt iets');
+    // Stemkanalen (docs/STEMS.md §5). Bij vier stems werkt `inst` op de groep: filter in serie, sends en cue samen.
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.filter$/.exec(rest))) return r(`${STEM[m[1]]} filter`, `stemfilter: ${STEM_UITLEG[m[1]]}; midden = open, links lowpass, rechts highpass (alleen deze stem)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.send\.a$/.exec(rest))) return r(`${STEM[m[1]]} echo`, `echo-send van één stem: ${STEM_UITLEG[m[1]]}; volgt de fader van de track (fader dicht = niets meer insturen)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.send\.b$/.exec(rest))) return r(`${STEM[m[1]]} galm`, `galm-send van één stem: ${STEM_UITLEG[m[1]]}; volgt de fader van de track (fader dicht = niets meer insturen)`);
+    if ((m = /^stem\.(vocals|inst|drums|bass|other)\.pfl$/.exec(rest))) return r(`${STEM[m[1]]} PFL`, `één stem in de koptelefoon aan/uit: ${STEM_UITLEG[m[1]]}, na zijn filter en vóór de fader; de zaal hoort het niet (uit = geen koptelefoonuitgang of geen stems)`);
+    // Patronen (docs/PATRONEN.md): vijf plekken per track, de rijen van het grid in de modus patronen.
+    // {plek} = het gekozen patroon van die track (de Maschine: PATTERN + pad kiest het, docs/MASCHINE.md).
+    // Secties (docs/SECTIES.md): de pads van de modus secties.
+    if ((m = /^section\.(\d+)$/.exec(rest))) return r(`sectie ${m[1]}`, `sectie ${m[1]} van het nummer (intro, drop, break … zie de strook boven de golfvorm): daarheen, en hij valt in op de volgende maat — de rest van deze maat hoor je de aanloop uit het nummer zelf; stilstaand: de speelkop naar het begin. Lampje: donker hemelsblauw = er is een sectie, wit = die hoor je nu (knippert op de tel), uit = geen sectie op deze pad`);
+    if ((m = /^section\.(\d+)\.loop$/.exec(rest))) return r(`sectie ${m[1]} ⟲`, `sectie ${m[1]} als loop: speel je er al in, dan blijft de speelkop staan; anders erheen op de volgende maat. Nog eens = loop eraf. Lampje cyaan = deze loop staat aan`);
+    if (rest === 'section.next') return r('sectie ▶', 'naar de volgende sectie, op de volgende maat');
+    if (rest === 'section.prev') return r('◀ sectie', 'naar de vorige sectie, op de volgende maat');
+    if (rest === 'pattern.{plek}') return r('pat ▶', 'het gekozen patroon: starten op de maat van de maatgever; speelt hij: stoppen op de maat; leeg: alleen kiezen (met opnemen aan: beginnen)');
+    if (rest === 'pattern.{plek}.now') return r('pat ▶!', 'het gekozen patroon meteen: starten op de volgende tel, of meteen stoppen');
+    if ((m = /^pattern\.([1-5])$/.exec(rest))) return r(`pat ${m[1]}`, `patroon ${m[1]}: starten op de maat van de maatgever (zonder maatgever op het eigen tempo); speelt hij: stoppen op de maat; speelt er een ander: wisselen op de maat; een lege plek: kiezen om te bewerken (met opnemen aan: beginnen). Lampje oranje: donker = gevuld, fel = speelt, knippert = wacht op de maat, donkergrijs = leeg, uit = geen instrument`);
+    if ((m = /^pattern\.([1-5])\.now$/.exec(rest))) return r(`pat ${m[1]}!`, `patroon ${m[1]} meteen: starten op de volgende tel in plaats van de maat, of meteen stoppen (binnen ~0,1 s)`);
+    if (rest === 'pattern.stop') return r('pat stop', 'patroon stoppen op de maat (alles los op het maatbegin)');
+    if (rest === 'pattern.stop.now') return r('pat stop!', 'patroon meteen stoppen (binnen ~0,1 s)');
+    if ((m = /^pattern\.step\.(\d+)$/.exec(rest))) return r(`stap ${m[1]}`, `stap ${m[1]} van het gekozen patroon: de laatst gespeelde noot erop, of eraf als hij er al staat`);
+    if (rest === 'pattern.length') return r('pat lengte', 'lengte van het gekozen patroon (1–64 stappen)');
+    if (rest === 'pattern.length.up') return r('langer', 'het gekozen patroon langer (per stap tot 16, dan per halve maat)');
+    if (rest === 'pattern.length.down') return r('korter', 'het gekozen patroon korter');
+    if (rest === 'pattern.swing') return r('swing', 'swing van het gekozen patroon (recht tot een halve stap op de off-beats)');
+    if (rest === 'pattern.clear') return r('pat wis', 'het gekozen patroon leegmaken (tweede druk binnen 3 s)');
+    if (rest === 'pfl') return r('PFL', 'in de koptelefoon aan/uit: voorbeluisteren vóór de fader, de zaal hoort het niet (lampje rood = je hoort hem; uit = geen koptelefoonuitgang, docs/STUDIO.md §3)');
     if (rest === 'brake') return r('rem', 'rem (vinylstop): in de remtijd naar stilstand, dan pauze; tijdens het remmen nog eens = los');
     if (rest === 'brake.time') return r('remtijd', 'remtijd: 0,1 tot 5 seconden tot stilstand');
     if (rest === 'grid.here') return r('tel 1 hier', 'tel 1 hier: de tel komt op wat je hoort, gesnapt naar een klap binnen 30 ms, en is de "1" van de maat in dit stuk');
@@ -69,6 +116,12 @@ export function beschrijf(action) {
     if (rest === 'grid.bpm') return r('grid bpm', 'bpm van het gridstuk hier: 0,01 per tik, met shift 0,1');
     if (rest === 'grid.lock') return r('slot', 'grid op slot (lampje = op slot; de automatische analyse blijft er dan af)');
     if (rest === 'grid.clear') return r('grid weg', 'grid wissen');
+    if (rest === 'grid.pin') return r('vast', 'vastzetten: de tel hier hoort hier — het tempo van het stuk komt zo dat het vanaf het anker (tel 1, of de vorige pin) precies klopt; vanaf hier een nieuw stuk. Tegen drift: tel 1 aan het begin, vast een paar minuten later');
+    if (rest === 'grid.pin.op') return r('vast op', 'vastzetten op een aangewezen plek (klik in de golfvorm)');
+    if (rest === 'grid.here.op') return r('tel 1 op', 'tel 1 op een aangewezen plek (klik in de golfvorm)');
+    if (rest === 'grid.bar') return r('1 →', 'de "1" een tel verder: de tellen blijven liggen, de maat begint een tel later');
+    if (rest === 'grid.bar.back') return r('← 1', 'de "1" een tel terug');
+    if (rest === 'grid.undo') return r('↶ grid', 'de laatste bewerking van het grid terug (tik, vast, ×2, ‹ ›, tel 1 …)');
     if (rest === 'key') return r('toon', 'toonsoort van de plaat hier: 24 standen in wijzervolgorde (1A 1B … 12B), voor een encoder');
     if (rest === 'key.fifth.up') return r('toon kwint+', 'toonsoort hier een kwint omhoog (Camelot +1): de meest gemaakte fout van de analyse');
     if (rest === 'key.fifth.down') return r('toon kwint−', 'toonsoort hier een kwint omlaag (Camelot −1)');
@@ -88,8 +141,10 @@ export function beschrijf(action) {
   // (de vorige focus, of wat je hiermee kiest). Zie src/ui/vensters.js.
   if ((m = /^window\.L\.show\.(\d)$/.exec(action))) return { kort: `focus ${m[1]}`, lang: `focus op track ${m[1]}` };
   if ((m = /^window\.R\.show\.(\d)$/.exec(action))) return { kort: `2e: ${m[1]}`, lang: `track ${m[1]} als tweede (rechterhand op het toetsenbord)` };
-  if ((m = /^sampler\.(\d)$/.exec(action))) return { kort: `pad ${m[1]}`, lang: `sampler-pad ${m[1]}: leeg = pak de laatste tellen van de focus-track, gevuld = start/stop op de tel` };
+  if ((m = /^patterns\.row\.([1-5])$/.exec(action))) return { kort: `rij ${m[1]}`, lang: `patronen: rij ${m[1]} op alle tracks met een instrument, op de maat (een lege plek in die rij: die track stopt); lampje fel = er speelt iets in deze rij, knippert = wacht, donker = gevuld` };
+  if ((m = /^sampler\.(\d)$/.exec(action))) return { kort: `pad ${m[1]}`, lang: `sampler-pad ${m[1]}: leeg = pak de laatste tellen van de focus-track, gevuld = start/stop op de tel (een sectie: op de "1"; een sectie van 2 maten of korter op de tel, zoals een gewone pad)` };
   if ((m = /^sampler\.(\d)\.clear$/.exec(action))) return { kort: `leeg ${m[1]}`, lang: `sampler-pad ${m[1]} leegmaken (bewaard blijft bewaard)` };
+  if ((m = /^sampler\.(\d)\.section$/.exec(action))) return { kort: `sectie→${m[1]}`, lang: `sampler-pad ${m[1]}: de sectie die je hoort op de focus-track, heel (van haar "1" tot de "1" van de volgende, in hele maten; hooguit 32 maten en 90 s), bewaard bij het nummer; de pad start daarna op de "1" van de maatgever (een sectie van 2 maten of korter: op de tel, zoals een gewone pad). Verspringt de "1" van het grid in de sectie, dan stopt de pad op de "1" ervóór (een melding zegt het). Alleen op een lege pad, anders zegt een melding waarom. Lampje: donker hemelsblauw = kan, uit = kan niet (pad gevuld of bewaard; de focus-track heeft geen secties of grid; onzeker grid; langer dan 32 maten of 90 s)` };
   if ((m = /^send\.a\.knob\.(\d)$/.exec(action))) return { kort: `echo ${SEND_A[m[1] - 1] ?? m[1]}`, lang: `echo-bus: ${SEND_A[m[1] - 1] ?? `knop ${m[1]}`}` };
   if ((m = /^send\.b\.knob\.(\d)$/.exec(action))) return { kort: `galm ${SEND_B[m[1] - 1] ?? m[1]}`, lang: `galm-bus: ${SEND_B[m[1] - 1] ?? `knop ${m[1]}`}` };
   // Vormlagen (alleen met ?vormen=1). Wat een knop doet hangt van de vorm af;
@@ -103,10 +158,14 @@ export function beschrijf(action) {
       'select.next': ['laag ▶', 'volgende vormlaag kiezen'], 'select.prev': ['◀ laag', 'vorige vormlaag kiezen'],
       react: ['reageer', 'vormlaag: hoe sterk de vorm op de mix reageert (standaard de bas op knop 1; dicht = niet)'],
       'react.source': ['reageer op', 'vormlaag: waarop de vorm reageert, rondlopend — wat de zaal hoort: laag · midden · hoog · klap · luid; '
-        + 'dan de maatgever (de track die het hardst klinkt, met grid): zijn klappen uit de analyse van het nummer · zijn tel'],
+        + 'dan de maatgever (de track die het hardst klinkt, met grid): zijn klappen uit de analyse van het nummer · zijn tel · '
+        + 'de energie van de sectie die je hoort · een nieuwe sectie'],
       'react.target': ['reageer knop', 'vormlaag: welke knop (1–6) op de mix reageert'] }[m[1]];
     if (v) return { kort: v[0], lang: v[1] };
   }
+  // De master: het insert-rack op het geheel (docs/MASTER.md), mapje master.
+  if ((m = /^master\.fx\.knob\.(\d)$/.exec(action))) return { kort: `master ${m[1]}`, lang: `master-rack: knop ${m[1]} (wat die doet hangt van het rack af; voor de hele mix)` };
+  if ((m = /^master\.fx\.knob\.(\d)\.hold$/.exec(action))) return { kort: `master ${m[1]}!`, lang: `master-rack: knop ${m[1]} vol open zolang je drukt` };
   if ((m = /^video\.fx\.(\w+)\.hold$/.exec(action))) return { kort: `${VIDEO[m[1]] ?? m[1]}!`, lang: `video ${VIDEO[m[1]] ?? m[1]} vol aan zolang je drukt` };
   if ((m = /^video\.fx\.(\w+)$/.exec(action))) return { kort: VIDEO[m[1]] ?? m[1], lang: `video-effect ${VIDEO[m[1]] ?? m[1]}` };
   if ((m = /^layer\.(\w+)\.(\w+)$/.exec(action))) {
@@ -127,9 +186,16 @@ export function beschrijf(action) {
     'log.replay.stop': ['stop terug', 'terugspelen van een handelingenlog stoppen (de tracks spelen door)'],
     'sampler.length': ['tellen', 'sampler: hoeveel tellen een lege pad pakt (1/2/4/8)'],
     'sampler.volume': ['sampler', 'sampler-volume'],
+    'headphone.level': ['kopt. vol', 'koptelefoon: volume'],
+    'headphone.mix': ['kopt. mix', 'koptelefoon: mix, links alleen wat je voorbeluistert, rechts alleen de zaal'],
+    'master.fx.mix': ['master mix', 'master-effect dry/wet, voor de hele mix (vóór de limiter)'],
+    'master.fx.bypass': ['master aan/uit', 'master-effect aan/uit (lampje brandt = effect aan)'],
+    'master.fx.next': ['master fx ▶', 'master: volgend los effect'],
+    'master.rack.next': ['master rack ▶', 'master: volgend rack (de kant-en-klare)'],
+    'master.rack.prev': ['◀ master rack', 'master: vorig rack (de kant-en-klare)'],
     'focus.next': ['focus ▶', 'focus naar de volgende track'], 'focus.prev': ['◀ focus', 'focus naar de vorige track'],
-    'video.mode': ['mengvorm', 'video: volgende mengvorm'], 'video.pulse': ['puls', 'video: puls op de tel'],
-    'video.pulse.target': ['puls-doel', 'video: wat er op de tel pulst'],
+    'video.mode': ['mengvorm', 'video: volgende mengvorm'], 'video.pulse': ['puls', 'video: puls op de tel; op een nieuwe sectie vol (dicht = uit)'],
+    'video.pulse.target': ['puls-doel', 'video: wat er op de tel (en op een nieuwe sectie) pulst'],
     'video.fit': ['passend', 'video: passend (randen) of vullen (bijsnijden)'],
     // Auto-DJ (docs/AUTO-DJ.md §4): de modus auto op de APC, Shift + scene 4.
     'auto.aan': ['auto', 'auto-DJ aan/uit (lampje: fel limoen = aan, donker = uit)'],
@@ -142,6 +208,12 @@ export function beschrijf(action) {
     'video.freeze': ['bevries', 'video: het beeld bevriezen aan/uit (de video\'s lopen door, loslaten = meteen het goede beeld)'],
     'video.master': ['beeld', 'video: master, de helderheid van het eindbeeld (dicht = zwart)'],
     'video.flash': ['flits', 'video: een witte flits die snel uitdooft'],
+    // Patronen (docs/PATRONEN.md): de modus patronen, Shift + scene 2.
+    'patterns.stop': ['pat stop', 'patronen: alles stoppen op de maat'],
+    'patterns.stop.now': ['pat stop!', 'patronen: alles meteen stoppen'],
+    'patterns.tempo': ['pat tempo', 'patronen: het eigen tempo als er geen maatgever is (40–240 bpm)'],
+    'patterns.tap': ['pat tap', 'patronen: het eigen tempo tikken'],
+    'patterns.record': ['pat rec', 'patronen: live opnemen aan/uit (wat je speelt komt in het patroon dat speelt, op de stap)'],
   };
   if (vast[action]) return { kort: vast[action][0], lang: vast[action][1] };
   return { kort: action, lang: action };

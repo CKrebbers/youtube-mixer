@@ -79,6 +79,7 @@ export class Handelingenlog {
     this.sessie = s;
     this.buffer = [];
     this.regels = 0;
+    this._tijd = 0;
     this.t0 = this.klok();
     this.gebeurtenis('kop', { versie: LOG_VERSIE, begon: this.datum().toISOString(), klok: opMicro(this.t0), opname, ...kop });
     if (stand) this.gebeurtenis('stand', stand);
@@ -98,17 +99,46 @@ export class Handelingenlog {
     return begin;
   }
 
-  /** Eén action van de bus. Heet pad: een regel maken en klaar. */
-  neem(actie, waarde) {
+  /**
+   * Eén action van de bus. Heet pad: een regel maken en klaar.
+   * `laat` (terugspelen, invoke-opties): de regel kwam zoveel seconden na zijn
+   * moment de bus op. Hij staat er dan op dat bedoelde moment, zodat een
+   * opname van een terugspelen (opnieuw renderen) niet per generatie een tik
+   * opschuift.
+   */
+  neem(actie, waarde, laat = 0) {
     if (!this.sessie) return;
-    this.buffer.push(asciiJson([opMicro(this.klok() - this.t0), actie, waarde === undefined ? null : waarde]));
+    // Nooit vóór de regel ervóór: de volgorde in het bestand blijft die van de bus.
+    const t = Math.max(this._tijd ?? 0, opMicro(this.klok() - this.t0 - (laat > 0 ? laat : 0)));
+    const w = waarde === undefined ? null : waarde;
+    this.buffer.push(asciiJson([t, actie, w]));
+    this._laatste = { buf: this.buffer, i: this.buffer.length - 1, t, actie, w };
+    this._tijd = t;
     this.regels++;
+  }
+
+  /**
+   * Een vierde element aan de LAATSTE actieregel: wat de action zelf bepaalde.
+   * Alleen als die regel met `voorvoegsel` begint, een druk is (true) en nog
+   * niet weg is. Voor een sectiedruk: `{ van }`, de tracktijd waarvan de sprong
+   * rekende (deck 'sectiedruk', logboek.js). Terugspelen neemt daarmee precies
+   * dezelfde beslissing (welke "1"); een oudere terugspeler leest alleen de
+   * eerste drie elementen. Geeft true als het gelukt is.
+   */
+  vulAan(voorvoegsel, extra) {
+    const l = this._laatste;
+    if (!this.sessie || !l || l.buf !== this.buffer || l.w !== true || !l.actie.startsWith(voorvoegsel)) return false;
+    this.buffer[l.i] = asciiJson([l.t, l.actie, l.w, extra]);
+    this._laatste = null;
+    return true;
   }
 
   /** Iets wat niet (alleen) op de bus staat: laden, focus, een rack- of gridwissel. */
   gebeurtenis(e, data = {}) {
     if (!this.sessie) return;
-    this.buffer.push(asciiJson({ t: opMicro(this.klok() - this.t0), e, ...data }));
+    const t = opMicro(this.klok() - this.t0);
+    this.buffer.push(asciiJson({ t, e, ...data }));
+    this._tijd = Math.max(this._tijd ?? 0, t);
     this.regels++;
   }
 
@@ -214,6 +244,42 @@ export function leesLog(tekst) {
   return { kop, stand, eind, regels, kapot, duur };
 }
 
+/** Een sectiedruk op de bus (track.N.section.*). */
+const SECTIEDRUK = /^track\.\d+\.section\./;
+
+/**
+ * De luisteraar op de bus (actions.bijInvoke) die het log vult, voor
+ * logboek.js. `kijk` vergelijkt wat buiten de bus om verandert (rack, grid,
+ * hotcues, sectiekaart, pads) en schrijft het als gebeurtenis.
+ * - Een knop (boolean) kan zelf een rack, grid of pad veranderen: kijk() als
+ *   microtask, dus direct ACHTER de action.
+ * - Een sectiedruk: kijk() eerst, synchroon. Een sectiekaart die net binnenkwam
+ *   (laden.js, haalSecties; kijk draait verder elke 100 ms) stond anders ná de
+ *   druk in het log, en bij terugspelen zag de druk nog geen kaart.
+ * - `o.laat` (terugspelen): de regel staat op zijn bedoelde moment (neem).
+ */
+export function busNaarLog(log, kijk) {
+  return (id, v, o) => {
+    if (!log.bezig) return;
+    if (v === true && SECTIEDRUK.test(id)) kijk();
+    log.neem(id, v, o?.laat);
+    if (typeof v === 'boolean') queueMicrotask(kijk);
+  };
+}
+
+/**
+ * De plek waarvan een sectiesprong rekende bij de druk in het log (een vierde
+ * element, Handelingenlog.vulAan). De deck meldt hem tijdens de action zelf
+ * ('sectiedruk'), dus direct na de regel die busNaarLog net schreef. Geeft een
+ * functie die weer ophoudt.
+ */
+export function koppelSectiedruk(engine, tracks, log) {
+  const af = tracks.map(([nr, id]) => engine.deck(id).on('sectiedruk', ({ van }) => {
+    try { if (log.bezig && Number.isFinite(van)) log.vulAan(`track.${nr}.section.`, { van }); } catch (_) {}
+  }));
+  return () => { for (const f of af) f(); };
+}
+
 /**
  * Trigger-actions waarvan de read een STAND is die je terugzet door te
  * drukken tot hij klopt: een knop die rondloopt (curve, tellen, mengvorm), of
@@ -233,9 +299,14 @@ export const RONDLOPERS = ['mixer.xfader.curve', 'sampler.length', 'video.mode',
  * `track.N.key` (de toonsoort van de plaat hier) zou de toonsoortkaart
  * bewerken en een automatische kaart "met de hand" maken: die kaart hoort
  * bij het nummer in de library, niet bij de set (zie OVERSLAAN in
- * terugspelen.js).
+ * terugspelen.js). `headphone.*` (de koptelefoon) hoort niet bij wat er
+ * klinkt en wordt bij terugspelen overgeslagen; `track.N.inst.knob.K` (een
+ * instrument) ook (docs/INSTRUMENTEN.md §6). `track.N.pattern.length/swing`
+ * bewerken een patroon, en dat is al bewaard bij de set (docs/PATRONEN.md):
+ * de beginstand zou het nog eens bewerken. Het eigen tempo (`patterns.tempo`)
+ * hoort wel bij wat je hoort en staat er wel in.
  */
-export const NIET_IN_WAARDEN = /^track\.\d+\.(seek|pitch|tempo|grid\.bpm|key)$/;
+export const NIET_IN_WAARDEN = /^(track\.\d+\.(seek|pitch|tempo|grid\.bpm|key|inst\..+|pattern\..+)|headphone\..+)$/;
 
 /** Het rack van een track zoals het log het bewaart: inhoud én live standen. */
 export function rackStand(fx) {
@@ -270,15 +341,27 @@ export function leesStand({ engine, tracks, herkomst, acties, lees }) {
       // Een track die op zijn start op de maat WACHT (dj-transport) speelt nog
       // niet: `wacht`, en terugspelen start hem opnieuw op de maat.
       positie: d.position, speelt: !!d.playing && !d.wacht, wacht: !!d.wacht, rate: d.rate, bereik: d.pitchBereik,
+      // Keylock en toon (docs/KEYLOCK.md): track.N.keylock is een toggle, dus
+      // zonder beginstand speelde een log dat met keylock begon omgekeerd terug.
+      keylock: !!d.keylock, toon: d.transpositie ?? 0,
       cue: d.cuePoint ?? 0, hotcues: [...(d.hotcues || [])],
       loop: d.loop ? { start: d.loop.start, end: d.loop.end, tellen: d.loopBeats ?? null } : null,
       grid: d.grid ? d.grid.toJSON() : null,
+      // De sectiekaart (docs/SECTIES.md): `section.5` betekent wat deze kaart
+      // zegt. Terugspelen zet hem terug en haalt hem niet van de server, die
+      // kan intussen opnieuw gerekend hebben (een ander grid). Een sectie-loop
+      // staat hierboven als gewone `loop`.
+      secties: d.buffer && d.sectieKaart ? d.sectieKaart.toJSON() : null,
       kant: engine.kant?.[id] ?? null,
       rack: rackStand(d.fx),
       // De kill-SCHAKELAARS (dj-klank): track.N.kill.* zijn toggles, dus een
       // log dat met een kill aan begint speelde anders omgekeerd terug. De
       // drukvariant (killVast) is loslaten = weg, die hoort niet in een stand.
       kill: { ...(d.kill || {}) },
+      // Stem-kills (docs/STEMS.md): ook schakelaars, dus om dezelfde reden in
+      // de stand. Ze horen bij het NUMMER (een laad zet ze open), dus alleen
+      // als er stems zijn; de niveaus staan als value-action in `waarden`.
+      stemKill: d.stems ? { ...d.stemKill } : null,
       // Beatjump-lengte (dj-transport): halve/double zijn geen rondlopers.
       sprong: d.sprongTellen ?? null,
     });
@@ -297,5 +380,9 @@ export function leesStand({ engine, tracks, herkomst, acties, lees }) {
     ? { track: trackVan(p.deckId), van: p.van, tot: p.tot, bpm: p.bpm ?? null, tellen: p.tellen ?? null, speelt: !!p.speelt }
     : null));
   uit.herinneringen = herinneringenVan(sampler, trackVan);
+  // Patronen (docs/PATRONEN.md): welke plek er op welke track speelt (of op de
+  // maat wacht). Terugspelen start ze opnieuw op de maat; de noten zelf staan
+  // in de set op de server, niet in het log.
+  uit.patronen = engine.patronen ? { speelt: engine.patronen.spelend().map(({ id, plek }) => ({ track: trackVan(id), plek })) } : null;
   return uit;
 }

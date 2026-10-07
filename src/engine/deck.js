@@ -1,10 +1,13 @@
 import { Emitter, clamp, piek } from '../lib/emitter.js';
-import { createDeckChain, setEqBand, killEqBand, setBipolarFilter, filterDoelen, faderGain } from './audio-graph.js';
+import { createDeckChain, setEqBand, killEqBand, killVersterking, setBipolarFilter, filterDoelen, faderGain,
+  maakStemFilter, stemFilterOpen, stemFilterDoelen } from './audio-graph.js';
 import { Beatgrid } from './beatgrid.js';
+import { meetGrid } from './tellen.js';
 import { ToonKaart } from './toonsoort.js';
+import { SectieKaart, sectieDoel, sectieEen, BEGIN_MARGE } from './secties.js';
 import { BufferBron, StreamBron, geheugenHaal } from './bron.js';
-import { maakWav } from './stream-kern.js';
-import { InsertSlot } from './fx.js';
+import { maakWav, KANALEN } from './stream-kern.js';
+import { InsertSlot, zetDoel } from './fx.js';
 import { hoorbaar, uitgangsVertraging } from './hoorbaar.js';
 import { startDrempel, houdVast, zetVervolg } from './overgang.js';
 
@@ -28,8 +31,18 @@ export const REM_STANDAARD = 1;
 export const EQ_BANDEN = ['low', 'mid', 'high'];
 /** Hoeveel een nudge (bend) versnelt of vertraagt zolang je drukt. */
 export const BEND = 0.04;
+/** Toonverschuiving: halve tonen, ±12 (K5, docs/KEYLOCK.md). */
+export const TOON_MAX = 12;
+/** Zoveel bewerkingen van het grid kunnen terug (deck.gridTerug). */
+export const GRID_TERUG = 30;
 /** Beatjump-lengtes in tellen, te halveren en te verdubbelen. Standaard 4. */
 export const SPRONG_TELLEN = [1, 2, 4, 8, 16, 32];
+/**
+ * Hoe ver (tracktijd, s) een teruggespeelde druk naast zijn plek uit het log mag
+ * liggen om die plek te gebruiken (drukPlek): een tik plus een paar stappen van
+ * de audioklok. Verder ernaast greep iemand in, en geldt de plek van nu.
+ */
+export const DRUK_NAAST = 0.05;
 /**
  * Glijden (Deck.glide, de auto-DJ): in zoveel seconden naar een nieuwe stand,
  * als helling op de audioklok. Wie glijdt, richt hem steeds opnieuw (elke
@@ -54,6 +67,42 @@ function glijStand(g, t) {
   if (t >= g.t1) return g.naar;
   if (t < g.t0) return g.vorige ? glijStand(g.vorige, t) : g.van;
   return g.van + (g.naar - g.van) * (t - g.t0) / (g.t1 - g.t0);
+}
+
+/**
+ * De stems die een track kan hebben (docs/STEMS.md). `inst` is alles behalve
+ * de zang: bij twee stems een eigen paar, bij vier de groep drums + bas +
+ * overig (één knop voor alle drie, zodat "zonder zang" en "alleen zang" in
+ * beide standen dezelfde knoppen zijn).
+ */
+export const STEM_NAMEN = ['vocals', 'inst', 'drums', 'bass', 'other'];
+/** Welke namen bij welk aantal horen (de volgorde in het bestand mag anders). */
+export const STEM_STANDEN = { 2: ['vocals', 'inst'], 4: ['drums', 'bass', 'other', 'vocals'] };
+/** De send-bussen van een stem, zoals die van de track: A = echo, B = galm (engine.sends). */
+export const STEM_BUSSEN = ['A', 'B'];
+/**
+ * Een stemfilter dat terug in het midden komt: zo lang (s) mag het filter
+ * teruglopen (5 × de τ van 10 ms van de knop: 99%) voordat de stem er weer
+ * langs gaat. Wie eerder weer draait, haalt die overgang weg (houdVast).
+ */
+export const STEM_FILTER_TERUG = 0.05;
+
+/**
+ * Klopt `{ namen, schaal }` van een stems-bestand? Null als het klopt,
+ * anders de reden. Twee of vier namen, precies die van één stand, elk één
+ * keer; schaal (ontbreekt = 1) groter dan 0 en hooguit 1.
+ */
+export function controleerStems(stems) {
+  if (!stems || !Array.isArray(stems.namen)) return 'stems zonder namen';
+  const { namen } = stems;
+  const stand = STEM_STANDEN[namen.length];
+  if (!stand) return `${namen.length} stems wordt niet ondersteund (alleen 2 of 4)`;
+  if (new Set(namen).size !== namen.length || !stand.every((n) => namen.includes(n))) {
+    return `stems ${namen.join(', ')}: verwacht ${stand.join(', ')}`;
+  }
+  const schaal = stems.schaal ?? 1;
+  if (!(typeof schaal === 'number' && schaal > 0 && schaal <= 1)) return `stems: schaal ${schaal} moet tussen 0 en 1 liggen`;
+  return null;
 }
 
 /**
@@ -100,6 +149,15 @@ export class Deck extends Emitter {
     this.kill = { low: false, mid: false, high: false };
     this.killVast = { low: false, mid: false, high: false };
     this._killHoorbaar = { low: false, mid: false, high: false };   // wat er nu op de EQ staat
+    // Stems (docs/STEMS.md): null, of { namen, aantal, schaal } van wat er
+    // geladen is. Niveau 0..1 per stem en een kill (schakelaar + drukknop),
+    // zoals de EQ-kill. Ze horen bij het NUMMER: elke laad zet ze terug op
+    // open (_naLaden). `_stemNu` = wat er nu op stemIn[k] staat (het doel).
+    this.stems = null;
+    this.stemNiveaus = Object.fromEntries(STEM_NAMEN.map((n) => [n, 1]));
+    this.stemKill = Object.fromEntries(STEM_NAMEN.map((n) => [n, false]));
+    this.stemKillVast = Object.fromEntries(STEM_NAMEN.map((n) => [n, false]));
+    this._stemNu = this.chain.stemIn.map(() => 1);
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.loop = null;           // {start, end}
@@ -112,6 +170,11 @@ export class Deck extends Emitter {
     this.vorigeLoop = null;     // voor reloop: de laatste loop die eraf ging
 
     this.grid = null;           // Beatgrid, of null als de track nog niet uitgemeten is
+    this.gridVersie = 0;        // telt bij elke wijziging van het grid (setGrid, gridGewijzigd): voor caches
+    // De tellen van Beat This! (docs/BEATGRID.md §11): { beats, downbeats }
+    // als gesorteerde Float64Arrays, of null. Alleen data, zoals de onsets: de
+    // UI zet ze na het laden; de zoom tekent ze, het scherm meet er het grid mee.
+    this.tellen = null;
     // Onset-pieken (tracktijd, s), gesorteerde Float64Array, of null. Alleen
     // data: de UI zet ze na het laden van een library-nummer, "tel 1 hier"
     // snapt ernaar en de zoom tekent ze. Het deck rekent er zelf niet mee.
@@ -120,11 +183,18 @@ export class Deck extends Emitter {
     // Toonsoortkaart (src/engine/toonsoort.js) of null. Van de PLAAT, in
     // tracktijd, en net als het grid van de app: het deck kent geen library.
     this.toonKaart = null;
-    // Afspraak met het keylock-spoor (TOONSOORT.md §6, KEYLOCK.md): zolang er
-    // geen keylock is klinkt de toon mee met de pitch, en klopt de formule in
-    // `toonsoort` al voor de pitchfader. Keylock en transponeren komen hier.
-    this.keylock = false;
-    this.transpositie = 0;      // halve tonen, mag een breuk zijn
+    this.sectieKaart = null;
+    this._sectieSprong = null;
+    // Keylock en transponeren (docs/KEYLOCK.md, gebouwd 5 okt): een keuze van
+    // de DJ op het deck; de StreamBron speelt ze (door een stretcher). Keylock
+    // blijft staan bij een nieuw nummer (K4, een voorkeur zoals het
+    // pitchbereik), de toon gaat terug naar 0 (K5, zoals de pitch).
+    this._keylock = false;
+    this._toon = 0;             // halve tonen, −12..+12
+    // Een eigen toon per stem (6 okt), bovenop die van de track: halve tonen
+    // per stemnaam (inst bij vier stems = drums, bas en overig samen).
+    this._stemToon = {};
+    this._gridTerug = [];       // grids van vóór een bewerking met de hand (gridTerug)
 
     /*
      * Sends: na de fader, vóór de crossfader. Fader dicht = er gaat niets
@@ -137,6 +207,38 @@ export class Deck extends Emitter {
     this.sendB.gain.value = 0;
     this.chain.fader.connect(this.sendA);
     this.chain.fader.connect(this.sendB);
+
+    /*
+     * Stem-sends (docs/STEMS.md §5): per stem een eigen echo en galm, getapt
+     * na het stemfilter. Een track-send zit NA de fader; een stem heeft geen
+     * eigen fader, dus de stem-sends gaan door een SPIEGEL van de fader: een
+     * versterking per bus die in dezelfde codepaden dezelfde automatisering
+     * krijgt als de fader zelf (applyUi, set, glide via _glijParams). Fader
+     * dicht = ook de stems sturen niets meer in, echo-out zoals bij de track;
+     * de auto-DJ die de fader laat glijden, laat de spiegel sample voor sample
+     * mee glijden. Trim zit in de versterking per stem (die glijdt niet). EQ,
+     * effect en trackfilter horen bij de som: daar gaat een stem-send niet door.
+     *
+     *   stem k (na zijn filter) -> send (knop² × trim) -> spiegel van de fader -> bus
+     *
+     * De spiegels bestaan altijd (twee stille versterkingen per deck: zo volgen
+     * ze de fader vanaf het begin, ook midden in een glijbeurt).
+     */
+    this.stemSends = {};
+    for (const bus of STEM_BUSSEN) this.stemSends[bus] = { fader: ctx.createGain() };
+    // De ingang van de stem-cue in de koptelefoon (maakStemCue): alleen als er een koptelefoon is.
+    this.stemCue = null;
+    // Per uitgang k wat er van zijn stemkanaal bestaat: { filter, send: { A, B }, cue, nu }.
+    // Elk deel komt er pas bij als het voor het eerst iets moet doen, en
+    // begint stil; daarna blijft het (er gaat nooit iets los). `nu` = wat er op
+    // de nodes staat (de doelen), zodat alleen wat verandert wordt aangeraakt.
+    this.stemKanalen = this.chain.stemIn.map(() => ({ filter: null, send: { A: null, B: null }, cue: null,
+      nu: { filter: false, doelen: filterDoelen(0.5), send: { A: 0, B: 0 }, cue: 0 } }));
+    // Per stem (bij het NUMMER, zoals niveau en kill): filter 0..1 (0,5 = open),
+    // sends 0..1 per bus, cue aan/uit.
+    this.stemFilters = Object.fromEntries(STEM_NAMEN.map((n) => [n, 0.5]));
+    this.stemSendStand = Object.fromEntries(STEM_BUSSEN.map((b) => [b, Object.fromEntries(STEM_NAMEN.map((n) => [n, 0]))]));
+    this.stemPfl = Object.fromEntries(STEM_NAMEN.map((n) => [n, false]));
 
     // UI-state, genormaliseerd 0..1 — precies wat MIDI later ook levert.
     // `ui.x` LEEST de stand van nu: tijdens het glijden (glide) de tussenstand
@@ -168,6 +270,7 @@ export class Deck extends Emitter {
     if (this.bron === bron) return;
     this.bron?.vernietig();
     this.bron = bron;
+    bron.zetRek?.({ keylock: this._keylock, toon: this._toon, stems: this._stemToonPerPaar() });
     bron.onEinde = () => this.emit('change', this);
     bron.onFout = (tekst) => this.emit('fout', tekst);
     // De rem is uitgelopen: de bron staat nu stil op die plek (een pauze).
@@ -192,21 +295,39 @@ export class Deck extends Emitter {
   /**
    * Streamen vanaf de server: wat uit de library komt. Een paar MB in het
    * geheugen in plaats van 23 MB per minuut.
+   *
+   * `opties.stems = { namen, schaal }`: het bestand is een stems.wav (twee of
+   * vier stems als stereoparen, docs/STEMS.md). Het aantal kanalen moet dan
+   * namen × 2 zijn, anders weigert de bron met een reden en blijft de oude
+   * track staan (de app valt terug op audio.wav). Zonder stems: stereo.
    */
   async laadStream(url, title, opties) {
-    if (!(this.bron instanceof StreamBron)) this._zetBron(new StreamBron(this.ctx, this.chain.input, opties));
+    const stems = opties?.stems ?? null;
+    if (stems) {
+      const fout = controleerStems(stems);
+      if (fout) throw new Error(fout);
+    }
+    // De bron NIET met de opties van deze laad maken: een `haal` daarin werd
+    // zijn standaard, en na een los bestand of de demo (laadGeheugen, de eerste
+    // laad op een vers deck) las elke library-laad dan uit dat geheugen in
+    // plaats van van de server: het verkeerde nummer onder de goede titel.
+    // `haal` gaat per laad mee, hieronder.
+    if (!(this.bron instanceof StreamBron)) this._zetBron(new StreamBron(this.ctx, this.chain.stemIn));
     // Cue en hotcues NIET hier wissen maar pas in _naLaden: mislukt de laad
     // (404, verkeerd formaat), dan staat de oude track er nog, met zijn punten.
     this._laadt = (this._laadt || 0) + 1;
+    const bron = this.bron;
     try {
-      await this.bron.laad({ url, haal: opties?.haal });
+      await bron.laad({ url, haal: opties?.haal, kanalen: stems ? stems.namen.length * 2 : KANALEN });
     } catch (err) {
       if (err.vervangen) return false;      // er kwam een nieuwere laad overheen: die wint
       throw err;
     } finally {
       this._laadt--;
     }
-    this._naLaden(title);
+    // Intussen leeggemaakt (er kwam een instrument op, leeg()): dit nummer hoort hier niet meer.
+    if (this.bron !== bron) return false;
+    this._naLaden(title, stems);
     return true;
   }
 
@@ -223,20 +344,136 @@ export class Deck extends Emitter {
     return this.laadStream(`geheugen:${this.id}:${this._geheugenNr}`, title, { haal: geheugenHaal(wav) });
   }
 
-  _naLaden(title) {
-    this.title = title || 'untitled';
+  /** Wordt er nu iets geladen (laadStream loopt nog)? */
+  get laadt() { return !!this._laadt; }
+
+  /**
+   * Het nummer eraf: de track is daarna leeg, zoals bij het opstarten. Voor
+   * een instrument op deze track (ST7: een track draagt een nummer óf een
+   * instrument, docs/INSTRUMENTEN.md §6). Ook een laad die nog loopt telt
+   * niet meer (laadStream ziet een andere bron en geeft false).
+   *
+   * Klikvrij: de oude bron stopt met zijn eigen uitvloeien (DECLICK, of de
+   * overgang van de streamkern) en wordt pas daarna opgeruimd; losmaken
+   * terwijl er nog signaal loopt tikt. De strip (EQ, effect, fader, sends)
+   * blijft zoals hij is: die is van de track, niet van het nummer.
+   * Meldt 'load' (iets anders op deze track: hotcue-opslag en sampler laten
+   * het oude nummer los) en 'change'.
+   */
+  leeg() {
+    const oud = this.bron;
+    try { oud.stop(); } catch (_) {}
+    oud.onEinde = null;
+    oud.onFout = null;
+    oud.onRemKlaar = null;
+    this.bron = null;                       // _zetBron ruimt de oude dan niet meteen op
+    this._zetBron(new BufferBron(this.ctx, this.chain.input));
+    const t = setTimeout(() => { try { oud.vernietig(); } catch (_) {} }, 100);
+    t?.unref?.();
+    clearTimeout(this._wisselTimer);
+    this._wisselTimer = null;
+    this.title = '— leeg —';
+    this._zetStems(null);
     this.cuePoint = 0;
     this.hotcues = [null, null, null, null];
     this.grid = null;
+    this.gridVersie++;
     this.onsets = null;
+    this.tellen = null;
     this.toonKaart = null;
+    this.sectieKaart = null;
+    this._sectieSprong = null;
+    this.loopBeats = null;
+    this.loopInPunt = null;
+    this.vorigeLoop = null;
+    this.buigt = 0;
+    this._gridTerug = [];
+    this.setRate(1);
+    this.setTranspositie(0);
+    this.fx.heranker();
+    this.emit('load', this);
+  }
+
+  _naLaden(title, stems = null) {
+    this.title = title || 'untitled';
+    this._zetStems(stems);
+    this.cuePoint = 0;
+    this.hotcues = [null, null, null, null];
+    this.grid = null;
+    this.gridVersie++;
+    this.onsets = null;
+    this.tellen = null;
+    this.toonKaart = null;
+    this.sectieKaart = null;
+    this._sectieSprong = null;
     this.loopBeats = null;
     this.loopInPunt = null;
     this.vorigeLoop = null;
     // Een nieuw nummer begint op 0%: de pitch van het vorige zegt niets over
-    // dit nummer. Het bereik blijft staan, dat is een keuze van de DJ.
+    // dit nummer. Het bereik blijft staan, dat is een keuze van de DJ. Zo ook
+    // de toon (K5); keylock blijft staan (K4).
+    this._gridTerug = [];
     this.setRate(1);
+    this.setTranspositie(0);
     this.emit('load', this);
+  }
+
+  // ---- keylock en toon (docs/KEYLOCK.md) -----------------------------------
+
+  /** Keylock: het tempo verandert, de toon blijft staan. */
+  get keylock() { return this._keylock; }
+  /** Toonverschuiving in halve tonen (−12..+12), met of zonder keylock (K8). */
+  get transpositie() { return this._toon; }
+
+  setKeylock(aan) {
+    const v = !!aan;
+    if (v === this._keylock) return;
+    this._keylock = v;
+    this.bron.zetRek?.({ keylock: v, toon: this._toon, stems: this._stemToonPerPaar() });
+    this.emit('change', this);
+  }
+
+  setTranspositie(n) {
+    const v = Math.max(-TOON_MAX, Math.min(TOON_MAX, Math.round(Number(n) || 0)));
+    if (v === this._toon) return;
+    this._toon = v;
+    this.bron.zetRek?.({ keylock: this._keylock, toon: v, stems: this._stemToonPerPaar() });
+    this.emit('change', this);
+  }
+
+  /**
+   * Een eigen toon voor één stem (halve tonen, −TOON_MAX..+TOON_MAX), bovenop
+   * de toon van de track; het tempo blijft (6 okt). `inst` bij vier stems
+   * telt op bij drums, bas en overig. Een stem die er niet is: niets. Een
+   * nieuw nummer begint weer op 0, zoals de toon van de track (K5).
+   */
+  setStemToon(s, n) {
+    if (!this.stemBestaat(s)) return;
+    const v = Math.max(-TOON_MAX, Math.min(TOON_MAX, Math.round(Number(n) || 0)));
+    if (v === (this._stemToon[s] ?? 0)) return;
+    if (v) this._stemToon[s] = v; else delete this._stemToon[s];
+    this.bron.zetRek?.({ keylock: this._keylock, toon: this._toon, stems: this._stemToonPerPaar() });
+    this.emit('change', this);
+  }
+
+  /** De eigen toon van een stem (halve tonen), of null als die stem er niet is. */
+  stemToon(s) { return this.stemBestaat(s) ? (this._stemToon[s] ?? 0) : null; }
+
+  /** De toonsoort die je van deze stem HOORT (zoals `toonsoort`, met zijn eigen toon erbij), of null. */
+  stemToonsoort(s) {
+    if (!this.toonKaart || !this.stemBestaat(s)) return null;
+    const vier = this.stems.aantal === 4;
+    const extra = (this._stemToon[s] ?? 0) + (vier && s !== 'vocals' && s !== 'inst' ? (this._stemToon.inst ?? 0) : 0);
+    return this.toonKaart.hoorbaarBij(hoorbaar(this, uitgangsVertraging(this.ctx)),
+      { rate: this.rate, transpositie: this._toon + extra, keylock: this._keylock });
+  }
+
+  /** Halve tonen per stereopaar van het bestand (de stems op volgorde), of null zonder stems of zonder eigen toon. */
+  _stemToonPerPaar() {
+    if (!this.stems) return null;
+    const vier = this.stems.aantal === 4, inst = this._stemToon.inst ?? 0;
+    const uit = this.stems.namen.map((n) => (this._stemToon[n] ?? 0) + (vier && n !== 'vocals' ? inst : 0));
+    return uit.some((x) => x !== 0) ? uit : null;
   }
 
   // ---- transport ---------------------------------------------------------
@@ -306,7 +543,7 @@ export class Deck extends Emitter {
    * fractie van een tel die over de loopgrens valt, wordt teruggevouwen in de
    * loop in plaats van hem te verlaten.
    */
-  seek(pos, { binnenLoop = false } = {}) {
+  seek(pos, { binnenLoop = false, doorlopend = false } = {}) {
     if (!this.buffer) return;
     let p = clamp(pos, 0, this.duration);
     const l = this.loop;
@@ -317,13 +554,14 @@ export class Deck extends Emitter {
     }
     // Wacht het deck op de maat, dan blijft die start staan: alleen het punt
     // waar hij begint verschuift (hotcue, beatjump, nudge tijdens het wachten).
-    if (this.playing) this.bron.start(p, this._startOpties());
+    if (this.playing) this.bron.start(p, this._startOpties(doorlopend ? { doorlopend } : undefined));
     else this.bron.plaats(p);
     this._heranker();
     this.emit('change', this);
   }
 
-  nudge(seconds) { this.seek(this.position + seconds, { binnenLoop: true }); }
+  /** Een duwtje in de fase: met keylock fasebehoudend gepland (KEYLOCK EN TOON in bron.js). */
+  nudge(seconds) { this.seek(this.position + seconds, { binnenLoop: true, doorlopend: true }); }
 
   /** Loop eraf zonder 'change' te melden: de aanroeper meldt zelf. */
   _verlaatLoop() {
@@ -431,17 +669,29 @@ export class Deck extends Emitter {
    *
    * Null als er geen grid is of het deck stilstaat — dan loopt een gate gewoon
    * niet, en dat is eerlijker dan hem op een verzonnen tempo laten draaien.
+   *
+   * Ook de MAAT (6 okt, een sectie in de sampler): `tellenTotEen` = hoeveel
+   * tellen na die volgende tel de eerstvolgende "1" valt (0 = hij IS de "1",
+   * met het maat-anker per stuk: Beatgrid.volgendeVeelvoud), `perMaat` =
+   * tellen per maat. Wie alleen de tel nodig heeft leest ze niet. In een
+   * loop die geen heel aantal maten is komt die "1" niet: dan null.
    */
   fxKlok() {
     // Remmen: geen maat. Wat al op de tel loopt houdt zijn tempo.
     if (!this.grid || !this.playing || this.remt) return null;
     // De tel die komt, en hoe lang DIE duurt (tot de tel erna): met een
     // tempokaart is dat het tempo van het stuk waar je naartoe gaat.
-    const n = Math.ceil(this.grid.beatAt(this.position) - 1e-9);
-    const volgende = this.grid.timeOf(n);
+    const g = this.grid;
+    const n = Math.ceil(g.beatAt(this.position) - 1e-9);
+    const volgende = g.timeOf(n);
+    const per = g.beatsPerBar;
+    const lusMaten = this.loop ? (g.beatAt(this.loop.end) - g.beatAt(this.loop.start)) / per : 1;
+    const heleMaten = Math.abs(lusMaten - Math.round(lusMaten)) < 1e-3 && lusMaten > 0.5;
     return {
-      beatLengte: (this.grid.timeOf(n + 1) - volgende) / this.rate,
+      beatLengte: (g.timeOf(n + 1) - volgende) / this.rate,
       ankerCtx: this.ctxTimeOf(volgende),
+      tellenTotEen: heleMaten ? g.volgendeVeelvoud(n) - n : null,
+      perMaat: per,
     };
   }
 
@@ -568,7 +818,9 @@ export class Deck extends Emitter {
     const l = this.loop;
     const binnen = !!l && h >= l.start && h < l.end;
     if (l && !binnen) this._verlaatLoop();
-    this.seek(doel, { binnenLoop: binnen });
+    // Gequantiseerd (doel ≠ h): fasebehoudend, ook met keylock. Anders de
+    // aanslag van de hotcue zelf, exact (op T, K3).
+    this.seek(doel, { binnenLoop: binnen, doorlopend: doel !== h });
   }
 
   // ---- quantize ----------------------------------------------------------
@@ -651,14 +903,14 @@ export class Deck extends Emitter {
     if (!l) {
       // Precies OP het einde landen is ook eindigen: dan stopt hij meteen.
       if (n > 0 && doel >= this.duration) return { ok: false, waarom: 'einde' };
-      this.seek(doel);
+      this.seek(doel, { doorlopend: true });
       return { ok: true };
     }
     const start = g.verschuif(l.start, n), eind = g.verschuif(l.end, n);
     if (!this._opGrid(start) || !this._opGrid(eind)) return { ok: false, waarom: 'onzeker' };
     if (start < 0 || eind > this.duration + 1e-9) return { ok: false, waarom: 'rand' };
     // Begin en einde schuiven evenveel tellen: loopBeats blijft kloppen.
-    this._spring(doel, { start, end: eind });
+    this._spring(doel, { start, end: eind }, true);
     return { ok: true };
   }
 
@@ -666,9 +918,9 @@ export class Deck extends Emitter {
    * Loop en positie in één keer: één segment voor de streamkern, één nieuwe
    * bron voor de BufferBron. Klikvrij via de gewone overgang van een sprong.
    */
-  _spring(p, loop) {
+  _spring(p, loop, doorlopend = false) {
     const pos = clamp(p, 0, this.duration);
-    if (this.playing) this.bron.start(pos, this._startOpties({ loop }));
+    if (this.playing) this.bron.start(pos, this._startOpties(doorlopend ? { loop, doorlopend } : { loop }));
     else { this.bron.setLoop(loop.start, loop.end); this.bron.plaats(pos); }
     this._heranker();
     this.emit('change', this);
@@ -678,6 +930,7 @@ export class Deck extends Emitter {
 
   setGrid(grid) {
     this.grid = grid instanceof Beatgrid ? grid : Beatgrid.van(grid);
+    this.gridVersie++;
     this._heranker();
     this.emit('change', this);
     return this.grid;
@@ -692,8 +945,45 @@ export class Deck extends Emitter {
     // Met de hand bewerkt: geen automatisch voorstel meer, dus de server
     // analyseert hem bij het opstarten niet opnieuw (zie Beatgrid.bron).
     if (this.grid) this.grid.bron = 'hand';
+    this.gridVersie++;
     this._heranker();
     this.emit('change', this);
+  }
+
+  /**
+   * Hoe het grid op de tellen valt (meetGrid, src/engine/tellen.js), per stuk.
+   * Null zonder grid of zonder tellen. Onthouden tot het grid of de tellen
+   * veranderen: een uur is ~9.000 tellen, de renderloop vraagt elke frame.
+   */
+  get gridMeting() {
+    if (!this.grid || !this.tellen) return null;
+    const k = this._meting;
+    if (k && k.versie === this.gridVersie && k.grid === this.grid && k.tellen === this.tellen) return k.meting;
+    const meting = meetGrid(this.grid, this.tellen.beats, this.tellen.downbeats);
+    this._meting = { versie: this.gridVersie, grid: this.grid, tellen: this.tellen, meting };
+    return meting;
+  }
+
+  /**
+   * TERUG (5 okt): vóór een bewerking met de hand het grid zoals het was
+   * (of `stand`, een toJSON van vlak ervoor), zodat een verkeerde tik, pin of
+   * ×2 terug kan. Hooguit GRID_TERUG stappen; leeg bij een nieuw nummer.
+   */
+  gridVoorBewerking(stand = this.grid ? this.grid.toJSON() : null) {
+    this._gridTerug.push(stand);
+    if (this._gridTerug.length > GRID_TERUG) this._gridTerug.shift();
+  }
+
+  /** Kan het grid een stap terug? */
+  get kanGridTerug() { return this._gridTerug.length > 0; }
+
+  /** Het grid van vóór de laatste bewerking terug. False als er niets is. */
+  gridTerug() {
+    if (!this._gridTerug.length) return false;
+    const vorig = this._gridTerug.pop();
+    this.grid = vorig ? new Beatgrid(vorig) : null;
+    this.gridGewijzigd();
+    return true;
   }
 
   /**
@@ -733,7 +1023,193 @@ export class Deck extends Emitter {
   get toonsoort() {
     if (!this.toonKaart) return null;
     return this.toonKaart.hoorbaarBij(hoorbaar(this, uitgangsVertraging(this.ctx)),
-      { rate: this.rate, transpositie: this.transpositie, keylock: this.keylock });
+      { rate: this.rate, transpositie: this._toon, keylock: this._keylock });
+  }
+
+  // ---- secties (docs/SECTIES.md) ---------------------------------------
+
+  /** De sectiekaart van de server (JSON of SectieKaart), of null. */
+  setSectieKaart(kaart) {
+    this.sectieKaart = kaart ? SectieKaart.van(kaart) : null;
+    this._sectieSprong = null;
+    this.emit('change', this);
+    return this.sectieKaart;
+  }
+
+  /**
+   * De sectie die je HOORT (index vanaf 0), of −1 zonder kaart. Zelfde plek als de toonsoort.
+   * In een loop: vlak na het rondgaan staat de speelkop al op het loopbegin, maar
+   * je hoort nog een uitgangsvertraging lang het EINDE van de loop (hoorbaar.js,
+   * "Bekend"); positie min vertraging valt dan vóór het loopbegin. Dat vouwen we
+   * terug in de loop, anders flitste de sectie ervóór op (lampjes, het scherm
+   * van de Maschine). Niet tot in de laatste BEGIN_MARGE: index() telt een begin
+   * zo ver verderop al mee, en het einde van een sectie-loop IS het begin van de
+   * volgende sectie (die hoor je in de loop nooit). Alleen getallen: dit draait
+   * elk beeld.
+   */
+  get sectieHier() {
+    if (!this.sectieKaart || !this.buffer) return -1;
+    let t = hoorbaar(this, uitgangsVertraging(this.ctx));
+    const l = this.loop, len = l ? l.end - l.start : 0;
+    if (len > 0 && t < l.start && this.position >= l.start) {
+      t = Math.max(l.start, Math.min(l.start + ((((t - l.start) % len) + len) % len), l.end - 2 * BEGIN_MARGE));
+    }
+    return this.sectieKaart.index(t);
+  }
+
+  /**
+   * De sectie op de eerstvolgende "1" (index), of −1 zonder kaart: daar staat
+   * de speelkop straks echt, ook tijdens de aanloop van een sprong (dan hoor je
+   * nog de maat ervóór). Volgende/vorige rekenen hiervanaf. Zonder zeker grid:
+   * de sectie op de positie.
+   */
+  get sectieOpDeMaat() { return this.buffer ? this._sectieOpDeMaatVan(this.position) : -1; }
+
+  /** sectieOpDeMaat, gerekend vanaf tracktijd p (waar de speelkop stond bij een druk, drukPlek().p). */
+  _sectieOpDeMaatVan(p) {
+    if (!this.sectieKaart || !this.buffer) return -1;
+    const g = this.grid;
+    // Tijdens de aanloop van een sprong: de sectie waar hij heen gaat. Het grid
+    // ziet daar de maat van het stuk ervóór, en die kan een andere "1" hebben.
+    // (De aanloop zelf ligt bij terugspelen een paar ms naast: daarom het begin
+    // ervan tegen de positie van nu.)
+    // Staat p in een loop, dan kwam die loop NA elke sprong (een sprong haalt de
+    // loop eraf, een sprong naar een sectie-loop landt ervóór): die sprong telt niet meer.
+    const l = this.loop, len = l ? l.end - l.start : 0;
+    const inLoop = len > 0 && p >= l.start && p < l.end;
+    const s = this._sectieSprong;
+    if (s && !inLoop && this.position >= s.van - 1e-3 && p < s.tot) return s.i;
+    if (!g || !this.sectieKaart.opGrid || !this._opGrid(p)) return this.sectieKaart.index(p);
+    const tellen = g.barPhase(p) * g.beatsPerBar;
+    let q = tellen < 0.02 ? p : g.verschuif(p, g.beatsPerBar - tellen);
+    // In een loop: valt de volgende "1" op of na het loopeinde, dan is de speelkop
+    // daar al rondgegaan. Terugvouwen (een loop om een sectie: naar het loopbegin;
+    // een beatloop of een loop over een grens: waar hij dan staat). Anders gaf de
+    // laatste maat van een loop om sectie 2 al sectie 3: "volgende" sloeg 3 over.
+    // Op de rand (binnen BEGIN_MARGE van het einde) is het het loopbegin.
+    if (inLoop && q > l.end - BEGIN_MARGE) {
+      q = l.start + ((((q - l.start) % len) + len) % len);
+      if (q > l.end - BEGIN_MARGE) q = l.start;
+    }
+    return this.sectieKaart.index(q);
+  }
+
+  /** Begin en einde van sectie i, of null. */
+  sectieBereik(i) {
+    const k = this.sectieKaart, b = k?.begin(i);
+    return b == null ? null : { start: b, end: k.eind(i, this.duration) };
+  }
+
+  /** Is de loop nu precies sectie i? */
+  loopIsSectie(i) {
+    const r = this.sectieBereik(i), l = this.loop;
+    return !!(r && l && Math.abs(l.start - r.start) < 1e-3 && Math.abs(l.end - r.end) < 1e-3);
+  }
+
+  /**
+   * Naar sectie i (vanaf 0). Tijdens het spelen valt hij in op de
+   * eerstvolgende maat (sectieDoel: de aanloop uit het nummer zelf, geen
+   * wachten, geen struikelende fase); stilstaand op het begin. Met `loop`:
+   * de sectie wordt de loop (staat die loop er al, dan gaat hij eraf), en
+   * speel je er al in, dan blijft de speelkop waar hij is.
+   * Zonder zeker grid (of een kaart zonder grid) springt hij gewoon naar het
+   * begin, zoals een hotcue zonder quantize.
+   *
+   * Terugspelen (`laat`, `van`, docs/HANDELINGENLOG.md): de druk komt tot een
+   * tik te laat. Dan beslissen vanaf waar de speelkop stond toen je drukte
+   * (drukPlek), en het doel even ver doorschuiven als hij sindsdien speelde.
+   * Zonder dat viel een druk binnen de marge net na de "1" (0,02 tel) bij
+   * terugspelen soms buiten die marge: dezelfde sectie een maat later.
+   * @returns {{ ok: boolean, waarom?: 'leeg'|'geensecties'|'geen' }}
+   */
+  naarSectie(i, { loop = false, laat = 0, van = null } = {}) {
+    return this._naarSectie(i, loop, () => this._meldDruk(this.drukPlek({ laat, van })));
+  }
+
+  /**
+   * Naar de volgende (stap 1) of vorige (−1) sectie, gerekend vanaf de sectie
+   * op de maat (sectieOpDeMaat): tijdens een aanloop gaat "volgende" verder
+   * dan de sectie waar je al heen sprong. Eén plek voor alle beslissingen
+   * (welke sectie, al aan het eind, welke "1"): `druk` zoals bij naarSectie.
+   * Aan het eind: { ok: false, waarom: 'laatste' | 'eerste' } (de action meldt het).
+   */
+  naarSectieStap(stap, druk = {}) {
+    if (!this.buffer) return { ok: false, waarom: 'leeg' };
+    if (!this.sectieKaart) return { ok: false, waarom: 'geensecties' };
+    const plek = this._meldDruk(this.drukPlek(druk));
+    const i = this._sectieOpDeMaatVan(plek.p) + stap;
+    if (i < 0) return { ok: false, waarom: 'eerste' };
+    if (i >= this.sectieKaart.aantal) return { ok: false, waarom: 'laatste' };
+    return this._naarSectie(i, false, () => plek);
+  }
+
+  /**
+   * Meldt 'sectiedruk' { van } als hij speelt: de plek waarvan de druk rekent.
+   * Het handelingenlog zet die bij de druk (logboek.js), zodat terugspelen
+   * precies dezelfde beslissing neemt, ook "al bij de laatste sectie"; ook als
+   * de audioklok tussen twee lezingen in dezelfde taak een stap (2,67 ms)
+   * verder ging.
+   */
+  _meldDruk(plek) {
+    if (this.playing) this.emit('sectiedruk', { van: plek.p });
+    return plek;
+  }
+
+  /** De sprong zelf, vanaf plek() = { p, terug } (drukPlek; pas gelezen na de controles). */
+  _naarSectie(i, loop, plek) {
+    if (!this.buffer) return { ok: false, waarom: 'leeg' };
+    if (!this.sectieKaart) return { ok: false, waarom: 'geensecties' };
+    const r = this.sectieBereik(i);
+    if (!r || !this._loopMag(r.start, r.end)) return { ok: false, waarom: 'geen' };
+    const { p, terug } = plek();                     // waar de speelkop stond bij de druk, en hoe ver sindsdien
+    const zeker = (t) => this.sectieKaart.opGrid && this._opGrid(t);
+    const doelToen = this.playing ? sectieDoel(this.grid, p, r.start, zeker) : r.start;
+    const doel = doelToen + terug;                   // waar hij nu zou zijn, na die sprong
+    const doorlopend = doelToen !== r.start;
+    const een = this.playing && zeker(r.start) ? sectieEen(this.grid, r.start) : r.start;
+    const sprong = doel < een ? { i, van: doel, tot: een } : null;
+    if (loop) {
+      if (this.loopIsSectie(i)) { this.clearLoop(); return { ok: true }; }
+      const tellen = this.grid && zeker(r.start) ? Math.round(this.grid.beatAt(r.end) - this.grid.beatAt(r.start)) : null;
+      if (p >= r.start && p < r.end) { this._zetLoop(r.start, r.end, tellen); return { ok: true }; }
+      this._onthoudLoop();
+      this.loopBeats = tellen;
+      this._sectieSprong = sprong;
+      this._spring(doel, { start: r.start, end: r.end }, doorlopend);
+      return { ok: true };
+    }
+    if (this.loop) this._verlaatLoop();
+    this._sectieSprong = sprong;
+    this.seek(doel, { doorlopend });
+    return { ok: true };
+  }
+
+  /**
+   * Waar de speelkop stond toen je drukte (`p`, daarvan rekent een
+   * sectiesprong) en hoeveel tracktijd hij sindsdien speelde (`terug`, zoveel
+   * schuift het doel op). Live is dat nu en 0. Terugspelen komt tot een tik
+   * (10 ms) te laat en ligt een paar ms naast het origineel (de beginstand: een
+   * stap van de audioklok):
+   * - `van`: de plek uit het log, waar de sprong TOEN van rekende. Dezelfde
+   *   beslissing (welke "1"), ook als het terugspelen een paar ms naast ligt;
+   *   alleen als hij past bij waar de track nu is (DRUK_NAAST). In een loop kan
+   *   de speelkop intussen rond zijn gegaan: dan past hij een loop verder.
+   * - anders `laat` (s audioklok te laat): zoveel tracktijd terug.
+   * Stilstaand, wachtend op de maat of remmend: nu.
+   * @returns {{ p: number, terug: number }}
+   */
+  drukPlek({ laat = 0, van = null } = {}) {
+    const nu = this.position;
+    if (!this.playing || this.wacht || this.remt) return { p: nu, terug: 0 };
+    const s = laat > 0 ? laat * this.rate : 0;
+    const toen = nu - s;
+    if (Number.isFinite(van)) {
+      const l = this.loop, len = l ? l.end - l.start : 0;
+      // Rond gegaan: nu in de loop, "toen" ervóór, maar de plek uit het log in de loop.
+      const rond = len > 0 && nu >= l.start && toen < l.start && van >= l.start && van < l.end ? toen + len : null;
+      for (const t of [toen, rond]) if (t !== null && Math.abs(t - van) <= DRUK_NAAST) return { p: van, terug: s + t - van };
+    }
+    return toen >= 0 ? { p: toen, terug: s } : { p: nu, terug: 0 };
   }
 
   /**
@@ -932,10 +1408,13 @@ export class Deck extends Emitter {
     this.emit('change', this);
   }
 
-  /** De AudioParams achter een glijdende knop. */
+  /**
+   * De AudioParams achter een glijdende knop. De fader met zijn spiegels voor
+   * de stem-sends: die glijden zo sample voor sample mee.
+   */
   _glijParams(p) {
     const c = this.chain;
-    if (p === 'fader') return [c.fader.gain];
+    if (p === 'fader') return [c.fader.gain, ...this._faderSpiegels()];
     if (p === 'filter') return [c.hpf.frequency, c.hpf.Q, c.lpf.frequency, c.lpf.Q];
     if (p === 'sendA') return [this.sendA.gain];
     if (p === 'sendB') return [this.sendB.gain];
@@ -944,20 +1423,30 @@ export class Deck extends Emitter {
 
   /** Wat een knopstand op die AudioParams zet: dezelfde formules als applyUi. */
   _glijDoelen(p, u) {
-    if (p === 'fader') return [faderGain(u)];
+    if (p === 'fader') { const g = faderGain(u); return [g, ...this._faderSpiegels().map(() => g)]; }
     if (p === 'filter') return filterDoelen(u);
     return [u * u];             // sends: kwadratisch, zie applyUi
   }
 
+  /** De versterkingen die de fader volgen: de spiegels van de stem-sends. */
+  _faderSpiegels() { return STEM_BUSSEN.map((b) => this.stemSends[b].fader.gain); }
+
   applyUi(only) {
     const now = this.ctx.currentTime;
     const c = this.chain, u = this.ui;
-    if (!only || only === 'trim')   c.trim.gain.setTargetAtTime(u.trim * 2, now, 0.01);
+    if (!only || only === 'trim') {
+      c.trim.gain.setTargetAtTime(u.trim * 2, now, 0.01);
+      // Trim zit ook in de sends en de cue van elke stem (de stemkanalen).
+      if (this.stemSends) { this._pasStemSendsToe(); this._pasStemCueToe(); }
+    }
     if (!only || only === 'low')    setEqBand(c.eqLow.gain, u.low, now, this.gekild('low'));
     if (!only || only === 'mid')    setEqBand(c.eqMid.gain, u.mid, now, this.gekild('mid'));
     if (!only || only === 'high')   setEqBand(c.eqHigh.gain, u.high, now, this.gekild('high'));
     if (!only || only === 'filter') setBipolarFilter(c.hpf, c.lpf, u.filter, now);
-    if (!only || only === 'fader')  c.fader.gain.setTargetAtTime(faderGain(u.fader), now, 0.008);
+    if (!only || only === 'fader') {
+      c.fader.gain.setTargetAtTime(faderGain(u.fader), now, 0.008);
+      for (const g of this._faderSpiegels()) g.setTargetAtTime(faderGain(u.fader), now, 0.008);
+    }
     // Kwadratisch: het eerste stuk van de knop is subtiel, het laatste gooit.
     if (!only || only === 'sendA')  this.sendA.gain.setTargetAtTime(u.sendA * u.sendA, now, 0.01);
     if (!only || only === 'sendB')  this.sendB.gain.setTargetAtTime(u.sendB * u.sendB, now, 0.01);
@@ -997,6 +1486,319 @@ export class Deck extends Emitter {
       killEqBand(param, this.ui[band], weg, this.ctx.currentTime, startDrempel(this.ctx));
     }
     this.emit('change', this);
+  }
+
+  // ---- stems (docs/STEMS.md) -------------------------------------------------
+
+  /**
+   * Na elke laad: de stems van het nieuwe nummer (of null), alle niveaus op
+   * 1 en alle kills uit. Stems horen bij het NUMMER, niet bij het kanaal (de
+   * EQ-knoppen wel): een nummer dat stil zonder zang begint omdat het vorige
+   * zonder zang speelde, is erger dan opnieuw drukken. Klikvrij, voor het
+   * geval de vorige nog uitvloeit.
+   */
+  _zetStems(stems) {
+    this.stems = stems ? Object.freeze({
+      namen: Object.freeze([...stems.namen]), aantal: stems.namen.length, schaal: stems.schaal ?? 1,
+    }) : null;
+    // De toon per stem hoort bij het nummer: een nieuw nummer begint op 0.
+    if (Object.keys(this._stemToon).length) {
+      this._stemToon = {};
+      this.bron.zetRek?.({ keylock: this._keylock, toon: this._toon, stems: null });
+    }
+    for (const n of STEM_NAMEN) {
+      this.stemNiveaus[n] = 1; this.stemKill[n] = false; this.stemKillVast[n] = false;
+      this.stemFilters[n] = 0.5; this.stemPfl[n] = false;
+      for (const b of STEM_BUSSEN) this.stemSendStand[b][n] = 0;
+    }
+    this._pasStemsToe('kill');
+    // De stemkanalen terug naar open (bij het nummer). Wat er nooit gebruikt
+    // werd, bestaat niet en blijft zo.
+    this._pasStemKanalenToe();
+  }
+
+  /** Heeft deze track deze stem, in deze stand? (`inst` ook bij vier: de groep.) */
+  stemBestaat(s) {
+    if (!this.stems) return false;
+    return this.stems.namen.includes(s) || (s === 'inst' && this.stems.aantal === 4);
+  }
+
+  /** Niveau 0..1 van een stem, of null als die er niet is. */
+  stemNiveau(s) { return this.stemBestaat(s) ? this.stemNiveaus[s] : null; }
+
+  /** Is deze stem nu weg (schakelaar of drukknop)? */
+  stemGekild(s) { return !!(this.stemKill[s] || this.stemKillVast[s]); }
+
+  /** Niveau 0..1 (1 = vol, 0 = uit). Een stem die er niet is: niets. */
+  setStemNiveau(s, norm) {
+    if (!this.stemBestaat(s)) return;
+    this.stemNiveaus[s] = clamp(norm);
+    this._pasStemsToe('niveau');
+    this.emit('change', this);
+  }
+
+  /** De kill-schakelaar van een stem. Het niveau blijft staan: uit = precies terug. */
+  setStemKill(s, aan) {
+    if (!this.stemBestaat(s)) return;
+    this.stemKill[s] = !!aan;
+    this._pasStemsToe('kill');
+    this.emit('change', this);
+  }
+
+  toggleStemKill(s) { if (this.stemBestaat(s)) this.setStemKill(s, !this.stemKill[s]); }
+
+  /** De drukvariant: weg zolang `aan`, loslaten = terug (tenzij de schakelaar aan staat). */
+  houdStemKill(s, aan) {
+    if (!this.stemBestaat(s)) return;
+    this.stemKillVast[s] = !!aan;
+    this._pasStemsToe('kill');
+    this.emit('change', this);
+  }
+
+  /**
+   * Wat er op uitgang k hoort te staan (docs/STEMS.md §3), voor stem n = namen[k]:
+   *   (1 / schaal) × niveau(n) × kill(n) × (vier stems en n ≠ vocals ? niveau(inst) × kill(inst) : 1)
+   * kill = 0 als hij weg is, anders 1. `inst` werkt zo in beide standen, en
+   * drums/bas/overig doen niets bij twee (die bestaan dan niet). 1/schaal
+   * maakt goed wat de splitter eraf deed om niet te clippen: de som klinkt
+   * even hard als audio.wav. Zonder stems, en op een uitgang zonder stem: 1.
+   */
+  stemVersterking(k) {
+    const st = this.stems;
+    if (!st || k >= st.aantal) return 1;
+    const deel = (n) => (this.stemGekild(n) ? 0 : this.stemNiveaus[n]);
+    const n = st.namen[k];
+    return (1 / st.schaal) * deel(n) * (st.aantal === 4 && n !== 'vocals' ? deel('inst') : 1);
+  }
+
+  /**
+   * Gewichten per paar voor bron.knip (de sampler): wat je NU hoort vóór de
+   * EQ, zodat een pad zonder zang ook zonder zang klinkt. Null zonder stems.
+   */
+  knipGewichten() {
+    if (!this.stems) return null;
+    return Array.from({ length: this.stems.aantal }, (_, k) => this.stemVersterking(k));
+  }
+
+  /**
+   * De versterking van elke uitgang die anders moet, naar zijn doel. Een
+   * KILL (aan, uit, laden) als klikvrije S in ~5 ms na startDrempel, zoals de
+   * EQ-kill (killVersterking: hellingen, nooit een curve); een NIVEAU als
+   * doelwaarde (vasthouden + setTargetAtTime, zoals een EQ-knop). Wat niet
+   * verandert, wordt niet aangeraakt: een niveauknop op een stem die weg is
+   * laat zijn kill-overgang gewoon uitlopen.
+   */
+  _pasStemsToe(soort) {
+    const nu = this.ctx.currentTime;
+    this.chain.stemIn.forEach((g, k) => {
+      const doel = this.stemVersterking(k);
+      if (doel === this._stemNu[k]) return;
+      this._stemNu[k] = doel;
+      if (soort === 'kill') killVersterking(g.gain, doel, nu, startDrempel(this.ctx));
+      else {
+        try { houdVast(g.gain, nu); } catch (_) {}
+        try { g.gain.setTargetAtTime(doel, nu, 0.01); } catch (_) { try { g.gain.value = doel; } catch (__) {} }
+      }
+    });
+  }
+
+  // ---- stemkanalen: filter, sends en cue per stem (docs/STEMS.md §5) ----------
+  //
+  // Per stem een bipolair filter (zoals het trackfilter), een echo- en een
+  // galm-send (na het filter, × trim, door de spiegel van de fader) en een cue
+  // (voorbeluisteren, vóór de fader). Ze horen bij het NUMMER, zoals niveau en
+  // kill: elke laad zet ze terug (_zetStems). De groepsknop `inst` bij vier
+  // stems werkt op drums, bas en overig samen:
+  //   filter  in SERIE met het eigen filter: per kant het sterkste (stemFilterDoelen)
+  //   sends   de GROOTSTE van eigen en groep (twee keer insturen = niet dubbel)
+  //   cue     eigen OF groep aan (één keer in de koptelefoon, niet twee keer)
+  // Niveau en kill vermenigvuldigen (stemVersterking): die horen bij de klank
+  // van de stem; sends en cue zijn aftakkingen van hetzelfde signaal.
+
+  /** Uitgang k: welke stem (n) en hoort hij bij de groep `inst` (vier stems, niet de zang)? Null zonder stem. */
+  _stemOp(k) {
+    const st = this.stems;
+    if (!st || k >= st.aantal) return null;
+    const n = st.namen[k];
+    return { n, lid: st.aantal === 4 && n !== 'vocals' };
+  }
+
+  /** Filter 0..1 van een stem (0,5 = open), of null als die er niet is. */
+  stemFilter(s) { return this.stemBestaat(s) ? this.stemFilters[s] : null; }
+
+  /** Bipolair filter van een stem: midden = open, links lowpass, rechts highpass. Een stem die er niet is: niets. */
+  setStemFilter(s, norm) {
+    if (!this.stemBestaat(s)) return;
+    this.stemFilters[s] = clamp(norm);
+    this._pasStemFiltersToe();
+    this.emit('change', this);
+  }
+
+  /** Send A (echo) of B (galm) van een stem, 0..1, of null als die er niet is. */
+  stemSend(bus, s) { return this.stemBestaat(s) && STEM_BUSSEN.includes(bus) ? this.stemSendStand[bus][s] : null; }
+
+  /** Send van een stem naar bus A of B, 0..1 (kwadratisch, zoals de track-send). */
+  setStemSend(bus, s, norm) {
+    if (!this.stemBestaat(s) || !STEM_BUSSEN.includes(bus)) return;
+    this.stemSendStand[bus][s] = clamp(norm);
+    this._pasStemSendsToe();
+    this.emit('change', this);
+  }
+
+  /** Staat deze stem in de koptelefoon? */
+  stemPflAan(s) { return this.stemBestaat(s) && !!this.stemPfl[s]; }
+
+  /** Staat er van deze track een stem in de koptelefoon? (De engine zet daarmee de koptelefoon.) */
+  get stemPflIets() { return STEM_NAMEN.some((n) => this.stemPflAan(n)); }
+
+  /** Cue van een stem aan of uit. Zonder koptelefoon (geen maakStemCue) alleen de stand. */
+  setStemPfl(s, aan) {
+    if (!this.stemBestaat(s)) return;
+    this.stemPfl[s] = !!aan;
+    this._pasStemCueToe();
+    this.emit('change', this);
+  }
+
+  toggleStemPfl(s) { if (this.stemBestaat(s)) this.setStemPfl(s, !this.stemPfl[s]); }
+
+  /**
+   * De ingang van de stem-cue in de koptelefoon: één versterking (1), waar de
+   * cue per stem in uitkomt. De engine roept dit één keer aan, bij het maken,
+   * en alleen als er een koptelefoonuitgang is: anders geen node erbij. Geeft
+   * de tap voor `koptelefoon.voegToe`.
+   */
+  maakStemCue() {
+    if (!this.stemCue) this.stemCue = { som: this.ctx.createGain() };
+    return this.stemCue.som;
+  }
+
+  /** De stem van uitgang k NA zijn filter: stemIn, en (als het filter bestaat) lowpass en tegen. */
+  _takken(k) {
+    const f = this.stemKanalen[k].filter;
+    return f ? [this.chain.stemIn[k], f.lpf, f.tegen] : [this.chain.stemIn[k]];
+  }
+
+  /**
+   * Een aftakking van stem k na zijn filter (een send of de cue): een stille
+   * versterking (0) naar `doel`. Komt er later een filter bij, dan verbindt
+   * _filterVan zijn takken ook hiermee.
+   */
+  _tapNaar(k, doel) {
+    const g = this.ctx.createGain();
+    g.gain.value = 0;
+    for (const t of this._takken(k)) t.connect(g);
+    g.connect(doel);
+    return g;
+  }
+
+  /** Het filter van stem k, gemaakt bij het eerste gebruik (stil, zie maakStemFilter). */
+  _filterVan(k) {
+    const kan = this.stemKanalen[k];
+    if (!kan.filter) {
+      kan.filter = maakStemFilter(this.ctx, this.chain.stemIn[k], this.chain.trim);
+      for (const tap of [kan.send.A, kan.send.B, kan.cue]) {
+        if (tap) { kan.filter.lpf.connect(tap); kan.filter.tegen.connect(tap); }
+      }
+    }
+    return kan.filter;
+  }
+
+  /** Alles van de stemkanalen naar de stand (na een laad). */
+  _pasStemKanalenToe() {
+    this._pasStemFiltersToe();
+    this._pasStemSendsToe();
+    this._pasStemCueToe();
+  }
+
+  /**
+   * Het filter van elk stemkanaal. Staan eigen knop en groepsknop in het
+   * midden (stemFilterOpen), dan staan beide takken op 0: alleen de droge weg,
+   * bit voor bit zoals zonder stemfilter (en zolang het filter nooit uit het
+   * midden ging, bestaat het niet eens). Anders de takken op 1 en −1: de
+   * gefilterde stem. Wisselen is een klikvrije overgang van 5 ms
+   * (killVersterking: hellingen na startDrempel, nooit een curve); terug naar
+   * het midden pas na STEM_FILTER_TERUG, als het filter zelf (τ 10 ms, zoals
+   * de knop) weer open staat.
+   */
+  _pasStemFiltersToe() {
+    const nu = this.ctx.currentTime, wacht = startDrempel(this.ctx);
+    this.stemKanalen.forEach((kan, k) => {
+      const x = this._stemOp(k), stand = kan.nu;
+      const eigen = x ? this.stemFilters[x.n] : 0.5, groep = x?.lid ? this.stemFilters.inst : 0.5;
+      const aan = !(stemFilterOpen(eigen) && stemFilterOpen(groep));
+      if (!aan && !kan.filter) return;
+      const f = this._filterVan(k);
+      const doelen = aan ? stemFilterDoelen(eigen, groep) : filterDoelen(0.5);
+      if (doelen.some((v, i) => v !== stand.doelen[i])) {
+        stand.doelen = doelen;
+        const [hf, hq, lf, lq] = doelen;
+        for (const [p, v] of [[f.hpf.frequency, hf], [f.hpf.Q, hq], [f.lpf.frequency, lf], [f.lpf.Q, lq]]) {
+          try { p.setTargetAtTime(v, nu, 0.01); } catch (_) { try { p.value = v; } catch (__) {} }
+        }
+      }
+      if (aan === stand.filter) return;
+      stand.filter = aan;
+      const w = aan ? wacht : Math.max(wacht, STEM_FILTER_TERUG);
+      killVersterking(f.filterIn.gain, aan ? 1 : 0, nu, w);
+      killVersterking(f.tegen.gain, aan ? -1 : 0, nu, w);
+    });
+  }
+
+  /** De sends van elk stemkanaal: de grootste van eigen knop en groepsknop, kwadratisch, × trim. */
+  _pasStemSendsToe() {
+    const trim = this._ui.trim * 2;
+    this.stemKanalen.forEach((kan, k) => {
+      const x = this._stemOp(k);
+      for (const b of STEM_BUSSEN) {
+        const s = this.stemSendStand[b];
+        const v = x ? Math.max(s[x.n], x.lid ? s.inst : 0) : 0;
+        const doel = v * v * trim;
+        if (doel === kan.nu.send[b]) continue;
+        kan.nu.send[b] = doel;
+        kan.send[b] ??= this._tapNaar(k, this.stemSends[b].fader);
+        zetDoel(kan.send[b].gain, doel, this.ctx);
+      }
+    });
+  }
+
+  /**
+   * De cue van elk stemkanaal: aan (op trim, zoals de cue van de track die na
+   * trim tapt) als de stem of, bij vier, de groep aan staat. Aan en uit klikvrij
+   * zoals de cue van de track (killVersterking); een andere trim terwijl hij aan
+   * staat als een knop (zetDoel). Zonder koptelefoon (geen maakStemCue): niets.
+   */
+  _pasStemCueToe() {
+    if (!this.stemCue) return;
+    const nu = this.ctx.currentTime, wacht = startDrempel(this.ctx), trim = this._ui.trim * 2;
+    this.stemKanalen.forEach((kan, k) => {
+      const x = this._stemOp(k);
+      const doel = x && (this.stemPfl[x.n] || (x.lid && this.stemPfl.inst)) ? trim : 0;
+      const was = kan.nu.cue;
+      if (doel === was) return;
+      kan.nu.cue = doel;
+      kan.cue ??= this._tapNaar(k, this.stemCue.som);
+      if (doel === 0 || was === 0) killVersterking(kan.cue.gain, doel, nu, wacht);
+      else zetDoel(kan.cue.gain, doel, this.ctx);
+    });
+  }
+
+  /**
+   * Voor de snapshot: per stem die er is het niveau, of hij weg is, het
+   * filter, de sends (A echo, B galm) en de cue. Null zonder stems.
+   */
+  stemStand() {
+    if (!this.stems) return null;
+    const niveau = {}, weg = {}, filter = {}, send = { A: {}, B: {} }, cue = {}, toon = {};
+    for (const n of STEM_NAMEN) {
+      if (!this.stemBestaat(n)) continue;
+      toon[n] = this._stemToon[n] ?? 0;
+      niveau[n] = this.stemNiveaus[n];
+      weg[n] = this.stemGekild(n);
+      filter[n] = this.stemFilters[n];
+      for (const b of STEM_BUSSEN) send[b][n] = this.stemSendStand[b][n];
+      cue[n] = !!this.stemPfl[n];
+    }
+    return { namen: [...this.stems.namen], niveau, weg, filter, send, cue, toon };
   }
 
   level() { return piek(this.chain.analyser); }

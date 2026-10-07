@@ -123,6 +123,25 @@ lagen.zet('grid', 'hotcues');
   ok('mapje-balk: de andere modi krijgen geen per-pad-uitleg (hotcues/klank per rij, sampler/video niets, zoals eerst)',
     ['grid.hotcues', 'grid.loops', 'grid.sampler', 'grid.video', 'grid.klank'].every((id) => gridPads(regels, id).length === 0));
 }
+// ---- modus stems (5 okt, VRAGEN N1, docs/STEMS.md §5) ---------------------------
+ok('scene 3 met shift = modus stems, in zeegroen; zonder shift sampler',
+  lees('note:0:84', 1, true)?.action === 'layer.grid.stems' && lees('note:0:84', 1, true).modus === 'stems' && P.MODUS_KLEUR.stems === 'zeegroen'
+  && lees('note:0:84')?.action === 'layer.grid.sampler' && lees('note:0:84').actionShift === 'layer.grid.stems');
+lagen.zet('grid', 'stems');
+ok('modus stems: pad linksboven = zang van track 1 weg zolang je drukt, shift+klik = aan/uit; kolom 4 rij 5 = overig van track 4',
+  lees('note:0:32')?.action === 'track.1.stem.vocals.hold' && lees('note:0:32').actionShift === 'track.1.stem.vocals.kill'
+  && lees('note:0:32').modus === 'stems' && lees(`note:0:${apc.gridNote(4, 5)}`)?.action === 'track.4.stem.other.hold'
+  && lees('note:0:32').kort === 'zang weg!');
+ok('modus stems: scene 3 blijft sampler, maar zijn lampje leest "stems open" (zoals de LED)',
+  lees('note:0:84')?.action === 'layer.grid.sampler' && lees('note:0:84').lamp === 'layer.grid.stems' && lees('note:0:84').modus === 'stems');
+lagen.zet('grid', 'hotcues');
+{
+  const { gridRijen } = await import('../src/ui/mapje-balk.js');
+  const r = gridRijen([...m.rules.values()], 'grid.stems');
+  ok('mapje-balk stems: vijf rijen, zang · rest · drums · bas · overig weg zolang je drukt (shift: aan/uit)',
+    r.map((x) => `${x.gewoon}|${x.shift}`).join() === ['vocals', 'inst', 'drums', 'bass', 'other']
+      .map((st) => `track.1.stem.${st}.hold|track.1.stem.${st}.kill`).join());
+}
 // Scherm en apc.html kennen elke grid-modus: een kleur op het scherm, een knop op de kaart.
 {
   const { GROEPEN } = await import('../src/control/lagen.js');
@@ -176,6 +195,61 @@ ok('kant uit read(): 0 = A, 0,5 = thru, 1 = B, null = onbekend',
   P.kantVan(0) === 'A' && P.kantVan(0.5) === 'thru' && P.kantVan(1) === 'B' && P.kantVan(null) === null);
 ok('alleen xfade.side toont de kant (niet de losse A/B/thru-actions)',
   P.isKantKnop('track.3.xfade.side') && !P.isKantKnop('track.3.xfade.a') && !P.isKantKnop(null));
+
+// ---- stems: de STEMS-rij en het teken in de kolomkop (docs/STEMS.md §4) ------
+
+const S = await import('../src/ui/stems-weergave.js');
+{
+  const lees = (stand) => (id) => {
+    const m = /^track\.(\d)\.stem\.(\w+)$/.exec(id);
+    if (!m) return null;
+    const namen = stand[m[1]];
+    if (!namen) return null;
+    return m[2] === 'inst' || namen.includes(m[2]) ? 1 : null;
+  };
+  ok('zonder stem-actions (vóór de integratie) leest alles null: 0 stems, niets crasht', S.aantalOpBus(read, 1) === 0 && S.aantalOpBus(() => null, 8) === 0);
+  const bus = lees({ 1: ['vocals', 'inst'], 2: ['drums', 'bass', 'other', 'vocals'] });
+  ok('twee stems: zang en rest lezen iets, drums null', S.aantalOpBus(bus, 1) === 2);
+  ok('vier stems: drums leest iets', S.aantalOpBus(bus, 2) === 4 && S.aantalOpBus(bus, 3) === 0);
+  ok('volgorde twee: zang, rest', S.VOLGORDE[2].join() === 'vocals,inst');
+  ok('volgorde vier: drums, bas, overig, zang, en rest als groep erachter', S.VOLGORDE[4].join() === 'drums,bass,other,vocals,inst');
+  ok('namen op het scherm in het Nederlands', ['zang', 'rest', 'drums', 'bas', 'overig'].join() === S.STEMMEN.map((s) => S.STEM_NAAM[s]).join());
+  ok('rest bij vier zegt dat hij een groep is', /groep/.test(S.stemUitleg('inst', 4)) && !/groep/.test(S.stemUitleg('inst', 2)));
+
+  // De rij staat vast in index.html (vensters.js bindt hem bij het opstarten):
+  // per stem een schuif, kill (klik) en hold (shift + vasthouden), op track 1.
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const rij = /<section id="stems"[\s\S]*?<\/section>/.exec(html)?.[0] ?? '';
+  ok('de STEMS-rij staat in index.html, standaard dicht', /<section id="stems" class="stems-rij hidden">/.test(rij));
+  ok('elke stem een strip: schuif, kill en hold op track 1', S.STEMMEN.every((s) =>
+    new RegExp(`data-stem="${s}"[\\s\\S]*?type="range"[^>]*data-action="track\\.1\\.stem\\.${s}"[\\s\\S]*?data-action="track\\.1\\.stem\\.${s}\\.kill" data-action-shift="track\\.1\\.stem\\.${s}\\.hold"`).test(rij)));
+  ok('splitsen in 2 en 4, en × voor annuleren', /data-aantal="2"/.test(rij) && /data-aantal="4"/.test(rij) && /class="btn sm st-x/.test(rij));
+
+  const r = (o) => S.rijStand({ geladen: true, nummer: 'n1', ...o });
+  ok('met stems: de strips', r({ aantal: 4 }).soort === 'stems' && r({ aantal: 2 }).tekst === '2 stems');
+  ok('lege track: niets te splitsen', S.rijStand({}).soort === 'leeg' && !S.rijStand({}).splits);
+  ok('los bestand of demo: geen splitsknoppen', r({ nummer: null }).soort === 'los' && !r({ nummer: null }).splits);
+  const mis = r({ mislukt: 'audio niet gevonden (404)', opdracht: { status: 'klaar', aantal: 2 } });
+  ok('stems.wav laden mislukte: dat gaat voor, met de reden, je hoort audio.wav', mis.soort === 'mislukt' && /404/.test(mis.tekst) && /audio\.wav/.test(mis.tekst));
+  const wacht = r({ opdracht: { id: 'o1', status: 'wacht', aantal: 4 } });
+  ok('in de rij: "wacht op splitsen in 4", × zonder balk', wacht.soort === 'open' && wacht.annuleer === 'o1' && !wacht.bezig && /wacht op splitsen in 4/.test(wacht.tekst));
+  const bezig = r({ opdracht: { id: 'o2', status: 'bezig', aantal: 2, voortgang: 1.7 } });
+  ok('bezig: balk en percentage, voortgang geklemd op 0..1, nooit 100%', bezig.bezig && bezig.voortgang === 1 && /99%/.test(bezig.tekst));
+  ok('klaar maar de track speelt zonder: herladen geeft ze (niet vanzelf wisselen)', r({ opdracht: { status: 'klaar', aantal: 2 } }).soort === 'herladen'
+    && /laad het nummer opnieuw/.test(r({ opdracht: { status: 'klaar', aantal: 2 } }).tekst));
+  const fout = r({ opdracht: { status: 'fout', fout: 'geheugen op', aantal: 2 } });
+  ok('mislukt: de reden, en opnieuw splitsen', fout.soort === 'fout' && /geheugen op/.test(fout.tekst) && fout.splits);
+  ok('niets: "geen stems" met splitsknoppen', r({}).soort === 'geen' && r({}).splits && r({}).uit === null);
+  ok('splitter weg: de knoppen uit, met de reden', /de splitter ontbreekt: geen python/.test(r({ beschikbaar: false, reden: 'geen python' }).uit));
+
+  const k = (o) => S.kolomTeken({ nummer: 'n1', ...o });
+  ok('kolomkop met stems: S2 / S4', k({ aantal: 2 }).tekst === 'S2' && k({ aantal: 4 }).tekst === 'S4' && k({ aantal: 4 }).soort === 'stems');
+  ok('kolomkop: ook een los bestand met stems op de bus krijgt het teken', S.kolomTeken({ aantal: 2 }).tekst === 'S2');
+  ok('kolomkop: klaar maar niet geladen = gestippeld, met uitleg', k({ opdracht: { status: 'klaar', aantal: 4 } }).soort === 'herladen'
+    && /laad het nummer opnieuw/.test(k({ opdracht: { status: 'klaar', aantal: 4 } }).titel));
+  ok('kolomkop: laden mislukte = S!', k({ mislukt: 'x' }).tekst === 'S!');
+  ok('kolomkop: geen stems, bezig of geen nummer = geen teken', k({}) === null && k({ opdracht: { status: 'bezig', aantal: 2 } }) === null && S.kolomTeken({}) === null);
+}
 
 if (fails.length) { console.log(`\n${fails.length} FAIL`); process.exit(1); }
 console.log('\nspiegel: alles groen');

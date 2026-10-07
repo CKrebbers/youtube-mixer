@@ -3,7 +3,7 @@ import { rmSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const { Library, SCHEMA, normaliseerGrid, sorteertitel, SORTERING, MAX_HOTCUES } = await import('../server/library.js');
+const { Library, SCHEMA, normaliseerGrid, sorteertitel, SORTERING, MAX_HOTCUES, normaliseerStems } = await import('../server/library.js');
 const { TOON_VERSIE } = await import('../server/toon.js');
 const { DatabaseSync } = await import('node:sqlite');
 
@@ -247,9 +247,10 @@ lib.bewaarGrid('abc123', kaart);            // voor het opruimen hieronder
   const l = new Library(pad5);
   ok(`v5 met data wordt de nieuwste (v${SCHEMA.length})`, l.versie === SCHEMA.length);
   const na = l.db.prepare('SELECT * FROM tracks ORDER BY id').all();
-  ok('elke rij ongeschonden, op de nieuwe kolommen (toon_json, titelsleutel) na', na.length === voor.length
-    && na.every(({ titel_sleutel: _s, toon_json: _t, ...r }, i) => JSON.stringify(r) === JSON.stringify(voor[i])));
-  ok('toon_json leeg en geen hotcues na de migratie', na.every((r) => r.toon_json === null)
+  // stems_json (v8) en secties_json (v9) zijn ook nieuwe kolommen: die komen er leeg bij.
+  ok('elke rij ongeschonden, op de nieuwe kolommen (toon_json, titelsleutel, stems_json, secties_json) na', na.length === voor.length
+    && na.every(({ titel_sleutel: _s, toon_json: _t, stems_json: _st, secties_json: _sec, ...r }, i) => JSON.stringify(r) === JSON.stringify(voor[i])));
+  ok('toon_json en stems_json leeg en geen hotcues na de migratie', na.every((r) => r.toon_json === null && r.stems_json === null)
     && l.db.prepare('SELECT COUNT(*) AS n FROM hotcues').get().n === 0);
   ok('elk gemigreerd nummer moet een toonsoort krijgen (achtergrond)', na.every((r) => l.teToonAnalyseren().includes(r.id)));
   ok('elke oude rij heeft een titelsleutel', na.every((r) => r.titel_sleutel === sorteertitel(r.titel)));
@@ -471,6 +472,58 @@ lib.sluit();
   lg.bewaarTrack(nummer('n5', '0 eerst'));
   ok('opnieuw binnenhalen met een nieuwe titel: de sleutel gaat mee', lg.tracks({ sorteer: 'titel', aantal: 1 })[0].id === 'n5');
   lg.sluit();
+}
+
+// ---- stems (docs/STEMS.md): schema v8, de rij, opnieuw binnenhalen -------------
+{
+  ok('schema: v8 = stems_json (de inhoud van stems.json plus bestand)', /stems_json/.test(SCHEMA[7]) && !/stems_json/.test(SCHEMA[6]));
+  const ls = new Library(join(map, 'stems.db'));
+  ok(`een nieuwe database staat op de nieuwste versie (v${ls.versie})`, ls.versie === SCHEMA.length);
+  ls.bewaarTrack(nummer('st1', 'Met stems'));
+  ls.bewaarTrack(nummer('st2', 'Zonder'));
+  ok('zonder stems: stems null, in de losse rij en in de lijst', ls.track('st1').stems === null
+    && ls.tracks().every((t) => t.stems === null && !('stems_json' in t)));
+  const json2 = { versie: 1, model: 'htdemucs', aantal: 2, namen: ['vocals', 'inst'], schaal: 0.93, frames: 3801600, sr: 48000,
+    apparaat: 'mps', rekentijd_s: 34.6, gemaakt: '2026-10-03T14:00:00Z', bestand: 'media/st1/stems.wav' };
+  const terug = ls.bewaarStems('st1', json2);
+  ok('stems bewaren: de rij krijgt alleen aantal, namen, schaal en bestand',
+    JSON.stringify(terug) === JSON.stringify({ aantal: 2, namen: ['vocals', 'inst'], schaal: 0.93, bestand: 'media/st1/stems.wav' }));
+  ok('in de losse rij én in de lijst (pagina en alles)', ls.track('st1').stems?.aantal === 2
+    && ls.tracks({ sorteer: 'titel', aantal: 10 }).find((t) => t.id === 'st1').stems?.schaal === 0.93
+    && ls.tracks().find((t) => t.id === 'st2').stems === null && ls.trackMetUrl('https://youtu.be/st1').stems?.aantal === 2);
+  ok('de hele stems.json blijft bewaard (model, frames, rekentijd)', ls.stemsInfo('st1')?.frames === 3801600 && ls.stemsInfo('st1').model === 'htdemucs'
+    && ls.stemsInfo('st2') === null);
+  const vier = ls.bewaarStems('st1', { ...json2, aantal: 4, namen: ['drums', 'bass', 'other', 'vocals'], schaal: 1 });
+  ok('2 -> 4: vervangen', vier.aantal === 4 && vier.namen.join() === 'drums,bass,other,vocals');
+  const fout = [
+    { ...json2, aantal: 3 }, { ...json2, namen: ['vocals'] }, { ...json2, namen: ['vocals', 'vocals'] }, { ...json2, schaal: 0 },
+    { ...json2, schaal: 1.2 }, { ...json2, bestand: '../../etc/passwd' }, { ...json2, bestand: 'media/st1/audio.wav' }, 'tekst', [],
+  ].map((x) => { try { ls.bewaarStems('st1', x); return 'bewaard'; } catch { return 'gooit'; } });
+  ok(`een onbruikbare set gooit en laat de oude staan (${fout.join(' ')})`, fout.every((x) => x === 'gooit') && ls.track('st1').stems.aantal === 4);
+  ok('normaliseerStems: null voor onzin', normaliseerStems(null) === null && normaliseerStems({}) === null
+    && normaliseerStems({ aantal: 2, namen: ['vocals', 'inst'], schaal: '1', bestand: 'media/x/stems.wav' }) === null);
+  // Een kapotte JSON in de database (met de hand bewerkt): de rij leest, zonder stems.
+  ls.db.prepare("UPDATE tracks SET stems_json = '{kapot' WHERE id = 'st2'").run();
+  ok('kapotte JSON in de database: stems null, de rij leest gewoon', ls.track('st2').stems === null && ls.track('st2').titel === 'Zonder');
+  // Opnieuw binnenhalen: bewaarTrack zelf laat de stems staan (de server wist ze, met de bestanden).
+  ls.bewaarTrack(nummer('st1', 'Met stems'));
+  ok('bewaarTrack alleen laat de stems staan (de server wist ze bij een nieuwe audio.wav)', ls.track('st1').stems?.aantal === 4);
+  ok('null wist', ls.bewaarStems('st1', null) === null && ls.track('st1').stems === null && ls.stemsInfo('st1') === null);
+  ls.sluit();
+
+  // Een database van vóór de stems (v7) krijgt de kolom erbij, met alles erin heel.
+  const p7 = join(map, 'v7.db');
+  const db7 = new DatabaseSync(p7);
+  db7.function('sorteertitel', { deterministic: true }, sorteertitel);
+  for (let v = 0; v < 7; v++) db7.exec(SCHEMA[v]);
+  db7.exec('PRAGMA user_version = 7');
+  db7.prepare("INSERT INTO tracks (id, url, titel, audio, toegevoegd, titel_sleutel) VALUES ('oud', 'https://youtu.be/oud', 'Oud', 'media/oud/audio.wav', 1, 'oud')").run();
+  db7.close();
+  const l7 = new Library(p7);
+  const kol = l7.db.prepare('PRAGMA table_info(tracks)').all().map((c) => c.name);
+  ok(`v7 -> v${l7.versie}: stems_json erbij, het oude nummer heel en zonder stems`, kol.includes('stems_json') && l7.versie === SCHEMA.length
+    && l7.track('oud')?.titel === 'Oud' && l7.track('oud').stems === null);
+  l7.sluit();
 }
 
 rmSync(map, { recursive: true, force: true });

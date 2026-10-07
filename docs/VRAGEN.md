@@ -25,7 +25,8 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 👀 kijken · 💬 al
   springen in de golfvorm, hotcues, loops van 4 tellen, pitch schuiven.
   Hoor je ergens nog een tik of gat?
 
-- [ ] **A3. Luistertest: keylock (Signalsmith-demo).** 🎧
+- [x] **A3. Luistertest: keylock (Signalsmith-demo).** 🎧 — 5 okt, Clay: "klinkt goed".
+  Keylock is gebouwd (`docs/KEYLOCK.md` §9).
   Staat al sinds fase 3 open. Een kwartier met de demo op je eigen ambient,
   ±5% en ±8%. Beslist of keylock Signalsmith wordt. Daarmee is fase 3 af.
   **Klaar om te luisteren (24 sep):** niet de demo maar je eigen nummers, door
@@ -170,9 +171,10 @@ Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 👀 kijken · 💬 al
 
 ## F. Nieuw uit het APC-onderzoek
 
-- [ ] **F1. Koptelefoon-cue (PFL).** De op vier na meest gebruikte DJ-functie,
-  maar VARVE heeft één audio-uitgang. Vraagt een tweede uitgang (tweede
-  geluidskaart, of kanaal 3/4 van een interface). Eerst bespreken, niet bouwen.
+- [x] **F1. Koptelefoon-cue (PFL).** — 5 okt: de Scarlett 2i2 voor de zaal en de
+  koptelefoonuitgang van de Mac, samen één samengesteld apparaat (vier kanalen, één
+  klok). Gebouwd als STUDIO S1, `docs/STUDIO.md` §3. (De vraag was: VARVE heeft één
+  audio-uitgang; een cue vraagt een tweede, of kanaal 3/4 van een interface.)
 
 ---
 
@@ -255,14 +257,17 @@ Beslist:
   - K7: de sampler blijft zoals hij is.
 
 Open:
-- [ ] **I1 (= K1). Wordt het Signalsmith?** 🎧 Na A3. Scoort ±5% op sakamoto en zoned-out
+- [x] **I1 (= K1). Wordt het Signalsmith?** 🎧 — JA (A3 klinkt goed), gebouwd 5 okt. Na A3. Scoort ±5% op sakamoto en zoned-out
   een 0 of 1 op de scorekaart, dan ja.
-- [ ] **I2 (= K2). Welke instelling?** 🎧 Standaard, goedkoper of kort. Luister naar
+- [x] **I2 (= K2). Welke instelling?** 🎧 — volgens advies: standaard, gespreid (5 okt). Standaard, goedkoper of kort. Luister naar
   13 en 14 tegen 08. **Advies:** standaard, gespreid; goedkoper als je 13 niet van 08
   onderscheidt.
-- [ ] **I3 (= K4). Keylock standaard aan of uit?** 🎧 Luister naar 01 tegen 04.
+- [x] **I3 (= K4). Keylock standaard aan of uit?** 🎧 — volgens advies: uit, en hij blijft staan bij een nieuw nummer (5 okt). Luister naar 01 tegen 04.
   **Advies:** uit, en keylock blijft staan bij een nieuw nummer.
-- [ ] **I4 (= K6). Waar op de APC?** 🎛 Clay 25 sep (voorstel A): keylock krijgt
+- [ ] **I4 (= K6). Waar op de APC?** 🎛 GEBOUWD 5 okt, niet op het apparaat nagelopen:
+  **Shift + Tap = keylock, Shift + Nudge −/+ = toon −1/+1** (focus-track); toon terug
+  naar 0 op het scherm (en vanzelf bij een nieuw nummer). Niet Bank: met de hub is
+  dat de hubtoets. **Advies:** zo proberen. Was: Clay 25 sep (voorstel A): keylock krijgt
   later Bank. De rest van het voorstel hieronder staat nog open. **Voorstel:**
   - Bank = keylock;
   - Shift + Bank = pitchbereik;
@@ -359,16 +364,130 @@ APC-indeling (voorstel A):
 - [ ] **PL2. Per stap: automatisch, of wachten op jouw GO?** 🎛 Voor fase 2 (live-stand). **Advies:** standaard automatisch, per stap om te zetten.
 - [ ] **PL3. Past het venster op je tweede scherm, en mist er iets in de lijst?** 👀
 
-## N. AV-app-hub (3 okt, `?hub=`, CLAUDE.md AV-APP-HUB)
+## N. Stems (3 okt, docs/STEMS.md)
 
-- [ ] **N1. LPD8 K1 (intensiteit) in VARVE?** 🎛 K1 hing eerst aan het
+- [ ] **N1. Waar op de APC?** 🎛 Nu nergens (koppelen werkt: `track.N.stem.vocals.kill` enz.). **Advies:** een grid-modus STEMS naast KLANK (eigen kleur, bereikbaar met ▲ ▼ zoals de andere grid-modi): per kolom rij 1 zang weg zolang je drukt, rij 2 rest weg (shift + pad = schakelaar, zoals de kill in KLANK), rij 3–5 bij vier stems drums/bas/overig. Eerst zelf een avond met koppelen proberen.
+- [ ] **N2. De rest van het model naar "rest"?** 👂 Nu: rest = mix − zang (bij vier: overig krijgt wat het model nergens onderbracht), zodat alles open precies klinkt als het nummer. Prijs: wat Demucs miste (ook een beetje zang) blijft hoorbaar als de zang weg is. Alternatief: rest = alleen drums + bas + overig; dan is zang weg schoner, maar alles open klinkt tot −25 dB (ambient) anders dan het origineel. **Advies:** zo laten; luister naar zang weg bij No Surprises en Bay Ledges.
+- [ ] **N3. Splitsen tijdens een set?** 💬 Demucs deelt de GPU met de video (WebGL); `nice` helpt alleen de CPU. Nu splitst hij gewoon door (na elke ingest standaard 2). **Advies:** zo laten tot het hapert; dan een knop "stems pauzeren" in de Controlekamer, of splitsen op de Omarchy-machine (H3).
+- [ ] **N4. Standaard 2 bij elke ingest, ook als je even snel iets binnenhaalt?** 💬 Een nummer van 5 minuten kost ~2 minuten rekenen en ~110 MB. De keuze `2 · 4 · geen` staat naast de invoer en wordt onthouden. **Advies:** zo laten (H2).
+
+---
+
+## S. Studio (5 okt, docs/STUDIO.md)
+
+- [x] **S1. Koptelefoonvolume en mix op de APC?** — 5 okt: Cue Level = volume, shift + Cue Level = mix; sampler-volume en puls naar shift + Cue Level in hun grid-modus. 🎛 De cue zelf zit op ● (zonder shift). VOL en MIX staan nu alleen in de KOPTELEFOON-rij; koppelen werkt. Cue Level is het voor de hand liggende label, maar dat is nu het sampler-volume (shift: puls). **Advies:** eerst een avond met de rij spelen; mis je hem, dan Cue Level = koptelefoonvolume en shift + Cue Level = mix, en krijgen sampler-volume en puls een andere plek.
+- [x] **S2. Een instrument of patroon: een van de acht tracks, of eigen kolommen?** — 5 okt: op een van de acht tracks. 💬 Beslissen vóór S3. Acht tracks = acht kolommen op de APC; een instrument erbij kost een kolom of een mapje. **Advies:** een track kan een nummer OF een instrument dragen (dezelfde strip, fader, sends en cue), zodat de APC-indeling niet verandert.
+- [ ] **S3. Zonder enige cue hoort de koptelefoon de zaal.** 🎧 Gekozen zodat je altijd iets hoort. Alternatief: stil tot je een cue aanzet. **Advies:** zo laten.
+- [ ] **S4. Drums: −14 LUFS of iets zachter?** 🎧 Een maat vier-op-de-vloer op −14 LUFS piekt op +3,5 dBFS (kick en snare samen); de limiter knijpt dan op 2 en 4. **Advies:** eerst luisteren; pompt het, dan `UIT_OPHOGING` in drums.js omlaag (−16 LUFS).
+- [ ] **S5. Stems op de APC: filter, echo en cue per stem?** 🎛 Nu alleen op het scherm (en weg/terug in de grid-modus STEMS). **Advies:** een derde mapje onder Clip/Device View (strip → rack → stems): device knobs 1–4 = filter, 5–8 = echo, shift = galm.
+- [ ] **S6. Een stem-echo door het trackfilter?** 🎧 De echo en galm van een stem gaan nu NIET door EQ, effect en filter van de track (wel door de fader). **Advies:** zo laten; zeg het als je het filter-dichtdraaien ook op de echo wilt horen.
+- [x] **S7. Schaal: de cent van de plaat volgen?** 🎧 — GEBOUWD 5 okt (advies gevolgd): de Schaal staat nu op A440 + de cent van wat je hoort (met de pitch erbij, ±50) + FIJN, zoals de globale schaal. Nog te beluisteren: speel hem over een plaat die niet op A440 staat. Poly en FM staan nog op A440 + hun eigen stemknop; zeg het als die ook mee moeten.
+- [ ] **S8. FM: zachter inzetten?** 🎧 Standaard aanslag 8 ms en release 1,2 s (MediSynth's Glass: 280 ms en 4,5 s). **Advies:** luisteren; het zijn knoppen 3 en 5.
+- [ ] **S9. Effecten: oversampling voor de distortion?** 🎧 Zonder: aliasing (−14,8 dB bij hard, drive vol). Met: 128–192 samples vertraging en dus een kamfilter met de mix-knop. **Advies:** zonder laten.
+- [ ] **S10. Compressor en pitch als insert schuiven de track op** (6 ms, pitch op meng 1 ~45 ms). 🎧 **Advies:** acceptabel voor een effect; niet voor de beatmatch-track zelf.
+- [ ] **S11. Tremolo en autopan standaard op de maat?** 🎧 **Advies:** ja. Op de "1" van de maat beginnen vraagt dat `fxKlok` ook de maatfase meegeeft (later).
+- [ ] **S12. Geheugen (90 s buffer uit de filter app)** niet als insert gebouwd (begint leeg bij elke wissel, 17 MB). 💬 **Advies:** later als instrument of op de master, als je het mist.
+- [ ] **S13. Master: knop 8 = mix in het mapje master, release 80 ms.** 🎛🎧 Proberen op de APC; vervormt de limiter als je hem hard raakt, zeg het. De master klinkt ~0,8 dB zachter dan met de oude compressor (die tilde op).
+- [x] **S15. Patronen: de instrumenten vanzelf terug bij het laden van de set?** — GEBOUWD 5 okt (advies gevolgd): de set onthoudt per track met patronen het instrument en zijn knoppen; na het laden (ook herladen) komt het terug op een lege track. Een track met een nummer houdt dat. Wrijven op de Schaal wordt niet onthouden (er klinkt niets vanzelf). PATRONEN.md §7.6.
+- [ ] **S16. Patronen na een sprong (hotcue, beatjump) die geen hele maat is.** 🎧 Lopende patronen blijven in hun eigen fase en de klok glijdt in één à twee tellen terug (geen dubbele of gemiste noot). Alternatief: een korte stilte en dan op de nieuwe tel. **Advies:** glijden laten.
+- [ ] **S17. Patronen op de APC: Shift + scene 2, en Stop All Clips = alles stoppen in die modus.** 🎛 (Shift + scene 3 werd stems, daarom 2.) **Advies:** zo proberen.
+- [ ] **S18. Maschine: zijn de gedimde padkleuren zichtbaar?** 👀 Poly gedimd is #190064 (heel donker violet). **Advies:** kijken op het apparaat; te zwak, dan een lichtere basiskleur per instrument.
+- [ ] **S19. Maschine-wiel: eerst kiezen, indrukken = zetten.** 🎛 Zo vervangt een tik tegen het wiel nooit per ongeluk je instrument. De eerste wielstap na het insteken telt niet (de hub kent dan nog geen beginstand). **Advies:** zo laten.
+- [ ] **S21. Grid uit de tellen (Beat This!) en controleren: zo goed?** 🎧 (6 okt, docs/BEATGRID.md §11) Elk nummer krijgt zijn grid nu uit de tellen die Beat This! hoort; naast de bpm staat of het klopt (✓ / ? met de reden / 🔒 / ⚠ als het live wegloopt), de gevonden tellen staan groen in de zoom, en een klik op het oordeel start de controle: een tik op elke gridlijn in de koptelefoon, ✓ per stuk, alles goed = op slot. Je met de hand gezette grids (jungle-mix, album) zijn NIET overschreven, alleen gemeten — ↻ in de library zet ze om (op slot: tweede klik). **Advies:** eerst de controle op Loving arms en Ciel (band zonder klik), dan ↻ op de jungle-mix en luisteren of het beter is dan je eigen grid.
+- [ ] **S23. Toon per stem: ook op de APC?** 🎛 (6 okt, docs/STEMS.md §7) Nu alleen in de STEMS-rij (draaiknop per stem, klik op het getal = 0). Voorstel: in grid-modus STEMS (Shift + scene 3) shift + de onderste twee pads van een kolom = toon − / + van die stem. **Advies:** eerst met de muis proberen; zeg het als je hem live wilt.
+- [ ] **S24. Toon per stem: klinkt het goed genoeg?** 🎧 Zang een paar halve tonen omhoog/omlaag, en de rest (bas!) een kwint. **Advies:** luisteren bij Loving arms (vier stems); drums verschuiven klinkt altijd "anders".
+- [ ] **S22. Tik in de zaal als er geen koptelefoon is?** 💬 Zonder samengesteld apparaat (Scarlett + Mac-uitgang) hoort de controletik door de zaal. **Advies:** zo laten (controleren doe je bij het voorbereiden); zeg het als hij dan beter stil kan blijven.
+- [ ] **S20. Beatgrid: vastzetten (pin) en terug zo proberen?** 🎛 (5 okt, docs/BEATGRID.md §10) Een correctie bevestigt nu het stuk (sync en loops mogen meteen), ↶/Cmd+Z zet terug, en "vast" haalt drift weg: "1" op een kick aan het begin, een paar minuten later "vast" op een kick. In grid-modus: klik in de golfvorm = tel 1, shift + klik = vast; scrollen = zoomen. Op de APC: grid-modus Shift + scene 1 = vast (terug niet op de APC: Shift + scene 5 blijft klank, Lock het slot). **Advies:** zo proberen op een lang nummer met drift; zeg het als vier tikken nog steeds niet het hele grid op slot moeten zetten.
+- [ ] **S14. Xboard49: knop 9–16 = de FX-knoppen van de speeltrack, de schuif = zijn fader.** 🎛 Voorstel; de CC-nummers van de knoppen komen uit de proef (`AV-app-hub`: proef speelapparaten).
+
+---
+
+## SE. Secties (6 okt, docs/SECTIES.md, tak `studio/secties`)
+
+- [ ] **SE1. Een sectie valt in op de volgende "1" met een aanloop uit het nummer zelf.** 🎧 Druk je midden in een maat, dan springt hij naar vlak vóór de sectie, precies zo ver als jij van de volgende "1" af zit: de rest van de maat hoor je het einde van de maat vóór die sectie (vaak een fill), en op de maatstreep valt hij in. Geen wachten en de groove struikelt nooit. Alternatief: blijven spelen tot de maat om is en dan springen (zoals Ableton). Dat vraagt een geplande sprong in de streamkern; die bestaat nu alleen voor keylock. **Advies:** zo proberen; mis je "eerst de maat afmaken", zeg het.
+- [ ] **SE2. Kloppen de grenzen en de namen op je eigen muziek?** 👂 Gemeten op synthetische nummers (EDM, pop met opmaat, ambient): elke grens op zijn maat, groepen en labels goed. Op echte muziek nog niet: de drempels zijn een eerste keuze. Labels: intro · opbouw · drop · break · outro, de rest alleen een letter. **Advies:** speel vijf verschillende nummers en noteer per nummer wat niet klopt (een gemiste grens, een grens te veel, een verkeerde naam). Dan stel ik bij en verhoog ik `SECTIE_VERSIE` (alles wordt vanzelf opnieuw berekend).
+- [ ] **SE3. De 40 pads = de secties van de FOCUS-track.** 🎛 Zo past een heel nummer (tot 40 secties) op het grid en blijft de volgorde vast. Alternatief: per kolom een track met 5 secties (zoals stems en patronen), maar dan moet je bladeren. **Advies:** zo laten; wisselen met Track Select.
+- [ ] **SE4. Kleur op de pads: wit = die hoor je (knippert op de tel), donker hemelsblauw = er is een sectie.** 👀 Op het scherm heeft elke groep (A, B, C …) een eigen kleur. Op de APC kan dat ook, maar de lampjes kennen nu alleen een vaste kleur per soort knop. **Advies:** eerst zo; mis je de groepen, dan bouw ik groepskleuren op de pads.
+- [ ] **SE5. Secties met de hand verschuiven, splitsen of hernoemen?** 💬 Niet gebouwd. De kaart kent al `bron: 'hand'` en `slot` (dan rekent de server er nooit overheen). **Advies:** eerst een paar avonden zonder; als je steeds dezelfde grens mist, dan een bewerkmodus zoals bij het grid.
+- [ ] **SE6. Labels uit een getraind model (all-in-one-infer, MIT, draait op Apple Silicon)?** 💬 Python in de venv van de stems, zoals Demucs. Beter op popstructuren (couplet/refrein), niet getest op jouw ambient en jungle. **Advies:** alleen als SE2 tegenvalt.
+
+
+## SV. Secties verweven (6 okt, avond; docs/SECTIES.md §7)
+
+De secties zitten nu ook in het toetsenbord, de sampler, het planvenster, het handelingenlog, de auto-DJ, de vormen en de video-puls, de Controlekamer, de Maschine en de globale laag van de hub.
+Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
+
+**Toetsenbord** (speellijst "Secties op het toetsenbord")
+- [ ] **SVT1. Shift+W/E (links) en shift+I/O (rechts) voor vorige/volgende sectie.** 🎧 Links naar rechts = terug naar vooruit (zoals R/T, Y/U, , / .). Zonder modifier is geen letter of cijfer vrij; Cmd/Ctrl/Alt blijven van het systeem. **Advies:** zo proberen.
+- [ ] **SVT2. Shift+I wisselde eerst de focus (net als I), shift+W/O waren cue.** 💬 Nu springen ze naar een sectie; hou je shift nog vast na shift+Q/P (starten op de maat) en tik je dan W of O voor cue, dan spring je in plaats daarvan. **Advies:** zo laten; zonder shift doen ze wat ze deden.
+- [ ] **SVT3. Vorige/volgende op de eerste of laatste sectie geeft een melding** ("track 1: al bij de laatste sectie (8 van 8)"), de speelkop blijft staan. 💬 Liever rondgaan (na de laatste weer de eerste)? **Advies:** de melding laten; rondgaan springt ongemerkt terug naar de intro.
+
+**Sampler** (speellijst "Een sectie in de sampler")
+- [ ] **SVS1. Een sectie in een pad loopt van haar "1" tot de "1" van de volgende, in hele maten.** 🎧 De opmaat vóór de eerste "1" komt in geen pad; de laatste sectie stopt op de laatste hele maat. Verspringt de "1" van het grid binnen de sectie (een maat van bv. 6 tellen), dan stopt de pad op de "1" ervóór en zegt een melding hoeveel tellen wegvallen. **Advies:** zo; mis je een staartje (een fill), zeg het.
+- [ ] **SVS2. Een sectie-pad start op de volgende "1" van de maatgever, niet op de tel.** 🎧 Hij wacht dus tot bijna een maat. Gewone pads (1–8 tellen) starten zoals altijd op de volgende tel. Een pad is een sectie als hij meer dan 8 tellen heeft (ook een bewaarde pad weet het zo, zonder nieuw veld); een sectie van 2 maten of korter start daardoor op de tel (de APC-kaart zegt dat). **Advies:** zo; wil je soms meteen, dan een shift-variant.
+- [ ] **SVS3. Een sectie-pad houdt bij herankeren ook de maat vast.** 🎧 Springt de maatgever een tel (beatjump 1), dan schuift de pad tot twee tellen mee zodat de "1"-en gelijk blijven; in een loop die geen hele maten is alleen de tel. Ook met keylock en een sprong terug blijft een wachtende pad op zijn "1". **Advies:** proberen met beatjump 1 en 4, ook met keylock aan.
+- [ ] **SVS4. Grens 32 maten en 90 s per pad.** 💬 Een pad houdt de audio vast: ~23 MB per minuut, acht volle pads ~280 MB. 32 maten is de langste sectie van de analyse; tot 86 bpm past die in 90 s. Langer (een mix, ambient op 70 bpm): een melding en het lampje uit (als loop op de track kan het wel). **Advies:** zo; loop je er vaak tegenaan, naar 120 s.
+- [ ] **SVS5. Bediening: rij 3 van de modus sampler, zonder shift.** 🎛 Shift + een lege pad betekent al "vergeten" (scherm). Rij 3 was leeg, onder "leegmaken". Lampje: donker hemelsblauw = kan, uit = kan niet (een druk zegt waarom). Op het scherm-als-APC, niet in de SAMPLER-rij. **Advies:** zo laten; wil je hem ook in de SAMPLER-rij, zeg het.
+- [ ] **SVS6. Een sectie op een onzeker grid wordt geweigerd.** 🎧 Een pad die naast de tel loopt hoor je meteen; waar de analyse het grid onzeker vindt, komt een melding en blijft het lampje uit (zoals bij beat-loops). Op het synthetische nummer in Chrome 2 van de 7 secties. **Advies:** klinkt het grid goed, zet het op slot (Lock in grid-modus); daarna kan het.
+
+**Handelingenlog** (speellijst "Secties terugspelen")
+- [ ] **SVL1. Speelt een set met sectiesprongen precies zo terug?** 🎧 Het log bewaart de sectiekaart, en bij elke sectiedruk de plek waarvan de sprong rekende; dat geldt ook voor "volgende" aan het eind van het nummer. Terugspelen haalt de kaart niet van de server, dus na een herberekening (ander grid) landt `section.5` waar hij toen landde. Gemeten in Chrome: 0–8 ms naast, nooit een maat. **Advies:** speellijst "Secties terugspelen". Hoor je een sprong een maat te laat, op een andere plek, of een melding "al bij de laatste sectie" die er toen niet was, zeg welke.
+- [ ] **SVL2. Logs van vóór deze tak met sectiedrukken spelen terug met de kaart van nu.** 💬 Een log zonder sectiekaart speelt terug zoals voorheen, met de kaart die de server nu geeft; is die opnieuw gerekend, dan springt `section.5` ergens anders. **Advies:** zo laten (hooguit de logs van vandaag).
+- [ ] **SVL3. Ook hotcues met quantize, beatloops en starten op de maat zo exact terugspelen?** 💬 Een regel komt tot een tik (10 ms) te laat; voor secties is dat opgevangen, bij die andere sprongen kan een tik op de rand van hun marge nog een tel schelen (starten op de maat misschien een maat). Niet gemeten. **Advies:** pas bouwen als je het hoort.
+
+**Planvenster** (speellijst "Planvenster met secties")
+- [ ] **SVP1. Secties berekenen vanuit het planvenster?** 💬 Het venster vraagt alleen kaarten die er al zijn (zonder `maak=1`; anders gaan dertig nummers tegelijk rekenen); een nummer dat nooit geladen is krijgt geen in/uit-keuze. **Advies:** eerst zo; kom je vaak een nummer zonder kaart tegen, dan een knop "secties" per rij (één tegelijk).
+- [ ] **SVP2. In kiezen met een keuzelijst of in de strook?** 👀 Nu een lijst onder "begin" ("3 drop C"). **Advies:** zo; klikken op een band als de lijst te klein of te traag voelt.
+- [ ] **SVP3. Uit en duur samen: welke wint?** 🎧 Nu is de duur de grens: een uit telt alleen als de overgang vóór het einde van de duur past; anders kiest de auto-DJ zelf (outro, break, frasegrens). Het venster maakt zo'n uit niet oranje; je ziet het alleen doordat de overgang in de strook ergens anders begint. **Advies:** uit wint en de duur wordt alleen de terugval zonder kaart; dan moet het venster bij een gekozen uit de duur leeg laten of verlengen.
+- [x] **SVP4. Strook altijd waar de auto-DJ de overgang echt begint?** 👀 — gedaan 6 okt (avond): de strook toont het moment van de planner (`momentArgs`, dezelfde regel als de automaat), ook zonder uit. Een blend begint daardoor tot 16 maten eerder dan de oude tekening.
+
+
+**Auto-DJ** (speellijst "Auto-DJ met secties")
+- [ ] **SVA1. Uitmixen op de outro.** 👂 Met een sectiekaart op een zeker grid begint de overgang waar de outro van de uitgaande begint (als hij daar nog vóór het eind past), niet meer op een veelvoud van 16 maten vanaf het anker (vaak midden in de laatste drop); de nieuwe begint op zijn intro. **Advies:** zo laten; zeg het als hij bij een lange outro te vroeg weggaat.
+- [ ] **SVA2. Past de outro niet: de laatste break.** 👂 Volgorde: de laatste break binnen 32 maten van het eind → het oude moment als dat niet in een drop valt → het begin van iets anders dan een drop → het begin van een drop. **Advies:** proberen; is de break te vroeg, dan het venster naar 16 maten.
+- [ ] **SVA3. Secties ook bij beatloos overvloeien op een onzeker grid?** 💬 Nu alleen op een zeker grid; in jouw library (overvloeien is de hoofdroute) doen ze bij het uitmixen dus bijna niets. **Advies:** ja, maar pas als SE2 laat zien dat de grenzen op onzekere grids kloppen.
+- [ ] **SVA4. langer en nu naar de volgende sectiegrens?** 🎛 langer = volgende grens binnen 16 maten (anders 8), nu = volgende grens binnen 8 maten (anders de eerstvolgende 4); beatloos blijft nu meteen. **Advies:** zo laten.
+- [ ] **SVA5. Een sectie drukken terwijl de volgende klaarstaat.** 🎛 Op wat nu klinkt: springt hij echt, dan plant hij opnieuw vanaf de nieuwe plek (geen overname); past de overgang daar niet meer vóór het einde, dan loopt hij vanaf waar je bent, zoals na een seek. Een druk die niets doet (geen sectie, loop om de sectie waar je al bent) verandert niets. Op de klaarstaande track: overname, zoals seek en hotcue. Alternatief: die sectie wordt het nieuwe beginpunt en de automaat mixt door. **Advies:** zo laten; het alternatief als je het mist.
+
+
+**Controlekamer** (speellijst "Avond 1 · Secties")
+- [ ] **SVC1. Secties meteen na het binnenhalen uitrekenen?** 💬 Nu krijgt een nieuw nummer pas secties als je het laadt (het laden wacht dan ~0,3–1 s op de server) of na een herstart van de server (de achtergrond). Tot dan staat het in de Controlekamer als "nog zonder". Na een split in stems of een ander grid staat de kaart als "verouderd" tot je het nummer laadt. Meteen rekenen, achter grid en toonsoort in de worker, kost de server ~1 s per nummer terwijl je mixt. **Advies:** ja, na het binnenhalen en na een split; dan hoeft het laden nooit te wachten.
+
+**Maschine** (speellijst "Secties op de Maschine")
+- [ ] **SVM1. De pads in de modus secties zijn de secties van de FOCUS-track?** 🎛 Groep A–H kiest de track, net als Track Select op de APC (SE3). De speeltrack kan niet: die heeft altijd een instrument en dus geen secties. **Advies:** zo laten.
+- [ ] **SVM2. Kleuren zoals op de APC: wit = die hoor je, donker hemelsblauw = er is een sectie, uit = geen?** 👀 De Maschine kan niet knipperen op de tel. De sectie waar je heen springt licht pas op bij de "1"; tot dan zegt het scherm "op de 1: …". **Advies:** eerst zo. Groepskleuren volgen SE4, dan op beide controllers tegelijk.
+- [ ] **SVM3. SHIFT + pad = die sectie als loop, zoals op de APC?** 💬 Niet gebouwd (niet gevraagd). De action `track.N.section.K.loop` bestaat al op de bus. **Advies:** ja, als je het op de APC gebruikt; het is een kleine stap.
+- [ ] **SVM4. Meer dan 16 secties: bladeren met ◄ ► (transport)?** 🎛 Bij een andere focus-track begint hij op de bladzijde met de sectie die je hoort; daarna loopt de bladzijde niet mee, dus de pads verspringen nooit onder je vingers. De kop noemt altijd wat je hoort, ook boven de 40. **Advies:** zo laten.
+- [ ] **SVM5. Het linkerscherm: de namen in een raster zoals de pads liggen, de sectie die je hoort omgekeerd, de kop groot?** 👀 Letters 5×7 in kolommen van 64 px; een naam is hooguit 8 tekens ("opbouw B"). **Advies:** op het echte toestel kijken; is het te klein, dan minder tekst en grotere letters.
+
+
+**In beeld** (speellijst "Secties in beeld")
+- [ ] **SVV1. De video-puls slaat op een nieuwe sectie vol, ook als je de puls zacht hebt staan: goed zo?** 👀 Het accent komt op de puls die er al is: het gekozen doel gaat op elke nieuwe sectie VOL, wat de diepte ook is; alleen met de puls aan (PULS op 0 = ook geen accent). Bij doel flits is dat een witte flits op de grens. Bij pixel, spiegel en korrel is het bij elke grens het volle effect, ook met PULS op 0,01, en de hub-macro `macro.beweging` (K4 = PULS) geeft op een lage stand al volle flitsen of effecten op elke grens. Geen nieuw puls-doel en geen nieuwe knop (de doelen lopen rond in het handelingenlog). Alternatieven: (a) zo laten; (b) vol alleen bij flits, bij de effecten met de diepte mee (bv. 3 × de diepte); (c) een schakelaar "puls op: tel · sectie · beide" (één knop, als stand in het log). **Advies:** (b). Probeer eerst doel flits met de puls laag, en zeg wat je bij pixel ziet.
+- [ ] **SVV2. Hoe lang gloeit een nieuwe sectie na?** 👀 Als een klap, maar twee keer zo lang: vol op de grens, na 0,3 s nog 22 %, na ~1,8 s weg (`NIEUW_TAU` 0,2 s). Dezelfde vorm voor de vormlaag (bron "nieuwe sectie") en de video-puls. Niet op de beamer bekeken. **Advies:** zo laten, tenzij de flits te kort is om op de beamer te zien; dan 0,3–0,5 s (één getal).
+- [ ] **SVV3. Sectie-energie als bron: springen op de grens, glijden bij een wissel?** 👀 De vorm krijgt de energie van de sectie die je hoort (0..1 binnen het nummer, van de server). Op een grens, een sectiesprong of een loop springt hij mee. Neemt een andere track de maat over of komt de kaart later binnen, dan glijdt hij in ~0,75 s naar de nieuwe waarde. Valt de maatgever weg, dan blijft de energie eerst 0,5 s staan (een cut in de mix) en glijdt dan in ~1,5 s naar 0. **Advies:** zo proberen. Kloppen de stappen niet met wat je hoort, dan ligt het waarschijnlijk aan de energie per sectie (SE2).
+- [ ] **SVV4. Op een nieuwe sectie ook de mengvorm wisselen?** 💬 Niet gebouwd: het verandert een stand die in het log staat (`video.mode`), en elke grens zou de mengvorm één plek doorschuiven. **Advies:** eerst de flits; wil je het, dan als eigen schakelaar.
+- [ ] **SVV5. Een korte loop of stutter op een sectiebegin: één accent?** 👀 Gekozen (7 okt): het rondgaan van een loop korter dan een maat, en hetzelfde sectiebegin binnen een maat (hotcue- of pad-stutter), is geen nieuwe sectie, in beeld én in de hub. Een sectie-loop (≥ 1 maat) klapt elke ronde. **Advies:** op de beamer kijken; mis je de flits per rondgang bij een korte loop, zeg het.
+- [ ] **SVV6. Energie vasthouden bij een cut?** 👀 Gekozen (7 okt): korter dan 0,5 s geen maatgever (een cut met de fader of crossfader) houdt de energie vast, in beeld en in de hub; daarna glijdt hij naar 0. **Advies:** proberen; is een halve seconde te kort of te lang, één getal (`HOUD`).
+
+
+**Hub** (speellijst "Secties naar de hub"; AV-app-hub PROTOCOL.md §18)
+- [ ] **SVH1. Een nieuw nummer: een klap of niet?** 👀 Stopt A en start B op zijn cue op een sectiebegin, dan een klap (dat is starten). Neemt een nummer dat al speelde de maat over in een mix, dan geen klap; label en energie gaan wel mee, en de volgende grens in dat nummer klapt wel. Spelen vanaf het begin van een nummer en een hotcue midden in een sectie geven geen klap (zoals in beeld). **Advies:** zo laten: een overname valt op de hysterese, niet op een "1".
+- [ ] **SVH2. Pauze: label laten staan?** 💬 Het label blijft staan met energie 0 ("drop, 0"). Energie 0 is ook een intro (de energie is relatief binnen het nummer): een beeld-app ziet geen verschil tussen pauze en intro. **Advies:** zo laten tot een beeld-app het verschil nodig heeft; anders een label `stil`.
+- [ ] **SVH3. Hoe vaak mag de hub een nieuwe sectie krijgen?** 💬 Gekozen (7 okt): hooguit één per seconde (vangnet in hub.js), en alles samen hooguit 10 per seconde in een schuivend venster waarin de `nieuw` meetelt; de `nieuw` gaat altijd meteen, gewone berichten wachten. **Advies:** zo laten.
+- [ ] **SVH4. Welke energie draagt een nieuwe sectie?** 💬 Gekozen (7 okt): die van de sectie zelf (het doel), niet die van het glijden; daarna glijdt de hub-energie niet van onderen op. **Advies:** zo laten.
+
+---
+
+## O. AV-app-hub (3 okt, `?hub=`, CLAUDE.md AV-APP-HUB)
+
+- [ ] **O1. LPD8 K1 (intensiteit) in VARVE?** 🎛 K1 hing eerst aan het
   audio-eindvolume (master). Weggehaald: de pickup van K1 volgt de EERSTE app met
   die rol, en andere apps gebruiken intensiteit als beeld (av-scene-kit 0,35);
   wie K1 dichtdraait om het beeld rustig te maken, zette ook de mix stil (gemeten
   0,80 → 0,43). Nu doet K1 niets in VARVE. Wil je hem wel: aan een BEELD-param
   (bv. de video-fx-intensiteit of de puls), of zo laten? **Advies:** zo laten;
   K2 (helderheid = video-master) en K4 (beweging = puls) doen al het beeld.
-- [ ] **N2. Bank: keylock of hubtoets?** 🎛 Je koos 25 sep (I4) Bank voor keylock,
+- [ ] **O2. Bank: keylock of hubtoets?** 🎛 Je koos 25 sep (I4) Bank voor keylock,
   met Shift + Bank = pitchbereik. De hub gebruikt Bank als hubtoets
   (`config.json` → `hubtoets`): met `?hub=` komt Bank nooit bij VARVE aan.
   Kiezen: keylock krijgt een andere toets (bv. Detail View, nu vrij zonder

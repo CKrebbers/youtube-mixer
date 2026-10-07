@@ -309,6 +309,532 @@
           ]
         }
       ]
+    },
+    {
+      "schema": 1,
+      "name": "Draaikolk",
+      "tags": [
+        "beweging",
+        "op de maat"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "autopan",
+          "params": {
+            "snelheid": 0.45,
+            "diepte": 0,
+            "vorm": 0,
+            "sync": 1
+          }
+        },
+        {
+          "slot": "b",
+          "type": "flanger",
+          "params": {
+            "snelheid": 0.3,
+            "diepte": 0.8,
+            "vertraging": 0.35,
+            "feedback": 0.7,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.2
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Draai",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.diepte",
+              "from": 0,
+              "to": 1
+            },
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.5,
+              "in": [
+                0.3,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Tempo",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "a.snelheid",
+              "from": 0.33,
+              "to": 0.78
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Straal",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "b.feedback",
+              "from": 0.55,
+              "to": 0.97,
+              "curve": "exp"
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Kleur",
+          "default": 0.5,
+          "bipolar": true,
+          "links": [
+            {
+              "target": "c.freq",
+              "from": 0.15,
+              "to": 0.85
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Oude band",
+      "tags": [
+        "lo-fi",
+        "warm"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "vibrato",
+          "params": {
+            "snelheid": 0.4,
+            "diepte": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "distortion",
+          "params": {
+            "drive": 0.45,
+            "soort": 0,
+            "toon": 0.7,
+            "niveau": 0.5,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "chorus",
+          "params": {
+            "snelheid": 0.35,
+            "diepte": 0.3,
+            "vertraging": 0.6,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "d",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.1
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Slijtage",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.diepte",
+              "from": 0,
+              "to": 0.3
+            },
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.8
+            },
+            {
+              "target": "d.freq",
+              "from": 0.5,
+              "to": 0.3,
+              "curve": "log"
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Wiebel",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "a.snelheid",
+              "from": 0.2,
+              "to": 0.6
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Zweef",
+          "default": 0,
+          "links": [
+            {
+              "target": "c.meng",
+              "from": 0,
+              "to": 0.5
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Vuil",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "b.drive",
+              "from": 0.25,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 5,
+          "label": "Dof",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "b.toon",
+              "from": 0.9,
+              "to": 0.4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Hakker",
+      "tags": [
+        "ritme",
+        "op de maat"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "tremolo",
+          "params": {
+            "snelheid": 0.5,
+            "diepte": 0,
+            "vorm": 0.67,
+            "sync": 1
+          }
+        },
+        {
+          "slot": "b",
+          "type": "autopan",
+          "params": {
+            "snelheid": 0.45,
+            "diepte": 0,
+            "vorm": 0,
+            "sync": 1
+          }
+        },
+        {
+          "slot": "c",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.25
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Hakken",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.diepte",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Deling",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "a.snelheid",
+              "from": 0.45,
+              "to": 0.78
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Zwaai",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.diepte",
+              "from": 0,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Vorm",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.vorm",
+              "from": 0.67,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 5,
+          "label": "Dun",
+          "default": 0,
+          "links": [
+            {
+              "target": "c.freq",
+              "from": 0.5,
+              "to": 0.8,
+              "curve": "exp"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Koor",
+      "tags": [
+        "zang",
+        "stems",
+        "ruimte"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "pitch",
+          "params": {
+            "interval": 0.75,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "chorus",
+          "params": {
+            "snelheid": 0.45,
+            "diepte": 0.4,
+            "vertraging": 0.65,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.55,
+            "toon": 0.5,
+            "meng": 0,
+            "freeze": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Koor",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 0.4
+            },
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.35
+            },
+            {
+              "target": "c.meng",
+              "from": 0,
+              "to": 0.3,
+              "in": [
+                0.2,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Interval",
+          "default": 1,
+          "links": [
+            {
+              "target": "a.interval",
+              "in": [
+                0.5,
+                0.5
+              ],
+              "from": 0.645833,
+              "to": 0.75
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Ruimte",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "c.grootte",
+              "from": 0.4,
+              "to": 0.85
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Glans",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "b.diepte",
+              "from": 0.2,
+              "to": 0.7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Kwaak",
+      "tags": [
+        "funk",
+        "bas",
+        "stems"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "autowah",
+          "params": {
+            "gevoel": 0.6,
+            "basis": 0.35,
+            "bereik": 0.6,
+            "reso": 0.65,
+            "aanzet": 0.4,
+            "verval": 0.55,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "distortion",
+          "params": {
+            "drive": 0.5,
+            "soort": 0,
+            "toon": 0.65,
+            "niveau": 0.5,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "widener",
+          "params": {
+            "breedte": 0.5,
+            "haas": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Kwaak",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 1
+            },
+            {
+              "target": "a.gevoel",
+              "from": 0.35,
+              "to": 0.75
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Toon",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "a.basis",
+              "from": 0.25,
+              "to": 0.6
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Vuil",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.7
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Breed",
+          "default": 0,
+          "links": [
+            {
+              "target": "c.breedte",
+              "from": 0.5,
+              "to": 0.85
+            }
+          ]
+        }
+      ]
     }
   ]
 }

@@ -15,22 +15,31 @@
  */
 import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/beatgrid.js';
 import { ToonKaart, WIJZER } from '../engine/toonsoort.js';
+import { teControleren, plekkenTeControleren, volgendTeControleren, oordeelStuk } from '../engine/tellen.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
-import { PITCH_BEREIKEN, SPRONG_TELLEN, GLIJ } from '../engine/deck.js';
+import { PITCH_BEREIKEN, SPRONG_TELLEN, GLIJ, TOON_MAX } from '../engine/deck.js';
 import { hoorbaar as hoorbaarVan, uitgangsVertraging } from '../engine/hoorbaar.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
 import { PULS_DOELEN } from '../video/puls.js';
 import { FITS } from '../video/passen.js';
-import { EQ_BANDEN, REM_MIN, REM_MAX } from '../engine/deck.js';
+import { EQ_BANDEN, REM_MIN, REM_MAX, STEM_NAMEN } from '../engine/deck.js';
 import { GROEPEN, LAAGNAAM } from './lagen.js';
 import { VOLGEN, LADDERS, KLANKSOORTEN, TRANSPOSITIE_MAX } from '../engine/klankschaal.js';
+import { INSTRUMENTEN } from '../engine/instrumenten/index.js';
+import { PLEKKEN, MAX_LENGTE, STANDAARD_LENGTE, TEMPO, SWING, gevuld, volgendeLengte } from '../engine/patronen/model.js';
 
 const registry = new Map();
+
+/** De stems op het scherm en in labels: Nederlands, de action-namen blijven Engels. */
+export const STEM_LABELS = { vocals: 'zang', inst: 'rest', drums: 'drums', bass: 'bas', other: 'overig' };
 
 /** Het rate-bereik van `track.N.tempo`; gelijk aan de klem in deck.setRate. */
 const RATE_MIN = 0.5;
 const RATE_MAX = 2;
+
+/** Zoveel secties per track op de bus: de 40 pads van het APC-grid (docs/SECTIES.md). */
+export const SECTIE_PADS = 40;
 
 export function define(id, type, fn, meta = {}) {
   registry.set(id, { id, type, fn, meta });
@@ -62,16 +71,24 @@ function drukknop(slotVan, k) {
   return { fn, ingedrukt: () => (vast ? 1 : 0) };
 }
 
-export function invoke(id, value) {
+/**
+ * Een action uitvoeren. `opties` is er alleen voor terugspelen
+ * (terugspelen.js): `{ laat, van }` = deze regel komt zoveel seconden audioklok
+ * na zijn moment (tot een tik), en (een sectiedruk) de tracktijd waar de
+ * speelkop toen stond. Het log zet hem dan op zijn bedoelde moment, en een
+ * sectiesprong rekent vanaf die plek (deck.drukPlek). De waarde blijft 0..1
+ * of een boolean (regel 2); de rest van de bus negeert het.
+ */
+export function invoke(id, value, opties) {
   const a = registry.get(id);
   if (!a) { console.warn('[actions] onbekend:', id); return false; }
   // Wie meeluistert (het handelingenlog) hoort het vóór de action draait:
   // dan staat de handeling in het log vóór wat eruit volgt.
-  for (const f of busLuisteraars) { try { f(id, value); } catch (_) {} }
+  for (const f of busLuisteraars) { try { f(id, value, opties); } catch (_) {} }
   // Een action die gooit mag de aanroeper niet meenemen: de MIDI-hub stuurt
   // het bericht daarna nog naar de monitor, en juist dán wil je het zien.
   try {
-    a.fn(value);
+    a.fn(value, opties);
   } catch (err) {
     console.error(`[actions] ${id} faalde:`, err);
     for (const f of foutLuisteraars) { try { f(id, err); } catch (_) {} }
@@ -82,9 +99,9 @@ export function invoke(id, value) {
 
 const busLuisteraars = new Set();
 /**
- * Meeluisteren op de bus: (id, waarde) bij elke action die bestaat, van
- * MIDI, toetsenbord, muis of terugspelen. Voor het handelingenlog. Geeft een
- * functie terug die weer ophoudt.
+ * Meeluisteren op de bus: (id, waarde, opties) bij elke action die bestaat,
+ * van MIDI, toetsenbord, muis of terugspelen (opties: zie invoke). Voor het
+ * handelingenlog. Geeft een functie terug die weer ophoudt.
  */
 export function bijInvoke(fn) { busLuisteraars.add(fn); return () => busLuisteraars.delete(fn); }
 
@@ -138,6 +155,7 @@ export function bindEngine(engine) {
   // De bus spreekt in TRACKS, de engine nog in decks A en B. Track 1 = A,
   // track 2 = B. Zo hoeven mappings niet opnieuw als er acht tracks komen:
   // dan groeit deze lijst, en veranderen de namen niet nog een keer.
+  const kt = engine.koptelefoon;
   for (const [nr, id] of TRACKS) {
     const d = engine.deck(id);
     const n = `track.${nr}`;
@@ -171,13 +189,16 @@ export function bindEngine(engine) {
     define(`${n}.tap`, 'trigger', (on) => {
       if (!on || !d.buffer) return;
       const r = tap.tap(performance.now(), d.position);
-      if (!r) return;
+      // De eerste tik doet nog niets zichtbaars: zeg dat hij geteld is.
+      if (!r) { engine.emit('melding', { tekst: `track ${nr}: tap — tik verder op de tel; vanaf de tweede tik schuift het grid mee, na vier staat hij op slot`, soort: 'info' }); return; }
       // Speelt de track, dan gaat de lijn door de TRACKTIJDEN van de tikken en
       // is het tempo meteen in tracktijd. Staat hij stil, dan door de klok:
       // je tikt mee met wat je HOORT (grid × rate), dus delen door de rate.
       // Zonder die deling stond het grid op +5% pitch 5% fout.
       const bpm = r.bpmTrack ?? r.bpm / (d.rate || 1);
       const anker = r.anker ?? d.position;
+      // De tweede tik is de eerste die het grid verandert: daarvóór kan het terug (↶).
+      if (r.taps === 2) d.gridVoorBewerking();
       // Alleen het stuk waar je tikte; zonder grid een nieuw grid van één stuk.
       if (d.grid) d.grid.zetStuk(anker, { bpm, anker });
       else d.setGrid(new Beatgrid({ bpm, firstBeat: anker }));
@@ -193,7 +214,17 @@ export function bindEngine(engine) {
     // Grid bewerken "vanaf hier": alles raakt alleen het STUK waar je bent.
     // "Hier" is wat je HOORT (hoorbaar()), anders zet je een tel een
     // uitgangsvertraging te laat. Met één stuk is dat het hele grid.
-    const bewerk = (fn) => (on) => { if (on && d.grid) { fn(d.grid, hoorbaar()); d.gridGewijzigd(); } };
+    // Een bewerking met de hand kan terug (↶, deck.gridTerug) en BEVESTIGT het
+    // stuk: wie het hier gelijkzet heeft het gecontroleerd, dus sync en
+    // beat-loops mogen meteen (5 okt; daarvoor bleef het onzeker tot "slot").
+    const bewerk = (fn) => (on) => {
+      if (!on || !d.grid) return;
+      const p = hoorbaar();
+      d.gridVoorBewerking();
+      fn(d.grid, p);
+      d.grid.bevestig(p);
+      d.gridGewijzigd();
+    };
     // Voor de scene-knoppen in de grid-modus: read null zonder grid (niets te
     // doen), 1 zolang ingedrukt (je ziet dat hij het deed), anders `rust()`.
     const gridKnop = (id, fn, label, rust = () => 0) => {
@@ -218,12 +249,148 @@ export function bindEngine(engine) {
     // (regel 2: de mapping weet niets van bpm). Lineair, zodat een encoder-tik
     // overal even groot is: 0,01 bpm = step 0,01 / 260. De tel die het dichtst
     // bij wat je hoort ligt blijft liggen (setBpm met `bij`).
+    let bpmDraai = -Infinity;           // een reeks encoder-tikken is één stap terug
     define(`${n}.grid.bpm`, 'value', (v) => {
       if (!d.grid) return;
-      d.grid.setBpm(MIN_BPM + Math.min(1, Math.max(0, v)) * (MAX_BPM - MIN_BPM), { bij: hoorbaar() });
+      const p = hoorbaar(), nu = performance.now();
+      if (nu - bpmDraai > 1500) d.gridVoorBewerking();
+      bpmDraai = nu;
+      d.grid.setBpm(MIN_BPM + Math.min(1, Math.max(0, v)) * (MAX_BPM - MIN_BPM), { bij: p });
+      d.grid.bevestig(p);
       d.gridGewijzigd();
     }, { label: `Track ${nr} bpm van het gridstuk hier (${MIN_BPM}–${MAX_BPM}, voor een encoder)`,
          read: () => (!d.grid ? null : (d.grid.bpmAt(hoorbaar()) - MIN_BPM) / (MAX_BPM - MIN_BPM)) });
+    // De "1" een tel verder (of terug): de tellen blijven, alleen de maat begint
+    // een tel later. De analyse vindt geen downbeat; zo zet je hem zonder te tikken.
+    gridKnop('bar', (g, p) => g.maatSchuif(p, 1), `Track ${nr} de "1" een tel verder`);
+    gridKnop('bar.back', (g, p) => g.maatSchuif(p, -1), `Track ${nr} de "1" een tel terug`);
+
+    // VASTZETTEN (Beatgrid.pin): de tel hier hoort HIER. Het tempo van het stuk
+    // komt zo dat er tussen zijn anker en hier een geheel aantal tellen ligt,
+    // en vanaf hier begint een nieuw stuk. Tel 1 aan het begin + vast een paar
+    // minuten later = de drift is weg. Snapt naar een klap, zoals "tel 1 hier".
+    const pin = (t) => {
+      if (!d.grid) return;
+      const was = d.grid.toJSON();
+      const r = d.grid.pin(snapNaarOnset(d.onsets, t));
+      if (!r.ok) { engine.emit('melding', { tekst: `track ${nr}, vastzetten: ${r.reden}`, soort: 'fout' }); return; }
+      d.gridVoorBewerking(was);
+      d.gridGewijzigd();
+      const komma = (x) => x.toFixed(2).replace('.', ',');
+      engine.emit('melding', { soort: 'info', tekst: r.alleenFase
+        ? `track ${nr}: tel gelijkgelegd (te dicht bij het anker voor een tempo: zet "1" eerder, of vast verder weg)`
+        : `track ${nr}: vastgezet — ${komma(r.bpm)} bpm (was ${komma(r.was)}) over ${Math.abs(r.tellen)} tellen; vanaf hier een nieuw stuk` });
+    };
+    let pinDruk = false;
+    define(`${n}.grid.pin`, 'trigger', (on) => { pinDruk = !!on; if (on) pin(hoorbaar()); },
+      { label: `Track ${nr} vastzetten: de tel hier hoort hier (tempo tussen het anker en hier)`,
+        read: () => (!d.grid ? null : pinDruk ? 1 : 0) });
+    // Hetzelfde op een AANGEWEZEN plek (klik in de golfvorm): value = tracktijd / duur.
+    define(`${n}.grid.pin.op`, 'value', (v) => { if (d.buffer) pin(Math.min(1, Math.max(0, v)) * d.duration); },
+      { label: `Track ${nr} vastzetten op een plek (tracktijd / duur)` });
+    define(`${n}.grid.here.op`, 'value', (v) => {
+      if (!d.buffer) return;
+      const t = snapNaarOnset(d.onsets, Math.min(1, Math.max(0, v)) * d.duration);
+      if (!d.grid) { engine.emit('melding', { tekst: `track ${nr} heeft nog geen beatgrid: tik eerst mee op de tel met TAP`, soort: 'info' }); return; }
+      d.gridVoorBewerking(); d.grid.ankerHier(t); d.grid.bevestig(t); d.gridGewijzigd();
+    }, { label: `Track ${nr} tel 1 op een plek (tracktijd / duur)` });
+
+    // Terug: de laatste bewerking van het grid ongedaan (tik, pin, ×2, ‹ ›, …).
+    let terugDruk = false;
+    define(`${n}.grid.undo`, 'trigger', (on) => {
+      terugDruk = !!on;
+      if (on && !d.gridTerug()) engine.emit('melding', { tekst: `track ${nr}: niets om terug te zetten aan het grid`, soort: 'info' });
+    }, { label: `Track ${nr} grid: de laatste bewerking terug`, read: () => (!d.buffer ? null : terugDruk ? 1 : d.kanGridTerug ? 0.5 : 0) });
+
+    // ---- controleren (docs/BEATGRID.md §11) -----------------------------
+    // De controleklik: een tik op elke gridlijn (accent op de "1"), in de
+    // koptelefoon. Je loopt de PLEKKEN langs waar twijfel over is (stukken
+    // die aan elkaar liggen horen bij één plek) — of, als alles er goed
+    // uitziet, alle stukken. ✓ = "klopt tot hier": de plek tot waar je HOORT
+    // is goed, en je luistert door; is de plek helemaal goed, dan springt hij
+    // naar de volgende. Alles goed = het grid op slot. ✎ (de gridmodus) om bij
+    // te stellen terwijl de tik doorloopt.
+    let controleAlles = false;
+    const komma = (x) => x.toFixed(2).replace('.', ',');
+    const naarStuk = (i) => {
+      const s = d.grid.stukken[i];
+      // Net na het begin van het stuk, vóór zijn eerste tel: dan hoor je die tel, en ✓ keurt DIT stuk goed.
+      d.seek(Math.max(0, s.van + Math.min(0.05, 15 / s.bpm)), { doorlopend: d.playing });
+    };
+    const plekBij = (i) => plekkenTeControleren(d.grid, d.gridMeting, { alles: controleAlles }).find((p) => p.van <= i && i <= p.tot) ?? null;
+    const minuten = (s) => (s < 60 ? `${Math.round(s)} s` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
+    const meldStuk = (i, voor = '') => {
+      const st = d.grid.stukken, s = st[i];
+      const o = oordeelStuk(s, d.gridMeting?.stukken[i] ?? null, d.grid.slot);
+      const plekken = plekkenTeControleren(d.grid, d.gridMeting, { alles: controleAlles });
+      const p = plekken.find((x) => x.van <= i && i <= x.tot);
+      const lang = p ? (st[p.tot + 1]?.van ?? d.duration) - st[p.van].van : null;
+      engine.emit('melding', { soort: 'info', duur: 9000, tekst: `${voor}track ${nr}: `
+        + (p ? `plek ${plekken.indexOf(p) + 1} van ${plekken.length} (${minuten(lang)})` : `stuk ${i + 1} van ${st.length}`)
+        + ` · ${komma(s.bpm)} bpm: ${o.uitleg}` });
+    };
+    define(`${n}.grid.controle`, 'trigger', (on) => {
+      if (!on || !d.buffer) return;
+      if (engine.gridControleDeck === id) { engine.gridControle(null); return; }
+      if (!d.grid) { engine.emit('melding', { tekst: `track ${nr} heeft nog geen beatgrid om te controleren`, soort: 'info' }); return; }
+      const plekken = plekkenTeControleren(d.grid, d.gridMeting);
+      controleAlles = plekken.length === 0;
+      engine.gridControle(id);
+      const hier = d.grid.stukIndex(hoorbaar());
+      // Vanaf hier: je controleert wat je gaat spelen, niet per se de hele opname.
+      const i = controleAlles ? hier : (plekken.find((p) => p.tot >= hier) ?? plekken[0]).van;
+      // Staat hij stil, dan meteen naar het eerste stuk en spelen; speelt hij, dan tikt hij mee waar je bent.
+      if (!d.playing) { naarStuk(i); d.play(); }
+      engine.emit('melding', { soort: 'info', duur: 12000, tekst: controleAlles
+        ? `track ${nr}: alles lijkt te kloppen — luister mee of de tik op de tel valt (hoog = de "1"). ✓ keurt een stuk goed; is alles goed, dan gaat het grid op slot`
+        : `track ${nr}: ${plekken.length} ${plekken.length === 1 ? 'plek' : 'plekken'} om te controleren — luister of de tik op de tel valt (hoog = de "1"). `
+          + '✓ = klopt tot hier (luister door; is de plek goed, dan door naar de volgende), ▶ = sla over, ✎ = bijstellen' });
+    }, { label: `Track ${nr} grid controleren: tik op de tellen, stuk voor stuk`,
+         read: () => (!d.buffer ? null : engine.gridControleDeck === id ? 1 : 0) });
+    define(`${n}.grid.ok`, 'trigger', (on) => {
+      if (!on || !d.grid) return;
+      const p = hoorbaar();
+      const hier = d.grid.stukIndex(p);
+      const controle = engine.gridControleDeck === id;
+      // In de controle: de plek tot hier (wat je gehoord hebt); anders alleen het stuk hier.
+      const plek = controle ? plekBij(hier) : null;
+      d.gridVoorBewerking();
+      const st = d.grid.stukken;
+      for (let k = plek ? plek.van : hier; k <= hier; k++) d.grid.keurGoed(st[k].van);
+      d.gridGewijzigd();
+      if (!controle) {
+        engine.emit('melding', { soort: 'info', tekst: `track ${nr}: dit stuk van het grid is goedgekeurd` });
+        return;
+      }
+      // Ligt de rest van de plek nog voor je: doorluisteren.
+      if (plek && plek.tot > hier && plekBij(hier + 1)) {
+        const nog = (st[plek.tot + 1]?.van ?? d.duration) - p;
+        engine.emit('melding', { soort: 'info', tekst: `✓ tot hier — luister door, nog ${minuten(nog)} in deze plek` });
+        return;
+      }
+      const volgende = volgendTeControleren(d.grid, d.gridMeting, p, { alles: controleAlles });
+      if (volgende === null) {
+        d.grid.slot = true;
+        d.gridGewijzigd();
+        engine.gridControle(null);
+        engine.emit('melding', { soort: 'info', tekst: `track ${nr}: alles gecontroleerd — het grid staat op slot` });
+        return;
+      }
+      naarStuk(volgende);
+      meldStuk(volgende, '✓ — ');
+    }, { label: `Track ${nr} grid: klopt tot hier (goedkeuren; in de controle door naar de volgende plek)`,
+         read: () => (!d.grid ? null : d.grid.stukBij(hoorbaar()).ok ? 1 : 0) });
+    for (const [naam, stap] of [['next', 1], ['prev', -1]]) {
+      define(`${n}.grid.check.${naam}`, 'trigger', (on) => {
+        if (!on || !d.grid) return;
+        const hier = d.grid.stukIndex(hoorbaar());
+        const i = volgendTeControleren(d.grid, d.gridMeting, hoorbaar(), { stap, alles: controleAlles })
+          ?? Math.min(d.grid.aantalStukken - 1, Math.max(0, hier + stap));
+        naarStuk(i);
+        meldStuk(i);
+      }, { label: `Track ${nr} grid controleren: ${stap > 0 ? 'volgende' : 'vorige'} plek`, read: () => (!d.grid ? null : 0) });
+    }
+
     define(`${n}.grid.merge`, 'trigger', bewerk((g, p) => g.voegSamen(p)),
       { label: `Track ${nr} gridstuk samenvoegen met het vorige` });
     define(`${n}.grid.lock`, 'trigger', bewerk((g) => { g.slot = !g.slot; }),
@@ -294,6 +461,39 @@ export function bindEngine(engine) {
       define(`${n}.hotcue.${i + 1}.delete`, 'trigger', (on) => { if (on) d.hotcue(i, { del: true }); },
         { label: `Track ${nr} hotcue ${i + 1} wissen`,
           read: () => (!d.buffer ? null : d.hotcues[i] !== null ? 1 : 0) });
+    }
+
+    // ---- secties (docs/SECTIES.md) ----------------------------------------
+    // Het nummer in stukken (intro, drop, break …) die je speelt: een pad =
+    // die sectie, die invalt op de volgende maat (deck.naarSectie); shift =
+    // de sectie als loop (nog eens = loop eraf). Reads: null = er is geen
+    // sectie op die plek (of geen kaart), 0,5 = er is er een, 1 = die hoor je
+    // nu (de LED knippert op de tel) of je drukt hem in. `o` komt van
+    // terugspelen: { laat, van } = hoe laat de druk is en waar de speelkop toen
+    // stond (deck.drukPlek); dezelfde sprong als toen.
+    for (let i = 0; i < SECTIE_PADS; i++) {
+      let ingedrukt = false;
+      const bestaat = () => !!d.sectieKaart && d.buffer && i < d.sectieKaart.aantal;
+      define(`${n}.section.${i + 1}`, 'trigger', (on, o) => { ingedrukt = !!on; if (on) d.naarSectie(i, { laat: o?.laat, van: o?.van }); },
+        { label: `Track ${nr} sectie ${i + 1}: daarheen, op de volgende maat`,
+          read: () => (!bestaat() ? null : ingedrukt || d.sectieHier === i ? 1 : 0.5) });
+      define(`${n}.section.${i + 1}.loop`, 'trigger', (on, o) => { if (on) d.naarSectie(i, { loop: true, laat: o?.laat, van: o?.van }); },
+        { label: `Track ${nr} sectie ${i + 1} als loop (nog eens: loop eraf)`,
+          read: () => (!bestaat() ? null : d.loopIsSectie(i) ? 1 : 0.5) });
+    }
+    for (const [stap, naam, tekst] of [[1, 'next', 'volgende'], [-1, 'prev', 'vorige']]) {
+      define(`${n}.section.${naam}`, 'trigger', (on, o) => {
+        if (!on || !d.sectieKaart) return;
+        // Aan het eind niet stil niets (Clay, 5 okt): een melding. De deck beslist dat
+        // vanaf dezelfde plek als de sprong (drukPlek), ook bij terugspelen.
+        const r = d.naarSectieStap(stap, { laat: o?.laat, van: o?.van });
+        const k = d.sectieKaart.aantal;
+        if (r.waarom === 'laatste' || r.waarom === 'eerste') {
+          engine.emit('melding', { tekst: r.waarom === 'laatste' ? `track ${nr}: al bij de laatste sectie (${k} van ${k})`
+            : `track ${nr}: al bij de eerste sectie (1 van ${k})`, soort: 'info', duur: 8000 });
+        }
+      }, { label: `Track ${nr} naar de ${tekst} sectie, op de volgende maat`,
+           read: () => (!d.sectieKaart || !d.buffer ? null : 0) });
     }
 
     for (const sec of [0.5, 1, 2, 4, 8]) {
@@ -401,6 +601,21 @@ export function bindEngine(engine) {
     define(`${n}.seek`, 'value', (v) => d.seek(v * d.duration),
       { label: `Track ${nr} scrub`, read: () => (d.duration ? d.position / d.duration : 0) });
 
+    // Keylock en toon (docs/KEYLOCK.md): het tempo los van de toon. Keylock
+    // blijft staan bij een nieuw nummer, de toon gaat terug naar 0. Een sprong
+    // met keylock (play, hotcue, seek) klinkt ~95 ms later, exact (K3).
+    define(`${n}.keylock`, 'trigger', (on) => { if (on) d.setKeylock(!d.keylock); },
+      { label: `Track ${nr} keylock aan/uit (het tempo verandert, de toon blijft)`, read: () => (d.keylock ? 1 : 0) });
+    define(`${n}.transpose`, 'value', (v) => d.setTranspositie(Math.round(Math.min(1, Math.max(0, v)) * 2 * TOON_MAX) - TOON_MAX),
+      { label: `Track ${nr} toon verschuiven (±${TOON_MAX} halve tonen, 0,5 = niets)`, bipolar: true,
+        read: () => (d.transpositie + TOON_MAX) / (2 * TOON_MAX) });
+    define(`${n}.transpose.up`, 'trigger', (on) => { if (on) d.setTranspositie(d.transpositie + 1); },
+      { label: `Track ${nr} toon een halve toon hoger`, read: () => (d.transpositie >= TOON_MAX ? null : d.transpositie > 0 ? 1 : 0) });
+    define(`${n}.transpose.down`, 'trigger', (on) => { if (on) d.setTranspositie(d.transpositie - 1); },
+      { label: `Track ${nr} toon een halve toon lager`, read: () => (d.transpositie <= -TOON_MAX ? null : d.transpositie < 0 ? 1 : 0) });
+    define(`${n}.transpose.reset`, 'trigger', (on) => { if (on) d.setTranspositie(0); },
+      { label: `Track ${nr} toon terug naar 0`, read: () => (d.transpositie !== 0 ? 1 : 0) });
+
     // bipolar: staat in het midden in rust. De LED-ring hoort dan pan-stijl te
     // zijn in plaats van volume-stijl; dat is het enige wat de LED-laag hoeft
     // te weten om hem goed te tekenen.
@@ -421,6 +636,116 @@ export function bindEngine(engine) {
         { label: `Track ${nr} kill ${naam} aan/uit`, read: stand });
       define(`${n}.kill.${band}.hold`, 'trigger', (on) => d.houdKill(band, !!on),
         { label: `Track ${nr} kill ${naam} zolang je drukt`, read: stand });
+    }
+
+    // Stems (docs/STEMS.md): per stem een niveau (0..1, 1 = vol; vóór de EQ)
+    // en een kill als schakelaar en als drukknop, zoals de EQ-kill: het
+    // niveau blijft staan, kill uit = precies terug. `inst` is de rest (bij
+    // vier stems: drums + bas + overig samen). Read null als de track geen
+    // stems heeft, of deze stem in deze stand niet bestaat (drums bij twee):
+    // dan is er niets te doen (B4: lampje uit). Kill-lampje: 1 = weg, 0 = open.
+    for (const st of STEM_NAMEN) {
+      const naam = STEM_LABELS[st];
+      const weg = () => (!d.stemBestaat(st) ? null : d.stemGekild(st) ? 1 : 0);
+      define(`${n}.stem.${st}`, 'value', (v) => d.setStemNiveau(st, v),
+        { label: `Track ${nr} stem ${naam}: niveau`, read: () => d.stemNiveau(st) });
+      define(`${n}.stem.${st}.kill`, 'trigger', (on) => { if (on) d.toggleStemKill(st); },
+        { label: `Track ${nr} stem ${naam} weg aan/uit`, read: weg });
+      define(`${n}.stem.${st}.hold`, 'trigger', (on) => d.houdStemKill(st, !!on),
+        { label: `Track ${nr} stem ${naam} weg zolang je drukt`, read: weg });
+
+      // Stemkanalen (docs/STEMS.md §5): per stem een bipolair filter (midden
+      // = open, zoals het trackfilter), een echo- en galm-send (door een
+      // spiegel van de fader: fader dicht = ook de stem stuurt niets meer in)
+      // en een cue. Bij vier stems werkt `inst` op drums, bas en overig samen.
+      // Read null zonder die stem; de cue ook zonder koptelefoonuitgang.
+      define(`${n}.stem.${st}.filter`, 'value', (v) => d.setStemFilter(st, v),
+        { label: `Track ${nr} stem ${naam}: filter`, bipolar: true, read: () => d.stemFilter(st) });
+      for (const bus of ['A', 'B']) {
+        define(`${n}.stem.${st}.send.${bus.toLowerCase()}`, 'value', (v) => d.setStemSend(bus, st, v),
+          { label: `Track ${nr} stem ${naam}: send ${bus} (${bus === 'A' ? 'echo' : 'galm'})`, read: () => d.stemSend(bus, st) });
+      }
+      const stemCue = `${id}:stems`;
+      define(`${n}.stem.${st}.pfl`, 'trigger', (on) => { if (on && kt.heeft(stemCue)) d.toggleStemPfl(st); },
+        { label: `Track ${nr} stem ${naam} in de koptelefoon (voorbeluisteren) aan/uit`,
+          read: () => (!kt.heeft(stemCue) || !d.stemBestaat(st) ? null : d.stemPflAan(st) ? 1 : 0) });
+
+      // Een eigen toon per stem (6 okt): halve tonen bovenop de toon van de
+      // track, het tempo blijft. Zoals track.N.transpose: value 0..1 over
+      // ±TOON_MAX (0,5 = niets), en hoger/lager/terug. Read null zonder die stem.
+      const toon = () => d.stemToon(st);
+      define(`${n}.stem.${st}.transpose`, 'value', (v) => d.setStemToon(st, Math.round(Math.min(1, Math.max(0, v)) * 2 * TOON_MAX) - TOON_MAX),
+        { label: `Track ${nr} stem ${naam}: toon (±${TOON_MAX} halve tonen, 0,5 = niets)`, bipolar: true,
+          read: () => (toon() === null ? null : (toon() + TOON_MAX) / (2 * TOON_MAX)) });
+      define(`${n}.stem.${st}.transpose.up`, 'trigger', (on) => { if (on && toon() !== null) d.setStemToon(st, toon() + 1); },
+        { label: `Track ${nr} stem ${naam}: een halve toon hoger`, read: () => (toon() === null || toon() >= TOON_MAX ? null : toon() > 0 ? 1 : 0) });
+      define(`${n}.stem.${st}.transpose.down`, 'trigger', (on) => { if (on && toon() !== null) d.setStemToon(st, toon() - 1); },
+        { label: `Track ${nr} stem ${naam}: een halve toon lager`, read: () => (toon() === null || toon() <= -TOON_MAX ? null : toon() < 0 ? 1 : 0) });
+      define(`${n}.stem.${st}.transpose.reset`, 'trigger', (on) => { if (on) d.setStemToon(st, 0); },
+        { label: `Track ${nr} stem ${naam}: toon terug naar 0`, read: () => (toon() === null ? null : toon() !== 0 ? 1 : 0) });
+    }
+
+    // Koptelefoon (docs/STUDIO.md §3): deze track voorbeluisteren, vóór de
+    // fader. Lampje: 1 = je hoort hem in de koptelefoon, 0 = niet, null = er
+    // is geen koptelefoonuitgang (de uitgang heeft geen vier kanalen).
+    define(`${n}.pfl`, 'trigger', (on) => { if (on) kt.wisselPfl(id); },
+      { label: `Track ${nr} in de koptelefoon (voorbeluisteren) aan/uit`,
+        read: () => (kt.heeft(id) ? (kt.pflAan(id) ? 1 : 0) : null) });
+
+    // ---- instrument op deze track (docs/INSTRUMENTEN.md §6) -----------------
+    // Een track draagt een nummer óf een instrument (ST7). Kiezen loopt rond:
+    // geen → elk instrument uit INSTRUMENTEN → geen. Staat er een nummer dat
+    // SPEELT, dan gaat het er pas af bij een tweede druk binnen 3 s (destructief,
+    // zoals laden over een spelende track): ook op de APC en het toetsenbord.
+    // Noten gaan NIET over de bus (een noot is geen 0..1): src/control/noten.js.
+    const inst = () => engine.instrumentOp?.(id) ?? null;
+    const keuzes = [null, ...INSTRUMENTEN.map((x) => x.soort)];
+    let zekerTot = 0;
+    const kiesInstrument = (soort) => {
+      if (soort && !inst() && d.playing) {
+        const nu = performance.now();
+        if (!(nu < zekerTot)) {
+          zekerTot = nu + 3000;
+          engine.emit('melding', { tekst: `track ${nr} speelt — druk nog eens (binnen 3 s) om het nummer eraf te halen voor een instrument`, soort: 'info' });
+          return;
+        }
+      }
+      zekerTot = 0;
+      const r = engine.zetInstrument(id, soort);
+      if (!r.ok) engine.emit('melding', { tekst: `track ${nr}: ${r.reden}`, soort: 'fout' });
+    };
+    const keuzeNu = () => keuzes.indexOf(inst()?.soort ?? null);
+    define(`${n}.inst`, 'trigger', (on) => { if (on) kiesInstrument(keuzes[(Math.max(0, keuzeNu()) + 1) % keuzes.length]); },
+      { label: `Track ${nr} instrument kiezen (geen → ${INSTRUMENTEN.map((x) => x.naam).join(' → ')} → geen)`,
+        read: () => (keuzes.length > 1 ? Math.max(0, keuzeNu()) / (keuzes.length - 1) : 0) });
+    // Door de instrumenten bladeren zonder "geen" (Device ◀ ▶ in het mapje inst).
+    for (const [naam, stap] of [['next', 1], ['prev', -1]]) {
+      define(`${n}.inst.${naam}`, 'trigger', (on) => {
+        if (!on || !INSTRUMENTEN.length) return;
+        const i = INSTRUMENTEN.findIndex((x) => x.soort === inst()?.soort);
+        const j = i < 0 ? (stap > 0 ? 0 : INSTRUMENTEN.length - 1) : (i + stap + INSTRUMENTEN.length) % INSTRUMENTEN.length;
+        kiesInstrument(INSTRUMENTEN[j].soort);
+      }, { label: `Track ${nr} ${stap > 0 ? 'volgend' : 'vorig'} instrument`, read: () => (inst() ? 0 : null) });
+    }
+    // Eén keuze in één keer (het masterwiel van de Maschine: draaien = kiezen op het
+    // scherm, indrukken = dit): 0 = geen, dan de instrumenten op hun plek in de rij,
+    // dezelfde schaal als de read van `track.N.inst`. Zelfde regel voor een spelend nummer.
+    define(`${n}.inst.choose`, 'value', (v) => {
+      const i = Math.round(Math.min(1, Math.max(0, Number(v) || 0)) * (keuzes.length - 1));
+      if (i !== keuzeNu()) kiesInstrument(keuzes[i]);
+    }, { label: `Track ${nr} instrument kiezen in één keer (0 = geen, dan ${INSTRUMENTEN.map((x) => x.naam).join(', ')})`,
+      read: () => (keuzes.length > 1 ? Math.max(0, keuzeNu()) / (keuzes.length - 1) : 0) });
+    // Acht knoppen: een PLEK, zoals de FX-knoppen; wat hij doet hangt van het instrument af.
+    for (let k = 1; k <= 8; k++) {
+      define(`${n}.inst.knob.${k}`, 'value', (v) => inst()?.zetParam(k, v),
+        { label: `Track ${nr} instrumentknop ${k}`, read: () => inst()?.leesParam(k) ?? null });
+    }
+    // Paniek: meteen stil (korte fade). Lampje: 1 = ingedrukt, 0,5 = er klinkt iets, 0 = stil, null = geen instrument.
+    {
+      let ingedrukt = false;
+      define(`${n}.inst.stil`, 'trigger', (on) => { ingedrukt = !!on; if (on) inst()?.stil(); },
+        { label: `Track ${nr} instrument meteen stil (paniek)`,
+          read: () => { const i = inst(); return !i ? null : ingedrukt ? 1 : i.stand().klinkt > 0 ? 0.5 : 0; } });
     }
 
     // Sends: na de fader naar de gedeelde echo (A) en galm (B).
@@ -530,6 +855,32 @@ export function bindEngine(engine) {
     }
   }
 
+  // ---- de master: effecten op het geheel (docs/MASTER.md) ------------------
+  // Hetzelfde racksysteem als een track, dus dezelfde namen: track.N.fx.* wordt
+  // master.fx.*. Welk rack er in zit kiest master.rack.next/prev (bindApp: de
+  // lijst kent de schermlaag). Altijd gedefinieerd, ook op een engine zonder
+  // master (een dubbel in de tests): dan doen ze niets en lezen ze null.
+  const mfx = () => engine.master?.fx ?? null;
+  define('master.fx.mix', 'value', (v) => mfx()?.setMix(v),
+    { label: 'Master FX dry/wet', read: () => mfx()?.mix ?? null });
+  // read = bypass (1 = effect UIT), zoals bij een track; de LED draait dat om.
+  define('master.fx.bypass', 'trigger', (on) => { const f = mfx(); if (on && f) f.setBypass(!f.bypass); },
+    { label: 'Master FX uit', read: () => { const f = mfx(); return !f?.effectId ? null : f.bypass ? 1 : 0; } });
+  for (let k = 1; k <= 8; k++) {
+    define(`master.fx.knob.${k}`, 'value', (v) => mfx()?.setPlek(k, v),
+      { label: `Master FX plek ${k}`, bipolar: false, read: () => mfx()?.leesPlek(k) ?? null });
+    const druk = drukknop(mfx, k);
+    define(`master.fx.knob.${k}.hold`, 'trigger', druk.fn,
+      { label: `Master FX plek ${k} vasthouden (open zolang ingedrukt)`, read: druk.ingedrukt });
+  }
+  define('master.fx.next', 'trigger', (on) => {
+    const f = mfx();
+    if (!on || !f) return;
+    const lijst = EFFECTEN.map((e) => e.id);
+    f.zetEffect(lijst[(lijst.indexOf(f.effectId) + 1) % lijst.length]);
+    engine.emit?.('change');
+  }, { label: 'Master volgend effect' });
+
   // ---- sampler: acht pads -------------------------------------------------
   // Leeg: pak de laatste tellen van de track met focus — of, als er een
   // bewaard stuk op deze pad wacht, knip dat opnieuw. Gevuld: start op de
@@ -556,6 +907,33 @@ export function bindEngine(engine) {
            // 0,5: er valt iets te wissen (gedimd rood); dit staat niet achter
            // shift, dus vol rood zou de hele tijd schreeuwen.
            read: () => (sampler.pads[i] || sampler.herinneringen?.[i] ? 0.5 : 0) });
+      // Een hele SECTIE (6 okt, docs/SECTIES.md): de sectie die je HOORT op de
+      // focus-track, van haar "1" tot de "1" van de volgende, in deze pad; hij
+      // start daarna op de "1". Een eigen action en geen shift: shift op een
+      // lege pad is al "vergeten" (.clear). Alleen op een lege pad; kan het
+      // niet, dan zegt een melding waarom (WAAROM NIET). Read: null = kan niet
+      // (dezelfde regels als de melding: pad bezet, geen secties of grid,
+      // onzeker, te lang), 0,5 = kan, 1 = ingedrukt.
+      let sectieDruk = false;
+      const zeg = (tekst, soort = 'info') => engine.emit('melding', { tekst: `sampler pad ${i + 1}: ${tekst}`, soort, duur: 8000 });
+      define(`sampler.${i + 1}.section`, 'trigger', (on) => {
+        sectieDruk = !!on;
+        if (!on) return;
+        const deck = engine.focused();
+        const nr = trackVanDeck(deck?.id);
+        const naam = `track ${nr}`;
+        const s = deck?.sectieHier ?? -1;
+        const waarom = sampler.waaromGeenSectie(i, deck, s, naam);
+        if (waarom) { zeg(waarom); return; }
+        sampler.neemSectie(i, deck, s, { bron: nr, naam })
+          .then((r) => { if (r?.letOp) zeg(r.letOp); })
+          .catch((err) => zeg(err.message, 'fout'));
+      }, { label: `Sampler pad ${i + 1}: de sectie die je hoort (focus-track), in hele maten`,
+           read: () => {
+             if (sectieDruk) return 1;
+             const d = engine.focused();
+             return sampler.waaromGeenSectie(i, d, d?.sectieHier ?? -1) ? null : 0.5;
+           } });
     }
     define('sampler.length', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },
       { label: 'Sampler: hoeveel tellen', read: () => [1, 2, 4, 8].indexOf(sampler.tellen) / 3 });
@@ -622,6 +1000,13 @@ export function bindEngine(engine) {
     { label: 'Crossfader', bipolar: true, read: () => engine.xfader });
   define('mixer.master', 'value', (v) => engine.setMaster(v),
     { label: 'Master', read: () => engine.masterLevel });
+
+  // De koptelefoon (docs/STUDIO.md §3): volume en de mix cue ↔ zaal. Read
+  // null zonder koptelefoonuitgang: dan is er niets te draaien.
+  define('headphone.level', 'value', (v) => kt.zetNiveau(v),
+    { label: 'Koptelefoon: volume', read: () => (kt.beschikbaar ? kt.niveau : null) });
+  define('headphone.mix', 'value', (v) => kt.zetMix(v),
+    { label: 'Koptelefoon: mix (links alleen de cue, rechts alleen de zaal)', read: () => (kt.beschikbaar ? kt.mix : null) });
   define('mixer.xfader.curve', 'trigger', (on) => {
     if (on) engine.setXfaderCurve(engine.xfaderCurve === 'smooth' ? 'sharp' : 'smooth');
   }, { label: 'Crossfader-curve wisselen', read: () => (engine.xfaderCurve === 'sharp' ? 1 : 0) });
@@ -630,6 +1015,191 @@ export function bindEngine(engine) {
   define('transport.quantize', 'trigger', (on) => { if (on) engine.setQuantize(!engine.quantize); },
     { label: 'Quantize aan/uit: cue, hotcues en loop in/out op de tel, hotcues springen in de maat',
       read: () => (engine.quantize ? 1 : 0) });
+
+  bindPatronen(engine);
+  waaromNiet(engine);
+}
+
+/*
+ * WAAROM NIET (Clay, 5 okt: "heel veel knoppen zijn wel in te klikken ... maar
+ * ze werken niet"). Een knop die stil niets doet, is voor wie hem indrukt een
+ * kapotte knop. Kan een track-action op dit moment niets, dan zegt een
+ * melding waarom en wat wel kan: een lege track, een instrument in plaats van
+ * een nummer, geen grid, geen stems, geen koptelefoonuitgang. Alleen bij
+ * INDRUKKEN van een drukknop (niet bij loslaten, niet voor draaiknoppen); staat
+ * dezelfde melding er al, dan licht die opnieuw op. De action zelf verandert niet: hij
+ * doet in die gevallen nog steeds niets (dat is goed), alleen niet meer stil.
+ */
+const NUMMER_NODIG = /^(play|cue|sync|tap|brake|hotcue\.\d$|loop\.|beatloop\.|beatjump\.|nudge\.|bend\.|grid\.|stem\.|section\.)/;
+// Zonder grid: tel 1 (here) kan nog steeds niets, maar zegt dat zelf; terug (undo) moet ook na wissen kunnen.
+const GRID_NODIG = /^(grid\.(?!here$|undo$)|beatloop\.|beatjump\.)/;
+const KOPTELEFOON_NODIG = /^(pfl$|stem\.\w+\.pfl$)/;
+
+function waaromNiet(engine) {
+  const kt = engine.koptelefoon;
+  // Elke druk zegt het: staat dezelfde melding er nog, dan licht die opnieuw op (meldingen.js).
+  const zeg = (tekst) => engine.emit('melding', { tekst, soort: 'info', duur: 8000 });
+  for (const [nr, id] of TRACKS) {
+    const d = engine.deck(id);
+    const n = `track.${nr}.`;
+    /** Waarom deze action op deze track nu niets kan, of null. */
+    const reden = (rest) => {
+      if (KOPTELEFOON_NODIG.test(rest) && !kt?.beschikbaar) {
+        return `koptelefoon: de audio-uitgang heeft ${kt?.kanalen ?? 2} kanalen, er is er geen voor de koptelefoon. `
+          + 'Maak in Audio-MIDI-configuratie een samengesteld apparaat (eerst de Scarlett, dan de koptelefoonuitgang van de Mac), '
+          + 'kies het in Systeeminstellingen → Geluid en herlaad VARVE (docs/STUDIO.md §3).';
+      }
+      if (!NUMMER_NODIG.test(rest)) return null;
+      if (!d.buffer) {
+        const inst = engine.instrumentOp?.(id);
+        return inst
+          ? `track ${nr} speelt een instrument (${inst.naam ?? inst.soort}), geen nummer: ${rest.split('.')[0]} hoort bij een nummer. `
+            + 'Speel het instrument met een keyboard of start een patroon (PATROON-rij).'
+          : `track ${nr} is leeg: laad eerst een nummer (library, of sleep een bestand op de kolom).`;
+      }
+      if (rest.startsWith('stem.') && !KOPTELEFOON_NODIG.test(rest) && !d.stems) {
+        return `track ${nr} heeft (nog) geen stems: splits hem in de STEMS-rij of in de library.`;
+      }
+      if (rest.startsWith('section.') && !d.sectieKaart) {
+        return `track ${nr} heeft (nog) geen secties: die worden bij het laden berekend (een paar seconden; met stems en een grid worden ze beter).`;
+      }
+      if (rest.startsWith('section.') && /^section\.\d+/.test(rest) && Number(rest.split('.')[1]) > d.sectieKaart.aantal) {
+        return `track ${nr} heeft ${d.sectieKaart.aantal} secties; sectie ${rest.split('.')[1]} is er niet.`;
+      }
+      // Volgende/vorige aan het eind: dat meldt de action zelf (naarSectieStap), vanaf
+      // dezelfde plek als de sprong. Hier vanaf de positie van NU zette dat een
+      // teruggespeelde druk (een tik te laat, vlak na de "1") stil die toen sprong.
+      if (GRID_NODIG.test(rest) && !d.grid) {
+        return `track ${nr} heeft nog geen beatgrid: tik mee op de tel met TAP (vier tikken), of zet tel 1 met "1".`;
+      }
+      return null;
+    };
+    for (const [aid, a] of registry) {
+      if (!aid.startsWith(n) || a.type !== 'trigger') continue;
+      const rest = aid.slice(n.length);
+      if (!NUMMER_NODIG.test(rest) && !KOPTELEFOON_NODIG.test(rest)) continue;
+      const fn = a.fn;
+      a.fn = (on, o) => {
+        if (on) {
+          const r = reden(rest);
+          if (r) { zeg(r); return; }
+        }
+        return fn(on, o);
+      };
+    }
+  }
+}
+
+/** Een speler die er niet is: alles doet niets, alles leest null. */
+const GEEN_PATRONEN = {
+  druk: () => ({ ok: false }), stop() {}, stopAlles() {}, rij() {}, wisselStap() {}, zetLengte() {}, zetSwing() {}, wis() {},
+  zetTempo() {}, neemOp() {}, lamp: () => null, rijLamp: () => null, stapLamp: () => null, stand: () => null,
+  patroon: () => null, gekozen: () => 1, spelend: () => [], tempo: null, opnemen: false,
+};
+
+/**
+ * Patronen (docs/PATRONEN.md, STUDIO S4): een sequencer op de maat van de
+ * maatgever die de instrumenten op de tracks speelt (engine.patronen,
+ * src/engine/patronen/). Per track vijf plekken, de vijf rijen van het grid.
+ *
+ *   track.N.pattern.K        starten op de maat; speelt hij: stoppen op de maat;
+ *                            een ander op dezelfde track: wisselen op de maat;
+ *                            een lege plek: alleen kiezen (met opnemen aan: beginnen)
+ *   track.N.pattern.K.now    hetzelfde, maar starten op de volgende TEL en meteen stoppen (shift)
+ *   track.N.pattern.stop(.now)  stoppen op de maat (meteen)
+ *   track.N.pattern.step.S   stap S (1–64) van de gekozen plek: de laatst gespeelde noot erop of eraf
+ *   track.N.pattern.length / .length.up / .length.down / .swing / .clear   de gekozen plek
+ *   patterns.row.K           rij K op alle tracks (scene launch); patterns.stop(.now) alles
+ *   patterns.tempo           het eigen tempo zonder maatgever (40–240 bpm); patterns.tap tikt het
+ *   patterns.record          live opnemen aan/uit (de noten zelf gaan niet over de bus: noten.js)
+ *
+ * Reads (VRAGEN B4): null = geen instrument op de track (niets te doen),
+ * 0 = leeg, 0,5 = gevuld, 1 = speelt; een plek die op de maat wacht
+ * (starten of stoppen) knippert op de tel van de klok tussen 1 en 0,5.
+ * Bewerken (stappen, lengte, swing, wissen, opnemen) slaat terugspelen over:
+ * het patroon is al bewaard (zie OVERSLAAN in terugspelen.js).
+ */
+export function bindPatronen(engine) {
+  // Altijd gedefinieerd, ook op een engine zonder speler (een dubbel in de
+  // tests): dan doen ze niets en lezen ze null, zoals master.fx.*.
+  const pt = engine.patronen ?? GEEN_PATRONEN;
+  const k01 = (v) => Math.min(1, Math.max(0, Number(v) || 0));
+  const melding = (r, nr) => { if (r && !r.ok && r.reden) engine.emit('melding', { tekst: `track ${nr}, patroon: ${r.reden}`, soort: 'fout' }); };
+  for (const [nr, id] of TRACKS) {
+    const n = `track.${nr}.pattern`;
+    const inst = () => engine.instrumentOp?.(id) ?? null;
+    const gekozenP = () => pt.patroon(id, pt.gekozen(id));
+    for (let k = 1; k <= PLEKKEN; k++) {
+      define(`${n}.${k}`, 'trigger', (on) => { if (on) melding(pt.druk(id, k), nr); },
+        { label: `Track ${nr} patroon ${k}: starten op de maat (speelt hij: stoppen op de maat)`, read: () => pt.lamp(id, k) });
+      define(`${n}.${k}.now`, 'trigger', (on) => { if (on) melding(pt.druk(id, k, { meteen: true }), nr); },
+        { label: `Track ${nr} patroon ${k} meteen: starten op de volgende tel, stoppen meteen`, read: () => pt.lamp(id, k) });
+    }
+    // 0,5 = er speelt (of wacht) iets om te stoppen, 1 = hij stopt al op de maat, 0 = niets.
+    const stopLamp = () => {
+      if (!inst()) return null;
+      const st = pt.stand(id);
+      return !st ? null : st.stopt ? 1 : st.speelt || st.wacht ? 0.5 : 0;
+    };
+    define(`${n}.stop`, 'trigger', (on) => { if (on) pt.stop(id); },
+      { label: `Track ${nr} patroon stoppen op de maat`, read: stopLamp });
+    define(`${n}.stop.now`, 'trigger', (on) => { if (on) pt.stop(id, { meteen: true }); },
+      { label: `Track ${nr} patroon meteen stoppen`, read: stopLamp });
+    for (let s = 1; s <= MAX_LENGTE; s++) {
+      define(`${n}.step.${s}`, 'trigger', (on) => { if (on && inst()) pt.wisselStap(id, pt.gekozen(id), s - 1); },
+        { label: `Track ${nr} patroon: stap ${s} aan/uit (de laatst gespeelde noot)`, read: () => pt.stapLamp(id, s - 1) });
+    }
+    define(`${n}.length`, 'value', (v) => { if (inst()) pt.zetLengte(id, pt.gekozen(id), 1 + Math.round(k01(v) * (MAX_LENGTE - 1))); },
+      { label: `Track ${nr} patroon: lengte (1–${MAX_LENGTE} stappen)`,
+        read: () => (!inst() ? null : ((gekozenP()?.lengte ?? STANDAARD_LENGTE) - 1) / (MAX_LENGTE - 1)) });
+    for (const [naam, r] of [['up', 1], ['down', -1]]) {
+      define(`${n}.length.${naam}`, 'trigger', (on) => {
+        if (on && inst()) pt.zetLengte(id, pt.gekozen(id), volgendeLengte(gekozenP()?.lengte ?? STANDAARD_LENGTE, r));
+      }, { label: `Track ${nr} patroon: ${r > 0 ? 'langer' : 'korter'}`, read: () => (inst() ? 0 : null) });
+    }
+    define(`${n}.swing`, 'value', (v) => { if (inst()) pt.zetSwing(id, pt.gekozen(id), SWING.min + k01(v) * (SWING.max - SWING.min)); },
+      { label: `Track ${nr} patroon: swing (${SWING.min} = recht, ${SWING.max} = een halve stap)`,
+        read: () => (!inst() ? null : ((gekozenP()?.swing ?? SWING.min) - SWING.min) / (SWING.max - SWING.min)) });
+    // Leegmaken is destructief: pas bij een tweede druk binnen 3 s (zoals een instrument kiezen over een spelend nummer).
+    let zekerTot = 0;
+    define(`${n}.clear`, 'trigger', (on) => {
+      if (!on || !inst()) return;
+      const plek = pt.gekozen(id);
+      if (!gevuld(pt.patroon(id, plek))) return;
+      const nu = performance.now();
+      if (!(nu < zekerTot)) {
+        zekerTot = nu + 3000;
+        engine.emit('melding', { tekst: `track ${nr}: druk nog eens (binnen 3 s) om patroon ${plek} leeg te maken`, soort: 'info' });
+        return;
+      }
+      zekerTot = 0;
+      pt.wis(id, plek);
+    }, { label: `Track ${nr} patroon leegmaken (de gekozen plek; tweede druk binnen 3 s)`,
+         read: () => (!inst() ? null : gevuld(gekozenP()) ? 0.5 : 0) });
+  }
+
+  const naarV = (bpm) => (bpm - TEMPO.min) / (TEMPO.max - TEMPO.min);
+  define('patterns.tempo', 'value', (v) => pt.zetTempo(TEMPO.min + k01(v) * (TEMPO.max - TEMPO.min)),
+    { label: `Patronen: eigen tempo zonder maatgever (${TEMPO.min}–${TEMPO.max} bpm)`, read: () => naarV(pt.tempo) });
+  // Tikken zet het tempo via de bus (patterns.tempo): zo staat het als getal in
+  // het handelingenlog en speelt terugspelen hetzelfde tempo terug.
+  const tap = new TapTempo();
+  define('patterns.tap', 'trigger', (on) => {
+    if (!on) return;
+    const r = tap.tap(performance.now());
+    if (r) invoke('patterns.tempo', naarV(Math.min(TEMPO.max, Math.max(TEMPO.min, r.bpm))));
+  }, { label: 'Patronen: tempo tikken (zonder maatgever)', read: () => 0 });
+  define('patterns.record', 'trigger', (on) => { if (on) pt.neemOp(!pt.opnemen); },
+    { label: 'Patronen: live opnemen aan/uit (wat je speelt komt in het patroon dat speelt)', read: () => (pt === GEEN_PATRONEN ? null : pt.opnemen ? 1 : 0) });
+  for (let k = 1; k <= PLEKKEN; k++) {
+    define(`patterns.row.${k}`, 'trigger', (on) => { if (on) pt.rij(k); },
+      { label: `Patronen: rij ${k} op alle tracks (op de maat; leeg = die track stopt)`, read: () => pt.rijLamp(k) });
+  }
+  const iets = () => (pt.spelend().length ? 0.5 : 0);
+  define('patterns.stop', 'trigger', (on) => { if (on) pt.stopAlles(); },
+    { label: 'Patronen: alles stoppen op de maat', read: iets });
+  define('patterns.stop.now', 'trigger', (on) => { if (on) pt.stopAlles({ meteen: true }); },
+    { label: 'Patronen: alles meteen stoppen', read: iets });
 }
 
 /**
@@ -660,7 +1230,7 @@ export function bindVideo(mixer) {
   define('video.fit', 'trigger', (on) => { if (on) mixer.volgendeFit(); },
     { label: 'Video: passend of vullen', read: () => FITS.indexOf(mixer.fit) / (FITS.length - 1) });
   define('video.pulse', 'value', (v) => mixer.zetPuls(v),
-    { label: 'Video: puls op de tel', read: () => mixer.puls });
+    { label: 'Video: puls op de tel (vol op een nieuwe sectie)', read: () => mixer.puls });
   define('video.pulse.target', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
     { label: 'Video: wat er pulst', read: () => PULS_DOELEN.indexOf(mixer.pulsDoel) / (PULS_DOELEN.length - 1) });
 
@@ -718,7 +1288,7 @@ export function bindVormen(vormen, router = null) {
   define('video.layer.react', 'value', (v) => router.zetSterkte(vormen.gekozen, v),
     { label: 'Vormlaag: reageren op de mix (sterkte)', read: () => router.route(vormen.gekozen).sterkte });
   define('video.layer.react.source', 'trigger', (on) => { if (on) router.volgendeBron(vormen.gekozen); },
-    { label: 'Vormlaag: reageren op laag · midden · hoog · klap · luid (de zaal) · klap · tel (de maatgever)' });
+    { label: 'Vormlaag: reageren op laag · midden · hoog · klap · luid (de zaal) · klap · tel · sectie · nieuwe sectie (de maatgever)' });
   define('video.layer.react.target', 'trigger', (on) => { if (on) router.volgendDoel(vormen.gekozen); },
     { label: 'Vormlaag: reageren, welke knop (1–6)' });
 }
@@ -729,7 +1299,7 @@ export function bindVormen(vormen, router = null) {
  * racks bladeren. De functies
  * komen van app.js; hier alleen de namen en de read.
  */
-export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnameSoort, rackStap }) {
+export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnameSoort, rackStap, masterRackStap = () => {} }) {
   for (const [nr, id] of TRACKS) {
     for (const v of ['L', 'R']) {
       define(`window.${v}.show.${nr}`, 'trigger', (on) => { if (on) toon(v, id); },
@@ -738,6 +1308,9 @@ export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnam
     define(`track.${nr}.rack.next`, 'trigger', (on) => { if (on) rackStap(id, 1); }, { label: `Track ${nr} volgend rack` });
     define(`track.${nr}.rack.prev`, 'trigger', (on) => { if (on) rackStap(id, -1); }, { label: `Track ${nr} vorig rack` });
   }
+  // De master-racks: de kant-en-klare (racks/sjablonen.json), master-paneel.js.
+  define('master.rack.next', 'trigger', (on) => { if (on) masterRackStap(1); }, { label: 'Master volgend rack' });
+  define('master.rack.prev', 'trigger', (on) => { if (on) masterRackStap(-1); }, { label: 'Master vorig rack' });
   define('record.start', 'trigger', (on) => { if (on && !opnemer.bezig) opnameStart(); },
     { label: 'Opname starten', read: () => (opnemer.bezig ? 1 : 0) });
   define('record.stop', 'trigger', (on) => { if (on && opnemer.bezig) opnameStop(); },
@@ -770,15 +1343,22 @@ export function bindLog({ log, wissel, terugspeler }) {
  */
 export function bindAuto(auto) {
   const klaar = () => auto.fase === 'klaar' && !!auto.volgende;
+  // Waarom een knop van de auto-DJ nu niets doet (WAAROM NIET, bindEngine): uit, of nog niets klaar.
+  const kan = (doe) => (on) => {
+    if (!on) return;
+    if (!auto.aan) { auto.emit?.('melding', { tekst: 'staat uit — zet hem eerst aan (knop "uit/aan" in de AUTO-rij)', soort: 'info' }); return; }
+    if (!auto.volgende) { auto.emit?.('melding', { tekst: 'er staat nog geen overgang klaar: hij kiest nog (of de library is leeg)', soort: 'info' }); return; }
+    doe();
+  };
   define('auto.aan', 'trigger', (on) => { if (on) auto.zetAan(); },
     { label: 'Auto-DJ aan/uit', read: () => (auto.aan ? 1 : 0) });
-  define('auto.ok', 'trigger', (on) => { if (on) auto.ok(); },
+  define('auto.ok', 'trigger', kan(() => auto.ok()),
     { label: 'Auto-DJ: de volgende overgang is goed', read: () => (!auto.volgende ? null : auto.volgende.bevestigd ? 1 : 0.5) });
-  define('auto.skip', 'trigger', (on) => { if (on) auto.overslaan(); },
+  define('auto.skip', 'trigger', kan(() => auto.overslaan()),
     { label: 'Auto-DJ: niet deze, de volgende kandidaat', read: () => (klaar() ? 0 : null) });
-  define('auto.langer', 'trigger', (on) => { if (on) auto.langer(); },
+  define('auto.langer', 'trigger', kan(() => auto.langer()),
     { label: 'Auto-DJ: nog 8 maten (of 30 s) langer op deze track', read: () => (klaar() ? 0 : null) });
-  define('auto.nu', 'trigger', (on) => { if (on) auto.nu(); },
+  define('auto.nu', 'trigger', kan(() => auto.nu()),
     { label: 'Auto-DJ: de overgang nu (op de eerstvolgende 4 maten)', read: () => (klaar() ? 0 : null) });
 }
 

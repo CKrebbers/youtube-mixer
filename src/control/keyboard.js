@@ -24,6 +24,7 @@ export const KEYMAP = {
   KeyE: 'track.{L}.focus',
   KeyR: 'track.{L}.beatjump.back', KeyT: 'track.{L}.beatjump.fwd',
   KeyG: 'track.{L}.loop.in',       KeyC: 'track.{L}.loop.out',
+  KeyV: 'track.{L}.keylock',
 
   // rechterhand: de vorige focus
   KeyP: 'track.{R}.play',       KeyO: 'track.{R}.cue',
@@ -37,17 +38,21 @@ export const KEYMAP = {
   KeyI: 'track.{R}.focus',
   KeyY: 'track.{R}.beatjump.back', KeyU: 'track.{R}.beatjump.fwd',
   KeyH: 'track.{R}.loop.in',       KeyN: 'track.{R}.loop.out',
+  KeyM: 'track.{R}.keylock',
 
   // midden: voor alle tracks
   Digit6: 'transport.quantize',
 };
 
 /**
- * Shift als ingebouwde modifier, geen aparte tabel: hotcue -> wissen, play ->
+ * Shift als ingebouwde modifier, per action: hotcue -> wissen, play ->
  * starten op de maat, beatjump terug/vooruit -> lengte halveren/verdubbelen,
- * loop in -> reloop/exit.
+ * loop in -> reloop/exit, nudge −/+ -> toon −1/+1 (zoals Shift + Nudge op de APC).
+ * Wat per TOETS moet, staat in SHIFT_TOETS hieronder.
  */
 const SHIFT_VARIANT = [
+  [/\.nudge\.back$/, (id) => id.replace(/nudge\.back$/, 'transpose.down')],
+  [/\.nudge\.fwd$/, (id) => id.replace(/nudge\.fwd$/, 'transpose.up')],
   [/\.hotcue\.\d+$/, (id) => `${id}.delete`],
   [/\.play$/, (id) => `${id}.quant`],
   [/\.beatjump\.back$/, (id) => id.replace(/back$/, 'halve')],
@@ -57,6 +62,25 @@ const SHIFT_VARIANT = [
 export const SHIFT_ALIAS = (id) => {
   const v = SHIFT_VARIANT.find(([re]) => re.test(id));
   return v ? v[1](id) : id;
+};
+
+/**
+ * Shift per TOETS, vóór SHIFT_VARIANT: voor een toets waarvan de shift-variant
+ * niet uit zijn eigen action volgt. Secties (docs/SECTIES.md): W en O zijn
+ * allebei cue, maar shift+W is de vorige sectie links en shift+O de volgende
+ * rechts (links naar rechts = terug naar vooruit, zoals R/T, Y/U en , / .).
+ * Met shift deden deze vier eerst hetzelfde als zonder.
+ */
+export const SHIFT_TOETS = {
+  KeyW: 'track.{L}.section.prev', KeyE: 'track.{L}.section.next',
+  KeyI: 'track.{R}.section.prev', KeyO: 'track.{R}.section.next',
+};
+
+/** De action van een toets (met `{L}`/`{R}`), met of zonder shift; null = geen. */
+export const toetsActie = (code, shift = false) => {
+  const basis = KEYMAP[code];
+  if (!basis) return null;
+  return shift ? (SHIFT_TOETS[code] ?? SHIFT_ALIAS(basis)) : basis;
 };
 
 /**
@@ -93,8 +117,16 @@ export function attachKeyboard(engine, opts = {}) {
     // kreeg door een klik, zette eerder álle toetsen stil tot je ergens
     // anders klikte.
     if (isTypen(e.target)) return;
+    // Cmd+Z (Ctrl+Z): de laatste bewerking van het grid van de focus-track terug
+    // (5 okt). Alle letters zijn al van de decks; dit is de toets die iedereen kent.
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.code === 'KeyZ') {
+      const id = `track.${trackVanDeck(engine.focus)}.grid.undo`;
+      invoke(id, true); invoke(id, false);
+      e.preventDefault();
+      return;
+    }
     // Cmd/Ctrl/Alt horen bij de browser en het systeem (Cmd+W, Ctrl+Tab),
-    // niet bij de decks. Shift wel: dat is de wis-variant.
+    // niet bij de decks. Shift wel: de shift-variant (toetsActie).
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
     if (e.code === 'BracketLeft')  { xfadeStep(-1); e.preventDefault(); return; }
@@ -102,13 +134,13 @@ export function attachKeyboard(engine, opts = {}) {
     if (e.code === 'Space')        { invoke(`track.${trackVanDeck(engine.focus)}.play`, true); e.preventDefault(); return; }
     if (e.code === 'Slash')        { opts.onHelp?.(); e.preventDefault(); return; }
 
-    if (!KEYMAP[e.code]) return;
+    const actie = toetsActie(e.code, e.shiftKey);
+    if (!actie) return;
     e.preventDefault();
     if (held.has(e.code)) return;      // geen auto-repeat op triggers
-    // Onthoud wat er echt ingedrukt is (met shift de wis-variant): loslaten
+    // Onthoud wat er echt ingedrukt is (met shift de shift-variant): loslaten
     // gaat naar dezelfde action, ook als shift intussen los is.
-    const basis = vul(KEYMAP[e.code]);
-    const id = e.shiftKey ? SHIFT_ALIAS(basis) : basis;
+    const id = vul(actie);
     held.set(e.code, id);
     if (invoke(id, true) && MELD_NA[id]) engine.emit('melding', { tekst: MELD_NA[id](engine), soort: 'info' });
   });
