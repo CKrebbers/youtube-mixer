@@ -1,6 +1,7 @@
 import { read, invoke } from '../control/actions.js';
 import { Maschine } from '../control/maschine.js';
 import { meld } from './meldingen.js';
+import { beschrijf } from './apc-beschrijf.js';
 
 /*
  * De speelapparaten van de AV-app-hub (PROTOCOL §17, docs/MASCHINE.md): alleen
@@ -8,8 +9,9 @@ import { meld } from './meldingen.js';
  *
  *   Xboard49 (hub)      -> noten.koppel(): noten, buiging, druk, modwiel, pedaal
  *                          en de knoppen/schuif (mappings/xboard49.json) op de speeltrack
- *   Maschine MK2 (hub)  -> maschine.js: pads, groepen, draaiknoppen, masterwiel,
- *                          lampjes en schermen (mappings/maschine-mk2.json)
+ *   Maschine MK2 (hub)  -> maschine.js: pads, groepen, draaiknoppen (pagina's Instrument,
+ *                          Strip, Rack), masterwiel, uitleg (CONTROL, met de teksten van
+ *                          apc-beschrijf.js), lampjes en schermen (mappings/maschine-mk2.json)
  *
  * Geen requestMIDIAccess: de poorten zijn nep-poorten van HubMidi. De lampjes
  * en schermen lopen op een eigen setInterval (zoals de LED-laag van de APC),
@@ -24,7 +26,7 @@ export function opzetSpeelapparaten({ engine, midi, noten }) {
   const ms = midi.speelPoort?.('maschine-mk2');
   let maschine = null;
   if (ms) {
-    maschine = new Maschine({ engine, noten, read, invoke });
+    maschine = new Maschine({ engine, noten, read, invoke, beschrijf });
     fetch('mappings/maschine-mk2.json')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
       .then((doc) => maschine.laadMapping(doc))

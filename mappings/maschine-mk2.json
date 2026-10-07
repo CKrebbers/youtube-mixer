@@ -1,8 +1,8 @@
 {
-  "name": "Maschine MK2 — spelen en patronen",
+  "name": "Maschine MK2 — spelen, patronen en DJ-pagina's",
   "device": "maschine-mk2",
   "version": 3,
-  "uitleg": "De knoppen en draaiknoppen van de Maschine MK2 zoals de AV-app-hub ze doorgeeft (virtuele MIDI, src/control/devices/maschine-mk2.js). Groep A–H = focus op track 1–8; de acht draaiknoppen = de acht instrumentknoppen van de speeltrack ({speel}), relatief: één omwenteling (±1000 tellen) is de hele knop, met SHIFT vijf omwentelingen (fijn). Transport op het gekozen patroon ({plek}) van de speeltrack: PLAY = starten/stoppen op de maat (SHIFT: meteen), RESTART = stoppen (SHIFT: meteen), REC = live opnemen, ERASE = leegmaken (tweede druk), SHIFT + ◄ ► = korter/langer. De pads (spelen, stappen in de stapmodus, of secties van de focus-track in de modus secties), STEP, SCENE (de modus secties), PATTERN + pad (patroon kiezen), ◄ ► (bladzijde van de stappen), het masterwiel (instrument kiezen op de focus-track), de lampjes en de schermen doet src/control/maschine.js. Wat elke knop doet: docs/MASCHINE.md.",
+  "uitleg": "De knoppen en draaiknoppen van de Maschine MK2 zoals de AV-app-hub ze doorgeeft (virtuele MIDI, src/control/devices/maschine-mk2.js). Groep A–H = focus op track 1–8; de acht draaiknoppen = de acht instrumentknoppen van de speeltrack ({speel}), relatief: één omwenteling (±1000 tellen) is de hele knop, met SHIFT vijf omwentelingen (fijn). Transport op het gekozen patroon ({plek}) van de speeltrack: PLAY = starten/stoppen op de maat (SHIFT: meteen), RESTART = stoppen (SHIFT: meteen), REC = live opnemen, ERASE = leegmaken (tweede druk), SHIFT + ◄ ► = korter/langer. De pads (spelen, stappen in de stapmodus, of secties van de focus-track in de modus secties), STEP, SCENE (de modus secties), PATTERN + pad (patroon kiezen), ◄ ► (bladzijde van de stappen), het masterwiel (instrument kiezen op de focus-track), de lampjes en de schermen doet src/control/maschine.js. Wat elke knop doet: docs/MASCHINE.md. Knoppagina's (◄ ► links boven, maschine.js): Instrument (de regels zonder laag), Strip (laag pagina.strip: trim, hoog, mid, laag, echo, galm, fx-mix en filter van de focus-track) en Rack (laag pagina.rack: de acht plekken van het rack van de focus-track), elk ook fijn met SHIFT.",
   "shift": "note:1:39",
   "rules": [
     {
@@ -224,6 +224,278 @@
       "mode": "trigger",
       "shift": true,
       "label": "SHIFT ►: langer"
+    },
+    {
+      "in": "cc:0:16",
+      "action": "track.{focus}.trim",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.strip",
+      "label": "strip: trim"
+    },
+    {
+      "in": "cc:0:17",
+      "action": "track.{focus}.high",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.strip",
+      "label": "strip: hoog"
+    },
+    {
+      "in": "cc:0:18",
+      "action": "track.{focus}.mid",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.strip",
+      "label": "strip: mid"
+    },
+    {
+      "in": "cc:0:19",
+      "action": "track.{focus}.low",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.strip",
+      "label": "strip: laag"
+    },
+    {
+      "in": "cc:0:20",
+      "action": "track.{focus}.send.a",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.strip",
+      "label": "strip: echo"
+    },
+    {
+      "in": "cc:0:21",
+      "action": "track.{focus}.send.b",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.strip",
+      "label": "strip: galm"
+    },
+    {
+      "in": "cc:0:22",
+      "action": "track.{focus}.fx.mix",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.strip",
+      "label": "strip: fx-mix"
+    },
+    {
+      "in": "cc:0:23",
+      "action": "track.{focus}.filter",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.strip",
+      "label": "strip: filter"
+    },
+    {
+      "in": "cc:0:16",
+      "action": "track.{focus}.trim",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.strip",
+      "label": "strip: trim fijn"
+    },
+    {
+      "in": "cc:0:17",
+      "action": "track.{focus}.high",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.strip",
+      "label": "strip: hoog fijn"
+    },
+    {
+      "in": "cc:0:18",
+      "action": "track.{focus}.mid",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.strip",
+      "label": "strip: mid fijn"
+    },
+    {
+      "in": "cc:0:19",
+      "action": "track.{focus}.low",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.strip",
+      "label": "strip: laag fijn"
+    },
+    {
+      "in": "cc:0:20",
+      "action": "track.{focus}.send.a",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.strip",
+      "label": "strip: echo fijn"
+    },
+    {
+      "in": "cc:0:21",
+      "action": "track.{focus}.send.b",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.strip",
+      "label": "strip: galm fijn"
+    },
+    {
+      "in": "cc:0:22",
+      "action": "track.{focus}.fx.mix",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.strip",
+      "label": "strip: fx-mix fijn"
+    },
+    {
+      "in": "cc:0:23",
+      "action": "track.{focus}.filter",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.strip",
+      "label": "strip: filter fijn"
+    },
+    {
+      "in": "cc:0:16",
+      "action": "track.{focus}.fx.knob.1",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.rack",
+      "label": "rack: plek 1"
+    },
+    {
+      "in": "cc:0:17",
+      "action": "track.{focus}.fx.knob.2",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.rack",
+      "label": "rack: plek 2"
+    },
+    {
+      "in": "cc:0:18",
+      "action": "track.{focus}.fx.knob.3",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.rack",
+      "label": "rack: plek 3"
+    },
+    {
+      "in": "cc:0:19",
+      "action": "track.{focus}.fx.knob.4",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.rack",
+      "label": "rack: plek 4"
+    },
+    {
+      "in": "cc:0:20",
+      "action": "track.{focus}.fx.knob.5",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.rack",
+      "label": "rack: plek 5"
+    },
+    {
+      "in": "cc:0:21",
+      "action": "track.{focus}.fx.knob.6",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.rack",
+      "label": "rack: plek 6"
+    },
+    {
+      "in": "cc:0:22",
+      "action": "track.{focus}.fx.knob.7",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.rack",
+      "label": "rack: plek 7"
+    },
+    {
+      "in": "cc:0:23",
+      "action": "track.{focus}.fx.knob.8",
+      "mode": "relative-2c",
+      "step": 0.001,
+      "laag": "pagina.rack",
+      "label": "rack: plek 8"
+    },
+    {
+      "in": "cc:0:16",
+      "action": "track.{focus}.fx.knob.1",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.rack",
+      "label": "rack: plek 1 fijn"
+    },
+    {
+      "in": "cc:0:17",
+      "action": "track.{focus}.fx.knob.2",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.rack",
+      "label": "rack: plek 2 fijn"
+    },
+    {
+      "in": "cc:0:18",
+      "action": "track.{focus}.fx.knob.3",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.rack",
+      "label": "rack: plek 3 fijn"
+    },
+    {
+      "in": "cc:0:19",
+      "action": "track.{focus}.fx.knob.4",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.rack",
+      "label": "rack: plek 4 fijn"
+    },
+    {
+      "in": "cc:0:20",
+      "action": "track.{focus}.fx.knob.5",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.rack",
+      "label": "rack: plek 5 fijn"
+    },
+    {
+      "in": "cc:0:21",
+      "action": "track.{focus}.fx.knob.6",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.rack",
+      "label": "rack: plek 6 fijn"
+    },
+    {
+      "in": "cc:0:22",
+      "action": "track.{focus}.fx.knob.7",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.rack",
+      "label": "rack: plek 7 fijn"
+    },
+    {
+      "in": "cc:0:23",
+      "action": "track.{focus}.fx.knob.8",
+      "mode": "relative-2c",
+      "step": 0.0002,
+      "shift": true,
+      "laag": "pagina.rack",
+      "label": "rack: plek 8 fijn"
     }
   ]
 }

@@ -3,7 +3,8 @@
 *5 oktober 2026 · spoor speelapparaten (tak `studio/speelapparaten`, op `studio/integratie` met
 de patronen). Gebouwd en getest in Node en in een headless Chromium tegen de echte hub met een
 nep-Maschine op HID-niveau; nog niet op Clay's toestellen. 6 okt: SCENE = padmodus secties (§5b,
-tak `studio/sec-maschine`).*
+tak `studio/sec-maschine`). 7 okt: knoppagina's Strip en Rack en uitleg met CONTROL (§5c, tak
+`studio/maschine-dj`).*
 
 De AV-app-hub opent de **E-MU Xboard49** (MIDI) en de **Maschine MK2** (USB-HID, zonder
 NI-software) en geeft ze door aan de lease-app die ze "speelt" (AV-app-hub: PROTOCOL §17,
@@ -58,7 +59,9 @@ Data in `mappings/maschine-mk2.json` (groepen, draaiknoppen, shift, transport), 
 | **REC** | live opnemen aan/uit (`patterns.record`): wat je op de pads (of het keyboard) speelt komt in het patroon dat speelt |
 | **ERASE** | het gekozen patroon leegmaken (`track.{speel}.pattern.clear`, tweede druk binnen 3 s) |
 | **◄ ►** (transport) | in de stapmodus: de bladzijde (stap 1–16, 17–32, …); in de modus secties: de bladzijde van de secties (1–16, 17–32, 33–40); **SHIFT + ◄ ►** = korter/langer (`.pattern.length.down/up`) |
-| F1–F8, GRID, NOTE REPEAT, BROWSE, … | vrij |
+| **◄ ►** (links boven) | de knoppagina: **Instrument** (zoals hierboven) · **Strip** · **Rack** van de focus-track (§5c); niet rondlopend, het lampje zegt of het kan |
+| **CONTROL** vasthouden | uitleg: wat je dan aanraakt gebeurt niet, het scherm zegt wat het hier doet (§5c) |
+| F1–F8, GRID, NOTE REPEAT, BROWSE, … | vrij (ontwerp voor de DJ-kant: de Maschine-kaart, `~/Projects/maschine-lab/kaart/`) |
 
 **Waarom het wiel kiest en niet meteen wisselt:** een tik tegen het wiel zou anders je
 instrument (met zijn knopstanden) vervangen. Kiezen werkt op de FOCUS-track en niet op de
@@ -205,6 +208,41 @@ maar met 16 pads:
 Niet gebouwd (VRAGEN SVM): SHIFT + pad = sectie als loop (de APC doet dat wel), groepskleuren
 (SE4), en een bladzijde die vanzelf meeloopt met wat je hoort.
 
+## 5c. Knoppagina's en uitleg (gebouwd 7 okt, tak `studio/maschine-dj`)
+
+De DJ-kant begint bij de draaiknoppen: met **◄ ►** links boven wissel je van pagina, en het
+scherm zegt boven elke knop wat hij doet. Wat een knop doet blijft DATA: de pagina is voor de
+mapping een open "mapje" (`lagen: () => ['pagina.<naam>']` in maschine.js), en de regels staan in
+`mappings/maschine-mk2.json` met `"laag": "pagina.strip"` of `"pagina.rack"` (64 regels).
+
+| Pagina | Knop 1–8 | Op het scherm |
+|---|---|---|
+| **Instrument** (standaard) | de acht knoppen van de **speeltrack**, zoals in §2 (regels zonder laag) | zoals in §4 |
+| **Strip** | `track.{focus}.trim · high · mid · low · send.a · send.b · fx.mix · filter` | links groot `T3 Strip`, rechts klein de titel en `124,0 BPM  8A Am  -3:12` van de focus-track; per knop de waarde in echte eenheden (`0 dB`, `kill`, `+8,0 dB` uit `eqDb`; `LP 4,4 kHz`/`HP 350 Hz`/`open` uit `filterDoelen`; trim = 2 × knop; sends en mix in %) |
+| **Rack** | `track.{focus}.fx.knob.1–8` | de naam van het rack in de kop, per plek de naam die het rack zelf geeft (`fx.plekNaam`), een plek die niet bestaat: alleen het nummer |
+
+- Relatief zoals de instrumentknoppen: één omwenteling (±1000 tellen) = de hele knop, met
+  **SHIFT** vijf omwentelingen. Geen overpakken: de knop telt op bij wat de track nu heeft.
+- Strip werkt op de **focus-track** (groep A–H), niet op de speeltrack: een nummer heeft geen
+  instrument. Op de APC zit de strip op de device knobs met fx 1 op knop 8; hier staat het
+  filter op 8, omdat de Maschine geen trackknop heeft.
+- EQ, trim en het filter tekenen een balk **vanuit het midden** (0,5 = niets), de rest van
+  links. De knop die je net draaide staat een seconde omgekeerd (`GEDRAAID_MS`).
+- Lampjes: ◄ ► half als er die kant op een pagina is, anders uit.
+
+**Uitleg (CONTROL vasthouden):** wat je dan aanraakt (knop, draaiknop, pad, het wiel) wordt NIET
+uitgevoerd; links staat `UITLEG`, wat je aanraakte en wat het hier doet (te lange tekst loopt door
+op het rechterscherm), rechts de vaste knoppen. Teksten: voor wat in de mapping staat `beschrijf()`
+uit `ui/apc-beschrijf.js` (dezelfde als op de APC-kaart; speelapparaten.js geeft hem mee), met
+SHIFT erbij als die iets anders doet; eigen teksten voor wat maschine.js zelf doet (pads per
+padmodus, STEP, SCENE, PATTERN, ◄ ►, het wiel) en voor de knoppen van Strip en Rack. Wat iets
+doet knippert (`KNIPPER_MS`), de groepen houden hun kleur. Het loslaten van wat je tijdens de
+uitleg indrukte gaat nergens heen; wat al vóór CONTROL in zat, laat gewoon los (geen hangende noot).
+
+Nog niet gebouwd (de Maschine-kaart, VRAGEN volgt): F1–F8 per pagina, de pagina's Echo en galm,
+Tempo en loop, Stems en Klankschaal, de DJ-padmodi (cues en loops, sampler, kill en stems,
+effecten met druk), bladeren in de library met het wiel, NOTE REPEAT.
+
 ## 6. De Xboard49
 
 Via de hub precies zoals een rechtstreeks aangesloten keyboard (`src/control/noten.js`):
@@ -277,6 +315,9 @@ hub via Web MIDI binnenkomt (noten.js hoort beide).
 - De modus secties op het echte toestel: of de pads goed liggen (pad 1 linksonder = sectie 1),
   of het donker hemelsblauw op de Maschine te zien is, en of de namen in het raster leesbaar zijn.
 - De echte latency toets → geluid (Xboard en pads), en de velocity-curve van de pads.
+- De knoppagina's (§5c): of ◄ ► links boven logisch voelt, of een omwenteling voor de hele EQ
+  goed draait (of te grof bij 0 dB), of de balk vanuit het midden leesbaar is, en of CONTROL als
+  uitlegknop werkt zonder per ongeluk iets te laten liggen.
 - De CC's van de Xboard-knoppen en of de schuif echt Master Volume stuurt (§6).
 - **Bekend, aan de kant van de hub:** het eerste knoppenrapport na het aansluiten zet daar
   alleen de beginstand van wiel en draaiknoppen. De eerste wielklik (of draai) na het

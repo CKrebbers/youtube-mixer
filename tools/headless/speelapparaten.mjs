@@ -10,6 +10,7 @@
 //     - een groepknop zet de focus, een Maschine-pad slaat de drums aan (niveau)
 //     - een draaiknop draait een instrumentknop
 //     - de schuif (SysEx Master Volume) zet het volume van de speeltrack
+//     - knoppagina Strip (◄ ► links boven): een draaiknop zet de trim van de focus-track, scherm bit voor bit
 //     - lampjes en schermen komen als HID-rapporten bij de nep-Maschine aan, en het
 //       scherm is bit voor bit wat maschine-scherm.js van de stand maakt
 //     - patronen: in de stapmodus zetten pads stappen, PLAY start het patroon (de drums
@@ -217,6 +218,21 @@ try {
   ok('beide schermen als HID-rapporten aangekomen (8 stukken van 9 + 256 bytes elk)', !!links && !!rechts);
   ok('linkerscherm bit voor bit tekenScherm(stand, 0): "T2 Drums" en knop 1–4', gelijk(links, tekenScherm(stand, 0)), `T${stand.speel?.nr} ${stand.speel?.naam}`);
   ok('rechterscherm bit voor bit tekenScherm(stand, 1): knop 5–8', gelijk(rechts, tekenScherm(stand, 1)));
+  // ---- knoppagina's (◄ ► links boven, studio/maschine-dj): Strip van de focus-track, en terug ----
+  m.tik('browseR');
+  ok('◄ ► links boven: ► = de pagina Strip', await tot(() => doe(() => window.maschine.pagina === 'strip')));
+  const trim = () => doe(() => window.engine.deck('B').ui.trim);
+  const voorT = await trim();
+  m.draai(0, 100);
+  ok('Strip: draaiknop 1, 100 tellen -> de trim van de focus-track +0,1 (track.{focus}.trim)', await tot(async () => Math.abs((await trim()) - voorT - 0.1) < 0.015),
+    `${voorT.toFixed(3)} -> ${(await trim()).toFixed(3)}`);
+  await wacht(1300);   // voorbij GEDRAAID_MS: dan staat de knop niet meer omgekeerd en ligt het scherm stil
+  const standS = await doe(() => window.maschine.stand());
+  await wacht(300);
+  ok('… het linkerscherm bit voor bit tekenScherm: "T2 Strip" met trim, hoog, mid, laag', gelijk(lees(0), tekenScherm(standS, 0)),
+    `${standS.paginaNaam}: ${standS.knoppen.slice(0, 4).map((k) => `${k.label} ${k.tekst}`).join(', ')}`);
+  m.tik('browseL');
+  ok('◄ = terug naar Instrument (de patronen hieronder spelen daar)', await tot(() => doe(() => window.maschine.pagina === 'instrument')));
   // ---- patronen: stapmodus, PLAY, REC, PATTERN, RESTART (de echte patroonspeler) ----
   // Stap voor stap zet de LAATST GESPEELDE noot: eerst de kick spelen (pad 1), dan STEP.
   m.pad(1);

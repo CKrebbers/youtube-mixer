@@ -124,6 +124,32 @@ export function balk(buf, x, y, b, h, waarde) {
   for (let yy = y + 2; yy <= y + h - 3; yy++) lijn(buf, x + 2, x + 1 + vol, yy);
 }
 
+/** Een balk vanuit het midden (EQ, trim, filter: 0,5 = niets): rand, streepje in het midden, gevuld naar de waarde. */
+export function balkMidden(buf, x, y, b, h, waarde) {
+  lijn(buf, x, x + b - 1, y); lijn(buf, x, x + b - 1, y + h - 1);
+  staander(buf, x, y, y + h - 1); staander(buf, x + b - 1, y, y + h - 1);
+  const v = Math.min(1, Math.max(0, Number.isFinite(Number(waarde)) ? Number(waarde) : 0.5));
+  const midden = x + Math.round((b - 1) / 2);
+  const naar = x + 2 + Math.round(v * (b - 5));
+  staander(buf, midden, y - 2, y + h + 1);
+  const [van, tot] = naar < midden ? [naar, midden] : [midden, naar];
+  for (let yy = y + 2; yy <= y + h - 3; yy++) lijn(buf, van, tot, yy);
+}
+
+/** Woorden over regels van hooguit `max` letters (1×); een te lang woord wordt afgekapt. Puur. */
+export function regels(s, max = Math.floor((BREED - 4) / STAP)) {
+  const uit = [];
+  let regel = '';
+  for (const woord of normaliseer(s).split(/\s+/).filter(Boolean)) {
+    const proef = regel ? `${regel} ${woord}` : woord;
+    if (proef.length <= max) { regel = proef; continue; }
+    if (regel) uit.push(regel);
+    regel = woord.length > max ? woord.slice(0, max) : woord;
+  }
+  if (regel) uit.push(regel);
+  return uit;
+}
+
 /** Een leeg vak met rand. */
 function vak(buf, x, y, b, h) {
   lijn(buf, x, x + b - 1, y); lijn(buf, x, x + b - 1, y + h - 1);
@@ -200,6 +226,85 @@ function kop(buf, x, y, s, px) {
   return tekst(buf, x, y + 4, pasIn(s, Math.floor((px + 1) / STAP)), 1);
 }
 
+const REGEL = Math.floor((BREED - 4) / STAP);   // 42 letters (1×) op een hele regel
+
+/**
+ * De pagina's Strip en Rack (maschine.js, stand.dj): links groot de focus-track en de
+ * pagina ("T3 Strip", bij Rack de naam van het rack), rechts in twee kleine regels wat
+ * er op die track staat (titel; bpm, toonsoort, resterende tijd). Daaronder vier
+ * knoppen per scherm zoals op de pagina Instrument; EQ, trim en filter met een balk
+ * vanuit het midden. De knop die je net draaide (stand.gedraaid) staat omgekeerd.
+ */
+function tekenDj(buf, s, nr) {
+  const d = s.dj;
+  if (nr === 0) {
+    const naam = s.pagina === 'rack' ? (d.rack || 'Rack') : (s.paginaNaam || 'Strip');
+    kop(buf, 2, 1, `T${d.nr ?? '?'} ${naam}`, BREED - 4);
+  } else if (d.wat === 'nummer') {
+    tekst(buf, 2, 1, pasIn(d.titel || 'nummer', REGEL));
+    tekst(buf, 2, 9, pasIn([d.bpm ? `${d.bpm} BPM` : 'geen grid', d.toon, d.rest].filter(Boolean).join('  '), REGEL));
+  } else {
+    tekst(buf, 2, 1, pasIn(d.wat === 'leeg' ? 'leeg: laad een nummer' : `${d.wat} (instrument)`, REGEL));
+    tekst(buf, 2, 9, pasIn(d.wat === 'leeg' ? 'de knoppen werken ook zonder' : 'strip en rack werken ook hier', REGEL));
+  }
+  lijn(buf, 0, BREED - 1, 17);
+  const knoppen = s.knoppen || [];
+  for (let i = 0; i < 4; i++) {
+    const n = nr * 4 + i, k = knoppen[n], x = i * KOLOM;
+    if (i > 0) staander(buf, x - 1, 19, 50, true);
+    if (!k || k.waarde === null || k.waarde === undefined) {
+      tekst(buf, x + 2, 21, k?.label ? pasIn(k.label) : String(n + 1));
+      continue;
+    }
+    if (s.gedraaid === n) { vul(buf, x, 20, KOLOM - 1, 9); tekst(buf, x + 2, 21, pasIn(k.label), 1, true); }
+    else tekst(buf, x + 2, 21, pasIn(k.label));
+    tekst(buf, x + 2, 31, pasIn(k.tekst ?? `${Math.round(k.waarde * 100)}%`));
+    (k.bipolair ? balkMidden : balk)(buf, x + 2, 42, KOLOM - 5, 8, k.waarde);
+  }
+  lijn(buf, 0, BREED - 1, 53, true);
+  const onder = nr === 0
+    ? (s.shift ? 'SHIFT: draaiknoppen fijn' : `< > pagina ${(s.paginaNr ?? 0) + 1}/${s.paginas ?? 1}: ${s.paginaNaam ?? ''}`)
+    : (s.melding || 'CONTROL + knop = uitleg');
+  tekst(buf, 2, 56, pasIn(onder, REGEL));
+  return buf;
+}
+
+/**
+ * CONTROL vast (stand.uitleg): links "UITLEG" omgekeerd, wat je aanraakte en wat het
+ * hier doet (drie regels; wat niet past loopt door op het rechterscherm). Zonder iets
+ * aangeraakt: hoe het werkt. Rechts, als er niets doorloopt, de vaste knoppen.
+ */
+function tekenUitleg(buf, s, nr) {
+  const u = s.uitleg;
+  const tekstRegels = u.titel ? regels(u.tekst || '', REGEL) : [];
+  if (nr === 0) {
+    vul(buf, 0, 0, BREED, 16);
+    tekst(buf, 2, 1, 'UITLEG', 2, true);
+    if (u.titel) {
+      tekst(buf, 2, 20, pasIn(u.titel, REGEL));
+      lijn(buf, 2, 2 + tekstBreedte(pasIn(u.titel, REGEL)), 28);
+      tekstRegels.slice(0, 3).forEach((r, i) => tekst(buf, 2, 31 + i * 8, r));
+    } else {
+      ['houd CONTROL vast en raak iets aan:', 'een knop, draaiknop, pad of het wiel.', 'het gebeurt dan niet: hier staat', 'wat het doet.']
+        .forEach((r, i) => tekst(buf, 2, 20 + i * 8, r));
+    }
+    lijn(buf, 0, BREED - 1, 53, true);
+    tekst(buf, 2, 56, 'CONTROL los = weer spelen');
+    return buf;
+  }
+  if (tekstRegels.length > 3) {
+    tekstRegels.slice(3, 9).forEach((r, i) => tekst(buf, 2, 2 + i * 8, r));
+    return buf;
+  }
+  kop(buf, 2, 1, 'overal', BREED - 4);
+  lijn(buf, 0, BREED - 1, 17);
+  ['< > links boven: knoppagina', 'groep A-H: focus op een track', 'STEP: stappen   SCENE: secties', 'SHIFT + draaien: fijn']
+    .forEach((r, i) => tekst(buf, 2, 20 + i * 8, r));
+  lijn(buf, 0, BREED - 1, 53, true);
+  tekst(buf, 2, 56, pasIn(`nu: pagina ${s.paginaNaam ?? ''}`, REGEL));
+  return buf;
+}
+
 /**
  * Eén scherm tekenen.
  *
@@ -219,6 +324,10 @@ function kop(buf, x, y, s, px) {
 export function tekenScherm(stand, nr) {
   const buf = leegScherm();
   const s = stand || {};
+  // ---- uitleg (CONTROL vast): gaat voor alles ----
+  if (s.uitleg) return tekenUitleg(buf, s, nr);
+  // ---- de pagina's Strip en Rack: de focus-track en zijn knoppen ----
+  if (s.dj && !((s.patroonVast || s.modus === 'stappen' || s.modus === 'secties') && nr === 0)) return tekenDj(buf, s, nr);
   // ---- kop ----
   // Links in de stapmodus of met PATTERN vast: het gekozen patroon in plaats van knop 1–4.
   if (nr === 0 && s.speel && s.patroon && (s.patroonVast || s.modus === 'stappen')) {
