@@ -14,6 +14,38 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 7 OKT (middag): DE MASCHINE-KAART (`maschine.html`, tak `studio/maschine-kaart`)
+
+- **Wat:** zoals de APC-kaart: de Maschine MK2 van bovenaf, per knop, pad en draaiknop wat hij NU doet,
+  met schakelaars voor pagina (Instrument · Strip · Rack), padmodus (spelen · stappen · secties · plek
+  kiezen) en shift, de twee schermen op echt formaat, zoeken en een lijst. De tekst is `legUit()` van de
+  Maschine zelf (de uitleg van CONTROL), dus nooit een tweede beschrijving. In de mixer: **APC** en
+  **Maschine** naast elkaar in de bovenbalk (was "APC-kaart"; met twee volle namen paste de balk niet
+  meer op 1440 px). Alles in `docs/MASCHINE.md` §5d.
+- **Live:** open je hem met die knop terwijl de mixer de Maschine via de hub heeft (`?hub=`), dan volgt hij
+  het apparaat (pagina, padmodus, shift), kiest hij de knop die je aanraakt en toont hij de schermen die
+  naar de Maschine gingen. Hij stuurt niets. Zelf een stand kiezen = niet meer volgen, tot "volg de Maschine".
+- **Onderweg:** `ui/soorten.js` (de kleuren per soort, gedeeld met de APC-kaart; de CSS in styles.css);
+  `UITLEG` in maschine.js heeft per knop `{ kort, soort, tekst }`; `maschine.geraakt` (nieuw veld).
+  hub.test: de kaart mag maschine.js laden (eigen pagina), de mixer mag de kaart nooit laden.
+- **Afvalmeting:** master.test wankelde ook (−10 tot +2 kB rond een grens van 1 kB). master.test en
+  instrumenten-fm-schaal.test meten nu de JONGE ruimte min een leeg venster: stabiel 128–848 B, tegenproef
+  (één object per blok) 192 kB–1,5 MB = rood. renderblok, klankschaal en effecten meten nog met heapUsed
+  (groen); wankelen die ooit, dan dezelfde reparatie.
+- **Review (tweede agent):** niets waarmee de kaart iets kan veranderen; wel verwerkt, elk met een test:
+  per padmodus zei de kaart na een focuswissel een ander blad dan het apparaat (nu: vergeleken met een
+  Maschine die echt op STEP/SCENE drukt), een oude aanraking bij het openen en een verwijzing naar een oude
+  mixer na herladen, het shift-label van ◄ ► (transport: korter/langer), grote jonge objecten in de
+  afvalmeting (`new_large_object_space`), de detailtabel die kon verouderen, "terug naar de mixer" opende
+  een tweede mixer, gaten in de hub.test-check, en geen rekenwerk als het kaartvenster verborgen is.
+- **Getest:** `node test/alles.mjs` alles groen; `tools/headless/maschine-kaart.mjs` (los, en live vanuit de
+  mixer met een nep-poort) groen; `rijen.mjs` 377/377. NIET getest: met de echte Maschine via de hub.
+- **De bovenbalk, keuze voor Clay:** in rust past hij op 1440 px (1421 px nodig), maar IN GEBRUIK (audio aan:
+  "audio · 48 kHz · 6 ms", het log loopt: "◉ log 0:02 · 12 kB") niet: op main al 1506 px (met een lang log
+  1548), met de knop Maschine 1544 (1585). Op een MacBook van 1440 px vallen rechts MIDI en "? toetsen" weg.
+- **Al rood op main, niet door dit werk:** `tools/headless/apc-klank.mjs` verwacht nog de mapping van 25 sep
+  (374 regels, nu 702) en de oude volgorde van de grid-modi (3 fouten).
+
 ## 7 OKT (later): MASCHINE-DJ ERBIJ, INTEGRATIE NAAR MAIN, OPGERUIMD
 
 - `studio/maschine-dj` (Maschine: knoppagina's Strip en Rack, uitleg met CONTROL, `docs/MASCHINE.md`)
