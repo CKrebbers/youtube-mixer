@@ -14,6 +14,22 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 7 OKT (later): MASCHINE-DJ ERBIJ, INTEGRATIE NAAR MAIN, OPGERUIMD
+
+- `studio/maschine-dj` (Maschine: knoppagina's Strip en Rack, uitleg met CONTROL, `docs/MASCHINE.md`)
+  stond alleen lokaal: gepusht en samengevoegd in `studio/integratie`, daarna integratie naar main.
+- `instrumenten-fm-schaal.test` "geen afval per blok" wankelde (4 van 9 keer rood, 0 GC): V8 die de
+  meetlus tijdens het venster compileerde telde als heapgroei. Groei in code_space/trusted_space telt
+  nu niet mee; tegenproef: één object per blok in de worklet = 73 kB, rood. Dezelfde meting met
+  `heapUsed` staat in renderblok, klankschaal, master en effecten (daar nu groen).
+- Opgeruimd: PR #1 (Koppelbus, 2 okt) gesloten, de tak blijft als naslag; een achtergebleven server
+  van de knoppen-worktree (poort 8833, sinds 5 okt) gestopt; drie iCloud-kopieën (" 2") weg.
+- Getest: `node test/alles.mjs` 62 bestanden, 6583 checks, alles groen (1 overgeslagen: geen
+  AV-app-hub naast de map); `tools/headless/kijk.mjs` groen. NIET: de Maschine-pagina's op de echte
+  Maschine, en verder alles wat hieronder als niet getest staat.
+- Er draait GEEN server op 8777. Starten vanuit `~/Projects/varve-stems/sintegratie` (of main):
+  `node server/index.js`. De speellijst (`/controle`) is nog leeg.
+
 ## 7 OKT: BEELD — VARVE STUURT DE STROOMMACHINE (in `studio/integratie`)
 
 - **Wat:** twee machines, één relay. VARVE (MacBook) stuurt klok, kenmerken, de track per
