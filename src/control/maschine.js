@@ -140,19 +140,23 @@ export const STRIP = [
   { actie: 'filter', label: 'filter', bipolair: true, uitleg: 'links lowpass (dicht naar 250 Hz), rechts highpass (tot 9 kHz), midden open', tekst: filterTekst },
 ];
 
-/** Uitleg van de knoppen die maschine.js zelf afhandelt (niet in de mapping). */
-const UITLEG = {
-  control: 'vasthouden en iets aanraken: hier staat wat het doet, en het gebeurt niet',
-  shift: 'vasthouden: de tweede laag. Draaiknoppen fijn, PLAY en RESTART meteen, < > (transport) korter/langer',
-  browseL: 'vorige knoppagina: Instrument, Strip, Rack',
-  browseR: 'volgende knoppagina: Instrument, Strip, Rack',
-  step: 'stapmodus aan/uit: de pads zijn de stappen van het gekozen patroon op de speeltrack',
-  scene: 'padmodus secties aan/uit: pad K = sectie K van de focus-track, valt in op de volgende "1"',
-  pattern: 'vasthouden + pad 1-5: een patroonplek kiezen op de speeltrack',
-  stapL: 'stappen of secties: vorige bladzijde. SHIFT: het patroon korter',
-  stapR: 'stappen of secties: volgende bladzijde. SHIFT: het patroon langer',
-  wiel: 'indrukken: het instrument dat het wiel koos zetten op de focus-track',
-  enter: 'het instrument dat het wiel koos zetten op de focus-track',
+/**
+ * Uitleg van de knoppen die maschine.js zelf afhandelt (niet in de mapping):
+ * de tekst voor CONTROL, en voor de Maschine-kaart (maschine.html) een kort
+ * label en een soort (de kleur, ui/soorten.js).
+ */
+export const UITLEG = {
+  control: { kort: 'uitleg', soort: 'mapje', tekst: 'vasthouden en iets aanraken: hier staat wat het doet, en het gebeurt niet' },
+  shift: { kort: 'shift', soort: 'mapje', tekst: 'vasthouden: de tweede laag. Draaiknoppen fijn, PLAY en RESTART meteen, < > (transport) korter/langer' },
+  browseL: { kort: '◄ pagina', soort: 'mapje', tekst: 'vorige knoppagina: Instrument, Strip, Rack' },
+  browseR: { kort: 'pagina ►', soort: 'mapje', tekst: 'volgende knoppagina: Instrument, Strip, Rack' },
+  step: { kort: 'stappen', soort: 'patroon', tekst: 'stapmodus aan/uit: de pads zijn de stappen van het gekozen patroon op de speeltrack' },
+  scene: { kort: 'secties', soort: 'sectie', tekst: 'padmodus secties aan/uit: pad K = sectie K van de focus-track, valt in op de volgende "1"' },
+  pattern: { kort: 'plek kiezen', soort: 'patroon', tekst: 'vasthouden + pad 1-5: een patroonplek kiezen op de speeltrack' },
+  stapL: { kort: '◄ blad', soort: 'patroon', tekst: 'stappen of secties: vorige bladzijde. SHIFT: het patroon korter' },
+  stapR: { kort: 'blad ►', soort: 'patroon', tekst: 'stappen of secties: volgende bladzijde. SHIFT: het patroon langer' },
+  wiel: { kort: 'zetten', soort: 'instrument', tekst: 'indrukken: het instrument dat het wiel koos zetten op de focus-track' },
+  enter: { kort: 'zetten', soort: 'instrument', tekst: 'het instrument dat het wiel koos zetten op de focus-track' },
 };
 
 export class Maschine extends Emitter {
@@ -188,6 +192,7 @@ export class Maschine extends Emitter {
     this.patroonVast = false;       // PATTERN ingedrukt: pads 1–5 kiezen een plek
     this.padVast = new Map();       // pad-noot -> waar het indrukken heen ging ('noten', een action, of 'kies' = niets bij het loslaten)
     this.rx = 0;
+    this.geraakt = null;            // { sig, t }: het laatst ingedrukt of gedraaid (voor de Maschine-kaart)
   }
 
   /** De gekozen plek (1..5) op de speeltrack, of 1. */
@@ -289,6 +294,7 @@ export class Maschine extends Emitter {
   ontvang(msg) {
     if (!msg || !(msg.channel >= 0)) return false;
     this.rx++;
+    if ((msg.type === 'note' && msg.on) || msg.type === 'cc') this.geraakt = { sig: msg.sig, t: this.nu() };
     // CONTROL vasthouden = uitleg: wat je dan aanraakt wordt uitgelegd, niet uitgevoerd.
     if (msg.type === 'note' && msg.channel === KNOP_KANAAL && msg.number === knopNoot('control')) {
       this.uitleg = msg.on ? { wat: null } : null;
@@ -404,7 +410,7 @@ export class Maschine extends Emitter {
     }
     const naam = msg.channel === KNOP_KANAAL && msg.type === 'note' ? KNOPPEN[msg.number] : null;
     const titel = KNOP_LABEL[naam] ?? naam ?? msg.sig;
-    if (naam && UITLEG[naam]) return { titel, tekst: UITLEG[naam] };
+    if (naam && UITLEG[naam]) return { titel, tekst: UITLEG[naam].tekst };
     const regel = this.mapping.kies(msg.sig, { shift: false });
     const metShift = this.mapping.kies(msg.sig, { shift: true });
     if (!regel && !metShift) return { titel, tekst: 'doet hier (nog) niets' };

@@ -777,7 +777,7 @@ async function heranalyseOpAchtergrond() {
  * Wat de browser mag ophalen. Een witte lijst in plaats van "alles in de
  * projectmap": anders kon /.git/config of /media/library.db gewoon mee.
  */
-const MAG = [/^\/$/, /^\/(index|video|apc|plan|controle)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
+const MAG = [/^\/$/, /^\/(index|video|apc|maschine|plan|controle)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
   /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin|stems\.wav)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
   /^\/plannen\/[\w-]+\.json$/, /^\/favicon\.ico$/];
 

@@ -239,9 +239,47 @@ padmodus, STEP, SCENE, PATTERN, ◄ ►, het wiel) en voor de knoppen van Strip 
 doet knippert (`KNIPPER_MS`), de groepen houden hun kleur. Het loslaten van wat je tijdens de
 uitleg indrukte gaat nergens heen; wat al vóór CONTROL in zat, laat gewoon los (geen hangende noot).
 
-Nog niet gebouwd (de Maschine-kaart, VRAGEN volgt): F1–F8 per pagina, de pagina's Echo en galm,
+Nog niet gebouwd (het ONTWERP van de Maschine-kaart, `~/Projects/maschine-lab/kaart/`, artifact
+"Maschine-kaart Varve DJ"; VRAGEN volgt): F1–F8 per pagina, de pagina's Echo en galm,
 Tempo en loop, Stems en Klankschaal, de DJ-padmodi (cues en loops, sampler, kill en stems,
 effecten met druk), bladeren in de library met het wiel, NOTE REPEAT.
+
+## 5d. De Maschine-kaart in VARVE (`maschine.html`, gebouwd 7 okt, tak `studio/maschine-kaart`)
+
+Zoals de APC-kaart (`apc.html`): de Maschine van bovenaf, elke knop, pad en draaiknop op zijn
+plek (de plaatsing van het ontwerp), en per control wat hij NU doet. In de mixer: **Maschine**
+naast **APC** in de bovenbalk (korte namen, de tooltip zegt "…-kaart": op 1440 px was er nog
+~60 px over, de twee volle namen vroegen 95).
+
+- **Eén bron:** de tekst is `legUit()` van een Maschine-exemplaar met dezelfde indeling
+  (`mappings/maschine-mk2.json`), dus precies wat het scherm zegt als je CONTROL vasthoudt.
+  `src/ui/maschine-kaart-plan.js` (puur) voegt alleen een kort label en een soort (kleur,
+  `ui/soorten.js`, gedeeld met de APC-kaart) toe. Knoppen die maschine.js zelf afhandelt hebben
+  hun label en soort naast hun tekst in `UITLEG` (maschine.js).
+- **Schakelaars:** pagina (Instrument · Strip · Rack), pads (spelen · stappen · secties · plek
+  kiezen = PATTERN vast), shift. Per pad de vier padmodi, per draaiknop de drie pagina's, de
+  stand van nu gemarkeerd. Zoeken markeert waar een functie zit; vrij = gedimd.
+- **De schermen** op echt formaat (256 × 64, 1 bit) uit `tekenScherm()`: wat de Maschine in
+  deze stand laat zien.
+- **Live:** geopend vanuit de mixer (de knop, dus `window.opener`) en heeft die een Maschine
+  (alleen met `?hub=`: `window.maschine`), dan krijgt het eigen exemplaar de engine en `read`
+  van de mixer, neemt het de stand van het apparaat over (pagina, padmodus, shift), kiest en
+  licht het de knop op die je aanraakt (`maschine.geraakt`, nieuw veld: indrukken of draaien) en
+  tonen de schermen precies wat er naar de Maschine ging (`maschine.schermen`). Kies je op de
+  kaart een andere stand, dan stopt het volgen tot "volg de Maschine". De kaart STUURT NIETS:
+  `invoke` doet daar niets, geen MIDI, geen hub.
+- **Zonder mixer** (los geopend): een Maschine zonder engine, focus op track 1, geen
+  instrument; de kop zegt "niet live".
+- Getest: `test/maschine-kaart.test.mjs` (1728 keer tekst = legUit over 2 engines × 3
+  pagina's × 4 padmodi, elke regel van de indeling niet vrij, de stand blijft staan, niets naar
+  de bus) en `tools/headless/maschine-kaart.mjs` (los en live vanuit de mixer met een nep-poort:
+  volgen, aanraken, schermen, niet volgen, shift; de bovenbalk past in rust op 1440 px: 1421, maar in
+  gebruik (audio aan, log loopt) niet: 1544, op main al 1506; zie HANDOFF). NIET getest: met de echte
+  Maschine via de hub.
+- Per padmodus toont de kaart wat de Maschine zegt NADAT je op STEP/SCENE/PATTERN drukt: `zetModus`
+  rekent het blad uit zoals het apparaat (na een focuswissel het blad dat je hoort). Een aanraking van
+  vóór het openen telt niet; de kaart bewaart alleen `sig@t`, nooit een object van de mixer. Verborgen =
+  geen rekenwerk (het venster deelt de hoofdthread met de mixer).
 
 ## 6. De Xboard49
 

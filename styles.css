@@ -34,6 +34,7 @@ body{overflow-y:auto}
 .topbar-right{display:flex;align-items:center;gap:6px;white-space:nowrap}
 .topbar-right .ghost{padding:5px 8px}
 @media (max-width:1500px){.topbar-right .ghost,.topbar-right .primary{padding:4px 6px;font-size:12px}.topbar-right{gap:4px}}
+.kaarten{display:flex;align-items:center;gap:inherit}
 .master-knob{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.1em;color:var(--dim)}
 
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
@@ -1184,3 +1185,10 @@ body:has(#stems:not(.hidden)) .focusdeel .sampler-rij .pad{height:22px}
 .vorm-aan,.vorm-meng{min-width:52px;text-transform:uppercase;letter-spacing:.08em}
 .vorm-knop.leeg{visibility:hidden}
 .vorm-reageer{display:inline-flex;align-items:center;gap:6px}
+
+/* ---- soorten op de kaarten (apc.html, maschine.html; src/ui/soorten.js) ----
+   Dezelfde kleur op de kaart, in de legenda en in de lijst. */
+.s-transport{--kl:#3ddc84} .s-mixer{--kl:#4ad9c4} .s-hotcue{--kl:#ffd23c} .s-loop{--kl:#35c6ff}
+.s-fx{--kl:#c48cff} .s-sampler{--kl:#ff5fd2} .s-video{--kl:#4c7dff} .s-opname{--kl:#ff3b30}
+.s-mapje{--kl:#e6edf3} .s-klank{--kl:#ff8a3d} .s-auto{--kl:#8cff3c} .s-patroon{--kl:#ff6a1a} .s-sectie{--kl:#3c7dff} .s-instrument{--kl:#b07cff} .s-stems{--kl:#2ee8a6} .s-beeld{--kl:#ff4f8b} .s-vrij{--kl:#3a444e}
+.stip{display:inline-block;width:.8em;height:.8em;border-radius:3px;background:var(--kl);margin-right:6px;vertical-align:-1px}

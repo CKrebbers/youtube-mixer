@@ -127,6 +127,7 @@ try {
   // Het setplan (plannen/*.json uit VARVE_PLANNEN): alleen JSON, alleen direct in de map.
   console.log('\nsetplannen');
   ok('plan.html komt door', (await status('/plan.html')) === 200);
+  ok('maschine.html (de Maschine-kaart) komt door', (await status('/maschine.html')) === 200);
   ok('nog geen plannen: lijst leeg, plan 404', (await (await fetch(`${B}/api/plannen`)).json()).plannen.length === 0
     && (await status('/api/plannen/auto-plan')) === 404);
   const zet = (naam, body, headers = {}) => fetch(`${B}/api/plannen/${naam}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });

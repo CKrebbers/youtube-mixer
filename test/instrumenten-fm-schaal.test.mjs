@@ -609,28 +609,29 @@ console.log('\nde worklet (nagebouwde AudioWorkletGlobalScope)');
   for (let j = 0; j < NOOTVELDEN; j++) stuur(slagVan(j, 200 + 37 * j));
   draai(3000);                                            // opwarmen
   const SLAGEN = Array.from({ length: NOOTVELDEN }, (_, j) => slagVan(j, 300 + 29 * j, { tijd: 0 }));
-  // Gecompileerde code telt niet mee: V8 compileert de meetlus soms opnieuw
-  // TIJDENS een venster, en dat landt als 15–25 kB in code_space/trusted_space.
-  // Daardoor was de test 4 van de 9 keer rood zonder één byte afval per blok
-  // (gemeten 7 okt: de jonge ruimte groeit in 30 000 blokken evenveel als in
-  // 3000). Afval per blok landt in de jonge ruimte en telt dus gewoon.
-  const code = () => v8.getHeapSpaceStatistics().reduce((n, s) => n + (/code|trusted/.test(s.space_name) ? s.space_used_size : 0), 0);
-  const venster = (metNoten) => {
+  // Gemeten in de JONGE ruimte (new_space, plus new_large_object_space voor een
+  // grote array), min een leeg venster (wat het meten zelf kost): daar landt afval
+  // per blok. heapUsed telde ook gecompileerde code mee (V8 die de meetlus tijdens
+  // een venster opnieuw compileert, 15–25 kB in code_space/trusted_space: 4 van de
+  // 9 keer rood zonder één byte afval) en het opruimen van de oude ruimte na gc()
+  // (een min die afval kon verbergen). 7 okt.
+  const JONG = ['new_space', 'new_large_object_space'];
+  const jong = () => v8.getHeapSpaceStatistics().reduce((n, s) => n + (JONG.includes(s.space_name) ? s.space_used_size : 0), 0);
+  const venster = (metNoten, n = 3000) => {
     globalThis.gc(); globalThis.gc();
     const prof = new v8.GCProfiler();
     prof.start();
-    const c0 = code();
-    const h0 = process.memoryUsage().heapUsed;
+    const j0 = jong();
     let noten = 0;
-    for (let b = 0; b < 3000; b++) {
+    for (let b = 0; b < n; b++) {
       globalThis.currentFrame = frame;
       if (metNoten && b % 25 === 0) { const s = SLAGEN[noten++ % NOOTVELDEN]; s.tijd = (frame + 48) / FS; stuur(s); }
       proc.process(IN, uit); frame += BLOK;
     }
-    const h1 = process.memoryUsage().heapUsed;
-    const c1 = code();
-    return { bytes: h1 - h0 - (c1 - c0), gcs: prof.stop().statistics.length, noten };
+    const j1 = jong();
+    return { bytes: j1 - j0 - (n ? leeg : 0), gcs: prof.stop().statistics.length, noten };
   };
+  const leeg = venster(false, 0).bytes;
   const beste = (metNoten) => {
     let b = null;
     for (let i = 0; i < 4; i++) { const w = venster(metNoten); if (!b || w.gcs < b.gcs || (w.gcs === b.gcs && w.bytes < b.bytes)) b = w; }

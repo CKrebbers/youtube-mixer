@@ -5,6 +5,7 @@ import { esc } from './dom.js';
 import { beschrijf } from './apc-beschrijf.js';
 import { laadEigen } from './mapping-opslag.js';
 import { hubAdres } from './vlag.js';
+import { SOORTEN, soortVan } from './soorten.js';
 
 /**
  * De interactieve APC-kaart (apc.html).
@@ -69,36 +70,9 @@ PLAAT.push(K('cc:0:15', 918, 932, 'xfader', 'rechts'));
 const naamVan = (sig) => apc.label(sig) ?? sig;
 const PER_SIG = new Map(PLAAT.map((k) => [k.sig, k]));
 
-// ---- soorten (kleur op de kaart) -------------------------------------------
+// ---- soorten (kleur op de kaart): ui/soorten.js, gedeeld met de Maschine-kaart ----
 
-export const SOORTEN = [
-  ['mapje', 'modus kiezen', /^layer\./],
-  ['hotcue', 'hotcues', /\.hotcue\./],
-  ['loop', 'loops', /\.(beatloop\.[\d.]+|loop\.\w+)$/],
-  ['sampler', 'sampler', /^sampler\./],
-  ['video', 'video', /^video\./],
-  // De Stroommachine op de pc (docs/BEELD.md): het mapje beeld. Anders vielen
-  // macro's en regie in de grootste groep (transport).
-  ['beeld', 'beeld (Stroommachine)', /^beeld\./],
-  ['opname', 'opname', /^record\./],
-  ['auto', 'auto-DJ', /^auto\./],
-  // Vóór klank, fx en mixer: track.1.stem.vocals.filter eindigt op .filter, .send.a op een send.
-  ['stems', 'stems', /\.stem\./],
-  // Patronen (docs/PATRONEN.md): de modus patronen. Vóór "transport": anders viel
-  // een plek in de grootste groep.
-  ['patroon', 'patronen', /\.pattern(\.|$)|^patterns\./],
-  // Secties (docs/SECTIES.md): de modus secties (pad = sectie, shift = als loop).
-  ['sectie', 'secties', /\.section\./],
-  // Vóór "mixer": track.1.kill.high eindigt op .high, en dat is geen EQ-knop.
-  ['klank', 'kill & rem', /\.(kill\.(low|mid|high)(\.hold)?|brake(\.time)?)$/],
-  // Een instrument op de track (docs/INSTRUMENTEN.md §6): het mapje inst.
-  // (Niet `track.N.stem.inst`: dat is de stem "rest".)
-  ['instrument', 'instrument', /^track\.[^.]+\.inst(\.|$)/],
-  ['fx', 'effecten & sends', /\.(fx\.\w+|fx\.knob\.\d|send\.[ab]|rack\.\w+)$|^send\.[ab]\./],
-  ['mixer', 'mixer', /\.(fader|filter|trim|high|mid|low|xfade\.\w+)$|^mixer\./],
-  ['transport', 'transport & focus', /\.(play|play\.quant|cue|sync|tap|focus|pitch|bend\.\w+|nudge\.\w+|pitch\.range|beatjump\.\w+)$|^focus\.|^window\.|^transport\./],
-];
-export const soortVan = (action) => (action ? (SOORTEN.find(([, , re]) => re.test(action))?.[0] ?? 'transport') : 'vrij');
+export { SOORTEN, soortVan };
 
 // ---- toestand ------------------------------------------------------------------
 
