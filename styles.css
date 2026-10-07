@@ -34,6 +34,17 @@ body{overflow-y:auto}
 .topbar-right{display:flex;align-items:center;gap:6px;white-space:nowrap}
 .topbar-right .ghost{padding:5px 8px}
 @media (max-width:1500px){.topbar-right .ghost,.topbar-right .primary{padding:4px 6px;font-size:12px}.topbar-right{gap:4px}}
+/* Past de balk niet (tijdens het spelen: audio aan, het log loopt; op 1440 px tot ~1585 px nodig),
+   dan SCROLLT het rechterdeel opzij in plaats van dat rechts knoppen wegvallen (Clay, 7 okt;
+   ui/bovenbalk.js). 4 px boven en onder houden het lampje op "beeld" (top:-3px) in beeld zonder
+   dat de balk hoger wordt. Geen schuifbalk (die maakt de balk hoger), wel een vervaging aan de
+   kant waar nog meer staat. */
+.topbar{column-gap:12px}
+.topbar-right{min-width:0;overflow-x:auto;overflow-y:hidden;padding-block:4px;margin-block:-4px;scrollbar-width:none}
+.topbar-right::-webkit-scrollbar{display:none}
+.topbar-right.meer{mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent)}
+.topbar-right.minder{mask-image:linear-gradient(to right,transparent,#000 32px)}
+.topbar-right.meer.minder{mask-image:linear-gradient(to right,transparent,#000 32px,#000 calc(100% - 32px),transparent)}
 .kaarten{display:flex;align-items:center;gap:inherit}
 .master-knob{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.1em;color:var(--dim)}
 

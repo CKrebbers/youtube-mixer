@@ -30,6 +30,7 @@ import { startRenderloop } from './renderloop.js';
 import { tabblad } from './tabblad.js';
 import { startStatusZender } from './status-zender.js';
 import { vormenAan, hubAdres, hubGeweigerd } from './vlag.js';
+import { opzetBovenbalk } from './bovenbalk.js';
 
 /**
  * Het instappunt van de schermlaag: maakt de engine en zet de modules in
@@ -209,6 +210,9 @@ audioBtn.addEventListener('click', audioAan);
 // De browser wil een klik voordat er geluid mag. Elke eerste klik telt: PLAY
 // indrukken vóór "audio starten" gaf anders een deck dat speelt zonder geluid.
 document.addEventListener('pointerdown', () => { if (engine.ctx.state !== 'running') audioAan().catch(() => {}); }, { capture: true });
+
+// De bovenbalk scrollt opzij als hij tijdens het spelen niet past (bovenbalk.js).
+opzetBovenbalk();
 
 const help = document.getElementById('help');
 const toggleHelp = () => help.classList.toggle('hidden');

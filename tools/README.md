@@ -203,7 +203,8 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   (plaat, schermen, pagina's, padmodi, shift, zoeken), dan geopend VANUIT de mixer met een nagebootste
   Maschine-verbinding (dezelfde Maschine-klasse, nep-poort, geen hub): volgt de pagina, kiest de knop die je
   aanraakt, toont de schermen die naar het apparaat gingen, stopt met volgen als je zelf een stand kiest en
-  stuurt niets; plus: de bovenbalk van de mixer past nog op 1440 px. Poorten 8841/9441.
+  stuurt niets; plus de bovenbalk van de mixer: past in rust op 1440 px, scrollt tijdens het spelen
+  (audio aan, log loopt) opzij zonder hoger te worden, wiel, lampje op "beeld". Poorten 8841/9441.
 - `apc-klank.mjs [uitmap]` — de APC-indeling "Voorstel A" (25 sep) met een nep-APC (bytes →
   `parseMessage` → `mapping.handle`, geen MIDI, eigen server): Shift + scene 5 = modus klank,
   mapje-balk, kill-pad vasthouden en met shift vastzetten, Bank ◀ ▶ (beatjump en lengte),

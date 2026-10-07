@@ -2,7 +2,9 @@
 // mixer), dan geopend VANUIT de mixer met een nagebootste Maschine-verbinding
 // (dezelfde Maschine-klasse als met ?hub=, alleen de poort is nep): de kaart
 // volgt de pagina, licht de knop op die je aanraakt, toont de schermen die
-// naar het apparaat gingen, en verandert zelf niets aan de Maschine.
+// naar het apparaat gingen, en verandert zelf niets aan de Maschine. Plus de
+// bovenbalk van de mixer: past in rust op 1440 px, en scrollt tijdens het spelen
+// opzij zonder hoger te worden (ui/bovenbalk.js).
 // Eigen server, tijdelijke database, MIDI eruit (veilig met de APC aangesloten).
 //
 // Gebruik:  node tools/headless/maschine-kaart.mjs [uitmap]
@@ -198,17 +200,29 @@ try {
   ok('geen fouten in de console (mixer)', mixer.fouten.length === 0, mixer.fouten.join(' | '));
   // Wat de balk NODIG heeft (scrollWidth wordt nooit kleiner dan het venster): marges, merk en de knoppen rechts.
   const breed = await mixer.ev(`(() => { const t = document.querySelector('.topbar'), cs = getComputedStyle(t), k = document.getElementById('maschine-btn');
-    const nodig = () => Math.ceil(parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + t.querySelector('.brand').getBoundingClientRect().width
-      + t.querySelector('.topbar-right').scrollWidth);
-    const met = nodig(); k.style.display = 'none'; const zonder = nodig(); k.style.display = ''; return [met, zonder]; })()`);
+    const nodig = () => Math.ceil(parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + (parseFloat(cs.columnGap) || 0)
+      + t.querySelector('.brand').getBoundingClientRect().width + t.querySelector('.topbar-right').scrollWidth);
+    const met = nodig(); k.style.display = 'none'; const zonder = nodig(); k.style.display = ''; return [met, zonder, Math.round(t.getBoundingClientRect().height)]; })()`);
   ok('de bovenbalk van de mixer past in rust op 1440 px (met de knop Maschine)', breed[0] <= 1440, `nodig ${breed[0]} px, zonder de knop ${breed[1]} px`);
   // In gebruik worden "audio starten" en "○ log" langer (en het log loopt altijd): ter info.
   await mixer.ev("document.getElementById('audio-btn').click()", true);
   await mixer.ev("document.getElementById('log-btn').textContent.includes('◉') || document.getElementById('log-btn').click()", true);
   await wacht(2500);
-  const inGebruik = await mixer.ev(`(() => { const t = document.querySelector('.topbar'), cs = getComputedStyle(t);
-    return Math.ceil(parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + t.querySelector('.brand').getBoundingClientRect().width + t.querySelector('.topbar-right').scrollWidth); })()`);
-  console.log(`   ·  ter info: in gebruik (audio aan, log loopt) nodig ${inGebruik} px op 1440`);
+  // Dan scrollt het rechterdeel opzij (ui/bovenbalk.js, Clay 7 okt): niets valt weg, de balk wordt niet hoger.
+  const balk = () => mixer.ev(`(() => { const b = document.querySelector('.topbar-right'), t = document.querySelector('.topbar'), h = document.getElementById('help-btn').getBoundingClientRect();
+    return { nodig: b.scrollWidth, ziet: b.clientWidth, links: Math.round(b.scrollLeft), meer: b.classList.contains('meer'), minder: b.classList.contains('minder'),
+      pagina: document.documentElement.scrollWidth, hoog: Math.round(t.getBoundingClientRect().height), hulpRechts: Math.round(h.right), balkRechts: Math.round(b.getBoundingClientRect().right) }; })()`);
+  let b = await balk();
+  ok('tijdens het spelen past hij niet, en dan scrollt het rechterdeel (rechts vervaagd)', b.nodig > b.ziet && await tot(async () => (await balk()).meer), JSON.stringify(b));
+  ok('de pagina zelf scrolt niet opzij', b.pagina <= 1440, `${b.pagina} px`);
+  ok('de balk is niet hoger geworden', b.hoog === breed[2], `${b.hoog} px, in rust ${breed[2]}`);
+  await mixer.ev("document.querySelector('.topbar-right').dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true })), true");
+  ok('het scrollwiel van een muis schuift hem opzij (links vervaagt dan ook)', await tot(async () => { const x = await balk(); return x.links > 0 && x.minder; }));
+  await mixer.ev("{ const e = document.querySelector('.topbar-right'); e.scrollLeft = e.scrollWidth; }");
+  ok('helemaal opzij: "? toetsen" staat in beeld, rechts niets meer', await tot(async () => { const x = await balk(); return !x.meer && x.hulpRechts <= x.balkRechts; }), JSON.stringify(await balk()));
+  const lamp = await mixer.ev(`(() => { const k = document.getElementById('beeld-btn'); k.dataset.lamp = 'volgt';
+    return Math.round(k.getBoundingClientRect().top - 3 - document.querySelector('.topbar-right').getBoundingClientRect().top); })()`);
+  ok('het lampje op "beeld" (3 px boven de knop) valt binnen de balk, niet afgeknipt', lamp >= 0, `${lamp} px ruimte`);
 } catch (err) {
   ok(`script liep door: ${err.message}`, false);
 } finally {

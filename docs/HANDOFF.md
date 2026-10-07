@@ -40,11 +40,16 @@ Lees in deze volgorde:
   een tweede mixer, gaten in de hub.test-check, en geen rekenwerk als het kaartvenster verborgen is.
 - **Getest:** `node test/alles.mjs` alles groen; `tools/headless/maschine-kaart.mjs` (los, en live vanuit de
   mixer met een nep-poort) groen; `rijen.mjs` 377/377. NIET getest: met de echte Maschine via de hub.
-- **De bovenbalk, keuze voor Clay:** in rust past hij op 1440 px (1421 px nodig), maar IN GEBRUIK (audio aan:
-  "audio · 48 kHz · 6 ms", het log loopt: "◉ log 0:02 · 12 kB") niet: op main al 1506 px (met een lang log
-  1548), met de knop Maschine 1544 (1585). Op een MacBook van 1440 px vallen rechts MIDI en "? toetsen" weg.
+- **De bovenbalk scrollt (Clay koos, 7 okt):** in rust past hij op 1440 px (1433 nodig), maar tijdens het
+  spelen (audio aan: "audio · 48 kHz · 6 ms", het log loopt) niet: op main al 1506 px, met de knop Maschine
+  1544, met een lang log tot ~1585. Toen vielen rechts MIDI en "? toetsen" weg; nu scrollt het rechterdeel
+  opzij (`ui/bovenbalk.js`, styles.css): niet hoger, geen schuifbalk, een vervaging aan de kant waar meer
+  staat, het scrollwiel schuift mee, het lampje op "beeld" blijft heel. Headless gemeten in maschine-kaart.mjs.
 - **Al rood op main, niet door dit werk:** `tools/headless/apc-klank.mjs` verwacht nog de mapping van 25 sep
   (374 regels, nu 702) en de oude volgorde van de grid-modi (3 fouten).
+- **Wankelt (niet onderzocht):** `tools/headless/rijen.mjs` gaf later op 7 okt 4 fouten (de volumeknop van de
+  klankschaal "bedekt door #rijen" met ALLE rijen open, 1440×790 en 1920×1080), op main net zo; eerder die dag
+  377/377 op dezelfde mixer. Eerst los opnieuw draaien; blijft het, dan het scrollen van het rij-gebied nalopen.
 
 ## 7 OKT (later): MASCHINE-DJ ERBIJ, INTEGRATIE NAAR MAIN, OPGERUIMD
 
