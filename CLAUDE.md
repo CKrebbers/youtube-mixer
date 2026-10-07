@@ -114,6 +114,7 @@ src/
                     renderloop, mapje-balk — elk een opzet…()-functie
                     vlag.js + vorm-paneel.js: ?vormen=1 en de VORM-rij (paneel pas geladen als de vlag aan staat)
                     vlag.js ook ?hub=ws://… (hubAdres): dan laadt app.js control/hub.js, anders niet
+                    bovenbalk.js    past de balk niet (tijdens het spelen), dan scrollt het rechterdeel opzij: vervaging, wiel
                     waveform.js, controls.js, midi-monitor.js,
                     mapping-panel.js (de lijst), learn-mode.js (aanwijzen op het scherm),
                     rack-editor.js (racks bouwen met de muis, werkt op een kopie)
@@ -270,6 +271,7 @@ test/
                     speelapparaten: speelt, routering per dev, lampjes/schermen met dev door de wachtrij, statechange, niets statisch geladen
   maschine.test.mjs de Maschine (pads, groepen, draaiknoppen, wiel, lampjes, schermtempo), maschine-scherm (pixels), Xboard knop 9–16 en schuif, isSpeelapparaat
   maschine-kaart.test.mjs  de Maschine-kaart: tekst = legUit in elke pagina × padmodus, geen regel vrij, stand blijft staan, stuurt niets
+  bovenbalk.test.mjs  de bovenbalk scrollt opzij als hij niet past (randen, CSS: niet hoger, geen schuifbalk)
   patronen.test.mjs model, venster (swing, micro, omlopen), klok, speler met nep-maatgever (op de maat, herankeren zonder dubbele/gemiste), opnemen, opslag (409), server
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
   secties.test.mjs  secties: synthetische nummers met een bekend antwoord, worker, library, deck, actions, server, marges op de "1"
