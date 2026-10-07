@@ -188,8 +188,10 @@ Eindstand staat in HANDOFF.
   op 0,503; teruggezet uit `.versies/` (bytes gelijk). Nu zetten ALLE headless-proeven een eigen patronen- en
   plannenmap. Niet van mij te herleiden: 13 schrijfacties op 6 okt 22:31–22:32 (instrument 1 schaal → drums,
   noten op stap 5–7); Clay's set van daarvóór staat in `patronen/.versies/set/2026-10-06T20-31-07-…json`.
-- `tools/headless/speelapparaten.mjs` en `hub.mjs` startten de hub zonder `opname: false` en namen op in
-  `~/Movies/varve-avonden` (zes mapjes van 8 KB, 5 okt 09:54 en 6 okt 14:18): nu niet meer.
+- `tools/headless/speelapparaten.mjs` en `hub.mjs` startten de hub zonder `opname: false`; met de echte config
+  zouden ze opnemen in `~/Movies/varve-avonden`: nu niet meer. De drie mapjes van 6 okt 14:18 komen NIET van
+  een proef maar van de echte hub (hub.log: LPD8 opnieuw verbonden, daarna drie korte opnames via pad 4); die
+  van 5 okt 09:54 zijn niet te herleiden.
 - `vorm-maat.mjs` was al rood (limiter-vooruitblik), `tools/headless/plan.mjs` faalde door een meldingstimer:
   beide gerepareerd.
 - `fxKlok()` tijdens een geplande keylock-sprong (~95 ms) wijst tot 70 s vooruit: al vóór dit werk, de echte
