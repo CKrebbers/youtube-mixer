@@ -47,6 +47,7 @@ als een feature erom lijkt te vragen, is dat bijna altijd een ontwerpfout elders
 index.html          geen build-stap, plain ES-modules
 plan.html           het planvenster: de programmering zien, inrichten, live volgen (src/plan/plan-venster.js)
 apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze doen (src/ui/apc-kaart.js)
+maschine.html       de Maschine-kaart: wat elke knop nu doet (uitleg van de Maschine zelf), live vanuit de mixer (src/ui/maschine-kaart.js)
 controle.html       de Controlekamer (/controle): stand van alles, mixer openen, speellijst (docs/CONTROLEKAMER.md)
 styles.css
 src/
@@ -123,6 +124,9 @@ src/
                     status-zender.js de stand voor de Controlekamer: BroadcastChannel 'varve-status', alleen het eerste tabblad
                     apc-kaart.js    apc.html: de APC met knoppen op hun echte plek, klik = uitleg
                     apc-beschrijf.js elke action in gewone taal (de test eist er een voor de hele standaardmapping)
+                    soorten.js      soort (kleur) van een action voor beide kaarten; de kleuren in styles.css (.s-*). Puur.
+                    maschine-kaart.js  maschine.html: plaat, schermen, live volgen via window.opener.maschine. Stuurt niets.
+                    maschine-kaart-plan.js  plaatsing + wat een control doet = legUit() van de Maschine (label, soort). Puur.
                     toon-weergave.js toonsoort als tekst: kolomkop, focus, library, tooltip. Puur.
                     library-lijst.js de library als virtuele lijst: kolommen, cellen, pagina-cache. Puur.
                     hotcue-opslag.js hotcues per nummer bewaren: welk nummer op welke track, één verzoek tegelijk
@@ -195,6 +199,7 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
                     vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs, beeld.mjs: headless zonder MIDI;
                     beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
+                    maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
                     hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
@@ -264,6 +269,7 @@ test/
   hub.test.mjs      AV-app-hub: nep-WebSocket + nep-klok (ook verborgen tabblad: 1×/s, 1×/min); vlag (lokaal), manifest, LED's per beeld, focus, zet, paniek, hartslag, 0,5→5 s, open-en-dicht, 4001→30 s;
                     speelapparaten: speelt, routering per dev, lampjes/schermen met dev door de wachtrij, statechange, niets statisch geladen
   maschine.test.mjs de Maschine (pads, groepen, draaiknoppen, wiel, lampjes, schermtempo), maschine-scherm (pixels), Xboard knop 9–16 en schuif, isSpeelapparaat
+  maschine-kaart.test.mjs  de Maschine-kaart: tekst = legUit in elke pagina × padmodus, geen regel vrij, stand blijft staan, stuurt niets
   patronen.test.mjs model, venster (swing, micro, omlopen), klok, speler met nep-maatgever (op de maat, herankeren zonder dubbele/gemiste), opnemen, opslag (409), server
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
   secties.test.mjs  secties: synthetische nummers met een bekend antwoord, worker, library, deck, actions, server, marges op de "1"
@@ -1536,7 +1542,8 @@ Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag mis
 - Alleen met `?hub=`: `MANIFEST.speelt = ['xboard49', 'maschine-mk2']`; app.js laadt
   `ui/speelapparaten.js` (en daarmee maschine.js, maschine-scherm.js, het profiel en
   `mappings/maschine-mk2.json`) pas binnen `if (hubUrl)`. hub.test controleert dat niemand ze
-  statisch importeert.
+  statisch importeert. Uitzondering: de Maschine-kaart (`maschine.html`, een EIGEN pagina); hub.test
+  controleert ook dat de mixer die nooit laadt.
 - Elk speelapparaat heeft een EIGEN nep-poort (`midi.speelPoort(dev)`: "Xboard49 (hub)",
   "Maschine MK2 (hub)", interface van een MIDIInput), NIET in `access.inputs`: de MidiHub, de
   APC-mapping en het echofilter zien ze nooit. Geen focusfilter (de hub beslist wie speelt).
@@ -1570,6 +1577,12 @@ Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag mis
   echte eenheden uit de engine-formules (`eqDb`, `filterDoelen`), nooit zelf een tweede formule. CONTROL
   vasthouden = uitleg: niets uitvoeren, wel uitleggen (`beschrijf` uit apc-beschrijf.js, meegegeven door
   speelapparaten.js); het loslaten van wat tijdens de uitleg werd ingedrukt gaat nergens heen.
+- De Maschine-kaart (`maschine.html`, `docs/MASCHINE.md` §5d, 7 okt): de tekst per control is `legUit()` van een
+  eigen Maschine-exemplaar, dus nooit een tweede beschrijving. Knoppen die maschine.js zelf afhandelt staan in
+  `UITLEG` als `{ kort, soort, tekst }` (label en kleur voor de kaart naast de tekst van CONTROL). Een nieuwe
+  pagina: `PAGINAS` (de kaart volgt vanzelf); een nieuwe padmodus: ook `PADMODI` in maschine-kaart-plan.js. Live
+  via `window.opener.maschine` (alleen met `?hub=`): stand overnemen, `maschine.geraakt` (laatst ingedrukt of
+  gedraaid) en `maschine.schermen` (wat er naar het apparaat ging). De kaart stuurt NIETS (`invoke` doet niets).
 - Toetsen: `node test/maschine.test.mjs`, `node test/hub.test.mjs`, en headless
   `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
   HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een

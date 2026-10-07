@@ -34,7 +34,13 @@
     <button id="instrument-btn" class="ghost" title="instrument op de track met focus: kiezen, acht knoppen, een toetsenbord om te proberen, en welk MIDI-keyboard er binnenkomt">instrument</button>
     <button id="patronen-btn" class="ghost" title="patronen: per track met een instrument vijf patronen, starten op de maat, stap voor stap of live opnemen">patronen</button>
     <button id="master-btn" class="ghost" title="master: effecten op de hele mix en de limiter (hoeveel hij afneemt)">master</button>
-    <a id="apc-btn" class="ghost" href="apc.html" target="varve-apc" title="wat elke knop van de APC doet, per mapje">APC-kaart</a>
+    <!-- De kaarten van de controllers: wat elke knop doet, op zijn echte plek. Korte namen (de
+         tooltip zegt "…-kaart"): op 1440 px was er nog ~60 px over, "APC-kaart" + "Maschine-kaart"
+         vroeg 95 (7 okt). -->
+    <span class="kaarten">
+      <a id="apc-btn" class="ghost" href="apc.html" target="varve-apc" title="APC-kaart: wat elke knop van de APC doet, per mapje">APC</a>
+      <a id="maschine-btn" class="ghost" href="maschine.html" target="varve-maschine" title="Maschine-kaart: wat elke knop van de Maschine MK2 doet, per pagina en padmodus (met de hub volgt hij het apparaat)">Maschine</a>
+    </span>
     <button id="midi-btn" class="ghost">MIDI</button>
     <button id="help-btn" class="ghost">? toetsen</button>
   </div>

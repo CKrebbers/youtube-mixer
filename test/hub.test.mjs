@@ -84,7 +84,9 @@ console.log('\nzonder vlag geen byte van hub.js');
   ok(`niemand importeert hub.js statisch${statisch.length ? ` (${statisch.join(', ')})` : ''}`, statisch.length === 0);
   // De speelapparaten (Xboard49, Maschine) laden ook alleen met de vlag: app.js haalt
   // ui/speelapparaten.js dynamisch binnen; alleen die keten importeert de rest statisch.
-  const MAG = { 'ui/speelapparaten.js': ['maschine'], 'control/maschine.js': ['maschine-scherm', 'devices/maschine-mk2'] };
+  // Plus de Maschine-kaart: een EIGEN pagina (maschine.html), niet de mixer (zie hieronder).
+  const MAG = { 'ui/speelapparaten.js': ['maschine'], 'control/maschine.js': ['maschine-scherm', 'devices/maschine-mk2'],
+    'ui/maschine-kaart.js': ['maschine', 'maschine-scherm'], 'ui/maschine-kaart-plan.js': ['devices/maschine-mk2', 'maschine'] };
   const fout = [];
   for (const d of ['ui', 'control', 'control/devices', 'engine', 'video', 'auto', 'plan', 'controle', 'analysis', 'vormen', 'lib', 'opname']) {
     if (!existsSync(map + d)) continue;
@@ -97,6 +99,18 @@ console.log('\nzonder vlag geen byte van hub.js');
     }
   }
   ok(`speelapparaten.js, maschine.js en maschine-scherm.js: nergens statisch geladen buiten hun eigen keten${fout.length ? ` (${fout.join(', ')})` : ''}`, fout.length === 0);
+  // De kaart mag de Maschine laden omdat de mixer de kaart nooit laadt: alleen maschine.html.
+  // Elk .js-bestand onder src/ (ook import() met backticks) en elke andere pagina.
+  const kaartFout = [];
+  const alleJs = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? alleJs(`${d}/${e.name}`) : e.name.endsWith('.js') ? [`${d}/${e.name}`] : []));
+  for (const pad of alleJs(map.replace(/\/$/, ''))) {
+    if (pad.endsWith('/ui/maschine-kaart.js')) continue;
+    if (/maschine-kaart(-plan)?\.js/.test(readFileSync(pad, 'utf8'))) kaartFout.push(pad.slice(map.length));
+  }
+  for (const html of ['index.html', 'video.html', 'apc.html', 'plan.html', 'controle.html']) {
+    if (/maschine-kaart(-plan)?\.js/.test(readFileSync(new URL(`../${html}`, import.meta.url), 'utf8'))) kaartFout.push(html);
+  }
+  ok(`de Maschine-kaart wordt alleen door maschine.html geladen, nooit door de mixer${kaartFout.length ? ` (${kaartFout.join(', ')})` : ''}`, kaartFout.length === 0);
   // De sectie (PROTOCOL §18): app.js maakt de bron (engineSecties, uit het dynamisch geladen hub.js)
   // en midi-opzet.js geeft hem aan HubMidi. Of het echt werkt: tools/headless/sec-hub.mjs.
   const appJs = readFileSync(`${map}ui/app.js`, 'utf8'), opzet = readFileSync(`${map}ui/midi-opzet.js`, 'utf8');

@@ -313,12 +313,11 @@ console.log('\nde modus patronen op de APC');
     'track.3.pattern.length', 'track.3.pattern.length.up', 'track.3.pattern.length.down', 'track.3.pattern.swing', 'track.3.pattern.clear',
     'patterns.row.4', 'patterns.stop', 'patterns.stop.now', 'patterns.tempo', 'patterns.tap', 'patterns.record', 'layer.grid.patronen'];
   ok('elke nieuwe action heeft een uitleg in gewone taal', nieuw.every((a) => { const b = beschrijf(a); return b.kort && !b.lang.startsWith('?') && b.lang !== a; }));
-  // apc-kaart.js raakt bij het laden de DOM aan: de soort lezen we uit de bron.
-  const kaart = readFileSync(new URL('../src/ui/apc-kaart.js', import.meta.url), 'utf8');
-  const re = new RegExp(/\['patroon', 'patronen', \/(.+)\/\]/.exec(kaart)?.[1] ?? '^$');
-  const iVoor = kaart.indexOf("['patroon'"), iTransport = kaart.indexOf("['transport'");
-  ok('apc-kaart: de plekken zijn een eigen soort (patronen), vóór transport', re.test('track.1.pattern.1') && re.test('patterns.row.1')
-    && !re.test('track.1.play') && iVoor > 0 && iVoor < iTransport);
+  // De soorten van de kaarten (ui/soorten.js, puur; apc-kaart.js raakt bij het laden de DOM aan).
+  const { SOORTEN, soortVan } = await import('../src/ui/soorten.js');
+  const iVoor = SOORTEN.findIndex(([s]) => s === 'patroon'), iTransport = SOORTEN.findIndex(([s]) => s === 'transport');
+  ok('apc-kaart: de plekken zijn een eigen soort (patronen), vóór transport', soortVan('track.1.pattern.1') === 'patroon' && soortVan('patterns.row.1') === 'patroon'
+    && soortVan('track.1.play') !== 'patroon' && iVoor >= 0 && iVoor < iTransport);
   const { MODUS_KLEUR, modusVan } = await import('../src/ui/spiegel-plan.js');
   ok('het scherm kleurt de modus (oranje)', MODUS_KLEUR.patronen === 'oranje' && modusVan({ laag: 'grid.patronen' }, 'track.1.pattern.1') === 'patronen');
 }
