@@ -609,10 +609,17 @@ console.log('\nde worklet (nagebouwde AudioWorkletGlobalScope)');
   for (let j = 0; j < NOOTVELDEN; j++) stuur(slagVan(j, 200 + 37 * j));
   draai(3000);                                            // opwarmen
   const SLAGEN = Array.from({ length: NOOTVELDEN }, (_, j) => slagVan(j, 300 + 29 * j, { tijd: 0 }));
+  // Gecompileerde code telt niet mee: V8 compileert de meetlus soms opnieuw
+  // TIJDENS een venster, en dat landt als 15–25 kB in code_space/trusted_space.
+  // Daardoor was de test 4 van de 9 keer rood zonder één byte afval per blok
+  // (gemeten 7 okt: de jonge ruimte groeit in 30 000 blokken evenveel als in
+  // 3000). Afval per blok landt in de jonge ruimte en telt dus gewoon.
+  const code = () => v8.getHeapSpaceStatistics().reduce((n, s) => n + (/code|trusted/.test(s.space_name) ? s.space_used_size : 0), 0);
   const venster = (metNoten) => {
     globalThis.gc(); globalThis.gc();
     const prof = new v8.GCProfiler();
     prof.start();
+    const c0 = code();
     const h0 = process.memoryUsage().heapUsed;
     let noten = 0;
     for (let b = 0; b < 3000; b++) {
@@ -621,7 +628,8 @@ console.log('\nde worklet (nagebouwde AudioWorkletGlobalScope)');
       proc.process(IN, uit); frame += BLOK;
     }
     const h1 = process.memoryUsage().heapUsed;
-    return { bytes: h1 - h0, gcs: prof.stop().statistics.length, noten };
+    const c1 = code();
+    return { bytes: h1 - h0 - (c1 - c0), gcs: prof.stop().statistics.length, noten };
   };
   const beste = (metNoten) => {
     let b = null;
