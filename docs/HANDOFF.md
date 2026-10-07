@@ -24,11 +24,14 @@ Lees in deze volgorde:
   `heapUsed` staat in renderblok, klankschaal, master en effecten (daar nu groen).
 - Opgeruimd: PR #1 (Koppelbus, 2 okt) gesloten, de tak blijft als naslag; een achtergebleven server
   van de knoppen-worktree (poort 8833, sinds 5 okt) gestopt; drie iCloud-kopieën (" 2") weg.
+  Alle 38 worktrees in `~/Projects/varve-stems/` weg (alles zat in main, niets ongecommit; de takken
+  bestaan nog). `patronen/` stond alleen in `sintegratie` en staat nu in de Bureaublad-map. Over in
+  die map: `hub-set-studio` (kloon van AV-app-hub) en `proef-maschine-dj` (proefmap), niet aangeraakt.
 - Getest: `node test/alles.mjs` 62 bestanden, 6583 checks, alles groen (1 overgeslagen: geen
   AV-app-hub naast de map); `tools/headless/kijk.mjs` groen. NIET: de Maschine-pagina's op de echte
   Maschine, en verder alles wat hieronder als niet getest staat.
-- Er draait GEEN server op 8777. Starten vanuit `~/Projects/varve-stems/sintegratie` (of main):
-  `node server/index.js`. De speellijst (`/controle`) is nog leeg.
+- Er draait GEEN server op 8777. Starten vanuit de Bureaublad-map (main, daar staan media,
+  opnames en patronen): `node server/index.js`. De speellijst (`/controle`) is nog leeg.
 
 ## 7 OKT: BEELD — VARVE STUURT DE STROOMMACHINE (in `studio/integratie`)
 
