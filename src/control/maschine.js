@@ -4,8 +4,9 @@ import { Mapping } from './mapping.js';
 import { trackVanDeck, TRACKS, SECTIE_PADS } from './actions.js';
 import { PALETTE } from './devices/apc40mk2.js';
 import { INSTRUMENTEN } from '../engine/instrumenten/index.js';
-import { KNOP_KANAAL, PAD_KANAAL, PAD_NOOT, WIEL_SIG, GROEPEN, knopNoot, padVanNoot } from './devices/maschine-mk2.js';
+import { KNOP_KANAAL, PAD_KANAAL, PAD_NOOT, WIEL_SIG, GROEPEN, KNOPPEN, KNOP_LABEL, ENCODER_CC, knopNoot, knopSig, padVanNoot } from './devices/maschine-mk2.js';
 import { tekenScherm } from './maschine-scherm.js';
+import { eqDb, filterDoelen } from '../engine/audio-graph.js';
 
 /**
  * De Maschine MK2 in VARVE (docs/MASCHINE.md), zoals de AV-app-hub hem
@@ -55,6 +56,23 @@ import { tekenScherm } from './maschine-scherm.js';
  *                    Waarom de focus-track en niet de speeltrack: secties horen bij
  *                    een NUMMER, de speeltrack heeft altijd een instrument.
  *
+ * KNOPPAGINA'S (◄ ► links boven, tak studio/maschine-dj):
+ *   Instrument       de regels zonder laag (hierboven): de acht knoppen van de speeltrack
+ *   Strip            laag `pagina.strip` in de mapping: trim, hoog, mid, laag, echo, galm,
+ *                    fx-mix en filter van de FOCUS-track (de strip van de APC, met het
+ *                    filter op 8: op de APC zit dat op de trackknop)
+ *   Rack             laag `pagina.rack`: de acht plekken van het rack van de focus-track,
+ *                    met de naam die het rack zelf geeft (fx.plekNaam)
+ *   De pagina is een "open mapje" voor de mapping (`lagen`): wat een knop doet blijft
+ *   data in mappings/maschine-mk2.json. Op het scherm de naam, de waarde in echte
+ *   eenheden (dB uit eqDb, Hz uit filterDoelen) en een balk; de knop die je draait
+ *   staat even omgekeerd.
+ *
+ * UITLEG (CONTROL vasthouden): wat je dan aanraakt (knop, draaiknop, pad, wiel) gebeurt
+ *   NIET; het scherm zegt wat het hier doet (`beschrijf` uit ui/apc-beschrijf.js voor
+ *   wat in de mapping staat, eigen teksten voor pads, STEP, SCENE, ◄ ► …). Wat iets doet
+ *   knippert. Loslaten van wat je tijdens de uitleg indrukte gaat ook nergens heen.
+ *
  * Wat de engine doet gaat over de bus (focus, knoppen, instrument kiezen,
  * stappen, transport); noten niet (een noot is geen 0..1: noten.js). De engine
  * kent geen MIDI.
@@ -92,6 +110,51 @@ const NAMEN = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 /** MIDI-noot als naam (60 = C4). */
 export const nootNaam = (n) => `${NAMEN[((n % 12) + 12) % 12]}${Math.floor(n / 12) - 1}`;
 
+/** De knoppagina's (◄ ► links boven), in deze volgorde; 'instrument' = de regels zonder laag. */
+export const PAGINAS = ['instrument', 'strip', 'rack'];
+export const PAGINA_NAAM = { instrument: 'Instrument', strip: 'Strip', rack: 'Rack' };
+/** Zo lang staat de draaiknop die je draaide omgekeerd op het scherm. */
+export const GEDRAAID_MS = 1000;
+/** Knipperen tijdens de uitleg: zo lang aan, zo lang zacht. */
+export const KNIPPER_MS = 300;
+
+const komma = (s) => s.replace('.', ',');
+const dB = (db) => (Math.abs(db) < 0.05 ? '0 dB' : komma(`${db > 0 ? '+' : ''}${db.toFixed(1)} dB`));
+const hz = (f) => (f < 1000 ? `${Math.round(f)} Hz` : komma(`${(f / 1000).toFixed(f < 10000 ? 1 : 0)} kHz`));
+const procent = (v) => `${Math.round(v * 100)}%`;
+/** Het filter in woorden: midden open, links lowpass, rechts highpass (dezelfde formule als de engine). */
+export function filterTekst(v) {
+  if (Math.abs(v - 0.5) < 0.004) return 'open';
+  const [hpf, , lpf] = filterDoelen(v);
+  return v < 0.5 ? `LP ${hz(lpf)}` : `HP ${hz(hpf)}`;
+}
+/** De pagina Strip: welke action per knop, de naam op het scherm en de waarde in echte eenheden. */
+export const STRIP = [
+  { actie: 'trim', label: 'trim', bipolair: true, uitleg: 'versterking vóór de EQ; midden = 0 dB, helemaal links = uit', tekst: (v) => (v <= 0.001 ? 'uit' : dB(20 * Math.log10(2 * v))) },
+  { actie: 'high', label: 'hoog', bipolair: true, uitleg: 'EQ hoog: -30 tot +8 dB, midden = 0 dB, helemaal links = kill', tekst: (v) => (v < 0.03 ? 'kill' : dB(eqDb(v))) },
+  { actie: 'mid', label: 'mid', bipolair: true, uitleg: 'EQ mid: -30 tot +8 dB, midden = 0 dB, helemaal links = kill', tekst: (v) => (v < 0.03 ? 'kill' : dB(eqDb(v))) },
+  { actie: 'low', label: 'laag', bipolair: true, uitleg: 'EQ laag: -30 tot +8 dB, midden = 0 dB, helemaal links = kill', tekst: (v) => (v < 0.03 ? 'kill' : dB(eqDb(v))) },
+  { actie: 'send.a', label: 'echo', uitleg: 'hoeveel naar de echobus gaat (na de fader: echo-out werkt)', tekst: procent },
+  { actie: 'send.b', label: 'galm', uitleg: 'hoeveel naar de galmbus gaat (na de fader)', tekst: procent },
+  { actie: 'fx.mix', label: 'fx-mix', uitleg: 'droog/nat van het effect op deze track (pagina Rack: de plekken)', tekst: procent },
+  { actie: 'filter', label: 'filter', bipolair: true, uitleg: 'links lowpass (dicht naar 250 Hz), rechts highpass (tot 9 kHz), midden open', tekst: filterTekst },
+];
+
+/** Uitleg van de knoppen die maschine.js zelf afhandelt (niet in de mapping). */
+const UITLEG = {
+  control: 'vasthouden en iets aanraken: hier staat wat het doet, en het gebeurt niet',
+  shift: 'vasthouden: de tweede laag. Draaiknoppen fijn, PLAY en RESTART meteen, < > (transport) korter/langer',
+  browseL: 'vorige knoppagina: Instrument, Strip, Rack',
+  browseR: 'volgende knoppagina: Instrument, Strip, Rack',
+  step: 'stapmodus aan/uit: de pads zijn de stappen van het gekozen patroon op de speeltrack',
+  scene: 'padmodus secties aan/uit: pad K = sectie K van de focus-track, valt in op de volgende "1"',
+  pattern: 'vasthouden + pad 1-5: een patroonplek kiezen op de speeltrack',
+  stapL: 'stappen of secties: vorige bladzijde. SHIFT: het patroon korter',
+  stapR: 'stappen of secties: volgende bladzijde. SHIFT: het patroon langer',
+  wiel: 'indrukken: het instrument dat het wiel koos zetten op de focus-track',
+  enter: 'het instrument dat het wiel koos zetten op de focus-track',
+};
+
 export class Maschine extends Emitter {
   /**
    * @param engine  focus, speeltrack(), instrumentOp(id), deck(id)
@@ -99,12 +162,18 @@ export class Maschine extends Emitter {
    * @param read    read() van de bus
    * @param invoke  invoke() van de bus
    * @param nu      klok in ms (flitsen, schermtempo, keuze van het wiel)
+   * @param beschrijf  action -> { kort, lang } (ui/apc-beschrijf.js), voor de uitleg; zonder: de kale action
    */
-  constructor({ engine, noten, read = () => null, invoke = () => {}, nu = () => (globalThis.performance?.now() ?? Date.now()) }) {
+  constructor({ engine, noten, read = () => null, invoke = () => {}, nu = () => (globalThis.performance?.now() ?? Date.now()), beschrijf = null }) {
     super();
-    Object.assign(this, { engine, noten, read, invoke, nu });
+    Object.assign(this, { engine, noten, read, invoke, nu, beschrijf });
+    this.pagina = 'instrument';     // de knoppagina (◄ ► links boven): een open "mapje" voor de mapping
     this.mapping = new Mapping({ read, invoke, now: nu,
+      lagen: () => [`pagina.${this.pagina}`],
       vars: () => ({ focus: trackVanDeck(engine.focus), speel: trackVanDeck(engine.speeltrack?.() ?? null), plek: this.plek() }) });
+    this.uitleg = null;             // CONTROL vast: { wat: { titel, tekst } | null }
+    this.uitlegVast = new Set();    // knoppen/pads die tijdens de uitleg ingedrukt werden: hun loslaten gaat nergens heen
+    this.gedraaid = null;           // { k (0..7), tot }: de draaiknop die je net draaide
     this.poort = null;              // { in, uit, scherm } van HubMidi.speelPoort('maschine-mk2')
     this.leds = new Map();          // 'kanaal:noot' -> velocity zoals het laatst verstuurd
     this.schermen = [null, null];   // laatst verstuurde bytes per scherm
@@ -205,6 +274,8 @@ export class Maschine extends Emitter {
     for (const waar of this.padVast.values()) if (waar !== 'noten' && waar !== 'kies') this.invoke(waar, false);
     this.padVast.clear();
     this.patroonVast = false;
+    this.uitleg = null;
+    this.uitlegVast.clear();
     this.mapping.losgekoppeld();
     this.vergeet();
   }
@@ -218,6 +289,20 @@ export class Maschine extends Emitter {
   ontvang(msg) {
     if (!msg || !(msg.channel >= 0)) return false;
     this.rx++;
+    // CONTROL vasthouden = uitleg: wat je dan aanraakt wordt uitgelegd, niet uitgevoerd.
+    if (msg.type === 'note' && msg.channel === KNOP_KANAAL && msg.number === knopNoot('control')) {
+      this.uitleg = msg.on ? { wat: null } : null;
+      return true;
+    }
+    if (this._uitlegSlikt(msg)) return true;
+    // ◄ ► links boven: de knoppagina (Instrument, Strip, Rack).
+    if (msg.type === 'note' && msg.channel === KNOP_KANAAL && (msg.number === knopNoot('browseL') || msg.number === knopNoot('browseR'))) {
+      if (msg.on) this.bladerPagina(msg.number === knopNoot('browseL') ? -1 : 1);
+      return true;
+    }
+    if (msg.type === 'cc' && msg.channel === 0 && msg.number >= ENCODER_CC && msg.number < ENCODER_CC + 8) {
+      this.gedraaid = { k: msg.number - ENCODER_CC, tot: this.nu() + GEDRAAID_MS };
+    }
     // Pads: spelen (noten.js), een stap (stapmodus) of een plek kiezen (PATTERN).
     if (msg.channel === PAD_KANAAL && (msg.type === 'note' || msg.type === 'poly') && padVanNoot(msg.number) !== null) return this._pad(msg);
     // STEP, SCENE en PATTERN: de modus van de pads (hier, niet op de bus: het is wat de pads betekenen).
@@ -255,6 +340,142 @@ export class Maschine extends Emitter {
     this.modus = modus === 'stappen' || modus === 'secties' ? modus : 'spelen';
     this._bladzijden();
     this._sectieBladen();
+  }
+
+  /** Een knoppagina zetten ('instrument', 'strip', 'rack'). Geeft false bij een onbekende. */
+  zetPagina(pagina) {
+    if (!PAGINAS.includes(pagina)) return false;
+    this.pagina = pagina;
+    this.gedraaid = null;
+    return true;
+  }
+
+  /** ◄ ► links boven: één pagina verder of terug, niet rondlopend (het lampje zegt of het kan). */
+  bladerPagina(stap) {
+    const i = PAGINAS.indexOf(this.pagina) + stap;
+    return i >= 0 && i < PAGINAS.length ? this.zetPagina(PAGINAS[i]) : false;
+  }
+
+  // ---- uitleg (CONTROL vasthouden) ------------------------------------------------
+
+  /**
+   * Slikt de uitleg dit bericht in? Tijdens de uitleg: indrukken en draaien worden
+   * uitgelegd en NIET doorgegeven. Wat tijdens de uitleg werd ingedrukt, laat ook
+   * nergens los (ook als CONTROL al los is). Loslaten en druk van wat er al vóór
+   * CONTROL in zat gaan gewoon door: anders bleef er een noot of knop hangen.
+   */
+  _uitlegSlikt(msg) {
+    const toets = msg.type === 'note' || msg.type === 'poly' ? `note:${msg.channel}:${msg.number}` : null;
+    if (toets && this.uitlegVast.has(toets) && !(msg.type === 'note' && msg.on)) {
+      if (msg.type === 'note') this.uitlegVast.delete(toets);
+      return true;
+    }
+    if (!this.uitleg) return false;
+    if (msg.type === 'note' && msg.on) {
+      this.uitlegVast.add(toets);
+      this.uitleg.wat = this.legUit(msg);
+      return true;
+    }
+    if (msg.type === 'cc') {
+      if (msg.value) this.uitleg.wat = this.legUit(msg);
+      return true;
+    }
+    return false;
+  }
+
+  /** Wat een knop, draaiknop, pad of het wiel HIER doet: { titel, tekst }. */
+  legUit(msg) {
+    if (msg.channel === PAD_KANAAL && msg.type === 'note' && padVanNoot(msg.number) !== null) return this._legPadUit(padVanNoot(msg.number));
+    if (msg.sig === WIEL_SIG) {
+      return { titel: 'masterwiel', tekst: 'draaien = een instrument kiezen voor de focus-track (eerst alleen op het scherm); indrukken of ENTER = zetten' };
+    }
+    if (msg.type === 'cc' && msg.number >= ENCODER_CC && msg.number < ENCODER_CC + 8) {
+      const k = msg.number - ENCODER_CC + 1;
+      const titel = `draaiknop ${k} (${PAGINA_NAAM[this.pagina]})`;
+      const nr = trackVanDeck(this.engine.focus ?? null);
+      if (this.pagina === 'strip') return { titel, tekst: `${STRIP[k - 1].label} van track ${nr ?? '?'} (focus): ${STRIP[k - 1].uitleg}. SHIFT = fijn` };
+      if (this.pagina === 'rack') {
+        const naam = this.engine.deck?.(this.engine.focus)?.fx?.plekNaam?.(k) ?? null;
+        return { titel, tekst: naam ? `plek ${k} van het rack van track ${nr ?? '?'}: ${naam}. Het rack bepaalt wat dat doet. SHIFT = fijn`
+          : `plek ${k} bestaat niet in het rack van track ${nr ?? '?'} (een ander rack: ook met de APC of op het scherm)` };
+      }
+      const regel = this.mapping.kies(msg.sig, { shift: false });
+      return { titel, tekst: regel ? `${this._beschrijfActie(regel.action)}. SHIFT = fijn` : 'doet op deze pagina niets' };
+    }
+    const naam = msg.channel === KNOP_KANAAL && msg.type === 'note' ? KNOPPEN[msg.number] : null;
+    const titel = KNOP_LABEL[naam] ?? naam ?? msg.sig;
+    if (naam && UITLEG[naam]) return { titel, tekst: UITLEG[naam] };
+    const regel = this.mapping.kies(msg.sig, { shift: false });
+    const metShift = this.mapping.kies(msg.sig, { shift: true });
+    if (!regel && !metShift) return { titel, tekst: 'doet hier (nog) niets' };
+    let tekst = regel ? this._beschrijfActie(regel.action) : '';
+    if (metShift && metShift !== regel) tekst += `${tekst ? '. ' : ''}SHIFT: ${this._beschrijfActie(metShift.action)}`;
+    return { titel, tekst };
+  }
+
+  _legPadUit(pad) {
+    const titel = `pad ${pad}`;
+    if (this.patroonVast) return { titel, tekst: pad <= PLEKKEN ? `patroonplek ${pad} kiezen op de speeltrack` : 'doet niets zolang PATTERN vastzit (pad 1-5 kiezen een plek)' };
+    if (this.modus === 'secties') return { titel, tekst: `sectie ${this.sectieBlad * STAPPEN + pad} van de focus-track; valt in op de volgende "1"` };
+    if (this.modus === 'stappen') return { titel, tekst: `stap ${this.bladzijde * STAPPEN + pad} van het gekozen patroon aan/uit, met de laatst gespeelde noot` };
+    const speel = this.engine.speeltrack?.() ?? null;
+    const inst = speel ? this.engine.instrumentOp(speel) : null;
+    return { titel, tekst: inst
+      ? `speelt ${nootNaam(PAD_NOOT + pad - 1)} op ${inst.naam} (track ${trackVanDeck(speel)}): zo hard als je slaat, dieper drukken = druk`
+      : 'speelt een noot zodra er een instrument op een track staat (groep, wiel, indrukken)' };
+  }
+
+  /** Een action in gewone taal (ui/apc-beschrijf.js), of de kale naam. */
+  _beschrijfActie(action) {
+    try { return this.beschrijf?.(action)?.lang ?? action; } catch (_) { return action; }
+  }
+
+  // ---- de pagina's Strip en Rack ------------------------------------------------------
+
+  /** De focus-track voor de schermkop: nummer, titel, bpm, toonsoort, resterende tijd, rack. */
+  _djStand() {
+    const id = this.engine.focus ?? null;
+    const nr = id ? trackVanDeck(id) : null;
+    const d = id ? this.engine.deck?.(id) ?? null : null;
+    const metNummer = !!d?.buffer;
+    let rest = null;
+    if (metNummer && Number.isFinite(d.duration) && Number.isFinite(d.position)) {
+      const s = Math.max(0, Math.round(d.duration - d.position));
+      rest = `-${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+    const t = metNummer ? d.toonsoort : null;
+    const bpm = metNummer ? d.bpm : null;
+    return {
+      nr, titel: metNummer ? d.title ?? null : null,
+      wat: metNummer ? 'nummer' : this.engine.instrumentOp?.(id) ? this.engine.instrumentOp(id).naam : 'leeg',
+      bpm: Number.isFinite(bpm) ? komma(bpm.toFixed(1)) : null,
+      toon: t ? [t.camelot, t.kort].filter(Boolean).join(' ') : null,
+      rest,
+      rack: d?.fx?.rackNaam ?? null,
+    };
+  }
+
+  /** De acht knoppen van Strip of Rack voor het scherm: { label, waarde, tekst, bipolair }. */
+  _djKnoppen() {
+    const id = this.engine.focus ?? null;
+    const nr = id ? trackVanDeck(id) : null;
+    if (!nr) return Array.from({ length: 8 }, () => ({ label: null, waarde: null, tekst: null }));
+    if (this.pagina === 'strip') {
+      return STRIP.map((s) => {
+        const w = this.read(`track.${nr}.${s.actie}`);
+        return w === null || w === undefined ? { label: s.label, waarde: null, tekst: null }
+          : { label: s.label, waarde: w, tekst: s.tekst(w), bipolair: !!s.bipolair };
+      });
+    }
+    const fx = this.engine.deck?.(id)?.fx ?? null;
+    return Array.from({ length: 8 }, (_, i) => {
+      const k = i + 1;
+      const label = fx?.plekNaam?.(k) ?? null;
+      const w = label ? this.read(`track.${nr}.fx.knob.${k}`) : null;
+      if (w === null || w === undefined) return { label: null, waarde: null, tekst: null };
+      const bipolair = !!fx?.plekBipolair?.(k);
+      return { label, waarde: w, bipolair, tekst: bipolair ? `${w >= 0.5 ? '+' : ''}${Math.round((w - 0.5) * 200)}%` : procent(w) };
+    });
   }
 
   /**
@@ -434,6 +655,20 @@ export class Maschine extends Emitter {
     const blad = secties ? this.sectieBlad : this.bladzijde;
     knop('stapL', bladen && blad > 0 ? HELDER.half : HELDER.uit);
     knop('stapR', bladen && blad < bladen - 1 ? HELDER.half : HELDER.uit);
+    // Knoppagina's: ◄ ► half als er die kant op een pagina is. CONTROL zacht, fel tijdens de uitleg.
+    const p = PAGINAS.indexOf(this.pagina);
+    knop('browseL', p > 0 ? HELDER.half : HELDER.uit);
+    knop('browseR', p < PAGINAS.length - 1 ? HELDER.half : HELDER.uit);
+    knop('control', this.uitleg ? HELDER.aan : HELDER.beschikbaar);
+    if (this.uitleg) {
+      // Tijdens de uitleg knippert wat iets doet (de groepen houden hun kleur).
+      const fel = Math.floor(nu / KNIPPER_MS) % 2 === 0;
+      for (const naam of KNOPPEN) {
+        if (naam === 'wiel' || naam === 'control' || GROEPEN.includes(naam)) continue;
+        const doetIets = UITLEG[naam] || this.mapping.kies(knopSig(naam), { shift: false }) || this.mapping.kies(knopSig(naam), { shift: true });
+        if (doetIets) knop(naam, fel ? HELDER.aan : HELDER.zacht);
+      }
+    }
     return uit;
   }
 
@@ -441,7 +676,7 @@ export class Maschine extends Emitter {
   stand() {
     const speel = this.engine.speeltrack?.() ?? null;
     const inst = speel ? this.engine.instrumentOp(speel) : null;
-    const knoppen = Array.from({ length: 8 }, (_, i) => {
+    const knoppen = this.pagina !== 'instrument' ? this._djKnoppen() : Array.from({ length: 8 }, (_, i) => {
       const p = inst?.params?.[i];
       if (!p) return { label: null, waarde: null, tekst: null };
       const w = inst.leesParam(i + 1);
@@ -481,6 +716,10 @@ export class Maschine extends Emitter {
       kandidaat: k ? { naam: k.index === 0 ? 'geen' : INSTRUMENTEN[k.index - 1].naam } : null,
       shift: !!this.mapping.shift,
       melding: this.melding && this.melding.tot > nu ? this.melding.tekst : null,
+      pagina: this.pagina, paginaNr: PAGINAS.indexOf(this.pagina), paginas: PAGINAS.length, paginaNaam: PAGINA_NAAM[this.pagina],
+      dj: this.pagina !== 'instrument' ? this._djStand() : null,
+      gedraaid: this.gedraaid && this.gedraaid.tot > nu ? this.gedraaid.k : null,
+      uitleg: this.uitleg ? { titel: this.uitleg.wat?.titel ?? null, tekst: this.uitleg.wat?.tekst ?? null } : null,
     };
   }
 

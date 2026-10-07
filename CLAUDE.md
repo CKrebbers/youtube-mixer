@@ -93,7 +93,7 @@ src/
                     feedback.js     engine-stand -> LED's, met diffing. Leest de mapping.
                     midi-learn.js   action kiezen, control bewegen, gekoppeld
                     noten.js        MIDI-noten (elke ingang behalve de APC) naar het instrument op de speeltrack; knoppen en de schuif (SysEx Master Volume) via een apparaatmapping
-                    maschine.js     de Maschine MK2 via de hub (alleen ?hub=): pads -> noten.js of stappen (STEP), PATTERN, transport, groepen/draaiknoppen (mapping), masterwiel, lampjes, schermen
+                    maschine.js     de Maschine MK2 via de hub (alleen ?hub=): pads -> noten.js of stappen (STEP), PATTERN, transport, groepen/draaiknoppen (mapping), knoppagina's (◄ ►: Instrument/Strip/Rack als open mapje), uitleg (CONTROL), masterwiel, lampjes, schermen
                     maschine-scherm.js  de twee schermen van de Maschine: stand -> 2048 bytes (256×64, 1 bit), eigen 5×7-font. Puur.
                     handelingen.js  het handelingenlog: [t, action, waarde] op de audioklok, per seconde weg
                     terugspelen.js  een log terugspelen: beginstand, dan elke regel op T0 + t
@@ -205,7 +205,7 @@ mappings/
   generic.json      leeg startpunt
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
   xboard49.json     E-MU Xboard49: knop 1–8 -> instrument, 9–16 -> FX, schuif -> fader van de speeltrack (AANNAME, te controleren met een proef)
-  maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn), transport van de patronen ({plek})
+  maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn), transport van de patronen ({plek}); laag pagina.strip / pagina.rack = de knoppagina's van de focus-track
 racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 plannen/
@@ -1563,6 +1563,13 @@ Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag mis
   bladert boven de 16, kleuren uit de read zoals de APC, links op het scherm wat je hoort + een 4×4-raster.
   Eén padmodus tegelijk (STEP, SCENE). De hub in een headless-proef altijd met `opname: false`: de echte
   config heeft een `avondmap`.
+- Knoppagina's en uitleg (`docs/MASCHINE.md` §5c, 7 okt, tak `studio/maschine-dj`): ◄ ► links boven wisselt
+  Instrument · Strip · Rack. De pagina is een open MAPJE voor de mapping (`lagen` in maschine.js), dus wat een
+  knop doet staat in `mappings/maschine-mk2.json` (`"laag": "pagina.strip"`); een nieuwe pagina = regels erbij
+  plus een naam in `PAGINAS`. Strip en Rack werken op de FOCUS-track (Instrument op de speeltrack). Waarden in
+  echte eenheden uit de engine-formules (`eqDb`, `filterDoelen`), nooit zelf een tweede formule. CONTROL
+  vasthouden = uitleg: niets uitvoeren, wel uitleggen (`beschrijf` uit apc-beschrijf.js, meegegeven door
+  speelapparaten.js); het loslaten van wat tijdens de uitleg werd ingedrukt gaat nergens heen.
 - Toetsen: `node test/maschine.test.mjs`, `node test/hub.test.mjs`, en headless
   `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
   HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een
