@@ -414,7 +414,7 @@ APC-indeling (voorstel A):
 
 ## SV. Secties verweven (6 okt, avond; docs/SECTIES.md §7)
 
-De secties zitten nu ook in het toetsenbord, de sampler, het planvenster en het handelingenlog.
+De secties zitten nu ook in het toetsenbord, de sampler, het planvenster, het handelingenlog, de auto-DJ, de vormen en de video-puls, de Controlekamer, de Maschine en de globale laag van de hub.
 Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 
 **Toetsenbord** (speellijst "Secties op het toetsenbord")
@@ -438,8 +438,43 @@ Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 **Planvenster** (speellijst "Planvenster met secties")
 - [ ] **SVP1. Secties berekenen vanuit het planvenster?** 💬 Het venster vraagt alleen kaarten die er al zijn (zonder `maak=1`; anders gaan dertig nummers tegelijk rekenen); een nummer dat nooit geladen is krijgt geen in/uit-keuze. **Advies:** eerst zo; kom je vaak een nummer zonder kaart tegen, dan een knop "secties" per rij (één tegelijk).
 - [ ] **SVP2. In kiezen met een keuzelijst of in de strook?** 👀 Nu een lijst onder "begin" ("3 drop C"). **Advies:** zo; klikken op een band als de lijst te klein of te traag voelt.
-- [ ] **SVP3. Uit en duur samen: welke wint?** 🎧 Kies je een uit, dan blijft een ingevulde duur staan; de planner beslist. **Advies:** uit wint, de duur is alleen de terugval zonder kaart (zoals `van` bij `in`).
-- [ ] **SVP4. Strook altijd waar de auto-DJ de overgang echt begint?** 👀 Nu alleen bij een stap met uit; zonder uit de oude schatting (eind van het stuk), terwijl de automaat op een frasegrens begint (tot 16 maten eerder). **Advies:** ja, na samenvoegen met sec-auto (één regel in tijdlijn.js + de vaste test bijwerken).
+- [ ] **SVP3. Uit en duur samen: welke wint?** 🎧 Nu is de duur de grens: een uit telt alleen als de overgang vóór het einde van de duur past; anders kiest de auto-DJ zelf (outro, break, frasegrens). Het venster maakt zo'n uit niet oranje; je ziet het alleen doordat de overgang in de strook ergens anders begint. **Advies:** uit wint en de duur wordt alleen de terugval zonder kaart; dan moet het venster bij een gekozen uit de duur leeg laten of verlengen.
+- [x] **SVP4. Strook altijd waar de auto-DJ de overgang echt begint?** 👀 — gedaan 6 okt (avond): de strook toont het moment van de planner (`momentArgs`, dezelfde regel als de automaat), ook zonder uit. Een blend begint daardoor tot 16 maten eerder dan de oude tekening.
+
+
+**Auto-DJ** (speellijst "Auto-DJ met secties")
+- [ ] **SVA1. Uitmixen op de outro.** 👂 Met een sectiekaart op een zeker grid begint de overgang waar de outro van de uitgaande begint (als hij daar nog vóór het eind past), niet meer op een veelvoud van 16 maten vanaf het anker (vaak midden in de laatste drop); de nieuwe begint op zijn intro. **Advies:** zo laten; zeg het als hij bij een lange outro te vroeg weggaat.
+- [ ] **SVA2. Past de outro niet: de laatste break.** 👂 Volgorde: de laatste break binnen 32 maten van het eind → het oude moment als dat niet in een drop valt → het begin van iets anders dan een drop → het begin van een drop. **Advies:** proberen; is de break te vroeg, dan het venster naar 16 maten.
+- [ ] **SVA3. Secties ook bij beatloos overvloeien op een onzeker grid?** 💬 Nu alleen op een zeker grid; in jouw library (overvloeien is de hoofdroute) doen ze bij het uitmixen dus bijna niets. **Advies:** ja, maar pas als SE2 laat zien dat de grenzen op onzekere grids kloppen.
+- [ ] **SVA4. langer en nu naar de volgende sectiegrens?** 🎛 langer = volgende grens binnen 16 maten (anders 8), nu = volgende grens binnen 8 maten (anders de eerstvolgende 4); beatloos blijft nu meteen. **Advies:** zo laten.
+- [ ] **SVA5. Een sectie drukken terwijl de volgende klaarstaat.** 🎛 Op wat nu klinkt: springt hij echt, dan plant hij opnieuw vanaf de nieuwe plek (geen overname); past de overgang daar niet meer vóór het einde, dan loopt hij vanaf waar je bent, zoals na een seek. Een druk die niets doet (geen sectie, loop om de sectie waar je al bent) verandert niets. Op de klaarstaande track: overname, zoals seek en hotcue. Alternatief: die sectie wordt het nieuwe beginpunt en de automaat mixt door. **Advies:** zo laten; het alternatief als je het mist.
+
+
+**Controlekamer** (speellijst "Avond 1 · Secties")
+- [ ] **SVC1. Secties meteen na het binnenhalen uitrekenen?** 💬 Nu krijgt een nieuw nummer pas secties als je het laadt (het laden wacht dan ~0,3–1 s op de server) of na een herstart van de server (de achtergrond). Tot dan staat het in de Controlekamer als "nog zonder". Na een split in stems of een ander grid staat de kaart als "verouderd" tot je het nummer laadt. Meteen rekenen, achter grid en toonsoort in de worker, kost de server ~1 s per nummer terwijl je mixt. **Advies:** ja, na het binnenhalen en na een split; dan hoeft het laden nooit te wachten.
+
+**Maschine** (speellijst "Secties op de Maschine")
+- [ ] **SVM1. De pads in de modus secties zijn de secties van de FOCUS-track?** 🎛 Groep A–H kiest de track, net als Track Select op de APC (SE3). De speeltrack kan niet: die heeft altijd een instrument en dus geen secties. **Advies:** zo laten.
+- [ ] **SVM2. Kleuren zoals op de APC: wit = die hoor je, donker hemelsblauw = er is een sectie, uit = geen?** 👀 De Maschine kan niet knipperen op de tel. De sectie waar je heen springt licht pas op bij de "1"; tot dan zegt het scherm "op de 1: …". **Advies:** eerst zo. Groepskleuren volgen SE4, dan op beide controllers tegelijk.
+- [ ] **SVM3. SHIFT + pad = die sectie als loop, zoals op de APC?** 💬 Niet gebouwd (niet gevraagd). De action `track.N.section.K.loop` bestaat al op de bus. **Advies:** ja, als je het op de APC gebruikt; het is een kleine stap.
+- [ ] **SVM4. Meer dan 16 secties: bladeren met ◄ ► (transport)?** 🎛 Bij een andere focus-track begint hij op de bladzijde met de sectie die je hoort; daarna loopt de bladzijde niet mee, dus de pads verspringen nooit onder je vingers. De kop noemt altijd wat je hoort, ook boven de 40. **Advies:** zo laten.
+- [ ] **SVM5. Het linkerscherm: de namen in een raster zoals de pads liggen, de sectie die je hoort omgekeerd, de kop groot?** 👀 Letters 5×7 in kolommen van 64 px; een naam is hooguit 8 tekens ("opbouw B"). **Advies:** op het echte toestel kijken; is het te klein, dan minder tekst en grotere letters.
+
+
+**In beeld** (speellijst "Secties in beeld")
+- [ ] **SVV1. De video-puls slaat op een nieuwe sectie vol, ook als je de puls zacht hebt staan: goed zo?** 👀 Het accent komt op de puls die er al is: het gekozen doel gaat op elke nieuwe sectie VOL, wat de diepte ook is; alleen met de puls aan (PULS op 0 = ook geen accent). Bij doel flits is dat een witte flits op de grens. Bij pixel, spiegel en korrel is het bij elke grens het volle effect, ook met PULS op 0,01, en de hub-macro `macro.beweging` (K4 = PULS) geeft op een lage stand al volle flitsen of effecten op elke grens. Geen nieuw puls-doel en geen nieuwe knop (de doelen lopen rond in het handelingenlog). Alternatieven: (a) zo laten; (b) vol alleen bij flits, bij de effecten met de diepte mee (bv. 3 × de diepte); (c) een schakelaar "puls op: tel · sectie · beide" (één knop, als stand in het log). **Advies:** (b). Probeer eerst doel flits met de puls laag, en zeg wat je bij pixel ziet.
+- [ ] **SVV2. Hoe lang gloeit een nieuwe sectie na?** 👀 Als een klap, maar twee keer zo lang: vol op de grens, na 0,3 s nog 22 %, na ~1,8 s weg (`NIEUW_TAU` 0,2 s). Dezelfde vorm voor de vormlaag (bron "nieuwe sectie") en de video-puls. Niet op de beamer bekeken. **Advies:** zo laten, tenzij de flits te kort is om op de beamer te zien; dan 0,3–0,5 s (één getal).
+- [ ] **SVV3. Sectie-energie als bron: springen op de grens, glijden bij een wissel?** 👀 De vorm krijgt de energie van de sectie die je hoort (0..1 binnen het nummer, van de server). Op een grens, een sectiesprong of een loop springt hij mee. Neemt een andere track de maat over of komt de kaart later binnen, dan glijdt hij in ~0,75 s naar de nieuwe waarde. Valt de maatgever weg, dan blijft de energie eerst 0,5 s staan (een cut in de mix) en glijdt dan in ~1,5 s naar 0. **Advies:** zo proberen. Kloppen de stappen niet met wat je hoort, dan ligt het waarschijnlijk aan de energie per sectie (SE2).
+- [ ] **SVV4. Op een nieuwe sectie ook de mengvorm wisselen?** 💬 Niet gebouwd: het verandert een stand die in het log staat (`video.mode`), en elke grens zou de mengvorm één plek doorschuiven. **Advies:** eerst de flits; wil je het, dan als eigen schakelaar.
+- [ ] **SVV5. Een korte loop of stutter op een sectiebegin: één accent?** 👀 Gekozen (7 okt): het rondgaan van een loop korter dan een maat, en hetzelfde sectiebegin binnen een maat (hotcue- of pad-stutter), is geen nieuwe sectie, in beeld én in de hub. Een sectie-loop (≥ 1 maat) klapt elke ronde. **Advies:** op de beamer kijken; mis je de flits per rondgang bij een korte loop, zeg het.
+- [ ] **SVV6. Energie vasthouden bij een cut?** 👀 Gekozen (7 okt): korter dan 0,5 s geen maatgever (een cut met de fader of crossfader) houdt de energie vast, in beeld en in de hub; daarna glijdt hij naar 0. **Advies:** proberen; is een halve seconde te kort of te lang, één getal (`HOUD`).
+
+
+**Hub** (speellijst "Secties naar de hub"; AV-app-hub PROTOCOL.md §18)
+- [ ] **SVH1. Een nieuw nummer: een klap of niet?** 👀 Stopt A en start B op zijn cue op een sectiebegin, dan een klap (dat is starten). Neemt een nummer dat al speelde de maat over in een mix, dan geen klap; label en energie gaan wel mee, en de volgende grens in dat nummer klapt wel. Spelen vanaf het begin van een nummer en een hotcue midden in een sectie geven geen klap (zoals in beeld). **Advies:** zo laten: een overname valt op de hysterese, niet op een "1".
+- [ ] **SVH2. Pauze: label laten staan?** 💬 Het label blijft staan met energie 0 ("drop, 0"). Energie 0 is ook een intro (de energie is relatief binnen het nummer): een beeld-app ziet geen verschil tussen pauze en intro. **Advies:** zo laten tot een beeld-app het verschil nodig heeft; anders een label `stil`.
+- [ ] **SVH3. Hoe vaak mag de hub een nieuwe sectie krijgen?** 💬 Gekozen (7 okt): hooguit één per seconde (vangnet in hub.js), en alles samen hooguit 10 per seconde in een schuivend venster waarin de `nieuw` meetelt; de `nieuw` gaat altijd meteen, gewone berichten wachten. **Advies:** zo laten.
+- [ ] **SVH4. Welke energie draagt een nieuwe sectie?** 💬 Gekozen (7 okt): die van de sectie zelf (het doel), niet die van het glijden; daarna glijdt de hub-energie niet van onderen op. **Advies:** zo laten.
 
 ## BE. Beeld: VARVE stuurt de Stroommachine (6 okt, docs/BEELD.md, tak `studio/beeld`)
 

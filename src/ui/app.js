@@ -225,8 +225,10 @@ attachKeyboard(engine, { onHelp: toggleHelp, venster: (v) => staat.venster[v] })
 const lagen = new Lagen({ beschikbaar: (groep, laag) => groep === 'device' && laag === 'inst' && !!engine.instrumentOp(engine.focus) });
 bindLagen(lagen);
 window.lagen = lagen;
-// AV-app-hub: alleen met ?hub=ws://… wordt hub.js geladen (zie hierboven).
-const hub = hubUrl ? { url: hubUrl, HubMidi: (await import('../control/hub.js')).HubMidi } : null;
+// AV-app-hub: alleen met ?hub=ws://… wordt hub.js geladen (zie hierboven). De sectie
+// van de maatgever die je hoort gaat naar de globale laag (PROTOCOL §18, engineSecties).
+const hubJs = hubUrl ? await import('../control/hub.js') : null;
+const hub = hubJs ? { url: hubUrl, HubMidi: hubJs.HubMidi, secties: hubJs.engineSecties(engine, DECK_IDS) } : null;
 const midiDelen = opzetMidi({ engine, sluitOnderpanelen: onderpanelen.sluitOnderpanelen, lagen, hub,
   geraakt: (sig, regelSig) => spiegel.markeer(sig, regelSig) });
 spiegel.koppel({ mapping: midiDelen.mapping, lagen });

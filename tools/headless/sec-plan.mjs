@@ -185,13 +185,14 @@ async function doorloop() {
   ok(`uit van twee: alleen secties na in (${optiesUit.slice(1).join(',')})`, optiesUit.slice(1).join() === '4,5');
   await kiesIn(0, '.pl-uit', 4);
   const s1 = await ev("window.varvePlanVenster.plan.stappen[0]");
-  ok('uit van een = sectie 4 (break D)', s1.uit?.sectie === 4 && s1.uit.label === 'break' && s1.uit.groep === 'D' && !s1.in);
+  ok(`uit van een = sectie 4 (break D), met de tijd van de sectie (van ${s1.uit?.van?.toFixed(2)} s)`, s1.uit?.sectie === 4 && s1.uit.label === 'break' && s1.uit.groep === 'D' && !s1.in
+    && Math.abs(s1.uit.van - KAARTEN.een.stukken[3].van) < 1e-9);
   ok(`de rij toont het: "${await ev(`${rij(0)}.querySelector('.pl-titel small').textContent`)}"`,
     await ev(`${rij(0)}.querySelector('.pl-uit').value === '4' && /uit 4 break D/.test(${rij(0)}.querySelector('.pl-titel small').textContent)`));
   const na = await ev('window.varvePlanVenster.v.stappen.map((r) => r.start)');
   const moment = await ev('window.varvePlanVenster.v.stappen[1].moment');
-  ok(`met uit volgt de strook het moment van de planner (twee begint op ${na[1].toFixed(1)} s in de set, was ${voor[1].toFixed(1)}; moment ${moment?.start?.toFixed(1)} s)`,
-    !!moment && Math.abs(na[1] - moment.start) < 1e-6);
+  ok(`met uit begint de overgang op break D en de strook volgt (twee begint op ${na[1].toFixed(1)} s in de set, was ${voor[1].toFixed(1)}; moment ${moment?.start?.toFixed(1)} s op ${moment?.sectie?.label})`,
+    !!moment && moment.sectie?.label === 'break' && Math.abs(moment.start - KAARTEN.een.stukken[3].van) < 1e-6 && Math.abs(na[1] - moment.start) < 1e-6);
   ok('witte strepen op de gekozen in en uit', await ev(`(() => { const c = document.querySelector('.pl-strook canvas'), g = c.getContext('2d');
     const r = window.varvePlanVenster.v.stappen[0], tot = Math.max(1, window.varvePlanVenster.v.totaal), w = c.clientWidth;
     const t = window.varvePlanVenster.secties.get('een').stukken[3].van, x = Math.round(10 + ((r.start + t - r.van) / tot) * (w - 20));
@@ -204,7 +205,7 @@ async function doorloop() {
   ok('opgeslagen', await tot("document.querySelector('.pl-status').textContent === 'opgeslagen'"));
   const schijf = opSchijf();
   ok('op schijf: in en uit, en van = het begin van de drop', schijf.stappen[1].in?.sectie === 3 && Math.abs(schijf.stappen[1].van - beginDrop) < 1e-9
-    && schijf.stappen[0].uit?.sectie === 4 && !schijf.stappen[2].in && !schijf.stappen[2].uit);
+    && schijf.stappen[0].uit?.sectie === 4 && Math.abs(schijf.stappen[0].uit.van - KAARTEN.een.stukken[3].van) < 1e-9 && !schijf.stappen[2].in && !schijf.stappen[2].uit);
   ok('de PUT zegt dat het venster in/uit kent', await ev("window.__bodies.some((b) => JSON.stringify(b.kent) === JSON.stringify(['in', 'uit']))"));
   await cdp('Page.reload');
   ok('herladen', await tot("window.varvePlanVenster && document.querySelectorAll('.pl-rij').length === 3 && window.varvePlanVenster.secties.get('twee')", 15000));

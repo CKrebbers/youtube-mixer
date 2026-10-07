@@ -19,9 +19,9 @@ golfvorm, als grid-modus SECTIES op de APC, tests groen. Daarna: Clay probeert.
 - [x] Docs: `docs/SECTIES.md`, CLAUDE.md, ROADMAP 28, HANDOFF, VRAGEN blok SE, speellijst blok Secties
 
 ## Open (Clay)
-- [ ] `git push -u origin studio/secties` op de Mac (de sessie kon niet bij GitHub)
+- [x] `git push -u origin studio/secties` (staat op GitHub)
 - [ ] Speellijst blok "Avond 1 · Secties" op de APC, dan VRAGEN SE1–SE6
-- [ ] Na het oordeel: samenvoegen in `studio/integratie`
+- [x] Samenvoegen in `studio/integratie` (gebeurd vóór het verweven, 6 okt)
 
 ## Gevonden, niet gedaan
 - [ ] De ingest legde de "1" van het synthetische nummer een tel te vroeg: de secties volgen het grid (SECTIES.md §2)
@@ -133,8 +133,13 @@ wachten → RACE in de automaat en bij terugspelen.
 | log | `studio/sec-log` | 4 (handelingen, terugspelen, logboek, laden bij terugspelen) | 8905/9505 |
 | toets | `studio/sec-toets` | 5 (keyboard, helpkaart) | 8907/9507 |
 | sampler | `studio/sec-sampler` | 6 (sampler, action, opslag) | 8909/9509 |
+| vorm (KAN) | `studio/sec-vorm` | 7, 8 (vormbronnen, accent op de video-puls, `SectieLezer`) | 8911/9511 |
+| controle (KAN) | `studio/sec-controle` | 10 (`sectieTelling`, `/api/secties`, de tegel) | 8913/9513 |
+| maschine (KAN) | `studio/sec-maschine` | 9 (SCENE, scherm; loop-reparaties in deck.js) | 8915/9515, hub 7715 |
+| hub (KAN) | AV-app-hub `claude/sectie-globaal` (PR #15) | 11, de hub-kant: PROTOCOL.md §18 | — |
+| sec-hub (KAN) | `studio/sec-hub` | 11, de Varve-kant: `levert: ['sectie']` in hub.js | 8921/9521, hub 7721 |
 
-Daarna, als er tijd is: vormen/router (7), Controlekamer (10), video (8), Maschine (9), AV-app-hub (11).
+Daarna, als er tijd is: vormen/router (7), Controlekamer (10), video (8), Maschine (9), AV-app-hub (11). Alle vijf zijn gedaan.
 
 ## Contract tussen de sporen auto en plan
 
@@ -150,9 +155,45 @@ Daarna, als er tijd is: vormen/router (7), Controlekamer (10), video (8), Maschi
     - `uit` = het library-nummer van de uitgaande (dan `kenmerken(uit, t)`, bpm × rate) of `(t) => kenmerken op t`; `inn` = `kenmerken(nieuwNummer, zijnVan)`;
     - `kaart` = de sectiekaart van de UITGAANDE (JSON of SectieKaart; alleen `opGrid` telt); `uitSectie` = `uit` van de stap die nu klinkt.
     - Zonder `uit`/`inn` geen `mag` (de bewakers): dan kan het venster een sectie voorspellen die de automaat weigert.
-  - **Terugvinden** (`vindSectie`, review 7 okt): kandidaten = de stukken met dezelfde label en groep; daarvan het stuk het dichtst bij de tijd van toen (`van` uit de stap voor `in`, of `van` in de verwijzing zelf), anders bij waar stuk K nu begint. Met een tijd: alleen binnen 30 s (`SECTIE_SPELING`), anders telt die tijd. **Aanrader voor het spoor plan:** zet in `uit` ook `van` (het begin van die sectie bij het plannen); in `in` is `van` van de stap al genoeg.
+  - **Terugvinden** (`vindSectie`, review 7 okt): kandidaten = de stukken met dezelfde label en groep; daarvan het stuk het dichtst bij de tijd van toen (`van` uit de stap voor `in`, of `van` in de verwijzing zelf), anders bij waar stuk K nu begint. Met een tijd: alleen binnen 30 s (`SECTIE_SPELING`), anders telt die tijd. In `uit` staat sinds het vervolg van spoor plan ook `van` (het begin van die sectie bij het plannen; optioneel, het venster zet hem, `sectieRef` in automaat.js geeft hem door); in `in` is `van` van de stap genoeg.
   - `in` telt alleen met nog minstens 60 s (`MIN_FRAGMENT`, of de kortere speelduur) tot het eind; `uit` alleen als de overgang tussen "vroegst" en het einde van het fragment past.
 - **Wie wat bouwt:**
   - auto: de planner en de automaat, die de velden uit de stap meegeeft.
   - plan: `plan-model` (`normaliseerPlan`, `pak`, `verschil`), het venster, `tijdlijn.voorspel` (geeft de parameters door), en `vervangPlan` `zelfde` in de automaat.
 - **Volgorde van samenvoegen:** auto vóór plan.
+
+## Gedaan (verweven, 6 okt avond)
+
+Elk spoor: bouwer → reviewer (fouten, geen stijl) → verwerker, elke wijziging met een test die
+eerst faalde, één voor één samengevoegd met de volledige suite en de headless-proeven ertussen.
+Eindstand staat in HANDOFF.
+
+- [x] toets: shift+W/E en shift+I/O, helpkaart; marges `sectieEen`/`SectieKaart.index` (afronding van de server)
+- [x] sampler: rij 3 = de hele sectie in een pad, start op de "1", grens 32 maten/90 s, onzeker grid geweigerd
+- [x] plan: `in`/`uit` per stap (`van` in `uit`), `herstelSecties` + `kent`, banden in de strook, strepen bovenop,
+      `voorspel` met `momentArgs` (de strook = het moment van de automaat, ook zonder uit)
+- [x] log: de kaart in de stand en als gebeurtenis, `van` bij een sectiedruk, precies terugspelen, volgorde
+- [x] auto: in op intro/sectiegrens, uit op outro/break, bewakers boven alles, wachten op de kaart begrensd,
+      `vindSectie` (label+groep, dicht bij de tijd van toen), OVERNEEM alleen bij een echte sprong
+- [x] vorm (KAN): `sectie.energie`, `sectie.nieuw`, accent op de video-puls, `SectieLezer` zonder afval
+- [x] controle (KAN): "secties: N nog zonder · M verouderd" in de servertegel, cache per rij
+- [x] maschine (KAN): SCENE = secties van de focus-track; `sectieHier` en `sectieOpDeMaat` kloppen in een loop
+- [x] hub (KAN): PROTOCOL.md §18 in AV-app-hub (PR #15, gemerged met groene CI); Varve-kant op `studio/sec-hub`
+- [x] Docs: SECTIES.md §6/§7, CLAUDE.md "Secties", VRAGEN blok SV, speellijstblokken, HANDOFF, ROADMAP 28
+
+## Gevonden onderweg (verweven)
+- `controle.test` controleerde alleen vraagcodes van 1–2 letters (SVT1 glipte erdoor): nu 1–3.
+- Headless-proeven zonder `VARVE_PATRONEN` lazen en schreven `patronen/` van de worktree; in `sintegratie` is dat
+  de map van de echte mixer. De eindronde (7 okt 01:32, `hub.mjs`) zette daar één knop van instrument 1 van 0,5
+  op 0,503; teruggezet uit `.versies/` (bytes gelijk). Nu zetten ALLE headless-proeven een eigen patronen- en
+  plannenmap. Niet van mij te herleiden: 13 schrijfacties op 6 okt 22:31–22:32 (instrument 1 schaal → drums,
+  noten op stap 5–7); Clay's set van daarvóór staat in `patronen/.versies/set/2026-10-06T20-31-07-…json`.
+- `tools/headless/speelapparaten.mjs` en `hub.mjs` startten de hub zonder `opname: false` en namen op in
+  `~/Movies/varve-avonden` (zes mapjes van 8 KB, 5 okt 09:54 en 6 okt 14:18): nu niet meer.
+- `vorm-maat.mjs` was al rood (limiter-vooruitblik), `tools/headless/plan.mjs` faalde door een meldingstimer:
+  beide gerepareerd.
+- `fxKlok()` tijdens een geplande keylock-sprong (~95 ms) wijst tot 70 s vooruit: al vóór dit werk, de echte
+  reparatie hoort in fxKlok/StreamBron (sampler begrenst het voor sectie-pads).
+- De server labelt in het synthetische nummer met nep-stems het couplet "drop" en de break "deel": de keuzes
+  van de auto-DJ hangen aan labels die nog een gok zijn (SE2).
+

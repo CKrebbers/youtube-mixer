@@ -27,14 +27,15 @@ import { uitgangsVertraging } from '../engine/hoorbaar.js';
  * @param geraakt  (sig, regelSig) -> void: een control op de controller is
  *                 aangeraakt en deed iets. De spiegel op het scherm licht dan
  *                 het bijbehorende element even op.
- * @param hub      null, of { url, HubMidi } met ?hub= (app.js): dan is de APC
+ * @param hub      null, of { url, HubMidi, secties } met ?hub= (app.js): dan is de APC
  *                 van de AV-app-hub: geen Web MIDI, en de lock beslist niets over MIDI.
+ *                 `secties` (engineSecties) = de sectie naar de hub (PROTOCOL §18).
  */
 export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null, hub = null }) {
   const DEVICES = [apc40mk2, generic];   // generic matcht alles, dus als laatste
   const pickDevice = (naam) => DEVICES.find((d) => d.match.test(naam || '')) || generic;
 
-  const midi = hub ? new hub.HubMidi({ url: hub.url, invoke, read: readAction }) : new MidiHub();
+  const midi = hub ? new hub.HubMidi({ url: hub.url, invoke, read: readAction, secties: hub.secties ?? null }) : new MidiHub();
   /*
    * Maar één VARVE-tabblad praat met de APC (tabblad.js, Web Lock). Een tweede
    * tabblad vraagt helemaal GEEN MIDI-toegang aan: dan kan het ook niets

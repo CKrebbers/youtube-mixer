@@ -17,6 +17,10 @@
  *            vol, voorbij de lengte = niets), een streep onder de stap die je
  *            hoort, en stap/lengte, noot, speelt/wacht, REC
  *   PATTERN vast (links): de vijf plekken, de gekozen onderstreept
+ *   SECTIES (links, SCENE): kop = de focus-track en de sectie die je hoort
+ *            ("T4 5 opbouw B"); daaronder de namen van de 16 pads ZOALS ZE
+ *            LIGGEN (pad 1 linksonder, 13–16 bovenaan), die je hoort of
+ *            indrukt omgekeerd (wit vlak); onderaan wat er op de "1" komt
  *
  * Het lettertype is een klassiek 5×7-font (kolom voor kolom, onderste bit =
  * bovenste pixel), ASCII 32–126 plus ±. Wat er niet in staat wordt eerst
@@ -73,6 +77,11 @@ export function zetPixel(buf, x, y) {
   buf[32 * y + (x >> 3)] |= 0x80 >> (x & 7);
 }
 
+export function wisPixel(buf, x, y) {
+  if (x < 0 || y < 0 || x >= BREED || y >= HOOG) return;
+  buf[32 * y + (x >> 3)] &= ~(0x80 >> (x & 7));
+}
+
 /** Staat pixel (x, y) aan? (voor de tests en wie het scherm wil nalezen) */
 export const leesPixel = (buf, x, y) => (x < 0 || y < 0 || x >= BREED || y >= HOOG ? false : (buf[32 * y + (x >> 3)] & (0x80 >> (x & 7))) !== 0);
 
@@ -82,15 +91,16 @@ export const tekstBreedte = (tekst, schaal = 1) => {
   return n ? (n * STAP - 1) * schaal : 0;
 };
 
-/** Tekst op (x, y) = linksboven van de eerste letter. Geeft de x ná de tekst. */
-export function tekst(buf, x, y, s, schaal = 1) {
+/** Tekst op (x, y) = linksboven van de eerste letter. Geeft de x ná de tekst. `wis`: de letters uit (op een vol vlak). */
+export function tekst(buf, x, y, s, schaal = 1, wis = false) {
+  const pixel = wis ? wisPixel : zetPixel;
   let cx = x;
   for (const t of normaliseer(s)) {
     const g = glyph(t);
     for (let k = 0; k < LETTER_B; k++) {
       for (let r = 0; r < LETTER_H; r++) {
         if (!(g[k] & (1 << r))) continue;
-        for (let dx = 0; dx < schaal; dx++) for (let dy = 0; dy < schaal; dy++) zetPixel(buf, cx + k * schaal + dx, y + r * schaal + dy);
+        for (let dx = 0; dx < schaal; dx++) for (let dy = 0; dy < schaal; dy++) pixel(buf, cx + k * schaal + dx, y + r * schaal + dy);
       }
     }
     cx += STAP * schaal;
@@ -154,6 +164,22 @@ function tekenPlekken(buf, p) {
 }
 
 /**
+ * Modus secties, het linkerscherm (onder de kop): de naam per pad in een raster
+ * van 4 × 4 zoals de pads liggen (pad 1 linksonder, rij van onder naar boven),
+ * een kolom van 64 px per pad, rijen van 8 px. Brandt een pad (die hoor je of
+ * drukt je in), dan staat zijn naam omgekeerd: een vol vlak met de letters uit.
+ */
+function tekenSecties(buf, c) {
+  for (let i = 0; i < 16; i++) {
+    const naam = c.namen?.[i];
+    if (naam === null || naam === undefined) continue;
+    const x = (i % 4) * KOLOM, y = 20 + (3 - Math.floor(i / 4)) * 8;
+    if (c.aan?.[i]) { vul(buf, x, y - 1, KOLOM - 1, 9); tekst(buf, x + 2, y, pasIn(naam), 1, true); }
+    else tekst(buf, x + 2, y, pasIn(naam));
+  }
+}
+
+/**
  * Een tekst die in `max` letters moet passen (1×): eerst zonder spatie vóór een
  * eenheid ("1,2 kHz" -> "1,2kHz"), lange woorden korter ("halve tonen" -> "ht"),
  * dan afkappen op een woordgrens, en pas daarna midden in een woord.
@@ -184,6 +210,8 @@ function kop(buf, x, y, s, px) {
  *   kandidaat: { naam } | null        het masterwiel staat op een ander instrument (nog niet gezet)
  *   shift:     boolean
  *   melding:   string | null          een korte regel onderaan (rechts), bv. "druk nog eens"
+ *   modus:     'spelen' | 'stappen' | 'secties'
+ *   secties:   { nr, wat, aantal, blad, bladen, namen[16], aan[16], hoort, naar } | null   (modus secties, maschine.js)
  * }
  * @param nr 0 = links (knop 1–4), 1 = rechts (knop 5–8)
  * @returns Uint8Array(2048)
@@ -201,6 +229,20 @@ export function tekenScherm(stand, nr) {
     lijn(buf, 0, BREED - 1, 53, true);
     const onder = s.melding || (s.patroonVast ? 'pad 1-5 = kiezen, PLAY = starten'
       : p.bladzijden > 1 ? `< > blad ${p.bladzijde + 1}/${p.bladzijden}, SHIFT < > lengte` : 'pad = stap, SHIFT < > = lengte');
+    tekst(buf, 2, 56, pasIn(onder, Math.floor((BREED - 4) / STAP)));
+    return buf;
+  }
+  // Links in de modus secties (SCENE): de focus-track en zijn secties in plaats van knop 1–4.
+  if (nr === 0 && s.modus === 'secties' && s.secties && !s.patroonVast) {
+    const c = s.secties;
+    kop(buf, 2, 1, c.aantal ? `T${c.nr} ${c.hoort ?? ''}`
+      : `T${c.nr} ${c.wat === 'nummer' ? 'nog geen secties' : c.wat === 'leeg' ? 'leeg' : `${c.wat}: geen nummer`}`, BREED - 4);
+    lijn(buf, 0, BREED - 1, 17);
+    tekenSecties(buf, c);
+    lijn(buf, 0, BREED - 1, 53, true);
+    const onder = c.naar ? `op de 1: ${c.naar}`
+      : !c.aantal ? (c.wat === 'nummer' ? 'de secties komen na het laden' : 'secties horen bij een nummer: groep A-H')
+      : c.bladen > 1 ? `pad = sectie op de 1, < > blad ${c.blad + 1}/${c.bladen}` : 'pad = sectie, valt in op de 1';
     tekst(buf, 2, 56, pasIn(onder, Math.floor((BREED - 4) / STAP)));
     return buf;
   }

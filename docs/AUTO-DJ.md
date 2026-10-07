@@ -218,7 +218,10 @@ vragen tegelijk rekent de server één keer):
   plande opnieuw toen hij binnenkwam, en de nieuwe viel in op de outro (~139,7 s).
 
 **Clay springt.** Een sectie, sectie-loop, volgende of vorige op een track in
-de overgang = overgenomen (OVERNEEM). Op de track die nu klinkt terwijl de
+de overgang = overgenomen (OVERNEEM), maar alleen als die sectie daar bestaat:
+een pad zonder sectie (op de Maschine bij 7 secties 9 van de 16 pads), een
+track zonder kaart of volgende/vorige aan het eind springt niet en telt dus
+niet (`sectieSpringt`, review spoor maschine). Op de track die nu klinkt terwijl de
 volgende klaarstaat is het geen overnemen. Sprong de positie echt (de bus hoort
 de druk vóór de sprong; bij de volgende tik vergelijkt hij de positie met
 gewoon doorspelen, > 0,1 s ernaast = een sprong), dan plant hij opnieuw. Een

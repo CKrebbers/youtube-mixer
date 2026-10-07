@@ -37,6 +37,24 @@ const ZELF = Symbol('auto');
 const OVERNEEM = /^track\.(\d)\.(fader|low|mid|high|filter|play|play\.quant|sync|seek|tempo|pitch|send\.[ab]|kill\.\w+(\.hold)?|stem\.(vocals|inst|drums|bass|other)(\.(kill|hold|filter|send\.[ab]))?|brake|cue|hotcue\.\d|section\.(\d+(\.loop)?|next|prev))$/;
 /** Een sectiesprong (docs/SECTIES.md): op de track die nu klinkt verspringt de positie, dus opnieuw plannen. */
 const SECTIE = /^track\.\d\.section\./;
+
+/**
+ * Springt deze sectie-action echt op deck `d`? Een pad zonder sectie (op de
+ * Maschine bij 7 secties 9 van de 16 pads), een track zonder kaart, of
+ * volgende/vorige aan het eind: de bus meldt alleen waarom niet, er springt
+ * niets. Dan is het geen overname en geen nieuwe planning. (De luisteraar op
+ * de bus hoort de druk vóór de action, en vóór die melding.)
+ */
+function sectieSpringt(d, id) {
+  const k = d?.buffer ? d.sectieKaart : null;
+  const m = k ? /\.section\.(\d+|next|prev)/.exec(id) : null;
+  if (!m) return false;
+  if (m[1] === 'next' || m[1] === 'prev') {
+    const i = d.sectieOpDeMaat + (m[1] === 'next' ? 1 : -1);
+    return i >= 0 && i < k.aantal;
+  }
+  return Number(m[1]) <= k.aantal;
+}
 /** Zo lang (ms) wacht het klaarzetten op de sectiekaart van de nieuwe (laden.js haalt hem pas NA het laden). */
 const WACHT_SECTIES = 3000;
 /** "nu" en "langer" mogen naar de volgende sectiegrens als die binnen zoveel maten komt (beatloos: seconden). */
@@ -237,7 +255,8 @@ export class Automaat extends Emitter {
   _bijBus(id) {
     if (this._zelf || !this.aan) return;
     const m = OVERNEEM.exec(id);
-    const deck = m ? deckVanNr(Number(m[1])) : null;
+    let deck = m ? deckVanNr(Number(m[1])) : null;
+    if (deck && SECTIE.test(id) && !sectieSpringt(this.engine.deck(deck), id)) deck = null;
     const raakt = deck && (deck === this.hoofd || deck === this.volgende?.deckId);
     // Een sectiedruk op wat nu klinkt terwijl de volgende klaarstaat: springt
     // de positie echt (_klaar kijkt bij de volgende tik; de bus hoort de druk
@@ -766,13 +785,16 @@ export class Automaat extends Emitter {
 
 /**
  * Een sectieverwijzing uit een planstap (`in` / `uit`, het spoor plan):
- * { sectie: K (vanaf 1), label?, groep? }, defensief gelezen. Anders null.
+ * { sectie: K (vanaf 1), label?, groep?, van? }, defensief gelezen. Anders null.
+ * `van` = waar die sectie begon bij het plannen: vindSectie kiest daarmee de
+ * goede als een label na een herberekening vaker voorkomt.
  */
 function sectieRef(x) {
   if (!x || typeof x !== 'object') return null;
   const sectie = Number.isInteger(x.sectie) && x.sectie >= 1 ? x.sectie : null;
   const label = typeof x.label === 'string' ? x.label : null, groep = typeof x.groep === 'string' ? x.groep : null;
-  return sectie || label || groep ? { sectie, label, groep } : null;
+  const van = eindig(x.van) && x.van >= 0 ? { van: x.van } : {};
+  return sectie || label || groep ? { sectie, label, groep, ...van } : null;
 }
 
 /** Wat een sectiekaart voor het moment betekent (op het grid? waar, wat): om "dezelfde kaart opnieuw" te herkennen. */

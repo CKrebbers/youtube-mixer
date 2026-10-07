@@ -4,11 +4,13 @@ import { LOCK_NAAM } from '../ui/tabblad.js';
 import { stemsTegel } from '../ui/stems-weergave.js';
 import { beeldTegel } from '../ui/beeld-weergave.js';
 import { backupTegel } from './backup-tegel.js';
+import { serverTegel } from './server-tegel.js';
 
 /**
  * De Controlekamer (controle.html, docs/CONTROLEKAMER.md). Leest:
  * - de server: /api/tooling, /api/library (aantal), /api/ingest, /api/stems, /api/proef,
- *   /api/backups (de laatste kopie van library.db);
+ *   /api/backups (de laatste kopie van library.db), /api/secties (hoeveel nummers nog
+ *   geen actuele secties hebben);
  * - de Web Lock van de mixer (tabblad.js): is er een mixer open, wacht er een tweede;
  * - het kanaal van de mixer (status-zender.js): APC, audio, wat er speelt, beeld.
  * Opent zelf GEEN MIDI: de APC heeft maar één tabblad, de mixer.
@@ -24,6 +26,7 @@ const stand = {
   ingest: [],          // open opdrachten
   stems: null,         // antwoord van /api/stems, { ontbreekt: true } bij een server zonder stems, null = onbekend
   backup: null,        // antwoord van /api/backups
+  secties: null,       // antwoord van /api/secties, { ontbreekt: true } bij een server zonder die route, null = onbekend
   mixer: null,         // { open, wachtend } uit de Web Lock
   status: null,        // laatste bericht van de mixer
   proef: { begonnen: null, items: {} },
@@ -37,10 +40,36 @@ function meld(tekst, soort = '') {
   setTimeout(() => el.remove(), soort === 'fout' ? 8000 : 3000);
 }
 
-async function haal(pad) {
-  const r = await fetch(pad, { cache: 'no-store' });
+/*
+ * Een trage of hangende server (een telefoon via het LAN): elk verzoek geeft het
+ * na WACHT_MS op, en ververs() begint pas opnieuw als de vorige klaar is. Anders
+ * stapelden de verzoeken zich elke 2 s op (16 open na 14 s).
+ */
+const WACHT_MS = 6000;
+/** Een losse route die 404 of een fout gaf: hooguit eens per minuut opnieuw (niet elke 2 s een rode regel in de console). */
+const RUST_MS = 60000;
+const rustTot = new Map();   // pad → tijdstip waarop hij weer gevraagd wordt
+
+async function haal(pad, { wacht = WACHT_MS } = {}) {
+  const r = await fetch(pad, { cache: 'no-store', signal: AbortSignal.timeout(wacht) });
   if (!r.ok) throw new Error(`${pad}: ${r.status}`);
   return r.json();
+}
+
+/**
+ * Een losse route, die een oudere server misschien niet kent: { data } bij 200,
+ * { ontbreekt: true } bij 404, { fout: status } bij een andere fout, null als de
+ * server niet (op tijd) antwoordt. Na een 404 of fout rust de route RUST_MS:
+ * dan `undefined` (= houd wat je had), zonder verzoek.
+ */
+async function haalLos(pad) {
+  if (Date.now() < (rustTot.get(pad) ?? 0)) return undefined;
+  try {
+    const r = await fetch(pad, { cache: 'no-store', signal: AbortSignal.timeout(WACHT_MS) });
+    if (r.ok) { rustTot.delete(pad); return { data: await r.json() }; }
+    rustTot.set(pad, Date.now() + RUST_MS);
+    return r.status === 404 ? { ontbreekt: true } : { fout: r.status };
+  } catch { return null; }
 }
 
 // ---- de stand -----------------------------------------------------------------
@@ -53,7 +82,8 @@ async function leesServer() {
     stand.server = true;
   } catch { stand.server = false; }
   // Los: een oudere server zonder /api/backups is nog steeds een draaiende server.
-  try { stand.backup = await haal('/api/backups'); } catch { stand.backup = null; }
+  const b = await haalLos('/api/backups');
+  if (b !== undefined) stand.backup = b?.data ?? null;
 }
 
 /**
@@ -62,14 +92,24 @@ async function leesServer() {
  * en dat is geen reden om de server als "weg" te tonen.
  */
 async function leesStems() {
-  try {
-    const r = await fetch('/api/stems', { cache: 'no-store' });
-    stand.stems = r.status === 404 ? { ontbreekt: true } : r.ok ? await r.json() : null;
-  } catch { stand.stems = null; }
+  const a = await haalLos('/api/stems');
+  if (a !== undefined) stand.stems = a?.data ?? (a?.ontbreekt ? a : null);
 }
 
+/**
+ * Hoeveel nummers (nog) geen actuele secties hebben (docs/SECTIES.md §4). Los,
+ * zoals de stems: een oudere server kent de route niet (404, "onbekend") en
+ * draait toch; een fout (500) is "onbekend (fout)". De server cachet de
+ * telling, dus elke 2 s vragen kost hem bijna niets.
+ */
+async function leesSecties() {
+  const a = await haalLos('/api/secties');
+  if (a !== undefined) stand.secties = a?.data ?? a;
+}
+
+// De tooling-controle start yt-dlp, de splitter en de tellenzoeker: die mag langer duren.
 async function leesTooling() {
-  try { stand.tooling = await haal('/api/tooling'); } catch { stand.tooling = null; }
+  try { stand.tooling = await haal('/api/tooling', { wacht: 60000 }); } catch { stand.tooling = null; }
 }
 
 async function leesMixer() {
@@ -87,16 +127,13 @@ const kanaal = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(KA
 if (kanaal) kanaal.onmessage = (e) => { if (e.data && e.data.t) { stand.status = e.data; tekenStand(); } };
 const vraagStatus = () => kanaal?.postMessage({ vraag: 'status' });
 
-/** Eén tegel: { naam, licht: 'ok'|'half'|'fout'|'uit', waarde, sub }. */
+/** Eén tegel: { naam, licht: 'ok'|'half'|'fout'|'uit', waarde, sub, regel? }. */
 function tegels() {
   const s = stand.status;
   const vers = s && Date.now() - s.t < 5000;
   const t = [];
 
-  t.push(stand.server === false
-    ? { naam: 'Server', licht: 'fout', waarde: 'niet bereikbaar', sub: 'start hem op de Mac (docs/HANDOFF.md)' }
-    : { naam: 'Server', licht: stand.server ? 'ok' : 'uit', waarde: stand.server ? 'draait' : '…',
-        sub: stand.nummers === null ? '' : `library: ${stand.nummers} nummers` });
+  t.push(serverTegel(stand));
 
   const tl = stand.tooling;
   t.push(!tl ? { naam: 'Binnenhalen', licht: 'uit', waarde: '…', sub: '' }
@@ -146,7 +183,8 @@ function tekenStand() {
     <div class="tegel" data-licht="${g.licht}">
       <span class="tegel-naam"><i class="led"></i>${esc(g.naam)}</span>
       <span class="tegel-waarde">${esc(g.waarde)}</span>
-      <span class="tegel-sub">${esc(g.sub)}</span>
+      <span class="tegel-sub">${esc(g.sub)}</span>${g.regel ? `
+      <span class="tegel-regel">${esc(g.regel)}</span>` : ''}
     </div>`).join('');
 
   const s = stand.status;
@@ -284,7 +322,13 @@ $('nieuw').addEventListener('click', async () => {
 
 function klok() { $('tijd').textContent = new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }); }
 
-async function ververs() { await Promise.all([leesServer(), leesMixer(), leesStems()]); tekenStand(); }
+let verversBezig = false;
+async function ververs() {
+  if (verversBezig) return;   // de vorige loopt nog (trage server): niet stapelen
+  verversBezig = true;
+  try { await Promise.all([leesServer(), leesMixer(), leesStems(), leesSecties()]); tekenStand(); }
+  finally { verversBezig = false; }
+}
 
 klok(); setInterval(klok, 10000);
 try { stand.proef = await haal('/api/proef'); } catch (_) { meld('speellijst niet geladen: is de server er?', 'fout'); }

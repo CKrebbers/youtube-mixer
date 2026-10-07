@@ -367,9 +367,22 @@ async function scenario({ plan, haalSecties, wachtSecties, lib = LIB, opDeckKaar
     au.vernietig();
     return uit;
   };
-  const neemt = ['track.2.section.3', 'track.1.section.12', 'track.2.section.4.loop', 'track.1.section.next', 'track.2.section.prev'];
+  // Beide tracks een nummer met de zeven secties van KA, stil midden in het nummer (de drukken springen echt).
+  for (const id of ['A', 'B']) { const d = eng.deck(id); if (!d.buffer) await laad(id, LIB[0]); if (d.playing) d.togglePlay(); d.setSectieKaart(KA); d.seek(70); }
+  const neemt = ['track.2.section.3', 'track.1.section.6', 'track.2.section.4.loop', 'track.1.section.next', 'track.2.section.prev'];
   const mis = neemt.filter((id) => proef(id) !== 'overgenomen');
   ok(`tijdens de overgang: sectie, sectie-loop, volgende en vorige overgenomen${mis.length ? ` (niet: ${mis.join(', ')})` : ''}`, mis.length === 0);
+  // Review spoor maschine: een pad zonder sectie (op de Maschine bij 7 secties 9 van de 16 pads) doet niets
+  // (de bus meldt alleen waarom niet); dat mag de overgang niet van Clay maken.
+  const posA = eng.deck('A').position;
+  ok('een sectie die er niet is (7 secties: section.12, section.9.loop): niet overgenomen, en er sprong niets',
+    proef('track.1.section.12') === 'bezig' && proef('track.1.section.9.loop') === 'bezig' && eng.deck('A').position === posA);
+  eng.deck('B').seek(5);
+  invoke('track.2.section.1', true); invoke('track.2.section.1', false);
+  ok('vorige in de eerste sectie (er is geen vorige): niet overgenomen', proef('track.2.section.prev') === 'bezig');
+  eng.deck('B').setSectieKaart(null);
+  ok('een track zonder secties (nog niet berekend): een sectiepad is geen overname', proef('track.2.section.3') === 'bezig');
+  eng.deck('B').setSectieKaart(KA);
   ok('een sectie op een track die niet meedoet: niet overgenomen', proef('track.5.section.1') === 'bezig');
   ok('geen sectie-action (section.x, sections.1): niet overgenomen', proef('track.2.section.x', 'bezig', false) === 'bezig' && proef('track.2.sections.1', 'bezig', false) === 'bezig');
   ok('klaar: een sectie op de klaarstaande track is overnemen (zoals seek en hotcue)', proef('track.2.section.2', 'klaar') === 'overgenomen');

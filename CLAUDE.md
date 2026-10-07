@@ -99,7 +99,8 @@ src/
                     terugspelen.js  een log terugspelen: beginstand, dan elke regel op T0 + t
                     devices/        apc40mk2.js, generic.js, maschine-mk2.js (de virtuele MIDI van de hub) — wat er op het apparaat zit
                     hub.js          AV-app-hub (alleen ?hub=ws://…): HubMidi = MidiHub met de hub als poort (lease), manifest, herverbinden;
-                                    speelt Xboard49 en Maschine (eigen nep-poorten, speelPoort(dev)), lampjes/schermen door een wachtrij
+                                    speelt Xboard49 en Maschine (eigen nep-poorten, speelPoort(dev)), lampjes/schermen door een wachtrij;
+                                    de sectie naar de globale laag (§18, engineSecties)
   analysis/         peaks.js        golfvorm-peaks + ruwe RMS
                     features.js     banden laag/midden/hoog, rms, zwaartepunt, onsets uit een spectrum. Puur, tijd van buiten.
                     luisteraar.js   leest de master-AnalyserNode uit (alleen lezen) -> features
@@ -192,9 +193,9 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs, beeld.mjs: headless zonder MIDI;
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs, beeld.mjs: headless zonder MIDI;
                     beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
-                    hub.mjs en speelapparaten.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
+                    hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden) — zie tools/README.md
@@ -268,6 +269,9 @@ test/
   secties.test.mjs  secties: synthetische nummers met een bekend antwoord, worker, library, deck, actions, server, marges op de "1"
   sec-sampler.test.mjs  een sectie in een sampler-pad: knipSectie, start op de "1", herankeren (ook keylock), grenzen, meldingen
   secties-log.test.mjs  secties in het handelingenlog: kaart in de stand, `van` bij een druk, volgorde, precies terugspelen
+  auto-secties.test.mjs  auto-DJ met secties: fragment/planMoment/momentArgs, terugvinden, wachten op de kaart, OVERNEEM, langer/nu, zonder kaart identiek
+  sec-maschine.test.mjs  secties en loops: sectieHier na het rondgaan, sectieOpDeMaat in een loop, de melding, de Maschine
+  sec-controle.test.mjs  sectieTelling (zelfde regel als moetSecties, cache per rij, ROLLBACK), /api/secties, de tegel
   beeld.test.mjs    spoor beeld: adres, latentie, id's, kiesKant, de tel met latentie, track/mix/poort, aanwezig en opnieuw, de echte zender op een nep-WebSocket
   varve-beeld-zender.test.mjs  de zendertest van de Stroommachine (overgenomen; alles.mjs telt zijn eigen formaat)
   alles.mjs         alle tests in één keer met overzicht
@@ -677,6 +681,9 @@ docs/
   Effecten op de tel (`video.pulse`, `video.pulse.target`): de maat komt van de
   maatgever van de engine (zie Sync), alleen als je hem hoort, op het moment dat
   je hem HOORT. De puls komt bovenop de knopstand en dooft binnen een halve tel.
+  Een nieuwe sectie van de maatgever is een ACCENT op de puls (6 okt, `metPuls(…, accent)`,
+  `VideoMixer._accentNu` met een `SectieLezer`): vol, wat de diepte ook is, alleen met de puls aan. Geen
+  nieuw PULS_DOEL: de doelen lopen rond in het handelingenlog.
   Meet je dit, meet dan NIET precies op de tel: door afronding val je dan op
   het einde van de vorige tel en zie je niets.
   Testen zonder zichtbaar venster: geef de mixer een canvas als nep-video,
@@ -1044,6 +1051,14 @@ docs/
   live mee; vanuit de Controlekamer opent hij zonder vlag), de Web Lock
   beslist niets over MIDI, de init-SysEx wordt ingeslikt (de hub zet 0x42),
   en Clay's bewaarde poortkeuze blijft onaangeroerd.
+  - De sectie (PROTOCOL §18 van de hub, 7 okt, `studio/sec-hub`): `levert: ['sectie']`. `engineSecties` =
+    een SectieLezer op de maatgever die je hoort (dezelfde als vormbron en video-accent), plus een seintje
+    van elke deck. Elke grens die je hoort: één `globaal {sectie.nieuw: true, sectie.energie (die van de
+    sectie zelf), sectie.label}`, meteen; vangnet hooguit één per seconde; alles samen hooguit 10/s
+    (schuivend venster, de nieuw telt mee). Verder energie (stap ≥ 0,01) en label bij verandering. Na
+    (her)verbinden de sectie van nu ZONDER nieuw. t loopt nooit terug; een nieuwe sectie is een GROTERE
+    teller. Lezen elke 50 ms + een wekker op de grens of de hoorbare sprong + op hub-berichten (≥ 20 ms).
+    Een oude hub negeert het. Toets: `tools/headless/sec-hub.mjs` (8921/9521/7721, `opname: false`).
   - Twee tabbladen: de hub laat de nieuwste winnen, de oude krijgt 4001, wacht
     30 s en MELDT dat (fout-melding, weg na een stabiele herverbinding). De
     status voor de Controlekamer komt van het tabblad dat met de hub verbonden
@@ -1187,7 +1202,10 @@ docs/
     VÓÓR de klap op tot 1 op de klap (ze zijn vooraf bekend), τ 0,1 s in KLOKtijd.
     Geen sprong: de uitvoer zakt nooit sneller dan de puls uitdooft; neemt een
     track die al speelde de maat over, dan telt alleen wat sinds het vorige beeld
-    komt, tot hij terugspringt tot ervóór (loop rond, hotcue). Alleen de lezer die
+    komt, tot hij terugspringt tot ervóór (loop rond, hotcue). Sinds 6 okt ook `sectie.energie`
+    en `sectie.nieuw` (achteraan in BRONNEN, uit `SectieLezer`: geen objecten per beeld, stil na
+    een sprong tot je hem hoort, een grens uit een gat > 1 s telt niet; NIEUW_TAU 0,2 s,
+    ENERGIE_TAU 0,25 s). Alleen de lezer die
     een open route nodig heeft wordt gelezen (`router.nodig()`). Nog niet:
     `metPuls` zelf als route.
 
@@ -1540,6 +1558,11 @@ Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag mis
   mapping met `{plek}` (= de gekozen plek van de speeltrack). Live opnemen gaat vanzelf: de pads
   spelen via noten.js. Een pad laat los waar hij indrukte, ook na een moduswissel (`padVast`).
   Headless: `VARVE_PATRONEN` naar een tijdelijke map, anders schrijft de testserver `patronen/set.json`.
+- Secties op de Maschine (`docs/MASCHINE.md` §5b, 6 okt): SCENE = padmodus secties, de 16 pads = de secties
+  van de FOCUS-track (groep A–H), pad = `track.N.section.K` via `invoke` (dus log en auto-DJ zien het), ◄ ►
+  bladert boven de 16, kleuren uit de read zoals de APC, links op het scherm wat je hoort + een 4×4-raster.
+  Eén padmodus tegelijk (STEP, SCENE). De hub in een headless-proef altijd met `opname: false`: de echte
+  config heeft een `avondmap`.
 - Toetsen: `node test/maschine.test.mjs`, `node test/hub.test.mjs`, en headless
   `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
   HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een
@@ -1581,6 +1604,18 @@ Volledig in `docs/SECTIES.md`, vragen in VRAGEN blok SE. Wat een bouwer niet mag
     server. Een sectiedruk draagt `{ van }` (de plek waarvan hij rekende, 4e element van de logregel,
     `invoke(id, v, { laat, van })`). `section.K.loop` staat niet apart in de stand: de loop van het deck
     is de waarheid.
+  - Auto-DJ (AUTO-DJ.md §3b): secties alleen met een kaart op een ZEKER grid; zonder kaart precies het oude
+    gedrag (ook bij een trage kaart: het wachten stopt vóór het oude moment). De bewakers gaan voor, de soort
+    overgang verandert nooit. `momentArgs` (planner.js) is DE rekenregel voor automaat én planvenster: geef
+    planMoment nooit losse argumenten. `vindSectie`: dezelfde label+groep, het dichtst bij de tijd van toen
+    (binnen `SECTIE_SPELING` 30 s, anders wint `van`).
+  - Loops: `sectieHier` vouwt wat je hoort terug in de loop (anders 1–40 ms de vorige sectie na het
+    rondgaan), en `sectieOpDeMaat` geeft in de laatste maat van een loop wat er NA het rondgaan komt.
+  - Controlekamer: `Library.sectieTelling()` gebruikt dezelfde helpers als `moetSecties`; verander je die
+    regel, verander hem op één plek (sec-controle.test vergelijkt ze).
+  - `SectieLezer` (src/analysis/maat.js; vormbron, video-accent en hub): een stap terug in t kleiner dan
+    GAT (1 s) is geen nieuwe klok (de uitgangsvertraging kan groeien); hetzelfde sectiebegin binnen 0,99
+    maat is een herhaling, geen nieuwe sectie; zonder maatgever blijft de energie `HOUD` (0,5 s) staan.
   - Headless: elke `tools/headless/sec-*.mjs` zet VARVE_PATRONEN en VARVE_PLANNEN op zijn tmp-map. Anders
     leest de proefserver `patronen/` van de worktree, en in `sintegratie` is dat de map van de echte mixer.
 

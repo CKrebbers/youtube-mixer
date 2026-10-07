@@ -162,7 +162,9 @@ export const SPEELLIJST = [
   ] },
 
   // ---- Secties (6 okt, docs/SECTIES.md): op studio/secties ----------------------
-  { id: 'secties', titel: 'Avond 1 · Secties', minuten: 15, punten: [
+  { id: 'secties', titel: 'Avond 1 · Secties', minuten: 18, punten: [
+    { id: 'se-telling', doe: 'Controlekamer, tegel Server: lees de regel "secties". (Na het starten van de server rekent hij ze op de achtergrond uit, één nummer tegelijk.)',
+      let: 'Staat er "secties: alles actueel"? Zo niet: hoeveel "nog zonder" of "verouderd", en zakt het nog?' },
     { id: 'se-strook', doe: 'Laad Loving arms op track 1 en kijk boven de golfvorm in het overzicht (de eerste keer rekent de server ze even uit).',
       let: 'Zie je gekleurde stukken met namen (intro, drop, break …)? Dezelfde letter = dezelfde kleur. Kloppen de grenzen met wat je hoort? (SE2)' },
     { id: 'se-apc', doe: 'APC: Shift + scene 1 = modus secties. De pads zijn de secties van de focus-track, op volgorde (rij 1 = 1–8).',
@@ -175,6 +177,8 @@ export const SPEELLIJST = [
       let: 'Logisch dat de pads de focus-track volgen, of liever per kolom een track (dan 5 secties per track)? (SE3)' },
     { id: 'se-stems', doe: 'Library: splits een nummer dat nog geen stems heeft (2 of 4) en laad het daarna opnieuw.',
       let: 'Rekent hij de secties opnieuw uit (kijk naar de namen), en kloppen de labels beter met stems? (SE2)' },
+    { id: 'se-nieuw', doe: 'Haal een nieuw nummer binnen en kijk naar de regel "secties" in de Controlekamer; laad het nummer daarna op een track.',
+      let: 'Eerst "1 nog zonder", na het laden weer "alles actueel"? Of liever dat de server de secties meteen na het binnenhalen uitrekent? (SVC1)' },
   ] },
 
   // ---- Secties verweven (6 okt, avond, docs/SECTIES.md §7) --------------------
@@ -218,10 +222,66 @@ export const SPEELLIJST = [
     { id: 'sp-in', doe: 'Kies bij een stap onder "begin" een sectie als in (bijvoorbeeld de drop).',
       let: 'Springt het begin naar die sectie en staat "in … drop" in de rij? Werkt een keuzelijst, of liever klikken op een band in de strook? (SVP2)' },
     { id: 'sp-uit', doe: 'Kies bij de stap ervóór onder "duur" een sectie als uit (break of outro), sla op en zet auto aan.',
-      let: 'Begint de overgang op die sectie (witte streep in de strook)? Typ je daarna een later begin, wordt uit dan oranje? Wat moet er met de duur gebeuren als je een uit kiest? (SVP3)' },
+      let: 'Begint de overgang op die sectie (witte streep in de strook)? Typ je daarna een later begin, wordt uit dan oranje? Ligt de uit ná de duur, dan gebruikt de auto-DJ hem niet: wat moet er met de duur gebeuren als je een uit kiest? (SVP3)' },
     { id: 'sp-herladen', doe: 'Sla op, sluit het venster en open het opnieuw.', let: 'Staan in en uit er nog?' },
     { id: 'sp-claude', doe: 'Vraag Claude om een plan met in en uit per stap ("begin elk nummer op de eerste drop").',
-      let: 'Kiest hij logische secties, en toont het venster ze? Waar tekent de strook de overgangen zonder uit? (SVP4)' },
+      let: 'Kiest hij logische secties, en toont het venster ze? Begint de overgang in de strook op de plek waar de auto-DJ hem speelt, ook zonder uit?' },
+  ] },
+
+  { id: 'sec-auto', titel: 'Avond 2 · Auto-DJ met secties', minuten: 20, punten: [
+    { id: 'sa-tooltip', doe: 'Laad twee nummers met ✓ naast de bpm (zeker grid) en een duidelijke outro; track 1 speelt. Zet de auto-DJ aan en houd de muis op "→ 2 …" in de AUTO-rij.',
+      let: 'Staat in de tooltip "uit op outro … (sectie N)" en "in op intro …"? Valt het aftellen samen met het begin van de outro-band boven de golfvorm? (SVA1)' },
+    { id: 'sa-outro', doe: 'Laat de overgang lopen.',
+      let: 'Valt de nieuwe in op de "1" van de outro, niet midden in de laatste drop? Beter dan vroeger? (SVA1)' },
+    { id: 'sa-break', doe: 'Nu als eerste een nummer met een korte outro (of zonder).',
+      let: 'Hij kiest dan de laatste break binnen 32 maten van het eind (tooltip "uit op break …"). Goed zo, of liever later? (SVA2)' },
+    { id: 'sa-vaag', doe: 'Twee nummers met ? naast de bpm (onzeker grid), zoals de meeste in je library.',
+      let: 'Zonder zeker grid gebruikt hij geen secties: overvloeien 24 s vóór het eind, geen "uit op" in de tooltip. Mis je ze daar? (SVA3)' },
+    { id: 'sa-nu', doe: 'Met een overgang klaar: druk "nu"; een andere keer "langer".',
+      let: 'nu = volgende sectiegrens binnen 8 maten (anders 4 maten); langer = volgende grens binnen 16 maten (anders 8). Goed zo, of liever vaste maten? (SVA4)' },
+    { id: 'sa-spring', doe: 'Met een overgang klaar: APC modus secties (Shift + scene 1, focus op wat nu klinkt), druk een sectie. Daarna, tijdens een overgang, een sectie van een van beide tracks.',
+      let: 'Op wat nu klinkt: geen "jij mixt"; springt hij, dan springt het aftellen mee (vlak voor het eind: de overgang loopt vanaf waar je bent). Tijdens de overgang: "jij mixt", de automaat laat los. Logisch? (SVA5)' },
+  ] },
+
+  { id: 'sec-maschine', titel: 'Avond 2 · Secties op de Maschine', minuten: 10, punten: [
+    { id: 'sm-scene', doe: 'Laad Loving arms op track 1 (wacht tot de secties er zijn). Maschine: groep A (focus track 1), druk SCENE.',
+      let: 'Brandt SCENE fel en zijn de pads de secties op volgorde (pad 1 linksonder = sectie 1)? Die je hoort wit, de rest donker hemelsblauw, pads zonder sectie uit? (SVM1, SVM2)' },
+    { id: 'sm-sprong', doe: 'Laat track 1 spelen en druk midden in een maat op een andere pad, een paar keer, ook terug.',
+      let: 'Valt de sectie in op de volgende "1", net als op de APC? Mis je SHIFT + pad = als loop? (SVM3)' },
+    { id: 'sm-scherm', doe: 'Kijk naar het linkerscherm terwijl je springt.',
+      let: 'Staat de sectie die je hoort groot bovenaan ("T1 4 drop D"), en tijdens de aanloop "op de 1: …" onderaan? Zijn de namen leesbaar en liggen ze zoals de pads? (SVM5)' },
+    { id: 'sm-focus', doe: 'Laad een tweede nummer op track 2, druk groep B en speel daar secties; terug met groep A. Heb je een mix met meer dan 16 secties: ◄ ► (transport).',
+      let: 'Volgen de pads de groepknop, en begint hij op de bladzijde van wat je hoort? Is bladeren goed, of moet de bladzijde meelopen? (SVM4)' },
+    { id: 'sm-terug', doe: 'Druk SCENE nog eens, en daarna STEP.',
+      let: 'Spelen de pads weer het instrument, en is STEP de stapmodus zoals eerst?' },
+  ] },
+
+  { id: 'sec-vorm', titel: 'Avond 2 · Secties in beeld', minuten: 10, punten: [
+    { id: 'sv-nieuw', doe: 'Open de mixer met ?vormen=1 (blijft onthouden), laad Loving arms op track 1 en open het videopaneel (V). VORM-rij: laag 1 aan, REAGEER open (APC: mapje vorm, device knob 8), in de keuzelijst ernaast "nieuwe sectie". Laat het nummer over een grens spelen (zie de strook boven de golfvorm).',
+      let: 'Slaat de vorm aan precies als de nieuwe sectie invalt, niet een tel te vroeg of te laat? Gloeit hij lang genoeg na, of te lang? (SVV2)' },
+    { id: 'sv-energie', doe: 'Zelfde, maar kies in de keuzelijst "sectie". Speel een drop en een break, en mix daarna over naar een ander nummer.',
+      let: 'Is de vorm voller in de drop en rustiger in de break? Gaat het in één keer op de grens, en glijdt het rustig als het andere nummer de maat overneemt? (SVV3)' },
+    { id: 'sv-sprong', doe: 'APC: Shift + scene 1 (modus secties), druk midden in een maat op een andere sectie.',
+      let: 'Slaat de vorm aan op de "1" waar de sectie invalt, en niet al bij het indrukken?' },
+    { id: 'sv-puls', doe: 'Videopaneel: PULS zacht (APC: grid-modus video, shift + Cue Level), de knop naast PULS op "flits". Laat een nummer over een paar grenzen spelen; zet het doel daarna op "pixel".',
+      let: 'Op elke tel een zachte flits en op een nieuwe sectie een volle? Is een vol effect (pixel) op elke grens bij een lage PULS te veel? Of liever een andere mengvorm op de grens? (SVV1, SVV4)' },
+    { id: 'sv-maatgever', doe: 'Twee nummers op track 1 en 2: mix over met de crossfader, daarna de fader van de track met MAAT dicht.',
+      let: 'Volgen vorm en flits de MAAT-badge (de grenzen van het nummer dat je hoort, niet van het andere)? Met de fader dicht geen flits meer?' },
+  ] },
+
+  { id: 'sec-hub', titel: 'Avond 2 · Secties naar de hub', minuten: 12, punten: [
+    { id: 'sh-cockpit', doe: 'Met de hub (npm start -- studio): open de cockpit, laad Loving arms op track 1 en laat hem spelen.',
+      let: 'Staat de sectie onder Globaal (label, energie) met varve-dj als bron? Flitst hij bij elke nieuwe sectie, op het moment dat je hem hoort?' },
+    { id: 'sh-sprong', doe: 'Spring een paar keer naar een andere sectie (APC modus secties, shift+W/E, of een hotcue op een sectiebegin).',
+      let: 'Precies één flits per sprong, op de "1" waar hij invalt (of meteen bij de hotcue), niet bij het drukken?' },
+    { id: 'sh-loop', doe: 'Zet een beatloop van 1 tel (en daarna 1/8) op de "1" van de drop, en tik snel op een hotcue op dat begin.',
+      let: 'Eén flits, geen stroboscoop, in de cockpit en in beeld? En een sectie-loop (shift + pad): elke ronde een flits? (SVV5)' },
+    { id: 'sh-overgang', doe: 'Mix naar een tweede nummer tot dat de maat geeft. Stop daarna track 1 en start track 2 op een cue op zijn drop.',
+      let: 'Overnemen: label en energie gaan mee zonder flits. Stoppen en starten op de cue: wel een flits. Logisch zo? (SVH1)' },
+    { id: 'sh-cut', doe: 'Tijdens het mixen: trek de fader van de track die de maat geeft even dicht en weer open.',
+      let: 'Blijft de energie in de cockpit en in beeld staan, zonder dip? (SVV6)' },
+    { id: 'sh-pauze', doe: 'Pauzeer track 1. Herlaad daarna het mixer-tabblad, of stop en start de hub.',
+      let: 'Pauze: de energie blijft een halve seconde staan en zakt dan in ~1,5 s naar 0; het label blijft. Terugkomen: geen flits, wel de juiste sectie. (SVH2)' },
   ] },
 
   // ---- Eerder werk (vóór 6 okt): als er tijd over is ------------------------------

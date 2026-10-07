@@ -758,6 +758,65 @@ export class Library {
     return this.alleIds().filter((id) => this.moetSecties(id, { versie }));
   }
 
+  /**
+   * Hoeveel nummers (nog) geen actuele secties hebben, voor de Controlekamer
+   * (GET /api/secties): { totaal, zonder, verouderd }. `zonder` = geen
+   * (leesbare) kaart; `verouderd` = wel een kaart, maar moetSecties zegt
+   * "opnieuw" (oudere SECTIE_VERSIE, een ander grid, stems erbij). Dezelfde
+   * regel als moetSecties en teSectieAnalyseren; met de hand of op slot telt
+   * als actueel.
+   *
+   * De Controlekamer vraagt dit elke 2 s. Daarom in twee lagen gecachet:
+   * - de telling, op de stand van de database: total_changes() van deze
+   *   verbinding (`wijzigingen`, zoals de backup) plus PRAGMA data_version (een
+   *   andere verbinding). Zonder wijziging twee kleine queries.
+   * - per nummer de ruwe kolommen (grid, stems, kaart) en wat eruit kwam. Elke
+   *   schrijfactie, in welke tabel ook, is een miss (tijdens de achtergrond-
+   *   analyse bijna elke vraag); dan haalt één query de kolommen op en worden
+   *   alleen de nummers waarvan er een anders is opnieuw geparst. Gemeten in
+   *   docs/CONTROLEKAMER.md.
+   * Midden in een transactie gaat er niets IN de cache: na een ROLLBACK daalt
+   * total_changes niet en blijft data_version voor deze verbinding gelijk, dus
+   * een telling van tijdens de transactie zou blijven staan. (Nu onbereikbaar:
+   * alle transacties hier zijn synchroon.)
+   */
+  sectieTelling({ versie = SECTIE_VERSIE } = {}) {
+    const vast = !this.db.isTransaction;
+    const sleutel = `${versie}:${this.wijzigingen()}:${this._q('PRAGMA data_version').get().data_version}`;
+    if (this._sectieTelling?.sleutel === sleutel) return this._sectieTelling.telling;
+    const oud = this._sectieRijen?.versie === versie ? this._sectieRijen.rijen : null;
+    const rijen = new Map();
+    let zonder = 0, verouderd = 0;
+    for (const r of this._q(`SELECT id, grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar, stems_json, secties_json
+      FROM tracks`).all()) {
+      const o = oud?.get(r.id);
+      r.stand = o && o.secties_json === r.secties_json && o.grid_json === r.grid_json && o.stems_json === r.stems_json
+        && o.grid_bpm === r.grid_bpm && o.grid_first_beat === r.grid_first_beat && o.grid_beats_per_bar === r.grid_beats_per_bar
+        ? o.stand : this._sectieStand(r, versie);
+      if (r.stand === 'zonder') zonder++;
+      else if (r.stand === 'verouderd') verouderd++;
+      rijen.set(r.id, r);
+    }
+    const telling = Object.freeze({ totaal: rijen.size, zonder, verouderd });
+    if (vast) {
+      this._sectieTelling = { sleutel, telling };
+      this._sectieRijen = { versie, rijen };
+    }
+    return telling;
+  }
+
+  /**
+   * 'zonder', 'verouderd' of 'actueel' voor één rij van sectieTelling: zoals
+   * moetSecties, maar zonder track() (alleen de grid- en stemskolommen en de kaart).
+   */
+  _sectieStand(r, versie) {
+    const k = r.secties_json != null ? normaliseerSecties(veiligJson(r.secties_json, null)) : null;
+    if (!k) return 'zonder';
+    const grid = this._grid(r);
+    const stems = r.stems_json != null ? normaliseerStems(veiligJson(r.stems_json, null)) : null;
+    return moetSectieAnalyse(k, { versie, grid: grid ? gridSleutel(grid) : null, metStems: !!stems }) ? 'verouderd' : 'actueel';
+  }
+
   // ---- stems -------------------------------------------------------------
 
   /**

@@ -74,7 +74,7 @@ const invoke = (id, v) => {
   else if ((m = /^track\.(\d)\.inst\.choose$/.exec(id))) {
     if (eng.weiger > 0) { eng.weiger--; return true; }   // een spelend nummer: eerst een melding
     eng.zet(trackId(+m[1]), KEUZES[Math.round(v * (KEUZES.length - 1))]);
-  } else if (!globalThis.__busPatronen?.(id, v)) stand[id] = v;
+  } else if (!globalThis.__busPatronen?.(id, v) && !globalThis.__busSecties?.(id, v)) stand[id] = v;
   return true;
 };
 const read = (id) => {
@@ -82,6 +82,8 @@ const read = (id) => {
   if ((m = /^track\.(\d)\.inst\.knob\.(\d)$/.exec(id))) return eng.inst[trackId(+m[1])]?.leesParam(+m[2]) ?? null;
   const pv = globalThis.__leesPatronen?.(id);
   if (pv !== undefined) return pv;
+  const sv = globalThis.__leesSecties?.(id);
+  if (sv !== undefined) return sv;
   return id in stand ? stand[id] : null;
 };
 
@@ -239,8 +241,9 @@ leds.length = 0;
 ms.vergeet();
 ms.tik();
 const eerste = leds.length;
-ok(`eerste tik: alle lampjes (16 pads, 8 groepen, 10 knoppen = 34), als noot aan op hun nummer (${eerste})`,
-  eerste === 34 && leds.every((m) => m.length === 3 && (m[0] === 0x90 || m[0] === 0x91) && m[2] <= 127));
+// 11 knoppen sinds de padmodus secties (6 okt): SCENE heeft nu ook een lampje (was 10, samen 34).
+ok(`eerste tik: alle lampjes (16 pads, 8 groepen, 11 knoppen = 35), als noot aan op hun nummer (${eerste})`,
+  eerste === 35 && leds.every((m) => m.length === 3 && (m[0] === 0x90 || m[0] === 0x91) && m[2] <= 127));
 leds.length = 0;
 ms.tik();
 ok('tweede tik zonder verandering: niets', leds.length === 0);
@@ -293,7 +296,7 @@ poort.in.state = 'connected'; poort.uit.state = 'connected';
 poort.in.onstatechange({});
 nu += 1000;
 ms.tik();
-ok('terug: alle lampjes en beide schermen opnieuw', leds.length === 34 && schermen.length === 2);
+ok('terug: alle lampjes (35, met SCENE) en beide schermen opnieuw', leds.length === 35 && schermen.length === 2);
 
 
 // ---- 5b. patronen: de stapmodus en het transport ------------------------------------------------
@@ -417,6 +420,201 @@ console.log('\npatronen op de Maschine (stapmodus, PATTERN, transport)');
   ok('… het rechterscherm blijft knop 5–8', S.tekenScherm(st, 1).every((x, i) => x === S.tekenScherm({ ...st, modus: 'spelen', patroon: null }, 1)[i]));
   tik('step');
   eng.patronen = undefined;
+}
+
+// ---- 5c. secties: SCENE als padmodus (docs/MASCHINE.md §5b, docs/SECTIES.md) --------------------
+console.log('\nsecties op de Maschine (SCENE)');
+{
+  const { SectieKaart } = await import('../src/engine/secties.js');
+  const LABELS = ['intro', 'opbouw', 'drop', 'break', 'opbouw', 'drop', 'outro'], GROEP = 'ABCDBCE';
+  const kaart7 = new SectieKaart({ stukken: LABELS.map((label, i) => ({ van: i * 16, label, groep: GROEP[i], energie: 0.5 })) });
+  const kaart20 = new SectieKaart({ stukken: Array.from({ length: 20 }, (_, i) => ({ van: i * 8, label: 'deel', groep: 'ABCD'[i % 4], energie: 0.5 })) });
+  // Nep-decks met wat maschine.js en de bus ervan lezen (de echte: test/secties.test.mjs, en in Chrome
+  // tools/headless/sec-maschine.mjs): een nummer, zijn kaart, de sectie die je hoort en die op de volgende "1".
+  const nepDeck = (kaart, hier) => ({ buffer: {}, sectieKaart: kaart, sectieHier: hier, sectieOpDeMaat: hier, vast: new Set() });
+  eng.decks.D = nepDeck(kaart7, 2);                     // track 4: 7 secties, je hoort sectie 3
+  eng.decks.F = nepDeck(kaart20, 0);                    // track 6: 20 secties (twee bladzijden)
+  eng.decks.G = nepDeck(null, -1);                      // track 7: een nummer, (nog) geen secties
+  const kaart50 = new SectieKaart({ stukken: Array.from({ length: 50 }, (_, i) => ({ van: i * 4, label: 'deel', groep: 'A', energie: 0.5 })) });
+  eng.decks.H = nepDeck(kaart50, 0);                    // track 8: meer secties dan de bus kent (handwerk mag tot 64)
+  const kaart36 = new SectieKaart({ stukken: Array.from({ length: 36 }, (_, i) => ({ van: i * 8, label: 'deel', groep: 'ABC'[i % 3], energie: 0.5 })) });
+  // De bus zoals actions.js: track.N.section.K springt (valt in op de volgende "1": sectieOpDeMaat);
+  // read: null = geen sectie op die plek, 0,5 = er is er een, 1 = die hoor je of drukt je in.
+  globalThis.__busSecties = (id, v) => {
+    const m = /^track\.(\d)\.section\.(\d+)$/.exec(id);
+    if (!m) return false;
+    const d = eng.decks[trackId(+m[1])], i = +m[2] - 1;
+    if (d.vast) { if (v) d.vast.add(i); else d.vast.delete(i); }
+    if (v && d.buffer && d.sectieKaart && i < d.sectieKaart.aantal) d.sectieOpDeMaat = i;
+    return true;
+  };
+  globalThis.__leesSecties = (id) => {
+    const m = /^track\.(\d)\.section\.(\d+)$/.exec(id);
+    if (!m) return undefined;
+    const d = eng.decks[trackId(+m[1])], i = +m[2] - 1;
+    if (!d.buffer || !d.sectieKaart || i >= d.sectieKaart.aantal || i >= 40) return null;   // section.41+ bestaat niet (SECTIE_PADS)
+    return d.vast?.has(i) || d.sectieHier === i ? 1 : 0.5;
+  };
+  const lamp = (naam) => ms.ledBeeld().get(`1:${M.knopNoot(naam)}`);
+  const padLamp = (pad) => ms.ledBeeld().get(`0:${35 + pad}`);
+  const pad = (p, aan = true) => stuur(aan ? 0x90 : 0x80, 35 + p, aan ? 100 : 0);
+  const laatste = () => JSON.stringify(aangeroepen.at(-1));
+  const sec = () => ms.stand().secties ?? {};
+  const zelfde = (a, b, x0, x1, y0, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (S.leesPixel(a, x, y) !== S.leesPixel(b, x, y)) return false; return true; };
+  const gelijkScherm = (a, b) => a.every((x, i) => x === b[i]);
+  const cel = (p) => ({ x: ((p - 1) % 4) * 64, y: 20 + (3 - Math.floor((p - 1) / 4)) * 8 });
+  // Een cel: de naam op (x+2, y); brandt hij (wit op de pad), dan omgekeerd: een vol vlak x..x+62, y-1..y+7, de letters uit.
+  const celGoed = (buf, p, naam, aan) => {
+    const { x, y } = cel(p), t = S.leegScherm();
+    S.tekst(t, x + 2, y, naam);
+    for (let yy = y; yy <= y + 6; yy++) for (let xx = x; xx <= x + 62; xx++) if (S.leesPixel(buf, xx, yy) !== (aan ? !S.leesPixel(t, xx, yy) : S.leesPixel(t, xx, yy))) return false;
+    return !aan || (S.leesPixel(buf, x, y - 1) && S.leesPixel(buf, x + 62, y + 7) && !S.leesPixel(buf, x + 63, y));
+  };
+
+  tik('groepA');
+  ok('SCENE uit als de focus-track geen secties heeft (track 1: de Poly)', lamp('scene') === 0);
+  tik('groepD');                                        // focus: het nummer op track 4; de speeltrack blijft de drums (track 2)
+  ok('SCENE zacht aan als de focus-track secties heeft', lamp('scene') === 16);
+  const voor = aangeroepen.length;
+  tik('scene');
+  ok('SCENE: de padmodus secties, lampje fel, niets op de bus', ms.modus === 'secties' && lamp('scene') === 127 && aangeroepen.length === voor);
+  ok('pads = de secties van de FOCUS-track (track 4, 7): die je hoort (3) wit, de andere donker hemelsblauw, 8–16 uit',
+    padLamp(3) === PALETTE.wit && [1, 2, 4, 5, 6, 7].every((p) => padLamp(p) === PALETTE.hemelsblauwdonker) && [8, 9, 12, 16].every((p) => padLamp(p) === PALETTE.uit));
+  const dlog = dr.log.length;
+  pad(5);
+  ok('pad 5 -> track.4.section.5 = true (over de bus: op de maat, in het log, de auto-DJ ziet het); geen noot op de speeltrack',
+    laatste() === JSON.stringify(['track.4.section.5', true]) && dr.log.length === dlog && !noten.ingedrukt('B').has(40));
+  ok('… zolang hij vastzit: pad 5 wit (de read)', padLamp(5) === PALETTE.wit && padLamp(3) === PALETTE.wit);
+  ok('… het scherm: je hoort nog sectie 3, op de "1" komt sectie 5', sec().hoort === '3 drop C' && sec().naar === '5 opbouw B');
+  const stV = ms.stand(), lV = S.tekenScherm(stV, 0);
+  ok('… de ingedrukte pad (5) die je nog niet hoort brandt ook op het scherm: omgekeerd, net als 3 (die hoor je)',
+    stV.secties?.aan?.[4] === true && stV.secties.aan[2] === true && celGoed(lV, 5, 'opbouw B', true) && celGoed(lV, 3, 'drop C', true) && celGoed(lV, 4, 'break D', false));
+  pad(5, false);
+  ok('… los -> track.4.section.5 = false; pad 5 donker hemelsblauw tot hij klinkt', laatste() === JSON.stringify(['track.4.section.5', false]) && padLamp(5) === PALETTE.hemelsblauwdonker);
+  eng.decks.D.sectieHier = 4;                           // de "1": nu hoor je sectie 5
+  ok('op de "1": pad 5 wit, pad 3 donker; het scherm noemt sectie 5, niets meer "op de 1"',
+    padLamp(5) === PALETTE.wit && padLamp(3) === PALETTE.hemelsblauwdonker && sec().hoort === '5 opbouw B' && sec().naar === null);
+  const st = ms.stand();
+  st.secties ??= { namen: [], aan: [] };
+  ok('stand: track 4, 7 secties, blad 1/1, de naam per pad (pad 8–16 null), wat brandt',
+    st.modus === 'secties' && st.secties.nr === 4 && st.secties.aantal === 7 && st.secties.blad === 0 && st.secties.bladen === 1
+    && st.secties.namen[0] === 'intro A' && st.secties.namen[3] === 'break D' && st.secties.namen[6] === 'outro E' && st.secties.namen[7] === null && st.secties.namen.length === 16
+    && st.secties.aan[4] === true && st.secties.aan[2] === false);
+
+  // Het scherm: links de sectie die je hoort (groot) en de namen zoals de pads liggen (pad 1 linksonder).
+  const links = S.tekenScherm(st, 0);
+  const kop = S.leegScherm(); S.tekst(kop, 2, 1, 'T4 5 opbouw B', 2);
+  ok('linkerscherm: kop groot "T4 5 opbouw B" (de track en de sectie die je hoort)', zelfde(links, kop, 0, 255, 0, 15));
+  ok('… pad 1 "intro A" linksonder, pad 4 "break D" rechtsonder, pad 7 "outro E" in de tweede rij van onder',
+    celGoed(links, 1, 'intro A', false) && celGoed(links, 4, 'break D', false) && celGoed(links, 7, 'outro E', false));
+  ok('… de sectie die je hoort (pad 5) omgekeerd: wit vlak, zwarte letters', celGoed(links, 5, 'opbouw B', true));
+  ok('… pads zonder sectie (8–16): leeg', [8, 12, 13, 16].every((p) => { const { x, y } = cel(p); for (let yy = y - 1; yy <= y + 6; yy++) for (let xx = x; xx <= x + 63; xx++) if (S.leesPixel(links, xx, yy)) return false; return true; }));
+  ok('… het rechterscherm blijft knop 5–8 van de speeltrack', S.tekenScherm(st, 1).every((x, i) => x === S.tekenScherm({ ...st, modus: 'spelen', secties: null }, 1)[i]));
+  // tik(): het linkerscherm volgt wat je hoort.
+  schermen.length = 0;
+  ms.vergeet(); nu += 1000; ms.tik();
+  const nS = schermen.length;
+  eng.decks.D.sectieHier = 5;
+  nu += 1000; ms.tik();
+  ok('tik: een andere sectie hoorbaar -> alleen het linkerscherm opnieuw', nS === 2 && schermen.length === 3 && schermen.at(-1).nr === 0);
+  ok('… en het lampje volgt (pad 6 wit, pad 5 donker)', padLamp(6) === PALETTE.wit && padLamp(5) === PALETTE.hemelsblauwdonker);
+
+  // PATTERN vast gaat ook in de modus secties voor (zoals in de stapmodus): pad = een plek kiezen, geen sectie.
+  let gekozen = 1;
+  eng.patronen = { gekozen: () => gekozen, kies: (id, p) => { if (id === 'A') gekozen = p; }, patroon: () => null, stand: () => ({}), laatsteNoot: () => 36 };
+  knop('pattern', true);
+  const nP = aangeroepen.length;
+  pad(2); pad(2, false);
+  ok('PATTERN vast in de modus secties: pad 2 kiest plek 2 op de speeltrack (track 1), geen sectie over de bus', gekozen === 2 && aangeroepen.length === nP);
+  ok('… de pads tonen de plekken (de gekozen wit, 6–16 uit), niet de secties', padLamp(2) === PALETTE.wit && padLamp(6) === PALETTE.uit);
+  const stP = ms.stand();
+  ok('… het linkerscherm: "kies patroon" zoals in de speelmodus, niet de secties',
+    stP.patroonVast && !!stP.patroon && gelijkScherm(S.tekenScherm(stP, 0), S.tekenScherm({ ...stP, modus: 'spelen', secties: null }, 0))
+    && !gelijkScherm(S.tekenScherm(stP, 0), S.tekenScherm({ ...stP, patroonVast: false }, 0)));
+  eng.patronen = undefined;                             // zonder patroonspeler: PATTERN vast kiest niets, en het scherm toont geen secties
+  const stQ = ms.stand();
+  ok('… zonder patroonspeler: ook geen secties op het scherm (de pads kiezen dan niets)',
+    stQ.patroonVast && !stQ.patroon && gelijkScherm(S.tekenScherm(stQ, 0), S.tekenScherm({ ...stQ, modus: 'spelen', secties: null }, 0)));
+  knop('pattern', false);
+  ok('PATTERN los: weer de secties (pad 6 wit: die hoor je)', padLamp(6) === PALETTE.wit && padLamp(2) === PALETTE.hemelsblauwdonker);
+
+  // Meer dan 16 secties: ◄ ► (transport) bladeren, zoals in de stapmodus.
+  tik('groepF');
+  ok('groep F (20 secties): de pads volgen de focus; pad 1 wit (hoor je), pad 16 = sectie 16; ► half, ◄ uit',
+    padLamp(1) === PALETTE.wit && padLamp(16) === PALETTE.hemelsblauwdonker && lamp('stapR') === 32 && lamp('stapL') === 0 && sec().bladen === 2);
+  tik('stapR');
+  ok('►: blad 2, pad 1–4 = sectie 17–20, 5–16 uit; ◄ half, ► uit',
+    sec().blad === 1 && [1, 4].every((p) => padLamp(p) === PALETTE.hemelsblauwdonker) && padLamp(5) === PALETTE.uit && lamp('stapL') === 32 && lamp('stapR') === 0);
+  pad(4); pad(4, false);
+  ok('… pad 4 = track.6.section.20', aangeroepen.some(([a, v]) => a === 'track.6.section.20' && v === true));
+  tik('stapR');
+  ok('… voorbij de laatste bladzijde: blijft staan; de bladzijde van de stapmodus blijft ongemoeid', sec().blad === 1 && ms.bladzijde === 0);
+  tik('stapL');
+  ok('◄: terug naar blad 1', sec().blad === 0);
+  // Een andere focus-track: het blad met de sectie die je daar hoort, anders blad 1 (review: het blad ging mee).
+  eng.decks.C = nepDeck(kaart36, 2);                    // track 3: 36 secties, je hoort sectie 3
+  eng.decks.E = nepDeck(kaart36, 17);                   // track 5: je hoort sectie 18
+  tik('stapR');
+  tik('groepC');
+  ok('van blad 2 (track 6) naar track 3 (36 secties, je hoort 3): meteen blad 1 op de pads (het eerste lampjesbeeld), niet 17–32',
+    padLamp(3) === PALETTE.wit && padLamp(1) === PALETTE.hemelsblauwdonker && sec().blad === 0);
+  tik('stapR'); tik('stapR');
+  ok('… ► ►: blad 3 (33–36)', sec().blad === 2 && padLamp(4) === PALETTE.hemelsblauwdonker && padLamp(5) === PALETTE.uit);
+  tik('groepE');
+  pad(2); pad(2, false);
+  ok('naar track 5 (je hoort 18): meteen blad 2, ook zonder tik ertussen: pad 2 = track.5.section.18',
+    aangeroepen.some(([a, v]) => a === 'track.5.section.18' && v === true) && !aangeroepen.some(([a]) => a === 'track.5.section.34') && sec().blad === 1 && padLamp(2) === PALETTE.wit);
+  tik('groepF');
+  ok('terug naar track 6 (je hoort 1): blad 1', padLamp(1) === PALETTE.wit && sec().blad === 0);
+  // Meer dan 40 secties (de bus kent track.N.section.1–40): drie bladzijden, daarna niets.
+  tik('groepH');
+  tik('stapR'); tik('stapR'); tik('stapR');
+  const nH = aangeroepen.length, hlog = eng.inst.A.log.length;
+  pad(9); pad(9, false);
+  ok('track 8 met 50 secties: drie bladzijden (tot 40, niet vier); pad 9 op blad 3 (= 41) doet niets, ook niet bij het loslaten',
+    sec().bladen === 3 && sec().blad === 2 && aangeroepen.length === nH && eng.inst.A.log.length === hlog && padLamp(8) === PALETTE.hemelsblauwdonker && padLamp(9) === PALETTE.uit);
+  eng.decks.H.sectieHier = 42; eng.decks.H.sectieOpDeMaat = 42;
+  const stH = ms.stand();
+  const kopH = S.leegScherm(); S.tekst(kopH, 2, 1, 'T8 43 A', 2);
+  ok('je hoort sectie 43 (boven de 40: op geen pad): de kop noemt hem toch ("T8 43 A")', stH.secties?.hoort === '43 A' && zelfde(S.tekenScherm(stH, 0), kopH, 0, 255, 0, 15));
+  eng.decks.H.sectieHier = 0; eng.decks.H.sectieOpDeMaat = 0;
+  tik('stapL'); tik('stapL');
+
+  // Geen secties op de focus-track.
+  tik('groepG');
+  ok('groep G (een nummer, nog geen secties): pads uit, SCENE fel (je zit in de modus), het scherm zegt het',
+    [1, 5, 16].every((p) => padLamp(p) === PALETTE.uit) && lamp('scene') === 127 && sec().aantal === 0 && sec().wat === 'nummer');
+  pad(1); pad(1, false);
+  ok('… een pad gaat toch over de bus: die meldt waarom het niet kan (zoals op de APC)', laatste() === JSON.stringify(['track.7.section.1', false])
+    && aangeroepen.at(-2)[0] === 'track.7.section.1');
+
+  // Wisselen, en niets blijft hangen.
+  tik('groepD');
+  pad(2);
+  tik('scene');
+  ok('SCENE nog eens: weer spelen', ms.modus === 'spelen');
+  const n0 = dr.log.length;
+  pad(2, false);
+  ok('pad 2 vast in de modus secties, SCENE, los: het loslaten gaat naar track.4.section.2, niet naar de drums',
+    laatste() === JSON.stringify(['track.4.section.2', false]) && dr.log.length === n0 && !eng.decks.D.vast.size);
+  pad(1);
+  ok('… in de speelmodus speelt pad 1 weer op de speeltrack (de Poly op track 1: de laatste focus met een instrument)',
+    eng.speeltrack() === 'A' && JSON.stringify(eng.inst.A.log.at(-1)?.slice(0, 2)) === JSON.stringify(['aan', 36]));
+  pad(1, false);
+  tik('scene'); tik('step');
+  ok('STEP in de modus secties: de stapmodus (één padmodus tegelijk)', ms.modus === 'stappen');
+  tik('scene');
+  ok('SCENE in de stapmodus: secties', ms.modus === 'secties');
+  pad(3);
+  poort.in.state = 'disconnected';
+  poort.in.onstatechange({});
+  ok('de hub weg met een sectiepad vast: hij laat los (track.4.section.3 = false)', laatste() === JSON.stringify(['track.4.section.3', false]) && !eng.decks.D.vast.size);
+  poort.in.state = 'connected';
+  poort.in.onstatechange({});
+  tik('scene');
+  tik('groepB');
+  ok('terug: spelen, focus op de drums', ms.modus === 'spelen' && eng.focus === 'B');
+  globalThis.__busSecties = undefined; globalThis.__leesSecties = undefined;
 }
 
 // ---- 6. het scherm als pure functie ---------------------------------------------------------
