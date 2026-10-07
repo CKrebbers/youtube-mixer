@@ -5,6 +5,8 @@
 // reads), wat je hoort (hoorbaar.js), het scherm (puur) en de APC.
 // Draai met: node test/master.test.mjs
 import v8 from 'node:v8';
+/** De jonge ruimtes van V8: daar landt afval per blok (zie de afvalmetingen hieronder). */
+const JONG = ['new_space', 'new_large_object_space'];
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
@@ -189,22 +191,29 @@ console.log('de kern (zonder browser)');
   ok(`rekentijd per blok, luid: ${(besteMs * 1000).toFixed(1)} µs (< 500 µs van de 2,67 ms; beste van 3)`, besteMs < 0.5);
 
   // i. Afval: zoals renderblok.test, na opwarmen, het schoonste venster.
-  const venster = () => {
+  // Gemeten in de JONGE ruimte (new_space, plus new_large_object_space voor een grote array),
+  // min een leeg venster (wat het meten zelf kost): daar landt afval per blok. heapUsed telde ook
+  // gecompileerde code (V8 die de meetlus opnieuw compileert: rood zonder één byte afval) en het
+  // opruimen van de oude ruimte na gc() (tot -194 kB: een min die echt afval kon verbergen).
+  // 7 okt, zie instrumenten-fm-schaal.test. JONG staat bovenaan (ook voor de worklet hieronder).
+  const jong = () => v8.getHeapSpaceStatistics().reduce((n, s) => n + (JONG.includes(s.space_name) ? s.space_used_size : 0), 0);
+  const venster = (n = 12000) => {
     globalThis.gc(); globalThis.gc();
     const prof = new v8.GCProfiler();
     prof.start();
-    const h0 = process.memoryUsage().heapUsed;
-    for (let b = 0; b < 12000; b++) kt.render(pakket[b & 63], pakket[(b + 7) & 63], oL, oR, oG, Q);
-    const h1 = process.memoryUsage().heapUsed;
-    return { bytes: h1 - h0, gcs: prof.stop().statistics.length };
+    const j0 = jong();
+    for (let b = 0; b < n; b++) kt.render(pakket[b & 63], pakket[(b + 7) & 63], oL, oR, oG, Q);
+    const j1 = jong();
+    return { bytes: j1 - j0 - (n ? leeg : 0), gcs: prof.stop().statistics.length };
   };
+  const leeg = venster(0).bytes;
   let beste = null;
   for (let i = 0; i < 30; i++) {
     const w = venster();
     if (!beste || w.gcs < beste.gcs || (w.gcs === beste.gcs && w.bytes < beste.bytes)) beste = w;
     if (w.gcs === 0 && w.bytes < 1024) break;
   }
-  ok(`geen afval: 12 000 blokken, ${beste.gcs} GC, ${beste.bytes} bytes heapgroei`, beste.gcs === 0 && beste.bytes < 1024);
+  ok(`geen afval: 12 000 blokken, ${beste.gcs} GC, ${beste.bytes} bytes in de jonge ruimte`, beste.gcs === 0 && beste.bytes < 1024);
 }
 
 // ---- 2. de worklet, in een nagebouwde AudioWorkletGlobalScope ---------------------------
@@ -244,22 +253,25 @@ console.log('\nde worklet');
   const pakket = Array.from({ length: 32 }, (_, b) => { const a = new Float32Array(Q); for (let i = 0; i < Q; i++) a[i] = bron(b * Q + i)[0]; return a; });
   const invoer = pakket.map((a, b) => [[a, pakket[(b + 3) & 31]]]);
   for (let b = 0; b < 3000; b++) p.process(invoer[b & 31], uit);
-  const venster = () => {
+  // Zoals hierboven: de jonge ruimte, min een leeg venster.
+  const jong = () => v8.getHeapSpaceStatistics().reduce((n, s) => n + (JONG.includes(s.space_name) ? s.space_used_size : 0), 0);
+  const venster = (n = 12000) => {
     globalThis.gc(); globalThis.gc();
     const prof = new v8.GCProfiler();
     prof.start();
-    const h0 = process.memoryUsage().heapUsed;
-    for (let b = 0; b < 12000; b++) p.process(invoer[b & 31], uit);
-    const h1 = process.memoryUsage().heapUsed;
-    return { bytes: h1 - h0, gcs: prof.stop().statistics.length };
+    const j0 = jong();
+    for (let b = 0; b < n; b++) p.process(invoer[b & 31], uit);
+    const j1 = jong();
+    return { bytes: j1 - j0 - (n ? leeg : 0), gcs: prof.stop().statistics.length };
   };
+  const leeg = venster(0).bytes;
   let beste = null;
   for (let i = 0; i < 30; i++) {
     const w = venster();
     if (!beste || w.gcs < beste.gcs || (w.gcs === beste.gcs && w.bytes < beste.bytes)) beste = w;
     if (w.gcs === 0 && w.bytes < 1024) break;
   }
-  ok(`de worklet: 12 000 blokken, ${beste.gcs} GC, ${beste.bytes} bytes heapgroei`, beste.gcs === 0 && beste.bytes < 1024);
+  ok(`de worklet: 12 000 blokken, ${beste.gcs} GC, ${beste.bytes} bytes in de jonge ruimte`, beste.gcs === 0 && beste.bytes < 1024);
   delete globalThis.AudioWorkletProcessor;
   delete globalThis.registerProcessor;
 }
