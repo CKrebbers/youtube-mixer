@@ -321,7 +321,7 @@ docs/
 | Tests | Alle bestanden in `test/` moeten groen blijven: `node test/alles.mjs`. Bij wijzigingen: check toevoegen. |
 | Mocks | Een mock die makkelijker is dan de echte API verbergt bugs. De Web Audio-mock vuurt `onended` asynchroon omdat de browser dat ook doet. |
 | Browser | Chrome. Web MIDI bestaat niet in Safari — geen polyfill-pogingen. |
-| Git | `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud) en bestanden met " 2" in de naam zijn conflictkopieën. Nooit committen. |
+| Git | Committen en pushen mag. `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud), en bestanden met " 2" in de naam zijn conflictkopieën (meestal een oude versie): die NOOIT committen. Groter werk per spoor op een eigen tak in een worktree buiten iCloud (`~/Projects/varve-stems/<spoor>`), samenvoegen in `studio/integratie`, naar main met een PR; daarna de worktree weg. Data staat niet in git en hoort in de Bureaublad-map: `media/`, `opnames/`, `patronen/`, `proef/`. Een server die vanuit een worktree draait schrijft patronen en de speellijst in die worktree: link `media`/`opnames` en zet de rest terug vóór je de worktree weghaalt. |
 
 ## Bekende grenzen (niet als bug rapporteren)
 
