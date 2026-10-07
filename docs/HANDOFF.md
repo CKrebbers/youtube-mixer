@@ -22,10 +22,12 @@ Lees in deze volgorde:
   meetlus tijdens het venster compileerde telde als heapgroei. Groei in code_space/trusted_space telt
   nu niet mee; tegenproef: één object per blok in de worklet = 73 kB, rood. Dezelfde meting met
   `heapUsed` staat in renderblok, klankschaal, master en effecten (daar nu groen).
-- Opgeruimd: PR #1 (Koppelbus, 2 okt) gesloten, de tak blijft als naslag; een achtergebleven server
+- Opgeruimd: PR #1 (Koppelbus, 2 okt) gesloten; de commits staan nog onder de PR
+  (`refs/pull/1/head`, c19d902). Een achtergebleven server
   van de knoppen-worktree (poort 8833, sinds 5 okt) gestopt; drie iCloud-kopieën (" 2") weg.
-  Alle 38 worktrees in `~/Projects/varve-stems/` weg (alles zat in main, niets ongecommit; de takken
-  bestaan nog). `patronen/` stond alleen in `sintegratie` en staat nu in de Bureaublad-map. Over in
+  Alle 38 worktrees in `~/Projects/varve-stems/` weg (alles zat in main, niets ongecommit), en alle
+  takken, lokaal en op GitHub, behalve `main` en `studio/integratie` (gelijk aan main).
+  `patronen/` stond alleen in `sintegratie` en staat nu in de Bureaublad-map. Over in
   die map: `hub-set-studio` (kloon van AV-app-hub) en `proef-maschine-dj` (proefmap), niet aangeraakt.
 - Getest: `node test/alles.mjs` 62 bestanden, 6583 checks, alles groen (1 overgeslagen: geen
   AV-app-hub naast de map); `tools/headless/kijk.mjs` groen. NIET: de Maschine-pagina's op de echte
