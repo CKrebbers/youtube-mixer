@@ -216,6 +216,8 @@ export function beschrijf(action) {
     'log.replay.stop': ['stop terug', 'terugspelen van een handelingenlog stoppen (de tracks spelen door)'],
     'sampler.length': ['tellen', 'sampler: hoeveel tellen een lege pad pakt (1/2/4/8)'],
     'sampler.volume': ['sampler', 'sampler-volume'],
+    'sampler.length.down': ['tellen −', 'sampler: minder tellen voor een lege pad (8 → 4 → 2 → 1)'],
+    'sampler.length.up': ['tellen +', 'sampler: meer tellen voor een lege pad (1 → 2 → 4 → 8)'],
     'headphone.level': ['kopt. vol', 'koptelefoon: volume'],
     'headphone.mix': ['kopt. mix', 'koptelefoon: mix, links alleen wat je voorbeluistert, rechts alleen de zaal'],
     'master.fx.mix': ['master mix', 'master-effect dry/wet, voor de hele mix (vóór de limiter)'],

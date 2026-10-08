@@ -81,7 +81,7 @@ console.log('\nniets uit de indeling lijkt vrij');
     const id = K.idVanSig(r.in);
     if (!id) { fout.push(`${r.in} staat niet op de plaat`); continue; }
     const m = met;
-    m.zetPagina(r.laag?.startsWith('pagina.') ? r.laag.replace('pagina.', '') : 'instrument'); K.zetPadmodus(m, 'spelen');
+    m.zetPagina(r.laag?.startsWith('pagina.') ? r.laag.replace('pagina.', '') : 'instrument'); K.zetPadmodus(m, r.laag === 'sampler' ? 'sampler' : 'spelen');
     libraryOpen = r.laag === 'bladeren' ? 1 : 0;
     const c = K.leesControl(m, id, { shift: !!r.shift });
     libraryOpen = 0;
@@ -134,9 +134,11 @@ console.log('\nper stand, en de Maschine blijft zoals hij was');
   m.zetPagina('strip'); K.zetPadmodus(m, 'stappen'); m.bladzijde = 0;
   const voor = JSON.stringify(K.neemStand(m));
   const pad = K.perStand(m, 'pad4'), knop = K.perStand(m, 'k1');
-  ok('pad: vier padmodi, de huidige gemarkeerd', pad.length === 4 && pad.filter((x) => x.nu).length === 1 && pad.find((x) => x.nu).naam.startsWith('stappen'));
+  ok('pad: vijf padmodi (sinds SAMPLING, §5f), de huidige gemarkeerd', pad.length === 5 && pad.filter((x) => x.nu).length === 1 && pad.find((x) => x.nu).naam.startsWith('stappen'));
   ok('draaiknop: drie pagina\'s, de huidige gemarkeerd', knop.length === 3 && knop.find((x) => x.nu).naam === 'Strip' && /trim/.test(knop[1].tekst));
   ok('een gewone knop: geen tabel', K.perStand(m, 'play').length === 0);
+  const stap = K.perStand(m, 'stapL');
+  ok('◄ (transport): per padmodus, in sampler "minder tellen" (§5f)', stap.length === 5 && /minder tellen/.test(stap.find((x) => x.naam.startsWith('sampler')).tekst));
   ok('na perStand staat de Maschine precies zoals ervoor', JSON.stringify(K.neemStand(m)) === voor);
 
   // Per padmodus = wat de Maschine zegt NADAT je op STEP/SCENE/PATTERN drukt. Met >16 secties en
@@ -157,6 +159,7 @@ console.log('\nper stand, en de Maschine blijft zoals hij was');
     const kaartRij = K.perStand(a, 'pad3').find((x) => x.naam === p.naam).tekst;
     if (p.id === 'stappen') b.ontvang(parseMessage([0x91, D.knopNoot('step'), 127]));
     if (p.id === 'secties') b.ontvang(parseMessage([0x91, D.knopNoot('scene'), 127]));
+    if (p.id === 'sampler') b.ontvang(parseMessage([0x91, D.knopNoot('sampling'), 127]));
     return kaartRij === b.legUit(K.berichtVan('pad3')).tekst;
   });
   ok('elke padmodus: de rij van de kaart = de uitleg van een Maschine die die knop indrukte', elk);

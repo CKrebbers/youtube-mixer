@@ -29,6 +29,7 @@ import { VOLGEN, LADDERS, KLANKSOORTEN, TRANSPOSITIE_MAX } from '../engine/klank
 import { INSTRUMENTEN } from '../engine/instrumenten/index.js';
 import { PLEKKEN, MAX_LENGTE, STANDAARD_LENGTE, TEMPO, SWING, gevuld, volgendeLengte } from '../engine/patronen/model.js';
 import { MACROS as BEELD_MACROS, REGIE as BEELD_REGIE } from '../koppel/beeld.js';
+import { TELLEN as TELLEN_SAMPLER } from '../engine/sampler.js';
 
 const registry = new Map();
 
@@ -938,6 +939,18 @@ export function bindEngine(engine) {
     }
     define('sampler.length', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },
       { label: 'Sampler: hoeveel tellen', read: () => [1, 2, 4, 8].indexOf(sampler.tellen) / 3 });
+    // Korter/langer zonder rondlopen (de Maschine: ◄ ► in de stand sampler, docs/MASCHINE.md §5f).
+    // Read: 0,5 = kan nog die kant op, null = aan het eind.
+    const lengteStap = (stap) => {
+      // Staat de lengte (ooit) niet in TELLEN, dan vanaf de dichtstbijzijnde kortere.
+      const nu = Math.max(0, TELLEN_SAMPLER.findLastIndex((t) => t <= sampler.tellen));
+      const i = nu + stap;
+      if (i >= 0 && i < TELLEN_SAMPLER.length) sampler.tellen = TELLEN_SAMPLER[i];
+    };
+    define('sampler.length.down', 'trigger', (on) => { if (on) lengteStap(-1); },
+      { label: 'Sampler: minder tellen (1 · 2 · 4 · 8)', read: () => (TELLEN_SAMPLER.indexOf(sampler.tellen) > 0 ? 0.5 : null) });
+    define('sampler.length.up', 'trigger', (on) => { if (on) lengteStap(1); },
+      { label: 'Sampler: meer tellen (1 · 2 · 4 · 8)', read: () => (TELLEN_SAMPLER.indexOf(sampler.tellen) < TELLEN_SAMPLER.length - 1 ? 0.5 : null) });
     define('sampler.volume', 'value', (v) => sampler.setVolume(v),
       { label: 'Sampler volume', read: () => sampler.volume });
   }

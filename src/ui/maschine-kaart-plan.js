@@ -1,7 +1,7 @@
 import { KNOPPEN, KNOP_LABEL, PAD_NOOT, knopSig, padSig, encoderSig, WIEL_SIG, padVanNoot } from '../control/devices/maschine-mk2.js';
 import { parseMessage } from '../control/midi.js';
 import { resolveTarget } from '../control/mapping.js';
-import { UITLEG, STRIP, PAGINAS, PAGINA_NAAM, PLEKKEN, STAPPEN, nootNaam } from '../control/maschine.js';
+import { UITLEG, STRIP, PAGINAS, PAGINA_NAAM, PLEKKEN, STAPPEN, nootNaam, samplerPad } from '../control/maschine.js';
 import { soortVan } from './soorten.js';
 
 /**
@@ -91,6 +91,7 @@ export const PADMODI = [
   { id: 'spelen', naam: 'spelen' },
   { id: 'stappen', naam: 'stappen (STEP)' },
   { id: 'secties', naam: 'secties (SCENE)' },
+  { id: 'sampler', naam: 'sampler (SAMPLING)' },
   { id: 'plek', naam: 'plek kiezen (PATTERN vast)' },
 ];
 export const padmodusVan = (m) => (m.patroonVast ? 'plek' : m.modus);
@@ -133,6 +134,10 @@ export function leesControl(m, id, { shift = false, stand = null } = {}) {
     const modus = padmodusVan(m);
     if (modus === 'plek') Object.assign(uit, pad <= PLEKKEN ? { kort: `plek ${pad}`, soort: 'patroon' } : { vrij: true });
     else if (modus === 'stappen') Object.assign(uit, { kort: `stap ${m.bladzijde * STAPPEN + pad}`, soort: 'patroon' });
+    else if (modus === 'sampler') {
+      const { k, soort } = samplerPad(pad);
+      Object.assign(uit, { kort: shift ? `wis ${k}` : soort === 'sample' ? `sample ${k}` : `sectie → ${k}`, soort: 'sampler', shiftRegel: true });
+    }
     else if (modus === 'secties') {
       const naam = (stand ?? m.stand()).secties?.namen?.[pad - 1] ?? null;
       Object.assign(uit, { kort: naam ?? `sectie ${m.sectieBlad * STAPPEN + pad}`, soort: 'sectie' });
@@ -195,6 +200,13 @@ export function perStand(m, id) {
       for (const p of PAGINAS) {
         m.pagina = p;
         rijen.push({ naam: PAGINA_NAAM[p], tekst: m.legUit(msg).tekst, nu: p === voor.pagina });
+      }
+    } else if (id === 'stapL' || id === 'stapR') {
+      // ◄ ► (transport) doen per padmodus iets anders: bladzijde (stappen, secties), tellen (sampler).
+      for (const p of PADMODI) {
+        zetStand(m, voor);
+        zetPadmodus(m, p.id);
+        rijen.push({ naam: p.naam, tekst: m.legUit(msg).tekst, nu: p.id === (voor.patroonVast ? 'plek' : voor.modus) });
       }
     } else if (LIBRARY_KNOPPEN.includes(id)) {
       // Met de library dicht of open (BROWSE): even een andere read voor library.toggle.

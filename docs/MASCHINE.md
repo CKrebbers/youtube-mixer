@@ -55,12 +55,13 @@ Data in `mappings/maschine-mk2.json` (groepen, draaiknoppen, shift, transport), 
 | **◄ ►** (bij het wiel) | met de library open: 10 nummers terug/verder (`library.page.prev/next`); anders vrij |
 | **STEP** | stapmodus aan/uit (§5); lampje fel = aan |
 | **SCENE** | padmodus secties aan/uit (§5b): pad K = sectie K van de **focus-track**, valt in op de volgende "1"; lampje zacht = de focus-track heeft secties, fel = aan |
+| **SAMPLING** | padmodus sampler aan/uit (§5f): boven de 8 sampler-pads, onder een sectie in pad 1–8; ◄ ► (transport) = tellen, draaiknop 5 = volume |
 | **PATTERN** vast + pad 1–5 | patroon (plek) 1–5 kiezen op de speeltrack; de pads tonen zolang de vijf plekken |
 | **PLAY** | het gekozen patroon op de speeltrack starten op de maat, of stoppen als het speelt (`track.{speel}.pattern.{plek}`); **SHIFT + PLAY** meteen (`.now`) |
 | **RESTART** | het patroon op de speeltrack stoppen op de maat (`track.{speel}.pattern.stop`; de MK2 heeft geen STOP-knop); **SHIFT** = meteen |
 | **REC** | live opnemen aan/uit (`patterns.record`): wat je op de pads (of het keyboard) speelt komt in het patroon dat speelt |
 | **ERASE** | het gekozen patroon leegmaken (`track.{speel}.pattern.clear`, tweede druk binnen 3 s) |
-| **◄ ►** (transport) | in de stapmodus: de bladzijde (stap 1–16, 17–32, …); in de modus secties: de bladzijde van de secties (1–16, 17–32, 33–40); **SHIFT + ◄ ►** = korter/langer (`.pattern.length.down/up`) |
+| **◄ ►** (transport) | in de stapmodus: de bladzijde (stap 1–16, 17–32, …); in de modus secties: de bladzijde van de secties (1–16, 17–32, 33–40); in de padmodus sampler: minder/meer tellen (§5f); **SHIFT + ◄ ►** = korter/langer (`.pattern.length.down/up`) |
 | **◄ ►** (links boven) | de knoppagina: **Instrument** (zoals hierboven) · **Strip** · **Rack** van de focus-track (§5c); niet rondlopend, het lampje zegt of het kan |
 | **CONTROL** vasthouden | uitleg: wat je dan aanraakt gebeurt niet, het scherm zegt wat het hier doet (§5c) |
 | F1–F8, GRID, NOTE REPEAT, … | vrij (ontwerp voor de DJ-kant: de Maschine-kaart, `~/Projects/maschine-lab/kaart/`) |
@@ -272,8 +273,8 @@ naast **APC** in de bovenbalk (korte namen, de tooltip zegt "…-kaart": op 1440
   `invoke` doet daar niets, geen MIDI, geen hub.
 - **Zonder mixer** (los geopend): een Maschine zonder engine, focus op track 1, geen
   instrument; de kop zegt "niet live".
-- Getest: `test/maschine-kaart.test.mjs` (1728 keer tekst = legUit over 2 engines × 3
-  pagina's × 4 padmodi, elke regel van de indeling niet vrij, de stand blijft staan, niets naar
+- Getest: `test/maschine-kaart.test.mjs` (2160 keer tekst = legUit over 2 engines × 3
+  pagina's × 5 padmodi (sinds SAMPLING), elke regel van de indeling niet vrij, de stand blijft staan, niets naar
   de bus) en `tools/headless/maschine-kaart.mjs` (los en live vanuit de mixer met een nep-poort:
   volgen, aanraken, schermen, niet volgen, shift; de bovenbalk past in rust op 1440 px: 1421, maar in
   gebruik (audio aan, log loopt) niet: 1544, op main al 1506; zie HANDOFF). NIET getest: met de echte
@@ -313,6 +314,37 @@ Het ontwerp van de Maschine-kaart, keuze "wiel" (advies): **BROWSE schakelt naar
   ENTER, ◄ ►, loslaten na sluiten, lampjes, schermen, uitleg) en `tools/headless/bladeren.mjs` (twee
   testnummers door de ingest: BROWSE, wiel, laden, tweede druk over een spelende track, klik op een rij,
   dicht = weer instrumenten). NIET getest: met de echte Maschine.
+
+## 5f. De sampler op de Maschine (gebouwd 8 okt, tak `studio/maschine-sampler`)
+
+Clay: "als ik op de maschine op sample click wil ik alle mogelijkheden op de maschine krijgen". Het ontwerp
+(de Maschine-kaart, padmodus Sampler) had vier sectie-pads; hier zijn het er acht, zodat alles van de
+sampler (zoals de modus sampler op de APC) op de Maschine zit.
+
+**SAMPLING** = padmodus sampler, zoals STEP en SCENE (één padmodus tegelijk; nog eens = weer spelen).
+
+| Waar | Wat |
+|---|---|
+| bovenste rij (pad 13–16) | sampler-pad 1–4 (`sampler.K`): leeg = de laatste tellen van de **focus-track** knippen, of het bewaarde stuk terughalen; gevuld = op de tel starten / stoppen |
+| tweede rij (pad 9–12) | sampler-pad 5–8 |
+| derde rij (pad 5–8) | sectie → pad 1–4 (`sampler.K.section`): de sectie die je HOORT op de focus-track, in die (lege) pad |
+| onderste rij (pad 1–4) | sectie → pad 5–8 |
+| **SHIFT** + pad | `sampler.K.clear`: een gevulde pad leeg (bewaard blijft bewaard), een lege bewaarde pad vergeten (beide rijen van die pad) |
+| **◄ ►** (transport) | minder/meer tellen voor een lege pad: 1 · 2 · 4 · 8 (`sampler.length.down/up`, niet rondlopend); SHIFT + ◄ ► blijft het patroon korter/langer |
+| **draaiknop 5** | het sampler-volume (`sampler.volume`; SHIFT = fijn). Draaiknop 1–4 en 6–8 blijven van de pagina |
+
+- Laag `sampler` in de mapping (maschine.js zet hem vooraan in `lagen` zolang de padmodus sampler aan is):
+  draaiknop 5 en ◄ ►. De pads zelf doet maschine.js (`samplerActie(pad, shift)`; loslaten naar dezelfde action).
+- **Lampjes:** sample-pads violet zoals de modus sampler op de APC: fel = speelt, donker = gevuld, grijs = bewaard, wit = knipt,
+  donkergrijs = leeg. Sectie-pads: blauw = kan (lege pad, de focus-track heeft secties), wit = ingedrukt, uit = kan
+  niet. SHIFT vast: rood waar iets te wissen valt. SAMPLING fel in de modus; ◄ ► half zolang er die kant op nog kan.
+- **Schermen:** links "SAMPLER T1" (T = de focus-track: daar knipt een lege pad van) met de lengte en het volume, acht vakjes zoals de pads liggen ("T1 4t" = van track 1,
+  4 tellen; "(T2)" = bewaard; "knipt"; een pad die speelt omgekeerd), onderaan welke sectie een sectie-pad nu pakt;
+  rechts draaiknop 5–8 (5 = volume), onderaan "SAMPLING = weer spelen".
+- Bus: `sampler.length.up/down` zijn nieuw (de rest bestond al). De Maschine-kaart kent de padmodus sampler.
+- Getest: `test/maschine-sampler.test.mjs` (de pads per rij, SHIFT, loslaten, ◄ ►, draaiknop 5, lampjes, scherm,
+  uitleg), `engine.test` (length.up/down), en headless `tools/headless/maschine-sampler.mjs` met de ECHTE sampler
+  (knippen, spelen op de tel, stoppen, tellen, volume, leeg). NIET getest: met de echte Maschine.
 
 ## 6. De Xboard49
 

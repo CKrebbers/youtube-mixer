@@ -1024,6 +1024,14 @@ console.log('\nsampler');
   sm.onGevuld = sm.onVergeet = null;
   invoke('sampler.length', true);
   ok('lengte-knop loopt rond', [1, 2, 4, 8].includes(sm.tellen));
+  // Korter/langer zonder rondlopen (de Maschine: ◄ ► in de stand sampler, docs/MASCHINE.md §5f).
+  sm.tellen = 2;
+  invoke('sampler.length.up', true); invoke('sampler.length.up', true);
+  const boven = sm.tellen;
+  invoke('sampler.length.up', true);
+  ok('sampler.length.up: 2 → 4 → 8, en blijft op 8 (read null = kan niet verder)', boven === 8 && sm.tellen === 8 && read('sampler.length.up') === null && read('sampler.length.down') === 0.5);
+  for (let i = 0; i < 5; i++) invoke('sampler.length.down', true);
+  ok('sampler.length.down: tot 1 en niet verder', sm.tellen === 1 && read('sampler.length.down') === null && read('sampler.length.up') === 0.5);
 }
 
 // ---- ronde 1 van de verbeteringen (23 sep): engine-correctheid -------------

@@ -266,7 +266,7 @@ function tekenDj(buf, s, nr) {
   lijn(buf, 0, BREED - 1, 53, true);
   const onder = nr === 0
     ? (s.shift ? 'SHIFT: draaiknoppen fijn' : `< > pagina ${(s.paginaNr ?? 0) + 1}/${s.paginas ?? 1}: ${s.paginaNaam ?? ''}`)
-    : (s.melding || 'CONTROL + knop = uitleg');
+    : (s.melding || (s.modus === 'sampler' ? 'SAMPLING = weer spelen' : 'CONTROL + knop = uitleg'));
   tekst(buf, 2, 56, pasIn(onder, REGEL));
   return buf;
 }
@@ -300,10 +300,37 @@ function tekenUitleg(buf, s, nr) {
   }
   kop(buf, 2, 1, 'overal', BREED - 4);
   lijn(buf, 0, BREED - 1, 17);
-  ['< > links boven: knoppagina', 'groep A-H: focus op een track', 'STEP: stappen   SCENE: secties', 'BROWSE: library   SHIFT: fijn']
+  ['< > links boven: knoppagina', 'groep A-H: focus op een track', 'STEP SCENE SAMPLING: padmodus', 'BROWSE: library   SHIFT: fijn']
     .forEach((r, i) => tekst(buf, 2, 20 + i * 8, r));
   lijn(buf, 0, BREED - 1, 53, true);
   tekst(buf, 2, 56, pasIn(`nu: pagina ${s.paginaNaam ?? ''}`, REGEL));
+  return buf;
+}
+
+/**
+ * De padmodus sampler links (stand.sampler, docs/MASCHINE.md §5f): kop "SAMPLER" omgekeerd met
+ * de lengte en het volume; acht vakjes zoals de pads liggen (boven pad 1–4, daaronder 5–8): het
+ * nummer en wat erin zit ("T1 4t" = van track 1, 4 tellen; "(T2)" = bewaard, terug te halen;
+ * "knipt"; "leeg"), een pad die speelt omgekeerd. Onderaan welke sectie een sectie-pad nu pakt.
+ */
+function tekenSampler(buf, s) {
+  const c = s.sampler;
+  vul(buf, 0, 0, BREED, 10);
+  tekst(buf, 2, 1, c.focus ? `SAMPLER T${c.focus}` : 'SAMPLER', 1, true);   // T = waar een lege pad van knipt (de focus-track)
+  const kop = [c.tellen ? `${c.tellen} tel${c.tellen === 1 ? '' : 'len'}` : '', c.volume == null ? '' : `vol ${Math.round(c.volume * 100)}%`].filter(Boolean).join('  ');
+  if (kop) tekst(buf, BREED - 2 - tekstBreedte(kop), 1, kop, 1, true);
+  for (let n = 0; n < 8; n++) {
+    const p = c.pads?.[n] ?? {};
+    const x = (n % 4) * KOLOM, y = n < 4 ? 12 : 31;
+    const wat = p.bezig ? 'knipt' : p.gevuld ? `T${p.bron ?? '?'} ${p.tellen ?? '?'}t` : p.bewaard ? `(T${p.bewaardBron ?? '?'})` : 'leeg';
+    if (p.speelt) vul(buf, x, y - 1, KOLOM - 1, 18);
+    tekst(buf, x + 2, y, String(n + 1), 1, !!p.speelt);
+    tekst(buf, x + 2, y + 9, pasIn(wat), 1, !!p.speelt);
+    if (n % 4) staander(buf, x - 1, y - 1, y + 16, true);
+  }
+  lijn(buf, 0, BREED - 1, 29, true);
+  lijn(buf, 0, BREED - 1, 53, true);
+  tekst(buf, 2, 56, pasIn(s.melding || (c.sectie ? `onder: sectie ${c.sectie}` : 'SHIFT+pad = leeg  < > = tellen'), REGEL));
   return buf;
 }
 
@@ -368,6 +395,7 @@ function tekenBladeren(buf, s, nr) {
  *   modus:     'spelen' | 'stappen' | 'secties'
  *   secties:   { nr, wat, aantal, blad, bladen, namen[16], aan[16], hoort, naar } | null   (modus secties, maschine.js)
  *   bladeren:  { gekozen, totaal, rijen[{ titel, bpm, gekozen }], track, focus, melding, zoek, laadt } | null   (de library open)
+ *   sampler:   { pads[8] (sampler.stand()), tellen, volume, focus, sectie } | null   (padmodus sampler)
  * }
  * @param nr 0 = links (knop 1–4), 1 = rechts (knop 5–8)
  * @returns Uint8Array(2048)
@@ -380,7 +408,9 @@ export function tekenScherm(stand, nr) {
   // ---- bladeren (de library open): de lijst en het gekozen nummer ----
   if (s.bladeren) return tekenBladeren(buf, s, nr);
   // ---- de pagina's Strip en Rack: de focus-track en zijn knoppen ----
-  if (s.dj && !((s.patroonVast || s.modus === 'stappen' || s.modus === 'secties') && nr === 0)) return tekenDj(buf, s, nr);
+  if (s.dj && !((s.patroonVast || s.modus === 'stappen' || s.modus === 'secties' || s.modus === 'sampler') && nr === 0)) return tekenDj(buf, s, nr);
+  // Links in de padmodus sampler: de acht pads in plaats van knop 1–4.
+  if (nr === 0 && s.modus === 'sampler' && s.sampler && !s.patroonVast) return tekenSampler(buf, s);
   // ---- kop ----
   // Links in de stapmodus of met PATTERN vast: het gekozen patroon in plaats van knop 1–4.
   if (nr === 0 && s.speel && s.patroon && (s.patroonVast || s.modus === 'stappen')) {
@@ -424,7 +454,8 @@ export function tekenScherm(stand, nr) {
     const k = knoppen[nr * 4 + i];
     const x = i * KOLOM;
     if (i > 0) staander(buf, x - 1, 19, 50, true);
-    if (!s.speel || !k || k.waarde === null || k.waarde === undefined) {
+    // Zonder instrument alleen het nummer, behalve een knop die niet van het instrument is (k.vast: sampler-volume).
+    if ((!s.speel && !k?.vast) || !k || k.waarde === null || k.waarde === undefined) {
       tekst(buf, x + 2, 21, String(nr * 4 + i + 1));
       continue;
     }
@@ -436,7 +467,7 @@ export function tekenScherm(stand, nr) {
   lijn(buf, 0, BREED - 1, 53, true);
   const onder = nr === 0
     ? (s.shift ? 'SHIFT: draaiknoppen fijn' : s.speel ? 'pads + keyboard spelen hier' : 'zet een instrument met het wiel')
-    : (s.melding || (s.kandidaat ? 'druk op het wiel = zetten' : 'wiel = instrument kiezen'));
+    : (s.melding || (s.kandidaat ? 'druk op het wiel = zetten' : s.modus === 'sampler' ? 'SAMPLING = weer spelen' : 'wiel = instrument kiezen'));
   tekst(buf, 2, 56, pasIn(onder, Math.floor((BREED - 4) / STAP)));
   return buf;
 }

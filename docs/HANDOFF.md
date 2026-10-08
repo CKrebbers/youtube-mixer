@@ -14,6 +14,19 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 8 OKT: DE SAMPLER OP DE MASCHINE (tak `studio/maschine-sampler`)
+
+- **Wat:** SAMPLING op de Maschine = padmodus sampler. Boven de 8 sampler-pads (leeg = knippen of het bewaarde stuk
+  terug, gevuld = op de tel starten/stoppen), onder een sectie in pad 1–8, SHIFT + pad = leeg/vergeten, ◄ ►
+  (transport) = minder/meer tellen, draaiknop 5 = volume. Lampjes zoals de modus sampler op de APC, links op het scherm
+  de acht pads. Clay: "alle mogelijkheden op de maschine". `docs/MASCHINE.md` §5f.
+- **Review (tweede agent):** niets hangt of gaat kapot; verwerkt: de kleur is violet zoals op de APC (ik had magenta),
+  met PATTERN vast in sampler zei de uitleg "bladzijde" terwijl ◄ ► tellen doen, knop 5 heette op de losse kaart niet
+  "volume", de kaart toont ◄ ► per padmodus, het scherm zegt van welke track een lege pad knipt, docs; plus tests voor
+  loslaten na een wissel, PATTERN vast, Strip en de library open.
+- **Getest:** `node test/alles.mjs` 66 bestanden, 6707 checks, groen; `test/maschine-sampler.test.mjs`; headless
+  `maschine-sampler.mjs` met de echte sampler, `maschine-kaart.mjs` en `bladeren.mjs` groen. NIET getest: met de echte Maschine.
+
 ## 8 OKT: BLADEREN IN DE LIBRARY MET DE MASCHINE (tak `studio/maschine-browse`)
 
 - **Wat:** BROWSE op de Maschine opent de library (het paneel in de mixer). Zolang hij open is: het masterwiel
