@@ -85,6 +85,9 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   elke fader, knop en knob van de acht kolommen en de hele sampler binnen het scherm, niet weggeknipt
   en niet bedekt (elementFromPoint), faders ≥ 56 px, de pagina en main scrollen niet, elke open rij
   helemaal te zien (zo nodig door het rij-gebied te scrollen), en een melding boven de rijen.
+  De SCHUIFBALK zet de proef zelf vast (anders hing de uitkomst af van of Clay's muis verbonden was):
+  alles met een gewone (15 px, zoals met een muis), en 1440×790 nog eens met een zwevende (trackpad), met
+  de eis dat er in een scrollend rij-gebied niets in de 15 px aan de rand ligt.
   Schermafdrukken `rijen-<label>-<maat>-<rijen>.png`, cijfers in `rijen-<label>.json`.
   `VARVE_WORTEL=<map>` draait de app uit een andere map (`git archive` van oude code: de stand vóór).
 - `tekenen.mjs` — hoeveel VARVE op zijn canvassen tekent (eigen server op 8823, geen MIDI): in rust ~0 Mpx/s

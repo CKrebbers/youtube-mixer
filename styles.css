@@ -643,8 +643,12 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 /* ---- de rijen (stems, koptelefoon, instrument, patronen, master, auto, klankschaal, beeld) ----
    Samen onder main, in één gebied dat zelf scrolt: main houdt zijn minimale
    hoogte (de faders op 56 px, de sampler heel) en de rijen krijgen de rest.
-   Staat er een open, dan blijft er minstens één lage rij (35 px) te zien. */
-.rijen{flex:0 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;anchor-name:--rijen}
+   Staat er een open, dan blijft er minstens één lage rij (35 px) te zien.
+   8 px rechts: met alleen een trackpad zweeft de schuifbalk van macOS OVER de
+   inhoud (±15 px van de rand), en lag hij tijdens het scrollen over de rechterrand
+   van VOL in de klankschaal-rij (7 okt, rijen.mjs). Met een muis neemt hij zelf
+   ruimte; de rijen rekken mee, dus die 8 px kosten niets. */
+.rijen{flex:0 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;anchor-name:--rijen;padding-right:8px}
 .rijen:has(> section:not(.hidden)){min-height:35px}
 
 /* ---- auto-dj ---- */
