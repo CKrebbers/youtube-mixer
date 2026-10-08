@@ -68,6 +68,12 @@ import { eqDb, filterDoelen } from '../engine/audio-graph.js';
  *   eenheden (dB uit eqDb, Hz uit filterDoelen) en een balk; de knop die je draait
  *   staat even omgekeerd.
  *
+ * SAMPLER (SAMPLING, docs/MASCHINE.md §5f): padmodus sampler (zoals STEP en SCENE, één tegelijk).
+ *   Bovenste rij = sampler-pad 1–4, tweede rij = 5–8 (`sampler.K`: leeg = knippen of het bewaarde
+ *   stuk terug, gevuld = op de tel starten/stoppen); derde rij = sectie → pad 1–4, onderste = 5–8
+ *   (`sampler.K.section`); SHIFT + pad = `sampler.K.clear`. Laag `sampler` in de mapping: ◄ ►
+ *   (transport) = minder/meer tellen, draaiknop 5 = sampler-volume. Links op het scherm de 8 pads.
+ *
  * BLADEREN (BROWSE, docs/MASCHINE.md §5e): zolang de library open is (`library.toggle`, ook
  *   met de muis of B geopend) loopt het masterwiel door de lijst (`library.next/prev`), en
  *   laden ENTER en het wiel indrukken het gekozen nummer op de FOCUS-track
@@ -119,6 +125,21 @@ export const nootNaam = (n) => `${NAMEN[((n % 12) + 12) % 12]}${Math.floor(n / 1
 /** De knoppagina's (◄ ► links boven), in deze volgorde; 'instrument' = de regels zonder laag. */
 export const PAGINAS = ['instrument', 'strip', 'rack'];
 export const PAGINA_NAAM = { instrument: 'Instrument', strip: 'Strip', rack: 'Rack' };
+/**
+ * De pads in de padmodus sampler (§5f), zoals je ernaar kijkt: bovenste rij (pad 13–16) =
+ * sampler-pad 1–4, tweede rij (9–12) = 5–8, derde (5–8) = sectie → pad 1–4, onderste (1–4) =
+ * sectie → pad 5–8. Puur: pad 1..16 → { k: sampler-pad 1..8, soort: 'sample' | 'sectie' }.
+ */
+export function samplerPad(pad) {
+  const rij = Math.floor((pad - 1) / 4), kol = (pad - 1) % 4;
+  return rij >= 2 ? { k: kol + (rij === 3 ? 1 : 5), soort: 'sample' } : { k: kol + (rij === 1 ? 1 : 5), soort: 'sectie' };
+}
+/** De action van een pad in de padmodus sampler; met SHIFT: leegmaken (of vergeten). */
+export const samplerActie = (pad, shift) => {
+  const { k, soort } = samplerPad(pad);
+  return shift ? `sampler.${k}.clear` : soort === 'sample' ? `sampler.${k}` : `sampler.${k}.section`;
+};
+
 /** Zo lang staat de draaiknop die je draaide omgekeerd op het scherm. */
 export const GEDRAAID_MS = 1000;
 /** Knipperen tijdens de uitleg: zo lang aan, zo lang zacht. */
@@ -158,6 +179,7 @@ export const UITLEG = {
   browseR: { kort: 'pagina ►', soort: 'mapje', tekst: 'volgende knoppagina: Instrument, Strip, Rack' },
   step: { kort: 'stappen', soort: 'patroon', tekst: 'stapmodus aan/uit: de pads zijn de stappen van het gekozen patroon op de speeltrack' },
   scene: { kort: 'secties', soort: 'sectie', tekst: 'padmodus secties aan/uit: pad K = sectie K van de focus-track, valt in op de volgende "1"' },
+  sampling: { kort: 'sampler', soort: 'sampler', tekst: 'padmodus sampler aan/uit: boven de 8 sampler-pads, onder een sectie in pad 1-8, SHIFT + pad = leeg; < > = tellen, knop 5 = volume' },
   pattern: { kort: 'plek kiezen', soort: 'patroon', tekst: 'vasthouden + pad 1-5: een patroonplek kiezen op de speeltrack' },
   stapL: { kort: '◄ blad', soort: 'patroon', tekst: 'stappen of secties: vorige bladzijde. SHIFT: het patroon korter' },
   stapR: { kort: 'blad ►', soort: 'patroon', tekst: 'stappen of secties: volgende bladzijde. SHIFT: het patroon langer' },
@@ -179,7 +201,7 @@ export class Maschine extends Emitter {
     Object.assign(this, { engine, noten, read, invoke, nu, beschrijf, library });
     this.pagina = 'instrument';     // de knoppagina (◄ ► links boven): een open "mapje" voor de mapping
     this.mapping = new Mapping({ read, invoke, now: nu,
-      lagen: () => [`pagina.${this.pagina}`, ...(this.bladeren() ? ['bladeren'] : [])],
+      lagen: () => [...(this.modus === 'sampler' ? ['sampler'] : []), `pagina.${this.pagina}`, ...(this.bladeren() ? ['bladeren'] : [])],
       vars: () => ({ focus: trackVanDeck(engine.focus), speel: trackVanDeck(engine.speeltrack?.() ?? null), plek: this.plek() }) });
     this.uitleg = null;             // CONTROL vast: { wat: { titel, tekst } | null }
     this.uitlegVast = new Set();    // knoppen/pads die tijdens de uitleg ingedrukt werden: hun loslaten gaat nergens heen
@@ -207,6 +229,7 @@ export class Maschine extends Emitter {
   /** Een eigen uitleg (UITLEG) voor deze knop, als die nu geldt; met de library open laden wiel en ENTER (de mapping). */
   eigenUitleg(naam) {
     if ((naam === 'wiel' || naam === 'enter') && this.bladeren()) return null;
+    if ((naam === 'stapL' || naam === 'stapR') && this.modus === 'sampler') return null;   // zoals ontvang(): ook met PATTERN vast
     return UITLEG[naam] ?? null;
   }
 
@@ -341,10 +364,11 @@ export class Maschine extends Emitter {
     if (msg.type === 'note' && msg.channel === KNOP_KANAAL) {
       if (msg.number === knopNoot('step')) { if (msg.on) this.zetModus(this.modus === 'stappen' ? 'spelen' : 'stappen'); return true; }
       if (msg.number === knopNoot('scene')) { if (msg.on) this.zetModus(this.modus === 'secties' ? 'spelen' : 'secties'); return true; }
+      if (msg.number === knopNoot('sampling')) { if (msg.on) this.zetModus(this.modus === 'sampler' ? 'spelen' : 'sampler'); return true; }
       if (msg.number === knopNoot('pattern')) { this.patroonVast = !!msg.on; return true; }
       // ◄ ► (transport) zonder SHIFT: de bladzijde van de stappen of de secties. Met SHIFT: de mapping (korter/langer).
       const stap = msg.number === knopNoot('stapL') ? -1 : msg.number === knopNoot('stapR') ? 1 : 0;
-      if (stap && !this.mapping.shift && !this.mapping.vast.has(msg.sig)) {
+      if (stap && !this.mapping.shift && !this.mapping.vast.has(msg.sig) && this.modus !== 'sampler') {
         if (msg.on && this.modus === 'stappen') this.bladzijde = Math.max(0, Math.min(this._bladzijden() - 1, this.bladzijde + stap));
         if (msg.on && this.modus === 'secties') this.sectieBlad = Math.max(0, Math.min(this._sectieBladen() - 1, this.sectieBlad + stap));
         return msg.on && (this.modus === 'stappen' || this.modus === 'secties');
@@ -371,7 +395,7 @@ export class Maschine extends Emitter {
 
   /** STEP en SCENE: spelen, stappen of secties (één padmodus tegelijk). */
   zetModus(modus) {
-    this.modus = modus === 'stappen' || modus === 'secties' ? modus : 'spelen';
+    this.modus = modus === 'stappen' || modus === 'secties' || modus === 'sampler' ? modus : 'spelen';
     this._bladzijden();
     this._sectieBladen();
   }
@@ -429,6 +453,9 @@ export class Maschine extends Emitter {
     }
     if (msg.type === 'cc' && msg.number >= ENCODER_CC && msg.number < ENCODER_CC + 8) {
       const k = msg.number - ENCODER_CC + 1;
+      // In de padmodus sampler gaat de laag `sampler` voor (draaiknop 5 = volume).
+      const viaSampler = this.modus === 'sampler' ? this.mapping.kies(msg.sig, { shift: false }) : null;
+      if (viaSampler?.laag === 'sampler') return { titel: `draaiknop ${k} (sampler)`, tekst: `${this._beschrijfActie(viaSampler.action)}. SHIFT = fijn` };
       const titel = `draaiknop ${k} (${PAGINA_NAAM[this.pagina]})`;
       const nr = trackVanDeck(this.engine.focus ?? null);
       if (this.pagina === 'strip') return { titel, tekst: `${STRIP[k - 1].label} van track ${nr ?? '?'} (focus): ${STRIP[k - 1].uitleg}. SHIFT = fijn` };
@@ -456,6 +483,12 @@ export class Maschine extends Emitter {
     const titel = `pad ${pad}`;
     if (this.patroonVast) return { titel, tekst: pad <= PLEKKEN ? `patroonplek ${pad} kiezen op de speeltrack` : 'doet niets zolang PATTERN vastzit (pad 1-5 kiezen een plek)' };
     if (this.modus === 'secties') return { titel, tekst: `sectie ${this.sectieBlad * STAPPEN + pad} van de focus-track; valt in op de volgende "1"` };
+    if (this.modus === 'sampler') {
+      const { k, soort } = samplerPad(pad);
+      return { titel, tekst: soort === 'sample'
+        ? `sampler-pad ${k}: leeg = de laatste tellen van de focus-track knippen (of het bewaarde stuk terug), gevuld = op de tel starten/stoppen. SHIFT = leegmaken (leeg: vergeten)`
+        : `de sectie die je hoort op de focus-track in sampler-pad ${k} (alleen een lege pad). SHIFT = pad ${k} leegmaken` };
+    }
     if (this.modus === 'stappen') return { titel, tekst: `stap ${this.bladzijde * STAPPEN + pad} van het gekozen patroon aan/uit, met de laatst gespeelde noot` };
     const speel = this.engine.speeltrack?.() ?? null;
     const inst = speel ? this.engine.instrumentOp(speel) : null;
@@ -540,6 +573,13 @@ export class Maschine extends Emitter {
       this.padVast.set(noot, 'kies');
       if (id && pad <= PLEKKEN && this.engine.patronen?.kies) { this.engine.patronen.kies(id, pad); this.bladzijde = 0; return true; }
       return false;
+    }
+    if (this.modus === 'sampler') {
+      // Sampler-pad of sectie → pad (§5f); SHIFT = leegmaken. Loslaten naar dezelfde action.
+      const action = samplerActie(pad, !!this.mapping.shift);
+      this.padVast.set(noot, action);
+      this.invoke(action, true);
+      return true;
     }
     if (this.modus === 'secties') {
       // De sectie op deze pad van de focus-track, over de bus (op de maat, in het log). Ook
@@ -632,6 +672,26 @@ export class Maschine extends Emitter {
         const v = i >= PLEKKEN ? PALETTE.uit : i + 1 === plek && !(r >= 0.75) ? PALETTE.wit : kleurVan(r);
         uit.set(sleutel(PAD_KANAAL, PAD_NOOT + i), v);
       }
+    } else if (this.modus === 'sampler' && !this.patroonVast) {
+      // Sampler (§5f): violet zoals de modus sampler op de APC (feedback.js; §3: een pad heeft op beide
+      // controllers dezelfde kleur). Sample: fel = speelt, donker = gevuld,
+      // grijs = bewaard (terug te halen), wit = knipt nu, donkergrijs = leeg. Sectie: blauw = kan, wit =
+      // ingedrukt, uit = kan niet. SHIFT vast: rood waar iets te wissen valt.
+      const st = this.engine.sampler?.stand?.() ?? [];
+      const shift = this.mapping.shift;
+      for (let i = 0; i < 16; i++) {
+        const { k, soort } = samplerPad(i + 1);
+        let v = PALETTE.uit;
+        if (shift) v = this.read(`sampler.${k}.clear`) >= 0.25 ? PALETTE.rooddonker : PALETTE.uit;
+        else if (soort === 'sample') {
+          const p = st[k - 1];
+          v = !p ? PALETTE.uit : p.bezig ? PALETTE.wit : p.speelt ? PALETTE.violet : p.gevuld ? PALETTE.violetdonker : p.bewaard ? PALETTE.grijs : PALETTE.donkergrijs;
+        } else {
+          const r = this.read(`sampler.${k}.section`);
+          v = r === null || r === undefined ? PALETTE.uit : r >= 0.75 ? PALETTE.wit : PALETTE.hemelsblauwdonker;
+        }
+        uit.set(sleutel(PAD_KANAAL, PAD_NOOT + i), v);
+      }
     } else if (this.modus === 'secties' && !this.patroonVast) {
       // Secties van de focus-track (zoals de APC): wit = die hoor je (of drukt je in),
       // donker hemelsblauw = er is een sectie, uit = geen. Geen instrument nodig.
@@ -689,11 +749,17 @@ export class Maschine extends Emitter {
     knop('erase', pt ? helder(this.read(`track.${nr}.pattern.clear`)) : HELDER.uit);
     // Secties: zacht aan als de focus-track ze heeft, fel in de modus.
     knop('scene', this.modus === 'secties' ? HELDER.aan : this._sectieKaart() ? HELDER.beschikbaar : HELDER.uit);
+    knop('sampling', !this.engine.sampler ? HELDER.uit : this.modus === 'sampler' ? HELDER.aan : HELDER.beschikbaar);
     const secties = this.modus === 'secties';
     const bladen = secties ? this._sectieBladen() : pt && this.modus === 'stappen' ? this._bladzijden() : 0;
     const blad = secties ? this.sectieBlad : this.bladzijde;
     knop('stapL', bladen && blad > 0 ? HELDER.half : HELDER.uit);
     knop('stapR', bladen && blad < bladen - 1 ? HELDER.half : HELDER.uit);
+    if (this.modus === 'sampler') {
+      // ◄ ► = minder/meer tellen: half zolang het die kant op nog kan.
+      knop('stapL', this.read('sampler.length.down') != null ? HELDER.half : HELDER.uit);
+      knop('stapR', this.read('sampler.length.up') != null ? HELDER.half : HELDER.uit);
+    }
     // Knoppagina's: ◄ ► half als er die kant op een pagina is. CONTROL zacht, fel tijdens de uitleg.
     const p = PAGINAS.indexOf(this.pagina);
     knop('browseL', p > 0 ? HELDER.half : HELDER.uit);
@@ -731,6 +797,11 @@ export class Maschine extends Emitter {
       try { tekst = p.eenheid ? p.eenheid(w) : null; } catch (_) { /* dan het percentage */ }
       return { label: p.label, waarde: w, tekst: tekst ?? `${Math.round((w ?? 0) * 100)}%` };
     });
+    if (this.modus === 'sampler') {
+      // Draaiknop 5 = het sampler-volume (laag `sampler`); 6–8 blijven van de pagina. Ook zonder sampler (de losse kaart): het label.
+      const v = this.read('sampler.volume');
+      knoppen[4] = { label: 'volume', waarde: v ?? null, tekst: v === null || v === undefined ? null : `${Math.round(v * 100)}%`, vast: true };
+    }
     const f = this.engine.focus;
     const fi = this.engine.instrumentOp(f);
     const k = this._kandidaat();
@@ -767,8 +838,28 @@ export class Maschine extends Emitter {
       dj: this.pagina !== 'instrument' ? this._djStand() : null,
       gedraaid: this.gedraaid && this.gedraaid.tot > nu ? this.gedraaid.k : null,
       uitleg: this.uitleg ? { titel: this.uitleg.wat?.titel ?? null, tekst: this.uitleg.wat?.tekst ?? null } : null,
+      sampler: this.modus === 'sampler' ? this._samplerStand() : null,
       bladeren: this.bladeren()
         ? { ...(this.library?.bladerStand?.(BLADER_RIJEN) ?? { gekozen: 0, totaal: 0, rijen: [], track: null }), focus: trackVanDeck(f ?? null) } : null,
+    };
+  }
+
+  /**
+   * De padmodus sampler voor het scherm (§5f): de 8 pads (wat erin zit, van welke track, speelt,
+   * bewaard, knipt), de lengte, het volume, en welke sectie een sectie-pad nu zou pakken.
+   */
+  _samplerStand() {
+    const s = this.engine.sampler;
+    const id = this.engine.focus ?? null;
+    const d = id ? this.engine.deck?.(id) ?? null : null;
+    const k = d?.buffer && d.sectieKaart ? d.sectieKaart : null;
+    const hier = k ? d.sectieHier : -1;
+    return {
+      pads: s?.stand?.() ?? [],
+      tellen: s?.tellen ?? null,
+      volume: s ? s.volume : null,
+      focus: trackVanDeck(id),
+      sectie: k && hier >= 0 && hier < k.aantal ? `${hier + 1} ${k.naam(hier)}` : null,
     };
   }
 

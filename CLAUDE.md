@@ -202,6 +202,7 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
                     maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
                     bladeren.mjs: BROWSE, wiel en ENTER op een nep-Maschine met een echte library (twee testnummers);
+                    maschine-sampler.mjs: SAMPLING op een nep-Maschine met de echte sampler (knippen, spelen, tellen, volume);
                     hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
@@ -273,6 +274,7 @@ test/
   maschine.test.mjs de Maschine (pads, groepen, draaiknoppen, wiel, lampjes, schermtempo), maschine-scherm (pixels), Xboard knop 9–16 en schuif, isSpeelapparaat
   maschine-kaart.test.mjs  de Maschine-kaart: tekst = legUit in elke pagina × padmodus, geen regel vrij, stand blijft staan, stuurt niets
   bladeren.test.mjs  bladeren in de library met de Maschine: bindLibrary, keuze/venster, terugspelen, wiel/ENTER/◄ ►, lampjes, schermen
+  maschine-sampler.test.mjs  de padmodus sampler op de Maschine: pads per rij, SHIFT, ◄ ► tellen, knop 5 volume, lampjes, scherm
   bovenbalk.test.mjs  de bovenbalk scrollt opzij als hij niet past (randen, CSS: niet hoger, geen schuifbalk)
   patronen.test.mjs model, venster (swing, micro, omlopen), klok, speler met nep-maatgever (op de maat, herankeren zonder dubbele/gemiste), opnemen, opslag (409), server
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
@@ -1594,6 +1596,10 @@ Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag mis
   `track.{focus}.load.selected` (laag `bladeren` in de mapping). De keuze leeft in het paneel (`gekozen`, een rij
   van de huidige sortering); laden gaat door het paneel, met de tweede druk over een spelende track. Terugspelen
   slaat `library.*` en `load.selected` over: de laad zelf staat al in het log.
+- De sampler (`docs/MASCHINE.md` §5f, 8 okt): SAMPLING = padmodus sampler (één padmodus tegelijk). Boven de 8
+  sampler-pads (`sampler.K`), onder een sectie in pad 1–8 (`sampler.K.section`), SHIFT + pad = `sampler.K.clear`
+  (`samplerPad`/`samplerActie` in maschine.js). Laag `sampler` VOORAAN in `lagen`: ◄ ► = `sampler.length.down/up`,
+  draaiknop 5 = `sampler.volume`; de andere draaiknoppen blijven van de pagina.
 - Toetsen: `node test/maschine.test.mjs`, `node test/hub.test.mjs`, en headless
   `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
   HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een
