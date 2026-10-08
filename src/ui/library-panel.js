@@ -4,7 +4,7 @@ import { libraryToon, KIEZER } from './toon-weergave.js';
 import { ToonKaart, camelot, kortNaam, volleNaam } from '../engine/toonsoort.js';
 import {
   RIJ_H, PaginaCache, lijstUrl, zichtbaar, volgendeSortering, leesSortering, bewaarSortering,
-  kolomSjabloon, kopHtml, cellenHtml, standaardOpslag, stemsCelHtml,
+  kolomSjabloon, kopHtml, cellenHtml, standaardOpslag, stemsCelHtml, klemKeuze, bladerVenster,
 } from './library-lijst.js';
 import { IngestStrook } from './ingest-strook.js';
 
@@ -41,6 +41,8 @@ export class LibraryPanel {
     this.bezig = new Set();     // tracks die nu geladen worden
     this.analyseert = new Set(); // tracks waarvan grid en toonsoort nu opnieuw geanalyseerd worden
     this.melding = null;
+    this.gekozen = 0;            // de rij waar je met een controller op staat (bladeren, docs/MASCHINE.md §5e)
+    this.gekozenId = null;       // ...en welk NUMMER dat is: een ingest bovenaan schuift de rijen op
     this.zoek = '';
     // De lijst: pagina's van de server, alleen zichtbare rijen getekend (library-lijst.js).
     this.opslag = opslag;
@@ -187,6 +189,9 @@ export class LibraryPanel {
         }
         return this.verwijder(weg.dataset.weg);
       }
+      // Een klik op een rij (niet op een knop) zet de keuze daar: muis en controller wijzen hetzelfde aan.
+      const rij = e.target.closest('.lib-rij[data-i]');
+      if (rij && !e.target.closest('button, input, select')) { this._zetKeuze(Number(rij.dataset.i)); this.tekenRijen(); }
     });
 
     this.ververs();
@@ -204,6 +209,88 @@ export class LibraryPanel {
   }
 
   get open() { return !this.root.classList.contains('hidden'); }
+
+  /** Een melding onthoudt wanneer hij kwam (het scherm van de Maschine toont alleen een verse). */
+  get melding() { return this._melding; }
+  set melding(m) { this._melding = m; this._meldingT = Date.now(); }
+
+  // ---- bladeren met een controller (docs/MASCHINE.md §5e) ------------------------
+
+  /** De keuze op rij `i` (binnen de lijst), en onthouden welk nummer dat is. */
+  _zetKeuze(i) {
+    this.gekozen = klemKeuze(i, 0, this.cache.totaal);
+    this.gekozenId = this.cache.rij(this.gekozen)?.id ?? null;
+  }
+
+  /** De rijen rond de keuze ophalen (het scherm van de Maschine, ENTER); daarna het nummer erbij onthouden. */
+  async _rondKeuze() {
+    const nieuw = await this.cache.zorgVoor(Math.max(0, this.gekozen - 3), this.gekozen + 4);
+    if (!this.gekozenId) this.gekozenId = this.cache.rij(this.gekozen)?.id ?? null;
+    if (nieuw) this._tekenStraks();
+  }
+
+  /** Eén keer tekenen bij het volgende beeld (het wiel kan 20 stappen in één bericht sturen). */
+  _tekenStraks() {
+    if (this._straks) return;
+    this._straks = requestAnimationFrame(() => { this._straks = 0; this.tekenRijen(); });
+  }
+
+  /**
+   * Na een verversing: de keuze blijft op hetzelfde NUMMER (een ingest bovenaan schuift
+   * alles een rij op), anders binnen de lijst. Staat het nummer niet in de pagina's die de
+   * lijst nu heeft (je keek ergens anders), dan eerst die rond de keuze ophalen.
+   */
+  async _volgKeuze() {
+    const id = this.gekozenId;
+    let i = id ? this.cache.index(id) : -1;
+    if (i < 0 && id) {
+      await this.cache.zorgVoor(Math.max(0, this.gekozen - 10), this.gekozen + 11);
+      if (this.gekozenId !== id) return;          // intussen verder gebladerd
+      i = this.cache.index(id);
+    }
+    if (i >= 0) this.gekozen = i;
+    else this._zetKeuze(this.gekozen);
+    await this._rondKeuze();
+    this._tekenStraks();
+  }
+
+  /** De keuze `stap` rijen verder, in beeld, en de rijen eromheen ophalen (ook voor het scherm van de Maschine). */
+  kies(stap) {
+    const totaal = this.cache.totaal;
+    if (!totaal) return;
+    this._zetKeuze(klemKeuze(this.gekozen, stap, totaal));
+    const el = this.el.rijen, kop = this.el.kop?.offsetHeight || 0;
+    const boven = kop + this.gekozen * RIJ_H, onder = boven + RIJ_H;
+    if (boven - kop < el.scrollTop) el.scrollTop = boven - kop;
+    else if (onder > el.scrollTop + el.clientHeight) el.scrollTop = onder - el.clientHeight;
+    this._tekenStraks();
+    this._rondKeuze();
+  }
+
+  /**
+   * Het gekozen nummer laden op `deck`. Over een track die speelt pas bij een tweede keer
+   * binnen 3 s. Het NUMMER dat gekozen is, niet de rij: die kan intussen verschoven zijn.
+   */
+  laadGekozen(deck) {
+    this.gekozen = klemKeuze(this.gekozen, 0, this.cache.totaal);
+    const t = (this.gekozenId && this._track(this.gekozenId)) || this.cache.rij(this.gekozen);
+    if (!t) {
+      this.melding = { tekst: this.cache.totaal ? 'dat nummer is nog niet binnen, even wachten' : 'de library is leeg', goed: false };
+      this._rondKeuze();
+      return this.tekenStatus();
+    }
+    if (this.stand(deck) === 'speelt' && !this._bevestigd('laad', `${t.id}:${deck}`)) {
+      this.melding = { tekst: `"${t.titel}": track ${this.label(deck)} speelt, nog eens om er toch overheen te laden`, goed: false };
+      return this.tekenStatus();
+    }
+    return this.laad(t.id, deck);
+  }
+
+  /** Voor een klein scherm: de rijen rond de keuze, en een melding van de laatste 3 s (zo lang telt een tweede druk). */
+  bladerStand(n = 5, nu = Date.now()) {
+    const vers = this._melding && nu - (this._meldingT ?? 0) < 3000;
+    return { ...bladerVenster(this.cache, this.gekozen, n), zoek: this.zoek, laadt: this.bezig.size > 0, melding: vers ? this._melding.tekst : null };
+  }
 
   /** Wat er nu van de lijst geladen is, op volgorde (console; de lijst zelf staat in `cache`). */
   get tracks() { return this.cache.geladen; }
@@ -533,7 +620,7 @@ export class LibraryPanel {
    */
   async ververs({ bovenaan = false } = {}) {
     // Nieuwe zoekterm of sortering: de kiezer hoort bij een rij die nu ergens anders staat.
-    if (bovenaan) { this.el.rijen.scrollTop = 0; this.kiezer = null; }
+    if (bovenaan) { this.el.rijen.scrollTop = 0; this.kiezer = null; this.gekozen = 0; this.gekozenId = null; }
     const { van, tot } = this._venster(Math.max(this.cache.totaal, 1));
     try {
       if (!(await this.cache.ververs({ zoek: this.zoek, ...this.sortering }, van, tot))) return;
@@ -543,6 +630,7 @@ export class LibraryPanel {
     this.tekenStatus();
     this.tekenRijen();
     this._haalZichtbaar();
+    this._volgKeuze();
   }
 
   /** Welke rijen er nu in beeld zijn (met marge). */
@@ -599,11 +687,11 @@ export class LibraryPanel {
     let kiezer = '';
     for (let i = van; i < tot; i++) {
       const t = this.cache.rij(i);
-      if (!t) { rijen.push('<div class="lib-rij laadt"><span class="lib-titel">…</span></div>'); continue; }
+      if (!t) { rijen.push(`<div class="lib-rij laadt${i === this.gekozen ? ' gekozen' : ''}" data-i="${i}"><span class="lib-titel">…</span></div>`); continue; }
       const laadt = this.bezig.has(t.id);
       const her = this.analyseert.has(t.id);
       this._stemsHtml.set(t.id, stemsCelHtml(t, staat));
-      rijen.push(`<div class="lib-rij">${cellenHtml(t, nu, staat)}
+      rijen.push(`<div class="lib-rij${i === this.gekozen ? ' gekozen' : ''}" data-i="${i}">${cellenHtml(t, nu, staat)}
         <span class="lib-knoppen">
           ${this.decks.map((d, k) => `<button class="btn sm lib-trk ${standen[k]}" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)} (${standen[k]})"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}
           <button class="btn sm lib-her${her ? ' bezig' : ''}" data-her="${esc(t.id)}" title="grid en toonsoort opnieuw analyseren${t.grid?.slot || t.toon?.slot ? ' (staat op slot: tweede klik)' : ''}">${her ? '…' : '↻'}</button>

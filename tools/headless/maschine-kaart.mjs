@@ -108,7 +108,7 @@ try {
   ok('niet live, en dat staat er', /niet live/.test(await L('live()')), await L('live()'));
   ok('beginstand: pagina Instrument, pads spelen', JSON.stringify(await L('aan()')) === '["instrument","spelen"]', JSON.stringify(await L('aan()')));
   ok('pad 1 = C2, groep A = focus 1, PLAY = patroon', (await L("label('pad1')")) === 'C2' && (await L("label('groepA')")) === 'focus 1' && /pat/.test(await L("label('play')")));
-  ok('vrije knoppen zijn gedimd (F1, BROWSE)', await los.ev("document.querySelector('#plaat [data-id=\"f1\"]').classList.contains('s-vrij') && document.querySelector('#plaat [data-id=\"browse\"]').classList.contains('s-vrij')"));
+  ok('vrije knoppen zijn gedimd (F1, NOTE REPEAT); BROWSE is de library (sinds 8 okt)', await los.ev("document.querySelector('#plaat [data-id=\"f1\"]').classList.contains('s-vrij') && document.querySelector('#plaat [data-id=\"noteRepeat\"]').classList.contains('s-vrij') && document.querySelector('#plaat [data-id=\"browse\"]').classList.contains('s-library')"));
   ok('beide schermen zijn getekend', (await L('pixels(0)')) > 50 && (await L('pixels(1)')) > 50, `${await L('pixels(0)')} / ${await L('pixels(1)')} px aan`);
   await los.ev("document.querySelector('[data-pagina=\"strip\"]').click()");
   ok('Strip: draaiknop 1 = trim, 8 = filter', await tot(async () => (await L("label('k1')")) === 'trim' && (await L("label('k8')")) === 'filter'));

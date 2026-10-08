@@ -27,9 +27,10 @@ const MET = {
   deck: (id) => (id === 'B' ? { buffer: null, fx: { rackNaam: 'Filter', plekNaam: (k) => ['cutoff', 'reso', 'mix'][k - 1] ?? null, plekBipolair: () => false } } : null),
 };
 const gestuurd = [];
+let libraryOpen = 0;          // wat de nep-bus zegt voor library.toggle (bladeren, §5e)
 const maak = (engine) => {
   // read: een rackplek die bestaat heeft een stand (zoals de bus); de rest null.
-  const m = new Maschine({ engine, read: (a) => (/\.fx\.knob\.[1-3]$/.test(a) ? 0.5 : null), invoke: (...a) => gestuurd.push(a), beschrijf });
+  const m = new Maschine({ engine, read: (a) => (a === 'library.toggle' ? libraryOpen : /\.fx\.knob\.[1-3]$/.test(a) ? 0.5 : null), invoke: (...a) => gestuurd.push(a), beschrijf });
   m.laadMapping(doc);
   return m;
 };
@@ -80,8 +81,10 @@ console.log('\nniets uit de indeling lijkt vrij');
     const id = K.idVanSig(r.in);
     if (!id) { fout.push(`${r.in} staat niet op de plaat`); continue; }
     const m = met;
-    m.zetPagina(r.laag ? r.laag.replace('pagina.', '') : 'instrument'); K.zetPadmodus(m, 'spelen');
+    m.zetPagina(r.laag?.startsWith('pagina.') ? r.laag.replace('pagina.', '') : 'instrument'); K.zetPadmodus(m, 'spelen');
+    libraryOpen = r.laag === 'bladeren' ? 1 : 0;
     const c = K.leesControl(m, id, { shift: !!r.shift });
+    libraryOpen = 0;
     if (c.vrij) fout.push(`${id} (${r.laag ?? 'zonder laag'}${r.shift ? ', shift' : ''})`);
   }
   ok(`elke regel van mappings/maschine-mk2.json (${doc.rules.length}) staat op de plaat en is niet vrij${fout.length ? ': ' + fout.slice(0, 5).join(', ') : ''}`, fout.length === 0);
@@ -89,7 +92,7 @@ console.log('\nniets uit de indeling lijkt vrij');
   const alles = K.leesAlles(met);
   const vrij = [...alles.values()].filter((r) => r.vrij).map((r) => r.id);
   ok(`vrij zijn alleen knoppen zonder regel en zonder eigen uitleg (${vrij.length}: ${vrij.join(' ')})`,
-    vrij.includes('f1') && vrij.includes('browse') && !vrij.includes('play') && !vrij.includes('control') && !vrij.some((i) => /^pad\d|^k\d$/.test(i)));
+    vrij.includes('f1') && vrij.includes('noteRepeat') && !vrij.includes('browse') && !vrij.includes('play') && !vrij.includes('control') && !vrij.some((i) => /^pad\d|^k\d$/.test(i)));
   const css = lees('../styles.css');
   const soorten = new Set([...alles.values()].map((r) => r.soort));
   for (const pagina of PAGINAS) for (const p of K.PADMODI) { met.zetPagina(pagina); K.zetPadmodus(met, p.id); for (const r of K.leesAlles(met).values()) soorten.add(r.soort); }

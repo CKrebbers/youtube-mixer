@@ -15,6 +15,8 @@ export const SOORTEN = [
   // macro's en regie in de grootste groep (transport).
   ['beeld', 'beeld (Stroommachine)', /^beeld\./],
   ['opname', 'opname', /^record\./],
+  // Bladeren en laden uit de library (docs/MASCHINE.md §5e). Vóór transport.
+  ['library', 'library', /^library\.|\.load\.selected$/],
   ['auto', 'auto-DJ', /^auto\./],
   // Vóór klank, fx en mixer: track.1.stem.vocals.filter eindigt op .filter, .send.a op een send.
   ['stems', 'stems', /\.stem\./],

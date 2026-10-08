@@ -37,5 +37,5 @@ export function opzetOnderpanelen({ library, rackEditor }) {
 
   rackEditor.onOpen = () => sluitOnderpanelen('rack');
 
-  return { sluitOnderpanelen };
+  return { sluitOnderpanelen, toggleLib };
 }

@@ -202,6 +202,10 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   hotcues die bij het nummer bewaard worden en terugkomen (ook op een andere track).
   Zelfde veiligheid als `kijk.mjs` (geen MIDI, eigen server). Poorten: `VARVE_KIJK_POORT`
   (standaard 8814) en `VARVE_KIJK_DEBUG` (9414).
+- `bladeren.mjs [uitmap]` — bladeren in de library met de Maschine (docs/MASCHINE.md §5e): twee testnummers door
+  de ingest, een nep-Maschine in de mixer (dezelfde klasse, nep-poort, geen hub): BROWSE opent de library, het wiel
+  kiest (het paneel licht op), ENTER laadt op de focus-track, over een spelende track pas bij een tweede druk, een
+  klik op een rij zet de keuze, dicht = het wiel kiest weer instrumenten. Poorten 8842/9442.
 - `maschine-kaart.mjs [uitmap]` — de Maschine-kaart (`maschine.html`, docs/MASCHINE.md §5d): eerst los
   (plaat, schermen, pagina's, padmodi, shift, zoeken), dan geopend VANUIT de mixer met een nagebootste
   Maschine-verbinding (dezelfde Maschine-klasse, nep-poort, geen hub): volgt de pagina, kiest de knop die je

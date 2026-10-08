@@ -201,6 +201,7 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs, beeld.mjs: headless zonder MIDI;
                     beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
                     maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
+                    bladeren.mjs: BROWSE, wiel en ENTER op een nep-Maschine met een echte library (twee testnummers);
                     hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
@@ -271,6 +272,7 @@ test/
                     speelapparaten: speelt, routering per dev, lampjes/schermen met dev door de wachtrij, statechange, niets statisch geladen
   maschine.test.mjs de Maschine (pads, groepen, draaiknoppen, wiel, lampjes, schermtempo), maschine-scherm (pixels), Xboard knop 9–16 en schuif, isSpeelapparaat
   maschine-kaart.test.mjs  de Maschine-kaart: tekst = legUit in elke pagina × padmodus, geen regel vrij, stand blijft staan, stuurt niets
+  bladeren.test.mjs  bladeren in de library met de Maschine: bindLibrary, keuze/venster, terugspelen, wiel/ENTER/◄ ►, lampjes, schermen
   bovenbalk.test.mjs  de bovenbalk scrollt opzij als hij niet past (randen, CSS: niet hoger, geen schuifbalk)
   patronen.test.mjs model, venster (swing, micro, omlopen), klok, speler met nep-maatgever (op de maat, herankeren zonder dubbele/gemiste), opnemen, opslag (409), server
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
@@ -1587,6 +1589,11 @@ Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag mis
   pagina: `PAGINAS` (de kaart volgt vanzelf); een nieuwe padmodus: ook `PADMODI` in maschine-kaart-plan.js. Live
   via `window.opener.maschine` (alleen met `?hub=`): stand overnemen, `maschine.geraakt` (laatst ingedrukt of
   gedraaid) en `maschine.schermen` (wat er naar het apparaat ging). De kaart stuurt NIETS (`invoke` doet niets).
+- Bladeren (`docs/MASCHINE.md` §5e, 8 okt): BROWSE = `library.toggle`; zolang de library OPEN is (hoe ook geopend)
+  bladert het wiel (`library.next/prev`, maschine.js), ◄ ► = `library.page.*` en ENTER/wiel indrukken =
+  `track.{focus}.load.selected` (laag `bladeren` in de mapping). De keuze leeft in het paneel (`gekozen`, een rij
+  van de huidige sortering); laden gaat door het paneel, met de tweede druk over een spelende track. Terugspelen
+  slaat `library.*` en `load.selected` over: de laad zelf staat al in het log.
 - Toetsen: `node test/maschine.test.mjs`, `node test/hub.test.mjs`, en headless
   `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
   HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een
