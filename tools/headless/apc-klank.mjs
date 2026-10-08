@@ -9,10 +9,17 @@
 // Gebruik:  node tools/headless/apc-klank.mjs [uitmap]
 // Poorten:  VARVE_KIJK_POORT (server, standaard 8793) en VARVE_KIJK_DEBUG (DevTools, 9339).
 import { spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { GROEPEN } from '../../src/control/lagen.js';
+
+// Wat er nu in de standaard staat, uit de bron zelf: een vast getal (374 op 25 sep) verouderde bij
+// elke nieuwe modus (702 op 7 okt), en ▼ na klank was toen hotcues, nu auto.
+const STANDAARD = JSON.parse(readFileSync(new URL('../../mappings/apc40mk2.json', import.meta.url), 'utf8')).rules.length;
+const VOLGORDE = GROEPEN.grid.volgorde;
+const NA_KLANK = VOLGORDE[(VOLGORDE.indexOf('klank') + 1) % VOLGORDE.length];
 
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
 const UIT = process.argv[2] || join(WORTEL, 'tools/headless/uit');
@@ -95,8 +102,8 @@ try {
   await totDat('window.engine && window.mapping && window.lagen && window.feedback', 20000);
   await wacht(800);
   ok('de app start, zonder MIDI in dit tabblad', await evalueer('!!window.engine && !navigator.requestMIDIAccess'));
-  ok('de mapping is de nieuwe standaard (374 regels, klank erin)',
-    await evalueer("window.mapping.rules.size === 374 && window.mapping.kies('note:0:86', { shift: true })?.action === 'layer.grid.klank'"),
+  ok(`de mapping is de standaard (${STANDAARD} regels, klank erin)`,
+    await evalueer(`window.mapping.rules.size === ${STANDAARD} && window.mapping.kies('note:0:86', { shift: true })?.action === 'layer.grid.klank'`),
     String(await evalueer('window.mapping.rules.size')));
 
   // Een demotrack op track 1 met een grid, spelend, focus op 1.
@@ -201,9 +208,12 @@ try {
   ok(`na de remtijd (${remTijd.toFixed(2)} s) staat hij stil`, await totDat("!window.engine.deck('A').playing && !window.engine.deck('A').remt", remTijd * 1000 + 3000));
   ok('LED op de maat (rij 5): stil = donkergrijs (kan starten)', await evalueer("window.feedback.desired().get('note:0:0')?.[2] === 1"));
 
-  // ▼ loopt rond: klank -> hotcues.
+  // ▼ = de volgende modus (layer.grid.next), en hij loopt rond: na de laatste weer hotcues.
   await evalueer('__apc(0x90, 95, 127); __apc(0x80, 95, 0)');
-  ok('▼ vanuit klank: hotcues', await evalueer("window.lagen.stand.grid === 'hotcues'"));
+  ok(`▼ vanuit klank: ${NA_KLANK}`, await evalueer(`window.lagen.stand.grid === '${NA_KLANK}'`), await evalueer('window.lagen.stand.grid'));
+  await evalueer(`window.lagen.zet('grid', '${VOLGORDE.at(-1)}')`);
+  await evalueer('__apc(0x90, 95, 127); __apc(0x80, 95, 0)');
+  ok(`▼ vanuit de laatste (${VOLGORDE.at(-1)}): rond naar ${VOLGORDE[0]}`, await evalueer(`window.lagen.stand.grid === '${VOLGORDE[0]}'`), await evalueer('window.lagen.stand.grid'));
   ok('geen fouten in de app', meldingen.length === 0, meldingen.join(' | '));
   meldingen.length = 0;
 
@@ -211,7 +221,7 @@ try {
   console.log('apc.html');
   await cdp('Page.navigate', { url: `http://localhost:${POORT}/apc.html` });
   await totDat("document.querySelectorAll('#plaat [data-sig]').length > 100", 15000);
-  ok('de kaart leest de nieuwe standaard (374 regels)', await totDat("/374 regels/.test(document.getElementById('bron')?.textContent)"),
+  ok(`de kaart leest de standaard (${STANDAARD} regels)`, await totDat(`/[^0-9]${STANDAARD} regels/.test(document.getElementById('bron')?.textContent)`),
     await evalueer("document.getElementById('bron')?.textContent"));
   const titel = (sig) => evalueer(`document.querySelector('#plaat [data-sig="${sig}"]')?.title ?? ''`);
   const klasse = (sig) => evalueer(`document.querySelector('#plaat [data-sig="${sig}"]')?.className ?? ''`);
