@@ -523,7 +523,9 @@ docs/
   klankschaal) staan samen in `#rijen`, dat zelf scrolt: main wordt nooit lager
   dan zijn inhoud met de faders op 56 px (`min-height:min-content`), dus faders
   en sampler blijven heel met welke rijen ook open (6 okt, `tools/headless/rijen.mjs`).
-  Een nieuwe rij hoort in `#rijen`. Per kolom bovenaan resterende
+  Een nieuwe rij hoort in `#rijen`. `#rijen` houdt rechts 8 px vrij: met alleen een
+  trackpad zweeft de schuifbalk van macOS over de inhoud (een muis: hij neemt zelf 15 px);
+  rijen.mjs toetst beide standen, los van wat er aan de Mac hangt. Per kolom bovenaan resterende
   tijd (14 px, rood onder 30 s als hij speelt) en BPM, groot genoeg voor de
   zaal. Labels ≥ 11 px. APC-knopnamen alleen in de KOPPELMODUS (anders ruis).
   MAAT-badge zegt "(stil)" als de maatgever stilstaat; hotcues overal geel met

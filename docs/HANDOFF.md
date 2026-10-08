@@ -48,9 +48,13 @@ Lees in deze volgorde:
 - **`tools/headless/apc-klank.mjs` weer groen (8 okt):** hij verwachtte nog de mapping van 25 sep (374 regels,
   nu 702) en ▼ na klank = hotcues (nu auto). Het aantal regels komt nu uit `mappings/apc40mk2.json` en de
   volgorde uit `GROEPEN.grid.volgorde` (lagen.js); plus: ▼ vanuit de laatste modus loopt rond naar hotcues.
-- **Wankelt (niet onderzocht):** `tools/headless/rijen.mjs` gaf later op 7 okt 4 fouten (de volumeknop van de
-  klankschaal "bedekt door #rijen" met ALLE rijen open, 1440×790 en 1920×1080), op main net zo; eerder die dag
-  377/377 op dezelfde mixer. Eerst los opnieuw draaien; blijft het, dan het scrollen van het rij-gebied nalopen.
+- **`tools/headless/rijen.mjs` hing af van je muis (uitgezocht 8 okt):** macOS staat op "schuifbalken
+  automatisch". Met de MX Master verbonden neemt een schuifbalk 15 px; met alleen het trackpad zweeft hij over
+  de inhoud. Zonder muis (7 okt avond) lag hij tijdens het scrollen over de rechterrand van VOL in de
+  klankschaal-rij (10 px van de rand) en wees de browser daar `#rijen` aan: 4 fouten; met muis 377/377.
+  Echt, al was het klein: met het trackpad pakte je daar de schuifbalk. Nu: `#rijen` houdt rechts 8 px vrij,
+  en de proef zet de schuifbalk zelf vast (gewoon op beide maten, zwevend op 1440×790 met de eis "niets in
+  de 15 px aan de rand"). Tegenproef: de nieuwe proef op de oude app = precies die fout; op de nieuwe 565/565.
 
 ## 7 OKT (later): MASCHINE-DJ ERBIJ, INTEGRATIE NAAR MAIN, OPGERUIMD
 

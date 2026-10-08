@@ -71,6 +71,9 @@ console.log('\nopmaak van het hoofdscherm');
   // minmax(0,1fr): de rij mag lager worden dan de inhoud, anders schuift de onderkant
   // (de faders) achter de rand van het scherm in plaats van dat de fader krimpt (2 okt).
   ok('de kolommen krijgen de rest (grid-template-rows:auto minmax(0,1fr))', /main\{[^}]*grid-template-rows:auto minmax\(0,1fr\)/.test(css));
+  // Met alleen een trackpad zweeft de schuifbalk van macOS over de rijen (±15 px van de rand):
+  // de rechterrand van VOL in de klankschaal lag eronder (7 okt, tools/headless/rijen.mjs).
+  ok('het rij-gebied houdt rechts 8 px vrij voor een zwevende schuifbalk', /\.rijen\{[^}]*padding-right:8px/.test(css));
   ok('een kolom mag lager worden dan zijn inhoud (.kol{min-height:0})', /\.kol\{min-height:0\}/.test(css));
   ok('de kolomfader krimpt mee (.kol-onder flex)', /\.kol-onder\{[^}]*flex:1 1/.test(css));
 }

@@ -24,6 +24,15 @@
 // Dat alles met de focus op een nummer (met grid en toonsoort: de hoogste kop) en
 // op een instrument. Schermafdrukken: rijen-<label>-<B>x<H>-<focus>-<rijen>.png.
 //
+// De SCHUIFBALK hangt van je Mac af (Instellingen "automatisch"): met een muis
+// neemt hij 15 px, met alleen een trackpad zweeft hij over de inhoud. De proef was
+// daardoor groen of rood al naar gelang Clay's muis verbonden was (7-8 okt). Nu
+// zet de proef hem zelf vast: alles met een GEWONE schuifbalk (een eigen
+// ::-webkit-scrollbar, die neemt altijd ruimte), en 1440×790 nog eens met een
+// ZWEVENDE (geen schuifbalk, zoals een trackpad hem tekent), met als extra eis
+// dat er in een scrollend rij-gebied niets in de 15 px aan de rechterrand ligt:
+// daar verschijnt hij tijdens het scrollen, en dan pak je de schuifbalk.
+//
 // Gebruik:  node tools/headless/rijen.mjs [uitmap] [--label voor|na]
 //           VARVE_WORTEL=<map> draait de app uit een andere map (bijv. `git archive`
 //           van studio/integratie: de stand van vóór de reparatie).
@@ -102,6 +111,10 @@ const RIJEN = ['stems', 'koptelefoon', 'instrument', 'patronen', 'master', 'auto
  * Welke rijen samen open: geen, elk apart, twee keer drie (de lage en de hoge), alle;
  * en met de videokolom open (die maakt het focusdeck hoger) één en alle.
  */
+/** Welke schuifbalk, op welke maten: gewoon (met een muis) overal, zwevend (trackpad) op de MacBook. */
+const SCHUIFBALKEN = [['gewoon', [[1440, 790], [1920, 1080]]], ['zwevend', [[1440, 790]]]];
+/** Zoveel px aan de rechterrand bedekt een zwevende schuifbalk van macOS tijdens het scrollen. */
+const ZWEEF = 15;
 const COMBINATIES = [
   [],
   ...RIJEN.map((r) => [r]),
@@ -158,6 +171,15 @@ const METEN = `window.__rijen = (() => {
   const pakken = (wortel) => [...wortel.querySelectorAll(SEL)].filter((el) => !el.parentElement.closest('.knob') && el.getClientRects().length
     && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).pointerEvents !== 'none');   // uitgezet (bv. .dood): niet te pakken, bewust
   return {
+    /** De schuifbalk vastzetten (zie boven): 'gewoon' neemt 15 px, 'zwevend' niets. */
+    schuifbalk(stand) {
+      let st = document.getElementById('__schuifbalk');
+      if (!st) { st = document.createElement('style'); st.id = '__schuifbalk'; document.head.append(st); }
+      st.textContent = stand === 'gewoon'
+        ? '*::-webkit-scrollbar{width:15px;height:15px;background:#0b0e11}*::-webkit-scrollbar-thumb{background:#3a444e;border-radius:7px}'
+        : '*{scrollbar-width:none}';
+      return stand;
+    },
     /** De rijen (en de videokolom) in deze stand zetten met hun eigen knop in de bovenbalk. */
     zet(open) {
       for (const id of ${JSON.stringify(RIJEN)}) {
@@ -197,7 +219,7 @@ const METEN = `window.__rijen = (() => {
       return uit;
     },
     /** Elk element van elke open rij: in beeld brengen door zijn eigen scrollgebied (niet de pagina, niet main) te scrollen, dan meten. */
-    async rijen() {
+    async rijen(zweef = 0) {
       const uit = {};
       const open = ${JSON.stringify(RIJEN)}.filter((id) => !document.getElementById(id).classList.contains('hidden'));
       const gebieden = new Set();
@@ -219,6 +241,11 @@ const METEN = `window.__rijen = (() => {
           }
           const m = pakbaar(el);
           if (m) mis.push([naam(el), m]);
+          // Zwevende schuifbalk: niets in de strook aan de rand waar hij tijdens het scrollen verschijnt.
+          if (!m && zweef && sc && sc.scrollHeight > sc.clientHeight + 1) {
+            const e = el.getBoundingClientRect(), g = sc.getBoundingClientRect(), rand = g.left + sc.clientLeft + sc.clientWidth;
+            if (e.right > rand - zweef) mis.push([naam(el), 'onder een zwevende schuifbalk (' + Math.round(rand - e.right) + ' px van de rand, ' + zweef + ' nodig)']);
+          }
         }
         const r = rij.getBoundingClientRect();
         uit[id] = { h: Math.round(r.height), n: els.length, mis };
@@ -298,20 +325,22 @@ try {
   await evalueer(METEN);
   console.log(`rijen (${LABEL}${WORTEL !== HIER ? `, app uit ${WORTEL}` : ''})`);
 
-  for (const [B, H] of [[1440, 790], [1920, 1080]]) {
+  for (const [schuif, maten] of SCHUIFBALKEN) {
+   await evalueer(`window.__rijen.schuifbalk('${schuif}')`);
+   for (const [B, H] of maten) {
     await cdp('Emulation.setDeviceMetricsOverride', { width: B, height: H, deviceScaleFactor: 1, mobile: false });
-    const maat = `${B}x${H}`;
+    const maat = `${B}x${H}${schuif === 'zwevend' ? '-zwevend' : ''}`;
     verslag.maten[maat] = {};
     for (const [stand, deck] of Object.entries(STANDEN)) {
       await evalueer(`window.engine.setFocus('${deck}'), true`);
       verslag.maten[maat][stand] = {};
-      console.log(`\n${B} × ${H}, focus op ${stand === 'nummer' ? 'een nummer (track 1)' : 'een instrument (track 3)'}`);
+      console.log(`\n${B} × ${H}${schuif === 'zwevend' ? ', zwevende schuifbalk (trackpad)' : ''}, focus op ${stand === 'nummer' ? 'een nummer (track 1)' : 'een instrument (track 3)'}`);
       for (const combi of COMBINATIES) {
         const nm = naamVan(combi);
         const open = await evalueer(`window.__rijen.zet(${JSON.stringify(combi)})`);
         await beeld(); await wacht(150); await beeld();
         const m = await evalueer('window.__rijen.meet()');
-        const r = await evalueer('window.__rijen.rijen()');
+        const r = await evalueer(`window.__rijen.rijen(${schuif === 'zwevend' ? ZWEEF : 0})`);
         const mel = combi.some((x) => x !== 'video') ? await evalueer('window.__rijen.melding()') : null;
         verslag.maten[maat][stand][nm] = { open, ...m, ...r, melding: mel };
         if (FOTO.has(nm)) { await beeld(); await foto(`rijen-${LABEL}-${maat}-${stand}-${nm}.png`); }
@@ -341,6 +370,7 @@ try {
       }
       await evalueer('window.__rijen.zet([])');
     }
+   }
   }
   ok('geen fouten in de pagina', fouten.length === 0, fouten.slice(0, 3).join(' | '));
 } catch (err) {
