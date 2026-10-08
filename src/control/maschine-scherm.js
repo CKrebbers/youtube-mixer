@@ -227,6 +227,8 @@ function kop(buf, x, y, s, px) {
 }
 
 const REGEL = Math.floor((BREED - 4) / STAP);   // 42 letters (1×) op een hele regel
+/** Zoveel rijen van de library passen links bij bladeren (10 px per rij). */
+export const BLADER_RIJEN = 4;
 
 /**
  * De pagina's Strip en Rack (maschine.js, stand.dj): links groot de focus-track en de
@@ -298,10 +300,58 @@ function tekenUitleg(buf, s, nr) {
   }
   kop(buf, 2, 1, 'overal', BREED - 4);
   lijn(buf, 0, BREED - 1, 17);
-  ['< > links boven: knoppagina', 'groep A-H: focus op een track', 'STEP: stappen   SCENE: secties', 'SHIFT + draaien: fijn']
+  ['< > links boven: knoppagina', 'groep A-H: focus op een track', 'STEP: stappen   SCENE: secties', 'BROWSE: library   SHIFT: fijn']
     .forEach((r, i) => tekst(buf, 2, 20 + i * 8, r));
   lijn(buf, 0, BREED - 1, 53, true);
   tekst(buf, 2, 56, pasIn(`nu: pagina ${s.paginaNaam ?? ''}`, REGEL));
+  return buf;
+}
+
+/**
+ * Bladeren (stand.bladeren, docs/MASCHINE.md §5e: de library staat open). Links de
+ * lijst: kop "LIBRARY" omgekeerd met n/totaal, vier rijen (titel, rechts de bpm), het
+ * gekozen nummer omgekeerd; een rij die nog niet binnen is: "...". Rechts het gekozen
+ * nummer groot, wie, bpm/toon/duur, waar ENTER hem heen laadt, en een melding.
+ */
+function tekenBladeren(buf, s, nr) {
+  const b = s.bladeren;
+  if (nr === 0) {
+    vul(buf, 0, 0, BREED, 10);
+    tekst(buf, 2, 1, 'LIBRARY', 1, true);
+    const teller = b.totaal ? `${b.gekozen + 1}/${b.totaal}` : '0';
+    tekst(buf, BREED - 2 - tekstBreedte(teller), 1, teller, 1, true);
+    if (!b.totaal) {
+      tekst(buf, 2, 20, pasIn(b.zoek ? `niets gevonden voor "${b.zoek}"` : 'nog niets binnengehaald', REGEL));
+      tekst(buf, 2, 28, pasIn(b.zoek ? 'zoek iets anders in de library' : 'plak een link in de library', REGEL));
+    }
+    (b.rijen || []).slice(0, BLADER_RIJEN).forEach((r, i) => {
+      const y = 13 + i * 10;
+      if (r.gekozen) vul(buf, 0, y - 1, BREED, 9);
+      const bpm = r.titel === null || !r.bpm || r.bpm === '—' ? '' : String(r.bpm);
+      const ruimte = Math.floor((BREED - 6 - (bpm ? tekstBreedte(bpm) + STAP : 0)) / STAP);
+      tekst(buf, 2, y, r.titel === null ? '...' : pasIn(r.titel, ruimte), 1, r.gekozen);
+      if (bpm) tekst(buf, BREED - 2 - tekstBreedte(bpm), y, bpm, 1, r.gekozen);
+    });
+    lijn(buf, 0, BREED - 1, 53, true);
+    tekst(buf, 2, 56, pasIn(b.totaal ? 'wiel = kiezen  < > = 10 verder' : 'BROWSE = library dicht', REGEL));
+    return buf;
+  }
+  const t = b.track;
+  if (!t) {
+    kop(buf, 2, 1, b.totaal ? 'even geduld...' : 'library leeg', BREED - 4);
+  } else {
+    kop(buf, 2, 1, t.titel || '(geen titel)', BREED - 4);
+  }
+  lijn(buf, 0, BREED - 1, 17);
+  if (t) {
+    if (t.artiest) tekst(buf, 2, 20, pasIn(t.artiest, REGEL));
+    tekst(buf, 2, 28, pasIn([t.bpm && t.bpm !== '—' ? `${t.bpm} BPM` : 'geen grid', t.toon && t.toon !== '—' ? t.toon : '', t.duur].filter(Boolean).join('  '), REGEL));
+  }
+  // Een melding ("speelt: nog eens") gaat voor, op twee regels; anders waar ENTER hem heen laadt.
+  if (b.melding) regels(b.melding, REGEL).slice(0, 2).forEach((r, i) => tekst(buf, 2, 36 + i * 8, r));
+  else if (t) tekst(buf, 2, 38, pasIn(b.laadt ? 'laden...' : `ENTER = laden op T${b.focus ?? '?'}`, REGEL));
+  lijn(buf, 0, BREED - 1, 53, true);
+  tekst(buf, 2, 56, pasIn(s.melding || 'BROWSE = library dicht', REGEL));
   return buf;
 }
 
@@ -317,6 +367,7 @@ function tekenUitleg(buf, s, nr) {
  *   melding:   string | null          een korte regel onderaan (rechts), bv. "druk nog eens"
  *   modus:     'spelen' | 'stappen' | 'secties'
  *   secties:   { nr, wat, aantal, blad, bladen, namen[16], aan[16], hoort, naar } | null   (modus secties, maschine.js)
+ *   bladeren:  { gekozen, totaal, rijen[{ titel, bpm, gekozen }], track, focus, melding, zoek, laadt } | null   (de library open)
  * }
  * @param nr 0 = links (knop 1–4), 1 = rechts (knop 5–8)
  * @returns Uint8Array(2048)
@@ -326,6 +377,8 @@ export function tekenScherm(stand, nr) {
   const s = stand || {};
   // ---- uitleg (CONTROL vast): gaat voor alles ----
   if (s.uitleg) return tekenUitleg(buf, s, nr);
+  // ---- bladeren (de library open): de lijst en het gekozen nummer ----
+  if (s.bladeren) return tekenBladeren(buf, s, nr);
   // ---- de pagina's Strip en Rack: de focus-track en zijn knoppen ----
   if (s.dj && !((s.patroonVast || s.modus === 'stappen' || s.modus === 'secties') && nr === 0)) return tekenDj(buf, s, nr);
   // ---- kop ----

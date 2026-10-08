@@ -65,6 +65,7 @@ function maak(van) {
     invoke: () => {},                    // de kaart stuurt nooit iets
     nu: van?.nu,
     beschrijf,
+    library: van?.library ?? null,      // met de library open: de lijst op de schermen (alleen lezen)
   });
   if (doc) m.laadMapping(doc);
   if (vorig) zetStand(m, vorig);
@@ -156,7 +157,7 @@ function tekenDetail(alles) {
     <h3><i class="stip s-${r.soort}"></i>${esc(naamVan(gekozen))}</h3>
     <p class="dim">${esc(deel)}${OPDRUK[gekozen] !== naamVan(gekozen) ? ` · op de knop: ${esc(OPDRUK[gekozen])}` : ''}</p>
     <dl><dt>doet nu</dt><dd>${r.vrij ? '<span class="dim">niets (vrij)</span>' : esc(r.tekst)}</dd></dl>
-    ${rijen.length ? `<h4>${/^pad/.test(gekozen) ? 'per padmodus' : 'per pagina'}</h4><table>${rijen.map((x) =>
+    ${rijen.length ? `<h4>${/^pad/.test(gekozen) ? 'per padmodus' : /^k\d$/.test(gekozen) ? 'per pagina' : 'library dicht of open'}</h4><table>${rijen.map((x) =>
     `<tr class="${x.nu ? 'nu' : ''}"><td>${esc(x.naam)}</td><td>${esc(x.tekst)}</td></tr>`).join('')}</table>` : ''}`;
 }
 

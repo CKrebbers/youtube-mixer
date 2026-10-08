@@ -496,6 +496,40 @@
       "shift": true,
       "laag": "pagina.rack",
       "label": "rack: plek 8 fijn"
+    },
+    {
+      "in": "note:1:10",
+      "action": "library.toggle",
+      "mode": "trigger",
+      "label": "BROWSE: library open/dicht (open = bladeren)"
+    },
+    {
+      "in": "note:1:19",
+      "action": "library.page.prev",
+      "mode": "trigger",
+      "laag": "bladeren",
+      "label": "bladeren: 10 terug"
+    },
+    {
+      "in": "note:1:20",
+      "action": "library.page.next",
+      "mode": "trigger",
+      "laag": "bladeren",
+      "label": "bladeren: 10 verder"
+    },
+    {
+      "in": "note:1:21",
+      "action": "track.{focus}.load.selected",
+      "mode": "trigger",
+      "laag": "bladeren",
+      "label": "bladeren: ENTER = laden op de focus-track"
+    },
+    {
+      "in": "note:1:23",
+      "action": "track.{focus}.load.selected",
+      "mode": "trigger",
+      "laag": "bladeren",
+      "label": "bladeren: wiel indrukken = laden op de focus-track"
     }
   ]
 }

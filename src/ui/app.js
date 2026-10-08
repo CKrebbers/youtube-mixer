@@ -1,5 +1,6 @@
 import { Engine, DECK_IDS } from '../engine/engine.js';
-import { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, bindBeeld, invoke, bijInvoke } from '../control/actions.js';
+import { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, bindBeeld, bindLibrary, invoke, bijInvoke } from '../control/actions.js';
+import { BLADER_PAGINA } from './library-lijst.js';
 import { Lagen } from '../control/lagen.js';
 import { opzetMapjeBalk } from './mapje-balk.js';
 import { attachKeyboard } from '../control/keyboard.js';
@@ -195,6 +196,13 @@ const autoPaneel = opzetAuto({ auto });
 window.auto = auto;
 
 const onderpanelen = opzetOnderpanelen({ library: laden.library, rackEditor: racks.rackEditor });
+// Bladeren in de library zonder muis (docs/MASCHINE.md §5e): BROWSE, het wiel en ENTER op de Maschine.
+bindLibrary({
+  get open() { return laden.library.open; },
+  toggle: onderpanelen.toggleLib,
+  kies: (stap) => laden.library.kies(stap),
+  laadGekozen: (deck) => laden.library.laadGekozen(deck),
+}, BLADER_PAGINA);
 
 // ---- audio unlock + help --------------------------------------------------
 
@@ -264,7 +272,7 @@ if (hubUrl) {
   }
   // De speelapparaten van de hub (Xboard49, Maschine MK2; docs/MASCHINE.md): ook alleen met de vlag geladen.
   const { opzetSpeelapparaten } = await import('./speelapparaten.js');
-  window.maschine = opzetSpeelapparaten({ engine, midi: midiDelen.midi, noten: instrumentPaneel.noten }).maschine;
+  window.maschine = opzetSpeelapparaten({ engine, midi: midiDelen.midi, noten: instrumentPaneel.noten, library: laden.library }).maschine;
 }
 // De PATROON-rij (docs/PATRONEN.md): plekken, stappen, opnemen, en de set op de server.
 // Wat je speelt (noten.js) gaat naar de speler: de laatste noot en live opnemen.

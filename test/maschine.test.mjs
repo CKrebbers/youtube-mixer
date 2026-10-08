@@ -106,7 +106,8 @@ const kaart = lees('../mappings/maschine-mk2.json');
 const ms0 = new Maschine({ engine: eng, noten, read, invoke, nu: () => nu });
 const uitKaart = ms0.laadMapping(kaart);
 // 64 regels sinds de knoppagina's (studio/maschine-dj): de 32 van spelen en patronen, plus Strip en Rack (elk 8 + 8 fijn).
-ok('mappings/maschine-mk2.json laadt zonder fouten: 64 regels, shift = note:1:39', uitKaart.aantal === 64 && !uitKaart.fouten.length && ms0.mapping.shiftSig === 'note:1:39');
+// 69 sinds bladeren (docs/MASCHINE.md §5e): BROWSE, en in de laag bladeren ◄ ►, ENTER en het wiel indrukken.
+ok('mappings/maschine-mk2.json laadt zonder fouten: 69 regels, shift = note:1:39', uitKaart.aantal === 69 && !uitKaart.fouten.length && ms0.mapping.shiftSig === 'note:1:39');
 ok('groep A–H -> track.1–8.focus (trigger)', kaart.rules.slice(0, 8).every((r, i) => r.in === `note:1:${24 + i}` && r.action === `track.${i + 1}.focus` && r.mode === 'trigger'));
 ok('draaiknop 1–8 -> track.{speel}.inst.knob.1–8, relatief (tweecomplement), 1/1000 per tel, met shift 1/5000',
   kaart.rules.slice(8, 24).every((r) => r.mode === 'relative-2c' && /^track\.\{speel\}\.inst\.knob\.[1-8]$/.test(r.action) && r.step === (r.shift ? 0.0002 : 0.001)));
@@ -244,8 +245,9 @@ ms.tik();
 const eerste = leds.length;
 // 11 knoppen sinds de padmodus secties (6 okt): SCENE heeft nu ook een lampje (was 10, samen 34).
 // 14 sinds de knoppagina's (studio/maschine-dj): ◄ ► links boven en CONTROL (uitleg) erbij.
-ok(`eerste tik: alle lampjes (16 pads, 8 groepen, 14 knoppen = 38), als noot aan op hun nummer (${eerste})`,
-  eerste === 38 && leds.every((m) => m.length === 3 && (m[0] === 0x90 || m[0] === 0x91) && m[2] <= 127));
+// 17 sinds bladeren (§5e): BROWSE (uit zolang de bus geen library.toggle kent, zoals hier) en ◄ ► bij het wiel (altijd gezet).
+ok(`eerste tik: alle lampjes (16 pads, 8 groepen, 17 knoppen = 41), als noot aan op hun nummer (${eerste})`,
+  eerste === 41 && leds.every((m) => m.length === 3 && (m[0] === 0x90 || m[0] === 0x91) && m[2] <= 127));
 leds.length = 0;
 ms.tik();
 ok('tweede tik zonder verandering: niets', leds.length === 0);
@@ -298,7 +300,7 @@ poort.in.state = 'connected'; poort.uit.state = 'connected';
 poort.in.onstatechange({});
 nu += 1000;
 ms.tik();
-ok('terug: alle lampjes (38, met SCENE, ◄ ► en CONTROL) en beide schermen opnieuw', leds.length === 38 && schermen.length === 2);
+ok('terug: alle lampjes (41, met SCENE, ◄ ►, CONTROL, BROWSE en ◄ ► bij het wiel) en beide schermen opnieuw', leds.length === 41 && schermen.length === 2);
 
 
 // ---- 5b. patronen: de stapmodus en het transport ------------------------------------------------

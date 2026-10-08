@@ -55,6 +55,7 @@ export function beschrijf(action) {
     if (rest === 'sync') return r('sync', 'sync naar de track die de maat geeft');
     if (rest === 'tap') return r('tap', 'tap tempo');
     if (rest === 'focus') return { kort: `focus ${k}`, lang: `focus op ${w} (device knobs en focus-knoppen volgen)` };
+    if (rest === 'load.selected') return r('laden', 'het gekozen nummer uit de library hierop laden (speelt de track: nog eens binnen 3 s)');
     if (rest === 'xfade.side') return r('A/B/thru', 'crossfaderkant A → B → thru (lampje: geel = A, oranje = B, uit = thru)');
     if (rest === 'loop.toggle') return r('loop', 'loop aan/uit (8 tellen met grid, anders 4 s)');
     if (rest === 'loop.exit') return r('loop weg', 'loop weg');
@@ -243,6 +244,12 @@ export function beschrijf(action) {
     'patterns.tempo': ['pat tempo', 'patronen: het eigen tempo als er geen maatgever is (40–240 bpm)'],
     'patterns.tap': ['pat tap', 'patronen: het eigen tempo tikken'],
     'patterns.record': ['pat rec', 'patronen: live opnemen aan/uit (wat je speelt komt in het patroon dat speelt, op de stap)'],
+    // Bladeren in de library (docs/MASCHINE.md §5e): BROWSE en het wiel op de Maschine.
+    'library.toggle': ['library', 'library openen/sluiten; zolang hij open is bladert het wiel van de Maschine erdoor en laadt ENTER op de focus-track'],
+    'library.next': ['lib ▼', 'library: het volgende nummer kiezen'],
+    'library.prev': ['lib ▲', 'library: het vorige nummer kiezen'],
+    'library.page.next': ['lib ▼▼', 'library: een pagina verder (10 nummers)'],
+    'library.page.prev': ['lib ▲▲', 'library: een pagina terug (10 nummers)'],
   };
   if (vast[action]) return { kort: vast[action][0], lang: vast[action][1] };
   return { kort: action, lang: action };

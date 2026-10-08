@@ -118,6 +118,15 @@ export class PaginaCache {
     return this.extra.get(id) ?? null;
   }
 
+  /** De rij van nummer `id` in de pagina's die er nu zijn, of -1. */
+  index(id) {
+    for (const [p, rijen] of this.paginas) {
+      const k = rijen.findIndex((x) => x.id === id);
+      if (k >= 0) return p * this.grootte + k;
+    }
+    return -1;
+  }
+
   /** Alles wat er nu is, op volgorde (voor de console en oude code). */
   get geladen() {
     return [...this.paginas.keys()].sort((a, b) => a - b).flatMap((k) => this.paginas.get(k));
@@ -205,6 +214,33 @@ function toonInfo(t) {
   let x = toonCache.get(t.toon);
   if (!x) { x = libraryToon(t.toon, t.duur); toonCache.set(t.toon, x); }
   return x;
+}
+
+// ---- bladeren met een controller (docs/MASCHINE.md §5e) -----------------------
+
+/** Hoeveel rijen een "pagina" bladert (◄ ► bij het wiel van de Maschine). */
+export const BLADER_PAGINA = 10;
+
+/** De keuze `stap` rijen verder, binnen de lijst (geen rondlopen). Puur. */
+export const klemKeuze = (gekozen, stap, totaal) => (totaal > 0 ? Math.max(0, Math.min(totaal - 1, gekozen + stap)) : 0);
+
+/**
+ * Het gekozen nummer en de rijen eromheen voor een klein scherm (de Maschine):
+ * `n` rijen, de keuze zo veel mogelijk in het midden. Een rij die nog niet
+ * binnen is: `titel: null` (het paneel haalt hem op). Puur, op de cache.
+ */
+export function bladerVenster(cache, gekozen, n = 5) {
+  const totaal = cache.totaal || 0;
+  if (!totaal) return { gekozen: 0, totaal: 0, rijen: [], track: null };
+  const g = klemKeuze(gekozen, 0, totaal);
+  const van = Math.max(0, Math.min(g - Math.floor(n / 2), totaal - n));
+  const rijen = [];
+  for (let i = van; i < Math.min(totaal, van + n); i++) {
+    const t = cache.rij(i);
+    rijen.push(t ? { i, titel: t.titel || '', artiest: t.uploader || '', bpm: gridInfo(t).bpm, toon: toonInfo(t).tekst,
+      duur: fmtTime(t.duur || 0).replace(/\.\d+$/, ''), gekozen: i === g } : { i, titel: null, gekozen: i === g });
+  }
+  return { gekozen: g, totaal, rijen, track: rijen.find((r) => r.gekozen && r.titel !== null) ?? null };
 }
 
 /**

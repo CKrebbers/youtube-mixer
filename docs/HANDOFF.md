@@ -14,6 +14,23 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 8 OKT: BLADEREN IN DE LIBRARY MET DE MASCHINE (tak `studio/maschine-browse`)
+
+- **Wat:** BROWSE op de Maschine opent de library (het paneel in de mixer). Zolang hij open is: het masterwiel
+  kiest een nummer (licht op in het paneel en staat op de schermen), ◄ ► bij het wiel 10 verder/terug, ENTER of het
+  wiel indrukken laadt op de focus-track (groep A–H; speelt die: nog eens binnen 3 s). Dicht: het wiel kiest weer
+  instrumenten. Een klik op een rij zet de keuze ook. Alles in `docs/MASCHINE.md` §5e. Clay vroeg het (8 okt); het
+  ontwerp van de Maschine-kaart had dit al als advies (keuze "wiel").
+- **Bus:** `library.toggle`, `library.next/prev`, `library.page.next/prev`, `track.N.load.selected` (bindLibrary);
+  terugspelen slaat ze over (de laad zelf staat in het log), de auto-DJ telt laden op zijn track als overnemen.
+- **Review (tweede agent):** niets hangt of gebeurt dubbel; verwerkt, met tests: de keuze volgt het NUMMER (een
+  ingest bovenaan schoof hem stil naar een ander nummer), klemmen na weghalen, de rijen rond de keuze weer ophalen,
+  ◄ ► bleven na sluiten half branden, de melding 3 s (zo lang telt een tweede druk) met de titel, één actie per
+  wieltik en één keer tekenen per beeld, de Maschine-kaart krijgt de library mee.
+- **Getest:** `node test/alles.mjs` alles groen; `test/bladeren.test.mjs`; headless `bladeren.mjs` (drie testnummers
+  door de ingest: BROWSE, wiel, laden, tweede druk, klik, een nummer dat binnenkomt) en `maschine-kaart.mjs` groen.
+  NIET getest: met de echte Maschine (de hub draaide, Clay probeert het).
+
 ## 7 OKT (middag): DE MASCHINE-KAART (`maschine.html`, tak `studio/maschine-kaart`)
 
 - **Wat:** zoals de APC-kaart: de Maschine MK2 van bovenaf, per knop, pad en draaiknop wat hij NU doet,

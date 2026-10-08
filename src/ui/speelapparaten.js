@@ -19,14 +19,14 @@ import { beschrijf } from './apc-beschrijf.js';
  */
 export const TIK_MS = 33;
 
-export function opzetSpeelapparaten({ engine, midi, noten }) {
+export function opzetSpeelapparaten({ engine, midi, noten, library = null }) {
   const xb = midi.speelPoort?.('xboard49');
   if (xb) noten.koppel(xb.in);
 
   const ms = midi.speelPoort?.('maschine-mk2');
   let maschine = null;
   if (ms) {
-    maschine = new Maschine({ engine, noten, read, invoke, beschrijf });
+    maschine = new Maschine({ engine, noten, read, invoke, beschrijf, library });
     fetch('mappings/maschine-mk2.json')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
       .then((doc) => maschine.laadMapping(doc))

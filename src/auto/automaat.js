@@ -34,7 +34,7 @@ import {
 
 const ZELF = Symbol('auto');
 /** Actions waarmee Clay een overgang overneemt (op een track in de overgang). */
-const OVERNEEM = /^track\.(\d)\.(fader|low|mid|high|filter|play|play\.quant|sync|seek|tempo|pitch|send\.[ab]|kill\.\w+(\.hold)?|stem\.(vocals|inst|drums|bass|other)(\.(kill|hold|filter|send\.[ab]))?|brake|cue|hotcue\.\d|section\.(\d+(\.loop)?|next|prev))$/;
+const OVERNEEM = /^track\.(\d)\.(fader|low|mid|high|filter|play|play\.quant|sync|seek|tempo|pitch|send\.[ab]|kill\.\w+(\.hold)?|stem\.(vocals|inst|drums|bass|other)(\.(kill|hold|filter|send\.[ab]))?|brake|cue|hotcue\.\d|section\.(\d+(\.loop)?|next|prev)|load\.selected)$/;
 /** Een sectiesprong (docs/SECTIES.md): op de track die nu klinkt verspringt de positie, dus opnieuw plannen. */
 const SECTIE = /^track\.\d\.section\./;
 

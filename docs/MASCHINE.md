@@ -49,8 +49,10 @@ Data in `mappings/maschine-mk2.json` (groepen, draaiknoppen, shift, transport), 
 | **groep A–H** | focus op track 1–8 (`track.N.focus`) |
 | **draaiknop 1–8** | de acht instrumentknoppen van de speeltrack (`track.{speel}.inst.knob.1–8`), relatief: één omwenteling (±1000 tellen van de hub) = de hele knop |
 | **SHIFT** + draaiknop | fijn: vijf omwentelingen voor de hele knop |
-| **masterwiel** draaien | een ander instrument KIEZEN voor de **focus-track** (geen → Poly → FM → Schaal → Drums, rondlopend): het staat alleen op het scherm, er verandert nog niets |
-| **masterwiel** indrukken of **ENTER** | de keuze zetten (`track.N.inst.choose`). Speelt daar een nummer: eerst "druk nog eens" (de bus wil een tweede druk binnen 3 s, zoals overal), de keuze blijft staan. Een keuze vervalt na 8 s of als de focus wisselt |
+| **masterwiel** draaien | een ander instrument KIEZEN voor de **focus-track** (geen → Poly → FM → Schaal → Drums, rondlopend): het staat alleen op het scherm, er verandert nog niets. Met de library open: door de lijst (§5e) |
+| **masterwiel** indrukken of **ENTER** | de keuze zetten (`track.N.inst.choose`). Speelt daar een nummer: eerst "druk nog eens" (de bus wil een tweede druk binnen 3 s, zoals overal), de keuze blijft staan. Een keuze vervalt na 8 s of als de focus wisselt. Met de library open: het gekozen nummer laden (§5e) |
+| **BROWSE** | de library open/dicht (`library.toggle`); open = bladeren (§5e) |
+| **◄ ►** (bij het wiel) | met de library open: 10 nummers terug/verder (`library.page.prev/next`); anders vrij |
 | **STEP** | stapmodus aan/uit (§5); lampje fel = aan |
 | **SCENE** | padmodus secties aan/uit (§5b): pad K = sectie K van de **focus-track**, valt in op de volgende "1"; lampje zacht = de focus-track heeft secties, fel = aan |
 | **PATTERN** vast + pad 1–5 | patroon (plek) 1–5 kiezen op de speeltrack; de pads tonen zolang de vijf plekken |
@@ -61,7 +63,7 @@ Data in `mappings/maschine-mk2.json` (groepen, draaiknoppen, shift, transport), 
 | **◄ ►** (transport) | in de stapmodus: de bladzijde (stap 1–16, 17–32, …); in de modus secties: de bladzijde van de secties (1–16, 17–32, 33–40); **SHIFT + ◄ ►** = korter/langer (`.pattern.length.down/up`) |
 | **◄ ►** (links boven) | de knoppagina: **Instrument** (zoals hierboven) · **Strip** · **Rack** van de focus-track (§5c); niet rondlopend, het lampje zegt of het kan |
 | **CONTROL** vasthouden | uitleg: wat je dan aanraakt gebeurt niet, het scherm zegt wat het hier doet (§5c) |
-| F1–F8, GRID, NOTE REPEAT, BROWSE, … | vrij (ontwerp voor de DJ-kant: de Maschine-kaart, `~/Projects/maschine-lab/kaart/`) |
+| F1–F8, GRID, NOTE REPEAT, … | vrij (ontwerp voor de DJ-kant: de Maschine-kaart, `~/Projects/maschine-lab/kaart/`) |
 
 **Waarom het wiel kiest en niet meteen wisselt:** een tik tegen het wiel zou anders je
 instrument (met zijn knopstanden) vervangen. Kiezen werkt op de FOCUS-track en niet op de
@@ -280,6 +282,37 @@ naast **APC** in de bovenbalk (korte namen, de tooltip zegt "…-kaart": op 1440
   rekent het blad uit zoals het apparaat (na een focuswissel het blad dat je hoort). Een aanraking van
   vóór het openen telt niet; de kaart bewaart alleen `sig@t`, nooit een object van de mixer. Verborgen =
   geen rekenwerk (het venster deelt de hoofdthread met de mixer).
+
+## 5e. Bladeren in de library (gebouwd 8 okt, tak `studio/maschine-browse`)
+
+Het ontwerp van de Maschine-kaart, keuze "wiel" (advies): **BROWSE schakelt naar de library**.
+
+| Wat | Doet |
+|---|---|
+| **BROWSE** | het library-paneel in de mixer open/dicht (`library.toggle`, zelfde als de knop library en B). Lampje fel = open |
+| **masterwiel** draaien | met de library open: per tik een nummer verder/terug (`library.next/prev`); het gekozen nummer licht op in het paneel en staat op de schermen |
+| **◄ ►** bij het wiel | 10 nummers terug/verder (`library.page.prev/next`) |
+| **ENTER** of het wiel indrukken | het gekozen nummer laden op de **focus-track** (groep A–H; `track.{focus}.load.selected`). Speelt die track: eerst "nog eens" (tweede druk binnen 3 s, zoals overal), op het scherm |
+
+- **Eén stand:** bladeren = de library is open, hoe je hem ook opende (BROWSE, de knop, B). Dicht: het wiel
+  kiest weer instrumenten, ENTER zet die keuze, ◄ ► doen niets. De mapping heeft daarvoor de laag `bladeren`
+  (maschine.js zet hem in `lagen` zolang `library.toggle` 1 leest); het draaien zelf doet maschine.js
+  (relatief: per tik een `library.next/prev`, hooguit 20 per bericht).
+- **De keuze hoort bij het paneel** (`LibraryPanel.gekozen`, een rij in de huidige sortering en zoekterm;
+  nieuwe zoekterm of sortering = weer bovenaan). Een klik op een rij zet de keuze daar: muis en Maschine
+  wijzen hetzelfde aan. Laden gaat door het paneel (`laadGekozen` → `laad` → `laden.laadLibrary`), dus zoals
+  een klik op een laadknop: in het handelingenlog als laad, "gespeeld" bijgewerkt. Terugspelen slaat
+  `library.*` en `track.N.load.selected` over (anders twee keer laden).
+- **Schermen:** links "LIBRARY n/totaal" omgekeerd en vier rijen (titel, rechts de bpm; de keuze omgekeerd;
+  een rij die nog niet binnen is: "..."); rechts het gekozen nummer groot, de artiest, bpm/toonsoort/duur en
+  "ENTER = laden op T1", of een melding ("speelt: nog eens") op twee regels. Lampjes: BROWSE fel, ◄ ► half als
+  er die kant op nog iets is, ENTER fel als er een nummer gekozen is.
+- **De Maschine-kaart** volgt mee: met de library open heet het wiel "bladeren", en bij het wiel, ENTER en ◄ ►
+  staat wat ze doen met de library dicht en open.
+- Getest: `test/bladeren.test.mjs` (de bus, de pure lijsthulp, terugspelen, de Maschine met een nep-bus: wiel,
+  ENTER, ◄ ►, loslaten na sluiten, lampjes, schermen, uitleg) en `tools/headless/bladeren.mjs` (twee
+  testnummers door de ingest: BROWSE, wiel, laden, tweede druk over een spelende track, klik op een rij,
+  dicht = weer instrumenten). NIET getest: met de echte Maschine.
 
 ## 6. De Xboard49
 

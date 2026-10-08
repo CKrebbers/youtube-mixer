@@ -139,7 +139,7 @@ export function leesControl(m, id, { shift = false, stand = null } = {}) {
     } else Object.assign(uit, { kort: nootNaam(PAD_NOOT + pad - 1), soort: 'instrument' });
     return uit;
   }
-  if (id === 'wiel') return Object.assign(uit, { kort: 'instrument', soort: 'instrument' });
+  if (id === 'wiel') return Object.assign(uit, m.bladeren?.() ? { kort: 'bladeren', soort: 'library' } : { kort: 'instrument', soort: 'instrument' });
   const k = /^k(\d)$/.exec(id);
   if (k) {
     const i = Number(k[1]) - 1;
@@ -152,10 +152,12 @@ export function leesControl(m, id, { shift = false, stand = null } = {}) {
   const gewoon = m.mapping.kies(sig, { shift: false });
   const metShift = m.mapping.kies(sig, { shift: true });
   uit.shiftRegel = !!metShift && metShift !== gewoon;
-  if (UITLEG[naam]) {
+  // Een eigen uitleg van maschine.js, als die nu geldt (met de library open laden wiel en ENTER: de mapping).
+  const eigen = m.eigenUitleg ? m.eigenUitleg(naam) : UITLEG[naam];
+  if (eigen) {
     // Een knop van maschine.js zelf, maar met SHIFT kan de mapping het overnemen (◄ ► transport: korter/langer).
     if (shift && uit.shiftRegel) return Object.assign(uit, { kort: kortVanActie(m, metShift.action), soort: soortVan(metShift.action) });
-    return Object.assign(uit, { kort: UITLEG[naam].kort, soort: UITLEG[naam].soort });
+    return Object.assign(uit, { kort: eigen.kort, soort: eigen.soort });
   }
   if (!gewoon && !metShift) return Object.assign(uit, { vrij: true });
   const regel = shift && uit.shiftRegel ? metShift : gewoon ?? metShift;
@@ -170,13 +172,15 @@ export function leesAlles(m, { shift = false } = {}) {
 
 /**
  * Wat control `id` doet in elke stand die voor hem uitmaakt: de padmodi voor
- * een pad, de knoppagina's voor een draaiknop. [{ naam, tekst, nu }]; leeg als
+ * een pad, de knoppagina's voor een draaiknop, library dicht of open voor het
+ * wiel, ENTER en ◄ ► bij het wiel. [{ naam, tekst, nu }]; leeg als
  * de stand niets uitmaakt. Zet de Maschine daarna terug zoals hij was.
  */
 export function perStand(m, id) {
   const msg = berichtVan(id);
   if (!msg) return [];
   const voor = neemStand(m);
+  const echteRead = m.read;
   const rijen = [];
   try {
     if (/^pad\d+$/.test(id)) {
@@ -192,12 +196,23 @@ export function perStand(m, id) {
         m.pagina = p;
         rijen.push({ naam: PAGINA_NAAM[p], tekst: m.legUit(msg).tekst, nu: p === voor.pagina });
       }
+    } else if (LIBRARY_KNOPPEN.includes(id)) {
+      // Met de library dicht of open (BROWSE): even een andere read voor library.toggle.
+      const nuOpen = m.read('library.toggle') === 1;
+      for (const [naam, open] of [['library dicht', false], ['library open (BROWSE)', true]]) {
+        m.read = (a) => (a === 'library.toggle' ? (open ? 1 : 0) : echteRead(a));
+        rijen.push({ naam, tekst: m.legUit(msg).tekst, nu: open === nuOpen });
+      }
     }
   } finally {
+    m.read = echteRead;
     zetStand(m, voor);
   }
   return rijen;
 }
+
+/** De knoppen die met de library open (bladeren) iets anders doen. */
+export const LIBRARY_KNOPPEN = ['wiel', 'enter', 'navL', 'navR'];
 
 /** De naam van een control zoals het apparaatprofiel hem noemt (voor titels en de lijst). */
 export const naamVan = (id) => (/^k\d$/.test(id) ? `draaiknop ${id.slice(1)}` : id === 'wiel' ? 'masterwiel' : /^pad\d+$/.test(id) ? `pad ${id.slice(3)}` : KNOP_LABEL[id] ?? id);

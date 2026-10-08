@@ -1321,6 +1321,26 @@ export function bindApp({ toon, venster, opnemer, opnameStart, opnameStop, opnam
 }
 
 /**
+ * Bladeren in de library zonder muis (docs/MASCHINE.md §5e): BROWSE, het wiel en ENTER
+ * op de Maschine, en zo ook te koppelen op de APC of het toetsenbord. De keuze hoort bij
+ * het paneel (library-panel.js); laden gaat door het paneel (laden.laadLibrary), dus in
+ * het handelingenlog als een laad. Terugspelen slaat deze actions zelf over.
+ * `lib`: { open, toggle(), kies(stap), laadGekozen(deck) }; `pagina` = rijen per pagina.
+ */
+export function bindLibrary(lib, pagina = 10) {
+  define('library.toggle', 'trigger', (on) => { if (on) lib.toggle(); },
+    { label: 'Library openen/sluiten (met de library open bladert de Maschine)', read: () => (lib.open ? 1 : 0) });
+  define('library.next', 'trigger', (on) => { if (on) lib.kies(1); }, { label: 'Library: het volgende nummer kiezen' });
+  define('library.prev', 'trigger', (on) => { if (on) lib.kies(-1); }, { label: 'Library: het vorige nummer kiezen' });
+  define('library.page.next', 'trigger', (on) => { if (on) lib.kies(pagina); }, { label: `Library: ${pagina} nummers verder` });
+  define('library.page.prev', 'trigger', (on) => { if (on) lib.kies(-pagina); }, { label: `Library: ${pagina} nummers terug` });
+  for (const [nr, id] of TRACKS) {
+    define(`track.${nr}.load.selected`, 'trigger', (on) => { if (on) lib.laadGekozen(id); },
+      { label: `Het gekozen nummer uit de library op track ${nr} laden (speelt die: nog eens binnen 3 s)` });
+  }
+}
+
+/**
  * Het handelingenlog (docs/HANDELINGENLOG.md): aan/uit en terugspelen
  * stoppen. Op de bus zodat een toets of knop het kan; er staat bewust geen
  * APC-knop op. Terugspelen slaat log.* zelf over (terugspelen.js).
