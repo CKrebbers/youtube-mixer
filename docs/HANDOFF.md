@@ -45,8 +45,9 @@ Lees in deze volgorde:
   1544, met een lang log tot ~1585. Toen vielen rechts MIDI en "? toetsen" weg; nu scrollt het rechterdeel
   opzij (`ui/bovenbalk.js`, styles.css): niet hoger, geen schuifbalk, een vervaging aan de kant waar meer
   staat, het scrollwiel schuift mee, het lampje op "beeld" blijft heel. Headless gemeten in maschine-kaart.mjs.
-- **Al rood op main, niet door dit werk:** `tools/headless/apc-klank.mjs` verwacht nog de mapping van 25 sep
-  (374 regels, nu 702) en de oude volgorde van de grid-modi (3 fouten).
+- **`tools/headless/apc-klank.mjs` weer groen (8 okt):** hij verwachtte nog de mapping van 25 sep (374 regels,
+  nu 702) en ▼ na klank = hotcues (nu auto). Het aantal regels komt nu uit `mappings/apc40mk2.json` en de
+  volgorde uit `GROEPEN.grid.volgorde` (lagen.js); plus: ▼ vanuit de laatste modus loopt rond naar hotcues.
 - **Wankelt (niet onderzocht):** `tools/headless/rijen.mjs` gaf later op 7 okt 4 fouten (de volumeknop van de
   klankschaal "bedekt door #rijen" met ALLE rijen open, 1440×790 en 1920×1080), op main net zo; eerder die dag
   377/377 op dezelfde mixer. Eerst los opnieuw draaien; blijft het, dan het scrollen van het rij-gebied nalopen.
