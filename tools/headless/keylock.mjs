@@ -253,6 +253,35 @@ try {
   const tt = await evalueer("document.querySelector('.rek-toon').textContent");
   ok(`toon +1: de kop zegt "${tt}"`, tt === '+1');
 
+  // V en M zijn keylock en verder niets (verbeteronderzoek 9 okt): eerder opende V
+  // ook het videopaneel en M de MIDI-monitor. Een echte toetsaanslag via CDP.
+  const toets = async (code, key, vk) => {
+    await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: vk, text: key, unmodifiedText: key });
+    await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: vk });
+  };
+  const keylocks = () => evalueer("['A','B','C','D','E','F','G','H'].map((id) => window.engine.deck(id).keylock)");
+  const dicht = (id) => evalueer(`document.getElementById('${id}').classList.contains('hidden')`);
+  const focusIdx = await evalueer("['A','B','C','D','E','F','G','H'].indexOf(window.engine.focus)");
+  await evalueer('document.activeElement?.blur?.(), true');
+  for (const [code, key, vk, paneel, wie] of [['KeyV', 'v', 86, 'video-panel', 'focus'], ['KeyM', 'm', 77, 'midi-panel', 'vorige']]) {
+    const voor = await keylocks();
+    await toets(code, key, vk);
+    await wacht(300);
+    const na = await keylocks();
+    const om = na.map((k, i) => (k !== voor[i] ? i : -1)).filter((i) => i >= 0);
+    const goed = om.length === 1 && (wie === 'focus' ? om[0] === focusIdx : om[0] !== focusIdx);
+    ok(`${key.toUpperCase()}: keylock om op de ${wie === 'focus' ? 'focus-track' : 'vorige focus'}, verder niets`, goed, `om: ${om.map((i) => i + 1).join(',') || 'geen'}`);
+    ok(`${key.toUpperCase()}: ${paneel} blijft dicht`, await dicht(paneel));
+  }
+  // Video en de MIDI-monitor blijven bereikbaar via hun knop in de bovenbalk.
+  for (const [knop, paneel] of [['video-btn', 'video-panel'], ['midi-btn', 'midi-panel']]) {
+    await evalueer(`document.getElementById('${knop}').click(), true`);
+    await wacht(200);
+    ok(`de knop ${knop} opent ${paneel}`, !(await dicht(paneel)));
+    await evalueer(`document.getElementById('${knop}').click(), true`);
+    await wacht(200);
+  }
+
   for (const m of meldingen) console.log(`  ! ${m}`);
   ok('geen uitzonderingen of console-fouten op de pagina', meldingen.length === 0, meldingen.length ? `${meldingen.length}` : '');
 } catch (err) {
