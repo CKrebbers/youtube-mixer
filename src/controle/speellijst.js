@@ -13,9 +13,13 @@
  * INSTRUMENTEN.md, MASCHINE.md en PATRONEN.md §7. Elke open vraag uit
  * docs/VRAGEN.md staat met zijn code bij het punt waar je hem beantwoordt.
  * Erbij (6 okt, studio/secties): het blok Secties (docs/SECTIES.md, VRAGEN SE).
+ * Erbij (9 okt): wat er op 7–8 okt bij kwam en nog geen punt had: de Maschine
+ * als DJ-bediening (docs/MASCHINE.md §5c–5f: pagina's Strip en Rack, uitleg met
+ * CONTROL, de Maschine-kaart, BROWSE, SAMPLING) en beeld met de Stroommachine
+ * (docs/BEELD.md, VRAGEN BE) als avond 3, want daar hoort de pc bij.
  * Avond 1 = mixen (APC + koptelefoon, zonder hub), avond 2 = spelen en
- * programmeren (met de hub: Xboard49 en Maschine). De blokken van vóór 6 okt
- * staan achteraan ("Eerder werk").
+ * programmeren (met de hub: Xboard49 en Maschine), avond 3 = beeld (met de
+ * Omarchy-pc). De blokken van vóór 6 okt staan achteraan ("Eerder werk").
  * Elk punt: `doe` = wat je doet, `let` = waar je op let.
  */
 export const SPEELLIJST = [
@@ -282,6 +286,52 @@ export const SPEELLIJST = [
       let: 'Blijft de energie in de cockpit en in beeld staan, zonder dip? (SVV6)' },
     { id: 'sh-pauze', doe: 'Pauzeer track 1. Herlaad daarna het mixer-tabblad, of stop en start de hub.',
       let: 'Pauze: de energie blijft een halve seconde staan en zakt dan in ~1,5 s naar 0; het label blijft. Terugkomen: geen flits, wel de juiste sectie. (SVH2)' },
+  ] },
+
+  { id: 'maschine-dj', titel: 'Avond 2 · De Maschine als DJ-bediening', minuten: 15, punten: [
+    { id: 'md-strip', doe: 'Laad een nummer op track 1 en laat hem spelen. Maschine: groep A, dan ◄ ► links boven tot de pagina Strip.',
+      let: 'Staat er links "T1 Strip" en rechts de titel, bpm, toonsoort en resterende tijd? Staat boven elke draaiknop wat hij doet (trim, hoog, mid, laag, echo, galm, mix, filter)?' },
+    { id: 'md-eq', doe: 'Draai knop 4 (laag) helemaal dicht en terug naar 0 dB, en knop 8 (filter) naar links en naar rechts. Daarna hetzelfde met SHIFT ingedrukt.',
+      let: 'Is één omwenteling voor de hele EQ goed, of te grof rond 0 dB? Is SHIFT fijn genoeg? Is de balk vanuit het midden leesbaar, en kloppen de waarden (dB, Hz) met wat je hoort?' },
+    { id: 'md-rack', doe: '◄ ► naar de pagina Rack. Kies een rack voor track 1 (bijvoorbeeld Hakker, met de RACK-kiezer of Device ◀ ▶ op de APC), MIX open, en draai knop 1–8 op de Maschine.',
+      let: 'Staat de naam van het rack in de kop en per knop de naam van de plek? Volgt het geluid de knop, ook als je daarna op de APC aan dezelfde knop draait (geen sprong)?' },
+    { id: 'md-uitleg', doe: 'Houd CONTROL vast en raak om de beurt een draaiknop, een pad, het masterwiel en een groepknop aan. Laat CONTROL los.',
+      let: 'Gebeurt er niets behalve uitleg op het scherm? Is de tekst te lezen, en loopt een lange tekst goed door op het rechterscherm? Blijft er na het loslaten niets hangen (geen noot, geen knop)?' },
+    { id: 'md-kaart', doe: 'In de mixer: knop Maschine in de bovenbalk (de Maschine-kaart, naast APC). Wissel op het apparaat van pagina, druk SHIFT, en daarna STEP, SCENE en SAMPLING.',
+      let: 'Volgt de kaart het apparaat (pagina, padmodus, shift), licht de knop op die je aanraakt, en tonen de schermen op de kaart wat de Maschine laat zien? Is de kaart handig als spiekbrief?' },
+  ] },
+
+  { id: 'maschine-bladeren', titel: 'Avond 2 · Bladeren en sampler op de Maschine', minuten: 15, punten: [
+    { id: 'mb-browse', doe: 'Druk BROWSE. Draai het masterwiel een paar tikken en druk ◄ ► bij het wiel.',
+      let: 'Gaat de library in de mixer open en licht het gekozen nummer op? Staan titel, bpm, toonsoort en duur op het rechterscherm? Gaat ◄ ► tien nummers verder en terug? Telt de eerste wielklik na het insteken niet (bekend)?' },
+    { id: 'mb-laden', doe: 'Groep B (track 2, leeg): kies een nummer en druk ENTER (of het wiel in).',
+      let: 'Komt het nummer op track 2, met grid, toonsoort en secties, zoals met een klik in de library?' },
+    { id: 'mb-speelt', doe: 'Track 1 speelt. Groep A: kies een ander nummer, druk ENTER, en binnen 3 s nog eens.',
+      let: 'Eerst "speelt: nog eens" op het scherm, pas bij de tweede druk geladen? Blijft het bij één druk spelen?' },
+    { id: 'mb-dicht', doe: 'BROWSE nog eens (de library gaat dicht) en draai het wiel.',
+      let: 'Kiest het wiel weer instrumenten, zoals eerst? Doen ◄ ► bij het wiel niets meer?' },
+    { id: 'ms-knip', doe: 'Track 1 speelt met een zeker grid. Groep A, druk SAMPLING. Zet met ◄ ► (transport) de lengte op 4 tellen en druk pad 13 (linksboven).',
+      let: 'Knipt hij de laatste 4 tellen van track 1 (eerst wit, dan violet), en speelt hij op de tel als je de pad nog eens drukt? Is het vakje "T1 4t" op het linkerscherm duidelijk?' },
+    { id: 'ms-sectie', doe: 'Druk tijdens de drop op een blauwe pad in de onderste twee rijen. Druk daarna de bijbehorende pad in de bovenste twee rijen.',
+      let: 'Komt de sectie die je hoort in die sampler-pad, en start hij op de "1"? Is het verschil tussen de rijen (boven = spelen, onder = sectie pakken) logisch?' },
+    { id: 'ms-volume', doe: 'Draai draaiknop 5 (volume), druk SHIFT + een gevulde pad, en druk daarna SAMPLING nog eens.',
+      let: 'Is het volume hoorbaar? Is de pad daarna leeg maar bewaard (grijs)? Spelen de pads na SAMPLING weer het instrument? Lijken de violetten op die van de APC (modus sampler)?' },
+  ] },
+
+  // ---- Avond 3: beeld (met de Omarchy-pc) ------------------------------------------
+  { id: 'beeld-pc', titel: 'Avond 3 · Beeld met de Stroommachine (met de pc)', minuten: 25, punten: [
+    { id: 'bp-start', doe: 'Op de pc: de relay en de Stroommachine volgens koppel/DJ-START.md in de Stroommachine-repo (relay met --host 0.0.0.0, poort 7702, niet 7700). In de mixer: knop beeld, adres ws://<ip-van-de-pc>:7702/app, aan.',
+      let: 'Komt er één melding "verbonden", en daarna de scène in de BEELD-rij? Is de tegel Beeld in de Controlekamer groen?' },
+    { id: 'bp-klok', doe: 'Speel een nummer met een harde kick en kijk naar de flits op de tel in de Stroommachine.',
+      let: 'Valt de flits op de kick? Zo niet: zet de extra latentie hoger tot hij klopt, en noteer het getal. (BE6)' },
+    { id: 'bp-crossfader', doe: 'Track 1 op A en track 2 op B (de A|B-knop), allebei spelend. Schuif de crossfader langzaam van A naar B, en daarna nog eens met de scherpe curve (Metronome).',
+      let: 'Wisselt de scène voorbij het midden? Voelt dat goed, ook met de scherpe curve? Mis je een scène voor een track op thru? (BE2, BE10)' },
+    { id: 'bp-macro', doe: 'APC: Shift + Detail View = mapje beeld. Draai device knob 1–8 om de beurt.',
+      let: 'Reageert het beeld per macro? Springt de eerste draai (de ring weet de stand van de pc niet)? Liever faders? (BE1, BE3)' },
+    { id: 'bp-regie', doe: 'In het mapje beeld: scene 1–5 (ontdek, volgende, vasthouden, flits, vrij), daarna Stop All Clips (paniek) en nog eens.',
+      let: 'Doet elke knop wat hij zegt? Mis je dat het lampje laat zien of vasthouden en paniek aan staan? Wint je spiergeheugen van de Stroommachine-indeling? (BE4, BE5)' },
+    { id: 'bp-weg', doe: 'Trek de netwerkkabel van de pc eruit (of zet de wifi uit), wacht 20 s, en sluit hem weer aan. Herlaad daarna de Stroommachine.',
+      let: 'Hooguit één melding, en daarna komt alles vanzelf terug (tel, scène, macro\'s), zonder dat het spelen hapert? Is "zoeken zonder pc" stil genoeg? (BE7)' },
   ] },
 
   // ---- Eerder werk (vóór 6 okt): als er tijd over is ------------------------------
