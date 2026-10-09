@@ -25,6 +25,16 @@ console.log('de speellijst');
   ok('elk punt heeft een doe en een let', punten.every((p) => p.doe && p.let));
   ok('elk blok heeft een titel, minuten en punten', SPEELLIJST.every((b) => b.titel && b.minuten > 0 && b.punten.length));
   ok('blok-ids zijn uniek', new Set(SPEELLIJST.map((b) => b.id)).size === SPEELLIJST.length);
+  // De volgorde (9 okt, verbeteronderzoek): Clay loopt de lijst van boven af, dus alle "Avond 1" vóór "Avond 2"
+  // vóór "Avond 3" vóór "Eerder werk", en avond 1 begint met de kern van ~45 min.
+  const AVONDEN = ['Avond 1', 'Avond 2', 'Avond 3', 'Eerder werk'];
+  const rang = SPEELLIJST.map((b) => AVONDEN.indexOf(b.titel.split(' · ')[0]));
+  ok(`elke bloktitel begint met ${AVONDEN.map((a) => `"${a} · "`).join(', ')}`, rang.every((r) => r >= 0));
+  ok('de blokken staan op avondvolgorde', rang.every((r, i) => i === 0 || r >= rang[i - 1]));
+  const KERN = ['start', 'luisteren', 'draaien', 'koptelefoon', 'keylock'];
+  const kern = SPEELLIJST.slice(0, KERN.length);
+  ok(`de kern van avond 1 staat vooraan (${KERN.join(', ')}: ~${kern.reduce((s, b) => s + b.minuten, 0)} min)`,
+    kern.map((b) => b.id).join() === KERN.join() && kern.every((b) => b.titel.startsWith('Avond 1 · ')));
   // De stand op de server hangt aan het id: een punt dat al bestond, blijft bestaan
   // (anders raakt zijn notitie kwijt). De punten van vóór 6 okt:
   const EERDER = ['start-apc', 'start-audio', 'start-scherm', 'dr-laden', 'dr-opdemaat', 'dr-beatjump', 'dr-loop',
