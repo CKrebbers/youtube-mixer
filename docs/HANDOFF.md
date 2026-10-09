@@ -191,10 +191,10 @@ Lees in deze volgorde:
 - **Eerst doen (Clay):** de speellijst in de Controlekamer (`localhost:8777/controle`),
   van boven naar beneden; per punt ok, fout of `—` en een notitie
   (`docs/CONTROLEKAMER.md`, "De speellijst").
-  - **Avond 1, mixen** (APC + koptelefoon, zonder hub, 76 punten, ~2,5 uur, met een kern van ~45 min: start, luisteren, draaien, koptelefoon, keylock): opstarten, koptelefoon
-    (eerst zonder, dan het samengestelde apparaat maken), beatgrid (controle op Loving
-    arms en Ciel, de jungle-mix vóór en na ↻, vastzetten), keylock en toon, stems,
-    master en effecten.
+  - **Avond 1, mixen** (APC + koptelefoon, zonder hub, 76 punten, ~2,5 uur, met een kern van ~45 min: start, luisteren, draaien, koptelefoon, keylock): opstarten, luisteren, draaien op de APC,
+    koptelefoon (eerst zonder, dan het samengestelde apparaat maken), keylock en toon; daarna
+    klank, beatgrid (controle op Loving arms en Ciel, de jungle-mix vóór en na ↻, vastzetten),
+    stems, master en effecten, secties.
   - **Avond 2, spelen en programmeren** (met de hub: in AV-app-hub `npm start -- studio`,
     64 punten, ~2,5 uur): FM op de Xboard49 eerst in de koptelefoon, de Maschine, drums, patronen
     (stappen op de Maschine, een baslijn van de Xboard, starten vanaf de APC, herladen).

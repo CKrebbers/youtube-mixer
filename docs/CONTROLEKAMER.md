@@ -94,7 +94,9 @@ avond 3 vóór "Eerder werk", en de kern vooraan):
   een keuze, niets om te proberen) en KS1, KS4, KS5 (de globale klankschaal).
 - **Ids**: de 44 punten van vóór 6 okt hebben hun id en tekst gehouden (kp-mix kreeg
   alleen "Goed zo? (S3)" erachter; start-apc zegt sinds 9 okt "Logic en andere
-  muziekprogramma's dicht" in plaats van "Ableton dicht"). Nieuwe ids hebben een
+  muziekprogramma's dicht" in plaats van "Ableton dicht"; be-los zegt "knop video in de
+  bovenbalk" omdat V nu alleen keylock is; dr-opdemaat zegt "nummerknop (1–8, in het 2×2-blok)"
+  in plaats van het dubbelzinnige "track-knop"). Nieuwe ids hebben een
   voorvoegsel per blok: `kp-`, `bg-`, `ky-`, `st-`, `ma-`/`fx-`, `hb-`, `sp-`, `pa-`.
 - **Geen "gedaan"-stand.** De server kent per punt alleen open, ok, fout en overslaan;
   er is niets om oude punten vooraf mee af te vinken (en `proef/sessie.json` was leeg).

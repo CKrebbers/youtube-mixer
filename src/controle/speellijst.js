@@ -51,7 +51,7 @@ export const SPEELLIJST = [
   ] },
   { id: 'draaien', titel: 'Avond 1 · Draaien op de APC', minuten: 15, punten: [
     { id: 'dr-laden', doe: 'Laad twee nummers op track 1 en 2 (library: B).', let: 'Grid en toonsoort staan erbij, geen foutmelding.' },
-    { id: 'dr-opdemaat', doe: 'Start track 1. Start track 2 met shift + zijn track-knop: op de maat.',
+    { id: 'dr-opdemaat', doe: 'Start track 1. Start track 2 met shift + zijn nummerknop (1–8, in het 2×2-blok): op de maat.',
       let: 'Valt track 2 precies op de 1 van de maat?' },
     { id: 'dr-beatjump', doe: 'Bank ◀ ▶ = beatjump; shift + Bank = de lengte (½ of ×2).', let: 'Springt hij in de maat, zonder hapering?' },
     { id: 'dr-loop', doe: 'Pan = loop in, Sends = loop out, User = reloop.', let: 'Loopt de loop zonder tik op de naad?' },
