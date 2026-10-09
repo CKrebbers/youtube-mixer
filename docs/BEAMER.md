@@ -251,7 +251,7 @@ gebaar, geen stand). Een log van vóór A4 begint met zwart en bevriezen uit.
 
 **Op het scherm**: rij BEELD onder de video-effecten: MASTER-knop, zwart (shift +
 vasthouden = de drukvariant), bevries, flits; de knoppen lezen hun stand terug.
-Geen sneltoets: elke letter en elk cijfer is al bezet (V opent het paneel).
+Geen sneltoets: elke letter en elk cijfer is al bezet (V is keylock; het paneel opent met de knop video).
 
 Gemeten: `node test/video.test.mjs` (38 checks, symbolische WebGL) en
 `node tools/headless/noodknoppen.mjs` (31 controles, echte pixels in headless

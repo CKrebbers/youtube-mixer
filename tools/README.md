@@ -27,6 +27,10 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking; d
 `rest/` van 25 september. `rest/` leest geen server maar de bestanden zelf (ook vanuit een
 worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van het systeem.
 
+## varve-app/
+`VARVE.applescript` + `maak.sh`: de Dock-knop die de server start en de Controlekamer opent
+(`~/Applications/VARVE.app`). Een losse macOS-app; draait niet in de mixer.
+
 ## git/
 - `test-index.sh` — test precies wat er in de git-index staat (niet de werkmap): pakt de
   index uit in een tijdelijke map en draait daar alle tests. Handig bij het splitsen van

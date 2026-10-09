@@ -43,7 +43,7 @@ de mixer.
    notitie. "Nieuwe ronde" (twee keer klikken) zet de sessie in
    `proef/archief/<tijd>.json` en begint leeg. Wat erin staat: hieronder.
 
-## De speellijst (6 oktober): de proef in twee avonden
+## De speellijst: de proef in drie avonden (6 okt; volgorde 9 okt)
 
 Clay probeert alles wat sinds 5 okt gebouwd is voor het eerst op zijn echte hardware
 (APC40 mkII, Xboard49, Maschine MK2, de koptelefoon via het samengestelde apparaat,

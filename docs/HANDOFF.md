@@ -131,7 +131,7 @@ Lees in deze volgorde:
   melding bij opstarten zonder pc; regie niet terugspelen; geblokkeerde poorten), de rest in BEELD.md
   §7 en VRAGEN BE. NIET getest: LAN/wifi naar de echte pc, de beamer-latentie, de APC zelf.
 - **Proberen:** op een avond met de pc: `koppel/DJ-START.md` (relay met `--host 0.0.0.0`, de
-  Stroommachine met `?hub=ws://127.0.0.1:7702/app&dj`), in VARVE de BEELD-rij op `ws://<ip-pc>:7702/app`
+  Stroommachine met `?hub=ws://127.0.0.1:7702/app&dj`), in VARVE de BEELD-rij op `ws://clayk:7702/app` (terugval `ws://100.110.172.126:7702/app`)
   en aan. Dan VRAGEN blok BE (vooral BE6: de latentie van de beamer).
 - **Let op:** zonder pc kan beeld gewoon aan blijven (één melding, verder stil), maar Chrome logt elke
   mislukte poging zelf rood in zijn console (BE7). De zender in `src/koppel/` NIET hier wijzigen.
@@ -191,13 +191,14 @@ Lees in deze volgorde:
 - **Eerst doen (Clay):** de speellijst in de Controlekamer (`localhost:8777/controle`),
   van boven naar beneden; per punt ok, fout of `—` en een notitie
   (`docs/CONTROLEKAMER.md`, "De speellijst").
-  - **Avond 1, mixen** (APC + koptelefoon, zonder hub, ~1 uur): opstarten, koptelefoon
+  - **Avond 1, mixen** (APC + koptelefoon, zonder hub, 76 punten, ~2,5 uur, met een kern van ~45 min: start, luisteren, draaien, koptelefoon, keylock): opstarten, koptelefoon
     (eerst zonder, dan het samengestelde apparaat maken), beatgrid (controle op Loving
     arms en Ciel, de jungle-mix vóór en na ↻, vastzetten), keylock en toon, stems,
     master en effecten.
   - **Avond 2, spelen en programmeren** (met de hub: in AV-app-hub `npm start -- studio`,
-    ~1 uur): FM op de Xboard49 eerst in de koptelefoon, de Maschine, drums, patronen
+    64 punten, ~2,5 uur): FM op de Xboard49 eerst in de koptelefoon, de Maschine, drums, patronen
     (stappen op de Maschine, een baslijn van de Xboard, starten vanaf de APC, herladen).
+  - **Avond 3, beeld** (met de Omarchy-pc, 6 punten, ~25 min): Stroommachine v10, `ws://clayk:7702/app`, ijken op één plek.
   - De open vragen staan bij hun punt (VRAGEN S3–S22 behalve S12, I4, N1–N3, O1–O2): je antwoord in
     de notitie. Het werk van vóór 6 okt staat achteraan ("Eerder werk").
   - Staat de nieuwe lijst er niet, dan serveert de server een map zonder deze versie
@@ -520,7 +521,7 @@ Niets gecommit.
 
 De repo is schoon: alleen `main`, geen andere branches of worktrees, niets
 ongecommit. De server draait met de nieuwe code (`~/.varve-server.log`); na een
-herstart van de Mac: `cd` naar de projectmap en
+herstart van de Mac: klik VARVE in het Dock (`~/Applications/VARVE.app`); of, als terugval, `cd` naar de projectmap en
 `nohup node server/index.js >> ~/.varve-server.log 2>&1 &`.
 
 De volgende sessie begint met wat Clay zegt over zijn proefsessie. Hervat-prompt:
@@ -654,7 +655,7 @@ Proeflijst (wat niet klopt: noteren, dan eerst repareren):
    donkeroranje (rem: speelt), donkergroen (op de maat: speelt) tegen donkergrijs
    (stil), en of Pan/Sends/User op de tel knipperen. In de grid-modus (Shift +
    Metronome) is Lock nog steeds het slot. `apc.html` toont alles met uitleg.
-7. **Vormen:** `?vormen=1`, videopaneel (V), Detail View, Device ◀ ▶ door alle 26:
+7. **Vormen:** `?vormen=1`, videopaneel (knop video in de bovenbalk), Detail View, Device ◀ ▶ door alle 26:
    rond in het midden, Harmonograaf breed, Zonnebloem tot in de hoeken, niets
    uitgerekt. REAGEER-bron op "klap (maat)" of "tel": volgt de MAAT-badge.
 8. **Album:** in de library ↻ op "I will delete this album…" (twee klikken als het
@@ -877,7 +878,7 @@ reageren. Details staan in CLAUDE.md (VORMLAGEN).
   Clay juist mooi vond.
 
 ### Volgende stap
-1. Clay: `http://localhost:8777/?vormen=1`, videopaneel (V), een track met
+1. Clay: `http://localhost:8777/?vormen=1`, videopaneel (knop video in de bovenbalk), een track met
    video. Probeer Detail View, On/Off, knob 1–8 en Device ◀ ▶ door alle 26 vormen.
    Zet REAGEER open en doe een bass-kill.
 2. Daarna volgens het plan eerst AV-kern (publicatie 25 okt): die kan
@@ -935,7 +936,7 @@ Getest:
 Clay opent `http://localhost:8777/?vormen=1` in zijn eigen tabblad. Een
 herlaadbeurt is genoeg; de server hoeft niet opnieuw te starten, want er zijn
 alleen statische bestanden bij gekomen. Daarna:
-1. Videopaneel open (V) en een track met video.
+1. Videopaneel open (knop video in de bovenbalk) en een track met video.
 2. Op de APC: Detail View, On/Off, draaien, Device ◀ ▶.
 3. Kijken of het beeld hapert.
 
