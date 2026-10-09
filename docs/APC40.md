@@ -97,21 +97,24 @@ Shift + Tap (VRAGEN I4).
 knop geeft het verschil, de software houdt de stand. Geen overpakken na een
 focus- of mapjewissel.
 
-**Grid-modi op scene 1–4, klank op Shift + scene 5, auto op Shift + scene 4**
-(kleur fel = open, donker = dicht): hotcues (geel: rij 1–4 hotcue per track, shift = wissen (rood zolang
-shift vastzit), rij 5 loop aan/uit) · loops (cyaan: 1 · 2 · 4 · 8 · 16 tellen) ·
+**Negen grid-modi: scene 1–4 = hotcues · loops · sampler · video; Shift + scene 1 =
+secties, Shift + scene 2 = stems, Shift + scene 3 = patronen, Shift + scene 4 = auto,
+Shift + scene 5 = klank** (kleur fel = open, donker = dicht): hotcues (geel: rij 1–4
+hotcue per track, shift = wissen (rood zolang shift vastzit), rij 5 loop aan/uit) · loops (cyaan: 1 · 2 · 4 · 8 · 16 tellen) ·
 sampler (violet: rij 1 pads, rij 2 leegmaken, rij 3 de sectie die je hoort in die pad
 (hemelsblauw, zie SECTIES.md; de pad start dan op de "1"), linksonder samplerlengte) · video
 (blauw: effect vasthouden, mengvorm, puls-doel; rechts de beeld-noodknoppen: rij 1 pad 7
-flits, pad 8 zwart zolang je drukt, rij 2 pad 7 zwart aan/uit, pad 8 bevriezen) · klank (magenta, per kolom =
-track: rij 1 kill hoog, 2 kill mid, 3 kill laag — vasthouden = weg zolang je
+flits, pad 8 zwart zolang je drukt, rij 2 pad 7 zwart aan/uit, pad 8 bevriezen) · klank (magenta, Shift +
+scene 5, per kolom = track: rij 1 kill hoog, 2 kill mid, 3 kill laag — vasthouden = weg zolang je
 drukt, shift + pad = vastzetten/losmaken; rij 4 rem; rij 5 op de maat starten) ·
-auto (limoen: de auto-DJ, zie "Modus auto" onderaan) · stems (zeegroen, Shift +
+auto (limoen, Shift + scene 4: de auto-DJ, zie "Modus auto" onderaan) · stems (zeegroen, Shift +
 scene 3: per kolom een stem weg, zie "Modus stems" onderaan) · patronen (oranje, Shift +
-scene 2: clips per track, zie "Modus patronen" onderaan).
-Scene 5 = loop weg. ▲ ▼ loopt rond door alle acht (hotcues → loops → sampler →
-video → klank → auto → stems → patronen → hotcues). Vasthouden van een modusknop (ook
-Shift + scene 5, 4, 3 en 2) vanuit een andere modus = even gluren.
+scene 2: clips per track, zie "Modus patronen" onderaan) · secties (hemelsblauw, Shift +
+scene 1: de 40 pads zijn de secties van de focus-track, rij 1 = 1–8 enz.; een pad valt in
+op de maat, shift + pad = als loop; zie `docs/SECTIES.md`).
+Scene 5 = loop weg. ▲ ▼ loopt rond door alle negen (hotcues → loops → sampler →
+video → klank → auto → stems → patronen → secties → hotcues). Vasthouden van een modusknop (ook
+Shift + scene 1–5) vanuit een andere modus = even gluren.
 
 Waarom klank op **Shift + scene 5**: scene 5 is al "loop weg", en dat moet één
 druk blijven (een loop moet je snel kwijt kunnen). Shift + scene 5 was vrij, zit
@@ -404,7 +407,7 @@ grid-modus iets verandert.
 hij zonder shift het mapje vorm; het fragment heeft geen shift-regel op Detail View, dus
 beide werken naast elkaar). Hij zit naast Clip/Device View, en het gebaar is dat van
 master: Shift + de knop ernaast. Detail View is daarmee de enige knop in de standaard die
-ALLEEN met shift iets doet; op het scherm staat hij als "⇧ ▣ beeld" (shift + klik opent het
+ALLEEN met shift iets doet; op het scherm staat hij als "⇧ beeld" (shift + klik opent het
 mapje, een gewone klik doet niets, geen lampje: zoals de LED zonder shift; `leesControl` in
 `spiegel-plan.js`).
 

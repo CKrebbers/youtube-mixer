@@ -20,12 +20,18 @@
  * Avond 1 = mixen (APC + koptelefoon, zonder hub), avond 2 = spelen en
  * programmeren (met de hub: Xboard49 en Maschine), avond 3 = beeld (met de
  * Omarchy-pc). De blokken van vóór 6 okt staan achteraan ("Eerder werk").
+ * Erbij (9 okt, na het verbeteronderzoek): de blokken staan op avondvolgorde
+ * (avond 1, 2, 3, dan "Eerder werk"; test/controle.test.mjs eist het), en
+ * avond 1 begint met de kern van ~45 min: opstarten, luisteren, draaien op de
+ * APC, koptelefoon, keylock. Draaien en klank kwamen uit "Eerder werk" naar
+ * avond 1. Alleen blokken verschoven: de ids bleven, dus de stand ook.
  * Elk punt: `doe` = wat je doet, `let` = waar je op let.
  */
 export const SPEELLIJST = [
   // ---- Avond 1: mixen (APC + koptelefoon) ----------------------------------------
+  // De kern (~45 min): opstarten, luisteren, draaien, koptelefoon, keylock.
   { id: 'start', titel: 'Avond 1 · Opstarten', minuten: 2, punten: [
-    { id: 'start-apc', doe: 'Sluit de APC40 aan (Ableton dicht) en open de mixer met de knop hierboven.',
+    { id: 'start-apc', doe: 'Sluit de APC40 aan (Logic en andere muziekprogramma\'s dicht) en open de mixer met de knop hierboven.',
       let: 'APC hierboven groen, geen melding "verkeerde poort".' },
     { id: 'start-audio', doe: 'Klik in de mixer op "audio starten".', let: 'Audio hierboven: aan.' },
     { id: 'start-scherm', doe: 'Kijk of de mixer op je MacBook-scherm past zonder scrollen.',
@@ -36,12 +42,22 @@ export const SPEELLIJST = [
       let: 'Hoor je ergens een tik, een gat of gehaper? Alles is gemeten, nog niets beluisterd. (A2)' },
     { id: 'lu-springen', doe: 'Klik in de golfvorm een paar keer vooruit en terug, ook ver weg.',
       let: 'Een korte stilte bij een sprong ver weg is bekend (tientallen ms). Hoor je ooit ruis of een stukje dat herhaalt?' },
-    { id: 'lu-hotcue', doe: 'Zet hotcue 1 en 2 (modus hotcues, scene 1) en spring er een paar keer tussen heen en weer.',
+    { id: 'lu-hotcues', doe: 'Zet hotcue 1 en 2 (modus hotcues, scene 1) en spring er een paar keer tussen heen en weer.',
       let: 'Klinken de hotcues meteen, zonder gat?' },
     { id: 'lu-loop', doe: 'Modus loops (scene 2): de pad van 4 tellen in de kolom van track 1, een minuut laten rondgaan; daarna 1 tel.',
       let: 'Hoor je de naad van de loop (een tik bij het rondgaan)? Blijft hij op de maat?' },
     { id: 'lu-pitch', doe: 'Zonder keylock: schuif de pitch langzaam van −8% naar +8% terwijl het nummer speelt.',
       let: 'Glijdt het geluid mee zonder tikken of trapjes?' },
+  ] },
+  { id: 'draaien', titel: 'Avond 1 · Draaien op de APC', minuten: 15, punten: [
+    { id: 'dr-laden', doe: 'Laad twee nummers op track 1 en 2 (library: B).', let: 'Grid en toonsoort staan erbij, geen foutmelding.' },
+    { id: 'dr-opdemaat', doe: 'Start track 1. Start track 2 met shift + zijn track-knop: op de maat.',
+      let: 'Valt track 2 precies op de 1 van de maat?' },
+    { id: 'dr-beatjump', doe: 'Bank ◀ ▶ = beatjump; shift + Bank = de lengte (½ of ×2).', let: 'Springt hij in de maat, zonder hapering?' },
+    { id: 'dr-loop', doe: 'Pan = loop in, Sends = loop out, User = reloop.', let: 'Loopt de loop zonder tik op de naad?' },
+    { id: 'dr-quantize', doe: 'Lock = quantize aan en uit.', let: 'Licht Lock op, vallen cues dan op de tel?' },
+    { id: 'dr-rem', doe: 'Stop All Clips = rem.', let: 'Klinkt het als een draaitafel die uitloopt?' },
+    { id: 'dr-mix', doe: 'Mix een overgang met faders, EQ, filter en crossfader.', let: 'Reageert alles direct, zonder vertraging?' },
   ] },
   { id: 'koptelefoon', titel: 'Avond 1 · Koptelefoon', minuten: 12, punten: [
     { id: 'kp-zonder', doe: 'Nog zonder samengesteld apparaat (uitvoer = alleen de Scarlett): knop koptelefoon in de balk.',
@@ -55,6 +71,27 @@ export const SPEELLIJST = [
     { id: 'kp-mix', doe: 'Draai Cue Level (volume) en shift + Cue Level (mix); zet ● weer uit.',
       let: 'MIX gaat van cue naar zaal; geen tik bij aan en uit; zonder cue hoor je de zaal. Goed zo? (S3)' },
     { id: 'kp-opname', doe: 'Neem 30 s op met een cue aan.', let: 'Staat de cue NIET in de opname?' },
+  ] },
+  { id: 'keylock', titel: 'Avond 1 · Keylock en toon', minuten: 8, punten: [
+    { id: 'ky-aan', doe: 'Track 1 speelt. Shift + Tap: keylock aan, en nog eens: uit.',
+      let: 'Licht keylock op in de focuskop, zonder tik of dip in het geluid? Ligt Shift + Tap goed in de hand? (I4, O2)' },
+    { id: 'ky-pitch', doe: 'Keylock aan. Zet de pitch op +8% en daarna op −8% (PITCH in de focuskop, of de tempo-encoder).',
+      let: 'Blijft de toon staan (de toonsoort in de focuskop verandert niet) en klinkt het schoon, zonder gewiebel?' },
+    { id: 'ky-toon', doe: 'Shift + Nudge + en Shift + Nudge −. Klik daarna op het getal tussen ♭ en ♯ in de focuskop.',
+      let: 'Gaat de toon een halve toon op en neer terwijl het tempo blijft? Zet de klik hem terug op 0? (I4)' },
+    { id: 'ky-toetsen', doe: 'Toetsenbord: V = keylock van de focus-track, M = die van de vorige track, Shift + Z / X = toon − / +.',
+      let: 'Doen ze hetzelfde als op de APC?' },
+    { id: 'ky-sprong', doe: 'Keylock aan: zet en druk een hotcue (pad in modus hotcues, scene 1) en spring met Bank ◀ ▶.',
+      let: 'Landt hij precies (beatjump in de maat)? Voelt het traag dat de sprong ~0,1 s later klinkt?' },
+  ] },
+
+  // Daarna, als er tijd en zin is: klank, beatgrid, stems, master, en de secties (6 okt, docs/SECTIES.md; verweven §7).
+  { id: 'klank', titel: 'Avond 1 · Modus klank', minuten: 5, punten: [
+    { id: 'kl-modus', doe: 'Shift + scene 5: modus klank.', let: 'Scene 5 brandt magenta.' },
+    { id: 'kl-kill', doe: 'Rij 1–3 vasthouden = kill hoog, mid, laag. Shift + pad = vast.', let: 'Valt de band echt weg, ook bij zware bas?' },
+    { id: 'kl-kleuren', doe: 'Kijk naar de pads: rood = kill, oranje = rem, groen = op de maat, grijs = stil.',
+      let: 'Zijn de kleuren op het apparaat uit elkaar te houden?' },
+    { id: 'kl-knipper', doe: 'Kijk naar Pan, Sends en User terwijl er een loop loopt.', let: 'Knipperen ze op de tel?' },
   ] },
   { id: 'beatgrid', titel: 'Avond 1 · Beatgrid', minuten: 18, punten: [
     { id: 'bg-oordeel', doe: 'Laad Loving arms op track 1 en laat hem spelen. Kijk naar het teken naast de bpm.',
@@ -74,18 +111,6 @@ export const SPEELLIJST = [
     { id: 'bg-terug', doe: 'Druk ↶ (of Cmd+Z).', let: 'Staat het grid weer zoals vóór je klik?' },
     { id: 'bg-vast', doe: 'Lang nummer (Let it all go), grid-modus: scene 1 op een kick aan het begin (= tel 1); een paar minuten later Shift + scene 1 op een kick (= vast). Daarna grid-modus weer uit.',
       let: 'Melding "vastgezet — … bpm", en loopt het grid daarna gelijk met de muziek (geen ⚠)? (S20)' },
-  ] },
-  { id: 'keylock', titel: 'Avond 1 · Keylock en toon', minuten: 8, punten: [
-    { id: 'ky-aan', doe: 'Track 1 speelt. Shift + Tap: keylock aan, en nog eens: uit.',
-      let: 'Licht keylock op in de focuskop, zonder tik of dip in het geluid? Ligt Shift + Tap goed in de hand? (I4, O2)' },
-    { id: 'ky-pitch', doe: 'Keylock aan. Zet de pitch op +8% en daarna op −8% (PITCH in de focuskop, of de tempo-encoder).',
-      let: 'Blijft de toon staan (de toonsoort in de focuskop verandert niet) en klinkt het schoon, zonder gewiebel?' },
-    { id: 'ky-toon', doe: 'Shift + Nudge + en Shift + Nudge −. Klik daarna op het getal tussen ♭ en ♯ in de focuskop.',
-      let: 'Gaat de toon een halve toon op en neer terwijl het tempo blijft? Zet de klik hem terug op 0? (I4)' },
-    { id: 'ky-toetsen', doe: 'Toetsenbord: V = keylock van de focus-track, M = die van de vorige track, Shift + Z / X = toon − / +.',
-      let: 'Doen ze hetzelfde als op de APC?' },
-    { id: 'ky-sprong', doe: 'Keylock aan: zet en druk een hotcue (pad in modus hotcues, scene 1) en spring met Bank ◀ ▶.',
-      let: 'Landt hij precies (beatjump in de maat)? Voelt het traag dat de sprong ~0,1 s later klinkt?' },
   ] },
   { id: 'stems', titel: 'Avond 1 · Stems', minuten: 14, punten: [
     { id: 'st-zang', doe: 'Laad Loving arms (vier stems), knop stems in de balk, kill bij de zang aan en weer uit.',
@@ -121,11 +146,63 @@ export const SPEELLIJST = [
     { id: 'fx-vertraging', doe: 'Zet met › een Compressor op een track die gesynct meeloopt, MIX (device knob 7) vol.',
       let: 'Loopt die track hoorbaar achter (compressor 6 ms; Pitch op meng 1 zelfs ~45 ms)? Mag dat voor een effect? (S10)' },
   ] },
+  { id: 'secties', titel: 'Avond 1 · Secties', minuten: 18, punten: [
+    { id: 'se-telling', doe: 'Controlekamer, tegel Server: lees de regel "secties". (Na het starten van de server rekent hij ze op de achtergrond uit, één nummer tegelijk.)',
+      let: 'Staat er "secties: alles actueel"? Zo niet: hoeveel "nog zonder" of "verouderd", en zakt het nog?' },
+    { id: 'se-strook', doe: 'Laad Loving arms op track 1 en kijk boven de golfvorm in het overzicht (de eerste keer rekent de server ze even uit).',
+      let: 'Zie je gekleurde stukken met namen (intro, drop, break …)? Dezelfde letter = dezelfde kleur. Kloppen de grenzen met wat je hoort? (SE2)' },
+    { id: 'se-apc', doe: 'APC: Shift + scene 1 = modus secties. De pads zijn de secties van de focus-track, op volgorde (rij 1 = 1–8).',
+      let: 'Brandt de sectie die je hoort wit en knippert hij op de tel; de andere donker hemelsblauw; pads zonder sectie uit? Genoeg te zien, of liever de groepskleuren zoals op het scherm? (SE4)' },
+    { id: 'se-sprong', doe: 'Laat het nummer spelen en druk midden in een maat op een andere sectie, een paar keer, ook terug.',
+      let: 'Valt de sectie in op de volgende "1", zonder hapering of struikelende maat? De rest van de maat hoor je de aanloop uit het nummer zelf. Goed zo, of liever wachten (stil) tot de maat om is? (SE1)' },
+    { id: 'se-loop', doe: 'Shift + pad = die sectie als loop. Nog eens shift + dezelfde pad = loop eraf. Daarna een gewone pad.',
+      let: 'Loopt hij netjes rond op de maat? Haalt een gewone pad de loop eraf?' },
+    { id: 'se-mashup', doe: 'Laad een tweede nummer op track 2 (sync), wissel de focus met Track Select en lanceer om de beurt secties op beide tracks.',
+      let: 'Logisch dat de pads de focus-track volgen, of liever per kolom een track (dan 5 secties per track)? (SE3)' },
+    { id: 'se-stems', doe: 'Library: splits een nummer dat nog geen stems heeft (2 of 4) en laad het daarna opnieuw.',
+      let: 'Rekent hij de secties opnieuw uit (kijk naar de namen), en kloppen de labels beter met stems? (SE2)' },
+    { id: 'se-nieuw', doe: 'Haal een nieuw nummer binnen en kijk naar de regel "secties" in de Controlekamer; laad het nummer daarna op een track.',
+      let: 'Eerst "1 nog zonder", na het laden weer "alles actueel"? Of liever dat de server de secties meteen na het binnenhalen uitrekent? (SVC1)' },
+  ] },
+  { id: 'sec-toets', titel: 'Avond 1 · Secties op het toetsenbord', minuten: 10, punten: [
+    { id: 'st2-leeg', doe: 'Zonder nummer op de focus-track: druk shift+E.',
+      let: 'Komt er onderaan een melding ("track 1 is leeg …") in plaats van stil niets?' },
+    { id: 'st2-links', doe: 'Laad Loving arms op track 1 (focus), laat hem spelen en druk midden in een maat shift+E; een paar maten later shift+W.',
+      let: 'Valt de volgende (en daarna de vorige) sectie in op de volgende "1", net als met de pads op de APC? Liggen W en E goed onder je hand: terug links, vooruit rechts? (SVT1)' },
+    { id: 'st2-rechts', doe: 'Laad een tweede nummer op track 2. Klik kolom 2 en daarna kolom 1: de rechterhand is nu track 2. Druk shift+O en daarna shift+I.',
+      let: 'Springt track 2 en blijft track 1 waar hij was? Mis je shift+I als "wisselen" (I zonder shift wisselt nog)? (SVT2)' },
+    { id: 'st2-eind', doe: 'Druk op de laatste sectie nog eens shift+E (en op de eerste shift+W).',
+      let: 'Blijft hij staan, met onderaan een melding ("track 1: al bij de laatste sectie (8 van 8)")? Goed zo, of liever rondgaan naar de eerste sectie? (SVT3)' },
+    { id: 'st2-kaart', doe: 'Druk / (of klik "? toetsen").',
+      let: 'Staan shift+W / E en shift+I / O erin, en is het duidelijk? Esc sluit.' },
+  ] },
+  { id: 'sec-sampler', titel: 'Avond 1 · Een sectie in de sampler', minuten: 15, punten: [
+    { id: 'ss-knip', doe: 'Laad een nummer met secties op track 1 (focus) en speel het. Open de modus sampler (scene 3) en druk in rij 3 op pad 2 terwijl je de drop hoort.',
+      let: 'Pad 2 (rij 1) wordt donkerviolet, het scherm zegt "track 1 · 64" (16 maten) en het lampje van pad 2 in rij 3 gaat uit. Is het precies de drop die je hoorde, van begin tot eind? (SVS1)' },
+    { id: 'ss-start', doe: 'Druk pad 2 (rij 1) op verschillende plekken in de maat, ook vlak na een "1".',
+      let: 'Valt hij steeds in op de volgende "1" van de track die de maat geeft, niet op de volgende tel? Is wachten (tot bijna een maat) goed? (SVS2)' },
+    { id: 'ss-mee', doe: 'Laat pad 2 lopen. Doe op track 1 een beatjump van 1 tel, daarna van 4 tellen, en zet de pitch een paar procent anders.',
+      let: 'Bij 1 tel schuift de pad mee en blijft zijn "1" op de "1" van de track. Bij 4 tellen en bij pitch geen sprong. (SVS3)' },
+    { id: 'ss-grens', doe: 'Probeer rij 3 op een gevulde pad, op een lange sectie (een mix of een traag nummer) en op een nummer waar het grid onzeker is (strook onder de golfvorm).',
+      let: 'Is het lampje van rij 3 daar uit, en zegt een druk waarom (eerst leegmaken; te lang: hooguit 32 maten en 90 s; grid onzeker)? Is dat de goede grens? (SVS4, SVS6)' },
+    { id: 'ss-terug', doe: 'Herlaad VARVE, laad het nummer opnieuw en klik de bewaarde pad 2 (↺). Speel de track en start de pad.',
+      let: 'Is het dezelfde sectie, en start hij weer op de "1"? Vind je rij 3 de goede plek? (SVS5)' },
+  ] },
+  { id: 'sec-log', titel: 'Avond 1 · Secties terugspelen', minuten: 10, punten: [
+    { id: 'sl-opnemen', doe: 'Laat een nummer met secties spelen op track 1. ○ log aan. APC modus secties: druk een paar secties, één precies op de "1", dan shift + pad (loop) en daarna een gewone pad. ○ log uit.',
+      let: 'Staat het log in de lijst achter ↺?' },
+    { id: 'sl-terug', doe: '↺ en speel dat log (tweede klik vervangt de tracks). Luister mee. Neem ook eens op met een "volgende" (shift+E of de APC) precies op de "1" van de maat vóór de laatste sectie.',
+      let: 'Valt elke sectie op dezelfde maat in als toen, ook die op de "1" en die vóór de laatste sectie (geen melding "al bij de laatste sectie" die er toen niet was), en duurt de loop even lang? (SVL1)' },
+    { id: 'sl-herreken', doe: 'Grid-modus: zet tel 1 van dat nummer een tel verder en laad het opnieuw (de secties worden opnieuw gerekend). Speel het log nog eens terug. Zet daarna tel 1 terug (grid-modus, terug).',
+      let: 'Springt het terugspelen naar de plekken van toen, niet naar de nieuwe secties? (SVL1, SVL2)' },
+    { id: 'sl-loop', doe: 'Zet eerst shift + pad (sectie-loop) aan, dan pas ○ log. Na een paar maten shift + dezelfde pad (loop eraf), ○ log uit, en terugspelen.',
+      let: 'Begint het terugspelen in die loop (pad wit) en gaat hij er op dezelfde maat af? Hoor je ergens anders een tel of maat verschil, ook bij hotcues of start op de maat? (SVL3)' },
+  ] },
 
   // ---- Avond 2: spelen en programmeren (met de hub) -------------------------------
   { id: 'hub', titel: 'Avond 2 · Opstarten met de hub', minuten: 5, punten: [
-    { id: 'hb-start', doe: 'Mixer-tabblad dicht; APC, Xboard49 en Maschine aangesloten. Terminal, in AV-app-hub: npm start -- studio. (Doet de Maschine niets: Invoermonitoring voor Terminal aan en opnieuw starten.)',
-      let: 'Chrome opent de mixer met ?hub= in de adresbalk, en de APC werkt zoals op avond 1?' },
+    { id: 'hb-start', doe: 'Varve draait al: start de hub pas daarna, dan gebruikt hij die server en laat hem bij stoppen staan. Mixer-tabblad dicht; APC, Xboard49 en Maschine aangesloten. Terminal, in AV-app-hub: npm start -- studio. Doet de Maschine niets: Invoermonitoring voor Terminal aan en opnieuw starten. Zegt de hub "Maschine: bezet"? Klik Studio uit (de app) en wacht een paar seconden.',
+      let: 'Chrome opent (na een paar seconden) de mixer met ?hub= in de adresbalk, en de APC werkt zoals op avond 1?' },
     { id: 'hb-lpd8', doe: 'LPD8 (als hij aangesloten is): draai K1 terwijl er muziek speelt.',
       let: 'In VARVE gebeurt er niets (bewust). Wil je K1 ergens aan hangen, bijvoorbeeld de puls? (O1)' },
   ] },
@@ -176,62 +253,7 @@ export const SPEELLIJST = [
       let: 'Logisch zo, ook RESTART als stopknop (de MK2 heeft geen STOP)?' },
     { id: 'pa-herladen', doe: 'Herlaad de mixer (Cmd+R).', let: 'Staan drums en baslijn er nog, met hun instrument en knoppen? (S15)' },
   ] },
-
-  // ---- Secties (6 okt, docs/SECTIES.md): op studio/secties ----------------------
-  { id: 'secties', titel: 'Avond 1 · Secties', minuten: 18, punten: [
-    { id: 'se-telling', doe: 'Controlekamer, tegel Server: lees de regel "secties". (Na het starten van de server rekent hij ze op de achtergrond uit, één nummer tegelijk.)',
-      let: 'Staat er "secties: alles actueel"? Zo niet: hoeveel "nog zonder" of "verouderd", en zakt het nog?' },
-    { id: 'se-strook', doe: 'Laad Loving arms op track 1 en kijk boven de golfvorm in het overzicht (de eerste keer rekent de server ze even uit).',
-      let: 'Zie je gekleurde stukken met namen (intro, drop, break …)? Dezelfde letter = dezelfde kleur. Kloppen de grenzen met wat je hoort? (SE2)' },
-    { id: 'se-apc', doe: 'APC: Shift + scene 1 = modus secties. De pads zijn de secties van de focus-track, op volgorde (rij 1 = 1–8).',
-      let: 'Brandt de sectie die je hoort wit en knippert hij op de tel; de andere donker hemelsblauw; pads zonder sectie uit? Genoeg te zien, of liever de groepskleuren zoals op het scherm? (SE4)' },
-    { id: 'se-sprong', doe: 'Laat het nummer spelen en druk midden in een maat op een andere sectie, een paar keer, ook terug.',
-      let: 'Valt de sectie in op de volgende "1", zonder hapering of struikelende maat? De rest van de maat hoor je de aanloop uit het nummer zelf. Goed zo, of liever wachten (stil) tot de maat om is? (SE1)' },
-    { id: 'se-loop', doe: 'Shift + pad = die sectie als loop. Nog eens shift + dezelfde pad = loop eraf. Daarna een gewone pad.',
-      let: 'Loopt hij netjes rond op de maat? Haalt een gewone pad de loop eraf?' },
-    { id: 'se-mashup', doe: 'Laad een tweede nummer op track 2 (sync), wissel de focus met Track Select en lanceer om de beurt secties op beide tracks.',
-      let: 'Logisch dat de pads de focus-track volgen, of liever per kolom een track (dan 5 secties per track)? (SE3)' },
-    { id: 'se-stems', doe: 'Library: splits een nummer dat nog geen stems heeft (2 of 4) en laad het daarna opnieuw.',
-      let: 'Rekent hij de secties opnieuw uit (kijk naar de namen), en kloppen de labels beter met stems? (SE2)' },
-    { id: 'se-nieuw', doe: 'Haal een nieuw nummer binnen en kijk naar de regel "secties" in de Controlekamer; laad het nummer daarna op een track.',
-      let: 'Eerst "1 nog zonder", na het laden weer "alles actueel"? Of liever dat de server de secties meteen na het binnenhalen uitrekent? (SVC1)' },
-  ] },
-
-  // ---- Secties verweven (6 okt, avond, docs/SECTIES.md §7) --------------------
-  { id: 'sec-toets', titel: 'Avond 1 · Secties op het toetsenbord', minuten: 10, punten: [
-    { id: 'st2-leeg', doe: 'Zonder nummer op de focus-track: druk shift+E.',
-      let: 'Komt er onderaan een melding ("track 1 is leeg …") in plaats van stil niets?' },
-    { id: 'st2-links', doe: 'Laad Loving arms op track 1 (focus), laat hem spelen en druk midden in een maat shift+E; een paar maten later shift+W.',
-      let: 'Valt de volgende (en daarna de vorige) sectie in op de volgende "1", net als met de pads op de APC? Liggen W en E goed onder je hand: terug links, vooruit rechts? (SVT1)' },
-    { id: 'st2-rechts', doe: 'Laad een tweede nummer op track 2. Klik kolom 2 en daarna kolom 1: de rechterhand is nu track 2. Druk shift+O en daarna shift+I.',
-      let: 'Springt track 2 en blijft track 1 waar hij was? Mis je shift+I als "wisselen" (I zonder shift wisselt nog)? (SVT2)' },
-    { id: 'st2-eind', doe: 'Druk op de laatste sectie nog eens shift+E (en op de eerste shift+W).',
-      let: 'Blijft hij staan, met onderaan een melding ("track 1: al bij de laatste sectie (8 van 8)")? Goed zo, of liever rondgaan naar de eerste sectie? (SVT3)' },
-    { id: 'st2-kaart', doe: 'Druk / (of klik "? toetsen").',
-      let: 'Staan shift+W / E en shift+I / O erin, en is het duidelijk? Esc sluit.' },
-  ] },
-  { id: 'sec-sampler', titel: 'Avond 1 · Een sectie in de sampler', minuten: 15, punten: [
-    { id: 'ss-knip', doe: 'Laad een nummer met secties op track 1 (focus) en speel het. Open de modus sampler (scene 3) en druk in rij 3 op pad 2 terwijl je de drop hoort.',
-      let: 'Pad 2 (rij 1) wordt donkerviolet, het scherm zegt "track 1 · 64" (16 maten) en het lampje van pad 2 in rij 3 gaat uit. Is het precies de drop die je hoorde, van begin tot eind? (SVS1)' },
-    { id: 'ss-start', doe: 'Druk pad 2 (rij 1) op verschillende plekken in de maat, ook vlak na een "1".',
-      let: 'Valt hij steeds in op de volgende "1" van de track die de maat geeft, niet op de volgende tel? Is wachten (tot bijna een maat) goed? (SVS2)' },
-    { id: 'ss-mee', doe: 'Laat pad 2 lopen. Doe op track 1 een beatjump van 1 tel, daarna van 4 tellen, en zet de pitch een paar procent anders.',
-      let: 'Bij 1 tel schuift de pad mee en blijft zijn "1" op de "1" van de track. Bij 4 tellen en bij pitch geen sprong. (SVS3)' },
-    { id: 'ss-grens', doe: 'Probeer rij 3 op een gevulde pad, op een lange sectie (een mix of een traag nummer) en op een nummer waar het grid onzeker is (strook onder de golfvorm).',
-      let: 'Is het lampje van rij 3 daar uit, en zegt een druk waarom (eerst leegmaken; te lang: hooguit 32 maten en 90 s; grid onzeker)? Is dat de goede grens? (SVS4, SVS6)' },
-    { id: 'ss-terug', doe: 'Herlaad VARVE, laad het nummer opnieuw en klik de bewaarde pad 2 (↺). Speel de track en start de pad.',
-      let: 'Is het dezelfde sectie, en start hij weer op de "1"? Vind je rij 3 de goede plek? (SVS5)' },
-  ] },
-  { id: 'sec-log', titel: 'Avond 1 · Secties terugspelen', minuten: 10, punten: [
-    { id: 'sl-opnemen', doe: 'Laat een nummer met secties spelen op track 1. ○ log aan. APC modus secties: druk een paar secties, één precies op de "1", dan shift + pad (loop) en daarna een gewone pad. ○ log uit.',
-      let: 'Staat het log in de lijst achter ↺?' },
-    { id: 'sl-terug', doe: '↺ en speel dat log (tweede klik vervangt de tracks). Luister mee. Neem ook eens op met een "volgende" (shift+E of de APC) precies op de "1" van de maat vóór de laatste sectie.',
-      let: 'Valt elke sectie op dezelfde maat in als toen, ook die op de "1" en die vóór de laatste sectie (geen melding "al bij de laatste sectie" die er toen niet was), en duurt de loop even lang? (SVL1)' },
-    { id: 'sl-herreken', doe: 'Grid-modus: zet tel 1 van dat nummer een tel verder en laad het opnieuw (de secties worden opnieuw gerekend). Speel het log nog eens terug. Zet daarna tel 1 terug (grid-modus, terug).',
-      let: 'Springt het terugspelen naar de plekken van toen, niet naar de nieuwe secties? (SVL1, SVL2)' },
-    { id: 'sl-loop', doe: 'Zet eerst shift + pad (sectie-loop) aan, dan pas ○ log. Na een paar maten shift + dezelfde pad (loop eraf), ○ log uit, en terugspelen.',
-      let: 'Begint het terugspelen in die loop (pad wit) en gaat hij er op dezelfde maat af? Hoor je ergens anders een tel of maat verschil, ook bij hotcues of start op de maat? (SVL3)' },
-  ] },
+  // Secties verweven (6 okt, avond, docs/SECTIES.md §7), daarna de Maschine als DJ-bediening (7–8 okt).
   { id: 'sec-plan', titel: 'Avond 2 · Planvenster met secties', minuten: 15, punten: [
     { id: 'sp-strook', doe: 'Open het planvenster (knop plan in de mixer) op een plan met nummers die je al eens geladen hebt.',
       let: 'Zie je per nummer gekleurde banden in de strook bovenaan (zelfde letter = zelfde kleur, zoals boven de golfvorm)? Een nummer dat nog nooit geladen is heeft er geen. (SVP1)' },
@@ -243,7 +265,6 @@ export const SPEELLIJST = [
     { id: 'sp-claude', doe: 'Vraag Claude om een plan met in en uit per stap ("begin elk nummer op de eerste drop").',
       let: 'Kiest hij logische secties, en toont het venster ze? Begint de overgang in de strook op de plek waar de auto-DJ hem speelt, ook zonder uit?' },
   ] },
-
   { id: 'sec-auto', titel: 'Avond 2 · Auto-DJ met secties', minuten: 20, punten: [
     { id: 'sa-tooltip', doe: 'Laad twee nummers met ✓ naast de bpm (zeker grid) en een duidelijke outro; track 1 speelt. Zet de auto-DJ aan en houd de muis op "→ 2 …" in de AUTO-rij.',
       let: 'Staat in de tooltip "uit op outro … (sectie N)" en "in op intro …"? Valt het aftellen samen met het begin van de outro-band boven de golfvorm? (SVA1)' },
@@ -258,7 +279,6 @@ export const SPEELLIJST = [
     { id: 'sa-spring', doe: 'Met een overgang klaar: APC modus secties (Shift + scene 1, focus op wat nu klinkt), druk een sectie. Daarna, tijdens een overgang, een sectie van een van beide tracks.',
       let: 'Op wat nu klinkt: geen "jij mixt"; springt hij, dan springt het aftellen mee (vlak voor het eind: de overgang loopt vanaf waar je bent). Tijdens de overgang: "jij mixt", de automaat laat los. Logisch? (SVA5)' },
   ] },
-
   { id: 'sec-maschine', titel: 'Avond 2 · Secties op de Maschine', minuten: 10, punten: [
     { id: 'sm-scene', doe: 'Laad Loving arms op track 1 (wacht tot de secties er zijn). Maschine: groep A (focus track 1), druk SCENE.',
       let: 'Brandt SCENE fel en zijn de pads de secties op volgorde (pad 1 linksonder = sectie 1)? Die je hoort wit, de rest donker hemelsblauw, pads zonder sectie uit? (SVM1, SVM2)' },
@@ -271,9 +291,8 @@ export const SPEELLIJST = [
     { id: 'sm-terug', doe: 'Druk SCENE nog eens, en daarna STEP.',
       let: 'Spelen de pads weer het instrument, en is STEP de stapmodus zoals eerst?' },
   ] },
-
   { id: 'sec-vorm', titel: 'Avond 2 · Secties in beeld', minuten: 10, punten: [
-    { id: 'sv-nieuw', doe: 'Open de mixer met ?vormen=1 (blijft onthouden), laad Loving arms op track 1 en open het videopaneel (V). VORM-rij: laag 1 aan, REAGEER open (APC: mapje vorm, device knob 8), in de keuzelijst ernaast "nieuwe sectie". Laat het nummer over een grens spelen (zie de strook boven de golfvorm).',
+    { id: 'sv-nieuw', doe: 'Open de mixer met ?vormen=1 (blijft onthouden), laad Loving arms op track 1 en open het videopaneel (knop video in de bovenbalk). VORM-rij: laag 1 aan, REAGEER open (APC: mapje vorm, device knob 8), in de keuzelijst ernaast "nieuwe sectie". Laat het nummer over een grens spelen (zie de strook boven de golfvorm).',
       let: 'Slaat de vorm aan precies als de nieuwe sectie invalt, niet een tel te vroeg of te laat? Gloeit hij lang genoeg na, of te lang? (SVV2)' },
     { id: 'sv-energie', doe: 'Zelfde, maar kies in de keuzelijst "sectie". Speel een drop en een break, en mix daarna over naar een ander nummer.',
       let: 'Is de vorm voller in de drop en rustiger in de break? Gaat het in één keer op de grens, en glijdt het rustig als het andere nummer de maat overneemt? (SVV3)' },
@@ -284,7 +303,6 @@ export const SPEELLIJST = [
     { id: 'sv-maatgever', doe: 'Twee nummers op track 1 en 2: mix over met de crossfader, daarna de fader van de track met MAAT dicht.',
       let: 'Volgen vorm en flits de MAAT-badge (de grenzen van het nummer dat je hoort, niet van het andere)? Met de fader dicht geen flits meer?' },
   ] },
-
   { id: 'sec-hub', titel: 'Avond 2 · Secties naar de hub', minuten: 12, punten: [
     { id: 'sh-cockpit', doe: 'Met de hub (npm start -- studio): open de cockpit, laad Loving arms op track 1 en laat hem spelen.',
       let: 'Staat de sectie onder Globaal (label, energie) met varve-dj als bron? Flitst hij bij elke nieuwe sectie, op het moment dat je hem hoort?' },
@@ -299,7 +317,6 @@ export const SPEELLIJST = [
     { id: 'sh-pauze', doe: 'Pauzeer track 1. Herlaad daarna het mixer-tabblad, of stop en start de hub.',
       let: 'Pauze: de energie blijft een halve seconde staan en zakt dan in ~1,5 s naar 0; het label blijft. Terugkomen: geen flits, wel de juiste sectie. (SVH2)' },
   ] },
-
   { id: 'maschine-dj', titel: 'Avond 2 · De Maschine als DJ-bediening', minuten: 15, punten: [
     { id: 'md-strip', doe: 'Laad een nummer op track 1 en laat hem spelen. Maschine: groep A, dan ◄ ► links boven tot de pagina Strip.',
       let: 'Staat er links "T1 Strip" en rechts de titel, bpm, toonsoort en resterende tijd? Staat boven elke draaiknop wat hij doet (trim, hoog, mid, laag, echo, galm, mix, filter)?' },
@@ -312,7 +329,6 @@ export const SPEELLIJST = [
     { id: 'md-kaart', doe: 'In de mixer: knop Maschine in de bovenbalk (de Maschine-kaart, naast APC). Wissel op het apparaat van pagina, druk SHIFT, en daarna STEP, SCENE en SAMPLING.',
       let: 'Volgt de kaart het apparaat (pagina, padmodus, shift), licht de knop op die je aanraakt, en tonen de schermen op de kaart wat de Maschine laat zien? Is de kaart handig als spiekbrief?' },
   ] },
-
   { id: 'maschine-bladeren', titel: 'Avond 2 · Bladeren en sampler op de Maschine', minuten: 15, punten: [
     { id: 'mb-browse', doe: 'Druk BROWSE. Draai het masterwiel een paar tikken en druk ◄ ► bij het wiel.',
       let: 'Gaat de library in de mixer open en licht het gekozen nummer op? Staan titel, bpm, toonsoort en duur op het rechterscherm? Gaat ◄ ► tien nummers verder en terug? Telt de eerste wielklik na het insteken niet (bekend)?' },
@@ -332,10 +348,10 @@ export const SPEELLIJST = [
 
   // ---- Avond 3: beeld (met de Omarchy-pc) ------------------------------------------
   { id: 'beeld-pc', titel: 'Avond 3 · Beeld met de Stroommachine (met de pc)', minuten: 25, punten: [
-    { id: 'bp-start', doe: 'Op de pc: de relay en de Stroommachine volgens koppel/DJ-START.md in de Stroommachine-repo (relay met --host 0.0.0.0, poort 7702, niet 7700). In de mixer: knop beeld, adres ws://<ip-van-de-pc>:7702/app, aan.',
+    { id: 'bp-start', doe: 'Tailscale aan op Mac en pc. Op de pc de Stroommachine van tak v10 (git clone -b v10, of git switch v10), en start tools/omarchy/stroom-avond.sh in een terminal, zodat je de uitvoer ziet. In de mixer: knop beeld, adres ws://clayk:7720/app (lukt dat niet: ws://100.110.172.126:7702/app), aan.',
       let: 'Komt er één melding "verbonden", en daarna de scène in de BEELD-rij? Is de tegel Beeld in de Controlekamer groen?' },
-    { id: 'bp-klok', doe: 'Speel een nummer met een harde kick en kijk naar de flits op de tel in de Stroommachine.',
-      let: 'Valt de flits op de kick? Zo niet: zet de extra latentie hoger tot hij klopt, en noteer het getal. (BE6)' },
+    { id: 'bp-klok', doe: 'Speel een nummer met een harde kick en kijk naar de flits op de tel in de Stroommachine. IJk op één plek: met v10 IJken op de pc (tab Live → Varve DJ, de pijltjes), de latentie in Varve op 0.',
+      let: 'Valt de flits op de kick? Zo niet: schuif bij IJken tot hij klopt, en noteer het getal. (BE6)' },
     { id: 'bp-crossfader', doe: 'Track 1 op A en track 2 op B (de A|B-knop), allebei spelend. Schuif de crossfader langzaam van A naar B, en daarna nog eens met de scherpe curve (Metronome).',
       let: 'Wisselt de scène voorbij het midden? Voelt dat goed, ook met de scherpe curve? Mis je een scène voor een track op thru? (BE2, BE10)' },
     { id: 'bp-macro', doe: 'APC: Shift + Detail View = mapje beeld. Draai device knob 1–8 om de beurt.',
@@ -347,23 +363,6 @@ export const SPEELLIJST = [
   ] },
 
   // ---- Eerder werk (vóór 6 okt): als er tijd over is ------------------------------
-  { id: 'draaien', titel: 'Eerder werk · Draaien op de APC', minuten: 15, punten: [
-    { id: 'dr-laden', doe: 'Laad twee nummers op track 1 en 2 (library: B).', let: 'Grid en toonsoort staan erbij, geen foutmelding.' },
-    { id: 'dr-opdemaat', doe: 'Start track 1. Start track 2 met shift + zijn track-knop: op de maat.',
-      let: 'Valt track 2 precies op de 1 van de maat?' },
-    { id: 'dr-beatjump', doe: 'Bank ◀ ▶ = beatjump; shift + Bank = de lengte (½ of ×2).', let: 'Springt hij in de maat, zonder hapering?' },
-    { id: 'dr-loop', doe: 'Pan = loop in, Sends = loop out, User = reloop.', let: 'Loopt de loop zonder tik op de naad?' },
-    { id: 'dr-quantize', doe: 'Lock = quantize aan en uit.', let: 'Licht Lock op, vallen cues dan op de tel?' },
-    { id: 'dr-rem', doe: 'Stop All Clips = rem.', let: 'Klinkt het als een draaitafel die uitloopt?' },
-    { id: 'dr-mix', doe: 'Mix een overgang met faders, EQ, filter en crossfader.', let: 'Reageert alles direct, zonder vertraging?' },
-  ] },
-  { id: 'klank', titel: 'Eerder werk · Modus klank', minuten: 5, punten: [
-    { id: 'kl-modus', doe: 'Shift + scene 5: modus klank.', let: 'Scene 5 brandt magenta.' },
-    { id: 'kl-kill', doe: 'Rij 1–3 vasthouden = kill hoog, mid, laag. Shift + pad = vast.', let: 'Valt de band echt weg, ook bij zware bas?' },
-    { id: 'kl-kleuren', doe: 'Kijk naar de pads: rood = kill, oranje = rem, groen = op de maat, grijs = stil.',
-      let: 'Zijn de kleuren op het apparaat uit elkaar te houden?' },
-    { id: 'kl-knipper', doe: 'Kijk naar Pan, Sends en User terwijl er een loop loopt.', let: 'Knipperen ze op de tel?' },
-  ] },
   { id: 'toon', titel: 'Eerder werk · Toonsoort en library', minuten: 5, punten: [
     { id: 'to-pitch', doe: 'Schuif de pitch van een spelend nummer.', let: 'Schuift de toonsoort in de kolomkop mee?' },
     { id: 'to-klopt', doe: 'Vergelijk de toonsoort met wat je hoort.', let: 'Klopt hij muzikaal? Zo niet: bij welk nummer?' },
@@ -398,7 +397,7 @@ export const SPEELLIJST = [
       let: 'Meteen mee, of liever pas bij de volgende aanslag? (KS2)' },
   ] },
   { id: 'beeld', titel: 'Eerder werk · Beamer en vormen', minuten: 10, punten: [
-    { id: 'be-los', doe: 'Videopaneel (V) → los venster naar het tweede scherm, dubbelklik voor volledig scherm.',
+    { id: 'be-los', doe: 'Videopaneel (knop video in de bovenbalk) → los venster naar het tweede scherm, dubbelklik voor volledig scherm.',
       let: 'Eerst "beamer loopt in", dan "beamer": niets verspringt of ontbreekt.' },
     { id: 'be-achter', doe: 'Zet in het mixervenster een ander tabblad vooraan.', let: 'Loopt het beeld op de beamer door?' },
     { id: 'be-vormen', doe: 'Vormen aan; Device ◀ ▶ door alle 26 systemen.', let: 'Niets uitgerekt: rond blijft rond, breed blijft breed.' },

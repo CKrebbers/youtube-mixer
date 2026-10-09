@@ -33,6 +33,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
+const { EFFECTEN } = await import(new URL('../../src/engine/fx.js', import.meta.url));
+const EFFECTEN_AANTAL = EFFECTEN.length;
 const UIT = process.argv[2] || join(WORTEL, 'tools/headless/uit');
 mkdirSync(UIT, { recursive: true });
 const POORT = Number(process.env.VARVE_KIJK_POORT) || 8811, DEBUG = Number(process.env.VARVE_KIJK_DEBUG) || 9411;
@@ -310,7 +312,7 @@ try {
       dof: r.querySelectorAll('.ms-plek.dof').length, aan: r.querySelector('.ms-aan').textContent }; })()`);
   ok('de knop in de balk opent de rij', rij.open);
   ok(`de kiezer: de kant-en-klare racks en de losse effecten; nu het filter (${rij.waarde})`,
-    rij.opties.filter((o) => o.startsWith('s:')).length >= 3 && rij.opties.filter((o) => o.startsWith('e:')).length === 7 && rij.waarde === 'e:filter');
+    rij.opties.filter((o) => o.startsWith('s:')).length >= 3 && rij.opties.filter((o) => o.startsWith('e:')).length === EFFECTEN_AANTAL && rij.waarde === 'e:filter');
   ok(`de rij zegt wat er werkt: "${rij.soort}", gain reduction "${rij.gr}"`, /limiter −1 dBTP · 1,5 ms/.test(rij.soort) && rij.gr === '0 dB');
   ok(`de knoppen heten naar het rack (${rij.labels.slice(0, 3).join(', ')}…), de lege dof (${rij.dof})`, rij.labels[0] !== '1' && rij.dof === 6 && rij.aan === 'aan');
   await foto('master-rij.png');

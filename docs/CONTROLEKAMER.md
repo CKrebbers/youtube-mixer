@@ -43,7 +43,7 @@ de mixer.
    notitie. "Nieuwe ronde" (twee keer klikken) zet de sessie in
    `proef/archief/<tijd>.json` en begint leeg. Wat erin staat: hieronder.
 
-## De speellijst (6 oktober): de proef in twee avonden
+## De speellijst: de proef in drie avonden (6 okt; volgorde 9 okt)
 
 Clay probeert alles wat sinds 5 okt gebouwd is voor het eerst op zijn echte hardware
 (APC40 mkII, Xboard49, Maschine MK2, de koptelefoon via het samengestelde apparaat,
@@ -54,30 +54,52 @@ De Controlekamer kent geen avonden: de bloktitel groepeert ("Avond 1 · …").
 | blok | punten | min | waarover (docs) | vragen (VRAGEN.md) |
 |---|---|---|---|---|
 | Avond 1 · Opstarten | 3 | 2 | APC, audio, scherm | — |
+| Avond 1 · Draaien op de APC | 7 | 15 | sinds 9 okt uit "Eerder werk": laden, op de maat, beatjump, loop, quantize, rem, een overgang mixen | — |
 | Avond 1 · Koptelefoon | 6 | 12 | S1: STUDIO §3 en §5, ook zonder samengesteld apparaat | S22, S3 |
-| Avond 1 · Beatgrid | 9 | 18 | BEATGRID §10–11: oordeel, streepjes, controle (Loving arms, Ciel), jungle-mix vóór en na ↻, klik in de golfvorm, ↶, vastzetten | S21, S20 |
 | Avond 1 · Keylock en toon | 5 | 8 | KEYLOCK §9: Shift + Tap, Shift + Nudge, ±8%, V/M, Shift + Z/X, sprongen | I4, O2 |
-| Avond 1 · Stems | 8 | 12 | STEMS §5: zang weg, grid-modus stems, filter/echo/galm per stem, alleen de bas in de koptelefoon, splitsen tijdens het mixen | N1, N2, N3, S5, S6 |
+| Avond 1 · Modus klank | 4 | 5 | sinds 9 okt uit "Eerder werk": grid-modus klank, kill, kleuren, knipperen | — |
+| Avond 1 · Beatgrid | 9 | 18 | BEATGRID §10–11: oordeel, streepjes, controle (Loving arms, Ciel), jungle-mix vóór en na ↻, klik in de golfvorm, ↶, vastzetten | S21, S20 |
+| Avond 1 · Stems | 9 | 14 | STEMS §5: zang weg, grid-modus stems, filter/echo/galm/toon per stem, alleen de bas in de koptelefoon, splitsen tijdens het mixen | N1, N2, N3, S5, S6, S23, S24 |
 | Avond 1 · Master en effecten | 6 | 12 | MASTER (mapje master, limiter), EFFECTEN (sjablonen, distortion, vertraging) | S9, S10, S11, S13 |
 | Avond 2 · Opstarten met de hub | 2 | 5 | `npm start -- studio` in AV-app-hub, LPD8 K1 | O1 |
 | Avond 2 · Spelen | 15 | 30 | INSTRUMENTEN, MASCHINE, STUDIO S3: FM op de Xboard eerst in de koptelefoon, aanslag, toets → geluid, Maschine (wiel, pads, kleuren, draaiknoppen, schermen), drums, Schaal, mapje inst | S4, S7, S8, S14, S18, S19 |
 | Avond 2 · Patronen | 8 | 22 | PATRONEN §7, MASCHINE §5, STUDIO S4: stappen op de Maschine, baslijn van de Xboard, starten vanaf de APC, mixen, sprong, herladen | S15, S16, S17 |
-| Eerder werk · … (negen blokken) | 37 | 65 | wat er vóór 6 okt al in stond: draaien, klank, toonsoort, binnenhalen, auto-DJ, plan, klankschaal, beamer, kleine dingen | AU2, AU3, PL3, KS2, KS3 |
+| Eerder werk · … (zeven blokken) | 26 | 45 | wat er vóór 6 okt al in stond: toonsoort, binnenhalen, auto-DJ, plan, klankschaal, beamer, kleine dingen | AU2, AU3, PL3, KS2, KS3 |
 
-**Avond 1** (mixen): 37 punten, ~64 min, zonder hub (de mixer opent de APC zelf).
-**Avond 2** (spelen en programmeren): 25 punten, ~57 min, met de hub (de Maschine kan
-alleen via de hub).
+Sinds 9 okt (na het verbeteronderzoek) staat alles erin, ook wat hierboven niet in de
+tabel staat (luisteren, secties, de Maschine als DJ-bediening, beeld):
+
+**Avond 1** (mixen): 76 punten, ~2,5 uur (149 min), zonder hub (de mixer opent de APC
+zelf). De **kern** vooraan is ~45 min (26 punten, 47 min): opstarten, luisteren, draaien
+op de APC, koptelefoon, keylock. De rest van avond 1 als er tijd en zin is.
+**Avond 2** (spelen en programmeren): 64 punten, ~2,5 uur (154 min), met de hub (de
+Maschine kan alleen via de hub).
+**Avond 3** (beeld, met de Omarchy-pc): 6 punten, ~25 min.
+**Eerder werk**: 26 punten, ~45 min.
+
+**De volgorde** (9 okt; `test/controle.test.mjs` eist alle avond 1 vóór avond 2 vóór
+avond 3 vóór "Eerder werk", en de kern vooraan):
+- Avond 1: opstarten, luisteren, draaien op de APC, koptelefoon, keylock (de kern), daarna
+  modus klank, beatgrid, stems, master en effecten, secties, secties op het toetsenbord,
+  een sectie in de sampler, secties terugspelen.
+- Avond 2: opstarten met de hub, spelen, patronen, planvenster met secties, auto-DJ met
+  secties, secties op de Maschine, secties in beeld, secties naar de hub, de Maschine als
+  DJ-bediening, bladeren en sampler op de Maschine.
+- Avond 3: beeld met de Stroommachine.
+- Eerder werk: toonsoort, binnenhalen, auto-DJ, planvenster, klankschaal, beamer, kleine dingen.
 
 - **Vraagcodes**: een code tussen haakjes in de let-tekst ("(S21)") is de open vraag uit
   `docs/VRAGEN.md` die je bij dat punt beantwoordt; je antwoord gaat in de notitie.
   Bij elk punt alleen de vraag die erbij past. Bij geen enkel punt: N4 en S12 (alleen
   een keuze, niets om te proberen) en KS1, KS4, KS5 (de globale klankschaal).
 - **Ids**: de 44 punten van vóór 6 okt hebben hun id en tekst gehouden (kp-mix kreeg
-  alleen "Goed zo? (S3)" erachter). Nieuwe ids hebben een voorvoegsel per blok:
-  `kp-`, `bg-`, `ky-`, `st-`, `ma-`/`fx-`, `hb-`, `sp-`, `pa-`.
+  alleen "Goed zo? (S3)" erachter; start-apc zegt sinds 9 okt "Logic en andere
+  muziekprogramma's dicht" in plaats van "Ableton dicht"). Nieuwe ids hebben een
+  voorvoegsel per blok: `kp-`, `bg-`, `ky-`, `st-`, `ma-`/`fx-`, `hb-`, `sp-`, `pa-`.
 - **Geen "gedaan"-stand.** De server kent per punt alleen open, ok, fout en overslaan;
   er is niets om oude punten vooraf mee af te vinken (en `proef/sessie.json` was leeg).
   Daarom staan de oude blokken achteraan als "Eerder werk": als er tijd over is, of `—`.
+  Behalve draaien en klank: die horen sinds 9 okt bij avond 1 (de APC-basis).
 - **Wat de lijst aanneemt** (6 okt in de library): Loving arms en Ciel (vier stems, grid
   uit de tellen), de jungle-mix (grid met de hand, op slot), Let it all go (lang, het
   begin ~22 cent hoog); Beat This! en Demucs staan klaar.
@@ -141,7 +163,8 @@ alleen via de hub).
 
 In `src/controle/speellijst.js`. Verander geen bestaande `id`: de stand op de
 server hangt eraan. `test/controle.test.mjs` controleert dat ids uniek zijn en
-op de server passen, dat de punten van vóór 6 okt er nog zijn, en dat elke
+op de server passen, dat de punten van vóór 6 okt er nog zijn, dat de blokken op
+avondvolgorde staan met de kern van avond 1 vooraan, en dat elke
 vraagcode in een let-tekst in `docs/VRAGEN.md` staat (één tot drie hoofdletters en een
 getal, zoals `S21` of `SVC1`; een lijst als `(I4, O2)`). Een punt is één handeling
 met één ding om op te letten; zet er alleen knoppen in die in de mapping, de
@@ -150,8 +173,8 @@ actions of `index.html` bestaan.
 ## Getest
 
 - `test/controle.test.mjs`: opslag (fouten, gelijktijdig, kapot bestand,
-  archief), de speellijst (ook: de ids van vóór 6 okt, de vraagcodes), het bericht
-  van de mixer.
+  archief), de speellijst (ook: de ids van vóór 6 okt, de vraagcodes, de
+  avondvolgorde), het bericht van de mixer.
 - `test/server.test.mjs`: de routes, de witte lijst, 415 zonder JSON.
 - `test/backup.test.mjs`: de backup-tegel (vandaag, gisteren, langer geleden, fout,
   nog geen, geen server) en `/api/backups` op een echte server.
@@ -176,5 +199,6 @@ actions of `index.html` bestaan.
   knop, de demotrack in "in de mixer", afvinken en notities na herladen, de
   Backup-tegel. Gedraaid op 6 okt met de speellijst van twee avonden (99 punten):
   alles groen, de lijst past op 1440 px en op 390 px breed zonder zijwaarts scrollen.
+  Op 9 okt opnieuw met de avondvolgorde (172 punten): alles groen.
 - NIET getest: met de echte APC (de headless mixer heeft geen MIDI), en op de
   Mac in Clay's Chrome.

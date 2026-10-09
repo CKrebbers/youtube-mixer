@@ -179,8 +179,9 @@ function tegels() {
 }
 
 function tekenStand() {
+  // De title draagt de hele tekst: de waarde kan nog afgekapt zijn (één regel).
   $('tegels').innerHTML = tegels().map((g) => `
-    <div class="tegel" data-licht="${g.licht}">
+    <div class="tegel" data-licht="${g.licht}" title="${esc([g.waarde, g.sub].filter((x) => x && x !== '—').join(' — '))}">
       <span class="tegel-naam"><i class="led"></i>${esc(g.naam)}</span>
       <span class="tegel-waarde">${esc(g.waarde)}</span>
       <span class="tegel-sub">${esc(g.sub)}</span>${g.regel ? `
