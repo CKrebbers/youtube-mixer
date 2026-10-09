@@ -201,7 +201,7 @@ export const SPEELLIJST = [
 
   // ---- Avond 2: spelen en programmeren (met de hub) -------------------------------
   { id: 'hub', titel: 'Avond 2 · Opstarten met de hub', minuten: 5, punten: [
-    { id: 'hb-start', doe: 'Varve draait al: start de hub pas daarna, dan gebruikt hij die server en laat hem bij stoppen staan. Mixer-tabblad dicht; APC, Xboard49 en Maschine aangesloten. Terminal, in AV-app-hub: npm start -- studio. Doet de Maschine niets: Invoermonitoring voor Terminal aan en opnieuw starten. Zegt de hub "Maschine: bezet"? Klik Studio uit (de app) en wacht een paar seconden.',
+    { id: 'hb-start', doe: 'Varve draait al: start de hub pas daarna, dan gebruikt hij die server en laat hem bij stoppen staan. Mixer-tabblad dicht; APC, Xboard49 en Maschine aangesloten. Dubbelklik Start studio.command in de map AV-app-hub (of in Terminal: npm start -- studio --geen-drivers). Doet de Maschine niets: Invoermonitoring voor Terminal aan en opnieuw starten. Zegt de hub "Maschine: bezet"? Klik Studio uit (de app) en wacht een paar seconden.',
       let: 'Chrome opent (na een paar seconden) de mixer met ?hub= in de adresbalk, en de APC werkt zoals op avond 1?' },
     { id: 'hb-lpd8', doe: 'LPD8 (als hij aangesloten is): draai K1 terwijl er muziek speelt.',
       let: 'In VARVE gebeurt er niets (bewust). Wil je K1 ergens aan hangen, bijvoorbeeld de puls? (O1)' },
