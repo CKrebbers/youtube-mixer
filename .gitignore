@@ -1,5 +1,6 @@
 media/
 opnames/
+proef/
 *.db
 *.db-wal
 *.db-shm

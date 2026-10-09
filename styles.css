@@ -948,6 +948,7 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .focus-deck .deck-head{align-items:center}
 .focus-deck.leeg .deck-title{color:var(--dim)}
 .focus-deck .demo-btn{font-size:11px}
+.focus-deck:not(.leeg) .demo-btn{display:none}   /* alleen op een lege track: anders vervangt één klik het nummer */
 .maat-badge{font:700 11px/1 ui-monospace,monospace;letter-spacing:.06em;color:#03100e;background:var(--warn);
   padding:3px 5px;border-radius:3px;white-space:nowrap}
 .maat-badge.hidden{display:none}
