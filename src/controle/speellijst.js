@@ -31,6 +31,18 @@ export const SPEELLIJST = [
     { id: 'start-scherm', doe: 'Kijk of de mixer op je MacBook-scherm past zonder scrollen.',
       let: 'Alle acht faders helemaal te zien? Is er iets te klein om te lezen?' },
   ] },
+  { id: 'luisteren', titel: 'Avond 1 · Luisteren: streamen, loops, springen', minuten: 10, punten: [
+    { id: 'lu-album', doe: 'Laad een lang nummer (Let it all go, of de jungle-mix) op track 1 en laat het een paar minuten spelen, met de koptelefoon op.',
+      let: 'Hoor je ergens een tik, een gat of gehaper? Alles is gemeten, nog niets beluisterd. (A2)' },
+    { id: 'lu-springen', doe: 'Klik in de golfvorm een paar keer vooruit en terug, ook ver weg.',
+      let: 'Een korte stilte bij een sprong ver weg is bekend (tientallen ms). Hoor je ooit ruis of een stukje dat herhaalt?' },
+    { id: 'lu-hotcue', doe: 'Zet hotcue 1 en 2 (modus hotcues, scene 1) en spring er een paar keer tussen heen en weer.',
+      let: 'Klinken de hotcues meteen, zonder gat?' },
+    { id: 'lu-loop', doe: 'Modus loops (scene 2): de pad van 4 tellen in de kolom van track 1, een minuut laten rondgaan; daarna 1 tel.',
+      let: 'Hoor je de naad van de loop (een tik bij het rondgaan)? Blijft hij op de maat?' },
+    { id: 'lu-pitch', doe: 'Zonder keylock: schuif de pitch langzaam van −8% naar +8% terwijl het nummer speelt.',
+      let: 'Glijdt het geluid mee zonder tikken of trapjes?' },
+  ] },
   { id: 'koptelefoon', titel: 'Avond 1 · Koptelefoon', minuten: 12, punten: [
     { id: 'kp-zonder', doe: 'Nog zonder samengesteld apparaat (uitvoer = alleen de Scarlett): knop koptelefoon in de balk.',
       let: 'De rij zegt "geen koptelefoonuitgang" (waarom staat in de tooltip), en verder werkt alles zoals altijd?' },
