@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "titel": "Maschine via de hub",
+  "uitleg": "De Maschine via de hub-set studio, de mixer via de hub, de vertrouwde krat.",
+  "delen": {
+    "pakket": { "profiel": "maschine" },
+    "kaart": { "krat": "slim:vertrouwd" },
+    "hub": { "set": "studio", "mixerVia": true }
+  }
+}
