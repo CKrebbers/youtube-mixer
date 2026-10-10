@@ -42,19 +42,26 @@
 //        <uitmap>/kijk-<datum>.jsonl. Raakt niets, verbindt niet met de relay.
 //   node tools/headless/beeld-lokaal.mjs --opruimen
 //        stopt ALLEEN processen van deze meting: met het tmp-voorvoegsel
-//        varve-beeld-lokaal- in hun argumenten, of varve-relay.js op 7712.
+//        varve-beeld-lokaal- in hun argumenten (de Chromes via hun profiel, de
+//        proefserver via --meting=<tmp>), of varve-relay.js op 7712.
+// Ctrl-C (SIGINT/SIGTERM) stopt alle kinderen (ze draaien in een eigen
+// procesgroep) en ruimt de tijdelijke map op, ook in --zelftest.
 // Standen: nul (Stroommachine leeg), licht-1080, normaal-1080, licht-720 (de
 //   vergelijking met ontwerp B §3), vormen (zaalbeeld: vormen in het losse
 //   venster, zonder clips), en op aanvraag samen (zaalbeeld + Licht) en auto-1080.
 // Omgeving: VARVE_STROOM_REPO (~/Projects/stroommachine), VARVE_RELAY_POORT (7712),
 //   VARVE_BL_POORT (8801), VARVE_BL_DEBUG (9391; VARVE +1), VARVE_BL_KIJK_DEBUG (9393),
 //   VARVE_CHROME, VARVE_BL_FORCEER=1 (meten ondanks een druk proces of geluid; wordt
-//   gelogd), VARVE_BL_BEWAAR=1 (de tijdelijke map laten staan).
+//   gelogd; zie tools/README.md wanneer dat mag), VARVE_BL_BEWAAR=1 (de tijdelijke
+//   map laten staan).
 //
 // NIET op een speeldag en niet terwijl Clay speelt: de volledige run trekt minuten
 // lang twee Chromes op de GPU. Hij weigert te starten als er geluid uit de Mac komt
 // (pmset audio-out) of een ander proces > 20 % van een kern trekt, en breekt af
-// als het audioproces van Clay's Chrome tijdens de run gaat rekenen.
+// als het audioproces van Clay's Chrome tijdens de run gaat rekenen. Systeemdaemons
+// (/System/, /usr/libexec/, …: mediaanalysisd, fileproviderd, Spotlight) houden hem
+// niet tegen: die pieken op deze Mac geregeld en zijn geen andere testrun; ze komen
+// als "achtergrond" in de JSON, ook per stand (begin en eind).
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createConnection } from 'node:net';
@@ -118,6 +125,12 @@ export function leesOpties(argv = [], env = {}) {
     forceer: env.VARVE_BL_FORCEER === '1',
     bewaar: env.VARVE_BL_BEWAAR === '1',
   };
+}
+
+/** Een getaloptie die geen getal ≥ 0 is (NaN uit leesOpties), als tekst; null als alles klopt. */
+export function optieFout(o) {
+  const mis = [['--warm', o.warm], ['--meet', o.meet], ['--duur', o.duur]].filter(([, v]) => v !== null && !Number.isFinite(v)).map(([k]) => k);
+  return mis.length ? `${mis.join(', ')} moet een getal ≥ 0 zijn (in seconden)` : null;
 }
 
 /** Hoe lang stand i meet (s): `nul` de eerste keer 120 en daarna 60, licht-1080 120, de rest 60. */
@@ -202,6 +215,32 @@ export function topGebruikers(voor, na, dtS, uitsluiten = new Set()) {
     .sort((a, b) => b.kern - a.kern);
 }
 
+/** Een proces van macOS zelf (mediaanalysisd, fileproviderd, mds, WindowServer …), geen andere testrun. */
+export const SYSTEEM = /^(\/System\/|\/usr\/libexec\/|\/usr\/sbin\/|\/sbin\/|\/Library\/Apple\/)/;
+export const isSysteem = (cmd) => SYSTEEM.test(String(cmd));
+
+/**
+ * De CPU-poort (H7): boven `grens` (kern) stopt een ANDER proces de meting;
+ * een systeemproces niet, dat is achtergrond (vastgelegd, geen stop). Elke rij
+ * krijgt `systeem: true/false`.
+ */
+export function cpuPoort(top, grens = VREEMD_KERN) {
+  const rij = (t) => ({ pid: t.pid, kern: +t.kern.toFixed(3), cmd: t.cmd, systeem: isSysteem(t.cmd) });
+  const boven = top.filter((t) => t.kern > grens).map(rij);
+  return { ander: boven.filter((t) => !t.systeem), achtergrond: boven.filter((t) => t.systeem), top5: top.slice(0, 5).map(rij) };
+}
+
+/**
+ * Een korte naam voor een regel: de naam van het programma (een pad mag spaties
+ * hebben, "Google Chrome") en van padargumenten de laatste twee stukken:
+ * mediaanalysisd · node test/x.test.mjs · Google Chrome Helper.
+ */
+export function kortNaam(cmd) {
+  const [prog, ...args] = String(cmd).split(' --')[0].split(' /');
+  const naam = prog.startsWith('/') ? prog.split('/').pop() : prog;
+  return [naam, ...args.map((a) => a.split('/').slice(-2).join('/'))].join(' ');
+}
+
 /** Het audioproces van Clay's Chrome (/Applications/Google Chrome.app), of null. */
 export function claysAudio(rijen) {
   return rijen.find((r) => r.cmd.includes('/Applications/Google Chrome.app/') && r.cmd.includes('--utility-sub-type=audio.mojom.AudioService')) || null;
@@ -214,6 +253,26 @@ export function claysChromeVersie(rijen) {
     if (m) return m[1];
   }
   return null;
+}
+
+/** De omgevingsvariabelen van de server die een PAD zijn: in een proefserver allemaal in de tijdelijke map. */
+export const PROEF_PADEN = ['VARVE_DB', 'VARVE_MEDIA', 'VARVE_OPNAMES', 'VARVE_PATRONEN', 'VARVE_PLANNEN', 'VARVE_PROEF',
+  'VARVE_KAART', 'VARVE_KAART_DB', 'VARVE_BACKUPS', 'VARVE_NACHT'];
+
+/**
+ * De omgeving van een proefserver (ook voor zaalbeeld.mjs): ALLES in `tmp`, ook
+ * wat de server alleen leest als het gezet is (backups, nacht), zodat een geërfde
+ * VARVE_BACKUPS nooit in Clay's echte backupmap schrijft of daar dunt
+ * (server/backup.js). Geen extra hosts (VARVE_HOSTS), geen heranalyse, de nep-yt-dlp.
+ */
+export function proefEnv(tmp, poort, ytdlp, basis = process.env) {
+  return {
+    ...basis, PORT: String(poort), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
+    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'),
+    VARVE_PROEF: join(tmp, 'proef'), VARVE_KAART: join(tmp, 'geen-kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'),
+    VARVE_BACKUPS: join(tmp, 'backups'), VARVE_NACHT: join(tmp, 'nacht.json'), VARVE_HOSTS: '',
+    VARVE_YTDLP: ytdlp, VARVE_HERANALYSE: 'uit',
+  };
 }
 
 // ---- puur: verdelingen en oordelen -------------------------------------------------
@@ -522,20 +581,20 @@ const n1 = (x, d = 1) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : 
 // ---- processen die wij starten, en opruimen -------------------------------------------
 
 const processen = [];
-/** Een kind in een EIGEN procesgroep (detached), zodat opruimen de hele familie raakt. */
-function start(cmd, args, opties = {}) {
+/** Een kind in een EIGEN procesgroep (detached), zodat opruimen de hele familie raakt. Ook voor zaalbeeld.mjs. */
+export function start(cmd, args, opties = {}) {
   const p = spawn(cmd, args, { stdio: 'ignore', detached: true, ...opties });
   p.on('error', () => {});
   processen.push(p);
   return p;
 }
-function stopAlles() {
+export function stopAlles() {
   for (const p of processen) {
     if (p.exitCode !== null || p.signalCode !== null) continue;
     try { process.kill(-p.pid, 'SIGTERM'); } catch (_) { try { p.kill('SIGTERM'); } catch (__) {} }
   }
 }
-async function wachtTotWeg(ms = 5000) {
+export async function wachtTotWeg(ms = 5000) {
   for (const eind = Date.now() + ms; Date.now() < eind;) {
     if (processen.every((p) => p.exitCode !== null || p.signalCode !== null)) return true;
     await wacht(100);
@@ -544,10 +603,31 @@ async function wachtTotWeg(ms = 5000) {
   return false;
 }
 let signaalGezet = false;
-function zetSignalen() {
+const naStop = [];
+/**
+ * Ctrl-C, kill, een uitzondering: alle kinderen (hun hele procesgroep) stoppen,
+ * hooguit 1,5 s wachten (daarna SIGKILL), dan `bijStop` (de tijdelijke map weg)
+ * en eruit. Een tweede signaal tijdens het wachten: meteen SIGKILL en eruit.
+ * Zonder dit bleven na Ctrl-C de Chromes en de server draaien (eigen procesgroep;
+ * review 10 okt).
+ */
+export function zetSignalen(bijStop = null) {
+  if (bijStop) naStop.push(bijStop);
   if (signaalGezet) return;
   signaalGezet = true;
-  const dood = (code, reden) => { console.error(`\n${reden}: alles van deze meting stoppen`); stopAlles(); setTimeout(() => process.exit(code), 400); };
+  let bezig = false;
+  const dood = async (code, reden) => {
+    if (bezig) {
+      for (const p of processen) { try { process.kill(-p.pid, 'SIGKILL'); } catch (_) {} }
+      process.exit(code);
+    }
+    bezig = true;
+    console.error(`\n${reden}: alles van deze meting stoppen`);
+    stopAlles();
+    await wachtTotWeg(1500);
+    for (const f of naStop) { try { f(); } catch (_) {} }
+    process.exit(code);
+  };
   process.on('SIGINT', () => dood(130, 'SIGINT'));
   process.on('SIGTERM', () => dood(143, 'SIGTERM'));
   process.on('uncaughtException', (e) => dood(1, `uitzondering: ${e.message}`));
@@ -556,18 +636,47 @@ function zetSignalen() {
 
 /**
  * Welke processen --opruimen zou stoppen: een PAD met ons tmp-voorvoegsel in de
- * argumenten (de Chromes: --user-data-dir=…/varve-beeld-lokaal-…), of node met
- * varve-relay.js op onze poort. Nooit een shell (een `pgrep -f varve-beeld-lokaal-`
+ * argumenten (de Chromes: --user-data-dir=…/varve-beeld-lokaal-…; de proefserver:
+ * --meting=…/varve-beeld-lokaal-…, want zijn tmp-paden staan alleen in zijn env en
+ * die toont ps niet), of node met varve-relay.js op onze poort (`relayPoort` null:
+ * geen relay, zoals in zaalbeeld.mjs). Nooit een shell (een `pgrep -f varve-beeld-lokaal-`
  * in zsh droeg de tekst ook, zelftest 10 okt) en nooit dit proces of wie het startte.
  */
-export function teOpruimen(rijen, relayPoort = 7712, zelf = process.pid) {
+export function teOpruimen(rijen, relayPoort = 7712, zelf = process.pid, voorvoegsel = VOORVOEGSEL) {
   const ouder = new Map(rijen.map((r) => [r.pid, r.ppid]));
   const voorouders = new Set();
   for (let p = zelf; p && !voorouders.has(p); p = ouder.get(p)) voorouders.add(p);
-  const relay = new RegExp(`^\\S*node\\S*\\s+\\S*varve-relay\\.js\\s+${relayPoort}(\\s|$)`);
+  const relay = relayPoort ? new RegExp(`^\\S*node\\S*\\s+\\S*varve-relay\\.js\\s+${relayPoort}(\\s|$)`) : null;
   const shell = /^(\S*\/)?-?(z|ba|da|fi|k|tc)?sh(\s|$)/;
   return rijen.filter((r) => !voorouders.has(r.pid) && !shell.test(r.cmd)
-    && (r.cmd.includes(`/${VOORVOEGSEL}`) || relay.test(r.cmd)));
+    && (r.cmd.includes(`/${voorvoegsel}`) || (relay && relay.test(r.cmd))));
+}
+
+/**
+ * --opruimen (ook voor zaalbeeld.mjs): SIGTERM naar de WORTELS van wat teOpruimen
+ * vindt (de browser, de server, de relay), zodat Chrome zijn helpers zelf
+ * afsluit; wie na 3 s nog leeft (opnieuw gezocht: een pid wordt niet blind
+ * hergebruikt, en een helper die Chrome intussen opnieuw startte telt mee) krijgt
+ * SIGKILL. Eerst alles tegelijk SIGTERM liet Chrome zijn helpers herstarten en
+ * bleef de browser leven (proef 10 okt, na kill -9 van zaalbeeld.mjs).
+ */
+export async function ruimOp(relayPoort = 7712, voorvoegsel = VOORVOEGSEL) {
+  const lijst = teOpruimen(psNu(), relayPoort, process.pid, voorvoegsel);
+  if (!lijst.length) { console.log('niets van deze meting gevonden'); return 0; }
+  const pids = new Set(lijst.map((r) => r.pid));
+  const wortels = lijst.filter((r) => !pids.has(r.ppid));
+  for (const r of wortels) {
+    console.log(`stop ${r.pid} ${kortCmd(r.cmd)}`);
+    try { process.kill(r.pid, 'SIGTERM'); } catch (e) { console.log(`  kon niet: ${e.message}`); }
+  }
+  if (lijst.length > wortels.length) console.log(`  (${lijst.length - wortels.length} helper(s) gaan mee met hun ouder)`);
+  let over = lijst;
+  for (let i = 0; i < 30 && over.length; i++) { await wacht(100); over = teOpruimen(psNu(), relayPoort, process.pid, voorvoegsel); }
+  for (const r of over) {
+    console.log(`hard stop ${r.pid} ${kortCmd(r.cmd)} (na 3 s nog niet weg)`);
+    try { process.kill(r.pid, 'SIGKILL'); } catch (_) {}
+  }
+  return 0;
 }
 
 // ---- vooraf: de controles van punt 2 ---------------------------------------------------
@@ -612,14 +721,18 @@ async function vooraf(o, tmp, { volledig }) {
   const ps1 = psNu();
   const dt = (performance.now() - t0) / 1000;
   const eigen = boom(ps1, process.pid);
-  const top = topGebruikers(ps0, ps1, dt, eigen);
-  vooraf.top5 = top.slice(0, 5).map((t) => ({ ...t, kern: +t.kern.toFixed(3) }));
-  for (const t of vooraf.top5) info(`top: ${n1(t.kern * 100, 0)} % van een kern · pid ${t.pid} · ${t.cmd}`);
-  const vreemd = top.filter((t) => t.kern > VREEMD_KERN);
-  vooraf.vreemd = vreemd.map((t) => ({ pid: t.pid, kern: +t.kern.toFixed(3), cmd: t.cmd }));
-  if (vreemd.length) {
-    const tekst = `${vreemd.length} ander(e) proces(sen) boven ${VREEMD_KERN * 100} % van een kern, o.a. pid ${vreemd[0].pid} (${n1(vreemd[0].kern * 100, 0)} %, ${vreemd[0].cmd})`;
-    if (volledig && !o.forceer) stop.push(`${tekst} (H7; VARVE_BL_FORCEER=1 om toch te meten)`);
+  const poort = cpuPoort(topGebruikers(ps0, ps1, dt, eigen));
+  vooraf.top5 = poort.top5;
+  for (const t of vooraf.top5) info(`top: ${n1(t.kern * 100, 0)} % van een kern · pid ${t.pid} · ${t.cmd}${t.systeem ? ' (systeem)' : ''}`);
+  vooraf.achtergrond = poort.achtergrond;
+  vooraf.vreemd = poort.ander;
+  if (poort.achtergrond.length) {
+    info(`achtergrond (systeem, houdt de meting niet tegen): ${poort.achtergrond.map((t) => `${kortNaam(t.cmd)} ${n1(t.kern * 100, 0)} %`).join(' · ')}`);
+  }
+  if (poort.ander.length) {
+    const v = poort.ander[0];
+    const tekst = `${poort.ander.length} ander(e) proces(sen) boven ${VREEMD_KERN * 100} % van een kern, o.a. pid ${v.pid} (${n1(v.kern * 100, 0)} %, ${v.cmd})`;
+    if (volledig && !o.forceer) stop.push(`${tekst} (H7; VARVE_BL_FORCEER=1 om toch te meten, zie tools/README.md)`);
     else info(`${volledig ? 'GEFORCEERD: ' : 'zou stoppen bij een volledige run: '}${tekst}`);
   }
   const audio1 = audio0 ? ps1.find((r) => r.pid === audio0.pid) : null;
@@ -639,6 +752,7 @@ async function vooraf(o, tmp, { volledig }) {
 async function zelftest(o) {
   const t0 = performance.now();
   const tmp = mkdtempSync(join(tmpdir(), VOORVOEGSEL));
+  zetSignalen(() => { if (!o.bewaar) rmSync(tmp, { recursive: true, force: true }); });
   let srv = null, chrome = null, uitslag = null;
   const json = { soort: 'zelftest', datum: new Date().toISOString(), opties: { ...o } };
   try {
@@ -790,8 +904,10 @@ const CLAY_LAST = `(async () => {
 
 async function volledigeRun(o) {
   if (o.onbekend.length) { console.error(`onbekende stand(en): ${o.onbekend.join(', ')} (kies uit ${Object.keys(STANDEN).join(', ')})`); return 2; }
-  zetSignalen();
+  const optie = optieFout(o);
+  if (optie) { console.error(optie); return 2; }
   const tmp = mkdtempSync(join(tmpdir(), VOORVOEGSEL));
+  zetSignalen(() => { if (!o.bewaar) rmSync(tmp, { recursive: true, force: true }); });
   const json = { soort: 'volledig', datum: new Date().toISOString(), opties: { ...o }, standen: [], meldingen: [] };
   const v = await vooraf(o, tmp, { volledig: true });
   json.vooraf = v.vooraf;
@@ -806,7 +922,11 @@ async function volledigeRun(o) {
       for (let i = 0; i < 60 && machineNu(null).stroom !== 'Battery Power'; i++) await wacht(2000);
     }
     json.stroombron = machineNu(null).stroom;
-    if (json.stroombron !== 'Battery Power') { console.error('STOP  --accu: de Mac hangt nog aan de lader'); return 2; }
+    if (json.stroombron !== 'Battery Power') {
+      console.error('STOP  --accu: de Mac hangt nog aan de lader');
+      if (!o.bewaar) rmSync(tmp, { recursive: true, force: true });
+      return 2;
+    }
   }
 
   let stroom = null, varve = null, varveSid = null, stroomSid = null, popup = null;
@@ -821,11 +941,9 @@ async function volledigeRun(o) {
     closeSync(relayLog);
     const { maakNepYtdlp } = await import(pathToFileURL(join(WORTEL, 'test/nep-ytdlp.mjs')).href);
     mkdirSync(join(tmp, 'nep'), { recursive: true });
-    groepen.server = start(process.execPath, [join(WORTEL, 'server/index.js')], {
-      env: { ...process.env, PORT: String(o.poort), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
-        VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'),
-        VARVE_PROEF: join(tmp, 'proef'), VARVE_KAART: join(tmp, 'geen-kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'),
-        VARVE_YTDLP: maakNepYtdlp(join(tmp, 'nep')), VARVE_HERANALYSE: 'uit' },
+    // --meting=<tmp>: een merkteken in de argv voor --opruimen (server/index.js leest geen argv).
+    groepen.server = start(process.execPath, [join(WORTEL, 'server/index.js'), `--meting=${tmp}`], {
+      env: proefEnv(tmp, o.poort, maakNepYtdlp(join(tmp, 'nep'))),
     }).pid;
     const chromeArgs = (debug, b, h) => ['--headless=new', `--remote-debugging-port=${debug}`, `--user-data-dir=${join(tmp, `profiel-${debug}`)}`,
       '--use-angle=metal', '--enable-gpu', '--mute-audio', '--no-first-run', '--no-default-browser-check',
@@ -935,6 +1053,13 @@ async function volledigeRun(o) {
         ]);
         const ps1 = psNu(); const nu = performance.now();
         const cpu = cpuPerGroep(ps0, ps1, groepen, (nu - tPs) / 1000);
+        // De top-5 van de rest van de Mac aan het begin en het eind van de stand:
+        // een daemon-piek in één stand valt zo op (review 10 okt, punt 5).
+        if (s === 1 || s === duur) {
+          const p = cpuPoort(topGebruikers(ps0, ps1, (nu - tPs) / 1000, boom(ps1, process.pid)));
+          (r.top ??= {})[s === 1 ? 'begin' : 'eind'] = p.top5;
+          if (p.ander.length) r.ander = [...(r.ander || []), ...p.ander.map((t) => ({ ...t, s }))];
+        }
         r.cpu.push(Object.fromEntries(Object.entries(cpu).map(([k, x]) => [k, { kern: +x.kern.toFixed(3), rssMB: +x.rssMB.toFixed(1) }])));
         ps0 = ps1; tPs = nu;
         if (kw) { r.kw.push(kw); }
@@ -974,6 +1099,7 @@ async function volledigeRun(o) {
         const f = fpsOordeel(r.kw);
         ok(`${naam}: kwInfo().fps === true en ms niet constant (H1)`, f.ok, f.tekst);
       }
+      if (r.ander?.length) info(`${naam}: let op, een ander proces trok > ${VREEMD_KERN * 100} %: ${r.ander.map((t) => `pid ${t.pid} ${kortNaam(t.cmd)} ${n1(t.kern * 100, 0)} % (s ${t.s})`).join(' · ')}`);
       if (st.vormen) ok(`${naam}: het losse venster tekent > 20 beelden/s`, (r.som.popupPerS?.p50 ?? 0) > 20, r.som.popupPerS ? `p50 ${r.som.popupPerS.p50}` : 'niet gemeten');
       // Eén regel
       const s = r.som;
@@ -1036,6 +1162,8 @@ async function volledigeRun(o) {
 // ---- kijken tijdens een echte proef (stap 7) -------------------------------------------
 
 async function kijk(o) {
+  const fout = optieFout(o);
+  if (fout) { console.error(fout); return 2; }
   zetSignalen();
   const lijst = await fetch(`http://127.0.0.1:${o.kijkDebug}/json/list`).then((r) => r.json()).catch(() => null);
   const doel = lijst?.find((d) => d.type === 'page' && /index\.html/.test(d.url));
@@ -1070,19 +1198,13 @@ async function kijk(o) {
 // ---- opruimen -------------------------------------------------------------------------
 
 function opruimen(o) {
-  const lijst = teOpruimen(psNu(), o.relay);
-  if (!lijst.length) { console.log('niets van deze meting gevonden'); return 0; }
-  for (const r of lijst) {
-    console.log(`stop ${r.pid} ${kortCmd(r.cmd)}`);
-    try { process.kill(r.pid, 'SIGTERM'); } catch (e) { console.log(`  kon niet: ${e.message}`); }
-  }
-  return 0;
+  return ruimOp(o.relay, VOORVOEGSEL);   // een belofte: het hoofdprogramma wacht erop
 }
 
 // ---- hoofdprogramma (niet bij importeren: test/beeld-meting.test.mjs leest de pure delen) ----
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const o = leesOpties(process.argv.slice(2), process.env);
-  const code = o.zelftest ? await zelftest(o) : o.kijk ? await kijk(o) : o.opruimen ? opruimen(o) : await volledigeRun(o);
+  const code = o.zelftest ? await zelftest(o) : o.kijk ? await kijk(o) : o.opruimen ? await opruimen(o) : await volledigeRun(o);
   process.exit(code);
 }

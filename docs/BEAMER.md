@@ -280,10 +280,19 @@ per avond (straks een stand van het spoor *standen*, `onderweg-licht`). Met clip
 is het beeld bit voor bit als vroeger.
 
 **Waar je het ziet** (niet op het doek: daar kijkt de zaal):
-- de knop **video** in de bovenbalk: "video · alleen eigen beeld", in amber (klasse `clips-uit`);
-- in het videopaneel het knopje **CLIPS** naast "los venster" (brandt = clips aan) en de
-  statusregel "alleen eigen beeld (clips uit)";
-- de venstertitel van het losse venster: "VARVE DJ — video · alleen eigen beeld".
+- de knop **video** in de bovenbalk: in amber (klasse `clips-uit`), de tekst blijft "video" en
+  de title zegt "nu: alleen eigen beeld". Een langere tekst ("video · alleen eigen beeld",
+  45 → 158 px) liet de bovenbalk op 1440 × 900 in rust 105 px opzij schuiven: er is daar
+  maar 8 px speling (review 10 okt);
+- in het videopaneel het knopje **CLIPS** in de rij van de deck-video's, na MIX en PASSEND
+  (brandt = clips aan), en de statusregel "clips uit" ("beamer · clips uit" als het losse
+  venster mengt), met de uitleg in de title. In de kop (naast "los venster") kostte het
+  knopje de statusregel 57 px: op 1440 breed bleef er 79 px over en paste zelfs "geen
+  zichtbare video" (110 px) niet meer. In de BEELD-rij brak die rij op 1440 breed in twee;
+  in de rij van de deck-video's blijft die rij even hoog (111 px, gemeten);
+- de venstertitel van het losse venster: "VARVE DJ — video · alleen eigen beeld". Op de
+  beamer is die titelbalk even te zien zolang het venster nog niet op volledig scherm staat
+  (net als het hulpje "dubbelklik voor volledig scherm"); daarna niet meer.
 
 **APC**: geen standaardplek. Koppelen kan (koppelmodus, bijvoorbeeld in de modus
 video); `apc-beschrijf.js` legt hem uit en de LED volgt de read.
@@ -293,9 +302,12 @@ begon, begint teruggespeeld ook zonder clips. Een log van vóór 10 okt begint m
 clips aan (`rondVroeger` in terugspelen.js).
 
 **Het recept, met één machine** (handelingen geteld): VARVE.app → knop video → los
-venster → het venster naar de beamer slepen → dubbelklik (volledig scherm) → op de APC
-`video.layer.on` en `video.clips`. Vijf keer muis of toets en twee APC-knoppen. Slepen en
-volledig scherm kan alleen een echte beamer wegnemen (`getScreenDetails()`, niet gebouwd).
+venster → het venster naar de beamer slepen → dubbelklik (volledig scherm) → de vormen aan
+(`video.layer.on`: in de VORM-rij, of op de APC Detail View en dan On/Off) → het knopje
+CLIPS in het videopaneel (`video.clips`). Zeven keer muis of toets; met de APC voor de
+vormen vijf plus twee APC-knoppen. `video.clips` heeft geen standaardplek op de APC: pas
+als je hem koppelt, is CLIPS ook één APC-knop. Slepen en volledig scherm kan alleen een
+echte beamer wegnemen (`getScreenDetails()`, niet gebouwd).
 - Eén HDMI-uitgang: de beamer toont het losse venster óf (straks) de Stroommachine, niet
   allebei. Beamer op 60 Hz (thuis viel 75 Hz via de hub zwart).
 - Opnemen of uitzenden met beeld van één machine: alleen dit zaalbeeld gaat mee (het is
@@ -309,17 +321,23 @@ volledig scherm kan alleen een echte beamer wegnemen (`getScreenDetails()`, niet
   clips aan), het eindbeeld (zwart canvas, de flits werkt) en het log (beginstand,
   terugspelen, een oud log).
 - `node tools/headless/zaalbeeld.mjs [uitmap]` (eigen server op 8806, debug 9406, Chrome for
-  Testing op Metal, `--mute-audio`, ZONDER `--disable-popup-blocking`): 22 controles,
-  10 okt alle groen. Clips aan: de vier kwarten in het losse venster, 60 beelden/s.
-  Clips uit: vier keer zwart, 0,0 % lichte pixels, de video staat stil, 61 beelden/s, het
-  geluid speelt door, de knop, het paneel en de venstertitel zeggen het. Vormen aan (clips
-  nog uit): 2,0 % lichte pixels, 60 beelden/s, geen video. `video.black` maakt ook het
-  zaalbeeld zwart. Clips weer aan: de vier kwarten terug. 0 uitzonderingen. Vijf
-  schermafdrukken `zaalbeeld-*.png`.
-- Gemeten in dezelfde run: de knop video wordt 45 → 158 px breed; op 1440 × 900 steekt de
-  rechterkant van de bovenbalk dan in rust 105 px uit (was 0) en scrollt hij opzij
-  (`bovenbalk.js`). Tijdens het spelen scrollt hij al (het label van audio en het log
-  groeien). Wil je dat niet, dan een korter label; dat is een keuze, geen fout.
+  Testing op Metal, `--mute-audio`, ZONDER `--disable-popup-blocking`): 27 controles,
+  10 okt (herstelronde 1) alle groen. Clips aan: de vier kwarten in het losse venster,
+  60 beelden/s. Clips uit: vier keer zwart, 0,0 % lichte pixels, de video staat stil,
+  60–61 beelden/s, het geluid speelt door, de knop (amber), de statusregel en de venstertitel
+  zeggen het. Vormen aan (clips nog uit): 4,1 % lichte pixels, 61 beelden/s, geen video.
+  `video.black` maakt ook het zaalbeeld zwart. Clips weer aan: de vier kwarten terug.
+  0 uitzonderingen. Vijf schermafdrukken `zaalbeeld-*.png`.
+- Lay-out op 1440 × 900 (in dezelfde run): de statusregel (136 px) past in drie toestanden:
+  paneel open zonder los venster ("1: N ms", 55 px tekst), clips aan met het losse venster
+  ("beamer · 1: N ms", 103 px) en clips uit ("beamer · clips uit", 91 px). De rij van de deck-video's is
+  met CLIPS even hoog als zonder (111 px). De bovenbalk steekt met clips uit niet verder uit
+  (0 → 0 px), de knop video blijft 45 px. Bekend en niet van dit spoor: twee spelende
+  video's met het losse venster ("beamer · 1: 12 ms · 2: -3 ms", 145 px) passen op 1440 breed
+  niet; dat was vóór `video.clips` ook zo.
+- Ctrl-C (SIGINT) stopt de Chrome en de server (eigen procesgroep) en ruimt de tijdelijke
+  map op; na een harde stop (`kill -9`) vindt `node tools/headless/zaalbeeld.mjs --opruimen`
+  ze terug (de server draagt `--meting=<tmp>` in zijn argumenten). Beide 10 okt geproefd.
 
 **Niet getest**: in Clay's Chrome, met een echte beamer, op de APC (geen knop gekoppeld),
 in een video-opname (de mp4), met acht tracks of echte YouTube-video's, met het

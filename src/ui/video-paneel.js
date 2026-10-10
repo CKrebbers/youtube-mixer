@@ -83,21 +83,28 @@ export function opzetVideo({ engine }) {
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) zetVoorbeeld(null); });
 
-  // De noodknoppen (zwart, bevries, flits): hun stand komt van de bus
-  // (read), zoals bij elke knop die ook via de APC of een log kan wisselen.
-  const noodKnoppen = [...videoPaneel.querySelectorAll('.vid-nood [data-kind="button"]')];
+  // De noodknoppen (zwart, bevries, flits) en het knopje clips: hun stand komt
+  // van de bus (read), zoals bij elke knop die ook via de APC of een log kan wisselen.
+  // Clips staat in de rij van de deck-video's (mix, passend, clips), niet in de kop:
+  // daar kostte hij de statusregel 57 px (review 10 okt), en in de BEELD-rij brak
+  // die op 1440 breed in twee regels.
+  const busKnoppen = [...videoPaneel.querySelectorAll('.vid-nood [data-kind="button"], .vid-clips')];
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
-  // Clips uit (video.clips, het zaalbeeld): de knop video zegt het, ook met het
-  // paneel dicht. NIET op het doek: daar kijkt de zaal (docs/BEAMER.md "Zaalbeeld").
+  const titel = (el, t) => { if (el.title !== t) el.title = t; };
+  // Clips uit (video.clips, het zaalbeeld): de knop video zegt het in amber, ook met
+  // het paneel dicht; de tekst blijft "video", anders schuift de bovenbalk opzij
+  // (8 px speling op 1440 breed). NIET op het doek: daar kijkt de zaal (docs/BEAMER.md "Zaalbeeld").
   const videoKnop = document.getElementById('video-btn');
-  const clipsKnop = videoPaneel.querySelector('.vid-clips');
-  const VIDEO_TEKST = videoKnop.textContent;
+  const VIDEO_TITEL = videoKnop.title;
+  const VIDEO_TITEL_UIT = `${VIDEO_TITEL} — nu: alleen eigen beeld (clips uit, video.clips)`;
   const zetVideoKnop = () => {
     const uit = !videoMixer.clips;
-    const tekst = uit ? `${VIDEO_TEKST} · alleen eigen beeld` : VIDEO_TEKST;
-    if (videoKnop.textContent !== tekst) videoKnop.textContent = tekst;
     klasse(videoKnop, 'clips-uit', uit);
+    titel(videoKnop, uit ? VIDEO_TITEL_UIT : VIDEO_TITEL);
   };
+  // De statusregel is smal (op 1440 breed ~135 px): kort, de uitleg in de title.
+  const CLIPS_UIT = 'clips uit';
+  const CLIPS_UIT_UITLEG = 'alleen eigen beeld: de deck-video\'s staan uit (video.clips); vormen, effecten en zwart lopen door';
 
   /** Eén frame: mengen als het hier moet, en de statusregel bijwerken. */
   const teken = () => {
@@ -112,7 +119,7 @@ export function opzetVideo({ engine }) {
     if (!paneelOpen()) return;
     const bron = w.hoofd || !los ? videoMixer : los.mixer;
     const st = bron.stand().filter((l) => l.video && l.speelt);
-    const wat = !videoMixer.clips ? 'alleen eigen beeld (clips uit)'
+    const wat = !videoMixer.clips ? CLIPS_UIT
       : st.length ? st.map((l) => `${trackVanDeck(l.id)}: ${Math.round(l.verschil * 1000)} ms`).join(' · ') : 'geen zichtbare video';
     const tekst = bron.fout || `${w.los ? 'beamer · ' : w.inloop ? 'beamer loopt in · ' : ''}${wat}`;
     const modusEl = videoPaneel.querySelector('.vid-modus');
@@ -121,17 +128,16 @@ export function opzetVideo({ engine }) {
     if (fitEl && fitEl.textContent !== videoMixer.fit) fitEl.textContent = videoMixer.fit;
     const doelEl = videoPaneel.querySelector('.vid-pulsdoel');
     if (doelEl.textContent !== videoMixer.pulsDoel) doelEl.textContent = videoMixer.pulsDoel;
-    for (const b of noodKnoppen) {
+    for (const b of busKnoppen) {
       // Zwart brandt ook zolang de drukvariant vastzit (shift + vasthouden).
       const extra = b.dataset.actionShift ? leesAction(b.dataset.actionShift) === 1 : false;
       klasse(b, 'on', leesAction(b.dataset.action) === 1 || extra);
     }
-    if (clipsKnop) klasse(clipsKnop, 'on', leesAction('video.clips') === 1);
     const statusEl = videoPaneel.querySelector('.vid-status');
     if (statusEl.textContent !== tekst) statusEl.textContent = tekst;
-    const titel = w.los ? 'het losse venster mengt (het loopt door als dit tabblad verborgen is)'
+    const waar = w.los ? 'het losse venster mengt (het loopt door als dit tabblad verborgen is)'
       : w.inloop ? 'het losse venster toont dit beeld tot zijn eigen video\'s in de pas lopen; dan mengt het zelf' : '';
-    if (statusEl.title !== titel) statusEl.title = titel;
+    titel(statusEl, videoMixer.clips ? waar : waar ? `${CLIPS_UIT_UITLEG} · ${waar}` : CLIPS_UIT_UITLEG);
   };
 
   /** Het canvas voor een nieuwe video-opname, en onthouden waar het vandaan komt. */

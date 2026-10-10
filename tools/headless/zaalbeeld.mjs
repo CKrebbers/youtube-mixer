@@ -3,9 +3,11 @@
 // mengt ZWART (geen clips van anderen) en de video's staan stil, terwijl het
 // geluid doorspeelt; `video.layer.on` = de vormen geven wél beeld (> 20 beelden/s,
 // pixels niet zwart); `video.black` werkt ook dan; clips weer aan = de video
-// terug. Plus wat VARVE laat zien: de knop video in de bovenbalk ("video · alleen
-// eigen beeld"), het knopje clips en de statusregel in het paneel, de
-// venstertitel van het losse venster. Niets van dat alles op het doek zelf.
+// terug. Plus wat VARVE laat zien: de knop video in de bovenbalk (amber, de tekst
+// blijft "video", de balk schuift niet opzij), het knopje clips in de rij van de
+// deck-video's en de statusregel in het paneel ("clips uit"; past in drie
+// toestanden op 1440 breed), de venstertitel van het losse venster. Niets van dat
+// alles op het doek zelf.
 //
 // VEILIG MET DE APC AANGESLOTEN: geen requestMIDIAccess in geen enkel venster
 // (ook het losse niet: nieuwe vensters wachten tot dat weg is). Eigen server op
@@ -16,19 +18,25 @@
 // venster gaat open met een klik mét gebaar, zoals bij Clay.
 //
 // Gebruik:  node tools/headless/zaalbeeld.mjs [uitmap]
+//           node tools/headless/zaalbeeld.mjs --opruimen   (na een harde stop: alleen
+//           processen met varve-zaalbeeld- in een pad in hun argumenten)
 // Poorten:  VARVE_KIJK_POORT (8806), VARVE_KIJK_DEBUG (9406). VARVE_CHROME.
-import { spawn, spawnSync } from 'node:child_process';
+// Ctrl-C stopt de Chrome en de server (eigen procesgroep) en ruimt de tijdelijke map op.
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Chrome, GEEN_MIDI, poortBezet, zoekChrome } from './beeld-lokaal.mjs';
+import { Chrome, GEEN_MIDI, poortBezet, zoekChrome, start, stopAlles, wachtTotWeg, zetSignalen, proefEnv, ruimOp } from './beeld-lokaal.mjs';
 
+const VOORVOEGSEL = 'varve-zaalbeeld-';
+if (process.argv.includes('--opruimen')) process.exit(await ruimOp(null, VOORVOEGSEL));
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
-const UIT = process.argv[2] || join(WORTEL, 'tools/headless/uit');
+const UIT = process.argv.slice(2).find((a) => !a.startsWith('--')) || join(WORTEL, 'tools/headless/uit');
 mkdirSync(UIT, { recursive: true });
 const POORT = Number(process.env.VARVE_KIJK_POORT) || 8806, DEBUG = Number(process.env.VARVE_KIJK_DEBUG) || 9406;
-const tmp = mkdtempSync(join(tmpdir(), 'varve-zaalbeeld-'));
+const tmp = mkdtempSync(join(tmpdir(), VOORVOEGSEL));
+zetSignalen(() => rmSync(tmp, { recursive: true, force: true }));
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const uitkomst = [];
 const ok = (naam, cond, extra = '') => { uitkomst.push([naam, !!cond]); console.log(`${cond ? '  ok  ' : 'FAIL  '}${naam}${extra !== '' ? ` (${typeof extra === 'string' ? extra : JSON.stringify(extra)})` : ''}`); };
@@ -61,20 +69,14 @@ const VIDEO = join(tmp, 'kwarten.mp4');
   if (r.status !== 0) { console.error(String(r.stderr)); process.exit(1); }
 }
 
-const processen = [];
-const start = (cmd, args, opties = {}) => { const p = spawn(cmd, args, { stdio: 'ignore', detached: true, ...opties }); p.on('error', () => {}); processen.push(p); return p; };
 let chrome = null;
 let code = 0;
 try {
   if (await poortBezet(POORT) || await poortBezet(DEBUG)) throw new Error(`poort ${POORT} of ${DEBUG} is bezet (zet VARVE_KIJK_POORT/VARVE_KIJK_DEBUG)`);
   const { maakNepYtdlp } = await import(pathToFileURL(join(WORTEL, 'test/nep-ytdlp.mjs')).href);
   mkdirSync(join(tmp, 'nep'), { recursive: true });
-  start(process.execPath, [join(WORTEL, 'server/index.js')], {
-    env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
-      VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'),
-      VARVE_PROEF: join(tmp, 'proef'), VARVE_KAART: join(tmp, 'geen-kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'),
-      VARVE_YTDLP: maakNepYtdlp(join(tmp, 'nep')), VARVE_HERANALYSE: 'uit' },
-  });
+  // --meting=<tmp>: het merkteken voor --opruimen (server/index.js leest geen argv).
+  start(process.execPath, [join(WORTEL, 'server/index.js'), `--meting=${tmp}`], { env: proefEnv(tmp, POORT, maakNepYtdlp(join(tmp, 'nep'))) });
   start(zoekChrome(process.env.VARVE_CHROME || null), ['--headless=new', `--remote-debugging-port=${DEBUG}`, `--user-data-dir=${join(tmp, 'profiel')}`,
     '--use-angle=metal', '--enable-gpu', '--mute-audio', '--window-size=1440,900', '--no-first-run', '--no-default-browser-check',
     '--autoplay-policy=no-user-gesture-required', 'about:blank']);
@@ -117,6 +119,22 @@ try {
   ok('video.clips op de bus, standaard aan; de knop video zegt gewoon "video"',
     (await chrome.ev(hoofd, "__act.has('video.clips') && __act.read('video.clips') === 1 && document.getElementById('video-btn').textContent === 'video'")) === true);
 
+  // ---- het paneel, nog zonder los venster: de statusregel past (review 10 okt, punt 1) ----
+  // Op 1440 breed is de statusregel ~136 px. Met het knopje clips in de kop was hij
+  // 79 px en paste "geen zichtbare video" (110 px) al niet meer.
+  const STATUS = `(() => { const s = document.querySelector('.vid-status'), r = document.createRange(); r.selectNodeContents(s);
+    return { tekst: s.textContent, titel: s.title, past: s.scrollWidth <= s.clientWidth, nodig: Math.ceil(r.getBoundingClientRect().width), breed: s.clientWidth }; })()`;
+  const px = (st) => `"${st.tekst}": ${st.nodig} px tekst in ${st.breed} px`;
+  await chrome.ev(hoofd, "document.getElementById('video-btn').click(); true");
+  await wacht(800);
+  const st0 = await chrome.tot(hoofd, `(() => { const st = ${STATUS}; return st.tekst ? st : null; })()`, 5000);
+  ok('statusregel past: paneel open, zonder los venster', !!st0?.past, st0 ? px(st0) : 'leeg');
+  const fx = await chrome.ev(hoofd, `(() => { const r = document.querySelector('.vid-fx'), k = r.querySelector('.vid-clips');
+    if (!k) return null; const met = r.getBoundingClientRect().height; k.style.display = 'none'; const zonder = r.getBoundingClientRect().height; k.style.display = '';
+    return { met: Math.round(met), zonder: Math.round(zonder), aan: k.classList.contains('on'), inKop: !!document.querySelector('.vid-head .vid-clips') }; })()`);
+  ok('het knopje clips staat in de rij van de deck-video\'s (mix, passend, clips), niet in de kop; brandt (aan); de rij wordt er niet hoger van',
+    !!fx && fx.aan && !fx.inKop && fx.met === fx.zonder, fx ? `rij ${fx.zonder} → ${fx.met} px` : 'geen knopje');
+
   // ---- het losse venster ------------------------------------------------------------
   await chrome.cdp('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
   await chrome.ev(hoofd, "document.querySelector('#video-panel .vid-los').click(); true", true);
@@ -137,6 +155,8 @@ try {
   let b = await beeldenPerS();
   let p = await chrome.ev(pop, LEES);
   ok('clips aan: de video in het losse venster (vier kwarten, rechtop), hij speelt', p.kwarten === 'rood groen blauw geel' && await chrome.ev(pop, videoSpeelt), `${p.kwarten} · ${b} beelden/s`);
+  const st1 = await chrome.tot(hoofd, `(() => { const st = ${STATUS}; return /^beamer · 1: -?\\d+ ms$/.test(st.tekst) ? st : null; })()`, 5000);
+  ok('statusregel past: clips aan, het losse venster mengt ("beamer · 1: N ms")', !!st1?.past, st1 ? px(st1) : await chrome.ev(hoofd, STATUS).then(px));
   await chrome.foto(pop, join(UIT, 'zaalbeeld-1-clips-aan.png'));
 
   // ---- clips uit: het zaalbeeld ------------------------------------------------------
@@ -148,17 +168,17 @@ try {
   ok('clips uit: het losse venster mengt ZWART (geen deck-video op het doek)', p.kwarten === 'zwart zwart zwart zwart' && p.licht < 0.001, `${p.kwarten} · licht ${pct(p.licht)}`);
   ok('clips uit: de video in het losse venster staat stil, het tekenen loopt door', !(await chrome.ev(pop, videoSpeelt)) && b > 20, `${b} beelden/s`);
   ok('clips uit: het geluid speelt door (deck A)', (await chrome.ev(hoofd, "window.engine.deck('A').playing")) === true);
-  const knop = await chrome.ev(hoofd, "(() => { const k = document.getElementById('video-btn'); return { tekst: k.textContent, klasse: k.classList.contains('clips-uit') }; })()");
-  ok('de knop video zegt "video · alleen eigen beeld" (klasse clips-uit)', knop.tekst === 'video · alleen eigen beeld' && knop.klasse, knop.tekst);
+  const knop = await chrome.ev(hoofd, "(() => { const k = document.getElementById('video-btn'); return { tekst: k.textContent, klasse: k.classList.contains('clips-uit'), titel: k.title }; })()");
+  ok('de knop video blijft "video", in amber (klasse clips-uit), de title zegt "alleen eigen beeld"', knop.tekst === 'video' && knop.klasse && /alleen eigen beeld/.test(knop.titel), knop);
   ok('de venstertitel van het losse venster zegt het ook (niet op het doek)', /alleen eigen beeld/.test(await chrome.ev(pop, 'document.title')), await chrome.ev(pop, 'document.title'));
   const balkUit = await chrome.ev(hoofd, balk);
-  console.log(`  ..  bovenbalk op 1440×900: de knop video ${Math.round(balkAan.knop)} → ${Math.round(balkUit.knop)} px; de rechterkant steekt ${balkAan.over} → ${balkUit.over} px uit (> 0 = hij scrollt opzij, bovenbalk.js)`);
+  ok(`de bovenbalk op 1440×900 schuift met clips uit niet verder opzij (steekt ${balkAan.over} → ${balkUit.over} px uit, knop video ${Math.round(balkAan.knop)} → ${Math.round(balkUit.knop)} px)`,
+    balkUit.over <= balkAan.over && Math.round(balkUit.knop) === Math.round(balkAan.knop));
   await chrome.foto(pop, join(UIT, 'zaalbeeld-2-clips-uit.png'));
   // Het paneel: het knopje clips en de statusregel.
-  await chrome.ev(hoofd, "document.getElementById('video-btn').click(); true");
-  await wacht(800);
-  const paneel = await chrome.ev(hoofd, "({ status: document.querySelector('.vid-status').textContent, clipsAan: document.querySelector('.vid-clips').classList.contains('on') })");
-  ok('het paneel: de statusregel zegt "alleen eigen beeld (clips uit)", het knopje clips brandt niet', /alleen eigen beeld \(clips uit\)/.test(paneel.status) && !paneel.clipsAan, paneel.status);
+  const st2 = await chrome.tot(hoofd, `(() => { const st = ${STATUS}; return st.tekst === 'beamer · clips uit' ? st : null; })()`, 3000);
+  ok('statusregel past: clips uit ("beamer · clips uit"), de uitleg in de title', !!st2?.past && /alleen eigen beeld/.test(st2.titel), st2 ? px(st2) : await chrome.ev(hoofd, STATUS).then(px));
+  ok('het knopje clips brandt niet', (await chrome.ev(hoofd, "document.querySelector('.vid-clips').classList.contains('on')")) === false);
   await chrome.foto(hoofd, join(UIT, 'zaalbeeld-3-paneel.png'));
 
   // ---- vormen erbij: het eigen beeld --------------------------------------------------
@@ -184,7 +204,8 @@ try {
   await wacht(500);
   p = await chrome.ev(pop, LEES);
   ok('clips weer aan: de video terug in het losse venster', !!terug && p.kwarten === 'rood groen blauw geel', p.kwarten);
-  ok('de knop video zegt weer "video"', (await chrome.ev(hoofd, "document.getElementById('video-btn').textContent")) === 'video'
+  ok('de knop video weer gewoon (geen amber, de gewone title), de venstertitel ook',
+    (await chrome.ev(hoofd, "(() => { const k = document.getElementById('video-btn'); return k.textContent === 'video' && !k.classList.contains('clips-uit') && !/alleen eigen beeld/.test(k.title); })()")) === true
     && !/alleen eigen beeld/.test(await chrome.ev(pop, 'document.title')));
   await chrome.foto(pop, join(UIT, 'zaalbeeld-5-clips-terug.png'));
 
@@ -194,8 +215,8 @@ try {
   ok('liep zonder uitzondering', false, e.message);
 } finally {
   chrome?.sluit();
-  for (const pr of processen) { try { process.kill(-pr.pid, 'SIGTERM'); } catch (_) {} }
-  await wacht(800);
+  stopAlles();
+  await wachtTotWeg(3000);
   rmSync(tmp, { recursive: true, force: true });
   const fout = uitkomst.filter(([, g]) => !g).length;
   console.log(`\n${uitkomst.length} checks, ${fout ? `${fout} FAIL` : 'alles ok'} — schermafdrukken in ${UIT}`);

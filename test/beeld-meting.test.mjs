@@ -5,7 +5,9 @@
 // De meting zelf (GPU, twee Chromes) draait niet in alles.mjs: daarvoor
 // `node tools/headless/beeld-lokaal.mjs --zelftest` en de volledige run.
 // Draai met: node test/beeld-meting.test.mjs
+import { readFileSync, readdirSync } from 'node:fs';
 const m = await import('../tools/headless/beeld-lokaal.mjs');
+const bron = (pad) => readFileSync(new URL(`../${pad}`, import.meta.url), 'utf8');
 
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
@@ -27,6 +29,11 @@ console.log('opties en duur');
   ok('de omgeving wint (relay, debug +1 voor VARVE, forceer, repo)',
     o2.relay === 7720 && o2.debugStroom === 9500 && o2.debugVarve === 9501 && o2.forceer && o2.repo === '/x/s');
   ok('--meet met onzin wordt NaN (niet stil 0)', Number.isNaN(m.leesOpties(['--meet', 'veel'], {}).meet));
+  ok('optieFout: --warm abc en --meet -1 worden genoemd (de run stopt met exit 2, niet stil 0 s opwarmen)',
+    /--warm, --meet moet een getal ≥ 0 zijn/.test(m.optieFout(m.leesOpties(['--warm', 'abc', '--meet', '-1'], {})) ?? ''));
+  ok('optieFout: --duur onzin ook (--kijk), en de standaard is goed (null)',
+    /--duur/.test(m.optieFout(m.leesOpties(['--kijk', '--duur', 'lang'], {})) ?? '') && m.optieFout(m.leesOpties([], {})) === null
+    && m.optieFout(m.leesOpties(['--warm', '0', '--meet', '5'], {})) === null);
   const v = m.VOLGORDE;
   ok('duur: nul 120 s de eerste keer en 60 daarna, licht-1080 120, de rest 60',
     v.map((_, i) => m.duurVan(v, i)).join(',') === '120,120,60,60,60,60,60');
@@ -127,6 +134,76 @@ console.log('\nwat --opruimen mag stoppen');
   ok('NIET: Clay\'s relay op 7702, een grep, de Stroommachine van het startscript', !weg.includes(31) && !weg.includes(32) && !weg.includes(40));
   ok('NIET: een shell met de tekst in zijn opdracht, en ook niet het script zelf of wie het startte',
     !weg.includes(10) && !weg.includes(11) && weg.length === 3);
+  // De proefserver: zijn tmp-paden staan alleen in zijn env (ps toont die niet), dus een merkteken in de argv.
+  const srv = m.leesPs([
+    '  50     1   0:01.00  1000 /opt/homebrew/bin/node /Users/c/Projects/varve-stems/w/server/index.js --meting=/var/folders/x/T/varve-beeld-lokaal-x',
+    '  51     1   0:01.00  1000 /opt/homebrew/bin/node server/index.js',
+    '  52     1   0:01.00  1000 /opt/homebrew/bin/node /Users/c/Desktop/1. Projects/Youtube mixer/server/index.js',
+    '  60     1   0:01.00  1000 /opt/homebrew/bin/node /w/server/index.js --meting=/var/folders/x/T/varve-zaalbeeld-y',
+    '  61     1   0:01.00  1000 /pad/Google Chrome for Testing --user-data-dir=/var/folders/x/T/varve-zaalbeeld-y/profiel',
+  ].join('\n'));
+  const wegS = m.teOpruimen(srv, 7712, 1).map((r) => r.pid);
+  ok('de proefserver met --meting=…/varve-beeld-lokaal-… wordt gevonden, Clay\'s server (node server/index.js, 8777) niet',
+    wegS.join() === '50');
+  const wegZ = m.teOpruimen([...srv, ...rijen], null, 11, 'varve-zaalbeeld-').map((r) => r.pid);
+  ok('zaalbeeld --opruimen (voorvoegsel varve-zaalbeeld-, geen relay): zijn server en Chrome, niets van beeld-lokaal of een relay',
+    wegZ.join() === '60,61');
+  const z = bron('tools/headless/zaalbeeld.mjs'), b = bron('tools/headless/beeld-lokaal.mjs');
+  ok('beide scripts geven de proefserver het merkteken --meting=<tmp> mee', /server\/index\.js'\), `--meting=\$\{tmp\}`\]/.test(z) && /server\/index\.js'\), `--meting=\$\{tmp\}`\]/.test(b));
+  ok('zaalbeeld.mjs kent --opruimen', /process\.argv\.includes\('--opruimen'\)/.test(z) && /await ruimOp\(null, VOORVOEGSEL\)/.test(z));
+}
+
+console.log('\nCtrl-C ruimt op (review 10 okt, punt 3)');
+{
+  const z = bron('tools/headless/zaalbeeld.mjs'), b = bron('tools/headless/beeld-lokaal.mjs');
+  const zelftest = b.slice(b.indexOf('async function zelftest('), b.indexOf('// ---- de volledige run'));
+  ok('de zelftest zet de signaalhandlers (eerst niet: na Ctrl-C bleef zijn Chrome op 9391 draaien)', /zetSignalen\(/.test(zelftest));
+  ok('zaalbeeld.mjs start zijn kinderen via start() van beeld-lokaal.mjs en zet de signaalhandlers (met de tijdelijke map weg)',
+    !/\bspawn\(/.test(z) && /zetSignalen\(\(\) => rmSync\(tmp/.test(z) && /\bstart\(process\.execPath/.test(z));
+  ok('de handlers stoppen de hele procesgroep en wachten (SIGKILL na 1,5 s), dan pas de map weg en exit',
+    /process\.kill\(-p\.pid, 'SIGTERM'\)/.test(b) && /await wachtTotWeg\(1500\)/.test(b) && /naStop/.test(b));
+}
+
+console.log('\nde CPU-poort: systeem is achtergrond, een ander proces stopt de run (review 10 okt, punt 5)');
+{
+  const top = [
+    { pid: 1, kern: 0.6, cmd: '/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd' },
+    { pid: 2, kern: 0.3, cmd: '/opt/homebrew/bin/node /Users/c/Projects/varve-stems/x/test/x.test.mjs' },
+    { pid: 3, kern: 0.24, cmd: '/System/Library/Frameworks/FileProvider.framework/Support/fileproviderd' },
+    { pid: 4, kern: 0.27, cmd: '/Users/c/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell' },
+    { pid: 5, kern: 0.15, cmd: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
+    { pid: 6, kern: 0.25, cmd: '/usr/libexec/airportd' },
+  ];
+  const p = m.cpuPoort(top);
+  ok('mediaanalysisd 60 % en fileproviderd 24 % en /usr/libexec/… 25 % stoppen niet: achtergrond', p.achtergrond.map((t) => t.pid).join() === '1,3,6');
+  ok('node …/test/x.test.mjs 30 % en een headless shell 27 % stoppen wel; Clay\'s Chrome op 15 % niet', p.ander.map((t) => t.pid).join() === '2,4');
+  ok('de top-5 draagt systeem ja/nee', p.top5.length === 5 && p.top5[0].systeem === true && p.top5[1].systeem === false);
+  ok('isSysteem: /System/, /usr/libexec/, /usr/sbin/, /sbin/, /Library/Apple/; niet /Applications/ of /opt/',
+    ['/System/x', '/usr/libexec/x', '/usr/sbin/x', '/sbin/launchd', '/Library/Apple/System/x'].every(m.isSysteem)
+    && !['/Applications/Google Chrome.app/x', '/opt/homebrew/bin/node', 'node server/index.js', '/Users/c/System/x'].some(m.isSysteem));
+  ok('kortNaam: mediaanalysisd, node test/x.test.mjs, Google Chrome (spatie in het pad)',
+    m.kortNaam(top[0].cmd) === 'mediaanalysisd' && m.kortNaam(top[1].cmd) === 'node test/x.test.mjs' && m.kortNaam(top[4].cmd) === 'Google Chrome');
+}
+
+console.log('\nde omgeving van de proefserver (review 10 okt, punt 7)');
+{
+  const clay = { HOME: '/Users/c', VARVE_BACKUPS: '/Users/c/echte-backups', VARVE_NACHT: '/Users/c/nacht.json', VARVE_HOSTS: 'mac.tail1234.ts.net',
+    VARVE_DB: '/Users/c/media/library.db', VARVE_MEDIA: '/Users/c/media', VARVE_KAART: '/Users/c/kaart.json' };
+  const e = m.proefEnv('/var/T/varve-beeld-lokaal-q', 8801, '/var/T/varve-beeld-lokaal-q/nep/yt-dlp', clay);
+  ok('elk pad van de server in de tijdelijke map, ook als Clay\'s omgeving ze zet (backups, nacht, db, media, kaart)',
+    m.PROEF_PADEN.every((k) => String(e[k]).startsWith('/var/T/varve-beeld-lokaal-q/')));
+  ok('geen extra hosts, geen heranalyse, de nep-yt-dlp, de poort; de rest van de omgeving blijft', e.VARVE_HOSTS === '' && e.VARVE_HERANALYSE === 'uit'
+    && e.VARVE_YTDLP.endsWith('/nep/yt-dlp') && e.PORT === '8801' && e.HOME === '/Users/c');
+  // Elke VARVE_-variabele die de server leest, is een pad in PROEF_PADEN of staat hieronder als geen pad.
+  const GEEN_PAD = new Set(['VARVE_BACKUP_ELKE', 'VARVE_UPLOAD_MAX', 'VARVE_HERANALYSE', 'VARVE_HOSTS', 'VARVE_YTDLP']);
+  const gelezen = new Set();
+  for (const f of readdirSync(new URL('../server/', import.meta.url)).filter((x) => x.endsWith('.js'))) {
+    for (const [, k] of bron(`server/${f}`).matchAll(/process\.env\.(VARVE_[A-Z_]+)/g)) gelezen.add(k);
+  }
+  const los = [...gelezen].filter((k) => !m.PROEF_PADEN.includes(k) && !GEEN_PAD.has(k));
+  ok(`elke VARVE_-variabele van server/ is gedekt (${gelezen.size} gelezen; nieuw en niet gedekt: ${los.join(', ') || 'geen'})`, gelezen.size >= 10 && !los.length);
+  const z = bron('tools/headless/zaalbeeld.mjs'), b = bron('tools/headless/beeld-lokaal.mjs');
+  ok('beide scripts starten de proefserver met proefEnv(tmp, …)', /env: proefEnv\(tmp, POORT,/.test(z) && /env: proefEnv\(tmp, o\.poort,/.test(b));
 }
 
 console.log('\nde hartslag-worklet zelf, met een nepklok');
