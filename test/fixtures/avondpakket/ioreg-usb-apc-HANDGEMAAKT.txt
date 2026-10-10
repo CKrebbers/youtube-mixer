@@ -9,4 +9,3 @@
       "idVendor" = 2536
       "kUSBProductString" = "APC40 mkII"
     }
-    

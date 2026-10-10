@@ -1,14 +1,17 @@
+import { wanneer } from '../src/controle/backup-tegel.js';
+
 /**
  * Het avondpakket (docs/AVONDPAKKET.md): één alleen-lezen controle die op twee
  * momenten dezelfde vraag beantwoordt, "kan ik met deze tas vertrekken" en
  * "kan ik hier beginnen".
  *
- * Dit bestand is (stap 1) alleen het PURE deel: parsers voor de uitvoer van
- * pmset, ioreg, df, defaults, system_profiler, tailscale en find, de profielen
- * als data (avondpakket/profielen.json), de keuze van de fase en het oordeel.
- * Geen I/O, geen kindprocessen, geen klok: `nu` komt van buiten. De sondes
- * (meet), de cache, de route en de CLI komen in latere stappen en voeren
- * alleen de commando's uit; wat ze opleveren gaat hier doorheen.
+ * Dit bestand is het PURE deel: parsers voor de uitvoer van pmset, ioreg, df,
+ * defaults, system_profiler, tailscale en find, de profielen als data
+ * (avondpakket/profielen.json), de keuze van de fase en het oordeel. Geen I/O,
+ * geen kindprocessen, geen klok: `nu` komt van buiten. De sondes (meet), de
+ * cache en de bevriezing staan in server/avondpakket-meet.js; de route in
+ * server/index.js, de CLI in tools/avondpakket.mjs. Die voeren alleen de
+ * commando's uit; wat ze opleveren gaat hier doorheen.
  *
  * Een meting is per sonde het geparste object, of { onbekend: '<reden>' }:
  * dat punt wordt altijd grijs, nooit rood.
@@ -42,6 +45,25 @@ const komma = (x) => String(x).replace('.', ',');
 function jsonVan(j) {
   if (j && typeof j === 'object') return j;
   try { return JSON.parse(tekst(j)); } catch { return null; }
+}
+
+/**
+ * Privacy (review F5): wat er uit een foutmelding of een commando in het rapport
+ * komt. Een absoluut pad wordt alleen de laatste naam (onder een map "media":
+ * <id>/<bestand>), de naam van een backup wordt "de kopie", een IPv4-adres "<ip>".
+ * Elk punt gaat hier doorheen (`punt()` in beoordeel), dus ook een fout van
+ * backup.js of een kindproces die het meetdeel niet al opschoonde.
+ */
+export function schoon(t) {
+  const kort = (pad) => {
+    const i = pad.lastIndexOf('/media/');
+    return i >= 0 ? pad.slice(i + '/media/'.length) : pad.replace(/\/+$/, '').split('/').pop();
+  };
+  return tekst(t)
+    .replace(/'(\/[^'\n]*)'/g, (_, pad) => `'${kort(pad)}'`)
+    .replace(/(^|[\s"`(=])((?:\/[^\s'"`/,;:()]+)+\/?)/g, (_, voor, pad) => voor + kort(pad))
+    .replace(/library-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d+)?\.db/g, 'de kopie')
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '<ip>');
 }
 
 /** Een regex uit de data; een ongeldige geeft null (nooit een throw). */
@@ -291,12 +313,14 @@ export function parseBestanden(statTekst, datalessTekst, mediaMap) {
  * Uitgeplaatste bestanden buiten media/: `find <WORTEL> … -flags +dataless -print`.
  * Groep: 'instellingen' (mappings/, racks/, patronen/, plannen/, Input/, proef/),
  * 'media' (media/, telt bij het punt media) of 'code' (de rest).
- * `extra`: mappen buiten de wortel (VARVE_*) als [{ map, groep }].
+ * `extra`: mappen (VARVE_*) of losse bestanden (het kaartbestand) buiten de
+ * wortel, als [{ map, groep }]; een los bestand houdt alleen zijn naam.
  */
 export function parseInstellingen(t, wortel, extra = []) {
   const uit = [];
   for (const r of tekst(t).split('\n').map((x) => x.trim()).filter(Boolean)) {
-    const buiten = (Array.isArray(extra) ? extra : []).find((e) => e?.map && r.startsWith(tekst(e.map).replace(/\/+$/, '') + '/'));
+    const buiten = (Array.isArray(extra) ? extra : []).find((e) => e?.map && (r === tekst(e.map) || r.startsWith(tekst(e.map).replace(/\/+$/, '') + '/')));
+    if (buiten && r === tekst(buiten.map)) { uit.push({ pad: r.split('/').pop(), groep: buiten.groep || 'instellingen' }); continue; }
     if (buiten) { uit.push({ pad: `${tekst(buiten.map).split('/').pop()}/${relatief(r, buiten.map)}`, groep: buiten.groep || 'instellingen' }); continue; }
     const pad = relatief(r, wortel);
     const eerste = pad.includes('/') ? pad.split('/')[0] : '';
@@ -351,7 +375,7 @@ const TERUGVAL_PROFIEL = {
 
 function terugval(fout) {
   return { standaard: 'laptop', fase: 'auto', hardwareBevestigd: false, bekend: [], grenzen: { ...STANDAARD_GRENZEN },
-    apparaten: {}, virtueel: STANDAARD_VIRTUEEL, profielen: { laptop: { ...TERUGVAL_PROFIEL } }, fout };
+    apparaten: {}, virtueel: STANDAARD_VIRTUEEL, paklijst: [], profielen: { laptop: { ...TERUGVAL_PROFIEL } }, fout };
 }
 
 /**
@@ -382,8 +406,42 @@ export function leesProfielen(t) {
     bekend: Array.isArray(j.bekend) ? j.bekend.filter((x) => typeof x === 'string') : [],
     grenzen, apparaten,
     virtueel: regex(j.virtueel) ? j.virtueel : STANDAARD_VIRTUEEL,
+    paklijst: leesPaklijst(j.paklijst),
     profielen,
   };
+}
+
+/**
+ * De paklijst uit de data (review F2): [{ wat, profielen: '*' | [naam, …] }].
+ * De apparaten, de PD-hub en de rest die het pakket zelf kent, staan er niet in
+ * (die komen uit `apparaten` en `usbhub`). Gooit nooit: een onbruikbare regel
+ * valt weg, een onbruikbare lijst is [].
+ */
+function leesPaklijst(lijst) {
+  if (!Array.isArray(lijst)) return [];
+  return lijst.filter((r) => r && typeof r === 'object' && typeof r.wat === 'string' && r.wat.trim()
+    && (r.profielen === '*' || (Array.isArray(r.profielen) && r.profielen.every((x) => typeof x === 'string'))))
+    .map((r) => ({ wat: r.wat.trim(), profielen: r.profielen === '*' ? '*' : [...r.profielen] }));
+}
+
+/**
+ * Alle paklijstregels van een profiel, in de volgorde van docs/AVONDPAKKET.md §5:
+ * eerst wat het pakket zelf kent (de verwachte apparaten met hun kabel, de
+ * PD-hub), dan de regels uit de data. Ongeacht de fase: ook `laptop`, dat altijd
+ * `aankomst` is, heeft een paklijst.
+ */
+export function paklijstVan(naam, data) {
+  const p = data?.profielen?.[naam];
+  if (!p) return [];
+  const uit = [];
+  if (waardeVan(p, 'usbhub') === 'verwacht') uit.push('USB-C-hub met PD-ingang (lader in de hub)');
+  for (const [id, a] of Object.entries(data.apparaten || {})) {
+    if (waardeVan(p, id) === 'verwacht') uit.push(`${a.titel}${a.kabel ? ` + ${a.kabel}` : ''}`);
+  }
+  for (const r of Array.isArray(data.paklijst) ? data.paklijst : []) {
+    if (r.profielen === '*' || r.profielen.includes(naam)) uit.push(r.wat);
+  }
+  return uit;
 }
 
 // ---- fase ------------------------------------------------------------------
@@ -391,11 +449,17 @@ export function leesProfielen(t) {
 const onbekend = (m) => m == null || (typeof m === 'object' && !Array.isArray(m) && 'onbekend' in m);
 const waardeVan = (profiel, veld) => (WAARDEN.includes(profiel?.[veld]) ? profiel[veld] : 'nee');
 
-/** Wat er gezien is: { [apparaatId]: boolean }, uit USB en (voor geluidskaarten) uit de audio-items. */
+/**
+ * Wat er gezien is: { [apparaatId]: boolean }, uit USB en (voor geluidskaarten) uit
+ * de audio-items MET TRANSPORT usb. Een samengesteld of virtueel apparaat dat
+ * "Scarlett + koptelefoon" heet, telt niet: dat kan blijven bestaan terwijl de
+ * Scarlett zelf in de tas zit (review F7; of de Scarlett echt `usb` meldt, is
+ * pas na stap 7a gezien).
+ */
 function gezienApparaten(metingen, data) {
   const usb = onbekend(metingen.usb) ? [] : metingen.usb;
   const uit = herkenUsb(usb, data.apparaten);
-  const audio = onbekend(metingen.audio) ? [] : metingen.audio;
+  const audio = onbekend(metingen.audio) ? [] : metingen.audio.filter((i) => i.transport === 'usb');
   for (const [id, a] of Object.entries(data.apparaten)) {
     const re = regex(a.naam);
     if (!uit[id] && re && audio.some((i) => re.test(i.naam))) uit[id] = true;
@@ -412,10 +476,12 @@ function isVirtueel(item, data) {
 }
 
 /**
- * De fase bij `auto`: hangt er geen enkel apparaat van het profiel aan (en is de
- * standaarduitvoer ingebouwd, Bluetooth of virtueel), dan `vertrek`; anders
- * `aankomst`. Een profiel zonder iets om in te pakken (alleen de laptop) is
- * altijd `aankomst`.
+ * De fase bij `auto`: hangt er geen enkel apparaat van het profiel aan, dan
+ * `vertrek`; anders `aankomst`. Een standaarduitvoer met 4 of meer kanalen die
+ * niet ingebouwd, Bluetooth of virtueel is (het samengestelde apparaat) telt ook
+ * als "aangekomen"; een HDMI-scherm of een USB-C-dongle met 2 kanalen niet
+ * (review F4: thuis hangt de iiyama via HDMI). Een profiel zonder iets om in te
+ * pakken (alleen de laptop) is altijd `aankomst`.
  */
 export function kiesFase(metingen = {}, profiel = {}, data = {}) {
   const apparaten = Object.keys(data.apparaten || {});
@@ -424,27 +490,14 @@ export function kiesFase(metingen = {}, profiel = {}, data = {}) {
   const gezien = gezienApparaten(metingen, { apparaten: {}, ...data });
   if (apparaten.some((id) => waardeVan(profiel, id) !== 'nee' && gezien[id])) return 'aankomst';
   const std = standaardUitvoer(metingen);
-  if (std && !['builtin', 'bluetooth'].includes(std.transport) && !isVirtueel(std, data)) return 'aankomst';
+  if (std && std.uit >= 4 && !['builtin', 'bluetooth'].includes(std.transport) && !isVirtueel(std, data)) return 'aankomst';
   return 'vertrek';
 }
 
 // ---- het oordeel -------------------------------------------------------------
 
-function hhmm(ms) {
-  if (!Number.isFinite(ms)) return '?';
-  return new Date(ms).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
-}
-
-/** "14:05" vandaag, "gisteren 22:10", anders "8 okt 22:10" (zoals de tegel Backup). */
-function wanneer(ms, nu) {
-  if (!Number.isFinite(ms)) return 'onbekend';
-  const d = new Date(ms);
-  const dag = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const verschil = Math.round((dag(nu) - dag(d)) / 864e5);
-  if (verschil === 0) return hhmm(ms);
-  if (verschil === 1) return `gisteren ${hhmm(ms)}`;
-  return `${d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }).replace('.', '')} ${hhmm(ms)}`;
-}
+/** "HH:MM": dezelfde weergave als de tegel Backup (`wanneer` uit backup-tegel.js, review F14). */
+const hhmm = (ms) => (Number.isFinite(ms) ? wanneer(ms, new Date(ms)) : '?');
 
 function gb(bytes) {
   if (!Number.isFinite(bytes)) return '';
@@ -467,7 +520,7 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
   const g = data.grenzen || STANDAARD_GRENZEN;
   const punten = [];
   const inpakken = [];
-  const punt = (id, naam, licht, waarde, sub = '') => punten.push({ id, naam, licht, waarde, sub });
+  const punt = (id, naam, licht, waarde, sub = '') => punten.push({ id, naam, licht, waarde: schoon(waarde), sub: schoon(sub) });
   const nietGemeten = (x) => `niet gemeten${x?.onbekend ? `: ${x.onbekend}` : ''}`;
 
   // profiel en fase
@@ -549,7 +602,9 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
       const gezond = [Number.isFinite(a.gezondheid) && `gezondheid ${a.gezondheid} %`, Number.isFinite(a.cycli) && `${a.cycli} cycli`].filter(Boolean).join(' · ');
       const sub = (zin) => [zin, lader, gezond].filter(Boolean).join(' · ');
       const waarde = `${a.procent} %`;
-      if (a.bron !== 'AC' && a.procent < g.accuRoodProcent) punt('accu', 'Accu', 'fout', waarde, sub('bijna leeg: lader erin'));
+      const zwak = a.bron === 'AC' && Number.isFinite(a.laderW) && a.laderW < g.laderMinW;
+      if (a.procent < g.accuRoodProcent && a.bron !== 'AC') punt('accu', 'Accu', 'fout', waarde, sub('bijna leeg: lader erin'));
+      else if (a.procent < g.accuRoodProcent && zwak) punt('accu', 'Accu', 'fout', waarde, sub(`bijna leeg aan een zwakke lader (${a.laderW} W): onder last loopt hij verder leeg; een lader van ${g.laderMinW} W of meer`));
       else if (!aankomst) {
         if (a.procent >= g.accuVertrekProcent) punt('accu', 'Accu', 'ok', waarde, sub(''));
         else punt('accu', 'Accu', 'half', waarde, sub(`laad vóór vertrek tot ${g.accuVertrekProcent} %`));
@@ -571,7 +626,6 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
     if (w === 'nee') { /* niet getoond */ } else if (!aankomst) {
       if (w === 'verwacht') {
         punt('geluid', 'Geluid', 'uit', 'inpakken', `inpakken: bedrade koptelefoon, speakerkabels${btZaal ? ` · ${latentie}` : ''}`);
-        inpakken.push('bedrade koptelefoon + speakerkabels');
       } else punt('geluid', 'Geluid', 'uit', onbekend(m.audio) ? '?' : beschrijf(std), 'optioneel');
     } else if (onbekend(m.audio)) punt('geluid', 'Geluid', 'uit', '?', nietGemeten(m.audio));
     else if (btZaal) {
@@ -612,9 +666,9 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
       if (w === 'nee' && !(aankomst && gezien[id])) continue;
       if (gezien[id]) { punt(id, a.titel, w === 'nee' ? 'uit' : 'ok', 'aangesloten', w === 'nee' ? 'niet in dit profiel' : viaTekst(a.via)); continue; }
       if (!aankomst) {
-        if (w === 'verwacht') { punt(id, a.titel, 'uit', 'inpakken', `inpakken: ${a.titel}${a.kabel ? ` + ${a.kabel}` : ''}`); inpakken.push(a.titel); }
+        if (w === 'verwacht') punt(id, a.titel, 'uit', 'inpakken', `inpakken: ${a.titel}${a.kabel ? ` + ${a.kabel}` : ''}`);
         else punt(id, a.titel, 'uit', 'optioneel', 'niet aangesloten (optioneel)');
-      } else if (usbOnbekend && w === 'verwacht') punt(id, a.titel, 'uit', '?', nietGemeten(m.usb));
+      } else if (usbOnbekend) punt(id, a.titel, 'uit', '?', nietGemeten(m.usb));
       else if (w === 'verwacht') punt(id, a.titel, streng, 'niet gezien', `${a.titel} aansluiten${a.via ? ` (${viaTekst(a.via)})` : ''}`);
       else punt(id, a.titel, 'uit', 'niet aangesloten', 'optioneel');
     }
@@ -628,13 +682,15 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
     else if (w === 'nee') { if (h.draait) punt('avhub', 'AV-hub', 'half', 'draait', 'niet in dit profiel: de hub kan de APC vergrendelen (lease)'); }
     else if (h.draait) punt('avhub', 'AV-hub', 'ok', 'draait', p.set ? `set ${p.set}` : '');
     else if (w === 'optioneel') punt('avhub', 'AV-hub', 'uit', 'dicht', 'optioneel');
-    else punt('avhub', 'AV-hub', aankomst ? 'fout' : 'half', 'dicht',
-      aankomst ? `start de hub: npm start -- ${p.set || 'studio'} in ~/Projects/AV-app-hub` : `straks: npm start -- ${p.set || 'studio'}`);
+    // Vertrek: thuis hoort de hub dicht te zijn; het ritueel start hem pas bij aankomst
+    // (review F3: W1 gaat voor de tabel in ontwerp §2.6).
+    else if (!aankomst) punt('avhub', 'AV-hub', 'uit', 'dicht', `straks bij aankomst: npm start -- ${p.set || 'studio'} in ~/Projects/AV-app-hub`);
+    else punt('avhub', 'AV-hub', 'fout', 'dicht', `start de hub: npm start -- ${p.set || 'studio'} in ~/Projects/AV-app-hub`);
   }
 
   // USB-hub met PD-ingang: niet meetbaar zonder aannames, alleen de paklijst
   if (waardeVan(p, 'usbhub') !== 'nee') {
-    if (!aankomst) { punt('usbhub', 'USB-hub', 'uit', 'inpakken', 'inpakken: USB-C-hub met PD-ingang (lader in de hub)'); inpakken.push('USB-C-hub met PD-ingang'); }
+    if (!aankomst) punt('usbhub', 'USB-hub', 'uit', 'inpakken', 'inpakken: USB-C-hub met PD-ingang (lader in de hub)');
     else punt('usbhub', 'USB-hub', 'uit', 'niet gemeten', 'lader → PD-hub → Mac; APC direct in de Mac');
   }
 
@@ -684,6 +740,7 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
     else if (!b.laatste) punt('backup', 'Backup', 'fout', 'nog nooit', 'library.db heeft nog geen kopie: start de server, die maakt er een');
     else if (b.bron === 'map') punt('backup', 'Backup', 'uit', wanneer(b.laatste.tijd, nu), `laatste kopie uit de map (server niet gezien) · ${tas}`);
     else if (b.gewijzigdSinds === true) punt('backup', 'Backup', 'half', wanneer(b.laatste.tijd, nu), `wijziging nog in geen kopie; de server kijkt uiterlijk ${hhmm((b.gekeken ?? nu.getTime()) + 36e5)}`);
+    else if (b.gewijzigdSinds === null) punt('backup', 'Backup', 'uit', wanneer(b.laatste.tijd, nu), `of er sindsdien iets veranderde is niet te zien · ${tas}`);
     else punt('backup', 'Backup', 'ok', wanneer(b.laatste.tijd, nu), tas);
   }
 
@@ -734,11 +791,13 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
   const licht = punten.reduce((erg, x) => (ERG[x.licht] > ERG[erg] ? x.licht : erg), 'uit');
   const oordeel = telling.fout ? (aankomst ? 'nog niet beginnen' : 'nog niet vertrekken') : 'klaar';
   const lijst = (v) => (Array.isArray(v) ? v.map(tekst) : []);
+  const paklijst = paklijstVan(naam, data);
+  if (!aankomst) inpakken.push(...paklijst);
   const rapport = {
     profiel: naam, fase, faseGekozen, t: nu.getTime(), hardwareBevestigd: !!data.hardwareBevestigd,
     licht, telling, oordeel,
     letOp: punten.filter((x) => x.licht === 'half').map((x) => x.id),
-    inpakken, punten,
+    inpakken, paklijst, punten,
     titel: tekst(p.titel) || naam,
     kan: lijst(p.kan), kanNiet: lijst(p.kanNiet), let: lijst(p.let),
     profielen: Object.entries(data.profielen).map(([id, x]) => ({ id, titel: tekst(x.titel) || id })),

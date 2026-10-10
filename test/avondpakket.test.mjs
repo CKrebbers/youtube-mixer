@@ -15,7 +15,7 @@ const { avondpakketTegel } = await import('../src/controle/avondpakket-tegel.js'
 const {
   parsePmset, parsePmsetAc, parseIoregAccu, parseDf, parseOptimize, parseAudio, parseBluetooth, parseUsbHost,
   parseIoregUsb, voegUsbSamen, herkenUsb, parseTailscale, parseBestanden, parseInstellingen, verwachteBestanden,
-  vergelijkCompleet, leesProfielen, kiesFase, beoordeel, hexId, FASEN,
+  vergelijkCompleet, leesProfielen, kiesFase, beoordeel, hexId, FASEN, schoon, paklijstVan,
 } = A;
 
 const MAP = fileURLToPath(new URL('./fixtures/avondpakket/', import.meta.url));
@@ -163,8 +163,8 @@ console.log('8. tailscale');
   ok('gestopt → Stopped, geen peers', parseTailscale(fx('tailscale-gestopt-HANDGEMAAKT.json')).backend === 'Stopped');
   ok('ongeldige JSON → null', parseTailscale('nee') === null && parseTailscale('{}') === null);
   ok('geen IP-adres in de uitkomst, ook als ze in de invoer staan',
-    !JSON.stringify(parseTailscale({ BackendState: 'Running', TailscaleIPs: ['100.116.71.56'], Self: { HostName: 'x', TailscaleIPs: ['100.1.2.3'] },
-      Peer: { a: { HostName: 'clayk', Online: true, CurAddr: '100.110.172.126:41641', TailscaleIPs: ['100.110.172.126'] } } })).includes('100.'));
+    !JSON.stringify(parseTailscale({ BackendState: 'Running', TailscaleIPs: ['100.64.0.1'], Self: { HostName: 'x', TailscaleIPs: ['100.64.0.2'] },
+      Peer: { a: { HostName: 'clayk', Online: true, CurAddr: '100.64.0.3:41641', TailscaleIPs: ['100.64.0.3'] } } })).includes('100.'));
 }
 
 console.log('9. bestanden en instellingen');
@@ -222,8 +222,9 @@ console.log('12. goed ingepakt vertrek (W1)');
   ok(`0 rood, 0 oranje (${JSON.stringify(r.telling)}; ${r.punten.filter((p) => p.licht === 'fout' || p.licht === 'half').map((p) => p.id)})`,
     r.telling.fout === 0 && r.telling.half === 0);
   ok('oordeel klaar, licht groen', r.oordeel === 'klaar' && r.licht === 'ok');
-  ok(`inpakken bevat APC40 mkII en Scarlett 2i2 (${r.inpakken})`, r.inpakken.includes('APC40 mkII') && r.inpakken.includes('Scarlett 2i2'));
-  ok('inpakken bevat de PD-hub en de bedrade koptelefoon', r.inpakken.some((x) => /PD/.test(x)) && r.inpakken.some((x) => /koptelefoon/.test(x)));
+  ok(`inpakken bevat APC40 mkII en Scarlett 2i2 met hun kabel (${r.inpakken})`, r.inpakken.includes('APC40 mkII + USB-B → USB-C (eigen kabel)')
+    && r.inpakken.includes('Scarlett 2i2 + USB-C → USB-C'));
+  ok('inpakken bevat de PD-hub en de bedrade koptelefoon', r.inpakken.some((x) => /PD-ingang/.test(x)) && r.inpakken.some((x) => /bedrade koptelefoon/.test(x)));
   ok('bij vertrek geen Bluetooth-punt en geen avhub-punt (profiel apc: nee, dicht)', !punt(r, 'bluetooth') && !punt(r, 'avhub'));
   ok('iCloud aan met 122 GiB vrij → groen "pas een risico bij weinig ruimte"', punt(r, 'icloud').licht === 'ok' && /weinig ruimte/.test(punt(r, 'icloud').sub));
 }
@@ -328,7 +329,8 @@ console.log('21. AV-hub en servers');
 {
   const r = (m, profiel, fase, id) => punt(beoordeel(goedAankomst(m), { profiel, fase, data: data(), nu: NU }), id);
   ok('maschine + aankomst + 7700 dicht → rood "npm start -- studio"', r({}, 'maschine', 'aankomst', 'avhub').licht === 'fout' && /npm start -- studio/.test(r({}, 'maschine', 'aankomst', 'avhub').sub));
-  ok('maschine + vertrek + dicht → oranje "straks"', r({}, 'maschine', 'vertrek', 'avhub').licht === 'half');
+  ok('maschine + vertrek + dicht → grijs "straks bij aankomst" (F3: thuis hoort de hub dicht)', r({}, 'maschine', 'vertrek', 'avhub').licht === 'uit'
+    && /straks bij aankomst: npm start -- studio/.test(r({}, 'maschine', 'vertrek', 'avhub').sub));
   ok('maschine + draait → groen', r({ avhub: { draait: true } }, 'maschine', 'aankomst', 'avhub').licht === 'ok');
   ok('apc + 7700 open → oranje "vergrendelen"', r({ avhub: { draait: true } }, 'apc', 'aankomst', 'avhub').licht === 'half' && /vergrendelen/.test(r({ avhub: { draait: true } }, 'apc', 'aankomst', 'avhub').sub));
   ok('servers: opDb 1 → groen', r({}, 'apc', 'aankomst', 'servers').licht === 'ok');
@@ -439,9 +441,12 @@ console.log('28. tegel');
   const rood = tegel(beoordeel(goedVertrek({ schijf: { vrijGiB: 10, totaalGiB: 460 }, backup: { fout: 'schijf vol' } }), { profiel: 'apc', fase: 'vertrek', data: data(), nu: NU }));
   ok(`rood → "2 rood" met de regel van het eerste rode punt (${rood.regel})`, rood.waarde === '2 rood' && rood.licht === 'fout' && /^Schijf: /.test(rood.regel));
   const rapport = beoordeel(goedVertrek(), { profiel: 'apc', data: data(), nu: NU });
-  ok('bevroren → sub "bevroren: er speelt een deck"', tegel({ ...rapport, bevroren: 'er speelt een deck' }).sub === 'bevroren: er speelt een deck');
+  ok('bevroren → sub "bevroren: er speelt een deck · 18:30" (F12: met de tijd van de stand)',
+    tegel({ ...rapport, bevroren: 'er speelt een deck' }).sub === 'bevroren: er speelt een deck · 18:30');
+  ok('bevroren zonder tijd → alleen de reden', tegel({ ...rapport, t: undefined, bevroren: 'er speelt een deck' }).sub === 'bevroren: er speelt een deck');
   ok('titel: één regel per punt', tegel(rapport).titel.split('\n').length === rapport.punten.length);
-  ok('rapport van gisteren: sub met datum', /^apc · vertrek · 10 okt 18:30$/.test(avondpakketTegel(rapport, new Date(2026, 9, 11, 9, 0)).sub));
+  ok('rapport van gisteren / eergisteren: zoals de tegel Backup (F14)', avondpakketTegel(rapport, new Date(2026, 9, 11, 9, 0)).sub === 'apc · vertrek · gisteren 18:30'
+    && avondpakketTegel(rapport, new Date(2026, 9, 12, 9, 0)).sub === 'apc · vertrek · 10 okt 18:30');
 }
 
 console.log('29. privacy');
@@ -451,8 +456,8 @@ console.log('29. privacy');
     instellingen: parseInstellingen(fx('find-instellingen-1-HANDGEMAAKT.txt'), W),
     bluetooth: parseBluetooth({ SPBluetoothDataType: [{ controller_properties: { controller_state: 'attrib_on', controller_address: 'AA:BB:CC:DD:EE:FF' },
       device_connected: [{ 'AirPods 4': { device_address: '11:22:33:44:55:66', device_minorType: 'Headphones' } }] }] }),
-    tailscale: parseTailscale({ BackendState: 'Running', TailscaleIPs: ['100.116.71.56'], Self: { HostName: 'mac' },
-      Peer: { a: { HostName: 'clayk', Online: true, CurAddr: '100.110.172.126:41641' } } }),
+    tailscale: parseTailscale({ BackendState: 'Running', TailscaleIPs: ['100.64.0.1'], Self: { HostName: 'mac' },
+      Peer: { a: { HostName: 'clayk', Online: true, CurAddr: '100.64.0.3:41641' } } }),
   });
   for (const fase of ['vertrek', 'aankomst']) {
     const s = JSON.stringify(beoordeel(m, { profiel: 'beeld', fase, data: data(), nu: NU }));
@@ -463,7 +468,115 @@ console.log('29. privacy');
   const fixtures = ['audio-luidsprekers.json', 'bluetooth-aan-niets-verbonden.json', 'tailscale-running.json', 'ioreg-accu.txt', 'pmset-ac-65.txt']
     .map(fx).join('\n').replaceAll('"clayk"', '"pc"');
   ok('de echte fixtures bevatten geen naam, adres, serienummer of IP (behalve de hostnaam clayk)',
-    !/claykrebbers|Clay|@gmail|100\.\d+\.\d+\.\d+|tailbce427|([0-9A-F]{2}:){5}[0-9A-F]{2}|Serial/i.test(fixtures));
+    !/claykrebbers|Clay|@gmail|100\.\d+\.\d+\.\d+|tail[0-9a-f]{6}\b|([0-9A-F]{2}:){5}[0-9A-F]{2}|Serial/i.test(fixtures));
+}
+
+// ---- herstelronde 1 (review 7-review-1.md): F2-F9, F11-F13 ---------------------------
+
+console.log('30. paklijst als data (F2)');
+{
+  const d = data();
+  ok(`de data heeft 6 paklijstregels (${d.paklijst.length}), elk met wat en profielen`, d.paklijst.length === 6
+    && d.paklijst.every((r) => r.wat && (r.profielen === '*' || Array.isArray(r.profielen))));
+  const r = beoordeel(goedVertrek(), { profiel: 'apc', data: d, nu: NU });
+  ok('apc vertrek: inpakken bevat "lader ≥ 30 W", de speaker, de stekkerdoos en regel 9 "blijft thuis"', r.inpakken.some((x) => /lader ≥ 30 W/.test(x))
+    && r.inpakken.some((x) => /speaker/.test(x)) && r.inpakken.some((x) => /stekkerdoos/.test(x)) && r.inpakken.some((x) => /blijft thuis/.test(x)));
+  ok('apc vertrek: inpakken = paklijst (zelfde regels, zelfde volgorde)', JSON.stringify(r.inpakken) === JSON.stringify(r.paklijst));
+  ok('volgorde: eerst de PD-hub en de apparaten, dan de dataregels', /PD-ingang/.test(r.paklijst[0]) && /^APC40/.test(r.paklijst[1]) && /^lader/.test(r.paklijst[3]));
+  ok('apc vertrek: geen HDMI (alleen beeld)', !r.paklijst.some((x) => /HDMI/.test(x)));
+  const laptop = beoordeel(goedVertrek(), { profiel: 'laptop', data: d, nu: NU });
+  ok(`laptop (altijd aankomst): paklijst niet leeg (${laptop.paklijst.length}), inpakken leeg, geen speaker`, laptop.fase === 'aankomst' && laptop.paklijst.length === 4
+    && laptop.inpakken.length === 0 && !laptop.paklijst.some((x) => /^speaker/.test(x)) && laptop.paklijst.some((x) => /blijft thuis/.test(x)));
+  ok('beeld: paklijst bevat "HDMI" en de pc', beoordeel(goedVertrek(), { profiel: 'beeld', data: d, nu: NU }).paklijst.some((x) => /HDMI/.test(x) && /pc/.test(x)));
+  ok('maschine: Maschine MK2 met kabel, geen APC; LPD8 (optioneel) niet op de lijst', (() => {
+    const p = paklijstVan('maschine', d);
+    return p.some((x) => /^Maschine MK2 \+ USB-B/.test(x)) && !p.some((x) => /APC40/.test(x)) && !p.some((x) => /LPD8|Xboard/.test(x));
+  })());
+  const aank = beoordeel(goedAankomst(), { profiel: 'apc', data: d, nu: NU });
+  ok('aankomst: inpakken leeg, paklijst blijft (voor het kaartje)', aank.fase === 'aankomst' && aank.inpakken.length === 0 && aank.paklijst.length === r.paklijst.length);
+  const kapot = (paklijst) => leesProfielen(JSON.stringify({ ...JSON.parse(ECHTE_DATA), paklijst })).paklijst;
+  ok('kapotte paklijst → [] of alleen de bruikbare regels, nooit een throw', kapot('nee').length === 0 && kapot({}).length === 0
+    && kapot([null, 3, { wat: '' }, { wat: 'x', profielen: 'apc' }, { wat: 'goed', profielen: ['apc'] }]).length === 1);
+  ok('terugval (kapotte profielen.json): paklijst [] en geen throw', leesProfielen('kapot').paklijst.length === 0
+    && Array.isArray(beoordeel(goedVertrek(), { data: leesProfielen('kapot'), nu: NU }).paklijst));
+  ok('een onbekend profiel → paklijstVan geeft []', paklijstVan('bestaatniet', d).length === 0);
+}
+
+console.log('31. maschine en alles: goed ingepakt vertrek is klaar zonder let op (F3, F11)');
+{
+  for (const profiel of ['apc', 'beeld', 'maschine', 'alles']) {
+    for (const [naam, audio] of [['AirPods (HANDGEMAAKT)', 'audio-airpods-HANDGEMAAKT.json'], ['luidsprekers (echt)', 'audio-luidsprekers.json']]) {
+      const r = beoordeel(goedVertrek({ audio: parseAudio(fx(audio)) }), { profiel, data: data(), nu: NU });
+      ok(`${profiel} + ${naam}: fase vertrek, 0 rood, 0 oranje, klaar (${r.fase}; ${r.letOp})`,
+        r.fase === 'vertrek' && r.telling.fout === 0 && r.telling.half === 0 && r.oordeel === 'klaar');
+    }
+  }
+  ok('maschine aankomst + hub dicht blijft rood', beoordeel(goedAankomst(), { profiel: 'maschine', data: data(), nu: NU }).punten.find((p) => p.id === 'avhub').licht === 'fout');
+}
+
+console.log('32. fase auto: alleen een 4-kanaals standaard telt (F4)');
+{
+  const d = data();
+  const std = (naam, transport, uit) => [{ naam: 'MacBook Air luidsprekers', transport: 'builtin', uit: 2, in: 0, standaardUit: false, standaardSysteem: true },
+    { naam, transport, uit, in: 0, standaardUit: true, standaardSysteem: false }];
+  ok('HDMI-scherm met 2 kanalen als standaard → vertrek', kiesFase(goedVertrek({ audio: std('iiyama PL2792Q', 'hdmi', 2) }), d.profielen.apc, d) === 'vertrek');
+  ok('USB-C-naar-jack-dongle met 2 kanalen → vertrek', kiesFase(goedVertrek({ audio: std('USB-C to 3.5mm Headphone Jack Adapter', 'usb', 2) }), d.profielen.apc, d) === 'vertrek');
+  ok('DisplayPort met 8 kanalen → aankomst (niet ingebouwd, ≥ 4)', kiesFase(goedVertrek({ audio: std('Scherm', 'displayport', 8) }), d.profielen.apc, d) === 'aankomst');
+  const r = beoordeel(goedVertrek({ audio: std('iiyama PL2792Q', 'hdmi', 2) }), { profiel: 'apc', data: d, nu: NU });
+  ok('apc met HDMI thuis: "klaar" zonder let op', r.oordeel === 'klaar' && r.telling.half === 0);
+}
+
+console.log('33. privacy: foutteksten door schoon() (F5)');
+{
+  const fout = "ENOSPC: no space left on device, copyfile '/Users/x/varve/media/library.db' -> '/Users/x/varve/media/backups/library-2026-10-10_12-00-00.db'";
+  const m = goedVertrek({ backup: { ...goedVertrek().backup, fout }, bestanden: { onbekend: 'Command failed: find /Users/x/media -type f -exec stat -f %z %N {} +' } });
+  for (const fase of ['vertrek', 'aankomst']) {
+    const s = JSON.stringify(beoordeel(m, { profiel: 'apc', fase, data: data(), nu: NU }));
+    ok(`${fase}: backup-fout en sondefout zonder /Users/ en zonder backupnaam`, !s.includes('/Users/') && !s.includes('library-2026'));
+  }
+  const b = punt(beoordeel(m, { profiel: 'apc', data: data(), nu: NU }), 'backup');
+  ok(`de reden blijft leesbaar (${b.sub})`, b.licht === 'fout' && /ENOSPC/.test(b.sub) && /'backups\/de kopie'/.test(b.sub) && /'library\.db'/.test(b.sub));
+  ok('een pad met spaties tussen quotes: alleen wat onder media/ staat', schoon("open '/Users/x/Desktop/1. Projects/Youtube mixer/media/nr01/stems.wav'") === "open 'nr01/stems.wav'");
+  ok('buiten media/: alleen de laatste naam', schoon('lezen van /private/var/folders/ab/T/varve-x/profielen.json mislukt') === 'lezen van profielen.json mislukt');
+  ok('IP-adres → <ip>', schoon('verbinding met 100.64.0.3:41641 weigert') === 'verbinding met <ip>:41641 weigert');
+  ok('gewone zinnen blijven heel (~/Projects, 1/2, filter/fx, nr01/stems.wav)',
+    schoon('npm start -- studio in ~/Projects/AV-app-hub · zaal 1/2 · filter/fx · nr01_test/stems.wav (3,9 GB)')
+      === 'npm start -- studio in ~/Projects/AV-app-hub · zaal 1/2 · filter/fx · nr01_test/stems.wav (3,9 GB)');
+  ok('schoon(null/undefined) → ""', schoon(null) === '' && schoon(undefined) === '');
+}
+
+console.log('34. samengesteld apparaat met "Scarlett" in de naam (F7)');
+{
+  const d = data();
+  const audio = [{ naam: 'MacBook Air luidsprekers', transport: 'builtin', uit: 2, in: 0, standaardUit: true, standaardSysteem: true },
+    { naam: 'Scarlett + koptelefoon', transport: 'aggregate', uit: 4, in: 2, standaardUit: false, standaardSysteem: false }];
+  const m = goedVertrek({ audio });
+  ok('geen USB-Scarlett → fase vertrek', kiesFase(m, d.profielen.apc, d) === 'vertrek');
+  ok('aankomst: Scarlett niet "aangesloten"', punt(beoordeel(m, { profiel: 'apc', fase: 'aankomst', data: d, nu: NU }), 'scarlett').waarde === 'niet gezien');
+  const usb = goedVertrek({ audio: [...audio, { naam: 'Scarlett 2i2 USB', transport: 'usb', uit: 2, in: 2, standaardUit: false, standaardSysteem: false }] });
+  ok('de Scarlett zelf als USB-audio → gezien, aankomst', kiesFase(usb, d.profielen.apc, d) === 'aankomst'
+    && punt(beoordeel(usb, { profiel: 'apc', data: d, nu: NU }), 'scarlett').licht === 'ok');
+}
+
+console.log('35. accu bijna leeg aan een zwakke lader (F8)');
+{
+  const r = (accu, fase) => punt(beoordeel(goedVertrek({ accu }), { profiel: 'apc', fase, data: data(), nu: NU }), 'accu');
+  ok('aankomst, 12 %, 8 W → rood "zwakke lader"', r({ bron: 'AC', procent: 12, laderW: 8 }, 'aankomst').licht === 'fout' && /zwakke lader \(8 W\)/.test(r({ bron: 'AC', procent: 12, laderW: 8 }, 'aankomst').sub));
+  ok('vertrek, 12 %, 8 W → ook rood', r({ bron: 'AC', procent: 12, laderW: 8 }, 'vertrek').licht === 'fout');
+  ok('aankomst, 12 %, 30 W → niet rood (hij laadt)', r({ bron: 'AC', procent: 12, laderW: 30 }, 'aankomst').licht !== 'fout');
+  ok('aankomst, 12 %, lader zonder vermogen → niet rood (onbekend is nooit rood)', r({ bron: 'AC', procent: 12, laderW: null }, 'aankomst').licht !== 'fout');
+}
+
+console.log('36. backup: gewijzigdSinds null (F9)');
+{
+  const b = punt(beoordeel(goedVertrek({ backup: { ...goedVertrek().backup, gewijzigdSinds: null } }), { profiel: 'apc', data: data(), nu: NU }), 'backup');
+  ok(`null → grijs, waarde = de tijd, "niet te zien" (${b.sub})`, b.licht === 'uit' && b.waarde === '12:00' && /niet te zien/.test(b.sub) && /gaat mee in de tas/.test(b.sub));
+}
+
+console.log('37. optioneel apparaat, USB niet gemeten (F13)');
+{
+  const lpd = punt(beoordeel(goedAankomst({ usb: { onbekend: 'time-out' }, avhub: { draait: true } }), { profiel: 'maschine', fase: 'aankomst', data: data(), nu: NU }), 'lpd8');
+  ok(`LPD8 (optioneel) bij aankomst, usb onbekend → "?" "niet gemeten: time-out" (${lpd.waarde}; ${lpd.sub})`, lpd.licht === 'uit' && lpd.waarde === '?' && lpd.sub === 'niet gemeten: time-out');
 }
 
 if (fails.length) { console.log(`\n${fails.length} FAIL`); process.exit(1); }

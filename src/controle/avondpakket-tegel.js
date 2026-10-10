@@ -1,3 +1,5 @@
+import { wanneer } from './backup-tegel.js';
+
 /**
  * De tegel "Avondpakket" van de Controlekamer, uit GET /api/avondpakket
  * (server/avondpakket.js, docs/AVONDPAKKET.md). Puur: geen DOM, dus
@@ -11,7 +13,8 @@
  * - { ontbreekt: true }: een oudere server zonder de route (404);
  * - { fout: status }: een fout van de server;
  * - een rapport: "klaar", "klaar · let op 2" of "2 rood", met als regel de
- *   uitleg van het eerste rode punt (anders het eerste oranje).
+ *   uitleg van het eerste rode punt (anders het eerste oranje). Bevroren (er
+ *   speelt een deck): de sub zegt het, met de tijd van de stand die je ziet.
  */
 export function avondpakketTegel(a, nu = new Date()) {
   const basis = { id: 'avondpakket', naam: 'Avondpakket', regel: '', titel: '' };
@@ -21,7 +24,8 @@ export function avondpakketTegel(a, nu = new Date()) {
   const punten = Array.isArray(a.punten) ? a.punten : [];
   const telling = a.telling || { ok: 0, half: 0, fout: 0, uit: 0 };
   const waarde = telling.fout ? `${telling.fout} rood` : telling.half ? `klaar · let op ${telling.half}` : 'klaar';
-  const sub = a.bevroren ? `bevroren: ${a.bevroren}` : [a.profiel, a.fase, tijd(a.t, nu)].filter(Boolean).join(' · ');
+  const t = Number.isFinite(a.t) ? wanneer(a.t, nu) : '';
+  const sub = a.bevroren ? [`bevroren: ${a.bevroren}`, t].filter(Boolean).join(' · ') : [a.profiel, a.fase, t].filter(Boolean).join(' · ');
   const eerste = punten.find((p) => p.licht === 'fout') || punten.find((p) => p.licht === 'half');
   const regel = eerste ? `${eerste.naam}: ${eerste.sub || eerste.waarde}` : '';
   const teken = { ok: '●', half: '◐', fout: '✕', uit: '○' };
@@ -30,12 +34,3 @@ export function avondpakketTegel(a, nu = new Date()) {
 }
 
 const LICHT = new Set(['ok', 'half', 'fout', 'uit']);
-
-/** "14:05" vandaag, anders "8 okt 14:05". */
-function tijd(ms, nu) {
-  if (!Number.isFinite(ms)) return '';
-  const d = new Date(ms);
-  const hm = d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
-  const zelfdeDag = d.getFullYear() === nu.getFullYear() && d.getMonth() === nu.getMonth() && d.getDate() === nu.getDate();
-  return zelfdeDag ? hm : `${d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }).replace('.', '')} ${hm}`;
-}
