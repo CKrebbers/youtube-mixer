@@ -382,7 +382,7 @@ class Zending {
       const kind = spawn(ffmpeg, args, { cwd: uitzendMap, stdio: ['pipe', 'ignore', 'pipe', 'pipe'] });
       const gestart = await new Promise((r) => { kind.once('spawn', () => r(true)); kind.once('error', (e) => r(e)); });
       if (gestart !== true) {
-        // De laatste fout blijft in stand() staan tot de volgende start: de UI kan zeggen waarom het niet ging.
+        // De laatste fout blijft in stand() staan tot de volgende geslaagde start: de UI kan zeggen waarom het niet ging.
         Object.assign(this.s, { ffmpeg: 'weg', fout: `ffmpeg start niet: ${gestart.code || gestart.message}` });
         return { ok: false, fout: this.s.fout };
       }

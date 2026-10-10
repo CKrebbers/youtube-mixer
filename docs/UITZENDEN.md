@@ -238,7 +238,7 @@ elkaar, een dienst wil er één per 2 s.
 | E4 beeld hercoderen, Chrome-cadans, echte tijd (gevoerd zoals de browser: WAV-stuk op het eind van zijn seconde, fragment op eind + 1 s) | per s 0 1 2 3 4 1,6 2,6 3,6 1,3 2,3 3,3; **max 5,00 / 5,00 / 5,26 s** in drie runs; tweede helft 4,63 / 4,63 / 5,26 (eerste 5,00); beeld 12,00 s | ≤ 5,5; tweede helft ≤ eerste + 0,5 |
 | E4, eerste versie van de test (WAV-stuk aan het begin van zijn seconde, fragment op de eerste hele seconde na eind + 1 s: tot 0,63 s later) | max **5,26** s en **5,63** s in twee runs (één keer FAIL) | zelfde drempel; niet verruimd |
 | E5 regressiewacht: beeld + geluid aac | 11,04-11,42 s achter na 12 s (vijf runs) | notitie (> 2,5 verwacht: niet verbeterd) |
-| E6 CPU stil/golf 15 fps | 0,99-1,12 s user per 8 s (~12-14 % van een kern), alleen het ffmpeg-kind | notitie |
+| E6 CPU stil/golf 15 fps | 0,98-1,12 s user per 8 s (~12-14 % van een kern), alleen het ffmpeg-kind | notitie |
 
 De piek bij E4 hangt ook af van wanneer ffmpeg zijn voortgang meldt (`-stats_period 1`): `uitS` kan tot 1 s oud zijn,
 en dan lijkt de achterstand groter dan hij is. Met de cadans van de kritiek blijft hij onder 5,5 s (5,00 of 5,26,
