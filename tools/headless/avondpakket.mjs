@@ -163,6 +163,12 @@ try {
     .some((l) => l.dataset.licht === 'uit' && /AV-hub/.test(l.textContent) && /straks bij aankomst/.test(l.textContent))`));
   ok('de paklijst volgt het profiel (Maschine MK2, geen APC)', await ctl.ev(`(() => { const t = document.getElementById('ap-paklijst').textContent;
     return /Maschine MK2/.test(t) && !/APC40/.test(t); })()`));
+  const tSnel = Date.now();
+  await ctl.ev(`(() => { const s = document.getElementById('ap-profiel'); s.value = 'beeld'; s.dispatchEvent(new Event('change'));
+    s.value = 'maschine'; s.dispatchEvent(new Event('change')); })()`);
+  await wacht(3000);
+  ok(`twee keuzes vlak na elkaar: de laatste wint (maschine), de tweede wacht op de eerste (${sinds(tSnel).map((v) => v.url.split('?')[1]).join(' ')})`,
+    /^maschine · /.test((await tegel())?.sub) && sinds(tSnel).length === 2 && /profiel=maschine/.test(sinds(tSnel)[1].url));
   const tFase = Date.now();
   await ctl.ev(`(() => { const s = document.getElementById('ap-fase'); s.value = 'aankomst'; s.dispatchEvent(new Event('change')); })()`);
   ok('fase aankomst → één vraag met fase=aankomst, de tegel zegt "aankomst"', await tot(async () => / · aankomst · /.test((await tegel())?.sub)) && sinds(tFase).length === 1

@@ -123,11 +123,12 @@ async function leesSecties() {
  */
 const AP_ELKE_MS = 5 * 60 * 1000;
 const AP_PROFIEL = 'varve.avondpakket.profiel';
-const ap = { profiel: '', fase: 'auto', bezig: false, paklijst: '' };
+const ap = { profiel: '', fase: 'auto', bezig: false, nogEens: null, paklijst: '' };
 try { ap.profiel = localStorage.getItem(AP_PROFIEL) || ''; } catch (_) { /* privévenster: dan het standaardprofiel */ }
 
 async function leesAvondpakket({ vers = false, gevraagd = false } = {}) {
-  if (ap.bezig) return;
+  // Loopt er al een, dan geen tweede tegelijk; een keuze of klik komt erna alsnog aan de beurt.
+  if (ap.bezig) { if (gevraagd) ap.nogEens = { vers, gevraagd }; return; }
   if (!gevraagd && stand.mixer?.open) {
     // Nog niets gemeten en de mixer staat open: zeg het, in plaats van "…".
     if (!stand.avondpakket) { stand.avondpakket = { overgeslagen: 'mixer open: klik om te meten' }; tekenStand(); }
@@ -143,7 +144,11 @@ async function leesAvondpakket({ vers = false, gevraagd = false } = {}) {
     if (a === undefined || a === null) return;   // rust na een 404/fout, of geen antwoord: houd wat er staat
     stand.avondpakket = a.data ?? a;
     tekenAvondpakket();
-  } finally { ap.bezig = false; tekenStand(); }
+  } finally {
+    ap.bezig = false;
+    tekenStand();
+    if (ap.nogEens) { const n = ap.nogEens; ap.nogEens = null; leesAvondpakket(n); }
+  }
 }
 
 /** De keuzelijsten, de punten, de paklijst en wat Varve dan kan (in de <details> onder de tegels). */
