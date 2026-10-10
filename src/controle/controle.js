@@ -5,12 +5,13 @@ import { stemsTegel } from '../ui/stems-weergave.js';
 import { beeldTegel } from '../ui/beeld-weergave.js';
 import { backupTegel } from './backup-tegel.js';
 import { serverTegel } from './server-tegel.js';
+import { standTegel, mixerAdres, verschilTekst, activeerMelding, LABEL as STAND_LABEL, MIXER_VIA_HUB } from './stand-tegel.js';
 
 /**
  * De Controlekamer (controle.html, docs/CONTROLEKAMER.md). Leest:
  * - de server: /api/tooling, /api/library (aantal), /api/ingest, /api/stems, /api/proef,
  *   /api/backups (de laatste kopie van library.db), /api/secties (hoeveel nummers nog
- *   geen actuele secties hebben);
+ *   geen actuele secties hebben), /api/standen (de opstelling: welke actief is, docs/STANDEN.md);
  * - de Web Lock van de mixer (tabblad.js): is er een mixer open, wacht er een tweede;
  * - het kanaal van de mixer (status-zender.js): APC, audio, wat er speelt, beeld.
  * Opent zelf GEEN MIDI: de APC heeft maar één tabblad, de mixer.
@@ -27,6 +28,7 @@ const stand = {
   stems: null,         // antwoord van /api/stems, { ontbreekt: true } bij een server zonder stems, null = onbekend
   backup: null,        // antwoord van /api/backups
   secties: null,       // antwoord van /api/secties, { ontbreekt: true } bij een server zonder die route, null = onbekend
+  standen: null,       // antwoord van /api/standen ({ standen, actief, label }), { ontbreekt } / { fout }, null = onbekend
   mixer: null,         // { open, wachtend } uit de Web Lock
   status: null,        // laatste bericht van de mixer
   proef: { begonnen: null, items: {} },
@@ -107,6 +109,15 @@ async function leesSecties() {
   if (a !== undefined) stand.secties = a?.data ?? a;
 }
 
+/**
+ * De opstellingen (docs/STANDEN.md): de lijst en welke actief is. Los, zoals de
+ * stems: een oudere server kent de route niet (404, "onbekend") en draait toch.
+ */
+async function leesStanden() {
+  const a = await haalLos('/api/standen');
+  if (a !== undefined) stand.standen = a?.data ?? a;
+}
+
 // De tooling-controle start yt-dlp, de splitter en de tellenzoeker: die mag langer duren.
 async function leesTooling() {
   try { stand.tooling = await haal('/api/tooling', { wacht: 60000 }); } catch { stand.tooling = null; }
@@ -134,6 +145,7 @@ function tegels() {
   const t = [];
 
   t.push(serverTegel(stand));
+  t.push(standTegel({ standen: stand.server === false ? null : stand.standen }));
 
   const tl = stand.tooling;
   t.push(!tl ? { naam: 'Binnenhalen', licht: 'uit', waarde: '…', sub: '' }
@@ -203,20 +215,110 @@ function tekenStand() {
 
   const knop = $('mixer-open');
   const open = !!stand.mixer?.open;
+  // Via de hub als de actieve opstelling dat zegt (hub.mixerVia): het adres staat op de knop, zodat je het ziet.
+  knop.dataset.adres = mixerAdres(stand.standen?.actief);
+  const viaHub = knop.dataset.adres === MIXER_VIA_HUB;
   if (!knop.dataset.bezig) {
     knop.disabled = open;
-    knop.textContent = open ? 'mixer staat open' : 'mixer openen';
-    knop.title = open ? 'er is al een mixer-tabblad: gebruik dat (een tweede luistert niet naar de APC)' : '';
+    knop.textContent = open ? 'mixer staat open' : viaHub ? 'mixer openen via de hub' : 'mixer openen';
+    knop.title = open ? 'er is al een mixer-tabblad: gebruik dat (een tweede luistert niet naar de APC)'
+      : viaHub ? `de opstelling zegt: via de hub (${knop.dataset.adres}); start de hub eerst` : '';
   }
+  tekenKiezer();
 }
 
 $('mixer-open').addEventListener('click', async () => {
   const knop = $('mixer-open');
   await leesMixer();
   if (stand.mixer?.open) { tekenStand(); meld('de mixer staat al open — gebruik dat tabblad', 'fout'); return; }
-  window.open('/', '_blank');
+  window.open(mixerAdres(stand.standen?.actief), '_blank');
   knop.dataset.bezig = '1'; knop.disabled = true; knop.textContent = 'mixer gaat open…';
   setTimeout(() => { delete knop.dataset.bezig; tekenStand(); }, 4000);
+});
+
+// ---- de opstelling (docs/STANDEN.md) ----------------------------------------------
+
+$('h-opstelling').textContent = STAND_LABEL;
+let kiezerSleutel = '';
+
+/** De kiezer alleen opnieuw opbouwen als de lijst verandert, en nooit terwijl hij focus heeft. */
+function tekenKiezer() {
+  const kies = $('stand-kies');
+  const d = stand.standen;
+  const lijst = Array.isArray(d?.standen) ? d.standen : null;
+  const aan = !!lijst && stand.server !== false;
+  kies.disabled = !aan || !lijst?.length;
+  $('stand-activeer').disabled = kies.disabled || !!$('stand-activeer').dataset.bezig;
+  $('stand-terug').disabled = !aan || !!$('stand-terug').dataset.bezig;
+  if (!lijst || document.activeElement === kies) return;
+  const actief = d.actief?.naam ?? null;
+  const sleutel = JSON.stringify([lijst.map((s) => [s.naam, s.titel, s.fouten]), actief]);
+  if (sleutel === kiezerSleutel) return;
+  const gekozen = kiezerSleutel ? kies.value : (actief ?? lijst[0]?.naam ?? '');
+  kiezerSleutel = sleutel;
+  kies.innerHTML = lijst.map((s) => `<option value="${esc(s.naam)}">${esc(s.titel)}${s.naam === actief ? ' · actief' : ''}${s.fouten ? ' · fout' : ''}</option>`).join('');
+  kies.value = lijst.some((s) => s.naam === gekozen) ? gekozen : (actief ?? lijst[0]?.naam ?? '');
+  toonVerschil();
+}
+
+/** Onder de kiezer: wat activeren zou veranderen (GET …/verschil), zodat de tweede klik een echte keuze is. */
+let verschilNr = 0;
+async function toonVerschil() {
+  const naam = $('stand-kies').value;
+  const nr = ++verschilNr;
+  if (!naam) return;
+  try {
+    const v = await haal(`/api/standen/${encodeURIComponent(naam)}/verschil`);
+    if (nr === verschilNr) $('stand-uitleg').textContent = `Activeren: ${verschilTekst(v)}.`;
+  } catch (err) {
+    if (nr === verschilNr) $('stand-uitleg').textContent = `Deze opstelling klopt niet (${err.message}); kijk het bestand na.`;
+  }
+}
+$('stand-kies').addEventListener('change', () => { toonVerschil(); });
+$('stand-kies').addEventListener('blur', () => { kiezerSleutel = '__'; tekenKiezer(); });
+
+/** Twee klikken binnen 4 s, zoals "nieuwe ronde": de eerste vraagt "zeker?". */
+function tweeKlik(knop, label, actie) {
+  let klaar = null;
+  knop.addEventListener('click', async () => {
+    if (!klaar) {
+      knop.textContent = 'zeker? klik nog eens';
+      knop.classList.add('let-op');
+      klaar = setTimeout(() => { klaar = null; knop.textContent = label; knop.classList.remove('let-op'); }, 4000);
+      return;
+    }
+    clearTimeout(klaar); klaar = null;
+    knop.textContent = label; knop.classList.remove('let-op');
+    knop.dataset.bezig = '1'; knop.disabled = true;
+    try { await actie(); } finally { delete knop.dataset.bezig; await ververs(); }
+  });
+}
+
+async function postJson(pad) {
+  const r = await fetch(pad, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(WACHT_MS) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.fout || `${r.status}`);
+  return d;
+}
+
+tweeKlik($('stand-activeer'), 'activeer', async () => {
+  const naam = $('stand-kies').value;
+  if (!naam) return;
+  try {
+    const { tekst, rood } = activeerMelding(await postJson(`/api/standen/${encodeURIComponent(naam)}/activeer`));
+    meld(tekst);
+    for (const r of rood.slice(0, 3)) meld(r, 'fout');
+  } catch (err) { meld(`niet geactiveerd: ${err.message}`, 'fout'); }
+  kiezerSleutel = '';
+});
+
+tweeKlik($('stand-terug'), 'vorige terugzetten', async () => {
+  try {
+    const d = await postJson('/api/standen/terug');
+    meld(`vorige teruggezet: ${d.delen?.join(', ') || 'niets'}`);
+    for (const f of (d.fouten ?? []).slice(0, 3)) meld(`${f.deel}: ${f.fout}`, 'fout');
+  } catch (err) { meld(`niet teruggezet: ${err.message}`, 'fout'); }
+  kiezerSleutel = '';
 });
 
 // ---- de speellijst --------------------------------------------------------------
@@ -327,7 +429,7 @@ let verversBezig = false;
 async function ververs() {
   if (verversBezig) return;   // de vorige loopt nog (trage server): niet stapelen
   verversBezig = true;
-  try { await Promise.all([leesServer(), leesMixer(), leesStems(), leesSecties()]); tekenStand(); }
+  try { await Promise.all([leesServer(), leesMixer(), leesStems(), leesSecties(), leesStanden()]); tekenStand(); }
   finally { verversBezig = false; }
 }
 
@@ -340,4 +442,4 @@ vraagStatus();
 setInterval(ververs, 2000);
 setInterval(vraagStatus, 2000);
 setInterval(() => leesTooling().then(tekenStand), 60000);
-window.controle = { stand, ververs };   // handig in de console en voor tools/headless/controle.mjs
+window.controle = { stand, ververs, mixerAdres: () => mixerAdres(stand.standen?.actief) };   // handig in de console en voor tools/headless/controle.mjs

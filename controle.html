@@ -24,6 +24,17 @@
 
   <section class="blok" aria-labelledby="h-open">
     <h2 id="h-open">Openen</h2>
+    <!-- De opstelling van vanavond (docs/STANDEN.md): kiezen, activeren, terugzetten.
+         Buiten #tegels: die wordt elke 2 s opnieuw getekend. Het label komt uit LABEL (stand-tegel.js). -->
+    <div class="opstelling" id="opstelling">
+      <h3 id="h-opstelling">Opstelling</h3>
+      <div class="opstelling-rij">
+        <select id="stand-kies" aria-labelledby="h-opstelling" disabled></select>
+        <button class="knop" id="stand-activeer" disabled>activeer</button>
+        <button class="knop" id="stand-terug" disabled title="zet de mapping en de nacht terug zoals ze vóór de laatste activering waren">vorige terugzetten</button>
+      </div>
+      <p class="uitleg" id="stand-uitleg">Een opstelling zet alleen beginwaarden (de nacht remmen, je mapping, het master-rack klaarzetten); wat je daarna met de hand doet blijft staan.</p>
+    </div>
     <div class="openen">
       <button class="knop hoofd" id="mixer-open">mixer openen</button>
       <a class="knop" href="/apc.html" target="_blank" rel="noopener">APC-kaart</a>
