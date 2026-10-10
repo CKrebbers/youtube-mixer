@@ -10,9 +10,11 @@
  * Harde grenzen (het onderscheid uit docs/VISIE.md §4, in code):
  *   G1  de bron is alleen de eigen set: set-<id>.wav / .mp4 in de opnamemap. Nooit
  *       media/, nooit library.db. Deze module importeert alleen node:* en kopVan/ID
- *       uit ./opname.js; het id moet aan opname.ID voldoen, er is geen padargument.
+ *       uit ./opname.js; het id moet aan opname.ID voldoen. Paden staan alleen in de
+ *       `instellingen` van start() (van de server), nooit in het `verzoek` (van buiten).
  *   G2  doelen alleen van schijf: wie start, noemt een naam. Een url van buiten
- *       bestaat niet in de API.
+ *       bestaat niet in de API: start() leest uit het verzoek alleen id, doel,
+ *       beeldstand en door.
  *   G3  lokaal-slot: bestand; rtmp:// naar letterlijk 127.0.0.1 of [::1]; udp://
  *       naar letterlijk 127.0.0.1 (poort >= 1024). Geen gebruikersnaam, en de url
  *       moet al genormaliseerd zijn. Al het andere is dicht. Een slot tegen
@@ -28,7 +30,8 @@
  *       doel met beeld bestaat niet (in v1 bestaat geen enkel niet-lokaal doel);
  *       lokale beeld-doelen dragen de waarschuwing "alleen thuis (I78)".
  *   G9  uitgang buiten iCloud en buiten opnames/: standaard ~/Movies/VARVE-uitzend/,
- *       nooit overschrijven (eerste vrije naam), na stop een .mp4 naast de .flv.
+ *       nooit overschrijven (eerste vrije naam), na stop een .mp4 naast de .flv. Elk
+ *       pad wordt eerst absoluut gemaakt: toetsen en schrijven op hetzelfde pad.
  *
  * Elke functie geeft een resultaat terug ({ ok, … }) en gooit nooit, zoals opname.js.
  */
@@ -67,7 +70,8 @@ export function toegestaan(doel) {
   if (doel.soort !== 'rtmp' && doel.soort !== 'udp') return { ok: false, fout: DICHT };
   let u;
   try { u = new URL(doel.url); } catch { return { ok: false, fout: 'ongeldige url' }; }
-  if (u.href !== doel.url) return { ok: false, fout: 'url is niet genormaliseerd: schrijf hem precies zo: ' + maskeer(u.href) };
+  // Een lokaal adres mag je letterlijk zien (anders neem je "****" over als streamnaam); elders blijft het pad gemaskeerd.
+  if (u.href !== doel.url) return { ok: false, fout: 'url is niet genormaliseerd: schrijf hem precies zo: ' + maskeer(u.href, { pad: !LOKAAL.has(u.hostname) }) };
   if (u.username || u.password) return { ok: false, fout: DICHT };
   if (doel.soort === 'rtmp' && (u.protocol !== 'rtmp:' || !LOKAAL.has(u.hostname))) return { ok: false, fout: DICHT };
   if (doel.soort === 'udp' && (u.protocol !== 'udp:' || u.hostname !== '127.0.0.1' || !(Number(u.port) >= 1024))) return { ok: false, fout: DICHT };
@@ -164,15 +168,24 @@ export async function laadDoelen(uitzendMap = STANDAARD_MAP) {
   }
 }
 
+/**
+ * showwaves stempelt elk beeld 4 beelden te laat (gemeten met ffmpeg 9.0.1, ook zonder encoder: bij 2 fps
+ * kwam een stoot van 3,0 s pas op 5,0 s in beeld). `setpts` trekt die 4 beelden eraf, `trim` laat weg wat
+ * daardoor vóór 0 valt: de golf valt op het geluid (3,02 s) en `uitS` volgt weer het geluid (review 1, punt 2).
+ * De check "golf loopt gelijk" in de test pint de 4 vast: geeft een andere ffmpeg iets anders, dan faalt hij.
+ */
+const GOLF_GELIJK = 'setpts=PTS-4/(FR*TB),trim=start=0';
+
 /** Het beeldfilter van het stil-profiel: het beeld komt uit het geluid zelf (één invoer, één klok). */
 function beeldFilter(beeld, fps) {
-  if (beeld === 'golf') return `[0:a]asplit[a][b];[b]showwaves=s=1280x720:rate=${fps}:mode=cline:colors=white,format=yuv420p[v]`;
+  const golf = (opmaak) => `[0:a]asplit[a][b];[b]showwaves=s=1280x720:rate=${fps}:${opmaak},${GOLF_GELIJK}`;
+  if (beeld === 'golf') return `${golf('mode=cline:colors=white')},format=yuv420p[v]`;
   if (beeld !== 'zwart' && PNG.test(beeld)) {
     return `movie=beelden/${beeld},loop=loop=-1:size=1,fps=${fps},scale=1280:720[p];`
-      + `[0:a]asplit[a][b];[b]showwaves=s=1280x720:rate=${fps}:mode=cline:colors=white@0.5[w];`
+      + `${golf('mode=cline:colors=white@0.5')}[w];`
       + '[p][w]overlay=shortest=1,format=yuv420p[v]';
   }
-  return `[0:a]asplit[a][b];[b]showwaves=s=1280x720:rate=${fps}:colors=black,format=yuv420p[v]`;
+  return `${golf('colors=black')},format=yuv420p[v]`;
 }
 
 /** De argumenten voor ffmpeg (docs/UITZENDEN.md §4). Puur. `uit` is het pad of de url. */
@@ -186,7 +199,9 @@ export function bouwArgs(doel, { uit, fps } = {}) {
     else {
       const k = Number(br.slice(0, -1));
       midden = ['-hwaccel', 'videotoolbox', '-f', 'mp4', '-i', 'pipe:0', ...map,
-        '-c:v', 'h264_videotoolbox', '-realtime', '1', '-b:v', br, '-maxrate', br, '-bufsize', `${2 * k}k`, '-g', '60', '-pix_fmt', 'yuv420p',
+        '-c:v', 'h264_videotoolbox', '-realtime', '1', '-b:v', br, '-maxrate', br, '-bufsize', `${2 * k}k`,
+        // -g telt beelden; Chrome's fps varieert (29,07 gemeten), dus ook een keyframe op elke 2 s (review 1, punt 3).
+        '-g', '60', '-force_key_frames', 'expr:gte(t,n_forced*2)', '-pix_fmt', 'yuv420p',
         '-c:a', 'copy'];
     }
   } else {
@@ -211,12 +226,14 @@ export function uitgangsPad(uitMap, id, bestaat) {
   return join(uitMap, `set-${id}.uitzend-${Date.now()}.flv`);
 }
 
-/** G7: alles wat op een sleutel lijkt eruit. rtmp://host/app/**** , ?key=**** , user:pw@ . Puur. */
-export function maskeer(tekst) {
-  return String(tekst ?? '')
-    .replace(/(\w+:\/\/)[^\s/@]*@/g, '$1****@')
-    .replace(/(rtmps?:\/\/[^\s/]+\/[^\s/?#]+\/)[^\s?#]+/gi, '$1****')
-    .replace(/([?&](?:key|sleutel|token|streamkey|stream_key|secret|auth|sig|password|pw)=)[^&\s]+/gi, '$1****');
+/**
+ * G7: alles wat op een sleutel lijkt eruit. rtmp://host/app/**** , ?key=**** , user:pw@ . Puur.
+ * `pad: false` laat het rtmp-pad staan (alleen voor een adres op 127.0.0.1/[::1]); gebruiker en ?key= gaan er altijd uit.
+ */
+export function maskeer(tekst, { pad = true } = {}) {
+  let t = String(tekst ?? '').replace(/(\w+:\/\/)[^\s/@]*@/g, '$1****@');
+  if (pad) t = t.replace(/(rtmps?:\/\/[^\s/]+\/[^\s/?#]+\/)[^\s?#]+/gi, '$1****');
+  return t.replace(/([?&](?:key|sleutel|token|streamkey|stream_key|secret|auth|sig|password|pw)=)[^&\s]+/gi, '$1****');
 }
 
 /** De mp4-boxen op het hoogste niveau: [{ type, begin, grootte }]. Stopt bij iets dat geen box is. Puur. */
@@ -293,24 +310,34 @@ class Zending {
     return { ...s, uit: s.uit ? { ...s.uit } : null, waarschuwingen: [...s.waarschuwingen], fout: s.fout ? maskeer(s.fout) : null };
   }
 
-  start(o = {}) {
+  start(verzoek, instellingen) {
     // Een stop() tijdens het starten (wachten op de mp4 kan 10 s duren) mag niet verloren gaan: hij
     // zet `afbreken` en wacht op deze belofte; _start kijkt vóór de spawn of hij moet stoppen.
     if (this.bezigMetStarten) return Promise.resolve({ ok: false, fout: 'er loopt al een uitzending' });
     this.afbreken = false;
-    this.startBelofte = this._start(o).catch((err) => ({ ok: false, fout: maskeer(err.message) }));
+    this.startBelofte = this._start(verzoek, instellingen).catch((err) => ({ ok: false, fout: maskeer(err.message) }));
     return this.startBelofte;
   }
 
-  async _start({
-    opnames, uitzendMap = STANDAARD_MAP, uitMap = process.env.VARVE_UITZEND_UIT || STANDAARD_UIT, id, doel: naam,
-    beeldstand, door, ffmpeg = 'ffmpeg', pollMs = 250, stilNa = 10000, stopNa = 30000, achterstandMax = 8, wachtMp4 = 10000,
-    _argsHaak,
-  } = {}) {
+  /**
+   * Twee delen, zodat de route (stap 3) de body niet kan laten kiezen waar gelezen en geschreven wordt (G1, G2):
+   *   verzoek      { id, doel, beeldstand?, door? }: van buiten; elk ander veld wordt NIET gelezen (ook geen url, pad of ffmpeg).
+   *   instellingen { opnames, uitzendMap, uitMap, ffmpeg, pollMs, stilNa, stopNa, achterstandMax, wachtMp4 }: van de server zelf.
+   */
+  async _start(verzoek, instellingen) {
+    const { id, doel: naam, beeldstand, door } = verzoek && typeof verzoek === 'object' ? verzoek : {};
+    let {
+      opnames, uitzendMap = STANDAARD_MAP, uitMap = process.env.VARVE_UITZEND_UIT || STANDAARD_UIT,
+      ffmpeg = 'ffmpeg', pollMs = 250, stilNa = 10000, stopNa = 30000, achterstandMax = 8, wachtMp4 = 10000, _argsHaak,
+    } = instellingen && typeof instellingen === 'object' ? instellingen : {};
     if (this.s.bezig || this.kind || this.bezigMetStarten) return { ok: false, fout: 'er loopt al een uitzending' };
     if (typeof id !== 'string' || !ID.test(id)) return { ok: false, fout: 'ongeldig opname-id' };
     if (typeof opnames !== 'string' || !opnames) return { ok: false, fout: 'geen opnamemap' };
+    if (typeof uitzendMap !== 'string' || !uitzendMap || typeof uitMap !== 'string' || !uitMap) return { ok: false, fout: 'geen uitzend- of uitgangsmap' };
     if (beeldstand !== undefined && !['alles', 'vormen'].includes(beeldstand)) return { ok: false, fout: 'beeldstand moet alles of vormen zijn' };
+    // G9: elk pad absoluut VÓÓR elke toets. Node toetst vanuit zijn eigen map, ffmpeg schrijft vanuit de uitzendmap
+    // (cwd van het kind): met een relatief pad toetsten ze twee verschillende plekken (review 1, punt 1).
+    opnames = resolve(opnames); uitzendMap = resolve(uitzendMap); uitMap = resolve(uitMap);
     this.bezigMetStarten = true;
     let wav = null, mp4 = null, overgedragen = false;          // handles die nog niet aan de zending zijn gegeven
     const AFGEBROKEN = 'gestopt tijdens het starten';
@@ -332,18 +359,22 @@ class Zending {
 
       const waarschuwingen = [];
       if (doel.waarschuwing) waarschuwingen.push(doel.waarschuwing);
-      const ic = iCloudWaarschuwing(resolve(opnames), homedir(), existsSync);
+      const ic = iCloudWaarschuwing(opnames, homedir(), existsSync);
       if (ic) waarschuwingen.push(ic);
 
       // Beeld: de mp4 van de video-opname, vanaf byte 0 (v1: alleen samen met de opname).
       if (doel.bron === 'video') {
         if (bronS >= 10) return { ok: false, fout: 'video-uitzending start in v1 samen met de opname (binnen 10 s); kies een doel met bron audio' };
-        if (existsSync(join(opnames, `set-${id}.webm`))) return { ok: false, fout: 'de video is webm: kies een doel met bron audio' };
+        const WEBM = 'de video is webm: kies een doel met bron audio';
+        const webmPad = join(opnames, `set-${id}.webm`);
+        if (existsSync(webmPad)) return { ok: false, fout: WEBM };
         const mp4Pad = join(opnames, `set-${id}.mp4`);
         const kopMp4 = Buffer.alloc(4 * 1024 * 1024);                // alleen het begin lezen, niet het hele bestand
         const t0 = Date.now();
         let begin = null;
         while (Date.now() - t0 <= wachtMp4 && !this.afbreken) {
+          // De browser kiest webm als hij geen mp4 kan; dat komt pas met het eerste videostuk (review 1, punt 4).
+          if (!mp4 && existsSync(webmPad)) return { ok: false, fout: WEBM };
           if (!mp4) mp4 = await open(mp4Pad, 'r').catch(() => null);
           if (mp4) {
             const { bytesRead: n } = await mp4.read(kopMp4, 0, kopMp4.length, 0);
@@ -364,7 +395,7 @@ class Zending {
       if (doel.soort === 'bestand') {
         if (binnen(uitMap, opnames) || binnenEcht(uitMap, opnames)) return { ok: false, fout: 'de uitgang mag niet in de opnamemap (G9)' };
         await mkdir(uitMap, { recursive: true });
-        const icUit = iCloudWaarschuwing(resolve(uitMap), homedir(), existsSync);
+        const icUit = iCloudWaarschuwing(uitMap, homedir(), existsSync);
         if (icUit) waarschuwingen.push(`de uitzenduitgang staat ook in iCloud (${uitMap}): zet VARVE_UITZEND_UIT buiten Bureaublad en Documenten`);
         uit = uitgangsPad(uitMap, id, existsSync);
         uitInfo = { flv: uit, mp4: null };
@@ -531,10 +562,14 @@ class Zending {
     return this.pompBelofte;
   }
 
-  /** Eén laatste ronde tot het eind van het bestand (bij opnameKlaar), hooguit `ms`. */
+  /**
+   * Eén laatste ronde tot het eind van het bestand (bij opnameKlaar), hooguit `ms`. Komt er intussen een stop(),
+   * dan houdt dit op: anders draaide het zonder pauze rondjes tot ffmpeg dicht was, en las het een al gesloten
+   * bestand (review 1, punt 7).
+   */
   async _leeg(ms = 10000) {
     const t0 = Date.now();
-    while (this.kind && Date.now() - t0 < ms) {
+    while (this.kind && this.wav && !this.stoppen && Date.now() - t0 < ms) {
       const grootte = (await this.wav.stat()).size;
       const data = Math.max(0, grootte - this.kop);
       this.eind = Math.max(this.eind, this.kop + data - (data % FRAME));
@@ -607,9 +642,11 @@ class Zending {
 
   async _remuxEens(netjes) {
     const flv = this.s.uit?.flv;
-    if (!flv || this.s.uit.mp4 || !existsSync(flv)) return;
+    if (!flv || this.s.uit.mp4) return;
+    // Nooit stil: zonder flv (of met een lege) zegt de stand waarom er geen mp4 is (review 1, punt 1).
+    if (!existsSync(flv)) { this.s.waarschuwingen.push(maskeer(`geen flv op ${flv}: er is geen mp4 gemaakt`)); return; }
     const grootte = (await stat(flv).catch(() => ({ size: 0 }))).size;
-    if (!grootte) return;
+    if (!grootte) { this.s.waarschuwingen.push(maskeer(`de flv is leeg (${flv}): er is geen mp4 gemaakt`)); return; }
     const mp4 = flv.replace(/\.flv$/, '.mp4');
     const kind = spawn(this.ffmpegPad || 'ffmpeg', ['-hide_banner', '-loglevel', 'error', '-n', '-i', flv, '-c', 'copy', '-movflags', '+faststart', mp4],
       { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -649,8 +686,12 @@ class Zending {
 
 const zending = new Zending();
 
-/** Start een uitzending van opname `id` naar doel `doel` (een naam uit doelen.json). */
-export const start = (o) => zending.start(o);
+/**
+ * Start een uitzending van opname `id` naar doel `doel` (een naam uit doelen.json).
+ * `verzoek` = { id, doel, beeldstand?, door? } (mag de body van de route zijn: de rest wordt niet gelezen);
+ * `instellingen` = { opnames, uitzendMap?, uitMap?, ffmpeg?, … } komt van de server, nooit uit een verzoek.
+ */
+export const start = (verzoek, instellingen) => zending.start(verzoek, instellingen);
 /** Stop netjes (G6). `snel`: bij het afsluiten van de server, zonder mp4-remux. */
 export const stop = (o) => zending.stop(o);
 /** De opname is klaar: lees tot het eind, laat ffmpeg spoelen, stop. */

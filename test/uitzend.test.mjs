@@ -2,15 +2,15 @@
 // duwt hem in één ffmpeg naar een bestand, een lokale RTMP-ontvanger of udp op 127.0.0.1 (OBS).
 // Nooit een echte dienst: elke ontvanger hier is een ffmpeg op deze machine, elke map een mkdtemp.
 //
-// Draai met: node test/uitzend.test.mjs                          (P en S, ~25 s)
+// Draai met: node test/uitzend.test.mjs                          (P, S en R, ~45 s)
 //            VARVE_TEST_ECHTETIJD=1 node test/uitzend.test.mjs   (+ E1-E6 in echte tijd, ~75 s extra)
 //
 // P = puur (geen ffmpeg), S = met ffmpeg maar sneller dan echte tijd gevoerd, E = echte tijd (H11:
 // traag en gevoelig voor load, daarom niet standaard). Een regel '  -- …' is een notitie of een
 // check die hier niet kon draaien; alles.mjs telt die als "overgeslagen", nooit stil groen.
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname, isAbsolute } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { createSocket } from 'node:dgram';
@@ -92,6 +92,24 @@ const grootsteKeyAfstand = (pad) => {
   return { aantal: k.length, max: m };
 };
 
+/** Stilte met één luide stoot van 0,2 s op `op` s (s16le, 48 kHz, stereo): zo zie je waar de golf valt. */
+const stootPcm = (sec, op) => spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', `aevalsrc='if(between(t,${op},${op + 0.2}),0.9*sin(2*PI*440*t),0)':s=48000:d=${sec}`,
+  '-ac', '2', '-f', 's16le', '-'], { maxBuffer: 1 << 28 }).stdout;
+/**
+ * Waar wordt de stoot zichtbaar? De gemiddelde helderheid (YAVG) van een strook van 100 px rond het midden, per
+ * beeld: in stilte is de golf daar een streep, bij de stoot een vol vlak (gemeten: zwart 16 -> 88, de plaat 31 -> 51
+ * bij 2 fps). Geeft `basis` (de mediaan vóór 2,5 s) en de tijd van het eerste beeld dat er meer dan 8 van afwijkt.
+ */
+function stootZichtbaar(pad) {
+  const r = spawnSync('ffprobe', ['-v', 'error', '-f', 'lavfi', `movie=${pad},crop=1280:100:0:310,signalstats`, '-show_entries', 'frame=pts_time:frame_tags=lavfi.signalstats.YAVG',
+    '-of', 'csv=p=0'], { encoding: 'utf8', maxBuffer: 1 << 26 });
+  const rij = (r.stdout || '').trim().split('\n').map((l) => l.split(',').map(Number)).filter(([t, y]) => Number.isFinite(t) && Number.isFinite(y));
+  const voor = rij.filter(([t]) => t < 2.5).map(([, y]) => y).sort((a, b) => a - b);
+  if (!voor.length) return { t: null, basis: null, rij };
+  const basis = voor[Math.floor(voor.length / 2)];
+  return { t: rij.find(([, y]) => Math.abs(y - basis) > 8)?.[0] ?? null, basis, rij };
+}
+
 /** PCM zoals de opnemer hem stuurt: s16le, 48 kHz, stereo. */
 const pcm = (sec) => spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=f=440:r=48000', '-ac', '2', '-t', String(sec), '-f', 's16le', '-'],
   { maxBuffer: 1 << 28 }).stdout;
@@ -99,10 +117,11 @@ const pcm = (sec) => spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 's
 /**
  * Een gefragmenteerde mp4 met de cadans van Clay's Chrome (H2): een keyframe en een fragment per
  * 101 beelden (3,37 s bij 30 fps). Geeft { init, frags: [{ buf, eind }] } met `eind` in seconden.
+ * `fps`/`gop` anders: Chrome's fps varieert (29,07 gemeten), en -g telt beelden, geen seconden.
  */
-function fmp4(codecA) {
-  const buf = spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=1280x720:r=30', '-f', 'lavfi', '-i', 'sine=r=48000', '-t', '12',
-    '-c:v', 'libx264', '-preset', 'veryfast', '-g', '101', '-keyint_min', '101', '-sc_threshold', '0', '-pix_fmt', 'yuv420p',
+function fmp4(codecA, { fps = 30, gop = 101 } = {}) {
+  const buf = spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', `testsrc2=s=1280x720:r=${fps}`, '-f', 'lavfi', '-i', 'sine=r=48000', '-t', '12',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-g', String(gop), '-keyint_min', String(gop), '-sc_threshold', '0', '-pix_fmt', 'yuv420p',
     '-c:a', codecA, '-ac', '2', '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', '-'], { maxBuffer: 1 << 28 }).stdout;
   const bx = U.boxen(buf);
   const moov = bx.find((b) => b.type === 'moov');
@@ -110,7 +129,7 @@ function fmp4(codecA) {
   const moofs = bx.filter((b) => b.type === 'moof');
   // ffmpeg zet aan het eind een mfra (index); Chrome's MediaRecorder niet: de fragmenten stoppen ervóór.
   const staart = bx.find((b) => b.type === 'mfra')?.begin ?? buf.length;
-  const frags = moofs.map((m, i) => ({ buf: buf.subarray(m.begin, i + 1 < moofs.length ? moofs[i + 1].begin : staart), eind: Math.min(12, ((i + 1) * 101) / 30) }));
+  const frags = moofs.map((m, i) => ({ buf: buf.subarray(m.begin, i + 1 < moofs.length ? moofs[i + 1].begin : staart), eind: Math.min(12, ((i + 1) * gop) / fps) }));
   return { buf, init, frags, boxen: bx };
 }
 
@@ -143,16 +162,22 @@ try {
   {
     const stil = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'audio', beeld: 'zwart', fps: 2 }, { uit: '/u/set-x.uitzend.flv' });
     const s = stil.join(' ');
+    const GELIJK = 'setpts=PTS-4/(FR*TB),trim=start=0';             // review 1, punt 2: showwaves loopt 4 beelden achter
     ok('P1 stil/zwart fps 2: s16le 48 kHz stereo uit pipe:0, showwaves rate=2, -g 4', s.includes('-f s16le -ar 48000 -ac 2 -i pipe:0') && /showwaves=[^ ]*rate=2/.test(s) && /colors=black/.test(s) && s.includes('-g 4'));
+    ok(`P1 zwart: direct na showwaves "${GELIJK}"`, s.includes(`colors=black,${GELIJK},format=yuv420p[v]`));
     ok('P1 geen -re, geen -loop, geen -y (overschrijven kan niet); eindigt op -f flv <uit>', !stil.includes('-re') && !stil.includes('-loop') && !stil.includes('-y') && stil.includes('-n') && eindigtOp(stil, ['-f', 'flv', '/u/set-x.uitzend.flv']));
     const golf = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'audio', beeld: 'golf', fps: 15 }, { uit: 'u.flv' }).join(' ');
-    ok('P2 stil/golf fps 15: rate=15, mode=cline, -g 30', /showwaves=[^ ]*rate=15/.test(golf) && golf.includes('mode=cline') && golf.includes('-g 30'));
+    ok('P2 stil/golf fps 15: rate=15, mode=cline, -g 30, en de golf gelijk met het geluid', /showwaves=[^ ]*rate=15/.test(golf) && golf.includes('mode=cline') && golf.includes('-g 30')
+      && golf.includes(`colors=white,${GELIJK},format=yuv420p[v]`));
     const png = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'audio', beeld: 'plaat-donker.png', fps: 2 }, { uit: 'u.flv' }).join(' ');
-    ok('P3 stil/png: movie=beelden/<naam>.png met de golf erover', png.includes('movie=beelden/plaat-donker.png') && png.includes('overlay=shortest=1'));
+    ok('P3 stil/png: movie=beelden/<naam>.png met de golf erover, ook gelijk met het geluid', png.includes('movie=beelden/plaat-donker.png') && png.includes('overlay=shortest=1')
+      && png.includes(`colors=white@0.5,${GELIJK}[w]`));
     const her = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'hercodeer', bitrate: '2500k' }, { uit: 'u.flv' });
     const hs = her.join(' ');
     ok('P4 beeld/hercodeer: -hwaccel videotoolbox, h264_videotoolbox, -g 60, geluid -c:a copy, nergens aac als encoder',
       hs.includes('-hwaccel videotoolbox') && hs.includes('-c:v h264_videotoolbox') && hs.includes('-g 60') && hs.includes('-c:a copy') && !/-c:a aac/.test(hs) && hs.includes('-bufsize 5000k'));
+    const fk = her.indexOf('-force_key_frames');
+    ok('P4 een keyframe op elke 2 s in SECONDEN (-force_key_frames expr:gte(t,n_forced*2), één argv-element): -g telt beelden', fk > 0 && her[fk + 1] === 'expr:gte(t,n_forced*2)');
     const kop = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'kopie' }, { uit: 'u.flv' }).join(' ');
     ok('P5 beeld/kopie: -c copy', kop.includes('-map 0:v:0 -map 0:a:0 -c copy'));
     const rt = U.bouwArgs({ naam: 't', soort: 'rtmp', bron: 'audio', url: 'rtmp://127.0.0.1:1935/live/test' }, { uit: 'rtmp://127.0.0.1:1935/live/test' });
@@ -168,6 +193,8 @@ try {
 
     ok('P8 maskeer: rtmp://host/app/<sleutel> -> ****', !U.maskeer('rtmp://a.example/live2/geheim123').includes('geheim123') && U.maskeer('rtmp://a.example/live2/geheim123').includes('rtmp://a.example/live2/'));
     ok('P8 maskeer: ?key=… en user:pw@ weg', !U.maskeer('srt://x:9000?key=abc&b=1').includes('abc') && !U.maskeer('rtmp://u:pw@h/x').includes('pw'));
+    const zonderPad = U.maskeer('rtmp://u:pw@127.0.0.1:1935/live/test?key=abc', { pad: false });
+    ok(`P8 maskeer met pad: false laat het pad staan, niet de gebruiker of ?key= ("${zonderPad}")`, zonderPad.includes('/live/test') && !zonderPad.includes('pw') && !zonderPad.includes('abc'));
 
     // P9: het lokaal-slot (G3, H12, W3)
     const t = (soort, url) => U.toegestaan({ naam: 't', soort, bron: 'audio', url });
@@ -180,6 +207,9 @@ try {
     ok(`P9 slot dicht met "U1" in de fout voor ${dicht.length} andere${fout.length ? ` (open: ${fout.map((x) => x[1]).join(' ')})` : ''}`, !fout.length);
     const spatie = t('rtmp', ' rtmp://127.0.0.1/x'), tab = t('rtmp', 'rtmp://127.0.0.1/x\t');
     ok('P9 niet genormaliseerd (spatie vooraan, tab achteraan) -> dicht met "niet genormaliseerd"', !spatie.ok && /niet genormaliseerd/.test(spatie.fout) && !tab.ok && /niet genormaliseerd/.test(tab.fout));
+    const lokaal = t('rtmp', ' rtmp://127.0.0.1:1935/live/test'), ver = t('rtmp', ' rtmp://a.example/live2/geheim123');
+    ok(`P9 de fout bij een lokale url toont het pad letterlijk ("${lokaal.fout}"), bij een andere niet`,
+      /schrijf hem precies zo: rtmp:\/\/127\.0\.0\.1:1935\/live\/test$/.test(lokaal.fout || '') && /niet genormaliseerd/.test(ver.fout || '') && !(ver.fout || '').includes('geheim123'));
     ok('P9 G8: een lokaal beeld-doel mag (v1: alles is lokaal), een niet-lokaal beeld-doel niet',
       U.toegestaan({ soort: 'udp', bron: 'video', url: 'udp://127.0.0.1:25596?pkt_size=1316' }).ok && !U.toegestaan({ soort: 'rtmp', bron: 'video', url: 'rtmp://a.rtmp.youtube.com/live2' }).ok);
 
@@ -249,6 +279,8 @@ try {
     const testDoelen = [
       { naam: 'proef', soort: 'bestand', bron: 'audio', beeld: 'zwart', fps: 2 },
       { naam: 'golf', soort: 'bestand', bron: 'audio', beeld: 'golf', fps: 2 },
+      { naam: 'golf10', soort: 'bestand', bron: 'audio', beeld: 'golf', fps: 10 },
+      { naam: 'plaat', soort: 'bestand', bron: 'audio', beeld: 'plaat-donker.png', fps: 2 },
       { naam: 'rtmp-test', soort: 'rtmp', bron: 'audio', beeld: 'golf', url: `rtmp://127.0.0.1:${rtmpPoort}/live/test` },
       { naam: 'udp-test', soort: 'udp', bron: 'audio', url: `udp://127.0.0.1:${udpPoort}?pkt_size=1316` },
       { naam: 'beeld', soort: 'bestand', bron: 'video' },
@@ -262,11 +294,11 @@ try {
     // S14: stil -> bestand, 6 s, met remux naar mp4 (W6)
     {
       const id = await nieuweOpname();
-      const s = await U.start({ ...basis, id, doel: 'proef', url: 'rtmp://a.rtmp.youtube.com/live2/x', door: 'localhost:8777' });
+      const s = await U.start({ id, doel: 'proef', url: 'rtmp://a.rtmp.youtube.com/live2/x', door: 'localhost:8777' }, basis);
       ok('S14 start stil -> bestand: ok, uitgang in uitMap (buiten opnames/), een url in de body wordt genegeerd (G2)', s.ok && s.soort === 'bestand' && s.uit?.startsWith(uitMap) && s.uit.endsWith(`set-${id}.uitzend.flv`));
       ok('S14 stand: bezig, door = de Host van de start (H16), ffmpeg loopt', U.stand().bezig && U.stand().door === 'localhost:8777' && U.stand().ffmpeg === 'loopt');
       const t0 = Date.now();
-      const sl = await voer({ id, pcmBuf: p6, sec: 6, tussen: 400 });
+      const sl = await voer({ id, pcmBuf: p6, sec: 6, tussen: 250 });
       const k = await U.opnameKlaar(id);
       const st = U.stand();
       ok(`S14 opname dicht (${r2(sl.duur)} s) en opnameKlaar ok; ffmpeg 'uit', niet meer bezig (${((Date.now() - t0) / 1000).toFixed(1)} s)`, sl.ok && sl.duur === 6 && k.ok && st.ffmpeg === 'uit' && !st.bezig);
@@ -278,7 +310,7 @@ try {
       ok('S14 geen uitzendbestand in opnames/ (G9)', !readdirSync(opnames).some((n) => /uitzend/.test(n)));
       // Nog een keer dezelfde opname: een vrije naam, niets overschreven (H8)
       const id2 = id;
-      const s2 = await U.start({ ...basis, id: id2, doel: 'proef' });
+      const s2 = await U.start({ id: id2, doel: 'proef' }, basis);
       ok('S14 dezelfde opname nog eens -> set-<id>.uitzend-2.flv (H8)', s2.ok && s2.uit.endsWith(`set-${id}.uitzend-2.flv`));
       await U.stop();
     }
@@ -289,9 +321,9 @@ try {
       const uit = join(tmp, 'rtmp-ontvangen.flv');
       const o = ontvanger(['-listen', '1', '-timeout', '15', '-i', `rtmp://127.0.0.1:${rtmpPoort}/live/test`, '-c', 'copy', uit]);
       await wacht(1000);
-      const s = await U.start({ ...basis, id, doel: 'rtmp-test' });
+      const s = await U.start({ id, doel: 'rtmp-test' }, basis);
       ok('S15 start stil -> rtmp://127.0.0.1 ok; geen url in stand()', s.ok && s.soort === 'rtmp' && !JSON.stringify(U.stand()).includes('rtmp://'));
-      await voer({ id, pcmBuf: p6, sec: 6, tussen: 400 });
+      await voer({ id, pcmBuf: p6, sec: 6, tussen: 250 });
       await U.opnameKlaar(id);
       const r = await wachtOp(o, 8000);
       const p = probeJson(uit);
@@ -305,10 +337,10 @@ try {
     {
       const id = await nieuweOpname();
       const uit = join(tmp, 'udp-ontvangen.ts');
-      const o = ontvanger(['-i', `udp://127.0.0.1:${udpPoort}?timeout=5000000`, '-c', 'copy', uit]);
+      const o = ontvanger(['-i', `udp://127.0.0.1:${udpPoort}?timeout=3000000`, '-c', 'copy', uit]);   // stopt 3 s na het laatste pakket
       await wacht(700);
-      const s = await U.start({ ...basis, id, doel: 'udp-test' });
-      await voer({ id, pcmBuf: p6, sec: 6, tussen: 400 });
+      const s = await U.start({ id, doel: 'udp-test' }, basis);
+      await voer({ id, pcmBuf: p6, sec: 6, tussen: 250 });
       await U.opnameKlaar(id);
       await wachtOp(o, 9000);
       const p = probeJson(uit);
@@ -320,7 +352,7 @@ try {
     {
       const id = await nieuweOpname();
       let s;
-      await voer({ id, pcmBuf: p6, sec: 6, tussen: 400, sluiten: false, elkeSeconde: async (n) => { if (n === 3) s = await U.start({ ...basis, id, doel: 'proef' }); } });
+      await voer({ id, pcmBuf: p6, sec: 6, tussen: 250, sluiten: false, elkeSeconde: async (n) => { if (n === 3) s = await U.start({ id, doel: 'proef' }, basis); } });
       await O.sluit(opnames, id);
       await U.opnameKlaar(id);
       const ad = duurVan(U.stand().uit?.mp4 || '/x', 'a:0');
@@ -333,14 +365,23 @@ try {
     else {
       const id = await nieuweOpname();
       await O.voegVideoToe(opnames, id, 'mp4', vAac.init);
-      const s = await U.start({ ...basis, id, doel: 'beeld' });
+      const s = await U.start({ id, doel: 'beeld' }, basis);
       ok('S18 start beeld/hercodeer -> bestand: ok, met de I78-waarschuwing (G8)', s.ok && s.bron === 'video' && s.waarschuwingen.some((w) => /I78/.test(w)));
-      await voer({ id, pcmBuf: p12, sec: 12, tussen: 400, video: vAac });
+      await voer({ id, pcmBuf: p12, sec: 12, tussen: 250, video: vAac });
       await U.opnameKlaar(id);
       const st = U.stand();
       const vd = duurVan(st.uit?.mp4 || '/x', 'v:0'), kf = grootsteKeyAfstand(st.uit?.mp4 || '/x');
-      ok(`S18 mp4 speelbaar: beeld ${r2(vd)} s (12 ± 0,6), ${kf.aantal} keyframes, grootste afstand ${r2(kf.max)} s (≤ 2,1)`, Math.abs(vd - 12) <= 0.6 && kf.aantal >= 5 && kf.max <= 2.1);
+      ok(`S18 mp4 speelbaar: beeld ${r2(vd)} s (12 ± 0,6), ${kf.aantal} keyframes, grootste afstand ${r2(kf.max)} s (≤ 2,05)`, Math.abs(vd - 12) <= 0.6 && kf.aantal >= 5 && kf.max <= 2.05);
       ok(`S18 achterstandTekst noemt de cadans van Chrome ("${st.achterstandTekst}")`, /beeld komt per 3,4 s/.test(st.achterstandTekst));
+      // Review 1, punt 3: Chrome's fps varieert (29,07 gemeten) en -g telt beelden. Op 25 fps gaf -g 60 alleen 2,4 s.
+      const v25 = fmp4('aac', { fps: 25, gop: 85 });
+      const id25 = await nieuweOpname();
+      await O.voegVideoToe(opnames, id25, 'mp4', v25.init);
+      const s25 = await U.start({ id: id25, doel: 'beeld' }, basis);
+      await voer({ id: id25, pcmBuf: p12, sec: 12, tussen: 200, video: v25 });
+      await U.opnameKlaar(id25);
+      const kf25 = grootsteKeyAfstand(U.stand().uit?.mp4 || '/x');
+      ok(`S18 ook op 25 fps (keyframe per 85 beelden): ${kf25.aantal} keyframes, grootste afstand ${r2(kf25.max)} s (≤ 2,05; met alleen -g 60: 2,4)`, s25.ok && kf25.aantal >= 6 && kf25.max <= 2.05);
     }
     {
       const id = await nieuweOpname();
@@ -348,8 +389,8 @@ try {
       const o = ontvanger(['-listen', '1', '-timeout', '15', '-i', `rtmp://127.0.0.1:${kopiePoort}/live/test`, '-c', 'copy', uit]);
       await wacht(1000);
       await O.voegVideoToe(opnames, id, 'mp4', vAac.init);
-      const s = await U.start({ ...basis, id, doel: 'kopie-rtmp' });
-      await voer({ id, pcmBuf: p12, sec: 12, tussen: 400, video: vAac });
+      const s = await U.start({ id, doel: 'kopie-rtmp' }, basis);
+      await voer({ id, pcmBuf: p12, sec: 12, tussen: 250, video: vAac });
       await U.opnameKlaar(id);
       await wachtOp(o, 8000);
       const vd = duurVan(uit, 'v:0');
@@ -363,9 +404,9 @@ try {
       const id = await nieuweOpname();
       await O.voegToe(opnames, id, p6.subarray(0, 192000), 0);
       await O.voegVideoToe(opnames, id, 'mp4', vOpus.init);
-      const r = await U.start({ ...basis, id, doel: 'beeld-rtmp', wachtMp4: 1000 });
+      const r = await U.start({ id, doel: 'beeld-rtmp' }, { ...basis, wachtMp4: 1000 });
       ok(`S20 Opus + rtmp -> geweigerd met "Opus" (${r.fout})`, !r.ok && /Opus/.test(r.fout || ''));
-      const b = await U.start({ ...basis, id, doel: 'beeld', wachtMp4: 1000 });
+      const b = await U.start({ id, doel: 'beeld' }, { ...basis, wachtMp4: 1000 });
       ok('S20 Opus + bestand -> mag, met een waarschuwing over Opus', b.ok && b.waarschuwingen.some((w) => /Opus/.test(w)));
       U._reset();
     }
@@ -374,8 +415,8 @@ try {
     {
       const a = await nieuweOpname(), b = await nieuweOpname();
       await voer({ id: a, pcmBuf: p6, sec: 6, tussen: 0 });
-      await U.start({ ...basis, id: b, doel: 'proef' });
-      await voer({ id: b, pcmBuf: p6, sec: 6, tussen: 400 });
+      await U.start({ id: b, doel: 'proef' }, basis);
+      await voer({ id: b, pcmBuf: p6, sec: 6, tussen: 250 });
       await U.opnameKlaar(b);
       const da = readFileSync(join(opnames, `set-${a}.wav`)), db = readFileSync(join(opnames, `set-${b}.wav`));
       ok('S21 WAV met en zonder uitzending: dezelfde bytes vanaf de kop (G4)', Buffer.compare(da.subarray(80), db.subarray(80)) === 0 && da.length === db.length);
@@ -384,7 +425,7 @@ try {
     // S22: ffmpeg sterft midden in een opname: de opname loopt door
     {
       const id = await nieuweOpname();
-      const s = await U.start({ ...basis, id, doel: 'proef' });
+      const s = await U.start({ id, doel: 'proef' }, basis);
       let pid = null;
       const sl = await voer({ id, pcmBuf: p6, sec: 6, tussen: 300, elkeSeconde: async (n) => { if (n === 2) { pid = U._pid(); process.kill(pid, 'SIGKILL'); await wacht(400); } } });
       const st = U.stand();
@@ -400,7 +441,7 @@ try {
       await O.voegToe(opnames, id, p6.subarray(0, 192000), 0);
       const nieuw = join(tmp, 'bestaat-nog-niet', 'uitzend');
       const t0 = Date.now();
-      const r = await U.start({ ...basis, uitzendMap: nieuw, id, doel: 'proef', ffmpeg: '/bestaat/niet' });
+      const r = await U.start({ id, doel: 'proef' }, { ...basis, uitzendMap: nieuw, ffmpeg: '/bestaat/niet' });
       await wacht(Math.max(0, 1000 - (Date.now() - t0)));
       ok(`S23 ffmpeg '/bestaat/niet' -> ok:false of ffmpeg 'weg' binnen 1 s (${r.fout || U.stand().ffmpeg})`, (!r.ok && /ENOENT|start niet/.test(r.fout)) || U.stand().ffmpeg === 'weg');
       ok('S23 de uitzendmap is gemaakt (cwd van het kind)', existsSync(nieuw));
@@ -410,7 +451,7 @@ try {
     // S24: stoppen (G6)
     {
       const id = await nieuweOpname();
-      await U.start({ ...basis, id, doel: 'proef' });
+      await U.start({ id, doel: 'proef' }, basis);
       await voer({ id, pcmBuf: p6, sec: 2, tussen: 400, sluiten: false });
       const pid = U._pid();
       const t0 = Date.now();
@@ -421,7 +462,7 @@ try {
       ok('S24 tweemaal stop() geeft ok', (await U.stop()).ok);
       await O.sluit(opnames, id);
       const id2 = await nieuweOpname();
-      await U.start({ ...basis, id: id2, doel: 'proef' });
+      await U.start({ id: id2, doel: 'proef' }, basis);
       await voer({ id: id2, pcmBuf: p6, sec: 1, tussen: 200, sluiten: false });
       const pid2 = U._pid();
       process.kill(pid2, 'SIGSTOP');
@@ -436,23 +477,32 @@ try {
 
     // S25: weigeringen
     {
-      const geen = await U.start({ ...basis, id: '20991231-235959', doel: 'proef' });
+      const geen = await U.start({ id: '20991231-235959', doel: 'proef' }, basis);
       ok(`S25 zonder opname -> "${geen.fout}" (G5)`, !geen.ok && /geen opname/.test(geen.fout));
       const id = await nieuweOpname();
       await O.voegToe(opnames, id, p6.subarray(0, 192000), 0);
-      const onb = await U.start({ ...basis, id, doel: 'youtube' });
+      const onb = await U.start({ id, doel: 'youtube' }, basis);
       ok('S25 onbekend doel -> ok:false', !onb.ok && /onbekend doel/.test(onb.fout));
-      const pad = await U.start({ ...basis, id: '../../etc', doel: 'proef' });
+      const pad = await U.start({ id: '../../etc', doel: 'proef' }, basis);
       ok('S25 id ../../etc -> ok:false (G1)', !pad.ok && /id/.test(pad.fout));
-      const zv = await U.start({ ...basis, id, doel: 'beeld', wachtMp4: 300 });
+      const zv = await U.start({ id, doel: 'beeld' }, { ...basis, wachtMp4: 300 });
       ok(`S25 beeld-doel zonder mp4 (wachtMp4 300) -> "${zv.fout}"`, !zv.ok && /geen videobestand/.test(zv.fout));
       const lang = await nieuweOpname();
       await voer({ id: lang, pcmBuf: p12, sec: 11, tussen: 0, sluiten: false });
       await O.voegVideoToe(opnames, lang, 'mp4', vAac.init);
-      const laat = await U.start({ ...basis, id: lang, doel: 'beeld' });
+      const laat = await U.start({ id: lang, doel: 'beeld' }, basis);
       ok('S25 beeld-doel bij bronS > 10 s -> ok:false (v1: video start samen met de opname)', !laat.ok && /10 s/.test(laat.fout));
-      const een = await U.start({ ...basis, id, doel: 'proef', door: 'a' });
-      const twee = await U.start({ ...basis, id, doel: 'proef' });
+      // Review 1, punt 4: de browser kiest webm, en het eerste videostuk komt pas na de start (start samen met de opname).
+      const wId = await nieuweOpname();
+      const tW = Date.now();
+      const wP = U.start({ id: wId, doel: 'beeld' }, { ...basis, wachtMp4: 3000 });
+      await wacht(300);
+      await O.voegVideoToe(opnames, wId, 'webm', Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+      const w = await wP;
+      const dW = (Date.now() - tW) / 1000;
+      ok(`S25 webm komt ná de start (0,3 s): "${w.fout}" na ${r2(dW)} s (≤ 1; niet de hele wachtMp4 van 3 s)`, !w.ok && /webm/.test(w.fout || '') && dW <= 1);
+      const een = await U.start({ id, doel: 'proef', door: 'a' }, basis);
+      const twee = await U.start({ id, doel: 'proef' }, basis);
       ok('S25 tweede start -> "er loopt al een uitzending"; door blijft "a"', een.ok && !twee.ok && twee.fout === 'er loopt al een uitzending' && U.stand().door === 'a');
       U._reset();
     }
@@ -460,7 +510,7 @@ try {
     // S26: bron stil (tabblad dicht of hangt)
     {
       const id = await nieuweOpname();
-      const s = await U.start({ ...basis, id, doel: 'udp-test', stilNa: 500, stopNa: 1200, pollMs: 100 });
+      const s = await U.start({ id, doel: 'udp-test' }, { ...basis, stilNa: 500, stopNa: 1200, pollMs: 100 });
       await voer({ id, pcmBuf: p6, sec: 2, tussen: 100, sluiten: false });
       const t0 = Date.now();
       await wacht(800);
@@ -468,6 +518,37 @@ try {
       await wacht(Math.max(0, 1500 - (Date.now() - t0)));
       ok(`S26 na 0,8 s zonder groei: fout "${f}"; na 1,5 s niet meer bezig (${U.stand().bezig ? 'nog bezig' : 'gestopt'})`, s.ok && f === 'bron stil' && !U.stand().bezig);
       await O.sluit(opnames, id);
+    }
+
+    // S27: de golf valt op het geluid (review 1, punt 2). Een stoot op 3,0 s moet op 3,0 s in beeld staan; zonder
+    //      setpts kwam hij op 5,0 s (2 fps) of 3,4 s (10 fps). Bij 2 fps pint dit ook de "4 beelden" vast.
+    const stoot = stootPcm(6, 3);
+    for (const doel of ['golf', 'golf10']) {
+      const id = await nieuweOpname();
+      const s = await U.start({ id, doel }, basis);
+      await voer({ id, pcmBuf: stoot, sec: 6, tussen: 0 });
+      await U.opnameKlaar(id);
+      const z = stootZichtbaar(U.stand().uit?.mp4 || '/x');
+      ok(`S27 ${doel}: de stoot op 3,0 s staat in beeld op ${z.t === null ? '-' : r2(z.t)} s (3,0 ± 0,15)`, s.ok && z.t !== null && Math.abs(z.t - 3) <= 0.15);
+    }
+
+    // S28: stil met een png-plaat, echt door ffmpeg (review 1, punt 5): movie, loop en overlay breken stil bij een update.
+    {
+      mkdirSync(join(uitzendMap, 'beelden'), { recursive: true });
+      spawnSync('ffmpeg', ['-v', 'error', '-n', '-f', 'lavfi', '-i', 'color=c=0x202020:s=1280x720', '-frames:v', '1', join(uitzendMap, 'beelden', 'plaat-donker.png')]);
+      const id = await nieuweOpname();
+      const s = await U.start({ id, doel: 'plaat' }, basis);
+      await voer({ id, pcmBuf: stoot, sec: 6, tussen: 0 });
+      await U.opnameKlaar(id);
+      const st = U.stand();
+      const mp4 = st.uit?.mp4 || '/x';
+      const p = probeJson(mp4);
+      const ad = duurVan(mp4, 'a:0');
+      ok(`S28 stil/png -> bestand: h264 1280x720 + aac, geluid ${r2(ad)} s (6 ± 0,3)${s.ok ? '' : ` [${s.fout}]`}`, s.ok && stroom(p, 'video').codec_name === 'h264'
+        && stroom(p, 'video').width === 1280 && stroom(p, 'video').height === 720 && stroom(p, 'audio').codec_name === 'aac' && Math.abs(ad - 6) <= 0.3);
+      const z = stootZichtbaar(mp4);
+      ok(`S28 png: de plaat staat in beeld (helderheid in stilte ${r2(z.basis)}; zwart is 16) en de stoot op ${z.t === null ? '-' : r2(z.t)} s (3,0 ± 0,15)`,
+        z.basis > 30 && z.t !== null && Math.abs(z.t - 3) <= 0.15);
     }
   }
 
@@ -480,7 +561,7 @@ try {
       await O.voegToe(opnames, id, p6.subarray(0, 192000), 0);
       const tS = Date.now();
       let startDuur = null;
-      const st = U.start({ ...basis, id, doel: 'beeld', wachtMp4: 3000 }).then((r) => { startDuur = (Date.now() - tS) / 1000; return r; });
+      const st = U.start({ id, doel: 'beeld' }, { ...basis, wachtMp4: 3000 }).then((r) => { startDuur = (Date.now() - tS) / 1000; return r; });
       await wacht(200);
       const t0 = Date.now();
       const sp = await U.stop();
@@ -498,7 +579,7 @@ try {
       const fds = () => readdirSync('/dev/fd').length;
       const voor = fds();
       const rs = [];
-      for (let i = 0; i < 5; i++) rs.push(await U.start({ ...basis, uitMap: join(tmp, 'een-bestand', 'uit'), id, doel: 'proef' }));
+      for (let i = 0; i < 5; i++) rs.push(await U.start({ id, doel: 'proef' }, { ...basis, uitMap: join(tmp, 'een-bestand', 'uit') }));
       const na = fds();
       ok(`R3 vijf starts die op mkdir stuklopen (ENOTDIR): ok:false, open bestanden ${voor} -> ${na}`, rs.every((r) => !r.ok) && na <= voor);
       await O.sluit(opnames, id);
@@ -510,9 +591,79 @@ try {
       const link = join(tmp, 'naar-opnames');
       spawnSync('ln', ['-s', opnames, link]);
       const voor = readdirSync(opnames).length;
-      const r = await U.start({ ...basis, uitMap: join(link, 'uit'), id, doel: 'proef' });
+      const r = await U.start({ id, doel: 'proef' }, { ...basis, uitMap: join(link, 'uit') });
       ok(`R7 uitMap via een link in opnames/ -> "${r.fout}"; opnames/ ongewijzigd`, !r.ok && /G9/.test(r.fout || '') && readdirSync(opnames).length === voor);
       await O.sluit(opnames, id);
+    }
+    // R8 (review 1, punt 1): een relatieve uitMap. Node toetste vanuit zijn eigen map, ffmpeg schreef vanuit de
+    //    uitzendmap; met '../opnames' kwam de flv zo IN opnames/. Nu toetsen en schrijven ze hetzelfde absolute pad.
+    for (const [rel, map] of [['uit-rel', ['x']], ['../opnames', ['x', 'y']]]) {
+      const id = await nieuweOpname();
+      await O.voegToe(opnames, id, p6.subarray(0, 192000), 0);
+      const cwd = process.cwd();
+      const nodeMap = join(tmp, ...map);
+      mkdirSync(nodeMap, { recursive: true });
+      const voor = readdirSync(opnames).length;
+      let r, st;
+      try {
+        process.chdir(nodeMap);
+        r = await U.start({ id, doel: 'proef' }, { ...basis, uitMap: rel });
+        await O.voegToe(opnames, id, p6.subarray(192000, 384000), 48000);
+        await O.sluit(opnames, id);
+        await U.opnameKlaar(id);
+        st = U.stand();
+      } finally { process.chdir(cwd); }
+      const verwacht = join(realpathSync(nodeMap), rel);
+      const flv = st?.uit?.flv || '', mp4 = st?.uit?.mp4 || '';
+      ok(`R8 uitMap '${rel}' vanuit ${map.join('/')}: flv absoluut in ${verwacht.slice(realpathSync(tmp).length)}, mp4 ernaast, niets in opnames/ of in de uitzendmap`,
+        r?.ok && isAbsolute(flv) && dirname(flv) === verwacht && existsSync(flv) && dirname(mp4) === verwacht && existsSync(mp4)
+        && readdirSync(opnames).length === voor && !existsSync(join(uitzendMap, 'uit-rel')) && !readdirSync(opnames).some((n) => /uitzend/.test(n)));
+    }
+    // R9 (review 1, punt 6): uit het verzoek leest start() alleen id, doel, beeldstand en door. De route in stap 3
+    //    mag de body dus doorgeven: paden, ffmpeg en een argv-haak komen alleen uit de instellingen van de server.
+    {
+      const id = await nieuweOpname();
+      await O.voegToe(opnames, id, p6.subarray(0, 192000), 0);
+      const vreemd = join(tmp, 'vreemd');
+      const r = await U.start({ id, doel: 'proef', ffmpeg: '/bestaat/niet', opnames: vreemd, uitzendMap: vreemd, uitMap: opnames,
+        url: 'rtmp://a.rtmp.youtube.com/live2/x', _argsHaak: () => ['-version'] }, basis);
+      const st = U.stand();
+      ok(`R9 ffmpeg, opnames, uitzendMap, uitMap, url en _argsHaak in het verzoek: genegeerd (ffmpeg ${st.ffmpeg}, uitgang in uitMap, ${existsSync(vreemd) ? 'vreemde map gemaakt' : 'geen vreemde map'})`,
+        r.ok && st.ffmpeg === 'loopt' && (st.uit?.flv || '').startsWith(uitMap) && !existsSync(vreemd));
+      await U.stop({ snel: true });
+      await O.sluit(opnames, id);
+    }
+    // R10 (review 1, punt 7): opnameKlaar en stop() tegelijk, terwijl er nog ongeschreven geluid ligt. Vroeger liep
+    //     _leeg dan zonder pauze rondjes tot ffmpeg dicht was: Node op ~100 % (gemeten 35 ms CPU in 34 ms), nu ~1 ms.
+    {
+      let mis = 0, cpu = 0, wand = 0;
+      const fouten = [];
+      for (let i = 0; i < 10; i++) {
+        const id = await nieuweOpname();
+        const s = await U.start({ id, doel: 'udp-test' }, basis);       // udp: geen remux, dus snel
+        await O.voegToe(opnames, id, p6.subarray(0, 3 * 192000), 0);   // 3 s ineens: opnameKlaar heeft nog werk
+        const c0 = process.cpuUsage(), t0 = Date.now();
+        const [k, sp] = await Promise.all([U.opnameKlaar(id), U.stop()]);
+        const c = process.cpuUsage(c0);
+        cpu += (c.user + c.system) / 1000; wand += Date.now() - t0;
+        if (!s.ok || !k.ok || !sp.ok) { mis++; fouten.push(k.fout || sp.fout || s.fout); }
+        await O.sluit(opnames, id);
+      }
+      ok(`R10 opnameKlaar en stop() tegelijk, 10 keer: ${mis} keer ok:false${fouten.length ? ` (${fouten[0]})` : ''}; daarna niet bezig`, mis === 0 && !U.stand().bezig && U._pid() === null);
+      ok(`R10 en intussen geen rondjes zonder pauze: Node ${Math.round(cpu)} ms CPU in ${wand} ms (≤ de helft)`, cpu <= wand / 2);
+    }
+    // R11 (review 1, punt 1): staat de flv niet waar de stand hem verwacht, dan zegt de stand waarom er geen mp4 is.
+    {
+      const id = await nieuweOpname();
+      await O.voegToe(opnames, id, p6.subarray(0, 192000), 0);
+      const elders = join(tmp, 'elders.flv');
+      const r = await U.start({ id, doel: 'proef' }, { ...basis, _argsHaak: (a) => [...a.slice(0, -1), elders] });
+      await O.voegToe(opnames, id, p6.subarray(192000, 384000), 48000);
+      await O.sluit(opnames, id);
+      await U.opnameKlaar(id);
+      const st = U.stand();
+      const w = st.waarschuwingen.find((x) => /geen flv op/.test(x));
+      ok(`R11 geen flv op de verwachte plek -> geen stille stop maar "${w}"`, r.ok && !!w && !st.uit?.mp4);
     }
   }
 
@@ -526,7 +677,7 @@ try {
     // E1: stil -> bestand, 8 s in echte tijd
     {
       const id = await nieuweOpname();
-      await U.start({ ...basis, id, doel: 'proef' });
+      await U.start({ id, doel: 'proef' }, basis);
       const rij = [];
       await voer({ id, pcmBuf: p14, sec: 8, tussen: 1000, sluiten: false, elkeSeconde: async (n) => { if (n === 4 || n === 6 || n === 8) rij.push([n, U.stand().achterstandS, U.stand().uitS]); } });
       const uitS = U.stand().uitS;
@@ -538,7 +689,7 @@ try {
     // E2/E3: ffmpeg hangt (SIGSTOP) 10 s, de opname loopt door (H1)
     for (const [naam, max] of [['E2', 8], ['E3', 1000]]) {
       const id = await nieuweOpname();
-      await U.start({ ...basis, id, doel: 'udp-test', achterstandMax: max });
+      await U.start({ id, doel: 'udp-test' }, { ...basis, achterstandMax: max });
       const rij = [];
       let pid = null, naCont = null, tCont = 0;
       const ref = { na6: null, na10: null };
@@ -576,7 +727,7 @@ try {
     else for (const [naam, haak] of [['E4', null], ['E5', (a) => a.map((x, i) => (x === 'copy' && a[i - 1] === '-c:a' ? 'aac' : x))]]) {
       const id = await nieuweOpname();
       await O.voegVideoToe(opnames, id, 'mp4', vAac.init);
-      const s = await U.start({ ...basis, id, doel: 'beeld', ...(haak ? { _argsHaak: haak } : {}) });
+      const s = await U.start({ id, doel: 'beeld' }, { ...basis, ...(haak ? { _argsHaak: haak } : {}) });
       const rij = [];
       const tStart = Date.now();
       const meet = setInterval(() => rij.push([(Date.now() - tStart) / 1000, U.stand().achterstandS]), 250);
@@ -607,7 +758,7 @@ try {
     {
       doelenJson([{ naam: 'golf15', soort: 'bestand', bron: 'audio', beeld: 'golf', fps: 15 }]);
       const id = await nieuweOpname();
-      await U.start({ ...basis, id, doel: 'golf15' });
+      await U.start({ id, doel: 'golf15' }, basis);
       let cpu = null;
       await voer({ id, pcmBuf: p14, sec: 8, tussen: 1000, sluiten: false, elkeSeconde: async (n) => {
         if (n === 8) {
