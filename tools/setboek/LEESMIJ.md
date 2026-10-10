@@ -10,7 +10,8 @@ Buma/Stemra-lijst. Spoor produceren-uit, stap 2 (10 okt). Leest alleen; schrijft
 
 ```
 K=<kladmap>/avond1; mkdir -p "$K"
-cp "<checkout>/opnames/set-20261010-"*.acties.jsonl "<checkout>/opnames/set-20261011-0"*.acties.jsonl "$K"/ 2>/dev/null
+cp "<checkout>/opnames/set-20261010-"*.acties.jsonl "$K"/
+cp "<checkout>/opnames/set-20261011-0"*.acties.jsonl "$K"/ 2>/dev/null   # de nacht; aparte regel: in zsh breekt een glob zonder treffer de hele cp af
 cp "$(ls -t "<checkout>/media/backups/"library-*.db | head -1)" "$K/library.db"   # optioneel: lengtes (de nieuwste backup: één consistent bestand)
 cp "<checkout>/proef/sessie.json" "$K"/ 2>/dev/null                                                             # optioneel: proefpunten
 taskpolicy -b node tools/setboek/setboek.mjs --dag 20261010 --map "$K" --db "$K/library.db" --proef "$K/sessie.json"
