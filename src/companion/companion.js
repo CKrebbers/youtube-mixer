@@ -30,6 +30,7 @@ const st = {
   mixer: undefined,          // antwoord van GET /api/mixer, { ontbreekt }, { fout }, null (weg); undefined = nog niet gevraagd
   kaart: null,               // GET /api/kaart
   wensen: [],                // GET /api/kaart/wensen
+  wensenEtag: null,          // de ETag van die lijst: zolang er niets veranderde antwoordt de server 304 zonder body
   kandidaten: new Map(),     // sleutel -> kandidaten (wens op `kies`)
   nacht: null,               // GET /api/nacht
   zoek: '', krat: '', filters: [],
@@ -67,14 +68,14 @@ function metTijd(ms) {
   return { signal: c.signal, klaar: () => clearTimeout(id) };
 }
 
-/** { status, ok, j } of een fout (netwerk, tijd op). Zet st.server. */
+/** { status, ok, j, etag } of een fout (netwerk, tijd op). Zet st.server. Bij 304 is `j` null (geen body). */
 async function haal(pad, init = {}) {
   const t = metTijd(WACHT_MS);
   try {
     const r = await fetch(pad, { cache: 'no-store', ...init, signal: t.signal });
-    const j = await r.json().catch(() => null);
+    const j = r.status === 304 ? null : await r.json().catch(() => null);
     zetServer(true);
-    return { status: r.status, ok: r.ok, j };
+    return { status: r.status, ok: r.ok, j, etag: r.headers.get('ETag') };
   } catch (err) {
     zetServer(false);
     throw err;
@@ -165,10 +166,16 @@ function tekenNu() {
 
 async function leesWensenEnNacht() {
   // ?licht=1: zonder track en nummer (de lijst groeit met elke nacht; zie server/kaart.js wensen()).
-  const [w, n] = await Promise.allSettled([haal('/api/kaart/wensen?licht=1'), haal('/api/nacht')]);
-  if (w.status === 'fulfilled' && w.value.ok) {
-    st.wensen = w.value.j?.wensen ?? [];
-    st.kandidaten = L.kandidatenPerSleutel(st.wensen);
+  // If-None-Match: zolang er niets veranderde zegt de server 304 zonder body, en blijft st.wensen
+  // zoals het is (review ronde 2, fix 4: over een hotspot telt elke 5 s de hele lijst op).
+  const wensInit = st.wensenEtag ? { headers: { 'If-None-Match': st.wensenEtag } } : {};
+  const [w, n] = await Promise.allSettled([haal('/api/kaart/wensen?licht=1', wensInit), haal('/api/nacht')]);
+  if (w.status === 'fulfilled' && (w.value.ok || w.value.status === 304)) {
+    if (w.value.status !== 304) {
+      st.wensen = w.value.j?.wensen ?? [];
+      st.wensenEtag = w.value.etag || null;
+      st.kandidaten = L.kandidatenPerSleutel(st.wensen);
+    }
     // Wat de laptop of de nacht intussen deed (zoeken → kies, binnen → klaar): alleen die rijen opnieuw.
     const { rijen, veranderd } = L.pasWensenToe(st.rijen, st.wensen);
     if (veranderd.length) {

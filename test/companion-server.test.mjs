@@ -284,6 +284,32 @@ try {
     && L.kandidatenPerSleutel(lw).get(SP)?.length === 5 && lw.find((w) => w.status === 'klaar').kandidaten === null);
   const { rijen: naLicht } = L.pasWensenToe([{ ...rijYt, binnen: null, wens: { status: 'wacht', fout: null, youtube_id: rijYt.youtube_id } }], lw);
   ok('... en de companion-rij volgt ook met de lichte lijst: klaar', /data-stand="klaar"/.test(L.rijHtml(naLicht[0])));
+
+  // Review ronde 2, fix 4: de lichte lijst met een ETag; zolang er niets verandert 304 zonder body
+  // (de companion peilt elke 5 s, over een hotspot telt de hele lijst anders elke keer op).
+  console.log('\nde lichte wenslijst met een ETag (fix 4): 304 zolang er niets veranderde');
+  const e1 = await fetch(`${H}/api/kaart/wensen?licht=1`);
+  const tag1 = e1.headers.get('etag');
+  const body1 = await e1.text();
+  ok(`?licht=1 geeft een ETag (${tag1})`, e1.status === 200 && /^"[0-9a-f]{16}"$/.test(tag1 ?? '') && JSON.parse(body1).wensen.length === lw.length);
+  const e2 = await fetch(`${H}/api/kaart/wensen?licht=1`, { headers: { 'If-None-Match': tag1 } });
+  const body2 = await e2.text();
+  ok(`opnieuw met If-None-Match: ${e2.status}, lege body (${body2.length} B in plaats van ${body1.length} B), dezelfde ETag`,
+    e2.status === 304 && body2 === '' && e2.headers.get('etag') === tag1);
+  const zwak = await fetch(`${H}/api/kaart/wensen?licht=1`, { headers: { 'If-None-Match': `W/${tag1}` } });
+  const lijst = await fetch(`${H}/api/kaart/wensen?licht=1`, { headers: { 'If-None-Match': `"0000000000000000", ${tag1}` } });
+  ok(`als zwakke ETag (${zwak.status}) of in een lijst (${lijst.status}): 304`, zwak.status === 304 && lijst.status === 304);
+  const ander = await fetch(`${H}/api/kaart/wensen?licht=1`, { headers: { 'If-None-Match': '"0000000000000000"' } });
+  ok(`een andere ETag: ${ander.status} met de hele lichte lijst`, ander.status === 200 && (await ander.json()).wensen.length === lw.length);
+  const vol = await fetch(`${H}/api/kaart/wensen`, { headers: { 'If-None-Match': tag1 } });
+  ok(`zonder ?licht=1 (de laptop): ${vol.status}, geen ETag, de volle lijst zoals altijd`, vol.status === 200 && vol.headers.get('etag') === null
+    && (await vol.json()).wensen.some((w) => w.track));
+  await hPost('/api/kaart/wens', { sleutels: ['yt:eigenlike001'] });
+  const e3 = await fetch(`${H}/api/kaart/wensen?licht=1`, { headers: { 'If-None-Match': tag1 } });
+  const tag3 = e3.headers.get('etag');
+  ok(`na een nieuwe wens met de oude ETag: ${e3.status}, een andere ETag (${tag3}), één wens meer`, e3.status === 200 && !!tag3 && tag3 !== tag1
+    && (await e3.json()).wensen.length === lw.length + 1);
+  ok('... en met die nieuwe ETag weer 304', (await fetch(`${H}/api/kaart/wensen?licht=1`, { headers: { 'If-None-Match': tag3 } })).status === 304);
 } catch (err) {
   ok(`test liep door: ${err.stack || err}`, false);
 } finally {

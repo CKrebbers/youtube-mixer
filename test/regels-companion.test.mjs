@@ -123,6 +123,11 @@ ok('haal nu alleen via POST /api/nacht/nu (de server weigert zelf op een speelda
 const naarNacht = [...eigenCode.matchAll(/['"]\/api\/nacht\/nu['"]\s*,\s*([^)]*\))/g)].map((m) => m[1]);
 ok(`haal nu stuurt altijd alleenWensen: true (${naarNacht.length}× via L.haalNuBody, en die zet de vlag)`, naarNacht.length >= 1
   && naarNacht.every((a) => /^L\.haalNuBody\(/.test(a)) && /haalNuBody\s*=\s*\([^)]*\)\s*=>\s*\(\{[^}]*alleenWensen:\s*true/.test(eigenCode));
+// Review ronde 2, fix 4: de wenslijst die elke 5 s gepeild wordt, gaat altijd licht en met If-None-Match (304 zonder body).
+const wensPeil = [...eigenCode.matchAll(/haal\(\s*['"`](\/api\/kaart\/wensen[^'"`]*)['"`]\s*(,\s*[^)]*)?\)/g)];
+ok(`de companion peilt de wenslijst alleen licht en met If-None-Match (${wensPeil.length}×), en kent 304`, wensPeil.length >= 1
+  && wensPeil.every((m) => m[1] === '/api/kaart/wensen?licht=1' && /wensInit/.test(m[2] ?? '')) && /'If-None-Match'/.test(eigenCode)
+  && /status\s*===\s*304/.test(eigenCode));
 ok('geen POST /api/mixer in v1 (de companion stuurt de mixer niets)', !/\/api\/mixer['"`]\s*,\s*\{[^}]*method/.test(eigenCode) && !/post\(\s*['"]\/api\/mixer/.test(eigenCode));
 
 // ---- de stripper zelf --------------------------------------------------------------------------------

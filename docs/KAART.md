@@ -108,7 +108,9 @@ vreemde Origin.
   Status: `wacht` | `zoekt` | `kies` | `bezig` | `klaar` | `mislukt` | `geannuleerd`.
   **`?licht=1`** (de companion, die elke 5 s peilt; 10 okt): `{ sleutel, status, gevraagd, youtube_id, fout, bron, kandidaten }`,
   zonder `track` en `nummer`, en `kandidaten` alleen bij `kies` (anders null). Gemeten op de nep-kaart: een klare
-  wens 1379 B gewoon, 143 B licht (`test/companion-server.test.mjs`).
+  wens 1379 B gewoon, 143 B licht (`test/companion-server.test.mjs`). Alleen de lichte vorm heeft een `ETag`
+  (sha1 van de JSON, 16 tekens): met een gelijke `If-None-Match` (ook `W/"…"` of in een lijst) `304` zonder
+  body. De gewone vorm (het kaartpaneel) blijft zoals hij was, zonder ETag.
 - `POST /api/kaart/nummer/<sleutel>/zoek` → `{ kandidaten: [{ youtube_id, titel, kanaal, duur, score, reden }], vraag }`,
   beste eerst. 409 als er een deck speelt, 404 onbekende sleutel, 502 `{ fout: "zoeken mislukt: …" }`
   met de regel van yt-dlp erin. Een wens die `wacht` gaat via `zoekt` naar `kies`
