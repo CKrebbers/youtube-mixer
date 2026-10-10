@@ -367,6 +367,9 @@ export class LibraryPanel {
     return this.laad(track.id, deck);
   }
 
+  /** Hetzelfde, voor buiten (de tab kaart laadt een nummer dat al in de library staat). */
+  laadTrack(track, deck) { return this._laadTrack(track, deck); }
+
   /** Klaar met een opdracht die op een track moest? Dan nu laden — als dat mag. */
   _laadNaIngest(track, deck) {
     if (!deck || !track) return;

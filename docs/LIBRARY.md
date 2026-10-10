@@ -312,3 +312,112 @@ en een `VARVE_BACKUPS` die nog niet bestaat. NIET getest: op Clay's Mac, met een
 externe schijf die tijdens een backup wegvalt, en de tegel in een echte browser
 (`tools/headless/controle.mjs` heeft er een check bij, maar is hier niet gedraaid:
 geen Chromium in de container).
+
+## De kaart-tab (10 oktober 2026, tak `studio/kaart-ui`)
+
+De muziekkaart (`~/Projects/muziekkaart`, contract: scratchpad `CONTRACT-KAART.md`)
+als ZOEKLAAG in het library-paneel: een tweede tab `library | kaart`. De kaart
+kent 18.763 nummers (YouTube-video's en Spotify-nummers zonder video) en de
+playlists als kratten; Varve haalt er niets van vanzelf binnen. Per nummer of
+per krat zet je iets op de wenslijst; de nachtwachtrij van de server
+(`server/nacht.js`, serveragent, `docs/KAART.md`) haalt dat 's nachts binnen,
+alleen audio. De serverkant (`/api/kaart`, `/api/nacht`) staat op de tak
+`studio/kaart-server`; deze tak bevat alleen de UI en een nep-server.
+
+### Wat er is
+
+- `src/ui/kaart-lijst.js`: puur rekenwerk, getest in `test/kaart-lijst.test.mjs`
+  (115 checks). Kolommen (artiest, titel, duur, beurten, laatst, bronnen, stand)
+  in dezelfde vorm als `KOLOMMEN` van de library, zodat `kopHtml`, `cellenHtml`
+  en `kolomSjabloon` van `library-lijst.js` ze ongewijzigd tekenen. Badges
+  (♥ eigen like, ⇄ overzet, ≡ playlist, ▶ gekeken, ♫ alleen Spotify), de stand
+  van een nummer (`standVan`: binnen → laadknoppen; wens → tekst; kandidaat →
+  "haal binnen"; geen video → "zoek") en de knop erbij (`standCelHtml`), de
+  filters (`niet binnen` en `binnen` sluiten elkaar uit), de url van een pagina
+  (`kaartUrl`), de kratkiezer, de bevestiging boven 20 (aantal × 50 MB), de
+  zekere zoekkandidaat (score ≥ 0,9) en het kieslijstje, de teksten en de
+  gedeeltelijke POST van de nachtwachtrij. Eigen sleutels in localStorage:
+  `varve.library.tab` (welke tab) en `varve.kaart.sortering`.
+- `src/ui/kaart-panel.js`: de tab, op dezelfde `PaginaCache` en virtuele lijst
+  als de library. `library-lijst.js` is NIET veranderd: `alsPagina` zet het
+  antwoord van `/api/kaart/nummers` om in de vorm van `/api/library`, met `id`
+  = sleutel. Zoeken (120 ms wachten), kratkiezer, filterknoppen, sorteren op de
+  kolomkop, "haal binnen" (`POST /api/kaart/wens` met `meteen: true`, daarna
+  de rij opnieuw ophalen), laden van een nummer dat binnen is (via
+  `library.laadTrack`, zelfde weg als de ingest-strook, met de tweede klik over
+  een spelende track), "zoek" (kandidaten; ≥ 0,9 meteen `kies`, "gekozen: …"
+  met "anders"; anders een kieslijstje dat onder zijn rij zweeft, zoals de
+  toonsoortkiezer), × bij een wens die wacht (`DELETE`), de krat-knop (haalt de
+  sleutels `niet-binnen` op in pagina's van 500, vraagt boven 20 eerst "ja"
+  in de statusregel, stuurt dan `bevestig: true`), en het blok Nachtwachtrij
+  (aan/uit, per nacht, venster, vandaag niet, laatste run, wenslijst-telling).
+- "Er speelt een deck": `stand(deck)` van het library-paneel (uit laden.js),
+  elke seconde nagekeken zolang de tab open is; dan staan "haal binnen" en
+  "zoek" uit met de uitleg in de tooltip, en de server zou toch 409 geven.
+- Peilen (`/api/nacht` en `/api/kaart/wensen`) elke 5 s, ALLEEN met het paneel
+  open én de tab op kaart (`open`). De wensen gaan in de rijen die er zijn en
+  alleen de stand-cellen worden bijgewerkt (niet terwijl je in de lijst drukt,
+  zoals de stems-cellen). Een wens die klaar werd ververst de lijst.
+- Kop en rijen van de kaart bestaan alleen zolang haar tab open staat; bij het
+  wisselen naar de library worden ze leeggemaakt. De library (en
+  `tools/headless/library.mjs`) zoekt op `.lib-kop`/`.lib-rij` in het hele
+  paneel en mag niets van de kaart tegenkomen.
+- De stand-kolom is vast 276 px: elke rij is een eigen grid, dus met
+  `max-content` lag die kolom per rij ergens anders en de kop er niet boven.
+- `index.html`: de tabs in `.lib-head`, en `.kaart-deel` (eigen kop, status,
+  lijst, nachtblok) achter `.lib-rijen`. `styles.css`: `.lib-panel.tab-kaart`
+  verbergt wat van de library is. Geen APC- of Maschine-knoppen, geen action.
+
+### De nep-server
+
+`tools/headless/kaart-nep.mjs` (geen test zelf): de API uit contract deel 2 in
+het geheugen, op een `varve-kaart.json` (`test/fixtures/varve-kaart.klein.json`:
+40 verzonnen nummers, 3 kratten, verzonnen namen, geen echte
+luistergeschiedenis). Alles buiten `/api/kaart*` en `/api/nacht*` gaat door
+naar een echte Varve-server op `doel` (Host en Origin herschreven). "Zoek"
+geeft drie verzonnen kandidaten (zeker alleen bij een eigen like), "haal
+binnen" laat de wens op `bezig` staan (`rondAf()` maakt hem klaar). Niets van
+YouTube, geen yt-dlp. `test/kaart-lijst.test.mjs` toetst de nep tegen het
+contract (sorteren, filters, 409 boven 20, 409 met een spelend deck, zoek/kies,
+nacht), zodat de UI tegen hetzelfde praat als straks de echte server.
+
+### Headless
+
+`node tools/headless/kaart.mjs [uitmap]`: echte server op 8815 met drie nummers
+van de kaart al binnen (id = youtube_id), de nep op 8816 ervoor, Chrome via
+CDP. Groen op 10 okt (65 checks): paneel open, tab kaart (rijen na ~20 ms),
+tab onthouden, ≤ 30 rijen in de DOM, kop boven de kolommen, kratkiezer met
+aantal en binnen, badges, nachtblok; zoeken filtert; krat en filters; sorteren
+op titel/laatst/beurten en onthouden; "haal binnen" stuurt precies
+`{ sleutels: [die], meteen: true, bevestig: false }`, de rij zegt bezig, na
+klaar binnen met laadknoppen; laden op track 1; met een spelend deck staan
+haal/zoek uit en vraagt laden eerst; zoek met kieslijstje onder de rij, kies,
+de zekere keuze zonder lijstje, "anders"; de krat op de wenslijst met de
+bevestiging (36 × 50 MB = 1,8 GB), nee/ja, × van de wenslijst; het nachtblok
+stuurt `{ aan }`, `{ perNacht }`, `{ venster }`, `{ vandaagNiet }`; geen
+peiling met de tab dicht, wel met de tab open; na herladen opent het paneel op
+de kaart. Foto's in de uitmap (`kaart-open.png`, `kaart-kieslijst.png`, …).
+
+### Waar de UI iets anders nodig heeft dan het contract zegt
+
+- `POST /api/kaart/nummer/<sleutel>/kies` op een nummer ZONDER wens: de UI
+  verwacht dat de server dan de wens aanmaakt (status `wacht`), want "zoek"
+  op een Spotify-only rij maakt er in het contract geen. De nep doet dat zo.
+- De krat-knop haalt de sleutels zelf op (`/api/kaart/nummers?krat=&filter=
+  niet-binnen&aantal=500`, in pagina's) en stuurt ze als `sleutels`; het
+  contract kent geen `krat` in de POST. Bij 23 playlists is dat hooguit een
+  paar verzoeken.
+- `GET /api/kaart/wensen`: de UI leest `track` als track-id (string) of als
+  object met `id`; het contract zegt niet welk van de twee.
+
+### Niet gedaan / niet getest
+
+- Niets in Clay's eigen Chrome, niets op de APC of de Maschine, niets beluisterd.
+- Niet tegen de echte `server/kaart.js`: die staat op een andere tak. De
+  integrator draait `tools/headless/kaart.mjs` dan het best nog eens met de nep
+  erachter weg (de nep kan ook zonder `doel`, maar het script spawnt altijd een
+  echte server; met de echte routes erin is de nep overbodig).
+- Geen echte varve-kaart.json van 18.763 rijen gezien: de lijst is gebouwd op
+  dezelfde pagina-cache als de library (gemeten met 5000), niet apart gemeten.
+- De tijdvelden van het nachtblok zijn `<input type="time">`: in een Engelse
+  Chrome tonen ze "01:00 AM"; de waarde is altijd "01:00".
