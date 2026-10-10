@@ -46,6 +46,14 @@ console.log('\nonthouden op dit apparaat');
   c.bewaarTab(o, 'meters');
   ok('een onbekende tab wordt niet bewaard', c.leesTab(o) === 'kaart');
   ok('bewaarde tab die niet in de config staat: de eerste van de config', c.leesTab(o, ['beeld']) === 'beeld');
+  // De eerste keer (review ronde 1, fix 4): niets bewaard en de mixer meldt zich niet = de kaart.
+  ok('bewaardeTab: de bewaarde, of null', c.bewaardeTab(o) === 'kaart' && c.bewaardeTab(opslag()) === null && c.bewaardeTab(opslag({ gooit: true })) === null);
+  ok('eersteTab: niets bewaard en 404 (stap 1) = kaart', c.eersteTab(null, { ontbreekt: true }) === 'kaart');
+  ok('eersteTab: niets bewaard, de server kent /api/mixer maar er is geen melding = kaart', c.eersteTab(null, { leeftijd_ms: null, twee: false, melding: null }) === 'kaart');
+  ok('eersteTab: de mixer meldt zich = nu', c.eersteTab(null, { leeftijd_ms: 300, melding: { t: 1, tracks: [] } }) === 'nu');
+  ok('eersteTab: server weg of een fout = nu (daar staat wat er mis is)', c.eersteTab(null, null) === 'nu' && c.eersteTab(null, { fout: 500 }) === 'nu');
+  ok('eersteTab: een bewaarde tab wint altijd', c.eersteTab('nu', { ontbreekt: true }) === 'nu' && c.eersteTab('beeld', { ontbreekt: true }) === 'beeld');
+  ok('eersteTab: zonder kaart in de indeling blijft het nu', c.eersteTab(null, { ontbreekt: true }, ['nu', 'beeld']) === 'nu');
   const stuk = opslag({ gooit: true });
   ok('opslag die gooit: lezen en schrijven gooien niet', c.leesTab(stuk) === 'nu' && (c.bewaarTab(stuk, 'kaart'), true)
     && c.leesPins(stuk).length === 0 && c.wisselPin(stuk, [], 'slim:x').join() === 'slim:x');
@@ -109,7 +117,8 @@ console.log('\n"nu" (GET /api/mixer)');
   ok('oud: "meldt zich niet", de laatste stand grijs en de resttijd als schatting',
     oud.includes('mixer meldt zich niet (op de achtergrond?)') && oud.includes('nu-tracks grijs') && oud.includes('≈ nog'));
   ok('geen melding: "nog niet gemeld"', c.nuHtml({ leeftijd_ms: null, twee: false, melding: null }).includes('de mixer heeft zich nog niet gemeld'));
-  ok('404: "kent /api/mixer nog niet"', c.nuHtml({ ontbreekt: true }).includes('deze server kent /api/mixer nog niet'));
+  ok('404: een zin voor Clay (wat er komt), geen ontwikkelaarszin', c.nuHtml({ ontbreekt: true }).includes(c.NU_ONTBREEKT)
+    && c.nuHtml({ ontbreekt: true }).includes('De kaart werkt wel.') && !/\/api\/mixer|stap 2|docs\//.test(c.nuHtml({ ontbreekt: true })));
   ok('server weg: "niet bereikbaar"', c.nuHtml(null).includes('server niet bereikbaar'));
   ok('500: "de server gaf een fout (500)"', c.nuHtml({ fout: 500 }).includes('de server gaf een fout (500)'));
   ok('geen track geladen', c.nuHtml({ leeftijd_ms: 10, melding: { ...melding, tracks: [] } }).includes('geen track geladen'));
@@ -180,6 +189,10 @@ console.log('\nwens, haal nu en speeldag');
   ok('niets te halen', c.haalNuKnop(0, n({ speeldagen: [] })).tekst === 'haal nu: niets te halen');
   ok('drie wachten: "haal de wenslijst nu op (3)"', c.haalNuKnop(3, n({ speeldagen: [] })).tekst === 'haal de wenslijst nu op (3)' && c.haalNuKnop(3, n({ speeldagen: [] })).aantal === 3);
   ok(`klemt op ${c.HAAL_MAX}`, c.haalNuKnop(57, n({ speeldagen: [] })).aantal === 20 && c.haalNuKnop(57, n({ speeldagen: [] })).tekst.endsWith('(20)'));
+  // Fix 1: de knop belooft de wenslijst, dus de body zegt alleenWensen.
+  ok('haalNuBody: { aantal, alleenWensen: true }, geklemd op 1..HAAL_MAX', JSON.stringify(c.haalNuBody(3)) === '{"aantal":3,"alleenWensen":true}'
+    && c.haalNuBody(57).aantal === c.HAAL_MAX && c.haalNuBody(0).aantal === 1);
+  ok(`melding na 202: "${c.haalNuGestartTekst(2)}"`, c.haalNuGestartTekst(2) === 'run gestart: hooguit 2 van de wenslijst');
   ok('wachtAantal telt alleen wacht', c.wachtAantal([{ status: 'wacht' }, { status: 'kies' }, { status: 'wacht' }, { status: 'klaar' }]) === 2);
   ok('speeldag-knop: weg als vandaag er al in staat', c.speeldagKnopTekst(n({})) === null);
   ok('... en "vandaag speeldag" als niet', c.speeldagKnopTekst(n({ speeldagen: ['2026-10-03'] })) === 'vandaag speeldag');
@@ -187,6 +200,16 @@ console.log('\nwens, haal nu en speeldag');
   const body = c.speeldagErbij(n({ speeldagen: ['2026-10-17', '2026-10-03'], nu: nu11middag.toISOString() }));
   ok(`alleen toevoegen, gesorteerd: ${body.speeldagen.join(', ')}`, body.speeldagen.join() === '2026-10-03,2026-10-11,2026-10-17');
   ok('vandaag die er al in staat: niet dubbel', c.speeldagErbij(n({})).speeldagen.join() === '2026-10-10');
+  // Fix 9: "vandaag" volgens de server (zijn tijdzone), niet volgens de klok of de tijdzone van de iPhone.
+  // Hier wijkt de server bewust af van wat dit toestel uit `nu` zou halen.
+  const anders = n({ speeldagen: ['2026-10-09'], nu: nu10.toISOString(), vandaag: '2026-10-09', nachtDatum: '2026-10-08' });
+  ok('vandaagVan: de server zegt het (vandaag), anders zelf uit nu', c.vandaagVan(anders) === '2026-10-09' && c.vandaagVan(n({})) === '2026-10-10');
+  ok('isSpeeldag rekent met vandaag/nachtDatum van de server', c.isSpeeldag(anders) === true
+    && c.isSpeeldag(n({ speeldagen: ['2026-10-10'], vandaag: '2026-10-11', nachtDatum: '2026-10-11' })) === false
+    && c.isSpeeldag(n({ speeldagen: ['2026-10-10'], vandaag: '2026-10-11', nachtDatum: '2026-10-10' })) === true);
+  ok('speeldag-knop en speeldagErbij gebruiken de dag van de server', c.speeldagKnopTekst(anders) === null
+    && c.speeldagErbij(n({ speeldagen: [], vandaag: '2026-10-09' })).speeldagen.join() === '2026-10-09');
+  ok('een kapotte vandaag van de server telt niet (terug naar nu)', c.vandaagVan(n({ vandaag: 'gisteren' })) === '2026-10-10');
   const km = c.kandidatenPerSleutel([{ sleutel: 'a', status: 'kies', kandidaten: [{ youtube_id: 'x' }] }, { sleutel: 'b', status: 'wacht', kandidaten: [{ youtube_id: 'y' }] }, { sleutel: 'c', status: 'kies', kandidaten: [] }]);
   ok('kandidaten alleen van wensen die op kies staan', km.size === 1 && km.get('a')[0].youtube_id === 'x');
 }

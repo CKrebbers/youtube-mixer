@@ -30,6 +30,9 @@ export const TABS = ['nu', 'kaart', 'beeld'];
 export const TAB_SLEUTEL = 'varve.companion.tab';
 export const PIN_SLEUTEL = 'varve.companion.pins';
 
+/** "Nu" zolang de server /api/mixer nog niet kent (404): wat er komt, voor Clay, geen ontwikkelaarszin. */
+export const NU_ONTBREEKT = 'Wat er speelt komt hier zodra de mixer zich bij de server meldt (nog niet gebouwd).';
+
 /** De zin die altijd onder de beeldstand staat: wat dit beeld wel en niet is. */
 export const BEELD_ZIN = 'Varve-beeld op deze Mac · de beamer van de pc volgt dit niet · noodknop: APC mapje beeld';
 
@@ -70,9 +73,28 @@ export function leesConfig(json) {
 
 // ---- onthouden op dit apparaat (localStorage; mag ontbreken of gooien) ----------
 
-export function leesTab(opslag, tabs = TABS) {
+/** De tab die op dit apparaat bewaard is (en in de indeling staat), of null. */
+export function bewaardeTab(opslag, tabs = TABS) {
   try { const t = opslag?.getItem(TAB_SLEUTEL); if (tabs.includes(t)) return t; } catch {}
-  return tabs.includes('nu') ? 'nu' : tabs[0];
+  return null;
+}
+
+export function leesTab(opslag, tabs = TABS) {
+  return bewaardeTab(opslag, tabs) ?? (tabs.includes('nu') ? 'nu' : tabs[0]);
+}
+
+/**
+ * De eerste keer (niets bewaard): welke tab, na het eerste antwoord van
+ * GET /api/mixer? "Nu" als de mixer zich meldt; anders de kaart (die werkt
+ * altijd), want een vrijwel leeg "nu" is geen eerste scherm (review ronde 1,
+ * fix 4). Een fout of geen server: "nu" blijft (daar staat dan wat er mis is).
+ * Een bewaarde tab wint altijd; deze keuze wordt zelf niet bewaard.
+ */
+export function eersteTab(bewaard, antwoord, tabs = TABS) {
+  if (bewaard && tabs.includes(bewaard)) return bewaard;
+  const nu = tabs.includes('nu') ? 'nu' : tabs[0];
+  if (!tabs.includes('kaart') || !antwoord || antwoord.fout) return nu;
+  return antwoord.ontbreekt || !antwoord.melding ? 'kaart' : nu;
 }
 
 export function bewaarTab(opslag, tab) {
@@ -150,8 +172,8 @@ const bpmTekst = (b) => (typeof b === 'number' && Number.isFinite(b) ? `${String
  */
 export function nuHtml(antwoord) {
   if (antwoord === null || antwoord === undefined) return '<p class="nu-regel let-op">server niet bereikbaar</p>';
-  if (antwoord.ontbreekt) return '<p class="nu-regel">deze server kent /api/mixer nog niet</p>'
-    + '<p class="nu-uitleg">De mixer meldt zich pas bij de server na stap 2 van docs/COMPANION.md. De kaart werkt wel.</p>';
+  if (antwoord.ontbreekt) return `<p class="nu-regel">${esc(NU_ONTBREEKT)}</p>`
+    + '<p class="nu-uitleg">De kaart werkt wel.</p>';
   if (antwoord.fout) return `<p class="nu-regel let-op">de server gaf een fout (${esc(antwoord.fout)}); over een minuut opnieuw</p>`;
   const m = antwoord.melding;
   const vers = m ? versheid(antwoord.leeftijd_ms) : 'geen';
@@ -246,15 +268,23 @@ const klokVan = (nacht, nu) => {
   const ms = Date.parse(nacht?.nu ?? '');
   return new Date(Number.isFinite(ms) ? ms : (typeof nu === 'number' ? nu : Date.now()));
 };
+const isDatum = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
-/** "Vandaag" volgens de server, als datum. */
-export const vandaagVan = (nacht, nu) => datumVan(klokVan(nacht, nu));
+/**
+ * "Vandaag" als datum: wat de server zegt (`vandaag`, in ZIJN tijdzone), anders
+ * uitgerekend uit zijn klok in de tijdzone van dit toestel (een oudere server).
+ * Zo voegt de speeldag-knop op locatie in een andere tijdzone, of met een
+ * verkeerd gezette iPhone, de dag toe die de server bedoelt (review ronde 1, fix 9).
+ */
+export const vandaagVan = (nacht, nu) => (isDatum(nacht?.vandaag) ? nacht.vandaag : datumVan(klokVan(nacht, nu)));
+
+/** De nacht waar het nu bij hoort, volgens de server (`nachtDatum`), anders zelf uitgerekend. */
+const nachtVan = (nacht, nu) => (isDatum(nacht?.nachtDatum) ? nacht.nachtDatum : nachtDatum(klokVan(nacht, nu)));
 
 /** Is het nu een speeldag (dezelfde regel als nacht.nu() op de server: vandaag of de nacht van gisteren)? */
 export function isSpeeldag(nacht, nu) {
-  const d = klokVan(nacht, nu);
   const dagen = Array.isArray(nacht?.speeldagen) ? nacht.speeldagen : [];
-  return dagen.includes(datumVan(d)) || dagen.includes(nachtDatum(d));
+  return dagen.includes(vandaagVan(nacht, nu)) || dagen.includes(nachtVan(nacht, nu));
 }
 
 /** Wat er na een wens gebeurt, in één zin: de uitkomst plus wat de nacht ermee doet. */
@@ -274,7 +304,9 @@ export const wachtAantal = (wensen = []) => wensen.filter((w) => w.status === 'w
 /**
  * De knop "haal de wenslijst nu op (n)": { tekst, kan, aantal }. Kan niet op
  * een speeldag, als er al een run loopt, of als er niets wacht. De server
- * weigert zelf ook (409); dit is alleen om niet voor niets te tikken.
+ * weigert zelf ook (409); dit is alleen om niet voor niets te tikken. De knop
+ * stuurt `alleenWensen: true` (haalNuBody): alleen de wenslijst, nooit nummers
+ * uit de standaardvolgorde van de kaart (server/nacht.js).
  */
 export function haalNuKnop(wacht, nacht, nu) {
   const aantal = Math.min(Math.max(0, wacht | 0), HAAL_MAX);
@@ -283,6 +315,12 @@ export function haalNuKnop(wacht, nacht, nu) {
   if (!aantal) return { tekst: 'haal nu: niets te halen', kan: false, aantal };
   return { tekst: `haal de wenslijst nu op (${aantal})`, kan: true, aantal };
 }
+
+/** De body voor POST /api/nacht/nu: hooguit `aantal`, alleen van de wenslijst. */
+export const haalNuBody = (aantal) => ({ aantal: Math.min(Math.max(1, aantal | 0), HAAL_MAX), alleenWensen: true });
+
+/** De melding na een 202 van POST /api/nacht/nu. */
+export const haalNuGestartTekst = (aantal) => `run gestart: hooguit ${aantal} van de wenslijst`;
 
 /** De knop "vandaag speeldag": de tekst, of null als vandaag er al in staat (weghalen kan alleen op de laptop). */
 export function speeldagKnopTekst(nacht, nu) {

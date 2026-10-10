@@ -120,7 +120,7 @@ export class Nacht {
     this._timer = null;
     this._run = null;            // de lopende run (promise) of null
     this._stop = false;          // stop gevraagd: na het lopende nummer
-    this._bezig = null;          // { begonnen, soort, gehaald, mislukt, huidig }
+    this._bezig = null;          // { id, begonnen, soort, aantal, gehaald, mislukt, huidig, alleenWensen }
     this._gedaan = new Set();    // nachtDatums waarvoor deze serverrun al een nachtrun deed
     const vorige = this.kaart.laatsteRun?.();
     if (vorige?.soort === 'nacht' && vorige.begonnen) this._gedaan.add(nachtDatum(new Date(vorige.begonnen)));
@@ -161,14 +161,20 @@ export class Nacht {
 
   get vandaagNiet() { return this.instellingen.vandaagNietDatum === nachtDatum(this.klok()); }
 
-  /** GET /api/nacht */
+  /**
+   * GET /api/nacht. `vandaag` en `nachtDatum` zijn de datums volgens de klok en
+   * de tijdzone van de SERVER (dezelfde regel als nu() en magNu()): een iPhone in
+   * een andere tijdzone of met een verkeerde klok rekent zo niet zelf een andere
+   * dag uit (review companion ronde 1, fix 9).
+   */
   stand() {
     const i = this.instellingen;
+    const klok = this.klok();
     return {
       aan: i.aan, venster: { ...i.venster }, perNacht: i.perNacht, pauze: { ...i.pauze },
       vandaagNiet: this.vandaagNiet, speeldagen: [...i.speeldagen], standaardVolgorde: i.standaardVolgorde,
       laatsteRun: this.kaart.laatsteRun(), volgende: this.volgende(), bezig: this._bezig ? { ...this._bezig } : null,
-      nu: this.klok().toISOString(),
+      nu: klok.toISOString(), vandaag: datumVan(klok), nachtDatum: nachtDatum(klok),
     };
   }
 
@@ -227,11 +233,13 @@ export class Nacht {
    * Het volgende te halen: een wens die wacht (oudste eerst), anders het eerste
    * uit de standaardvolgorde van de kaart (als die aan staat). Een item is
    * { sleutel, youtube_id, bron }. null = niets meer.
+   * `alleenWensen`: nooit de standaardvolgorde, ook als die aan staat ("haal de
+   * wenslijst nu op" op de companion belooft de wenslijst, niet de kaart).
    */
-  volgendeItem() {
+  volgendeItem({ alleenWensen = false } = {}) {
     const w = this.kaart.volgendeWens();
     if (w) return { sleutel: w.sleutel, youtube_id: w.youtube_id, bron: 'wens' };
-    if (!this.instellingen.standaardVolgorde) return null;
+    if (alleenWensen || !this.instellingen.standaardVolgorde) return null;
     const [s] = this.kaart.standaardVolgorde({ grens: 1 });
     if (!s) return null;
     const n = this.kaart.perSleutel.get(s);
@@ -244,10 +252,15 @@ export class Nacht {
   stop() { if (this._bezig) { this._stop = true; return true; } return false; }
 
   /**
-   * POST /api/nacht/nu { aantal }: een run nu. Weigert (gooit met .code 409)
-   * als er al een loopt, een deck speelt, of vandaag een speeldag is.
+   * POST /api/nacht/nu { aantal, alleenWensen }: een run nu. Weigert (gooit met
+   * .code 409) als er al een loopt, een deck speelt, of vandaag een speeldag is.
+   * `alleenWensen` (standaard false, dan als altijd): alleen wat op de wenslijst
+   * wacht, nooit de standaardvolgorde. Zonder die vlag haalde een wens die op
+   * `kies` eindigde (Spotify zonder zekere versie) een nummer van de kaart in
+   * zijn plaats (review companion ronde 1, fix 1).
    */
-  nu({ aantal = 1 } = {}) {
+  nu({ aantal = 1, alleenWensen = false } = {}) {
+    if (typeof alleenWensen !== 'boolean') { const e = new Error('alleenWensen is true of false'); e.code = 400; throw e; }
     if (!(Number.isInteger(aantal) && aantal >= 1 && aantal <= 1000)) { const e = new Error('aantal is 1..1000'); e.code = 400; throw e; }
     if (this._run) { const e = new Error('er loopt al een run'); e.code = 409; throw e; }
     if (this.speeltDeck()) { const e = new Error('er speelt een deck'); e.code = 409; throw e; }
@@ -255,7 +268,7 @@ export class Nacht {
     if (this.instellingen.speeldagen.includes(datumVan(nu)) || this.instellingen.speeldagen.includes(nachtDatum(nu))) {
       const e = new Error('vandaag is een speeldag'); e.code = 409; throw e;
     }
-    return this.run({ aantal, soort: 'nu' });
+    return this.run({ aantal, soort: 'nu', alleenWensen });
   }
 
   /**
@@ -263,18 +276,18 @@ export class Nacht {
    * Geeft { gehaald, mislukt, reden } en logt in nacht_runs. Loopt er al een,
    * dan die.
    */
-  run({ aantal, soort = 'nacht' }) {
+  run({ aantal, soort = 'nacht', alleenWensen = false }) {
     if (this._run) return this._run;
     this._stop = false;
-    this._run = this._doeRun({ aantal, soort }).finally(() => { this._run = null; this._bezig = null; });
+    this._run = this._doeRun({ aantal, soort, alleenWensen }).finally(() => { this._run = null; this._bezig = null; });
     return this._run;
   }
 
-  async _doeRun({ aantal, soort }) {
+  async _doeRun({ aantal, soort, alleenWensen = false }) {
     const begonnen = this.klok().getTime();
     const id = this.kaart.beginRun(soort, begonnen);
-    this._bezig = { id, begonnen, soort, aantal, gehaald: 0, mislukt: 0, huidig: null };
-    this.log?.(`[nacht] run ${id} (${soort}): hooguit ${aantal} nummer${aantal === 1 ? '' : 's'}`);
+    this._bezig = { id, begonnen, soort, aantal, gehaald: 0, mislukt: 0, huidig: null, alleenWensen };
+    this.log?.(`[nacht] run ${id} (${soort}${alleenWensen ? ', alleen de wenslijst' : ''}): hooguit ${aantal} nummer${aantal === 1 ? '' : 's'}`);
     let opEenRij = 0;
     let reden = null;
     const b = this._bezig;
@@ -283,7 +296,7 @@ export class Nacht {
         if (this._stop) { reden = 'gestopt'; break; }
         if (this.speeltDeck()) { reden = 'er speelt een deck'; break; }                                  // regel 4
         if (soort === 'nacht' && !inVenster(this.klok(), this.instellingen.venster)) { reden = 'venster voorbij'; break; }
-        const item = this.volgendeItem();
+        const item = this.volgendeItem({ alleenWensen });
         if (!item) { reden = 'niets meer te halen'; break; }
         b.huidig = item.sleutel;
         // Uit de standaardvolgorde: eerst een wens-rij (bron 'nacht'), zodat hij

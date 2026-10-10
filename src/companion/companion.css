@@ -1,12 +1,12 @@
 /* De companion (companion.html, docs/COMPANION.md): eerst de telefoon (één kolom,
-   onderbalk met drie tabs), vanaf 900 px twee kolommen (kaart links, nu en beeld
-   rechts) zonder onderbalk. Tokens als de Controlekamer (src/controle/controle.css).
+   onderbalk met drie tabs; ook de iPad staand, 768), vanaf 900 px twee kolommen (kaart
+   links, nu en beeld rechts en die blijven staan) zonder onderbalk. Tokens als de Controlekamer (src/controle/controle.css).
    Elk tikdoel minstens 48 × 48. */
 :root{
   --bg:#07090b; --panel:#10151a; --panel2:#161d24; --line:#232c35;
   --text:#dfe7ee; --dim:#7b8794; --klein:#8a96a2; --a:#4ad9c4; --b:#c48cff;
   --warn:#ffbe3c; --red:#ff3b30; --groen:#3ddc84;
-  --balk:60px; --tik:48px;
+  --balk:60px; --tik:48px; --kop:45px;
   color-scheme:dark;
   font:15px/1.45 ui-sans-serif,-apple-system,"Inter",system-ui,sans-serif;
   -webkit-text-size-adjust:100%;
@@ -32,6 +32,8 @@ button{cursor:pointer;touch-action:manipulation}
 
 main{padding:14px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left));display:grid;gap:22px;max-width:1400px;margin:0 auto}
 .paneel{min-width:0}
+/* smal: de wrapper telt niet mee (nu en beeld zijn gewone vakken in main, één tegelijk) */
+.rechts{display:contents}
 h2{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-weight:700}
 .klein{margin:0;font-size:13px;color:var(--klein)}
 
@@ -144,14 +146,16 @@ body[data-tab="beeld"] #nu, body[data-tab="beeld"] #kaart{display:none}
 .melding.fout{border-color:var(--red);color:#ffb3ad}
 .melding.goed{border-color:var(--a)}
 
-/* breed (iPad liggend, laptop): twee kolommen, alles tegelijk, geen onderbalk */
+/* breed (iPad liggend, laptop): twee kolommen, alles tegelijk, geen onderbalk. Rechts (nu en beeld)
+   blijft onder de kop staan als de kaart scrolt (sticky); te lang = zelf scrollen. */
 @media (min-width:900px){
   body{padding-bottom:0}
   .onderbalk{display:none}
-  main{grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-template-areas:"kaart nu" "kaart beeld";grid-template-rows:auto 1fr;align-items:start;column-gap:28px}
+  main{grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-template-areas:"kaart rechts";align-items:start;column-gap:28px}
   body[data-tab] #kaart{display:block;grid-area:kaart}
-  body[data-tab] #nu{display:block;grid-area:nu}
-  body[data-tab] #beeld{display:block;grid-area:beeld}
+  .rechts{display:grid;gap:22px;align-content:start;grid-area:rechts;align-self:start;position:sticky;
+    top:calc(var(--kop) + env(safe-area-inset-top) + 14px);max-height:calc(100vh - var(--kop) - env(safe-area-inset-top) - 28px);overflow-y:auto}
+  body[data-tab] #nu, body[data-tab] #beeld{display:block}
   .meldingen{bottom:16px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

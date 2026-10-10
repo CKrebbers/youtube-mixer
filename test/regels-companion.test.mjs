@@ -119,6 +119,10 @@ ok(`alleen /api/… en /mappings/companion.json (${[...new Set(paadjes.map((p) =
 ok('nooit "meteen" of "bevestig" (de laptop haalt binnen, niet de telefoon)', !/\b(meteen|bevestig)\b/.test(eigenCode));
 ok('nooit zoeken op YouTube (/zoek) en nooit iets weghalen (DELETE)', !/\/zoek\b/.test(eigenCode) && !/['"]DELETE['"]/.test(eigenCode));
 ok('haal nu alleen via POST /api/nacht/nu (de server weigert zelf op een speeldag)', /['"]\/api\/nacht\/nu['"]/.test(eigenCode) && !/\/api\/ingest/.test(eigenCode));
+// Review ronde 1, fix 1: "haal de wenslijst nu op" mag geen nummers buiten de wenslijst halen.
+const naarNacht = [...eigenCode.matchAll(/['"]\/api\/nacht\/nu['"]\s*,\s*([^)]*\))/g)].map((m) => m[1]);
+ok(`haal nu stuurt altijd alleenWensen: true (${naarNacht.length}× via L.haalNuBody, en die zet de vlag)`, naarNacht.length >= 1
+  && naarNacht.every((a) => /^L\.haalNuBody\(/.test(a)) && /haalNuBody\s*=\s*\([^)]*\)\s*=>\s*\(\{[^}]*alleenWensen:\s*true/.test(eigenCode));
 ok('geen POST /api/mixer in v1 (de companion stuurt de mixer niets)', !/\/api\/mixer['"`]\s*,\s*\{[^}]*method/.test(eigenCode) && !/post\(\s*['"]\/api\/mixer/.test(eigenCode));
 
 // ---- de stripper zelf --------------------------------------------------------------------------------

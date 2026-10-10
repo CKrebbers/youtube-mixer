@@ -22,11 +22,6 @@
 </header>
 
 <main>
-  <section class="paneel" id="nu" aria-labelledby="h-nu">
-    <h2 id="h-nu">Nu</h2>
-    <div id="nu-inhoud"><p class="nu-regel">even kijken…</p></div>
-  </section>
-
   <section class="paneel" id="kaart" aria-labelledby="h-kaart">
     <h2 id="h-kaart">Kaart</h2>
     <div class="wenslijst" id="wenslijst">
@@ -54,10 +49,18 @@
     </div>
   </section>
 
-  <section class="paneel" id="beeld" aria-labelledby="h-beeld">
-    <h2 id="h-beeld">Beeld</h2>
-    <div id="beeld-inhoud"></div>
-  </section>
+  <!-- Breed (iPad liggend): nu en beeld samen rechts, en ze blijven staan als de kaart scrolt. Smal: display:contents. -->
+  <div class="rechts">
+    <section class="paneel" id="nu" aria-labelledby="h-nu">
+      <h2 id="h-nu">Nu</h2>
+      <div id="nu-inhoud"><p class="nu-regel">even kijken…</p></div>
+    </section>
+
+    <section class="paneel" id="beeld" aria-labelledby="h-beeld">
+      <h2 id="h-beeld">Beeld</h2>
+      <div id="beeld-inhoud"></div>
+    </section>
+  </div>
 </main>
 
 <nav class="onderbalk" aria-label="tabbladen">

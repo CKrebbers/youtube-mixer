@@ -4,12 +4,14 @@
 // via Tailscale) en één zonder (de opstartregel die zegt dat de iPhone een 403
 // krijgt). Daarna de stappen die de companion zelf zet, met de pure functies
 // uit companion-lijst.js: wens, kies uit kandidaten, haal nu (geweigerd op een
-// speeldag) en de speeldag-knop (alleen toevoegen).
+// speeldag) en de speeldag-knop (alleen toevoegen). Een derde server (met een
+// nep-download, NEP_BRON) laat "haal de wenslijst nu op" echt lopen: alleen de
+// wenslijst (alleenWensen, review ronde 1, fix 1) en het 202-pad tot `klaar`.
 // Draai met: node test/companion-server.test.mjs
 import { mkdtempSync, rmSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { request } from 'node:http';
 
 const L = await import('../src/companion/companion-lijst.js');
@@ -28,15 +30,15 @@ const nepLog = join(map, 'nep.log');
 schrijfKaart(kaartPad);
 const nepYtdlp = maakNepYtdlp(map);
 
-/** Een server met alles in een eigen submap; `hosts` = VARVE_HOSTS of niets. */
-function startServer(naam, { hosts = null } = {}) {
+/** Een server met alles in een eigen submap; `hosts` = VARVE_HOSTS of niets; `extra` = meer omgeving. */
+function startServer(naam, { hosts = null, extra = {} } = {}) {
   const m = join(map, naam);
   mkdirSync(join(m, 'media'), { recursive: true });
   const poort = 20000 + Math.floor(Math.random() * 20000);
   const env = { ...process.env, PORT: String(poort), VARVE_DB: join(m, 'media', 'library.db'), VARVE_MEDIA: join(m, 'media'),
     VARVE_OPNAMES: join(m, 'opnames'), VARVE_PLANNEN: join(m, 'plannen'), VARVE_PATRONEN: join(m, 'patronen'),
     VARVE_PROEF: join(m, 'proef'), VARVE_BACKUPS: join(m, 'backups'), VARVE_HERANALYSE: 'uit',
-    VARVE_YTDLP: nepYtdlp, NEP_LOG: nepLog, VARVE_KAART: kaartPad };
+    VARVE_YTDLP: nepYtdlp, NEP_LOG: nepLog, VARVE_KAART: kaartPad, ...extra };
   delete env.VARVE_HOSTS;
   if (hosts) env.VARVE_HOSTS = hosts;
   const proc = spawn(process.execPath, ['server/index.js'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -63,6 +65,11 @@ const rauw = (s, pad, { method = 'GET', headers = {}, body = null } = {}) => new
 
 const met = startServer('met', { hosts: TS });
 const zonder = startServer('zonder');
+// De derde: een eigen nep-log en een echte bron voor de nep-download (ffmpeg maakt 12 s toon).
+const haalLog = join(map, 'haal-nep.log');
+const bron = join(map, 'bron.wav');
+execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'sine=f=440:d=12', '-ac', '2', bron]);
+const haalSrv = startServer('haal', { extra: { NEP_LOG: haalLog, NEP_BRON: bron, NEP_DUUR: '300' } });
 const B = met.B;
 const get = async (p) => { const r = await fetch(`${B}${p}`); return { status: r.status, j: await r.json().catch(() => null) }; };
 const post = async (p, body) => {
@@ -71,7 +78,7 @@ const post = async (p, body) => {
 };
 
 try {
-  ok('twee servers draaien (met en zonder VARVE_HOSTS)', (await klaar(met)) && (await klaar(zonder)));
+  ok('drie servers draaien (met en zonder VARVE_HOSTS, en een met nep-download)', (await klaar(met)) && (await klaar(zonder)) && (await klaar(haalSrv)));
 
   console.log('de pagina en zijn bestanden');
   const html = await (await fetch(`${B}/companion`)).text();
@@ -159,12 +166,72 @@ try {
     && L.speeldagKnopTekst(nacht) === null && !L.haalNuKnop(2, nacht).kan);
   const gevolg = L.wensGevolgTekst((await post('/api/kaart/wens', { sleutels: ['yt:eigenlike001'] })).j, nacht);
   ok(`een wens op een speeldag zegt het: "${gevolg.tekst}"`, gevolg.goed && /speeldag: niet vóór morgen/.test(gevolg.tekst));
+
+  // ---- haal nu echt laten lopen (derde server, nep-download) ----------------------------
+  console.log('\nhaal de wenslijst nu op: alleen de wenslijst (fix 1), en het 202-pad tot klaar');
+  const H = haalSrv.B;
+  const hGet = async (p) => { const r = await fetch(`${H}${p}`); return { status: r.status, j: await r.json().catch(() => null) }; };
+  const hPost = async (p, b) => {
+    const r = await fetch(`${H}${p}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+    return { status: r.status, j: await r.json().catch(() => null) };
+  };
+  const haalRegels = () => (existsSync(haalLog) ? readFileSync(haalLog, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+  const totKlaar = async () => { for (let i = 0; i < 300; i++) { if ((await hGet('/api/nacht')).j.bezig === null) return true; await wacht(100); } return false; };
+  let hn = (await hPost('/api/nacht', { speeldagen: ['2026-01-02'], pauze: { min: 0, max: 0 } })).j;
+  const hNu = new Date(hn.nu);
+  ok(`de stand geeft vandaag en nachtDatum van de server (fix 9): ${hn.vandaag}, ${hn.nachtDatum}`,
+    hn.vandaag === datumVan(hNu) && hn.nachtDatum === nachtDatum(hNu) && L.vandaagVan(hn) === hn.vandaag);
+  ok('de standaardvolgorde staat aan (standaard): zonder vlag zou de run de kaart afwerken', hn.standaardVolgorde === true);
+  await hPost('/api/kaart/wens', { sleutels: [SP] });                 // alleen Spotify; de nep-zoeker geeft hooguit 0,60
+  const knopH = L.haalNuKnop(L.wachtAantal((await hGet('/api/kaart/wensen')).j.wensen), hn);
+  ok(`de knop: "${knopH.tekst}"`, knopH.kan && knopH.aantal === 1);
+  const r1 = await hPost('/api/nacht/nu', L.haalNuBody(knopH.aantal));
+  ok('POST /api/nacht/nu { aantal: 1, alleenWensen: true }: 202, bezig met alleenWensen', r1.status === 202 && r1.j.bezig?.alleenWensen === true && r1.j.bezig?.soort === 'nu');
+  ok('... de run is binnen 30 s klaar', await totKlaar());
+  const w1 = (await hGet('/api/kaart/wensen')).j.wensen;
+  ok(`de wens staat op kies (geen zekere versie): ${w1.map((w) => `${w.sleutel}=${w.status}`).join(', ')}`, w1.length === 1 && w1[0].status === 'kies');
+  ok('geen wens met bron nacht: niets uit de standaardvolgorde gehaald', w1.every((w) => w.bron !== 'nacht'));
+  ok(`in het nep-log alleen de zoekvraag, geen download (${haalRegels().map((r) => r.wat).join(', ')})`, haalRegels().length >= 1 && haalRegels().every((r) => r.wat === 'zoek'));
+  const run1 = (await hGet('/api/nacht/runs')).j.runs[0];
+  ok(`de run zegt het: "${run1?.reden}"`, run1?.reden === 'niets meer te halen' && run1?.gehaald === 0);
+
+  const YT = 'yt:fourtet0baby';
+  await hPost('/api/kaart/wens', { sleutels: [YT] });
+  const r2 = await hPost('/api/nacht/nu', L.haalNuBody(1));
+  ok('een yt-wens: 202, bezig gevuld (de knop zegt dan "er loopt al een run")', r2.status === 202 && r2.j.bezig?.aantal === 1
+    && L.haalNuKnop(1, r2.j).tekst === 'haal nu: er loopt al een run');
+  ok('... de run is binnen 30 s klaar', await totKlaar());
+  const w2 = (await hGet('/api/kaart/wensen')).j.wensen;
+  const ytWens = w2.find((w) => w.sleutel === YT);
+  ok(`de wens staat op klaar, met de track (${ytWens?.status}, ${ytWens?.track?.id ?? 'geen track'})`, ytWens?.status === 'klaar' && !!ytWens?.track);
+  ok('nog steeds geen wens met bron nacht', w2.every((w) => w.bron !== 'nacht'));
+  ok('in het nep-log nu ook de download van dat nummer, en alleen dat', haalRegels().filter((r) => r.wat === 'download').length === 1
+    && haalRegels().filter((r) => r.wat === 'download').every((r) => /fourtet0baby/.test(r.url)));
+  const rijYt = (await hGet(`/api/kaart/nummer/${encodeURIComponent(YT)}`)).j.nummer;
+  const { rijen: naRun } = L.pasWensenToe([{ ...rijYt, binnen: null, wens: { status: 'wacht', fout: null, youtube_id: rijYt.youtube_id } }], w2);
+  ok('de companion-rij volgt: klaar (pasWensenToe)', /data-stand="klaar"/.test(L.rijHtml(naRun[0])));
+
+  // Fix 5: hoe groot is GET /api/kaart/wensen per wens? Een klare wens draagt het hele track-object mee;
+  // de companion vraagt daarom ?licht=1 (zonder track en nummer, kandidaten alleen bij kies).
+  const ruw = await (await fetch(`${H}/api/kaart/wensen`)).text();
+  const licht = await (await fetch(`${H}/api/kaart/wensen?licht=1`)).text();
+  const perWens = Object.fromEntries(w2.map((w) => [w.status, JSON.stringify(w).length]));
+  const lw = JSON.parse(licht).wensen;
+  const perLicht = Object.fromEntries(lw.map((w) => [w.status, JSON.stringify(w).length]));
+  ok(`omvang /api/kaart/wensen: ${ruw.length} B voor ${w2.length} wensen (klaar met track ${perWens.klaar} B, kies met 5 kandidaten ${perWens.kies} B);`
+    + ` ?licht=1: ${licht.length} B (klaar ${perLicht.klaar} B)`, ruw.length > 0 && licht.length < ruw.length && perLicht.klaar < perWens.klaar / 3);
+  ok('?licht=1: geen track en geen nummer, wel sleutel/status/fout/youtube_id, en de kandidaten van de kies-wens',
+    lw.every((w) => !('track' in w) && !('nummer' in w) && 'status' in w && 'youtube_id' in w && 'fout' in w)
+    && L.kandidatenPerSleutel(lw).get(SP)?.length === 5 && lw.find((w) => w.status === 'klaar').kandidaten === null);
+  const { rijen: naLicht } = L.pasWensenToe([{ ...rijYt, binnen: null, wens: { status: 'wacht', fout: null, youtube_id: rijYt.youtube_id } }], lw);
+  ok('... en de companion-rij volgt ook met de lichte lijst: klaar', /data-stand="klaar"/.test(L.rijHtml(naLicht[0])));
 } catch (err) {
   ok(`test liep door: ${err.stack || err}`, false);
 } finally {
-  for (const s of [met, zonder]) s.proc.kill('SIGTERM');
-  await Promise.race([Promise.all([met, zonder].map((s) => new Promise((z) => (s.proc.exitCode !== null ? z() : s.proc.on('exit', z))))), wacht(5000)]);
-  if (fails.length) console.log(`\n--- server met ---\n${met.uit.split('\n').slice(-25).join('\n')}\n--- server zonder ---\n${zonder.uit.split('\n').slice(-8).join('\n')}`);
+  for (const s of [met, zonder, haalSrv]) s.proc.kill('SIGTERM');
+  await Promise.race([Promise.all([met, zonder, haalSrv].map((s) => new Promise((z) => (s.proc.exitCode !== null ? z() : s.proc.on('exit', z))))), wacht(5000)]);
+  if (fails.length) console.log(`\n--- server met ---\n${met.uit.split('\n').slice(-25).join('\n')}\n--- server zonder ---\n${zonder.uit.split('\n').slice(-8).join('\n')}`
+    + `\n--- server haal ---\n${haalSrv.uit.split('\n').slice(-25).join('\n')}`);
   rmSync(map, { recursive: true, force: true });
 }
 

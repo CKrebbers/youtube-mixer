@@ -23,6 +23,8 @@ const opslag = (() => { try { return window.localStorage; } catch { return null;
 const st = {
   config: L.STANDAARD_CONFIG,
   tab: 'nu',
+  tabBewaard: L.bewaardeTab(opslag),   // null = de eerste keer: na het eerste antwoord van /api/mixer kiezen (L.eersteTab)
+  tabGetikt: false,          // heeft iemand zelf een tab gekozen? Dan kiest de pagina niets meer.
   pins: L.leesPins(opslag),
   server: null,              // true | false: lukte het laatste verzoek?
   mixer: undefined,          // antwoord van GET /api/mixer, { ontbreekt }, { fout }, null (weg); undefined = nog niet gevraagd
@@ -102,14 +104,27 @@ function zetServer(aan) {
 
 // ---- tabs ----------------------------------------------------------------------------
 
-function zetTab(tab) {
+/*
+ * Breed (iPad liggend, ≥ 900 px): alle drie tegelijk in beeld. Smal: alleen de
+ * gekozen tab, en dan wordt de wenslijst alleen gelezen als de kaart open is
+ * (GET /api/kaart/wensen groeit met elke nacht; over een hotspot elke 5 s per
+ * apparaat is zonde als niemand kijkt; review ronde 1, fix 5).
+ */
+const breed = (() => { try { return window.matchMedia('(min-width: 900px)'); } catch { return null; } })();
+const wensNodig = () => !!breed?.matches || st.tab === 'kaart';
+
+/** Een tab tonen. `bewaar: false` = de pagina kiest zelf (geen keuze van Clay, dus niet onthouden). */
+function zetTab(tab, { bewaar = true } = {}) {
   if (!st.config.tabs.includes(tab)) return;
+  const was = st.tab;
   st.tab = tab;
   document.body.dataset.tab = tab;
   for (const b of document.querySelectorAll('.onderbalk button')) {
     if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   }
-  L.bewaarTab(opslag, tab);
+  if (bewaar) L.bewaarTab(opslag, tab);
+  // Naar de kaart op een smal scherm: meteen de wenslijst (hij werd niet gepeild).
+  if (tab === 'kaart' && was !== 'kaart' && !breed?.matches && peilId) leesWensenEnNacht().catch(() => {});
 }
 
 function pasConfigToe() {
@@ -118,12 +133,12 @@ function pasConfigToe() {
     $(tab).hidden = !aan;
     document.querySelector(`.onderbalk button[data-tab="${tab}"]`).hidden = !aan;
   }
-  zetTab(L.leesTab(opslag, st.config.tabs));
+  zetTab(L.leesTab(opslag, st.config.tabs), { bewaar: false });
 }
 
 // ---- nu en beeld ------------------------------------------------------------------------
 
-let peilt = false;
+let peilt = false, eersteGekozen = false;
 async function peilMixer() {
   if (peilt) return;
   peilt = true;
@@ -132,6 +147,11 @@ async function peilMixer() {
     if (a === undefined) return;                       // in rust na een 404: houd wat er staat
     st.mixer = a?.data ?? (a?.ontbreekt ? { ontbreekt: true } : a?.fout ? { fout: a.fout } : null);
     tekenNu();
+    // De eerste keer (niets bewaard, nog niets getikt): meldt de mixer zich niet, dan de kaart.
+    if (!eersteGekozen) {
+      eersteGekozen = true;
+      if (!st.tabGetikt) zetTab(L.eersteTab(st.tabBewaard, st.mixer, st.config.tabs), { bewaar: false });
+    }
   } finally { peilt = false; }
 }
 
@@ -144,7 +164,8 @@ function tekenNu() {
 // ---- de wenslijst en de nacht ----------------------------------------------------------
 
 async function leesWensenEnNacht() {
-  const [w, n] = await Promise.allSettled([haal('/api/kaart/wensen'), haal('/api/nacht')]);
+  // ?licht=1: zonder track en nummer (de lijst groeit met elke nacht; zie server/kaart.js wensen()).
+  const [w, n] = await Promise.allSettled([haal('/api/kaart/wensen?licht=1'), haal('/api/nacht')]);
   if (w.status === 'fulfilled' && w.value.ok) {
     st.wensen = w.value.j?.wensen ?? [];
     st.kandidaten = L.kandidatenPerSleutel(st.wensen);
@@ -178,8 +199,9 @@ async function haalNu() {
   const knop = $('haal-nu');
   knop.disabled = true;
   try {
-    const r = await post('/api/nacht/nu', { aantal });
-    if (r.status === 202) { st.nacht = r.j; meld(`run gestart (${aantal})`, 'goed'); }
+    // { aantal, alleenWensen: true }: alleen de wenslijst, nooit de standaardvolgorde van de kaart (server/nacht.js).
+    const r = await post('/api/nacht/nu', L.haalNuBody(aantal));
+    if (r.status === 202) { st.nacht = r.j; tekenWenslijst(); meld(L.haalNuGestartTekst(Math.min(aantal, L.HAAL_MAX)), 'goed'); }
     else meld(r.j?.fout || `haal nu: fout ${r.status}`, 'fout');
   } catch { meld('haal nu: de server antwoordt niet', 'fout'); }
   await leesWensenEnNacht().catch(() => {});
@@ -319,8 +341,10 @@ let zoekTimer = null;
 function bind() {
   document.querySelector('.onderbalk').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-tab]');
-    if (b) zetTab(b.dataset.tab);
+    if (b) { st.tabGetikt = true; zetTab(b.dataset.tab); }
   });
+  // iPad gedraaid naar liggend: de kaart is dan altijd in beeld, dus de wenslijst meteen bijwerken.
+  breed?.addEventListener?.('change', () => { if (breed.matches && peilId) leesWensenEnNacht().catch(() => {}); });
   $('zoek').addEventListener('input', () => {
     clearTimeout(zoekTimer);
     zoekTimer = setTimeout(() => { st.zoek = $('zoek').value.trim(); laadLijst(); }, 300);
@@ -362,14 +386,14 @@ function startPeilen() {
   if (peilId) return;
   peilMixer();
   peilId = setInterval(peilMixer, L.PEIL_MS);
-  wensId = setInterval(() => leesWensenEnNacht().catch(() => {}), 5000);
+  wensId = setInterval(() => { if (wensNodig()) leesWensenEnNacht().catch(() => {}); }, 5000);
 }
 function stopPeilen() {
   clearInterval(peilId); clearInterval(wensId);
   peilId = wensId = null;
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') { startPeilen(); leesWensenEnNacht().catch(() => {}); } else stopPeilen();
+  if (document.visibilityState === 'visible') { startPeilen(); if (wensNodig()) leesWensenEnNacht().catch(() => {}); } else stopPeilen();
 });
 
 async function start() {
@@ -387,7 +411,7 @@ async function start() {
   tekenNu();
   tekenKratten();
   if (document.visibilityState !== 'hidden') startPeilen();
-  await Promise.all([leesKaart(), leesWensenEnNacht().catch(() => {})]);
+  await Promise.all([leesKaart(), wensNodig() ? leesWensenEnNacht().catch(() => {}) : null]);
   await laadLijst();
   window.companion.klaar = true;
 }

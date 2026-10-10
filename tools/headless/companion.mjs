@@ -1,9 +1,10 @@
 // De companion (companion.html, docs/COMPANION.md) headless in echte Chromium,
-// op een telefoon (390 × 844) en een iPad liggend (1024 × 768).
+// op een telefoon (390 × 844), een iPad liggend (1024 × 768) en staand (768 × 1024).
 //
 // Opzet: een EIGEN server op een eigen poort (nooit 8777) met een lege
 // tijdelijke database, de nep-kaart (test/nep-kaart.mjs, twaalf nummers en de
-// zeven slimme kratten) en de nep-yt-dlp (geen byte van internet). Er is hier
+// zeven slimme kratten) en de nep-yt-dlp (geen byte van internet; een "download"
+// is een toon van 12 s die ffmpeg hier maakt, NEP_BRON). Er is hier
 // GEEN mixertabblad: de companion moet het zonder doen. Getikt wordt met echte
 // aanraakgebeurtenissen (Input.dispatchTouchEvent), niet met el.click().
 //
@@ -12,7 +13,12 @@
 // - requestMIDIAccess en AudioContext zijn tellers die NOOIT de echte aanroepen
 //   (er hangt misschien een APC aan deze Mac): de controle is dat ze 0 blijven;
 // - SIGINT/SIGTERM/een fout ruimen Chromium, server en tmp op; een waakhond stopt
-//   alles na 150 s; na afloop: `pgrep -fl 'varve-companion|:8805|9405'` moet leeg zijn.
+//   alles na 150 s; aan het eind kijkt het script ZELF na dat beide poorten weer
+//   dicht zijn en dat er geen proces met dit profiel meer draait (de laatste
+//   controle). Met de hand: `lsof -nP -iTCP:8805 -iTCP:9405 -sTCP:LISTEN` en
+//   `pgrep -fl 'user-data-dir=[^ ]*varve-companion-'`, allebei leeg. NIET
+//   `pgrep -fl '…|9405'`: dat getal stond toevallig in de argumenten van de
+//   GPU-helper van Clay's eigen Chrome (review ronde 1, fix 3).
 //
 // "Nu" en "beeld" zijn in stap 1 leeg (de server kent /api/mixer nog niet). Eén
 // blok bootst met de Fetch-laag van Chromium een melding na (acht tracks, beeld
@@ -20,7 +26,7 @@
 //
 // Gebruik:  node tools/headless/companion.mjs [uitmap]
 // Poorten:  VARVE_KIJK_POORT (8805) en VARVE_KIJK_DEBUG (9405). Chrome: VARVE_CHROME.
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, existsSync, rmSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
@@ -28,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { schrijfKaart, NUMMERS } from '../../test/nep-kaart.mjs';
 import { maakNepYtdlp } from '../../test/nep-ytdlp.mjs';
 import { datumVan, nachtDatum } from '../../server/nacht.js';
-import { BEELD_ZIN } from '../../src/companion/companion-lijst.js';
+import { BEELD_ZIN, NU_ONTBREEKT } from '../../src/companion/companion-lijst.js';
 
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
 const UIT = process.argv[2] || join(WORTEL, 'tools/headless/uit');
@@ -60,13 +66,16 @@ const kaartPad = join(tmp, 'varve-kaart.json');
 const nepLog = join(tmp, 'nep.log');
 schrijfKaart(kaartPad);
 mkdirSync(join(tmp, 'media'), { recursive: true });
+// De "download" van de nep-yt-dlp: 12 s toon (haal nu loopt echt door de ingest, zonder internet).
+const bron = join(tmp, 'bron.wav');
+execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'sine=f=440:d=12', '-ac', '2', bron]);
 
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   cwd: WORTEL,
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'media', 'library.db'), VARVE_MEDIA: join(tmp, 'media'),
     VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_PATRONEN: join(tmp, 'patronen'),
     VARVE_PROEF: join(tmp, 'proef'), VARVE_BACKUPS: join(tmp, 'backups'), VARVE_HERANALYSE: 'uit',
-    VARVE_YTDLP: maakNepYtdlp(tmp), NEP_LOG: nepLog, VARVE_KAART: kaartPad, VARVE_HOSTS: '' },
+    VARVE_YTDLP: maakNepYtdlp(tmp), NEP_LOG: nepLog, NEP_BRON: bron, NEP_DUUR: '300', VARVE_KAART: kaartPad, VARVE_HOSTS: '' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let serverLog = '';
@@ -205,14 +214,25 @@ try {
   // ================= telefoon 390 × 844 =================
   console.log('\nde telefoon: 390 × 844 (iPhone 14 Pro, staand)');
   await scherm(390, 844, 3);
+  // Elk verzoek naar de wenslijst tellen (fix 5: niet peilen zolang de kaart niet te zien is).
+  const wensVerzoeken = [];
+  p.op('Network.requestWillBeSent', (q) => { if (/\/api\/kaart\/wensen/.test(q.request.url)) wensVerzoeken.push({ t: Date.now(), url: q.request.url }); });
   ok('companion laadt en is klaar', await laad());
   ok('de kop zegt met welke server hij praat', /localhost:\d+/.test(await tekst('#verbinding')));
-  ok('eerste keer: tab "nu", de kaart en het beeld staan verborgen', (await p.ev('document.body.dataset.tab')) === 'nu'
-    && await zichtbaar('#nu') && !(await zichtbaar('#kaart')) && !(await zichtbaar('#beeld')));
-  ok('"nu": deze server kent /api/mixer nog niet (stap 1), en dat wordt netjes gezegd',
-    await tot(async () => /deze server kent \/api\/mixer nog niet/.test(await tekst('#nu-inhoud'))));
+  ok('eerste keer (niets bewaard), /api/mixer geeft 404: de kaart, niet een vrijwel leeg "nu" (fix 4)',
+    await tot(async () => (await p.ev('document.body.dataset.tab')) === 'kaart') && await zichtbaar('#kaart') && !(await zichtbaar('#nu')) && !(await zichtbaar('#beeld')));
+  ok('... en die keuze is niet bewaard (Clay koos niets)', (await p.ev('localStorage.getItem("varve.companion.tab")')) === null);
+  ok('naar de kaart: meteen de wenslijst, de lichte vorm (?licht=1)', await tot(async () => wensVerzoeken.length > 0, 3000)
+    && wensVerzoeken.every((v) => /\?licht=1$/.test(v.url)), wensVerzoeken.map((v) => v.url).join(' '));
+  await tik('.onderbalk button[data-tab="nu"]');
+  ok('tik op "nu": een zin voor Clay, geen ontwikkelaarszin', await tot(async () => (await tekst('#nu-inhoud')).includes(NU_ONTBREEKT))
+    && !/\/api\/mixer|stap 2/.test(await tekst('#nu-inhoud')));
   ok('390 px op "nu": geen zijwaarts scrollen', await geenZijwaarts());
   await foto('companion-390-nu-leeg.png');
+  const sindsNu = Date.now();
+  await wacht(6500);
+  ok(`zolang "nu" open is (6,5 s): geen GET /api/kaart/wensen (fix 5; ${wensVerzoeken.filter((v) => v.t >= sindsNu).length} gezien)`,
+    wensVerzoeken.filter((v) => v.t >= sindsNu).length === 0);
 
   await tik('.onderbalk button[data-tab="beeld"]');
   ok('tik op "beeld": alleen het beeld', (await p.ev('document.body.dataset.tab')) === 'beeld' && await zichtbaar('#beeld') && !(await zichtbaar('#nu')));
@@ -221,8 +241,10 @@ try {
   ok('"beeld" heeft geen knoppen (in v1 alleen tonen)', (await p.ev('document.querySelectorAll("#beeld button").length')) === 0);
   await foto('companion-390-beeld.png');
 
+  const voorKaart = Date.now();
   await tik('.onderbalk button[data-tab="kaart"]');
   ok('tik op "kaart": de kaart', (await p.ev('document.body.dataset.tab')) === 'kaart' && await zichtbaar('#kaart'));
+  ok('... en meteen de wenslijst (binnen 1,5 s een verzoek, niet pas na 5 s)', await tot(async () => wensVerzoeken.some((v) => v.t >= voorKaart), 1500));
   ok(`de hele kaart: ${NUMMERS.length} rijen, "${NUMMERS.length} nummers"`, (await rijen()).length === NUMMERS.length
     && (await tekst('#lijst-stand')) === `${NUMMERS.length} nummers`);
   const opties = await p.ev(`[...document.querySelectorAll('#krat option')].map((o) => ({ v: o.value, groep: o.parentElement.label ?? null }))`);
@@ -312,6 +334,26 @@ try {
   ok('de knop zegt nu zelf "vandaag speeldag"', await tot(async () => /vandaag speeldag/.test(await tekst('#haal-nu'))));
   ok('de netwerkfout in de console is alleen die 409 van /api/nacht/nu', p.logFouten.slice(logVoor).every((f) => /api\/nacht\/nu/.test(f.url + f.tekst)),
     p.logFouten.slice(logVoor).map((f) => `${f.tekst} ${f.url}`).join(' | '));
+  // Haal nu echt (fix 1): alleen de wenslijst, ook al staat de standaardvolgorde aan. Geen pauze tussen twee.
+  console.log('\nhaal nu echt: alleen de wenslijst (de standaardvolgorde staat aan)');
+  const nachtH = (await api('/api/nacht', { speeldagen: ['2026-01-02'], pauze: { min: 0, max: 0 } })).j;
+  ok('de standaardvolgorde staat aan (standaard)', nachtH.standaardVolgorde === true);
+  await laad();
+  ok('geen speeldag: "haal de wenslijst nu op (2)"', await tot(async () => (await tekst('#haal-nu')) === 'haal de wenslijst nu op (2)'));
+  const zoekVoor = nepRegels().length;
+  await tik('#haal-nu');
+  ok('tik: de melding "run gestart: hooguit 2 van de wenslijst"', await tot(async () => (await meldingen()).includes('run gestart: hooguit 2 van de wenslijst')),
+    (await meldingen()).at(-1));
+  ok('... en de knop zegt meteen "haal nu: er loopt al een run"', await tot(async () => (await tekst('#haal-nu')) === 'haal nu: er loopt al een run', 1500),
+    await tekst('#haal-nu'));
+  ok('binnen 25 s staan beide rijen op klaar, zonder herladen (de lijst volgt de wenslijst)', await tot(async () => {
+    const r = await rijen(); return r.find((x) => x.s === WENS)?.stand === 'klaar' && r.find((x) => x.s === SP)?.stand === 'klaar'; }, 25000),
+    JSON.stringify((await rijen()).filter((x) => x.s === WENS || x.s === SP)));
+  const downloads = nepRegels().slice(zoekVoor).filter((r) => r.wat === 'download').map((r) => r.url);
+  ok(`alleen die twee gedownload, niets uit de standaardvolgorde (${downloads.length}: ${downloads.map((u) => u.split('=').pop()).join(', ')})`,
+    downloads.length === 2 && (await api('/api/kaart/wensen')).j.wensen.every((w) => w.bron !== 'nacht'));
+  ok('de run is klaar en de knop zegt weer "niets te halen"', await tot(async () => (await api('/api/nacht')).j.bezig === null
+    && (await tekst('#haal-nu')) === 'haal nu: niets te halen', 8000), await tekst('#haal-nu'));
   await api('/api/nacht', { speeldagen: ['2026-01-02'] });
   await laad();
   ok('weer geen speeldag: de knop "vandaag speeldag" staat er', await tot(() => zichtbaar('#speeldag')));
@@ -345,6 +387,30 @@ try {
   const doelen3 = await tikdoelen();
   ok(`1024: elk tikdoel ≥ 44 × 44 (${doelen3.n} getoetst)`, doelen3.klein.length === 0, doelen3.klein.join(', '));
   await foto('companion-1024.png');
+  // Fix 6: nu en beeld blijven staan als de kaart scrolt.
+  await p.ev('window.scrollTo(0, 1500)');
+  await wacht(250);
+  const plak = await p.ev(`({ y: Math.round(scrollY), nu: Math.round(document.getElementById('nu').getBoundingClientRect().top),
+    beeld: Math.round(document.getElementById('beeld').getBoundingClientRect().bottom) })`);
+  ok(`gescrold (${plak.y} px): nu staat nog bovenaan (top ${plak.nu} px), beeld in beeld (onder ${plak.beeld} px)`,
+    plak.y >= 200 && plak.nu >= 0 && plak.nu <= 120 && plak.beeld <= 768, JSON.stringify(plak));
+  await foto('companion-1024-gescrold.png');
+  await p.ev('window.scrollTo(0, 0)');
+
+  // ================= iPad staand 768 × 1024 (fix 7) =================
+  console.log('\nde iPad staand: 768 × 1024');
+  await scherm(768, 1024, 2);
+  await laad();
+  const staand = await p.ev(`(() => { const r = document.getElementById('kaart').getBoundingClientRect(); return { w: Math.round(r.width), tab: document.body.dataset.tab }; })()`);
+  ok(`één kolom met onderbalk: alleen de gekozen tab (${staand.tab}), de kaart ${staand.w} px breed`, await zichtbaar('.onderbalk')
+    && staand.tab === 'kaart' && await zichtbaar('#kaart') && !(await zichtbaar('#nu')) && !(await zichtbaar('#beeld')) && staand.w >= 700);
+  ok('768: geen zijwaarts scrollen', await geenZijwaarts());
+  const doelen4 = await tikdoelen();
+  ok(`768: elk tikdoel ≥ 44 × 44 (${doelen4.n} getoetst)`, doelen4.klein.length === 0, doelen4.klein.join(', '));
+  await foto('companion-768.png');
+  await tik('.onderbalk button[data-tab="nu"]');
+  ok('768: tik op "nu" werkt (onderbalk)', (await p.ev('document.body.dataset.tab')) === 'nu' && await zichtbaar('#nu') && !(await zichtbaar('#kaart')));
+  await tik('.onderbalk button[data-tab="kaart"]');
 
   // ================= laden over een trage verbinding =================
   console.log('\neen trage verbinding (200 ms per verzoek, zoals een hotspot)');
@@ -413,8 +479,22 @@ try {
   opruimen();
   await wacht(500);
 }
+// Zelf nakijken dat alles van deze run weg is (fix 3): beide poorten dicht, en geen
+// proces meer met DIT profiel in zijn argumenten (de tmp-map is uniek per run).
+{
+  const open = (url) => fetch(url, { signal: AbortSignal.timeout(800) }).then(() => true).catch(() => false);
+  const eigen = () => { try { return execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' }).split('\n').filter((r) => r.includes(tmp)).map((r) => r.trim().slice(0, 120)); } catch { return ['ps faalde']; } };
+  let vrij = false, over = [];
+  for (let i = 0; i < 25 && !vrij; i++) {
+    const poortOpen = (await open(`http://127.0.0.1:${POORT}/`)) || (await open(`http://127.0.0.1:${DEBUG}/json/version`));
+    over = eigen();
+    vrij = !poortOpen && over.length === 0;
+    if (!vrij) await wacht(200);
+  }
+  ok(`poorten ${POORT}/${DEBUG} weer vrij, geen eigen Chromium meer`, vrij, over.join(' | '));
+}
 const rood = uitkomst.filter(([, g]) => !g).length;
 if (rood) console.log(`\nserverlog (laatste regels):\n${serverLog.split('\n').slice(-15).join('\n')}`);
 console.log(`\n${uitkomst.length - rood}/${uitkomst.length} ok${rood ? ` — ${rood} FOUT(EN)` : ''}. Schermafdrukken in ${UIT}.`);
-console.log(`Controleer daarna: pgrep -fl 'varve-companion|:${POORT}|${DEBUG}'  → moet leeg zijn.`);
+console.log(`Met de hand nakijken (allebei leeg = goed): lsof -nP -iTCP:${POORT} -iTCP:${DEBUG} -sTCP:LISTEN   en   pgrep -fl 'user-data-dir=[^ ]*varve-companion-'`);
 process.exit(rood ? 1 : 0);

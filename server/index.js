@@ -1571,7 +1571,7 @@ async function kaartRoute(req, res, url, padRuw) {
       }));
     }
 
-    if (pad === '/api/kaart/wensen' && req.method === 'GET') return json(res, 200, { wensen: kaart.wensen() });
+    if (pad === '/api/kaart/wensen' && req.method === 'GET') return json(res, 200, { wensen: kaart.wensen({ licht: url.searchParams.get('licht') === '1' }) });
 
     if (pad === '/api/kaart/wens' && req.method === 'POST') {
       const body = await leesJson(req, 256 * 1024);
@@ -1625,7 +1625,8 @@ async function kaartRoute(req, res, url, padRuw) {
     if (pad === '/api/nacht/nu' && req.method === 'POST') {
       const body = await leesJson(req);
       try {
-        const run = nacht.nu({ aantal: body?.aantal ?? 1 });
+        // alleenWensen (de companion): alleen de wenslijst, nooit de standaardvolgorde (docs/KAART.md §3).
+        const run = nacht.nu({ aantal: body?.aantal ?? 1, alleenWensen: body?.alleenWensen ?? false });
         // Niet wachten tot hij af is (dat kan uren duren): de stand, met bezig.
         run.catch(() => {});
         return json(res, 202, nacht.stand());
