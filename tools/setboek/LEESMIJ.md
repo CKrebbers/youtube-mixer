@@ -9,16 +9,41 @@ Buma/Stemra-lijst. Spoor produceren-uit, stap 2 (10 okt). Leest alleen; schrijft
 **Altijd op een KOPIE van de logs**, nooit in de echte `opnames/` en nooit tijdens een set:
 
 ```
-mkdir -p <klad>/avond1 && cp "<checkout>/opnames/set-20261010-"*.acties.jsonl <klad>/avond1/
+K=<kladmap>/avond1; mkdir -p "$K"
+cp "<checkout>/opnames/set-20261010-"*.acties.jsonl "<checkout>/opnames/set-20261011-0"*.acties.jsonl "$K"/ 2>/dev/null
+cp "$(ls -t "<checkout>/media/backups/"library-*.db | head -1)" "$K/library.db"   # optioneel: lengtes (de nieuwste backup: één consistent bestand)
+cp "<checkout>/proef/sessie.json" "$K"/ 2>/dev/null                                                             # optioneel: proefpunten
+taskpolicy -b node tools/setboek/setboek.mjs --dag 20261010 --map "$K" --db "$K/library.db" --proef "$K/sessie.json"
 ```
+
+`cp`, nooit `mv`. Zonder `--db` en `--proef` werkt het ook (zonder lengtes en proefpunten).
+Voor `--db` de nieuwste backup (`media/backups/`, gemaakt met VACUUM INTO) en niet `library.db` zelf:
+dat bestand kopiëren terwijl de server schrijft kan half zijn (recent werk staat in `-wal`, CLAUDE.md "Backup").
+Lengtes veranderen zelden; een backup van het laatste uur is genoeg.
+
+## De CLI (`setboek.mjs`)
+
+| Vlag | Wat |
+|---|---|
+| `--dag JJJJMMDD --map <map>` | alle `set-JJJJMMDD-*.acties.jsonl` in de map, plus die van de volgende ochtend vóór 06:00 (een avond over middernacht) |
+| `--log <pad>` | één log; herhaalbaar (niet samen met `--dag`) |
+| `--db <library.db>` | lengte per nummer (`tracks.duur`), alleen-lezen via `node:sqlite`; ontbreekt of kapot = een melding, verder zonder |
+| `--proef <sessie.json>` | punten met "fout" of een notitie op de tijdlijn, met wat er toen klonk; vrij spelen / speellijst gesplitst op `begonnen` |
+| `--json` | JSON in plaats van Markdown |
+| `--uit <pad>` / `--naast-log` | naar een bestand (`--naast-log`: `set-<id>.setboek.md` naast het eerste log); bestaat het al: exit 2, niets overschreven |
+
+Standaard naar stdout. Exit 0 goed, 1 verkeerd aangeroepen, 2 bestaat al. Ligt een log in de
+`opnames/` van een checkout (een map met `server/index.js` ernaast), dan waarschuwt hij: lees
+een kopie. Nooit `pkill`/`killall` in de buurt van deze map: er draait geen server voor nodig.
 
 ## Bestanden
 
 | Bestand | Wat |
 |---|---|
-| `lees.mjs` | puur (geen fs): `rijgLogs`, `laadmomenten`, `toestand`, `hoort`, `hoorbaar`, `positieInBron`, `setboek`, `naarMarkdown`, `naarJson` |
+| `lees.mjs` | puur (geen fs): `rijgLogs`, `laadmomenten`, `toestand`, `hoort`, `hoorbaar`, `positieInBron`, `proefpunten`, `setboek`, `naarMarkdown`, `naarJson` |
 | `gebruik.mjs` | `tellingen(regels)`: top 10 actions, laads, actieve minuten. Eén teller, ook voor een latere `tools/gebruik.mjs` |
-| `../../test/setboek.test.mjs` | 61 checks op synthetische logs in het echte formaat |
+| `setboek.mjs` | de CLI: bestanden lezen, `--dag`, `--db`, `--proef`, uitvoer |
+| `../../test/setboek.test.mjs` | 75 checks op synthetische logs in het echte formaat, en de CLI in een tijdelijke map |
 
 ## De regel "hoorbaar"
 
@@ -69,4 +94,5 @@ node test/setboek.test.mjs
 
 Gemeten (10 okt, bouwer): 60 000 synthetische acties (3,4 MB, 2,1 uur) in 0,8 s onder
 `taskpolicy -b`. Niet getest: een ECHT log van een avond (er is er nog geen met deze
-lezer gelezen).
+lezer gelezen; de bouwer las op 10 okt bewust niets uit de echte `opnames/`). Een actie telt
+in "Gebruik" per logregel, dus een knop twee keer (indrukken en loslaten).

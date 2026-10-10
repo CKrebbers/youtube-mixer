@@ -256,5 +256,80 @@ console.log('\nlaadmomenten en een stand midden in het log');
   ok('een stand midden in het log (terugspelen) begint een nieuw stuk', h.stukken.map((s) => `${s.titel}:${s.van}-${s.tot}`).join() === 'Begin:0-100,Opnieuw:100-160', JSON.stringify(h.stukken));
 }
 
+console.log('\nproefpunten (Controlekamer)');
+{
+  const tekst = logTekst({ tracks: { 1: tr(1, 'Eerste', { speelt: true }) }, waarden: { 'mixer.xfader': 0 }, regels: [[600, 'mixer.xfader', 0]] });
+  const sessie = { begonnen: new Date(BEGIN + 300 * 1000).toISOString(), items: {
+    'apc-fader': { status: 'fout', notitie: 'fader 3 sprong', tijd: new Date(BEGIN + 120 * 1000).toISOString() },
+    'beeld': { status: 'ok', notitie: '', tijd: new Date(BEGIN + 200 * 1000).toISOString() },
+    'cue': { status: 'ok', notitie: 'klonk goed', tijd: new Date(BEGIN + 700 * 1000).toISOString() } } };
+  const boek = S.setboek([{ bestand: 'set-20261010-200000.acties.jsonl', tekst }], { proef: sessie });
+  ok('alleen fout of met notitie, fout eerst; wat er toen klonk erbij',
+    boek.proef.punten.map((x) => x.id).join() === 'apc-fader,cue' && boek.proef.punten[0].klonk.join() === 'T1 Eerste' && boek.proef.punten[1].klonk.length === 0, JSON.stringify(boek.proef));
+  const md = S.naarMarkdown(boek);
+  ok('Markdown: proefpunten met de kloktijd, en vrij spelen / speellijst', md.includes('**fout** · apc-fader · rond 20:02:00 · "fader 3 sprong" · toen hoorbaar: T1 Eerste') && md.includes('Speellijst begonnen 20:05:00'), md);
+}
+
+console.log('\nde CLI (tools/setboek/setboek.mjs)');
+{
+  const { mkdtempSync, writeFileSync, readFileSync: lees, existsSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { spawnSync } = await import('node:child_process');
+  const cli = new URL('../tools/setboek/setboek.mjs', import.meta.url).pathname;
+  const draai = (...args) => spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+  const map = mkdtempSync(join(tmpdir(), 'setboek-'));
+  try {
+    const kort = logTekst({ tracks: { 1: tr(1, 'Kort', { speelt: true, nummer: 'kort' }) }, waarden: { 'mixer.xfader': 0 }, regels: [[600, 'mixer.xfader', 0]] });
+    const nacht = logTekst({ begon: BEGIN + 4.5 * 3600 * 1000, tracks: { 2: tr(2, 'Na middernacht', { speelt: true }) }, waarden: { 'mixer.xfader': 1 }, regels: [[120, 'mixer.xfader', 1]] });
+    const ander = logTekst({ begon: BEGIN - 86400 * 1000, tracks: { 1: tr(1, 'Gisteren', { speelt: true }) }, regels: [[60, 'mixer.xfader', 0.5]] });
+    writeFileSync(join(map, 'set-20261010-200000.acties.jsonl'), kort);
+    writeFileSync(join(map, 'set-20261011-003000.acties.jsonl'), nacht);
+    writeFileSync(join(map, 'set-20261009-200000.acties.jsonl'), ander);
+    writeFileSync(join(map, 'set-20261011-120000.acties.jsonl'), ander);
+    const r = draai('--dag', '20261010', '--map', map);
+    ok('--dag: die dag plus de nacht erna (vóór 06:00), naar stdout', r.status === 0 && r.stdout.startsWith('# Setboek 2026-10-10') && r.stdout.includes('Na middernacht')
+      && !r.stdout.includes('Gisteren') && r.stdout.includes('20261011-003000'), r.stderr + r.stdout.slice(0, 300));
+    ok('zonder --db: Kort speelt door tot 10:00 (geen einde te schatten)', r.stdout.includes('| 1 | 0:00–10:00 | 20:00:00 | T1 | Kort |'), r.stdout);
+    const { DatabaseSync } = await import('node:sqlite');
+    const dbPad = join(map, 'library.db');
+    const db = new DatabaseSync(dbPad);
+    db.exec('CREATE TABLE tracks (id TEXT PRIMARY KEY, titel TEXT, duur REAL)');
+    db.prepare('INSERT INTO tracks (id, titel, duur) VALUES (?, ?, ?)').run('kort', 'Kort', 180);
+    db.close();
+    const metDb = draai('--log', join(map, 'set-20261010-200000.acties.jsonl'), '--db', dbPad, '--json');
+    const j = JSON.parse(metDb.stdout);
+    ok('--db (kopie, alleen lezen): Kort stopt op 3:00; --json is te lezen', metDb.status === 0 && j.stukken.length === 1 && j.stukken[0].tot === 180 && j.instellingen.lengte === true, metDb.stderr);
+    const zonderDb = draai('--log', join(map, 'set-20261010-200000.acties.jsonl'), '--db', join(map, 'bestaat-niet.db'));
+    ok('--db die niet bestaat: geen crash, een melding, gewoon een setboek', zonderDb.status === 0 && /bestaat niet/.test(zonderDb.stderr) && zonderDb.stdout.includes('# Setboek'));
+    const twee = draai('--log', join(map, 'set-20261010-200000.acties.jsonl'), '--log', join(map, 'set-20261011-003000.acties.jsonl'), '--json');
+    ok('--log herhaalbaar', twee.status === 0 && JSON.parse(twee.stdout).logs.length === 2);
+    const uit = join(map, 'boek.md');
+    const eerste = draai('--dag', '20261010', '--map', map, '--uit', uit);
+    const inhoud = existsSync(uit) ? lees(uit, 'utf8') : '';
+    const tweede = draai('--dag', '20261010', '--map', map, '--uit', uit, '--json');
+    ok('--uit: schrijft; een tweede keer exit 2 en niets overschreven', eerste.status === 0 && inhoud.startsWith('# Setboek') && tweede.status === 2 && /bestaat al/.test(tweede.stderr) && lees(uit, 'utf8') === inhoud);
+    const naast = draai('--log', join(map, 'set-20261010-200000.acties.jsonl'), '--naast-log');
+    const naastNog = draai('--log', join(map, 'set-20261010-200000.acties.jsonl'), '--naast-log');
+    ok('--naast-log: set-<id>.setboek.md naast het log, niet over een bestaande heen', naast.status === 0 && existsSync(join(map, 'set-20261010-200000.setboek.md')) && naastNog.status === 2);
+    const leeg = mkdtempSync(join(tmpdir(), 'setboek-leeg-'));
+    const niets = draai('--dag', '20261010', '--map', leeg);
+    ok('geen logs van die dag: exit 0, de melding op stdout en stderr', niets.status === 0 && niets.stdout.includes('geen log van die dag met acties') && /geen log/.test(niets.stderr));
+    rmSync(leeg, { recursive: true, force: true });
+    ok('zonder argumenten: exit 1 met gebruik', draai().status === 1 && /gebruik/.test(draai().stderr));
+    ok('--dag in een ander formaat: exit 1', draai('--dag', '2026-10-10', '--map', map).status === 1);
+    const proefPad = join(map, 'sessie.json');
+    writeFileSync(proefPad, JSON.stringify({ begonnen: new Date(BEGIN).toISOString(), items: { x: { status: 'fout', notitie: 'kapot', tijd: new Date(BEGIN + 60000).toISOString() } } }));
+    const proef = draai('--log', join(map, 'set-20261010-200000.acties.jsonl'), '--proef', proefPad);
+    ok('--proef: de proefpunten in het setboek', proef.status === 0 && proef.stdout.includes('## Proefpunten') && proef.stdout.includes('**fout** · x'));
+    const echt = join(map, 'checkout');
+    mkdirSync(join(echt, 'opnames'), { recursive: true }); mkdirSync(join(echt, 'server'));
+    writeFileSync(join(echt, 'server', 'index.js'), '');
+    writeFileSync(join(echt, 'opnames', 'set-20261010-200000.acties.jsonl'), kort);
+    const w = draai('--log', join(echt, 'opnames', 'set-20261010-200000.acties.jsonl'));
+    ok('een log in de opnames/ van een checkout: waarschuwing "lees liever een kopie" (wel gelezen)', w.status === 0 && /kopie/.test(w.stderr) && w.stdout.includes('# Setboek'));
+  } finally { rmSync(map, { recursive: true, force: true }); }
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

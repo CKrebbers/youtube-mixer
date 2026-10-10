@@ -464,6 +464,29 @@ export function positieInBron(stuk) {
   return delen.map((d) => (Number.isFinite(d.van) && Number.isFinite(d.tot) ? `${duurTekst(d.van)}–${duurTekst(d.tot)}` : '?')).join(', ');
 }
 
+// ---- de proefsessie (Controlekamer) -------------------------------------------------
+
+/**
+ * De punten van een proefsessie (`proef/sessie.json`: { begonnen, items: { id: { status, notitie, tijd } } },
+ * server/proef.js) op de klok van de avond. Alleen punten met status 'fout' of met een notitie.
+ * `tijd` is wanneer het punt het laatst werd afgevinkt, niet wanneer het misging: "rond".
+ * Per punt ook wat er toen klonk (de stukken die de tijd omvatten).
+ */
+export function proefpunten(sessie, stukken = []) {
+  const items = sessie && typeof sessie.items === 'object' && sessie.items ? sessie.items : {};
+  const begonnenMs = Date.parse(sessie?.begonnen ?? '');
+  const punten = [];
+  for (const [id, x] of Object.entries(items)) {
+    const klokMs = Date.parse(x?.tijd ?? '');
+    const notitie = typeof x?.notitie === 'string' ? x.notitie.trim() : '';
+    if (!(x?.status === 'fout' || notitie)) continue;
+    const klonk = Number.isFinite(klokMs) ? stukken.filter((s) => s.klokVan <= klokMs && klokMs <= s.klokTot).map((s) => `T${s.track} ${s.titel}`) : [];
+    punten.push({ id, status: x.status ?? 'open', notitie, klokMs: Number.isFinite(klokMs) ? klokMs : null, klonk });
+  }
+  punten.sort((a, b) => (a.status === 'fout' ? 0 : 1) - (b.status === 'fout' ? 0 : 1) || (a.klokMs ?? Infinity) - (b.klokMs ?? Infinity));
+  return { begonnenMs: Number.isFinite(begonnenMs) ? begonnenMs : null, punten };
+}
+
 // ---- alles samen -----------------------------------------------------------------
 
 /**
@@ -486,6 +509,7 @@ export function setboek(bestanden, opties = {}) {
     for (const x of l.log.regels) alleRegels.push(Array.isArray(x) ? [x[0] + off, x[1]] : x);
   }
   stukken.sort((a, b) => a.klokVan - b.klokVan || a.track - b.track);
+  if (o.proef) for (const s of stukken) s.deel = Number.isFinite(Date.parse(o.proef.begonnen ?? '')) && s.klokVan >= Date.parse(o.proef.begonnen) ? 'speellijst' : 'vrij';
   return {
     dag: r.dag,
     logs: r.logs.map(({ id, bestand, begonMs, duur, acties, opname, af, afgebroken, kapot }) => ({ id, bestand, begonMs, duur, acties, opname, af, afgebroken, kapot })),
@@ -493,6 +517,7 @@ export function setboek(bestanden, opties = {}) {
     gebruik: tellingen(alleRegels),
     onzeker: stukken.filter((s) => s.onzeker).length,
     instellingen: { drempelDb: o.drempelDb, minDuur: o.minDuur, samenvoegen: o.samenvoegen, lengte: typeof o.lengte === 'function' },
+    proef: o.proef ? proefpunten(o.proef, stukken) : null,
     melding: r.logs.length ? null : 'geen log van die dag met acties',
   };
 }
@@ -526,6 +551,15 @@ export function naarMarkdown(res) {
       const opm = [s.gefilterd && 'gefilterd', s.loop && 'loop', s.onzeker && '(onzeker)'].filter(Boolean).join(', ');
       r.push(`| ${i + 1} | ${duurTekst(s.avondVan)}–${duurTekst(s.avondTot)} | ${kloktijd(s.klokVan)} | T${s.track} | ${cel(s.titel)} | ${cel(s.bron)} | ${inBron} | ${opm} |`);
     });
+  }
+  if (res.proef) {
+    const p = res.proef;
+    r.push('', '## Proefpunten (Controlekamer)', '');
+    if (p.begonnenMs !== null) r.push(`Speellijst begonnen ${kloktijd(p.begonnenMs)}: daarvoor vrij spelen (${res.stukken.filter((s) => s.deel === 'vrij').length} stukken), daarna de speellijst (${res.stukken.filter((s) => s.deel === 'speellijst').length}).`, '');
+    if (!p.punten.length) r.push('Geen punt met "fout" of een notitie.');
+    for (const x of p.punten) {
+      r.push(`- ${x.status === 'fout' ? '**fout**' : x.status} · ${x.id} · rond ${kloktijd(x.klokMs)}${x.notitie ? ` · "${cel(x.notitie)}"` : ''}${x.klonk.length ? ` · toen hoorbaar: ${x.klonk.map(cel).join(', ')}` : ''}`);
+    }
   }
   r.push('', '## Geladen maar niet hoorbaar', '');
   if (!res.nietHoorbaar.length) r.push('Geen.');
