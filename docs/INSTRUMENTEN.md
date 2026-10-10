@@ -366,8 +366,8 @@ Pad 1 = noot 36, linksonder op de Maschine, per rij van vier naar boven. Elke an
 noot valt erop terug: pad = (noot − 36) mod 16 + 1 (noot 52 = pad 1, 35 = pad 16).
 
 ```
- 13  14  15  16        (noot 48–51)   pads 9–16: leeg, laadPad()
-  9  10  11  12        (noot 44–47)
+ 13  14  15  16        (noot 48–51)   pads 9–16: leeg, laadPad()   ← sampler-pad 1–4 (sampler.N.drums)
+  9  10  11  12        (noot 44–47)                                 ← sampler-pad 5–8
   5   6   7   8        (noot 40–43)   TOM   RIM   BAS   HAT OPEN
   1   2   3   4        (noot 36–39)   KICK  SNARE CLAP  HAT
 ```
@@ -399,6 +399,76 @@ in. Niveau en pan mengen de kit onderling (gemeten per slag, zie onder).
 - `wisPad(pad)` → `true` als er iets op stond; wat er nog klinkt fadet weg (6 ms).
 - Een lege pad (of de kit vóór `start()`) is stil en gooit niet.
 - `stand().pads` = `[{ pad, noot, naam, gevuld, kit }]` (extra naast het contract).
+
+### Uit de sampler (crossover, 10 okt)
+
+**Een knip uit de sampler krijgt een eigen strip**: fader, filter, echo, galm, fx en
+koptelefoon. `sampler.N.drums` zet sampler-pad N als drumpad op de Drums, op **dezelfde
+fysieke pad** als in de padmodus sampler van de Maschine (docs/MASCHINE.md §5f): wat je
+in SAMPLING op pad 13 knipt, sla je in de speelmodus op pad 13 aan. Het stuk speelt
+one-shot door de strip van die track en in een patroon op zijn noot. De sampler-pad
+blijft staan.
+
+| sampler-pad | drumpad | noot | Maschine-pad (SAMPLING én spelen) | schermklavier (vanaf C3) |
+|---|---|---|---|---|
+| S1–S4 | 13–16 | 48–51 (C3–D#3) | bovenste rij | ja |
+| S5–S8 | 9–12 | 44–47 (G#2–B2) | tweede rij | een octaaf omlaag |
+
+De tabel staat in `src/control/drumpads.js` (`DRUMPAD_VAN_SAMPLER`, her-exporteerd door
+`actions.js`); de engine blijft neutraal: `engine.samplerNaarDrums(n, { pad })`.
+
+- **Welke Drums** (`engine.drumsDoel()`): de speeltrack als die de Drums heeft; anders de
+  enige track met de Drums; twee of meer en de speeltrack is iets anders: geweigerd met
+  "meer dan één Drums (track 7 en 8): zet de focus op de track die je bedoelt".
+- **De melding** zegt wat je moet weten: `S1 staat op drumpad 13 van track 8 (noot C3 · 48)`,
+  plus ` · stems: drums` als niet alle stems in de knip zaten (de stand van de stems bij
+  het knippen: `gewichten` en `stemNamen` op de sampler-pad), en een tempowaarschuwing
+  als het stuk meer dan 0,5 % van de maat afwijkt: `let op: dit stuk is 124 bpm, de maat
+  staat op 128: als drumpad speelt het op 124 (loops blijven in de sampler)`.
+- **Tempo**: een drumpad speelt het stuk op het tempo waarop het geknipt is (snelheid 1,
+  one-shot). **Drumpads voor slagen en stukjes; loops blijven in de sampler** (die volgt
+  het tempo). Rekenvoorbeeld met Clay's knips (2–4 tellen op 174 en 146 bpm, 0,69–1,64 s):
+  bij de mediane tempowisseling in de library (1,43 %) is een knip van 4 tellen ~20 ms te
+  lang of te kort per aanslag; een knip van 4 tellen op 174 is in een set op 146 265 ms
+  korter dan de maat.
+- **Lampje**: fel violet = drumpad gevuld, donker violet = kan, uit = kan niet (sampler-pad
+  leeg of geen Drums).
+- **Niet bewaard**: na herladen zijn 9–16 leeg. Gebruikt een patroon ze (een noot die op
+  9–16 valt, ook via de terugval mod 16), dan zegt `herstelInstrumenten` het: "track N: de
+  patronen gebruiken drumpads 9–16, en die zijn na herladen leeg". Bewaren is stap 2.
+- **Leegmaken** is er niet: een nieuwe `sampler.N.drums` overschrijft (`wisPad` blijft in
+  de engine, voor als je het mist).
+- **Terugspelen** slaat `sampler.N.drums` over (instrumenten staan niet in het log).
+- **Naar Logic** (MIDI-export van een patroon): noten 44–51 komen aan als noten zonder
+  klank (General MIDI: 44 = pedaal-hihat); de padnaam (`S1 · track 2`) hoort in de
+  `varve:patroon`-meta, de audio bij de stems-stap van produceren-uit.
+
+**Koppelen**: MIDI (bovenbalk) → filter "drumpad" → leer → druk de knop. Of met de muis:
+de acht knoppen `1→13 … 8→12` onder de sampler-pads (ook in de koppelmodus: klik
+"koppelen", dan de knop, dan de controller). Geen vaste APC- of Maschine-knop (huisregel:
+geen nieuwe controllerfuncties vóór de proefavond).
+
+**Gemeten** in Chrome (`node tools/headless/sampler-drums.mjs`, OfflineAudioContext, de hele
+engine): hetzelfde signaal als dat stuk op een deck met dezelfde strip (correlatie 0,9994),
+bij snelheid 1 en NIVEAU 0,8 +2,1 dB (bij 0,8: −0,8 dB); fader 0 = −70 dB; in een patroon
+elke aanslag op de tel van de maatgever (afwijking 0,000 ms), ook als de maat op 128 staat
+en het stuk op 124 geknipt is (het stuk blijft dan 124: niet uitgerekt); `laadPad` van
+90 s kost ~3 ms; met de fader van de drumtrack dicht en PFL aan staat het stuk in de
+koptelefoon (kanaal 3/4, −24 dB) en is de zaal stil (−97 dB). Op het scherm (1440 × 900):
+de knoppen passen als derde regel onder de pads (+26 px, de pads even breed, het focusdeel
+scrolt niet, ook niet met de rijen instrument en patronen open), een muisklik op `1→13`
+werkt, de koppelmodus ziet de knop.
+
+**Testen**: `node test/sampler-drums.test.mjs` (zonder DOM: de tabel, de actions, de
+melding, welke Drums, de lampjes, terugspelen, na herladen, de knoppen in `index.html`),
+`node test/maschine-sampler.test.mjs` (dezelfde fysieke pad) en de headless hierboven.
+
+**Niet getest**: niet gehoord, niet op de Maschine of de APC, niet realtime (alleen
+`OfflineAudioContext`); de bron was de demotrack via `laadGeheugen`, niet een gestreamd
+library-nummer (`StreamBron.knip`); niet gemeten met echte stems (de stems-tekst is
+alleen in Node getest); de koptelefoon alleen in een 4-kanaals OfflineAudioContext, niet
+op het samengestelde apparaat; het scherm alleen op 1440 × 900 (met en zonder
+videopaneel en de rijen instrument en patronen), niet op de iPad of een kleiner venster.
 
 ### De stem
 

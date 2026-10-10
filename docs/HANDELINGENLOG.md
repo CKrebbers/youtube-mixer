@@ -311,6 +311,10 @@ Wat NIET opnieuw de bus op gaat (`OVERSLAAN`):
   de plaat in de library (TOONSOORT.md §7) en de correctie van toen is toen al
   bewaard; terugspelen laadt de kaart van NU, en er nog eens een kwint bij doen
   zou hem twee keer toepassen. Ze staan wel in het log.
+- `sampler.N.drums` (crossover, 10 okt): zet een stuk uit de sampler op de Drums
+  van NU (docs/INSTRUMENTEN.md "Uit de sampler"). Instrumenten staan niet in het
+  log, dus terugspelen zou de drumpads van nu overschrijven met een stuk dat er
+  toen misschien niet eens lag. Ze staan wel in het log.
 
 Een track zonder zijn nummer van toen (niet meer in de library, een los
 bestand, laden mislukt, of leeg): transport, cues, loops, grid en seek, en
