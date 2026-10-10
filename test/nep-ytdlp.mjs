@@ -21,6 +21,8 @@
 //   ...was-live...   een afgelopen livestream (was_live): gewoon een video
 //   watch?v=<id> een YouTube-nummer (extractor Youtube)
 // Een videodownload (-f bv/b) faalt altijd: video is bonus, de audio blijft.
+// `ytsearch5:<vraag>` (de kaart): vijf kandidaten, de eerste past precies;
+// "kapot" in de vraag = fout, "geblokkeerd" = HTTP 403.
 //
 // Signalen zoals de echte (Python) yt-dlp: SIGINT = KeyboardInterrupt, dan
 // ruimt hij zijn kinderen op (ffmpeg krijgt 'q', een nabewerking wordt
@@ -56,6 +58,30 @@ async function nep(args) {
   });
 
   if (args.includes('--version')) { console.log('2026.08.19'); return; }
+
+  // Zoeken (de kaart, server/kaart.js): `ytsearch5:<vraag>` --flat-playlist -J.
+  // Vijf kandidaten uit de vraag zelf: één die precies past (Topic-kanaal,
+  // zelfde lengte als NEP_DUUR of 240 s, titel erin), de rest slechter.
+  // "kapot" in de vraag = fout, "geblokkeerd" = HTTP 403 zoals YouTube die geeft.
+  const zoek = args.find((a) => /^ytsearch\d*:/.test(a));
+  if (zoek) {
+    const vraag = zoek.replace(/^ytsearch\d*:/, '');
+    log('zoek', { vraag, args });
+    if (/kapot/i.test(vraag)) { console.error('ERROR: [youtube:search] nep: zoeken kapot'); process.exit(1); }
+    if (/geblokkeerd/i.test(vraag)) { console.error('ERROR: [youtube:search] Unable to download webpage: HTTP Error 403: Forbidden'); process.exit(1); }
+    const [artiest, ...rest] = vraag.split(' ');
+    const titel = rest.join(' ');
+    const duur = Number(process.env.NEP_DUUR) || 240;
+    const id = (t) => (t.replace(/[^\w-]/g, '').toLowerCase() + 'xxxxxxxxxxx').slice(0, 11);
+    console.log(JSON.stringify({ _type: 'playlist', id: vraag, title: vraag, entries: [
+      { id: id('top' + titel), title: `${artiest} - ${titel}`, channel: `${artiest} - Topic`, duration: duur },
+      { id: id('clip' + titel), title: `${artiest} - ${titel} (Official Video)`, channel: `${artiest}VEVO`, duration: duur + 12 },
+      { id: id('live' + titel), title: `${artiest} - ${titel} (live 2019)`, channel: 'Fan Kanaal', duration: duur + 90 },
+      { id: id('cover' + titel), title: `${titel} cover`, channel: 'Iemand Anders', duration: duur - 30 },
+      { id: id('react' + titel), title: 'REACTION!!!', channel: 'Reacties', duration: 600 },
+    ] }));
+    return;
+  }
 
   if (args.includes('--dump-single-json')) {
     log('meta', { url, args });
