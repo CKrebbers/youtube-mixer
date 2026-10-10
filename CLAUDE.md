@@ -182,7 +182,9 @@ src/
                     opnemer-worklet.js  telt frames, zet om naar 16-bit, geeft per seconde door
   koppel/           varve-beeld-zender.js  de zender van de Stroommachine, ONGEWIJZIGD overgenomen (herkomstregel bovenaan; wijzigen in haar repo)
                     beeld.js        spoor beeld: klok, kenmerken, track per crossfaderkant, mix, poorten naar de Stroommachine. Leest de engine alleen.
+  export/           patronen-smf.js patronen/set <-> Standard MIDI File (type 1, 384 PPQN) voor Logic; buiten de engine (docs/PATRONEN.md §8). Puur.
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
+                    smf.js          een MIDI-bestand als bytes: schrijven (zonder running status) en lezen (ook running status). Geen imports.
 server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
   ingest.js         yt-dlp (of een eigen bestand) -> ffmpeg -> media/<id>/. Gooit nooit.
@@ -290,6 +292,9 @@ test/
   bovenbalk.test.mjs  de bovenbalk scrollt opzij als hij niet past (randen, CSS: niet hoger, geen schuifbalk)
   patronen.test.mjs model, venster (swing, micro, omlopen), klok, speler met nep-maatgever (op de maat, herankeren zonder dubbele/gemiste), opnemen, opslag (409), server
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
+  smf.test.mjs      de bytes van een MIDI-bestand (src/lib/smf.js): vlq, meta, tempo, ascii, sporen, lezen (running status, SysEx, kapot = byte-offset)
+  patronen-midi.test.mjs  patronen als MIDI-bestand: S1–S13/L1–L2, de kick bytegewijs (met de hand + fixtures), 500 patronen tegen de vensters van de speler, rondreis
+  fixtures/midi/    gouden .mid's (kick met en zonder meta, proef-set): de test vergelijkt ermee, en ze zijn het materiaal voor de Logic-proef
   secties.test.mjs  secties: synthetische nummers met een bekend antwoord, worker, library, deck, actions, server, marges op de "1"
   sec-sampler.test.mjs  een sectie in een sampler-pad: knipSectie, start op de "1", herankeren (ook keylock), grenzen, meldingen
   secties-log.test.mjs  secties in het handelingenlog: kaart in de stand, `van` bij een druk, volgorde, precies terugspelen
@@ -332,7 +337,7 @@ docs/
   MASCHINE.md       Maschine MK2 en Xboard49 via de hub (5 okt): wat elke knop doet, lampjes, schermen, de stapmodus straks, metingen
   MASTER.md         effecten op het geheel en de limiter (S2a, 5 okt): keten, algoritme, laden, opslag, APC, metingen
   EFFECTEN.md       effecten uit de filter app (S2c): per effect herkomst, eenheden, staart, metingen, wat niet
-  PATRONEN.md       patronen (S4): het contract (§1–6) en wat gebouwd is (§7: klok, opnemen, API, APC, opslag, metingen)
+  PATRONEN.md       patronen (S4): het contract (§1–6) en wat gebouwd is (§7: klok, opnemen, API, APC, opslag, metingen; §8 naar Logic als MIDI-bestand)
   BEELD.md          spoor beeld (6 okt): VARVE stuurt de Stroommachine via de relay; instellen, wat er gaat, APC-mapje, problemen, tests
   KAART.md          de muziekkaart in Varve (10 okt): het bestand, de API (+ §3b de afspraken met de UI), de nachtregels, "er speelt een deck",
                     §9 gemeten op het echte bestand, §10 na de proefavond, wat niet getest is
@@ -1565,6 +1570,10 @@ Volledig in `docs/PATRONEN.md` (§1–6 het contract, §7 wat gebouwd is). Wat e
 - APC: grid-modus `patronen` (oranje 9/10): Shift + scene 2 of ▲ ▼; pad = plek per track, shift =
   meteen, scene = rij, Stop All Clips = alles stoppen. De read knippert zelf (een instrumenttrack heeft
   geen `track.N.phase`). Alleen regels erbij.
+- Naar Logic (10 okt, `docs/PATRONEN.md` §8): `src/export/patronen-smf.js` maakt een MIDI-bestand uit de
+  VENSTERS van de speler (`notenInVenster`, 384 PPQN: swing en micro zijn tijdverschuiving). Buiten de engine
+  (regels.test: geen `MThd`/`MTrk`/`0x99` in `src/engine/`). Verander je venster of model: ook
+  `test/patronen-midi.test.mjs` (gouden bytes, 500 patronen tegen de speler). Nog geen route, CLI of knop.
 
 ## Xboard49 en Maschine via de hub (gebouwd 5 okt)
 
