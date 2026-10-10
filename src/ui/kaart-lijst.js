@@ -18,6 +18,8 @@ import { PAGINA, datumKort } from './library-lijst.js';
  */
 
 /** Welke tab van het library-paneel open staat: onthouden in localStorage. */
+const MAANDEN = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+
 export const TAB_SLEUTEL = 'varve.library.tab';
 export const TABS = ['library', 'kaart'];
 
@@ -37,9 +39,27 @@ export function bewaarTab(opslag, tab) {
  * Waarop de kaart sorteert en welke kant een EERSTE klik op gaat. Gelijk aan
  * `sorteer` in contract deel 2 (server/kaart.js van de serveragent).
  */
-export const SORTERINGEN = { beurten: 'af', laatst: 'af', titel: 'op', artiest: 'op', duur: 'op', like_datum: 'af', gekeken: 'af' };
+export const SORTERINGEN = { beurten: 'af', laatst: 'af', titel: 'op', artiest: 'op', duur: 'op', like_datum: 'af', gekeken: 'af', krat: 'op' };
 export const STANDAARD_SORTERING = { sorteer: 'beurten', richting: 'af' };
+/** Met een krat gekozen en niets aangeklikt: de volgorde van de krat zelf, zoals de server zonder `sorteer` doet. */
+export const KRAT_SORTERING = { sorteer: 'krat', richting: 'op' };
 export const SORTEER_SLEUTEL = 'varve.kaart.sortering';
+
+/**
+ * Wat er echt naar de server gaat: `sorteer=krat` bestaat alleen MET een krat
+ * (zonder geeft de server 400), dus zonder krat valt hij terug op beurten.
+ */
+export function effectieveSortering(sortering, krat) {
+  if (sortering?.sorteer === 'krat' && !krat) return { ...STANDAARD_SORTERING };
+  return { sorteer: sortering?.sorteer ?? STANDAARD_SORTERING.sorteer, richting: sortering?.richting ?? STANDAARD_SORTERING.richting };
+}
+
+/** Een krat kiezen met de standaardsortering (beurten af) = de volgorde van de krat; anders blijft de keuze staan. */
+export function sorteringBijKrat(sortering, krat) {
+  if (!krat) return sortering;
+  if (sortering?.sorteer === STANDAARD_SORTERING.sorteer && sortering?.richting === STANDAARD_SORTERING.richting) return { ...KRAT_SORTERING };
+  return sortering;
+}
 
 /** Klik op een kolomkop: een andere kolom = zijn eigen eerste richting, dezelfde nog eens = omgekeerd. */
 export function volgendeSortering(huidig, sleutel) {
@@ -239,6 +259,22 @@ export const KOLOMMEN = [
   { id: 'stand', kop: 'stand', breedte: '276px', klasse: 'kaart-stand-cel', cel: (n, nu, staat) => `<span data-stand="${esc(n.sleutel)}">${standCelHtml(n, staat)}</span>` },
 ];
 
+/**
+ * De kolom "krat": alleen met een krat gekozen, vooraan. De kop sorteert op de
+ * volgorde van de krat zelf (`sorteer=krat`: een playlist in volgorde van
+ * toevoegen, eigen likes op like_datum). De cel toont het rangnummer in de
+ * krat zolang daarop gesorteerd is (`staat.volgnr`, gezet door het paneel per
+ * rij), anders niets: de server geeft geen positie mee.
+ */
+export const KRAT_KOLOM = {
+  id: 'krat', kop: 'krat', breedte: '44px', sorteer: 'krat', klasse: 'kaart-getal kaart-volgnr',
+  hint: () => 'plek in de krat (sorteer op de kolomkop: de volgorde van de krat zelf)',
+  cel: (n, nu, staat) => (staat?.volgnr != null ? esc(String(staat.volgnr)) : ''),
+};
+
+/** De kolommen van nu: met een krat de kratkolom vooraan. */
+export const kolommenVoor = (metKrat) => (metKrat ? [KRAT_KOLOM, ...KOLOMMEN] : KOLOMMEN);
+
 // ---- kratten -----------------------------------------------------------------
 
 /** De vaste slimme kratten en hun volgorde in de kiezer (contract deel 1). */
@@ -355,6 +391,21 @@ export function nachtStandTekst(n, nu = Date.now()) {
   if (n.vandaagNiet) return 'nachtwachtrij aan, vannacht niet';
   const volgende = tijdKort(n.volgende, nu);
   return `nachtwachtrij aan${volgende ? `, volgende ${volgende}` : ''}`;
+}
+
+/** De speeldagen van de server kort: "10 okt (vandaag)", "geen". `nu` = de klok van de server (ISO) of van hier. */
+export function speeldagenTekst(speeldagen = [], nu = Date.now()) {
+  const lijst = Array.isArray(speeldagen) ? speeldagen.filter((d) => /^\d{4}-\d\d-\d\d$/.test(d)).sort() : [];
+  if (!lijst.length) return 'geen';
+  const ms = typeof nu === 'number' ? nu : (Date.parse(nu) || Date.now());
+  const d = new Date(ms);
+  const vandaag = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // Een ISO-datum ("2026-10-10") als "10 okt" (met jaar als het een ander jaar is); geen datumKort: die zegt voor vandaag de tijd.
+  const kort = (x) => {
+    const [j, m, dg] = x.split('-').map(Number);
+    return `${dg} ${MAANDEN[m - 1]}${j === d.getFullYear() ? '' : ` ${String(j).slice(2)}`}`;
+  };
+  return lijst.map((x) => `${kort(x)}${x === vandaag ? ' (vandaag)' : ''}`).join(', ');
 }
 
 /** Een instelling uit het blok, als gedeeltelijke POST /api/nacht. Null = niets te sturen. */

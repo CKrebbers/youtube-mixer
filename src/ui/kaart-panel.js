@@ -1,9 +1,9 @@
 import { esc } from './dom.js';
 import { RIJ_H, PaginaCache, zichtbaar, kolomSjabloon, kopHtml, cellenHtml, standaardOpslag } from './library-lijst.js';
 import {
-  KOLOMMEN, TABS, leesTab, bewaarTab, leesSortering, bewaarSortering, volgendeSortering, kaartUrl, alsPagina, alsRij,
+  kolommenVoor, effectieveSortering, sorteringBijKrat, TABS, leesTab, bewaarTab, leesSortering, bewaarSortering, volgendeSortering, kaartUrl, alsPagina, alsRij,
   wisselFilter, filterKnoppenHtml, standCelHtml, kratOptiesHtml, kratVan, moetBevestigen, bevestigingsTekst, wensUitkomst,
-  zekereKandidaat, kieslijstHtml, wensTelling, wensTellingTekst, laatsteRunTekst, nachtStandTekst, nachtWijziging, SPEELT_UITLEG,
+  zekereKandidaat, kieslijstHtml, wensTelling, wensTellingTekst, laatsteRunTekst, nachtStandTekst, nachtWijziging, speeldagenTekst, SPEELT_UITLEG,
 } from './kaart-lijst.js';
 
 /**
@@ -83,7 +83,13 @@ export class KaartPanel {
         if (zoek !== this.zoek) { this.zoek = zoek; this.ververs({ bovenaan: true }); }
       }, 120);
     });
-    this.el.krat.addEventListener('change', () => { this.krat = this.el.krat.value; this.ververs({ bovenaan: true }); });
+    this.el.krat.addEventListener('change', () => {
+      this.krat = this.el.krat.value;
+      // Een krat kiezen met de standaardsortering = de volgorde van de krat (zoals de server zonder `sorteer`).
+      this.sortering = sorteringBijKrat(this.sortering, this.krat);
+      this.tekenKop();
+      this.ververs({ bovenaan: true });
+    });
     this.el.filters.innerHTML = filterKnoppenHtml(this.filters);
     this.el.filters.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-filter]');
@@ -123,7 +129,7 @@ export class KaartPanel {
     this.el.ruimte = this.el.rijen.querySelector('.lib-ruimte');
     this.el.venster = this.el.rijen.querySelector('.lib-venster');
     this.el.rijen.style.setProperty('--lib-rij-h', `${RIJ_H}px`);
-    this.el.rijen.style.setProperty('--lib-kolommen', kolomSjabloon(KOLOMMEN));
+    this.el.rijen.style.setProperty('--lib-kolommen', kolomSjabloon(this.kolommen));
     let beeld = 0;
     const volg = () => {
       if (beeld || !this.open) return;
@@ -226,7 +232,13 @@ export class KaartPanel {
     this.ververs({ bovenaan: true });
   }
 
-  _vraag() { return { zoek: this.zoek, krat: this.krat, filters: this.filters, ...this.sortering }; }
+  /** De kolommen van nu: met een krat de kratkolom vooraan (kolommenVoor). */
+  get kolommen() { return kolommenVoor(!!this.krat); }
+
+  /** De sortering die echt naar de server gaat (sorteer=krat alleen met een krat). */
+  get sorteringEcht() { return effectieveSortering(this.sortering, this.krat); }
+
+  _vraag() { return { zoek: this.zoek, krat: this.krat, filters: this.filters, ...this.sorteringEcht }; }
 
   /** GET /api/kaart: de stand van de kaart en de kratten (met aantal en hoeveel binnen). */
   async haalKaart() {
@@ -276,7 +288,10 @@ export class KaartPanel {
     try {
       const r = await fetch(`/api/kaart/nummer/${encodeURIComponent(sleutel)}`);
       if (!r.ok) return;
-      const n = alsRij(await r.json());
+      // De server geeft { nummer } (docs/KAART.md §3); de nep deed dat eerst niet.
+      const j = await r.json();
+      const n = alsRij(j.nummer ?? j);
+      if (!n.sleutel) return;
       const oud = this._nummer(sleutel);
       if (oud) Object.assign(oud, n);
     } catch {}
@@ -542,7 +557,9 @@ export class KaartPanel {
   }
 
   tekenKop() {
-    this.el.kop.innerHTML = kopHtml(this.sortering, '', KOLOMMEN);
+    const kolommen = this.kolommen;
+    this.el.rijen.style.setProperty('--lib-kolommen', kolomSjabloon(kolommen));
+    this.el.kop.innerHTML = kopHtml(this.sorteringEcht, '', kolommen);
   }
 
   /** Wat de stand-cellen nodig hebben. */
@@ -581,6 +598,7 @@ export class KaartPanel {
       <label title="hoeveel nummers per nacht, hooguit">per nacht <input class="kaart-nacht-per" type="number" min="1" max="500" data-nacht="perNacht" value="${esc(n.perNacht ?? 80)}"></label>
       <label title="alleen tussen deze tijden">venster <input type="time" data-nacht="van" value="${esc(v.van)}"> – <input type="time" data-nacht="tot" value="${esc(v.tot)}"></label>
       <button class="btn sm${n.vandaagNiet ? ' on' : ''}" data-nacht="vandaagNiet" aria-pressed="${!!n.vandaagNiet}" title="vannacht overslaan (speeldag)">vandaag niet</button>
+      <span class="kaart-nacht-speeldagen" title="speeldagen: op die datum (en de nacht erna) haalt de nacht niets">speeldagen: ${esc(speeldagenTekst(n.speeldagen, n.nu))}</span>
       <span class="kaart-nacht-run" title="de laatste run">laatste run: ${esc(laatsteRunTekst(n.laatsteRun))}</span>
       <span class="kaart-nacht-wensen" title="de wenslijst: wat wacht, wat binnen is, wat mislukte">wenslijst: ${esc(wensTellingTekst(t))}</span>
       <span class="kaart-nacht-stand${n.bezig ? ' bezig' : ''}">${esc(nachtStandTekst(n))}${n.pauze ? ` · pauze ${esc(n.pauze.min)}–${esc(n.pauze.max)} s` : ''}</span>`;
@@ -613,14 +631,19 @@ export class KaartPanel {
     this.el.venster.style.transform = `translateY(${van * RIJ_H}px)`;
     const nu = Date.now();
     const staat = this._staat();
+    const kolommen = this.kolommen;
+    // Gesorteerd op de krat: het rangnummer in de krat in de kratkolom (op: 1, 2, …; af: van achteren).
+    const s = this.sorteringEcht;
+    const opKrat = s.sorteer === 'krat';
     this._standHtml.clear();
     const rijen = [];
     let kieslijst = '';
     for (let i = van; i < tot; i++) {
       const n = this.cache.rij(i);
       if (!n) { rijen.push(`<div class="lib-rij kaart-rij laadt" data-i="${i}"><span class="kaart-artiest">…</span></div>`); continue; }
+      staat.volgnr = opKrat ? (s.richting === 'op' ? i + 1 : totaal - i) : null;
       this._standHtml.set(n.sleutel, standCelHtml(n, staat));
-      rijen.push(`<div class="lib-rij kaart-rij${n.klasse === 'twijfel' ? ' twijfel' : ''}" data-i="${i}" data-sleutel="${esc(n.sleutel)}">${cellenHtml(n, nu, staat, KOLOMMEN)}<span class="lib-knoppen"></span></div>`);
+      rijen.push(`<div class="lib-rij kaart-rij${n.klasse === 'twijfel' ? ' twijfel' : ''}" data-i="${i}" data-sleutel="${esc(n.sleutel)}">${cellenHtml(n, nu, staat, kolommen)}<span class="lib-knoppen"></span></div>`);
       // Het kieslijstje zweeft onder zijn rij, zoals de toonsoortkiezer in de library.
       if (this.kieslijst?.sleutel === n.sleutel) {
         kieslijst = kieslijstHtml(n.sleutel, this.kandidaten.get(n.sleutel) || [], (i - van + 1) * RIJ_H, { gekozen: this.gekozen.get(n.sleutel)?.youtube_id ?? null });

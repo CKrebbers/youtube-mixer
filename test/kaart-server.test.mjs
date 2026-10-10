@@ -105,6 +105,23 @@ try {
   ok('het nummer draagt zijn wens', (await get('/api/kaart/nummer/yt:eigenlike001')).j.nummer.wens.status === 'wacht');
   ok('DELETE /api/kaart/wens/<sleutel>', (await del('/api/kaart/wens/yt:eigenlike001')).j?.ok === true && (await del('/api/kaart/wens/yt:eigenlike001')).j?.ok === false && (await get('/api/kaart/wensen')).j.wensen.length === 0);
 
+  console.log('\nwat de UI stuurt (docs/KAART.md §3b): gecodeerde sleutels, kies zonder wens, track als object, de krat op de wenslijst');
+  ok('GET /api/kaart/nummer/yt%3Abinnen000001 (encodeURIComponent uit de UI) = hetzelfde nummer', (await get('/api/kaart/nummer/yt%3Abinnen000001')).j?.nummer?.sleutel === 'yt:binnen000001');
+  const kz = await post('/api/kaart/nummer/sp%3Asp0000000002/kies', { youtube_id: 'topic0000002' });
+  ok('kies zonder bestaande wens maakt er een op wacht (ook gecodeerd)', kz.status === 200 && kz.j.wens.status === 'wacht' && kz.j.wens.youtube_id === 'topic0000002'
+    && (await get('/api/kaart/nummer/sp:sp0000000002')).j.nummer.wens.status === 'wacht');
+  ok('wensen[].track is null (niet binnen) of een object met id, nooit een string', (await get('/api/kaart/wensen')).j.wensen.every((w) => w.track === null || (typeof w.track === 'object' && typeof w.track.id === 'string')));
+  ok('DELETE met een gecodeerde sleutel', (await del('/api/kaart/wens/sp%3Asp0000000002')).j?.ok === true && (await get('/api/kaart/wensen')).j.wensen.length === 0);
+  ok('een onleesbaar pad onder /api/kaart: 400', (await get('/api/kaart/nummer/yt%E0%A4%A')).status === 400);
+  // De krat-knop van de UI: alle niet-binnen sleutels van de krat (ook sp: zonder video), dan POST wens; alles komt op wacht.
+  const kratSleutels = (await get('/api/kaart/nummers?krat=slim:eigen-likes&filter=niet-binnen&aantal=500')).j.nummers.map((n) => n.sleutel);
+  ok(`krat eigen-likes, niet-binnen: ${kratSleutels.length} sleutels, met een sp:-sleutel erbij`, kratSleutels.length >= 2 && kratSleutels.some((s) => s.startsWith('sp:')) && !kratSleutels.includes('yt:binnen000001'));
+  const kw = await post('/api/kaart/wens', { sleutels: kratSleutels, bevestig: true });
+  ok('POST wens met die sleutels: alles toegevoegd, ook de sp:-sleutels, allemaal op wacht', kw.status === 200 && kw.j.toegevoegd.length === kratSleutels.length && !kw.j.geweigerd.length
+    && (await get('/api/kaart/wensen')).j.wensen.every((w) => w.status === 'wacht' && kratSleutels.includes(w.sleutel)));
+  for (const s of kratSleutels) await del(`/api/kaart/wens/${encodeURIComponent(s)}`);
+  ok('weer leeg (DELETE per sleutel, gecodeerd zoals de UI)', (await get('/api/kaart/wensen')).j.wensen.length === 0);
+
   console.log('\neen YouTube-versie zoeken (nep-yt-dlp, ytsearch5, geen cookies)');
   const zk = await post('/api/kaart/nummer/sp:sp0000000001/zoek', {});
   ok(`kandidaten met score, beste eerst (${zk.j?.kandidaten?.[0]?.youtube_id} ${zk.j?.kandidaten?.[0]?.score})`, zk.status === 200 && zk.j.kandidaten.length === 5 && zk.j.kandidaten[0].score >= 0.9

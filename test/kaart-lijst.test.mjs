@@ -41,6 +41,15 @@ console.log('\nsorteren');
   s = K.volgendeSortering(s, 'titel');
   ok('nog eens: Z→A', s.richting === 'af');
   ok('laatst begint met de laatste bovenaan', K.volgendeSortering(s, 'laatst').richting === 'af');
+  // sorteer=krat (de volgorde van de krat zelf, server/kaart.js): alleen met een krat.
+  ok('effectieveSortering: krat zonder krat valt terug op beurten af; met krat blijft hij', JSON.stringify(K.effectieveSortering(K.KRAT_SORTERING, '')) === JSON.stringify(K.STANDAARD_SORTERING)
+    && JSON.stringify(K.effectieveSortering(K.KRAT_SORTERING, 'pl:x')) === JSON.stringify(K.KRAT_SORTERING) && K.effectieveSortering(null, '').sorteer === 'beurten');
+  ok('sorteringBijKrat: een krat kiezen met de standaard = kratvolgorde; een eigen keuze blijft; geen krat = niets', JSON.stringify(K.sorteringBijKrat(K.STANDAARD_SORTERING, 'pl:x')) === JSON.stringify(K.KRAT_SORTERING)
+    && K.sorteringBijKrat({ sorteer: 'titel', richting: 'op' }, 'pl:x').sorteer === 'titel' && K.sorteringBijKrat(K.STANDAARD_SORTERING, '').sorteer === 'beurten');
+  ok('kolommenVoor: met een krat de kratkolom vooraan (sorteer krat), zonder de gewone kolommen', K.kolommenVoor(true)[0].id === 'krat' && K.kolommenVoor(true)[0].sorteer === 'krat'
+    && K.kolommenVoor(true).length === K.KOLOMMEN.length + 1 && K.kolommenVoor(false) === K.KOLOMMEN);
+  ok('de kratkolom toont het rangnummer alleen als het paneel er een geeft', K.KRAT_KOLOM.cel({}, 0, { volgnr: 7 }) === '7' && K.KRAT_KOLOM.cel({}, 0, {}) === '' && K.KRAT_KOLOM.cel({}, 0, { volgnr: null }) === '');
+  ok('de kop van de kratkolom is sorteerbaar', /data-sorteer="krat"/.test(L.kopHtml(K.KRAT_SORTERING, '', K.kolommenVoor(true))) && /aria-sort="ascending"/.test(L.kopHtml(K.KRAT_SORTERING, '', K.kolommenVoor(true))));
   ok('onbekend (bronnen, stand, constructor) verandert niets', K.volgendeSortering(s, 'bronnen') === s && K.volgendeSortering(s, 'constructor') === s);
   const o = geheugen();
   K.bewaarSortering(o, { sorteer: 'laatst', richting: 'op' });
@@ -156,6 +165,12 @@ console.log('\nkratten, bevestigen, kandidaten');
 
 console.log('\nnachtwachtrij');
 {
+  ok('speeldagenTekst: "10 okt (vandaag)", ander jaar met jaartal, gesorteerd, leeg = geen, onzin eruit',
+    K.speeldagenTekst(['2026-10-10'], '2026-10-10T12:00:00+02:00') === '10 okt (vandaag)'
+    && K.speeldagenTekst(['2026-10-10', '2025-12-31'], '2026-10-10T12:00:00+02:00') === '31 dec 25, 10 okt (vandaag)'
+    && K.speeldagenTekst([], 1) === 'geen' && K.speeldagenTekst(['gisteren'], 1) === 'geen' && K.speeldagenTekst(undefined) === 'geen');
+}
+{
   const t = K.wensTelling([{ status: 'wacht' }, { status: 'wacht' }, { status: 'kies' }, { status: 'klaar' }, { status: 'mislukt' }, { status: 'bezig' }, { status: 'onzin' }]);
   ok('telling per status', t.wacht === 2 && t.kies === 1 && t.klaar === 1 && t.mislukt === 1 && t.bezig === 1 && t.totaal === 7);
   ok('tekst: wacht (incl. zoekt/kies) · klaar · mislukt, bezig voorop', K.wensTellingTekst(t) === '1 bezig · 3 wacht · 1 klaar · 1 mislukt');
@@ -201,7 +216,7 @@ console.log('\nde nep-server tegen het contract (deel 2)');
   ok('filters met komma', (await api('/api/kaart/nummers?filter=niet-binnen,geen-video')).j.totaal === 10);
   ok('onbekend filter = 400', (await api('/api/kaart/nummers?filter=cookies')).status === 400);
   const een = await api('/api/kaart/nummer/yt:nep002xxxxx');
-  ok('GET /api/kaart/nummer/<sleutel>', een.status === 200 && een.j.sleutel === 'yt:nep002xxxxx' && een.j.binnen === null && een.j.wens === null);
+  ok('GET /api/kaart/nummer/<sleutel> = { nummer } zoals de server', een.status === 200 && een.j.nummer.sleutel === 'yt:nep002xxxxx' && een.j.nummer.binnen === null && een.j.nummer.wens === null);
   ok('onbekende sleutel = 404', (await api('/api/kaart/nummer/yt:nee')).status === 404);
 
   // wensen
@@ -209,16 +224,17 @@ console.log('\nde nep-server tegen het contract (deel 2)');
   let r = await post('/api/kaart/wens', { sleutels: veel.slice(0, 21) });
   ok('meer dan 20 zonder bevestig = 409 met aantal', r.status === 409 && r.j.fout === 'meer dan 20' && r.j.aantal === 21);
   r = await post('/api/kaart/wens', { sleutels: ['yt:nep002xxxxx', 'yt:nep000xxxxx', 'yt:nep002xxxxx', 'yt:nee'] });
-  ok('wens: toegevoegd, en geweigerd met reden (al binnen, dubbel, onbekend)', r.status === 200 && r.j.toegevoegd.join() === 'yt:nep002xxxxx'
-    && r.j.geweigerd.map((g) => g.reden).join('|') === 'staat al in de library|dubbel|onbekende sleutel');
+  ok('wens: toegevoegd, en geweigerd met de redenen van de server (al binnen, dubbel in de vraag, niet op de kaart)', r.status === 200 && r.j.toegevoegd.join() === 'yt:nep002xxxxx'
+    && r.j.geweigerd.map((g) => g.reden).join('|') === 'al binnen|dubbel in de vraag|niet op de kaart');
   r = await post('/api/kaart/wens', { sleutels: ['yt:nep002xxxxx'] });
-  ok('nog eens: al op de wenslijst', r.j.geweigerd[0]?.reden === 'staat al op de wenslijst');
-  ok('de rij zegt nu wacht', (await api('/api/kaart/nummer/yt:nep002xxxxx')).j.wens.status === 'wacht');
+  ok('nog eens: staat al op de lijst (wacht)', r.j.geweigerd[0]?.reden === 'staat al op de lijst (wacht)');
+  ok('geen sleutels = 400', (await post('/api/kaart/wens', { sleutels: [] })).status === 400);
+  ok('de rij zegt nu wacht', (await api('/api/kaart/nummer/yt:nep002xxxxx')).j.nummer.wens.status === 'wacht');
   const sp = alles.nummers.find((n) => !n.youtube_id).sleutel;
   const yt = alles.nummers.find((n) => n.youtube_id && !n.binnen && n.sleutel !== 'yt:nep002xxxxx').sleutel;
   r = await post('/api/kaart/wens', { sleutels: [yt, sp], meteen: true });
-  ok('meteen: met video naar bezig, zonder video geweigerd (eerst zoeken)', r.j.toegevoegd.join() === yt && /zoeken/.test(r.j.geweigerd[0].reden)
-    && (await api(`/api/kaart/nummer/${yt}`)).j.wens.status === 'bezig');
+  ok('meteen: met video naar bezig (gestart), zonder video op wacht (eerst zoeken, of de nacht)', r.j.toegevoegd.join() === `${yt},${sp}` && r.j.gestart.join() === yt && !r.j.geweigerd.length
+    && (await api(`/api/kaart/nummer/${yt}`)).j.nummer.wens.status === 'bezig' && (await api(`/api/kaart/nummer/${sp}`)).j.nummer.wens.status === 'wacht');
   nep.speelt = () => true;
   r = await post('/api/kaart/wens', { sleutels: ['yt:nep004xxxxx'], meteen: true });
   ok('meteen terwijl een deck speelt = 409', r.status === 409 && r.j.fout === 'er speelt een deck');
@@ -229,14 +245,20 @@ console.log('\nde nep-server tegen het contract (deel 2)');
   const spN = alles.nummers.find((n) => n.sleutel === sp);
   ok('nep-kandidaten: zeker (0,95) alleen met een eigen like', (K.zekereKandidaat(nepKandidaten(spN)) !== null) === (spN.like === 'eigen') && K.zekereKandidaat(nepKandidaten({ ...spN, like: 'eigen' }))?.score === 0.95);
   r = await post(`/api/kaart/nummer/${sp}/kies`, { youtube_id: r.j.kandidaten[0].youtube_id });
-  ok('kies: de wens krijgt de id en wacht (ook zonder eerdere wens)', r.status === 200 && (await api(`/api/kaart/nummer/${sp}`)).j.wens.status === 'wacht' && (await api(`/api/kaart/nummer/${sp}`)).j.wens.youtube_id);
+  ok('kies: de wens krijgt de id en wacht', r.status === 200 && (await api(`/api/kaart/nummer/${sp}`)).j.nummer.wens.status === 'wacht' && (await api(`/api/kaart/nummer/${sp}`)).j.nummer.wens.youtube_id);
+  const sp2 = alles.nummers.find((n) => !n.youtube_id && n.sleutel !== sp).sleutel;
+  r = await post(`/api/kaart/nummer/${sp2}/kies`, { youtube_id: 'abcdefghijk' });
+  ok('kies zonder eerdere wens maakt er een op wacht (contract-afwijking van de UI, de server doet het zo)', r.status === 200 && r.j.wens.status === 'wacht' && (await api(`/api/kaart/nummer/${sp2}`)).j.nummer.wens.youtube_id === 'abcdefghijk');
+  await api(`/api/kaart/wens/${sp2}`, { method: 'DELETE' });
   ok('kies zonder youtube_id = 400', (await post(`/api/kaart/nummer/${sp}/kies`, {})).status === 400);
   const w = (await api('/api/kaart/wensen')).j.wensen;
   ok('GET /api/kaart/wensen: drie, met sleutel/status/gevraagd/youtube_id/fout/track', w.length === 3 && w.every((x) => ['sleutel', 'status', 'gevraagd', 'youtube_id', 'fout', 'track'].every((v) => v in x)));
   nep.rondAf(yt);
-  ok('rondAf: klaar met track', (await api('/api/kaart/wensen')).j.wensen.find((x) => x.sleutel === yt).status === 'klaar');
-  ok('DELETE /api/kaart/wens/<sleutel>', (await api('/api/kaart/wens/yt:nep002xxxxx', { method: 'DELETE' })).j.ok === true && (await api('/api/kaart/nummer/yt:nep002xxxxx')).j.wens === null);
-  ok('DELETE van een sleutel zonder wens = 404', (await api('/api/kaart/wens/yt:nep002xxxxx', { method: 'DELETE' })).status === 404);
+  const klaarW = (await api('/api/kaart/wensen')).j.wensen.find((x) => x.sleutel === yt);
+  ok('rondAf: klaar met track als OBJECT met id (zoals de server), nooit een string', klaarW.status === 'klaar' && typeof klaarW.track === 'object' && klaarW.track.id === alles.nummers.find((n) => n.sleutel === yt).youtube_id);
+  ok('track is null zolang hij niet binnen is', w.every((x) => x.track === null));
+  ok('DELETE /api/kaart/wens/<sleutel>', (await api('/api/kaart/wens/yt:nep002xxxxx', { method: 'DELETE' })).j.ok === true && (await api('/api/kaart/nummer/yt:nep002xxxxx')).j.nummer.wens === null);
+  ok('DELETE van een sleutel zonder wens = 200 { ok: false } (zoals de server)', (await api('/api/kaart/wens/yt:nep002xxxxx', { method: 'DELETE' })).j.ok === false);
 
   // nacht
   const n0 = (await api('/api/nacht')).j;

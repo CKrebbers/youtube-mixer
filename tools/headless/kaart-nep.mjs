@@ -12,6 +12,12 @@
 // kandidaten (zie `zoek`), "haal binnen" zet de wens op `bezig` en laat hem
 // daar staan (rondAf() maakt hem met de hand klaar).
 //
+// Sinds de samenvoeging (10 okt, docs/KAART.md §3) geeft de nep DEZELFDE vormen
+// als server/kaart.js: `GET /api/kaart/nummer/<sleutel>` = { nummer }, `track`
+// in de wensen = een library-track (object met id) of null, de redenen van
+// `geweigerd` letterlijk, `meteen` met een sp:-sleutel = op wacht (niet
+// geweigerd) en `gestart`, DELETE zonder wens = 200 { ok: false }, nacht/nu = 202.
+//
 // Gebruik:
 //   import { maakKaartNep } from './kaart-nep.mjs';
 //   const nep = maakKaartNep({ kaart: 'test/fixtures/varve-kaart.klein.json', doel: 8814 });
@@ -30,6 +36,8 @@ export const SORTERING = {
   duur: { eerst: 'op', waarde: (n) => n.duur },
   like_datum: { eerst: 'af', waarde: (n) => n.like_datum },
   gekeken: { eerst: 'af', waarde: (n) => n.gekeken ?? 0 },
+  // Zoals server/kaart.js: de volgorde van de krat zelf; alleen met een krat, en zonder `sorteer` de standaard mét krat.
+  krat: { eerst: 'op', waarde: null },
 };
 
 export const FILTERS = ['binnen', 'niet-binnen', 'geen-video', 'vertrouwd', 'vergeten', 'evergreens', 'geliket-nooit-gespeeld', 'eigen-keuze', 'eigen-likes'];
@@ -61,7 +69,7 @@ export function maakKaartNep({ kaart, binnen = () => null, speelt = () => false,
   const wensen = new Map();          // sleutel -> { sleutel, status, gevraagd, youtube_id, fout, track }
   const nacht = {
     aan: false, venster: { van: '01:00', tot: '07:00' }, perNacht: 80, pauze: { min: 20, max: 90 },
-    vandaagNiet: false, speeldagen: ['2026-10-10'], laatsteRun: null, volgende: null, bezig: false, standaardVolgorde: true,
+    vandaagNiet: false, speeldagen: ['2026-10-10'], laatsteRun: null, volgende: null, bezig: null, standaardVolgorde: true,
   };
   const nep = { verzoeken: [], wensen, nacht, binnen, speelt, zoek, server: null, poort: null };
 
@@ -75,18 +83,20 @@ export function maakKaartNep({ kaart, binnen = () => null, speelt = () => false,
     const zoekTerm = schoon(q.get('zoek') || '').trim();
     const kratId = q.get('krat') || '';
     const filters = (q.get('filter') || '').split(',').map((f) => f.trim()).filter(Boolean);
-    const sorteer = q.get('sorteer') || 'beurten';
+    const sorteer = q.get('sorteer') || (kratId ? 'krat' : 'beurten');
     if (!Object.hasOwn(SORTERING, sorteer)) return { fout: `onbekende sortering: ${sorteer}`, code: 400 };
+    if (sorteer === 'krat' && !kratId) return { fout: 'sorteer=krat alleen met een krat', code: 400 };
     for (const f of filters) if (!FILTERS.includes(f)) return { fout: `onbekend filter: ${f}`, code: 400 };
     const richting = q.get('richting') || SORTERING[sorteer].eerst;
     if (richting !== 'op' && richting !== 'af') return { fout: 'richting: op of af', code: 400 };
     const van = Math.max(0, Number(q.get('van')) || 0);
     const aantal = q.has('aantal') ? Math.min(500, Math.max(1, Number(q.get('aantal')) || 100)) : 100;
     let rijen = nummers;
+    let volg = null;
     if (kratId) {
       const krat = kratten.find((k) => k.id === kratId);
       if (!krat) return { fout: `onbekende krat: ${kratId}`, code: 404 };
-      const volg = new Map(krat.sleutels.map((s, i) => [s, i]));
+      volg = new Map(krat.sleutels.map((s, i) => [s, i]));
       rijen = rijen.filter((n) => volg.has(n.sleutel));
     }
     if (zoekTerm) rijen = rijen.filter((n) => (n.zoek || '').includes(zoekTerm) || schoon(n.artiest).includes(zoekTerm) || schoon(n.titel).includes(zoekTerm));
@@ -96,7 +106,7 @@ export function maakKaartNep({ kaart, binnen = () => null, speelt = () => false,
       else if (f === 'geen-video') rijen = rijen.filter((n) => !n.youtube_id);
       else rijen = rijen.filter(SLIM[f]);
     }
-    const w = SORTERING[sorteer].waarde;
+    const w = sorteer === 'krat' ? (n) => volg.get(n.sleutel) : SORTERING[sorteer].waarde;
     const teken = richting === 'op' ? 1 : -1;
     rijen = [...rijen].sort((a, b) => {
       const x = w(a), y = w(b);
@@ -130,36 +140,37 @@ export function maakKaartNep({ kaart, binnen = () => null, speelt = () => false,
     if (p === '/api/kaart/wensen' && req.method === 'GET') return json(res, 200, { wensen: [...wensen.values()] });
     if (p === '/api/kaart/wens' && req.method === 'POST') {
       const sleutels = Array.isArray(body.sleutels) ? body.sleutels : [];
+      if (!sleutels.length) return json(res, 400, { fout: 'geef { sleutels: [..] }' });
       if (sleutels.length > 20 && body.bevestig !== true) return json(res, 409, { fout: 'meer dan 20', aantal: sleutels.length });
       if (body.meteen === true && nep.speelt()) return json(res, 409, { fout: 'er speelt een deck' });
-      const toegevoegd = [], geweigerd = [], gezien = new Set();
+      const toegevoegd = [], geweigerd = [], gestart = [], gezien = new Set();
       for (const s of sleutels) {
         const n = perSleutel.get(s);
-        if (gezien.has(s)) { geweigerd.push({ sleutel: s, reden: 'dubbel' }); continue; }
+        if (gezien.has(s)) { geweigerd.push({ sleutel: s, reden: 'dubbel in de vraag' }); continue; }
         gezien.add(s);
-        if (!n) { geweigerd.push({ sleutel: s, reden: 'onbekende sleutel' }); continue; }
-        if (binnenVan(n)) { geweigerd.push({ sleutel: s, reden: 'staat al in de library' }); continue; }
+        if (!n) { geweigerd.push({ sleutel: s, reden: 'niet op de kaart' }); continue; }
+        if (binnenVan(n)) { geweigerd.push({ sleutel: s, reden: 'al binnen' }); continue; }
         const w = wensen.get(s);
-        if (w && !['klaar', 'mislukt', 'geannuleerd'].includes(w.status)) { geweigerd.push({ sleutel: s, reden: 'staat al op de wenslijst' }); continue; }
-        if (body.meteen === true && !n.youtube_id) { geweigerd.push({ sleutel: s, reden: 'geen video: eerst zoeken' }); continue; }
-        wensen.set(s, { sleutel: s, status: body.meteen === true ? 'bezig' : 'wacht', gevraagd: new Date().toISOString(), youtube_id: n.youtube_id, fout: null, track: null });
+        if (w && !['mislukt', 'geannuleerd'].includes(w.status)) { geweigerd.push({ sleutel: s, reden: `staat al op de lijst (${w.status})` }); continue; }
+        // Meteen én een video: de "ingest" (bezig). Zonder video gewoon wacht (eerst zoeken, of de nacht).
+        const meteen = body.meteen === true && !!n.youtube_id;
+        wensen.set(s, { sleutel: s, status: meteen ? 'bezig' : 'wacht', gevraagd: new Date().toISOString(), youtube_id: n.youtube_id, fout: null, track: null, bron: 'wens', nummer: { artiest: n.artiest, titel: n.titel } });
         toegevoegd.push(s);
+        if (meteen) gestart.push(s);
       }
-      return json(res, 200, { ok: true, toegevoegd, geweigerd });
+      return json(res, 200, { ok: true, toegevoegd, geweigerd, ...(body.meteen === true ? { gestart } : {}) });
     }
     let m = /^\/api\/kaart\/wens\/(.+)$/.exec(p);
     if (m && req.method === 'DELETE') {
       const s = decodeURIComponent(m[1]);
-      if (!wensen.has(s)) return json(res, 404, { fout: 'geen wens voor deze sleutel' });
-      wensen.delete(s);
-      return json(res, 200, { ok: true });
+      return json(res, 200, { ok: wensen.delete(s) });
     }
     m = /^\/api\/kaart\/nummer\/([^/]+)(?:\/(zoek|kies))?$/.exec(p);
     if (m) {
       const s = decodeURIComponent(m[1]);
       const n = perSleutel.get(s);
       if (!n) return json(res, 404, { fout: 'onbekende sleutel' });
-      if (!m[2] && req.method === 'GET') return json(res, 200, metStand(n));
+      if (!m[2] && req.method === 'GET') return json(res, 200, { nummer: metStand(n) });
       if (m[2] === 'zoek' && req.method === 'POST') {
         if (nep.speelt()) return json(res, 409, { fout: 'er speelt een deck' });
         const w = wensen.get(s);
@@ -168,14 +179,16 @@ export function maakKaartNep({ kaart, binnen = () => null, speelt = () => false,
       }
       if (m[2] === 'kies' && req.method === 'POST') {
         if (typeof body.youtube_id !== 'string' || !body.youtube_id) return json(res, 400, { fout: 'youtube_id ontbreekt' });
-        const w = wensen.get(s) || { sleutel: s, gevraagd: new Date().toISOString(), fout: null, track: null };
+        const w = wensen.get(s) || { sleutel: s, gevraagd: new Date().toISOString(), fout: null, track: null, bron: 'wens', nummer: { artiest: n.artiest, titel: n.titel } };
         w.youtube_id = body.youtube_id;
         w.status = 'wacht';
+        w.fout = null;
+        w.track = null;
         wensen.set(s, w);
         return json(res, 200, { ok: true, wens: w });
       }
     }
-    if (p === '/api/nacht' && req.method === 'GET') return json(res, 200, nacht);
+    if (p === '/api/nacht' && req.method === 'GET') return json(res, 200, { ...nacht, nu: new Date().toISOString() });
     if (p === '/api/nacht' && req.method === 'POST') {
       if (typeof body.aan === 'boolean') nacht.aan = body.aan;
       if (typeof body.vandaagNiet === 'boolean') nacht.vandaagNiet = body.vandaagNiet;
@@ -194,10 +207,10 @@ export function maakKaartNep({ kaart, binnen = () => null, speelt = () => false,
     if (p === '/api/nacht/nu' && req.method === 'POST') {
       if (nep.speelt()) return json(res, 409, { fout: 'er speelt een deck' });
       if (nacht.speeldagen.includes(new Date().toISOString().slice(0, 10))) return json(res, 409, { fout: 'vandaag is een speeldag' });
-      nacht.bezig = true;
-      return json(res, 200, { ok: true, aantal: body.aantal ?? nacht.perNacht });
+      nacht.bezig = { id: 1, begonnen: new Date().toISOString(), soort: 'nu', aantal: body.aantal ?? nacht.perNacht, gehaald: 0, mislukt: 0, huidig: null };
+      return json(res, 202, { ...nacht, nu: new Date().toISOString() });
     }
-    if (p === '/api/nacht/stop' && req.method === 'POST') { nacht.bezig = false; return json(res, 200, { ok: true }); }
+    if (p === '/api/nacht/stop' && req.method === 'POST') { const liep = !!nacht.bezig; nacht.bezig = null; return json(res, 200, { ok: liep, ...nacht }); }
     return json(res, 404, { fout: 'onbekend eindpunt (nep)' });
   }
 
@@ -225,12 +238,13 @@ export function maakKaartNep({ kaart, binnen = () => null, speelt = () => false,
     nep.server.listen(poort, '127.0.0.1', () => { nep.poort = nep.server.address().port; ok(nep.poort); });
   });
   nep.stop = () => new Promise((ok) => { nep.server.closeAllConnections?.(); nep.server.close(() => ok()); });
-  /** Een wens die "bezig" is met de hand klaar maken (de echte server doet dat na de ingest). */
+  /** Een wens die "bezig" is met de hand klaar maken (de echte server doet dat na de ingest): `track` wordt een library-track (object met id). */
   nep.rondAf = (sleutel, trackId = perSleutel.get(sleutel)?.youtube_id ?? sleutel) => {
     const w = wensen.get(sleutel);
     if (!w) return null;
+    const n = perSleutel.get(sleutel);
     w.status = 'klaar';
-    w.track = trackId;
+    w.track = { id: trackId, titel: n ? `${n.artiest} - ${n.titel}` : trackId, video: null };
     return w;
   };
   return nep;

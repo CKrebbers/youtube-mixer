@@ -1552,7 +1552,11 @@ const server = createServer(async (req, res) => {
  * één op één zijn code en { fout, ...extra }; alles anders is een gewone 500.
  * Geeft undefined als het pad niet van ons is (dan volgt de 404).
  */
-async function kaartRoute(req, res, url, pad) {
+async function kaartRoute(req, res, url, padRuw) {
+  // De UI stuurt de sleutel met encodeURIComponent ("yt%3Aabc"); url.pathname
+  // decodeert niet. Een sleutel is `yt:` of `sp:` plus letters, cijfers, - en _.
+  let pad;
+  try { pad = decodeURIComponent(padRuw); } catch { return json(res, 400, { fout: 'onleesbaar pad' }); }
   try {
     if (pad === '/api/kaart' && req.method === 'GET') return json(res, 200, kaart.stand());
 

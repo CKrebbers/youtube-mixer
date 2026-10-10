@@ -71,6 +71,13 @@ keuzelogica staat puur in `kies.mjs` (`test/lokaal-importeer.test.mjs`). Zie `lo
 Pas draaien NÁ de proefavond van 10 okt.
 
 ## headless/
+- `kaart.mjs [uitmap]` — de tab kaart (docs/LIBRARY.md "De kaart-tab") op de NEP-server `kaart-nep.mjs`
+  (de kaart-API in het geheugen op `test/fixtures/varve-kaart.klein.json`, de rest doorgegeven aan een
+  eigen echte server op 8815; nep op 8816): voor ontwikkeling aan de UI zonder de serverkant. 65 checks.
+- `kaart-echt.mjs [uitmap]` — de tab kaart tegen de ECHTE kaart-routes van een server die al draait
+  (`VARVE_KIJK_ECHT`, standaard 8782), met het echte `varve-kaart.json`, een KOPIE van de library en de
+  nep-yt-dlp (`NEP_LOG` om de videostap te controleren); spawnt alleen Chrome. Hoe je die server start
+  staat bovenin het script en in docs/KAART.md §9. 31 checks, foto's `kaart-echt-*.png`.
 - `stems.mjs [--nep] [uitmap]` — de stems van binnenhalen tot horen (eigen server op 8793, nep-yt-dlp,
   nep-splitter via `maakNepStems`): binnenhalen met stems=2, de kolom, laden, de STEMS-rij, kill
   per stem met de muis GEMETEN aan de master (zang weg 0,25 · alles weg 0 · terug 1; vier stems:

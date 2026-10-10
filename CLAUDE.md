@@ -202,7 +202,9 @@ server/             draait apart: `node server/index.js`
                     wensen en nacht_runs in een EIGEN media/kaart.db, een YouTube-versie zoeken (ytsearch5, nooit cookies) (docs/KAART.md)
   nacht.js          de nachtwachtrij: venster, speeldagen, wensen dan standaardvolgorde, één tegelijk met pauze, stopt bij een deck of 403; media/nacht.json
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
-                    headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
+                    lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
+                    headless/ (kaart.mjs: de tab kaart op de nep-server kaart-nep.mjs; kaart-echt.mjs: de tab kaart tegen de
+                    echte kaart-routes van een server die al draait (kopie van de library, nep-yt-dlp, echte varve-kaart.json); kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
                     vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs, beeld.mjs: headless zonder MIDI;
                     beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
                     maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
@@ -262,7 +264,8 @@ test/
   opname.test.mjs   opname-WAV: stukken op ?frame=N, kop, RF64, herstel na crash, geen ../
   opnemer.test.mjs  opnemer tegen de echte opname.js met een haperend netwerk: geen dubbel, gat = stilte
   bronnen.test.mjs  TikTok-links zonder netwerk, ffprobe-controle, eigen staande video door de pijplijn
-  upload.test.mjs   upload-route op een eigen server: grens, geen media, hash-id, streamen i.p.v. geheugen
+  upload.test.mjs   upload-route op een eigen server: grens, geen media, hash-id, streamen i.p.v. geheugen, ?video=0/?titel=/?artiest=
+  lokaal-importeer.test.mjs  tools/lokaal: welke bestanden, overslaan (al binnen, .acties.jsonl, mp4 naast wav, < 20 s), de droogloop
   vormen.test.mjs   vormlagen: elk systeem, zaad, 1/60 s-stappen, knoppen, bus, fragment, mixer (nep-WebGL)
   vormen-zwaar/-meer/-isomorf.test.mjs  de 16 extra systemen: puur, zaad, g.kwaliteit, ms per stap, nep-sink
                     (ms per stap in THREADtijd, beste van 3: de wandklok telde onder load de planner mee)
@@ -327,7 +330,8 @@ docs/
   EFFECTEN.md       effecten uit de filter app (S2c): per effect herkomst, eenheden, staart, metingen, wat niet
   PATRONEN.md       patronen (S4): het contract (§1–6) en wat gebouwd is (§7: klok, opnemen, API, APC, opslag, metingen)
   BEELD.md          spoor beeld (6 okt): VARVE stuurt de Stroommachine via de relay; instellen, wat er gaat, APC-mapje, problemen, tests
-  KAART.md          de muziekkaart in Varve (10 okt): het bestand, de API, de nachtregels, de keuze voor "er speelt een deck", wat niet getest is
+  KAART.md          de muziekkaart in Varve (10 okt): het bestand, de API (+ §3b de afspraken met de UI), de nachtregels, "er speelt een deck",
+                    §9 gemeten op het echte bestand, §10 na de proefavond, wat niet getest is
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 

@@ -1,9 +1,20 @@
-# De muziekkaart in Varve: zoeklaag, wenslijst, nachtwachtrij (serverkant)
+# De muziekkaart in Varve: zoeklaag, wenslijst, nachtwachtrij, lokale import
 
-Gebouwd op 10 oktober 2026 op `studio/kaart-server`, naar het contract van die
-dag (`CONTRACT-KAART.md` in de scratchpad van de sessie; de kern staat hier). De
-UI (tab `kaart` in het library-paneel) is een ander spoor (`studio/kaart-ui`),
-lokale bestanden ook (`studio/kaart-lokaal`). Dit document is de serverkant.
+Gebouwd op 10 oktober 2026 in drie sporen naar het contract van die dag
+(`CONTRACT-KAART.md` in de scratchpad van de sessie; de kern staat hier):
+de serverkant (`studio/kaart-server`, dit document §1–6), de UI (`studio/kaart-ui`,
+tab `kaart` in het library-paneel: `docs/LIBRARY.md` "De kaart-tab") en de lokale
+bestanden (`studio/kaart-lokaal`, `tools/lokaal/LEESMIJ.md`). Samengevoegd op
+`studio/kaart` (PR naar `studio/integratie`); de afspraken tussen UI en server
+die bij het samenvoegen zijn rechtgetrokken staan in §3b, de cijfers van het echte
+bestand in §9, wat Clay na de proefavond doet in §10.
+
+Het echte bestand van 10 okt (09:47): **18.233 nummers** (9.753 met YouTube-video,
+8.480 alleen Spotify), **29 kratten** (22 playlists + 7 slimme), 10,7 MB. Het
+contract rekende met 18.763 rijen en 23 playlists; de kaart zelf heeft "Watch
+later" en een paar lege playlists weggelaten. Slim: vertrouwd 835, eigen likes
+771, geliket-nooit-gespeeld 507, vergeten 204, evergreens 103, eigen keuze 57,
+proefkrat 15. Veel playlists zijn leeg (AI, Games, Podcast, …: geen muziek).
 
 ## 1. Wat het is
 
@@ -115,6 +126,53 @@ vreemde Origin.
 - `POST /api/nacht/stop` → `{ ok, …stand }`: stopt na het lopende nummer.
 - **Extra:** `GET /api/nacht/runs` → `{ runs }`, de laatste 30 uit `nacht_runs`.
 
+### 3b. De afspraken met de UI (samengevoegd 10 okt)
+
+Zes punten waar de UI-agent en de server-agent elkaar niet hadden gezien, met de
+keuze (de server is de waarheid, tenzij de UI-keuze beter was) en de test die het
+bewaakt (`test/kaart-server.test.mjs` "wat de UI stuurt", `test/kaart-lijst.test.mjs`
+voor de nep):
+
+a. **`POST …/kies` zonder bestaande wens** maakt een wens aan op `wacht` (de UI
+   verwachtte dat; `kaart.kies` deed het al). Vastgelegd met een HTTP-test, ook met
+   een percent-gecodeerde sleutel.
+b. **`GET /api/kaart/wensen[].track`** is de library-track als OBJECT (met `id`,
+   `titel`, `video`, …) of `null`; nooit een string. De UI las beide; de nep gaf een
+   string en geeft nu een object. De UI leest `track` nergens (de laadknoppen komen
+   van `binnen` per rij), dus alleen de nep en de test zijn veranderd.
+c. **`sorteer=krat`** (de volgorde van de krat zelf) bestaat nu ook in de UI: met
+   een krat gekozen komt vooraan een kolom `krat` (sorteerbaar, toont het rangnummer
+   zolang daarop gesorteerd is). Een krat kiezen met de STANDAARDsortering (beurten
+   af) schakelt naar de kratvolgorde, zoals de server zonder `sorteer`; een eigen
+   keuze (titel, laatst, …) blijft staan. Zonder krat valt een bewaarde `krat`-
+   sortering terug op beurten (de server geeft anders 400). De nep kent hem ook.
+d. **409-teksten** zijn letterlijk gelijk: `meer dan 20` (met `aantal`) en
+   `er speelt een deck`. De UI test op `/meer dan 20/` en toont de andere als tekst.
+e. **De krat op de wenslijst**: de UI haalt `?krat=&filter=niet-binnen&aantal=500`
+   zelf op (in pagina's) en stuurt de sleutels; de server geeft daarbij ook de
+   `sp:`-sleutels zonder video, en `POST /api/kaart/wens` zet die gewoon op `wacht`
+   (de nacht zoekt dan eerst een versie). Getest op `slim:eigen-likes`.
+   De nep weigerde een `sp:`-sleutel bij `meteen: true` ("eerst zoeken"); de server
+   zet hem op `wacht` en meldt in `gestart` wat wél meteen ging. De nep doet dat nu ook.
+f. **De naam van een krat** komt uit het bestand (`naam`, met hoofdletter:
+   "Proefkrat", "Vertrouwd"): `GET /api/kaart` geeft hem door en de UI toont hem zo in
+   de kiezer en de status. De fixture van de UI had kleine letters; dat is alleen data.
+
+Erbij gevonden bij het samenvoegen:
+- **Percent-gecodeerde sleutels.** De UI stuurt `encodeURIComponent(sleutel)`
+  (`yt%3Aabc`); `url.pathname` decodeert niet, dus de routes `/api/kaart/nummer/…`,
+  `…/zoek`, `…/kies` en `DELETE /api/kaart/wens/…` gaven 404. `kaartRoute` decodeert
+  het pad nu eerst (onleesbaar = 400). Zonder deze fix werkte "haal binnen" in de
+  echte app niet (de rij werd daarna niet opnieuw opgehaald).
+- **`GET /api/kaart/nummer/<sleutel>` geeft `{ nummer }`**; de nep gaf het nummer
+  kaal en de UI las dat. De UI leest nu `j.nummer ?? j`, de nep geeft `{ nummer }`.
+- De nep volgt verder de server in: de redenen van `geweigerd` (`dubbel in de
+  vraag`, `niet op de kaart`, `al binnen`, `staat al op de lijst (<status>)`),
+  `DELETE` zonder wens = 200 `{ ok: false }`, `POST /api/nacht/nu` = 202 met de stand,
+  `GET /api/nacht` met `nu`, lege `sleutels` = 400.
+- Het nachtblok toont nu ook de **speeldagen** ("speeldagen: 10 okt (vandaag)"),
+  zodat je op een proefavond ziet dat de nacht erna overslaat.
+
 ### De score van een zoekresultaat
 
 `yt-dlp "ytsearch5:<artiest> <titel>" --flat-playlist -J --no-warnings`, zonder
@@ -218,20 +276,34 @@ meer), of `laatst_geladen` uit de library (zegt niets over spelen).
   `/api/nacht/nu`, "er speelt een deck" via een echt Range-verzoek (zoek, meteen en
   nu geven 409), herstart (wensen en instellingen blijven), zonder kaartbestand.
 
-Rooktest 10 okt zonder netwerk en zonder de echte library: de server uit deze
-worktree op poort 8781 met een KOPIE van `media/library.db` (+ -wal/-shm) en het
-echte `varve-kaart.json` van die ochtend (18.233 nummers, 29 kratten): `GET
-/api/kaart`, `/api/kaart/nummers?zoek=four&aantal=5` en `/api/nacht` antwoorden
-zoals hierboven. Niets binnengehaald.
+- `test/kaart-lijst.test.mjs` (UI, puur + de nep): kolommen, badges, stand → knop,
+  filters, kratkiezer, `sorteer=krat` (effectieveSortering, sorteringBijKrat,
+  kolommenVoor), speeldagenTekst, bevestiging, kieslijst, nachtteksten, en de nep
+  (`tools/headless/kaart-nep.mjs`) tegen dezelfde vormen als de server.
+- `test/lokaal-importeer.test.mjs` en `test/upload.test.mjs`: de lokale import
+  (`tools/lokaal/kies.mjs`) en `?video=0`, `?titel=`, `?artiest=` op `/api/upload`.
+- Headless: `tools/headless/kaart.mjs` (de UI op de nep, zonder serverkant, voor
+  ontwikkeling; 65 checks) en `tools/headless/kaart-echt.mjs` (de UI tegen de ECHTE
+  routes van een server die al draait; 31 checks; zie §9).
+
+Eerste rooktest 10 okt (serverkant alleen, poort 8781): `GET /api/kaart`,
+`/api/kaart/nummers?zoek=four&aantal=5` en `/api/nacht` op het echte bestand. De
+volledige rooktest na het samenvoegen staat in §9.
 
 ## 8. Niet getest / open
 
-- Niet met een echte yt-dlp op het netwerk: het zoeken (`ytsearch5`) en een echte
-  download zijn alleen met de nep gedaan. Of YouTube `ytsearch` zonder cookies
-  laat lopen op Clay's IP, en wat hij bij een 403 precies zegt, is een aanname
-  (`isBlokkade`). Eerste echte nacht: `perNacht` klein zetten en het log lezen.
-- Niet op Clay's echte server (8777) en niet met een spelend deck in Chrome; de
-  30 s-regel is op een Range-verzoek met curl getoetst.
+- **Clay's eigen Chrome** (alleen de headless shell), **de APC en de Maschine**
+  (de kaart heeft bewust geen knoppen op de controllers), **niets beluisterd**.
+- **Een echte yt-dlp op het netwerk**: het zoeken (`ytsearch5`) en elke download
+  zijn alleen met `test/nep-ytdlp.mjs` gedaan, ook in de rooktest van §9. Of
+  YouTube `ytsearch` zonder cookies laat lopen op Clay's IP, en wat hij bij een 403
+  precies zegt, is een aanname (`isBlokkade`). Daarom §10: de eerste nacht klein.
+- **De 30 s-regel met een echt deck**: "er speelt een deck" is getoetst met een
+  Range-verzoek (curl, servertest) en in de UI met de engine-stand (nep-headless);
+  niet met een deck dat in Clay's Chrome echt streamt tegen de echte routes.
+- **De lokale import echt draaien**: alleen de droogloop (24 nieuw, 3 al binnen, 11
+  Spotdownloader-mp3's onleesbaar) en de testserver; §10.
+- Niet op Clay's echte server (8777): de rooktest draaide op 8782 met een kopie.
 - Een lopende ingest wordt bij "er speelt een deck" NIET geannuleerd (de run stopt
   ná dat nummer). Annuleren kan (de wachtrij kan het), maar een halve download
   weggooien terwijl Clay al speelt helpt de set niet meer; niet gebouwd.
@@ -243,10 +315,100 @@ zoals hierboven. Niets binnengehaald.
   voor de integrator als dat vaak voorkomt.
 - `slim:proefkrat` komt uit het bestand (15 sleutels op 10 okt); de server doet er
   niets bijzonders mee.
-- De UI-agent heeft nodig: `GET /api/kaart` voor de kratkiezer (met `aantal` en
-  `binnen`), `/api/kaart/nummers` voor de lijst (zelfde paginatie als de library),
-  `wens.status` per rij, `POST /api/kaart/wens` met `bevestig` na de 409 en `meteen`
-  voor "haal binnen", `/zoek` + `/kies` voor het kieslijstje (score ≥ 0,9 = meteen
-  gekozen door de UI zelf; de server kiest alleen in de nacht), `/api/nacht` en
-  `/api/kaart/wensen` voor het blok Nachtwachtrij. "Haal binnen" uitgeschakeld terwijl
-  een deck speelt weet de UI uit de engine; de server zegt het ook (409).
+- De UI gebruikt: `GET /api/kaart` voor de kratkiezer (met `aantal` en `binnen`),
+  `/api/kaart/nummers` voor de lijst (zelfde paginatie als de library), `wens.status`
+  per rij, `POST /api/kaart/wens` met `bevestig` na de 409 en `meteen` voor "haal
+  binnen", `/zoek` + `/kies` voor het kieslijstje (score ≥ 0,9 = meteen gekozen door
+  de UI zelf; de server kiest alleen in de nacht), `/api/nacht` en `/api/kaart/wensen`
+  voor het blok Nachtwachtrij. "Haal binnen" uitgeschakeld terwijl een deck speelt
+  weet de UI uit de engine; de server zegt het ook (409). Zie §3b.
+
+## 9. Gemeten (10 okt, na het samenvoegen, op het echte bestand)
+
+De samengevoegde server uit de worktree `studio/kaart` op poort 8782, met een KOPIE
+van Clay's `media/library.db` (+ `-wal`/`-shm`, 15 nummers) in een scratchmap, de
+nep-yt-dlp (`VARVE_YTDLP`, `NEP_BRON` = een synthetische wav van 12 s, `NEP_LOG`) en
+het echte `varve-kaart.json` (18.233 nummers, 29 kratten). Niets van YouTube, de
+Bureaublad-map en 8777 niet aangeraakt. M-serie Mac, container rustig.
+
+Server (curl, `time_total`, warm):
+
+| | |
+|---|---|
+| kaart laden bij de start | 62–70 ms (10,7 MB JSON, log `[kaart] 18233 nummers, 29 kratten geladen`) |
+| pagina van 100 (beurten af) | 2,2–2,5 ms (eerste 6,9 ms) |
+| pagina van 100 op titel, `van=9000` | 1,5 ms (eerste keer 19,7 ms: de sortering wordt één keer gemaakt) |
+| zoeken `four` (135 treffers) | 4,5–5,0 ms |
+| krat proefkrat (kratvolgorde, 15) | 0,9–1,0 ms |
+| krat Musicc (340) `niet-binnen`, 500 per pagina | 4,0 ms |
+| `GET /api/kaart` (telt per krat wat binnen is) | 1,3 ms |
+| `GET /api/kaart/wensen` | 0,9 ms |
+| geheugen van de server (RSS) | 155 MB na het laden, 168 MB na de metingen, 116 MB na de rooktest (GC) |
+
+UI (`tools/headless/kaart-echt.mjs`, headless Chromium, 1440×900):
+
+| | |
+|---|---|
+| tab kaart → de rijen staan er (18.233 in de status) | 62–80 ms na de klik |
+| typen `four` → "135 gevonden" | 158–162 ms (waarvan 120 ms wachten op het typen) |
+| "haal binnen" → wens `klaar`, rij `binnen` | 2,0–2,1 s (nep-download, ffmpeg, peaks, grid, toon) |
+
+Rooktest (`kaart-echt.mjs`, 31 checks, alles groen; foto's in de scratchmap
+`kaart-integratie/kaart-echt-*.png`): de tab opent met 18.233 nummers, ≤ 30 rijen
+in de DOM, scrollhoogte 18.233 × 28, de kratkiezer heeft alle 29 kratten met de
+naam uit het bestand en het aantal, zoeken `four` → 135 (dezelfde eerste rijen als
+de API), krat Proefkrat → 15 in kratvolgorde met de kratkolom (1, 2, 3 …), kolomkop
+beurten en terug, "haal binnen" op één nummer (Ross from Friends – The Daisy, daarna
+Overmono – Is U) gaat door `POST /api/kaart/wens { meteen }`, de echte ingest-rij
+zonder videostap, nep-yt-dlp zonder cookie-optie (6 aanroepen, 0 × video), de wens
+wordt `klaar` met `track` als object, de library heeft er één bij, de rij wordt
+`binnen` met laadknoppen, de kiezer telt "1 binnen", het nachtblok zegt uit, 80 per
+nacht, 01:00–07:00, "speeldagen: 10 okt (vandaag)", "nog geen run geweest";
+`/api/nacht` blijft `aan: false` met `speeldagen: ["2026-10-10"]`; geen consolefouten.
+De nep-headless (`kaart.mjs`, 65 checks) blijft ook groen.
+
+Zo start je die proefserver zelf (de regels staan ook bovenin `kaart-echt.mjs`):
+
+```
+M=<scratchmap>; mkdir -p $M/media; cp media/library.db* $M/media/     # KOPIE
+printf '#!/bin/sh\nexec node "%s/test/nep-ytdlp.mjs" "$@"\n' "$PWD" > $M/nep-yt-dlp; chmod +x $M/nep-yt-dlp
+ffmpeg -f lavfi -i "aevalsrc='0.8*sin(2*PI*900*t)':s=44100:d=12" -ac 2 $M/bron.wav
+PORT=8782 VARVE_DB=$M/media/library.db VARVE_MEDIA=$M/media VARVE_OPNAMES=$M/opnames \
+VARVE_PATRONEN=$M/patronen VARVE_PLANNEN=$M/plannen VARVE_PROEF=$M/proef VARVE_BACKUPS=$M/backups \
+VARVE_HERANALYSE=uit VARVE_YTDLP=$M/nep-yt-dlp NEP_LOG=$M/nep.log NEP_BRON=$M/bron.wav NEP_DUUR=300 \
+VARVE_KAART="$HOME/Desktop/3. Resources/Data/Muziekkaart/varve-kaart.json" node server/index.js
+NEP_LOG=$M/nep.log node tools/headless/kaart-echt.mjs $M
+```
+
+## 10. Na de proefavond (voor Clay)
+
+Vandaag (10 okt) staat als speeldag in `nacht.json` en de nacht staat UIT; er
+gebeurt vannacht niets, ook niet als je de knop per ongeluk aanzet (regel 1: ook
+de nacht ná een speeldag telt als die dag). Daarna, in deze volgorde:
+
+1. **Server herstarten** vanuit de samengevoegde code (na de merge van de PR) en de
+   tab `kaart` openen: 18.233 nummers, 29 kratten in de kiezer.
+2. **De eerste nacht klein.** In het blok Nachtwachtrij: `per nacht` op **5**, dan
+   `aan`. Of met curl: `curl -X POST localhost:8777/api/nacht -H 'Content-Type: application/json'
+   -d '{"perNacht":5,"aan":true}'`. De volgende ochtend: `laatste run` in het blok,
+   `GET /api/nacht/runs`, en het serverlog (`[nacht] …`). Mislukt iets met 403/429 of
+   "sign in to confirm": de nacht stopt zelf; dan is het een vraag voor de muziekkaart,
+   niet iets om met cookies te forceren (nooit). Gaat het goed: `perNacht` naar 20, dan 80.
+3. **Speeldagen bijhouden.** Elke avond dat je draait vooraf in de lijst zetten:
+   `curl -X POST localhost:8777/api/nacht -H 'Content-Type: application/json'
+   -d '{"speeldagen":["2026-10-10","2026-10-17"]}'` (de hele lijst, `JJJJ-MM-DD`), of
+   voor één keer de knop `vandaag niet` (loopt na die nacht vanzelf af). Op een
+   speeldag en de nacht erna haalt de nacht niets, en "haal binnen" geeft 409
+   zolang een deck speelt.
+4. **Wensen zetten** waar je zin in hebt: per nummer `haal binnen` (nu, alleen als
+   er geen deck speelt) of een hele krat op de wenslijst (boven 20 eerst "ja"). Een
+   Spotify-nummer zonder video: eerst `zoek`, of laat de nacht het doen (score ≥ 0,9
+   kiest hij zelf; anders staat hij op `kies video` tot jij kiest).
+5. **De lokale import**, eerst droog:
+   `node tools/lokaal/importeer.mjs --droog --map ~/Music/Music/Media.localized/Music
+   --map ~/Music/Samples/Muziek --map "$HOME/Desktop/1. Projects/Youtube mixer/opnames"`.
+   Klopt de tabel (24 nieuw, 3 al binnen, 11 onleesbaar op 10 okt), dan zonder
+   `--droog` met de server op 8777 aan: één voor één door de upload-route, alleen
+   audio, geen stems. `tools/lokaal/LEESMIJ.md`.
+6. **Het bestand verversen** als de muziekkaart opnieuw gebouwd is: Varve ziet de
+   nieuwe mtime bij het eerste verzoek erna; niets herstarten.

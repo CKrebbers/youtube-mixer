@@ -270,7 +270,7 @@ try {
   ok('klik = POST .../kies met die youtube_id; de rij zegt "gekozen: …" met "anders"', await tot(`!document.querySelector('#lib-panel .kaart-kieslijst') && document.querySelector('#lib-panel .kaart-rijen [data-stand="${twijfel.sleutel}"]')?.textContent.includes('gekozen:')
     && document.querySelector('#lib-panel .kaart-rijen button[data-anders="${twijfel.sleutel}"]')`, 5000)
     && nep.verzoeken.some((v) => v.pad.endsWith('/kies') && v.body?.youtube_id === kiesId), await standVan(twijfel.sleutel));
-  ok('op de server staat de wens te wachten met die id', (await api(`/api/kaart/nummer/${twijfel.sleutel}`)).wens?.youtube_id === kiesId);
+  ok('op de server staat de wens te wachten met die id', (await api(`/api/kaart/nummer/${twijfel.sleutel}`)).nummer?.wens?.youtube_id === kiesId);
   nep.verzoeken.length = 0;
   await klik(`#lib-panel .kaart-rijen button[data-zoek="${zeker.sleutel}"]`);
   ok('score ≥ 0,9: meteen gekozen (POST kies zonder lijstje), "gekozen: …" en de knop "anders"', await tot(`document.querySelector('#lib-panel .kaart-rijen [data-stand="${zeker.sleutel}"]')?.textContent.includes('gekozen: ${zeker.titel}')

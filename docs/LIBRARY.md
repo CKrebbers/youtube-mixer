@@ -317,12 +317,13 @@ geen Chromium in de container).
 
 De muziekkaart (`~/Projects/muziekkaart`, contract: scratchpad `CONTRACT-KAART.md`)
 als ZOEKLAAG in het library-paneel: een tweede tab `library | kaart`. De kaart
-kent 18.763 nummers (YouTube-video's en Spotify-nummers zonder video) en de
-playlists als kratten; Varve haalt er niets van vanzelf binnen. Per nummer of
-per krat zet je iets op de wenslijst; de nachtwachtrij van de server
-(`server/nacht.js`, serveragent, `docs/KAART.md`) haalt dat 's nachts binnen,
-alleen audio. De serverkant (`/api/kaart`, `/api/nacht`) staat op de tak
-`studio/kaart-server`; deze tak bevat alleen de UI en een nep-server.
+kent 18.233 nummers (9.753 YouTube-video's en 8.480 Spotify-nummers zonder video;
+het contract zei 18.763) en de playlists als kratten; Varve haalt er niets van
+vanzelf binnen. Per nummer of per krat zet je iets op de wenslijst; de
+nachtwachtrij van de server (`server/nacht.js`, `docs/KAART.md`) haalt dat
+'s nachts binnen, alleen audio. De serverkant (`/api/kaart`, `/api/nacht`) is op
+`studio/kaart-server` gebouwd; sinds het samenvoegen (`studio/kaart`, 10 okt)
+staat alles bij elkaar en is de nep-server alleen nog voor ontwikkeling.
 
 ### Wat er is
 
@@ -398,26 +399,42 @@ stuurt `{ aan }`, `{ perNacht }`, `{ venster }`, `{ vandaagNiet }`; geen
 peiling met de tab dicht, wel met de tab open; na herladen opent het paneel op
 de kaart. Foto's in de uitmap (`kaart-open.png`, `kaart-kieslijst.png`, …).
 
-### Waar de UI iets anders nodig heeft dan het contract zegt
+### De afspraken met de server (samengevoegd 10 okt, `studio/kaart`)
 
-- `POST /api/kaart/nummer/<sleutel>/kies` op een nummer ZONDER wens: de UI
-  verwacht dat de server dan de wens aanmaakt (status `wacht`), want "zoek"
-  op een Spotify-only rij maakt er in het contract geen. De nep doet dat zo.
-- De krat-knop haalt de sleutels zelf op (`/api/kaart/nummers?krat=&filter=
-  niet-binnen&aantal=500`, in pagina's) en stuurt ze als `sleutels`; het
-  contract kent geen `krat` in de POST. Bij 23 playlists is dat hooguit een
-  paar verzoeken.
-- `GET /api/kaart/wensen`: de UI leest `track` als track-id (string) of als
-  object met `id`; het contract zegt niet welk van de twee.
+De punten waar de UI iets anders verwachtte dan het contract zei, zijn bij het
+samenvoegen rechtgetrokken; de keuzes en de tests staan in `docs/KAART.md` §3b.
+Kort, voor wie aan de UI werkt:
+
+- `POST …/kies` zonder wens maakt er een (`wacht`): de server deed dat al.
+- `GET /api/kaart/nummer/<sleutel>` geeft `{ nummer }`: `_vernieuwRij` leest
+  `j.nummer ?? j`. De sleutel gaat percent-gecodeerd (`yt%3A…`); de server
+  decodeert.
+- `GET /api/kaart/wensen[].track` is een object met `id` of null; de UI leest
+  het niet (de laadknoppen komen van `binnen` per rij).
+- `sorteer=krat`: met een krat gekozen staat vooraan de kolom `krat` (`KRAT_KOLOM`,
+  `kolommenVoor`), sorteerbaar, met het rangnummer zolang daarop gesorteerd is
+  (`staat.volgnr` per rij uit het paneel). Een krat kiezen met de standaardsortering
+  schakelt naar de kratvolgorde (`sorteringBijKrat`); zonder krat valt `krat` terug
+  op beurten (`effectieveSortering`), want de server geeft dan 400.
+- 409-teksten letterlijk: `meer dan 20`, `er speelt een deck`.
+- De krat-knop blijft de sleutels zelf ophalen (`niet-binnen`, pagina's van 500);
+  `sp:`-sleutels komen mee en gaan op `wacht`.
+- De kratnaam komt uit het bestand ("Proefkrat", "Vertrouwd").
+- Het nachtblok toont de speeldagen (`speeldagenTekst`: "10 okt (vandaag)").
+- De nep (`kaart-nep.mjs`) geeft dezelfde vormen als de server (redenen,
+  `{ nummer }`, `track` als object, `gestart`, 202 op `nacht/nu`, `sorteer=krat`).
+
+Headless tegen de echte routes: `node tools/headless/kaart-echt.mjs [uitmap]` (de
+server start je zelf, met een kopie van de library en de nep-yt-dlp; de regels
+staan bovenin het script en in `docs/KAART.md` §9). Groen op 10 okt op het echte
+bestand (18.233 nummers): 31 checks, tab → rijen 62–80 ms, zoeken 158 ms, "haal
+binnen" 2,0 s door de echte wens-route en de nep-ingest zonder video.
 
 ### Niet gedaan / niet getest
 
 - Niets in Clay's eigen Chrome, niets op de APC of de Maschine, niets beluisterd.
-- Niet tegen de echte `server/kaart.js`: die staat op een andere tak. De
-  integrator draait `tools/headless/kaart.mjs` dan het best nog eens met de nep
-  erachter weg (de nep kan ook zonder `doel`, maar het script spawnt altijd een
-  echte server; met de echte routes erin is de nep overbodig).
-- Geen echte varve-kaart.json van 18.763 rijen gezien: de lijst is gebouwd op
-  dezelfde pagina-cache als de library (gemeten met 5000), niet apart gemeten.
+- Niet met een deck dat echt streamt in Chrome tegen de echte routes (de
+  30 s-regel): in de nep-headless komt "er speelt een deck" van de engine-stand,
+  in de servertest van een Range-verzoek met curl.
 - De tijdvelden van het nachtblok zijn `<input type="time">`: in een Engelse
   Chrome tonen ze "01:00 AM"; de waarde is altijd "01:00".
