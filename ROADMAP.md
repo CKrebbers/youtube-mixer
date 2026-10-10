@@ -122,10 +122,20 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 30. KAART (10 okt, Clay: "de muziekkaart in Varve DJ"): de hele muziekkaart als ZOEKLAAG
     (`varve-kaart.json`, 0 bytes per nummer), wenslijst, een YouTube-versie zoeken voor Spotify-
     nummers, en een nachtwachtrij met rem (standaard uit; 80 per nacht, 01:00–07:00, nooit bij een
-    spelend deck of op een speeldag, nooit cookies). Serverkant gebouwd op `studio/kaart-server`
-    (`docs/KAART.md`, `server/kaart.js`, `server/nacht.js`); UI op `studio/kaart-ui`, lokale
-    bestanden op `studio/kaart-lokaal`; de integrator voegt samen in `studio/kaart`. Alleen met de
-    nep-yt-dlp getoetst: de eerste echte nacht met een klein `perNacht` en het log erbij.
+    spelend deck of op een speeldag, nooit cookies). Drie delen, samengevoegd in `studio/kaart` (PR
+    naar `studio/integratie`, `docs/KAART.md`):
+    a. Server (`studio/kaart-server`): `server/kaart.js`, `server/nacht.js`, `/api/kaart` en `/api/nacht`,
+       eigen `media/kaart.db` en `media/nacht.json`; library.db ongewijzigd.
+    b. UI (`studio/kaart-ui`): tab `library | kaart` in het library-paneel (`src/ui/kaart-panel.js`,
+       rekenwerk in `kaart-lijst.js`), kratkiezer, filters, haal binnen/zoek, nachtblok
+       (`docs/LIBRARY.md` "De kaart-tab"); headless `tools/headless/kaart.mjs`.
+    c. Lokale bestanden (`studio/kaart-lokaal`): `tools/lokaal/importeer.mjs` zet Clay's eigen muziek
+       (Apple Music, Spotdownloader-mp3's, `opnames/`) in de library via de upload-route met `video: false`
+       en zonder stems; `--droog` toont alleen wat er zou gebeuren (`tools/lokaal/LEESMIJ.md`). Droogloop
+       10 okt: 24 nieuw (212 MB, 1:42), 3 al binnen, 11 Spotdownloader-mp3's onleesbaar. `/api/upload` kent
+       nu `?video=0`, `?titel=`, `?artiest=`.
+    Alleen met de nep-yt-dlp getoetst (rooktest op de echte kaart: 18.233 nummers, 29 kratten). Echt
+    draaien NÁ de proefavond: de eerste nacht met een klein `perNacht` en het log erbij, dan de lokale import.
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
