@@ -192,6 +192,25 @@ const json = (res, code, data) => {
 };
 
 /**
+ * JSON met een ETag (sha1 van de body, 16 tekens), en 304 zonder body als de
+ * vrager die ETag al heeft (If-None-Match, ook `W/"…"`, een lijst of `*`).
+ * Voor wat een ander apparaat vaak peilt en zelden verandert: de lichte
+ * wenslijst die de companion elke 5 s vraagt (docs/COMPANION.md). Een gewone
+ * GET zonder If-None-Match krijgt precies wat `json` geeft, plus de ETag.
+ */
+const jsonMetEtag = (req, res, data) => {
+  const body = JSON.stringify(data);
+  const etag = `"${createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
+  const vraag = String(req.headers['if-none-match'] ?? '');
+  if (vraag && vraag.split(',').some((e) => { const x = e.trim().replace(/^W\//, ''); return x === etag || x === '*'; })) {
+    res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-store', ...ISOLATIE });
+    return res.end();
+  }
+  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ETag: etag, ...ISOLATIE });
+  res.end(body);
+};
+
+/**
  * Een JSON-body. De pakketten worden als BYTES verzameld en pas aan het eind
  * één keer gedecodeerd: `data += d` decodeerde elk pakket los, en een
  * UTF-8-teken dat over een pakketgrens viel werd dan twee keer U+FFFD (een
@@ -1571,7 +1590,11 @@ async function kaartRoute(req, res, url, padRuw) {
       }));
     }
 
-    if (pad === '/api/kaart/wensen' && req.method === 'GET') return json(res, 200, { wensen: kaart.wensen({ licht: url.searchParams.get('licht') === '1' }) });
+    if (pad === '/api/kaart/wensen' && req.method === 'GET') {
+      // ?licht=1 (de companion, elke 5 s): met ETag, en 304 zolang er niets veranderde (review ronde 2, fix 4).
+      if (url.searchParams.get('licht') === '1') return jsonMetEtag(req, res, { wensen: kaart.wensen({ licht: true }) });
+      return json(res, 200, { wensen: kaart.wensen() });
+    }
 
     if (pad === '/api/kaart/wens' && req.method === 'POST') {
       const body = await leesJson(req, 256 * 1024);

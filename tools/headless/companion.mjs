@@ -217,6 +217,9 @@ try {
   // Elk verzoek naar de wenslijst tellen (fix 5: niet peilen zolang de kaart niet te zien is).
   const wensVerzoeken = [];
   p.op('Network.requestWillBeSent', (q) => { if (/\/api\/kaart\/wensen/.test(q.request.url)) wensVerzoeken.push({ t: Date.now(), url: q.request.url }); });
+  // En elk antwoord daarop (review ronde 2, fix 4: 304 zolang de wenslijst niet verandert).
+  const wensAntwoorden = [];
+  p.op('Network.responseReceived', (q) => { if (/\/api\/kaart\/wensen/.test(q.response.url)) wensAntwoorden.push({ t: Date.now(), status: q.response.status }); });
   ok('companion laadt en is klaar', await laad());
   ok('de kop zegt met welke server hij praat', /localhost:\d+/.test(await tekst('#verbinding')));
   ok('eerste keer (niets bewaard), /api/mixer geeft 404: de kaart, niet een vrijwel leeg "nu" (fix 4)',
@@ -377,7 +380,10 @@ try {
   // ================= iPad liggend 1024 × 768 =================
   console.log('\nde iPad liggend: 1024 × 768');
   await scherm(1024, 768, 2);
+  const laad1024 = Date.now();
   await laad();
+  await tot(async () => /\S/.test(await tekst('#wens-telling') ?? ''), 3000);
+  const tellingVoor1024 = await tekst('#wens-telling');
   const vakken = await p.ev(`Object.fromEntries(['kaart', 'nu', 'beeld'].map((id) => { const r = document.getElementById(id).getBoundingClientRect();
     return [id, { l: Math.round(r.left), r: Math.round(r.right), t: Math.round(r.top), b: Math.round(r.bottom), w: Math.round(r.width) }]; }))`);
   ok(`twee kolommen: kaart links (${vakken.kaart.w} px), nu en beeld rechts`, vakken.kaart.r <= vakken.nu.l && vakken.kaart.r <= vakken.beeld.l
@@ -387,6 +393,16 @@ try {
   const doelen3 = await tikdoelen();
   ok(`1024: elk tikdoel ≥ 44 × 44 (${doelen3.n} getoetst)`, doelen3.klein.length === 0, doelen3.klein.join(', '));
   await foto('companion-1024.png');
+  // Review ronde 2, fix 4: de iPad liggend peilt de wenslijst altijd (elke 5 s). Na het eerste antwoord
+  // (200, met ETag) zijn de volgende 304 zolang er niets verandert, en de telling blijft staan.
+  // (Een antwoord van de vorige pagina kan nog net na laad1024 binnenkomen: tel vanaf het eerste 200.)
+  const naEerste = () => { const a = wensAntwoorden.filter((x) => x.t >= laad1024).map((x) => x.status); return a.slice(a.indexOf(200)); };
+  ok('iPad liggend: binnen 13 s na het eerste antwoord nog twee peilingen', await tot(async () => naEerste()[0] === 200 && naEerste().length >= 3, 13000),
+    naEerste().join(', '));
+  ok(`... het eerste 200 (met ETag), daarna 304 zonder body (${naEerste().join(', ')})`, naEerste()[0] === 200 && naEerste().length >= 3
+    && naEerste().slice(1).every((x) => x === 304));
+  ok(`... en de wenslijst op het scherm blijft staan: "${await tekst('#wens-telling')}"`, (await tekst('#wens-telling')) === tellingVoor1024
+    && (await p.ev('window.companion.st.wensen.length')) > 0);
   // Fix 6: nu en beeld blijven staan als de kaart scrolt.
   await p.ev('window.scrollTo(0, 1500)');
   await wacht(250);

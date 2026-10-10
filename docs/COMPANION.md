@@ -63,8 +63,14 @@ kratkiezer pint per apparaat (localStorage `varve.companion.pins`), vóór de li
 | Wat | Wanneer | Grootte |
 |---|---|---|
 | `GET /api/mixer` | elke seconde zolang de pagina zichtbaar is; na een 404 hooguit eens per minuut | klein |
-| `GET /api/kaart/wensen?licht=1` + `GET /api/nacht` | elke 5 s, **alleen als de kaart in beeld is** (iPhone en iPad staand: tab kaart; iPad liggend: altijd), en meteen bij het openen van de kaart | licht: ~143 B per klare wens (gewoon: ~1,4 kB met het track-object; gemeten op de nep-kaart) |
+| `GET /api/kaart/wensen?licht=1` + `GET /api/nacht` | elke 5 s, **alleen als de kaart in beeld is** (iPhone en iPad staand: tab kaart; iPad liggend: altijd), en meteen bij het openen van de kaart | licht: ~143 B per klare wens (gewoon: ~1,4 kB met het track-object; gemeten op de nep-kaart); met `If-None-Match`: **304 zonder body** zolang de wenslijst niet verandert |
 | `GET /api/kaart/nummers` | bij zoeken, krat, filter, "meer" | 50 rijen |
+
+De lichte wenslijst heeft een `ETag` (sha1 van de JSON, 16 tekens). De companion stuurt de laatste mee
+(`If-None-Match`); zolang er niets verandert antwoordt de server `304` zonder body en blijft de lijst op
+het scherm staan. Zo telt de lijst die met elke nacht groeit (80 klare wensen per nacht ≈ +11 kB) niet
+elke 5 s op over een hotspot; alleen na een verandering komt hij één keer heel. De laptop (het
+kaartpaneel, zonder `?licht=1`) krijgt geen ETag en verandert niet.
 
 Niets als de pagina op de achtergrond staat (`visibilitychange`). Niet gemeten op Clay's echte wenslijst
 (op de proefavond geen `media/` aanraken): na de proefavond op een kopie
@@ -117,13 +123,14 @@ Gemeten op 10 okt (MacBook Air, met andere agenten ernaast):
 
 | | |
 |---|---|
-| headless-controles | 70/70 (bouw, 13:13); na de herstelronde **89/89** (390, 1024, 768, haal nu echt, zelfcontrole aan het eind) |
+| headless-controles | 70/70 (bouw, 13:13); na herstelronde 1 **89/89** (390, 1024, 768, haal nu echt, zelfcontrole aan het eind); na herstelronde 2 **92/92** (+ de ETag: 200, 304, 304) |
 | laadtijd tot de kaart gevuld is, 200 ms per verzoek (Chromium-netwerkemulatie) | 1,9–2,1 s (vier runs: 2062, 2061, 1887, 2058 ms) |
 | tikdoelen | alle ≥ 44 × 44 (CSS: 48), ook op 768 |
 | Node-tests | zie de PR (vóór dit spoor: 71 bestanden / 7107 checks) |
 | zijwaarts scrollen op 390, 768 en 1024 | geen |
 | iPad liggend, kaart 683 px gescrold | "nu" staat op 59 px van boven, "beeld" eindigt op 271 px (blijft in beeld) |
 | `/api/kaart/wensen` per klare wens (nep-kaart) | 1379 B gewoon, 143 B met `?licht=1` |
+| dezelfde lichte lijst opnieuw, niets veranderd (herstelronde 2) | `304`, 0 B body (was 946 B voor 2 wensen); headless iPad liggend: 200, 304, 304 |
 
 ## Eenmalig instellen (Clay, ná de proefavond, nooit op een speeldag)
 
