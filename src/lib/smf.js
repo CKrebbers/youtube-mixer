@@ -45,7 +45,7 @@ export function meta(type, bytes = []) {
  * tekenset het bestand bedoelde (het formaat zegt het niet).
  */
 export function ascii(s) {
-  const t = String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/→/g, '->');
+  const t = String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u2192/g, '->');
   const uit = [];
   for (const c of t) { const k = c.codePointAt(0); uit.push(k < 128 ? k : 63); }
   return uit;

@@ -36,7 +36,7 @@ export const MAX_CONTEXT = 1024;
  * JSON met alleen ASCII: alles vanaf U+0080 als \uXXXX (ook de helften van
  * een surrogaatpaar). JSON.parse maakt er weer precies dezelfde tekst van.
  */
-export const jsonAscii = (x) => JSON.stringify(x).replace(/[\u0080-￿]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+export const jsonAscii = (x) => JSON.stringify(x).replace(/[\u0080-\uffff]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 
 /**
  * S1 — het venster: precies de eerste `omlopen` omlopen zoals de speler ze

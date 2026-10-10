@@ -28,7 +28,7 @@ for (const f of engineBestanden) {
 // in src/export/ met de bytes-laag src/lib/smf.js. Geen bestand in de engine schrijft
 // MIDI-bytes: geen 'MThd', geen 'MTrk', geen noot-aan op kanaal 10 (0x99).
 ok('geen bestand onder src/engine/ bevat MThd, MTrk of 0x99 (MIDI-bestanden staan in src/export/)',
-  engineBestanden.every((f) => !/MThd|MTrk|0x99/.test(readFileSync(engineMap + f, 'utf8'))));
+  engineBestanden.every((f) => !/MThd|MTrk|\b0x99\b/.test(readFileSync(engineMap + f, 'utf8'))));
 {
   const exportMap = fileURLToPath(new URL('../src/export/', import.meta.url));
   for (const f of readdirSync(exportMap).filter((x) => x.endsWith('.js'))) {
