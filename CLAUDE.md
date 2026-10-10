@@ -176,6 +176,11 @@ src/
   controle/         controle.js     de Controlekamer: tegels (server, ingest, mixer via de Web Lock, APC via het kanaal), speellijst
                     speellijst.js   de punten van een proefsessie, in blokken. Puur data; de stand staat in proef/sessie.json
                     backup-tegel.js de tegel "Backup" (laatste kopie, of de fout). Puur.
+                    stand-tegel.js  de tegel "Opstelling", het adres van "mixer openen", de tekst onder de kiezer (docs/STANDEN.md). Puur.
+                    stand-bewerker.js een opstelling instellen zonder JSON: keuzelijsten → stand. Puur.
+  standen/          stand-model.js  het formaat van een stand (schema 1): witte lijst van delen, de nacht alleen remmen,
+                                    normaliseerStand. Puur, geen DOM, geen imports; ook door de server gebruikt
+                                    (server/standen.js importeert dit en src/control/mapping.js, allebei puur)
   auto/             planner.js      de auto-DJ, puur: welk fragment, welke overgang (bewakers), wanneer (frasegrens), de curves
                     automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
@@ -204,6 +209,8 @@ server/             draait apart: `node server/index.js`
   kaart.js          de muziekkaart als zoeklaag: varve-kaart.json in het geheugen (zoeken/filteren/sorteren/pagineren), binnen = tracks.id,
                     wensen en nacht_runs in een EIGEN media/kaart.db, een YouTube-versie zoeken (ytsearch5, nooit cookies) (docs/KAART.md)
   nacht.js          de nachtwachtrij: venster, speeldagen, wensen dan standaardvolgorde, één tegelijk met pauze, stopt bij een deck of 403; media/nacht.json
+  standen.js        standen (docs/STANDEN.md): standen/<naam>.json met versie (409) en .versies, activeren (mapping, nachtrem,
+                    nakijken, master vastleggen), verschil, vastleggen, terug (.vorige/), .actief.json; VARVE_STANDEN
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
                     headless/ (kaart.mjs: de tab kaart op de nep-server kaart-nep.mjs; kaart-echt.mjs: de tab kaart tegen de
@@ -300,6 +307,8 @@ test/
   varve-beeld-zender.test.mjs  de zendertest van de Stroommachine (overgenomen; alles.mjs telt zijn eigen formaat)
   kaart.test.mjs    de kaart op een verzonnen varve-kaart.json (nep-kaart.mjs): laden/herladen, zoeken, filters, sorteren, pagina's, wensen (20, dubbel), score, standaardvolgorde, cookie-bewaker
   nacht.test.mjs    de zes nachtregels één voor één met nepklok, nep-deck en nep-ingest (geen tijd, geen netwerk)
+  standen-model.test.mjs, standen.test.mjs, standen-server.test.mjs  standen: formaat, server/standen.js (echte Kaart en Nacht), /api/standen op een eigen server
+  stand-tegel.test.mjs, stand-bewerker.test.mjs  de tegel Opstelling en de bewerker (puur)
   kaart-server.test.mjs  kaart en nacht op een eigen server met de nep-yt-dlp: routes, 409 bij een deck (echt Range-verzoek), ingest zonder video, nachtrun, herstart
   nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
   alles.mjs         alle tests in één keer met overzicht
@@ -334,6 +343,7 @@ docs/
   EFFECTEN.md       effecten uit de filter app (S2c): per effect herkomst, eenheden, staart, metingen, wat niet
   PATRONEN.md       patronen (S4): het contract (§1–6) en wat gebouwd is (§7: klok, opnemen, API, APC, opslag, metingen)
   BEELD.md          spoor beeld (6 okt): VARVE stuurt de Stroommachine via de relay; instellen, wat er gaat, APC-mapje, problemen, tests
+  STANDEN.md        standen (10 okt, pijler 4): één bestand per situatie met beginwaarden, wat er niet in mag, routes, Controlekamer, grenzen
   KAART.md          de muziekkaart in Varve (10 okt): het bestand, de API (+ §3b de afspraken met de UI), de nachtregels, "er speelt een deck",
                     §9 gemeten op het echte bestand, §10 na de proefavond, wat niet getest is
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
