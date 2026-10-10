@@ -47,6 +47,8 @@ console.log('\nvideo op de action-bus');
     puls: 0, pulsDoel: 'rgb',
     zetPuls(v) { this.puls = v; },
     volgendPulsDoel() { this.pulsDoel = this.pulsDoel === 'rgb' ? 'pixel' : 'rgb'; },
+    clips: true,
+    zetClips(aan) { this.clips = !!aan; },
   };
   bindVideo(nep);
   ok('elk effect staat op de bus', VIDEO_FX.every((f) => list().some((a) => a.id === `video.fx.${VIDEO_FX_ACTIE[f.id] ?? f.id}`)));
@@ -62,6 +64,16 @@ console.log('\nvideo op de action-bus');
   ok('puls-knop op de bus', nep.puls === 0.6 && read('video.pulse') === 0.6);
   invoke('video.pulse.target', true);
   ok('puls-doel wisselt', nep.pulsDoel === 'pixel');
+  // Het zaalbeeld (docs/BEAMER.md): video.clips, een schakelaar met een read zoals video.black.
+  const { metaOf } = await import('../src/control/actions.js');
+  ok('video.clips staat op de bus: een trigger met een read (de LED zegt de stand), standaard aan',
+    list().some((x) => x.id === 'video.clips') && metaOf('video.clips')?.type === 'trigger' && read('video.clips') === 1);
+  invoke('video.clips', true);
+  ok('indrukken: clips uit (alleen eigen beeld), read 0', nep.clips === false && read('video.clips') === 0);
+  invoke('video.clips', false);
+  ok('loslaten doet niets', nep.clips === false);
+  invoke('video.clips', true); invoke('video.clips', false);
+  ok('nog eens drukken: clips weer aan, read 1', nep.clips === true && read('video.clips') === 1);
 }
 
 console.log('\neffecten op de tel');
@@ -656,6 +668,73 @@ console.log('\nde mixer in het losse venster neemt alles over van die in het hoo
 
 }
 
+console.log('\nhet zaalbeeld: video.clips (deck-video\'s uit, vormen, effecten en noodknoppen lopen door)');
+{
+  const { VideoMixer } = await import('../src/video/video-mixer.js');
+  const { bindVideo, invoke, read, metaOf } = await import('../src/control/actions.js');
+  let id = 0, laatsteW = null;
+  const gebruikt = new Set();
+  const gl = new Proxy({ TEXTURE0: 1000, createTexture: () => ({ tex: ++id }), createFramebuffer: () => ({ fb: ++id }),
+    createProgram: () => ({ prog: ++id }), createShader: () => ({ sh: ++id }), getShaderParameter: () => true,
+    getProgramParameter: () => true, getUniformLocation: (p, n) => n, getAttribLocation: () => 0,
+    useProgram: (p) => { gebruikt.add(p); }, uniform1fv: (loc, v) => { if (loc === 'w') laatsteW = Array.from(v); } },
+  { get(t, k) { return k in t ? t[k] : () => {}; } });
+  const nepVideo = () => {
+    const luister = {};
+    return { paused: true, currentTime: 0, readyState: 4, seeking: false, playbackRate: 1, duration: 60, luister, src: '',
+      addEventListener: (n, f) => { (luister[n] ??= []).push(f); }, removeAttribute() { this.src = ''; },
+      load() {}, pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); } };
+  };
+  const decks = { A: { buffer: {}, ui: { fader: 1 }, position: 0, rate: 1, playing: true, grid: null },
+    B: { buffer: {}, ui: { fader: 0.5 }, position: 0, rate: 1, playing: true, grid: null } };
+  const engine = { ctx: { currentTime: 1, outputLatency: 0, baseLatency: 0 }, deck: (d) => decks[d], xfadeGain: () => 1 };
+  const maak = () => {
+    const mx = new VideoMixer({ canvas: { getContext: () => gl }, engine, decks: ['A', 'B'], maakVideo: nepVideo });
+    mx.zetBron('A', '/media/a/video.mp4'); mx.zetBron('B', '/media/b/video.mp4');
+    for (const l of mx.lagen.values()) l.video.luister.loadeddata.forEach((f) => f());
+    return mx;
+  };
+  const hoofd = maak();
+  const videos = (mx) => [...mx.lagen.values()].map((l) => l.video);
+  hoofd.teken();
+  const wAan = laatsteW.slice();
+  ok('standaard clips aan: beide video\'s zichtbaar (fader 1 en 0,5) en spelend, stand() zegt clips: true',
+    hoofd.clips === true && wAan[0] === 1 && wAan[1] === 0.5 && videos(hoofd).every((v) => !v.paused) && hoofd.stand().every((l) => l.clips === true));
+  bindVideo(hoofd);
+  ok('video.clips op de echte mixer: trigger met read 1', metaOf('video.clips')?.type === 'trigger' && read('video.clips') === 1);
+  const laag = { aan: true, dekking: 1, mengvorm: 'screen', n: 0, frame() { this.n++; return { width: 640, height: 360 }; } };
+  hoofd.voegBeeldlaagToe(laag);
+  invoke('video.clips', true); invoke('video.clips', false);
+  gebruikt.clear();
+  hoofd.teken();
+  ok('clips uit: elke video gewicht 0 in de mengstap (zwart) en gepauzeerd',
+    hoofd.clips === false && read('video.clips') === 0 && laatsteW.every((x) => x === 0) && videos(hoofd).every((v) => v.paused));
+  ok('clips uit: de vormlaag tekent gewoon door (frame gevraagd, lagenstap gebruikt)', laag.n > 0 && gebruikt.has(hoofd.lagenProg));
+  ok('clips uit: stand() meldt clips: false bij elke laag', hoofd.stand().every((l) => l.clips === false));
+  hoofd.teken(); hoofd.teken();
+  ok('en blijft uit: de video\'s worden niet weer gestart', videos(hoofd).every((v) => v.paused) && laatsteW.every((x) => x === 0));
+
+  // Het losse venster neemt de schakelaar over (anders toonde de beamer de clips toch).
+  const los = maak();
+  los.neemOver(hoofd);
+  los.teken();
+  ok('los venster: neemOver neemt clips uit over, mengt zwart, pauzeert zijn eigen video\'s',
+    los.clips === false && laatsteW.every((x) => x === 0) && videos(los).every((v) => v.paused));
+  ok('los venster tijdens de inloop: zonder zichtbare video meteen in de pas (het zaalbeeld hoeft niet in te lopen)', los.loopIn() === true);
+
+  invoke('video.clips', true); invoke('video.clips', false);
+  hoofd.teken();
+  ok('clips weer aan: precies het beeld van ervoor (gewichten gelijk) en de video\'s spelen',
+    hoofd.clips === true && laatsteW.every((x, i) => x === wAan[i]) && videos(hoofd).every((v) => !v.paused));
+  los.neemOver(hoofd); los.teken();
+  ok('los venster: clips weer aan komt ook daar', los.clips === true && laatsteW.every((x, i) => x === wAan[i]));
+  // Een hoofdvenster van vóór video.clips (geen veld) zet het losse venster niet op uit.
+  const oud = { ...hoofd, clips: undefined, fx: hoofd.fx, eindbeeld: hoofd.eindbeeld, beeldlagen: [], bron: (d) => hoofd.bron(d) };
+  los.zetClips(false);
+  los.neemOver(oud);
+  ok('neemOver van een hoofdvenster zonder clips-veld: clips aan (zoals vroeger)', los.clips === true);
+}
+
 console.log('\nnoodknoppen op het eindbeeld: zwart, bevriezen, master, flits (A4)');
 {
   const { Eindbeeld, standOp, flitsOp, ZWART_FADE, FLITS_DUUR, wandklok } = await import('../src/video/eindbeeld.js');
@@ -891,6 +970,27 @@ console.log('\nnoodknoppen op het eindbeeld: zwart, bevriezen, master, flits (A4
     druk('video.freeze');
     await doe.stand({ tracks: [], waarden: {}, rond: {} });          // een log van vóór A4
     ok('een log van vóór de noodknoppen: beeld gewoon te zien (zwart en bevriezen uit)', read('video.black') === 0 && read('video.freeze') === 0);
+
+    // ---- het zaalbeeld (video.clips) in het eindbeeld en in het log ------------
+    invoke('video.master', 1);
+    klok += 1000; hoofd.teken();
+    const metClips = bij(H.pixel(), H.canvas.beeld?.w ?? -1) && H.canvas.beeld !== null;
+    druk('video.clips');
+    klok += 16; hoofd.teken();
+    ok('clips uit: geen video in het eindbeeld (het canvas is zwart), de toonstap loopt gewoon',
+      metClips && read('video.clips') === 0 && H.canvas.beeld === null && H.pixel() === 0 && H.canvas.helder === 1);
+    druk('video.flash');
+    hoofd.teken();
+    ok('clips uit: de flits gaat gewoon door de toonstap (de noodknoppen werken)', H.canvas.flits === 1 && read('video.flash') === 1);
+    klok += 1000;
+    const stZaal = leesStand({ engine: { deck: () => deck, focus: null }, tracks: [], herkomst: () => null, acties: list(), lees: read });
+    ok('beginstand: clips als stand (0 = alleen eigen beeld)', stZaal.rond['video.clips'] === 0);
+    druk('video.clips');
+    await doe.stand(stZaal);
+    ok('terugspelen van een set in het zaalbeeld: begint zonder clips', read('video.clips') === 0);
+    await doe.stand({ tracks: [], waarden: {}, rond: {} });          // een log van vóór video.clips
+    klok += 16; hoofd.teken();
+    ok('een log van vóór video.clips: de clips staan aan, het beeld is terug', read('video.clips') === 1 && H.canvas.beeld !== null);
   } finally { performance.now = echteNu; }
 }
 

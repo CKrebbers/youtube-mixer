@@ -242,6 +242,7 @@ export function beschrijf(action) {
     'video.freeze': ['bevries', 'video: het beeld bevriezen aan/uit (de video\'s lopen door, loslaten = meteen het goede beeld)'],
     'video.master': ['beeld', 'video: master, de helderheid van het eindbeeld (dicht = zwart)'],
     'video.flash': ['flits', 'video: een witte flits die snel uitdooft'],
+    'video.clips': ['clips', 'video: de deck-video\'s aan/uit — uit = alleen eigen beeld (vormen) voor een zaal; vormen, effecten en zwart lopen door (lampje brandt = clips aan)'],
     // Patronen (docs/PATRONEN.md): de modus patronen, Shift + scene 2.
     'patterns.stop': ['pat stop', 'patronen: alles stoppen op de maat'],
     'patterns.stop.now': ['pat stop!', 'patronen: alles meteen stoppen'],

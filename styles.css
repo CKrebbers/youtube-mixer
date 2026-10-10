@@ -597,6 +597,11 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .vid-nood .btn{min-width:56px;text-transform:uppercase;letter-spacing:.08em}
 .btn.vid-zwart.on{background:var(--red);border-color:var(--red);color:#fff}
 .btn.vid-bevries.on{background:var(--warn);border-color:var(--warn);color:#03100e}
+/* Clips (video.clips): brandt = de deck-video's staan aan. Uit = het zaalbeeld:
+   de knop video in de bovenbalk zegt het (niet op het doek: daar kijkt de zaal). */
+.btn.vid-clips{text-transform:uppercase;letter-spacing:.08em}
+.btn.vid-clips.on{border-color:var(--a);color:var(--a)}
+#video-btn.clips-uit{color:var(--warn);border-color:var(--warn)}
 
 /* ---- opnemen ---- */
 .opname{font-variant-numeric:tabular-nums}

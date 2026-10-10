@@ -87,6 +87,17 @@ export function opzetVideo({ engine }) {
   // (read), zoals bij elke knop die ook via de APC of een log kan wisselen.
   const noodKnoppen = [...videoPaneel.querySelectorAll('.vid-nood [data-kind="button"]')];
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
+  // Clips uit (video.clips, het zaalbeeld): de knop video zegt het, ook met het
+  // paneel dicht. NIET op het doek: daar kijkt de zaal (docs/BEAMER.md "Zaalbeeld").
+  const videoKnop = document.getElementById('video-btn');
+  const clipsKnop = videoPaneel.querySelector('.vid-clips');
+  const VIDEO_TEKST = videoKnop.textContent;
+  const zetVideoKnop = () => {
+    const uit = !videoMixer.clips;
+    const tekst = uit ? `${VIDEO_TEKST} · alleen eigen beeld` : VIDEO_TEKST;
+    if (videoKnop.textContent !== tekst) videoKnop.textContent = tekst;
+    klasse(videoKnop, 'clips-uit', uit);
+  };
 
   /** Eén frame: mengen als het hier moet, en de statusregel bijwerken. */
   const teken = () => {
@@ -97,10 +108,13 @@ export function opzetVideo({ engine }) {
     // Inloop: dit beeld ook op het losse venster, nu het nog in de buffer staat.
     if (w.inloop) los.mixer.toonBeeld(canvasEl);
     zetVoorbeeld(w.voorbeeld ? los.mixer.canvas : null);
+    zetVideoKnop();
     if (!paneelOpen()) return;
     const bron = w.hoofd || !los ? videoMixer : los.mixer;
     const st = bron.stand().filter((l) => l.video && l.speelt);
-    const tekst = bron.fout || `${w.los ? 'beamer · ' : w.inloop ? 'beamer loopt in · ' : ''}${st.length ? st.map((l) => `${trackVanDeck(l.id)}: ${Math.round(l.verschil * 1000)} ms`).join(' · ') : 'geen zichtbare video'}`;
+    const wat = !videoMixer.clips ? 'alleen eigen beeld (clips uit)'
+      : st.length ? st.map((l) => `${trackVanDeck(l.id)}: ${Math.round(l.verschil * 1000)} ms`).join(' · ') : 'geen zichtbare video';
+    const tekst = bron.fout || `${w.los ? 'beamer · ' : w.inloop ? 'beamer loopt in · ' : ''}${wat}`;
     const modusEl = videoPaneel.querySelector('.vid-modus');
     if (modusEl.textContent !== videoMixer.modus) modusEl.textContent = videoMixer.modus;
     const fitEl = videoPaneel.querySelector('.vid-fit');
@@ -112,6 +126,7 @@ export function opzetVideo({ engine }) {
       const extra = b.dataset.actionShift ? leesAction(b.dataset.actionShift) === 1 : false;
       klasse(b, 'on', leesAction(b.dataset.action) === 1 || extra);
     }
+    if (clipsKnop) klasse(clipsKnop, 'on', leesAction('video.clips') === 1);
     const statusEl = videoPaneel.querySelector('.vid-status');
     if (statusEl.textContent !== tekst) statusEl.textContent = tekst;
     const titel = w.los ? 'het losse venster mengt (het loopt door als dit tabblad verborgen is)'
