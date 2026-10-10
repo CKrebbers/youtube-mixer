@@ -6,10 +6,11 @@ import { join, basename, isAbsolute, relative, sep } from 'node:path';
 import { homedir } from 'node:os';
 import {
   parsePmset, parsePmsetAc, parseIoregAccu, parseDf, parseOptimize, parseAudio, parseBluetooth, parseUsbHost,
-  parseIoregUsb, voegUsbSamen, parseTailscale, parseBestanden, parseInstellingen, vergelijkCompleet,
+  parseIoregUsb, voegUsbSamen, parseTailscale, parseBestanden, parseInstellingen, vergelijkCompleet, verwachtePaden,
   leesProfielen, beoordeel, schoon,
 } from './avondpakket.js';
 import { kopieen } from './backup.js';
+import { allePunten } from '../src/controle/speellijst.js';
 
 /**
  * Het meetdeel van het avondpakket (docs/AVONDPAKKET.md, ontwerp §2.5-2.7):
@@ -25,6 +26,10 @@ import { kopieen } from './backup.js';
  * - Speelt er een deck (`speeltDeck()`), dan meet de cache niets nieuws: het
  *   laatste rapport komt terug met `bevroren`. Met `vers` mogen alleen de
  *   goedkope sondes (GOEDKOOP) opnieuw: nooit system_profiler, ioreg, lsof of find.
+ * - `auto` (de Controlekamer, elke 5 min): uit de cache, anders alleen GOEDKOOP;
+ *   nooit de dure sondes. De server ziet alleen een spelend DECK; een set met
+ *   alleen patronen, sampler of instrumenten, of een iPhone die de Web Lock van
+ *   de mixer niet ziet, krijgt zo toch geen system_profiler onder het geluid.
  * - VARVE_AVONDPAKKET_NEP=<map>: geen enkel commando, alles uit fixtures
  *   (`<map>/nep.json`, zie maakNep). Voor de tests en de headless-check.
  */
@@ -38,6 +43,8 @@ export const STANDAARD_TIMEOUTS = Object.freeze({
 export const GOEDKOOP = Object.freeze(['icloud', 'schijf', 'accu', 'avhub', 'servers']);
 /** De sondes die commando's uitvoeren (backup alleen in de CLI zonder server). */
 export const SONDES = Object.freeze(['bestanden', 'instellingen', 'icloud', 'schijf', 'accu', 'audio', 'bluetooth', 'usb', 'avhub', 'servers', 'tailscale']);
+/** Hoe lang de route wacht op een eigen bestand (profielen.json, de speellijst); uitgeplaatst en offline zou hij anders blijven hangen. */
+export const LEES_MS = 1000;
 /** De poort van de AV-app-hub (~/Projects/AV-app-hub, config.json). */
 export const AVHUB_POORT = 7700;
 /** Het standaardpad van de muziekkaart; hetzelfde als STANDAARD_PAD in server/kaart.js (test/avondpakket-meet.test.mjs bewaakt dat). */
@@ -223,7 +230,7 @@ const METERS = {
  * @param {string} [o.waarom]            de reden voor een sonde die niet draaide
  * @returns {Promise<object>} per sonde het object of { onbekend }
  */
-export async function meet({ exec = voerUit, verbind = poortOpen, paden = {}, timeouts = {}, alleen = null, vorige = null, waarom = 'niet gemeten terwijl er een deck speelt' } = {}) {
+export async function meet({ exec = voerUit, verbind = poortOpen, paden = {}, timeouts = {}, alleen = null, vorige = null, waarom = 'er speelt een deck' } = {}) {
   const t = { ...STANDAARD_TIMEOUTS, ...timeouts };
   const wel = alleen ? new Set(alleen) : null;
   const goedkoop = !!wel;
@@ -244,7 +251,11 @@ export async function meet({ exec = voerUit, verbind = poortOpen, paden = {}, ti
  * vraag wacht op dezelfde), `ttlMs` hergebruik, `vers` binnen `versMs` ook.
  * Speelt er een deck: geen nieuwe meting maar de laatste met `bevroren`; met
  * `vers` alleen de goedkope sondes, de rest uit de vorige meting.
- * @returns {{ metingen({ vers }): Promise<{ metingen, t, duurMs, bevroren? }>, laatste }}
+ * `auto` (review 2, fix 4): binnen `ttlMs` de laatste, anders alleen de goedkope
+ * sondes; nooit een volledige meting.
+ * Elke stand draagt `volledigT`: wanneer de dure sondes voor het laatst echt
+ * gemeten zijn (null = nog nooit).
+ * @returns {{ metingen({ vers, auto }): Promise<{ metingen, t, duurMs, goedkoop, volledigT, bevroren? }>, laatste }}
  */
 export function maakCache({ meet: meter, ttlMs = 10000, versMs = 2000, speeltDeck = () => false, klok = Date.now } = {}) {
   let laatste = null;
@@ -252,21 +263,27 @@ export function maakCache({ meet: meter, ttlMs = 10000, versMs = 2000, speeltDec
   const draai = (opties = {}) => {
     if (lopend) return lopend;
     const t0 = klok();
+    const goedkoop = !!opties.alleen;
+    const volledigT = goedkoop ? (laatste?.volledigT ?? null) : t0;
     lopend = Promise.resolve().then(() => meter(opties))
-      .then((metingen) => (laatste = { metingen, t: t0, duurMs: Math.max(0, klok() - t0), goedkoop: !!opties.alleen }))
+      .then((metingen) => (laatste = { metingen, t: t0, duurMs: Math.max(0, klok() - t0), goedkoop, volledigT }))
       .finally(() => { lopend = null; });
     return lopend;
   };
   const BEVROREN = 'er speelt een deck';
   return {
-    async metingen({ vers = false } = {}) {
+    async metingen({ vers = false, auto = false } = {}) {
       if (speeltDeck()) {
         const recent = laatste && klok() - laatste.t < versMs;
-        if (!vers || recent) return laatste ? { ...laatste, bevroren: BEVROREN } : { metingen: {}, t: klok(), duurMs: 0, bevroren: BEVROREN };
+        if (!vers || recent) return laatste ? { ...laatste, bevroren: BEVROREN } : { metingen: {}, t: klok(), duurMs: 0, goedkoop: false, volledigT: null, bevroren: BEVROREN };
         if (lopend) return { ...(await lopend), bevroren: BEVROREN };
         return { ...(await draai({ alleen: GOEDKOOP, vorige: laatste?.metingen ?? null })), bevroren: BEVROREN };
       }
       if (lopend) return lopend;
+      if (auto && !vers) {
+        if (laatste && klok() - laatste.t < ttlMs) return laatste;
+        return draai({ alleen: GOEDKOOP, vorige: laatste?.metingen ?? null, waarom: 'automatisch, klik om te meten' });
+      }
       // Een goedkope (bevroren) meting is geen volledige: na het spelen meteen opnieuw.
       if (laatste && !laatste.goedkoop && klok() - laatste.t < (vers ? versMs : ttlMs)) return laatste;
       return draai({});
@@ -337,6 +354,7 @@ const datum = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, 
  * de vorige dag) telt mee zoals Nacht.magNu.
  */
 export function achtergrondMeting({ ingest = [], stems = [], nacht = null, speelt = false, nu = new Date() } = {}) {
+  // vannachtUit: de knop "vandaag niet" (nacht.stand().vandaagNiet); Nacht.magNu weigert dan net zo goed.
   const tel = (l, s) => (Array.isArray(l) ? l.filter((o) => o?.status === s).length : 0);
   const vandaag = datum(nu);
   const nachtDag = nu.getHours() < 12 ? datum(new Date(nu.getFullYear(), nu.getMonth(), nu.getDate() - 1)) : vandaag;
@@ -344,8 +362,21 @@ export function achtergrondMeting({ ingest = [], stems = [], nacht = null, speel
   return {
     ingestBezig: tel(ingest, 'bezig') > 0 || !!nacht?.bezig, ingestWacht: tel(ingest, 'wacht'),
     stemsBezig: tel(stems, 'bezig') > 0, stemsWacht: tel(stems, 'wacht'),
-    nachtAan: !!nacht?.aan, vandaagSpeeldag: dagen.includes(vandaag) || dagen.includes(nachtDag), speelt: !!speelt,
+    nachtAan: !!nacht?.aan, vandaagSpeeldag: dagen.includes(vandaag) || dagen.includes(nachtDag), vannachtUit: !!nacht?.vandaagNiet,
+    speelt: !!speelt,
   };
+}
+
+/**
+ * De speellijst van de Controlekamer als info (ontwerp §2.7, W15: niet in het oordeel):
+ * hoeveel punten gedaan (alles behalve open), hoeveel fout, van hoeveel. Zoals
+ * tekenVoortgang in controle.js: alleen ids die nog in de lijst staan.
+ */
+export function speellijstStand(sessie, punten = allePunten()) {
+  const items = sessie?.items && typeof sessie.items === 'object' ? sessie.items : {};
+  const ids = punten.map((p) => p.id);
+  const st = (id) => (Object.hasOwn(items, id) ? items[id]?.status : undefined);
+  return { gedaan: ids.filter((id) => st(id) && st(id) !== 'open').length, fout: ids.filter((id) => st(id) === 'fout').length, totaal: ids.length };
 }
 
 /**
@@ -358,24 +389,36 @@ export function achtergrondMeting({ ingest = [], stems = [], nacht = null, speel
  * @param {() => object} [o.backupStand]       backups.stand()
  * @param {() => object} [o.rijen]             { ingest: wachtrij.lijst(), stems: stemsRij.lijst(), nacht: nacht.stand() }
  * @param {() => { sleutel: string, tracks: () => object[] }} [o.library]   sleutel = wijzigingen + data_version
+ * @param {() => Promise<object>} [o.speellijst]  proef.lees(): de sessie van de speellijst (alleen info)
  * @param {() => boolean} [o.speeltDeck]
  * @param {string} [o.nep]                     VARVE_AVONDPAKKET_NEP
  */
-export function maakAvondpakket({ paden, profielenPad, backupStand = null, rijen = null, library = null, speeltDeck = () => false, nep = null, timeouts = {}, ttlMs, klok = Date.now }) {
+export function maakAvondpakket({ paden, profielenPad, backupStand = null, rijen = null, library = null, speellijst = null, speeltDeck = () => false, nep = null, timeouts = {}, ttlMs, klok = Date.now, leesMs = LEES_MS }) {
   const n = nep ? maakNep(nep) : null;
   const meetPaden = n?.paden ? { ...paden, ...n.paden } : paden;
   const cache = maakCache({
     meet: (opties) => meet({ exec: n ? n.exec : voerUit, verbind: n ? n.verbind : poortOpen, paden: meetPaden, timeouts, ...opties }),
     speeltDeck, klok, ...(ttlMs ? { ttlMs } : {}),
   });
-  let lib = { sleutel: null, tracks: null };
+  // Alleen de verwachte paden per nummer, niet de hele rij (review 2, fix 16).
+  let lib = { sleutel: null, paden: null };
   let compleetLaatst = null;
+  // profielen.json met een grens: uitgeplaatst en offline zou readFile blijven hangen (review 2, fix 5).
+  // Een lezing die nog loopt, wordt hergebruikt: niet bij elk verzoek een nieuwe die blijft hangen.
+  let lezing = null;
+  const leesData = async () => {
+    if (!lezing) lezing = readFile(profielenPad, 'utf8').then((t) => t, () => null).finally(() => { lezing = null; });
+    try {
+      const tekst = await metGrens(lezing, leesMs);
+      return tekst === null ? { ...leesProfielen(''), fout: 'niet gevonden' } : leesProfielen(tekst);
+    } catch { return { ...leesProfielen(''), fout: 'time-out (in iCloud?)' }; }
+  };
   return {
     cache,
-    async rapport({ profiel = null, fase = null, vers = false } = {}) {
-      const tekst = await readFile(profielenPad, 'utf8').catch(() => null);
-      const data = tekst === null ? { ...leesProfielen(''), fout: 'niet gevonden' } : leesProfielen(tekst);
-      const m = await cache.metingen({ vers });
+    async rapport({ profiel = null, fase = null, vers = false, auto = false } = {}) {
+      const data = await leesData();
+      const m = await cache.metingen({ vers, auto });
+      const deels = m.goedkoop && !m.bevroren;
       const metingen = { ...m.metingen };
       try { metingen.backup = backupStand ? backupMeting(backupStand(), paden) : { onbekend: 'geen server' }; } catch (err) { metingen.backup = { onbekend: reden(err) }; }
       try {
@@ -386,18 +429,26 @@ export function maakAvondpakket({ paden, profielenPad, backupStand = null, rijen
       try {
         if (!library) metingen.compleet = { onbekend: 'geen server' };
         else if (m.bevroren) metingen.compleet = compleetLaatst ? { ...compleetLaatst, oud: true } : { onbekend: 'er speelt een deck' };
+        // Automatisch (alleen het goedkope): media is niet opnieuw gemeten, dus het oordeel van de laatste volledige meting.
+        else if (deels) metingen.compleet = compleetLaatst ?? { onbekend: 'automatisch, klik om te meten' };
         else if (!metingen.bestanden || 'onbekend' in metingen.bestanden || metingen.bestanden.bestaat === false) metingen.compleet = { onbekend: 'media niet gemeten' };
         else {
           const l = library();
-          if (l.sleutel !== lib.sleutel || !lib.tracks) lib = { sleutel: l.sleutel, tracks: l.tracks() };
-          compleetLaatst = vergelijkCompleet(lib.tracks, metingen.bestanden, meetPaden.media);
+          if (l.sleutel !== lib.sleutel || !lib.paden) lib = { sleutel: l.sleutel, paden: verwachtePaden(l.tracks(), meetPaden.media) };
+          compleetLaatst = vergelijkCompleet(lib.paden, metingen.bestanden, meetPaden.media);
           metingen.compleet = compleetLaatst;
         }
       } catch (err) { metingen.compleet = { onbekend: reden(err) }; }
+      // De speellijst: alleen info (W15), nooit in het oordeel; een fout laat hem weg uit het rapport.
+      if (speellijst) {
+        try { metingen.speellijst = speellijstStand(await metGrens(Promise.resolve().then(speellijst), leesMs)); } catch { /* geen info */ }
+      }
       const fasekeuze = fase === 'vertrek' || fase === 'aankomst' ? fase : null;
       const rapport = beoordeel(metingen, { profiel, fase: fasekeuze, data, nu: new Date(m.t) });
       rapport.duurMs = m.duurMs;
       if (m.bevroren) rapport.bevroren = m.bevroren;
+      // Automatisch en alleen het goedkope: zeg het, met de tijd van de laatste volledige meting.
+      if (deels) rapport.deels = { volledig: Number.isFinite(m.volledigT) ? m.volledigT : null };
       return rapport;
     },
   };

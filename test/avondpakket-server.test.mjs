@@ -103,10 +103,15 @@ try {
   ok('backup uit de server zelf: groen, "gaat mee in de tas"', p('backup').licht === 'ok' && /gaat mee in de tas/.test(p('backup').sub));
   ok('achtergrond uit de rijen: rustig', p('achtergrond').licht === 'ok');
   ok('paklijst en profielen in het antwoord', r1.j.paklijst.length > 5 && r1.j.profielen.length === 5);
+  ok(`de speellijst als info (proef.lees(), niet in het oordeel) (${JSON.stringify(r1.j.info?.speellijst)})`, typeof r1.j.info?.speellijst?.totaal === 'number'
+    && r1.j.info.speellijst.totaal > 0 && r1.j.info.speellijst.gedaan === 0 && !r1.j.punten.some((x) => x.id === 'speellijst'));
+  ok('faseBron auto (geen vaste fase in profielen.json)', r1.j.faseBron === 'auto' && r1.j.faseGekozen === false);
   const s1 = JSON.stringify(r1.j);
   ok('geen kladpad, geen /Users/, geen backupnaam in het antwoord', !s1.includes(map) && !s1.includes('/Users/') && !/library-20\d\d/.test(s1));
   const r2 = await fetch(`${B}/api/avondpakket?profiel=maschine&fase=aankomst`).then((r) => r.json());
   ok('tweede verzoek binnen 10 s (ander profiel en fase): dezelfde meting (zelfde t)', r2.t === r1.j.t && r2.profiel === 'maschine' && r2.fase === 'aankomst' && r2.faseGekozen);
+  const r3 = await fetch(`${B}/api/avondpakket?profiel=apc&auto=1`).then((r) => r.json());
+  ok('auto=1 binnen 10 s: uit de cache (zelfde t), geen deels', r3.t === r1.j.t && !r3.deels);
 
   console.log('\nfouten en grenzen');
   const onb = await fetch(`${B}/api/avondpakket?profiel=bestaatniet`);

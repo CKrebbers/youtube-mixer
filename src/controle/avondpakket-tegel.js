@@ -17,6 +17,8 @@ import { wanneer } from './backup-tegel.js';
  * - een rapport: "klaar", "klaar · let op 2" of "2 rood", met als regel de
  *   uitleg van het eerste rode punt (anders het eerste oranje). Bevroren (er
  *   speelt een deck): de sub zegt het, met de tijd van de stand die je ziet.
+ *   Deels (automatisch, alleen het goedkope opnieuw; review 2 fix 4): de sub
+ *   noemt eerst de tijd van de laatste volledige meting, dan "deels HH:MM".
  */
 export function avondpakketTegel(a, nu = new Date()) {
   const basis = { id: 'avondpakket', naam: 'Avondpakket', regel: '', titel: '' };
@@ -28,11 +30,16 @@ export function avondpakketTegel(a, nu = new Date()) {
   const telling = a.telling || { ok: 0, half: 0, fout: 0, uit: 0 };
   const waarde = telling.fout ? `${telling.fout} rood` : telling.half ? `klaar · let op ${telling.half}` : 'klaar';
   const t = Number.isFinite(a.t) ? wanneer(a.t, nu) : '';
-  const sub = a.bevroren ? [`bevroren: ${a.bevroren}`, t].filter(Boolean).join(' · ') : [a.profiel, a.fase, t].filter(Boolean).join(' · ');
+  const deels = !a.bevroren && a.deels && typeof a.deels === 'object';
+  const volledig = deels && Number.isFinite(a.deels.volledig) ? wanneer(a.deels.volledig, nu) : '';
+  const sub = a.bevroren ? [`bevroren: ${a.bevroren}`, t].filter(Boolean).join(' · ')
+    : deels ? [a.profiel, a.fase, volledig, t && `deels ${t}`].filter(Boolean).join(' · ')
+      : [a.profiel, a.fase, t].filter(Boolean).join(' · ');
   const eerste = punten.find((p) => p.licht === 'fout') || punten.find((p) => p.licht === 'half');
   const regel = eerste ? `${eerste.naam}: ${eerste.sub || eerste.waarde}` : '';
   const teken = { ok: '●', half: '◐', fout: '✕', uit: '○' };
-  const titel = punten.map((p) => `${teken[p.licht] ?? '○'} ${p.naam}: ${p.waarde}${p.sub ? ` — ${p.sub}` : ''}`).join('\n');
+  const kop = deels ? [`Automatisch${t ? ` om ${t}` : ''} alleen accu, schijf, iCloud, AV-hub en servers opnieuw; apparaten, geluid en media ${volledig ? `van ${volledig}` : 'nog niet gemeten'}. Klik om alles te meten.`] : [];
+  const titel = [...kop, ...punten.map((p) => `${teken[p.licht] ?? '○'} ${p.naam}: ${p.waarde}${p.sub ? ` — ${p.sub}` : ''}`)].join('\n');
   return { ...basis, licht: LICHT.has(a.licht) ? a.licht : 'uit', waarde, sub, regel, titel };
 }
 

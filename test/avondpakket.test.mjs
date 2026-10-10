@@ -15,7 +15,7 @@ const { avondpakketTegel } = await import('../src/controle/avondpakket-tegel.js'
 const {
   parsePmset, parsePmsetAc, parseIoregAccu, parseDf, parseOptimize, parseAudio, parseBluetooth, parseUsbHost,
   parseIoregUsb, voegUsbSamen, herkenUsb, parseTailscale, parseBestanden, parseInstellingen, verwachteBestanden,
-  vergelijkCompleet, leesProfielen, kiesFase, beoordeel, hexId, FASEN, schoon, paklijstVan,
+  vergelijkCompleet, leesProfielen, kiesFase, beoordeel, hexId, FASEN, schoon, paklijstVan, verwachtePaden, heeftProfiel,
 } = A;
 
 const MAP = fileURLToPath(new URL('./fixtures/avondpakket/', import.meta.url));
@@ -365,9 +365,13 @@ console.log('23. achtergrond');
   ok('aankomst + split bezig → rood', r({ stemsBezig: true }, 'aankomst').licht === 'fout');
   ok('vertrek + split bezig → oranje "wacht"', r({ stemsBezig: true }, 'vertrek').licht === 'half');
   ok('ingestWacht 1 → oranje', r({ ingestWacht: 1 }, 'aankomst').licht === 'half' && /1 in de wachtrij/.test(r({ ingestWacht: 1 }, 'aankomst').waarde));
-  ok('vertrek + nacht aan zonder speeldag → oranje "zet vandaag als speeldag"', r({ nachtAan: true, vandaagSpeeldag: false }, 'vertrek').licht === 'half'
-    && /speeldag/.test(r({ nachtAan: true, vandaagSpeeldag: false }, 'vertrek').sub));
+  // review 2, fix 3: de bediening is de knop "vandaag niet" in de mixer (KAART › NACHTWACHTRIJ), er is geen tegel Nacht
+  const nacht = r({ nachtAan: true, vandaagSpeeldag: false }, 'vertrek');
+  ok(`vertrek + nacht aan zonder speeldag → oranje, wijst naar "vandaag niet" in de mixer (${nacht.sub})`, nacht.licht === 'half'
+    && /'vandaag niet'/.test(nacht.sub) && /NACHTWACHTRIJ/.test(nacht.sub) && !/tegel Nacht/.test(nacht.sub));
   ok('nacht aan mét speeldag → groen', r({ nachtAan: true, vandaagSpeeldag: true }, 'vertrek').licht === 'ok');
+  const uit = r({ nachtAan: true, vandaagSpeeldag: false, vannachtUit: true }, 'vertrek');
+  ok(`nacht aan + "vandaag niet" → groen "nacht aan, vannacht niet" (${uit.sub})`, uit.licht === 'ok' && uit.sub === 'nacht aan, vannacht niet');
 }
 
 console.log('24. compleet');
@@ -485,7 +489,7 @@ console.log('29. privacy');
 console.log('30. paklijst als data (F2)');
 {
   const d = data();
-  ok(`de data heeft 6 paklijstregels (${d.paklijst.length}), elk met wat en profielen`, d.paklijst.length === 6
+  ok(`de data heeft 7 paklijstregels (${d.paklijst.length}), elk met wat en profielen`, d.paklijst.length === 7
     && d.paklijst.every((r) => r.wat && (r.profielen === '*' || Array.isArray(r.profielen))));
   const r = beoordeel(goedVertrek(), { profiel: 'apc', data: d, nu: NU });
   ok('apc vertrek: inpakken bevat "lader ≥ 30 W", de speaker, de stekkerdoos en regel 9 "blijft thuis"', r.inpakken.some((x) => /lader ≥ 30 W/.test(x))
@@ -497,10 +501,14 @@ console.log('30. paklijst als data (F2)');
   ok(`laptop (altijd aankomst): paklijst niet leeg (${laptop.paklijst.length}), inpakken leeg, geen speaker`, laptop.fase === 'aankomst' && laptop.paklijst.length === 4
     && laptop.inpakken.length === 0 && !laptop.paklijst.some((x) => /^speaker/.test(x)) && laptop.paklijst.some((x) => /blijft thuis/.test(x)));
   ok('beeld: paklijst bevat "HDMI" en de pc', beoordeel(goedVertrek(), { profiel: 'beeld', data: d, nu: NU }).paklijst.some((x) => /HDMI/.test(x) && /pc/.test(x)));
-  ok('maschine: Maschine MK2 met kabel, geen APC; LPD8 (optioneel) niet op de lijst', (() => {
+  // review 2, fix 13: de LPD8 blijft `optioneel` (nooit gemist), maar gaat wel mee via een dataregel, zoals §6 en O5 §3.2 regel 7
+  ok('maschine: Maschine MK2 met kabel, geen APC; de LPD8 via een dataregel "als hij meegaat", geen Xboard', (() => {
     const p = paklijstVan('maschine', d);
-    return p.some((x) => /^Maschine MK2 \+ USB-B/.test(x)) && !p.some((x) => /APC40/.test(x)) && !p.some((x) => /LPD8|Xboard/.test(x));
+    return p.some((x) => /^Maschine MK2 \+ USB-B/.test(x)) && !p.some((x) => /APC40/.test(x)) && p.filter((x) => /LPD8/.test(x)).length === 1
+      && p.some((x) => /^LPD8 .*als hij meegaat/.test(x)) && !p.some((x) => /Xboard/.test(x));
   })());
+  ok('alles wel met LPD8, apc en beeld zonder (keuze 11)', paklijstVan('alles', d).some((x) => /LPD8/.test(x))
+    && !paklijstVan('apc', d).some((x) => /LPD8/.test(x)) && !paklijstVan('beeld', d).some((x) => /LPD8/.test(x)));
   const aank = beoordeel(goedAankomst(), { profiel: 'apc', data: d, nu: NU });
   ok('aankomst: inpakken leeg, paklijst blijft (voor het kaartje)', aank.fase === 'aankomst' && aank.inpakken.length === 0 && aank.paklijst.length === r.paklijst.length);
   const kapot = (paklijst) => leesProfielen(JSON.stringify({ ...JSON.parse(ECHTE_DATA), paklijst })).paklijst;
@@ -587,6 +595,86 @@ console.log('37. optioneel apparaat, USB niet gemeten (F13)');
 {
   const lpd = punt(beoordeel(goedAankomst({ usb: { onbekend: 'time-out' }, avhub: { draait: true } }), { profiel: 'maschine', fase: 'aankomst', data: data(), nu: NU }), 'lpd8');
   ok(`LPD8 (optioneel) bij aankomst, usb onbekend → "?" "niet gemeten: time-out" (${lpd.waarde}; ${lpd.sub})`, lpd.licht === 'uit' && lpd.waarde === '?' && lpd.sub === 'niet gemeten: time-out');
+}
+
+// ---- herstelronde 2 (review 7-review-2.md) ----------------------------------------------
+
+console.log('38. vals groen: USB en geluid niet gemeten bij fase auto (review 2, fix 1)');
+{
+  const vg = goedVertrek();
+  const alleenBinnen = { usb: { onbekend: 'time-out' }, audio: { onbekend: 'time-out' }, backup: vg.backup, achtergrond: vg.achtergrond };
+  const r = beoordeel(alleenBinnen, { profiel: 'apc', data: data(), nu: NU });
+  ok(`apc, auto, usb en audio onbekend, backup en achtergrond groen → niet groen (${r.licht}), punt fase oranje`,
+    r.licht !== 'ok' && r.licht === 'half' && punt(r, 'fase')?.licht === 'half' && punt(r, 'fase').waarde === 'niet te bepalen');
+  ok(`… de sub zegt waarom en wat te doen (${punt(r, 'fase').sub})`, punt(r, 'fase').sub === 'USB en geluid niet gemeten (time-out): kies vertrek of aankomst');
+  ok('… en de tegel is oranje, met de fase als regel', avondpakketTegel(r, NU).licht === 'half' && /^Fase: USB en geluid niet gemeten/.test(avondpakketTegel(r, NU).regel));
+  const b = beoordeel(goedAankomst({ usb: { onbekend: 'time-out' }, audio: { onbekend: 'time-out' }, accu: { bron: 'AC', procent: 90, laderW: 30 } }), { profiel: 'apc', data: data(), nu: NU });
+  ok(`aangekomen maar usb en audio time-out (proef geval 2) → niet "klaar" in het groen (${b.licht}, ${b.telling.half} oranje)`, b.licht !== 'ok' && !!punt(b, 'fase'));
+  ok('fase vertrek gekozen → geen fase-punt', !punt(beoordeel(alleenBinnen, { profiel: 'apc', fase: 'vertrek', data: data(), nu: NU }), 'fase'));
+  ok('fase aankomst gekozen → geen fase-punt', !punt(beoordeel(alleenBinnen, { profiel: 'apc', fase: 'aankomst', data: data(), nu: NU }), 'fase'));
+  ok('laptop (niets in te pakken) → geen fase-punt', !punt(beoordeel(alleenBinnen, { profiel: 'laptop', data: data(), nu: NU }), 'fase'));
+  ok('alleen usb onbekend (audio gemeten) → geen fase-punt', !punt(beoordeel({ ...alleenBinnen, audio: vg.audio }, { profiel: 'apc', data: data(), nu: NU }), 'fase'));
+  const leeg = beoordeel({ backup: vg.backup, achtergrond: vg.achtergrond }, { profiel: 'maschine', data: data(), nu: NU });
+  ok(`nog nooit gemeten (metingen leeg, bevroren) → fase-punt zonder reden (${punt(leeg, 'fase')?.sub})`, leeg.licht === 'half' && punt(leeg, 'fase')?.sub === 'USB en geluid niet gemeten: kies vertrek of aankomst');
+  ok('"fase" in bekend → grijs (Clay accepteert het bewust), rood nooit', punt(beoordeel(alleenBinnen, { profiel: 'apc', data: data({ bekend: ['fase'] }), nu: NU }), 'fase').licht === 'uit');
+}
+
+console.log('39. fase uit profielen.json (review 2, fix 8)');
+{
+  const vg = goedVertrek();
+  const a = beoordeel(vg, { profiel: 'apc', data: data({ fase: 'aankomst' }), nu: NU });
+  ok(`data fase aankomst, niets aangesloten → aankomst, faseBron data, niet gekozen (${a.fase}, ${a.faseBron})`, a.fase === 'aankomst' && a.faseBron === 'data' && a.faseGekozen === false);
+  const v = beoordeel(goedAankomst(), { profiel: 'apc', data: data({ fase: 'vertrek' }), nu: NU });
+  ok('data fase vertrek, alles aangesloten → toch vertrek (de data wint van auto)', v.fase === 'vertrek' && v.faseBron === 'data');
+  ok('een keuze in tegel/CLI wint van de data', beoordeel(vg, { profiel: 'apc', fase: 'vertrek', data: data({ fase: 'aankomst' }), nu: NU }).fase === 'vertrek');
+  ok('data fase auto → auto (faseBron auto)', beoordeel(vg, { profiel: 'apc', data: data(), nu: NU }).faseBron === 'auto');
+  ok('data fase vast + usb/audio onbekend → geen fase-punt (de fase raadt niet)', !punt(beoordeel({ usb: { onbekend: 'x' }, audio: { onbekend: 'x' } }, { profiel: 'apc', data: data({ fase: 'vertrek' }), nu: NU }), 'fase'));
+  ok('leesProfielen: fase "onzin" → auto', leesProfielen(JSON.stringify({ ...JSON.parse(ECHTE_DATA), fase: 'onzin' })).fase === 'auto');
+}
+
+console.log('40. profielnamen die op elk object staan (review 2, fix 7)');
+{
+  for (const naam of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+    const r = beoordeel(goedVertrek(), { profiel: naam, data: data(), nu: NU });
+    ok(`profiel ${naam} → profielOnbekend, het standaardprofiel (${r.profiel})`, r.profielOnbekend === naam && r.profiel === 'apc' && r.titel === 'APC');
+  }
+  ok('paklijstVan("constructor") → []', paklijstVan('constructor', data()).length === 0 && !heeftProfiel(data(), 'toString') && heeftProfiel(data(), 'apc'));
+  ok('standaard "constructor" in de data → het eerste profiel', leesProfielen(JSON.stringify({ ...JSON.parse(ECHTE_DATA), standaard: 'constructor' })).standaard === 'laptop');
+  const vies = leesProfielen('{"profielen": {"__proto__": {"titel": "x"}, "apc": {"titel": "APC"}}, "apparaten": {"__proto__": {"naam": "x"}}}');
+  ok('"__proto__" als profiel of apparaat in de JSON → genegeerd, geen ander prototype', Object.keys(vies.profielen).join() === 'apc'
+    && Object.getPrototypeOf(vies.profielen) === Object.prototype && Object.keys(vies.apparaten).length === 0);
+}
+
+console.log('41. profielen.json is een instelling (review 2, fix 5)');
+{
+  const x = parseInstellingen(`${W}/avondpakket/profielen.json\n`, W);
+  ok('avondpakket/profielen.json → groep instellingen', x.length === 1 && x[0].groep === 'instellingen' && x[0].pad === 'avondpakket/profielen.json');
+  const p = punt(beoordeel(goedVertrek({ instellingen: x }), { profiel: 'apc', data: data(), nu: NU }), 'instellingen');
+  ok(`uitgeplaatst → rood "zonder internet geen profielen" (${p.sub})`, p.licht === 'fout' && /zonder internet geen profielen/.test(p.sub));
+}
+
+console.log('42. compleet zonder de hele rij (review 2, fix 16)');
+{
+  const b = parseBestanden(fx('find-stat-131-HANDGEMAAKT.txt'), '', M);
+  const rij = (id, extra = {}) => ({ id, titel: 'lang', secties: { veel: 'x' }, audio: `media/${id}/audio.wav`, video: `media/${id}/video.mp4`,
+    peaks: { bestand: `media/${id}/peaks.bin` }, onset: { bestand: `media/${id}/onset.bin` }, stems: { bestand: `media/${id}/stems.wav` }, ...extra });
+  const rijen = [rij('nr00_test'), rij('nr03_test'), rij('weg_test')];
+  const paden = verwachtePaden(rijen, M);
+  ok('verwachtePaden: alleen { id, paden }', paden.length === 3 && Object.keys(paden[0]).join() === 'id,paden' && paden[0].paden.length === 5);
+  ok('vergelijkCompleet op { id, paden } = op de hele rij', JSON.stringify(vergelijkCompleet(paden, b, M)) === JSON.stringify(vergelijkCompleet(rijen, b, M)));
+  ok('verwachtePaden van geen lijst → []', verwachtePaden(null).length === 0);
+}
+
+console.log('43. tegel: automatisch, alleen het goedkope (review 2, fix 4)');
+{
+  const r = beoordeel(goedVertrek(), { profiel: 'apc', data: data(), nu: new Date(2026, 9, 10, 18, 35) });
+  const t = avondpakketTegel({ ...r, deels: { volledig: NU.getTime() } }, new Date(2026, 9, 10, 18, 36));
+  ok(`deels → sub "apc · vertrek · 18:30 · deels 18:35" (${t.sub})`, t.sub === 'apc · vertrek · 18:30 · deels 18:35');
+  ok('… en de title begint met wat er wel en niet opnieuw gemeten is', /^Automatisch om 18:35 alleen accu, schijf, iCloud, AV-hub en servers opnieuw; apparaten, geluid en media van 18:30\. Klik om alles te meten\.$/m.test(t.titel.split('\n')[0])
+    && t.titel.split('\n').length === r.punten.length + 1);
+  const nooit = avondpakketTegel({ ...r, deels: { volledig: null } }, new Date(2026, 9, 10, 18, 36));
+  ok(`deels zonder volledige meting → "apc · vertrek · deels 18:35", "nog niet gemeten" (${nooit.sub})`, nooit.sub === 'apc · vertrek · deels 18:35' && /media nog niet gemeten/.test(nooit.titel));
+  ok('bevroren gaat voor deels', avondpakketTegel({ ...r, deels: { volledig: 1 }, bevroren: 'er speelt een deck' }, NU).sub === 'bevroren: er speelt een deck · 18:35');
 }
 
 if (fails.length) { console.log(`\n${fails.length} FAIL`); process.exit(1); }

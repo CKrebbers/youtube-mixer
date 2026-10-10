@@ -18,7 +18,8 @@ const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? ' 
 const M = await import('../server/avondpakket-meet.js');
 const { leesProfielen, beoordeel } = await import('../server/avondpakket.js');
 const { voerUit, poortOpen, meet, maakCache, maakNep, maakAvondpakket, backupMeting, backupUitNamen, achtergrondMeting, extraPaden,
-  GOEDKOOP, SONDES, KAART_STANDAARD } = M;
+  speellijstStand, GOEDKOOP, SONDES, KAART_STANDAARD } = M;
+const { allePunten } = await import('../src/controle/speellijst.js');
 
 const WORTEL = fileURLToPath(new URL('..', import.meta.url));
 const FX = join(WORTEL, 'test/fixtures/avondpakket');
@@ -122,7 +123,7 @@ try {
     ok('servers: opDb uit de vorige meting', m.servers.opDb === 1);
     ok('de dure sondes: de vorige waarde (audio, usb, bestanden)', m.audio === vorige.audio && m.bestanden === vorige.bestanden);
     const zonder = await meet({ exec: maakNep(FX).exec, verbind: async () => false, paden: NEP_PADEN, alleen: GOEDKOOP });
-    ok('zonder vorige: de dure sondes onbekend "niet gemeten terwijl er een deck speelt"', /deck speelt/.test(zonder.audio.onbekend) && zonder.servers.opDb === null);
+    ok('zonder vorige: de dure sondes onbekend "er speelt een deck"', /^er speelt een deck$/.test(zonder.audio.onbekend) && zonder.servers.opDb === null);
   }
 
   console.log('7. maakCache');
@@ -157,6 +158,32 @@ try {
     const leeg = maakCache({ meet: meter, speeltDeck: () => true, klok: () => t });
     const r = await leeg.metingen();
     ok('speelt en nooit gemeten → geen meting, lege metingen met bevroren', n === 5 && r.bevroren && Object.keys(r.metingen).length === 0);
+    // review 2, fix 4: automatisch (de Controlekamer elke 5 min) nooit een volledige meting
+    const volT = c.laatste.t;
+    ok('elke stand draagt volledigT (de laatste volledige meting)', c.laatste.volledigT === volT && c.laatste.goedkoop === false);
+    t += 1_000;
+    const a1 = await c.metingen({ auto: true });
+    ok('auto binnen de ttl → de laatste, geen meting', n === 5 && a1 === c.laatste);
+    t += 11_000;
+    const a2 = await c.metingen({ auto: true });
+    ok('auto na de ttl → één goedkope meting (alleen GOEDKOOP, vorige erbij, eigen reden)', n === 6 && a2.goedkoop && a2.metingen.o.alleen === GOEDKOOP
+      && a2.metingen.o.vorige.nr === 5 && /automatisch/.test(a2.metingen.o.waarom));
+    ok('… met volledigT van de vorige volledige meting', a2.volledigT === volT && a2.t > volT);
+    t += 1_000;
+    await c.metingen({ auto: true });
+    ok('auto binnen de ttl na een goedkope → die goedkope, geen nieuwe', n === 6);
+    await c.metingen();
+    ok('een gewone vraag (openen, keuze) na een goedkope → volledig', n === 7 && c.laatste.goedkoop === false && c.laatste.volledigT === t);
+    t += 11_000;
+    await c.metingen({ auto: true, vers: true });
+    ok('vers gaat voor auto (een klik meet alles)', n === 8 && c.laatste.goedkoop === false);
+    const nooit = maakCache({ meet: meter, klok: () => t });
+    const a3 = await nooit.metingen({ auto: true });
+    ok('auto en nog nooit gemeten → alleen goedkoop, volledigT null', n === 9 && a3.goedkoop && a3.volledigT === null);
+    speelt = true;
+    await c.metingen({ auto: true });
+    ok('auto terwijl er een deck speelt → geen meting (bevroren)', n === 9);
+    speelt = false;
   }
 
   console.log('8. maakAvondpakket (de bundel voor de route), met nep');
@@ -192,6 +219,66 @@ try {
     ok('backup-fout zonder paden of backupnaam; profielen.json weg → terugval laptop + oranje punt', f.punten.find((q) => q.id === 'backup').licht === 'fout'
       && !s.includes('/Users/') && !s.includes('library-2026') && f.profiel === 'laptop' && f.punten.find((q) => q.id === 'profielen').licht === 'half');
     ok('zonder server-bronnen: achtergrond en compleet grijs "geen server"', f.punten.find((q) => q.id === 'compleet').sub === 'niet gemeten: geen server');
+
+    // review 2, fix 1 (a): de server herstart midden in de set, of de Controlekamer gaat pas open als er al een deck speelt
+    const koud = maakAvondpakket({ paden: { media: '/Users/x/media', wortel: '/Users/x', db: '/Users/x/media/library.db', backups: '/Users/x/media/backups' },
+      profielenPad: PROFIELEN, nep: FX, speeltDeck: () => true,
+      backupStand: () => ({ laatste: { tijd: Date.now() - 3600e3, bytes: 5e6 }, aantal: 3, gekeken: Date.now(), fout: null, bezig: false, gewijzigdSinds: false }),
+      rijen: () => ({ ingest: [], stems: [], nacht: { aan: false, speeldagen: [] } }), library: () => ({ sleutel: 'a', tracks: () => [] }) });
+    const k = await koud.rapport({ profiel: 'apc' });
+    ok(`speelt en nog nooit gemeten → bevroren, maar niet groen (${k.licht}, ${k.oordeel}), punt fase oranje`, k.bevroren && k.licht !== 'ok'
+      && k.punten.find((q) => q.id === 'fase')?.licht === 'half');
+    const kv = await koud.rapport({ profiel: 'apc', vers: true });
+    ok(`… ook na een klik (alleen het goedkope) niet groen (${kv.licht})`, kv.licht !== 'ok' && /\(er speelt een deck\)/.test(kv.punten.find((q) => q.id === 'fase').sub));
+  }
+
+  console.log('8b. automatisch: nooit de dure sondes (review 2, fix 4)');
+  {
+    let t = 5_000_000, tracksGevraagd = 0;
+    const map = nepMap('auto');
+    const ap = maakAvondpakket({
+      paden: { media: '/Users/x/media', wortel: '/Users/x', db: '/Users/x/media/library.db', backups: '/Users/x/media/backups' },
+      profielenPad: PROFIELEN, nep: map, klok: () => t,
+      backupStand: () => ({ laatste: { tijd: t - 3600e3, bytes: 5e6 }, aantal: 3, gekeken: t, fout: null, bezig: false, gewijzigdSinds: false }),
+      rijen: () => ({ ingest: [], stems: [], nacht: { aan: false, speeldagen: [] } }),
+      library: () => ({ sleutel: 'a:1', tracks: () => { tracksGevraagd++; return [{ id: 'weg_test', audio: 'media/weg_test/audio.wav' }]; } }),
+      speellijst: async () => ({ items: { [allePunten()[0].id]: { status: 'ok' }, [allePunten()[1].id]: { status: 'fout' }, bestaatniet: { status: 'ok' } } }),
+    });
+    // De teller van de nep (maakNep in de bundel) is niet van buiten te zien: tel via een tweede nep op dezelfde map.
+    const eerste = await ap.rapport({ profiel: 'apc' });
+    ok('eerste vraag (openen): volledig, geen deels', !eerste.deels && eerste.punten.find((q) => q.id === 'compleet').licht === 'fout');
+    ok(`speellijst als info: 1 gedaan + 1 fout = 2 van ${allePunten().length}, 1 fout; een onbekende id telt niet`, eerste.info?.speellijst?.gedaan === 2
+      && eerste.info.speellijst.fout === 1 && eerste.info.speellijst.totaal === allePunten().length);
+    t += 11_000;
+    const auto = await ap.rapport({ profiel: 'apc', auto: true });
+    ok(`auto na de ttl → deels, met de tijd van de volledige meting (${JSON.stringify(auto.deels)})`, auto.deels?.volledig === eerste.t && auto.t > eerste.t);
+    ok('… de dure punten houden de stand van toen (media, geluid), compleet hetzelfde oordeel, tracks niet opnieuw', auto.punten.find((q) => q.id === 'media').waarde === eerste.punten.find((q) => q.id === 'media').waarde
+      && auto.punten.find((q) => q.id === 'compleet').licht === 'fout' && tracksGevraagd === 1);
+    // Rechtstreeks op meet(): een auto-ronde vraagt met de nep-teller geen audio, usbhost, ioreg of find.
+    const n = maakNep(FX);
+    const vorige = await meet({ exec: n.exec, verbind: n.verbind, paden: n.paden });
+    const c = maakCache({ meet: (o) => meet({ exec: n2.exec, verbind: n2.verbind, paden: n2.paden, ...o }), klok: () => t });
+    const n2 = maakNep(FX);
+    await c.metingen({ auto: true });
+    const gevraagd = [...n2.geteld.keys()].sort().join();
+    ok(`auto: alleen pmset, df, defaults, pgrep (${gevraagd})`, gevraagd === 'df,optimize,pgrep,pmset-ac,pmset-batt' && !!vorige.audio);
+  }
+
+  console.log('8c. profielen.json die blijft hangen (review 2, fix 5)');
+  {
+    const fifo = join(tmp, 'profielen-hangt.json');
+    const mk = spawnSync('mkfifo', [fifo]);
+    if (mk.status !== 0) ok('mkfifo (overgeslagen: geen mkfifo)', true);
+    else {
+      const ap = maakAvondpakket({ paden: { media: '/Users/x/media', wortel: '/Users/x' }, profielenPad: fifo, nep: FX, leesMs: 100 });
+      const t0 = Date.now();
+      const [a, b] = await Promise.all([ap.rapport({}), ap.rapport({})]);
+      const duur = Date.now() - t0;
+      ok(`een lezing die niet terugkomt → na de grens de terugval met een oranje punt (${duur} ms)`, duur < 1500 && a.profiel === 'laptop'
+        && /time-out/.test(a.punten.find((q) => q.id === 'profielen').sub) && b.profiel === 'laptop');
+      writeFileSync(fifo, '{}');   // de hangende lezing loslaten (anders houdt hij de test open)
+      await wacht(50);
+    }
   }
 
   console.log('9. backup, achtergrond, extra paden');
@@ -207,6 +294,15 @@ try {
     ok('achtergrond: tellingen, en de speeldag van gisteren telt vóór 12:00 (nachtDatum)', a.ingestBezig && a.ingestWacht === 0 && a.stemsWacht === 2 && a.nachtAan && a.vandaagSpeeldag);
     ok('achtergrond: na 12:00 niet meer', !achtergrondMeting({ nacht: { aan: true, speeldagen: ['2026-10-10'] }, nu: new Date(2026, 9, 11, 13, 0) }).vandaagSpeeldag);
     ok('een lopende nachtrun telt als ingest bezig', achtergrondMeting({ nacht: { aan: true, bezig: { soort: 'nacht' }, speeldagen: [] } }).ingestBezig);
+    const vn = achtergrondMeting({ nacht: { aan: true, speeldagen: [], vandaagNiet: true } });
+    ok('"vandaag niet" (nacht.stand().vandaagNiet) → vannachtUit (review 2, fix 3)', vn.vannachtUit === true && vn.vandaagSpeeldag === false
+      && achtergrondMeting({ nacht: { aan: true, speeldagen: [] } }).vannachtUit === false);
+    ok('… en het oordeel is groen', beoordeel({ achtergrond: vn }, { profiel: 'apc', fase: 'vertrek', data: DATA }).punten.find((q) => q.id === 'achtergrond').licht === 'ok');
+    const ids = ['a', 'b', 'c', 'd'].map((id) => ({ id }));
+    ok('speellijstStand: open telt niet, fout telt als gedaan én fout, onbekende ids niet', JSON.stringify(speellijstStand({ items: { a: { status: 'ok' }, b: { status: 'fout' },
+      c: { status: 'open', notitie: 'x' }, z: { status: 'ok' } } }, ids)) === '{"gedaan":2,"fout":1,"totaal":4}');
+    ok('speellijstStand: geen sessie → 0 van de echte lijst', speellijstStand(null).gedaan === 0 && speellijstStand(null).totaal === allePunten().length
+      && speellijstStand({ items: { constructor: { status: 'ok' } } }, [{ id: 'constructor' }]).gedaan === 1 && speellijstStand({ items: {} }, [{ id: 'toString' }]).gedaan === 0);
     const e = extraPaden({ wortel: '/w', env: { VARVE_PLANNEN: '/elders/plannen', VARVE_PATRONEN: '/w/patronen', VARVE_KAART: '/k/kaart.json' } });
     ok('extraPaden: een VARVE_*-map buiten de wortel wel, erbinnen niet; het kaartbestand erbij', e.length === 2 && e[0].map === '/elders/plannen' && e[1].map === '/k/kaart.json');
     ok('extraPaden zonder VARVE_KAART: het standaardpad', extraPaden({ wortel: '/w', env: {} })[0].map === KAART_STANDAARD);
@@ -233,6 +329,8 @@ try {
     ok('rode set + --vertrek → "NOG NIET VERTREKKEN"', /NOG NIET VERTREKKEN/.test(cli(['--vertrek'], rood).stdout));
     const onb = cli(['--profiel', 'bestaatniet']);
     ok(`--profiel bestaatniet → exit 3 met de keuze (${onb.status})`, onb.status === 3 && /laptop, apc, maschine, alles, beeld/.test(onb.stderr));
+    ok('--profiel constructor / __proto__ → exit 3 (review 2, fix 7)', cli(['--profiel', 'constructor']).status === 3 && cli(['--profiel', '__proto__']).status === 3);
+    ok('tekst: de kop zegt hoe de fase gekozen is ("vertrek (auto)")', /· vertrek \(auto\) · \d\d:\d\d/.test(cli([]).stdout));
     ok('--vertrek --aankomst → exit 3', cli(['--vertrek', '--aankomst']).status === 3);
     ok('onbekende vlag of ongeldige poort → exit 3', cli(['--onzin']).status === 3 && cli(['--poort', 'abc']).status === 3 && cli(['--profiel']).status === 3);
     ok('--help → exit 0', cli(['--help']).status === 0);

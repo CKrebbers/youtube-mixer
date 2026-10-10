@@ -141,6 +141,14 @@ try {
   ok(`bij het openen precies één meting, daarna niet elke 2 s (${sinds(t0).length} in ~10 s)`, sinds(t0).length === 1, sinds(t0).map((v) => v.url).join(' '));
   ok('zonder profiel en fase in de vraag (standaard, auto)', /\/api\/avondpakket$/.test(sinds(t0)[0]?.url || ''));
 
+  console.log('\nde toetsenbordfocus (review 2, fix 10)');
+  await ctl.ev(`document.querySelector('.tegel[data-id="avondpakket"]').focus()`);
+  const tFocus = Date.now();
+  await wacht(2600);
+  ok('de tegel houdt de focus na het hertekenen (elke 2 s)', (await ctl.ev(`document.activeElement?.dataset?.id ?? null`)) === 'avondpakket');
+  ok('… en focussen alleen meet niets', sinds(tFocus).length === 0);
+  await ctl.ev(`document.activeElement.blur()`);
+
   console.log('\nde keuze en de lijsten');
   await ctl.ev(`document.getElementById('avondpakket').open = true`);
   ok('de keuzelijst kent de vijf profielen, apc gekozen', await tot(() => ctl.ev(`(() => { const s = document.getElementById('ap-profiel');
@@ -148,6 +156,8 @@ try {
   ok('punten, paklijst (met vinkjes) en "Varve kan" staan er', await ctl.ev(`document.querySelectorAll('#ap-punten li').length >= 12
     && document.querySelectorAll('#ap-paklijst input[type=checkbox]').length >= 6 && document.querySelectorAll('#ap-kan li').length >= 1`));
   ok('de paklijst heeft regel 9 (kopie blijft thuis)', await ctl.ev(`[...document.querySelectorAll('#ap-paklijst li')].some((l) => /blijft thuis/.test(l.textContent))`));
+  ok('de speellijst staat er als info (review 2, fix 12)', await ctl.ev(`(() => { const i = document.getElementById('ap-info');
+    return !i.hidden && /^speellijst: 0 van \\d+ punten gedaan \\(telt niet mee in het oordeel\\)$/.test(i.textContent); })()`), await ctl.ev(`document.getElementById('ap-info').textContent`));
   await ctl.ev(`document.getElementById('ap-pak-0').checked = true`);
   const tKlik = Date.now();
   await klik();
@@ -174,11 +184,40 @@ try {
   ok('fase aankomst → één vraag met fase=aankomst, de tegel zegt "aankomst"', await tot(async () => / · aankomst · /.test((await tegel())?.sub)) && sinds(tFase).length === 1
     && /fase=aankomst/.test(sinds(tFase)[0].url));
 
+  console.log('\nhet automatische moment, elke 5 min (review 2, fix 4)');
+  const zicht = (s) => ctl.ev(`(Object.defineProperty(document, 'visibilityState', { value: '${s}', configurable: true }), document.dispatchEvent(new Event('visibilitychange')), true)`);
+  await zicht('hidden');
+  const tVerb = Date.now();
+  await ctl.ev(`controle.apAutomatisch()`);
+  await wacht(1500);
+  ok(`verborgen pagina: het automatische moment vraagt niets (${sinds(tVerb).length})`, sinds(tVerb).length === 0);
+  const tZicht = Date.now();
+  await zicht('visible');   // terug in beeld, maar de laatste meting is net: geen extra vraag
+  await wacht(800);
+  ok(`terug in beeld binnen 5 min na de laatste meting: geen vraag (${sinds(tZicht).length})`, sinds(tZicht).length === 0);
+  await ctl.ev(`controle.apAutomatisch()`);
+  ok('in beeld: één vraag met auto=1 (de server meet dan niets duurs)', await tot(async () => sinds(tZicht).length === 1) && /auto=1/.test(sinds(tZicht)[0].url)
+    && !/vers=1/.test(sinds(tZicht)[0].url), sinds(tZicht).map((v) => v.url.split('?')[1]).join(' '));
+  ok('… met de keuze erbij (profiel en fase blijven)', /profiel=maschine/.test(sinds(tZicht)[0]?.url || '') && /fase=aankomst/.test(sinds(tZicht)[0]?.url || ''));
+  await wacht(300);   // de volgende stap telt vanaf een eigen tijdstip (anders kan de auto-vraag in dezelfde ms vallen)
+
   console.log('\nopnieuw laden: het profiel blijft, de fase niet');
   const tHer = Date.now();
   await ctl.cdp('Page.reload');
   ok('na herladen: maschine en fase auto (vertrek)', await tot(async () => /^maschine · vertrek · /.test((await tegel())?.sub)));
   ok('de eerste vraag na herladen heeft profiel=maschine en geen fase', /profiel=maschine$/.test(sinds(tHer)[0]?.url || ''), sinds(tHer)[0]?.url);
+
+  console.log('\neen onthouden profiel dat niet meer bestaat (review 2, fix 6)');
+  await ctl.ev(`localStorage.setItem('varve.avondpakket.profiel', 'bestaatniet'), true`);
+  const tWeg = Date.now();
+  await ctl.cdp('Page.reload');
+  ok('de eerste vraag heeft nog profiel=bestaatniet; daarna is het vergeten', await tot(async () => sinds(tWeg).length >= 1
+    && (await ctl.ev(`localStorage.getItem('varve.avondpakket.profiel')`)) === null) && /profiel=bestaatniet/.test(sinds(tWeg)[0].url));
+  ok('de tegel en de keuzelijst staan op het standaardprofiel', await tot(async () => /^apc · /.test((await tegel())?.sub))
+    && (await ctl.ev(`document.getElementById('ap-profiel').value`)) === 'apc');
+  const tNa = Date.now();
+  await klik();
+  ok('de volgende vraag (een klik) heeft geen profiel= meer', await tot(async () => sinds(tNa).length === 1) && !/profiel=/.test(sinds(tNa)[0].url), sinds(tNa)[0]?.url);
 
   console.log('\nde mixer is open (Web Lock in een tweede tabblad, geen echte mixer)');
   const doel = await fetch(`http://127.0.0.1:${DEBUG}/json/new?${encodeURIComponent(`http://localhost:${POORT}/api/backups`)}`, { method: 'PUT' }).then((r) => r.json());
@@ -196,7 +235,13 @@ try {
   await klik();
   await wacht(2500);
   ok(`… maar een klik meet wel: precies één vraag met vers=1 (${sinds(tLockKlik).length})`, sinds(tLockKlik).length === 1 && /vers=1/.test(sinds(tLockKlik)[0].url));
+  await ctl.cdp('Page.reload');   // weer "niet gemeten · mixer open"
+  ok('opnieuw geladen met de mixer open: weer "niet gemeten"', await tot(async () => (await tegel())?.waarde === 'niet gemeten'));
+  const tLos = Date.now();
   await slot.cdp('Page.navigate', { url: 'about:blank' });   // lock los
+  ok('lock los terwijl de tegel "niet gemeten" zei: binnen 5 s een meting (review 2, fix 11)', await tot(async () => sinds(tLos).length >= 1, 5000)
+    && !/vers=1|auto=1/.test(sinds(tLos)[0].url), sinds(tLos).map((v) => v.url).join(' '));
+  ok('… en de tegel toont het rapport', await tot(async () => /rood|klaar/.test((await tegel())?.waarde || '')), (await tegel())?.waarde);
   ok('lock los: de Controlekamer ziet de mixer dicht', await tot(() => ctl.ev(`[...document.querySelectorAll('.tegel')].some((t) => /Mixer/.test(t.textContent) && /niet open/.test(t.querySelector('.tegel-waarde').textContent))`)));
 
   console.log('\nop een smal scherm (390 px), met het paneel open');

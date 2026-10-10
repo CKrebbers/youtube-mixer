@@ -32,8 +32,12 @@ export const STANDAARD_GRENZEN = Object.freeze({
 });
 const STANDAARD_VIRTUEEL = 'blackhole|soundflower|loopback';
 
-/** Mappen in de projectwortel waarvan een uitgeplaatst bestand onderweg een dode set betekent. */
-export const INSTELLINGEN_MAPPEN = ['mappings', 'racks', 'patronen', 'plannen', 'Input', 'proef'];
+/**
+ * Mappen in de projectwortel waarvan een uitgeplaatst bestand onderweg een dode set betekent.
+ * Ook `avondpakket/`: profielen.json is Clay's eigen instelling, en de route leest hem bij
+ * elk verzoek (review 2, fix 5).
+ */
+export const INSTELLINGEN_MAPPEN = ['mappings', 'racks', 'patronen', 'plannen', 'Input', 'proef', 'avondpakket'];
 /** Bestanden bovenin media/ die niet zonder kunnen. */
 const KERN_DB = /^(library|kaart)\.db(-wal|-shm)?$/;
 
@@ -356,7 +360,8 @@ export function vergelijkCompleet(tracks, bestanden, mediaMap = 'media') {
   let verwacht = 0;
   const lijst = Array.isArray(tracks) ? tracks : [];
   for (const t of lijst) {
-    for (const rel of verwachteBestanden(t, mediaMap)) {
+    // Een rij uit de library, of al teruggebracht tot { id, paden } (verwachtePaden, review 2 fix 16).
+    for (const rel of Array.isArray(t?.paden) ? t.paden : verwachteBestanden(t, mediaMap)) {
       verwacht++;
       const bestand = rel.split('/').slice(1).join('/') || rel;
       if (!bestanden?.paden?.has(rel)) ontbreekt.push({ id: t.id, bestand });
@@ -364,6 +369,14 @@ export function vergelijkCompleet(tracks, bestanden, mediaMap = 'media') {
     }
   }
   return { nummers: lijst.length, verwacht, ontbreekt, leeg };
+}
+
+/**
+ * Alleen wat `vergelijkCompleet` nodig heeft: [{ id, paden }] in plaats van de hele
+ * rij uit `_verrijk` (die de route anders tussen twee wijzigingen vasthoudt).
+ */
+export function verwachtePaden(tracks, mediaMap = 'media') {
+  return (Array.isArray(tracks) ? tracks : []).map((t) => ({ id: t?.id, paden: verwachteBestanden(t, mediaMap) }));
 }
 
 // ---- de data: avondpakket/profielen.json ----------------------------------
@@ -386,21 +399,22 @@ function terugval(fout) {
 export function leesProfielen(t) {
   const j = jsonVan(t);
   if (!j || typeof j !== 'object' || Array.isArray(j)) return terugval('geen geldige JSON');
+  // "__proto__" als sleutel zou het prototype van het object zetten in plaats van een profiel (review 2, fix 7).
   const profielen = {};
   for (const [naam, p] of Object.entries(j.profielen && typeof j.profielen === 'object' ? j.profielen : {})) {
-    if (p && typeof p === 'object' && !Array.isArray(p)) profielen[naam] = p;
+    if (naam !== '__proto__' && p && typeof p === 'object' && !Array.isArray(p)) profielen[naam] = p;
   }
   if (!Object.keys(profielen).length) return terugval('geen profielen');
   const apparaten = {};
   for (const [id, a] of Object.entries(j.apparaten && typeof j.apparaten === 'object' ? j.apparaten : {})) {
-    if (a && typeof a === 'object') apparaten[id] = { titel: tekst(a.titel) || id, naam: tekst(a.naam), usb: Array.isArray(a.usb) ? a.usb.map(tekst) : [], via: tekst(a.via), kabel: tekst(a.kabel) };
+    if (id !== '__proto__' && a && typeof a === 'object') apparaten[id] = { titel: tekst(a.titel) || id, naam: tekst(a.naam), usb: Array.isArray(a.usb) ? a.usb.map(tekst) : [], via: tekst(a.via), kabel: tekst(a.kabel) };
   }
   const grenzen = { ...STANDAARD_GRENZEN };
   for (const [k, v] of Object.entries(j.grenzen && typeof j.grenzen === 'object' ? j.grenzen : {})) {
     if (k in grenzen && Number.isFinite(v)) grenzen[k] = v;
   }
   return {
-    standaard: profielen[j.standaard] ? j.standaard : Object.keys(profielen)[0],
+    standaard: heeftProfiel({ profielen }, j.standaard) ? j.standaard : Object.keys(profielen)[0],
     fase: FASEN.includes(j.fase) ? j.fase : 'auto',
     hardwareBevestigd: j.hardwareBevestigd === true,
     bekend: Array.isArray(j.bekend) ? j.bekend.filter((x) => typeof x === 'string') : [],
@@ -425,14 +439,22 @@ function leesPaklijst(lijst) {
 }
 
 /**
- * Alle paklijstregels van een profiel, in de volgorde van docs/AVONDPAKKET.md §5:
+ * Bestaat dit profiel echt in de data? Alleen eigen sleutels: `constructor`,
+ * `toString` of `__proto__` staan op elk object en zijn geen profiel (review 2, fix 7).
+ */
+export function heeftProfiel(data, naam) {
+  return typeof naam === 'string' && !!data?.profielen && Object.hasOwn(data.profielen, naam);
+}
+
+/**
+ * Alle paklijstregels van een profiel, in de volgorde van docs/AVONDPAKKET.md §6:
  * eerst wat het pakket zelf kent (de verwachte apparaten met hun kabel, de
  * PD-hub), dan de regels uit de data. Ongeacht de fase: ook `laptop`, dat altijd
  * `aankomst` is, heeft een paklijst.
  */
 export function paklijstVan(naam, data) {
-  const p = data?.profielen?.[naam];
-  if (!p) return [];
+  if (!heeftProfiel(data, naam)) return [];
+  const p = data.profielen[naam];
   const uit = [];
   if (waardeVan(p, 'usbhub') === 'verwacht') uit.push('USB-C-hub met PD-ingang (lader in de hub)');
   for (const [id, a] of Object.entries(data.apparaten || {})) {
@@ -484,14 +506,18 @@ function isVirtueel(item, data) {
  * pakken (alleen de laptop) is altijd `aankomst`.
  */
 export function kiesFase(metingen = {}, profiel = {}, data = {}) {
+  if (!heeftInTePakken(profiel, data)) return 'aankomst';
   const apparaten = Object.keys(data.apparaten || {});
-  const inTePakken = apparaten.some((id) => waardeVan(profiel, id) !== 'nee') || waardeVan(profiel, 'geluid') === 'verwacht';
-  if (!inTePakken) return 'aankomst';
   const gezien = gezienApparaten(metingen, { apparaten: {}, ...data });
   if (apparaten.some((id) => waardeVan(profiel, id) !== 'nee' && gezien[id])) return 'aankomst';
   const std = standaardUitvoer(metingen);
   if (std && std.uit >= 4 && !['builtin', 'bluetooth'].includes(std.transport) && !isVirtueel(std, data)) return 'aankomst';
   return 'vertrek';
+}
+
+/** Heeft het profiel iets om in te pakken (een apparaat dat niet `nee` is, of geluid `verwacht`)? Zo niet: altijd aankomst. */
+function heeftInTePakken(profiel, data) {
+  return Object.keys(data?.apparaten || {}).some((id) => waardeVan(profiel, id) !== 'nee') || waardeVan(profiel, 'geluid') === 'verwacht';
 }
 
 // ---- het oordeel -------------------------------------------------------------
@@ -524,16 +550,27 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
   const nietGemeten = (x) => `niet gemeten${x?.onbekend ? `: ${x.onbekend}` : ''}`;
 
   // profiel en fase
-  const naam = gevraagd && data.profielen[gevraagd] ? gevraagd : data.standaard;
+  const naam = gevraagd && heeftProfiel(data, gevraagd) ? gevraagd : data.standaard;
   const p = data.profielen[naam];
-  const profielOnbekend = gevraagd && !data.profielen[gevraagd] ? String(gevraagd) : undefined;
+  const profielOnbekend = gevraagd && !heeftProfiel(data, gevraagd) ? String(gevraagd) : undefined;
+  // De fase: gekozen (tegel/CLI), anders een vaste fase uit profielen.json (`fase`, review 2
+  // fix 8), anders auto. Alleen bij auto raadt het pakket.
   const faseGekozen = faseIn === 'vertrek' || faseIn === 'aankomst';
-  const fase = faseGekozen ? faseIn : kiesFase(m, p, data);
+  const faseBron = faseGekozen ? 'gekozen' : data.fase === 'vertrek' || data.fase === 'aankomst' ? 'data' : 'auto';
+  const fase = faseBron === 'gekozen' ? faseIn : faseBron === 'data' ? data.fase : kiesFase(m, p, data);
   const aankomst = fase === 'aankomst';
   const streng = data.hardwareBevestigd ? 'fout' : 'half';   // H5: niet-geziene hardware-uitvoer nooit vals rood
 
   if (data.fout) punt('profielen', 'Profielen', 'half', 'niet leesbaar', `profielen.json niet leesbaar: ${data.fout}; nu: alleen de laptop`);
   if (profielOnbekend) punt('profiel', 'Profiel', 'half', 'onbekend', `profiel ${profielOnbekend} bestaat niet (meer); nu: ${naam}`);
+  // Review 2, fix 1: "niets gezien" is niet "niet gemeten". Zijn USB en geluid allebei niet
+  // gemeten (time-out, of de server meet niet omdat er een deck speelt), dan kan auto de fase
+  // niet kiezen: vertrek zou elk apparaat een grijze paklijstregel maken, en dan bleef alleen
+  // groen over. Oranje, nooit rood (onbekend is nooit rood).
+  if (faseBron === 'auto' && onbekend(m.usb) && onbekend(m.audio) && heeftInTePakken(p, data)) {
+    const reden = m.usb?.onbekend || m.audio?.onbekend;
+    punt('fase', 'Fase', 'half', 'niet te bepalen', `USB en geluid niet gemeten${reden ? ` (${reden})` : ''}: kies vertrek of aankomst`);
+  }
 
   // media lokaal
   {
@@ -565,10 +602,11 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
     else {
       const inst = x.filter((i) => i.groep === 'instellingen');
       const code = x.filter((i) => i.groep === 'code');
-      const waarom = (pad) => (/^mappings\//.test(pad) ? ': zonder internet een dode APC' : ': zonder internet niet te lezen');
+      const waarom = (pad) => (/^mappings\//.test(pad) ? ': zonder internet een dode APC'
+        : /^avondpakket\//.test(pad) ? ': zonder internet geen profielen' : ': zonder internet niet te lezen');
       if (inst.length) punt('instellingen', 'Instellingen lokaal', 'fout', `${inst.length} in iCloud`, `${inst[0].pad}${waarom(inst[0].pad)}${inst.length > 1 ? ` (+${inst.length - 1})` : ''}`);
       else if (code.length) punt('instellingen', 'Instellingen lokaal', 'half', `${code.length} code in iCloud`, `${code.slice(0, 3).map((i) => i.pad).join(', ')}: haal ze thuis binnen`);
-      else punt('instellingen', 'Instellingen lokaal', 'ok', 'lokaal', 'mappings, racks, patronen, plannen, proef');
+      else punt('instellingen', 'Instellingen lokaal', 'ok', 'lokaal', 'mappings, racks, patronen, plannen, proef, avondpakket');
     }
   }
 
@@ -751,12 +789,13 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
     else {
       const bezig = [a.stemsBezig && 'een split', a.ingestBezig && 'een ingest'].filter(Boolean);
       const wacht = (a.ingestWacht || 0) + (a.stemsWacht || 0);
-      const nacht = a.nachtAan && !a.vandaagSpeeldag;
+      // "vandaag niet" (de knop in de mixer, KAART › NACHTWACHTRIJ) houdt de nacht net zo goed tegen (review 2, fix 3).
+      const nacht = a.nachtAan && !a.vandaagSpeeldag && !a.vannachtUit;
       if (bezig.length && aankomst) punt('achtergrond', 'Achtergrond', 'fout', `${bezig.join(' en ')} bezig`, 'kost CPU tijdens het spelen: wacht of stop hem');
       else if (bezig.length) punt('achtergrond', 'Achtergrond', 'half', `${bezig.join(' en ')} bezig`, 'wacht tot hij klaar is, of stop hem');
       else if (wacht) punt('achtergrond', 'Achtergrond', 'half', `${wacht} in de wachtrij`, 'leeg de wachtrij of laat hem thuis aflopen');
-      else if (nacht) punt('achtergrond', 'Achtergrond', 'half', 'nacht aan', 'zet vandaag als speeldag (tegel Nacht)');
-      else punt('achtergrond', 'Achtergrond', 'ok', 'rustig', a.nachtAan ? 'nacht aan, vandaag speeldag' : 'wachtrijen leeg, nacht uit');
+      else if (nacht) punt('achtergrond', 'Achtergrond', 'half', 'nacht aan', "zet 'vandaag niet' aan of de nachtwachtrij uit (mixer › KAART › NACHTWACHTRIJ)");
+      else punt('achtergrond', 'Achtergrond', 'ok', 'rustig', !a.nachtAan ? 'wachtrijen leeg, nacht uit' : a.vandaagSpeeldag ? 'nacht aan, vandaag speeldag' : 'nacht aan, vannacht niet');
     }
   }
 
@@ -794,7 +833,7 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
   const paklijst = paklijstVan(naam, data);
   if (!aankomst) inpakken.push(...paklijst);
   const rapport = {
-    profiel: naam, fase, faseGekozen, t: nu.getTime(), hardwareBevestigd: !!data.hardwareBevestigd,
+    profiel: naam, fase, faseGekozen, faseBron, t: nu.getTime(), hardwareBevestigd: !!data.hardwareBevestigd,
     licht, telling, oordeel,
     letOp: punten.filter((x) => x.licht === 'half').map((x) => x.id),
     inpakken, paklijst, punten,

@@ -108,6 +108,7 @@ h2{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
 .ap-paklijst label{display:flex;gap:8px;align-items:baseline;overflow-wrap:anywhere}
 .ap-paklijst label:has(input:checked){color:var(--dim);text-decoration:line-through}
 .ap-tekst li{color:var(--klein);overflow-wrap:anywhere}
+.ap-info{margin:10px 0 0;font-size:12px;color:var(--klein)}
 
 .meldingen{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:grid;gap:6px;z-index:5}
 .melding{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:8px 14px;font-size:13px}

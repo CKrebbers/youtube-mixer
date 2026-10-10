@@ -187,6 +187,7 @@ const avondpakket = maakAvondpakket({
   rijen: () => ({ ingest: wachtrij.lijst(), stems: stemsRij.lijst(), nacht: nacht.stand() }),
   // De verwachte bestanden alleen opnieuw uit de database als die veranderde (zoals sectieTelling).
   library: () => ({ sleutel: `${lib.wijzigingen()}:${lib.db.prepare('PRAGMA data_version').get().data_version}`, tracks: () => lib.tracks({}) }),
+  speellijst: () => proef.lees(),   // alleen info: "speellijst 12 van 40" (niet in het oordeel)
   speeltDeck,
   nep: process.env.VARVE_AVONDPAKKET_NEP || null,
 });
@@ -1150,9 +1151,10 @@ const server = createServer(async (req, res) => {
     // het rapport. Zonder fase: auto. Een onbekend profiel is 200 met het standaardprofiel
     // en `profielOnbekend` (nooit 400: de Controlekamer rust dan een minuut). `vers=1` (een
     // klik): opnieuw meten, behalve binnen 2 s; speelt er een deck, dan alleen het goedkope.
+    // `auto=1` (de Controlekamer elke 5 min): uit de cache of alleen het goedkope, nooit meer.
     if (pad === '/api/avondpakket' && req.method === 'GET') {
       const q = url.searchParams;
-      return json(res, 200, await avondpakket.rapport({ profiel: q.get('profiel'), fase: q.get('fase'), vers: q.get('vers') === '1' }));
+      return json(res, 200, await avondpakket.rapport({ profiel: q.get('profiel'), fase: q.get('fase'), vers: q.get('vers') === '1', auto: q.get('auto') === '1' }));
     }
     // GET /api/secties: { totaal, zonder, verouderd, versie }: hoeveel nummers (nog)
     // geen actuele secties hebben (Library.sectieTelling, docs/SECTIES.md §4). De

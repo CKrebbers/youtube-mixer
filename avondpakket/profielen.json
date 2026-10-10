@@ -1,5 +1,5 @@
 {
-  "_doc": "Avondpakket (docs/AVONDPAKKET.md). De code leest dit alleen. Apparaten: hoe ze in system_profiler/ioreg te herkennen zijn (naam = regex zonder slashes, usb = 'vid:pid' hex). Profielen: per apparaat verwacht|optioneel|nee. Fase auto: geen apparaat van het profiel gezien = vertrek, anders aankomst. bekend: oranje punten die Clay bewust accepteert (worden grijs). hardwareBevestigd: pas true na de uittrekproef (stap 7b); tot dan is niet-geziene hardware hooguit oranje. paklijst: wat mee moet en niet te meten is (profielen = '*' of een lijst); de verwachte apparaten met hun kabel en de PD-hub zet het pakket er zelf voor. optioneel = niet op de paklijst, wel herkend als hij eraan hangt (zo de Xboard49: geen reisspul).",
+  "_doc": "Avondpakket (docs/AVONDPAKKET.md). De code leest dit alleen. Apparaten: hoe ze in system_profiler/ioreg te herkennen zijn (naam = regex zonder slashes, usb = 'vid:pid' hex). Profielen: per apparaat verwacht|optioneel|nee. Fase: auto = geen apparaat van het profiel gezien = vertrek, anders aankomst; vertrek of aankomst = altijd die fase, tenzij je in de tegel of de CLI een andere kiest. bekend: oranje punten die Clay bewust accepteert (worden grijs). hardwareBevestigd: pas true na de uittrekproef (stap 7b); tot dan is niet-geziene hardware hooguit oranje. paklijst: wat mee moet en niet te meten is (profielen = '*' of een lijst); de verwachte apparaten met hun kabel en de PD-hub zet het pakket er zelf voor. optioneel = niet vanzelf op de paklijst, wel herkend als hij eraan hangt en nooit gemist (zo de Xboard49: geen reisspul); gaat een optioneel apparaat toch mee, dan een regel in paklijst (zo de LPD8).",
   "standaard": "apc",
   "fase": "auto",
   "hardwareBevestigd": false,
@@ -18,6 +18,7 @@
     { "wat": "bedrade koptelefoon + verloop 6,3 → 3,5 mm (AirPods = Bluetooth: latency, geen cue)", "profielen": "*" },
     { "wat": "speaker + netsnoer + 2× jack naar de ingang van de speaker", "profielen": ["apc", "maschine", "alles", "beeld"] },
     { "wat": "stekkerdoos (lader, speaker, hub)", "profielen": "*" },
+    { "wat": "LPD8 + USB-B → USB-C, als hij meegaat (werkt alleen via de AV-hub)", "profielen": ["maschine", "alles"] },
     { "wat": "USB-C → HDMI, de Omarchy-pc + voeding, netwerk voor Tailscale (iPhone-hotspot of zaal-wifi)", "profielen": ["beeld"] },
     { "wat": "☐ een kopie van library.db (liefst ook media/) blijft thuis: de backups in media/backups/ gaan mee in de tas", "profielen": "*" }
   ],

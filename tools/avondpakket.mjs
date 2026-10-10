@@ -17,6 +17,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { leesProfielen, beoordeel } from '../server/avondpakket.js';
 import { meet, maakNep, backupUitNamen, extraPaden, voerUit, poortOpen } from '../server/avondpakket-meet.js';
+import { wanneer } from '../src/controle/backup-tegel.js';
 
 const HULP = `node tools/avondpakket.mjs [--profiel <naam>] [--vertrek|--aankomst] [--streng] [--json] [--poort <n>]
   --profiel   laptop | apc | maschine | alles | beeld (avondpakket/profielen.json); standaard uit de data
@@ -49,11 +50,13 @@ export function leesArgs(argv) {
 }
 
 const TEKEN = { ok: '●', half: '◐', fout: '✕', uit: '○' };
-const hhmm = (ms) => (Number.isFinite(ms) ? new Date(ms).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }) : '?');
+/** De tijd zoals de tegels (review 2 fix 15, F14): "18:30", "gisteren 18:30", "8 okt 18:30". */
+const tijd = (ms, nu = new Date()) => (Number.isFinite(ms) ? wanneer(ms, nu) : '?');
+const BRON = { gekozen: 'gekozen', data: 'uit profielen.json', auto: 'auto' };
 
 /** Het rapport als tekst voor de terminal. */
-export function alsTekst(r, { bron = '' } = {}) {
-  const kop = [`Avondpakket · ${r.titel} (${r.profiel})`, `${r.fase} (${r.faseGekozen ? 'gekozen' : 'auto'})`, hhmm(r.t),
+export function alsTekst(r, { bron = '', nu = new Date() } = {}) {
+  const kop = [`Avondpakket · ${r.titel} (${r.profiel})`, `${r.fase} (${BRON[r.faseBron] || (r.faseGekozen ? 'gekozen' : 'auto')})`, tijd(r.t, nu),
     Number.isFinite(r.duurMs) ? `${(r.duurMs / 1000).toFixed(1).replace('.', ',')} s` : '', r.bevroren ? `bevroren: ${r.bevroren}` : ''].filter(Boolean).join(' · ');
   const t = r.telling || {};
   const oordeel = r.oordeel === 'klaar' ? (t.half ? `KLAAR · let op ${t.half}` : 'KLAAR') : `${String(r.oordeel).toUpperCase()} · ${t.fout} rood`;
@@ -65,6 +68,8 @@ export function alsTekst(r, { bron = '' } = {}) {
   if (r.kan?.length) uit.push('', 'Kan:', ...r.kan.map((x) => `  ${x}`));
   if (r.kanNiet?.length) uit.push('Kan niet:', ...r.kanNiet.map((x) => `  ${x}`));
   if (r.let?.length) uit.push('Let op:', ...r.let.map((x) => `  ${x}`));
+  const sl = r.info?.speellijst;
+  if (Number.isFinite(sl?.totaal)) uit.push('', `Speellijst: ${sl.gedaan} van ${sl.totaal} punten gedaan${sl.fout ? `, ${sl.fout} fout` : ''} (telt niet mee)`);
   if (bron) uit.push('', bron);
   return uit.join('\n');
 }

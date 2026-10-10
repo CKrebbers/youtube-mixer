@@ -114,19 +114,25 @@ async function leesSecties() {
 /*
  * Het avondpakket (docs/AVONDPAKKET.md): kan ik vertrekken, kan ik hier beginnen.
  * De meting start kindprocessen (system_profiler, find): daarom NIET in ververs()
- * maar bij het openen, bij een andere keuze, bij een klik op de tegel, en verder
- * hooguit elke 5 minuten. Staat de mixer open (Web Lock), dan meet de pagina niet
- * vanzelf: de tweede laag naast de server, die zelf bevriest zolang er een deck
- * speelt. Een klik of een keuze mag wel (de server geeft dan de bevroren stand).
+ * maar bij het openen, bij een andere keuze, bij een klik op de tegel, en als de
+ * mixer dichtging terwijl de tegel "niet gemeten" zei. Verder elke 5 minuten
+ * automatisch, maar alleen als de pagina in beeld is en met `auto=1`: dan geeft
+ * de server de cache of alleen het goedkope (pmset, df), nooit system_profiler
+ * of find (review 2, fix 4: de server ziet alleen een spelend deck, en op de
+ * iPhone ziet deze pagina de Web Lock van de mixer niet). Staat de mixer open
+ * (Web Lock), dan meet de pagina niet vanzelf: de tweede laag naast de server,
+ * die zelf bevriest zolang er een deck speelt. Een klik of een keuze mag wel (de
+ * server geeft dan de bevroren stand).
  * Het profiel onthoudt deze browser; de fase niet (thuis zou anders dagenlang
- * "aankomst" in het rood staan).
+ * "aankomst" in het rood staan). Een onthouden profiel dat niet meer bestaat,
+ * wordt vergeten (review 2, fix 6).
  */
 const AP_ELKE_MS = 5 * 60 * 1000;
 const AP_PROFIEL = 'varve.avondpakket.profiel';
-const ap = { profiel: '', fase: 'auto', bezig: false, nogEens: null, paklijst: '' };
+const ap = { profiel: '', fase: 'auto', bezig: false, nogEens: null, paklijst: '', laatst: 0, mixerOpen: false };
 try { ap.profiel = localStorage.getItem(AP_PROFIEL) || ''; } catch (_) { /* privévenster: dan het standaardprofiel */ }
 
-async function leesAvondpakket({ vers = false, gevraagd = false } = {}) {
+async function leesAvondpakket({ vers = false, gevraagd = false, auto = false } = {}) {
   // Loopt er al een, dan geen tweede tegelijk; een keuze of klik komt erna alsnog aan de beurt.
   if (ap.bezig) { if (gevraagd) ap.nogEens = { vers, gevraagd }; return; }
   if (!gevraagd && stand.mixer?.open) {
@@ -140,9 +146,12 @@ async function leesAvondpakket({ vers = false, gevraagd = false } = {}) {
     if (ap.profiel) q.set('profiel', ap.profiel);
     if (ap.fase !== 'auto') q.set('fase', ap.fase);
     if (vers) q.set('vers', '1');
+    else if (auto) q.set('auto', '1');
     const a = await haalLos(`/api/avondpakket${q.toString() ? `?${q}` : ''}`);
     if (a === undefined || a === null) return;   // rust na een 404/fout, of geen antwoord: houd wat er staat
     stand.avondpakket = a.data ?? a;
+    ap.laatst = Date.now();
+    if (stand.avondpakket.profielOnbekend) { ap.profiel = ''; try { localStorage.removeItem(AP_PROFIEL); } catch (_) {} }
     tekenAvondpakket();
   } finally {
     ap.bezig = false;
@@ -162,8 +171,17 @@ function tekenAvondpakket() {
     kies.dataset.opties = opties;
   }
   kies.value = a.profiel;
+  // Een vaste fase in profielen.json (`fase`): dan is "auto" in de keuzelijst niet waar.
+  if (a.faseBron && a.faseBron !== 'gekozen') {
+    $('ap-fase').querySelector('option[value="auto"]').textContent = a.faseBron === 'data' ? `standaard: ${a.fase} (profielen.json)` : 'auto (niets aangesloten = vertrek)';
+  }
   $('ap-punten').innerHTML = a.punten.map((p) => `<li data-licht="${esc(p.licht)}"><i class="led"></i><b>${esc(p.naam)}</b>
     <span class="ap-waarde">${esc(p.waarde)}</span>${p.sub ? `<span class="ap-sub">${esc(p.sub)}</span>` : ''}</li>`).join('');
+  // De speellijst: alleen info, niet in het oordeel (ontwerp W15).
+  const sl = a.info?.speellijst;
+  const info = $('ap-info');
+  info.hidden = !Number.isFinite(sl?.totaal);
+  info.textContent = info.hidden ? '' : `speellijst: ${sl.gedaan} van ${sl.totaal} punten gedaan${sl.fout ? `, ${sl.fout} fout` : ''} (telt niet mee in het oordeel)`;
   // De paklijst alleen opnieuw tekenen als hij anders is: anders verdwijnen de vinkjes elke meting.
   const pak = JSON.stringify([a.profiel, a.paklijst || []]);
   if (pak !== ap.paklijst) {
@@ -177,6 +195,16 @@ function tekenAvondpakket() {
   $('ap-kanniet').innerHTML = lijst(a.kanNiet);
   $('ap-let').innerHTML = lijst(a.let);
 }
+
+/** Het automatische moment (elke 5 min): alleen als deze pagina in beeld is, en dan alleen het goedkope. */
+function apAutomatisch() {
+  if (document.visibilityState !== 'visible') return;
+  leesAvondpakket({ auto: true });
+}
+document.addEventListener('visibilitychange', () => {
+  // Terug in beeld na meer dan 5 min verborgen: bijwerken (ook dan alleen het goedkope).
+  if (document.visibilityState === 'visible' && Date.now() - ap.laatst > AP_ELKE_MS) apAutomatisch();
+});
 
 $('ap-profiel').addEventListener('change', (e) => {
   ap.profiel = e.target.value;
@@ -267,6 +295,9 @@ function tegels() {
 const KLIKBAAR = new Set(['avondpakket']);
 
 function tekenStand() {
+  // De tegels worden elke 2 s opnieuw getekend: een tegel met de toetsenbordfocus
+  // (Avondpakket is een knop) krijgt hem daarna terug (review 2, fix 10).
+  const focus = document.activeElement?.closest?.('#tegels [data-id]')?.dataset.id;
   // De title draagt de hele tekst: de waarde kan nog afgekapt zijn (één regel). Een
   // tegel met een eigen `titel` (Avondpakket: alle punten) gebruikt die.
   $('tegels').innerHTML = tegels().map((g) => `
@@ -277,6 +308,7 @@ function tekenStand() {
       <span class="tegel-sub">${esc(g.sub)}</span>${g.regel ? `
       <span class="tegel-regel">${esc(g.regel)}</span>` : ''}
     </div>`).join('');
+  if (focus) $('tegels').querySelector(`.tegel[data-id="${CSS.escape(focus)}"]`)?.focus();
 
   const s = stand.status;
   const spelen = $('spelen');
@@ -417,8 +449,14 @@ let verversBezig = false;
 async function ververs() {
   if (verversBezig) return;   // de vorige loopt nog (trage server): niet stapelen
   verversBezig = true;
-  try { await Promise.all([leesServer(), leesMixer(), leesStems(), leesSecties()]); tekenStand(); }
-  finally { verversBezig = false; }
+  try {
+    await Promise.all([leesServer(), leesMixer(), leesStems(), leesSecties()]);
+    // De mixer ging dicht terwijl de tegel "niet gemeten · mixer open" zei: nu meten (review 2, fix 11).
+    const open = !!stand.mixer?.open;
+    if (ap.mixerOpen && !open && stand.avondpakket?.overgeslagen) leesAvondpakket();
+    ap.mixerOpen = open;
+    tekenStand();
+  } finally { verversBezig = false; }
 }
 
 klok(); setInterval(klok, 10000);
@@ -427,9 +465,9 @@ tekenLijst();
 await ververs();
 leesTooling().then(tekenStand);
 leesAvondpakket();
-setInterval(() => leesAvondpakket(), AP_ELKE_MS);
+setInterval(apAutomatisch, AP_ELKE_MS);
 vraagStatus();
 setInterval(ververs, 2000);
 setInterval(vraagStatus, 2000);
 setInterval(() => leesTooling().then(tekenStand), 60000);
-window.controle = { stand, ververs, leesAvondpakket };   // handig in de console en voor tools/headless/controle.mjs en avondpakket.mjs
+window.controle = { stand, ververs, leesAvondpakket, apAutomatisch };   // handig in de console en voor tools/headless/controle.mjs en avondpakket.mjs
