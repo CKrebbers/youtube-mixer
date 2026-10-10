@@ -253,7 +253,8 @@ auto voor scene 4). De kern blijft: fader, play, filter, Clip Stop, master-knop.
 *Op de tak `visie/produceren-uit`, PR naar `studio/integratie` "[na de proefavond]". Ontwerp en
 kritiek: de scratchpad-map `uitwerking/produceren-uit/` van 10 okt (`5-ontwerp-definitief.md`).
 Gebouwd: **stap 1, de pure exporter en lezer** (met L3 van de B-lijst), en in hetzelfde spoor het
-**setboek** (`tools/setboek/`, stap 2). Route, CLI en knop voor de MIDI-export komen later (§8.5).
+**setboek** (`tools/setboek/`, stap 2), en (herstelronde 1) de **CLI** `tools/patronen/midi.mjs`.
+Route en knop voor de MIDI-export komen later (§8.5).
 Nog in **geen** Logic geopend.*
 
 **Waarom.** Clay produceert ook in Logic (VISIE pijler 2). Een patroon dat in VARVE gemaakt is,
@@ -267,7 +268,8 @@ UITGANG, geen distributie (CLAUDE.md "geen deelfuncties" gaat over de YouTube-ca
 | `src/lib/smf.js` | de bytes van een Standard MIDI File: `vlq`, `meta`, `ascii`, `tempoMeta`, `maatsoortMeta`, `mtrk`, `smf`, `leesSmf`. Geen imports, geen Buffer, geen DOM. |
 | `src/export/patronen-smf.js` | patroon/set ↔ SMF: `klinkendeNoten`, `setNaarSmf`, `smfNaarPatronen`. Staat BUITEN `src/engine/` (regel 1: de engine kent geen MIDI); importeert alleen `engine/patronen/{model,venster}.js` en `lib/smf.js`. |
 | `test/smf.test.mjs` | de bytes-laag (43 checks) |
-| `test/patronen-midi.test.mjs` | de regels hieronder, gouden bytes, 500 patronen tegen de speler, rondreis met en zonder meta (65 checks) |
+| `test/patronen-midi.test.mjs` | de regels hieronder, gouden bytes, 500 patronen tegen de speler, rondreis met en zonder meta, de CLI (73 checks) |
+| `tools/patronen/midi.mjs` | de CLI: `--set <kopie van patronen/<naam>.json> --uit <pad.mid> [--track N [--plek K]] [--omlopen M] [--bpm B] [--zonder-meta]`; schrijft met `wx` (bestaat het: exit 2), niets gevuld: exit 1. Recept in `tools/patronen/LEESMIJ.md` |
 | `test/fixtures/midi/` | `kick-goud.mid` (431 B), `kick-goud-zonder-meta.mid` (118 B), `proef-set.mid` (2200 B): gouden bestanden én het materiaal voor de Logic-proef (§8.4) |
 
 `test/regels.test.mjs` bewaakt dat er in `src/engine/` geen `MThd`, `MTrk` of `0x99` staat, en dat
@@ -340,8 +342,9 @@ jury-referentie (in de scratchpad, niet in de repo); mido leest alle drie de fix
    die Clay na een proefavond gebruikt, op kopieën van de logs.
 2. **Route** `GET /api/patronen/<naam>/midi[?track=N&plek=K][&omlopen=M][&bpm=B][&meta=0][&context=…]`
    (200 `audio/midi` met bestandsnaam `<set>-T<N>P<K>-<naam>-<JJJJMMDD-UUMM>.mid`; 400/404/405;
-   413 boven `omlopen` 16 of Σ noten × omlopen > 65 536; 422 bij een onleesbare set) en CLI
-   `tools/patronen/midi.mjs`. Na de proefavond.
+   413 boven `omlopen` 16 of Σ noten × omlopen > 65 536; 422 bij een onleesbare set). Na de
+   proefavond. De CLI `tools/patronen/midi.mjs` is er al (10 okt, herstelronde 1): zo kan het
+   eerste proefpunt (een patroon maken, exporteren, in Logic slepen) zonder server.
 3. **Knop `.mid`** in de PATROON-rij (shift = de hele set), pas na stap 0 én na een avond waarop
    Clay een patroon maakte (VRAGEN, K-C).
 4. Drumvertaling als data (`patronen/export.json`), alleen als stap 0 laat horen dat het moet.

@@ -220,7 +220,8 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden), varve-app/ (de Dock-app VARVE: start de server, opent de Controlekamer),
                     setboek/ (lees.mjs: wat er op een avond KLONK uit de handelingenlogs, puur; gebruik.mjs: de teller;
-                    setboek.mjs: de CLI op KOPIEËN, --dag/--log, --db, --proef, stdout; LEESMIJ.md) — zie tools/README.md
+                    setboek.mjs: de CLI op KOPIEËN, --dag/--vanaf/--log, --db, --proef, stdout; LEESMIJ.md),
+                    patronen/ (midi.mjs: een set patronen als MIDI-bestand voor Logic, op een kopie; LEESMIJ.md) — zie tools/README.md
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
@@ -295,8 +296,8 @@ test/
   patronen.test.mjs model, venster (swing, micro, omlopen), klok, speler met nep-maatgever (op de maat, herankeren zonder dubbele/gemiste), opnemen, opslag (409), server
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
   smf.test.mjs      de bytes van een MIDI-bestand (src/lib/smf.js): vlq, meta, tempo, ascii, sporen, lezen (running status, SysEx, kapot = byte-offset)
-  patronen-midi.test.mjs  patronen als MIDI-bestand: S1–S13/L1–L2, de kick bytegewijs (met de hand + fixtures), 500 patronen tegen de vensters van de speler, rondreis
-  setboek.test.mjs  het setboek (tools/setboek): hoorbaar (fader, kant, trim, kills, stems, master), cue/play/laad zoals het deck, trackeinde met lengte, positie in de bron, meerdere logs per avond, proefpunten, de CLI
+  patronen-midi.test.mjs  patronen als MIDI-bestand: S1–S13/L1–L2, de kick bytegewijs (met de hand + fixtures), 500 patronen tegen de vensters van de speler, rondreis, de CLI tools/patronen/midi.mjs
+  setboek.test.mjs  het setboek (tools/setboek): hoorbaar (fader, kant, trim, kills, stems, master via faderGain), cue/play/laad/rem/gridcontrole zoals het deck, trackeinde met lengte, positie in de bron (secties), één stuk over de grens van twee logs, proefpunten (alleen van deze avond), Buma/Stemra, de CLI (--vanaf)
   fixtures/midi/    gouden .mid's (kick met en zonder meta, proef-set): de test vergelijkt ermee, en ze zijn het materiaal voor de Logic-proef
   secties.test.mjs  secties: synthetische nummers met een bekend antwoord, worker, library, deck, actions, server, marges op de "1"
   sec-sampler.test.mjs  een sectie in een sampler-pad: knipSectie, start op de "1", herankeren (ook keylock), grenzen, meldingen
@@ -1576,7 +1577,8 @@ Volledig in `docs/PATRONEN.md` (§1–6 het contract, §7 wat gebouwd is). Wat e
 - Naar Logic (10 okt, `docs/PATRONEN.md` §8): `src/export/patronen-smf.js` maakt een MIDI-bestand uit de
   VENSTERS van de speler (`notenInVenster`, 384 PPQN: swing en micro zijn tijdverschuiving). Buiten de engine
   (regels.test: geen `MThd`/`MTrk`/`0x99` in `src/engine/`). Verander je venster of model: ook
-  `test/patronen-midi.test.mjs` (gouden bytes, 500 patronen tegen de speler). Nog geen route, CLI of knop.
+  `test/patronen-midi.test.mjs` (gouden bytes, 500 patronen tegen de speler). De CLI `tools/patronen/midi.mjs`
+  werkt op een kopie van de set (bestand in, bestand uit); nog geen route of knop.
 
 ## Xboard49 en Maschine via de hub (gebouwd 5 okt)
 

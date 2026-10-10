@@ -298,5 +298,45 @@ console.log('\nlezen zonder meta (L2, benaderd)');
   ok('het tempospoor (geen noten, geen meta) levert geen patroon', smfNaarPatronen(fixture('kick-goud.mid')).length === 1);
 }
 
+// ---- 6. de CLI (tools/patronen/midi.mjs) ------------------------------------------
+console.log('\nde CLI (tools/patronen/midi.mjs)');
+{
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const cli = fileURLToPath(new URL('../tools/patronen/midi.mjs', import.meta.url));   // niet .pathname: spaties in de checkout
+  const draai = (...args) => spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+  const map = mkdtempSync(join(tmpdir(), 'midi-'));
+  const bytesVan = (pad) => new Uint8Array(readFileSync(pad));
+  try {
+    const setPad = join(map, 'proef.json'), legePad = join(map, 'leeg.json');
+    writeFileSync(setPad, JSON.stringify(PROEF_SET));
+    writeFileSync(legePad, JSON.stringify({ naam: 'leeg', tempo: 120, tracks: {}, instrumenten: {} }));
+    const heel = join(map, 'proef.mid');
+    const r = draai('--set', setPad, '--omlopen', '2', '--uit', heel);
+    ok('de hele set, 2 omlopen: bytegewijs proef-set.mid (= setNaarSmf)', r.status === 0 && existsSync(heel) && gelijk(bytesVan(heel), fixture('proef-set.mid')), r.stderr);
+    const kick = join(map, 'kick.mid');
+    const k = draai('--set', setPad, '--track', '1', '--plek', '1', '--bpm', '120', '--uit', kick);
+    ok('--track 1 --plek 1 --bpm 120: dezelfde bytes als setNaarSmf', k.status === 0 && gelijk(bytesVan(kick), setNaarSmf(PROEF_SET, { track: 1, plek: 1, bpm: 120 })), k.stderr);
+    const zm = join(map, 'zonder.mid');
+    const z = draai('--set', setPad, '--track', '3', '--zonder-meta', '--uit', zm);
+    ok('--zonder-meta: dezelfde bytes als setNaarSmf(meta: false), geen varve:patroon', z.status === 0 && gelijk(bytesVan(zm), setNaarSmf(PROEF_SET, { track: 3, meta: false }))
+      && !Buffer.from(bytesVan(zm)).includes('varve:patroon'), z.stderr);
+    const nog = draai('--set', setPad, '--omlopen', '2', '--uit', heel);
+    ok('een tweede keer naar hetzelfde pad: exit 2, niets overschreven', nog.status === 2 && /bestaat al/.test(nog.stderr) && gelijk(bytesVan(heel), fixture('proef-set.mid')));
+    const leeg = draai('--set', legePad, '--uit', join(map, 'leeg.mid'));
+    ok('een lege set: exit 1 "geen gevulde patronen", geen bestand', leeg.status === 1 && /geen gevulde patronen/.test(leeg.stderr) && !existsSync(join(map, 'leeg.mid')));
+    const plek = draai('--set', setPad, '--track', '2', '--plek', '1', '--uit', join(map, 'x.mid'));
+    ok('een lege plek: exit 1 met welke', plek.status === 1 && /track 2 plek 1/.test(plek.stderr));
+    ok('verkeerd aangeroepen: exit 1 (zonder --uit; --plek zonder --track; --omlopen 17; --track 9; --bpm 300)',
+      [['--set', setPad], ['--set', setPad, '--plek', '1', '--uit', join(map, 'y.mid')], ['--set', setPad, '--omlopen', '17', '--uit', join(map, 'y.mid')],
+        ['--set', setPad, '--track', '9', '--uit', join(map, 'y.mid')], ['--set', setPad, '--bpm', '300', '--uit', join(map, 'y.mid')]].every((x) => draai(...x).status === 1) && !existsSync(join(map, 'y.mid')));
+    writeFileSync(join(map, 'kapot.json'), '{ niet');
+    ok('een kapotte set: exit 1', draai('--set', join(map, 'kapot.json'), '--uit', join(map, 'z.mid')).status === 1);
+  } finally { rmSync(map, { recursive: true, force: true }); }
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
