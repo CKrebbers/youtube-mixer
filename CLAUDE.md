@@ -216,6 +216,8 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     maschine-sampler.mjs: SAMPLING op een nep-Maschine met de echte sampler (knippen, spelen, tellen, volume);
                     sampler-drums.mjs: crossover, een sampler-pad als drumpad 13 in de echte Web Audio (inhoud, strip, patroon,
                     tempo, koptelefoon) en de knoppen 1→13 … 8→12 in de app op 1440×900 en 1440×790 (muisklik, koppelmodus);
+                    sampler-drums-stems.mjs: hetzelfde met een GESTREAMD library-nummer met vier stems (synthetisch, tijdelijke db),
+                    kills, knip, drumpad 13, Goertzel per stem, deck-vergelijking met de crossfaderkant erin (proefpunt cx-stems);
                     hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
