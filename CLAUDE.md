@@ -174,10 +174,10 @@ src/
   plan/             plan-model.js   het setplan als data: formaat v2, normaliseerPlan, bewerk, verschil. Puur (ook door de server gebruikt)
                     tijdlijn.js     voorspel: set-tijden en de overgang die de app echt kiest. Puur.
                     plan-venster.js het planvenster (plan.html): lijst, strook, bewerken, opslaan met versie, live via opener
+  companion/        companion.js    de pagina voor iPad en iPhone: alleen fetch naar /api; companion-lijst.js het rekenwerk en de HTML (puur)
   controle/         controle.js     de Controlekamer: tegels (server, ingest, mixer via de Web Lock, APC via het kanaal), speellijst
                     speellijst.js   de punten van een proefsessie, in blokken. Puur data; de stand staat in proef/sessie.json
                     backup-tegel.js de tegel "Backup" (laatste kopie, of de fout). Puur.
-  companion/        companion.js    de pagina voor iPad en iPhone: alleen fetch naar /api; companion-lijst.js het rekenwerk en de HTML (puur)
   auto/             planner.js      de auto-DJ, puur: welk fragment, welke overgang (bewakers), wanneer (frasegrens), de curves
                     automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server

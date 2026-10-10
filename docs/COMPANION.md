@@ -1,15 +1,16 @@
 # De companion: iPad en iPhone naast de laptop (10 okt 2026)
 
 *Spoor companion (VISIE §3: "laptop, iPad, iPhone … als draagbare set"). Ontwerp:
-`uitwerking/companion/5-ontwerp-definitief.md`. Gebouwd: stap 1 (de pagina). Stap 2 (de mixer
-meldt zich bij de server) is ontworpen, niet gebouwd.*
+`uitwerking/companion/5-ontwerp-definitief.md`. Gebouwd: stap 1 (de pagina), met de herstelronde
+na de review (10 okt middag). Stap 2 (de mixer meldt zich bij de server) staat als code op een eigen
+tak (zie onderaan); het live-pad met `index.html` is niet geproefd.*
 
 Eén adres voor iPad en iPhone: **`https://<NAAM>/companion`** (via Tailscale, `docs/TAILSCALE.md`),
 op de Mac zelf `http://localhost:8777/companion`. Geen tweede mixer, maar een eigen rol:
 
 | Apparaat | Thuis (proefavond, staand scherm met de Controlekamer) | Tussen avonden | Op locatie (geen tweede scherm) |
 |---|---|---|---|
-| **iPad** (liggend: kaart links, nu en beeld rechts) | Een verzoekje opzoeken en op de wenslijst zetten. | **De hoofdrol**: bladeren in de kaart en de kratten, wensen, kiezen uit wat de laptop vond, "haal de wenslijst nu op". | Als thuis. |
+| **iPad** (liggend: kaart links, nu en beeld rechts, die blijven staan als de kaart scrolt; staand: één kolom met onderbalk, zoals de iPhone) | Een verzoekje opzoeken en op de wenslijst zetten. | **De hoofdrol**: bladeren in de kaart en de kratten, wensen, kiezen uit wat de laptop vond, "haal de wenslijst nu op". | Als thuis. |
 | **iPhone** (staand, onderbalk nu · kaart · beeld) | Een extraatje: de Controlekamer staat al op het staande scherm. | De wenslijst en de speeldag-knop in de hand. | Straks (stap 2) de blik in je zak: per track wat speelt en hoe lang nog. |
 | **Laptop** | Blijft de enige die geluid maakt, MIDI opent, de Web Lock heeft en binnenhaalt. | idem | idem |
 
@@ -24,14 +25,23 @@ op de Mac zelf `http://localhost:8777/companion`. Geen tweede mixer, maar een ei
   - `kies` (de laptop zocht en vond kandidaten): de kandidaten als knoppen onder de rij; een tik
     kiest die video en de wens wacht weer. Zonder kandidaten: "kies op de laptop".
   - `wacht`, `bezig`, `klaar`, `mislukt`, `binnen`: alleen het label. **Geen intrekken** op touch.
-  - De lijst volgt de wenslijst (elke 5 s): zoekt de laptop intussen, dan krijgt de rij vanzelf `kies`.
+  - De lijst volgt de wenslijst (elke 5 s, zolang de kaart in beeld is): zoekt de laptop intussen, dan
+    krijgt de rij vanzelf `kies`; haalt de nacht of "haal nu" hem binnen, dan `klaar`.
 - **Wenslijst** bovenaan de kaart: telling, stand van de nachtwachtrij en de speeldagen, en twee knoppen:
-  - **haal de wenslijst nu op (n)** (n ≤ 20) via `POST /api/nacht/nu`. Uit op een speeldag, als er al
-    een run loopt of als er niets wacht; de server weigert zelf ook (409, de melding toont zijn reden).
-  - **vandaag speeldag**: zet vandaag (klok van de server) erbij. Alleen toevoegen; weghalen kan
+  - **haal de wenslijst nu op (n)** (n ≤ 20) via `POST /api/nacht/nu { aantal, alleenWensen: true }`:
+    **alleen de wenslijst**. Zonder die vlag vulde de server een wens die op `kies` eindigde (Spotify
+    zonder zekere versie) aan met een nummer uit de standaardvolgorde van de kaart, dat niemand wenste
+    (review ronde 1). De melding: *"run gestart: hooguit n van de wenslijst"*; daarna zegt de knop
+    *"haal nu: er loopt al een run"* tot hij klaar is. Uit op een speeldag, als er al een run loopt of als
+    er niets wacht; de server weigert zelf ook (409, de melding toont zijn reden).
+  - **vandaag speeldag**: zet vandaag erbij, en "vandaag" is wat de server zegt (`vandaag` in
+    `GET /api/nacht`, in zíjn tijdzone), niet wat de iPhone uitrekent. Alleen toevoegen; weghalen kan
     alleen op de laptop.
-- **Nu**: in stap 1 *"deze server kent /api/mixer nog niet"*. De pagina vraagt `/api/mixer` na een 404
+- **Nu**: zolang de server `/api/mixer` niet kent (stap 1): *"Wat er speelt komt hier zodra de mixer zich
+  bij de server meldt (nog niet gebouwd). De kaart werkt wel."* De pagina vraagt `/api/mixer` na een 404
   hooguit eens per minuut opnieuw.
+- **Eerste scherm**: wie de companion voor het eerst opent (geen tab bewaard), krijgt de **kaart** als de
+  mixer zich niet meldt, en "nu" als hij dat wel doet. Die keuze wordt niet bewaard; een tik op een tab wel.
 - **Beeld**: alleen tonen, met altijd de zin *"Varve-beeld op deze Mac · de beamer van de pc volgt dit
   niet · noodknop: APC mapje beeld"*. Geen knoppen.
 
@@ -47,6 +57,18 @@ op de Mac zelf `http://localhost:8777/companion`. Geen tweede mixer, maar een ei
 `tabs`: welke tabs er zijn (onbekende vallen weg, met een melding). `kratten_bovenaan`: krat-id's
 zoals in `varve-kaart.json`; een krat die niet op de kaart staat wordt overgeslagen. De ★ in de
 kratkiezer pint per apparaat (localStorage `varve.companion.pins`), vóór de lijst uit de JSON.
+
+## Wat de companion de server vraagt, en hoe vaak
+
+| Wat | Wanneer | Grootte |
+|---|---|---|
+| `GET /api/mixer` | elke seconde zolang de pagina zichtbaar is; na een 404 hooguit eens per minuut | klein |
+| `GET /api/kaart/wensen?licht=1` + `GET /api/nacht` | elke 5 s, **alleen als de kaart in beeld is** (iPhone en iPad staand: tab kaart; iPad liggend: altijd), en meteen bij het openen van de kaart | licht: ~143 B per klare wens (gewoon: ~1,4 kB met het track-object; gemeten op de nep-kaart) |
+| `GET /api/kaart/nummers` | bij zoeken, krat, filter, "meer" | 50 rijen |
+
+Niets als de pagina op de achtergrond staat (`visibilitychange`). Niet gemeten op Clay's echte wenslijst
+(op de proefavond geen `media/` aanraken): na de proefavond op een kopie
+`curl -s localhost:<proefpoort>/api/kaart/wensen?licht=1 | wc -c`.
 
 ## Grenzen (in code en tests vastgelegd)
 
@@ -66,15 +88,28 @@ kratkiezer pint per apparaat (localStorage `varve.companion.pins`), vóór de li
 ## Testen
 
 ```sh
-node test/alles.mjs                       # o.a. companion-lijst, companion-server, regels-companion, server
-node tools/headless/companion.mjs <map>   # eigen server :8805, Chromium :9405, 390×844 en 1024×768
-pgrep -fl 'varve-companion|:8805|9405'    # daarna: leeg
+node test/alles.mjs                       # o.a. companion-lijst, companion-server, regels-companion, nacht, server
+node tools/headless/companion.mjs <map>   # eigen server :8805, Chromium :9405; 390×844, 1024×768 en 768×1024
 ```
+
+Het script kijkt aan het eind **zelf** na dat beide poorten weer dicht zijn en dat er geen proces met
+zijn eigen profiel meer draait (laatste regel: `ok  poorten 8805/9405 weer vrij, geen eigen Chromium
+meer`). Met de hand, als je het wilt zien (allebei leeg = goed):
+
+```sh
+lsof -nP -iTCP:8805 -iTCP:9405 -sTCP:LISTEN
+pgrep -fl 'user-data-dir=[^ ]*varve-companion-'
+```
+
+**Niet** `pgrep -fl 'varve-companion|:8805|9405'` (het oude advies): `9405`/`9415` staan toevallig in de
+argumenten van de GPU-helper van Clay's eigen Chrome. Wie op dat vals alarm "de eigen pids" stopt, stopt
+een stuk van Clay's Chrome (review ronde 1, fix 3).
 
 Het headless-script draait op een **lege** database met de nep-kaart en de nep-yt-dlp (nooit 8777,
 nooit `media/`), Chromium met `--mute-audio` en een eigen profiel, en `requestMIDIAccess`/`AudioContext`
 als tellers die de echte nooit aanroepen (de APC kan aan deze Mac hangen). Waakhond 150 s; SIGINT en
-SIGTERM ruimen op. Het tikt met echte aanraakgebeurtenissen. Eén blok bootst met de Fetch-laag een
+SIGTERM ruimen op. Het tikt met echte aanraakgebeurtenissen. "Haal nu" loopt echt door de ingest
+(de nep-yt-dlp "downloadt" een toon van 12 s die ffmpeg in de tmp-map maakt). Eén blok bootst met de Fetch-laag een
 melding van de mixer na (acht tracks, beeld bevroren) om te laten zien hoe "nu" straks wordt: dat is
 geen proef van stap 2.
 
@@ -82,11 +117,13 @@ Gemeten op 10 okt (MacBook Air, met andere agenten ernaast):
 
 | | |
 |---|---|
-| headless-controles | 70/70 (drie runs; de eerste 69/70 door een fout in de controle zelf) |
-| laadtijd tot de kaart gevuld is, 200 ms per verzoek (Chromium-netwerkemulatie) | 1,9–2,1 s (drie runs: 2062, 2061, 1887 ms) |
-| tikdoelen | alle ≥ 44 × 44 (CSS: 48) |
-| Node-tests | 74 bestanden, 7255 checks, alles groen (vóór dit spoor: 71 / 7107) |
-| zijwaarts scrollen op 390 en 1024 | geen |
+| headless-controles | 70/70 (bouw, 13:13); na de herstelronde **89/89** (390, 1024, 768, haal nu echt, zelfcontrole aan het eind) |
+| laadtijd tot de kaart gevuld is, 200 ms per verzoek (Chromium-netwerkemulatie) | 1,9–2,1 s (vier runs: 2062, 2061, 1887, 2058 ms) |
+| tikdoelen | alle ≥ 44 × 44 (CSS: 48), ook op 768 |
+| Node-tests | zie de PR (vóór dit spoor: 71 bestanden / 7107 checks) |
+| zijwaarts scrollen op 390, 768 en 1024 | geen |
+| iPad liggend, kaart 683 px gescrold | "nu" staat op 59 px van boven, "beeld" eindigt op 271 px (blijft in beeld) |
+| `/api/kaart/wensen` per klare wens (nep-kaart) | 1379 B gewoon, 143 B met `?licht=1` |
 
 ## Eenmalig instellen (Clay, ná de proefavond, nooit op een speeldag)
 
@@ -124,15 +161,23 @@ pas opdrachten met id's.
 
 ## Niet getest
 
-iOS Safari (`dvh`, safe-area, "zet op beginscherm", de voorproef voor oude iOS), een echte Tailscale
-(alleen de Host/Origin die `tailscale serve` aflevert, nagebootst in de tests), de hotspot-situaties,
-de `~/.zprofile`-route, de iOS-versie van de iPad. Getest: Node-tests en headless Chromium
-(chrome-headless-shell van Playwright) met mobiele emulatie en aanraakgebeurtenissen.
+iOS Safari (`dvh`, safe-area, `position: sticky` in de rechterkolom, "zet op beginscherm", de voorproef
+voor oude iOS), een echte Tailscale (alleen de Host/Origin die `tailscale serve` aflevert, nagebootst in de
+tests), de hotspot-situaties, de `~/.zprofile`-route, de iOS-versie van de iPad, een toestel in een
+andere tijdzone (de regel "vandaag van de server" is getoetst met een stand waarin de server een andere
+dag zegt dan het toestel zou uitrekenen), de omvang van de wenslijst op Clay's echte `kaart.db`.
+Getest: Node-tests en headless Chromium (chrome-headless-shell van Playwright) met mobiele emulatie en
+aanraakgebeurtenissen.
 
-## Stap 2 (ontworpen, niet gebouwd)
+Klein punt voor later (niet in deze PR, server-breed): zonder `VARVE_HOSTS` ziet de iPhone de kale 403
+`{"fout":"onbekende host"}`; een hint in die 403 ("zet VARVE_HOSTS, docs/TAILSCALE.md") zou op de
+telefoon helpen. De opstartregel dekt het op de Mac.
+
+## Stap 2 (eigen tak `visie/companion-stap2`, eigen PR, ná deze)
 
 De mixer (alleen het tabblad met de Web Lock, alleen vanaf deze Mac) POST hooguit eens per 900 ms
 `maakStatus(…)` met positie/duur/rate, `eind` (zwart/bevroren/master) en een `tab`-id naar
 `POST /api/mixer`; iedereen leest `GET /api/mixer`. Dan krijgt "nu" per track titel, ▶/❚❚, "nog mm:ss",
-bpm en toon, en "beeld" de stand. `nuHtml` en `beeldHtml` zijn er al (en getest); de server-kant en
-`status-zender.js` niet. Raakt het mixer-tabblad: pas na de proefavond, met eigen tests.
+bpm en toon, en "beeld" de stand. Die code staat op een gestapelde tak met een eigen concept-PR, zodat
+deze PR (stap 1) los samengevoegd kan worden en het Lock-tabblad niet raakt. Wat daar wel en niet
+geproefd is, staat in die PR.
