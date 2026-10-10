@@ -196,6 +196,9 @@ server/             draait apart: `node server/index.js`
   handelingen.js    handelingenlogs naast de opnames: stukken op hun plek, lijst, lezen
   stems.js          de stems-rij: Demucs starten (nice), één tegelijk, annuleren, werkmap, nalopen, verhuizen
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
+  kaart.js          de muziekkaart als zoeklaag: varve-kaart.json in het geheugen (zoeken/filteren/sorteren/pagineren), binnen = tracks.id,
+                    wensen en nacht_runs in een EIGEN media/kaart.db, een YouTube-versie zoeken (ytsearch5, nooit cookies) (docs/KAART.md)
+  nacht.js          de nachtwachtrij: venster, speeldagen, wensen dan standaardvolgorde, één tegelijk met pauze, stopt bij een deck of 403; media/nacht.json
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
                     vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs, beeld.mjs: headless zonder MIDI;
@@ -286,6 +289,10 @@ test/
   sec-controle.test.mjs  sectieTelling (zelfde regel als moetSecties, cache per rij, ROLLBACK), /api/secties, de tegel
   beeld.test.mjs    spoor beeld: adres, latentie, id's, kiesKant, de tel met latentie, track/mix/poort, aanwezig en opnieuw, de echte zender op een nep-WebSocket
   varve-beeld-zender.test.mjs  de zendertest van de Stroommachine (overgenomen; alles.mjs telt zijn eigen formaat)
+  kaart.test.mjs    de kaart op een verzonnen varve-kaart.json (nep-kaart.mjs): laden/herladen, zoeken, filters, sorteren, pagina's, wensen (20, dubbel), score, standaardvolgorde, cookie-bewaker
+  nacht.test.mjs    de zes nachtregels één voor één met nepklok, nep-deck en nep-ingest (geen tijd, geen netwerk)
+  kaart-server.test.mjs  kaart en nacht op een eigen server met de nep-yt-dlp: routes, 409 bij een deck (echt Range-verzoek), ingest zonder video, nachtrun, herstart
+  nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -317,6 +324,7 @@ docs/
   EFFECTEN.md       effecten uit de filter app (S2c): per effect herkomst, eenheden, staart, metingen, wat niet
   PATRONEN.md       patronen (S4): het contract (§1–6) en wat gebouwd is (§7: klok, opnemen, API, APC, opslag, metingen)
   BEELD.md          spoor beeld (6 okt): VARVE stuurt de Stroommachine via de relay; instellen, wat er gaat, APC-mapje, problemen, tests
+  KAART.md          de muziekkaart in Varve (10 okt): het bestand, de API, de nachtregels, de keuze voor "er speelt een deck", wat niet getest is
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
