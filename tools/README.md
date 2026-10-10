@@ -31,6 +31,20 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
 `VARVE.applescript` + `maak.sh`: de Dock-knop die de server start en de Controlekamer opent
 (`~/Applications/VARVE.app`). Een losse macOS-app; draait niet in de mixer.
 
+## beeld-lokaal.sh
+Beeld op één machine (docs/BEELD.md §8): `zsh tools/beeld-lokaal.sh [--stand licht|normaal|auto]
+[--stroom <map>] [--poort 7702] [--geen-fps] [--droog] [--stop] [--installeer]`. Start op deze Mac
+de relay uit `~/Projects/stroommachine` (127.0.0.1:7702, log `~/.varve-relay.log`, pid
+`~/.varve-beeld-lokaal.pid`) en de Stroommachine in een EIGEN Chrome-bundel
+(`~/Applications/Stroommachine-Chrome.app`, eigen profiel `~/.varve-stroom-chrome`, debugpoort 9393),
+en drukt de vijf handelingen daarna af. Start de VARVE-server nooit ("klik eerst VARVE.app").
+`--installeer` kopieert Chrome for Testing uit de Playwright-cache naar die bundel (weigert
+`com.google.Chrome`, overschrijft niets). `--droog`: alleen de controles en wat het zou starten, met
+de volledige URL. `--stop`: alleen de relay uit het pid-bestand (als het nog `varve-relay.js` is) en
+de Chrome met het eigen profiel, nooit `pkill`. De test: `test/beeld-lokaal.test.mjs` (een kopie in
+een map met een spatie, nep-relay, nep-`open`, eigen poorten). Nog nooit echt gestart: dat is de
+speelproef (stap 7 van het ontwerp), met Clay erbij.
+
 ## git/
 - `test-index.sh` — test precies wat er in de git-index staat (niet de werkmap): pakt de
   index uit in een tijdelijke map en draait daar alle tests. Handig bij het splitsen van
@@ -89,6 +103,7 @@ Pas draaien NÁ de proefavond van 10 okt.
   de bovenbalk met de knop beeld op 1440×790/900 en 1920×1080, de BEELD-rij (velden, geweigerd adres
   = één melding, latentie geklemd), de stand (zoekt · verbonden · beeld-status · na 3 s weer
   "wacht"), het manifest als eerste bericht, de tegel in de Controlekamer, relay weg, uit en herladen,
+  de knopjes "deze Mac · pc" (een echte muisklik, met beeld UIT: niets naar 7702 of de pc; 10 okt),
   opstarten met een onbereikbaar adres (40 s: één info-melding, 0 fouten van onze code), en een tweede
   VARVE-tabblad (zendt niet zolang het eerste open is, neemt het daarna over). Wat Chrome
   zelf logt bij een mislukte WebSocket (Log-domein, niet te onderdrukken) wordt apart geteld.
@@ -102,15 +117,25 @@ Pas draaien NÁ de proefavond van 10 okt.
 - `beeld-lokaal.mjs [uitmap] [--standen …] [--warm 20] [--meet 120] [--zelftest] [--kijk] [--opruimen] [--accu]` —
   beeld op één machine (docs/BEELD.md §8): de Stroommachine naast VARVE op deze Mac, op Metal, met de relay op
   7712, een eigen server op 8801 (debug 9391/9392). Per stand fps (eigen rAF-meter, `&fps`), VARVE-rAF, een
-  hartslag-worklet in `engine.ctx` (gaten > 15 ms, positieve controle van 40 ms), CPU/RSS per proces, warmte,
-  lader en accu; `uit/beeld-lokaal.json`. Weigert bij geluid uit de Mac of een ander proces > 20 % van een kern
-  (`VARVE_BL_FORCEER=1`). `--zelftest`: zonder GPU en zonder Stroommachine, ≤ 20 s. `--kijk`: tijdens een echte
-  proef kwInfo() via 9393 en ps naar `uit/kijk-<datum>.jsonl`. `--opruimen`: alleen eigen processen. NIET op een
-  speeldag. De pure delen: `test/beeld-meting.test.mjs`.
+  hartslag-worklet in `engine.ctx` (gaten > 15 ms, positieve controle van 40 ms), CPU/RSS per proces, de top-5
+  van de rest van de Mac aan begin en eind, warmte, lader en accu; `uit/beeld-lokaal.json`. Weigert bij geluid
+  uit de Mac of een ANDER proces > 20 % van een kern (een andere testrun, een achtergebleven headless Chrome).
+  Systeemprocessen (`/System/`, `/usr/libexec/`, `/usr/sbin/`, `/sbin/`, `/Library/Apple/`: mediaanalysisd,
+  fileproviderd, Spotlight) houden hem niet tegen; die staan als `achtergrond` in de JSON.
+  `VARVE_BL_FORCEER=1` (meten ondanks geluid of een druk proces, wordt gelogd) ALLEEN als je zeker weet wat
+  dat proces is en dat het tijdens de run niet verandert (een wees die je niet mag stoppen), nooit terwijl er
+  een andere testrun of Clay's set loopt: dan meet je die mee. `--warm`/`--meet`/`--duur` met iets anders dan
+  een getal ≥ 0: exit 2, er start niets. `--zelftest`: zonder GPU en zonder Stroommachine, ≤ 20 s. `--kijk`:
+  tijdens een echte proef kwInfo() via 9393 en ps naar `uit/kijk-<datum>.jsonl`. Ctrl-C stopt alle kinderen
+  (eigen procesgroep) en ruimt de tijdelijke map op. `--opruimen` na een harde stop: alleen eigen processen
+  (de Chromes via hun profiel, de proefserver via `--meting=<tmp>`, de relay op 7712); eerst SIGTERM naar de
+  wortels, na 3 s SIGKILL. NIET op een speeldag. De pure delen: `test/beeld-meting.test.mjs`.
 - `zaalbeeld.mjs [uitmap]` — het zaalbeeld (`video.clips`, docs/BEAMER.md): eigen server op 8806, debug 9406,
   Chrome for Testing op Metal, ZONDER `--disable-popup-blocking`. Het losse venster met een testvideo, clips uit =
-  zwart en de video stil (geluid door), vormen erbij = beeld, `video.black` werkt, clips terug; de knop video,
-  het paneel en de venstertitel. 22 controles, vijf schermafdrukken `zaalbeeld-*.png`.
+  zwart en de video stil (geluid door), vormen erbij = beeld, `video.black` werkt, clips terug; de knop video
+  (amber, de bovenbalk schuift niet), het knopje CLIPS, de statusregel (past op 1440 breed in drie toestanden)
+  en de venstertitel. 27 controles, vijf schermafdrukken `zaalbeeld-*.png`. Ctrl-C ruimt op;
+  `zaalbeeld.mjs --opruimen` na een harde stop.
 - `rijen.mjs [uitmap] [--label voor|na]` — de rijen onder de mixer (stems, koptelefoon, instrument,
   patronen, master, auto, klankschaal, beeld; eigen server op 8863, debug 9463, geen MIDI): op 1440×790 en
   1920×1080 met geen, elke rij apart, drie, alle rijen open, en met de videokolom erbij. Per stand:

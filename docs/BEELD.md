@@ -29,7 +29,7 @@ Knop **beeld** in de bovenbalk opent de BEELD-rij (onthouden, standaard dicht):
 | veld | wat | bewaard in |
 |---|---|---|
 | aan / uit | de zender loopt alleen als hij aan staat ÉN er een geldig adres is | `varve.beeld.aan` |
-| relay-adres | `ws://clayk:7702/app` (terugval `ws://100.110.172.126:7702/app`), met Tailscale aan op Mac en pc: ze zitten op twee subnetten, dus het LAN-adres 192.168.0.x dat de pc toont werkt vanaf de Mac niet. Alleen `ws://` of `wss://`, getrimd, hooguit 200 tekens, geen gebruikersnaam/wachtwoord of `#`. Een ongeldig adres wordt geweigerd met een melding; de zender start dan niet (en een lopende stopt), het oude adres blijft bewaard | `varve.beeld.adres` |
+| relay-adres | `ws://clayk:7702/app` (terugval `ws://100.110.172.126:7702/app`), met Tailscale aan op Mac en pc: ze zitten op twee subnetten, dus het LAN-adres 192.168.0.x dat de pc toont werkt vanaf de Mac niet. Naast het veld twee knopjes: **deze Mac** (`ws://127.0.0.1:7702/app`, de relay van `tools/beeld-lokaal.sh`, §8) en **pc** (`ws://clayk:7702/app`); één klik = dat adres, toegepast zoals Enter; het knopje van het adres dat geldt brandt (`BEELD_ADRESSEN` in beeld.js, sleutels `lokaal` en `pc`). Alleen `ws://` of `wss://`, getrimd, hooguit 200 tekens, geen gebruikersnaam/wachtwoord of `#`. Een ongeldig adres wordt geweigerd met een melding; de zender start dan niet (en een lopende stopt), het oude adres blijft bewaard | `varve.beeld.adres` |
 | extra latentie | −200 … +500 ms, standaard 0. **+ = het beeld eerder**: voor een beamer die achterloopt | `varve.beeld.latentie` |
 
 Bewaard zoals de andere rijen: in localStorage van deze browser.
@@ -148,12 +148,13 @@ naar de strip. Volledig, met het waarom: `docs/APC40.md` "Mapje beeld".
 
 ## 6. Testen
 
-- `node test/beeld.test.mjs` (156 checks): de koppeling zonder browser en netwerk
+- `node test/beeld.test.mjs` (163 checks): de koppeling zonder browser en netwerk
   (nep-engine, nep-zender, en de echte zender op een nep-WebSocket met nep-timers); de
   poort-id's tegen `src/09d-poorten.js` van de Stroommachine als die repo er is.
 - `node test/varve-beeld-zender.test.mjs`: de zendertest van de Stroommachine (21 checks),
   overgenomen; `test/alles.mjs` telt zijn eigen formaat mee.
-- `node tools/headless/beeld.mjs` (56 checks): echte Chrome (headless, zonder MIDI), met een
+- `node tools/headless/beeld.mjs` (60 checks, 10 okt; de laatste vier: de knopjes deze Mac · pc
+  met een echte muisklik, met beeld UIT zodat er niets naar 7702 of de pc gaat): echte Chrome (headless, zonder MIDI), met een
   nep-relay: opstarten zonder adres (0 fouten, geen WebSocket), de bovenbalk en de rij,
   de velden, de stand, de tegel in de Controlekamer, relay weg, uit en herladen,
   opstarten met een onbereikbaar adres (40 s: één info-melding die weggaat, 0 fouten van
@@ -195,7 +196,7 @@ naar de strip. Volledig, met het waarom: `docs/APC40.md` "Mapje beeld".
 - Terugspelen (handelingenlog) stuurt de macro's opnieuw, de regieknoppen niet
   (`OVERSLAAN` in terugspelen.js: vasthouden en paniek zijn schakelaars).
 
-## 8. Eén machine: zonder pc (spoor beeld-een-machine, 10 okt, in opbouw)
+## 8. Eén machine: zonder pc (spoor beeld-een-machine, 10 okt)
 
 Zonder de Omarchy-pc is er geen Stroommachine. De vraag: kan ze op de MacBook zelf
 draaien, naast VARVE, met de relay lokaal, en wat kost dat (fps, CPU, gaten in het geluid)?
@@ -207,12 +208,36 @@ de noodknoppen werken, en het gaat mee in de opname. De Stroommachine lokaal is 
 **upgrade**: pas na een groene meting (VRAGEN BE11) en nadat je haar één keer zo echt
 bespeeld hebt. Zwart (`video.black`) bereikt haar niet, en ze zit niet in VARVE's opname.
 
+**De upgrade-route, als gereedschap** (gebouwd, alleen met `--droog` en in de test gedraaid):
+`zsh tools/beeld-lokaal.sh` start op deze Mac de relay en de Stroommachine naast VARVE.
+- Eerst één keer `zsh tools/beeld-lokaal.sh --installeer`: een kopie van Chrome for Testing
+  in `~/Applications/Stroommachine-Chrome.app` (bundle-id `com.google.chrome.for.testing`).
+  Een tweede "Google Chrome" zou VARVE.app de verkeerde Chrome laten aanspreken; het script
+  weigert een bundel met `com.google.Chrome` en overschrijft nooit iets.
+- Daarna `zsh tools/beeld-lokaal.sh` (VARVE.app moet al draaien: het script start de server
+  nooit, het zegt "klik eerst VARVE.app"): de relay op 127.0.0.1:7702 (zonder `--stil`, log
+  in `~/.varve-relay.log`, pid in `~/.varve-beeld-lokaal.pid`; draait er al een, dan die) en
+  de Stroommachine in Licht met de fps-meter (`--stand normaal|auto`, `--geen-fps`), eigen
+  profiel `~/.varve-stroom-chrome`, debugpoort 9393 voor `beeld-lokaal.mjs --kijk`.
+- Dan wat jij doet (het script drukt het af): in VARVE de BEELD-rij, knopje **deze Mac**,
+  beeld aan; het Stroommachine-venster naar de beamer, `F` volledig scherm, `H` panelen weg;
+  **klik daarna terug in VARVE** (anders gaan spatie en cijfers naar de Stroommachine);
+  videopaneel dicht; in de Stroommachine niet op `G` (eigen geluid), `I`/`C` (microfoon,
+  camera) of MIDI in de Live-tab. **Zwart = APC mapje beeld, Stop All**: een wissel, kijk
+  naar het doek.
+- `--droog` = alleen de controles en wat het zou starten, met de volledige URL. `--stop` =
+  alleen de relay uit het pid-bestand (als dat nog `varve-relay.js` is) en de Chrome met het
+  eigen profiel; nooit `pkill`.
+- `node test/beeld-lokaal.test.mjs` (29 checks) draait het script als kopie in een map met
+  een spatie, met een nep-Stroommachine, een nep-`open` en eigen vrije poorten.
+
 **De meting**: `node tools/headless/beeld-lokaal.mjs` (tools/README.md). De relay op 7712,
 een eigen VARVE-server op 8801 met een tijdelijke library, twee Chromes for Testing op
-Metal (`--mute-audio`), VARVE met een last zoals je speelt (vier tracks waar het kan,
-stems uit een fixture, keylock, sends, rack, elke 2 s een filter- en faderzwaai), per
-stand (nul, Licht en Normaal op 1920 × 1080, het zaalbeeld, Licht op 1280 × 720) CPU en
-RSS per proces, warmte (`thermalState`), lader en accu. Drie meters:
+Metal (`--mute-audio`), VARVE met een last zoals je speelt (vier tracks, stems uit een
+fixture, keylock, sends, rack, elke 2 s een filter- en faderzwaai), per stand (nul, Licht
+en Normaal op 1920 × 1080, het zaalbeeld, Licht op 1280 × 720) CPU en RSS per proces, de
+top-5 van de rest van de Mac aan begin en eind, warmte (`thermalState`), lader en accu.
+Drie meters:
 - **fps**: een eigen rAF-meter in de Stroommachine-tab; ter controle `kwInfo().ms`, dat
   alleen iets zegt met `&fps` in de hash (zonder blijft het 16,7). Harde check.
 - **gaten in het geluid**: een hartslag-worklet in `engine.ctx` (het grootste gat tussen
@@ -222,12 +247,20 @@ RSS per proces, warmte (`thermalState`), lader en accu. Drie meters:
 - de drift van `getOutputTimestamp` als derde kolom, geen criterium (hij zag in de proef
   van de critici 0 van 12 opgewekte gaten).
 
-**Stand 10 okt**: alleen `--zelftest` gedraaid (geen GPU, geen Stroommachine, stil, 9,6 s):
-18 controles groen; hartslag in rust max 6 ms, 0 gaten > 15 ms in 452 blokken; de
-positieve controle van 40 ms gezien (max 40 ms). De **volledige run is nog niet
-gedraaid**: niet op de dag van proefavond 1, en hij weigert zolang er geluid uit de Mac
-komt of een ander proces > 20 % van een kern trekt. Er staan dus nog geen cijfers voor
-"Stroommachine naast VARVE" in dit document.
+Hij weigert te starten als er geluid uit de Mac komt of een ANDER proces > 20 % van een kern
+trekt (een andere testrun, een achtergebleven headless Chrome). Systeemdaemons
+(`/System/`, `/usr/libexec/`: mediaanalysisd, fileproviderd) houden hem niet tegen; die
+pieken op deze Mac geregeld en staan als "achtergrond" in de JSON.
+
+**Stand 10 okt**: de volledige run is **nog niet gedraaid** (niet op de dag van proefavond 1).
+Er staan dus nog geen cijfers voor "Stroommachine naast VARVE" in dit document. Wel gedraaid:
+- `--zelftest` (geen GPU, geen Stroommachine, stil, 9,6 s): 18 controles groen; hartslag in
+  rust max 6 ms, 0 gaten > 15 ms in 452 blokken; de positieve controle van 40 ms gezien.
+- De Clay-last zelf, door de reviewer (13:47, headless op Metal, eigen server, zonder
+  Stroommachine en relay, `--mute-audio`; een functionele proef, geen meting volgens BE11):
+  vier tracks spelen (1, 2 en 4 de demo, 3 de stems-fixture met vier stems), keylock op alle
+  vier, de loops houden, op elke track een effect in de slot; de hartslag in `engine.ctx`
+  loopt (`running`), over 19,5 s max 6 ms en 0 gaten > 15 ms in 7126 blokken; 0 uitzonderingen.
 
 **Twee dingen die we onderweg vonden** (nagelezen in de Stroommachine-repo, niets gewijzigd):
 - `beeld-status.fps` (de tooltip in VARVE) is **vast 63**: `09o-dj.js` regel 138 rekent
@@ -237,7 +270,16 @@ komt of een ander proces > 20 % van een kern trekt. Er staan dus nog geen cijfer
   CfT 153). De meters werken op VARVE (`http://localhost`); de zelftest serveert zijn
   pagina daarom zelf over http.
 
-**Nog niet gebouwd** (volgende stappen van het ontwerp): de knopjes "deze Mac · pc" in de
-BEELD-rij, het startscript `tools/beeld-lokaal.sh` (relay + de Stroommachine in een eigen
-Chrome-bundel, zodat VARVE.app nooit de verkeerde Chrome aanspreekt), de speelproef met
-de APC, de lange meting op de accu, en de Dock-app "VARVE + beeld".
+**Voorstel aan de hub** (AV-app-hub; alleen tekst, de hub-repo is hier niet aangeraakt):
+nu **geen hub-set** voor beeld op één machine. Een set `beeld-lokaal.json` zou een app
+`stroommachine` starten die zich nooit bij de hub (7700) meldt: haar `?hub=` wijst naar de
+relay, en ze kan er maar één aan. Na 60 s staat ze dan op `MIS`. Dat vraagt een app-veld
+`"wacht": false` ("alleen starten, niet wachten op een melding"), en dat is werk voor de
+hub-eigenaar. Het spoor *draagbaar* kan wel een controle `beeld.relay` toevoegen (poort 7702
+open, `status.json` zegt varve-relay): daar hoort "klaar voor beeld lokaal". Tot dan is
+`tools/beeld-lokaal.sh` de weg, en na de speelproef een Dock-app "VARVE + beeld" (BE14 b).
+
+**Nog niet gebouwd of gedaan**: de volledige meting (morgen, of na "de Mac is vrij tot X"),
+de speelproef met de APC (30 min: eerst de VARVE.app-toets met de eigen bundel open), de
+lange meting op de accu, de Dock-app "VARVE + beeld", en `--installeer` op deze Mac (het
+script is alleen met `--droog` en in de test gedraaid).
