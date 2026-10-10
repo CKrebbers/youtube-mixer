@@ -1,7 +1,10 @@
 # YouTube Mixer — projectgeheugen
 
 Lees dit voordat je iets wijzigt. Dit bestand is de bron van waarheid voor
-architectuurbeslissingen; `ROADMAP.md` is de bron van waarheid voor de volgorde.
+architectuurbeslissingen; `ROADMAP.md` is de bron van waarheid voor de volgorde;
+`docs/VISIE.md` zegt waar het geheel heen moet (Clay's beeld, 10 okt: dj'en +
+produceren + audio programmeren + zelf instellen, met beeld en controllers, als
+draagbare set die overal kan streamen). Toets elke keuze daaraan (VISIE §5).
 
 Hervatten na een pauze: `docs/HANDOFF.md` (stand, wat ongecommit is, wat
 niet getest is), `docs/VRAGEN.md` (open vragen voor Clay),
@@ -301,6 +304,7 @@ test/
   nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
   alles.mjs         alle tests in één keer met overzicht
 docs/
+  VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
   HANDOFF.md        stand, wat niet getest is, volgende stap
   VRAGEN.md         open vragen voor Clay
   VERBETERINGEN.md  verbeterlijst uit de reviewagenten, in rondes
