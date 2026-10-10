@@ -15,11 +15,14 @@
 //  6. de koptelefoon: fader van de drumtrack dicht, PFL aan: het stuk op kanaal 3/4,
 //     de zaal stil (een knip vóórhoren kan de sampler niet)
 //  7. het scherm (de echte app op 1440 × 900): de acht knoppen 1→13 … 8→12 passen in
-//     de sampler-rij, een muisklik op 1→13 zet het stuk op de Drums, de koppelmodus
-//     ziet de knop. Schermafdruk naar de uitmap (argument 1, standaard tools/headless/uit).
+//     de sampler-rij (ook met de rijen instrument en patronen of het videopaneel open),
+//     een muisklik op 1→13 zet het stuk op de Drums, de koppelmodus ziet de knop.
+//  7b. hetzelfde op de laptopmaat 1440 × 790 (styles.css): geen rij, rij instrument,
+//     instrument + patronen, videopaneel: het focusdeel scrolt niet, alles te zien.
+//     Schermafdrukken naar de uitmap (argument 1, standaard tools/headless/uit).
 //
 // VEILIG: eigen headless shell, eigen server op een eigen poort, ALLES van de server
-// in een tijdelijke map (database, media, opnames, patronen, plannen, kaart, nacht,
+// in een tijdelijke map (database, media, opnames, patronen, plannen, proef, kaart, nacht,
 // en een nep-yt-dlp: geen netwerk), geen requestMIDIAccess. Voor 1–6 is de pagina
 // /styles.css (de app start niet); voor 7 de app zelf, zonder MIDI.
 // Gebruik: node tools/headless/sampler-drums.mjs [uitmap]   (VARVE_KIJK_POORT 8797, VARVE_KIJK_DEBUG 9397)
@@ -61,6 +64,8 @@ const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
     VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_HERANALYSE: 'uit',
+    // De speellijst van de Controlekamer (server/index.js PROEF): zonder valt hij terug op <werkmap>/proef.
+    VARVE_PROEF: join(tmp, 'proef'),
     // H13: ook de kaart, de nachtwachtrij en yt-dlp in de tijdelijke map (zonder VARVE_KAART
     // valt een verse database terug op Clay's kaart; de nep-yt-dlp kan niet naar buiten).
     VARVE_KAART: join(tmp, 'kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'), VARVE_NACHT: join(tmp, 'nacht.json'),
@@ -391,13 +396,17 @@ try {
     const r = (el) => { const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, r: b.right, b: b.bottom }; };
     const met = { rij: r(rij), pads: pads.map(r), knoppen: kn.map(r), labels: kn.map((b) => b.textContent), acties: kn.map((b) => b.dataset.action),
       scroll: rij.scrollWidth, client: rij.clientWidth, docScroll: document.documentElement.scrollWidth,
-      fdScroll: fd ? fd.scrollHeight - fd.clientHeight : null, zichtbaar: kn.every((b) => { const x = r(b); return x.w > 0 && x.h > 0 && document.elementFromPoint(x.x + x.w / 2, x.y + x.h / 2) === b; }),
+      fdScroll: fd ? fd.scrollHeight - fd.clientHeight : null, docH: document.documentElement.scrollHeight - innerHeight, zichtbaar: kn.every((b) => { const x = r(b); return x.w > 0 && x.h > 0 && document.elementFromPoint(x.x + x.w / 2, x.y + x.h / 2) === b; }),
       padsZichtbaar: pads.every((b) => { const x = r(b); return x.w > 0 && x.h > 0 && b.contains(document.elementFromPoint(x.x + x.w / 2, x.y + x.h / 2)); }) };
     const drums = rij.querySelector('.sampler-drums'); drums.style.display = 'none';
     const zonder = { rij: r(rij), pads: pads.map(r), fdScroll: fd ? fd.scrollHeight - fd.clientHeight : null };
     drums.style.display = '';
     return { stand: ${JSON.stringify(stand)}, met, zonder, vw: innerWidth, vh: innerHeight };
   })()`);
+  // Past de rij in deze stand: het focusdeel en de pagina scrollen niet, de knoppen binnen
+  // de rij, elke knop en pad te zien en aan te klikken (elementFromPoint).
+  const past = (m) => m.met.fdScroll <= 0 && m.met.docH <= 0 && m.met.docScroll <= m.vw && m.met.zichtbaar && m.met.padsZichtbaar
+    && m.met.knoppen.length === 8 && m.met.knoppen.every((k) => k.x >= m.met.rij.x - 0.5 && k.r <= m.met.rij.r + 0.5 && k.b <= m.met.rij.b + 0.5);
   const maat = await meetRij('geen rij open');
   const mw = maat.metDrums = maat.met, padW = mw.pads.map((p) => p.w), padW0 = maat.zonder.pads.map((p) => p.w);
   meld(`venster ${maat.vw} × ${maat.vh}; sampler-rij ${mw.rij.w.toFixed(0)} × ${mw.rij.h.toFixed(0)} px (zonder de knoppen ${maat.zonder.rij.h.toFixed(0)} hoog: +${(mw.rij.h - maat.zonder.rij.h).toFixed(0)} px)`);
@@ -416,6 +425,7 @@ try {
     const m = await meetRij(naam);
     rijenStand.push(m);
     meld(`${naam}: sampler-rij ${m.met.rij.h.toFixed(0)} px hoog; overloop van het focusdeel met de knoppen ${m.met.fdScroll} px, zonder ${m.zonder.fdScroll} px; knoppen ${m.met.zichtbaar ? 'te zien' : 'NIET (allemaal) te zien'}, pads ${m.met.padsZichtbaar ? 'te zien' : 'NIET (allemaal) te zien'}`);
+    ok(`${naam} (1440 × 900): het focusdeel scrolt niet (${m.met.fdScroll} px), knoppen en pads te zien en aan te klikken`, past(m));
   }
   {
     const { data } = await cdp('Page.captureScreenshot', { format: 'png' });
@@ -472,6 +482,27 @@ try {
   const leer = await evalueer(`(() => { const l = window.leerModus.learn; const uit = { busy: !!l.busy, action: l.action ?? null, gevuld: !!window.engine.instrumentOp('C')?.stand().pads[11].gevuld }; try { l.stop?.(); } catch (_) {} window.leerModus.toggle(); return uit; })()`);
   meld(`koppelmodus na een klik op 8→12: learn ${leer.busy ? 'wacht' : 'wacht niet'} op "${leer.action}"; drumpad 12 ${leer.gevuld ? 'gevuld (fout: de klik ging door)' : 'leeg (de klik ging niet door, zoals het hoort)'}`);
   ok('de koppelmodus ziet de knop: klik 8→12 = koppel sampler.8.drums (en voert hem niet uit)', leer.busy && leer.action === 'sampler.8.drums' && !leer.gevuld);
+
+  // 7b. De laptopmaat die styles.css zelf noemt (1440 × 790, review 1 punt 6): een verse
+  // pagina, dan elke stand apart open en weer dicht.
+  console.log('\n7b. het scherm op de laptopmaat 1440 × 790');
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 790, deviceScaleFactor: 1, mobile: false });
+  await cdp('Page.navigate', { url: `http://localhost:${POORT}/` });
+  { const t0 = Date.now(); while (Date.now() - t0 < 20000) { if (await evalueer('!!(window.engine && window.leerModus)').catch(() => false)) break; await wacht(200); } await wacht(1000); }
+  for (const [naam, knoppen, foto] of [['geen rij open', [], null], ['rij instrument open', ['instrument-btn'], null],
+    ['rijen instrument + patronen open', ['instrument-btn', 'patronen-btn'], 'sampler-drums-app-1440x790-rijen.png'], ['videopaneel open', ['video-btn'], null]]) {
+    await evalueer(`(${JSON.stringify(knoppen)}).forEach((id) => document.getElementById(id).click()), true`);
+    await wacht(500);
+    const m = await meetRij(naam);
+    meld(`${naam}: venster ${m.vw} × ${m.vh}; sampler-rij ${m.met.rij.w.toFixed(0)} × ${m.met.rij.h.toFixed(0)} px (zonder de knoppen ${m.zonder.rij.h.toFixed(0)}); overloop focusdeel ${m.met.fdScroll} px (zonder ${m.zonder.fdScroll}), pagina ${m.met.docH} px; knoppen ${m.met.zichtbaar ? 'te zien' : 'NIET (allemaal) te zien'}, pads ${m.met.padsZichtbaar ? 'te zien' : 'NIET (allemaal) te zien'}`);
+    ok(`1440 × 790, ${naam}: het focusdeel en de pagina scrollen niet, knoppen binnen de rij, knoppen en pads te zien en aan te klikken`, m.vh === 790 && past(m));
+    if (foto) {
+      const { data } = await cdp('Page.captureScreenshot', { format: 'png' });
+      writeFileSync(join(UIT, foto), Buffer.from(data, 'base64'));
+    }
+    await evalueer(`(${JSON.stringify(knoppen)}).forEach((id) => document.getElementById(id).click()), true`);
+    await wacht(300);
+  }
 
   for (const m of meldingen) console.log(`  ! ${m}`);
   ok('geen uitzonderingen of console-fouten op de pagina', meldingen.length === 0);

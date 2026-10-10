@@ -415,11 +415,18 @@ blijft staan.
 | S5–S8 | 9–12 | 44–47 (G#2–B2) | tweede rij | een octaaf omlaag |
 
 De tabel staat in `src/control/drumpads.js` (`DRUMPAD_VAN_SAMPLER`, her-exporteerd door
-`actions.js`); de engine blijft neutraal: `engine.samplerNaarDrums(n, { pad })`.
+`actions.js`); de engine blijft neutraal: `engine.samplerNaarDrums(n, { pad })`, met `pad`
+verplicht (zonder: "geen drumpad gekozen"; buiten 9–16: geweigerd, 1–8 is de kit).
 
-- **Welke Drums** (`engine.drumsDoel()`): de speeltrack als die de Drums heeft; anders de
-  enige track met de Drums; twee of meer en de speeltrack is iets anders: geweigerd met
-  "meer dan één Drums (track 7 en 8): zet de focus op de track die je bedoelt".
+- **Welke Drums** (`engine.drumsDoel()`): de **speeltrack** (waar het toetsenbord en de
+  speelmodus van de Maschine spelen: de focus, anders de laatst gefocuste instrumenttrack,
+  anders de eerste track met een instrument) als die de Drums heeft; anders de enige
+  track met de Drums. Geweigerd alleen als de speeltrack een ander instrument is en er
+  twee of meer Drums zijn: "meer dan één Drums (track 7 en 8): zet de focus op de track
+  die je bedoelt". De melding noemt altijd de track. Let op: je knipt met de focus op het
+  nummer, dus met twee Drums beslist de speeltrack zonder dat je de focus verzet. Drums op
+  7 en 8 en nooit een instrumenttrack gefocust: track 7 (de eerste); na focus op 8 en
+  terug naar het nummer: track 8. Zo landt het stuk altijd waar noot 48 aankomt.
 - **De melding** zegt wat je moet weten: `S1 staat op drumpad 13 van track 8 (noot C3 · 48)`,
   plus ` · stems: drums` als niet alle stems in de knip zaten (de stand van de stems bij
   het knippen: `gewichten` en `stemNamen` op de sampler-pad), en een tempowaarschuwing
@@ -431,11 +438,14 @@ De tabel staat in `src/control/drumpads.js` (`DRUMPAD_VAN_SAMPLER`, her-exportee
   bij de mediane tempowisseling in de library (1,43 %) is een knip van 4 tellen ~20 ms te
   lang of te kort per aanslag; een knip van 4 tellen op 174 is in een set op 146 265 ms
   korter dan de maat.
-- **Lampje**: fel violet = drumpad gevuld, donker violet = kan, uit = kan niet (sampler-pad
-  leeg of geen Drums).
+- **Lampje**: fel violet = er ligt een stuk op drumpad P (niet per se de knip van nu: na
+  een nieuwe knip op S1 blijft het fel, maar drumpad 13 houdt het oude stuk tot je opnieuw
+  `1→13` drukt), donker violet = kan, uit = kan niet (sampler-pad leeg of geen Drums).
 - **Niet bewaard**: na herladen zijn 9–16 leeg. Gebruikt een patroon ze (een noot die op
   9–16 valt, ook via de terugval mod 16), dan zegt `herstelInstrumenten` het: "track N: de
-  patronen gebruiken drumpads 9–16, en die zijn na herladen leeg". Bewaren is stap 2.
+  patronen gebruiken drumpads 9–16, en die zijn na herladen leeg (zet ze terug met de
+  knoppen 1→13 … 8→12 onder de sampler, of je gekoppelde knop; bewaren komt later)".
+  Bewaren is stap 2.
 - **Leegmaken** is er niet: een nieuwe `sampler.N.drums` overschrijft (`wisPad` blijft in
   de engine, voor als je het mist).
 - **Terugspelen** slaat `sampler.N.drums` over (instrumenten staan niet in het log).
@@ -454,10 +464,10 @@ bij snelheid 1 en NIVEAU 0,8 +2,1 dB (bij 0,8: −0,8 dB); fader 0 = −70 dB; i
 elke aanslag op de tel van de maatgever (afwijking 0,000 ms), ook als de maat op 128 staat
 en het stuk op 124 geknipt is (het stuk blijft dan 124: niet uitgerekt); `laadPad` van
 90 s kost ~3 ms; met de fader van de drumtrack dicht en PFL aan staat het stuk in de
-koptelefoon (kanaal 3/4, −24 dB) en is de zaal stil (−97 dB). Op het scherm (1440 × 900):
-de knoppen passen als derde regel onder de pads (+26 px, de pads even breed, het focusdeel
-scrolt niet, ook niet met de rijen instrument en patronen open), een muisklik op `1→13`
-werkt, de koppelmodus ziet de knop.
+koptelefoon (kanaal 3/4, −24 dB) en is de zaal stil (−97 dB). Op het scherm (1440 × 900 en
+de laptopmaat 1440 × 790): de knoppen passen als derde regel onder de pads (+26 px, de pads
+even breed, het focusdeel scrolt niet, ook niet met de rijen instrument en patronen open),
+een muisklik op `1→13` werkt, de koppelmodus ziet de knop.
 
 **Testen**: `node test/sampler-drums.test.mjs` (zonder DOM: de tabel, de actions, de
 melding, welke Drums, de lampjes, terugspelen, na herladen, de knoppen in `index.html`),
@@ -466,9 +476,11 @@ melding, welke Drums, de lampjes, terugspelen, na herladen, de knoppen in `index
 **Niet getest**: niet gehoord, niet op de Maschine of de APC, niet realtime (alleen
 `OfflineAudioContext`); de bron was de demotrack via `laadGeheugen`, niet een gestreamd
 library-nummer (`StreamBron.knip`); niet gemeten met echte stems (de stems-tekst is
-alleen in Node getest); de koptelefoon alleen in een 4-kanaals OfflineAudioContext, niet
-op het samengestelde apparaat; het scherm alleen op 1440 × 900 (met en zonder
-videopaneel en de rijen instrument en patronen), niet op de iPad of een kleiner venster.
+alleen in Node getest, met de echte `deck.knipGewichten` en `STEM_STANDEN`); de koptelefoon
+alleen in een 4-kanaals OfflineAudioContext, niet op het samengestelde apparaat; het scherm
+alleen op 1440 × 900 en 1440 × 790 (met en zonder videopaneel en de rijen instrument en
+patronen), niet op de iPad (de knoppen zijn 20 px hoog, klein om aan te raken) of een
+kleiner venster.
 
 ### De stem
 

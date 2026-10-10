@@ -3,7 +3,7 @@ import { Deck } from './deck.js';
 import { createMasterChain, xfaderGains, faderGain, killVersterking, KILL_FADE } from './audio-graph.js';
 import { InsertSlot, startDrempel } from './fx.js';
 import { instrumentDef } from './instrumenten/index.js';
-import { KIT_PADS, EERSTE_NOOT, padVanNoot } from './instrumenten/drums.js';
+import { KIT_PADS, AANTAL_PADS, EERSTE_NOOT, padVanNoot } from './instrumenten/drums.js';
 import { Sampler } from './sampler.js';
 import { Klankschaal } from './klankschaal.js';
 import { Koptelefoon } from './koptelefoon.js';
@@ -335,9 +335,14 @@ export class Engine extends Emitter {
 
   /**
    * Op welke track een stuk uit de sampler als drumpad landt (crossover,
-   * docs/INSTRUMENTEN.md "Uit de sampler"): de speeltrack als die pads 9–16
-   * heeft (de Drums); anders de ENIGE track met de Drums. Twee of meer Drums
-   * en de speeltrack is iets anders: niet raden, de focus kiest.
+   * docs/INSTRUMENTEN.md "Uit de sampler"): de SPEELTRACK (`speeltrack()`:
+   * waar het toetsenbord en de speelmodus van de Maschine spelen, dus de
+   * focus, anders de laatst gefocuste instrumenttrack, anders de eerste) als
+   * die pads 9–16 heeft (de Drums); anders de ENIGE track met de Drums.
+   * Geweigerd alleen als de speeltrack een ander instrument is en er twee of
+   * meer Drums zijn: dan niet raden. De focus staat bij het knippen meestal
+   * op het nummer, dus met twee Drums beslist de speeltrack zonder dat je de
+   * focus verzet; de melding noemt altijd de track (review 1, punt 2).
    * @returns {{ id: string|null, reden?: string }}
    */
   drumsDoel() {
@@ -361,7 +366,9 @@ export class Engine extends Emitter {
    * Drums maken zelf een kopie met in- en uitfade; de sampler-pad blijft
    * staan. Welke pad bij welke sampler-pad hoort, kent de action-laag
    * (DRUMPAD_VAN_SAMPLER: dezelfde fysieke Maschine-pad); de engine blijft
-   * neutraal. Geen klok: alleen data (de maat wordt gelezen, niet gezet).
+   * neutraal, dus `pad` is VERPLICHT (zonder: "geen drumpad gekozen", geen
+   * stille andere indeling). Geen klok: alleen data (de maat wordt gelezen,
+   * niet gezet).
    *
    * Terug bij succes: de pad, zijn noot, het tempo van het stuk (`bpm`, van
    * het knippen) en dat van de maat (`maatBpm`, 60 / tel van de maatgever,
@@ -370,7 +377,11 @@ export class Engine extends Emitter {
    * @returns {{ ok: boolean, reden?: string, id?: string, pad?: number, noot?: number,
    *   bpm?: number|null, maatBpm?: number|null, gewichten?: number[]|null, stemNamen?: string[]|null }}
    */
-  samplerNaarDrums(n, { pad = KIT_PADS + n + 1, id } = {}) {
+  samplerNaarDrums(n, { pad, id } = {}) {
+    // Welke drumpad bij welke sampler-pad hoort, kiest de aanroeper (de action:
+    // DRUMPAD_VAN_SAMPLER). Zonder pad geen stille andere indeling.
+    if (pad == null) return { ok: false, reden: 'geen drumpad gekozen' };
+    if (!Number.isInteger(pad) || pad <= KIT_PADS || pad > AANTAL_PADS) return { ok: false, reden: `drumpad ${pad}: alleen 9–16 (1–8 is de kit)` };
     const sp = this.sampler?.pads?.[n];
     if (!sp?.buffer) return { ok: false, reden: `sampler-pad ${n + 1} is leeg` };
     let doel = id;
@@ -419,7 +430,7 @@ export class Engine extends Emitter {
       // speelt dat patroon daar stil zonder dat je weet waarom.
       const opPads9 = (p) => p?.noten?.some((x) => padVanNoot(x.noot) > KIT_PADS);
       if (typeof inst.laadPad === 'function' && pt.set.tracks[nr].some(opPads9)) {
-        this.emit('melding', { tekst: `track ${nrVan(id)}: de patronen gebruiken drumpads 9–16, en die zijn na herladen leeg (zet ze terug met sampler.N.drums; bewaren komt later)`, soort: 'info', duur: 8000 });
+        this.emit('melding', { tekst: `track ${nrVan(id)}: de patronen gebruiken drumpads 9–16, en die zijn na herladen leeg (zet ze terug met de knoppen 1→13 … 8→12 onder de sampler, of je gekoppelde knop; bewaren komt later)`, soort: 'info', duur: 8000 });
       }
     }
     return terug;

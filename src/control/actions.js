@@ -979,7 +979,8 @@ export function bindEngine(engine) {
       // sampler"): een eigen strip (fader, filter, echo, galm, fx, koptelefoon),
       // in een patroon op zijn noot, op dezelfde Maschine-pad als in de padmodus
       // sampler (DRUMPAD_VAN_SAMPLER). Welke Drums: engine.drumsDoel(). Read:
-      // null = kan niet (sampler-pad leeg of geen Drums), 0,5 = kan, 1 = gevuld.
+      // null = kan niet (sampler-pad leeg of geen Drums), 0,5 = kan, 1 = er ligt
+      // een stuk op die drumpad (niet per se de knip van nu: stap 1 vergelijkt niet).
       const drumpad = DRUMPAD_VAN_SAMPLER[i];
       define(`sampler.${i + 1}.drums`, 'trigger', (on) => {
         if (!on) return;

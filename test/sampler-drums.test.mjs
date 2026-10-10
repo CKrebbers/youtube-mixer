@@ -77,6 +77,7 @@ const { EERSTE_NOOT, KIT_PADS } = await import('../src/engine/instrumenten/drums
 const { OVERSLAAN } = await import('../src/control/terugspelen.js');
 const { kleurVoor } = await import('../src/control/feedback.js');
 const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+const { STEM_STANDEN } = await import('../src/engine/deck.js');
 const eng = new Engine();
 bindEngine(eng);
 const meldingen = [];
@@ -95,16 +96,22 @@ console.log('\nde actions');
 ok('8 actions sampler.N.drums, allemaal trigger', [1, 2, 3, 4, 5, 6, 7, 8].every((n) => has(`sampler.${n}.drums`) && metaOf(`sampler.${n}.drums`)?.type === 'trigger'));
 ok('geen sampler.N.drums.clear (W8: pas als Clay het mist)', ![1, 2, 3, 4, 5, 6, 7, 8].some((n) => has(`sampler.${n}.drums.clear`)) && !list().some((a) => /drums\.clear$/.test(a.id ?? a)));
 ok('label noemt de drumpad en de Maschine-pad', /drumpad 13 .*Maschine-pad 13/.test(metaOf('sampler.1.drums')?.label ?? '') && /drumpad 12 .*Maschine-pad 12/.test(metaOf('sampler.8.drums')?.label ?? ''));
-ok('lege sampler-pad: geweigerd met reden', eng.samplerNaarDrums(0).ok === false && /sampler-pad 1 is leeg/.test(eng.samplerNaarDrums(0).reden));
+ok('lege sampler-pad: geweigerd met reden', eng.samplerNaarDrums(0, { pad: 13 }).ok === false && /sampler-pad 1 is leeg/.test(eng.samplerNaarDrums(0, { pad: 13 }).reden));
+{
+  // Review 1, punt 4: geen stille standaard-pad in de engine (de oude jury-tabel zette S1 op 9).
+  const zonder = eng.samplerNaarDrums(0, {}), kaal = eng.samplerNaarDrums(0), kit = eng.samplerNaarDrums(0, { pad: 5 }), te = eng.samplerNaarDrums(0, { pad: 17 });
+  ok(`zonder pad: geweigerd met "geen drumpad gekozen" (${zonder.reden}), ook zonder opties`, zonder.ok === false && zonder.reden === 'geen drumpad gekozen' && kaal.ok === false && kaal.reden === 'geen drumpad gekozen');
+  ok(`pad buiten 9–16: geweigerd (${kit.reden}; ${te.reden})`, !kit.ok && /alleen 9–16 \(1–8 is de kit\)/.test(kit.reden) && !te.ok && /alleen 9–16/.test(te.reden) && !eng.samplerNaarDrums(0, { pad: 13.5 }).ok);
+}
 const b = eng.ctx.createBuffer(2, 23226, 48000);
 b.getChannelData(0).fill(0.25); b.getChannelData(1).fill(-0.25);
 eng.sampler.pads[0] = { buffer: b, bpm: 124, bron: 1, tellen: 1, van: 10, tot: 10.484, deckId: 'A', gewichten: null, stemNamen: null, speelt: false, src: null, g: null };
-ok('geen instrument: geweigerd', eng.samplerNaarDrums(0).ok === false && /nergens een instrument/.test(eng.samplerNaarDrums(0).reden));
+ok('geen instrument: geweigerd', eng.samplerNaarDrums(0, { pad: 13 }).ok === false && /nergens een instrument/.test(eng.samplerNaarDrums(0, { pad: 13 }).reden));
 invoke('sampler.1.drums', true);
 ok('… en de action zegt het als fout, zonder "sampler pad 1:" ervoor (de reden noemt de pad al)', meldingen.at(-1)?.soort === 'fout' && /^er staat nergens een instrument/.test(laatste()));
 eng.setFocus('C');
 eng.zetInstrument('C', 'poly');
-ok('Poly op de speeltrack en geen Drums: geweigerd (alleen de Drums)', /track 3: .*alleen de Drums/.test(eng.samplerNaarDrums(0).reden ?? ''));
+ok('Poly op de speeltrack en geen Drums: geweigerd (alleen de Drums)', /track 3: .*alleen de Drums/.test(eng.samplerNaarDrums(0, { pad: 13 }).reden ?? ''));
 ok('read null met alleen Poly', read('sampler.1.drums') === null);
 eng.zetInstrument('C', 'drums');
 const dr = eng.instrumentOp('C');
@@ -138,6 +145,7 @@ ok('terugspelen slaat sampler.N.drums over, de rest van de sampler niet',
   OVERSLAAN.test('sampler.3.drums') && !OVERSLAAN.test('sampler.3') && !OVERSLAAN.test('sampler.3.section') && !OVERSLAAN.test('sampler.3.clear') && !OVERSLAAN.test('sampler.3.drumsx'));
 const u1 = beschrijf('sampler.1.drums'), u8 = beschrijf('sampler.8.drums');
 ok(`uitleg S1: kort "${u1.kort}", lang noemt C3 (48) en de strip`, u1.kort === '→drum 13' && /noot C3 \(48\)/.test(u1.lang) && /fader, filter, echo, galm, fx, koptelefoon/.test(u1.lang));
+ok('uitleg lampje: fel = er ligt een stuk op drumpad 13, niet per se de knip van nu (review 1, punt 9)', /fel = er ligt een stuk op drumpad 13 \(niet per se de knip van nu\)/.test(u1.lang));
 ok(`uitleg S8: kort "${u8.kort}", noot B2 (47)`, u8.kort === '→drum 12' && /noot B2 \(47\)/.test(u8.lang));
 ok('geen uitleg meer voor .drums.clear (valt terug op de standaard)', beschrijf('sampler.1.drums.clear').kort !== 'drum 9 −');
 
@@ -158,6 +166,26 @@ ok('… de action meldt het als fout', meldingen.at(-1).soort === 'fout' && /mee
 eng.setFocus('G');
 ok('focus op 7 (een Drums): die is het', eng.drumsDoel().id === 'G' && eng.samplerNaarDrums(1, { pad: 14 }).id === 'G');
 for (const id of ['C', 'G', 'H']) eng.zetInstrument(id, null);
+// Review 1, punt 2: zo werk je echt. Je knipt met de focus op het NUMMER (track 1), niet op
+// een Drums. Dan beslist de speeltrack (waar noot 48 ook heen gaat): geen weigering.
+eng.setFocus('A');
+eng.zetInstrument('G', 'drums');
+eng.zetInstrument('H', 'drums');
+ok('Drums op 7 en 8, focus op 1 (een nummer), nooit een instrumenttrack gefocust: de eerste Drums (track 7), niet geweigerd',
+  eng.speeltrack() === 'G' && eng.drumsDoel().id === 'G' && read('sampler.2.drums') === 0.5);
+invoke('sampler.2.drums', true);
+ok(`… de melding noemt track 7 (${laatste()})`, meldingen.at(-1).soort === 'info' && /^S2 staat op drumpad 14 van track 7/.test(laatste()) && eng.instrumentOp('G').stand().pads[13].gevuld);
+eng.setFocus('H');
+eng.setFocus('A');
+ok('na focus 8 en terug naar 1: de laatst gefocuste Drums (track 8), zoals het toetsenbord', eng.speeltrack() === 'H' && eng.drumsDoel().id === 'H');
+invoke('sampler.2.drums', true);
+ok(`… en daar landt het stuk (${laatste()})`, /^S2 staat op drumpad 14 van track 8/.test(laatste()) && eng.instrumentOp('H').stand().pads[13].gevuld);
+eng.zetInstrument('C', 'poly');
+eng.setFocus('C');
+eng.setFocus('A');
+ok('de speeltrack is een Poly (laatst gefocust) en er zijn twee Drums: geweigerd, met de tracks erbij',
+  eng.speeltrack() === 'C' && eng.drumsDoel().id === null && /meer dan één Drums \(track 7 en 8\)/.test(eng.drumsDoel().reden));
+for (const id of ['C', 'G', 'H']) eng.zetInstrument(id, null);
 
 console.log('\nwat de melding zegt: tempo (H1) en stems (W11)');
 eng.setFocus('C');
@@ -177,24 +205,51 @@ invoke('sampler.3.drums', true);
 ok('0,33 % verschil (122 tegen 122,4): geen waarschuwing (de grens is 0,5 %)', !/let op/.test(laatste()));
 eng.syncMaster = echteMaster;
 const r = { id: 'C', pad: 13, noot: 48, bpm: 128, maatBpm: 128 };
-ok('stems [0, 0, 1, 0] met namen: " · stems: drums"', drumMelding(0, { ...r, gewichten: [0, 0, 1, 0], stemNamen: ['vocals', 'inst', 'drums', 'bass'] }).endsWith('(noot C3 · 48) · stems: drums'));
-ok('stems [1, 0, 0, 0]: in het Nederlands, " · stems: zang"', drumMelding(0, { ...r, gewichten: [1, 0, 0, 0], stemNamen: ['vocals', 'inst', 'drums', 'bass'] }).endsWith(' · stems: zang'));
-ok('dezelfde gewichten zonder namen: " · niet alle stems"', drumMelding(0, { ...r, gewichten: [0, 0, 1, 0], stemNamen: null }).endsWith(' · niet alle stems'));
-ok('[1, 1, 1, 1]: geen stems-tekst', !/stems/.test(drumMelding(0, { ...r, gewichten: [1, 1, 1, 1], stemNamen: ['vocals', 'inst', 'drums', 'bass'] })));
-ok('[1,25 × 4] (schaal 0,8 van de splitter: alle stems aan): geen stems-tekst', stemsInKnip([1.25, 1.25, 1.25, 1.25], ['vocals', 'inst', 'drums', 'bass']) === '');
-ok('zang op half niveau [0,5, 1, 1, 1]: " · niet alle stems" (niets is weg, wel anders)', stemsInKnip([0.5, 1, 1, 1], ['vocals', 'inst', 'drums', 'bass']) === 'niet alle stems');
+// De echte indelingen (deck.js STEM_STANDEN): 4 = drums, bas, overig, zang; 2 = zang, rest.
+const S4 = [...STEM_STANDEN[4]], S2 = [...STEM_STANDEN[2]];
+ok('stems [1, 0, 0, 0] (4 stems: drums, bass, other, vocals): " · stems: drums"', drumMelding(0, { ...r, gewichten: [1, 0, 0, 0], stemNamen: S4 }).endsWith('(noot C3 · 48) · stems: drums'));
+ok('stems [0, 0, 0, 1]: in het Nederlands, " · stems: zang"', drumMelding(0, { ...r, gewichten: [0, 0, 0, 1], stemNamen: S4 }).endsWith(' · stems: zang'));
+ok('2 stems [1, 0] (vocals, inst): " · stems: zang"', drumMelding(0, { ...r, gewichten: [1, 0], stemNamen: S2 }).endsWith(' · stems: zang'));
+ok('dezelfde gewichten zonder namen: " · niet alle stems"', drumMelding(0, { ...r, gewichten: [1, 0, 0, 0], stemNamen: null }).endsWith(' · niet alle stems'));
+ok('[1, 1, 1, 1]: geen stems-tekst', !/stems/.test(drumMelding(0, { ...r, gewichten: [1, 1, 1, 1], stemNamen: S4 })));
+ok('[1,25 × 4] (schaal 0,8 van de splitter: alle stems aan): geen stems-tekst', stemsInKnip([1.25, 1.25, 1.25, 1.25], S4) === '');
+ok('zang op half niveau [1, 1, 1, 0,5]: " · niet alle stems" (niets is weg, wel anders)', stemsInKnip([1, 1, 1, 0.5], S4) === 'niet alle stems');
+{
+  // Review 1, punt 3: de echte keten. Een deck met stems (zoals laadStems ze zet), de echte
+  // kill-knoppen en deck.knipGewichten (niveau × kill × 1/schaal, met "rest" als groep bij
+  // 4 stems): de index van de gewichten hoort bij die van stems.namen.
+  const d = eng.deck('D');
+  const stemsVoor = d.stems;
+  const kill = (aan = []) => { for (const n of Object.keys(d.stemKill)) d.stemKill[n] = aan.includes(n); };
+  const tekst = () => stemsInKnip(d.knipGewichten(), d.stems.namen);
+  d.stems = Object.freeze({ namen: Object.freeze([...STEM_STANDEN[4]]), aantal: 4, schaal: 0.8 });
+  kill();
+  const alle = d.knipGewichten();
+  ok(`4 stems, schaal 0,8, alles aan: [${alle.map((x) => x.toFixed(2)).join(', ')}] → geen tekst`, alle.length === 4 && alle.every((x) => dicht(x, 1.25, 1e-9)) && tekst() === '');
+  kill(['bass', 'other', 'vocals']);
+  ok(`4 stems, bas, overig en zang uit (de kill-knoppen): "${tekst()}" = "stems: drums"`, tekst() === 'stems: drums');
+  kill(['inst']);
+  ok(`4 stems, "rest" (de groep drums + bas + overig) uit: "${tekst()}" = "stems: zang"`, tekst() === 'stems: zang');
+  kill();
+  ok('4 stems, alles weer aan: geen tekst', tekst() === '');
+  d.stems = Object.freeze({ namen: Object.freeze([...STEM_STANDEN[2]]), aantal: 2, schaal: 1 });
+  kill(['vocals']);
+  ok(`2 stems, zang uit: "${tekst()}" = "stems: rest"`, tekst() === 'stems: rest');
+  kill();
+  d.stems = stemsVoor;
+}
 ok('alles weg: "stems: geen (stil)"', stemsInKnip([0, 0], ['vocals', 'inst']) === 'stems: geen (stil)');
 ok('geen stems (null): geen tekst', stemsInKnip(null, null) === '' && stemsInKnip([], []) === '');
 
 console.log('\nde sampler zet gewichten en stemnamen op de pad bij het knippen');
 {
   let meegegeven = 'niet aangeroepen';
-  const nepDeck = { id: 'D', stems: { namen: ['vocals', 'inst', 'drums', 'bass'], aantal: 4, schaal: 1 }, knipGewichten: () => [0, 0, 1, 0],
+  const nepDeck = { id: 'D', stems: { namen: [...STEM_STANDEN[4]], aantal: 4, schaal: 1 }, knipGewichten: () => [1, 0, 0, 0],
     bron: { knip: async (van, tot, g) => { meegegeven = g; const k = eng.ctx.createBuffer(2, Math.round((tot - van) * 48000), 48000); return k; } } };
   await eng.sampler._vul(5, nepDeck, { van: 10, tot: 10.5, bpm: 128, tellen: 1, bron: 4 });
   const sp = eng.sampler.pads[5];
-  ok('de knip krijgt de gewichten (wat je hoort)', Array.isArray(meegegeven) && meegegeven.join() === '0,0,1,0');
-  ok('pad.gewichten en pad.stemNamen gezet (index k hoort bij elkaar)', sp.gewichten.join() === '0,0,1,0' && sp.stemNamen.join() === 'vocals,inst,drums,bass');
+  ok('de knip krijgt de gewichten (wat je hoort)', Array.isArray(meegegeven) && meegegeven.join() === '1,0,0,0');
+  ok('pad.gewichten en pad.stemNamen gezet (index k hoort bij elkaar)', sp.gewichten.join() === '1,0,0,0' && sp.stemNamen.join() === 'drums,bass,other,vocals');
   const zonder = { id: 'E', stems: null, knipGewichten: () => null, bron: nepDeck.bron };
   await eng.sampler._vul(6, zonder, { van: 10, tot: 10.5, bpm: 128, tellen: 1, bron: 5 });
   ok('zonder stems: allebei null', eng.sampler.pads[6].gewichten === null && eng.sampler.pads[6].stemNamen === null && meegegeven === null);
@@ -214,6 +269,8 @@ console.log('\nna herladen (H8)');
   ok(`track 2 terug met de Drums; de patronen gebruiken noot 48 (drumpad 13): een melding (${nieuw.join(' | ')})`,
     terug.includes('B') && nieuw.some((t) => /^track 2: de patronen gebruiken drumpads 9–16, en die zijn na herladen leeg/.test(t)));
   ok('track 4 (alleen de kit, noot 36): geen melding', terug.includes('D') && !nieuw.some((t) => /^track 4:/.test(t)));
+  ok('de melding zegt hoe je ze terugzet in gewone taal (de knoppen 1→13 … 8→12), niet met een action-id (review 1, punt 8)',
+    nieuw.some((t) => /zet ze terug met de knoppen 1→13 … 8→12 onder de sampler, of je gekoppelde knop; bewaren komt later/.test(t)) && !nieuw.some((t) => /sampler\.N\.drums/.test(t)));
   for (const id of ['B', 'D']) eng.zetInstrument(id, null);
   pt.laadSet({ tracks: { 3: [{ noten: [{ stap: 0, noot: 60 }] }] }, instrumenten: { 3: { soort: 'drums' } } });
   const m1 = meldingen.length;
