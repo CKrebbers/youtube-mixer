@@ -17,9 +17,13 @@ cp "<checkout>/proef/sessie.json" "$K"/ 2>/dev/null                             
 taskpolicy -b node tools/setboek/setboek.mjs --dag 20261010 --map "$K" --db "$K/library.db" --proef "$K/sessie.json"
 ```
 
-Lees eerst `## Logs` bovenaan: liep er 's middags (de opbouw) al een log, dan staat dat in de
-tracklist van de avond. Draai dan opnieuw met `--vanaf 17:00` (of wanneer de avond begon); die
-logs staan dan onder "overgeslagen".
+Lees eerst `## Logs` bovenaan: liep er 's middags (de opbouw) al een log, dan staat de opbouw in
+de tracklist van de avond. Draai dan opnieuw met `--vanaf 17:00` (of wanneer de avond begon).
+`--vanaf` laat alles vóór die tijd weg, **ook binnen één log**: met het vinkje "altijd" en de pagina
+open van de opbouw tot na de set is de hele avond één log dat om 15:00 begon, en dat blijft erin
+vanaf 17:00. Een nummer dat over 17:00 heen klonk staat erin vanaf 17:00 ("klonk al vóór 17:00").
+Alleen een log dat vóór 17:00 eindigde staat onder "overgeslagen"; eindigden ze dat allemaal,
+dan zegt het setboek dat ("draai zonder --vanaf"), niet "liep er een log?".
 
 `cp`, nooit `mv`. Zonder `--db` en `--proef` werkt het ook (zonder lengtes en proefpunten).
 Voor `--db` de nieuwste backup (`media/backups/`, gemaakt met VACUUM INTO) en niet `library.db` zelf:
@@ -36,7 +40,7 @@ twee uur van de logs; oudere staan als één regel ("1 punt van eerder (6 okt), 
 | Vlag | Wat |
 |---|---|
 | `--dag JJJJMMDD --map <map>` | alle `set-JJJJMMDD-*.acties.jsonl` in de map, plus die van de volgende ochtend vóór 06:00 (een avond over middernacht) |
-| `--vanaf UU:MM` | alleen met `--dag`: logs die die dag eerder begonnen (`kop.begon`, Amsterdam) weglaten; ze staan onder "overgeslagen" |
+| `--vanaf UU:MM` | alleen met `--dag`: alles vóór die tijd (Amsterdam) weg, ook binnen één log: tracklist, "geladen maar niet hoorbaar" en "Gebruik"; de kolom "avond" telt dan vanaf die tijd. Een log dat eerder eindigde staat onder "overgeslagen" |
 | `--log <pad>` | één log; herhaalbaar (niet samen met `--dag`) |
 | `--db <library.db>` | lengte per nummer (`tracks.duur`), alleen-lezen via `node:sqlite`; ontbreekt of kapot = een melding, verder zonder |
 | `--proef <sessie.json>` | punten met "fout" of een notitie op de tijdlijn (binnen 2 uur van de logs), met wat er toen klonk; gesplitst op het eerste vinkje (`begonnen`) als dat op deze avond viel |
@@ -54,7 +58,7 @@ een kopie. Nooit `pkill`/`killall` in de buurt van deze map: er draait geen serv
 | `lees.mjs` | puur (geen fs): `rijgLogs`, `laadmomenten`, `toestand`, `hoort`, `hoorbaar`, `positieInBron`, `proefpunten`, `setboek`, `naarMarkdown`, `naarJson`, `amsterdamMs` |
 | `gebruik.mjs` | `tellingen(regels)`: top 10 actions, laads, actieve minuten. Eén teller, ook voor een latere `tools/gebruik.mjs` |
 | `setboek.mjs` | de CLI: bestanden lezen, `--dag`, `--vanaf`, `--db`, `--proef`, uitvoer |
-| `../../test/setboek.test.mjs` | 117 checks op synthetische logs in het echte formaat, en de CLI in een tijdelijke map |
+| `../../test/setboek.test.mjs` | 142 checks op synthetische logs in het echte formaat, en de CLI in een tijdelijke map |
 
 ## De regel "hoorbaar"
 
@@ -89,18 +93,25 @@ Spelen volgt het deck:
   3 s, zoals `kiesInstrument`); `inst.choose` kiest `round(v × 4)`, dus onder 0,125 is het
   "geen" en blijft het nummer.
 - `grid.controle` op een stil deck START hem (naar het eerste stuk om te controleren): dat
-  stuk heet "(onzeker)" en de positie "?"; nog eens drukken zet alleen de controle uit.
+  stuk heet "(onzeker)" en de positie "?"; nog eens drukken zet alleen de controle uit. Zonder
+  grid (beginstand `grid`, de `laad` en de gebeurtenis `grid` zeggen of er een is) doet hij niets,
+  net als de engine ("nog geen beatgrid"). `grid.check.next`/`prev` (met grid) en `grid.ok` in de
+  controle zetten de speelkop op een gridstuk: daarna is de positie "?".
 - de glijdende fades van de auto-DJ (`fader.glide`, `filter.glide`) tellen als fader en filter.
 
 Meerdere logs op één avond worden op `kop.begon` aan elkaar geregen. Een opname starten of
 stoppen sluit het log en begint een nieuw: een nummer dat over die grens speelt, is **één**
 stuk (zelfde track, zelfde nummer in de beginstand van het nieuwe log, gat < 5 s), en pas
 daarna gaan de flitsen eruit (14,5 s vóór de grens + 15 s erna = 29,5 s, dus in de
-tracklist). Een gat > 2 s tussen logs wordt gemeld ("log opnieuw begonnen 21:14,
-herladen?"), een log zonder acties staat onder "overgeslagen".
+tracklist). Dezelfde laad = het nummer stond in de **eerste stand** van het nieuwe log (niet: op
+t = 0; de beginstand kan een paar ms later staan). Een gat > 2 s tussen logs wordt gemeld ("log
+opnieuw begonnen 21:14, herladen?"). Alleen een log dat echt leeg is (0 acties, geen laad en niets
+dat in de beginstand speelt) staat onder "overgeslagen"; een opname waarin je niets aanraakte of
+het losse log na ■ terwijl het laatste nummer uitspeelt, telt mee.
 
-**Buma/Stemra.** Een stuk uit een mix (lengte ≥ 20 min met `--db`, of een positie voorbij
-20:00) staat er als "titel onbekend: deel van "<mix>" 0:00–8:00". Zonder `--db` ziet het
+**Buma/Stemra.** Een stuk uit een mix (lengte ≥ 20 min met `--db`, of zonder `--db` een positie
+voorbij 20:00 zonder loop) staat er als "titel onbekend: deel van "<mix>" 0:00–8:00". Met `--db`
+beslist alleen de lengte: een nummer van 5:30 dat 20 min in een loop hing is gewoon dat nummer. Zonder `--db` ziet het
 setboek een lange mix die je vóór 20:00 verliet niet; dat staat onder de lijst. Is de
 positie ergens "?" en de lengte onbekend: "<titel> (lengte onbekend)".
 
@@ -113,16 +124,19 @@ positie ergens "?" en de lengte onbekend: "<titel> (lengte onbekend)".
   geweest; dat stuk en wat erna komt (tot een sprong of een laad) heet "(onzeker)".
 - **Waar de speelkop is.** "In de bron" komt uit de stand (positie, rate), hotcues, secties
   (`section.N`, `section.next`/`prev`, `section.N.loop`, met de `van` uit de logregel als
-  ijkpunt; zonder sectiekaart in het log wordt de positie "?"), cue, pitch, tempo en, met de
+  ijkpunt; zonder sectiekaart doet de knop niets, net als de engine, en de kaart staat altijd in
+  het log als het deck er een heeft), cue, pitch, tempo en, met de
   lengte, seek. Beatjump, nudge en loops zetten de speelkop ook, maar dat staat niet als plek
   in het log: daarom "benaderd". Een sprong binnen een hoorbaar stuk splitst het in delen
-  ("1:23–1:53, 0:31–1:01").
+  ("1:23–1:53, 0:31–1:01"). Met `--db` komt de positie niet voorbij het einde van het nummer
+  (na een loop telt het model door; waar de loop lag staat niet in het log).
 - **Sync** zet de speelkop (fase) én de **rate** (het tempo van de andere track). Geen van
   beide staat in het log: na een sync lopen de positie in de bron en het geschatte einde weg,
   hoe langer hoe meer. De tracklist zelf (wanneer hoorbaar) klopt wel.
-- **Loops**: `loop.<s>`, `loop.out`, `loop.reloop`, `beatloop.<n>` en `section.N.loop` zetten
-  de aantekening "loop" (en dan geen einde-schatting meer); `loop.in`, `loop.exit`, halveren
-  en verdubbelen niet.
+- **Loops**: `loop.<s>`, `loop.out`, `loop.reloop`, `loop.toggle` (Clip Stop op de APC),
+  `beatloop.<n>` en `section.N.loop` zetten de aantekening "loop" (en dan geen einde-schatting
+  meer); `loop.in`, `loop.exit`, halveren en verdubbelen niet. Een loop die weer uit gaat
+  (`loop.toggle` nog eens, `loop.exit`) blijft "loop gezien": dan wordt alleen geen einde geschat.
 - **Stems op een nummer zonder stems.** Na een laad weet het log niet of er stems zijn; een
   stem-action zet ze in het setboek "aan", maar de engine negeert ze als de stem niet bestaat
   (`deck.stemBestaat`). Zang 0 + inst 0 op zo'n nummer heet dan ten onrechte "stil". (Voor

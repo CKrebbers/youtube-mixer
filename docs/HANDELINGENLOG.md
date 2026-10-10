@@ -402,7 +402,9 @@ op 1 µs).
 tracklist "hoorbaar (benaderd)" van, plus wat geladen maar niet gehoord werd en het gebruik.
 Het gebruikt `leesLog` en dezelfde curves als de engine en de puls. Een nummer dat over de
 grens van twee logs speelt (opname aan/uit sluit het log en begint een nieuw), is daar één
-stuk. Wat het log niet ziet (het einde van een nummer, waar sync en beatjump de speelkop
+stuk: het nummer in de eerste stand van het nieuwe log is dezelfde laad (op die stand zelf, niet
+op t = 0: de beginstand ligt vaak een stap van de audioklok naast, zie Grenzen), ook als in dat
+log niets aangeraakt werd. `--vanaf` knipt op de klok, ook binnen één log. Wat het log niet ziet (het einde van een nummer, waar sync en beatjump de speelkop
 zetten en welk tempo sync kiest, of een geladen nummer stems heeft, de sampler) staat in
 `tools/setboek/LEESMIJ.md`. Een nieuw soort regel die de hoorbaarheid raakt (een nieuwe
 knop die een track stil kan zetten): ook daar meenemen, met een check in `test/setboek.test.mjs`.

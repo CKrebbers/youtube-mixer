@@ -297,7 +297,7 @@ test/
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
   smf.test.mjs      de bytes van een MIDI-bestand (src/lib/smf.js): vlq, meta, tempo, ascii, sporen, lezen (running status, SysEx, kapot = byte-offset)
   patronen-midi.test.mjs  patronen als MIDI-bestand: S1–S13/L1–L2, de kick bytegewijs (met de hand + fixtures), 500 patronen tegen de vensters van de speler, rondreis, de CLI tools/patronen/midi.mjs
-  setboek.test.mjs  het setboek (tools/setboek): hoorbaar (fader, kant, trim, kills, stems, master via faderGain), cue/play/laad/rem/gridcontrole zoals het deck, trackeinde met lengte, positie in de bron (secties), één stuk over de grens van twee logs, proefpunten (alleen van deze avond), Buma/Stemra, de CLI (--vanaf)
+  setboek.test.mjs  het setboek (tools/setboek): hoorbaar (fader, kant, trim, kills, stems, master via faderGain), cue/play/laad/rem/gridcontrole zoals het deck, trackeinde met lengte, positie in de bron (secties), één stuk over de grens van twee logs (ook door een log zonder acties), proefpunten (alleen van deze avond), Buma/Stemra, --vanaf op de klok (ook binnen één log), de CLI
   fixtures/midi/    gouden .mid's (kick met en zonder meta, proef-set): de test vergelijkt ermee, en ze zijn het materiaal voor de Logic-proef
   secties.test.mjs  secties: synthetische nummers met een bekend antwoord, worker, library, deck, actions, server, marges op de "1"
   sec-sampler.test.mjs  een sectie in een sampler-pad: knipSectie, start op de "1", herankeren (ook keylock), grenzen, meldingen

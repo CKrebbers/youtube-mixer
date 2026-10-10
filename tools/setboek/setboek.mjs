@@ -13,9 +13,10 @@
  *     [--naast-log]                         naast het eerste log: set-<id>.setboek.md (bestaat het: exit 2)
  *
  * --dag neemt set-JJJJMMDD-*.acties.jsonl, plus de logs van de volgende ochtend vóór 06:00
- * (een avond die over middernacht loopt). --vanaf UU:MM laat logs van die dag die eerder
- * begonnen (kop.begon, Amsterdam) weg: de opbouw 's middags hoort niet in de tracklist; ze
- * staan dan onder "overgeslagen". Exit: 0 goed, 1 verkeerd aangeroepen, 2 bestaat al.
+ * (een avond die over middernacht loopt). --vanaf UU:MM laat alles vóór die tijd (Amsterdam) weg,
+ * ook binnen één log (met het vinkje "altijd" loopt één log van de opbouw tot na de set): de
+ * opbouw 's middags hoort niet in de tracklist. Een log dat vóór die tijd EINDIGDE staat onder
+ * "overgeslagen". Exit: 0 goed, 1 verkeerd aangeroepen, 2 bestaat al.
  * Nooit tijdens een set, nooit op de echte opnames/ (kopieer eerst).
  */
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';

@@ -39,7 +39,7 @@ export const STANDAARD = {
   filterRand: 0.1,      // filterknop ≤ 0,1 of ≥ 0,9: de aantekening "gefilterd"
   proefMarge: 2 * 3600, // s: proefpunten verder dan dit van de logs af horen niet bij deze avond
   lengte: null,         // (nummerId) => seconden | null: uit een kopie van library.db (stap 2b, --db)
-  vanafMs: null,        // logs die eerder begonnen overslaan (CLI --vanaf HH:MM)
+  vanafMs: null,        // alles vóór deze kloktijd weg, ook binnen één log (CLI --vanaf UU:MM)
 };
 
 const TZ = 'Europe/Amsterdam';
@@ -101,6 +101,14 @@ const idUit = (bestand) => String(bestand).split(/[\\/]/).pop().replace(/\.actie
 // ---- meerdere logs op één avond --------------------------------------------------
 
 /**
+ * Echt leeg: geen actie, geen laad en niets dat in de beginstand speelt (of op de maat wacht).
+ * "0 acties" is niet "niets klonk": een opname die Clay start en stopt zonder iets aan te raken,
+ * of het losse log na ■ terwijl het laatste nummer uitspeelt, heeft geen acties maar wel muziek.
+ */
+const leegLog = (x) => x.acties === 0 && !x.log.regels.some((r) => r?.e === 'laad')
+  && !(x.log.stand?.tracks ?? []).some((t) => t && t.bron && t.bron !== 'leeg' && (t.speelt || t.wacht));
+
+/**
  * Logs van één avond op volgorde van `kop.begon`. Een avond is vaak meer dan
  * één log: een los log, dan een opname (die het losse log afsluit en een
  * eigen log met zijn id begint), dan weer los, of opnieuw na herladen. Elk log
@@ -123,10 +131,12 @@ export function rijgLogs(bestanden, opties = {}) {
     };
   });
   alle.sort((a, b) => (a.begonMs ?? Infinity) - (b.begonMs ?? Infinity) || (a.id < b.id ? -1 : 1));
-  const vroeg = (x) => Number.isFinite(o.vanafMs) && x.begonMs !== null && x.begonMs < o.vanafMs;
-  const logs = alle.filter((x) => x.acties > 0 && x.begonMs !== null && !vroeg(x));
+  // --vanaf knipt op de klok (setboek()): een log valt hier alleen weg als het EINDIGDE vóór die tijd.
+  // Met het vinkje "altijd" loopt één log van de opbouw tot na de set; dat log hoort erbij.
+  const vroeg = (x) => Number.isFinite(o.vanafMs) && x.begonMs !== null && x.begonMs + x.duur * 1000 < o.vanafMs;
+  const logs = alle.filter((x) => x.begonMs !== null && !leegLog(x) && !vroeg(x));
   const overgeslagen = alle.filter((x) => !logs.includes(x)).map((x) => ({
-    id: x.id, reden: x.begonMs === null ? 'geen kop' : x.acties === 0 ? '0 acties' : `begon vóór ${kloktijd(o.vanafMs).slice(0, 5)} (--vanaf)`,
+    id: x.id, reden: x.begonMs === null ? 'geen kop' : leegLog(x) ? '0 acties, niets speelde' : `eindigde vóór ${kloktijd(o.vanafMs).slice(0, 5)} (--vanaf)`,
   }));
   const gaten = [];
   for (let i = 1; i < logs.length; i++) {
@@ -164,6 +174,7 @@ function nieuweTrack(nr) {
     stems: false, geenStems: false, stemNiveau: {}, stemKill: {}, stemVast: {},
     positie: null, tStand: 0, rate: 1, bereik: 0.16, cue: 0, opCue: null,
     hotcues: [null, null, null, null], secties: null, loop: false, onzeker: false,
+    grid: null,   // heeft het nummer een beatgrid? true/false uit de stand, de laad en 'grid'; null = niet in het log
   };
 }
 
@@ -214,9 +225,9 @@ export function* toestand(log, opties = {}) {
   };
   const stop = (tr, t) => { anker(tr, t); tr.speelt = false; tr.eind = null; };
   const springNaar = (tr, t, p) => { anker(tr, t); tr.positie = p; tr.opCue = false; tr.onzeker = false; };
-  const leeg = (tr, t, { titel = null, nummer = null, bron = null } = {}) => {
+  const leeg = (tr, t, { titel = null, nummer = null, bron = null, grid = null } = {}) => {
     Object.assign(tr, {
-      titel, nummer, bron, laadId: tr.laadId + 1, speelt: false, sindsStart: null, eind: null, remT: null, instT: null,
+      titel, nummer, bron, grid, laadId: tr.laadId + 1, speelt: false, sindsStart: null, eind: null, remT: null, instT: null,
       positie: 0, tStand: t, rate: 1, cue: 0, opCue: true, hotcues: [null, null, null, null], secties: null,
       loop: false, onzeker: false, stems: false, geenStems: false, stemNiveau: {}, stemKill: {}, stemVast: {},
     });
@@ -257,13 +268,16 @@ export function* toestand(log, opties = {}) {
       const doel = tr.secties?.stukken?.[Number(m[1]) - 1]?.van;
       if (Number.isFinite(doel)) springNaar(tr, t, doel);
     } else if ((m = /^section\.(next|prev)$/.exec(a))) {
-      // deck.naarSectieStap: de sectie waar de speelkop staat (vanaf `van`) ± 1. Zonder kaart
-      // in het log weten we niet waar hij landt: positie "?".
+      // deck.naarSectieStap: de sectie waar de speelkop staat (vanaf `van`) ± 1. Zonder kaart doet
+      // de knop niets (actions.js: `if (!on || !d.sectieKaart) return`), en de kaart staat altijd in
+      // het log als het deck er een heeft (beginstand `secties`, gebeurtenis 'secties', en kijk()
+      // loopt synchroon vóór een sectiedruk: busNaarLog). Met kaart maar zonder positie: "?".
       if (v !== true || !tr.titel) return;
       if (Number.isFinite(extra?.van)) { tr.positie = extra.van; tr.tStand = t; }
       const st = Array.isArray(tr.secties?.stukken) ? tr.secties.stukken : [];
+      if (!st.length) return;
       const p = positieOp(tr, t);
-      if (!st.length || p === null) { anker(tr, t); tr.positie = null; return; }
+      if (p === null) { anker(tr, t); tr.positie = null; return; }
       let i = -1;
       st.forEach((s, k) => { if (Number.isFinite(s?.van) && s.van <= p + 1e-6) i = k; });
       const doel = st[i + (m[1] === 'next' ? 1 : -1)]?.van;
@@ -277,9 +291,11 @@ export function* toestand(log, opties = {}) {
       const p = positieOp(tr, t), tot = getal(st[i + 1]?.van, Infinity);
       if (!(p !== null && p >= doel && p < tot)) springNaar(tr, t, doel);
       tr.loop = true;
-    } else if (/^(loop\.(\d|out|reloop)|beatloop\.)/.test(a)) {
-      // Een loop gezien (loop.<s>, loop.out, reloop, beatloop.<n>): geen trackeinde meer te voorspellen.
-      // loop.in zet alleen een beginpunt; loop.exit, halve en double maken er geen.
+    } else if (/^(loop\.(\d|out|reloop|toggle)|beatloop\.)/.test(a)) {
+      // Een loop gezien (loop.<s>, loop.out, reloop, loop.toggle = Clip Stop op de APC, beatloop.<n>):
+      // geen trackeinde meer te voorspellen. loop.in zet alleen een beginpunt; loop.exit, halve en
+      // double maken er geen. loop.toggle zet hem ook weer uit (actions.js: clearLoop); dat ziet het
+      // setboek niet: "loop gezien" blijft staan, en dan wordt er alleen geen einde geschat.
       if (v !== false) tr.loop = true;
     } else if (a === 'fader' || a === 'trim' || a === 'filter') {
       tr[a] = getal(v, tr[a]);
@@ -329,12 +345,21 @@ export function* toestand(log, opties = {}) {
       if (tr.remT !== null && t - tr.remT < tr.remTijd) { start(tr, t); tr.remT = null; }
       else if (tr.speelt) { stop(tr, t); tr.remT = t; }
     } else if (a === 'grid.controle') {
-      // actions.js: de gridcontrole aan (nog eens = uit). Staat de track stil, dan springt hij naar het
-      // eerste stuk om te controleren en SPEELT: waar dat is, en of er een grid was, ziet het log niet.
+      // actions.js: de gridcontrole aan (nog eens = uit). Zonder grid alleen een melding ("nog geen
+      // beatgrid"): niets. Staat de track stil, dan springt hij naar het eerste stuk om te controleren
+      // en SPEELT: waar dat is, ziet het log niet (positie "?", "(onzeker)").
       if (v !== true || !tr.titel) return;
       if (gridControle === tr.nr) { gridControle = null; return; }
+      if (tr.grid === false) return;
       gridControle = tr.nr;
       if (!tr.speelt) { start(tr, t); tr.positie = null; tr.onzeker = true; }
+    } else if (a === 'grid.check.next' || a === 'grid.check.prev' || a === 'grid.ok') {
+      // actions.js naarStuk: grid.check.* zet de speelkop op een gridstuk (met een grid); grid.ok doet
+      // dat alleen in de controle (naar de volgende plek, of hij luistert door). Waar, staat niet in het
+      // log: positie "?". (grid.ok kan de controle ook afsluiten als alles goed is; dat ziet het log niet.)
+      if (v !== true || !tr.titel || tr.grid === false) return;
+      if (a === 'grid.ok' && gridControle !== tr.nr) return;
+      anker(tr, t); tr.positie = null; tr.opCue = false;
     }
     // De rest (sync, beatjump, nudge, bend, EQ-knoppen, sends, racks, keylock, …) verandert
     // niet OF je hem hoort; sync en beatjump wel waar hij is: de positie heet daarom "benaderd".
@@ -345,7 +370,7 @@ export function* toestand(log, opties = {}) {
       for (const x of r.tracks || []) {
         const tr = track(x.track);
         if (!tr) continue;
-        leeg(tr, t, x.bron && x.bron !== 'leeg' ? { titel: x.titel ?? null, nummer: x.nummer ?? null, bron: x.bron } : {});
+        leeg(tr, t, x.bron && x.bron !== 'leeg' ? { titel: x.titel ?? null, nummer: x.nummer ?? null, bron: x.bron, grid: 'grid' in x ? !!x.grid : null } : {});
         if (!tr.titel && x.bron && x.bron !== 'leeg') tr.titel = '(zonder titel)';
         Object.assign(tr, {
           positie: getal(x.positie, 0), rate: getal(x.rate, 1), bereik: getal(x.bereik, tr.bereik), cue: getal(x.cue, 0),
@@ -372,13 +397,17 @@ export function* toestand(log, opties = {}) {
     } else if (r.e === 'laad') {
       const tr = track(r.track);
       // BufferBron.laad() roept stop(): het oude nummer is weg, het nieuwe staat stil op 0.
-      if (tr) leeg(tr, t, { titel: r.titel ?? '(zonder titel)', nummer: r.nummer ?? null, bron: r.bron ?? null });
+      if (tr) leeg(tr, t, { titel: r.titel ?? '(zonder titel)', nummer: r.nummer ?? null, bron: r.bron ?? null, grid: 'grid' in r ? !!r.grid : null });
     } else if (r.e === 'hotcues') {
       const tr = track(r.track);
       if (tr && Array.isArray(r.hotcues)) tr.hotcues = [...r.hotcues];
     } else if (r.e === 'secties') {
       const tr = track(r.track);
       if (tr) tr.secties = r.secties ?? null;
+    } else if (r.e === 'grid') {
+      // Alleen OF er een grid is (logboek.js kijk(): elke gridwissel); de inhoud doet hier niet mee.
+      const tr = track(r.track);
+      if (tr && tr.titel) tr.grid = !!r.grid;
     }
   }
 
@@ -490,8 +519,8 @@ function zonderFlitsen(samen, lijst, per, duur, o) {
   return { stukken, nietHoorbaar: lijst.filter((x) => !gehoord.has(x)) };
 }
 
-/** Interne velden weg (sleutels), voor de uitvoer. */
-const netjes = (x) => { const { sleutels, sleutel, ...rest } = x; return rest; };
+/** Interne velden weg (sleutels, beginstand), voor de uitvoer. */
+const netjes = (x) => { const { sleutels, sleutel, beginstand, ...rest } = x; return rest; };
 
 /**
  * De hoorbare stukken van één log.
@@ -499,11 +528,20 @@ const netjes = (x) => { const { sleutels, sleutel, ...rest } = x; return rest; }
  *                        sectie, gefilterd, onzeker, loop }],
  *            nietHoorbaar: [{ track, laadId, titel, nummer, bron, t, kortHoorbaar }], eind, afgebroken }
  * Met `opties.ruw`: de stukken nog MET de flitsen (setboek() lijmt eerst over de logs heen),
- * elk met `sleutels`, en `geladen` (alles wat er stond, met `sleutel`) in plaats van nietHoorbaar.
+ * elk met `sleutels`, en `geladen` (alles wat er stond, met `sleutel`, en `beginstand`: kwam het
+ * uit de eerste stand van dit log) in plaats van nietHoorbaar.
+ * Met `opties.knipT` (log-t, voor --vanaf): wat dan klinkt wordt daar in tweeën geknipt, met de
+ * positie in de bron op dat moment, en niet weer aan elkaar gelijmd; het tweede stuk heeft `geknipt`.
  */
 export function hoorbaar(log, opties = {}) {
   const o = { ...STANDAARD, ...opties };
   const open = new Map(), ruw = [], geladen = new Map();
+  // De eerste stand van het log (de beginstand): wat daar staat kan dezelfde laad zijn als aan het
+  // eind van het vorige log (setboek()). Op identiteit, niet op t = 0: de beginstand staat op
+  // klok() − t0 en de audioklok kan binnen één taak een stap (2,67 ms) verder staan.
+  const beginstand = log.regels.find((r) => r?.e === 'stand') ?? null;
+  const knip = Number.isFinite(o.knipT) && o.knipT > 0 ? o.knipT : null;
+  let geknipt = knip === null;
   const sluit = (s, t) => {
     s.tot = t;
     s.delen[s.delen.length - 1].tot = verder(s.anker, t);
@@ -512,12 +550,25 @@ export function hoorbaar(log, opties = {}) {
   };
   let eind = 0, afgebroken = false;
   for (const g of toestand(log, o)) {
+    if (!geknipt && g.t >= knip) {
+      // Tussen de vorige stand en deze regel veranderde niets: wat nu open is, klonk op `knip`.
+      geknipt = true;
+      for (const [nr, s] of open) {
+        const p = verder(s.anker, knip);
+        const na = { ...s, van: knip, delen: [{ van: p, tot: p }], anker: { ...s.anker }, geknipt: true };
+        sluit(s, knip);
+        open.set(nr, na);
+      }
+    }
     eind = g.t;
     if (g.waarom?.e === 'einde log') afgebroken = g.waarom.afgebroken;
     const xg = xfaderGains(g.xfader, g.curve);
     for (const tr of g.tracks) {
       const sleutel = `${tr.nr}:${tr.laadId}`;
-      if (tr.titel && !geladen.has(sleutel)) geladen.set(sleutel, { track: tr.nr, laadId: tr.laadId, titel: tr.titel, nummer: tr.nummer, bron: tr.bron, t: g.t, kortHoorbaar: 0 });
+      if (tr.titel && !geladen.has(sleutel)) {
+        geladen.set(sleutel, { track: tr.nr, laadId: tr.laadId, titel: tr.titel, nummer: tr.nummer, bron: tr.bron, t: g.t, kortHoorbaar: 0,
+          beginstand: beginstand !== null && g.waarom === beginstand });
+      }
       const h = hoort(tr, g, xg, o);
       let s = open.get(tr.nr);
       if (s && s.laadId === tr.laadId) {
@@ -549,12 +600,16 @@ export function hoorbaar(log, opties = {}) {
   const samen = [];
   for (const s of ruw) {
     const v = samen[samen.length - 1];
-    if (v && v.track === s.track && v.laadId === s.laadId && s.van - v.tot < o.samenvoegen) {
+    const overKnip = knip !== null && v && v.tot <= knip && s.van >= knip;
+    if (v && v.track === s.track && v.laadId === s.laadId && s.van - v.tot < o.samenvoegen && !overKnip) {
       v.tot = s.tot; v.delen.push(...s.delen);
       v.gefilterd ||= s.gefilterd; v.onzeker ||= s.onzeker; v.loop ||= s.loop;
     } else samen.push({ ...s, delen: [...s.delen] });
   }
   for (const s of samen) {
+    // Met de lengte (--db): de speelkop komt niet voorbij het einde. Na een loop telt het model
+    // gewoon door (waar de loop ligt staat niet in het log); zo blijft "in de bron" binnen het nummer.
+    if (Number.isFinite(s.lengte)) for (const d of s.delen) for (const k of ['van', 'tot']) if (d[k] !== null) d[k] = Math.min(d[k], s.lengte);
     s.delen = schoneDelen(s.delen);
     s.posVan = s.delen[0]?.van ?? null;
     s.posTot = s.delen[s.delen.length - 1]?.tot ?? null;
@@ -626,21 +681,28 @@ export function proefpunten(sessie, stukken = [], venster = null) {
 /**
  * Het setboek van een avond.
  * @param bestanden [{ bestand, tekst }]: kopieën van de logs
- * @returns { dag, logs, gaten, overgeslagen, stukken, nietHoorbaar, gebruik, onzeker, instellingen, melding }
+ * @returns { dag, logs, gaten, overgeslagen, stukken, nietHoorbaar, gebruik, onzeker, instellingen, proef, melding, raad }
+ *          (melding en raad: waarom er geen setboek is en wat je dan doet; null als er logs zijn)
  */
 export function setboek(bestanden, opties = {}) {
   const o = { ...STANDAARD, ...opties };
   const r = rijgLogs(bestanden, o);
-  const begin = r.logs[0]?.begonMs ?? 0;
+  // --vanaf knipt op de KLOK, ook binnen één log (met het vinkje "altijd" loopt één log van de opbouw
+  // tot na de set): wat vóór die tijd klonk, geladen of gedrukt werd, telt niet. rijgLogs liet alleen
+  // de logs weg die vóór die tijd eindigden. De kolom "avond" telt dan vanaf --vanaf.
+  const vanaf = Number.isFinite(o.vanafMs) ? o.vanafMs : -Infinity;
+  const begin = Math.max(r.logs[0]?.begonMs ?? 0, vanaf);
   const ruwe = [], lijst = [], per = new Map(), alleRegels = [];
   const wie = (x) => (x.nummer != null ? `n:${x.nummer}` : `t:${x.titel}`);
   let vorigLog = new Map();   // track → geladen item aan het eind van het vorige log
   for (const l of r.logs) {
     const off = (l.begonMs - begin) / 1000;
-    const h = hoorbaar(l.log, { ...o, ruw: true });
+    const h = hoorbaar(l.log, { ...o, ruw: true, knipT: (vanaf - l.begonMs) / 1000 });
     for (const s of h.stukken) {
+      const klokTot = l.begonMs + s.tot * 1000;
+      if (klokTot - vanaf < 1) continue;                 // klonk alleen vóór --vanaf (1 ms: afronding van knipT)
       ruwe.push({ ...s, sleutels: s.sleutels.map((k) => `${l.id}:${k}`), log: [l.id],
-        avondVan: off + s.van, avondTot: off + s.tot, klokVan: l.begonMs + s.van * 1000, klokTot: l.begonMs + s.tot * 1000 });
+        klokVan: Math.max(l.begonMs + s.van * 1000, vanaf), klokTot });
     }
     // Een opname starten of stoppen sluit het log en begint een nieuw (HANDELINGENLOG): wat in de
     // beginstand van dit log op een track staat en aan het eind van het vorige log daar ook stond,
@@ -649,13 +711,16 @@ export function setboek(bestanden, opties = {}) {
     for (const x of h.geladen) {
       const item = { ...x, sleutel: `${l.id}:${x.sleutel}`, log: l.id, klokMs: l.begonMs + x.t * 1000 };
       const vorig = vorigLog.get(x.track);
-      const zelfde = x.t === 0 && x.laadId === 1 && vorig && wie(vorig) === wie(item);
+      const zelfde = x.beginstand && x.laadId === 1 && vorig && wie(vorig) === wie(item);
       if (zelfde) per.set(item.sleutel, vorig);
       else { per.set(item.sleutel, item); lijst.push(item); }
       ditLog.set(x.track, per.get(item.sleutel));
     }
     vorigLog = ditLog;
-    for (const x of l.log.regels) alleRegels.push(Array.isArray(x) ? [x[0] + off, x[1]] : x);
+    for (const x of l.log.regels) {
+      if (l.begonMs + getal(tijdVan(x), 0) * 1000 < vanaf) continue;   // "Gebruik" ook vanaf --vanaf
+      alleRegels.push(Array.isArray(x) ? [x[0] + off, x[1]] : x);
+    }
   }
   // Lijmen over de grens van twee logs: dezelfde laad (zie boven) en een gat korter dan `samenvoegen`.
   // Pas daarna de flitsen eruit: 14 s vóór de grens + 15 s erna is één nummer van 29 s.
@@ -665,7 +730,6 @@ export function setboek(bestanden, opties = {}) {
     const v = laatste.get(s.track);
     if (v && per.get(v.sleutels[0]) === per.get(s.sleutels[0]) && s.klokVan - v.klokTot < o.samenvoegen * 1000) {
       v.klokTot = Math.max(v.klokTot, s.klokTot);
-      v.avondTot = Math.max(v.avondTot, s.avondTot);
       v.tot = v.van + (v.klokTot - v.klokVan) / 1000;   // van/tot: seconden in het eerste log van het stuk
       v.delen = schoneDelen([...v.delen, ...s.delen]);
       v.posTot = v.delen[v.delen.length - 1]?.tot ?? null;
@@ -675,7 +739,10 @@ export function setboek(bestanden, opties = {}) {
       v.lengte ??= s.lengte;
     } else { samen.push(s); laatste.set(s.track, s); }
   }
-  const h = zonderFlitsen(samen, lijst, per, (s) => (s.klokTot - s.klokVan) / 1000, o);
+  for (const s of samen) { s.avondVan = (s.klokVan - begin) / 1000; s.avondTot = (s.klokTot - begin) / 1000; }
+  // "Geladen maar niet hoorbaar": wat vanaf --vanaf geladen werd, of daarna (kort) klonk.
+  const naVanaf = new Set(samen.flatMap((s) => s.sleutels.map((k) => per.get(k))));
+  const h = zonderFlitsen(samen, lijst.filter((x) => x.klokMs >= vanaf || naVanaf.has(x)), per, (s) => (s.klokTot - s.klokVan) / 1000, o);
   const stukken = h.stukken.sort((a, b) => a.klokVan - b.klokVan || a.track - b.track).map(netjes);
   const nietHoorbaar = h.nietHoorbaar.sort((a, b) => a.klokMs - b.klokMs || a.track - b.track).map(netjes);
   // De proefsessie: alleen punten rond deze avond (de logs ± proefMarge).
@@ -689,10 +756,21 @@ export function setboek(bestanden, opties = {}) {
     gaten: r.gaten, overgeslagen: r.overgeslagen, stukken, nietHoorbaar,
     gebruik: tellingen(alleRegels),
     onzeker: stukken.filter((s) => s.onzeker).length,
-    instellingen: { drempelDb: o.drempelDb, minDuur: o.minDuur, samenvoegen: o.samenvoegen, lang: o.lang, lengte: typeof o.lengte === 'function' },
+    instellingen: { drempelDb: o.drempelDb, minDuur: o.minDuur, samenvoegen: o.samenvoegen, lang: o.lang, lengte: typeof o.lengte === 'function',
+      vanafMs: Number.isFinite(o.vanafMs) ? o.vanafMs : null },
     proef,
-    melding: r.logs.length ? null : 'geen log van die dag met acties',
+    ...melding(r, o),
   };
+}
+
+/** Waarom er geen setboek is, en wat je dan doet: { melding, raad } (beide null als er logs zijn). */
+function melding(r, o) {
+  if (r.logs.length) return { melding: null, raad: null };
+  const uu = Number.isFinite(o.vanafMs) ? kloktijd(o.vanafMs).slice(0, 5) : null;
+  if (uu && r.overgeslagen.some((x) => x.reden.startsWith('eindigde vóór'))) {
+    return { melding: `alle logs van die dag eindigden vóór ${uu} (--vanaf)`, raad: 'Draai zonder --vanaf, of met een vroegere tijd.' };
+  }
+  return { melding: 'geen log van die dag met acties', raad: 'Liep er een log (● opname, ○ log, of het vinkje "altijd" achter ↺)?' };
 }
 
 export const naarJson = (res) => JSON.stringify(res, null, 2);
@@ -704,7 +782,7 @@ export function naarMarkdown(res) {
   const r = [];
   r.push(`# Setboek ${res.dag ?? ''}`.trim(), '');
   if (res.melding) {
-    r.push(`**${res.melding}.** Liep er een log (● opname, ○ log, of het vinkje "altijd" achter ↺)?`, '');
+    r.push(`**${res.melding}.** ${res.raad ?? ''}`.trim(), '');
     if (res.overgeslagen.length) r.push(`Overgeslagen: ${res.overgeslagen.map((x) => `${x.id} (${x.reden})`).join(', ')}.`, '');
     return r.join('\n');
   }
@@ -715,13 +793,19 @@ export function naarMarkdown(res) {
   }
   for (const gat of res.gaten) r.push(`- gat van ${duurTekst(gat.s)}: log opnieuw begonnen ${kloktijd(gat.totMs)} (herladen?)`);
   if (res.overgeslagen.length) r.push(`- overgeslagen: ${res.overgeslagen.map((x) => `${x.id} (${x.reden})`).join(', ')}`);
+  const vanaf = res.instellingen?.vanafMs ?? null;
+  if (vanaf !== null) {
+    const uu = kloktijd(vanaf).slice(0, 5);
+    r.push(`- --vanaf ${uu}: alles daarvóór weggelaten, ook binnen een log${res.logs[0]?.begonMs < vanaf ? `; de kolom "avond" telt vanaf ${uu}` : ''}`);
+  }
   r.push('', '## Tracklist (hoorbaar, benaderd)', '');
   if (!res.stukken.length) r.push('Niets was langer dan ' + res.instellingen.minDuur + ' s hoorbaar.');
   else {
     r.push('| # | avond | klok | track | titel | bron | in de bron | opmerking |', '|---|---|---|---|---|---|---|---|');
     res.stukken.forEach((s, i) => {
       const inBron = [positieInBron(s), s.sectie].filter(Boolean).join(' · ') || '?';
-      const opm = [s.gefilterd && 'gefilterd', s.loop && 'loop', s.onzeker && '(onzeker)'].filter(Boolean).join(', ');
+      const opm = [s.geknipt && vanaf !== null && `klonk al vóór ${kloktijd(vanaf).slice(0, 5)}`, s.gefilterd && 'gefilterd', s.loop && 'loop', s.onzeker && '(onzeker)']
+        .filter(Boolean).join(', ');
       r.push(`| ${i + 1} | ${duurTekst(s.avondVan)}–${duurTekst(s.avondTot)} | ${kloktijd(s.klokVan)} | T${s.track} | ${cel(s.titel)} | ${cel(s.bron)} | ${inBron} | ${opm} |`);
     });
   }
@@ -756,9 +840,10 @@ export function naarMarkdown(res) {
   r.push('', '## Buma/Stemra (hoorbare nummers)', '');
   const gezien = new Set(), LANG = res.instellingen.lang ?? STANDAARD.lang;
   for (const s of res.stukken) {
-    // Een mix: het nummer is lang (lengte uit --db), of de speelkop kwam voorbij LANG. Welke titel er
-    // in die mix klonk, weet het setboek niet: "titel onbekend: deel van …".
-    const lang = (Number.isFinite(s.lengte) && s.lengte >= LANG) || (s.delen ?? []).some((d) => Number.isFinite(d.tot) && d.tot >= LANG);
+    // Een mix: het nummer is lang (lengte uit --db), of, zonder lengte, de speelkop kwam voorbij LANG
+    // (niet na een loop: dan telt het model door terwijl de speelkop in de loop blijft). Welke titel
+    // er in die mix klonk, weet het setboek niet: "titel onbekend: deel van …".
+    const lang = Number.isFinite(s.lengte) ? s.lengte >= LANG : !s.loop && (s.delen ?? []).some((d) => Number.isFinite(d.tot) && d.tot >= LANG);
     const pos = positieInBron(s), ergensVraag = (s.delen ?? []).some((d) => !Number.isFinite(d.van) || !Number.isFinite(d.tot));
     const regel = lang ? `titel onbekend: deel van "${s.titel}" ${pos ?? '(positie onbekend)'}`
       : !Number.isFinite(s.lengte) && ergensVraag ? `${s.titel} (lengte onbekend)` : s.titel;
