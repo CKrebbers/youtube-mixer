@@ -46,7 +46,13 @@ iPad / laptop / telefoon ──(Tailscale, HTTPS)──> Mac: tailscale serve :4
    ```
    In het log staat dan `ook via · https://<NAAM>`.
 5. **Op elk ander apparaat**: Tailscale installeren, met hetzelfde account
-   inloggen, en openen: `https://<NAAM>/controle`.
+   inloggen, en openen: `https://<NAAM>/companion` (iPad en iPhone, `docs/COMPANION.md`)
+   of `https://<NAAM>/controle` (de Controlekamer op een groot scherm).
+
+Uitzetten: `tailscale serve reset`. Zet ook een ACL (alleen je eigen apparaten,
+`autogroup:member`, naar de Mac op 443; geen `tag:*`), zie `docs/COMPANION.md`.
+Start je de server via VARVE.app, dan moet `VARVE_HOSTS` in `~/.zprofile` staan;
+zonder zegt de server bij het opstarten `VARVE_HOSTS is leeg: iPad en iPhone krijgen 403`.
 
 ## "Altijd": de Mac moet aan staan
 
@@ -89,9 +95,11 @@ iPad / laptop / telefoon ──(Tailscale, HTTPS)──> Mac: tailscale serve :4
   data (720p).
 - **De APC werkt alleen op het apparaat waar hij in zit**, en alleen in Chrome.
   Op iPhone en iPad bestaat Web MIDI niet (elke browser daar is Safari van
-  binnen), en de mixer is daar nooit getest. Daar zijn vooral handig: de
-  Controlekamer, de speellijst, het planvenster, en links plakken in de
-  ingest (de Mac haalt ze binnen).
+  binnen), en de mixer is daar nooit getest. **Hét adres voor iPad en iPhone is
+  `/companion`** (sinds 10 okt, `docs/COMPANION.md`): de kaart met wensen, kiezen
+  en "haal nu", straks wat er speelt. Geen geluid, geen MIDI, geen Web Lock: hij
+  stoort de mixer niet. Verder handig op een groot scherm: de Controlekamer, de
+  speellijst, het planvenster.
 - **Op de Mac zelf: blijf `localhost:8777` gebruiken.** `localhost` en
   `https://<NAAM>` zijn voor Chrome twee verschillende oorsprongen, met elk
   hun eigen Web Lock, BroadcastChannel en localStorage. De bescherming "maar
@@ -103,6 +111,12 @@ iPad / laptop / telefoon ──(Tailscale, HTTPS)──> Mac: tailscale serve :4
   op de server is wel gedeeld.
 - Wie in je Tailscale-netwerk zit, kan erbij. Deel de Mac niet met anderen
   in Tailscale, of zet een ACL.
+
+## Op locatie (te meten)
+
+Drie situaties, nog niet geprobeerd (proefblok in `docs/COMPANION.md`): (a) thuis-wifi,
+(b) Mac en iPad op de hotspot van de iPhone met mobiele data aan, (c) idem met mobiele
+data uit. Aanname: Tailscale verbindt Mac en iPad dan direct over het hotspot-netwerk.
 
 ## Niet getest
 

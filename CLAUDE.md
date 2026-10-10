@@ -52,6 +52,7 @@ plan.html           het planvenster: de programmering zien, inrichten, live volg
 apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze doen (src/ui/apc-kaart.js)
 maschine.html       de Maschine-kaart: wat elke knop nu doet (uitleg van de Maschine zelf), live vanuit de mixer (src/ui/maschine-kaart.js)
 controle.html       de Controlekamer (/controle): stand van alles, mixer openen, speellijst (docs/CONTROLEKAMER.md)
+companion.html      de companion (/companion) voor iPad en iPhone: kaart met wens/kies/haal nu, nu, beeld. Geen geluid, MIDI of Web Lock (docs/COMPANION.md)
 styles.css
 src/
   engine/           audio-graph.js  kanaalstrip, EQ (+ kill), bipolair filter, master, xfader, het stemfilter (maakStemFilter)
@@ -176,6 +177,7 @@ src/
   controle/         controle.js     de Controlekamer: tegels (server, ingest, mixer via de Web Lock, APC via het kanaal), speellijst
                     speellijst.js   de punten van een proefsessie, in blokken. Puur data; de stand staat in proef/sessie.json
                     backup-tegel.js de tegel "Backup" (laatste kopie, of de fout). Puur.
+  companion/        companion.js    de pagina voor iPad en iPhone: alleen fetch naar /api; companion-lijst.js het rekenwerk en de HTML (puur)
   auto/             planner.js      de auto-DJ, puur: welk fragment, welke overgang (bewakers), wanneer (frasegrens), de curves
                     automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
@@ -208,7 +210,7 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
                     headless/ (kaart.mjs: de tab kaart op de nep-server kaart-nep.mjs; kaart-echt.mjs: de tab kaart tegen de
                     echte kaart-routes van een server die al draait (kopie van de library, nep-yt-dlp, echte varve-kaart.json); kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
-                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs, beeld.mjs: headless zonder MIDI;
+                    vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, companion.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs, beeld.mjs: headless zonder MIDI;
                     beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
                     maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
                     bladeren.mjs: BROWSE, wiel en ENTER op een nep-Maschine met een echte library (twee testnummers);
@@ -301,6 +303,8 @@ test/
   kaart.test.mjs    de kaart op een verzonnen varve-kaart.json (nep-kaart.mjs): laden/herladen, zoeken, filters, sorteren, pagina's, wensen (20, dubbel), score, standaardvolgorde, cookie-bewaker
   nacht.test.mjs    de zes nachtregels één voor één met nepklok, nep-deck en nep-ingest (geen tijd, geen netwerk)
   kaart-server.test.mjs  kaart en nacht op een eigen server met de nep-yt-dlp: routes, 409 bij een deck (echt Range-verzoek), ingest zonder video, nachtrun, herstart
+  companion-lijst.test.mjs, companion-server.test.mjs  de companion: rekenwerk; en tegen eigen servers (Tailscale-Host, wens, kies, haal nu, speeldag)
+  regels-companion.test.mjs  de companion volgt zijn hele importboom: geen AudioContext, MIDI, Web Lock; alleen /api
   nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
   alles.mjs         alle tests in één keer met overzicht
 docs/
@@ -326,6 +330,7 @@ docs/
   STEMS.md          stems per nummer: Demucs bij de ingest, stems.wav, de engine, de rij, metingen; §5 de stemkanalen
   SECTIES.md        secties per nummer (6 okt): rekenwerk, de sprong op de maat, opslag, grid-modus SECTIES, grenzen
   TAILSCALE.md      overal openen via Tailscale: VARVE_HOSTS, tailscale serve, wat waar werkt
+  COMPANION.md      iPad en iPhone als eigen deel van de set (/companion): rol per apparaat, grenzen, instellen, testen
   ONTBREEKT.md      wat er nog ontbreekt (2 okt): eigen docs, DJ-software, Logic/TD; voorstel en vragen
   STUDIO.md         VARVE als muziekprogramma (5 okt): hergebruik, vier controllers, fasen S0–S5; §3 de koptelefoon
   INSTRUMENTEN.md   het contract van een instrument (§1–5) en hoe het op een track woont (§6: engine, actions, noten, scherm, APC, metingen)
