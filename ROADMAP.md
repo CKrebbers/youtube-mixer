@@ -119,6 +119,11 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     latentie, APC-mapje beeld op Shift + Detail View (`docs/BEELD.md`). Gebouwd op `studio/beeld`,
     samengevoegd in `studio/integratie` (7 okt); eind-tot-eind gemeten op de Mac met de echte
     Stroommachine headless; nog niet op LAN/wifi en niet op de APC (VRAGEN BE).
+30. KAART — lokale bestanden (10 okt, contract deel 4, tak `studio/kaart-lokaal`): `tools/lokaal/importeer.mjs`
+    zet Clay's eigen muziek (Apple Music, Spotdownloader-mp3's, `opnames/`) in de library via de bestaande
+    upload-route met `video: false` en zonder stems; `--droog` toont alleen wat er zou gebeuren
+    (`tools/lokaal/LEESMIJ.md`). Droogloop 10 okt: 24 nieuw (212 MB, 1:42), 3 al binnen, 11 Spotdownloader-mp3's
+    onleesbaar. Echt draaien NÁ de proefavond; `/api/upload` kent nu `?video=0`, `?titel=`, `?artiest=`.
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.

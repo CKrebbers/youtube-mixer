@@ -519,6 +519,15 @@ async function upload(req, res, url) {
   const stemsQ = url.searchParams.get('stems');
   const stems = stemsQ === null ? STEMS_STANDAARD : /^[024]$/.test(stemsQ) ? Number(stemsQ) : null;
   if (stems === null) return weigerUpload(req, res, 400, { fout: 'stems is 0, 2 of 4' });
+  // ?video=0: alleen de audio, ook als er beeld in zit (de lokale import van de
+  // kaart, tools/lokaal). ?titel= en ?artiest=: wat de aanroeper al weet (uit tags
+  // of een opgeschoonde naam); die gaan vóór de tags in het bestand. Zonder deze
+  // drie gedraagt de route zich als voorheen.
+  const videoQ = url.searchParams.get('video');
+  const metVideo = videoQ === null || !/^(0|false|uit|nee)$/i.test(videoQ);
+  // eslint-disable-next-line no-control-regex
+  const tekstQ = (k) => String(url.searchParams.get(k) ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200);
+  const titelQ = tekstQ('titel'), artiestQ = tekstQ('artiest');
   const lengte = Number(req.headers['content-length']);
   if (Number.isFinite(lengte) && lengte > UPLOAD_MAX) {
     return weigerUpload(req, res, 413, { fout: `te groot: ${gb(lengte)}, de grens is ${gb(UPLOAD_MAX)}` });
@@ -584,18 +593,19 @@ async function upload(req, res, url) {
     await rm(map, { recursive: true, force: true }).catch(() => {});
     return json(res, 202, loopt);
   }
-  const titel = info.tags.titel || naam.titel;
+  const titel = titelQ || info.tags.titel || naam.titel;
+  const artiest = artiestQ || info.tags.artiest;
   // Achter in de rij, net als een link; met ?vooraan=1 (op een track gesleept,
   // VRAGEN J12) vóór wat gewoon wacht. De werkmap met het bestand staat er
   // al: annuleer je vóór hij begint, dan gaat die weg (bijAnnuleren).
   const { opdracht } = wachtrij.voegToe({
     vooraan: url.searchParams.get('vooraan') === '1',
     sleutel: id, url: `bestand:${naam.naam}`, soort: 'bestand', titel,
-    stappen: stappenVoor({ link: false, video: info.video }),
+    stappen: stappenVoor({ link: false, video: info.video && metVideo }),
     werk: async (onStap, signal) => {
       const r = await ingestBestand(bron, {
-        id, map, mediaDir: MEDIA, onStap, signal, heeftVideo: info.video,
-        info: { url: `bestand:${id.slice('lokaal-'.length)}:${naam.naam}`, titel, uploader: info.tags.artiest, duur: info.duur },
+        id, map, mediaDir: MEDIA, onStap, signal, heeftVideo: info.video, video: metVideo,
+        info: { url: `bestand:${id.slice('lokaal-'.length)}:${naam.naam}`, titel, uploader: artiest, duur: info.duur },
       });
       if (r.ok) {
         r.track = bewaarInLibrary(r.track);

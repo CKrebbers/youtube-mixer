@@ -87,6 +87,44 @@ try {
   ok('zelfde bestand nog eens: hetzelfde nummer, niets opnieuw', r2.status === 200 && r2.j?.bestond === true && r2.j.track?.id === verwacht);
   ok('en niet dubbel in de library', (await (await fetch(`${B}/api/library`)).json()).tracks.filter((x) => x.id === verwacht).length === 1);
 
+  console.log('\n?titel=, ?artiest= en ?video=0 (de lokale import, tools/lokaal)');
+  const wav2 = join(map, 'klik2.wav');
+  await ing.run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi',
+    '-i', "aevalsrc='0.8*sin(2*PI*600*t)*exp(-60*mod(t,0.5))':s=44100:d=20", '-ac', '2', wav2]);
+  const wav2Bytes = readFileSync(wav2);
+  const stuurMet = (naam, body, q) => new Promise((klaar) => {
+    const rq = request({ host: '127.0.0.1', port: poort, method: 'POST', path: `/api/upload?naam=${encodeURIComponent(naam)}&${q}`,
+      headers: { Host: `localhost:${poort}`, 'Content-Type': 'application/octet-stream', 'Content-Length': body.length } }, (res) => {
+      const delen = [];
+      res.on('data', (d) => delen.push(d));
+      res.on('end', () => { let j = null; try { j = JSON.parse(Buffer.concat(delen)); } catch {} klaar({ status: res.statusCode, j }); });
+    });
+    rq.on('error', (e) => klaar({ status: 0, fout: String(e) }));
+    rq.end(body);
+  });
+  const r2b = await stuurMet('set-20260923-131222.wav', wav2Bytes, 'titel=Set%2023%20sep%202026%2013%3A12&artiest=Clay%20(Varve)&video=0&stems=0');
+  ok(`202 met titel en artiest uit de query (${r2b.status})`, r2b.status === 202 && r2b.j?.titel === 'Set 23 sep 2026 13:12');
+  const o2b = await wachtOp(r2b.j?.id);
+  ok('de track krijgt die titel en artiest (gaan vóór de bestandsnaam)',
+    o2b?.status === 'klaar' && o2b.track?.titel === 'Set 23 sep 2026 13:12' && o2b.track?.uploader === 'Clay (Varve)');
+  ok('url blijft bestand:<hash>:<echte naam>', /^bestand:[0-9a-f]{12}:set-20260923-131222\.wav$/.test(o2b?.track?.url || ''));
+
+  // Een mp4 met beeld én geluid, met ?video=0: alleen de audio komt binnen.
+  const klip = join(map, 'klip.mp4');
+  const mk = await ing.run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
+    '-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=10:duration=4',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=4',
+    '-c:v', 'mpeg4', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', klip]);
+  if (mk.ok) {
+    const r2c = await stuurMet('klip.mp4', readFileSync(klip), 'video=0&stems=0');
+    ok(`mp4 met ?video=0: 202 en geen videostap in de rij (${r2c.status})`, r2c.status === 202 && !(r2c.j?.stappen || []).includes('video'));
+    const o2c = await wachtOp(r2c.j?.id);
+    ok('alleen audio binnen: geen video.mp4 in media/<id>/, track.video leeg',
+      o2c?.status === 'klaar' && !o2c.track?.video && existsSync(join(media, o2c.track.id, 'audio.wav')) && !existsSync(join(media, o2c.track.id, 'video.mp4')));
+  } else {
+    console.log('  -- geen mp4-fixture te maken met deze ffmpeg (mpeg4/aac); ?video=0 op een video niet getoetst');
+  }
+
   console.log('\nweigeren');
   const r3 = await stuur('x.wav', wavBytes, { type: 'text/plain' });
   ok(`text/plain: 415 (${r3.status})`, r3.status === 415);

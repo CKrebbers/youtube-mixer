@@ -889,6 +889,9 @@ docs/
   track: audio speelt direct zoals altijd; VIDEO (en audio die de browser niet
   leest) gaat via de library en komt daarna op die track — niet als die track
   dan speelt. Het origineel wordt niet bewaard, alleen wat de pijplijn maakt.
+  Sinds 10 okt (kaart, `tools/lokaal/`) drie optionele parameters: `?video=0`
+  (alleen de audio, ook met beeld), `?titel=` en `?artiest=` (gaan vóór de
+  tags). Zonder die drie gedraagt de route zich als voorheen.
 - TikTok (en wat yt-dlp verder kent) werkt; gemeten met yt-dlp 2026.08.19 op
   Clay's link (79 s nummer, 57 s ingest, video 720×1280). TikTok vraagt
   browser-imitatie; yt-dlp doet dat zelf zolang `curl_cffi` geïnstalleerd is
