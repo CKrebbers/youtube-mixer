@@ -60,6 +60,25 @@ function maak({ nu = new Date(2026, 9, 10, 14, 0), profielen = async () => null,
   return { standen, nacht, kaart, lib, sub, nachtPad, logs, map: join(sub, 'standen') };
 }
 const gooit = async (f) => { try { await f(); return null; } catch (err) { return err; } };
+/**
+ * Named pipes vrijgeven: een schrijver openen (en even openhouden), zodat een
+ * lezer die erop wacht EOF krijgt en zijn draad terugkomt. Herhalen tot
+ * `klaar()` (een lezer die nog niet in open() zat, krijgt anders geen schrijver):
+ * een draad die blijft wachten houdt ook het einde van dit proces tegen.
+ */
+async function geefVrij(pijpen, klaar = () => true, maxMs = 3000) {
+  const { openSync, closeSync, constants } = await import('node:fs');
+  const t0 = performance.now();
+  do {
+    const fds = [];
+    for (const p of pijpen) { try { fds.push(openSync(p, constants.O_WRONLY | constants.O_NONBLOCK)); } catch {} }
+    await new Promise((z) => setTimeout(z, 30));
+    for (const fd of fds) { try { closeSync(fd); } catch {} }
+    if (klaar()) return true;
+    await new Promise((z) => setTimeout(z, 20));
+  } while (performance.now() - t0 < maxMs);
+  return false;
+}
 const lijstIn = (p) => (existsSync(p) ? readdirSync(p) : []);
 
 try {
@@ -177,6 +196,15 @@ try {
     await standen.schrijf('onbekend', { schema: 1, delen: { kaart: { krat: 'slim:bestaat-niet' } } }, null);
     const o = await standen.activeer('onbekend');
     ok('krat slim:bestaat-niet: waarschuwing "niet in de kaart", niet gecontroleerd', !o.verslag.gecontroleerd.includes('kaart') && o.verslag.waarschuwingen.some((w) => /niet in de kaart/.test(w)));
+    ok('… en .actief.json heeft dan geen kratnaam (de tegel valt terug op de id)', (await standen.actief()).kaart.naam === undefined);
+    // Review 2, punt 4c: één naam voor de krat. Een krat waarvan de naam niet uit de id volgt (pl:PLnachtwerk = "Nachtwerk").
+    await standen.schrijf('nacht-krat', { schema: 1, delen: { kaart: { krat: 'pl:PLnachtwerk' } } }, null);
+    const v = await standen.verschil('nacht-krat');
+    await standen.activeer('nacht-krat');
+    const a2 = await standen.actief();
+    const { standRegel } = await import('../src/controle/stand-tegel.js');
+    ok(`kratnaam: het verschil zegt "${v.delen.kaart.naar}", .actief.json "${a2.kaart.naam}", de tegel "${standRegel(a2).split(' (')[0]}"`,
+      v.delen.kaart.naar === 'Nachtwerk' && a2.kaart.naam === 'Nachtwerk' && a2.kaart.krat === 'pl:PLnachtwerk' && standRegel(a2).startsWith('krat Nachtwerk (kies hem in de kaart)'));
   }
   {
     const { standen } = maak({ kaartBestand: join(map, 'bestaat-niet.json') });
@@ -191,6 +219,27 @@ try {
     await standen.schrijf('kwijt', { schema: 1, delen: { master: { sjabloon: 'Nergens' }, nacht: { vannacht: false } } }, null);
     const k = await standen.activeer('kwijt');
     ok('een onbekend sjabloon: fout bij master, de nacht wel toegepast', k.verslag.fouten.some((f) => f.deel === 'master') && k.verslag.toegepast.includes('nacht') && (await standen.actief()).mixer.master === null);
+  }
+  {
+    // Review 2, punt 4a: racks/sjablonen.json niet te lezen is iets anders dan "het sjabloon staat er niet in".
+    const g = maak();
+    const st = new Standen({ map: g.map, voorbeelden: join(wortel, 'tools', 'standen', 'voorbeelden'), lib: g.lib, nacht: g.nacht, kaart: g.kaart, log: () => {},
+      sjablonen: async () => { throw new SyntaxError('Unexpected end of JSON input'); } });
+    const r = await st.activeer('apc');
+    const f = r.verslag.fouten.find((x) => x.deel === 'master');
+    ok(`sjablonen niet te lezen bij activeren: "${f?.fout}"`, f?.fout === 'racks/sjablonen.json niet te lezen (Unexpected end of JSON input): sjabloon "Dub-worp" niet vastgelegd');
+    const w = await st.schrijf('m', { schema: 1, delen: { master: { sjabloon: 'Dub-worp' } } }, null);
+    ok(`… en bij opslaan: "${w.antwoord.waarschuwingen[0]}"`, w.code === 200 && w.antwoord.waarschuwingen.length === 1 && /^racks\/sjablonen\.json niet te lezen \(.*\): sjabloon "Dub-worp" niet nagekeken$/.test(w.antwoord.waarschuwingen[0]));
+    const k = await st.keuzes();
+    ok('… en keuzes() geeft geen sjablonen, met sjablonenFout', k.sjablonen.length === 0 && /niet te lezen/.test(k.sjablonenFout));
+    const st2 = new Standen({ map: g.map, voorbeelden: join(wortel, 'tools', 'standen', 'voorbeelden'), lib: g.lib, nacht: g.nacht, kaart: g.kaart, log: () => {},
+      leesMs: 80, sjablonen: () => new Promise(() => {}) });
+    // De tijdgrens-timer is unref (hij mag de server niet openhouden); hier houdt een eigen timer het proces in leven.
+    const houd = setTimeout(() => {}, 5000);
+    const r2 = await st2.activeer('apc').finally(() => clearTimeout(houd));
+    ok(`… een sjablonenbestand dat niet terugkomt (iCloud): "${r2.verslag.fouten.find((x) => x.deel === 'master')?.fout}"`,
+      r2.verslag.fouten.some((x) => x.deel === 'master' && /^racks\/sjablonen\.json niet te lezen \(niet lokaal beschikbaar \(iCloud\?\)\)/.test(x.fout)));
+    ok('… en keuzes() van een goede lezer: sjablonenFout null', (await g.standen.keuzes()).sjablonenFout === null);
   }
   {
     const { standen } = maak();
@@ -296,6 +345,9 @@ try {
     const g = await standen.lees('apc');
     ok('vastleggen("apc"): 200, mapping = het verschil van vier regels', r.code === 200 && g.stand.delen.mapping.rules.length === 4);
     ok('… nacht alleen als rem: { aan: false, vannacht: false }', g.stand.delen.nacht.aan === false && g.stand.delen.nacht.vannacht === false && Object.keys(g.stand.delen.nacht).length === 2);
+    // Review 2, punt 2: de nacht stond uit (de standaard), dus de stand wordt strenger; dat gebeurt niet stil.
+    ok(`… en dat de rem strenger werd staat in het antwoord: "${r.antwoord.opmerkingen?.[0]}"`, r.antwoord.opmerkingen?.length === 1
+      && /^nacht: vannacht niet → uit en vannacht niet \(de nachtwachtrij staat nu uit, dus deze opstelling zet hem voortaan bij elke activering helemaal uit; anders kies je het in de bewerker\)$/.test(r.antwoord.opmerkingen[0]));
     ok('… hub/pakket/kaart/master behouden', g.stand.delen.pakket.profiel === 'apc' && g.stand.delen.kaart.krat === 'slim:proefkrat' && g.stand.delen.master.sjabloon === 'Dub-worp');
     ok('… één vorige versie in .versies/apc', lijstIn(join(smap, '.versies', 'apc')).length === 1);
     ok('… met een oude versie: 409', (await standen.vastleggen('apc', eerst.antwoord.versie)).code === 409);
@@ -309,6 +361,11 @@ try {
     const r = await standen.vastleggen('nieuw', null);
     const g = await standen.lees('nieuw');
     ok('vastleggen op een nieuwe naam zonder eigen mapping: mapping "standaard", geen nachtdeel (de nacht staat aan)', r.code === 200 && g.stand.delen.mapping === 'standaard' && !('nacht' in g.stand.delen));
+    ok('… en dan geen opmerking over de nacht', r.antwoord.opmerkingen.length === 0);
+    nacht.zet({ aan: false });
+    const r2 = await standen.vastleggen('nieuw2', null);
+    ok(`een nieuwe naam met de nacht uit: { aan: false } en de opmerking "${r2.antwoord.opmerkingen?.[0]}"`, r2.code === 200 && (await standen.lees('nieuw2')).stand.delen.nacht.aan === false
+      && /^nacht: uit \(de nachtwachtrij staat nu uit/.test(r2.antwoord.opmerkingen?.[0] ?? ''));
   }
   {
     // Review punt 4: "leg vast" om je mapping te bewaren haalt de nachtrem niet uit de stand.
@@ -318,13 +375,16 @@ try {
     const g = await standen.lees('apc');
     ok('vastleggen("apc") met de nacht aan: de rem { vannacht: false } blijft in de stand', r.code === 200 && g.stand.delen.nacht?.vannacht === false && !('aan' in g.stand.delen.nacht));
     ok(`… en het antwoord zegt het: "${r.antwoord.opmerkingen?.[0]}"`, /nachtrem uit de opstelling behouden \(vannacht niet\)/.test(r.antwoord.opmerkingen?.[0] ?? '') && r.antwoord.delen.includes('nacht'));
+    ok('… met de nacht aan: geen opmerking die "uit" noemt (er komt geen rem bij)', r.antwoord.opmerkingen.length === 1 && !r.antwoord.opmerkingen.some((o) => /→ uit|staat nu uit/.test(o)));
     nacht.zet({ aan: false });
     const r2 = await standen.vastleggen('laptop', (await standen.lees('laptop')).versie);
     ok('laptop met de nacht uit: { aan: false }, geen opmerking (de rem van nu)', r2.code === 200 && (await standen.lees('laptop')).stand.delen.nacht.aan === false && r2.antwoord.opmerkingen.length === 0);
     nacht.zet({ aan: true, vandaagNiet: true });
-    await standen.vastleggen('laptop', (await standen.lees('laptop')).versie);
+    const r3 = await standen.vastleggen('laptop', (await standen.lees('laptop')).versie);
     const gl = (await standen.lees('laptop')).stand.delen.nacht;
     ok('laptop met de nacht aan + vandaag niet: beide remmen (de oude blijft, de nieuwe komt erbij)', gl.aan === false && gl.vannacht === false);
+    ok(`… en twee opmerkingen: behouden (uit) en strenger (vannacht niet): ${JSON.stringify(r3.antwoord.opmerkingen)}`, r3.antwoord.opmerkingen.length === 2
+      && /behouden \(uit\)/.test(r3.antwoord.opmerkingen[0]) && /^nacht: uit → uit en vannacht niet \("vandaag niet" staat nu aan/.test(r3.antwoord.opmerkingen[1]));
   }
 
   // ---- terug ------------------------------------------------------------------------------------------------
@@ -473,9 +533,66 @@ try {
       ok(`… daarna een gewoon bestand lezen: ${gewoon} in ${Math.round(msGewoon)} ms (< 100; vóór de fix hing dit na 4 polls)`, gewoon === 'ok' && msGewoon < 100);
     } finally {
       // Altijd de pijp vrijgeven: een draad die erop blijft wachten houdt ook het einde van dit proces tegen.
-      const { openSync, closeSync, constants } = await import('node:fs');
-      try { closeSync(openSync(fifo, constants.O_WRONLY | constants.O_NONBLOCK)); } catch {}
+      await geefVrij([fifo], () => standen._lopend.size === 0);
     }
+  }
+  {
+    // Review 2, punt 1: de grens per pad is niet genoeg. De vier voorbeelden staan in de echte checkout
+    // in iCloud; zijn ze alle vier dataless, dan mag ook EEN poll niet alle vier de draden vullen.
+    const vb = join(map, 'vier-pijpen');
+    mkdirSync(vb, { recursive: true });
+    const { spawnSync } = await import('node:child_process');
+    const pijpen = ['alles', 'apc', 'laptop', 'maschine'].map((n) => join(vb, `${n}.json`));
+    const gemaakt = pijpen.every((p) => spawnSync('mkfifo', [p]).status === 0);
+    const g = maak();
+    const st = new Standen({ map: g.map, voorbeelden: vb, lib: g.lib, nacht: g.nacht, kaart: g.kaart, leesMs: 150, log: () => {} });
+    if (!gemaakt) console.log('  -- mkfifo niet beschikbaar: de grens voor de hele server niet getoetst');
+    else try {
+      const t0 = performance.now();
+      const o = await st.overzicht();
+      const ms = performance.now() - t0;
+      ok(`vier hangende voorbeelden, één overzicht(): 4 standen met een fout in ${Math.round(ms)} ms, hooguit ${st._lopend.size} operaties onderweg (≤ 2)`,
+        o.standen.length === 4 && o.standen.every((x) => x.fouten === 1) && st._lopend.size <= 2 && ms < 1000);
+      const t1 = performance.now();
+      const gewoon = await Promise.race([readFile(join(wortel, 'CLAUDE.md')).then(() => 'ok'), new Promise((z) => setTimeout(() => z('HANGT'), 1500))]);
+      ok(`… daarna een gewoon bestand lezen: ${gewoon} in ${Math.round(performance.now() - t1)} ms (< 100; vóór de fix hingen alle vier de draden)`, gewoon === 'ok' && performance.now() - t1 < 100);
+      const t2 = performance.now();
+      const e = await gooit(() => st.overzicht());
+      ok(`… de volgende poll: meteen 503 "te veel bestanden tegelijk" (${Math.round(performance.now() - t2)} ms), geen nieuwe operatie (${st._lopend.size})`,
+        e instanceof StandFout && e.code === 503 && /te veel bestanden tegelijk niet lokaal beschikbaar \(iCloud\?\)/.test(e.message) && performance.now() - t2 < 100 && st._lopend.size <= 2);
+      const ea = await gooit(() => st.actief());
+      ok('… en actief() zegt 503 (onbekend), niet { naam: null } (niets actief)', ea instanceof StandFout && ea.code === 503);
+    } finally {
+      await geefVrij(pijpen, () => st._lopend.size === 0);
+    }
+    if (gemaakt) {
+      // Het netwerk komt terug: iCloud zet de echte bestanden neer (de pijp eerst weg: schrijven op een pijp
+      // zonder lezer zou zelf blijven wachten). Dan werkt het weer en blijft er geen operatie hangen.
+      const vrij = st._lopend.size === 0;
+      if (vrij) for (const p of pijpen) { rmSync(p); writeFileSync(p, readFileSync(join(wortel, 'tools', 'standen', 'voorbeelden', p.split('/').at(-1)))); }
+      const o = vrij ? await st.overzicht().catch((err) => err) : null;
+      ok(`… netwerk terug: geen operaties meer onderweg, overzicht() antwoordt weer (${o?.standen?.length ?? o?.message} standen, ${o?.standen?.filter((x) => !x.fouten).length} zonder fout)`,
+        vrij && o?.standen?.length === 4 && o.standen.every((x) => x.fouten === 0) && st._lopend.size === 0);
+    }
+  }
+  {
+    // De grens wacht als er nog iets binnen de tijd loopt (gewoon traag), en start niets als alles hangt.
+    const g = maak();
+    const st = new Standen({ map: g.map, voorbeelden: g.standen.voorbeelden, lib: g.lib, nacht: g.nacht, kaart: g.kaart, leesMs: 300, log: () => {} });
+    const traag = (ms) => () => new Promise((z) => setTimeout(() => z(ms), ms));
+    let gestart = 0;
+    const t0 = performance.now();
+    const [a, b, c] = await Promise.all([st._extern('a', traag(60)), st._extern('b', traag(60)), st._extern('c', async () => { gestart++; return 'c'; })]);
+    ok(`twee trage (60 ms) en een derde: de derde wacht tot er een klaar is en lukt (${Math.round(performance.now() - t0)} ms)`, a === 60 && b === 60 && c === 'c' && gestart === 1);
+    const nooit = () => new Promise(() => {});
+    st._extern('x', nooit).catch(() => {}); st._extern('y', nooit).catch(() => {});
+    const t1 = performance.now();
+    const e = await gooit(() => st._extern('z', async () => { gestart++; return 'z'; }));
+    ok(`twee die nooit terugkomen en een derde: 503 na ${Math.round(performance.now() - t1)} ms (de tijdgrens), de derde nooit gestart`,
+      e instanceof StandFout && e.code === 503 && gestart === 1 && performance.now() - t1 < 1000);
+    const t2 = performance.now();
+    const e2 = await gooit(() => st._extern('w', async () => { gestart++; return 'w'; }));
+    ok(`… en daarna meteen 503 (${Math.round(performance.now() - t2)} ms: beide hangen al langer dan de tijdgrens)`, e2?.code === 503 && gestart === 1 && performance.now() - t2 < 50);
   }
   {
     // Ongewijzigd = uit het geheugen: 50 polls lezen geen enkel bestand opnieuw.

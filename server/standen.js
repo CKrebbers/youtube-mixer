@@ -42,10 +42,19 @@ import { komendeNacht } from './nacht.js';
  * (1) ongewijzigd volgens `stat` = uit het geheugen, geen nieuwe lees;
  * (2) nooit een tweede lees op hetzelfde pad zolang de eerste loopt (hooguit
  *     één vastzittende draad per bestand); loopt hij al langer dan de
- *     tijdgrens, dan meteen 503.
+ *     tijdgrens, dan meteen 503;
+ * (3) over alle paden samen hooguit MAX_DRADEN (2) operaties tegelijk
+ *     onderweg (review 2: vier dataless voorbeelden vulden anders in één poll
+ *     alle vier de draden). Vol = wachten tot er een klaar is, binnen de
+ *     tijdgrens; hangen ze allemaal al langer, dan meteen 503, zonder een
+ *     nieuwe draad te starten. De andere twee draden blijven voor de audio.
  */
 
 export const LEES_MS = 2000;
+/** Hoeveel fs-operaties van de standen tegelijk onderweg mogen zijn (de threadpool heeft er 4). */
+export const MAX_DRADEN = 2;
+const VOL_TEKST = `te veel bestanden tegelijk niet lokaal beschikbaar (iCloud?): de server leest er hooguit ${MAX_DRADEN} tegelijk, `
+  + 'zodat de audio blijft lezen; wacht op het netwerk of zet de VARVE-map buiten iCloud';
 /** De delen die "vorige terugzetten" kan terugzetten: wat de server zelf bezit. */
 export const TERUG_DELEN = Object.freeze(['mapping', 'nacht']);
 const MAANDEN = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
@@ -82,6 +91,26 @@ export function nachtTekst(datum) {
     : `de nacht van ${a.getDate()} ${MAANDEN[a.getMonth()]} op ${b.getDate()} ${MAANDEN[b.getMonth()]}`;
 }
 
+/** Een nachtdeel van een stand in gewone taal: "ongemoeid", "vannacht niet", "uit", "uit en vannacht niet". */
+function beschrijfRem(n) {
+  const d = [n?.aan === false && 'uit', n?.vannacht === false && 'vannacht niet'].filter(Boolean);
+  return d.length ? d.join(' en ') : 'ongemoeid';
+}
+
+/**
+ * "leg vast" legt de rem van NU vast. Komt er daardoor een rem bij die de stand
+ * nog niet had, dan één zin die zegt wat de opstelling voortaan doet (null als
+ * er niets bijkomt). `oud` = het nachtdeel van de stand, null bij een nieuwe.
+ */
+export function opmerkingStrenger(oud, nieuw) {
+  const uit = nieuw.aan === false && oud?.aan !== false;
+  const vannacht = nieuw.vannacht === false && oud?.vannacht !== false;
+  if (!uit && !vannacht) return null;
+  const waarom = [uit && 'de nachtwachtrij staat nu uit, dus deze opstelling zet hem voortaan bij elke activering helemaal uit',
+    vannacht && '"vandaag niet" staat nu aan, dus deze opstelling remt voortaan bij elke activering de komende nacht'].filter(Boolean).join('; ');
+  return `nacht: ${oud ? `${beschrijfRem(oud)} → ` : ''}${beschrijfRem(nieuw)} (${waarom}; anders kies je het in de bewerker)`;
+}
+
 async function binnenTijd(belofte, ms, fout) {
   let t;
   const tijd = new Promise((_, nee) => { t = setTimeout(() => nee(fout), ms); t.unref?.(); });
@@ -104,12 +133,13 @@ export class Standen {
    * @param o.klok             () => Date
    * @param o.leesMs           hoe lang een lees mag duren voor 503 (iCloud)
    * @param o.leesBestand      async (pad) => Buffer (readFile; de tests tellen ermee)
+   * @param o.maxDraden        hoeveel fs-operaties tegelijk onderweg mogen zijn, over alle paden samen
    */
   constructor({ map, voorbeelden, lib, nacht, kaart, sjablonen = async () => [], standaardMapping = async () => null,
     profielen = async () => null, hubSets = async () => null, speeltDeck = () => false, valideerNacht = null,
-    klok = () => new Date(), log = console.log, leesMs = LEES_MS, leesBestand = readFile }) {
+    klok = () => new Date(), log = console.log, leesMs = LEES_MS, leesBestand = readFile, maxDraden = MAX_DRADEN }) {
     Object.assign(this, { map, voorbeelden, lib, nacht, kaart, sjablonen, standaardMapping, profielen, hubSets,
-      speeltDeck, valideerNacht, klok, log, leesMs, leesBestand });
+      speeltDeck, valideerNacht, klok, log, leesMs, leesBestand, maxDraden });
     this._lopend = new Map();   // sleutel (pad) → { belofte, sinds }: één fs-operatie tegelijk per pad
     this._cache = new Map();    // pad → { sleutel (ino:size:mtime:ctime), buf, gewijzigd }
   }
@@ -124,10 +154,27 @@ export class Standen {
    * Eén fs-operatie tegelijk per `sleutel`, binnen de tijd (zie bovenaan:
    * iCloud). Wie komt terwijl er al een loopt, wacht op diezelfde (geen
    * tweede draad); loopt die al langer dan `leesMs`, dan meteen 503.
+   * Daarbovenop de grens voor de hele server: hooguit `maxDraden` operaties
+   * tegelijk onderweg. Is die vol, dan wachten we tot er een klaar is, zolang
+   * er nog een binnen de tijd loopt en wij zelf nog tijd hebben; hangen ze
+   * allemaal al langer dan `leesMs`, dan meteen 503. Een nieuwe draad starten
+   * we dan nooit.
    */
   async _beperkt(sleutel, werk, tekst = `stand niet lokaal beschikbaar (iCloud?): ${sleutel}; zet VARVE_STANDEN op een map buiten iCloud`) {
     const fout = () => new StandFout(503, tekst);
+    const t0 = performance.now();
     let l = this._lopend.get(sleutel);
+    while (!l && this._lopend.size >= this.maxDraden) {
+      const nu = performance.now();
+      const jong = [...this._lopend.values()].filter((x) => nu - x.sinds < this.leesMs);
+      const rest = Math.min(this.leesMs - (nu - t0), ...jong.map((x) => this.leesMs - (nu - x.sinds)));
+      if (!jong.length || rest <= 0) throw new StandFout(503, VOL_TEKST);
+      let t;
+      await Promise.race([...[...this._lopend.values()].map((x) => x.belofte.then(() => {}, () => {})),
+        new Promise((z) => { t = setTimeout(z, rest); t.unref?.(); })]);
+      clearTimeout(t);
+      l = this._lopend.get(sleutel);   // intussen gestart door een ander: meeliften
+    }
     if (l && performance.now() - l.sinds >= this.leesMs) throw fout();
     if (!l) {
       l = { belofte: Promise.resolve().then(werk), sinds: performance.now() };
@@ -165,6 +212,21 @@ export class Standen {
    * iCloud. Zelfde regel: één tegelijk, binnen de tijd.
    */
   _extern(wat, f) { return this._beperkt(`extern:${wat}`, () => f(), `${wat} niet lokaal beschikbaar (iCloud?)`); }
+
+  /**
+   * racks/sjablonen.json: { lijst } of { lijst: [], fout } als hij niet te
+   * lezen is (iCloud, kapotte JSON). "Niet te lezen" is iets anders dan "het
+   * sjabloon staat er niet in" (review 2).
+   */
+  async _sjablonen() {
+    try {
+      const l = await this._extern('racks/sjablonen.json', this.sjablonen);
+      return { lijst: Array.isArray(l) ? l : [] };
+    } catch (err) {
+      const reden = err instanceof StandFout ? 'niet lokaal beschikbaar (iCloud?)' : String(err?.message || err);
+      return { lijst: [], fout: `racks/sjablonen.json niet te lezen (${reden})` };
+    }
+  }
 
   /** Een map lezen, ook beperkt; een map die er niet is = []. */
   async _leesMap(map) {
@@ -223,13 +285,17 @@ export class Standen {
     return { standen: await this.lijst(), actief: a.naam || a.teruggezet ? a : null, label: LABEL };
   }
 
-  /** GET /api/standen/actief: altijd een object; { naam: null } als er niets actief is. */
+  /** GET /api/standen/actief: een object; { naam: null } als er niets actief is. StandFout 503 als het niet te lezen is. */
   async actief() {
     try {
       const b = await this._leesBestand(this.actiefPad);
       const j = b ? JSON.parse(b.buf.toString('utf8')) : null;
       return j && typeof j === 'object' && !Array.isArray(j) ? j : { naam: null };
-    } catch { return { naam: null }; }
+    } catch (err) {
+      // Niet te lezen (iCloud, de grens vol) is "onbekend", niet "niets actief": 503 door.
+      if (err instanceof StandFout) throw err;
+      return { naam: null };
+    }
   }
 
   // ---- opslaan ------------------------------------------------------------------
@@ -283,8 +349,9 @@ export class Standen {
     const w = [];
     const d = stand.delen;
     if (d.master) {
-      const lijst = await this._extern('racks/sjablonen.json', this.sjablonen).catch(() => []);
-      if (!lijst.some((r) => r?.name === d.master.sjabloon)) w.push(`geen sjabloon "${d.master.sjabloon}" in racks/sjablonen.json`);
+      const s = await this._sjablonen();
+      if (s.fout) w.push(`${s.fout}: sjabloon "${d.master.sjabloon}" niet nagekeken`);
+      else if (!s.lijst.some((r) => r?.name === d.master.sjabloon)) w.push(`geen sjabloon "${d.master.sjabloon}" in racks/sjablonen.json`);
     }
     if (d.kaart && this.kaart) {
       try { this.kaart.laad(); } catch {}
@@ -383,10 +450,12 @@ export class Standen {
     }
 
     // 4. De krat: nakijken, niet openen (de kaart opent er pas in stap D op).
+    let krat = null;
     if ('kaart' in d) {
       let status = null;
       try { status = this.kaart?.laad?.()?.status ?? null; } catch {}
       const k = (this.kaart?.kratten ?? []).find((x) => x.id === d.kaart.krat);
+      krat = k ?? null;
       if (status && status !== 'geladen') verslag.waarschuwingen.push(`de kaart is niet geladen (${status}): krat "${d.kaart.krat}" niet nagekeken`);
       else if (!k) verslag.waarschuwingen.push(`krat "${d.kaart.krat}" niet in de kaart`);
       else {
@@ -398,9 +467,10 @@ export class Standen {
     // 5. Het master-rack: op naam opzoeken en vastleggen; de mixer neemt het pas later over (stap M).
     let master = null;
     if ('master' in d) {
-      const lijst = await this._extern('racks/sjablonen.json', this.sjablonen).catch(() => []);
+      const { lijst, fout } = await this._sjablonen();
       const i = lijst.findIndex((r) => r?.name === d.master.sjabloon);
-      if (i < 0) verslag.fouten.push({ deel: 'master', fout: `geen sjabloon "${d.master.sjabloon}" in racks/sjablonen.json` });
+      if (fout) verslag.fouten.push({ deel: 'master', fout: `${fout}: sjabloon "${d.master.sjabloon}" niet vastgelegd` });
+      else if (i < 0) verslag.fouten.push({ deel: 'master', fout: `geen sjabloon "${d.master.sjabloon}" in racks/sjablonen.json` });
       else {
         master = { sjabloon: d.master.sjabloon, herkomst: `s:${i}`, rack: lijst[i] };
         verslag.mixer.push('master');
@@ -439,7 +509,8 @@ export class Standen {
     const actief = {
       naam, titel: g.stand.titel || naam, versie: g.versie, bron: g.bron, sinds, vorige, raakt, verslag,
       na: Object.fromEntries(raakt.map((x) => [x, this._toestand(x)])),
-      mixer: { master }, hub: d.hub ?? null, pakket: d.pakket ?? null, kaart: d.kaart ?? null, delen,
+      // De kaart met de naam die de kaart zelf geeft ("Proefkrat"), zodat de tegel hetzelfde zegt als het verschil.
+      mixer: { master }, hub: d.hub ?? null, pakket: d.pakket ?? null, kaart: d.kaart ? { ...d.kaart, ...(krat?.naam ? { naam: krat.naam } : {}) } : null, delen,
     };
     await this._schrijfAtomisch(this.actiefPad, JSON.stringify(actief, null, 1));
     this.log?.(`[standen] ${naam} actief: ${[...verslag.toegepast, ...verslag.gecontroleerd].join(', ') || 'niets op de server'}`
@@ -515,6 +586,10 @@ export class Standen {
     const opmerkingen = [];
     const behouden = [oudNacht.aan === false && this.nacht.instellingen.aan && 'uit', oudNacht.vannacht === false && !this.nacht.vandaagNiet && 'vannacht niet'].filter(Boolean);
     if (behouden.length) opmerkingen.push(`nachtrem uit de opstelling behouden (${behouden.join(', ')}); weghalen doe je in de bewerker`);
+    // Andersom niet stil (review 2): wordt de rem strenger omdat de nacht NU zo staat (de nachtwachtrij staat
+    // standaard uit), dan zegt het antwoord dat, want de opstelling doet dat voortaan bij elke activering.
+    const strenger = opmerkingStrenger(g ? oudNacht : null, nacht);
+    if (strenger) opmerkingen.push(strenger);
     for (const [deel, w] of Object.entries(oud)) {
       if (deel === 'mapping' || deel === 'nacht') continue;
       if (['hub', 'pakket', 'kaart', 'master'].includes(deel) && !houd.includes(deel)) continue;
@@ -599,7 +674,8 @@ export class Standen {
 
   /** GET /api/standen/keuzes: waaruit de bewerker in de Controlekamer kiest. */
   async keuzes() {
-    const sjablonen = (await this._extern('racks/sjablonen.json', this.sjablonen).catch(() => [])).map((r) => r?.name).filter((n) => typeof n === 'string');
+    const sj = await this._sjablonen();
+    const sjablonen = sj.lijst.map((r) => r?.name).filter((n) => typeof n === 'string');
     try { this.kaart?.laad(); } catch {}
     const kratten = (this.kaart?.kratten ?? []).map((k) => ({ id: k.id, naam: k.naam, aantal: k.lijst?.length ?? 0 }));
     let profielen = null;
@@ -615,6 +691,6 @@ export class Standen {
         if (typeof p === 'string' && !bekendeProfielen.includes(p)) bekendeProfielen.push(p);
       } catch {}
     }
-    return { sjablonen, kratten, profielen, bekendeProfielen, hubSets, mappingNu: beschrijfMapping(this.lib.haal('mapping', null)), delen: Object.keys(DELEN) };
+    return { sjablonen, sjablonenFout: sj.fout ?? null, kratten, profielen, bekendeProfielen, hubSets, mappingNu: beschrijfMapping(this.lib.haal('mapping', null)), delen: Object.keys(DELEN) };
   }
 }
