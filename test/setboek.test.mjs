@@ -104,6 +104,9 @@ console.log('\n4. wat een track stil maakt');
   ok('master dicht = niets hoorbaar', master.stukken.length === 2 && master.stukken[0].tot === 50 && master.stukken[1].van === 150);
   const kills = met([[50, 'track.1.kill.low', true], [50, 'track.1.kill.mid', true], [50, 'track.1.kill.high.hold', true], [150, 'track.1.kill.high.hold', false]]);
   ok('drie kills (twee schakelaars + één vastgehouden) = niet hoorbaar; loslaten = terug', kills.stukken.length === 2 && kills.stukken[0].tot === 50 && kills.stukken[1].van === 150);
+  const knoppen = met([[50, 'track.1.low', 0], [50, 'track.1.mid', 0.02], [50, 'track.1.kill.high', true], [150, 'track.1.mid', 0.2]]);
+  ok('EQ-knoppen onderaan (< 3% = kill, eqDb) tellen als kill: laag 0 + midden 0,02 + hoog-kill = stil; midden op 0,2 = terug',
+    knoppen.stukken.length === 2 && knoppen.stukken[0].tot === 50 && knoppen.stukken[1].van === 150, JSON.stringify(knoppen.stukken));
   const twee = met([[50, 'track.1.kill.low', true], [50, 'track.1.kill.mid', true]]);
   ok('twee kills = nog hoorbaar', twee.stukken.length === 1);
   const zacht = met([[50, 'track.1.fader', 0.3], [150, 'track.1.fader', 0.4]]);

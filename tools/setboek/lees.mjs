@@ -17,14 +17,14 @@
  *   setboek(bestanden, opties) alles samen; naarMarkdown / naarJson
  *
  * De regel "hoorbaar": de track speelt, er staat een nummer op, niet alle
- * drie de EQ-kills, niet alle stems dicht, de master open, en
+ * drie de EQ-banden weg (kill, of de knop onderaan), niet alle stems dicht, de master open, en
  * 20·log10(klinkt(fader, kant) × trim × 2) boven de drempel (−30 dB). `klinkt`
  * is dezelfde als die van de video-puls (src/video/puls.js), en de curves zijn
  * die van de engine (faderGain, xfaderGains): het setboek en het beeld
  * bedoelen met "je hoort hem" hetzelfde.
  */
 import { leesLog } from '../../src/control/handelingen.js';
-import { xfaderGains } from '../../src/engine/audio-graph.js';
+import { xfaderGains, eqDb, EQ_KILL_DB } from '../../src/engine/audio-graph.js';
 import { klinkt } from '../../src/video/puls.js';
 import { tellingen } from './gebruik.mjs';
 
@@ -123,7 +123,7 @@ function nieuweTrack(nr) {
     nr, titel: null, nummer: null, bron: null, laadId: 0,
     speelt: false, sindsStart: null, eind: null, remT: null, instT: null,
     kant: standaardKant(nr), fader: 1, trim: 0.5, filter: 0.5,
-    kill: { low: false, mid: false, high: false }, killVast: { low: false, mid: false, high: false },
+    kill: { low: false, mid: false, high: false }, killVast: { low: false, mid: false, high: false }, eq: { low: 0.5, mid: 0.5, high: 0.5 },
     stems: false, stemNiveau: {}, stemKill: {}, stemVast: {},
     positie: null, tStand: 0, rate: 1, bereik: 0.16, cue: 0, opCue: null,
     hotcues: [null, null, null, null], secties: null, loop: false, onzeker: false,
@@ -223,6 +223,8 @@ export function* toestand(log, opties = {}) {
       // De auto-DJ (AUTO-DJ.md §2b): "glijd hierheen in 0,5 s". Hier meteen: een halve seconde valt in de afronding.
       const k = a.slice(0, -'.glide'.length);
       tr[k] = getal(v, tr[k]);
+    } else if (a === 'low' || a === 'mid' || a === 'high') {
+      tr.eq[a] = getal(v, tr.eq[a]);                    // de EQ-knop: onderaan (< 3%) is ook een kill (eqDb)
     } else if ((m = /^kill\.(low|mid|high)$/.exec(a))) {
       if (v === true) tr.kill[m[1]] = !tr.kill[m[1]];
     } else if ((m = /^kill\.(low|mid|high)\.hold$/.exec(a))) {
@@ -284,6 +286,7 @@ export function* toestand(log, opties = {}) {
         if (k === 'mixer.xfader') g.xfader = getal(v, g.xfader);
         else if (k === 'mixer.master') g.master = getal(v, g.master);
         else if ((m = /^track\.(\d+)\.(fader|trim|filter)$/.exec(k))) { const tr = track(m[1]); if (tr) tr[m[2]] = getal(v, tr[m[2]]); }
+        else if ((m = /^track\.(\d+)\.(low|mid|high)$/.exec(k))) { const tr = track(m[1]); if (tr) tr.eq[m[2]] = getal(v, 0.5); }
         else if ((m = /^track\.(\d+)\.stem\.(vocals|inst|drums|bass|other)$/.exec(k))) { const tr = track(m[1]); if (tr) tr.stemNiveau[m[2]] = getal(v, 1); }
       }
       if (r.rond && 'mixer.xfader.curve' in r.rond) g.curve = r.rond['mixer.xfader.curve'] === 1 ? 'sharp' : 'smooth';
@@ -359,7 +362,8 @@ export function hoort(tr, g, xg, opties = {}) {
   const kantGain = tr.kant === 'A' ? xg.a : tr.kant === 'B' ? xg.b : 1;
   const gain = klinkt(tr.fader, kantGain) * tr.trim * 2;
   const db = gain > 0 ? 20 * Math.log10(gain) : -Infinity;
-  const ja = db > o.drempelDb && g.master > o.stil && !BANDEN.every((b) => tr.kill[b] || tr.killVast[b]) && !(tr.stems && stemsDicht(tr, o.stil));
+  const bandWeg = (b) => tr.kill[b] || tr.killVast[b] || eqDb(tr.eq[b]) === EQ_KILL_DB;
+  const ja = db > o.drempelDb && g.master > o.stil && !BANDEN.every(bandWeg) && !(tr.stems && stemsDicht(tr, o.stil));
   return { ja, db, gefilterd };
 }
 
@@ -586,7 +590,7 @@ export function naarMarkdown(res) {
   if (!res.stukken.length) r.push('Geen.');
   const i = res.instellingen;
   r.push('', '## Hoe dit gemaakt is', '',
-    `Hoorbaar = de track speelt, er staat een nummer op, fader × crossfaderkant × trim boven ${i.drempelDb} dB, niet alle drie de kills, niet alle stems dicht, master open. `
+    `Hoorbaar = de track speelt, er staat een nummer op, fader × crossfaderkant × trim boven ${i.drempelDb} dB, niet alle drie de EQ-banden weg (kill of knop onderaan), niet alle stems dicht, master open. `
     + `Korter dan ${i.minDuur} s telt niet; gaten korter dan ${i.samenvoegen} s zijn gelijmd. Tijden en posities in de bron zijn benaderd (het log is de partituur van de bus, geen meting van het geluid).`,
     '',
     `Het log ziet niet: het einde van een nummer${i.lengte ? ' (geschat uit de lengte in de library, alleen zonder loop)' : ' (zonder library-kopie niet geschat)'}, `

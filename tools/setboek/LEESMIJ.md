@@ -43,12 +43,12 @@ een kopie. Nooit `pkill`/`killall` in de buurt van deze map: er draait geen serv
 | `lees.mjs` | puur (geen fs): `rijgLogs`, `laadmomenten`, `toestand`, `hoort`, `hoorbaar`, `positieInBron`, `proefpunten`, `setboek`, `naarMarkdown`, `naarJson` |
 | `gebruik.mjs` | `tellingen(regels)`: top 10 actions, laads, actieve minuten. Eén teller, ook voor een latere `tools/gebruik.mjs` |
 | `setboek.mjs` | de CLI: bestanden lezen, `--dag`, `--db`, `--proef`, uitvoer |
-| `../../test/setboek.test.mjs` | 77 checks op synthetische logs in het echte formaat, en de CLI in een tijdelijke map |
+| `../../test/setboek.test.mjs` | 78 checks op synthetische logs in het echte formaat, en de CLI in een tijdelijke map |
 
 ## De regel "hoorbaar"
 
 Een track telt als hoorbaar als hij speelt, er een nummer op staat, niet alle drie de
-EQ-kills aan staan, niet alle stems dicht zijn, de master open is (> 0,01) en
+EQ-banden weg zijn (kill, vastgehouden kill, of de knop onderaan: < 3% = kill, `eqDb`), niet alle stems dicht zijn, de master open is (> 0,01) en
 
     20 · log10( klinkt(fader, crossfaderkant) × trim × 2 )  >  −30 dB
 
