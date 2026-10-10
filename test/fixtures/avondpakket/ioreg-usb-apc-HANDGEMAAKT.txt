@@ -1,0 +1,12 @@
++-o APC40 mkII@01100000  <class IOUSBHostDevice, id 0x100000a1b, registered, matched, active, busy 0 (12 ms), retain 34>
+    {
+      "sessionID" = 1234567890
+      "USB Product Name" = "APC40 mkII"
+      "idProduct" = 41
+      "iManufacturer" = 1
+      "bDeviceClass" = 239
+      "USB Vendor Name" = "Akai Professional"
+      "idVendor" = 2536
+      "kUSBProductString" = "APC40 mkII"
+    }
+    

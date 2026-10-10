@@ -1,0 +1,5 @@
+ Wattage = 8W
+ Current = 1500mA
+ Voltage = 5000mV
+ AdapterID = 10
+ Family Code = 0xe0004008

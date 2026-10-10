@@ -1,0 +1,56 @@
+{
+  "_doc": "Avondpakket (docs/AVONDPAKKET.md). De code leest dit alleen. Apparaten: hoe ze in system_profiler/ioreg te herkennen zijn (naam = regex zonder slashes, usb = 'vid:pid' hex). Profielen: per apparaat verwacht|optioneel|nee. Fase auto: geen apparaat van het profiel gezien = vertrek, anders aankomst. bekend: oranje punten die Clay bewust accepteert (worden grijs). hardwareBevestigd: pas true na de uittrekproef (stap 7b); tot dan is niet-geziene hardware hooguit oranje.",
+  "standaard": "apc",
+  "fase": "auto",
+  "hardwareBevestigd": false,
+  "bekend": ["icloud"],
+  "grenzen": { "schijfRoodGiB": 20, "schijfOranjeGiB": 50, "accuRoodProcent": 20, "accuVertrekProcent": 80, "laderMinW": 30 },
+  "apparaten": {
+    "apc40":    { "titel": "APC40 mkII",   "naam": "apc40",              "usb": ["09e8:0029"], "via": "direct", "kabel": "USB-B → USB-C (eigen kabel)" },
+    "scarlett": { "titel": "Scarlett 2i2", "naam": "scarlett|focusrite", "usb": [],            "via": "hub-pd", "kabel": "USB-C → USB-C" },
+    "maschine": { "titel": "Maschine MK2", "naam": "maschine",           "usb": ["17cc:1140"], "via": "hub-pd", "kabel": "USB-B → USB-C" },
+    "lpd8":     { "titel": "LPD8",         "naam": "lpd8",               "usb": [],            "via": "hub-pd", "kabel": "USB-B → USB-C" },
+    "xboard":   { "titel": "Xboard49",     "naam": "xboard",             "usb": [],            "via": "hub-pd" }
+  },
+  "virtueel": "blackhole|soundflower|loopback",
+  "profielen": {
+    "laptop": {
+      "titel": "Alleen de laptop",
+      "geluid": "optioneel", "apc40": "nee", "scarlett": "nee", "maschine": "nee", "lpd8": "nee", "xboard": "nee",
+      "avhub": "nee", "usbhub": "nee", "voeding": "verwacht", "tailscale": "optioneel", "beeld": "nee",
+      "kan": ["fader: één tegelijk, met de muis (geen overgang met de hand)", "filter ✓, fx ✓, echo ✓ op de focus-track", "alles met toetsenbord (KEYMAP)"],
+      "kanNiet": ["twee faders tegelijk", "aparte cue met alleen de Mac-uitgang (2 kanalen)"]
+    },
+    "apc": {
+      "titel": "APC",
+      "geluid": "verwacht", "apc40": "verwacht", "scarlett": "verwacht", "maschine": "nee", "lpd8": "nee", "xboard": "nee",
+      "avhub": "nee", "usbhub": "verwacht", "voeding": "verwacht", "tailscale": "optioneel", "beeld": "optioneel", "peers": ["clayk"],
+      "zaal": "bedraad",
+      "kan": ["fader ✓ 8 tegelijk (11.796×) · filter ✓ (6.452×) · fx ✓ (5.064×) · echo ✓ (4.765×): Clay's vier meest gebruikte gebaren, SP r.219 (niet nagerekend)", "het volledige DJ-werk zonder hub (docs/APC40.md): grid-modi, EQ/trim, master, crossfader, Cue Level, tempo, keylock, loops, opname, beeld-noodknoppen"],
+      "kanNiet": ["bladeren/laden vanaf de APC (ONTBREEKT B10): muis of toetsenbord", "Maschine-pads en -patronen"],
+      "let": ["APC direct in de Mac; Scarlett en lader via de PD-hub", "sysex-toestemming, anders blijven de lampjes dood", "modi van na 5 okt nooit op het apparaat nagelopen"]
+    },
+    "maschine": {
+      "titel": "Maschine via hub",
+      "geluid": "verwacht", "apc40": "nee", "scarlett": "verwacht", "maschine": "verwacht", "lpd8": "optioneel", "xboard": "optioneel",
+      "avhub": "verwacht", "usbhub": "verwacht", "voeding": "verwacht", "tailscale": "optioneel", "beeld": "optioneel", "set": "studio",
+      "kan": ["geen fader: overgangen met de muis", "filter ✓, fx ✓, echo ✓ alleen op de focus-track", "pads als instrument, stapmodus en patronen, Strip/Rack-pagina's, secties, sampler, bladeren en laden met het wiel"],
+      "kanNiet": ["play/pauze, faders, crossfader, tempo per deck (MASCHINE.md §5c): muis of toetsenbord"],
+      "let": ["hub-lease nooit op de hardware geproefd", "de eerste wielklik na het insteken telt niet"]
+    },
+    "alles": {
+      "titel": "APC + Maschine (avond 2)",
+      "geluid": "verwacht", "apc40": "verwacht", "scarlett": "verwacht", "maschine": "verwacht", "lpd8": "optioneel", "xboard": "optioneel",
+      "avhub": "verwacht", "usbhub": "verwacht", "voeding": "verwacht", "tailscale": "optioneel", "beeld": "optioneel", "set": "studio", "peers": ["clayk"],
+      "kan": ["alles van apc én maschine"],
+      "let": ["de APC gaat via de hub: Bank is dan de hubtoets", "de hub-set start geen tweede Varve-server als 8777 al bezet is (set.js r.97); het pakket kijkt toch: één proces op library.db"]
+    },
+    "beeld": {
+      "titel": "APC + beeld (avond 3)",
+      "geluid": "verwacht", "apc40": "verwacht", "scarlett": "verwacht", "maschine": "nee", "lpd8": "nee", "xboard": "nee",
+      "avhub": "nee", "usbhub": "verwacht", "voeding": "verwacht", "tailscale": "verwacht", "beeld": "verwacht", "peers": ["clayk"],
+      "kan": ["alles van apc", "Stroommachine op de pc volgt klok en nummer (docs/BEELD.md)"],
+      "let": ["Varve zelf speelt zonder internet; alleen beeld (Tailscale naar clayk) en de iPhone hebben netwerk nodig", "HDMI-adapter en de voeding van de pc apart inpakken"]
+    }
+  }
+}

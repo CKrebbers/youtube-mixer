@@ -1,0 +1,14 @@
+{
+ "SPUSBHostDataType": [
+  {
+   "_name": "USB 3.1 Bus",
+   "Driver": "AppleT8103USBXHCI",
+   "USBKeyHardwareType": "Built-in"
+  },
+  {
+   "_name": "USB 3.1 Bus",
+   "Driver": "AppleT8103USBXHCI",
+   "USBKeyHardwareType": "Built-in"
+  }
+ ]
+}

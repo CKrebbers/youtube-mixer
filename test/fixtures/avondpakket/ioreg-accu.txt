@@ -1,0 +1,3 @@
+  |   "MaxCapacity" = 100
+  |   "CycleCount" = 591
+  |   "BatteryData" = {"FullChargeCapacity"=3413,"NominalChargeCapacity"=3543,"FullyCharged"=0,"AvgTimeToEmpty"=65535,"RemainingCapacity"=2194,"AbsoluteCapacity"=0,"MaxCapacity"=100,"DesignCapacity"=4382,"CurrentCapacity"=65,"BatteryPower"=3661,"TrueRemainingCapacity"=0}

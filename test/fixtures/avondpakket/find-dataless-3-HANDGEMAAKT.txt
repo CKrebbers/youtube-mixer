@@ -1,0 +1,3 @@
+/Users/test/varve/media/nr01_test/stems.wav
+/Users/test/varve/media/nr02_test/stems.wav
+/Users/test/varve/media/backups/library-2026-10-08T14-44-00.db
