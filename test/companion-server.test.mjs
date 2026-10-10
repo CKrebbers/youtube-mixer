@@ -124,7 +124,11 @@ try {
   ok(`GET: acht tracks, leeftijd ${na1.j.leeftijd_ms} ms (< 1000), de beeldstand erbij`, na1.j.melding?.tracks?.length === 8 && na1.j.leeftijd_ms < 1000
     && na1.j.melding.eind.bevroren === true && na1.j.twee === false);
   const nuH = L.nuHtml(na1.j);
-  ok('de companion tekent acht rijen, A met "nog 49:5x"', (nuH.match(/<li class="nu-track/g) || []).length === 8 && /nog 49:5\d/.test(nuH));
+  // Review ronde 2, fix 1: 600 van 3600 bij rate 1 is precies 3000 s; geeft de server de melding in dezelfde
+  // milliseconde terug (leeftijd 0), dan is het "nog 50:00". Verwacht wat restTekst bij DIE leeftijd geeft.
+  const verwacht = L.restTekst(na1.j.melding.tracks.find((t) => t.id === 'A'), na1.j.leeftijd_ms);
+  ok(`de companion tekent acht rijen, A met "${verwacht}" (leeftijd ${na1.j.leeftijd_ms} ms)`, (nuH.match(/<li class="nu-track/g) || []).length === 8
+    && /^(nog 49:5\d|nog 50:00)$/.test(verwacht ?? '') && nuH.includes(verwacht));
   ok('en de beeldstand: BEVRIES aan, MASTER 80 %', /BEVRIES<\/b><span>aan/.test(L.beeldHtml(na1.j.melding.eind)) && /80 %/.test(L.beeldHtml(na1.j.melding.eind)));
   const lijf = JSON.stringify(melding());
   const ts = await rauw(met, '/api/mixer', { method: 'POST', headers: { Host: TS, 'Content-Type': 'application/json' }, body: lijf });
@@ -158,9 +162,21 @@ try {
   const zonderTracks = await post('/api/mixer', { t: 1, tab: 'tab-proef-1' });
   ok(`{ t, tab } zonder tracks: ${zonderTracks.status}`, zonderTracks.status === 400);
   ok('een negende track: 400', (await post('/api/mixer', { ...melding(), tracks: [...melding().tracks, { id: 'I' }] })).status === 400);
+  // Review ronde 2, fix 2: alleen om beurten (1, 2, 1) is "twee mixers"; herladen (de oude stopt, de nieuwe begint) niet.
   await post('/api/mixer', melding('tab-proef-2'));
-  ok('twee POSTs met een ander tab-id: twee: true (de rode regel op de companion)', (await get('/api/mixer')).j.twee === true
-    && L.nuHtml((await get('/api/mixer')).j).includes('twee mixers open'));
+  const naTwee = (await get('/api/mixer')).j;
+  ok('een ander tab-id na de vorige (kan een herladen zijn): nog geen alarm', naTwee.twee === false && !L.nuHtml(naTwee).includes('twee mixers open'));
+  await post('/api/mixer', melding('tab-proef-1'));
+  const omBeurten = (await get('/api/mixer')).j;
+  ok('om beurten: tab-proef-1, -2, -1 → twee: true (de rode regel op de companion)', omBeurten.twee === true
+    && L.nuHtml(omBeurten).includes('twee mixers open'));
+  await wacht(5200);   // iets langer dan TWEE_MS: de eerdere id's verlopen
+  await post('/api/mixer', melding('tab-proef-3'));
+  await post('/api/mixer', melding('tab-proef-4'));
+  await post('/api/mixer', melding('tab-proef-4'));
+  const herladen = (await get('/api/mixer')).j;
+  ok('herladen na 5,2 s stilte: tab-proef-3 één keer, dan alleen -4 → twee: false, geen rode regel', herladen.twee === false
+    && !L.nuHtml(herladen).includes('twee mixers open') && herladen.melding.tab === 'tab-proef-4');
   const viaTsGet = await rauw(met, '/api/mixer', { headers: { Host: TS } });
   ok(`GET via de ts-naam (iPhone): ${viaTsGet.status}, met de melding`, viaTsGet.status === 200 && JSON.parse(viaTsGet.body).melding?.tracks?.length === 8);
 

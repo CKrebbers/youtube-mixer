@@ -154,7 +154,8 @@ body[data-tab="beeld"] #nu, body[data-tab="beeld"] #kaart{display:none}
   main{grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-template-areas:"kaart rechts";align-items:start;column-gap:28px}
   body[data-tab] #kaart{display:block;grid-area:kaart}
   .rechts{display:grid;gap:22px;align-content:start;grid-area:rechts;align-self:start;position:sticky;
-    top:calc(var(--kop) + env(safe-area-inset-top) + 14px);max-height:calc(100vh - var(--kop) - env(safe-area-inset-top) - 28px);overflow-y:auto}
+    top:calc(var(--kop) + env(safe-area-inset-top) + 14px);max-height:calc(100vh - var(--kop) - env(safe-area-inset-top) - 28px);overflow-y:auto;
+    scrollbar-gutter:stable;padding-right:6px}   /* de resttijd raakt de schuifbalk niet (review ronde 2, fix 7) */
   body[data-tab] #nu, body[data-tab] #beeld{display:block}
   .meldingen{bottom:16px}
 }

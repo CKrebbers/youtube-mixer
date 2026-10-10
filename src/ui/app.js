@@ -29,7 +29,7 @@ import { opzetOnderpanelen } from './onderpanelen.js';
 import { opzetMidi } from './midi-opzet.js';
 import { startRenderloop } from './renderloop.js';
 import { tabblad } from './tabblad.js';
-import { startStatusZender } from './status-zender.js';
+import { startStatusZender, eindUitActions } from './status-zender.js';
 import { vormenAan, hubAdres, hubGeweigerd } from './vlag.js';
 import { opzetBovenbalk } from './bovenbalk.js';
 
@@ -316,7 +316,7 @@ const TAB_ID = globalThis.crypto?.randomUUID?.() ?? `tab-${Math.random().toStrin
 startStatusZender({
   isEerste: statusVanMij, naarServer: true,
   lees: () => ({ snap: engine.snapshot(), midi: midiDelen.midi.status(), audio: engine.ctx.state,
-                 tab: TAB_ID, eind: { zwart: read('video.black') === 1, bevroren: read('video.freeze') === 1, master: read('video.master') ?? 1 },
+                 tab: TAB_ID, eind: eindUitActions(read),
                  auto: auto.aan, opname: !!opname.opnemer.bezig, beeld: beeld.status() }),
 });
 

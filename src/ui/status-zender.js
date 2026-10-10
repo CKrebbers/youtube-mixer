@@ -32,6 +32,21 @@ function eindBericht(eind) {
 }
 
 /**
+ * De beeld-noodknoppen zoals de zaal ze ziet, uit de action-bus (`read` uit
+ * src/control/actions.js wordt meegegeven: dit bestand laadt de bus niet).
+ * Zwart = de schakelaar (`video.black`) óf de drukvariant (`video.black.hold`,
+ * ook de paniekknop van de hub), net als Eindbeeld._naarZwart
+ * (src/video/eindbeeld.js). Review ronde 2, fix 6.
+ */
+export function eindUitActions(read) {
+  return {
+    zwart: read('video.black') === 1 || read('video.black.hold') === 1,
+    bevroren: read('video.freeze') === 1,
+    master: read('video.master') ?? 1,
+  };
+}
+
+/**
  * Het bericht, uit een engine-snapshot en de MIDI-status. Puur.
  * `beeld` = status() van de BeeldKoppeling (src/koppel/beeld.js), mag
  * ontbreken: dan staat er beeld: null in het bericht (beeld-weergave.js).

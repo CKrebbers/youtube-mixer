@@ -23,6 +23,8 @@ export const PAGINA = 50;
 export const VERS_MS = 5000;
 /** Ouder dan dit: de resttijd is een schatting (≈). */
 export const SCHATTING_MS = 1500;
+/** Ouder dan dit: geen resttijden meer (die zouden verzonnen zijn), wel hoe lang geleden de laatste melding was. */
+export const WEG_MS = 60_000;
 /** "Haal nu" vraagt hooguit zoveel tegelijk (meer is werk voor de nacht of de laptop). */
 export const HAAL_MAX = 20;
 
@@ -150,16 +152,24 @@ const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart
 /**
  * "nog 49:58", of "≈ nog 49:58" als de melding ouder is dan SCHATTING_MS.
  * (duur − positie) / rate is de resttijd op het moment van de melding; de
- * leeftijd van de melding gaat eraf. Null als het deck niet speelt of een
- * veld ontbreekt (de mixer van vóór stap 2 stuurt geen positie).
+ * leeftijd van de melding gaat eraf. Null als het deck niet speelt, een
+ * veld ontbreekt (de mixer van vóór stap 2 stuurt geen positie) of de
+ * melding ouder is dan WEG_MS (de mixer is dicht: niets meer te schatten).
  */
 export function restTekst(track, leeftijd_ms = 0) {
   if (!track?.speelt) return null;
+  if (Number.isFinite(leeftijd_ms) && leeftijd_ms > WEG_MS) return null;
   const { positie, duur, rate } = track;
   if (![positie, duur, rate].every((x) => typeof x === 'number' && Number.isFinite(x)) || rate <= 0 || duur <= 0) return null;
   const leeftijd = Number.isFinite(leeftijd_ms) && leeftijd_ms > 0 ? leeftijd_ms : 0;
   const rest = Math.max(0, Math.floor((duur - positie) / rate - leeftijd / 1000));
   return `${leeftijd > SCHATTING_MS ? '≈ ' : ''}nog ${mmss(rest)}`;
+}
+
+/** "1 min geleden", "59 min geleden", "2 u 5 min geleden" (naar beneden afgerond). */
+export function geledenTekst(ms) {
+  const min = Math.max(0, Math.floor((Number.isFinite(ms) ? ms : 0) / 60_000));
+  return min < 60 ? `${min} min geleden` : `${Math.floor(min / 60)} u ${min % 60} min geleden`;
 }
 
 const bpmTekst = (b) => (typeof b === 'number' && Number.isFinite(b) ? `${String(b).replace('.', ',')} bpm` : '');
@@ -183,7 +193,10 @@ export function nuHtml(antwoord) {
     delen.push('<p class="nu-regel">de mixer heeft zich nog niet gemeld</p>');
     return delen.join('');
   }
-  if (vers === 'oud') delen.push('<p class="nu-regel let-op">mixer meldt zich niet (op de achtergrond?)</p>');
+  // Ouder dan WEG_MS (de mixer is dicht of slaapt): zeggen hoe oud, en geen resttijden meer (review ronde 2, fix 5).
+  const weg = vers === 'oud' && antwoord.leeftijd_ms > WEG_MS;
+  if (weg) delen.push(`<p class="nu-regel let-op">mixer meldt zich niet · laatste melding ${esc(geledenTekst(antwoord.leeftijd_ms))}</p>`);
+  else if (vers === 'oud') delen.push('<p class="nu-regel let-op">mixer meldt zich niet (op de achtergrond?)</p>');
   const tracks = Array.isArray(m.tracks) ? m.tracks : [];
   const rijen = tracks.map((t) => {
     const rest = restTekst(t, antwoord.leeftijd_ms);

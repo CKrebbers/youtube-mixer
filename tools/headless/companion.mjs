@@ -24,7 +24,8 @@
 // mixertabblad (geen index.html: dat raakt het Lock-tabblad en wacht tot na de
 // proefavond, ontwerp H2); het SCRIPT post zelf meldingen, gebouwd met de echte
 // maakStatus (src/ui/status-zender.js), zoals de mixer ze stuurt: acht tracks,
-// beeld bevroren, daarna stil (meldt zich niet) en twee tab-id's (twee mixers).
+// beeld bevroren, daarna stil (meldt zich niet), een herladen (nieuwe tab-id: geen
+// alarm) en twee tab-id's om beurten (twee mixers).
 //
 // Gebruik:  node tools/headless/companion.mjs [uitmap]
 // Poorten:  VARVE_KIJK_POORT (8805) en VARVE_KIJK_DEBUG (9405). Chrome: VARVE_CHROME.
@@ -462,7 +463,8 @@ try {
     && (await p.ev('document.querySelectorAll("#nu .nu-track.speelt").length')) === 2));
   const restA = await p.ev('document.querySelector(\'#nu [data-track="A"] .nu-rest\').textContent');
   const restH = await p.ev('document.querySelector(\'#nu [data-track="H"] .nu-rest\').textContent');
-  ok(`resttijd: A "${restA}", H (rate 1,05) "${restH}"`, /^nog 49:5\d$/.test(restA) && /^nog 3:(0\d|10)$/.test(restH));
+  // 600 van 3600 is precies 3000 s: met een melding van 0 ms oud is het "nog 50:00" (review ronde 2, fix 1).
+  ok(`resttijd: A "${restA}", H (rate 1,05) "${restH}"`, /^nog (49:5\d|50:00)$/.test(restA) && /^nog 3:(0\d|10)$/.test(restH));
   ok('onderregel: audio aan · APC40 mkII · opname loopt · auto-DJ uit', /audio aan.*APC: APC40 mkII.*opname loopt.*auto-DJ uit/.test(await tekst('#nu-inhoud')));
   ok('geen rode regel (één mixer)', !/twee mixers open/.test(await tekst('#nu-inhoud')));
   await foto('companion-390-nu.png');
@@ -474,9 +476,23 @@ try {
   ok('de mixer zwijgt: binnen 9 s "mixer meldt zich niet", de stand grijs, resttijd met ≈', await tot(async () => /mixer meldt zich niet/.test(await tekst('#nu-inhoud'))
     && (await p.ev('document.querySelector("#nu .nu-tracks.grijs") !== null')) && /^≈ nog/.test(await p.ev('document.querySelector(\'#nu [data-track="A"] .nu-rest\').textContent')), 9000),
     `${Date.now() - stilVanaf} ms`);
+  // Review ronde 2, fix 2: herladen (de oude tab-id stopt, ~1 s later begint een nieuwe) is geen tweede mixer.
+  pomp = setInterval(() => api('/api/mixer', melding('tab-herladen-oud')).catch(() => {}), 800);
+  await wacht(2000);
+  clearInterval(pomp); pomp = null;
+  await wacht(1000);                                                                  // de mixer laadt opnieuw
+  pomp = setInterval(() => api('/api/mixer', melding('tab-herladen-nieuw')).catch(() => {}), 800);
+  await api('/api/mixer', melding('tab-herladen-nieuw'));
+  let rodeRegel = false, gekeken = 0;
+  for (const t0 = Date.now(); Date.now() - t0 < 3000; gekeken++) { if (/twee mixers open/.test(await tekst('#nu-inhoud'))) rodeRegel = true; await wacht(150); }
+  ok(`herladen (oude id stopt, 1 s later een nieuwe): 3 s lang geen rode regel (${gekeken}× gekeken)`, !rodeRegel && gekeken > 10
+    && (await p.ev('document.querySelectorAll("#nu .nu-track").length')) === 8);
+  clearInterval(pomp); pomp = null;
+  // Twee echte mixers melden om beurten (localhost en 127.0.0.1, elk een eigen Web Lock): 1, 2, 1.
   await api('/api/mixer', melding('tab-proef-1'));
   await api('/api/mixer', melding('tab-proef-2'));
-  ok('twee tab-id\'s binnen 5 s: de rode regel "twee mixers open"', await tot(async () => /twee mixers open/.test(await tekst('#nu-inhoud')), 4000));
+  await api('/api/mixer', melding('tab-proef-1'));
+  ok('twee tab-id\'s om beurten (1, 2, 1): de rode regel "twee mixers open"', await tot(async () => /twee mixers open/.test(await tekst('#nu-inhoud')), 4000));
   // iPad liggend met een melding: nu en beeld rechts gevuld.
   await scherm(1024, 768, 2);
   await wacht(TWEE_WACHT);   // de tweede tab-id verloopt (5 s), anders staat de rode regel ook op de foto
@@ -486,6 +502,14 @@ try {
   ok('iPad liggend: acht rijen rechts, en de beeldstand eronder', await tot(async () => (await p.ev('document.querySelectorAll("#nu .nu-track").length')) === 8)
     && await zichtbaar('#nu') && await zichtbaar('#beeld') && /BEVRIESaan/.test((await tekst('#beeld-inhoud')).replace(/\s+/g, '')));
   await foto('companion-1024-vol.png');
+  // Review ronde 2, fix 7: rechts scrolt zelf (acht tracks + beeld > 768 px); de resttijd blijft van de schuifbalk af.
+  const kolom = await p.ev(`(() => { const r = document.querySelector('.rechts'); const b = r.getBoundingClientRect();
+    const rand = b.left + r.clientLeft + r.clientWidth;   // de rechterrand vóór de schuifbalk (of de goot)
+    const rest = [...document.querySelectorAll('#nu .nu-rest')].filter((x) => x.textContent).map((x) => x.getBoundingClientRect().right);
+    return { rand: Math.round(rand * 10) / 10, restRechts: Math.round(Math.max(...rest) * 10) / 10, scrolt: r.scrollHeight > r.clientHeight,
+      goot: getComputedStyle(r).scrollbarGutter, padding: getComputedStyle(r).paddingRight }; })()`);
+  ok(`iPad liggend: de resttijd ${Math.round((kolom.rand - kolom.restRechts) * 10) / 10} px van de schuifbalk (goot ${kolom.goot}, padding ${kolom.padding})`,
+    kolom.restRechts <= kolom.rand - 6 && kolom.goot === 'stable', JSON.stringify(kolom));
   clearInterval(pomp); pomp = null;
   await scherm(390, 844, 3);
 

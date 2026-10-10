@@ -97,6 +97,13 @@ console.log('\nresttijd en versheid');
   ok('rate 0 of duur 0: null', c.restTekst({ ...t, rate: 0 }, 0) === null && c.restTekst({ ...t, duur: 0 }, 0) === null);
   ok('voorbij het eind: nog 0:00, nooit negatief', c.restTekst({ ...t, positie: 3599 }, 9000) === '≈ nog 0:00');
   ok('leeftijd null telt als 0', c.restTekst(t, null) === 'nog 50:00');
+  // Review ronde 2, fix 1: de rand die de servertest wisselvallig maakte. 3000 s rest, leeftijd 0 → precies 50:00.
+  ok(`de rand: leeftijd 0 ms "${c.restTekst(t, 0)}", 1 ms "${c.restTekst(t, 1)}"`, c.restTekst(t, 0) === 'nog 50:00' && c.restTekst(t, 1) === 'nog 49:59');
+  // Fix 5: na WEG_MS (60 s) geen resttijd meer.
+  ok(`45 s oud: nog een schatting ("${c.restTekst(t, 45_000)}"); 60 s precies ook; 61 s: geen resttijd`, c.restTekst(t, 45_000) === '≈ nog 49:15'
+    && c.restTekst(t, c.WEG_MS) === '≈ nog 49:00' && c.restTekst(t, 61_000) === null);
+  ok('geledenTekst: 61 s, 59 min, 2 u 5 min', c.geledenTekst(61_000) === '1 min geleden' && c.geledenTekst(59 * 60_000 + 59_000) === '59 min geleden'
+    && c.geledenTekst(125 * 60_000) === '2 u 5 min geleden' && c.geledenTekst(null) === '0 min geleden');
 }
 
 console.log('\n"nu" (GET /api/mixer)');
@@ -116,6 +123,13 @@ console.log('\n"nu" (GET /api/mixer)');
   const oud = c.nuHtml({ leeftijd_ms: 7000, twee: false, melding });
   ok('oud: "meldt zich niet", de laatste stand grijs en de resttijd als schatting',
     oud.includes('mixer meldt zich niet (op de achtergrond?)') && oud.includes('nu-tracks grijs') && oud.includes('≈ nog'));
+  // Review ronde 2, fix 5: de mixer dicht. De server houdt de laatste melding vast; na 60 s geen resttijden meer.
+  const bijna = c.nuHtml({ leeftijd_ms: 45_000, twee: false, melding });
+  ok('45 s oud: nog "meldt zich niet (op de achtergrond?)" met "≈ nog"', bijna.includes('(op de achtergrond?)') && bijna.includes('≈ nog'));
+  const weg = c.nuHtml({ leeftijd_ms: 61_000, twee: false, melding });
+  ok('61 s oud: "laatste melding 1 min geleden", geen resttijd meer, de laatste stand nog grijs',
+    weg.includes('mixer meldt zich niet · laatste melding 1 min geleden') && !/nog \d/.test(weg) && weg.includes('nu-tracks grijs') && !weg.includes('(op de achtergrond?)'));
+  ok('uren later: "laatste melding 3 u 0 min geleden"', c.nuHtml({ leeftijd_ms: 3 * 3_600_000, twee: false, melding }).includes('laatste melding 3 u 0 min geleden'));
   ok('geen melding: "nog niet gemeld"', c.nuHtml({ leeftijd_ms: null, twee: false, melding: null }).includes('de mixer heeft zich nog niet gemeld'));
   ok('404: een zin voor Clay (wat er komt), geen ontwikkelaarszin', c.nuHtml({ ontbreekt: true }).includes(c.NU_ONTBREEKT)
     && c.nuHtml({ ontbreekt: true }).includes('De kaart werkt wel.') && !/\/api\/mixer|stap 2|docs\//.test(c.nuHtml({ ontbreekt: true })));

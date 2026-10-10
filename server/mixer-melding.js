@@ -20,7 +20,13 @@
 export const TRACKS = Object.freeze(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
 /** Een melding is hooguit zo groot (bytes). Acht tracks met alles erop: zie test/controle.test.mjs. */
 export const MAX_BYTES = 16 * 1024;
-/** Twee verschillende tab-id's binnen dit venster = twee mixers open (localhost en 127.0.0.1?). */
+/**
+ * Twee tab-id's die binnen dit venster OM BEURTEN melden = twee mixers open
+ * (localhost en 127.0.0.1, elk met een eigen Web Lock). Een id die stopte
+ * voordat de andere begon is één mixer die herladen werd (app.js maakt per
+ * laden een nieuwe TAB_ID), of een tweede tabblad dat de Web Lock overnam:
+ * geen alarm (review ronde 2, fix 2).
+ */
 export const TWEE_MS = 5000;
 
 const eindig = (x) => typeof x === 'number' && Number.isFinite(x);
@@ -54,28 +60,41 @@ export function vanDezeMac(req, poort) {
   return String(h.origin).toLowerCase() === `http://${host}`;
 }
 
-/** De laatste melding, en wie er de laatste TWEE_MS meldde. */
+/**
+ * De laatste melding, en wie er de laatste TWEE_MS meldde: per tab-id de laatste
+ * keer (ms, voor het venster) en het volgnummer van zijn eerste en laatste
+ * melding (voor "om beurten": de volgorde van binnenkomst, ook als twee
+ * meldingen in dezelfde milliseconde vallen).
+ */
 export class MixerStand {
   constructor() {
     this.melding = null;
     this.ontvangen = null;      // ms volgens de klok van de server
-    this.tabs = new Map();      // tab-id -> laatst gezien (ms)
+    this.tabs = new Map();      // tab-id -> { laatst (ms), eersteNr, laatsteNr }
+    this.nr = 0;                // telt elke melding
   }
 
   zet(melding, nu) {
     this.melding = melding;
     this.ontvangen = nu;
-    this.tabs.set(melding.tab, nu);
-    for (const [tab, t] of this.tabs) if (nu - t > TWEE_MS) this.tabs.delete(tab);
+    const nr = ++this.nr;
+    const t = this.tabs.get(melding.tab);
+    if (t) { t.laatst = nu; t.laatsteNr = nr; } else this.tabs.set(melding.tab, { laatst: nu, eersteNr: nr, laatsteNr: nr });
+    for (const [tab, x] of this.tabs) if (nu - x.laatst > TWEE_MS) this.tabs.delete(tab);
   }
 
-  /** { leeftijd_ms (null = nog nooit), twee, melding } */
+  /**
+   * { leeftijd_ms (null = nog nooit), twee, melding }. `twee`: twee id's die
+   * allebei binnen TWEE_MS meldden en elkaar overlappen (elk meldde nog ná de
+   * eerste melding van de ander). Herladen = de oude stopt, dan begint de
+   * nieuwe: geen overlap, geen alarm.
+   */
   lees(nu) {
-    let recent = 0;
-    for (const t of this.tabs.values()) if (nu - t <= TWEE_MS) recent++;
+    const recent = [...this.tabs.values()].filter((x) => nu - x.laatst <= TWEE_MS);
+    const twee = recent.some((a) => recent.some((b) => a !== b && a.laatsteNr > b.eersteNr && b.laatsteNr > a.eersteNr));
     return {
       leeftijd_ms: this.ontvangen === null ? null : Math.max(0, nu - this.ontvangen),
-      twee: recent >= 2,
+      twee,
       melding: this.melding,
     };
   }

@@ -17,7 +17,7 @@ globalThis.BroadcastChannel = class {
   close() { this.dicht = true; }
 };
 
-const { startStatusZender, maakStatus, SERVER_MS, RUST_WEIGER_MS, RUST_FOUT_MS, KANAAL } = await import('../src/ui/status-zender.js');
+const { startStatusZender, maakStatus, eindUitActions, SERVER_MS, RUST_WEIGER_MS, RUST_FOUT_MS, KANAAL } = await import('../src/ui/status-zender.js');
 
 const snap = { focus: 'A', maat: 'A', decks: { A: { id: 'A', loaded: true, playing: true, title: 'Proef A', bpm: 124, toon: null, position: 600, duration: 3600, rate: 1 } } };
 const lees = () => ({ snap, midi: null, audio: 'running', tab: 'tab-proef-1', eind: { zwart: false, bevroren: true, master: 0.8 } });
@@ -161,6 +161,39 @@ console.log('\nmaakStatus: eind en tab');
   ok('master 7 wordt 1, -1 wordt 0, ontbrekend wordt 1', maakStatus({ snap, midi: null, eind: { master: 7 } }).eind.master === 1
     && maakStatus({ snap, midi: null, eind: { master: -1 } }).eind.master === 0 && maakStatus({ snap, midi: null, eind: {} }).eind.master === 1);
   ok('zwart en bevroren worden booleans', JSON.stringify(maakStatus({ snap, midi: null, eind: { zwart: 1, bevroren: 0, master: 0.5 } }).eind) === '{"zwart":true,"bevroren":false,"master":0.5}');
+}
+
+// Review ronde 2, fix 6: "beeld" op de companion zegt ZWART aan precies als de zaal zwart is: ook bij de
+// drukvariant (video.black.hold, de paniekknop van de hub). Met de echte action-bus en een echt Eindbeeld.
+console.log('\neindUitActions: de noodknoppen zoals de zaal ze ziet (echte bus, echt Eindbeeld)');
+{
+  const { bindVideo, invoke, read } = await import('../src/control/actions.js');
+  const { Eindbeeld } = await import('../src/video/eindbeeld.js');
+  const { VIDEO_FX, MODI } = await import('../src/video/instellingen.js');
+  const eb = new Eindbeeld();
+  let klok = 1000;
+  bindVideo({
+    fx: Object.fromEntries(VIDEO_FX.map((f) => [f.id, f.standaard])), modus: MODI[0], puls: 0, pulsDoel: 'rgb',
+    zetFx() {}, volgendeModus() {}, zetPuls() {}, volgendPulsDoel() {}, volgendeFit() {},
+    eindbeeld: eb,   // zoals video-mixer.js r.358–363
+    zetZwart(a) { eb.zetZwart(a, klok); }, zetZwartVast(a) { eb.zetZwartVast(a, klok); }, zetBevroren(a) { eb.zetBevroren(a, klok); },
+    zetMaster(v) { eb.zetMaster(v); }, flits() { eb.flits(klok); }, flitsNu() { return eb.flitsNu(klok); },
+  });
+  const zaalZwart = () => eb.zwart.naar === 1;   // waar Eindbeeld naartoe gaat (de schakelaar dooft in 250 ms, de drukvariant direct)
+  ok('begin: niets zwart, niets bevroren, master 1', JSON.stringify(eindUitActions(read)) === '{"zwart":false,"bevroren":false,"master":1}' && !zaalZwart());
+  invoke('video.black.hold', true);
+  ok('de drukvariant ingedrukt: de zaal is zwart, en eind.zwart ook', zaalZwart() && eb.zwartNu(klok) === 1 && eindUitActions(read).zwart === true);
+  ok('... en zo staat het in de melding', maakStatus({ snap, midi: null, eind: eindUitActions(read) }).eind.zwart === true);
+  invoke('video.black.hold', false);
+  ok('losgelaten: weer niet zwart', !zaalZwart() && eindUitActions(read).zwart === false);
+  invoke('video.black', true); invoke('video.black', false);
+  ok('de schakelaar aan: zwart', zaalZwart() && eindUitActions(read).zwart === true);
+  invoke('video.black.hold', true); invoke('video.black.hold', false);
+  ok('schakelaar aan, drukvariant in- en uitgedrukt: nog steeds zwart (de schakelaar beslist)', zaalZwart() && eindUitActions(read).zwart === true);
+  invoke('video.black', true); invoke('video.black', false);
+  invoke('video.freeze', true); invoke('video.master', 0.25);
+  ok('schakelaar weer uit, bevroren, master 0,25', JSON.stringify(eindUitActions(read)) === '{"zwart":false,"bevroren":true,"master":0.25}' && !zaalZwart());
+  ok('een bus zonder video-actions (read geeft null): niets zwart, master 1', JSON.stringify(eindUitActions(() => null)) === '{"zwart":false,"bevroren":false,"master":1}');
 }
 
 console.log(`\n${fails.length ? `${fails.length} FAIL` : 'alles ok'}`);
