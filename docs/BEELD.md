@@ -29,7 +29,7 @@ Knop **beeld** in de bovenbalk opent de BEELD-rij (onthouden, standaard dicht):
 | veld | wat | bewaard in |
 |---|---|---|
 | aan / uit | de zender loopt alleen als hij aan staat ÉN er een geldig adres is | `varve.beeld.aan` |
-| relay-adres | `ws://clayk:7702/app` (terugval `ws://100.110.172.126:7702/app`), met Tailscale aan op Mac en pc: ze zitten op twee subnetten, dus het LAN-adres 192.168.0.x dat de pc toont werkt vanaf de Mac niet. Naast het veld twee knopjes: **deze Mac** (`ws://127.0.0.1:7702/app`, de relay van `tools/beeld-lokaal.sh`, §8) en **pc** (`ws://clayk:7702/app`); één klik = dat adres, toegepast zoals Enter; het knopje van het adres dat geldt brandt (`BEELD_ADRESSEN` in beeld.js, sleutels `lokaal` en `pc`). Alleen `ws://` of `wss://`, getrimd, hooguit 200 tekens, geen gebruikersnaam/wachtwoord of `#`. Een ongeldig adres wordt geweigerd met een melding; de zender start dan niet (en een lopende stopt), het oude adres blijft bewaard | `varve.beeld.adres` |
+| relay-adres | `ws://clayk:7702/app` (terugval `ws://100.110.172.126:7702/app`), met Tailscale aan op Mac en pc: ze zitten op twee subnetten, dus het LAN-adres 192.168.0.x dat de pc toont werkt vanaf de Mac niet. Naast het veld twee knopjes: **deze Mac** (`ws://127.0.0.1:7702/app`, de relay van `tools/beeld-lokaal.sh`, §8) en **pc** (`ws://clayk:7702/app`); één klik = dat adres, toegepast zoals Enter; het knopje van het adres dat geldt brandt (`BEELD_ADRESSEN` in beeld.js, sleutels `lokaal` en `pc`). Staat beeld aan en verbonden met een ánder adres (midden in een set), dan wisselt één klik niet: je krijgt een melding en wisselt met een tweede klik op hetzelfde knopje binnen 3 s (`wisselVraagtBevestiging`), anders verliest de Stroommachine op de beamer door één misklik de klok. Typen plus Enter wisselt wel meteen. Alleen `ws://` of `wss://`, getrimd, hooguit 200 tekens, geen gebruikersnaam/wachtwoord of `#`. Een ongeldig adres wordt geweigerd met een melding; de zender start dan niet (en een lopende stopt), het oude adres blijft bewaard | `varve.beeld.adres` |
 | extra latentie | −200 … +500 ms, standaard 0. **+ = het beeld eerder**: voor een beamer die achterloopt | `varve.beeld.latentie` |
 
 Bewaard zoals de andere rijen: in localStorage van deze browser.
@@ -148,13 +148,15 @@ naar de strip. Volledig, met het waarom: `docs/APC40.md` "Mapje beeld".
 
 ## 6. Testen
 
-- `node test/beeld.test.mjs` (163 checks): de koppeling zonder browser en netwerk
+- `node test/beeld.test.mjs` (169 checks): de koppeling zonder browser en netwerk
   (nep-engine, nep-zender, en de echte zender op een nep-WebSocket met nep-timers); de
   poort-id's tegen `src/09d-poorten.js` van de Stroommachine als die repo er is.
 - `node test/varve-beeld-zender.test.mjs`: de zendertest van de Stroommachine (21 checks),
   overgenomen; `test/alles.mjs` telt zijn eigen formaat mee.
-- `node tools/headless/beeld.mjs` (60 checks, 10 okt; de laatste vier: de knopjes deze Mac · pc
-  met een echte muisklik, met beeld UIT zodat er niets naar 7702 of de pc gaat): echte Chrome (headless, zonder MIDI), met een
+- `node tools/headless/beeld.mjs` (66 checks, 10 okt; de knopjes deze Mac · pc met een echte
+  muisklik: met beeld UIT, en verbonden met de nep-relay, waar één klik niet wisselt en een
+  tweede klik binnen 3 s wel. De adressen van Clay leidt de pagina om naar een lege poort,
+  dus er gaat nooit iets naar 7702 of de pc): echte Chrome (headless, zonder MIDI), met een
   nep-relay: opstarten zonder adres (0 fouten, geen WebSocket), de bovenbalk en de rij,
   de velden, de stand, de tegel in de Controlekamer, relay weg, uit en herladen,
   opstarten met een onbereikbaar adres (40 s: één info-melding die weggaat, 0 fouten van
@@ -265,19 +267,72 @@ Er staan dus nog geen cijfers voor "Stroommachine naast VARVE" in dit document. 
 **Twee dingen die we onderweg vonden** (nagelezen in de Stroommachine-repo, niets gewijzigd):
 - `beeld-status.fps` (de tooltip in VARVE) is **vast 63**: `09o-dj.js` regel 138 rekent
   `1000 / (PF.ms || 16)`, en `PF` (`08b-kwaliteit.js`) heeft geen veld `ms`. Gebruik hem
-  niet als meting. Voorstel voor haar repo: `KW.fpsNu` meesturen.
+  niet als meting. Voorstel voor haar repo: `KW.fpsNu` meesturen (hieronder, punt a).
 - Een worklet uit een Blob-URL laadt niet op een `file://`-pagina (`blob:null`, AbortError,
   CfT 153). De meters werken op VARVE (`http://localhost`); de zelftest serveert zijn
   pagina daarom zelf over http.
 
-**Voorstel aan de hub** (AV-app-hub; alleen tekst, de hub-repo is hier niet aangeraakt):
-nu **geen hub-set** voor beeld op één machine. Een set `beeld-lokaal.json` zou een app
-`stroommachine` starten die zich nooit bij de hub (7700) meldt: haar `?hub=` wijst naar de
-relay, en ze kan er maar één aan. Na 60 s staat ze dan op `MIS`. Dat vraagt een app-veld
-`"wacht": false` ("alleen starten, niet wachten op een melding"), en dat is werk voor de
-hub-eigenaar. Het spoor *draagbaar* kan wel een controle `beeld.relay` toevoegen (poort 7702
-open, `status.json` zegt varve-relay): daar hoort "klaar voor beeld lokaal". Tot dan is
-`tools/beeld-lokaal.sh` de weg, en na de speelproef een Dock-app "VARVE + beeld" (BE14 b).
+**Voorstel aan de Stroommachine** (alleen tekst; gelezen op `0f4124e`, in haar repo is niets
+gewijzigd; Clay beslist, en het hoort bij haar eigen stappen, niet bij deze PR):
+- (a) **Een echte fps in `beeld-status`**: `09o-dj.js` r.138 stuurt `1000 / (PF.ms || 16)`,
+  dus altijd 63. Stuur `KW.fpsNu` (`08b-kwaliteit.js` r.17 en r.100), of het
+  3 s-gemiddelde uit `10-app.js` r.1136–1140.
+- (b) **Met `&dj` de gevaarlijke toetsen vergrendelen** (of een bevestiging vragen): `G`
+  (eigen geluid, `toggleSound`, `10-app.js` r.914), `I` en `C` (microfoon en camera,
+  r.919 → `liveKey`, `09c-live.js` r.571) en de MIDI-knop in de Live-tab (`lvMidi`,
+  `09c-live.js` r.619 → `liveMidiToggle`, r.339). Op één Mac staan VARVE en de
+  Stroommachine naast elkaar; één toets in het verkeerde venster zet dan een tweede
+  geluidsbron aan, of MIDI pakt de APC (huisregel 1). Tot die vergrendeling er is, drukt
+  `tools/beeld-lokaal.sh` het af als regel 5 van wat jij doet.
+- (c) **De kwaliteitsstand als poort** (`kwaliteit.stand`: auto, licht, normaal of zwaar;
+  nu alleen via de hash `#licht` of haar eigen paneel, `kwZet` in `08b-kwaliteit.js` r.43),
+  zodat VARVE of de APC haar lichter kan zetten als de Mac het zwaar krijgt. En `ms`,
+  `kwaliteit` en `scale` in `beeld-status`, zodat de tooltip in VARVE laat zien hoe zwaar
+  ze het heeft. Nu kan dat alleen via `kwInfo()` en DevTools (`beeld-lokaal.mjs --kijk`,
+  poort 9393).
+- (d) **`hold` en `paniek` in `beeld-status`** (VRAGEN BE4): pas dan weet VARVE of zwart op
+  de Stroommachine staat. Tot dan geldt "zwart = mapje beeld, Stop All, kijk naar het doek".
+
+Daarnaast staat v10 (deck-video's synchroon) nog los (BE14 e). Pas na (d), of als de
+Stroommachine in het losse venster van VARVE komt (BE12), is ze een kandidaat voor de
+hoofdroute in een zaal.
+
+**Voorstel aan de hub** (AV-app-hub, `main` = `6b101f8`; alleen gelezen, de hub-repo is hier
+niet aangeraakt): nu **geen hub-set** voor beeld op één machine.
+
+Wachten is niet het probleem. Een Stroommachine die zich nooit bij de hub (7700) meldt
+(haar `?hub=` wijst naar de relay, en ze kan er maar één aan) hoeft niet na 60 s op `MIS`
+te staan. Het setveld **`wacht: "kern" | "poort" | "geen"`** bestaat al sinds 3 okt:
+- `src/sets/set.js` r.19 en r.28, gecontroleerd in r.113–116;
+- `src/sets/starter.js` r.93 en r.276–277;
+- `docs/SETS.md`, tabel "Een set schrijven", rij `wacht`;
+- in gebruik in `sets/meditatie.json`: av-kern met `"wacht": "poort"`.
+
+De echte belemmeringen zijn twee andere:
+- (a) **Geen repo.** Een set mag alleen een app starten die `config.json → apps.<id>.repo`
+  heeft (`set.js` r.104). `stroommachine` heeft daar geen `repo`. Haar `_doc` zegt nog
+  "Nog geen eigen GitHub-repo", maar `github.com/CKrebbers/stroommachine` bestaat
+  intussen. Voor de relay (`tools/varve-relay.js` in die repo) is er geen app.
+- (b) **De verkeerde Chrome.** De starter opent elke `url` met `open -a "Google Chrome"`
+  (`src/sets/systeem.js` r.72, `openInChrome`). Dat is Clay's Chrome met VARVE erin, en
+  dat moet hier juist niet: de Stroommachine hoort in haar eigen bundel
+  (`Stroommachine-Chrome.app`, BE14 a), anders spreekt VARVE.app de verkeerde Chrome aan.
+
+Het voorstel aan de hub-eigenaar (alleen tekst, Clay beslist):
+1. `repo` voor `stroommachine` in `config.json`, het pad in `sets/paden.json`, en de `_doc`
+   bijwerken.
+2. De relay als eigen app (bijvoorbeeld `varve-relay`: repo `stroommachine`, poort 7702,
+   `start.commando` `node tools/varve-relay.js {poort}`, `url: null`, `"wacht": "poort"`),
+   of als `start` van de app `stroommachine` met `"wacht": "poort"` op 7702.
+3. Een manier om een URL in een andere bundel te openen (een veld per app in de set, naast
+   `url`), of `url: null` met een `start.commando` dat zelf
+   `open -na ~/Applications/Stroommachine-Chrome.app --args … --app=<url>` doet, met
+   `"wacht": "geen"`. Dat is wat `tools/beeld-lokaal.sh` nu doet.
+
+Punt 1 en 2 zijn alleen config; punt 3 is het echte werk. Het spoor *draagbaar* kan
+intussen een controle `beeld.relay` toevoegen (poort 7702 open, `status.json` zegt
+varve-relay): daar hoort "klaar voor beeld lokaal". Tot dan is `tools/beeld-lokaal.sh` de
+weg, en na de speelproef een Dock-app "VARVE + beeld" (BE14 b).
 
 **Nog niet gebouwd of gedaan**: de volledige meting (morgen, of na "de Mac is vrij tot X"),
 de speelproef met de APC (30 min: eerst de VARVE.app-toets met de eigen bundel open), de

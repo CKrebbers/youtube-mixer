@@ -284,8 +284,11 @@ is het beeld bit voor bit als vroeger.
   de title zegt "nu: alleen eigen beeld". Een langere tekst ("video · alleen eigen beeld",
   45 → 158 px) liet de bovenbalk op 1440 × 900 in rust 105 px opzij schuiven: er is daar
   maar 8 px speling (review 10 okt);
-- in het videopaneel het knopje **CLIPS** in de rij van de deck-video's, na MIX en PASSEND
-  (brandt = clips aan), en de statusregel "clips uit" ("beamer · clips uit" als het losse
+- in het videopaneel het knopje **CLIPS** in de rij van de deck-video's, na MIX en PASSEND.
+  Brandt = clips aan, de standaardstand, en dus rustig: omlijnd turquoise met turquoise
+  tekst, zonder vlak (zoals de knopjes "deze Mac · pc"). Tot review 2 kreeg het van `.btn.on`
+  een turquoise vlak onder turquoise tekst: een egaal blok zonder leesbaar woord. Uit =
+  een gewoon knopje. Daarnaast de statusregel "clips uit" ("beamer · clips uit" als het losse
   venster mengt), met de uitleg in de title. In de kop (naast "los venster") kostte het
   knopje de statusregel 57 px: op 1440 breed bleef er 79 px over en paste zelfs "geen
   zichtbare video" (110 px) niet meer. In de BEELD-rij brak die rij op 1440 breed in twee;
@@ -321,13 +324,23 @@ echte beamer wegnemen (`getScreenDetails()`, niet gebouwd).
   clips aan), het eindbeeld (zwart canvas, de flits werkt) en het log (beginstand,
   terugspelen, een oud log).
 - `node tools/headless/zaalbeeld.mjs [uitmap]` (eigen server op 8806, debug 9406, Chrome for
-  Testing op Metal, `--mute-audio`, ZONDER `--disable-popup-blocking`): 27 controles,
+  Testing op Metal, `--mute-audio`, ZONDER `--disable-popup-blocking`): 31 controles
+  (herstelronde 2: eerst of de audioklok loopt; CLIPS is in beide standen leesbaar, gemeten
+  als contrast tekst/vlak ≥ 4,5; clips uit gaat met een echte muisklik). 27 daarvan waren op
   10 okt (herstelronde 1) alle groen. Clips aan: de vier kwarten in het losse venster,
   60 beelden/s. Clips uit: vier keer zwart, 0,0 % lichte pixels, de video staat stil,
   60–61 beelden/s, het geluid speelt door, de knop (amber), de statusregel en de venstertitel
   zeggen het. Vormen aan (clips nog uit): 4,1 % lichte pixels, 61 beelden/s, geen video.
   `video.black` maakt ook het zaalbeeld zwart. Clips weer aan: de vier kwarten terug.
-  0 uitzonderingen. Vijf schermafdrukken `zaalbeeld-*.png`.
+  0 uitzonderingen. Zeven schermafdrukken `zaalbeeld-*.png`, waarvan
+  `zaalbeeld-0-paneel-clips-aan.png` en `zaalbeeld-0-rij-clips-aan.png` (uitsnede, 2×) CLIPS
+  in de standaardstand tonen. Herstelronde 2 (10 okt, 15:30–15:45): CLIPS aan contrast 10,5,
+  uit 13,6, de klik groen. De pixelchecks van vormen en video waren toen rood, ook met een
+  schone export van de vorige versie (`c1015b4`, om 14:53 nog 27 × groen). Oorzaak: de klep
+  van de MacBook was dicht (pmset "Clamshell Sleep" om 15:03). Dan rendert de audio-uitgang
+  niets (0 samples/s, ook buiten de sandbox gemeten), staat de audioklok van VARVE stil, en
+  lopen video en vormen niet mee. Sindsdien zegt het script dat zelf als eerste check ("de
+  audioklok van VARVE loopt").
 - Lay-out op 1440 × 900 (in dezelfde run): de statusregel (136 px) past in drie toestanden:
   paneel open zonder los venster ("1: N ms", 55 px tekst), clips aan met het losse venster
   ("beamer · 1: N ms", 103 px) en clips uit ("beamer · clips uit", 91 px). De rij van de deck-video's is

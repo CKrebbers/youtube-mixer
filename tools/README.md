@@ -103,7 +103,8 @@ Pas draaien NÁ de proefavond van 10 okt.
   de bovenbalk met de knop beeld op 1440×790/900 en 1920×1080, de BEELD-rij (velden, geweigerd adres
   = één melding, latentie geklemd), de stand (zoekt · verbonden · beeld-status · na 3 s weer
   "wacht"), het manifest als eerste bericht, de tegel in de Controlekamer, relay weg, uit en herladen,
-  de knopjes "deze Mac · pc" (een echte muisklik, met beeld UIT: niets naar 7702 of de pc; 10 okt),
+  de knopjes "deze Mac · pc" (een echte muisklik, met beeld UIT: niets naar 7702 of de pc; verbonden
+  met de nep-relay: één klik wisselt niet, een tweede binnen 3 s wel, Clay's adressen omgeleid naar 8787; 10 okt),
   opstarten met een onbereikbaar adres (40 s: één info-melding, 0 fouten van onze code), en een tweede
   VARVE-tabblad (zendt niet zolang het eerste open is, neemt het daarna over). Wat Chrome
   zelf logt bij een mislukte WebSocket (Log-domein, niet te onderdrukken) wordt apart geteld.
@@ -127,14 +128,17 @@ Pas draaien NÁ de proefavond van 10 okt.
   een andere testrun of Clay's set loopt: dan meet je die mee. `--warm`/`--meet`/`--duur` met iets anders dan
   een getal ≥ 0: exit 2, er start niets. `--zelftest`: zonder GPU en zonder Stroommachine, ≤ 20 s. `--kijk`:
   tijdens een echte proef kwInfo() via 9393 en ps naar `uit/kijk-<datum>.jsonl`. Ctrl-C stopt alle kinderen
-  (eigen procesgroep) en ruimt de tijdelijke map op. `--opruimen` na een harde stop: alleen eigen processen
+  (eigen procesgroep), ruimt de tijdelijke map op en sluit af met 130; wat de lus daarna nog ziet, telt niet
+  (geen FAIL-regel, `isAfgebroken()`). `--opruimen` na een harde stop: alleen eigen processen
   (de Chromes via hun profiel, de proefserver via `--meting=<tmp>`, de relay op 7712); eerst SIGTERM naar de
   wortels, na 3 s SIGKILL. NIET op een speeldag. De pure delen: `test/beeld-meting.test.mjs`.
 - `zaalbeeld.mjs [uitmap]` — het zaalbeeld (`video.clips`, docs/BEAMER.md): eigen server op 8806, debug 9406,
   Chrome for Testing op Metal, ZONDER `--disable-popup-blocking`. Het losse venster met een testvideo, clips uit =
   zwart en de video stil (geluid door), vormen erbij = beeld, `video.black` werkt, clips terug; de knop video
-  (amber, de bovenbalk schuift niet), het knopje CLIPS, de statusregel (past op 1440 breed in drie toestanden)
-  en de venstertitel. 27 controles, vijf schermafdrukken `zaalbeeld-*.png`. Ctrl-C ruimt op;
+  (amber, de bovenbalk schuift niet), het knopje CLIPS (leesbaar in beide standen: contrast ≥ 4,5; uit met een
+  echte muisklik), de statusregel (past op 1440 breed in drie toestanden) en de venstertitel. Eerst: loopt de
+  audioklok (zonder audio-uitgang, bv. met de klep dicht, zeggen de beeldchecks niets). 31 controles, zeven
+  schermafdrukken `zaalbeeld-*.png` (`zaalbeeld-0-*` = CLIPS aan). Ctrl-C ruimt op, zonder FAIL-regel achteraf;
   `zaalbeeld.mjs --opruimen` na een harde stop.
 - `rijen.mjs [uitmap] [--label voor|na]` — de rijen onder de mixer (stems, koptelefoon, instrument,
   patronen, master, auto, klankschaal, beeld; eigen server op 8863, debug 9463, geen MIDI): op 1440×790 en
