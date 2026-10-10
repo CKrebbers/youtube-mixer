@@ -144,6 +144,15 @@ console.log('\n6. cue, play en laad (deck.cue, BufferBron.laad)');
   ok('play.quant start en stopt zoals play', quant.stukken.length === 1 && quant.stukken[0].van === 10 && quant.stukken[0].tot === 70);
 }
 
+console.log('\n6b. een instrument haalt het nummer eraf (actions.js, kiesInstrument)');
+{
+  const h = een(logTekst({ tracks: { 3: tr(3, 'Speelt', { speelt: true }), 4: tr(4, 'Stil') },
+    regels: [...druk(60, 'track.3.inst'), ...druk(120, 'track.3.inst'), ...druk(121.5, 'track.3.inst'), [200, 'track.4.inst.choose', 0.25], ...druk(210, 'track.4.play'), [300, 'mixer.master', 0.8]] }));
+  ok('spelend nummer: één druk = alleen een melding (speelt door), twee binnen 3 s = eraf (0–121,5)',
+    h.stukken.length === 1 && h.stukken[0].titel === 'Speelt' && h.stukken[0].tot === 121.5, JSON.stringify(h.stukken));
+  ok('stil nummer: inst.choose > 0 haalt het er meteen af; play daarna start niets (geen nummer)', !h.stukken.some((x) => x.titel === 'Stil') && h.nietHoorbaar.some((x) => x.titel === 'Stil'));
+}
+
 console.log('\n7. het einde van een nummer (zit niet in het log)');
 {
   const regels = [...druk(1500, 'track.1.seek'), [1500, 'track.1.seek', 0], ...druk(1500.5, 'track.1.play'), [1800, 'mixer.xfader', 0]];

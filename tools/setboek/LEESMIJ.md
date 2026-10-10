@@ -43,7 +43,7 @@ een kopie. Nooit `pkill`/`killall` in de buurt van deze map: er draait geen serv
 | `lees.mjs` | puur (geen fs): `rijgLogs`, `laadmomenten`, `toestand`, `hoort`, `hoorbaar`, `positieInBron`, `proefpunten`, `setboek`, `naarMarkdown`, `naarJson` |
 | `gebruik.mjs` | `tellingen(regels)`: top 10 actions, laads, actieve minuten. Eén teller, ook voor een latere `tools/gebruik.mjs` |
 | `setboek.mjs` | de CLI: bestanden lezen, `--dag`, `--db`, `--proef`, uitvoer |
-| `../../test/setboek.test.mjs` | 75 checks op synthetische logs in het echte formaat, en de CLI in een tijdelijke map |
+| `../../test/setboek.test.mjs` | 77 checks op synthetische logs in het echte formaat, en de CLI in een tijdelijke map |
 
 ## De regel "hoorbaar"
 
@@ -63,7 +63,8 @@ stand (≤ 0,1 of ≥ 0,9) is een aantekening "gefilterd", geen stilte. Alle dre
 Spelen volgt het deck: `play`/`play.quant` wisselen, `cue` zoals `deck.cue()` (speelt →
 terug naar het cuepunt en stil; stil op het cuepunt → spelen; stil elders → het cuepunt
 zetten), een `laad` stopt (`BufferBron.laad()` roept `stop()`), `brake` = stil, nog eens
-binnen 5 s = los. De glijdende fades van de auto-DJ (`fader.glide`, `filter.glide`) tellen als fader
+binnen 5 s = los, een instrument kiezen haalt het nummer eraf (speelt het, dan pas bij een tweede
+druk binnen 3 s, zoals `kiesInstrument` in actions.js). De glijdende fades van de auto-DJ (`fader.glide`, `filter.glide`) tellen als fader
 en filter. Meerdere logs op één avond worden op `kop.begon` aan elkaar geregen;
 een gat > 2 s wordt gemeld ("log opnieuw begonnen 21:14, herladen?"), een log zonder
 acties staat onder "overgeslagen".

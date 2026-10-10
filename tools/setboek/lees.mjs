@@ -121,7 +121,7 @@ export function laadmomenten(log, begonMs = null) {
 function nieuweTrack(nr) {
   return {
     nr, titel: null, nummer: null, bron: null, laadId: 0,
-    speelt: false, sindsStart: null, eind: null, remT: null,
+    speelt: false, sindsStart: null, eind: null, remT: null, instT: null,
     kant: standaardKant(nr), fader: 1, trim: 0.5, filter: 0.5,
     kill: { low: false, mid: false, high: false }, killVast: { low: false, mid: false, high: false },
     stems: false, stemNiveau: {}, stemKill: {}, stemVast: {},
@@ -176,7 +176,7 @@ export function* toestand(log, opties = {}) {
   const springNaar = (tr, t, p) => { anker(tr, t); tr.positie = p; tr.opCue = false; tr.onzeker = false; };
   const leeg = (tr, t, { titel = null, nummer = null, bron = null } = {}) => {
     Object.assign(tr, {
-      titel, nummer, bron, laadId: tr.laadId + 1, speelt: false, sindsStart: null, eind: null, remT: null,
+      titel, nummer, bron, laadId: tr.laadId + 1, speelt: false, sindsStart: null, eind: null, remT: null, instT: null,
       positie: 0, tStand: t, rate: 1, cue: 0, opCue: true, hotcues: [null, null, null, null], secties: null,
       loop: false, onzeker: false, stems: false, stemNiveau: {}, stemKill: {}, stemVast: {},
     });
@@ -243,6 +243,14 @@ export function* toestand(log, opties = {}) {
       if (v === true) tr.bereik = PITCH_BEREIKEN[(PITCH_BEREIKEN.indexOf(tr.bereik) + 1) % PITCH_BEREIKEN.length];
     } else if (a === 'tempo') {
       if (typeof v === 'number') { anker(tr, t); tr.rate = RATE.min + klem01(v) * (RATE.max - RATE.min); }
+    } else if (a === 'inst' || a === 'inst.next' || a === 'inst.prev' || a === 'inst.choose') {
+      // Een track draagt een nummer óf een instrument (actions.js, kiesInstrument): een instrument
+      // kiezen haalt het nummer eraf; speelt het, dan pas bij een tweede druk binnen 3 s.
+      const kiest = a === 'inst.choose' ? typeof v === 'number' && v > 0 : v === true;
+      if (!kiest || !tr.titel) return;
+      if (tr.speelt && !(tr.instT !== null && t - tr.instT < 3)) { tr.instT = t; return; }
+      stop(tr, t);
+      leeg(tr, t);
     } else if (a === 'brake') {
       // Rem = stil (binnen de remtijd, hooguit 5 s); nog eens drukken in die tijd = los.
       if (v !== true || !tr.titel) return;
