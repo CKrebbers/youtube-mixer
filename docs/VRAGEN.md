@@ -507,3 +507,69 @@ Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
   `?vormen=1`), óf de hubtoets van de hub wordt een andere (dat raakt alle
   apps, PROTOCOL §5/§7). **Advies:** keylock naar een andere toets; de hubtoets
   is voor elke app hetzelfde.
+
+---
+
+## VI. Uitwerking van de visie (10 okt, docs/UITWERKING-2026-10-10.md §5, zeven sporen, PR #19–#26)
+
+Stand 10 okt 17:00. De keuzes per spoor staan in de eigen blokken (U, AP, BE11–14, CX, K-A–K-F, standen,
+companion in de PR-teksten); dit blok zijn de keuzes die over de sporen heen gaan. Niets gemerged tot ze er zijn.
+
+- [ ] **VI1. Eén zin in `CLAUDE.md` over uitgangen.** 💬 Drie sporen vragen dezelfde verduidelijking van
+  "geen deelfuncties, geen publieke streaming, geen upload" (r. 29–31): *geen distributie van de cache; een
+  uitgang (een bestand, 127.0.0.1, een export naar eigen schijf) is geen distributie en mag; eigen opnames
+  en renders naar de eigen library mogen.* Dit opent niets naar buiten (het lokaal-slot van uitzenden blijft
+  dicht tot U1b) en legt vast wat al zo is (de upload-route bestaat). **Advies: ja, in één aparte kleine PR,
+  niet in drie takken.** Daarmee kunnen uitzenden stap 3, produceren-uit K-D en crossover 3a verder.
+- [ ] **VI2. `media/` en de opnames buiten iCloud, en een kopie buiten de laptop.** 💬👀 Gemeten: een
+  uitgeplaatst bestand laat de server bij de eerste lezing hangen tot het hele bestand binnen is (3,9 GB
+  voor `stems.wav`; zonder internet nooit); "Optimaliseer Mac-opslag" staat aan, de schijf is 72 % vol, en
+  iCloud is geen backup (het synchroniseert ook wissen). **Advies: ja, na de proefavond en vóór de eerste
+  reis-set**: `VARVE_MEDIA` naar bijv. `~/Varve-media` (in VARVE.app en in de hub-set), `media/` verhuizen
+  met `rsync -a` terwijl de server uit staat (`library.db` bewaart relatieve paden), `VARVE_BACKUPS` naar een
+  externe SSD, en vóór elke reis een `rsync` van `media/`. Dit vervangt uitzenden U3(b) en draagbaar keuze 3+4.
+- [ ] **VI3. Merge-ritme: wat na avond 1, wat na avond 2?** 💬 Keuze 1 van het verbeterplan (9 okt) zei:
+  tot na avond 2 alleen repareren wat op de proefavond fout gaat. **Advies: houd dat voor alles wat het
+  live-pad raakt (#21 standen, #25 companion stap 2, #26 crossover, de uitzend-routes), maar laat de vier
+  additieve takken (#22, #20, #23, #24 zonder route) na de verwerking van avond 1 in `studio/integratie`**:
+  ze raken de mixer niet, hebben elk twee reviews, en elke dag open kost conflicten. Zeg "nee" en alles
+  wacht op avond 2; zeg "ja" en crossover (CX4) schuift ook naar avond 2.
+- [ ] **VI4. De commit-trailers.** 💬 Alle acht takken eindigen op `Co-Authored-By: Claude Opus 5.5` in
+  plaats van `Claude Fable 5.1`; het is het model dat de commits schreef. **Advies: laten staan.** Herschrijven
+  kost een amend op ~70 commits en een force-push op acht takken en levert niets op.
+- [ ] **VI5. Wat doet avond 2?** 🎛🎧 Kandidaten: via de hub met opstelling `alles`; beeld-speelproef
+  zaalbeeld (en Stroommachine op de Mac als de meting groen is); uitzenden stap 0 (één hele set opnemen met
+  beeld, ≥ 45 min); het crossover-proefblok (5 punten, ~8 min). **Advies: hub + avondpakket + zaalbeeld +
+  de lange opname; de crossover op avond 2 alleen als VI3 "ja" is, anders avond 3.** Vier nieuwe dingen op
+  één avond is het maximum; de speellijst is al van 33 naar 172 punten gegroeid.
+- [ ] **VI6. De eerste echte uitzending.** 💬 Na de thuisproef via OBS: (1) een eigen-werk-sessie op je
+  eigen kanaal (geen rechtenzorg; precies de crossover), (2) Mixcloud Live unlisted (€ 11 voor één maand,
+  audio-only mag, een fout kost alleen een draft-show), (3) Twitch DJ Program (opt-in, NL ok, maar nooit
+  audio-only of automatisch; alleen catalogusnummers). **Advies: in deze volgorde, en U1b (Varve zelf naar
+  een dienst) pas beslissen als OBS op de Air te zwaar blijkt.** Geen juridisch advies; cijfers nagekeken op
+  10 okt bij de bronnen.
+- [ ] **VI7. Beeld onderweg = zaalbeeld.** 👀 Vormen aan, clips uit, Stroommachine uit, als stand
+  `onderweg-licht` in standen; de Stroommachine op de Mac (Licht, vast, 1152×648) als upgrade na een groene
+  meting naast Varve én een speelproef. **Advies: ja.** Je speelt je eigen beeld (4.576 acties); de clips van
+  anderen mogen de zaal niet in; de zwart-knop en de opname werken alleen op het zaalbeeld.
+- [ ] **VI8. "Vanaf elke plek" = de iPhone heeft data.** 💬 De companion via Tailscale werkt op een hotspot
+  mét data en loopt waarschijnlijk door als de data wegvalt, maar een koude start zonder internet werkt
+  waarschijnlijk niet (en iOS zet de hotspot niet aan zonder data). Alternatief: de server op het
+  hotspot-adres laten luisteren (`VARVE_BIND`, klein spoor). **Advies: accepteer "data" als voorwaarde en
+  bouw het LAN-pad pas als een locatie het echt vraagt.**
+- [ ] **VI9. Eén tegel "Vanavond" of twee (Opstelling, Avondpakket)?** 💬 Beide sporen gebruiken dezelfde
+  profielnamen. **Advies: eerst twee tegels (elk spoor mergt los), na avond 2 samenvoegen als je ze altijd
+  samen gebruikt.** En het label blijft "Opstelling", niet "Stand".
+- [ ] **VI10. De kernset onderweg en de spullen.** 💬👀 APC + Scarlett + bedrade koptelefoon + PD-hub +
+  Apple-lader ≥ 30 W is de kleinste set voor een volledige set; Maschine en AV-hub pas na avond 2. Te checken:
+  heeft je USB-C-hub stroomdoorvoer (PD-opdruk)? Welke beamer (BE13: model, 1080p, 60 Hz, HDMI-pad)?
+  **Advies: kijk morgen op je hub; zo niet, een PD-hub van ~30–50 euro; beamer-gegevens doorgeven vóór de
+  beeld-speelproef.**
+- [ ] **VI11. Wie doet 7a morgenochtend?** 👀 Twee alleen-lezen-commando's met de APC en Scarlett nog
+  aangesloten (`system_profiler SPAudioDataType SPUSBHostDataType -json`, `ioreg -p IOUSB …`), daarna
+  anonimiseren (serienummers). **Advies: een agent, vóór je de stekkers eruit trekt.** Zonder 7a blijft het
+  avondpakket op `hardwareBevestigd: false` en de PR in draft.
+- [ ] **VI12. De richtingen B: welke het eerst?** 💬 Stroommachine ín Varve's beamer; beeldhand op de iPad;
+  live wisselen van opstelling; bevriezen naar een nieuw nummer met eigen stems; in-app uitzenden. **Advies:
+  nu geen; laat de speelproeven van stap 6–8 kiezen.** Mijn verwachting: de beeldhand op de iPad komt het
+  eerst (het is 9 % van je acties), daarna bevriezen (de crossover-belofte).

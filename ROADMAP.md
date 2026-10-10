@@ -136,6 +136,15 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
        nu `?video=0`, `?titel=`, `?artiest=`.
     Alleen met de nep-yt-dlp getoetst (rooktest op de echte kaart: 18.233 nummers, 29 kratten). Echt
     draaien NÁ de proefavond: de eerste nacht met een klein `perNacht` en het log erbij, dan de lokale import.
+31. UITWERKING VAN DE VISIE (10 okt, Clay: "werk het zo goed en lang mogelijk uit"): zeven sporen, elk
+    verkenner → twee ontwerpers → jury → twee critici → bouwer → twee reviews → spoorleider → verdieping, op
+    eigen takken `visie/<spoor>` met acht PR's naar `studio/integratie`, allemaal "[na de proefavond]", niets
+    gemerged: uitzenden (#24: `server/uitzend.js`, alleen lokaal), companion (#20 iPad/iPhone-pagina, #25 "nu
+    speelt"), beeld-een-machine (#23: knop CLIPS = zaalbeeld, Stroommachine op de Mac als upgrade), crossover
+    (#26: sampler-knip als drumpad op dezelfde Maschine-pad), standen (#21: opstelling = één JSON per situatie),
+    draagbaar (#19: avondpakket, 14 controles + paklijst), produceren-uit (#22: patronen → MIDI, setboek uit het
+    log). Synthese, hoe ze elkaar raken, de volgorde na de proefavond en de keuzes (VRAGEN blok VI):
+    `docs/UITWERKING-2026-10-10.md`. Eerst avond 1 verwerken, dan VI1–VI3 beslissen, dan de additieve PR's.
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
@@ -153,6 +162,9 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     Stroommachine-repo, docs/BEELD.md §1), dan VRAGEN blok BE.
 11. 30 KAART: drie sporen gebouwd (10 okt), samenvoegen in `studio/kaart`, dan de kaart-tab proberen en
     de nachtwachtrij één nacht aan met `perNacht` klein (docs/KAART.md §8).
+12. 31 UITWERKING: acht PR's wachten op de proefavond. Volgorde in `docs/UITWERKING-2026-10-10.md` §4:
+    avond 1 verwerken → VI1–VI3 → de additieve PR's (#22, #20, #23, #24) → de metingen → standen + draagbaar →
+    Tailscale → avond 2 (hub, zaalbeeld, lange opname) → uitzenden stap 3–7 → crossover/Logic.
 
 Aanname: publicatie 1 van AV-kern (25 okt) blijft staan. Komt die datum in de
 knel door 15 en 17, dan gaat AV-kern voor; dat is de vraag van H5.
