@@ -1,0 +1,23 @@
+{
+  "_doc": "VARVE_AVONDPAKKET_NEP=test/fixtures/avondpakket: welke fixture elke sonde krijgt (server/avondpakket-meet.js, maakNep). De echte uitvoer van 10 okt 12:26 (niets aangesloten, accu 65 % aan 8 W) plus een handgemaakte library van 26 nummers. Geen enkel commando, geen netwerk.",
+  "paden": { "media": "/Users/test/varve/media", "wortel": "/Users/test/varve", "db": "/Users/test/varve/media/library.db", "extra": [] },
+  "pmset-batt": "pmset-ac-65.txt",
+  "pmset-ac": "pmset-ac-8w.txt",
+  "ioreg-accu": "ioreg-accu.txt",
+  "df": "df-122vrij.txt",
+  "optimize": "optimize-aan.txt",
+  "audio": "audio-luidsprekers.json",
+  "bluetooth": "bluetooth-aan-niets-verbonden.json",
+  "usbhost": "usbhost-leeg.json",
+  "ioreg-usb": "ioreg-usb-leeg.txt",
+  "find-stat": "find-stat-131-HANDGEMAAKT.txt",
+  "find-dataless": "find-dataless-leeg.txt",
+  "find-instellingen": "find-dataless-leeg.txt",
+  "find-extra": "find-dataless-leeg.txt",
+  "tailscale": "tailscale-running.json",
+  "lsof": { "tekst": "4242\n" },
+  "pgrep": { "tekst": "4242\n" },
+  "avhub": false,
+  "backups": ["library-2026-10-09_22-10-00.db", "library-2026-10-10_12-00-00.db", "iets-anders.txt"],
+  "server": { "bereikbaar": true, "nummers": 26 }
+}

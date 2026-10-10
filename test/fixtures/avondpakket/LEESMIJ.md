@@ -25,6 +25,18 @@ die staat al in `docs/BEELD.md` en in `avondpakket/profielen.json` (`peers`).
 | `bluetooth-aan-niets-verbonden.json` | `system_profiler SPBluetoothDataType -json` | aan, niets verbonden (de niet-verbonden lijst is vervangen door één placeholder) |
 | `tailscale-running.json` | `tailscale status --json` | Running; `clayk` online en direct, `telefoon` via relay ams, `oud-apparaat` offline |
 | `find-stat-leeg.txt`, `find-dataless-leeg.txt` | (leeg) | een lege mediamap, en "niets uitgeplaatst" |
+| `audio-airpods-10okt.json` | `system_profiler SPAudioDataType -json` (13:47, herstelronde 1) | de AirPods als standaarduitvoer: twee items met dezelfde naam (invoer 1, uitvoer 2), meldingen op de luidsprekers. Bevestigt de vorm van `audio-airpods-HANDGEMAAKT.json` |
+| `bluetooth-aan-airpods-10okt.json` | `system_profiler SPBluetoothDataType -json` (13:47) | aan, de AirPods verbonden (`Headphones`); adressen en niet-verbonden apparaten weg |
+
+## `nep.json`: de sondes zonder commando's
+
+`VARVE_AVONDPAKKET_NEP=test/fixtures/avondpakket` laat `server/avondpakket-meet.js`
+(`maakNep`) per sonde een bestand hieruit lezen in plaats van een commando uit te voeren:
+de echte uitvoer van 12:26 (accu 65 % aan 8 W, niets aangesloten) plus de handgemaakte
+library van 26 nummers. Ook `avhub` (de poort 7700), `backups` (namen voor de CLI zonder
+server), `server` en `paden` (waar de find-fixtures onder staan). De CLI vraagt in die
+stand geen server, tenzij `--poort` gegeven is. `test/avondpakket-meet.test.mjs` maakt er
+varianten van (groen, rood, leeg, geen map) in een tijdelijke map.
 
 ## HANDGEMAAKT (het woord staat in de bestandsnaam)
 

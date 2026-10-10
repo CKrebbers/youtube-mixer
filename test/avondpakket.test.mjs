@@ -29,8 +29,8 @@ const punt = (r, id) => r.punten.find((p) => p.id === id);
 const hhmm = (ms) => new Date(ms).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
 
 /**
- * "Goed ingepakt vertrek" (W1): de echte uitvoer van vandaag (AirPods als standaard is
- * handgemaakt, zie LEESMIJ), een library van 26 nummers lokaal, accu 85 % aan de 8 W-lader,
+ * "Goed ingepakt vertrek" (W1): de echte uitvoer van vandaag (AirPods als standaard: echt
+ * sinds herstelronde 1, zie LEESMIJ), een library van 26 nummers lokaal, accu 85 % aan de 8 W-lader,
  * backup zonder wijziging, nacht uit, wachtrijen leeg, één server op library.db.
  */
 function goedVertrek(wijzig = {}) {
@@ -40,7 +40,7 @@ function goedVertrek(wijzig = {}) {
     icloud: parseOptimize(fx('optimize-aan.txt')),
     schijf: parseDf(fx('df-122vrij.txt')),
     accu: { ...parsePmset(fx('pmset-ac-65.txt')), ...parsePmsetAc(fx('pmset-ac-8w.txt')), ...parseIoregAccu(fx('ioreg-accu.txt')), procent: 85 },
-    audio: parseAudio(fx('audio-airpods-HANDGEMAAKT.json')),
+    audio: parseAudio(fx('audio-airpods-10okt.json')),   // echt, 10 okt 13:47 (de HANDGEMAAKT-versie toetst groep 5)
     bluetooth: parseBluetooth(fx('bluetooth-aan-niets-verbonden.json')),
     usb: voegUsbSamen(parseUsbHost(fx('usbhost-leeg.json')), parseIoregUsb(fx('ioreg-usb-leeg.txt'))),
     avhub: { draait: false },
@@ -114,6 +114,10 @@ console.log('5. audio');
     air.filter((i) => /AirPods/.test(i.naam)).length === 2 && airStd.length === 1 && airStd[0].transport === 'bluetooth' && airStd[0].uit === 2);
   ok('AirPods: standaardSysteem ≠ standaardUit (meldingen blijven op de luidsprekers)',
     air.find((i) => i.standaardSysteem).naam === 'MacBook Air luidsprekers');
+  const echt2 = parseAudio(fx('audio-airpods-10okt.json'));
+  ok('ECHT (13:47): de AirPods twee keer (invoer 1, uitvoer 2), het uitvoer-item is de standaard; de handgemaakte vorm klopte',
+    echt2.filter((i) => /AirPods/.test(i.naam)).length === 2 && echt2.find((i) => i.standaardUit).uit === 2
+    && echt2.find((i) => i.standaardUit).transport === 'bluetooth' && echt2.find((i) => i.standaardSysteem).transport === 'builtin');
   ok('samengesteld: standaard met 4 uit', parseAudio(fx('audio-samengesteld-HANDGEMAAKT.json')).find((i) => i.standaardUit).uit === 4);
   ok('BlackHole als standaard: naam past op "virtueel" uit de data',
     new RegExp(data().virtueel, 'i').test(parseAudio(fx('audio-blackhole-HANDGEMAAKT.json')).find((i) => i.standaardUit).naam));
@@ -127,6 +131,8 @@ console.log('6. bluetooth');
   ok('AirPods verbonden: in verbonden én in audio; de muis alleen in verbonden',
     air.verbonden.includes('AirPods 4') && air.audio.join() === 'AirPods 4' && air.verbonden.length === 2);
   ok('uit → aan: false', parseBluetooth(fx('bluetooth-uit-HANDGEMAAKT.json')).aan === false);
+  const echtBt = parseBluetooth(fx('bluetooth-aan-airpods-10okt.json'));
+  ok('ECHT (13:47): AirPods verbonden als Headphones → in audio', echtBt.aan && echtBt.audio.length === 1 && /AirPods/.test(echtBt.audio[0]));
   ok('onzin → null', parseBluetooth('[]') === null);
 }
 
@@ -465,7 +471,8 @@ console.log('29. privacy');
       !s.includes('/Users/') && !/100\.\d+\.\d+\.\d+/.test(s) && !s.includes('library-2026') && !/([0-9A-F]{2}:){5}[0-9A-F]{2}/i.test(s));
   }
   // "clayk" (de beeld-pc) staat al in docs/BEELD.md en in profielen.json (peers): die mag blijven.
-  const fixtures = ['audio-luidsprekers.json', 'bluetooth-aan-niets-verbonden.json', 'tailscale-running.json', 'ioreg-accu.txt', 'pmset-ac-65.txt']
+  const fixtures = ['audio-luidsprekers.json', 'bluetooth-aan-niets-verbonden.json', 'tailscale-running.json', 'ioreg-accu.txt', 'pmset-ac-65.txt',
+    'audio-airpods-10okt.json', 'bluetooth-aan-airpods-10okt.json', 'nep.json']
     .map(fx).join('\n').replaceAll('"clayk"', '"pc"');
   ok('de echte fixtures bevatten geen naam, adres, serienummer of IP (behalve de hostnaam clayk)',
     !/claykrebbers|Clay|@gmail|100\.\d+\.\d+\.\d+|tail[0-9a-f]{6}\b|([0-9A-F]{2}:){5}[0-9A-F]{2}|Serial/i.test(fixtures));
@@ -505,7 +512,8 @@ console.log('30. paklijst als data (F2)');
 console.log('31. maschine en alles: goed ingepakt vertrek is klaar zonder let op (F3, F11)');
 {
   for (const profiel of ['apc', 'beeld', 'maschine', 'alles']) {
-    for (const [naam, audio] of [['AirPods (HANDGEMAAKT)', 'audio-airpods-HANDGEMAAKT.json'], ['luidsprekers (echt)', 'audio-luidsprekers.json']]) {
+    for (const [naam, audio] of [['AirPods (echt, 13:47)', 'audio-airpods-10okt.json'], ['AirPods (HANDGEMAAKT)', 'audio-airpods-HANDGEMAAKT.json'],
+      ['luidsprekers (echt, 12:26)', 'audio-luidsprekers.json']]) {
       const r = beoordeel(goedVertrek({ audio: parseAudio(fx(audio)) }), { profiel, data: data(), nu: NU });
       ok(`${profiel} + ${naam}: fase vertrek, 0 rood, 0 oranje, klaar (${r.fase}; ${r.letOp})`,
         r.fase === 'vertrek' && r.telling.fout === 0 && r.telling.half === 0 && r.oordeel === 'klaar');

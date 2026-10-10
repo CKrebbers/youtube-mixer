@@ -1,0 +1,55 @@
+{
+ "SPAudioDataType": [
+  {
+   "_items": [
+    {
+     "_name": "AirPods 4 (anc) (test) ",
+     "coreaudio_default_audio_input_device": "spaudio_yes",
+     "coreaudio_device_input": 1,
+     "coreaudio_device_manufacturer": "Apple Inc.",
+     "coreaudio_device_srate": 24000,
+     "coreaudio_device_transport": "coreaudio_device_type_bluetooth",
+     "coreaudio_input_source": "spaudio_default"
+    },
+    {
+     "_name": "AirPods 4 (anc) (test) ",
+     "coreaudio_default_audio_output_device": "spaudio_yes",
+     "coreaudio_device_manufacturer": "Apple Inc.",
+     "coreaudio_device_output": 2,
+     "coreaudio_device_srate": 48000,
+     "coreaudio_device_transport": "coreaudio_device_type_bluetooth",
+     "coreaudio_output_source": "spaudio_default"
+    },
+    {
+     "_name": "BlackHole 16ch",
+     "coreaudio_device_input": 16,
+     "coreaudio_device_manufacturer": "Existential Audio Inc.",
+     "coreaudio_device_output": 16,
+     "coreaudio_device_srate": 48000,
+     "coreaudio_device_transport": "coreaudio_device_type_virtual",
+     "coreaudio_input_source": "spaudio_default",
+     "coreaudio_output_source": "spaudio_default"
+    },
+    {
+     "_name": "MacBook Air microfoon",
+     "coreaudio_device_input": 1,
+     "coreaudio_device_manufacturer": "Apple Inc.",
+     "coreaudio_device_srate": 44100,
+     "coreaudio_device_transport": "coreaudio_device_type_builtin",
+     "coreaudio_input_source": "MacBook Air microfoon"
+    },
+    {
+     "_name": "MacBook Air luidsprekers",
+     "_properties": "coreaudio_default_audio_system_device",
+     "coreaudio_default_audio_system_device": "spaudio_yes",
+     "coreaudio_device_manufacturer": "Apple Inc.",
+     "coreaudio_device_output": 2,
+     "coreaudio_device_srate": 44100,
+     "coreaudio_device_transport": "coreaudio_device_type_builtin",
+     "coreaudio_output_source": "MacBook Air luidsprekers"
+    }
+   ],
+   "_name": "coreaudio_device"
+  }
+ ]
+}
