@@ -456,6 +456,15 @@ export class Standen {
     let profielen = null;
     try { const p = await this.profielen(); profielen = p ? Object.keys(p) : null; } catch {}
     const hubSets = await this.hubSets().catch(() => null);
-    return { sjablonen, kratten, profielen, hubSets, mappingNu: beschrijfMapping(this.lib.haal('mapping', null)), delen: Object.keys(DELEN) };
+    // Zolang het avondpakket (spoor draagbaar) er niet is: de profielnamen die de voorbeelden noemen,
+    // zodat de bewerker iets te kiezen heeft. Nagekeken wordt dan niets (dat zegt de bewerker erbij).
+    const bekendeProfielen = [];
+    for (const naam of await this._namen(this.voorbeelden)) {
+      try {
+        const p = JSON.parse(await readFile(this.voorbeeldPad(naam), 'utf8'))?.delen?.pakket?.profiel;
+        if (typeof p === 'string' && !bekendeProfielen.includes(p)) bekendeProfielen.push(p);
+      } catch {}
+    }
+    return { sjablonen, kratten, profielen, bekendeProfielen, hubSets, mappingNu: beschrijfMapping(this.lib.haal('mapping', null)), delen: Object.keys(DELEN) };
   }
 }

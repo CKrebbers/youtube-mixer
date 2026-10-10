@@ -6,6 +6,7 @@ import { beeldTegel } from '../ui/beeld-weergave.js';
 import { backupTegel } from './backup-tegel.js';
 import { serverTegel } from './server-tegel.js';
 import { standTegel, mixerAdres, verschilTekst, activeerMelding, LABEL as STAND_LABEL, MIXER_VIA_HUB } from './stand-tegel.js';
+import { bewerkerHtml, leesBewerker, nieuweNaamGeldig } from './stand-bewerker.js';
 
 /**
  * De Controlekamer (controle.html, docs/CONTROLEKAMER.md). Leest:
@@ -240,6 +241,7 @@ $('mixer-open').addEventListener('click', async () => {
 
 $('h-opstelling').textContent = STAND_LABEL;
 let kiezerSleutel = '';
+let kiesNa = null;   // na "bewaar als": deze naam kiezen zodra hij in de lijst staat
 
 /** De kiezer alleen opnieuw opbouwen als de lijst verandert, en nooit terwijl hij focus heeft. */
 function tekenKiezer() {
@@ -254,7 +256,8 @@ function tekenKiezer() {
   const actief = d.actief?.naam ?? null;
   const sleutel = JSON.stringify([lijst.map((s) => [s.naam, s.titel, s.fouten]), actief]);
   if (sleutel === kiezerSleutel) return;
-  const gekozen = kiezerSleutel ? kies.value : (actief ?? lijst[0]?.naam ?? '');
+  const gekozen = kiesNa && lijst.some((s) => s.naam === kiesNa) ? kiesNa : kiezerSleutel ? kies.value : (actief ?? lijst[0]?.naam ?? '');
+  if (kiesNa && gekozen === kiesNa) kiesNa = null;
   kiezerSleutel = sleutel;
   kies.innerHTML = lijst.map((s) => `<option value="${esc(s.naam)}">${esc(s.titel)}${s.naam === actief ? ' · actief' : ''}${s.fouten ? ' · fout' : ''}</option>`).join('');
   kies.value = lijst.some((s) => s.naam === gekozen) ? gekozen : (actief ?? lijst[0]?.naam ?? '');
@@ -274,7 +277,7 @@ async function toonVerschil() {
     if (nr === verschilNr) $('stand-uitleg').textContent = `Deze opstelling klopt niet (${err.message}); kijk het bestand na.`;
   }
 }
-$('stand-kies').addEventListener('change', () => { toonVerschil(); });
+$('stand-kies').addEventListener('change', () => { toonVerschil(); if ($('stand-bewerk').open) laadBewerker(); });
 $('stand-kies').addEventListener('blur', () => { kiezerSleutel = '__'; tekenKiezer(); });
 
 /** Twee klikken binnen 4 s, zoals "nieuwe ronde": de eerste vraagt "zeker?". */
@@ -319,6 +322,84 @@ tweeKlik($('stand-terug'), 'vorige terugzetten', async () => {
     for (const f of (d.fouten ?? []).slice(0, 3)) meld(`${f.deel}: ${f.fout}`, 'fout');
   } catch (err) { meld(`niet teruggezet: ${err.message}`, 'fout'); }
   kiezerSleutel = '';
+});
+
+// ---- de bewerker: een opstelling instellen zonder JSON (stand-bewerker.js) ------------
+
+let bewerkt = null;   // { naam, versie, stand } van wat er in de bewerker staat
+const bwStatus = (tekst) => { $('bw-status').textContent = tekst; };
+
+async function laadBewerker() {
+  const naam = $('stand-kies').value;
+  if (!naam) return;
+  bwStatus('laden…');
+  try {
+    const [g, k] = await Promise.all([haal(`/api/standen/${encodeURIComponent(naam)}`), haal('/api/standen/keuzes')]);
+    if (!g.stand) {
+      bewerkt = null; $('bw-velden').innerHTML = '';
+      bwStatus(`dit bestand klopt niet (${g.fouten?.[0]?.fout ?? 'onbekend'}): pas standen/${naam}.json met de hand aan`);
+      return;
+    }
+    bewerkt = { naam, versie: g.versie, stand: g.stand };
+    $('bw-velden').innerHTML = bewerkerHtml(g.stand, k);
+    bwStatus(`${naam} · ${g.bron === 'eigen' ? 'eigen bestand' : 'voorbeeld (bewaren maakt een eigen kopie)'}${g.fouten?.length ? ` · ${g.fouten.length} fout(en) in het bestand` : ''}`);
+  } catch (err) { bewerkt = null; bwStatus(`niet geladen: ${err.message}`); }
+}
+$('stand-bewerk').addEventListener('toggle', () => { if ($('stand-bewerk').open) laadBewerker(); });
+
+/** PUT met de versie; 409 = intussen veranderd (nooit stil overschrijven). */
+async function bewaar(naam, versie) {
+  const stand = leesBewerker(Object.fromEntries(new FormData($('bw-form'))), bewerkt?.stand);
+  const r = await fetch(`/api/standen/${encodeURIComponent(naam)}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ stand, versie }), signal: AbortSignal.timeout(WACHT_MS),
+  });
+  const d = await r.json().catch(() => ({}));
+  return { status: r.status, d };
+}
+
+$('bw-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!bewerkt) return;
+  try {
+    const { status, d } = await bewaar(bewerkt.naam, bewerkt.versie);
+    if (status === 409) { meld('intussen veranderd: laad opnieuw (bewerk dicht en open)', 'fout'); bwStatus('niet bewaard: het bestand is intussen veranderd'); return; }
+    if (status !== 200) { meld(`niet bewaard: ${d.fout ?? status}`, 'fout'); bwStatus(`niet bewaard: ${d.fout ?? status}`); return; }
+    meld(`${bewerkt.naam} bewaard`);
+    for (const w of (d.waarschuwingen ?? []).slice(0, 3)) meld(w, 'fout');
+    kiezerSleutel = '__';
+    await laadBewerker(); await ververs(); toonVerschil();
+  } catch (err) { meld(`niet bewaard: ${err.message}`, 'fout'); }
+});
+
+$('bw-bewaar-als').addEventListener('click', async () => {
+  const naam = $('bw-nieuw').value.trim();
+  if (!nieuweNaamGeldig(naam)) { meld('een naam is letters, cijfers, - en _ (niet actief, keuzes of terug)', 'fout'); $('bw-nieuw').focus(); return; }
+  try {
+    const { status, d } = await bewaar(naam, null);
+    if (status === 409) { meld(`"${naam}" bestaat al: kies een andere naam, of kies hem in de lijst en bewaar`, 'fout'); return; }
+    if (status !== 200) { meld(`niet bewaard: ${d.fout ?? status}`, 'fout'); return; }
+    meld(`bewaard als ${naam}`);
+    $('bw-nieuw').value = '';
+    kiesNa = naam; kiezerSleutel = '__';
+    await ververs();
+    if ($('stand-kies').value === naam) { await laadBewerker(); toonVerschil(); }
+  } catch (err) { meld(`niet bewaard: ${err.message}`, 'fout'); }
+});
+
+$('bw-leg-vast').addEventListener('click', async () => {
+  if (!bewerkt) return;
+  try {
+    const r = await fetch(`/api/standen/${encodeURIComponent(bewerkt.naam)}/vastleggen`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ versie: bewerkt.versie }), signal: AbortSignal.timeout(WACHT_MS),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 409) { meld('intussen veranderd: laad opnieuw (bewerk dicht en open)', 'fout'); return; }
+    if (!r.ok) { meld(`niet vastgelegd: ${d.fout ?? r.status}`, 'fout'); return; }
+    meld(`vastgelegd in ${bewerkt.naam}: ${(d.delen ?? []).join(', ')}`);
+    for (const w of (d.waarschuwingen ?? []).slice(0, 3)) meld(w, 'fout');
+    kiezerSleutel = '__';
+    await laadBewerker(); await ververs(); toonVerschil();
+  } catch (err) { meld(`niet vastgelegd: ${err.message}`, 'fout'); }
 });
 
 // ---- de speellijst --------------------------------------------------------------

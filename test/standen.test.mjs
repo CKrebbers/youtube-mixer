@@ -339,6 +339,7 @@ try {
     const { standen } = maak({ hubSets: async () => { throw new Error('weg'); } });
     const k = await standen.keuzes();
     ok('zonder profielen en zonder hub: null, null', k.profielen === null && k.hubSets === null);
+    ok(`… maar wel de profielen die de voorbeelden noemen (${k.bekendeProfielen.join(', ')})`, [...k.bekendeProfielen].sort().join() === 'alles,apc,laptop,maschine');
   }
 
   // ---- iCloud: een bestand dat niet terugkomt ---------------------------------------------------------------

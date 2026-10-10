@@ -65,7 +65,21 @@ h2{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
 .opstelling select{font:inherit;font-size:14px;color:var(--text);background:var(--panel2);border:1px solid var(--line);
   border-radius:6px;padding:7px 10px;min-width:0;max-width:100%;flex:0 1 340px}
 .opstelling select:disabled,.opstelling .knop:disabled{opacity:.55}
-@media (max-width:720px){.opstelling select{flex-basis:100%}}
+/* de bewerker: per deel een keuzelijst (stand-bewerker.js) */
+.bewerk>summary{list-style:none;width:max-content;font-size:13px;padding:5px 12px}
+.bewerk>summary::-webkit-details-marker{display:none}
+.bewerk[open]>summary{border-color:var(--a)}
+.bw-form{margin-top:10px;display:grid;gap:10px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.bw-velden{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 16px}
+.bw-veld{display:grid;gap:3px;min-width:0;align-content:start}
+.bw-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.bw-hint{font-size:12px;color:var(--klein)}
+.bw-veld select,.bw-veld input,.bw-nieuw{font:inherit;font-size:13px;color:var(--text);background:var(--bg);border:1px solid var(--line);
+  border-radius:4px;padding:5px 7px;min-width:0;width:100%}
+.bw-blijft{grid-column:1/-1;margin:0;font-size:12px;color:var(--klein)}
+.bw-knoppen{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+.bw-nieuw{width:auto;flex:0 1 240px}
+@media (max-width:720px){.opstelling select{flex-basis:100%}.bw-nieuw{flex-basis:100%}}
 
 /* speellijst */
 .lijst-kop{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}

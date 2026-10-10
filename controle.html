@@ -34,6 +34,19 @@
         <button class="knop" id="stand-terug" disabled title="zet de mapping en de nacht terug zoals ze vóór de laatste activering waren">vorige terugzetten</button>
       </div>
       <p class="uitleg" id="stand-uitleg">Een opstelling zet alleen beginwaarden (de nacht remmen, je mapping, het master-rack klaarzetten); wat je daarna met de hand doet blijft staan.</p>
+      <details class="bewerk" id="stand-bewerk">
+        <summary class="knop">bewerk</summary>
+        <form class="bw-form" id="bw-form" autocomplete="off">
+          <div class="bw-velden" id="bw-velden"></div>
+          <div class="bw-knoppen">
+            <button class="knop" id="bw-bewaar" type="submit">bewaar</button>
+            <input class="bw-nieuw" id="bw-nieuw" type="text" maxlength="60" placeholder="nieuwe naam: letters, cijfers, - en _" aria-label="naam om onder te bewaren">
+            <button class="knop" id="bw-bewaar-als" type="button">bewaar als</button>
+            <button class="knop" id="bw-leg-vast" type="button" title="zet je huidige mapping en de rem van de nacht in deze opstelling (krat, master, hub en avondpakket blijven)">leg vast</button>
+          </div>
+          <p class="uitleg" id="bw-status"></p>
+        </form>
+      </details>
     </div>
     <div class="openen">
       <button class="knop hoofd" id="mixer-open">mixer openen</button>

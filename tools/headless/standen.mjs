@@ -58,13 +58,15 @@ async function verbind(doel) {
   const ws = new WebSocket(doel.webSocketDebuggerUrl);
   await new Promise((r) => ws.addEventListener('open', r));
   let volg = 0;
-  const wachtend = new Map(), fouten = [];
+  // fouten = van onze code (uitzondering, console.error); netwerk = wat Chrome zelf logt over een verzoek
+  // met een foutstatus (Log-domein, bron network): dat kan JavaScript niet onderdrukken (CLAUDE.md, beeld).
+  const wachtend = new Map(), fouten = [], netwerk = [];
   ws.addEventListener('message', (e) => {
     const m = JSON.parse(e.data);
     if (m.id && wachtend.has(m.id)) { const w = wachtend.get(m.id); wachtend.delete(m.id); m.error ? w.f(new Error(m.error.message)) : w.ok(m.result); }
     if (m.method === 'Runtime.exceptionThrown') fouten.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') fouten.push(m.params.args.map((a) => a.value ?? a.description).join(' '));
-    if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') fouten.push(`${m.params.entry.text} ${m.params.entry.url ?? ''}`);
+    if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') (m.params.entry.source === 'network' ? netwerk : fouten).push(`${m.params.entry.text} ${m.params.entry.url ?? ''}`);
   });
   const cdp = (method, params = {}) => { const id = ++volg; ws.send(JSON.stringify({ id, method, params })); return new Promise((ok, f) => wachtend.set(id, { ok, f })); };
   const ev = async (expr) => {
@@ -74,7 +76,7 @@ async function verbind(doel) {
   };
   await cdp('Page.enable'); await cdp('Runtime.enable'); await cdp('Log.enable');
   await cdp('Page.addScriptToEvaluateOnNewDocument', { source: GEEN_MIDI });
-  return { ws, cdp, ev, fouten, id: doel.id };
+  return { ws, cdp, ev, fouten, netwerk, id: doel.id };
 }
 async function tot(fn, maxMs = 8000) {
   const t0 = Date.now();
@@ -172,6 +174,43 @@ try {
   ok('mixer openen weer gewoon /', await tot(() => ctl.ev(`document.getElementById('mixer-open').dataset.adres === '/'`)));
   ok('de nacht: vannacht niet blijft (terug = vóór "alles", en toen gold het al door apc)', (await ctl.ev(`fetch('/api/nacht').then((r) => r.json())`)).vandaagNiet === true);
 
+  console.log('\nbewerken zonder JSON');
+  const B = `http://localhost:${POORT}`;
+  const api = (pad, opties) => fetch(`${B}${pad}`, opties).then((r) => r.json());
+  await kies('apc');
+  await ctl.ev(`document.getElementById('stand-bewerk').open = true`);
+  ok('bewerk open: velden voor apc, met de 8 sjablonen', await tot(() => ctl.ev(`document.querySelectorAll('#bw-velden select[name="master"] option').length === 9
+    && document.querySelector('#bw-velden select[name="master"]').value === 'Dub-worp'`)));
+  ok('de status zegt: voorbeeld (bewaren maakt een eigen kopie)', /voorbeeld \(bewaren maakt een eigen kopie\)/.test(await tekst('bw-status')));
+  await ctl.ev(`(() => { const s = document.querySelector('#bw-velden select[name="master"]'); s.value = 'Oplossen'; })()`);
+  await klik('bw-bewaar');
+  ok('kies Oplossen, bewaar: GET /api/standen/apc is eigen, master Oplossen, de rest gelijk', await tot(async () => {
+    const g = await api('/api/standen/apc');
+    return g.bron === 'eigen' && g.stand.delen.master.sjabloon === 'Oplossen' && g.stand.delen.nacht.vannacht === false && g.stand.delen.kaart.krat === 'slim:proefkrat';
+  }));
+  ok('… melding "apc bewaard" en de status zegt nu "eigen bestand"', await tot(async () => (await meldingen()).includes('apc bewaard') && /eigen bestand/.test(await tekst('bw-status'))));
+  await ctl.ev(`document.getElementById('bw-nieuw').value = 'a b'`);
+  await klik('bw-bewaar-als');
+  ok('"bewaar als" met "a b": een melding, niets bewaard', await tot(async () => (await meldingen()).some((m) => /een naam is letters/.test(m))) && (await api('/api/standen')).standen.length === 4);
+  await ctl.ev(`document.getElementById('bw-nieuw').value = 'proef-x'`);
+  await klik('bw-bewaar-als');
+  ok('"bewaar als" proef-x: 5 opties, proef-x gekozen', await tot(() => ctl.ev(`document.querySelectorAll('#stand-kies option').length === 5 && document.getElementById('stand-kies').value === 'proef-x'`)));
+  ok('… met de inhoud van de bewerker (master Oplossen)', (await api('/api/standen/proef-x')).stand?.delen?.master?.sjabloon === 'Oplossen');
+  // Een eigen mapping van één regel op de server (zoals de mixer hem bewaart), dan "leg vast".
+  await api('/api/mapping', { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ mapping: { kind: 'diff', version: 3, device: 'apc40mk2', base: 'x', top: {}, rules: [{ in: 'cc:0:41', action: 'track.1.filter', mode: 'absolute' }], removed: [] } }) });
+  ok('de bewerker toont proef-x', await tot(async () => /^proef-x · eigen bestand/.test(await tekst('bw-status'))));
+  await klik('bw-leg-vast');
+  ok('"leg vast": GET /api/standen/proef-x heeft nu een mapping (1 regel)', await tot(async () => (await api('/api/standen/proef-x')).stand?.delen?.mapping?.rules?.length === 1));
+  ok('… en de lijst "mapping" biedt "zoals bewaard (eigen, 1 regel)"', await tot(() => ctl.ev(`[...document.querySelectorAll('#bw-velden select[name="mapping"] option')].some((o) => o.textContent === 'zoals bewaard (eigen, 1 regel)' && o.selected)`)));
+  fotos.push(await foto(ctl, 'standen-4-bewerker.png', true));
+  // Iemand anders (Claude, een tweede tabblad) verandert het bestand: bewaren mag dan niet stil overschrijven.
+  const nu = await api('/api/standen/proef-x');
+  await api('/api/standen/proef-x', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ stand: { ...nu.stand, titel: 'Van buiten' }, versie: nu.versie }) });
+  await klik('bw-bewaar');
+  ok('bewaren na een wijziging van buiten: 409, melding "intussen veranderd", niets overschreven', await tot(async () => (await meldingen()).some((m) => /intussen veranderd/.test(m)))
+    && (await api('/api/standen/proef-x')).stand.titel === 'Van buiten');
+
   console.log('\nsmal (390 px)');
   await maat(ctl, 390, 844);
   await wacht(400);
@@ -180,7 +219,9 @@ try {
   fotos.push(await foto(ctl, 'standen-3-smal-390.png', true));
   await maat(ctl, 1440, 790);
 
-  ok(`0 consolefouten${ctl.fouten.length ? `: ${ctl.fouten.slice(0, 3).join(' | ')}` : ''}`, ctl.fouten.length === 0);
+  ok(`0 consolefouten van onze code${ctl.fouten.length ? `: ${ctl.fouten.slice(0, 3).join(' | ')}` : ''}`, ctl.fouten.length === 0);
+  ok(`netwerk: alleen de bedoelde 409 op proef-x (${ctl.netwerk.length}: ${ctl.netwerk.map((x) => x.replace(/^.*status of /, '')).join(' | ')})`,
+    ctl.netwerk.length === 1 && /409 \(Conflict\) http:\/\/localhost:\d+\/api\/standen\/proef-x/.test(ctl.netwerk[0]));
   ok('geen MIDI in de Controlekamer', await ctl.ev('!navigator.requestMIDIAccess'));
 } catch (err) {
   ok(`zonder uitzondering: ${err.message}`, false);
