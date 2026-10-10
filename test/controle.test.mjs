@@ -136,6 +136,22 @@ console.log('\nhet bericht van de mixer (status-zender.js)');
     && wacht.beeld.regime === null && wacht.beeld.scene === null && wacht.beeld.volgt === null);
   const uit = maakStatus({ snap, midi, beeld: { aan: false, adres: '', latentie: 0, loopt: false, verbonden: false, fout: null, beeld: null } });
   ok('beeld uit: aan, loopt en verbonden false', uit.beeld.aan === false && uit.beeld.loopt === false && uit.beeld.verbonden === false);
+
+  // Voor de companion (docs/COMPANION.md stap 2): positie/duur/rate, eind en tab.
+  ok('zonder eind en tab: eind null, tab null', s.eind === null && s.tab === null);
+  ok('zonder positie/duur/rate in de snapshot: null', s.tracks[0].positie === null && s.tracks[0].duur === null && s.tracks[0].rate === null);
+  const met = maakStatus({ snap: { ...snap, decks: { A: { ...snap.decks.A, position: 600.04, duration: 3600.123, rate: 1.00049 } } }, midi,
+    eind: { zwart: false, bevroren: true, master: 7 }, tab: 'tab-x', nu: 1000 });
+  ok('positie en duur op 0,1 s, rate op 0,001', met.tracks[0].positie === 600 && met.tracks[0].duur === 3600.1 && met.tracks[0].rate === 1);
+  ok('eind: master 7 wordt 1, het bericht blijft te klonen', met.eind.master === 1 && met.eind.bevroren === true && met.tab === 'tab-x'
+    && JSON.stringify(structuredClone(met)) === JSON.stringify(met));
+  // De grootste melding die de mixer kan sturen: acht tracks met lange titels, een MIDI-fout, beeld en eind.
+  const acht = Object.fromEntries('ABCDEFGH'.split('').map((id) => [id, { id, loaded: true, playing: true, title: `${'Een heel lange titel van een album '.repeat(3)}${id}`,
+    bpm: 123.456, toon: { camelot: '12B', kort: 'E' }, position: 3599.99, duration: 7200, rate: 1.234 }]));
+  const groot = maakStatus({ snap: { focus: 'A', maat: 'A', decks: acht }, midi: { ...midi, enabled: false, error: new Error('x'.repeat(200)) },
+    audio: 'running', auto: true, opname: true, beeld: beeldStatus, eind: { zwart: true, bevroren: true, master: 0.5 }, tab: crypto.randomUUID(), nu: Date.now() });
+  const bytes = Buffer.byteLength(JSON.stringify(groot));
+  ok(`een melding met acht tracks, lange titels, een MIDI-fout en beeld: ${bytes} bytes (grens server 16384)`, bytes < 16 * 1024);
 }
 
 console.log('\nbeeld: tegel, statusregel en lampje (beeld-weergave.js)');

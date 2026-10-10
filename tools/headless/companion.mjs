@@ -20,9 +20,11 @@
 //   `pgrep -fl '…|9405'`: dat getal stond toevallig in de argumenten van de
 //   GPU-helper van Clay's eigen Chrome (review ronde 1, fix 3).
 //
-// "Nu" en "beeld" zijn in stap 1 leeg (de server kent /api/mixer nog niet). Eén
-// blok bootst met de Fetch-laag van Chromium een melding na (acht tracks, beeld
-// bevroren) om te zien hoe het er straks uitziet; dat is GEEN proef van stap 2.
+// Stap 2 (docs/COMPANION.md): de server kent /api/mixer. Er is hier GEEN
+// mixertabblad (geen index.html: dat raakt het Lock-tabblad en wacht tot na de
+// proefavond, ontwerp H2); het SCRIPT post zelf meldingen, gebouwd met de echte
+// maakStatus (src/ui/status-zender.js), zoals de mixer ze stuurt: acht tracks,
+// beeld bevroren, daarna stil (meldt zich niet) en twee tab-id's (twee mixers).
 //
 // Gebruik:  node tools/headless/companion.mjs [uitmap]
 // Poorten:  VARVE_KIJK_POORT (8805) en VARVE_KIJK_DEBUG (9405). Chrome: VARVE_CHROME.
@@ -34,7 +36,8 @@ import { fileURLToPath } from 'node:url';
 import { schrijfKaart, NUMMERS } from '../../test/nep-kaart.mjs';
 import { maakNepYtdlp } from '../../test/nep-ytdlp.mjs';
 import { datumVan, nachtDatum } from '../../server/nacht.js';
-import { BEELD_ZIN, NU_ONTBREEKT } from '../../src/companion/companion-lijst.js';
+import { BEELD_ZIN } from '../../src/companion/companion-lijst.js';
+import { maakStatus } from '../../src/ui/status-zender.js';
 
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
 const UIT = process.argv[2] || join(WORTEL, 'tools/headless/uit');
@@ -42,6 +45,7 @@ mkdirSync(UIT, { recursive: true });
 const POORT = Number(process.env.VARVE_KIJK_POORT) || 8805, DEBUG = Number(process.env.VARVE_KIJK_DEBUG) || 9405;
 const B = `http://localhost:${POORT}`;
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
+const TWEE_WACHT = 5200;   // iets langer dan TWEE_MS van server/mixer-melding.js
 
 function zoekChrome() {
   if (process.env.VARVE_CHROME) return process.env.VARVE_CHROME;
@@ -155,7 +159,7 @@ const api = async (pad, body) => {
 const nepRegels = () => (existsSync(nepLog) ? readFileSync(nepLog, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 const schermen = [];
 
-let p;
+let p, pomp = null;
 try {
   let doelen = null;
   for (let i = 0; i < 50 && !doelen; i++) { await wacht(200); doelen = await fetch(`http://127.0.0.1:${DEBUG}/json/list`).then((r) => r.json()).catch(() => null); }
@@ -219,14 +223,13 @@ try {
   p.op('Network.requestWillBeSent', (q) => { if (/\/api\/kaart\/wensen/.test(q.request.url)) wensVerzoeken.push({ t: Date.now(), url: q.request.url }); });
   ok('companion laadt en is klaar', await laad());
   ok('de kop zegt met welke server hij praat', /localhost:\d+/.test(await tekst('#verbinding')));
-  ok('eerste keer (niets bewaard), /api/mixer geeft 404: de kaart, niet een vrijwel leeg "nu" (fix 4)',
+  ok('eerste keer (niets bewaard), de mixer heeft zich niet gemeld: de kaart, niet een vrijwel leeg "nu"',
     await tot(async () => (await p.ev('document.body.dataset.tab')) === 'kaart') && await zichtbaar('#kaart') && !(await zichtbaar('#nu')) && !(await zichtbaar('#beeld')));
   ok('... en die keuze is niet bewaard (Clay koos niets)', (await p.ev('localStorage.getItem("varve.companion.tab")')) === null);
   ok('naar de kaart: meteen de wenslijst, de lichte vorm (?licht=1)', await tot(async () => wensVerzoeken.length > 0, 3000)
     && wensVerzoeken.every((v) => /\?licht=1$/.test(v.url)), wensVerzoeken.map((v) => v.url).join(' '));
   await tik('.onderbalk button[data-tab="nu"]');
-  ok('tik op "nu": een zin voor Clay, geen ontwikkelaarszin', await tot(async () => (await tekst('#nu-inhoud')).includes(NU_ONTBREEKT))
-    && !/\/api\/mixer|stap 2/.test(await tekst('#nu-inhoud')));
+  ok('tik op "nu": "de mixer heeft zich nog niet gemeld"', await tot(async () => /de mixer heeft zich nog niet gemeld/.test(await tekst('#nu-inhoud'))));
   ok('390 px op "nu": geen zijwaarts scrollen', await geenZijwaarts());
   await foto('companion-390-nu-leeg.png');
   const sindsNu = Date.now();
@@ -424,38 +427,51 @@ try {
   ok(`laadtijd tot de kaart gevuld is, met 200 ms per verzoek: ${laadMs} ms (gemeten, geen belofte)`, vol);
   await p.cdp('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
 
-  // ================= nagebootst: zo ziet "nu" eruit als de mixer zich meldt (stap 2) =================
-  console.log('\nnagebootst met de Fetch-laag (stap 2 bestaat nog niet): "nu" en "beeld" met een melding');
-  let leeftijd = 800;
-  const melding = () => ({ leeftijd_ms: leeftijd, twee: false, speelt: true, melding: {
-    t: Date.now() - leeftijd, tab: 'proef', audio: 'running', focus: 'A', auto: false, opname: true,
-    midi: { aan: true, invoer: 'APC40 mkII', uitvoer: 'APC40 mkII' },
-    tracks: [
-      { id: 'A', titel: 'Four Tet - Baby', speelt: true, bpm: 124, toon: '8A', positie: 600, duur: 3600, rate: 1 },
-      { id: 'B', titel: 'Burial - Archangel', speelt: false, bpm: 139.5, toon: '4A', positie: 0, duur: 238, rate: 1 },
-      ...'CDEFG'.split('').map((id) => ({ id, titel: `Proef ${id}`, speelt: false, bpm: 120, toon: '1B', positie: 0, duur: 300, rate: 1 })),
-      { id: 'H', titel: 'Nils Frahm - Says', speelt: true, bpm: 120.2, toon: '11B', positie: 300, duur: 500, rate: 1.05 },
-    ],
-    eind: { zwart: false, bevroren: true, master: 0.8 } } });
-  p.op('Fetch.requestPaused', (q) => p.cdp('Fetch.fulfillRequest', { requestId: q.requestId, responseCode: 200,
-    responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body: Buffer.from(JSON.stringify(melding())).toString('base64') }).catch(() => {}));
-  await p.cdp('Fetch.enable', { patterns: [{ urlPattern: '*/api/mixer*', requestStage: 'Request' }] });
+  // ================= stap 2: de mixer meldt zich (hier: het script, met de echte maakStatus) =================
+  console.log('\nstap 2: meldingen naar POST /api/mixer (het script, zoals de mixer; geen index.html)');
+  const decks = {
+    A: { id: 'A', loaded: true, playing: true, title: 'Four Tet - Baby', bpm: 124, toon: { camelot: '8A', kort: 'Am' }, position: 600, duration: 3600, rate: 1 },
+    B: { id: 'B', loaded: true, playing: false, title: 'Burial - Archangel', bpm: 139.5, toon: { camelot: '4A', kort: 'Fm' }, position: 0, duration: 238, rate: 1 },
+    ...Object.fromEntries('CDEFG'.split('').map((id) => [id, { id, loaded: true, playing: false, title: `Proef ${id}`, bpm: 120, toon: { camelot: '1B', kort: 'B' }, position: 0, duration: 300, rate: 1 }])),
+    H: { id: 'H', loaded: true, playing: true, title: 'Nils Frahm - Says', bpm: 120.2, toon: { camelot: '11B', kort: 'A' }, position: 300, duration: 500, rate: 1.05 },
+  };
+  const melding = (tab = 'tab-proef-1') => maakStatus({ snap: { focus: 'A', maat: 'A', decks }, audio: 'running', auto: false, opname: true, tab,
+    midi: { enabled: true, supported: true, input: { name: 'APC40 mkII' }, output: { name: 'APC40 mkII' } }, eind: { zwart: false, bevroren: true, master: 0.8 } });
+  const eerste = await api('/api/mixer', melding());
+  ok(`POST /api/mixer van het script (Host localhost, geen Origin): ${eerste.status}`, eerste.status === 200);
+  pomp = setInterval(() => api('/api/mixer', melding()).catch(() => {}), 800);   // zoals de mixer: elke 0,8–1 s
   await p.ev('localStorage.setItem("varve.companion.tab", "nu")');
   await laad();
   ok('acht rijen A–H, A en H spelen', await tot(async () => (await p.ev('document.querySelectorAll("#nu .nu-track").length')) === 8
     && (await p.ev('document.querySelectorAll("#nu .nu-track.speelt").length')) === 2));
   const restA = await p.ev('document.querySelector(\'#nu [data-track="A"] .nu-rest\').textContent');
   const restH = await p.ev('document.querySelector(\'#nu [data-track="H"] .nu-rest\').textContent');
-  ok(`resttijd: A "${restA}", H (rate 1,05) "${restH}"`, /^nog 49:5\d$/.test(restA) && /^nog 3:0\d$/.test(restH));
+  ok(`resttijd: A "${restA}", H (rate 1,05) "${restH}"`, /^nog 49:5\d$/.test(restA) && /^nog 3:(0\d|10)$/.test(restH));
   ok('onderregel: audio aan · APC40 mkII · opname loopt · auto-DJ uit', /audio aan.*APC: APC40 mkII.*opname loopt.*auto-DJ uit/.test(await tekst('#nu-inhoud')));
-  await foto('companion-390-nu-voorproef.png');
+  ok('geen rode regel (één mixer)', !/twee mixers open/.test(await tekst('#nu-inhoud')));
+  await foto('companion-390-nu.png');
   await tik('.onderbalk button[data-tab="beeld"]');
-  ok('beeld: BEVRIES aan, ZWART uit, MASTER 80 %', /ZWARTuit.*BEVRIESaan.*MASTER80%/.test((await tekst('#beeld-inhoud')).replace(/\s+/g, '')));
+  ok('beeld: BEVRIES aan, ZWART uit, MASTER 80 %', await tot(async () => /ZWARTuit.*BEVRIESaan.*MASTER80%/.test((await tekst('#beeld-inhoud')).replace(/\s+/g, ''))));
   await tik('.onderbalk button[data-tab="nu"]');
-  leeftijd = 6000;
-  ok('melding van 6 s oud: "mixer meldt zich niet", de stand grijs, resttijd met ≈', await tot(async () => /mixer meldt zich niet/.test(await tekst('#nu-inhoud'))
-    && (await p.ev('document.querySelector("#nu .nu-tracks.grijs") !== null')) && /^≈ nog/.test(await p.ev('document.querySelector(\'#nu [data-track="A"] .nu-rest\').textContent')), 4000));
-  await p.cdp('Fetch.disable');
+  clearInterval(pomp); pomp = null;
+  const stilVanaf = Date.now();
+  ok('de mixer zwijgt: binnen 9 s "mixer meldt zich niet", de stand grijs, resttijd met ≈', await tot(async () => /mixer meldt zich niet/.test(await tekst('#nu-inhoud'))
+    && (await p.ev('document.querySelector("#nu .nu-tracks.grijs") !== null')) && /^≈ nog/.test(await p.ev('document.querySelector(\'#nu [data-track="A"] .nu-rest\').textContent')), 9000),
+    `${Date.now() - stilVanaf} ms`);
+  await api('/api/mixer', melding('tab-proef-1'));
+  await api('/api/mixer', melding('tab-proef-2'));
+  ok('twee tab-id\'s binnen 5 s: de rode regel "twee mixers open"', await tot(async () => /twee mixers open/.test(await tekst('#nu-inhoud')), 4000));
+  // iPad liggend met een melding: nu en beeld rechts gevuld.
+  await scherm(1024, 768, 2);
+  await wacht(TWEE_WACHT);   // de tweede tab-id verloopt (5 s), anders staat de rode regel ook op de foto
+  pomp = setInterval(() => api('/api/mixer', melding()).catch(() => {}), 800);
+  await api('/api/mixer', melding());
+  await laad();
+  ok('iPad liggend: acht rijen rechts, en de beeldstand eronder', await tot(async () => (await p.ev('document.querySelectorAll("#nu .nu-track").length')) === 8)
+    && await zichtbaar('#nu') && await zichtbaar('#beeld') && /BEVRIESaan/.test((await tekst('#beeld-inhoud')).replace(/\s+/g, '')));
+  await foto('companion-1024-vol.png');
+  clearInterval(pomp); pomp = null;
+  await scherm(390, 844, 3);
 
   // ================= de grenzen =================
   console.log('\nde grenzen: geen geluid, geen MIDI, geen tabblad-slot');
@@ -464,17 +480,17 @@ try {
   const sloten = await p.ev('navigator.locks.query().then((q) => [...q.held, ...q.pending].map((l) => l.name))');
   ok(`geen Web Lock (en zeker geen varve-mixer): [${sloten.join(', ')}]`, sloten.length === 0);
   ok('geen fouten van de pagina zelf (Runtime: uitzonderingen en console.error)', p.fouten.length === 0, p.fouten.join(' | '));
-  const vreemd = p.logFouten.filter((f) => !/\/api\/mixer/.test(f.url + f.tekst) && !/\/api\/nacht\/nu/.test(f.url + f.tekst));
-  ok(`netwerkfouten in de console alleen de verwachte (404 /api/mixer, 409 /api/nacht/nu): ${p.logFouten.length}`, vreemd.length === 0,
+  const vreemd = p.logFouten.filter((f) => !/\/api\/nacht\/nu/.test(f.url + f.tekst));
+  ok(`netwerkfouten in de console alleen de verwachte (409 /api/nacht/nu): ${p.logFouten.length}`, vreemd.length === 0,
     vreemd.map((f) => `${f.tekst} ${f.url}`).join(' | '));
-  const mixer404 = p.logFouten.filter((f) => /\/api\/mixer/.test(f.url + f.tekst)).length;
-  ok(`/api/mixer na een 404 niet elke seconde opnieuw: ${mixer404} keer in de hele run (één per laden)`, mixer404 <= 12);
+  ok('geen enkele 404 van /api/mixer (de server kent hem nu)', !p.logFouten.some((f) => /\/api\/mixer/.test(f.url + f.tekst)));
 
   console.log('\nschermafdrukken');
   for (const [naam, grootte] of schermen) ok(`${naam}: ${Math.round(grootte / 1024)} kB`, grootte > 10 * 1024);
 } catch (err) {
   ok(`script liep door: ${err.stack || err.message}`, false);
 } finally {
+  if (pomp) clearInterval(pomp);
   try { p?.ws.close(); } catch {}
   opruimen();
   await wacht(500);

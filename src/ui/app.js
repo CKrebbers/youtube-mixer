@@ -1,5 +1,5 @@
 import { Engine, DECK_IDS } from '../engine/engine.js';
-import { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, bindBeeld, bindLibrary, invoke, bijInvoke } from '../control/actions.js';
+import { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, bindBeeld, bindLibrary, invoke, bijInvoke, read } from '../control/actions.js';
 import { BLADER_PAGINA } from './library-lijst.js';
 import { Lagen } from '../control/lagen.js';
 import { opzetMapjeBalk } from './mapje-balk.js';
@@ -311,9 +311,12 @@ beeldMag();
 // Terug uit de bfcache (pagehide stopte de zender): weer starten als het mag.
 window.addEventListener('pageshow', (e) => { if (e.persisted) { beeldMag(); beeld.zet({}, { vanzelf: true }); } });
 
+// Ook naar de server (POST /api/mixer, hooguit 1 per 900 ms) voor iPad en iPhone (docs/COMPANION.md stap 2).
+const TAB_ID = globalThis.crypto?.randomUUID?.() ?? `tab-${Math.random().toString(36).slice(2, 12)}`;
 startStatusZender({
-  isEerste: statusVanMij,
+  isEerste: statusVanMij, naarServer: true,
   lees: () => ({ snap: engine.snapshot(), midi: midiDelen.midi.status(), audio: engine.ctx.state,
+                 tab: TAB_ID, eind: { zwart: read('video.black') === 1, bevroren: read('video.freeze') === 1, master: read('video.master') ?? 1 },
                  auto: auto.aan, opname: !!opname.opnemer.bezig, beeld: beeld.status() }),
 });
 
