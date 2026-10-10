@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const { Kaart } = await import('../server/kaart.js');
-const { Nacht, STANDAARD, nachtDatum, inVenster, pasToe, isBlokkade, MAX_OP_EEN_RIJ, datumVan } = await import('../server/nacht.js');
+const { Nacht, STANDAARD, nachtDatum, komendeNacht, inVenster, pasToe, isBlokkade, MAX_OP_EEN_RIJ, datumVan } = await import('../server/nacht.js');
 const { schrijfKaart, NUMMERS } = await import('./nep-kaart.mjs');
 
 const fails = [];
@@ -88,6 +88,36 @@ try {
     nacht.zet({ aan: false });
     ok('uit: volgende null', nacht.volgende() === null && nacht.magNu() === 'staat uit');
     ok('zet: een verkeerde waarde gooit, de stand blijft', (() => { try { nacht.zet({ perNacht: 0 }); return false; } catch (e) { return /perNacht/.test(e.message) && nacht.stand().perNacht === 80; } })());
+  }
+
+  // "vandaag niet" geldt voor de KOMENDE nacht, ook 's ochtends gezet (review standen, 10 okt):
+  // vóór 12:00 is nachtDatum de nacht die net voorbij is; komendeNacht de volgende.
+  console.log('\n"vandaag niet" geldt voor de komende nacht, hoe laat je het ook zet');
+  {
+    const V = STANDAARD.venster;
+    ok('komendeNacht 01:00–07:00: 10:00 en 14:00 en 23:00 op 17 okt = 17 okt', ['10', '14', '23'].every((u) => komendeNacht(new Date(2026, 9, 17, Number(u), 0), V) === '2026-10-17'));
+    ok('… 03:00 op 18 okt (in het venster) = 17 okt; 00:30 op 18 okt = 17 okt; 07:30 op 18 okt = 18 okt',
+      komendeNacht(new Date(2026, 9, 18, 3, 0), V) === '2026-10-17' && komendeNacht(new Date(2026, 9, 18, 0, 30), V) === '2026-10-17' && komendeNacht(new Date(2026, 9, 18, 7, 30), V) === '2026-10-18');
+    ok('… venster over middernacht (23:00–06:00): 22:00 op 17 = 17, 05:00 op 18 = 17, 08:00 op 18 = 18',
+      komendeNacht(new Date(2026, 9, 17, 22, 0), { van: '23:00', tot: '06:00' }) === '2026-10-17' && komendeNacht(new Date(2026, 9, 18, 5, 0), { van: '23:00', tot: '06:00' }) === '2026-10-17'
+      && komendeNacht(new Date(2026, 9, 18, 8, 0), { van: '23:00', tot: '06:00' }) === '2026-10-18');
+    for (const [uur, wanneer] of [[10, 17], [14, 17], [23, 17], [3, 18]]) {
+      const { nacht, zet } = maak({ nu: new Date(2026, 9, wanneer, uur, 0) });
+      nacht.zet({ aan: true });
+      nacht.zet({ vandaagNiet: true });   // wat een stand met nacht.vannacht: false doet, en de knop "vandaag niet"
+      const toen = nacht.stand().vandaagNiet;
+      zet(new Date(2026, 9, 18, wanneer === 18 ? 4 : 2, 0));   // midden in de nacht van 17 op 18 okt
+      ok(`gezet op ${wanneer} okt ${String(uur).padStart(2, '0')}:00: de stand zegt "vandaag niet" (${toen}) en de nacht van 17 op 18 okt remt (${nacht.magNu()})`,
+        toen === true && nacht.magNu() === 'vandaag niet');
+      zet(new Date(2026, 9, 19, 2, 0));
+      ok(`… en de nacht daarna (18 op 19 okt) mag weer (${nacht.magNu()})`, nacht.magNu() === null);
+    }
+    const { nacht, zet } = maak({ nu: new Date(2026, 9, 17, 22, 0) });
+    nacht.zet({ aan: true, vandaagNiet: true });
+    zet(new Date(2026, 9, 18, 9, 0));
+    ok('de ochtend erna (09:00): de rem van de afgelopen nacht telt niet meer, de knop staat weer uit', nacht.stand().vandaagNiet === false);
+    nacht.zet({ vandaagNiet: true });
+    ok('… en nu "vandaag niet" = de nacht van 18 op 19 okt', nacht.instellingen.vandaagNietDatum === '2026-10-18' && nacht.vandaagNiet === true);
   }
 
   // ---- regel 2 ---------------------------------------------------------------------

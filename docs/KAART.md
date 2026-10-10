@@ -190,8 +190,11 @@ Standaard **uit**. De zes regels van het contract en hoe ze hier zitten:
    of als `vandaagNiet`.** `magNu()`. Een "nacht" hoort bij een DATUM:
    `nachtDatum` = vóór 12:00 de dag ervóór. Zo is 03:00 op 11 oktober de nacht
    van 10 oktober (de proefavond), en geldt `speeldagen: ["2026-10-10"]` ook voor
-   die nacht. `vandaagNiet` wordt bewaard als die nachtdatum en loopt vanzelf af;
-   om 22:00 aangezet geldt het voor de nacht die komt. Per nacht één run: ook
+   die nacht. `vandaagNiet` geldt voor de KOMENDE nacht (`komendeNacht`: de nacht
+   waar je in zit, anders de eerstvolgende) en wordt bewaard als die nachtdatum;
+   het loopt vanzelf af. Om 22:00, om 14:00 en ook om 10:00 's ochtends aangezet
+   geldt het voor de nacht die komt (tot 10 okt gold het vóór 12:00 voor de nacht
+   die al voorbij was; gevonden in de review van de standen). Per nacht één run: ook
    als die stopte (deck, 403) gaat hij pas de volgende nacht verder. Een
    serverherstart onthoudt dat via `nacht_runs`.
 2. **Eerst de wensen (`wacht`, oudste eerst), dan de standaardvolgorde**:
