@@ -61,9 +61,10 @@ async function verbind(doel) {
   let volg = 0;
   // fouten = van onze code (uitzondering, console.error); netwerk = wat Chrome zelf logt over een verzoek
   // met een foutstatus (Log-domein, bron network): dat kan JavaScript niet onderdrukken (CLAUDE.md, beeld).
-  const wachtend = new Map(), fouten = [], netwerk = [];
+  const wachtend = new Map(), fouten = [], netwerk = [], luister = new Map();
   ws.addEventListener('message', (e) => {
     const m = JSON.parse(e.data);
+    if (m.method && luister.has(m.method)) luister.get(m.method)(m.params);
     if (m.id && wachtend.has(m.id)) { const w = wachtend.get(m.id); wachtend.delete(m.id); m.error ? w.f(new Error(m.error.message)) : w.ok(m.result); }
     if (m.method === 'Runtime.exceptionThrown') fouten.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') fouten.push(m.params.args.map((a) => a.value ?? a.description).join(' '));
@@ -77,7 +78,7 @@ async function verbind(doel) {
   };
   await cdp('Page.enable'); await cdp('Runtime.enable'); await cdp('Log.enable');
   await cdp('Page.addScriptToEvaluateOnNewDocument', { source: GEEN_MIDI });
-  return { ws, cdp, ev, fouten, netwerk, id: doel.id };
+  return { ws, cdp, ev, fouten, netwerk, luister, id: doel.id };
 }
 async function tot(fn, maxMs = 8000) {
   const t0 = Date.now();
@@ -233,6 +234,35 @@ try {
     && await ctl.ev(`document.getElementById('stand-kies').value === 'feest2' && [...document.querySelectorAll('#stand-kies option')].every((o) => o.value === o.value.toLowerCase())`)));
   ok('… en proef-x is niet overschreven (titel "Van buiten")', (await api('/api/standen/proef-x')).stand.titel === 'Van buiten' && (await api('/api/standen/feest2')).bron === 'eigen');
 
+  console.log('\nfouten van de server (review 2)');
+  // Punt 4b: een kapot eigen bestand. Onder de kiezer de reden van de server, niet alleen "400".
+  writeFileSync(join(tmp, 'standen', 'kapot.json'), JSON.stringify({ schema: 2, titel: 'Kapot', delen: {} }));
+  ok('een kapot eigen bestand verschijnt in de kiezer met "· fout"', await tot(() => ctl.ev(`[...document.querySelectorAll('#stand-kies option')].some((o) => o.value === 'kapot' && o.textContent.endsWith('· fout'))`), 5000));
+  await kies('kapot');
+  ok('onder de kiezer de reden van de server, niet alleen "400" (review 2, punt 4b)',
+    await tot(async () => (await tekst('stand-uitleg')) === 'Deze opstelling klopt niet: deze VARVE kent schema 1 (dit bestand: 2). Pas standen/kapot.json met de hand aan.', 3000), await tekst('stand-uitleg'));
+  // Punt 3: "alles" actief (mixer via de hub), dan geeft GET /api/standen even 503 (iCloud). De knop blijft via de hub.
+  await api('/api/standen/alles/activeer', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+  ok('alles weer actief: mixer openen via de hub', await tot(() => ctl.ev(`document.getElementById('mixer-open').dataset.adres === '/?hub=ws://localhost:7700/app'`), 5000));
+  let onderschept = 0;
+  ctl.luister.set('Fetch.requestPaused', (p) => {
+    onderschept++;
+    ctl.cdp('Fetch.fulfillRequest', { requestId: p.requestId, responseCode: 503, responsePhrase: 'Service Unavailable',
+      responseHeaders: [{ name: 'content-type', value: 'application/json' }],
+      body: Buffer.from(JSON.stringify({ fout: 'te veel bestanden tegelijk niet lokaal beschikbaar (iCloud?)' })).toString('base64') }).catch(() => {});
+  });
+  await ctl.cdp('Fetch.enable', { patterns: [{ urlPattern: '*/api/standen', requestStage: 'Response' }] });
+  ok('GET /api/standen geeft 503: de tegel zegt "onbekend · fout van de server (503)"', await tot(async () => { const t = await tegel(); return t?.waarde === 'onbekend' && /503/.test(t.sub); }, 6000),
+    `${onderschept}× onderschept`);
+  const knopNu = await ctl.ev(`(() => { const k = document.getElementById('mixer-open'), g = document.getElementById('mixer-open-gewoon');
+    return { adres: k.dataset.adres, onbekend: k.dataset.onbekend, tekst: k.textContent, title: k.title, gewoonZichtbaar: !g.hidden && !!g.offsetParent }; })()`);
+  ok('… en "mixer openen" blijft via de hub (de laatst bekende), met dat in de title; "zonder hub" blijft zichtbaar (review 2, punt 3)',
+    knopNu.adres === '/?hub=ws://localhost:7700/app' && knopNu.onbekend === '1' && knopNu.tekst === 'mixer openen via de hub' && knopNu.gewoonZichtbaar
+      && knopNu.title.startsWith('opstelling nu onbekend (fout van de server); dit is de laatst bekende: via de hub'), knopNu.title);
+  ok('… window.controle.mixerAdres() zegt hetzelfde', (await ctl.ev('window.controle.mixerAdres()')) === '/?hub=ws://localhost:7700/app');
+  await ctl.cdp('Fetch.disable');
+  ctl.luister.delete('Fetch.requestPaused');
+
   console.log('\nsmal (390 px)');
   await maat(ctl, 390, 844);
   await wacht(400);
@@ -242,8 +272,11 @@ try {
   await maat(ctl, 1440, 790);
 
   ok(`0 consolefouten van onze code${ctl.fouten.length ? `: ${ctl.fouten.slice(0, 3).join(' | ')}` : ''}`, ctl.fouten.length === 0);
-  ok(`netwerk: alleen de bedoelde 409 op proef-x (${ctl.netwerk.length}: ${ctl.netwerk.map((x) => x.replace(/^.*status of /, '')).join(' | ')})`,
-    ctl.netwerk.length === 1 && /409 \(Conflict\) http:\/\/localhost:\d+\/api\/standen\/proef-x/.test(ctl.netwerk[0]));
+  // Bedoeld: de 409 op proef-x (bewaren na een wijziging van buiten), de 400 op kapot/verschil en de nagebootste 503 (review 2).
+  const bedoeld = [/409 \(Conflict\) http:\/\/localhost:\d+\/api\/standen\/proef-x\s*$/, /400 \(Bad Request\) http:\/\/localhost:\d+\/api\/standen\/kapot\/verschil\s*$/,
+    /status of 503\b.*http:\/\/localhost:\d+\/api\/standen\s*$/];
+  ok(`netwerk: alleen de bedoelde 409, 400 en 503 (${ctl.netwerk.length}: ${ctl.netwerk.map((x) => x.replace(/^.*status of /, '')).join(' | ')})`,
+    ctl.netwerk.every((x) => bedoeld.some((b) => b.test(x))) && ctl.netwerk.filter((x) => bedoeld[0].test(x)).length === 1 && bedoeld.every((b) => ctl.netwerk.some((x) => b.test(x))));
   ok('geen MIDI in de Controlekamer', await ctl.ev('!navigator.requestMIDIAccess'));
 } catch (err) {
   ok(`zonder uitzondering: ${err.message}`, false);

@@ -5,7 +5,7 @@
 // Draai met: node test/stand-tegel.test.mjs
 import { readFileSync } from 'node:fs';
 
-const { standTegel, standRegel, mixerAdres, verschilTekst, activeerMelding, terugMelding, LABEL, MIXER_VIA_HUB, MIXER_GEWOON, SUB_MAX } = await import('../src/controle/stand-tegel.js');
+const { standTegel, standRegel, mixerAdres, mixerKeuze, verschilTekst, activeerMelding, terugMelding, LABEL, MIXER_VIA_HUB, MIXER_GEWOON, SUB_MAX } = await import('../src/controle/stand-tegel.js');
 const model = await import('../src/standen/stand-model.js');
 
 const fails = [];
@@ -56,6 +56,8 @@ ok(`een lange sub wordt afgekapt op ${SUB_MAX} tekens met …`, (() => {
 console.log('\nde regel: wat Clay zelf nog doet');
 const r = tegel(met({ hub: { set: 'studio', mixerVia: true }, pakket: { profiel: 'alles' } })).regel.replaceAll(' ', ' ');
 ok(`krat met "kies hem in de kaart" ("${r.split(' · ')[0]}")`, r.includes('krat proefkrat (kies hem in de kaart)'));
+// Review 2, punt 4c: de naam die de kaart geeft (in .actief.json sinds review 2) gaat vóór de id.
+ok('krat met zijn naam uit de kaart: "krat Proefkrat", zoals het verschil', standRegel({ ...ACTIEF_APC, kaart: { krat: 'slim:proefkrat', naam: 'Proefkrat' } }).startsWith('krat Proefkrat (kies hem in de kaart)'));
 ok('hub-set met "start hem zelf (npm start -- studio)"', r.includes('hub-set studio: start hem zelf (npm start -- studio)'));
 ok('mixer via de hub genoemd', r.includes('mixer openen gaat via de hub'));
 ok('master met "mixer volgt nog niet"', r.includes('master Dub-worp: mixer volgt nog niet'));
@@ -68,6 +70,16 @@ ok('niets actief: gewoon /', mixerAdres(null) === MIXER_GEWOON && mixerAdres({ n
 ok('actief zonder hub: /', mixerAdres(ACTIEF_APC) === '/');
 ok(`hub.mixerVia: ${MIXER_VIA_HUB}`, mixerAdres({ ...ACTIEF_APC, hub: { set: 'studio', mixerVia: true } }) === '/?hub=ws://localhost:7700/app');
 ok('mixerVia "ja" (geen boolean) of teruggezet: gewoon /', mixerAdres({ ...ACTIEF_APC, hub: { mixerVia: 'ja' } }) === '/' && mixerAdres({ naam: null, hub: { mixerVia: true } }) === '/');
+
+// Review 2, punt 3: een fout van /api/standen (503, iCloud) mag "mixer openen" niet stil zonder hub laten openen.
+const ALLES = { ...ACTIEF_APC, naam: 'alles', hub: { set: 'studio', mixerVia: true } };
+const goed = { standen: [{ naam: 'alles' }], actief: ALLES, label: 'Opstelling' };
+ok('mixerKeuze: een goed antwoord met alles: via de hub, niet onbekend', (() => { const k = mixerKeuze(goed, null); return k.adres === MIXER_VIA_HUB && !k.onbekend; })());
+ok('… daarna { fout: 503 }: blijft /?hub=… (de laatst bekende), onbekend', (() => { const k = mixerKeuze({ fout: 503 }, ALLES); return k.adres === MIXER_VIA_HUB && k.onbekend; })());
+ok('… of geen antwoord (null): ook de laatst bekende', mixerKeuze(null, ALLES).adres === MIXER_VIA_HUB && mixerKeuze(null, ALLES).onbekend);
+ok('een fout zonder laatst bekende: gewoon /, onbekend', (() => { const k = mixerKeuze({ fout: 500 }, null); return k.adres === MIXER_GEWOON && k.onbekend; })());
+ok('een goed antwoord zonder actieve opstelling gaat vóór de laatst bekende: /', mixerKeuze({ standen: [], actief: null }, ALLES).adres === MIXER_GEWOON);
+ok('een oudere server zonder standen (404): gewoon /, niet onbekend', (() => { const k = mixerKeuze({ ontbreekt: true }, ALLES); return k.adres === MIXER_GEWOON && !k.onbekend; })());
 
 console.log('\nwat activeren verandert');
 const v = verschilTekst({ delen: {

@@ -29,8 +29,12 @@ const uurMin = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '?' : d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
 };
-/** "slim:proefkrat" → "proefkrat", "pl:PL…" blijft zoals hij is. */
-const kratNaam = (id) => String(id).replace(/^slim:/, '');
+/**
+ * De naam van de krat: wat de kaart hem noemt (de server zet die bij het
+ * activeren in .actief.json, zoals het verschil hem toont: "Proefkrat"); een
+ * oude .actief.json zonder naam: uit de id ("slim:proefkrat" → "proefkrat").
+ */
+const kratNaam = (kaart) => (typeof kaart.naam === 'string' && kaart.naam ? kaart.naam : String(kaart.krat).replace(/^slim:/, ''));
 
 /**
  * Wat Clay zelf nog moet doen of weten, als één regel:
@@ -42,7 +46,7 @@ const kratNaam = (id) => String(id).replace(/^slim:/, '');
 export function standRegel(a) {
   if (!a) return '';
   const delen = [];
-  if (a.kaart?.krat) delen.push(`krat ${kratNaam(a.kaart.krat)} (kies hem in de kaart)`);
+  if (a.kaart?.krat) delen.push(`krat ${kratNaam(a.kaart)} (kies hem in de kaart)`);
   if (a.hub?.set) delen.push(`hub-set ${a.hub.set}: start hem zelf (npm start -- ${a.hub.set})`);
   if (a.hub?.mixerVia) delen.push('mixer openen gaat via de hub');
   if (a.mixer?.master?.sjabloon) delen.push(`master ${a.mixer.master.sjabloon}: mixer volgt nog niet`);
@@ -85,6 +89,22 @@ export function standTegel({ standen = null } = {}) {
 /** Het adres voor "mixer openen": via de hub als de actieve stand dat zegt (hub.mixerVia), anders gewoon. */
 export function mixerAdres(actief) {
   return actief?.naam && actief?.hub?.mixerVia === true ? MIXER_VIA_HUB : MIXER_GEWOON;
+}
+
+/**
+ * "mixer openen" uit wat de Controlekamer weet (review 2): het antwoord van nu
+ * (GET /api/standen), of, bij een fout van de server of geen antwoord, het
+ * `actief` uit het laatste goede antwoord. Anders opent een hapering (503,
+ * iCloud; de route rust daarna een minuut) de mixer zonder ?hub= terwijl de hub
+ * de APC heeft. Een oudere server zonder standen (404): gewoon.
+ * @param standen  { standen, actief } | { fout } | { ontbreekt } | null
+ * @param laatste  `actief` uit het laatste goede antwoord, of null
+ * @returns {{ adres, onbekend }} onbekend = de opstelling is nu niet bekend; het adres komt uit `laatste`
+ */
+export function mixerKeuze(standen, laatste = null) {
+  if (standen && Array.isArray(standen.standen)) return { adres: mixerAdres(standen.actief), onbekend: false };
+  if (standen?.ontbreekt) return { adres: MIXER_GEWOON, onbekend: false };
+  return { adres: mixerAdres(laatste), onbekend: true };
 }
 
 /**

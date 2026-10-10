@@ -36,9 +36,9 @@ export function nachtKeuze(n) {
   return uit && vannacht ? 'beide' : uit ? 'uit' : vannacht ? 'vannacht' : '';
 }
 
-function opties(lijst, gekozen) {
+function opties(lijst, gekozen, onbekend = 'niet gevonden') {
   const rijen = [...lijst];
-  if (gekozen && !rijen.some((o) => o.waarde === gekozen)) rijen.push({ waarde: gekozen, tekst: `${gekozen} (niet gevonden)` });
+  if (gekozen && !rijen.some((o) => o.waarde === gekozen)) rijen.push({ waarde: gekozen, tekst: `${gekozen} (${onbekend})` });
   return rijen.map((o) => `<option value="${esc(o.waarde)}"${o.waarde === (gekozen ?? '') ? ' selected' : ''}>${esc(o.tekst)}</option>`).join('');
 }
 
@@ -46,7 +46,7 @@ const veld = (label, binnen, uitleg = '') => `<label class="bw-veld"><span class
 
 /**
  * De velden voor één stand. `keuzes` is GET /api/standen/keuzes:
- * { sjablonen, kratten: [{ id, naam, aantal }], profielen | null, bekendeProfielen?, hubSets | null, mappingNu }.
+ * { sjablonen, sjablonenFout?, kratten: [{ id, naam, aantal }], profielen | null, bekendeProfielen?, hubSets | null, mappingNu }.
  */
 export function bewerkerHtml(stand, keuzes = {}) {
   const d = stand?.delen ?? {};
@@ -70,8 +70,10 @@ export function bewerkerHtml(stand, keuzes = {}) {
     ], mapping)}</select>`, `nu: ${k.mappingNu ?? '?'}; je huidige erin zetten = "leg vast"`),
     veld('krat', `<select name="krat">${opties([{ waarde: '', tekst: '—' },
       ...(k.kratten ?? []).map((x) => ({ waarde: x.id, tekst: `${x.naam} (${x.aantal ?? '?'})` }))], d.kaart?.krat ?? '')}</select>`, 'kies hem daarna zelf in de kaart'),
+    // racks/sjablonen.json niet te lezen (iCloud?): dat zeggen, en een gekozen sjabloon is dan "niet nagekeken", niet "niet gevonden".
     veld('master-rack', `<select name="master">${opties([{ waarde: '', tekst: '—' },
-      ...(k.sjablonen ?? []).map((n) => ({ waarde: n, tekst: n }))], d.master?.sjabloon ?? '')}</select>`, 'de mixer volgt nog niet'),
+      ...(k.sjablonen ?? []).map((n) => ({ waarde: n, tekst: n }))], d.master?.sjabloon ?? '', k.sjablonenFout ? 'niet nagekeken' : 'niet gevonden')}</select>`,
+    k.sjablonenFout ? `${k.sjablonenFout}; probeer het straks opnieuw` : 'de mixer volgt nog niet'),
     veld('hub-set', `<select name="hubSet">${opties([{ waarde: '', tekst: '—' },
       ...hubSets.map((n) => ({ waarde: n, tekst: n }))], d.hub?.set ?? '')}</select>`, k.hubSets ? 'start hem zelf' : 'geen hub gevonden op deze Mac'),
     veld('mixer openen', `<select name="mixerVia">${opties([

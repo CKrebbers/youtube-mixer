@@ -51,6 +51,12 @@ ok('zonder keuzes (server gaf niets): toch een formulier, geen fout', bewerkerHt
 
 console.log('\nontsmet');
 const vies = { schema: 1, titel: '"><script>alert(1)</script>', uitleg: "a'b", delen: { kaart: { krat: '<img src=x onerror=alert(1)>' } } };
+// Review 2, punt 4a: racks/sjablonen.json niet te lezen (iCloud?) is iets anders dan "niet gevonden".
+{
+  const x = bewerkerHtml({ schema: 1, delen: { master: { sjabloon: 'Dub-worp' } } }, { ...KEUZES, sjablonen: [], sjablonenFout: 'racks/sjablonen.json niet te lezen (niet lokaal beschikbaar (iCloud?))' });
+  ok('sjablonen niet te lezen: het gekozen sjabloon blijft, "(niet nagekeken)", en de hint noemt "niet te lezen"',
+    x.includes('<option value="Dub-worp" selected>Dub-worp (niet nagekeken)</option>') && x.includes('racks/sjablonen.json niet te lezen (niet lokaal beschikbaar (iCloud?)); probeer het straks opnieuw'));
+}
 const hv = bewerkerHtml(vies, { ...KEUZES, sjablonen: ['<b>x</b>'], hubSets: ['"onmouseover="x'] });
 ok('geen <script>, <img of <b> uit de data in de HTML', !/<script|<img|<b>/.test(hv));
 ok('aanhalingstekens ontsmet (geen attribuut te breken)', !hv.includes('"onmouseover="') && hv.includes('&quot;onmouseover=&quot;x'));

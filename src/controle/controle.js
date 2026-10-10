@@ -5,7 +5,7 @@ import { stemsTegel } from '../ui/stems-weergave.js';
 import { beeldTegel } from '../ui/beeld-weergave.js';
 import { backupTegel } from './backup-tegel.js';
 import { serverTegel } from './server-tegel.js';
-import { standTegel, mixerAdres, verschilTekst, activeerMelding, terugMelding, LABEL as STAND_LABEL, MIXER_VIA_HUB, MIXER_GEWOON } from './stand-tegel.js';
+import { standTegel, mixerKeuze, verschilTekst, activeerMelding, terugMelding, LABEL as STAND_LABEL, MIXER_VIA_HUB, MIXER_GEWOON } from './stand-tegel.js';
 import { bewerkerHtml, leesBewerker, nieuweNaamGeldig, nieuweNaam } from './stand-bewerker.js';
 
 /**
@@ -30,17 +30,18 @@ const stand = {
   backup: null,        // antwoord van /api/backups
   secties: null,       // antwoord van /api/secties, { ontbreekt: true } bij een server zonder die route, null = onbekend
   standen: null,       // antwoord van /api/standen ({ standen, actief, label }), { ontbreekt } / { fout }, null = onbekend
+  standenLaatst: null, // `actief` uit het laatste goede antwoord: "mixer openen" houdt dat bij een fout van de server
   mixer: null,         // { open, wachtend } uit de Web Lock
   status: null,        // laatste bericht van de mixer
   proef: { begonnen: null, items: {} },
 };
 
-function meld(tekst, soort = '') {
+function meld(tekst, soort = '', ms = soort === 'fout' ? 8000 : 3000) {
   const el = document.createElement('div');
   el.className = `melding ${soort}`;
   el.textContent = tekst;
   $('meldingen').append(el);
-  setTimeout(() => el.remove(), soort === 'fout' ? 8000 : 3000);
+  setTimeout(() => el.remove(), ms);
 }
 
 /*
@@ -55,7 +56,13 @@ const rustTot = new Map();   // pad → tijdstip waarop hij weer gevraagd wordt
 
 async function haal(pad, { wacht = WACHT_MS } = {}) {
   const r = await fetch(pad, { cache: 'no-store', signal: AbortSignal.timeout(wacht) });
-  if (!r.ok) throw new Error(`${pad}: ${r.status}`);
+  if (!r.ok) {
+    // De server zegt in { fout } wat er mis is ("deze VARVE kent schema 1"); die tekst gaat mee in err.fout.
+    const err = new Error(`${pad}: ${r.status}`);
+    err.status = r.status;
+    try { const d = await r.json(); if (typeof d?.fout === 'string') err.fout = d.fout; } catch {}
+    throw err;
+  }
   return r.json();
 }
 
@@ -117,7 +124,11 @@ async function leesSecties() {
 async function leesStanden() {
   const a = await haalLos('/api/standen');
   if (a !== undefined) stand.standen = a?.data ?? a;
+  if (a?.data) stand.standenLaatst = a.data.actief ?? null;
 }
+
+/** "mixer openen": de opstelling van nu, of de laatst bekende als de server een fout gaf (stand-tegel.js, mixerKeuze). */
+const mixerNu = () => mixerKeuze(stand.standen, stand.standenLaatst);
 
 // De tooling-controle start yt-dlp, de splitter en de tellenzoeker: die mag langer duren.
 async function leesTooling() {
@@ -217,13 +228,16 @@ function tekenStand() {
   const knop = $('mixer-open');
   const open = !!stand.mixer?.open;
   // Via de hub als de actieve opstelling dat zegt (hub.mixerVia): het adres staat op de knop, zodat je het ziet.
-  knop.dataset.adres = mixerAdres(stand.standen?.actief);
+  // Geeft de server even een fout, dan de laatst bekende opstelling (niet stil terug naar "zonder hub").
+  const keuze = mixerNu();
+  knop.dataset.adres = keuze.adres;
+  knop.dataset.onbekend = keuze.onbekend ? '1' : '';
   const viaHub = knop.dataset.adres === MIXER_VIA_HUB;
   if (!knop.dataset.bezig) {
     knop.disabled = open;
     knop.textContent = open ? 'mixer staat open' : viaHub ? 'mixer openen via de hub' : 'mixer openen';
     knop.title = open ? 'er is al een mixer-tabblad: gebruik dat (een tweede luistert niet naar de APC)'
-      : viaHub ? `de opstelling zegt: via de hub (${knop.dataset.adres}); start de hub eerst` : '';
+      : viaHub ? `${keuze.onbekend ? 'opstelling nu onbekend (fout van de server); dit is de laatst bekende: ' : 'de opstelling zegt: '}via de hub (${knop.dataset.adres}); start de hub eerst` : '';
   }
   // De uitweg zonder hub: alleen zichtbaar als de opstelling "via de hub" zegt (met ?hub= opent de mixer zelf geen MIDI).
   const gewoon = $('mixer-open-gewoon');
@@ -242,7 +256,7 @@ async function openMixer(adres) {
   knop.dataset.bezig = '1'; knop.disabled = true; $('mixer-open-gewoon').disabled = true; knop.textContent = 'mixer gaat open…';
   setTimeout(() => { delete knop.dataset.bezig; tekenStand(); }, 4000);
 }
-$('mixer-open').addEventListener('click', () => openMixer(mixerAdres(stand.standen?.actief)));
+$('mixer-open').addEventListener('click', () => openMixer(mixerNu().adres));
 $('mixer-open-gewoon').addEventListener('click', () => openMixer(MIXER_GEWOON));
 
 // ---- de opstelling (docs/STANDEN.md) ----------------------------------------------
@@ -282,7 +296,12 @@ async function toonVerschil() {
     const v = await haal(`/api/standen/${encodeURIComponent(naam)}/verschil`);
     if (nr === verschilNr) $('stand-uitleg').textContent = `Activeren: ${verschilTekst(v)}.`;
   } catch (err) {
-    if (nr === verschilNr) $('stand-uitleg').textContent = `Deze opstelling klopt niet (${err.message}); kijk het bestand na.`;
+    // De reden van de server ("deze VARVE kent schema 1"), niet alleen de status. 400 = het bestand klopt niet;
+    // iets anders (503, iCloud) = nu niet te zien.
+    if (nr !== verschilNr) return;
+    $('stand-uitleg').textContent = err.status === 400
+      ? `Deze opstelling klopt niet: ${err.fout ?? err.message}. Pas standen/${naam}.json met de hand aan.`
+      : `Wat activeren verandert is nu niet te zien: ${err.fout ?? err.message}.`;
   }
 }
 $('stand-kies').addEventListener('change', () => { toonVerschil(); if ($('stand-bewerk').open) laadBewerker(); });
@@ -416,7 +435,7 @@ $('bw-leg-vast').addEventListener('click', async () => {
     if (r.status === 409) { meld('intussen veranderd: laad opnieuw (bewerk dicht en open)', 'fout'); return; }
     if (!r.ok) { meld(`niet vastgelegd: ${d.fout ?? r.status}`, 'fout'); return; }
     meld(`vastgelegd in ${bewerkt.naam}: ${(d.delen ?? []).join(', ')}`);
-    for (const o of (d.opmerkingen ?? []).slice(0, 2)) meld(o);
+    for (const o of (d.opmerkingen ?? []).slice(0, 2)) meld(o, '', 8000);   // ze zeggen wat de opstelling voortaan doet: even laten staan
     for (const w of (d.waarschuwingen ?? []).slice(0, 3)) meld(w, 'fout');
     kiezerSleutel = '__';
     await laadBewerker(); await ververs(); toonVerschil();
@@ -544,4 +563,4 @@ vraagStatus();
 setInterval(ververs, 2000);
 setInterval(vraagStatus, 2000);
 setInterval(() => leesTooling().then(tekenStand), 60000);
-window.controle = { stand, ververs, mixerAdres: () => mixerAdres(stand.standen?.actief) };   // handig in de console en voor tools/headless/controle.mjs
+window.controle = { stand, ververs, mixerAdres: () => mixerNu().adres };   // handig in de console en voor tools/headless/controle.mjs
