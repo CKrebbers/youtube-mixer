@@ -561,8 +561,9 @@ export class Chrome {
     }
     return v;
   }
-  async foto(sid, pad) {
-    const { data } = await this.cdp('Page.captureScreenshot', { format: 'png' }, sid);
+  /** Een schermafdruk; `clip` = { x, y, width, height, scale? } voor een uitsnede (CSS-px). */
+  async foto(sid, pad, clip = null) {
+    const { data } = await this.cdp('Page.captureScreenshot', { format: 'png', ...(clip ? { clip: { scale: 1, ...clip } } : {}) }, sid);
     writeFileSync(pad, Buffer.from(data, 'base64'));
   }
   sluit() { try { this.ws?.close(); } catch (_) {} }
@@ -571,11 +572,21 @@ export class Chrome {
 // ---- uitvoer -----------------------------------------------------------------------
 
 const checks = [];
-const ok = (naam, cond, extra = '') => {
+/**
+ * Na een signaal (Ctrl-C, kill) of een onverwachte fout ruimt `dood()` op en sluit af.
+ * Intussen loopt de hoofdlus nog even door tegen een Chrome die al weg is; wat die dan
+ * nog meldt, is geen uitkomst. ok() en info() zwijgen dan, het hoofdprogramma laat de
+ * exitcode aan dood() (review 2, punt 4: een misleidende FAIL-regel na Ctrl-C).
+ * Ook voor zaalbeeld.mjs.
+ */
+let afgebroken = false;
+export const isAfgebroken = () => afgebroken;
+export const ok = (naam, cond, extra = '') => {
+  if (afgebroken) return;
   checks.push({ naam, ok: !!cond, extra: typeof extra === 'string' ? extra : JSON.stringify(extra) });
   console.log(`${cond ? '  ok  ' : 'FAIL  '}${naam}${extra !== '' ? ` (${typeof extra === 'string' ? extra : JSON.stringify(extra)})` : ''}`);
 };
-const info = (tekst) => console.log(`  ..  ${tekst}`);
+const info = (tekst) => { if (!afgebroken) console.log(`  ..  ${tekst}`); };
 const n1 = (x, d = 1) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '–');
 
 // ---- processen die wij starten, en opruimen -------------------------------------------
@@ -622,10 +633,12 @@ export function zetSignalen(bijStop = null) {
       process.exit(code);
     }
     bezig = true;
+    afgebroken = true;
     console.error(`\n${reden}: alles van deze meting stoppen`);
     stopAlles();
     await wachtTotWeg(1500);
     for (const f of naStop) { try { f(); } catch (_) {} }
+    console.error(`afgebroken: opgeruimd, exit ${code}`);
     process.exit(code);
   };
   process.on('SIGINT', () => dood(130, 'SIGINT'));
@@ -794,7 +807,8 @@ async function zelftest(o) {
     await wacht(1200);
     const rust = await chrome.ev(sid, 'window.__meet.hartLees()').catch(() => null);
     const reeks = await chrome.ev(sid, 'window.__meet.neem()').catch(() => null);
-    ok('de hartslag telt blokken (process() loopt)', !!rust && rust.n > 100, rust ? `${rust.n} blokken, max ${rust.max} ms, ${rust.n15} > ${GAT_MS} ms` : 'niets');
+    ok('de hartslag telt blokken (process() loopt)', !!rust && rust.n > 100, rust ? `${rust.n} blokken, max ${rust.max} ms, ${rust.n15} > ${GAT_MS} ms`
+      + (rust.n === 0 ? ' — de audioklok staat stil: geen audio-uitgang (de klep van de MacBook dicht?)' : '') : 'niets');
     const raf = rafSamenvatting(reeks?.raf);
     ok('de rAF-meter loopt', !!raf && raf.beelden > 10, raf ? `${raf.beelden} beelden, p50 ${n1(raf.fpsP50)} fps` : 'geen beelden');
     ok('document.visibilityState is visible in elk monster (H16)', !!reeks?.zicht?.length && reeks.zicht.every((z) => z === 'visible'), reeks ? `${reeks.zicht.length} monsters` : '');
@@ -832,7 +846,7 @@ async function zelftest(o) {
     writeFileSync(join(o.uit, 'beeld-lokaal-zelftest.json'), JSON.stringify(json, null, 1));
     if (!o.bewaar) rmSync(tmp, { recursive: true, force: true });
     uitslag = checks.filter((c) => !c.ok).length;
-    console.log(`\n${checks.length} checks, ${uitslag ? `${uitslag} FAIL` : 'alles ok'} — ${join(o.uit, 'beeld-lokaal-zelftest.json')}`);
+    if (!afgebroken) console.log(`\n${checks.length} checks, ${uitslag ? `${uitslag} FAIL` : 'alles ok'} — ${join(o.uit, 'beeld-lokaal-zelftest.json')}`);
   }
   return uitslag ? 1 : 0;
 }
@@ -931,7 +945,7 @@ async function volledigeRun(o) {
 
   let stroom = null, varve = null, varveSid = null, stroomSid = null, popup = null;
   let audioPid = v.vooraf.claysAudio?.pid ?? null;
-  let afgebroken = null;
+  let audioStop = null;
   const groepen = {};
   try {
     // ---- starten ------------------------------------------------------------------
@@ -1068,7 +1082,7 @@ async function volledigeRun(o) {
         if (audioPid && nu - tAudio >= 5000) {
           const a1 = ps1.find((x) => x.pid === audioPid)?.cpu ?? null;
           if (a1 != null && audio0 != null && a1 - audio0 > AUDIO_KLAAG_S && !o.forceer) {
-            afgebroken = `het audioproces van Clay's Chrome rekende ${n1(a1 - audio0, 2)} s in 5 s (speelt er iets?): afgebroken in ${naam} na ${s} s`;
+            audioStop = `het audioproces van Clay's Chrome rekende ${n1(a1 - audio0, 2)} s in 5 s (speelt er iets?): afgebroken in ${naam} na ${s} s`;
             break;
           }
           audio0 = a1; tAudio = nu;
@@ -1109,12 +1123,12 @@ async function volledigeRun(o) {
       console.log(`  ==  ${naam}: ${s.stroom ? `Stroommachine p50 ${n1(s.stroom.fpsP50)} fps · p10 ${n1(s.stroom.fpsP10)} (1000/ms ${n1(s.kwFps?.p50)}) · ${kwL?.stand} ${kwL?.scale} ${kwL?.W}×${kwL?.H} | ` : ''}`
         + `VARVE-rAF p50 ${n1(s.varve?.msP50)} ms · p99 ${n1(s.varve?.msP99)} | ${hartTekst(r.hart, null)} | CPU (kern) ${cpuTekst} | RSS (MB) ${rssTekst}`
         + `${s.rtt ? ` | rtt ${n1(s.rtt)} ms` : ''}${s.popupPerS ? ` | los venster ${s.popupPerS.p50}/s` : ''} | warmte ${r.voor.warmte ?? '?'}→${r.na.warmte ?? '?'} | ${r.na.watt ?? '?'} W, ${r.voor.accu ?? '?'}→${r.na.accu ?? '?'} %`);
-      if (afgebroken) break;
+      if (audioStop) break;
     }
     if (popup) { await varve.cdp('Target.closeTarget', { targetId: popup.targetId }).catch(() => {}); popup = null; }
 
     // ---- na de standen --------------------------------------------------------------------
-    if (afgebroken) { console.error(`\nAFGEBROKEN  ${afgebroken}`); json.afgebroken = afgebroken; }
+    if (audioStop) { console.error(`\nAFGEBROKEN  ${audioStop}`); json.afgebroken = audioStop; }
     const fouten = (varve.fouten.get(varveSid) || []).slice(varveFouten0);
     ok('0 uitzonderingen in VARVE tijdens de standen', !fouten.length, fouten.slice(0, 3).join(' · '));
     console.log('\npositieve controle');
@@ -1155,8 +1169,8 @@ async function volledigeRun(o) {
     info(`Clay's server op 8777: ${clay ? 'draait' : 'antwoordt niet (draaide hij?)'}`);
   }
   const fout = checks.filter((c) => !c.ok).length;
-  console.log(`\n${checks.length} checks, ${fout ? `${fout} FAIL` : 'alles ok'} — ${join(o.uit, 'beeld-lokaal.json')}`);
-  return afgebroken ? 3 : fout ? 1 : 0;
+  if (!afgebroken) console.log(`\n${checks.length} checks, ${fout ? `${fout} FAIL` : 'alles ok'} — ${join(o.uit, 'beeld-lokaal.json')}`);
+  return audioStop ? 3 : fout ? 1 : 0;
 }
 
 // ---- kijken tijdens een echte proef (stap 7) -------------------------------------------
@@ -1206,5 +1220,5 @@ function opruimen(o) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const o = leesOpties(process.argv.slice(2), process.env);
   const code = o.zelftest ? await zelftest(o) : o.kijk ? await kijk(o) : o.opruimen ? await opruimen(o) : await volledigeRun(o);
-  process.exit(code);
+  if (!afgebroken) process.exit(code);   // anders sluit dood() af, met 130/143/1
 }

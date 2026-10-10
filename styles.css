@@ -598,9 +598,12 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .btn.vid-zwart.on{background:var(--red);border-color:var(--red);color:#fff}
 .btn.vid-bevries.on{background:var(--warn);border-color:var(--warn);color:#03100e}
 /* Clips (video.clips): brandt = de deck-video's staan aan. Uit = het zaalbeeld:
-   de knop video in de bovenbalk zegt het (niet op het doek: daar kijkt de zaal). */
+   de knop video in de bovenbalk zegt het (niet op het doek: daar kijkt de zaal).
+   Aan is de standaardstand, dus rustig: omlijnd, zonder vlak (zoals .bd-keuze en
+   .toon-menu). background:none is nodig: .btn.on geeft een turquoise vlak, en met
+   color:var(--a) erop was de tekst onzichtbaar (review 2, 10 okt). */
 .btn.vid-clips{text-transform:uppercase;letter-spacing:.08em}
-.btn.vid-clips.on{border-color:var(--a);color:var(--a)}
+.btn.vid-clips.on{background:none;border-color:var(--a);color:var(--a)}
 #video-btn.clips-uit{color:var(--warn);border-color:var(--warn)}
 
 /* ---- opnemen ---- */

@@ -7,7 +7,9 @@
 // blijft "video", de balk schuift niet opzij), het knopje clips in de rij van de
 // deck-video's en de statusregel in het paneel ("clips uit"; past in drie
 // toestanden op 1440 breed), de venstertitel van het losse venster. Niets van dat
-// alles op het doek zelf.
+// alles op het doek zelf. Het knopje clips is in beide standen leesbaar (tekst niet
+// in de kleur van zijn vlak, contrast ≥ 4,5; review 2: aan was een egaal turquoise
+// blok) en gaat uit met een echte muisklik (CDP Input, zoals Clay klikt).
 //
 // VEILIG MET DE APC AANGESLOTEN: geen requestMIDIAccess in geen enkel venster
 // (ook het losse niet: nieuwe vensters wachten tot dat weg is). Eigen server op
@@ -27,7 +29,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Chrome, GEEN_MIDI, poortBezet, zoekChrome, start, stopAlles, wachtTotWeg, zetSignalen, proefEnv, ruimOp } from './beeld-lokaal.mjs';
+import { Chrome, GEEN_MIDI, poortBezet, zoekChrome, start, stopAlles, wachtTotWeg, zetSignalen, proefEnv, ruimOp, isAfgebroken } from './beeld-lokaal.mjs';
 
 const VOORVOEGSEL = 'varve-zaalbeeld-';
 if (process.argv.includes('--opruimen')) process.exit(await ruimOp(null, VOORVOEGSEL));
@@ -39,7 +41,8 @@ const tmp = mkdtempSync(join(tmpdir(), VOORVOEGSEL));
 zetSignalen(() => rmSync(tmp, { recursive: true, force: true }));
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const uitkomst = [];
-const ok = (naam, cond, extra = '') => { uitkomst.push([naam, !!cond]); console.log(`${cond ? '  ok  ' : 'FAIL  '}${naam}${extra !== '' ? ` (${typeof extra === 'string' ? extra : JSON.stringify(extra)})` : ''}`); };
+// Na Ctrl-C (isAfgebroken) zwijgt ok(): wat de lus dan nog ziet, is geen uitkomst (review 2, punt 4).
+const ok = (naam, cond, extra = '') => { if (isAfgebroken()) return; uitkomst.push([naam, !!cond]); console.log(`${cond ? '  ok  ' : 'FAIL  '}${naam}${extra !== '' ? ` (${typeof extra === 'string' ? extra : JSON.stringify(extra)})` : ''}`); };
 
 /** In het losse venster: één beeld mengen en meteen het hele canvas lezen (zonder preserveDrawingBuffer is het daarna leeg). */
 const LEES = `(() => {
@@ -55,6 +58,24 @@ const LEES = `(() => {
   return { kwarten: [px(0.05, 0.1), px(0.95, 0.1), px(0.05, 0.9), px(0.95, 0.9)].map(naam).join(' '), licht: licht / n };
 })()`;
 const pct = (x) => `${(x * 100).toFixed(1).replace('.', ',')} %`;
+/**
+ * Is een knop leesbaar? De tekstkleur tegen het vlak eronder: zijn eigen achtergrond,
+ * of (doorzichtig) die van de eerste voorouder met een vlak. Contrast volgens WCAG
+ * (≥ 4,5 voor kleine tekst). Een half doorzichtig vlak telt als dicht (benadering).
+ */
+const LEESBAAR = (sel) => `(() => {
+  const k = document.querySelector(${JSON.stringify(sel)}); if (!k) return null;
+  const rgb = (s) => { const m = s.match(/[\\d.]+/g) || []; return { r: +m[0], g: +m[1], b: +m[2], a: m[3] === undefined ? 1 : +m[3] }; };
+  const cs = getComputedStyle(k);
+  let el = k, bg = rgb(cs.backgroundColor);
+  while (bg.a === 0 && el.parentElement) { el = el.parentElement; bg = rgb(getComputedStyle(el).backgroundColor); }
+  const lum = ({ r, g, b }) => { const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+  const L1 = lum(rgb(cs.color)), L2 = lum(bg);
+  return { tekst: k.textContent, aan: k.classList.contains('on'), kleur: cs.color, vlak: cs.backgroundColor, onder: \`rgb(\${bg.r}, \${bg.g}, \${bg.b})\`,
+    contrast: Math.round(((Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05)) * 10) / 10 };
+})()`;
+const leesbaar = (l) => !!l && l.kleur !== l.vlak && l.contrast >= 4.5;
+const lsTekst = (l) => (l ? `"${l.tekst}": tekst ${l.kleur} op ${l.onder} (eigen vlak ${l.vlak}), contrast ${String(l.contrast).replace('.', ',')}` : 'geen knopje');
 
 // ---- testvideo: vier gekleurde kwarten (asymmetrisch, zoals beamer.mjs) -------
 const VIDEO = join(tmp, 'kwarten.mp4');
@@ -114,6 +135,12 @@ try {
     return window.engine.deck('A').playing;
   })()`);
   ok('track 1 speelt', speelt === true);
+  // Zonder lopende audio-uitgang staat de audioklok stil: dan lopen video en vormen niet
+  // mee en zijn de pixelchecks hieronder rood zonder dat VARVE iets mankeert (10 okt: de
+  // klep van de MacBook dicht = 0 samples/s). Eén duidelijke regel in plaats van raadsels.
+  const klok = await chrome.ev(hoofd, '(async () => { const c = window.engine.ctx, t0 = c.currentTime; await new Promise((r) => setTimeout(r, 500)); return { staat: c.state, dt: c.currentTime - t0 }; })()');
+  ok('de audioklok van VARVE loopt (anders: geen audio-uitgang, bv. de klep dicht; de beeldchecks zeggen dan niets)',
+    klok.staat === 'running' && klok.dt > 0.3, `${klok.staat}, ${klok.dt.toFixed(3).replace('.', ',')} s in 0,5 s`);
   const balk = "(() => { const b = document.querySelector('.topbar-right'); return { over: b.scrollWidth - b.clientWidth, knop: document.getElementById('video-btn').getBoundingClientRect().width }; })()";
   const balkAan = await chrome.ev(hoofd, balk);
   ok('video.clips op de bus, standaard aan; de knop video zegt gewoon "video"',
@@ -134,6 +161,12 @@ try {
     return { met: Math.round(met), zonder: Math.round(zonder), aan: k.classList.contains('on'), inKop: !!document.querySelector('.vid-head .vid-clips') }; })()`);
   ok('het knopje clips staat in de rij van de deck-video\'s (mix, passend, clips), niet in de kop; brandt (aan); de rij wordt er niet hoger van',
     !!fx && fx.aan && !fx.inKop && fx.met === fx.zonder, fx ? `rij ${fx.zonder} → ${fx.met} px` : 'geen knopje');
+  // Review 2, punt 1: aan (de standaardstand) waren tekst en vlak allebei turquoise.
+  const lsAan = await chrome.ev(hoofd, LEESBAAR('.vid-clips'));
+  ok('het knopje clips is leesbaar zolang het brandt (tekst niet in de kleur van het vlak, contrast ≥ 4,5)', leesbaar(lsAan) && lsAan.aan, lsTekst(lsAan));
+  await chrome.foto(hoofd, join(UIT, 'zaalbeeld-0-paneel-clips-aan.png'));
+  const rijVak = await chrome.ev(hoofd, "(() => { const r = document.querySelector('.vid-fx').getBoundingClientRect(); return { x: Math.max(0, r.left - 6), y: Math.max(0, r.top - 6), width: r.width + 12, height: r.height + 12 }; })()");
+  await chrome.foto(hoofd, join(UIT, 'zaalbeeld-0-rij-clips-aan.png'), { ...rijVak, scale: 2 });
 
   // ---- het losse venster ------------------------------------------------------------
   await chrome.cdp('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
@@ -160,8 +193,13 @@ try {
   await chrome.foto(pop, join(UIT, 'zaalbeeld-1-clips-aan.png'));
 
   // ---- clips uit: het zaalbeeld ------------------------------------------------------
-  await chrome.ev(hoofd, "__act.invoke('video.clips', true); __act.invoke('video.clips', false); true");
+  // Met een echte muisklik op CLIPS (review 2, punt 5): pointerdown/pointerup via
+  // bindButtons, zoals Clay klikt. Clips weer aan gaat verderop via de bus.
+  const kp = await chrome.ev(hoofd, "(() => { const k = document.querySelector('.vid-clips'); k.scrollIntoView({ block: 'center' }); const r = k.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()");
+  for (const type of ['mousePressed', 'mouseReleased']) await chrome.cdp('Input.dispatchMouseEvent', { type, x: kp.x, y: kp.y, button: 'left', clickCount: 1 }, hoofd);
   await wacht(600);
+  ok('een echte muisklik op CLIPS (CDP Input.dispatchMouseEvent): clips uit (read 0)', (await chrome.ev(hoofd, "__act.read('video.clips')")) === 0,
+    `klik op ${Math.round(kp.x)},${Math.round(kp.y)}`);
   p = await chrome.ev(pop, LEES);
   b = await beeldenPerS();
   ok('clips uit: het losse venster neemt het over (beamerMixer.clips === false)', (await chrome.ev(pop, 'window.beamerMixer.clips')) === false);
@@ -178,7 +216,8 @@ try {
   // Het paneel: het knopje clips en de statusregel.
   const st2 = await chrome.tot(hoofd, `(() => { const st = ${STATUS}; return st.tekst === 'beamer · clips uit' ? st : null; })()`, 3000);
   ok('statusregel past: clips uit ("beamer · clips uit"), de uitleg in de title', !!st2?.past && /alleen eigen beeld/.test(st2.titel), st2 ? px(st2) : await chrome.ev(hoofd, STATUS).then(px));
-  ok('het knopje clips brandt niet', (await chrome.ev(hoofd, "document.querySelector('.vid-clips').classList.contains('on')")) === false);
+  const lsUit = await chrome.ev(hoofd, LEESBAAR('.vid-clips'));
+  ok('het knopje clips brandt niet, en is leesbaar (contrast ≥ 4,5)', !!lsUit && !lsUit.aan && leesbaar(lsUit), lsTekst(lsUit));
   await chrome.foto(hoofd, join(UIT, 'zaalbeeld-3-paneel.png'));
 
   // ---- vormen erbij: het eigen beeld --------------------------------------------------
@@ -204,6 +243,8 @@ try {
   await wacht(500);
   p = await chrome.ev(pop, LEES);
   ok('clips weer aan: de video terug in het losse venster', !!terug && p.kwarten === 'rood groen blauw geel', p.kwarten);
+  const lsTerug = await chrome.ev(hoofd, LEESBAAR('.vid-clips'));
+  ok('het knopje clips brandt weer, en is leesbaar', !!lsTerug && lsTerug.aan && leesbaar(lsTerug), lsTekst(lsTerug));
   ok('de knop video weer gewoon (geen amber, de gewone title), de venstertitel ook',
     (await chrome.ev(hoofd, "(() => { const k = document.getElementById('video-btn'); return k.textContent === 'video' && !k.classList.contains('clips-uit') && !/alleen eigen beeld/.test(k.title); })()")) === true
     && !/alleen eigen beeld/.test(await chrome.ev(pop, 'document.title')));
@@ -219,7 +260,7 @@ try {
   await wachtTotWeg(3000);
   rmSync(tmp, { recursive: true, force: true });
   const fout = uitkomst.filter(([, g]) => !g).length;
-  console.log(`\n${uitkomst.length} checks, ${fout ? `${fout} FAIL` : 'alles ok'} — schermafdrukken in ${UIT}`);
+  if (!isAfgebroken()) console.log(`\n${uitkomst.length} checks, ${fout ? `${fout} FAIL` : 'alles ok'} — schermafdrukken in ${UIT}`);
   code = fout ? 1 : 0;
 }
-process.exit(code);
+if (!isAfgebroken()) process.exit(code);   // anders sluit de signaalhandler af (130/143)

@@ -735,6 +735,33 @@ console.log('\nhet zaalbeeld: video.clips (deck-video\'s uit, vormen, effecten e
   ok('neemOver van een hoofdvenster zonder clips-veld: clips aan (zoals vroeger)', los.clips === true);
 }
 
+console.log('\nknoppen die branden zijn leesbaar (styles.css; review 2: CLIPS was een egaal turquoise blok)');
+{
+  // .btn.on geeft een vlak var(--a) en tekst #03100e. Een regel die een brandende
+  // knop een eigen tekstkleur geeft zonder eigen vlak, erft dat vlak: tekst in
+  // var(--a) wordt dan onzichtbaar. Statisch (zonder browser); zaalbeeld.mjs meet
+  // het echte contrast van CLIPS in Chrome.
+  const css = (await import('node:fs')).readFileSync(new URL('../styles.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const decl = (d, k) => (d.match(new RegExp(`(?:^|;)\\s*${k}\\s*:\\s*([^;]+)`)) || [])[1]?.trim() ?? null;
+  const basis = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(([, sel]) => sel.trim() === '.btn.on');
+  const vlakOn = decl(basis?.[2] ?? '', 'background'), tekstOn = decl(basis?.[2] ?? '', 'color');
+  ok(`.btn.on: vlak ${vlakOn}, tekst ${tekstOn}`, vlakOn === 'var(--a)' && tekstOn === '#03100e');
+  const slecht = [];
+  let geteld = 0;
+  for (const [, sel, d] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    for (const s of sel.split(',').map((x) => x.trim()).filter((x) => /\.btn\b/.test(x) && /\.on\b/.test(x))) {
+      geteld++;
+      const vlak = decl(d, 'background') ?? decl(d, 'background-color') ?? vlakOn;
+      const tekst = decl(d, 'color') ?? tekstOn;
+      if (vlak === tekst) slecht.push(`${s} (tekst en vlak ${tekst})`);
+    }
+  }
+  ok(`geen brandende knop met tekst in de kleur van zijn vlak (${geteld} regels; fout: ${slecht.join(', ') || 'geen'})`, geteld >= 5 && !slecht.length);
+  const clips = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(([, sel]) => sel.trim() === '.btn.vid-clips.on');
+  ok('CLIPS aan: omlijnd zonder vlak, tekst in var(--a) (zoals .bd-keuze en .toon-menu)',
+    !!clips && decl(clips[2], 'background') === 'none' && decl(clips[2], 'color') === 'var(--a)');
+}
+
 console.log('\nnoodknoppen op het eindbeeld: zwart, bevriezen, master, flits (A4)');
 {
   const { Eindbeeld, standOp, flitsOp, ZWART_FADE, FLITS_DUUR, wandklok } = await import('../src/video/eindbeeld.js');

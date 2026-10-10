@@ -6,6 +6,7 @@
 // `node tools/headless/beeld-lokaal.mjs --zelftest` en de volledige run.
 // Draai met: node test/beeld-meting.test.mjs
 import { readFileSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 const m = await import('../tools/headless/beeld-lokaal.mjs');
 const bron = (pad) => readFileSync(new URL(`../${pad}`, import.meta.url), 'utf8');
 
@@ -162,6 +163,40 @@ console.log('\nCtrl-C ruimt op (review 10 okt, punt 3)');
     !/\bspawn\(/.test(z) && /zetSignalen\(\(\) => rmSync\(tmp/.test(z) && /\bstart\(process\.execPath/.test(z));
   ok('de handlers stoppen de hele procesgroep en wachten (SIGKILL na 1,5 s), dan pas de map weg en exit',
     /process\.kill\(-p\.pid, 'SIGTERM'\)/.test(b) && /await wachtTotWeg\(1500\)/.test(b) && /naStop/.test(b));
+}
+
+console.log('\nna Ctrl-C geen misleidende FAIL-regel (review 2, punt 4)');
+{
+  // Een kind-node die beeld-lokaal.mjs laadt, een proces start (sleep, eigen
+  // procesgroep), zichzelf SIGINT stuurt en daarna nog een check doet, zoals de
+  // hoofdlus die nog even doorloopt terwijl dood() opruimt.
+  const KIND = `const m = await import(process.env.VARVE_TEST_MOD);
+    m.zetSignalen(() => console.log('naStop: tijdelijke map weg'));
+    const k = m.start('sleep', ['30']);
+    console.log('kind ' + k.pid);
+    m.ok('voor het signaal', false, 'hoort te verschijnen');
+    process.kill(process.pid, 'SIGINT');
+    await new Promise((r) => setTimeout(r, 40));
+    m.ok('na het signaal', false, 'hoort niet te verschijnen');
+    console.log('vlag ' + m.isAfgebroken());
+    await new Promise((r) => setTimeout(r, 5000));
+    console.log('hier komt hij niet');`;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', KIND], {
+    encoding: 'utf8', timeout: 15000, env: { ...process.env, VARVE_TEST_MOD: new URL('../tools/headless/beeld-lokaal.mjs', import.meta.url).href } });
+  const uit = r.stdout ?? '', fout = r.stderr ?? '';
+  const pid = Number((uit.match(/kind (\d+)/) || [])[1]);
+  let leeft = false;
+  try { process.kill(pid, 0); leeft = true; } catch (_) {}
+  ok('vóór het signaal meldt ok() gewoon (FAIL voor het signaal)', /FAIL {2}voor het signaal/.test(uit));
+  ok('na het signaal zwijgt ok(): geen FAIL-regel meer', !/na het signaal/.test(uit) && (uit.match(/FAIL/g) || []).length === 1);
+  ok('isAfgebroken() is waar zodra de handler loopt', /vlag true/.test(uit));
+  ok('de handler meldt het signaal en het einde, ruimt op (naStop) en sluit af met 130', r.status === 130 && /SIGINT: alles van deze meting stoppen/.test(fout)
+    && /afgebroken: opgeruimd, exit 130/.test(fout) && /naStop: tijdelijke map weg/.test(uit) && !/hier komt hij niet/.test(uit));
+  ok('het kind (sleep, eigen procesgroep) is gestopt', pid > 0 && !leeft);
+  if (leeft) { try { process.kill(pid, 'SIGKILL'); } catch (_) {} }
+  const z = bron('tools/headless/zaalbeeld.mjs'), b = bron('tools/headless/beeld-lokaal.mjs');
+  ok('zaalbeeld.mjs en het hoofdprogramma laten de exitcode aan de handler (geen process.exit na een signaal)',
+    /if \(isAfgebroken\(\)\) return;/.test(z) && /if \(!isAfgebroken\(\)\) process\.exit\(code\)/.test(z) && /if \(!afgebroken\) process\.exit\(code\)/.test(b));
 }
 
 console.log('\nde CPU-poort: systeem is achtergrond, een ander proces stopt de run (review 10 okt, punt 5)');
