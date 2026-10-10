@@ -2,7 +2,7 @@
 // duwt hem in één ffmpeg naar een bestand, een lokale RTMP-ontvanger of udp op 127.0.0.1 (OBS).
 // Nooit een echte dienst: elke ontvanger hier is een ffmpeg op deze machine, elke map een mkdtemp.
 //
-// Draai met: node test/uitzend.test.mjs                          (P, S en R, ~45 s)
+// Draai met: node test/uitzend.test.mjs                          (P, S en R, ~40 s)
 //            VARVE_TEST_ECHTETIJD=1 node test/uitzend.test.mjs   (+ E1-E6 in echte tijd, ~75 s extra)
 //
 // P = puur (geen ffmpeg), S = met ffmpeg maar sneller dan echte tijd gevoerd, E = echte tijd (H11:

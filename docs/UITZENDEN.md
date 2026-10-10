@@ -177,7 +177,7 @@ I77, I78, I79 en "Rechten en privacy"); niet nagekeken bij Twitch, Sena of Mixcl
 **Automatisch** (geen netwerk, geen dienst, alleen ffmpeg op deze Mac en `mkdtemp`-mappen):
 
 ```sh
-node test/uitzend.test.mjs                          # 88 checks, ~45 s (P puur, S met ffmpeg sneller dan echte tijd, R review)
+node test/uitzend.test.mjs                          # 88 checks, ~40 s (P puur, S met ffmpeg sneller dan echte tijd, R review)
 VARVE_TEST_ECHTETIJD=1 node test/uitzend.test.mjs   # + E1-E6 in echte tijd, ~70 s extra; niet tijdens een speelavond
 node test/alles.mjs                                 # draait de snelle variant mee
 ```
