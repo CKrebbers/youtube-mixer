@@ -4,7 +4,7 @@
  * Leest alleen. Schrijft standaard naar stdout; naar een bestand alleen met --uit of
  * --naast-log, en nooit over een bestaand bestand heen.
  *
- *   node tools/setboek/setboek.mjs --dag 20261010 --map <kopie van opnames/>
+ *   node tools/setboek/setboek.mjs --dag 20261010 --map <kopie van opnames/> [--vanaf 17:00]
  *   node tools/setboek/setboek.mjs --log <pad> [--log <pad> …]
  *     [--db <kopie van media/library.db>]   lengte per nummer: het einde van een nummer schatten
  *     [--proef <kopie van proef/sessie.json>] proefpunten met "fout" of een notitie op de tijdlijn
@@ -13,24 +13,27 @@
  *     [--naast-log]                         naast het eerste log: set-<id>.setboek.md (bestaat het: exit 2)
  *
  * --dag neemt set-JJJJMMDD-*.acties.jsonl, plus de logs van de volgende ochtend vóór 06:00
- * (een avond die over middernacht loopt). Exit: 0 goed, 1 verkeerd aangeroepen, 2 bestaat al.
+ * (een avond die over middernacht loopt). --vanaf UU:MM laat logs van die dag die eerder
+ * begonnen (kop.begon, Amsterdam) weg: de opbouw 's middags hoort niet in de tracklist; ze
+ * staan dan onder "overgeslagen". Exit: 0 goed, 1 verkeerd aangeroepen, 2 bestaat al.
  * Nooit tijdens een set, nooit op de echte opnames/ (kopieer eerst).
  */
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve, dirname, basename } from 'node:path';
-import { setboek, naarMarkdown, naarJson } from './lees.mjs';
+import { setboek, naarMarkdown, naarJson, amsterdamMs } from './lees.mjs';
 
-const GEBRUIK = 'gebruik: setboek.mjs (--dag JJJJMMDD --map <map> | --log <pad> …) [--db <library.db>] [--proef <sessie.json>] [--json] [--uit <pad> | --naast-log]';
+const GEBRUIK = 'gebruik: setboek.mjs (--dag JJJJMMDD --map <map> [--vanaf UU:MM] | --log <pad> …) [--db <library.db>] [--proef <sessie.json>] [--json] [--uit <pad> | --naast-log]';
 const fout = (tekst, code = 1) => { process.stderr.write(`setboek: ${tekst}\n`); process.exit(code); };
 const melding = (tekst) => process.stderr.write(`setboek: ${tekst}\n`);
 
 function lees(argv) {
-  const a = { log: [], dag: null, map: null, db: null, proef: null, json: false, uit: null, naastLog: false };
+  const a = { log: [], dag: null, map: null, vanaf: null, db: null, proef: null, json: false, uit: null, naastLog: false };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i], waarde = () => { const v = argv[++i]; if (v === undefined || v.startsWith('--')) fout(`${k} zonder waarde\n${GEBRUIK}`); return v; };
     if (k === '--log') a.log.push(waarde());
     else if (k === '--dag') a.dag = waarde();
     else if (k === '--map') a.map = waarde();
+    else if (k === '--vanaf') a.vanaf = waarde();
     else if (k === '--db') a.db = waarde();
     else if (k === '--proef') a.proef = waarde();
     else if (k === '--uit') a.uit = waarde();
@@ -43,6 +46,7 @@ function lees(argv) {
   if (a.log.length && (a.dag || a.map)) fout('--log of --dag/--map, niet allebei');
   if (a.dag && !/^\d{8}$/.test(a.dag)) fout('--dag is JJJJMMDD');
   if (a.uit && a.naastLog) fout('--uit of --naast-log, niet allebei');
+  if (a.vanaf !== null && (!a.dag || !/^\d{2}:\d{2}$/.test(a.vanaf) || amsterdamMs(a.dag, a.vanaf) === null)) fout('--vanaf is UU:MM, en alleen met --dag');
   return a;
 }
 
@@ -96,7 +100,7 @@ let proef = null;
 if (a.proef) {
   try { proef = JSON.parse(readFileSync(a.proef, 'utf8')); } catch (e) { melding(`--proef ${a.proef} is niet te lezen (${e.code ?? e.message}): zonder proefpunten`); }
 }
-const res = setboek(bestanden, { lengte, proef });
+const res = setboek(bestanden, { lengte, proef, vanafMs: a.vanaf ? amsterdamMs(a.dag, a.vanaf) : null });
 const tekst = a.json ? naarJson(res) + '\n' : naarMarkdown(res);
 
 const doel = a.uit ?? (a.naastLog && paden[0] ? join(dirname(paden[0]), basename(paden[0]).replace(/\.acties\.jsonl$/, '.setboek' + (a.json ? '.json' : '.md'))) : null);

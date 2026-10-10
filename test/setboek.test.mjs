@@ -53,6 +53,11 @@ console.log('constanten gelijk aan de engine');
   ok('PITCH_BEREIKEN = deck.js', deck.includes(`export const PITCH_BEREIKEN = [${S.PITCH_BEREIKEN.join(', ')}];`));
   ok('RATE 0,5–2 = actions.js (track.N.tempo)', acties.includes(`const RATE_MIN = ${S.RATE.min};`) && acties.includes(`const RATE_MAX = ${S.RATE.max};`));
   ok("KANTEN = engine.js (XFADE_KANTEN, de volgorde van xfade.side)", engine.includes(`export const XFADE_KANTEN = ['A', 'B', 'thru'];`) && S.KANTEN.join() === 'A,B,thru');
+  ok('REM = deck.js (REM_MIN, REM_MAX, REM_STANDAARD)', deck.includes(`export const REM_MIN = ${S.REM.min};`) && deck.includes(`export const REM_MAX = ${S.REM.max};`) && deck.includes(`export const REM_STANDAARD = ${S.REM.standaard};`));
+  const inst = readFileSync(new URL('../src/engine/instrumenten/index.js', import.meta.url), 'utf8');
+  const lijst = /export const INSTRUMENTEN = \[([^\]]*)\];/.exec(inst)?.[1] ?? '';
+  ok('INSTRUMENT_AANTAL = INSTRUMENTEN.length (instrumenten/index.js)', lijst.split(',').filter((x) => x.trim()).length === S.INSTRUMENT_AANTAL, lijst);
+  ok('MASTER_STANDAARD = engine.js (masterLevel)', engine.includes(`this.masterLevel = ${S.MASTER_STANDAARD};`));
 }
 
 console.log('\n1–2. een overgang met de crossfader, en een flits');
@@ -95,6 +100,8 @@ console.log('\n4. wat een track stil maakt');
   ok('trim dicht = niet hoorbaar (50–150)', trim.stukken.length === 2 && trim.stukken[0].tot === 50 && trim.stukken[1].van === 150, JSON.stringify(trim.stukken));
   const stems = met([[50, 'track.1.stem.vocals.kill', true], [50, 'track.1.stem.inst', 0], [150, 'track.1.stem.inst', 1]], { stemKill: { vocals: false, inst: false } });
   ok('alle stems dicht (zang weg, rest op 0) = niet hoorbaar', stems.stukken.length === 2 && stems.stukken[0].tot === 50 && stems.stukken[1].van === 150, JSON.stringify(stems.stukken));
+  const geen = met([[50, 'track.1.stem.vocals', 0], [50, 'track.1.stem.inst', 0]]);
+  ok('stem-acties op een nummer zonder stems (beginstand: stemKill null): de engine negeert ze, dus nog hoorbaar', geen.stukken.length === 1 && geen.stukken[0].tot === 200, JSON.stringify(geen.stukken));
   const zang = met([[50, 'track.1.stem.vocals.kill', true]], { stemKill: { vocals: false, inst: false } });
   ok('alleen de zang weg = nog hoorbaar', zang.stukken.length === 1 && zang.stukken[0].tot === 200);
   const vier = met([[50, 'track.1.stem.vocals', 0], [50, 'track.1.stem.drums.kill', true], [50, 'track.1.stem.bass.kill', true], [50, 'track.1.stem.other.hold', true], [150, 'track.1.stem.other.hold', false]],
@@ -102,6 +109,12 @@ console.log('\n4. wat een track stil maakt');
   ok('vier stems: zang 0 + drums, bas, overig dicht = stil, ook als inst open staat; loslaten = terug', vier.stukken.length === 2 && vier.stukken[0].tot === 50 && vier.stukken[1].van === 150, JSON.stringify(vier.stukken));
   const master = met([[50, 'mixer.master', 0], [150, 'mixer.master', 0.8]]);
   ok('master dicht = niets hoorbaar', master.stukken.length === 2 && master.stukken[0].tot === 50 && master.stukken[1].van === 150);
+  const fade = met([[50, 'mixer.master', 0.1], [150, 'mixer.master', 0.5]]);
+  ok('master 0,1 (−40,5 dB, faderGain) = stil; 0,5 (−22,5 dB) = hoorbaar: een fade-out met de master telt', fade.stukken.length === 2 && fade.stukken[0].tot === 50 && fade.stukken[1].van === 150, JSON.stringify(fade.stukken));
+  const grens = met([[50, 'mixer.master', 0.3], [150, 'mixer.master', 0.35]]);
+  ok('de grens ligt op master 1/3 (−30 dB): 0,3 stil, 0,35 hoorbaar', grens.stukken.length === 2 && grens.stukken[0].tot === 50 && grens.stukken[1].van === 150);
+  const stemZacht = met([[50, 'track.1.stem.vocals', 0.02], [50, 'track.1.stem.inst', 0.02], [150, 'track.1.stem.inst', 0.05]], { stemKill: { vocals: false, inst: false } });
+  ok('stems op 0,02 (−34 dB) = dicht, 0,05 (−26 dB) = open (grens 10^(−30/20) ≈ 0,03)', stemZacht.stukken.length === 2 && stemZacht.stukken[0].tot === 50 && stemZacht.stukken[1].van === 150, JSON.stringify(stemZacht.stukken));
   const kills = met([[50, 'track.1.kill.low', true], [50, 'track.1.kill.mid', true], [50, 'track.1.kill.high.hold', true], [150, 'track.1.kill.high.hold', false]]);
   ok('drie kills (twee schakelaars + één vastgehouden) = niet hoorbaar; loslaten = terug', kills.stukken.length === 2 && kills.stukken[0].tot === 50 && kills.stukken[1].van === 150);
   const knoppen = met([[50, 'track.1.low', 0], [50, 'track.1.mid', 0.02], [50, 'track.1.kill.high', true], [150, 'track.1.mid', 0.2]]);
@@ -141,8 +154,17 @@ console.log('\n6. cue, play en laad (deck.cue, BufferBron.laad)');
   ok('laad tijdens spelen = stop en een nieuwe titel; play start hem (280–400)', r.endsWith('Daarna:280-400') && h.stukken.length === 4, r);
   ok('na een cue-stop staat de positie op het cuepunt: het stuk 100–160 begint in de bron op 0:00', dicht(h.stukken[1].posVan, 0) && dicht(h.stukken[1].posTot, 60));
   const rem = een(logTekst({ tracks: { 1: tr(1, 'Rem', { speelt: true }) }, waarden: { 'mixer.xfader': 0 },
-    regels: [...druk(60, 'track.1.brake'), ...druk(62, 'track.1.brake'), ...druk(120, 'track.1.brake'), [200, 'mixer.xfader', 0]] }));
-  ok('rem = stil, nog eens binnen 5 s = los (één stuk 0–120 met een gat van 2 s gelijmd)', rem.stukken.length === 1 && rem.stukken[0].tot === 120, JSON.stringify(rem.stukken));
+    regels: [...druk(60, 'track.1.brake'), ...druk(60.5, 'track.1.brake'), ...druk(120, 'track.1.brake'), [200, 'mixer.xfader', 0]] }));
+  ok('rem = stil, nog eens TIJDENS de rem (standaard 1 s) = los: één stuk 0–120', rem.stukken.length === 1 && rem.stukken[0].tot === 120, JSON.stringify(rem.stukken));
+  const remNa = een(logTekst({ tracks: { 1: tr(1, 'Rem', { speelt: true }) }, waarden: { 'mixer.xfader': 0 },
+    regels: [...druk(60, 'track.1.brake'), ...druk(62, 'track.1.brake'), [200, 'mixer.xfader', 0]] }));
+  ok('na de rem (1 s) staat hij stil: een tweede druk 2 s later start niets (deck.rem op een stil deck)', remNa.stukken.length === 1 && remNa.stukken[0].tot === 60, JSON.stringify(remNa.stukken));
+  const remLang = een(logTekst({ tracks: { 1: tr(1, 'Rem', { speelt: true }) }, waarden: { 'mixer.xfader': 0, 'track.1.brake.time': 1 },
+    regels: [...druk(60, 'track.1.brake'), ...druk(62, 'track.1.brake'), [200, 'mixer.xfader', 0]] }));
+  ok('brake.time 1 in de stand = 5 s remmen: 2 s later is nog tijdens de rem, dus los (één stuk 0–200)', remLang.stukken.length === 1 && remLang.stukken[0].tot === 200, JSON.stringify(remLang.stukken));
+  const remKort = een(logTekst({ tracks: { 1: tr(1, 'Rem', { speelt: true }) }, waarden: { 'mixer.xfader': 0 },
+    regels: [[10, 'track.1.brake.time', 0], ...druk(60, 'track.1.brake'), ...druk(60.5, 'track.1.brake'), [200, 'mixer.xfader', 0]] }));
+  ok('brake.time 0 als actie = 0,1 s: 0,5 s later staat hij al stil', remKort.stukken.length === 1 && remKort.stukken[0].tot === 60, JSON.stringify(remKort.stukken));
   const quant = een(logTekst({ regels: [laad(5, 1, 'Op de maat'), ...druk(10, 'track.1.play.quant'), ...druk(70, 'track.1.play.quant'), [100, 'mixer.xfader', 0]] }));
   ok('play.quant start en stopt zoals play', quant.stukken.length === 1 && quant.stukken[0].van === 10 && quant.stukken[0].tot === 70);
 }
@@ -154,6 +176,10 @@ console.log('\n6b. een instrument haalt het nummer eraf (actions.js, kiesInstrum
   ok('spelend nummer: één druk = alleen een melding (speelt door), twee binnen 3 s = eraf (0–121,5)',
     h.stukken.length === 1 && h.stukken[0].titel === 'Speelt' && h.stukken[0].tot === 121.5, JSON.stringify(h.stukken));
   ok('stil nummer: inst.choose > 0 haalt het er meteen af; play daarna start niets (geen nummer)', !h.stukken.some((x) => x.titel === 'Stil') && h.nietHoorbaar.some((x) => x.titel === 'Stil'));
+  const klein = een(logTekst({ tracks: { 4: tr(4, 'Blijft') }, regels: [[10, 'track.4.inst.choose', 0.05], ...druk(20, 'track.4.play'), [200, 'mixer.master', 0.8]] }));
+  ok('inst.choose 0,05: round(0,05 × 4) = 0 = "geen", het nummer blijft en speelt (20–200)', klein.stukken.length === 1 && klein.stukken[0].titel === 'Blijft' && klein.stukken[0].van === 20, JSON.stringify(klein.stukken));
+  const net = een(logTekst({ tracks: { 4: tr(4, 'Weg') }, regels: [[10, 'track.4.inst.choose', 0.13], ...druk(20, 'track.4.play'), [200, 'mixer.master', 0.8]] }));
+  ok('inst.choose 0,13: round(0,52) = 1 = het eerste instrument, het nummer is eraf', net.stukken.length === 0, JSON.stringify(net.stukken));
 }
 
 console.log('\n7. het einde van een nummer (zit niet in het log)');
@@ -171,6 +197,10 @@ console.log('\n7. het einde van een nummer (zit niet in het log)');
   ok('met een loop geen einde: speelt door tot 600, met de aantekening loop', loop.stukken.length === 1 && loop.stukken[0].tot === 600 && loop.stukken[0].loop);
   const rate = een(logTekst({ tracks: { 1: tr(1, 'Sneller', { speelt: true, nummer: 'x', positie: 60, rate: 1.2 }) }, waarden: { 'mixer.xfader': 0 }, regels: [[600, 'mixer.xfader', 0]] }), { lengte: () => 180 });
   ok('einde = (lengte − positie) / rate: (180 − 60) / 1,2 = 100 s', rate.stukken.length === 1 && dicht(rate.stukken[0].tot, 100) && dicht(rate.stukken[0].posTot, 180));
+  const opnieuw = een(logTekst({ tracks: { 1: tr(1, 'Kort', { speelt: true, nummer: 'kort' }) }, waarden: { 'mixer.xfader': 0 }, regels: [...druk(200, 'track.1.play'), [400, 'mixer.xfader', 0]] }),
+    { lengte: () => 180 });
+  const o2 = opnieuw.stukken.map((s) => `${s.van}-${s.tot} [${S.positieInBron(s)}]`).join(' ');
+  ok('play op het einde begint opnieuw op 0 (deck.play): 0–180 en 200–380, in de bron 0:00–3:00', o2 === '0-180 [0:00–3:00] 200-380 [0:00–3:00]', o2);
 }
 
 console.log('\n8. de positie in de bron (benaderd)');
@@ -196,6 +226,25 @@ console.log('\n8. de positie in de bron (benaderd)');
   ok('seek zonder lengte: positie onbekend (null), de tracklist zegt "?"', seek.stukken[1].posVan === null && S.positieInBron(seek.stukken[1]) === null);
   const seekL = een(logTekst({ tracks: { 1: tr(1, 'S', { speelt: true, nummer: 's' }) }, waarden: { 'mixer.xfader': 0 }, regels: [[50, 'track.1.fader', 0], [100, 'track.1.seek', 0.5], [100, 'track.1.fader', 1], [160, 'mixer.xfader', 0]] }), { lengte: () => 400 });
   ok('seek met lengte 400: 0,5 = 200 s', dicht(seekL.stukken[1].posVan, 200));
+  const kaart = (regels) => een(logTekst({ tracks: { 1: tr(1, 'Lang', { speelt: true, secties }) }, waarden: { 'mixer.xfader': 0 }, regels: [...regels, [60, 'mixer.xfader', 0]] }));
+  const vol = kaart([[30, 'track.1.section.next', true, { van: 30 }], [30.1, 'track.1.section.next', false]]);
+  ok("section.next vanaf 30 (intro) springt naar 120 (drop): '0:00–0:30, 2:00–2:30'", S.positieInBron(vol.stukken[0]) === '0:00–0:30, 2:00–2:30', S.positieInBron(vol.stukken[0]));
+  const terug = een(logTekst({ tracks: { 1: tr(1, 'Lang', { speelt: true, secties, positie: 150 }) }, waarden: { 'mixer.xfader': 0 },
+    regels: [[30, 'track.1.section.prev', true, { van: 180 }], [60, 'mixer.xfader', 0]] }));
+  ok("section.prev vanaf 180 (drop, `van` ijkt) springt naar 0 (intro): '2:30–3:00, 0:00–0:30'", S.positieInBron(terug.stukken[0]) === '2:30–3:00, 0:00–0:30', S.positieInBron(terug.stukken[0]));
+  const lus = kaart([[30, 'track.1.section.2.loop', true, { van: 30 }]]);
+  ok("section.2.loop vanaf 30: naar 120 en de aantekening loop", S.positieInBron(lus.stukken[0]) === '0:00–0:30, 2:00–2:30' && lus.stukken[0].loop, JSON.stringify(lus.stukken[0]));
+  const erin = kaart([[30, 'track.1.section.1.loop', true, { van: 30 }]]);
+  ok('section.1.loop terwijl hij al in sectie 1 speelt: geen sprong, wel loop', S.positieInBron(erin.stukken[0]) === '0:00–1:00' && erin.stukken[0].loop);
+  const zonderKaart = een(logTekst({ tracks: { 1: tr(1, 'Geen kaart', { speelt: true }) }, waarden: { 'mixer.xfader': 0 }, regels: [[30, 'track.1.section.next', true], [60, 'mixer.xfader', 0]] }));
+  ok("section.next zonder kaart in het log: positie onbekend vanaf daar ('0:00–0:30, ?')", S.positieInBron(zonderKaart.stukken[0]) === '0:00–0:30, ?', S.positieInBron(zonderKaart.stukken[0]));
+  const lp = (id) => een(logTekst({ tracks: { 1: tr(1, 'Loop', { speelt: true }) }, waarden: { 'mixer.xfader': 0 }, regels: [[30, id, true], [60, 'mixer.xfader', 0]] }), { lengte: () => 1000 }).stukken[0].loop;
+  ok('loop.exit, loop.in, loop.halve: geen loop; loop.out, loop.4, reloop, beatloop.8: wel',
+    !lp('track.1.loop.exit') && !lp('track.1.loop.in') && !lp('track.1.loop.halve') && lp('track.1.loop.out') && lp('track.1.loop.4') && lp('track.1.loop.reloop') && lp('track.1.beatloop.8'));
+  const ctl = een(logTekst({ tracks: { 1: tr(1, 'Controle') }, waarden: { 'mixer.xfader': 0 },
+    regels: [...druk(10, 'track.1.grid.controle'), ...druk(100, 'track.1.grid.controle'), [200, 'mixer.xfader', 0]] }));
+  ok('grid.controle op een stil deck start hem (actions.js: naar het eerste stuk en spelen): 10–200, (onzeker), positie ?; nog eens = alleen de controle uit',
+    ctl.stukken.length === 1 && ctl.stukken[0].van === 10 && ctl.stukken[0].tot === 200 && ctl.stukken[0].onzeker && S.positieInBron(ctl.stukken[0]) === null, JSON.stringify(ctl.stukken));
 }
 
 console.log('\n9. het einde van het log');
@@ -227,18 +276,44 @@ console.log('\n10–11. meerdere logs op één avond');
   ok('de opname is herkend (kop.opname)', r.logs[1].opname === '20261010-201000' && r.logs[0].opname === null);
   const boek = S.setboek(bestanden);
   const lijst = boek.stukken.map((s) => `${s.titel}@${S.kloktijd(s.klokVan)}-${S.kloktijd(s.klokTot)}`).join(' ');
-  ok('één tracklist op de klok: Een 20:00–20:10, Een 20:10–20:15 (de opname), Twee 20:16:30–20:18:30', lijst === 'Een@20:00:00-20:10:00 Een@20:10:00-20:15:00 Twee@20:16:30-20:18:30', lijst);
-  ok('avondtijden lopen door over de logs (Twee begint op 16:30)', boek.stukken[2].avondVan === 990);
+  ok('één tracklist op de klok: Een 20:00–20:15 (over de grens los log → opname gelijmd), Twee 20:16:30–20:18:30', lijst === 'Een@20:00:00-20:15:00 Twee@20:16:30-20:18:30', lijst);
+  ok('het gelijmde stuk: beide logs, in de bron 0:00–15:00 in één deel', boek.stukken[0].log.join() === '20261010-200000,20261010-201000' && S.positieInBron(boek.stukken[0]) === '0:00–15:00', JSON.stringify(boek.stukken[0]));
+  ok('avondtijden lopen door over de logs (Twee begint op 16:30)', boek.stukken[1].avondVan === 990);
   const md = S.naarMarkdown(boek);
   ok('Markdown: kop, logs, het gat, overgeslagen, tracklist, verslagblok, Buma/Stemra',
     md.startsWith('# Setboek 2026-10-10') && md.includes('gat van 1:30: log opnieuw begonnen 20:16:30 (herladen?)') && md.includes('overgeslagen: 20261010-202000 (0 acties)')
-    && md.includes('| 3 | 16:30–18:30 | 20:16:30 | T2 | Twee | library |') && md.includes('## Wat werkte') && md.includes('## Buma/Stemra'), md);
+    && md.includes('| 2 | 16:30–18:30 | 20:16:30 | T2 | Twee | library |') && md.includes('## Wat werkte') && md.includes('## Buma/Stemra'), md);
   const json = JSON.parse(S.naarJson(boek));
-  ok('JSON: zonder de ruwe logs, met dezelfde stukken', !('log' in json.logs[0]) && json.stukken.length === 3 && json.melding === null);
+  ok('JSON: zonder de ruwe logs en zonder interne sleutels, met dezelfde stukken', !('log' in json.logs[0]) && json.stukken.length === 2 && json.melding === null && !('sleutels' in json.stukken[0]));
   const niets = S.setboek([{ bestand: 'set-20261010-202000.acties.jsonl', tekst: leeg }]);
   ok('alleen lege logs: melding "geen log van die dag met acties", geen lege tracklist',
     niets.melding === 'geen log van die dag met acties' && niets.stukken.length === 0 && S.naarMarkdown(niets).includes('geen log van die dag met acties') && !S.naarMarkdown(niets).includes('## Tracklist'));
   ok('nul logs: dezelfde melding', S.setboek([]).melding === 'geen log van die dag met acties');
+}
+
+console.log('\n10b. een nummer over de grens van twee logs (opname aan/uit)');
+{
+  // Los log: A speelt; B wordt op 4:45 geladen en gestart (thru, track 3). Op 5:00 start de opname:
+  // het losse log sluit, de opname begint een nieuw log met B in de beginstand; 15 s later fader dicht.
+  const los = logTekst({ tracks: { 1: tr(1, 'A', { speelt: true }) }, waarden: { 'mixer.xfader': 0 }, regels: [laad(285, 3, 'B', 'b'), ...druk(285.5, 'track.3.play')], eind: 300 });
+  const opn = logTekst({ begon: BEGIN + 300e3, opname: '20261010-200500', waarden: { 'mixer.xfader': 0 },
+    tracks: { 1: tr(1, 'A', { speelt: true, positie: 300 }), 3: tr(3, 'B', { speelt: true, positie: 14.5, nummer: 'b' }), 4: tr(4, 'C', { nummer: 'c' }) },
+    regels: [[15, 'track.3.fader', 0], [200, 'mixer.xfader', 0]], eind: 200 });
+  const los2 = logTekst({ begon: BEGIN + 500e3, tracks: { 4: tr(4, 'C', { nummer: 'c' }) }, regels: [[30, 'track.1.fader', 1]], eind: 30 });
+  const boek = S.setboek([{ bestand: 'set-20261010-200000.acties.jsonl', tekst: los }, { bestand: 'set-20261010-200500.acties.jsonl', tekst: opn },
+    { bestand: 'set-20261010-200820.acties.jsonl', tekst: los2 }]);
+  const lijst = boek.stukken.map((s) => `${s.titel}@${S.kloktijd(s.klokVan)}-${S.kloktijd(s.klokTot)}`).join(' ');
+  ok('A één keer (20:00:00–20:08:20); B 14,5 s + 15 s = 29,5 s: in de tracklist (20:04:45–20:05:15)', lijst === 'A@20:00:00-20:08:20 B@20:04:45-20:05:15', lijst);
+  const b = boek.stukken.find((s) => s.titel === 'B');
+  ok('B in de bron 0:00–0:30, uit twee logs', b && S.positieInBron(b) === '0:00–0:30' && b.log.length === 2, JSON.stringify(b));
+  ok('B staat niet onder "geladen maar niet hoorbaar"', !boek.nietHoorbaar.some((x) => x.titel === 'B'), JSON.stringify(boek.nietHoorbaar));
+  ok('C (geladen, nooit gespeeld, in twee beginstanden) staat er één keer', boek.nietHoorbaar.filter((x) => x.titel === 'C').length === 1, JSON.stringify(boek.nietHoorbaar));
+  const ver = S.setboek([{ bestand: 'set-20261010-200000.acties.jsonl', tekst: los },
+    { bestand: 'set-20261010-201000.acties.jsonl', tekst: logTekst({ begon: BEGIN + 600e3, waarden: { 'mixer.xfader': 0 }, tracks: { 1: tr(1, 'A', { speelt: true, positie: 600 }) }, regels: [[60, 'mixer.xfader', 0]] }) }]);
+  ok('een gat van 5 min tussen de logs (herladen): twee stukken A, niet gelijmd', ver.stukken.filter((s) => s.titel === 'A').length === 2, JSON.stringify(ver.stukken.map((s) => s.klokVan)));
+  const ander = S.setboek([{ bestand: 'set-20261010-200000.acties.jsonl', tekst: los },
+    { bestand: 'set-20261010-200500.acties.jsonl', tekst: logTekst({ begon: BEGIN + 300e3, waarden: { 'mixer.xfader': 0 }, tracks: { 1: tr(1, 'Ander', { speelt: true, nummer: 'x' }) }, regels: [[60, 'mixer.xfader', 0]] }) }]);
+  ok('een ander nummer op dezelfde track aan het begin van het volgende log: niet gelijmd', ander.stukken.map((s) => s.titel).join() === 'A,Ander', ander.stukken.map((s) => s.titel).join());
 }
 
 console.log('\n12–14. titels, filter, gebruik');
@@ -279,7 +354,44 @@ console.log('\nproefpunten (Controlekamer)');
   ok('alleen fout of met notitie, fout eerst; wat er toen klonk erbij',
     boek.proef.punten.map((x) => x.id).join() === 'apc-fader,cue' && boek.proef.punten[0].klonk.join() === 'T1 Eerste' && boek.proef.punten[1].klonk.length === 0, JSON.stringify(boek.proef));
   const md = S.naarMarkdown(boek);
-  ok('Markdown: proefpunten met de kloktijd, en vrij spelen / speellijst', md.includes('**fout** · apc-fader · rond 20:02:00 · "fader 3 sprong" · toen hoorbaar: T1 Eerste') && md.includes('Speellijst begonnen 20:05:00'), md);
+  ok('Markdown: proefpunten met de kloktijd, en het eerste vinkje als grens (eerlijk benoemd)', md.includes('**fout** · apc-fader · rond 20:02:00 · "fader 3 sprong" · toen hoorbaar: T1 Eerste')
+    && md.includes('Eerste proefpunt afgevinkt 20:05:00 (`begonnen` in de sessie: het eerste vinkje, geen startknop). Daarvóór 1 stuk(ken) (vrij spelen?), daarna 0 (de speellijst?).'), md);
+  const oud = { begonnen: '2026-10-06T19:14:00.000Z', items: { 'oud-punt': { status: 'fout', notitie: 'fader 3 sprong (6 okt)', tijd: '2026-10-06T19:20:00.000Z' } } };
+  const boekOud = S.setboek([{ bestand: 'set-20261010-200000.acties.jsonl', tekst }], { proef: oud });
+  const mdOud = S.naarMarkdown(boekOud);
+  ok('een sessie van 6 okt (niet gearchiveerd): geen splitsing, geen punt op de tijdlijn, wel "1 punt van eerder (6 okt)"',
+    !/Eerste proefpunt|Speellijst begonnen/.test(mdOud) && !mdOud.includes('oud-punt') && mdOud.includes('1 punt van eerder (6 okt), niet getoond.') && mdOud.includes('nieuwe ronde')
+    && boekOud.stukken.every((s) => s.deel === undefined) && mdOud.includes('Geen punt van deze avond met "fout" of een notitie.'), mdOud);
+  const nacht = { begonnen: new Date(BEGIN + 4 * 3600e3).toISOString(), items: { laat: { status: 'fout', notitie: '', tijd: new Date(BEGIN + 4.5 * 3600e3).toISOString() } } };
+  const lang = logTekst({ tracks: { 1: tr(1, 'Eerste', { speelt: true }) }, waarden: { 'mixer.xfader': 0 }, regels: [[4 * 3600, 'mixer.xfader', 0]] });
+  const mdNacht = S.naarMarkdown(S.setboek([{ bestand: 'set-20261010-200000.acties.jsonl', tekst: lang }], { proef: nacht }));
+  ok('een punt na middernacht (binnen de avond): met de datum ervoor', mdNacht.includes('**fout** · laat · rond 11 okt 00:30:00'), mdNacht.split('\n').filter((l) => /laat|Eerste proefpunt/.test(l)).join(' / '));
+}
+
+console.log('\nBuma/Stemra: een lange mix');
+{
+  const mix = logTekst({ tracks: { 1: tr(1, 'Deep House Mix 2024', { speelt: true, nummer: 'mix' }) }, waarden: { 'mixer.xfader': 0 }, regels: [[480, 'mixer.xfader', 0]] });
+  const metDb = S.naarMarkdown(S.setboek([{ bestand: 'set-20261010-200000.acties.jsonl', tekst: mix }], { lengte: (id) => (id === 'mix' ? 7200 : null) }));
+  ok('lengte 7200 en gespeeld 0:00–8:00: "titel onbekend: deel van …" (de lengte telt, niet alleen de positie)', metDb.includes('- titel onbekend: deel van "Deep House Mix 2024" 0:00–8:00'), metDb.split('## Buma')[1]);
+  const zonder = S.naarMarkdown(S.setboek([{ bestand: 'set-20261010-200000.acties.jsonl', tekst: mix }]));
+  ok('zonder --db: de titel, met de waarschuwing dat een lange mix zo niet te zien is', zonder.includes('- Deep House Mix 2024\n') && zonder.includes('Zonder --db: een lange mix'), zonder.split('## Buma')[1]);
+  const vraag = logTekst({ tracks: { 1: tr(1, 'Waar', { speelt: true, nummer: 'w' }) }, waarden: { 'mixer.xfader': 0 }, regels: [[30, 'track.1.seek', 0.5], [300, 'mixer.xfader', 0]] });
+  const onbekend = S.naarMarkdown(S.setboek([{ bestand: 'set-20261010-200000.acties.jsonl', tekst: vraag }]));
+  ok('positie ergens "?" (seek zonder lengte) en geen lengte: "(lengte onbekend)"', onbekend.includes('- Waar (lengte onbekend)\n'), onbekend.split('## Buma')[1]);
+  const ver = logTekst({ tracks: { 1: tr(1, 'Ver', { speelt: true, nummer: 'v', positie: 1500 }) }, waarden: { 'mixer.xfader': 0 }, regels: [[60, 'mixer.xfader', 0]] });
+  ok('positie voorbij 20 min (zonder lengte): ook "titel onbekend"', S.naarMarkdown(S.setboek([{ bestand: 'set-20261010-200000.acties.jsonl', tekst: ver }])).includes('- titel onbekend: deel van "Ver" 25:00–26:00'));
+}
+
+console.log('\n--vanaf (amsterdamMs)');
+{
+  ok('amsterdamMs zomer: 20261010 17:00 = 15:00 UTC', S.amsterdamMs('20261010', '17:00') === Date.parse('2026-10-10T15:00:00Z'));
+  ok('amsterdamMs winter: 20261210 17:00 = 16:00 UTC', S.amsterdamMs('20261210', '17:00') === Date.parse('2026-12-10T16:00:00Z'));
+  ok('amsterdamMs: onzin = null', S.amsterdamMs('2026-10-10', '17:00') === null && S.amsterdamMs('20261010', '17u') === null);
+  const middag = logTekst({ begon: BEGIN - 6 * 3600e3, tracks: { 1: tr(1, 'Opbouw', { speelt: true }) }, regels: [[60, 'mixer.xfader', 0.5]] });
+  const avond = logTekst({ tracks: { 1: tr(1, 'Avond', { speelt: true }) }, regels: [[60, 'mixer.xfader', 0.5]] });
+  const b = S.setboek([{ bestand: 'set-20261010-140000.acties.jsonl', tekst: middag }, { bestand: 'set-20261010-200000.acties.jsonl', tekst: avond }], { vanafMs: S.amsterdamMs('20261010', '17:00') });
+  ok('vanafMs: het middaglog onder overgeslagen ("begon vóór 17:00"), alleen de avond in de tracklist',
+    b.logs.length === 1 && b.stukken.map((s) => s.titel).join() === 'Avond' && b.overgeslagen[0]?.reden === 'begon vóór 17:00 (--vanaf)' && b.gaten.length === 0, JSON.stringify(b.overgeslagen));
 }
 
 console.log('\nde CLI (tools/setboek/setboek.mjs)');
@@ -331,6 +443,14 @@ console.log('\nde CLI (tools/setboek/setboek.mjs)');
     rmSync(leeg, { recursive: true, force: true });
     ok('zonder argumenten: exit 1 met gebruik', draai().status === 1 && /gebruik/.test(draai().stderr));
     ok('--dag in een ander formaat: exit 1', draai('--dag', '2026-10-10', '--map', map).status === 1);
+    const middag = logTekst({ begon: BEGIN - 6 * 3600e3, tracks: { 1: tr(1, 'Opbouw', { speelt: true }) }, regels: [[60, 'mixer.xfader', 0.5]] });
+    writeFileSync(join(map, 'set-20261010-140000.acties.jsonl'), middag);
+    const zonderVanaf = draai('--dag', '20261010', '--map', map);
+    const vanaf = draai('--dag', '20261010', '--map', map, '--vanaf', '17:00');
+    ok('--vanaf 17:00: het log van 14:00 eruit (overgeslagen), dat van 20:00 en de nacht erin',
+      zonderVanaf.stdout.includes('Opbouw') && vanaf.status === 0 && !vanaf.stdout.includes('| Opbouw |') && vanaf.stdout.includes('20261010-140000 (begon vóór 17:00 (--vanaf))') && vanaf.stdout.includes('Na middernacht'), vanaf.stderr + vanaf.stdout.slice(0, 600));
+    ok('--vanaf zonder --dag, of in een ander formaat: exit 1', draai('--log', join(map, 'set-20261010-200000.acties.jsonl'), '--vanaf', '17:00').status === 1
+      && draai('--dag', '20261010', '--map', map, '--vanaf', '17u').status === 1);
     const proefPad = join(map, 'sessie.json');
     writeFileSync(proefPad, JSON.stringify({ begonnen: new Date(BEGIN).toISOString(), items: { x: { status: 'fout', notitie: 'kapot', tijd: new Date(BEGIN + 60000).toISOString() } } }));
     const proef = draai('--log', join(map, 'set-20261010-200000.acties.jsonl'), '--proef', proefPad);

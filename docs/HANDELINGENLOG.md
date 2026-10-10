@@ -400,8 +400,10 @@ op 1 µs).
 
 `tools/setboek/lees.mjs` leest één of meer logs van een avond (op een KOPIE) en maakt er een
 tracklist "hoorbaar (benaderd)" van, plus wat geladen maar niet gehoord werd en het gebruik.
-Het gebruikt `leesLog` en dezelfde curves als de engine en de puls. Wat het log niet ziet (het
-einde van een nummer, waar sync en beatjump de speelkop zetten, de sampler) staat in
+Het gebruikt `leesLog` en dezelfde curves als de engine en de puls. Een nummer dat over de
+grens van twee logs speelt (opname aan/uit sluit het log en begint een nieuw), is daar één
+stuk. Wat het log niet ziet (het einde van een nummer, waar sync en beatjump de speelkop
+zetten en welk tempo sync kiest, of een geladen nummer stems heeft, de sampler) staat in
 `tools/setboek/LEESMIJ.md`. Een nieuw soort regel die de hoorbaarheid raakt (een nieuwe
 knop die een track stil kan zetten): ook daar meenemen, met een check in `test/setboek.test.mjs`.
 
