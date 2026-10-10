@@ -14,10 +14,14 @@
 //     het stuk zelf blijft 124 (niet uitgerekt), en de uitkomst zegt het
 //  6. de koptelefoon: fader van de drumtrack dicht, PFL aan: het stuk op kanaal 3/4,
 //     de zaal stil (een knip vóórhoren kan de sampler niet)
+//  7. het scherm (de echte app op 1440 × 900): de acht knoppen 1→13 … 8→12 passen in
+//     de sampler-rij, een muisklik op 1→13 zet het stuk op de Drums, de koppelmodus
+//     ziet de knop. Schermafdruk naar de uitmap (argument 1, standaard tools/headless/uit).
 //
 // VEILIG: eigen headless shell, eigen server op een eigen poort, ALLES van de server
 // in een tijdelijke map (database, media, opnames, patronen, plannen, kaart, nacht,
-// en een nep-yt-dlp: geen netwerk), geen requestMIDIAccess. De pagina is /styles.css (de app start niet).
+// en een nep-yt-dlp: geen netwerk), geen requestMIDIAccess. Voor 1–6 is de pagina
+// /styles.css (de app start niet); voor 7 de app zelf, zonder MIDI.
 // Gebruik: node tools/headless/sampler-drums.mjs [uitmap]   (VARVE_KIJK_POORT 8797, VARVE_KIJK_DEBUG 9397)
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readdirSync, rmSync, existsSync, realpathSync, writeFileSync } from 'node:fs';
@@ -374,6 +378,100 @@ try {
   ok('PFL aan: kanaal 3/4 is het stuk (correlatie > 0,8, boven −40 dB), de zaal 1/2 is stil (onder −60 dB)',
     k1.ok && k1.beschikbaar && k1.pfl && k1.kanalen.slice(2).every((c) => c.corr > 0.8 && c.rmsDb > -40) && k1.kanalen.slice(0, 2).every((c) => c.rmsDb < -60));
   ok('PFL uit: ook de koptelefoon stil (hij hoort dan de zaal, en die is stil)', k0.kanalen.every((c) => c.rmsDb < -60));
+
+  console.log('\n7. het scherm: de app op 1440 × 900, de sampler-rij met 1→13 … 8→12');
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  await cdp('Page.navigate', { url: `http://localhost:${POORT}/` });
+  { const t0 = Date.now(); while (Date.now() - t0 < 20000) { if (await evalueer('!!(window.engine && window.leerModus)').catch(() => false)) break; await wacht(200); } await wacht(1000); }
+  // Meten met en zonder de knoppen (display none), in drie standen: geen rij open, de
+  // rij instrument open, en instrument + patronen (wat je bij de crossover open hebt).
+  const meetRij = (stand) => evalueer(`(() => {
+    const rij = document.querySelector('#sampler.sampler-rij'), pads = [...rij.querySelectorAll('.pad')], kn = [...rij.querySelectorAll('.sampler-drums [data-action]')];
+    const fd = rij.closest('.focusdeel');
+    const r = (el) => { const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, r: b.right, b: b.bottom }; };
+    const met = { rij: r(rij), pads: pads.map(r), knoppen: kn.map(r), labels: kn.map((b) => b.textContent), acties: kn.map((b) => b.dataset.action),
+      scroll: rij.scrollWidth, client: rij.clientWidth, docScroll: document.documentElement.scrollWidth,
+      fdScroll: fd ? fd.scrollHeight - fd.clientHeight : null, zichtbaar: kn.every((b) => { const x = r(b); return x.w > 0 && x.h > 0 && document.elementFromPoint(x.x + x.w / 2, x.y + x.h / 2) === b; }),
+      padsZichtbaar: pads.every((b) => { const x = r(b); return x.w > 0 && x.h > 0 && b.contains(document.elementFromPoint(x.x + x.w / 2, x.y + x.h / 2)); }) };
+    const drums = rij.querySelector('.sampler-drums'); drums.style.display = 'none';
+    const zonder = { rij: r(rij), pads: pads.map(r), fdScroll: fd ? fd.scrollHeight - fd.clientHeight : null };
+    drums.style.display = '';
+    return { stand: ${JSON.stringify(stand)}, met, zonder, vw: innerWidth, vh: innerHeight };
+  })()`);
+  const maat = await meetRij('geen rij open');
+  const mw = maat.metDrums = maat.met, padW = mw.pads.map((p) => p.w), padW0 = maat.zonder.pads.map((p) => p.w);
+  meld(`venster ${maat.vw} × ${maat.vh}; sampler-rij ${mw.rij.w.toFixed(0)} × ${mw.rij.h.toFixed(0)} px (zonder de knoppen ${maat.zonder.rij.h.toFixed(0)} hoog: +${(mw.rij.h - maat.zonder.rij.h).toFixed(0)} px)`);
+  meld(`pads ${Math.min(...padW).toFixed(1)} px breed (zonder de knoppen ${Math.min(...padW0).toFixed(1)}); knoppen ${mw.labels.join(' ')} elk ${Math.min(...mw.knoppen.map((k) => k.w)).toFixed(1)} × ${mw.knoppen[0].h.toFixed(0)} px`);
+  ok('acht knoppen in de sampler-rij, in de volgorde van de tabel (1→13 2→14 3→15 4→16 5→9 6→10 7→11 8→12)', mw.labels.join() === '1→13,2→14,3→15,4→16,5→9,6→10,7→11,8→12' && mw.acties.every((x, k) => x === `sampler.${k + 1}.drums`));
+  const eenRegel = mw.knoppen.every((k) => Math.abs(k.y - mw.knoppen[0].y) < 1);
+  const binnen = mw.knoppen.every((k) => k.x >= mw.rij.x - 0.5 && k.r <= mw.rij.r + 0.5 && k.b <= mw.rij.b + 0.5) && mw.scroll <= mw.client && mw.docScroll <= maat.vw;
+  ok(`de knoppen passen: op één regel onder de pads, binnen de rij (scroll ${mw.scroll} ≤ ${mw.client}, pagina ${mw.docScroll} ≤ ${maat.vw}), elk helemaal te zien en aan te klikken`,
+    eenRegel && binnen && mw.zichtbaar && mw.knoppen[0].y >= Math.max(...mw.pads.map((p) => p.b)) - 0.5);
+  ok(`de pads blijven even breed (${Math.min(...padW).toFixed(1)} = ${Math.min(...padW0).toFixed(1)} px)`, Math.abs(Math.min(...padW) - Math.min(...padW0)) < 0.5);
+  ok(`het focusdeel scrolt niet door de knoppen (overloop ${mw.fdScroll} px; zonder knoppen ${maat.zonder.fdScroll} px)`, mw.fdScroll <= 0);
+  const rijenStand = [];
+  for (const [naam, knoppen] of [['rij instrument open', ['instrument-btn']], ['rijen instrument + patronen open', ['patronen-btn']]]) {
+    await evalueer(`(${JSON.stringify(knoppen)}).forEach((id) => document.getElementById(id).click()), true`);
+    await wacht(400);
+    const m = await meetRij(naam);
+    rijenStand.push(m);
+    meld(`${naam}: sampler-rij ${m.met.rij.h.toFixed(0)} px hoog; overloop van het focusdeel met de knoppen ${m.met.fdScroll} px, zonder ${m.zonder.fdScroll} px; knoppen ${m.met.zichtbaar ? 'te zien' : 'NIET (allemaal) te zien'}, pads ${m.met.padsZichtbaar ? 'te zien' : 'NIET (allemaal) te zien'}`);
+  }
+  {
+    const { data } = await cdp('Page.captureScreenshot', { format: 'png' });
+    writeFileSync(join(UIT, 'sampler-drums-app-1440-rijen.png'), Buffer.from(data, 'base64'));
+  }
+  await evalueer(`['instrument-btn', 'patronen-btn'].forEach((id) => document.getElementById(id).click()), true`);
+  await wacht(300);
+  // Het videopaneel open (de kolom rechts): het focusdeel kan dan smaller worden.
+  await evalueer(`document.getElementById('video-btn').click(), true`);
+  await wacht(500);
+  {
+    const v = await meetRij('videopaneel open');
+    const kw = v.met.knoppen.map((k) => k.w);
+    const vBinnen = v.met.knoppen.every((k) => k.x >= v.met.rij.x - 0.5 && k.r <= v.met.rij.r + 0.5) && v.met.scroll <= v.met.client;
+    meld(`videopaneel open: sampler-rij ${v.met.rij.w.toFixed(0)} × ${v.met.rij.h.toFixed(0)} px, knoppen ${Math.min(...kw).toFixed(1)} px breed, pads ${Math.min(...v.met.pads.map((p) => p.w)).toFixed(1)} px; overloop van het focusdeel ${v.met.fdScroll} px (zonder knoppen ${v.zonder.fdScroll})`);
+    const { data } = await cdp('Page.captureScreenshot', { format: 'png' });
+    writeFileSync(join(UIT, 'sampler-drums-app-1440-video.png'), Buffer.from(data, 'base64'));
+    ok('ook met het videopaneel open passen de knoppen (binnen de rij, elk te zien)', vBinnen && v.met.zichtbaar);
+  }
+  await evalueer(`document.getElementById('video-btn').click(), true`);
+  await wacht(500);
+  {
+    const y0 = Math.max(0, mw.rij.y - 40);
+    const { data } = await cdp('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: y0, width: maat.vw, height: Math.min(maat.vh - y0, mw.rij.h + 80), scale: 1 } });
+    writeFileSync(join(UIT, 'sampler-drums-rij-1440.png'), Buffer.from(data, 'base64'));
+    const heel = await cdp('Page.captureScreenshot', { format: 'png' });
+    writeFileSync(join(UIT, 'sampler-drums-app-1440.png'), Buffer.from(heel.data, 'base64'));
+    meld(`schermafdrukken: ${join(UIT, 'sampler-drums-rij-1440.png')} en sampler-drums-app-1440.png`);
+  }
+  // Een echte muisklik op 1→13: Drums op track 3 met focus, sampler-pad 1 gevuld.
+  await evalueer(`(() => {
+    const e = window.engine; window.__drumMeld = [];
+    e.on('melding', (m) => window.__drumMeld.push(m.tekst));
+    e.setFocus('C'); e.zetInstrument('C', 'drums');
+    const b = e.ctx.createBuffer(2, 4800, e.ctx.sampleRate); b.getChannelData(0).fill(0.1); b.getChannelData(1).fill(0.1);
+    e.sampler.pads[0] = { buffer: b, bpm: 124, bron: 1, tellen: 1, van: 1, tot: 1.1, deckId: 'A', gewichten: null, stemNamen: null, speelt: false, src: null, g: null };
+    return true;
+  })()`);
+  await wacht(300);
+  const klik = async (k) => {
+    const x = k.x + k.w / 2, y = k.y + k.h / 2;
+    await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+    await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    await wacht(200);
+  };
+  await klik(mw.knoppen[0]);
+  const naKlik = await evalueer(`(() => { const p = window.engine.instrumentOp('C')?.stand().pads[12]; return { gevuld: !!p?.gevuld, naam: p?.naam, meld: window.__drumMeld.slice(), sampler: window.engine.sampler.pads[0]?.speelt ?? null }; })()`);
+  meld(`na de klik: drumpad 13 ${naKlik.gevuld ? 'gevuld' : 'leeg'} ("${naKlik.naam}"); melding: ${naKlik.meld.join(' | ') || '(geen)'}`);
+  ok('een muisklik op 1→13 zet sampler-pad 1 op drumpad 13 van track 3, met de melding', naKlik.gevuld && naKlik.naam === 'S1 · track 1' && naKlik.meld.some((t) => /^S1 staat op drumpad 13 van track 3 \(noot C3 · 48\)/.test(t)) && naKlik.sampler === false);
+  // De koppelmodus: aan, klik 8→12, dan wacht MIDI-learn op een knop voor sampler.8.drums.
+  await evalueer('window.leerModus.toggle(), true');
+  await klik(mw.knoppen[7]);
+  const leer = await evalueer(`(() => { const l = window.leerModus.learn; const uit = { busy: !!l.busy, action: l.action ?? null, gevuld: !!window.engine.instrumentOp('C')?.stand().pads[11].gevuld }; try { l.stop?.(); } catch (_) {} window.leerModus.toggle(); return uit; })()`);
+  meld(`koppelmodus na een klik op 8→12: learn ${leer.busy ? 'wacht' : 'wacht niet'} op "${leer.action}"; drumpad 12 ${leer.gevuld ? 'gevuld (fout: de klik ging door)' : 'leeg (de klik ging niet door, zoals het hoort)'}`);
+  ok('de koppelmodus ziet de knop: klik 8→12 = koppel sampler.8.drums (en voert hem niet uit)', leer.busy && leer.action === 'sampler.8.drums' && !leer.gevuld);
 
   for (const m of meldingen) console.log(`  ! ${m}`);
   ok('geen uitzonderingen of console-fouten op de pagina', meldingen.length === 0);

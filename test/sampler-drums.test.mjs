@@ -227,6 +227,18 @@ console.log('\nna herladen (H8)');
   eng.zetInstrument('C', null);
 }
 
+console.log('\nhet scherm (index.html, zonder DOM gelezen)');
+{
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const knoppen = [...html.matchAll(/<button data-kind="button" data-action="sampler\.(\d)\.drums" class="btn sm"[^>]*>(\d)→(\d+)<\/button>/g)];
+  ok(`precies acht knoppen data-action="sampler.N.drums" (${knoppen.length})`, knoppen.length === 8 && (html.match(/data-action="sampler\.\d\.drums"/g) ?? []).length === 8);
+  ok('in de volgorde 1–8 met opschrift 1→13 … 8→12 (sampler-pad → drumpad, de tabel)', knoppen.every((m, k) => Number(m[1]) === k + 1 && Number(m[2]) === k + 1 && Number(m[3]) === DRUMPAD_VAN_SAMPLER[k]));
+  ok('geen drums.clear, geen shift-variant', !/drums\.clear/.test(html) && !knoppen.some((m) => /data-action-shift/.test(m[0])));
+  ok('niet met class "pad" (renderloop.js telt .pad als de acht sampler-pads)', (html.match(/class="pad"/g) ?? []).length === 8);
+  const sec = html.slice(html.indexOf('<section id="sampler"'), html.indexOf('</section>', html.indexOf('<section id="sampler"')));
+  ok('in de sampler-rij', (sec.match(/sampler\.\d\.drums/g) ?? []).length === 8);
+}
+
 eng.zetInstrument('C', null);
 ok('instrument eraf: read null, geen fout', read('sampler.1.drums') === null);
 ok('nergens setValueCurveAtTime', CURVES === 0);
