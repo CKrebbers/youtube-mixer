@@ -218,7 +218,8 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
-                    luisterbestanden), varve-app/ (de Dock-app VARVE: start de server, opent de Controlekamer) — zie tools/README.md
+                    luisterbestanden), varve-app/ (de Dock-app VARVE: start de server, opent de Controlekamer),
+                    setboek/ (lees.mjs: wat er op een avond KLONK uit de handelingenlogs, puur; gebruik.mjs: de teller; LEESMIJ.md) — zie tools/README.md
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
@@ -294,6 +295,7 @@ test/
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
   smf.test.mjs      de bytes van een MIDI-bestand (src/lib/smf.js): vlq, meta, tempo, ascii, sporen, lezen (running status, SysEx, kapot = byte-offset)
   patronen-midi.test.mjs  patronen als MIDI-bestand: S1–S13/L1–L2, de kick bytegewijs (met de hand + fixtures), 500 patronen tegen de vensters van de speler, rondreis
+  setboek.test.mjs  het setboek (tools/setboek): hoorbaar (fader, kant, trim, kills, stems, master), cue/play/laad zoals het deck, trackeinde met lengte, positie in de bron, meerdere logs per avond
   fixtures/midi/    gouden .mid's (kick met en zonder meta, proef-set): de test vergelijkt ermee, en ze zijn het materiaal voor de Logic-proef
   secties.test.mjs  secties: synthetische nummers met een bekend antwoord, worker, library, deck, actions, server, marges op de "1"
   sec-sampler.test.mjs  een sectie in een sampler-pad: knipSectie, start op de "1", herankeren (ook keylock), grenzen, meldingen

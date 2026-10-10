@@ -70,6 +70,11 @@ alleen de tabel; `--library` opent de database alleen-lezen als de server niet d
 keuzelogica staat puur in `kies.mjs` (`test/lokaal-importeer.test.mjs`). Zie `lokaal/LEESMIJ.md`.
 Pas draaien NÁ de proefavond van 10 okt.
 
+## setboek/
+Wat er op een avond KLONK, uit de handelingenlogs (spoor produceren-uit, 10 okt): tracklist
+"hoorbaar (benaderd)", geladen maar niet gehoord, gebruik, verslagblok. Alleen op een KOPIE van
+`opnames/*.acties.jsonl`, nooit tijdens een set. Zie `setboek/LEESMIJ.md`.
+
 ## headless/
 - `kaart.mjs [uitmap]` — de tab kaart (docs/LIBRARY.md "De kaart-tab") op de NEP-server `kaart-nep.mjs`
   (de kaart-API in het geheugen op `test/fixtures/varve-kaart.klein.json`, de rest doorgegeven aan een
