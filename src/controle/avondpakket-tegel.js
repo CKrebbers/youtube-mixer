@@ -12,6 +12,8 @@ import { wanneer } from './backup-tegel.js';
  * - null: nog niets gehoord;
  * - { ontbreekt: true }: een oudere server zonder de route (404);
  * - { fout: status }: een fout van de server;
+ * - { overgeslagen: reden }: de pagina heeft (nog) niet gemeten, bv. omdat de
+ *   mixer open is: een klik meet wel;
  * - een rapport: "klaar", "klaar · let op 2" of "2 rood", met als regel de
  *   uitleg van het eerste rode punt (anders het eerste oranje). Bevroren (er
  *   speelt een deck): de sub zegt het, met de tijd van de stand die je ziet.
@@ -21,6 +23,7 @@ export function avondpakketTegel(a, nu = new Date()) {
   if (!a) return { ...basis, licht: 'uit', waarde: '…', sub: '' };
   if (a.ontbreekt) return { ...basis, licht: 'uit', waarde: 'onbekend', sub: 'oudere server' };
   if (a.fout) return { ...basis, licht: 'uit', waarde: 'onbekend (fout)', sub: typeof a.fout === 'number' ? `status ${a.fout}` : String(a.fout) };
+  if (a.overgeslagen) return { ...basis, licht: 'uit', waarde: 'niet gemeten', sub: String(a.overgeslagen) };
   const punten = Array.isArray(a.punten) ? a.punten : [];
   const telling = a.telling || { ok: 0, half: 0, fout: 0, uit: 0 };
   const waarde = telling.fout ? `${telling.fout} rood` : telling.half ? `klaar · let op ${telling.half}` : 'klaar';

@@ -440,6 +440,8 @@ console.log('28. tegel');
   ok('null → grijs "…"', tegel(null).licht === 'uit' && tegel(null).waarde === '…' && tegel(null).id === 'avondpakket');
   ok('{ ontbreekt } → "oudere server"', tegel({ ontbreekt: true }).sub === 'oudere server');
   ok('{ fout: 500 } → "onbekend (fout)"', tegel({ fout: 500 }).waarde === 'onbekend (fout)' && tegel({ fout: 500 }).licht === 'uit');
+  ok('{ overgeslagen } → grijs "niet gemeten" met de reden', tegel({ overgeslagen: 'mixer open: klik om te meten' }).waarde === 'niet gemeten'
+    && tegel({ overgeslagen: 'mixer open: klik om te meten' }).sub === 'mixer open: klik om te meten' && tegel({ overgeslagen: 'x' }).licht === 'uit');
   const groen = tegel(beoordeel(goedVertrek(), { profiel: 'apc', data: data(), nu: NU }));
   ok(`groen → "klaar", sub "apc · vertrek · 18:30" (${groen.sub})`, groen.waarde === 'klaar' && groen.licht === 'ok' && groen.sub === 'apc · vertrek · 18:30' && groen.regel === '');
   const half = tegel(beoordeel(goedVertrek({ accu: { bron: 'AC', procent: 60, laderW: 8 }, achtergrond: { ingestWacht: 2 } }), { profiel: 'apc', fase: 'vertrek', data: data(), nu: NU }));
