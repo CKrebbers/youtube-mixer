@@ -252,7 +252,8 @@ auto voor scene 4). De kern blijft: fader, play, filter, Clip Stop, master-knop.
 
 *Op de tak `visie/produceren-uit`, PR naar `studio/integratie` "[na de proefavond]". Ontwerp en
 kritiek: de scratchpad-map `uitwerking/produceren-uit/` van 10 okt (`5-ontwerp-definitief.md`).
-Gebouwd is alleen **stap 1: de pure exporter en lezer**. Route, CLI en knop komen later (§8.5).
+Gebouwd: **stap 1, de pure exporter en lezer** (met L3 van de B-lijst), en in hetzelfde spoor het
+**setboek** (`tools/setboek/`, stap 2). Route, CLI en knop voor de MIDI-export komen later (§8.5).
 Nog in **geen** Logic geopend.*
 
 **Waarom.** Clay produceert ook in Logic (VISIE pijler 2). Een patroon dat in VARVE gemaakt is,
@@ -266,7 +267,7 @@ UITGANG, geen distributie (CLAUDE.md "geen deelfuncties" gaat over de YouTube-ca
 | `src/lib/smf.js` | de bytes van een Standard MIDI File: `vlq`, `meta`, `ascii`, `tempoMeta`, `maatsoortMeta`, `mtrk`, `smf`, `leesSmf`. Geen imports, geen Buffer, geen DOM. |
 | `src/export/patronen-smf.js` | patroon/set ↔ SMF: `klinkendeNoten`, `setNaarSmf`, `smfNaarPatronen`. Staat BUITEN `src/engine/` (regel 1: de engine kent geen MIDI); importeert alleen `engine/patronen/{model,venster}.js` en `lib/smf.js`. |
 | `test/smf.test.mjs` | de bytes-laag (43 checks) |
-| `test/patronen-midi.test.mjs` | de regels hieronder, gouden bytes, 500 patronen tegen de speler, rondreis (59 checks) |
+| `test/patronen-midi.test.mjs` | de regels hieronder, gouden bytes, 500 patronen tegen de speler, rondreis met en zonder meta (65 checks) |
 | `test/fixtures/midi/` | `kick-goud.mid` (431 B), `kick-goud-zonder-meta.mid` (118 B), `proef-set.mid` (2200 B): gouden bestanden én het materiaal voor de Logic-proef (§8.4) |
 
 `test/regels.test.mjs` bewaakt dat er in `src/engine/` geen `MThd`, `MTrk` of `0x99` staat, en dat
@@ -302,8 +303,8 @@ De regels (elke regel een commentaar in de code en een check in de test):
 | S12 | Sporen in volgorde track 1..8, plek 1..5; lege plekken overgeslagen; `track`/`plek` kiezen er één (of één track); niets gevuld = `null`. |
 | S13 | Geschreven zonder running status (lezen kan het wel). |
 | L1 | Lezen met meta: het patroon uit de tekst door `normaliseerPatroon`. `bron: 'meta'`. |
-| L2 | Lezen zonder meta (een bestand uit Logic, of `negeerMeta`): noot-aan/-uit koppelen per (kanaal, noot), stap = dichtstbijzijnde stap (mod lengte), micro = de rest, **zonder swingcorrectie**; ppqn van het bestand telt (480 uit Logic gaat goed). `bron: 'noten'` en "benaderd" in `fouten`. |
-| L3 | *Nog niet gebouwd*: de stap kiezen met de kleinste \|micro\| na swing (zodat een swing-75-noot niet op de volgende stap valt). Gemeten in de jury-proef van 10 okt: zonder meta komt 2851 van 3000 willekeurige patronen bytegewijs terug. |
+| L2 | Lezen zonder meta (een bestand uit Logic, of `negeerMeta`): noot-aan/-uit koppelen per (kanaal, noot) (noot-aan met velocity 0 = uit), duur in stappen, snelheid = v/127; ppqn van het bestand telt (480 uit Logic gaat goed). Het raster (`lengte`, `deling`, `swing`) geef je mee: een bestand zonder meta zegt het niet. `bron: 'noten'` en "benaderd" in `fouten`. |
+| L3 | De stap: van k − 1, k, k + 1 (k = dichtstbijzijnde stap) die met de kleinste \|micro\| NA de swing van het raster, binnen −0,5..0,5 en binnen de omlopen (een noot op de laatste stap die op de omloopgrens valt, blijft de laatste stap). Met het juiste raster en niet-dubbelzinnige noten is het opnieuw geschreven bestand bytegewijs hetzelfde (1000/1000); helemaal willekeurig 957/1000, en op de generator van de jury precies haar uitkomst (2851/3000, 3000/3000 dezelfde patronen). Wat niet terugkomt is dubbelzinnig: dezelfde tick met een andere stap en micro (die geeft wel dezelfde bytes), of een zelfoverlap (S4) die de duur inkortte. |
 
 ### 8.3 Testen
 
@@ -335,8 +336,8 @@ jury-referentie (in de scratchpad, niet in de repo); mido leest alle drie de fix
 
 ### 8.5 Nog niet gebouwd (volgorde uit het ontwerp)
 
-1. **Setboek** (tracklist + verslag uit het handelingenlog, `tools/setboek/`): de kleinste export
-   die Clay na een proefavond gebruikt. Eigen stap, vóór de route.
+1. ~~Setboek~~: gebouwd op 10 okt (stap 2a en 2b, `tools/setboek/LEESMIJ.md`): de kleinste export
+   die Clay na een proefavond gebruikt, op kopieën van de logs.
 2. **Route** `GET /api/patronen/<naam>/midi[?track=N&plek=K][&omlopen=M][&bpm=B][&meta=0][&context=…]`
    (200 `audio/midi` met bestandsnaam `<set>-T<N>P<K>-<naam>-<JJJJMMDD-UUMM>.mid`; 400/404/405;
    413 boven `omlopen` 16 of Σ noten × omlopen > 65 536; 422 bij een onleesbare set) en CLI

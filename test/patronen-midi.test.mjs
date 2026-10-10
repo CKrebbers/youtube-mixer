@@ -236,8 +236,20 @@ console.log('\nlezen zonder meta (L2, benaderd)');
   const hats = smfNaarPatronen(setNaarSmf(setMet(hatsP), { meta: false }), { swing: 66.7 });
   const h = hats[0]?.patroon;
   ok('hats (swing 66,7, micro 0,1) zonder meta: gooit niet, 16 noten, fouten niet leeg', !!h && h.noten.length === 16 && hats[0].fouten.length > 0 && h.swing === 66.7);
-  ok('hats: stap 1 komt terug als stap 1 met micro ≈ 1/3 (de swing, zonder correctie); stap 6 micro ≈ 0,1',
-    Math.abs(h.noten[1].micro - 32 / 96) < 1e-9 && h.noten[1].stap === 1 && Math.abs(h.noten[6].micro - 10 / 96) < 1e-9, JSON.stringify(h?.noten.slice(0, 7)));
+  ok('hats (L3): stap 1 komt terug als stap 1 met micro ≈ 0 (de swing eraf, binnen één tick); stap 6 micro ≈ 0,1',
+    h.noten[1].stap === 1 && Math.abs(h.noten[1].micro) <= 1 / 96 && h.noten[6].stap === 6 && Math.abs(h.noten[6].micro - 0.1) <= 1 / 96, JSON.stringify(h?.noten.slice(0, 7)));
+  const p75 = patroon([{ stap: 1, noot: 42 }, { stap: 3, noot: 42, micro: 0.4 }], { swing: 75 });
+  const b75 = setNaarSmf(setMet(p75), { meta: false });
+  const z75 = smfNaarPatronen(b75, { swing: 75 })[0].patroon;
+  ok('L3 bij swing 75: stap 1 (tick 144, precies tussen 1 en 2) blijft stap 1; stap 3 + 0,4 (tick 374) ligt dichter bij stap 4 (−10 ticks) en wordt dat',
+    z75.noten.map((n) => `${n.stap}:${Math.round(n.micro * 96)}`).join() === '1:0,4:-10', JSON.stringify(z75.noten));
+  const rand = smfNaarPatronen(setNaarSmf(setMet(patroon([{ stap: 15, noot: 36, micro: 0.5 }])), { meta: false }))[0];
+  ok('L3: de laatste stap met micro +0,5 (precies op de omloopgrens) blijft stap 15, niet weggelaten',
+    rand.patroon.noten.length === 1 && rand.patroon.noten[0].stap === 15 && rand.patroon.noten[0].micro === 0.5 && !rand.fouten.some((f) => /weggelaten/.test(f)), JSON.stringify(rand));
+  ok('… met dezelfde tick: opnieuw geschreven bytegewijs hetzelfde', gelijk(setNaarSmf(setMet({ ...z75, id: 'p-t' }), { meta: false }), b75));
+  const zonderSwing = smfNaarPatronen(setNaarSmf(setMet(hatsP), { meta: false }))[0].patroon;
+  ok('met het verkeerde raster (swing 50 gelezen) komt de swing terug als micro ≈ 1/3: benaderd, en zo gemeld',
+    zonderSwing.noten[1].stap === 1 && Math.abs(zonderSwing.noten[1].micro - 32 / 96) < 1e-9);
   const basP = PROEF_SET.tracks[3][0];
   const bas = smfNaarPatronen(setNaarSmf(setMet(basP, { soort: 'poly' }), { meta: false }))[0].patroon;
   const n6 = bas.noten.find((n) => n.noot === 43), n14 = bas.noten.find((n) => n.noot === 48);
@@ -254,6 +266,29 @@ console.log('\nlezen zonder meta (L2, benaderd)');
   const lg = smfNaarPatronen(logic);
   ok('een "Logic"-bestand (480 PPQN, running status, v 0 = uit): stap 0 en 4, duur 1, naam Kick',
     lg.length === 1 && lg[0].naam === 'Kick' && lg[0].patroon.noten.map((n) => `${n.stap}:${n.noot}:${n.duur}`).join() === '0:36:1,4:38:1', JSON.stringify(lg[0]?.patroon.noten));
+  // De rondreis ZONDER meta (L3), 1000 patronen. (a) Als het raster bekend is en de noten niet
+  // dubbelzinnig zijn (|micro| ≤ 0,2, swing ≤ 62,5, duur ≤ 0,5, één omloop): bytegewijs hetzelfde.
+  // (b) Helemaal willekeurig: gemeten, niet geëist (de jury mat 2851/3000); de grens bewaakt een terugval.
+  let zaad = 4242;
+  const rnd = () => ((zaad = (zaad * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const rondreis = (netjes) => {
+    let zelfde = 0;
+    for (let k = 0; k < 1000; k++) {
+      const lengte = M.LENGTES[Math.floor(rnd() * M.LENGTES.length)], deling = M.DELINGEN[Math.floor(rnd() * M.DELINGEN.length)];
+      const swing = rnd() < 0.3 ? 50 : 50 + rnd() * (netjes ? 12.5 : 25);
+      const p = M.normaliseerPatroon({ id: 'p-z', lengte, deling, swing, noten: Array.from({ length: 1 + Math.floor(rnd() * 24) }, () => ({
+        stap: Math.floor(rnd() * lengte), noot: 30 + Math.floor(rnd() * 30), snelheid: 0.01 + rnd() * 0.99,
+        duur: netjes ? 0.05 + rnd() * 0.45 : 0.05 + rnd() * (rnd() < 0.8 ? 2 : 20), micro: rnd() < 0.5 ? 0 : (rnd() - 0.5) * (netjes ? 0.4 : 1) })) });
+      const set = setMet(p, { soort: null });
+      const a = setNaarSmf(set, { meta: false });
+      const q = smfNaarPatronen(a, { lengte, deling, swing })[0].patroon;
+      if (gelijk(setNaarSmf(setMet({ ...q, id: 'p-z' }, { soort: null }), { meta: false }), a)) zelfde++;
+    }
+    return zelfde;
+  };
+  const netjes = rondreis(true), alles = rondreis(false);
+  ok(`L3-rondreis zonder meta, raster bekend en niet dubbelzinnig: bytegewijs hetzelfde (${netjes}/1000)`, netjes === 1000, `${netjes}/1000`);
+  ok(`L3-rondreis zonder meta, helemaal willekeurig: ${alles}/1000 bytegewijs hetzelfde (grens 950; jury 2851/3000 op haar generator)`, alles >= 950, `${alles}/1000`);
   ok('negeerMeta: ook met meta de noten lezen', smfNaarPatronen(setNaarSmf(KICK_SET), { negeerMeta: true })[0].bron === 'noten');
   const kapot = setNaarSmf(KICK_SET);
   const i = hex(kapot).replace(/ /g, '').indexOf(Buffer.from(META + '{').toString('hex')) / 2 + META.length;

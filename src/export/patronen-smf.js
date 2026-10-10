@@ -17,7 +17,7 @@
  *             `omlopen` omlopen, en (standaard) het patroon zelf als tekst
  *             `varve:patroon {...}`, zodat het verliesvrij terugkomt.
  */
-import { notenInVenster, omloopTicks, PPQN } from '../engine/patronen/venster.js';
+import { notenInVenster, omloopTicks, swingTicks, PPQN } from '../engine/patronen/venster.js';
 import { normaliseerPatroon, normaliseerSet, PLEKKEN, TRACKS, TEMPO } from '../engine/patronen/model.js';
 import { ascii, leesSmf, maatsoortMeta, meta, mtrk, smf, tempoMeta } from '../lib/smf.js';
 
@@ -154,9 +154,12 @@ const tekstUit = (data) => String.fromCharCode(...data);
  *      (de rondreis in de test). bron: 'meta'.
  * L2 — zonder meta (een bestand uit Logic, of `negeerMeta`): noot-aan en noot-uit
  *      per (kanaal, noot) koppelen (noot-aan met velocity 0 = uit), duur in stappen,
- *      snelheid = v/127, stap = dichtstbijzijnde stap (mod lengte), micro = de
- *      rest, ZONDER swingcorrectie. bron: 'noten', met de melding 'benaderd' in
- *      `fouten`. (De betere stapkeuze, L3 in docs/PATRONEN.md §8, is nog niet gebouwd.)
+ *      snelheid = v/127. bron: 'noten', met de melding 'benaderd' in `fouten`.
+ * L3 — de stap: van de stappen rond de noot (k − 1, k, k + 1) die waarvan de micro
+ *      NA de swing van het raster het kleinst is (binnen −0,5..0,5); bij gelijk de
+ *      eerste. Zo valt een swing-75-noot niet op de volgende stap. Met het juiste
+ *      raster (lengte, deling, swing) en |micro| klein genoeg is het bestand na opnieuw
+ *      schrijven bytegewijs hetzelfde (test: 1000 patronen).
  *
  * @param lengte, deling, swing  het raster voor L2 (een bestand zonder meta zegt het niet)
  * @param omlopen  L2: noten op of na stap omlopen × lengte vallen weg (en staan in `fouten`)
@@ -189,7 +192,7 @@ export function smfNaarPatronen(bytes, { lengte = 16, deling = 4, swing = 50, om
 
 /** L2: noten zonder meta naar een patroon; wat benaderd of weggelaten is komt in `fouten`. */
 function uitNoten(noten, ev, { ppqn, lengte, deling, swing, omlopen, fouten }) {
-  fouten.push('benaderd: stap zonder swingcorrectie');
+  fouten.push(`benaderd: stap met de kleinste micro na swing ${swing}`);
   const st = ppqn / deling;
   const open = new Map();
   const paren = [];
@@ -213,9 +216,23 @@ function uitNoten(noten, ev, { ppqn, lengte, deling, swing, omlopen, fouten }) {
   const res = [];
   let weg = 0;
   for (const n of paren.sort((a, b) => a.aan - b.aan || a.noot - b.noot)) {
-    const k = Math.round(n.aan / st);
-    if (k >= omlopen * lengte) { weg++; continue; }
-    res.push({ stap: k % lengte, noot: n.noot, snelheid: n.v / 127, duur: (n.uit - n.aan) / st, micro: (n.aan - k * st) / st });
+    // L3: de stap met de kleinste |micro| na swing, binnen de omlopen van het bestand: een
+    // noot op de laatste stap die door swing of micro op de omloopgrens valt, hoort bij die
+    // laatste stap, niet bij een omloop die er niet is.
+    const k0 = Math.round(n.aan / st), maxK = omlopen * lengte - 1;
+    if (k0 - 1 > maxK) { weg++; continue; }
+    let best = null;
+    for (let k = Math.max(0, k0 - 1); k <= Math.min(k0 + 1, maxK); k++) {
+      const micro = (n.aan - k * st - swingTicks(k % lengte, swing, st)) / st;
+      if (micro < -0.5 - 1e-9 || micro > 0.5 + 1e-9) continue;
+      if (!best || Math.abs(micro) < Math.abs(best.micro) - 1e-12) best = { k, micro };
+    }
+    if (!best && k0 > maxK) { weg++; continue; }   // past nergens en ligt voorbij de laatste stap
+    if (!best) {
+      const k = Math.min(k0, maxK);
+      best = { k, micro: Math.min(0.5, Math.max(-0.5, (n.aan - k * st - swingTicks(k % lengte, swing, st)) / st)) };
+    }
+    res.push({ stap: best.k % lengte, noot: n.noot, snelheid: n.v / 127, duur: (n.uit - n.aan) / st, micro: best.micro });
   }
   if (weg) fouten.push(`${weg} noot/noten na omloop ${omlopen} weggelaten`);
   return normaliseerPatroon({ naam: '', lengte, deling, swing, noten: res }, { fouten });
