@@ -342,7 +342,7 @@ export class Engine extends Emitter {
    * Geweigerd alleen als de speeltrack een ander instrument is en er twee of
    * meer Drums zijn: dan niet raden. De focus staat bij het knippen meestal
    * op het nummer, dus met twee Drums beslist de speeltrack zonder dat je de
-   * focus verzet; de melding noemt altijd de track (review 1, punt 2).
+   * focus verzet; de melding noemt altijd de track (review 10 okt).
    * @returns {{ id: string|null, reden?: string }}
    */
   drumsDoel() {
@@ -362,7 +362,7 @@ export class Engine extends Emitter {
 
   /**
    * Sampler-pad n (0..7) als eigen buffer op drumpad `pad` (9..16) van de
-   * Drums van `drumsDoel()` (of van track `id` als je die meegeeft). De
+   * Drums van `drumsDoel()` (de enige weg naar de doeltrack). De
    * Drums maken zelf een kopie met in- en uitfade; de sampler-pad blijft
    * staan. Welke pad bij welke sampler-pad hoort, kent de action-laag
    * (DRUMPAD_VAN_SAMPLER: dezelfde fysieke Maschine-pad); de engine blijft
@@ -377,23 +377,20 @@ export class Engine extends Emitter {
    * @returns {{ ok: boolean, reden?: string, id?: string, pad?: number, noot?: number,
    *   bpm?: number|null, maatBpm?: number|null, gewichten?: number[]|null, stemNamen?: string[]|null }}
    */
-  samplerNaarDrums(n, { pad, id } = {}) {
+  samplerNaarDrums(n, { pad } = {}) {
     // Welke drumpad bij welke sampler-pad hoort, kiest de aanroeper (de action:
     // DRUMPAD_VAN_SAMPLER). Zonder pad geen stille andere indeling.
     if (pad == null) return { ok: false, reden: 'geen drumpad gekozen' };
     if (!Number.isInteger(pad) || pad <= KIT_PADS || pad > AANTAL_PADS) return { ok: false, reden: `drumpad ${pad}: alleen 9–16 (1–8 is de kit)` };
     const sp = this.sampler?.pads?.[n];
     if (!sp?.buffer) return { ok: false, reden: `sampler-pad ${n + 1} is leeg` };
-    let doel = id;
-    if (doel === undefined) {
-      const d = this.drumsDoel();
-      if (!d.id) return { ok: false, reden: d.reden };
-      doel = d.id;
-    }
-    if (!doel) return { ok: false, reden: 'er staat nergens een instrument (zet eerst Drums op een track)' };
+    // Eén weg naar de doeltrack: drumsDoel() (de speeltrack, anders de enige
+    // Drums). Een optie om een track af te dwingen had geen aanroeper en gaf
+    // verkeerde redenen; weg (review 10 okt, ronde 2).
+    const d = this.drumsDoel();
+    if (!d.id) return { ok: false, reden: d.reden };
+    const doel = d.id;
     const inst = this.instrumentOp(doel);
-    if (!inst) return { ok: false, reden: `track ${nrVan(doel)} heeft geen instrument` };
-    if (typeof inst.laadPad !== 'function') return { ok: false, reden: `track ${nrVan(doel)}: ${inst.naam ?? inst.soort} heeft geen pads 9–16 (alleen de Drums)` };
     const naam = `S${n + 1}${sp.bron != null ? ` · track ${sp.bron}` : ''}`;
     if (!inst.laadPad(pad, sp.buffer, naam)) return { ok: false, reden: `drumpad ${pad} nam het stuk niet aan` };
     const m = maatVan(this.syncMaster());
@@ -430,7 +427,7 @@ export class Engine extends Emitter {
       // speelt dat patroon daar stil zonder dat je weet waarom.
       const opPads9 = (p) => p?.noten?.some((x) => padVanNoot(x.noot) > KIT_PADS);
       if (typeof inst.laadPad === 'function' && pt.set.tracks[nr].some(opPads9)) {
-        this.emit('melding', { tekst: `track ${nrVan(id)}: de patronen gebruiken drumpads 9–16, en die zijn na herladen leeg (zet ze terug met de knoppen 1→13 … 8→12 onder de sampler, of je gekoppelde knop; bewaren komt later)`, soort: 'info', duur: 8000 });
+        this.emit('melding', { tekst: `track ${nrVan(id)}: de patronen gebruiken drumpads 9–16, en die zijn na herladen leeg; stonden er stukken uit de sampler op, zet ze dan terug met de knoppen 1→13 … 8→12 onder de sampler (of je gekoppelde knop); bewaren komt later`, soort: 'info', duur: 8000 });
       }
     }
     return terug;

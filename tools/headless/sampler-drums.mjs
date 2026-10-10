@@ -483,7 +483,7 @@ try {
   meld(`koppelmodus na een klik op 8→12: learn ${leer.busy ? 'wacht' : 'wacht niet'} op "${leer.action}"; drumpad 12 ${leer.gevuld ? 'gevuld (fout: de klik ging door)' : 'leeg (de klik ging niet door, zoals het hoort)'}`);
   ok('de koppelmodus ziet de knop: klik 8→12 = koppel sampler.8.drums (en voert hem niet uit)', leer.busy && leer.action === 'sampler.8.drums' && !leer.gevuld);
 
-  // 7b. De laptopmaat die styles.css zelf noemt (1440 × 790, review 1 punt 6): een verse
+  // 7b. De laptopmaat die styles.css zelf noemt (1440 × 790, review 10 okt): een verse
   // pagina, dan elke stand apart open en weer dicht.
   console.log('\n7b. het scherm op de laptopmaat 1440 × 790');
   await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 790, deviceScaleFactor: 1, mobile: false });

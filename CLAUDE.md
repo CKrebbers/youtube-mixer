@@ -1473,8 +1473,9 @@ Volledig in `docs/INSTRUMENTEN.md` (§3 het contract, §6 de track). Wat een bou
   `engine.samplerNaarDrums(n, { pad })`; `pad` is verplicht (de engine kent de tabel niet).
   `drumsDoel()` = de speeltrack als die de Drums heeft, anders de enige Drums; geweigerd alleen
   als de speeltrack een ander instrument is en er twee of meer Drums zijn. Pads 9–16 staan NIET
-  in de set of het log (`OVERSLAAN`): na herladen zijn ze leeg, en `herstelInstrumenten` meldt
-  het als een patroon ze gebruikt.
+  in de set; `sampler.N.drums` staat wel in het log, maar terugspelen slaat hem over
+  (`OVERSLAAN`): na herladen zijn ze leeg, en `herstelInstrumenten` meldt het als een patroon
+  ze gebruikt ("stonden er stukken uit de sampler op, zet ze dan terug …").
 
 ## Master en limiter (gebouwd 5 okt)
 

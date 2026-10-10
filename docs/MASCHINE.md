@@ -342,6 +342,9 @@ sampler (zoals de modus sampler op de APC) op de Maschine zit.
   4 tellen; "(T2)" = bewaard; "knipt"; een pad die speelt omgekeerd), onderaan welke sectie een sectie-pad nu pakt;
   rechts draaiknop 5–8 (5 = volume), onderaan "SAMPLING = weer spelen".
 - Bus: `sampler.length.up/down` zijn nieuw (de rest bestond al). De Maschine-kaart kent de padmodus sampler.
+- **Dezelfde pad in de speelmodus** (crossover, 10 okt): na `sampler.N.drums` ligt het stuk van pad 13–16 / 9–12 in
+  SAMPLING op drumpad 13–16 / 9–12 van de Drums, dus op dezelfde fysieke pad in de speelmodus (S1–S4 → 13–16,
+  S5–S8 → 9–12; docs/INSTRUMENTEN.md "Uit de sampler"). Geen vaste Maschine-knop: koppelen met learn.
 - Getest: `test/maschine-sampler.test.mjs` (de pads per rij, SHIFT, loslaten, ◄ ►, draaiknop 5, lampjes, scherm,
   uitleg), `engine.test` (length.up/down), en headless `tools/headless/maschine-sampler.mjs` met de ECHTE sampler
   (knippen, spelen op de tel, stoppen, tellen, volume, leeg). NIET getest: met de echte Maschine.

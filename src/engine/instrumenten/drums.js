@@ -11,8 +11,8 @@ import { startDrempel } from '../overgang.js';
  *
  *   pads 1–8   een kit, ter plekke gerekend met een zaad (de geluiden van
  *              Elektronlearn, aangevuld met een clap en een tom)
- *   pads 9–16  leeg; laadPad() zet er een AudioBuffer op (straks de
- *              samplerpads van Varve: stukken uit nummers)
+ *   pads 9–16  leeg; laadPad() zet er een AudioBuffer op (de sampler-pads:
+ *              sampler.N.drums, docs/INSTRUMENTEN.md "Uit de sampler")
  *
  * Per aanslag één stem zoals de PLAYER van Elektronlearn, met native nodes:
  *

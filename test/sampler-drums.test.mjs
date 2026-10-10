@@ -98,7 +98,7 @@ ok('geen sampler.N.drums.clear (W8: pas als Clay het mist)', ![1, 2, 3, 4, 5, 6,
 ok('label noemt de drumpad en de Maschine-pad', /drumpad 13 .*Maschine-pad 13/.test(metaOf('sampler.1.drums')?.label ?? '') && /drumpad 12 .*Maschine-pad 12/.test(metaOf('sampler.8.drums')?.label ?? ''));
 ok('lege sampler-pad: geweigerd met reden', eng.samplerNaarDrums(0, { pad: 13 }).ok === false && /sampler-pad 1 is leeg/.test(eng.samplerNaarDrums(0, { pad: 13 }).reden));
 {
-  // Review 1, punt 4: geen stille standaard-pad in de engine (de oude jury-tabel zette S1 op 9).
+  // Review 10 okt: geen stille standaard-pad in de engine (de oude jury-tabel zette S1 op 9).
   const zonder = eng.samplerNaarDrums(0, {}), kaal = eng.samplerNaarDrums(0), kit = eng.samplerNaarDrums(0, { pad: 5 }), te = eng.samplerNaarDrums(0, { pad: 17 });
   ok(`zonder pad: geweigerd met "geen drumpad gekozen" (${zonder.reden}), ook zonder opties`, zonder.ok === false && zonder.reden === 'geen drumpad gekozen' && kaal.ok === false && kaal.reden === 'geen drumpad gekozen');
   ok(`pad buiten 9–16: geweigerd (${kit.reden}; ${te.reden})`, !kit.ok && /alleen 9–16 \(1–8 is de kit\)/.test(kit.reden) && !te.ok && /alleen 9–16/.test(te.reden) && !eng.samplerNaarDrums(0, { pad: 13.5 }).ok);
@@ -145,7 +145,7 @@ ok('terugspelen slaat sampler.N.drums over, de rest van de sampler niet',
   OVERSLAAN.test('sampler.3.drums') && !OVERSLAAN.test('sampler.3') && !OVERSLAAN.test('sampler.3.section') && !OVERSLAAN.test('sampler.3.clear') && !OVERSLAAN.test('sampler.3.drumsx'));
 const u1 = beschrijf('sampler.1.drums'), u8 = beschrijf('sampler.8.drums');
 ok(`uitleg S1: kort "${u1.kort}", lang noemt C3 (48) en de strip`, u1.kort === '→drum 13' && /noot C3 \(48\)/.test(u1.lang) && /fader, filter, echo, galm, fx, koptelefoon/.test(u1.lang));
-ok('uitleg lampje: fel = er ligt een stuk op drumpad 13, niet per se de knip van nu (review 1, punt 9)', /fel = er ligt een stuk op drumpad 13 \(niet per se de knip van nu\)/.test(u1.lang));
+ok('uitleg lampje: fel = er ligt een stuk op drumpad 13, niet per se de knip van nu (review 10 okt)', /fel = er ligt een stuk op drumpad 13 \(niet per se de knip van nu\)/.test(u1.lang));
 ok(`uitleg S8: kort "${u8.kort}", noot B2 (47)`, u8.kort === '→drum 12' && /noot B2 \(47\)/.test(u8.lang));
 ok('geen uitleg meer voor .drums.clear (valt terug op de standaard)', beschrijf('sampler.1.drums.clear').kort !== 'drum 9 −');
 
@@ -165,8 +165,15 @@ invoke('sampler.2.drums', true);
 ok('… de action meldt het als fout', meldingen.at(-1).soort === 'fout' && /meer dan één Drums/.test(laatste()));
 eng.setFocus('G');
 ok('focus op 7 (een Drums): die is het', eng.drumsDoel().id === 'G' && eng.samplerNaarDrums(1, { pad: 14 }).id === 'G');
+{
+  // Review 10 okt (ronde 2): de optie `id` is weg; er is één weg naar de doeltrack (drumsDoel()).
+  // Vroeger gaf { id: 'Z' } "track 0 heeft geen instrument" en { id: null } "nergens een instrument".
+  const z = eng.samplerNaarDrums(1, { pad: 14, id: 'Z' }), nul = eng.samplerNaarDrums(1, { pad: 14, id: null });
+  ok(`geen optie id meer: { id: 'Z' } en { id: null } gaan via drumsDoel() naar track 7 (${z.reden ?? z.id}, ${nul.reden ?? nul.id})`,
+    z.ok && z.id === 'G' && nul.ok && nul.id === 'G');
+}
 for (const id of ['C', 'G', 'H']) eng.zetInstrument(id, null);
-// Review 1, punt 2: zo werk je echt. Je knipt met de focus op het NUMMER (track 1), niet op
+// Review 10 okt: zo werk je echt. Je knipt met de focus op het NUMMER (track 1), niet op
 // een Drums. Dan beslist de speeltrack (waar noot 48 ook heen gaat): geen weigering.
 eng.setFocus('A');
 eng.zetInstrument('G', 'drums');
@@ -215,7 +222,7 @@ ok('[1, 1, 1, 1]: geen stems-tekst', !/stems/.test(drumMelding(0, { ...r, gewich
 ok('[1,25 × 4] (schaal 0,8 van de splitter: alle stems aan): geen stems-tekst', stemsInKnip([1.25, 1.25, 1.25, 1.25], S4) === '');
 ok('zang op half niveau [1, 1, 1, 0,5]: " · niet alle stems" (niets is weg, wel anders)', stemsInKnip([1, 1, 1, 0.5], S4) === 'niet alle stems');
 {
-  // Review 1, punt 3: de echte keten. Een deck met stems (zoals laadStems ze zet), de echte
+  // Review 10 okt: de echte keten. Een deck met stems (zoals laadStems ze zet), de echte
   // kill-knoppen en deck.knipGewichten (niveau × kill × 1/schaal, met "rest" als groep bij
   // 4 stems): de index van de gewichten hoort bij die van stems.namen.
   const d = eng.deck('D');
@@ -269,8 +276,12 @@ console.log('\nna herladen (H8)');
   ok(`track 2 terug met de Drums; de patronen gebruiken noot 48 (drumpad 13): een melding (${nieuw.join(' | ')})`,
     terug.includes('B') && nieuw.some((t) => /^track 2: de patronen gebruiken drumpads 9–16, en die zijn na herladen leeg/.test(t)));
   ok('track 4 (alleen de kit, noot 36): geen melding', terug.includes('D') && !nieuw.some((t) => /^track 4:/.test(t)));
-  ok('de melding zegt hoe je ze terugzet in gewone taal (de knoppen 1→13 … 8→12), niet met een action-id (review 1, punt 8)',
-    nieuw.some((t) => /zet ze terug met de knoppen 1→13 … 8→12 onder de sampler, of je gekoppelde knop; bewaren komt later/.test(t)) && !nieuw.some((t) => /sampler\.N\.drums/.test(t)));
+  ok('de melding zegt hoe je ze terugzet in gewone taal (de knoppen 1→13 … 8→12), niet met een action-id (review 10 okt)',
+    nieuw.some((t) => /zet ze dan terug met de knoppen 1→13 … 8→12 onder de sampler \(of je gekoppelde knop\); bewaren komt later/.test(t)) && !nieuw.some((t) => /sampler\.N\.drums/.test(t)));
+  // Ronde 2, punt 3: pads 9–16 kunnen ook altijd leeg geweest zijn (een Drums-patroon op noot 60 = drumpad 9
+  // zonder crossover). Dus geen bevel "zet ze terug", maar een voorwaarde: "stonden er stukken uit de sampler op".
+  ok('de melding stuurt niet de verkeerde kant op: alleen terugzetten als er stukken uit de sampler op stonden',
+    nieuw.some((t) => /leeg; stonden er stukken uit de sampler op, zet ze dan terug/.test(t)) && !nieuw.some((t) => /leeg \(zet ze terug/.test(t)));
   for (const id of ['B', 'D']) eng.zetInstrument(id, null);
   pt.laadSet({ tracks: { 3: [{ noten: [{ stap: 0, noot: 60 }] }] }, instrumenten: { 3: { soort: 'drums' } } });
   const m1 = meldingen.length;
@@ -282,6 +293,20 @@ console.log('\nna herladen (H8)');
   eng.herstelInstrumenten();
   ok('noot 48 op een Poly: geen melding (geen pads)', !meldingen.slice(m2).some((m) => /drumpads 9–16/.test(m.tekst)));
   eng.zetInstrument('C', null);
+}
+
+console.log('\nde proef staat in de speellijst (review 10 okt, ronde 2)');
+{
+  // Clay loopt een proefavond af in de Controlekamer; alleen wat daar staat komt in proef/sessie.json.
+  const { SPEELLIJST } = await import('../src/controle/speellijst.js');
+  const vragen = readFileSync(new URL('../docs/VRAGEN.md', import.meta.url), 'utf8');
+  const blok = SPEELLIJST.find((b) => b.id === 'crossover');
+  ok(`blok crossover op avond 2 of 3 (${blok?.titel})`, !!blok && /^Avond [23] · Crossover/.test(blok.titel));
+  ok('met de punten zet, strip, pfl, stems en patroon', blok?.punten.map((p) => p.id).join() === 'cx-zet,cx-strip,cx-pfl,cx-stems,cx-patroon');
+  const tekst = blok?.punten.map((p) => `${p.doe} ${p.let}`).join(' ') ?? '';
+  ok('de proef noemt de knop 1→13, de melding, PFL en "stems: drums"', /1→13/.test(tekst) && /drumpad 13 van track 8 \(noot C3 · 48\)/.test(tekst) && /PFL/.test(tekst) && /stems: drums/.test(tekst));
+  ok('met de terugval zonder hub (schermklavier, Xboard49)', /Zonder hub: het schermklavier/.test(tekst) && /Xboard49/.test(tekst));
+  ok('de vragen CX1–CX5 staan in docs/VRAGEN.md', [1, 2, 3, 4, 5].every((k) => vragen.includes(`**CX${k}. `)));
 }
 
 console.log('\nhet scherm (index.html, zonder DOM gelezen)');

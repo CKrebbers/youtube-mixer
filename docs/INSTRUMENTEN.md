@@ -443,15 +443,20 @@ verplicht (zonder: "geen drumpad gekozen"; buiten 9–16: geweigerd, 1–8 is de
   `1→13` drukt), donker violet = kan, uit = kan niet (sampler-pad leeg of geen Drums).
 - **Niet bewaard**: na herladen zijn 9–16 leeg. Gebruikt een patroon ze (een noot die op
   9–16 valt, ook via de terugval mod 16), dan zegt `herstelInstrumenten` het: "track N: de
-  patronen gebruiken drumpads 9–16, en die zijn na herladen leeg (zet ze terug met de
-  knoppen 1→13 … 8→12 onder de sampler, of je gekoppelde knop; bewaren komt later)".
-  Bewaren is stap 2.
+  patronen gebruiken drumpads 9–16, en die zijn na herladen leeg; stonden er stukken uit
+  de sampler op, zet ze dan terug met de knoppen 1→13 … 8→12 onder de sampler (of je
+  gekoppelde knop); bewaren komt later". De voorwaarde staat erin omdat de set niet weet
+  of er ooit iets op lag: een patroon op noot 60 (= drumpad 9) zonder crossover speelde daar
+  altijd al stil. Bewaren is stap 2.
 - **Leegmaken** is er niet: een nieuwe `sampler.N.drums` overschrijft (`wisPad` blijft in
   de engine, voor als je het mist).
-- **Terugspelen** slaat `sampler.N.drums` over (instrumenten staan niet in het log).
-- **Naar Logic** (MIDI-export van een patroon): noten 44–51 komen aan als noten zonder
-  klank (General MIDI: 44 = pedaal-hihat); de padnaam (`S1 · track 2`) hoort in de
-  `varve:patroon`-meta, de audio bij de stems-stap van produceren-uit.
+- **Terugspelen**: `sampler.N.drums` staat wel in het log, maar terugspelen slaat hem over
+  (`OVERSLAAN`): de instrumenten zelf staan niet in het log, dus hij zou de drumpads van nu
+  overschrijven met een stuk dat er toen misschien niet lag (docs/HANDELINGENLOG.md).
+- **Naar Logic** (nog niet gebouwd; komt met produceren-uit): in een MIDI-export komen
+  noten 44–51 aan zonder het stuk; een GM-drumkit speelt er iets anders op (44 =
+  pedaal-hihat). De padnaam (`S1 · track 2`) hoort dan in de meta, de audio bij de
+  stems-stap.
 
 **Koppelen**: MIDI (bovenbalk) → filter "drumpad" → leer → druk de knop. Of met de muis:
 de acht knoppen `1→13 … 8→12` onder de sampler-pads (ook in de koppelmodus: klik
@@ -479,8 +484,11 @@ library-nummer (`StreamBron.knip`); niet gemeten met echte stems (de stems-tekst
 alleen in Node getest, met de echte `deck.knipGewichten` en `STEM_STANDEN`); de koptelefoon
 alleen in een 4-kanaals OfflineAudioContext, niet op het samengestelde apparaat; het scherm
 alleen op 1440 × 900 en 1440 × 790 (met en zonder videopaneel en de rijen instrument en
-patronen), niet op de iPad (de knoppen zijn 20 px hoog, klein om aan te raken) of een
-kleiner venster.
+patronen), niet op de iPad (de knoppen zijn 20 px hoog, klein om aan te raken). Onder
+790 px hoog (review 10 okt, headless gemeten, niet op een echt apparaat): op 1180 × 740 met
+een rij open loopt de pagina 34 px over de rand in plaats van 8 px (de knoppen kosten 26 px);
+op 1280 × 720 zonder rij vallen de knoppen net onder de rand; op 1024 breed met het
+videopaneel open past het opschrift `1→13` niet. Dat zijn bestaande grenzen van de layout.
 
 ### De stem
 
