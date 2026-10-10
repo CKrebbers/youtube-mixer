@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const M = await import('../src/standen/stand-model.js');
-const { normaliseerStand, naamGeldig, DELEN, VERBODEN_DELEN, GERESERVEERD, SCHEMA, NACHT_REM, STANDAARD_APPARAAT, LABEL, nogNietToegepast } = M;
+const { normaliseerStand, naamGeldig, DELEN, VERBODEN_DELEN, GERESERVEERD, SCHEMA, NACHT_REM, STANDAARD_APPARAAT, LABEL, MAX_BYTES, nogNietToegepast } = M;
 const { pasToe, STANDAARD } = await import('../server/nacht.js');
 
 const fails = [];
@@ -58,6 +58,14 @@ ok(`device xboard49: fout (alleen ${STANDAARD_APPARAAT})`, fout({ mapping: { ...
 ok('een volledig document zonder device: fout', fout({ mapping: { name: 'x', rules: [] } }, 'mapping'));
 ok('een andere tekst dan "standaard": fout', fout({ mapping: 'mijn' }, 'mapping'));
 ok('groter dan 64 KiB: fout', fout({ mapping: { ...verschil, rules: Array.from({ length: 2000 }, (_, i) => ({ in: `cc:0:${i}`, action: 'track.1.volume.lang.genoeg', mode: 'absolute' })) } }, 'mapping'));
+{
+  // Gemeten zoals het in het bestand komt (ingesprongen): compact past hij, in het bestand niet (review 10 okt, punt 11).
+  const groot = { ...verschil, rules: Array.from({ length: 900 }, (_, i) => ({ in: `cc:0:${i}`, action: 'track.1.volume', mode: 'absolute' })) };
+  const compact = JSON.stringify(groot).length, ingesprongen = JSON.stringify({ delen: { mapping: groot } }, null, 2).length;
+  ok(`compact ${compact} B, in het bestand ${ingesprongen} B: fout, want het bestand zou boven 64 KiB komen`, compact < MAX_BYTES && ingesprongen > MAX_BYTES && fout({ mapping: groot }, 'mapping'));
+  const klein = { ...verschil, rules: groot.rules.slice(0, 300) };
+  ok('300 regels (ingesprongen < 64 KiB) is goed', goed({ mapping: klein }));
+}
 ok('de standaardmapping zelf (231 kB) past bewust niet', fout({ mapping: JSON.parse(readFileSync(`${wortel}mappings/apc40mk2.json`, 'utf8')) }, 'mapping'));
 
 // ---- nacht: alleen remmen ---------------------------------------------------------
@@ -88,6 +96,8 @@ ok('master zonder sjabloon fout', fout({ master: {} }, 'master'));
 ok('hub { set, mixerVia } goed; leeg goed', goed({ hub: { set: 'studio', mixerVia: true } }) && goed({ hub: {} }));
 ok('hub.mixerVia "ja" fout', fout({ hub: { mixerVia: 'ja' } }, 'hub'));
 ok('hub.set als getal fout', fout({ hub: { set: 1 } }, 'hub'));
+ok('hub.set is een bestandsnaam: "studio; rm -rf ~", "../x", "a b" fout; "scene-kit" en "dj" goed (review 10 okt, punt 6)',
+  ['studio; rm -rf ~', '../x', 'a b', '', 'x'.repeat(61)].every((set) => fout({ hub: { set } }, 'hub')) && goed({ hub: { set: 'scene-kit' } }) && goed({ hub: { set: 'dj' } }));
 ok('hub met een adres fout (onbekende sleutel)', fout({ hub: { set: 'dj', adres: 'ws://localhost:7700/app' } }, 'hub'));
 ok('pakket { profiel: "apc" } goed; profiel 3 fout', goed({ pakket: { profiel: 'apc' } }) && fout({ pakket: { profiel: 3 } }, 'pakket'));
 ok('beeld { aan, latentieMs: 120 } goed', goed({ beeld: { aan: true, latentieMs: 120 } }));
@@ -109,7 +119,8 @@ ok('nog niet toegepast: master en beeld, niet nacht', nogNietToegepast({ delen: 
 
 // ---- namen -----------------------------------------------------------------------
 console.log('\nnamen');
-ok('apc, avond-2, Thuis_1 zijn goede namen', ['apc', 'avond-2', 'Thuis_1'].every(naamGeldig));
+ok('apc, avond-2, thuis_1, 3 zijn goede namen', ['apc', 'avond-2', 'thuis_1', '3'].every(naamGeldig));
+ok('hoofdletters geweigerd: APC, Thuis_1, Apc (de schijf van de Mac ziet APC.json en apc.json als één bestand)', ['APC', 'Thuis_1', 'Apc'].every((x) => !naamGeldig(x)));
 ok('actief, keuzes, terug zijn gereserveerd', ['actief', 'keuzes', 'terug'].every((x) => GERESERVEERD.has(x) && !naamGeldig(x)));
 ok('"a b", "", "../x", 61 tekens en een getal geweigerd', ['a b', '', '../x', 'x'.repeat(61), 3].every((x) => !naamGeldig(x)));
 ok('het label in de Controlekamer is "Opstelling"', LABEL === 'Opstelling');

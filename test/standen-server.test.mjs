@@ -75,6 +75,13 @@ try {
   ok('PUT op de vaste namen actief, keuzes, terug: geen opslag (405)', (await put('/api/standen/actief', { stand: nieuw })).status === 405
     && (await put('/api/standen/keuzes', { stand: nieuw })).status === 405 && (await put('/api/standen/terug', { stand: nieuw })).status === 405);
   ok('PUT zonder stand: 400', (await put('/api/standen/mijn', { versie: null })).status === 400);
+  ok('PUT en GET op "APC": 400 "kleine letters" (review punt 7)', await (async () => { const r = await put('/api/standen/APC', { stand: nieuw, versie: null }); return r.status === 400 && /kleine letters/.test(r.j.fout) && (await get('/api/standen/APC')).status === 400; })());
+  ok('PUT met hub.set "studio; rm -rf ~": 400 (review punt 6)', (await put('/api/standen/mijn', { stand: { schema: 1, delen: { hub: { set: 'studio; rm -rf ~' } } }, versie: null })).status === 400);
+  ok('PUT met een body boven 65 KiB: 413 (de kop zegt het al), geen verbroken verbinding (review punt 11)', await (async () => {
+    const groot = JSON.stringify({ stand: { schema: 1, uitleg: 'x'.repeat(70 * 1024), delen: {} }, versie: null });
+    const r = await fetch(`${B}/api/standen/groot`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: groot }).catch((e) => ({ status: `fout: ${e.message}` }));
+    return r.status === 413 && !existsSync(join(standenMap, 'groot.json'));
+  })());
   ok('PUT met nacht { aan: true }: 400 "alleen remmen"', await (async () => { const r = await put('/api/standen/mijn', { stand: { schema: 1, delen: { nacht: { aan: true } } } }); return r.status === 400 && /remmen/.test(r.j.fout); })());
   const p1 = await put('/api/standen/mijn', { stand: nieuw, versie: null });
   ok('PUT een nieuwe stand: 200, bron eigen', p1.status === 200 && p1.j.bron === 'eigen' && existsSync(join(standenMap, 'mijn.json')));
@@ -131,6 +138,13 @@ try {
   ok('actief overleeft de herstart: alles, hub studio via de mixer', na.naam === 'alles' && na.hub?.set === 'studio' && na.hub?.mixerVia === true);
   ok('de eigen standen ook (5 namen: vier voorbeelden plus mijn; apc nu als eigen)', (await get('/api/standen')).j.standen.length === 5
     && (await get('/api/standen')).j.standen.find((s) => s.naam === 'apc').bron === 'eigen');
+  // Review punt 1: maschine raakt mapping noch nacht; "terug" zet dan ook niets terug.
+  await post('/api/nacht', { aan: true });
+  await post('/api/standen/maschine/activeer');
+  await post('/api/nacht', { aan: false });
+  const tm = await post('/api/standen/terug');
+  ok('na maschine (geen mapping, geen nacht) en de nacht met de hand uit: terug zet niets terug, de nacht blijft uit',
+    tm.status === 200 && tm.j.delen.length === 0 && tm.j.raakte.length === 0 && (await get('/api/nacht')).j.aan === false);
 } finally {
   server.kill('SIGTERM');
   await Promise.race([new Promise((z) => server.on('exit', z)), wacht(5000)]);

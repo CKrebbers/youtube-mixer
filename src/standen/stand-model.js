@@ -27,8 +27,16 @@
  */
 
 export const SCHEMA = 1;
-/** Dezelfde regel als de namen van setplannen (server/plannen.js). */
-export const NAAM = /^[\w-]{1,60}$/;
+/**
+ * Een standnaam is ook een bestandsnaam: alleen KLEINE letters, cijfers, - en _.
+ * Strenger dan de setplannen (server/plannen.js): de schijf van de Mac ziet
+ * `APC.json` en `apc.json` als hetzelfde bestand, dus hoofdletters zouden twee
+ * namen voor één stand geven (review 10 okt).
+ */
+export const NAAM = /^[a-z0-9_-]{1,60}$/;
+export const NAAM_UITLEG = 'een standnaam is kleine letters, cijfers, - en _ (hooguit 60; niet actief, keuzes of terug)';
+/** Een hub-set is een bestandsnaam in AV-app-hub/sets (zonder .json). */
+export const HUB_SET = /^[\w-]{1,60}$/;
 /** Vaste routenamen onder /api/standen/: geen stand mag zo heten. */
 export const GERESERVEERD = new Set(['actief', 'keuzes', 'terug']);
 /** Het enige apparaat waarvoor een stand een mapping mag zetten (eigen constante, geen import uit src/ui/). */
@@ -69,6 +77,8 @@ export const NACHT_REM = 'een stand kan de nacht alleen remmen: { aan: false } o
 export const naamGeldig = (n) => typeof n === 'string' && NAAM.test(n) && !GERESERVEERD.has(n);
 
 const isObject = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
+/** Bytes in UTF-8 (TextEncoder bestaat in Node én de browser; geen import nodig). */
+const bytes = (s) => new TextEncoder().encode(s).length;
 const korteTekst = (x, max = 200) => typeof x === 'string' && x.trim().length > 0 && x.length <= max;
 
 /** Elke sleutel buiten de eigen sleutels van een deel is een fout (geeft de eerste, of null). */
@@ -92,7 +102,8 @@ function controleerDeel(deel, w, { valideerNacht }) {
       if (!Array.isArray(w.rules)) return { fout: 'een mapping heeft rules nodig (een lijst)' };
       if (w.kind === 'diff' && (typeof w.device !== 'string' || !w.device)) return { fout: 'een mapping-verschil zonder device' };
       if (w.device !== STANDAARD_APPARAAT) return { fout: `een stand zet alleen een mapping voor ${STANDAARD_APPARAAT} (niet "${w.device ?? 'zonder apparaat'}")` };
-      if (JSON.stringify(w).length > MAX_BYTES) return { fout: 'mapping te groot (meer dan 64 KiB): gebruik "standaard" of je eigen verschil' };
+      // Gemeten zoals het in het bestand komt (ingesprongen, UTF-8), zodat opslaan niet alsnog 413 geeft.
+      if (bytes(JSON.stringify({ delen: { mapping: w } }, null, 2)) > MAX_BYTES) return { fout: 'mapping te groot (meer dan 64 KiB in het bestand): gebruik "standaard" of je eigen verschil' };
       return { waarde: w };
     }
     case 'nacht': {
@@ -116,7 +127,7 @@ function controleerDeel(deel, w, { valideerNacht }) {
       return { waarde: { sjabloon: w.sjabloon } };
     case 'hub':
       if (!isObject(w)) return { fout: 'hub is { set?: "<hub-set>", mixerVia?: true|false }' };
-      if ('set' in w && !korteTekst(w.set, 60)) return { fout: 'hub.set is de naam van een hub-set (tekst)' };
+      if ('set' in w && !(typeof w.set === 'string' && HUB_SET.test(w.set))) return { fout: 'hub.set is de naam van een hub-set: letters, cijfers, - en _ (bv. "studio")' };
       if ('mixerVia' in w && typeof w.mixerVia !== 'boolean') return { fout: 'hub.mixerVia is true of false' };
       return { waarde: { ...('set' in w ? { set: w.set } : {}), ...('mixerVia' in w ? { mixerVia: w.mixerVia } : {}) } };
     case 'pakket':

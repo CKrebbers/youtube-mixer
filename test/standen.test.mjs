@@ -5,11 +5,12 @@
 // vier regels bewaart (zoals lib.zet/haal: via JSON).
 // Draai met: node test/standen.test.mjs
 import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const { Standen, StandFout, beschrijfMapping } = await import('../server/standen.js');
+const { Standen, StandFout, beschrijfMapping, nachtTekst } = await import('../server/standen.js');
 const { Kaart } = await import('../server/kaart.js');
 const { Nacht, pasToe, STANDAARD, nachtDatum } = await import('../server/nacht.js');
 const { vingerafdruk } = await import('../src/control/mapping.js');
@@ -43,7 +44,7 @@ function nepLib(begin = {}) {
 let teller = 0;
 /** Een vers geheel in een eigen submap. `nu` is 10 okt 14:00 (de nacht van 10 okt). */
 function maak({ nu = new Date(2026, 9, 10, 14, 0), profielen = async () => null, hubSets = async () => ['dj', 'studio'],
-  speeltDeck = () => false, lib = nepLib({ mapping: VIER }), kaartBestand = kaartPad } = {}) {
+  speeltDeck = () => false, lib = nepLib({ mapping: VIER }), kaartBestand = kaartPad, leesBestand = readFile } = {}) {
   const sub = join(map, `geheel-${++teller}`);
   mkdirSync(sub, { recursive: true });
   const kaart = new Kaart({ pad: kaartBestand, db: ':memory:', library: { alleIds: () => [], track: () => null }, log: () => {} });
@@ -54,7 +55,7 @@ function maak({ nu = new Date(2026, 9, 10, 14, 0), profielen = async () => null,
     map: join(sub, 'standen'), voorbeelden: join(wortel, 'tools', 'standen', 'voorbeelden'),
     lib, nacht, kaart, speeltDeck, profielen, hubSets, klok: () => nu, log: (s) => logs.push(s),
     valideerNacht: (d) => pasToe(STANDAARD, d),
-    sjablonen: async () => SJABLONEN, standaardMapping: async () => STD,
+    sjablonen: async () => SJABLONEN, standaardMapping: async () => STD, leesBestand,
   });
   return { standen, nacht, kaart, lib, sub, nachtPad, logs, map: join(sub, 'standen') };
 }
@@ -262,7 +263,9 @@ try {
   {
     const { standen } = maak();
     const v = await standen.verschil('apc');
-    ok('verschil("apc"): nacht van "uit" naar "uit · vannacht niet", nu', v.delen.nacht.van === 'uit' && v.delen.nacht.naar === 'uit · vannacht niet' && v.delen.nacht.moment === 'nu');
+    ok(`verschil("apc"): nacht van "uit" naar "uit · vannacht niet", ${v.delen.nacht.moment}`, v.delen.nacht.van === 'uit' && v.delen.nacht.naar === 'uit · vannacht niet' && v.delen.nacht.moment === 'geldt voor de nacht van 10 op 11 okt');
+    ok(`… de krat met zijn naam uit de kaart: ${v.delen.kaart.van} → ${v.delen.kaart.naar} (review punt 10)`, v.delen.kaart.van === '—' && v.delen.kaart.naar === 'proefkrat');
+    ok('nachtTekst: over de maandgrens en bij onzin', nachtTekst('2026-10-31') === 'de nacht van 31 okt op 1 nov' && nachtTekst('x') === 'de komende nacht');
     ok('… master — → Dub-worp (mixer volgt nog niet), krat (kies hem in de kaart)', v.delen.master.van === '—' && v.delen.master.naar === 'Dub-worp' && /mixer volgt nog niet/.test(v.delen.master.moment) && /kies hem in de kaart/.test(v.delen.kaart.moment));
     ok('… geen mapping-deel (apc noemt geen mapping)', !('mapping' in v.delen));
     const h = await standen.verschil('alles');
@@ -270,6 +273,16 @@ try {
     await standen.activeer('apc');
     ok('na activeren: master van Dub-worp naar Dub-worp', (await standen.verschil('alles')).delen.master.van === 'Dub-worp');
     ok('verschil van een onbekende stand gooit 404', (await gooit(() => standen.verschil('nergens')))?.code === 404);
+  }
+  {
+    // 's Ochtends: de nacht van gisteren is voorbij, "vannacht niet" geldt voor de komende (review punt 3).
+    const { standen, nacht } = maak({ nu: new Date(2026, 9, 17, 10, 0) });
+    nacht.zet({ aan: true });
+    const v = await standen.verschil('apc');
+    ok(`verschil("apc") om 10:00 op 17 okt: ${v.delen.nacht.moment}`, v.delen.nacht.moment === 'geldt voor de nacht van 17 op 18 okt' && v.delen.nacht.naar === 'aan · vannacht niet');
+    await standen.activeer('apc');
+    ok(`… activeren om 10:00: vandaagNietDatum ${nacht.instellingen.vandaagNietDatum}, en de nacht van 17 op 18 okt (02:00) remt: ${nacht.magNu(new Date(2026, 9, 18, 2, 0))}`,
+      nacht.instellingen.vandaagNietDatum === '2026-10-17' && nacht.magNu(new Date(2026, 9, 18, 2, 0)) === 'vandaag niet' && nacht.vandaagNiet === true);
   }
 
   // ---- vastleggen ---------------------------------------------------------------------------------------
@@ -296,6 +309,22 @@ try {
     const r = await standen.vastleggen('nieuw', null);
     const g = await standen.lees('nieuw');
     ok('vastleggen op een nieuwe naam zonder eigen mapping: mapping "standaard", geen nachtdeel (de nacht staat aan)', r.code === 200 && g.stand.delen.mapping === 'standaard' && !('nacht' in g.stand.delen));
+  }
+  {
+    // Review punt 4: "leg vast" om je mapping te bewaren haalt de nachtrem niet uit de stand.
+    const { standen, nacht } = maak();
+    nacht.zet({ aan: true });   // de nacht staat aan, zonder "vandaag niet"
+    const r = await standen.vastleggen('apc', (await standen.lees('apc')).versie);
+    const g = await standen.lees('apc');
+    ok('vastleggen("apc") met de nacht aan: de rem { vannacht: false } blijft in de stand', r.code === 200 && g.stand.delen.nacht?.vannacht === false && !('aan' in g.stand.delen.nacht));
+    ok(`… en het antwoord zegt het: "${r.antwoord.opmerkingen?.[0]}"`, /nachtrem uit de opstelling behouden \(vannacht niet\)/.test(r.antwoord.opmerkingen?.[0] ?? '') && r.antwoord.delen.includes('nacht'));
+    nacht.zet({ aan: false });
+    const r2 = await standen.vastleggen('laptop', (await standen.lees('laptop')).versie);
+    ok('laptop met de nacht uit: { aan: false }, geen opmerking (de rem van nu)', r2.code === 200 && (await standen.lees('laptop')).stand.delen.nacht.aan === false && r2.antwoord.opmerkingen.length === 0);
+    nacht.zet({ aan: true, vandaagNiet: true });
+    await standen.vastleggen('laptop', (await standen.lees('laptop')).versie);
+    const gl = (await standen.lees('laptop')).stand.delen.nacht;
+    ok('laptop met de nacht aan + vandaag niet: beide remmen (de oude blijft, de nieuwe komt erbij)', gl.aan === false && gl.vannacht === false);
   }
 
   // ---- terug ------------------------------------------------------------------------------------------------
@@ -326,6 +355,77 @@ try {
     await standen.terug();
     ok('terug zet "vannacht niet" ook terug', nacht.vandaagNiet === false && nacht.instellingen.vandaagNietDatum === null);
   }
+  {
+    // Review punt 1, scenario A: apc noemt geen mapping; daarna koppelt Clay in de mixer een vijfde regel.
+    const { standen, lib } = maak();
+    await standen.activeer('apc');
+    lib.zet('mapping', { ...VIER, rules: [...VIER.rules, { in: 'cc:0:45', action: 'track.5.filter', mode: 'absolute' }] });
+    const t = await standen.terug();
+    ok(`A: apc (geen mapping) → Clay koppelt een 5e regel → terug: delen ${t.delen.join(',') || 'geen'}, regels ${lib.haal('mapping').rules.length} (5)`,
+      lib.haal('mapping').rules.length === 5 && !t.delen.includes('mapping') && t.raakte.join() === 'nacht');
+  }
+  {
+    // Scenario B: de nacht staat aan; maschine noemt geen nacht; Clay zet de nacht zelf uit; terug.
+    const { standen, nacht } = maak();
+    nacht.zet({ aan: true });
+    await standen.activeer('maschine');
+    nacht.zet({ aan: false });
+    const t = await standen.terug();
+    ok(`B: maschine (geen nacht) → Clay zet de nacht uit → terug: nacht.aan ${nacht.instellingen.aan} (false), delen [${t.delen}]`,
+      nacht.instellingen.aan === false && t.delen.length === 0 && t.raakte.length === 0);
+    ok('… .vorige/ van maschine zegt raakt: [] en .actief.json na het terugzetten ook', (await standen.actief()).raakt?.length === 0 && (await standen.actief()).teruggezet);
+  }
+  {
+    // De nacht met de hand veranderd NA een activering die hem zette: terug laat hem staan.
+    const { standen, nacht, lib } = maak();
+    nacht.zet({ aan: true });
+    await standen.schrijf('std', { schema: 1, delen: { mapping: 'standaard', nacht: { aan: false } } }, null);
+    await standen.activeer('std');
+    ok('.actief.json: raakt mapping en nacht, met hoe ze erbij stonden (na)', (await standen.actief()).raakt.join() === 'mapping,nacht' && typeof (await standen.actief()).na.nacht === 'string');
+    nacht.zet({ vandaagNiet: true });   // Clay drukt na het activeren zelf "vandaag niet"
+    const t = await standen.terug();
+    ok(`terug na een eigen wijziging van de nacht: mapping terug (4 regels), nacht blijft uit met "vandaag niet" (${t.overgeslagen.map((o) => `${o.deel}: ${o.reden}`).join('; ')})`,
+      lib.haal('mapping').rules.length === 4 && nacht.instellingen.aan === false && nacht.vandaagNiet === true
+      && t.delen.join() === 'mapping' && t.overgeslagen.length === 1 && t.overgeslagen[0].deel === 'nacht');
+    const t2 = await standen.terug();
+    ok('nog eens terug: alleen de mapping opnieuw (wat het terugzetten raakte), de nacht blijft', t2.delen.join() === 'mapping' && lib.haal('mapping').rules.length === 0 && nacht.instellingen.aan === false);
+  }
+  {
+    // Review punt 5: terug naar "geen eigen mapping" = een leeg verschil, niet null (anders wint de reserve in de browser).
+    const { standen, lib } = maak({ lib: nepLib({}) });
+    await standen.schrijf('eigen', { schema: 1, delen: { mapping: VIER } }, null);
+    await standen.activeer('eigen');
+    ok('vooraf: geen eigen mapping; na activeren: 4 regels', lib.haal('mapping').rules.length === 4);
+    const t = await standen.terug();
+    const m = lib.haal('mapping');
+    ok(`terug: een leeg verschil op de standaard (kind ${m?.kind}, ${m?.rules?.length} regels), niet null`,
+      t.delen.join() === 'mapping' && m !== null && m.kind === 'diff' && m.rules.length === 0 && m.removed.length === 0 && m.base === vingerafdruk(STD));
+  }
+  {
+    // Een oud .vorige-bestand zonder `raakt` (vóór deze ronde): mapping en nacht, zoals eerst.
+    const { standen, lib, nacht, map: smap } = maak();
+    mkdirSync(join(smap, '.vorige'), { recursive: true });
+    writeFileSync(join(smap, '.vorige', '000001-oud.json'), JSON.stringify({ tijd: 'x', door: 'activeer', voor: 'oud', mapping: { ...VIER, rules: VIER.rules.slice(0, 2) }, nacht: { aan: false, vandaagNietDatum: null } }));
+    nacht.zet({ aan: true });
+    const t = await standen.terug();
+    ok('een oud .vorige zonder raakt: mapping en nacht terug', t.delen.join() === 'mapping,nacht' && lib.haal('mapping').rules.length === 2 && nacht.instellingen.aan === false);
+  }
+
+  // ---- namen: alleen kleine letters ------------------------------------------------------------------------
+  console.log('\nnamen: kleine letters (review punt 7)');
+  {
+    const { standen, map: smap } = maak();
+    ok('schrijf("APC") en lees("APC"): 400 en null', (await standen.schrijf('APC', { schema: 1, delen: {} }, null)).code === 400 && (await standen.lees('APC')) === null);
+    mkdirSync(smap, { recursive: true });
+    writeFileSync(join(smap, 'Feest.json'), JSON.stringify({ schema: 1, titel: 'Feest', delen: {} }));
+    writeFileSync(join(smap, 'Apc.json'), JSON.stringify({ schema: 1, titel: 'Apc met de hand', delen: {} }));
+    const l = await standen.lijst();
+    const namen = l.map((x) => x.naam);
+    const ongevoelig = existsSync(join(smap, 'feest.json'));   // de schijf van de Mac: Feest.json = feest.json
+    ok(`lijst: alleen kleine letters, geen dubbele (${namen.join(', ')}; schijf ${ongevoelig ? 'hoofdletterongevoelig' : 'hoofdlettergevoelig'})`,
+      namen.every((x) => x === x.toLowerCase()) && new Set(namen).size === namen.length && namen.filter((x) => x === 'apc').length === 1);
+    if (ongevoelig) ok('… met de hand gemaakt Feest.json heet "feest" en Apc.json gaat als eigen "apc" vóór het voorbeeld', namen.includes('feest') && l.find((x) => x.naam === 'apc').bron === 'eigen');
+  }
 
   // ---- keuzes voor de bewerker ----------------------------------------------------------------------------
   console.log('\nkeuzes');
@@ -354,15 +454,58 @@ try {
     const { spawnSync } = await import('node:child_process');
     const mk = spawnSync('mkfifo', [fifo]);
     if (mk.status !== 0) console.log('  -- mkfifo niet beschikbaar: lezen binnen de tijd niet getoetst');
-    else {
+    else try {
       standen.leesMs = 150;
       const t0 = performance.now();
       const e = await gooit(() => standen.lees('traag'));
       const ms = performance.now() - t0;
       ok(`een bestand dat niet terugkomt: 503 "niet lokaal beschikbaar (iCloud?)" na ${Math.round(ms)} ms`, e instanceof StandFout && e.code === 503 && /iCloud/.test(e.message) && ms < 1000);
+      // Review punt 2: de tijdgrens geeft het antwoord op, niet de draad. Tien keer pollen (de Controlekamer
+      // doet dat elke 2 s) mag niet meer dan die ene draad vasthouden: een gewoon bestand lezen moet blijven gaan.
+      const t1 = performance.now();
+      let lijsten = 0;
+      for (let i = 0; i < 10; i++) { const l = await standen.lijst(); if (l.some((x) => x.naam === 'traag' && x.fouten === 1)) lijsten++; }
+      const msLijst = performance.now() - t1;
+      ok(`10× lijst() met het hangende bestand: elke keer "traag" met een fout, samen ${Math.round(msLijst)} ms (geen 10× wachten)`, lijsten === 10 && msLijst < 1000);
+      const t2 = performance.now();
+      const gewoon = await Promise.race([readFile(join(wortel, 'CLAUDE.md')).then(() => 'ok'), new Promise((z) => setTimeout(() => z('HANGT'), 1500))]);
+      const msGewoon = performance.now() - t2;
+      ok(`… daarna een gewoon bestand lezen: ${gewoon} in ${Math.round(msGewoon)} ms (< 100; vóór de fix hing dit na 4 polls)`, gewoon === 'ok' && msGewoon < 100);
+    } finally {
+      // Altijd de pijp vrijgeven: een draad die erop blijft wachten houdt ook het einde van dit proces tegen.
       const { openSync, closeSync, constants } = await import('node:fs');
       try { closeSync(openSync(fifo, constants.O_WRONLY | constants.O_NONBLOCK)); } catch {}
     }
+  }
+  {
+    // Ongewijzigd = uit het geheugen: 50 polls lezen geen enkel bestand opnieuw.
+    let gelezen = 0;
+    const { standen } = maak({ leesBestand: (p) => { gelezen++; return readFile(p); } });
+    await standen.overzicht();
+    const eerst = gelezen;
+    for (let i = 0; i < 50; i++) await standen.overzicht();
+    ok(`overzicht(): de eerste keer ${eerst} bestanden gelezen (de vier voorbeelden), daarna 50× zonder wijziging: ${gelezen - eerst}`, eerst === 4 && gelezen === eerst);
+    await standen.activeer('apc');
+    const voor = gelezen;
+    for (let i = 0; i < 10; i++) await standen.overzicht();
+    ok(`na activeren: .actief.json één keer gelezen (${gelezen - voor}), daarna weer uit het geheugen`, gelezen - voor === 1 && (await standen.overzicht()).actief.naam === 'apc');
+    const vb = await standen.lees('apc');
+    await standen.schrijf('apc', { ...vb.stand, titel: 'Nieuw' }, vb.versie);
+    ok('na een eigen opslag: de nieuwe inhoud (niet uit een oud geheugen)', (await standen.lijst()).find((x) => x.naam === 'apc').titel === 'Nieuw');
+  }
+  {
+    // Ook de lezers van buiten (racks/sjablonen.json, de standaardmapping, profielen, hub-sets staan in de repo, dus in iCloud):
+    // een die nooit terugkomt wordt één keer gestart, niet bij elke klik opnieuw.
+    let gestart = 0;
+    const g = maak();
+    const st = new Standen({ map: g.map, voorbeelden: join(wortel, 'tools', 'standen', 'voorbeelden'), lib: g.lib, nacht: g.nacht, kaart: g.kaart,
+      leesMs: 100, log: () => {}, sjablonen: () => { gestart++; return new Promise(() => {}); } });
+    const t0 = performance.now();
+    const k1 = await st.keuzes();
+    const k2 = await st.keuzes();
+    const k3 = await st.keuzes();
+    ok(`een hangende sjablonen-lezer: keuzes() 3× zonder sjablonen in ${Math.round(performance.now() - t0)} ms, maar ${gestart}× gestart`,
+      gestart === 1 && [k1, k2, k3].every((k) => k.sjablonen.length === 0) && performance.now() - t0 < 1000);
   }
 } finally {
   rmSync(map, { recursive: true, force: true });

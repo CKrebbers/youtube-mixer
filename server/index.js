@@ -29,7 +29,7 @@ import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
 import { Kaart, KaartFout, STANDAARD_PAD as KAART_STANDAARD_PAD } from './kaart.js';
 import { Nacht, pasToe as nachtPasToe, STANDAARD as NACHT_STANDAARD } from './nacht.js';
 import { Standen, StandFout } from './standen.js';
-import { naamGeldig as standNaamGeldig, MAX_BYTES as STAND_MAX_BYTES } from '../src/standen/stand-model.js';
+import { naamGeldig as standNaamGeldig, NAAM_UITLEG as STAND_NAAM_UITLEG, MAX_BYTES as STAND_MAX_BYTES } from '../src/standen/stand-model.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -1703,7 +1703,7 @@ async function standenRoute(req, res, pad, mediatype) {
     if (!m) return json(res, 404, { fout: 'onbekend eindpunt' });
     let naam;
     try { naam = decodeURIComponent(m[1]); } catch { return json(res, 400, { fout: 'onleesbare naam' }); }
-    if (!standNaamGeldig(naam)) return json(res, 400, { fout: 'een standnaam is letters, cijfers, - en _ (niet actief, keuzes of terug)' });
+    if (!standNaamGeldig(naam)) return json(res, 400, { fout: STAND_NAAM_UITLEG });
     switch (m[2]) {
       case undefined:
         if (req.method === 'GET') {
@@ -1712,6 +1712,8 @@ async function standenRoute(req, res, pad, mediatype) {
         }
         if (req.method === 'PUT') {
           if (mediatype !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
+          // Te groot volgens de kop: meteen 413 (leesJson zou de verbinding verbreken in plaats van te antwoorden).
+          if (Number(req.headers['content-length']) > STAND_MAX_BYTES + 1024) return json(res, 413, { fout: 'stand te groot (meer dan 64 KiB)' });
           const body = await leesJson(req, STAND_MAX_BYTES + 1024);
           if (!body || typeof body !== 'object' || Array.isArray(body) || !body.stand) return json(res, 400, { fout: 'stuur { stand, versie } als JSON (hooguit 64 KiB)' });
           const r = await standen.schrijf(naam, body.stand, typeof body.versie === 'string' ? body.versie : null);
