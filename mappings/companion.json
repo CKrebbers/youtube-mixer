@@ -1,0 +1,7 @@
+{
+  "versie": 1,
+  "tabs": ["nu", "kaart", "beeld"],
+  "kaart": {
+    "kratten_bovenaan": ["slim:proefkrat", "slim:eigen-keuze", "slim:vertrouwd"]
+  }
+}

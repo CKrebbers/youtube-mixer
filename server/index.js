@@ -854,7 +854,7 @@ async function heranalyseOpAchtergrond() {
  * Wat de browser mag ophalen. Een witte lijst in plaats van "alles in de
  * projectmap": anders kon /.git/config of /media/library.db gewoon mee.
  */
-const MAG = [/^\/$/, /^\/(index|video|apc|maschine|plan|controle)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
+const MAG = [/^\/$/, /^\/(index|video|apc|maschine|plan|controle)\.html$/, /^\/companion\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
   /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin|stems\.wav)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
   /^\/plannen\/[\w-]+\.json$/, /^\/favicon\.ico$/];
 
@@ -1540,7 +1540,7 @@ const server = createServer(async (req, res) => {
 
     if (pad.startsWith('/api/')) return json(res, 404, { fout: 'onbekend eindpunt' });
 
-    await statisch(req, res, pad === '/' ? 'index.html' : pad === '/controle' ? 'controle.html' : pad);
+    await statisch(req, res, pad === '/' ? 'index.html' : pad === '/controle' ? 'controle.html' : pad === '/companion' ? 'companion.html' : pad);
   } catch (err) {
     // Eén kapot verzoek mag de server niet meenemen.
     try { json(res, 500, { fout: String(err?.message || err) }); } catch {}
@@ -1705,6 +1705,8 @@ await herstelStemsRij().catch((err) => console.error('[stems] de rij van voor de
 server.listen(POORT, '127.0.0.1', () => {
   console.log(`VARVE DJ  ·  http://localhost:${POORT}`);
   for (const naam of EXTRA_HOSTS) console.log(`ook via  ·  https://${naam}  (Tailscale, docs/TAILSCALE.md)`);
+  // Zonder VARVE_HOSTS krijgen iPad en iPhone (Tailscale) een 403: zeg dat hier, anders zie je het pas op de telefoon.
+  if (!EXTRA_HOSTS.size) console.log('alleen op deze Mac  ·  VARVE_HOSTS is leeg: iPad en iPhone krijgen 403 (docs/COMPANION.md)');
   console.log(`library: ${lib.aantalTracks()} nummers  ·  schema v${lib.versie}`);
   console.log(`yt-dlp ${tooling.ytdlp}  ·  ffmpeg ${tooling.ffmpeg ? 'ok' : 'ONTBREEKT'}`);
   // Meteen een backup (in een worker; gooit nooit), daarna elk uur als er iets veranderde.

@@ -167,6 +167,12 @@ try {
   ok('/controle en /controle.html geven de pagina', (await status('/controle')) === 200 && (await status('/controle.html')) === 200
     && (await (await fetch(`${B}/controle`)).text()).includes('Controlekamer'));
   ok('zijn script en opmaak komen door', (await status('/src/controle/controle.js')) === 200 && (await status('/src/controle/controle.css')) === 200);
+  // De companion (docs/COMPANION.md): dezelfde witte-lijstregels als de Controlekamer.
+  ok('/companion en /companion.html geven de companion', (await status('/companion')) === 200 && (await status('/companion.html')) === 200
+    && (await (await fetch(`${B}/companion`)).text()).includes('/src/companion/companion.js'));
+  ok('/companion.htm en /companion/ niet', (await status('/companion.htm')) === 404 && (await status('/companion/')) === 404);
+  ok('zijn script, opmaak en indeling komen door', (await status('/src/companion/companion.js')) === 200
+    && (await status('/src/companion/companion.css')) === 200 && (await status('/mappings/companion.json')) === 200);
   ok('proef/sessie.json zelf niet (alleen via de API)', (await status('/proef/sessie.json')) === 404);
   const zetPunt = (id, body, type = 'application/json') => fetch(`${B}/api/proef/${id}`, { method: 'PUT', headers: { 'content-type': type }, body: JSON.stringify(body) });
   ok('nog niets: leeg', Object.keys((await (await fetch(`${B}/api/proef`)).json()).items).length === 0);
