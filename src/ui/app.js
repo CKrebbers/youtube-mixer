@@ -155,6 +155,7 @@ const laden = opzetLaden({
   stems: stemsWachtrij,
 });
 window.library = laden.library;
+window.kaart = laden.kaart;     // de tab kaart (kaart-panel.js), voor de console en tools/headless/kaart.mjs
 // De STEMS-rij voor de track met focus (standaard dicht, knop "stems").
 const stemsPaneel = opzetStems({ engine, staat, wachtrij: stemsWachtrij, library: laden.library });
 const koptelefoonPaneel = opzetKoptelefoon({ engine });

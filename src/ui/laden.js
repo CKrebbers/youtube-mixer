@@ -2,6 +2,7 @@ import { DECK_IDS } from '../engine/engine.js';
 import { Beatgrid } from '../engine/beatgrid.js';
 import { trackVanDeck, read as readAction } from '../control/actions.js';
 import { LibraryPanel, isVideoBestand, isMediaBestand } from './library-panel.js';
+import { KaartPanel } from './kaart-panel.js';
 import { computePeaks, rmsDb, laadPeaks } from '../analysis/peaks.js';
 import { renderDemoTrack } from '../analysis/demo-track.js';
 import { meld } from './meldingen.js';
@@ -517,5 +518,24 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
   // onderaan melden, want met het paneel dicht zie je de strook niet.
   library.strook.meldBuiten = (tekst) => meld(tekst, 'fout');
 
-  return { laadBuffer, loadFile, library, libPaneel, laadVoorTerugspelen, laadLibrary };
+  // De tab "kaart" in hetzelfde paneel (docs/LIBRARY.md "De kaart-tab"): de
+  // muziekkaart als zoeklaag. Laden gaat door het library-paneel (zelfde weg
+  // als de ingest-strook); of een deck speelt weet hij via dezelfde `stand`.
+  let kaart = null;
+  try {
+    kaart = new KaartPanel({
+      root: libPaneel, decks: DECK_IDS, label: (id) => String(trackVanDeck(id)),
+      stand: (id) => {
+        const d = engine.deck(id), inst = engine.instrumentOp?.(id);
+        if (inst) return inst.stand().klinkt > 0 ? 'speelt' : 'geladen';
+        return !d.buffer ? 'leeg' : d.playing ? 'speelt' : 'geladen';
+      },
+      laad: (track, deck) => library.laadTrack(track, deck),
+    });
+  } catch (err) {
+    // Zonder de markup (een oudere index.html) blijft de library gewoon werken.
+    console.warn('[kaart] tab niet opgezet:', err.message);
+  }
+
+  return { laadBuffer, loadFile, library, kaart, libPaneel, laadVoorTerugspelen, laadLibrary };
 }

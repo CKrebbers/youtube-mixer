@@ -130,6 +130,8 @@ src/
                     maschine-kaart-plan.js  plaatsing + wat een control doet = legUit() van de Maschine (label, soort). Puur.
                     toon-weergave.js toonsoort als tekst: kolomkop, focus, library, tooltip. Puur.
                     library-lijst.js de library als virtuele lijst: kolommen, cellen, pagina-cache. Puur.
+                    kaart-lijst.js  de muziekkaart als lijst (tab kaart): kolommen, badges, stand → knop, filters, kratten, nachtteksten. Puur.
+                    kaart-panel.js  de tab kaart in het library-paneel: zoeken, kratten, haal binnen/zoek, wenslijst, nachtwachtrij (docs/LIBRARY.md "De kaart-tab")
                     hotcue-opslag.js hotcues per nummer bewaren: welk nummer op welke track, één verzoek tegelijk
                     mapping-opslag.js je eigen mapping als verschil: standaard ophalen, omzetten, bewaren, herstellen
                     ingest-strook.js de ingest-wachtrij in het library-paneel: plakken, voortgang, ×, laadknoppen
@@ -231,6 +233,7 @@ test/
   library.test.mjs  database, effect-racks per link, cascade bij verwijderen, migraties (SCHEMA.length)
   backup.test.mjs   backups: geldige kopie uit de WAL, niet dubbel, opruimen, mislukken, niet via HTTP
   library-lijst.test.mjs  virtuele lijst, pagina-cache (ook de race bij een nieuwe sortering), kolommen
+  kaart-lijst.test.mjs  de tab kaart als rekenwerk, en de nep-server (tools/headless/kaart-nep.mjs) tegen het contract van de kaart-API
   ingest.test.mjs   pipeline zonder netwerk; ffmpeg maakt zijn eigen testmateriaal
   wachtrij.test.mjs wachtrij, annuleren (ook midden in een nep-download), playlist, dubbel, voortgang, strook
   wachtrij-server.test.mjs  eigen server + nep-yt-dlp: urls, volgorde, DELETE, dubbel, upload in de rij, herstart
