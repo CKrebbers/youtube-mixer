@@ -6,7 +6,7 @@
 // Draai met: node test/stand-bewerker.test.mjs
 import { readFileSync } from 'node:fs';
 
-const { bewerkerHtml, leesBewerker, nachtKeuze, nieuweNaamGeldig, BEWERKBAAR } = await import('../src/controle/stand-bewerker.js');
+const { bewerkerHtml, leesBewerker, nachtKeuze, nieuweNaamGeldig, nieuweNaam, BEWERKBAAR } = await import('../src/controle/stand-bewerker.js');
 const { normaliseerStand, DELEN } = await import('../src/standen/stand-model.js');
 
 const fails = [];
@@ -93,7 +93,8 @@ ok('elke uitkomst van de bewerker komt foutloos door normaliseerStand', ['', 'ui
   normaliseerStand(leesBewerker({ nacht, mapping, krat: 'slim:x', master: 'Getij', hubSet: 'dj', mixerVia: 'ja', profiel: 'laptop', titel: 't' })).fouten.length === 0)));
 
 console.log('\nnamen en grenzen');
-ok('nieuweNaamGeldig: "avond-3" ja; "a b", "actief", "" nee', nieuweNaamGeldig('avond-3') && !nieuweNaamGeldig('a b') && !nieuweNaamGeldig('actief') && !nieuweNaamGeldig(''));
+ok('nieuweNaamGeldig: "avond-3" ja; "a b", "actief", "", "Avond3" nee', nieuweNaamGeldig('avond-3') && !nieuweNaamGeldig('a b') && !nieuweNaamGeldig('actief') && !nieuweNaamGeldig('') && !nieuweNaamGeldig('Avond3'));
+ok('nieuweNaam: " Avond3 " wordt "avond3" (geldig); "Mijn Feest" blijft ongeldig (spatie)', nieuweNaam(' Avond3 ') === 'avond3' && nieuweNaamGeldig(nieuweNaam(' Avond3 ')) && !nieuweNaamGeldig(nieuweNaam('Mijn Feest')) && nieuweNaam(3) === '');
 ok('BEWERKBAAR zijn bekende delen, geen verboden', BEWERKBAAR.every((d) => Object.hasOwn(DELEN, d)));
 ok('nachtKeuze: { aan: false, vannacht: false } → beide; null → ""', nachtKeuze({ aan: false, vannacht: false }) === 'beide' && nachtKeuze(null) === '');
 const bron = readFileSync(new URL('src/controle/stand-bewerker.js', wortel), 'utf8');

@@ -2,12 +2,14 @@
 //
 //   node tools/standen/activeer.mjs                 de lijst, en welke actief is
 //   node tools/standen/activeer.mjs apc             apc activeren, het verslag afdrukken
-//   node tools/standen/activeer.mjs --terug         de vorige mapping en nacht-rem terugzetten
+//   node tools/standen/activeer.mjs --terug         terugzetten wat de laatste activering veranderde (mapping en/of nacht)
 //   … --poort 8821                                  een andere server (standaard 8777)
 //
 // Praat alleen met de server (POST /api/standen/<naam>/activeer); de mixer herlaadt
 // nooit vanzelf. Eindigt met code 1 bij een onbekende stand, een fout van de server
 // of een fout in het verslag (waarschuwingen alleen: code 0).
+import { terugMelding } from '../../src/controle/stand-tegel.js';
+
 const args = process.argv.slice(2);
 const i = args.indexOf('--poort');
 const poort = i >= 0 ? Number(args[i + 1]) : 8777;
@@ -41,7 +43,9 @@ if (!naam) {
 if (naam === '--terug') {
   const { status, d } = await vraag('/api/standen/terug', true);
   if (status !== 200) { console.error(`terugzetten: ${status} ${d.fout ?? ''}`); process.exit(1); }
-  console.log(`vorige teruggezet (van ${d.uit}): ${lijst(d.delen)}`);
+  const m = terugMelding(d);
+  console.log(`${m.tekst} (de activering van ${d.uit})`);
+  for (const o of d.overgeslagen ?? []) console.log(`  blijft  ${o.deel}: ${o.reden}`);
   for (const f of d.fouten ?? []) console.error(`  fout  ${f.deel}: ${f.fout}`);
   process.exit(d.fouten?.length ? 1 : 0);
 }

@@ -106,6 +106,24 @@ export function verschilTekst(v) {
   return regels.length ? regels.join(' · ') : 'verandert niets op de server';
 }
 
+/**
+ * Een melding na "vorige terugzetten" (POST /api/standen/terug): wat er terug
+ * staat, of waarom niets. `raakte` = de delen die de laatste activering zette;
+ * `overgeslagen` = wat je daarna met de hand veranderde en dus blijft (rood).
+ */
+export function terugMelding(antwoord) {
+  const d = antwoord ?? {};
+  const delen = Array.isArray(d.delen) ? d.delen : [];
+  const overgeslagen = Array.isArray(d.overgeslagen) ? d.overgeslagen : [];
+  let tekst;
+  if (delen.length) tekst = `vorige teruggezet: ${delen.join(', ')}`;
+  else if (overgeslagen.length) tekst = `vorige teruggezet: niets (${overgeslagen.map((o) => o.deel).join(', ')} met de hand veranderd na de activering)`;
+  else if (Array.isArray(d.raakte) && !d.raakte.length) tekst = 'vorige teruggezet: niets (de laatste activering veranderde mapping en nacht niet)';
+  else tekst = 'vorige teruggezet: niets';
+  const rood = [...overgeslagen.map((o) => `${o.deel}: ${o.reden}`), ...(d.fouten ?? []).map((f) => `${f.deel}: ${f.fout}`)];
+  return { tekst, rood };
+}
+
 /** Een melding na activeren: wat er gebeurde, in één zin. Waarschuwingen en fouten apart (rood). */
 export function activeerMelding(antwoord) {
   const v = antwoord?.verslag ?? {};

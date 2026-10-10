@@ -5,7 +5,7 @@
 // Draai met: node test/stand-tegel.test.mjs
 import { readFileSync } from 'node:fs';
 
-const { standTegel, standRegel, mixerAdres, verschilTekst, activeerMelding, LABEL, MIXER_VIA_HUB, MIXER_GEWOON, SUB_MAX } = await import('../src/controle/stand-tegel.js');
+const { standTegel, standRegel, mixerAdres, verschilTekst, activeerMelding, terugMelding, LABEL, MIXER_VIA_HUB, MIXER_GEWOON, SUB_MAX } = await import('../src/controle/stand-tegel.js');
 const model = await import('../src/standen/stand-model.js');
 
 const fails = [];
@@ -84,6 +84,16 @@ const m = activeerMelding({ naam: 'apc', verslag: { toegepast: ['nacht'], gecont
 ok(`tekst: "${m.tekst}"`, m.tekst === 'apc actief: nacht, kaart nagekeken, master klaar voor de mixer');
 ok('fouten en waarschuwingen apart (rood)', m.rood.join('|') === 'pakket: x|krat leeg');
 ok('zonder verslag: "<naam> actief"', activeerMelding({ naam: 'laptop' }).tekst === 'laptop actief');
+
+console.log('\nde melding na "vorige terugzetten" (review punt 1)');
+ok('mapping en nacht terug', terugMelding({ delen: ['mapping', 'nacht'], raakte: ['mapping', 'nacht'], overgeslagen: [], fouten: [] }).tekst === 'vorige teruggezet: mapping, nacht');
+ok('na "alles" (alleen de nacht): "vorige teruggezet: nacht"', terugMelding({ delen: ['nacht'], raakte: ['nacht'] }).tekst === 'vorige teruggezet: nacht');
+const niets = terugMelding({ delen: [], raakte: [], overgeslagen: [], fouten: [] });
+ok(`de laatste activering raakte niets: "${niets.tekst}"`, niets.tekst === 'vorige teruggezet: niets (de laatste activering veranderde mapping en nacht niet)' && niets.rood.length === 0);
+const hand = terugMelding({ delen: ['mapping'], raakte: ['mapping', 'nacht'], overgeslagen: [{ deel: 'nacht', reden: 'met de hand veranderd na de activering: blijft zoals hij is' }], fouten: [] });
+ok(`de nacht met de hand veranderd: "${hand.tekst}", rood "${hand.rood[0]}"`, hand.tekst === 'vorige teruggezet: mapping' && hand.rood[0] === 'nacht: met de hand veranderd na de activering: blijft zoals hij is');
+ok('alleen overgeslagen: "niets (nacht met de hand veranderd …)"', /^vorige teruggezet: niets \(nacht met de hand veranderd/.test(terugMelding({ delen: [], raakte: ['nacht'], overgeslagen: [{ deel: 'nacht', reden: 'x' }] }).tekst));
+ok('een fout gaat ook rood; onzin geeft "niets"', terugMelding({ delen: [], fouten: [{ deel: 'mapping', fout: 'stuk' }] }).rood.join() === 'mapping: stuk' && terugMelding(null).tekst === 'vorige teruggezet: niets');
 
 console.log('\npuur');
 const bron = readFileSync(new URL('../src/controle/stand-tegel.js', import.meta.url), 'utf8');

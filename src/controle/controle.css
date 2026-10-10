@@ -56,6 +56,7 @@ h2{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
 .knop.hoofd:disabled{background:var(--panel2);border-color:var(--line);color:var(--dim)}
 .knop.klein{padding:4px 10px;font-size:12px}
 .knop.let-op{border-color:var(--warn);color:var(--warn)}
+.knop[hidden]{display:none}
 .openen .uitleg{flex-basis:100%}
 
 /* de opstelling (docs/STANDEN.md): kiezer + twee knoppen, daaronder wat activeren verandert */

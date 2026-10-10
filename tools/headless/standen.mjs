@@ -21,6 +21,7 @@ const tmp = mkdtempSync(join(tmpdir(), 'varve-standen-kijk-'));
 const GEEN_MIDI = 'delete Navigator.prototype.requestMIDIAccess; delete navigator.requestMIDIAccess;';
 
 const { maakNepYtdlp } = await import(join(WORTEL, 'test/nep-ytdlp.mjs'));
+const { komendeNacht, STANDAARD: NACHT_STANDAARD } = await import(join(WORTEL, 'server/nacht.js'));
 const { schrijfKaart } = await import(join(WORTEL, 'test/nep-kaart.mjs'));
 const kaartPad = join(tmp, 'varve-kaart.json');
 schrijfKaart(kaartPad);
@@ -129,7 +130,8 @@ try {
   await kies('apc');
   ok('onder de kiezer: wat activeren verandert', await tot(async () => /^Activeren: .*nacht: uit → uit · vannacht niet.*master: — → Dub-worp \(mixer volgt nog niet\)/.test(await tekst('stand-uitleg'))),
     (await tekst('stand-uitleg')).slice(0, 120));
-  ok('mixer openen: gewoon / (niets actief)', await ctl.ev(`document.getElementById('mixer-open').dataset.adres === '/' && document.getElementById('mixer-open').textContent === 'mixer openen'`));
+  ok('mixer openen: gewoon / (niets actief), geen knop "zonder hub"', await ctl.ev(`document.getElementById('mixer-open').dataset.adres === '/' && document.getElementById('mixer-open').textContent === 'mixer openen'
+    && document.getElementById('mixer-open-gewoon').hidden && !document.getElementById('mixer-open-gewoon').offsetParent`));
   ok('past op 1440×790 zonder zijwaarts scrollen', await geenZijwaarts());
   fotos.push(await foto(ctl, 'standen-1-geen.png', true));
 
@@ -146,7 +148,8 @@ try {
   ok(`… met de regel "${tg?.regel.replaceAll('\u00a0', ' ')}"`, /krat proefkrat \(kies hem in de kaart\)/.test(tg?.regel.replaceAll('\u00a0', ' ')) && /master Dub-worp: mixer volgt nog niet/.test(tg?.regel.replaceAll('\u00a0', ' ')));
   ok('de waarschuwingen staan ook als rode melding', (await ctl.ev(`[...document.querySelectorAll('.melding.fout')].map((m) => m.textContent)`)).some((m) => /avondpakket/.test(m)));
   const n = await ctl.ev(`fetch('/api/nacht').then((r) => r.json())`);
-  const vandaag = await ctl.ev(`(() => { const d = new Date(); if (d.getHours() < 12) d.setDate(d.getDate() - 1); return d.toLocaleDateString('sv-SE'); })()`);
+  // De komende nacht (nacht.js, komendeNacht): 's ochtends na 07:00 is dat de nacht van vandaag op morgen.
+  const vandaag = komendeNacht(new Date(), NACHT_STANDAARD.venster);
   ok(`fetch('/api/nacht') op de pagina: vannacht niet (${n.vandaagNiet}), aan blijft ${n.aan}`, n.vandaagNiet === true && n.aan === false);
   ok(`… vandaagNietDatum in nacht.json is de nacht van vandaag (${vandaag})`, await (async () => {
     const { readFileSync } = await import('node:fs');
@@ -162,6 +165,9 @@ try {
   ok('de knop "mixer openen" heeft de ?hub=-URL', await tot(() => ctl.ev(`document.getElementById('mixer-open').dataset.adres === '/?hub=ws://localhost:7700/app'`)));
   ok('… en zegt "mixer openen via de hub"; window.controle.mixerAdres() zegt hetzelfde',
     (await tekst('mixer-open')) === 'mixer openen via de hub' && (await ctl.ev('window.controle.mixerAdres()')) === '/?hub=ws://localhost:7700/app');
+  ok('daarnaast de uitweg "zonder hub" naar / (zichtbaar, niet geklikt) (review punt 8)', await tot(() => ctl.ev(`(() => { const g = document.getElementById('mixer-open-gewoon');
+    return !g.hidden && !!g.offsetParent && g.dataset.adres === '/' && g.textContent === 'zonder hub' && !g.disabled; })()`)));
+  fotos.push(await foto(ctl, 'standen-5-alles-zonder-hub.png', true));
   ok('de regel zegt "hub-set studio: start hem zelf (npm start -- studio)"', /hub-set studio: start hem zelf \(npm start -- studio\)/.test((await tegel())?.regel.replaceAll('\u00a0', ' ')));
   ok('nog steeds geen tweede tabblad (alleen de Controlekamer)', (await fetch(`http://127.0.0.1:${DEBUG}/json/list`).then((r) => r.json())).filter((d) => d.type === 'page').length === 1);
 
@@ -169,9 +175,10 @@ try {
   await klik('stand-terug');
   ok('één klik: "zeker? klik nog eens"', (await tekst('stand-terug')) === 'zeker? klik nog eens');
   await klik('stand-terug');
-  ok('tweede klik: melding "vorige teruggezet: mapping, nacht"', await tot(async () => (await meldingen()).some((m) => m === 'vorige teruggezet: mapping, nacht'), 3000));
+  ok('tweede klik: melding "vorige teruggezet: nacht" ("alles" noemt geen mapping, dus die blijft) (review punt 1)', await tot(async () => (await meldingen()).some((m) => m === 'vorige teruggezet: nacht'), 3000),
+    (await meldingen()).slice(-2).join(' | '));
   ok('de tegel: "geen", "vorige teruggezet hh:mm"', await tot(async () => { const t = await tegel(); return t?.waarde === 'geen' && /^vorige teruggezet \d\d:\d\d$/.test(t.sub); }, 3000));
-  ok('mixer openen weer gewoon /', await tot(() => ctl.ev(`document.getElementById('mixer-open').dataset.adres === '/'`)));
+  ok('mixer openen weer gewoon /, "zonder hub" weer weg', await tot(() => ctl.ev(`document.getElementById('mixer-open').dataset.adres === '/' && document.getElementById('mixer-open-gewoon').hidden`)));
   ok('de nacht: vannacht niet blijft (terug = vóór "alles", en toen gold het al door apc)', (await ctl.ev(`fetch('/api/nacht').then((r) => r.json())`)).vandaagNiet === true);
 
   console.log('\nbewerken zonder JSON');
@@ -191,7 +198,7 @@ try {
   ok('… melding "apc bewaard" en de status zegt nu "eigen bestand"', await tot(async () => (await meldingen()).includes('apc bewaard') && /eigen bestand/.test(await tekst('bw-status'))));
   await ctl.ev(`document.getElementById('bw-nieuw').value = 'a b'`);
   await klik('bw-bewaar-als');
-  ok('"bewaar als" met "a b": een melding, niets bewaard', await tot(async () => (await meldingen()).some((m) => /een naam is letters/.test(m))) && (await api('/api/standen')).standen.length === 4);
+  ok('"bewaar als" met "a b": een melding, niets bewaard', await tot(async () => (await meldingen()).some((m) => /een naam is kleine letters/.test(m))) && (await api('/api/standen')).standen.length === 4);
   await ctl.ev(`document.getElementById('bw-nieuw').value = 'proef-x'`);
   await klik('bw-bewaar-als');
   ok('"bewaar als" proef-x: 5 opties, proef-x gekozen', await tot(() => ctl.ev(`document.querySelectorAll('#stand-kies option').length === 5 && document.getElementById('stand-kies').value === 'proef-x'`)));
@@ -200,6 +207,16 @@ try {
   await api('/api/mapping', { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ mapping: { kind: 'diff', version: 3, device: 'apc40mk2', base: 'x', top: {}, rules: [{ in: 'cc:0:41', action: 'track.1.filter', mode: 'absolute' }], removed: [] } }) });
   ok('de bewerker toont proef-x', await tot(async () => /^proef-x · eigen bestand/.test(await tekst('bw-status'))));
+  // Review punt 9: een keuze gemaakt maar niet bewaard, dan "leg vast": niet stil weggooien.
+  await ctl.ev(`(() => { const s = document.querySelector('#bw-velden select[name="master"]'); s.value = 'Dub-worp'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await klik('bw-leg-vast');
+  ok('kies Dub-worp, "leg vast" zonder bewaren: melding "nog niet bewaard", niets vastgelegd', await tot(async () => (await meldingen()).some((m) => /je keuzes zijn nog niet bewaard/.test(m)))
+    && await (async () => { const g = await api('/api/standen/proef-x'); return g.stand.delen.master.sjabloon === 'Oplossen' && !g.stand.delen.mapping; })());
+  ok('… en de keuze staat nog in de bewerker', await ctl.ev(`document.querySelector('#bw-velden select[name="master"]').value === 'Dub-worp'`));
+  await ctl.ev(`document.getElementById('stand-bewerk').open = false`);   // dicht en open = de keuze loslaten
+  await wacht(300);
+  await ctl.ev(`document.getElementById('stand-bewerk').open = true`);
+  ok('bewerk dicht en open: de bewaarde waarde (Oplossen) staat er weer', await tot(() => ctl.ev(`document.querySelector('#bw-velden select[name="master"]')?.value === 'Oplossen' && /^proef-x · eigen bestand/.test(document.getElementById('bw-status').textContent)`)));
   await klik('bw-leg-vast');
   ok('"leg vast": GET /api/standen/proef-x heeft nu een mapping (1 regel)', await tot(async () => (await api('/api/standen/proef-x')).stand?.delen?.mapping?.rules?.length === 1));
   ok('… en de lijst "mapping" biedt "zoals bewaard (eigen, 1 regel)"', await tot(() => ctl.ev(`[...document.querySelectorAll('#bw-velden select[name="mapping"] option')].some((o) => o.textContent === 'zoals bewaard (eigen, 1 regel)' && o.selected)`)));
@@ -210,6 +227,11 @@ try {
   await klik('bw-bewaar');
   ok('bewaren na een wijziging van buiten: 409, melding "intussen veranderd", niets overschreven', await tot(async () => (await meldingen()).some((m) => /intussen veranderd/.test(m)))
     && (await api('/api/standen/proef-x')).stand.titel === 'Van buiten');
+  // Review punt 7: een naam met hoofdletters wordt kleine letters; Enter in het naamveld = "bewaar als" (niet de oude naam).
+  await ctl.ev(`(() => { const n = document.getElementById('bw-nieuw'); n.value = ' Feest2 '; n.focus(); n.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); })()`);
+  ok('"Feest2" + Enter: bewaard als feest2, gekozen in de kiezer, geen naam met hoofdletters', await tot(async () => (await meldingen()).includes('bewaard als feest2')
+    && await ctl.ev(`document.getElementById('stand-kies').value === 'feest2' && [...document.querySelectorAll('#stand-kies option')].every((o) => o.value === o.value.toLowerCase())`)));
+  ok('… en proef-x is niet overschreven (titel "Van buiten")', (await api('/api/standen/proef-x')).stand.titel === 'Van buiten' && (await api('/api/standen/feest2')).bron === 'eigen');
 
   console.log('\nsmal (390 px)');
   await maat(ctl, 390, 844);

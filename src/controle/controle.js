@@ -5,8 +5,8 @@ import { stemsTegel } from '../ui/stems-weergave.js';
 import { beeldTegel } from '../ui/beeld-weergave.js';
 import { backupTegel } from './backup-tegel.js';
 import { serverTegel } from './server-tegel.js';
-import { standTegel, mixerAdres, verschilTekst, activeerMelding, LABEL as STAND_LABEL, MIXER_VIA_HUB } from './stand-tegel.js';
-import { bewerkerHtml, leesBewerker, nieuweNaamGeldig } from './stand-bewerker.js';
+import { standTegel, mixerAdres, verschilTekst, activeerMelding, terugMelding, LABEL as STAND_LABEL, MIXER_VIA_HUB, MIXER_GEWOON } from './stand-tegel.js';
+import { bewerkerHtml, leesBewerker, nieuweNaamGeldig, nieuweNaam } from './stand-bewerker.js';
 
 /**
  * De Controlekamer (controle.html, docs/CONTROLEKAMER.md). Leest:
@@ -225,17 +225,25 @@ function tekenStand() {
     knop.title = open ? 'er is al een mixer-tabblad: gebruik dat (een tweede luistert niet naar de APC)'
       : viaHub ? `de opstelling zegt: via de hub (${knop.dataset.adres}); start de hub eerst` : '';
   }
+  // De uitweg zonder hub: alleen zichtbaar als de opstelling "via de hub" zegt (met ?hub= opent de mixer zelf geen MIDI).
+  const gewoon = $('mixer-open-gewoon');
+  gewoon.dataset.adres = MIXER_GEWOON;
+  gewoon.hidden = !viaHub;
+  if (!knop.dataset.bezig) gewoon.disabled = open;
   tekenKiezer();
 }
 
-$('mixer-open').addEventListener('click', async () => {
+/** De mixer openen op `adres`, maar nooit een tweede (de Web Lock zegt of er al een is). */
+async function openMixer(adres) {
   const knop = $('mixer-open');
   await leesMixer();
   if (stand.mixer?.open) { tekenStand(); meld('de mixer staat al open — gebruik dat tabblad', 'fout'); return; }
-  window.open(mixerAdres(stand.standen?.actief), '_blank');
-  knop.dataset.bezig = '1'; knop.disabled = true; knop.textContent = 'mixer gaat open…';
+  window.open(adres, '_blank');
+  knop.dataset.bezig = '1'; knop.disabled = true; $('mixer-open-gewoon').disabled = true; knop.textContent = 'mixer gaat open…';
   setTimeout(() => { delete knop.dataset.bezig; tekenStand(); }, 4000);
-});
+}
+$('mixer-open').addEventListener('click', () => openMixer(mixerAdres(stand.standen?.actief)));
+$('mixer-open-gewoon').addEventListener('click', () => openMixer(MIXER_GEWOON));
 
 // ---- de opstelling (docs/STANDEN.md) ----------------------------------------------
 
@@ -317,9 +325,9 @@ tweeKlik($('stand-activeer'), 'activeer', async () => {
 
 tweeKlik($('stand-terug'), 'vorige terugzetten', async () => {
   try {
-    const d = await postJson('/api/standen/terug');
-    meld(`vorige teruggezet: ${d.delen?.join(', ') || 'niets'}`);
-    for (const f of (d.fouten ?? []).slice(0, 3)) meld(`${f.deel}: ${f.fout}`, 'fout');
+    const { tekst, rood } = terugMelding(await postJson('/api/standen/terug'));
+    meld(tekst);
+    for (const r of rood.slice(0, 3)) meld(r, 'fout');
   } catch (err) { meld(`niet teruggezet: ${err.message}`, 'fout'); }
   kiezerSleutel = '';
 });
@@ -327,11 +335,16 @@ tweeKlik($('stand-terug'), 'vorige terugzetten', async () => {
 // ---- de bewerker: een opstelling instellen zonder JSON (stand-bewerker.js) ------------
 
 let bewerkt = null;   // { naam, versie, stand } van wat er in de bewerker staat
+let bwVeranderd = false;   // een keuze gemaakt die nog niet bewaard is
 const bwStatus = (tekst) => { $('bw-status').textContent = tekst; };
+// Alleen de keuzelijsten en velden van de stand zelf; het naamveld van "bewaar als" telt niet mee.
+for (const soort of ['input', 'change']) $('bw-velden').addEventListener(soort, () => { bwVeranderd = true; });
 
 async function laadBewerker() {
   const naam = $('stand-kies').value;
   if (!naam) return;
+  if (bwVeranderd && bewerkt && bewerkt.naam !== naam) meld(`je keuzes voor ${bewerkt.naam} zijn niet bewaard (je koos een andere opstelling)`, 'fout');
+  bwVeranderd = false;
   bwStatus('laden…');
   try {
     const [g, k] = await Promise.all([haal(`/api/standen/${encodeURIComponent(naam)}`), haal('/api/standen/keuzes')]);
@@ -365,6 +378,7 @@ $('bw-form').addEventListener('submit', async (e) => {
     if (status === 409) { meld('intussen veranderd: laad opnieuw (bewerk dicht en open)', 'fout'); bwStatus('niet bewaard: het bestand is intussen veranderd'); return; }
     if (status !== 200) { meld(`niet bewaard: ${d.fout ?? status}`, 'fout'); bwStatus(`niet bewaard: ${d.fout ?? status}`); return; }
     meld(`${bewerkt.naam} bewaard`);
+    bwVeranderd = false;
     for (const w of (d.waarschuwingen ?? []).slice(0, 3)) meld(w, 'fout');
     kiezerSleutel = '__';
     await laadBewerker(); await ververs(); toonVerschil();
@@ -372,13 +386,14 @@ $('bw-form').addEventListener('submit', async (e) => {
 });
 
 $('bw-bewaar-als').addEventListener('click', async () => {
-  const naam = $('bw-nieuw').value.trim();
-  if (!nieuweNaamGeldig(naam)) { meld('een naam is letters, cijfers, - en _ (niet actief, keuzes of terug)', 'fout'); $('bw-nieuw').focus(); return; }
+  const naam = nieuweNaam($('bw-nieuw').value);   // "Avond3" wordt "avond3"
+  if (!nieuweNaamGeldig(naam)) { meld('een naam is kleine letters, cijfers, - en _ (geen spaties; niet actief, keuzes of terug)', 'fout'); $('bw-nieuw').focus(); return; }
   try {
     const { status, d } = await bewaar(naam, null);
     if (status === 409) { meld(`"${naam}" bestaat al: kies een andere naam, of kies hem in de lijst en bewaar`, 'fout'); return; }
     if (status !== 200) { meld(`niet bewaard: ${d.fout ?? status}`, 'fout'); return; }
     meld(`bewaard als ${naam}`);
+    bwVeranderd = false;
     $('bw-nieuw').value = '';
     kiesNa = naam; kiezerSleutel = '__';
     await ververs();
@@ -386,8 +401,13 @@ $('bw-bewaar-als').addEventListener('click', async () => {
   } catch (err) { meld(`niet bewaard: ${err.message}`, 'fout'); }
 });
 
+// Enter in het naamveld = "bewaar als" (anders zou het formulier de stand onder de OUDE naam bewaren).
+$('bw-nieuw').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('bw-bewaar-als').click(); } });
+
 $('bw-leg-vast').addEventListener('click', async () => {
   if (!bewerkt) return;
+  // "leg vast" leest het bestand daarna opnieuw in: wat je net koos maar niet bewaarde zou stil weg zijn.
+  if (bwVeranderd) { meld('je keuzes zijn nog niet bewaard: klik eerst op bewaar, dan op leg vast', 'fout'); bwStatus('niet vastgelegd: eerst bewaren'); return; }
   try {
     const r = await fetch(`/api/standen/${encodeURIComponent(bewerkt.naam)}/vastleggen`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ versie: bewerkt.versie }), signal: AbortSignal.timeout(WACHT_MS),
@@ -396,6 +416,7 @@ $('bw-leg-vast').addEventListener('click', async () => {
     if (r.status === 409) { meld('intussen veranderd: laad opnieuw (bewerk dicht en open)', 'fout'); return; }
     if (!r.ok) { meld(`niet vastgelegd: ${d.fout ?? r.status}`, 'fout'); return; }
     meld(`vastgelegd in ${bewerkt.naam}: ${(d.delen ?? []).join(', ')}`);
+    for (const o of (d.opmerkingen ?? []).slice(0, 2)) meld(o);
     for (const w of (d.waarschuwingen ?? []).slice(0, 3)) meld(w, 'fout');
     kiezerSleutel = '__';
     await laadBewerker(); await ververs(); toonVerschil();

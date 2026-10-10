@@ -18,8 +18,16 @@ export const BEWERKBAAR = Object.freeze(['pakket', 'nacht', 'mapping', 'kaart', 
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-/** Een nieuwe naam voor "bewaar als": dezelfde regel als de server (letters, cijfers, - en _). */
+/** Een nieuwe naam voor "bewaar als": dezelfde regel als de server (kleine letters, cijfers, - en _). */
 export const nieuweNaamGeldig = (n) => typeof n === 'string' && NAAM.test(n) && !GERESERVEERD.has(n);
+
+/**
+ * Wat Clay in het naamveld typt → de naam waaronder het bewaard wordt: zonder
+ * spaties eromheen en in kleine letters ("Avond3" → "avond3"), zodat hij
+ * niet om een hoofdletter geweigerd wordt. Spaties en leestekens blijven
+ * staan: die weigert nieuweNaamGeldig met een melding.
+ */
+export const nieuweNaam = (n) => (typeof n === 'string' ? n.trim().toLowerCase() : '');
 
 /** De nacht als keuze: '' (ongemoeid), 'uit', 'vannacht', 'beide'. */
 export function nachtKeuze(n) {

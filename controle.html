@@ -31,7 +31,7 @@
       <div class="opstelling-rij">
         <select id="stand-kies" aria-labelledby="h-opstelling" disabled></select>
         <button class="knop" id="stand-activeer" disabled>activeer</button>
-        <button class="knop" id="stand-terug" disabled title="zet de mapping en de nacht terug zoals ze vóór de laatste activering waren">vorige terugzetten</button>
+        <button class="knop" id="stand-terug" disabled title="zet terug wat de laatste activering veranderde (de mapping en/of de nacht), zoals het daarvóór was; wat die activering niet aanraakte, en een nacht die je daarna zelf veranderde, blijft">vorige terugzetten</button>
       </div>
       <p class="uitleg" id="stand-uitleg">Een opstelling zet alleen beginwaarden (de nacht remmen, je mapping, het master-rack klaarzetten); wat je daarna met de hand doet blijft staan.</p>
       <details class="bewerk" id="stand-bewerk">
@@ -40,7 +40,7 @@
           <div class="bw-velden" id="bw-velden"></div>
           <div class="bw-knoppen">
             <button class="knop" id="bw-bewaar" type="submit">bewaar</button>
-            <input class="bw-nieuw" id="bw-nieuw" type="text" maxlength="60" placeholder="nieuwe naam: letters, cijfers, - en _" aria-label="naam om onder te bewaren">
+            <input class="bw-nieuw" id="bw-nieuw" type="text" maxlength="60" placeholder="nieuwe naam: kleine letters, cijfers, - en _" aria-label="naam om onder te bewaren">
             <button class="knop" id="bw-bewaar-als" type="button">bewaar als</button>
             <button class="knop" id="bw-leg-vast" type="button" title="zet je huidige mapping en de rem van de nacht in deze opstelling (krat, master, hub en avondpakket blijven)">leg vast</button>
           </div>
@@ -50,6 +50,8 @@
     </div>
     <div class="openen">
       <button class="knop hoofd" id="mixer-open">mixer openen</button>
+      <!-- Alleen als de opstelling "mixer via de hub" zegt: de uitweg als de hub niet draait (de APC dan direct). -->
+      <button class="knop" id="mixer-open-gewoon" hidden title="de hub draait niet? open de mixer gewoon: de APC gaat dan direct via Web MIDI">zonder hub</button>
       <a class="knop" href="/apc.html" target="_blank" rel="noopener">APC-kaart</a>
       <p class="uitleg" id="mixer-uitleg">Open de mixer altijd hier, zodat er nooit twee tegelijk naar de APC luisteren.
         Planvenster en los venster (beamer) open je vanuit de mixer: knop <b>plan</b> en, in het videopaneel, <b>los venster</b>.</p>
