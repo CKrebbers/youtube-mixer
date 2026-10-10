@@ -33,9 +33,9 @@
  * Elke functie geeft een resultaat terug ({ ok, … }) en gooit nooit, zoals opname.js.
  */
 import { open, readFile, stat, mkdir } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { join, resolve, sep, dirname } from 'node:path';
+import { join, resolve, sep, dirname, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { kopVan, ID } from './opname.js';
@@ -103,7 +103,7 @@ function controleer(d, i) {
   } else {
     if ('beeld' in d || 'fps' in d) return { fout: `${wie}: beeld en fps horen bij bron audio` };
     const video = d.video ?? 'hercodeer';
-    if (!['hercodeer', 'kopie'].includes(video)) return { fout: `${wie}: video moet hercodeer zijn` };
+    if (!['hercodeer', 'kopie'].includes(video)) return { fout: `${wie}: video moet hercodeer zijn (kopie bestaat alleen voor lokale proeven: Chrome's keyframes liggen 3,4-7 s uit elkaar)` };
     const inhoud = d.inhoud ?? 'alles';
     if (!['alles', 'vormen'].includes(inhoud)) return { fout: `${wie}: inhoud moet alles of vormen zijn` };
     Object.assign(doel, { video, inhoud });
@@ -263,6 +263,15 @@ export function iCloudWaarschuwing(opnames, home, bestaat) {
 
 /** Ligt `kind` in `ouder` (of is het dezelfde map)? */
 const binnen = (kind, ouder) => { const a = resolve(kind), b = resolve(ouder); return a === b || a.startsWith(b + sep); };
+/** Het echte pad: links gevolgd tot het dichtstbijzijnde bestaande deel, de rest erachter (hoeft niet te bestaan). */
+function echtPad(p) {
+  let a = resolve(p);
+  const rest = [];
+  while (!existsSync(a)) { const d = dirname(a); if (d === a) break; rest.unshift(basename(a)); a = d; }
+  try { return join(realpathSync(a), ...rest); } catch { return resolve(p); }
+}
+/** Idem als binnen(), maar een link kan de grens niet omzeilen. Vóór mkdir te gebruiken. */
+const binnenEcht = (kind, ouder) => binnen(echtPad(kind), echtPad(ouder));
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const tekstS = (s) => s.toFixed(1).replace('.', ',');
 
@@ -284,8 +293,13 @@ class Zending {
     return { ...s, uit: s.uit ? { ...s.uit } : null, waarschuwingen: [...s.waarschuwingen], fout: s.fout ? maskeer(s.fout) : null };
   }
 
-  async start(o = {}) {
-    try { return await this._start(o); } catch (err) { return { ok: false, fout: maskeer(err.message) }; }
+  start(o = {}) {
+    // Een stop() tijdens het starten (wachten op de mp4 kan 10 s duren) mag niet verloren gaan: hij
+    // zet `afbreken` en wacht op deze belofte; _start kijkt vóór de spawn of hij moet stoppen.
+    if (this.bezigMetStarten) return Promise.resolve({ ok: false, fout: 'er loopt al een uitzending' });
+    this.afbreken = false;
+    this.startBelofte = this._start(o).catch((err) => ({ ok: false, fout: maskeer(err.message) }));
+    return this.startBelofte;
   }
 
   async _start({
@@ -298,6 +312,8 @@ class Zending {
     if (typeof opnames !== 'string' || !opnames) return { ok: false, fout: 'geen opnamemap' };
     if (beeldstand !== undefined && !['alles', 'vormen'].includes(beeldstand)) return { ok: false, fout: 'beeldstand moet alles of vormen zijn' };
     this.bezigMetStarten = true;
+    let wav = null, mp4 = null, overgedragen = false;          // handles die nog niet aan de zending zijn gegeven
+    const AFGEBROKEN = 'gestopt tijdens het starten';
     try {
       const { doelen } = await leesDoelen(uitzendMap);
       const doel = doelen.find((d) => d.naam === naam);
@@ -306,15 +322,12 @@ class Zending {
       if (!mag.ok) return { ok: false, fout: mag.fout };
 
       // G5: geen uitzending zonder opname. G1: alleen set-<id>.wav uit de opnamemap.
-      const wavPad = join(opnames, `set-${id}.wav`);
-      let wav;
-      try { wav = await open(wavPad, 'r'); } catch { return { ok: false, fout: 'geen opname: start eerst de opname' }; }
+      try { wav = await open(join(opnames, `set-${id}.wav`), 'r'); } catch { return { ok: false, fout: 'geen opname: start eerst de opname' }; }
       const kopBuf = Buffer.alloc(16);
       const { bytesRead } = await wav.read(kopBuf, 0, 16, 0);
       const kop = kopVan(kopBuf.subarray(0, bytesRead));
-      if (!kop) { await wav.close(); return { ok: false, fout: 'geen opname-kop in het bestand' }; }
-      const grootte = (await wav.stat()).size;
-      const dataNu = Math.max(0, grootte - kop);
+      if (!kop) return { ok: false, fout: 'geen opname-kop in het bestand' };
+      const dataNu = Math.max(0, (await wav.stat()).size - kop);
       const bronS = dataNu / BPS;
 
       const waarschuwingen = [];
@@ -323,52 +336,53 @@ class Zending {
       if (ic) waarschuwingen.push(ic);
 
       // Beeld: de mp4 van de video-opname, vanaf byte 0 (v1: alleen samen met de opname).
-      let mp4 = null;
       if (doel.bron === 'video') {
-        const sluitWav = async (fout) => { await wav.close(); return { ok: false, fout }; };
-        if (bronS >= 10) return sluitWav('video-uitzending start in v1 samen met de opname (binnen 10 s); kies een doel met bron audio');
-        if (existsSync(join(opnames, `set-${id}.webm`))) return sluitWav('de video is webm: kies een doel met bron audio');
+        if (bronS >= 10) return { ok: false, fout: 'video-uitzending start in v1 samen met de opname (binnen 10 s); kies een doel met bron audio' };
+        if (existsSync(join(opnames, `set-${id}.webm`))) return { ok: false, fout: 'de video is webm: kies een doel met bron audio' };
         const mp4Pad = join(opnames, `set-${id}.mp4`);
+        const kopMp4 = Buffer.alloc(4 * 1024 * 1024);                // alleen het begin lezen, niet het hele bestand
         const t0 = Date.now();
         let begin = null;
-        while (Date.now() - t0 <= wachtMp4) {
-          const b = await readFile(mp4Pad).catch(() => null);   // klein zolang de opname net begint
-          if (b) {
-            const bx = boxen(b.subarray(0, 4 * 1024 * 1024));
-            const moov = bx.find((x) => x.type === 'moov');
-            if (moov && moov.begin + moov.grootte <= b.length) { begin = b.subarray(0, Math.min(b.length, 64 * 1024)); break; }
+        while (Date.now() - t0 <= wachtMp4 && !this.afbreken) {
+          if (!mp4) mp4 = await open(mp4Pad, 'r').catch(() => null);
+          if (mp4) {
+            const { bytesRead: n } = await mp4.read(kopMp4, 0, kopMp4.length, 0);
+            const moov = boxen(kopMp4.subarray(0, n)).find((x) => x.type === 'moov');
+            if (moov && moov.begin + moov.grootte <= n) { begin = Buffer.from(kopMp4.subarray(0, Math.min(n, 64 * 1024))); break; }
           }
           await wacht(Math.min(100, wachtMp4));
         }
-        if (!begin) return sluitWav('geen videobestand: start de opname met audio + video');
+        if (this.afbreken) return { ok: false, fout: AFGEBROKEN };
+        if (!begin) return { ok: false, fout: 'geen videobestand: start de opname met audio + video' };
         const codec = audioCodecVanMp4(begin);
-        if (codec === 'Opus' && doel.soort === 'rtmp') return sluitWav('mp4 met Opus: kies een doel met bron audio (een RTMP-dienst verwacht AAC)');
+        if (codec === 'Opus' && doel.soort === 'rtmp') return { ok: false, fout: 'mp4 met Opus: kies een doel met bron audio (een RTMP-dienst verwacht AAC)' };
         if (codec === 'Opus') waarschuwingen.push('Opus in de mp4: goed voor een bestand of OBS, niet voor een RTMP-dienst');
-        try { mp4 = await open(mp4Pad, 'r'); } catch { return sluitWav('geen videobestand: start de opname met audio + video'); }
       }
 
       // De uitgang: een vrije naam buiten opnames/ (G9), of de lokale url.
       let uit, uitInfo = null;
       if (doel.soort === 'bestand') {
-        if (binnen(uitMap, opnames)) { await wav.close(); await mp4?.close(); return { ok: false, fout: 'de uitgang mag niet in de opnamemap (G9)' }; }
+        if (binnen(uitMap, opnames) || binnenEcht(uitMap, opnames)) return { ok: false, fout: 'de uitgang mag niet in de opnamemap (G9)' };
         await mkdir(uitMap, { recursive: true });
+        const icUit = iCloudWaarschuwing(resolve(uitMap), homedir(), existsSync);
+        if (icUit) waarschuwingen.push(`de uitzenduitgang staat ook in iCloud (${uitMap}): zet VARVE_UITZEND_UIT buiten Bureaublad en Documenten`);
         uit = uitgangsPad(uitMap, id, existsSync);
         uitInfo = { flv: uit, mp4: null };
       } else uit = doel.url;
 
       if (doel.bron === 'audio' && doel.beeld !== 'zwart' && doel.beeld !== 'golf' && !existsSync(join(uitzendMap, 'beelden', doel.beeld))) {
-        await wav.close(); await mp4?.close();
         return { ok: false, fout: `plaat uitzend/beelden/${doel.beeld} bestaat niet` };
       }
 
       // Het kind. cwd = de uitzendmap: dan blijft het Bureaublad-pad (spaties) uit de filtergraaf.
       await mkdir(uitzendMap, { recursive: true });
+      if (this.afbreken) return { ok: false, fout: AFGEBROKEN };
       let args = bouwArgs(doel, { uit });
       if (_argsHaak) args = _argsHaak(args);
       const kind = spawn(ffmpeg, args, { cwd: uitzendMap, stdio: ['pipe', 'ignore', 'pipe', 'pipe'] });
       const gestart = await new Promise((r) => { kind.once('spawn', () => r(true)); kind.once('error', (e) => r(e)); });
       if (gestart !== true) {
-        await wav.close(); await mp4?.close();
+        // De laatste fout blijft in stand() staan tot de volgende start: de UI kan zeggen waarom het niet ging.
         Object.assign(this.s, { ffmpeg: 'weg', fout: `ffmpeg start niet: ${gestart.code || gestart.message}` });
         return { ok: false, fout: this.s.fout };
       }
@@ -381,6 +395,7 @@ class Zending {
         eind, mp4Eind: 0, gevolgd: 0, draining: false, sprongVlag: false, pompBelofte: null, pompt: false,
         laatsteGroei: Date.now(), stderr: [], stoppen: false, stopBelofte: null,
       });
+      overgedragen = true;
       this.s = {
         ...legeStand(), bezig: true, doel: doel.naam, id, bron: doel.bron, soort: doel.soort, sinds: Date.now(),
         door: door ?? null, beeldstand: beeldstand ?? null, bronS, ffmpeg: 'loopt', uit: uitInfo, waarschuwingen,
@@ -390,6 +405,8 @@ class Zending {
       this._poll().catch(() => {});
       return { ok: true, doel: doel.naam, bron: doel.bron, soort: doel.soort, ...(uitInfo ? { uit: uitInfo.flv } : {}), waarschuwingen: [...waarschuwingen] };
     } finally {
+      // Elke weg naar buiten zonder zending (fout, weigering, afgebroken, exception) sluit wat open stond.
+      if (!overgedragen) { await wav?.close().catch(() => {}); await mp4?.close().catch(() => {}); }
       this.bezigMetStarten = false;
     }
   }
@@ -403,6 +420,7 @@ class Zending {
     kind.stderr.on('data', (b) => {
       const regels = (rest + b.toString()).split(/\r?\n/);
       rest = regels.pop();
+      if (this.kind !== kind) return;                                 // late regels van een vorig kind tellen niet
       for (const r of regels) if (r.trim()) { this.stderr.push(maskeer(r.trim()).slice(0, 300)); if (this.stderr.length > 5) this.stderr.shift(); }
     });
     let restP = '';
@@ -443,7 +461,9 @@ class Zending {
     const stil = nu - this.laatsteGroei;
     if (stil > this.stopNa) { this.s.fout = 'bron stil'; this._stopIntern('bron stil'); return; }
     if (stil > this.stilNa) this.s.fout = 'bron stil';
-    if (this.s.bron === 'audio' && this.s.achterstandS > this.achterstandMax) this.sprongVlag = true;
+    // Sprong alleen als de achterstand in het BESTAND zit (≥ 1 s): zit hij in pijp of encoder, dan helpt
+    // vooruitspringen niet en zou elke poll vers geluid weggooien.
+    if (this.s.bron === 'audio' && this.s.achterstandS > this.achterstandMax && (this.eind - this.pos) / BPS >= 1) this.sprongVlag = true;
     if (this.s.bron === 'video' && this.s.achterstandS > 20) { this.s.fout = 'achterstand'; this._stopIntern('achterstand'); return; }
     this._pomp();
   }
@@ -470,7 +490,7 @@ class Zending {
     this.pompt = true;
     this.pompBelofte = (async () => {
       try {
-        while (this.kind && !this.draining && !this.stoppenHard) {
+        while (this.kind && !this.draining && !this.stoppen) {
           const kind = this.kind;
           let buf;
           if (this.s.bron === 'audio') {
@@ -500,7 +520,7 @@ class Zending {
           if (kind !== this.kind || kind.stdin.destroyed || kind.stdin.writableEnded) break;
           if (!kind.stdin.write(buf)) {
             this.draining = true;
-            kind.stdin.once('drain', () => { this.draining = false; this._pomp(); });
+            kind.stdin.once('drain', () => { this.draining = false; if (!this.stoppen) this._pomp(); });
           }
         }
       } catch { /* bestand weg of kind weg: de poll of close meldt het */ } finally {
@@ -530,38 +550,45 @@ class Zending {
 
   stop({ snel = false } = {}) {
     if (this.stopBelofte) return this.stopBelofte;
+    // Nog aan het starten (bv. wachten op de mp4): niet verloren laten gaan. Afbreken, wachten, dan pas kijken.
+    if (this.bezigMetStarten) { this.afbreken = true; return (this.startBelofte || Promise.resolve()).then(() => this.stop({ snel })); }
     if (!this.s.bezig && !this.kind) return Promise.resolve({ ok: true, duurS: 0, bytes: 0, stopS: 0, ...(this.s.uit ? { uit: { ...this.s.uit } } : {}) });
-    this.stopBelofte = this._stop(snel).catch((err) => ({ ok: false, fout: maskeer(err.message) }));
-    return this.stopBelofte;
+    const belofte = this._stop(snel).catch((err) => ({ ok: false, fout: maskeer(err.message) }));
+    this.stopBelofte = belofte;                                      // opgeruimd ná het afronden, nooit ervóór
+    belofte.finally(() => { if (this.stopBelofte === belofte) this.stopBelofte = null; });
+    return belofte;
   }
 
   async _stop(snel) {
     const t0 = Date.now();
     this.stoppen = true;
     clearInterval(this.poll);
-    const kind = this.kind;
-    const stap = snel ? 1500 : 3000;
-    if (kind) {
-      const dicht = new Promise((r) => kind.once('close', r));
-      const binnen = (ms) => Promise.race([dicht.then(() => true), wacht(ms).then(() => false)]);
-      try { kind.stdin.end(); } catch { /* al dicht */ }
-      if (!(await binnen(stap))) {
-        try { kind.kill('SIGINT'); } catch { /* weg */ }
-        if (!(await binnen(stap))) { try { kind.kill('SIGKILL'); } catch { /* weg */ } await binnen(2000); }
+    try {
+      const kind = this.kind;
+      const stap = snel ? 1500 : 3000;
+      if (kind) {
+        const dicht = new Promise((r) => kind.once('close', r));
+        const binnenTijd = (ms) => Promise.race([dicht.then(() => true), wacht(ms).then(() => false)]);
+        try { kind.stdin.end(); } catch { /* al dicht */ }
+        if (!(await binnenTijd(stap))) {
+          try { kind.kill('SIGINT'); } catch { /* weg */ }
+          if (!(await binnenTijd(stap))) { try { kind.kill('SIGKILL'); } catch { /* weg */ } await binnenTijd(2000); }
+        }
+        this.kind = null;
+        if (this.s.ffmpeg === 'loopt') this.s.ffmpeg = 'uit';
       }
+      const stopS = (Date.now() - t0) / 1000;
+      await this._opruimen();
+      if (snel) {
+        if (this.s.uit?.flv) this.s.waarschuwingen.push(`mp4 niet gemaakt (snel stoppen): ffmpeg -i "${this.s.uit.flv}" -c copy uit.mp4`);
+      } else await this._remux(true);
+      return { ok: true, duurS: this.s.sinds ? (Date.now() - this.s.sinds) / 1000 : 0, bytes: this.gevolgd || 0, stopS, ...(this.s.uit ? { uit: { ...this.s.uit } } : {}) };
+    } finally {
+      // Wat er ook misgaat: de module mag niet voor altijd "bezig" blijven.
       this.kind = null;
-      if (this.s.ffmpeg === 'loopt') this.s.ffmpeg = 'uit';
+      this.s.bezig = false;
+      this.stoppen = false;
     }
-    const stopS = (Date.now() - t0) / 1000;
-    await this._opruimen();
-    if (snel) {
-      if (this.s.uit?.flv) this.s.waarschuwingen.push(`mp4 niet gemaakt (snel stoppen): ffmpeg -i "${this.s.uit.flv}" -c copy uit.mp4`);
-    } else await this._remux(true);
-    const r = { ok: true, duurS: this.s.sinds ? (Date.now() - this.s.sinds) / 1000 : 0, bytes: this.gevolgd || 0, stopS, ...(this.s.uit ? { uit: { ...this.s.uit } } : {}) };
-    this.s.bezig = false;
-    this.stoppen = false;
-    this.stopBelofte = null;
-    return r;
   }
 
   async _opruimen() {
@@ -615,7 +642,7 @@ class Zending {
     this.kind = null;
     this.wav?.close().catch(() => {}); this.mp4?.close().catch(() => {});
     this.wav = null; this.mp4 = null;
-    this.stopBelofte = null; this.stoppen = false; this.bezigMetStarten = false; this.pompBelofte = null; this.pompt = false; this.draining = false;
+    this.afbreken = true; this.stopBelofte = null; this.stoppen = false; this.bezigMetStarten = false; this.pompBelofte = null; this.pompt = false; this.draining = false;
     this.s = legeStand();
   }
 }

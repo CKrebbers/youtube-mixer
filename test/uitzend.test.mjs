@@ -200,10 +200,12 @@ try {
       { naam: 'pad1', soort: 'bestand', bron: 'audio', beeld: '../x.png' },
       { naam: 'pad2', soort: 'bestand', bron: 'audio', beeld: 'a/b.png' },
       { naam: 'yt', soort: 'rtmp', bron: 'audio', url: 'rtmp://a.rtmp.youtube.com/live2' },
+      { naam: 'copy', soort: 'bestand', bron: 'video', video: 'copy' },
     ] }));
     const gemengd = await U.laadDoelen(leeg);
     const tekst = JSON.stringify(gemengd);
-    ok('P10 alleen het geldige doel blijft; zeven fouten (sleutel, naam, fps 60, onbekend veld, twee png-paden, youtube)', gemengd.doelen.length === 1 && gemengd.doelen[0].naam === 'goed' && gemengd.fouten.length === 7);
+    ok('P10 alleen het geldige doel blijft; acht fouten (sleutel, naam, fps 60, onbekend veld, twee png-paden, youtube, video copy)', gemengd.doelen.length === 1 && gemengd.doelen[0].naam === 'goed' && gemengd.fouten.length === 8);
+    ok('P10 de fout bij video "copy" noemt dat kopie alleen lokaal bestaat', /kopie bestaat alleen voor lokale proeven/.test(gemengd.fouten.find((f) => /copy/.test(f)) || ''));
     ok('P10 nergens een url of sleutel in het antwoord (de browser kent alleen namen)', !/rtmp:|"url"|sleutel"/.test(tekst.replace(/"fouten":\[.*\]/, '')));
     ok('P10 de fouten zeggen waarom (G7 sleutel, onbekend veld, U1)', /sleutel/.test(gemengd.fouten.join()) && /onbekend veld "kleur"/.test(gemengd.fouten.join()) && /U1/.test(gemengd.fouten.join()));
     // Het voorbeeld in git moet zelf geldig zijn, anders leert het Clay iets wat niet werkt.
@@ -469,6 +471,51 @@ try {
     }
   }
 
+  // ==== R: uit de code-review van 10 okt ===========================================
+  if (heeftFfmpeg) {
+    const p6 = pcm(6);
+    // R1: een stop() tijdens het starten (wachten op de mp4) gaat niet verloren
+    {
+      const id = await nieuweOpname();
+      await O.voegToe(opnames, id, p6.subarray(0, 192000), 0);
+      const tS = Date.now();
+      let startDuur = null;
+      const st = U.start({ ...basis, id, doel: 'beeld', wachtMp4: 3000 }).then((r) => { startDuur = (Date.now() - tS) / 1000; return r; });
+      await wacht(200);
+      const t0 = Date.now();
+      const sp = await U.stop();
+      const r = await st;
+      const d = (Date.now() - t0) / 1000;
+      ok(`R1 stop() tijdens het wachten op de mp4 (start liep ${r2(startDuur)} s): stop ok na ${r2(d)} s (≤ 0,6), start geeft "${r.fout}", geen ffmpeg, niet bezig`,
+        sp.ok && startDuur >= 0.15 && startDuur < 1 && d <= 0.6 && !r.ok && /gestopt tijdens het starten/.test(r.fout || '') && U._pid() === null && !U.stand().bezig);
+      await O.sluit(opnames, id);
+    }
+    // R3: een fout tussen het openen van de WAV en de spawn laat geen open bestand achter
+    {
+      const id = await nieuweOpname();
+      await O.voegToe(opnames, id, p6.subarray(0, 192000), 0);
+      writeFileSync(join(tmp, 'een-bestand'), 'x');
+      const fds = () => readdirSync('/dev/fd').length;
+      const voor = fds();
+      const rs = [];
+      for (let i = 0; i < 5; i++) rs.push(await U.start({ ...basis, uitMap: join(tmp, 'een-bestand', 'uit'), id, doel: 'proef' }));
+      const na = fds();
+      ok(`R3 vijf starts die op mkdir stuklopen (ENOTDIR): ok:false, open bestanden ${voor} -> ${na}`, rs.every((r) => !r.ok) && na <= voor);
+      await O.sluit(opnames, id);
+    }
+    // R7: een link naar de opnamemap omzeilt G9 niet, en er komt niets in opnames/ bij
+    {
+      const id = await nieuweOpname();
+      await O.voegToe(opnames, id, p6.subarray(0, 192000), 0);
+      const link = join(tmp, 'naar-opnames');
+      spawnSync('ln', ['-s', opnames, link]);
+      const voor = readdirSync(opnames).length;
+      const r = await U.start({ ...basis, uitMap: join(link, 'uit'), id, doel: 'proef' });
+      ok(`R7 uitMap via een link in opnames/ -> "${r.fout}"; opnames/ ongewijzigd`, !r.ok && /G9/.test(r.fout || '') && readdirSync(opnames).length === voor);
+      await O.sluit(opnames, id);
+    }
+  }
+
   // ==== E: echte tijd (alleen met VARVE_TEST_ECHTETIJD=1) ==========================
   if (!echteTijd) notitie('E1-E6: echte tijd overgeslagen (VARVE_TEST_ECHTETIJD=1 om ze te draaien, ~75 s)');
   else if (!heeftFfmpeg) notitie('E1-E6: geen ffmpeg');
@@ -513,32 +560,47 @@ try {
       } else ok(`E3 de stand liegt niet: zonder sprong na 10 s pauze achterstandS ${r2(ref.na10)} (≥ 9)`, ref.na10 >= 9 && st.sprongen === 0);
     }
 
-    // E4: beeld/hercodeer met Chrome's cadans, per fragment gevoerd (H2)
+    // E4: beeld/hercodeer met Chrome's cadans (H2), gevoerd zoals de browser het doet en de kritiek het mat:
+    //     elk WAV-stuk op het EIND van zijn seconde, elk fragment op precies (eind van het fragment + 1 s).
+    //     (Eerder voerde E4 via voer(): WAV-stuk aan het begin van zijn seconde, fragment op de eerste hele
+    //     seconde na eind + 1 s. Dat is tot 0,63 s later dan dit, en gaf 5,26 en 5,63 s: docs/UITZENDEN.md §7.)
     // E5: regressiewacht O §2.2: hetzelfde met -c:a aac (nooit FAIL, H11)
     const vAac = fmp4('aac');
+    /** Taken op hun wandtijd vanaf t0, in volgorde; geeft t0. */
+    const opTijd = async (taken) => {
+      const t0 = Date.now();
+      for (const [ms, doe] of [...taken].sort((a, b) => a[0] - b[0])) { await wacht(Math.max(0, t0 + ms - Date.now())); await doe(); }
+      return t0;
+    };
     if (!heeftVT) notitie('E4-E5: geen h264_videotoolbox');
     else for (const [naam, haak] of [['E4', null], ['E5', (a) => a.map((x, i) => (x === 'copy' && a[i - 1] === '-c:a' ? 'aac' : x))]]) {
       const id = await nieuweOpname();
       await O.voegVideoToe(opnames, id, 'mp4', vAac.init);
       const s = await U.start({ ...basis, id, doel: 'beeld', ...(haak ? { _argsHaak: haak } : {}) });
       const rij = [];
-      const meet = setInterval(() => rij.push([Number(((Date.now() - t0) / 1000).toFixed(2)), U.stand().achterstandS]), 250);
-      const t0 = Date.now();
-      await voer({ id, pcmBuf: p12, sec: 12, tussen: 1000, video: vAac, fragNa: 1, sluiten: false });
+      const tStart = Date.now();
+      const meet = setInterval(() => rij.push([(Date.now() - tStart) / 1000, U.stand().achterstandS]), 250);
+      let opWav12 = null;
+      const taken = [
+        ...Array.from({ length: 12 }, (_, i) => [(i + 1) * 1000, () => O.voegToe(opnames, id, p12.subarray(i * 192000, (i + 1) * 192000), i * 48000)]),
+        ...vAac.frags.map((f) => [(f.eind + 1) * 1000, () => O.voegVideoToe(opnames, id, 'mp4', f.buf)]),
+        [12900, async () => { opWav12 = U.stand().achterstandS; }],
+      ];
+      await opTijd(taken);
       clearInterval(meet);
-      const laatste = U.stand().achterstandS;
       await O.sluit(opnames, id); await U.opnameKlaar(id);
-      const per = rij.filter(([t]) => Number.isInteger(Math.round(t * 4) / 4) && Math.abs(t - Math.round(t)) < 0.13).map(([t, a]) => [Math.round(t), a]);
+      const per = [];
+      for (let t = 1; t <= 13; t++) { const x = rij.find(([w]) => w >= t); if (x) per.push([t, x[1]]); }
       log(`${naam} achterstandS per s`, per);
       if (naam === 'E4') {
-        const na3 = rij.filter(([t]) => t >= 3);
-        const max = Math.max(...na3.map(([, a]) => a));
-        const eerstePiek = Math.max(...rij.filter(([t]) => t >= 3 && t < 7.5).map(([, a]) => a));
+        const max = Math.max(...rij.filter(([t]) => t >= 3).map(([, a]) => a));
+        const eerste = Math.max(...rij.filter(([t]) => t >= 3 && t < 7.5).map(([, a]) => a));
+        const laatste = Math.max(...rij.filter(([t]) => t >= 7.5).map(([, a]) => a));
         const vd = duurVan(U.stand().uit?.mp4 || '/x', 'v:0');
-        ok(`E4 hercodeer, Chrome-cadans: max achterstandS na 3 s ${r2(max)} (≤ 5,5)`, s.ok && max <= 5.5);
-        ok(`E4 niet groeiend: laatste ${r2(laatste)} ≤ eerste piek ${r2(eerstePiek)} + 0,5`, laatste <= eerstePiek + 0.5);
+        ok(`E4 hercodeer, Chrome-cadans: max achterstandS na 3 s ${r2(max)} (≤ 5,5 = fragmentduur + 2 s)`, s.ok && max <= 5.5);
+        ok(`E4 niet groeiend: max in de tweede helft ${r2(laatste)} ≤ max in de eerste ${r2(eerste)} + 0,5`, laatste <= eerste + 0.5);
         ok(`E4 ontvangen beeld ${r2(vd)} s (12 ± 0,6)`, Math.abs(vd - 12) <= 0.6);
-      } else notitie(`E5 regressiewacht: achterstand bij aac na 12 s = ${r2(laatste)} s (verwacht > 2,5; is hij kleiner, dan is ffmpeg verbeterd: melden)`);
+      } else notitie(`E5 regressiewacht: achterstand bij aac na 12 s = ${r2(opWav12)} s (verwacht > 2,5; is hij kleiner, dan is ffmpeg verbeterd: melden)`);
     }
 
     // E6: CPU van het stil-profiel op 15 fps (H6): alleen loggen

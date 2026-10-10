@@ -65,7 +65,7 @@ Een slot **tegen vergissing, niet tegen opzet**: wie zelf een relay op 127.0.0.1
 | G6 | Eén uitzending tegelijk; netjes stoppen | stdin dicht -> 3 s -> SIGINT -> 3 s -> SIGKILL (`snel`: 1,5 / 1,5 s). Nooit SIGTERM | S24, S25 |
 | G7 | Een sleutel komt nergens | een doel met `sleutel*` is ongeldig; elke stderr-regel en elke fout door `maskeer()` | P8, P10 |
 | G8 | Inhoudsgrens: het mengcanvas bevat de YouTube-clips van de decks (14 van 15 nummers) | een niet-lokaal doel bestaat in v1 niet, dus ook geen niet-lokaal beeld-doel; elk beeld-doel krijgt de waarschuwing *"deck-clips van anderen: alleen thuis (stappenplan I78)"*. `inhoud: vormen` is Clay's verklaring, de server kan het niet zien | P9, P10, S18 |
-| G9 | Uitgang buiten iCloud en buiten `opnames/` | bestandsdoelen naar `VARVE_UITZEND_UIT`, standaard `~/Movies/VARVE-uitzend/`; nooit overschrijven (`-n`, eerste vrije naam `set-<id>.uitzend[-N].flv`); na stop een `.mp4` ernaast; waarschuwing als `opnames/` op het iCloud-Bureaublad staat | P7, P13, S14 |
+| G9 | Uitgang buiten iCloud en buiten `opnames/` | bestandsdoelen naar `VARVE_UITZEND_UIT`, standaard `~/Movies/VARVE-uitzend/`; nooit overschrijven (`-n`, eerste vrije naam `set-<id>.uitzend[-N].flv`); na stop een `.mp4` ernaast; ook via een link niet in `opnames/` (echte paden, vóór `mkdir`); waarschuwing als `opnames/` of de uitgang zelf in iCloud staat | P7, P13, S14, R7 |
 
 ## 4. Twee profielen
 
@@ -118,8 +118,12 @@ muxer+uit:  bestand: -f flv <uitmap>/set-<id>.uitzend[-N].flv   (na stop: -c cop
   (E1: `uitS` 9,0 na 8 s geluid). De eerste term, die bij een echte achterstand groeit en de sprong stuurt, klopt
   (E2/E3). Bij beeld schommelt de achterstand met Chrome's fragmenten (één per ~3,4 s) tussen ~1 en ~5,3 s. Dat is
   geen fout; de strook moet "≈ 4 s achter (beeld komt per 3,4 s)" zeggen, niet "1 s".
-- **Sprong** (alleen WAV): boven 8 s achterstand springt de volger naar het eind (op een frame); `sprongen` en
-  `kwijtS` tellen mee. Een mp4 wordt nooit geknipt: boven 20 s stopt de uitzending met `fout: 'achterstand'`.
+- **Sprong** (alleen WAV): boven 8 s achterstand springt de volger naar het eind (op een frame), maar alleen als er
+  ook echt ≥ 1 s in het **bestand** wacht: zit de achterstand in pijp of encoder, dan helpt springen niet en zou elke
+  poll vers geluid weggooien (review 10 okt). `sprongen` en `kwijtS` tellen mee. Een mp4 wordt nooit geknipt: boven
+  20 s stopt de uitzending met `fout: 'achterstand'`.
+- **Stoppen tijdens het starten** (wachten op de mp4 kan 10 s duren): `stop()` breekt de start af en wacht erop;
+  er komt dan geen ffmpeg (R1).
 - **Bron stil**: groeit de WAV 10 s niet, dan `fout: 'bron stil'`; na 30 s stopt de uitzending (tabblad dicht).
 
 ## 5. Rechten in gewone taal
@@ -154,7 +158,7 @@ I77, I78, I79 en "Rechten en privacy"); niet nagekeken bij Twitch, Sena of Mixcl
 **Automatisch** (geen netwerk, geen dienst, alleen ffmpeg op deze Mac en `mkdtemp`-mappen):
 
 ```sh
-node test/uitzend.test.mjs                          # 68 checks, ~44 s (P puur, S met ffmpeg sneller dan echte tijd)
+node test/uitzend.test.mjs                          # 72 checks, ~44 s (P puur, S met ffmpeg sneller dan echte tijd, R review)
 VARVE_TEST_ECHTETIJD=1 node test/uitzend.test.mjs   # + E1-E6 in echte tijd, ~70 s extra; niet tijdens een speelavond
 node test/alles.mjs                                 # draait de snelle variant mee
 ```
@@ -164,6 +168,8 @@ node test/alles.mjs                                 # draait de snelle variant m
 - S14-S26: stil -> bestand (+ mp4), stil -> RTMP-ontvanger (`ffmpeg -listen 1` op 127.0.0.1), stil -> udp,
   midden in de set aan, beeld hercoderen met Chrome's cadans (keyframe per 101 beelden), beeld kopiëren naar RTMP,
   Opus, opname onaangetast, ffmpeg gedood, ffmpeg bestaat niet, stoppen (ook een hangend kind), weigeringen, bron stil.
+- R1, R3, R7 (uit de code-review van 10 okt): stop() tijdens het starten gaat niet verloren; een fout tussen openen
+  en spawn laat geen open bestand achter (`/dev/fd` geteld); een link naar `opnames/` omzeilt G9 niet.
 - E1-E6: echte tijd, SIGSTOP-proef met en zonder sprong, beeld met Chrome's cadans, regressiewacht (aac), CPU bij 15 fps.
 
 **Met de hand** kan pas vanaf stap 3 (de routes). Dan zo, op een proefserver met een kopie van de library:
@@ -229,12 +235,16 @@ elkaar, een dienst wil er één per 2 s.
 | E1 stil, echte tijd | achterstand 0,00 op 4, 6, 8 s; `uitS` 9,0 na 8 s (zie §4 "Beperking") | ≤ 2,5; ≥ 6,5 |
 | E2 SIGSTOP 10 s, sprong bij 8 s | 7,00 na 6 s pauze; 1 sprong, 9,0 s kwijt; 0,00 na SIGCONT | ≥ 4; ≥ 1, ≥ 7; ≤ 2,5 |
 | E3 idem zonder sprong | 11,00 na 10 s pauze | ≥ 9 |
-| E4 beeld hercoderen, Chrome-cadans, echte tijd | per s 1 2 3 4 5 2,6 3,6 4,6 2,3 3,3 4,3; **max 5,26 s**; beeld 12,00 s | ≤ 5,5 (krap); niet groeiend |
-| E5 regressiewacht: beeld + geluid aac | 11,42 s achter na 12 s | notitie (> 2,5 verwacht: niet verbeterd) |
-| E6 CPU stil/golf 15 fps | 1,12 s user per 8 s (~14 % van een kern), alleen het ffmpeg-kind | notitie |
+| E4 beeld hercoderen, Chrome-cadans, echte tijd (gevoerd zoals de browser: WAV-stuk op het eind van zijn seconde, fragment op eind + 1 s) | per s 0 1 2 3 4 1,6 2,6 3,6 1,3 2,3 3,3; **max 5,00 / 5,00 / 5,26 s** in drie runs; tweede helft 4,63 / 4,63 / 5,26 (eerste 5,00); beeld 12,00 s | ≤ 5,5; tweede helft ≤ eerste + 0,5 |
+| E4, eerste versie van de test (WAV-stuk aan het begin van zijn seconde, fragment op de eerste hele seconde na eind + 1 s: tot 0,63 s later) | max **5,26** s en **5,63** s in twee runs (één keer FAIL) | zelfde drempel; niet verruimd |
+| E5 regressiewacht: beeld + geluid aac | 11,04-11,42 s achter na 12 s (vijf runs) | notitie (> 2,5 verwacht: niet verbeterd) |
+| E6 CPU stil/golf 15 fps | 0,99-1,12 s user per 8 s (~12-14 % van een kern), alleen het ffmpeg-kind | notitie |
 
-Bij E4 gaat elk fragment er op een hele seconde in (eind + 1 s, naar boven afgerond): tot 0,6 s later dan Chrome.
-De gemeten achterstand is dus eerder te hoog dan te laag. Beeldjes uit de uitgang (zwart, golf, beeld) staan bij het
+De piek bij E4 hangt ook af van wanneer ffmpeg zijn voortgang meldt (`-stats_period 1`): `uitS` kan tot 1 s oud zijn,
+en dan lijkt de achterstand groter dan hij is. Met de cadans van de kritiek blijft hij onder 5,5 s (5,00 of 5,26,
+afhankelijk van dat moment; marge 0,24 s); met de eerste, strengere voeding kwam hij één keer op 5,63 s. Voor Chrome zelf meet stap 2 het (10 minuten, headless).
+
+Beeldjes uit de uitgang (zwart, golf, beeld) staan bij het
 bouwverslag in de scratchpad (`uitwerking/uitzenden/6-beeld-*.png`).
 
 ## 8. Standaardkeuzes zonder vraag
