@@ -2,8 +2,8 @@
 
 *Spoor companion (VISIE §3: "laptop, iPad, iPhone … als draagbare set"). Ontwerp:
 `uitwerking/companion/5-ontwerp-definitief.md`. Gebouwd: stap 1 (de pagina), met de herstelronde
-na de review (10 okt middag). Stap 2 (de mixer meldt zich bij de server) staat als code op een eigen
-tak (zie onderaan); het live-pad met `index.html` is niet geproefd.*
+na de review (10 okt middag), en op deze tak stap 2 (de mixer meldt zich bij de server, onderaan); het
+live-pad met `index.html` is niet geproefd.*
 
 Eén adres voor iPad en iPhone: **`https://<NAAM>/companion`** (via Tailscale, `docs/TAILSCALE.md`),
 op de Mac zelf `http://localhost:8777/companion`. Geen tweede mixer, maar een eigen rol:
@@ -37,9 +37,10 @@ op de Mac zelf `http://localhost:8777/companion`. Geen tweede mixer, maar een ei
   - **vandaag speeldag**: zet vandaag erbij, en "vandaag" is wat de server zegt (`vandaag` in
     `GET /api/nacht`, in zíjn tijdzone), niet wat de iPhone uitrekent. Alleen toevoegen; weghalen kan
     alleen op de laptop.
-- **Nu**: zolang de server `/api/mixer` niet kent (stap 1): *"Wat er speelt komt hier zodra de mixer zich
-  bij de server meldt (nog niet gebouwd). De kaart werkt wel."* De pagina vraagt `/api/mixer` na een 404
-  hooguit eens per minuut opnieuw.
+- **Nu**: met stap 2 per track wat er speelt en hoe lang nog (zie onderaan); zolang de mixer zich niet
+  meldt *"de mixer heeft zich nog niet gemeld"*, of na 5 s stilte *"mixer meldt zich niet (op de
+  achtergrond?)"*. Een oudere server zonder `/api/mixer` (stap 1): *"Wat er speelt komt hier zodra de mixer
+  zich bij de server meldt (nog niet gebouwd). De kaart werkt wel."*; na een 404 hooguit eens per minuut opnieuw.
 - **Eerste scherm**: wie de companion voor het eerst opent (geen tab bewaard), krijgt de **kaart** als de
   mixer zich niet meldt, en "nu" als hij dat wel doet. Die keuze wordt niet bewaard; een tik op een tab wel.
 - **Beeld**: alleen tonen, met altijd de zin *"Varve-beeld op deze Mac · de beamer van de pc volgt dit
@@ -81,7 +82,7 @@ Niets als de pagina op de achtergrond staat (`visibilitychange`). Niet gemeten o
   `src/engine/toonsoort.js` (de laatste twee puur rekenwerk, samen ~115 kB). Niets uit `control/` of
   `koppel/`.
 - Stuurt nooit `meteen`, `bevestig` of `zoek` (zoeken gaat naar YouTube: dat blijft op de laptop),
-  nooit `DELETE`, en in v1 niets naar de mixer.
+  nooit `DELETE`, en in v1 niets naar de mixer (ook geen `POST /api/mixer`: dat doet alleen de mixer).
 - De server is de bewaker van "nooit binnenhalen op een speeldag of als er een deck speelt"
   (`server/nacht.js` `nu()`); de knop op de telefoon is alleen gemak.
 
@@ -173,11 +174,44 @@ Klein punt voor later (niet in deze PR, server-breed): zonder `VARVE_HOSTS` ziet
 `{"fout":"onbekende host"}`; een hint in die 403 ("zet VARVE_HOSTS, docs/TAILSCALE.md") zou op de
 telefoon helpen. De opstartregel dekt het op de Mac.
 
-## Stap 2 (eigen tak `visie/companion-stap2`, eigen PR, ná deze)
+## Stap 2: de mixer meldt zich bij de server (tak `visie/companion-stap2`, eigen PR)
 
-De mixer (alleen het tabblad met de Web Lock, alleen vanaf deze Mac) POST hooguit eens per 900 ms
-`maakStatus(…)` met positie/duur/rate, `eind` (zwart/bevroren/master) en een `tab`-id naar
-`POST /api/mixer`; iedereen leest `GET /api/mixer`. Dan krijgt "nu" per track titel, ▶/❚❚, "nog mm:ss",
-bpm en toon, en "beeld" de stand. Die code staat op een gestapelde tak met een eigen concept-PR, zodat
-deze PR (stap 1) los samengevoegd kan worden en het Lock-tabblad niet raakt. Wat daar wel en niet
-geproefd is, staat in die PR.
+**Wat.** Het mixer-tabblad met de Web Lock (alleen dat, `statusVanMij` in `app.js`) stuurt hetzelfde
+bericht dat de Controlekamer krijgt (`maakStatus`, `src/ui/status-zender.js`) ook naar
+`POST /api/mixer`, met per track `positie`/`duur` (0,1 s) en `rate` (0,001), `eind`
+(`{ zwart, bevroren, master }` uit de reads van de beeld-noodknoppen) en een `tab`-id per laden van de
+pagina. iPad en iPhone lezen `GET /api/mixer` → `{ leeftijd_ms, twee, melding, speelt }`. "Nu" toont dan
+per track titel, ▶/❚❚, **nog mm:ss**, bpm en toon, plus audio · APC · opname · auto-DJ; "beeld" de stand
+van zwart, bevriezen en master.
+
+**Grenzen** (`server/mixer-melding.js`, puur):
+- Schrijven alleen vanaf deze Mac (`vanDezeMac`): Host `localhost`/`127.0.0.1`/`[::1]` op de eigen poort,
+  Origin ontbreekt of is precies die oorsprong, en geen `x-forwarded-for` of `tailscale-user-login`
+  (AANNAME: `tailscale serve` zet die; niet nagekeken op een echte tailnet). Anders 403.
+- Hooguit 16 kB (`content-length` groter = 413 vóór het lezen; zonder `content-length` breekt `leesJson`
+  af). Een melding met acht tracks, lange titels, een MIDI-fout en beeld: **2307 bytes** (gemeten,
+  `controle.test`); met acht korte titels 1018 bytes.
+- Alleen in het geheugen, niets op schijf, niets uitvoeren. `twee` = binnen 5 s meldingen van twee
+  tab-id's (localhost én 127.0.0.1 open): de companion zet dan een rode regel.
+- De mixer post hooguit één keer per 900 ms, nooit een tweede zolang de eerste onderweg is, met een
+  eigen time-out van 900 ms (dan gewoon de volgende keer); na een 404 of een weigering 60 s rust, na een
+  netwerkfout of 5xx 10 s. Er wordt nooit gewacht in de interval: niets wat de POST doet komt in de mixer
+  (`test/status-zender.test.mjs`). `app.js` verandert in 5 regels (`naarServer: true`, `tab`, `eind`).
+
+**Getest**: `test/mixer-melding.test.mjs` (isMelding, vanDezeMac in elf gevallen, MixerStand met een
+nepklok), `test/status-zender.test.mjs` (nagebouwd BroadcastChannel, fetch en klok; met een mutatie
+gecontroleerd), `test/controle.test.mjs` (de nieuwe velden, de grootte), `test/companion-server.test.mjs`
+(403 via de ts-naam, met een ts-Origin, een vreemde Origin, `x-forwarded-for` en `tailscale-user-login`;
+415, 413, chunked 17 kB, 400, `twee`, GET via de ts-naam) en headless: het **script** post meldingen
+(gebouwd met de echte `maakStatus`) en de companion toont acht rijen, A "nog 49:59", H op 1,05× "nog 3:10",
+BEVRIES aan · MASTER 80 %, na ~4–5 s stilte "mixer meldt zich niet" (grijs, "≈ nog"), en de rode regel bij
+twee tab-id's (`companion-390-nu.png`, `companion-1024-vol.png`).
+
+**NIET getest, bewust (ontwerp H2)**: de mixer zelf (`index.html` met `app.js`) heeft nog nooit gepost.
+Dat raakt het Lock-tabblad en wacht tot na de proefavond: één extra tabblad met `index.html` van een
+EIGEN proefserver (MIDI omwikkeld, `--mute-audio`, geen demotrack), en dan `GET /api/mixer` met
+`leeftijd_ms < 2000` en een `tab`. Ook niet gemeten: wat een POST per 900 ms kost in een echte set (een
+`JSON.stringify` van ~1–2 kB per seconde op de hoofdthread; het audiopad wordt niet geraakt).
+
+Op de iPad liggend is "nu" met acht tracks plus "beeld" hoger dan 768 px: de rechterkolom scrolt dan zelf
+(hij blijft wel staan als de kaart scrolt).
