@@ -1,4 +1,5 @@
 import { GROEPEN, LAAGNAAM } from '../control/lagen.js';
+import { DRUMPAD_VAN_SAMPLER, drumpadNoot, nootNaamDrum } from '../control/drumpads.js';
 
 /**
  * Wat een action betekent, in gewone taal — voor de APC-kaarten (apc.html).
@@ -166,6 +167,10 @@ export function beschrijf(action) {
   if ((m = /^patterns\.row\.([1-5])$/.exec(action))) return { kort: `rij ${m[1]}`, lang: `patronen: rij ${m[1]} op alle tracks met een instrument, op de maat (een lege plek in die rij: die track stopt); lampje fel = er speelt iets in deze rij, knippert = wacht, donker = gevuld` };
   if ((m = /^sampler\.(\d)$/.exec(action))) return { kort: `pad ${m[1]}`, lang: `sampler-pad ${m[1]}: leeg = pak de laatste tellen van de focus-track, gevuld = start/stop op de tel (een sectie: op de "1"; een sectie van 2 maten of korter op de tel, zoals een gewone pad)` };
   if ((m = /^sampler\.(\d)\.clear$/.exec(action))) return { kort: `leeg ${m[1]}`, lang: `sampler-pad ${m[1]} leegmaken (bewaard blijft bewaard)` };
+  if ((m = /^sampler\.(\d)\.drums$/.exec(action))) {
+    const p = DRUMPAD_VAN_SAMPLER[Number(m[1]) - 1], noot = drumpadNoot(p);
+    return { kort: `→drum ${p}`, lang: `sampler-pad ${m[1]} als drumpad ${p} op de Drums (de speeltrack, of de enige Drums-track): dezelfde pad als in de padmodus sampler van de Maschine; one-shot door de strip van die track (fader, filter, echo, galm, fx, koptelefoon), in een patroon op noot ${nootNaamDrum(noot)} (${noot}). Lampje: fel = drumpad gevuld, gedimd = kan, uit = kan niet (sampler-pad leeg of geen Drums)` };
+  }
   if ((m = /^sampler\.(\d)\.section$/.exec(action))) return { kort: `sectie→${m[1]}`, lang: `sampler-pad ${m[1]}: de sectie die je hoort op de focus-track, heel (van haar "1" tot de "1" van de volgende, in hele maten; hooguit 32 maten en 90 s), bewaard bij het nummer; de pad start daarna op de "1" van de maatgever (een sectie van 2 maten of korter: op de tel, zoals een gewone pad). Verspringt de "1" van het grid in de sectie, dan stopt de pad op de "1" ervóór (een melding zegt het). Alleen op een lege pad, anders zegt een melding waarom. Lampje: donker hemelsblauw = kan, uit = kan niet (pad gevuld of bewaard; de focus-track heeft geen secties of grid; onzeker grid; langer dan 32 maten of 90 s)` };
   if ((m = /^send\.a\.knob\.(\d)$/.exec(action))) return { kort: `echo ${SEND_A[m[1] - 1] ?? m[1]}`, lang: `echo-bus: ${SEND_A[m[1] - 1] ?? `knop ${m[1]}`}` };
   if ((m = /^send\.b\.knob\.(\d)$/.exec(action))) return { kort: `galm ${SEND_B[m[1] - 1] ?? m[1]}`, lang: `galm-bus: ${SEND_B[m[1] - 1] ?? `knop ${m[1]}`}` };

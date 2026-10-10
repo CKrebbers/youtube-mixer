@@ -15,6 +15,7 @@ const D = await import('../src/control/devices/maschine-mk2.js');
 const S = await import('../src/control/maschine-scherm.js');
 const { PALETTE } = await import('../src/control/devices/apc40mk2.js');
 const { beschrijf } = await import('../src/ui/apc-beschrijf.js');
+const { DRUMPAD_VAN_SAMPLER } = await import('../src/control/actions.js');
 const doc = JSON.parse(readFileSync(new URL('../mappings/maschine-mk2.json', import.meta.url), 'utf8'));
 
 console.log('de pads zoals je ernaar kijkt');
@@ -27,6 +28,10 @@ console.log('de pads zoals je ernaar kijkt');
   ok('elke sampler-pad komt precies twee keer voor (sample en sectie)', [1, 2, 3, 4, 5, 6, 7, 8].every((k) => kaart.filter((x) => x.k === k).length === 2));
   ok('de action: sample = sampler.K, sectie = sampler.K.section, met SHIFT allebei sampler.K.clear',
     samplerActie(13, false) === 'sampler.1' && samplerActie(1, false) === 'sampler.5.section' && samplerActie(13, true) === 'sampler.1.clear' && samplerActie(1, true) === 'sampler.5.clear');
+  // Crossover (W1): sampler.K.drums legt het stuk op dezelfde fysieke pad waarop je het in
+  // SAMPLING knipt; in de speelmodus slaat die pad dan het stuk aan.
+  ok('sampler.K.drums: dezelfde fysieke pad (voor elke pad 9–16: samplerPad = sample K en DRUMPAD_VAN_SAMPLER[K − 1] = die pad)',
+    [9, 10, 11, 12, 13, 14, 15, 16].every((p) => { const x = samplerPad(p); return x.soort === 'sample' && DRUMPAD_VAN_SAMPLER[x.k - 1] === p; }));
 }
 
 // ---- een Maschine met een nep-sampler -----------------------------------------------
