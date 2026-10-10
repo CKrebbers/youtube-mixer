@@ -288,7 +288,8 @@ console.log('\nde CLI (tools/setboek/setboek.mjs)');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   const { spawnSync } = await import('node:child_process');
-  const cli = new URL('../tools/setboek/setboek.mjs', import.meta.url).pathname;
+  const { fileURLToPath } = await import('node:url');
+  const cli = fileURLToPath(new URL('../tools/setboek/setboek.mjs', import.meta.url));   // niet .pathname: de echte checkout heeft spaties
   const draai = (...args) => spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
   const map = mkdtempSync(join(tmpdir(), 'setboek-'));
   try {
