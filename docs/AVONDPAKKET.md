@@ -1,10 +1,11 @@
 # Avondpakket: één controle vóór vertrek en bij aankomst
 
 *10 okt 2026, spoor "draagbaar" (VISIE §3: de draagbare set). Ontwerp:
-`uitwerking/draagbaar/5-ontwerp-definitief.md` (kladmap van de sessie van 10 okt), review
-`7-review-1.md`. Stand: **stap 1-6 gebouwd** (kern, sondes, CLI, route, tegel, docs).
-Open: **7a/7b** (de uitvoer van aangesloten hardware zien en de uittrekproef met Clay);
-tot dan staat `hardwareBevestigd` op `false`.*
+`uitwerking/draagbaar/5-ontwerp-definitief.md` met de reviews `7-review-1.md` en
+`7-review-2.md` (kladmap van de sessie van 10 okt, **niet in de repo**; de besluiten staan in
+dit bestand, de open keuzes voor Clay in §14). Stand: **stap 1-6 gebouwd** (kern, sondes,
+CLI, route, tegel, docs) en twee herstelrondes. Open: **7a/7b** (de uitvoer van aangesloten
+hardware zien en de uittrekproef met Clay); tot dan staat `hardwareBevestigd` op `false`.*
 
 ## 1. Wat het is
 
@@ -26,25 +27,35 @@ deck speelt.
 - **Zonder server, en voor Claude/agents:** `node tools/avondpakket.mjs` (zie §10).
 - **De route:** `GET /api/avondpakket?profiel=apc&fase=vertrek|aankomst&vers=1`.
 
-Wanneer meet het? Bij het openen van de Controlekamer, bij een andere keuze, bij een klik,
-en verder hooguit elke 5 minuten (niet elke 2 s zoals de andere tegels: de meting start
-`system_profiler` en `find`). **Staat de mixer open**, dan meet de pagina niet vanzelf
-("niet gemeten · mixer open: klik om te meten"). **Speelt er een deck** (de server ziet
-Range-verzoeken op `audio.wav`/`stems.wav`, 30 s), dan geeft de server de laatste stand terug:
-"bevroren: er speelt een deck · 18:30". Een klik vraagt dan alleen het goedkope opnieuw
-(`pmset`, `df`, `defaults`, `pgrep`, poort 7700), nooit `system_profiler`, `ioreg`, `lsof` of `find`.
+Wanneer meet het? **Volledig** alleen bij het openen van de Controlekamer, bij een andere
+keuze, bij een klik, en als de mixer dichtgaat terwijl de tegel "niet gemeten" zei (niet
+elke 2 s zoals de andere tegels: de meting start `system_profiler` en `find`). Verder
+**elke 5 minuten automatisch, maar alleen als de pagina in beeld is** en met `auto=1`: de
+server geeft dan de cache (< 10 s) of meet alleen het goedkope (`pmset`, `df`, `defaults`,
+`pgrep`, poort 7700). De tegel zegt dat: "apc · vertrek · 18:30 · deels 18:35" (18:30 = de
+laatste volledige meting); een klik meet alles. **Staat de mixer open**, dan meet de pagina
+niet vanzelf ("niet gemeten · mixer open: klik om te meten"). **Speelt er een deck** (de server
+ziet Range-verzoeken op `audio.wav`/`stems.wav`, 30 s), dan geeft de server de laatste stand
+terug: "bevroren: er speelt een deck · 18:30". Een klik vraagt dan alleen het goedkope
+opnieuw, nooit `system_profiler`, `ioreg`, `lsof` of `find`.
+
+**Grens:** de server ziet alleen een spelend **deck**. Een set met alleen patronen, sampler
+of instrumenten, of een pauze van meer dan 30 s tussen decks, ziet hij niet als spelen; en de
+Controlekamer op de iPhone ziet de Web Lock van de mixer op de Mac niet. Daarom meet het
+automatische moment nooit iets duurs: een volledige meting komt alleen van een keuze of een
+klik van Clay zelf. Of `system_profiler` onder het geluid een tik geeft, is niet gemeten.
 
 ## 3. De bestanden
 
 | bestand | wat |
 |---|---|
-| `server/avondpakket.js` | **puur**: parsers (`pmset -g batt`/`ac`, `ioreg` accu en USB, `df -k`, `defaults read com.apple.bird optimize-storage`, `system_profiler` audio/Bluetooth/USB-host, `tailscale status --json`, `find -exec stat` en `find -flags +dataless`), `leesProfielen`, `paklijstVan`, `herkenUsb`, `kiesFase`, `verwachteBestanden`/`vergelijkCompleet`, `schoon` (privacy), `beoordeel`. Geen I/O, `nu` van buiten |
-| `server/avondpakket-meet.js` | de sondes in **kindprocessen** met een time-out per sonde (`voerUit`: `execFile`, 8 MB, SIGKILL), `poortOpen`, `meet`, `maakCache` (één lopende meting, 10 s, bevriezing), `maakNep` (fixtures), `maakAvondpakket` (de bundel voor de route), `backupMeting`, `achtergrondMeting`, `extraPaden` |
+| `server/avondpakket.js` | **puur**: parsers (`pmset -g batt`/`ac`, `ioreg` accu en USB, `df -k`, `defaults read com.apple.bird optimize-storage`, `system_profiler` audio/Bluetooth/USB-host, `tailscale status --json`, `find -exec stat` en `find -flags +dataless`), `leesProfielen`, `heeftProfiel`, `paklijstVan`, `herkenUsb`, `kiesFase`, `verwachteBestanden`/`verwachtePaden`/`vergelijkCompleet`, `schoon` (privacy), `beoordeel`. Geen I/O, `nu` van buiten |
+| `server/avondpakket-meet.js` | de sondes in **kindprocessen** met een time-out per sonde (`voerUit`: `execFile`, 8 MB, SIGKILL), `poortOpen`, `meet`, `maakCache` (één lopende meting, 10 s, bevriezing, `auto`), `maakNep` (fixtures), `maakAvondpakket` (de bundel voor de route; `profielen.json` met een grens van 1 s), `backupMeting`, `achtergrondMeting`, `speellijstStand`, `extraPaden` |
 | `avondpakket/profielen.json` | de data: apparaten (hoe te herkennen), vijf profielen, grenzen, `bekend`, `paklijst`, `hardwareBevestigd`. Niet via HTTP te lezen (niet in `MAG`) |
 | `server/index.js` | één import, `maakAvondpakket({ … speeltDeck … })`, de route na `/api/backups` |
 | `server/backup.js` | `stand().gewijzigdSinds`: een wijziging die nog in geen kopie zit (false/true/null) |
 | `src/controle/avondpakket-tegel.js` | de tegel als pure functie |
-| `src/controle/controle.js`, `controle.html`, `controle.css` | de tegel, het uitklapblok, wanneer er gemeten wordt |
+| `src/controle/controle.js`, `controle.html`, `controle.css` | de tegel, het uitklapblok (met de speellijst als info), wanneer er gemeten wordt |
 | `tools/avondpakket.mjs` | de CLI |
 | `test/avondpakket.test.mjs`, `test/avondpakket-meet.test.mjs`, `test/avondpakket-server.test.mjs`, `test/fixtures/avondpakket/` | zie §11 |
 | `tools/headless/avondpakket.mjs` | de tegel in Chromium (§11) |
@@ -55,15 +66,17 @@ Niets in `src/engine/`, geen actions, geen speellijstblokken, geen nieuwe depend
 
 `avondpakket/profielen.json`. Per onderdeel `verwacht`, `optioneel` of `nee`. Een nieuwe
 controller of geluidskaart is een regel onder `apparaten` (naam als regex, USB `vid:pid`
-in hex), geen code. `optioneel` = niet op de paklijst, wel herkend als hij eraan hangt (zo
-staat de Xboard49 erin: geen reisspul).
+in hex), geen code. `optioneel` = niet vanzelf op de paklijst en nooit gemist, wel herkend
+als hij eraan hangt (zo staat de Xboard49 erin: geen reisspul). Gaat een optioneel apparaat
+toch mee, dan staat hij als regel in `paklijst`: zo de **LPD8** bij `maschine` en `alles`
+("als hij meegaat").
 
 | profiel | mee | Varve kan | niet, en het alternatief |
 |---|---|---|---|
 | `laptop` | laptop, bedrade koptelefoon | fader: één tegelijk met de muis · filter/fx/echo op de focus-track · alles met toetsenbord | geen overgang met de hand; geen aparte cue (2 kanalen) |
 | **`apc`** (standaard, de kern) | + APC40 mkII, Scarlett 2i2, PD-hub | **fader 8 tegelijk · filter · fx · echo** (Clay's vier meest gebruikte gebaren) en het volledige DJ-werk zonder hub (`docs/APC40.md`) | bladeren/laden vanaf de APC (ONTBREEKT B10): muis of toetsenbord |
-| `maschine` | + Maschine MK2 (+ LPD8), Scarlett, AV-hub | **geen fader** (overgangen met de muis) · filter/fx/echo op de focus-track · pads, patronen, Strip/Rack, secties, sampler, wiel | play/pauze, crossfader, tempo per deck (`docs/MASCHINE.md` §5c) |
-| `alles` | APC + Maschine + LPD8 + hub (avond 2) | alles van apc én maschine | Bank = hubtoets |
+| `maschine` | + Maschine MK2 (+ LPD8 als hij meegaat), Scarlett, AV-hub | **geen fader** (overgangen met de muis) · filter/fx/echo op de focus-track · pads, patronen, Strip/Rack, secties, sampler, wiel | play/pauze, crossfader, tempo per deck (`docs/MASCHINE.md` §5c) |
+| `alles` | APC + Maschine (+ LPD8) + hub (avond 2) | alles van apc én maschine | Bank = hubtoets |
 | `beeld` | APC + Scarlett + Tailscale naar `clayk` (avond 3) | alles van apc + de Stroommachine volgt klok en nummer | HDMI-adapter en de voeding van de pc apart |
 
 **Minimale controllerset onderweg:** **APC + Scarlett + bedrade koptelefoon + PD-hub + lader
@@ -79,6 +92,14 @@ hub-lease is nog nooit op de hardware geproefd).
   HDMI-scherm of een USB-C-dongle met 2 kanalen niet. Alleen USB-audio telt als apparaat:
   een samengesteld apparaat dat "Scarlett + koptelefoon" heet, is geen Scarlett. Profiel
   `laptop` is altijd `aankomst` (niets in te pakken). De fase wordt niet onthouden.
+- **Niets gezien is niet niets gemeten:** zijn USB én geluid allebei niet gemeten (time-out,
+  of er speelt een deck en er is nog nooit gemeten), dan kan `auto` niet kiezen. Dan een
+  oranje punt **Fase: "niet te bepalen"** ("USB en geluid niet gemeten (time-out): kies
+  vertrek of aankomst"); zo is het licht nooit groen zonder dat de apparaten gezien zijn.
+  Niet bij een gekozen fase en niet bij `laptop`.
+- **`fase` in `profielen.json`**: `auto` (standaard), of `vertrek`/`aankomst` als vaste fase
+  (dan raadt het pakket niet; een keuze in de tegel of `--vertrek`/`--aankomst` gaat voor).
+  Het rapport zegt waar de fase vandaan komt: `faseBron` = `gekozen`, `data` of `auto`.
 - **Vertrek** toetst alleen het thuiswerk. Apparaten, geluid, de USB-hub en een dichte
   AV-hub zijn dan grijze **paklijstregels** ("inpakken: APC40 mkII + USB-B → USB-C",
   "straks bij aankomst: npm start -- studio"), nooit oranje. Zo is een goed ingepakte tas
@@ -96,7 +117,8 @@ hub-lease is nog nooit op de hardware geproefd).
 | punt | groen | oranje | rood |
 |---|---|---|---|
 | media lokaal | > 0 bestanden, niets uitgeplaatst (met server: niet minder dan de library verwacht) | alleen buiten de nummers (`backups/`) uitgeplaatst; minder bestanden dan verwacht | iets in `<id>/` of `library.db`/`kaart.db` uitgeplaatst: "open in de Finder, klik het wolkje, thuis" (leeg/ontbreekt = grijs) |
-| instellingen lokaal | niets uitgeplaatst | code uitgeplaatst | `mappings/`, `racks/`, `patronen/`, `plannen/`, `Input/`, `proef/` of het kaartbestand uitgeplaatst |
+| instellingen lokaal | niets uitgeplaatst | code uitgeplaatst | `mappings/`, `racks/`, `patronen/`, `plannen/`, `Input/`, `proef/`, `avondpakket/` ("zonder internet geen profielen") of het kaartbestand uitgeplaatst |
+| fase (alleen `auto`) | — | USB en geluid allebei niet gemeten: "kies vertrek of aankomst" | — |
 | iCloud | optimaliseren uit, of aan met ≥ 50 GiB vrij | aan en < 50 GiB vrij | — |
 | schijf | ≥ 50 GiB | 20-50 GiB | < 20 GiB |
 | accu | vertrek ≥ 80 %; aankomst aan een lader ≥ 30 W | < 80 % bij vertrek; zwakke lader (nu **8 W**); op de accu bij aankomst | < 20 % op de accu, **of < 20 % aan een lader onder 30 W** |
@@ -106,7 +128,7 @@ hub-lease is nog nooit op de hardware geproefd).
 | servers | één proces op `library.db` | onbekend en ≥ 2 Varve-servers | ≥ 2 processen op `library.db` |
 | Tailscale | Running | niet Running als `verwacht` (vertrek); peer offline (`beeld: verwacht`) | niet Running als `verwacht` (aankomst) |
 | backup | kopie zonder latere wijziging; sub altijd "kopie staat op deze Mac (gaat mee in de tas)" | wijziging nog in geen kopie | mislukt, of nog nooit een kopie (grijs: bezig, onbekend of CLI zonder server) |
-| achtergrond | wachtrijen leeg, nacht uit of vandaag speeldag | iets in de wachtrij; nacht aan zonder speeldag; bij vertrek een split bezig | een split of ingest bezig bij aankomst |
+| achtergrond | wachtrijen leeg; nacht uit, vandaag speeldag of "vandaag niet" aan | iets in de wachtrij; nacht aan zonder speeldag en zonder "vandaag niet" ("zet 'vandaag niet' aan of de nachtwachtrij uit (mixer › KAART › NACHTWACHTRIJ)"); bij vertrek een split bezig | een split of ingest bezig bij aankomst |
 | library compleet | elk verwacht bestand er en > 0 B | — | een bestand mist of is 0 B (grijs met de oude stand als er een deck speelt) |
 
 ## 6. Paklijst en poorten
@@ -118,8 +140,8 @@ stekkers. Daarom een **USB-C-hub met PD-ingang** (lader in de hub, hub in de Mac
 |---|---|---|---|
 | `laptop` | lader | — | — |
 | `apc` | APC40 mkII direct | PD-hub | lader (≥ 30 W) · Scarlett 2i2 |
-| `maschine` | PD-hub | — | lader · Scarlett · Maschine · LPD8 |
-| `alles` | APC direct | PD-hub | lader · Scarlett · Maschine · LPD8 |
+| `maschine` | PD-hub | — | lader · Scarlett · Maschine · LPD8 (als hij meegaat) |
+| `alles` | APC direct | PD-hub | lader · Scarlett · Maschine · LPD8 (als hij meegaat) |
 | `beeld` | APC direct | PD-hub | lader · Scarlett · USB-C→HDMI (als de hub hem heeft) |
 
 **De paklijst is data.** Het rapport heeft altijd een veld `paklijst` (ook bij aankomst en
@@ -131,8 +153,10 @@ kent (de PD-hub en elk `verwacht` apparaat met zijn kabel), dan de regels uit
 2. bedrade koptelefoon + verloop 6,3 → 3,5 mm (AirPods = Bluetooth: latency, geen cue) — alle
 3. speaker + netsnoer + 2× jack naar de ingang van de speaker — apc, maschine, alles, beeld
 4. stekkerdoos (lader, speaker, hub) — alle
-5. USB-C → HDMI, de Omarchy-pc + voeding, netwerk voor Tailscale — beeld
-6. ☐ een kopie van `library.db` (liefst ook `media/`) **blijft thuis**: de backups in `media/backups/` gaan mee in de tas — alle
+5. LPD8 + USB-B → USB-C, als hij meegaat (werkt alleen via de AV-hub) — maschine, alles
+   (de LPD8 blijft `optioneel`: hij gaat mee, maar ontbreekt hij, dan is dat geen punt)
+6. USB-C → HDMI, de Omarchy-pc + voeding, netwerk voor Tailscale — beeld
+7. ☐ een kopie van `library.db` (liefst ook `media/`) **blijft thuis**: de backups in `media/backups/` gaan mee in de tas — alle
 
 Een regel erbij of weg: `profielen.json` aanpassen, geen code.
 
@@ -141,7 +165,7 @@ Een regel erbij of weg: `profielen.json` aanpassen, geen code.
 **Vóór vertrek (thuis, ~5 min):**
 1. VARVE in het Dock → Controlekamer → tegel Avondpakket (fase springt op `vertrek` zolang er niets aanhangt). Doel: "klaar"; elk "let op" bewust gezien.
 2. Rood media/instellingen: map openen in de Finder, het wolkje klikken, wachten (een `stems.wav` van 3,9 GB duurt minuten); tegel opnieuw klikken.
-3. Accu tot ≥ 80 %; achtergrond: vandaag als speeldag in de nacht-tegel, of de split laten aflopen.
+3. Accu tot ≥ 80 %; achtergrond: in de mixer KAART › NACHTWACHTRIJ "vandaag niet" aan (of de nachtwachtrij uit), of de split laten aflopen.
 4. Paklijst van het profiel afvinken in het uitklapblok, **inclusief de kopie die thuis blijft**.
 5. Niets meer binnenhalen (huisregel). Geen server? `node tools/avondpakket.mjs`.
 
@@ -204,9 +228,14 @@ node tools/avondpakket.mjs [--profiel <naam>] [--vertrek|--aankomst] [--streng] 
   `VARVE_PLANNEN`/`_PATRONEN`/`_PROEF`, `VARVE_KAART`.
 - Exit: **0** geen rood · **1** oranje, alleen met `--streng` · **2** rood · **3** fout in de
   aanroep (onbekend profiel, ongeldige vlag, server noch mediamap bereikbaar).
-- `--json` = het antwoord van de route: `{ profiel, profielOnbekend?, fase, faseGekozen, t,
-  duurMs, bevroren?, hardwareBevestigd, licht, telling, oordeel, letOp, inpakken, paklijst,
-  punten: [{ id, naam, licht, waarde, sub }], titel, kan, kanNiet, let, profielen, bron }`.
+- `--json` = het antwoord van de route: `{ profiel, profielOnbekend?, fase, faseGekozen,
+  faseBron, t, duurMs, bevroren?, deels?: { volledig }, hardwareBevestigd, licht, telling,
+  oordeel, letOp, inpakken, paklijst, punten: [{ id, naam, licht, waarde, sub }], titel, kan,
+  kanNiet, let, profielen, info?: { speellijst: { gedaan, fout, totaal } }, bron }`. `info`
+  telt nooit mee in het oordeel (de speellijst van de Controlekamer, `proef/sessie.json`).
+- De route kent drie soorten vragen: zonder vlag (openen, keuze: uit de cache als die < 10 s
+  oud is, anders volledig), `vers=1` (een klik: volledig, behalve binnen 2 s) en `auto=1` (de
+  Controlekamer elke 5 min: de cache of alleen het goedkope, met `deels`).
 - **Nooit tijdens een set** draaien zonder dat de server het weet: de route bevriest op een
   spelend deck, de CLI zonder server niet.
 - Tests en de headless-check: `VARVE_AVONDPAKKET_NEP=<map>` leest `<map>/nep.json`
@@ -219,7 +248,7 @@ node test/avondpakket.test.mjs          # puur, < 1 s: parsers, profielen, fase,
 node test/avondpakket-meet.test.mjs     # sondes met een nep-exec (50 ms), cache, bevriezing, de CLI (exit 0-3)
 node test/avondpakket-server.test.mjs   # de route op een eigen server met NEP-fixtures (~3 s)
 node test/backup.test.mjs               # o.a. gewijzigdSinds
-node tools/headless/avondpakket.mjs [uitmap]   # de tegel in Chromium (~40 s; poorten 8914/9514)
+node tools/headless/avondpakket.mjs [uitmap]   # de tegel in Chromium (~45 s; poorten 8914/9514)
 node test/alles.mjs                     # alles
 ```
 
@@ -236,10 +265,18 @@ Niet tijdens een proefavond: `alles.mjs`, de servertest en de headless-check geb
   het samengestelde apparaat `aggregate` heet: pas na 7a.
 - De USB-id van de APC (`09e8:0029`) is niet geverifieerd; de naam-regex `apc40` moet het
   dan doen.
-- Eén echte run van de CLI (10 okt 13:45, kladmediamap via een link, geen server): 0,27 s,
-  elke sonde gemeten. Nooit tegen Clay's server op 8777, de echte `media/` of de echte
-  `library.db` gedraaid.
+- Echte runs (10 okt, kladmappen, echte sondes): de CLI zonder server (13:45 en 14:48,
+  0,2-0,3 s, elke sonde gemeten) en de route op een proefserver (14:01 en 14:48): volledige
+  meting 0,2-0,4 s, `auto=1` na de cache 31-55 ms (alleen het goedkope), "vandaag niet" via
+  `POST /api/nacht` maakt de achtergrond groen. Nooit tegen Clay's server op 8777, de echte
+  `media/` of de echte `library.db` gedraaid.
 - Of `find -flags +dataless` een door Clay "van deze Mac verwijderd" bestand echt ziet: 7b.
+- Of `readFile` op een **uitgeplaatst** `profielen.json` zonder internet echt blijft hangen:
+  niet gezien. De route wacht hoe dan ook hooguit 1 s (`LEES_MS`) en valt dan terug op
+  `laptop` met een oranje punt; getest met een named pipe die nooit antwoordt.
+- Het automatische moment (`auto=1`, alleen als de pagina in beeld is) is in de headless-check
+  getest door `controle.apAutomatisch()` aan te roepen met een nagebootste `visibilityState`;
+  het echte interval van 5 minuten en een echte verborgen tab niet.
 - Hoe lang de accu het onder last houdt aan de 8 W-lader of zonder lader: niet gemeten.
 - Clay's gebruikscijfers in de `kan`-regels (11.796× fader enz.) zijn overgenomen uit het
   stappenplan van 9 okt, niet nagerekend.
@@ -248,11 +285,51 @@ Niet tijdens een proefavond: `alles.mjs`, de servertest en de headless-check geb
 
 - **7a** (morgenochtend, mixer dicht, apparaten nog aan, alleen lezen): `system_profiler
   SPAudioDataType SPUSBHostDataType -json` en `ioreg -p IOUSB -w0 -r -c IOUSBHostDevice -l`
-  vastleggen, anonimiseren, de HANDGEMAAKT-fixtures voor audio en usb vervangen.
+  vastleggen, anonimiseren, de HANDGEMAAKT-fixtures voor audio en usb vervangen. Wie dat
+  doet, is keuze 9 in §14.
 - **7b** (met Clay): elk apparaat uittrekken maakt precies dat punt rood; één bestand "van
   deze Mac verwijderen" en kijken of het pakket het ziet; dan `hardwareBevestigd: true`.
 - 8: de mixer meldt zijn uitgang (eigen PR). 9: het ritueel afvinkbaar op de iPhone. 10: een
   sonde voor de reiskopie. Alle drie na een keuze van Clay.
+- "De speellijst" is nu de speellijst van de Controlekamer (`proef/sessie.json`), alleen als
+  info ("speellijst: 12 van 172 punten gedaan"). Wordt het het plan of de krat van de avond
+  (keuze 5), dan controleert `compleet` alleen die nummers.
 
-Open keuzes voor Clay (speaker en koptelefoon, PD-hub, kopie buiten de laptop, iCloud,
-grenzen, fase `auto`) staan in het ontwerp, §7.
+## 14. Open keuzes voor Clay
+
+Uit het ontwerp (§7) en de reviews; ook in `docs/VRAGEN.md` blok AP. Niets hiervan houdt
+het pakket tegen: tot er een keuze is, doet het wat hier als "nu" staat.
+
+1. **Speaker en koptelefoon.** Actieve monitor met jack/XLR, een draagbare speaker via aux-in,
+   of een Bluetooth-speaker (150-250 ms latency, geen cue; dan `"zaal": "bluetooth"` in het
+   profiel)? Koptelefoon bedraad, of de AirPods Max met de Apple-kabel naar 3,5 mm (niet
+   getest)? Nu: bedraad, paklijstregel 2 en 3.
+2. **PD-doorvoer van de hub.** Heeft je USB-C-hub een PD-ingang (lader in de hub)? Zo nee: een
+   PD-hub kopen, of onderweg op de accu spelen (looptijd niet gemeten)? Nu: paklijst "USB-C-hub
+   met PD-ingang".
+3. **Een kopie buiten de laptop.** `VARVE_BACKUPS` naar een externe schijf of de pc? En een
+   tweede kopie van `media/` (32 GB), hoe vaak? Nu: paklijstregel "kopie blijft thuis", handwerk.
+4. **iCloud en `media/`.** "Optimaliseer opslag" uitzetten, of `media/` buiten iCloud
+   (`VARVE_MEDIA`)? Nu: `bekend: ["icloud"]` houdt het grijs zolang er ≥ 50 GiB vrij is.
+5. **"De speellijst"**: de speellijst van de Controlekamer (`proef/sessie.json`, nu als info)
+   of het plan/de krat van de avond (`plannen/`)? Bij het tweede controleert `compleet`
+   alleen die nummers, met de hele library als terugval.
+6. **Profielen, namen en grenzen** (`laptop`, `apc`, `maschine`, `alles`, `beeld`; schijf
+   20/50 GiB; accu 80 %; lader 30 W; standaard `apc`): akkoord? Het is data.
+7. **Fase `auto`** als standaard, of liever altijd zelf kiezen? Dat is één woord in
+   `profielen.json`: `"fase": "vertrek"` (of `"aankomst"`) zet hem vast.
+8. **Tailscale serve + `VARVE_HOSTS`** voor de Controlekamer op de iPhone: ja? Dan krijgt het
+   pakket ook een punt voor de iPhone.
+9. **Stap 7a morgenochtend:** mag een agent, met de mixer dicht en de apparaten nog
+   aangesloten, de alleen-lezen-commando's draaien? Of doe je het zelf (twee commando's,
+   alleen lezen):
+   ```sh
+   system_profiler SPAudioDataType SPUSBHostDataType -json > ~/Desktop/avondpakket-7a.json
+   ioreg -p IOUSB -w0 -r -c IOUSBHostDevice -l > ~/Desktop/avondpakket-7a-ioreg.txt
+   ```
+   De bestanden bevatten serienummers: niet delen; een agent anonimiseert ze vóór ze in de
+   fixtures komen.
+10. **Stap 8** (de mixer meldt zijn kanalen, tegel Koptelefoon) en **stap 9** (ritueel
+    afvinkbaar op de iPhone): gewenst, en wanneer?
+11. **LPD8 zonder hub:** in profiel `apc` gaat hij niet mee (hij werkt alleen via de AV-hub).
+    Bij `maschine` en `alles` staat hij op de paklijst "als hij meegaat". Akkoord?

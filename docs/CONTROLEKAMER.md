@@ -131,11 +131,15 @@ avond 3 vóór "Eerder werk", en de kern vooraan):
 - **Vragen aan de server** (`ververs`, elke 2 s): pas een nieuwe ronde als de vorige klaar
   is, en elk verzoek geeft het na 6 s op (`WACHT_MS`; de tooling-controle 60 s). Bij een
   trage of hangende server (een telefoon via het LAN) stapelden de verzoeken zich anders op.
-  De losse routes (`/api/backups`, `/api/stems`, `/api/secties`) worden na een 404 of een
-  fout hooguit eens per minuut opnieuw gevraagd (`RUST_MS`, `haalLos`); intussen blijft het
-  laatste antwoord staan, en komt er niet elke 2 s een rode regel in de console.
+  De losse routes (`/api/backups`, `/api/stems`, `/api/secties`, en `/api/avondpakket`, dat
+  niet elke 2 s gevraagd wordt) worden na een 404 of een fout hooguit eens per minuut opnieuw
+  gevraagd (`RUST_MS`, `haalLos`); intussen blijft het laatste antwoord staan, en komt er niet
+  elke 2 s een rode regel in de console. De rust geldt per route (het pad zonder vraag):
+  `/api/avondpakket?vers=1` omzeilt de rust van `/api/avondpakket` niet.
 - **De backup-stand** (`GET /api/backups`, alleen GET, achter dezelfde Host-controle):
-  `{ laatste: { naam, tijd, bytes } | null, aantal, gekeken, fout, foutTijd, bezig }`.
+  `{ laatste: { naam, tijd, bytes } | null, aantal, gekeken, fout, foutTijd, bezig,
+  gewijzigdSinds }`; `gewijzigdSinds` (het avondpakket) = staat er een wijziging in
+  `library.db` die nog in geen kopie zit: `false`, `true`, of `null` (niet te zien).
   Los opgehaald: een oudere server zonder die route geeft een grijze tegel, geen
   "server weg". De kopieën zelf zijn via HTTP niet te lezen.
 - **De secties-telling** (`GET /api/secties`, alleen GET, achter dezelfde Host-controle):

@@ -507,3 +507,17 @@ Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
   `?vormen=1`), óf de hubtoets van de hub wordt een andere (dat raakt alle
   apps, PROTOCOL §5/§7). **Advies:** keylock naar een andere toets; de hubtoets
   is voor elke app hetzelfde.
+
+---
+
+## AP. Avondpakket (10 okt, docs/AVONDPAKKET.md §14, tak `visie/draagbaar`)
+
+De elf open keuzes van het avondpakket (de controle vóór vertrek en bij aankomst) staan met
+de stand van nu in **docs/AVONDPAKKET.md §14**: speaker en koptelefoon, PD-doorvoer van de
+hub, een kopie buiten de laptop, iCloud en `media/`, wat "de speellijst" is, profielen en
+grenzen, fase `auto`, Tailscale serve, stap 7a, stap 8/9, de LPD8.
+
+- [ ] **AP9. Stap 7a (morgenochtend, eerst nodig).** 💬 Mag een agent, met de mixer dicht en
+  de apparaten van de proefavond nog aangesloten, twee alleen-lezen-commando's draaien
+  (`system_profiler … -json`, `ioreg -p IOUSB …`)? Of doe je het zelf: de commando's staan
+  letterlijk in §14 punt 9. **Advies:** een agent, dan zijn de fixtures dezelfde ochtend echt.
