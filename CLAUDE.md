@@ -212,7 +212,8 @@ server/             draait apart: `node server/index.js`
                     "vandaag niet" geldt voor de komende nacht (komendeNacht), ook 's ochtends gezet
   standen.js        standen (docs/STANDEN.md): standen/<naam>.json met versie (409) en .versies, activeren (mapping, nachtrem,
                     nakijken, master vastleggen), verschil, vastleggen, terug (.vorige/ met `raakt`), .actief.json; VARVE_STANDEN;
-                    lezen uit het geheugen zolang stat niets nieuws zegt, één lees per pad (iCloud mag de threadpool niet vullen)
+                    lezen uit het geheugen zolang stat niets nieuws zegt, één lees per pad en hooguit 2 tegelijk voor de hele
+                    server (MAX_DRADEN: iCloud mag de threadpool niet vullen, de andere 2 draden blijven voor de audio)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
                     headless/ (kaart.mjs: de tab kaart op de nep-server kaart-nep.mjs; kaart-echt.mjs: de tab kaart tegen de

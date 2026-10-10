@@ -99,23 +99,33 @@ dat iCloud "dataless" maakte komt zonder netwerk niet terug. De server geeft het
 tot het er is; de libuv-threadpool heeft er vier, dezelfde die de audio van de decks van schijf leest.
 Daarom (review 10 okt): (1) een bestand dat volgens `stat` niet veranderde komt uit het geheugen, dus
 de Controlekamer (elke 2 s) leest niets opnieuw; (2) er loopt nooit een tweede lees op hetzelfde pad
-zolang de eerste hangt (hooguit één vastzittende draad per bestand; daarna meteen 503). Mappen
-(`standen/`, `tools/standen/voorbeelden/`) gaan op dezelfde manier. Wat blijft: één hangend bestand
-houdt één draad vast tot het netwerk terug is. Het avondpakket (spoor draagbaar) hoort `standen/` en
-`tools/standen/voorbeelden/` mee te nemen in zijn dataless-controle (`INSTELLINGEN_MAPPEN`).
+zolang de eerste hangt (daarna meteen 503); (3) over alle paden samen zijn er **hooguit twee**
+operaties van de standen tegelijk onderweg (`MAX_DRADEN`, review 2): de andere twee draden blijven
+voor de audio. Is die grens vol, dan wacht een lees tot er een klaar is (zolang er een binnen de 2 s
+loopt); hangen ze allebei al langer, dan meteen 503 "te veel bestanden tegelijk niet lokaal
+beschikbaar (iCloud?)", zonder een nieuwe draad te starten. Dat geldt voor bestanden, mappen
+(`standen/`, `tools/standen/voorbeelden/`) en de lezers van buiten (sjablonen, standaardmapping,
+profielen, hub-sets). Nagemeten met vier named pipes als de vier voorbeelden: na één poll 2 operaties
+onderweg (was 4) en een gewoon bestand lezen in 0 ms (hing eerst); de volgende poll meteen 503.
+
+Wat blijft: hooguit twee hangende draden tot het netwerk terug is, en zolang die hangen geeft
+`/api/standen` 503 (de Controlekamer toont "onbekend", "mixer openen" houdt de laatst bekende
+opstelling). Het avondpakket (spoor draagbaar) hoort `standen/` en `tools/standen/voorbeelden/` mee te
+nemen in zijn dataless-controle (`INSTELLINGEN_MAPPEN`): die controle vóór vertrek is de echte
+bescherming, de grens hier is het vangnet.
 
 ## 4. Routes
 
 | route | wat |
 |---|---|
 | `GET /api/standen` | `{ standen: [{ naam, titel, bron, versie, gewijzigd, fouten }], actief, label }` |
-| `GET /api/standen/actief` | `{ naam: null }` of de actieve stand met verslag, `mixer.master`, `hub`, `pakket`, `kaart` |
-| `GET /api/standen/keuzes` | sjablonen, kratten, profielen (of `null`), `bekendeProfielen`, hub-sets, `mappingNu` |
+| `GET /api/standen/actief` | `{ naam: null }` of de actieve stand met verslag, `mixer.master`, `hub`, `pakket`, `kaart` (met `naam`: hoe de kaart de krat noemt); 503 als `.actief.json` niet te lezen is (onbekend is niet "niets actief") |
+| `GET /api/standen/keuzes` | sjablonen (en `sjablonenFout` als `racks/sjablonen.json` niet te lezen is), kratten, profielen (of `null`), `bekendeProfielen`, hub-sets, `mappingNu` |
 | `GET /api/standen/<naam>` | `{ stand, versie, bron, fouten, waarschuwingen }` / 404 |
 | `GET /api/standen/<naam>/verschil` | per deel `{ van, naar, moment }`: wat activeren zou veranderen |
 | `PUT /api/standen/<naam>` | `{ stand, versie }`; versie = die van het effectieve bestand (eigen, anders voorbeeld); `null` = nieuw. 200 / 400 / 409 met wat er nu staat / 415 |
 | `POST /api/standen/<naam>/activeer` | `{ ok, naam, sinds, verslag: { toegepast, gecontroleerd, genoemd, mixer, overgeslagen, fouten, waarschuwingen } }` |
-| `POST /api/standen/<naam>/vastleggen` | `{ versie, behoud? }`: je huidige mapping en nachtrem in de stand; hub, pakket, kaart en master blijven; een nachtrem die al in de stand stond blijft ook (`opmerkingen` zegt het) |
+| `POST /api/standen/<naam>/vastleggen` | `{ versie, behoud? }`: je huidige mapping en nachtrem in de stand; hub, pakket, kaart en master blijven; een nachtrem die al in de stand stond blijft ook, en komt er een rem bij omdat de nacht nu zo staat, dan zegt het antwoord dat ook (`opmerkingen`, zie onder) |
 | `POST /api/standen/terug` | `{ ok, delen, raakte, overgeslagen, fouten }`: zet terug wat de laatste activering veranderde; schrijft eerst zelf een `.vorige/` |
 | `DELETE` | 405: weghalen = het bestand met de hand verplaatsen |
 
@@ -137,15 +147,32 @@ na `apc` (noemt geen mapping) blijft een regel die je daarna in de mixer koppeld
 Raakte de laatste activering niets: "vorige teruggezet: niets (de laatste activering veranderde mapping
 en nacht niet)".
 
+**Leg vast en de nacht.** "Leg vast" legt de rem van **nu** vast: staat de nachtwachtrij uit (de
+standaard), dan krijgt de stand `aan: false`, ook als hij eerst alleen `vannacht: false` had. Dat is de
+bedoeling (een momentopname), maar het gebeurt niet stil (review 2): de opmerking zegt bijvoorbeeld
+"nacht: vannacht niet → uit en vannacht niet (de nachtwachtrij staat nu uit, dus deze opstelling zet
+hem voortaan bij elke activering helemaal uit; anders kies je het in de bewerker)", en de
+Controlekamer laat hem 8 s staan. Omgekeerd wordt een rem bij vastleggen nooit zachter: een rem die al
+in de stand stond blijft ("nachtrem uit de opstelling behouden"); weghalen doe je in de bewerker.
+
+**Sjablonen niet te lezen.** Is `racks/sjablonen.json` niet te lezen (iCloud, kapotte JSON), dan zegt
+activeren "racks/sjablonen.json niet te lezen (…): sjabloon "Dub-worp" niet vastgelegd" en opslaan
+"… niet nagekeken", niet "geen sjabloon"; de bewerker toont het gekozen sjabloon als "(niet
+nagekeken)".
+
 ## 5. In de Controlekamer
 
 - **Tegel "Opstelling"**, direct na Server: `geen` · de titel met `sinds 18:40` · oranje bij een
   waarschuwing (`sinds 18:40 · krat "proefkrat" is leeg (+1)`) · rood bij een fout · `vorige
-  teruggezet 18:50`. Daaronder wat je zelf nog doet: *krat proefkrat (kies hem in de kaart) · hub-set
-  studio: start hem zelf (npm start -- studio) · master Dub-worp: mixer volgt nog niet · profiel alles*.
+  teruggezet 18:50` · `onbekend · fout van de server (503)`. Daaronder wat je zelf nog doet: *krat
+  Proefkrat (kies hem in de kaart) · hub-set studio: start hem zelf (npm start -- studio) · master
+  Dub-worp: mixer volgt nog niet · profiel alles*. De krat heet zoals de kaart hem noemt, net als in
+  het verschil (de server zet die naam bij het activeren in `.actief.json`).
 - **Blok Openen**: een kiezer, **activeer** en **vorige terugzetten** (elk twee klikken binnen 4 s),
   en onder de kiezer wat activeren verandert ("nacht: uit → uit · vannacht niet · master: — →
-  Dub-worp (mixer volgt nog niet)").
+  Dub-worp (mixer volgt nog niet)"). Klopt het bestand niet, dan staat daar de reden van de server
+  ("Deze opstelling klopt niet: deze VARVE kent schema 1 (dit bestand: 2). Pas standen/kapot.json met
+  de hand aan.").
 - **bewerk** (zonder JSON): per deel een keuzelijst (nacht, mapping, krat, master-rack, hub-set,
   mixer openen, avondpakket); **bewaar** (met versie: "intussen veranderd" als iemand anders het
   bestand veranderde), **bewaar als** (naamveld; Enter doet hetzelfde; hoofdletters worden kleine
@@ -156,7 +183,11 @@ en nacht niet)".
 - **mixer openen** gaat via de hub (`/?hub=ws://localhost:7700/app`) als de actieve opstelling
   `hub.mixerVia: true` zegt; de knop zegt dan "mixer openen via de hub". Daarnaast staat dan
   **zonder hub** (`/`): de uitweg als de hub niet draait (met `?hub=` opent de mixer zelf geen MIDI,
-  dus zonder hub doet de APC dan niets).
+  dus zonder hub doet de APC dan niets). Geeft `/api/standen` even een fout (503, iCloud; de
+  Controlekamer vraagt het dan pas na een minuut opnieuw), dan houdt de knop de **laatst bekende**
+  opstelling, met in de title "opstelling nu onbekend (fout van de server); dit is de laatst bekende"
+  (review 2: anders opende hij een minuut lang zonder `?hub=` en vroeg de mixer zelf de APC terwijl
+  de hub hem had).
 
 Zonder browser: `node tools/standen/activeer.mjs` (lijst), `… apc` (activeren, verslag), `… --terug`,
 `--poort 8821` voor een andere server. Code 1 bij een fout.
@@ -179,7 +210,7 @@ Zonder browser: `node tools/standen/activeer.mjs` (lijst), `… apc` (activeren,
 
 ```zsh
 node test/standen-model.test.mjs     # het formaat en de vier voorbeelden
-node test/standen.test.mjs           # server/standen.js zonder server (ook terug, iCloud/threadpool, het geheugen)
+node test/standen.test.mjs           # server/standen.js zonder server (ook terug, iCloud/threadpool per pad en voor de hele server, het geheugen)
 node test/standen-server.test.mjs    # /api/standen op een eigen server
 node test/stand-tegel.test.mjs       # de tegel, de regel, mixer openen, de meldingen
 node test/stand-bewerker.test.mjs    # de bewerker
@@ -202,9 +233,18 @@ map, Chromium met `--mute-audio` en zonder MIDI, en opent **geen** mixer-tabblad
 - `varve-kaart.json` leest de kaart zelf synchroon (`server/kaart.js`, `readFileSync`); is dat bestand
   dataless, dan hangt de hele server bij het eerste `laad()`. Niet van deze tak; wel iets voor het
   avondpakket.
-- Op 10 okt een rooktest op een proefserver (8821) met een kopie van Clay's library: Clay's eigen
-  mapping (4 regels) bleef bij `apc` staan, "vannacht niet" kwam op 2026-10-10, de echte proefkrat
-  (15) werd nagekeken, "terug" zette alles precies terug.
+- Rooktests op 10 okt op een proefserver (8821) met een kopie van Clay's library, de echte kaart
+  alleen gelezen. Na de herstelrondes (rooktest 2 van de reviewer, herhaald als rooktest 3 na
+  herstelronde 2): Clay's eigen mapping (4 regels) blijft bij `apc` staan, "vannacht niet" komt op
+  2026-10-10, de echte proefkrat (15) wordt nagekeken; `apc` activeren, in de mixer een 5e regel
+  koppelen, dan terug: **de mapping houdt 5 regels**, alleen de nacht gaat terug; `laptop` activeren,
+  de nacht met de hand weer aan, dan terug: **de nacht blijft aan** (overgeslagen: met de hand
+  veranderd); "leg vast" op `apc` met de nacht uit houdt de rem `vannacht: false`, zet er `aan: false`
+  bij en zegt dat in de opmerkingen; na activeren noemt `.actief.json` de krat "Proefkrat", zoals het
+  verschil en de tegel. (De eerste rooktest, vóór herstelronde 1, zette bij terug ook de mapping
+  terug; dat was de fout uit review 1.)
+- De grens van twee draden (§3) is nagebootst met named pipes in `test/standen.test.mjs`, niet met
+  iCloud zelf en niet op de proefserver (de voorbeeldmap is daar vast: `tools/standen/voorbeelden/`).
 
 ## 9. Na de proefavond
 
