@@ -25,6 +25,8 @@ import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, TELLEN_BESTAND
 import { gridUitTellen, vergelijk, meetGrid, VERSIE as KAART_VERSIE } from '../src/engine/tellen.js';
 import { Beatgrid } from '../src/engine/beatgrid.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
+import { Kaart, KaartFout, STANDAARD_PAD as KAART_STANDAARD_PAD } from './kaart.js';
+import { Nacht } from './nacht.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -130,6 +132,40 @@ const backupElke = Number(process.env.VARVE_BACKUP_ELKE);
 const backups = new Backups({
   db: DB, map: BACKUPS, wijzigingen: () => lib.wijzigingen(),
   elke: Number.isFinite(backupElke) && backupElke >= 100 ? backupElke : BACKUP_ELKE,
+});
+
+/*
+ * DE MUZIEKKAART (docs/KAART.md): een zoeklaag over alles wat Clay ooit
+ * draaide, uit `varve-kaart.json` (instelling `kaart_pad` in de library, of
+ * VARVE_KAART, anders het standaardpad). Wensen en het nachtlog in een EIGEN
+ * `kaart.db` naast de library; de nachtwachtrij (server/nacht.js) met zijn
+ * instellingen in `nacht.json` ernaast. Niets hiervan raakt library.db.
+ */
+const KAART_DB = process.env.VARVE_KAART_DB || join(dirname(DB), 'kaart.db');
+const kaart = new Kaart({
+  pad: () => process.env.VARVE_KAART || lib.haal('kaart_pad', null) || KAART_STANDAARD_PAD,
+  db: KAART_DB, library: lib,
+});
+
+/*
+ * "ER SPEELT EEN DECK": de server ziet dat aan zijn eigen werk. Een deck
+ * streamt zijn geluid met Range-verzoeken op /media/<id>/audio.wav (of
+ * stems.wav), pagina's van ~1,4 s, zolang hij speelt of vooruit buffert.
+ * Elk zo'n verzoek zet `laatstGestreamd`; speelt = minder dan 30 s geleden.
+ * Grof maar eerlijk: een deck dat net gepauzeerd of geladen is telt nog een
+ * halve minuut als spelend (liever te voorzichtig). Wat NIET meetelt: een
+ * los bestand of de demotrack (die komen uit het geheugen van de browser) en
+ * een deck op een andere server.
+ */
+let laatstGestreamd = 0;
+const SPEELT_MS = 30 * 1000;
+const speeltDeck = () => Date.now() - laatstGestreamd < SPEELT_MS;
+
+const nacht = new Nacht({
+  pad: process.env.VARVE_NACHT || join(dirname(DB), 'nacht.json'),
+  kaart, speeltDeck,
+  haal: (wens) => haalKaartNummer(wens),
+  zoek: (sleutel) => kaart.zoek(sleutel),
 });
 
 /**
@@ -461,7 +497,7 @@ async function tellenOpAchtergrond() {
  * binnengehaald, en een lijst opnieuw plakken zou anders de hele library
  * door Demucs halen. Splitsen kan daar met POST /api/stems.
  */
-async function nieuweLink(tekst, { opnieuw = false, stems = STEMS_STANDAARD } = {}) {
+async function nieuweLink(tekst, { opnieuw = false, stems = STEMS_STANDAARD, video = true } = {}) {
   const b = bekijkLink(tekst);
   if (!b.ok) {
     return { code: 400, antwoord: { url: String(tekst ?? '').trim().slice(0, 500), fout: b.fout, ...(b.playlist ? { playlist: true } : {}) } };
@@ -473,9 +509,10 @@ async function nieuweLink(tekst, { opnieuw = false, stems = STEMS_STANDAARD } = 
     if (al) return { code: 200, antwoord: wachtrij.voegKlaarToe({ sleutel: al.id, url: b.link, track: al }) };
   }
   const { opdracht, dubbel } = wachtrij.voegToe({
-    sleutel: b.sleutel, url: b.link, soort: 'link', stappen: stappenVoor({ link: true, video: true }),
+    sleutel: b.sleutel, url: b.link, soort: 'link', stappen: stappenVoor({ link: true, video }),
     werk: async (onStap, signal) => {
-      const r = await ingest(b.link, { mediaDir: MEDIA, onStap, signal,
+      // `video: false` (de kaart, docs/KAART.md): alleen audio, geen beeld.
+      const r = await ingest(b.link, { mediaDir: MEDIA, onStap, signal, video,
         // Tweede controle, als de id bekend is: een andere link naar hetzelfde nummer.
         bestaat: opnieuw ? null : async (id) => metAudio(lib.track(id)) });
       if (r.ok && !r.bestond) {
@@ -491,6 +528,36 @@ async function nieuweLink(tekst, { opnieuw = false, stems = STEMS_STANDAARD } = 
   // hem zo terug (anders "staat al in de library" en gebeurt er niets).
   if (opnieuw) opdracht.opnieuw = true;
   return { code: 202, antwoord: { ...opdracht, ...(b.lijstEraf ? { lijstEraf: true } : {}) } };
+}
+
+/**
+ * Een nummer van de kaart binnenhalen (docs/KAART.md): door DEZELFDE
+ * ingest-wachtrij als een geplakte link, maar alleen audio en zonder stems.
+ * Komt pas terug als het nummer af is (klaar, mislukt of geannuleerd), met
+ * wat de ingest gaf; stond het al in de library, dan meteen { ok, bestond }.
+ * Zo kan de nacht één nummer tegelijk doen en een 403 herkennen. Gooit nooit.
+ */
+function haalKaartNummer({ sleutel, youtube_id }) {
+  if (typeof youtube_id !== 'string' || !/^[\w-]{6,20}$/.test(youtube_id)) return Promise.resolve({ ok: false, fout: `geen video-id voor ${sleutel}` });
+  return nieuweLink(`https://www.youtube.com/watch?v=${youtube_id}`, { stems: 0, video: false })
+    .then((r) => {
+      if (r.code >= 400) return { ok: false, fout: r.antwoord?.fout || `code ${r.code}`, ...(r.antwoord?.playlist ? { playlist: true } : {}) };
+      if (r.antwoord?.status === 'klaar') return { ok: true, bestond: true, track: r.antwoord.track };
+      // In de rij (nieuw, of hij liep al omdat Clay hem net zelf plakte): wachten
+      // tot de opdracht af is. Peilen, niet haken aan het werk: een opdracht die
+      // vóór zijn start geannuleerd wordt heeft geen werk dat ooit afloopt.
+      const id = r.antwoord?.id;
+      return new Promise((klaar) => {
+        const kijk = () => {
+          const o = wachtrij.opdrachten.get(id);
+          if (!o) return klaar({ ok: false, fout: 'opdracht verdwenen uit de rij' });
+          if (isOpen(o)) { setTimeout(kijk, 500).unref?.(); return; }
+          klaar(o.status === 'klaar' ? { ok: true, track: o.track, bestond: o.bestond } : { ok: false, fout: o.fout || o.status });
+        };
+        kijk();
+      });
+    })
+    .catch((err) => ({ ok: false, fout: String(err?.message || err) }));
 }
 
 /**
@@ -519,6 +586,15 @@ async function upload(req, res, url) {
   const stemsQ = url.searchParams.get('stems');
   const stems = stemsQ === null ? STEMS_STANDAARD : /^[024]$/.test(stemsQ) ? Number(stemsQ) : null;
   if (stems === null) return weigerUpload(req, res, 400, { fout: 'stems is 0, 2 of 4' });
+  // ?video=0: alleen de audio, ook als er beeld in zit (de lokale import van de
+  // kaart, tools/lokaal). ?titel= en ?artiest=: wat de aanroeper al weet (uit tags
+  // of een opgeschoonde naam); die gaan vóór de tags in het bestand. Zonder deze
+  // drie gedraagt de route zich als voorheen.
+  const videoQ = url.searchParams.get('video');
+  const metVideo = videoQ === null || !/^(0|false|uit|nee)$/i.test(videoQ);
+  // eslint-disable-next-line no-control-regex
+  const tekstQ = (k) => String(url.searchParams.get(k) ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200);
+  const titelQ = tekstQ('titel'), artiestQ = tekstQ('artiest');
   const lengte = Number(req.headers['content-length']);
   if (Number.isFinite(lengte) && lengte > UPLOAD_MAX) {
     return weigerUpload(req, res, 413, { fout: `te groot: ${gb(lengte)}, de grens is ${gb(UPLOAD_MAX)}` });
@@ -584,18 +660,19 @@ async function upload(req, res, url) {
     await rm(map, { recursive: true, force: true }).catch(() => {});
     return json(res, 202, loopt);
   }
-  const titel = info.tags.titel || naam.titel;
+  const titel = titelQ || info.tags.titel || naam.titel;
+  const artiest = artiestQ || info.tags.artiest;
   // Achter in de rij, net als een link; met ?vooraan=1 (op een track gesleept,
   // VRAGEN J12) vóór wat gewoon wacht. De werkmap met het bestand staat er
   // al: annuleer je vóór hij begint, dan gaat die weg (bijAnnuleren).
   const { opdracht } = wachtrij.voegToe({
     vooraan: url.searchParams.get('vooraan') === '1',
     sleutel: id, url: `bestand:${naam.naam}`, soort: 'bestand', titel,
-    stappen: stappenVoor({ link: false, video: info.video }),
+    stappen: stappenVoor({ link: false, video: info.video && metVideo }),
     werk: async (onStap, signal) => {
       const r = await ingestBestand(bron, {
-        id, map, mediaDir: MEDIA, onStap, signal, heeftVideo: info.video,
-        info: { url: `bestand:${id.slice('lokaal-'.length)}:${naam.naam}`, titel, uploader: info.tags.artiest, duur: info.duur },
+        id, map, mediaDir: MEDIA, onStap, signal, heeftVideo: info.video, video: metVideo,
+        info: { url: `bestand:${id.slice('lokaal-'.length)}:${naam.naam}`, titel, uploader: artiest, duur: info.duur },
       });
       if (r.ok) {
         r.track = bewaarInLibrary(r.track);
@@ -827,6 +904,7 @@ async function statisch(req, res, pad) {
   // Een leesfout halverwege mag de server niet meenemen.
   const stuur = (stroom) => { stroom.on('error', () => res.destroy()); stroom.pipe(res); };
   const range = req.headers.range;
+  if (range && /^\/media\/[\w-]+\/(audio|stems)\.wav$/.test(schoon)) laatstGestreamd = Date.now();
   if (range) {
     const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
     if (m && (m[1] || m[2])) {
@@ -1454,6 +1532,12 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ---- de muziekkaart (docs/KAART.md) ---------------------------------
+    if (pad.startsWith('/api/kaart') || pad.startsWith('/api/nacht')) {
+      const r = await kaartRoute(req, res, url, pad);
+      if (r !== undefined) return r;
+    }
+
     if (pad.startsWith('/api/')) return json(res, 404, { fout: 'onbekend eindpunt' });
 
     await statisch(req, res, pad === '/' ? 'index.html' : pad === '/controle' ? 'controle.html' : pad);
@@ -1462,6 +1546,99 @@ const server = createServer(async (req, res) => {
     try { json(res, 500, { fout: String(err?.message || err) }); } catch {}
   }
 });
+
+/**
+ * De routes van de kaart en de nacht (contract §2). Een KaartFout wordt
+ * één op één zijn code en { fout, ...extra }; alles anders is een gewone 500.
+ * Geeft undefined als het pad niet van ons is (dan volgt de 404).
+ */
+async function kaartRoute(req, res, url, padRuw) {
+  // De UI stuurt de sleutel met encodeURIComponent ("yt%3Aabc"); url.pathname
+  // decodeert niet. Een sleutel is `yt:` of `sp:` plus letters, cijfers, - en _.
+  let pad;
+  try { pad = decodeURIComponent(padRuw); } catch { return json(res, 400, { fout: 'onleesbaar pad' }); }
+  try {
+    if (pad === '/api/kaart' && req.method === 'GET') return json(res, 200, kaart.stand());
+
+    if (pad === '/api/kaart/nummers' && req.method === 'GET') {
+      const q = url.searchParams;
+      const heel = (k) => (q.has(k) ? Number(q.get(k)) : null);
+      const stand = kaart.laad();
+      if (stand.status !== 'geladen') return json(res, 404, { fout: `kaart ${stand.status}${stand.fout ? `: ${stand.fout}` : ''}`, status: stand.status, pad: kaart.pad });
+      return json(res, 200, kaart.nummers({
+        zoek: q.get('zoek') || '', krat: q.get('krat') || null, filter: q.get('filter') || '',
+        sorteer: q.get('sorteer'), richting: q.get('richting'), van: heel('van') ?? 0, aantal: heel('aantal') ?? 100,
+      }));
+    }
+
+    if (pad === '/api/kaart/wensen' && req.method === 'GET') return json(res, 200, { wensen: kaart.wensen() });
+
+    if (pad === '/api/kaart/wens' && req.method === 'POST') {
+      const body = await leesJson(req, 256 * 1024);
+      if (!body || typeof body !== 'object') return json(res, 400, { fout: 'stuur { sleutels: [..], meteen, bevestig } als JSON' });
+      const meteen = body.meteen === true;
+      if (meteen && speeltDeck()) return json(res, 409, { fout: 'er speelt een deck' });
+      const r = kaart.voegWensen(body.sleutels, { bevestig: body.bevestig === true });
+      if (meteen) {
+        // Meteen de ingest-rij in, alleen wat een video heeft; de rest wacht op zoeken of de nacht.
+        r.gestart = [];
+        for (const s of r.toegevoegd) {
+          const w = kaart.wens(s);
+          if (!w?.youtube_id) continue;
+          kaart.zetWens(s, { status: 'bezig' });
+          haalKaartNummer({ sleutel: s, youtube_id: w.youtube_id }).then((u) => {
+            if (!kaart.wens(s)) return;   // intussen weggehaald
+            if (u.ok) kaart.zetWens(s, { status: 'klaar', fout: null, track_id: u.track?.id ?? w.youtube_id });
+            else kaart.zetWens(s, { status: 'mislukt', fout: u.fout });
+          });
+          r.gestart.push(s);
+        }
+      }
+      return json(res, 200, r);
+    }
+
+    const mWens = /^\/api\/kaart\/wens\/([a-z]+:[\w-]+)$/.exec(pad);
+    if (mWens && req.method === 'DELETE') return json(res, 200, { ok: kaart.verwijderWens(mWens[1]) });
+
+    const mNummer = /^\/api\/kaart\/nummer\/([a-z]+:[\w-]+)(?:\/(zoek|kies))?$/.exec(pad);
+    if (mNummer) {
+      const [, sleutel, actie] = mNummer;
+      if (!actie && req.method === 'GET') {
+        const n = kaart.nummer(sleutel);
+        return n ? json(res, 200, { nummer: n }) : json(res, 404, { fout: 'niet op de kaart', status: kaart.laad().status });
+      }
+      if (actie === 'zoek' && req.method === 'POST') {
+        if (speeltDeck()) return json(res, 409, { fout: 'er speelt een deck' });
+        return json(res, 200, await kaart.zoek(sleutel));
+      }
+      if (actie === 'kies' && req.method === 'POST') {
+        const body = await leesJson(req);
+        return json(res, 200, { ok: true, wens: kaart.kies(sleutel, body?.youtube_id) });
+      }
+    }
+
+    if (pad === '/api/nacht' && req.method === 'GET') return json(res, 200, nacht.stand());
+    if (pad === '/api/nacht' && req.method === 'POST') {
+      const body = await leesJson(req);
+      try { return json(res, 200, nacht.zet(body)); } catch (err) { return json(res, 400, { fout: err.message }); }
+    }
+    if (pad === '/api/nacht/nu' && req.method === 'POST') {
+      const body = await leesJson(req);
+      try {
+        const run = nacht.nu({ aantal: body?.aantal ?? 1 });
+        // Niet wachten tot hij af is (dat kan uren duren): de stand, met bezig.
+        run.catch(() => {});
+        return json(res, 202, nacht.stand());
+      } catch (err) { return json(res, err.code === 409 ? 409 : 400, { fout: err.message }); }
+    }
+    if (pad === '/api/nacht/stop' && req.method === 'POST') return json(res, 200, { ok: nacht.stop(), ...nacht.stand() });
+    if (pad === '/api/nacht/runs' && req.method === 'GET') return json(res, 200, { runs: kaart.runs() });
+    return undefined;
+  } catch (err) {
+    if (err instanceof KaartFout) return json(res, err.code, err.antwoord());
+    throw err;
+  }
+}
 
 // Laatste vangnet. Zonder dit legt één losse promise de hele server om.
 // Een upload van gigabytes duurt langer dan de standaard 5 minuten die Node
@@ -1532,6 +1709,10 @@ server.listen(POORT, '127.0.0.1', () => {
   console.log(`yt-dlp ${tooling.ytdlp}  ·  ffmpeg ${tooling.ffmpeg ? 'ok' : 'ONTBREEKT'}`);
   // Meteen een backup (in een worker; gooit nooit), daarna elk uur als er iets veranderde.
   backups.start();
+  // De kaart: laden als het bestand er is (anders 'ontbreekt'), en de nacht gaat zijn klok peilen.
+  const k = kaart.laad();
+  console.log(`kaart: ${k.status === 'geladen' ? `${kaart.rijen.length} nummers, ${kaart.kratten.length} kratten` : k.status}  ·  nacht ${nacht.instellingen.aan ? 'AAN' : 'uit'} (${nacht.instellingen.venster.van}–${nacht.instellingen.venster.tot}, ${nacht.instellingen.perNacht}/nacht)`);
+  nacht.start();
   const her = process.env.VARVE_HERANALYSE;
   if (her !== 'uit') {
     setTimeout(() => {

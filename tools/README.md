@@ -61,7 +61,23 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   Met stems (3 okt): `--stems 2,4` (standaard aan) meet ook 8 decks × 2 en × 4 stems,
   `--ref-stems` de oude kern ernaast; cijfers in `docs/AUDIOPAD.md` ("Stems").
 
+## lokaal/
+Clay's eigen muziek in de library via de bestaande upload-route (kaart-contract deel 4,
+10 okt): `importeer.mjs --map <dir>… [--droog] [--video] [--library <library.db>]` doorloopt
+mappen, rekent dezelfde `lokaal-<SHA-256>`-id als de server, vraagt `/api/library` wat al binnen
+is en stuurt de rest één voor één naar `POST /api/upload` (`video=0`, `stems=0`). `--droog` toont
+alleen de tabel; `--library` opent de database alleen-lezen als de server niet draait. De
+keuzelogica staat puur in `kies.mjs` (`test/lokaal-importeer.test.mjs`). Zie `lokaal/LEESMIJ.md`.
+Pas draaien NÁ de proefavond van 10 okt.
+
 ## headless/
+- `kaart.mjs [uitmap]` — de tab kaart (docs/LIBRARY.md "De kaart-tab") op de NEP-server `kaart-nep.mjs`
+  (de kaart-API in het geheugen op `test/fixtures/varve-kaart.klein.json`, de rest doorgegeven aan een
+  eigen echte server op 8815; nep op 8816): voor ontwikkeling aan de UI zonder de serverkant. 65 checks.
+- `kaart-echt.mjs [uitmap]` — de tab kaart tegen de ECHTE kaart-routes van een server die al draait
+  (`VARVE_KIJK_ECHT`, standaard 8782), met het echte `varve-kaart.json`, een KOPIE van de library en de
+  nep-yt-dlp (`NEP_LOG` om de videostap te controleren); spawnt alleen Chrome. Hoe je die server start
+  staat bovenin het script en in docs/KAART.md §9. 31 checks, foto's `kaart-echt-*.png`.
 - `stems.mjs [--nep] [uitmap]` — de stems van binnenhalen tot horen (eigen server op 8793, nep-yt-dlp,
   nep-splitter via `maakNepStems`): binnenhalen met stems=2, de kolom, laden, de STEMS-rij, kill
   per stem met de muis GEMETEN aan de master (zang weg 0,25 · alles weg 0 · terug 1; vier stems:

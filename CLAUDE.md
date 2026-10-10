@@ -130,6 +130,8 @@ src/
                     maschine-kaart-plan.js  plaatsing + wat een control doet = legUit() van de Maschine (label, soort). Puur.
                     toon-weergave.js toonsoort als tekst: kolomkop, focus, library, tooltip. Puur.
                     library-lijst.js de library als virtuele lijst: kolommen, cellen, pagina-cache. Puur.
+                    kaart-lijst.js  de muziekkaart als lijst (tab kaart): kolommen, badges, stand → knop, filters, kratten, nachtteksten. Puur.
+                    kaart-panel.js  de tab kaart in het library-paneel: zoeken, kratten, haal binnen/zoek, wenslijst, nachtwachtrij (docs/LIBRARY.md "De kaart-tab")
                     hotcue-opslag.js hotcues per nummer bewaren: welk nummer op welke track, één verzoek tegelijk
                     mapping-opslag.js je eigen mapping als verschil: standaard ophalen, omzetten, bewaren, herstellen
                     ingest-strook.js de ingest-wachtrij in het library-paneel: plakken, voortgang, ×, laadknoppen
@@ -196,8 +198,13 @@ server/             draait apart: `node server/index.js`
   handelingen.js    handelingenlogs naast de opnames: stukken op hun plek, lijst, lezen
   stems.js          de stems-rij: Demucs starten (nice), één tegelijk, annuleren, werkmap, nalopen, verhuizen
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
+  kaart.js          de muziekkaart als zoeklaag: varve-kaart.json in het geheugen (zoeken/filteren/sorteren/pagineren), binnen = tracks.id,
+                    wensen en nacht_runs in een EIGEN media/kaart.db, een YouTube-versie zoeken (ytsearch5, nooit cookies) (docs/KAART.md)
+  nacht.js          de nachtwachtrij: venster, speeldagen, wensen dan standaardvolgorde, één tegelijk met pauze, stopt bij een deck of 403; media/nacht.json
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
-                    headless/ (kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
+                    lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
+                    headless/ (kaart.mjs: de tab kaart op de nep-server kaart-nep.mjs; kaart-echt.mjs: de tab kaart tegen de
+                    echte kaart-routes van een server die al draait (kopie van de library, nep-yt-dlp, echte varve-kaart.json); kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
                     vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs, beeld.mjs: headless zonder MIDI;
                     beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
                     maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
@@ -231,6 +238,7 @@ test/
   library.test.mjs  database, effect-racks per link, cascade bij verwijderen, migraties (SCHEMA.length)
   backup.test.mjs   backups: geldige kopie uit de WAL, niet dubbel, opruimen, mislukken, niet via HTTP
   library-lijst.test.mjs  virtuele lijst, pagina-cache (ook de race bij een nieuwe sortering), kolommen
+  kaart-lijst.test.mjs  de tab kaart als rekenwerk, en de nep-server (tools/headless/kaart-nep.mjs) tegen het contract van de kaart-API
   ingest.test.mjs   pipeline zonder netwerk; ffmpeg maakt zijn eigen testmateriaal
   wachtrij.test.mjs wachtrij, annuleren (ook midden in een nep-download), playlist, dubbel, voortgang, strook
   wachtrij-server.test.mjs  eigen server + nep-yt-dlp: urls, volgorde, DELETE, dubbel, upload in de rij, herstart
@@ -256,7 +264,8 @@ test/
   opname.test.mjs   opname-WAV: stukken op ?frame=N, kop, RF64, herstel na crash, geen ../
   opnemer.test.mjs  opnemer tegen de echte opname.js met een haperend netwerk: geen dubbel, gat = stilte
   bronnen.test.mjs  TikTok-links zonder netwerk, ffprobe-controle, eigen staande video door de pijplijn
-  upload.test.mjs   upload-route op een eigen server: grens, geen media, hash-id, streamen i.p.v. geheugen
+  upload.test.mjs   upload-route op een eigen server: grens, geen media, hash-id, streamen i.p.v. geheugen, ?video=0/?titel=/?artiest=
+  lokaal-importeer.test.mjs  tools/lokaal: welke bestanden, overslaan (al binnen, .acties.jsonl, mp4 naast wav, < 20 s), de droogloop
   vormen.test.mjs   vormlagen: elk systeem, zaad, 1/60 s-stappen, knoppen, bus, fragment, mixer (nep-WebGL)
   vormen-zwaar/-meer/-isomorf.test.mjs  de 16 extra systemen: puur, zaad, g.kwaliteit, ms per stap, nep-sink
                     (ms per stap in THREADtijd, beste van 3: de wandklok telde onder load de planner mee)
@@ -286,6 +295,10 @@ test/
   sec-controle.test.mjs  sectieTelling (zelfde regel als moetSecties, cache per rij, ROLLBACK), /api/secties, de tegel
   beeld.test.mjs    spoor beeld: adres, latentie, id's, kiesKant, de tel met latentie, track/mix/poort, aanwezig en opnieuw, de echte zender op een nep-WebSocket
   varve-beeld-zender.test.mjs  de zendertest van de Stroommachine (overgenomen; alles.mjs telt zijn eigen formaat)
+  kaart.test.mjs    de kaart op een verzonnen varve-kaart.json (nep-kaart.mjs): laden/herladen, zoeken, filters, sorteren, pagina's, wensen (20, dubbel), score, standaardvolgorde, cookie-bewaker
+  nacht.test.mjs    de zes nachtregels één voor één met nepklok, nep-deck en nep-ingest (geen tijd, geen netwerk)
+  kaart-server.test.mjs  kaart en nacht op een eigen server met de nep-yt-dlp: routes, 409 bij een deck (echt Range-verzoek), ingest zonder video, nachtrun, herstart
+  nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
   alles.mjs         alle tests in één keer met overzicht
 docs/
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -317,6 +330,8 @@ docs/
   EFFECTEN.md       effecten uit de filter app (S2c): per effect herkomst, eenheden, staart, metingen, wat niet
   PATRONEN.md       patronen (S4): het contract (§1–6) en wat gebouwd is (§7: klok, opnemen, API, APC, opslag, metingen)
   BEELD.md          spoor beeld (6 okt): VARVE stuurt de Stroommachine via de relay; instellen, wat er gaat, APC-mapje, problemen, tests
+  KAART.md          de muziekkaart in Varve (10 okt): het bestand, de API (+ §3b de afspraken met de UI), de nachtregels, "er speelt een deck",
+                    §9 gemeten op het echte bestand, §10 na de proefavond, wat niet getest is
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -889,6 +904,9 @@ docs/
   track: audio speelt direct zoals altijd; VIDEO (en audio die de browser niet
   leest) gaat via de library en komt daarna op die track — niet als die track
   dan speelt. Het origineel wordt niet bewaard, alleen wat de pijplijn maakt.
+  Sinds 10 okt (kaart, `tools/lokaal/`) drie optionele parameters: `?video=0`
+  (alleen de audio, ook met beeld), `?titel=` en `?artiest=` (gaan vóór de
+  tags). Zonder die drie gedraagt de route zich als voorheen.
 - TikTok (en wat yt-dlp verder kent) werkt; gemeten met yt-dlp 2026.08.19 op
   Clay's link (79 s nummer, 57 s ingest, video 720×1280). TikTok vraagt
   browser-imitatie; yt-dlp doet dat zelf zolang `curl_cffi` geïnstalleerd is

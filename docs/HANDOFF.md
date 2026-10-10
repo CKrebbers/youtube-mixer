@@ -14,6 +14,24 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 10 OKT: DE MUZIEKKAART IN VARVE (tak `studio/kaart`, PR naar `studio/integratie`)
+
+- **Kaart (10 okt).** De hele muziekkaart (`varve-kaart.json`: 18.233 nummers, 29 kratten) als
+  ZOEKLAAG in een tweede tab `library | kaart`, een wenslijst, een YouTube-versie zoeken voor
+  Spotify-nummers, een nachtwachtrij met rem (standaard UIT; 80 per nacht, 01:00–07:00, nooit bij
+  een spelend deck of op een speeldag, nooit cookies) en de lokale import (`tools/lokaal/`). Drie
+  agenten op `studio/kaart-server`, `studio/kaart-ui`, `studio/kaart-lokaal`, samengevoegd op
+  `studio/kaart`; de zes punten waar UI en server elkaar niet zagen zijn rechtgetrokken (server =
+  waarheid; `docs/KAART.md` §3b), plus twee echte bugs die alleen in de samenvoeging bestonden
+  (percent-gecodeerde sleutels gaven 404; `GET …/nummer` geeft `{ nummer }`). `node test/alles.mjs`
+  groen; rooktest op het echte bestand met een KOPIE van de library en de nep-yt-dlp op 8782
+  (`tools/headless/kaart-echt.mjs`, 31 checks: tab → rijen 62–80 ms, zoeken 158 ms, "haal binnen"
+  2,0 s zonder videostap). Niets van YouTube gehaald, 8777 en de Bureaublad-map niet aangeraakt.
+  **Vandaag is een speeldag** (`speeldagen: ["2026-10-10"]`) en de nacht staat uit. Niet getest:
+  Clay's Chrome, APC/Maschine, echte yt-dlp `ytsearch`, de 30 s-regel met een echt deck, de lokale
+  import echt. Wat Clay na de proefavond doet: `docs/KAART.md` §10 (eerste nacht `perNacht` 5,
+  speeldagen bijhouden, `importeer.mjs --droog` eerst). ROADMAP 30.
+
 ## 8 OKT: DE SAMPLER OP DE MASCHINE (tak `studio/maschine-sampler`)
 
 - **Wat:** SAMPLING op de Maschine = padmodus sampler. Boven de 8 sampler-pads (leeg = knippen of het bewaarde stuk
