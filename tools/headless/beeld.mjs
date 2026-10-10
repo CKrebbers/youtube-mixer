@@ -27,7 +27,10 @@
 //   - relay weg: geen nieuwe meldingen, geen fouten van onze code;
 //   - de tegel Beeld in de Controlekamer (een tweede tabblad, controle.html);
 //   - uit = de WebSocket dicht, geen lampje; na herladen alles terug, en uit
-//     maakt na herladen geen WebSocket.
+//     maakt na herladen geen WebSocket;
+//   - de knopjes "deze Mac · pc" (BEELD_ADRESSEN): een echte muisklik zet het
+//     adres in veld, localStorage en koppeling, het knopje brandt (ook na
+//     herladen). Met beeld UIT: er gaat niets naar 127.0.0.1:7702 of de pc.
 // Een mislukte WebSocket-verbinding logt Chrome zelf (Log-domein, bron
 // "network"): geen JavaScript kan dat onderdrukken. Die worden apart geteld.
 //
@@ -416,6 +419,41 @@ try {
   ok(`na herladen: adres, latentie en de open rij terug, uit blijft uit (${JSON.stringify(terug)})`,
     terug.adres === RELAY_ADRES && terug.lat === '80' && terug.open && !terug.aan && terug.lamp === null && terug.stand === 'uit', terug);
   ok('… en uit maakt geen WebSocket', terug.ws === 0, terug);
+
+  // ---- 7b. de knopjes "deze Mac · pc" (spoor beeld-een-machine) ----------------
+  // Beeld staat UIT: een adres kiezen maakt dan geen verbinding, dus er gaat niets
+  // naar 127.0.0.1:7702 (Clay's poort) of naar de pc. Een echte muisklik (CDP Input).
+  console.log('\nde knopjes deze Mac · pc');
+  const klik = async (sel) => {
+    const r = await tab.evalueer(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    for (const type of ['mousePressed', 'mouseReleased']) await tab.cdp('Input.dispatchMouseEvent', { type, x: r.x, y: r.y, button: 'left', clickCount: 1 });
+    await tab.beeld(); await wacht(150); await tab.beeld();
+  };
+  const KNOPJES = `({ knoppen: [...document.querySelectorAll('#beeld .bd-keuze .bd-kies')].map((b) => [b.dataset.sleutel, b.textContent, b.classList.contains('on'), __b.heel(b)]),
+    veld: document.querySelector('#beeld .bd-adres').value, rood: document.querySelector('#beeld .bd-adres').classList.contains('fout'),
+    bewaard: ${opslag('varve.beeld.adres')}, adres: window.beeld.instellingen.adres, aan: window.beeld.status().aan, ws: window.__ws.length })`;
+  const k0 = await tab.evalueer(KNOPJES);
+  ok('twee knopjes "deze Mac" en "pc" naast het adresveld, heel te zien; geen van beide brandt (het adres is de nep-relay)',
+    JSON.stringify(k0.knoppen) === JSON.stringify([['lokaal', 'deze Mac', false, null], ['pc', 'pc', false, null]]), k0);
+  const mMac0 = (await tab.evalueer('__b.meldingen()')).length;
+  await klik('#beeld .bd-kies[data-sleutel="lokaal"]');
+  const kMac = await tab.evalueer(KNOPJES);
+  ok('een klik op "deze Mac": ws://127.0.0.1:7702/app in veld, localStorage en koppeling, niet rood, het knopje brandt; beeld blijft uit, 0 WebSockets, geen melding',
+    kMac.veld === 'ws://127.0.0.1:7702/app' && kMac.bewaard === kMac.veld && kMac.adres === kMac.veld && !kMac.rood
+    && kMac.knoppen[0][2] && !kMac.knoppen[1][2] && !kMac.aan && kMac.ws === 0 && (await tab.evalueer('__b.meldingen()')).length === mMac0, kMac);
+  await klik('#beeld .bd-kies[data-sleutel="pc"]');
+  const kPc = await tab.evalueer(KNOPJES);
+  ok('een klik op "pc": ws://clayk:7702/app, idem; "deze Mac" brandt niet meer',
+    kPc.veld === 'ws://clayk:7702/app' && kPc.bewaard === kPc.veld && kPc.adres === kPc.veld && !kPc.rood
+    && !kPc.knoppen[0][2] && kPc.knoppen[1][2] && !kPc.aan && kPc.ws === 0, kPc);
+  await tab.foto('beeld-rij-knopjes-1440x790.png');
+  await tab.cdp('Page.navigate', { url: `http://localhost:${POORT}/` });
+  await tab.tot('!!(window.engine && window.beeld && window.meld)', 30000);
+  await tab.evalueer(HULP);
+  for (let i = 0; i < 4; i++) { await tab.beeld(); await wacht(250); }
+  const kTerug = await tab.evalueer(KNOPJES);
+  ok('na herladen brandt "pc" nog (het adres komt uit localStorage), uit blijft uit, 0 WebSockets',
+    kTerug.veld === 'ws://clayk:7702/app' && kTerug.knoppen[1][2] && !kTerug.knoppen[0][2] && !kTerug.aan && kTerug.ws === 0, kTerug);
 
   // ---- 8. opstarten met een onbereikbaar adres (de pc staat uit) -------------
   // Zoals Clay het op een avond zonder pc tegenkomt: beeld staat nog aan, met

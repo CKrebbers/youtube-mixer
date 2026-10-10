@@ -132,6 +132,18 @@ export function controleerAdres(invoer) {
   return { ok: true, adres };
 }
 
+/**
+ * De twee relay-adressen die je met één klik kiest (de knopjes in de BEELD-rij):
+ * de relay op deze Mac (beeld op één machine: `zsh tools/beeld-lokaal.sh`,
+ * docs/BEELD.md §8) en die op de Omarchy-pc via Tailscale (§1). De sleutels
+ * liggen vast: het spoor *standen* kan ernaar verwijzen (`lokaal`, `pc`).
+ * Elk adres gaat door controleerAdres zoals een getypt adres.
+ */
+export const BEELD_ADRESSEN = Object.freeze([
+  Object.freeze({ sleutel: 'lokaal', naam: 'deze Mac', adres: 'ws://127.0.0.1:7702/app' }),
+  Object.freeze({ sleutel: 'pc', naam: 'pc', adres: 'ws://clayk:7702/app' }),
+]);
+
 /** Extra latentie in hele ms, binnen LATENTIE_MIN … LATENTIE_MAX. Onzin wordt 0. */
 export function klemLatentie(v) {
   const n = typeof v === 'string' ? Number(v.trim().replace(',', '.')) : Number(v);

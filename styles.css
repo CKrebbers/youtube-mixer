@@ -867,6 +867,8 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .bd-veld input.fout{border-color:var(--red);color:var(--red)}
 .bd-adres{width:250px;flex:0 1 250px}
 .bd-latentie{width:62px;color-scheme:dark}
+.bd-keuze{display:flex;gap:4px;flex:0 0 auto}
+.bd-keuze .btn.on{background:none;color:var(--a);border-color:var(--a)}
 .bd-stand{font:600 12px ui-monospace,monospace;color:var(--klein);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
 .bd-stand[data-soort="fout"]{color:var(--red)}
 .bd-stand[data-soort="zoekt"],.bd-stand[data-soort="geen"]{color:var(--warn)}

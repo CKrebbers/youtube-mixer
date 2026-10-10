@@ -500,8 +500,9 @@
 <section id="beeld" class="beeld-rij hidden">
   <span class="sampler-kop">BEELD</span>
   <button class="btn sm bd-aan" title="beeld aan/uit: de klok, de mix en de nummers naar de Stroommachine op de pc (uit = er gaat niets het netwerk op)">uit</button>
-  <label class="bd-veld" title="het adres van de Varve-relay op de pc (poort 7702); toepassen met Enter of door het veld te verlaten">relay
+  <label class="bd-veld" title="het adres van de Varve-relay (poort 7702): op de pc, of op deze Mac (zsh tools/beeld-lokaal.sh); toepassen met Enter of door het veld te verlaten, of kies een knopje">relay
     <input class="bd-adres" type="text" maxlength="200" placeholder="ws://192.168.1.20:7702/app" spellcheck="false" autocomplete="off"></label>
+  <span class="bd-keuze"></span>
   <label class="bd-veld" title="extra latentie in ms (−200…500): + = het beeld eerder, voor een beamer die achterloopt">latentie
     <input class="bd-latentie" type="number" min="-200" max="500" step="10" value="0"> ms</label>
   <span class="bd-stand" data-soort="uit">uit</span>
