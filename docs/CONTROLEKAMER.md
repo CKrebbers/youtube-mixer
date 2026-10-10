@@ -28,6 +28,12 @@ de mixer.
      staan en hoe groot (`/api/backups`, `src/controle/backup-tegel.js`). Rood met de
      reden als de laatste poging mislukte. Een oude datum is geen fout: zonder
      wijziging komt er bewust geen nieuwe kopie. Zie docs/LIBRARY.md, "Backup".
+   - **Avondpakket** (10 okt): kan ik met deze tas vertrekken, kan ik hier beginnen
+     (`/api/avondpakket`, `src/controle/avondpakket-tegel.js`, docs/AVONDPAKKET.md).
+     Meet bij het openen, bij een keuze en bij een klik op de tegel, verder hooguit elke
+     5 min; nooit vanzelf als de mixer open is, en de server bevriest zelf zolang er een
+     deck speelt ("bevroren: er speelt een deck · HH:MM"). Profiel, fase, de punten en de
+     paklijst staan in het uitklapblok onder de tegels.
    - **Mixer**: open of niet, uit de Web Lock `varve-mixer` (`src/ui/tabblad.js`).
      Rood als er een tweede mixer-tabblad wacht.
    - **Audio** en **APC40**: uit wat de mixer zelf meldt (zie hieronder). Bij de

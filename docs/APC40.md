@@ -48,7 +48,8 @@ knobs `cc:0:16-23` → `track.{focus}.…`, Track Select → focus.
 
 **Niet mogelijk:** geen editor, geen publieke firmware, geen verborgen instellingen
 gevonden, geen scherm, geen motorfaders, geen aanslaggevoeligheid. USB-gevoed:
-direct aansluiten, niet via een zwakke hub. Onze wachtrij (16 berichten / 4 ms) aanhouden.
+direct aansluiten, niet via een hub zonder eigen voeding (onderweg: APC direct in de Mac,
+lader en Scarlett aan een PD-hub; docs/AVONDPAKKET.md §5). Onze wachtrij (16 berichten / 4 ms) aanhouden.
 
 ## Indeling (herzien en GEBOUWD 23 september 2026) — controller eerst
 

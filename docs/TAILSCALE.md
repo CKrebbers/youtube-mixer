@@ -103,6 +103,9 @@ iPad / laptop / telefoon ──(Tailscale, HTTPS)──> Mac: tailscale serve :4
   op de server is wel gedeeld.
 - Wie in je Tailscale-netwerk zit, kan erbij. Deel de Mac niet met anderen
   in Tailscale, of zet een ACL.
+- **Onderweg** toont de tegel Avondpakket (docs/AVONDPAKKET.md) of Tailscale draait en
+  of `clayk` online is, direct of via een relay. Alleen bij profiel `beeld` is dat
+  verplicht: Varve zelf speelt zonder netwerk.
 
 ## Niet getest
 
