@@ -204,7 +204,9 @@ export function beschrijf(action) {
     if (knop === 'next') return { kort: 'mapje ▼', lang: `${GROEPEN[g]?.naam}: volgend mapje` };
     if (knop === 'prev') return { kort: 'mapje ▲', lang: `${GROEPEN[g]?.naam}: vorig mapje` };
     const lagen = GROEPEN[g]?.knoppen[knop] ?? [];
-    return { kort: `▣ ${lagen.map((l) => l).join('/')}`, lang: `open mapje ${GROEPEN[g]?.naam}: ${lagen.map((l) => LAAGNAAM[`${g}.${l}`] ?? l).join(', dan ')} (vasthouden = even gluren)` };
+    // Clip/Device View loopt door strip, rack en (met een instrument) inst: een vaste korte naam, die past op de kaart.
+    const kort = g === 'device' && knop === 'view' ? 'strip/rack' : lagen.join('/');
+    return { kort, lang: `open mapje ${GROEPEN[g]?.naam}: ${lagen.map((l) => LAAGNAAM[`${g}.${l}`] ?? l).join(', dan ')} (vasthouden = even gluren)` };
   }
   const vast = {
     'mixer.master': ['master', 'mastervolume'], 'mixer.xfader': ['crossfader', 'crossfader'],

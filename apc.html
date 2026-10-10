@@ -48,8 +48,9 @@
   #plaat .c span{font-size:1.05cqw;line-height:1.05;white-space:nowrap;max-width:7cqw;overflow:hidden;text-overflow:ellipsis;color:#cfd8e0}
   #plaat .pad span,#plaat .scene span,#plaat .breed span,#plaat .knop span{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);max-width:92%;pointer-events:none}
   #plaat .pad i{width:6.6cqw;height:2.6cqw;border-radius:.35cqw}
-  #plaat .scene i{width:3.6cqw;height:2.6cqw;border-radius:.35cqw}
-  #plaat .scene span{max-width:3.4cqw;font-size:.85cqw}
+  /* breed genoeg voor de langste modusnaam (patronen) en "loop weg" */
+  #plaat .scene i{width:4.4cqw;height:2.6cqw;border-radius:.35cqw}
+  #plaat .scene span{max-width:4.2cqw;font-size:.85cqw}
   #plaat .knop i{width:5.2cqw;height:2.5cqw;border-radius:.35cqw}
   #plaat .knop span{max-width:5cqw;font-size:.9cqw}
   #plaat .breed i{width:6.6cqw;height:2.4cqw;border-radius:.35cqw}
@@ -67,6 +68,8 @@
   #plaat .xfader i{width:12.4cqw;height:1cqw;border-radius:.5cqw;position:relative}
   #plaat .xfader i::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:2.2cqw;height:4cqw;border-radius:.3cqw;
     background:#2a323b;border:.15cqw solid var(--kl,#3a444e)}
+  /* het woord onder de schuif (die steekt 1,5cqw onder de baan uit), niet eronder verstopt */
+  #plaat .xfader span{position:absolute;left:50%;top:calc(100% + 1.7cqw);transform:translateX(-50%)}
   #plaat .s-vrij{opacity:.45} #plaat .s-vrij span{color:var(--dim)}
   #plaat .c:hover i{transform:scale(1.08)}
   #plaat .c.gekozen i{box-shadow:0 0 0 .35cqw #fff,0 0 1.5cqw rgba(255,255,255,.4)}
@@ -129,11 +132,12 @@
   <aside id="detail" class="paneel"></aside>
 </main>
 <p class="uitleg"><b>Elke kolom is een track</b>: filter bovenaan, fader onderaan, play · cue · sync · crossfaderkant in het blokje van vier.
-  <b>Track Select</b> kiest welke track de <b>rechterkant</b> bedient. De <b>scene-knoppen</b> naast het grid kiezen de grid-modus
-  (<b>Shift + scene 5</b> = klank: kill hoog · mid · laag, rem en op de maat starten per track; <b>Shift + scene 4</b> = auto:
-  de auto-DJ bijsturen op de bovenste rij, ok · overslaan · langer · nu, en rechts aan/uit; <b>Shift + scene 3</b> = patronen:
-  pad = plek per track (starten en stoppen op de maat, shift = meteen), scene = die rij op alle tracks, Stop All Clips = alles stoppen;
-  ▲ ▼ loopt ze allemaal rond),
+  <b>Track Select</b> kiest welke track de <b>rechterkant</b> bedient. De <b>scene-knoppen</b> naast het grid kiezen een van de negen grid-modi
+  (scene 1–4 = hotcues · loops · sampler · video; <b>Shift + scene 1</b> = secties: pad = een sectie van de focus-track, valt in op de maat,
+  shift = als loop; <b>Shift + scene 2</b> = patronen: pad = plek per track (starten en stoppen op de maat, shift = meteen), scene = die rij
+  op alle tracks, Stop All Clips = alles stoppen; <b>Shift + scene 3</b> = stems: per track zang · rest · drums · bas · overig weg zolang je
+  drukt, shift = vastzetten; <b>Shift + scene 4</b> = auto: de auto-DJ bijsturen op de bovenste rij, ok · overslaan · langer · nu, en rechts
+  aan/uit; <b>Shift + scene 5</b> = klank: kill hoog · mid · laag, rem en op de maat starten per track; ▲ ▼ loopt ze allemaal rond),
   <b>Clip/Device View</b> wisselt rechts tussen strip en rack (heeft de focus-track een instrument, dan daarna ook inst: de acht knoppen
   van het instrument, Device ◀ ▶ kiezen, On/Off stil). Vasthouden van een modusknop = even gluren. Plaatsing volgens de officiële
   handleiding; wat een knop doet komt rechtstreeks uit de mapping. <span id="bron"></span></p>

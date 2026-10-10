@@ -1,5 +1,4 @@
 import { invoke, read as readAction, metaOf, trackVanDeck } from '../control/actions.js';
-import { isTypen } from '../control/keyboard.js';
 import { MidiHub } from '../control/midi.js';
 import { Mapping } from '../control/mapping.js';
 import { Feedback } from '../control/feedback.js';
@@ -254,11 +253,9 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null, hu
     midiPanel.classList.toggle('hidden');
     if (!midiPanel.classList.contains('hidden')) { monitor.dirty = true; midi.init(); }
   };
+  // Alleen de knop, geen sneltoets: M is keylock van de vorige focus (keyboard.js).
   document.getElementById('midi-btn').addEventListener('click', toggleMidi);
   midiPanel.querySelector('.mon-close').addEventListener('click', toggleMidi);
-  window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyM' && !isTypen(e.target)) toggleMidi();
-  });
 
   // Chrome kan voor de sysex-permissie een gebruikersgebaar eisen. Daarom een
   // poging bij laden, en nog een zodra er sowieso geklikt wordt.

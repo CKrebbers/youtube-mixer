@@ -29,7 +29,7 @@ Knop **beeld** in de bovenbalk opent de BEELD-rij (onthouden, standaard dicht):
 | veld | wat | bewaard in |
 |---|---|---|
 | aan / uit | de zender loopt alleen als hij aan staat ÉN er een geldig adres is | `varve.beeld.aan` |
-| relay-adres | bv. `ws://192.168.1.20:7702/app` (het IP van de pc). Alleen `ws://` of `wss://`, getrimd, hooguit 200 tekens, geen gebruikersnaam/wachtwoord of `#`. Een ongeldig adres wordt geweigerd met een melding; de zender start dan niet (en een lopende stopt), het oude adres blijft bewaard | `varve.beeld.adres` |
+| relay-adres | `ws://clayk:7702/app` (terugval `ws://100.110.172.126:7702/app`), met Tailscale aan op Mac en pc: ze zitten op twee subnetten, dus het LAN-adres 192.168.0.x dat de pc toont werkt vanaf de Mac niet. Alleen `ws://` of `wss://`, getrimd, hooguit 200 tekens, geen gebruikersnaam/wachtwoord of `#`. Een ongeldig adres wordt geweigerd met een melding; de zender start dan niet (en een lopende stopt), het oude adres blijft bewaard | `varve.beeld.adres` |
 | extra latentie | −200 … +500 ms, standaard 0. **+ = het beeld eerder**: voor een beamer die achterloopt | `varve.beeld.latentie` |
 
 Bewaard zoals de andere rijen: in localStorage van deze browser.
@@ -48,7 +48,9 @@ staan. Een poort die de browser nooit opent (6000, 6667, …) wordt meteen gewei
 
 ### De latentie afstellen
 Speel een nummer met een duidelijke kick en kijk naar een flits op de tel in de
-Stroommachine. Komt het beeld te laat (beamers rekenen vaak 50–120 ms), zet de latentie
+Stroommachine. Komt het beeld te laat (beamers rekenen vaak 50–120 ms), dan ijk je op één
+plek. Met Stroommachine v10: IJken op de pc (tab Live → Varve DJ, de pijltjes) tot de flits
+op de kick valt, en de latentie in Varve op 0. Zonder v10: zet de extra latentie in Varve
 hoger tot de flits op de kick valt. Klinkt het geluid later dan je denkt (een PA met
 vertraging), dan negatief. Wat de Mac zelf aan uitgangsvertraging heeft
 (`outputLatency + baseLatency` en de vooruitblik van de limiter) zit er al in: zie §2.
@@ -127,7 +129,7 @@ naar de strip. Volledig, met het waarom: `docs/APC40.md` "Mapje beeld".
 - **Lampjes:** de regie in roze (donker = verbonden, fel zolang je drukt), flits wit,
   paniek rood (Stop All heeft geen LED: alleen op het scherm en `apc.html`). Zonder
   verbinding zijn ringen en lampjes uit en stuurt een draai niets.
-- **Op het scherm** (het scherm als APC) staat Detail View als "⇧ ▣ beeld": shift + klik
+- **Op het scherm** (het scherm als APC) staat Detail View als "⇧ beeld": shift + klik
   opent het mapje.
 - Koppelen werkt zoals altijd: elke `beeld.*`-action kan op elke knop (de mapping blijft
   van jou; een eigen regel wint).
@@ -136,10 +138,10 @@ naar de strip. Volledig, met het waarom: `docs/APC40.md` "Mapje beeld".
 
 | wat je ziet | kijk naar |
 |---|---|
-| lampje op **beeld** blijft "zoekt" | draait de relay op de pc (`node tools/varve-relay.js 7702 --host 0.0.0.0`)? klopt het IP? laat de firewall 7702/tcp toe? (`koppel/DJ-START.md`) |
+| lampje op **beeld** blijft "zoekt" | draait de relay op de pc (`node tools/varve-relay.js 7702 --host 0.0.0.0`)? klopt het adres (`ws://clayk:7702/app`, Tailscale aan op beide)? laat de firewall 7702/tcp toe? (`koppel/DJ-START.md`) |
 | "verbonden, wacht op de Stroommachine" | de relay draait, maar de Stroommachine is niet open of mist `&dj` in haar adres |
 | "eigen klok" | er is geen maatgever die je hoort: speelt er een track met een grid, staat zijn fader open en de crossfader niet weg van zijn kant? |
-| beeld te laat / te vroeg | extra latentie (§1) |
+| beeld te laat / te vroeg | ijken (§1): met Stroommachine v10 IJken op de pc, anders de extra latentie in Varve |
 | een track geeft geen scène | staat hij op kant A of B (de A\|B-knop in het 2×2-blok)? thru telt niet (§3) |
 | macro-knoppen doen niets, ringen uit | geen verbinding (de ringen tonen alleen iets als VARVE verbonden is) |
 | in de console van Chrome "WebSocket connection to … failed" | dat logt Chrome zelf bij elke mislukte poging (relay weg); JavaScript kan het niet onderdrukken. Hooguit één per 10 s. Zet beeld uit als je zonder pc speelt |

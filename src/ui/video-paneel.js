@@ -1,6 +1,5 @@
 import { DECK_IDS } from '../engine/engine.js';
 import { trackVanDeck, read as leesAction } from '../control/actions.js';
-import { isTypen } from '../control/keyboard.js';
 import { VideoMixer } from '../video/video-mixer.js';
 import { Beamer } from '../video/beamer.js';
 import { meld } from './meldingen.js';
@@ -50,6 +49,7 @@ export function opzetVideo({ engine }) {
     videoPaneel.classList.toggle('hidden');
     if (!wie().hoofd) videoMixer.pauzeerAlles();
   };
+  // Alleen de knop, geen sneltoets: V is keylock van de focus-track (keyboard.js).
   document.getElementById('video-btn').addEventListener('click', toggleVideo);
   videoPaneel.querySelector('.vid-sluit').addEventListener('click', toggleVideo);
   videoPaneel.querySelector('.vid-los').addEventListener('click', () => {
@@ -58,9 +58,6 @@ export function opzetVideo({ engine }) {
     const los = beamer.levend();
     if (los) { los.venster.focus(); return; }
     window.open('video.html', 'varve-video', 'width=960,height=540');
-  });
-  window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyV' && !isTypen(e.target)) toggleVideo();
   });
   if (videoMixer.fout) console.warn('[video]', videoMixer.fout);
 

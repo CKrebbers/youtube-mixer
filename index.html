@@ -24,7 +24,7 @@
       <button id="log-btn" class="ghost log-knop" title="handelingenlog: wat je doet, met de tijd, om de set terug te spelen (loopt vanzelf mee met een opname)">○ log</button>
       <button id="terug-btn" class="ghost log-knop" title="een handelingenlog terugspelen">↺</button>
     </span>
-    <button id="video-btn" class="ghost" title="video-mixer (V)">video</button>
+    <button id="video-btn" class="ghost" title="video-mixer">video</button>
     <button id="beeld-btn" class="ghost" title="beeld: de Stroommachine op de pc sturen via de Varve-relay (klok, mix en nummers) — aan/uit, adres, latentie en de stand">beeld</button>
     <button id="plan-btn" class="ghost" title="de programmering: het hele setplan zien, inrichten en live volgen (apart venster)">plan</button>
     <button id="auto-btn" class="ghost" title="auto-DJ: de app kiest en mixt, jij stuurt bij">auto</button>
@@ -510,7 +510,10 @@
 <!-- ================= LIBRARY ================= -->
 <section id="lib-panel" class="lib-panel hidden">
   <div class="lib-head">
-    <span class="lib-titelbalk">LIBRARY</span>
+    <!-- twee tabs: de library (wat binnen is) en de kaart (de muziekkaart als zoeklaag, src/ui/kaart-panel.js) -->
+    <span class="lib-titelbalk lib-tabs" role="tablist">
+      <button class="lib-tab on" data-tab="library" role="tab" aria-selected="true" title="wat er binnen is">LIBRARY</button><i>|</i><button class="lib-tab" data-tab="kaart" role="tab" aria-selected="false" title="de muziekkaart: alles wat je ooit draaide, binnen te halen per nummer of per krat">KAART</button>
+    </span>
     <input class="lib-url" type="text" placeholder="plak een YouTube- of TikTok-link en druk op enter…">
     <button class="btn sm lib-haal">haal binnen</button>
     <button class="btn sm lib-bestand" title="eigen audio of video (ook meerdere) — of sleep bestanden op dit paneel">bestand…</button>
@@ -525,6 +528,18 @@
   <div class="lib-status"></div>
   <div class="lib-jobs hidden"></div>
   <div class="lib-rijen"></div>
+  <!-- de tab kaart (contract deel 3): zoeken, kratten, filters, de lijst, de nachtwachtrij -->
+  <div class="kaart-deel hidden">
+    <div class="kaart-head">
+      <input class="lib-zoek kaart-zoek" type="text" placeholder="zoek op artiest, titel, playlist, kanaal…">
+      <select class="kaart-krat" title="een krat: slimme kratten en je playlists (aantal · hoeveel al binnen)"><option value="">hele kaart</option></select>
+      <span class="kaart-filters"></span>
+      <button class="btn sm kaart-krat-wens" disabled title="kies eerst een krat">alles in deze krat op de wenslijst</button>
+    </div>
+    <div class="lib-status kaart-status"></div>
+    <div class="lib-rijen kaart-rijen"></div>
+    <div class="kaart-nacht"><span class="kaart-nacht-kop">NACHTWACHTRIJ</span><span class="kaart-nacht-stand">…</span></div>
+  </div>
 </section>
 
 <!-- ================= MIDI-MONITOR ================= -->
@@ -634,8 +649,6 @@
           <tr><td>[ / ]</td><td>crossfader</td></tr>
           <tr><td>6</td><td>quantize aan/uit (alle tracks; de Q bij Lock in het focusdeel)</td></tr>
           <tr><td>B</td><td>library (bibliotheek)</td></tr>
-          <tr><td>V</td><td>video</td></tr>
-          <tr><td>M</td><td>MIDI-monitor</td></tr>
           <tr><td>/</td><td>deze kaart</td></tr>
           <tr><td>Esc</td><td>paneel sluiten</td></tr>
         </table>

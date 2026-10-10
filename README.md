@@ -4,15 +4,25 @@ Fundament van de DJ-app. Geen build-stap, geen dependencies: plain ES-modules.
 
 ## Starten
 
+Klik op **VARVE** in het Dock (of open `~/Applications/VARVE.app`). Draait de server nog
+niet, dan start de app hem vanuit de Bureaublad-map (poort 8777) en wacht tot hij antwoordt.
+Daarna haalt hij de Controlekamer (**http://localhost:8777/controle**) in Chrome naar voren,
+of opent hem. Begin daar; *mixer openen* opent de mixer. De bron van de app staat in
+`tools/varve-app/` (opnieuw bouwen: `zsh tools/varve-app/maak.sh`).
+
+Terugval, met de hand:
+
 ```bash
-cd varve-dj
-python3 -m http.server 8080     # of: npx serve .
+cd ~/Desktop/"1. Projects/Youtube mixer" && node server/index.js
 ```
 
-Open **http://localhost:8080** in **Chrome** (Web MIDI in fase 2 werkt niet in Safari).
-Klik eerst op *audio starten* — browsers laten geen AudioContext lopen zonder klik.
+en open **http://localhost:8777/controle** in **Chrome** (Web MIDI werkt niet in Safari).
 
-Daarna: *laad demotrack* op beide decks, of sleep een audiobestand op een deck.
+Het log: wat de app start, schrijft naar `~/.varve-server.log` (meekijken:
+`tail -f ~/.varve-server.log`; de melding bij een mislukte start heeft een knop *Log openen*).
+Met de hand gestart staat het gewoon in de Terminal.
+
+In de mixer: klik eerst op *audio starten* — browsers laten geen AudioContext lopen zonder klik.
 `/` opent de toetsenlijst.
 
 ## Tests
