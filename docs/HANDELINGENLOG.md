@@ -152,6 +152,8 @@ het midden in een set begint. ~10 kB met acht tracks.
   automatische kaart "met de hand" maken), en die kaart hoort bij de library.
 - `rond`: triggers die rondlopen (`RONDLOPERS`): terugzetten = drukken tot de
   read klopt. Ook `transport.quantize` (één schakelaar voor de hele engine).
+  Sinds 10 okt ook `video.clips` (het zaalbeeld, docs/BEAMER.md): een log van
+  daarvóór begint teruggespeeld met de clips aan, zoals ze toen altijd stonden.
 - Sinds ronde 3 (25 sep, dj-transport en dj-klank) per track ook:
   - `kill`: de kill-SCHAKELAARS per band. `track.N.kill.*` zijn toggles op de
     bus: zonder deze stand speelde een log dat met een kill aan begon omgekeerd

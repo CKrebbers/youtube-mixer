@@ -297,6 +297,7 @@ test/
   sec-maschine.test.mjs  secties en loops: sectieHier na het rondgaan, sectieOpDeMaat in een loop, de melding, de Maschine
   sec-controle.test.mjs  sectieTelling (zelfde regel als moetSecties, cache per rij, ROLLBACK), /api/secties, de tegel
   beeld.test.mjs    spoor beeld: adres, latentie, id's, kiesKant, de tel met latentie, track/mix/poort, aanwezig en opnieuw, de echte zender op een nep-WebSocket
+  beeld-meting.test.mjs  de pure delen van tools/headless/beeld-lokaal.mjs: opties, ps optellen, fps-oordeel, wat --opruimen mag, de hartslag-worklet met een nepklok
   varve-beeld-zender.test.mjs  de zendertest van de Stroommachine (overgenomen; alles.mjs telt zijn eigen formaat)
   kaart.test.mjs    de kaart op een verzonnen varve-kaart.json (nep-kaart.mjs): laden/herladen, zoeken, filters, sorteren, pagina's, wensen (20, dubbel), score, standaardvolgorde, cookie-bewaker
   nacht.test.mjs    de zes nachtregels één voor één met nepklok, nep-deck en nep-ingest (geen tijd, geen netwerk)
@@ -865,6 +866,15 @@ docs/
   eindbeeld van NA het indrukken; de video's lopen door. Zwart en bevriezen staan
   in de beginstand van het log. APC: de master-knop (`note:0:80`) = zwart in elk
   mapje; in de modus video rechts flits, zwart vasthouden, zwart, bevriezen.
+- ZAALBEELD (10 okt, spoor beeld-een-machine, `docs/BEAMER.md` "Zaalbeeld"): `video.clips`
+  (trigger met read, schakelaar) zet de deck-video's uit: in `VideoMixer._bijwerken` telt elke
+  video dan als onzichtbaar (gewicht 0, gepauzeerd); vormlagen, effecten en noodknoppen lopen
+  door, dus zaal, los venster (`neemOver` neemt `clips` over) en opname zien hetzelfde. Standaard
+  aan, geen localStorage; in `RONDLOPERS` (een log van daarvóór begint met clips aan). Op het
+  scherm alleen in VARVE (knop video, knopje CLIPS, venstertitel), nooit op het doek. De meting
+  "Stroommachine op de Mac zelf": `tools/headless/beeld-lokaal.mjs` (hartslag-worklet in
+  `engine.ctx` via CDP, nooit in de app; `--zelftest` zonder GPU); `beeld-status.fps` van de
+  Stroommachine is vast 63 en zegt niets.
 - BACKUP VAN DE LIBRARY (2 okt, ONTBREEKT A6, `server/backup.js`, docs/LIBRARY.md
   "Backup"): `VACUUM INTO` op een eigen alleen-lezen verbinding in een
   worker_thread, NOOIT het bestand kopiëren (in WAL staat recent werk alleen in

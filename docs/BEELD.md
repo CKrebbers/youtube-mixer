@@ -194,3 +194,50 @@ naar de strip. Volledig, met het waarom: `docs/APC40.md` "Mapje beeld".
   hetzelfde `id` negeren; zie het verslag, "Vragen voor de Stroommachine").
 - Terugspelen (handelingenlog) stuurt de macro's opnieuw, de regieknoppen niet
   (`OVERSLAAN` in terugspelen.js: vasthouden en paniek zijn schakelaars).
+
+## 8. Eén machine: zonder pc (spoor beeld-een-machine, 10 okt, in opbouw)
+
+Zonder de Omarchy-pc is er geen Stroommachine. De vraag: kan ze op de MacBook zelf
+draaien, naast VARVE, met de relay lokaal, en wat kost dat (fps, CPU, gaten in het geluid)?
+
+**Advies tot er gemeten is** (het ontwerp, 10 okt): de standaard voor "ergens heen met
+alleen de laptop" is het **zaalbeeld**: Varve's eigen vormen in het losse venster, zonder
+clips van anderen (`video.clips`, `docs/BEAMER.md` "Zaalbeeld"). Dat voegt geen proces toe,
+de noodknoppen werken, en het gaat mee in de opname. De Stroommachine lokaal is een
+**upgrade**: pas na een groene meting (VRAGEN BE11) en nadat je haar één keer zo echt
+bespeeld hebt. Zwart (`video.black`) bereikt haar niet, en ze zit niet in VARVE's opname.
+
+**De meting**: `node tools/headless/beeld-lokaal.mjs` (tools/README.md). De relay op 7712,
+een eigen VARVE-server op 8801 met een tijdelijke library, twee Chromes for Testing op
+Metal (`--mute-audio`), VARVE met een last zoals je speelt (vier tracks waar het kan,
+stems uit een fixture, keylock, sends, rack, elke 2 s een filter- en faderzwaai), per
+stand (nul, Licht en Normaal op 1920 × 1080, het zaalbeeld, Licht op 1280 × 720) CPU en
+RSS per proces, warmte (`thermalState`), lader en accu. Drie meters:
+- **fps**: een eigen rAF-meter in de Stroommachine-tab; ter controle `kwInfo().ms`, dat
+  alleen iets zegt met `&fps` in de hash (zonder blijft het 16,7). Harde check.
+- **gaten in het geluid**: een hartslag-worklet in `engine.ctx` (het grootste gat tussen
+  twee `process()`-aanroepen, het aantal > 15 ms), via het DevTools-protocol, nooit in de
+  app. Aan het eind een positieve controle: een aparte context blokkeert 40 ms; ziet de
+  meter dat niet, dan is de run FAIL ("meter blind").
+- de drift van `getOutputTimestamp` als derde kolom, geen criterium (hij zag in de proef
+  van de critici 0 van 12 opgewekte gaten).
+
+**Stand 10 okt**: alleen `--zelftest` gedraaid (geen GPU, geen Stroommachine, stil, 9,6 s):
+18 controles groen; hartslag in rust max 6 ms, 0 gaten > 15 ms in 452 blokken; de
+positieve controle van 40 ms gezien (max 40 ms). De **volledige run is nog niet
+gedraaid**: niet op de dag van proefavond 1, en hij weigert zolang er geluid uit de Mac
+komt of een ander proces > 20 % van een kern trekt. Er staan dus nog geen cijfers voor
+"Stroommachine naast VARVE" in dit document.
+
+**Twee dingen die we onderweg vonden** (nagelezen in de Stroommachine-repo, niets gewijzigd):
+- `beeld-status.fps` (de tooltip in VARVE) is **vast 63**: `09o-dj.js` regel 138 rekent
+  `1000 / (PF.ms || 16)`, en `PF` (`08b-kwaliteit.js`) heeft geen veld `ms`. Gebruik hem
+  niet als meting. Voorstel voor haar repo: `KW.fpsNu` meesturen.
+- Een worklet uit een Blob-URL laadt niet op een `file://`-pagina (`blob:null`, AbortError,
+  CfT 153). De meters werken op VARVE (`http://localhost`); de zelftest serveert zijn
+  pagina daarom zelf over http.
+
+**Nog niet gebouwd** (volgende stappen van het ontwerp): de knopjes "deze Mac · pc" in de
+BEELD-rij, het startscript `tools/beeld-lokaal.sh` (relay + de Stroommachine in een eigen
+Chrome-bundel, zodat VARVE.app nooit de verkeerde Chrome aanspreekt), de speelproef met
+de APC, de lange meting op de accu, en de Dock-app "VARVE + beeld".

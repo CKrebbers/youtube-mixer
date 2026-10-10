@@ -99,6 +99,18 @@ Pas draaien NÁ de proefavond van 10 okt.
   de klok · 124.0 BPM"), tracks met hun id, crossfader 0 → 0,8 = dom A → B, een macro van de
   APC-pagina, de Stroommachine herladen (tracks terug), pauze (haar bronnen zakken naar stil), relay weg
   en terug. Weigert als 7702 bezet is.
+- `beeld-lokaal.mjs [uitmap] [--standen …] [--warm 20] [--meet 120] [--zelftest] [--kijk] [--opruimen] [--accu]` —
+  beeld op één machine (docs/BEELD.md §8): de Stroommachine naast VARVE op deze Mac, op Metal, met de relay op
+  7712, een eigen server op 8801 (debug 9391/9392). Per stand fps (eigen rAF-meter, `&fps`), VARVE-rAF, een
+  hartslag-worklet in `engine.ctx` (gaten > 15 ms, positieve controle van 40 ms), CPU/RSS per proces, warmte,
+  lader en accu; `uit/beeld-lokaal.json`. Weigert bij geluid uit de Mac of een ander proces > 20 % van een kern
+  (`VARVE_BL_FORCEER=1`). `--zelftest`: zonder GPU en zonder Stroommachine, ≤ 20 s. `--kijk`: tijdens een echte
+  proef kwInfo() via 9393 en ps naar `uit/kijk-<datum>.jsonl`. `--opruimen`: alleen eigen processen. NIET op een
+  speeldag. De pure delen: `test/beeld-meting.test.mjs`.
+- `zaalbeeld.mjs [uitmap]` — het zaalbeeld (`video.clips`, docs/BEAMER.md): eigen server op 8806, debug 9406,
+  Chrome for Testing op Metal, ZONDER `--disable-popup-blocking`. Het losse venster met een testvideo, clips uit =
+  zwart en de video stil (geluid door), vormen erbij = beeld, `video.black` werkt, clips terug; de knop video,
+  het paneel en de venstertitel. 22 controles, vijf schermafdrukken `zaalbeeld-*.png`.
 - `rijen.mjs [uitmap] [--label voor|na]` — de rijen onder de mixer (stems, koptelefoon, instrument,
   patronen, master, auto, klankschaal, beeld; eigen server op 8863, debug 9463, geen MIDI): op 1440×790 en
   1920×1080 met geen, elke rij apart, drie, alle rijen open, en met de videokolom erbij. Per stand:
