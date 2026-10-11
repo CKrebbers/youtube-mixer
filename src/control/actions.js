@@ -30,6 +30,7 @@ import { INSTRUMENTEN } from '../engine/instrumenten/index.js';
 import { PLEKKEN, MAX_LENGTE, STANDAARD_LENGTE, TEMPO, SWING, gevuld, volgendeLengte } from '../engine/patronen/model.js';
 import { MACROS as BEELD_MACROS, REGIE as BEELD_REGIE } from '../koppel/beeld.js';
 import { TELLEN as TELLEN_SAMPLER } from '../engine/sampler.js';
+import { DRUMPAD_VAN_SAMPLER, nootNaamDrum } from './drumpads.js';
 
 const registry = new Map();
 
@@ -42,6 +43,43 @@ const RATE_MAX = 2;
 
 /** Zoveel secties per track op de bus: de 40 pads van het APC-grid (docs/SECTIES.md). */
 export const SECTIE_PADS = 40;
+
+// Sampler-pad → drumpad (crossover): de tabel staat los, zodat apc-beschrijf.js hem
+// kan lezen zonder de engine mee te laden.
+export { DRUMPAD_VAN_SAMPLER } from './drumpads.js';
+const bpmTekst = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
+
+/**
+ * Welke stems er in een knip zitten, voor de melding; leeg als het alle stems
+ * zijn (of het nummer geen stems had). De gewichten zijn wat je hoorde bij het
+ * knippen (deck.knipGewichten: niveau × kill × 1/schaal), dus "alle stems" =
+ * allemaal gelijk en niet 0, niet "allemaal 1" (1/schaal maakt ze groter).
+ */
+export function stemsInKnip(gewichten, namen) {
+  if (!Array.isArray(gewichten) || !gewichten.length) return '';
+  const max = Math.max(...gewichten);
+  if (gewichten.every((g) => g > 0 && Math.abs(g - max) <= 1e-6 * max)) return '';
+  if (!(max > 0)) return 'stems: geen (stil)';
+  const aan = Array.isArray(namen) && namen.length === gewichten.length
+    ? gewichten.map((g, k) => (g > 0 ? STEM_LABELS[namen[k]] ?? namen[k] : null)).filter(Boolean) : null;
+  return aan && aan.length < gewichten.length ? `stems: ${aan.join(', ')}` : 'niet alle stems';
+}
+
+/**
+ * De melding na `sampler.N.drums` (i = N − 1; r = de uitkomst van
+ * engine.samplerNaarDrums): waar het stuk staat met de nootnaam, welke stems
+ * erin zitten als dat niet alle zijn, en een tempowaarschuwing als het stuk
+ * meer dan 0,5 % van de maat afwijkt (een drumpad speelt op snelheid 1).
+ */
+export function drumMelding(i, r) {
+  let t = `S${i + 1} staat op drumpad ${r.pad} van track ${trackVanDeck(r.id)} (noot ${nootNaamDrum(r.noot)} · ${r.noot})`;
+  const stems = stemsInKnip(r.gewichten, r.stemNamen);
+  if (stems) t += ` · ${stems}`;
+  if (r.bpm > 0 && r.maatBpm > 0 && Math.abs(r.bpm / r.maatBpm - 1) > 0.005) {
+    t += `; let op: dit stuk is ${bpmTekst(r.bpm)} bpm, de maat staat op ${bpmTekst(r.maatBpm)}: als drumpad speelt het op ${bpmTekst(r.bpm)} (loops blijven in de sampler)`;
+  }
+  return t;
+}
 
 export function define(id, type, fn, meta = {}) {
   registry.set(id, { id, type, fn, meta });
@@ -890,6 +928,7 @@ export function bindEngine(engine) {
   // maken (bewaard blijft bewaard); een lege, bewaarde pad vergeten.
   const sampler = engine.sampler;
   if (sampler) {
+    const zegDrum = (tekst, soort = 'info') => engine.emit('melding', { tekst, soort, duur: 8000 });
     for (let i = 0; i < 8; i++) {
       define(`sampler.${i + 1}`, 'trigger', (on) => {
         if (!on) return;
@@ -935,6 +974,27 @@ export function bindEngine(engine) {
              if (sectieDruk) return 1;
              const d = engine.focused();
              return sampler.waaromGeenSectie(i, d, d?.sectieHier ?? -1) ? null : 0.5;
+           } });
+      // Dit stuk als drumpad op de Drums (crossover, docs/INSTRUMENTEN.md "Uit de
+      // sampler"): een eigen strip (fader, filter, echo, galm, fx, koptelefoon),
+      // in een patroon op zijn noot, op dezelfde Maschine-pad als in de padmodus
+      // sampler (DRUMPAD_VAN_SAMPLER). Welke Drums: engine.drumsDoel(). Read:
+      // null = kan niet (sampler-pad leeg of geen Drums), 0,5 = kan, 1 = er ligt
+      // een stuk op die drumpad (niet per se de knip van nu: stap 1 vergelijkt niet).
+      const drumpad = DRUMPAD_VAN_SAMPLER[i];
+      define(`sampler.${i + 1}.drums`, 'trigger', (on) => {
+        if (!on) return;
+        const r = engine.samplerNaarDrums(i, { pad: drumpad });
+        // De reden uit de engine noemt de pad zelf al: geen voorvoegsel.
+        if (!r.ok) { zegDrum(r.reden, 'fout'); return; }
+        zegDrum(drumMelding(i, r));
+      }, { label: `Sampler pad ${i + 1} als drumpad ${drumpad} op de Drums (one-shot, door de strip; Maschine-pad ${drumpad})`,
+           read: () => {
+             if (!sampler.pads[i]) return null;
+             const d = engine.drumsDoel?.();
+             const inst = d?.id ? engine.instrumentOp(d.id) : null;
+             if (!inst) return null;
+             return inst.stand?.().pads?.[drumpad - 1]?.gevuld ? 1 : 0.5;
            } });
     }
     define('sampler.length', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },

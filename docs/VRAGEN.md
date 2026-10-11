@@ -510,6 +510,20 @@ Standaardkeuzes zonder vraag (zeg het als je het anders wilt; docs/UITZENDEN.md 
 
 ---
 
+## CX. Crossover (10 okt, docs/INSTRUMENTEN.md "Uit de sampler", PR #26)
+
+Een knip uit de sampler als drumpad op de Drums (`sampler.N.drums`, knoppen `1→13 … 8→12`
+onder de sampler-pads): het stuk krijgt de strip en de cue van een track en speelt in een
+patroon. Proef: het speellijstblok `crossover` (Controlekamer).
+
+- [ ] **CX1. Welke Drums krijgt de knip?** 💬 Gebouwd: de **speeltrack** (waar het toetsenbord en de speelmodus van de Maschine spelen: de focus, anders de laatst gefocuste instrumenttrack) als die de Drums heeft, anders de enige Drums-track; geweigerd alleen als de speeltrack een ander instrument is en er twee of meer Drums zijn. De melding noemt altijd de track. Je knipt met de focus op het nummer, dus met twee Drums beslist de speeltrack zonder dat je de focus verzet. Alternatief (het eerste ontwerp): bij twee Drums altijd weigeren tot je de focus op een Drums zet. **Advies:** zo laten: het stuk landt waar noot 48 ook aankomt.
+- [ ] **CX2. Drumpads bewaren bij de set?** 💬 Nu zijn pads 9–16 na herladen leeg; gebruikt een patroon ze, dan zegt een melding het. Bewaren (stap 2, ~2–2,5 dagen) zet per pad het library-nummer, van–tot, tellen, bpm en de stems in de patronenset, en knipt het stuk bij het laden opnieuw; alleen stukken uit de library (niet de demo of een los bestand). **Advies:** beslissen na de proef: miste je ze na herladen, dan bouwen.
+- [ ] **CX3. Eigen opnames naar de library?** 💬 `CLAUDE.md` zegt "geen upload". Stap 3a gebruikt alleen wat er al is: een kopie van een opname in een kladmap, `node tools/lokaal/importeer.mjs --droog` (alleen lezen), en op je ja echt importeren op een dag zonder set (stems en video uit). Stap 3b zou een knop `record.library` en een route toevoegen; dan zou de regel worden "geen upload van buiten, geen distributie van de cache; eigen opnames en renders naar de eigen library mag", en dan kies je ook hoe een opname genormaliseerd wordt. **Advies:** 3a proberen na de proefavonden; 3b niet bouwen zonder je ja op 3a én op de regel.
+- [ ] **CX4. Wanneer de proef, en dus wanneer mergen?** 💬 Hangt aan keuze 1 uit het verbeterplan van 9 okt ("Tot na avond 2 alleen repareren wat op de proefavond fout gaat?"). **Ja** → PR #26 pas mergen na de verwerking van avond 2, de proef op de avond daarna (bij het mergen gaat het blok `crossover` naar avond 3: titel "Avond 3 · …", achter `beeld-pc`, en de tellingen in `docs/CONTROLEKAMER.md` en `HANDOFF.md` mee). **Nee** → mergen na de verwerking van avond 1, de proef op avond 2 (het blok staat daar al, na de sampler op de Maschine). De crossover is nieuw werk, geen reparatie. **Advies:** volg wat je bij keuze 1 kiest (het verbeterplan raadt ja aan).
+- [ ] **CX5. Leegmaken en het opschrift `1→13`?** 👀 Er is geen knop om een drumpad leeg te maken: een nieuwe `1→13` overschrijft. Het opschrift noemt de sampler-pad en de drumpad (de pads staan 4 × 2, de knoppen 8 × 1). **Advies:** zo laten tot je leegmaken mist; zeg het als `1→13` niet duidelijk is.
+
+---
+
 ## O. AV-app-hub (3 okt, `?hub=`, CLAUDE.md AV-APP-HUB)
 
 - [ ] **O1. LPD8 K1 (intensiteit) in VARVE?** 🎛 K1 hing eerst aan het

@@ -279,14 +279,19 @@ export class Sampler {
       // Met stems: wat je NU hoort vóór de EQ (niveau en kill per stem), zodat
       // een pad die je knipt terwijl de zang weg is ook zonder zang klinkt.
       // Een herstelde pad knipt met de stand van het moment van herstellen.
-      const ruw = await deck.bron.knip(van - voorSec, tot, deck.knipGewichten?.() ?? null);
+      // De gewichten (en de namen erbij, index k = stems.namen[k]) gaan mee op
+      // de pad: wie het stuk later als drumpad neerzet, hoort te weten dat er
+      // bijvoorbeeld alleen de drums in zitten (crossover). Pure data.
+      const gewichten = deck.knipGewichten?.() ?? null;
+      const stemNamen = gewichten ? deck.stems?.namen ?? null : null;
+      const ruw = await deck.bron.knip(van - voorSec, tot, gewichten);
       const voor = Math.round(voorSec * ruw.sampleRate);
       const kanalen = naadloos([ruw.getChannelData(0), ruw.getChannelData(1)], voor);
       const buf = this.ctx.createBuffer(2, kanalen[0].length, ruw.sampleRate);
       buf.getChannelData(0).set(kanalen[0]);
       buf.getChannelData(1).set(kanalen[1]);
       this.stop(n);
-      this.pads[n] = { buffer: buf, bpm, bron, tellen, van, tot, deckId: deck.id, speelt: false, src: null, g: null };
+      this.pads[n] = { buffer: buf, bpm, bron, tellen, van, tot, deckId: deck.id, gewichten, stemNamen, speelt: false, src: null, g: null };
       return true;
     } finally {
       this.bezig.delete(n);

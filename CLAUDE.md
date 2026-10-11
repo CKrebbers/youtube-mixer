@@ -97,6 +97,7 @@ src/
                     mapping.js      signature -> action, soft-takeover, shift, mapjes. Kent geen hardware.
                     lagen.js        mapjes (lagen): welk mapje open staat, vastzetten en gluren
                     feedback.js     engine-stand -> LED's, met diffing. Leest de mapping.
+                    drumpads.js     sampler-pad -> drumpad (DRUMPAD_VAN_SAMPLER, nootnamen), zonder imports: ook voor apc-beschrijf op apc.html
                     midi-learn.js   action kiezen, control bewegen, gekoppeld
                     noten.js        MIDI-noten (elke ingang behalve de APC) naar het instrument op de speeltrack; knoppen en de schuif (SysEx Master Volume) via een apparaatmapping
                     maschine.js     de Maschine MK2 via de hub (alleen ?hub=): pads -> noten.js of stappen (STEP), PATTERN, transport, groepen/draaiknoppen (mapping), knoppagina's (◄ ►: Instrument/Strip/Rack als open mapje), uitleg (CONTROL), masterwiel, lampjes, schermen
@@ -239,6 +240,10 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
                     bladeren.mjs: BROWSE, wiel en ENTER op een nep-Maschine met een echte library (twee testnummers);
                     maschine-sampler.mjs: SAMPLING op een nep-Maschine met de echte sampler (knippen, spelen, tellen, volume);
+                    sampler-drums.mjs: crossover, een sampler-pad als drumpad 13 in de echte Web Audio (inhoud, strip, patroon,
+                    tempo, koptelefoon) en de knoppen 1→13 … 8→12 in de app op 1440×900 en 1440×790 (muisklik, koppelmodus);
+                    sampler-drums-stems.mjs: hetzelfde met een GESTREAMD library-nummer met vier stems (synthetisch, tijdelijke db),
+                    kills, knip, drumpad 13, Goertzel per stem, deck-vergelijking met de crossfaderkant erin (proefpunt cx-stems);
                     hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
@@ -320,6 +325,8 @@ test/
   maschine-kaart.test.mjs  de Maschine-kaart: tekst = legUit in elke pagina × padmodus, geen regel vrij, stand blijft staan, stuurt niets
   bladeren.test.mjs  bladeren in de library met de Maschine: bindLibrary, keuze/venster, terugspelen, wiel/ENTER/◄ ►, lampjes, schermen
   maschine-sampler.test.mjs  de padmodus sampler op de Maschine: pads per rij, SHIFT, ◄ ► tellen, knop 5 volume, lampjes, scherm
+  sampler-drums.test.mjs  crossover: sampler-pad als drumpad (tabel, actions, welke Drums, melding tempo/stems met de echte
+                    stemindeling, lampjes, terugspelen, na herladen, de knoppen in index.html), zonder DOM
   bovenbalk.test.mjs  de bovenbalk scrollt opzij als hij niet past (randen, CSS: niet hoger, geen schuifbalk)
   patronen.test.mjs model, venster (swing, micro, omlopen), klok, speler met nep-maatgever (op de maat, herankeren zonder dubbele/gemiste), opnemen, opslag (409), server
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
@@ -1525,6 +1532,15 @@ Volledig in `docs/INSTRUMENTEN.md` (§3 het contract, §6 de track). Wat een bou
   begon een lineaire helling na `cancelAndHoldAtTime` midden in een `setTargetAtTime` op 0 (een
   tik bij een GEPLANDE stemroof). Luidheid gemeten: `OPHOGING` 0,52 = −14 LUFS voor een akkoord
   van drie op 0,8; verander je de klank, meet opnieuw (`tools/headless/instrument.mjs`).
+- Crossover (10 okt, `docs/INSTRUMENTEN.md` "Uit de sampler"): `sampler.N.drums` zet sampler-pad N
+  op drumpad `DRUMPAD_VAN_SAMPLER[N−1]` (S1–S4 → 13–16, S5–S8 → 9–12: dezelfde fysieke
+  Maschine-pad als in de padmodus sampler) van `engine.drumsDoel()`, via
+  `engine.samplerNaarDrums(n, { pad })`; `pad` is verplicht (de engine kent de tabel niet).
+  `drumsDoel()` = de speeltrack als die de Drums heeft, anders de enige Drums; geweigerd alleen
+  als de speeltrack een ander instrument is en er twee of meer Drums zijn. Pads 9–16 staan NIET
+  in de set; `sampler.N.drums` staat wel in het log, maar terugspelen slaat hem over
+  (`OVERSLAAN`): na herladen zijn ze leeg, en `herstelInstrumenten` meldt het als een patroon
+  ze gebruikt ("stonden er stukken uit de sampler op, zet ze dan terug …").
 
 ## Master en limiter (gebouwd 5 okt)
 

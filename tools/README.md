@@ -294,6 +294,14 @@ bestand heen. Zie `patronen/LEESMIJ.md`.
 - `maschine-sampler.mjs [uitmap]` — de padmodus sampler op de Maschine (docs/MASCHINE.md §5f) met de ECHTE sampler:
   een demotrack met grid op track 1, een nep-Maschine in de mixer (nep-poort, geen hub): SAMPLING, een lege pad
   knipt, nog eens = speelt op de tel, stoppen, ◄ ► tellen, draaiknop 5 volume, SHIFT + pad leeg, lampjes. Poorten 8843/9443.
+- `sampler-drums.mjs [uitmap]` — crossover stap 1 (docs/INSTRUMENTEN.md "Uit de sampler"): een knip uit de sampler
+  als drumpad 13 op de Drums, in de echte Web Audio (OfflineAudioContext, de hele engine). Checks: 1 inhoud (elke
+  aanslag is de sampler-buffer), 1b gelijk aan hetzelfde stuk op een deck (+2,1 dB), 2 fader 0 = stil, 3 een patroon
+  met noot 48 op de tellen van de maatgever, 4 `laadPad` van 90 s (~3 ms), 5 tempo (geknipt op 124, maat 128: niet
+  uitgerekt, de uitkomst zegt het), 6 koptelefoon (PFL: kanaal 3/4, zaal stil), 7 de knoppen 1→13 … 8→12 in de app
+  op 1440×900 (ook met rijen of videopaneel open; muisklik, koppelmodus) en 7b op 1440×790. Alles van de server in
+  een tijdelijke map (ook proef, kaart, nacht, nep-yt-dlp), geen MIDI. Poorten 8797/9397
+  (`VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`). Raakt de geluidsinstellingen van de Mac niet.
 - `bladeren.mjs [uitmap]` — bladeren in de library met de Maschine (docs/MASCHINE.md §5e): twee testnummers door
   de ingest, een nep-Maschine in de mixer (dezelfde klasse, nep-poort, geen hub): BROWSE opent de library, het wiel
   kiest (het paneel licht op), ENTER laadt op de focus-track, over een spelende track pas bij een tweede druk, een

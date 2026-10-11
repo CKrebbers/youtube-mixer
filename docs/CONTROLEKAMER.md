@@ -85,8 +85,9 @@ tabel staat (luisteren, secties, de Maschine als DJ-bediening, beeld):
 **Avond 1** (mixen): 76 punten, ~2,5 uur (149 min), zonder hub (de mixer opent de APC
 zelf). De **kern** vooraan is ~45 min (26 punten, 47 min): opstarten, luisteren, draaien
 op de APC, koptelefoon, keylock. De rest van avond 1 als er tijd en zin is.
-**Avond 2** (spelen en programmeren): 64 punten, ~2,5 uur (154 min), met de hub (de
-Maschine kan alleen via de hub).
+**Avond 2** (spelen en programmeren): 69 punten, ~2,7 uur (162 min), met de hub (de
+Maschine kan alleen via de hub). Sinds 10 okt met het blok crossover (5 punten, 8 min, PR #26;
+VRAGEN CX4: wordt er pas na avond 2 gemerged, dan gaat het naar avond 3).
 **Avond 3** (beeld, met de Omarchy-pc): 6 punten, ~25 min.
 **Eerder werk**: 26 punten, ~45 min.
 
@@ -97,7 +98,7 @@ avond 3 vóór "Eerder werk", en de kern vooraan):
   een sectie in de sampler, secties terugspelen.
 - Avond 2: opstarten met de hub, spelen, patronen, planvenster met secties, auto-DJ met
   secties, secties op de Maschine, secties in beeld, secties naar de hub, de Maschine als
-  DJ-bediening, bladeren en sampler op de Maschine.
+  DJ-bediening, bladeren en sampler op de Maschine, crossover (een knip als drumpad).
 - Avond 3: beeld met de Stroommachine.
 - Eerder werk: toonsoort, binnenhalen, auto-DJ, planvenster, klankschaal, beamer, kleine dingen.
 

@@ -71,6 +71,9 @@ const KLEURSCHEMA = [
   // secties, donker = kan (een lege pad, de focus-track heeft secties), fel =
   // ingedrukt, uit = kan niet.
   [/^sampler\.\d+\.section$/, { aan: 'hemelsblauw', half: 'hemelsblauwdonker', uit: 'uit' }],
+  // Een stuk uit de sampler als drumpad (crossover): in de kleur van de
+  // sampler, fel = drumpad gevuld, donker = kan, uit = kan niet.
+  [/^sampler\.\d+\.drums$/, { aan: 'violet', half: 'violetdonker', uit: 'uit' }],
   [/\.clear$|\.delete$/, { aan: 'rood', half: 'rooddonker', uit: 'uit' }],
   // Doorbladerknoppen (tellen, mengvorm, pulsdoel): hun read is een KEUZE
   // (index), geen niveau. Stand 0 als "uit" tonen zou liegen; ze branden
@@ -158,7 +161,7 @@ export const TEL_VENSTER_EEN = 0.5;
 /** Drie standen uit een read: 'uit', 'half', 'aan'. */
 const standVan = (v) => (v >= 0.99 ? 'aan' : v > 0.01 ? 'half' : 'uit');
 
-const kleurVoor = (actie) =>
+export const kleurVoor = (actie) =>
   (KLEURSCHEMA.find(([re]) => re.test(actie)) || [null, { aan: 'wit', uit: 'donkergrijs' }])[1];
 
 /** Wildcard-kanaal bestaat alleen inkomend; naar buiten moet het een getal zijn. */

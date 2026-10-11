@@ -160,7 +160,7 @@ export function opzetPatronen({ engine, noten }) {
     } else {
       const noot = st.laatsteNoot;
       const pad = inst.stand?.().pads?.find((x) => x.noot === 36 + (((noot - 36) % 16) + 16) % 16);
-      tekst(nootEl, `noot ${nootNaam(noot)}${pad ? ` · ${pad.naam}` : ''}`);
+      tekst(nootEl, `noot ${nootNaam(noot)}${pad?.naam ? ` · ${pad.naam}` : ''}`);
       klasse(nootEl, 'leeg', false);
     }
 

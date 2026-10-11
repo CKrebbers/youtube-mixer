@@ -57,8 +57,11 @@ import { PITCH_BEREIKEN, SPRONG_TELLEN, EQ_BANDEN } from '../engine/deck.js';
  * - beeld.regie.*: de regieknoppen van de Stroommachine (docs/BEELD.md). Vasthouden
  *   en paniek zijn schakelaars waarvan VARVE de stand niet kent: terugspelen kon ze
  *   omgekeerd zetten. De macro's (beeld.macro.*) gaan wel door: een stand.
+ * - sampler.N.drums: zet een stuk uit de sampler op de Drums van NU (crossover).
+ *   Instrumenten staan niet in het log, dus terugspelen zou de drumpads van nu
+ *   overschrijven met een stuk dat er toen misschien niet eens lag.
  */
-export const OVERSLAAN = /^(record\.|log\.|layer\.|library\.|track\.\d+\.load\.selected$|headphone\.|beeld\.regie\.|track\.\d+\.rack\.(next|prev)$|track\.\d+\.key(\.|$)|track\.\d+\.pfl$|track\.\d+\.inst(\.|$)|track\.\d+\.pattern\.(step\.|length|swing|clear)|patterns\.(record|tap)$|track\.\d+\.stem\.\w+\.pfl$)/;
+export const OVERSLAAN = /^(record\.|log\.|layer\.|library\.|track\.\d+\.load\.selected$|headphone\.|beeld\.regie\.|track\.\d+\.rack\.(next|prev)$|track\.\d+\.key(\.|$)|track\.\d+\.pfl$|track\.\d+\.inst(\.|$)|track\.\d+\.pattern\.(step\.|length|swing|clear)|patterns\.(record|tap)$|track\.\d+\.stem\.\w+\.pfl$|sampler\.\d+\.drums$)/;
 
 /**
  * Actions die over het NUMMER gaan (transport, cues, loops, grid, secties).

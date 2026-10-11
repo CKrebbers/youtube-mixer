@@ -1272,6 +1272,12 @@ body:has(#stems:not(.hidden)) .focusdeel .sampler-rij .pad{height:22px}
 .focusdeel .sampler-rij .pads{grid-column:1 / 4;grid-row:2;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
 .focusdeel .sampler-rij > .knob{grid-column:4;grid-row:1 / 3;align-self:center}
 .focusdeel .sampler-rij .pad{height:26px;padding:0 6px}
+/* crossover (10 okt): de acht knoppen 1→13 … 8→12 (sampler-pad als drumpad) als derde
+   regel onder de pads, over de volle breedte; in de kopregel pasten ze niet (~180 px).
+   Het opschrift noemt de sampler-pad, want de pads staan hier 4 × 2 en de knoppen 8 × 1.
+   De sampler staat altijd in het focusdeel (index.html), dus alleen deze regels. */
+.focusdeel .sampler-rij .sampler-drums{grid-column:1 / 4;grid-row:3;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
+.focusdeel .sampler-rij .sampler-drums .btn{min-width:0;height:20px;padding:0;font-size:10px;letter-spacing:0}
 
 /* vormlagen (alleen met ?vormen=1) */
 .vid-vorm{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:0 10px 8px}
