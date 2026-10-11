@@ -75,7 +75,7 @@ advies verandert daar niets. Gewichten en maten zijn niet nagemeten. Vragen HA3,
 <!-- handen:begin -->
 
 *Gegenereerd door `node tools/handen/handenkaart.mjs`; niet met de hand bewerken tussen de markers.*
-Bronnen: de standaardmappings (APC v3, 702 regels + 14 in het fragment vorm; Maschine 73 regels; Xboard 17 regels), de APC-controls uit de hub (src/devices/apc40mk2.js), het action-register (3234 actions), `handen/voorstel.json`, de profielen uit de ingebakken kopie (`PROFIELEN_V0`; avondpakket bestaat nog niet op deze tak), 27 handelingenlogs (VARVE_OPNAMES, set-20260930-001113.acties.jsonl … set-20261010-190959.acties.jsonl).
+Bronnen: de standaardmappings (APC v3, 702 regels + 14 in het fragment vorm; Maschine 73 regels; Xboard 17 regels), de 148 APC-controls van de hub (`src/devices/apc40mk2.js`, gelijk aan de kopie `src/handen/apc-controls.js`), het action-register (3234 actions), `handen/voorstel.json`, de profielen uit de ingebakken kopie (`PROFIELEN_V0`; avondpakket bestaat nog niet op deze tak), de handelingenlogs (zie de top-40 onderaan).
 
 ### Rol per controller in de draagbare set
 
@@ -395,7 +395,7 @@ Vrij in Varve: K1, K3, K5, K6, K7, K8. De knoppen zijn rollen van de hub (PROTOC
 
 ### Wat de handen doen (top-40 uit de handelingenlogs)
 
-27 logs, 62.282 handelingen. Het log kent geen bron (MIDI, muis, toets): "hand" hieronder is waar de actie in een mapping staat, geen meting.
+27 logs (set-20260930-001113.acties.jsonl … set-20261010-190959.acties.jsonl), 62.282 handelingen. Het log kent geen bron (MIDI, muis, toets): "hand" hieronder is waar de actie in een mapping staat, geen meting.
 
 | # | Actie | Aantal | Hand |
 |---|---|---|---|
@@ -478,10 +478,17 @@ knop in Varve doet; de spiekbrief van de hub toont voor een lease-app alleen Ban
 
 ```bash
 node tools/handen/handenkaart.mjs                # §4 opnieuw maken uit de data (logs: VARVE_OPNAMES of opnames/)
-node tools/handen/handenkaart.mjs --controleer   # klopt §4 nog? (exit 1 als niet)
+node tools/handen/handenkaart.mjs --controleer   # klopt §4 nog? (exit 1 als niet; schrijft niets)
 node tools/handen/handenkaart.mjs --html         # A4-afdruk in tools/handen/uit/handenkaart.html (⌘P)
 node test/handen.test.mjs                        # de zes checks (vrije plekken, voorstel, register, telling, …)
 ```
+
+De top-40 komt uit de handelingenlogs. In een worktree of bij de integrator zijn die er meestal
+niet; dan laat de tool de top-40 die er staat ongemoeid, en zegt `--controleer` erbij "top-40 niet
+vergeleken". Wil je hem vernieuwen, wijs dan de logs aan (alleen lezen):
+`VARVE_OPNAMES=~/Desktop/1.\ Projects/Youtube\ mixer/opnames node tools/handen/handenkaart.mjs`.
+Alleen `--zonder-logs` haalt de top-40 weg. Of de 148 APC-controls uit de hub (`VARVE_HUB_REPO`)
+of uit de ingebakken kopie komen maakt voor het document niets uit: de test houdt die gelijk.
 
 Verandert de standaardmapping, dan valt `test/handen.test.mjs` op de vrije-plekkenlijst: kijk of
 de plek bewust bezet is, pas de verwachte lijst in de test aan, en draai de kaart opnieuw. Komt er

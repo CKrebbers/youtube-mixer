@@ -5,11 +5,16 @@
 //
 // Gebruik:
 //   node tools/handen/handenkaart.mjs                 docs/HANDEN.md bijwerken (tussen de markers)
-//   node tools/handen/handenkaart.mjs --controleer    alleen kijken of docs/HANDEN.md nog klopt (exit 1 als niet)
-//   node tools/handen/handenkaart.mjs --html [--uit <pad>]   ook een A4-afdruk (standaard tools/handen/uit/handenkaart.html, ⌘P)
+//   node tools/handen/handenkaart.mjs --controleer    alleen kijken of docs/HANDEN.md nog klopt (exit 1 als niet), niets schrijven
+//   node tools/handen/handenkaart.mjs --html [--uit <pad>]   ook een A4-afdruk (standaard tools/handen/uit/handenkaart.html, ⌘P);
+//                                                     een bestaand --uit-bestand alleen als het een eerdere handenkaart is
 //   node tools/handen/handenkaart.mjs --controller apc|maschine|lpd8|xboard|alles   dat deel op stdout, niets schrijven
 //   node tools/handen/handenkaart.mjs --json          de tabellen als JSON op stdout, niets schrijven
-//   node tools/handen/handenkaart.mjs --zonder-logs   zonder de telling van de handelingenlogs
+//   node tools/handen/handenkaart.mjs --zonder-logs   de top-40 uit docs/HANDEN.md weghalen (zonder logs)
+// Zijn er geen handelingenlogs (geen VARVE_OPNAMES, geen opnames/), dan blijft de top-40 die al in
+// docs/HANDEN.md staat ongemoeid; --controleer zegt dan dat hij die niet vergeleken heeft.
+// Foute vlaggen (--controller of --uit zonder waarde, --uit op een map of een vreemd bestand): exit 2,
+// en dan is er niets geschreven.
 //
 // Bronnen: mappings/apc40mk2.json (+ -vormen.json), maschine-mk2.json, xboard49.json; de
 // APC-controls van de hub (VARVE_HUB_REPO, standaard ../av-app-hub; anders de ingebakken
@@ -18,7 +23,7 @@
 // (tools/handen/register.mjs); handen/voorstel.json (bestaat hij niet, dan schrijft dit
 // script de v0 uit tools/handen/voorstel-v0.mjs, nooit over een bestaand bestand heen);
 // avondpakket/profielen.json als die er is; de logs in VARVE_OPNAMES of opnames/ (alleen lezen).
-import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { maakHandenkaart, plekTekst, rijVanBoven } from '../../src/handen/kaart.js';
@@ -33,6 +38,9 @@ import { VOORSTEL_V0 } from './voorstel-v0.mjs';
 const WORTEL = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export const BEGIN = '<!-- handen:begin -->';
 export const EIND = '<!-- handen:eind -->';
+/** Het kopje van de top-40: het laatste deel tussen de markers. */
+export const KOP_TOP = '### Wat de handen doen';
+export const STANDAARD_UIT = join(WORTEL, 'tools/handen/uit/handenkaart.html');
 
 const leesJson = (pad) => JSON.parse(readFileSync(pad, 'utf8'));
 
@@ -46,12 +54,48 @@ export async function leesControls(hubRepo = process.env.VARVE_HUB_REPO || join(
   return { controls: APC_CONTROLS, bron: 'de ingebakken kopie (src/handen/apc-controls.js)' };
 }
 
-/** Alle `.acties.jsonl` in de map, op naam; null als de map er niet is. */
+/** Alle `.acties.jsonl`-bestanden in de map, op naam; null als de map er niet is of geen logs heeft. */
 export function leesLogs(map) {
-  if (!map || !existsSync(map)) return null;
+  if (!map || !existsSync(map) || !statSync(map).isDirectory()) return null;
+  const namen = readdirSync(map).filter((x) => x.endsWith('.acties.jsonl') && statSync(join(map, x)).isFile()).sort();
+  if (!namen.length) return null;
   const t = legeTelling();
-  for (const f of readdirSync(map).filter((x) => x.endsWith('.acties.jsonl')).sort()) telLog(t, readFileSync(join(map, f), 'utf8'), f);
+  for (const f of namen) telLog(t, readFileSync(join(map, f), 'utf8'), f);
   return t;
+}
+
+/** Waarom `--uit` niet mag (een tekst), of null als het mag: nieuw, of een eerdere handenkaart. */
+export function uitWeigering(pad) {
+  if (resolve(pad) === STANDAARD_UIT) return null;
+  if (existsSync(pad)) {
+    const s = statSync(pad);
+    if (s.isDirectory()) return `--uit ${pad} is een map; geef een bestandsnaam, bijvoorbeeld ${join(pad, 'handenkaart.html')}`;
+    if (!s.isFile()) return `--uit ${pad} is geen gewoon bestand: niets geschreven`;
+    const fd = openSync(pad, 'r'), buf = Buffer.alloc(512);
+    const n = readSync(fd, buf, 0, 512, 0); closeSync(fd);
+    const begin = buf.subarray(0, n).toString('utf8');
+    if (begin.startsWith('<!doctype html>') && begin.includes('<title>Handenkaart</title>')) return null;
+    return `--uit ${pad} bestaat al en is geen eerdere handenkaart: niets geschreven (kies een ander pad)`;
+  }
+  // De map erboven moet een map zijn (of nog niet bestaan).
+  for (let d = dirname(resolve(pad)); ; d = dirname(d)) {
+    if (existsSync(d)) return statSync(d).isDirectory() ? null : `--uit ${pad}: ${d} is geen map: niets geschreven`;
+    if (dirname(d) === d) return null;
+  }
+}
+
+/** De top-40-sectie zoals die nu tussen de markers staat (tot de eindmarker), of null. */
+export function topUitDoc(doc) {
+  const a = doc.indexOf(BEGIN), e = doc.indexOf(EIND);
+  if (a < 0 || e < a) return null;
+  const k = doc.indexOf(KOP_TOP, a);
+  return k > a && k < e ? doc.slice(k, e).trimEnd() : null;
+}
+
+/** Vervang de top-40-sectie (het laatste deel) van het gegenereerde stuk door een bestaande. */
+export function zetTop(md, top) {
+  const k = md.indexOf(KOP_TOP);
+  return k < 0 ? md : md.slice(0, k) + top;
 }
 
 /** Alles inlezen en de kaart maken. */
@@ -77,7 +121,7 @@ export async function bouw({ zonderLogs = false, schrijfVoorstel = true } = {}) 
     { naam: 'wiel', label: 'masterwiel (draaien)', sig: WIEL_SIG }];
   const kaart = maakHandenkaart({ mappings, controls, knoppen, draaiknoppen, eigen: UITLEG, params: PARAMS, register: register.ids, voorstel, profielen, telling });
   const logNamen = telling ? telling.perLog.map(([n]) => n) : [];
-  return { kaart, mappings, voorstel, voorstelGeschreven, telling, bronnen: { controls: controlsBron, profielen: profielen ? 'avondpakket/profielen.json' : null,
+  return { kaart, mappings, voorstel, voorstelGeschreven, telling, bronnen: { controls: controlsBron, controlsAantal: controls.length, profielen: profielen ? 'avondpakket/profielen.json' : null,
     logs: telling ? { map: logMap === join(WORTEL, 'opnames') ? 'opnames/' : 'VARVE_OPNAMES', aantal: telling.logs, eerste: logNamen[0] ?? null, laatste: logNamen.at(-1) ?? null } : null,
     register: { acties: register.ids.length, fouten: register.fouten } } };
 }
@@ -108,10 +152,13 @@ export function mdBron(b) {
   return [
     `*Gegenereerd door \`node tools/handen/handenkaart.mjs\`; niet met de hand bewerken tussen de markers.*`,
     `Bronnen: de standaardmappings (APC v${b.mappings.apc.version}, ${b.mappings.apc.rules.length} regels + ${b.mappings.vormen.rules.length} in het fragment vorm;`
-      + ` Maschine ${b.mappings.maschine.rules.length} regels; Xboard ${b.mappings.xboard.rules.length} regels), de APC-controls uit ${l.controls},`
+      // Waar de controls vandaan komen (hub of ingebakken kopie) staat hier bewust niet: test/handen.test.mjs
+      // houdt die twee gelijk, en zo hangt --controleer niet af van VARVE_HUB_REPO.
+      + ` Maschine ${b.mappings.maschine.rules.length} regels; Xboard ${b.mappings.xboard.rules.length} regels), de ${l.controlsAantal ?? 148} APC-controls van de hub`
+      + ` (\`src/devices/apc40mk2.js\`, gelijk aan de kopie \`src/handen/apc-controls.js\`),`
       + ` het action-register (${l.register.acties} actions${l.register.fouten.length ? `; niet gebonden: ${l.register.fouten.join('; ')}` : ''}),`
       + ` \`handen/voorstel.json\`, de profielen uit ${l.profielen ? '`avondpakket/profielen.json`' : 'de ingebakken kopie (`PROFIELEN_V0`; avondpakket bestaat nog niet op deze tak)'},`
-      + ` ${l.logs ? `${l.logs.aantal} handelingenlogs (${l.logs.map}, ${l.logs.eerste} … ${l.logs.laatste})` : 'geen handelingenlogs'}.`,
+      + ' de handelingenlogs (zie de top-40 onderaan).',
   ].join('\n');
 }
 
@@ -201,9 +248,10 @@ export function mdZonderPlek(k) {
 }
 
 export function mdTop(k, telling) {
-  if (!k.top) return '### Wat de handen doen\n\nGeen handelingenlogs gelezen (`--zonder-logs`, of geen map).';
-  const uit = ['### Wat de handen doen (top-40 uit de handelingenlogs)', '',
-    `${k.top.logs} logs, ${k.top.acties.toLocaleString('nl-NL')} handelingen. Het log kent geen bron (MIDI, muis, toets): "hand" hieronder is waar de actie in een mapping staat, geen meting.`, ''];
+  if (!k.top) return `${KOP_TOP}\n\nGeen handelingenlogs gelezen (\`--zonder-logs\`, of geen logs in VARVE_OPNAMES of opnames/).`;
+  const namen = telling?.perLog?.map(([n]) => n) ?? [];
+  const uit = [`${KOP_TOP} (top-40 uit de handelingenlogs)`, '',
+    `${k.top.logs} logs${namen.length ? ` (${namen[0]} … ${namen.at(-1)})` : ''}, ${k.top.acties.toLocaleString('nl-NL')} handelingen. Het log kent geen bron (MIDI, muis, toets): "hand" hieronder is waar de actie in een mapping staat, geen meting.`, ''];
   uit.push(tabel(['#', 'Actie', 'Aantal', 'Hand'], k.top.rijen.map((r) => [r.nr, code(r.actie), r.aantal.toLocaleString('nl-NL'), r.plekken.length ? r.plekken.join('<br>') : `geen vaste plek${r.zonder ? ` (zie \`${r.zonder}\` hierboven)` : ''}`])));
   if (telling) uit.push('', `Per groep: ${perGroep(telling).map(([g, n]) => `${g} ${n.toLocaleString('nl-NL')}`).join(' · ')}.`);
   return uit.join('\n');
@@ -260,10 +308,23 @@ ${mdNaarHtml(md)}
 
 // ---- CLI --------------------------------------------------------------------------------------
 
+const DELEN = ['apc', 'maschine', 'lpd8', 'xboard', 'alles'];
+
 async function hoofd(argv) {
   const vlag = (n) => argv.includes(n);
-  const waarde = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : null; };
-  const b = await bouw({ zonderLogs: vlag('--zonder-logs'), schrijfVoorstel: !vlag('--json') && !vlag('--controller') });
+  // undefined = vlag niet gegeven; null = vlag zonder waarde.
+  const waarde = (n) => { const i = argv.indexOf(n); if (i < 0) return undefined; const w = argv[i + 1]; return w && !w.startsWith('--') ? w : null; };
+  // Eerst alle vlaggen nakijken; pas daarna wordt er iets gelezen of geschreven.
+  const c = waarde('--controller');
+  if (c === null) { console.error(`--controller zonder waarde (${DELEN.join(', ')}): niets geschreven`); return 2; }
+  if (c !== undefined && !DELEN.includes(c)) { console.error(`onbekende controller: ${c} (${DELEN.join(', ')})`); return 2; }
+  const uitVlag = waarde('--uit');
+  if (uitVlag === null) { console.error('--uit zonder pad: niets geschreven'); return 2; }
+  if (uitVlag !== undefined && !vlag('--html')) { console.error('--uit hoort bij --html: niets geschreven'); return 2; }
+  if (uitVlag) { const w = uitWeigering(uitVlag); if (w) { console.error(w); return 2; } }
+  const alleenKijken = vlag('--json') || c !== undefined || vlag('--controleer');
+
+  const b = await bouw({ zonderLogs: vlag('--zonder-logs'), schrijfVoorstel: !alleenKijken });
   const { telling } = b;
   if (b.voorstelGeschreven) console.error('handen/voorstel.json bestond niet: de v0 geschreven.');
   if (vlag('--json')) {
@@ -272,31 +333,37 @@ async function hoofd(argv) {
       voorstellen: k.voorstellen, zonderPlek: k.zonderPlek, verouderd: k.verouderd, top: k.top, rollen: k.rollen }, null, 2));
     return 0;
   }
-  const md = markdown(b, telling);
-  const c = waarde('--controller');
-  if (c) {
+  const docPad = join(WORTEL, 'docs/HANDEN.md');
+  const oud = c !== undefined && !existsSync(docPad) ? null : readFileSync(docPad, 'utf8');
+  let md = markdown(b, telling);
+  // Geen logs gelezen: de top-40 die er staat blijft staan (alleen --zonder-logs haalt hem weg;
+  // --controleer vergelijkt hem dan niet).
+  const oudeTop = !telling && oud ? topUitDoc(oud) : null;
+  const topBehouden = Boolean(oudeTop && (!vlag('--zonder-logs') || vlag('--controleer')));
+  if (topBehouden) md = zetTop(md, oudeTop);
+  if (c !== undefined) {
     const k = b.kaart;
     k.lpd8Voorstel = Object.fromEntries((b.voorstel.lpd8 || []).map((x) => [x.plek, `${x.voorstel} (${x.vraag ?? '—'})`]));
     const delen = { apc: () => mdApc(k), maschine: () => mdMaschine(k), lpd8: () => mdLpd8(k), xboard: () => mdXboard(k), alles: () => md };
-    if (!delen[c]) { console.error(`onbekende controller: ${c} (apc, maschine, lpd8, xboard, alles)`); return 2; }
     console.log(delen[c]());
     return 0;
   }
-  const docPad = join(WORTEL, 'docs/HANDEN.md');
-  const oud = readFileSync(docPad, 'utf8');
   const nieuw = vervangTussenMarkers(oud, md);
+  const geenLogs = vlag('--zonder-logs') ? '--zonder-logs' : 'geen handelingenlogs in VARVE_OPNAMES of opnames/';
   if (vlag('--controleer')) {
-    if (nieuw === oud) { console.log('docs/HANDEN.md klopt met de data.'); return 0; }
-    console.log('docs/HANDEN.md wijkt af van wat de data nu zegt: draai node tools/handen/handenkaart.mjs'); return 1;
+    const noot = telling ? '' : ` (top-40 niet vergeleken: ${geenLogs})`;
+    if (nieuw === oud) { console.log(`docs/HANDEN.md klopt met de data${noot}.`); return 0; }
+    console.log(`docs/HANDEN.md wijkt af van wat de data nu zegt${noot}: draai node tools/handen/handenkaart.mjs`); return 1;
   }
   if (nieuw !== oud) writeFileSync(docPad, nieuw);
   console.log(`docs/HANDEN.md ${nieuw === oud ? 'was al bij' : 'bijgewerkt'}.`);
+  if (topBehouden) console.log(`${geenLogs}: de top-40 die in docs/HANDEN.md stond is blijven staan (weghalen: --zonder-logs).`);
   const k = b.kaart;
   console.log(`vrij: APC ${k.vrij.apc.zonderRegel.length} zonder regel, ${k.vrij.apc.alleenShift.length} alleen shift, ${k.vrij.apc.shiftVrij.length} shift vrij · Maschine ${k.vrij.maschine.length} · LPD8 ${k.vrij.lpd8.join(', ')}`);
   const onbekend = k.zonderPlek.filter((z) => z.status === 'onbekend');
   if (onbekend.length) console.log(`zonder plek en zonder besluit: ${onbekend.map((z) => z.actie).join(', ')}`);
   if (vlag('--html')) {
-    const uit = waarde('--uit') || join(WORTEL, 'tools/handen/uit/handenkaart.html');
+    const uit = uitVlag || STANDAARD_UIT;
     mkdirSync(dirname(uit), { recursive: true });
     writeFileSync(uit, html(md));
     console.log(`A4-afdruk: ${uit} (open in Chrome, ⌘P)`);
@@ -305,5 +372,6 @@ async function hoofd(argv) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  hoofd(process.argv.slice(2)).then((c) => process.exit(c), (e) => { console.error(e.stack || e.message); process.exit(1); });
+  // process.exitCode, geen process.exit(): anders kapt node stdout door een pipe af na 64 KiB (--json).
+  hoofd(process.argv.slice(2)).then((c) => { process.exitCode = c; }, (e) => { console.error(e.stack || e.message); process.exitCode = 1; });
 }

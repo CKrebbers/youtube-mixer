@@ -349,7 +349,7 @@ vrije plek staat. Leest alleen; verandert geen mapping.
 
 | bestand | wat |
 |---|---|
-| handenkaart.mjs | de CLI: schrijft `docs/HANDEN.md` tussen `<!-- handen:begin -->` en `<!-- handen:eind -->`; `--controleer` (exit 1 als het document achterloopt), `--html [--uit <pad>]` (A4 liggend, ⌘P, standaard `uit/handenkaart.html`), `--controller apc\|maschine\|lpd8\|xboard\|alles`, `--json`, `--zonder-logs`. Logs uit `VARVE_OPNAMES` of `opnames/` (alleen lezen); APC-controls uit `VARVE_HUB_REPO` (standaard `../av-app-hub`), anders de ingebakken kopie |
+| handenkaart.mjs | de CLI: schrijft `docs/HANDEN.md` tussen `<!-- handen:begin -->` en `<!-- handen:eind -->`; `--controleer` (exit 1 als het document achterloopt op de data; schrijft niets), `--html [--uit <pad>]` (A4 liggend, ⌘P, standaard `uit/handenkaart.html`; een bestaand `--uit`-bestand alleen als het een eerdere handenkaart is, anders exit 2), `--controller apc\|maschine\|lpd8\|xboard\|alles`, `--json`, `--zonder-logs` (haalt de top-40 weg). Logs uit `VARVE_OPNAMES` of `opnames/` (alleen lezen); zijn die er niet, dan blijft de top-40 in het document staan en zegt `--controleer` "top-40 niet vergeleken". APC-controls uit `VARVE_HUB_REPO` (standaard `../av-app-hub`), anders de ingebakken kopie; het document noemt dat verschil niet, dus de uitkomst hangt niet van die omgeving af |
 | register.mjs | het action-register zonder mixer: alle `bind*` van actions.js op dubbels (ook klankschaal en het mapje vorm) |
 | voorstel-v0.mjs | het beginpunt van `handen/voorstel.json`; alleen geschreven als dat bestand er niet is |
 
