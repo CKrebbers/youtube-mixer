@@ -24,6 +24,7 @@ import { Splitter, StemsRij, maakStems, wisStemsBestanden, isAantal, isStemsKeuz
 import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, TELLEN_BESTAND, TELLEN_VERSIE } from './tellen.js';
 import { gridUitTellen, vergelijk, meetGrid, VERSIE as KAART_VERSIE } from '../src/engine/tellen.js';
 import { Beatgrid } from '../src/engine/beatgrid.js';
+import { INSTELLING_SLEUTELS, INSTELLING_MAX, isInstelling } from '../src/ui/instellingen-opslag.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
 import { Kaart, KaartFout, STANDAARD_PAD as KAART_STANDAARD_PAD } from './kaart.js';
 import { Nacht } from './nacht.js';
@@ -1489,6 +1490,40 @@ const server = createServer(async (req, res) => {
     }
     // "Standaard herstellen": geen eigen mapping meer, de app volgt weer mappings/apc40mk2.json.
     if (pad === '/api/mapping' && req.method === 'DELETE') { lib.zet('mapping', null); return json(res, 200, { ok: true }); }
+
+    // ---- de zeven browser-instellingen die het instrument zijn (extra-3 B4) -
+    // Zoals de mapping: in de tabel instellingen, dus in library.db en in elke
+    // backup. Alleen de sleutels op de witte lijst (src/ui/instellingen-opslag.js);
+    // de waarde is de tekst die de browser in localStorage zet, of null (gewist).
+    // GET /api/instellingen: alles wat ooit bewaard is ({ sleutel: tekst|null });
+    // een sleutel die er niet in staat is nooit bewaard (de browser schrijft hem dan één keer omhoog).
+    // (lib.haal met een eigen object als standaard: undefined zou de standaard null worden.)
+    const NOOIT = {};
+    if (pad === '/api/instellingen' && req.method === 'GET') {
+      const uit = {};
+      for (const k of INSTELLING_SLEUTELS) { const w = lib.haal(k, NOOIT); if (w !== NOOIT) uit[k] = typeof w === 'string' ? w : null; }
+      return json(res, 200, { instellingen: uit });
+    }
+    const mInst = /^\/api\/instellingen\/([^/]+)$/.exec(pad);
+    if (mInst) {
+      let sleutel = null;
+      try { sleutel = decodeURIComponent(mInst[1]); } catch (_) {}
+      if (!isInstelling(sleutel)) return json(res, 400, { fout: 'onbekende instelling', sleutels: INSTELLING_SLEUTELS });
+      if (req.method === 'GET') {
+        const w = lib.haal(sleutel, NOOIT);
+        return json(res, 200, { sleutel, waarde: typeof w === 'string' ? w : null, bewaard: w !== NOOIT });
+      }
+      if (req.method === 'PUT') {
+        if (mediatype !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
+        const b = await leesJson(req, INSTELLING_MAX * 2 + 1024);
+        if (!b || typeof b !== 'object' || !('waarde' in b)) return json(res, 400, { fout: 'stuur { waarde: tekst of null }' });
+        if (b.waarde !== null && typeof b.waarde !== 'string') return json(res, 400, { fout: 'waarde moet tekst of null zijn' });
+        if (typeof b.waarde === 'string' && b.waarde.length > INSTELLING_MAX) return json(res, 413, { fout: `waarde te groot (hooguit ${INSTELLING_MAX} tekens)` });
+        lib.zet(sleutel, b.waarde);
+        return json(res, 200, { ok: true, sleutel });
+      }
+      return json(res, 405, { fout: 'GET of PUT' });
+    }
 
     // ---- sampler-pads: horen bij het nummer, net als racks en grid ---------
     const mSamples = /^\/api\/library\/([\w-]+)\/samples(?:\/(\d+))?$/.exec(pad);
