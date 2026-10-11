@@ -118,14 +118,19 @@ export async function kopie(opties, env = process.env, uit = console.log) {
 
   // ---- schrijven ------------------------------------------------------------
   const nu = new Date();
-  const stempel = stempelVoor(nu);
+  // Een stempel per run, ook als twee runs in dezelfde seconde vallen: wat opzij gaat of
+  // als manifest bewaard wordt, mag nooit over iets van een eerdere run heen.
+  let stempel = stempelVoor(nu);
+  for (let i = 2; [join(staat, '.vorige', stempel), join(varve, '.vorige', stempel), join(staat, 'versies', `MANIFEST-${stempel}.json`)]
+    .some((p) => existsSync(p)); i++) stempel = `${stempelVoor(nu)}-${i}`;
   const vorige = join(staat, '.vorige', stempel);
   let opzij = 0;
   mkdirSync(join(staat, 'versies'), { recursive: true });
 
   /** Een bestand in staat/ dat weg moet voor een nieuwe versie: eerst opzij, nooit weg. */
   const zetOpzij = (rel) => {
-    const naar = join(vorige, rel);
+    let naar = join(vorige, rel);
+    for (let i = 2; existsSync(naar); i++) naar = `${join(vorige, rel)}.${i}`;
     mkdirSync(dirname(naar), { recursive: true });
     renameSync(join(staat, rel), naar);
     opzij++;
