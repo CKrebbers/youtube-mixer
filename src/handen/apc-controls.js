@@ -3,7 +3,8 @@
  * (AV-app-hub/src/devices/apc40mk2.js, `CONTROLS`; dezelfde id's als av-kern).
  * Een ingebakken kopie, zodat de handenkaart ook zonder de hub-repo werkt;
  * test/handen.test.mjs vergelijkt hem met het origineel als dat er is
- * (VARVE_HUB_REPO, standaard ../av-app-hub of ~/Projects/AV-app-hub).
+ * (VARVE_HUB_REPO, anders ../av-app-hub naast deze repo; op deze Mac bijv.
+ * VARVE_HUB_REPO=~/Projects/AV-app-hub).
  * Puur data, in dezelfde volgorde en met dezelfde opbouw als in de hub.
  *
  * Let op de rijen: de hub telt de grid VAN ONDER (`pad1-x` = onderste rij,

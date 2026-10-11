@@ -213,7 +213,7 @@ export const SPEELLIJST = [
       let: 'Krijgen de vijf open vragen van de hub een antwoord: V1 nemen de ringen de waarde over, V2 knipperen op de klok, V3 een pad vasthouden, V4 faderstanden bij de start, V5 welke LPD8? Doet Bank vast + Track Select 3 (stap 12) wat de proef zegt?' },
     { id: 'hf-speel', doe: 'node src/cli.js proef speelapparaten: 21 stappen, 25–30 min (docs/HARDWARE-AVOND.md blok 8). Bij de Xboard49 draai je knop 1 tot en met 16 om de beurt een stukje.',
       let: 'Leert de proef de CC\'s van de 16 Xboard-knoppen (Varve gaat nu uit van een aanname: 21–28 en 31–38)? Welke Maschine-pad is linksboven? Vraagt macOS om Invoermonitoring? Branden de lampjes, zie je beide schermen?' },
-    { id: 'hf-push', doe: 'In de map AV-app-hub: git add proef/, git add lpd8-profiel.json xboard49-profiel.json (wat er is), git status, git commit -m "proef f0-hardware" en git push (blok 6).',
+    { id: 'hf-push', doe: 'In de map AV-app-hub: git add proef/, git add lpd8-profiel.json en apart git add xboard49-profiel.json (elk alleen als hij er is; samen in één git add faalt alles als er één ontbreekt), git status, git commit -m "proef f0-hardware" en git push (blok 6).',
       let: 'Staat er onder "Changes to be committed" minstens één proef/…jsonl? Daarvan maakt Claude golden tests, en de echte Xboard-CC\'s gaan naar mappings/xboard49.json.' },
     { id: 'hf-check', doe: 'npm run check -- studio in de map AV-app-hub, met dezelfde stekkers erin. Als het avondpakket er al is: de twee alleen-lezen-commando\'s van 7a in dezelfde minuut.',
       let: 'Alleen ✓ en !, geen ✗? Dan begint avond 2 met het blok Opstarten met de hub. (HA2, HA3)' },
