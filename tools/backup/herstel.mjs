@@ -125,7 +125,7 @@ export function herstel(opties, env = process.env, uit = console.log) {
   uit('  5. server starten (VARVE.app of node server/index.js); de code eerst bijwerken: een nieuwere kopie op oudere code migreert niet terug');
   uit(existsSync(join(staat, 'browser'))
     ? `  6. Chrome: ${join(staat, 'browser')} importeren`
-    : '  6. Chrome: master-rack, klankschaal, MIDI-poorten, beeld-adres, stems-standaard, cue-wissel en vormen opnieuw instellen\n     (die staan alleen in localStorage; nog geen kopie, zie docs/BACKUP.md §5)');
+    : '  6. Chrome: master-rack, klankschaal, MIDI-poorten, beeld-adres, stems-standaard, cue-wissel en vormen opnieuw instellen\n     (die staan alleen in localStorage; nog geen kopie, zie docs/BACKUP.md §3)');
   if (!hubTerug && existsSync(hub)) uit(`  -  hub: ${hub} staat in de backup; de huidige ${P.hub} is niet overschreven`);
   uit(existsSync(join(staat, 'beeld'))
     ? `  7. beeld: op de pc de Stroommachine → Live → "Importeer track-scènes" met ${join(staat, 'beeld')}`
