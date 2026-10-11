@@ -1,4 +1,5 @@
 media/
+media-VERHUISD.txt
 opnames/
 proef/
 *.db
@@ -12,4 +13,3 @@ tools/stems/uit/
 tools/toonsoort/uit/
 tools/keylock/uit/
 tools/keylock/pakket/
-media-VERHUISD.txt

@@ -31,18 +31,6 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
 `VARVE.applescript` + `maak.sh`: de Dock-knop die de server start en de Controlekamer opent
 (`~/Applications/VARVE.app`). Een losse macOS-app; draait niet in de mixer.
 
-## media-verhuis.mjs
-`media/` naar een map buiten iCloud (VI2; `docs/LIBRARY.md` "Waar media/ staat"). Standaard een
-droogloop die alleen leest: bron (media/ van de hoofdmap, ook vanuit een worktree), doel
-(`~/Varve-media`), grootte, uitgeplaatste iCloud-bestanden, of de server op 8777 draait, of
-`library.db` alleen relatieve paden heeft, waar de backups staan. `--doe` hernoemt (zelfde schijf,
-nooit kopiëren of wissen) als niets in de weg staat en schrijft `media-VERHUISD.txt`.
-
-```
-node tools/media-verhuis.mjs            # het plan
-node tools/media-verhuis.mjs --doe      # verhuizen (server uit)
-```
-
 ## git/
 - `test-index.sh` — test precies wat er in de git-index staat (niet de werkmap): pakt de
   index uit in een tijdelijke map en draait daar alle tests. Handig bij het splitsen van
@@ -298,6 +286,18 @@ Pas draaien NÁ de proefavond van 10 okt.
   - `sec-maschine.mjs` (8915/9515, echte hub op 7715 met `opname: false`) — SCENE, pads als HID, scherm bit voor bit.
   - `sec-hub.mjs` (8921/9521, echte hub op 7721 met `opname: false`; `VARVE_HUB_REPO` met PROTOCOL §18, of een oude hub) —
     één `sectie.nieuw` per gehoorde grens, energie en label, herverbinden zonder klap, pauze, een korte loop op de "1".
+
+## media-verhuis.mjs
+`media/` naar een map buiten iCloud (VI2; `docs/LIBRARY.md` "Waar media/ staat"). Standaard een
+droogloop die alleen leest: bron (media/ van de hoofdmap, ook vanuit een worktree), doel
+(`~/Varve-media`), grootte, uitgeplaatste iCloud-bestanden, of de server op 8777 draait, of
+`library.db` alleen relatieve paden heeft, waar de backups staan. `--doe` hernoemt (zelfde schijf,
+nooit kopiëren of wissen) als niets in de weg staat en schrijft `media-VERHUISD.txt`.
+
+```
+node tools/media-verhuis.mjs            # het plan
+node tools/media-verhuis.mjs --doe      # verhuizen (server uit)
+```
 
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen
