@@ -142,6 +142,11 @@ try {
     ok('het doel in de bron: niet', !p3.kan && p3.blokkades.some((b) => /in elkaar/.test(b)));
     const p4 = await maakPlan({ bron: join(proj, 'bestaat-niet'), doel, thuis, env: {}, isOpen: nietOpen, dataless: () => [] });
     ok('een bron die niet bestaat: niet', !p4.kan && p4.blokkades.some((b) => /bestaat niet/.test(b)));
+    schrijf(join(proj, 'server', 'index.js'), '// oude server');
+    const p6 = await maakPlan({ bron, doel, thuis, env: {}, isOpen: nietOpen, dataless: () => [] });
+    ok('de server in de projectmap is van vóór VI2: niet', !p6.kan && p6.blokkades.some((b) => /vóór VI2/.test(b)));
+    schrijf(join(proj, 'server', 'media-plek.js'), '// nieuw');
+    ok('met server/media-plek.js: wel', (await maakPlan({ bron, doel, thuis, env: {}, isOpen: nietOpen, dataless: () => [] })).kan);
     symlinkSync(bron, join(proj, 'koppeling'));
     const p5 = await maakPlan({ bron: join(proj, 'koppeling'), doel, thuis, env: {}, isOpen: nietOpen, dataless: () => [] });
     ok('een bron die een koppeling is: niet (dan zou alleen de koppeling verhuizen)', !p5.kan && p5.blokkades.some((b) => /koppeling/.test(b)));

@@ -137,6 +137,13 @@ export async function maakPlan({ bron, doel = STANDAARD_DOEL, poorten = [STANDAA
   if (existsSync(doel)) blok(`het doel bestaat al: ${doel} (niets wordt overschreven of samengevoegd)`);
   if (binnen(echtPad(doel), echtPad(bron)) || binnen(echtPad(bron), echtPad(doel))) blok('bron en doel liggen in elkaar');
 
+  // De server in die projectmap moet VI2 kennen: een oudere leest VARVE_MEDIA als "testserver"
+  // (stems en tellen uit) en zoekt library.db in <projectmap>/media/ (dan een lege library).
+  const projectmap = dirname(bron);
+  if (existsSync(join(projectmap, 'server', 'index.js')) && !existsSync(join(projectmap, 'server', 'media-plek.js'))) {
+    blok(`de server in ${projectmap} is van vóór VI2 (geen server/media-plek.js): eerst die versie binnenhalen (git pull na de merge)`);
+  }
+
   plan.iCloudBron = iCloudReden(bron, { thuis });
   plan.iCloudDoel = iCloudReden(doel, { thuis });
   if (plan.iCloudDoel) blok(`het doel ligt zelf in iCloud (${plan.iCloudDoel})`);
