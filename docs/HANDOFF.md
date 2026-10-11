@@ -14,6 +14,31 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 11 OKT: MEDIA BUITEN ICLOUD EN DE UITGANGEN-ZIN (VI1 + VI2, tak `studio/media-buiten-icloud`)
+
+- **VI1:** `CLAUDE.md` ("Gekozen aanpak") en `docs/ONTBREEKT.md` D1: geen distributie van de cache; een
+  uitgang (bestand, 127.0.0.1, export naar eigen schijf) mag, eigen opnames en renders naar de eigen
+  library ook. Varve zelf naar een dienst blijft dicht (U1b).
+- **VI2:** `VARVE_TESTSERVER=1` is nu de enige "testserver"-vlag (was `VARVE_MEDIA`; alle testservers
+  zetten hem); de server kiest zijn mediamap (`VARVE_MEDIA`, anders `media/`, anders
+  `media-VERHUISD.txt`), zet `library.db` standaard in die map en waarschuwt bij het starten als hij
+  in iCloud ligt; `tools/media-verhuis.mjs` (droog, `--doe`); VARVE.app leest `~/.varve/media-pad`.
+  Alles in `docs/LIBRARY.md` "Waar media/ staat".
+- **Wat Clay doet, ná de merge naar main en een `git pull` in de Bureaublad-map:** server stoppen,
+  `node tools/media-verhuis.mjs` (droog), dan `--doe`, de twee regels die het toont, VARVE.app opnieuw
+  bouwen (`zsh tools/varve-app/maak.sh`), server starten en in het log `[media] …/Varve-media` zien.
+  Niet eerder: de server van vóór VI2 zou met `VARVE_MEDIA` geen stems maken en een lege library
+  beginnen (het tool weigert dan ook).
+- **`VARVE_BACKUPS`:** een kopie BUITEN de laptop vraagt een externe SSD, en die is er nog niet. Tot
+  dan staan de backups van `library.db` naast de library (`~/Varve-media/backups/`) en is er van de
+  media (32 GB) geen tweede kopie; na de verhuizing haalt iCloud `media/` ook uit de cloud. Met een SSD:
+  `VARVE_BACKUPS=/Volumes/<naam>/varve-backups` en vóór elke reis `rsync -a ~/Varve-media/
+  /Volumes/<naam>/Varve-media/`. Het tool meldt dit ook.
+- **Getest:** `node test/alles.mjs` groen (met `test/media-verhuis.test.mjs`); een testserver op 8811
+  logt zijn mediamap; VARVE.app compileert (proefdoel) en de startregel is getoetst met een nep-thuismap.
+  **Niet getest:** de echte verhuizing (rename uit de iCloud-Bureaublad-map), de herbouwde VARVE.app
+  echt gestart, de hub-set (AV-app-hub) met `VARVE_MEDIA`.
+
 ## 10 OKT: DE MUZIEKKAART IN VARVE (tak `studio/kaart`, PR naar `studio/integratie`)
 
 - **Kaart (10 okt).** De hele muziekkaart (`varve-kaart.json`: 18.233 nummers, 29 kratten) als

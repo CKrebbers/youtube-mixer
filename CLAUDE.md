@@ -208,6 +208,7 @@ server/             draait apart: `node server/index.js`
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
   kaart.js          de muziekkaart als zoeklaag: varve-kaart.json in het geheugen (zoeken/filteren/sorteren/pagineren), binnen = tracks.id,
                     wensen en nacht_runs in een EIGEN media/kaart.db, een YouTube-versie zoeken (ytsearch5, nooit cookies) (docs/KAART.md)
+  media-plek.js     waar media/ staat: VARVE_MEDIA, media-VERHUISD.txt, binnen iCloud?, isTestserver (VARVE_TESTSERVER=1)
   nacht.js          de nachtwachtrij: venster, speeldagen, wensen dan standaardvolgorde, één tegelijk met pauze, stopt bij een deck of 403; media/nacht.json
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
@@ -221,7 +222,8 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
-                    luisterbestanden), varve-app/ (de Dock-app VARVE: start de server, opent de Controlekamer) — zie tools/README.md
+                    luisterbestanden), varve-app/ (de Dock-app VARVE: start de server, opent de Controlekamer),
+                    media-verhuis.mjs (media/ buiten iCloud: --droog, --doe) — zie tools/README.md
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
@@ -307,6 +309,7 @@ test/
   nacht.test.mjs    de zes nachtregels één voor één met nepklok, nep-deck en nep-ingest (geen tijd, geen netwerk)
   kaart-server.test.mjs  kaart en nacht op een eigen server met de nep-yt-dlp: routes, 409 bij een deck (echt Range-verzoek), ingest zonder video, nachtrun, herstart
   nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
+  media-verhuis.test.mjs  media buiten iCloud: iCloud-herkenning, het briefje, droogloop/--doe op een nepmap, VARVE_TESTSERVER-bewaker
   alles.mjs         alle tests in één keer met overzicht
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
@@ -357,7 +360,7 @@ docs/
 | Tests | Alle bestanden in `test/` moeten groen blijven: `node test/alles.mjs`. Bij wijzigingen: check toevoegen. |
 | Mocks | Een mock die makkelijker is dan de echte API verbergt bugs. De Web Audio-mock vuurt `onended` asynchroon omdat de browser dat ook doet. |
 | Browser | Chrome. Web MIDI bestaat niet in Safari — geen polyfill-pogingen. |
-| Git | Committen en pushen mag. `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud), en bestanden met " 2" in de naam zijn conflictkopieën (meestal een oude versie): die NOOIT committen. Groter werk per spoor op een eigen tak in een worktree buiten iCloud (`~/Projects/varve-stems/<spoor>`), samenvoegen in `studio/integratie`, naar main met een PR; daarna de worktree weg. Data staat niet in git en hoort in de Bureaublad-map: `media/`, `opnames/`, `patronen/`, `proef/`. Een server die vanuit een worktree draait schrijft patronen en de speellijst in die worktree: link `media`/`opnames` en zet de rest terug vóór je de worktree weghaalt. |
+| Git | Committen en pushen mag. `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud), en bestanden met " 2" in de naam zijn conflictkopieën (meestal een oude versie): die NOOIT committen. Groter werk per spoor op een eigen tak in een worktree buiten iCloud (`~/Projects/varve-stems/<spoor>`), samenvoegen in `studio/integratie`, naar main met een PR; daarna de worktree weg. Data staat niet in git en hoort in de Bureaublad-map: `media/`, `opnames/`, `patronen/`, `proef/` (`media/` mag sinds 11 okt buiten iCloud, via `VARVE_MEDIA`: "Waar media/ staat"). Een server die vanuit een worktree draait schrijft patronen en de speellijst in die worktree: link `media`/`opnames` en zet de rest terug vóór je de worktree weghaalt. |
 
 ## Bekende grenzen (niet als bug rapporteren)
 
@@ -832,7 +835,7 @@ docs/
     in een werkmap (`media/.bezig-*`) en pas bij succes verhuizen, video-id
     gecontroleerd, migraties in een transactie. `VARVE_DB`/`VARVE_OPNAMES`/
     `VARVE_MEDIA` voor tests (een testserver ruimde anders `.bezig-*` op in de
-    echte media/), plus `VARVE_TESTSERVER=1` (zie "Waar media/ staat").
+    echte media/), plus `VARVE_TESTSERVER=1` (zie "Waar media/ staat" hieronder).
   - Server, tweede ronde (d2f6844): de witte lijst kijkt naar het pad NÁ
     decoderen en normaliseren; `%2f`, `%5c`, `..`-segmenten en backslashes
     worden geweigerd (`/src/..%2fmedia%2flibrary.db` gaf 200). Mediatype exact
@@ -1720,6 +1723,20 @@ bouwer niet mag missen:
   All = paniek. Read null zonder verbinding (ring en lampje uit). 15 regels erbij, eerder.mjs gedraaid.
 - Een mislukte WebSocket logt Chrome zelf rood in de console (Log-domein); JavaScript kan dat niet
   onderdrukken. Headless-tools tellen dat apart van fouten van onze code.
+
+## Waar media/ staat (11 okt, VI2)
+
+Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag missen:
+- `VARVE_MEDIA` is de mediamap, niets meer. "Dit is een testserver" is ALLEEN `VARVE_TESTSERVER=1`
+  (`isTestserver` in `server/media-plek.js`). Een nieuwe testserver in `test/` of `tools/headless/`
+  zet beide; `test/media-verhuis.test.mjs` faalt anders.
+- `library.db` staat standaard in de mediamap (`join(MEDIA, 'library.db')`), en alles wat naast de
+  database hoort (backups, kaart.db, nacht.json, stems-rij.json) verhuist mee. Paden in de database
+  blijven relatief (`media/<id>/…`, `alsPad`/`opSchijf`): sla nooit een absoluut pad op.
+- Zonder `VARVE_MEDIA` en zonder `<projectmap>/media` volgt de server `media-VERHUISD.txt`
+  (`kiesMedia`); een testserver nooit.
+- Verhuizen gaat met `tools/media-verhuis.mjs` (droog standaard; `--doe` hernoemt alleen, met de
+  server uit). VARVE.app leest `~/.varve/media-pad` en, via de login-shell, `~/.zprofile`.
 
 ## Werkwijze die hier werkt
 
