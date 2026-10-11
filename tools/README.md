@@ -340,3 +340,19 @@ Draai met `node tools/toonsoort/meet.mjs [id ...]` en `node tools/toonsoort/synt
 24 sep: zie docs/TOONSOORT.md. `uit/` staat niet in git. `server/toon.js` is een kopie van de
 gekozen keten uit toon.mjs; `test/toon.test.mjs` controleert dat ze getal voor getal gelijk rekenen
 (pas je toon.mjs aan voor een proef, laat dan `kaartPerStuk`, `spectrum` en `nietStil` staan of pas de test aan).
+
+## handen/
+
+De handenkaart (`docs/HANDEN.md`, 11 okt): wat elke control van de APC40 mkII, de Maschine MK2,
+de LPD8 en de Xboard49 in Varve doet, waar nog plek is, en welke nieuwe actie er als voorstel op een
+vrije plek staat. Leest alleen; verandert geen mapping.
+
+| bestand | wat |
+|---|---|
+| handenkaart.mjs | de CLI: schrijft `docs/HANDEN.md` tussen `<!-- handen:begin -->` en `<!-- handen:eind -->`; `--controleer` (exit 1 als het document achterloopt), `--html [--uit <pad>]` (A4 liggend, ⌘P, standaard `uit/handenkaart.html`), `--controller apc\|maschine\|lpd8\|xboard\|alles`, `--json`, `--zonder-logs`. Logs uit `VARVE_OPNAMES` of `opnames/` (alleen lezen); APC-controls uit `VARVE_HUB_REPO` (standaard `../av-app-hub`), anders de ingebakken kopie |
+| register.mjs | het action-register zonder mixer: alle `bind*` van actions.js op dubbels (ook klankschaal en het mapje vorm) |
+| voorstel-v0.mjs | het beginpunt van `handen/voorstel.json`; alleen geschreven als dat bestand er niet is |
+
+Het rekenwerk staat in `src/handen/kaart.js` en `telling.js` (puur); `test/handen.test.mjs` toetst
+het (vrije plekken, voorstel, register, telling, het speellijstblok hub-f0, VRAGEN blok HA).
+`uit/` staat niet in git.
