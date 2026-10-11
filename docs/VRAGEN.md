@@ -507,3 +507,37 @@ Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
   `?vormen=1`), óf de hubtoets van de hub wordt een andere (dat raakt alle
   apps, PROTOCOL §5/§7). **Advies:** keylock naar een andere toets; de hubtoets
   is voor elke app hetzelfde.
+
+---
+
+## HA. Handen: de controllers en de hub als drager (11 okt, docs/HANDEN.md, tak `visie/handen`)
+
+In het ontwerp (mini-spoor extra-2 §7) heette dit blok H; hier HA, want blok H (24 sep) heeft al H1–H6.
+HA1, HA2, HA3 en HA4/HA5 zijn dezelfde keuzes als VI13, VI16, VI17 en VI18 in de synthese.
+
+- [ ] **HA1. Is proefavond 1 (10 okt) als DJ-proef op de APC doorgegaan?** 💬 Het enige log van die avond
+  (19:09–19:17) is zeven minuten beeld zonder nummer; de speellijst heeft 0 vinkjes. **Zo ja:** wat ging
+  fout, dan verwerken we dat eerst (VISIE §5.4) en kan de hub-middag gepland worden. **Zo nee:** avond 1
+  opnieuw plannen vóór alles hieronder; de PR's blijven "[na de proefavond]".
+- [ ] **HA2. De F0-proef van de hub als eigen hub-middag (overdag, 80 min, zonder muziek) vóór avond 2?** 🎛
+  Alternatief: aan het begin van avond 2 (dan wordt avond 2 ≥ 4 uur, of de kern van avond 2 schuift naar
+  avond 3). **Advies: hub-middag**, met 7a van het avondpakket in dezelfde minuut. In de Controlekamer
+  staat hij als blok "Avond 2 · Hub-middag" (docs/HANDEN.md §2).
+- [ ] **HA3. Kernset onderweg: K1 (APC alleen) nu, K2 (APC + Maschine via de hub) als doel?** 💬 Zie
+  docs/HANDEN.md §3. **Advies: ja**; dat is ook wat standen en het avondpakket al als standaard hebben (`apc`).
+- [ ] **HA4. `video.clips` op Shift + master-knop (naast zwart), eerst via learn?** 👀 Alternatief: een pad in
+  de modus video. **Advies: Shift + master-knop**, pas in de standaard na de beeld-speelproef (VI7).
+- [ ] **HA5. `sampler.N.drums` op de APC in de modus sampler, rij 4; op de Maschine DUPLICATE + pad?** 🎛
+  Nooit SHIFT + pad (K10: dat is leegmaken). **Advies: ja, eerst learn**, standaard na het
+  crossover-proefblok (CX4).
+- [ ] **HA6. LPD8 mee onderweg?** 💬 In Varve doet hij drie dingen (K2 beeld, K4 puls, P1 zwart) en vraagt
+  hij de hub. **Advies: alleen als av-kern in de set zit** (na 25 okt); O1 (K1) blijft open.
+- [ ] **HA7. Xboard49 thuis?** 💬 Het avondpakket noemt hem geen reisspul; de Maschine-pads geven noten
+  36–51. **Advies: thuis.**
+- [ ] **HA8. `broadcast.toggle` nooit op een controller?** 💬 Uitzenden stap 6 kiest stand + iPhone.
+  **Advies: ja, nooit op een pad.**
+- [ ] **HA9. De handenkaart als A4-afdruk (HTML, ⌘P) én `docs/HANDEN.md`, of alleen het document?** 👀
+  Beide bestaan nu (`node tools/handen/handenkaart.mjs --html`). **Advies: beide**; de afdruk ligt op
+  avond 2 naast de controllers, zoals de spiekbrief van de hub bedoeld is.
+- [ ] **HA10. De tien regels voor `AV-app-hub/docs/HARDWARE-AVOND.md` (docs/HANDEN.md §5) overnemen?** 💬
+  Alleen tekst, in de hub-repo, met jouw OK. **Advies: ja.**
