@@ -214,6 +214,8 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     echte kaart-routes van een server die al draait (kopie van de library, nep-yt-dlp, echte varve-kaart.json); kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
                     vorm-maat.mjs, vormen-plaat.mjs, beamer.mjs, stems.mjs, secties.mjs, sec-toets.mjs, sec-sampler.mjs, sec-plan.mjs, sec-log.mjs, sec-auto.mjs, sec-vorm.mjs, sec-controle.mjs, companion.mjs, koptelefoon.mjs, instrument.mjs, instrumenten.mjs, master.mjs, effecten.mjs, stemkanalen.mjs, patronen.mjs, rijen.mjs, beeld.mjs: headless zonder MIDI;
                     beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
+                    zaalbeeld.mjs: video.clips op Metal, eigen server 8806 (--opruimen na een harde stop);
+                    beeld-lokaal.mjs: de Stroommachine naast VARVE meten (--zelftest zonder GPU; de volledige run NIET op een speeldag);
                     maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
                     bladeren.mjs: BROWSE, wiel en ENTER op een nep-Maschine met een echte library (twee testnummers);
                     maschine-sampler.mjs: SAMPLING op een nep-Maschine met de echte sampler (knippen, spelen, tellen, volume);
@@ -223,7 +225,8 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     luisterbestanden), varve-app/ (de Dock-app VARVE: start de server, opent de Controlekamer),
                     setboek/ (lees.mjs: wat er op een avond KLONK uit de handelingenlogs, puur; gebruik.mjs: de teller;
                     setboek.mjs: de CLI op KOPIEËN, --dag/--vanaf/--log, --db, --proef, stdout; LEESMIJ.md),
-                    patronen/ (midi.mjs: een set patronen als MIDI-bestand voor Logic, op een kopie; LEESMIJ.md) — zie tools/README.md
+                    patronen/ (midi.mjs: een set patronen als MIDI-bestand voor Logic, op een kopie; LEESMIJ.md),
+                    beeld-lokaal.sh (beeld op één machine: relay + Stroommachine in een eigen Chrome-bundel, --droog/--stop/--installeer) — zie tools/README.md
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
@@ -308,6 +311,8 @@ test/
   sec-maschine.test.mjs  secties en loops: sectieHier na het rondgaan, sectieOpDeMaat in een loop, de melding, de Maschine
   sec-controle.test.mjs  sectieTelling (zelfde regel als moetSecties, cache per rij, ROLLBACK), /api/secties, de tegel
   beeld.test.mjs    spoor beeld: adres, latentie, id's, kiesKant, de tel met latentie, track/mix/poort, aanwezig en opnieuw, de echte zender op een nep-WebSocket
+  beeld-meting.test.mjs  de pure delen van tools/headless/beeld-lokaal.mjs: opties, ps optellen, fps-oordeel, wat --opruimen mag, de CPU-poort (systeem/ander), de proefserver-omgeving, de hartslag-worklet met een nepklok
+  beeld-lokaal.test.mjs  tools/beeld-lokaal.sh als kopie in een map met een spatie: --droog, de URL, --installeer (weigert com.google.Chrome), starten met nep-relay en nep-open, --stop
   varve-beeld-zender.test.mjs  de zendertest van de Stroommachine (overgenomen; alles.mjs telt zijn eigen formaat)
   kaart.test.mjs    de kaart op een verzonnen varve-kaart.json (nep-kaart.mjs): laden/herladen, zoeken, filters, sorteren, pagina's, wensen (20, dubbel), score, standaardvolgorde, cookie-bewaker
   nacht.test.mjs    de zes nachtregels één voor één met nepklok, nep-deck en nep-ingest (geen tijd, geen netwerk)
@@ -879,6 +884,19 @@ docs/
   eindbeeld van NA het indrukken; de video's lopen door. Zwart en bevriezen staan
   in de beginstand van het log. APC: de master-knop (`note:0:80`) = zwart in elk
   mapje; in de modus video rechts flits, zwart vasthouden, zwart, bevriezen.
+- ZAALBEELD (10 okt, spoor beeld-een-machine, `docs/BEAMER.md` "Zaalbeeld"): `video.clips`
+  (trigger met read, schakelaar) zet de deck-video's uit: in `VideoMixer._bijwerken` telt elke
+  video dan als onzichtbaar (gewicht 0, gepauzeerd); vormlagen, effecten en noodknoppen lopen
+  door, dus zaal, los venster (`neemOver` neemt `clips` over) en opname zien hetzelfde. Standaard
+  aan, geen localStorage; in `RONDLOPERS` (een log van daarvóór begint met clips aan). Op het
+  scherm alleen in VARVE (knop video in amber, de tekst blijft "video": 8 px speling op 1440;
+  knopje CLIPS in de rij van de deck-video's, NIET in de kop: de statusregel heeft daar maar
+  ~136 px; de statusregel "clips uit"; venstertitel), nooit op het doek. Op één machine met de
+  Stroommachine: `zsh tools/beeld-lokaal.sh` en de knopjes "deze Mac · pc" in de BEELD-rij
+  (`BEELD_ADRESSEN`, docs/BEELD.md §8). De meting
+  "Stroommachine op de Mac zelf": `tools/headless/beeld-lokaal.mjs` (hartslag-worklet in
+  `engine.ctx` via CDP, nooit in de app; `--zelftest` zonder GPU); `beeld-status.fps` van de
+  Stroommachine is vast 63 en zegt niets.
 - BACKUP VAN DE LIBRARY (2 okt, ONTBREEKT A6, `server/backup.js`, docs/LIBRARY.md
   "Backup"): `VACUUM INTO` op een eigen alleen-lezen verbinding in een
   worker_thread, NOOIT het bestand kopiëren (in WAL staat recent werk alleen in

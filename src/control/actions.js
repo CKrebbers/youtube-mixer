@@ -1247,6 +1247,11 @@ export function bindVideo(mixer) {
     { label: 'Video: puls op de tel (vol op een nieuwe sectie)', read: () => mixer.puls });
   define('video.pulse.target', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
     { label: 'Video: wat er pulst', read: () => PULS_DOELEN.indexOf(mixer.pulsDoel) / (PULS_DOELEN.length - 1) });
+  // Het zaalbeeld (docs/BEAMER.md "Zaalbeeld"): de deck-video's (clips van
+  // anderen) uit, de vormlagen, effecten en noodknoppen lopen door. Een
+  // schakelaar zoals video.black: read = de stand, dus een LED zegt wat je deed.
+  define('video.clips', 'trigger', (on) => { if (on) mixer.zetClips(!mixer.clips); },
+    { label: 'Video: deck-video\'s (clips) aan/uit — uit = alleen eigen beeld (vormen), voor een zaal', read: () => (mixer.clips ? 1 : 0) });
 
   // De noodknoppen van de beamer (src/video/eindbeeld.js), op het EINDbeeld:
   // de zaal, het losse venster en de video-opname zien hetzelfde.

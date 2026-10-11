@@ -27,7 +27,14 @@
 //   - relay weg: geen nieuwe meldingen, geen fouten van onze code;
 //   - de tegel Beeld in de Controlekamer (een tweede tabblad, controle.html);
 //   - uit = de WebSocket dicht, geen lampje; na herladen alles terug, en uit
-//     maakt na herladen geen WebSocket.
+//     maakt na herladen geen WebSocket;
+//   - de knopjes "deze Mac · pc" (BEELD_ADRESSEN): een echte muisklik zet het
+//     adres in veld, localStorage en koppeling, het knopje brandt (ook na
+//     herladen). Met beeld UIT: er gaat niets naar 127.0.0.1:7702 of de pc.
+//     Verbonden met de nep-relay: één klik wisselt NIET (een melding), een ander
+//     knopje of een klik na 3 s ook niet, een tweede klik binnen 3 s wel (review 2,
+//     punt 6). De adressen van Clay leidt de pagina dan om naar de lege poort:
+//     ook dan gaat er niets naar 127.0.0.1:7702 of de pc.
 // Een mislukte WebSocket-verbinding logt Chrome zelf (Log-domein, bron
 // "network"): geen JavaScript kan dat onderdrukken. Die worden apart geteld.
 //
@@ -218,6 +225,15 @@ const HULP = `window.__b = {
 }; true`;
 
 const opslag = (k) => `localStorage.getItem(${JSON.stringify(k)})`;
+/**
+ * Elke WebSocket die de pagina maakt, tellen (`__ws`: het adres dat VARVE vroeg,
+ * `__wsEcht`: waar hij echt heen ging). De twee adressen van Clay (BEELD_ADRESSEN:
+ * de relay op deze Mac en die op de pc) gaan naar de lege poort: een test die met
+ * beeld aan wisselt, raakt Clay's relay of de pc nooit.
+ */
+const OMLEIDEN = { 'ws://127.0.0.1:7702/app': LEEG_ADRES, 'ws://clayk:7702/app': LEEG_ADRES };
+const WS_TEL = `(() => { const W = window.WebSocket, om = ${JSON.stringify(OMLEIDEN)}; window.__ws = []; window.__wsEcht = [];
+    window.WebSocket = class extends W { constructor(u, ...r) { super(om[String(u)] ?? u, ...r); window.__ws.push(String(u)); window.__wsEcht.push(this.url); } }; })();`;
 const processen = [];
 let tab = null, ktab = null;
 try {
@@ -243,7 +259,7 @@ try {
   await tab.verbind();
   // Veilig met de APC aangesloten: geen MIDI. En elke WebSocket die de pagina maakt, tellen.
   await tab.cdp('Page.addScriptToEvaluateOnNewDocument', { source: `delete Navigator.prototype.requestMIDIAccess; delete navigator.requestMIDIAccess;
-    (() => { const W = window.WebSocket; window.__ws = []; window.WebSocket = class extends W { constructor(...a) { super(...a); window.__ws.push(String(a[0])); } }; })();` });
+    ${WS_TEL}` });
   await tab.cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 790, deviceScaleFactor: 1, mobile: false });
   for (let i = 0; i < 50; i++) { if (await fetch(`http://localhost:${POORT}/`).then((r) => r.ok).catch(() => false)) break; await wacht(200); }
 
@@ -386,6 +402,49 @@ try {
 
   ok('na 3 s zonder beeld-status: weer "verbonden, wacht op de Stroommachine"', (await tab.tot("__b.stand() === 'verbonden, wacht op de Stroommachine'", 6000)) === true, await tab.evalueer('__b.stand()'));
 
+  // ---- 5b. de knopjes terwijl beeld verbonden is (review 2, punt 6) ----------
+  // Midden in een set wisselt één misklik niet: eerst een tweede klik op hetzelfde
+  // knopje binnen 3 s. Een echte muisklik (CDP Input). Wisselen naar "deze Mac"
+  // gaat door de omleiding (WS_TEL) naar de lege poort, niet naar 127.0.0.1:7702.
+  console.log('\nde knopjes terwijl beeld verbonden is: tweede klik binnen 3 s');
+  const klik = async (sel) => {
+    const r = await tab.evalueer(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    for (const type of ['mousePressed', 'mouseReleased']) await tab.cdp('Input.dispatchMouseEvent', { type, x: r.x, y: r.y, button: 'left', clickCount: 1 });
+    await tab.beeld(); await wacht(150); await tab.beeld();
+  };
+  const MAC = 'ws://127.0.0.1:7702/app';
+  // Meldingen met dezelfde tekst stapelen niet (meldingen.js): vóór elke klik de rij leeg.
+  const leegMeld = "(document.querySelectorAll('#meldingen .melding').forEach((m) => m.remove()), true)";
+  const WISSEL = `({ adres: window.beeld.status().adres, verbonden: window.beeld.status().verbonden, veld: document.querySelector('#beeld .bd-adres').value,
+    bewaard: ${opslag('varve.beeld.adres')}, ws: window.__ws.length, vraag: __b.meldingen().filter((m) => m.includes('nog eens op')),
+    brandt: [...document.querySelectorAll('#beeld .bd-kies.on')].map((b) => b.dataset.sleutel), laatste: window.__ws.at(-1), echt: window.__wsEcht.at(-1), alleEcht: window.__wsEcht })`;
+  const blijft = (w, w0) => w.adres === RELAY_ADRES && w.veld === RELAY_ADRES && w.bewaard === RELAY_ADRES && w.verbonden && w.ws === w0.ws && !w.brandt.length;
+  const w0 = await tab.evalueer(WISSEL);
+  await tab.evalueer(leegMeld);
+  await klik('#beeld .bd-kies[data-sleutel="pc"]');
+  const w1 = await tab.evalueer(WISSEL);
+  ok('verbonden met de nep-relay, één klik op "pc": niets verandert (adres, veld, opslag, verbinding, geen nieuwe WebSocket), wel één melding',
+    blijft(w1, w0) && w1.vraag.length === 1 && w1.vraag[0] === 'info: beeld: klik binnen 3 s nog eens op "pc" om te wisselen naar ws://clayk:7702/app — de Stroommachine die nu meekijkt, verliest dan de klok van VARVE', w1);
+  await tab.evalueer(leegMeld);
+  await klik('#beeld .bd-kies[data-sleutel="lokaal"]');
+  const w2 = await tab.evalueer(WISSEL);
+  ok('meteen daarna "deze Mac": een ander knopje telt niet als tweede klik, weer alleen een melding', blijft(w2, w0) && w2.vraag.length === 1 && /nog eens op "deze Mac"/.test(w2.vraag[0]), w2);
+  await wacht(3300);
+  await tab.evalueer(leegMeld);
+  await klik('#beeld .bd-kies[data-sleutel="lokaal"]');
+  const w3 = await tab.evalueer(WISSEL);
+  ok('na 3,3 s nog eens "deze Mac": te laat, weer alleen een melding', blijft(w3, w0) && w3.vraag.length === 1 && /nog eens op "deze Mac"/.test(w3.vraag[0]), w3);
+  await klik('#beeld .bd-kies[data-sleutel="lokaal"]');
+  const w4 = await tab.evalueer(WISSEL);
+  ok('binnen 3 s nog eens "deze Mac": wisselt (veld, opslag, koppeling), "deze Mac" brandt, een nieuwe verbinding naar dat adres',
+    w4.adres === MAC && w4.veld === MAC && w4.bewaard === MAC && w4.brandt.join() === 'lokaal' && w4.ws === w0.ws + 1 && w4.laatste === MAC, w4);
+  ok(`… omgeleid naar de lege poort (${w4.echt}): geen enkele WebSocket naar :7702`, w4.echt === LEEG_ADRES && w4.alleEcht.every((u) => !u.includes(':7702')), w4.alleEcht);
+  await tab.evalueer(leegMeld);
+  await tab.evalueer(`__b.zetVeld('#beeld .bd-adres', '${RELAY_ADRES}')`);
+  ok('terug met typen + Enter: meteen (geen tweede klik), weer verbonden met de nep-relay',
+    (await tab.tot("__b.stand() === 'verbonden, wacht op de Stroommachine'", 8000)) === true && !(await tab.evalueer('__b.meldingen()')).some((m) => m.includes('nog eens op')),
+    await tab.evalueer('[__b.stand(), __b.meldingen()]'));
+
   // ---- 6. relay weg ----------------------------------------------------------
   console.log('\nrelay weg');
   const mVoor = await tab.evalueer('__b.meldingen()');
@@ -416,6 +475,36 @@ try {
   ok(`na herladen: adres, latentie en de open rij terug, uit blijft uit (${JSON.stringify(terug)})`,
     terug.adres === RELAY_ADRES && terug.lat === '80' && terug.open && !terug.aan && terug.lamp === null && terug.stand === 'uit', terug);
   ok('… en uit maakt geen WebSocket', terug.ws === 0, terug);
+
+  // ---- 7b. de knopjes "deze Mac · pc" (spoor beeld-een-machine) ----------------
+  // Beeld staat UIT: een adres kiezen maakt dan geen verbinding, dus er gaat niets
+  // naar 127.0.0.1:7702 (Clay's poort) of naar de pc. Een echte muisklik (CDP Input).
+  console.log('\nde knopjes deze Mac · pc (beeld uit)');
+  const KNOPJES = `({ knoppen: [...document.querySelectorAll('#beeld .bd-keuze .bd-kies')].map((b) => [b.dataset.sleutel, b.textContent, b.classList.contains('on'), __b.heel(b)]),
+    veld: document.querySelector('#beeld .bd-adres').value, rood: document.querySelector('#beeld .bd-adres').classList.contains('fout'),
+    bewaard: ${opslag('varve.beeld.adres')}, adres: window.beeld.instellingen.adres, aan: window.beeld.status().aan, ws: window.__ws.length })`;
+  const k0 = await tab.evalueer(KNOPJES);
+  ok('twee knopjes "deze Mac" en "pc" naast het adresveld, heel te zien; geen van beide brandt (het adres is de nep-relay)',
+    JSON.stringify(k0.knoppen) === JSON.stringify([['lokaal', 'deze Mac', false, null], ['pc', 'pc', false, null]]), k0);
+  const mMac0 = (await tab.evalueer('__b.meldingen()')).length;
+  await klik('#beeld .bd-kies[data-sleutel="lokaal"]');
+  const kMac = await tab.evalueer(KNOPJES);
+  ok('een klik op "deze Mac": ws://127.0.0.1:7702/app in veld, localStorage en koppeling, niet rood, het knopje brandt; beeld blijft uit, 0 WebSockets, geen melding',
+    kMac.veld === 'ws://127.0.0.1:7702/app' && kMac.bewaard === kMac.veld && kMac.adres === kMac.veld && !kMac.rood
+    && kMac.knoppen[0][2] && !kMac.knoppen[1][2] && !kMac.aan && kMac.ws === 0 && (await tab.evalueer('__b.meldingen()')).length === mMac0, kMac);
+  await klik('#beeld .bd-kies[data-sleutel="pc"]');
+  const kPc = await tab.evalueer(KNOPJES);
+  ok('een klik op "pc": ws://clayk:7702/app, idem; "deze Mac" brandt niet meer',
+    kPc.veld === 'ws://clayk:7702/app' && kPc.bewaard === kPc.veld && kPc.adres === kPc.veld && !kPc.rood
+    && !kPc.knoppen[0][2] && kPc.knoppen[1][2] && !kPc.aan && kPc.ws === 0, kPc);
+  await tab.foto('beeld-rij-knopjes-1440x790.png');
+  await tab.cdp('Page.navigate', { url: `http://localhost:${POORT}/` });
+  await tab.tot('!!(window.engine && window.beeld && window.meld)', 30000);
+  await tab.evalueer(HULP);
+  for (let i = 0; i < 4; i++) { await tab.beeld(); await wacht(250); }
+  const kTerug = await tab.evalueer(KNOPJES);
+  ok('na herladen brandt "pc" nog (het adres komt uit localStorage), uit blijft uit, 0 WebSockets',
+    kTerug.veld === 'ws://clayk:7702/app' && kTerug.knoppen[1][2] && !kTerug.knoppen[0][2] && !kTerug.aan && kTerug.ws === 0, kTerug);
 
   // ---- 8. opstarten met een onbereikbaar adres (de pc staat uit) -------------
   // Zoals Clay het op een avond zonder pc tegenkomt: beeld staat nog aan, met
@@ -453,7 +542,7 @@ try {
   const tab2 = new Tab(nieuw2.webSocketDebuggerUrl);
   await tab2.verbind();
   await tab2.cdp('Page.addScriptToEvaluateOnNewDocument', { source: `delete Navigator.prototype.requestMIDIAccess; delete navigator.requestMIDIAccess;
-    (() => { const W = window.WebSocket; window.__ws = []; window.WebSocket = class extends W { constructor(...a) { super(...a); window.__ws.push(String(a[0])); } }; })();` });
+    ${WS_TEL}` });
   await tab2.cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 790, deviceScaleFactor: 1, mobile: false });
   await tab2.cdp('Page.navigate', { url: `http://localhost:${POORT}/` });
   await tab2.tot('!!(window.engine && window.beeld && window.meld)', 30000);

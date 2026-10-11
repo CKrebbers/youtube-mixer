@@ -1,5 +1,5 @@
 import { DECK_IDS } from '../engine/engine.js';
-import { BeeldKoppeling, klemLatentie, ADRES_MAX, LATENTIE_MIN, LATENTIE_MAX } from '../koppel/beeld.js';
+import { BeeldKoppeling, klemLatentie, ADRES_MAX, LATENTIE_MIN, LATENTIE_MAX, BEELD_ADRESSEN, WISSEL_BEVESTIG_MS, wisselVraagtBevestiging } from '../koppel/beeld.js';
 import { beeldStand } from './beeld-weergave.js';
 import { meld } from './meldingen.js';
 
@@ -14,6 +14,13 @@ import { meld } from './meldingen.js';
  * Ontwerpregel: MacBook + APC is genoeg. Uit of zonder adres maakt de
  * koppeling geen verbinding en tekent deze module niets opnieuw; een relay
  * die er niet is geeft hooguit één melding per start (dat doet beeld.js).
+ *
+ * Naast het adresveld twee knopjes, "deze Mac" en "pc" (BEELD_ADRESSEN): één
+ * klik zet dat adres in het veld en past het toe zoals Enter (dezelfde controle,
+ * opslag en melding). Het knopje van het adres dat nu geldt, brandt. Staat beeld
+ * aan en verbonden met een ánder adres (midden in een set), dan eerst een tweede
+ * klik op hetzelfde knopje binnen 3 s, met een melding: anders verliest de
+ * Stroommachine op de beamer door één misklik de klok (wisselVraagtBevestiging).
  *
  * Toepassen bij Enter of bij het verlaten van een veld (change), nooit per
  * toets: elk ander adres is een nieuwe verbinding. Een geweigerd adres wordt
@@ -43,6 +50,7 @@ export function opzetBeeld({ engine }) {
   const adresVeld = rij.querySelector('.bd-adres');
   const latentieVeld = rij.querySelector('.bd-latentie');
   const standEl = rij.querySelector('.bd-stand');
+  const keuze = rij.querySelector('.bd-keuze');
   // De grenzen komen uit beeld.js: één plek.
   adresVeld.maxLength = ADRES_MAX;
   latentieVeld.min = String(LATENTIE_MIN);
@@ -107,6 +115,32 @@ export function opzetBeeld({ engine }) {
     vies = true;
   });
 
+  // De knopjes "deze Mac · pc": alsof je het adres typte en Enter gaf. Verbonden
+  // met een ander adres: eerst een tweede klik op hetzelfde knopje binnen 3 s.
+  let zeker = null;   // { sleutel, tot }
+  const keuzeKnoppen = BEELD_ADRESSEN.map(({ sleutel, naam, adres }) => {
+    const b = document.createElement('button');
+    b.className = 'btn sm bd-kies';
+    b.dataset.sleutel = sleutel;
+    b.textContent = naam;
+    b.title = sleutel === 'lokaal'
+      ? `de relay op deze Mac (${adres}): start hem met zsh tools/beeld-lokaal.sh (docs/BEELD.md §8)`
+      : `de relay op de pc (${adres}), met Tailscale aan op Mac en pc`;
+    b.addEventListener('click', () => {
+      const nu = Date.now();
+      if (wisselVraagtBevestiging(beeld.status(), adres) && !(zeker?.sleutel === sleutel && nu < zeker.tot)) {
+        zeker = { sleutel, tot: nu + WISSEL_BEVESTIG_MS };
+        meld(`beeld: klik binnen ${WISSEL_BEVESTIG_MS / 1000} s nog eens op "${naam}" om te wisselen naar ${adres} — de Stroommachine die nu meekijkt, verliest dan de klok van VARVE`);
+        return;
+      }
+      zeker = null;
+      adresVeld.value = adres;
+      adresVeld.dispatchEvent(new Event('change'));
+    });
+    keuze?.append(b);
+    return { b, adres };
+  });
+
   latentieVeld.addEventListener('change', () => {
     const v = klemLatentie(latentieVeld.value);
     latentieVeld.value = String(v);
@@ -136,6 +170,7 @@ export function opzetBeeld({ engine }) {
     tekst(aanKnop, s.aan ? 'aan' : 'uit');
     klasse(aanKnop, 'on', s.aan);
     klasse(adresVeld, 'fout', !!geweigerd);
+    for (const k of keuzeKnoppen) klasse(k.b, 'on', !geweigerd && s.adres === k.adres);
     tekst(standEl, st.tekst);
     data(standEl, 'soort', st.soort);
     titel(standEl, s.beeld
