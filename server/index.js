@@ -15,6 +15,7 @@ import { ZEKER_VANAF } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon, maakSecties } from './analyze.js';
 import { toonSamenvatting } from './toon.js';
 import { sectieSamenvatting, SECTIE_VERSIE } from './secties.js';
+import { kiesMedia, iCloudReden, VERHUISD_BESTAND } from './media-plek.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
@@ -27,7 +28,6 @@ import { Beatgrid } from '../src/engine/beatgrid.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
 import { Kaart, KaartFout, STANDAARD_PAD as KAART_STANDAARD_PAD } from './kaart.js';
 import { Nacht } from './nacht.js';
-import { kiesMedia, iCloudReden, VERHUISD_BESTAND } from './media-plek.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
