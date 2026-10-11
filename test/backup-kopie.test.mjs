@@ -6,14 +6,16 @@
 // rsync zonder --delete aan (nep-rsync via PATH); herstel zet terug en weigert een
 // bestaande library.db. HOME wijst naar de tijdelijke map: nooit de echte
 // ~/.varve of ~/.varve-hub. Draai met: node test/backup-kopie.test.mjs
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, copyFileSync, rmSync, chmodSync, statSync, appendFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, copyFileSync, rmSync, chmodSync, statSync, appendFileSync, symlinkSync } from 'node:fs';
+import { tmpdir, hostname } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 
 const { Library } = await import('../server/library.js');
+const { paden, ligtIn } = await import('../tools/backup/gedeeld.mjs');
+const { versieSleutel } = await import('../tools/backup/kopie.mjs');
 
 const WORTEL = fileURLToPath(new URL('..', import.meta.url));
 const fails = [];
@@ -115,6 +117,50 @@ try {
     ok('--overslaan-zonder-doel zonder doel: exit 0, één regel, niets gemaakt', s.code === 0 && s.uit.trim().split('\n').length === 1 && !existsSync(join(tmp, 'niet-aangesloten')));
     const i = draai('kopie.mjs', ['--doel', join(bron, 'media', 'kopie'), '--bron', bron, '--zelfde-schijf'], VK);
     ok('een doel binnen de bron: exit 2', i.code === 2 && !existsSync(join(bron, 'media', 'kopie')));
+    // Via een symlink (of een alias-pad zoals iCloud → ~/Desktop): resolve() ziet het niet, het echte pad wel.
+    symlinkSync(join(bron, 'media'), join(tmp, 'link-naar-media'));
+    symlinkSync(bron, join(tmp, 'link-naar-bron'));
+    const l = draai('kopie.mjs', ['--doel', join(tmp, 'link-naar-media'), '--bron', bron, '--zelfde-schijf', '--media'], VK);
+    ok('een doel via een symlink naar media/: exit 2, niets in media/varve', l.code === 2 && /ligt in de bron/.test(l.uit) && !existsSync(join(bron, 'media', 'varve')));
+    const lb = draai('kopie.mjs', ['--doel', join(tmp, 'link-naar-bron', 'kopie'), '--bron', bron, '--zelfde-schijf'], VK);
+    ok('een doel via een symlink naar de bron: exit 2', lb.code === 2 && !existsSync(join(bron, 'kopie')));
+    ok('ligtIn: op het echte pad', ligtIn(join(tmp, 'link-naar-media', 'x'), join(bron, 'media')) && !ligtIn(join(tmp, 'doel'), join(bron, 'media')));
+    const v = draai('kopie.mjs', ['--doel', '/Volumes/VARVE-BESTAAT-NIET-TEST', '--bron', bron], VK);
+    ok('/Volumes/<x> die er niet is: exit 2 "niet aangesloten", niet "dezelfde schijf"', v.code === 2 && /niet aangesloten/.test(v.uit) && !/dezelfde schijf/.test(v.uit));
+  }
+
+  // ---- welke library: VARVE_DB, <media>/library.db of <bron>/media/library.db (#29) ----
+  console.log('welke library');
+  {
+    const b2 = join(tmp, 'bron-verhuisd');
+    const ver = join(tmp, 'verhuisde-media');
+    mkdirSync(b2); mkdirSync(ver);
+    writeFileSync(join(b2, 'media-VERHUISD.txt'), `media/ is verhuisd.\n\nVARVE_MEDIA=${ver}\n`);
+    const p2 = paden(b2, {});
+    ok('media-VERHUISD.txt: media en library op de nieuwe plek', p2.media === ver && p2.db === join(ver, 'library.db') && !p2.dbFout);
+    ok('… kaart.db, nacht.json en stems-rij.json ernaast', p2.kaartDb === join(ver, 'kaart.db') && p2.stemsRij === join(ver, 'stems-rij.json'));
+    ok('… een testserver (VARVE_TESTSERVER=1) volgt het briefje niet', paden(b2, { VARVE_TESTSERVER: '1' }).media === join(b2, 'media'));
+    // Een echte library op de verhuisde plek (de VACUUM-kopie van hierboven komt later; nu de bron).
+    { const d = new DatabaseSync(join(ver, 'library.db')); d.exec('CREATE TABLE tracks (id TEXT PRIMARY KEY, audio TEXT); INSERT INTO tracks VALUES (\'een00000001\', \'media/een00000001/audio.wav\')'); d.close(); }
+    const r = draai('kopie.mjs', ['--doel', join(tmp, 'doel-verhuisd'), '--bron', b2, '--droog'], VK);
+    ok('kopie --droog na de verhuizing: exit 0, vindt de library (1 nummer)', r.code === 0 && /1 nummers/.test(r.uit));
+
+    // VARVE_MEDIA gezet en nog een oude library in <bron>/media: niet stil kiezen.
+    const twee = { VARVE_MEDIA: ver };
+    ok('twee libraries (VARVE_MEDIA en <bron>/media): dbFout', /twee libraries/.test(paden(bron, twee).dbFout || ''));
+    const t = draai('kopie.mjs', ['--doel', join(tmp, 'doel-twee'), '--bron', bron, '--zelfde-schijf'], { ...VK, ...twee });
+    ok('… kopie weigert: exit 2 "twee libraries: … zet VARVE_DB", niets geschreven', t.code === 2 && /twee libraries/.test(t.uit) && /VARVE_DB/.test(t.uit) && !existsSync(join(tmp, 'doel-twee')));
+    ok('… met VARVE_DB is het eenduidig', paden(bron, { ...twee, VARVE_DB: dbPad }).db === dbPad && !paden(bron, { ...twee, VARVE_DB: dbPad }).dbFout);
+    ok('… en alleen de oude bestaat: die (de server van main)', paden(bron, { VARVE_MEDIA: join(tmp, 'lege-media') }).db === dbPad);
+    ok('zonder variabelen: <bron>/media/library.db, zoals altijd', paden(bron, {}).db === dbPad && !paden(bron, {}).dbFout);
+  }
+
+  // ---- versies sorteren op tijd, niet op naam ------------------------------------
+  {
+    const namen = ['library-2026-10-11_14-05-33.db', 'library-2026-10-11_14-05-33-2.db', 'library-2026-10-11_14-05-09.db'];
+    const sorteer = (lijst) => [...lijst].sort((a, b) => (versieSleutel(a, 'library') < versieSleutel(b, 'library') ? -1 : 1));
+    ok('versieSleutel: "…_33-2.db" komt ná "…_33.db"', sorteer(namen).at(-1) === 'library-2026-10-11_14-05-33-2.db');
+    ok('versieSleutel: een ander soort of een vreemde naam telt niet', versieSleutel('kaart-2026-10-11_14-05-33.db', 'library') === null && versieSleutel('MANIFEST-x.json', 'library') === null);
   }
 
   // ---- --droog -------------------------------------------------------------
@@ -273,7 +319,36 @@ try {
     writeFileSync(db + '-wal', 'oud');
     ok('herstel weigert ook bij alleen een library.db-wal', draai('herstel.mjs', ['--van', varve, '--naar', naar], H).code === 2);
     ok('herstel zonder --naar: exit 2', draai('herstel.mjs', ['--van', varve]).code === 2);
+    // Ook een losse -journal van library.db, of een losse kaart.db-wal zonder kaart.db.
+    const naar2 = join(tmp, 'verse-checkout-2');
+    mkdirSync(join(naar2, 'media'), { recursive: true });
+    writeFileSync(join(naar2, 'media/library.db-journal'), 'oud');
+    const j = draai('herstel.mjs', ['--van', varve, '--naar', naar2], H);
+    ok('herstel weigert bij een losse library.db-journal', j.code === 2 && /library\.db-journal/.test(j.uit) && !existsSync(join(naar2, 'media/library.db')));
+    const naar3 = join(tmp, 'verse-checkout-3');
+    mkdirSync(join(naar3, 'media'), { recursive: true });
+    writeFileSync(join(naar3, 'media/kaart.db-wal'), 'oud');
+    const k = draai('herstel.mjs', ['--van', varve, '--naar', naar3], H);
+    ok('herstel weigert bij een losse kaart.db-wal zonder kaart.db', k.code === 2 && /kaart\.db-wal/.test(k.uit) && !existsSync(join(naar3, 'media/library.db')));
     ok('herstel van een map zonder backup: exit 2', draai('herstel.mjs', ['--van', join(tmp, 'leeg'), '--naar', naar], H).code === 2);
+  }
+
+  // ---- één run tegelijk per doel ---------------------------------------------------
+  console.log('slot');
+  {
+    const slot = join(staat, '.werk', 'slot');
+    // Een levend proces (deze test) houdt het slot vast.
+    writeFileSync(slot, JSON.stringify({ pid: process.pid, tijd: new Date().toISOString(), host: hostname() }) + '\n');
+    const voor = alles(varve);
+    const r = draai('kopie.mjs', ['--doel', doelMap, '--bron', bron, '--zelfde-schijf'], VK);
+    ok('een tweede run tegelijk: exit 2 "er loopt al een kopie"', r.code === 2 && /er loopt al een kopie/.test(r.uit));
+    ok('… en die schrijft niets', JSON.stringify(alles(varve)) === JSON.stringify(voor));
+    rmSync(slot);   // alleen ons eigen nep-slot in de tijdelijke map
+    // Een slot van een proces dat niet meer leeft (afgebroken run): opzij, en dan gewoon door.
+    writeFileSync(slot, JSON.stringify({ pid: 2 ** 22 + 12345, tijd: '2026-10-11T06:00:00.000Z', host: hostname() }) + '\n');
+    const d = draai('kopie.mjs', ['--doel', doelMap, '--bron', bron, '--zelfde-schijf'], VK);
+    ok('een slot van een dood proces: de run gaat door (exit 0)', d.code === 0);
+    ok('… het oude slot staat opzij (niet weg), het eigen slot is los', readdirSync(join(staat, '.werk')).some((n) => /^slot-/.test(n)) && !existsSync(slot));
   }
 
   // ---- controleer vangt een beschadigde kopie ------------------------------------
