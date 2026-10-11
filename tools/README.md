@@ -31,11 +31,6 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
 `VARVE.applescript` + `maak.sh`: de Dock-knop die de server start en de Controlekamer opent
 (`~/Applications/VARVE.app`). Een losse macOS-app; draait niet in de mixer.
 
-## backup/
-`kopie.mjs` (de staat van het instrument naar een andere schijf; `--media` ook media en opnames,
-zonder `--delete`), `controleer.mjs`, `herstel.mjs` en `launchd/` (dagelijks 08:00, standaard niet
-geïnstalleerd). Zie `tools/backup/LEESMIJ.md` en `docs/BACKUP.md`.
-
 ## git/
 - `test-index.sh` — test precies wat er in de git-index staat (niet de werkmap): pakt de
   index uit in een tijdelijke map en draait daar alle tests. Handig bij het splitsen van
@@ -345,3 +340,8 @@ Draai met `node tools/toonsoort/meet.mjs [id ...]` en `node tools/toonsoort/synt
 24 sep: zie docs/TOONSOORT.md. `uit/` staat niet in git. `server/toon.js` is een kopie van de
 gekozen keten uit toon.mjs; `test/toon.test.mjs` controleert dat ze getal voor getal gelijk rekenen
 (pas je toon.mjs aan voor een proef, laat dan `kaartPerStuk`, `spectrum` en `nietStil` staan of pas de test aan).
+
+## backup/
+`kopie.mjs` (de staat van het instrument naar een andere schijf; `--media` ook media en opnames,
+zonder `--delete`), `controleer.mjs`, `herstel.mjs` en `launchd/` (dagelijks 08:00, standaard niet
+geïnstalleerd). Zie `tools/backup/LEESMIJ.md` en `docs/BACKUP.md`.

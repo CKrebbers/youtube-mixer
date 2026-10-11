@@ -1,7 +1,7 @@
 # Back-up en herstel van het hele instrument
 
-*11 oktober 2026, tak `visie/backup-kopie`. Ontwerp: `scratchpad/uitwerking/extra-3/ontwerp.md`
-(mini-spoor 3), SYNTHESE §4b.3. Dit document gaat over de DATA van het instrument, niet over de
+*11 oktober 2026, tak `visie/backup-kopie`. Achtergrond: `docs/VISIE.md` (de draagbare set) en
+SYNTHESE §4b.3 (mini-spoor 3). Dit document gaat over de DATA van het instrument, niet over de
 code (die staat op GitHub). De uurlijkse kopie van de library door de server zelf staat in
 `docs/LIBRARY.md` "Backup"; die blijft zoals hij is.*
 
@@ -104,9 +104,13 @@ server) wel. Set B is tegelijk de reiskopie: op reis kan `VARVE_MEDIA` naar de S
    de kopie is al in journal-modus), `kaart.db`, `nacht.json` en `stems-rij.json` ernaast, de mappen
    op hun plek, `handelingen/*` → `opnames/`, `hub/staat.json` → `~/.varve-hub/`,
    `kaart/varve-kaart.json` → `~/Desktop/3. Resources/Data/Muziekkaart/`. 1 minuut.
-   `herstel.mjs` weigert als er al een `library.db` (of `-wal`) staat: eerst zelf opzij zetten
-   (`docs/LIBRARY.md` "Terugzetten"). Andere bestanden die er al staan blijven staan; is er een
-   anders dan in de kopie, dan zegt hij dat en kies je zelf.
+   `herstel.mjs` weigert als er al een `library.db` (of een `-wal`, `-shm` of `-journal`) staat,
+   of een losse `kaart.db-wal`/`-shm`/`-journal` zonder `kaart.db` (SQLite zou die op het
+   teruggezette bestand toepassen): eerst zelf opzij zetten (`docs/LIBRARY.md` "Terugzetten").
+   Andere bestanden die er al staan blijven staan; is er een anders dan in de kopie, dan zegt hij
+   dat en kies je zelf. Let op: herstel zet ook bestanden terug die sinds de kopie bewust uit de
+   bron verdwenen zijn (ze blijven in `staat/` en staan in het manifest, §5); haal die daarna zelf
+   weer weg.
 4. **Set B**: `rsync -a /Volumes/<SSD>/varve/media/ <checkout>/media/` (of `VARVE_MEDIA` naar de SSD
    laten wijzen en later verhuizen); `opnames/` idem. Minuten (niet gemeten). Zonder set B: de
    server start gewoon, de library kent de nummers, `library compleet` wordt rood, en elk nummer is
@@ -139,7 +143,17 @@ Gemeten (11 okt, extra-3 §1.6): een verse worktree met een hersteldataset van 8
   12 + 30 dagen). Set A groeit ~0,3 MB per gewijzigde dag: ~100 MB per jaar. Opruimen is altijd
   handwerk van Clay.
 - De bron wordt alleen gelezen. Een doel binnen de bron weigert `kopie.mjs` (een backup in
-  `media/` gaat mee de prullenbak in).
+  `media/` gaat mee de prullenbak in, en `--media` zou `media/` elke run dieper in zichzelf
+  kopiëren). Hij vergelijkt de echte paden (symlinks opgelost), van de checkout, `media/`,
+  `opnames/`, de map van de library en elke map van set A: een symlink of een alias-pad (iCloud
+  `…/com~apple~CloudDocs/Desktop` → `~/Desktop`) komt er niet langs.
+- Welke library: dezelfde als de server. `VARVE_DB`; anders `<media>/library.db` met media =
+  `VARVE_MEDIA`, `<checkout>/media` of (na de verhuizing VI2) het pad uit `media-VERHUISD.txt`;
+  anders `<checkout>/media/library.db` (de server van vóór VI2). Bestaan er twee verschillende,
+  dan kiest hij niet stil: "twee libraries … zet VARVE_DB", exit 2.
+- Eén run tegelijk per doel: een slot in `staat/.werk/slot` (pid, host, tijd). Een tweede run
+  (launchd om 08:00 en een run met de hand) zegt "er loopt al een kopie" en stopt (exit 2). Een
+  slot van een proces dat niet meer leeft gaat opzij naar `.werk/slot-<tijd>`.
 - Een doel op dezelfde schijf als de bron weigert hij ook, tenzij `--zelfde-schijf`: dat is een
   extra versie, geen backup buiten de laptop. Het manifest en de stempel zeggen het dan
   (`zelfdeSchijf: true`).
@@ -177,13 +191,19 @@ Nog niet gebouwd: dat raakt die tak (PR 3 van het ontwerp, na de merge daarvan).
 komen mee (en een gewone bestandskopie mist ze); de tellingen in het manifest; `.versies/` mee,
 alleen de logs uit `opnames/`, geen `.DS_Store`; een tweede run zonder wijziging: geen versie erbij
 en niets weg; een run na een wijziging: een versie erbij, een in de bron verdwenen bestand blijft,
-het oude van een veranderd bestand staat in `.vorige/`; twee runs in dezelfde seconde schrijven
-niet over elkaar heen; `--droog` schrijft niets (geen doel, geen stempel, bron ongewijzigd); zelfde
-schijf, een doel binnen de bron en geen library = exit 2; `--overslaan-zonder-doel`; `--media` met
+het oude van een veranderd bestand staat in `.vorige/`; versies sorteren op tijd (`…_33-2.db` ná
+`…_33.db`); een tweede run tegelijk stopt op het slot, een slot van een dood proces gaat opzij;
+`--droog` schrijft niets (geen doel, geen stempel, bron ongewijzigd); zelfde schijf, een doel binnen
+de bron (ook via een symlink), een `/Volumes/<x>` die er niet is en geen library = exit 2; welke
+library (`media-VERHUISD.txt`, `VARVE_DB`, twee libraries = exit 2); `--overslaan-zonder-doel`; `--media` met
 een nep-rsync via `PATH` (altijd `-a`, nooit `--delete`, de databases uitgesloten,
 `--backup-dir`); controleer (alles ok, nummers nieuwer dan de kopie, nummers zonder media-kopie, een
 veranderd bestand = NIET OK); herstel (`--droog`, terugzetten, een ander bestand niet
-overschreven, weigeren bij een bestaande `library.db` of alleen een `-wal`).
+overschreven, weigeren bij een bestaande `library.db`, alleen een `-wal`, een losse
+`library.db-journal` of een losse `kaart.db-wal`).
+
+Niet als test: twee runs na elkaar in dezelfde seconde (de stempel krijgt dan `-2`; de code staat
+er, maar zonder nepklok is dat niet betrouwbaar te toetsen).
 
 Met de hand, 11 okt: `kopie.mjs --droog` tegen de echte checkout (alleen lezen), één echte run naar
 `~/Backups/varve-staat --zelfde-schijf`, `controleer.mjs` daarop, en een herstel in een tijdelijke
