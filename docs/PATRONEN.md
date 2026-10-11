@@ -245,3 +245,113 @@ auto voor scene 4). De kern blijft: fader, play, filter, Clip Stop, master-knop.
   kwantisering op de dichtstbijzijnde stap vangt het meeste op).
 - Lange sets: de klok-tellen lopen door (doubles, ruim genoeg voor dagen).
 - De Maschine (hub, stapmodus): de API staat klaar, de koppeling niet.
+
+---
+
+## 8. Naar Logic: patronen als MIDI-bestand (10 okt, spoor produceren-uit, stap 1)
+
+*Op de tak `visie/produceren-uit`, PR naar `studio/integratie` "[na de proefavond]". Ontwerp en
+kritiek: de scratchpad-map `uitwerking/produceren-uit/` van 10 okt (`5-ontwerp-definitief.md`).
+Gebouwd: **stap 1, de pure exporter en lezer** (met L3 van de B-lijst), en in hetzelfde spoor het
+**setboek** (`tools/setboek/`, stap 2), en (herstelronde 1) de **CLI** `tools/patronen/midi.mjs`.
+Route en knop voor de MIDI-export komen later (§8.5).
+Nog in **geen** Logic geopend.*
+
+**Waarom.** Clay produceert ook in Logic (VISIE pijler 2). Een patroon dat in VARVE gemaakt is,
+moet daar als noten verder kunnen. Een export naar een bestand op de eigen schijf is een
+UITGANG, geen distributie (CLAUDE.md "geen deelfuncties" gaat over de YouTube-cache).
+
+### 8.1 Bestanden
+
+| Bestand | Wat |
+|---|---|
+| `src/lib/smf.js` | de bytes van een Standard MIDI File: `vlq`, `meta`, `ascii`, `tempoMeta`, `maatsoortMeta`, `mtrk`, `smf`, `leesSmf`. Geen imports, geen Buffer, geen DOM. |
+| `src/export/patronen-smf.js` | patroon/set ↔ SMF: `klinkendeNoten`, `setNaarSmf`, `smfNaarPatronen`. Staat BUITEN `src/engine/` (regel 1: de engine kent geen MIDI); importeert alleen `engine/patronen/{model,venster}.js` en `lib/smf.js`. |
+| `test/smf.test.mjs` | de bytes-laag (43 checks) |
+| `test/patronen-midi.test.mjs` | de regels hieronder, gouden bytes, 500 patronen tegen de speler, rondreis met en zonder meta, de CLI (73 checks) |
+| `tools/patronen/midi.mjs` | de CLI: `--set <kopie van patronen/<naam>.json> --uit <pad.mid> [--track N [--plek K]] [--omlopen M] [--bpm B] [--zonder-meta]`; schrijft met `wx` (bestaat het: exit 2), niets gevuld: exit 1. Recept in `tools/patronen/LEESMIJ.md` |
+| `test/fixtures/midi/` | `kick-goud.mid` (431 B), `kick-goud-zonder-meta.mid` (118 B), `proef-set.mid` (2200 B): gouden bestanden én het materiaal voor de Logic-proef (§8.4) |
+
+`test/regels.test.mjs` bewaakt dat er in `src/engine/` geen `MThd`, `MTrk` of `0x99` staat, en dat
+`src/export/` alleen uit engine en lib importeert.
+
+### 8.2 Het bestand
+
+Type 1, **384 ticks per tel** (= `PPQN` van de patroonklok; deelbaar door elke deling 1, 2, 3, 4,
+6, 8, dus elke stap valt op een hele tick). Spoor 0 is de tempotrack (naam van de set, tempo, 4/4,
+eventueel `varve:context {…}`); daarna één spoor per gevuld patroon.
+
+```js
+setNaarSmf(set, { track, plek, omlopen = 1, bpm = null, meta = true, context = null })  // Uint8Array | null
+smfNaarPatronen(bytes, { lengte = 16, deling = 4, swing = 50, omlopen = 1, negeerMeta = false })
+  // [{ naam (spoornaam), patroon, bron: 'meta' | 'noten', fouten }]
+```
+
+De regels (elke regel een commentaar in de code en een check in de test):
+
+| # | Regel |
+|---|---|
+| S1 | Venster: precies de eerste `omlopen` omlopen zoals de speler ze vanaf een verse start speelt (`notenInVenster` met basis 0). Negatieve micro op stap 0 van de eerste omloop valt op tick 0 (D1); een noot die door swing/micro over het einde schuift blijft staan. |
+| S2 | `aan = round(tick)`, `uit = max(aan + 1, round(tick + duur))`. Swing en micro zijn dus gewoon tijdverschuiving in het bestand. |
+| S3 | Dezelfde (noot, aan) twee keer: één, de laatste in tickvolgorde. |
+| S4 | Zelfoverlap: begint dezelfde noot opnieuw voordat hij uit is, dan gaat hij uit op de nieuwe aan. **Bewust anders dan de speler** (die laat het instrument het oplossen; een MIDI-bestand kan dezelfde noot niet twee keer tegelijk hebben). |
+| S5 | Velocity `min(127, max(1, round(snelheid × 127)))`; noot-uit is `0x8n` met velocity 0. |
+| S6 | Drums-track (`instrumenten[track].soort === 'drums'`) op kanaal 10 (`0x99`), al het andere kanaal 1. **Geen GM-vertaling**: noot 36 blijft 36; 44–51 (de sample-pads) blijven altijd zichzelf, ook in een latere vertaling. |
+| S7 | Op dezelfde tick: spoornaam, tekst-meta, noot-uit, noot-aan. |
+| S8 | Een spoor eindigt op `max(omlopen × omloop, laatste uit)`; de tempotrack op 0. |
+| S9 | Tempotrack: `FF 03` naam van de set (ASCII), `FF 51` tempo (`bpm` of `set.tempo`, 40..240), `FF 58` 4/4, en met `context` een `FF 01 varve:context {json}` (hooguit 1024 bytes, anders RangeError). |
+| S10 | Spoornaam `T<track> P<plek>[ <naam>][ (<instrument>)]`, ASCII ('één' → 'een', '→' → '->'). |
+| S11 | Met `meta` (standaard): `FF 01 varve:patroon {json}` met het genormaliseerde patroon, niet-ASCII als `\uXXXX`. Zo komt het verliesvrij terug, ook noten voorbij de lengte. |
+| S12 | Sporen in volgorde track 1..8, plek 1..5; lege plekken overgeslagen; `track`/`plek` kiezen er één (of één track); niets gevuld = `null`. |
+| S13 | Geschreven zonder running status (lezen kan het wel). |
+| L1 | Lezen met meta: het patroon uit de tekst door `normaliseerPatroon`. `bron: 'meta'`. |
+| L2 | Lezen zonder meta (een bestand uit Logic, of `negeerMeta`): noot-aan/-uit koppelen per (kanaal, noot) (noot-aan met velocity 0 = uit), duur in stappen, snelheid = v/127; ppqn van het bestand telt (480 uit Logic gaat goed). Het raster (`lengte`, `deling`, `swing`) geef je mee: een bestand zonder meta zegt het niet. `bron: 'noten'` en "benaderd" in `fouten`. |
+| L3 | De stap: van k − 1, k, k + 1 (k = dichtstbijzijnde stap) die met de kleinste \|micro\| NA de swing van het raster, binnen −0,5..0,5 en binnen de omlopen (een noot op de laatste stap die op de omloopgrens valt, blijft de laatste stap). Met het juiste raster en niet-dubbelzinnige noten is het opnieuw geschreven bestand bytegewijs hetzelfde (1000/1000); helemaal willekeurig 957/1000, en op de generator van de jury precies haar uitkomst (2851/3000, 3000/3000 dezelfde patronen). Wat niet terugkomt is dubbelzinnig: dezelfde tick met een andere stap en micro (die geeft wel dezelfde bytes), of een zelfoverlap (S4) die de duur inkortte. |
+
+### 8.3 Testen
+
+```
+node test/smf.test.mjs && node test/patronen-midi.test.mjs && node test/regels.test.mjs
+# optioneel, buiten de suite (mido 1.3.x):
+python3 -I -c "import mido,sys; m=mido.MidiFile(sys.argv[1]); print(m.type,m.ticks_per_beat,len(m.tracks),m.length)" test/fixtures/midi/kick-goud.mid
+#   → 1 384 2 2.0     (proef-set.mid → 1 384 4 4.3548)
+```
+
+Gemeten op 10 okt (bouwer): de kick is bytegewijs gelijk aan de met de hand uitgeschreven 118 bytes
+uit het ontwerp en aan de gouden bestanden; 3000 willekeurige sets (meerdere tracks, drums en poly,
+1–3 omlopen, met en zonder meta, namen met umlauten) bytegewijs gelijk aan de onafhankelijke
+jury-referentie (in de scratchpad, niet in de repo); mido leest alle drie de fixtures. Mutaties
+(venster te ruim, zelfoverlap weg, drums op kanaal 1, noot-uit na noot-aan) maken de test rood.
+
+### 8.4 Wat niet getest is (stap 0: Logic, niet op een speeldag)
+
+- **Logic is niet gestart.** Of Logic het tempo overneemt (120/124), kanaal 10 als drums leest,
+  welke klank 36–39 en 44–51 krijgen (Varve 36–39 ≠ GM 38/39/42), of `varve:patroon …` als tekst
+  zichtbaar is en stoort, en of de spoornaam in de spoorkop komt: allemaal aanname.
+  De proef (Clay, ~10 min): mixer dicht, controllers los (of in Logic de automatische installatie
+  van bedieningsoppervlakken uit), `test/fixtures/midi/*.mid` in een leeg project slepen, daarna
+  Audio MIDI Setup terug op 48 kHz. Finder-pad: `~/Projects/varve-stems/vis-produceren-uit/test/fixtures/midi/`.
+  De antwoorden beslissen of de drumpads vertaald worden (stap 5) en of de meta mag blijven.
+- **Een in Logic bewerkt bestand dat de meta nog draagt** komt terug als de (oude) meta, niet als
+  de bewerkte noten; `negeerMeta: true` leest de noten. Er is geen controle die het verschil ziet.
+- Realtime niets: dit is een export, niets ervan zit in het audiopad of op de bus.
+
+### 8.5 Nog niet gebouwd (volgorde uit het ontwerp)
+
+1. ~~Setboek~~: gebouwd op 10 okt (stap 2a en 2b, `tools/setboek/LEESMIJ.md`): de kleinste export
+   die Clay na een proefavond gebruikt, op kopieën van de logs.
+2. **Route** `GET /api/patronen/<naam>/midi[?track=N&plek=K][&omlopen=M][&bpm=B][&meta=0][&context=…]`
+   (200 `audio/midi` met bestandsnaam `<set>-T<N>P<K>-<naam>-<JJJJMMDD-UUMM>.mid`; 400/404/405;
+   413 boven `omlopen` 16 of Σ noten × omlopen > 65 536; 422 bij een onleesbare set). Na de
+   proefavond. De CLI `tools/patronen/midi.mjs` is er al (10 okt, herstelronde 1): zo kan het
+   eerste proefpunt (een patroon maken, exporteren, in Logic slepen) zonder server.
+3. **Knop `.mid`** in de PATROON-rij (shift = de hele set), pas na stap 0 én na een avond waarop
+   Clay een patroon maakte (VRAGEN, K-C).
+4. Drumvertaling als data (`patronen/export.json`), alleen als stap 0 laat horen dat het moet.
+
+**Standaardkeuzes** (geen vraag tot iemand erover struikelt): D1 negatieve micro op stap 0 = tick 0
+zoals de speler; D2 de knop stuurt het tempo dat je hoorde, route/CLI zonder `bpm` = `set.tempo`;
+D3 stems naar Logic later in `~/Music/Logic/Varve/` (niet in iCloud); D4 Logic-richting =
+opnemen en nabewerken, geen Link; D5 terug uit Logic = de bounce op het library-paneel slepen
+(≥ 20 s, nooit op een speeldag; een korte lus hoort op een pad); D6 een export naar de eigen schijf
+is een uitgang, geen distributie.
