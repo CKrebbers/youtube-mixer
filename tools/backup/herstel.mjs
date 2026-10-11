@@ -4,8 +4,9 @@
 //   node tools/backup/herstel.mjs --van <doel>/varve --naar <checkout> [--droog]
 //
 // Overschrijft NOOIT iets:
-//   - staat er al een library.db (of -wal) op de plek van de server, dan weigert hij helemaal
-//     (exit 2): zet hem eerst zelf opzij (docs/LIBRARY.md "Terugzetten");
+//   - staat er al een library.db (of een -wal, -shm of -journal) op de plek van de server, of
+//     een losse kaart.db-wal/-shm/-journal zonder kaart.db, dan weigert hij helemaal (exit 2):
+//     zet ze eerst zelf opzij (docs/LIBRARY.md "Terugzetten");
 //   - elk ander bestand dat er al staat blijft staan; is het anders dan in de kopie, dan zegt
 //     hij dat (je kiest zelf).
 // Zet terug: library.db en kaart.db (de VACUUM-kopieën, zonder -wal/-shm: ze staan al in
@@ -40,10 +41,19 @@ export function herstel(opties, env = process.env, uit = console.log) {
   }
   if (!existsSync(naar)) { uit(`herstel: ${naar} bestaat niet — eerst de code ophalen (git clone), zie docs/BACKUP.md §4`); return 2; }
   const P = paden(naar, env);
-  for (const p of [P.db, `${P.db}-wal`]) {
-    if (existsSync(p)) {
-      uit(`herstel: weigert — er staat al een ${p.endsWith('-wal') ? 'library.db-wal' : 'library.db'} op ${p}.\n`
-        + '         Nooit overschrijven. Stop de server en zet library.db, -wal en -shm eerst zelf opzij\n'
+  if (P.dbFout) { uit(`herstel: weigert — ${P.dbFout}`); return 2; }
+  // Ook een losse -wal, -shm of -journal: SQLite past een achtergebleven -wal of hot journal
+  // toe op het teruggezette bestand, en dat is een stille beschadiging. Voor kaart.db ook,
+  // want die zet herstel ook terug (als hij er nog niet is).
+  // Een bestaande kaart.db laat herstel staan (met zijn -wal); alleen losse zijbestanden tellen.
+  const teToetsen = [[P.db, 'library.db']];
+  if (!existsSync(P.kaartDb)) teToetsen.push([P.kaartDb, 'kaart.db']);
+  for (const [db, naam] of teToetsen) {
+    for (const achter of ['', '-wal', '-shm', '-journal']) {
+      const p = db + achter;
+      if (!existsSync(p)) continue;
+      uit(`herstel: weigert — er staat al een ${naam}${achter} op ${p}.\n`
+        + `         Nooit overschrijven. Stop de server en zet ${naam}, -wal, -shm en -journal eerst zelf opzij\n`
         + '         (docs/LIBRARY.md "Terugzetten"), of kies een verse checkout.');
       return 2;
     }
