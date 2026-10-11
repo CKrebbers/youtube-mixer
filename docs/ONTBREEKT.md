@@ -117,6 +117,11 @@ Botst met een vastgelegde keuze (CLAUDE.md, VRAGEN).
 | D4 | **De indeling van de blauwdruk (2 decks spiegelbeeldig)** | Acht tracks, één kolom = één track. Ook: beeld-crossfader los van het geluid, vier beeldlagen, tempo-master met de hand, blauwdruk-import. | CLAUDE.md · VRAGEN G4 | — |
 | D5 | **Link als native module, eigen Syphon/NDI-helper, VARVE in TouchDesigner draaien, Link Audio** | GPL of native code in het serverproces, of een tweede beamer over het netwerk. Pas heroverwegen als de goedkope routes tekortschieten. | onderzoek Logic/TD | — |
 
+**D1 verduidelijkt (VI1, 11 okt).** "Niet" betekent: geen distributie van de cache. Een uitgang
+is geen distributie en mag: een bestand, een poort op 127.0.0.1, een export naar je eigen schijf.
+Eigen opnames en renders naar de eigen library mogen ook. Varve zelf naar een streamingdienst
+laten sturen blijft dicht tot een aparte keuze (U1b); zie de regel in `CLAUDE.md` ("Gekozen aanpak").
+
 ## Voorstel voor de volgorde
 
 **Stand 2 okt (avond):** stap 1 is gebouwd (A4, A6, A7, A8, A9), zie HANDOFF.

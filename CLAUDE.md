@@ -26,9 +26,14 @@ filters, waveforms, beatgrids, keylock en scratch onmogelijk via de officiële w
 Daarom: **lokale cache**. `yt-dlp` + `ffmpeg` halen media binnen en normaliseren die,
 daarna draait alles op Web Audio en WebGL.
 
-Consequentie: dit is een persoonlijk instrument, geen distributieplatform. Bouw geen
-deelfuncties, geen publieke streaming, geen upload. Als een feature erom vraagt:
-eerst melden, niet stilletjes bouwen.
+Consequentie: dit is een persoonlijk instrument, geen distributieplatform. **Geen
+distributie van de cache**: bouw geen deelfuncties, geen publieke streaming en geen
+upload van de cache naar buiten. Een **uitgang** is geen distributie en mag: een
+bestand, een poort op 127.0.0.1, een export naar je eigen schijf. Eigen opnames en
+renders naar de eigen library mogen ook (de upload-route bestaat al). Dit opent niets
+naar buiten: Varve zelf naar een dienst laten sturen blijft een aparte keuze (U1b,
+`docs/VRAGEN.md`). Als een feature om meer vraagt: eerst melden, niet stilletjes bouwen.
+(VI1, 11 okt.)
 
 ## De drie regels
 
