@@ -176,6 +176,8 @@ src/
   controle/         controle.js     de Controlekamer: tegels (server, ingest, mixer via de Web Lock, APC via het kanaal), speellijst
                     speellijst.js   de punten van een proefsessie, in blokken. Puur data; de stand staat in proef/sessie.json
                     backup-tegel.js de tegel "Backup" (laatste kopie, of de fout). Puur.
+  handen/           kaart.js        de handenkaart: wat elke control doet, vrije plekken, voorstel per nieuwe actie (docs/HANDEN.md). Puur
+                    telling.js      de telling van de handelingenlogs: normaliseren, groepen, top. Puur. apc-controls.js: de 148 APC-controls van de hub (kopie)
   auto/             planner.js      de auto-DJ, puur: welk fragment, welke overgang (bewakers), wanneer (frasegrens), de curves
                     automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
@@ -224,6 +226,8 @@ mappings/
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
   xboard49.json     E-MU Xboard49: knop 1–8 -> instrument, 9–16 -> FX, schuif -> fader van de speeltrack (AANNAME, te controleren met een proef)
   maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn), transport van de patronen ({plek}); laag pagina.strip / pagina.rack = de knoppagina's van de focus-track
+handen/
+  voorstel.json     per actie zonder plek op een controller het voorstel of "bewust geen" (docs/HANDEN.md); de mixer leest het niet
 racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 plannen/
@@ -302,6 +306,7 @@ test/
   nacht.test.mjs    de zes nachtregels één voor één met nepklok, nep-deck en nep-ingest (geen tijd, geen netwerk)
   kaart-server.test.mjs  kaart en nacht op een eigen server met de nep-yt-dlp: routes, 409 bij een deck (echt Range-verzoek), ingest zonder video, nachtrun, herstart
   nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
+  handen.test.mjs   de handenkaart: controls, register, vrije plekken (exact), voorstel/uitzonderingen, puur, de telling, blok hub-f0, VRAGEN HA
   alles.mjs         alle tests in één keer met overzicht
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
