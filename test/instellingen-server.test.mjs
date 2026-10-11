@@ -26,7 +26,7 @@ let server = null, uit = '';
 async function start() {
   uit = '';
   server = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_MEDIA: join(map, 'media'), VARVE_OPNAMES: join(map, 'opnames'),
+    env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_TESTSERVER: '1', VARVE_MEDIA: join(map, 'media'), VARVE_OPNAMES: join(map, 'opnames'),
       VARVE_PLANNEN: join(map, 'plannen'), VARVE_PATRONEN: join(map, 'patronen'), VARVE_PROEF: join(map, 'proef'),
       VARVE_BACKUPS: join(map, 'backups'), VARVE_HERANALYSE: 'uit' },
     stdio: ['ignore', 'pipe', 'pipe'],

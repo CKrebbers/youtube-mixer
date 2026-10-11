@@ -47,7 +47,7 @@ const ADRES = 'ws://localhost:7702/app';
   lib.sluit();
 }
 const startServer = (poort, db) => spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
-  env: { ...process.env, PORT: String(poort), VARVE_DB: join(tmp, db), VARVE_MEDIA: join(tmp, `media-${poort}`),
+  env: { ...process.env, PORT: String(poort), VARVE_DB: join(tmp, db), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, `media-${poort}`),
     VARVE_OPNAMES: join(tmp, `opnames-${poort}`), VARVE_PATRONEN: join(tmp, `patronen-${poort}`), VARVE_PLANNEN: join(tmp, `plannen-${poort}`),
     VARVE_PROEF: join(tmp, `proef-${poort}`), VARVE_BACKUPS: join(tmp, `backups-${poort}`), VARVE_HERANALYSE: 'uit' },
   stdio: 'ignore',

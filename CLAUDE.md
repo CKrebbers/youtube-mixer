@@ -236,12 +236,12 @@ opnames/            je opgenomen sets als WAV (niet in git)
 test/
   engine.test.mjs   engine tegen gemockte Web Audio API, draait in Node
   mapping.test.mjs  mapping + soft-takeover, puur logica, geen mock nodig
+  instellingen-server.test.mjs / instellingen-opslag.test.mjs  de zeven browser-sleutels: route en witte lijst; server eerst, eenmalig omhoog
   feedback.test.mjs LED-diffing en paletproef, bytes worden opgevangen
   learn.test.mjs    MIDI-learn, modusherkenning, export/import-rondje
   midi.test.mjs     parsen, poortkeuze op naam, echodetectie
   library.test.mjs  database, effect-racks per link, cascade bij verwijderen, migraties (SCHEMA.length)
   backup.test.mjs   backups: geldige kopie uit de WAL, niet dubbel, opruimen, mislukken, niet via HTTP
-  instellingen-server.test.mjs / instellingen-opslag.test.mjs  de zeven browser-sleutels: route en witte lijst; server eerst, eenmalig omhoog
   library-lijst.test.mjs  virtuele lijst, pagina-cache (ook de race bij een nieuwe sortering), kolommen
   kaart-lijst.test.mjs  de tab kaart als rekenwerk, en de nep-server (tools/headless/kaart-nep.mjs) tegen het contract van de kaart-API
   ingest.test.mjs   pipeline zonder netwerk; ffmpeg maakt zijn eigen testmateriaal
