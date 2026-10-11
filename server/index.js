@@ -27,6 +27,7 @@ import { Beatgrid } from '../src/engine/beatgrid.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
 import { Kaart, KaartFout, STANDAARD_PAD as KAART_STANDAARD_PAD } from './kaart.js';
 import { Nacht } from './nacht.js';
+import { kiesMedia, iCloudReden, VERHUISD_BESTAND } from './media-plek.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -38,10 +39,15 @@ import { Nacht } from './nacht.js';
 
 const WORTEL = fileURLToPath(new URL('..', import.meta.url));
 const POORT = Number(process.env.PORT) || 8777;
-// Instelbaar voor de tests: zo komt een testserver nooit aan Clay's media/
-// (ook het opruimen van .bezig-mappen bij het opstarten niet — dat wiste
-// anders de werkmap van een ingest die op de echte server liep).
-const MEDIA = process.env.VARVE_MEDIA || join(WORTEL, 'media');
+// De mediamap: VARVE_MEDIA, anders <projectmap>/media, anders (als die na een
+// verhuizing weg is) het pad uit media-VERHUISD.txt (server/media-plek.js, VI2).
+// VARVE_MEDIA mag Clay's map buiten iCloud zijn (~/Varve-media) én de map van
+// een testserver: zo komt een testserver nooit aan Clay's media/ (ook het
+// opruimen van .bezig-mappen bij het opstarten niet — dat wiste anders de
+// werkmap van een ingest die op de echte server liep). Of het een testserver
+// is, zegt alleen VARVE_TESTSERVER=1.
+const MEDIA_KEUZE = kiesMedia({ wortel: WORTEL });
+const MEDIA = MEDIA_KEUZE.map;
 // Opnames en handelingenlogs. Ook de statische /opnames/-paden komen hieruit,
 // anders las een testserver (of een andere opnamemap) uit de projectmap.
 const OPNAMES = process.env.VARVE_OPNAMES || join(WORTEL, 'opnames');
@@ -92,7 +98,10 @@ const SERVER_RUN = randomUUID();
  * staat, de stems komen erna.
  */
 // Instelbaar voor de tests: een eigen database en opnamemap, niet de jouwe.
-const DB = process.env.VARVE_DB || join(WORTEL, 'media', 'library.db');
+// Standaard IN de mediamap (tot 11 okt: altijd <projectmap>/media/library.db):
+// zo verhuist de library mee met VARVE_MEDIA, en daarmee ook backups/,
+// kaart.db, nacht.json en stems-rij.json (die staan naast de database).
+const DB = process.env.VARVE_DB || join(MEDIA, 'library.db');
 const splitter = new Splitter();
 // De tellen (Beat This!) en de stems (Demucs) gebruiken allebei de GPU: om de beurt (server/tellen.js).
 const gpu = new GpuSlot();
@@ -1671,13 +1680,33 @@ for (const sig of ['SIGTERM', 'SIGINT']) {
 // Werkmappen van een ingest of een split die nooit afkwam (server gestopt
 // midden in een download, .bezig-stems-* van een onderbroken split): opruimen.
 // Een goede track of een goede set stems staat nooit in zo'n map. Alleen
-// binnen MEDIA (VARVE_MEDIA voor een testserver).
+// binnen MEDIA (VARVE_MEDIA: Clay's map buiten iCloud, of die van een testserver).
 try {
   const { readdir, rm: weg } = await import('node:fs/promises');
   for (const n of await readdir(MEDIA).catch(() => [])) {
     if (n.startsWith('.bezig-')) await weg(join(MEDIA, n), { recursive: true, force: true });
   }
 } catch (_) {}
+
+// Waar de media en de library staan, en of dat binnen iCloud is (VI2): een
+// uitgeplaatst bestand laat de server bij de eerste lezing hangen tot het hele
+// bestand binnen is (gemeten: 3,9 GB voor een stems.wav; zonder internet nooit).
+{
+  const waarom = {
+    VARVE_MEDIA: 'VARVE_MEDIA',
+    standaard: 'standaard: de projectmap',
+    [VERHUISD_BESTAND]: `uit ${VERHUISD_BESTAND}; zet VARVE_MEDIA`,
+  }[MEDIA_KEUZE.bron];
+  console.log(`[media] ${MEDIA} (${waarom}); library ${DB}`);
+  const plekken = [...new Set([MEDIA, dirname(DB)])];
+  for (const plek of plekken) {
+    const reden = iCloudReden(plek);
+    if (reden) {
+      console.warn(`[media] LET OP: ${plek} ligt binnen iCloud (${reden}). Een uitgeplaatst bestand laat de server `
+        + 'hangen tot het binnen is. Verhuizen: node tools/media-verhuis.mjs (docs/LIBRARY.md "Waar media/ staat")');
+    }
+  }
+}
 
 const tooling = await controleerTooling();
 if (!tooling.ok) console.warn(`[server] LET OP: ${tooling.ontbreekt.join(', ')} ontbreekt — ingest werkt niet`);
