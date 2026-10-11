@@ -145,9 +145,10 @@ try {
   ok('tweede klik: een melding "apc actief: nacht, …"', await tot(async () => (await meldingen()).some((m) => /^apc actief: nacht/.test(m)), 3000), (await meldingen()).join(' | '));
   ok('binnen 3 s toont de tegel "Avond 1 · APC direct"', await tot(async () => (await tegel())?.waarde === 'Avond 1 · APC direct', 3000), `${Date.now() - t0} ms`);
   const tg = await tegel();
-  ok(`… half (waarschuwingen: lege proefkrat in de nep-kaart, avondpakket nog niet samengevoegd): "${tg?.sub}"`, tg?.licht === 'half' && /^sinds \d\d:\d\d · /.test(tg.sub));
+  ok(`… half (waarschuwing: lege proefkrat in de nep-kaart; het profiel apc staat in het avondpakket): "${tg?.sub}"`, tg?.licht === 'half' && /^sinds \d\d:\d\d · /.test(tg.sub));
   ok(`… met de regel "${tg?.regel.replaceAll('\u00a0', ' ')}"`, /krat proefkrat \(kies hem in de kaart\)/.test(tg?.regel.replaceAll('\u00a0', ' ')) && /master Dub-worp: mixer volgt nog niet/.test(tg?.regel.replaceAll('\u00a0', ' ')));
-  ok('de waarschuwingen staan ook als rode melding', (await ctl.ev(`[...document.querySelectorAll('.melding.fout')].map((m) => m.textContent)`)).some((m) => /avondpakket/.test(m)));
+  // Sinds de integratie met draagbaar (11 okt) is "avondpakket nog niet samengevoegd" weg; de lege proefkrat blijft.
+  ok('de waarschuwingen staan ook als rode melding', (await ctl.ev(`[...document.querySelectorAll('.melding.fout')].map((m) => m.textContent)`)).some((m) => /proefkrat" is leeg/.test(m)));
   const n = await ctl.ev(`fetch('/api/nacht').then((r) => r.json())`);
   // De komende nacht (nacht.js, komendeNacht): 's ochtends na 07:00 is dat de nacht van vandaag op morgen.
   const vandaag = komendeNacht(new Date(), NACHT_STANDAARD.venster);
