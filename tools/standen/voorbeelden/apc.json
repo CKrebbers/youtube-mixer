@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "titel": "Avond 1 · APC direct",
+  "uitleg": "De APC rechtstreeks in de Mac, vannacht niet binnenhalen, proefkrat, master Dub-worp staat klaar.",
+  "delen": {
+    "pakket": { "profiel": "apc" },
+    "nacht": { "vannacht": false },
+    "kaart": { "krat": "slim:proefkrat" },
+    "master": { "sjabloon": "Dub-worp" }
+  }
+}

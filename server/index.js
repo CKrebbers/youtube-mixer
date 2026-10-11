@@ -1,8 +1,9 @@
 import { createServer } from 'node:http';
 import { createReadStream, createWriteStream, readFileSync, writeFileSync, renameSync } from 'node:fs';
-import { stat, rm } from 'node:fs/promises';
+import { stat, rm, readFile, readdir } from 'node:fs/promises';
 import { join, extname, resolve, relative, isAbsolute, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
 import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, stappenVoor, YTDLP_GETEST_OP, GEANNULEERD } from './ingest.js';
 import { bekijkLink, ontsmetNaam, BESTAND_EXT } from './links.js';
@@ -26,7 +27,9 @@ import { gridUitTellen, vergelijk, meetGrid, VERSIE as KAART_VERSIE } from '../s
 import { Beatgrid } from '../src/engine/beatgrid.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
 import { Kaart, KaartFout, STANDAARD_PAD as KAART_STANDAARD_PAD } from './kaart.js';
-import { Nacht } from './nacht.js';
+import { Nacht, pasToe as nachtPasToe, STANDAARD as NACHT_STANDAARD } from './nacht.js';
+import { Standen, StandFout } from './standen.js';
+import { naamGeldig as standNaamGeldig, NAAM_UITLEG as STAND_NAAM_UITLEG, MAX_BYTES as STAND_MAX_BYTES } from '../src/standen/stand-model.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -49,6 +52,8 @@ const OPNAMES = process.env.VARVE_OPNAMES || join(WORTEL, 'opnames');
 const PLANNEN = process.env.VARVE_PLANNEN || join(WORTEL, 'plannen');
 // De speellijst van de Controlekamer (proef/sessie.json, docs/CONTROLEKAMER.md).
 const PROEF = process.env.VARVE_PROEF || join(WORTEL, 'proef');
+// Standen (docs/STANDEN.md): Clay's eigen opstellingen, buiten git. VARVE_STANDEN = een map buiten iCloud.
+const STANDEN = process.env.VARVE_STANDEN || join(WORTEL, 'standen');
 const plannen = new Plannen(PLANNEN);
 /** Patronen per set (docs/PATRONEN.md). Eigen map voor de tests: VARVE_PATRONEN. */
 const patronen = new Patronen(process.env.VARVE_PATRONEN || join(WORTEL, 'patronen'));
@@ -166,6 +171,36 @@ const nacht = new Nacht({
   kaart, speeltDeck,
   haal: (wens) => haalKaartNummer(wens),
   zoek: (sleutel) => kaart.zoek(sleutel),
+});
+
+/*
+ * STANDEN (docs/STANDEN.md; "Opstelling" in de Controlekamer): één bestand per
+ * situatie met beginwaarden. Activeren zet wat de server bezit (mapping, de rem
+ * van de nacht), kijkt na wat hij kan zien (krat, profiel, hub-set) en legt
+ * het master-rack vast voor de mixer. De routes voor mapping en nacht zelf
+ * blijven zoals ze zijn. Lezen van racks/sjablonen.json, de standaardmapping,
+ * avondpakket/profielen.json en de hub-sets gebeurt pas als het nodig is.
+ */
+const standen = new Standen({
+  map: STANDEN, voorbeelden: join(WORTEL, 'tools', 'standen', 'voorbeelden'),
+  lib, nacht, kaart, speeltDeck,
+  valideerNacht: (deel) => nachtPasToe(NACHT_STANDAARD, deel),
+  sjablonen: async () => JSON.parse(await readFile(join(WORTEL, 'racks', 'sjablonen.json'), 'utf8')).racks ?? [],
+  standaardMapping: async () => JSON.parse(await readFile(join(WORTEL, 'mappings', 'apc40mk2.json'), 'utf8')),
+  // null = het avondpakket (spoor draagbaar) is er nog niet; kapotte JSON gooit (dan een waarschuwing).
+  profielen: async () => {
+    let tekst;
+    try { tekst = await readFile(join(WORTEL, 'avondpakket', 'profielen.json'), 'utf8'); } catch (err) { if (err.code === 'ENOENT') return null; throw err; }
+    const j = JSON.parse(tekst);
+    return j?.profielen && typeof j.profielen === 'object' ? j.profielen : {};
+  },
+  // De namen in AV-app-hub/sets (alleen lezen; paden*.json zijn geen sets). null = geen hub op deze machine.
+  hubSets: async () => {
+    try {
+      const map = process.env.VARVE_HUB_SETS || join(homedir(), 'Projects', 'AV-app-hub', 'sets');
+      return (await readdir(map)).filter((f) => f.endsWith('.json') && !f.startsWith('paden')).map((f) => f.slice(0, -5)).sort();
+    } catch { return null; }
+  },
 });
 
 /**
@@ -1137,6 +1172,9 @@ const server = createServer(async (req, res) => {
       return json(res, 405, { fout: 'GET of PUT' });
     }
 
+    // ---- standen (docs/STANDEN.md) ------------------------------------------
+    if (pad === '/api/standen' || pad.startsWith('/api/standen/')) return await standenRoute(req, res, pad, mediatype);
+
     // ---- speellijst van de Controlekamer (docs/CONTROLEKAMER.md) ----------
     // GET /api/backups: wanneer de laatste backup van library.db was, hoeveel er
     // staan, een fout (server/backup.js). Alleen de stand; de kopieën zelf zijn
@@ -1660,6 +1698,68 @@ async function kaartRoute(req, res, url, padRuw) {
     return undefined;
   } catch (err) {
     if (err instanceof KaartFout) return json(res, err.code, err.antwoord());
+    throw err;
+  }
+}
+
+/**
+ * De routes van de standen (docs/STANDEN.md). Vaste namen (actief, keuzes,
+ * terug) gaan vóór <naam>; geen stand mag zo heten. Er is geen DELETE: een
+ * stand weghalen = het bestand met de hand verplaatsen (niets weggooien).
+ *   GET  /api/standen                     { standen, actief, label }
+ *   GET  /api/standen/actief              { naam: null } of de actieve stand met het verslag
+ *   GET  /api/standen/keuzes              waaruit de bewerker kiest
+ *   POST /api/standen/terug               de vorige mapping en nacht-rem terug
+ *   GET  /api/standen/<naam>              { stand, versie, bron, fouten, waarschuwingen }
+ *   PUT  /api/standen/<naam>              { stand, versie } → 200 / 400 / 409 / 415
+ *   GET  /api/standen/<naam>/verschil     wat activeren zou veranderen
+ *   POST /api/standen/<naam>/activeer     { ok, naam, sinds, verslag }
+ *   POST /api/standen/<naam>/vastleggen   { versie, behoud? }
+ */
+async function standenRoute(req, res, pad, mediatype) {
+  const alleen = (methode) => json(res, 405, { fout: methode });
+  try {
+    if (pad === '/api/standen') return req.method === 'GET' ? json(res, 200, await standen.overzicht()) : alleen('GET');
+    if (pad === '/api/standen/actief') return req.method === 'GET' ? json(res, 200, await standen.actief()) : alleen('GET');
+    if (pad === '/api/standen/keuzes') return req.method === 'GET' ? json(res, 200, await standen.keuzes()) : alleen('GET');
+    if (pad === '/api/standen/terug') return req.method === 'POST' ? json(res, 200, await standen.terug()) : alleen('POST');
+    const m = /^\/api\/standen\/([^/]+)(?:\/(activeer|verschil|vastleggen))?$/.exec(pad);
+    if (!m) return json(res, 404, { fout: 'onbekend eindpunt' });
+    let naam;
+    try { naam = decodeURIComponent(m[1]); } catch { return json(res, 400, { fout: 'onleesbare naam' }); }
+    if (!standNaamGeldig(naam)) return json(res, 400, { fout: STAND_NAAM_UITLEG });
+    switch (m[2]) {
+      case undefined:
+        if (req.method === 'GET') {
+          const g = await standen.lees(naam);
+          return g ? json(res, 200, g) : json(res, 404, { fout: `geen stand "${naam}"` });
+        }
+        if (req.method === 'PUT') {
+          if (mediatype !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
+          // Te groot volgens de kop: meteen 413 (leesJson zou de verbinding verbreken in plaats van te antwoorden).
+          if (Number(req.headers['content-length']) > STAND_MAX_BYTES + 1024) return json(res, 413, { fout: 'stand te groot (meer dan 64 KiB)' });
+          const body = await leesJson(req, STAND_MAX_BYTES + 1024);
+          if (!body || typeof body !== 'object' || Array.isArray(body) || !body.stand) return json(res, 400, { fout: 'stuur { stand, versie } als JSON (hooguit 64 KiB)' });
+          const r = await standen.schrijf(naam, body.stand, typeof body.versie === 'string' ? body.versie : null);
+          return json(res, r.code, r.antwoord);
+        }
+        return alleen('GET of PUT');
+      case 'activeer':
+        if (req.method !== 'POST') return alleen('POST');
+        return json(res, 200, { ok: true, ...await standen.activeer(naam) });
+      case 'verschil':
+        return req.method === 'GET' ? json(res, 200, await standen.verschil(naam)) : alleen('GET');
+      case 'vastleggen': {
+        if (req.method !== 'POST') return alleen('POST');
+        const body = await leesJson(req, 16 * 1024);
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return json(res, 400, { fout: 'stuur { versie, behoud? } als JSON' });
+        const r = await standen.vastleggen(naam, typeof body.versie === 'string' ? body.versie : null, body.behoud);
+        return json(res, r.code, r.antwoord);
+      }
+    }
+    return json(res, 404, { fout: 'onbekend eindpunt' });
+  } catch (err) {
+    if (err instanceof StandFout) return json(res, err.code, err.antwoord());
     throw err;
   }
 }

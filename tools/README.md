@@ -45,6 +45,11 @@ de Chrome met het eigen profiel, nooit `pkill`. De test: `test/beeld-lokaal.test
 een map met een spatie, nep-relay, nep-`open`, eigen poorten). Nog nooit echt gestart: dat is de
 speelproef (stap 7 van het ontwerp), met Clay erbij.
 
+## standen/
+`voorbeelden/` (apc, alles, maschine, laptop: de vertrekpunten van docs/STANDEN.md, in git) en `activeer.mjs`: een
+opstelling activeren zonder browser (`node tools/standen/activeer.mjs [naam|--terug] [--poort 8777]`; zonder naam de
+lijst). Praat alleen met de server; code 1 bij een fout.
+
 ## git/
 - `test-index.sh` — test precies wat er in de git-index staat (niet de werkmap): pakt de
   index uit in een tijdelijke map en draait daar alle tests. Handig bij het splitsen van
@@ -219,6 +224,12 @@ bestand heen. Zie `patronen/LEESMIJ.md`.
   dezelfde headless Chromium (Web Lock en BroadcastChannel zoals bij Clay): mixer open/dicht, een tweede mixer
   rood, de knop "mixer openen", wat er in de mixer staat, afvinken en notities na herladen. Eigen server
   (8796), tijdelijke database en speellijst, MIDI eruit vóór elke pagina. Schermafdruk `controle.png`.
+- `standen.mjs` — de opstelling in de Controlekamer (docs/STANDEN.md): tegel, kiezer, activeren en terugzetten met
+  twee klikken, "mixer openen" via de hub (niet geklikt), de bewerker (bewaren, bewaar als, leg vast, 409), 1440 en
+  390 px. Eigen server **8822** (debug **9422**; `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`) met de verzonnen kaart, de
+  nep-yt-dlp en een tijdelijke map; Chromium `--mute-audio`, geen MIDI, **geen mixer-tabblad**. Schermafdrukken
+  `standen-*.png`. Reserve voor een gedempte `controle.mjs` naast deze: **8824/9424**; de rooktest met een kopie van
+  de library: **8821** (docs/STANDEN.md §8). 8823 is van `tekenen.mjs`.
 - `hub.mjs` — de koppeling met de AV-app-hub (`?hub=`, src/control/hub.js) in Chromium via
   playwright-core uit de AV-app-hub (`VARVE_HUB_REPO`, standaard `../av-app-hub`). Zonder vlag:
   Web MIDI zoals altijd, geen WebSocket, hub.js niet geladen. Met vlag: `toetsApp` (de

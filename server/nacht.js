@@ -26,8 +26,10 @@ import { ZEKER } from './kaart.js';
  *
  * Eén "nacht" is de nacht die bij een DATUM hoort: 01:00–07:00 op 11 okt is
  * de nacht van 10 okt (`nachtDatum`: vóór 12:00 telt de vorige dag). Zo dekt
- * "nooit op een speeldag" ook de nacht ná de proefavond, en geldt "vandaag
- * niet" voor de komende nacht, hoe laat je het ook aanzet.
+ * "nooit op een speeldag" ook de nacht ná de proefavond. "Vandaag niet" geldt
+ * voor de KOMENDE nacht (`komendeNacht`: de nacht waar je in zit, anders de
+ * eerstvolgende), hoe laat je het ook aanzet: ook om 10:00 's ochtends, als
+ * de nacht van gisteren al voorbij is.
  */
 
 export const STANDAARD = Object.freeze({
@@ -54,6 +56,19 @@ export function nachtDatum(d) {
   const x = new Date(d.getTime());
   if (x.getHours() < 12) x.setDate(x.getDate() - 1);
   return datumVan(x);
+}
+/**
+ * De nacht waar "vandaag niet" voor geldt: zit `d` in het venster, dan deze
+ * nacht; anders de eerstvolgende keer dat het venster opent. Om 10:00 op 17
+ * okt (venster 01:00–07:00) is dat de nacht van 17 op 18 okt (nachtDatum
+ * 17 okt), niet de nacht die net voorbij is (`nachtDatum(10:00)` = 16 okt).
+ */
+export function komendeNacht(d, venster = STANDAARD.venster) {
+  if (inVenster(d, venster)) return nachtDatum(d);
+  const [u, m] = venster.van.split(':').map(Number);
+  let t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), u, m);
+  if (t <= d) t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, u, m);
+  return nachtDatum(t);
 }
 const isDatum = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
 const isTijd = (s) => typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -152,14 +167,15 @@ export class Nacht {
   /** POST /api/nacht: gedeeltelijk. Gooit bij een onbruikbare waarde (de route zegt 400). */
   zet(deel) {
     const n = pasToe(this.instellingen, deel);
-    if ('_vandaagNiet' in n) { n.vandaagNietDatum = n._vandaagNiet ? nachtDatum(this.klok()) : null; delete n._vandaagNiet; }
+    if ('_vandaagNiet' in n) { n.vandaagNietDatum = n._vandaagNiet ? komendeNacht(this.klok(), n.venster) : null; delete n._vandaagNiet; }
     this.instellingen = n;
     this._bewaar();
     this.log?.(`[nacht] instellingen: ${this.instellingen.aan ? 'AAN' : 'uit'}, ${this.instellingen.perNacht} per nacht, ${this.instellingen.venster.van}–${this.instellingen.venster.tot}`);
     return this.stand();
   }
 
-  get vandaagNiet() { return this.instellingen.vandaagNietDatum === nachtDatum(this.klok()); }
+  /** Geldt "vandaag niet" voor de komende nacht? (Een rem voor de nacht die al voorbij is telt niet meer.) */
+  get vandaagNiet() { return this.instellingen.vandaagNietDatum === komendeNacht(this.klok(), this.instellingen.venster); }
 
   /**
    * GET /api/nacht. `vandaag` en `nachtDatum` zijn de datums volgens de klok en

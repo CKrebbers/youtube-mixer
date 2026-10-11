@@ -6,7 +6,7 @@ de mixer.
 
 ## Wat erop staat
 
-1. **Stand**, acht tegels met een lampje:
+1. **Stand**, tegels met een lampje:
    - **Server** draait, met het aantal nummers in de library. Daaronder (6 okt) een regel
      over de secties (`docs/SECTIES.md` §4, `/api/secties`, `src/controle/server-tegel.js`):
      "secties: 12 nog zonder · 3 verouderd", of "secties: alles actueel". *Nog zonder* = er is
@@ -20,6 +20,9 @@ de mixer.
      (oudere server)"; herstarten lost dat op. Een fout van de server (bv. een library.db met
      de v9 van een andere tak, zonder `secties_json`): "secties: onbekend (fout)". Lege
      library: geen regel.
+   - **Opstelling** (10 okt, `docs/STANDEN.md`, `src/controle/stand-tegel.js`): welke stand
+     actief is en sinds wanneer, oranje bij een waarschuwing, rood bij een fout; daaronder wat je
+     zelf nog doet ("krat proefkrat (kies hem in de kaart) · master Dub-worp: mixer volgt nog niet").
    - **Binnenhalen**: yt-dlp en ffmpeg (`/api/tooling`).
    - **Ingest-rij**: hoeveel er bezig is en wacht (`/api/ingest`).
    - **Stems** (3 okt): wat er gesplitst wordt en wacht, de laatste fout, of de
@@ -34,7 +37,11 @@ de mixer.
      APC staat de echo-teller (ROADMAP 2: is hij na een sessie 0, dan mag het
      echofilter voor de APC uit).
    - Daaronder: wat er in de mixer staat (track, bpm, toonsoort, MAAT, auto, opname).
-2. **Openen**: de knop "mixer openen" staat uit zolang er al een mixer open is.
+2. **Openen**: bovenaan de **opstelling** (`docs/STANDEN.md` §5): kiezen, activeren en
+   "vorige terugzetten" (twee klikken), wat activeren verandert, en "bewerk" om een opstelling
+   zonder JSON in te stellen. Zegt de actieve opstelling `hub.mixerVia`, dan opent "mixer openen"
+   de mixer via de hub (`/?hub=ws://localhost:7700/app`). Daaronder:
+   de knop "mixer openen" staat uit zolang er al een mixer open is.
    Zo komen er nooit twee tabbladen op de APC (Chrome-MIDI kan daar van crashen).
    Planvenster en los venster open je vanuit de mixer: die hebben de mixer als
    `opener` nodig.
