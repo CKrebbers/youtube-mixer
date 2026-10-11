@@ -1,4 +1,5 @@
 import { esc } from './dom.js';
+import { spiegelInstelling } from './instellingen-opslag.js';
 
 /**
  * De ingest-strook in het library-paneel: wat er binnengehaald wordt, wat er
@@ -86,6 +87,7 @@ export function leesStemsKeuze(opslag) {
 
 export function bewaarStemsKeuze(opslag, n) {
   try { opslag?.setItem(STEMS_SLEUTEL, String(n)); } catch {}
+  spiegelInstelling(STEMS_SLEUTEL, String(n));   // ook op de server (alleen in een pagina van de server)
 }
 
 /** Een link kort genoeg voor één regel: zonder https://www. */

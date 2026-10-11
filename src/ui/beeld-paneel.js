@@ -2,6 +2,7 @@ import { DECK_IDS } from '../engine/engine.js';
 import { BeeldKoppeling, klemLatentie, ADRES_MAX, LATENTIE_MIN, LATENTIE_MAX } from '../koppel/beeld.js';
 import { beeldStand } from './beeld-weergave.js';
 import { meld } from './meldingen.js';
+import { schrijfInstelling } from './instellingen-opslag.js';
 
 /*
  * De BEELD-rij (docs/BEELD.md): VARVE stuurt de Stroommachine, de
@@ -25,7 +26,8 @@ const AAN = 'varve.beeld.aan';
 const ADRES = 'varve.beeld.adres';
 const LATENTIE = 'varve.beeld.latentie';
 const lees = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
-const schrijf = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+// De instrument-sleutels gaan ook naar de server (instellingen-opslag.js); de rest alleen localStorage.
+const schrijf = schrijfInstelling;
 
 /**
  * Zo vaak de stand opnieuw lezen zolang de zender loopt (ms): een beeld-status

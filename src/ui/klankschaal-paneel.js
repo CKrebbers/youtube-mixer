@@ -1,4 +1,5 @@
 import { meld } from './meldingen.js';
+import { schrijfInstelling } from './instellingen-opslag.js';
 
 /*
  * De KLANKSCHAAL-rij onder de sampler: openen en sluiten (knop in de balk),
@@ -12,7 +13,8 @@ import { meld } from './meldingen.js';
 const OPEN = 'varve.klankschaal.open';
 const INSTELLINGEN = 'varve.klankschaal';
 const lees = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
-const schrijf = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+// De instrument-sleutels gaan ook naar de server (instellingen-opslag.js); de rest alleen localStorage.
+const schrijf = schrijfInstelling;
 
 /** "Bb3" → "B♭3", "F#4" → "F♯4": zoals de toonsoort elders op het scherm. */
 const mooi = (n) => (n || '').replace(/^([A-G])b/, '$1♭').replace('#', '♯');

@@ -219,6 +219,35 @@ console.log('\nde schrijvers van de browser, in Node');
 }
 
 // ==========================================================================
+console.log('\nde plekken in src/ die de sleutels lezen en schrijven');
+{
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const bestanden = (map) => readdirSync(map, { withFileTypes: true }).flatMap((d) =>
+    d.isDirectory() ? bestanden(join(map, d.name)) : d.name.endsWith('.js') ? [join(map, d.name)] : []);
+  const plekken = {};
+  for (const f of bestanden('src')) {
+    const tekst = readFileSync(f, 'utf8');
+    for (const k of INSTELLING_SLEUTELS) if (tekst.includes(`'${k}'`)) (plekken[k] ??= []).push(f);
+  }
+  const zonder = INSTELLING_SLEUTELS.filter((k) => !plekken[k]);
+  ok('elke sleutel heeft een plek in src/ (anders klopt de witte lijst niet meer)', zonder.length === 0, zonder.join(', '));
+  const los = [];
+  for (const [k, fs] of Object.entries(plekken)) for (const f of fs) {
+    if (f.endsWith('instellingen-opslag.js')) continue;
+    const t = readFileSync(f, 'utf8');
+    const aangesloten = /from '\.\/instellingen-opslag\.js'/.test(t) || (f.endsWith('control/midi.js') && /this\.bewaar\(STORE_KEY/.test(t))
+      || (f.endsWith('master-weergave.js') && /OPSLAG/.test(readFileSync('src/ui/master-paneel.js', 'utf8')) && /schrijfInstelling/.test(readFileSync('src/ui/master-paneel.js', 'utf8')));
+    if (!aangesloten) los.push(`${k} in ${f}`);
+  }
+  ok('elke plek is aangesloten (import van instellingen-opslag.js, of de bewaarder van midi.js)', los.length === 0, los.join('; '));
+  ok('midi-opzet geeft de MidiHub schrijfInstelling als bewaarder', /new MidiHub\(\{ bewaar: schrijfInstelling \}\)/.test(readFileSync('src/ui/midi-opzet.js', 'utf8')));
+  const app = readFileSync('src/ui/app.js', 'utf8');
+  ok('app.js haalt de instellingen op vóór de engine en de panelen', app.indexOf('await startInstellingen()') > 0
+    && app.indexOf('await startInstellingen()') < app.indexOf('new Engine(') && app.indexOf('await startInstellingen()') < app.indexOf('opzetMaster('));
+  ok('geen engine-bestand raakt de opslag (regel 1)', bestanden('src/engine').every((f) => !readFileSync(f, 'utf8').includes('instellingen-opslag')));
+}
+
+// ==========================================================================
 console.log('\ntegen de echte server (eigen poort, tijdelijke db)');
 {
   const map = mkdtempSync(join(tmpdir(), 'varve-instellingen-opslag-'));   // niet verwijderd (niets verwijderen)
