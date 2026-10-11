@@ -127,7 +127,8 @@ src/
                     spiegel.js      acht kolommen, focusdeel, acht banen; data-actions uit de mapping
                     vensters.js     de track met focus bovenaan + vensters als model (L/R)
                     tabblad.js      Web Lock 'varve-mixer': maar één tabblad praat met de APC
-                    status-zender.js de stand voor de Controlekamer: BroadcastChannel 'varve-status', alleen het eerste tabblad
+                    status-zender.js de stand voor de Controlekamer: BroadcastChannel 'varve-status', alleen het eerste tabblad;
+                                    met naarServer ook POST /api/mixer (hooguit 1 per 900 ms, nooit wachten) voor de companion
                     apc-kaart.js    apc.html: de APC met knoppen op hun echte plek, klik = uitleg
                     apc-beschrijf.js elke action in gewone taal (de test eist er een voor de hele standaardmapping)
                     soorten.js      soort (kleur) van een action voor beide kaarten; de kleuren in styles.css (.s-*). Puur.
@@ -211,6 +212,7 @@ server/             draait apart: `node server/index.js`
   opname.js         opnames: WAV dat groeit, kop herstellen na een crash
   patronen.js       patronen per set: patronen/<naam>.json met versie (409), .versies (docs/PATRONEN.md)
   proef.js          de speellijst van de Controlekamer: proef/sessie.json, per punt, atomisch; archief per ronde
+  mixer-melding.js  de melding van de mixer voor de companion (POST/GET /api/mixer): isMelding, vanDezeMac, MixerStand (alleen geheugen). Puur.
   handelingen.js    handelingenlogs naast de opnames: stukken op hun plek, lijst, lezen
   stems.js          de stems-rij: Demucs starten (nice), één tegelijk, annuleren, werkmap, nalopen, verhuizen
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
@@ -342,6 +344,7 @@ test/
   kaart-server.test.mjs  kaart en nacht op een eigen server met de nep-yt-dlp: routes, 409 bij een deck (echt Range-verzoek), ingest zonder video, nachtrun, herstart
   companion-lijst.test.mjs, companion-server.test.mjs  de companion: rekenwerk; en tegen eigen servers (Tailscale-Host, wens, kies, haal nu, speeldag)
   regels-companion.test.mjs  de companion volgt zijn hele importboom: geen AudioContext, MIDI, Web Lock; alleen /api
+  mixer-melding.test.mjs, status-zender.test.mjs  stap 2 van de companion: de melding, wie mag schrijven, de stand; de POST van de mixer (900 ms, rust, nooit storen)
   uitzend.test.mjs  uitzenden: doelen (lokaal-slot), profielen stil/beeld, nooit overschrijven of in opnames/, ffmpeg sneller dan echte tijd
                     (VARVE_TEST_ECHTETIJD=1: ook in echte tijd, ~2 min; niet tijdens een speelavond)
   nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf

@@ -21,6 +21,7 @@ import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
 import { Patronen, NAAM as SETNAAM } from './patronen.js';
 import { Proef } from './proef.js';
+import { MixerStand, isMelding, vanDezeMac, MAX_BYTES as MIXER_MAX } from './mixer-melding.js';
 import { Splitter, StemsRij, maakStems, wisStemsBestanden, isAantal, isStemsKeuze, STEMS_STANDAARD } from './stems.js';
 import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, TELLEN_BESTAND, TELLEN_VERSIE } from './tellen.js';
 import { gridUitTellen, vergelijk, meetGrid, VERSIE as KAART_VERSIE } from '../src/engine/tellen.js';
@@ -167,6 +168,8 @@ let laatstGestreamd = 0;
 const SPEELT_MS = 30 * 1000;
 const speeltDeck = () => Date.now() - laatstGestreamd < SPEELT_MS;
 
+/** De laatste melding van de mixer (docs/COMPANION.md stap 2): alleen in het geheugen. */
+const mixer = new MixerStand();
 const nacht = new Nacht({
   pad: process.env.VARVE_NACHT || join(dirname(DB), 'nacht.json'),
   kaart, speeltDeck,
@@ -1621,6 +1624,20 @@ const server = createServer(async (req, res) => {
         return json(res, 200, { rack: lib.zetActiefRack(trackId, Number(rackId)) });
       }
     }
+
+    // ---- de mixer meldt zich (docs/COMPANION.md stap 2) ----------------
+    // Het tabblad met de Web Lock POST hooguit eens per 900 ms zijn stand; iPad en
+    // iPhone lezen hem. Alleen in het geheugen; schrijven alleen vanaf deze Mac.
+    if (pad === '/api/mixer' && req.method === 'POST') {
+      if (!vanDezeMac(req, POORT)) return json(res, 403, { fout: 'alleen de mixer op deze Mac meldt zich' });
+      // Vóór het lezen: een te grote melding komt er niet in (de vorige blijft staan).
+      if (Number(req.headers['content-length']) > MIXER_MAX) return json(res, 413, { fout: `een melding is hooguit ${MIXER_MAX} bytes` });
+      const body = await leesJson(req, MIXER_MAX);
+      if (!isMelding(body)) return json(res, 400, { fout: 'geen melding van de mixer' });
+      mixer.zet(body, Date.now());
+      return json(res, 200, { ok: true });
+    }
+    if (pad === '/api/mixer' && req.method === 'GET') return json(res, 200, { ...mixer.lees(Date.now()), speelt: speeltDeck() });
 
     // ---- de muziekkaart (docs/KAART.md) ---------------------------------
     if (pad.startsWith('/api/kaart') || pad.startsWith('/api/nacht')) {

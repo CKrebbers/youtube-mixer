@@ -7,6 +7,8 @@
 // speeldag) en de speeldag-knop (alleen toevoegen). Een derde server (met een
 // nep-download, NEP_BRON) laat "haal de wenslijst nu op" echt lopen: alleen de
 // wenslijst (alleenWensen, review ronde 1, fix 1) en het 202-pad tot `klaar`.
+// Stap 2: de mixer meldt zich (POST /api/mixer, alleen vanaf deze Mac) en iPad en
+// iPhone lezen het (GET /api/mixer).
 // Draai met: node test/companion-server.test.mjs
 import { mkdtempSync, rmSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,6 +17,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { request } from 'node:http';
 
 const L = await import('../src/companion/companion-lijst.js');
+const { maakStatus } = await import('../src/ui/status-zender.js');
 const { maakNepYtdlp } = await import('./nep-ytdlp.mjs');
 const { schrijfKaart, NUMMERS } = await import('./nep-kaart.mjs');
 const { datumVan, nachtDatum } = await import('../server/nacht.js');
@@ -104,6 +107,78 @@ try {
     (await rauw(zonder, '/companion', { headers: { Host: TS } })).status === 403);
   ok('opstartregel met VARVE_HOSTS: "ook via", geen waarschuwing', met.uit.includes(`ook via  ·  https://${TS}`) && !met.uit.includes('VARVE_HOSTS is leeg'));
   ok('opstartregel zonder: "VARVE_HOSTS is leeg: iPad en iPhone krijgen 403"', zonder.uit.includes('VARVE_HOSTS is leeg: iPad en iPhone krijgen 403'));
+
+  // ---- stap 2: de mixer meldt zich bij de server (docs/COMPANION.md) -------------------
+  console.log('\nde mixer meldt zich (POST /api/mixer), iPad en iPhone lezen (GET /api/mixer)');
+  const leegM = await get('/api/mixer');
+  ok('nog niets gemeld: { leeftijd_ms: null, melding: null, twee: false, speelt: false }', leegM.status === 200 && leegM.j.leeftijd_ms === null
+    && leegM.j.melding === null && leegM.j.twee === false && leegM.j.speelt === false);
+  ok('de companion opent dan de kaart (eersteTab), niet een leeg "nu"', L.eersteTab(null, leegM.j) === 'kaart');
+  const decks = Object.fromEntries('ABCDEFGH'.split('').map((id) => [id, { id, loaded: true, playing: id === 'A', title: `Proef ${id}`,
+    bpm: 124, toon: { camelot: '8A', kort: 'Am' }, position: id === 'A' ? 600 : 0, duration: 3600, rate: 1 }]));
+  const melding = (tab = 'tab-proef-1') => maakStatus({ snap: { focus: 'A', maat: 'A', decks }, midi: null, audio: 'running', tab,
+    eind: { zwart: false, bevroren: true, master: 0.8 } });
+  const m1 = await post('/api/mixer', melding());
+  ok('POST zonder Origin (de mixer op deze Mac, zoals fetch van localhost): 200', m1.status === 200 && m1.j.ok === true);
+  const na1 = await get('/api/mixer');
+  ok(`GET: acht tracks, leeftijd ${na1.j.leeftijd_ms} ms (< 1000), de beeldstand erbij`, na1.j.melding?.tracks?.length === 8 && na1.j.leeftijd_ms < 1000
+    && na1.j.melding.eind.bevroren === true && na1.j.twee === false);
+  const nuH = L.nuHtml(na1.j);
+  // Review ronde 2, fix 1: 600 van 3600 bij rate 1 is precies 3000 s; geeft de server de melding in dezelfde
+  // milliseconde terug (leeftijd 0), dan is het "nog 50:00". Verwacht wat restTekst bij DIE leeftijd geeft.
+  const verwacht = L.restTekst(na1.j.melding.tracks.find((t) => t.id === 'A'), na1.j.leeftijd_ms);
+  ok(`de companion tekent acht rijen, A met "${verwacht}" (leeftijd ${na1.j.leeftijd_ms} ms)`, (nuH.match(/<li class="nu-track/g) || []).length === 8
+    && /^(nog 49:5\d|nog 50:00)$/.test(verwacht ?? '') && nuH.includes(verwacht));
+  ok('en de beeldstand: BEVRIES aan, MASTER 80 %', /BEVRIES<\/b><span>aan/.test(L.beeldHtml(na1.j.melding.eind)) && /80 %/.test(L.beeldHtml(na1.j.melding.eind)));
+  const lijf = JSON.stringify(melding());
+  const ts = await rauw(met, '/api/mixer', { method: 'POST', headers: { Host: TS, 'Content-Type': 'application/json' }, body: lijf });
+  ok(`Host = de ts-naam (de iPhone via tailscale serve): ${ts.status}`, ts.status === 403);
+  const tsO = await rauw(met, '/api/mixer', { method: 'POST', headers: { Host: `localhost:${met.poort}`, Origin: `https://${TS}`, 'Content-Type': 'application/json' }, body: lijf });
+  ok(`localhost met Origin https://<ts-naam>: ${tsO.status}`, tsO.status === 403);
+  const vreemd = await rauw(met, '/api/mixer', { method: 'POST', headers: { Host: `localhost:${met.poort}`, Origin: 'https://evil.example', 'Content-Type': 'application/json' }, body: lijf });
+  ok(`een vreemde Origin: ${vreemd.status}`, vreemd.status === 403);
+  const xff = await rauw(met, '/api/mixer', { method: 'POST', headers: { Host: `localhost:${met.poort}`, 'X-Forwarded-For': '100.64.0.7', 'Content-Type': 'application/json' }, body: lijf });
+  const tul = await rauw(met, '/api/mixer', { method: 'POST', headers: { Host: `localhost:${met.poort}`, 'Tailscale-User-Login': 'clay@example.com', 'Content-Type': 'application/json' }, body: lijf });
+  ok(`met x-forwarded-for (${xff.status}) of tailscale-user-login (${tul.status}): 403`, xff.status === 403 && tul.status === 403);
+  const eigen = await rauw(met, '/api/mixer', { method: 'POST', headers: { Host: `127.0.0.1:${met.poort}`, Origin: `http://127.0.0.1:${met.poort}`, 'Content-Type': 'application/json' }, body: lijf });
+  ok(`127.0.0.1 met zijn eigen Origin (de mixer op 127.0.0.1): ${eigen.status}`, eigen.status === 200);
+  const tekst = await rauw(met, '/api/mixer', { method: 'POST', headers: { Host: `localhost:${met.poort}`, 'Content-Type': 'text/plain' }, body: lijf });
+  ok(`text/plain: ${tekst.status}`, tekst.status === 415);
+  const voorGroot = (await get('/api/mixer')).j.melding;
+  const groot = JSON.stringify({ ...melding('tab-te-groot'), opvulling: 'x'.repeat(17 * 1024) });
+  const g1 = await rauw(met, '/api/mixer', { method: 'POST', headers: { Host: `localhost:${met.poort}`, 'Content-Type': 'application/json',
+    'Content-Length': String(Buffer.byteLength(groot)) }, body: groot });
+  ok(`content-length ${Buffer.byteLength(groot)} B: ${g1.status} (413), de vorige melding staat er nog`, g1.status === 413
+    && (await get('/api/mixer')).j.melding.tab === voorGroot.tab);
+  const g2 = await new Promise((z) => {   // zonder content-length: in stukken (chunked)
+    const rq = request({ host: '127.0.0.1', port: met.poort, path: '/api/mixer', method: 'POST',
+      headers: { Host: `localhost:${met.poort}`, 'Content-Type': 'application/json', 'Transfer-Encoding': 'chunked' } }, (res) => { res.resume(); res.on('end', () => z(res.statusCode)); });
+    rq.on('error', () => z(0));
+    for (let i = 0; i < groot.length; i += 4096) rq.write(groot.slice(i, i + 4096));
+    rq.end();
+  });
+  ok(`zonder content-length (chunked) 17 kB: geen 200 (${g2}), de vorige melding staat er nog`, g2 !== 200
+    && (await get('/api/mixer')).j.melding.tab === voorGroot.tab);
+  const zonderTracks = await post('/api/mixer', { t: 1, tab: 'tab-proef-1' });
+  ok(`{ t, tab } zonder tracks: ${zonderTracks.status}`, zonderTracks.status === 400);
+  ok('een negende track: 400', (await post('/api/mixer', { ...melding(), tracks: [...melding().tracks, { id: 'I' }] })).status === 400);
+  // Review ronde 2, fix 2: alleen om beurten (1, 2, 1) is "twee mixers"; herladen (de oude stopt, de nieuwe begint) niet.
+  await post('/api/mixer', melding('tab-proef-2'));
+  const naTwee = (await get('/api/mixer')).j;
+  ok('een ander tab-id na de vorige (kan een herladen zijn): nog geen alarm', naTwee.twee === false && !L.nuHtml(naTwee).includes('twee mixers open'));
+  await post('/api/mixer', melding('tab-proef-1'));
+  const omBeurten = (await get('/api/mixer')).j;
+  ok('om beurten: tab-proef-1, -2, -1 → twee: true (de rode regel op de companion)', omBeurten.twee === true
+    && L.nuHtml(omBeurten).includes('twee mixers open'));
+  await wacht(5200);   // iets langer dan TWEE_MS: de eerdere id's verlopen
+  await post('/api/mixer', melding('tab-proef-3'));
+  await post('/api/mixer', melding('tab-proef-4'));
+  await post('/api/mixer', melding('tab-proef-4'));
+  const herladen = (await get('/api/mixer')).j;
+  ok('herladen na 5,2 s stilte: tab-proef-3 één keer, dan alleen -4 → twee: false, geen rode regel', herladen.twee === false
+    && !L.nuHtml(herladen).includes('twee mixers open') && herladen.melding.tab === 'tab-proef-4');
+  const viaTsGet = await rauw(met, '/api/mixer', { headers: { Host: TS } });
+  ok(`GET via de ts-naam (iPhone): ${viaTsGet.status}, met de melding`, viaTsGet.status === 200 && JSON.parse(viaTsGet.body).melding?.tracks?.length === 8);
 
   console.log('\nde kaart zoals de companion hem vraagt');
   const k = await get('/api/kaart');
