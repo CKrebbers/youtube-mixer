@@ -59,8 +59,9 @@ try {
   ok(`GET /api/standen: 200, vier voorbeelden, label Opstelling, actief null`, l.status === 200 && l.j.standen.length === 4 && l.j.label === 'Opstelling' && l.j.actief === null);
   ok('GET /api/standen/actief: { naam: null }', (await get('/api/standen/actief')).j?.naam === null);
   const k = await get('/api/standen/keuzes');
-  ok(`GET /api/standen/keuzes: 8 sjablonen, 8 kratten, hub-sets dj en studio (paden niet), profielen null`, k.status === 200 && k.j.sjablonen.length === 8
-    && k.j.kratten.length === 8 && k.j.hubSets.join() === 'dj,studio' && k.j.profielen === null && k.j.mappingNu === 'standaard');
+  ok(`GET /api/standen/keuzes: 8 sjablonen, 8 kratten, hub-sets dj en studio (paden niet), profielen uit avondpakket/profielen.json (samengevoegd met draagbaar)`, k.status === 200 && k.j.sjablonen.length === 8
+    && k.j.kratten.length === 8 && k.j.hubSets.join() === 'dj,studio' && Array.isArray(k.j.profielen)
+    && ['apc', 'alles', 'maschine', 'laptop'].every((n) => k.j.profielen.includes(n)) && k.j.mappingNu === 'standaard');
   const apc = await get('/api/standen/apc');
   ok('GET /api/standen/apc: 200, voorbeeld, met versie', apc.status === 200 && apc.j.bron === 'voorbeeld' && apc.j.stand.titel === 'Avond 1 · APC direct' && /^[0-9a-f]{16}$/.test(apc.j.versie));
   ok('GET /api/standen/bestaatniet: 404', (await get('/api/standen/bestaatniet')).status === 404);
@@ -103,9 +104,9 @@ try {
   ok('… GET /api/standen/actief: laptop', (await get('/api/standen/actief')).j.naam === 'laptop');
   ok('… GET /api/standen: actief laptop', (await get('/api/standen')).j.actief?.naam === 'laptop');
   const a2 = await post('/api/standen/apc/activeer');
-  ok(`POST apc/activeer: vannacht niet (${nachtDatum(new Date())}), krat proefkrat leeg (nep-kaart), master voor de mixer, pakket: avondpakket nog niet samengevoegd`,
+  ok(`POST apc/activeer: vannacht niet (${nachtDatum(new Date())}), krat proefkrat leeg (nep-kaart), master voor de mixer, pakket: profiel apc bestaat in het avondpakket (geen waarschuwing)`,
     a2.status === 200 && (await get('/api/nacht')).j.vandaagNiet === true && a2.j.verslag.mixer.includes('master')
-    && a2.j.verslag.waarschuwingen.some((w) => /proefkrat" is leeg/.test(w)) && a2.j.verslag.waarschuwingen.some((w) => /avondpakket nog niet samengevoegd/.test(w)));
+    && a2.j.verslag.waarschuwingen.some((w) => /proefkrat" is leeg/.test(w)) && !a2.j.verslag.waarschuwingen.some((w) => /avondpakket nog niet samengevoegd|profiel "apc" staat niet|profielen\.json niet leesbaar/.test(w)));
   ok('… de mapping bleef staan (apc noemt geen mapping)', (await get('/api/mapping')).j.mapping.rules.length === 1);
   ok('POST onbekend/activeer: 404', (await post('/api/standen/onbekend/activeer')).status === 404);
   ok('GET apc/activeer: 405', (await get('/api/standen/apc/activeer')).status === 405);

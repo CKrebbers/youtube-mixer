@@ -188,6 +188,8 @@ console.log('9. bestanden en instellingen');
   const meer = parseInstellingen(`${W}/src/ui/app.js\n${W}/media/x/audio.wav\n/Users/test/elders/plannen/auto-plan.json\n`, W, [{ map: '/Users/test/elders/plannen', groep: 'instellingen' }]);
   ok('code → code, media → media, een VARVE_*-map buiten de wortel → zijn groep, zonder /Users/',
     meer.map((x) => x.groep).join() === 'code,media,instellingen' && meer[2].pad === 'plannen/auto-plan.json');
+  const st = parseInstellingen(`${W}/standen/apc.json\n${W}/tools/standen/voorbeelden/apc.json\n`, W);
+  ok('standen/ (Clay\'s opstellingen) → instellingen; tools/standen/voorbeelden (in git) → code', st.map((x) => x.groep).join() === 'instellingen,code');
 }
 
 console.log('10. profielen');

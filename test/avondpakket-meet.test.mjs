@@ -306,6 +306,8 @@ try {
     const e = extraPaden({ wortel: '/w', env: { VARVE_PLANNEN: '/elders/plannen', VARVE_PATRONEN: '/w/patronen', VARVE_KAART: '/k/kaart.json' } });
     ok('extraPaden: een VARVE_*-map buiten de wortel wel, erbinnen niet; het kaartbestand erbij', e.length === 2 && e[0].map === '/elders/plannen' && e[1].map === '/k/kaart.json');
     ok('extraPaden zonder VARVE_KAART: het standaardpad', extraPaden({ wortel: '/w', env: {} })[0].map === KAART_STANDAARD);
+    const es = extraPaden({ wortel: '/w', env: { VARVE_STANDEN: '/buiten/standen', VARVE_KAART: '/k/kaart.json' } });
+    ok('extraPaden: VARVE_STANDEN buiten de wortel telt als instellingen (spoor standen)', es.length === 2 && es[0].map === '/buiten/standen' && es[0].groep === 'instellingen');
     const { STANDAARD_PAD } = await import('../server/kaart.js');
     ok('KAART_STANDAARD = STANDAARD_PAD uit server/kaart.js', KAART_STANDAARD === STANDAARD_PAD);
   }

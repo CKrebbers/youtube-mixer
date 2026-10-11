@@ -35,9 +35,11 @@ const STANDAARD_VIRTUEEL = 'blackhole|soundflower|loopback';
 /**
  * Mappen in de projectwortel waarvan een uitgeplaatst bestand onderweg een dode set betekent.
  * Ook `avondpakket/`: profielen.json is Clay's eigen instelling, en de route leest hem bij
- * elk verzoek (review 2, fix 5).
+ * elk verzoek (review 2, fix 5). Ook `standen/` (spoor standen, docs/STANDEN.md): Clay's
+ * eigen opstellingen; een uitgeplaatste stand laat de server na 2 s 503 geven, dus de
+ * controle vóór vertrek moet hem zien (integratie 11 okt, verzoek van spoor standen).
  */
-export const INSTELLINGEN_MAPPEN = ['mappings', 'racks', 'patronen', 'plannen', 'Input', 'proef', 'avondpakket'];
+export const INSTELLINGEN_MAPPEN = ['mappings', 'racks', 'patronen', 'plannen', 'Input', 'proef', 'avondpakket', 'standen'];
 /** Bestanden bovenin media/ die niet zonder kunnen. */
 const KERN_DB = /^(library|kaart)\.db(-wal|-shm)?$/;
 

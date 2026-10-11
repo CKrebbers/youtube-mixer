@@ -458,7 +458,7 @@ export function maakAvondpakket({ paden, profielenPad, backupStand = null, rijen
 export function extraPaden({ wortel, env = process.env, kaart = null }) {
   const w = String(wortel || '').replace(/\/+$/, '');
   const uit = [];
-  for (const k of ['VARVE_PLANNEN', 'VARVE_PATRONEN', 'VARVE_PROEF']) {
+  for (const k of ['VARVE_PLANNEN', 'VARVE_PATRONEN', 'VARVE_PROEF', 'VARVE_STANDEN']) {
     const p = env[k];
     if (!p) continue;
     const rel = relative(w, p);

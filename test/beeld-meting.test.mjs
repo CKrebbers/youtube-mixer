@@ -230,7 +230,8 @@ console.log('\nde omgeving van de proefserver (review 10 okt, punt 7)');
   ok('geen extra hosts, geen heranalyse, de nep-yt-dlp, de poort; de rest van de omgeving blijft', e.VARVE_HOSTS === '' && e.VARVE_HERANALYSE === 'uit'
     && e.VARVE_YTDLP.endsWith('/nep/yt-dlp') && e.PORT === '8801' && e.HOME === '/Users/c');
   // Elke VARVE_-variabele die de server leest, is een pad in PROEF_PADEN of staat hieronder als geen pad.
-  const GEEN_PAD = new Set(['VARVE_BACKUP_ELKE', 'VARVE_UPLOAD_MAX', 'VARVE_HERANALYSE', 'VARVE_HOSTS', 'VARVE_YTDLP']);
+  // VARVE_AVONDPAKKET_NEP (spoor draagbaar) is de fixturemap van de tests: alleen lezen, zet niets op Clay's schijf.
+  const GEEN_PAD = new Set(['VARVE_BACKUP_ELKE', 'VARVE_UPLOAD_MAX', 'VARVE_HERANALYSE', 'VARVE_HOSTS', 'VARVE_YTDLP', 'VARVE_AVONDPAKKET_NEP']);
   const gelezen = new Set();
   for (const f of readdirSync(new URL('../server/', import.meta.url)).filter((x) => x.endsWith('.js'))) {
     for (const [, k] of bron(`server/${f}`).matchAll(/process\.env\.(VARVE_[A-Z_]+)/g)) gelezen.add(k);

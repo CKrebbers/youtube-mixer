@@ -117,7 +117,7 @@ hub-lease is nog nooit op de hardware geproefd).
 | punt | groen | oranje | rood |
 |---|---|---|---|
 | media lokaal | > 0 bestanden, niets uitgeplaatst (met server: niet minder dan de library verwacht) | alleen buiten de nummers (`backups/`) uitgeplaatst; minder bestanden dan verwacht | iets in `<id>/` of `library.db`/`kaart.db` uitgeplaatst: "open in de Finder, klik het wolkje, thuis" (leeg/ontbreekt = grijs) |
-| instellingen lokaal | niets uitgeplaatst | code uitgeplaatst | `mappings/`, `racks/`, `patronen/`, `plannen/`, `Input/`, `proef/`, `avondpakket/` ("zonder internet geen profielen") of het kaartbestand uitgeplaatst |
+| instellingen lokaal | niets uitgeplaatst | code uitgeplaatst | `mappings/`, `racks/`, `patronen/`, `plannen/`, `Input/`, `proef/`, `avondpakket/` ("zonder internet geen profielen"), `standen/` (Clay's opstellingen, of `VARVE_STANDEN` buiten de wortel; integratie 11 okt) of het kaartbestand uitgeplaatst |
 | fase (alleen `auto`) | — | USB en geluid allebei niet gemeten: "kies vertrek of aankomst" | — |
 | iCloud | optimaliseren uit, of aan met ≥ 50 GiB vrij | aan en < 50 GiB vrij | — |
 | schijf | ≥ 50 GiB | 20-50 GiB | < 20 GiB |
