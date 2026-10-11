@@ -137,6 +137,7 @@ src/
                     kaart-panel.js  de tab kaart in het library-paneel: zoeken, kratten, haal binnen/zoek, wenslijst, nachtwachtrij (docs/LIBRARY.md "De kaart-tab")
                     hotcue-opslag.js hotcues per nummer bewaren: welk nummer op welke track, één verzoek tegelijk
                     mapping-opslag.js je eigen mapping als verschil: standaard ophalen, omzetten, bewaren, herstellen
+                    instellingen-opslag.js de zeven instrument-sleutels (master-rack, klankschaal, poorten, beeld, stems, koptelefoon, vormen) ook op de server: /api/instellingen, server eerst (docs/LIBRARY.md)
                     ingest-strook.js de ingest-wachtrij in het library-paneel: plakken, voortgang, ×, laadknoppen
                     logboek.js      ○ log en ↺ naast de opname: vastleggen, vergelijken, lijst, terugspelen
                     klankschaal-paneel.js de KLANKSCHAAL-rij: openen, instellingen bewaren, per frame tonen
@@ -240,6 +241,7 @@ test/
   midi.test.mjs     parsen, poortkeuze op naam, echodetectie
   library.test.mjs  database, effect-racks per link, cascade bij verwijderen, migraties (SCHEMA.length)
   backup.test.mjs   backups: geldige kopie uit de WAL, niet dubbel, opruimen, mislukken, niet via HTTP
+  instellingen-server.test.mjs / instellingen-opslag.test.mjs  de zeven browser-sleutels: route en witte lijst; server eerst, eenmalig omhoog
   library-lijst.test.mjs  virtuele lijst, pagina-cache (ook de race bij een nieuwe sortering), kolommen
   kaart-lijst.test.mjs  de tab kaart als rekenwerk, en de nep-server (tools/headless/kaart-nep.mjs) tegen het contract van de kaart-API
   ingest.test.mjs   pipeline zonder netwerk; ffmpeg maakt zijn eigen testmateriaal
