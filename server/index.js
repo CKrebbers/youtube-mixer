@@ -192,6 +192,25 @@ const json = (res, code, data) => {
 };
 
 /**
+ * JSON met een ETag (sha1 van de body, 16 tekens), en 304 zonder body als de
+ * vrager die ETag al heeft (If-None-Match, ook `W/"…"`, een lijst of `*`).
+ * Voor wat een ander apparaat vaak peilt en zelden verandert: de lichte
+ * wenslijst die de companion elke 5 s vraagt (docs/COMPANION.md). Een gewone
+ * GET zonder If-None-Match krijgt precies wat `json` geeft, plus de ETag.
+ */
+const jsonMetEtag = (req, res, data) => {
+  const body = JSON.stringify(data);
+  const etag = `"${createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
+  const vraag = String(req.headers['if-none-match'] ?? '');
+  if (vraag && vraag.split(',').some((e) => { const x = e.trim().replace(/^W\//, ''); return x === etag || x === '*'; })) {
+    res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-store', ...ISOLATIE });
+    return res.end();
+  }
+  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ETag: etag, ...ISOLATIE });
+  res.end(body);
+};
+
+/**
  * Een JSON-body. De pakketten worden als BYTES verzameld en pas aan het eind
  * één keer gedecodeerd: `data += d` decodeerde elk pakket los, en een
  * UTF-8-teken dat over een pakketgrens viel werd dan twee keer U+FFFD (een
@@ -854,7 +873,7 @@ async function heranalyseOpAchtergrond() {
  * Wat de browser mag ophalen. Een witte lijst in plaats van "alles in de
  * projectmap": anders kon /.git/config of /media/library.db gewoon mee.
  */
-const MAG = [/^\/$/, /^\/(index|video|apc|maschine|plan|controle)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
+const MAG = [/^\/$/, /^\/(index|video|apc|maschine|plan|controle)\.html$/, /^\/companion\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
   /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin|stems\.wav)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
   /^\/plannen\/[\w-]+\.json$/, /^\/favicon\.ico$/];
 
@@ -1540,7 +1559,7 @@ const server = createServer(async (req, res) => {
 
     if (pad.startsWith('/api/')) return json(res, 404, { fout: 'onbekend eindpunt' });
 
-    await statisch(req, res, pad === '/' ? 'index.html' : pad === '/controle' ? 'controle.html' : pad);
+    await statisch(req, res, pad === '/' ? 'index.html' : pad === '/controle' ? 'controle.html' : pad === '/companion' ? 'companion.html' : pad);
   } catch (err) {
     // Eén kapot verzoek mag de server niet meenemen.
     try { json(res, 500, { fout: String(err?.message || err) }); } catch {}
@@ -1571,7 +1590,11 @@ async function kaartRoute(req, res, url, padRuw) {
       }));
     }
 
-    if (pad === '/api/kaart/wensen' && req.method === 'GET') return json(res, 200, { wensen: kaart.wensen() });
+    if (pad === '/api/kaart/wensen' && req.method === 'GET') {
+      // ?licht=1 (de companion, elke 5 s): met ETag, en 304 zolang er niets veranderde (review ronde 2, fix 4).
+      if (url.searchParams.get('licht') === '1') return jsonMetEtag(req, res, { wensen: kaart.wensen({ licht: true }) });
+      return json(res, 200, { wensen: kaart.wensen() });
+    }
 
     if (pad === '/api/kaart/wens' && req.method === 'POST') {
       const body = await leesJson(req, 256 * 1024);
@@ -1625,7 +1648,8 @@ async function kaartRoute(req, res, url, padRuw) {
     if (pad === '/api/nacht/nu' && req.method === 'POST') {
       const body = await leesJson(req);
       try {
-        const run = nacht.nu({ aantal: body?.aantal ?? 1 });
+        // alleenWensen (de companion): alleen de wenslijst, nooit de standaardvolgorde (docs/KAART.md §3).
+        const run = nacht.nu({ aantal: body?.aantal ?? 1, alleenWensen: body?.alleenWensen ?? false });
         // Niet wachten tot hij af is (dat kan uren duren): de stand, met bezig.
         run.catch(() => {});
         return json(res, 202, nacht.stand());
@@ -1705,6 +1729,8 @@ await herstelStemsRij().catch((err) => console.error('[stems] de rij van voor de
 server.listen(POORT, '127.0.0.1', () => {
   console.log(`VARVE DJ  ·  http://localhost:${POORT}`);
   for (const naam of EXTRA_HOSTS) console.log(`ook via  ·  https://${naam}  (Tailscale, docs/TAILSCALE.md)`);
+  // Zonder VARVE_HOSTS krijgen iPad en iPhone (Tailscale) een 403: zeg dat hier, anders zie je het pas op de telefoon.
+  if (!EXTRA_HOSTS.size) console.log('alleen op deze Mac  ·  VARVE_HOSTS is leeg: iPad en iPhone krijgen 403 (docs/COMPANION.md)');
   console.log(`library: ${lib.aantalTracks()} nummers  ·  schema v${lib.versie}`);
   console.log(`yt-dlp ${tooling.ytdlp}  ·  ffmpeg ${tooling.ffmpeg ? 'ok' : 'ONTBREEKT'}`);
   // Meteen een backup (in een worker; gooit nooit), daarna elk uur als er iets veranderde.

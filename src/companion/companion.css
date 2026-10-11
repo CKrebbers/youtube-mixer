@@ -1,0 +1,161 @@
+/* De companion (companion.html, docs/COMPANION.md): eerst de telefoon (één kolom,
+   onderbalk met drie tabs; ook de iPad staand, 768), vanaf 900 px twee kolommen (kaart
+   links, nu en beeld rechts en die blijven staan) zonder onderbalk. Tokens als de Controlekamer (src/controle/controle.css).
+   Elk tikdoel minstens 48 × 48. */
+:root{
+  --bg:#07090b; --panel:#10151a; --panel2:#161d24; --line:#232c35;
+  --text:#dfe7ee; --dim:#7b8794; --klein:#8a96a2; --a:#4ad9c4; --b:#c48cff;
+  --warn:#ffbe3c; --red:#ff3b30; --groen:#3ddc84;
+  --balk:60px; --tik:48px; --kop:45px;
+  color-scheme:dark;
+  font:15px/1.45 ui-sans-serif,-apple-system,"Inter",system-ui,sans-serif;
+  -webkit-text-size-adjust:100%;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh;
+  padding-bottom:calc(var(--balk) + env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;touch-action:manipulation}
+:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+
+/* kop */
+.kop{position:sticky;top:0;z-index:3;display:flex;align-items:baseline;gap:10px;
+  padding:calc(10px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
+  background:var(--bg);border-bottom:1px solid var(--line)}
+.brand{font-weight:700;letter-spacing:.14em;font-size:13px}
+.brand b{color:var(--a);font-weight:700}
+.kop-naam{font-size:15px;font-weight:600}
+.verbinding{margin-left:auto;font-size:12px;color:var(--klein);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.verbinding.fout{color:var(--red)}
+
+main{padding:14px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left));display:grid;gap:22px;max-width:1400px;margin:0 auto}
+.paneel{min-width:0}
+/* smal: de wrapper telt niet mee (nu en beeld zijn gewone vakken in main, één tegelijk) */
+.rechts{display:contents}
+h2{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-weight:700}
+.klein{margin:0;font-size:13px;color:var(--klein)}
+
+/* smal: alleen de gekozen tab */
+body[data-tab="nu"] #kaart, body[data-tab="nu"] #beeld,
+body[data-tab="kaart"] #nu, body[data-tab="kaart"] #beeld,
+body[data-tab="beeld"] #nu, body[data-tab="beeld"] #kaart{display:none}
+
+/* knoppen */
+.knop{display:inline-flex;align-items:center;justify-content:center;min-height:var(--tik);min-width:var(--tik);
+  padding:0 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:15px}
+.knop:disabled{opacity:.55;cursor:default}
+.knop.let-op{border-color:var(--warn);color:var(--warn)}
+.knop.wens{border-color:var(--a);color:var(--a)}
+.knop.kies{border-color:var(--b);color:var(--b)}
+
+/* onderbalk */
+.onderbalk{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;background:var(--panel);
+  border-top:1px solid var(--line);padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.onderbalk button{flex:1;min-height:var(--balk);background:none;border:0;color:var(--dim);font-size:15px;letter-spacing:.04em}
+.onderbalk button[aria-current="page"]{color:var(--a);font-weight:600;box-shadow:inset 0 2px 0 var(--a)}
+
+/* nu */
+.nu-regel{margin:0 0 8px;font-size:15px}
+.nu-regel.let-op{color:var(--warn)}
+.nu-regel.rood{color:var(--red);font-weight:600}
+.nu-uitleg{margin:0;font-size:13px;color:var(--klein)}
+.nu-tracks{list-style:none;margin:0;padding:0}
+.nu-tracks.grijs{opacity:.5}
+.nu-track{display:grid;grid-template-columns:22px minmax(0,1fr) auto auto;grid-template-areas:"letter titel speelt rest" "letter klein klein klein";
+  gap:2px 10px;align-items:baseline;padding:10px 0;border-top:1px solid var(--line)}
+.nu-letter{grid-area:letter;font:700 15px ui-monospace,monospace;color:var(--dim)}
+.nu-track.focus .nu-letter{color:var(--a)}
+.nu-titel{grid-area:titel;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--klein)}
+.nu-track.speelt .nu-titel{color:var(--text);font-weight:600}
+.nu-speelt{grid-area:speelt;color:var(--dim)}
+.nu-track.speelt .nu-speelt{color:var(--groen)}
+.nu-rest{grid-area:rest;font:600 17px ui-monospace,monospace;white-space:nowrap}
+.nu-klein{grid-area:klein;font-size:12px;color:var(--klein)}
+.nu-onder{display:flex;flex-wrap:wrap;gap:4px 14px;margin:10px 0 0;font-size:13px;color:var(--klein)}
+.nu-onder.grijs{opacity:.5}
+
+/* beeld */
+.beeld-stand{list-style:none;margin:0 0 10px;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.beeld-stand li{display:grid;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.beeld-stand b{font-size:11px;letter-spacing:.12em;color:var(--dim)}
+.beeld-stand span{font:600 17px ui-monospace,monospace}
+.beeld-stand li.aan{border-color:var(--red)}
+.beeld-stand li.aan span{color:var(--red)}
+.beeld-zin{margin:0;font-size:13px;color:var(--klein)}
+
+/* kaart: wenslijst */
+.wenslijst{display:grid;gap:6px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:14px}
+.wens-kop{margin:0}
+.wens-kop b{font-weight:600}
+.wens-knoppen{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+
+/* kaart: zoeken, kratten, filters */
+.zoekbalk{display:grid;gap:8px;margin-bottom:8px}
+.zoek,.krat{width:100%;min-width:0;min-height:var(--tik);font-size:16px;padding:0 12px;border-radius:8px;border:1px solid var(--line);
+  background:var(--bg);color:var(--text)}
+.krat-rij{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.ster{font-size:20px;padding:0 12px}
+.ster[aria-pressed="true"]{color:var(--warn);border-color:var(--warn)}
+.filters{display:flex;flex-wrap:wrap;gap:8px}
+.kaart-filter{min-height:var(--tik);min-width:var(--tik);padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);
+  color:var(--klein);font-size:14px}
+.kaart-filter.on{border-color:var(--a);color:var(--a)}
+
+/* kaart: de lijst */
+.lijst{list-style:none;margin:0;padding:0}
+.rij{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"tekst stand" "meta stand";gap:2px 12px;
+  align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.rij-tekst{grid-area:tekst;display:grid;min-width:0}
+.rij-titel{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rij-titel small{font-weight:400;color:var(--klein)}
+.rij-artiest{color:var(--klein);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rij-meta{grid-area:meta;display:flex;gap:8px;align-items:baseline;font-size:12px;color:var(--dim)}
+.rij-duur{font-family:ui-monospace,monospace}
+.rij-stand{grid-area:stand;display:flex;justify-content:flex-end}
+.stand{font-size:13px;color:var(--klein);padding:0 4px;white-space:nowrap}
+.stand.binnen{color:var(--groen)}
+.stand.wacht,.stand.bezig,.stand.zoekt{color:var(--a)}
+.stand.mislukt{color:var(--red)}
+.kaart-badge{font-style:normal}
+.kaart-badge.eigen{color:#ff7aa8}
+.kaart-badge.spotify{color:var(--groen)}
+
+/* het kieslijstje (kieslijstHtml uit kaart-lijst.js): hier een blok onder de rij, geen zwevend vak */
+.kaart-kieslijst{grid-column:1 / -1;position:static!important;display:grid;gap:8px;margin-top:8px;padding:10px;border:1px solid var(--b);
+  border-radius:8px;background:var(--panel)}
+.lib-tk-kop{font-size:12px;color:var(--klein)}
+.kaart-kandidaten{display:grid;gap:6px}
+.kaart-kandidaat{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"t d s" "k k k";gap:2px 10px;text-align:left;
+  min-height:var(--tik);padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text)}
+.kaart-kandidaat b{grid-area:t;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kaart-kandidaat span:nth-of-type(1){grid-area:k;font-size:12px;color:var(--klein)}
+.kaart-kandidaat .lib-duur{grid-area:d;font:13px ui-monospace,monospace;color:var(--klein)}
+.kaart-kandidaat .kaart-score{grid-area:s;font:13px ui-monospace,monospace;color:var(--dim)}
+.kaart-kandidaat .kaart-score.zeker{color:var(--groen)}
+.lib-tk-rest{display:flex;justify-content:flex-end}
+.lib-tk-rest .btn{min-height:var(--tik);min-width:var(--tik);border-radius:8px;border:1px solid var(--line);background:var(--panel2);font-size:18px}
+.kaart-leeg{color:var(--klein);font-size:13px}
+.lijst-onder{display:flex;gap:8px;margin-top:12px}
+
+/* meldingen boven de onderbalk */
+.meldingen{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--balk) + env(safe-area-inset-bottom) + 10px);
+  display:grid;gap:6px;z-index:5;width:min(560px, calc(100vw - 32px));pointer-events:none}
+.melding{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:14px}
+.melding.fout{border-color:var(--red);color:#ffb3ad}
+.melding.goed{border-color:var(--a)}
+
+/* breed (iPad liggend, laptop): twee kolommen, alles tegelijk, geen onderbalk. Rechts (nu en beeld)
+   blijft onder de kop staan als de kaart scrolt (sticky); te lang = zelf scrollen. */
+@media (min-width:900px){
+  body{padding-bottom:0}
+  .onderbalk{display:none}
+  main{grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-template-areas:"kaart rechts";align-items:start;column-gap:28px}
+  body[data-tab] #kaart{display:block;grid-area:kaart}
+  .rechts{display:grid;gap:22px;align-content:start;grid-area:rechts;align-self:start;position:sticky;
+    top:calc(var(--kop) + env(safe-area-inset-top) + 14px);max-height:calc(100vh - var(--kop) - env(safe-area-inset-top) - 28px);overflow-y:auto}
+  body[data-tab] #nu, body[data-tab] #beeld{display:block}
+  .meldingen{bottom:16px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

@@ -237,6 +237,47 @@ try {
     ok('zonder zoeker: de wens gaat op kies met uitleg, de run loopt door', k6.wens('sp:sp0000000001').status === 'kies' && r6.reden === 'niets meer te halen');
   }
 
+  // ---- alleenWensen: "haal de wenslijst nu op" haalt alleen de wenslijst ------------
+  // (review companion ronde 1, fix 1). De standaardvolgorde staat standaard AAN; een
+  // wens die op `kies` eindigt telt niet als gehaald, dus zonder vlag pakte de run
+  // daarna een nummer van de kaart dat niemand wenste.
+  console.log('\nalleenWensen: haal nu met de companion haalt alleen de wenslijst');
+  {
+    const twijfel = async () => ({ kandidaten: [{ youtube_id: 'twijfelig001', score: 0.6, reden: 'titel klopt' }] });
+    const { nacht: n7, kaart: k7, gehaald: g7 } = maak({ nu: new Date(2026, 9, 12, 15, 0), zoek: twijfel });
+    ok('de standaardvolgorde staat aan (zoals standaard)', n7.stand().standaardVolgorde === true);
+    k7.voegWensen(['sp:sp0000000002']);
+    ok('volgendeItem({ alleenWensen }): eerst de wens',
+      n7.volgendeItem({ alleenWensen: true })?.sleutel === 'sp:sp0000000002');
+    const p7 = n7.nu({ aantal: 1, alleenWensen: true });
+    ok('nu({ alleenWensen: true }) staat in bezig', n7.stand().bezig?.alleenWensen === true && n7.stand().bezig?.soort === 'nu');
+    const r7 = await p7;
+    ok(`met alleenWensen: de wens op kies, niets gehaald ("${r7.reden}")`, r7.reden === 'niets meer te halen' && r7.gehaald === 0
+      && g7.length === 0 && k7.wens('sp:sp0000000002').status === 'kies');
+    ok('... en geen wens met bron nacht (niets van de kaart erbij)', k7.wensen().every((w) => w.bron !== 'nacht'));
+    ok('volgendeItem({ alleenWensen }) zonder wachtende wens: null', n7.volgendeItem({ alleenWensen: true }) === null && n7.volgendeItem() !== null);
+
+    const { nacht: n8, kaart: k8, gehaald: g8 } = maak({ nu: new Date(2026, 9, 12, 15, 0), zoek: twijfel });
+    k8.voegWensen(['sp:sp0000000002']);
+    const r8 = await n8.nu({ aantal: 1 });
+    const vanNacht = k8.wensen().filter((w) => w.bron === 'nacht');
+    ok(`zonder vlag het oude gedrag (de nacht zelf verandert niet): één nummer uit de standaardvolgorde (${vanNacht.map((w) => w.sleutel).join()})`,
+      r8.gehaald === 1 && g8.length === 1 && vanNacht.length === 1 && vanNacht[0].status === 'klaar');
+    const { nacht: n9 } = maak({ nu: new Date(2026, 9, 12, 15, 0) });
+    ok('alleenWensen dat geen boolean is: 400', (() => { try { n9.nu({ aantal: 1, alleenWensen: 'ja' }); return false; } catch (e) { return e.code === 400; } })());
+  }
+
+  // ---- de datums van de server in de stand (fix 9) -----------------------------------
+  console.log('\nvandaag en nachtDatum in de stand, volgens de klok van de server');
+  {
+    const { nacht, zet } = maak({ nu: new Date(2026, 9, 11, 3, 0) });
+    const s1 = nacht.stand();
+    ok(`11 okt 03:00: vandaag ${s1.vandaag}, de nacht van ${s1.nachtDatum}`, s1.vandaag === '2026-10-11' && s1.nachtDatum === '2026-10-10');
+    zet(new Date(2026, 9, 11, 15, 0));
+    const s2 = nacht.stand();
+    ok(`11 okt 15:00: vandaag ${s2.vandaag}, nachtDatum ${s2.nachtDatum}`, s2.vandaag === '2026-10-11' && s2.nachtDatum === '2026-10-11');
+  }
+
   // ---- opslag -----------------------------------------------------------------------
   console.log('\nopslag in nacht.json');
   {
