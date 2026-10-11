@@ -78,7 +78,8 @@ export function controleer({ doel, bron = WORTEL, env = process.env, nu = Date.n
 
   // 2. bij?
   const P = paden(bron, env);
-  if (kopieTel && existsSync(P.db)) {
+  if (kopieTel && P.dbFout) waarschuwingen.push(`niet vergeleken met nu: ${P.dbFout}`);
+  else if (kopieTel && existsSync(P.db)) {
     const nuTel = telLibrary(P.db);
     regels.push(NAMEN.slice(0, 5).map(([k, n]) => `${kopieTel[k]}/${nuTel[k]} ${n}`).join(', ') + ' (kopie/nu)');
     const inKopie = nummersVan(db);

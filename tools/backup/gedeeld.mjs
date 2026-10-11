@@ -5,9 +5,9 @@
 // en zonder variabelen de mappen in de checkout. `bron` is de checkout; standaard
 // die waar dit bestand in staat, met --bron een andere (bv. de echte Bureaublad-map
 // vanuit een worktree, alleen lezen).
-import { existsSync, statSync, lstatSync, readFileSync, readdirSync, openSync, fsyncSync, closeSync } from 'node:fs';
+import { existsSync, statSync, lstatSync, readFileSync, readdirSync, openSync, fsyncSync, closeSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { join, dirname, resolve } from 'node:path';
+import { join, dirname, resolve, basename, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -64,10 +64,74 @@ function kaartPad(db, env) {
   return join(homedir(), 'Desktop', '3. Resources', 'Data', 'Muziekkaart', 'varve-kaart.json');
 }
 
-/** Waar alles staat, zoals de server het ziet. */
+/**
+ * Het echte pad (symlinks opgelost), ook als het (nog) niet bestaat: de
+ * dichtstbijzijnde map die wel bestaat gaat door realpathSync, de rest komt
+ * erachter. Zoals echtPad() in server/media-plek.js (#29); op macOS is /tmp
+ * bijvoorbeeld /private/tmp.
+ */
+export function echtPad(pad) {
+  let p = resolve(pad);
+  const rest = [];
+  for (;;) {
+    try { return join(realpathSync(p), ...rest.reverse()); } catch (_) { /* hoger kijken */ }
+    const boven = dirname(p);
+    if (boven === p) return resolve(pad);
+    rest.push(basename(p));
+    p = boven;
+  }
+}
+
+/** Ligt `pad` in `map` (of is het `map` zelf)? Op de echte paden: een symlink of alias telt mee. */
+export function ligtIn(pad, map) {
+  const a = echtPad(pad), m = echtPad(map);
+  return a === m || a.startsWith(m.endsWith(sep) ? m : m + sep);
+}
+
+/** Het pad uit <bron>/media-VERHUISD.txt (de regel VARVE_MEDIA=…), of null. Zoals verhuisdNaar() in #29. */
+export function verhuisdNaar(bron) {
+  let tekst;
+  try { tekst = readFileSync(join(bron, 'media-VERHUISD.txt'), 'utf8'); } catch (_) { return null; }
+  const m = /^\s*(?:export\s+)?VARVE_MEDIA=("?)(\/[^"\n]+)\1\s*$/m.exec(tekst);
+  return m ? m[2].trim() : null;
+}
+
+/**
+ * De mediamap zoals de server hem kiest (kiesMedia() in #29): VARVE_MEDIA, anders
+ * <bron>/media, en als die er niet meer is (VI2 hernoemde hem) het pad uit
+ * media-VERHUISD.txt. Een testserver (VARVE_TESTSERVER=1) volgt het briefje nooit.
+ */
+function kiesMedia(bron, env) {
+  if (env.VARVE_MEDIA) return env.VARVE_MEDIA;
+  const standaard = join(bron, 'media');
+  if (env.VARVE_TESTSERVER !== '1' && !existsSync(standaard)) return verhuisdNaar(bron) || standaard;
+  return standaard;
+}
+
+/**
+ * Welke library.db de server gebruikt. VARVE_DB wint altijd. Anders zijn er twee
+ * plekken: <media>/library.db (de server na #29) en <bron>/media/library.db (de
+ * server tot dan). Zijn dat twee verschillende bestanden die allebei bestaan, dan
+ * kiezen we NIET stil (dan kopieert en controleert hij misschien een andere
+ * library dan de server gebruikt): `fout` zegt het. Geeft { db, fout }.
+ */
+function kiesDb(bron, media, env) {
+  if (env.VARVE_DB) return { db: env.VARVE_DB, fout: null };
+  const nieuw = join(media, 'library.db');
+  const oud = join(bron, 'media', 'library.db');
+  if (echtPad(nieuw) === echtPad(oud)) return { db: nieuw, fout: null };
+  const er = [nieuw, oud].filter((p) => existsSync(p));
+  if (er.length === 2) {
+    return { db: nieuw, fout: `twee libraries: ${nieuw} en ${oud}. Welke de server gebruikt hangt af van zijn versie; zet VARVE_DB op de goede` };
+  }
+  return { db: er[0] ?? nieuw, fout: null };
+}
+
+/** Waar alles staat, zoals de server het ziet. `dbFout` is gezet als de library niet eenduidig is. */
 export function paden(bron = WORTEL, env = process.env) {
   bron = resolve(bron);
-  const db = env.VARVE_DB || join(bron, 'media', 'library.db');
+  const media = kiesMedia(bron, env);
+  const { db, fout: dbFout } = kiesDb(bron, media, env);
   const naast = dirname(db);
   const mappen = {
     patronen: env.VARVE_PATRONEN || join(bron, 'patronen'),
@@ -79,8 +143,8 @@ export function paden(bron = WORTEL, env = process.env) {
     Input: join(bron, 'Input'),
   };
   return {
-    bron, db, mappen,
-    media: env.VARVE_MEDIA || join(bron, 'media'),
+    bron, db, dbFout, mappen,
+    media,
     opnames: env.VARVE_OPNAMES || join(bron, 'opnames'),
     kaartDb: env.VARVE_KAART_DB || join(naast, 'kaart.db'),
     nacht: env.VARVE_NACHT || join(naast, 'nacht.json'),
