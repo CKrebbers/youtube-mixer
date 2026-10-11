@@ -65,7 +65,7 @@ const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 async function startServer(wortel) {
   const s = spawn(process.execPath, [join(wortel, 'server/index.js')], {
     cwd: wortel,
-    env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, `lib-${Date.now()}.db`), VARVE_MEDIA: join(tmp, 'media'),
+    env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, `lib-${Date.now()}.db`), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'),
       VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_HERANALYSE: 'uit' },
     stdio: 'ignore',
   });

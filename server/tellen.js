@@ -2,6 +2,7 @@ import { readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run, GEANNULEERD } from './ingest.js';
+import { isTestserver } from './media-plek.js';
 import { STANDAARD_PY, NICE, redenUit } from './stems.js';
 
 /**
@@ -37,14 +38,16 @@ export const TELLEN_HULP = '~/.varve/stems-venv/bin/pip install beat-this==1.1.0
  *   krijgt dezelfde argumenten als tellen.py.
  * - VARVE_TELLEN_PY, anders VARVE_STEMS_PY: die Python (de venv van de stems).
  * - anders ~/.varve/stems-venv/bin/python.
- * Een testserver (VARVE_MEDIA gezet) zonder een van deze zoekt geen tellen.
+ * Een testserver (VARVE_TESTSERVER=1) zonder een van deze zoekt geen tellen.
+ * VARVE_MEDIA alleen is GEEN testserver: dat is Clay's mediamap buiten iCloud
+ * (VI2, docs/LIBRARY.md "Waar media/ staat"); daar blijven de tellen aan.
  */
 export function tellenCommando(env = process.env) {
   if (env.VARVE_TELLEN_CMD) return { cmd: env.VARVE_TELLEN_CMD, args: [], commando: env.VARVE_TELLEN_CMD };
   const py = env.VARVE_TELLEN_PY || env.VARVE_STEMS_PY;
   if (py) return { cmd: py, args: [TELLEN_PY], python: py };
-  if (env.VARVE_MEDIA) {
-    return { uit: 'uit op een testserver (VARVE_MEDIA is gezet): zet VARVE_TELLEN_CMD (nep) of VARVE_TELLEN_PY (echte Beat This!)' };
+  if (isTestserver(env)) {
+    return { uit: 'uit op een testserver (VARVE_TESTSERVER=1): zet VARVE_TELLEN_CMD (nep) of VARVE_TELLEN_PY (echte Beat This!)' };
   }
   return { cmd: STANDAARD_PY, args: [TELLEN_PY], python: STANDAARD_PY };
 }

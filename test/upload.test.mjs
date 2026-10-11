@@ -31,7 +31,7 @@ const teGroot = join(map, 'tegroot.mp4');
 const poort = 20000 + Math.floor(Math.random() * 20000);
 const server = spawn(process.execPath, ['server/index.js'], {
   env: { ...process.env, PORT: String(poort), VARVE_DB: join(map, 'test.db'), VARVE_OPNAMES: join(map, 'opnames'),
-    VARVE_MEDIA: media, VARVE_HERANALYSE: 'uit', VARVE_UPLOAD_MAX: String(MAX) },
+    VARVE_TESTSERVER: '1', VARVE_MEDIA: media, VARVE_HERANALYSE: 'uit', VARVE_UPLOAD_MAX: String(MAX) },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 const B = `http://localhost:${poort}`;

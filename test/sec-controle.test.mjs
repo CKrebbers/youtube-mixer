@@ -225,7 +225,7 @@ await blok('de route', async () => {
   { const lib = new Library(db); vul(lib); lib.sluit(); }
   const poort = 20000 + Math.floor(Math.random() * 20000);
   const server = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_MEDIA: join(map, 'media'), VARVE_OPNAMES: join(map, 'opnames'),
+    env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_TESTSERVER: '1', VARVE_MEDIA: join(map, 'media'), VARVE_OPNAMES: join(map, 'opnames'),
       VARVE_PLANNEN: join(map, 'plannen'), VARVE_PATRONEN: join(map, 'patronen'), VARVE_PROEF: join(map, 'proef'), VARVE_HERANALYSE: 'uit' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

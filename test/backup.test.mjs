@@ -233,7 +233,7 @@ try {
   const start = (extra = {}) => {
     const poort = 20000 + Math.floor(Math.random() * 20000);
     const p = spawn(process.execPath, ['server/index.js'], {
-      env: { ...process.env, PORT: String(poort), VARVE_DB: sdb, VARVE_MEDIA: media, VARVE_OPNAMES: join(smap, 'opnames'),
+      env: { ...process.env, PORT: String(poort), VARVE_DB: sdb, VARVE_TESTSERVER: '1', VARVE_MEDIA: media, VARVE_OPNAMES: join(smap, 'opnames'),
         VARVE_HERANALYSE: 'uit', VARVE_PLANNEN: join(smap, 'plannen'), VARVE_PROEF: join(smap, 'proef'),
         VARVE_BACKUP_ELKE: '200', ...extra },
       stdio: ['ignore', 'pipe', 'pipe'],

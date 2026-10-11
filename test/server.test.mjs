@@ -87,7 +87,7 @@ const poort = 20000 + Math.floor(Math.random() * 20000);
 const server = spawn(process.execPath, ['server/index.js'], {
   // Zonder achtergrondanalyse: die meet test/gridauto.test.mjs apart; hier
   // zou hij door de tap-tests heen lopen.
-  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_MEDIA: media,
+  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_TESTSERVER: '1', VARVE_MEDIA: media,
     VARVE_HERANALYSE: 'uit', VARVE_PLANNEN: join(map, 'plannen'), VARVE_PROEF: join(map, 'proef'),
     VARVE_HOSTS: 'varve.proef-net.ts.net, https://fout.ts.net' },
   stdio: ['ignore', 'pipe', 'pipe'],

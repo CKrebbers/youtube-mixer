@@ -553,7 +553,7 @@ console.log('\nde server');
   const map = mkdtempSync(join(tmpdir(), 'varve-patronen-srv-'));
   const poort = 20000 + Math.floor(Math.random() * 20000);
   const server = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, PORT: String(poort), VARVE_DB: join(map, 'lib.db'), VARVE_OPNAMES: join(map, 'opnames'), VARVE_MEDIA: join(map, 'media'),
+    env: { ...process.env, PORT: String(poort), VARVE_DB: join(map, 'lib.db'), VARVE_OPNAMES: join(map, 'opnames'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(map, 'media'),
       VARVE_HERANALYSE: 'uit', VARVE_PLANNEN: join(map, 'plannen'), VARVE_PROEF: join(map, 'proef'), VARVE_PATRONEN: join(map, 'patronen') },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

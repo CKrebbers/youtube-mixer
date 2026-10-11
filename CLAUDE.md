@@ -832,7 +832,7 @@ docs/
     in een werkmap (`media/.bezig-*`) en pas bij succes verhuizen, video-id
     gecontroleerd, migraties in een transactie. `VARVE_DB`/`VARVE_OPNAMES`/
     `VARVE_MEDIA` voor tests (een testserver ruimde anders `.bezig-*` op in de
-    echte media/).
+    echte media/), plus `VARVE_TESTSERVER=1` (zie "Waar media/ staat").
   - Server, tweede ronde (d2f6844): de witte lijst kijkt naar het pad NÁ
     decoderen en normaliseren; `%2f`, `%5c`, `..`-segmenten en backslashes
     worden geweigerd (`/src/..%2fmedia%2flibrary.db` gaf 200). Mediatype exact
@@ -1410,7 +1410,7 @@ Volledig in `docs/STEMS.md`. Wat een bouwer niet mag missen:
   na `startDrempel`, nooit setValueCurveAtTime). Bij elke laad alles open: stems
   horen bij het NUMMER. `inst` werkt in beide standen (bij vier: drums + bas +
   overig samen).
-- Een testserver (`VARVE_MEDIA`) splitst alleen met `VARVE_STEMS_CMD` (één
+- Een testserver (`VARVE_TESTSERVER=1`) splitst alleen met `VARVE_STEMS_CMD` (één
   uitvoerbaar bestand: `maakNepStems(map)`) of `VARVE_STEMS_PY`. Na een
   serverwijziging: server herstarten; schema v8 migreert vanzelf.
 - Opnieuw splitsen vervangt `stems.wav`: de ui weigert het zolang een track dat

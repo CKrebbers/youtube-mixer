@@ -5,7 +5,7 @@
 // Chrome. De server start je zelf, met een KOPIE van de library en de
 // nep-yt-dlp, zodat er niets van YouTube komt. Bijvoorbeeld (docs/KAART.md §9):
 //
-//   PORT=8782 VARVE_DB=<map>/media/library.db VARVE_MEDIA=<map>/media \
+//   PORT=8782 VARVE_TESTSERVER=1 VARVE_DB=<map>/media/library.db VARVE_MEDIA=<map>/media \
 //   VARVE_OPNAMES=<map>/opnames VARVE_PATRONEN=<map>/patronen VARVE_PLANNEN=<map>/plannen \
 //   VARVE_PROEF=<map>/proef VARVE_BACKUPS=<map>/backups VARVE_HERANALYSE=uit \
 //   VARVE_YTDLP=<map>/nep-yt-dlp NEP_LOG=<map>/nep.log NEP_BRON=<map>/bron.wav NEP_DUUR=300 \

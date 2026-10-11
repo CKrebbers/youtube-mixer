@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run, GEANNULEERD } from './ingest.js';
+import { isTestserver } from './media-plek.js';
 
 /**
  * Stems: zang en rest (of vier) per nummer, vooraf gerekend, live bediend
@@ -45,16 +46,18 @@ export const NICE = 10;
  *   dezelfde argumenten als splits.py.
  * - VARVE_STEMS_PY: een andere Python met Demucs.
  * - anders ~/.varve/stems-venv/bin/python met server/stems/splits.py.
- * Een TESTSERVER (VARVE_MEDIA gezet) zonder een van beide splitst niet: een
+ * Een TESTSERVER (VARVE_TESTSERVER=1) zonder een van beide splitst niet: een
  * test die iets binnenhaalt zou anders, omdat 2 stems de standaard is, de
  * echte Demucs op zijn testgeluid zetten — seconden GPU, en een werkmap in
- * media/ waar die test niet op rekent. De reden staat erbij.
+ * media/ waar die test niet op rekent. De reden staat erbij. VARVE_MEDIA
+ * alleen is GEEN testserver (tot 11 okt wel): dat is Clay's mediamap buiten
+ * iCloud (VI2), en daar moeten de stems gewoon gemaakt worden.
  */
 export function stemsCommando(env = process.env) {
   if (env.VARVE_STEMS_CMD) return { cmd: env.VARVE_STEMS_CMD, args: [], commando: env.VARVE_STEMS_CMD };
   if (env.VARVE_STEMS_PY) return { cmd: env.VARVE_STEMS_PY, args: [SPLITS_PY], python: env.VARVE_STEMS_PY };
-  if (env.VARVE_MEDIA) {
-    return { uit: 'uit op een testserver (VARVE_MEDIA is gezet): zet VARVE_STEMS_CMD (nep-splitter) of VARVE_STEMS_PY (echte Demucs)' };
+  if (isTestserver(env)) {
+    return { uit: 'uit op een testserver (VARVE_TESTSERVER=1): zet VARVE_STEMS_CMD (nep-splitter) of VARVE_STEMS_PY (echte Demucs)' };
   }
   return { cmd: STANDAARD_PY, args: [SPLITS_PY], python: STANDAARD_PY };
 }

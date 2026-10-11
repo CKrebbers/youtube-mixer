@@ -54,7 +54,7 @@ const nepYtdlp = maakNepYtdlp(tmp);
 const STEMS_CMD = process.env.VARVE_STEMS_CMD || maakNepStems(tmp);
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   cwd: WORTEL,
-  env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
+  env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'),
     VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_HERANALYSE: 'uit', VARVE_YTDLP: nepYtdlp, NEP_BRON: bron,
     NEP_LOG: join(tmp, 'nep.log'), VARVE_STEMS_CMD: STEMS_CMD },
   stdio: 'ignore',
