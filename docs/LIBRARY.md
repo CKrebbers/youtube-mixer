@@ -203,10 +203,6 @@ racks, toonsoorten, sampler-pads en je eigen mapping (tabel `instellingen`).
 Er is geen Time Machine, dus de server maakt zelf kopieën (`server/backup.js`,
 `server/backup-werker.js`).
 
-Sinds 11 okt (B4): de zeven sleutels staan nu in library.db en gaan mee in de
-backup (master-rack, klankschaal, MIDI-poorten, beeld, stems-standaard,
-koptelefoon-wissel, vormen-vlag; zie "De zeven browser-instellingen" hieronder).
-
 ### Wat hij doet
 
 - **Hoe:** `VACUUM INTO` op een eigen, alleen-lezen verbinding in een
@@ -246,6 +242,9 @@ koptelefoon-wissel, vormen-vlag; zie "De zeven browser-instellingen" hieronder).
   `<id>/audio.wav|video.mp4|peaks.bin|onset.bin` door. `GET /api/backups` geeft
   alleen de stand: `{ laatste: { naam, tijd, bytes } | null, aantal, gekeken,
   fout, foutTijd, bezig }`, geen pad (behalve in de tekst van een fout).
+- **Ook de browser-sleutels (B4, 11 okt):** de zeven sleutels staan nu in library.db en
+  gaan mee in de backup (master-rack, klankschaal, MIDI-poorten, beeld, stems-standaard,
+  koptelefoon-wissel, vormen-vlag; zie "De zeven browser-instellingen" hieronder).
 
 ### Gemeten (2 okt, deze container, 4 kernen, rustig)
 
