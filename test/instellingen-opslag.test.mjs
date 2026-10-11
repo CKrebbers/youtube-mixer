@@ -197,6 +197,27 @@ console.log('\nniet aangekomen: de browser wint bij de volgende start');
   ok('geblokkeerde localStorage: start en schrijven gooien niet', goed);
 }
 
+{
+  // De server antwoordde niet bij het opstarten; het master-paneel schrijft zijn standaard-rack weg.
+  const srv = nepServer({ 'varve.master.rack': RACK });
+  srv.stand = 'hangt';
+  const opslag = nepOpslag();   // nieuw Chrome-profiel
+  const meldingen = [];
+  const o = maakInstellingenOpslag({ haal: srv.haal, opslag, wacht: 1, tijdslimiet: 40, meld: (t) => meldingen.push(t) });
+  await o.start();
+  srv.stand = 'ok';             // nu antwoordt hij wel (hij was alleen traag)
+  o.schrijf('varve.master.rack', '{"naam":"Filter"}');
+  o.schrijf('varve.klankschaal', '{}');
+  await wacht(20); await o.klaar();
+  ok('server niet gelezen: niets naar de server, ook als hij later wel antwoordt', srv.puts.length === 0 && srv.db.get('varve.master.rack') === RACK);
+  ok('…wel in de browser, en niet als onverzonden gemarkeerd', opslag.getItem('varve.master.rack') === '{"naam":"Filter"}' && opslag.getItem(ONVERZONDEN) === null);
+  ok('…één melding', meldingen.length === 1 && /niet van de server gelezen/.test(meldingen[0]), JSON.stringify(meldingen));
+  await maakInstellingenOpslag({ haal: srv.haal, opslag }).start();
+  ok('volgende start: het echte rack van de server komt terug (niet overschreven)', opslag.getItem('varve.master.rack') === RACK && srv.db.get('varve.master.rack') === RACK
+    && !srv.puts.some(([k]) => k === 'varve.master.rack'), JSON.stringify([opslag.alles(), srv.puts]));
+  ok('…en wat de server nooit had (klankschaal) gaat dan gewoon één keer omhoog', JSON.stringify(srv.puts) === JSON.stringify([['varve.klankschaal', '{}']]));
+}
+
 // ==========================================================================
 console.log('\nde schrijvers van de browser, in Node');
 {

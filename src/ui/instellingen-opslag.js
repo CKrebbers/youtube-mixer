@@ -19,8 +19,11 @@
  *     "onverzonden" gemarkeerd in deze browser, en wint de browser bij de
  *     volgende start (anders zou een oudere serverwaarde je laatste keuze
  *     overschrijven).
- *   - Is de server er niet bij het opstarten: niets aan de hand, localStorage
- *     is de reserve en alles werkt zoals vóór B4.
+ *   - Is de server er niet bij het opstarten (of antwoordt hij niet binnen
+ *     1,5 s): localStorage is de reserve en alles werkt zoals vóór B4, maar
+ *     deze sessie gaat er niets naar de server (één melding). Zoals bij de
+ *     mapping: anders zou een standaardwaarde uit een lege browser het echte
+ *     master-rack op de server overschrijven.
  *
  * Geen DOM. `haal` (fetch), `opslag` (localStorage) en `meld` komen van buiten;
  * zo is de volgorde server/browser in Node te testen (test/instellingen-opslag.test.mjs).
@@ -64,6 +67,13 @@ export function maakInstellingenOpslag({ haal = null, opslag = null, meld = () =
   const timers = new Map();
   const lopend = new Set();
   let gemeld = false;
+  // Alleen naar de server als hij bij het opstarten gelezen is (de regel van de
+  // mapping): anders weten we niet of de browser nieuwer is. Het master-paneel
+  // schrijft bij de eerste frame zijn rack weg; met een lege browser en een
+  // server die even niet antwoordde, zou dat standaard-rack anders het echte
+  // rack op de server overschrijven.
+  let gelezen = false;
+  let nietGelezenGemeld = false;
 
   const lees = (k) => { try { return opslag?.getItem(k) ?? null; } catch (_) { return null; } };
   const zetLokaal = (k, v) => {
@@ -97,6 +107,13 @@ export function maakInstellingenOpslag({ haal = null, opslag = null, meld = () =
   /** Alleen de server: de plek heeft de browser zelf al geschreven. */
   function spiegel(k, waarde) {
     if (!isInstelling(k) || !haal) return;
+    if (!gelezen) {
+      if (!nietGelezenGemeld) {
+        nietGelezenGemeld = true;
+        meld('instellingen niet van de server gelezen bij het opstarten — deze sessie blijven ze in deze browser (herlaad om ze weer op de server te bewaren)', 'fout');
+      }
+      return;
+    }
     const w = waarde == null ? null : String(waarde);
     if (!timers.has(k) && opServer.has(k) && opServer.get(k) === w) return;   // niets nieuws
     markeer(k, true);
@@ -136,6 +153,7 @@ export function maakInstellingenOpslag({ haal = null, opslag = null, meld = () =
       return verslag;
     }
     verslag.serverBereikbaar = true;
+    gelezen = true;
     const wacht = new Set(onverzonden());
     const omhoog = [];
     for (const k of INSTELLING_SLEUTELS) {
