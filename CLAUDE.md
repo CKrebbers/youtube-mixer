@@ -26,9 +26,14 @@ filters, waveforms, beatgrids, keylock en scratch onmogelijk via de officiële w
 Daarom: **lokale cache**. `yt-dlp` + `ffmpeg` halen media binnen en normaliseren die,
 daarna draait alles op Web Audio en WebGL.
 
-Consequentie: dit is een persoonlijk instrument, geen distributieplatform. Bouw geen
-deelfuncties, geen publieke streaming, geen upload. Als een feature erom vraagt:
-eerst melden, niet stilletjes bouwen.
+Consequentie: dit is een persoonlijk instrument, geen distributieplatform. **Geen
+distributie van de cache**: bouw geen deelfuncties, geen publieke streaming en geen
+upload van de cache naar buiten. Een **uitgang** is geen distributie en mag: een
+bestand, een poort op 127.0.0.1, een export naar je eigen schijf. Eigen opnames en
+renders naar de eigen library mogen ook (de upload-route bestaat al). Dit opent niets
+naar buiten: Varve zelf naar een dienst laten sturen blijft een aparte keuze (U1b,
+`docs/VRAGEN.md`). Als een feature om meer vraagt: eerst melden, niet stilletjes bouwen.
+(VI1, 11 okt.)
 
 ## De drie regels
 
@@ -200,6 +205,7 @@ server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
   ingest.js         yt-dlp (of een eigen bestand) -> ffmpeg -> media/<id>/. Gooit nooit.
   links.js          links netjes maken (TikTok), bron van een nummer, id's, bestandsnamen
+  media-plek.js     waar media/ staat: VARVE_MEDIA, media-VERHUISD.txt, binnen iCloud?, isTestserver (VARVE_TESTSERVER=1)
   library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren), peaks, racks, grid, toonsoort, hotcues, stems.
   backup.js         backups van library.db: wanneer, hoeveel, opruimen; het werk in backup-werker.js (worker)
   avondpakket.js    het avondpakket: parsers (pmset, ioreg, df, system_profiler, tailscale, find), profielen, fase, oordeel. Puur
@@ -228,6 +234,7 @@ server/             draait apart: `node server/index.js`
   uitzend.js        uitzenden stap 1: een UITGANG, geen bron. Volgt de opname die al groeit en duwt hem via ffmpeg naar een LOKAAL doel
                     (bestand, rtmp/udp op 127.0.0.1); slot tegen elke dienst; nog geen route of knop (docs/UITZENDEN.md)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
+                    media-verhuis.mjs (media/ buiten iCloud: --droog, --doe; docs/LIBRARY.md "Waar media/ staat"),
                     lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
                     headless/ (kaart.mjs: de tab kaart op de nep-server kaart-nep.mjs; kaart-echt.mjs: de tab kaart tegen de
                     echte kaart-routes van een server die al draait (kopie van de library, nep-yt-dlp, echte varve-kaart.json); kijk.mjs, apc-klank.mjs, toon.mjs, toon-keten.mjs, library.mjs, kijk-ingest.mjs,
@@ -355,6 +362,7 @@ test/
   uitzend.test.mjs  uitzenden: doelen (lokaal-slot), profielen stil/beeld, nooit overschrijven of in opnames/, ffmpeg sneller dan echte tijd
                     (VARVE_TEST_ECHTETIJD=1: ook in echte tijd, ~2 min; niet tijdens een speelavond)
   nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
+  media-verhuis.test.mjs  media buiten iCloud: iCloud-herkenning, het briefje, droogloop/--doe op een nepmap, VARVE_TESTSERVER-bewaker
   alles.mjs         alle tests in één keer met overzicht
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
@@ -884,7 +892,7 @@ docs/
     in een werkmap (`media/.bezig-*`) en pas bij succes verhuizen, video-id
     gecontroleerd, migraties in een transactie. `VARVE_DB`/`VARVE_OPNAMES`/
     `VARVE_MEDIA` voor tests (een testserver ruimde anders `.bezig-*` op in de
-    echte media/).
+    echte media/), plus `VARVE_TESTSERVER=1` (zie "Waar media/ staat" hieronder).
   - Server, tweede ronde (d2f6844): de witte lijst kijkt naar het pad NÁ
     decoderen en normaliseren; `%2f`, `%5c`, `..`-segmenten en backslashes
     worden geweigerd (`/src/..%2fmedia%2flibrary.db` gaf 200). Mediatype exact
@@ -1475,7 +1483,7 @@ Volledig in `docs/STEMS.md`. Wat een bouwer niet mag missen:
   na `startDrempel`, nooit setValueCurveAtTime). Bij elke laad alles open: stems
   horen bij het NUMMER. `inst` werkt in beide standen (bij vier: drums + bas +
   overig samen).
-- Een testserver (`VARVE_MEDIA`) splitst alleen met `VARVE_STEMS_CMD` (één
+- Een testserver (`VARVE_TESTSERVER=1`) splitst alleen met `VARVE_STEMS_CMD` (één
   uitvoerbaar bestand: `maakNepStems(map)`) of `VARVE_STEMS_PY`. Na een
   serverwijziging: server herstarten; schema v8 migreert vanzelf.
 - Opnieuw splitsen vervangt `stems.wav`: de ui weigert het zolang een track dat
@@ -1799,6 +1807,20 @@ bouwer niet mag missen:
   All = paniek. Read null zonder verbinding (ring en lampje uit). 15 regels erbij, eerder.mjs gedraaid.
 - Een mislukte WebSocket logt Chrome zelf rood in de console (Log-domein); JavaScript kan dat niet
   onderdrukken. Headless-tools tellen dat apart van fouten van onze code.
+
+## Waar media/ staat (11 okt, VI2)
+
+Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag missen:
+- `VARVE_MEDIA` is de mediamap, niets meer. "Dit is een testserver" is ALLEEN `VARVE_TESTSERVER=1`
+  (`isTestserver` in `server/media-plek.js`). Een nieuwe testserver in `test/` of `tools/headless/`
+  zet beide; `test/media-verhuis.test.mjs` faalt anders.
+- `library.db` staat standaard in de mediamap (`join(MEDIA, 'library.db')`), en alles wat naast de
+  database hoort (backups, kaart.db, nacht.json, stems-rij.json) verhuist mee. Paden in de database
+  blijven relatief (`media/<id>/…`, `alsPad`/`opSchijf`): sla nooit een absoluut pad op.
+- Zonder `VARVE_MEDIA` en zonder `<projectmap>/media` volgt de server `media-VERHUISD.txt`
+  (`kiesMedia`); een testserver nooit.
+- Verhuizen gaat met `tools/media-verhuis.mjs` (droog standaard; `--doe` hernoemt alleen, met de
+  server uit). VARVE.app leest `~/.varve/media-pad` en, via de login-shell, `~/.zprofile`.
 
 ## Werkwijze die hier werkt
 

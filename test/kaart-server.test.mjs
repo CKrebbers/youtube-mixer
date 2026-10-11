@@ -44,7 +44,7 @@ await ing.run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavf
 const poort = 20000 + Math.floor(Math.random() * 20000);
 const nepYtdlp = maakNepYtdlp(map);
 const startServer = () => spawn(process.execPath, ['server/index.js'], {
-  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'), VARVE_PLANNEN: join(map, 'plannen'),
+  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_TESTSERVER: '1', VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'), VARVE_PLANNEN: join(map, 'plannen'),
     VARVE_PATRONEN: join(map, 'patronen'), VARVE_PROEF: join(map, 'proef'), VARVE_BACKUPS: join(map, 'backups'), VARVE_HERANALYSE: 'uit',
     VARVE_YTDLP: nepYtdlp, NEP_LOG: log, NEP_BRON: bron, NEP_DUUR: '300', VARVE_KAART: kaartPad },
   stdio: ['ignore', 'pipe', 'pipe'],

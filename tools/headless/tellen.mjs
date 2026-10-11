@@ -43,7 +43,7 @@ function zoekChrome() {
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 let serverUit = '';
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
-  env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
+  env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'),
     VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'),
     VARVE_PROEF: join(tmp, 'proef'), VARVE_HERANALYSE: 'uit', VARVE_TELLEN_CMD: maakNepTellen(tmp) },
   stdio: ['ignore', 'pipe', 'pipe'],

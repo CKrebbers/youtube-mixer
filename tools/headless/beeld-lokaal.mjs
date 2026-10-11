@@ -264,11 +264,12 @@ export const PROEF_PADEN = ['VARVE_DB', 'VARVE_MEDIA', 'VARVE_OPNAMES', 'VARVE_P
  * De omgeving van een proefserver (ook voor zaalbeeld.mjs): ALLES in `tmp`, ook
  * wat de server alleen leest als het gezet is (backups, nacht), zodat een geërfde
  * VARVE_BACKUPS nooit in Clay's echte backupmap schrijft of daar dunt
- * (server/backup.js). Geen extra hosts (VARVE_HOSTS), geen heranalyse, de nep-yt-dlp.
+ * (server/backup.js). Geen extra hosts (VARVE_HOSTS), geen heranalyse, de nep-yt-dlp,
+ * en VARVE_TESTSERVER=1 (VI2: VARVE_MEDIA alleen zet stems en tellen niet meer uit).
  */
 export function proefEnv(tmp, poort, ytdlp, basis = process.env) {
   return {
-    ...basis, PORT: String(poort), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
+    ...basis, PORT: String(poort), VARVE_DB: join(tmp, 'lib.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'),
     VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'),
     VARVE_PROEF: join(tmp, 'proef'), VARVE_KAART: join(tmp, 'geen-kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'),
     VARVE_BACKUPS: join(tmp, 'backups'), VARVE_NACHT: join(tmp, 'nacht.json'), VARVE_UITZEND_UIT: join(tmp, 'uitzend-uit'),

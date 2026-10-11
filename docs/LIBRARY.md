@@ -313,6 +313,43 @@ externe schijf die tijdens een backup wegvalt, en de tegel in een echte browser
 (`tools/headless/controle.mjs` heeft er een check bij, maar is hier niet gedraaid:
 geen Chromium in de container).
 
+## Waar media/ staat (11 oktober 2026, VI2)
+
+`media/` (de nummers, `library.db`, `backups/`, `kaart.db`, `nacht.json`, `stems-rij.json`)
+hoort buiten iCloud: een uitgeplaatst bestand laat de server bij de eerste lezing hangen tot het
+hele bestand binnen is (3,9 GB voor een `stems.wav`; zonder internet nooit), en iCloud is geen
+backup (het synchroniseert ook wissen). Stand 11 okt: 32 GB in de Bureaublad-map, niets
+uitgeplaatst.
+
+- **Welke map** (`server/media-plek.js`, `kiesMedia`): `VARVE_MEDIA`; anders
+  `<projectmap>/media`; is die er niet meer, dan het pad uit `media-VERHUISD.txt` in de projectmap
+  (het briefje dat het verhuistool achterlaat; vangnet, een testserver volgt het nooit).
+- **De library** staat standaard IN die map (`VARVE_DB` verlegt hem nog steeds). Tot 11 okt was
+  dat altijd `<projectmap>/media/library.db`, ook met `VARVE_MEDIA`.
+- **Paden in de database zijn relatief** (`media/<id>/audio.wav`, ook video, peaks, onset en
+  `stems.bestand`): `alsPad()` schrijft ze zo, `opSchijf()` legt ze op `MEDIA`, en de statische
+  route `/media/<id>/…` gaat ook via `opSchijf()`. Verhuizen breekt dus niets. Absoluut in de
+  instellingen staat alleen `kaart_pad` (de muziekkaart, buiten `media/`). Het tool telt het na
+  op de echte database (alleen lezen) en weigert als er een pad niet met `media/` begint.
+- **Bij het starten** logt de server `[media] <map> (waarom); library <pad>`, en een
+  waarschuwing als een van beide binnen iCloud ligt (`~/Library/Mobile Documents`, of `~/Desktop`
+  / `~/Documents` als "Bureaublad- en Documentenmappen" in iCloud aan staat; dat zie je aan
+  `~/Library/Mobile Documents/com~apple~CloudDocs/Desktop`).
+- **Testserver** = `VARVE_TESTSERVER=1` (stems en tellen uit tenzij een nep- of echt commando
+  gezet is). Tot 11 okt las de server dat af aan `VARVE_MEDIA`; met Clay's map buiten iCloud zou
+  zijn eigen server dan geen stems meer maken. Elke testserver in `test/` en `tools/headless/`
+  zet de vlag (`test/media-verhuis.test.mjs` bewaakt dat).
+- **Verhuizen:** `node tools/media-verhuis.mjs` (droogloop: bron, doel, grootte, iCloud, server,
+  paden in de db, backups), dan met de server uit `--doe`: hernoemen naar `~/Varve-media`
+  (zelfde schijf, geen kopie, niets gewist), `media-VERHUISD.txt` waar `media/` stond, en de
+  regels voor `~/.zprofile` en `~/.varve/media-pad`. VARVE.app leest beide (de login-shell leest
+  `.zprofile`; `media-pad` gaat voor). Het plan voor Clay's map: HANDOFF.
+- **Backups buiten de laptop:** `VARVE_BACKUPS` naar een externe SSD, die er nog niet is; tot dan
+  staan de kopieën van `library.db` naast de library en is er van de media zelf geen tweede kopie.
+- **Niet getest:** de verhuizing van de echte map (de rename uit een door iCloud beheerde map),
+  VARVE.app opnieuw gebouwd en echt gestart, `find -flags +dataless` op een echt uitgeplaatst
+  bestand. Niet verhuisd door het tool: `opnames/` (`VARVE_OPNAMES`), `patronen/`, `proef/`.
+
 ## De kaart-tab (10 oktober 2026, tak `studio/kaart-ui`)
 
 De muziekkaart (`~/Projects/muziekkaart`, contract: scratchpad `CONTRACT-KAART.md`)

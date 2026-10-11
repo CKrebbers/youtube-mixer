@@ -38,7 +38,7 @@ function startServer(naam, { hosts = null, extra = {} } = {}) {
   const m = join(map, naam);
   mkdirSync(join(m, 'media'), { recursive: true });
   const poort = 20000 + Math.floor(Math.random() * 20000);
-  const env = { ...process.env, PORT: String(poort), VARVE_DB: join(m, 'media', 'library.db'), VARVE_MEDIA: join(m, 'media'),
+  const env = { ...process.env, PORT: String(poort), VARVE_DB: join(m, 'media', 'library.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(m, 'media'),
     VARVE_OPNAMES: join(m, 'opnames'), VARVE_PLANNEN: join(m, 'plannen'), VARVE_PATRONEN: join(m, 'patronen'),
     VARVE_PROEF: join(m, 'proef'), VARVE_BACKUPS: join(m, 'backups'), VARVE_HERANALYSE: 'uit',
     VARVE_YTDLP: nepYtdlp, NEP_LOG: nepLog, VARVE_KAART: kaartPad, ...extra };

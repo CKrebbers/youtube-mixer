@@ -315,7 +315,7 @@ lib.sluit();
 
 const poort = 20000 + Math.floor(Math.random() * 20000);
 const server = spawn(process.execPath, ['server/index.js'], {
-  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_MEDIA: media,
+  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_TESTSERVER: '1', VARVE_MEDIA: media,
     VARVE_HERANALYSE: '0' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });

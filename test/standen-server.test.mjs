@@ -30,7 +30,7 @@ schrijfKaart(kaartPad);
 
 const poort = 20000 + Math.floor(Math.random() * 20000);
 const startServer = () => spawn(process.execPath, ['server/index.js'], {
-  env: { ...process.env, PORT: String(poort), VARVE_DB: join(media, 'library.db'), VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'),
+  env: { ...process.env, PORT: String(poort), VARVE_DB: join(media, 'library.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'),
     VARVE_PLANNEN: join(map, 'plannen'), VARVE_PATRONEN: join(map, 'patronen'), VARVE_PROEF: join(map, 'proef'), VARVE_BACKUPS: join(map, 'backups'),
     VARVE_HERANALYSE: 'uit', VARVE_YTDLP: maakNepYtdlp(map), VARVE_KAART: kaartPad, VARVE_KAART_DB: join(map, 'kaart.db'),
     VARVE_NACHT: join(map, 'nacht.json'), VARVE_STANDEN: standenMap, VARVE_HUB_SETS: hubSets },

@@ -224,7 +224,7 @@ node tools/avondpakket.mjs [--profiel <naam>] [--vertrek|--aankomst] [--streng] 
 - Draait de server, dan leest de CLI `/api/avondpakket` (met `vers=1`) en zegt hij hetzelfde
   als de tegel. Geen server (of een oudere zonder de route): hij meet zelf, met de backup
   uit de namen in de backupmap, achtergrond en library compleet grijs, en opent
-  `library.db` nooit. Omgeving zoals de server: `VARVE_MEDIA`, `VARVE_DB`, `VARVE_BACKUPS`,
+  `library.db` nooit. Omgeving zoals de server: `VARVE_MEDIA` (anders `media/`, anders `media-VERHUISD.txt`, VI2), `VARVE_DB`, `VARVE_BACKUPS`,
   `VARVE_PLANNEN`/`_PATRONEN`/`_PROEF`, `VARVE_KAART`.
 - Exit: **0** geen rood · **1** oranje, alleen met `--streng` · **2** rood · **3** fout in de
   aanroep (onbekend profiel, ongeldige vlag, server noch mediamap bereikbaar).

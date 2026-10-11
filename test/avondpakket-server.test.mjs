@@ -55,7 +55,7 @@ mkdirSync(nepMap);
 const poort = 20000 + Math.floor(Math.random() * 20000);
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   cwd: WORTEL,
-  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'), VARVE_PLANNEN: join(map, 'plannen'),
+  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_TESTSERVER: '1', VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'), VARVE_PLANNEN: join(map, 'plannen'),
     VARVE_PATRONEN: join(map, 'patronen'), VARVE_PROEF: join(map, 'proef'), VARVE_BACKUPS: join(map, 'backups'), VARVE_KAART: join(WORTEL, 'test/fixtures/varve-kaart.klein.json'),
     VARVE_KAART_DB: join(map, 'kaart.db'), VARVE_NACHT: join(map, 'nacht.json'), VARVE_HERANALYSE: 'uit', VARVE_YTDLP: maakNepYtdlp(map),
     VARVE_AVONDPAKKET_NEP: nepMap },

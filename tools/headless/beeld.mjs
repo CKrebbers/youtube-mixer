@@ -240,7 +240,7 @@ try {
   for (const p of [POORT, DEBUG, RELAY, LEEG]) if (await poortBezet(p)) throw new Error(`poort ${p} is al bezet (zie de omgevingsvariabelen bovenin)`);
   await new Promise((r) => relayServer.listen(RELAY, '127.0.0.1', r));
   processen.push(spawn(process.execPath, [join(HIER, 'server/index.js')], {
-    env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
+    env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'),
       VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'),
       VARVE_PROEF: join(tmp, 'proef'), VARVE_HERANALYSE: 'uit' },
     stdio: 'ignore',

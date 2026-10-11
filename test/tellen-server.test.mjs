@@ -33,14 +33,16 @@ try {
   // ======================================================================
   console.log('het commando');
   {
-    const c1 = tl.tellenCommando({ VARVE_TELLEN_CMD: '/x/nep', VARVE_STEMS_PY: '/y/python', VARVE_MEDIA: '/m' });
-    const c2 = tl.tellenCommando({ VARVE_STEMS_PY: '/y/python', VARVE_MEDIA: '/m' });
+    const c1 = tl.tellenCommando({ VARVE_TELLEN_CMD: '/x/nep', VARVE_STEMS_PY: '/y/python', VARVE_TESTSERVER: '1' });
+    const c2 = tl.tellenCommando({ VARVE_STEMS_PY: '/y/python', VARVE_TESTSERVER: '1' });
     const c3 = tl.tellenCommando({ VARVE_TELLEN_PY: '/z/python', VARVE_STEMS_PY: '/y/python' });
-    const c4 = tl.tellenCommando({ VARVE_MEDIA: '/m' });
+    const c4 = tl.tellenCommando({ VARVE_TESTSERVER: '1', VARVE_MEDIA: '/m' });
+    const c5 = tl.tellenCommando({ VARVE_MEDIA: '/Users/clay/Varve-media' });
     ok('VARVE_TELLEN_CMD vervangt het hele commando', c1.cmd === '/x/nep' && c1.args.length === 0);
     ok('zonder eigen Python: die van de stems, met server/tellen/tellen.py', c2.cmd === '/y/python' && c2.args[0].endsWith('server/tellen/tellen.py'));
     ok('VARVE_TELLEN_PY gaat voor', c3.cmd === '/z/python');
-    ok('een testserver zonder een van deze: uit, met de reden', !!c4.uit && /VARVE_TELLEN_CMD/.test(c4.uit));
+    ok('een testserver (VARVE_TESTSERVER=1) zonder een van deze: uit, met de reden', !!c4.uit && /VARVE_TELLEN_CMD/.test(c4.uit) && /VARVE_TESTSERVER/.test(c4.uit));
+    ok('alleen VARVE_MEDIA (media buiten iCloud, VI2) is GEEN testserver: de tellen blijven aan', !c5.uit && c5.cmd === tl.tellenCommando({}).cmd);
     const z = new tl.Tellenzoeker({ env: { VARVE_TELLEN_CMD: nepTellen } });
     const c = await z.controleer();
     ok('de controle met de nep-zoeker: klaar', c.ok === true && c.commando === nepTellen);
@@ -179,7 +181,7 @@ try {
   const B = `http://localhost:${poort}`;
   let uit = '';
   server = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'),
+    env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_TESTSERVER: '1', VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'),
       VARVE_PLANNEN: join(map, 'plannen'), VARVE_PROEF: join(map, 'proef'), VARVE_HERANALYSE: '100',
       VARVE_TELLEN_CMD: nepTellen, NEP_TELLEN_LOG: tLog, VARVE_STEMS_CMD: nepStems, NEP_STEMS_LOG: sLog, NEP_STEMS_TRAAG_MS: '120' },
     stdio: ['ignore', 'pipe', 'pipe'],

@@ -378,7 +378,7 @@ const db = join(map, 'test.db');
 }
 const poort = 20000 + Math.floor(Math.random() * 20000);
 const server = spawn(process.execPath, ['server/index.js'], {
-  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_MEDIA: media, VARVE_HERANALYSE: 'uit' },
+  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_TESTSERVER: '1', VARVE_MEDIA: media, VARVE_HERANALYSE: 'uit' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let log = '';

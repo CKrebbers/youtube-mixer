@@ -17,6 +17,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { leesProfielen, beoordeel } from '../server/avondpakket.js';
 import { meet, maakNep, backupUitNamen, extraPaden, voerUit, poortOpen } from '../server/avondpakket-meet.js';
+import { kiesMedia } from '../server/media-plek.js';
 import { wanneer } from '../src/controle/backup-tegel.js';
 
 const HULP = `node tools/avondpakket.mjs [--profiel <naam>] [--vertrek|--aankomst] [--streng] [--json] [--poort <n>]
@@ -103,8 +104,10 @@ async function main() {
   }
   if (!rapport) {
     const env = process.env;
-    const MEDIA = env.VARVE_MEDIA || join(WORTEL, 'media');
-    const DB = env.VARVE_DB || join(WORTEL, 'media', 'library.db');   // zoals server/index.js
+    // Zoals server/index.js (VI2): VARVE_MEDIA, anders media/, anders media-VERHUISD.txt;
+    // de library staat standaard in de mediamap.
+    const MEDIA = kiesMedia({ env, wortel: WORTEL }).map;
+    const DB = env.VARVE_DB || join(MEDIA, 'library.db');
     const BACKUPS = env.VARVE_BACKUPS || join(dirname(DB), 'backups');
     const n = nep ? maakNep(nep) : null;
     const paden = { media: MEDIA, wortel: WORTEL, db: DB, extra: extraPaden({ wortel: WORTEL, env }), ...(n?.paden || {}) };

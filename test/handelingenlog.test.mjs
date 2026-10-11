@@ -758,7 +758,7 @@ try {
     const poort = 20000 + Math.floor(Math.random() * 20000);
     const server = spawn(process.execPath, ['server/index.js'], {
       env: { ...process.env, PORT: String(poort), VARVE_DB: join(tmp, 'test.db'), VARVE_OPNAMES: join(tmp, 'opnames'),
-        VARVE_MEDIA: join(tmp, 'media'), VARVE_HERANALYSE: 'uit' },
+        VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'), VARVE_HERANALYSE: 'uit' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const B = `http://localhost:${poort}`;

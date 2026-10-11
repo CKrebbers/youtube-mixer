@@ -387,7 +387,7 @@ Zo start je die proefserver zelf (de regels staan ook bovenin `kaart-echt.mjs`):
 M=<scratchmap>; mkdir -p $M/media; cp media/library.db* $M/media/     # KOPIE
 printf '#!/bin/sh\nexec node "%s/test/nep-ytdlp.mjs" "$@"\n' "$PWD" > $M/nep-yt-dlp; chmod +x $M/nep-yt-dlp
 ffmpeg -f lavfi -i "aevalsrc='0.8*sin(2*PI*900*t)':s=44100:d=12" -ac 2 $M/bron.wav
-PORT=8782 VARVE_DB=$M/media/library.db VARVE_MEDIA=$M/media VARVE_OPNAMES=$M/opnames \
+PORT=8782 VARVE_TESTSERVER=1 VARVE_DB=$M/media/library.db VARVE_MEDIA=$M/media VARVE_OPNAMES=$M/opnames \
 VARVE_PATRONEN=$M/patronen VARVE_PLANNEN=$M/plannen VARVE_PROEF=$M/proef VARVE_BACKUPS=$M/backups \
 VARVE_HERANALYSE=uit VARVE_YTDLP=$M/nep-yt-dlp NEP_LOG=$M/nep.log NEP_BRON=$M/bron.wav NEP_DUUR=300 \
 VARVE_KAART="$HOME/Desktop/3. Resources/Data/Muziekkaart/varve-kaart.json" node server/index.js

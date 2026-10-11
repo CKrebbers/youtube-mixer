@@ -223,10 +223,12 @@ console.log('\nde CPU-poort: systeem is achtergrond, een ander proces stopt de r
 console.log('\nde omgeving van de proefserver (review 10 okt, punt 7)');
 {
   const clay = { HOME: '/Users/c', VARVE_BACKUPS: '/Users/c/echte-backups', VARVE_NACHT: '/Users/c/nacht.json', VARVE_HOSTS: 'mac.tail1234.ts.net',
-    VARVE_DB: '/Users/c/media/library.db', VARVE_MEDIA: '/Users/c/media', VARVE_KAART: '/Users/c/kaart.json' };
+    VARVE_DB: '/Users/c/media/library.db', VARVE_TESTSERVER: '0', VARVE_MEDIA: '/Users/c/media', VARVE_KAART: '/Users/c/kaart.json' };
   const e = m.proefEnv('/var/T/varve-beeld-lokaal-q', 8801, '/var/T/varve-beeld-lokaal-q/nep/yt-dlp', clay);
   ok('elk pad van de server in de tijdelijke map, ook als Clay\'s omgeving ze zet (backups, nacht, db, media, kaart)',
     m.PROEF_PADEN.every((k) => String(e[k]).startsWith('/var/T/varve-beeld-lokaal-q/')));
+  // VI2: VARVE_MEDIA alleen is geen testserver meer; zonder de vlag startte een proefserver de echte Demucs.
+  ok('VARVE_TESTSERVER=1, ook als Clay\'s omgeving iets anders zegt (stems en tellen uit, VI2)', e.VARVE_TESTSERVER === '1');
   ok('geen extra hosts, geen heranalyse, de nep-yt-dlp, de poort; de rest van de omgeving blijft', e.VARVE_HOSTS === '' && e.VARVE_HERANALYSE === 'uit'
     && e.VARVE_YTDLP.endsWith('/nep/yt-dlp') && e.PORT === '8801' && e.HOME === '/Users/c');
   // Elke VARVE_-variabele die de server leest, is een pad in PROEF_PADEN of staat hieronder als geen pad.
