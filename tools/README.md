@@ -31,6 +31,11 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
 `VARVE.applescript` + `maak.sh`: de Dock-knop die de server start en de Controlekamer opent
 (`~/Applications/VARVE.app`). Een losse macOS-app; draait niet in de mixer.
 
+## backup/
+`kopie.mjs` (de staat van het instrument naar een andere schijf; `--media` ook media en opnames,
+zonder `--delete`), `controleer.mjs`, `herstel.mjs` en `launchd/` (dagelijks 08:00, standaard niet
+geïnstalleerd). Zie `tools/backup/LEESMIJ.md` en `docs/BACKUP.md`.
+
 ## git/
 - `test-index.sh` — test precies wat er in de git-index staat (niet de werkmap): pakt de
   index uit in een tijdelijke map en draait daar alle tests. Handig bij het splitsen van

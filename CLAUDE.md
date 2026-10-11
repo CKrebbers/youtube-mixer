@@ -217,6 +217,7 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden), varve-app/ (de Dock-app VARVE: start de server, opent de Controlekamer) — zie tools/README.md
+                    backup/: kopie.mjs, controleer.mjs, herstel.mjs, launchd/ — de staat buiten de laptop (docs/BACKUP.md)
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
@@ -302,6 +303,7 @@ test/
   nacht.test.mjs    de zes nachtregels één voor één met nepklok, nep-deck en nep-ingest (geen tijd, geen netwerk)
   kaart-server.test.mjs  kaart en nacht op een eigen server met de nep-yt-dlp: routes, 409 bij een deck (echt Range-verzoek), ingest zonder video, nachtrun, herstart
   nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
+  backup-kopie.test.mjs  tools/backup: WAL-rijen in de kopie, manifest, niets weg, --droog, rsync zonder --delete, herstel weigert
   alles.mjs         alle tests in één keer met overzicht
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
@@ -336,6 +338,7 @@ docs/
   BEELD.md          spoor beeld (6 okt): VARVE stuurt de Stroommachine via de relay; instellen, wat er gaat, APC-mapje, problemen, tests
   KAART.md          de muziekkaart in Varve (10 okt): het bestand, de API (+ §3b de afspraken met de UI), de nachtregels, "er speelt een deck",
                     §9 gemeten op het echte bestand, §10 na de proefavond, wat niet getest is
+  BACKUP.md         back-up en herstel van het hele instrument (11 okt): iCloud is geen backup, de WAL-les, set A/B, herstel in acht stappen, launchd
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -1722,6 +1725,8 @@ bouwer niet mag missen:
 - Bij een keuze met gevolgen: benoem de trade-off en kies, wacht niet op goedkeuring.
 - Meld het expliciet als iets een aanname is die verkeerd kan zijn.
 - Geen features bouwen die niet gevraagd zijn, ook niet als ze voor de hand liggen.
+- Niets verwijderen (Clay): geen data, geen takken, geen bestanden van een ander; ordenen door
+  verplaatsen. Een backup wordt nooit met `--delete` gesynchroniseerd (docs/BACKUP.md §5).
 
 ## Beatgrid (23 sep 2026, restpunten 25 sep, docs/BEATGRID.md)
 - Het grid is een TEMPOKAART: stukken {van, bpm, anker, zekerheid?, maat?} in tracktijd; tellen
