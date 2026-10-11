@@ -305,7 +305,8 @@ test/
   alles.mjs         alle tests in één keer met overzicht
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
-  UITWERKING-2026-10-10.md  de visie uitgewerkt in zeven sporen (10 okt): per spoor stand en PR, hoe ze elkaar raken, de volgorde na de proefavond, VRAGEN VI, de niet-lijst
+  UITWERKING-2026-10-10.md  de visie uitgewerkt in zeven sporen (10 okt): per spoor stand en PR, hoe ze elkaar raken, de volgorde na de proefavond, VRAGEN VI, de niet-lijst;
+                    §4b (11 okt) wat de sporen misten: modale klankmodule (pijler 3, av-kern), controllers en hub als drager, back-up en herstel; VI13–VI20
   HANDOFF.md        stand, wat niet getest is, volgende stap
   VRAGEN.md         open vragen voor Clay
   VERBETERINGEN.md  verbeterlijst uit de reviewagenten, in rondes

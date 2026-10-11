@@ -573,3 +573,58 @@ companion in de PR-teksten); dit blok zijn de keuzes die over de sporen heen gaa
   live wisselen van opstelling; bevriezen naar een nieuw nummer met eigen stems; in-app uitzenden. **Advies:
   nu geen; laat de speelproeven van stap 6–8 kiezen.** Mijn verwachting: de beeldhand op de iPad komt het
   eerst (het is 9 % van je acties), daarna bevriezen (de crossover-belofte).
+
+**Aanvulling 11 okt (tweede ronde, §4b): de keuzes van de drie mini-sporen.** De volledige blokken staan
+in de ontwerpen zelf (AK1–AK9 in extra-1, H1–H10 in extra-2, B1–B7 in extra-3); hier wat over de sporen heen
+gaat of een eerdere VI-keuze verandert.
+
+- [ ] **VI13. Is proefavond 1 (10 okt) als DJ-proef op de APC doorgegaan?** 💬 Het enige log van die avond
+  (19:09–19:17, 430 s) is 5.539 handelingen beeld zonder nummer, acht tracks leeg; de speellijst heeft 0
+  vinkjes; de library is sinds 8 okt niet gewijzigd. **Zo ja:** wat ging fout op de APC, in de Scarlett en de
+  kaart; dat verwerken we eerst (stap 0). **Zo nee:** avond 1 opnieuw plannen vóór elke merge; alle PR's
+  blijven "[na de proefavond]", en de hub-middag (VI16) wordt de eerste hardwareproef sinds 23 sep. Dit gaat
+  vóór VI1–VI3.
+- [ ] **VI14. av-kern en 25 okt: A, B of C, en wanneer fase 0?** 🎛💬 A (het Totaalplan: 8 modules, 20
+  scènes) is met 0 uur hardwaretijd sinds 23 sep en Oktoberfest niet eerlijk te beloven; B ("lelijk mag", het
+  vangnet van het plan zelf: Drone + Veld, 5 scènes, 10 min online) kost fase 0 (40 min met de APC, Varve
+  dicht) plus één avond van ~1,5 u; C (parkeren) is de feitelijke stand sinds ~7 okt. **Advies: B, met fase 0
+  op het eerste dagdeel zonder Varve-set (stap 5b), en daarna 06a–c als gedeelde module, niet de AI-laag.**
+  Klein onderhoud nu, zonder hardware: het pad `~/src/av-kern` → `~/Projects/src/av-kern` in vier docs en de
+  td-brug-tak (3 commits, 54 tests groen) naar av-kern `main`.
+- [ ] **VI15. De modale klankmodule (H6): waar woont de kern, en hoe komt hij in Varve?** 💬🎧 (a) **Varve is
+  de bron, av-kern vendort** met `HERKOMST.md` (zoals de vormen, beslissing 4a van 24 sep); het bewijs (de
+  eerste keer horen) komt wel eerst in av-kern. In Varve eerst als **vormbus** op `master.input`, standaard
+  dicht, één schuif "geluid" in de VORM-rij; de isomorfe vorm als **instrument op een track** (strip, cue,
+  patronen, Maschine) als richting B. Grondtoon volgt de maatgever, nooit terug naar een standaardtoon;
+  omstemmen tijdens de klank niet (anders dan KS2: beeld en geluid blijven één). Korrelbuffer = de knip van
+  een sampler-pad. **Advies: zo; stap 1 (puur, geen wiring) mag nu gebouwd worden, wiring pas na een
+  luistertest.**
+- [ ] **VI16. De hub-F0-proef als eigen hub-middag vóór avond 2, met 7a in dezelfde minuut?** 🎛 Overdag,
+  ±80 min, zonder muziek en zonder speaker: `doctor` → F0-proef (26 stappen, V1–V5) → speelapparaten (21,
+  de echte Xboard-CC's) → push → `npm run check -- studio`. Alternatief: aan het begin van avond 2 (dan ≥ 4
+  uur). Avond 2 wordt 2b en begint met `check`; kern 57 min. **Advies: hub-middag.** Dit verfijnt VI5 en
+  VI11; de tien regels voor `AV-app-hub/docs/HARDWARE-AVOND.md` (extra-2 §3.4) alleen met jouw OK.
+- [ ] **VI17. Kernset onderweg: K1 (APC alleen) nu, K2 (APC + Maschine via de hub) als doel?** 💬 LPD8 alleen
+  mee als av-kern meespeelt (na 25 okt; in Varve doet hij drie dingen en vraagt de hub); Xboard thuis (de
+  Maschine-pads geven dezelfde noten 36–51). **Advies: ja.** Dit is het antwoord op VI10; `standen` en
+  `profielen.json` staan al op `apc`.
+- [ ] **VI18. Plekken voor de acties zonder knop, eerst via learn?** 👀🎛 `video.clips` op **Shift +
+  master-knop** (naast zwart; 0 regels daar), `sampler.N.drums` in de **modus sampler rij 4** en op de
+  Maschine **DUPLICATE + pad** (nooit SHIFT + pad: leegmaken), `broadcast.toggle` **nooit op een pad** (stand +
+  iPhone). Standaardmapping pas na de beeld-speelproef (VI7) resp. het crossover-proefblok (CX4). De
+  handenkaart (`docs/HANDEN.md` + A4-afdruk) toont de vrije plekken: Bank, footswitch, 23 shift-vrije knoppen,
+  21 Maschine-knoppen, LPD8 K1/K3/K5–K8. **Advies: ja, learn eerst; kaart als document én afdruk.**
+- [ ] **VI19. Een externe SSD (1 TB) vóór VI2, en de kleine set "staat" ook in een privé GitHub-repo?** 💬👀
+  Gemeten: nul kopieën van de data buiten deze laptop; `cp library.db` mist twee dagen handwerk (de WAL);
+  VACUUM INTO is de enige juiste bron; herstel op een verse worktree werkt in 1 s zodra de bestanden er
+  staan. Set A ~16 MB dagelijks 08:00 via launchd + vóór vertrek; set B ~33 GB `rsync -a` zonder `--delete`
+  vóór elke reis, tegelijk de reiskopie. "Geen cloud" is een geldig antwoord: dan SSD + een stick in de tas.
+  **Advies: SSD + GitHub-privé; VI2 pas ná de SSD.** Morgen zonder code: de handkopie van 10 minuten
+  (extra-3 §8).
+- [ ] **VI20. De zeven Chrome-sleutels naar de library, de muziekkaart-code naar een privé-repo, de
+  Stroommachine-scènes exporteren?** 💬 Master-rack, klankschaal, MIDI-poorten, beeld-adres, stems-standaard,
+  cue-wissel en de vormen-vlag staan alleen in localStorage: een nieuw Chrome-profiel wist ze. Spiegelen
+  zoals de mapping (`/api/instellingen/<sleutel>`, kleine PR, na avond 2) of een exportknop. De
+  muziekkaart (`~/Projects/muziekkaart`) heeft geen remote: `gh repo create muziekkaart --private` (1 min).
+  Stroommachine-scènes staan alleen in de browser van de pc: na elke sessie "Track-scènes als JSON" naar de
+  SSD, tot de zender ze meestuurt. **Advies: alle drie ja; de repo vandaag, de PR na avond 2.**

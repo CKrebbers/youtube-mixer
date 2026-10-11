@@ -1,4 +1,4 @@
-# Uitwerking van de visie: zeven sporen (10 oktober 2026)
+# Uitwerking van de visie: zeven sporen (10 oktober 2026, aangevuld 11 oktober)
 
 *Synthese, geschreven 10 okt 16:40–17:15 door de synthesizer-agent, uit de zeven spoorrapporten
 (`8-spoorrapport.md`), de zeven verdiepingen (`9-verdieping*.md`) en, waar nodig, de definitieve
@@ -8,6 +8,15 @@ uit de verslagen van de agenten en de PR-teksten (door mij nagekeken via `gh pr 
 kopie staat in `scratchpad/uitwerking/SYNTHESE.md`. Eerlijkheidshalve: in deze sessie waren geen
 subagenten beschikbaar (`ListAgents`: geen), dus de synthese is door één agent geschreven; "elkaar
 aansturen" gebeurde vandaag via de bestanden in de spoormappen, niet live.*
+
+> **Tweede ronde, 11 okt 13:00–14:30.** De volledigheidscriticus vond drie gaten; drie mini-sporen hebben ze
+> uitgewerkt (`scratchpad/uitwerking/extra-1/`, `extra-2/`, `extra-3/`). Nieuw in dit document: §4b "Wat de
+> sporen misten" (per mini-spoor het ontwerp in het kort en de plek in de volgorde van §4) en VI13–VI20 in
+> §5. §0–§4 en VI1–VI12 zijn van 10 okt en ongewijzigd gelaten; waar de tweede ronde ze verandert, staat dat
+> in §4b (vooral 4b.0: of proefavond 1 is doorgegaan is uit de bestanden niet op te maken). Ook deze ronde
+> had geen subagenten: `ListAgents` toont één peer-sessie (Clay's eigen interactieve venster, idle), geen
+> agent die ik mocht aansturen; de drie mini-sporen zijn door losse agenten vóór mij geschreven, de
+> aansturing liep via de bestanden.
 
 ---
 
@@ -432,6 +441,278 @@ gebeurt op de dagen dat Varve aan de beurt is.
 
 ---
 
+## 4b. Wat de sporen misten (tweede ronde, 11 oktober 13:00–14:00)
+
+*De volledigheidscriticus legde de zeven sporen naast `docs/VISIE.md` en vond drie gaten die geen spoor
+had: pijler 3 ("de klank zelf bouwen") en de deadline van av-kern; de controllers als tweede drager (VISIE
+§2) en de hub die alles draagt maar nooit op hardware draaide; en het ontbreken van een kopie van het
+instrument buiten deze laptop (§6 noemde het "urgenter dan elk spoor", niemand werkte het uit). Drie
+mini-sporen (verkenner en ontwerper in één, elk ~40–60 minuten, niets gebouwd, niets gemerged, geen
+hardware) staan in `scratchpad/uitwerking/extra-1/ontwerp.md`, `extra-2/ontwerp.md` en
+`extra-3/ontwerp.md` met hun kladmappen. Hieronder per mini-spoor het ontwerp in het kort en de plek in de
+volgorde van §4; de keuzes staan in §5 als VI13–VI20. Let op de datum: de mini-sporen zijn van 11 okt,
+de dag ná proefavond 1, en gaan er niet van uit dat die avond gelukt is (zie 4b.0).*
+
+### 4b.0 Eén feit dat vóór alles gaat: is proefavond 1 doorgegaan?
+
+Twee mini-sporen keken onafhankelijk in de bestanden en zagen hetzelfde:
+
+- Het enige handelingenlog van 10 okt (`opnames/set-20261010-190959.acties.jsonl`, 19:09–19:17, 430 s)
+  bevat **5.539 handelingen, 100 % beeld** (`video.layer.knob.K` 3.598, `video.fx.pixel` 851, trails,
+  grain, mirror, rgb), **acht tracks leeg**, geen `laad`, geen `focus`, geen enkele `track.*`- of
+  mixer-handeling, `opname: null` (extra-2 §1.9). Dat is vormen en video-effecten draaien zonder muziek.
+- `media/library.db` is sinds 8 okt 14:22 niet gewijzigd (`laatst_geladen` 8 okt; de WAL heeft die mtime);
+  geen WAV van 10 okt in `opnames/`; `proef/sessie.json` heeft 0 punten afgevinkt; de hub-map `proef/` is
+  leeg (extra-3 §1.5, extra-2 §1.4).
+
+Conclusie als feit: **er is geen bestand dat laat zien dat proefavond 1 als DJ-proef op de APC heeft
+plaatsgevonden.** Het kan zonder log zijn gebeurd (het log is optioneel; de "altijd"-vink uit §0 punt 4
+stond kennelijk niet aan), of niet. Stap 0 van §4 ("avond 1 verwerken") en alle acht "[na de proefavond]"
+gaan ervan uit dat hij wél is geweest. Daarom staat de vraag nu bovenaan (VI13 = H1 van extra-2): zo ja,
+wat ging fout; zo nee, avond 1 opnieuw plannen vóór elke merge, en dan is de hub-middag van 4b.2 de eerste
+hardwareproef sinds 23 september.
+
+### 4b.1 Extra-1 · Pijler 3 en av-kern: één klankmodule "modaal", twee gastheren
+
+**Wat de criticus miste.** Geen spoor ging over pijler 3 (audio programmeren als *de klank zelf bouwen*),
+en de enige concrete afspraak daarover, het H6-besluit van 24 sep (één AudioWorklet-module met modale
+synthese, eerst in av-kern, dan in Varve via een vormbus), is door niemand opgepakt. Tegelijk hangt er een
+datum aan: av-kern publicatie 1 op 25 okt, waar ROADMAP, het Totaalplan én het hub-plan op rekenen.
+
+**Feiten (nagekeken 11 okt).** av-kern staat in `~/Projects/src/av-kern` (het pad `~/src/av-kern` in
+ROADMAP r. 33, Varve `CLAUDE.md`, `FASE0-TEST.md` en av-kern `README.md` bestaat niet); laatste commit
+28 sep (13 dagen); 54 tests groen; de tak `waterschaal-hartslag-td` (3 commits) is niet gemerged; **geen
+enkele AudioWorklet**; drie audio- en drie beeldplekken leeg (`korrel`, `reson`, `pad`, `strata`,
+`deeltjes`, `nasleep`); `FASE0-TEST.md` 0 van ~60 vakjes; `LOG.md` zonder één regel van Clay met de APC.
+Het Totaalplan zegt zelf: *"14 dagen zonder sessie met de fysieke APC40 → project parkeren"*. Dat criterium
+is sinds ~7 okt van kracht: **formeel geparkeerd.** In Varve bestaan de vier isomorfe systemen (`sn`, `tv`,
+`ep`, `dw`) met geluid achter `g.geluid`, maar dat is nergens aangesloten (0 treffers in `vorm-paneel.js`,
+`laag.js`, `werker.js`) en kan in werker-modus ook niet (een Worker heeft geen `AudioContext`); per
+aanslag kost `modalBuffer` 12–32 ms op de hoofdthread.
+
+**Oordeel over 25 okt.** Drie lezingen: A (zoals het Totaalplan: 8 modules, 20 scènes) is met 0 uur
+hardwaretijd sinds 23 sep en Oktoberfest 19–31 okt niet eerlijk te beloven; B ("lelijk mag", het vangnet
+dat het plan zelf voorschrijft: Drone + Veld, 5 scènes, 10 minuten online) is haalbaar in **twee avonden
+van Clay** (fase 0 van 40 minuten + één opname van 10 minuten); C (parkeren) is de feitelijke stand.
+Advies: **B**, en pas daarna 06a–c als gedeelde module (niet ervoor, niet de AI-laag).
+
+**Ontwerp.** Het spectrum is het bericht: een aanslag in `systemen-isomorf.js` levert al per modus
+frequentie, amplitude en uitklinktijd (`s.fr`, `s.am`, `s.ta`); dat gaat als bericht van ≤ 1 KB
+(`{ t:'slag' | 'golf' | 'korrel' | 'buffer' | 'grond' | 'vol' | 'stil' | 'opt', tijd? }`, `tijd` op de
+audioklok) uit de Worker via de hoofdthread naar één worklet `varve-modaal`. **De bron staat in Varve**
+(`src/engine/modaal/{modaal-kern,modaal-worklet,modaal}.js`, `src/vormen/klank.js`, een functie-sink
+`g.klank` naast `g.geluid`, +12 regels in `werker.js`/`laag.js`, `test/modaal.test.mjs`, `docs/MODAAL.md`);
+av-kern vendort met `tools/vendor-varve.sh` en `src/vendor/HERKOMST.md` (commit + SHA-256 per bestand),
+zoals de vormen al zouden (beslissing 4a van 24 sep). Kern: 12 stemmen × ≤ 256 modi als complexe
+oscillatoren, een golf-stem (≤ 48 harmonischen L/R), een korrel-stem (≤ 64 korrels), berichtenrij met tijd
+(het patroon van `instrumenten/schaal-kern.js`), slaapt bij stilte, LCG, 0 GC. Geschat 0,05–0,2 ms per blok
+van 128 frames op de M1 in de drukste stand (niet gemeten; boven 0,4 ms gaat `maxModi` omlaag).
+Grondtoon in Varve = `deck.toonsoort` van de maatgever, nooit terug naar een standaardtoon; in av-kern
+`bus.root`/`bus.scale`. De acht av-kern-plekken per systeem: `reson` = `sn` (precies acht knoppen),
+`korrel` = `dw` (+ toonbereik, bufferstart, breedte), `pad` = `ep` (+ vorm, filter, zweving, adem); de
+korrelbuffer in Varve = de knip van een sampler-pad (H6 letterlijk), in av-kern 3 s van de eigen Drone.
+Beeld blijft byte voor byte gelijk (de bestaande test eist dat al); av-kern's replay-hash blijft gelijk
+(de vormen lopen op `bus.nowMs()`, de klank zit niet in de bus).
+
+**Bouwstappen en kosten.** Stap 0: pad-fix in vier docs + de td-brug-tak mergen (0,5 u agent). Fase 0:
+40 min Clay met de APC, Varve dicht. Publicatie 1 "lelijk": ~1 u agent (Wake Lock), ~1,5 u Clay. Stap 1
+(Varve-kant, puur, **geen wiring**, raakt `engine.js` niet): 4–6 u agent, 0 u Clay, 0 hardware. Stap 2
+(av-kern-gastheer `reson`, pas ná fase 0: av-kern's eigen regel 4): 2–3 u agent, 30 min luisteren. Stap 3
+(Varve-vormbus op `master.input`, standaard dicht, schuif "geluid"): 2 u agent, 20 min luisteren, raakt
+`engine.js` +6 regels, dus na de proefavonden. Som tot "reson klinkt in beide": ~9–12 u agent, ~1,5 u Clay.
+
+**Plek in §4.** Stap 0: AK3 (pad-fix, 0,5 u). Stap 1: AK1 (A/B/C) is de vierde keuze die alles
+ontgrendelt voor av-kern. Stap 2: modaal stap 1 als **vierde additieve PR** (nieuwe bestanden, geen wiring,
+`regels.test` en de gouden hash van `renderblok.test` ongewijzigd). Nieuwe stap 5b (overdag, zonder set):
+fase 0 (40 min) en publicatie 1 "lelijk" vóór 25 okt. Stap 8: modaal stap 2 (av-kern) en stap 3 (Varve
+vormbus, raakt de engine: na avond 2). Stap 9: AK5(b), de isomorfe vorm als **instrument op een track**
+(strip, cue, fx, sends, patronen; de crossover van pijler 2 en 3).
+
+**Toets VISIE §5.** 1: pijler 3 krijgt voor het eerst een drager, zonder pijler 1 te raken (standaard
+dicht, buiten het live-pad tot stap 3). 2: niets erbij in de tas. 3: knoppen en presets blijven data
+(`draaiKnoppen`, `vanaf01`). 4: niemand heeft een `ModaalKern` gehoord; geen wiring vóór een luistertest.
+
+### 4b.2 Extra-2 · De controllers en de hub als drager: handenkaart, één proefvolgorde, de kernset
+
+**Wat de criticus miste.** VISIE §2 noemt de controllers als tweede drager; geen spoor ging erover, en de
+acht PR's voegen vier dingen toe die alleen een schermknop hebben (`video.clips`, `sampler.1–8.drums`,
+`broadcast.toggle`, opstelling activeren). De AV-app-hub, het enige mechanisme waarmee APC, Maschine en
+LPD8 samen in één set kunnen (en waarmee drie apps, Varve, av-kern en de Stroommachine, dezelfde APC
+delen), is **nooit op hardware gedraaid**: hub `proef/` leeg, `lpd8-profiel.json` en
+`xboard49-profiel.json` bestaan niet, V1–V5 van `STATUS.md` onbeantwoord, de 648 tests allemaal met
+nep-apparaten. Opstelling `alles`, het crossover-proefblok en avond 2 van de speellijst leunen erop.
+
+**Feiten (berekend, `extra-2/klad/vrij-apc.tsv`).** APC: 702 regels standaardmapping, 148 controls uit de
+hub-controltabel; vrij zonder enige regel: Shift (is de shift zelf), **Bank** (zonder hub vrij, met hub de
+hubtoets), **footswitch** (CC 64); vrij zonder shift: Detail View (met `?vormen=1` het mapje vorm); **23
+knoppen met een basisregel maar zonder shift-variant** (A|B 1–8, Device ◀ ▶, On/Off, Lock, master-knop,
+Stop All, Pan, Sends, User, Play, ▲ ▼ ◀ ▶); in de modus sampler is rij 4 (noot 8–15) ongebruikt. Maschine:
+27 van 48 knoppen in gebruik, **21 vrij** (F1–F8, ALL, AUTO, VOLUME, SWING, TEMPO, NOTE REPEAT, GRID, PAD
+MODE, NAVIGATE, DUPLICATE, SELECT, SOLO, MUTE); `~/Projects/maschine-lab/kaart/data2.js` heeft voor die 21
+al een voorstel. LPD8 in Varve: K2 beeld, K4 puls, P1 zwart; K1, K3, K5–K8 vrij. Xboard: alles bezet,
+alle CC's een **aanname**. Uit 26 logs (56.743 handelingen, 30 sep–10 okt): de top-15 ligt voor 100 % op
+de APC (fader 11.796, filter 6.452, fx.knob 5.064, send.a 4.765, …); `layer.*` 128, patronen 72, auto-DJ
+32. Het log kent geen bron (MIDI, muis, toets), dus "op de APC" is een afleiding. Avond 2 heeft nu **twee
+proeflijsten zonder brug**: de hub-`HARDWARE-AVOND.md` (±80 min relevant, zonder Varve, zonder draaiende
+hub, set `meditatie`) en de Varve-speellijst avond 2 (64 punten, 154 min, mét draaiende hub, set `studio`);
+samen ±5 uur, en de volgorde is dwingend (de F0-proef kan niet naast een hub of een Varve-tab).
+
+**Ontwerp.** (a) **De handenkaart**: een gegenereerd document uit de data (mappings, action-register,
+hub-controltabel via `VARVE_HUB_REPO`, `src/control/devices/maschine-mk2.js`, de LPD8-rollen in `hub.js`,
+`handen/voorstel.json`, de profielen, de logs): per control wat hij doet (basis, shift, per mapje/modus),
+of hij vrij is, en voor de vrije plekken het voorstel per nieuwe actie; per controller zijn rol per
+profiel; top-40 handelingen → welke hand. Bestanden: `src/handen/kaart.js` en `telling.js` (puur),
+`tools/handen/handenkaart.mjs` (CLI; schrijft `docs/HANDEN.md` tussen markers en een A4-HTML voor ⌘P),
+`handen/voorstel.json`, `test/handen.test.mjs` (zes checks: elke `in` is een bekende control, elke action
+bestaat, de vrije-plekkenlijst is precies §1.6, elke koppelbare actie zonder plek heeft een voorstel of
+staat op de uitzonderingslijst, geen import uit `src/engine/`, de telling klopt). **Geen enkele mapping
+verandert.** Voorstellen: `video.clips` op **Shift + master-knop** (naast zwart; 0 regels op
+`note:0:80#shift`), `sampler.N.drums` in de **modus sampler rij 4** en op de Maschine **DUPLICATE + pad**
+(nooit SHIFT + pad: dat is leegmaken, K10), `broadcast.toggle` **nooit** op een pad, opstelling geen
+bus-action. Eerst via learn in Clay's eigen verschil, standaard pas na de proef. (b) **Eén proefvolgorde**:
+de F0-proef als eigen **hub-middag** (2a, overdag, ±80 min, zonder muziek: `doctor` → F0-proef 26 stappen →
+speelapparaten 21 stappen → push → `npm run check -- studio`), als blok `hub-f0` in de
+Controlekamer-speellijst (ids `hf-…`, nieuw voorvoegsel) met VRAGEN-blok V (V1–V5) en H; avond 2 wordt 2b
+en begint met `check` in plaats van hopen; 7a van draagbaar in dezelfde minuut (zelfde stekkers). Tien
+regels tekst als voorstel voor `AV-app-hub/docs/HARDWARE-AVOND.md` (de hub-repo niet aangeraakt). (c) **De
+kernset**: K1 APC alleen (= `apc`) nu; K2 APC + Maschine via de hub (= `alles`) als doel zodra de
+hub-middag groen is en 2b het bevestigt; LPD8 alleen als av-kern meespeelt (na 25 okt); Xboard thuis.
+`standen` en `profielen.json` staan al op `apc`: dit verandert daar niets.
+
+**Kosten.** Kaart + telling + test 4–5 u, CLI/HTML 3–4 u, voorstel en tekst 1–2 u, speellijstblok +
+VRAGEN + CONTROLEKAMER 2–3 u: ~1,5 dag agent vóór de proef; hub-middag 80 min Clay; verwerking F0 (golden
+tests, `config.json`, de echte Xboard-CC's in `mappings/xboard49.json`) 2–4 u agent in de hub-repo na
+Clay's push; standaardplek per actie 2 u, alleen na "bevalt".
+
+**Plek in §4.** Stap 0: **VI13** (H1) gaat vóór "avond 1 verwerken". Stap 2: de handenkaart als **vijfde
+additieve PR** (raakt engine, bus, mapping, `apc.html`, `maschine.html` niet). Stap 3: het speellijstblok
+`hub-f0` + VRAGEN V/H (headless `controle.mjs` op een kopie, eigen poort). Nieuwe stap 5b (overdag): de
+hub-middag mét 7a, vóór avond 2; dit verfijnt VI5 en VI11. Stap 6 (avond 2 = 2b): kern = `check` →
+`hb-start` → `hb-lpd8` → spelen (15) → patronen (8), 57 min; secties, Maschine-als-DJ, bladeren en de
+crossover alleen als er tijd is. Stap 8: de standaardplekken (handen stap 4) na de proeven; de echte
+Xboard-CC's vervangen de aanname. VI10 (kernset) krijgt zijn antwoord: K1 nu, K2 doel.
+
+**Toets VISIE §5.** 1: de kaart maakt zichtbaar waar alle vier de pijlers op de handen liggen; de twee
+voorstelplekken dienen pijler 2–3 en de beelddrager op plekken met 0 regels. 2: K1 haalt hub en Maschine
+uit de eerste reis-tas. 3: `voorstel.json` en learn-eerst; de kaart herrekent zichzelf. 4: niets hierin is
+geproefd; het hele spoor zet de hub-middag vóór elke merge en elke standaardplek.
+
+### 4b.3 Extra-3 · Back-up en herstel van het hele instrument: de data, niet de code
+
+**Wat de criticus miste.** §6 van deze synthese: "een externe backup bestaat niet … urgenter dan elk
+spoor", en draagbaar keuze 3+4 en VI2 noemen het, maar niemand inventariseerde wat het instrument *is*
+buiten de code, mat of een kopie klopt, of deed een herstelproef.
+
+**Feiten (gemeten 11 okt 13:00–13:15, op kopieën).** Geen Time Machine (`tmutil: No destinations
+configured`), geen externe schijf, geen launchd of cron: **nul kopieën van de data buiten deze laptop**;
+iCloud is synchronisatie (synct ook wissen, plaatst uit, geen versies). Het handwerk is klein: **~16 MB**
+(library.db 0,3 MB, patronen 196 KB, plannen, racks, mappings 256 KB, proef, 27 handelingenlogs 3,8 MB,
+hub-staat 1 KB, de kaart `varve-kaart.json` 10,7 MB in `~/Desktop/3. Resources/Data/Muziekkaart/`) plus
+**32 GB media** (15 nummers, ~2,2 GB per nummer, herbouwbaar met uren en alleen als YouTube ze nog heeft)
+en **0,6 GB opnames** (niet herbouwbaar). Daarnaast **zeven sleutels alleen in Chrome's localStorage**
+die nergens anders staan: `varve.master.rack`, `varve.klankschaal`, `varve.midi.ports`,
+`varve.beeld.adres/.latentie/.aan`, `varve.stems.standaard`, `varve.koptelefoon.omgewisseld`,
+`varve.vormen` (alleen de mapping heeft een serverkopie). De muziekkaart-code (`~/Projects/muziekkaart`)
+heeft **geen remote**. **Gemeten: `cp library.db` is fout.** De laatste twee dagen handwerk staan in
+`library.db-wal` (4,1 MB, 8 okt), niet in `library.db` (266 KB, 6 okt): een kopie zonder WAL mist één
+nummer (FUTURE.666), één hotcue, drie sampler-pads, twee stems-sets en de kolom `secties_json` (de
+v9-migratie leeft in de WAL), en `quick_check` zegt toch "ok". De server-backup (`VACUUM INTO`,
+`media/backups/`, 14 stuks) is wél compleet. **Herstelproef gedaan**: verse worktree van `origin/main` +
+85 MB hersteldataset → proefserver op 8790 → in ~1 s 15/15 nummers, mapping, samples, patronen, plan,
+27 logs, secties 15/15; het ene nummer met media speelt (206), de andere veertien 404; opnames en kaart
+"weg"; Chrome-staat per constructie weg. De server herstelt alles wat hij zelf schrijft zonder migratie of
+handwerk; de gaten zitten buiten de server.
+
+**Ontwerp: twee sets, drie plekken.** **Set A "staat"** (~16 MB, dagelijks 08:00 via launchd + vóór
+vertrek, met versies): `MANIFEST.json` (sha256, tellingen), `library.db` en `kaart.db` als VACUUM-kopie,
+`patronen/ plannen/ racks/ mappings/ proef/ standen/ Input/` incl. `.versies/`, `handelingen/*.acties.jsonl`,
+`hub/staat.json`, `browser/varve-instellingen.json` (na B4), `beeld/track-scenes-<datum>.json` (export uit
+de Stroommachine, handwerk), `kaart/varve-kaart.json`, `versies/` (12 + 30 dagen). **Set B "media"**
+(~33 GB, vóór elke reis en na elke nacht-run of opname): `rsync -a` van `media/` en `opnames/` **zonder
+`--delete`** (nooit verwijderen); tegelijk de reiskopie waar `VARVE_MEDIA` op reis heen kan wijzen.
+Plekken: een **externe SSD 1 TB** (A + B; nodig, ook voor VI2: zonder SSD heeft `media/` na de verhuizing
+uit iCloud nul kopieën), een **privé GitHub-repo `varve-staat`** voor set A (gratis, versies, buiten huis;
+luistergeschiedenis dus nooit publiek en nooit in `AV-app-hub`), de Omarchy-pc als derde optie (SSH wordt
+nu door het tailnet-beleid geweigerd), iCloud als restlaag tot VI2. Bestanden: `tools/backup/kopie.mjs`
+(hergebruikt de bestaande `Backups`-klasse: VACUUM INTO, quick_check, fsync; `--media`, `--controleer`,
+`--droog`; weigert dezelfde schijf zonder `--zelfde-schijf`), `controleer.mjs` (de sonde reiskopie van
+draagbaar stap 10: "kopie van 2 dagen geleden; 15/15 nummers; LET OP: 2 nummers nieuwer"), `herstel.mjs`
+(weigert een bestaande `library.db` te overschrijven), `test/backup-kopie.test.mjs` (de S1-fout als test:
+rijen in de WAL komen mee), `docs/BACKUP.md` met de herstelprocedure in acht stappen. PR 2 (B4): de zeven
+Chrome-sleutels naar de library zoals de mapping (`/api/instellingen/<sleutel>`, server eerst, localStorage
+reserve). PR 3: launchd-plist + de regel "kopie buiten de laptop: n dagen" in het avondpakket.
+
+**Zonder code, morgen, 10 minuten** (extra-3 §8): `sqlite3 media/library.db "VACUUM INTO '<D>/staat/library.db'"`
+(niet `cp`), idem `kaart.db`, `cp -R` van zeven mappen en de logs, `~/.varve-hub/staat.json`,
+`varve-kaart.json`; `rsync -a media/ opnames/` naar een echte tweede schijf; `gh repo create muziekkaart
+--private --source=. --push`; op de pc één keer "Track-scènes als JSON".
+
+**Kosten.** SSD €80–120 (schatting, niet opgezocht), GitHub €0; PR 1 ~1 dag agent, PR 2 ~½ dag, PR 3
+~½ dag; Clay 30 min eenmalig, 1 min vóór elke reis (`kopie.mjs --media`), 2 min na elke Stroommachine-sessie.
+Set A in seconden (VACUUM INTO 35 ms gemeten); set B eerste keer 32 GB over USB-C (minuten, niet gemeten).
+
+**Plek in §4.** Stap 0: de **handkopie van 10 minuten** (geen code), vóór alles, ook vóór de verwerking
+van avond 1; en de muziekkaart-code naar een privé-repo (1 min). Stap 1: **B2 (SSD) vóór VI2**, want VI2
+zonder SSD maakt het aantal kopieën van `media/` nul; VI2 wordt daarmee "SSD → `VARVE_MEDIA` buiten iCloud
+→ `VARVE_BACKUPS` op de SSD → `kopie.mjs --media` vóór elke reis". Stap 2: backup PR 1 als **zesde
+additieve PR** (alleen `tools/` en `test/`, geen server-, engine- of UI-wijziging). Stap 4: PR 3 (launchd +
+avondpakket-regel) direct na de merge van #19; `standen/` gaat mee in set A zodra #21 gemerged is. Stap 8:
+PR 2 (B4, raakt `server/index.js` en de ui: na avond 2 volgens VI3). Elk kwartaal: de herstelproef van
+extra-3 §1.6 herhalen (10 min); een backup die nooit hersteld is, is geen backup.
+
+**Toets VISIE §5.** 1: dient alle vier (pijler 4 letterlijk: het instellen ís het instrument, en dat staat
+nu op nul plekken). 2: de SSD is hardware, geen dienst; GitHub is al in gebruik; het is tegelijk de
+reiskopie. 3: een mapstructuur die je met de Finder leest; herstellen is kopiëren. 4: de WAL-meting en de
+herstelproef zijn gedaan; rsync naar een SSD, launchd en Chrome niet.
+
+### 4b.4 Hoe de drie mini-sporen de zeven sporen raken
+
+- **Proefavond 1 (VI13)** raakt alles: stap 0 van §4 verandert van "verwerken" in "vaststellen, en zo nodig
+  opnieuw plannen". Het setboek van produceren-uit (K-B) heeft dan niets te lezen behalve 7 minuten beeld.
+- **Backup × draagbaar × standen**: extra-3 levert de sonde reiskopie (draagbaar stap 10), maakt
+  paklijstregel 7 een meting, zet `standen/` in set A, en draait de volgorde van VI2 om (SSD eerst).
+- **Backup × produceren-uit × kaart-brug × beeld**: de logs (het setboek) en `varve-kaart.json` gaan in set
+  A; de Stroommachine-scènes alleen via de JSON-export op de pc (B6), tot de zender ze ooit meestuurt.
+- **Handen × crossover × beeld × uitzenden**: de drie acties zonder knop krijgen een voorstelplek
+  (`sampler.N.drums`, `video.clips`) of bewust géén (`broadcast.toggle`); de hub-middag is de voorwaarde
+  voor opstelling `alles`, het crossover-proefblok en de LPD8-paniek.
+- **Handen × draagbaar**: 7a en de hub-middag zijn dezelfde minuut met dezelfde stekkers; de echte
+  Xboard-CC's vervangen de aanname in `mappings/xboard49.json`.
+- **Modaal × crossover**: AK5(b) (de isomorfe vorm als instrument op een track) en AK6 (de korrelbuffer uit
+  een sampler-pad) zijn de volgende schakels van dezelfde kringloop die crossover met knip → drumpad begon.
+- **Modaal × beeld-een-machine**: het zaalbeeld (vormen zonder clips) wordt met de vormbus ook *hoorbaar*
+  eigen beeld; de rekenlast komt bovenop de meting van beeld (stap 3), dus meten vóór wiring.
+- **Modaal × av-kern × hub**: drie plannen rekenen op 25 okt; AK1 (B) vraagt één PR die ROADMAP 6–11
+  bijwerkt plus een zin in het hub-plan; de hub-koppeling van av-kern ("na 25 okt") en de lease-fase
+  (wk 44–45) houden hun anker alleen als fase 0 echt gebeurt.
+
+### 4b.5 De volgorde van §4, aangevuld
+
+Dezelfde negen stappen, met de mini-sporen op hun plek (alleen wat erbij komt):
+
+| # | Erbij |
+|---|---|
+| **0** | **Eerst VI13**: is avond 1 als DJ-proef doorgegaan (log 19:09–19:17 is alleen beeld; 0 vinkjes; library ongewijzigd sinds 8 okt)? Zo nee: avond 1 opnieuw plannen, stap 0 "verwerken" vervalt tot dan. Daarnaast, zonder code: de **handkopie van 10 minuten** naar een stick of de pc (extra-3 §8), de muziekkaart-code naar een privé-repo, en AK3 (pad-fix in vier docs, td-brug-tak mergen). |
+| **1** | Vierde en vijfde keuze: **AK1** (av-kern 25 okt: A/B/C, advies B) en **B2** (SSD vóór VI2). VI2 wordt: SSD → `VARVE_MEDIA` buiten iCloud → backups op de SSD → `kopie.mjs --media` vóór elke reis. |
+| **2** | Drie extra additieve PR's, nog te bouwen (anders dan #19–#26 bestaan ze alleen als ontwerp): **backup PR 1** (`tools/backup/`, ~1 dag), **handenkaart** (`src/handen/`, `tools/handen/`, ~1,5 dag), **modaal stap 1** (`src/engine/modaal/`, puur, geen wiring, 4–6 u). Geen van de drie raakt engine, bus, mapping of het live-pad. |
+| **3** | Het speellijstblok `hub-f0` + VRAGEN V/H (headless `controle.mjs` op een kopie, eigen poort); de ms-per-blok-meting van de modaal-kern in Node en headless, naast de beeldmeting. |
+| **4** | Na #19: backup PR 3 (launchd 08:00 + "kopie buiten de laptop: n dagen" in het avondpakket). Na #21: `standen/` in set A. |
+| **5** | (ongewijzigd: Tailscale eenmalig) |
+| **5b** | **Nieuw, overdag, zonder set, vóór avond 2**: de **hub-middag** (±80 min: `doctor`, F0-proef, speelapparaten, push, `check -- studio`) mét 7a in dezelfde minuut; en **av-kern fase 0** (40 min, Varve dicht, `~/Projects/src/av-kern`) plus publicatie 1 "lelijk" (10 min spelen en opnemen) vóór 25 okt. Twee dagdelen van Clay; de eerste hardwareproeven van hub en av-kern ooit. |
+| **6** | Avond 2 = **2b**: begint met `npm run check -- studio`; kern 57 min (hub-start, LPD8, spelen, patronen), de rest alleen als er tijd is; kernset K1 → K2. |
+| **7** | (ongewijzigd: uitzenden stap 3–6) |
+| **8** | Modaal stap 2 (av-kern-gastheer `reson`, na fase 0) en stap 3 (Varve-vormbus, raakt `engine.js`); backup PR 2 (B4, de zeven Chrome-sleutels); de standaardplekken voor `video.clips` en `sampler.N.drums` na learn en proef; de echte Xboard-CC's. |
+| **9** | AK5(b): de isomorfe vorm als instrument op een track; AK9: na een echte M2 pas de AI-laag van av-kern; de Stroommachine-scènes via de zender in plaats van handexport (B6). |
+
+**Toets van de aanvulling aan VISIE §5.** 1: pijler 3 krijgt een drager (modaal) en pijler 4 een kopie
+(backup); de handenkaart raakt alle vier zonder er één te breken; geen mini-spoor raakt engine, bus of de
+drie regels vóór stap 8. 2: één stuk hardware erbij (de SSD), geen dienst, geen tweede machine; K1 haalt
+juist spullen uit de tas. 3: voorstelplekken, profielen, manifest en kaart zijn data. 4: de twee dagdelen
+van stap 5b zijn de eerste hardwareproeven van hub en av-kern; daarvóór wordt niets gemerged dat ervan
+afhangt, en niets gewired dat niemand gehoord heeft.
+
+---
+
 ## 5. Keuzes voor Clay: blok VI (ook in `docs/VRAGEN.md`)
 
 Legenda zoals in VRAGEN: 🎧 luisteren · 🎛 de APC erbij · 👀 kijken · 💬 alleen een keuze.
@@ -494,6 +775,61 @@ Legenda zoals in VRAGEN: 🎧 luisteren · 🎛 de APC erbij · 👀 kijken · �
   live wisselen van opstelling; bevriezen naar een nieuw nummer met eigen stems; in-app uitzenden. **Advies:
   nu geen; laat de speelproeven van stap 6–8 kiezen.** Mijn verwachting: de beeldhand op de iPad komt het
   eerst (het is 9 % van je acties), daarna bevriezen (de crossover-belofte).
+
+**Aanvulling 11 okt (tweede ronde, §4b): de keuzes van de drie mini-sporen.** De volledige blokken staan
+in de ontwerpen zelf (AK1–AK9 in extra-1, H1–H10 in extra-2, B1–B7 in extra-3); hier wat over de sporen heen
+gaat of een eerdere VI-keuze verandert.
+
+- [ ] **VI13. Is proefavond 1 (10 okt) als DJ-proef op de APC doorgegaan?** 💬 Het enige log van die avond
+  (19:09–19:17, 430 s) is 5.539 handelingen beeld zonder nummer, acht tracks leeg; de speellijst heeft 0
+  vinkjes; de library is sinds 8 okt niet gewijzigd. **Zo ja:** wat ging fout op de APC, in de Scarlett en de
+  kaart; dat verwerken we eerst (stap 0). **Zo nee:** avond 1 opnieuw plannen vóór elke merge; alle PR's
+  blijven "[na de proefavond]", en de hub-middag (VI16) wordt de eerste hardwareproef sinds 23 sep. Dit gaat
+  vóór VI1–VI3.
+- [ ] **VI14. av-kern en 25 okt: A, B of C, en wanneer fase 0?** 🎛💬 A (het Totaalplan: 8 modules, 20
+  scènes) is met 0 uur hardwaretijd sinds 23 sep en Oktoberfest niet eerlijk te beloven; B ("lelijk mag", het
+  vangnet van het plan zelf: Drone + Veld, 5 scènes, 10 min online) kost fase 0 (40 min met de APC, Varve
+  dicht) plus één avond van ~1,5 u; C (parkeren) is de feitelijke stand sinds ~7 okt. **Advies: B, met fase 0
+  op het eerste dagdeel zonder Varve-set (stap 5b), en daarna 06a–c als gedeelde module, niet de AI-laag.**
+  Klein onderhoud nu, zonder hardware: het pad `~/src/av-kern` → `~/Projects/src/av-kern` in vier docs en de
+  td-brug-tak (3 commits, 54 tests groen) naar av-kern `main`.
+- [ ] **VI15. De modale klankmodule (H6): waar woont de kern, en hoe komt hij in Varve?** 💬🎧 (a) **Varve is
+  de bron, av-kern vendort** met `HERKOMST.md` (zoals de vormen, beslissing 4a van 24 sep); het bewijs (de
+  eerste keer horen) komt wel eerst in av-kern. In Varve eerst als **vormbus** op `master.input`, standaard
+  dicht, één schuif "geluid" in de VORM-rij; de isomorfe vorm als **instrument op een track** (strip, cue,
+  patronen, Maschine) als richting B. Grondtoon volgt de maatgever, nooit terug naar een standaardtoon;
+  omstemmen tijdens de klank niet (anders dan KS2: beeld en geluid blijven één). Korrelbuffer = de knip van
+  een sampler-pad. **Advies: zo; stap 1 (puur, geen wiring) mag nu gebouwd worden, wiring pas na een
+  luistertest.**
+- [ ] **VI16. De hub-F0-proef als eigen hub-middag vóór avond 2, met 7a in dezelfde minuut?** 🎛 Overdag,
+  ±80 min, zonder muziek en zonder speaker: `doctor` → F0-proef (26 stappen, V1–V5) → speelapparaten (21,
+  de echte Xboard-CC's) → push → `npm run check -- studio`. Alternatief: aan het begin van avond 2 (dan ≥ 4
+  uur). Avond 2 wordt 2b en begint met `check`; kern 57 min. **Advies: hub-middag.** Dit verfijnt VI5 en
+  VI11; de tien regels voor `AV-app-hub/docs/HARDWARE-AVOND.md` (extra-2 §3.4) alleen met jouw OK.
+- [ ] **VI17. Kernset onderweg: K1 (APC alleen) nu, K2 (APC + Maschine via de hub) als doel?** 💬 LPD8 alleen
+  mee als av-kern meespeelt (na 25 okt; in Varve doet hij drie dingen en vraagt de hub); Xboard thuis (de
+  Maschine-pads geven dezelfde noten 36–51). **Advies: ja.** Dit is het antwoord op VI10; `standen` en
+  `profielen.json` staan al op `apc`.
+- [ ] **VI18. Plekken voor de acties zonder knop, eerst via learn?** 👀🎛 `video.clips` op **Shift +
+  master-knop** (naast zwart; 0 regels daar), `sampler.N.drums` in de **modus sampler rij 4** en op de
+  Maschine **DUPLICATE + pad** (nooit SHIFT + pad: leegmaken), `broadcast.toggle` **nooit op een pad** (stand +
+  iPhone). Standaardmapping pas na de beeld-speelproef (VI7) resp. het crossover-proefblok (CX4). De
+  handenkaart (`docs/HANDEN.md` + A4-afdruk) toont de vrije plekken: Bank, footswitch, 23 shift-vrije knoppen,
+  21 Maschine-knoppen, LPD8 K1/K3/K5–K8. **Advies: ja, learn eerst; kaart als document én afdruk.**
+- [ ] **VI19. Een externe SSD (1 TB) vóór VI2, en de kleine set "staat" ook in een privé GitHub-repo?** 💬👀
+  Gemeten: nul kopieën van de data buiten deze laptop; `cp library.db` mist twee dagen handwerk (de WAL);
+  VACUUM INTO is de enige juiste bron; herstel op een verse worktree werkt in 1 s zodra de bestanden er
+  staan. Set A ~16 MB dagelijks 08:00 via launchd + vóór vertrek; set B ~33 GB `rsync -a` zonder `--delete`
+  vóór elke reis, tegelijk de reiskopie. "Geen cloud" is een geldig antwoord: dan SSD + een stick in de tas.
+  **Advies: SSD + GitHub-privé; VI2 pas ná de SSD.** Morgen zonder code: de handkopie van 10 minuten
+  (extra-3 §8).
+- [ ] **VI20. De zeven Chrome-sleutels naar de library, de muziekkaart-code naar een privé-repo, de
+  Stroommachine-scènes exporteren?** 💬 Master-rack, klankschaal, MIDI-poorten, beeld-adres, stems-standaard,
+  cue-wissel en de vormen-vlag staan alleen in localStorage: een nieuw Chrome-profiel wist ze. Spiegelen
+  zoals de mapping (`/api/instellingen/<sleutel>`, kleine PR, na avond 2) of een exportknop. De
+  muziekkaart (`~/Projects/muziekkaart`) heeft geen remote: `gh repo create muziekkaart --private` (1 min).
+  Stroommachine-scènes staan alleen in de browser van de pc: na elke sessie "Track-scènes als JSON" naar de
+  SSD, tot de zender ze meestuurt. **Advies: alle drie ja; de repo vandaag, de PR na avond 2.**
 
 ---
 
@@ -562,6 +898,19 @@ de kern klein houden (VISIE §6).
   gesynchroniseerd wordt (uitzenden, niet nagekeken); dat de acht takken samen mergen zoals uitzenden droog
   mat (één meting, op 15:00).
 
+**Tweede ronde (11 okt), hetzelfde eerlijk:**
+- **Nagekeken door mij:** dat PR #27 (`visie/uitwerking` → `studio/integratie`) open staat; dat de drie
+  ontwerpen bestaan met hun kladmappen (`extra-2/klad/vrij-apc.tsv`, `telling-uitvoer.txt`,
+  `log-10okt-avond.jsonl`; `extra-3/klad/` met S0/S1/S2 en `herstel/`); dat `~/Projects/varve-stems/extra-3-herstel`
+  (tak `visie/extra-3`, gelijk aan `origin/main`, geen commits) is achtergelaten zoals extra-3 schrijft.
+- **Niet door mij gedaan:** geen meting herhaald (de WAL-vergelijking, de herstelproef, de telling over 26
+  logs, de av-kern-tests zijn van de mini-sporen); geen `node test/alles.mjs` (deze tak raakt alleen docs,
+  ROADMAP en één regel CLAUDE.md); geen server, geen hardware, geen hub, geen Chrome; niets gemerged.
+- **Aannames die §4b draagt:** dat het ontbreken van een DJ-log op 10 okt betekent dat de avond niet als
+  DJ-proef is geweest *of* zonder log; ik kies niet (VI13). Dat de drie ontwerpen nog niemand heeft
+  gereviewd (ze hebben, anders dan de zeven sporen, geen jury, critici of bouwer gehad: het zijn ontwerpen,
+  geen takken). Dat de uren in 4b.1–4b.3 schattingen zijn op de omvang van vergelijkbare bestanden.
+
 *Bronnen: `scratchpad/uitwerking/<spoor>/8-spoorrapport.md` en `9-verdieping*.md` voor uitzenden,
 companion, beeld-een-machine, crossover, standen, draagbaar en produceren-uit; `docs/VISIE.md`; de
-PR-teksten van #19–#26. Een kopie van dit bestand: `scratchpad/uitwerking/SYNTHESE.md`.*
+PR-teksten van #19–#26; voor §4b `scratchpad/uitwerking/extra-1/ontwerp.md`, `extra-2/ontwerp.md`, `extra-3/ontwerp.md`. Een kopie van dit bestand: `scratchpad/uitwerking/SYNTHESE.md`.*

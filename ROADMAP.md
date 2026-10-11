@@ -145,6 +145,11 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
     draagbaar (#19: avondpakket, 14 controles + paklijst), produceren-uit (#22: patronen → MIDI, setboek uit het
     log). Synthese, hoe ze elkaar raken, de volgorde na de proefavond en de keuzes (VRAGEN blok VI):
     `docs/UITWERKING-2026-10-10.md`. Eerst avond 1 verwerken, dan VI1–VI3 beslissen, dan de additieve PR's.
+    Tweede ronde (11 okt, §4b): drie gaten die geen spoor had, als ontwerp (nog niet gebouwd): de modale
+    klankmodule voor pijler 3 en av-kern (H6; 25 okt alleen "lelijk" haalbaar, fase 0 eerst), de controllers
+    en de hub als drager (handenkaart, hub-middag vóór avond 2, kernset APC nu), en back-up/herstel van de
+    data (nul kopieën buiten de laptop; `cp library.db` mist de WAL; SSD vóór VI2). VI13–VI20. Eerst VI13:
+    uit de bestanden blijkt niet dat proefavond 1 als DJ-proef is doorgegaan (het log van 10 okt is alleen beeld).
 
 **Wat overblijft, op volgorde (25 sep)**
 1. Clay: proberen (1), echofilter (2), luistertests A3 (5) en A2 (19), VRAGEN J.
@@ -163,8 +168,10 @@ De repo staat sinds 24 sep in `~/src/av-kern` (main `ab7e115`, 40 tests groen).
 11. 30 KAART: drie sporen gebouwd (10 okt), samenvoegen in `studio/kaart`, dan de kaart-tab proberen en
     de nachtwachtrij één nacht aan met `perNacht` klein (docs/KAART.md §8).
 12. 31 UITWERKING: acht PR's wachten op de proefavond. Volgorde in `docs/UITWERKING-2026-10-10.md` §4:
-    avond 1 verwerken → VI1–VI3 → de additieve PR's (#22, #20, #23, #24) → de metingen → standen + draagbaar →
-    Tailscale → avond 2 (hub, zaalbeeld, lange opname) → uitzenden stap 3–7 → crossover/Logic.
+    VI13 (is avond 1 doorgegaan?) → handkopie 10 min → avond 1 verwerken → VI1–VI3 + AK1 + SSD → de additieve
+    PR's (#22, #20, #23, #24; te bouwen: backup, handenkaart, modaal stap 1) → de metingen → standen + draagbaar →
+    Tailscale → stap 5b overdag (hub-middag + 7a, av-kern fase 0) → avond 2 (hub, zaalbeeld, lange opname) →
+    uitzenden stap 3–7 → crossover/Logic/modaal stap 2–3.
 
 Aanname: publicatie 1 van AV-kern (25 okt) blijft staan. Komt die datum in de
 knel door 15 en 17, dan gaat AV-kern voor; dat is de vraag van H5.
