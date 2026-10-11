@@ -53,6 +53,7 @@ apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze do
 maschine.html       de Maschine-kaart: wat elke knop nu doet (uitleg van de Maschine zelf), live vanuit de mixer (src/ui/maschine-kaart.js)
 companion.html      de companion (/companion) voor iPad en iPhone: kaart met wens/kies/haal nu, nu, beeld. Geen geluid, MIDI of Web Lock (docs/COMPANION.md)
 controle.html       de Controlekamer (/controle): stand van alles, mixer openen, speellijst (docs/CONTROLEKAMER.md)
+avondpakket/        profielen.json: het avondpakket als data (apparaten, profielen, grenzen, paklijst); niet in MAG (docs/AVONDPAKKET.md)
 styles.css
 src/
   engine/           audio-graph.js  kanaalstrip, EQ (+ kill), bipolair filter, master, xfader, het stemfilter (maakStemFilter)
@@ -180,6 +181,7 @@ src/
                     backup-tegel.js de tegel "Backup" (laatste kopie, of de fout). Puur.
                     stand-tegel.js  de tegel "Opstelling", het adres van "mixer openen", de tekst onder de kiezer (docs/STANDEN.md). Puur.
                     stand-bewerker.js een opstelling instellen zonder JSON: keuzelijsten → stand. Puur.
+                    avondpakket-tegel.js  de tegel "Avondpakket" (vertrek/aankomst, docs/AVONDPAKKET.md). Puur.
   standen/          stand-model.js  het formaat van een stand (schema 1): witte lijst van delen, de nacht alleen remmen,
                                     normaliseerStand. Puur, geen DOM, geen imports; ook door de server gebruikt
                                     (server/standen.js importeert dit en src/control/mapping.js, allebei puur)
@@ -198,6 +200,8 @@ server/             draait apart: `node server/index.js`
   links.js          links netjes maken (TikTok), bron van een nummer, id's, bestandsnamen
   library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren), peaks, racks, grid, toonsoort, hotcues, stems.
   backup.js         backups van library.db: wanneer, hoeveel, opruimen; het werk in backup-werker.js (worker)
+  avondpakket.js    het avondpakket: parsers (pmset, ioreg, df, system_profiler, tailscale, find), profielen, fase, oordeel. Puur
+  avondpakket-meet.js  de sondes in kindprocessen met time-outs (nooit fs op media/), cache, bevroren als er een deck speelt, NEP-fixtures
   analyze.js        golfvorm-peaks, onset-envelope en toonsoort vooraf, streamend uit ffmpeg
   analyse-werker.js peaks, onset, tap-verfijning en toonsoort in een worker_thread (server blijft vrij)
   detect.js         FFT, onset-envelope, tempo, segmentatie (+ tweede kans). Geen dependencies.
@@ -228,6 +232,8 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
                     zaalbeeld.mjs: video.clips op Metal, eigen server 8806 (--opruimen na een harde stop);
                     beeld-lokaal.mjs: de Stroommachine naast VARVE meten (--zelftest zonder GPU; de volledige run NIET op een speeldag);
+                    avondpakket.mjs: de tegel Avondpakket (eigen server 8914, NEP-fixtures, de mixer-lock in een tweede tab);
+                    en los: tools/avondpakket.mjs, de CLI van het avondpakket (exit 0/1/2/3; docs/AVONDPAKKET.md);
                     maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
                     bladeren.mjs: BROWSE, wiel en ENTER op een nep-Maschine met een echte library (twee testnummers);
                     maschine-sampler.mjs: SAMPLING op een nep-Maschine met de echte sampler (knippen, spelen, tellen, volume);
@@ -262,6 +268,9 @@ test/
   midi.test.mjs     parsen, poortkeuze op naam, echodetectie
   library.test.mjs  database, effect-racks per link, cascade bij verwijderen, migraties (SCHEMA.length)
   backup.test.mjs   backups: geldige kopie uit de WAL, niet dubbel, opruimen, mislukken, niet via HTTP
+  avondpakket.test.mjs  het avondpakket puur: parsers op echte en HANDGEMAAKT-uitvoer (fixtures/avondpakket), fase, oordeel, paklijst, tegel, privacy
+  avondpakket-meet.test.mjs  sondes met een nep-exec (time-outs 50 ms), cache en bevriezing, de CLI via spawnSync (nooit een server)
+  avondpakket-server.test.mjs  GET /api/avondpakket op een eigen server: compleet, onbekend profiel, bevroren na een Range-verzoek, schrijft niets
   library-lijst.test.mjs  virtuele lijst, pagina-cache (ook de race bij een nieuwe sortering), kolommen
   kaart-lijst.test.mjs  de tab kaart als rekenwerk, en de nep-server (tools/headless/kaart-nep.mjs) tegen het contract van de kaart-API
   ingest.test.mjs   pipeline zonder netwerk; ffmpeg maakt zijn eigen testmateriaal
@@ -371,6 +380,7 @@ docs/
   PATRONEN.md       patronen (S4): het contract (§1–6) en wat gebouwd is (§7: klok, opnemen, API, APC, opslag, metingen; §8 naar Logic als MIDI-bestand)
   BEELD.md          spoor beeld (6 okt): VARVE stuurt de Stroommachine via de relay; instellen, wat er gaat, APC-mapje, problemen, tests
   STANDEN.md        standen (10 okt, pijler 4): één bestand per situatie met beginwaarden, wat er niet in mag, routes, Controlekamer, grenzen
+  AVONDPAKKET.md    één controle vóór vertrek en bij aankomst (10 okt): profielen, fase, oordeel, paklijst, ritueel, tegel en CLI
   KAART.md          de muziekkaart in Varve (10 okt): het bestand, de API (+ §3b de afspraken met de UI), de nachtregels, "er speelt een deck",
                     §9 gemeten op het echte bestand, §10 na de proefavond, wat niet getest is
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)

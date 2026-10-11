@@ -20,6 +20,37 @@
     <h2 id="h-stand">Stand</h2>
     <div class="tegels" id="tegels"></div>
     <div class="spelen" id="spelen" hidden></div>
+    <!-- Het avondpakket (docs/AVONDPAKKET.md): de keuze staat hier vast, buiten #tegels
+         (die worden elke 2 s opnieuw getekend). Alleen lezen; repareert niets. -->
+    <details class="avondpakket" id="avondpakket">
+      <summary>Avondpakket: profiel, fase, punten en paklijst</summary>
+      <div class="ap-keuze">
+        <label>profiel <select id="ap-profiel"><option value="">standaard</option></select></label>
+        <label>fase <select id="ap-fase">
+          <option value="auto">auto (niets aangesloten = vertrek)</option>
+          <option value="vertrek">vertrek</option>
+          <option value="aankomst">aankomst</option>
+        </select></label>
+        <button class="knop klein" id="ap-meet" type="button">opnieuw meten</button>
+      </div>
+      <div class="ap-vakken">
+        <div>
+          <h3>Punten</h3>
+          <ul class="ap-punten" id="ap-punten"></ul>
+          <p class="ap-info" id="ap-info" hidden></p>
+        </div>
+        <div>
+          <h3>Paklijst <span id="ap-paklijst-profiel"></span></h3>
+          <ul class="ap-paklijst" id="ap-paklijst"></ul>
+          <h3>Varve kan</h3><ul class="ap-tekst" id="ap-kan"></ul>
+          <h3>Kan niet</h3><ul class="ap-tekst" id="ap-kanniet"></ul>
+          <h3>Let op</h3><ul class="ap-tekst" id="ap-let"></ul>
+        </div>
+      </div>
+      <p class="uitleg">Klik de tegel om opnieuw te meten. Speelt er een deck, dan meet het pakket niets
+        (<b>bevroren</b>). De vinkjes van de paklijst worden niet bewaard. Zonder server:
+        <code>node tools/avondpakket.mjs</code>.</p>
+    </details>
   </section>
 
   <section class="blok" aria-labelledby="h-open">

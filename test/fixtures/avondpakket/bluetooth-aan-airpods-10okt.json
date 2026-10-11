@@ -1,0 +1,23 @@
+{
+ "SPBluetoothDataType": [
+  {
+   "controller_properties": {
+    "controller_state": "attrib_on"
+   },
+   "device_connected": [
+    {
+     "AirPods 4 (anc) (test)": {
+      "device_minorType": "Headphones"
+     }
+    }
+   ],
+   "device_not_connected": [
+    {
+     "(weggelaten)": {
+      "device_minorType": "Headphones"
+     }
+    }
+   ]
+  }
+ ]
+}

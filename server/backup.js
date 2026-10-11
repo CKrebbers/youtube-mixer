@@ -119,8 +119,21 @@ export class Backups {
     this._stand = { laatste: null, aantal: 0, gekeken: null, fout: null, foutTijd: null };
   }
 
-  /** Wat de Controlekamer te zien krijgt. Geen paden: alleen naam, tijd en grootte. */
-  stand() { return { ...this._stand, bezig: !!this._bezig }; }
+  /**
+   * Wat de Controlekamer te zien krijgt. Geen paden: alleen naam, tijd en grootte.
+   * `gewijzigdSinds` (het avondpakket, docs/AVONDPAKKET.md): staat er een wijziging
+   * in library.db die nog in geen kopie zit? false vóór de eerste geslaagde backup
+   * en zolang de teller gelijk is aan die van de laatste; null als de teller niet
+   * te lezen is. De tegel Backup gebruikt hem niet.
+   */
+  stand() {
+    let gewijzigdSinds = false;
+    try {
+      const t = this.wijzigingen();
+      gewijzigdSinds = this._teller !== undefined && Number.isFinite(t) && t !== this._teller;
+    } catch { gewijzigdSinds = null; }
+    return { ...this._stand, bezig: !!this._bezig, gewijzigdSinds };
+  }
 
   /** Bij het opstarten één keer meteen, daarna op de timer. */
   start() {

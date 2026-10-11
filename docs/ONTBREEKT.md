@@ -26,6 +26,10 @@ Wat je bij een live set merkbaar mist of wat je handwerk beschermt. Op belang.
 | A9 | **Vier live-randgevallen (gebouwd 2 okt)** | Een lege hotcue vlak na het laden overschrijft de bewaarde · sync kan terugvallen op een remmende track · na stilstand telt een track nog even als remmend · gate zonder maat start op "nu". | VERBETERINGEN ronde 4 | S |
 | A10 | **Luistertests A2 en A3 (jij)** | Streamen, loops en springen beluisteren (A2), en de keylock-proef (A3). Geen bouwwerk, wel nodig vóór een echte set. | ROADMAP 19 · VRAGEN A2, A3 | — |
 
+Erbij (10 okt, spoor "draagbaar", VISIE §3): het **avondpakket**, één alleen-lezen controle
+vóór vertrek en bij aankomst (media en instellingen lokaal, schijf, accu en lader, apparaten,
+backup, achtergrondwerk), als tegel en als `node tools/avondpakket.mjs` (docs/AVONDPAKKET.md).
+
 ## B. Later
 
 Gewenst of gangbaar, maar een set lukt zonder.

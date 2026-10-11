@@ -31,6 +31,12 @@ de mixer.
      staan en hoe groot (`/api/backups`, `src/controle/backup-tegel.js`). Rood met de
      reden als de laatste poging mislukte. Een oude datum is geen fout: zonder
      wijziging komt er bewust geen nieuwe kopie. Zie docs/LIBRARY.md, "Backup".
+   - **Avondpakket** (10 okt): kan ik met deze tas vertrekken, kan ik hier beginnen
+     (`/api/avondpakket`, `src/controle/avondpakket-tegel.js`, docs/AVONDPAKKET.md).
+     Meet bij het openen, bij een keuze en bij een klik op de tegel, verder hooguit elke
+     5 min; nooit vanzelf als de mixer open is, en de server bevriest zelf zolang er een
+     deck speelt ("bevroren: er speelt een deck · HH:MM"). Profiel, fase, de punten en de
+     paklijst staan in het uitklapblok onder de tegels.
    - **Mixer**: open of niet, uit de Web Lock `varve-mixer` (`src/ui/tabblad.js`).
      Rood als er een tweede mixer-tabblad wacht.
    - **Audio** en **APC40**: uit wat de mixer zelf meldt (zie hieronder). Bij de
@@ -132,11 +138,15 @@ avond 3 vóór "Eerder werk", en de kern vooraan):
 - **Vragen aan de server** (`ververs`, elke 2 s): pas een nieuwe ronde als de vorige klaar
   is, en elk verzoek geeft het na 6 s op (`WACHT_MS`; de tooling-controle 60 s). Bij een
   trage of hangende server (een telefoon via het LAN) stapelden de verzoeken zich anders op.
-  De losse routes (`/api/backups`, `/api/stems`, `/api/secties`) worden na een 404 of een
-  fout hooguit eens per minuut opnieuw gevraagd (`RUST_MS`, `haalLos`); intussen blijft het
-  laatste antwoord staan, en komt er niet elke 2 s een rode regel in de console.
+  De losse routes (`/api/backups`, `/api/stems`, `/api/secties`, en `/api/avondpakket`, dat
+  niet elke 2 s gevraagd wordt) worden na een 404 of een fout hooguit eens per minuut opnieuw
+  gevraagd (`RUST_MS`, `haalLos`); intussen blijft het laatste antwoord staan, en komt er niet
+  elke 2 s een rode regel in de console. De rust geldt per route (het pad zonder vraag):
+  `/api/avondpakket?vers=1` omzeilt de rust van `/api/avondpakket` niet.
 - **De backup-stand** (`GET /api/backups`, alleen GET, achter dezelfde Host-controle):
-  `{ laatste: { naam, tijd, bytes } | null, aantal, gekeken, fout, foutTijd, bezig }`.
+  `{ laatste: { naam, tijd, bytes } | null, aantal, gekeken, fout, foutTijd, bezig,
+  gewijzigdSinds }`; `gewijzigdSinds` (het avondpakket) = staat er een wijziging in
+  `library.db` die nog in geen kopie zit: `false`, `true`, of `null` (niet te zien).
   Los opgehaald: een oudere server zonder die route geeft een grijze tegel, geen
   "server weg". De kopieën zelf zijn via HTTP niet te lezen.
 - **De secties-telling** (`GET /api/secties`, alleen GET, achter dezelfde Host-controle):

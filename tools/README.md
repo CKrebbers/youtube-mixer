@@ -27,6 +27,13 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking; d
 `rest/` van 25 september. `rest/` leest geen server maar de bestanden zelf (ook vanuit een
 worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van het systeem.
 
+## avondpakket.mjs
+`node tools/avondpakket.mjs [--profiel apc] [--vertrek|--aankomst] [--streng] [--json] [--poort 8777]`:
+het avondpakket vanaf de opdrachtregel (docs/AVONDPAKKET.md). Leest `/api/avondpakket` als de
+server draait (dan zegt hij hetzelfde als de tegel), meet anders zelf; alleen lezen, opent
+`library.db` nooit. Exit 0 = geen rood, 1 = oranje (alleen met `--streng`), 2 = rood, 3 = fout
+in de aanroep. Met `VARVE_AVONDPAKKET_NEP=test/fixtures/avondpakket` uit fixtures, zonder server.
+
 ## varve-app/
 `VARVE.applescript` + `maak.sh`: de Dock-knop die de server start en de Controlekamer opent
 (`~/Applications/VARVE.app`). Een losse macOS-app; draait niet in de mixer.

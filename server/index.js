@@ -30,6 +30,7 @@ import { Kaart, KaartFout, STANDAARD_PAD as KAART_STANDAARD_PAD } from './kaart.
 import { Nacht, pasToe as nachtPasToe, STANDAARD as NACHT_STANDAARD } from './nacht.js';
 import { Standen, StandFout } from './standen.js';
 import { naamGeldig as standNaamGeldig, NAAM_UITLEG as STAND_NAAM_UITLEG, MAX_BYTES as STAND_MAX_BYTES } from '../src/standen/stand-model.js';
+import { maakAvondpakket, extraPaden } from './avondpakket-meet.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -201,6 +202,29 @@ const standen = new Standen({
       return (await readdir(map)).filter((f) => f.endsWith('.json') && !f.startsWith('paden')).map((f) => f.slice(0, -5)).sort();
     } catch { return null; }
   },
+});
+
+/*
+ * HET AVONDPAKKET (docs/AVONDPAKKET.md): GET /api/avondpakket, "kan ik met deze
+ * tas vertrekken, kan ik hier beginnen". Alleen lezen. De commando's draaien in
+ * kindprocessen met een time-out (server/avondpakket-meet.js); media/ wordt in
+ * dit proces nooit gelezen (find in een kind). Speelt er een deck, dan komt de
+ * laatste stand terug met `bevroren` en wordt er niets duurs gemeten.
+ * VARVE_AVONDPAKKET_NEP=<map>: fixtures in plaats van commando's (tests).
+ */
+const avondpakket = maakAvondpakket({
+  paden: {
+    media: MEDIA, wortel: WORTEL, db: DB, backups: BACKUPS,
+    extra: () => extraPaden({ wortel: WORTEL, kaart: process.env.VARVE_KAART || lib.haal('kaart_pad', null) || KAART_STANDAARD_PAD }),
+  },
+  profielenPad: join(WORTEL, 'avondpakket', 'profielen.json'),
+  backupStand: () => backups.stand(),
+  rijen: () => ({ ingest: wachtrij.lijst(), stems: stemsRij.lijst(), nacht: nacht.stand() }),
+  // De verwachte bestanden alleen opnieuw uit de database als die veranderde (zoals sectieTelling).
+  library: () => ({ sleutel: `${lib.wijzigingen()}:${lib.db.prepare('PRAGMA data_version').get().data_version}`, tracks: () => lib.tracks({}) }),
+  speellijst: () => proef.lees(),   // alleen info: "speellijst 12 van 40" (niet in het oordeel)
+  speeltDeck,
+  nep: process.env.VARVE_AVONDPAKKET_NEP || null,
 });
 
 /**
@@ -1180,6 +1204,15 @@ const server = createServer(async (req, res) => {
     // staan, een fout (server/backup.js). Alleen de stand; de kopieën zelf zijn
     // via HTTP nooit te lezen.
     if (pad === '/api/backups' && req.method === 'GET') return json(res, 200, backups.stand());
+    // GET /api/avondpakket?profiel=apc&fase=vertrek|aankomst&vers=1 (docs/AVONDPAKKET.md):
+    // het rapport. Zonder fase: auto. Een onbekend profiel is 200 met het standaardprofiel
+    // en `profielOnbekend` (nooit 400: de Controlekamer rust dan een minuut). `vers=1` (een
+    // klik): opnieuw meten, behalve binnen 2 s; speelt er een deck, dan alleen het goedkope.
+    // `auto=1` (de Controlekamer elke 5 min): uit de cache of alleen het goedkope, nooit meer.
+    if (pad === '/api/avondpakket' && req.method === 'GET') {
+      const q = url.searchParams;
+      return json(res, 200, await avondpakket.rapport({ profiel: q.get('profiel'), fase: q.get('fase'), vers: q.get('vers') === '1', auto: q.get('auto') === '1' }));
+    }
     // GET /api/secties: { totaal, zonder, verouderd, versie }: hoeveel nummers (nog)
     // geen actuele secties hebben (Library.sectieTelling, docs/SECTIES.md §4). De
     // Controlekamer vraagt het elke 2 s; zonder wijziging in de database is het

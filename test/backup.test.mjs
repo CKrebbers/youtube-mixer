@@ -160,6 +160,23 @@ try {
   const r5 = await b.nu('periodiek', { alleenGewijzigd: true });
   ok('gezet en weer gewist: geteld, maar dezelfde inhoud, geen kopie', r5.ok && !r5.nieuw && kopieIn(bmap).length === 2);
 
+  // gewijzigdSinds (het avondpakket): een wijziging die nog in geen kopie zit.
+  console.log('\ngewijzigdSinds');
+  ok('na een backup: false', b.stand().gewijzigdSinds === false);
+  lib.bewaarHotcue('nummerC', { nr: 3, tijd: 2.5 });
+  ok('teller omhoog (hotcue gezet): true', b.stand().gewijzigdSinds === true);
+  klok = new Date(2026, 9, 2, 14, 0, 0);
+  const r6 = await b.nu('periodiek', { alleenGewijzigd: true });
+  ok('na de volgende run: weer false', r6.ok && b.stand().gewijzigdSinds === false);
+  {
+    const vers = new Backups({ db: dbPad, map: bmap, wijzigingen: () => lib.wijzigingen(), elke: 0, log: () => {} });
+    ok('vóór de eerste backup: false', vers.stand().gewijzigdSinds === false);
+    const stuk = new Backups({ db: dbPad, map: bmap, wijzigingen: () => { throw new Error('dicht'); }, elke: 0, log: () => {} });
+    ok('teller gooit: null (en stand() zelf gooit niet)', stuk.stand().gewijzigdSinds === null);
+    const nan = new Backups({ db: dbPad, map: bmap, elke: 0, log: () => {} });
+    ok('zonder teller (NaN): false', nan.stand().gewijzigdSinds === false);
+  }
+
   console.log('\nterwijl de server schrijft');
   {
     let geschreven = 0;

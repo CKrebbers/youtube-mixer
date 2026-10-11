@@ -109,12 +109,38 @@ h2{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
 .notitie::placeholder{color:#4a5661}
 .notitie.bewaard{border-color:var(--a)}
 
+/* het avondpakket: de tegel is een knop; de keuze en de lijsten in een <details> onder de tegels */
+.tegel[data-id="avondpakket"]{cursor:pointer}
+.tegel[data-id="avondpakket"]:hover{background:var(--panel2)}
+.avondpakket{margin-top:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:0 14px}
+.avondpakket summary{cursor:pointer;padding:10px 0;font-size:13px;color:var(--klein)}
+.avondpakket[open] summary{border-bottom:1px solid var(--line);margin-bottom:10px}
+.ap-keuze{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:13px;color:var(--klein)}
+.ap-keuze select{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:4px 6px;max-width:100%}
+.ap-keuze label{display:flex;gap:6px;align-items:center;min-width:0;max-width:100%}
+.ap-vakken{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:8px 24px;margin:12px 0}
+.ap-vakken h3{margin:10px 0 4px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:700}
+.ap-vakken ul{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:13px}
+.ap-punten li{display:grid;grid-template-columns:auto minmax(0,9em) minmax(0,1fr);gap:0 6px;align-items:baseline;min-width:0}
+.ap-punten li b{font-weight:600;overflow-wrap:anywhere}
+.ap-waarde{font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere}
+.ap-sub{grid-column:2/-1;color:var(--klein);font-size:12px;overflow-wrap:anywhere}
+.ap-punten li[data-licht="ok"] .led{background:var(--a)}
+.ap-punten li[data-licht="half"] .led{background:var(--warn)}
+.ap-punten li[data-licht="fout"] .led{background:var(--red)}
+.ap-punten li[data-licht="fout"] .ap-waarde{color:var(--red)}
+.ap-paklijst label{display:flex;gap:8px;align-items:baseline;overflow-wrap:anywhere}
+.ap-paklijst label:has(input:checked){color:var(--dim);text-decoration:line-through}
+.ap-tekst li{color:var(--klein);overflow-wrap:anywhere}
+.ap-info{margin:10px 0 0;font-size:12px;color:var(--klein)}
+
 .meldingen{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:grid;gap:6px;z-index:5}
 .melding{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:8px 14px;font-size:13px}
 .melding.fout{border-color:var(--red);color:#ffb3ad}
 
 @media (max-width:720px){
   .punt{grid-template-columns:1fr}
+  .ap-vakken{grid-template-columns:1fr}
   .kop{flex-wrap:wrap}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
