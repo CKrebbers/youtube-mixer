@@ -7,8 +7,11 @@
 // importeren niets uit src/engine/ en doen geen I/O, (6) de telling rekent als de
 // telling van 10 okt. Geen hardware, geen server, geen netwerk.
 // Draai met: node test/handen.test.mjs
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, statSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
@@ -138,6 +141,14 @@ console.log('\n(4) elke actie zonder plek heeft een voorstel of een uitzondering
   const metRegel = { ...mappings, apc: { ...mappings.apc, rules: [...mappings.apc.rules, { in: 'note:0:80', action: 'video.clips', mode: 'trigger', shift: true }] } };
   const later = maakHandenkaart({ mappings: metRegel, controls: APC_CONTROLS, knoppen, eigen: UITLEG, params: PARAMS, register: [...register.ids, 'video.clips'], voorstel });
   ok('video.clips in de standaard: het voorstel is achterhaald en Shift + master is niet meer vrij', JSON.stringify(later.verouderd) === '["video.clips"]' && !later.vrij.apc.shiftVrij.includes('mastersel'));
+  // Brede uitzonderingen slikken nieuwe actions stil in; daarom het aantal per patroon vast.
+  // Valt dit om: kijk of de nieuwe actie echt bij de uitzondering hoort, en pas dan het getal aan.
+  const BREED = { 'video.fx.*': 6, 'video.layer.*': 4, 'track.N.stem.*': 45, 'track.N.pattern.*': 3, 'track.N.loop.*': 4, 'track.N.grid.*': 11, 'klankschaal.*': 18, 'patterns.*': 2 };
+  const perPatroon = (p) => kaart.zonderPlek.filter((z) => z.status === 'uitzondering' && z.patroon === p).map((z) => z.actie);
+  for (const [p, n] of Object.entries(BREED)) {
+    const acties = perPatroon(p);
+    ok(`uitzondering ${p}: precies ${n} actions${acties.length !== n ? ` — nu ${acties.length}: ${acties.join(', ')}` : ''}`, acties.length === n);
+  }
   ok('patroonPast: * over punten heen, zonder * alleen precies', patroonPast('track.N.stem.*', 'track.N.stem.drums.send.a') && !patroonPast('track.N.stem.*', 'track.N.stemx')
     && patroonPast('*.glide', 'track.N.fader.glide') && !patroonPast('log.toggle', 'log.toggle.x'));
 }
@@ -233,8 +244,45 @@ console.log('\nde CLI en docs/HANDEN.md');
   ok('markdown: master-knop met voorstel video.clips, DUPLICATE met sampler.N.drums', /\| master \(mastersel.*voorstel `video\.clips`/.test(md) && /\| DUPLICATE .*voorstel `sampler\.N\.drums`/.test(md));
   const html = H.html(md);
   ok('html: A4 liggend, een tabel per deel, geen script', html.includes('size: A4 landscape') && (html.match(/<table>/g) || []).length >= 8 && !/<script/i.test(html));
+  ok('de bronregel hangt niet af van waar de controls vandaan komen (hub of kopie)', H.mdBron({ ...b, bronnen: { ...b.bronnen, controls: 'de hub' } }) === H.mdBron(b));
+  const metTop = `a\n${H.BEGIN}\n\nx\n\n${H.KOP_TOP} (top-40)\n\n| 1 |\n\n${H.EIND}\nb`;
+  ok('topUitDoc en zetTop: zonder logs blijft de top-40 die er stond', H.topUitDoc(metTop) === `${H.KOP_TOP} (top-40)\n\n| 1 |`
+    && H.zetTop(`y\n\n${H.KOP_TOP}\n\nGeen`, H.topUitDoc(metTop)) === `y\n\n${H.KOP_TOP} (top-40)\n\n| 1 |` && H.topUitDoc('geen markers') === null);
   const { VOORSTEL_V0 } = await import('../tools/handen/voorstel-v0.mjs');
   ok('de v0 in tools/handen/voorstel-v0.mjs heeft dezelfde acties als handen/voorstel.json (beginpunt)', JSON.stringify(VOORSTEL_V0.acties.map((a) => a.actie)) === JSON.stringify(voorstel.acties.map((a) => a.actie)));
+}
+
+console.log('\nde CLI als programma (spawnSync; schrijft niets in de repo)');
+{
+  const cli = fileURLToPath(new URL('../tools/handen/handenkaart.mjs', import.meta.url));
+  const docUrl = new URL('../docs/HANDEN.md', import.meta.url), voorstelUrl = new URL('../handen/voorstel.json', import.meta.url);
+  const stand = () => [readFileSync(docUrl, 'utf8'), statSync(docUrl).mtimeMs, readFileSync(voorstelUrl, 'utf8')].join('\0');
+  const voor = stand();
+  const tmp = mkdtempSync(join(tmpdir(), 'varve-handen-'));
+  const env = { ...process.env, VARVE_OPNAMES: join(tmp, 'opnames') };
+  const draai = (...args) => spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 });
+  const j = draai('--json');
+  let geparst = null; try { geparst = JSON.parse(j.stdout); } catch { /* blijft null */ }
+  ok(`--json door een pipe: heel (${j.stdout.length} bytes, meer dan 64 KiB) en te parsen`, j.status === 0 && j.stdout.length > 65536 && geparst?.apc?.length === 148 && Array.isArray(geparst.zonderPlek));
+  const tekst = join(tmp, 'tekst.txt');
+  writeFileSync(tekst, 'iets van Clay\n');
+  const r1 = draai('--html', '--uit', tekst);
+  ok('--html --uit op een bestaand bestand dat geen handenkaart is: exit 2, bestand heel', r1.status === 2 && readFileSync(tekst, 'utf8') === 'iets van Clay\n');
+  const r2 = draai('--html', '--uit', tmp);
+  ok('--html --uit op een map: exit 2', r2.status === 2 && /is een map/.test(r2.stderr));
+  const kaartPad = join(tmp, 'oud.html');
+  writeFileSync(kaartPad, H.html('### oud'));
+  ok('uitWeigering: een eerdere handenkaart en een nieuw pad mogen, een gewoon bestand niet', H.uitWeigering(kaartPad) === null && H.uitWeigering(join(tmp, 'nieuw', 'k.html')) === null && H.uitWeigering(tekst) !== null);
+  const r3 = draai('--controller');
+  ok('--controller zonder waarde: exit 2', r3.status === 2 && /zonder waarde/.test(r3.stderr));
+  const r4 = draai('--controleer');
+  ok(`--controleer zonder logs: meldt "top-40 niet vergeleken", geen crash (exit ${r4.status})`, [0, 1].includes(r4.status) && /top-40 niet vergeleken/.test(r4.stdout));
+  mkdirSync(join(tmp, 'opnames', 'map.acties.jsonl'), { recursive: true });
+  ok('leesLogs: een map met een .acties.jsonl-naam wordt overgeslagen (geen EISDIR)', H.leesLogs(join(tmp, 'opnames')) === null);
+  writeFileSync(join(tmp, 'opnames', 'set-1.acties.jsonl'), '[0,"track.1.fader",0.5]\n');
+  ok('leesLogs: het echte log ernaast telt wel', H.leesLogs(join(tmp, 'opnames'))?.logs === 1);
+  ok('docs/HANDEN.md en handen/voorstel.json onaangeroerd na al deze runs', stand() === voor);
+  rmSync(tmp, { recursive: true, force: true });
 }
 
 console.log('\nde speellijst: blok hub-f0 (de hub-middag)');
@@ -254,7 +302,8 @@ console.log('\nde speellijst: blok hub-f0 (de hub-middag)');
 console.log('\ndocs/VRAGEN.md: blok HA');
 {
   const vragen = lees('docs/VRAGEN.md');
-  ok('blok HA staat onderaan, na blok O', vragen.lastIndexOf('## HA. ') > vragen.indexOf('## O. ') && !/\n## /.test(vragen.slice(vragen.lastIndexOf('## HA. ') + 5)));
+  // Niet "het laatste blok": volgende takken voegen hun blok ook onderaan toe.
+  ok('blok HA bestaat één keer, na blok O', vragen.split('\n## HA. ').length === 2 && vragen.indexOf('\n## HA. ') > vragen.indexOf('\n## O. ') && vragen.includes('\n## O. '));
   ok('HA1–HA10 bestaan, elk één keer', Array.from({ length: 10 }, (_, k) => `**HA${k + 1}. `).every((c) => vragen.split(c).length === 2));
 }
 
