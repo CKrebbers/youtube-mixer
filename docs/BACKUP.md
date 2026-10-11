@@ -1,0 +1,197 @@
+# Back-up en herstel van het hele instrument
+
+*11 oktober 2026, tak `visie/backup-kopie`. Ontwerp: `scratchpad/uitwerking/extra-3/ontwerp.md`
+(mini-spoor 3), SYNTHESE §4b.3. Dit document gaat over de DATA van het instrument, niet over de
+code (die staat op GitHub). De uurlijkse kopie van de library door de server zelf staat in
+`docs/LIBRARY.md` "Backup"; die blijft zoals hij is.*
+
+## 1. Waarom: iCloud is geen backup
+
+Op 11 okt stond er **nul** kopieën van de data buiten deze laptop: geen Time Machine, geen
+externe schijf, geen launchd. Alleen iCloud, en iCloud is synchronisatie:
+
+- het synchroniseert ook wissen (een per ongeluk gewiste map is binnen seconden overal weg; 30 dagen
+  "onlangs verwijderd" is de enige rem);
+- het plaatst bestanden uit ("Optimaliseer Mac-opslag" staat aan) en kent geen versies;
+- het zet `library.db`, `-wal` en `-shm` op verschillende momenten over, en dan klopt de set
+  onderling niet (§2).
+
+Wat Clay zelf instelde is klein (~16–20 MB): de library, patronen, plannen, racks, mappings, de
+speellijst, 27 handelingenlogs, de hub-staat en de kaart. Daarnaast ~32 GB media (herbouwbaar, met
+uren en alleen als YouTube ze nog heeft) en ~0,6 GB opnames (niet herbouwbaar).
+
+## 2. De WAL-les: kopieer `library.db` NOOIT als bestand
+
+De library draait in WAL-modus. Wat net bewaard is staat vaak alleen in `library.db-wal`, niet in
+`library.db`. Gemeten op 11 okt, op kopieën (extra-3 §1.5):
+
+| Kopie | tracks | hotcues | racks | pads | grid op slot | kolom `secties_json` | quick_check |
+|---|---|---|---|---|---|---|---|
+| live `library.db` + `-wal` | 15 | 15 | 1 | 6 | 2 | ja | ok |
+| **alleen `library.db` (266 KB, van 6 okt)** | **14** | **14** | 1 | **3** | 2 | **nee** | **ok** |
+| `VACUUM INTO` (server-backup van 8 okt) | 15 | 15 | 1 | 6 | 2 | ja | ok |
+
+De gewone bestandskopie mist één nummer, één hotcue, drie sampler-pads, twee stems-sets en zelfs
+de v9-migratie, en `quick_check` zegt tóch "ok": een onvolledige kopie ziet er gezond uit. Daarom
+gebruikt `kopie.mjs` dezelfde `VACUUM INTO` als de server (`server/backup.js`: een eigen
+alleen-lezen verbinding in een worker, fsync, quick_check). Ook met de hand: `sqlite3 library.db
+"VACUUM INTO '<doel>/library.db'"`, nooit `cp`. `test/backup-kopie.test.mjs` houdt deze fout vast.
+
+## 3. Wat er gebouwd is
+
+| | |
+|---|---|
+| `tools/backup/kopie.mjs --doel <map>` | maakt `<map>/varve/staat/` (set A) en met `--media` ook `<map>/varve/media/` en `opnames/` (set B) |
+| `tools/backup/controleer.mjs --doel <map>` | is de kopie heel (manifest, SHA-256, quick_check, tellingen), is hij bij (tellingen naast de library van nu), heeft set B elk nummer? |
+| `tools/backup/herstel.mjs --van <map>/varve --naar <checkout>` | zet set A terug; weigert als er al een `library.db` staat; overschrijft nooit iets |
+| `tools/backup/launchd/` | `maak.sh` + sjabloon + `dagelijks.sh`: elke ochtend 08:00 set A. **Standaard niet geïnstalleerd** (§6) |
+
+Alle drie lezen dezelfde `VARVE_*`-variabelen als de server en werken standaard op de checkout
+waar ze in staan; `--bron <checkout>` (kopie, controleer) leest een andere. Geen server nodig; ze
+mogen draaien terwijl de server draait (in WAL blokkeert een lezer geen schrijver). Geen
+dependency: node, sqlite (`node:sqlite`) en rsync.
+
+### Set A "staat" (klein, dagelijks en vóór elke reis)
+
+```
+<doel>/varve/staat/
+  MANIFEST.json            wanneer, host, commit, tellingen (nummers, hotcues, racks, pads, grids
+                           op slot, stems, secties, schema), per bestand bytes en SHA-256
+  library.db, kaart.db     VACUUM INTO-kopie: één bestand, journal-modus, quick_check ok
+  nacht.json, stems-rij.json
+  patronen/ plannen/ proef/ standen/ racks/ mappings/ Input/     met hun .versies/
+  handelingen/set-*.acties.jsonl                                  ← opnames/ (alleen de logs)
+  hub/staat.json           ← ~/.varve-hub/staat.json (of $VARVE_HUB_STAAT)
+  kaart/varve-kaart.json   ← VARVE_KAART, de instelling kaart_pad, of ~/Desktop/3. Resources/Data/Muziekkaart/
+  versies/library-<stempel>.db, kaart-<stempel>.db, MANIFEST-<stempel>.json
+  .vorige/<stempel>/…      wat in de kopie anders was dan in de bron, vóór het vervangen
+```
+
+Een map of bestand dat in de bron ontbreekt wordt overgeslagen en staat in het manifest onder
+`ontbreekt` (bv. `standen/` tot die tak gemerged is). `.DS_Store` gaat niet mee; conflictkopieën
+("… 2") wel: ook dat is data.
+
+### Set B "media" (groot, vóór elke reis en na een nacht-run of opname)
+
+`kopie.mjs --media` draait `rsync -a --backup --backup-dir=<doel>/varve/.vorige/<stempel>/…` van
+`media/` naar `<doel>/varve/media/` en van `opnames/` naar `<doel>/varve/opnames/`. **Zonder
+`--delete`.** `library.db*` en `kaart.db*` gaan daar niet als bestand mee (§2: die staan goed in
+set A), lopend ingest-werk (`.bezig-*`) ook niet; `media/backups/` (de VACUUM-kopieën van de
+server) wel. Set B is tegelijk de reiskopie: op reis kan `VARVE_MEDIA` naar de SSD wijzen.
+
+### Wat er NIET in zit (nog)
+
+- **Zeven sleutels die alleen in Chrome staan**: `varve.master.rack`, `varve.klankschaal`,
+  `varve.midi.ports`, `varve.beeld.adres/.latentie/.aan`, `varve.stems.standaard`,
+  `varve.koptelefoon.omgewisseld`, `varve.vormen`. Een nieuw Chrome-profiel of een nieuwe Mac =
+  master-rack en klankschaal weg. Volgende stap (PR 2, keuze B4): spiegelen naar de library zoals de
+  mapping, dan zitten ze vanzelf in elke kopie.
+- **De track-scènes van de Stroommachine** (op de pc, in de browser): alleen via haar knop
+  "Track-scènes als JSON" (handwerk, B6). Leg zo'n export in `<doel>/varve/staat/beeld/`; herstel
+  meldt hem dan.
+- **De bronnen van de muziekkaart** (`~/Desktop/3. Resources/Data/`, de exports) en de code van de
+  muziekkaart (geen remote; B5). De kaart zelf (`varve-kaart.json`) gaat wel mee.
+- De code: die staat op GitHub.
+
+## 4. De herstelprocedure
+
+1. **Code**: `git clone git@github.com:CKrebbers/youtube-mixer.git` (+ AV-app-hub, stroommachine,
+   maschine-lab, av-kern, en na B5 de muziekkaart). 1 minuut.
+2. **Gereedschap**: node, ffmpeg, yt-dlp, de Demucs-venv (`docs/STEMS.md`), Tailscale. ~30 min
+   (schatting; niet gemeten).
+3. **Set A**: `node tools/backup/herstel.mjs --van /Volumes/<SSD>/varve --naar <checkout>`.
+   Zonder tool kan het ook met de Finder: `staat/library.db` → `media/library.db` (zonder -wal/-shm:
+   de kopie is al in journal-modus), `kaart.db`, `nacht.json` en `stems-rij.json` ernaast, de mappen
+   op hun plek, `handelingen/*` → `opnames/`, `hub/staat.json` → `~/.varve-hub/`,
+   `kaart/varve-kaart.json` → `~/Desktop/3. Resources/Data/Muziekkaart/`. 1 minuut.
+   `herstel.mjs` weigert als er al een `library.db` (of `-wal`) staat: eerst zelf opzij zetten
+   (`docs/LIBRARY.md` "Terugzetten"). Andere bestanden die er al staan blijven staan; is er een
+   anders dan in de kopie, dan zegt hij dat en kies je zelf.
+4. **Set B**: `rsync -a /Volumes/<SSD>/varve/media/ <checkout>/media/` (of `VARVE_MEDIA` naar de SSD
+   laten wijzen en later verhuizen); `opnames/` idem. Minuten (niet gemeten). Zonder set B: de
+   server start gewoon, de library kent de nummers, `library compleet` wordt rood, en elk nummer is
+   opnieuw binnen te halen vanuit `tracks.url` (plus Demucs). Uren; alleen op een niet-speeldag.
+5. **Server starten** (VARVE.app of `node server/index.js`): de schema-migratie gebeurt vanzelf als
+   de kopie ouder is dan de code (`SCHEMA` in `library.js`); andersom (nieuwere kopie, oudere code)
+   niet — dus de code altijd eerst bijwerken.
+6. **Chrome**: tot B4 het master-rack, de klankschaal, de MIDI-poorten, het beeld-adres, de
+   stems-standaard, de cue-wissel en de vormen-vlag opnieuw instellen (dat is het werk dat nu
+   verloren gaat).
+7. **Beeld**: op de pc de Stroommachine → Live → "Importeer track-scènes" met
+   `staat/beeld/track-scenes-<datum>.json` (als die er is).
+8. **Controle**: `node tools/backup/controleer.mjs --doel /Volumes/<SSD> --bron <checkout>` en de
+   Controlekamer: tegel Backup groen.
+
+Gemeten (11 okt, extra-3 §1.6): een verse worktree met een hersteldataset van 85 MB → server op in
+~1 s, 15/15 nummers, mapping, samples, patronen, plan, 27 logs. Herhaal die proef elk kwartaal
+(10 min): een backup die nooit hersteld is, is geen backup.
+
+## 5. Nooit iets weggooien
+
+- Een backup wordt **nooit met `--delete` gesynchroniseerd** (ook niet met de hand): wat in de bron
+  verdween, per ongeluk of niet, blijft in de kopie staan. `test/backup-kopie.test.mjs` controleert
+  dat `kopie.mjs` rsync zonder `--delete` aanroept.
+- Wat in de kopie anders is dan in de bron, gaat eerst naar `.vorige/<stempel>/` en wordt pas dan
+  vervangen (set A door `kopie.mjs` zelf, set B door rsync's `--backup-dir`).
+- Elke run met een andere library voegt een versie toe in `versies/`; dezelfde inhoud (SHA-256)
+  geeft geen nieuwe versie. Elke run bewaart zijn manifest als `versies/MANIFEST-<stempel>.json`.
+- Er wordt **niets automatisch opgeruimd** in het doel (anders dan `media/backups/` van de server,
+  12 + 30 dagen). Set A groeit ~0,3 MB per gewijzigde dag: ~100 MB per jaar. Opruimen is altijd
+  handwerk van Clay.
+- De bron wordt alleen gelezen. Een doel binnen de bron weigert `kopie.mjs` (een backup in
+  `media/` gaat mee de prullenbak in).
+- Een doel op dezelfde schijf als de bron weigert hij ook, tenzij `--zelfde-schijf`: dat is een
+  extra versie, geen backup buiten de laptop. Het manifest en de stempel zeggen het dan
+  (`zelfdeSchijf: true`).
+
+## 6. Hoe vaak, en automatisch
+
+| | Set A | Set B |
+|---|---|---|
+| automatisch | dagelijks 08:00 via launchd (na het nachtvenster 01–07, vóór een speeldag begint); overslaan met één logregel als het doel er niet is | niet (32 GB; de SSD hangt er niet altijd) |
+| met de hand | vóór vertrek, en na een sessie met veel handwerk | vóór elke reis; na een nacht-run of opname |
+
+**launchd (standaard NIET geïnstalleerd).** Vanuit de echte checkout (de plist wijst naar het
+`dagelijks.sh` van de checkout waar je hem maakt):
+
+```
+zsh tools/backup/launchd/maak.sh --doel /Volumes/<SSD>               # laat alleen de plist zien
+zsh tools/backup/launchd/maak.sh --doel /Volumes/<SSD> --installeer  # zet hem in ~/Library/LaunchAgents
+```
+
+`--installeer` weigert als er al een `nl.varve.backup.plist` staat. Stoppen: `launchctl bootout
+gui/$UID/nl.varve.backup` en de plist zelf opzij zetten. Log: `~/.varve-backup.log`. Is het doel
+een git-repo (de privé-repo `varve-staat`, keuze B1), dan doet `dagelijks.sh` daarna `git add -A
+-- varve/staat`, commit en push. Zo'n repo bevat titels, YouTube-id's en luistergeschiedenis:
+**altijd privé**, nooit in `AV-app-hub` (publiek), en nooit `media/` of `muziekkaart.db` erin.
+
+**Het avondpakket.** `kopie.mjs` schrijft na elke run `~/.varve/backup-laatste.json`
+(`{ doel, tijd, setA, setB, bytes, zelfdeSchijf, tracks, host }`). Het punt "backup" van het
+avondpakket (tak `visie/draagbaar`) kan daar "kopie buiten de laptop: n dagen geleden" uit halen
+(groen ≤ 1 dag, oranje ≤ 7, rood ouder of nooit; `zelfdeSchijf` telt niet als buiten de laptop).
+Nog niet gebouwd: dat raakt die tak (PR 3 van het ontwerp, na de merge daarvan).
+
+## 7. Getest en niet getest
+
+**Getest** (`test/backup-kopie.test.mjs`, in `node test/alles.mjs`): rijen die nog in de WAL staan
+komen mee (en een gewone bestandskopie mist ze); de tellingen in het manifest; `.versies/` mee,
+alleen de logs uit `opnames/`, geen `.DS_Store`; een tweede run zonder wijziging: geen versie erbij
+en niets weg; een run na een wijziging: een versie erbij, een in de bron verdwenen bestand blijft,
+het oude van een veranderd bestand staat in `.vorige/`; twee runs in dezelfde seconde schrijven
+niet over elkaar heen; `--droog` schrijft niets (geen doel, geen stempel, bron ongewijzigd); zelfde
+schijf, een doel binnen de bron en geen library = exit 2; `--overslaan-zonder-doel`; `--media` met
+een nep-rsync via `PATH` (altijd `-a`, nooit `--delete`, de databases uitgesloten,
+`--backup-dir`); controleer (alles ok, nummers nieuwer dan de kopie, nummers zonder media-kopie, een
+veranderd bestand = NIET OK); herstel (`--droog`, terugzetten, een ander bestand niet
+overschreven, weigeren bij een bestaande `library.db` of alleen een `-wal`).
+
+Met de hand, 11 okt: `kopie.mjs --droog` tegen de echte checkout (alleen lezen), één echte run naar
+`~/Backups/varve-staat --zelfde-schijf`, `controleer.mjs` daarop, en een herstel in een tijdelijke
+map (zie het verslag van de bouwer). `dagelijks.sh` tegen een tijdelijke library en een tijdelijke
+git-repo met een kale remote (overslaan zonder doel; commit en push). `maak.sh` zonder
+`--installeer` (de plist is geldig volgens `plutil -lint`).
+
+**Niet getest:** rsync naar een echte externe SSD (er is er geen), de duur van 32 GB, launchd zelf
+(niet geïnstalleerd; of een LaunchAgent zonder Volledige schijftoegang bij `~/Desktop` mag, is
+**niet** gemeten — macOS kan dat weigeren), een push naar een echte GitHub-repo, Chrome, de
+Stroommachine-export, herstel van de hub-staat met een draaiende hub.
