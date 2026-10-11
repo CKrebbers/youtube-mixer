@@ -99,7 +99,7 @@ export async function kopie(opties, env = process.env, uit = console.log) {
   for (const m of MAPPEN) {
     const o = omvang(P.mappen[m]);
     totaal += o.bytes;
-    uit(`  ${(m + '/').padEnd(15)} ${existsSync(P.mappen[m]) ? `${o.aantal} bestanden, ${maat(o.bytes)}` : 'ontbreekt (overgeslagen)'}`);
+    uit(`  ${(m + '/').padEnd(15)} ${existsSync(P.mappen[m]) ? `${o.aantal} bestand${o.aantal === 1 ? '' : 'en'}, ${maat(o.bytes)}` : 'ontbreekt (overgeslagen)'}`);
   }
   const logBytes = logs.reduce((s, n) => s + statSync(join(P.opnames, n)).size, 0);
   totaal += logBytes;
