@@ -274,7 +274,7 @@ try {
   }
 
   // ==== S: met ffmpeg, sneller dan echte tijd ======================================
-  if (!heeftFfmpeg) notitie('S14-S26: geen ffmpeg');
+  if (!heeftFfmpeg) notitie('S14-S29: geen ffmpeg');
   else {
     const p6 = pcm(6), p12 = pcm(12);
     const rtmpPoort = await vrijePoort(), udpPoort = await vrijePoort(true), kopiePoort = await vrijePoort();
@@ -520,6 +520,34 @@ try {
       const f = U.stand().fout;
       await wacht(Math.max(0, 1500 - (Date.now() - t0)));
       ok(`S26 na 0,8 s zonder groei: fout "${f}"; na 1,5 s niet meer bezig (${U.stand().bezig ? 'nog bezig' : 'gestopt'})`, s.ok && f === 'bron stil' && !U.stand().bezig);
+      await O.sluit(opnames, id);
+    }
+
+    // S29: de noodrem van beeld (review 2, L4). Een mp4 is niet te knippen: boven achterstandMaxBeeld stopt de
+    //      uitzending met fout 'achterstand'. Hier 2 s, met een ffmpeg die hangt (SIGSTOP) en 4 s geluid erbij.
+    if (!heeftVT) notitie('S29: geen h264_videotoolbox in deze ffmpeg');
+    else {
+      const id = await nieuweOpname();
+      await O.voegVideoToe(opnames, id, 'mp4', vAac.init);
+      const s = await U.start({ id, doel: 'beeld' }, { ...basis, achterstandMaxBeeld: 2, pollMs: 100 });
+      const pid = U._pid();
+      let fout = null, tFout = null, gestopt = false, weg = false;
+      try {
+        if (pid) process.kill(pid, 'SIGSTOP');
+        await voer({ id, pcmBuf: p6, sec: 4, tussen: 250, sluiten: false });
+        const t0 = Date.now();
+        while (Date.now() - t0 < 2000 && U.stand().fout !== 'achterstand') await wacht(50);
+        fout = U.stand().fout; tFout = (Date.now() - t0) / 1000;
+      } finally {
+        try { if (pid) process.kill(pid, 'SIGCONT'); } catch { /* weg */ }
+      }
+      const t1 = Date.now();
+      while (Date.now() - t1 < 10000 && U.stand().bezig) await wacht(100);
+      gestopt = !U.stand().bezig;
+      try { process.kill(pid, 0); } catch (e) { weg = e.code === 'ESRCH'; }
+      ok(`S29 beeld, ffmpeg hangt, achterstandMaxBeeld 2: fout "${fout}" binnen ${r2(tFout)} s na 4 s geluid (≤ 2), daarna gestopt (${r2((Date.now() - t1) / 1000)} s), ffmpeg weg`,
+        s.ok && fout === 'achterstand' && gestopt && weg && U.stand().fout === 'achterstand');
+      U._reset();
       await O.sluit(opnames, id);
     }
 

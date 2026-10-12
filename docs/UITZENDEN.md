@@ -144,7 +144,7 @@ muxer+uit:  bestand: -f flv <uitmap>/set-<id>.uitzend[-N].flv   (na stop: -c cop
 - **Sprong** (alleen WAV): boven 8 s achterstand springt de volger naar het eind (op een frame), maar alleen als er
   ook echt ≥ 1 s in het **bestand** wacht: zit de achterstand in pijp of encoder, dan helpt springen niet en zou elke
   poll vers geluid weggooien (review 10 okt). `sprongen` en `kwijtS` tellen mee. Een mp4 wordt nooit geknipt: boven
-  20 s stopt de uitzending met `fout: 'achterstand'`.
+  20 s (`achterstandMaxBeeld`) stopt de uitzending met `fout: 'achterstand'` (S29, met een hangende ffmpeg en 2 s).
 - **Stoppen tijdens het starten** (wachten op de mp4 kan 10 s duren): `stop()` breekt de start af en wacht erop;
   er komt dan geen ffmpeg (R1). **`opnameKlaar` tijdens het starten** wacht eerst de start af en leest dan tot het
   eind (R12). Eerst gaf hij meteen ok zonder iets te doen; de start slaagde daarna alsnog en volgde een opname die al
@@ -190,11 +190,11 @@ node test/alles.mjs                                 # draait de snelle variant m
 
 - P1-P13: argv per profiel, uitgangsnaam, maskeren, het slot (18 url's), doelen laden (ook het voorbeeld), mp4-boxen,
   Opus herkennen, iCloud-waarschuwing, en G1 (welke imports).
-- S14-S28: stil -> bestand (+ mp4), stil -> RTMP-ontvanger (`ffmpeg -listen 1` op 127.0.0.1), stil -> udp,
+- S14-S29: stil -> bestand (+ mp4), stil -> RTMP-ontvanger (`ffmpeg -listen 1` op 127.0.0.1), stil -> udp,
   midden in de set aan, beeld hercoderen met Chrome's cadans (keyframe per 101 beelden op 30 fps, en per 85 op 25 fps),
   beeld kopiëren naar RTMP, Opus, opname onaangetast, ffmpeg gedood, ffmpeg bestaat niet, stoppen (ook een hangend
   kind), weigeringen (ook webm na de start), bron stil, de golf gelijk met het geluid (S27, stoot op 3,0 s bij 2 en 10 fps)
-  en het png-profiel door ffmpeg (S28, ook op 10 fps).
+  het png-profiel door ffmpeg (S28, ook op 10 fps) en de noodrem van beeld bij een hangende ffmpeg (S29).
 - R1, R3, R7 (uit de code-review van 10 okt): stop() tijdens het starten gaat niet verloren; een fout tussen openen
   en spawn laat geen open bestand achter (`/dev/fd` geteld); een link naar `opnames/` omzeilt G9 niet.
 - R8-R11 (uit reviewronde 1): een relatieve uitMap (`uit-rel`, en `../opnames` vanuit een andere map dan de
@@ -323,7 +323,8 @@ uitgangsPad(uitMap, id, bestaat)    -> pad                                     /
 maskeer(tekst) · boxen(buf) · audioCodecVanMp4(buf) · iCloudWaarschuwing(opnames, home, bestaat)   // puur
 start(verzoek, instellingen)        -> { ok, doel, bron, soort, uit?, waarschuwingen } | { ok: false, fout }
       verzoek      = { id, doel, beeldstand?, door? }                         // van buiten; de rest wordt NIET gelezen
-      instellingen = { opnames, uitzendMap?, uitMap?, ffmpeg?, pollMs?, stilNa?, stopNa?, achterstandMax?, wachtMp4? }
+      instellingen = { opnames, uitzendMap?, uitMap?, ffmpeg?, pollMs?, stilNa?, stopNa?, achterstandMax?,
+                       achterstandMaxBeeld?, wachtMp4? }
                                                                               // van de server zelf; paden worden absoluut gemaakt
 stop({ snel })                      -> Promise<{ ok, duurS, bytes, stopS, uit? }>
 opnameKlaar(id)                     -> Promise<{ ok }>      // lees tot het eind, laat ffmpeg spoelen, stop

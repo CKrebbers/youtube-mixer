@@ -322,13 +322,15 @@ class Zending {
   /**
    * Twee delen, zodat de route (stap 3) de body niet kan laten kiezen waar gelezen en geschreven wordt (G1, G2):
    *   verzoek      { id, doel, beeldstand?, door? }: van buiten; elk ander veld wordt NIET gelezen (ook geen url, pad of ffmpeg).
-   *   instellingen { opnames, uitzendMap, uitMap, ffmpeg, pollMs, stilNa, stopNa, achterstandMax, wachtMp4 }: van de server zelf.
+   *   instellingen { opnames, uitzendMap, uitMap, ffmpeg, pollMs, stilNa, stopNa, achterstandMax, achterstandMaxBeeld, wachtMp4 }:
+   *                van de server zelf.
    */
   async _start(verzoek, instellingen) {
     const { id, doel: naam, beeldstand, door } = verzoek && typeof verzoek === 'object' ? verzoek : {};
     let {
       opnames, uitzendMap = STANDAARD_MAP, uitMap = process.env.VARVE_UITZEND_UIT || STANDAARD_UIT,
-      ffmpeg = 'ffmpeg', pollMs = 250, stilNa = 10000, stopNa = 30000, achterstandMax = 8, wachtMp4 = 10000, _argsHaak,
+      ffmpeg = 'ffmpeg', pollMs = 250, stilNa = 10000, stopNa = 30000, achterstandMax = 8, achterstandMaxBeeld = 20, wachtMp4 = 10000,
+      _argsHaak,
     } = instellingen && typeof instellingen === 'object' ? instellingen : {};
     if (this.s.bezig || this.kind || this.bezigMetStarten) return { ok: false, fout: 'er loopt al een uitzending' };
     if (typeof id !== 'string' || !ID.test(id)) return { ok: false, fout: 'ongeldig opname-id' };
@@ -421,7 +423,7 @@ class Zending {
       // Opname jonger dan 2 s: vanaf het begin. Anders vanaf nu (midden in de set).
       const eind = kop + dataNu - (dataNu % FRAME);
       Object.assign(this, {
-        kind, wav, mp4, kop, pollMs, stilNa, stopNa, achterstandMax, doelObj: doel, ffmpegPad: ffmpeg, remuxBelofte: null,
+        kind, wav, mp4, kop, pollMs, stilNa, stopNa, achterstandMax, achterstandMaxBeeld, doelObj: doel, ffmpegPad: ffmpeg, remuxBelofte: null,
         pos: doel.bron === 'audio' ? (bronS < 2 ? kop : eind) : 0,
         eind, mp4Eind: 0, gevolgd: 0, draining: false, sprongVlag: false, pompBelofte: null, pompt: false,
         laatsteGroei: Date.now(), stderr: [], stoppen: false, stopBelofte: null,
@@ -495,7 +497,8 @@ class Zending {
     // Sprong alleen als de achterstand in het BESTAND zit (≥ 1 s): zit hij in pijp of encoder, dan helpt
     // vooruitspringen niet en zou elke poll vers geluid weggooien.
     if (this.s.bron === 'audio' && this.s.achterstandS > this.achterstandMax && (this.eind - this.pos) / BPS >= 1) this.sprongVlag = true;
-    if (this.s.bron === 'video' && this.s.achterstandS > 20) { this.s.fout = 'achterstand'; this._stopIntern('achterstand'); return; }
+    // Een mp4 is niet te knippen: boven `achterstandMaxBeeld` (standaard 20 s) stopt de uitzending (S29).
+    if (this.s.bron === 'video' && this.s.achterstandS > this.achterstandMaxBeeld) { this.s.fout = 'achterstand'; this._stopIntern('achterstand'); return; }
     this._pomp();
   }
 
