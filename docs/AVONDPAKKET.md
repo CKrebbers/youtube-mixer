@@ -4,8 +4,9 @@
 `uitwerking/draagbaar/5-ontwerp-definitief.md` met de reviews `7-review-1.md` en
 `7-review-2.md` (kladmap van de sessie van 10 okt, **niet in de repo**; de besluiten staan in
 dit bestand, de open keuzes voor Clay in §14). Stand: **stap 1-6 gebouwd** (kern, sondes,
-CLI, route, tegel, docs) en twee herstelrondes. Open: **7a/7b** (de uitvoer van aangesloten
-hardware zien en de uittrekproef met Clay); tot dan staat `hardwareBevestigd` op `false`.*
+CLI, route, tegel, docs), twee herstelrondes en het punt uit review ronde 3 (`fix/draagbaar`).
+Open: **7a/7b** (de uitvoer van aangesloten hardware zien en de uittrekproef met Clay); tot
+dan staat `hardwareBevestigd` op `false`.*
 
 ## 1. Wat het is
 
@@ -97,6 +98,14 @@ hub-lease is nog nooit op de hardware geproefd).
   oranje punt **Fase: "niet te bepalen"** ("USB en geluid niet gemeten (time-out): kies
   vertrek of aankomst"); zo is het licht nooit groen zonder dat de apparaten gezien zijn.
   Niet bij een gekozen fase en niet bij `laptop`.
+- **Een gekozen fase zonder meting is ook nooit groen** (review ronde 3): is de kern van de
+  fase niet gemeten, dan een oranje punt **Meting: "niet gemeten"**. De kern is bij
+  `vertrek` media en instellingen (het thuiswerk), bij `aankomst` USB en geluid (bij
+  `laptop`, dat niets in te pakken heeft: media en instellingen). Dat geldt voor een fase uit
+  de tegel, de CLI of `profielen.json`, en ook als `auto` "vertrek" koos terwijl `find` in een
+  time-out liep. Voorbeeld: Clay kiest "aankomst" terwijl er een deck speelt en de server nog
+  nooit gemeten heeft; dan bleven alleen backup en achtergrond groen over. Niet naast het
+  punt Fase (dat zegt het al); `bekend: ["meting"]` maakt het bewust grijs.
 - **`fase` in `profielen.json`**: `auto` (standaard), of `vertrek`/`aankomst` als vaste fase
   (dan raadt het pakket niet; een keuze in de tegel of `--vertrek`/`--aankomst` gaat voor).
   Het rapport zegt waar de fase vandaan komt: `faseBron` = `gekozen`, `data` of `auto`.
@@ -119,6 +128,7 @@ hub-lease is nog nooit op de hardware geproefd).
 | media lokaal | > 0 bestanden, niets uitgeplaatst (met server: niet minder dan de library verwacht) | alleen buiten de nummers (`backups/`) uitgeplaatst; minder bestanden dan verwacht | iets in `<id>/` of `library.db`/`kaart.db` uitgeplaatst: "open in de Finder, klik het wolkje, thuis" (leeg/ontbreekt = grijs) |
 | instellingen lokaal | niets uitgeplaatst | code uitgeplaatst | `mappings/`, `racks/`, `patronen/`, `plannen/`, `Input/`, `proef/`, `avondpakket/` ("zonder internet geen profielen"), `standen/` (Clay's opstellingen, of `VARVE_STANDEN` buiten de wortel; integratie 11 okt) of het kaartbestand uitgeplaatst |
 | fase (alleen `auto`) | — | USB en geluid allebei niet gemeten: "kies vertrek of aankomst" | — |
+| meting | — | de kern van de fase niet gemeten (vertrek: media en instellingen; aankomst: USB en geluid): "meet opnieuw vóór je vertrekt/begint" | — |
 | iCloud | optimaliseren uit, of aan met ≥ 50 GiB vrij | aan en < 50 GiB vrij | — |
 | schijf | ≥ 50 GiB | 20-50 GiB | < 20 GiB |
 | accu | vertrek ≥ 80 %; aankomst aan een lader ≥ 30 W | < 80 % bij vertrek; zwakke lader (nu **8 W**); op de accu bij aankomst | < 20 % op de accu, **of < 20 % aan een lader onder 30 W** |
