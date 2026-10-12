@@ -549,9 +549,10 @@ try {
       ok(`S28 ${doel} stil/png -> bestand: h264 1280x720 + aac, geluid ${r2(ad)} s (6 ± 0,3)${s.ok ? '' : ` [${s.fout}]`}`, s.ok && stroom(p, 'video').codec_name === 'h264'
         && stroom(p, 'video').width === 1280 && stroom(p, 'video').height === 720 && stroom(p, 'audio').codec_name === 'aac' && Math.abs(ad - 6) <= 0.3);
       const z = stootZichtbaar(mp4);
+      // "In beeld" = niet zwart (16); de plaat geeft 31. De grens ligt ertussen, niet één stap onder 31 (review 2, L2).
       const piek = Math.max(...z.rij.filter(([t]) => t >= 2.9 && t <= 3.4).map(([, y]) => y));
       ok(`S28 ${doel}: de plaat staat in beeld (helderheid in stilte ${r2(z.basis)}; zwart is 16) en de stoot op ${z.t === null ? '-' : r2(z.t)} s (3,0 ± 0,15), lichter dan de plaat (max ${r2(piek)})`,
-        z.basis > 30 && z.t !== null && Math.abs(z.t - 3) <= 0.15 && piek > z.basis + 8);
+        z.basis > 23 && z.t !== null && Math.abs(z.t - 3) <= 0.15 && piek > z.basis + 8);
     }
   }
 
