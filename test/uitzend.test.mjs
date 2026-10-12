@@ -38,6 +38,8 @@ const opnames = join(tmp, 'opnames');
 const uitzendMap = join(tmp, 'uitzend');
 const uitMap = join(tmp, 'uit');
 mkdirSync(opnames); mkdirSync(uitzendMap); mkdirSync(uitMap);
+// Vangnet (review 2, L3): een start zonder uitMap schrijft zo in de tijdelijke map, nooit in ~/Movies/VARVE-uitzend.
+process.env.VARVE_UITZEND_UIT = uitMap;
 const ontvangers = [];
 
 // ---- hulp ----------------------------------------------------------------------
