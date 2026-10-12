@@ -665,6 +665,26 @@ try {
       const w = st.waarschuwingen.find((x) => /geen flv op/.test(x));
       ok(`R11 geen flv op de verwachte plek -> geen stille stop maar "${w}"`, r.ok && !!w && !st.uit?.mp4);
     }
+    // R12 (review 2, M1): opnameKlaar terwijl de start nog op de mp4 wacht. Vroeger gaf opnameKlaar meteen ok zonder
+    //     iets te doen; de start slaagde daarna alsnog en volgde een opname die al dicht was ("bron stil" na 10 s).
+    if (!heeftVT) notitie('R12: geen h264_videotoolbox in deze ffmpeg');
+    else {
+      const p12 = pcm(12), v = fmp4('aac');
+      const id = await nieuweOpname();
+      await O.voegToe(opnames, id, p12.subarray(0, 192000), 0);
+      const sP = U.start({ id, doel: 'beeld' }, { ...basis, wachtMp4: 3000 });
+      await wacht(150);
+      for (let i = 1; i < 12; i++) await O.voegToe(opnames, id, p12.subarray(i * 192000, (i + 1) * 192000), i * 48000);
+      await O.voegVideoToe(opnames, id, 'mp4', v.init);
+      for (const f of v.frags) await O.voegVideoToe(opnames, id, 'mp4', f.buf);
+      await O.sluit(opnames, id);
+      const k = await U.opnameKlaar(id);
+      const s = await sP;
+      const st = U.stand();
+      const vd = duurVan(st.uit?.mp4 || '/x', 'v:0');
+      ok(`R12 opnameKlaar tijdens het starten: start ${s.ok ? 'ok' : s.fout}, klaar ok, daarna niet bezig, geen fout ("${st.fout}"), mp4 met beeld ${r2(vd)} s (12 ± 0,6)`,
+        s.ok && k.ok && !st.bezig && st.fout === null && existsSync(st.uit?.mp4 || '/x') && Math.abs(vd - 12) <= 0.6);
+    }
   }
 
   // ==== E: echte tijd (alleen met VARVE_TEST_ECHTETIJD=1) ==========================

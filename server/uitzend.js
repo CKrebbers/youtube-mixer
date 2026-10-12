@@ -663,6 +663,9 @@ class Zending {
 
   async opnameKlaar(id) {
     try {
+      // Loopt de start nog (wachten op de mp4 kan 10 s duren), dan eerst die afwachten: anders deed dit niets en
+      // volgde de uitzending daarna een opname die al dicht was, tot "bron stil" (review 2, M1; R12).
+      if (this.bezigMetStarten) await this.startBelofte?.catch(() => {});
       if (!this.s.bezig || this.s.id !== id || this.stoppen) return { ok: true };
       clearInterval(this.poll);
       await this._leeg();

@@ -142,7 +142,9 @@ muxer+uit:  bestand: -f flv <uitmap>/set-<id>.uitzend[-N].flv   (na stop: -c cop
   poll vers geluid weggooien (review 10 okt). `sprongen` en `kwijtS` tellen mee. Een mp4 wordt nooit geknipt: boven
   20 s stopt de uitzending met `fout: 'achterstand'`.
 - **Stoppen tijdens het starten** (wachten op de mp4 kan 10 s duren): `stop()` breekt de start af en wacht erop;
-  er komt dan geen ffmpeg (R1).
+  er komt dan geen ffmpeg (R1). **`opnameKlaar` tijdens het starten** wacht eerst de start af en leest dan tot het
+  eind (R12). Eerst gaf hij meteen ok zonder iets te doen; de start slaagde daarna alsnog en volgde een opname die al
+  dicht was, tot "bron stil" na 10 s en een stop na 30 s (review 2, M1).
 - **Bron stil**: groeit de WAV 10 s niet, dan `fout: 'bron stil'`; na 30 s stopt de uitzending (tabblad dicht).
 
 ## 5. Rechten in gewone taal
@@ -195,6 +197,8 @@ node test/alles.mjs                                 # draait de snelle variant m
   uitzendmap) komt op het absolute pad dat Node toetste; alles behalve `id`/`doel`/`beeldstand`/`door` in het verzoek
   wordt genegeerd; `opnameKlaar` en `stop()` tegelijk geven beide ok en draaien geen rondjes zonder pauze (Node-CPU
   ≤ de helft van de wandtijd; vroeger ~100 %); een flv die er niet is geeft een waarschuwing in plaats van stilte.
+- R12 (uit review 2): `opnameKlaar` terwijl de start nog op de mp4 wacht, leest alsnog tot het eind en stopt netjes
+  (niet bezig, geen fout, de mp4 met 12 s beeld).
 - Elke nieuwe check is ook tegen de oude code gedraaid (de reparaties tijdelijk teruggezet in een kopie): alle vijftien
   werden rood.
 - E1-E6: echte tijd, SIGSTOP-proef met en zonder sprong, beeld met Chrome's cadans, regressiewacht (aac), CPU bij 15 fps.
