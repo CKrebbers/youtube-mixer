@@ -26,7 +26,8 @@
 //
 // VEILIG: eigen headless shell, eigen server op een eigen poort (8801/9401, vooraf
 // vrij), ALLES van de server in een tijdelijke map (database, media, opnames, patronen,
-// plannen, proef, kaart, nacht, nep-yt-dlp: geen netwerk), geen requestMIDIAccess, de
+// plannen, proef, backups, kaart, nacht, standen, hub-sets, uitzenduitgang, nep-yt-dlp:
+// geen netwerk), VARVE_TESTSERVER=1, geen requestMIDIAccess, de
 // pagina is /styles.css (de app start niet). De echte media/library.db wordt niet
 // aangeraakt. De tijdelijke map blijft staan (het pad staat in de uitvoer).
 // Gebruik: VARVE_TMP=<kladmap> node tools/headless/sampler-drums-stems.mjs [uitmap]
@@ -140,6 +141,9 @@ const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
     VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_HERANALYSE: 'uit',
     VARVE_PROEF: join(tmp, 'proef'), VARVE_BACKUPS: join(tmp, 'backups'),
     VARVE_KAART: join(tmp, 'kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'), VARVE_NACHT: join(tmp, 'nacht.json'),
+    // Na de samenvoeging (12 okt): ook standen, hub-sets en de uitzenduitgang in de tijdelijke
+    // map, en geen extra hosts (test/sampler-drums.test.mjs bewaakt dat).
+    VARVE_STANDEN: join(tmp, 'standen'), VARVE_HUB_SETS: join(tmp, 'hub-sets'), VARVE_UITZEND_UIT: join(tmp, 'uitzend-uit'), VARVE_HOSTS: '',
     VARVE_YTDLP: maakNepYtdlp(tmp) },
   stdio: 'ignore',
 });

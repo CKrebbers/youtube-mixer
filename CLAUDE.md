@@ -333,7 +333,8 @@ test/
   bladeren.test.mjs  bladeren in de library met de Maschine: bindLibrary, keuze/venster, terugspelen, wiel/ENTER/◄ ►, lampjes, schermen
   maschine-sampler.test.mjs  de padmodus sampler op de Maschine: pads per rij, SHIFT, ◄ ► tellen, knop 5 volume, lampjes, scherm
   sampler-drums.test.mjs  crossover: sampler-pad als drumpad (tabel, actions, welke Drums, melding tempo/stems met de echte
-                    stemindeling, lampjes, terugspelen, na herladen, de knoppen in index.html), zonder DOM
+                    stemindeling, lampjes, terugspelen, na herladen, de knoppen in index.html, de omgeving van de
+                    proefservers van tools/headless/sampler-drums*.mjs), zonder DOM
   bovenbalk.test.mjs  de bovenbalk scrollt opzij als hij niet past (randen, CSS: niet hoger, geen schuifbalk)
   patronen.test.mjs model, venster (swing, micro, omlopen), klok, speler met nep-maatgever (op de maat, herankeren zonder dubbele/gemiste), opnemen, opslag (409), server
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
