@@ -130,6 +130,30 @@ try {
     ok('versies() geeft ze, nieuwste eerst', (await standen.versies('proef')).length === 60);
     ok('lijst(): nu 6 (de vier voorbeelden plus proef en krat; apc één keer, als eigen)', (await standen.lijst()).length === 6 && (await standen.lijst()).find((x) => x.naam === 'apc').bron === 'eigen');
   }
+  {
+    // Fix standen (na review 2, punt 1): de grens voor de hele server kan vol raken TUSSEN het lezen van de
+    // stand en het bewaren van de vorige inhoud (een poll start intussen twee leesoperaties die blijven hangen,
+    // iCloud). Dan mag opslaan niet doorgaan zonder .versies-kopie: 503, en het bestand blijft zoals het was.
+    const { standen, map: smap } = maak();
+    standen.leesMs = 60;
+    const eerst = { schema: 1, titel: 'Eerst', delen: { nacht: { aan: false } } };
+    const r1 = await standen.schrijf('eigen', eerst, null);
+    const echteLees = standen.lees.bind(standen);
+    const nooit = () => new Promise(() => {});
+    standen.lees = async (n) => {
+      const r = await echteLees(n);
+      standen._extern('poll-a', nooit).catch(() => {}); standen._extern('poll-b', nooit).catch(() => {});
+      return r;
+    };
+    // De wachttimers van de grens zijn unref (de server houdt het proces open); hier houdt deze het open.
+    const houd = setInterval(() => {}, 1000);
+    const e = await gooit(() => standen.schrijf('eigen', { ...eerst, titel: 'Daarna' }, r1.antwoord.versie));
+    clearInterval(houd);
+    standen.lees = echteLees;
+    const nu = JSON.parse(readFileSync(join(smap, 'eigen.json'), 'utf8'));
+    ok(`de grens vol tussen lezen en .versies: 503 (${e?.code}), "eigen" ongewijzigd ("${nu.titel}"), geen halve .versies`,
+      e instanceof StandFout && e.code === 503 && nu.titel === 'Eerst' && lijstIn(join(smap, '.versies', 'eigen')).length === 0);
+  }
 
   // ---- activeren: de nacht ----------------------------------------------------------------
   console.log('\nactiveren: de nacht remmen');

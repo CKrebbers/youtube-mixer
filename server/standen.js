@@ -328,9 +328,17 @@ export class Standen {
     return { code: 200, antwoord: { versie: versieVan(Buffer.from(tekst)), bron: 'eigen', waarschuwingen: [...waarschuwingen, ...await this._controleer(stand)] } };
   }
 
-  /** De vorige eigen inhoud naar .versies/<naam>/; nooit iets weggooien. */
+  /**
+   * De vorige eigen inhoud naar .versies/<naam>/; nooit iets weggooien. Is de
+   * vorige inhoud niet te lezen (iCloud, of de grens voor de hele server raakte
+   * vol na de lees in schrijf()), dan gaat de 503 door en wordt er NIET
+   * opgeslagen: anders verdween de vorige inhoud zonder kopie.
+   */
   async _bewaarOud(naam) {
-    const oud = (await this._leesBestand(this.pad(naam)).catch(() => null))?.buf;
+    const oud = (await this._leesBestand(this.pad(naam)).catch((err) => {
+      if (err instanceof StandFout) throw err;
+      return null;
+    }))?.buf;
     if (!oud) return;
     const map = join(this.map, '.versies', naam);
     await mkdir(map, { recursive: true });
