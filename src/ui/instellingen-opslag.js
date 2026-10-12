@@ -11,6 +11,11 @@
  *   - Bij het opstarten (app.js, vóór de engine en de panelen) haalt `start()`
  *     alle zeven in één verzoek op en zet ze in localStorage. De bestaande
  *     `localStorage.getItem(...)`-plekken lezen daarna gewoon de serverwaarde.
+ *     Had deze browser een andere waarde, dan gaat die eerst naar
+ *     `varve.instellingen.vorige` (per sleutel de laatste vijf, één melding):
+ *     een vers profiel dat zijn standaard-rack op de server zette, kan zo nooit
+ *     ongemerkt het echte rack van een andere browser wegvagen. Terugzetten:
+ *     `instellingen.herstel('<sleutel>')` in de console (app.js), dan herladen.
  *   - Staat een sleutel nog NIET op de server (nooit bewaard) maar wel in deze
  *     browser, dan gaat hij één keer omhoog. Daarna is de server de bron.
  *   - Schrijven gaat via `schrijfInstelling`/`wisInstelling` (of, als de plek
@@ -18,37 +23,39 @@
  *     de server kort daarna. Lukt dat niet, dan blijft de sleutel als
  *     "onverzonden" gemarkeerd in deze browser, en wint de browser bij de
  *     volgende start (anders zou een oudere serverwaarde je laatste keuze
- *     overschrijven).
+ *     overschrijven). De serverwaarde die hij dan vervangt (misschien nieuwer,
+ *     uit een andere browser) gaat ook naar `vorige`.
  *   - Is de server er niet bij het opstarten (of antwoordt hij niet binnen
  *     1,5 s): localStorage is de reserve en alles werkt zoals vóór B4, maar
  *     deze sessie gaat er niets naar de server (één melding). Zoals bij de
  *     mapping: anders zou een standaardwaarde uit een lege browser het echte
- *     master-rack op de server overschrijven.
+ *     master-rack op de server overschrijven. Bij de volgende start wint de
+ *     server weer, en wat je in deze sessie instelde staat dan bij `vorige`.
  *
- * Geen DOM. `haal` (fetch), `opslag` (localStorage) en `meld` komen van buiten;
+ * De witte lijst staat in `instellingen-lijst.js` (puur; de server importeert
+ * hem). Geen DOM op moduleniveau ook hier: tests laden dit bestand in Node. `haal` (fetch), `opslag` (localStorage) en `meld` komen van buiten;
  * zo is de volgorde server/browser in Node te testen (test/instellingen-opslag.test.mjs).
  */
 
-/** De witte lijst: alleen deze sleutels mogen naar de server (server/index.js importeert hem). */
-export const INSTELLING_SLEUTELS = Object.freeze([
-  'varve.master.rack',
-  'varve.klankschaal',
-  'varve.midi.ports',
-  'varve.beeld.adres',
-  'varve.beeld.latentie',
-  'varve.beeld.aan',
-  'varve.stems.standaard',
-  'varve.koptelefoon.omgewisseld',
-  'varve.vormen',
-]);
+import { INSTELLING_SLEUTELS, INSTELLING_MAX, isInstelling } from './instellingen-lijst.js';
 
-/** Hoe groot één waarde mag zijn (tekens). Een master-rack is een paar kB. */
-export const INSTELLING_MAX = 128 * 1024;
+export { INSTELLING_SLEUTELS, INSTELLING_MAX, isInstelling };
 
 /** In deze browser: welke sleutels nog niet op de server staan (lijst als JSON). */
 export const ONVERZONDEN = 'varve.instellingen.onverzonden';
 
-export const isInstelling = (sleutel) => INSTELLING_SLEUTELS.includes(sleutel);
+/**
+ * In deze browser: waarden die bij het opstarten vervangen werden, zodat er
+ * nooit iets zonder kopie verdwijnt. `{ <sleutel>: [{ waarde, tijd, bron }] }`,
+ * nieuwste eerst, hooguit VORIGE_MAX per sleutel. `bron`: 'browser' (deze
+ * browser had hem, de server won), 'server' (de server had hem, een onverzonden
+ * browserwaarde won) of 'herstel' (weggezet door `herstel`).
+ */
+export const VORIGE = 'varve.instellingen.vorige';
+export const VORIGE_MAX = 5;
+
+/** Leesbare naam in een melding. */
+const kort = (k) => k.replace(/^varve\./, '');
 
 const pad = (sleutel) => `/api/instellingen/${encodeURIComponent(sleutel)}`;
 
@@ -87,6 +94,33 @@ export function maakInstellingenOpslag({ haal = null, opslag = null, meld = () =
     if (aan) l.add(k); else l.delete(k);
     try { if (l.size) opslag?.setItem(ONVERZONDEN, JSON.stringify([...l])); else opslag?.removeItem(ONVERZONDEN); } catch (_) {}
   };
+  const vorige = () => {
+    try {
+      const v = JSON.parse(opslag?.getItem(VORIGE) || '{}');
+      if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+      const uit = {};
+      for (const k of INSTELLING_SLEUTELS) {
+        const l = Array.isArray(v[k]) ? v[k].filter((x) => x && typeof x.waarde === 'string') : [];
+        if (l.length) uit[k] = l;
+      }
+      return uit;
+    } catch (_) { return {}; }
+  };
+  /** Een waarde die vervangen wordt eerst wegzetten. Gelukt = true. */
+  const bewaarVorige = (k, waarde, bron) => {
+    if (typeof waarde !== 'string') return false;   // null (niets of gewist): niets te verliezen
+    const v = vorige();
+    const l = (v[k] || []).filter((x) => x.waarde !== waarde);
+    v[k] = [{ waarde, tijd: new Date().toISOString(), bron }, ...l].slice(0, VORIGE_MAX);
+    try { opslag?.setItem(VORIGE, JSON.stringify(v)); return !!opslag; } catch (_) {}
+    // Vol (quota): dan van elke sleutel alleen de nieuwste.
+    try {
+      for (const s of Object.keys(v)) v[s] = v[s].slice(0, 1);
+      opslag?.setItem(VORIGE, JSON.stringify(v)); return !!opslag;
+    } catch (_) { return false; }
+  };
+  const NIET_GELEZEN = 'instellingen niet van de server gelezen bij het opstarten — wat je deze sessie verandert, blijft alleen in deze browser. '
+    + 'Bij de volgende start neemt de server het weer over; je versie staat dan bewaard als vorige (instellingen.vorige() in de console)';
 
   async function stuur(k, waarde) {
     if (!haal) return false;
@@ -99,7 +133,7 @@ export function maakInstellingenOpslag({ haal = null, opslag = null, meld = () =
       return true;
     } catch (err) {
       // Eén keer per sessie melden: een schuif die blijft bewegen geeft anders een rij meldingen.
-      if (!gemeld) { gemeld = true; meld(`instelling ${k} niet op de server bewaard (${err.message}) — staat wel in deze browser`, 'fout'); }
+      if (!gemeld) gemeld = false !== meld(`instelling ${k} niet op de server bewaard (${err.message}) — staat wel in deze browser`, 'fout');
       return false;
     }
   }
@@ -108,10 +142,7 @@ export function maakInstellingenOpslag({ haal = null, opslag = null, meld = () =
   function spiegel(k, waarde) {
     if (!isInstelling(k) || !haal) return;
     if (!gelezen) {
-      if (!nietGelezenGemeld) {
-        nietGelezenGemeld = true;
-        meld('instellingen niet van de server gelezen bij het opstarten — deze sessie blijven ze in deze browser (herlaad om ze weer op de server te bewaren)', 'fout');
-      }
+      if (!nietGelezenGemeld) nietGelezenGemeld = false !== meld(NIET_GELEZEN, 'fout');
       return;
     }
     const w = waarde == null ? null : String(waarde);
@@ -133,10 +164,12 @@ export function maakInstellingenOpslag({ haal = null, opslag = null, meld = () =
    * Opstarten: de server lezen en de browser gelijk zetten, of (lege server,
    * gevulde browser) één keer omhoog schrijven. Gooit nooit.
    *
-   * @returns {{ serverBereikbaar, vanServer: string[], omhoog: string[], fout? }}
+   * @returns {{ serverBereikbaar, vanServer: string[], omhoog: string[], bewaard: string[], nietBewaard: string[], fout? }}
+   *   `bewaard`: sleutels waarvan een vervangen waarde nu in `vorige` staat.
+   *   `nietBewaard`: de kopie lukte niet (localStorage vol); daar bleef de browserwaarde staan.
    */
   async function start() {
-    const verslag = { serverBereikbaar: false, vanServer: [], omhoog: [] };
+    const verslag = { serverBereikbaar: false, vanServer: [], omhoog: [], bewaard: [], nietBewaard: [] };
     if (!haal) return verslag;
     let lijst;
     try {
@@ -150,6 +183,7 @@ export function maakInstellingenOpslag({ haal = null, opslag = null, meld = () =
       if (!lijst || typeof lijst !== 'object') throw new Error('geen instellingen in het antwoord');
     } catch (err) {
       verslag.fout = err?.name === 'AbortError' ? 'geen antwoord' : err?.message;
+      if (!nietGelezenGemeld) nietGelezenGemeld = false !== meld(`${NIET_GELEZEN} [${verslag.fout}]`, 'fout');
       return verslag;
     }
     verslag.serverBereikbaar = true;
@@ -163,9 +197,18 @@ export function maakInstellingenOpslag({ haal = null, opslag = null, meld = () =
       if (bewaard) opServer.set(k, server);
       if (wacht.has(k) && !timers.has(k)) {
         // De vorige keer niet aangekomen: de browser is nieuwer dan de server.
-        if (!bewaard || server !== lokaal) omhoog.push(k); else markeer(k, false);
+        // Maar de serverwaarde kan intussen uit een andere browser komen: die eerst wegzetten.
+        if (!bewaard || server !== lokaal) {
+          if (bewaard && server !== null && bewaarVorige(k, server, 'server')) verslag.bewaard.push(k);
+          omhoog.push(k);
+        } else markeer(k, false);
       } else if (bewaard) {
-        if (lokaal !== server) zetLokaal(k, server);
+        if (lokaal !== server) {
+          // Nooit een afwijkende browserwaarde zonder kopie weggooien.
+          if (lokaal === null) zetLokaal(k, server);
+          else if (bewaarVorige(k, lokaal, 'browser')) { verslag.bewaard.push(k); zetLokaal(k, server); }
+          else verslag.nietBewaard.push(k);   // kopie lukte niet (localStorage vol): de browserwaarde blijft staan
+        }
         verslag.vanServer.push(k);
       } else if (lokaal !== null) {
         omhoog.push(k);   // lege server, gevulde browser: één keer omhoog
@@ -175,7 +218,38 @@ export function maakInstellingenOpslag({ haal = null, opslag = null, meld = () =
       markeer(k, true);
       if (await stuur(k, lees(k))) verslag.omhoog.push(k);
     }
+    if (verslag.bewaard.length) {
+      meld(`instellingen bijgewerkt bij het opstarten: ${verslag.bewaard.map(kort).join(', ')} — de vervangen versie staat bewaard `
+        + `(instellingen.vorige() in de console; terugzetten: instellingen.herstel('<sleutel>') en herladen)`);
+    }
+    if (verslag.nietBewaard.length) {
+      meld(`instellingen: ${verslag.nietBewaard.map(kort).join(', ')} NIET van de server genomen — de opslag van deze browser is vol, `
+        + 'dus er kon geen kopie van je versie bij; die blijft staan (de server houdt de zijne)', 'fout');
+    }
     return verslag;
+  }
+
+  /**
+   * Een bewaarde vorige waarde terugzetten: in de browser, en op de server als
+   * die bij het opstarten gelezen is. Wat er nu staat gaat eerst zelf naar
+   * `vorige` (dus terug te draaien). De panelen lezen hun sleutel bij het
+   * opstarten: daarna herladen.
+   *
+   * @returns {Promise<{ ok, opServer?, fout? }>}
+   */
+  async function herstel(k, i = 0) {
+    if (!isInstelling(k)) return { ok: false, fout: 'onbekende instelling' };
+    const terug = vorige()[k]?.[i];
+    if (!terug) return { ok: false, fout: `geen vorige waarde ${i} voor ${k}` };
+    const nu = lees(k);
+    if (nu !== null && nu !== terug.waarde && !bewaarVorige(k, nu, 'herstel')) {
+      return { ok: false, fout: 'geen kopie te maken van wat er nu staat (opslag vol): niets veranderd' };
+    }
+    zetLokaal(k, terug.waarde);
+    if (!gelezen || !haal) return { ok: true, opServer: false };
+    clearTimeout(timers.get(k)); timers.delete(k);
+    markeer(k, true);
+    return { ok: true, opServer: await stuur(k, terug.waarde) };
   }
 
   /** Wacht tot alles wat klaarstaat verstuurd is (tests; en vóór een backup). */
@@ -188,7 +262,7 @@ export function maakInstellingenOpslag({ haal = null, opslag = null, meld = () =
     await Promise.all([...lopend]);
   }
 
-  return { start, schrijf, wis, spiegel, klaar, onverzonden };
+  return { start, schrijf, wis, spiegel, klaar, onverzonden, vorige, herstel };
 }
 
 // ---- de ene opslag van de browser ------------------------------------------
@@ -202,6 +276,15 @@ const inBrowser = () => {
   try { return /^https?:$/.test(globalThis.location?.protocol || ''); } catch (_) { return false; }
 };
 let browser = null;
+// Meldingen van vóór `window.meld` (app.js zet die pas na startInstellingen):
+// wachten tot `toonInstellingMeldingen()`, niet stilletjes weg.
+const uitgesteld = [];
+const browserMeld = (...a) => {
+  if (typeof globalThis.meld === 'function') { globalThis.meld(...a); return true; }
+  if (uitgesteld.length >= 10) return false;
+  uitgesteld.push(a);
+  return true;
+};
 function deBrowser() {
   if (!browser) {
     let opslag = null;
@@ -209,7 +292,7 @@ function deBrowser() {
     browser = maakInstellingenOpslag({
       haal: inBrowser() && typeof globalThis.fetch === 'function' ? (...a) => globalThis.fetch(...a) : null,
       opslag,
-      meld: (...a) => globalThis.meld?.(...a),
+      meld: browserMeld,
     });
   }
   return browser;
@@ -217,6 +300,12 @@ function deBrowser() {
 
 /** app.js: vóór de engine en de panelen. Gooit nooit; zonder server blijft de browser de bron. */
 export const startInstellingen = () => deBrowser().start();
+/** app.js, direct na `window.meld = meld`: wat startInstellingen te melden had. */
+export const toonInstellingMeldingen = () => { for (const a of uitgesteld.splice(0)) browserMeld(...a); };
+/** Console (`instellingen.vorige()`): de bij het opstarten vervangen waarden van deze browser. */
+export const vorigeInstellingen = () => deBrowser().vorige();
+/** Console (`instellingen.herstel('varve.master.rack')`): een vorige waarde terug, daarna herladen. */
+export const herstelInstelling = (k, i = 0) => deBrowser().herstel(k, i);
 /** localStorage.setItem, en voor de zeven sleutels ook de server. */
 export const schrijfInstelling = (k, v) => {
   if (isInstelling(k)) return deBrowser().schrijf(k, v);

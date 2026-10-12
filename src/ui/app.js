@@ -32,7 +32,7 @@ import { tabblad } from './tabblad.js';
 import { startStatusZender } from './status-zender.js';
 import { vormenAan, hubAdres, hubGeweigerd } from './vlag.js';
 import { opzetBovenbalk } from './bovenbalk.js';
-import { startInstellingen } from './instellingen-opslag.js';
+import { startInstellingen, toonInstellingMeldingen, vorigeInstellingen, herstelInstelling } from './instellingen-opslag.js';
 
 /**
  * Het instappunt van de schermlaag: maakt de engine en zet de modules in
@@ -61,6 +61,8 @@ const perDeck = (maak) => Object.fromEntries(DECK_IDS.map((id) => [id, maak(id)]
 
 koppelMeldingen(engine);
 window.meld = meld;
+toonInstellingMeldingen();   // wat startInstellingen hierboven te melden had (vóór window.meld)
+window.instellingen = { vorige: vorigeInstellingen, herstel: herstelInstelling };   // console: een vervangen waarde terug
 
 // ---- één VARVE-tabblad luistert naar de APC ------------------------------
 // Een tweede tabblad krijgt anders elke knopdruk ook, en stuurt zijn eigen

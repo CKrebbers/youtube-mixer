@@ -24,7 +24,7 @@ import { Splitter, StemsRij, maakStems, wisStemsBestanden, isAantal, isStemsKeuz
 import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, TELLEN_BESTAND, TELLEN_VERSIE } from './tellen.js';
 import { gridUitTellen, vergelijk, meetGrid, VERSIE as KAART_VERSIE } from '../src/engine/tellen.js';
 import { Beatgrid } from '../src/engine/beatgrid.js';
-import { INSTELLING_SLEUTELS, INSTELLING_MAX, isInstelling } from '../src/ui/instellingen-opslag.js';
+import { INSTELLING_SLEUTELS, INSTELLING_MAX, isInstelling } from '../src/ui/instellingen-lijst.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
 import { Kaart, KaartFout, STANDAARD_PAD as KAART_STANDAARD_PAD } from './kaart.js';
 import { Nacht } from './nacht.js';
@@ -1493,7 +1493,7 @@ const server = createServer(async (req, res) => {
 
     // ---- de zeven browser-instellingen die het instrument zijn (extra-3 B4) -
     // Zoals de mapping: in de tabel instellingen, dus in library.db en in elke
-    // backup. Alleen de sleutels op de witte lijst (src/ui/instellingen-opslag.js);
+    // backup. Alleen de sleutels op de witte lijst (src/ui/instellingen-lijst.js);
     // de waarde is de tekst die de browser in localStorage zet, of null (gewist).
     // GET /api/instellingen: alles wat ooit bewaard is ({ sleutel: tekst|null });
     // een sleutel die er niet in staat is nooit bewaard (de browser schrijft hem dan één keer omhoog).
@@ -1515,7 +1515,7 @@ const server = createServer(async (req, res) => {
       }
       if (req.method === 'PUT') {
         if (mediatype !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
-        const b = await leesJson(req, INSTELLING_MAX * 2 + 1024);
+        const b = await leesJson(req, INSTELLING_MAX * 6 + 1024);   // ruim: elk teken kan als \uXXXX komen
         if (!b || typeof b !== 'object' || !('waarde' in b)) return json(res, 400, { fout: 'stuur { waarde: tekst of null }' });
         if (b.waarde !== null && typeof b.waarde !== 'string') return json(res, 400, { fout: 'waarde moet tekst of null zijn' });
         if (typeof b.waarde === 'string' && b.waarde.length > INSTELLING_MAX) return json(res, 413, { fout: `waarde te groot (hooguit ${INSTELLING_MAX} tekens)` });

@@ -108,6 +108,14 @@ try {
   ok('geen JSON: 400', (await put('varve.klankschaal', 'nee{')).status === 400);
   ok('text/plain: 415', (await put('varve.klankschaal', { waarde: 'x' }, { 'Content-Type': 'text/plain' })).status === 415);
   ok('te groot: 413', (await put('varve.klankschaal', { waarde: 'x'.repeat(INSTELLING_MAX + 1) })).status === 413);
+  // Herstelronde 1 (fix 4): meerbyte-tekens en JSON-escapes zijn meer bytes dan tekens; ook dan 413/200, geen afgebroken verbinding.
+  const st = async (w) => { try { return (await put('varve.klankschaal', { waarde: w })).status; } catch (e) { return `verbinding weg (${e.cause?.code || e.message})`; } };
+  const euro = await st('€'.repeat(100_000));
+  ok('100 000 × € (300 kB): 200, geen afgebroken verbinding', euro === 200, String(euro));
+  const ctrl = await st('\u0001'.repeat(INSTELLING_MAX));
+  ok('128 K stuurtekens (elk als \\u0001, 768 kB): 200', ctrl === 200, String(ctrl));
+  const teveel = await st('€'.repeat(INSTELLING_MAX + 1));
+  ok('128 K + 1 × €: 413', teveel === 413, String(teveel));
   ok('precies op de grens: 200', (await put('varve.klankschaal', { waarde: 'y'.repeat(INSTELLING_MAX) })).status === 200);
   ok('DELETE: 405 (wissen = PUT met null)', (await json('/api/instellingen/varve.klankschaal', { method: 'DELETE' })).status === 405);
   ok('PUT vanaf een andere oorsprong: 403', (await put('varve.klankschaal', { waarde: 'x' },

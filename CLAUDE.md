@@ -137,7 +137,7 @@ src/
                     kaart-panel.js  de tab kaart in het library-paneel: zoeken, kratten, haal binnen/zoek, wenslijst, nachtwachtrij (docs/LIBRARY.md "De kaart-tab")
                     hotcue-opslag.js hotcues per nummer bewaren: welk nummer op welke track, één verzoek tegelijk
                     mapping-opslag.js je eigen mapping als verschil: standaard ophalen, omzetten, bewaren, herstellen
-                    instellingen-opslag.js de zeven instrument-sleutels (master-rack, klankschaal, poorten, beeld, stems, koptelefoon, vormen) ook op de server: /api/instellingen, server eerst (docs/LIBRARY.md)
+                    instellingen-opslag.js de zeven instrument-sleutels (master-rack, klankschaal, poorten, beeld, stems, koptelefoon, vormen) ook op de server: /api/instellingen, server eerst, vervangen waarden bij varve.instellingen.vorige; witte lijst in instellingen-lijst.js (docs/LIBRARY.md)
                     ingest-strook.js de ingest-wachtrij in het library-paneel: plakken, voortgang, ×, laadknoppen
                     logboek.js      ○ log en ↺ naast de opname: vastleggen, vergelijken, lijst, terugspelen
                     klankschaal-paneel.js de KLANKSCHAAL-rij: openen, instellingen bewaren, per frame tonen

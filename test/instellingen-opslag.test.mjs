@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const io = await import('../src/ui/instellingen-opslag.js');
-const { maakInstellingenOpslag, INSTELLING_SLEUTELS, ONVERZONDEN } = io;
+const { maakInstellingenOpslag, INSTELLING_SLEUTELS, ONVERZONDEN, VORIGE, VORIGE_MAX } = io;
 
 const fails = [];
 const ok = (naam, cond, info = '') => { if (!cond) fails.push(naam); console.log((cond ? '  ok  ' : 'FAIL  ') + naam + (!cond && info ? `  (${info})` : '')); };
@@ -212,10 +212,157 @@ console.log('\nniet aangekomen: de browser wint bij de volgende start');
   ok('server niet gelezen: niets naar de server, ook als hij later wel antwoordt', srv.puts.length === 0 && srv.db.get('varve.master.rack') === RACK);
   ok('…wel in de browser, en niet als onverzonden gemarkeerd', opslag.getItem('varve.master.rack') === '{"naam":"Filter"}' && opslag.getItem(ONVERZONDEN) === null);
   ok('…één melding', meldingen.length === 1 && /niet van de server gelezen/.test(meldingen[0]), JSON.stringify(meldingen));
+  ok('…die niet meer "herlaad om te bewaren" zegt, maar wat er bij de volgende start gebeurt', !/herlaad om/.test(meldingen[0]) && /volgende start neemt de server/.test(meldingen[0]) && /vorige/.test(meldingen[0]));
   await maakInstellingenOpslag({ haal: srv.haal, opslag }).start();
   ok('volgende start: het echte rack van de server komt terug (niet overschreven)', opslag.getItem('varve.master.rack') === RACK && srv.db.get('varve.master.rack') === RACK
     && !srv.puts.some(([k]) => k === 'varve.master.rack'), JSON.stringify([opslag.alles(), srv.puts]));
+  ok('…en het standaard-rack van die sessie staat bij vorige', JSON.parse(opslag.getItem(VORIGE))['varve.master.rack'][0].waarde === '{"naam":"Filter"}');
   ok('…en wat de server nooit had (klankschaal) gaat dan gewoon één keer omhoog', JSON.stringify(srv.puts) === JSON.stringify([['varve.klankschaal', '{}']]));
+}
+
+// ==========================================================================
+console.log('\nherstelronde 1: nooit een afwijkende browserwaarde zonder kopie weg');
+{
+  // Review fix 1: eerst opent een vers profiel (de pc, een tweede Chrome-profiel) de mixer
+  // tegen een lege server; het master-paneel schrijft bij de eerste frame zijn standaard-rack.
+  const srv = nepServer();
+  const vers = nepOpslag();
+  const ov = maakInstellingenOpslag({ haal: srv.haal, opslag: vers, wacht: 1 });
+  await ov.start();
+  ov.schrijf('varve.master.rack', 'STANDAARD');
+  ov.schrijf('varve.klankschaal', '{}');
+  await wacht(10); await ov.klaar();
+  ok('het verse profiel zette zijn standaard op de server', srv.db.get('varve.master.rack') === 'STANDAARD');
+  // Daarna start Clay's eigen Chrome, met zijn echte rack en klankschaal.
+  const KLANK = '{"volgen":"maat","band":3}';
+  const clay = nepOpslag({ 'varve.master.rack': RACK, 'varve.klankschaal': KLANK, 'varve.vormen': '1' });
+  const meldingen = [];
+  const oc = maakInstellingenOpslag({ haal: srv.haal, opslag: clay, wacht: 1, meld: (t, soort) => meldingen.push([t, soort]) });
+  const v = await oc.start();
+  ok('de server wint nog steeds (zoals ontworpen)', clay.getItem('varve.master.rack') === 'STANDAARD' && clay.getItem('varve.klankschaal') === '{}');
+  const vorige = JSON.parse(clay.getItem(VORIGE) || '{}');
+  ok('maar Clay\'s echte rack staat bewaard in varve.instellingen.vorige', vorige['varve.master.rack']?.[0]?.waarde === RACK && vorige['varve.master.rack'][0].bron === 'browser'
+    && typeof vorige['varve.master.rack'][0].tijd === 'string', clay.getItem(VORIGE));
+  ok('…en zijn klankschaal ook', vorige['varve.klankschaal']?.[0]?.waarde === KLANK);
+  ok('een sleutel die de server nooit had (vormen) gaat gewoon omhoog, niets bewaard', !vorige['varve.vormen'] && srv.db.get('varve.vormen') === '1');
+  ok('het verslag noemt de bewaarde sleutels', JSON.stringify(v.bewaard) === JSON.stringify(['varve.master.rack', 'varve.klankschaal']), JSON.stringify(v));
+  ok('één melding (info), die zegt waar het staat', meldingen.length === 1 && meldingen[0][1] !== 'fout' && /master\.rack, klankschaal/.test(meldingen[0][0]) && /instellingen\.herstel/.test(meldingen[0][0]), JSON.stringify(meldingen));
+  ok('de opslag laat het ook zien (vorige())', oc.vorige()['varve.master.rack'][0].waarde === RACK);
+  // Terugzetten: in de browser en op de server; wat er stond gaat zelf naar vorige.
+  const h = await oc.herstel('varve.master.rack');
+  ok('herstel: browser en server weer het echte rack', h.ok && h.opServer && clay.getItem('varve.master.rack') === RACK && srv.db.get('varve.master.rack') === RACK, JSON.stringify(h));
+  ok('…en het standaard-rack staat nu bij vorige (terug te draaien)', oc.vorige()['varve.master.rack'][0].waarde === 'STANDAARD' && oc.vorige()['varve.master.rack'][0].bron === 'herstel'
+    && oc.vorige()['varve.master.rack'][1].waarde === RACK);
+  ok('…niets onverzonden', clay.getItem(ONVERZONDEN) === null);
+  ok('herstel van iets dat er niet is: nee, geen gooien', (await oc.herstel('varve.beeld.adres')).ok === false && (await oc.herstel('varve.mapping')).ok === false);
+  meldingen.length = 0;
+  const v2 = await maakInstellingenOpslag({ haal: srv.haal, opslag: clay, meld: (t) => meldingen.push(t) }).start();
+  ok('volgende start: gelijk aan de server, niets bewaard, geen melding', v2.bewaard.length === 0 && meldingen.length === 0 && clay.getItem('varve.master.rack') === RACK);
+}
+{
+  // Review fix 2: de start mislukt, Clay stelt in deze sessie iets in, en herlaadt.
+  const srv = nepServer({ 'varve.master.rack': 'OUD' });
+  const opslag = nepOpslag({ 'varve.master.rack': 'OUD' });
+  srv.stand = 'hangt';
+  const meldingen = [];
+  const o = maakInstellingenOpslag({ haal: srv.haal, opslag, wacht: 1, tijdslimiet: 30, meld: (t) => meldingen.push(t) });
+  const v = await o.start();
+  ok('mislukte start meldt het meteen zelf (niet pas bij de eerste schrijfactie)', meldingen.length === 1 && /niet van de server gelezen/.test(meldingen[0]) && /geen antwoord/.test(meldingen[0]) && v.fout === 'geen antwoord');
+  o.schrijf('varve.master.rack', 'NIEUW');
+  await o.klaar();
+  ok('…en niet nog eens bij het schrijven', meldingen.length === 1);
+  srv.stand = 'ok';
+  await maakInstellingenOpslag({ haal: srv.haal, opslag }).start();
+  ok('herladen: de server neemt het over', opslag.getItem('varve.master.rack') === 'OUD' && srv.db.get('varve.master.rack') === 'OUD');
+  ok('…en de sessiewaarde NIEUW is terug te vinden', JSON.parse(opslag.getItem(VORIGE))['varve.master.rack'][0].waarde === 'NIEUW');
+}
+{
+  // Review fix 6: een oude onverzonden-vlag wint, maar de nieuwere serverwaarde gaat eerst naar vorige.
+  const srv = nepServer({ 'varve.klankschaal': 'VAN-DE-PC' });
+  const opslag = nepOpslag({ 'varve.klankschaal': 'WEKEN-OUD', [ONVERZONDEN]: JSON.stringify(['varve.klankschaal']) });
+  const v = await maakInstellingenOpslag({ haal: srv.haal, opslag }).start();
+  ok('onverzonden wint nog steeds', srv.db.get('varve.klankschaal') === 'WEKEN-OUD' && v.omhoog.includes('varve.klankschaal'));
+  const vg = JSON.parse(opslag.getItem(VORIGE))['varve.klankschaal'];
+  ok('…maar de vervangen serverwaarde staat bij vorige (bron server)', vg[0].waarde === 'VAN-DE-PC' && vg[0].bron === 'server' && v.bewaard.includes('varve.klankschaal'));
+}
+{
+  // Hooguit VORIGE_MAX per sleutel, nieuwste eerst, geen dubbele.
+  const srv = nepServer();
+  const opslag = nepOpslag();
+  for (let i = 0; i < VORIGE_MAX + 3; i++) {
+    srv.db.set('varve.vormen', 'S');
+    opslag.setItem('varve.vormen', i % 2 ? 'B' : `B${i}`);
+    await maakInstellingenOpslag({ haal: srv.haal, opslag }).start();
+  }
+  const l = JSON.parse(opslag.getItem(VORIGE))['varve.vormen'];
+  ok(`hooguit ${VORIGE_MAX} per sleutel, nieuwste eerst, geen dubbele`, l.length === VORIGE_MAX && l[0].waarde === 'B' && l[1].waarde === `B${VORIGE_MAX + 1}`
+    && new Set(l.map((x) => x.waarde)).size === l.length, JSON.stringify(l.map((x) => x.waarde)));
+  opslag.setItem(VORIGE, '{kapot');
+  opslag.setItem('varve.vormen', 'X');
+  const v = await maakInstellingenOpslag({ haal: srv.haal, opslag }).start();
+  ok('een kapotte vorige-lijst: opnieuw begonnen, niet gegooid', v.serverBereikbaar && JSON.parse(opslag.getItem(VORIGE))['varve.vormen'][0].waarde === 'X');
+}
+{
+  // Opslag vol: geen kopie mogelijk, dan ook niet overschrijven (en herstel weigert).
+  const srv = nepServer({ 'varve.master.rack': 'STANDAARD', 'varve.klankschaal': '{}' });
+  const opslag = nepOpslag({ 'varve.master.rack': RACK });
+  const setItem = opslag.setItem;
+  opslag.setItem = (k, v) => { if (k === VORIGE) throw new Error('QuotaExceededError'); setItem(k, v); };
+  const meldingen = [];
+  const o = maakInstellingenOpslag({ haal: srv.haal, opslag, meld: (t, soort) => meldingen.push([t, soort]) });
+  const v = await o.start();
+  ok('opslag vol: het echte rack blijft in de browser staan (geen kopie = niet overschrijven)', opslag.getItem('varve.master.rack') === RACK && opslag.getItem(VORIGE) === null
+    && JSON.stringify(v.nietBewaard) === JSON.stringify(['varve.master.rack']) && v.bewaard.length === 0, JSON.stringify(v));
+  ok('…wat de browser niet had, komt gewoon van de server', opslag.getItem('varve.klankschaal') === '{}');
+  ok('…en één foutmelding die het zegt', meldingen.length === 1 && meldingen[0][1] === 'fout' && /master\.rack NIET van de server/.test(meldingen[0][0]), JSON.stringify(meldingen));
+  ok('…de server houdt de zijne', srv.db.get('varve.master.rack') === 'STANDAARD');
+  opslag.setItem = setItem;
+  opslag.setItem(VORIGE, JSON.stringify({ 'varve.master.rack': [{ waarde: 'OUDER', tijd: 'x', bron: 'browser' }] }));
+  opslag.setItem = (k, w) => { if (k === VORIGE) throw new Error('QuotaExceededError'); setItem(k, w); };
+  const h = await o.herstel('varve.master.rack');
+  ok('herstel met volle opslag: weigert, niets veranderd', !h.ok && opslag.getItem('varve.master.rack') === RACK && srv.db.get('varve.master.rack') === 'STANDAARD', JSON.stringify(h));
+}
+{
+  // Review fix 3: een melding die nergens heen kon, telt niet als gemeld.
+  const srv = nepServer();
+  const opslag = nepOpslag();
+  const meldingen = [];
+  let meldKan = false;
+  const o = maakInstellingenOpslag({ haal: srv.haal, opslag, wacht: 1, meld: (t) => { if (!meldKan) return false; meldingen.push(t); return true; } });
+  await o.start();
+  srv.stand = 'weg';
+  o.schrijf('varve.vormen', '1'); await wacht(5); await o.klaar();
+  meldKan = true;
+  o.schrijf('varve.vormen', '0'); await wacht(5); await o.klaar();
+  o.schrijf('varve.vormen', '1'); await wacht(5); await o.klaar();
+  ok('meld gaf false: de volgende fout wordt alsnog gemeld, daarna één keer per sessie', meldingen.length === 1 && /niet op de server bewaard/.test(meldingen[0]), JSON.stringify(meldingen));
+}
+{
+  // Review fix 3, in de browser: meldingen van vóór window.meld wachten op toonInstellingMeldingen().
+  // Een eigen kopie van de module (?query = een nieuwe module), met location en fetch zoals in een pagina.
+  const srv = nepServer({ 'varve.master.rack': 'STANDAARD' });
+  const opslag = nepOpslag({ 'varve.master.rack': RACK });
+  const echteFetch = globalThis.fetch;
+  globalThis.location = { protocol: 'http:' };
+  globalThis.fetch = srv.haal;
+  globalThis.localStorage = opslag;
+  delete globalThis.meld;
+  try {
+    const p = await import('../src/ui/instellingen-opslag.js?pagina');
+    const v = await p.startInstellingen();
+    ok('pagina: de start bewaart het echte rack', v.bewaard.includes('varve.master.rack') && p.vorigeInstellingen()['varve.master.rack'][0].waarde === RACK);
+    const gezien = [];
+    globalThis.meld = (t, s) => { gezien.push([t, s]); };
+    p.toonInstellingMeldingen();
+    ok('de melding van vóór window.meld komt alsnog, één keer', gezien.length === 1 && /bijgewerkt bij het opstarten/.test(gezien[0][0]), JSON.stringify(gezien));
+    p.toonInstellingMeldingen();
+    ok('…en niet twee keer', gezien.length === 1);
+    const h = await p.herstelInstelling('varve.master.rack');
+    ok('pagina: herstelInstelling zet het rack terug, ook op de server', h.ok && h.opServer && opslag.getItem('varve.master.rack') === RACK && srv.db.get('varve.master.rack') === RACK);
+  } finally {
+    globalThis.fetch = echteFetch;
+    delete globalThis.location; delete globalThis.localStorage; delete globalThis.meld;
+  }
 }
 
 // ==========================================================================
@@ -254,7 +401,7 @@ console.log('\nde plekken in src/ die de sleutels lezen en schrijven');
   ok('elke sleutel heeft een plek in src/ (anders klopt de witte lijst niet meer)', zonder.length === 0, zonder.join(', '));
   const los = [];
   for (const [k, fs] of Object.entries(plekken)) for (const f of fs) {
-    if (f.endsWith('instellingen-opslag.js')) continue;
+    if (f.endsWith('instellingen-opslag.js') || f.endsWith('instellingen-lijst.js')) continue;
     const t = readFileSync(f, 'utf8');
     const aangesloten = /from '\.\/instellingen-opslag\.js'/.test(t) || (f.endsWith('control/midi.js') && /this\.bewaar\(STORE_KEY/.test(t))
       || (f.endsWith('master-weergave.js') && /OPSLAG/.test(readFileSync('src/ui/master-paneel.js', 'utf8')) && /schrijfInstelling/.test(readFileSync('src/ui/master-paneel.js', 'utf8')));
@@ -265,6 +412,10 @@ console.log('\nde plekken in src/ die de sleutels lezen en schrijven');
   const app = readFileSync('src/ui/app.js', 'utf8');
   ok('app.js haalt de instellingen op vóór de engine en de panelen', app.indexOf('await startInstellingen()') > 0
     && app.indexOf('await startInstellingen()') < app.indexOf('new Engine(') && app.indexOf('await startInstellingen()') < app.indexOf('opzetMaster('));
+  ok('app.js toont de uitgestelde meldingen direct na window.meld', app.indexOf('toonInstellingMeldingen();') > app.indexOf('window.meld = meld;') && app.indexOf('window.meld = meld;') > 0);
+  ok('de server importeert de witte lijst uit het pure bestand, niet uit de opslag', /from '\.\.\/src\/ui\/instellingen-lijst\.js'/.test(readFileSync('server/index.js', 'utf8'))
+    && !readFileSync('server/index.js', 'utf8').includes('instellingen-opslag.js'));
+  ok('instellingen-lijst.js is puur (geen localStorage, fetch, document, window)', !/localStorage|fetch|document|window/.test(readFileSync('src/ui/instellingen-lijst.js', 'utf8').replace(/\/\*\*[\s\S]*?\*\//g, '')));
   ok('geen engine-bestand raakt de opslag (regel 1)', bestanden('src/engine').every((f) => !readFileSync(f, 'utf8').includes('instellingen-opslag')));
 }
 

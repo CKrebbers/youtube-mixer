@@ -163,8 +163,8 @@ kopie van `server/backup.js` en in elke backupset die `library.db` meeneemt.
 | `varve.vormen` | de vlag `?vormen=1` | `vlag.js` |
 
 Samen negen namen (beeld telt drie). De witte lijst staat op één plek,
-`INSTELLING_SLEUTELS` in `src/ui/instellingen-opslag.js`; de server importeert
-hem. Gemak-sleutels (panelen open/dicht, sorteringen, `varve.log.altijd`) en de
+`INSTELLING_SLEUTELS` in `src/ui/instellingen-lijst.js` (puur, zonder DOM); de
+server en `instellingen-opslag.js` importeren hem. Gemak-sleutels (panelen open/dicht, sorteringen, `varve.log.altijd`) en de
 mapping (eigen route) staan er bewust niet op.
 
 ### API
@@ -173,7 +173,8 @@ mapping (eigen route) staan er bewust niet op.
   wat ooit bewaard is. Een sleutel die ontbreekt is NOOIT bewaard; `null` = gewist.
 - `GET /api/instellingen/<sleutel>` → `{ sleutel, waarde, bewaard }`.
 - `PUT /api/instellingen/<sleutel>` met `{ waarde: tekst | null }` (application/json;
-  hooguit 128 K tekens, anders 413). De waarde is precies de tekst die de browser
+  hooguit 128 K tekens, anders 413; een verzoek boven 769 KiB wordt afgebroken,
+  ruim genoeg voor 128 K tekens die elk als `\uXXXX` komen). De waarde is precies de tekst die de browser
   in localStorage zet; `null` is wissen (`localStorage.removeItem`).
 - Een sleutel buiten de lijst: **400** (`{ fout: 'onbekende instelling', sleutels }`).
   Een getal of object als waarde: 400. Andere methode: 405. Host/Origin zoals elke route.
@@ -183,7 +184,13 @@ mapping (eigen route) staan er bewust niet op.
 - **Opstarten:** `app.js` doet `await startInstellingen()` vóór de engine en de
   panelen. Eén `GET /api/instellingen`; wat de server heeft gaat in localStorage
   (de server wint). Daardoor lezen alle bestaande `localStorage.getItem`-plekken
-  vanzelf de serverwaarde; die plekken zijn niet veranderd.
+  vanzelf de serverwaarde; die plekken zijn niet veranderd. Had de browser een
+  andere waarde, dan gaat die eerst naar `varve.instellingen.vorige` (per sleutel
+  de laatste vijf, met tijd) en komt er één melding; terugzetten met
+  `instellingen.herstel('varve.master.rack')` in de console en herladen
+  (`instellingen.vorige()` laat zien wat er staat). Lukt die kopie niet (opslag
+  van de browser vol), dan blijft de browserwaarde staan en komt er een
+  foutmelding; `herstel` weigert dan ook.
 - **Lege server, gevulde browser:** per sleutel die de server nog nooit had en de
   browser wel: één keer omhoog. Daarna is de server de bron.
 - **Schrijven:** de plekken schrijven via `schrijfInstelling`/`wisInstelling` (of
@@ -192,12 +199,16 @@ mapping (eigen route) staan er bewust niet op.
   het anders is dan wat de server al heeft.
 - **Server weg bij het opstarten** (of geen antwoord binnen 1,5 s): de mixer
   start met wat de browser had, en deze sessie gaat er NIETS naar de server (één
-  melding). Dat is de regel van de mapping: het master-paneel schrijft bij de
+  melding, meteen bij het opstarten). Bij de volgende start wint de server weer;
+  wat je in deze sessie instelde staat dan bij `vorige`. Dat is de regel van de mapping: het master-paneel schrijft bij de
   eerste frame zijn rack, en met een lege browser zou dat standaard-rack anders
   het echte rack op de server overschrijven (gevonden met de headless proef).
 - **Server weg tijdens de sessie:** de sleutel blijft als onverzonden staan
   (`varve.instellingen.onverzonden` in localStorage); bij de volgende start wint
-  dan de browser en gaat hij omhoog. Eén melding per sessie.
+  dan de browser en gaat hij omhoog. De serverwaarde die hij vervangt (die kan
+  uit een andere browser komen) gaat eerst naar `vorige`. Eén melding per sessie.
+- Meldingen van vóór `window.meld` (de start loopt eerder) wachten tot `app.js`
+  `toonInstellingMeldingen()` aanroept, direct na `window.meld = meld`.
 - Buiten een pagina van de server (Node-tests, file://) praat de opslag met geen
   server; `midi.js` (laag control) importeert niets uit ui: de MidiHub krijgt een
   optionele `bewaar`-functie, zonder die schrijft hij localStorage zoals altijd.
@@ -213,11 +224,16 @@ mapping (eigen route) staan er bewust niet op.
   500 / hangend, een schuif = één PUT, onverzonden wint de volgende keer, niet
   gelezen = niets naar de server; een statische check dat elke plek in `src/`
   aangesloten is en dat `app.js` vóór de engine ophaalt; en één ronde tegen de
-  echte server.
+  echte server. Sinds herstelronde 1 ook: vers profiel eerst en daarna een gevulde
+  browser (de oude waarde staat bij `vorige`, herstel zet hem terug), een mislukte
+  start plus herladen, een oude onverzonden-vlag, en uitgestelde meldingen.
 - `tools/headless/instellingen.mjs` (echte Chrome, eigen poorten 8872/8873): een
   nieuw profiel krijgt adres, latentie en stems-keuze van de server in het paneel;
   een wijziging in het paneel staat binnen een seconde op de server; een browser
   met sleutels tegen een lege server schrijft ze één keer omhoog.
+- Open: `varve.midi.ports` is per machine, maar op de server gedeeld; een tweede
+  machine neemt de poortkeuze van de eerste over (op naam valt hij terug). Per host
+  bewaren of van de lijst halen is een keuze voor Clay.
 - NIET getest: Clay's eigen Chrome-profiel (welke sleutels er nu echt staan; de
   eerste start na de merge schrijft ze omhoog), Web MIDI (`varve.midi.ports` alleen
   in de Node-test), en twee tabbladen die tegelijk een sleutel veranderen (de
