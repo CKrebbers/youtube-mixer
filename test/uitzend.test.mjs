@@ -3,7 +3,7 @@
 // Nooit een echte dienst: elke ontvanger hier is een ffmpeg op deze machine, elke map een mkdtemp.
 //
 // Draai met: node test/uitzend.test.mjs                          (P, S en R, ~40 s)
-//            VARVE_TEST_ECHTETIJD=1 node test/uitzend.test.mjs   (+ E1-E6 in echte tijd, ~75 s extra)
+//            VARVE_TEST_ECHTETIJD=1 node test/uitzend.test.mjs   (+ E1-E6 in echte tijd, ~72 s extra)
 //
 // P = puur (geen ffmpeg), S = met ffmpeg maar sneller dan echte tijd gevoerd, E = echte tijd (H11:
 // traag en gevoelig voor load, daarom niet standaard). Een regel '  -- …' is een notitie of een
@@ -727,7 +727,7 @@ try {
   }
 
   // ==== E: echte tijd (alleen met VARVE_TEST_ECHTETIJD=1) ==========================
-  if (!echteTijd) notitie('E1-E6: echte tijd overgeslagen (VARVE_TEST_ECHTETIJD=1 om ze te draaien, ~75 s)');
+  if (!echteTijd) notitie('E1-E6: echte tijd overgeslagen (VARVE_TEST_ECHTETIJD=1 om ze te draaien, ~72 s)');
   else if (!heeftFfmpeg) notitie('E1-E6: geen ffmpeg');
   else {
     const p14 = pcm(14), p12 = pcm(12);

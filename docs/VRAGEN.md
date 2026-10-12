@@ -493,7 +493,6 @@ Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 - [ ] **BE13. Welke beamer?** 💬 Model, eigen resolutie (1080p?), Hz (60 graag: 75 Hz via de hub viel thuis zwart) en de HDMI-weg (een USB-C-hub met PD-doorvoer: de Air heeft twee poorten voor beamer, Scarlett, APC en lader). Feiten die de meting en de paklijst nodig hebben.
 - [ ] **BE14. Standaarden voor beeld op één machine (ok = besloten).** 💬 (a) De Stroommachine draait straks in een eigen Chrome-bundel (een kopie van Chrome for Testing in `~/Applications/`), zodat VARVE.app nooit de verkeerde Chrome aanspreekt; (b) eerst een script, na de speelproef een Dock-app "VARVE + beeld"; (c) clips uit is de standaard onderweg zodra er een stand voor is, thuis alles aan; (d) lokaal de stand Licht; (e) v10 van de Stroommachine samenvoegen (jouw repo); (f) `video.window` (venster openen vanaf de APC) niet bouwen: Chrome blokkeert het zonder klik; (g) de fps-meter op het doek alleen tijdens de proef. **Advies:** alles zo, zeg het als je iets anders wilt.
 
-
 ## U. Uitzenden (10 okt, docs/UITZENDEN.md, tak `visie/uitzenden`)
 
 Zin één: wat uitgezonden wordt is het **mengcanvas van de Mac**, niet wat op de beamer staat als daar de
