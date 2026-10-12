@@ -296,7 +296,7 @@ const tekstS = (s) => s.toFixed(1).replace('.', ',');
 
 function legeStand() {
   return {
-    bezig: false, doel: null, id: null, bron: null, soort: null, sinds: null, door: null, beeldstand: null,
+    bezig: false, start: false, doel: null, id: null, bron: null, soort: null, sinds: null, door: null, beeldstand: null,
     bronS: 0, gevolgdS: 0, uitS: 0, achterstandS: 0, achterstandTekst: '', bitrateKbit: null,
     kwijtS: 0, sprongen: 0, fout: null, ffmpeg: 'uit', uit: null, waarschuwingen: [],
   };
@@ -305,9 +305,10 @@ function legeStand() {
 class Zending {
   constructor() { this.s = legeStand(); this.kind = null; this.stopBelofte = null; }
 
+  /** `start` = er loopt een start (bv. wachten op de mp4): dan is een tweede start geweigerd (review 2, L5). */
   stand() {
     const s = this.s;
-    return { ...s, uit: s.uit ? { ...s.uit } : null, waarschuwingen: [...s.waarschuwingen], fout: s.fout ? maskeer(s.fout) : null };
+    return { ...s, start: !!this.bezigMetStarten, uit: s.uit ? { ...s.uit } : null, waarschuwingen: [...s.waarschuwingen], fout: s.fout ? maskeer(s.fout) : null };
   }
 
   start(verzoek, instellingen) {
@@ -431,7 +432,8 @@ class Zending {
       overgedragen = true;
       this.s = {
         ...legeStand(), bezig: true, doel: doel.naam, id, bron: doel.bron, soort: doel.soort, sinds: Date.now(),
-        door: door ?? null, beeldstand: beeldstand ?? null, bronS, ffmpeg: 'loopt', uit: uitInfo, waarschuwingen,
+        door: door ?? null, beeldstand: beeldstand ?? null, bronS, gevolgdS: doel.bron === 'audio' ? 0 : null,
+        ffmpeg: 'loopt', uit: uitInfo, waarschuwingen,
       };
       this._kindLuisteraars(kind);
       this.poll = setInterval(() => { this._poll().catch(() => {}); }, pollMs);
@@ -505,7 +507,8 @@ class Zending {
   /** H1: achterstand = wat nog in het bestand wacht + wat in pijp en encoder zit, tegen de WAV-klok. */
   _meet() {
     const s = this.s;
-    s.gevolgdS = s.bron === 'audio' ? this.gevolgd / BPS : s.gevolgdS;
+    // gevolgdS = seconden geluid die in ffmpeg gingen; bij beeld zijn het mp4-bytes, geen seconden: null (review 2, L5).
+    s.gevolgdS = s.bron === 'audio' ? this.gevolgd / BPS : null;
     if (s.bron === 'audio') s.achterstandS = (this.eind - this.pos) / BPS + Math.max(0, s.gevolgdS - s.uitS);
     else s.achterstandS = Math.max(0, s.bronS - s.uitS);
     s.achterstandTekst = s.bron === 'video'

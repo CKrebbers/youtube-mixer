@@ -299,7 +299,8 @@ try {
       const id = await nieuweOpname();
       const s = await U.start({ id, doel: 'proef', url: 'rtmp://a.rtmp.youtube.com/live2/x', door: 'localhost:8777' }, basis);
       ok('S14 start stil -> bestand: ok, uitgang in uitMap (buiten opnames/), een url in de body wordt genegeerd (G2)', s.ok && s.soort === 'bestand' && s.uit?.startsWith(uitMap) && s.uit.endsWith(`set-${id}.uitzend.flv`));
-      ok('S14 stand: bezig, door = de Host van de start (H16), ffmpeg loopt', U.stand().bezig && U.stand().door === 'localhost:8777' && U.stand().ffmpeg === 'loopt');
+      ok('S14 stand: bezig, door = de Host van de start (H16), ffmpeg loopt, gevolgdS een getal, geen start meer', U.stand().bezig && U.stand().door === 'localhost:8777'
+        && U.stand().ffmpeg === 'loopt' && typeof U.stand().gevolgdS === 'number' && U.stand().start === false);
       const t0 = Date.now();
       const sl = await voer({ id, pcmBuf: p6, sec: 6, tussen: 250 });
       const k = await U.opnameKlaar(id);
@@ -376,6 +377,7 @@ try {
       const vd = duurVan(st.uit?.mp4 || '/x', 'v:0'), kf = grootsteKeyAfstand(st.uit?.mp4 || '/x');
       ok(`S18 mp4 speelbaar: beeld ${r2(vd)} s (12 ± 0,6), ${kf.aantal} keyframes, grootste afstand ${r2(kf.max)} s (≤ 2,05)`, Math.abs(vd - 12) <= 0.6 && kf.aantal >= 5 && kf.max <= 2.05);
       ok(`S18 achterstandTekst noemt de cadans van Chrome ("${st.achterstandTekst}")`, /beeld komt per 3,4 s/.test(st.achterstandTekst));
+      ok(`S18 gevolgdS is null bij beeld (mp4-bytes zijn geen seconden; review 2, L5): ${st.gevolgdS}`, st.gevolgdS === null);
       // Review 1, punt 3: Chrome's fps varieert (29,07 gemeten) en -g telt beelden. Op 25 fps gaf -g 60 alleen 2,4 s.
       const v25 = fmp4('aac', { fps: 25, gop: 85 });
       const id25 = await nieuweOpname();
@@ -597,12 +599,15 @@ try {
       let startDuur = null;
       const st = U.start({ id, doel: 'beeld' }, { ...basis, wachtMp4: 3000 }).then((r) => { startDuur = (Date.now() - tS) / 1000; return r; });
       await wacht(200);
+      const tijdens = U.stand();
       const t0 = Date.now();
       const sp = await U.stop();
       const r = await st;
       const d = (Date.now() - t0) / 1000;
       ok(`R1 stop() tijdens het wachten op de mp4 (start liep ${r2(startDuur)} s): stop ok na ${r2(d)} s (≤ 0,6), start geeft "${r.fout}", geen ffmpeg, niet bezig`,
         sp.ok && startDuur >= 0.15 && startDuur < 1 && d <= 0.6 && !r.ok && /gestopt tijdens het starten/.test(r.fout || '') && U._pid() === null && !U.stand().bezig);
+      ok(`R1 de stand zegt dat er een start loopt (review 2, L5): tijdens start ${tijdens.start}, bezig ${tijdens.bezig}; daarna start ${U.stand().start}`,
+        tijdens.start === true && !tijdens.bezig && U.stand().start === false);
       await O.sluit(opnames, id);
     }
     // R3: een fout tussen het openen van de WAV en de spawn laat geen open bestand achter

@@ -328,8 +328,9 @@ start(verzoek, instellingen)        -> { ok, doel, bron, soort, uit?, waarschuwi
                                                                               // van de server zelf; paden worden absoluut gemaakt
 stop({ snel })                      -> Promise<{ ok, duurS, bytes, stopS, uit? }>
 opnameKlaar(id)                     -> Promise<{ ok }>      // lees tot het eind, laat ffmpeg spoelen, stop
-stand()                             -> { bezig, doel, id, bron, soort, sinds, door, bronS, gevolgdS, uitS, achterstandS,
+stand()                             -> { bezig, start, doel, id, bron, soort, sinds, door, bronS, gevolgdS, uitS, achterstandS,
                                          achterstandTekst, bitrateKbit, kwijtS, sprongen, fout, ffmpeg, uit, waarschuwingen }
+                                    // start: er loopt een start (wachten op de mp4); gevolgdS: null bij beeld
 ```
 
 Stap 3 hangt dit aan de server (`GET /api/uitzend`, `POST /api/uitzend/start|stop`, `opnameKlaar` ná het antwoord
