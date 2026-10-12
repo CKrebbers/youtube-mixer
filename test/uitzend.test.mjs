@@ -170,8 +170,8 @@ try {
     ok('P2 stil/golf fps 15: rate=15, mode=cline, -g 30, en de golf gelijk met het geluid', /showwaves=[^ ]*rate=15/.test(golf) && golf.includes('mode=cline') && golf.includes('-g 30')
       && golf.includes(`colors=white,${GELIJK},format=yuv420p[v]`));
     const png = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'audio', beeld: 'plaat-donker.png', fps: 2 }, { uit: 'u.flv' }).join(' ');
-    ok('P3 stil/png: movie=beelden/<naam>.png met de golf erover, ook gelijk met het geluid', png.includes('movie=beelden/plaat-donker.png') && png.includes('overlay=shortest=1')
-      && png.includes(`colors=white@0.5,${GELIJK}[w]`));
+    ok('P3 stil/png: movie=beelden/<naam>.png met de golf erover (draw=full: review 2, L1), ook gelijk met het geluid', png.includes('movie=beelden/plaat-donker.png') && png.includes('overlay=shortest=1')
+      && png.includes(`colors=white@0.5:draw=full,${GELIJK}[w]`));
     const her = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'hercodeer', bitrate: '2500k' }, { uit: 'u.flv' });
     const hs = her.join(' ');
     ok('P4 beeld/hercodeer: -hwaccel videotoolbox, h264_videotoolbox, -g 60, geluid -c:a copy, nergens aac als encoder',
@@ -281,6 +281,7 @@ try {
       { naam: 'golf', soort: 'bestand', bron: 'audio', beeld: 'golf', fps: 2 },
       { naam: 'golf10', soort: 'bestand', bron: 'audio', beeld: 'golf', fps: 10 },
       { naam: 'plaat', soort: 'bestand', bron: 'audio', beeld: 'plaat-donker.png', fps: 2 },
+      { naam: 'plaat10', soort: 'bestand', bron: 'audio', beeld: 'plaat-donker.png', fps: 10 },
       { naam: 'rtmp-test', soort: 'rtmp', bron: 'audio', beeld: 'golf', url: `rtmp://127.0.0.1:${rtmpPoort}/live/test` },
       { naam: 'udp-test', soort: 'udp', bron: 'audio', url: `udp://127.0.0.1:${udpPoort}?pkt_size=1316` },
       { naam: 'beeld', soort: 'bestand', bron: 'video' },
@@ -533,22 +534,24 @@ try {
     }
 
     // S28: stil met een png-plaat, echt door ffmpeg (review 1, punt 5): movie, loop en overlay breken stil bij een update.
-    {
-      mkdirSync(join(uitzendMap, 'beelden'), { recursive: true });
-      spawnSync('ffmpeg', ['-v', 'error', '-n', '-f', 'lavfi', '-i', 'color=c=0x202020:s=1280x720', '-frames:v', '1', join(uitzendMap, 'beelden', 'plaat-donker.png')]);
+    //      Ook op 10 fps (review 2, L1): zonder draw=full was de stoot daar niet te zien en werd de plaat donkerder.
+    mkdirSync(join(uitzendMap, 'beelden'), { recursive: true });
+    spawnSync('ffmpeg', ['-v', 'error', '-n', '-f', 'lavfi', '-i', 'color=c=0x202020:s=1280x720', '-frames:v', '1', join(uitzendMap, 'beelden', 'plaat-donker.png')]);
+    for (const doel of ['plaat', 'plaat10']) {
       const id = await nieuweOpname();
-      const s = await U.start({ id, doel: 'plaat' }, basis);
+      const s = await U.start({ id, doel }, basis);
       await voer({ id, pcmBuf: stoot, sec: 6, tussen: 0 });
       await U.opnameKlaar(id);
       const st = U.stand();
       const mp4 = st.uit?.mp4 || '/x';
       const p = probeJson(mp4);
       const ad = duurVan(mp4, 'a:0');
-      ok(`S28 stil/png -> bestand: h264 1280x720 + aac, geluid ${r2(ad)} s (6 ± 0,3)${s.ok ? '' : ` [${s.fout}]`}`, s.ok && stroom(p, 'video').codec_name === 'h264'
+      ok(`S28 ${doel} stil/png -> bestand: h264 1280x720 + aac, geluid ${r2(ad)} s (6 ± 0,3)${s.ok ? '' : ` [${s.fout}]`}`, s.ok && stroom(p, 'video').codec_name === 'h264'
         && stroom(p, 'video').width === 1280 && stroom(p, 'video').height === 720 && stroom(p, 'audio').codec_name === 'aac' && Math.abs(ad - 6) <= 0.3);
       const z = stootZichtbaar(mp4);
-      ok(`S28 png: de plaat staat in beeld (helderheid in stilte ${r2(z.basis)}; zwart is 16) en de stoot op ${z.t === null ? '-' : r2(z.t)} s (3,0 ± 0,15)`,
-        z.basis > 30 && z.t !== null && Math.abs(z.t - 3) <= 0.15);
+      const piek = Math.max(...z.rij.filter(([t]) => t >= 2.9 && t <= 3.4).map(([, y]) => y));
+      ok(`S28 ${doel}: de plaat staat in beeld (helderheid in stilte ${r2(z.basis)}; zwart is 16) en de stoot op ${z.t === null ? '-' : r2(z.t)} s (3,0 ± 0,15), lichter dan de plaat (max ${r2(piek)})`,
+        z.basis > 30 && z.t !== null && Math.abs(z.t - 3) <= 0.15 && piek > z.basis + 8);
     }
   }
 

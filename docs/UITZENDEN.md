@@ -123,8 +123,12 @@ muxer+uit:  bestand: -f flv <uitmap>/set-<id>.uitzend[-N].flv   (na stop: -c cop
 - **Tekst op het beeld.** `drawtext` zit niet in deze ffmpeg (geen freetype). Clay's idee (zwart met donkergrijze
   tekst) komt daarom als **png-plaat** in `uitzend/beelden/<naam>.png`: data, geen code. De voorbeeldplaat
   `plaat-donker.png` komt in stap 2; de test maakt zijn eigen plaat en stuurt het png-profiel echt door ffmpeg (S28:
-  h264 1280x720 + aac, de plaat in beeld, de stoot op 3,02 s). Gezien en niet gerepareerd: bij 10 fps wordt de plaat
-  tijdens een luide stoot donkerder (helderheid 31 -> 27,5) in plaats van lichter; bij de standaard 2 fps niet (31 -> 51).
+  h264 1280x720 + aac, de plaat in beeld, de stoot op 3,02 s). Eerst werd de plaat bij 10 fps tijdens een luide stoot
+  donkerder (helderheid 31 -> 27,5) in plaats van lichter, en was de stoot niet te zien; bij 15 fps zwak (31 -> 44).
+  De oorzaak is showwaves in `draw=scale` (de standaard): met alfa (`white@0.5`) gaat de overlay mis zodra er weinig
+  samples per kolom vallen. Sinds review 2 (L1) tekent de png-tak met `draw=full`: de stoot op 3,02 s bij 2 en 10 fps,
+  helderheid 31 -> 75 (2 fps) en 31 -> 140 (10 fps). S28 draait beide. De golf op zwart (`golf`) houdt `draw=scale`:
+  een andere look is een keuze.
 - **Webm.** Kiest de browser webm (geen mp4), dan weigert een beeld-doel meteen, ook als het eerste videostuk pas ná
   de start komt: "de video is webm: kies een doel met bron audio" (S25; eerst wachtte het de hele `wachtMp4` van 10 s
   en zei dan "geen videobestand").
@@ -190,7 +194,7 @@ node test/alles.mjs                                 # draait de snelle variant m
   midden in de set aan, beeld hercoderen met Chrome's cadans (keyframe per 101 beelden op 30 fps, en per 85 op 25 fps),
   beeld kopiëren naar RTMP, Opus, opname onaangetast, ffmpeg gedood, ffmpeg bestaat niet, stoppen (ook een hangend
   kind), weigeringen (ook webm na de start), bron stil, de golf gelijk met het geluid (S27, stoot op 3,0 s bij 2 en 10 fps)
-  en het png-profiel door ffmpeg (S28).
+  en het png-profiel door ffmpeg (S28, ook op 10 fps).
 - R1, R3, R7 (uit de code-review van 10 okt): stop() tijdens het starten gaat niet verloren; een fout tussen openen
   en spawn laat geen open bestand achter (`/dev/fd` geteld); een link naar `opnames/` omzeilt G9 niet.
 - R8-R11 (uit reviewronde 1): een relatieve uitMap (`uit-rel`, en `../opnames` vanuit een andere map dan de
@@ -343,7 +347,7 @@ proefavond 1.
   rtmps, een dienst, Content ID, 2 fps of Opus bij een ingest; iCloud-upload bij groeiende bestanden en op een
   hotspot; de oorzaak van de groeiende achterstand bij volledig hercoderen; een set langer dan 14,6 s door de module
   (de golf zelf wel over 300 s, offline door dezelfde argv: geen drift; de bron is in het echt nooit langer dan 336 s
-  gedraaid: stap 0); de donkere plaat bij 10 fps (§4, "Tekst op het beeld").
+  gedraaid: stap 0).
 - **Aannames**: `~/Movies` wordt niet door iCloud gesynchroniseerd; de "USB Video"-bron in OBS is een MS2109-stick;
   de Twitch-, Sena- en Mixcloud-regels zijn zoals het record van 9 okt ze noemt; Clay's Chrome kiest
   `avc1 + mp4a.40.2` (zo op 23 sep). De CPU-cijfers gelden alleen voor het ffmpeg-kind.

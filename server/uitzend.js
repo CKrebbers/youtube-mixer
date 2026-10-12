@@ -182,7 +182,7 @@ function beeldFilter(beeld, fps) {
   if (beeld === 'golf') return `${golf('mode=cline:colors=white')},format=yuv420p[v]`;
   if (beeld !== 'zwart' && PNG.test(beeld)) {
     return `movie=beelden/${beeld},loop=loop=-1:size=1,fps=${fps},scale=1280:720[p];`
-      + `${golf('mode=cline:colors=white@0.5')}[w];`
+      + `${golf('mode=cline:colors=white@0.5:draw=full')}[w];`
       + '[p][w]overlay=shortest=1,format=yuv420p[v]';
   }
   return `${golf('colors=black')},format=yuv420p[v]`;
