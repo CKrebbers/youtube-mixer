@@ -57,7 +57,7 @@ Na het onderzoek in `docs/APC40-onderzoek.md`: de eerste versie met mapjes
 voor alles (B3) voelde niet logisch. Nu: één kolom = één track, de kern nooit
 in een mapje. Fysieke plaatsing volgens de User Guide. Volledig en actueel op
 `apc.html` (leest de mapping zelf); de mapping zelf is `mappings/apc40mk2.json`
-(702 regels, versie 3; tot 25 sep 291, tot 2 okt 374, tot 6 okt 687). Op 25 september kwamen de
+(710 regels, versie 3; tot 25 sep 291, tot 2 okt 374, tot 6 okt 687, tot 14 okt 702). Op 25 september kwamen de
 DJ-functies van ronde 3 erbij, zoals Clay koos ("Voorstel A"): zie hieronder, en de
 tabel "Voorstel A". Op 2 oktober de modus auto (auto-DJ, VRAGEN AU1): zie
 "Modus auto" onderaan. Op 5 oktober de modus stems (VRAGEN N1, 480 regels): zie
@@ -366,8 +366,35 @@ ligt; of het knipperen op de tel goed te zien is).
 In de grid-modus (Shift + Metronome) is **Shift + scene 1 = vast** (pin: de tel hier hoort
 hier; het tempo klopt dan vanaf "tel 1" of de vorige pin, en vanaf hier begint een nieuw
 stuk). Eén regel erbij (`note:0:82#shift@edit.aan`, was vrij), niets bestaands veranderd.
-Terug (↶) staat bewust niet op de APC: Shift + scene 5 blijft klank, Lock (ook met shift)
-blijft het grid-slot; terug gaat met ↶ op het scherm of Cmd+Z.
+Terug (↶) stond toen bewust niet op de APC: Shift + scene 5 blijft klank, Lock (ook met shift)
+blijft het grid-slot. Sinds 14 okt zit ↶ op Detail View in de grid-modus (hieronder).
+
+## Grid-modus: gelijkzetten en controleren (14 oktober 2026, docs/BEATGRID.md §12, niet op het apparaat nagelopen)
+
+In de grid-modus (Shift + Metronome) staat sinds 14 okt alles wat je nodig hebt om een grid
+recht te zetten en te controleren op de APC; vroeger moest je voor ↶, de "1" verschuiven en
+controleren naar het scherm. Acht regels erbij, alleen in de grid-modus (`@edit.aan`):
+
+| knop | in de grid-modus | met shift | lampje |
+|---|---|---|---|
+| Device ◀ | de "1" een tel terug (`grid.bar.back`) | vorige plek om te controleren (`grid.check.prev`) | aan zolang je drukt |
+| Device ▶ | de "1" een tel verder (`grid.bar`) | volgende plek (`grid.check.next`) | idem |
+| On/Off | controleren met de tik aan/uit (`grid.controle`) | ✓ klopt tot hier (`grid.ok`) | aan = de tik loopt (met shift: dit stuk is goedgekeurd) |
+| Clip/Device View | tellen hier: de tel op de klap, de "1" blijft (`grid.align`, nieuw) | (blijft: mapje master) | aan zolang je drukt |
+| Detail View | ↶ de laatste gridbewerking terug (`grid.undo`) | (blijft: mapje beeld) | aan = er is iets terug te zetten |
+
+En twee dingen die al op de APC zaten doen meer:
+- **Scene 1 (tel 1 hier)** brandt in rust **wit als het stuk dat je hoort klopt** (zeker of op
+  slot) en **oranje bij twijfel** (controleer, geen puls, of het grid wijkt live van de gevonden
+  tellen af). Het lampje van de knop, niet wat hij doet (`KLEURSCHEMA` in feedback.js, read 0 / 0,5).
+- **Nudge ±** (5 ms, shift 1 ms) herhaalt als je hem **vasthoudt** (na 350 ms elke 60 ms); het
+  hele vasthouden is één stap terug.
+
+**Wat er daardoor in de grid-modus níet meer kan:** strip ↔ rack wisselen met Clip/Device View,
+een ander rack kiezen met Device ◀ ▶, het effect aan/uit met On/Off, en met `?vormen=1` het
+mapje vorm met Detail View. Buiten de grid-modus doet elke knop wat hij deed
+(`test/mapping.test.mjs` loopt elke knop na in elk mapje). Dat is een keuze: zie de vraag in
+`docs/verslagen/2026-10-14/beatgrid-bediening.md`.
 
 ## Mapje beeld (6 oktober 2026, spoor beeld, GEBOUWD, niet op het apparaat nagelopen)
 

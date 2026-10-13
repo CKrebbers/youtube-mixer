@@ -1878,3 +1878,8 @@ Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag misse
   Cue level bpm ±0,01 (shift ±0,1; track.N.grid.bpm lineair over 40–300) · Lock = slot (alleen in
   grid-modus, het open mapje wint; erbuiten is Lock quantize). Wat de grid-modus niet
   definieert blijft werken. regel.led.lees laat een lampje de stand van een andere action tonen.
+  Sinds 14 okt (BEATGRID.md §12) ook: Device ◀ ▶ de "1" ∓ een tel (shift: plek ◀ ▶), On/Off controle
+  (shift: ✓), Clip/Device View tellen hier (`grid.align`), Detail View ↶; scene 1 brandt oranje bij twijfel.
+  `grid.undo` zet PRECIES terug (geen bron 'hand'); pin krijgt `klappen` (deck.onsets) en telt daarop
+  als het grid > ¼ tel uit de pas ligt. Bewaren: `src/ui/grid-bewaren.js` (250 ms na een bewerking),
+  daarna de library-rij en andere tracks met dat nummer. Weergave leest `deck.gridMetingBij(nu)`.
