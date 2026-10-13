@@ -83,7 +83,7 @@ stil  (bron audio = de WAV vanaf de data-offset uit kopVan):
   zwart: [0:a]asplit[a][b];[b]showwaves=s=1280x720:rate=<fps>:colors=black,<gelijk>,format=yuv420p[v]
   golf : [0:a]asplit[a][b];[b]showwaves=s=1280x720:rate=<fps>:mode=cline:colors=white,<gelijk>,format=yuv420p[v]
   png  : movie=beelden/<naam>.png,loop=loop=-1:size=1,fps=<fps>,scale=1280:720[p];
-         [0:a]asplit[a][b];[b]showwaves=s=1280x720:rate=<fps>:mode=cline:colors=white@0.5,<gelijk>[w];
+         [0:a]asplit[a][b];[b]showwaves=s=1280x720:rate=<fps>:mode=cline:colors=white@0.5:draw=full,<gelijk>[w];
          [p][w]overlay=shortest=1,format=yuv420p[v]          (cwd = de uitzendmap)
 
 beeld (bron video = de mp4 van de video-opname, vanaf byte 0):
@@ -106,8 +106,10 @@ muxer+uit:  bestand: -f flv <uitmap>/set-<id>.uitzend[-N].flv   (na stop: -c cop
   achter de kick aan bij de standaard 2 fps (stoot zichtbaar op 5,02 s; bij 10 fps 3,42 s). Nu trekt
   `setpts=PTS-4/(FR*TB)` die 4 beelden eraf en laat `trim=start=0` weg wat dan vóór 0 valt: de stoot staat op
   **3,02 s** bij 2, 10 en 15 fps, ook na 300 s (10,02 / 150,02 / 290,02 s: geen drift), en het eerste beeld op
-  0,02 s. Bijwerking: aan het eind valt het laatste halve tot hele beeld weg (bij 2 fps eindigt het beeld op 11,52 s
-  bij 12 s geluid). S27 en S28 pinnen de "4" vast: geeft een andere ffmpeg iets anders, dan falen ze.
+  0,02 s. Per fps gemeten (review 2, de argv van `bouwArgs`, offline): 1, 2, 5, 10, 15 en 20 fps 3,021 s; 25 fps
+  2,981 s; 30 fps 2,954 s. Bij hoge fps landt de golf dus 40-67 ms vroeg, wat onschuldig is. Bijwerking: aan het
+  eind valt het laatste halve tot hele beeld weg (bij 2 fps eindigt het beeld op 11,52 s bij 12 s geluid). S27 en
+  S28 pinnen de "4" vast: geeft een andere ffmpeg iets anders, dan falen ze.
 - **Keyframes in seconden.** `-g 60` telt beelden, en Chrome's fps varieert (de headless-opname van de review:
   gemiddeld 29,07). Daarmee lagen de keyframes 2,27 s uit elkaar (op 25 fps-materiaal 2,4 s), terwijl een dienst er
   één per ≤ 2 s wil. `-force_key_frames expr:gte(t,n_forced*2)` zet er ook één op elke 2 s: op dezelfde Chrome-mp4
@@ -123,8 +125,12 @@ muxer+uit:  bestand: -f flv <uitmap>/set-<id>.uitzend[-N].flv   (na stop: -c cop
 - **Tekst op het beeld.** `drawtext` zit niet in deze ffmpeg (geen freetype). Clay's idee (zwart met donkergrijze
   tekst) komt daarom als **png-plaat** in `uitzend/beelden/<naam>.png`: data, geen code. De voorbeeldplaat
   `plaat-donker.png` komt in stap 2; de test maakt zijn eigen plaat en stuurt het png-profiel echt door ffmpeg (S28:
-  h264 1280x720 + aac, de plaat in beeld, de stoot op 3,02 s). Gezien en niet gerepareerd: bij 10 fps wordt de plaat
-  tijdens een luide stoot donkerder (helderheid 31 -> 27,5) in plaats van lichter; bij de standaard 2 fps niet (31 -> 51).
+  h264 1280x720 + aac, de plaat in beeld, de stoot op 3,02 s). Eerst werd de plaat bij 10 fps tijdens een luide stoot
+  donkerder (helderheid 31 -> 27,5) in plaats van lichter, en was de stoot niet te zien; bij 15 fps zwak (31 -> 44).
+  De oorzaak is showwaves in `draw=scale` (de standaard): met alfa (`white@0.5`) gaat de overlay mis zodra er weinig
+  samples per kolom vallen. Sinds review 2 (L1) tekent de png-tak met `draw=full`: de stoot op 3,02 s bij 2 en 10 fps,
+  helderheid 31 -> 75 (2 fps) en 31 -> 140 (10 fps). S28 draait beide. De golf op zwart (`golf`) houdt `draw=scale`:
+  een andere look is een keuze.
 - **Webm.** Kiest de browser webm (geen mp4), dan weigert een beeld-doel meteen, ook als het eerste videostuk pas ná
   de start komt: "de video is webm: kies een doel met bron audio" (S25; eerst wachtte het de hele `wachtMp4` van 10 s
   en zei dan "geen videobestand").
@@ -140,9 +146,11 @@ muxer+uit:  bestand: -f flv <uitmap>/set-<id>.uitzend[-N].flv   (na stop: -c cop
 - **Sprong** (alleen WAV): boven 8 s achterstand springt de volger naar het eind (op een frame), maar alleen als er
   ook echt ≥ 1 s in het **bestand** wacht: zit de achterstand in pijp of encoder, dan helpt springen niet en zou elke
   poll vers geluid weggooien (review 10 okt). `sprongen` en `kwijtS` tellen mee. Een mp4 wordt nooit geknipt: boven
-  20 s stopt de uitzending met `fout: 'achterstand'`.
+  20 s (`achterstandMaxBeeld`) stopt de uitzending met `fout: 'achterstand'` (S29, met een hangende ffmpeg en 2 s).
 - **Stoppen tijdens het starten** (wachten op de mp4 kan 10 s duren): `stop()` breekt de start af en wacht erop;
-  er komt dan geen ffmpeg (R1).
+  er komt dan geen ffmpeg (R1). **`opnameKlaar` tijdens het starten** wacht eerst de start af en leest dan tot het
+  eind (R12). Eerst gaf hij meteen ok zonder iets te doen; de start slaagde daarna alsnog en volgde een opname die al
+  dicht was, tot "bron stil" na 10 s en een stop na 30 s (review 2, M1).
 - **Bron stil**: groeit de WAV 10 s niet, dan `fout: 'bron stil'`; na 30 s stopt de uitzending (tabblad dicht).
 
 ## 5. Rechten in gewone taal
@@ -178,25 +186,28 @@ I77, I78, I79 en "Rechten en privacy"); niet nagekeken bij Twitch, Sena of Mixcl
 
 ```sh
 node test/uitzend.test.mjs                          # 88 checks, ~40 s (P puur, S met ffmpeg sneller dan echte tijd, R review)
-VARVE_TEST_ECHTETIJD=1 node test/uitzend.test.mjs   # + E1-E6 in echte tijd, ~70 s extra; niet tijdens een speelavond
+VARVE_TEST_ECHTETIJD=1 node test/uitzend.test.mjs   # + E1-E6 in echte tijd, ~72 s extra; niet tijdens een speelavond
 node test/alles.mjs                                 # draait de snelle variant mee
 ```
 
 - P1-P13: argv per profiel, uitgangsnaam, maskeren, het slot (18 url's), doelen laden (ook het voorbeeld), mp4-boxen,
   Opus herkennen, iCloud-waarschuwing, en G1 (welke imports).
-- S14-S28: stil -> bestand (+ mp4), stil -> RTMP-ontvanger (`ffmpeg -listen 1` op 127.0.0.1), stil -> udp,
+- S14-S29: stil -> bestand (+ mp4), stil -> RTMP-ontvanger (`ffmpeg -listen 1` op 127.0.0.1), stil -> udp,
   midden in de set aan, beeld hercoderen met Chrome's cadans (keyframe per 101 beelden op 30 fps, en per 85 op 25 fps),
   beeld kopiëren naar RTMP, Opus, opname onaangetast, ffmpeg gedood, ffmpeg bestaat niet, stoppen (ook een hangend
-  kind), weigeringen (ook webm na de start), bron stil, de golf gelijk met het geluid (S27, stoot op 3,0 s bij 2 en 10 fps)
-  en het png-profiel door ffmpeg (S28).
+  kind), weigeringen (ook webm na de start), bron stil, de golf gelijk met het geluid (S27, stoot op 3,0 s bij 2 en 10 fps),
+  het png-profiel door ffmpeg (S28, ook op 10 fps) en de noodrem van beeld bij een hangende ffmpeg (S29).
 - R1, R3, R7 (uit de code-review van 10 okt): stop() tijdens het starten gaat niet verloren; een fout tussen openen
   en spawn laat geen open bestand achter (`/dev/fd` geteld); een link naar `opnames/` omzeilt G9 niet.
 - R8-R11 (uit reviewronde 1): een relatieve uitMap (`uit-rel`, en `../opnames` vanuit een andere map dan de
   uitzendmap) komt op het absolute pad dat Node toetste; alles behalve `id`/`doel`/`beeldstand`/`door` in het verzoek
   wordt genegeerd; `opnameKlaar` en `stop()` tegelijk geven beide ok en draaien geen rondjes zonder pauze (Node-CPU
   ≤ de helft van de wandtijd; vroeger ~100 %); een flv die er niet is geeft een waarschuwing in plaats van stilte.
+- R12 (uit review 2): `opnameKlaar` terwijl de start nog op de mp4 wacht, leest alsnog tot het eind en stopt netjes
+  (niet bezig, geen fout, de mp4 met 12 s beeld).
 - Elke nieuwe check is ook tegen de oude code gedraaid (de reparaties tijdelijk teruggezet in een kopie): alle vijftien
-  werden rood.
+  werden rood, op R9 na (die kon niet tegen de oude API, die nog paden uit het verzoek las). Na review 2: R12, S29, P3
+  (`draw=full`) en S28 op 10 fps zijn ook tegen de code van vóór die ronde gedraaid en waren rood.
 - E1-E6: echte tijd, SIGSTOP-proef met en zonder sprong, beeld met Chrome's cadans, regressiewacht (aac), CPU bij 15 fps.
 
 **Met de hand** kan pas vanaf stap 3 (de routes). Dan zo, op een proefserver met een kopie van de library:
@@ -261,7 +272,7 @@ door andere sporen.**
 | S19 beeld kopie -> RTMP | 11,97 s | 12 ± 0,6 |
 | S24 stoppen / snel op een hangend kind | 0,01 s / 3,01 s | ≤ 3,5 |
 | S27 golf: stoot op 3,0 s, in beeld op (review 1) | 3,02 s bij 2 en bij 10 fps (zonder `setpts`: 5,02 en 3,42 s) | 3,0 ± 0,15 |
-| S28 png-plaat door ffmpeg (review 1) | h264 1280x720 + aac, geluid 6,04 s; plaat in beeld (helderheid 31), stoot op 3,02 s | 6 ± 0,3; 3,0 ± 0,15 |
+| S28 png-plaat door ffmpeg (review 1, 10 fps sinds review 2) | h264 1280x720 + aac, geluid 6,04 s; plaat in beeld (helderheid 31), stoot op 3,02 s bij 2 en 10 fps (max 75 en 140; zonder `draw=full` bij 10 fps 27,5: donkerder) | 6 ± 0,3; > 23; 3,0 ± 0,15 |
 | R8 relatieve uitMap (review 1) | `uit-rel` en `../opnames`: flv en mp4 op het absolute pad dat Node toetste, niets in `opnames/` (zonder `resolve`: FAIL) | |
 | R10 opnameKlaar en stop() tegelijk, 10 keer | 0 keer ok:false; Node-CPU ~1 ms per stop (oude code: 35 ms CPU in 34 ms wandtijd) | ≤ de helft van de wandtijd |
 | E1 stil, echte tijd | eerst 0,00 op 4, 6, 8 s en `uitS` 9,0 na 8 s (zie §4 "Achterstand"); na review 1 **0,12 / 0,54 / 0,43 s**, `uitS` **7,87** | ≤ 2,5; ≥ 6,5 |
@@ -312,15 +323,17 @@ laadDoelen(uitzendMap)              -> { ok, doelen: [...zonder url], fouten: []
 toegestaan(doel)                    -> { ok } | { ok: false, fout }            // puur: G3 + G8
 bouwArgs(doel, { uit, fps })        -> string[]                                // puur: §4
 uitgangsPad(uitMap, id, bestaat)    -> pad                                     // puur: G9
-maskeer(tekst) · boxen(buf) · audioCodecVanMp4(buf) · iCloudWaarschuwing(opnames, home, bestaat)   // puur
+maskeer(tekst, { pad }) · boxen(buf, vanaf) · audioCodecVanMp4(buf) · iCloudWaarschuwing(opnames, home, bestaat)   // puur
 start(verzoek, instellingen)        -> { ok, doel, bron, soort, uit?, waarschuwingen } | { ok: false, fout }
       verzoek      = { id, doel, beeldstand?, door? }                         // van buiten; de rest wordt NIET gelezen
-      instellingen = { opnames, uitzendMap?, uitMap?, ffmpeg?, pollMs?, stilNa?, stopNa?, achterstandMax?, wachtMp4? }
+      instellingen = { opnames, uitzendMap?, uitMap?, ffmpeg?, pollMs?, stilNa?, stopNa?, achterstandMax?,
+                       achterstandMaxBeeld?, wachtMp4? }
                                                                               // van de server zelf; paden worden absoluut gemaakt
 stop({ snel })                      -> Promise<{ ok, duurS, bytes, stopS, uit? }>
 opnameKlaar(id)                     -> Promise<{ ok }>      // lees tot het eind, laat ffmpeg spoelen, stop
-stand()                             -> { bezig, doel, id, bron, soort, sinds, door, bronS, gevolgdS, uitS, achterstandS,
+stand()                             -> { bezig, start, doel, id, bron, soort, sinds, door, beeldstand, bronS, gevolgdS, uitS, achterstandS,
                                          achterstandTekst, bitrateKbit, kwijtS, sprongen, fout, ffmpeg, uit, waarschuwingen }
+                                    // start: er loopt een start (wachten op de mp4); gevolgdS: null bij beeld
 ```
 
 Stap 3 hangt dit aan de server (`GET /api/uitzend`, `POST /api/uitzend/start|stop`, `opnameKlaar` ná het antwoord
@@ -339,7 +352,7 @@ proefavond 1.
   rtmps, een dienst, Content ID, 2 fps of Opus bij een ingest; iCloud-upload bij groeiende bestanden en op een
   hotspot; de oorzaak van de groeiende achterstand bij volledig hercoderen; een set langer dan 14,6 s door de module
   (de golf zelf wel over 300 s, offline door dezelfde argv: geen drift; de bron is in het echt nooit langer dan 336 s
-  gedraaid: stap 0); de donkere plaat bij 10 fps (§4, "Tekst op het beeld").
+  gedraaid: stap 0).
 - **Aannames**: `~/Movies` wordt niet door iCloud gesynchroniseerd; de "USB Video"-bron in OBS is een MS2109-stick;
   de Twitch-, Sena- en Mixcloud-regels zijn zoals het record van 9 okt ze noemt; Clay's Chrome kiest
   `avc1 + mp4a.40.2` (zo op 23 sep). De CPU-cijfers gelden alleen voor het ffmpeg-kind.

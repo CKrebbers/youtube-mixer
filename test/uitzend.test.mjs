@@ -3,7 +3,7 @@
 // Nooit een echte dienst: elke ontvanger hier is een ffmpeg op deze machine, elke map een mkdtemp.
 //
 // Draai met: node test/uitzend.test.mjs                          (P, S en R, ~40 s)
-//            VARVE_TEST_ECHTETIJD=1 node test/uitzend.test.mjs   (+ E1-E6 in echte tijd, ~75 s extra)
+//            VARVE_TEST_ECHTETIJD=1 node test/uitzend.test.mjs   (+ E1-E6 in echte tijd, ~72 s extra)
 //
 // P = puur (geen ffmpeg), S = met ffmpeg maar sneller dan echte tijd gevoerd, E = echte tijd (H11:
 // traag en gevoelig voor load, daarom niet standaard). Een regel '  -- …' is een notitie of een
@@ -38,6 +38,8 @@ const opnames = join(tmp, 'opnames');
 const uitzendMap = join(tmp, 'uitzend');
 const uitMap = join(tmp, 'uit');
 mkdirSync(opnames); mkdirSync(uitzendMap); mkdirSync(uitMap);
+// Vangnet (review 2, L3): een start zonder uitMap schrijft zo in de tijdelijke map, nooit in ~/Movies/VARVE-uitzend.
+process.env.VARVE_UITZEND_UIT = uitMap;
 const ontvangers = [];
 
 // ---- hulp ----------------------------------------------------------------------
@@ -170,8 +172,8 @@ try {
     ok('P2 stil/golf fps 15: rate=15, mode=cline, -g 30, en de golf gelijk met het geluid', /showwaves=[^ ]*rate=15/.test(golf) && golf.includes('mode=cline') && golf.includes('-g 30')
       && golf.includes(`colors=white,${GELIJK},format=yuv420p[v]`));
     const png = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'audio', beeld: 'plaat-donker.png', fps: 2 }, { uit: 'u.flv' }).join(' ');
-    ok('P3 stil/png: movie=beelden/<naam>.png met de golf erover, ook gelijk met het geluid', png.includes('movie=beelden/plaat-donker.png') && png.includes('overlay=shortest=1')
-      && png.includes(`colors=white@0.5,${GELIJK}[w]`));
+    ok('P3 stil/png: movie=beelden/<naam>.png met de golf erover (draw=full: review 2, L1), ook gelijk met het geluid', png.includes('movie=beelden/plaat-donker.png') && png.includes('overlay=shortest=1')
+      && png.includes(`colors=white@0.5:draw=full,${GELIJK}[w]`));
     const her = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'hercodeer', bitrate: '2500k' }, { uit: 'u.flv' });
     const hs = her.join(' ');
     ok('P4 beeld/hercodeer: -hwaccel videotoolbox, h264_videotoolbox, -g 60, geluid -c:a copy, nergens aac als encoder',
@@ -272,7 +274,7 @@ try {
   }
 
   // ==== S: met ffmpeg, sneller dan echte tijd ======================================
-  if (!heeftFfmpeg) notitie('S14-S26: geen ffmpeg');
+  if (!heeftFfmpeg) notitie('S14-S29: geen ffmpeg');
   else {
     const p6 = pcm(6), p12 = pcm(12);
     const rtmpPoort = await vrijePoort(), udpPoort = await vrijePoort(true), kopiePoort = await vrijePoort();
@@ -281,6 +283,7 @@ try {
       { naam: 'golf', soort: 'bestand', bron: 'audio', beeld: 'golf', fps: 2 },
       { naam: 'golf10', soort: 'bestand', bron: 'audio', beeld: 'golf', fps: 10 },
       { naam: 'plaat', soort: 'bestand', bron: 'audio', beeld: 'plaat-donker.png', fps: 2 },
+      { naam: 'plaat10', soort: 'bestand', bron: 'audio', beeld: 'plaat-donker.png', fps: 10 },
       { naam: 'rtmp-test', soort: 'rtmp', bron: 'audio', beeld: 'golf', url: `rtmp://127.0.0.1:${rtmpPoort}/live/test` },
       { naam: 'udp-test', soort: 'udp', bron: 'audio', url: `udp://127.0.0.1:${udpPoort}?pkt_size=1316` },
       { naam: 'beeld', soort: 'bestand', bron: 'video' },
@@ -296,7 +299,8 @@ try {
       const id = await nieuweOpname();
       const s = await U.start({ id, doel: 'proef', url: 'rtmp://a.rtmp.youtube.com/live2/x', door: 'localhost:8777' }, basis);
       ok('S14 start stil -> bestand: ok, uitgang in uitMap (buiten opnames/), een url in de body wordt genegeerd (G2)', s.ok && s.soort === 'bestand' && s.uit?.startsWith(uitMap) && s.uit.endsWith(`set-${id}.uitzend.flv`));
-      ok('S14 stand: bezig, door = de Host van de start (H16), ffmpeg loopt', U.stand().bezig && U.stand().door === 'localhost:8777' && U.stand().ffmpeg === 'loopt');
+      ok('S14 stand: bezig, door = de Host van de start (H16), ffmpeg loopt, gevolgdS een getal, geen start meer', U.stand().bezig && U.stand().door === 'localhost:8777'
+        && U.stand().ffmpeg === 'loopt' && typeof U.stand().gevolgdS === 'number' && U.stand().start === false);
       const t0 = Date.now();
       const sl = await voer({ id, pcmBuf: p6, sec: 6, tussen: 250 });
       const k = await U.opnameKlaar(id);
@@ -373,6 +377,7 @@ try {
       const vd = duurVan(st.uit?.mp4 || '/x', 'v:0'), kf = grootsteKeyAfstand(st.uit?.mp4 || '/x');
       ok(`S18 mp4 speelbaar: beeld ${r2(vd)} s (12 ± 0,6), ${kf.aantal} keyframes, grootste afstand ${r2(kf.max)} s (≤ 2,05)`, Math.abs(vd - 12) <= 0.6 && kf.aantal >= 5 && kf.max <= 2.05);
       ok(`S18 achterstandTekst noemt de cadans van Chrome ("${st.achterstandTekst}")`, /beeld komt per 3,4 s/.test(st.achterstandTekst));
+      ok(`S18 gevolgdS is null bij beeld (mp4-bytes zijn geen seconden; review 2, L5): ${st.gevolgdS}`, st.gevolgdS === null);
       // Review 1, punt 3: Chrome's fps varieert (29,07 gemeten) en -g telt beelden. Op 25 fps gaf -g 60 alleen 2,4 s.
       const v25 = fmp4('aac', { fps: 25, gop: 85 });
       const id25 = await nieuweOpname();
@@ -520,6 +525,34 @@ try {
       await O.sluit(opnames, id);
     }
 
+    // S29: de noodrem van beeld (review 2, L4). Een mp4 is niet te knippen: boven achterstandMaxBeeld stopt de
+    //      uitzending met fout 'achterstand'. Hier 2 s, met een ffmpeg die hangt (SIGSTOP) en 4 s geluid erbij.
+    if (!heeftVT) notitie('S29: geen h264_videotoolbox in deze ffmpeg');
+    else {
+      const id = await nieuweOpname();
+      await O.voegVideoToe(opnames, id, 'mp4', vAac.init);
+      const s = await U.start({ id, doel: 'beeld' }, { ...basis, achterstandMaxBeeld: 2, pollMs: 100 });
+      const pid = U._pid();
+      let fout = null, tFout = null, gestopt = false, weg = false;
+      try {
+        if (pid) process.kill(pid, 'SIGSTOP');
+        await voer({ id, pcmBuf: p6, sec: 4, tussen: 250, sluiten: false });
+        const t0 = Date.now();
+        while (Date.now() - t0 < 2000 && U.stand().fout !== 'achterstand') await wacht(50);
+        fout = U.stand().fout; tFout = (Date.now() - t0) / 1000;
+      } finally {
+        try { if (pid) process.kill(pid, 'SIGCONT'); } catch { /* weg */ }
+      }
+      const t1 = Date.now();
+      while (Date.now() - t1 < 10000 && U.stand().bezig) await wacht(100);
+      gestopt = !U.stand().bezig;
+      try { process.kill(pid, 0); } catch (e) { weg = e.code === 'ESRCH'; }
+      ok(`S29 beeld, ffmpeg hangt, achterstandMaxBeeld 2: fout "${fout}" binnen ${r2(tFout)} s na 4 s geluid (≤ 2), daarna gestopt (${r2((Date.now() - t1) / 1000)} s), ffmpeg weg`,
+        s.ok && fout === 'achterstand' && gestopt && weg && U.stand().fout === 'achterstand');
+      U._reset();
+      await O.sluit(opnames, id);
+    }
+
     // S27: de golf valt op het geluid (review 1, punt 2). Een stoot op 3,0 s moet op 3,0 s in beeld staan; zonder
     //      setpts kwam hij op 5,0 s (2 fps) of 3,4 s (10 fps). Bij 2 fps pint dit ook de "4 beelden" vast.
     const stoot = stootPcm(6, 3);
@@ -533,22 +566,25 @@ try {
     }
 
     // S28: stil met een png-plaat, echt door ffmpeg (review 1, punt 5): movie, loop en overlay breken stil bij een update.
-    {
-      mkdirSync(join(uitzendMap, 'beelden'), { recursive: true });
-      spawnSync('ffmpeg', ['-v', 'error', '-n', '-f', 'lavfi', '-i', 'color=c=0x202020:s=1280x720', '-frames:v', '1', join(uitzendMap, 'beelden', 'plaat-donker.png')]);
+    //      Ook op 10 fps (review 2, L1): zonder draw=full was de stoot daar niet te zien en werd de plaat donkerder.
+    mkdirSync(join(uitzendMap, 'beelden'), { recursive: true });
+    spawnSync('ffmpeg', ['-v', 'error', '-n', '-f', 'lavfi', '-i', 'color=c=0x202020:s=1280x720', '-frames:v', '1', join(uitzendMap, 'beelden', 'plaat-donker.png')]);
+    for (const doel of ['plaat', 'plaat10']) {
       const id = await nieuweOpname();
-      const s = await U.start({ id, doel: 'plaat' }, basis);
+      const s = await U.start({ id, doel }, basis);
       await voer({ id, pcmBuf: stoot, sec: 6, tussen: 0 });
       await U.opnameKlaar(id);
       const st = U.stand();
       const mp4 = st.uit?.mp4 || '/x';
       const p = probeJson(mp4);
       const ad = duurVan(mp4, 'a:0');
-      ok(`S28 stil/png -> bestand: h264 1280x720 + aac, geluid ${r2(ad)} s (6 ± 0,3)${s.ok ? '' : ` [${s.fout}]`}`, s.ok && stroom(p, 'video').codec_name === 'h264'
+      ok(`S28 ${doel} stil/png -> bestand: h264 1280x720 + aac, geluid ${r2(ad)} s (6 ± 0,3)${s.ok ? '' : ` [${s.fout}]`}`, s.ok && stroom(p, 'video').codec_name === 'h264'
         && stroom(p, 'video').width === 1280 && stroom(p, 'video').height === 720 && stroom(p, 'audio').codec_name === 'aac' && Math.abs(ad - 6) <= 0.3);
       const z = stootZichtbaar(mp4);
-      ok(`S28 png: de plaat staat in beeld (helderheid in stilte ${r2(z.basis)}; zwart is 16) en de stoot op ${z.t === null ? '-' : r2(z.t)} s (3,0 ± 0,15)`,
-        z.basis > 30 && z.t !== null && Math.abs(z.t - 3) <= 0.15);
+      // "In beeld" = niet zwart (16); de plaat geeft 31. De grens ligt ertussen, niet één stap onder 31 (review 2, L2).
+      const piek = Math.max(...z.rij.filter(([t]) => t >= 2.9 && t <= 3.4).map(([, y]) => y));
+      ok(`S28 ${doel}: de plaat staat in beeld (helderheid in stilte ${r2(z.basis)}; zwart is 16) en de stoot op ${z.t === null ? '-' : r2(z.t)} s (3,0 ± 0,15), lichter dan de plaat (max ${r2(piek)})`,
+        z.basis > 23 && z.t !== null && Math.abs(z.t - 3) <= 0.15 && piek > z.basis + 8);
     }
   }
 
@@ -563,12 +599,15 @@ try {
       let startDuur = null;
       const st = U.start({ id, doel: 'beeld' }, { ...basis, wachtMp4: 3000 }).then((r) => { startDuur = (Date.now() - tS) / 1000; return r; });
       await wacht(200);
+      const tijdens = U.stand();
       const t0 = Date.now();
       const sp = await U.stop();
       const r = await st;
       const d = (Date.now() - t0) / 1000;
       ok(`R1 stop() tijdens het wachten op de mp4 (start liep ${r2(startDuur)} s): stop ok na ${r2(d)} s (≤ 0,6), start geeft "${r.fout}", geen ffmpeg, niet bezig`,
         sp.ok && startDuur >= 0.15 && startDuur < 1 && d <= 0.6 && !r.ok && /gestopt tijdens het starten/.test(r.fout || '') && U._pid() === null && !U.stand().bezig);
+      ok(`R1 de stand zegt dat er een start loopt (review 2, L5): tijdens start ${tijdens.start}, bezig ${tijdens.bezig}; daarna start ${U.stand().start}`,
+        tijdens.start === true && !tijdens.bezig && U.stand().start === false);
       await O.sluit(opnames, id);
     }
     // R3: een fout tussen het openen van de WAV en de spawn laat geen open bestand achter
@@ -665,10 +704,30 @@ try {
       const w = st.waarschuwingen.find((x) => /geen flv op/.test(x));
       ok(`R11 geen flv op de verwachte plek -> geen stille stop maar "${w}"`, r.ok && !!w && !st.uit?.mp4);
     }
+    // R12 (review 2, M1): opnameKlaar terwijl de start nog op de mp4 wacht. Vroeger gaf opnameKlaar meteen ok zonder
+    //     iets te doen; de start slaagde daarna alsnog en volgde een opname die al dicht was ("bron stil" na 10 s).
+    if (!heeftVT) notitie('R12: geen h264_videotoolbox in deze ffmpeg');
+    else {
+      const p12 = pcm(12), v = fmp4('aac');
+      const id = await nieuweOpname();
+      await O.voegToe(opnames, id, p12.subarray(0, 192000), 0);
+      const sP = U.start({ id, doel: 'beeld' }, { ...basis, wachtMp4: 3000 });
+      await wacht(150);
+      for (let i = 1; i < 12; i++) await O.voegToe(opnames, id, p12.subarray(i * 192000, (i + 1) * 192000), i * 48000);
+      await O.voegVideoToe(opnames, id, 'mp4', v.init);
+      for (const f of v.frags) await O.voegVideoToe(opnames, id, 'mp4', f.buf);
+      await O.sluit(opnames, id);
+      const k = await U.opnameKlaar(id);
+      const s = await sP;
+      const st = U.stand();
+      const vd = duurVan(st.uit?.mp4 || '/x', 'v:0');
+      ok(`R12 opnameKlaar tijdens het starten: start ${s.ok ? 'ok' : s.fout}, klaar ok, daarna niet bezig, geen fout ("${st.fout}"), mp4 met beeld ${r2(vd)} s (12 ± 0,6)`,
+        s.ok && k.ok && !st.bezig && st.fout === null && existsSync(st.uit?.mp4 || '/x') && Math.abs(vd - 12) <= 0.6);
+    }
   }
 
   // ==== E: echte tijd (alleen met VARVE_TEST_ECHTETIJD=1) ==========================
-  if (!echteTijd) notitie('E1-E6: echte tijd overgeslagen (VARVE_TEST_ECHTETIJD=1 om ze te draaien, ~75 s)');
+  if (!echteTijd) notitie('E1-E6: echte tijd overgeslagen (VARVE_TEST_ECHTETIJD=1 om ze te draaien, ~72 s)');
   else if (!heeftFfmpeg) notitie('E1-E6: geen ffmpeg');
   else {
     const p14 = pcm(14), p12 = pcm(12);

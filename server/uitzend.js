@@ -182,7 +182,7 @@ function beeldFilter(beeld, fps) {
   if (beeld === 'golf') return `${golf('mode=cline:colors=white')},format=yuv420p[v]`;
   if (beeld !== 'zwart' && PNG.test(beeld)) {
     return `movie=beelden/${beeld},loop=loop=-1:size=1,fps=${fps},scale=1280:720[p];`
-      + `${golf('mode=cline:colors=white@0.5')}[w];`
+      + `${golf('mode=cline:colors=white@0.5:draw=full')}[w];`
       + '[p][w]overlay=shortest=1,format=yuv420p[v]';
   }
   return `${golf('colors=black')},format=yuv420p[v]`;
@@ -296,7 +296,7 @@ const tekstS = (s) => s.toFixed(1).replace('.', ',');
 
 function legeStand() {
   return {
-    bezig: false, doel: null, id: null, bron: null, soort: null, sinds: null, door: null, beeldstand: null,
+    bezig: false, start: false, doel: null, id: null, bron: null, soort: null, sinds: null, door: null, beeldstand: null,
     bronS: 0, gevolgdS: 0, uitS: 0, achterstandS: 0, achterstandTekst: '', bitrateKbit: null,
     kwijtS: 0, sprongen: 0, fout: null, ffmpeg: 'uit', uit: null, waarschuwingen: [],
   };
@@ -305,9 +305,10 @@ function legeStand() {
 class Zending {
   constructor() { this.s = legeStand(); this.kind = null; this.stopBelofte = null; }
 
+  /** `start` = er loopt een start (bv. wachten op de mp4): dan is een tweede start geweigerd (review 2, L5). */
   stand() {
     const s = this.s;
-    return { ...s, uit: s.uit ? { ...s.uit } : null, waarschuwingen: [...s.waarschuwingen], fout: s.fout ? maskeer(s.fout) : null };
+    return { ...s, start: !!this.bezigMetStarten, uit: s.uit ? { ...s.uit } : null, waarschuwingen: [...s.waarschuwingen], fout: s.fout ? maskeer(s.fout) : null };
   }
 
   start(verzoek, instellingen) {
@@ -322,13 +323,15 @@ class Zending {
   /**
    * Twee delen, zodat de route (stap 3) de body niet kan laten kiezen waar gelezen en geschreven wordt (G1, G2):
    *   verzoek      { id, doel, beeldstand?, door? }: van buiten; elk ander veld wordt NIET gelezen (ook geen url, pad of ffmpeg).
-   *   instellingen { opnames, uitzendMap, uitMap, ffmpeg, pollMs, stilNa, stopNa, achterstandMax, wachtMp4 }: van de server zelf.
+   *   instellingen { opnames, uitzendMap, uitMap, ffmpeg, pollMs, stilNa, stopNa, achterstandMax, achterstandMaxBeeld, wachtMp4 }:
+   *                van de server zelf.
    */
   async _start(verzoek, instellingen) {
     const { id, doel: naam, beeldstand, door } = verzoek && typeof verzoek === 'object' ? verzoek : {};
     let {
       opnames, uitzendMap = STANDAARD_MAP, uitMap = process.env.VARVE_UITZEND_UIT || STANDAARD_UIT,
-      ffmpeg = 'ffmpeg', pollMs = 250, stilNa = 10000, stopNa = 30000, achterstandMax = 8, wachtMp4 = 10000, _argsHaak,
+      ffmpeg = 'ffmpeg', pollMs = 250, stilNa = 10000, stopNa = 30000, achterstandMax = 8, achterstandMaxBeeld = 20, wachtMp4 = 10000,
+      _argsHaak,
     } = instellingen && typeof instellingen === 'object' ? instellingen : {};
     if (this.s.bezig || this.kind || this.bezigMetStarten) return { ok: false, fout: 'er loopt al een uitzending' };
     if (typeof id !== 'string' || !ID.test(id)) return { ok: false, fout: 'ongeldig opname-id' };
@@ -421,7 +424,7 @@ class Zending {
       // Opname jonger dan 2 s: vanaf het begin. Anders vanaf nu (midden in de set).
       const eind = kop + dataNu - (dataNu % FRAME);
       Object.assign(this, {
-        kind, wav, mp4, kop, pollMs, stilNa, stopNa, achterstandMax, doelObj: doel, ffmpegPad: ffmpeg, remuxBelofte: null,
+        kind, wav, mp4, kop, pollMs, stilNa, stopNa, achterstandMax, achterstandMaxBeeld, doelObj: doel, ffmpegPad: ffmpeg, remuxBelofte: null,
         pos: doel.bron === 'audio' ? (bronS < 2 ? kop : eind) : 0,
         eind, mp4Eind: 0, gevolgd: 0, draining: false, sprongVlag: false, pompBelofte: null, pompt: false,
         laatsteGroei: Date.now(), stderr: [], stoppen: false, stopBelofte: null,
@@ -429,7 +432,8 @@ class Zending {
       overgedragen = true;
       this.s = {
         ...legeStand(), bezig: true, doel: doel.naam, id, bron: doel.bron, soort: doel.soort, sinds: Date.now(),
-        door: door ?? null, beeldstand: beeldstand ?? null, bronS, ffmpeg: 'loopt', uit: uitInfo, waarschuwingen,
+        door: door ?? null, beeldstand: beeldstand ?? null, bronS, gevolgdS: doel.bron === 'audio' ? 0 : null,
+        ffmpeg: 'loopt', uit: uitInfo, waarschuwingen,
       };
       this._kindLuisteraars(kind);
       this.poll = setInterval(() => { this._poll().catch(() => {}); }, pollMs);
@@ -495,14 +499,16 @@ class Zending {
     // Sprong alleen als de achterstand in het BESTAND zit (≥ 1 s): zit hij in pijp of encoder, dan helpt
     // vooruitspringen niet en zou elke poll vers geluid weggooien.
     if (this.s.bron === 'audio' && this.s.achterstandS > this.achterstandMax && (this.eind - this.pos) / BPS >= 1) this.sprongVlag = true;
-    if (this.s.bron === 'video' && this.s.achterstandS > 20) { this.s.fout = 'achterstand'; this._stopIntern('achterstand'); return; }
+    // Een mp4 is niet te knippen: boven `achterstandMaxBeeld` (standaard 20 s) stopt de uitzending (S29).
+    if (this.s.bron === 'video' && this.s.achterstandS > this.achterstandMaxBeeld) { this.s.fout = 'achterstand'; this._stopIntern('achterstand'); return; }
     this._pomp();
   }
 
   /** H1: achterstand = wat nog in het bestand wacht + wat in pijp en encoder zit, tegen de WAV-klok. */
   _meet() {
     const s = this.s;
-    s.gevolgdS = s.bron === 'audio' ? this.gevolgd / BPS : s.gevolgdS;
+    // gevolgdS = seconden geluid die in ffmpeg gingen; bij beeld zijn het mp4-bytes, geen seconden: null (review 2, L5).
+    s.gevolgdS = s.bron === 'audio' ? this.gevolgd / BPS : null;
     if (s.bron === 'audio') s.achterstandS = (this.eind - this.pos) / BPS + Math.max(0, s.gevolgdS - s.uitS);
     else s.achterstandS = Math.max(0, s.bronS - s.uitS);
     s.achterstandTekst = s.bron === 'video'
@@ -663,6 +669,9 @@ class Zending {
 
   async opnameKlaar(id) {
     try {
+      // Loopt de start nog (wachten op de mp4 kan 10 s duren), dan eerst die afwachten: anders deed dit niets en
+      // volgde de uitzending daarna een opname die al dicht was, tot "bron stil" (review 2, M1; R12).
+      if (this.bezigMetStarten) await this.startBelofte?.catch(() => {});
       if (!this.s.bezig || this.s.id !== id || this.stoppen) return { ok: true };
       clearInterval(this.poll);
       await this._leeg();
