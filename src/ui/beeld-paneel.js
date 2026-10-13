@@ -2,6 +2,7 @@ import { DECK_IDS } from '../engine/engine.js';
 import { BeeldKoppeling, klemLatentie, ADRES_MAX, LATENTIE_MIN, LATENTIE_MAX, BEELD_ADRESSEN, WISSEL_BEVESTIG_MS, wisselVraagtBevestiging } from '../koppel/beeld.js';
 import { beeldStand } from './beeld-weergave.js';
 import { meld } from './meldingen.js';
+import { zetTekst } from './dom.js';
 
 /*
  * De BEELD-rij (docs/BEELD.md): VARVE stuurt de Stroommachine, de
@@ -57,7 +58,7 @@ export function opzetBeeld({ engine }) {
   latentieVeld.max = String(LATENTIE_MAX);
   const KNOP_TITEL = knop.title;
 
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
   const titel = (el, t) => { if (el.title !== t) el.title = t; };
   const data = (el, k, v) => {

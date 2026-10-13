@@ -3,7 +3,7 @@ import { read as readAction, invoke as invokeAction, metaOf, trackVanDeck } from
 import { Mapping } from '../control/mapping.js';
 import { knobVan } from './controls.js';
 import { BaanView } from './waveform.js';
-import { esc } from './dom.js';
+import { esc, zetTekst } from './dom.js';
 import { bpmTekst } from './grid-strook.js';
 import { kolomToon } from './toon-weergave.js';
 import {
@@ -18,6 +18,8 @@ import {
  * dezelfde cel: kolom 2, rij 2 van .fd-devknoppen.
  */
 const LOCK_SIG = DEVICE_KNOPPEN[1][1].sig;
+/** Zo lang licht een element op als je de control op de APC aanraakt. */
+const GERAAKT_MS = 300;
 const QUANTIZE_TITEL = {
   aan: 'quantize AAN, voor alle tracks: cue, hotcues en loop in/out op de tel, hotcues springen in de maat — klik of toets 6',
   uit: 'quantize uit — klik of toets 6 om cue, hotcues en loop in/out op de tel te zetten (alle tracks)',
@@ -43,6 +45,13 @@ const QUANTIZE_TITEL = {
 export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null }) {
   const items = [];          // { el, sig, soort, kolom?, r (leesControl) }
   const perSig = new Map();  // sig -> [el]
+  // classList.toggle en dataset met dezelfde stand zijn goedkoop, maar niet
+  // gratis: alleen aanraken wat verandert.
+  const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
+  const data = (el, k, v) => {
+    if (v === undefined || v === null || v === false) { if (k in el.dataset) delete el.dataset[k]; }
+    else if (el.dataset[k] !== v) el.dataset[k] = v;
+  };
 
   const knopHtml = (c, extra = '') => `<button class="spg spg-${c.soort} ${extra}" data-kind="button" data-sig="${c.sig}">`
     + `<span class="spg-t"></span>${c.teken ? `<i class="spg-teken">${c.teken}</i>` : ''}`
@@ -172,21 +181,30 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
     // Een draaiknop of fader kan alleen een waarde sturen, een drukknop alleen
     // aan/uit. Past het niet, dan toont hij wat hij doet maar stuurt hij niets.
     const past = r && meta && ((isKnob || isFader) ? meta.type === 'value' : meta.type === 'trigger');
-    if (r?.action) el.dataset.action = r.action; else delete el.dataset.action;
-    if (r?.actionShift) el.dataset.actionShift = r.actionShift; else delete el.dataset.actionShift;
-    if (r?.modus) el.dataset.modus = r.modus; else delete el.dataset.modus;
-    el.classList.toggle('leeg', !r);
-    el.classList.toggle('stuurt-niet', !!r && !past);
-    el.title = r ? r.titel : `APC: ${naamVan(item.sig)} — (niets gekoppeld)`;
+    // Alleen schrijven wat anders is: een herberekening raakt ~200 elementen,
+    // en elk geschreven attribuut laat Chrome de stijl van dat element opnieuw
+    // uitrekenen, ook als de waarde dezelfde was.
+    data(el, 'action', r?.action);
+    data(el, 'actionShift', r?.actionShift);
+    data(el, 'modus', r?.modus);
+    klasse(el, 'leeg', !r);
+    klasse(el, 'stuurt-niet', !!r && !past);
+    const titel = r ? r.titel : `APC: ${naamVan(item.sig)} — (niets gekoppeld)`;
+    if (el.title !== titel) el.title = titel;
     // Een rack-knop van de track (of, in het mapje master, van de master), of een instrumentknop.
     const plek = r ? /^(track\.\d+|master)\.fx\.knob\.(\d)$/.exec(r.action) : null;
     item.fxPlek = plek ? Number(plek[2]) : null;
     item.fxMaster = plek?.[1] === 'master';
     item.instPlek = r ? Number(/^track\.\d+\.inst\.knob\.(\d)$/.exec(r.action)?.[1]) || null : null;
-    if (!item.fxPlek && !item.instPlek) el.classList.remove('dof');
+    if (!item.fxPlek && !item.instPlek) klasse(el, 'dof', false);
     // De A|B-knop toont de KANT (A / thru / B), geen aan/uit-licht; zie teken().
     item.kant = !!r && isKantKnop(r.action);
-    if (!item.kant) delete el.dataset.kant;
+    if (!item.kant) data(el, 'kant', undefined);
+    // Wat teken() elke frame van deze regel wil weten, hier één keer: een sectie-pad
+    // (track, index) en of het lampje omgekeerd is (On/Off). Was per frame per knop een regex.
+    const sec = r ? /^track\.(\d+)\.section\.(\d+)$/.exec(r.action) : null;
+    item.sectie = sec ? { deck: DECK_IDS[Number(sec[1]) - 1], i: Number(sec[2]) - 1 } : null;
+    item.lampOm = !!r && !!(r.lampOm || /\.fx\.bypass$/.test(r.action));
     let tekst = r ? r.kort : '';
     // In een kolom staat het tracknummer al bovenaan: "focus 3" wordt "focus".
     if (item.kolom) tekst = kortInKolom(tekst).replace(new RegExp(`^focus ${item.kolom}$`), 'focus');
@@ -207,8 +225,21 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
   /**
    * Alle controls opnieuw laten afleiden. Bij: een andere mapping, een ander
    * mapje, een focuswissel en shift op de APC.
+   *
+   * Van een gebeurtenis (shift, een mapje, de mapping) komt dit NIET meteen,
+   * maar bij het volgende beeld (`straks`): het liep anders midden in het
+   * MIDI-bericht van shift of een modusknop, 2–8 ms (gemeten, controller-invoer
+   * 14 okt), en elk bericht dat erachter in de rij stond (een fader) wachtte
+   * zolang. Tien keer shift in één beeld = één herberekening.
    */
+  let gepland = false;
+  function straks() {
+    if (gepland) return;
+    gepland = true;
+    requestAnimationFrame(() => { if (gepland) herbereken(); });
+  }
   function herbereken() {
+    gepland = false;
     const vars = { focus: trackVanDeck(engine.focus) };
     const shift = !!appMapping?.shift;
     const m = bron();
@@ -228,29 +259,49 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
   function koppel({ mapping, lagen: l }) {
     appMapping = mapping;
     lagen = l;
-    mapping.on('change', herbereken);
-    mapping.on('shift', herbereken);
-    standaard.on('change', herbereken);
-    lagen.on('change', herbereken);
+    mapping.on('change', straks);
+    mapping.on('shift', straks);
+    standaard.on('change', straks);
+    lagen.on('change', straks);
     herbereken();
   }
 
   // ---- oplichten als je de APC aanraakt ------------------------------------
-  const timers = new WeakMap();
+  /** Element -> tot wanneer (performance.now) het oplicht. teken() zet en haalt de klasse. */
+  const geraakt = new Map();
+  const perSigVan = new Map();   // sig zoals hij binnenkomt -> elementen (cache, ook voor de wildcards)
   /**
    * Een control op de APC is aangeraakt: het element op het scherm licht
    * even op. `sig` is wat het apparaat stuurde, `regelSig` de regel die het
    * raakte (die kan een wildcard zijn, `cc:*:16`).
+   *
+   * Per bericht alleen ONTHOUDEN; de klasse zet teken() bij het volgende
+   * beeld. Een fader-sweep van acht faders is ~1000 berichten per seconde: per
+   * bericht een klasse, een clearTimeout en een setTimeout was een
+   * stijlberekening en twee timers per bericht voor wat je één keer per beeld ziet.
    */
   function markeer(sig, regelSig = null) {
-    const [type, , nr] = String(sig).split(':');
-    const els = perSig.get(sig) || perSig.get(regelSig) || perSig.get(`${type}:0:${nr}`) || [];
-    for (const el of els) {
-      el.classList.add('geraakt');
-      clearTimeout(timers.get(el));
-      timers.set(el, setTimeout(() => el.classList.remove('geraakt'), 300));
+    const sleutel = regelSig ? `${sig}|${regelSig}` : sig;
+    let els = perSigVan.get(sleutel);
+    if (!els) {
+      const [type, , nr] = String(sig).split(':');
+      els = perSig.get(sig) || perSig.get(regelSig) || perSig.get(`${type}:0:${nr}`) || [];
+      perSigVan.set(sleutel, els);
+    }
+    if (els.length) {
+      const tot = performance.now() + GERAAKT_MS;
+      for (const el of els) geraakt.set(el, tot);
     }
     return els.length;
+  }
+  function tekenGeraakt() {
+    if (!geraakt.size) return;
+    const nu = performance.now();
+    for (const [el, tot] of geraakt) {
+      const aan = nu < tot;
+      klasse(el, 'geraakt', aan);
+      if (!aan) geraakt.delete(el);
+    }
   }
 
   // ---- elk frame -----------------------------------------------------------
@@ -265,14 +316,13 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
   const fdLaag = document.querySelector('.fd-laag');
   const fdLaagUitleg = document.querySelector('.fd-laag-uitleg');
   const focusdeel = document.getElementById('focusdeel');
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
-  // classList.toggle met dezelfde stand is goedkoop, maar niet gratis: 16
-  // elementen × 6 klassen × 60 frames. Alleen aanraken wat verandert.
-  const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   let laatsteFocus = engine.focus;
 
   function teken(s) {
     if (s.focus !== laatsteFocus) { laatsteFocus = s.focus; herbereken(); }
+    if (gepland) herbereken();     // shift of een mapje sinds het vorige beeld: vóór de lampjes
+    tekenGeraakt();
     const { venster, analysis } = staat;
     for (const id of DECK_IDS) {
       const d = s.decks[id], k = kolEls[id], b = banen[id];
@@ -280,8 +330,9 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
       const titel = d.instrument ? `♪ ${d.instrument.naam}` : (d.title || '— leeg —');
       tekst(k.titel, titel);
       tekst(b.titel, titel);
-      const hoogte = (d.level * 100).toFixed(1) + '%';
-      if (k.hoogte !== hoogte) { k.hoogte = hoogte; k.meter.style.height = hoogte; }
+      // transform, geen height: geen opmaak per beeld (styles.css, .meter.vmeter i).
+      const hoogte = `scaleY(${Math.min(1, Math.max(0, d.level)).toFixed(3)})`;
+      if (k.hoogte !== hoogte) { k.hoogte = hoogte; k.meter.style.transform = hoogte; }
       // MAAT op een track die stilstaat: gedimd en "(stil)". De maat komt dan
       // van de eerste geladen track met grid, niet van wat je hoort.
       const maat = s.maat === id, stil = maat && !d.playing;
@@ -334,16 +385,15 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
       // led.invert uit de regel, net als de LED-laag.
       // Modus secties (docs/SECTIES.md): op de pad de NAAM van de sectie
       // ("drop D"), zoals de strook boven de golfvorm; zonder sectie leeg en gedimd.
-      const sec = r ? /^track\.(\d+)\.section\.(\d+)$/.exec(r.action) : null;
+      const sec = item.sectie;
       if (sec) {
-        const k = engine.deck(DECK_IDS[Number(sec[1]) - 1])?.sectieKaart;
-        const i = Number(sec[2]) - 1;
-        const naam = k && i < k.aantal ? k.naam(i) : null;
+        const k = engine.deck(sec.deck)?.sectieKaart;
+        const naam = k && sec.i < k.aantal ? k.naam(sec.i) : null;
         tekst(item.t, naam ?? '');
         if (el.classList.contains('leeg') !== (naam === null)) el.classList.toggle('leeg', naam === null);
       }
       const ruw = r ? readAction(r.lamp) : null;
-      const om = r && (r.lampOm || /\.fx\.bypass$/.test(r.action));
+      const om = item.lampOm;
       const licht = r ? lichtVan(om && ruw != null ? 1 - ruw : ruw) : null;
       const want = licht ?? '';
       if (el.dataset.licht !== want) el.dataset.licht = want;
@@ -392,5 +442,5 @@ export function opzetSpiegel({ engine, staat, loadFile, stemsVan = () => null })
     if (focusdeel.dataset.laag !== laag) focusdeel.dataset.laag = laag;
   }
 
-  return { herbereken, koppel, markeer, teken, bron, items };
+  return { herbereken, straks, koppel, markeer, teken, bron, items };
 }

@@ -4,6 +4,7 @@ import { knobVan } from './controls.js';
 import { meld } from './meldingen.js';
 import { VOLGORDE, aantalOpBus, rijStand, kolomTeken, stemUitleg } from './stems-weergave.js';
 import { verschuivingTekst } from './toon-weergave.js';
+import { zetTekst } from './dom.js';
 
 /*
  * De STEMS-rij (docs/STEMS.md §4): voor de track met focus per stem een naam,
@@ -46,7 +47,7 @@ export function opzetStems({ engine, staat, wachtrij, library = null }) {
     cue: el.querySelector('.st-cue'), toon: el.querySelector('.st-toon'), toonw: el.querySelector('.st-toonw'),
   }]));
 
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
   const titel = (el, t) => { if (el.title !== t) el.title = t; };
   const isDicht = () => rij.classList.contains('hidden');

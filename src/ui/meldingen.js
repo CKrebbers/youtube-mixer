@@ -30,9 +30,12 @@ export function meld(tekst, soort = 'info', duur = 5000) {
   if (al) {
     // Dezelfde melding staat er al (dezelfde knop nog eens, een stream die blijft
     // haperen): niet stapelen, maar hem opnieuw laten oplichten en (info) langer laten staan.
+    // Opnieuw laten oplichten zonder `offsetWidth`: dat dwong Chrome de opmaak van de
+    // hele pagina METEEN uit te rekenen, midden in het MIDI-bericht dat de melding gaf
+    // (tot ~12 ms; een pad die steeds "geen secties" zegt; controller-invoer, 14 okt).
+    // Klasse eraf, en bij het volgende beeld er weer op: dat start de animatie ook opnieuw.
     al.classList.remove('flits');
-    void al.offsetWidth;
-    al.classList.add('flits');
+    requestAnimationFrame(() => al.classList.add('flits'));
     if (soort !== 'fout') { clearTimeout(al._weg); al._weg = setTimeout(() => weg(al), duur); }
     return al;
   }

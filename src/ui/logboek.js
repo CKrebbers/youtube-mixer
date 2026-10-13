@@ -3,7 +3,7 @@ import { bijInvoke, invoke, read, has, list, TRACKS, trackVanDeck, bindLog } fro
 import { Handelingenlog, leesStand, leesLog, rackStand, herinneringenVan, busNaarLog, koppelSectiedruk, LOG_VERSIE } from '../control/handelingen.js';
 import { Terugspeler, maakUitvoerder, kentSecties } from '../control/terugspelen.js';
 import { meld } from './meldingen.js';
-import { esc, mmss } from './dom.js';
+import { esc, mmss, zetTekst } from './dom.js';
 
 /**
  * Het handelingenlog in de schermlaag (docs/HANDELINGENLOG.md): de knop naast
@@ -276,7 +276,7 @@ export function opzetLogboek({ engine, staat, laden, opnemer }) {
 
   const grootte = (b) => (b >= 1e6 ? `${(b / 1e6).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(b / 1000))} kB`);
   // Alleen schrijven wat verandert (zie renderloop.js).
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   const titel = (el, t) => { if (el.title !== t) el.title = t; };
 
   /** Eén frame: tijd en grootte op de knop, en of er teruggespeeld wordt. */
