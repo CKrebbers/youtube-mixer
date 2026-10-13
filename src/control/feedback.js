@@ -161,8 +161,22 @@ export const TEL_VENSTER_EEN = 0.5;
 /** Drie standen uit een read: 'uit', 'half', 'aan'. */
 const standVan = (v) => (v >= 0.99 ? 'aan' : v > 0.01 ? 'half' : 'uit');
 
-export const kleurVoor = (actie) =>
-  (KLEURSCHEMA.find(([re]) => re.test(actie)) || [null, { aan: 'wit', uit: 'donkergrijs' }])[1];
+const STANDAARD_KLEUR = { aan: 'wit', uit: 'donkergrijs' };
+const kleurOnthouden = new Map();
+/**
+ * De kleur van een action: de eerste regel van KLEURSCHEMA die past. Onthouden
+ * per action-id: anders liepen elke tik ~70 regexen over elke regel van de
+ * mapping (de helft van wat een tik kostte, docs/verslagen/2026-10-14/controller-uitvoer.md).
+ * Het schema is vast, dus de uitkomst ook.
+ */
+export const kleurVoor = (actie) => {
+  let k = kleurOnthouden.get(actie);
+  if (k === undefined) {
+    k = (KLEURSCHEMA.find(([re]) => re.test(actie)) || [null, STANDAARD_KLEUR])[1];
+    if (kleurOnthouden.size < 4096) kleurOnthouden.set(actie, k);
+  }
+  return k;
+};
 
 /** Wildcard-kanaal bestaat alleen inkomend; naar buiten moet het een getal zijn. */
 const uitSig = (sig) => sig.replace(':*:', ':0:');
@@ -172,6 +186,22 @@ const ontleed = (sig) => {
   return m ? { type: m[1], channel: +m[2], number: +m[3] } : null;
 };
 
+/** Drie bytes als één getal (geen array en geen string per lampje per tik), en terug. */
+const pak = (b0, b1, b2) => (b0 << 16) | (b1 << 8) | b2;
+const uitpak = (v) => [v >> 16, (v >> 8) & 0xff, v & 0xff];
+
+/**
+ * Hooguit zoveel berichten per tik. Ruim boven een volledige verversing (~140:
+ * 110 lampjes, 16 ringen en hun types): de wachtrij van de MidiHub (16 per 4 ms)
+ * spreidt ze al. Vroeger 24 per tik: een mapje wisselen (~40 lampjes) duurde
+ * daardoor twee tikken (gemeten 51 ms tot het laatste lampje), een hele
+ * verversing zes (200 ms).
+ */
+export const MAX_PER_TIK = 160;
+
+/** Een wektik (Feedback.wek) hooguit zo vaak: dezelfde maat als de wachtrij van de MidiHub. */
+export const WEK_MS = 4;
+
 export class Feedback {
   /**
    * @param device  device-profiel (controls, palette, ring, init-sysex)
@@ -179,8 +209,9 @@ export class Feedback {
    * @param read    (actionId) -> 0..1 of null
    * @param meta    (actionId) -> { bipolar, ... } of null
    * @param send    (bytes) -> bool, en sendSysex voor de init
+   * @param nu      klok in ms (de test geeft een nep-klok)
    */
-  constructor({ device, mapping, read, meta, send, sendSysex }) {
+  constructor({ device, mapping, read, meta, send, sendSysex, nu = () => (globalThis.performance?.now() ?? Date.now()) }) {
     // send(bytes, opties) — opties gaan door naar de hub (bijv. { direct: true })
     this.device = device;
     this.mapping = mapping;
@@ -188,13 +219,29 @@ export class Feedback {
     this.meta = meta;
     this.send = send;
     this.sendSysex = sendSysex || send;
-    this.vorige = new Map();     // sig -> laatst verstuurde bytes, als string
+    this.nu = nu;
+    this.vorige = new Map();     // sig -> laatst verstuurde bytes, gepakt (pak())
+    this._wil = new Map();       // per tik hergebruikt: sig -> gewilde bytes (gepakt)
     this.gepauzeerd = false;     // staat aan tijdens de paletproef
     this.verstuurd = 0;
     this.klaar = false;
+    // Het PLAN: per regel die nu geldt alles wat niet van de engine afhangt
+    // (signature, soort lampje, doel-action, kleur). Opnieuw als de mapping,
+    // shift, de open mapjes, de focus of het apparaat verandert (_planNu).
+    this._plan = null;
+    this._planSleutel = null;
+    this._planDevice = null;
+    this._versie = 0;            // +1 bij elke 'change' van de mapping
+    this._telTik = 0;            // per tik één keer de tel van een track lezen (_telVan)
+    this._telVan_ = [];
+    this._wekker = null;         // een geplande wektik (null, een teken voor de microtaak, of een timer)
+    this._laatsteTik = -Infinity;
+    this.tikken = 0;             // voor de meting (tools/bench/feedback.mjs)
+    this.wekTikken = 0;
+    mapping?.on?.('change', () => { this._versie++; });
     // Shift ingedrukt of los: de lampjes tonen meteen de andere laag, niet pas
     // bij de volgende tik. Een shift-tik duurt soms maar 100 ms.
-    mapping?.on?.('shift', () => { if (this.klaar && !this.gepauzeerd) this.tick(48); });
+    mapping?.on?.('shift', () => { if (this.klaar && !this.gepauzeerd) this.tick(); });
   }
 
   /**
@@ -239,117 +286,201 @@ export class Feedback {
 
   /** Wat zou er nu moeten branden? Geeft sig -> bytes. */
   desired() {
+    const wil = new Map();
+    this._vul(wil);
     const uit = new Map();
-    const vars = this.mapping.vars();
-    const palet = this.device.palette || {};
-    const gedrag = this.device.behaviour || {};
+    for (const [sig, v] of wil) uit.set(sig, uitpak(v));
+    return uit;
+  }
 
-    const ring = this.device.ring;
+  /**
+   * Het plan van NU: per regel die geldt wat er per tik niet verandert. Een
+   * mapping met 700 regels kostte per tik ~0,5 ms aan actieveRegels(),
+   * resolveTarget en de kleurregexen, ook als er niets veranderde; nu alleen
+   * als de sleutel verandert. In de sleutel: de versie van de mapping (en het
+   * aantal regels, voor een mapping zonder events), shift, de open mapjes en
+   * de vars ({focus}). Het apparaat apart.
+   */
+  _planNu() {
+    const m = this.mapping;
+    const vars = m.vars ? m.vars() : {};
+    const open = typeof m.lagen === 'function' ? m.lagen() : null;
+    const sleutel = `${this._versie}|${m.rules?.size ?? 0}|${m.shift ? 1 : 0}|${open ? open.join(',') : ''}|${JSON.stringify(vars)}`;
+    if (this._plan && sleutel === this._planSleutel && this._planDevice === this.device) return this._plan;
+    const dev = this.device;
+    const gedrag = dev.behaviour || {};
+    const ring = dev.ring;
+    const plan = [];
     for (const regel of this._regels()) {
       const sig = uitSig(regel.in);
-      const control = this.device.controls.get(sig);
+      const control = dev.controls.get(sig);
       if (!control) continue;
-
-      const doel = resolveTarget(regel.action, vars);
-      const bron = regel.led?.lees ? resolveTarget(regel.led.lees, vars) : doel;
-      const waarde = this.read ? this.read(bron) : null;
-      if (waarde === null) continue;
       const p = ontleed(sig);
       if (!p) continue;
-
+      const doel = resolveTarget(regel.action, vars);
+      const bron = regel.led?.lees ? resolveTarget(regel.led.lees, vars) : doel;
       if (control.kind === 'knob') {
-        // Geen lampje maar een ring: die toont de SOFTWARE-stand. Precies wat
-        // je wilt zien als een knop nog niet overgepakt heeft.
-        uit.set(sig, [0xb0 | p.channel, p.number, Math.round(waarde * 127)]);
-        // Het ringtype hoort bij wat de knop NU doet: wisselt het mapje van
-        // filter (bipolair) naar send, dan wisselt de ring mee.
-        const ringSig = ring && this.device.ringFor?.(sig);
+        // Geen lampje maar een ring: die toont de SOFTWARE-stand. Het ringtype
+        // hoort bij wat de knop NU doet (bipolair of niet, per tik gelezen).
+        const ringSig = ring && dev.ringFor?.(sig);
         const rp = ringSig && ontleed(ringSig);
-        if (rp) {
-          const m = this.meta ? this.meta(doel) : null;
-          uit.set(`type:${ringSig}`, [0xb0 | rp.channel, rp.number, m?.bipolar ? ring.pan : ring.volume]);
-        }
+        plan.push({ soort: 'knob', sig, bron, doel, b0: 0xb0 | p.channel, b1: p.number,
+          typeSig: rp ? `type:${ringSig}` : null, t0: rp ? 0xb0 | rp.channel : 0, t1: rp ? rp.number : 0 });
         continue;
       }
       if (!control.led) continue;
-
       const kleur = { ...kleurVoor(regel.led?.lees ?? regel.action), ...(regel.led || {}) };
+      const nr = kleur.tel ? /^track\.(\d+)\./.exec(bron)?.[1] : null;
+      plan.push({ soort: control.led, sig, bron, kleur, nr: nr ? +nr : 0, kanaal: p.channel, b1: p.number,
+        rgbKanaal: gedrag[kleur.mode] ?? gedrag.vast ?? 0 });
+    }
+    this._plan = plan;
+    this._planSleutel = sleutel;
+    this._planDevice = dev;
+    return plan;
+  }
+
+  /** Vult `wil` met sig -> gewilde bytes (gepakt). Leest alleen de stand van de engine. */
+  _vul(wil) {
+    const plan = this._planNu();
+    const palet = this.device.palette || {};
+    const ring = this.device.ring;
+    const bi = this.device.bicolor || {};
+    this._telTik++;
+    for (const e of plan) {
+      const waarde = this.read ? this.read(e.bron) : null;
+      if (waarde === null) continue;
+      if (e.soort === 'knob') {
+        wil.set(e.sig, pak(e.b0, e.b1, Math.round(waarde * 127)));
+        if (e.typeSig) {
+          const m = this.meta ? this.meta(e.doel) : null;
+          wil.set(e.typeSig, pak(e.t0, e.t1, m?.bipolar ? ring.pan : ring.volume));
+        }
+        continue;
+      }
+      const kleur = e.kleur;
       let stand = standVan(kleur.invert ? 1 - waarde : waarde);
       if (stand === 'half' && kleur.half === undefined) stand = 'aan';
-      const tel = kleur.tel ? this._tel(kleur.tel, bron, stand) : null;   // null = knippert niet
+      const tel = kleur.tel ? this._tel(kleur.tel, e.nr, stand) : null;   // null = knippert niet
       const naamVan = (s) => kleur[s] ?? (s === 'half' ? kleur.aan : undefined);
 
-      if (control.led === 'rgb') {
+      if (e.soort === 'rgb') {
         // Op de tel: 'aan' is fel op de tel en gedimd ertussen, 'maat' keert
         // de stand op de tel even om.
         if (tel !== null && kleur.tel === 'aan') stand = tel ? 'aan' : 'half';
         else if (tel) stand = stand === 'aan' ? 'half' : 'aan';
         const naam = naamVan(stand);
         const vel = typeof naam === 'number' ? naam : (palet[naam] ?? 0);
-        const kanaal = gedrag[kleur.mode] ?? gedrag.vast ?? 0;
-        uit.set(sig, [0x90 | kanaal, p.number, vel]);
-      } else if (control.led === 'bicolor') {
+        wil.set(e.sig, pak(0x90 | e.rgbKanaal, e.b1, vel));
+      } else if (e.soort === 'bicolor') {
         // Tweekleurig (A|B-knop): 0 uit, 1 geel, 2-127 oranje. Een naam die
         // het apparaat niet kent valt terug op de stand: aan oranje, half geel.
         const naam = naamVan(stand);
-        const bi = this.device.bicolor || {};
         const vel = typeof naam === 'number' ? naam : (bi[naam] ?? { aan: 127, half: 1, uit: 0 }[stand]);
-        uit.set(sig, [0x90 | p.channel, p.number, vel]);
+        wil.set(e.sig, pak(0x90 | e.kanaal, e.b1, vel));
       } else {
         // Eenkleurig: alleen aan of uit, kanaal doet er niet toe. Een halve
         // stand is aan; knipperen op de tel is even omkeren (een lopende loop
         // op Clip Stop: aan, met een tik uit op elke tel).
         let aan = stand !== 'uit';
         if (tel) aan = !aan;
-        uit.set(sig, [0x90 | p.channel, p.number, aan ? 127 : 0]);
+        wil.set(e.sig, pak(0x90 | e.kanaal, e.b1, aan ? 127 : 0));
       }
     }
-    return uit;
   }
 
   /**
    * Valt de tel NU, voor deze LED? null = deze LED knippert nu niet, anders
-   * true (op de tel) of false (ertussen). De track komt uit de action
-   * (`track.3.beatloop.4` -> 3); de fase uit `track.N.phase` (null = speelt
-   * niet of geen grid: dan knippert er niets). Alleen lezen, geen teller:
-   * regel 3 geldt ook voor lampjes.
+   * true (op de tel) of false (ertussen). De track (`nr`) komt uit de action
+   * (`track.3.beatloop.4` -> 3, in het plan); de fase uit `track.N.phase`
+   * (null = speelt niet of geen grid: dan knippert er niets). Alleen lezen,
+   * geen teller: regel 3 geldt ook voor lampjes. Per tik één keer per track
+   * gelezen (_telVan): veertig loop-pads lazen anders 120 keer dezelfde fase.
    */
-  _tel(soort, doel, stand) {
-    const nr = /^track\.(\d+)\./.exec(doel)?.[1];
+  _tel(soort, nr, stand) {
     if (!nr || !this.read) return null;
     if (soort === 'aan' && stand !== 'aan') return null;
-    if (soort === 'maat' && this.read(`track.${nr}.leads`) !== 1) return null;
-    const fase = this.read(`track.${nr}.phase`);
-    if (fase === null || fase === undefined) return null;
-    return fase < (this.read(`track.${nr}.barbeat`) === 1 ? TEL_VENSTER_EEN : TEL_VENSTER);
+    const c = this._telVan(nr);
+    if (soort === 'maat') {
+      if (c.leads === undefined) c.leads = this.read(`track.${nr}.leads`);
+      if (c.leads !== 1) return null;
+    }
+    if (c.fase === null || c.fase === undefined) return null;
+    return c.fase < (c.een === 1 ? TEL_VENSTER_EEN : TEL_VENSTER);
+  }
+
+  /** Fase en "1" van track `nr` in deze tik (één keer gelezen). */
+  _telVan(nr) {
+    let c = this._telVan_[nr];
+    if (!c) c = this._telVan_[nr] = { tik: -1, fase: null, een: null, leads: undefined };
+    if (c.tik !== this._telTik) {
+      c.tik = this._telTik;
+      c.fase = this.read(`track.${nr}.phase`);
+      c.een = c.fase === null || c.fase === undefined ? null : this.read(`track.${nr}.barbeat`);
+      c.leads = undefined;
+    }
+    return c;
   }
 
   /**
-   * Stuurt alleen de verschillen. `max` houdt een volledige verversing binnen
-   * een paar frames in plaats van in één klap 60 berichten op de bus te gooien.
+   * Stuurt alleen de verschillen. `max` is een vangnet; het spreiden doet de
+   * wachtrij van de MidiHub (16 per 4 ms), zie MAX_PER_TIK.
    */
-  tick(max = 24) {
+  tick(max = MAX_PER_TIK) {
     if (this.gepauzeerd || !this.klaar) return 0;
-    const wil = this.desired();
+    this.tikken++;
+    this._laatsteTik = this.nu();
+    const wil = this._wil;
+    wil.clear();
+    this._vul(wil);
     let n = 0;
     // Wat niet meer gewild is (een ander mapje): uit. Anders blijft een pad
     // branden met de kleur van een mapje dat al dicht is.
-    for (const [sig, sleutel] of this.vorige) {
+    for (const [sig, v] of this.vorige) {
       if (wil.has(sig) || sig.startsWith('type:')) continue;
-      const b = sleutel.split(',').map(Number);
-      this.send([b[0], b[1], 0]);
+      this.send([v >> 16, (v >> 8) & 0xff, 0]);
       this.vorige.delete(sig);
       if (++n >= max) return n;
     }
-    for (const [sig, bytes] of wil) {
-      const sleutel = bytes.join(',');
-      if (this.vorige.get(sig) === sleutel) continue;
-      this.send(bytes);
-      this.vorige.set(sig, sleutel);
+    for (const [sig, v] of wil) {
+      if (this.vorige.get(sig) === v) continue;
+      this.send(uitpak(v));
+      this.vorige.set(sig, v);
       this.verstuurd++;
       if (++n >= max) break;
     }
     return n;
+  }
+
+  /**
+   * Zo snel mogelijk een tik, ná wat er nu gebeurt: een knop die je indrukt
+   * licht op zonder op de volgende tik van 33 ms te wachten (gemeten: druk ->
+   * lampje p50 ~20 ms, p99 ~33 ms; met wek ~1 ms). midi-opzet.js roept dit aan
+   * bij elke action op de bus (bijInvoke draait VÓÓR de action, daarom een
+   * microtaak: de tik ziet de nieuwe stand) en bij een ander mapje.
+   * Samengevoegd: wat er ook gebeurt in dezelfde taak, één tik; hooguit één
+   * per WEK_MS (daarna een timer). De tik stuurt alleen verschillen, dus niets
+   * dubbel: de gewone tik erna vindt niets meer.
+   */
+  wek() {
+    if (this._wekker !== null || this.gepauzeerd || !this.klaar) return;
+    let mijn = null;
+    const doe = () => {
+      if (this._wekker !== mijn) return;   // intussen gestopt
+      this._wekker = null;
+      if (!this.klaar || this.gepauzeerd) return;
+      this.wekTikken++;
+      this.tick();
+    };
+    const wacht = WEK_MS - (this.nu() - this._laatsteTik);
+    if (wacht <= 0) { mijn = {}; this._wekker = mijn; queueMicrotask(doe); }
+    else { mijn = setTimeout(doe, wacht); this._wekker = mijn; }
+  }
+
+  /** Een geplande wektik weg (afsluiten). */
+  stop() {
+    if (this._wekker !== null) clearTimeout(this._wekker);
+    this._wekker = null;
   }
 
   /**

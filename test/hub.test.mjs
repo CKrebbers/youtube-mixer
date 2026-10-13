@@ -179,6 +179,24 @@ ok('LED\'s gebundeld per beeld (meerdere berichten per led)', led.length >= 1 &&
 ok('init-SysEx niet verstuurd (de hub zet de modus)', midi.ingeslikt === 1 && !led.some((b) => b.bytes.some((x) => x[0] === 0xf0)));
 ok('alleen geldige 3-byte LED-berichten', led.every((b) => b.bytes.every((x) => x.length === 3 && [0x80, 0x90, 0xb0].includes(x[0] & 0xf0))));
 ok('de veegbeurt komt helemaal aan', led.reduce((n, b) => n + b.bytes.length, 0) === apc40mk2.allLeds().length);
+{
+  // Voorflank (14 okt): na een stille periode gaat een lampje meteen (na de lopende taak), niet 16 ms later;
+  // wat daarna binnen BEELD_MS komt, wacht tot BEELD_MS na de vorige bundel (hooguit één bundel per beeld).
+  const { BEELD_MS } = await import('../src/control/hub.js');
+  vooruit(200);
+  const ws = laatste(), n0 = ws.soort('led').length, t0 = nu;
+  midi.send([0x90, 0x20, 5]);
+  vooruit(0);
+  const eerste = ws.soort('led').slice(n0);
+  ok('na stilte: een lampje gaat meteen naar de hub (0 ms, niet BEELD_MS)', eerste.length === 1 && ws.uitT.at(-1) === t0
+    && JSON.stringify(eerste[0].bytes) === '[[144,32,5]]');
+  vooruit(3); midi.send([0x90, 0x21, 5]); midi.send([0x90, 0x22, 5]);
+  vooruit(BEELD_MS - 4);
+  ok('… het volgende binnen een beeld wacht', ws.soort('led').length === n0 + 1);
+  vooruit(1);
+  const tweede = ws.soort('led').slice(n0 + 1);
+  ok(`… en gaat ${BEELD_MS} ms na de vorige, samen in één bundel`, tweede.length === 1 && ws.uitT.at(-1) - t0 === BEELD_MS && tweede[0].bytes.length === 2);
+}
 
 console.log('\nAPC-invoer');
 await echteWacht(80);   // het echofilter van MidiHub (60 ms na wat wij stuurden) laten verlopen
@@ -270,11 +288,17 @@ console.log('\nspeelapparaten (PROTOCOL §17)');
   vooruit(100);
   const ledVoor = ws.soort('led').length;
   for (let i = 0; i < 40; i++) mm.uit.send([0x90, 36 + (i % 16), i]);
-  ok('lampjes eerst in de wachtrij (niets synchroon naar buiten)', midi.uitRij.length === 40 && ws.soort('led').length === ledVoor);
+  // Sinds 14 okt een schuivend venster: de rij was leeg, dus de eerste 16 meteen in de bundel (niet synchroon naar de hub).
+  ok('lampjes: de eerste 16 meteen in de bundel, de rest in de wachtrij; niets synchroon naar de hub', midi.uitRij.length === 24 && ws.soort('led').length === ledVoor);
   vooruit(0);
   ok('… hooguit 16 per 4 ms eruit (CLAUDE.md: alles naar buiten door een wachtrij)', midi.uitRij.length === 24);
+  vooruit(3);
+  ok('… ook niet na 3 ms (het venster schuift: 16 in elke 4 ms)', midi.uitRij.length === 24);
+  vooruit(1);
+  ok('… na 4 ms de volgende 16', midi.uitRij.length === 8);
+  vooruit(0);
   vooruit(4);
-  ok('… en 4 ms later weer 16', midi.uitRij.length === 8);
+  ok('… en 4 ms later de laatste 8', midi.uitRij.length === 0);
   ok('SysEx, ongeldige bytes en een lampje van 4 bytes: geweigerd en geteld', !mm.uit.send([0xf0, 0x47, 0x7f, 0x29, 0x60, 0, 4, 0x42, 0, 0, 0, 0xf7]) && !mm.uit.send([0x90, 200, 1]) && !mm.uit.send([0x90, 1, 2, 3])
     && midi.status().hub.speelt['maschine-mk2'].geweigerd === 3);
   vooruit(100);

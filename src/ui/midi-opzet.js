@@ -1,4 +1,4 @@
-import { invoke, read as readAction, metaOf, trackVanDeck } from '../control/actions.js';
+import { invoke, read as readAction, metaOf, trackVanDeck, bijInvoke } from '../control/actions.js';
 import { MidiHub } from '../control/midi.js';
 import { Mapping } from '../control/mapping.js';
 import { Feedback } from '../control/feedback.js';
@@ -87,6 +87,13 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null, hu
   // staat stil zodra het venster naar de achtergrond gaat, en dan zouden de
   // lampjes op de controller bevriezen terwijl de muziek doorspeelt.
   setInterval(() => { if (hub || isEersteTabblad()) feedback.tick(); }, 33);
+  // En meteen na elke action (APC, muis, toetsenbord, auto-DJ) en elk ander
+  // mapje: een knop licht op zonder op die tik te wachten (feedback.wek: één
+  // microtaak, samengevoegd, alleen verschillen). Gemeten druk -> lampje
+  // p50 ~20 ms naar ~1 ms (tools/bench/feedback.mjs).
+  const wek = () => { if (hub || isEersteTabblad()) feedback.wek(); };
+  bijInvoke(wek);
+  lagen?.on?.('change', wek);
 
   // Laat de controller niet met oude lampjes achter. Bij het sluiten is er geen
   // volgende tik meer, dus dit gaat direct — en alleen wat echt brandt, niet de

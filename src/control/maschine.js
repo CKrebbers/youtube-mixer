@@ -97,6 +97,18 @@ export const BRON_NAAM = 'Maschine MK2 (hub)';
 export const FLITS_MS = 150;
 /** Een scherm hooguit zo vaak (en alleen als het veranderde). */
 export const SCHERM_MS = 100;
+/**
+ * Na invoer (een draaiknop, een pad, een knop) mag een scherm sneller: de waarde
+ * die je draait loopt dan met ~25 beelden per seconde mee in plaats van 10. Een
+ * scherm is 8 HID-rapporten; de hub stuurt alleen de stukken die veranderden.
+ */
+export const SCHERM_SNEL_MS = 40;
+/**
+ * Na invoer een tik zo snel mogelijk (een microtaak, samengevoegd), hooguit één
+ * per WEK_MS: de pad die je aanslaat licht meteen op, niet pas bij de volgende
+ * tik van 33 ms (zoals Feedback.wek voor de APC).
+ */
+export const WEK_MS = 4;
 /** Zo lang blijft een keuze van het masterwiel staan als je niets doet. */
 export const KANDIDAAT_MS = 8000;
 /** Na een "druk nog eens" (er speelt een nummer) zo lang op het scherm. */
@@ -210,6 +222,10 @@ export class Maschine extends Emitter {
     this.leds = new Map();          // 'kanaal:noot' -> velocity zoals het laatst verstuurd
     this.schermen = [null, null];   // laatst verstuurde bytes per scherm
     this.schermTijd = [-Infinity, -Infinity];
+    this.schermWakker = -Infinity;  // nu() van de laatste invoer: tot SCHERM_MS daarna mag een scherm per SCHERM_SNEL_MS
+    this._wekker = null;            // een geplande wektik (zie wek)
+    this._laatsteTik = -Infinity;
+    this.wekTikken = 0;
     this.flits = new Map();         // pad-noot -> tot (ms)
     this.kandidaat = null;          // { id, index, tot }: het masterwiel, nog niet gezet
     this.melding = null;            // { tekst, tot }
@@ -313,6 +329,8 @@ export class Maschine extends Emitter {
           const m = parseMessage(e.data);
           m.port = BRON; m.portName = BRON_NAAM; m.time = e.timeStamp;
           zelf.ontvang(m);
+          zelf.schermWakker = zelf.nu();
+          zelf.wek();
         }
       }
     };
@@ -897,6 +915,7 @@ export class Maschine extends Emitter {
   tik() {
     const p = this.poort;
     if (!p?.uit || p.uit.state !== 'connected') return 0;
+    this._laatsteTik = this.nu();
     let n = 0;
     for (const [k, v] of this.ledBeeld()) {
       if (this.leds.get(k) === v) continue;
@@ -908,9 +927,11 @@ export class Maschine extends Emitter {
     for (const [noot, tot] of this.flits) if (tot <= this.nu()) this.flits.delete(noot);
     if (p.scherm) {
       const nu = this.nu();
+      // Vlak na invoer sneller (SCHERM_SNEL_MS), anders hooguit eens per SCHERM_MS.
+      const tussen = nu - this.schermWakker < SCHERM_MS ? SCHERM_SNEL_MS : SCHERM_MS;
       let stand = null, sleutelStand = null;
       for (const nr of [0, 1]) {
-        if (nu - this.schermTijd[nr] < SCHERM_MS) continue;
+        if (nu - this.schermTijd[nr] < tussen) continue;
         stand ??= this.stand();
         sleutelStand ??= JSON.stringify(stand);
         if (this.schermen[nr]?.sleutel === sleutelStand) continue;
@@ -924,6 +945,32 @@ export class Maschine extends Emitter {
       }
     }
     return n;
+  }
+
+  /**
+   * Na invoer zo snel mogelijk een tik (een microtaak, ná het verwerken van het
+   * bericht), samengevoegd en hooguit één per WEK_MS. De tik stuurt alleen wat
+   * veranderde, dus de gewone tik erna vindt niets dubbel. Gemeten pad ->
+   * lampje (via de hub) p50 26 ms naar ~1 ms (tools/bench/feedback.mjs).
+   */
+  wek() {
+    if (this._wekker !== null) return;
+    let mijn = null;
+    const doe = () => {
+      if (this._wekker !== mijn) return;
+      this._wekker = null;
+      this.wekTikken++;
+      try { this.tik(); } catch (err) { console.warn('[maschine]', err); }
+    };
+    const wacht = WEK_MS - (this.nu() - this._laatsteTik);
+    if (wacht <= 0) { mijn = {}; this._wekker = mijn; queueMicrotask(doe); }
+    else { mijn = setTimeout(doe, wacht); this._wekker = mijn; }
+  }
+
+  /** Een geplande wektik weg. */
+  stop() {
+    if (this._wekker !== null) clearTimeout(this._wekker);
+    this._wekker = null;
   }
 }
 
