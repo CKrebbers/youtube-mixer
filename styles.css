@@ -335,6 +335,19 @@ body.leermodus .loops .btn::after{bottom:-12px}
    die rekenen mee met de scrollpositie en moeten dus op één plek staan. */
 .lib-rijen{flex:1;overflow:auto;font-size:11px;position:relative;overscroll-behavior:contain}
 .lib-leeg{padding:24px;text-align:center;color:var(--dim)}
+/* "Past bij" (past-bij.js): een gewone lijst (hooguit ~70 rijen) in plaats van de virtuele. */
+.lib-panel.pastbij-aan .lib-rijen:not(.kaart-rijen){display:none}
+.lib-pastbij-lijst{flex:1;overflow:auto;font-size:11px;overscroll-behavior:contain}
+.lib-pastbij-lijst.hidden{display:none}
+.pb-rij{display:grid;grid-template-columns:48px minmax(0,1fr) 54px 72px 92px minmax(0,1.2fr) max-content;gap:10px;
+  align-items:center;min-height:28px;padding:0 12px;border-bottom:1px solid #161b20}
+.pb-kop{position:sticky;top:0;background:var(--panel);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.pb-soort{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.pb-rij.goed .pb-soort{color:var(--a)} .pb-rij.bijna .pb-soort{color:var(--warn)}
+.pb-titel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pb-getal{font-family:ui-monospace,monospace;color:var(--dim)}
+.pb-waarom{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pb-knoppen{display:flex;gap:3px}
 .lib-kop,.lib-rij{display:grid;grid-template-columns:var(--lib-kolommen);gap:10px;align-items:center;
   height:var(--lib-rij-h);box-sizing:border-box;padding:0 12px}
 .lib-kop{position:sticky;top:0;z-index:1;background:var(--panel);border-bottom:1px solid var(--line)}
@@ -921,7 +934,8 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
    de tabs en "sluit" blijven. */
 .lib-panel.tab-kaart .lib-url,.lib-panel.tab-kaart .lib-haal,.lib-panel.tab-kaart .lib-bestand,
 .lib-panel.tab-kaart .lib-stems-keuze,.lib-panel.tab-kaart .lib-head>.lib-zoek,
-.lib-panel.tab-kaart .lib-status:not(.kaart-status),.lib-panel.tab-kaart .lib-jobs,.lib-panel.tab-kaart .lib-rijen:not(.kaart-rijen){display:none}
+.lib-panel.tab-kaart .lib-status:not(.kaart-status),.lib-panel.tab-kaart .lib-jobs,.lib-panel.tab-kaart .lib-rijen:not(.kaart-rijen),
+.lib-panel.tab-kaart .lib-pastbij,.lib-panel.tab-kaart .lib-pastbij-lijst{display:none}
 .lib-panel.tab-kaart .lib-head{justify-content:space-between}
 .kaart-deel{display:flex;flex-direction:column;flex:1;min-height:0}
 .kaart-deel.hidden{display:none}

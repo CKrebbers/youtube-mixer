@@ -54,8 +54,13 @@ Sorteerregels (`SORTERING` + `volgorde()` in `server/library.js`):
   zonder accenten, kleine letters, getallen op waarde (Track 2 vóór Track 10).
   SQLite's NOCASE kent alleen ASCII; "Élan" kwam dan na de z. Vooraf, omdat
   een JS-functie per rij per verzoek tientallen ms kostte bij 5000 nummers.
-- bpm = het eerste stuk van het grid (`grid_bpm`), zoals de lijst het toont.
-  Een nummer met een wisselend tempo ("wisselend") sorteert op zijn begin.
+- bpm SORTEERT op het eerste stuk van het grid (`grid_bpm`). De kolom TOONT sinds 13 okt het
+  hoofdtempo (`libraryBpm` in grid-strook.js): alleen de zekere stukken, gewogen naar lengte, binnen
+  3% één tempo, half/dubbel hetzelfde. "~84.7" = drift (een stuk > 1% van het gemiddelde, live
+  gespeeld), "128 / 117" = een tweede tempo dat ≥ 25% van de zekere tijd klinkt, "64.6?" = geen
+  zeker stuk. Vroeger stond er "wisselend" bij elke afwijking > 0,5%, ook van een onzeker stuk:
+  61 van de 69 nummers. **Grens:** sorteren en tonen kunnen bij een nummer dat met een ander tempo
+  begint uit elkaar lopen; sorteren op het hoofdtempo vraagt een kolom op de server.
 - gespeeld = `laatst_geladen`, gezet door `POST /api/library/<id>/geladen`:
   het moment dat hij op een track geladen werd. **Aanname:** "laatst gespeeld"
   = laatst geladen. Of hij daarna ook echt speelde, weet de server niet.
@@ -475,3 +480,26 @@ binnen" 2,0 s door de echte wens-route en de nep-ingest zonder video.
   in de servertest van een Range-verzoek met curl.
 - De tijdvelden van het nachtblok zijn `<input type="time">`: in een Engelse
   Chrome tonen ze "01:00 AM"; de waarde is altijd "01:00".
+
+## Past bij (13 okt)
+
+De knop **past bij** in de balk van de library (naast zoeken) toont in plaats van de lijst welke
+nummers goed of bijna goed mixen met het nummer op de **focus-track**. Rekenwerk in
+`src/ui/past-bij.js` (puur, `test/past-bij.test.mjs`), met de regels van de auto-DJ
+(`kiesOvergang` in `src/auto/planner.js`): beide grids zeker, en de toon vergeleken NA het
+gelijkzetten van het tempo (zonder keylock schuift die mee).
+
+- **goed**: tempo ≤ 6% en toon gelijk of één stap op het Camelot-wiel.
+- **bijna**: tempo ≤ 6% met toon twee stappen (keylock en ±1 transponeren), tempo 6–10% met toon
+  ≤ 1 (ver pitchen, keylock aan), of half/dubbel tempo (≤ 6%) met toon ≤ 1.
+- Een gegokte toon (bijna de hele library is "onzeker") telt mee, maar staat erbij ("toon gegokt",
+  een ? achter de toon) en zakt onder een zekere. Het tempo telt alleen op een zeker grid.
+- Speelt de focus-track, dan telt het tempo en de toon van waar hij NU is; anders van vlak vóór het
+  eind van zijn fragment (wat er NA dit nummer komt). Is het grid daar onzeker (een outro zonder
+  beat), dan het midden van het langste zekere stuk ("gemeten op het zekere deel").
+- De inkomende wordt gemeten aan het begin van zijn fragment (zoals de auto-DJ hem zou starten).
+- Zolang de knop aan staat en het paneel open is, kijkt het paneel elke seconde of de focus-track
+  of zijn nummer veranderde en rekent dan opnieuw (de hele library, één verzoek). Laden uit de lijst
+  gaat zoals in de gewone lijst, met de tweede klik over een spelende track.
+- Headless: `tools/headless/past-bij.mjs` (eigen server, eigen library, geen MIDI).
+

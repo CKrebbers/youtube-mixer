@@ -60,7 +60,7 @@ vertraging), dan negatief. Wat de Mac zelf aan uitgangsvertraging heeft
 | bericht | inhoud | bron in VARVE |
 |---|---|---|
 | `klok` | `beat`, `bpm`, `speelt`, `t` | De **maatgever** die je hoort (`engineTel` in `src/analysis/maat.js`: dezelfde track als de MAAT-badge, de video-puls en de vormlagen, met hysterese). `beat` = de doorlopende tel (niet modulo 4) op de positie die je HOORT: positie − (uitgangsvertraging − extra latentie) × rate (`hoorbaar.js`, regel 3). `bpm` = grid × rate. `speelt:false` (met de laatste tel en bpm) als er geen maatgever is die je hoort: gestopt, fader dicht, wacht op de maat, remt. `t` = `performance.now()` (de zender), want daarop rekent de Stroommachine het klokverschil uit met ping/pong. |
-| `kenmerken` (30/s) | `mix.laag`, `mix.midden`, `mix.hoog`, `mix.klap`, `mix.luid`, `maat.tel`, `maat.klap` | `mix.*` = de master-analyser (na de limiter: wat de zaal hoort), dezelfde `Luisteraar` als de vormlagen (laag · midden · hoog · onset · rms). `maat.tel` = de fase binnen de tel (0..1) van de maatgever, `maat.klap` = 1 in het eerste kwart van de tel (zoals de lampjes op de APC), anders 0. Niets als er niets KLINKT: geen track die speelt en de master al 1 s stil. Een staart van echo of galm, de sampler of de klankschaal tellen dus mee, en na een pauze zakken de waarden eerst naar ~0 (anders bleef de Stroommachine op de laatste luide waarde staan: de klok houdt haar "vers"). Zonder verbinding wordt de analyser niet gelezen. |
+| `kenmerken` (30/s) | `mix.laag`, `mix.midden`, `mix.hoog`, `mix.klap`, `mix.luid`, `maat.tel`, `maat.klap` | `mix.*` = de master-analyser (na de limiter: wat de zaal hoort), dezelfde `Luisteraar` als de vormlagen (laag · midden · hoog · onset · rms). Sinds 13 okt gaan `mix.laag`, `mix.midden`, `mix.hoog` en `mix.luid` op de schaal van WAT ER NU KLINKT (`src/koppel/niveau.js`, §2a), niet op de vaste ijking van de vormlagen; `mix.klap` blijft de onset. `maat.tel` = de fase binnen de tel (0..1) van de maatgever, `maat.klap` = 1 in het eerste kwart van de tel (zoals de lampjes op de APC), anders 0. Niets als er niets KLINKT: geen track die speelt en de master al 1 s stil. Een staart van echo of galm, de sampler of de klankschaal tellen dus mee, en na een pauze zakken de waarden eerst naar ~0 (anders bleef de Stroommachine op de laatste luide waarde staan: de klok houdt haar "vers"). Zonder verbinding wordt de analyser niet gelezen. |
 | `track` | `deck`, `id`, `titel`, `bpm`, `key` | Bij laden (laden.js `naLaad`), per crossfaderkant: zie §3. `id` blijft per nummer hetzelfde: `yt:<videoId>`, `tiktok:<id>`, `lokaal:<hash>` (eigen bestand in de library), `varve:demo-<zaad>`, `bestand:<naam>` (los gesleept). `bpm` = het grid op de plaat, `key` = Camelot. |
 | `mix` | `xfader`, `a`, `b` = `{speelt, pos, rate}` | De crossfader (0 = volledig A, 1 = volledig B) en de track van elke kant; bij elke verandering van crossfader, play/pauze, tempo of een sprong (de zender begrenst tot 20/s). |
 | poort | `macro.*`, `regie!*` | De APC-pagina "Beeld" (§4). |
@@ -94,6 +94,32 @@ overschrijven.
 
 Gevonden in de eind-tot-eindproef en de review (6 okt): zonder dit kwam een track die je
 laadde vóór de Stroommachine er was nooit aan, en gaf een tweede tabblad een willekeurige tel.
+
+## 2a. Het niveau: op de schaal van wat er klinkt (13 okt)
+
+**Gemeten:** op de eerste avond met de pc (13 okt, Clay speelde, 146 BPM) stonden op de relay
+`mix.laag` en `mix.luid` continu op 1,00 en `mix.midden`/`mix.hoog` op 0,85–0,99: de banden
+in `features.js` liggen op vaste dB-grenzen (`BAND_DB`, `RMS_DB`, geijkt met de masterfader op
+0,8), en een luidere master kapt daar af. De Stroommachine moduleert met die waarden (haar
+bronnen "Mic" en "Mic bas"); met een vlakke lijn gebeurde er weinig op de maat. De master
+zachter zetten hielp meteen (Clay). `maat.klap` tikte wel goed.
+
+**Nu:** `NiveauVolger` (`src/koppel/niveau.js`) leest de ruwe dB uit `Kenmerken.waarden.db`
+(`bandenDb`, `rmsDb` in features.js, niet afgekapt) en legt per kenmerk de laatste 8 s op
+0..1: het 10e percentiel = 0, het 95e = 1, minstens 6 dB ertussen (een vlak stuk blaast niet
+op). Daarna gladmaken zoals features.js. Stilte (< 0,05 op de vaste schaal) telt niet mee en
+geeft 0; met minder dan 20 monsters (eerste ~0,7 s, of na een pauze van > 8 s) de vaste schaal.
+Zo pompt het beeld op elk volume en elk nummer gelijk. Alleen voor de zender: de vormlagen
+van VARVE houden hun vaste ijking (daar is een bass-kill naar 0 juist de bedoeling).
+
+**Bewust niet:** `mix.klap` (de onset) blijft zoals hij is. In dezelfde meting piekte hij
+vaak tussen de kicks (hats, snare); de Stroommachine neemt het maximum van `mix.klap` en
+`maat.klap`. Of de klap alleen de bas moet volgen, is een keuze voor na een avond met dit
+niveau (VRAGEN BE15).
+
+`test/niveau.test.mjs`: een luide plaat (vaste schaal vol) pompt (kick > 0,8, ertussen < 0,3),
+10 dB luider geeft per beeld hetzelfde, vlak en stilte blazen niet op, tijd van buiten, de
+ruwe dB naast de afgekapte waarden.
 
 ## 3. Acht tracks, twee decks
 

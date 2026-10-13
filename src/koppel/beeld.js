@@ -2,6 +2,7 @@ import { Emitter } from '../lib/emitter.js';
 import { maakBeeldZender } from './varve-beeld-zender.js';
 import { engineTel } from '../analysis/maat.js';
 import { Luisteraar } from '../analysis/luisteraar.js';
+import { NiveauVolger } from './niveau.js';
 import { uitgangsVertraging, hoorbaar } from '../engine/hoorbaar.js';
 
 /**
@@ -215,16 +216,18 @@ export function kiesKant(tracks, kant) {
 /**
  * De zeven kenmerken uit de master-analyse (features.js: laag, midden, hoog,
  * onset, rms) en de tel van de maatgever ({ beat } of null). Wat er niet is,
- * staat er niet in (de zender stuurt alleen echte getallen).
+ * staat er niet in (de zender stuurt alleen echte getallen). Met `niveau`
+ * (NiveauVolger.stap: laag, midden, hoog, luid op de schaal van wat er nu
+ * klinkt, niveau.js) gaan die vier in plaats van de vaste ijking.
  */
-export function kenmerkenVan(mix, tel) {
+export function kenmerkenVan(mix, tel, niveau = null) {
   const w = {};
   if (mix) {
-    w['mix.laag'] = mix.laag;
-    w['mix.midden'] = mix.midden;
-    w['mix.hoog'] = mix.hoog;
+    w['mix.laag'] = niveau ? niveau.laag : mix.laag;
+    w['mix.midden'] = niveau ? niveau.midden : mix.midden;
+    w['mix.hoog'] = niveau ? niveau.hoog : mix.hoog;
     w['mix.klap'] = mix.onset;
-    w['mix.luid'] = mix.rms;
+    w['mix.luid'] = niveau ? niveau.luid : mix.rms;
   }
   if (tel && Number.isFinite(tel.beat)) {
     const fase = tel.beat - Math.floor(tel.beat);
@@ -257,6 +260,7 @@ export class BeeldKoppeling extends Emitter {
     this.vanzelf = false;                 // kwam de laatste start uit de bewaarde instellingen (niet van Clay zelf)?
     this.luisteraar = luisteraar ?? new Luisteraar({
       analyser: () => engine.master?.analyser ?? null, sampleRate: () => engine.ctx.sampleRate });
+    this.niveau = new NiveauVolger();     // laag/midden/hoog/luid op de schaal van wat er nu klinkt (niveau.js)
     this.instellingen = { aan: false, adres: '', latentie: 0 };
     this.zender = null;
     this.fout = null;                     // waarom hij niet loopt (ongeldig adres), of null
@@ -494,12 +498,13 @@ export class BeeldKoppeling extends Emitter {
    */
   kenmerken() {
     if (this.zender && !this.verbonden) return null;
-    const mix = this.luisteraar.lees(this.engine.ctx.currentTime);
+    const t = this.engine.ctx.currentTime;
+    const mix = this.luisteraar.lees(t);
     const klinkt = this.speeltIets() || !!(mix && Math.max(mix.laag, mix.midden, mix.hoog, mix.rms) > STIL);
     if (klinkt) this.klonkAt = this.nu();
     else if (this.nu() - this.klonkAt > STIL_MS) return null;
     const tel = engineTel(this.engine, this.ids, this.vertraging());
-    return kenmerkenVan(mix, tel);
+    return kenmerkenVan(mix, tel, this.niveau.stap(t, mix));
   }
 
   // ---- tracks en mix ---------------------------------------------------------

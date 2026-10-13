@@ -87,8 +87,18 @@ ok('geen strook zonder duur of breedte', S.strookPixels(strook, 0, 100).length =
 
 console.log('\nbpm-tekst en library');
 ok('bpm met "?" in een onzeker stuk', S.bpmTekst(140.04, false) === '140.0?' && S.bpmTekst(150, true) === '150.0' && S.bpmTekst(null, false) === '—');
-ok('library-bpm: één tempo, of "wisselend"', S.libraryBpm({ bpm: 124 }) === '124.0' && S.libraryBpm(album) === 'wisselend' && S.libraryBpm(null) === '—');
-ok('bijna gelijke stukken (< 0,5%) zijn niet "wisselend"', S.libraryBpm({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 60, bpm: 120.3, anker: 60 }] }) === '120.0');
+const B = (stukken, extra = {}) => ({ stukken: stukken.map(([van, bpm, zekerheid]) => ({ van, bpm, anker: van, zekerheid })), ...extra });
+ok('library-bpm: één tempo, en zonder grid "—"', S.libraryBpm({ bpm: 124 }) === '124.0' && S.libraryBpm(null) === '—');
+ok('bijna gelijke stukken (< 0,5%): één tempo zonder ~', S.libraryBpm({ stukken: [{ van: 0, bpm: 120, anker: 0 }, { van: 60, bpm: 120.3, anker: 60 }] }) === '120.2');
+ok(`album: twee zekere tempo's van elk de helft ("${S.libraryBpm(album, 240)}")`, S.libraryBpm(album, 240) === '150 / 156');
+ok('onzekere stukken tellen niet mee', S.libraryBpm(B([[0, 80, 0.1], [30, 124, 0.9], [200, 95, 0.2]]), 240) === '124.0');
+const drift = S.libraryBpm(B([[0, 84.7, 0.97], [22, 84.3, 1], [30, 85.6, 1], [40, 87, 1]]), 60);
+ok(`live gespeeld (drift binnen 3%): ~ en het gewogen gemiddelde ("${drift}")`, drift === '~85.6');
+ok('half/dubbel tempo is hetzelfde nummer: geen "/"', S.libraryBpm(B([[0, 174, 0.9], [100, 87, 0.8], [200, 174, 0.9]]), 300) === '174.0');
+ok('een kort ander tempo (< 25%) komt niet in de kolom', S.libraryBpm(B([[0, 128, 0.9], [200, 100, 0.9]]), 240) === '128.0');
+ok('geen enkel zeker stuk: het langste tempo met "?"', S.libraryBpm(B([[0, 64.6, 0.15], [30, 62, 0.12], [40, 64.5, 0.1]]), 200) === '64.5?');
+ok('op slot telt alles als zeker', S.libraryBpm(B([[0, 90, 0.1], [60, 90, 0.1]], { slot: true }), 120) === '90.0');
+ok('zonder duur telt het laatste stuk een minuut', S.libraryBpm(B([[0, 128, 0.9], [60, 100, 0.9]])) === '128 / 100' || S.libraryBpm(B([[0, 128, 0.9], [60, 100, 0.9]])) === '100 / 128');
 const st = (gr, duur = 240) => S.gridStatus(gr, duur).status;
 ok('status: slot / zeker / onzeker / geen puls / met de hand / geen',
   st({ ...album, slot: true }) === 'slot'

@@ -15,6 +15,19 @@ const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? ' 
 const { Proef, ID, STATUSSEN } = await import('../server/proef.js');
 const { SPEELLIJST, allePunten } = await import('../src/controle/speellijst.js');
 const { maakStatus } = await import('../src/ui/status-zender.js');
+const { mixerAdres } = await import('../src/ui/vlag.js');
+
+console.log('mixer openen vanuit de Controlekamer');
+{
+  const C = 'http://localhost:8777/controle';
+  ok('zonder ?hub= gewoon /', mixerAdres(C) === '/');
+  const m = mixerAdres(`${C}?hub=ws://localhost:7700/app`);
+  ok(`met ?hub= gaat de hub mee (${m})`, new URL(m, C).searchParams.get('hub') === 'ws://localhost:7700/app' && new URL(m, C).pathname === '/');
+  ok('een vreemde hub gaat niet mee', mixerAdres(`${C}?hub=ws://voorbeeld.com:7700/app`) === '/');
+  const ext = new URL(mixerAdres(`${C}?hub=ws://voorbeeld.com:7700/app&hub_extern=1`), C).searchParams;
+  ok('met hub_extern=1 gaan beide mee', ext.get('hub') === 'ws://voorbeeld.com:7700/app' && ext.get('hub_extern') === '1');
+  ok('geen ws-adres: gewoon /', mixerAdres(`${C}?hub=http://localhost:7700`) === '/');
+}
 
 console.log('de speellijst');
 {

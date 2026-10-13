@@ -5,12 +5,18 @@
 --    Waar de media staan (VI2, media buiten iCloud): VARVE_MEDIA uit ~/.zprofile (de login-shell
 --    leest die), of, als het bestaat, het pad op de eerste regel van ~/.varve/media-pad (gaat voor).
 --    Geen van beide: media/ in de projectmap; de server volgt dan zelf media-VERHUISD.txt.
--- 2. Haal de Controlekamer in Chrome naar voren, of open er een. Nooit de mixer zelf, en nooit
---    een tweede Controlekamer als er al een is.
+-- 2. Draait de AV-app-hub (7700) niet, start hem dan (set studio, zonder eigen Chrome-tab): zonder
+--    hub doet de Maschine MK2 niets (docs/MASCHINE.md). Lukt dat niet, dan gaat VARVE door zonder
+--    hub en zegt dat. Het log: ~/.varve-hub.log. Stoppen: kill het proces op 7700 (de hub ruimt op).
+-- 3. Haal de Controlekamer in Chrome naar voren, of open er een (met ?hub= als de hub draait, dan
+--    opent "mixer openen" de mixer met de hub). Nooit de mixer zelf, en nooit een tweede Controlekamer.
 
 property poort : "8777"
 property map : "Desktop/1. Projects/Youtube mixer" -- onder je thuismap
 property logboek : "~/.varve-server.log"
+property hubPoort : "7700"
+property hubMap : "Projects/AV-app-hub" -- onder je thuismap
+property hubLogboek : "~/.varve-hub.log"
 
 on run
 	if not my antwoordt() then
@@ -32,12 +38,43 @@ on run
 			return
 		end if
 	end if
+	set hub to my zorgVoorHub()
 	try
-		my toonControlekamer()
+		my toonControlekamer(hub)
 	on error fout number nr
 		display dialog "De server draait, maar Chrome lukt niet (" & nr & "): " & fout & return & return & "Open zelf http://localhost:" & poort & "/controle" & return & "(Mag VARVE Chrome besturen? Systeeminstellingen > Privacy en beveiliging > Automatisering.)" buttons {"OK"} default button "OK" with title "VARVE" with icon caution
 	end try
 end run
+
+-- true = de hub luistert (al, of na starten). Een hub die al draait wordt nooit opnieuw gestart:
+-- twee hubs vechten om de APC en de Maschine.
+on zorgVoorHub()
+	if my luistertOp(hubPoort) then return true
+	set opdracht to "echo \"--- $(date '+%d-%m %H:%M:%S') gestart door VARVE.app\" && cd ~/" & quoted form of hubMap & " && nohup npm start -- studio --geen-drivers --zonder-chrome --blijf &"
+	try
+		do shell script "/bin/zsh -lc " & quoted form of opdracht & " < /dev/null >> " & hubLogboek & " 2>&1"
+	on error
+		display notification "De hub start niet: de Maschine doet niet mee. Log: " & hubLogboek with title "VARVE"
+		return false
+	end try
+	set eind to (current date) + 15
+	repeat
+		if my luistertOp(hubPoort) then return true
+		if (current date) > eind then exit repeat
+		delay 0.5
+	end repeat
+	display notification "De hub antwoordt na 15 s nog niet: de Maschine doet niet mee. Log: " & hubLogboek with title "VARVE"
+	return false
+end zorgVoorHub
+
+on luistertOp(p)
+	try
+		do shell script "/usr/sbin/lsof -nP -t -iTCP:" & p & " -sTCP:LISTEN"
+		return true
+	on error
+		return false
+	end try
+end luistertOp
 
 on antwoordt()
 	try
@@ -49,12 +86,7 @@ on antwoordt()
 end antwoordt
 
 on luistert()
-	try
-		do shell script "/usr/sbin/lsof -nP -t -iTCP:" & poort & " -sTCP:LISTEN"
-		return true
-	on error
-		return false
-	end try
+	return my luistertOp(poort)
 end luistert
 
 -- Via zsh -l (dan staan /opt/homebrew/bin en Python's bin op het pad, en VARVE_MEDIA uit
@@ -88,8 +120,9 @@ on isControlekamer(adres)
 	return false
 end isControlekamer
 
-on toonControlekamer()
+on toonControlekamer(hub)
 	set adres to "http://localhost:" & poort & "/controle"
+	if hub then set adres to adres & "?hub=ws://localhost:" & hubPoort & "/app"
 	if application "Google Chrome" is not running then
 		-- Koud starten: eerst Chrome zijn vensters laten terugzetten (hooguit 5 s), anders
 		-- missen we een Controlekamer die in de vorige sessie open stond.
@@ -105,6 +138,8 @@ on toonControlekamer()
 			set adressen to URL of every tab of w
 			repeat with i from 1 to count of adressen
 				if my isControlekamer((item i of adressen) as text) then
+					-- Een open Controlekamer zonder ?hub= krijgt hem erbij (herladen kost daar niets).
+					if hub and ((item i of adressen) as text) does not contain "hub=" then set URL of tab i of w to adres
 					set active tab index of w to i
 					if minimized of w then set minimized of w to false
 					set index of w to 1

@@ -35,7 +35,7 @@ server draait (dan zegt hij hetzelfde als de tegel), meet anders zelf; alleen le
 in de aanroep. Met `VARVE_AVONDPAKKET_NEP=test/fixtures/avondpakket` uit fixtures, zonder server.
 
 ## varve-app/
-`VARVE.applescript` + `maak.sh`: de Dock-knop die de server start en de Controlekamer opent
+`VARVE.applescript` + `maak.sh`: de Dock-knop die de server en de AV-app-hub start (zonder hub doet de Maschine niets) en de Controlekamer opent (met `?hub=`)
 (`~/Applications/VARVE.app`). Een losse macOS-app; draait niet in de mixer.
 
 ## beeld-lokaal.sh

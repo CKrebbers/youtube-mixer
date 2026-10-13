@@ -203,7 +203,7 @@ const gridCache = new WeakMap();
 function gridInfo(t) {
   if (!t.grid) return { gs: { status: 'geen', aandeel: null }, bpm: '—' };
   let x = gridCache.get(t.grid);
-  if (!x) { x = { gs: gridStatus(t.grid, t.duur), bpm: libraryBpm(t.grid) }; gridCache.set(t.grid, x); }
+  if (!x) { x = { gs: gridStatus(t.grid, t.duur), bpm: libraryBpm(t.grid, t.duur) }; gridCache.set(t.grid, x); }
   return x;
 }
 

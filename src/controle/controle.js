@@ -5,9 +5,10 @@ import { stemsTegel } from '../ui/stems-weergave.js';
 import { beeldTegel } from '../ui/beeld-weergave.js';
 import { backupTegel } from './backup-tegel.js';
 import { serverTegel } from './server-tegel.js';
-import { standTegel, mixerKeuze, verschilTekst, activeerMelding, terugMelding, LABEL as STAND_LABEL, MIXER_VIA_HUB, MIXER_GEWOON } from './stand-tegel.js';
+import { standTegel, mixerKeuze, verschilTekst, activeerMelding, terugMelding, LABEL as STAND_LABEL, MIXER_GEWOON } from './stand-tegel.js';
 import { bewerkerHtml, leesBewerker, nieuweNaamGeldig, nieuweNaam } from './stand-bewerker.js';
 import { avondpakketTegel } from './avondpakket-tegel.js';
+import { hubAdres, mixerAdres } from '../ui/vlag.js';
 
 /**
  * De Controlekamer (controle.html, docs/CONTROLEKAMER.md). Leest:
@@ -132,7 +133,12 @@ async function leesStanden() {
 }
 
 /** "mixer openen": de opstelling van nu, of de laatst bekende als de server een fout gaf (stand-tegel.js, mixerKeuze). */
-const mixerNu = () => mixerKeuze(stand.standen, stand.standenLaatst);
+// Opende VARVE.app de Controlekamer met ?hub= (hij startte de hub), dan gaat de mixer ook via die hub,
+// ook als de opstelling niets over de hub zegt: zonder hub doet de Maschine niets.
+const mixerNu = () => {
+  const k = mixerKeuze(stand.standen, stand.standenLaatst);
+  return k.adres === MIXER_GEWOON && hubAdres() ? { ...k, adres: mixerAdres() } : k;
+};
 
 /*
  * Het avondpakket (docs/AVONDPAKKET.md): kan ik vertrekken, kan ik hier beginnen.
@@ -354,7 +360,7 @@ function tekenStand() {
   const keuze = mixerNu();
   knop.dataset.adres = keuze.adres;
   knop.dataset.onbekend = keuze.onbekend ? '1' : '';
-  const viaHub = knop.dataset.adres === MIXER_VIA_HUB;
+  const viaHub = knop.dataset.adres !== MIXER_GEWOON;
   if (!knop.dataset.bezig) {
     knop.disabled = open;
     knop.textContent = open ? 'mixer staat open' : viaHub ? 'mixer openen via de hub' : 'mixer openen';
