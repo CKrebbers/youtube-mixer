@@ -54,8 +54,13 @@ Sorteerregels (`SORTERING` + `volgorde()` in `server/library.js`):
   zonder accenten, kleine letters, getallen op waarde (Track 2 vóór Track 10).
   SQLite's NOCASE kent alleen ASCII; "Élan" kwam dan na de z. Vooraf, omdat
   een JS-functie per rij per verzoek tientallen ms kostte bij 5000 nummers.
-- bpm = het eerste stuk van het grid (`grid_bpm`), zoals de lijst het toont.
-  Een nummer met een wisselend tempo ("wisselend") sorteert op zijn begin.
+- bpm SORTEERT op het eerste stuk van het grid (`grid_bpm`). De kolom TOONT sinds 13 okt het
+  hoofdtempo (`libraryBpm` in grid-strook.js): alleen de zekere stukken, gewogen naar lengte, binnen
+  3% één tempo, half/dubbel hetzelfde. "~84.7" = drift (een stuk > 1% van het gemiddelde, live
+  gespeeld), "128 / 117" = een tweede tempo dat ≥ 25% van de zekere tijd klinkt, "64.6?" = geen
+  zeker stuk. Vroeger stond er "wisselend" bij elke afwijking > 0,5%, ook van een onzeker stuk:
+  61 van de 69 nummers. **Grens:** sorteren en tonen kunnen bij een nummer dat met een ander tempo
+  begint uit elkaar lopen; sorteren op het hoofdtempo vraagt een kolom op de server.
 - gespeeld = `laatst_geladen`, gezet door `POST /api/library/<id>/geladen`:
   het moment dat hij op een track geladen werd. **Aanname:** "laatst gespeeld"
   = laatst geladen. Of hij daarna ook echt speelde, weet de server niet.
