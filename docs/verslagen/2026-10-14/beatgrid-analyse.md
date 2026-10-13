@@ -183,4 +183,9 @@ Grids van de oude analyse met `bron: 'auto'` veranderen pas na ↻ in de library
 
 `node test/beatbench.test.mjs`: 37 checks groen (op 7debab6: 19 rood, daarna stopt hij op een
 functie die er nog niet was). `tellen`, `tellen-server`, `detect`, `gridauto`, `gridzeker`,
-`beatgrid`, `analyze`: groen. `node test/alles.mjs`: zie de samenvatting van de opdracht.
+`beatgrid`, `analyze`: groen. `node test/alles.mjs`: 95 bestanden, 8833 checks, 4 rood: de drie die
+in deze container op main al rood zijn (renderblok "keylock met wissels … bytes per bericht",
+instrumenten-fm-schaal "geen afval per blok", wachtrij "yt-dlp en zijn kind zijn allebei weg" 2×) en
+upload "768 MB + 64 MB zonder lengte: 413 onderweg". Die laatste is alleen groen (los gedraaid, op
+deze tak én op 7debab6): hij viel om terwijl de benchmark tegelijk draaide (geheugen/timing); deze tak
+raakt de upload-route niet.
