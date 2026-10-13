@@ -569,9 +569,26 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
   // gemeten (time-out, of de server meet niet omdat er een deck speelt), dan kan auto de fase
   // niet kiezen: vertrek zou elk apparaat een grijze paklijstregel maken, en dan bleef alleen
   // groen over. Oranje, nooit rood (onbekend is nooit rood).
-  if (faseBron === 'auto' && onbekend(m.usb) && onbekend(m.audio) && heeftInTePakken(p, data)) {
+  const faseNietTeBepalen = faseBron === 'auto' && onbekend(m.usb) && onbekend(m.audio) && heeftInTePakken(p, data);
+  if (faseNietTeBepalen) {
     const reden = m.usb?.onbekend || m.audio?.onbekend;
     punt('fase', 'Fase', 'half', 'niet te bepalen', `USB en geluid niet gemeten${reden ? ` (${reden})` : ''}: kies vertrek of aankomst`);
+  }
+  // Review ronde 3 (spoorrapport §5): ook bij een gekozen fase (tegel, CLI of profielen.json),
+  // of bij auto die "vertrek" koos, is het licht nooit groen als de kern van die fase niet
+  // gemeten is. Vertrek: media en instellingen (het thuiswerk); aankomst: USB en geluid (wat
+  // er aanhangt; zonder iets om in te pakken, zoals `laptop`: media en instellingen). Anders
+  // bleven alleen backup en achtergrond (in het serverproces) groen over, bijvoorbeeld als
+  // Clay "aankomst" kiest terwijl er een deck speelt en de server nog nooit gemeten heeft.
+  // Oranje, nooit rood (onbekend is nooit rood); niet naast het punt fase (dat zegt het al).
+  if (!faseNietTeBepalen) {
+    const opAankomst = fase === 'aankomst' && heeftInTePakken(p, data);
+    const kern = opAankomst ? [m.usb, m.audio] : [m.bestanden, m.instellingen];
+    if (kern.every((x) => onbekend(x))) {
+      const reden = kern.map((x) => x?.onbekend).find(Boolean);
+      const wat = opAankomst ? 'USB en geluid' : 'media en instellingen';
+      punt('meting', 'Meting', 'half', 'niet gemeten', `${wat} niet gemeten${reden ? ` (${reden})` : ''}: meet opnieuw vóór je ${fase === 'aankomst' ? 'begint' : 'vertrekt'}`);
+    }
   }
 
   // media lokaal

@@ -314,8 +314,10 @@ try {
 
   console.log('10. de CLI (spawnSync, VARVE_AVONDPAKKET_NEP: nooit een server)');
   {
+    // VARVE_TESTSERVER=1 (VI2, #29): de CLI kiest zijn mediamap met kiesMedia; zo volgt hij in een
+    // test nooit een media-VERHUISD.txt naar Clay's echte map (met NEP komen de paden uit nep.json).
     const cli = (args, nep = FX, env = {}) => spawnSync(process.execPath, ['tools/avondpakket.mjs', ...args],
-      { cwd: WORTEL, encoding: 'utf8', env: { ...process.env, VARVE_AVONDPAKKET_NEP: nep, ...env }, timeout: 20000 });
+      { cwd: WORTEL, encoding: 'utf8', env: { ...process.env, VARVE_TESTSERVER: '1', VARVE_AVONDPAKKET_NEP: nep, ...env }, timeout: 20000 });
     const j = cli(['--json']);
     let rapport = null;
     try { rapport = JSON.parse(j.stdout); } catch { /* */ }

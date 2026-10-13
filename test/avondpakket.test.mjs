@@ -399,16 +399,18 @@ console.log('25. onbekend is nooit rood');
 {
   const ids = ['bestanden', 'instellingen', 'icloud', 'schijf', 'accu', 'audio', 'bluetooth', 'usb', 'avhub', 'servers', 'tailscale', 'backup', 'achtergrond', 'compleet', 'server'];
   const niets = Object.fromEntries(ids.map((id) => [id, { onbekend: 'time-out' }]));
-  let rood = 0, nietGrijs = 0;
+  let rood = 0, nietGrijs = 0, meting = 0;
   for (const profiel of Object.keys(data().profielen)) {
     for (const fase of ['vertrek', 'aankomst']) {
       const r = beoordeel(niets, { profiel, fase, data: data({ hardwareBevestigd: true }), nu: NU });
       rood += r.telling.fout;
-      nietGrijs += r.punten.filter((p) => !['uit'].includes(p.licht)).length;
+      nietGrijs += r.punten.filter((p) => p.id !== 'meting' && !['uit'].includes(p.licht)).length;
+      meting += r.punten.filter((p) => p.id === 'meting' && p.licht === 'half').length;
     }
   }
   ok(`elke sonde { onbekend } → geen rood in 5 profielen × 2 fasen (${rood})`, rood === 0);
-  ok(`… en alles grijs (${nietGrijs} niet grijs)`, nietGrijs === 0);
+  ok(`… en alles grijs behalve het punt meting (${nietGrijs} niet grijs)`, nietGrijs === 0);
+  ok(`… dat in elk geval oranje is: niet gemeten is nooit groen (review ronde 3; ${meting} van 10)`, meting === 10);
   const r = beoordeel(niets, { profiel: 'apc', fase: 'aankomst', data: data(), nu: NU });
   ok('de sub zegt "niet gemeten: time-out"', punt(r, 'schijf').sub === 'niet gemeten: time-out');
   ok('zonder server-meting geen server-punt (de route levert hem niet)', !punt(beoordeel(goedVertrek(), { profiel: 'apc', data: data(), nu: NU }), 'server'));
@@ -677,6 +679,34 @@ console.log('43. tegel: automatisch, alleen het goedkope (review 2, fix 4)');
   const nooit = avondpakketTegel({ ...r, deels: { volledig: null } }, new Date(2026, 9, 10, 18, 36));
   ok(`deels zonder volledige meting → "apc · vertrek · deels 18:35", "nog niet gemeten" (${nooit.sub})`, nooit.sub === 'apc · vertrek · deels 18:35' && /media nog niet gemeten/.test(nooit.titel));
   ok('bevroren gaat voor deels', avondpakketTegel({ ...r, deels: { volledig: 1 }, bevroren: 'er speelt een deck' }, NU).sub === 'bevroren: er speelt een deck · 18:35');
+}
+
+// ---- review ronde 3 (spoorrapport §5, fix/draagbaar) ------------------------------------
+
+console.log('44. gekozen fase, kern niet gemeten: nooit groen (review ronde 3)');
+{
+  const vg = goedVertrek();
+  const alleenBinnen = { usb: { onbekend: 'er speelt een deck' }, audio: { onbekend: 'er speelt een deck' }, backup: vg.backup, achtergrond: vg.achtergrond };
+  const a = beoordeel(alleenBinnen, { profiel: 'apc', fase: 'aankomst', data: data(), nu: NU });
+  ok(`aankomst gekozen, er speelt een deck, nooit gemeten → niet groen (${a.licht}), punt meting oranje`,
+    a.licht === 'half' && a.oordeel === 'klaar' && punt(a, 'meting')?.licht === 'half' && punt(a, 'meting').waarde === 'niet gemeten' && !punt(a, 'fase'));
+  ok(`… de sub zegt wat en waarom (${punt(a, 'meting').sub})`, punt(a, 'meting').sub === 'USB en geluid niet gemeten (er speelt een deck): meet opnieuw vóór je begint');
+  ok('… en de tegel is oranje met de meting als regel', avondpakketTegel(a, NU).licht === 'half' && /^Meting: USB en geluid niet gemeten/.test(avondpakketTegel(a, NU).regel));
+  const v = beoordeel(alleenBinnen, { profiel: 'apc', fase: 'vertrek', data: data(), nu: NU });
+  ok(`vertrek gekozen, media en instellingen niet gemeten → oranje (${punt(v, 'meting')?.sub})`, v.licht === 'half' && punt(v, 'meting')?.sub === 'media en instellingen niet gemeten: meet opnieuw vóór je vertrekt');
+  ok('vaste fase uit profielen.json → hetzelfde punt', punt(beoordeel(alleenBinnen, { profiel: 'apc', data: data({ fase: 'aankomst' }), nu: NU }), 'meting')?.licht === 'half');
+  const auto = beoordeel({ ...vg, bestanden: { onbekend: 'time-out' }, instellingen: { onbekend: 'time-out' } }, { profiel: 'apc', data: data(), nu: NU });
+  ok(`auto koos vertrek (usb gemeten), find time-out → oranje meting, geen fase-punt (${auto.fase})`, auto.fase === 'vertrek' && punt(auto, 'meting')?.licht === 'half' && !punt(auto, 'fase'));
+  const beide = beoordeel(alleenBinnen, { profiel: 'apc', data: data(), nu: NU });
+  ok('auto met usb en audio onbekend → alleen het punt fase, niet ook meting', !!punt(beide, 'fase') && !punt(beide, 'meting'));
+  ok('alleen usb onbekend bij aankomst (audio gemeten) → geen meting-punt', !punt(beoordeel(goedAankomst({ usb: { onbekend: 'x' } }), { profiel: 'apc', fase: 'aankomst', data: data(), nu: NU }), 'meting'));
+  ok('alleen media onbekend bij vertrek (instellingen gemeten) → geen meting-punt', !punt(beoordeel(goedVertrek({ bestanden: { onbekend: 'x' } }), { profiel: 'apc', fase: 'vertrek', data: data(), nu: NU }), 'meting'));
+  ok('goed vertrek en goede aankomst → geen meting-punt', !punt(beoordeel(vg, { profiel: 'apc', fase: 'vertrek', data: data(), nu: NU }), 'meting')
+    && !punt(beoordeel(goedAankomst(), { profiel: 'apc', fase: 'aankomst', data: data(), nu: NU }), 'meting'));
+  const laptop = beoordeel({ usb: { onbekend: 'x' }, audio: { onbekend: 'x' }, bestanden: vg.bestanden, instellingen: vg.instellingen }, { profiel: 'laptop', data: data(), nu: NU });
+  ok('laptop (niets in te pakken): de kern is media en instellingen, niet USB en geluid', laptop.fase === 'aankomst' && !punt(laptop, 'meting')
+    && punt(beoordeel(alleenBinnen, { profiel: 'laptop', data: data(), nu: NU }), 'meting')?.sub === 'media en instellingen niet gemeten: meet opnieuw vóór je begint');
+  ok('"meting" in bekend → grijs, rood nooit', punt(beoordeel(alleenBinnen, { profiel: 'apc', fase: 'aankomst', data: data({ bekend: ['meting'] }), nu: NU }), 'meting').licht === 'uit');
 }
 
 if (fails.length) { console.log(`\n${fails.length} FAIL`); process.exit(1); }
