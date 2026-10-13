@@ -444,3 +444,34 @@ rack); een oude volledige kopie van 25 sep wordt tegen zijn voorganger afgezet (
 
 Niet getest: de echte APC (roze naast rood op de scene-kolom, of Shift + Detail View en de
 regie op de scene-knoppen lekker liggen) en de ringen tegen een echte Stroommachine.
+
+## De LED-laag: snel en juist (14 oktober 2026, tak `afmaken/controller-uitvoer`)
+
+Clay merkte dat het "op veel punten erg laggy" was. Gemeten met `tools/bench/feedback.mjs` (Node,
+echte mapping en engine met acht tracks, nep-APC) en `tools/headless/led-vertraging.mjs` (echte
+Chrome en de echte hub met een nep-APC); alles in docs/verslagen/2026-10-14/controller-uitvoer.md.
+
+- **Een knop licht METEEN op.** `Feedback.wek()` na elke action op de bus (`bijInvoke` in
+  midi-opzet.js) en elk ander mapje: één tik na de lopende taak (microtaak), samengevoegd, hooguit
+  één per 4 ms. De tik stuurt alleen verschillen, dus niets dubbel. De tik van 33 ms blijft voor
+  wat zonder action verandert (de tel, het einde van een nummer). Druk -> lampje: p50 17 -> 1 ms
+  (Node), in Chrome via de hub p50 ~50 -> ~6 ms.
+- **De tik is 10× lichter.** Het PLAN (welke regels nu gelden, hun doel-action en kleur) wordt
+  alleen opnieuw gemaakt als mapping, shift, open mapjes of focus veranderen; per tik alleen de
+  reads. De kleurregexen zijn onthouden per action; de tel per track één keer per tik gelezen.
+  p50 454 -> 45 µs in rust, 457 -> 61 µs tijdens spelen (8 tracks, knipperen). `test/feedback-plan.test.mjs`
+  eist dat wat er brandt byte voor byte gelijk is aan de oude berekening (567 standen).
+- **Niets ingeslikt.** Het echofilter (60 ms) keek ook naar NOTEN: een lampje uit (`[0x90, n, 0]`)
+  is precies het loslaten van die knop, en een eenkleurig lampje aan (127, track select van de
+  maatgever en clip stop van een loop knipperen zo) precies het indrukken. 15–21 van ~220 druk/los
+  verdwenen (Node), 15–17 van 240 in Chrome; een ingeslikt loslaten laat een knop hangen. Nu alleen
+  CC (ringen), waar de lus kan ontstaan: 0 ingeslikt, en een APC die ringen terugkaatst geeft nog
+  steeds 0 echo's door.
+- **Een mapje in één keer.** Hooguit 160 berichten per tik (was 24: een mapje wisselen kostte twee
+  tikken); de wachtrij van de MidiHub spreidt ze. Mapje -> laatste lampje p50 56 -> 11 ms.
+- **De wachtrij is een schuivend venster** (16 in ELK venster van 4 ms) en stuurt meteen als er
+  plaats is; vroeger wachtte elk lampje op een setTimeout(0), en een rij die net leeg was kon
+  meteen weer 16 sturen. `test/midi.test.mjs` meet het venster op de echte tijden.
+
+Niet op het apparaat nagelopen: of de APC in 0x42 een ring-CC echt nooit terugkaatst (dan kan
+`echoFilter` voor de APC uit), en hoe het voelt met Clay's handen.
