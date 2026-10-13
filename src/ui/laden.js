@@ -507,6 +507,12 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
       }
     },
     onLaad: (deckId, track) => laadLibrary(deckId, track),
+    // "Past bij": het nummer op de focus-track, en waar hij is als hij speelt (anders rekent
+    // past-bij.js vanaf vlak voor het eind van zijn fragment: wat er NA dit nummer komt).
+    focus: () => {
+      const id = engine.focus, d = engine.deck(id);
+      return { deck: id, label: String(trackVanDeck(id)), trackId: deckTrack[id] ?? null, t: d?.playing ? d.position : null };
+    },
     // De stems-kolom: de stems-rij van de server, en welke tracks dit nummer
     // nu MET stems spelen (opnieuw splitsen vervangt het bestand onder ze).
     stems,

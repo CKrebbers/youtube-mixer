@@ -7,6 +7,7 @@ import {
   kolomSjabloon, kopHtml, cellenHtml, standaardOpslag, stemsCelHtml, klemKeuze, bladerVenster,
 } from './library-lijst.js';
 import { IngestStrook } from './ingest-strook.js';
+import { pastBij, pastBijKop, tempoTekst } from './past-bij.js';
 
 /** Wat de upload aanneemt; gelijk aan BESTAND_EXT in server/links.js. */
 export const BESTAND_EXT = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'wav', 'mp3', 'flac', 'm4a', 'aiff', 'aif', 'ogg', 'opus'];
@@ -26,7 +27,7 @@ export const isVideoBestand = (file) => /^video\//.test(file?.type || '') || ['m
 
 export class LibraryPanel {
   constructor({ root, onLaad, onGrid = () => {}, onToon = () => {}, decks = ['A', 'B'], label = (d) => d,
-    stand = () => 'leeg', opslag = standaardOpslag(), stems = null, stemsInGebruik = () => [] }) {
+    stand = () => 'leeg', opslag = standaardOpslag(), stems = null, stemsInGebruik = () => [], focus = () => null }) {
     this.root = root;
     this.onLaad = onLaad;
     this.onGrid = onGrid;        // (trackId, grid) na "opnieuw analyseren": op de decks zetten
@@ -37,6 +38,9 @@ export class LibraryPanel {
     this.decks = decks;
     this.label = label;
     this.stand = stand;          // (deck) => 'leeg' | 'geladen' | 'speelt'
+    this.focus = focus;          // () => { deck, label, trackId, t } van de focus-track (past bij), of null
+    this.pastBijAan = false;     // de knop "past bij": de lijst toont wat mixt met de focus-track
+    this._pb = { sleutel: null, tracks: new Map(), html: '' };
     this.zeker = null;           // { soort, sleutel, tot } voor 'nog eens klikken'
     this.bezig = new Set();     // tracks die nu geladen worden
     this.analyseert = new Set(); // tracks waarvan grid en toonsoort nu opnieuw geanalyseerd worden
@@ -64,6 +68,8 @@ export class LibraryPanel {
       jobs: root.querySelector('.lib-jobs'),
       rijen: root.querySelector('.lib-rijen'),
       stemsKeuze: root.querySelector('.lib-stems-keuze'),
+      pastBij: root.querySelector('.lib-pastbij'),
+      pbLijst: root.querySelector('.lib-pastbij-lijst'),
     };
 
     // Binnenhalen, wachtrij en voortgang: de strook (ingest-strook.js). Hij
@@ -121,6 +127,21 @@ export class LibraryPanel {
         const zoek = this.el.zoek.value.trim();
         if (zoek !== this.zoek) { this.zoek = zoek; this.ververs({ bovenaan: true }); }
       }, 120);
+    });
+
+    // "Past bij" (past-bij.js): aan/uit, en laden vanuit die lijst (zelfde tweede klik als de gewone lijst).
+    this.el.pastBij?.addEventListener('click', () => this.zetPastBij(!this.pastBijAan));
+    this.el.pbLijst?.addEventListener('click', (e) => {
+      const knop = e.target.closest('button[data-pb-deck]');
+      if (!knop) return;
+      const track = this._pb.tracks.get(knop.dataset.id);
+      const deck = knop.dataset.pbDeck;
+      if (!track) return;
+      if (this.stand(deck) === 'speelt' && !this._bevestigd('laad', `${track.id}:${deck}`)) {
+        this.melding = { tekst: `track ${this.label(deck)} speelt — klik nog eens om er toch overheen te laden`, goed: false };
+        return this.tekenStatus();
+      }
+      this._laadTrack(track, deck);
     });
 
     // Kop, lege ruimte zo hoog als de hele lijst, en het venster met de rijen die je ziet.
@@ -616,6 +637,74 @@ export class LibraryPanel {
     this.ververs();
   }
 
+  // ---- past bij (src/ui/past-bij.js) ---------------------------------------------
+
+  /**
+   * De knop "past bij": de lijst toont dan welke nummers goed of bijna goed mixen met
+   * het nummer op de focus-track. Zolang hij aan staat en het paneel open is, kijkt hij
+   * elke seconde of de focus-track of zijn nummer veranderde, en rekent dan opnieuw.
+   */
+  zetPastBij(aan) {
+    this.pastBijAan = !!aan;
+    this.root.classList.toggle('pastbij-aan', this.pastBijAan);
+    this.el.pastBij?.classList.toggle('on', this.pastBijAan);
+    this.el.pbLijst?.classList.toggle('hidden', !this.pastBijAan);
+    clearInterval(this._pbTimer);
+    this._pb.sleutel = null;
+    if (!this.pastBijAan) { this._pbKop = null; return this.tekenStatus(); }
+    this._pastBijVernieuw();
+    this._pbTimer = setInterval(() => {
+      if (!this.open) return;
+      const f = this.focus();
+      if (this._pbSleutel(f) !== this._pb.sleutel) this._pastBijVernieuw();
+      else this._tekenPastBij(this._pb.lijst ?? []);   // alleen de laadknoppen (welke track speelt); zelfde html = niets
+    }, 1000);
+  }
+
+  _pbSleutel(f) { return f ? `${f.deck}:${f.trackId ?? '-'}` : '-'; }
+
+  /** De hele library van de server (een paar honderd rijen: zonder `aantal` alles) en dan rekenen. */
+  async _pastBijVernieuw() {
+    const f = this.focus();
+    const sleutel = this._pbSleutel(f);
+    this._pb.sleutel = sleutel;
+    let tracks = [];
+    try {
+      const r = await fetch('/api/library');
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.fout || `${r.status}`);
+      tracks = j.tracks ?? [];
+    } catch (err) {
+      this.melding = { tekst: `past bij: library niet geladen (${err.message})`, goed: false };
+      return this.tekenStatus();
+    }
+    if (!this.pastBijAan || this._pb.sleutel !== sleutel) return;   // intussen uit of een ander nummer
+    const huidig = f?.trackId ? tracks.find((t) => t.id === f.trackId) : null;
+    const uitkomst = huidig ? pastBij(huidig, tracks, { t: f.t }) : { lijst: [], reden: null, uit: null };
+    this._pb.tracks = new Map(uitkomst.lijst.map((x) => [x.track.id, x.track]));
+    this._pb.lijst = uitkomst.lijst;
+    this._pbKop = huidig ? pastBijKop(huidig, uitkomst, f.label) : `geen nummer op de focus-track${f?.label ? ` (track ${f.label})` : ''}: laad er eerst een`;
+    this.tekenStatus();
+    this._tekenPastBij(uitkomst.lijst);
+  }
+
+  _tekenPastBij(lijst) {
+    if (!this.el.pbLijst) return;
+    const standen = this.decks.map((d) => this.stand(d));
+    const kop = `<div class="pb-rij pb-kop"><span>past</span><span>titel</span><span>bpm</span><span>toon</span><span>tempo</span><span>waarom</span><span></span></div>`;
+    const rijen = lijst.map((x) => `<div class="pb-rij ${x.soort}">
+      <span class="pb-soort">${x.soort}</span>
+      <span class="pb-titel" title="${esc(x.track.titel)}">${esc(x.track.titel)}</span>
+      <span class="pb-getal">${x.bpm.toFixed(1)}</span>
+      <span class="pb-getal">${esc(x.toon ?? '—')}${x.toonGegokt ? '?' : ''}</span>
+      <span class="pb-getal">${esc(tempoTekst(x))}</span>
+      <span class="pb-waarom" title="${esc(x.waarom)}">${esc(x.waarom)}</span>
+      <span class="pb-knoppen">${this.decks.map((d, k) => `<button class="btn sm lib-trk ${standen[k]}" data-pb-deck="${d}" data-id="${esc(x.track.id)}" title="laad op track ${this.label(d)} (${standen[k]})">${this.label(d)}</button>`).join('')}</span>
+    </div>`).join('');
+    const html = lijst.length ? kop + rijen : '<div class="lib-leeg">niets om te tonen</div>';
+    if (html !== this._pb.html) { this._pb.html = html; this.el.pbLijst.innerHTML = html; }
+  }
+
   /**
    * De lijst opnieuw van de server: het stuk dat je ziet, in één keer
    * geruild (geen flits). `bovenaan`: nieuwe zoekterm of sortering, dan
@@ -651,6 +740,7 @@ export class LibraryPanel {
     const n = this.cache.totaal;
     const m = this.melding
       ? `<b class="${this.melding.goed ? 'goed' : 'bad'}">${esc(this.melding.tekst)}</b> &nbsp;·&nbsp; ` : '';
+    if (this.pastBijAan && this._pbKop) { this.el.status.innerHTML = m + esc(this._pbKop); return; }
     this.el.status.innerHTML = m + (this.zoek
       ? `${n} gevonden voor "${esc(this.zoek)}"`
       : `${n} nummer${n === 1 ? '' : 's'} in de library`);
