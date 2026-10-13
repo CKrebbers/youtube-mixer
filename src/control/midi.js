@@ -344,8 +344,18 @@ export class MidiHub extends Emitter {
     return this.on('message', (m) => { if (m.selected && !m.echo) fn(m); });
   }
 
+  /*
+   * Alleen een CC kan een echo zijn (een LED-ring die als knopdraai terugkomt).
+   * Een NOOT nooit: een LED zetten is een note-on met de kleur als velocity, en
+   * een knop die je indrukt stuurt note-on 127 / note-off. Een lampje op 127
+   * (Lock, Sends, de knipperende Track Select) of uit (0) gevolgd door jouw
+   * druk of loslaten binnen 60 ms werd hier als echo weggegooid: een druk die
+   * niets deed, of een loslaten dat nooit kwam (een kill of bend die bleef
+   * hangen). Op een knop die op de tel knippert was dat ~1 op de 8 drukken
+   * (controller-invoer, 14 okt; test/midi.test.mjs).
+   */
   _isEcho(msg) {
-    if (!this.echoFilter || !this._verstuurd.size) return false;
+    if (!this.echoFilter || msg.type !== 'cc' || !this._verstuurd.size) return false;
     const sleutel = `${msg.sig}=${msg.value}`;
     const t = this._verstuurd.get(sleutel);
     if (t === undefined) return false;
@@ -398,7 +408,7 @@ export class MidiHub extends Emitter {
     const msg = parseMessage(bytes);
     // Pas hier onthouden: de echo komt terug na het VERSTUREN, niet na het
     // in de wachtrij zetten.
-    if (msg.channel >= 0) this._onthoudVerstuurd(msg);
+    if (msg.type === 'cc') this._onthoudVerstuurd(msg);   // alleen een CC kan terugkaatsen (zie _isEcho)
     msg.out = true;
     msg.port = out.id;
     msg.portName = out.name;
