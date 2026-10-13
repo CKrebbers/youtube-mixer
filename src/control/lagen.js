@@ -137,8 +137,25 @@ export class Lagen extends Emitter {
     this.ingedrukt = {};      // groep -> { knop, vorige, t0 }
   }
 
-  /** Alle open mapjes als 'groep.laag'. */
-  actief() { return Object.entries(this.stand).map(([g, l]) => `${g}.${l}`); }
+  /**
+   * Alle open mapjes als 'groep.laag'. Dezelfde (bevroren) lijst zolang er
+   * niets verandert: de mapping vraagt dit bij ELK MIDI-bericht en de LED-laag
+   * dertig keer per seconde (docs/verslagen/2026-10-14/controller-invoer.md:
+   * dat waren 700 nieuwe lijsten per LED-tik). Ook wie `stand` direct zet
+   * krijgt een nieuwe lijst: we vergelijken de stand, niet een teller.
+   */
+  actief() {
+    const c = this._actief;
+    if (c) {
+      let n = 0, gelijk = true;
+      for (const g in this.stand) { n++; if (c.stand[g] !== this.stand[g]) { gelijk = false; break; } }
+      if (gelijk && n === c.n) return c.lijst;
+    }
+    const stand = { ...this.stand };
+    const lijst = Object.freeze(Object.entries(stand).map(([g, l]) => `${g}.${l}`));
+    this._actief = { stand, n: lijst.length, lijst };
+    return lijst;
+  }
 
   /** Staat dit mapje (of een mapje onder deze kiesknop) open? */
   isOpen(groep, knop) { return (GROEPEN[groep]?.knoppen[knop] || []).includes(this.stand[groep]); }

@@ -1723,5 +1723,60 @@ console.log('\nmapje beeld');
   ok('elke regel van het mapje beeld heeft een uitleg op de APC-kaart', kaal.length === 0);
 }
 
+// ---- de caches van kies() en actieveRegels() (controller-invoer, 14 okt) ---------
+// Per MIDI-bericht en per LED-tik (700 regels, 30×/s) was kies() een zoektocht met nieuwe
+// teksten en een nieuwe lijst mapjes per regel. Nu één opzoeking, zolang de regels en de
+// open mapjes gelijk blijven. Hier: geeft hij nog ALTIJD wat de zoektocht zou geven?
+{
+  const { Lagen } = await import('../src/control/lagen.js');
+  const lg = new Lagen();
+  let lagenVragen = 0;
+  const mc = new Mapping({ read: () => 0.5, invoke: () => {}, vars: () => ({ focus: 1 }), lagen: () => { lagenVragen++; return lg.actief(); } });
+  mc.laadStandaard(JSON.parse(readFileSync(new URL('../mappings/apc40mk2.json', import.meta.url), 'utf8')));
+  const echt = (sig, shift = mc.shift) => mc._zoek(sig, shift, lg.actief());
+  const sigs = [...new Set([...mc.rules.values()].map((r) => r.in))];
+  const allesGelijk = () => sigs.every((sg) => mc.kies(sg) === echt(sg) && mc.kies(sg, { shift: true }) === echt(sg, true));
+  ok('cache: kies() geeft voor elke knop (met en zonder shift) wat de zoektocht geeft', allesGelijk());
+  lagenVragen = 0;
+  for (let i = 0; i < 100; i++) mc.kies('cc:0:16');
+  ok('cache: kies() vraagt de mapjes één keer per keer (geen lijst per regel)', lagenVragen === 100);
+  ok('cache: Lagen.actief() is dezelfde (bevroren) lijst zolang er niets verandert', lg.actief() === lg.actief() && Object.isFrozen(lg.actief()));
+  const a0 = mc.actieveRegels();
+  ok('cache: actieveRegels() is dezelfde Map zolang er niets verandert', mc.actieveRegels() === a0);
+  lg.zet('device', 'rack');
+  ok('cache: een ander mapje (zet) -> kies() volgt meteen (device knob 1 = rack-knop 1)',
+    mc.kies('cc:0:16')?.action === 'track.{focus}.fx.knob.1' && mc.actieveRegels() !== a0 && allesGelijk());
+  lg.stand.device = 'strip';   // buiten zet() om, zoals een oude test of een console
+  ok('cache: stand direct gezet (zonder zet) -> ook gevolgd', mc.kies('cc:0:16')?.action === 'track.{focus}.trim' && allesGelijk());
+  lg.zet('grid', 'klank');
+  ok('cache: grid-modus klank -> de pads volgen (pad 1/1 = kill hoog vasthouden)', mc.kies('note:0:32')?.action === 'track.1.kill.high.hold' && allesGelijk());
+  lg.zet('grid', 'hotcues');
+  mc.set('cc:0:16', 'mixer.xfader', { mode: 'absolute', laag: 'device.strip' });
+  ok('cache: set() op dezelfde knop -> de nieuwe regel', mc.kies('cc:0:16')?.action === 'mixer.xfader' && allesGelijk());
+  mc.remove('cc:0:16@device.strip');
+  ok('cache: remove() -> geen regel meer in dit mapje', mc.kies('cc:0:16') === echt('cc:0:16') && allesGelijk());
+  const leegEerst = mc.kies('cc:3:99') === null;   // nu staat "niets" in de cache
+  mc.set('cc:3:99', 'mixer.master', { mode: 'absolute' });
+  ok('cache: een nieuwe knop is meteen te vinden (ook nadat hij als "niets" in de cache stond)', leegEerst && mc.kies('cc:3:99')?.action === 'mixer.master');
+  ok('cache: een wildcardregel (cc:*:N) blijft werken', (() => { mc.set('cc:*:77', 'mixer.xfader', { mode: 'absolute' }); return mc.kies('cc:5:77')?.action === 'mixer.xfader'; })());
+  mc.voegToe('proef', { rules: [{ in: 'cc:0:120', action: 'mixer.master', mode: 'absolute' }] });
+  ok('cache: een fragment (voegToe) is meteen te vinden', mc.kies('cc:0:120')?.action === 'mixer.master');
+  const vorige = mc.actieveRegels();
+  mc.load({ name: 'leeg', device: 'apc40mk2', version: 3, rules: [{ in: 'cc:0:7', action: 'track.1.fader', mode: 'absolute' }] });
+  ok('cache: een andere mapping laden -> alles opnieuw (de oude regels zijn weg, het fragment blijft)',
+    mc.kies('cc:0:16') === null && mc.kies('cc:0:7')?.action === 'track.1.fader' && mc.kies('cc:0:120')?.action === 'mixer.master' && mc.actieveRegels() !== vorige);
+  mc.rules = new Map();
+  ok('cache: een nieuwe Map toewijzen aan rules telt ook', mc.kies('cc:0:7') === null);
+  mc.shift = true;
+  ok('cache: shift heeft zijn eigen vak (mapping.shift direct gezet)', mc.kies('cc:0:7') === null && mc.actieveRegels().size === 0);
+
+  // resolveTarget: sjablonen worden één keer geknipt, de uitkomst is gelijk aan de regex van eerst.
+  const oud = (a, v) => (a.includes('{') ? a.replace(/\{(\w+)\}/g, (x, k) => (k in v ? v[k] : x)) : a);
+  const gevallen = [['track.{focus}.fx.knob.1', { focus: 3 }], ['track.{speel}.inst.knob.{n}', { speel: 2, n: 7 }], ['a.{onbekend}.b', { focus: 1 }],
+    ['{focus}', { focus: 8 }], ['track.{focus}.pattern.{plek}.play', { focus: 1, plek: 4 }], ['geen.variabelen', {}]];
+  ok('resolveTarget: zelfde uitkomst als de regex van eerst (ook een onbekende variabele blijft staan)', gevallen.every(([a, v]) => resolveTarget(a, v) === oud(a, v)));
+  ok('resolveTarget: tweede keer (uit de cache) nog steeds goed, met andere waarden', resolveTarget('track.{focus}.fx.knob.1', { focus: 6 }) === 'track.6.fx.knob.1');
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
