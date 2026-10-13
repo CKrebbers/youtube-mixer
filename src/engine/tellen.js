@@ -42,8 +42,16 @@ export const VENSTER = 16;
 export const DRIFT = 0.012;
 /** Zo kort mag een stuk met een eigen tempo zijn (tellen); korter = rubato of een overgang. */
 export const MIN_TELLEN = 8;
-/** De versie van de methode; de server maakt grids van een oudere versie opnieuw. */
-export const VERSIE = 1;
+/**
+ * De versie van de methode; de server maakt grids van een oudere versie
+ * opnieuw (alleen automatische: nooit op slot of met de hand, wilTellenGrid
+ * in server/index.js). 2 (14 okt): het DJ-tempo (dansOctaven), het begin van
+ * een stuk na extra tellen (beginPeriode), een tempo dat het oude rooster
+ * kruist (staartKnip), tellen boven 300 bpm (MIN_L). Bij het opstarten
+ * rekent de server zo elk automatisch grid uit de tellen opnieuw (uit
+ * tellen.json, zonder GPU: milliseconden per nummer).
+ */
+export const VERSIE = 2;
 
 /** Verder dan dit (deel van een tel) van het rooster: deze tel hoort er niet bij. */
 const LOS = 0.25;
@@ -61,6 +69,13 @@ const GAT_PERIODEN = 2.6;
  */
 const GEEN_PULS_S = 4;
 const GEEN_PULS_TELLEN = 6;
+/**
+ * Het bereik van een tel (s) waarin de tellen een stuk kunnen vormen: 500 tot
+ * 30 bpm. Sneller dan 300 (MAX_BPM) gebeurt als Beat This! de achtsten telt;
+ * vroeger was alles onder 0,2 s "geen puls" en verloor jungle op 344 zijn hele
+ * grid (benchmark 14 okt). Het DJ-tempo (dansOctaven) brengt het daarna terug.
+ */
+const MIN_L = 0.12, MAX_L = 2;
 /** Tweede mening: tempo's binnen zoveel (log2, ~4%) zijn hetzelfde octaaf. */
 const OCTAAF_MARGE = 0.057;
 /**
@@ -143,6 +158,83 @@ function knip(punten) {
 }
 
 /**
+ * De periode waarmee een stuk begint (s), uit de eerstvolgende tellen. De
+ * mediaan van de afstanden ging mis met twee extra tellen op een rij (een
+ * snare op de achtsten, benchmark van 14 okt: 124 werd 164): nu wint de
+ * kandidaat (een afstand, de som van twee, of de periode van het vorige
+ * stuk) waarop de volgende BEGIN_TELLEN tellen het best passen: plekken met
+ * een tel, min de helft van de lege plekken (anders wint de halve periode
+ * zodra er één extra tel bij zit); bij gelijke stand de grootste, en de
+ * periode van het vorige stuk als die even goed past (na een gat loopt het
+ * tempo meestal door).
+ */
+const BEGIN_TELLEN = 12;
+/** Het beste rooster vanaf tel i: { L, score, treffers } (zie beginPeriode). */
+function besteRooster(B, i, vorigeL) {
+  const eind = Math.min(B.length, i + BEGIN_TELLEN + 1);
+  if (eind - i < 3) return null;
+  const kand = [];
+  for (let j = i + 1; j < Math.min(eind, i + 9); j++) {
+    kand.push(B[j] - B[j - 1]);
+    if (j + 1 < eind) kand.push(B[j + 1] - B[j - 1]);
+  }
+  if (vorigeL) kand.push(vorigeL);
+  let beste = null;
+  for (const L of kand) {
+    if (!(L > MIN_L && L < MAX_L)) continue;
+    // Plekken op het rooster met een tel, min de helft van de lege plekken:
+    // de halve periode vangt ook de extra tellen op de offbeat, maar laat dan
+    // de helft van zijn plekken leeg.
+    const raak = new Set();
+    for (let j = i + 1; j < eind; j++) {
+      const x = (B[j] - B[i]) / L;
+      if (Math.abs(x - Math.round(x)) <= LOS) raak.add(Math.round(x));
+    }
+    const plekken = Math.round((B[eind - 1] - B[i]) / L);
+    const score = raak.size - 0.5 * Math.max(0, plekken - raak.size) + (L === vorigeL ? 0.25 : 0);
+    if (!beste || score > beste.score + 1e-9 || (Math.abs(score - beste.score) < 1e-9 && L > beste.L)) {
+      beste = { L, score, treffers: raak.size, n: eind - i - 1, eind };
+    }
+  }
+  return beste;
+}
+function beginPeriode(B, i, vorigeL = null) {
+  const r = besteRooster(B, i, vorigeL);
+  // Valt minder dan de helft van de tellen op het beste rooster, of past het
+  // vanaf de VOLGENDE tel duidelijk beter, dan is deze tel zelf los (een extra
+  // tel tussen twee echte): hier begint niets.
+  if (!r || r.treffers < Math.max(3, 0.5 * r.n)) return NaN;
+  const zonder = besteRooster(B, i + 1, vorigeL);
+  if (zonder && zonder.score > r.score + 2) return NaN;
+  // Verfijnen: de mediaan van de afstanden die bij deze periode horen (een veelvoud dichtbij).
+  const bij = [];
+  for (let j = i + 1; j < r.eind; j++) {
+    const d = B[j] - B[j - 1], m = Math.round(d / r.L);
+    if (m >= 1 && Math.abs(d / m - r.L) <= LOS * r.L / m) bij.push(d / m);
+  }
+  return bij.length >= 2 ? mediaan(bij) : r.L;
+}
+
+/**
+ * Hoort het eind van een stuk eigenlijk bij iets anders? De plek c (zoals
+ * knip) waar twee lijnen het best passen, als de tellen vanaf c meer dan
+ * STAART_FOUT naast de lijn van de rest liggen én samen een ander tempo
+ * hebben (> 1%): dan een index om af te knippen, anders null. Ruis van de
+ * detector (σ ≤ 10 ms) haalt STAART_FOUT niet.
+ */
+const STAART_FOUT = 0.02;
+function staartKnip(punten) {
+  const n = punten.length;
+  if (n < MIN_TELLEN + 3) return null;
+  const c = knip(punten);
+  if (c < MIN_TELLEN || n - c < 3 || n - c > 4 * BREEK_VENSTER) return null;
+  const kop = Lijn.door(punten.slice(0, c)), staart = Lijn.door(punten.slice(c));
+  if (!kop || !staart) return null;
+  const fout = Math.sqrt(punten.slice(c).reduce((s, p) => s + (p.t - (kop.a + p.k * kop.L)) ** 2, 0) / (n - c));
+  return fout > STAART_FOUT && Math.abs(staart.L / kop.L - 1) > 0.01 ? c : null;
+}
+
+/**
  * Stukken met één tempo die de tellen volgen. Begin bij een tel, geef elke
  * volgende tel zijn nummer op het rooster tot nu toe (een overgeslagen tel is
  * zo een gat, geen tempowissel) en voorspel waar hij hoort. Het stuk stopt
@@ -157,10 +249,8 @@ function segmenteer(B) {
   let i = 0;
   while (i < B.length - 1) {
     // Een beginperiode uit de eerstvolgende tellen; geen regelmaat = hier geen puls.
-    const ibi = [];
-    for (let j = i + 1; j < Math.min(B.length, i + 9); j++) ibi.push(B[j] - B[j - 1]);
-    const L0 = mediaan(ibi);
-    if (!(L0 > 0.2 && L0 < 2)) { i++; continue; }
+    const L0 = beginPeriode(B, i, segs.length ? segs[segs.length - 1].L : null);
+    if (!(L0 > MIN_L && L0 < MAX_L)) { i++; continue; }
     const lijn = new Lijn(0, B[i]);
     lijn.voeg(0, B[i]);
     let a = B[i], L = L0;
@@ -175,7 +265,16 @@ function segmenteer(B) {
       const e = t - (a + k * L);
       if (k <= vorige.k || Math.abs(e) > LOS * L) {
         if (los++ === 0) eersteLos = j;
-        if (los >= LOS_ACHTEREEN) { eind = eersteLos; break; }
+        if (los >= LOS_ACHTEREEN) {
+          eind = eersteLos;
+          // Een nieuw tempo dat het oude rooster KRUIST (124 -> 131 in een
+          // mix): de eerste tellen ervan vielen nog net binnen LOS, met een
+          // fout die per tel 26 ms verschuift, door nul heen, dus de mediaan
+          // bleef klein. Die horen bij wat volgt, niet bij dit stuk.
+          const c = staartKnip(punten);
+          if (c !== null) { eind = punten[c].i; punten.length = c; }
+          break;
+        }
         continue;
       }
       losTotaal += los; los = 0;
@@ -265,7 +364,12 @@ function maatVan(seg, D, perMaat) {
   return { maat: seg.a + k * seg.L, stem: n ? telling[beste] / n : 0, n };
 }
 
-/** Tellen per maat: drie als de downbeats om de drie tellen vallen, anders vier. */
+/**
+ * Tellen per maat ZOALS BEAT THIS! TELT: hoeveel van zijn tellen er tussen
+ * twee downbeats liggen (2, 3, 4, 6 of 8; anders 4). Telt het netwerk het
+ * dubbele tempo, dan zijn het er 8 (of 6 in een wals); het grid zelf krijgt
+ * zijn maat pas na het DJ-tempo (maatNa).
+ */
 function tellenPerMaat(B, D) {
   const per = [];
   let j = 0;
@@ -275,7 +379,111 @@ function tellenPerMaat(B, D) {
     for (let m = j; m < B.length && B[m] < D[i] - 0.03; m++) n++;
     if (n >= 2 && n <= 8) per.push(n);
   }
-  return mediaan(per) === 3 ? 3 : 4;
+  const m = Math.round(mediaan(per));
+  return [2, 3, 4, 6, 8].includes(m) ? m : 4;
+}
+
+/** De maat van het grid als Beat This! `per` tellen per maat telt en het tempo met `f` vermenigvuldigd wordt: 3 of 4. */
+function maatNa(per, f) {
+  const p = per * f;
+  if (p === 3 || p === 4) return p;
+  return per === 3 || per === 6 ? 3 : 4;
+}
+
+// ---- het DJ-tempo --------------------------------------------------------------
+
+/**
+ * HET DANSBEREIK (14 okt, docs/BEATGRID.md §12): Beat This! kiest zelf welk
+ * octaaf het telt, en dat is vaak niet wat een DJ telt: 77 waar Clay 153
+ * tikt (Ciel), 75 waar de oude analyse 150 hoorde (het album), 86 voor
+ * jungle op 172, 70 voor half-time op 140. Een tempo onder DANS_MIN wordt
+ * verdubbeld, boven DANS_MAX gehalveerd. Gekozen voor Clay's repertoire:
+ * house ~124 en techno 140 blijven staan, jungle/dnb 160-178 ook, en alles
+ * wat Beat This! als halve tel hoort (75-88) komt in het bereik waar je het
+ * mixt. Wat ermee verloren gaat: een nummer dat écht op 70-87 telt
+ * (reggae, downtempo, trip-hop) krijgt het dubbele (een loop van 4 tellen is
+ * dan 2 van de jouwe; ×2/½ in grid-modus zet het terug, en dat is een
+ * bewerking met de hand: de analyse komt er nooit meer overheen).
+ * Hiphop rond 90-100 blijft staan.
+ */
+export const DANS_MIN = 88;
+export const DANS_MAX = 180;
+/** Hoe ver een stuk buiten het bereik mag om bij het tempo van de rest van het nummer te blijven. */
+const DANS_RUIM_MIN = DANS_MIN * 0.9, DANS_RUIM_MAX = DANS_MAX * 1.1;
+
+/** De macht van twee die `bpm` in het dansbereik brengt. */
+export function dansFactor(bpm) {
+  if (!(bpm > 0)) return 1;
+  let f = 1;
+  while (bpm * f < DANS_MIN) f *= 2;
+  while (bpm * f > DANS_MAX) f /= 2;
+  return f;
+}
+
+/**
+ * Het DJ-tempo van het nummer: per stuk zijn tempo × een macht van twee, zo
+ * dicht mogelijk bij het tempo van het NUMMER (zodat een nummer dat op 89
+ * begint en op 87 eindigt niet halverwege naar 174 springt, en een stuk waar
+ * Beat This! even het halve tempo hoort bij de rest blijft).
+ * Het tempo van het nummer: het octaaf waarin de meeste tellen in het bereik
+ * vallen; hoort meer dan een vijfde van het nummer (in dezelfde puls) het
+ * hogere octaaf, dan dat (Beat This! hoort vaker de halve tel dan de dubbele).
+ * Halveren (de tellen van het netwerk zijn achtsten) kan alleen als de "1"
+ * zegt welke van de twee de tel is (`kanHalveren`), of moet boven MAX_BPM.
+ * Een wals (3 per maat) wordt niet verdubbeld: die tel je in zijn tel.
+ * @param {{ bpm: number, gewicht: number, kanHalveren: boolean }[]} delen
+ * @param {number} per  tellen per maat van Beat This!
+ * @returns {number[]} de factor per deel
+ */
+export function dansOctaven(delen, per = 4) {
+  if (!delen.length) return [];
+  const toegestaan = (d, f) => {
+    if (f > 1 && (per === 3) && d.bpm * f / 2 >= MIN_BPM) return false;
+    if (f < 1 && !d.kanHalveren && d.bpm * f * 2 <= MAX_BPM) return false;
+    return d.bpm * f >= MIN_BPM && d.bpm * f <= MAX_BPM;
+  };
+  // Wat het bereik zegt, per deel (zonder halveren als het niet mag).
+  const eigen = delen.map((d) => {
+    let f = dansFactor(d.bpm);
+    while (f < 1 && !toegestaan(d, f)) f *= 2;
+    while (f > 1 && !toegestaan(d, f)) f /= 2;
+    return f;
+  });
+  // Het tempo van het nummer: per puls (tempo gevouwen op een octaaf) het meeste gewicht.
+  const vouw = (bpm) => { let x = Math.log2(bpm / DANS_MIN); return x - Math.floor(x); };
+  const totaal = delen.reduce((s, d) => s + d.gewicht, 0) || 1;
+  let besteKlas = null;
+  for (const d of delen) {
+    const v = vouw(d.bpm);
+    const bij = delen.filter((e) => Math.min(Math.abs(vouw(e.bpm) - v), 1 - Math.abs(vouw(e.bpm) - v)) < 0.03);
+    const g = bij.reduce((s, e) => s + e.gewicht, 0);
+    if (!besteKlas || g > besteKlas.g) besteKlas = { g, bij };
+  }
+  const tempo = new Map();
+  for (const e of besteKlas.bij) {
+    const t = Math.round(Math.log2(e.bpm * eigen[delen.indexOf(e)]) * 1000);
+    tempo.set(t, (tempo.get(t) ?? 0) + e.gewicht);
+  }
+  const octaven = [...tempo.entries()].sort((a, b) => a[0] - b[0]);
+  // De octaven van deze puls samen: hoger wint als het meer dan een vijfde van het nummer is.
+  const klassen = [];
+  for (const [t, g] of octaven) {
+    const k = klassen.find((x) => Math.abs(x.t - t) < 500);
+    if (k) { k.g += g; } else klassen.push({ t, g });
+  }
+  klassen.sort((a, b) => b.t - a.t);
+  const hoog = klassen.find((k) => k.g >= 0.2 * totaal) ?? klassen.sort((a, b) => b.g - a.g)[0];
+  const doel = 2 ** (hoog.t / 1000);
+  return delen.map((d, i) => {
+    let beste = eigen[i], afstand = Infinity;
+    for (const f of [0.25, 0.5, 1, 2, 4]) {
+      const b = d.bpm * f;
+      if (b < DANS_RUIM_MIN || b > DANS_RUIM_MAX || !toegestaan(d, f)) continue;
+      const a = Math.abs(Math.log2(b / doel));
+      if (a < afstand - 1e-9) { afstand = a; beste = f; }
+    }
+    return beste;
+  });
 }
 
 /**
@@ -293,8 +501,8 @@ function tellenPerMaat(B, D) {
 export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
   const B = Array.from(beats).filter(Number.isFinite).sort((a, b) => a - b);
   const D = Array.from(downbeats).filter(Number.isFinite).sort((a, b) => a - b);
-  const beatsPerBar = tellenPerMaat(B, D);
-  const leeg = () => ({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0, twijfel: 'geen puls' }], beatsPerBar, methode: 'tellen', versie: VERSIE });
+  const perBT = tellenPerMaat(B, D);
+  const leeg = () => ({ stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0, twijfel: 'geen puls' }], beatsPerBar: maatNa(perBT, 1), methode: 'tellen', versie: VERSIE });
   if (B.length < MIN_TELLEN) return leeg();
 
   // Korte stukken naast elkaar: rubato of een overgang. Samen één stuk dat
@@ -325,7 +533,7 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
       seg = { a: f.a, L: f.L, punten, eerste: g.eerste, laatste: g.laatste };
       rubato = true;
     }
-    if (!(seg.L > 0.2 && seg.L < 2)) continue;
+    if (!(seg.L > MIN_L && seg.L < MAX_L)) continue;
     delen.push({ seg, rubato });
   }
   if (!delen.length) return leeg();
@@ -335,24 +543,20 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
   const extra = new Map();
   const geenPuls = (van, buur) => {
     const s = { van, bpm: buur.bpm, anker: buur.anker, maat: buur.maat, zekerheid: 0, twijfel: 'geen puls' };
-    extra.set(s, { geen: true });
+    extra.set(s, { geen: true, buur });
     return s;
   };
   delen.forEach(({ seg, rubato }, n) => {
     const L = seg.L;
     const anker = seg.a + Math.round((seg.eerste - seg.a) / L) * L;
-    const { maat, stem, n: nDown } = maatVan(seg, D, beatsPerBar);
+    const { maat, stem, n: nDown } = maatVan(seg, D, perBT);
     const vorige = n ? delen[n - 1].seg : null;
     if (vorige && seg.eerste - vorige.laatste > Math.max(GEEN_PULS_S, GEEN_PULS_TELLEN * Math.max(L, vorige.L))) {
       stukken.push(geenPuls(vorige.laatste + vorige.L / 2, stukken[stukken.length - 1]));
     }
-    // Trager dan MIN_BPM (rubato piano kwam op 31 bpm, 6 okt): het dubbele
-    // tempo. Elke gevonden tel ligt dan nog op een lijn; de library en de
-    // Beatgrid kennen niets onder MIN_BPM (de library weigerde het hele grid).
-    let bpm = 60 / L;
-    while (bpm < MIN_BPM) bpm *= 2;
-    const stuk = { van: seg.eerste - L / 2, bpm: Math.min(MAX_BPM, bpm), anker, maat };
-    extra.set(stuk, { rubato, maatTwijfel: nDown >= 4 && stem < 0.6 });
+    const stuk = { van: seg.eerste - L / 2, bpm: 60 / L, anker, maat };
+    // Halveren kan alleen als de downbeats zeggen welke tel de tel is.
+    extra.set(stuk, { rubato, maatTwijfel: nDown >= 4 && stem < 0.6, gewicht: seg.punten.length, kanHalveren: nDown >= 4 && stem >= 0.6 });
     stukken.push(stuk);
   });
   // Het begin: het eerste stuk geldt ook ervoor, tenzij er lang niets is.
@@ -363,6 +567,31 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
   if (duur && duur - laatste.laatste > Math.max(GEEN_PULS_S, GEEN_PULS_TELLEN * laatste.L)) {
     stukken.push(geenPuls(laatste.laatste + laatste.L / 2, stukken[stukken.length - 1]));
   }
+
+  // Het DJ-tempo (dansOctaven): ×2 houdt anker en "1" (elke tel van het
+  // netwerk blijft een lijn); ½ houdt de tellen die op de "1" vallen.
+  const echte = stukken.filter((st) => !extra.get(st).geen);
+  const factoren = dansOctaven(echte.map((st) => ({ bpm: st.bpm, gewicht: extra.get(st).gewicht, kanHalveren: extra.get(st).kanHalveren })), perBT);
+  echte.forEach((st, i) => {
+    const f = factoren[i];
+    extra.get(st).f = f;
+    if (f === 1) return;
+    st.bpm *= f;
+    if (f < 1) {
+      const L2 = 60 / st.bpm;
+      st.anker = st.maat + Math.ceil((st.anker - st.maat) / L2 - 1e-9) * L2;
+    }
+  });
+  for (const st of stukken) {
+    const x = extra.get(st);
+    if (!x.geen) continue;
+    let b = x.buur;
+    while (extra.get(b)?.geen) b = extra.get(b).buur;
+    Object.assign(st, { bpm: b.bpm, anker: b.anker, maat: b.maat });
+  }
+  // De maat van het grid: die van het zwaarste stuk na zijn factor.
+  const zwaarste = echte.reduce((a, b) => (extra.get(b).gewicht > extra.get(a).gewicht ? b : a), echte[0]);
+  const beatsPerBar = maatNa(perBT, extra.get(zwaarste).f);
 
   // Meten op het grid zelf: zo is de zekerheid wat er op het scherm staat.
   const grid = new Beatgrid({ stukken: stukken.map(({ van, bpm, anker, maat }) => ({ van, bpm, anker, maat })), beatsPerBar });
@@ -383,6 +612,22 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
 }
 
 /**
+ * Liggen deze tellen (gesorteerd) om en om op de tel en de halve tel van een
+ * grid met tellen van L s? Dan telt het netwerk het dubbele tempo (en halveerde
+ * het DJ-tempo het grid). Niet hetzelfde als een grid dat een halve tel naast
+ * ligt: daar liggen de tellen een HELE tel uit elkaar, allemaal op de halve.
+ * Ook niet een stuk met een fasesprong: daar liggen ze per blok op één plek.
+ */
+function fijner(bs, L) {
+  if (bs.length < MIN_TELLEN) return false;
+  let half = 0;
+  for (let j = 1; j < bs.length; j++) if (Math.abs((bs[j] - bs[j - 1]) / L - 0.5) <= 0.12) half++;
+  return half >= 0.3 * (bs.length - 1);
+}
+/** Een fout op de halve tel (bij tellen die fijner zijn dan het grid) naar de halve lijn. */
+const vouwHalf = (e, L, fijn) => (fijn && Math.abs(e) > L / 4 ? e - Math.sign(e) * L / 2 : e);
+
+/**
  * Hoe goed valt een grid op de tellen? Per stuk van het grid:
  *   n         hoeveel gevonden tellen er in vallen;
  *   raak      het deel binnen RAAK van een gridlijn;
@@ -396,11 +641,17 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
 export function meetGrid(grid, beats, downbeats = null) {
   const per = grid.stukken.map((s) => ({ van: s.van, n: 0, raakN: 0, offN: 0, fouten: [], eenN: 0, eenOk: 0 }));
   const tot = { n: 0, raakN: 0, offN: 0, fouten: [], eenN: 0, eenOk: 0 };
+  // Telt Beat This! in een stuk het dubbele van het grid (het DJ-tempo halveerde), dan horen
+  // de tellen op de halve tel erbij (fijner): per stuk eerst kijken, dan meten.
+  const perStuk = grid.stukken.map(() => []);
+  for (const b of beats) perStuk[grid.stukIndex(b)].push(b);
+  const fijn = perStuk.map((bs, i) => fijner(bs, 60 / grid.stukken[i].bpm));
   for (const b of beats) {
     const k = Math.round(grid.beatAt(b));
-    const e = b - grid.timeOf(k);
     const L = 60 / grid.bpmAt(b);
-    const p = per[grid.stukIndex(b)];
+    const i = grid.stukIndex(b);
+    const e = vouwHalf(b - grid.timeOf(k), L, fijn[i]);
+    const p = per[i];
     for (const x of [p, tot]) {
       x.n++;
       if (Math.abs(e) <= RAAK) x.raakN++;
@@ -453,15 +704,18 @@ export function afwijkingBij(grid, beats, t, n = VENSTER) {
   if (!beats?.length || beats[0] > t) return null;
   let lo = 0, hi = beats.length - 1;
   while (lo < hi) { const m = (lo + hi + 1) >> 1; if (beats[m] <= t) lo = m; else hi = m - 1; }
+  const hier = [];
+  for (let i = lo; i >= 0 && hier.length < n && t - beats[i] < 20; i--) hier.push(beats[i]);
+  if (hier.length < Math.min(MIN_TELLEN, n)) return null;
+  hier.reverse();
+  const L = 60 / grid.bpmAt(t), fijn = fijner(hier, L);
   const fouten = [];
   let raak = 0;
-  for (let i = lo; i >= 0 && fouten.length < n && t - beats[i] < 20; i--) {
-    const b = beats[i];
-    const e = b - grid.timeOf(Math.round(grid.beatAt(b)));
+  for (const b of hier) {
+    const e = vouwHalf(b - grid.timeOf(Math.round(grid.beatAt(b))), L, fijn);
     fouten.push(e);
     if (Math.abs(e) <= RAAK) raak++;
   }
-  if (fouten.length < Math.min(MIN_TELLEN, n)) return null;
   return { mediaan: mediaan(fouten), raak: raak / fouten.length, n: fouten.length };
 }
 

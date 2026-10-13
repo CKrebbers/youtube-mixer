@@ -370,7 +370,7 @@ async function maakGridHier(onsetBestand, envRate, tijdOffset, audio) {
     return { ok: false, fout: `onset-bestand onleesbaar: ${err?.message || err}` };
   }
   if (env.length < envRate * 15) return { ok: false, fout: 'te kort voor een grid-analyse' };
-  const { analyseerGrid, fijneFase } = await import('./detect.js');
+  const { analyseerGrid, fijneFase, blokDrift, kantelOpPieken, DRIFT_TEL } = await import('./detect.js');
   const offset = await juisteOffset(envRate, tijdOffset);
   // Zonder pcm: een uur audio op 11025 Hz is 160 MB. De fijne fase doen we
   // hieronder per stuk, met alleen de 40 s audio die hij nodig heeft.
@@ -392,9 +392,46 @@ async function maakGridHier(onsetBestand, envRate, tijdOffset, audio) {
       }
     }
   }
+  // Loopt een zeker stuk weg van de klappen (een tempo dat golft)? Dan niet
+  // zeker: 'drift', zoals bij de tellen (blokDrift, docs/BEATGRID.md §12).
+  const pieken = onsetPieken(env, envRate, Math.abs(envRate - ONSET_RATE / ONSET_HOP) < 1e-6 ? PIEK_GEIJKT : tijdOffset);
+  for (const sk of stukken) {
+    if (!(sk.zekerheid >= ZEKER_VANAF) || !sk.bpm || !Number.isFinite(sk.anker)) continue;
+    const tot = sk.tot ?? Infinity;
+    let d = blokDrift(pieken, sk, tot);
+    // Een kleine tempofout (de lijn loopt aan de randen weg, in het midden niet):
+    // het tempo bijstellen op de pieken, de fase in het midden (fijneFase) houden.
+    if (d.afwijking !== null && d.afwijking > DRIFT_TEL / 2) {
+      const k = kantelOpPieken(pieken, sk, tot, Number.isFinite(sk.tot) ? (sk.van + sk.tot) / 2 : sk.van);
+      if (k) {
+        const d2 = blokDrift(pieken, { ...sk, ...k }, tot);
+        if (d2.afwijking !== null && d2.afwijking < d.afwijking) {
+          sk.bpm = k.bpm;
+          sk.anker = k.anker + Math.ceil((sk.van - k.anker) / (60 / k.bpm) - 1e-9) * (60 / k.bpm);
+          d = d2;
+        }
+      }
+    }
+    if (d.afwijking !== null && d.afwijking > DRIFT_TEL) {
+      sk.zekerheid = Math.min(sk.zekerheid, Math.round((ZEKER_VANAF - 0.05) * 1000) / 1000);
+      sk.twijfel = 'drift';
+    }
+  }
+  // Het DJ-tempo (dansOctaven, src/engine/tellen.js; docs/BEATGRID.md §12):
+  // hetzelfde bereik als het grid uit de tellen, zodat twee nummers in de
+  // library in hetzelfde octaaf staan, welke analyse ze ook kregen. Alleen
+  // verdubbelen: de oude analyse kent geen "1", dus bij halveren weet hij
+  // niet welke tel de tel is. Elke lijn blijft een lijn.
+  const { dansOctaven } = await import('../src/engine/tellen.js');
+  const metPuls = stukken.filter((sk) => sk.bpm > 0 && Number.isFinite(sk.anker));
+  const factoren = dansOctaven(metPuls.map((sk) => ({
+    bpm: sk.bpm, kanHalveren: false,
+    gewicht: Math.max(0.01, ((sk.tot ?? sk.van + 20) - sk.van) * (sk.zekerheid >= GEEN_PULS ? 1 : 0.01)),
+  })));
+  metPuls.forEach((sk, i) => { if (factoren[i] > 1) sk.bpm *= factoren[i]; });
   const grid = {
     stukken: stukken.filter((sk) => sk.bpm > 0 && Number.isFinite(sk.anker))
-      .map((sk) => ({ van: sk.van, bpm: sk.bpm, anker: sk.anker, zekerheid: sk.zekerheid })),
+      .map((sk) => ({ van: sk.van, bpm: sk.bpm, anker: sk.anker, zekerheid: sk.zekerheid, ...(sk.twijfel ? { twijfel: sk.twijfel } : {}) })),
     beatsPerBar: 4,
     bron: 'auto',
     slot: false,

@@ -1870,6 +1870,14 @@ Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag misse
 - Zeker ≥ 0,65, geen puls < 0,15 (gemeten op Clay's library: drie groepen 0–0,06 / 0,20–0,62 /
   0,69–0,94). In een onzeker stuk weigeren sync en beat-loops met een melding; op slot geldt
   het hele grid als zeker. Strook onder overzicht en banen; onset-streepjes in de zoom.
+- HET DJ-TEMPO (14 okt, BEATGRID.md §12): elk automatisch grid (tellen én oude analyse) komt in
+  88–180 bpm (`dansOctaven`, `DANS_MIN`/`DANS_MAX` in tellen.js): Beat This! hoort vaak de halve tel
+  (77 waar Clay 153 tikt). ½ alleen met downbeats (of boven 300), een wals niet ×2. Prijs: wat echt
+  op 70–87 telt krijgt het dubbele. Een grid ander octaaf meten kan: meetGrid/afwijkingBij tellen
+  tellen op de halve tel mee als ze om en om vallen (`fijner`). De oude analyse controleert zijn
+  zekere stukken op de onset-pieken (`blokDrift`, `kantelOpPieken`): wegloopt = `twijfel: 'drift'`.
+  Verander je de analyse: `node tools/beatmeting/synth/bench.mjs` (vóór/na met `--code`, `--vergelijk`)
+  en `node test/beatbench.test.mjs` (nergens vals zeker). Kaart-VERSIE omhoog = alle auto-grids uit de tellen opnieuw.
 - deck.onsets = klappen in tracktijd (GET /api/library/<id>/onsets, eigen ijking 68,5 ms, ±15 ms):
   goed om te snappen, niet om een fase op te zetten.
 - Grid-modus op de APC: Shift + Metronome (mapje `edit`, een schakelaar, vooraan in GROEPEN).
