@@ -5054,9 +5054,83 @@
       "mode": "trigger",
       "label": "stop all clips (beeld): paniek",
       "laag": "device.beeld"
+    },
+    {
+      "in": "note:0:58",
+      "action": "track.{focus}.grid.bar.back",
+      "mode": "trigger",
+      "label": "device ◀ (grid-modus): de \"1\" een tel terug",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:59",
+      "action": "track.{focus}.grid.bar",
+      "mode": "trigger",
+      "label": "device ▶ (grid-modus): de \"1\" een tel verder",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:58",
+      "action": "track.{focus}.grid.check.prev",
+      "mode": "trigger",
+      "label": "device ◀ + shift (grid-modus): vorige plek om te controleren",
+      "shift": true,
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:59",
+      "action": "track.{focus}.grid.check.next",
+      "mode": "trigger",
+      "label": "device ▶ + shift (grid-modus): volgende plek om te controleren",
+      "shift": true,
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:62",
+      "action": "track.{focus}.grid.controle",
+      "mode": "trigger",
+      "label": "device on/off (grid-modus): controleren met de tik aan/uit",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:62",
+      "action": "track.{focus}.grid.ok",
+      "mode": "trigger",
+      "label": "device on/off + shift (grid-modus): ✓ klopt tot hier",
+      "shift": true,
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:64",
+      "action": "track.{focus}.grid.align",
+      "mode": "trigger",
+      "label": "clip/device view (grid-modus): tellen hier (de \"1\" blijft)",
+      "laag": "edit.aan"
+    },
+    {
+      "in": "note:0:65",
+      "action": "track.{focus}.grid.undo",
+      "mode": "trigger",
+      "label": "detail view (grid-modus): ↶ de laatste gridbewerking terug",
+      "laag": "edit.aan"
     }
   ],
   "eerder": [
+    {
+      "vingerafdruk": "0bce11fa-702",
+      "tot": "2026-10-13",
+      "rules": [],
+      "removed": [
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
+      ]
+    },
     {
       "vingerafdruk": "a4d5af2f-687",
       "tot": "2026-10-06",
@@ -5076,7 +5150,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -5106,7 +5188,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -5218,7 +5308,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -5331,7 +5429,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -5447,7 +5553,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -5652,7 +5766,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -5940,7 +6062,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -6241,7 +6371,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -6553,7 +6691,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -6881,7 +7027,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -7217,7 +7371,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -7558,7 +7720,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -7907,7 +8077,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     },
     {
@@ -8339,7 +8517,15 @@
         "note:0:84@device.beeld",
         "note:0:85@device.beeld",
         "note:0:86@device.beeld",
-        "note:0:81@device.beeld"
+        "note:0:81@device.beeld",
+        "note:0:58@edit.aan",
+        "note:0:59@edit.aan",
+        "note:0:58#shift@edit.aan",
+        "note:0:59#shift@edit.aan",
+        "note:0:62@edit.aan",
+        "note:0:62#shift@edit.aan",
+        "note:0:64@edit.aan",
+        "note:0:65@edit.aan"
       ]
     }
   ]

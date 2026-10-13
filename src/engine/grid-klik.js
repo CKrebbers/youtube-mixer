@@ -56,6 +56,12 @@ export class GridKlik {
   start(deck) {
     this.stop();
     this.deck = deck;
+    // Meteen opnieuw plannen als het deck verandert (een gridbewerking, een
+    // sprong), niet pas bij de volgende tik van de timer: tikken die al op het
+    // oude grid ingepland stonden gaan er dan in dezelfde taak af (14 okt; was
+    // tot PLAN_MS = 30 ms later, en tot dan klonk de tik nog op het oude grid).
+    this._opChange = () => { if (this.deck === deck && deck.gridVersie !== this._versie) this._plan(); };
+    deck.on?.('change', this._opChange);
     this._timer = setInterval(() => this._plan(), PLAN_MS);
     this._timer?.unref?.();
     this._plan();
@@ -64,6 +70,8 @@ export class GridKlik {
   stop() {
     clearInterval(this._timer);
     this._timer = null;
+    if (this._opChange) this.deck?.off?.('change', this._opChange);
+    this._opChange = null;
     this.deck = null;
     this._wis();
   }

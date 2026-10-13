@@ -516,12 +516,20 @@ export class LibraryPanel {
   }
 
   /**
-   * Een track bewaarde een toonsoort die op het deck bewerkt is: de lijst toont
-   * hem ook. Het nummer hoeft niet in beeld te staan: `_track` zoekt in ALLE
+   * Een track bewaarde een grid (of toonsoort, zetToon) dat op het deck bewerkt
+   * is: de lijst toont het ook, en wie het nummer opnieuw laadt krijgt het. Het nummer hoeft niet in beeld te staan: `_track` zoekt in ALLE
    * geladen pagina's (en in wat net binnenkwam). Staat het in geen enkele
    * geladen pagina, dan is er niets bij te werken: die pagina komt later van
    * de server, en die heeft de kaart dan al.
    */
+  zetGrid(id, json) {
+    const t = this._track(id);
+    if (!t) return;
+    t.grid = json;
+    if (this.open) this.tekenRijen();
+  }
+
+  /** Zie zetGrid: hetzelfde voor de toonsoortkaart. */
   zetToon(id, json) {
     const t = this._track(id);
     if (!t) return;

@@ -7,6 +7,7 @@ import { computePeaks, rmsDb, laadPeaks } from '../analysis/peaks.js';
 import { renderDemoTrack } from '../analysis/demo-track.js';
 import { meld } from './meldingen.js';
 import { aantalOpBus } from './stems-weergave.js';
+import { maakGridBewaarder } from './grid-bewaren.js';
 
 /**
  * Laden en wat bij het geladen nummer hoort: de demotrack en losse bestanden
@@ -42,7 +43,11 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
   const laadTeller = perDeck(() => 0);
   const nieuweLaad = (id) => ++laadTeller[id];
   const nogDeLaatste = (id, nr) => laadTeller[id] === nr;
-  const gridBewaard = perDeck(() => null);
+  // Het grid bewaren bij het nummer, kort na elke bewerking (grid-bewaren.js, 14 okt).
+  // Daarna ook in de library-rij en op andere tracks met hetzelfde nummer.
+  const grids = maakGridBewaarder({ engine, decks: DECK_IDS, deckTrack, terugspeelDecks,
+    naBewaard: (trackId, json, vanId) => naGridBewaard(trackId, json, vanId) });
+  const gridBewaard = grids.bewaard;
   // Wat er van de toonsoortkaart per track het laatst bewaard (of geladen) is.
   const toonBewaard = perDeck(() => null);
   const toonTekst = (kaart) => (kaart ? JSON.stringify(kaart.toJSON()) : 'null');
@@ -127,33 +132,20 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
   }
 
   /**
-   * Het beatgrid hoort bij de link, dus het wordt daar bewaard.
-   *
-   * Dit draait op een eigen klok en niet vanuit de renderloop: een debounce die
-   * je elk frame opnieuw start, vuurt nooit.
+   * Het beatgrid hoort bij de link: na een geslaagde POST weet de library-rij
+   * het ook (vroeger niet: wie het nummer daarna opnieuw laadde, op deze of een
+   * andere track, kreeg het grid van VÓÓR de bewerking, en bewerkte hij dat,
+   * dan overschreef hij de jouwe). Een andere track met hetzelfde nummer die
+   * zijn grid sinds het laden niet zelf bewerkte, krijgt het nieuwe grid ook.
    */
-  async function bewaarGrid() {
-    {
-      for (const id of DECK_IDS) {
-        const trackId = deckTrack[id];
-        if (!trackId || terugspeelDecks.has(id)) continue;   // terugspelen: het grid van toen niet bewaren
-        const grid = engine.deck(id).grid;
-        const tekst = grid ? JSON.stringify(grid.toJSON()) : 'null';
-        if (tekst === gridBewaard[id]) continue;
-        gridBewaard[id] = tekst;
-        try {
-          const res = await fetch(`/api/library/${trackId}/grid`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ grid: grid ? grid.toJSON() : null }),
-          });
-          // fetch gooit niet bij een 404. Zonder deze controle denkt hij dat het
-          // gelukt is en probeert hij het nooit meer.
-          if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-        } catch (err) {
-          gridBewaard[id] = null;              // volgende ronde opnieuw proberen
-          console.warn('[grid] niet bewaard:', err.message);
-        }
-      }
+  function naGridBewaard(trackId, json, vanId) {
+    library.zetGrid(trackId, json);
+    for (const id of DECK_IDS) {
+      if (id === vanId || deckTrack[id] !== trackId || terugspeelDecks.has(id)) continue;
+      const d = engine.deck(id);
+      if ((d.grid ? JSON.stringify(d.grid.toJSON()) : 'null') !== gridBewaard[id]) continue;   // zelf bewerkt: niet overschrijven
+      d.setGrid(json);
+      gridBewaard[id] = JSON.stringify(d.grid?.toJSON() ?? null);
     }
   }
 
@@ -191,7 +183,8 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
       }
     }
   }
-  setInterval(() => { bewaarGrid(); bewaarToon(); }, 1500);
+  // Het vangnet: wat niet meteen lukte (of de toonsoort) om de 1,5 s opnieuw.
+  setInterval(() => { grids.bewaar(); bewaarToon(); }, 1500);
 
   /*
    * Een instrument op een track (docs/INSTRUMENTEN.md §6): het nummer is eraf
