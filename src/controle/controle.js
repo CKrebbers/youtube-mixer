@@ -5,6 +5,7 @@ import { stemsTegel } from '../ui/stems-weergave.js';
 import { beeldTegel } from '../ui/beeld-weergave.js';
 import { backupTegel } from './backup-tegel.js';
 import { serverTegel } from './server-tegel.js';
+import { mixerAdres } from '../ui/vlag.js';
 
 /**
  * De Controlekamer (controle.html, docs/CONTROLEKAMER.md). Leest:
@@ -214,7 +215,7 @@ $('mixer-open').addEventListener('click', async () => {
   const knop = $('mixer-open');
   await leesMixer();
   if (stand.mixer?.open) { tekenStand(); meld('de mixer staat al open — gebruik dat tabblad', 'fout'); return; }
-  window.open('/', '_blank');
+  window.open(mixerAdres(), '_blank'); // met ?hub= als de Controlekamer hem heeft (VARVE.app)
   knop.dataset.bezig = '1'; knop.disabled = true; knop.textContent = 'mixer gaat open…';
   setTimeout(() => { delete knop.dataset.bezig; tekenStand(); }, 4000);
 });
