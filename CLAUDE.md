@@ -182,6 +182,7 @@ src/
                     opnemer-worklet.js  telt frames, zet om naar 16-bit, geeft per seconde door
   koppel/           varve-beeld-zender.js  de zender van de Stroommachine, ONGEWIJZIGD overgenomen (herkomstregel bovenaan; wijzigen in haar repo)
                     beeld.js        spoor beeld: klok, kenmerken, track per crossfaderkant, mix, poorten naar de Stroommachine. Leest de engine alleen.
+                    niveau.js       laag/midden/hoog/luid voor de zender op de schaal van wat er nu klinkt (8 s, p10–p95, ≥ 6 dB). Puur.
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
 server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
@@ -296,6 +297,7 @@ test/
   auto-secties.test.mjs  auto-DJ met secties: fragment/planMoment/momentArgs, terugvinden, wachten op de kaart, OVERNEEM, langer/nu, zonder kaart identiek
   sec-maschine.test.mjs  secties en loops: sectieHier na het rondgaan, sectieOpDeMaat in een loop, de melding, de Maschine
   sec-controle.test.mjs  sectieTelling (zelfde regel als moetSecties, cache per rij, ROLLBACK), /api/secties, de tegel
+  niveau.test.mjs   het niveau van de beeldzender: pompt op een luide master, volume-onafhankelijk, vlak/stilte/tijd, de ruwe dB in features.js
   beeld.test.mjs    spoor beeld: adres, latentie, id's, kiesKant, de tel met latentie, track/mix/poort, aanwezig en opnieuw, de echte zender op een nep-WebSocket
   varve-beeld-zender.test.mjs  de zendertest van de Stroommachine (overgenomen; alles.mjs telt zijn eigen formaat)
   kaart.test.mjs    de kaart op een verzonnen varve-kaart.json (nep-kaart.mjs): laden/herladen, zoeken, filters, sorteren, pagina's, wensen (20, dubbel), score, standaardvolgorde, cookie-bewaker

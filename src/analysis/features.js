@@ -13,6 +13,8 @@
  *   rms     luidheid uit het tijdsignaal (RMS_DB)
  *   centroid zwaartepunt van het spectrum, logaritmisch tussen 40 Hz en 12 kHz
  *   onset   een klap: springt naar 1 en dooft uit met ONSET_TAU
+ *   db      { laag, midden, hoog, rms } in dB, ongeglad en NIET afgekapt (buiten regel 2, alleen
+ *           voor wie zelf schaalt: de beeldzender, src/koppel/niveau.js)
  *
  * Tijd (regel 3): de TIJD komt van buiten, in seconden (de audioklok). Gladmaken
  * en uitdoven gaan met exp(-dt/τ), nooit "× 0,86 per frame": op 30 en op 120
@@ -88,12 +90,11 @@ export function binBereik(lo, hi, sampleRate, bins) {
 }
 
 /**
- * De banden en het zwaartepunt van één spectrum, zonder gladmaken.
- * Een band = het GEMIDDELDE VERMOGEN van zijn bins, terug naar dB en dan op
- * minDb..maxDb gelegd. Vermogen en niet het gemiddelde in dB: één toon in een
- * brede band (hoog telt ~850 bins) zou anders wegvallen tegen de lege rest.
+ * Het gemiddelde vermogen per band in dB, NIET afgekapt (-Infinity bij stilte).
+ * Buiten regel 2: voor wie zelf schaalt (de beeldzender, src/koppel/niveau.js).
+ * `banden` legt dezelfde getallen op BAND_DB.
  */
-export function banden(spectrum, sampleRate, { minDb = MIN_DB, maxDb = MAX_DB } = {}) {
+export function bandenDb(spectrum, sampleRate, { minDb = MIN_DB, maxDb = MAX_DB } = {}) {
   const bins = spectrum.length;
   const byte = isByte(spectrum);
   const uit = {};
@@ -101,9 +102,24 @@ export function banden(spectrum, sampleRate, { minDb = MIN_DB, maxDb = MAX_DB } 
     const [van, tot] = binBereik(lo, hi, sampleRate, bins);
     let som = 0;
     for (let i = van; i < tot; i++) som += Math.pow(10, dbVan(spectrum, i, minDb, maxDb, byte) / 10);
-    const db = tot > van ? 10 * Math.log10(som / (tot - van)) : -Infinity;
+    uit[naam] = tot > van ? 10 * Math.log10(som / (tot - van)) : -Infinity;
+  }
+  return uit;
+}
+
+/**
+ * De banden en het zwaartepunt van één spectrum, zonder gladmaken.
+ * Een band = het GEMIDDELDE VERMOGEN van zijn bins, terug naar dB en dan op
+ * minDb..maxDb gelegd. Vermogen en niet het gemiddelde in dB: één toon in een
+ * brede band (hoog telt ~850 bins) zou anders wegvallen tegen de lege rest.
+ */
+export function banden(spectrum, sampleRate, { minDb = MIN_DB, maxDb = MAX_DB } = {}, db = bandenDb(spectrum, sampleRate, { minDb, maxDb })) {
+  const bins = spectrum.length;
+  const byte = isByte(spectrum);
+  const uit = {};
+  for (const naam of Object.keys(BANDEN)) {
     const [b0, b1] = BAND_DB[naam];
-    uit[naam] = clamp((db - b0) / (b1 - b0));
+    uit[naam] = clamp((db[naam] - b0) / (b1 - b0));
   }
   // Zwaartepunt: vermogen-gewogen gemiddelde frequentie, op een log-schaal.
   const [clo, chi] = CENTROID_BEREIK;
@@ -124,8 +140,13 @@ export function banden(spectrum, sampleRate, { minDb = MIN_DB, maxDb = MAX_DB } 
  * Luidheid uit het tijdsignaal: Float32 (-1..1, getFloatTimeDomainData) of
  * Uint8 (128 = nul, getByteTimeDomainData). RMS_DB[0] dBFS = 0, RMS_DB[1] = 1.
  */
-export function rms(td) {
-  if (!td || !td.length) return 0;
+export function rms(td, db = rmsDb(td)) {
+  return db === -Infinity ? 0 : clamp((db - RMS_DB[0]) / (RMS_DB[1] - RMS_DB[0]));
+}
+
+/** Dezelfde luidheid in dBFS, niet afgekapt (-Infinity bij stilte of zonder signaal). */
+export function rmsDb(td) {
+  if (!td || !td.length) return -Infinity;
   const byte = isByte(td);
   let som = 0;
   for (let i = 0; i < td.length; i++) {
@@ -133,8 +154,7 @@ export function rms(td) {
     som += v * v;
   }
   const r = Math.sqrt(som / td.length);
-  if (!(r > 0)) return 0;
-  return clamp((20 * Math.log10(r) - RMS_DB[0]) / (RMS_DB[1] - RMS_DB[0]));
+  return r > 0 ? 20 * Math.log10(r) : -Infinity;
 }
 
 /**
@@ -239,7 +259,7 @@ export class Kenmerken {
     this.vorigSpectrum = null;
     this.nuSpectrum = null;
     this.onsets.reset();
-    this.waarden = { laag: 0, midden: 0, hoog: 0, rms: 0, centroid: 0, onset: 0, klap: false, flux: 0 };
+    this.waarden = { laag: 0, midden: 0, hoog: 0, rms: 0, centroid: 0, onset: 0, klap: false, flux: 0, db: null };
   }
 
   /**
@@ -256,12 +276,14 @@ export class Kenmerken {
     const eerste = this.t === null;
     this.t = t;
 
-    const b = banden(spectrum, sampleRate, bereik);
+    const db = { ...bandenDb(spectrum, sampleRate, bereik), rms: rmsDb(td) };   // één keer per beeld
+    const b = banden(spectrum, sampleRate, bereik, db);
     const w = this.waarden;
     const nw = { ...w };
     for (const k of ['laag', 'midden', 'hoog', 'centroid']) nw[k] = eerste ? b[k] : gladOpNeer(w[k], b[k], dt);
-    const r = rms(td);
+    const r = rms(td, db.rms);
     nw.rms = eerste ? r : gladOpNeer(w.rms, r, dt);
+    nw.db = db;   // ongeglad, niet afgekapt
 
     // Twee buffers om de beurt: geen nieuwe array per beeld.
     const nu = spectrum01(spectrum, sampleRate, bereik, this.vorigSpectrum);
