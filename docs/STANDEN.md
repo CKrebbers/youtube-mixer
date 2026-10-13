@@ -107,12 +107,16 @@ beschikbaar (iCloud?)", zonder een nieuwe draad te starten. Dat geldt voor besta
 (`standen/`, `tools/standen/voorbeelden/`) en de lezers van buiten (sjablonen, standaardmapping,
 profielen, hub-sets). Nagemeten met vier named pipes als de vier voorbeelden: na één poll 2 operaties
 onderweg (was 4) en een gewoon bestand lezen in 0 ms (hing eerst); de volgende poll meteen 503.
+Opslaan bewaart de vorige eigen inhoud eerst in `.versies/`. Is die op dat moment niet te lezen (de
+grens raakte vol tussen de lees voor de versiecontrole en die kopie, of iCloud), dan geeft opslaan 503
+en blijft het bestand zoals het was: nooit een overschreven stand zonder kopie (fix na de integratie).
 
 Wat blijft: hooguit twee hangende draden tot het netwerk terug is, en zolang die hangen geeft
 `/api/standen` 503 (de Controlekamer toont "onbekend", "mixer openen" houdt de laatst bekende
-opstelling). Het avondpakket (spoor draagbaar) hoort `standen/` en `tools/standen/voorbeelden/` mee te
-nemen in zijn dataless-controle (`INSTELLINGEN_MAPPEN`): die controle vóór vertrek is de echte
-bescherming, de grens hier is het vangnet.
+opstelling). Het avondpakket (spoor draagbaar) neemt `standen/` sinds de samenvoeging mee in zijn
+dataless-controle (`INSTELLINGEN_MAPPEN`, en `VARVE_STANDEN` buiten de wortel als extra pad;
+`tools/standen/voorbeelden/` telt daar als code): die controle vóór vertrek is de echte bescherming,
+de grens hier is het vangnet.
 
 ## 4. Routes
 
@@ -226,8 +230,9 @@ map, Chromium met `--mute-audio` en zonder MIDI, en opent **geen** mixer-tabblad
 - **Niet op de echte opstelling geproefd**, niet met Clay. Stap P (na de proefavond) eerst.
 - De mapping-route is in de mixer niet geproefd (zie §6, eerste grens).
 - Activeren terwijl er echt een nachtrun loopt: alleen met een nep-run (`_bezig`) getest.
-- `avondpakket/profielen.json` bestaat in deze tak nog niet; de vorm (`{ profielen: { <naam>: … } }`)
-  is een aanname uit spoor draagbaar.
+- `avondpakket/profielen.json` (spoor draagbaar) zit sinds de samenvoeging in `studio/integratie`;
+  de lezer is daar getoetst met het echte bestand (`test/standen-server.test.mjs`: `apc` activeren
+  geeft geen pakketwaarschuwing meer), niet met Clay's spullen erbij.
 - iCloud "dataless": nagebootst met een named pipe die niet terugkomt, niet met iCloud zelf. Dat `stat`
   op een echt dataless bestand niet blijft hangen is een aanname (zo werkt het bij APFS; niet gemeten).
 - `varve-kaart.json` leest de kaart zelf synchroon (`server/kaart.js`, `readFileSync`); is dat bestand
