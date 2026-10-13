@@ -31,6 +31,7 @@ Alles hieronder komt uit deze commando's (in de worktree; `<basis>` = een checko
 `studio/afmaken` vóór dit spoor, commit `7debab6`):
 
 ```
+git worktree add --detach <basis> 7debab6                                # de boom van vóór dit spoor
 node test/grid-bediening.test.mjs                                        # nameting (en de test)
 VARVE_WORTEL=<basis> VARVE_GRID_UIT=voor.json node test/grid-bediening.test.mjs   # nulmeting
 VARVE_CHROME=/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell \
@@ -138,6 +139,13 @@ van de app al ~300 ms, ook in rust. Dat getal zegt niets over een Mac.
 - Tests: `test/grid-bediening.test.mjs` (nieuw, 16 checks over 21 routes), `test/beatgrid.test.mjs` (pin met klappen, 5
   checks), `test/mapping.test.mjs` (de acht nieuwe sleutels in de "niets bestaands veranderd"-checks).
 - Docs: `docs/BEATGRID.md` §12, `docs/APC40.md`, één alinea in CLAUDE.md (Beatgrid).
+
+## Tests
+
+`node test/alles.mjs`: 95 bestanden, 8817 checks, 3 rood, precies de drie die in deze container
+ook op main rood zijn (renderblok "keylock met wissels … bytes per bericht", instrumenten-fm-schaal
+"geen afval per blok", wachtrij "yt-dlp en zijn kind zijn allebei weg" 2×). grid-bediening 16 ok,
+beatgrid 165 ok, mapping 307 ok, engine 826 ok.
 
 ## Wat ik niet veranderde
 
