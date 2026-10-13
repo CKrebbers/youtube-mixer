@@ -23,7 +23,8 @@
 //
 // VEILIG: eigen headless shell, eigen server op een eigen poort, ALLES van de server
 // in een tijdelijke map (database, media, opnames, patronen, plannen, proef, kaart, nacht,
-// en een nep-yt-dlp: geen netwerk), geen requestMIDIAccess. Voor 1–6 is de pagina
+// backups, standen, hub-sets, uitzenduitgang, en een nep-yt-dlp: geen netwerk),
+// VARVE_TESTSERVER=1 (geen echte Demucs of Beat This!), geen requestMIDIAccess. Voor 1–6 is de pagina
 // /styles.css (de app start niet); voor 7 de app zelf, zonder MIDI.
 // Gebruik: node tools/headless/sampler-drums.mjs [uitmap]   (VARVE_KIJK_POORT 8797, VARVE_KIJK_DEBUG 9397)
 import { spawn, execFileSync } from 'node:child_process';
@@ -69,6 +70,10 @@ const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
     // H13: ook de kaart, de nachtwachtrij en yt-dlp in de tijdelijke map (zonder VARVE_KAART
     // valt een verse database terug op Clay's kaart; de nep-yt-dlp kan niet naar buiten).
     VARVE_KAART: join(tmp, 'kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'), VARVE_NACHT: join(tmp, 'nacht.json'),
+    // Na de samenvoeging (12 okt): ook backups, standen, hub-sets en de uitzenduitgang in de
+    // tijdelijke map, en geen extra hosts (test/sampler-drums.test.mjs bewaakt dat).
+    VARVE_BACKUPS: join(tmp, 'backups'), VARVE_STANDEN: join(tmp, 'standen'), VARVE_HUB_SETS: join(tmp, 'hub-sets'),
+    VARVE_UITZEND_UIT: join(tmp, 'uitzend-uit'), VARVE_HOSTS: '',
     VARVE_YTDLP: maakNepYtdlp(tmp) },
   stdio: 'ignore',
 });

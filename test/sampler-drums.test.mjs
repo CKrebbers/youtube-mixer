@@ -321,6 +321,30 @@ console.log('\nhet scherm (index.html, zonder DOM gelezen)');
   ok('in de sampler-rij', (sec.match(/sampler\.\d\.drums/g) ?? []).length === 8);
 }
 
+console.log('\nde proefservers van de headless-metingen (tools/headless/sampler-drums*.mjs, zonder ze te starten)');
+{
+  // Na de samenvoeging (12 okt) leest de server meer VARVE_-paden dan toen de metingen
+  // geschreven werden. Elk pad dat de server leest, staat in de env van de proefserver
+  // (anders valt hij terug op de werkmap of een map van Clay), plus VARVE_TESTSERVER=1
+  // (VI2: anders de echte Demucs) en geen extra hosts. Zelfde lijst "geen pad" als
+  // test/beeld-meting.test.mjs.
+  const { readdirSync } = await import('node:fs');
+  const GEEN_PAD = new Set(['VARVE_BACKUP_ELKE', 'VARVE_UPLOAD_MAX', 'VARVE_HERANALYSE', 'VARVE_HOSTS', 'VARVE_YTDLP', 'VARVE_AVONDPAKKET_NEP']);
+  const gelezen = new Set();
+  for (const f of readdirSync(new URL('../server/', import.meta.url)).filter((f) => f.endsWith('.js'))) {
+    for (const [, k] of readFileSync(new URL(`../server/${f}`, import.meta.url), 'utf8').matchAll(/process\.env\.(VARVE_[A-Z_]+)/g)) gelezen.add(k);
+  }
+  const paden = [...gelezen].filter((k) => !GEEN_PAD.has(k) && k !== 'VARVE_TESTSERVER');
+  for (const naam of ['sampler-drums.mjs', 'sampler-drums-stems.mjs']) {
+    const bron = readFileSync(new URL(`../tools/headless/${naam}`, import.meta.url), 'utf8');
+    const i = bron.indexOf("const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')]");
+    const env = i < 0 ? '' : bron.slice(i, bron.indexOf('stdio:', i));
+    const los = paden.filter((k) => !new RegExp(`\\b${k}: join\\(tmp, `).test(env));
+    ok(`${naam}: elk pad van de server in de tijdelijke map (${paden.length} gelezen; niet gedekt: ${los.join(', ') || 'geen'})`, !!env && paden.length >= 10 && !los.length);
+    ok(`${naam}: VARVE_TESTSERVER '1', VARVE_HOSTS leeg, de nep-yt-dlp`, /VARVE_TESTSERVER: '1'/.test(env) && /VARVE_HOSTS: ''/.test(env) && /VARVE_YTDLP: maakNepYtdlp\(tmp\)/.test(env));
+  }
+}
+
 eng.zetInstrument('C', null);
 ok('instrument eraf: read null, geen fout', read('sampler.1.drums') === null);
 ok('nergens setValueCurveAtTime', CURVES === 0);
