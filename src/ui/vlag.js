@@ -53,3 +53,16 @@ export function hubGeweigerd(url = location.href) {
   const v = new URL(url).searchParams.get('hub');
   return v && !hubAdres(url) ? v : null;
 }
+
+/**
+ * Het adres van de mixer vanuit een andere pagina (de Controlekamer): staat er een geldig ?hub= in
+ * `url`, dan gaat die mee, anders gewoon '/'. VARVE.app opent de Controlekamer met ?hub= zodra de
+ * hub draait; zonder dit opende "mixer openen" een mixer zonder hub, en dan doet de Maschine niets.
+ */
+export function mixerAdres(url = location.href) {
+  const hub = hubAdres(url);
+  if (!hub) return '/';
+  const q = new URLSearchParams({ hub });
+  if (new URL(url).searchParams.get('hub_extern') === '1') q.set('hub_extern', '1');
+  return `/?${q}`;
+}

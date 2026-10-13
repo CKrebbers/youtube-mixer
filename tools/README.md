@@ -28,7 +28,7 @@ De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking; d
 worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van het systeem.
 
 ## varve-app/
-`VARVE.applescript` + `maak.sh`: de Dock-knop die de server start en de Controlekamer opent
+`VARVE.applescript` + `maak.sh`: de Dock-knop die de server en de AV-app-hub start (zonder hub doet de Maschine niets) en de Controlekamer opent (met `?hub=`)
 (`~/Applications/VARVE.app`). Een losse macOS-app; draait niet in de mixer.
 
 ## git/
