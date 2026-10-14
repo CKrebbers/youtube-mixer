@@ -6,6 +6,7 @@ import { beschrijf } from './apc-beschrijf.js';
 import { laadEigen } from './mapping-opslag.js';
 import { hubAdres } from './vlag.js';
 import { SOORTEN, soortVan } from './soorten.js';
+import { lijstWerkruimtes, laadVoorbeeld, delenVan, zetFragmenten, zetApcMapjes, apcStandVan, houdMapjes, mapjeNaam } from './spiekbrief.js';
 
 /**
  * De interactieve APC-kaart (apc.html).
@@ -21,6 +22,12 @@ import { SOORTEN, soortVan } from './soorten.js';
  * labels wisselen direct mee. Is de APC aangesloten, dan luistert de pagina
  * zelf mee (alleen lezen, stuurt niets): een aangeraakte knop licht op, en
  * modus en shift volgen wat je op het apparaat doet.
+ *
+ * WERKRUIMTE (spoor S6, docs/werkruimte/S6.md): een kiezer werkruimte + deel toont wat de APC in
+ * dat deel doet ZONDER het te activeren (voorbeeldmodus): de stukken van die werkruimte komen als
+ * fragment op de mapping van deze pagina, hun nieuwe mapjes (fx-matrix, uitlijn …) krijgen een
+ * knop, het deel zet de modi, en onderaan staan de houd-mapjes (wat een knop doet zolang je een
+ * andere vasthoudt, ook op de Maschine). Er gaat niets naar de mixer of de APC.
  */
 
 // ---- plaatsing (procenten van het apparaat) --------------------------------
@@ -151,6 +158,14 @@ function tekenDetail() {
     ${rijen.length ? `<h4>per modus</h4><table>${rijen.join('')}</table>` : ''}`;
 }
 
+/** De houd-mapjes van de mapping (uit een stuk): welke APC-knop wat doet zolang je hem vasthoudt. */
+function houdLijst() {
+  const h = houdMapjes(mapping);
+  if (!h.length) return '';
+  return `<section><h3>Vasthouden (houd-mapjes${voorbeeld ? `, werkruimte ${esc(voorbeeld.naam)}` : ''})</h3><table>${h.map(({ naam, regels }) => regels.map((r) =>
+    `<tr data-sig="${esc(r.in)}"><td><i class="stip s-${soortVan(r.action)}"></i>${esc(naam.toUpperCase())} vast + ${esc(naamVan(r.in))}${r.shift ? ' + shift' : ''}</td><td>${esc(tekst(r)?.lang ?? r.action)}</td></tr>`).join('')).join('')}</table></section>`;
+}
+
 function tekenLijst() {
   // Alles wat nu iets doet, per deel van het apparaat; wat per kolom gelijk is op één regel.
   const delen = [['kolom', 'Per track (kolom 1–8)'], ['grid', 'Grid (modus: ' + (LAAGNAAM[`grid.${lagen.stand.grid}`] ?? '') + ')'],
@@ -177,7 +192,7 @@ function tekenLijst() {
       return `<tr data-sig="${esc(g.sig)}"><td><i class="stip s-${g.soort}"></i>${esc(knop)}</td><td>${esc(doet)}</td></tr>`;
     }).join('');
     return `<section><h3>${esc(titel)}</h3><table>${rijen}</table></section>`;
-  }).join('');
+  }).join('') + houdLijst();
 }
 
 function alles() { tekenPlaat(); tekenDetail(); tekenLijst(); }
@@ -196,10 +211,72 @@ document.getElementById('lijst').addEventListener('click', (e) => {
   tekenPlaat(); tekenDetail();
   plaat.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
-document.querySelectorAll('[data-modus]').forEach((el) => el.addEventListener('click', () => {
+// Eén luisteraar op de kop: ook voor de modusknoppen die een werkruimte erbij zet (voorbeeldmodus).
+document.querySelector('.k-kop').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-modus]');
+  if (!el) return;
   const [g, l] = el.dataset.modus.split('.');
   lagen.zet(g, l);
-}));
+});
+
+// ---- voorbeeldmodus: een werkruimte en een deel bekijken (spoor S6) -------------------
+
+let voorbeeld = null;
+let weg = () => {};          // haalt de fragmenten en mapjes van het voorbeeld weer weg
+
+async function haalJson(url) {
+  const r = await fetch(url);
+  if (!r.ok) { try { await r.body?.cancel(); } catch (_) {} return null; }
+  return r.json();
+}
+
+/** Knoppen voor de mapjes die het voorbeeld erbij zet (grid.fx, device.uitlijn …). */
+function mapjesKnoppen() {
+  document.querySelectorAll('.uit-werk').forEach((el) => el.remove());
+  for (const mj of voorbeeld?.samenstelling?.apparaten?.apc40mk2?.mapjes ?? []) {
+    if (mj.groep === 'houd') continue;
+    const groep = document.querySelector(`[data-modus^="${mj.groep}."]`)?.closest('.k-groep');
+    groep?.insertAdjacentHTML('beforeend', `<button class="k-knop uit-werk" data-modus="${esc(mj.groep)}.${esc(mj.laag)}" title="${esc(mapjeNaam(mj.groep, mj.laag))}">${esc(mj.laag)}</button>`);
+  }
+}
+
+function zetDeel(deelNaam) {
+  if (!voorbeeld) return;
+  for (const [g, l] of Object.entries(apcStandVan(voorbeeld, deelNaam))) lagen.zet(g, l);
+  alles();
+}
+
+async function kiesVoorbeeld(naam, deelKies) {
+  weg();
+  weg = () => {};
+  voorbeeld = naam ? await laadVoorbeeld(naam, haalJson) : null;
+  if (voorbeeld) {
+    const af = zetFragmenten(mapping, voorbeeld, 'apc40mk2');
+    const afMapjes = zetApcMapjes(voorbeeld);
+    weg = () => { af(); afMapjes(); };
+  }
+  mapjesKnoppen();
+  const delen = voorbeeld ? delenVan(voorbeeld).filter((d) => d.naam) : [];
+  deelKies.hidden = !delen.length;
+  deelKies.innerHTML = delen.map((d) => `<option value="${esc(d.naam)}">F${d.nr} ${esc(d.label)}</option>`).join('');
+  document.getElementById('spiek').href = `spiekbrief.html${naam ? `?werk=${encodeURIComponent(naam)}` : ''}`;
+  if (delen.length) zetDeel(delen[0].naam);
+  else { for (const [g, d] of Object.entries(GROEPEN)) if (!d.houd) lagen.zet(g, d.standaard); alles(); }
+}
+
+async function opzetKiezer() {
+  document.getElementById('gridmodus').insertAdjacentHTML('beforebegin', `<div class="k-groep" id="werk-kiezer"><span>werkruimte</span>
+    <select id="werk-kies" class="k-knop" title="bekijk een werkruimte zonder hem te activeren"><option value="">— (geen)</option></select>
+    <select id="deel-kies" class="k-knop" title="het deel" hidden></select>
+    <a class="k-knop" id="spiek" href="spiekbrief.html" target="_blank" rel="noopener" title="de spiekbrief: per deel wat elke knop doet, om te printen">spiekbrief</a></div>`);
+  const werkKies = document.getElementById('werk-kies'), deelKies = document.getElementById('deel-kies');
+  for (const w of await lijstWerkruimtes(haalJson)) {
+    if (w.naam === 'standaard') continue;   // "— (geen)" is de standaard
+    werkKies.insertAdjacentHTML('beforeend', `<option value="${esc(w.naam)}">${esc(w.naam)}${w.titel && w.titel !== w.naam ? ` · ${esc(w.titel)}` : ''}</option>`);
+  }
+  werkKies.addEventListener('change', () => kiesVoorbeeld(werkKies.value, deelKies).catch((err) => console.warn('[apc-kaart] voorbeeld', err)));
+  deelKies.addEventListener('change', () => zetDeel(deelKies.value));
+}
 document.getElementById('shift').addEventListener('click', () => { shift = !shift; alles(); });
 document.getElementById('gridmodus').addEventListener('click', () => lagen.zet('edit', lagen.stand.edit === 'aan' ? 'uit' : 'aan'));
 document.getElementById('zoek').addEventListener('input', (e) => { zoek = e.target.value.trim().toLowerCase(); tekenPlaat(); });
@@ -282,6 +359,7 @@ try {
 }
 document.getElementById('bron').textContent = `Uit ${bron} (${mapping.rules.size} regels).`;
 alles();
+opzetKiezer().catch((err) => console.warn('[apc-kaart] kiezer', err));
 // Meekijken met de APC pas na een klik: dan opent deze pagina nooit
 // ongevraagd MIDI naast de mixer (zie CLAUDE.md, Chrome-crash 23 sep).
 const live = document.getElementById('live');

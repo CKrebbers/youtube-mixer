@@ -1,8 +1,11 @@
 import { KNOPPEN, KNOP_LABEL, PAD_NOOT, knopSig, padSig, encoderSig, WIEL_SIG, padVanNoot } from '../control/devices/maschine-mk2.js';
 import { parseMessage } from '../control/midi.js';
 import { resolveTarget } from '../control/mapping.js';
-import { UITLEG, STRIP, PAGINAS, PAGINA_NAAM, PLEKKEN, STAPPEN, nootNaam, samplerPad } from '../control/maschine.js';
+import { UITLEG, STRIP, PAGINAS, PAGINA_NAAM, PLEKKEN, STAPPEN, nootNaam, samplerPad, naamUitData } from '../control/maschine.js';
 import { soortVan } from './soorten.js';
+import { Maschine, maakMaschineAdapter } from '../control/maschine.js';
+import { HoudRegister } from '../control/houd.js';
+import { zetFragmenten, maschineDefVan, deelLabels } from './spiekbrief.js';
 
 /**
  * De Maschine-kaart (maschine.html) als rekenwerk, zonder DOM: waar elke
@@ -86,7 +89,7 @@ export function berichtVan(id) {
 
 // ---- de standen van de kaart -----------------------------------------------------------
 
-/** De padmodi van de Maschine (STEP, SCENE, PATTERN vasthouden). */
+/** De padmodi van de Maschine die code zijn (STEP, SCENE, SAMPLING, PATTERN vasthouden). */
 export const PADMODI = [
   { id: 'spelen', naam: 'spelen' },
   { id: 'stappen', naam: 'stappen (STEP)' },
@@ -94,6 +97,13 @@ export const PADMODI = [
   { id: 'sampler', naam: 'sampler (SAMPLING)' },
   { id: 'plek', naam: 'plek kiezen (PATTERN vast)' },
 ];
+/**
+ * Alle padmodi van deze Maschine: die van code (PADMODI) en die een stuk declareert (laag
+ * pads.<modus>, spoor S6). Zonder stukken precies PADMODI.
+ */
+export const padmodiVan = (m) => [...PADMODI, ...(m.padmodi?.() ?? []).map((id) => ({ id, naam: `${id} (stuk)`, data: true }))];
+/** Alle knoppagina's van deze Maschine (Instrument, Strip, Rack en die uit data). */
+export const paginasVan = (m) => m.paginas?.() ?? PAGINAS;
 export const padmodusVan = (m) => (m.patroonVast ? 'plek' : m.modus);
 export function zetPadmodus(m, id) {
   m.patroonVast = id === 'plek';
@@ -104,8 +114,9 @@ export { PAGINAS, PAGINA_NAAM };
 /**
  * De stand van een Maschine die de kaart overneemt of terugzet. Met `_sectieFocus`:
  * daaraan ziet zetModus of de focus wisselde (dan het blad dat je hoort, zoals het apparaat).
+ * `wiel`, `scherm`, `delen`, `kleur`: wat een deel van de werkruimte zet (spoor S6).
  */
-const STAND = ['pagina', 'modus', 'patroonVast', 'bladzijde', 'sectieBlad', '_sectieFocus'];
+const STAND = ['pagina', 'modus', 'patroonVast', 'bladzijde', 'sectieBlad', '_sectieFocus', 'wiel', 'scherm', 'delen', 'kleur'];
 export const neemStand = (m) => Object.fromEntries(STAND.map((k) => [k, m[k]]));
 export function zetStand(m, s) { for (const k of STAND) if (k in s) m[k] = s[k]; }
 
@@ -141,16 +152,29 @@ export function leesControl(m, id, { shift = false, stand = null } = {}) {
     else if (modus === 'secties') {
       const naam = (stand ?? m.stand()).secties?.namen?.[pad - 1] ?? null;
       Object.assign(uit, { kort: naam ?? `sectie ${m.sectieBlad * STAPPEN + pad}`, soort: 'sectie' });
+    } else if (m.isDataPad?.(modus)) {
+      // Een padmodus uit data (laag pads.<modus>): wat de regel doet, of vrij.
+      const gewoon = m.mapping.kies(sig, { shift: false });
+      const metShift = m.mapping.kies(sig, { shift: true });
+      uit.shiftRegel = !!metShift && metShift !== gewoon;
+      const regel = shift && uit.shiftRegel ? metShift : gewoon ?? metShift;
+      if (!regel) Object.assign(uit, { vrij: true });
+      else Object.assign(uit, { kort: kortVanActie(m, regel.action), soort: soortVan(regel.action) });
     } else Object.assign(uit, { kort: nootNaam(PAD_NOOT + pad - 1), soort: 'instrument' });
     return uit;
   }
-  if (id === 'wiel') return Object.assign(uit, m.bladeren?.() ? { kort: 'bladeren', soort: 'library' } : { kort: 'instrument', soort: 'instrument' });
+  if (id === 'wiel') {
+    // Een regel op het wiel (een wiel-mapje uit data, spoor S6) gaat voor, behalve met de library open.
+    const regel = m.mapping.kies(sig, { shift: false });
+    if (regel && (!m.bladeren?.() || regel.laag === 'bladeren')) return Object.assign(uit, { kort: kortVanActie(m, regel.action), soort: soortVan(regel.action) });
+    return Object.assign(uit, m.bladeren?.() ? { kort: 'bladeren', soort: 'library' } : { kort: 'instrument', soort: 'instrument' });
+  }
   const k = /^k(\d)$/.exec(id);
   if (k) {
     const i = Number(k[1]) - 1;
     const label = (stand ?? m.stand()).knoppen?.[i]?.label ?? null;
     const regel = m.mapping.kies(sig, { shift: false });
-    const kort = label ?? (m.pagina === 'strip' ? STRIP[i].label : m.pagina === 'rack' ? `plek ${i + 1}` : `instr ${i + 1}`);
+    const kort = label ?? (m.pagina === 'strip' ? STRIP[i].label : m.pagina === 'rack' ? `plek ${i + 1}` : m.pagina === 'instrument' ? `instr ${i + 1}` : regel ? kortVanActie(m, regel.action) : `${m.pagina} ${i + 1}`);
     return Object.assign(uit, regel ? { kort, soort: soortVan(regel.action) } : { vrij: true });
   }
   const naam = id;
@@ -191,19 +215,19 @@ export function perStand(m, id) {
     if (/^pad\d+$/.test(id)) {
       // Per padmodus wat de Maschine zegt NA een druk op STEP/SCENE/PATTERN: zetModus rekent
       // het blad uit zoals het apparaat (na een focuswissel het blad dat je hoort, geklemd).
-      for (const p of PADMODI) {
+      for (const p of padmodiVan(m)) {
         zetStand(m, voor);
         zetPadmodus(m, p.id);
         rijen.push({ naam: p.naam, tekst: m.legUit(msg).tekst, nu: p.id === (voor.patroonVast ? 'plek' : voor.modus) });
       }
     } else if (/^k\d$/.test(id)) {
-      for (const p of PAGINAS) {
+      for (const p of paginasVan(m)) {
         m.pagina = p;
-        rijen.push({ naam: PAGINA_NAAM[p], tekst: m.legUit(msg).tekst, nu: p === voor.pagina });
+        rijen.push({ naam: PAGINA_NAAM[p] ?? naamUitData(p), tekst: m.legUit(msg).tekst, nu: p === voor.pagina });
       }
     } else if (id === 'stapL' || id === 'stapR') {
       // ◄ ► (transport) doen per padmodus iets anders: bladzijde (stappen, secties), tellen (sampler).
-      for (const p of PADMODI) {
+      for (const p of padmodiVan(m)) {
         zetStand(m, voor);
         zetPadmodus(m, p.id);
         rijen.push({ naam: p.naam, tekst: m.legUit(msg).tekst, nu: p.id === (voor.patroonVast ? 'plek' : voor.modus) });
@@ -228,3 +252,36 @@ export const LIBRARY_KNOPPEN = ['wiel', 'enter', 'navL', 'navR'];
 
 /** De naam van een control zoals het apparaatprofiel hem noemt (voor titels en de lijst). */
 export const naamVan = (id) => (/^k\d$/.test(id) ? `draaiknop ${id.slice(1)}` : id === 'wiel' ? 'masterwiel' : /^pad\d+$/.test(id) ? `pad ${id.slice(3)}` : KNOP_LABEL[id] ?? id);
+
+// ---- voorbeeldmodus en spiekbrief (spoor S6, docs/werkruimte/S6.md) ---------------------------
+
+const ZONDER = { focus: 'A', speeltrack: () => null, instrumentOp: () => null, deck: () => null };
+
+/**
+ * Een Maschine voor de voorbeeldmodus (kaart en spiekbrief): zonder engine of met die van de mixer
+ * (alleen lezen), de standaard + jouw verschil (`doc`) + de fragmenten van de werkruimte `v`
+ * (spiekbrief.js laadVoorbeeld), en de mapjes van het deel. `invoke` doet niets: de kaart en de
+ * spiekbrief sturen nooit iets. Een eigen HoudRegister: een houd-knop hier opent niets in de mixer.
+ */
+export function maakVoorbeeldMaschine({ doc, v, deel = null, engine = ZONDER, read = () => null, beschrijf = null, library = null, nu } = {}) {
+  const m = new Maschine({ engine, read, invoke: () => {}, beschrijf, library, nu, houd: new HoudRegister() });
+  if (doc) m.laadMapping(doc);
+  zetFragmenten(m.mapping, v, 'maschine-mk2');
+  Object.assign(m, deelLabels(v, deel));
+  if (deel) maakMaschineAdapter(m).zetMapjes(maschineDefVan(v, deel));
+  return m;
+}
+
+/** De rijen van de Maschine voor de spiekbrief (de tekst van legUit), in de volgorde van het apparaat. */
+export function maschineRijen(m) {
+  const alles = leesAlles(m);
+  const rijen = [];
+  for (const [deel, ids] of DELEN) {
+    for (const id of ids) {
+      const r = alles.get(id);
+      if (!r || r.vrij || !r.tekst) continue;
+      rijen.push({ sig: r.sig, knop: OPDRUK[id] ?? id, groep: deel, tekst: r.tekst, shift: null });
+    }
+  }
+  return rijen;
+}

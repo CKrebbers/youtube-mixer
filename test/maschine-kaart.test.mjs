@@ -199,5 +199,100 @@ console.log('\nde mixer en de server');
   ok('de kaart vraagt geen MIDI aan en stuurt niets (invoke doet niets)', !/requestMIDIAccess/.test(kaart) && /invoke: \(\) => \{\}/.test(kaart));
 }
 
+// ---- spoor S6: de kaarten en de spiekbrief per werkruimte en deel (voorbeeldmodus) ----------
+console.log('\nwerkruimte × deel × padmodus (voorbeeldmodus, spoor S6)');
+{
+  const { existsSync } = await import('node:fs');
+  const SB = await import('../src/ui/spiekbrief.js');
+  const { Mapping } = await import('../src/control/mapping.js');
+  const apcDev = (await import('../src/control/devices/apc40mk2.js')).default;
+  const wortel = new URL('../', import.meta.url);
+  const haal = async (url) => {
+    const m = /^\/api\/werkruimtes\/(.+)$/.exec(url);
+    if (url === '/api/werkruimtes') return { werkruimtes: ['standaard', 'apc-alleen', 'twee-handen'].map((naam) => ({ naam })) };
+    const pad = new URL(m ? `tools/werkruimtes/voorbeelden/${decodeURIComponent(m[1])}.json` : url, wortel);
+    if (!existsSync(pad)) return null;
+    const d = JSON.parse(readFileSync(pad, 'utf8'));
+    return m ? { ruw: d } : d;
+  };
+  const apcDoc = JSON.parse(lees('../mappings/apc40mk2.json'));
+  const leeg = /^(doet hier \(nog\) niets|doet in padmodus .* niets|doet op deze pagina niets)$/;
+  for (const naam of (await SB.lijstWerkruimtes(haal)).map((w) => w.naam)) {
+    const v = await SB.laadVoorbeeld(naam, haal);
+    ok(`${naam}: laadt zonder fouten`, v.werkruimte && v.fouten.length === 0);
+    let regels = 0, zonderUitleg = [];
+    for (const d of SB.delenVan(v)) {
+      const m = K.maakVoorbeeldMaschine({ doc, v, deel: d.naam, beschrijf });
+      for (const pm of K.padmodiVan(m)) {
+        K.zetPadmodus(m, pm.id);
+        for (const p of K.paginasVan(m)) {
+          m.pagina = p;
+          for (const [id, r] of K.leesAlles(m)) {
+            const heeft = m.mapping.kies(r.sig, { shift: false }) || m.mapping.kies(r.sig, { shift: true });
+            if (!heeft) continue;
+            regels++;
+            if (!r.tekst || leeg.test(r.tekst) || r.vrij) zonderUitleg.push(`${d.label}/${pm.id}/${p}/${id}`);
+          }
+        }
+      }
+    }
+    ok(`${naam}: Maschine, geen lege uitleg waar een regel staat (${regels} plekken)`, regels > 0 && zonderUitleg.length === 0);
+    if (zonderUitleg.length) console.log('      ', zonderUitleg.slice(0, 8).join(', '));
+    // APC: elke regel in elk deel heeft een uitleg.
+    const apcMapping = new Mapping({ read: () => null, invoke: () => {} });
+    apcMapping.laadStandaard(apcDoc);
+    const af = SB.zetFragmenten(apcMapping, v, 'apc40mk2');
+    const afM = SB.zetApcMapjes(v);
+    const apcLeeg = [];
+    for (const d of SB.delenVan(v)) for (const r of SB.apcRijen(apcMapping, SB.apcStandVan(v, d.naam), beschrijf)) if (!r.tekst || r.tekst.startsWith('?') || / mapje [a-z]+: {2}/.test(r.tekst + (r.shift ?? ''))) apcLeeg.push(`${d.label} ${r.knop}`);
+    af(); afM();
+    ok(`${naam}: APC, elke regel in elk deel een uitleg`, apcLeeg.length === 0);
+    if (apcLeeg.length) console.log('      ', apcLeeg.slice(0, 8).join(', '));
+    const vers = new Mapping({ read: () => null, invoke: () => {} });
+    vers.laadStandaard(apcDoc);
+    ok(`${naam}: na het bekijken staat de APC-mapping weer zoals hij was`, apcMapping.extra.size === 0 && apcMapping.rules.size === vers.rules.size);
+  }
+  // In voorbeeldmodus: het deel zet de mapjes van de Maschine, de deellabels staan erop, er gaat niets naar de bus.
+  const v = await SB.laadVoorbeeld('twee-handen', haal);
+  const voor = gestuurd.length;
+  const fx = K.maakVoorbeeldMaschine({ doc, v, deel: 'fx', beschrijf });
+  ok('voorbeeld FX: padmodus worpen, pagina rack, deellabels met FX actief', fx.modus === 'worpen' && fx.pagina === 'rack' && fx.delen.labels[fx.delen.actief] === 'FX');
+  ok('voorbeeld FX: pad 1 = worp plek 1 (kort op de kaart)', K.leesControl(fx, 'pad1').kort === 'worp fx 1' && !K.leesControl(fx, 'pad1').vrij);
+  ok('voorbeeld FX: pad 16 vrij (geen regel)', K.leesControl(fx, 'pad16').vrij);
+  fx.ontvang(parseMessage([0x90, 36, 100])); fx.ontvang(parseMessage([0x80, 36, 0]));
+  ok('de voorbeeld-Maschine stuurt niets (invoke doet niets)', gestuurd.length === voor);
+  const ul = K.maakVoorbeeldMaschine({ doc, v, deel: 'uitlijn', beschrijf });
+  ok('voorbeeld UITLIJN: pagina uitlijn, draaiknop 1 = fase', ul.pagina === 'uitlijn' && K.leesControl(ul, 'k1').kort === 'fase');
+  ok('perStand van pad 1: ook de padmodus uit het stuk', K.perStand(fx, 'pad1').some((r) => r.naam.startsWith('worpen') && /worp|plek 1/.test(r.tekst)));
+  ok('perStand van draaiknop 1: ook de pagina Uitlijn', K.perStand(ul, 'k1').some((r) => r.naam === 'Uitlijn' && /fase/.test(r.tekst)));
+  ok('zonder werkruimte: dezelfde padmodi en pagina\'s als vroeger', JSON.stringify(K.padmodiVan(zonder)) === JSON.stringify(K.PADMODI) && JSON.stringify(K.paginasVan(zonder)) === JSON.stringify(PAGINAS));
+
+  console.log('\nde spiekbrief (spiekbrief.html, src/ui/spiekbrief.js)');
+  const apcMapping = new Mapping({ read: () => null, invoke: () => {} });
+  apcMapping.laadStandaard(apcDoc);
+  for (const naam of ['standaard', 'apc-alleen', 'twee-handen']) {
+    const vv = await SB.laadVoorbeeld(naam, haal);
+    const paginas = SB.spiekbrief(vv, { apcMapping, maschineDoc: doc, maschine: K, beschrijf, maschineLabel: (s) => D.maschineMk2.label(s) });
+    const apps = SB.metMaschine(vv) ? 2 : 1;
+    const delen = SB.delenVan(vv).length;
+    ok(`${naam}: één pagina per apparaat × deel (${apps} × ${delen})`, paginas.length === apps * delen
+      && new Set(paginas.map((p) => `${p.apparaat}/${p.deel.naam}`)).size === paginas.length);
+    const zonderTekst = paginas.flatMap((p) => [...p.rijen, ...p.houd.flatMap((h) => h.rijen)].filter((r) => !r.tekst || !r.knop).map((r) => `${p.deel.label} ${r.knop}`));
+    ok(`${naam}: elke regel met tekst (${paginas.reduce((n, p) => n + p.rijen.length, 0)} regels)`, zonderTekst.length === 0 && paginas.every((p) => p.rijen.length > 0));
+    const html = SB.spiekHtml(paginas);
+    ok(`${naam}: de HTML heeft precies zoveel bladen, elk in de kleur van het deel`, (html.match(/<section class="blad"/g) ?? []).length === paginas.length && /--deel:#[0-9A-F]{6}/i.test(html));
+  }
+  const tw = SB.spiekbrief(await SB.laadVoorbeeld('twee-handen', haal), { apcMapping, maschineDoc: doc, maschine: K, beschrijf, maschineLabel: (s) => D.maschineMk2.label(s) });
+  ok('twee-handen: het Maschine-blad van FX noemt de worp op pad 1 en de houd-knoppen', tw.some((p) => p.apparaat === 'maschine-mk2' && p.deel.naam === 'fx'
+    && p.rijen.some((r) => r.knop === 'pad 1' && /plek 1/.test(r.tekst)) && p.houd.some((h) => h.naam === 'volume' && h.rijen.length === 16)));
+  ok('twee-handen: het APC-blad van UITLIJN noemt de fasemeter op device knob 2', tw.some((p) => p.apparaat === 'apc40mk2' && p.deel.naam === 'uitlijn'
+    && p.rijen.some((r) => r.sig === 'cc:0:17' && /fase/.test(r.tekst))));
+  ok('na de spiekbrief: de APC-mapping zonder fragmenten', apcMapping.extra.size === 0);
+  const sb = lees('../spiekbrief.html') + lees('../src/ui/spiekbrief.js');
+  ok('de spiekbrief vraagt geen MIDI en importeert de bus niet', !/requestMIDIAccess/.test(sb) && !/control\/actions\.js/.test(sb));
+  ok('de server laat spiekbrief.html door (witte lijst)', /spiekbrief\)\\\.html/.test(lees('../server/index.js')));
+  ok('apc-kaart en maschine-kaart hebben de kiezer werkruimte + deel', /werk-kies/.test(lees('../src/ui/apc-kaart.js')) && /werk-kies/.test(lees('../src/ui/maschine-kaart.js')));
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
