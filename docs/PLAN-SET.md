@@ -104,7 +104,9 @@ een gewone stap = "nu" (de eerstvolgende 4 maten, of de volgende sectiegrens).
   starten). Raakt Clay de track van een laag aan (wat dan ook), dan is de laag van hem: de automaat
   doet er niets meer mee, ook niet het dichtdraaien. Is de track van een laag in gebruik
   (speelt, of Clay deed er net iets), dan slaat de automaat de laag over, met een melding. Een laag
-  komt nooit op een track van de automaat.
+  komt nooit op een track van de automaat. **Laat dus een track van jou leeg** voor een laag "nummer":
+  een laag gaat nooit over iets dat er al staat (ook niet wat je vóór "auto aan" klaarzette); staan al
+  je tracks vol, dan slaat hij elke laag over, met een melding.
 
 **Buiten plan, en terug.** `plan.buiten`: de automaat laat alles los (een lopende overgang maakt
 hij af), zet niets meer klaar en kijkt alleen. Clay doet wat hij wil. `plan.terug`: wat er dan het

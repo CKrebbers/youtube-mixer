@@ -73,6 +73,10 @@ set klaar kunnen zetten waar je dan zelf nog onderdelen live moet bij kunnen mix
 
 ## 4. Alleen live te bevestigen
 
+- Een hele set met overnames in de echte browser: headless is alleen de start bewezen (stap 4 van
+  set-proef: eigen gestreamde tracks). Een hele set van 12 stappen met twee overnames draaide in
+  review ronde 3 op de mock met een getrouwe StreamBron-nabootsing (12/12, 0 tikken stil).
+
 - Een laag die met echte muziek op de maat invalt (sync + op de maat), en of 0,8 en 4 maten goed klinken (S9-2).
 - GO op de APC met het voorbeeldstuk.
 - Terugladen van een set met acht tracks met stems op de M1: hoe lang het duurt en of de StreamBron
