@@ -49,7 +49,7 @@ for (const e of S.S10_EFFECTEN) {
     gooit ? gooit.message : staat.NIET_EINDIG.slice(0, 2).map((x) => x.join(' ')).join('; '));
   const staarten = [];
   for (const stand of [0, 1, 0.5]) { for (const p of e.params) { staat.NOW += 0.37; inst.zet(p, stand, staat.NOW); } staarten.push(inst.staart()); }
-  ok(`${e.id}: staart eindig en begrensd (${staarten.map((s) => s.toFixed(3)).join(' / ')} s)`, staarten.every((s) => Number.isFinite(s) && s >= 0 && s <= 4.1));
+  ok(`${e.id}: staart eindig en begrensd (${staarten.map((s) => s.toFixed(3)).join(' / ')} s)`, staarten.every((s) => Number.isFinite(s) && s >= 0 && s <= 10.1));
   const comps = lussen(inst.in);
   ok(`${e.id}: lussen (${comps.length}) hebben elk een vertraging`, comps.every((c) => c.some((n) => n.soort === 'delay')));
   inst.vernietig?.();

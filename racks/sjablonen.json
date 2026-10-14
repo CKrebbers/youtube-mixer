@@ -1988,7 +1988,7 @@
         "lijm",
         "compressor"
       ],
-      "uitleg": "Voor de master: een rustige compressor (2:1, 30 ms) die de mix samenbindt, een kanteling en wat breedte. Knop 1 = hoeveel lijm (de drempel van −9 naar −24 dB), knop 2 = make-up. In de beginstand pakt hij alleen de pieken.",
+      "uitleg": "Voor de master: een rustige compressor (2:1, 30 ms) die de mix samenbindt, een kanteling en wat breedte. Knop 1 = hoeveel lijm (de drempel van −9 naar −24 dB), knop 2 = make-up (0 tot +6 dB). In de beginstand pakt hij alleen de pieken.",
       "chain": [
         {
           "slot": "a",
@@ -2035,7 +2035,7 @@
         {
           "place": 2,
           "label": "Make-up",
-          "default": 0.5,
+          "default": 0,
           "links": [
             {
               "target": "a.makeup",

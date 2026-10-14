@@ -98,10 +98,10 @@ const kam = {
         else if (naam === 'demping') { staat.demping = dempKam(t); if (w.node) doel(p('demping'), staat.demping, now); }
         else if (naam === 'meng') { staat.meng = t; if (staat.geladen) mengNaar(doel, t, droog, nat, now); }
       },
-      // Rondgangen tot −60 dB: (1/toon) · ln(0,001) / ln|fb|, hooguit 4 s.
+      // Rondgangen tot −60 dB: (1/toon) · ln(0,001) / ln|fb|, hooguit 10 s (30 Hz op 97%: 7,6 s).
       staart: () => {
         const f = Math.abs(staat.fb);
-        return f > 0.01 ? Math.min(4, (1 / staat.toon) * Math.log(0.001) / Math.log(f)) + 0.005 : 1 / staat.toon + 0.005;
+        return f > 0.01 ? Math.min(10, (1 / staat.toon) * Math.log(0.001) / Math.log(f)) + 0.005 : 1 / staat.toon + 0.005;
       },
       vernietig: () => w.stop(),
       _n: { w, droog, nat, staat },
@@ -128,8 +128,12 @@ export function formantVan(t, k) {
 export const klinkerNaam = (t) => KLINKERS[Math.round(clamp(t) * (KLINKERS.length - 1))].naam;
 export const qKlinker = (t) => expMap(t, 3, 20);
 export const schuifKlinker = (t) => expMap(t, 0.5, 2);
-/** Nat × √Q · 0,9 (hooguit ×4): drie smalle banden laten veel weg; gemeten in Chrome (EFFECTEN-MEER.md). */
-export const natKlinker = (q) => Math.min(4, Math.sqrt(q) * 0.9);
+/**
+ * Make-up: nat × 1,2·Q, hooguit ×8. Drie smalle banden laten op een vol nummer veel weg: met
+ * √Q · 0,9 was de klinker 10 (Q 3) tot 18 dB (Q 20) zachter dan droog (gemeten in Chrome, ruis +
+ * tonen). Prijs: een toon precies op een formant komt tot +18 dB boven zichzelf (de limiter vangt het).
+ */
+export const natKlinker = (q) => Math.min(8, 1.2 * q);
 
 const klinker = {
   id: 'klinker',
@@ -221,8 +225,8 @@ const freqschuif = {
         if (naam === 'schuif') { staat.hz = schuifHz(t); if (w.node) doel(w.node.parameters.get('hz'), staat.hz, now); }
         else if (naam === 'meng') { staat.meng = t; if (staat.geladen) mengNaar(doel, t, droog, nat, now); }
       },
-      // Allpass-ketens: een paar ms naklinken.
-      staart: () => 0.01,
+      // De traagste allpass-trap (a² = 0,9975 in z⁻²) klinkt na tot −60 dB in ~11 000 samples (0,23 s).
+      staart: () => 0.25,
       vernietig: () => w.stop(),
       _n: { w, droog, nat, staat },
     });

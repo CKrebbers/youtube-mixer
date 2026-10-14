@@ -138,6 +138,11 @@ export class Kam {
     this.d = sr / 220;          // huidige vertraging in samples (glijdt)
     this.zL = 0; this.zR = 0;   // toestand van de demping
     this._g = 1 - Math.exp(-1 / (sr * KAM_GLIJ));
+    // Feedback en demping glijden per SAMPLE (10 ms): de parameters komen per blok van 128
+    // binnen, en een sprong in de lusversterking midden in een resonantie is een tik
+    // (gemeten in Chrome: ×781 op de tweede afgeleide bij feedback +68% → −97%).
+    this._gp = 1 - Math.exp(-1 / (sr * 0.01));
+    this._fbS = 0.5; this._aS = -1;
     this._dVoor = -1; this._a = 1;
   }
 
@@ -147,12 +152,15 @@ export class Kam {
     let doel = this.sr / (this.toon > 1 ? this.toon : 1);
     if (doel < 2) doel = 2; else if (doel > max) doel = max;
     if (this.demping !== this._dVoor) { this._dVoor = this.demping; this._a = 1 - Math.exp(-2 * Math.PI * Math.min(this.demping, this.sr * 0.45) / this.sr); }
-    const a = this._a, g = this._g;
-    const fb = this.fb > 0.97 ? 0.97 : this.fb < -0.97 ? -0.97 : this.fb;
-    const inG = Math.sqrt(1 - fb * fb);
-    let w = this.w, d = this.d, zL = this.zL, zR = this.zR;
+    const aDoel = this._a, g = this._g, gp = this._gp;
+    const fbDoel = this.fb > 0.97 ? 0.97 : this.fb < -0.97 ? -0.97 : this.fb;
+    if (this._aS < 0) this._aS = aDoel;
+    let w = this.w, d = this.d, zL = this.zL, zR = this.zR, fb = this._fbS, a = this._aS;
     for (let i = 0; i < n; i++) {
       d += (doel - d) * g;
+      fb += (fbDoel - fb) * gp;
+      a += (aDoel - a) * gp;
+      const inG = Math.sqrt(1 - fb * fb);
       let p = w - d;
       if (p < 0) p += N;
       const i0 = p | 0;
@@ -173,7 +181,7 @@ export class Kam {
     // Onder het hoorbare: nul (geen denormale getallen in de lus).
     this.zL = zL < 1e-20 && zL > -1e-20 ? 0 : zL;
     this.zR = zR < 1e-20 && zR > -1e-20 ? 0 : zR;
-    this.w = w; this.d = d;
+    this.w = w; this.d = d; this._fbS = fb; this._aS = a;
   }
 }
 
