@@ -32,7 +32,7 @@ export default async function opzet(ctx) {
     o.start().then((v) => (v?.fouten || []).forEach((f) => console.warn('[toetsen]', f)))
       .catch((err) => ctx.meld?.(`toetsen: niet geladen (${err.message})`, 'fout'));
     // Actions die latere aanhakers definiëren bestaan pas daarna (zoals app.js voor de andere mappings).
-    Promise.resolve(globalThis.aanhakers).then(() => kb.mapping.weigerAlleenScherm?.()).catch(() => {});
+    setTimeout(() => Promise.resolve(globalThis.aanhakers).then(() => kb.mapping.weigerAlleenScherm?.()).catch(() => {}), 0);
   }
 
   // ---- de apparaatkiezer in het koppelpaneel en de koppelmodus ------------------
@@ -48,4 +48,13 @@ export default async function opzet(ctx) {
   // Eén keuze voor beide: kies je in het paneel de Maschine, dan koppelt ook de koppelmodus daar.
   paneel.onApparaat = (naam) => modus.kiesApparaat(naam);
   modus.onApparaat = (naam) => paneel.kiesApparaat(naam);
+  // Het paneel dicht (knop "lijst", MIDI-knop of ×): midi-opzet.js stopt dan alleen het
+  // leren van de APC. Ook dat van het gekozen apparaat stoppen, anders koppelt de volgende
+  // toets of knop stil. Na hun eigen klik-afhandeling (deze luisteraar komt later).
+  const midiPaneel = globalThis.document?.getElementById('midi-panel');
+  const dicht = () => midiPaneel?.classList.contains('hidden') || paneel.root?.classList.contains('hidden');
+  globalThis.document?.addEventListener('click', (e) => {
+    if (!e.target?.closest?.('.mon-map-knop, .mon-close, #midi-btn')) return;
+    if (dicht() && !modus.actief && paneel.learn.busy) paneel.learn.stop();
+  });
 }

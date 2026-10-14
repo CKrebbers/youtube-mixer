@@ -63,9 +63,8 @@ export function opzetInstrument({ engine, midi, lagen }) {
   const learn = new MidiLearn({ mapping: noten.mapping, device: KEYBOARD_APPARAAT });
   vangLeren(noten, 'ontvang', learn, { magLeren: (msg) => keyboardMagLeren(noten, msg) });
   const opslag = (() => { try { return window.localStorage; } catch (_) { return null; } })();
-  opzetMappingOpslag({ mapping: noten.mapping, apparaat: 'xboard49', learn, haal: (...a) => fetch(...a), opslag, meld })
-    .start()
-    .catch((err) => meld(`instrument: de knoppen van het keyboard (mappings/xboard49.json) niet geladen (${err.message})`, 'fout'));
+  // start() gooit niet: een fout meldt de opslag zelf (met "xboard49" erbij), en de standaard staat erop.
+  opzetMappingOpslag({ mapping: noten.mapping, apparaat: 'xboard49', learn, haal: (...a) => fetch(...a), opslag, meld }).start();
   if (midi) noten.hoorHub(midi);
   let laatsteGeen = 0;
   noten.on('geen', () => {

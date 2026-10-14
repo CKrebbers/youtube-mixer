@@ -137,6 +137,14 @@ console.log('\nkoppelen met een toets');
   druk('KeyQ', { target: { matches: () => true } });
   ok('tijdens typen wordt er ook niet gekoppeld', kb.learn.busy);
   kb.learn.stop();
+  // Lang vasthouden tijdens het koppelen: het OS stuurt herhaalde keydowns. Die doen niets,
+  // en de toets blijft daarna gewoon werken (geen druk zonder los, review ronde 1).
+  log.length = 0;
+  kb.learn.start('track.1.hotcue.1');
+  druk('KeyJ'); druk('KeyJ', { repeat: true }); druk('KeyJ', { repeat: true }); druk('KeyJ', {}, 'keyup');
+  ok('koppelen en lang vasthouden: de herhaalde keydowns en het loslaten doen niets', log.length === 0 && kb.mapping.rules.get(toetsSig('KeyJ'))?.action === 'track.1.hotcue.1');
+  tik('KeyJ');
+  ok('… en de volgende druk is een gewone druk met los', log.join() === 'track.1.hotcue.1=true,track.1.hotcue.1=false');
 }
 
 console.log('\njouw toetsen als verschil (/api/mapping/toetsen)');

@@ -1099,6 +1099,23 @@ met een eigen verschil op de server (punt 6, VISIE §5.3), en de hardwareproef v
 - De ijkproef draait headless tegen de nep-Maschine van `speelapparaten.mjs` en geeft voor elke
   control "klopt".
 
+**Gebouwd (14 okt, tak `werk/S5`, `docs/werkruimte/S5.md`).** Wat anders werd dan hierboven:
+- `src/control/maschine.js` is niet aangeraakt: de opslag laadt standaard + verschil in
+  `maschine.mapping` zelf, en het leren hangt vóór `maschine.ontvang` (`vangLeren` in
+  `midi-learn.js`). Het bestand blijft helemaal van S6.
+- Signature van een toets: `key:0:<HID-gebruikscode>` (A = 4 … § = 100) met de toets als label,
+  niet `key:<code>`: `mapping.js` (S4) neemt alleen `type:kanaal:nummer` aan.
+- Niet te koppelen op de Maschine (melding): pads, wiel, ENTER, CONTROL, SHIFT, ◄ ► (pagina en
+  transport), STEP, SCENE, SAMPLING, PATTERN — die handelt `maschine.js` af vóór de mapping.
+- De Xboard-plek geldt voor elk MIDI-keyboard (`noten.js` heeft één mapping voor alle poorten
+  behalve de APC).
+- De server weigert een document voor een ander apparaat (400) op `/api/mapping/<apparaat>`.
+- Erbij: `tools/proef/maschine-ijk.mjs` (headless runner, ook koppelen in de echte mixer), en
+  `test/aanhaakpunten.test.mjs`: "de routebestanden zijn leeg" werd "elke route onder /api/, geen
+  witte-lijstregel die data openzet" (een gevulde stub kon nooit meer groen zijn).
+- `tools/proef/` valt onder `proef/` in `.gitignore` (de datamap): met `git add -f` toegevoegd;
+  `.gitignore` hoort `/proef/` te zeggen (S3).
+
 ---
 
 #### S6 — Maschine-delen en de kaarten (golf 3)

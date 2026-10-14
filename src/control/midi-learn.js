@@ -122,8 +122,8 @@ export class MidiLearn extends Emitter {
  * BERICHT (koppelen, maar dát bericht leren: zo leert een keyboard zijn schuif, die
  * als SysEx binnenkomt, onder de signature die zijn mapping kent), of een tekst:
  * deze control kan hier niet gekoppeld worden (de reden). Dan gaat het
- * bericht gewoon door en meldt learn 'niet' met { sig, reden }, één keer per
- * indrukken.
+ * bericht gewoon door en meldt learn 'niet' met { sig, reden }: per indrukken,
+ * en voor een draaiknop of wiel één keer per leerbeurt.
  *
  * Elke regel die zo ontstaat komt in `learn.mapping`, de Mapping van DAT apparaat:
  * een Maschine-knop kan nooit in de APC-mapping belanden.
@@ -133,6 +133,9 @@ export class MidiLearn extends Emitter {
 export function vangLeren(doel, methode, learn, { magLeren = () => true } = {}) {
   const echt = doel[methode];
   const geslikt = new Set();
+  let gemeld = null;   // de control die al 'niet' meldde in deze leerbeurt (een CC stuurt er veel)
+  // Een nieuwe leerbeurt: wat nog geslikt stond (de verbinding viel weg vóór het loslaten) telt niet meer.
+  learn.on('armed', () => { geslikt.clear(); gemeld = null; });
   const vang = function (msg, ...rest) {
     if (msg && msg.type === 'note' && !msg.on && geslikt.delete(msg.sig)) return true;
     // Gaat dezelfde knop intussen gewoon door (het loslaten van het koppelen kwam nooit,
@@ -145,7 +148,13 @@ export function vangLeren(doel, methode, learn, { magLeren = () => true } = {}) 
         if (msg.type === 'note' && msg.on) geslikt.add(msg.sig);
         return true;
       }
-      if (typeof mag === 'string' && ((msg.type === 'note' && msg.on) || (msg.type === 'cc' && msg.value))) learn.emit('niet', { sig: msg.sig, reden: mag });
+      // Eén melding per control per leerbeurt (een noot opnieuw indrukken meldt opnieuw):
+      // geen schermwerk per MIDI-bericht van een draaiend wiel.
+      const druk = msg.type === 'note' && msg.on;
+      if (typeof mag === 'string' && (druk || (msg.type === 'cc' && msg.value)) && (druk || gemeld !== msg.sig)) {
+        gemeld = msg.sig;
+        learn.emit('niet', { sig: msg.sig, reden: mag });
+      }
     }
     return echt.call(doel, msg, ...rest);
   };

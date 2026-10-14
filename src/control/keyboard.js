@@ -262,6 +262,8 @@ export function attachKeyboard(engine, opts = {}) {
       geslikt.add(e.code);
       return;
     }
+    // Net gekoppeld en nog vast (auto-repeat): niets doen, zijn keyup gaat ook nergens heen.
+    if (geslikt.has(e.code)) { e.preventDefault(); return; }
     const regel = mapping.kies(sig, { shift: e.shiftKey });
     // Een toets is een knop: alleen trigger-regels (een fader op een toets betekent niets).
     if (!regel || (regel.mode && regel.mode !== 'trigger')) return;

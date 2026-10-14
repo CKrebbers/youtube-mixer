@@ -44,8 +44,7 @@ export function opzetSpeelapparaten({ engine, midi, noten, library = null }) {
     import('../control/devices/maschine-mk2.js').then((p) => { profiel = p; }).catch(() => {});
     vangLeren(maschine, 'ontvang', learn, { magLeren: (msg) => (profiel ? maschineMagLeren(maschine, learn, msg, profiel) : false) });
     opzetMappingOpslag({ mapping: maschine.mapping, apparaat: 'maschine-mk2', learn, haal: (...a) => fetch(...a), opslag: browserOpslag(), meld })
-      .start()
-      .catch((err) => meld(`Maschine: de indeling (mappings/maschine-mk2.json) niet geladen (${err.message})`, 'fout'));
+      .start();   // gooit niet: een fout meldt de opslag zelf (met "maschine-mk2" erbij)
     maschine.koppel(ms);
     setInterval(() => { try { maschine.tik(); } catch (err) { console.warn('[maschine]', err); } }, TIK_MS);
     globalThis.addEventListener?.('pagehide', () => maschine.stop());   // geen wektik meer bij het sluiten

@@ -233,6 +233,10 @@ try {
     && toetsen.rules[0].in === 'key:0:59' && toetsen.rules[0].action === 'track.3.focus', JSON.stringify(toetsen?.rules));
   await page.keyboard.press('F2');
   ok('F2 doet nu wat je koppelde: focus op track 3', await tot(() => page.evaluate(() => window.engine.focus === 'C')));
+  // Paneel dicht terwijl het leren op de toetsen aan staat: dat leren stopt ook (niet alleen dat van de APC).
+  await page.click('button[data-doe="leer"][data-action="track.3.focus"]');
+  await page.click('.mon-map-knop');
+  ok('paneel dicht tijdens leren op de toetsen: het leren stopt, Q is daarna gewoon play', await page.evaluate(() => !window.mapPanel.learn.busy));
   ok('de APC aan het eind byte voor byte wat hij was', (await api('/api/mapping')).tekst === apcVoor);
   ok('de mixer riep nooit requestMIDIAccess aan, geen paginafouten', (await page.evaluate(() => window.__midi)) === 0 && fouten.length === 0, fouten.join(' | '));
   await page.close();
