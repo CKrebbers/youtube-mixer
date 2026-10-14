@@ -510,6 +510,22 @@ try {
     ok('… daarna niet meer: wat je zelf koos wint weer', kiesStart({ stand: { naam: 'apc-alleen', sinds: '2026-10-14T10:00:00Z' }, lees: l }).naam === 'twee-handen');
   }
 
+  console.log('\neen stuk dat er al als proef op stond (?uitlijn=1, ?stukken=; samenvoegen golf 2)');
+  {
+    // Zoals S1's aanhaker (zetStukOp) het doet: eerst standaard, dan het stuk uitlijn zelf erop.
+    await werk.kies('standaard');
+    const { zetStukOp } = await import('../src/ui/aanhakers/precisie.js');
+    zetStukOp(mapping, await haalStuk('uitlijn'));
+    ok('proef: device.uitlijn en stuk:uitlijn staan er', !!GROEPEN.device.knoppen.uitlijn && mapping.extra.has('stuk:uitlijn'));
+    meldingen.length = 0;
+    await werk.kies('apc-alleen');
+    const fout = werk.waarschuwingen.find((x) => /bestaat al/.test(x));
+    ok('apc-alleen neemt het over: geen "bestaat al", het mapje en de regels van uitlijn zijn er', !fout && !!GROEPEN.device.knoppen.uitlijn
+      && [...mapping.rules.values()].some((r) => r.laag === 'device.uitlijn') && !meldingen.some((m) => m.soort === 'fout'));
+    await werk.kies('standaard');
+    ok('… en terug naar standaard: weg (de proef ook)', !GROEPEN.device.knoppen.uitlijn && !mapping.extra.has('stuk:uitlijn'));
+  }
+
   console.log('\nwerk.kies en terug naar standaard');
   bus.invoke('werk.kies', 0);
   await microtaak(); await microtaak(); await microtaak();

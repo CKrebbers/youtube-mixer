@@ -1,6 +1,6 @@
 import { Emitter } from '../lib/emitter.js';
 import { normaliseerWerkruimte, samenstellen, mapjesVanDeel, delenLijst, telNieuwePlekken, bekendUitGroepen,
-  DEEL_GROEPEN, STANDAARD, naamGeldig } from './model.js';
+  DEEL_GROEPEN, STANDAARD, naamGeldig, leesMapjeSleutel } from './model.js';
 import { apparaat, apparaten, aanwezigVan, bijApparaten } from './apparaten.js';
 import { GROEPEN, voegMapjeToe, haalMapjeWeg, zetVolgorde } from '../control/lagen.js';
 
@@ -159,6 +159,7 @@ export class Werkruimte extends Emitter {
     const nietGebruikt = [];
     this._stil(() => {
       this._ruimOp();
+      this._neemProefStukkenOver(ruw, stukken);
       const bekend = bekendUitGroepen(GROEPEN);
       ({ werkruimte, fouten, waarschuwingen } = normaliseerWerkruimte(ruw, { standaarden: this.standaarden, stukken, bekend }));
       w = werkruimte ?? normaliseerWerkruimte(STANDAARD).werkruimte;
@@ -238,6 +239,29 @@ export class Werkruimte extends Emitter {
     let f = fn;
     for (const [, a] of apparaten()) if (typeof a.stil === 'function') { const binnen = f; f = () => a.stil(binnen); }
     return f();
+  }
+
+  /**
+   * Een stuk dat deze werkruimte noemt, kan er al op staan als PROEF van één pagina: S1's
+   * ?uitlijn=1 (onthouden in localStorage) of S4's ?stukken=. Dan neemt de werkruimte het over:
+   * eerst dat fragment en de nieuwe mapjes van dat stuk weg, anders zegt samenstellen
+   * "het mapje device.uitlijn bestaat al" en doet het stuk niets (samenvoegen golf 2).
+   */
+  _neemProefStukkenOver(ruw, stukken) {
+    const map = apparaat('apc40mk2')?.mapping ?? this.mapping;
+    const namen = Array.isArray(ruw?.stukken) ? ruw.stukken : [];
+    let iets = false;
+    for (const naam of namen) {
+      const bron = `stuk:${naam}`;
+      if (typeof naam !== 'string' || !map?.extra?.has?.(bron)) continue;
+      map.haalWeg(bron);
+      for (const k of Object.keys(stukken?.[naam]?.mapjes?.nieuw ?? {})) {
+        const m = leesMapjeSleutel(k);
+        if (m && m.apparaat === 'apc40mk2') haalMapjeWeg(m.groep, m.laag);
+      }
+      iets = true;
+    }
+    if (iets) this.herbind();
   }
 
   /** Alles van de vorige werkruimte weg: fragmenten, mapjes, volgorde (de standaard blijft). */

@@ -59,6 +59,8 @@ export default async function opzet(ctx) {
   };
   const gevraagd = (new URLSearchParams(location.search).get('stukken') || '').split(',').map((s) => s.trim()).filter(Boolean);
   for (const naam of gevraagd) {
+    // Staat het stuk er al (de werkruimte noemt het, S3), dan niet nog eens: zijn mapje "bestaat al".
+    if (ctx.mapping?.extra?.has?.(`stuk:${naam}`)) { meld(`stuk ${naam}: staat er al (uit de werkruimte)`, 'info'); continue; }
     try { const u = await stuk(naam); meld(`stuk ${naam}: ${u.aantal} regels erbij (alleen deze pagina)`, 'info'); }
     catch (err) { meld(err.message, 'fout'); }
   }
