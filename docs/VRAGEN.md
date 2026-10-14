@@ -660,9 +660,11 @@ grenzen, fase `auto`, Tailscale serve, stap 7a, stap 8/9, de LPD8.
   waar jij de laatste 2 minuten iets aan deed. Is 2 minuten goed, of liever een vaste verdeling als
   standaard (bv. 1–2 voor de automaat, 3–8 voor jou)? **Advies:** zet het per plan (veld "tracks
   auto"); 2 minuten is de vangrail.
-- [ ] **S9-4 💬 GO vanaf de iPad.** `plan.*` en `set.terugladen` mogen van buiten de Mac als je ze
-  in `mag` van dat scherm zet; `set.bewaar` nooit. `auto.*` staat in VAST_NOOIT (laadt). Is dat de
-  goede grens, of moet GO ook nooit van buiten (net als laden)?
+- [ ] **S9-4 💬 GO en terugladen vanaf de iPad.** `plan.*` (GO, buiten/terug, lagen) en een set
+  KIEZEN mogen van buiten de Mac als je ze in `mag` van dat scherm zet; `set.bewaar` en
+  `set.terugladen` nooit (terugladen laadt nummers en kiest een werkruimte, net als wat VAST_NOOIT al
+  verbiedt). Wil je terugladen toch vanaf de iPad (met de tweede druk)? En moet GO, dat de automaat
+  laat laden, juist ook nooit van buiten?
 - [ ] **S9-5 💬 Wat zit er in een set.** Plan en patronen als kopie, de werkruimte op naam, de mixer
   alleen met "met mixer". Moet de werkruimte ook als kopie mee (dan is een set helemaal draagbaar,
   maar een latere aanpassing van je werkruimte zit niet in oude sets)?

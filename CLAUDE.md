@@ -1985,8 +1985,12 @@ Volledig in `docs/PLAN-SET.md`. Wat een bouwer niet mag missen:
   nieuwe plek die een track kiest: `_mijn()` en `_vanClay()`.
 - GO heeft een uiterste moment (`_goUiterst`): nooit stilte gaat voor GO. Lagen kijken naar de
   POSITIE van de hoofdtrack (regel 3); Clay die de track van een laag aanraakt = de laag is van hem.
-- `plan.*` en `set.*` hebben `log: 'overslaan'` en `beginstand: false`; `set.bewaar*` staat in
-  VAST_NOOIT (src/werk/model.js). De rest mag van de iPad alleen als `mag` het noemt.
+- `plan.*` en `set.*` hebben `log: 'overslaan'` en `beginstand: false`; `set.bewaar*` en
+  `set.terugladen*` staan in VAST_NOOIT (src/werk/model.js). De rest mag van de iPad alleen als `mag`
+  het noemt.
+- Laden gaat niet over de bus: de automaat ziet wat Clay laadde aan een ANDER nummer op het deck
+  (`_kijkLaden`, elke tik); zelf laden gaat via `_laadZelf`. Een laag rekent op de positie van zijn
+  eigen track en loopt mee over een stapwissel; zonder zeker grid start hij niet vanzelf.
 - Een SET (`src/sets/model.js`, puur, ook de server): plan en patronen als KOPIE, werkruimte op
   NAAM, momentopname = `leesStand()` met speelt/wacht/pads/patronen UIT. `sets/<naam>.json` (niet in
   git, `VARVE_SETS`), versie + 409 + `.versies`, elke fs-operatie via `beperkt` (server/sets.js).
