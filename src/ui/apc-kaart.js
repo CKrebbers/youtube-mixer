@@ -255,10 +255,14 @@ function zetDeel(deelNaam) {
   alles();
 }
 
+let keuze = 0;                // twee snelle keuzes: alleen de laatste telt (review ronde 1)
 async function kiesVoorbeeld(naam, deelKies) {
+  const nr = ++keuze;
+  const v = naam ? await laadVoorbeeld(naam, haalJson) : null;
+  if (nr !== keuze) return;
   weg();
   weg = () => {};
-  voorbeeld = naam ? await laadVoorbeeld(naam, haalJson) : null;
+  voorbeeld = v;
   if (voorbeeld) {
     const af = zetFragmenten(mapping, voorbeeld, 'apc40mk2');
     const afMapjes = zetApcMapjes(voorbeeld);

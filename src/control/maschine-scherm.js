@@ -412,7 +412,7 @@ export function tekenScherm(stand, nr) {
   // ---- uitleg (CONTROL vast): gaat voor alles, ook voor de deelnamen ----
   if (s.uitleg) return tekenUitleg(leegScherm(), s, nr);
   const buf = tekenInhoud(s, nr);
-  return s.delen ? metDeelLabels(buf, s.delen, nr) : buf;
+  return s.delen ? metDeelLabels(buf, s.delen, nr, s.melding) : buf;
 }
 
 /** Hoe hoog de regel met de deelnamen is (een letter + een pixel erboven en eronder). */
@@ -443,11 +443,18 @@ export function tekenDeelLabels(delen, actief, { nr = 0, buf = leegScherm() } = 
   return buf;
 }
 
-/** De inhoud 9 px omlaag (de onderste 9 rijen vallen weg) en de deelnamen erboven. */
-function metDeelLabels(buf, delen, nr) {
+/**
+ * De inhoud 9 px omlaag (de onderste 9 rijen vallen weg) en de deelnamen erboven. Een melding
+ * ("T1 speelt: druk nog eens") stond in die onderste rijen: dan staat ze zolang in plaats van de
+ * deelnamen, omgekeerd (review ronde 1: anders zag je de vraag om een tweede druk niet).
+ */
+function metDeelLabels(buf, delen, nr, melding = null) {
   const uit = leegScherm();
   uit.set(buf.subarray(0, 32 * (HOOG - LABEL_H)), 32 * LABEL_H);
-  return tekenDeelLabels(delen.labels, delen.actief ?? -1, { nr, buf: uit });
+  if (!melding) return tekenDeelLabels(delen.labels, delen.actief ?? -1, { nr, buf: uit });
+  vul(uit, 0, 0, BREED, LABEL_H - 1);
+  tekst(uit, 2, 1, pasIn(melding, REGEL), 1, true);
+  return uit;
 }
 
 /** Zo breed is de fasescoop: ± BEREIK_MS over de hele breedte (4 px per ms). */

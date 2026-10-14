@@ -22,13 +22,14 @@ export default async function opzet(ctx) {
   const engine = ctx.engine;
 
   // ---- de fasescoop en de getallen van de focus-track -------------------------------------------
-  maschine.uitlijn = (id) => {
+  maschine.uitlijn = (id, wat = { vouw: true, getallen: true }) => {
     if (!engine || !id) return null;
     const invoer = R.invoerVanEngine(engine);
     const as = R.maakAs(invoer);
     const baan = invoer.decks.find((d) => d.id === id);
     if (!as || !baan) return null;
-    return { vouw: R.vouw(baan, as), getallen: R.getallen(baan, as) };
+    // De getallen ook voor de kop van de fasescoop (bpm), maar muziek Δ alleen als het getallen-scherm hem toont.
+    return { vouw: wat.vouw ? R.vouw(baan, as) : null, getallen: R.getallen(baan, as, { muziek: !!wat.getallen }) };
   };
 
   // ---- de adapter -------------------------------------------------------------------------------

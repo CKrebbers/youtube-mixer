@@ -280,5 +280,27 @@ console.log('\nde schermen: deelnamen, fasescoop, getallen');
   ok('een kapotte uitlijn-functie legt het scherm niet stil', m.stand().uitlijn.vouw === null);
 }
 
+console.log('\nreview ronde 1');
+{
+  const { m } = maak({ stukken: [DELEN] });
+  const a = maakMaschineAdapter(m);
+  a.zetMapjes({ pads: 'worpen', pagina: 'uitlijn', wiel: 'jog' });
+  m.mapping.haalWeg('stuk:maschine-delen');
+  ok('mapjes() na een weggehaald stuk: spelen, Instrument, het oude wiel', JSON.stringify(a.mapjes()) === JSON.stringify({ pads: 'spelen', pagina: 'instrument', wiel: 'instrument', scherm: null }));
+  m.mapping.vervangFragment('stuk:x', { device: 'maschine-mk2', version: 3, rules: [{ in: 'note:1:22', action: 'layer.pads.stap', mode: 'trigger' }] });
+  ok('een kiesknop layer.pads.stap = STEP (geen dode padmodus "stap")', m.padmodi().length === 0 && (m.ontvang(knop('noteRepeat')), m.modus === 'stappen'));
+  ok('… zijn lampje leest de stand', m.mapping.read('layer.pads.stap') === 1 && m.mapping.read('layer.pads.secties') === 0);
+  m.ontvang(knop('noteRepeat', false));
+  const st = { speel: null, focus: { nr: 1, wat: 'leeg' }, knoppen: [], modus: 'spelen', pagina: 'instrument', delen: { labels: ['MIX', 'FX'], actief: 0 } };
+  const zonder = S.tekenScherm(st, 1), met = S.tekenScherm({ ...st, melding: 'T1 speelt: druk nog eens' }, 1);
+  let rij = 0; for (let x = 0; x < 256; x++) rij += S.leesPixel(met, x, 0) ? 1 : 0;
+  ok('in een werkruimte: een melding staat bovenaan (omgekeerd) in plaats van de deelnamen', rij > 200 && !zonder.every((b, i) => b === met[i]));
+  m.scherm = ['fasescoop'];
+  let gevraagd = null;
+  m.uitlijn = (id, wat) => { gevraagd = wat; return { vouw: { punten: [] }, getallen: { bpm: 124, grid: 3 } }; };
+  const s1 = m.stand();
+  ok('alleen een fasescoop: geen getallen in de stand (behalve bpm), de vraag zegt het', gevraagd.vouw && !gevraagd.getallen && s1.uitlijn.getallen.grid === undefined && s1.uitlijn.getallen.bpm === 124);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT:\n  ${fails.join('\n  ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

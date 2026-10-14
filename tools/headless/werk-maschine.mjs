@@ -410,9 +410,9 @@ try {
   // De hub zegt een lease-app niet dat ÉÉN speelapparaat wegviel (PROTOCOL §17: alleen de cockpit
   // ziet beeld.apparaten); de nep-poort in VARVE wordt pas 'disconnected' als de hubverbinding wegvalt.
   // Daarom zetten we hem hier zoals hub.js zou doen als de hub het meldde (_poorten): state + onstatechange.
-  console.log(`      na uittrekken: de nep-poort in VARVE staat op "${merkt}" (de hub meldt het niet per apparaat; zie S6.md)`);
+  console.log(`      na uittrekken: de nep-poort in VARVE staat op "${merkt}": de hub meldt het niet per apparaat, dus met de echte hub gebeurt er NIETS (docs/werkruimte/S6.md §6). Hieronder GESIMULEERD.`);
   await doe(() => { const p = window.midi.speelPoort('maschine-mk2'); for (const x of [p.in, p.uit]) { x.state = 'disconnected'; x.connection = 'closed'; x.onstatechange?.({ port: x }); } });
-  ok('werkruimte apc-alleen (terugval)', await tot(() => doe(() => window.werk.naam === 'apc-alleen' && window.werk.terug?.naam === 'twee-handen'), 5000),
+  ok('GESIMULEERD (poort met de hand disconnected): werkruimte apc-alleen (terugval)', await tot(() => doe(() => window.werk.naam === 'apc-alleen' && window.werk.terug?.naam === 'twee-handen'), 5000),
     await doe(() => window.werk.naam));
   await wacht(500);
   const meldingen = (await doe(() => window.__meld)).slice(meldVoor);

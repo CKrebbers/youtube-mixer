@@ -312,13 +312,14 @@ export class Maschine extends Emitter {
     const bij = { pads, pagina: paginas, wiel: wielen };
     for (const r of this.mapping.rules.values()) {
       sigs.add(r.in);
+      // De namen uit het werkruimtebestand (stap, secties …) zijn de padmodi van code, geen nieuwe.
       const [g, n] = typeof r.laag === 'string' ? r.laag.split('.') : [];
       if (bij[g] && n) bij[g].add(n);
       const k = /^layer\.(pads|pagina|wiel)\.([a-z0-9-]+)$/.exec(r.action);
       if (k) bij[k[1]].add(k[2]);
     }
     const ledKnoppen = KNOPPEN.filter((naam) => !CODE_LAMPJES.has(naam) && sigs.has(knopSig(naam)));
-    this._dataC = { v, pads: [...pads].filter((p) => !CODE_PADMODI.includes(p)), paginas: [...PAGINAS, ...[...paginas].filter((p) => !PAGINAS.includes(p))],
+    this._dataC = { v, pads: [...pads].filter((p) => !CODE_PADMODI.includes(p) && !WERK_PADMODUS[p]), paginas: [...PAGINAS, ...[...paginas].filter((p) => !PAGINAS.includes(p))],
       wielen: [...wielen], ledKnoppen };
     return this._dataC;
   }
@@ -347,7 +348,7 @@ export class Maschine extends Emitter {
   _leesLokaal(id, read) {
     const [, g, n] = id.split('.');
     if (g === 'houd' && n) return this.houd?.isOpen(n) ? 1 : 0;
-    if (g === 'pads') return this.isDataPad(n) ? (this.modus === n ? 1 : 0) : null;
+    if (g === 'pads') { const p = WERK_PADMODUS[n] ?? n; return CODE_PADMODI.includes(p) || this.isDataPad(p) ? (this.modus === p ? 1 : 0) : null; }
     if (g === 'pagina') return this.paginas().includes(n) ? (this.pagina === n ? 1 : 0) : null;
     if (g === 'wiel') return this._data().wielen.includes(n) ? (this.wiel === n ? 1 : 0) : null;
     return read(id);
@@ -359,7 +360,7 @@ export class Maschine extends Emitter {
     if (!k) return false;
     if (!v) return true;
     const [, g, n] = k;
-    if (g === 'pads') this.zetModus(this.modus === n ? 'spelen' : n);
+    if (g === 'pads') { const p = WERK_PADMODUS[n] ?? n; this.zetModus(this.modus === p ? 'spelen' : p); }
     else if (g === 'pagina') this.zetPagina(n);
     else this.wiel = this.wiel === n || !this._data().wielen.includes(n) ? null : n;
     return true;
@@ -1039,14 +1040,16 @@ export class Maschine extends Emitter {
    */
   _uitlijnStand() {
     let u = null;
-    try { u = this.uitlijn?.(this.engine.focus ?? null) ?? null; } catch (_) { u = null; }
+    // Alleen wat een scherm toont (review ronde 1): zonder getallen-scherm geen getallen (muziek Δ is duur).
+    const wat = { vouw: this.scherm.includes('fasescoop'), getallen: this.scherm.includes('getallen') };
+    try { u = this.uitlijn?.(this.engine.focus ?? null, wat) ?? null; } catch (_) { u = null; }
     if (!u) return { nr: trackVanDeck(this.engine.focus ?? null), vouw: null, getallen: null };
     const r4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 4) / 4 : null);
     const g = u.getallen;
     return {
       nr: trackVanDeck(this.engine.focus ?? null),
       vouw: u.vouw ? { bron: u.vouw.bron, punten: (u.vouw.punten ?? []).map((p) => ({ ms: r4(p.ms), k: p.k, tel: p.tel, wie: p.wie })) } : null,
-      getallen: g ? { bpm: g.bpm ? Math.round(g.bpm * 100) / 100 : null, grid: r4(g.grid), muziek: r4(g.muziek?.ms), drift: r4(g.drift), maat: g.maat ?? null,
+      getallen: g && !wat.getallen ? { bpm: g.bpm ? Math.round(g.bpm * 100) / 100 : null } : g ? { bpm: g.bpm ? Math.round(g.bpm * 100) / 100 : null, grid: r4(g.grid), muziek: r4(g.muziek?.ms), drift: r4(g.drift), maat: g.maat ?? null,
         maatgever: !!g.maatgever, afwijking: g.afwijking ? r4(g.afwijking.ms) : null, wacht: g.wacht ? Math.round(g.wacht.maten * 10) / 10 : null } : null,
     };
   }
@@ -1268,13 +1271,14 @@ export function maakMaschineAdapter(m, { naam = 'Maschine' } = {}) {
   return {
     naam, mapping: m.mapping,
     zetMapjes(def = {}) {
+      m._controleer();   // een padmodus/pagina/wiel van een weggehaald stuk telt niet meer (review ronde 1)
       const gezet = [], niet = [];
       for (const [g, w] of Object.entries(def ?? {})) (zetEen(g, w) ? gezet : niet).push(`${g}.${Array.isArray(w) ? w.join('+') : w}`);
       m.gedraaid = null;
       m.wek?.();
       return { gezet, niet };
     },
-    mapjes: () => ({ pads: werkNaam(m.modus), pagina: m.pagina, wiel: m.wiel ?? 'instrument', scherm: m.scherm ? [...m.scherm] : null }),
+    mapjes: () => (m._controleer(), { pads: werkNaam(m.modus), pagina: m.pagina, wiel: m.wiel ?? 'instrument', scherm: m.scherm ? [...m.scherm] : null }),
     standaard() {
       m.patroonVast = false;
       m.zetModus('spelen');
