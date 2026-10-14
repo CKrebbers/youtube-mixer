@@ -9,6 +9,96 @@ daarna in CLAUDE.md of ROADMAP.md.
 
 Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 👀 kijken · 💬 alleen een keuze
 
+Nieuwste blok (14 okt): **W, de werkruimte** (hieronder).
+
+---
+
+## W. De werkruimte (14 okt, docs/WERKRUIMTE.md, docs/werkruimte/S0–S8.md, tak werk/S8)
+
+Alle open vragen van de sporen S0–S8, ontdubbeld (bronnen: WERKRUIMTE.md E1, docs/verslagen/2026-10-14/werk-S0…S8.md
+en werk-golf2.md). Niets hiervan houdt de proef tegen: waar je niets zegt, geldt het advies (zo is het gebouwd).
+De proefavonden staan in de Controlekamer (blokken "Werkruimte · E0 … D").
+
+**Ontwerp**
+- [x] **W1. Mag de iPad de mixer bedienen?** 💬 Beantwoord 14 okt: ja ("per onderdeel van een mix anders"), plus een
+  xy-pad op de iPhone. Gebouwd in S8 (docs/werkruimte/S8.md): standaard uit, aanzetten in de Controlekamer, koppelen
+  met een code, alleen via Tailscale; opnemen, het log, mappings, werkruimtes, library en laden nooit.
+- [ ] **W2. Hoe staan de controllers op tafel?** 👀 Maschine links of rechts, links- of rechtshandig? Bepaalt alleen
+  welke houd-knoppen het makkelijkst samen gaan, niet de indeling. **Advies:** zeg het na proefavond C.
+- [ ] **W3. Effecten die de engine raken** (loop roll/beat repeat op NOTE REPEAT, reverse, effect per stem, extra bus,
+  vrije routing)? 🎧 Welk moment in een set mis je nu? **Advies:** niets bouwen zonder een concreet voorbeeld; noteer het
+  bij proefpunt E0 als je iets mist.
+- [ ] **W4. Op 1440×790 met een rij open krimpt het werkvak tot 9 px** (in feite weg; tools/headless/werkruimte.mjs, deel
+  FX met de MASTER-rij). 👀 Het werkvak geeft als eerste ruimte af, zodat faders en rijen heel blijven. Kiezen: zo laten ·
+  in dat deel de MASTER-rij niet openzetten (`schermen.hoofd.rijen`) · het werkvak ten koste van de rijen (dan scrollt
+  #rijen meer) · het werkvak naar mac-2. **Advies:** zo laten; zet wat je in FX op het werkvak wilt op mac-2 of de iPad.
+
+**Bedienen vanaf iPad en iPhone (S7, S8)**
+- [ ] **W5. Wat mag de iPad, wat de iPhone (`schermen.<s>.mag`)?** 💬 Het voorbeeld twee-handen: de iPad de bouwsteen fx,
+  mijn-mix en de video-worpen; de iPhone de xy-pad. **Advies:** begin daarmee, breid uit na avond D.
+- [ ] **W6. Tijdkritisch blijft uit?** 💬 Bend, play, cue, nudge, hotcues, loop in/out en tap weigert een scherm buiten de
+  Mac, tenzij `"tijdkritisch": true`. **Advies:** uit laten (A5: wifi en aanraking zijn tientallen ms).
+- [ ] **W7. De schakelaar na een herstart van de server weer uit?** 💬 Nu wel: aanzetten is een handeling, nooit een
+  overblijfsel. Gekoppelde apparaten blijven gekoppeld. **Advies:** zo laten.
+- [ ] **W8. De iPad: delen kiezen (`werk.deel.*`), maar nooit werkruimtes schrijven?** 💬 Zo is het (werk.kies, terug,
+  vastleggen staan in VAST_NOOIT). **Advies:** zo laten.
+- [ ] **W9. Standen (`PUT /api/standen`, `…/activeer`) ook alleen vanaf de Mac?** 💬 Nu kan de Controlekamer via Tailscale
+  een stand activeren. **Advies:** ja, alleen vanaf de Mac (een kleine wijziging in server/index.js, nog niet gedaan).
+- [ ] **W10. Vertraging op de echte iPhone.** 🎧 Headless (loopback, software-GL): POST -> mixer p50 13 ms, p99 38 ms; met
+  het tekenen van de pagina erbij p50 ~30 ms. **Advies:** meten op avond D (proefpunt wd-xy); voelt het traag, dan een
+  WebSocket in plaats van POST (volgende versie).
+- [ ] **W11. Twee vingers op één xy-pad?** 👀 Nu: één vinger per pad (twee pads = twee vingers). **Advies:** zo laten.
+- [ ] **W12. De positie op de iPad binnen 5 ms** is hier niet aan te tonen (de headless audioklok hapert). 🎧 **Advies:**
+  meten op avond D; haalt hij het niet, dan de eis p99 ≤ 5 ms maken.
+- [ ] **W13. Bouwstenen of eigen panelen?** 💬 **Advies:** begin met de bouwstenen, maak een eigen paneel (✎) waar een
+  bouwsteen te veel of te weinig heeft.
+
+**Inrichten (S8)**
+- [ ] **W14. Toewijzen in een eigen mapje per paneel (`p-<paneel>`) dat het deel openzet: goed?** 💬 Zo raakt het nooit de
+  standaard en doet het alleen in dat deel iets. **Advies:** zo laten; na de proef kan wat bevalt naar de standaard.
+- [ ] **W15. F1–F8 als groep voor een paneel** kan alleen in een werkruimte zonder het stuk maschine-delen (anders kiezen
+  F1–F8 het deel). 💬 **Advies:** zo laten.
+
+**Precisie en uitlijnen (S1, S2)**
+- [ ] **W16. Duoklik: hoog op de gelijkgezette track, laag op de maatgever** (gebouwd) of andersom? 🎧 **Advies:** zo laten.
+- [ ] **W17. "Op de 1" bij gelijkspel: terug** (gebouwd) of vooruit? 🎧 **Advies:** terug.
+- [ ] **W18. Precisie op het toetsenbord?** 💬 **Advies:** geen standaard; koppel zelf (S5), na de proef in toetsen.json.
+- [ ] **W19. `?uitlijn=1` wordt onthouden.** 💬 **Advies:** laten tot de proefavond, daarna weghalen.
+- [ ] **W20. Twee maten per pagina** in de uitlijnweergave (gebouwd) of één? 👀 **Advies:** twee.
+- [ ] **W21. Knop "uitlijn" in de transportrij houden** nu het werkvak er is (kost 4 px)? 👀 **Advies:** beslissen op avond A.
+- [ ] **W22. Een track zonder tellen: "grof" tonen** (gebouwd) of leeg? 👀 **Advies:** grof, met het label.
+
+**Werkruimte-kern en combinaties (S0, S3, S4)**
+- [ ] **W23. De voorbeelden apc-alleen en twee-handen houden?** 💬 **Advies:** alle drie houden tot je een eigen hebt.
+- [ ] **W24. De eerste keer "⚠ 74 nieuw": zo laten?** 👀 **Advies:** zo laten (klik = gezien).
+- [ ] **W25. "Leg vast" ook op de APC?** 💬 **Advies:** nee (op de balk en met ✎).
+- [ ] **W26. Mag een werkruimte een rack op de echo/galmbus zetten (`bussen`)?** 💬 **Advies:** alleen bij een uitdrukkelijke
+  keuze in de kiezer, niet bij peilen of opstarten, en alleen als er niets op die bus klinkt.
+- [ ] **W27. Twee solo's tegelijk = stilte; moeten solo drums + solo bas die twee laten horen?** 🎧 **Advies:** ja, samen.
+- [ ] **W28. Welke racks op de echo- en galmbus?** 🎧 **Advies:** begin met één dub-echo, kies na de proefavond.
+- [ ] **W29. ⇧ On/Off in de mapjes master en instrument** opent met de fx-matrix ook daar de fx-matrix (was bypass/stil). 🎛
+  **Advies:** daar laten wat het was (een `laag` per regel).
+- [ ] **W30. Een worp die vastzit bij het begin van een opname: bij terugspelen ook?** 🎧 **Advies:** nee.
+- [ ] **W31. Druk/latch op een toets van het toetsenbord doet nu niets.** 💬 **Advies:** zo laten tot je het mist.
+- [ ] **W32. Een superknop met `overneem: true` zonder track laat de auto-DJ altijd los.** 💬 **Advies:** zo (zoals de crossfader).
+
+**Maschine (S5, S6; poort M eerst)**
+- [ ] **W33. Koppelen op de Maschine alleen met CONTROL?** 🎛 **Advies:** ja.
+- [ ] **W34. De Maschine-pads ook koppelen (padmodus "knoppen")?** 🎛 **Advies:** na de ijkproef (S6).
+- [ ] **W35. Mapping bewaren alleen vanuit het tabblad met de APC?** 💬 **Advies:** ja.
+- [ ] **W36. Maschine weg terwijl de hub blijft: moet de hub dat per apparaat melden?** 💬 **Advies:** ja, in de hub (§17);
+  dan werkt de terugval naar apc-alleen vanzelf.
+- [ ] **W37. `stappen` ook `.next`/`.prev`** (een wiel dat racks of secties kiest)? 💬 **Advies:** ja, klein.
+- [ ] **W38. De deelnamen op de Maschine-schermen** (de onderregel valt weg): zo, of alleen zolang een F-knop vastzit? 👀
+  **Advies:** eerst zo proberen.
+- [ ] **W39. SHIFT + pad in SCENE = als loop, ook zonder werkruimte?** 🎛 **Advies:** ja, na de proefavond.
+- [ ] **W40. Welke padmodi en pagina's wil je echt?** 🎛 **Advies:** begin met de worpen in FX en de pagina uitlijn.
+
+Zelf gekozen (zeg het als je het anders wilt): acht delen op F1–F8 in deze volgorde; THUIS op ⇧ + master-knop; werkruimte
+wisselen alleen vanaf het scherm; fase lineair met een fijne variant op shift; SSE (plus POST voor bedienen) in plaats van
+WebSocket; sampler, secties, patronen en auto in twee-handen uit de ▲ ▼-rondgang; de zender vraagt zonder kijker 1×/s of er
+iemand kijkt.
+
 ---
 
 ## A. Eerst: wat er nu klaarstaat

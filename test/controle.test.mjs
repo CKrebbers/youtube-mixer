@@ -40,8 +40,10 @@ console.log('de speellijst');
   ok('blok-ids zijn uniek', new Set(SPEELLIJST.map((b) => b.id)).size === SPEELLIJST.length);
   // De volgorde (9 okt, verbeteronderzoek): Clay loopt de lijst van boven af, dus alle "Avond 1" vóór "Avond 2"
   // vóór "Avond 3" vóór "Eerder werk", en avond 1 begint met de kern van ~45 min.
-  const AVONDEN = ['Avond 1', 'Avond 2', 'Avond 3', 'Eerder werk'];
+  // S8: de proefavonden van de werkruimte (docs/WERKRUIMTE.md D3) staan tussen avond 3 en "Eerder werk".
+  const AVONDEN = ['Avond 1', 'Avond 2', 'Avond 3', 'Werkruimte', 'Eerder werk'];
   const rang = SPEELLIJST.map((b) => AVONDEN.indexOf(b.titel.split(' · ')[0]));
+  ok('het blok Werkruimte: E0, poort M, A, B, C en D, elk punt met een oordeel', ['werk-e0', 'werk-m', 'werk-a', 'werk-b', 'werk-c', 'werk-d'].every((id) => SPEELLIJST.find((b) => b.id === id)?.punten.every((p) => /Oordeel/.test(p.let))));
   ok(`elke bloktitel begint met ${AVONDEN.map((a) => `"${a} · "`).join(', ')}`, rang.every((r) => r >= 0));
   ok('de blokken staan op avondvolgorde', rang.every((r, i) => i === 0 || r >= rang[i - 1]));
   const KERN = ['start', 'luisteren', 'draaien', 'koptelefoon', 'keylock'];

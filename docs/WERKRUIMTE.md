@@ -1433,13 +1433,41 @@ tests `test/inrichten.test.mjs`, `test/paneel-schrijf.test.mjs` (nieuw),
 
 ---
 
+## Gebouwd (S0–S8, 14 okt 2026)
+
+*Samengevoegd uit `docs/werkruimte/S0–S8.md` (daar staat per spoor alles: bestanden, regels, metingen, wat
+niet getest is). De verslagen staan in `docs/verslagen/2026-10-14/werk-S0…S8.md`. Vragen: VRAGEN blok W.*
+
+| spoor | wat er is | waar | niet getest (kort) |
+|---|---|---|---|
+| **S0** aanhaakpunten | aanhakers per spoor (`src/ui/aanhakers/<spoor>.js`, in vaste volgorde), uitleg per spoor (`src/ui/beschrijf/`), css per spoor, routes per spoor (`server/routes/`), meta-vlaggen (`log`, `beginstand`, `overneem`, `alleenScherm`, `nummer`), mapjes en fragmenten van buiten (`voegMapjeToe`, `vervangFragment`), rijenregister, `Deck.tijdlijn()` | S0.md | — |
+| **S1** precisie | fase duwen (3,81 / 0,48 ms per tik), jog, ±1 ms, vaste beatjump, op de 1, bend-sterkte, duoklik, eerlijker sync-lampje; de Duwer (één sprong per 15 ms) | S1.md, `src/control/acties-precisie.js`, stuk `uitlijn` | de ring als fasemeter (proef A) |
+| **S2** uitlijnweergave | alle tracks in tellen van de maatgever: pagina, vouw, strook; grid Δ, muziek Δ, drift, maat; `uitlijn.html` en het werkvak | S2.md, `src/uitlijn/` | kosten op de M1 |
+| **S3** werkruimte-kern | het model (`src/werk/model.js`, ook de server), de runtime (deel, volgt, onthoud, THUIS, vereist/terugval, vastleggen, peilen), de werk-balk, `/api/werkruimtes` (versie, 409, .versies), voorbeelden standaard · apc-alleen · twee-handen | S3.md | — |
+| **S4** combinaties | druk, latch, lang, stappen, houd-mapjes, `als`, `{tweede}`/`{maatgever}`, worpen, solo per stem, superknoppen, fx-matrix, ⇧ A\|B = thru | S4.md, `src/control/acties-combi.js`, `superknop.js`, `houd.js` | W27–W31 |
+| **S5** mapping per apparaat | een eigen verschil per apparaat (APC, Maschine, Xboard, toetsenbord als data), koppelen overal, de Maschine-ijkproef | S5.md | de ijkproef op de echte Maschine (poort M) |
+| **S6** Maschine-delen en kaarten | padmodi, pagina's en wiel uit data, houd-knoppen, F1–F8, deelnamen en fasescoop op de schermen, spiekbrief, de kaarten in voorbeeldmodus | S6.md, stukken `maschine-delen`, `maschine-houd` | alles op de echte Maschine (poort M) |
+| **S7** schermen en de iPad (kijken) | `werk.html?s=<scherm>`: mac-2 als venster (bedient), de iPad via de server (SSE, regel 3 over het netwerk); vrije panelen en bouwstenen (fx, strip, mixer, stems, master, sampler), kaart, stand, secties, library; het werkvak in de mixer | S7.md, `src/paneel/`, `server/paneel.js`, `src/ui/live-zender.js` | Safari, Wake Lock, Begeleide toegang, wifi; de 5 ms op de iPad |
+| **S8** inrichten, bedienen, totaalmeting | de schrijfweg voor iPad en iPhone (standaard uit = 404, koppelcode → HttpOnly-cookie, Origin, rem 120/s, seq, de mixer beslist per scherm, loslaten binnen 1,5 s, bron in het log), de xy-pad in het model, ✎ inrichten zonder JSON (aanwijzen, zoeker met de top-40, weghalen, op een scherm, toewijzen aan een groep knoppen, terug), de tegel in de Controlekamer, de proefavonden in de speellijst, de totaalmeting | S8.md, `src/paneel/uitvoer.js`, `schrijver.js`, `src/werk/inrichten.js`, `src/controle/bedienen-tegel.js`, `tools/headless/werk-alles.mjs` | de echte iPad/iPhone (cookie op ts.net, vinger, wifi), een echte `tailscale serve`, de Maschine in de totaalmeting |
+
+**De regels die blijven** (ook in CLAUDE.md, sectie "Werkruimte"): met `standaard` is alles bit voor bit
+vandaag; stukken en werkruimteregels alleen op vrije sleutels of in eigen mapjes; een deel zet nooit een
+klank; uitzonderingen als meta-vlag; elk spoor raakt alleen zijn eigen stub; de iPad doet nooit opnemen,
+log, mappings, werkruimtes, library of laden; wat op de ms moet kloppen niet van buiten de Mac (tenzij het
+scherm het aanzet).
+
+**Wat er na de proef komt**: deel E2 hieronder, plus de opties in het verslag van S8.
+
+---
+
 ## Deel E: vragen, volgende versie, aannames
 
 ### E1. Vragen voor Clay (blok W)
 
 - **W1** Mag de iPad de mixer **bedienen** (de eerste schrijfweg van buiten de Mac, alleen via de
   tailnet, met een koppelcode en een schakelaar in de Controlekamer), of eerst alleen kijken? Tot
-  je ja zegt, kijkt hij alleen.
+  je ja zegt, kijkt hij alleen. **Beantwoord 14 okt: ja** (en een xy-pad op de iPhone); gebouwd in S8.
+  Alle open vragen van S0–S8: docs/VRAGEN.md blok W.
 - **W2** Hoe staan de controllers op tafel, en met welke hand doe je wat? Het ontwerp gaat uit
   van: de APC voor beide handen bij een overgang (de kern), de Maschine voor één hand naast de
   laptop. Staat de Maschine links of rechts, en ben je links- of rechtshandig? Dat bepaalt

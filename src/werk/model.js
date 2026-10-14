@@ -197,8 +197,16 @@ const sleutel = (r) => `${r.in}${r.shift ? '#shift' : ''}${r.laag ? `@${r.laag}`
 const plek = (r) => `${r.in}${r.shift ? '#shift' : ''}${r.laag ? `@${r.laag}` : ''}`;
 
 /** Een patroon met `*` (willekeurige tekens) als RegExp. */
+const PATRONEN = new Map();   // een cache: de mixer toetst elke invoke van de iPad tegen ~25 patronen (S8)
 export function patroon(p) {
-  return new RegExp(`^${String(p).split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
+  const k = String(p);
+  let r = PATRONEN.get(k);
+  if (!r) {
+    r = new RegExp(`^${k.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
+    if (PATRONEN.size > 512) PATRONEN.clear();
+    PATRONEN.set(k, r);
+  }
+  return r;
 }
 const PATROON = /^[a-z0-9{}*._-]{1,80}$/i;
 

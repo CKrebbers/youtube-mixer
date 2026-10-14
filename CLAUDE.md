@@ -55,6 +55,7 @@ als een feature erom lijkt te vragen, is dat bijna altijd een ontwerpfout elders
 index.html          geen build-stap, plain ES-modules
 plan.html           het planvenster: de programmering zien, inrichten, live volgen (src/plan/plan-venster.js)
 uitlijn.html        de uitlijnweergave als los venster (window.opener.varveUitlijn): alle tracks in tellen van de maatgever (docs/werkruimte/S2.md)
+werk.html           de paneelpagina (?s=<scherm>): mac-2 als venster van de mixer, de iPad/iPhone via de server; bedienen na koppelen (docs/werkruimte/S7.md, S8.md)
 apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze doen (src/ui/apc-kaart.js)
 maschine.html       de Maschine-kaart: wat elke knop nu doet (uitleg van de Maschine zelf), live vanuit de mixer (src/ui/maschine-kaart.js)
 companion.html      de companion (/companion) voor iPad en iPhone: kaart met wens/kies/haal nu, nu, beeld. Geen geluid, MIDI of Web Lock (docs/COMPANION.md)
@@ -139,6 +140,8 @@ src/
                     spiegel.js      acht kolommen, focusdeel, acht banen; data-actions uit de mapping
                     vensters.js     de track met focus bovenaan + vensters als model (L/R)
                     tabblad.js      Web Lock 'varve-mixer': maar één tabblad praat met de APC
+                    live-zender.js  de stand naar de server voor de iPad (S7, alleen met een kijker) + de ontvanger van de schrijfweg (S8,
+                                    alleen als die aan staat en alleen in het tabblad met de APC)
                     status-zender.js de stand voor de Controlekamer: BroadcastChannel 'varve-status', alleen het eerste tabblad;
                                     met naarServer ook POST /api/mixer (hooguit 1 per 900 ms, nooit wachten) voor de companion
                     apc-kaart.js    apc.html: de APC met knoppen op hun echte plek, klik = uitleg
@@ -208,6 +211,13 @@ src/
                     werkruimte.js   de werkruimte in de mixer: deel, wie koos, onthoud, volgt, THUIS, vereist/terugval, vastleggen, peilen
                     apparaten.js    registreerApparaat(id, { zetMapjes, mapjes, aanwezig }); de APC-adapter (layer.* over de bus)
                     kleuren.js      deel -> paletnaam (MIX wit … LIBRARY grijs). Puur.
+                    inrichten.js    ✎ inrichten zonder JSON (S8): item erbij/weg, op een scherm, toewijzen aan een groep knoppen
+                                    (eigen mapje p-<paneel>), de zoeker (top-40), de Inrichter (opslaan met versie, terug). Puur, alleen het model
+  paneel/           protocol.js     de berichten mixer <-> server <-> paneel (S7), invokeBericht/isInvoke (S8). Puur
+                    verbinding.js   opener (mac-2) of server (SSE + ping); zetSchrijver = bedienen (S8)
+                    paneel.js, vrij.js, kaart.js  werk.html: de vakken, het vrije paneel en de bouwstenen, de kaart (S7); koppelen en ✎ (S8)
+                    schrijver.js    de iPad/iPhone: POST invoke (seq, één herhaling), ping met ?k= zolang iets vastzit, wie/koppel (S8)
+                    uitvoer.js      in de mixer: de Uitvoerder beslist (panelen van DAT scherm, waaromNietOpScherm), loslaten, bron in het log (S8)
   auto/             planner.js      de auto-DJ, puur: welk fragment, welke overgang (bewakers), wanneer (frasegrens), de curves
                     automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
@@ -252,6 +262,8 @@ server/             draait apart: `node server/index.js`
   uitzend.js        uitzenden stap 1: een UITGANG, geen bron. Volgt de opname die al groeit en duwt hem via ffmpeg naar een LOKAAL doel
                     (bestand, rtmp/udp op 127.0.0.1); slot tegen elke dienst; nog geen route of knop (docs/UITZENDEN.md)
   routes/           werkruimte S0: index.js laadt werkruimtes/mapping-apparaat/paneel.js ({ routes, mag }), vlak vóór de 404
+  paneel.js         S7 PaneelRelais (de stand naar de kijkers, SSE) + S8 PaneelSchrijf: schakelaar (standaard uit = 404), koppelcode,
+                    token-cookie (alleen de hash op schijf), Origin, rem 120/s, seq, het kanaal naar de mixer, loslaten na 1,5 s
   werkruimtes.js    werkruimte S3: werkruimtes/<naam>.json met versie (409 met de huidige inhoud) en .versies/, voorbeelden uit
                     tools/werkruimtes/voorbeelden/ (een eigen bestand gaat voor), VARVE_WERKRUIMTES; opslaan alleen vanaf deze Mac (W1);
                     lezen onder dezelfde grens als de standen (`beperkt` + ANDERE_LEZERS in standen.js: samen hooguit 2, 503 na 2 s)
@@ -264,6 +276,8 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
                     zaalbeeld.mjs: video.clips op Metal, eigen server 8806 (--opruimen na een harde stop);
                     beeld-lokaal.mjs: de Stroommachine naast VARVE meten (--zelftest zonder GPU; de volledige run NIET op een speeldag);
+                    werk-scherm.mjs, werk-ipad.mjs (S7 + S8: koppelen, de xy-pad op een nep-iPhone, weigeren, loslaten), werk-maschine.mjs,
+                    inrichten.mjs (✎ in echte Chrome), werk-alles.mjs (de totaalmeting van de werkruimte, C6);
                     avondpakket.mjs: de tegel Avondpakket (eigen server 8914, NEP-fixtures, de mixer-lock in een tweede tab);
                     en los: tools/avondpakket.mjs, de CLI van het avondpakket (exit 0/1/2/3; docs/AVONDPAKKET.md);
                     maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
@@ -398,6 +412,9 @@ test/
   precisie.test.mjs werkruimte S1: duwen (3,81/0,48 ms per tik), samenvoegen, keylock, jog, op de 1 (stukgrens), duoklik, sync-lampje, het stuk uitlijn
   werkruimte-model.test.mjs, werkruimte.test.mjs, werkruimte-server.test.mjs  werkruimte S3: het model (weigeren/waarschuwen, samenstellen =
                     de mapping van vandaag), de runtime (bus-spion, volgt, onthoud, THUIS, terugval, LED-tik), /api/werkruimtes (409, W1)
+  paneel-schrijf.test.mjs  werkruimte S8: de schrijfweg (model, Uitvoerder, de bron in het log, PaneelSchrijf met nepklok, een eigen server
+                    met nep-mixer nep-mixer.mjs (geen test zelf): 404/401/403, invoke -> read, 429, seq, los binnen 1,5 s), de tegel
+  inrichten.test.mjs  werkruimte S8: ✎ inrichten (bewerkingen, toewijzen: het model beslist, de zoeker, de Inrichter, terug met 409 op een eigen server)
   alles.mjs         alle tests in één keer met overzicht
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
@@ -436,7 +453,8 @@ docs/
   AVONDPAKKET.md    één controle vóór vertrek en bij aankomst (10 okt): profielen, fase, oordeel, paklijst, ritueel, tegel en CLI
   KAART.md          de muziekkaart in Varve (10 okt): het bestand, de API (+ §3b de afspraken met de UI), de nachtregels, "er speelt een deck",
                     §9 gemeten op het echte bestand, §10 na de proefavond, wat niet getest is
-  werkruimte/       per spoor van de werkruimte wat het bouwde (S0.md: de aanhaakpunten); het ontwerp staat in WERKRUIMTE.md
+  WERKRUIMTE.md     de werkruimte: het ontwerp (A–E) en "Gebouwd" (S0–S8 samengevat)
+  werkruimte/       per spoor van de werkruimte wat het bouwde (S0.md: de aanhaakpunten … S8.md: inrichten, bedienen, totaalmeting)
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -1913,6 +1931,33 @@ Een HERLAAD (peil, 409, terugval) haalt mapjes weg en zet ze terug: dat gaat STI
 volgt-melding) en daarna gaat per apparaat weer open wat er stond. Een nieuwe adapter (S6: de Maschine) geeft
 `stil` mee, anders springt het deel bij elke peil (review ronde 2). Nieuwe fs-lezers in de server: via `beperkt`
 uit server/standen.js met `ANDERE_LEZERS`, nooit een eigen pool (de grens van 2 geldt voor de hele server).
+
+## Werkruimte (S0–S8, 14 okt): wat een bouwer niet mag missen
+
+Volledig in `docs/WERKRUIMTE.md` ("Gebouwd") en `docs/werkruimte/S0–S8.md`; vragen in VRAGEN blok W.
+- **Met `standaard` is alles bit voor bit vandaag**: geen fragment, geen mapje erbij, de werk-balk `hidden`, en de mixer
+  laadt niets van `src/paneel/` (geen zender, geen ontvanger, geen timer). Elke bestaande test en headless tool moet zo groen blijven.
+- **Stukken en werkruimteregels alleen op VRIJE sleutels of in nieuwe/eigen mapjes**, nooit op de kern of een plek van de
+  standaard (`leesRegels`, B1/B3). Een eigen (gekoppelde) regel wint altijd. De standaardmappings veranderen pas na de proef.
+- **Een deel zet nooit een klank**: alleen mapjes (layer.* via de adapters), rijen, onderpaneel, werkvak (bus-spion, 0 invokes buiten layer.*/werk.*).
+- **Meta-vlaggen, geen regex**: `log: 'overslaan'`, `beginstand: false`, `overneem: true`, `alleenScherm: true` (een mapping weigert
+  hem op een knop, de iPad ook), `nummer: true`. Houd-mapjes (`houd.<naam>`) zijn gedeeld over alle apparaten.
+- **Eigen stubs per spoor**: `src/ui/aanhakers/<spoor>.js`, `src/ui/beschrijf/<spoor>.js`, `src/ui/css/<spoor>.css`, `server/routes/<spoor>.js`.
+- **De iPad en iPhone (S8)**: de schrijfweg staat standaard UIT (404, ook na een herstart van de server); alleen via de tailnet
+  (VARVE_HOSTS) en met een Origin die precies de eigen pagina is; een koppelcode (6 cijfers, 60 s) geeft een HttpOnly-cookie
+  (alleen de hash op schijf) per apparaat én scherm. De MIXER beslist (`src/paneel/uitvoer.js`): alleen wat in de panelen
+  van DAT scherm in het actieve deel staat, en `waaromNietOpScherm` (model.js): VAST_NOOIT (opnemen, log, mappings,
+  werkruimtes, library, laden) wint altijd, dan `nooit`, dan TIJDKRITISCH (bend, play, cue, nudge, hotcues, loop in/out,
+  tap: alleen met `"tijdkritisch": true`), dan `mag`. Rem 120/s per apparaat en scherm (loslaten altijd door), `seq` tegen
+  dubbel, wegvallen = binnen 1,5 s alles los wat met `druk: 'aan'` binnenkwam (geen ping met `?k=` of de SSE dicht; de
+  mixer ook zelf als zijn kanaal 1,5 s stil is). Het log draagt de bron als vierde kolom (`[t, id, v, { bron: 'ipad' }]`,
+  samen met `van`); terugspelen leest alleen `van`. Een nieuwe action die gevaarlijk is van buiten de Mac: in VAST_NOOIT.
+- **Eén tabblad**: zender en ontvanger alleen in het tabblad dat `statusVanMij` is. De ontvanger opent zijn SSE alleen als de
+  schrijfweg aan staat: een open SSE kost een van de zes verbindingen per host die de StreamBron nodig heeft.
+- **xy-pad**: `y`, `druk`, `los` staan in het model; `actionsVan` neemt `y` en `druk` mee (anders weigert de mixer ze).
+- **✎ inrichten** (`src/werk/inrichten.js`): elke bewerking = één opslag met versie, het model toetst vooraf; toewijzen aan
+  een groep knoppen gaat in een eigen mapje `p-<paneel>` dat het deel openzet; terug = `POST /api/werkruimtes/<naam>/terug` (409).
+- **Totaalmeting**: `tools/headless/werk-alles.mjs` (C6). Wie iets per beeld toevoegt aan de mixer of mac-2: opnieuw meten.
 
 ## Werkwijze die hier werkt
 

@@ -1,5 +1,20 @@
 # Overdracht — waar we staan (7 oktober 2026)
 
+## Stand 14 okt (avond): de werkruimte S0–S8 is af, de proef nog niet
+
+- **De werkruimte** (`docs/WERKRUIMTE.md`, "Gebouwd"; per spoor `docs/werkruimte/S0–S8.md`): delen, werk-balk,
+  precisie, uitlijnweergave, combinaties, mapping per apparaat, Maschine-delen, schermen en de iPad, en (S8, tak
+  `werk/S8`) bedienen vanaf iPad en iPhone (W1 = ja), de xy-pad op de iPhone, ✎ inrichten zonder JSON en de
+  totaalmeting. Met `standaard` doet VARVE bit voor bit wat hij deed.
+- **Ongecommit**: niets; alles staat op `werk/S8` (gepusht), nog samen te voegen in `werkruimte/integratie`.
+- **Niet getest op echte apparaten**: de iPad en iPhone (Safari, cookie op de ts.net-naam, vinger, wifi), een echte
+  `tailscale serve`, de Maschine (poort M: de ijkproef). De proefavonden staan in de Controlekamer (blokken
+  "Werkruimte · E0 … D"); naar main pas na A–C.
+- **Open vragen**: `docs/VRAGEN.md` blok W (W2–W40; W1 is beantwoord). Het verslag van S8:
+  `docs/verslagen/2026-10-14/werk-S8.md`.
+- **Volgende in de wachtrij**: S9 (set klaarzetten), S10 (meer effecten), S11 (tags in de library);
+  `docs/werkruimte/WACHTRIJ.md`.
+
 Lees in deze volgorde:
 1. `CLAUDE.md`: architectuur, regels, valkuilen. Nieuw sinds 25 sep: transport,
    rem, EQ-kill, maatgever met hysterese, hoorbaar.js, overgangen als hellingen,

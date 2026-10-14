@@ -69,6 +69,19 @@ console.log('het model: xy, tijdkritisch, de voorbeelden');
     && ['track.2.fx.knob.1', 'track.2.send.a', 'track.2.fx.knob.2.hold'].every((a) => M.magOpScherm(nt.werkruimte, 'iphone', a)), JSON.stringify(nt.fouten));
 }
 
+// ---- de tegel in de Controlekamer (puur) ---------------------------------------------------------
+console.log('\nde tegel "Bedienen vanaf iPad en iPhone"');
+{
+  const { blokHtml } = await import('../src/controle/bedienen-tegel.js');
+  const nu = 1_800_000_000_000;
+  ok('uit: iPad en iPhone kijken alleen', /UIT/.test(blokHtml({ aan: false, apparaten: [] }, { nu })) && /kijken alleen/.test(blokHtml({ aan: false, apparaten: [] }, { nu })));
+  const h = blokHtml({ aan: true, mixer: true, vast: 1, code: { code: '123456', nog_ms: 41000 }, apparaten: [{ id: 'abcdefabcdef', naam: 'iPad <Clay>', scherm: 'ipad', laatst: nu - 30000 }],
+    stats: { doorgestuurd: 10, geweigerd: 2, te_snel: 0, los: 1, mixer_p50: 1.2, mixer_p99: 3.4 } }, { nu });
+  ok('aan: de code met de resterende tijd, de apparaten met intrekken, de snelheid van de mixer', /AAN/.test(h) && /123456/.test(h) && /nog 41 s/.test(h) && /data-id="abcdefabcdef"/.test(h) && /30 s geleden/.test(h) && /p99 3.4 ms/.test(h));
+  ok('een naam wordt ontsnapt (geen HTML van een apparaat)', /iPad &lt;Clay&gt;/.test(h) && !/<Clay>/.test(h));
+  ok('een 403 (niet op deze Mac): een uitleg', /alleen op deze Mac/.test(blokHtml({ fout: 'alleen op deze Mac: open de Controlekamer op localhost' })));
+}
+
 // ---- 2. de mixer beslist -----------------------------------------------------------------------
 console.log('\nde mixer beslist (Uitvoerder)');
 function nepBus() {

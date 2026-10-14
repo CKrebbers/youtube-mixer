@@ -9,6 +9,7 @@ import { standTegel, mixerKeuze, verschilTekst, activeerMelding, terugMelding, L
 import { bewerkerHtml, leesBewerker, nieuweNaamGeldig, nieuweNaam } from './stand-bewerker.js';
 import { avondpakketTegel } from './avondpakket-tegel.js';
 import { hubAdres, mixerAdres } from '../ui/vlag.js';
+import { opzetBedienen } from './bedienen-tegel.js';
 
 /**
  * De Controlekamer (controle.html, docs/CONTROLEKAMER.md). Leest:
@@ -699,4 +700,6 @@ vraagStatus();
 setInterval(ververs, 2000);
 setInterval(vraagStatus, 2000);
 setInterval(() => leesTooling().then(tekenStand), 60000);
-window.controle = { stand, ververs, mixerAdres: () => mixerNu().adres, leesAvondpakket, apAutomatisch };   // handig in de console en voor tools/headless/controle.mjs, standen.mjs en avondpakket.mjs
+// Bedienen vanaf iPad en iPhone (werkruimte S8): een eigen blok onder "Openen", met zijn eigen peiling.
+const bedienen = opzetBedienen({ na: document.querySelector('[aria-labelledby="h-open"]'), meld });
+window.controle = { bedienen, stand, ververs, mixerAdres: () => mixerNu().adres, leesAvondpakket, apAutomatisch };   // handig in de console en voor tools/headless/controle.mjs, standen.mjs en avondpakket.mjs

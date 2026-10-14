@@ -30,6 +30,9 @@
  * de sampler", VRAGEN CX). Het moment hangt aan CX4: wordt er pas na avond 2
  * gemerged, dan gaat het blok bij het mergen naar avond 3 (titel "Avond 3 · …",
  * achter beeld-pc); de ids blijven.
+ * Erbij (14 okt, werkruimte S8): de proefavonden van de werkruimte (docs/WERKRUIMTE.md D3: E0, poort M,
+ * A, B, C, D), elk met een meetbaar oordeel. Ze staan na avond 3 en vóór "Eerder werk" (titel
+ * "Werkruimte · …"). Naar main pas na A–C; wat bevalt gaat daarna pas naar de standaard.
  * Elk punt: `doe` = wat je doet, `let` = waar je op let.
  */
 export const SPEELLIJST = [
@@ -383,6 +386,45 @@ export const SPEELLIJST = [
   ] },
 
   // ---- Eerder werk (vóór 6 okt): als er tijd over is ------------------------------
+  // ---- De werkruimte (docs/WERKRUIMTE.md D3, docs/werkruimte/S8.md) ---------------
+  { id: 'werk-e0', titel: 'Werkruimte · E0 · Worpen via koppelen (kan nu al)', minuten: 10, punten: [
+    { id: 'we-pads', doe: 'Koppel in grid-modus video drie vrije pads aan video.fx.pixel.hold, .trails.hold, .mirror.hold; speel er 2 min mee.',
+      let: 'Oordeel: hoeveel keer greep je mis (tel)? 0–1 = pads werken voor worpen.' },
+    { id: 'we-knop', doe: 'Koppel ⇧ + A|B 1–4 aan track.{focus}.fx.knob.1–4.hold en gooi een echo-worp in een overgang.',
+      let: 'Oordeel: pads of knoppen voor worpen? Schrijf je keuze in de notitie (W3 als je iets mist).' },
+  ] },
+  { id: 'werk-m', titel: 'Werkruimte · Poort M · Maschine-ijkproef (met de hub)', minuten: 20, punten: [
+    { id: 'wm-ijk', doe: 'Open tools/proef/maschine-ijk.html via de hub en loop elke knop, het wiel, de draaiknoppen en F1–F8 af.',
+      let: 'Oordeel per punt ja/nee: kloppen de nummers van het profiel; wiel relatief ±1 per klik; SOLO/MUTE/VOLUME sturen noot aan én uit; F1–F8 onder de schermlabels. Alles ja = twee-handen mag aan.' },
+  ] },
+  { id: 'werk-a', titel: 'Werkruimte · A · Uitlijnen', minuten: 20, punten: [
+    { id: 'wa-ring', doe: 'Twee nummers, ⇧ Lock (fasemeters); duw track 2 met device knob 2 tot de ring in het midden staat.',
+      let: 'Oordeel: binnen hoeveel tikken stond hij gelijk (tel)? Is de ring leesbaar als fasemeter (ja/nee)?' },
+    { id: 'wa-ms', doe: 'Duoklik aan (Maschine UITLIJN r4 pad 1 of koppelen); duw 1 ms met ±1 ms.', let: 'Oordeel: hoor je de flam van 1 ms (ja/nee)? Klopt "muziek Δ" in de uitlijnweergave met je oor (ja/nee)?' },
+    { id: 'wa-scherm', doe: 'Werkruimte apc-alleen, deel UITLIJN; "open schermen" (mac-2) op het tweede scherm.', let: 'Oordeel: loopt de uitlijnweergave op mac-2 zonder haperen 5 min mee (ja/nee)?' },
+  ] },
+  { id: 'werk-b', titel: 'Werkruimte · B · Delen en effecten', minuten: 25, punten: [
+    { id: 'wb-delen', doe: 'apc-alleen: open stems (⇧ scene 3), fx-matrix (⇧ On/Off), terug; 10 keer wisselen.',
+      let: 'Oordeel: hoe vaak wist je niet in welk deel je zat (tel)? THUIS (⇧ master-knop) bracht je elke keer terug (ja/nee)?' },
+    { id: 'wb-dub', doe: 'Superknop DUB en de dub-worp in een overgang.', let: 'Oordeel: is de dub-worp wat je wilde (ja/nee + wat anders)? Hoeveel nieuwe plekken was te veel (het getal "⚠ N nieuw")?' },
+    { id: 'wb-inricht', doe: '✎ op de werk-balk: maak een paneel, wijs drie knoppen aan, zet het op het werkvak; wijs het toe aan de APC device knobs; ↶ terug.',
+      let: 'Oordeel: lukte het zonder JSON (ja/nee)? Hoeveel minuten? Wat zocht je en vond je niet (notitie)?' },
+  ] },
+  { id: 'werk-c', titel: 'Werkruimte · C · Twee handen (met de hub)', minuten: 25, punten: [
+    { id: 'wc-f', doe: 'twee-handen: F1–F8 op de Maschine, de houd-knoppen (VOLUME + draaiknop = fader), het wiel als jog.',
+      let: 'Oordeel: voelt APC breed / Maschine diep logisch (1–5)? Kom je met THUIS (SHIFT + F1) altijd terug (ja/nee)?' },
+    { id: 'wc-kaart', doe: 'Open de kaarten (apc.html, maschine.html) en het paneel "kaart" op mac-2.', let: 'Oordeel: kon je zonder kijken zeggen wat een knop doet in het deel van nu (ja/nee)?' },
+  ] },
+  { id: 'werk-d', titel: 'Werkruimte · D · iPad en iPhone naast de Mac', minuten: 25, punten: [
+    { id: 'wd-kijk', doe: 'iPad via Tailscale: werk.html?s=ipad op het beginscherm; laat hem 10 min naast de Mac staan, met auto-lock aan.',
+      let: 'Oordeel: loopt hij in de pas met wat je hoort (ja/nee)? Valt hij weg bij auto-lock, en komt hij binnen 5 s terug (ja/nee)?' },
+    { id: 'wd-koppel', doe: 'Zet hieronder "Bedienen vanaf iPad en iPhone" aan; koppelcode; typ hem op de iPad; dan op de iPhone (werk.html?s=iphone).',
+      let: 'Oordeel: lukte koppelen in één keer (ja/nee)? Zie je beide apparaten in de lijst?' },
+    { id: 'wd-xy', doe: 'Deel FX: veeg op de iPhone over de xy-pad (x = plek 1, y = echo; aanraken = worp, loslaten = terug).',
+      let: 'Oordeel: voelt de vertraging speelbaar (1–5)? Klinkt de worp op het moment van aanraken (ja/nee)? (De headless meting: zie docs/werkruimte/S8.md.)' },
+    { id: 'wd-weg', doe: 'Houd een worp vast op de iPad en zet de wifi van de iPad uit.', let: 'Oordeel: laat de mixer binnen ~2 s los (ja/nee)?' },
+    { id: 'wd-nooit', doe: 'Zet record.start of play in een paneel op de iPad en druk.', let: 'Oordeel: gebeurt er niets, met een melding op de iPad (ja/nee)?' },
+  ] },
   { id: 'toon', titel: 'Eerder werk · Toonsoort en library', minuten: 5, punten: [
     { id: 'to-pitch', doe: 'Schuif de pitch van een spelend nummer.', let: 'Schuift de toonsoort in de kolomkop mee?' },
     { id: 'to-klopt', doe: 'Vergelijk de toonsoort met wat je hoort.', let: 'Klopt hij muzikaal? Zo niet: bij welk nummer?' },
