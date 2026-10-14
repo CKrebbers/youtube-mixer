@@ -51,6 +51,8 @@ export default {
     { methode: 'GET', pad: /^\/api\/indeling$/, handler: metFout(async (req, res, ctx) => ctx.json(res, 200, ctx.lib.indeling.exporteer())) },
     post(/^\/api\/indeling$/, (ind, b, ctx, req) => {
       const droog = new URL(req.url, 'http://x').searchParams.get('droog') === '1';
+      // Een grote import houdt de server even bezig, en die levert ook de pagina's van de decks.
+      if (!droog && ctx.speeltDeck?.()) throw new IndelingFout(409, 'er speelt een deck: importeer als het stil is (droog=1 mag wel)');
       return ind.importeer(b, { droog });
     }, 8 * 1024 * 1024),
     post(/^\/api\/indeling\/tags\/zet$/, (ind, b) => {

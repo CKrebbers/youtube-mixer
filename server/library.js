@@ -5,7 +5,7 @@ import { bronVan } from './links.js';
 import { TOON_VERSIE, leesToonsoort, toonsoortNaam } from './toon.js';
 import { SECTIE_VERSIE, gridSleutel } from './secties.js';
 import { TWIJFELS, Beatgrid } from '../src/engine/beatgrid.js';
-import { gridKenmerk, toonKenmerk, energieKenmerk } from '../src/library/indeling.js';
+import { gridKenmerk, toonKenmerk, energieKenmerk, bpmKenmerk, KENMERK_VERSIE } from '../src/library/indeling.js';
 import { Indeling, IndelingFout } from './indeling.js';
 
 /**
@@ -194,11 +194,14 @@ export const SCHEMA = [
   ALTER TABLE tracks ADD COLUMN k_grid TEXT;
   ALTER TABLE tracks ADD COLUMN k_toon INTEGER;
   ALTER TABLE tracks ADD COLUMN k_energie REAL;
+  ALTER TABLE tracks ADD COLUMN k_bpm REAL;
   UPDATE tracks SET k_grid = gridkenmerk(grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar, duur),
-    k_toon = toonkenmerk(toon_json, duur), k_energie = energiekenmerk(secties_json, duur);
+    k_toon = toonkenmerk(toon_json, duur), k_energie = energiekenmerk(secties_json, duur),
+    k_bpm = bpmkenmerk(grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar, duur);
   CREATE INDEX tracks_k_grid ON tracks(k_grid);
   CREATE INDEX tracks_k_toon ON tracks(k_toon);
   CREATE INDEX tracks_k_energie ON tracks(k_energie);
+  CREATE INDEX tracks_k_bpm ON tracks(k_bpm);
   `,
 ];
 
@@ -516,6 +519,8 @@ export class Library {
     // De afgeleide kolommen van schema v10 (k_grid, k_toon, k_energie): dezelfde formules als de lijst.
     this.db.function('gridkenmerk', { deterministic: true }, (json, bpm, eerste, maat, duur) =>
       gridKenmerk(this._grid({ grid_json: json, grid_bpm: bpm, grid_first_beat: eerste, grid_beats_per_bar: maat }), duur));
+    this.db.function('bpmkenmerk', { deterministic: true }, (json, bpm, eerste, maat, duur) =>
+      bpmKenmerk(this._grid({ grid_json: json, grid_bpm: bpm, grid_first_beat: eerste, grid_beats_per_bar: maat }), duur));
     this.db.function('toonkenmerk', { deterministic: true }, (json, duur) =>
       toonKenmerk(json != null ? normaliseerToon(veiligJson(json, null)) : null, duur));
     this.db.function('energiekenmerk', { deterministic: true }, (json, duur) =>
@@ -523,12 +528,36 @@ export class Library {
     this._stmts = new Map();
     this._migreer();
     this.indeling = new Indeling(this);
+    this._kenmerkenNaOpen();
+  }
+
+  /**
+   * De afgeleide kolommen (k_*) kloppen alleen als elke schrijver ze zet. Een server van een tak zonder
+   * S11 op dezelfde library.db zet ze niet, en een andere drempel (KENMERK_VERSIE) maakt ze oud. Daarom
+   * bij elk openen alles opnieuw, in één transactie: op 20.000 nummers ~1 s (tools/bench/indeling.mjs),
+   * één keer bij het opstarten, vóór er een deck speelt. `instellingen.kenmerk_versie` zegt welke versie.
+   */
+  _kenmerkenNaOpen() {
+    this.db.exec('BEGIN');
+    try {
+      // Alleen rijen die anders zijn schrijven (anders groeit de WAL bij elke start met de hele tabel).
+      const G = 'gridkenmerk(grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar, duur)', T = 'toonkenmerk(toon_json, duur)',
+        E = 'energiekenmerk(secties_json, duur)', B = 'bpmkenmerk(grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar, duur)';
+      this._kenmerkenHersteld = this.db.prepare(`UPDATE tracks SET k_grid = ${G}, k_toon = ${T}, k_energie = ${E}, k_bpm = ${B}
+        WHERE k_grid IS NOT ${G} OR k_toon IS NOT ${T} OR k_energie IS NOT ${E} OR k_bpm IS NOT ${B}`).run().changes;
+      if (this.haal('kenmerk_versie', null) !== KENMERK_VERSIE) this.zet('kenmerk_versie', KENMERK_VERSIE);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      try { this.db.exec('ROLLBACK'); } catch {}
+      throw err;
+    }
   }
 
   /** De afgeleide kolommen van één nummer opnieuw (na een nieuw grid, toon, secties of duur). */
   _kenmerken(trackId) {
     this._q(`UPDATE tracks SET k_grid = gridkenmerk(grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar, duur),
-      k_toon = toonkenmerk(toon_json, duur), k_energie = energiekenmerk(secties_json, duur) WHERE id = ?`).run(trackId);
+      k_toon = toonkenmerk(toon_json, duur), k_energie = energiekenmerk(secties_json, duur),
+      k_bpm = bpmkenmerk(grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar, duur) WHERE id = ?`).run(trackId);
   }
 
   /** Schema-versie in de database zelf, zodat een uitbreiding later geen gok is. */
@@ -634,10 +663,9 @@ export class Library {
    * categorie (alleen met een categorie in het filter, anders gooit hij). Onbekende sortering gooit.
    */
   _lijstSql({ zoek = '', filter = null, sorteer = 'toegevoegd', richting = null } = {}) {
-    const f = { ...(filter ?? {}) };
-    if (zoek) f.zoek = f.zoek ? `${zoek} ${f.zoek}` : zoek;
     if (sorteer !== 'plek' && !isSortering(sorteer)) throw new Error(`onbekende sortering: ${sorteer}`);
-    const { waar, args, gewoon } = this.indeling.sql(f);
+    // zoek (de route) en het filter zijn twee blokken voorwaarden, EN: nooit één aan elkaar geplakte LIKE.
+    const { waar, args, gewoon } = this.indeling.sql(filter ?? {}, { zoek });
     if (sorteer === 'plek') {
       if (gewoon == null) throw new IndelingFout(400, 'sorteer=plek alleen in een gewone categorie');
       const af = richting === 'af';
@@ -670,7 +698,7 @@ export class Library {
    * racks wil je in het paneel zien zonder tweede vraag.
    */
   _verrijk({ titel_sleutel: _s, _rij, _racks, _tags, _p_bestand, _p_buckets, _p_per, stems_json, secties_json: _sec,
-    k_grid: _kg, k_toon: _kt, k_energie: energie, ...r }) {
+    k_grid: _kg, k_toon: _kt, k_bpm: _kb, k_energie: energie, ...r }) {
     const grid = this._grid(r);
     const onset = r.onset_bestand
       ? { bestand: r.onset_bestand, frames: r.onset_frames, envRate: r.onset_rate, tijdOffset: r.onset_offset }

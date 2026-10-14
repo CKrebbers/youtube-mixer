@@ -729,14 +729,21 @@ async function vulKratten() {
   if (sel.options.length <= 1) sel.hidden = true;
 }
 
-/** Alle ids van een lijst van de library (pagina's van 500), in de volgorde van de server. */
+/**
+ * Alle ids van een lijst van de library (pagina's van 500), in de volgorde van de server. Een nummer
+ * dat het venster nog niet kende (het kent de geladen pagina's van de mixer, of de eerste 500) komt
+ * erbij: anders viel een categorie of filter van meer dan 500 stil kleiner uit.
+ */
 async function idsVan(query) {
   const uit = [];
   for (let van = 0; van < 20000; van += 500) {
     const r = await fetch(`/api/library?${query}&van=${van}&aantal=500`);
     const d = await r.json().catch(() => null);
     if (!r.ok) throw new Error(d?.fout || `${r.status}`);
-    uit.push(...(d.tracks || []).map((t) => t.id));
+    for (const t of d.tracks || []) {
+      uit.push(t.id);
+      if (!staat.tracks.has(t.id)) { staat.tracks.set(t.id, t); staat.bieb.push(t); }
+    }
     if ((d.tracks || []).length < 500) break;
   }
   return uit;

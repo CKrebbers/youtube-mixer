@@ -55,6 +55,10 @@ const gooit = (fn, code) => { try { fn(); return false; } catch (e) { return e i
   ok('kort voor een klein scherm', filterKort({ categorie: 3, tags: { en: ['dub'], of: [], niet: [] } }, { categorieen: cat }) === '@Warm op #dub');
   ok('combineer: en bij elkaar, bereiken overlappen', gelijk(combineer({ tags: { en: ['a'], of: [], niet: ['x'] }, bpm: [60, 100] }, { tags: { en: ['b'], of: [], niet: [] }, bpm: [90, 140] }),
     { tags: { en: ['a', 'b'], of: [], niet: ['x'] }, bpm: [90, 100] }));
+  ok('combineer is strikt: twee of-groepen, geen bpm-overlap, toon zonder doorsnede, ander grid = null', combineer({ tags: { en: [], of: ['a', 'b'], niet: [] } }, { tags: { en: [], of: ['c'], niet: [] } }) === null
+    && combineer({ bpm: [70, 90] }, { bpm: [120, 130] }) === null && combineer({ toon: [21] }, { toon: [16] }) === null
+    && combineer({ grid: 'zeker' }, { grid: 'onzeker' }) === null && combineer({ zoek: 'a' }, { zoek: 'b' }) === null
+    && gelijk(combineer({ grid: 'zeker' }, { grid: 'zeker', stems: 'ja' }), { grid: 'zeker', stems: 'ja' }));
   ok('plekken: achteraan, vooraan, ertussen, te klein = null', gelijk(plekkenTussen(3, null, 2), [4, 5]) && gelijk(plekkenTussen(null, 1, 1), [0])
     && gelijk(plekkenTussen(1, 2, 1), [1.5]) && plekkenTussen(1, 1 + 1e-7, 1) === null);
   const imp = normaliseerIndeling({ tags: ['dub', { naam: 'Deep', kleur: 'groen' }, { naam: 'a,b' }, 'DUB'], categorieen: [
@@ -80,7 +84,7 @@ const gooit = (fn, code) => { try { fn(); return false; } catch (e) { return e i
 // ---- de Library ---------------------------------------------------------------------------------
 const map = mkdtempSync(join(tmpdir(), 'varve-indeling-'));
 try {
-  const lib = new Library(join(map, 'lib.db'));
+  let lib = new Library(join(map, 'lib.db'));
   ok(`schema v${SCHEMA.length} (v10 = de indeling)`, lib.versie === SCHEMA.length && SCHEMA.length === 10);
   const ind = lib.indeling;
   const nieuw = (id, extra = {}) => lib.bewaarTrack({ id, url: `https://youtu.be/${id}`, titel: extra.titel ?? `Nummer ${id}`, uploader: extra.uploader ?? 'x', audio: `media/${id}/audio.wav`, duur: 200 });
@@ -140,10 +144,17 @@ try {
   ind.zetNummers(warm.id, ['a2'], { aan: true, naarEind: true });
   ok('naar het eind', gelijk(ind.nummersVan(warm.id), ['a5', 'a3', 'a1', 'a2']));
   ok('vóór zichzelf of vóór iets wat er niet in staat: 400', gooit(() => ind.zetNummers(warm.id, ['a1'], { voor: 'a1' }), 400) && gooit(() => ind.zetNummers(warm.id, ['a1'], { voor: 'a6' }), 400));
-  // Duizend keer vooraan tussenvoegen: het gat wordt te klein, dan nummert hij opnieuw (de volgorde klopt).
-  for (let i = 0; i < 60; i++) ind.zetNummers(warm.id, [i % 2 ? 'a1' : 'a3'], { aan: true, voor: ind.nummersVan(warm.id)[1] === (i % 2 ? 'a1' : 'a3') ? ind.nummersVan(warm.id)[0] : ind.nummersVan(warm.id)[1] });
+  // Zestig keer wisselen op de tweede plek: het gat wordt te klein (na ~19 keer), dan nummert hij opnieuw.
+  // Het model hiernaast rekent dezelfde stappen na: de volgorde moet daarna nog precies kloppen.
+  const model = ind.nummersVan(warm.id);
+  for (let i = 0; i < 60; i++) {
+    const [eerste, tweede] = ind.nummersVan(warm.id);
+    ind.zetNummers(warm.id, [tweede], { aan: true, voor: eerste });
+    model.splice(0, 2, model[1], model[0]);
+  }
   const plekken = lib.db.prepare('SELECT plek FROM categorie_nummers WHERE categorie_id = ? ORDER BY plek').all(warm.id).map((r) => r.plek);
-  ok('na veel tussenvoegen: vier plekken, allemaal verschillend', plekken.length === 4 && new Set(plekken).size === 4);
+  ok('na 60 keer tussenvoegen: vier plekken, allemaal verschillend, en de volgorde klopt', plekken.length === 4 && new Set(plekken).size === 4
+    && gelijk(ind.nummersVan(warm.id), model), `${ind.nummersVan(warm.id)} / ${model}`);
   const volg = ind.nummersVan(warm.id);
   ok('sorteer=plek geeft de volgorde van de categorie', gelijk(lib.tracks({ filter: { categorie: warm.id }, sorteer: 'plek', aantal: 10 }).map((t) => t.id), volg)
     && gelijk(lib.tracks({ filter: { categorie: warm.id }, sorteer: 'plek', richting: 'af', aantal: 10 }).map((t) => t.id), [...volg].reverse()));
@@ -161,6 +172,13 @@ try {
   ok('…en werkt zichzelf bij (een nieuwe tag, een nieuw grid)', gelijk(ids({ categorie: slim.id }).sort(), ['a1', 'a3', 'a4']));
   ok('slim + wat je erbij typt (en)', gelijk(ids({ categorie: slim.id, bpm: [70, 90] }), ['a1']));
   const binnen = ind.bewaarCategorie({ naam: 'warm en dub', soort: 'slim', regel: { categorie: 'Warm op', tags: { en: ['dub'] } } });
+  // Wat je erbij typt in een slimme is ALTIJD een deelverzameling van de slimme (review S11 a2/b1).
+  const regelSlim = ind.bewaarCategorie({ naam: 'strikt', soort: 'slim', regel: { tags: { of: ['dub', 'deep'] }, bpm: [70, 90], toon: [21], grid: 'zeker' } });
+  const basis = new Set(ids({ categorie: regelSlim.id }));
+  const extra = [{ tags: { en: [], of: ['vocal', 'x'], niet: [] } }, { bpm: [120, 130] }, { toon: [16] }, { grid: 'onzeker' }, { grid: 'geen' }, { stems: 'nee' }, { zoek: 'Nummer' }];
+  ok(`slim + wat je typt is nooit ruimer (${basis.size} in de slimme)`, extra.every((x) => ids({ categorie: regelSlim.id, ...x }).every((id) => basis.has(id)))
+    && ids({ categorie: regelSlim.id, toon: [16] }).length === 0 && ids({ categorie: regelSlim.id, bpm: [120, 130] }).length === 0);
+  ind.wisCategorie(regelSlim.id);
   ok('slim binnen een gewone categorie (op naam), sorteer=plek kan dan ook', gelijk(ids({ categorie: binnen.id }, { sorteer: 'plek' }), ind.nummersVan(warm.id).filter((x) => ['a1', 'a2', 'a3', 'a4'].includes(x))));
   ok('slim in slim: 400', gooit(() => ind.bewaarCategorie({ naam: 'nee', soort: 'slim', regel: { categorie: slim.id } }), 400));
   ok('een slimme vult zich niet met de hand: 400', gooit(() => ind.zetNummers(slim.id, ['a1']), 400));
@@ -200,12 +218,36 @@ try {
   ok('import is samenvoegen: niets dubbel, niets weg; soort botst = fout in het verslag', nogEens.categorieen.bijgewerkt === 1 && nogEens.nummers.erin === 0
     && nogEens.fouten.length === 1 && lib2.indeling.categorieen().length === 2);
   ok('import van een export is idempotent', (() => { const e = lib2.indeling.exporteer(); lib2.indeling.importeer(e); return gelijk(lib2.indeling.exporteer(), e); })());
+  // Een export in een LEGE library met dezelfde nummers zet de tags per nummer terug (review S11 b3).
+  const lib3 = new Library(join(map, 'lib3.db'));
+  for (const id of ['a2', 'a3', 'a4']) lib3.bewaarTrack({ id, url: `https://youtu.be/${id}`, titel: id, audio: `media/${id}/audio.wav`, duur: 100 });
+  const v3 = lib3.indeling.importeer(exp);
+  ok('export → lege library: de tags staan weer op de nummers (onbekende genoemd)', gelijk(lib3.track('a3').tags, lib.track('a3').tags) && gelijk(lib3.track('a4').tags, lib.track('a4').tags)
+    && lib3.track('a3').tags.length > 0 && v3.tags.gezet > 0 && v3.tags.onbekend > 0, JSON.stringify(v3.tags));
+  lib3.sluit();
   lib2.sluit();
 
   // weghalen = cascade
   lib.verwijderTrack('a1');
   ok('een nummer weghalen haalt zijn tags en plekken mee', lib.db.prepare("SELECT COUNT(*) AS n FROM nummer_tags WHERE track_id = 'a1'").get().n === 0
     && lib.db.prepare("SELECT COUNT(*) AS n FROM categorie_nummers WHERE track_id = 'a1'").get().n === 0);
+  // bpm filtert op het hoofdtempo zoals de lijst het toont (k_bpm, libraryBpm), niet op het eerste stuk.
+  nieuw('bp');
+  lib.bewaarGrid('bp', { stukken: [{ van: 0, bpm: 95, anker: 0, zekerheid: 0.9 }, { van: 10, bpm: 124, anker: 0, zekerheid: 0.9 }] });
+  ok('bpm:120-128 vindt een nummer met een intro op 95 en de rest op 124', ids({ bpm: [120, 128] }).includes('bp') && !ids({ bpm: [90, 100] }).includes('bp'));
+  // Een kapotte stems_json (een oude schrijver): stems:4 geeft geen fout, alleen niets voor die rij.
+  lib.db.prepare("UPDATE tracks SET stems_json = '{kapot' WHERE id = 'a4'").run();
+  ok('stems:4 met een kapotte stems_json: geen fout', (() => { try { return Array.isArray(ids({ stems: '4' })); } catch { return false; } })());
+  lib.db.prepare("UPDATE tracks SET stems_json = NULL WHERE id = 'a4'").run();
+  // Een server zonder S11 op dezelfde library.db schrijft grid_json zonder de k_*-kolommen: bij het
+  // opnieuw openen kloppen ze weer (review S11 a4).
+  lib.db.prepare("UPDATE tracks SET grid_json = ?, grid_bpm = 140, k_grid = NULL, k_bpm = NULL WHERE id = 'a6'").run(JSON.stringify({ stukken: [{ van: 0, bpm: 140, anker: 0, zekerheid: 0.9 }] }));
+  const pad = join(map, 'lib.db');
+  lib.sluit();
+  const her = new Library(pad);
+  ok('opnieuw openen herstelt de afgeleide kolommen (en raakt de rest niet)', her._kenmerkenHersteld === 1
+    && her.db.prepare("SELECT k_grid, k_bpm FROM tracks WHERE id = 'a6'").get().k_bpm === 140 && her.haal('kenmerk_versie') >= 1);
+  lib = her;
   ok('de rijen hebben geen k_*-velden (intern), wel tags en energie', !('k_grid' in lib.track('a3')) && Array.isArray(lib.track('a3').tags) && 'energie' in lib.track('a3'));
   lib.sluit();
 

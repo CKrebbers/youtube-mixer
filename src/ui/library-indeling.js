@@ -1,7 +1,7 @@
 import { esc } from './dom.js';
 import { leesWeg } from '../lib/antwoord.js';
 import {
-  KLEUREN, SNEL, sleutelVan, geldigeNaam, leesZoekregel, zoekregelVan, chipsVan, filterKort,
+  KLEUREN, SNEL, sleutelVan, geldigeNaam, leesZoekregel, zoekregelVan, chipsVan, filterKort, combineer,
 } from '../library/indeling.js';
 
 /*
@@ -44,6 +44,23 @@ export function leesTagInvoer(tekst) {
     (weg ? eraf : erbij).push(naam);
   }
   return { erbij, eraf, fout };
+}
+
+/**
+ * Aanvullen in het tagveld (review S11 b4): een naam die nog geen tag is, maar het begin van precies
+ * één bestaande, wordt die. Geeft { namen, nieuw } met `nieuw` = de namen die echt nieuw zijn. Puur.
+ */
+export function vulAan(namen, bestaand) {
+  const uit = [], nieuw = [];
+  for (const n of namen) {
+    const s = sleutelVan(n);
+    const exact = bestaand.find((t) => t.sleutel === s);
+    const begin = exact ? [] : bestaand.filter((t) => t.sleutel.startsWith(s));
+    if (exact) uit.push(exact.naam);
+    else if (begin.length === 1) uit.push(begin[0].naam);
+    else { uit.push(n); nieuw.push(n); }
+  }
+  return { namen: uit, nieuw };
 }
 
 /** Aan of uit voor een groep: hebben ze hem allemaal, dan eraf; anders erbij. Puur. */
@@ -183,7 +200,6 @@ export class IndelingPaneel {
     } catch (err) {
       if (gen === this._gen) this.p.meld(`indeling niet geladen: ${err.message}`, false);
     }
-    this.naVerversen?.();
     this.teken();
     if (voor !== null && this.p.vraagSleutel?.() !== voor) this.p.naIndeling?.();
   }
@@ -252,7 +268,12 @@ export class IndelingPaneel {
         if (categorie != null) {
           const c = this.stand.categorieen.find((x) => x.id === categorie);
           if (c?.soort === 'gewoon') body.regel.categorie = categorie;
-          else if (c) Object.assign(body.regel, c.regel);   // vanuit een slimme: zijn regel erbij
+          else if (c) {
+            // Vanuit een slimme: zijn regel EN wat je erbij typte, als één regel (strikt, nooit ruimer).
+            const samen = combineer(c.regel ?? {}, rest);
+            if (!samen) { this.p.meld(`"${c.naam}" en wat je erbij typte passen niet in één regel (twee of-groepen, of niets gemeen): kies eerst "alles"`, false); return null; }
+            body.regel = samen;
+          }
         }
       }
       const r = await json('/api/indeling/categorie', body);
@@ -295,6 +316,7 @@ export class IndelingPaneel {
         r = await json('/api/indeling/tags/tag', { naam, ...velden, samenvoegen: true });
       }
       if (velden.nieuw) {
+        this.naHernoem?.();   // de namen kunnen anders zijn (het tag-geheugen van de bus)
         // Staat de oude naam in het zoekveld, dan de nieuwe erin.
         const { filter } = this.lees();
         const oud = sleutelVan(naam), nieuw = sleutelVan(r.tag.naam);
@@ -318,6 +340,7 @@ export class IndelingPaneel {
         r = await json('/api/indeling/tags/wis', { naam, forceer: true });
       }
       this.menu = null;
+      this.naHernoem?.();
       this.p.meld(`#${r.weg} weg (van ${r.nummers} nummers)`, true);
       const { filter } = this.lees();
       if (filter.tags) { for (const k of ['en', 'of', 'niet']) filter.tags[k] = filter.tags[k].filter((x) => x !== sleutelVan(naam)); this.zetFilter(filter); }
@@ -372,11 +395,31 @@ export class IndelingPaneel {
       const { erbij, eraf, fout } = leesTagInvoer(this.el.tagveld.value);
       if (fout.length) { this.p.meld(`geen tag: ${fout.join(', ')} (geen , | # @ ")`, false); return; }
       const ids = this.p.doelIds();
+      // "du" + Enter wordt #dub als dat de enige tag is die zo begint; een echt nieuwe tag vraagt een
+      // tweede Enter (zoals de tweede klik elders): een tikfout wordt zo geen nieuwe tag.
+      const a = vulAan(erbij, this.stand.tags);
+      if (a.nieuw.length && !this.p.bevestigd('nieuwe-tag', a.nieuw.join(','))) {
+        this.p.meld(`nieuw: ${a.nieuw.map((n) => `#${n}`).join(' ')} — Enter nog eens om ${a.nieuw.length > 1 ? 'ze' : 'hem'} te maken`, false);
+        return;
+      }
+      const weg = vulAan(eraf, this.stand.tags).namen;
       (async () => {
-        if (erbij.length) await this.zetTags(ids, erbij, true);
-        if (eraf.length) await this.zetTags(ids, eraf, false);
-        if (erbij.length || eraf.length) this.el.tagveld.value = '';
+        if (a.namen.length) await this.zetTags(ids, a.namen, true);
+        if (weg.length) await this.zetTags(ids, weg, false);
+        if (a.namen.length || weg.length) this.el.tagveld.value = '';
       })();
+    });
+    // Tab: de enige tag die zo begint invullen (het laatste deel na een komma).
+    this.el.tagveld.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab' || e.shiftKey) return;
+      const v = this.el.tagveld.value, i = v.lastIndexOf(',');
+      const deel = v.slice(i + 1).trim().replace(/^-\s*#?|^#/, '');
+      if (!deel) return;
+      const pas = this.stand.tags.filter((t) => t.sleutel.startsWith(sleutelVan(deel)));
+      if (pas.length !== 1) return;
+      e.preventDefault();
+      const voor = v.slice(0, i + 1) + (i >= 0 ? ' ' : '') + (/^\s*-/.test(v.slice(i + 1)) ? '-' : '');
+      this.el.tagveld.value = `${voor}${pas[0].naam}`;
     });
     this.el.incat.addEventListener('change', () => {
       const id = Number(this.el.incat.value);
@@ -463,12 +506,14 @@ export class IndelingPaneel {
     const c = this.stand.categorieen.find((x) => x.id === filter.categorie);
     const plek = this.plekMogelijk(filter) ? `<button class="btn sm ik-plek${this.p.plekAan?.() ? ' on' : ''}" data-plek="1" title="de volgorde van de categorie (sleep rijen om hem te verzetten); uit = de kolom waarop je sorteert">↕ volgorde</button> ` : '';
     const een = ids.length === 1 ? this.p.track(ids[0]) : null;
-    this._zet(this.el.sel, plek + (meer > 1 ? `<b>${meer} gekozen</b>` : een ? `<span class="ik-een" title="taggen en → categorie gaan naar dit nummer (cmd-klik of shift-klik = meer)">→ ${esc(een.titel)}</span>` : '')
-      + (c?.soort === 'gewoon' && ids.length ? ` <button class="btn sm" data-uitcat="${c.id}" title="wat gekozen is uit "${esc(c.naam)}" halen (de nummers blijven in de library)">uit ${esc(c.naam)}</button>` : ''));
+    const buiten = meer ? this.p.selectieBuiten?.() ?? 0 : 0;
+    this._zet(this.el.sel, plek + (meer > 1 ? `<b>${meer} gekozen</b>${buiten ? ` <span class="ik-onbekend" title="die staan niet in de lijst van nu (een ander filter, of nog niet geladen): taggen raakt ze wel">(${buiten} niet in beeld)</span>` : ''}` : een ? `<span class="ik-een" title="taggen en → categorie gaan naar dit nummer (cmd-klik of shift-klik = meer)">→ ${esc(een.titel)}</span>` : '')
+      + (c?.soort === 'gewoon' && ids.length ? ` <button class="btn sm" data-uitcat="${c.id}" title="wat gekozen is uit „${esc(c.naam)}” halen (de nummers blijven in de library)">uit ${esc(c.naam)}</button>` : ''));
     this._zet(this.el.taglijst, this.stand.tags.map((t) => `<option value="${esc(t.naam)}"></option>`).join(''));
     this._zet(this.el.incat, `<option value="">→ categorie</option>${this.stand.categorieen.filter((x) => x.soort === 'gewoon').map((x) => `<option value="${x.id}">${esc(x.naam)}</option>`).join('')}`);
     const doel = ids.map((id) => this.p.track(id)).filter(Boolean);
-    this._zet(this.el.snel, this.stand.snel.map((n, i) => (n ? `<button class="btn sm ik-snelknop ik-${esc(this.kleuren.get(sleutelVan(n)) ?? 'grijs')}${doel.length && tagWissel(doel, n) === 'uit' ? ' on' : ''}" data-snel="${i + 1}"
+    // Zonder snel-tags een hint (alt+1…8 doet anders niets, en niemand weet waarom).
+    this._zet(this.el.snel, !this.stand.snel.some(Boolean) ? (this.stand.tags.length ? '<span class="ik-hint" title="⋯ bij een tag in de kolom links: snel 1–8">snel-tags: ⋯ bij een tag</span>' : '') : this.stand.snel.map((n, i) => (n ? `<button class="btn sm ik-snelknop ik-${esc(this.kleuren.get(sleutelVan(n)) ?? 'grijs')}${doel.length && tagWissel(doel, n) === 'uit' ? ' on' : ''}" data-snel="${i + 1}"
       title="snel-tag ${i + 1}: #${esc(n)} aan/uit op wat gekozen is (alt+${i + 1})">${i + 1} ${esc(n)}</button>` : '')).join(''));
   }
 

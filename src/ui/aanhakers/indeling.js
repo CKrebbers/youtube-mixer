@@ -36,6 +36,11 @@ export function maakTagGeheugen({ haal, vind = () => null } = {}) {
       return null;
     },
     vers(id, t) { tags.set(id, t); },
+    /** Nu ophalen (en onthouden), voor wie niet op het volgende beeld kan wachten. Null = niet gelukt. */
+    async haal(id) {
+      try { const x = await haal(id); if (Array.isArray(x)) { tags.set(id, x); return x; } } catch (_) {}
+      return null;
+    },
     vergeet(id) { tags.delete(id); },
     /** Alles vergeten (een tag hernoemd, samengevoegd of gewist: de namen kunnen anders zijn). */
     wis() { tags.clear(); },
@@ -83,6 +88,7 @@ export default async function opzet(ctx) {
     },
   });
   const nummerOp = (deckId) => staat?.deckTrack?.[deckId] ?? null;
+  const bezig = new Set();
   for (const [nr, deckId] of TRACKS) {
     for (let k = 1; k <= SNEL; k++) {
       define(`track.${nr}.tag.${k}`, 'trigger', (on) => {
@@ -90,13 +96,19 @@ export default async function opzet(ctx) {
         const id = nummerOp(deckId), naam = snelNaam(k);
         if (!id) { meld(`track ${nr}: geen nummer uit de library om te taggen`, 'info'); return; }
         if (!naam) { meld(`snel-tag ${k} is leeg: zet hem in de library (⋯ bij een tag)`, 'info'); return; }
-        const tags = geheugen.lees(id) ?? lib._track(id)?.tags ?? [];
-        const aan = !tags.some((x) => sleutelVan(x) === sleutelVan(naam));
-        ind.zetTags([id], [naam], aan).then((r) => {
+        // Eerst weten welke tags het nummer HEEFT (anders zet de eerste druk hem altijd aan), en één
+        // druk tegelijk per nummer (twee snelle drukken lazen anders dezelfde stand).
+        if (bezig.has(id)) return;
+        bezig.add(id);
+        (async () => {
+          const tags = geheugen.lees(id) ?? await geheugen.haal(id);
+          if (!tags) { meld(`track ${nr}: de tags van dit nummer zijn niet te lezen`, 'fout'); return; }
+          const aan = !tags.some((x) => sleutelVan(x) === sleutelVan(naam));
+          const r = await ind.zetTags([id], [naam], aan);
           if (!r) return;
           const rest = tags.filter((x) => sleutelVan(x) !== sleutelVan(naam));
           geheugen.vers(id, aan ? [...rest, ...r.tags] : rest);
-        });
+        })().finally(() => bezig.delete(id));
       }, {
         label: `Snel-tag ${k} aan/uit op het nummer op track ${nr}`, ...OVERSLAAN,
         read: () => {
@@ -108,6 +120,7 @@ export default async function opzet(ctx) {
       });
     }
   }
-  ind.naVerversen = () => geheugen.wis();
+  // Alleen bij hernoemen, samenvoegen of wissen van een tag vergeten (niet bij elke nieuwe stand).
+  ind.naHernoem = () => geheugen.wis();
   window.varveIndeling = { geheugen, lib, stand: () => ind.stand };
 }

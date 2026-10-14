@@ -24,8 +24,8 @@
 .ik-item .ik-naam{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ik-item b{font-weight:400;color:var(--dim);font-family:ui-monospace,monospace;font-size:10px}
 .ik-stip{width:7px;height:7px;border-radius:50%;background:var(--ik);flex:none}
-.ik-meer{background:none;border:0;color:var(--dim);cursor:pointer;padding:0 2px;font:inherit;visibility:hidden}
-.ik-item:hover .ik-meer,.ik-tagrij:hover .ik-meer{visibility:visible}
+.ik-meer{background:none;border:0;color:var(--dim);cursor:pointer;padding:0 2px;font:inherit;opacity:.35}
+.ik-item:hover .ik-meer,.ik-tagrij:hover .ik-meer,.ik-meer:focus-visible{opacity:1}
 .ik-menu{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:4px 8px 6px 14px;background:var(--panel2)}
 .ik-menu input{width:100%;box-sizing:border-box;background:var(--panel);border:1px solid var(--line);border-radius:3px;color:var(--text);font:inherit;font-size:11px;padding:2px 5px}
 .ik-kleuren{display:flex;gap:3px}

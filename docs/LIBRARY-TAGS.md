@@ -30,7 +30,8 @@ Keuzes:
   bestaan zonder elkaar te raken. Bewust niet één begrip: een rack hoort bij geen nummer.
 - **Een tag heeft een naam en een sleutel.** De sleutel is de naam in kleine letters, zonder accenten
   en met enkele spaties (`sorteertitel`-achtig): "Dub" en "dub" zijn dezelfde tag. Verboden in een
-  naam: `, | # @ "` en stuurtekens (die zijn van de zoekregel), hooguit 40 tekens.
+  naam: `, | # @ "` en stuurtekens (die zijn van de zoekregel), en niet met `-` beginnen (dat is
+  "eraf" in het tagveld); hooguit 40 tekens. Een categorienaam mag 60 tekens.
 - **Slimme regels noemen tags bij NAAM** (leesbaar, ook voor Claude). Hernoemen of samenvoegen
   schrijft de regels mee om, in dezelfde transactie.
 - **Kleuren uit een vaste lijst** (`KLEUREN`): grijs rood oranje geel groen cyaan blauw violet roze.
@@ -50,10 +51,18 @@ Eén filter-object, puur gedefinieerd in `src/library/indeling.js` (server en br
 - `stems`: `ja`, `nee`, `2`, `4`.
 - `energie` 0..1: de energie van de secties, gewogen naar hun lengte (nog geen kaart = geen waarde).
 
-Om dat op 20.000 nummers in SQL te kunnen, bewaart schema v10 drie AFGELEIDE kolommen naast de JSON
-(`k_grid`, `k_toon`, `k_energie`). Ze worden gezet waar grid, toon en secties bewaard worden, met
-dezelfde formules als de lijst (`gridStatus` van grid-strook.js, `ToonKaart.hoofd`), en bij de
-migratie één keer uitgerekend. Nooit een tweede formule.
+Om dat op 20.000 nummers in SQL te kunnen, bewaart schema v10 vier AFGELEIDE kolommen naast de JSON
+(`k_grid`, `k_toon`, `k_energie`, `k_bpm`). Ze worden gezet waar grid, toon, secties en duur bewaard
+worden, met dezelfde formules als de lijst (`gridStatus`, `ToonKaart.hoofd`, `libraryBpm` voor het
+hoofdtempo: `bpm:` filtert op wat de kolom TOONT, niet op het eerste stuk). Nooit een tweede formule.
+Bij elk openen van de library rekent de server ze na (alleen wat anders is wordt geschreven): een
+server zonder S11 op dezelfde library.db, of een nieuwe drempel (`KENMERK_VERSIE`), maakt ze anders
+stil oud.
+
+**Een slimme categorie plus wat je erbij typt** is strikt EN: de server maakt er twee blokken
+voorwaarden van (`Indeling.sql`), dus wat je typt maakt hem nooit ruimer (twee of-groepen, een ander
+grid, toon zonder gemeenschappelijke = niets). `combineer()` doet hetzelfde als je er een nieuwe regel
+van maakt, en zegt null als het niet in één regel past.
 
 **De zoekregel** (het zoekveld van de library, de iPad, het planvenster): woorden zijn zoektekst,
 met daartussen:
@@ -71,7 +80,7 @@ met daartussen:
 | `stems` `-stems` `stems:4` | met / zonder / met vier |
 | `energie:hoog` `energie:0.5-1` | hoog (≥ 0,66), midden, laag (≤ 0,33) of een bereik |
 
-`leesZoekregel(tekst, { tags, categorieen })` maakt er een filter van en zegt wat hij niet begreep;
+`leesZoekregel(tekst, { categorieen })` maakt er een filter van en zegt wat hij niet begreep;
 `zoekregelVan(filter)` schrijft hem terug. De lijst toont het filter als chips; × haalt er één weg.
 
 **Sorteren** blijft hetzelfde (titel, bpm, duur, toegevoegd, gespeeld) met één erbij: `plek`, de
@@ -83,18 +92,28 @@ komt er niet meer overheen.
 ## 3. Bedienen
 
 **Op de Mac (library-paneel)**:
-- links een smalle kolom INDELING: alles · de categorieën (met aantal) · de slimme (✦) · de tags
-  (chips in hun kleur, met aantal). Klik = filter; alt-klik op een tag = "niet".
-- een nummer KIEZEN = klik (zoals nu). Meer kiezen: cmd-klik (erbij/eraf), shift-klik (een reeks).
-- **taggen**: het tagveld boven de lijst (aanvullen uit de bestaande tags), Enter = op alles wat
-  gekozen is; `-naam` haalt hem eraf. Alt+T = naar het tagveld. Alt+1…8 = snel-tag 1–8 aan/uit op
-  wat gekozen is. Een tagchip in een rij: klik = filter, × = eraf.
+- links een smalle kolom CATEGORIEËN/TAGS (☰ indeling = open/dicht): alles · de categorieën (met
+  aantal) · de slimme (✦) · de tags (chips in hun kleur, met aantal; een snel-tag met zijn nummer).
+  Klik = filter; alt-klik op een tag = "niet".
+- een nummer KIEZEN = klik (zoals nu). Meer kiezen: cmd-klik (erbij/eraf), shift-klik (een reeks),
+  cmd+A = alle treffers van het filter (hooguit 5000, van de server). Taggen raakt wat gekozen is,
+  of het nummer dat je zelf aanwees (klik, het wiel); na een nieuw filter niets tot je kiest.
+- **taggen**: het tagveld boven de lijst. Tab vult de enige tag aan die zo begint; Enter: een naam
+  die het begin van precies één tag is wordt die tag, een echt nieuwe vraagt een tweede Enter (een
+  tikfout wordt geen tag). Meer met een komma, `-naam` haalt hem eraf. Alt+T = naar het tagveld.
+  Alt+1…8 = snel-tag 1–8 aan/uit. Een tagchip in een rij: klik = filter, alt-klik = niet, shift-klik
+  = van dit nummer af.
 - **slepen** van een (of de gekozen) rij(en) naar een categorie = erin; binnen een categorie
   (gesorteerd op plek) op een andere rij = daarvóór zetten.
-- `+ categorie` (naam typen, Enter), `+ slim` = het filter van nu bewaren als slimme categorie.
-  Per categorie/tag `⋯`: hernoemen, kleur, wissen (tweede klik binnen 3 s). Een tag hernoemen naar
-  een bestaande = samenvoegen (tweede klik).
-- `kaartkrat →` in de kaart-tab: neem deze krat over als categorie.
+- `+` (naam typen, Enter) = een categorie, `+ ✦` = het filter van nu bewaren als slimme categorie
+  (vanuit een slimme: zijn regel EN wat je typte, strikt). Per categorie/tag `⋯` (gedimd, bij hover
+  vol): hernoemen, kleur, snel 1–8, wissen (tweede klik binnen 3 s), bij een slimme "regel" en
+  "✓ filter". Een tag hernoemen naar een bestaande = samenvoegen (tweede klik).
+- `→ categorie` in de tagbalk zet wat gekozen is erin; `↕ volgorde` = de volgorde van de categorie
+  aan/uit; "uit <categorie>" haalt het eruit.
+- `→ categorie` in de kaart-tab: neem de gekozen krat over als categorie.
+- Niet gebouwd: de volgorde van de categorieën zelf omslepen in de kolom (de route bestaat:
+  `POST /api/indeling/categorie/volgorde`).
 
 **Op de bus** (`define` in de aanhaker `indeling`, uitleg in `src/ui/beschrijf/indeling.js`):
 
@@ -116,7 +135,7 @@ iPad mag (Clay's wens "overal"), en het raakt alleen het label van het nummer da
 **Maschine (BROWSE, docs/MASCHINE.md §5e)**: de kop van het linkerscherm toont het filter
 (`@warm #dub`) in plaats van "LIBRARY". Welke knop `library.category.*` of `library.quick*` doet,
 kiest Clay: `mappings/*.json` blijven ongemoeid; een voorbeeld staat in
-`mappings/stukken/indeling-voorbeeld.json` (een fragment, alleen met `?stukken=indeling-voorbeeld`).
+`mappings/stukken/indeling-voorbeeld.json` (een stuk: noem het in je werkruimte, `"stukken": ["indeling-voorbeeld"]`).
 
 **iPad/iPhone en werk.html**: het vak `library` krijgt een categoriekeuze en leest de zoekregel
 (alleen GET, zoals nu). De bouwsteen `tags` (src/paneel/vrij.js) = acht knoppen
@@ -151,9 +170,11 @@ kopie nemen alles vanzelf mee; er komt geen bestand naast de database bij, dus g
 VARVE_*-variabele. Ids in de database blijven `tracks.id`; geen paden.
 
 **Export/import** (`GET/POST /api/indeling`): `{ soort: 'varve-indeling', schema: 1, tags:
-[{ naam, kleur }], categorieen: [{ naam, soort, kleur, regel?, nummers? }], snel: [8] }`. Importeren
+[{ naam, kleur, nummers }], categorieen: [{ naam, soort, kleur, regel?, nummers? }], snel: [8] }`. Importeren
 VOEGT SAMEN en wist nooit: nieuwe tags en categorieën komen erbij, een gewone categorie met dezelfde
-naam krijgt de ontbrekende nummers achteraan, een slimme met dezelfde naam krijgt de nieuwe regel.
+naam krijgt de ontbrekende nummers achteraan, een slimme met dezelfde naam krijgt de nieuwe regel,
+de `nummers` van een tag krijgen die tag (wat ze al hadden blijft). Per categorie een savepoint: een
+fout laat er niets half van staan. Met een spelend deck weigert hij (409, `droog` mag wel).
 Onbekende nummers worden overgeslagen en genoemd. `?droog=1` zegt wat er zou gebeuren. Zo kan Claude
 een indeling schrijven zonder iets kapot te maken.
 
@@ -182,7 +203,7 @@ Alle POST: alleen deze Mac (403), alleen JSON (de algemene regel, 415), Host/Ori
 ## 6. Tegen de drie regels
 
 1. De engine weet van niets: categorieën, tags en filters leven in de server, het paneel en de
-   aanhaker. `track.N.tag.K` leest welk nummer er op de track staat via de laadlaag (`deckHerkomst`),
+   aanhaker. `track.N.tag.K` leest welk nummer er op de track staat via de laadlaag (`staat.deckTrack`),
    niet via de engine.
 2. Alle actions zijn triggers (boolean); geen value-action nodig.
 3. Er is geen tijd in het spel.

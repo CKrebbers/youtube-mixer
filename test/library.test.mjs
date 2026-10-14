@@ -249,7 +249,7 @@ lib.bewaarGrid('abc123', kaart);            // voor het opruimen hieronder
   const na = l.db.prepare('SELECT * FROM tracks ORDER BY id').all();
   // stems_json (v8) en secties_json (v9) zijn ook nieuwe kolommen: die komen er leeg bij.
   ok('elke rij ongeschonden, op de nieuwe kolommen (toon_json, titelsleutel, stems_json, secties_json, k_*) na', na.length === voor.length
-    && na.every(({ titel_sleutel: _s, toon_json: _t, stems_json: _st, secties_json: _sec, k_grid: _kg, k_toon: _kt, k_energie: _ke, ...r }, i) => JSON.stringify(r) === JSON.stringify(voor[i])));
+    && na.every(({ titel_sleutel: _s, toon_json: _t, stems_json: _st, secties_json: _sec, k_grid: _kg, k_toon: _kt, k_energie: _ke, k_bpm: _kb, ...r }, i) => JSON.stringify(r) === JSON.stringify(voor[i])));
   // v10 (spoor S11): de afgeleide kolommen uit wat er al stond: een grid zonder zekerheid = 'hand'.
   ok('v10: k_grid uit het oude grid (hand), geen grid = null; k_toon en k_energie leeg', na.every((r) => (r.grid_json ? r.k_grid === 'hand' : r.k_grid === null)
     && r.k_toon === null && r.k_energie === null));

@@ -1,5 +1,5 @@
 import { ToonKaart, camelot, kortNaam, leesToonsoort } from '../engine/toonsoort.js';
-import { gridStatus } from '../ui/grid-strook.js';
+import { gridStatus, libraryBpm } from '../ui/grid-strook.js';
 
 /*
  * De indeling van de library (spoor S11, docs/LIBRARY-TAGS.md): categorieën, slimme categorieën en
@@ -118,21 +118,28 @@ export function normaliseerFilter(f) {
 /** Is dit filter leeg (= de hele library)? */
 export const filterLeeg = (f) => !f || Object.keys(f).length === 0;
 
-/** Twee filters als één (en): een slimme categorie plus wat je er nog bij typt. Puur. */
+/**
+ * Twee filters als één, strikt EN (een slimme categorie plus wat je erbij typt, als nieuwe regel):
+ * het resultaat vindt nooit meer dan elk van beide. Kan dat niet in één filter (twee "of"-groepen,
+ * twee zoekteksten), of is de doorsnede leeg (bpm/energie zonder overlap, toon zonder gemeenschappelijke,
+ * een ander grid of stems), dan null: de server rekent ze zelf als twee blokken (Indeling.sql). Puur.
+ */
 export function combineer(a, b) {
-  const uit = { ...(a ?? {}) };
+  const uit = structuredClone(a ?? {});
   for (const [k, v] of Object.entries(b ?? {})) {
+    if (uit[k] === undefined) { uit[k] = structuredClone(v); continue; }
     if (k === 'tags') {
-      const t = uit.tags ?? { en: [], of: [], niet: [] };
-      // Twee "of"-groepen samen zijn niet één "of": de tweede groep wordt "en" van zijn eerste… dat kan
-      // het filter niet zeggen. Dan wint b (wat je erbij typt); de regel blijft in `en` en `niet`.
-      uit.tags = { en: [...new Set([...t.en, ...v.en])], of: v.of.length ? v.of : t.of, niet: [...new Set([...t.niet, ...v.niet])] };
-    } else if (k === 'zoek' && uit.zoek) uit.zoek = `${uit.zoek} ${v}`;
-    else if ((k === 'bpm' || k === 'energie') && uit[k]) {
+      const t = uit.tags;
+      if (t.of.length && v.of.length) return null;
+      uit.tags = { en: [...new Set([...t.en, ...v.en])], of: t.of.length ? t.of : v.of, niet: [...new Set([...t.niet, ...v.niet])] };
+    } else if (k === 'bpm' || k === 'energie') {
       const lo = Math.max(uit[k][0], v[0]), hi = Math.min(uit[k][1], v[1]);
-      uit[k] = [lo, Math.max(lo, hi)];
-    } else if (k === 'toon' && uit.toon) uit.toon = uit.toon.filter((x) => v.includes(x));
-    else uit[k] = v;
+      if (lo > hi) return null;
+      uit[k] = [lo, hi];
+    } else if (k === 'toon') {
+      uit.toon = uit.toon.filter((x) => v.includes(x));
+      if (!uit.toon.length) return null;
+    } else if (JSON.stringify(uit[k]) !== JSON.stringify(v)) return null;   // zoek, grid, stems, categorie: hetzelfde of niets
   }
   return uit;
 }
@@ -316,7 +323,20 @@ export function filterKort(f, opties = {}) {
   return chipsVan(f, opties).map((c) => c.tekst).join(' ');
 }
 
-// ---- afgeleide kenmerken (schema v10: k_grid, k_toon, k_energie) -------------------------------
+// ---- afgeleide kenmerken (schema v10: k_grid, k_toon, k_energie, k_bpm) -------------------------
+
+/**
+ * De versie van de formules hieronder (en van gridStatus, ToonKaart.hoofd, libraryBpm die ze gebruiken).
+ * Anders dan in `instellingen.kenmerk_versie` = de server rekent bij het opstarten alles opnieuw.
+ * Verander je een drempel of formule die de lijst toont: verhoog hem.
+ */
+export const KENMERK_VERSIE = 1;
+
+/** k_bpm: het hoofdtempo zoals de bpm-kolom het toont (libraryBpm: "84.7", "~84.7", "128 / 117", "64.6?"), of null. */
+export function bpmKenmerk(grid, duur) {
+  if (!grid) return null;
+  try { const m = /\d+(?:\.\d+)?/.exec(libraryBpm(grid, duur)); return m ? Number(m[0]) : null; } catch { return null; }
+}
 
 /** k_grid: de status van gridStatus (geen/slot/hand/zeker/onzeker/geenpuls), of null zonder grid. */
 export function gridKenmerk(grid, duur) {
@@ -376,7 +396,10 @@ export function normaliseerIndeling(d) {
     if (!naam) { fouten.push(`tag ${JSON.stringify(t).slice(0, 60)} overgeslagen`); continue; }
     if (tagGezien.has(sleutelVan(naam))) continue;
     tagGezien.add(sleutelVan(naam));
-    uit.tags.push({ naam, kleur: KLEUREN.includes(t?.kleur) ? t.kleur : null });
+    const x = { naam, kleur: KLEUREN.includes(t?.kleur) ? t.kleur : null };
+    // De nummers met deze tag (export, of Claude die nummers tagt): alleen geldige ids, hooguit MAX_IDS.
+    if (Array.isArray(t?.nummers)) x.nummers = [...new Set(t.nummers.filter((id) => typeof id === 'string' && /^[\w-]{1,80}$/.test(id)))].slice(0, MAX_IDS);
+    uit.tags.push(x);
   }
   const catGezien = new Set();
   for (const c of Array.isArray(d.categorieen) ? d.categorieen.slice(0, MAX_CATEGORIEEN) : []) {

@@ -332,7 +332,7 @@ linkerscherm (`@Warm op #dub`, `bladerStand().filter`) in plaats van LIBRARY. Ki
 `library.category.next/prev/clear`, `library.quicktag.1–8` (snel-tag op het gekozen nummer) en
 `library.quickfilter.1–8`; ze staan op geen knop van `mappings/maschine-mk2.json` (Clay verdeelt).
 Een voorbeeld: `mappings/stukken/indeling-voorbeeld.json` (SHIFT + ◄ ► = categorie, SHIFT + ENTER =
-filter leeg, in de laag bladeren; alleen met `?stukken=indeling-voorbeeld`).
+filter leeg; zonder laag, want de laag bladeren is geen mapje dat een stuk kan noemen). Noem hem in je werkruimte (`"stukken": ["indeling-voorbeeld"]`): `?stukken=` laadt alleen APC-stukken.
 
 ## 5f. De sampler op de Maschine (gebouwd 8 okt, tak `studio/maschine-sampler`)
 

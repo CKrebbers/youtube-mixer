@@ -200,9 +200,18 @@ try {
   await klik('#lib-panel .lib-rij[data-id="echt2"] .lib-duur', { mod: 4 });
   ok('cmd-klik: echt2 eraf (twee gekozen)', await tot("document.querySelector('#lib-panel .ik-sel').textContent.includes('2 gekozen')", 3000));
   await typ('#lib-panel .ik-tagveld', 'Dub');
+  ok('een nieuwe tag vraagt een tweede Enter (een tikfout wordt geen tag)', await tot(`${STATUS}.includes('Enter nog eens')`, 3000)
+    && (await api('/api/library?tag=dub&aantal=1')).totaal === 0);
+  handelingen++;
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
   ok('tagveld + Enter: #Dub op echt1 en echt3 (server)', await tot("document.querySelectorAll('#lib-panel .lib-rij[data-id=\"echt1\"] .ik-chip, #lib-panel .lib-rij[data-id=\"echt3\"] .ik-chip').length === 2", 5000)
     && (await api('/api/library?tag=dub&aantal=10')).totaal === 2);
-  ok('taggen van twee nummers: 5 handelingen (zoeken, klik, shift-klik, cmd-klik, typen + Enter)', handelingen - h0 === 5, `${handelingen - h0}`);
+  ok('taggen van twee nummers met een NIEUWE tag: 6 handelingen (zoeken, klik, shift-klik, cmd-klik, typen + Enter, Enter)', handelingen - h0 === 6, `${handelingen - h0}`);
+  // Een bestaande tag: "nac" + Enter wordt #nacht (het enige begin), zonder tweede Enter.
+  await typ('#lib-panel .ik-tagveld', 'nac');
+  ok('aanvullen: "nac" + Enter = #nacht op beide (geen nieuwe tag "nac")', await tot("document.querySelectorAll('#lib-panel .lib-rij[data-id=\"echt1\"] .ik-chip').length === 2", 5000)
+    && !(await api('/api/indeling/stand')).tags.some((t) => t.sleutel === 'nac'));
   await foto('indeling-getagd.png');
 
   // ---- een categorie maken en er nummers heen slepen ---------------------------------------
@@ -292,6 +301,49 @@ try {
   ok(`een slimme categorie uit het filter: ${slim?.aantal} nummers, wat de regel nu vindt`, slim?.soort === 'slim' && slim.aantal === verwacht && verwacht > 0);
   ok('…en hij staat meteen als filter', await tot(`document.querySelector('#lib-panel .lib-zoek').value === '@"deep vlot"'`, 3000));
   await foto('indeling-slim.png');
+
+  // ---- cmd+A: alle treffers van het filter kiezen ------------------------------------------
+  console.log('\nalle treffers kiezen');
+  await zetZoek('#deep -#nacht');
+  const nDeep = (await api('/api/library?tag=deep&niet=nacht&aantal=1')).totaal;
+  await tot(`${STATUS}.includes('${nDeep} gevonden')`, 5000);
+  await klik('#lib-panel .lib-rij[data-i="0"] .lib-duur');
+  handelingen++;
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', code: 'KeyA', modifiers: 4, windowsVirtualKeyCode: 65 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', modifiers: 4, windowsVirtualKeyCode: 65 });
+  ok(`cmd+A: alle ${nDeep} treffers gekozen (ook wat nog niet geladen is)`, await tot(`window.library.selectie.size === ${nDeep}`, 8000)
+    && await evalueer("document.querySelector('#lib-panel .ik-sel').textContent").then((t) => t.includes(`${nDeep} gekozen`)));
+
+  // ---- het planvenster: een set uit een categorie, en uit het filter van de library (S9) -----------
+  console.log('\nplanvenster');
+  await evalueer("document.getElementById('plan-btn').click(), true");
+  let pv = null;
+  for (let i = 0; i < 100 && !pv; i++) {
+    await wacht(100);
+    const t = (await fetch(`http://127.0.0.1:${DEBUG}/json/list`).then((r) => r.json()).catch(() => [])).find((x) => x.type === 'page' && /plan\.html/.test(x.url));
+    if (t) pv = t;
+  }
+  ok('de knop plan opent het planvenster', !!pv);
+  const pws = new WebSocket(pv.webSocketDebuggerUrl);
+  await new Promise((r) => pws.addEventListener('open', r));
+  let pid = 0;
+  const pwacht = new Map();
+  pws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.id && pwacht.has(m.id)) { pwacht.get(m.id)(m.result); pwacht.delete(m.id); } });
+  const pev = (expr) => new Promise((ok2) => { const id = ++pid; pwacht.set(id, (r) => ok2(r?.result?.value)); pws.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression: expr, awaitPromise: true, returnByValue: true } })); });
+  const ptot = async (expr, ms = 10000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await pev(`!!(${expr})`)) return true; await wacht(100); } return false; };
+  ok('de keuzelijst kent de categorieën, de tags en het filter van de library', await ptot(`[...document.querySelectorAll('.pl-krat option')].some((o) => o.value === 'cat:${cid}')
+    && [...document.querySelectorAll('.pl-krat option')].some((o) => o.value === 'tag:dub') && [...document.querySelectorAll('.pl-krat option')].some((o) => o.value === 'lib')`));
+  await pev(`(() => { const s = document.querySelector('.pl-krat'); s.value = 'cat:${cid}'; s.dispatchEvent(new Event('change')); })()`);
+  ok('categorie Warm op → de selectie (3, in zijn volgorde)', await ptot("document.querySelector('.pl-sel-tel').textContent === 'selectie: 3' && /in zijn volgorde/.test(document.body.textContent)"));
+  await pev(`(() => { const s = document.querySelector('.pl-krat'); s.value = 'lib'; s.dispatchEvent(new Event('change')); })()`);
+  ok(`het filter van de library (#deep -#nacht) → de selectie (${nDeep})`, await ptot(`document.querySelector('.pl-sel-tel').textContent === 'selectie: ${nDeep}'`));
+  // "maak set" in de volgorde van de keuze: de stappen zijn de nummers van de categorie, in plekvolgorde.
+  await pev(`(() => { const s = document.querySelector('.pl-krat'); s.value = 'cat:${cid}'; s.dispatchEvent(new Event('change')); })()`);
+  await ptot("document.querySelector('.pl-sel-tel').textContent === 'selectie: 3'");
+  await pev(`(() => { document.querySelector('.pl-bron').value = 'selectie'; document.querySelector('.pl-vorm').value = 'zoals'; document.querySelector('.pl-maakset').click(); })()`);
+  ok('maak set (zoals gekozen) uit de categorie: echt3, echt2, echt1', await ptot(`[...document.querySelectorAll('.pl-rij .pl-titel')].map((e) => e.firstChild.textContent).join() === 'echt echt3,echt echt2,echt echt1'`),
+    await pev("[...document.querySelectorAll('.pl-rij .pl-titel')].map((e) => e.firstChild.textContent).join()"));
+  pws.close();
 
   ok('geen fouten in de console', meldingen.length === 0, meldingen.join(' | '));
   console.log(`\nhandelingen in totaal: ${handelingen}`);

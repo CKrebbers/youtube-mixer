@@ -61,7 +61,7 @@ const FONT = [
 /** Tekens buiten ASCII die we zelf tekenen. */
 const EXTRA = { '±': Uint8Array.of(0x44, 0x44, 0x5f, 0x44, 0x44) };
 /** Wat we vereenvoudigen voor we tekenen. */
-const VERVANG = { '−': '-', '–': '-', '—': '-', '×': 'x', '·': '.', '→': '>', '←': '<', '♯': '#', '♭': 'b', '…': '...', '½': '1/2', '°': 'o' };
+const VERVANG = { '−': '-', '–': '-', '—': '-', '×': 'x', '·': '.', '→': '>', '←': '<', '♯': '#', '♭': 'b', '…': '...', '½': '1/2', '°': 'o', '✦': '*' };
 
 /** Een tekst zoals het font hem kan tekenen. Puur. */
 export function normaliseer(tekst) {

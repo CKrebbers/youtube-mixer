@@ -7,6 +7,8 @@ import {
   kolomSjabloon, kopHtml, cellenHtml, standaardOpslag, stemsCelHtml, klemKeuze, bladerVenster, KOLOMMEN,
 } from './library-lijst.js';
 
+/** Zoveel nummers kiest cmd+A hooguit (= MAX_IDS van taggen in één keer, src/library/indeling.js). */
+export const MAX_ALLES = 5000;
 /** Welke kolommen weggaan zolang de kolom INDELING open staat (spoor S11). */
 export const SMAL_WEG = ['lufs', 'racks'];
 import { IngestStrook } from './ingest-strook.js';
@@ -144,6 +146,7 @@ export class LibraryPanel {
       zetZoekTekst: (t) => { clearTimeout(zoekTimer); this.el.zoek.value = t; this._zoekNu(t.trim()); },
       doelIds: () => this.doelIds(),
       selectieGrootte: () => this.selectie.size,
+      selectieBuiten: () => this.selectieBuiten(),
       track: (id) => this._track(id),
       ververs: () => this.ververs(),
       meld: (tekst, goed) => { this.melding = { tekst, goed }; this.tekenStatus(); },
@@ -161,6 +164,13 @@ export class LibraryPanel {
       if (e.code === 'KeyT') { e.preventDefault(); this.indeling.el.tagveld.focus(); this.indeling.el.tagveld.select(); }
       const m = /^Digit([1-8])$/.exec(e.code);
       if (m) { e.preventDefault(); this.indeling.snel(Number(m[1])); }
+    });
+    // cmd+A (ctrl+A) in de lijst, niet in een invoerveld: alle treffers kiezen.
+    globalThis.addEventListener?.('keydown', (e) => {
+      if (!this.open || !this.indeling.aan || !(e.metaKey || e.ctrlKey) || e.altKey || e.code !== 'KeyA' || this.root.classList.contains('tab-kaart')) return;
+      if (e.target?.closest?.('input, textarea, select, [contenteditable]')) return;
+      e.preventDefault();
+      this.kiesAlles();
     });
 
     // "Past bij" (past-bij.js): aan/uit, en laden vanuit die lijst (zelfde tweede klik als de gewone lijst).
@@ -356,9 +366,24 @@ export class LibraryPanel {
 
   /** Wat taggen en "→ categorie" raakt: de selectie, anders het gekozen nummer. */
   doelIds() {
-    if (this.selectie.size) return this._opVolgorde([...this.selectie]);
+    if (this.selectie.size) {
+      // Onthouden tot de selectie of de pagina's veranderen: de read van library.quicktag.K vraagt dit elke tik.
+      const sleutel = `${this._selVersie}:${this.cache.gen}:${this.cache.paginas.size}`;
+      if (this._doel?.sleutel !== sleutel) this._doel = { sleutel, ids: this._opVolgorde([...this.selectie]) };
+      return this._doel.ids;
+    }
+    // Alleen een nummer dat je zelf aanwees (klik, of het wiel): na een nieuw filter staat de keuze op
+    // rij 0, en dan zou alt+1 de bovenste rij taggen zonder dat je het vroeg (review S11 b10).
+    if (!this._bewust) return [];
     const id = this.gekozenId ?? this.cache.rij(this.gekozen)?.id ?? null;
     return id && this.cache.totaal ? [id] : [];
+  }
+
+  /** Hoeveel van de selectie niet (meer) in de lijst van nu staat (een ander filter, nog niet geladen). */
+  selectieBuiten() {
+    let n = 0;
+    for (const id of this.selectie) if (this.cache.index(id) < 0) n++;
+    return n;
   }
 
   /** Ids in de volgorde van de lijst (een categorie krijgt ze zoals je ze ziet); wat niet binnen is achteraan. */
@@ -370,10 +395,14 @@ export class LibraryPanel {
   /** Klik op rij i: alleen deze (de selectie leeg), erbij/eraf (cmd), of een reeks vanaf de vorige klik (shift). */
   kiesRij(i, { erbij = false, reeks = false } = {}) {
     const id = this.cache.rij(i)?.id;
+    this._bewust = true;
+    this._selVersie = (this._selVersie ?? 0) + 1;
     if (reeks && this._anker != null) {
       const [a, b] = [Math.min(this._anker, i), Math.max(this._anker, i)];
       if (!erbij) this.selectie.clear();
-      for (let k = a; k <= b; k++) { const t = this.cache.rij(k); if (t) this.selectie.add(t.id); }
+      let mis = 0;
+      for (let k = a; k <= b; k++) { const t = this.cache.rij(k); if (t) this.selectie.add(t.id); else mis++; }
+      if (mis) { this.melding = { tekst: `${mis} rijen van die reeks waren nog niet binnen en zijn niet gekozen (cmd+A kiest alle treffers)`, goed: false }; this.tekenStatus(); }
     } else if (erbij) {
       // De eerste cmd-klik neemt het nummer dat al gekozen was mee.
       if (!this.selectie.size && this.gekozenId && this.gekozenId !== id) this.selectie.add(this.gekozenId);
@@ -386,8 +415,31 @@ export class LibraryPanel {
     this._zetKeuze(i);
   }
 
-  /** Alles wat de lijst nu vindt kiezen (hooguit wat er binnen is). */
-  kiesAlles() { for (const t of this.cache.geladen) this.selectie.add(t.id); this.tekenRijen(); this.indeling.tekenBalk(); }
+  /**
+   * Alle treffers van het filter kiezen (cmd+A in de lijst): de ids van de server, pagina's van 500,
+   * hooguit MAX_ALLES (zoveel neemt taggen in één keer aan).
+   */
+  async kiesAlles() {
+    const vraag = this._vraag(), gen = this.cache.gen;
+    const ids = [];
+    try {
+      for (let p = 0; p * 500 < Math.min(this.cache.totaal, MAX_ALLES); p++) {
+        const r = await fetch(lijstUrl(vraag, p, 500));
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.fout || `${r.status}`);
+        ids.push(...(j.tracks || []).map((t) => t.id));
+        if ((j.tracks || []).length < 500) break;
+      }
+    } catch (err) { this.melding = { tekst: `alles kiezen mislukt: ${err.message}`, goed: false }; return this.tekenStatus(); }
+    if (gen !== this.cache.gen) return;   // intussen een ander filter
+    this.selectie = new Set(ids.slice(0, MAX_ALLES));
+    this._selVersie = (this._selVersie ?? 0) + 1;
+    this._bewust = true;
+    this.melding = { tekst: `${this.selectie.size} gekozen${this.cache.totaal > MAX_ALLES ? ` (de eerste ${MAX_ALLES} van ${this.cache.totaal})` : ''}: typ een tag of kies "→ categorie"`, goed: true };
+    this.tekenStatus();
+    this.tekenRijen();
+    this.indeling.tekenBalk();
+  }
 
   _markeerDrop(el) {
     for (const x of this.el.venster?.querySelectorAll('.drop-voor') ?? []) if (x !== el) x.classList.remove('drop-voor');
@@ -452,6 +504,7 @@ export class LibraryPanel {
   kies(stap) {
     const totaal = this.cache.totaal;
     if (!totaal) return;
+    this._bewust = true;
     this._zetKeuze(klemKeuze(this.gekozen, stap, totaal));
     const el = this.el.rijen, kop = this.el.kop?.offsetHeight || 0;
     const boven = kop + this.gekozen * RIJ_H, onder = boven + RIJ_H;
@@ -900,7 +953,7 @@ export class LibraryPanel {
    */
   async ververs({ bovenaan = false } = {}) {
     // Nieuwe zoekterm of sortering: de kiezer hoort bij een rij die nu ergens anders staat.
-    if (bovenaan) { this.el.rijen.scrollTop = 0; this.kiezer = null; this.gekozen = 0; this.gekozenId = null; this.selectie.clear(); this._anker = null; }
+    if (bovenaan) { this.el.rijen.scrollTop = 0; this.kiezer = null; this.gekozen = 0; this.gekozenId = null; this.selectie.clear(); this._anker = null; this._bewust = false; this._selVersie = (this._selVersie ?? 0) + 1; }
     const { van, tot } = this._venster(Math.max(this.cache.totaal, 1));
     const vraag = this._vraag();
     try {

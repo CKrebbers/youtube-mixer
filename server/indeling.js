@@ -1,7 +1,7 @@
 import {
   KLEUREN, SNEL, MAX_TAGS, MAX_CATEGORIEEN, MAX_IDS, MAX_CATEGORIE_NAAM, GRID_ZEKER,
   geldigeNaam, sleutelVan, normaliseerFilter, normaliseerRegel, normaliseerSnel, normaliseerIndeling,
-  combineer, plekkenTussen,
+  plekkenTussen,
 } from '../src/library/indeling.js';
 
 /**
@@ -14,6 +14,9 @@ import {
 export class IndelingFout extends Error {
   constructor(code, bericht, extra = {}) { super(bericht); this.code = code; this.extra = extra; }
 }
+
+/** Zoveel slimme categorieën telt de stand hooguit (de rest: aantal null). */
+export const MAX_SLIM_TELLEN = 24;
 
 const isId = (x) => Number.isSafeInteger(x) && x > 0;
 const isTrackId = (x) => typeof x === 'string' && /^[\w-]{1,80}$/.test(x);
@@ -215,9 +218,13 @@ export class Indeling {
   /** Alle categorieën op volgorde, met hun aantal (een slimme: wat zijn regel nu vindt). */
   categorieen() {
     const tel = new Map(this._q('SELECT categorie_id AS c, COUNT(*) AS n FROM categorie_nummers GROUP BY categorie_id').all().map((r) => [r.c, r.n]));
+    let slim = 0;
     return this._q('SELECT * FROM categorieen ORDER BY volgorde, id').all().map((r) => {
       const c = this._rij(r);
       if (c.soort === 'gewoon') return { ...c, aantal: tel.get(c.id) ?? 0 };
+      // Een slimme telt zijn regel (~2–3 ms op 20.000 nummers). Hooguit MAX_SLIM_TELLEN per stand: de
+      // server levert ook de pagina's van de decks; daarboven staat er "?" (de lijst telt hem wel).
+      if (++slim > MAX_SLIM_TELLEN) return { ...c, aantal: null };
       let aantal = null;
       try { aantal = this.lib.aantalTracks({ filter: { categorie: c.id } }); } catch { aantal = null; }
       return { ...c, aantal };
@@ -385,55 +392,69 @@ export class Indeling {
   // ---- het filter als SQL ------------------------------------------------------------------------
 
   /**
-   * Het filter (normaliseerFilter) als WHERE-delen op `tracks t`, met eventueel een JOIN op de
-   * categorie (voor sorteren op plek). Een slimme categorie wordt zijn regel en het filter samen.
-   * Een tag die niet bestaat in `en` of `of` = niets gevonden (`leeg`), in `niet` telt hij niet.
-   * Gooit IndelingFout(404) bij een categorie die niet bestaat.
+   * Het filter (normaliseerFilter) als WHERE-delen op `tracks t`. Een slimme categorie = zijn regel
+   * EN wat je erbij typt, als twee aparte blokken voorwaarden: wat je typt maakt hem nooit ruimer (twee
+   * of-groepen, twee grids, toon zonder doorsnede = niets). `zoek` (het oude veld van de route) is nog
+   * een blok. Een tag die niet bestaat in `en` of `of` = niets gevonden, in `niet` telt hij niet.
+   * `gewoon` = de gewone categorie waarbinnen gezocht wordt (sorteren op plek). Gooit IndelingFout(404)
+   * bij een categorie die niet bestaat.
    */
-  sql(filter) {
+  sql(filter, { zoek = '' } = {}) {
     const delen = [], args = [];
-    let f = filter ?? {};
-    let gewoon = null;
-    if (f.categorie != null) {
-      const c = this.categorie(f.categorie);
-      if (!c) throw new IndelingFout(404, 'geen categorie met dat id', { categorie: f.categorie });
+    const { categorie, ...f } = filter ?? {};
+    let gewoon = null, leeg = false;
+    const blokken = [f];
+    if (zoek) blokken.push({ zoek });
+    if (categorie != null) {
+      const c = this.categorie(categorie);
+      if (!c) throw new IndelingFout(404, 'geen categorie met dat id', { categorie });
       if (c.soort === 'slim') {
-        const { categorie: _, ...rest } = f;
-        const regel = { ...c.regel };
-        f = combineer(regel, rest);
-        if (regel.categorie != null) {
-          const g = this.categorie(regel.categorie);
+        const { categorie: binnen, ...regel } = c.regel ?? {};
+        blokken.push(regel);
+        if (binnen != null) {
+          const g = this.categorie(binnen);
           if (g?.soort === 'gewoon') gewoon = g.id;
-          else delete f.categorie;
         }
       } else gewoon = c.id;
     }
     if (gewoon != null) { delen.push('t.id IN (SELECT track_id FROM categorie_nummers WHERE categorie_id = ?)'); args.push(gewoon); }
+    for (const blok of blokken) if (this._delen(blok, delen, args)) leeg = true;
+    if (leeg) { delen.length = 0; args.length = 0; delen.push('0'); }
+    return { waar: delen.length ? `WHERE ${delen.join(' AND ')}` : '', args, gewoon };
+  }
+
+  /** De voorwaarden van één filter erbij (alles EN). True = dit kan niets vinden (een onbekende tag). */
+  _delen(f, delen, args) {
+    let leeg = false;
+    const like = (x) => `%${String(x).replace(/[\\%_]/g, (c) => '\\' + c)}%`;
     if (f.zoek) {
-      const z = `%${String(f.zoek).replace(/[\\%_]/g, (c) => '\\' + c)}%`;
+      const z = like(f.zoek);
       delen.push(`(t.titel LIKE ? ESCAPE '\\' OR t.uploader LIKE ? ESCAPE '\\' OR t.url LIKE ? ESCAPE '\\'
         OR t.id IN (SELECT nt.track_id FROM nummer_tags nt JOIN tags g ON g.id = nt.tag_id WHERE g.sleutel LIKE ? ESCAPE '\\'))`);
-      args.push(z, z, z, `%${sleutelVan(f.zoek).replace(/[\\%_]/g, (c) => '\\' + c)}%`);
+      args.push(z, z, z, like(sleutelVan(f.zoek)));
     }
-    let leeg = false;
     const tagId = (s) => this._q('SELECT id FROM tags WHERE sleutel = ?').get(s)?.id ?? null;
     if (f.tags) {
-      for (const s of f.tags.en) {
+      for (const s of f.tags.en ?? []) {
         const id = tagId(s);
         if (id == null) { leeg = true; continue; }
         delen.push('t.id IN (SELECT track_id FROM nummer_tags WHERE tag_id = ?)'); args.push(id);
       }
-      if (f.tags.of.length) {
+      if (f.tags.of?.length) {
         const ids = f.tags.of.map(tagId).filter((x) => x != null);
         if (!ids.length) leeg = true;
         else { delen.push(`t.id IN (SELECT track_id FROM nummer_tags WHERE tag_id IN (${ids.map(() => '?').join(',')}))`); args.push(...ids); }
       }
-      const niet = f.tags.niet.map(tagId).filter((x) => x != null);
+      const niet = (f.tags.niet ?? []).map(tagId).filter((x) => x != null);
       if (niet.length) { delen.push(`t.id NOT IN (SELECT track_id FROM nummer_tags WHERE tag_id IN (${niet.map(() => '?').join(',')}))`); args.push(...niet); }
     }
-    if (f.bpm) { delen.push('t.grid_bpm BETWEEN ? AND ?'); args.push(f.bpm[0], f.bpm[1]); }
+    // bpm: het hoofdtempo zoals de lijst het toont (k_bpm, libraryBpm), niet het eerste stuk.
+    if (f.bpm) { delen.push('t.k_bpm BETWEEN ? AND ?'); args.push(f.bpm[0], f.bpm[1]); }
     if (f.energie) { delen.push('t.k_energie BETWEEN ? AND ?'); args.push(f.energie[0], f.energie[1]); }
-    if (f.toon?.length) { delen.push(`t.k_toon IN (${f.toon.map(() => '?').join(',')})`); args.push(...f.toon); }
+    if (f.toon) {
+      if (!f.toon.length) leeg = true;
+      else { delen.push(`t.k_toon IN (${f.toon.map(() => '?').join(',')})`); args.push(...f.toon); }
+    }
     // `+t.k_grid`: niet via de index. Zes waarden is geen selectieve index; zonder `+` liep SQLite
     // eerst alle zekere nummers af en daarna pas de tag (een slimme telling op 20.000: 5,5 → 2,4 ms).
     if (f.grid === 'zeker') delen.push(`+t.k_grid IN (${GRID_ZEKER.map((x) => `'${x}'`).join(',')})`);
@@ -441,9 +462,9 @@ export class Indeling {
     else if (f.grid === 'geen') delen.push('t.k_grid IS NULL');
     if (f.stems === 'ja') delen.push('t.stems_json IS NOT NULL');
     else if (f.stems === 'nee') delen.push('t.stems_json IS NULL');
-    else if (f.stems === '2' || f.stems === '4') { delen.push("json_extract(t.stems_json, '$.aantal') = ?"); args.push(Number(f.stems)); }
-    if (leeg) { delen.length = 0; args.length = 0; delen.push('0'); }
-    return { waar: delen.length ? `WHERE ${delen.join(' AND ')}` : '', args, gewoon };
+    // json_valid eerst: één kapotte stems_json liet anders elke vraag met stems:2 een 500 geven.
+    else if (f.stems === '2' || f.stems === '4') { delen.push("(json_valid(t.stems_json) AND json_extract(t.stems_json, '$.aantal') = ?)"); args.push(Number(f.stems)); }
+    return leeg;
   }
 
   // ---- de kaart -----------------------------------------------------------------------------------
@@ -460,7 +481,11 @@ export class Indeling {
     if (!k) throw new IndelingFout(404, 'onbekende krat', { krat: kratId });
     const ids = [];
     for (let van = 0; van < 100000; van += 500) {
-      const r = kaart.nummers({ krat: kratId, filter: 'binnen', sorteer: 'krat', van, aantal: 500 });
+      let r;
+      try { r = kaart.nummers({ krat: kratId, filter: 'binnen', sorteer: 'krat', van, aantal: 500 }); } catch (err) {
+        // Een KaartFout (code + tekst) wordt dezelfde code, geen 500.
+        throw Number.isInteger(err?.code) ? new IndelingFout(err.code, `kaart: ${err.message}`) : err;
+      }
       ids.push(...(r.nummers ?? []).map((n) => n.binnen).filter(isTrackId));
       if ((r.nummers ?? []).length < 500) break;
     }
@@ -469,8 +494,10 @@ export class Indeling {
       let c = this._categorieOpNaam(n);
       if (c && c.soort !== 'gewoon') throw new IndelingFout(409, `"${c.naam}" is een slimme categorie`);
       if (!c) c = this.bewaarCategorie({ naam: n, soort: 'gewoon' });
-      const r = ids.length ? this.zetNummers(c.id, ids, { aan: true }) : { erin: 0, aantal: this._aantalIn(c.id) };
-      return { categorie: this.categorie(c.id), erin: r.erin, binnen: ids.length, aantal: r.aantal };
+      // In stukken van MAX_IDS: een krat met meer dan 5000 nummers binnen kan ook.
+      let erin = 0;
+      for (let i = 0; i < ids.length; i += MAX_IDS) erin += this.zetNummers(c.id, ids.slice(i, i + MAX_IDS), { aan: true }).erin;
+      return { categorie: this.categorie(c.id), erin, binnen: ids.length, aantal: this._aantalIn(c.id) };
     });
   }
 
@@ -478,7 +505,13 @@ export class Indeling {
 
   /** De hele indeling als JSON (namen, geen ids: ook voor Claude om te lezen en te schrijven). */
   exporteer() {
-    const tags = this.tags().map(({ naam, kleur }) => ({ naam, kleur }));
+    // Met de nummers per tag: een export in een lege library (met dezelfde nummers) zet ze terug.
+    const perTag = new Map();
+    for (const r of this._q('SELECT g.sleutel AS s, nt.track_id AS id FROM nummer_tags nt JOIN tags g ON g.id = nt.tag_id ORDER BY g.sleutel, nt.track_id').all()) {
+      if (!perTag.has(r.s)) perTag.set(r.s, []);
+      perTag.get(r.s).push(r.id);
+    }
+    const tags = this.tags().map(({ naam, sleutel, kleur }) => ({ naam, kleur, nummers: perTag.get(sleutel) ?? [] }));
     const naamVan = new Map(this._q('SELECT id, naam FROM categorieen').all().map((r) => [r.id, r.naam]));
     const categorieen = this._q('SELECT * FROM categorieen ORDER BY volgorde, id').all().map((r) => {
       const c = this._rij(r);
@@ -501,19 +534,26 @@ export class Indeling {
    */
   importeer(d, { droog = false } = {}) {
     const { indeling, fouten } = normaliseerIndeling(d);
-    const verslag = { droog, tags: { nieuw: 0 }, categorieen: { nieuw: 0, bijgewerkt: 0 }, nummers: { erin: 0, onbekend: 0 }, fouten: [...fouten] };
+    const verslag = { droog, tags: { nieuw: 0, gezet: 0, onbekend: 0 }, categorieen: { nieuw: 0, bijgewerkt: 0 }, nummers: { erin: 0, onbekend: 0 }, fouten: [...fouten] };
     const werk = () => {
       for (const t of indeling.tags) {
         const al = this.tag(t.naam);
         if (!al) { this._maakTag(t.naam, t.kleur); verslag.tags.nieuw++; }
         else if (t.kleur && t.kleur !== al.kleur) this._q('UPDATE tags SET kleur = ? WHERE id = ?').run(t.kleur, al.id);
+        if (t.nummers?.length) {
+          const r = this.zetTags(t.nummers, [t.naam], true);
+          verslag.tags.gezet += r.gezet;
+          verslag.tags.onbekend += r.onbekend.length;
+        }
       }
       // Eerst de gewone (een slimme regel kan ernaar wijzen), dan de slimme.
       for (const soort of ['gewoon', 'slim']) {
         for (const c of indeling.categorieen.filter((x) => x.soort === soort)) {
           const al = this._categorieOpNaam(c.naam);
+          // Per categorie een SAVEPOINT: gaat er halverwege iets mis, dan blijft er niets half van staan.
+          this.db.exec('SAVEPOINT cat');
           try {
-            if (al && al.soort !== c.soort) { verslag.fouten.push(`"${c.naam}" bestaat al als ${al.soort === 'slim' ? 'slimme' : 'gewone'} categorie`); continue; }
+            if (al && al.soort !== c.soort) throw new IndelingFout(409, `bestaat al als ${al.soort === 'slim' ? 'slimme' : 'gewone'} categorie`);
             const regel = soort === 'slim' ? this._regelVoorDb(c.regel) : undefined;
             const cat = this.bewaarCategorie({ id: al?.id ?? null, naam: c.naam, soort: c.soort, regel, ...(c.kleur ? { kleur: c.kleur } : {}) });
             if (al) verslag.categorieen.bijgewerkt++; else verslag.categorieen.nieuw++;
@@ -522,7 +562,10 @@ export class Indeling {
               verslag.nummers.erin += r.erin;
               verslag.nummers.onbekend += r.onbekend.length;
             }
+            this.db.exec('RELEASE cat');
           } catch (err) {
+            this.db.exec('ROLLBACK TO cat');
+            this.db.exec('RELEASE cat');
             if (!(err instanceof IndelingFout)) throw err;
             verslag.fouten.push(`"${c.naam}": ${err.message}`);
           }

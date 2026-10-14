@@ -726,7 +726,7 @@ grenzen, fase `auto`, Tailscale serve, stap 7a, stap 8/9, de LPD8.
 - [ ] **S11-5 💬 Welke acht snel-tags?** Je zet ze in de library (⋯ bij een tag, "snel 1–8"). Ze staan
   op geen knop; de sneltoetsen zijn alt+1…8 (en alt+T = het tagveld). Wil je ze op de APC of de
   Maschine, en waar?
-- [ ] **S11-6 💬 De Maschine bij BROWSE.** Het voorbeeld `?stukken=indeling-voorbeeld` zet SHIFT + ◄ ►
+- [ ] **S11-6 💬 De Maschine bij BROWSE.** Het voorbeeldstuk `indeling-voorbeeld` (noem het in je werkruimte, `"stukken"`) zet SHIFT + ◄ ►
   op de categorie en SHIFT + ENTER op "filter leeg". Overnemen in je mapping, of liever andere knoppen?
 - [ ] **S11-7 💬 Wat is "energie" van een nummer?** Nu: de energie van de secties gewogen naar hun
   lengte (`energie:hoog` = ≥ 0,66). De set-klaarzetter (S9) rekent met de LUIDSTE sectie. Zelfde regel

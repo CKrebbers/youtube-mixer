@@ -3,7 +3,8 @@
 // het tagveld, aan/uit voor een groep, de chips in een rij (ontsnapt), het tag-geheugen van de bus,
 // de uitleg van elke nieuwe action, en wat de iPad mag (library.* nooit, track.N.tag.K met mag).
 import * as L from '../src/ui/library-lijst.js';
-import { leesTagInvoer, tagWissel, rijChipsHtml, heeftTag } from '../src/ui/library-indeling.js';
+import { leesTagInvoer, tagWissel, rijChipsHtml, heeftTag, vulAan, IndelingPaneel } from '../src/ui/library-indeling.js';
+import { readFileSync } from 'node:fs';
 import { maakTagGeheugen } from '../src/ui/aanhakers/indeling.js';
 import { beschrijfSpoor } from '../src/ui/beschrijf/index.js';
 import { waaromNietOpScherm } from '../src/werk/model.js';
@@ -52,6 +53,31 @@ console.log('\nhet tagveld en de chips');
   ok('geen tags: niets', rijChipsHtml({ tags: [] }) === '' && rijChipsHtml({}) === '');
 }
 
+console.log('\naanvullen, title-attributen, het paneel zonder DOM');
+{
+  const tags = [{ naam: 'Dub', sleutel: 'dub' }, { naam: 'dub techno', sleutel: 'dub techno' }, { naam: 'Nacht', sleutel: 'nacht' }];
+  const a = vulAan(['na', 'dub', 'du', 'zzz'], tags);
+  ok('aanvullen: uniek begin = die tag, exact = die tag, dubbelzinnig of onbekend = nieuw', JSON.stringify(a) === JSON.stringify({ namen: ['Nacht', 'Dub', 'du', 'zzz'], nieuw: ['du', 'zzz'] }));
+  // Geen title="… "${…}" …": een letterlijke " in een attribuut liet een naam als attributen in de knop vallen (review S11 a1).
+  const fout = ['src/ui/library-indeling.js', 'src/ui/library-panel.js', 'src/ui/library-lijst.js'].flatMap((f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+    .split('\n').map((r, i) => [f, i + 1, r]).filter(([, , r]) => /title="[^"$]+"\$\{/.test(r) || /title="[^"]*"(?![\s>/$`])/.test(r)));
+  ok('…en de toets vangt de oude fout', /title="[^"$]+"\$\{/.test('title="wat gekozen is uit "${esc(c.naam)}" halen'));
+  ok('geen letterlijke " binnen een title-attribuut', fout.length === 0, fout.map(([f, n]) => `${f}:${n}`).join(', '));
+  let tekst = '';
+  const p = { zoekTekst: () => tekst, zetZoekTekst: (t) => { tekst = t; }, meld() {}, bevestigd: () => true };
+  const ind = new IndelingPaneel({ root: { querySelector: () => null }, panel: p });
+  ind.stand = { tags: [], categorieen: [{ id: 3, naam: 'Warm op', soort: 'gewoon' }, { id: 4, naam: 'Slim', soort: 'slim', regel: { grid: 'zeker' } }], snel: Array(8).fill(null) };
+  tekst = '#dub bpm:70-90';
+  ind.kiesCategorie(3);
+  ok('een categorie kiezen houdt de rest van het filter', tekst === '@"warm op" #dub bpm:70-90', tekst);
+  ind.wisselTagFilter('dub', true);
+  ok('alt-klik op een tag: van "en" naar "niet"', tekst === '@"warm op" -#dub bpm:70-90', tekst);
+  ind.wisselTagFilter('dub', true);
+  ok('nog eens: eraf', tekst === '@"warm op" bpm:70-90', tekst);
+  ok('stapCategorie: alles → Warm op → Slim → alles', ind.stapCategorie(1) === 'Slim' && ind.stapCategorie(1) === 'alles' && ind.stapCategorie(1) === 'Warm op');
+  ok('plek kan in een gewone, niet in een slimme zonder gewone', ind.plekMogelijk({ categorie: 3 }) && !ind.plekMogelijk({ categorie: 4 }));
+}
+
 console.log('\nhet tag-geheugen van track.N.tag.K');
 {
   let gehaald = 0;
@@ -76,6 +102,21 @@ console.log('\nde uitleg van elke nieuwe action');
   const zonder = acties.filter((a) => !beschrijfSpoor(a)?.kort || !beschrijfSpoor(a)?.lang);
   ok(`elke action heeft een korte en een lange uitleg (${acties.length})`, zonder.length === 0, zonder.join(', '));
   ok('een onbekende krijgt geen uitleg van dit spoor', beschrijfSpoor('library.quicktag.9') === null && beschrijfSpoor('track.9.tag.1') === null);
+}
+
+console.log('\nhet voorbeeldstuk voor de Maschine');
+{
+  const W = await import('../src/werk/model.js');
+  const lees = (pad) => JSON.parse(readFileSync(new URL(pad, import.meta.url), 'utf8'));
+  const std = { apc40mk2: lees('../mappings/apc40mk2.json'), 'maschine-mk2': lees('../mappings/maschine-mk2.json') };
+  const doc = lees('../mappings/stukken/indeling-voorbeeld.json');
+  const n = W.normaliseerStuk(doc, { standaarden: std });
+  ok('indeling-voorbeeld: geen fouten of waarschuwingen, als VOORBEELD gemarkeerd', n.fouten.length === 0 && n.waarschuwingen.length === 0 && /VOORBEELD/.test(doc.titel),
+    [...n.fouten, ...n.waarschuwingen].join('; '));
+  const sm = W.samenstellen(std, { 'indeling-voorbeeld': doc }, { naam: 'x', stukken: ['indeling-voorbeeld'] });
+  const regels = sm.apparaten['maschine-mk2']?.fragmenten.flatMap((f) => f.doc.rules) ?? [];
+  ok('in een werkruimte: 0 botsingen, en de drie regels komen op de Maschine (SHIFT, vrije sleutels)', sm.botsingen.length === 0 && sm.fouten.length === 0
+    && ['library.category.prev', 'library.category.next', 'library.category.clear'].every((a) => regels.some((r) => r.action === a && r.shift)));
 }
 
 console.log('\nwat de iPad mag');
