@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { Werkruimtes, NAAM_UITLEG } from '../werkruimtes.js';
+import { Werkruimtes, WerkFout, NAAM_UITLEG } from '../werkruimtes.js';
 import { naamGeldig } from '../../src/werk/model.js';
 
 /**
@@ -36,24 +36,33 @@ function naamUit(req, res, ctx, re) {
   return naam;
 }
 
+/** Een WerkFout (503: niet lokaal beschikbaar, iCloud?) wordt zijn code, de rest gaat door naar de 500 van de server. */
+const metFout = (handler) => async (req, res, ctx) => {
+  try { return await handler(req, res, ctx); } catch (err) {
+    if (!(err instanceof WerkFout)) throw err;
+    req.resume?.();
+    return ctx.json(res, err.code, { fout: err.message });
+  }
+};
+
 const alleen = (methode) => (req, res, ctx) => ctx.json(res, 405, { fout: `alleen ${methode}` });
 
 export default {
   routes: [
-    { methode: 'GET', pad: /^\/api\/werkruimtes$/, handler: async (req, res, ctx) => ctx.json(res, 200, { werkruimtes: await werkruimtes(ctx).lijst() }) },
-    { methode: 'GET', pad: VERSIES, handler: async (req, res, ctx) => {
+    { methode: 'GET', pad: /^\/api\/werkruimtes$/, handler: metFout(async (req, res, ctx) => ctx.json(res, 200, { werkruimtes: await werkruimtes(ctx).lijst() })) },
+    { methode: 'GET', pad: VERSIES, handler: metFout(async (req, res, ctx) => {
       const naam = naamUit(req, res, ctx, VERSIES);
       if (naam) ctx.json(res, 200, { naam, versies: await werkruimtes(ctx).versies(naam) });
-    } },
-    { methode: 'GET', pad: EEN, handler: async (req, res, ctx) => {
+    }) },
+    { methode: 'GET', pad: EEN, handler: metFout(async (req, res, ctx) => {
       const naam = naamUit(req, res, ctx, EEN);
       if (!naam) return;
       const w = await werkruimtes(ctx).lees(naam);
       if (!w) return ctx.json(res, 404, { fout: `geen werkruimte "${naam}"` });
       const { gewijzigd: _g, ...rest } = w;
       return ctx.jsonMetEtag(req, res, rest);
-    } },
-    { methode: 'PUT', pad: EEN, handler: async (req, res, ctx) => {
+    }) },
+    { methode: 'PUT', pad: EEN, handler: metFout(async (req, res, ctx) => {
       // W1 (Clay, nog open; tot dan zo): de iPad en alles via Tailscale KIJKT alleen. Een
       // werkruimte opslaan (en daarmee de indeling van de mixer veranderen) mag alleen vanaf
       // deze Mac: Host localhost/127.0.0.1/[::1], geen proxykop (vanDezeMac, mixer-melding.js).
@@ -68,7 +77,7 @@ export default {
       }
       const r = await werkruimtes(ctx).schrijf(naam, body.werkruimte, typeof body.versie === 'string' ? body.versie : null);
       return ctx.json(res, r.code, r.antwoord);
-    } },
+    }) },
     ...['POST', 'DELETE', 'PATCH'].map((methode) => ({ methode, pad: EEN, handler: alleen('GET of PUT') })),
     ...['POST', 'PUT', 'DELETE'].map((methode) => ({ methode, pad: /^\/api\/werkruimtes$/, handler: alleen('GET') })),
   ],

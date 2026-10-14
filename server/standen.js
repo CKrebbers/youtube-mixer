@@ -116,6 +116,53 @@ export function opmerkingStrenger(oud, nieuw) {
   return `nacht: ${oud ? `${beschrijfRem(oud)} → ` : ''}${beschrijfRem(nieuw)} (${waarom}; anders kies je het in de bewerker)`;
 }
 
+/*
+ * DE GRENS VOOR DE HELE SERVER (review ronde 2 van werkruimte S3): niet alleen de standen lezen
+ * uit een map die in iCloud kan staan, ook de werkruimtes (server/werkruimtes.js). Elk houdt zijn
+ * eigen lopende operaties bij (één per pad), maar de grens van MAX_DRADEN telt ze SAMEN: een
+ * Standen telt zijn eigen plus ANDERE_LEZERS, de andere lezers tellen alles (`serverOnderweg`).
+ * Zo blijven er van de vier draden van de threadpool twee voor de audio, hoeveel lezers er ook zijn.
+ */
+/** Lopende fs-operaties van de lezers buiten Standen (werkruimtes): sleutel → { belofte, sinds }. */
+export const ANDERE_LEZERS = new Map();
+const STANDEN_LOPEND = new Set();   // de _lopend van elke Standen in dit proces
+/** Alle lopende lees-operaties van de server: [{ belofte, sinds }]. */
+export function serverOnderweg() {
+  const uit = [...ANDERE_LEZERS.values()];
+  for (const m of STANDEN_LOPEND) uit.push(...m.values());
+  return uit;
+}
+
+/**
+ * Eén fs-operatie tegelijk per `sleutel` (in `lopend`), binnen de tijd, en hooguit `max` samen
+ * onderweg (`onderweg()`): zie Standen._beperkt hieronder voor de regels. `fout()` = de 503 als
+ * deze ene te lang loopt, `vol()` = de 503 als alles al te lang hangt. Gedeeld met server/werkruimtes.js.
+ */
+export async function beperkt({ lopend, sleutel, werk, max = MAX_DRADEN, leesMs = LEES_MS, fout, vol, onderweg = () => [...lopend.values()] }) {
+  const t0 = performance.now();
+  let l = lopend.get(sleutel);
+  while (!l && onderweg().length >= max) {
+    const nu = performance.now();
+    const alle = onderweg();
+    const jong = alle.filter((x) => nu - x.sinds < leesMs);
+    const rest = Math.min(leesMs - (nu - t0), ...jong.map((x) => leesMs - (nu - x.sinds)));
+    if (!jong.length || rest <= 0) throw vol();
+    let t;
+    await Promise.race([...alle.map((x) => x.belofte.then(() => {}, () => {})),
+      new Promise((z) => { t = setTimeout(z, rest); t.unref?.(); })]);
+    clearTimeout(t);
+    l = lopend.get(sleutel);   // intussen gestart door een ander: meeliften
+  }
+  if (l && performance.now() - l.sinds >= leesMs) throw fout();
+  if (!l) {
+    l = { belofte: Promise.resolve().then(werk), sinds: performance.now() };
+    lopend.set(sleutel, l);
+    const klaar = () => { if (lopend.get(sleutel) === l) lopend.delete(sleutel); };
+    l.belofte.then(klaar, klaar);
+  }
+  return binnenTijd(l.belofte, Math.max(1, leesMs - (performance.now() - l.sinds)), fout());
+}
+
 async function binnenTijd(belofte, ms, fout) {
   let t;
   const tijd = new Promise((_, nee) => { t = setTimeout(() => nee(fout), ms); t.unref?.(); });
@@ -146,6 +193,7 @@ export class Standen {
     Object.assign(this, { map, voorbeelden, lib, nacht, kaart, sjablonen, standaardMapping, profielen, hubSets,
       speeltDeck, valideerNacht, klok, log, leesMs, leesBestand, maxDraden });
     this._lopend = new Map();   // sleutel (pad) → { belofte, sinds }: één fs-operatie tegelijk per pad
+    STANDEN_LOPEND.add(this._lopend);
     this._cache = new Map();    // pad → { sleutel (ino:size:mtime:ctime), buf, gewijzigd }
   }
 
@@ -166,28 +214,11 @@ export class Standen {
    * we dan nooit.
    */
   async _beperkt(sleutel, werk, tekst = `stand niet lokaal beschikbaar (iCloud?): ${sleutel}; zet VARVE_STANDEN op een map buiten iCloud`) {
-    const fout = () => new StandFout(503, tekst);
-    const t0 = performance.now();
-    let l = this._lopend.get(sleutel);
-    while (!l && this._lopend.size >= this.maxDraden) {
-      const nu = performance.now();
-      const jong = [...this._lopend.values()].filter((x) => nu - x.sinds < this.leesMs);
-      const rest = Math.min(this.leesMs - (nu - t0), ...jong.map((x) => this.leesMs - (nu - x.sinds)));
-      if (!jong.length || rest <= 0) throw new StandFout(503, VOL_TEKST);
-      let t;
-      await Promise.race([...[...this._lopend.values()].map((x) => x.belofte.then(() => {}, () => {})),
-        new Promise((z) => { t = setTimeout(z, rest); t.unref?.(); })]);
-      clearTimeout(t);
-      l = this._lopend.get(sleutel);   // intussen gestart door een ander: meeliften
-    }
-    if (l && performance.now() - l.sinds >= this.leesMs) throw fout();
-    if (!l) {
-      l = { belofte: Promise.resolve().then(werk), sinds: performance.now() };
-      this._lopend.set(sleutel, l);
-      const klaar = () => { if (this._lopend.get(sleutel) === l) this._lopend.delete(sleutel); };
-      l.belofte.then(klaar, klaar);
-    }
-    return binnenTijd(l.belofte, Math.max(1, this.leesMs - (performance.now() - l.sinds)), fout());
+    // Eigen plus die van de andere lezers (werkruimtes), niet die van andere Standen: in de server
+    // is er één, en in de tests mag een hangende proef van de ene Standen de volgende niet raken.
+    return beperkt({ lopend: this._lopend, sleutel, werk, max: this.maxDraden, leesMs: this.leesMs,
+      fout: () => new StandFout(503, tekst), vol: () => new StandFout(503, VOL_TEKST),
+      onderweg: () => [...this._lopend.values(), ...ANDERE_LEZERS.values()] });
   }
 
   /**

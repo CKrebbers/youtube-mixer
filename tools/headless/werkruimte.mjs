@@ -213,6 +213,30 @@ try {
   await foto('werkruimte-790.png');
   await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 
+  // Review ronde 2: een herlaad (Claude schrijft het bestand) houdt een mapje dat van de werkruimte
+  // zelf komt open. Een eigen werkruimte met een mapje op ⇧ Device ◀ (kiezen: volgt), in de echte browser.
+  const dub = { schema: 1, naam: 'proef-dub', stukken: ['basis'], deel: { start: 'mix', kiezen: 'volgt', onthoud: true },
+    mapjes: { nieuw: { 'device.mijndub': { naam: 'mijn dub', kiesknop: { in: 'note:0:58', shift: true } } } },
+    delen: { mix: { label: 'MIX', kleur: 'wit', apc40mk2: { grid: 'hotcues', device: 'strip' } },
+      dub: { label: 'DUB', kleur: 'violet', apc40mk2: { device: 'mijndub' } },
+      beeld: { label: 'BEELD', kleur: 'geel', apc40mk2: { grid: 'video' } } },
+    volgt: [{ apparaat: 'apc40mk2', mapje: 'device.mijndub', deel: 'dub' }, { apparaat: 'apc40mk2', mapje: 'device.strip', deel: 'mix' }] };
+  writeFileSync(join(werkMap, 'proef-dub.json'), JSON.stringify(dub, null, 2));
+  await evalueer("window.werk.kies('proef-dub')");
+  await totDat("window.werk.naam === 'proef-dub' && window.werk.deel === 'mix'", 3000);
+  await evalueer("__apc(0x90, 98, 127); __apc(0x90, 58, 127); __apc(0x80, 58, 0); __apc(0x80, 98, 0)");
+  const opDub = await totDat("window.werk.deel === 'dub' && window.lagen.stand.device === 'mijndub'", 2000);
+  ok('eigen werkruimte proef-dub: ⇧ Device ◀ opent mijn dub, deel DUB (volgt)', opDub !== false);
+  await evalueer("window.__volgtNaDub = []; window.werk.on('change', (st) => { if (/volgt/.test(st.door ?? '') && st.deel !== 'dub') window.__volgtNaDub.push(st.deel); })");
+  dub.delen.beeld.label = 'BLD';
+  t = Date.now();
+  writeFileSync(join(werkMap, 'proef-dub.json'), JSON.stringify(dub, null, 2));
+  const herladen = await totDat("[...document.querySelectorAll('#werk-balk .werk-tab')].some((b) => b.textContent === 'BLD')", 6000);
+  await wacht(200);
+  const naDub = await evalueer("({ deel: window.werk.deel, device: window.lagen.stand.device, volgt: window.__volgtNaDub.length })");
+  ok(`… Claude verandert een ander deel (BEELD): herladen in ${Date.now() - t} ms, deel ${naDub.deel}, device ${naDub.device}, ${naDub.volgt} wissel door volgt`,
+    herladen !== false && naDub.deel === 'dub' && naDub.device === 'mijndub' && naDub.volgt === 0);
+
   // Terug naar standaard via de kiezer: de balk weg, de mapping weer de standaard.
   await evalueer(`(() => { const k = document.querySelector('#werk-balk .werk-kies'); k.value = 'standaard'; k.dispatchEvent(new Event('change')); })()`);
   ok('de kiezer: standaard = de werk-balk weg (en body.werk-balk-aan), de mapping weer precies de standaard', await totDat(`window.werk.naam === 'standaard' && document.getElementById('werk-balk').hidden && !document.body.classList.contains('werk-balk-aan')

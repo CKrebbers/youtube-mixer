@@ -66,6 +66,7 @@ export class Werkruimte extends Emitter {
     this._laad = 0;
     this._vastleggen = null;        // tijdstip van de eerste druk
     this._nogEens = false;          // een poortwissel tijdens kies/peil: daarna controleerAanwezig
+    this._peilt = false;            // een peilverzoek onderweg (nooit twee tegelijk)
     this._volgers = new Map();      // apparaat -> afmelden van zijn bij()
     for (const [id, a] of apparaten()) this._luisterNaar(id, a);
     this._afApparaten = bijApparaten((id) => { this._luisterNaar(id, apparaat(id)); this.controleerAanwezig(); });
@@ -116,7 +117,7 @@ export class Werkruimte extends Emitter {
         const naar = !terugVan && naamGeldig(ruw.terugval) && ruw.terugval !== naam ? ruw.terugval : 'standaard';
         if (!terugVan) this.meld(`${mist.map(apparaatNaam).join(' en ')} ${mist.length > 1 ? 'zijn' : 'is'} er niet: werkruimte ${naar} in plaats van ${naam}`, 'info', 8000);
         this._bezig = false;
-        const uit = await this.kies(naar, { vanzelf, terugVan: terugVan ?? { naam, vereist } });
+        const uit = await this.kies(naar, { vanzelf, behoudDeel, terugVan: terugVan ?? { naam, vereist } });
         return uit ? { ...uit, terugval: true } : null;
       }
       // De stukken, allemaal vóór we iets weghalen (zo staat er tussendoor nooit een halve indeling).
@@ -139,43 +140,57 @@ export class Werkruimte extends Emitter {
     Promise.resolve().then(() => { if (!this._bezig) this.controleerAanwezig(); else this._nogEens = true; });
   }
 
-  /** Synchroon: de vorige weg, de nieuwe erop. */
+  /**
+   * Synchroon: de vorige weg, de nieuwe erop.
+   *
+   * HERLADEN (behoudDeel: peilen, de peil na een 409, een terugval) mag je indeling niet
+   * veranderen zonder dat je iets indrukt (review ronde 2). _ruimOp haalt de mapjes van de
+   * werkruimte weg, en haalMapjeWeg zet een open mapje dan naar de standaard: dat gebeurt nu
+   * STIL (geen volgt-melding, `_stil`), en daarna gaat per apparaat weer open wat er vóór
+   * stond, als het in de nieuwe samenstelling nog bestaat. Pas als dat niet lukt (het mapje is
+   * weg) of als het deel voor dat apparaat veranderde, geldt het deel.
+   */
   _zetOp(naam, ruw, gehaald, stukken, { behoudDeel }) {
     const vorigDeel = this.deel;
     const vorigeDef = vorigDeel ? this.def?.delen?.[vorigDeel] ?? null : null;
-    this._ruimOp();
-    const bekend = bekendUitGroepen(GROEPEN);
-    const { werkruimte, fouten, waarschuwingen } = normaliseerWerkruimte(ruw, { standaarden: this.standaarden, stukken, bekend });
-    const w = werkruimte ?? normaliseerWerkruimte(STANDAARD).werkruimte;
-    const s = samenstellen(this.standaarden, stukken, w, { bekend });
+    const vorigeDelen = this.def?.delen ?? {};
+    const voor = behoudDeel && vorigDeel ? this._momentopname() : null;
+    let s, w, werkruimte, fouten, waarschuwingen;
+    const nietGebruikt = [];
+    this._stil(() => {
+      this._ruimOp();
+      const bekend = bekendUitGroepen(GROEPEN);
+      ({ werkruimte, fouten, waarschuwingen } = normaliseerWerkruimte(ruw, { standaarden: this.standaarden, stukken, bekend }));
+      w = werkruimte ?? normaliseerWerkruimte(STANDAARD).werkruimte;
+      s = samenstellen(this.standaarden, stukken, w, { bekend });
+      // Mapjes eerst (de regels verwijzen ernaar), dan de regels, dan de volgorde.
+      for (const [app, a] of Object.entries(s.apparaten)) {
+        const adapter = apparaat(app);
+        const map = app === 'apc40mk2' ? (adapter?.mapping ?? this.mapping) : adapter?.mapping ?? null;
+        for (const mj of a.mapjes) {
+          if (app !== 'apc40mk2') continue;   // de Maschine zet zijn mapjes zelf (S6)
+          try {
+            voegMapjeToe(mj.groep, mj.laag, { naam: mj.naam, kleur: mj.kleur ?? undefined, kiesknop: mj.kiesknop });
+            this._mapjes.push({ groep: mj.groep, laag: mj.laag });
+          } catch (err) { s.waarschuwingen.push(`mapje ${mj.groep}.${mj.laag}: ${err?.message || err}`); }
+        }
+        if (map) {
+          for (const f of a.fragmenten) {
+            const r = map.vervangFragment(f.bron, f.doc);
+            this._fragmenten.push({ mapping: map, bron: f.bron });
+            if (r?.fouten?.length) nietGebruikt.push(...r.fouten);
+          }
+        }
+        if (app === 'apc40mk2') {
+          for (const [groep, lijst] of Object.entries(a.volgorde)) {
+            try { zetVolgorde(groep, lijst); this._volgorde.push(groep); } catch (err) { s.waarschuwingen.push(`volgorde ${groep}: ${err?.message || err}`); }
+          }
+        }
+      }
+      this.herbind();
+    });
     this.waarschuwingen = [...fouten, ...waarschuwingen, ...s.fouten, ...s.waarschuwingen.filter((x) => !waarschuwingen.includes(x))];
     if (fouten.length) this.meld(`werkruimte ${naam}: ${fouten.length} fout(en), die delen doen niets: ${fouten[0]}`, 'fout');
-    // Mapjes eerst (de regels verwijzen ernaar), dan de regels, dan de volgorde.
-    const nietGebruikt = [];
-    for (const [app, a] of Object.entries(s.apparaten)) {
-      const adapter = apparaat(app);
-      const map = app === 'apc40mk2' ? (adapter?.mapping ?? this.mapping) : adapter?.mapping ?? null;
-      for (const mj of a.mapjes) {
-        if (app !== 'apc40mk2') continue;   // de Maschine zet zijn mapjes zelf (S6)
-        try {
-          voegMapjeToe(mj.groep, mj.laag, { naam: mj.naam, kleur: mj.kleur ?? undefined, kiesknop: mj.kiesknop });
-          this._mapjes.push({ groep: mj.groep, laag: mj.laag });
-        } catch (err) { this.waarschuwingen.push(`mapje ${mj.groep}.${mj.laag}: ${err?.message || err}`); }
-      }
-      if (map) {
-        for (const f of a.fragmenten) {
-          const r = map.vervangFragment(f.bron, f.doc);
-          this._fragmenten.push({ mapping: map, bron: f.bron });
-          if (r?.fouten?.length) nietGebruikt.push(...r.fouten);
-        }
-      }
-      if (app === 'apc40mk2') {
-        for (const [groep, lijst] of Object.entries(a.volgorde)) {
-          try { zetVolgorde(groep, lijst); this._volgorde.push(groep); } catch (err) { this.waarschuwingen.push(`volgorde ${groep}: ${err?.message || err}`); }
-        }
-      }
-    }
-    this.herbind();
     if (nietGebruikt.length) {
       this.waarschuwingen.push(...nietGebruikt);
       this.meld(`werkruimte ${naam}: ${nietGebruikt.length} regel(s) kan deze VARVE nog niet (bv. ${nietGebruikt[0]})`, 'info', 8000);
@@ -186,17 +201,43 @@ export class Werkruimte extends Emitter {
     this.versie = gehaald.versie ?? null;
     this.bron = gehaald.bron ?? null;
     this.samenstelling = s;
-    this.onthouden.clear();
+    // Onthouden is sessietoestand: bij een herlaad blijft hij voor de delen die niet veranderden.
+    const gelijk = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+    if (behoudDeel) { for (const d of [...this.onthouden.keys()]) if (!w.delen[d] || !gelijk(vorigeDelen[d], w.delen[d])) this.onthouden.delete(d); }
+    else this.onthouden.clear();
     this.nieuw = telNieuwePlekken(this.basislijn?.lees(naam) ?? null, s);
     // Het deel: bij herladen (Claude schreef het bestand) blijft het deel staan als het er nog is.
     const start = behoudDeel && vorigDeel && w.delen[vorigDeel] ? vorigDeel : w.deel.start;
     this.deel = null;
     const herlaad = behoudDeel && start === vorigDeel;
-    // Herladen met hetzelfde deel: alleen de apparaten waarvoor het deel echt veranderde krijgen hun
-    // mapjes opnieuw; een mapje dat je binnen het deel met de hand opende blijft dan open.
-    const zelfde = herlaad ? (id) => JSON.stringify(vorigeDef?.[id] ?? null) === JSON.stringify(w.delen[start]?.[id] ?? null) : null;
+    // Wat er vóór stond weer open (stil), per apparaat; hersteld[id] = alles staat weer.
+    const hersteld = {};
+    if (herlaad && voor) {
+      this._stil(() => {
+        for (const [id, a] of apparaten()) {
+          const m = voor[id];
+          if (!m) continue;
+          let nu = {};
+          try { nu = a.mapjes() ?? {}; } catch (_) {}
+          const doel = {};
+          for (const [g, l] of Object.entries(m)) if (typeof l === 'string' && nu[g] !== l) doel[g] = l;
+          if (!Object.keys(doel).length) { hersteld[id] = true; continue; }
+          try { const r = a.zetMapjes(doel); hersteld[id] = !r?.niet?.length; } catch (_) { hersteld[id] = false; }
+        }
+      });
+    }
+    // Herladen met hetzelfde deel: alleen de apparaten waarvoor het deel echt veranderde (of waar
+    // het vorige mapje niet meer bestaat) krijgen de mapjes van het deel; de rest houdt wat je had.
+    const zelfde = herlaad ? (id) => hersteld[id] !== false && gelijk(vorigeDef?.[id], w.delen[start]?.[id]) : null;
     if (start) this.kiesDeel(start, { door: herlaad ? this.door : 'start', stil: true, herlaad, sla: zelfde });
     else { this.door = null; this._planScherm(); }
+  }
+
+  /** fn() met elk apparaat stil (adapter.stil): wat er intussen wisselt is geen keuze van de gebruiker. */
+  _stil(fn) {
+    let f = fn;
+    for (const [, a] of apparaten()) if (typeof a.stil === 'function') { const binnen = f; f = () => a.stil(binnen); }
+    return f();
   }
 
   /** Alles van de vorige werkruimte weg: fragmenten, mapjes, volgorde (de standaard blijft). */
@@ -304,10 +345,19 @@ export class Werkruimte extends Emitter {
 
   // ---- het scherm --------------------------------------------------------------------------
 
+  /**
+   * Het scherm en het event 'werkruimte' (S2/S7) in het volgende beeld (`plan`), nooit in het
+   * MIDI-bericht van de wissel (review ronde 2: een luisteraar die werk doet zou anders de invoer
+   * vertragen). Twee wissels in één beeld: alleen de laatste telt.
+   */
   _planScherm() {
     const deel = this.deel;
-    this.plan(() => { if (this.deel === deel) this._scherm(); });
-    this.emit('werkruimte', { naam: this.naam, deel, def: this.deelDef(deel) });
+    const naam = this.naam;
+    this.plan(() => {
+      if (this.deel !== deel || this.naam !== naam) return;
+      this._scherm();
+      this.emit('werkruimte', { naam, deel, def: this.deelDef(deel) });
+    });
   }
 
   /** Rijen en onderpaneel zoals het deel ze wil. Alleen wat een deel openzette gaat weer dicht. */
@@ -358,7 +408,9 @@ export class Werkruimte extends Emitter {
     if (!mist.length) return;
     const naar = this.def.terugval ?? 'standaard';
     this.meld(`${mist.map(apparaatNaam).join(' en ')} ${mist.length > 1 ? 'zijn' : 'is'} weg: werkruimte ${naar}`, 'info', 8000);
-    this.kies(naar, { terugVan: { naam: this.naam, vereist: [...this.def.vereist] } });
+    // behoudDeel: het deel blijft als de terugval het ook heeft, en wat er op de andere apparaten
+    // open stond blijft open (review ronde 2: de APC verloor anders zijn mapje omdat de Maschine wegviel).
+    this.kies(naar, { behoudDeel: true, terugVan: { naam: this.naam, vereist: [...this.def.vereist] } });
   }
 
   /** De knop "terug naar …": de werkruimte die je koos, nu alles er weer is. */
@@ -437,9 +489,15 @@ export class Werkruimte extends Emitter {
 
   /** Is het bestand veranderd (Claude schreef het, een ander venster sloeg op)? Dan opnieuw, met hetzelfde deel. */
   async peil({ forceer = false } = {}) {
-    if (this._bezig) return false;
+    // Nooit twee verzoeken tegelijk (review ronde 2): blijft een GET hangen (iCloud), dan start de
+    // timer niet elke 2,5 s een nieuwe die de verbindingen van de StreamBron verdringt. De haler
+    // heeft zelf een tijdgrens (maakHaler, HAAL_MS).
+    if (this._bezig || this._peilt) return false;
+    const nr = this._laad, naam = this.naam;
     let g;
-    try { g = await this.haal(this.naam, { peil: true }); } catch (_) { return false; }
+    this._peilt = true;
+    try { g = await this.haal(naam, { peil: true }); } catch (_) { return false; } finally { this._peilt = false; }
+    if (nr !== this._laad || naam !== this.naam || this._bezig) return false;   // intussen een andere werkruimte gekozen
     if (!g || (!forceer && g.versie === this.versie) || g.niets) return false;
     if (!g.werkruimte) return false;
     this._bezig = true;
@@ -486,11 +544,14 @@ export function plekkenVan(s) {
  * van de vorige keer (304 = niets veranderd, geen body). Geeft { werkruimte, versie, bron } of
  * { niets: true } of null. `fetch` en `leesWeg` van buiten (de test, de browser).
  */
-export function maakHaler({ fetch: f = globalThis.fetch, leesWeg = async () => {}, basis = '' } = {}) {
+export const HAAL_MS = 5000;
+export function maakHaler({ fetch: f = globalThis.fetch, leesWeg = async () => {}, basis = '', tijd = HAAL_MS } = {}) {
   const etags = new Map();
   return async function haal(naam, { peil = false } = {}) {
     const headers = peil && etags.has(naam) ? { 'If-None-Match': etags.get(naam) } : {};
-    const r = await f(`${basis}/api/werkruimtes/${encodeURIComponent(naam)}`, { headers });
+    // Een tijdgrens: een verzoek dat blijft hangen houdt anders een van de zes verbindingen per host vast.
+    const signal = typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(tijd) : undefined;
+    const r = await f(`${basis}/api/werkruimtes/${encodeURIComponent(naam)}`, { headers, signal });
     if (r.status === 304) { await leesWeg(r); return { niets: true }; }
     if (r.status === 404) { await leesWeg(r); return null; }
     if (!r.ok) { await leesWeg(r); throw new Error(`werkruimte ${naam}: ${r.status}`); }

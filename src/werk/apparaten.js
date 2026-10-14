@@ -11,6 +11,8 @@ import { GROEPEN, OP_AANVRAAG } from '../control/lagen.js';
  *     aanwezig()       is hij er nu (poort aangesloten, hub verbonden)?
  *     standaard?()     alles terug naar de standaardmapjes, gluren en vasthouden los (THUIS)
  *     bij?(fn)         fn('groep.laag', { groep, vorige }) als de gebruiker op DIT apparaat een mapje VAST openzet (volgt)
+ *     stil?(fn)        fn() uitvoeren zonder dat wat er intussen wisselt als keuze van de gebruiker telt
+ *                      (geen bij-melding): de werkruimte haalt bij een herlaad mapjes weg en zet ze terug
  *     mapping?         de Mapping van dit apparaat (de fragmenten van de werkruimte komen erin)
  *     naam?            hoe het heet op de werk-balk ("APC", "Maschine")
  *   })
@@ -164,9 +166,20 @@ export function maakApcAdapter({ lagen, invoke, bijInvoke = null, aanwezig = () 
     });
   });
 
+  /**
+   * fn() zonder volgt-meldingen: wat er intussen wisselt (lagen.haalMapjeWeg zet een open mapje
+   * terug naar de standaard, en de werkruimte zet het daarna weer open) is geen keuze van jou.
+   * De luisteraar hierboven kijkt `zetten` synchroon na, vóór hij iets in een microtaak zet,
+   * dus er komt ook later niets achteraan (review ronde 2).
+   */
+  function stil(fn) {
+    zetten++;
+    try { return fn(); } finally { zetten--; }
+  }
+
   return {
     naam, mapping,
-    zetMapjes, standaard,
+    zetMapjes, standaard, stil,
     mapjes: () => ({ grid: lagen.stand.grid, device: lagen.stand.device }),
     aanwezig,
     bij(fn) { volgers.add(fn); return () => volgers.delete(fn); },

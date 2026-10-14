@@ -46,10 +46,58 @@ const post = (p, body = {}, headers) => zend('POST', p, body, headers);
 const versies = (naam) => (existsSync(join(werkMap, '.versies', naam)) ? readdirSync(join(werkMap, '.versies', naam)).length : 0);
 const wachtOpServer = async () => { for (let i = 0; i < 200; i++) { if (await fetch(`${B}/api/werkruimtes`).then((r) => r.ok).catch(() => false)) return true; await wacht(100); } return false; };
 
+/** Een pijp vrijgeven: een schrijver openen en sluiten, tot de lezer erop zijn EOF had. */
+async function geefVrij(pijp) {
+  const { openSync, closeSync, constants } = await import('node:fs');
+  for (let i = 0; i < 40; i++) {
+    let fd = null;
+    try { fd = openSync(pijp, constants.O_WRONLY | constants.O_NONBLOCK); } catch {}
+    await wacht(30);
+    if (fd !== null) { closeSync(fd); if (i > 2) return; }
+  }
+}
+
 const mijn = (extra = {}) => ({ schema: 1, naam: 'mijn', titel: 'Mijn proef', stukken: ['basis'],
   delen: { mix: { label: 'MIX', kleur: 'wit', apc40mk2: { grid: 'hotcues' } }, stems: { label: 'STEMS', kleur: 'zeegroen', apc40mk2: { grid: 'stems' } } }, ...extra });
 
 try {
+  console.log('de grens van de hele server (review ronde 2: werkruimtes en standen SAMEN hooguit 2)');
+  {
+    const { Werkruimtes, WerkFout } = await import('../server/werkruimtes.js');
+    const { Standen, StandFout, ANDERE_LEZERS } = await import('../server/standen.js');
+    const { spawnSync } = await import('node:child_process');
+    const g = join(map, 'grens');
+    for (const d of ['eigen', 'vb', 'standen']) mkdirSync(join(g, d), { recursive: true });
+    const pijpen = ['een', 'twee'].map((n) => join(g, 'eigen', `${n}.json`));
+    if (!pijpen.every((p) => spawnSync('mkfifo', [p]).status === 0)) console.log('  -- mkfifo niet beschikbaar: de grens niet getoetst');
+    else {
+      const w = new Werkruimtes({ map: join(g, 'eigen'), voorbeelden: join(g, 'vb'), stukken: join(g, 'stukken'), mappings: join(g, 'mappings'), leesMs: 200 });
+      const st = new Standen({ map: join(g, 'standen'), voorbeelden: join(g, 'vb'), lib: null, nacht: null, kaart: null, leesMs: 200, log: () => {} });
+      try {
+        const t0 = performance.now();
+        const [e1, e2] = await Promise.all([w.lees('een').catch((e) => e), w.lees('twee').catch((e) => e)]);
+        ok(`twee hangende werkruimtes: allebei 503 na ${Math.round(performance.now() - t0)} ms, ${ANDERE_LEZERS.size} draden onderweg`,
+          e1 instanceof WerkFout && e2 instanceof WerkFout && e1.code === 503 && ANDERE_LEZERS.size === 2 && performance.now() - t0 < 1000);
+        let gestart = 0;
+        const t1 = performance.now();
+        const es = await st._extern('x', async () => { gestart++; return 'x'; }).catch((e) => e);
+        ok(`… dan start ook een stand geen nieuwe draad: 503 "te veel tegelijk" (${Math.round(performance.now() - t1)} ms, ${gestart}× gestart)`,
+          es instanceof StandFout && es.code === 503 && /te veel bestanden tegelijk/.test(es.message) && gestart === 0);
+        const ew = await w.lees('drie').catch((e) => e);
+        ok('… en een derde werkruimte ook niet (503)', ew instanceof WerkFout && ew.code === 503);
+      } finally {
+        await Promise.all(pijpen.map((p) => geefVrij(p)));
+      }
+      for (let i = 0; i < 50 && ANDERE_LEZERS.size; i++) await wacht(20);
+      ok(`pijpen vrij: niets meer onderweg (${ANDERE_LEZERS.size})`, ANDERE_LEZERS.size === 0);
+      const nooit = () => new Promise(() => {});
+      st._extern('a', nooit).catch(() => {}); st._extern('b', nooit).catch(() => {});
+      await wacht(250);
+      const ew2 = await w.lees('een').catch((e) => e);
+      ok('twee hangende standen: een werkruimte lezen = 503, geen nieuwe draad (de standen tellen mee)', ew2 instanceof WerkFout && ew2.code === 503 && ANDERE_LEZERS.size === 0);
+    }
+  }
+
   ok('server draait', await wachtOpServer());
 
   console.log('lezen');
@@ -136,6 +184,30 @@ try {
     ok(`de volgende peilbeurt ziet het nieuwe bestand (${Date.now() - t0} ms; de mixer peilt elke 3 s)`, daarna.werkruimte?.titel === 'van Claude' && daarna.versie !== p3.j.versie);
     const gezien = await put('/api/werkruimtes/mijn', { werkruimte: mijn({ titel: 'over Claude heen' }), versie: p3.j.versie });
     ok('… en wie nog op de oude versie werkte krijgt 409 (niets overschreven)', gezien.status === 409 && gezien.j.ruw.titel === 'van Claude');
+  }
+
+  console.log('\niCloud: een werkruimte die niet terugkomt (review ronde 2)');
+  {
+    // Een named pipe blijft bij het openen hangen, zoals een dataless iCloud-bestand zonder netwerk.
+    const { spawnSync } = await import('node:child_process');
+    const fifo = join(werkMap, 'hangt.json');
+    mkdirSync(werkMap, { recursive: true });
+    if (spawnSync('mkfifo', [fifo]).status !== 0) console.log('  -- mkfifo niet beschikbaar: 503 over HTTP niet getoetst');
+    else {
+      const t0 = performance.now();
+      const r = await get('/api/werkruimtes/hangt');
+      const ms = performance.now() - t0;
+      ok(`GET /api/werkruimtes/hangt (een pijp): 503 "niet lokaal beschikbaar (iCloud?)" na ${Math.round(ms)} ms (LEES_MS 2 s)`, r.status === 503 && /iCloud/.test(r.j?.fout) && ms < 3500);
+      const t1 = performance.now();
+      const r2 = await get('/api/werkruimtes/hangt');
+      ok(`… de volgende peil meteen 503 (${Math.round(performance.now() - t1)} ms), geen tweede draad`, r2.status === 503 && performance.now() - t1 < 500);
+      const lijst = await get('/api/werkruimtes');
+      ok('… de lijst antwoordt, met "hangt" als fout', lijst.status === 200 && lijst.j.werkruimtes.some((w) => w.naam === 'hangt' && w.fouten === 1));
+      const stand = await get('/api/standen');
+      ok(`… en de standen lezen nog (${stand.status})`, stand.status === 200);
+      await geefVrij(fifo);
+      rmSync(fifo, { force: true });
+    }
   }
 
   console.log('\nstanden');

@@ -379,6 +379,112 @@ try {
     ok('maakHaler: eerst gewoon, peilen met If-None-Match, 304 = niets', a.versie === 'v' && bb.niets === true && vragen[1]['If-None-Match'] === '"x"');
   }
 
+  console.log('\nherladen houdt je indeling (review ronde 2)');
+  {
+    // Een herlaad (peil, de peil na een 409, een terugval) haalt de mapjes van de werkruimte weg en zet
+    // ze terug. Vroeger zette haalMapjeWeg een open mapje (grid.fx, device.uitlijn uit een stuk) naar
+    // de standaard, de adapter meldde dat als jouw keuze (volgt), en het deel sprong naar MIX.
+    const vb = () => lees('tools/werkruimtes/voorbeelden/apc-alleen.json');
+    const volgtWissels = [];
+    const afV = werk.on('change', (st) => { if (/volgt/.test(st.door ?? '')) volgtWissels.push(st.deel); });
+    let r2 = 0;
+    const nieuweVersie = (pas) => { const ruw = vb(); pas(ruw); eigen.set('apc-alleen', { werkruimte: ruw, versie: `r2-${++r2}`, bron: 'eigen' }); };
+    const stand = () => `deel ${werk.deel} grid ${lagen.stand.grid} device ${lagen.stand.device}`;
+    eigen.delete('apc-alleen');
+    await werk.kies('apc-alleen');
+    druk('werk.deel.fx'); await microtaak();
+    const voorFx = stand();
+    nieuweVersie((ruw) => { ruw.delen.beeld.label = 'BLD'; });
+    spion.length = 0;
+    await werk.peil(); await microtaak(); await microtaak();
+    ok(`deel FX (grid fx uit het stuk fx-matrix), peil met een wijziging in BEELD: ${voorFx} → ${stand()}, ${volgtWissels.length} change door volgt`,
+      werk.versie === 'r2-1' && stand() === voorFx && voorFx === 'deel fx grid fx device rack' && volgtWissels.length === 0);
+    ok('… 0 invokes buiten layer.*/werk.*', buiten(spion).length === 0);
+    druk('werk.deel.uitlijn'); await microtaak();
+    const voorUit = stand();
+    nieuweVersie((ruw) => { ruw.delen.beeld.label = 'BLD2'; });
+    await werk.peil(); await microtaak(); await microtaak();
+    ok(`deel UITLIJN (device uitlijn uit het stuk uitlijn): ${voorUit} → ${stand()}, 0 volgt`, stand() === voorUit && lagen.stand.device === 'uitlijn' && volgtWissels.length === 0);
+    // Met de hand een ander mapje binnen FX, dan een herlaad: blijft open, ook als het mapje van het deel (fx) weg en terug moest.
+    druk('werk.deel.fx'); druk('layer.grid.loops'); await microtaak();
+    nieuweVersie((ruw) => { ruw.delen.beeld.label = 'BLD3'; });
+    await werk.peil(); await microtaak();
+    ok('in FX met de hand loops geopend, peil: loops blijft open, deel FX', stand() === 'deel fx grid loops device rack' && volgtWissels.length === 0);
+    // Onthouden overleeft een herlaad voor de delen die niet veranderden.
+    druk('werk.deel.mix'); await microtaak();
+    nieuweVersie((ruw) => { ruw.delen.beeld.label = 'BLD4'; });
+    await werk.peil(); await microtaak();
+    druk('werk.deel.fx');
+    ok('FX → loops → MIX → peil → FX: loops terug (onthoud blijft voor een deel dat niet veranderde)', stand() === 'deel fx grid loops device rack');
+    // De peil na een 409 bij vastleggen (forceer) doet hetzelfde.
+    druk('layer.grid.fx'); await microtaak();
+    const echteBewaar = werk.bewaar;
+    werk.bewaar = async () => ({ ok: false, status: 409 });
+    nieuweVersie((ruw) => { ruw.delen.beeld.label = 'BLD5'; });
+    nuMs = 50000; druk('werk.vastleggen'); await microtaak();
+    nuMs = 50500; druk('werk.vastleggen');
+    for (let i = 0; i < 6; i++) await microtaak();
+    werk.bewaar = echteBewaar;
+    ok(`vastleggen geeft 409, de peil({ forceer }) erna: ${stand()}, versie ${werk.versie}`, werk.versie === 'r2-5' && stand() === 'deel fx grid fx device rack' && volgtWissels.length === 0);
+    // Verandert het deel zelf voor de APC, dan geldt het nieuwe (zoals in ronde 1).
+    nieuweVersie((ruw) => { ruw.delen.fx.apc40mk2.grid = 'sampler'; });
+    await werk.peil(); await microtaak();
+    ok('peil, FX kreeg grid sampler: de APC volgt het nieuwe deel', stand() === 'deel fx grid sampler device rack');
+
+    // twee-handen: de eigen dub op ⇧ Device ◀ (een mapje van de werkruimte zelf).
+    let er = true;
+    const afM = registreerApparaat('maschine-mk2', { naam: 'Maschine', aanwezig: () => er, mapjes: () => ({ pads: 'transport' }), zetMapjes: () => ({ gezet: [], niet: [] }) });
+    eigen.delete('apc-alleen');
+    await werk.kies('twee-handen');
+    shift(true); mapping.handle(note(58, true)); klok += 50; mapping.handle(note(58, false)); shift(false); await microtaak();
+    const voorDub = stand();
+    const ruwT = lees('tools/werkruimtes/voorbeelden/twee-handen.json'); ruwT.delen.beeld.label = 'BLD';
+    eigen.set('twee-handen', { werkruimte: ruwT, versie: 'th-1', bron: 'eigen' });
+    await werk.peil(); await microtaak(); await microtaak();
+    ok(`twee-handen, ⇧ Device ◀ (mijn dub) open, peil: ${voorDub} → ${stand()}`, voorDub === 'deel mix grid hotcues device mijndub' && stand() === voorDub && werk.versie === 'th-1');
+    eigen.delete('twee-handen');
+    // Een terugval (de Maschine valt weg) laat het mapje op de APC staan als de terugval dat deel ook heeft.
+    await werk.kies('twee-handen');
+    druk('werk.deel.stems'); await microtaak();
+    meldingen.length = 0;
+    er = false;
+    werk.controleerAanwezig();
+    for (let i = 0; i < 6; i++) await microtaak();
+    ok(`twee-handen in STEMS, Maschine weg: apc-alleen, ${stand()} (niet terug naar hotcues/strip)`, werk.naam === 'apc-alleen' && stand() === 'deel stems grid stems device strip'
+      && meldingen.length === 1 && volgtWissels.length === 0);
+    afM();
+    afV();
+    eigen.delete('apc-alleen');
+    await werk.kies('apc-alleen');
+  }
+
+  console.log('\nhet werkvak en peilen (review ronde 2)');
+  {
+    // Het event 'werkruimte' gaat in het volgende beeld (plan), nooit in het MIDI-bericht van de wissel.
+    const rij = [];
+    werk.plan = (fn) => rij.push(fn);
+    const n0 = werkvak.length;
+    druk('werk.deel.stems'); druk('werk.deel.fx');
+    ok('twee deelwissels in één beeld: nog geen event (het staat in plan)', werkvak.length === n0);
+    for (const f of rij.splice(0)) f();
+    ok(`… in het beeld: één event, voor het laatste deel (${werkvak.length - n0}, ${werkvak.at(-1)?.deel})`, werkvak.length === n0 + 1 && werkvak.at(-1).deel === 'fx');
+    werk.plan = (fn) => fn();
+    // Nooit twee peilverzoeken tegelijk, en een antwoord dat na een andere keuze komt telt niet.
+    const echteHaal = werk.haal;
+    let los = null, gevraagd = 0;
+    werk.haal = (n, o) => (o?.peil ? (gevraagd++, new Promise((z) => { los = z; })) : echteHaal(n, o));
+    const p1 = werk.peil();
+    const p2 = await werk.peil();
+    ok(`een peil die blijft hangen: de volgende start geen tweede verzoek (${gevraagd})`, p2 === false && gevraagd === 1);
+    await werk.kies('twee-handen');
+    const ruwX = lees('tools/werkruimtes/voorbeelden/apc-alleen.json'); ruwX.delen.mix.label = 'X';
+    los({ werkruimte: ruwX, versie: 'laat', bron: 'eigen' });
+    ok('… komt het antwoord pas na een andere keuze (twee-handen), dan telt het niet', (await p1) === false && werk.versie !== 'laat');
+    werk.haal = echteHaal;
+    await werk.kies('apc-alleen');
+    druk('werk.deel.stems');
+  }
+
   console.log('\nnieuw (A11)');
   ok(`apc-alleen telt ${werk.nieuw.aantal} nieuwe plekken tegen de standaard (> 0)`, werk.nieuw.aantal > 0);
   werk.gezien();

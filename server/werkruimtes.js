@@ -2,6 +2,7 @@ import { readFile, writeFile, rename, mkdir, readdir, stat } from 'node:fs/promi
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { normaliseerWerkruimte, naamGeldig, NAAM_UITLEG, MAX_BYTES } from '../src/werk/model.js';
+import { beperkt, serverOnderweg, ANDERE_LEZERS, LEES_MS, MAX_DRADEN } from './standen.js';
 
 /**
  * Werkruimtes op schijf (werkruimte S3, docs/WERKRUIMTE.md B2, docs/werkruimte/S3.md):
@@ -20,18 +21,25 @@ import { normaliseerWerkruimte, naamGeldig, NAAM_UITLEG, MAX_BYTES } from '../sr
  * - Bewaard wordt het bestand zoals het binnenkwam (ingesprongen), niet de genormaliseerde
  *   vorm: wat Claude of Clay erin zette (een `_uitleg`, de volgorde) blijft staan.
  *
- * iCloud (zoals server/standen.js): de mixer peilt elke 3 s, en een bestand dat iCloud
+ * iCloud (zoals server/standen.js): de mixer peilt elke 2,5 s, en een bestand dat iCloud
  * "dataless" maakte houdt een draad van de threadpool vast (dezelfde die de audio leest).
- * Daarom: ongewijzigd volgens `stat` = uit het geheugen; één lees per pad tegelijk; over alles
- * samen hooguit MAX_DRADEN (2) operaties onderweg; de mappings en stukken (git, veranderen
- * zelden) hooguit eens per CONTEXT_MS opnieuw. Een peilbeurt is zo één of twee keer `stat`.
+ * Daarom: ongewijzigd volgens `stat` = uit het geheugen; één lees per pad tegelijk; en de grens
+ * van de HELE server (review ronde 2): `beperkt` uit server/standen.js, met de lopende
+ * operaties van de standen erbij geteld, dus samen met de standen hooguit MAX_DRADEN (2)
+ * onderweg. Loopt een lees langer dan LEES_MS, of hangt alles al, dan 503 (WerkFout), en er
+ * start geen nieuwe draad. De mappings en stukken (git, veranderen zelden) hooguit eens per
+ * CONTEXT_MS opnieuw. Een peilbeurt is zo één of twee keer `stat`.
  */
 
 export const NAAM = /^[a-z0-9_-]{1,60}$/;
-export { NAAM_UITLEG };
+export { NAAM_UITLEG, MAX_DRADEN };
 
-export const MAX_DRADEN = 2;
 export const CONTEXT_MS = 5000;
+
+/** Een fout met een HTTP-code (503: niet lokaal beschikbaar, iCloud?). */
+export class WerkFout extends Error {
+  constructor(code, fout) { super(fout); this.code = code; }
+}
 
 const versieVan = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 16);
 const stempel = (d) => d.toISOString().replace(/[:.]/g, '-');
@@ -43,42 +51,44 @@ export class Werkruimtes {
    * @param stukken      mappings/stukken (welke stukken er zijn, voor de waarschuwingen)
    * @param mappings     mappings/ (de standaarden: vrije plekken)
    */
-  constructor({ map, voorbeelden, stukken, mappings, klok = () => new Date() }) {
-    Object.assign(this, { map, voorbeelden, stukkenMap: stukken, mappingsMap: mappings, klok });
+  /**
+   * @param leesMs  hoe lang een lees mag duren voor 503 (tests: korter)
+   * @param lopend  de lopende operaties (standaard ANDERE_LEZERS: telt mee in de grens van de standen)
+   * @param leesBestand  readFile (tests: een die hangt)
+   */
+  constructor({ map, voorbeelden, stukken, mappings, klok = () => new Date(), leesMs = LEES_MS, lopend = ANDERE_LEZERS,
+    leesBestand = readFile, maxDraden = MAX_DRADEN }) {
+    Object.assign(this, { map, voorbeelden, stukkenMap: stukken, mappingsMap: mappings, klok, leesMs, leesBestand, maxDraden });
     this._slot = new Map();   // naam -> Promise: één schrijver tegelijk per naam
     this._cache = new Map();  // pad -> { sleutel, buf, gewijzigd }
-    this._lopend = new Map(); // pad -> Promise (één lees per pad)
-    this._bezig = 0;
-    this._wacht = [];
+    this._lopend = lopend;    // sleutel -> { belofte, sinds } (één lees per pad; gedeeld met de grens van de server)
     this._ctx = null;         // { t, waarde }
   }
 
-  /** Hooguit MAX_DRADEN fs-operaties tegelijk (de rest wacht netjes op zijn beurt). */
-  async _draad(werk) {
-    if (this._bezig >= MAX_DRADEN) await new Promise((z) => this._wacht.push(z));
-    this._bezig++;
-    try { return await werk(); } finally { this._bezig--; this._wacht.shift()?.(); }
+  /** Eén fs-operatie onder de grens van de hele server (server/standen.js `beperkt`). */
+  _draad(sleutel, werk) {
+    const tekst = `werkruimte niet lokaal beschikbaar (iCloud?): ${sleutel}; zet VARVE_WERKRUIMTES op een map buiten iCloud`;
+    return beperkt({ lopend: this._lopend, sleutel: `werk:${sleutel}`, werk, max: this.maxDraden, leesMs: this.leesMs,
+      fout: () => new WerkFout(503, tekst),
+      vol: () => new WerkFout(503, `te veel bestanden tegelijk niet lokaal beschikbaar (iCloud?): de server leest er hooguit ${this.maxDraden} tegelijk, zodat de audio blijft lezen`),
+      onderweg: () => (this._lopend === ANDERE_LEZERS ? serverOnderweg() : [...this._lopend.values()]) });
   }
 
   /** Eén bestand: { buf, gewijzigd } of null. Ongewijzigd volgens stat = uit het geheugen. */
   _leesBestand(pad) {
-    const l = this._lopend.get(pad);
-    if (l) return l;
     const weg = (err) => err?.code === 'ENOENT' || err?.code === 'ENOTDIR';
-    const p = this._draad(async () => {
+    return this._draad(pad, async () => {
       let st;
       try { st = await stat(pad); } catch (err) { if (weg(err)) { this._cache.delete(pad); return null; } throw err; }
       const sleutel = `${st.ino}:${st.size}:${st.mtimeMs}`;
       const c = this._cache.get(pad);
       if (c?.sleutel === sleutel) return c;
       let buf;
-      try { buf = await readFile(pad); } catch (err) { if (weg(err)) { this._cache.delete(pad); return null; } throw err; }
+      try { buf = await this.leesBestand(pad); } catch (err) { if (weg(err)) { this._cache.delete(pad); return null; } throw err; }
       const uit = { sleutel, buf, gewijzigd: st.mtimeMs };
       this._cache.set(pad, uit);
       return uit;
-    }).finally(() => this._lopend.delete(pad));
-    this._lopend.set(pad, p);
-    return p;
+    });
   }
 
   pad(naam) { return join(this.map, `${naam}.json`); }
@@ -86,20 +96,25 @@ export class Werkruimtes {
 
   async _namen(map) {
     let f = [];
-    try { f = await this._draad(() => readdir(map)); } catch { return []; }
+    try { f = await this._draad(`${map}/`, () => readdir(map)); } catch (err) { if (err instanceof WerkFout) throw err; return []; }
     return f.map((x) => /^([a-z0-9_-]{1,60})\.json$/.exec(x)?.[1]).filter((n) => n && naamGeldig(n));
   }
 
   /** Wat het model van buiten moet weten: de standaardmappings en de stukken die er zijn. */
   async _context() {
     if (this._ctx && Date.now() - this._ctx.t < CONTEXT_MS) return this._ctx.waarde;
-    const json = async (p) => { try { const b = await this._leesBestand(p); return b ? JSON.parse(b.buf.toString('utf8')) : null; } catch { return null; } };
+    // Niet te lezen (iCloud, kapot) = er niet: hooguit een waarschuwing meer ("onbekend stuk"), en
+    // dan niet onthouden, zodat het de volgende keer opnieuw geprobeerd wordt.
+    let heel = true;
+    const json = async (p) => { try { const b = await this._leesBestand(p); return b ? JSON.parse(b.buf.toString('utf8')) : null; } catch { heel = false; return null; } };
     const standaarden = {};
     for (const app of ['apc40mk2', 'maschine-mk2']) { const d = await json(join(this.mappingsMap, `${app}.json`)); if (d) standaarden[app] = d; }
     const stukken = {};
-    for (const n of await this._namen(this.stukkenMap)) { const d = await json(join(this.stukkenMap, `${n}.json`)); if (d) stukken[n] = d; }
+    let namen = [];
+    try { namen = await this._namen(this.stukkenMap); } catch { heel = false; }
+    for (const n of namen) { const d = await json(join(this.stukkenMap, `${n}.json`)); if (d) stukken[n] = d; }
     const waarde = { standaarden, stukken };
-    this._ctx = { t: Date.now(), waarde };
+    if (heel) this._ctx = { t: Date.now(), waarde };
     return waarde;
   }
 
@@ -133,7 +148,12 @@ export class Werkruimtes {
     const ctx = await this._context();
     const uit = [];
     for (const n of namen) {
-      const w = await this.lees(n, ctx);
+      let w;
+      try { w = await this.lees(n, ctx); } catch (err) {
+        if (!(err instanceof WerkFout)) throw err;
+        uit.push({ naam: n, titel: n, bron: null, versie: null, delen: 0, fouten: 1, fout: err.message, gewijzigd: null });
+        continue;
+      }
       if (!w) continue;
       uit.push({ naam: n, titel: w.werkruimte?.titel ?? n, bron: w.bron, versie: w.versie, delen: Object.keys(w.werkruimte?.delen ?? {}).length,
         fouten: w.fouten.length, gewijzigd: w.gewijzigd });
@@ -173,7 +193,8 @@ export class Werkruimtes {
     await mkdir(this.map, { recursive: true });
     if (nu?.bron === 'eigen') await this._bewaarOud(naam);
     const tmp = join(this.map, `.${naam}.${process.pid}.${Date.now()}.tmp`);
-    await this._draad(async () => { await writeFile(tmp, tekst); await rename(tmp, this.pad(naam)); });
+    await writeFile(tmp, tekst);
+    await rename(tmp, this.pad(naam));
     this._cache.delete(this.pad(naam));
     return { code: 200, antwoord: { naam, versie: versieVan(Buffer.from(tekst)), bron: 'eigen', werkruimte, waarschuwingen } };
   }
@@ -184,13 +205,17 @@ export class Werkruimtes {
     if (!oud) return;
     const map = join(this.map, '.versies', naam);
     await mkdir(map, { recursive: true });
-    try { await this._draad(() => writeFile(join(map, `${stempel(this.klok())}-${versieVan(oud)}.json`), oud, { flag: 'wx' })); } catch (err) {
+    try { await writeFile(join(map, `${stempel(this.klok())}-${versieVan(oud)}.json`), oud, { flag: 'wx' }); } catch (err) {
       if (err.code !== 'EEXIST') throw err;
     }
   }
 
   /** De bewaarde versies (nieuwste eerst), voor "terug naar de vorige inrichting" (S8). */
   async versies(naam) {
-    try { return (await this._draad(() => readdir(join(this.map, '.versies', naam)))).filter((f) => f.endsWith('.json')).sort().reverse(); } catch { return []; }
+    const map = join(this.map, '.versies', naam);
+    try { return (await this._draad(`${map}/`, () => readdir(map))).filter((f) => f.endsWith('.json')).sort().reverse(); } catch (err) {
+      if (err instanceof WerkFout) throw err;
+      return [];
+    }
   }
 }
