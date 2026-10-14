@@ -144,7 +144,7 @@ Voor een hard oordeel: meerdere rondes (`--vergelijk a1,a2 b1,b2`) op een rustig
 
 ## 2c. De hele suite
 
-`VARVE_CHROME=… node test/alles.mjs`: 118 bestanden, 10.241 checks, 10 overgeslagen, **4 rood, alle vier de
+`VARVE_CHROME=… node test/alles.mjs`: 118 bestanden, 10.395 checks (na ronde 2; de twee checks van ronde 3 los gedraaid, groen), 10 overgeslagen, **4 rood, alle vier de
 omgeving**: renderblok ("keylock met wissels"), wachtrij ("yt-dlp en zijn kind", 2×) en instrumenten-fm-schaal ("geen
 afval per blok"), zoals op main in deze container; en ingest (10 fouten: yt-dlp ontbreekt hier, de installatie werd
 geweigerd; `node test/ingest.test.mjs` op de uitgepakte basis faalt precies even vaak). Overgeslagen en gemeld: o.a.
