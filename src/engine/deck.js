@@ -29,7 +29,7 @@ export const REM_MAX = 5;
 export const REM_STANDAARD = 1;
 /** De drie EQ-banden die een kill hebben. */
 export const EQ_BANDEN = ['low', 'mid', 'high'];
-/** Hoeveel een nudge (bend) versnelt of vertraagt zolang je drukt. */
+/** Hoeveel een nudge (bend) versnelt of vertraagt zolang je drukt: de standaard van deck.bendSterkte. */
 export const BEND = 0.04;
 /** Toonverschuiving: halve tonen, ±12 (K5, docs/KEYLOCK.md). */
 export const TOON_MAX = 12;
@@ -146,6 +146,9 @@ export class Deck extends Emitter {
     this.rate = 1;              // playbackRate (pitch schuift mee — keylock = fase 3)
     this.pitchBereik = 0.16;    // zie PITCH_BEREIKEN
     this.buigt = 0;             // -1/0/+1: nudge (bend) ingedrukt
+    // Hoe hard een bend duwt (14 okt, werkruimte S1: track.N.bend.amount, 1–16%).
+    // Een getal, geen klank: alleen bend() en setRate() lezen hem.
+    this.bendSterkte = BEND;
     this.remTijd = REM_STANDAARD;   // seconden tot stilstand, zie rem()
     // EQ-kill per band: de schakelaar, en de drukvariant zolang je drukt.
     // De knopstand (ui.low/mid/high) blijft staan: kill uit = precies terug.
@@ -624,10 +627,10 @@ export class Deck extends Emitter {
    * richting -1 of +1, en 0 = loslaten. Alleen de BRON draait anders; `rate`
    * (en dus pitchfader, bpm en sync) blijft staan, zodat loslaten precies
    * terug is waar je was. 4% is genoeg om een tel in te halen zonder dat het
-   * als een pitchsprong klinkt.
+   * als een pitchsprong klinkt; `bendSterkte` zet het anders (1–16%).
    */
   bend(richting) {
-    this.bron.setRate(richting ? this.rate * (1 + BEND * Math.sign(richting)) : this.rate);
+    this.bron.setRate(richting ? this.rate * (1 + this.bendSterkte * Math.sign(richting)) : this.rate);
     this.buigt = richting ? Math.sign(richting) : 0;
     this._heranker();
   }
@@ -685,7 +688,7 @@ export class Deck extends Emitter {
   setRate(r) {
     const nr = clamp(r, 0.5, 2);
     this.rate = nr;
-    this.bron.setRate(this.buigt ? nr * (1 + BEND * this.buigt) : nr);
+    this.bron.setRate(this.buigt ? nr * (1 + this.bendSterkte * this.buigt) : nr);
     this._heranker();
     this.emit('change', this);
   }
@@ -914,9 +917,14 @@ export class Deck extends Emitter {
    * op 0 liet de fase verspringen, en dat breekt de beatmatch van een track
    * die je net inmixt.
    *
+   * De lengte: zonder = `sprongTellen` (Bank ◀ ▶, ⇧ Bank zet hem), anders een
+   * getal of `{ tellen }` (14 okt, werkruimte S1: ¼, ½ en 1 tel, en "op de 1"),
+   * ook een breuk. Dezelfde weigerregels, wat de lengte ook is.
+   *
    * @returns {{ ok: boolean, waarom?: 'leeg'|'geengrid'|'onzeker'|'rand'|'einde'|'begin' }}
    */
-  beatjump(richting, tellen = this.sprongTellen) {
+  beatjump(richting, lengte = this.sprongTellen) {
+    const tellen = typeof lengte === 'object' && lengte !== null ? (lengte.tellen ?? this.sprongTellen) : lengte;
     if (!this.buffer) return { ok: false, waarom: 'leeg' };
     if (!this.grid) return { ok: false, waarom: 'geengrid' };
     const g = this.grid, p = this.position;

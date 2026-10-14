@@ -97,6 +97,7 @@ src/
                     limiter-kern.js de limiter als rekenwerk: vooruitblik 1,5 ms, −1 dBTP (4×), gekoppeld, afvalvrij. Puur.
                     limiter-worklet.js  de AudioWorklet eromheen (uitgang 1 = de gain, voor de gain reduction)
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
+                    acties-precisie.js  werkruimte S1: fase duwen, jog, ±1 ms, beatjump ¼/½/1, op de 1, bend-sterkte, duoklik; Duwer (15 ms samenvoegen) (docs/werkruimte/S1.md)
                     keyboard.js     toetsen -> actions
                     midi.js         Web MIDI: poorten, parsen, sysex. Kent geen actions.
                     mapping.js      signature -> action, soft-takeover, shift, mapjes. Kent geen hardware.
@@ -275,6 +276,7 @@ mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
   generic.json      leeg startpunt
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
+  stukken/          werkruimte (WERKRUIMTE.md B4): uitlijn.json = mapje device.uitlijn op ⇧ Lock, acht fasemeters (S1; tot S3 ze laadt alleen met ?uitlijn=1)
   xboard49.json     E-MU Xboard49: knop 1–8 -> instrument, 9–16 -> FX, schuif -> fader van de speeltrack (AANNAME, te controleren met een proef)
   maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn), transport van de patronen ({plek}); laag pagina.strip / pagina.rack = de knoppagina's van de focus-track
 racks/
@@ -379,6 +381,7 @@ test/
   nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
   media-verhuis.test.mjs  media buiten iCloud: iCloud-herkenning, het briefje, droogloop/--doe op een nepmap, VARVE_TESTSERVER-bewaker
   aanhaakpunten.test.mjs  werkruimte S0: mapjes erbij/weg/volgorde, fragmenten, meta-vlaggen, alleenScherm, Deck.tijdlijn, aanhakers, routes (kopie-server)
+  precisie.test.mjs werkruimte S1: duwen (3,81/0,48 ms per tik), samenvoegen, keylock, jog, op de 1 (stukgrens), duoklik, sync-lampje, het stuk uitlijn
   alles.mjs         alle tests in één keer met overzicht
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
@@ -1870,7 +1873,9 @@ Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag misse
 
 ## Werkruimte: aanhaakpunten (14 okt, spoor S0)
 
-Volledig in `docs/werkruimte/S0.md`. Een spoor van de werkruimte raakt ALLEEN zijn eigen stub:
+Volledig in `docs/werkruimte/S0.md`. Precisie (S1): `docs/werkruimte/S1.md`; duwen en jog gaan door de
+Duwer (hooguit één nudge/seek per 15 ms, met keylock nooit twee geplande sprongen), headless
+`tools/headless/precisie.mjs`. Een spoor van de werkruimte raakt ALLEEN zijn eigen stub:
 `src/ui/aanhakers/<spoor>.js`, `src/ui/beschrijf/<spoor>.js`, `src/ui/css/<spoor>.css`,
 `server/routes/<spoor>.js`. Uitzonderingen in de meta van de action, niet in een regex:
 `log: 'overslaan'`, `beginstand: false`, `overneem: true`, `alleenScherm: true`. Mapjes van buiten:

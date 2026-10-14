@@ -845,6 +845,21 @@ sync-drempel), `mappings/stukken/uitlijn.json` (nieuw), `test/precisie.test.mjs`
   tikken per seconde.
 - `renderblok.test.mjs`: gouden hash en 0 GC ongewijzigd.
 
+**Gebouwd (14 okt, tak `werk/S1`, `docs/werkruimte/S1.md`).** Wat anders werd dan hierboven:
+- `Deck.beatjump` had al een optionele lengte (een getal); er kwam `{ tellen }` bij. Zonder lengte
+  blijft het `sprongTellen`.
+- `phase.offset` duwt de afstand op een CIRKEL (`omtrek(v − read)`): over de rand van de ring gaat
+  hij rond, en dezelfde v twee keer duwt maar één keer. De read telt mee wat nog niet ingegaan is.
+- De Duwer voert de eerste tik pas na 15 ms uit (anders 8 sprongen in 100 ms in plaats van ≤ 7).
+- Vaste beatjumps en op de 1 gaan ook door de Duwer (`sprong`): met keylock wachten ze op een
+  geplande sprong die nog onderweg is. Ze en ±1 ms hebben ook `overneem: true`.
+- 5 ms en 1 ms zijn wat je hoort (× rate). De maatgever is `syncMaster()`: speelt er niets, dan de
+  eerste andere track met een grid (zoals sync); read null alleen op de maatgever zelf of zonder.
+- Duoklik: hoog = de controleklik op de track zelf (met zijn cue), laag = de maatgever (zoals de
+  opdracht hierboven; A6 zei het omgekeerd). Een ander deck controleren zet hem uit.
+- De headless meting rendert offline (OfflineAudioContext) met per deck een eigen kanaal, en meet
+  de sprong als de grootste tweede afgeleide tegen dezelfde muziek zonder duwen.
+
 ---
 
 #### S2 — De uitlijnweergave (golf 2)

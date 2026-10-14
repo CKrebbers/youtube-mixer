@@ -33,15 +33,27 @@ function maakTik(ctx, freq, sterkte) {
   return buf;
 }
 
+/** De tonen van de controleklik (Hz): de "1" en de andere tellen. */
+export const KLIK_TONEN = { een: 1760, tel: 1175 };
+/**
+ * De tonen van de DUOKLIK (14 okt, werkruimte S1): een octaaf lager, op de
+ * maatgever, naast de controleklik op de track die je gelijkzet. Twee tikken
+ * die samenvallen = gelijk; een flam = duwen.
+ */
+export const DUO_TONEN = { een: 880, tel: 587 };
+
 export class GridKlik {
-  /** @param {BaseAudioContext} ctx  @param {AudioNode} uitgang */
-  constructor(ctx, uitgang) {
+  /**
+   * @param {BaseAudioContext} ctx  @param {AudioNode} uitgang
+   * @param {{ een?: number, tel?: number }} [tonen]  standaard KLIK_TONEN (de controleklik)
+   */
+  constructor(ctx, uitgang, { een = KLIK_TONEN.een, tel = KLIK_TONEN.tel } = {}) {
     this.ctx = ctx;
     this.uit = ctx.createGain();
     this.uit.gain.value = 0.5;
     this.uit.connect(uitgang);
-    this._een = maakTik(ctx, 1760, 0.9);
-    this._tel = maakTik(ctx, 1175, 0.55);
+    this._een = maakTik(ctx, een, 0.9);
+    this._tel = maakTik(ctx, tel, 0.55);
     this.deck = null;
     this._timer = null;
     this._gepland = [];       // { bron, op }: om te kunnen stoppen

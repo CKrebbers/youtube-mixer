@@ -225,7 +225,9 @@ export function bindEngine(engine) {
          read: () => {
            const d2 = engine.syncMaster(id);
            if (!d.grid || !d2?.grid) return 0;
-           return Math.abs(d.bpm - d2.bpm) < 0.05 ? 1 : 0;   // hoorbaar, op de plek waar ze nu zijn
+           // Hoorbaar, op de plek waar ze nu zijn. Onder 0,005 bpm (14 okt, werkruimte S1;
+           // was 0,05: tot ~24 ms drift per minuut terwijl hij "gelijk" zei).
+           return Math.abs(d.bpm - d2.bpm) < 0.005 ? 1 : 0;
          } });
 
     // ---- beatgrid ---------------------------------------------------------

@@ -7,7 +7,7 @@ import { KIT_PADS, AANTAL_PADS, EERSTE_NOOT, padVanNoot } from './instrumenten/d
 import { Sampler } from './sampler.js';
 import { Klankschaal } from './klankschaal.js';
 import { Koptelefoon } from './koptelefoon.js';
-import { GridKlik } from './grid-klik.js';
+import { GridKlik, DUO_TONEN } from './grid-klik.js';
 import { PatroonSpeler, maatVan } from './patronen/speler.js';
 
 /**
@@ -232,6 +232,12 @@ export class Engine extends Emitter {
     // in de koptelefoon als die er is (met de cue van dat deck aan), anders in de zaal.
     this.gridKlik = new GridKlik(this.ctx, this.koptelefoon.beschikbaar ? this.koptelefoon.cue : this.master.input);
     this._controle = null;       // { id, pflWas }
+    // De duoklik (14 okt, werkruimte S1): een tweede, lagere klik op de maatgever,
+    // naar dezelfde uitgang. Zie duoklik().
+    this.duoKlik = new GridKlik(this.ctx, this.koptelefoon.beschikbaar ? this.koptelefoon.cue : this.master.input, DUO_TONEN);
+    this._duo = null;            // het deck dat je met de duoklik gelijkzet, of null
+    this._duoZetteControle = false;
+    this._duoVolg = () => this._volgDuo();
     for (const id of DECK_IDS) this.decks[id].on('load', () => { if (this._controle?.id === id) this.gridControle(null); });
   }
 
@@ -243,6 +249,8 @@ export class Engine extends Emitter {
    */
   gridControle(id = null) {
     if ((this._controle?.id ?? null) === id) return;
+    // Een ander deck controleren (of uit) beëindigt een duoklik op dit deck.
+    if (this._duo && this._duo !== id) this.duoklik(null);
     if (this._controle) {
       const { id: oud, pflWas } = this._controle;
       if (!pflWas) this.koptelefoon.zetPfl(oud, false);
@@ -259,6 +267,48 @@ export class Engine extends Emitter {
 
   /** Welk deck er gecontroleerd wordt, of null. */
   get gridControleDeck() { return this._controle?.id ?? null; }
+
+  /**
+   * DE DUOKLIK (14 okt, werkruimte S1, docs/werkruimte/S1.md): de controleklik
+   * op deze track (gridControle: hoog, met zijn cue aan), plus een tweede klik
+   * een octaaf LAGER op de tellen van de maatgever (syncMaster(id): is deze
+   * track zelf de maatgever, dan de luidste andere). In de koptelefoon hoor je
+   * twee tikken: vallen ze samen, dan loopt hij gelijk; een flam = duwen tot het
+   * één tik is. Volgt een andere maatgever vanzelf (bij elke 'change').
+   * Null = uit, en de controleklik ook als de duoklik hem aanzette. De
+   * controleklik zelf verandert niet: dezelfde tonen, hetzelfde gedrag.
+   */
+  duoklik(id = null) {
+    if (this._duo === id) return;
+    if (this._duo) {
+      const oud = this._duo;
+      this._duo = null;
+      this.off('change', this._duoVolg);
+      for (const k of DECK_IDS) this.decks[k].off('change', this._duoVolg);
+      this.duoKlik.stop();
+      if (this._duoZetteControle && this._controle?.id === oud) this.gridControle(null);
+    }
+    if (id && this.decks[id]) {
+      this._duoZetteControle = this._controle?.id !== id;   // stond hij al aan, dan laat uit hem staan
+      this._duo = id;
+      this.gridControle(id);
+      this.on('change', this._duoVolg);
+      for (const k of DECK_IDS) this.decks[k].on('change', this._duoVolg);
+      this._volgDuo();
+    }
+    this.emit('change');
+  }
+
+  /** Welk deck de duoklik gelijkzet, of null. */
+  get duoklikDeck() { return this._duo; }
+
+  /** De lage klik op de maatgever van nu (alleen als die wisselde: start() plant opnieuw). */
+  _volgDuo() {
+    if (!this._duo) return;
+    const m = this.syncMaster(this._duo);
+    if ((this.duoKlik.deck ?? null) === (m ?? null)) return;
+    if (m) this.duoKlik.start(m); else this.duoKlik.stop();
+  }
 
   async resume() { if (this.ctx.state !== 'running') await this.ctx.resume(); }
 
