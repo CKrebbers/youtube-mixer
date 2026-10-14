@@ -193,7 +193,9 @@ src/
                                     grid Δ, muziek Δ (faseTussen), drift, maat, vouw, tekensleutel; invoer { decks, maatgever, V, nu }
                     teken.js        pagina · vouw · strook: tegels in tracktijd, tekenen alleen bij een nieuwe sleutel; vaknamen (vakVorm)
                     venster.js      uitlijn.html (geen AudioContext, MIDI of Web Lock); docs/werkruimte/S2.md
-  plan/             plan-model.js   het setplan als data: formaat v2, normaliseerPlan, bewerk, verschil. Puur (ook door de server gebruikt)
+  plan/             plan-model.js   het setplan als data: formaat v2 (+ tracks, go, lagen), normaliseerPlan, bewerk, verschil, herstelVelden. Puur (ook de server)
+                    klaarzetten.js  een set uit een keuze: volgorde (boog/oplopend), lengte of eindtijd, "past bij"-keten (docs/PLAN-SET.md). Puur.
+                    live.js         NU / VOLGENDE / DAARNA, de laag, de verwachte eindtijd uit automaat.stand(). Puur.
                     tijdlijn.js     voorspel: set-tijden en de overgang die de app echt kiest. Puur.
                     plan-venster.js het planvenster (plan.html): lijst, strook, bewerken, opslaan met versie, live via opener
   companion/        companion.js    de pagina voor iPad en iPhone: alleen fetch naar /api; companion-lijst.js het rekenwerk en de HTML (puur)
@@ -204,6 +206,7 @@ src/
                     stand-bewerker.js een opstelling instellen zonder JSON: keuzelijsten → stand. Puur.
                     avondpakket-tegel.js  de tegel "Avondpakket" (vertrek/aankomst, docs/AVONDPAKKET.md). Puur.
                     bedienen-tegel.js  het blok "Bedienen vanaf iPad en iPhone" (S8): aan/uit, koppelcode, apparaten, intrekken
+  sets/             model.js        een set als geheel (plan, patronen, werkruimte, momentopname): normaliseerSet, nummersVan. Puur, ook de server (docs/PLAN-SET.md §6)
   standen/          stand-model.js  het formaat van een stand (schema 1): witte lijst van delen, de nacht alleen remmen,
                                     normaliseerStand. Puur, geen DOM, geen imports; ook door de server gebruikt
                                     (server/standen.js importeert dit en src/control/mapping.js, allebei puur)
@@ -1968,6 +1971,33 @@ Volledig in `docs/WERKRUIMTE.md` ("Gebouwd") en `docs/werkruimte/S0–S8.md`; vr
 - Bij een keuze met gevolgen: benoem de trade-off en kies, wacht niet op goedkeuring.
 - Meld het expliciet als iets een aanname is die verkeerd kan zijn.
 - Geen features bouwen die niet gevraagd zijn, ook niet als ze voor de hand liggen.
+
+## Een set klaarzetten, live bijmixen, sets (14 okt, spoor S9)
+
+Volledig in `docs/PLAN-SET.md`. Wat een bouwer niet mag missen:
+- Het planformaat groeit ZONDER nieuwe versie: `tracks: { auto }` (plan), `go: 'wacht'` en
+  `lagen` (stap), allemaal optioneel. Wie het plan schrijft stuurt `kent: KENT` (plan-model.js);
+  zonder zet de server ze terug (`herstelVelden`, de regels van in/uit). Een nieuw optioneel veld:
+  in KENT en in GROEPEN van herstelVelden.
+- De automaat raakt een track van Clay NOOIT: met `tracks` alleen die, zonder nooit een track waar
+  iemand anders dan de automaat de laatste `CLAY_RECENT` (120 s) een `track.N.*` stuurde, en nooit
+  een track met een laag (`_laagDecks`). `_luidste`/`_naOvername` tellen alleen zijn tracks. Een
+  nieuwe plek die een track kiest: `_mijn()` en `_vanClay()`.
+- GO heeft een uiterste moment (`_goUiterst`): nooit stilte gaat voor GO. Lagen kijken naar de
+  POSITIE van de hoofdtrack (regel 3); Clay die de track van een laag aanraakt = de laag is van hem.
+- `plan.*` en `set.*` hebben `log: 'overslaan'` en `beginstand: false`; `set.bewaar*` staat in
+  VAST_NOOIT (src/werk/model.js). De rest mag van de iPad alleen als `mag` het noemt.
+- Een SET (`src/sets/model.js`, puur, ook de server): plan en patronen als KOPIE, werkruimte op
+  NAAM, momentopname = `leesStand()` met speelt/wacht/pads/patronen UIT. `sets/<naam>.json` (niet in
+  git, `VARVE_SETS`), versie + 409 + `.versies`, elke fs-operatie via `beperkt` (server/sets.js).
+  Terugladen laadt nummers gewoon uit de library (grid van NU) en zet dan de stand
+  (`maakZetMoment`); over een spelende track pas bij de tweede druk binnen 3 s; er start niets.
+- `/api/set/klaarmaken` weigert (409) als er een deck speelt of op een speeldag (de speeldagen van
+  de nacht). De secties gaan één voor één en wachten als er een deck gaat spelen.
+- Aanhaker `src/ui/aanhakers/set.js` (negende in AANHAKERS), uitleg `src/ui/beschrijf/set.js`,
+  routes `server/routes/sets.js`, bouwstenen `plan` en `sets` (src/paneel/vrij.js; de live-stand
+  erboven in paneel.js `setVak`, op de iPad via `GET /api/set/live`). Toetsen: `test/plan-set`,
+  `test/auto-set`, `test/sets-server`, `test/sets-mixer`; headless `tools/headless/set-proef.mjs`.
 
 ## Beatgrid (23 sep 2026, restpunten 25 sep, docs/BEATGRID.md)
 - Het grid is een TEMPOKAART: stukken {van, bpm, anker, zekerheid?, maat?} in tracktijd; tellen

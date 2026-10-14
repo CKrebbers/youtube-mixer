@@ -1,5 +1,20 @@
 # Overdracht — waar we staan (7 oktober 2026)
 
+## Stand 14 okt (laat): S9 — een set klaarzetten, live bijmixen, sets (tak `werk/S9`)
+
+- **Gebouwd** (`docs/PLAN-SET.md` §9): in het planvenster een set uit de selectie, een krat of een
+  "past bij"-keten in een boog, passend in een duur of eindtijd (gemeten: 12 nummers in 3
+  handelingen); klaar per nummer (G T S § V) en "maak klaar" (stems en secties, niet op een
+  speeldag of met een deck aan); de automaat op zijn eigen tracks (nooit een track van Clay), GO
+  per stap, buiten plan en terug, lagen (nummer, sampler, patroon) op een track van Clay; de
+  live-stand (NU / VOLGENDE / DAARNA, eindtijd) in de AUTO-rij, het planvenster en het vak `plan`
+  op werk.html; sets opslaan en terugladen (`sets/<naam>.json`, met versie, de mixer als
+  momentopname, tweede klik over een spelende track, er start niets).
+- **Ongecommit**: niets; alles op `werk/S9` (gepusht), nog samen te voegen in `werkruimte/integratie`.
+- **Niet getest**: met echte nummers en de APC, op de iPad (het vak `plan`/`sets`), een laag die
+  op de maat invalt met echte muziek. Vragen: `docs/VRAGEN.md` blok S9. Verslag:
+  `docs/verslagen/2026-10-14/werk-S9.md`.
+
 ## Stand 14 okt (avond): de werkruimte S0–S8 is af, de proef nog niet
 
 - **De werkruimte** (`docs/WERKRUIMTE.md`, "Gebouwd"; per spoor `docs/werkruimte/S0–S8.md`): delen, werk-balk,

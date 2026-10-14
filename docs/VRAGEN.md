@@ -648,3 +648,28 @@ grenzen, fase `auto`, Tailscale serve, stap 7a, stap 8/9, de LPD8.
   de apparaten van de proefavond nog aangesloten, twee alleen-lezen-commando's draaien
   (`system_profiler … -json`, `ioreg -p IOUSB …`)? Of doe je het zelf: de commando's staan
   letterlijk in §14 punt 9. **Advies:** een agent, dan zijn de fixtures dezelfde ochtend echt.
+
+## S9. Een set klaarzetten, live bijmixen, sets (14 okt, docs/PLAN-SET.md, tak `werk/S9`)
+
+- [ ] **S9-1 💬 De boog.** "maak set" zet de nummers standaard in een boog (rustig, piek op 70%,
+  iets terug). De energie is een gok uit bpm, luidheid en de luidste sectie. Klopt de vorm voor jouw
+  avonden, of liever oplopend als standaard (of iets anders: een golf met twee pieken)?
+- [ ] **S9-2 👂 De niveaus van een laag.** Een laag gaat in 4 maten open tot fader 0,8 en na zijn
+  duur in 4 maten dicht. Is 0,8 goed bovenop de mix, en 4 maten?
+- [ ] **S9-3 💬 Tracks van de automaat.** Zonder `tracks` in het plan laadt hij nooit op een track
+  waar jij de laatste 2 minuten iets aan deed. Is 2 minuten goed, of liever een vaste verdeling als
+  standaard (bv. 1–2 voor de automaat, 3–8 voor jou)? **Advies:** zet het per plan (veld "tracks
+  auto"); 2 minuten is de vangrail.
+- [ ] **S9-4 💬 GO vanaf de iPad.** `plan.*` en `set.terugladen` mogen van buiten de Mac als je ze
+  in `mag` van dat scherm zet; `set.bewaar` nooit. `auto.*` staat in VAST_NOOIT (laadt). Is dat de
+  goede grens, of moet GO ook nooit van buiten (net als laden)?
+- [ ] **S9-5 💬 Wat zit er in een set.** Plan en patronen als kopie, de werkruimte op naam, de mixer
+  alleen met "met mixer". Moet de werkruimte ook als kopie mee (dan is een set helemaal draagbaar,
+  maar een latere aanpassing van je werkruimte zit niet in oude sets)?
+- [ ] **S9-6 💬 Backup van sets.** De backup neemt alleen `library.db` mee; `sets/`, `plannen/` en
+  `patronen/` zijn bestanden in de Bureaublad-map. Moet de backup ze ook kopiëren?
+- [ ] **S9-7 💬 Een set kiezen in de Controlekamer** ("een set kiezen voor vanavond", de aanvulling)
+  is niet gebouwd: de keuze en het terugladen zitten in het planvenster, het vak `sets` en de
+  actions. Wil je hem ook als tegel in de Controlekamer?
+- [ ] **S9-8 👂 Live te bevestigen**: een laag op de maat (sync + op de maat) met echte nummers, GO
+  op de APC (het voorbeeldstuk `set-voorbeeld`), terugladen van een set met acht tracks op de M1.

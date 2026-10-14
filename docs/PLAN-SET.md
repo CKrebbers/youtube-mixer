@@ -93,7 +93,7 @@ een gewone stap = "nu" (de eerstvolgende 4 maten, of de volgende sectiegrens).
   Clay), fader dicht, sync, en start hem op de maat op het moment (`start: 'auto'`), fader in 4
   maten open; met `stem` alleen die stem (de rest weg, via de stem-kills). `start: 'jij'` = alleen
   klaarzetten: Clay start hem. `duur` (s) = daarna in 4 maten dicht; zonder duur blijft hij tot
-  Clay hem stopt of de stap eindigt.
+  Clay hem stopt (ook na de stap: dan is hij van Clay).
 - `soort: sampler`: op het moment `sampler.K` (een pad die gevuld is; leeg = gemeld en overgeslagen).
 - `soort: patroon`: op het moment `track.N.pattern.K` (het patroon start op de maat; een track
   zonder instrument = gemeld en overgeslagen).
@@ -164,6 +164,7 @@ Een SET (`src/sets/model.js`, puur, ook op de server):
 | `set.bewaar` | de huidige set bewaren onder de gekozen naam (met versie) |
 | `set.next` / `set.prev` | de gekozen set in de lijst |
 | `set.terugladen` | de gekozen set terugladen (plan, patronen, werkruimte); met momentopname over een spelende track: tweede druk binnen 3 s |
+| `set.moment` | met of zonder de mixer (momentopname) bewaren en terugladen |
 
 Geen enkele mapping verandert (Clay verdeelt de knoppen zelf). Elke action heeft een uitleg in
 `src/ui/beschrijf/set.js`. Eén voorbeeld (gemarkeerd als voorbeeld): `mappings/stukken/set-voorbeeld.json`
@@ -195,6 +196,39 @@ expliciet in `mag` zet, en ook dan met de tweede druk.
 - **De lag-winst van 14 okt**: geen `:has()` met body, niets in het MIDI-bericht (de actions zetten
   een vlag; de automaat kijkt bij zijn tik), geen opmaak lezen in een lus.
 
-## 9. Gebouwd
+## 9. Gebouwd (14 okt, tak `werk/S9`)
 
-(zie onder; bijgewerkt na het bouwen)
+| bestand | wat |
+|---|---|
+| `src/plan/plan-model.js` | `tracks`, `go`, `lagen` (normaliseerTracks, normaliseerLaag), bewerking `tracks`, `verschil.tracks`, `KENT`, `herstelVelden` (oude schrijvers) |
+| `src/plan/klaarzetten.js` | `maakSet` (volgorde: energie op de plek + ruilen voor mooie overgangen; lengte: korter tot 2 min, dan nummers eraf), `pastBijKeten`, `secondenTot` |
+| `src/plan/live.js` | `liveStand`, `maakLiveLezer` (voorspelling alleen opnieuw bij een ander plan) |
+| `src/auto/automaat.js` | `_mijn`, `_vanClay` (CLAY_RECENT 120 s), GO (`go`, `_goUiterst`), `buiten`/`terug`, lagen (`_zetLagen`, `_lagenTik`, `_laagKlaar`, `_laagStart`, `_laagFade`), nooit stilte na een overname, `stand().buiten/.laag/.volgende.go` |
+| `src/control/acties-set.js` | `plan.go`, `plan.buiten`, `plan.terug`, `plan.laag.nu`, `plan.laag.skip` |
+| `src/sets/model.js` | `normaliseerSet`, `normaliseerMoment`, `nummersVan`, `overSpelend` (puur, ook de server) |
+| `server/sets.js`, `server/routes/sets.js` | `/api/sets` (versie, 409, `.versies`, kopie, hernoem, alleen deze Mac), `/api/set/klaar`, `/api/set/klaarmaken`, `/api/set/live` |
+| `server/index.js` | `spoorCtx` kreeg `nacht`, `stemsRij`, `nieuweStems`, `analyseerSecties` (vier regels) |
+| `src/ui/sets.js` | `maakSets` (bewaren, terugladen, tweede druk, kopie, hernoem), `maakZetMoment` |
+| `src/ui/aanhakers/set.js`, `src/ui/beschrijf/set.js` | actions `set.*`, `window.varveSets`, de live-stand naar de server; de uitleg |
+| `plan.html`, `src/plan/plan-venster.js` | "maak set van", tracks auto, klaar + maak klaar, GO en lagen per stap, de live-balk, sets |
+| `src/ui/auto-paneel.js` | GO-knop, DAARNA en de eindtijd in de AUTO-rij |
+| `src/paneel/vrij.js`, `protocol.js`, `paneel.js` | bouwstenen `plan` en `sets` met de live-stand erboven (`setVak`) |
+| `src/werk/model.js` | `set.bewaar*` in VAST_NOOIT |
+| `mappings/stukken/set-voorbeeld.json` | VOORBEELD: GO, buiten, laag weg op pad 5–7 van de modus auto (niet geladen tenzij je hem noemt) |
+
+**Gemeten** (`tools/headless/set-proef.mjs`, headless Chromium in de container): een set van 12
+nummers staat in **3 handelingen** op de server (alles/krat · maak set · opslaan); vanuit de mixer
+zijn het er 4 tot de automaat speelt (krat · maak set · gebruik dit plan · auto aan). Opslaan →
+alles veranderen → terugladen geeft dezelfde stand (nummers, posities, fader, filter, cue, het plan,
+de patronen) en er speelt niets; over een spelende track vraagt de eerste druk en laadt de tweede.
+
+Toetsen: `test/plan-set` (formaat, oude schrijver, volgorde, lengte, keten, live-stand),
+`test/auto-set` (eigen tracks, nooit Clay's track, GO, buiten/terug, lagen, log), `test/sets-server`
+(sets over HTTP, klaar, maak klaar met speeldag en deck, live), `test/sets-mixer` (bewaren,
+terugladen, tweede druk, ontbrekend nummer, grid van NU).
+
+**Anders dan hierboven ontworpen**:
+- Een laag zonder `duur` blijft spelen tot Clay hem stopt (ook na de stap): hij is van Clay.
+- Na een overname gaat de automaat verder zodra er ÉÉN van zijn tracks klinkt; klinkt er helemaal
+  niets meer (ook niet bij Clay), dan meteen de volgende stap. `plan.terug` werkt ook vanuit "jij mixt".
+- Een set kiezen in de Controlekamer is niet gebouwd (VRAGEN S9-7).
