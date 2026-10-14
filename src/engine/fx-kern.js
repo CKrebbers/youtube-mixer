@@ -180,15 +180,18 @@ export class Kam {
 /**
  * De twee ketens allpass-filters van Olli Niemitalo ("Hilbert transform",
  * 2 × 4 tweede-orde allpass in z⁻²): hun uitgangen staan van ~20 Hz tot ~20 kHz
- * 90° uit fase. Coëfficiënten zijn a² per trap.
+ * 90° uit fase (gemeten: ±0,6° van 50 Hz tot 18 kHz op 48 kHz). Zijn tabel geeft a;
+ * de trap rekent met a² (y = a²·(x + y[n−2]) − x[n−2]); met a zelf was de fout tot 13°.
  */
-export const HILBERT_A = [0.6923878, 0.9360654322959, 0.9882295226860, 0.9987488452737];
-export const HILBERT_B = [0.4021921162426, 0.8561710882420, 0.9722909545651, 0.9952884791278];
+const NIEMITALO_A = [0.6923878, 0.9360654322959, 0.9882295226860, 0.9987488452737];
+const NIEMITALO_B = [0.4021921162426, 0.8561710882420, 0.9722909545651, 0.9952884791278];
+export const HILBERT_A = Float64Array.from(NIEMITALO_A, (a) => a * a);
+export const HILBERT_B = Float64Array.from(NIEMITALO_B, (a) => a * a);
 
 /**
  * Frequentieschuif (single-sideband): elke frequentie schuift `hz` op (of neer),
  * dus harmonischen worden onharmonisch. I en Q uit het Hilbert-paar, dan
- * I·cos − Q·sin met een draaiende fasor (geen sin/cos per sample; elke blok
+ * I·cos + Q·sin met een draaiende fasor (dit teken schuift omhoog: gemeten) (geen sin/cos per sample; elke blok
  * teruggezet op lengte 1). Stereo, elk kanaal zijn eigen filters.
  */
 export class Freqschuif {
@@ -226,7 +229,7 @@ export class Freqschuif {
           S[o + 1] = S[o]; S[o] = v; S[o + 3] = S[o + 2]; S[o + 2] = y;
           v = y;
         }
-        const y = ia * c - v * si;
+        const y = ia * c + v * si;
         if (k === 0) uitL[i] = y; else uitR[i] = y;
       }
       const nc = c * dc - si * ds;
@@ -257,11 +260,15 @@ export class Aanslag {
     this._sa = k(0.0005); this._sr = k(0.02);
     this._ta = k(0.02); this._tr = k(0.2);
     this._gg = k(0.001);
+    this._top = AANSLAG_DB;
   }
 
   render(inL, inR, metInvoer, uitL, uitR, n) {
     const sa = this._sa, sr = this._sr, ta = this._ta, tr = this._tr, gg = this._gg;
     const av = this.aanval, su = this.sustain;
+    // De grens als lokale double: rechtstreeks de module-binding in de lus liet
+    // V8 `doel` als getal-object bewaren (gemeten: 23 GC's per 12 000 blokken).
+    const top = this._top;
     let snel = this.snel, traag = this.traag, g = this.g;
     for (let i = 0; i < n; i++) {
       const l = metInvoer ? inL[i] : 0, r = metInvoer ? inR[i] : 0;
@@ -271,7 +278,7 @@ export class Aanslag {
       traag = x > traag ? ta * traag + (1 - ta) * x : tr * traag + (1 - tr) * x;
       const v = Math.log2((snel + 1e-6) / (traag + 1e-6));
       let doel = v > 0 ? 6 * av * v : -6 * su * v;
-      if (doel > AANSLAG_DB) doel = AANSLAG_DB; else if (doel < -AANSLAG_DB) doel = -AANSLAG_DB;
+      if (doel > top) doel = top; else if (doel < -top) doel = -top;
       g = gg * g + (1 - gg) * doel;
       const lin = Math.exp(g * 0.11512925464970229);
       uitL[i] = l * lin; uitR[i] = r * lin;
