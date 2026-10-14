@@ -971,6 +971,10 @@ function schoonPad(pad) {
   return MAG.some((r) => r.test(schoon)) ? schoon : null;
 }
 
+/** Open Range-verzoeken op een video: hooguit zoveel bytes per antwoord (zie statisch). */
+const VIDEO_KNIP = 2 * 1024 * 1024;
+const VIDEO_PAD = /^\/media\/[\w-]+\/video\.mp4$/;
+
 async function statisch(req, res, pad) {
   const schoon = schoonPad(pad);
   if (schoon === undefined) { json(res, 400, { fout: 'ongeldig pad' }); return; }
@@ -1001,6 +1005,14 @@ async function statisch(req, res, pad) {
       let start, eind;
       if (!m[1]) { start = Math.max(0, info.size - parseInt(m[2], 10)); eind = info.size - 1; }   // "de laatste N bytes"
       else { start = parseInt(m[1], 10); eind = m[2] ? Math.min(parseInt(m[2], 10), info.size - 1) : info.size - 1; }
+      // Een OPEN verzoek op een video (bytes=N-) krijgt hooguit VIDEO_KNIP terug
+      // (docs/WINST.md punt 2). Chrome opent hooguit 6 verbindingen per host
+      // (HTTP/1.1), en een <video> die een minuut vooruit buffert houdt er een
+      // vast: met zes zichtbare video's wachtten de audiopagina's van de decks
+      // tot 17 s (stilte). Met de knip vraagt de video zelf het volgende stuk
+      // en komt de verbinding steeds vrij. audio.wav en stems.wav niet: de
+      // StreamBron vraagt altijd een gesloten bereik.
+      if (m[1] && !m[2] && VIDEO_PAD.test(schoon)) eind = Math.min(eind, start + VIDEO_KNIP - 1);
       if (start >= info.size || eind < start) {
         res.writeHead(416, { ...kop, 'Content-Range': `bytes */${info.size}` });
         res.end();
