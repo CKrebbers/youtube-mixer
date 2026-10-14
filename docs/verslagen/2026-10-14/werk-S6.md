@@ -207,7 +207,7 @@ Na de fixes: alle Maschine-tests groen, verschilproef opnieuw 0 verschillen, `we
 ## Tests
 
 `TMPDIR=$S/tmp VARVE_HUB_REPO=~/av-app-hub VARVE_CHROME=$S/chrome.sh node test/alles.mjs`:
-**113 bestanden, 10051 checks, 8 overgeslagen, 3 rood**, precies de bekende van deze container:
+**113 bestanden, 10056 checks (na de reviewfixes; daarvoor 10051), 8 overgeslagen, 3 rood**, precies de bekende van deze container:
 `renderblok` "keylock met wissels" (afval per bericht), `wachtrij` "yt-dlp en zijn kind" (2×),
 `instrumenten-fm-schaal` "geen afval per blok". Reviewer b zag dezelfde drie op een `git archive` van de basis.
 `werkruimte.test` (een `@alleen`-wandkloktest van S3) wankelde in de review onder belasting; alleen groen.
