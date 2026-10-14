@@ -161,6 +161,8 @@ C6-budget, de KAAL-meting) en een onvolledige bestandenlijst: hierboven bijgeste
 Ronde 2 vond een regressie die ronde 1 zelf maakte (B1: een `los` na een te late `aan` ging verloren en het late ja
 zette de knop vast), plus B2 (de mixer-verbinding moet het tabblad van de relais volgen) en B3 (`*.grid.*` ving ook
 `layer.grid.*`). Gerepareerd met tests (S8.md §6c).
+Ronde 3 (alleen op die reparaties): B2 en B3 in orde; B1 had nog een gat (waarden duwden een te late `aan` uit
+`_laat`, max 64): gerepareerd, met een test die op de oude code faalt. Keylock valt niet meer onder VAST_NOOIT.
 
 ## 3. Wat niet gedaan is
 

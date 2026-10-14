@@ -279,6 +279,16 @@ console.log('\nde server: koppelen, rem, seq, loslaten');
   s.antwoord({ n: losNaar.n, ok: true }); await pLos;
   s.antwoord({ n: nA, ok: true });                    // het late ja op de 'aan', ná de los
   ok('B1: … en het late ja daarna zet hem niet weer vast', !s._vast.get('paginaccccc')?.ids.has('track.1.fx.knob.3.hold'));
+  // Ronde 3: een 'aan' over de time-out, daarna 70 waarden over de time-out (een xy-pad): de 'los' gaat nog steeds door.
+  naarMixer.length = 0; nu += 2000;
+  const pa3 = s.invoke(a9, inv(960, { id: 'track.1.fx.knob.4.hold', v: true, druk: 'aan', k: 'paginaddddd' }));
+  timers.at(-1)(); await pa3;
+  for (let i = 0; i < 70; i++) { nu += 9; const pv = s.invoke(a9, inv(961 + i, { k: 'paginaddddd' })); timers.at(-1)(); await pv; }
+  naarMixer.length = 0;
+  s.invoke(a9, inv(1100, { id: 'track.1.fx.knob.4.hold', v: false, druk: 'los', k: 'paginaddddd' }));
+  ok('ronde 3: 70 waarden over de time-out duwen de "aan" er niet uit: de los gaat naar de mixer', naarMixer.some((x) => x.t === 'invoke' && x.seq === 1100));
+  ok('ronde 3: keylock valt niet onder VAST_NOOIT (de toonsoort wel)', (() => { const w = { schermen: { x: { soort: 'ipad', mag: ['*'], tijdkritisch: true } } };
+    return M.waaromNietOpScherm(w, 'x', 'track.1.keylock') === null && /nooit van buiten/.test(M.waaromNietOpScherm(w, 'x', 'track.1.key') ?? ''); })());
   // B2: het tabblad dat de stand zendt (de relais) wint, ook van een ander tabblad dat al luistert.
   nu += 10;
   relais.tab = 'zender'; relais.tabT = nu;

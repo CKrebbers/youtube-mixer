@@ -408,7 +408,8 @@ export class PaneelSchrijf {
         const w = this._wacht.get(n);
         this._wacht.delete(n);
         // Nog even onthouden: een laat antwoord op een 'aan' moet de server alsnog vasthouden (zie antwoord).
-        if (w) { (this._laat ??= new Map()).set(n, w); if (this._laat.size > 64) this._laat.delete(this._laat.keys().next().value); }
+        // Alleen indrukken en loslaten: waarden (een xy-pad, 120/s) zouden een 'aan' er anders uit duwen (review S8 ronde 3).
+        if (w?.b.druk) { (this._laat ??= new Map()).set(n, w); if (this._laat.size > 64) this._laat.delete(this._laat.keys().next().value); }
         this.stats.traag++;
         klaar({ status: 504, antwoord: { ok: false, seq: b.seq, reden: 'de mixer antwoordde niet binnen 1 s' } });
       }, ANTWOORD_MS);
