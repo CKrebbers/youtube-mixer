@@ -361,3 +361,35 @@ bindApp({
   rackStap: racks.rackStap,
   masterRackStap: masterPaneel.rackStap,
 });
+
+// ---- de aanhakers van de werkruimte (docs/werkruimte/S0.md) ----------------
+// Elk spoor zet zijn deel op in src/ui/aanhakers/<naam>.js; dit blok raakt
+// niemand meer aan. Na alle opzet hierboven, in vaste volgorde, en een aanhaker
+// die gooit geeft één melding (de rest start). Niet afgewacht: de mixer staat al.
+{
+  const bus = await import('../control/actions.js');
+  const { startAanhakers, maakRenderloop } = await import('./aanhakers.js');
+  const rijen = await import('./rijen.js');
+  // meta.alleenScherm (een action die nooit op een knop mag): elke mapping weigert
+  // zo'n regel bij het laden, met een melding. Voor wat er al geladen is en voor
+  // wat de aanhakers erbij definiëren: na het starten nog eens langs.
+  const maschine = hubUrl ? (window.maschine ?? null) : null;   // zonder hub: geen Maschine (window.maschine kan dan een element zijn)
+  const mappings = () => [midiDelen.mapping, maschine?.mapping, instrumentPaneel.noten?.mapping].filter(Boolean);
+  const koppelWeiger = (m) => {
+    if (m.metaOf) return;
+    m.metaOf = bus.metaOf;
+    m.on('geweigerd', (lijst) => meld(`mapping: ${lijst.length === 1 ? lijst[0] : `${lijst.length} regels geweigerd (alleen op het scherm)`}`, 'fout'));
+  };
+  mappings().forEach(koppelWeiger);
+  const ctx = {
+    engine, mapping: midiDelen.mapping, lagen, midi: midiDelen.midi, staat, meld,
+    invoke: bus.invoke, define: bus.define, read: bus.read, metaOf: bus.metaOf,
+    laden, videoMixer, renderloop: maakRenderloop({ meld }),
+    rijen: { registreerRij: rijen.registreerRij, rij: rijen.rij, rijNamen: rijen.rijNamen },
+    maschine: Promise.resolve(maschine),
+  };
+  window.aanhakers = startAanhakers(ctx).then((uit) => {
+    mappings().forEach((m) => { koppelWeiger(m); m.weigerAlleenScherm(); });
+    return uit;
+  });
+}

@@ -5,6 +5,7 @@ import { meld } from './meldingen.js';
 import { VOLGORDE, aantalOpBus, rijStand, kolomTeken, stemUitleg } from './stems-weergave.js';
 import { verschuivingTekst } from './toon-weergave.js';
 import { zetTekst } from './dom.js';
+import { registreerRij } from './rijen.js';
 
 /*
  * De STEMS-rij (docs/STEMS.md §4): voor de track met focus per stem een naam,
@@ -59,6 +60,7 @@ export function opzetStems({ engine, staat, wachtrij, library = null }) {
     if (open) wachtrij.peil();
   };
   knop.addEventListener('click', () => zet(isDicht()));
+  registreerRij('stems', { zet, isOpen: () => !rij.classList.contains('hidden') });   // rijen.js: een deel zet hem open
   if (lees(OPEN) === '1') zet(true);
   // Peilen zolang de rij open staat: dan zie je de voortgang van een split.
   wachtrij.kijk(() => !isDicht());

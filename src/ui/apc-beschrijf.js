@@ -1,5 +1,6 @@
 import { GROEPEN, LAAGNAAM } from '../control/lagen.js';
 import { DRUMPAD_VAN_SAMPLER, drumpadNoot, nootNaamDrum } from '../control/drumpads.js';
+import { beschrijfSpoor } from './beschrijf/index.js';
 
 /**
  * Wat een action betekent, in gewone taal — voor de APC-kaarten (apc.html).
@@ -40,8 +41,14 @@ const BEELD_REGIE = {
   vrij: ['vrij', 'alles weer automatisch (vasthouden ook los)'],
 };
 
-/** { kort, lang }: kort past op de tekening, lang staat in de tabel. */
+/**
+ * { kort, lang }: kort past op de tekening, lang staat in de tabel.
+ * Eerst de sporen van de werkruimte (src/ui/beschrijf/, elk zijn eigen
+ * actions), daarna wat hieronder staat.
+ */
 export function beschrijf(action) {
+  const spoor = beschrijfSpoor(action);
+  if (spoor) return spoor;
   let m;
   // {speel} = de speeltrack (waar noten heen gaan: Xboard49 en Maschine, docs/MASCHINE.md).
   const wie = (t) => (t === '{focus}' ? 'focus-track' : t === '{speel}' ? 'speeltrack' : `track ${t}`);

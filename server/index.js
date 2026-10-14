@@ -16,7 +16,7 @@ import { ZEKER_VANAF, OUDE_ANALYSE_VERSIE } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon, maakSecties } from './analyze.js';
 import { toonSamenvatting } from './toon.js';
 import { sectieSamenvatting, SECTIE_VERSIE } from './secties.js';
-import { kiesMedia, iCloudReden, VERHUISD_BESTAND } from './media-plek.js';
+import { kiesMedia, iCloudReden, VERHUISD_BESTAND, isTestserver } from './media-plek.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
@@ -33,6 +33,7 @@ import { Nacht, pasToe as nachtPasToe, STANDAARD as NACHT_STANDAARD } from './na
 import { Standen, StandFout } from './standen.js';
 import { naamGeldig as standNaamGeldig, NAAM_UITLEG as STAND_NAAM_UITLEG, MAX_BYTES as STAND_MAX_BYTES } from '../src/standen/stand-model.js';
 import { maakAvondpakket, extraPaden } from './avondpakket-meet.js';
+import { spoorRoutes, zoekRoute } from './routes/index.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -83,7 +84,7 @@ const TYPES = {
   '.json': 'application/json; charset=utf-8', '.wav': 'audio/wav',
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.png': 'image/png',
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml',
-  '.woff2': 'font/woff2', '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 /**
@@ -998,7 +999,14 @@ async function heranalyseOpAchtergrond() {
  */
 const MAG = [/^\/$/, /^\/(index|video|apc|maschine|plan|controle)\.html$/, /^\/companion\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
   /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin|stems\.wav)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
-  /^\/plannen\/[\w-]+\.json$/, /^\/favicon\.ico$/];
+  /^\/plannen\/[\w-]+\.json$/, /^\/favicon\.ico$/,
+  // De pagina's van de werkruimte (docs/WERKRUIMTE.md C1): zolang een spoor ze niet maakt, gewoon 404.
+  /^\/(werk|uitlijn|spiekbrief)\.html$/, /^\/werk\.webmanifest$/];
+
+// De routes van de sporen van de werkruimte (server/routes/, docs/werkruimte/S0.md):
+// hun witte-lijstregels hier erbij, hun routes vlak vóór de 404 (zie de server hieronder).
+const SPOOR = spoorRoutes();
+MAG.push(...SPOOR.mag);
 
 /**
  * Het pad dat de witte lijst te zien krijgt, of null.
@@ -1120,6 +1128,16 @@ function vreemdVerzoek(req) {
   if (o.startsWith('https://') && EXTRA_HOSTS.has(o.slice(8))) return null;
   return 'verzoek van een andere oorsprong';
 }
+
+/**
+ * Wat een route van een spoor meekrijgt (server/routes/index.js). Klein gehouden:
+ * antwoorden, JSON lezen, de library, waar alles staat, en "komt dit van deze Mac".
+ */
+const spoorCtx = {
+  json, jsonMetEtag, leesJson, lib, WORTEL, MEDIA, POORT,
+  vanDezeMac: (req) => vanDezeMac(req, POORT), speeltDeck,
+  testserver: isTestserver(),
+};
 
 const server = createServer(async (req, res) => {
   try {
@@ -1717,6 +1735,11 @@ const server = createServer(async (req, res) => {
       const r = await kaartRoute(req, res, url, pad);
       if (r !== undefined) return r;
     }
+
+    // ---- de sporen van de werkruimte (server/routes/) ------------------
+    // Na alle controles hierboven (Host/Origin, alleen JSON), vóór de 404.
+    const spoorRoute = SPOOR.routes.length ? zoekRoute(SPOOR.routes, req.method, pad) : null;
+    if (spoorRoute) return await spoorRoute.handler(req, res, spoorCtx);
 
     if (pad.startsWith('/api/')) return json(res, 404, { fout: 'onbekend eindpunt' });
 

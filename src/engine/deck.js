@@ -266,6 +266,30 @@ export class Deck extends Emitter {
   get loop() { return this.bron.loop; }
   set loop(v) { if (v) this.bron.setLoop(v.start, v.end); else this.bron.clearLoop(); }
 
+  /**
+   * Het segment waar de positie uit volgt, alleen lezen (14 okt, werkruimte S0):
+   * voor wie zelf de positie wil uitrekenen op een andere klok (de
+   * uitlijnweergave, de iPad) met positieIn(seg, vorig, t) uit stream-kern.js.
+   * Uit wat de bron al heeft: zijn segment (seg) en het nummer van het laatste
+   * bericht aan de worklet (_segId, telt bij elk nieuw segment). `vorig` = wat er
+   * nog speelt tot een geplande sprong met keylock (T), anders null. Geen timer,
+   * niets in het audiopad; elke aanroep één klein object. `speelt` is het veld
+   * van het segment (wat de formule nodig heeft; een uitgelopen rem telt nog als
+   * spelend, positieOp staat dan stil), `wacht`/`remt`/`rate` die van het deck.
+   * null als de bron geen segmenten kent (de BufferBron, de reserve).
+   */
+  tijdlijn() {
+    const b = this.bron, s = b?.seg;
+    if (!s) return null;
+    const v = b._vorig;
+    return {
+      segId: b._segId || 0, gridVersie: this.gridVersie,
+      T: s.T, P: s.P, R: s.R, loop: s.loop, rem: s.rem,
+      vorig: v ? { T: v.T, P: v.P, R: v.R, loop: v.loop, rem: v.rem, speelt: v.speelt } : null,
+      speelt: s.speelt, wacht: this.wacht, remt: this.remt, rate: this.rate,
+    };
+  }
+
   // ---- laden -------------------------------------------------------------
 
   /** Van soort bron wisselen. Alleen bij het laden, dus er klinkt niets. */

@@ -4,6 +4,7 @@
  * De knoppen gaan over de bus (data-action), de tekst leest automaat.stand().
  */
 import { zetTekst } from './dom.js';
+import { registreerRij } from './rijen.js';
 const OPEN = 'varve.auto.open';
 const lees = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
 const schrijf = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
@@ -27,6 +28,7 @@ export function opzetAuto({ auto }) {
     schrijf(OPEN, open ? '1' : '0');
   };
   knop.addEventListener('click', () => zet(rij.classList.contains('hidden')));
+  registreerRij('auto', { zet, isOpen: () => !rij.classList.contains('hidden') });   // rijen.js: een deel zet hem open
   if (lees(OPEN) === '1') zet(true);
 
   const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)

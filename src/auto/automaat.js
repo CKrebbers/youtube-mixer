@@ -4,6 +4,7 @@ import { DECK_IDS } from '../engine/engine.js';
 import { GLIJ } from '../engine/deck.js';
 import { kortNaam } from '../engine/toonsoort.js';
 import { SectieKaart } from '../engine/secties.js';
+import { metaOf as busMeta } from '../control/actions.js';
 import {
   OVERGANGEN, SPEELDUUR, VOORUIT, fragment, kenmerken, kiesVolgende, kiesOvergang, planMoment, standen, klaarStand,
   sectiesVan, sectieGrens, sectieNaam, momentArgs,
@@ -35,6 +36,19 @@ import {
 const ZELF = Symbol('auto');
 /** Actions waarmee Clay een overgang overneemt (op een track in de overgang). */
 const OVERNEEM = /^track\.(\d)\.(fader|low|mid|high|filter|play|play\.quant|sync|seek|tempo|pitch|send\.[ab]|kill\.\w+(\.hold)?|stem\.(vocals|inst|drums|bass|other)(\.(kill|hold|filter|send\.[ab]))?|brake|cue|hotcue\.\d|section\.(\d+(\.loop)?|next|prev)|load\.selected)$/;
+/**
+ * Neemt Clay hiermee over (OVERNEEM, of `meta.overneem === true` in de define()
+ * van de action, 14 okt werkruimte S0)? Geeft { nr } (tracknummer uit de id,
+ * of null als de action bij geen track hoort: dan telt hij als de crossfader,
+ * hij raakt elke overgang) of null. Zo hoeft een nieuw spoor de regex niet aan te raken.
+ */
+export function neemtOver(id, metaOf = busMeta) {
+  const m = OVERNEEM.exec(id);
+  if (m) return { nr: Number(m[1]) };
+  if (metaOf?.(id)?.overneem !== true) return null;
+  const t = /^track\.(\d)\./.exec(id);
+  return { nr: t ? Number(t[1]) : null };
+}
 /** Een sectiesprong (docs/SECTIES.md): op de track die nu klinkt verspringt de positie, dus opnieuw plannen. */
 const SECTIE = /^track\.\d\.section\./;
 
@@ -97,9 +111,9 @@ export class Automaat extends Emitter {
    * @param wachtSecties zo lang (ms) wacht het klaarzetten op die kaart; daarna zonder (het oude gedrag)
    */
   constructor({ engine, invoke, bijInvoke = () => () => {}, laad, haalLibrary, haalPlan = async () => null,
-    welkNummer = () => null, haalSecties = async () => null, wachtSecties = WACHT_SECTIES, rnd = Math.random, tik = 40 } = {}) {
+    welkNummer = () => null, haalSecties = async () => null, wachtSecties = WACHT_SECTIES, rnd = Math.random, tik = 40, metaOf = busMeta } = {}) {
     super();
-    Object.assign(this, { engine, _invoke: invoke, laad, haalLibrary, haalPlan, welkNummer, haalSecties, wachtSecties, rnd, tikMs: tik });
+    Object.assign(this, { engine, _invoke: invoke, laad, haalLibrary, haalPlan, welkNummer, haalSecties, wachtSecties, rnd, tikMs: tik, metaOf });
     this.aan = false;
     this.fase = 'uit';
     this.hoofd = null;            // deckId van wat nu klinkt
@@ -254,10 +268,11 @@ export class Automaat extends Emitter {
   /** Iemand anders (Clay, MIDI, muis, toetsenbord) raakte de bus aan. */
   _bijBus(id) {
     if (this._zelf || !this.aan) return;
-    const m = OVERNEEM.exec(id);
-    let deck = m ? deckVanNr(Number(m[1])) : null;
+    const o = neemtOver(id, this.metaOf);
+    let deck = o?.nr ? deckVanNr(o.nr) : null;
     if (deck && SECTIE.test(id) && !sectieSpringt(this.engine.deck(deck), id)) deck = null;
-    const raakt = deck && (deck === this.hoofd || deck === this.volgende?.deckId);
+    // Een action met meta.overneem die bij geen track hoort, raakt de overgang zoals de crossfader.
+    const raakt = (deck && (deck === this.hoofd || deck === this.volgende?.deckId)) || (o && o.nr === null);
     // Een sectiedruk op wat nu klinkt terwijl de volgende klaarstaat: springt
     // de positie echt (_klaar kijkt bij de volgende tik; de bus hoort de druk
     // vóór de sprong), dan de overgang opnieuw plannen. Onthoud waar hij was.

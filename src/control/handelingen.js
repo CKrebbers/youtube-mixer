@@ -371,6 +371,9 @@ export function leesStand({ engine, tracks, herkomst, acties, lees }) {
     });
   }
   for (const a of acties) {
+    // Een action kan het ook zelf zeggen: `beginstand: false` in zijn define()
+    // (14 okt, werkruimte S0), naast NIET_IN_WAARDEN; voor waarden én rondlopers.
+    if (a.meta?.beginstand === false) continue;
     if (a.type === 'value' && !NIET_IN_WAARDEN.test(a.id)) {
       const v = lees(a.id);
       if (v !== null) uit.waarden[a.id] = v;

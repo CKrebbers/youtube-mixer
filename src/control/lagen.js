@@ -96,8 +96,12 @@ export const GROEPEN = {
  * Het mapje "vorm" (vormlagen) onder Detail View. Alleen met ?vormen=1:
  * opzetVormen() roept dit aan VÓÓR bindLagen, zodat er zonder vlag geen
  * action layer.device.detail bestaat en apc.html geen lege rij toont.
+ * Sinds 14 okt (werkruimte S0) een gewone aanroep van voegMapjeToe: zelfde
+ * GROEPEN, zelfde LAAGNAAM (test/aanhaakpunten.test.mjs vergelijkt ze).
  */
-export function voegVormMapjeToe() { GROEPEN.device.knoppen.detail = ['vorm']; }
+export function voegVormMapjeToe() {
+  voegMapjeToe('device', 'vorm', { naam: LAAGNAAM['device.vorm'], kiesknop: 'detail' });
+}
 
 /**
  * Mapjes die alleen meedoen als ze er nu iets te doen hebben: rondlopen met
@@ -106,6 +110,129 @@ export function voegVormMapjeToe() { GROEPEN.device.knoppen.detail = ['vorm']; }
  * instrument: zonder dat blijft Clip/Device View strip ↔ rack, zoals altijd.
  */
 export const OP_AANVRAAG = new Set(['device.inst']);
+
+/*
+ * MAPJES ERBIJ, VAN BUITEN (14 okt, werkruimte S0, docs/werkruimte/S0.md).
+ *
+ * Een spoor (uitlijn, fx-matrix, houd-mapjes, een eigen leeg mapje) zet een
+ * mapje erbij zonder dit bestand te raken: voegMapjeToe, en daarna
+ * herbindLagen() uit actions.js (die maakt de layer.*-actions opnieuw). Wat
+ * erbij kwam staat in TOEGEVOEGD, zodat haalMapjeWeg alleen weghaalt wat er
+ * van buiten bij kwam: een standaardmapje gaat nooit weg (een werkruimte haalt
+ * niets weg, WERKRUIMTE.md A12).
+ *
+ * Alleen in een groep die al bestaat en mapjes heeft (device, grid; edit is
+ * een schakelaar): een groep erbij
+ * vraagt een stand in elke Lagen, en die rekent de constructor uit.
+ */
+
+/** 'groep.laag' -> { groep, laag, kiesknop, kleur } van elk mapje dat er van buiten bij kwam. */
+export const TOEGEVOEGD = new Map();
+
+/** Kleur per mapje ('groep.laag' -> naam uit het APC-palet), alleen als hij er een kreeg. Data. */
+export const MAPJE_KLEUR = {};
+
+/** De volgorde van ▲ ▼ zoals hij hier staat; zetVolgorde(groep, null) zet hem terug. */
+const STANDAARD_VOLGORDE = Object.fromEntries(Object.entries(GROEPEN).map(([g, d]) => [g, d.volgorde ? [...d.volgorde] : null]));
+
+/** De Lagen die er zijn: een mapje dat weggaat terwijl het open staat, gaat dicht (naar de standaard). */
+const ALLE_LAGEN = new Set();
+
+/** Welke kiesknop van deze groep heeft dit mapje onder zich (of null)? */
+function knopVan(groep, laag) {
+  const g = GROEPEN[groep];
+  for (const [knop, lijst] of Object.entries(g.knoppen)) if (lijst.includes(laag)) return knop;
+  return null;
+}
+
+/** Bestaat dit mapje (onder een kiesknop, in de volgorde, de standaard, of van buiten)? */
+function bestaatMapje(groep, laag) {
+  const g = GROEPEN[groep];
+  return !!g && (g.standaard === laag || knopVan(groep, laag) !== null || !!g.volgorde?.includes(laag)
+    || TOEGEVOEGD.has(`${groep}.${laag}`));
+}
+
+/**
+ * Een mapje erbij in een bestaande groep.
+ *
+ * @param groep      'device', 'grid' of 'edit'
+ * @param laag       naam van het mapje (a-z, 0-9, -)
+ * @param naam       hoe het op het scherm heet (LAAGNAAM)
+ * @param kiesknop   onder welke kiesknop (layer.<groep>.<knop>); standaard het mapje zelf.
+ *                   Bestaat die knop al, dan komt het mapje erachter (nog eens drukken = het
+ *                   volgende). null = geen kiesknop: alleen te openen met lagen.zet (een deel).
+ * @param kleur      naam uit het APC-palet (MAPJE_KLEUR), of weg
+ * @param opAanvraag doet alleen mee met rondlopen als `beschikbaar` ja zegt (OP_AANVRAAG)
+ *
+ * Nog eens met dezelfde kiesknop = alleen naam en kleur bijwerken. Een
+ * standaardmapje, of hetzelfde mapje onder een andere kiesknop: een fout.
+ */
+export function voegMapjeToe(groep, laag, { naam, kiesknop = laag, kleur, opAanvraag = false } = {}) {
+  const g = GROEPEN[groep];
+  if (!g) throw new Error(`mapje ${groep}.${laag}: de groep "${groep}" bestaat niet`);
+  if (g.schakel) throw new Error(`mapje ${groep}.${laag}: ${g.naam} is een schakelaar, geen groep met mapjes`);
+  if (typeof laag !== 'string' || !/^[a-z0-9-]{1,32}$/.test(laag)) throw new Error(`mapje ${groep}.${laag}: geen geldige naam`);
+  if (kiesknop !== null && (typeof kiesknop !== 'string' || !/^[a-z0-9-]{1,32}$/.test(kiesknop) || kiesknop === 'next' || kiesknop === 'prev')) {
+    throw new Error(`mapje ${groep}.${laag}: "${kiesknop}" is geen kiesknop`);
+  }
+  const id = `${groep}.${laag}`;
+  const was = TOEGEVOEGD.get(id);
+  if (was && was.kiesknop !== kiesknop) throw new Error(`mapje ${id} staat al onder een andere kiesknop`);
+  if (!was && bestaatMapje(groep, laag)) throw new Error(`mapje ${id} bestaat al`);
+  if (!was && kiesknop !== null) (g.knoppen[kiesknop] ??= []).push(laag);
+  TOEGEVOEGD.set(id, { groep, laag, kiesknop, kleur: kleur ?? null, naamWas: was ? was.naamWas : LAAGNAAM[id] });
+  if (typeof naam === 'string') LAAGNAAM[id] = naam;
+  if (typeof kleur === 'string') MAPJE_KLEUR[id] = kleur; else delete MAPJE_KLEUR[id];
+  if (opAanvraag) OP_AANVRAAG.add(id); else OP_AANVRAAG.delete(id);
+}
+
+/**
+ * Een mapje dat er van buiten bij kwam weer weg (een standaardmapje niet: false).
+ * Staat het ergens open, dan gaat die groep naar zijn standaard (met 'change').
+ * Daarna herbindLagen(), anders blijft layer.<groep>.<knop> bestaan.
+ */
+export function haalMapjeWeg(groep, laag) {
+  const id = `${groep}.${laag}`;
+  const t = TOEGEVOEGD.get(id);
+  if (!t) return false;
+  const g = GROEPEN[groep];
+  if (t.kiesknop !== null) {
+    const lijst = g.knoppen[t.kiesknop];
+    const i = lijst ? lijst.indexOf(laag) : -1;
+    if (i >= 0) lijst.splice(i, 1);
+    if (lijst && !lijst.length) delete g.knoppen[t.kiesknop];
+  }
+  if (g.volgorde?.includes(laag)) g.volgorde = g.volgorde.filter((l) => l !== laag);
+  TOEGEVOEGD.delete(id);
+  // De naam van vóór voegMapjeToe terug (vorm staat al in LAAGNAAM; een nieuw mapje niet).
+  if (t.naamWas === undefined) delete LAAGNAAM[id]; else LAAGNAAM[id] = t.naamWas;
+  delete MAPJE_KLEUR[id];
+  OP_AANVRAAG.delete(id);
+  for (const l of ALLE_LAGEN) if (l.stand[groep] === laag) l.zet(groep, g.standaard);
+  return true;
+}
+
+/**
+ * De volgorde van ▲ ▼ in een groep (layer.<groep>.next/prev). null = de
+ * standaardvolgorde (zonder volgorde: geen ▲ ▼). Alleen mapjes die bestaan; wat
+ * uit de standaardvolgorde valt moet een kiesknop hebben, anders kon je er niet
+ * meer bij (WERKRUIMTE.md B3: alles blijft bereikbaar). Daarna herbindLagen().
+ */
+export function zetVolgorde(groep, lijst) {
+  const g = GROEPEN[groep];
+  if (!g) throw new Error(`volgorde: de groep "${groep}" bestaat niet`);
+  if (lijst === null) {
+    if (STANDAARD_VOLGORDE[groep]) g.volgorde = [...STANDAARD_VOLGORDE[groep]]; else delete g.volgorde;
+    return;
+  }
+  if (!Array.isArray(lijst) || !lijst.length) throw new Error(`volgorde ${groep}: een lijst met mapjes, of null`);
+  const onbekend = lijst.filter((l) => !bestaatMapje(groep, l));
+  if (onbekend.length) throw new Error(`volgorde ${groep}: onbekend mapje ${onbekend.join(', ')}`);
+  if (new Set(lijst).size !== lijst.length) throw new Error(`volgorde ${groep}: een mapje staat er twee keer in`);
+  const kwijt = (STANDAARD_VOLGORDE[groep] ?? []).filter((l) => !lijst.includes(l) && knopVan(groep, l) === null);
+  if (kwijt.length) throw new Error(`volgorde ${groep}: ${kwijt.join(', ')} heeft geen kiesknop en zou onbereikbaar worden`);
+  g.volgorde = [...lijst];
+}
 
 /** Hoe een mapje op het scherm heet. */
 export const LAAGNAAM = {
@@ -135,6 +262,7 @@ export class Lagen extends Emitter {
     this.beschikbaar = beschikbaar;
     this.stand = Object.fromEntries(Object.entries(GROEPEN).map(([g, d]) => [g, d.standaard]));
     this.ingedrukt = {};      // groep -> { knop, vorige, t0 }
+    ALLE_LAGEN.add(this);
   }
 
   /**

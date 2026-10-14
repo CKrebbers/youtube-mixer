@@ -1510,8 +1510,27 @@ export function bindAuto(auto) {
 }
 
 export function bindLagen(lagen) {
+  gebondenLagen = lagen;
+  herbindLagen();
+}
+
+let gebondenLagen = null;      // de Lagen van bindLagen
+let laagActions = new Set();   // de layer.*-actions die herbindLagen de vorige keer maakte
+
+/**
+ * De layer.*-actions opnieuw, uit GROEPEN zoals hij NU is (14 okt, werkruimte
+ * S0): na voegMapjeToe, haalMapjeWeg of zetVolgorde in lagen.js. Idempotent:
+ * nog eens aanroepen geeft dezelfde actions. Wat er niet meer bij hoort (een
+ * mapje dat weg is, ▲ ▼ zonder volgorde) verdwijnt van de bus. Zonder
+ * bindLagen ervoor doet hij niets.
+ */
+export function herbindLagen() {
+  const lagen = gebondenLagen;
+  if (!lagen) return;
+  const nu = new Set();
   for (const [groep, g] of Object.entries(GROEPEN)) {
     for (const knop of Object.keys(g.knoppen)) {
+      nu.add(`layer.${groep}.${knop}`);
       define(`layer.${groep}.${knop}`, 'trigger', (on) => lagen.druk(groep, knop, on),
         { label: g.schakel ? `${g.naam[0].toUpperCase()}${g.naam.slice(1)} aan/uit`
             : `Mapje ${g.naam}: ${g.knoppen[knop].map((l) => LAAGNAAM[`${groep}.${l}`] ?? l).join(' / ')}`,
@@ -1522,10 +1541,13 @@ export function bindLagen(lagen) {
             && (g.knoppen[knop].length === 1 || lagen.stand[groep] !== g.standaard) ? 1 : 0) });
     }
     if (g.volgorde) {
+      nu.add(`layer.${groep}.next`); nu.add(`layer.${groep}.prev`);
       define(`layer.${groep}.next`, 'trigger', (on) => { if (on) lagen.stap(groep, 1); }, { label: `Mapje ${g.naam}: volgende` });
       define(`layer.${groep}.prev`, 'trigger', (on) => { if (on) lagen.stap(groep, -1); }, { label: `Mapje ${g.naam}: vorige` });
     }
   }
+  for (const id of laagActions) if (!nu.has(id)) registry.delete(id);
+  laagActions = nu;
 }
 
 /** Macro's die in de Stroommachine op 0,5 neutraal staan (LIVE_MACROS in 09c-live.js daar; balans = geluid ↔ beeld). */

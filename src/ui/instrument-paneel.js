@@ -3,6 +3,7 @@ import { Noten } from '../control/noten.js';
 import { knobVan } from './controls.js';
 import { meld } from './meldingen.js';
 import { zetTekst } from './dom.js';
+import { registreerRij } from './rijen.js';
 
 /*
  * De INSTRUMENT-rij (docs/INSTRUMENTEN.md §6): voor de track met focus het
@@ -75,6 +76,7 @@ export function opzetInstrument({ engine, midi, lagen }) {
     schrijf(OPEN, open ? '1' : '0');
   };
   knop.addEventListener('click', () => zet(isDicht()));
+  registreerRij('instrument', { zet, isOpen: () => !rij.classList.contains('hidden') });   // rijen.js: een deel zet hem open
   if (lees(OPEN) === '1') zet(true);
 
   // ---- de track met focus ----------------------------------------------------

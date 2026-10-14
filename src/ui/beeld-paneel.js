@@ -3,6 +3,7 @@ import { BeeldKoppeling, klemLatentie, ADRES_MAX, LATENTIE_MIN, LATENTIE_MAX, BE
 import { beeldStand } from './beeld-weergave.js';
 import { meld } from './meldingen.js';
 import { zetTekst } from './dom.js';
+import { registreerRij } from './rijen.js';
 
 /*
  * De BEELD-rij (docs/BEELD.md): VARVE stuurt de Stroommachine, de
@@ -79,6 +80,7 @@ export function opzetBeeld({ engine }) {
     schrijf(OPEN, open ? '1' : '0');
   };
   knop.addEventListener('click', () => zetOpen(isDicht()));
+  registreerRij('beeld', { zet: zetOpen, isOpen: () => !rij.classList.contains('hidden') });   // rijen.js: een deel zet hem open
   if (lees(OPEN) === '1') zetOpen(true);
 
   // De bewaarde instellingen terug. Een adres in localStorage is altijd een

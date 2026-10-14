@@ -18,7 +18,9 @@ const engineBestanden = [...readdirSync(engineMap).filter((x) => x.endsWith('.js
 for (const f of engineBestanden) {
   const bron = readFileSync(engineMap + f, 'utf8');
   const imports = [...bron.matchAll(/^\s*import\s[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1]);
-  const fout = imports.filter((i) => /\/(ui|control|server|video|opname)\//.test(i) || /^(\.\.\/)+(ui|control)/.test(i));
+  // Ook niets uit de werkruimte (14 okt, docs/WERKRUIMTE.md C3): src/werk/, src/uitlijn/, src/paneel/.
+  const fout = imports.filter((i) => /\/(ui|control|server|video|opname|werk|uitlijn|paneel)\//.test(i) || /^(\.\.\/)+(ui|control)/.test(i)
+    || /^(\.\.\/)+(werk|uitlijn|paneel)(\/|$)/.test(i));
   ok(`${f}: importeert alleen uit engine en lib`, fout.length === 0);
   // Ook geen DOM: document/window horen hier niet.
   const dom = /\b(document|window)\./.test(bron.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ''));
@@ -54,6 +56,39 @@ console.log('\nsrc/koppel: geen scherm, geen MIDI, geen DOM');
     ok(`koppel/${f}: importeert niets uit ui, control, server of video`, !imports.some((i) => /(^|\/)(ui|control|server|video|opname)\//.test(i)));
     ok(`koppel/${f}: raakt geen DOM aan`, !/\b(document|window)\./.test(bron.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
   }
+}
+
+// De pure modules van de werkruimte (14 okt, docs/WERKRUIMTE.md C1/C3, docs/werkruimte/S0.md):
+// het model, het rekenwerk van de uitlijnweergave, het paneelprotocol en de superknop
+// draaien ook in de server, het losse venster en de tests. Geen DOM, en niets uit ui/,
+// server/ of control/ (behalve de pure modules van control/). Zodra ze bestaan.
+console.log('\nde pure modules van de werkruimte');
+{
+  const { existsSync } = await import('node:fs');
+  const { dirname, resolve, relative } = await import('node:path');
+  const src = fileURLToPath(new URL('../src/', import.meta.url));
+  const PUUR_CONTROL = new Set(['control/mapping.js', 'control/lagen.js', 'control/drumpads.js', 'control/superknop.js']);
+  const PUUR = ['werk/model.js', 'uitlijn/reken.js', 'paneel/protocol.js', 'control/superknop.js'];
+  let gezien = 0;
+  for (const f of PUUR) {
+    const pad = src + f;
+    if (!existsSync(pad)) continue;
+    gezien++;
+    const bron = readFileSync(pad, 'utf8');
+    const imports = [...bron.matchAll(/^\s*import\s[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1]);
+    const dyn = [...bron.matchAll(/\bimport\s*\(/g)].length;
+    const fout = imports.filter((i) => {
+      if (!i.startsWith('.')) return true;                               // geen pakketten, geen node:
+      const rel = relative(src, resolve(dirname(pad), i)).split('\\').join('/');
+      if (rel.startsWith('..')) return true;                              // buiten src/ (server/)
+      if (/^(ui|server|video|opname)\//.test(rel)) return true;
+      if (rel.startsWith('control/') && !PUUR_CONTROL.has(rel)) return true;
+      return false;
+    });
+    ok(`${f}: importeert niets uit ui, server of (niet-pure) control${fout.length ? ` (wel: ${fout.join(', ')})` : ''}`, fout.length === 0 && dyn === 0);
+    ok(`${f}: raakt geen DOM aan`, !/\b(document|window|navigator)\./.test(bron.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
+  }
+  console.log(`  (${gezien} van de ${PUUR.length} bestaan al; de rest wordt nagelopen zodra hij er is)`);
 }
 
 // De worklets draaien op de audiothread: daar is geen DOM, geen fetch en geen

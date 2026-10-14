@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VARVE DJ</title>
 <link rel="stylesheet" href="styles.css">
+<!-- De stijl van de sporen van de werkruimte (docs/werkruimte/S0.md): elk spoor zijn eigen bestand, styles.css blijft. -->
+<link rel="stylesheet" href="src/ui/css/werk.css">
+<link rel="stylesheet" href="src/ui/css/uitlijn.css">
+<link rel="stylesheet" href="src/ui/css/panelen.css">
 </head>
 <body>
 
@@ -45,6 +49,8 @@
     <button id="help-btn" class="ghost">? toetsen</button>
   </div>
 </header>
+<!-- De werk-balk: de delen van de werkruimte (spoor S3, docs/WERKRUIMTE.md A5). Leeg en verborgen tot dat spoor hem vult. -->
+<div id="werk-balk" hidden></div>
 <!-- De lijst met handelingenlogs om terug te spelen (logboek.js). -->
 <div id="log-lijst" class="log-lijst hidden"></div>
 
@@ -259,6 +265,8 @@
 <!-- Wat de knoppen stems … klankschaal in de bovenbalk openen. Samen in één gebied
      dat zelf scrolt als ze niet passen: de kolommen met hun faders en de sampler
      blijven altijd heel (styles.css, "de rijen"). -->
+<!-- Het werkvak: het paneel van het deel (docs/WERKRUIMTE.md A5). Leeg en verborgen tot een spoor het vult. -->
+<section id="werkvak" hidden></section>
 <div id="rijen" class="rijen">
 
 <!-- ================= STEMS (docs/STEMS.md §4) ================= -->

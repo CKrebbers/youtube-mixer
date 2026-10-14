@@ -139,8 +139,15 @@ export const NIEUWE_NAMEN = [
 /**
  * De regels uit een mapping-document, gecontroleerd en zo nodig gemigreerd.
  * Wat niet klopt gaat naar `fouten` en wordt overgeslagen, niet geraden.
+ *
+ * Alleen `rules` en `version` tellen. Een veld `mapjes` (een stuk of een
+ * werkruimte, docs/WERKRUIMTE.md B4) wordt hier bewust NIET gelezen: die mapjes
+ * registreert de aanroeper zelf (lagen.voegMapjeToe), vóór hij de regels zet.
+ *
+ * `weiger(action)`: geeft een reden als deze action niet op een knop mag
+ * (meta.alleenScherm, zie Mapping.metaOf), anders null. Zonder: alles mag.
  */
-function leesRegels(doc) {
+function leesRegels(doc, weiger = null) {
   if (!doc || !Array.isArray(doc.rules)) throw new Error('mapping: "rules" ontbreekt of is geen lijst');
   const rules = new Map();
   const fouten = [];
@@ -156,6 +163,8 @@ function leesRegels(doc) {
     }
     const action = migreerAction(r.action, doc.version ?? 1);
     if (action !== r.action) gemigreerd++;
+    const nee = weiger?.(action);
+    if (nee) { fouten.push(`regel ${i}: "${action}" ${nee}`); return; }
     const regel = {
       in: r.in, action, mode,
       invert: !!r.invert,
@@ -426,8 +435,15 @@ export class Mapping extends Emitter {
   /**
    * @param lagen  () -> ['device.strip', 'grid.hotcues', …]: de open mapjes.
    */
-  constructor({ read, invoke, vars = () => ({}), lagen = () => [], now = () => (globalThis.performance?.now() ?? Date.now()) } = {}) {
+  /**
+   * @param metaOf (actionId) -> meta of null (metaOf uit actions.js). Zegt die
+   *               `alleenScherm: true`, dan komt een regel met die action er bij
+   *               het laden niet in ('geweigerd'). Weg (de server, de kaarten): alles mag.
+   *               Ook later te zetten (mapping.metaOf = …, dan weigerAlleenScherm()).
+   */
+  constructor({ read, invoke, vars = () => ({}), lagen = () => [], now = () => (globalThis.performance?.now() ?? Date.now()), metaOf = null } = {}) {
     super();
+    this.metaOf = metaOf;
     this.read = read;
     this.invoke = invoke;
     this.vars = vars;
@@ -517,7 +533,8 @@ export class Mapping extends Emitter {
   }
 
   _laad(doc) {
-    const { rules, fouten, gemigreerd } = leesRegels(doc);
+    const { rules, fouten, gemigreerd } = leesRegels(doc, this._weiger);
+    this._meldGeweigerd(fouten);
     this._pasExtraToe(rules);
     this.shiftSig = typeof doc.shift === 'string' ? doc.shift : null;
     this.shift = false;
@@ -542,13 +559,78 @@ export class Mapping extends Emitter {
    */
   voegToe(bron, data) {
     const doc = typeof data === 'string' ? JSON.parse(data) : data;
-    const { rules, fouten } = leesRegels(doc);
+    const { rules, fouten } = leesRegels(doc, this._weiger);
+    this._meldGeweigerd(fouten);
     const lijst = [...rules.values()].map((r) => ({ ...r, bron }));
     this.extra.set(bron, lijst);
     const voor = this.rules.size;
     this._pasExtraToe(this.rules);
     this.emit('change', this);
     return { aantal: this.rules.size - voor, fouten };
+  }
+
+  /**
+   * Een fragment VERVANGEN (14 okt, werkruimte S0): eerst alle regels van deze
+   * bron weg, dan de nieuwe erbij met de regels van voegToe (alleen aanvullen,
+   * een eigen regel op dezelfde sleutel wint). Twee keer hetzelfde = één keer de
+   * regels. Voor stukken en werkruimteregels die bij een wissel opnieuw komen.
+   */
+  vervangFragment(bron, data) {
+    this._haalBronWeg(bron);
+    return this.voegToe(bron, data);
+  }
+
+  /**
+   * Een fragment weg: daarna staat er geen regel van deze bron meer. Dekte hij
+   * een regel van een ander fragment af, dan staat die er meteen weer. Een
+   * eigen regel (zonder bron) blijft altijd. Geeft het aantal weggehaalde regels.
+   */
+  haalWeg(bron) {
+    const weg = this._haalBronWeg(bron);
+    this._pasExtraToe(this.rules);
+    if (weg) this.emit('change', this);
+    return weg;
+  }
+
+  _haalBronWeg(bron) {
+    this.extra.delete(bron);
+    let weg = 0;
+    for (const [k, r] of this.rules) if (r.bron === bron) { this.rules.delete(k); weg++; }
+    if (weg) this._versie++;
+    return weg;
+  }
+
+  /** Waarom een action niet op een knop mag (meta.alleenScherm), of null. */
+  get _weiger() {
+    const metaOf = this.metaOf;
+    if (typeof metaOf !== 'function') return null;
+    return (action) => (metaOf(action)?.alleenScherm === true ? 'mag alleen op het scherm, niet op een knop: geweigerd' : null);
+  }
+
+  _meldGeweigerd(fouten) {
+    const g = fouten.filter((f) => f.endsWith(': geweigerd'));
+    if (g.length) this.emit('geweigerd', g);
+  }
+
+  /**
+   * Regels die er al staan nog eens langs meta.alleenScherm: voor actions die
+   * pas NA het laden van de mapping bestaan (de aanhakers, docs/werkruimte/S0.md).
+   * Haalt ze weg ('geweigerd' + 'change'); geeft hoeveel.
+   */
+  weigerAlleenScherm() {
+    const w = this._weiger;
+    if (!w) return 0;
+    const fouten = [];
+    for (const [k, r] of this.rules) {
+      const nee = w(r.action);
+      if (nee) { this.rules.delete(k); fouten.push(`regel ${k}: "${r.action}" ${nee}`); }
+    }
+    for (const [bron, lijst] of this.extra) this.extra.set(bron, lijst.filter((r) => !w(r.action)));
+    if (!fouten.length) return 0;
+    this._versie++;
+    this._meldGeweigerd(fouten);
+    this.emit('change', this);
+    return fouten.length;
   }
 
   _pasExtraToe(rules) {
@@ -585,6 +667,8 @@ export class Mapping extends Emitter {
    * mapje zonder dat je daar iets voor hoeft in te stellen.
    */
   set(sig, action, opts = {}) {
+    const nee = this._weiger?.(action);
+    if (nee) { this._meldGeweigerd([`${sig}: "${action}" ${nee}`]); return null; }
     const shift = opts.shift ?? (this.shift || undefined);
     let laag = opts.laag;
     if (laag === undefined) {
