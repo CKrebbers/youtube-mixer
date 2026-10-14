@@ -22,6 +22,11 @@ export class LearnMode {
     this.knop = knop;
     this.actief = false;
     this.melding = null;
+    // Per apparaat (werkruimte S5): koppelen in de mapping van het gekozen apparaat.
+    // Zolang alleen de APC er is: geen keuze, alles zoals vroeger.
+    this.apparaten = new Map();     // naam -> { titel, mapping, learn, device }
+    this.apparaat = null;
+    this.onApparaat = null;         // (naam) -> void: de gebruiker koos in de balk een ander apparaat
 
     // Capture: we willen de klik hebben vóór de knop zelf hem afhandelt,
     // anders verzet je de waarde die je aan het koppelen bent.
@@ -33,7 +38,20 @@ export class LearnMode {
       if (e.code === 'Escape') { this.learn.busy ? this.learn.stop() : this.uit(); e.preventDefault(); }
     });
 
+    this._luister(mapping, learn);
+    // De kiezer in de balk (alleen met meer dan één apparaat).
+    balk?.addEventListener?.('click', (e) => {
+      const knop = e.target.closest?.('button[data-apparaat]');
+      if (!knop || !this.kiesApparaat(knop.dataset.apparaat)) return;
+      this.onApparaat?.(knop.dataset.apparaat);
+    });
+  }
+
+  /** Luisteren naar een mapping en zijn leren; alleen het gekozen apparaat telt. */
+  _luister(mapping, learn) {
+    const hier = () => this.mapping === mapping && this.learn === learn;
     learn.on('bound', (b) => {
+      if (!hier()) return;
       const naam = this.device?.label?.(b.sig.replace(':*:', ':0:')) || b.sig;
       const ook = this.mapping.forAction(b.action).length - 1;
       this.melding = { tekst: `${this._label(b.action)} ← ${naam}`, goed: true };
@@ -41,9 +59,52 @@ export class LearnMode {
       else if (ook > 0) this.melding.tekst += ` — staat nu op ${ook + 1} knoppen`;
       this.ververs();
     });
-    learn.on('done', () => this.ververs());
-    learn.on('armed', () => { this.melding = null; this.ververs(); });
-    mapping.on('change', () => this.ververs());
+    learn.on('niet', (n) => {
+      if (!hier()) return;
+      this.melding = { tekst: `${this.device?.label?.(n.sig) || n.sig}: ${n.reden}`, goed: false };
+      this.ververs();
+    });
+    learn.on('done', () => { if (hier()) this.ververs(); });
+    learn.on('armed', () => { if (hier()) { this.melding = null; this.ververs(); } });
+    mapping.on('change', () => { if (hier()) this.ververs(); });
+  }
+
+  /** Een apparaat erbij (zie MappingPanel.voegApparaatToe): het eerste maakt van de APC een keuze. */
+  voegApparaatToe(naam, { titel, mapping, learn, device = null }, { eersteNaam = 'apc40mk2', eersteTitel = 'APC' } = {}) {
+    if (!this.apparaten.size) {
+      this.apparaten.set(eersteNaam, { titel: eersteTitel, mapping: this.mapping, learn: this.learn, device: this.device });
+      this.apparaat = eersteNaam;
+    }
+    if (this.apparaten.has(naam)) return;
+    this.apparaten.set(naam, { titel: titel || naam, mapping, learn, device });
+    this._luister(mapping, learn);
+    this.ververs();
+  }
+
+  /** Koppelen op dit apparaat. Een lopende leerbeurt op het vorige stopt. */
+  kiesApparaat(naam) {
+    const a = this.apparaten.get(naam);
+    if (!a || naam === this.apparaat) return !!a;
+    this.learn.stop();
+    Object.assign(this, { mapping: a.mapping, learn: a.learn, device: a.device, apparaat: naam });
+    this.melding = null;
+    this.ververs();
+    return true;
+  }
+
+  /** Wat er in de balk moet om te zeggen (en te kiezen) op welk apparaat je koppelt. */
+  _kiezerHtml() {
+    if (this.apparaten.size < 2) return '';
+    return ` <span class="leer-apparaten">${[...this.apparaten].map(([naam, a]) =>
+      `<button class="btn sm${naam === this.apparaat ? ' on' : ''}" data-apparaat="${naam}">${a.titel}</button>`).join(' ')}</span>`;
+  }
+
+  /** Wat je nu moet aanraken, op welk apparaat. */
+  _beweeg() {
+    if (this.apparaat === 'maschine-mk2') return 'houd CONTROL vast op de Maschine en raak de knop of draaiknop aan';
+    if (this.apparaat === 'toetsen') return 'druk de toets (shift erbij = een shift-regel)';
+    if (this.apparaat === 'xboard49') return 'beweeg een knop of de schuif van je MIDI-keyboard';
+    return 'beweeg nu de knop op je controller';
   }
 
   toggle() { this.actief ? this.uit() : this.aan(); }
@@ -119,18 +180,19 @@ export class LearnMode {
   _balktekst() {
     // Een draaiknop is pas na een paar berichten te herkennen als encoder, dus
     // blijft learn even luisteren. Dat mag de bevestiging niet wegdrukken.
+    const kies = this._kiezerHtml();
     if (this.learn.busy && this.melding) {
-      return `<b class="goed">${this.melding.tekst}</b> <i>blijf even draaien, dan herkent hij het type</i>`;
+      return `<b class="${this.melding.goed ? 'goed' : 'weg'}">${this.melding.tekst}</b> <i>${this.melding.goed ? 'blijf even draaien, dan herkent hij het type' : this._beweeg()}</i>${kies}`;
     }
     if (this.learn.busy) {
-      return `<b class="wacht">${this._label(this.learn.action)}</b> — beweeg nu de knop op je controller
-              <i>Esc annuleert</i>`;
+      return `<b class="wacht">${this._label(this.learn.action)}</b> — ${this._beweeg()}
+              <i>Esc annuleert</i>${kies}`;
     }
     if (this.melding) {
       return `<b class="${this.melding.goed ? 'goed' : 'weg'}">${this.melding.tekst}</b>
-              <i>klik het volgende aan, of Esc om te stoppen</i>`;
+              <i>klik het volgende aan, of Esc om te stoppen</i>${kies}`;
     }
     return `<b>Koppelmodus</b> — klik iets op het scherm en beweeg dan de knop op je controller
-            <i>shift-klik maakt los · Esc stopt</i>`;
+            <i>shift-klik maakt los · Esc stopt</i>${kies}`;
   }
 }

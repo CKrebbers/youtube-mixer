@@ -342,8 +342,13 @@ console.log('\naanhakers, rijen en uitleg');
 console.log('\nserver: routes/ en de witte lijst');
 {
   const { spoorRoutes, zoekRoute } = await import('../server/routes/index.js');
-  const leeg = spoorRoutes();
-  ok('de drie lege routebestanden: geen routes, geen witte-lijstregels', !leeg.routes.length && !leeg.mag.length);
+  // Eerst waren de drie bestanden leeg (S0); een spoor vult zijn eigen (S5: mapping-apparaat). Wat
+  // altijd moet gelden: een route van een spoor staat onder /api/, en zijn witte lijst zet geen data open.
+  const nu = spoorRoutes();
+  const GEHEIM = ['/media/library.db', '/media/kaart.db', '/server/index.js', '/opnames/set-1.acties.jsonl', '/proef/sessie.json',
+    '/standen/x.json', '/patronen/set.json', '/.git/config', '/test/alles.mjs', '/tools/proef/../../media/library.db'];
+  ok('de routebestanden: elke route onder /api/, geen witte-lijstregel die data openzet',
+    nu.routes.every((x) => x.pad.source.startsWith('^\\/api\\/')) && !nu.mag.some((m) => GEHEIM.some((g) => m.test(g))));
   let fout = null;
   try { spoorRoutes([['kapot', { routes: [{ methode: 'GET', pad: '/api/x', handler: () => {} }], mag: [] }]]); } catch (e) { fout = e; }
   ok('een route zonder RegExp: de server start niet (fout met de naam)', /kapot/.test(fout?.message));

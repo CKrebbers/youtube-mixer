@@ -1,0 +1,428 @@
+{
+  "name": "Toetsenbord — standaard",
+  "device": "toetsen",
+  "version": 3,
+  "uitleg": "Het toetsenbord als data (werkruimte S5, docs/werkruimte/S5.md): precies de oude tabel KEYMAP en SHIFT_TOETS uit src/control/keyboard.js, geen nieuwe toewijzingen. Signature key:0:<n> = de HID-gebruikscode van de fysieke toets (page 0x07: A = 4 … Z = 29, 1 = 30 … 0 = 39); het label zegt welke toets. shift: true = met de shifttoets. {focus} = de track met focus (linkervenster), {tweede} = de vorige focus (rechtervenster). Spatie, [ ], /, Esc, B en Cmd+Z blijven code. Je eigen toetsen bewaar je als verschil (koppelpaneel, apparaat toetsen); dit bestand verander je niet.",
+  "rules": [
+    {
+      "in": "key:0:20",
+      "action": "track.{focus}.play",
+      "mode": "trigger",
+      "label": "toets Q"
+    },
+    {
+      "in": "key:0:20",
+      "action": "track.{focus}.play.quant",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets Q"
+    },
+    {
+      "in": "key:0:26",
+      "action": "track.{focus}.cue",
+      "mode": "trigger",
+      "label": "toets W"
+    },
+    {
+      "in": "key:0:26",
+      "action": "track.{focus}.section.prev",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets W"
+    },
+    {
+      "in": "key:0:53",
+      "action": "track.{focus}.brake",
+      "mode": "trigger",
+      "label": "toets `"
+    },
+    {
+      "in": "key:0:100",
+      "action": "track.{focus}.brake",
+      "mode": "trigger",
+      "label": "toets § (links van 1)"
+    },
+    {
+      "in": "key:0:4",
+      "action": "track.{focus}.hotcue.1",
+      "mode": "trigger",
+      "label": "toets A"
+    },
+    {
+      "in": "key:0:4",
+      "action": "track.{focus}.hotcue.1.delete",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets A"
+    },
+    {
+      "in": "key:0:22",
+      "action": "track.{focus}.hotcue.2",
+      "mode": "trigger",
+      "label": "toets S"
+    },
+    {
+      "in": "key:0:22",
+      "action": "track.{focus}.hotcue.2.delete",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets S"
+    },
+    {
+      "in": "key:0:7",
+      "action": "track.{focus}.hotcue.3",
+      "mode": "trigger",
+      "label": "toets D"
+    },
+    {
+      "in": "key:0:7",
+      "action": "track.{focus}.hotcue.3.delete",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets D"
+    },
+    {
+      "in": "key:0:9",
+      "action": "track.{focus}.hotcue.4",
+      "mode": "trigger",
+      "label": "toets F"
+    },
+    {
+      "in": "key:0:9",
+      "action": "track.{focus}.hotcue.4.delete",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets F"
+    },
+    {
+      "in": "key:0:30",
+      "action": "track.{focus}.loop.1",
+      "mode": "trigger",
+      "label": "toets 1"
+    },
+    {
+      "in": "key:0:31",
+      "action": "track.{focus}.loop.2",
+      "mode": "trigger",
+      "label": "toets 2"
+    },
+    {
+      "in": "key:0:32",
+      "action": "track.{focus}.loop.4",
+      "mode": "trigger",
+      "label": "toets 3"
+    },
+    {
+      "in": "key:0:33",
+      "action": "track.{focus}.loop.8",
+      "mode": "trigger",
+      "label": "toets 4"
+    },
+    {
+      "in": "key:0:34",
+      "action": "track.{focus}.loop.exit",
+      "mode": "trigger",
+      "label": "toets 5"
+    },
+    {
+      "in": "key:0:29",
+      "action": "track.{focus}.nudge.back",
+      "mode": "trigger",
+      "label": "toets Z"
+    },
+    {
+      "in": "key:0:29",
+      "action": "track.{focus}.transpose.down",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets Z"
+    },
+    {
+      "in": "key:0:27",
+      "action": "track.{focus}.nudge.fwd",
+      "mode": "trigger",
+      "label": "toets X"
+    },
+    {
+      "in": "key:0:27",
+      "action": "track.{focus}.transpose.up",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets X"
+    },
+    {
+      "in": "key:0:8",
+      "action": "track.{focus}.focus",
+      "mode": "trigger",
+      "label": "toets E"
+    },
+    {
+      "in": "key:0:8",
+      "action": "track.{focus}.section.next",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets E"
+    },
+    {
+      "in": "key:0:21",
+      "action": "track.{focus}.beatjump.back",
+      "mode": "trigger",
+      "label": "toets R"
+    },
+    {
+      "in": "key:0:21",
+      "action": "track.{focus}.beatjump.halve",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets R"
+    },
+    {
+      "in": "key:0:23",
+      "action": "track.{focus}.beatjump.fwd",
+      "mode": "trigger",
+      "label": "toets T"
+    },
+    {
+      "in": "key:0:23",
+      "action": "track.{focus}.beatjump.double",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets T"
+    },
+    {
+      "in": "key:0:10",
+      "action": "track.{focus}.loop.in",
+      "mode": "trigger",
+      "label": "toets G"
+    },
+    {
+      "in": "key:0:10",
+      "action": "track.{focus}.loop.reloop",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets G"
+    },
+    {
+      "in": "key:0:6",
+      "action": "track.{focus}.loop.out",
+      "mode": "trigger",
+      "label": "toets C"
+    },
+    {
+      "in": "key:0:25",
+      "action": "track.{focus}.keylock",
+      "mode": "trigger",
+      "label": "toets V"
+    },
+    {
+      "in": "key:0:19",
+      "action": "track.{tweede}.play",
+      "mode": "trigger",
+      "label": "toets P"
+    },
+    {
+      "in": "key:0:19",
+      "action": "track.{tweede}.play.quant",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets P"
+    },
+    {
+      "in": "key:0:18",
+      "action": "track.{tweede}.cue",
+      "mode": "trigger",
+      "label": "toets O"
+    },
+    {
+      "in": "key:0:18",
+      "action": "track.{tweede}.section.next",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets O"
+    },
+    {
+      "in": "key:0:46",
+      "action": "track.{tweede}.brake",
+      "mode": "trigger",
+      "label": "toets ="
+    },
+    {
+      "in": "key:0:13",
+      "action": "track.{tweede}.hotcue.1",
+      "mode": "trigger",
+      "label": "toets J"
+    },
+    {
+      "in": "key:0:13",
+      "action": "track.{tweede}.hotcue.1.delete",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets J"
+    },
+    {
+      "in": "key:0:14",
+      "action": "track.{tweede}.hotcue.2",
+      "mode": "trigger",
+      "label": "toets K"
+    },
+    {
+      "in": "key:0:14",
+      "action": "track.{tweede}.hotcue.2.delete",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets K"
+    },
+    {
+      "in": "key:0:15",
+      "action": "track.{tweede}.hotcue.3",
+      "mode": "trigger",
+      "label": "toets L"
+    },
+    {
+      "in": "key:0:15",
+      "action": "track.{tweede}.hotcue.3.delete",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets L"
+    },
+    {
+      "in": "key:0:51",
+      "action": "track.{tweede}.hotcue.4",
+      "mode": "trigger",
+      "label": "toets ;"
+    },
+    {
+      "in": "key:0:51",
+      "action": "track.{tweede}.hotcue.4.delete",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets ;"
+    },
+    {
+      "in": "key:0:36",
+      "action": "track.{tweede}.loop.1",
+      "mode": "trigger",
+      "label": "toets 7"
+    },
+    {
+      "in": "key:0:37",
+      "action": "track.{tweede}.loop.2",
+      "mode": "trigger",
+      "label": "toets 8"
+    },
+    {
+      "in": "key:0:38",
+      "action": "track.{tweede}.loop.4",
+      "mode": "trigger",
+      "label": "toets 9"
+    },
+    {
+      "in": "key:0:39",
+      "action": "track.{tweede}.loop.8",
+      "mode": "trigger",
+      "label": "toets 0"
+    },
+    {
+      "in": "key:0:45",
+      "action": "track.{tweede}.loop.exit",
+      "mode": "trigger",
+      "label": "toets -"
+    },
+    {
+      "in": "key:0:54",
+      "action": "track.{tweede}.nudge.back",
+      "mode": "trigger",
+      "label": "toets ,"
+    },
+    {
+      "in": "key:0:54",
+      "action": "track.{tweede}.transpose.down",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets ,"
+    },
+    {
+      "in": "key:0:55",
+      "action": "track.{tweede}.nudge.fwd",
+      "mode": "trigger",
+      "label": "toets ."
+    },
+    {
+      "in": "key:0:55",
+      "action": "track.{tweede}.transpose.up",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets ."
+    },
+    {
+      "in": "key:0:12",
+      "action": "track.{tweede}.focus",
+      "mode": "trigger",
+      "label": "toets I"
+    },
+    {
+      "in": "key:0:12",
+      "action": "track.{tweede}.section.prev",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets I"
+    },
+    {
+      "in": "key:0:28",
+      "action": "track.{tweede}.beatjump.back",
+      "mode": "trigger",
+      "label": "toets Y"
+    },
+    {
+      "in": "key:0:28",
+      "action": "track.{tweede}.beatjump.halve",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets Y"
+    },
+    {
+      "in": "key:0:24",
+      "action": "track.{tweede}.beatjump.fwd",
+      "mode": "trigger",
+      "label": "toets U"
+    },
+    {
+      "in": "key:0:24",
+      "action": "track.{tweede}.beatjump.double",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets U"
+    },
+    {
+      "in": "key:0:11",
+      "action": "track.{tweede}.loop.in",
+      "mode": "trigger",
+      "label": "toets H"
+    },
+    {
+      "in": "key:0:11",
+      "action": "track.{tweede}.loop.reloop",
+      "mode": "trigger",
+      "shift": true,
+      "label": "toets H"
+    },
+    {
+      "in": "key:0:17",
+      "action": "track.{tweede}.loop.out",
+      "mode": "trigger",
+      "label": "toets N"
+    },
+    {
+      "in": "key:0:16",
+      "action": "track.{tweede}.keylock",
+      "mode": "trigger",
+      "label": "toets M"
+    },
+    {
+      "in": "key:0:35",
+      "action": "transport.quantize",
+      "mode": "trigger",
+      "label": "toets 6"
+    }
+  ]
+}
