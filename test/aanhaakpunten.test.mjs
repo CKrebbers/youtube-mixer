@@ -342,8 +342,13 @@ console.log('\naanhakers, rijen en uitleg');
 console.log('\nserver: routes/ en de witte lijst');
 {
   const { spoorRoutes, zoekRoute } = await import('../server/routes/index.js');
+  // Golf 1 had hier "de drie routebestanden zijn leeg". Een spoor vult zijn eigen bestand (S3:
+  // werkruimtes, 14 okt); wat blijft gelden: ze laden in de vaste volgorde, elke route hoort bij
+  // een spoor van SPOREN en zit onder /api/ (de witte lijst mag een spoor zelf aanvullen).
+  const { SPOREN } = await import('../server/routes/index.js');
   const leeg = spoorRoutes();
-  ok('de drie lege routebestanden: geen routes, geen witte-lijstregels', !leeg.routes.length && !leeg.mag.length);
+  ok('de routebestanden laden; elke route hoort bij een spoor en zit onder /api/',
+    leeg.routes.every((r) => SPOREN.some(([n]) => n === r.spoor) && r.pad.source.startsWith('^\\/api\\/')));
   let fout = null;
   try { spoorRoutes([['kapot', { routes: [{ methode: 'GET', pad: '/api/x', handler: () => {} }], mag: [] }]]); } catch (e) { fout = e; }
   ok('een route zonder RegExp: de server start niet (fout met de naam)', /kapot/.test(fout?.message));

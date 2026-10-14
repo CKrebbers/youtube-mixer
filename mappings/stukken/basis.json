@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "stuk": "basis",
+  "titel": "THUIS op ⇧ + master-knop",
+  "_uitleg": "Werkruimte S3 (docs/werkruimte/S3.md, WERKRUIMTE.md B4, A9). Eén vrije plek: de master-knop doet zonder shift beeld zwart (de kern), met shift THUIS: deel = start, de standaardmapjes, gluren en vasthouden los. Klank, faders en wat er speelt blijven staan. Komt BIJ de mapping (vervangFragment stuk:basis), nooit in je eigen bewaarde mapping; een eigen regel op dezelfde plek wint.",
+  "regels": {
+    "apc40mk2": [
+      { "in": "note:0:80", "shift": true, "action": "werk.thuis", "mode": "trigger", "label": "⇧ master-knop: THUIS" }
+    ]
+  }
+}

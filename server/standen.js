@@ -1,8 +1,13 @@
-import { readFile, writeFile, rename, mkdir, readdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir, readdir, stat, access } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { maakVerschil, isVerschil } from '../src/control/mapping.js';
 import { normaliseerStand, naamGeldig, NAAM_UITLEG, DELEN, LABEL, MAX_BYTES, STANDAARD_APPARAAT } from '../src/standen/stand-model.js';
+
+/** Waar de werkruimtes staan (werkruimte S3): VARVE_WERKRUIMTES of <wortel>/werkruimtes, plus de voorbeelden. */
+const WERK_WORTEL = fileURLToPath(new URL('../', import.meta.url));
+
 import { komendeNacht } from './nacht.js';
 
 /**
@@ -352,10 +357,26 @@ export class Standen {
     return (await this._leesMap(join(this.map, '.versies', naam)).catch(() => [])).filter((f) => f.endsWith('.json')).sort().reverse();
   }
 
+  /**
+   * Bestaat deze werkruimte (eigen of voorbeeld)? Alleen voor een waarschuwing (werkruimte S3); de
+   * mixer kijkt bij het kiezen zelf ook. Beperkt zoals elke lees hier (iCloud); niet te zien = ja.
+   */
+  async _werkruimteBestaat(naam) {
+    const eigen = process.env.VARVE_WERKRUIMTES || join(WERK_WORTEL, 'werkruimtes');
+    const paden = [join(eigen, `${naam}.json`), join(WERK_WORTEL, 'tools', 'werkruimtes', 'voorbeelden', `${naam}.json`)];
+    try {
+      return await this._extern(`werkruimte:${naam}`, async () => {
+        for (const p of paden) { try { await access(p); return true; } catch {} }
+        return false;
+      });
+    } catch { return true; }
+  }
+
   /** Waarschuwingen bij opslaan: wat de server kan nakijken zonder iets te doen. */
   async _controleer(stand) {
     const w = [];
     const d = stand.delen;
+    if (d.werkruimte && !(await this._werkruimteBestaat(d.werkruimte.naam))) w.push(`geen werkruimte "${d.werkruimte.naam}" (eigen of voorbeeld)`);
     if (d.master) {
       const s = await this._sjablonen();
       if (s.fout) w.push(`${s.fout}: sjabloon "${d.master.sjabloon}" niet nagekeken`);
@@ -503,6 +524,14 @@ export class Standen {
       }
     }
 
+    // 7b. De werkruimte: vastleggen, de mixer kiest hem bij zijn volgende start (S3).
+    let werkruimte = null;
+    if ('werkruimte' in d) {
+      werkruimte = { naam: d.werkruimte.naam, sinds };
+      verslag.mixer.push('werkruimte');
+      if (!(await this._werkruimteBestaat(d.werkruimte.naam))) verslag.waarschuwingen.push(`geen werkruimte "${d.werkruimte.naam}" (eigen of voorbeeld): de mixer houdt dan wat hij had`);
+    }
+
     // 8. Wat de mixer zelf moet doen en nog niet kan.
     for (const deel of ['beeld', 'koptelefoon', 'vormen']) {
       if (deel in d) verslag.overgeslagen.push({ deel, reden: 'nog niet gebouwd (stap K): stel het in de mixer zelf in' });
@@ -518,7 +547,7 @@ export class Standen {
       naam, titel: g.stand.titel || naam, versie: g.versie, bron: g.bron, sinds, vorige, raakt, verslag,
       na: Object.fromEntries(raakt.map((x) => [x, this._toestand(x)])),
       // De kaart met de naam die de kaart zelf geeft ("Proefkrat"), zodat de tegel hetzelfde zegt als het verschil.
-      mixer: { master }, hub: d.hub ?? null, pakket: d.pakket ?? null, kaart: d.kaart ? { ...d.kaart, ...(krat?.naam ? { naam: krat.naam } : {}) } : null, delen,
+      mixer: { master, ...(werkruimte ? { werkruimte } : {}) }, hub: d.hub ?? null, pakket: d.pakket ?? null, kaart: d.kaart ? { ...d.kaart, ...(krat?.naam ? { naam: krat.naam } : {}) } : null, delen,
     };
     await this._schrijfAtomisch(this.actiefPad, JSON.stringify(actief, null, 1));
     this.log?.(`[standen] ${naam} actief: ${[...verslag.toegepast, ...verslag.gecontroleerd].join(', ') || 'niets op de server'}`
@@ -557,6 +586,7 @@ export class Standen {
       uit.hub = { van: tekst(a.hub), naar: tekst(d.hub), moment: d.hub.set ? 'start hem zelf' : 'alleen de knop mixer openen' };
     }
     if ('pakket' in d) uit.pakket = { van: a.pakket?.profiel ?? '—', naar: d.pakket.profiel, moment: 'controle' };
+    if ('werkruimte' in d) uit.werkruimte = { van: a.mixer?.werkruimte?.naam ?? '—', naar: d.werkruimte.naam, moment: 'bij de volgende start van de mixer' };
     for (const deel of ['beeld', 'koptelefoon', 'vormen']) if (deel in d) uit[deel] = { van: '?', naar: JSON.stringify(d[deel]), moment: 'nog niet (stap K)' };
     return { naam, delen: uit };
   }

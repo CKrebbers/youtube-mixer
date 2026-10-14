@@ -1,1 +1,31 @@
-/* werk: leeg (werkruimte S0). Alleen het spoor van dit bestand vult het; styles.css blijft zoals hij is. */
+/* werk: de werk-balk (werkruimte S3, docs/WERKRUIMTE.md A5, docs/werkruimte/S3.md). Alleen dit spoor
+   vult dit bestand; styles.css blijft zoals hij is. #werkvak is van S2/S7 (zij vullen het).
+   De balk is één regel van 26 px, alleen met een werkruimte (met `standaard`: hidden, dus geen
+   ruimte). Geen :has(), geen selector die de hele pagina raakt (docs/APC40.md "Invoer en
+   vertraging"): alles hangt onder .werk-balk. */
+#werk-balk[hidden]{display:none}
+.werk-balk{display:flex;align-items:center;gap:6px;flex:0 0 auto;height:30px;padding:0 14px;
+  background:var(--panel);border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;font-size:12px}
+.werk-balk .ghost{padding:2px 8px;font-size:12px;line-height:18px}
+.werk-kies{background:var(--panel2);color:var(--dim);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:12px;
+  padding:2px 4px;max-width:160px}
+.werk-kies:hover,.werk-kies:focus{color:var(--text)}
+.werk-tabs{display:flex;gap:4px;min-width:0}
+/* Een tab in de kleur van zijn deel (A10): dicht = een rand in die kleur, het deel van nu = gevuld. */
+.werk-tab{--k:#7f7f7f;--k-tekst:#07090b;border:1px solid var(--k);border-radius:5px;padding:2px 9px;color:var(--k);
+  font-size:12px;font-weight:600;letter-spacing:.06em;line-height:18px;background:none}
+.werk-tab:hover{background:color-mix(in srgb,var(--k) 18%,transparent)}
+.werk-tab.aan{background:var(--k);color:var(--k-tekst)}
+.werk-door{color:var(--klein);font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.werk-nieuw{color:var(--warn)!important;border-color:color-mix(in srgb,var(--warn) 50%,var(--line))!important}
+.werk-nieuw.te-veel{border-color:var(--warn)!important}
+.werk-letop{color:var(--klein);cursor:help;font-size:12px}
+.werk-vul{flex:1 1 auto}
+.werk-slot{display:flex;gap:4px;align-items:center}
+.werk-thuis{color:var(--text)!important;font-weight:600;letter-spacing:.06em}
+.werk-vast.vraag{color:var(--warn)!important;border-color:var(--warn)!important}
+.werk-vast:disabled{opacity:.4;cursor:default}
+.werk-terug{color:var(--a)!important;border-color:var(--a)!important}
+/* De knop in een melding ("terug naar twee-handen"): de melding zelf is doorklikbaar, de knop niet. */
+.melding .werk-melding-knop{pointer-events:auto;cursor:pointer;margin-left:10px;padding:1px 8px;border:1px solid var(--a);
+  border-radius:4px;background:none;color:var(--a);font:inherit;font-size:12px}
