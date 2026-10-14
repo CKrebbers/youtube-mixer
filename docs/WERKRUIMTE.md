@@ -977,6 +977,17 @@ voorbeelden (punt 1 en 6).
   werk-balk zichtbaar met `apc-alleen`, verborgen met `standaard`; ⇧ scene 3 → STEMS-rij open;
   `rijen.mjs` en `kijk.mjs` met `standaard` ongewijzigd groen.
 
+**Gebouwd (14 okt, tak `werk/S3`; `docs/werkruimte/S3.md`, verslag `docs/verslagen/2026-10-14/werk-S3.md`).**
+Zoals hierboven, met drie verschillen:
+- W1 (iPad kijkt alleen): `PUT /api/werkruimtes/<naam>` mag alleen vanaf deze Mac (`ctx.vanDezeMac`, zoals
+  `/api/mixer`); via Tailscale of met een proxykop 403. Lezen mag zoals de rest.
+- Afspraak met Clay (14 okt): de indeling maakt hij zelf. De drie bestanden in
+  `tools/werkruimtes/voorbeelden/` zijn VOORBEELDEN (de kiezer zet er "(voorbeeld)" achter); S3 levert
+  één echt stuk (`basis`: THUIS). `apc-alleen` en `twee-handen` noemen stukken van andere sporen; zolang
+  die er niet zijn: een waarschuwing per stuk, de rest werkt.
+- De Maschine-adapter (`registreerApparaat('maschine-mk2', …)`) levert S6; de toets van vereist/terugval
+  draait met een nep-adapter.
+
 ---
 
 #### S4 — Combinaties en effecten (golf 2)
