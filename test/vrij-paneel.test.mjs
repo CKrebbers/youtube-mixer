@@ -246,6 +246,12 @@ console.log('\nde xy-pad: y, druk, los (uit de ruwe werkruimte)');
 console.log('\nde bouwstenen (elk onderdeel als paneel)');
 {
   ok('fx, strip, mixer, stems, master, sampler', ['fx', 'strip', 'mixer', 'stems', 'master', 'sampler'].every((k) => typeof BOUWSTENEN[k] === 'function'));
+  // Spoor S11: de namen in protocol.js (werk.html, vakSoort) zijn precies de bouwstenen (sjablonen van S10 ontbrak daar).
+  const { BOUWSTEEN_NAMEN, vakSoort } = await import('../src/paneel/protocol.js');
+  ok('BOUWSTEEN_NAMEN in protocol.js = de bouwstenen in vrij.js (ook sjablonen en tags)', JSON.stringify([...BOUWSTEEN_NAMEN].sort()) === JSON.stringify(Object.keys(BOUWSTENEN).sort())
+    && vakSoort('tags:2').soort === 'bouwsteen' && vakSoort('sjablonen').soort === 'bouwsteen');
+  const tags = bouwsteenDef('tags:3');
+  ok('de bouwsteen tags: acht knoppen track.3.tag.1–8', tags.items.length === 1 && tags.items[0].item.action === 'track.3.tag.{k}' && tags.items[0].herhaal.length === 8);
   ok('bouwsteenVan: strip:3 = track 3, fx = de focus, onbekend = null', bouwsteenVan('strip:3').track === '3' && bouwsteenVan('fx').track === '{focus}' && bouwsteenVan('kaart') === null && bouwsteenVan('strip:9') === null);
   const bron = maakBron();
   const fx = bouwsteenDef('fx', { bestaat: (a) => !!bron.metaOf(a), vars: { focus: '1' } });

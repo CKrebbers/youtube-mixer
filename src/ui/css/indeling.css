@@ -1,0 +1,77 @@
+/* De indeling van de library (spoor S11, docs/LIBRARY-TAGS.md, src/ui/library-indeling.js):
+   de tagbalk boven de lijst, de kolom INDELING links, tagchips in de rijen. */
+
+/* De kleuren van tags en categorieën (KLEUREN in src/library/indeling.js). */
+.ik-grijs{--ik:#7d8a96} .ik-rood{--ik:#ff5d5d} .ik-oranje{--ik:#ff9d3c} .ik-geel{--ik:#ffd84a} .ik-groen{--ik:#5fd36b}
+.ik-cyaan{--ik:#3fd4e0} .ik-blauw{--ik:#5a8dff} .ik-violet{--ik:#b07cff} .ik-roze{--ik:#ff7cc8}
+
+/* Het midden: de kolom links en de lijst (de lijst blijft de virtuele lijst, library-lijst.js). */
+.lib-midden{flex:1;display:flex;min-height:0}
+.lib-midden>.lib-rijen{min-width:0}
+.lib-panel.pastbij-aan .lib-midden,.lib-panel.tab-kaart .lib-midden,.lib-panel.tab-kaart .lib-tagbalk{display:none}
+.lib-indeling{width:168px;flex:none;overflow:auto;border-right:1px solid var(--line);font-size:11px;padding:4px 0;overscroll-behavior:contain}
+.lib-panel.indeling-dicht .lib-indeling{display:none}
+
+.ik-kop{display:flex;align-items:center;gap:4px;padding:2px 8px 4px;font-size:9px;letter-spacing:.14em;font-weight:700;color:var(--dim)}
+.ik-kop .btn.sm{font-size:9px;padding:1px 4px;letter-spacing:0;font-weight:400}
+.ik-tagkop{margin-top:6px;border-top:1px solid var(--line);padding-top:6px}
+.ik-ruimte{flex:1}
+.ik-hint{font-weight:400;letter-spacing:0}
+.ik-item{display:flex;align-items:center;gap:5px;padding:2px 8px;cursor:pointer;min-height:20px;border-left:3px solid transparent}
+.ik-item:hover{background:rgba(255,255,255,.04)}
+.ik-item.on{border-left-color:var(--a);background:color-mix(in srgb,var(--a) 12%,transparent);color:var(--text)}
+.ik-item.drop{outline:2px dashed var(--a);outline-offset:-2px;background:color-mix(in srgb,var(--a) 18%,transparent)}
+.ik-item .ik-naam{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ik-item b{font-weight:400;color:var(--dim);font-family:ui-monospace,monospace;font-size:10px}
+.ik-stip{width:7px;height:7px;border-radius:50%;background:var(--ik);flex:none}
+.ik-meer{background:none;border:0;color:var(--dim);cursor:pointer;padding:0 2px;font:inherit;visibility:hidden}
+.ik-item:hover .ik-meer,.ik-tagrij:hover .ik-meer{visibility:visible}
+.ik-menu{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:4px 8px 6px 14px;background:var(--panel2)}
+.ik-menu input{width:100%;box-sizing:border-box;background:var(--panel);border:1px solid var(--line);border-radius:3px;color:var(--text);font:inherit;font-size:11px;padding:2px 5px}
+.ik-kleuren{display:flex;gap:3px}
+.ik-kleur{width:12px;height:12px;border-radius:50%;border:1px solid transparent;background:var(--ik);padding:0;cursor:pointer}
+.ik-kleur.on{border-color:var(--text);box-shadow:0 0 0 1px var(--panel)}
+.ik-snelkies{display:flex;gap:2px;align-items:center;color:var(--dim);font-size:10px}
+.ik-snelnr{font:inherit;font-size:9px;width:14px;height:14px;padding:0;border:1px solid var(--line);border-radius:2px;background:none;color:var(--dim);cursor:pointer}
+.ik-snelnr.on{border-color:var(--a);color:var(--a)}
+.ik-wis:hover{color:var(--red);border-color:var(--red)}
+.ik-tags{display:flex;flex-wrap:wrap;gap:3px;padding:0 8px}
+.ik-tagrij{display:inline-flex;align-items:center}
+.ik-leeg{color:var(--dim);font-size:10px;line-height:1.4}
+
+/* Een chip: in de kolom, in de balk (het filter) en in een rij. */
+.ik-chip{font:inherit;font-size:10px;line-height:14px;padding:0 5px;border-radius:7px;cursor:pointer;white-space:nowrap;
+  border:1px solid color-mix(in srgb,var(--ik) 55%,transparent);background:color-mix(in srgb,var(--ik) 14%,transparent);color:var(--text)}
+.ik-chip b{font-weight:400;color:var(--dim)}
+.ik-chip sup{font-size:8px;color:var(--a);margin-right:2px}
+.ik-chip.on{background:color-mix(in srgb,var(--ik) 45%,transparent)}
+.ik-chip.niet{text-decoration:line-through;opacity:.75}
+.ik-chip.onbekend{border-style:dashed;opacity:.7}
+
+/* De tagbalk boven de lijst. */
+.lib-tagbalk{display:flex;align-items:center;gap:6px;padding:3px 12px;border-bottom:1px solid var(--line);font-size:11px;min-height:22px}
+.lib-tagbalk:empty{display:none}
+.ik-chips{display:flex;gap:4px;flex-wrap:nowrap;overflow:hidden;min-width:0}
+.ik-onbekend{color:var(--warn);font-size:10px;white-space:nowrap}
+.ik-sel{color:var(--dim);white-space:nowrap}
+.ik-sel b{color:var(--a);font-weight:600}
+.ik-tagveld{width:130px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:2px 7px;color:var(--text);font:inherit;font-size:11px}
+.ik-tagveld:focus{outline:none;border-color:var(--a)}
+.ik-incat{background:var(--panel2);border:1px solid var(--line);border-radius:4px;color:var(--text);font:inherit;font-size:10px;max-width:120px}
+.ik-snel{display:flex;gap:3px}
+.ik-snelknop{border-color:color-mix(in srgb,var(--ik) 55%,transparent)!important;max-width:90px;overflow:hidden;text-overflow:ellipsis}
+.ik-snelknop.on{background:color-mix(in srgb,var(--ik) 40%,transparent)}
+.ik-kolomknop.on{color:var(--a)}
+
+/* In de rij: de titel en dan de tags (de titel kort in, de tags niet). */
+.lib-rij .lib-titel{display:flex;align-items:center;gap:4px}
+.lib-titeltekst{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.ik-rijtags{display:inline-flex;gap:2px;flex:none}
+.ik-rijtags .ik-chip{font-size:9px;line-height:12px;padding:0 4px}
+.ik-rijtags i{font-style:normal;color:var(--dim);font-size:9px}
+/* Gekozen (cmd-klik, shift-klik) en een plek om naartoe te slepen. */
+.lib-rij.sel{background:color-mix(in srgb,#5a8dff 16%,transparent)}
+.lib-rij.sel.gekozen{background:color-mix(in srgb,#5a8dff 24%,transparent)}
+.lib-rij.drop-voor{box-shadow:inset 0 2px 0 var(--a)}
+.ik-kolomknop{font:inherit;font-size:10px;background:none;border:1px solid var(--line);border-radius:3px;color:var(--dim);padding:1px 6px;cursor:pointer;white-space:nowrap}
+.ik-een{display:inline-block;max-width:180px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}

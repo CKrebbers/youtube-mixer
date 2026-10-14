@@ -541,6 +541,8 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
         return !d.buffer ? 'leeg' : d.playing ? 'speelt' : 'geladen';
       },
       laad: (track, deck) => library.laadTrack(track, deck),
+      // Spoor S11: een krat overnemen als categorie van de library.
+      naarCategorie: library.indeling?.aan ? (krat) => library.indeling.vanKaart(krat) : null,
     });
   } catch (err) {
     // Zonder de markup (een oudere index.html) blijft de library gewoon werken.

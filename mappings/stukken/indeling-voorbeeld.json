@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "stuk": "indeling-voorbeeld",
+  "titel": "VOORBEELD: categorieën kiezen bij BROWSE op de Maschine",
+  "uitleg": "VOORBEELD van spoor S11 (docs/LIBRARY-TAGS.md §3), geen standaard: alleen met ?stukken=indeling-voorbeeld of als je hem in je werkruimte noemt. Met de library open (BROWSE, laag bladeren): SHIFT + ◄ ► bij het wiel = de vorige/volgende categorie als filter (alles → je categorieën → de slimme), SHIFT + ENTER = het filter leeg. De kop van het linkerscherm toont het filter. Snel-tags (library.quicktag.1–8, track.N.tag.1–8) en filteren op een snel-tag (library.quickfilter.1–8) staan op de bus maar hier op geen knop: Clay verdeelt ze zelf.",
+  "regels": {
+    "maschine-mk2": [
+      {"in": "note:1:19", "shift": true, "laag": "bladeren", "action": "library.category.prev", "mode": "trigger", "label": "SHIFT + ◄ (bladeren): vorige categorie"},
+      {"in": "note:1:20", "shift": true, "laag": "bladeren", "action": "library.category.next", "mode": "trigger", "label": "SHIFT + ► (bladeren): volgende categorie"},
+      {"in": "note:1:21", "shift": true, "laag": "bladeren", "action": "library.category.clear", "mode": "trigger", "label": "SHIFT + ENTER (bladeren): filter leeg"}
+    ]
+  }
+}

@@ -26,7 +26,10 @@ import { leesWeg } from '../lib/antwoord.js';
  */
 export class KaartPanel {
   constructor({ root, decks = ['A', 'B'], label = (d) => d, stand = () => 'leeg', laad = async () => {}, opslag = standaardOpslag(),
-    peilMs = 5000 }) {
+    peilMs = 5000, naarCategorie = null }) {
+    // Spoor S11 (docs/LIBRARY-TAGS.md §1): een krat overnemen als categorie van de library (een kopie
+    // van wat binnen is, in kratvolgorde). (krat-id) => Promise<{ categorie, erin, binnen, aantal } | null>.
+    this.naarCategorie = naarCategorie;
     this.root = root;
     this.decks = decks;
     this.label = label;
@@ -66,6 +69,7 @@ export class KaartPanel {
       krat: q('.kaart-krat'),
       filters: q('.kaart-filters'),
       kratWens: q('.kaart-krat-wens'),
+      kratCat: root.querySelector('.kaart-krat-cat'),
       status: q('.kaart-status'),
       rijen: q('.kaart-rijen'),
       nacht: q('.kaart-nacht'),
@@ -100,6 +104,14 @@ export class KaartPanel {
       this.ververs({ bovenaan: true });
     });
     this.el.kratWens.addEventListener('click', () => this.kratOpWenslijst());
+    this.el.kratCat?.addEventListener('click', async () => {
+      const krat = kratVan(this.kratten, this.krat);
+      if (!krat || !this.naarCategorie) return;
+      const r = await this.naarCategorie(krat.id);
+      this.melding = r ? { tekst: `"${krat.naam}" → categorie "${r.categorie.naam}": ${r.erin} erbij (${r.binnen} binnen, ${r.aantal} in de categorie) — zie de tab library`, goed: true }
+        : { tekst: `"${krat.naam}" niet overgenomen (zie de statusregel van de library)`, goed: false };
+      this.tekenStatus();
+    });
     this.el.status.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-bevestig]');
       if (!b) return;
@@ -532,6 +544,12 @@ export class KaartPanel {
     if (this.el.krat.value !== huidig && this.el.krat.value !== this.krat) this.el.krat.value = this.krat;
     const krat = kratVan(this.kratten, this.krat);
     this.el.kratWens.disabled = !krat;
+    if (this.el.kratCat) {
+      this.el.kratCat.hidden = !this.naarCategorie;
+      this.el.kratCat.disabled = !krat || !krat.binnen;
+      this.el.kratCat.title = !krat ? 'kies eerst een krat' : !krat.binnen ? 'van deze krat is nog niets binnen'
+        : `de ${krat.binnen} nummers van "${krat.naam}" die binnen zijn als categorie in de library (een kopie, in de volgorde van de krat; nog eens = wat erbij kwam)`;
+    }
     this.el.kratWens.title = krat
       ? `alle nummers uit "${krat.naam}" die nog niet binnen zijn op de wenslijst (meer dan 20: eerst bevestigen)`
       : 'kies eerst een krat';

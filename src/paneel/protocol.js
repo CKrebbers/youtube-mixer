@@ -230,7 +230,7 @@ export function vakkenVan(deelDef, scherm) {
 }
 
 /** De bouwstenen (vrij.js BOUWSTENEN): hier alleen hun namen, zodat dit bestand puur en zonder imports blijft. */
-export const BOUWSTEEN_NAMEN = ['fx', 'strip', 'mixer', 'stems', 'master', 'sampler', 'plan', 'sets'];
+export const BOUWSTEEN_NAMEN = ['fx', 'strip', 'mixer', 'stems', 'master', 'sampler', 'plan', 'sets', 'sjablonen', 'tags'];   // = Object.keys(BOUWSTENEN) in vrij.js (vrij-paneel.test vergelijkt)
 
 /**
  * Een vaknaam ontleed: { soort: 'uitlijn'|'paneel'|'kaart'|'stand'|'secties'|'library'|'bouwsteen'|null, id }.

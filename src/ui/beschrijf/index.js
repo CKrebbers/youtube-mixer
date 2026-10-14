@@ -6,6 +6,7 @@ import schermen from './schermen.js';
 import set from './set.js';
 import inrichten from './inrichten.js';
 import effecten from './effecten.js';
+import indeling from './indeling.js';
 
 /**
  * De uitleg van de sporen van de werkruimte (14 okt, werkruimte S0,
@@ -15,7 +16,7 @@ import effecten from './effecten.js';
  * maschine.html laden geen bus en geen aanhakers, maar moeten de uitleg wel
  * kennen. Geen DOM, geen bus: een bestand hier is puur (action -> tekst).
  */
-const SPOREN = [precisie, combi, werk, maschine, schermen, inrichten, set, effecten];
+const SPOREN = [precisie, combi, werk, maschine, schermen, inrichten, set, effecten, indeling];
 
 /**
  * { kort, lang } van het eerste spoor dat deze action kent, of null. Een spoor

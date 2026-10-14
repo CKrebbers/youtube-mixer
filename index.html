@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="src/ui/css/panelen.css">
 <link rel="stylesheet" href="src/ui/css/inrichten.css">
 <link rel="stylesheet" href="src/ui/css/effecten.css">
+<link rel="stylesheet" href="src/ui/css/indeling.css">
 </head>
 <body>
 
@@ -552,7 +553,13 @@
   </div>
   <div class="lib-status"></div>
   <div class="lib-jobs hidden"></div>
-  <div class="lib-rijen"></div>
+  <!-- de indeling (spoor S11, docs/LIBRARY-TAGS.md, src/ui/library-indeling.js): de chips van het filter,
+       taggen, snel-tags; links de categorieën en tags -->
+  <div class="lib-tagbalk"></div>
+  <div class="lib-midden">
+    <aside class="lib-indeling"></aside>
+    <div class="lib-rijen"></div>
+  </div>
   <!-- "past bij" (src/ui/past-bij.js): in plaats van de lijst zolang de knop aan staat -->
   <div class="lib-pastbij-lijst hidden"></div>
   <!-- de tab kaart (contract deel 3): zoeken, kratten, filters, de lijst, de nachtwachtrij -->
@@ -562,6 +569,7 @@
       <select class="kaart-krat" title="een krat: slimme kratten en je playlists (aantal · hoeveel al binnen)"><option value="">hele kaart</option></select>
       <span class="kaart-filters"></span>
       <button class="btn sm kaart-krat-wens" disabled title="kies eerst een krat">alles in deze krat op de wenslijst</button>
+      <button class="btn sm kaart-krat-cat" disabled hidden title="kies eerst een krat">→ categorie</button>
     </div>
     <div class="lib-status kaart-status"></div>
     <div class="lib-rijen kaart-rijen"></div>

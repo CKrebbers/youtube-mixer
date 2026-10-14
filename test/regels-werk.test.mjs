@@ -72,7 +72,8 @@ const VERBODEN = [
   ['dynamische import() (dan ziet de bewaker hem niet)', /\bimport\s*\(/],
 ];
 /** Uit de engine alleen het pure rekenwerk (geen Engine, geen deck, geen Web Audio). */
-const ENGINE_PUUR = ['src/engine/stream-kern.js', 'src/engine/beatgrid.js', 'src/engine/tellen.js', 'src/engine/hoorbaar.js'];
+// toonsoort.js (S11): de ToonKaart voor de zoekregel (toon:8A) via src/library/indeling.js; puur, geen imports.
+const ENGINE_PUUR = ['src/engine/stream-kern.js', 'src/engine/beatgrid.js', 'src/engine/tellen.js', 'src/engine/hoorbaar.js', 'src/engine/toonsoort.js'];
 /** Uit control alleen wat puur is (resolveTarget en de kleuren van het palet). */
 const CONTROL_PUUR = ['src/control/mapping.js', 'src/control/houd.js', 'src/control/devices/apc40mk2.js'];
 
@@ -112,7 +113,8 @@ console.log('\nde iPad schrijft alleen via de schrijfweg (S8)');
     schrijvend.join() === 'schrijver.js' && !/['"`](PUT|PATCH|DELETE)['"`]|sendBeacon|new\s+WebSocket|XMLHttpRequest/.test(code['schrijver.js']));
   const paden = bestanden.flatMap((f) => [...code[f].matchAll(/(['"`])(\/api\/[^'"`?$]*)/g)].map((m) => [f, m[2]]));
   // /api/set/live (S9): de live-stand van de set voor het vak plan/sets, alleen GET.
-  const LEZEN = ['/api/paneel/ping', '/api/paneel/live', '/api/library', '/api/paneel/wie', '/api/set/live'];
+  // /api/indeling/stand (S11): de categorieën en tags voor het vak library, alleen GET.
+  const LEZEN = ['/api/paneel/ping', '/api/paneel/live', '/api/library', '/api/paneel/wie', '/api/set/live', '/api/indeling/stand'];
   const SCHRIJVEN = ['/api/paneel/invoke', '/api/paneel/koppel'];
   ok(`lezen: ping, live, library, wie; schrijven alleen invoke en koppel, en alleen in schrijver.js (${[...new Set(paden.map((x) => x[1]))].sort().join(' ')})`,
     paden.every(([f, p]) => LEZEN.includes(p) || (SCHRIJVEN.includes(p) && f === 'schrijver.js')));

@@ -3,6 +3,7 @@ import { maakSet, pastBijKeten, leesDuur } from './klaarzetten.js';
 import { voorspel, toonKleur } from './tijdlijn.js';
 import { LABEL_TEKST } from '../engine/secties.js';
 import { tekenStrook as tekenOp, mmss } from './strook.js';
+import { filterNaarQuery } from '../library/indeling.js';
 
 /*
  * Het planvenster (plan.html): de hele programmering zien, inrichten en live
@@ -37,6 +38,8 @@ function leesTijd(t) {
   return delen.reduce((a, x) => a * 60 + x, 0);
 }
 const koppeling = () => { try { const o = window.opener; return o && !o.closed ? o.varvePlan ?? null : null; } catch (_) { return null; } };
+/** Het library-paneel van de mixer (spoor S11: "het filter van de library"), of null. */
+const mixerLibrary = () => { try { const o = window.opener; return o && !o.closed ? o.library ?? null : null; } catch (_) { return null; } };
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 /** "drop B", "B" voor een gewoon deel; werkt voor een stuk van de kaart en voor een keuze { sectie, label, groep }. */
 const sectieNaam = (x) => [LABEL_TEKST[x?.label] ?? x?.label ?? '', x?.groep ?? ''].filter(Boolean).join(' ');
@@ -691,33 +694,88 @@ $('.pl-maakklaar').addEventListener('click', async () => {
   setTimeout(() => haalKlaar({ opnieuw: true }), 1500);
 });
 
-/** De kratten van de kaart (alleen als er een kaart is). */
+/**
+ * De bronnen voor de selectie: de kratten van de kaart (wat binnen is), en (spoor S11,
+ * docs/LIBRARY-TAGS.md §3) de eigen categorieën, de slimme, de tags en het filter dat nu in de
+ * library van de mixer staat. Kiezen = de selectie wordt die nummers, in hun volgorde.
+ */
 async function vulKratten() {
   const sel = $('.pl-krat');
+  const groep = (label) => { const g = document.createElement('optgroup'); g.label = label; sel.append(g); return g; };
+  const optie = (g, value, tekst) => { const o = document.createElement('option'); o.value = value; o.textContent = tekst; g.append(o); };
+  try {
+    const r = await fetch('/api/indeling/stand');
+    const d = r.ok ? await r.json() : null;
+    if (mixerLibrary()?.indeling) optie(groep('library'), 'lib', 'het filter van de library nu');
+    if (d?.categorieen?.length) {
+      const g = groep('categorieën');
+      for (const c of d.categorieen) optie(g, `cat:${c.id}`, `${c.soort === 'slim' ? '✦ ' : ''}${c.naam} (${c.aantal ?? '?'})`);
+    }
+    if (d?.tags?.length) {
+      const g = groep('tags');
+      for (const t of d.tags) optie(g, `tag:${t.sleutel}`, `#${t.naam} (${t.aantal})`);
+    }
+    staat.indeling = d;
+  } catch (_) { /* een oudere server: geen indeling */ }
   try {
     const r = await fetch('/api/kaart');
     const d = r.ok ? await r.json() : null;
+    const g = (d?.kratten || []).some((k) => k.binnen) ? groep('kratten van de kaart') : null;
     for (const k of d?.kratten || []) {
       if (!k.binnen) continue;
-      const o = document.createElement('option');
-      o.value = k.id;
-      o.textContent = `${k.naam} (${k.binnen} binnen)`;
-      sel.append(o);
+      optie(g, k.id, `${k.naam} (${k.binnen} binnen)`);
     }
   } catch (_) { /* geen kaart: geen kratten */ }
   if (sel.options.length <= 1) sel.hidden = true;
 }
+
+/** Alle ids van een lijst van de library (pagina's van 500), in de volgorde van de server. */
+async function idsVan(query) {
+  const uit = [];
+  for (let van = 0; van < 20000; van += 500) {
+    const r = await fetch(`/api/library?${query}&van=${van}&aantal=500`);
+    const d = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(d?.fout || `${r.status}`);
+    uit.push(...(d.tracks || []).map((t) => t.id));
+    if ((d.tracks || []).length < 500) break;
+  }
+  return uit;
+}
+
 $('.pl-krat').addEventListener('change', async (e) => {
   const id = e.target.value;
   if (!id) return;
   try {
-    const r = await fetch(`/api/kaart/nummers?krat=${encodeURIComponent(id)}&filter=binnen&sorteer=krat&aantal=500`);
-    const d = await r.json();
-    const ids = (d.nummers || []).map((n) => n.binnen).filter((x) => x && staat.tracks.has(x));
+    let ids, wat;
+    if (id === 'lib') {
+      // Het filter van de library van de mixer, in de volgorde waarin de lijst het nu toont.
+      const lib = mixerLibrary();
+      if (!lib?.indeling) throw new Error('geen mixer (open het planvenster vanuit de mixer)');
+      const v = lib._vraag();
+      const q = filterNaarQuery({ ...v.filter, zoek: v.zoek || undefined },
+        new URLSearchParams({ sorteer: v.plek ? 'plek' : v.sorteer, richting: v.plek ? 'op' : v.richting }));
+      ids = await idsVan(q.toString());
+      wat = `het filter van de library (${lib.indeling?.kort?.(lib.filter) || 'alles'})`;
+    } else if (id.startsWith('cat:')) {
+      const c = staat.indeling?.categorieen?.find((x) => `cat:${x.id}` === id);
+      const plek = c && (c.soort === 'gewoon' || c.regel?.categorie != null);
+      ids = await idsVan(`cat=${encodeURIComponent(id.slice(4))}&sorteer=${plek ? 'plek' : 'toegevoegd'}`);
+      wat = `categorie ${c?.naam ?? ''}${plek ? ' (in zijn volgorde)' : ''}`;
+    } else if (id.startsWith('tag:')) {
+      ids = await idsVan(`tag=${encodeURIComponent(id.slice(4))}&sorteer=toegevoegd`);
+      wat = `#${id.slice(4)}`;
+    } else {
+      const r = await fetch(`/api/kaart/nummers?krat=${encodeURIComponent(id)}&filter=binnen&sorteer=krat&aantal=500`);
+      const d = await r.json();
+      ids = (d.nummers || []).map((n) => n.binnen).filter(Boolean);
+      wat = 'krat (in de volgorde van de krat)';
+    }
+    ids = ids.filter((x) => staat.tracks.has(x));
     staat.selectie = new Set(ids);
     staat.selectieVolgorde = ids;
-    wisLater(melding(`krat: ${ids.length} nummers in de selectie (in de volgorde van de krat)`), 5000);
-  } catch (err) { melding(`krat niet gelezen: ${err.message}`); }
+    wisLater(melding(`${wat}: ${ids.length} nummers in de selectie`), 5000);
+  } catch (err) { melding(`niet gelezen: ${err.message}`); }
+  e.target.value = '';
   vulBieb();
 });
 $('.pl-sel-alles').addEventListener('click', () => { for (const t of staat.bieb) staat.selectie.add(t.id); staat.selectieVolgorde = null; vulBieb(); });

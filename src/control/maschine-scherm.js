@@ -351,11 +351,12 @@ function tekenBladeren(buf, s, nr) {
   const b = s.bladeren;
   if (nr === 0) {
     vul(buf, 0, 0, BREED, 10);
-    tekst(buf, 2, 1, 'LIBRARY', 1, true);
     const teller = b.totaal ? `${b.gekozen + 1}/${b.totaal}` : '0';
+    // Spoor S11: met een filter (een categorie, tags) staat dat in de kop in plaats van LIBRARY.
+    tekst(buf, 2, 1, b.filter ? pasIn(b.filter, Math.floor((BREED - 8 - tekstBreedte(teller)) / STAP)) : 'LIBRARY', 1, true);
     tekst(buf, BREED - 2 - tekstBreedte(teller), 1, teller, 1, true);
     if (!b.totaal) {
-      tekst(buf, 2, 20, pasIn(b.zoek ? `niets gevonden voor "${b.zoek}"` : 'nog niets binnengehaald', REGEL));
+      tekst(buf, 2, 20, pasIn(b.zoek ? `niets gevonden voor ${b.filter || `"${b.zoek}"`}` : 'nog niets binnengehaald', REGEL));
       tekst(buf, 2, 28, pasIn(b.zoek ? 'zoek iets anders in de library' : 'plak een link in de library', REGEL));
     }
     (b.rijen || []).slice(0, BLADER_RIJEN).forEach((r, i) => {
@@ -401,7 +402,7 @@ function tekenBladeren(buf, s, nr) {
  *   melding:   string | null          een korte regel onderaan (rechts), bv. "druk nog eens"
  *   modus:     'spelen' | 'stappen' | 'secties'
  *   secties:   { nr, wat, aantal, blad, bladen, namen[16], aan[16], hoort, naar } | null   (modus secties, maschine.js)
- *   bladeren:  { gekozen, totaal, rijen[{ titel, bpm, gekozen }], track, focus, melding, zoek, laadt } | null   (de library open)
+ *   bladeren:  { gekozen, totaal, rijen[{ titel, bpm, gekozen }], track, focus, melding, zoek, filter, laadt } | null   (de library open; filter = kort, S11)
  *   sampler:   { pads[8] (sampler.stand()), tellen, volume, focus, sectie } | null   (padmodus sampler)
  * }
  * @param nr 0 = links (knop 1–4), 1 = rechts (knop 5–8)

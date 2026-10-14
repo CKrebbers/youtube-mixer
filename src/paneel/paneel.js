@@ -26,6 +26,7 @@ import { KaartWeergave } from './kaart.js';
 import { vakSoort } from './protocol.js';
 import { UitlijnWeergave, vakVorm } from '../uitlijn/teken.js';
 import { hexVan, tekstOp, kleurVanDeel } from '../werk/kleuren.js';
+import { leesZoekregel, filterNaarQuery } from '../library/indeling.js';
 
 const PLEK = 'varve.scherm.';
 const vraag = new URLSearchParams(location.search);
@@ -103,43 +104,63 @@ const bpmT = (b) => (Number.isFinite(b) ? b.toFixed(2).replace('.', ',') : '–'
  * De library als vak: zoeken en de lijst (GET /api/library, alleen lezen). Als VENSTER van de mixer
  * staan er laadknoppen 1–8 bij (via de mixer, met de tweede druk over een spelende track); op de
  * iPad niet (laden staat in VAST_NOOIT: nooit van buiten de Mac).
+ * Spoor S11 (docs/LIBRARY-TAGS.md): een keuzelijst met de categorieën, en het zoekveld leest de
+ * zoekregel (#tag -#tag @categorie bpm:70-90 toon:8A grid:zeker stems energie:hoog). Taggen gaat hier
+ * niet (geen nummer-id op de bus): daarvoor is de bouwsteen `tags` (het nummer op de track).
  */
 function libraryVak(naam, el) {
   const kop = document.createElement('div');
   kop.className = 'wp-lib-kop';
   const zoek = document.createElement('input');
-  zoek.type = 'search'; zoek.placeholder = 'zoeken'; zoek.className = 'wp-lib-zoek';
-  kop.appendChild(zoek);
+  zoek.type = 'search'; zoek.placeholder = 'zoeken, #tag, @categorie, bpm:70-90'; zoek.className = 'wp-lib-zoek';
+  const cat = document.createElement('select');
+  cat.className = 'wp-lib-cat'; cat.title = 'een categorie (gewoon: op zijn volgorde)';
+  cat.innerHTML = '<option value="">alles</option>';
+  kop.append(zoek, cat);
   el.appendChild(kop);
   const lijst = document.createElement('div');
   lijst.className = 'wp-lib';
   el.appendChild(lijst);
-  let bezig = false, vraag = null, timer = null, gestopt = false, gehaald = null;
+  let bezig = false, vraag = null, timer = null, gestopt = false, gehaald = null, stand = { categorieen: [], tags: [] };
+  const sleutelNu = () => `${zoek.value.trim()}|${cat.value}`;
+  async function haalStand() {
+    try {
+      const r = await fetch('/api/indeling/stand', { cache: 'no-store' });
+      if (!r.ok) { await r.text().catch(() => {}); return; }
+      stand = await r.json();
+      const nu = cat.value;
+      cat.innerHTML = '<option value="">alles</option>' + stand.categorieen.map((c) => `<option value="${c.id}">${c.soort === 'slim' ? '✦ ' : ''}${escHtml(c.naam)} (${c.aantal ?? '?'})</option>`).join('');
+      cat.value = stand.categorieen.some((c) => String(c.id) === nu) ? nu : '';
+    } catch (_) { /* een oudere server: geen indeling */ }
+  }
   async function haal() {
     if (bezig || gestopt) return;
     bezig = true;
-    const z = zoek.value.trim();
-    gehaald = z;
+    gehaald = sleutelNu();
     try {
-      const q = new URLSearchParams({ sorteer: 'toegevoegd', van: '0', aantal: '200' });
-      if (z) q.set('zoek', z);
+      const { filter } = leesZoekregel(zoek.value.trim(), { categorieen: stand.categorieen });
+      if (cat.value) filter.categorie = Number(cat.value);
+      const c = stand.categorieen.find((x) => x.id === filter.categorie);
+      const plek = c && (c.soort === 'gewoon' || c.regel?.categorie != null);
+      const q = filterNaarQuery(filter, new URLSearchParams({ sorteer: plek ? 'plek' : 'toegevoegd', van: '0', aantal: '200' }));
       const r = await fetch(`/api/library?${q}`, { cache: 'no-store' });
       const d = await r.json().catch(() => null);
-      if (!gestopt) teken(r.ok ? d?.tracks ?? [] : []);
+      if (!gestopt) teken(r.ok ? d?.tracks ?? [] : [], r.ok ? null : d?.fout);
     } catch (_) { /* de rode balk zegt het al */ } finally {
       bezig = false;
       // Intussen verder getypt: nog eens, met de zoekvraag van nu.
-      if (!gestopt && zoek.value.trim() !== gehaald) haal();
+      if (!gestopt && sleutelNu() !== gehaald) haal();
     }
   }
-  function teken(tracks) {
+  function teken(tracks, fout = null) {
     lijst.replaceChildren();
-    if (!tracks.length) { const p = document.createElement('div'); p.className = 'wp-dim'; p.textContent = 'niets gevonden'; lijst.appendChild(p); return; }
+    if (!tracks.length) { const p = document.createElement('div'); p.className = 'wp-dim'; p.textContent = fout || 'niets gevonden'; lijst.appendChild(p); return; }
     for (const t of tracks) {
       const rij = document.createElement('div');
       rij.className = 'wp-lib-rij';
       const titel = document.createElement('span'); titel.className = 'wp-lib-titel';
       titel.textContent = [t.artiest, t.titel ?? t.title].filter(Boolean).join(' — ') || t.id;
+      if (t.tags?.length) { const g = document.createElement('small'); g.className = 'wp-lib-tags'; g.textContent = ` ${t.tags.map((x) => `#${x}`).join(' ')}`; titel.appendChild(g); }
       const bpm = document.createElement('span'); bpm.className = 'wp-bpm';
       bpm.textContent = bpmT(t.grid_bpm ?? t.bpm);
       rij.append(titel, bpm);
@@ -161,9 +182,13 @@ function libraryVak(naam, el) {
     }
   }
   zoek.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(haal, 250); });
-  haal();
-  return { naam, el, stap() {}, stop: () => { gestopt = true; clearTimeout(timer); clearTimeout(vraag); el.remove(); } };
+  cat.addEventListener('change', () => haal());
+  const standTimer = setInterval(haalStand, 30000);
+  haalStand().then(haal);
+  return { naam, el, stap() {}, stop: () => { gestopt = true; clearTimeout(timer); clearTimeout(vraag); clearInterval(standTimer); el.remove(); } };
 }
+
+const escHtml = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /**
  * De live-stand van de set (spoor S9, docs/PLAN-SET.md §4) boven de knoppen van de bouwsteen

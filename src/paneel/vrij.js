@@ -130,6 +130,13 @@ export const BOUWSTENEN = {
     { soort: 'knop', action: 'plan.laag.nu', label: 'laag nu' },
     { soort: 'knop', action: 'plan.laag.skip', label: 'laag weg' },
   ] }),
+  // Spoor S11 (docs/LIBRARY-TAGS.md §3): de acht snel-tags op het nummer van de track. Van buiten de
+  // Mac alleen als de werkruimte hem op dat scherm zet én `mag` track.*.tag.* noemt (schrijfweg S8).
+  // Welke tag op welke plek staat zet je in de library op de Mac (⋯ bij een tag); hernoemen, wissen en
+  // categorieën staan niet op de bus.
+  tags: (t) => ({ titel: `TAGS ${wie(t)}`, items: [
+    { soort: 'rij', herhaal: TRACKS, item: { soort: 'knop', action: `track.${t}.tag.{k}` } },
+  ] }),
   sets: () => ({ titel: 'SETS', items: [
     { soort: 'knop', action: 'set.prev', label: '◀ set' },
     { soort: 'knop', action: 'set.next', label: 'set ▶' },
