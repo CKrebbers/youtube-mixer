@@ -140,6 +140,27 @@ console.log('\nsuper.* op een nep-bus');
     /voorbeeld/.test(VOORBEELD_SUPERKNOP.naam) && S.normaliseerSuper(VOORBEELD_SUPERKNOP).fouten.length === 0);
   c.zetSuperknoppen([VOORBEELD_SUPERKNOP]);
   ok('zetSuperknoppen: de lijst op 1, de rest leeg', c.supers[1].links.length === 3 && c.supers[2].links.length === 0 && read('super.3') === null);
+
+  console.log('\nsuperknoppen uit een werkruimte (S3-vorm: nr + action; samenvoegen golf 2)');
+  const { superknoppenVanWerk } = await import('../src/control/acties-combi.js');
+  const { normaliseerWerkruimte } = await import('../src/werk/model.js');
+  // Het voorbeeld uit WERKRUIMTE.md B2, door het model van S3.
+  const ruw = { schema: 1, naam: 'proef', delen: { mix: { label: 'MIX', kleur: 'wit', apc40mk2: { grid: 'hotcues' } } }, deel: { start: 'mix' },
+    superknoppen: [{ nr: 2, naam: 'DUB', links: [
+      { action: 'track.{focus}.send.a', in: [0, 0.3], from: 0, to: 1 },
+      { action: 'track.{focus}.filter', in: [0, 1], from: 0.5, to: 0.72, curve: 's' }] }] };
+  const n = normaliseerWerkruimte(ruw);
+  ok('het model neemt het voorbeeld aan', n.fouten.length === 0 && n.werkruimte.superknoppen.length === 1);
+  const lijst = superknoppenVanWerk(n.werkruimte.superknoppen);
+  ok('superknoppenVanWerk: nr 2 op plek 2, action -> target', lijst.length === 2 && !lijst[0] && lijst[1].naam === 'DUB'
+    && lijst[1].links.every((l) => l.target && !('action' in l)) && lijst[1].links[1].curve === 's');
+  const fout = c.zetSuperknoppen(lijst);
+  ok('… zetSuperknoppen neemt het aan: super.2 heeft twee links, super.1 leeg', fout.length === 0 && c.supers[2].links.length === 2 && c.supers[1].links.length === 0);
+  const n2 = normaliseerWerkruimte({ ...ruw, superknoppen: [{ nr: 1, naam: 'opbouw', links: [{ target: 'track.{focus}.fader', from: 1, to: 0.7, glide: true }] }] });
+  const l2 = superknoppenVanWerk(n2.werkruimte?.superknoppen);
+  ok('de vorm van S4.md (target, glide) mag ook in een werkruimte', n2.fouten.length === 0 && l2[0]?.links[0]?.target === 'track.{focus}.fader' && l2[0].links[0].glide === true);
+  ok('… en zetSuperknop neemt hem aan', c.zetSuperknop(3, l2[0]).length === 0 && c.supers[3].links[0].glide === true);
+  ok('… en rekent zoals een rack-knop', (() => { const w = S.linkWaarden(0.5, c.supers[2].links); return Math.abs(w[0] - 1) < 1e-12 && Math.abs(w[1] - resolveLink(0.5, { from: 0.5, to: 0.72, curve: 's' })) < 1e-12; })());
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

@@ -56,6 +56,20 @@ export const VOORBEELD_SUPERKNOP = Object.freeze({
  * en solo van een van die drie laat `inst` buiten beschouwing (zang, en de
  * andere twee, gaan weg).
  */
+/**
+ * De superknoppen van een werkruimte (S3, WERKRUIMTE.md B2: `{ nr, naam, links: [{ action, in, from,
+ * to, curve, steps }] }`, al door normaliseerWerkruimte) als de lijst van zetSuperknoppen: plek nr−1,
+ * `action` heet hier `target`. Puur (samenvoegen golf 2: de twee sporen spraken elk hun eigen vorm).
+ */
+export function superknoppenVanWerk(lijst) {
+  const uit = [];
+  for (const s of Array.isArray(lijst) ? lijst : []) {
+    if (!s || !Number.isInteger(s.nr) || s.nr < 1 || s.nr > SUPERKNOPPEN || !Array.isArray(s.links)) continue;
+    uit[s.nr - 1] = { naam: s.naam ?? `super ${s.nr}`, links: s.links.map(({ action, target, ...rest }) => ({ target: target ?? action, ...rest })) };
+  }
+  return uit;
+}
+
 export function andereStems(namen, s) {
   if (!Array.isArray(namen) || !namen.length) return [];
   if (s === 'inst' && !namen.includes('inst')) return namen.filter((n) => n === 'vocals');

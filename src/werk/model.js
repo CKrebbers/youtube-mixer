@@ -444,9 +444,12 @@ function leesSuperknoppen(lijst, { fouten, waarschuwingen }) {
     let goed = true;
     for (const [j, l] of s.links.entries()) {
       const lw = `${w}, link ${j + 1}`;
-      if (!isObject(l) || typeof l.action !== 'string' || !/^[\w.{}-]{1,120}$/.test(l.action)) { fouten.push(`${lw}: action ontbreekt`); goed = false; continue; }
-      if (/^super\./.test(l.action)) { fouten.push(`${lw}: een superknop stuurt geen superknop (${l.action})`); goed = false; continue; }
-      const o = { action: l.action };
+      // `target` is de naam in superknop.js en docs/werkruimte/S4.md: hier hetzelfde als `action`.
+      const act = isObject(l) ? (l.action ?? l.target) : undefined;
+      if (typeof act !== 'string' || !/^[\w.{}-]{1,120}$/.test(act)) { fouten.push(`${lw}: action ontbreekt`); goed = false; continue; }
+      if (/^super\./.test(act)) { fouten.push(`${lw}: een superknop stuurt geen superknop (${act})`); goed = false; continue; }
+      const o = { action: act };
+      if (l.glide === true) o.glide = true;   // glijden via de .glide-action van het doel (S4)
       if ('in' in l) {
         if (!Array.isArray(l.in) || l.in.length !== 2 || !l.in.every((x) => typeof x === 'number' && x >= 0 && x <= 1) || l.in[0] > l.in[1]) {
           fouten.push(`${lw}: in is [van, tot] binnen 0..1`); goed = false; continue;

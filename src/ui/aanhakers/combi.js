@@ -9,7 +9,7 @@
 //   bij het starten terugzetten, zoals het master-rack;
 // - een stuk proberen zonder werkruimte: ?stukken=fx-matrix,mix-extra (alleen
 //   deze pagina, niets bewaard); of in de console varveCombi.stuk('fx-matrix').
-import { bindCombi, zetStuk, zetMaatgeverVariabele, maakAls, VOORBEELD_SUPERKNOP } from '../../control/acties-combi.js';
+import { bindCombi, zetStuk, zetMaatgeverVariabele, maakAls, VOORBEELD_SUPERKNOP, superknoppenVanWerk } from '../../control/acties-combi.js';
 import { voegMapjeToe } from '../../control/lagen.js';
 import { herbindLagen } from '../../control/actions.js';
 import { leesWeg } from '../../lib/antwoord.js';
@@ -36,6 +36,24 @@ export default async function opzet(ctx) {
   }
   // VOORBEELD (gooi weg of pas aan, docs/werkruimte/S4.md): super.1 = "dub". Geen knop zit erop.
   combi.zetSuperknop(1, VOORBEELD_SUPERKNOP);
+  // De superknoppen van de werkruimte (S3, `superknoppen`): bij elke (her)laad van de werkruimte;
+  // zonder superknoppen in de werkruimte weer het voorbeeld op 1. De bussen (`bussen`) nog niet:
+  // een rack op een bus verandert de klank, en een werkruimte zet nooit een klank (open vraag).
+  if (ctx.werk && typeof ctx.werk.on === 'function') {
+    let laatst = null;
+    const pas = () => {
+      const lijst = ctx.werk.def?.superknoppen ?? [];
+      const sleutel = `${ctx.werk.naam}|${JSON.stringify(lijst)}`;
+      if (sleutel === laatst) return;
+      laatst = sleutel;
+      if (!lijst.length) { combi.zetSuperknoppen([]); combi.zetSuperknop(1, VOORBEELD_SUPERKNOP); return; }
+      const fouten = combi.zetSuperknoppen(superknoppenVanWerk(lijst));
+      if (fouten.length) meld(`werkruimte ${ctx.werk.naam}: superknoppen: ${fouten[0]}`, 'fout');
+    };
+    ctx.werk.on('change', pas);
+    ctx.werk.on('werkruimte', pas);
+    pas();
+  }
 
   // De racks van de bussen: de kant-en-klare, en wat je de vorige keer koos.
   fetch('racks/sjablonen.json')
