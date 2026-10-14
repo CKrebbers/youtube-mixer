@@ -255,8 +255,10 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     tempo, koptelefoon) en de knoppen 1→13 … 8→12 in de app op 1440×900 en 1440×790 (muisklik, koppelmodus);
                     sampler-drums-stems.mjs: hetzelfde met een GESTREAMD library-nummer met vier stems (synthetisch, tijdelijke db),
                     kills, knip, drumpad 13, Goertzel per stem, deck-vergelijking met de crossfaderkant erin (proefpunt cx-stems);
-                    hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
-                    CPU en afval; draadpool.mjs: hangende iCloud-bestanden tegen de decks, standaard vs UV_THREADPOOL_SIZE=16),
+                    hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine;
+                    led-vertraging.mjs: druk -> lampje in Chrome met de echte hub), bench/ (renderblok.mjs:
+                    CPU en afval; draadpool.mjs: hangende iCloud-bestanden tegen de decks, standaard vs UV_THREADPOOL_SIZE=16;
+                    feedback.mjs + feedback-samen.mjs: de LED-laag, druk -> lampje, echo's, de Maschine),
                     headless/lek.mjs (groeit de renderer tijdens een opname?) en headless/acht-video.mjs (acht decks + acht video's: wacht de audio?), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden), varve-app/ (de Dock-app VARVE: start de server, opent de Controlekamer),
@@ -283,6 +285,7 @@ test/
   engine.test.mjs   engine tegen gemockte Web Audio API, draait in Node
   mapping.test.mjs  mapping + soft-takeover, puur logica, geen mock nodig
   feedback.test.mjs LED-diffing en paletproef, bytes worden opgevangen
+  feedback-plan.test.mjs  het plan van de LED-laag (byte voor byte de oude berekening, 567 standen) en de wektik
   learn.test.mjs    MIDI-learn, modusherkenning, export/import-rondje
   midi.test.mjs     parsen, poortkeuze op naam, echodetectie
   library.test.mjs  database, effect-racks per link, cascade bij verwijderen, migraties (SCHEMA.length)
@@ -1063,7 +1066,9 @@ docs/
   vier crashes op 22 september 2026, alle vier in `MidiService_TaskService_Thread`
   op dezelfde codeplek. Dat is hun bug, maar honderd berichten in één synchrone
   lus is sowieso geen net gedrag. Alleen bij het sluiten van de pagina mag het
-  direct, want dan is er geen volgende tik meer.
+  direct, want dan is er geen volgende tik meer. Sinds 14 okt een SCHUIVEND venster
+  (16 in elk venster van 4 ms, ook in hub.js en de hub-patch) dat meteen stuurt als
+  er plaats is: geen setTimeout per lampje.
 - ÉÉN VARVE-tabblad praat met de APC (`tabblad.js`, Web Lock `varve-mixer`), sinds
   Chrome op 23 sep in `MidiService_TaskService_Thread` crashte met vier
   VARVE-tabbladen die tegelijk init en LED's stuurden. Een tweede tabblad vraagt
@@ -1080,8 +1085,13 @@ docs/
   losgetrokken poort staan (`disconnected`), dus opnieuw aansluiten gaf eerst
   geen init en dode LED's. Valt de invoer weg, dan laat `mapping.losgekoppeld()`
   shift en ingedrukte knoppen los.
-- De hub negeert echo's: een bericht dat identiek is aan wat wij net stuurden en
-  binnen 60 ms terugkomt, bereikt de mapping niet. Zonder die rem maken de
+- De hub negeert echo's: een CC die identiek is aan wat wij net stuurden en
+  binnen 60 ms terugkomt, bereikt de mapping niet. ALLEEN CC (14 okt): op noten
+  slikte hij echte knoppen in (lampje uit = [0x90, n, 0] = het loslaten; een
+  knipperend lampje 127 = het indrukken); dat een lampje nooit als druk terugkomt
+  rust op het protocol, niet op een meting aan het apparaat. Een ring op de waarde
+  die de knop ons net ZELF stuurde wordt niet onthouden (`_laatsteIn`, behalve 0 en
+  127): anders at het filter bij het terugdraaien elke vorige stap op. Zonder die rem maken de
   LED-ringen een lus — wij zetten een ring, het apparaat meldt de stand terug,
   wij verwerken dat als een knopdraai — en loopt de bus vol. Het filter is per
   apparaat uit te zetten (`echoFilter` in het profiel); voor de APC staat het
@@ -1170,7 +1180,13 @@ docs/
   ziet, zonder overpakken. Faders (geen ring) houden absolute + soft-takeover.
 - LED's lopen op een eigen `setInterval`, niet op de renderloop: `requestAnimationFrame`
   staat stil zodra het venster naar de achtergrond gaat, en dan zouden de lampjes
-  bevriezen terwijl de muziek doorspeelt.
+  bevriezen terwijl de muziek doorspeelt. Daarnaast `Feedback.wek()` na elke action op
+  de bus (14 okt): een knop licht meteen op (microtaak, alleen verschillen). ALLEEN
+  LAMPJES: ringen blijven op de tik van 33 ms, want een APC die een ring als knopwaarde
+  overneemt (hub-proef V1, niet gemeten) botst met endless bij een ring na elke stap. De tik
+  leest per regel alleen nog de read; het PLAN (regels, doelen, kleuren) wordt pas
+  opnieuw gemaakt bij een andere mapping, shift, mapjes of focus. Een nieuwe input
+  voor wat een regel betekent (naast vars, lagen, shift): zet hem in `_planNu()`.
 - De APC draait in mode 0x42, Alternate Ableton Live (Clay, 23 sep, VRAGEN
   B1). Alles momentary, ALLE LED's en ringen van ons, Track Select stuurt MIDI,
   de device-sectie is NIET gebankt: device knobs op kanaal 0 (`cc:0:16-23`),

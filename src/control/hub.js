@@ -79,7 +79,15 @@ export const OPEN_MS = 5000;
  * 0,6 s stilte + hooguit één tik van 0,2 s = op de voorgrond nooit meer dan 0,8 s.
  */
 export const HB_MS = HB_S * 600;
-const BEELD_MS = 16;   // LED's bundelen per beeld (setTimeout, geen rAF: die staat stil op de achtergrond)
+/**
+ * LED's bundelen per beeld (setTimeout, geen rAF: die staat stil op de achtergrond).
+ * Met een VOORFLANK (14 okt 2026): is er al BEELD_MS geen bundel weg, dan gaat
+ * hij na de lopende taak (setTimeout 0: alles van dezelfde tik of druk samen),
+ * anders op BEELD_MS na de vorige. Vroeger wachtte elk lampje 16 ms, ook als er
+ * een seconde niets gebeurd was: de helft van de vertraging druk -> lampje via
+ * de hub (tools/bench/feedback.mjs).
+ */
+export const BEELD_MS = 16;
 const TIK_MS = 200;    // eigen wijzigingen terugmelden, en kijken of er een hartslag moet
 
 /**
@@ -214,6 +222,9 @@ export class HubMidi extends MidiHub {
     this.ingedrukt = new Set();  // triggers die de hub indrukte en nog niet losliet
     this.leds = [];              // LED-berichten van dit beeld
     this.ledTimer = null;
+    this.beeldUit = -Infinity;   // klok() van de laatste bundel
+    this.speelT = new Float64Array(PER_TIK).fill(-Infinity);   // schuivend venster van de speel-wachtrij (zoals MidiHub)
+    this.speelI = 0;
     this.tikker = null;
     this.laatsteUit = -Infinity; // klok() van het laatste bericht naar de hub
     this.herverbind = null;
@@ -552,17 +563,25 @@ export class HubMidi extends MidiHub {
     this._beeld();
   }
 
-  /** Eén bericht per beeld per apparaat; de APC zoals altijd zonder `dev`. */
+  /** Eén bericht per beeld per apparaat; de APC zoals altijd zonder `dev`. Voorflank: zie BEELD_MS. */
   _beeld() {
-    this.ledTimer ??= setTimeout(() => {
-      this.ledTimer = null;
-      if (this.leds.length) this._stuur({ t: 'led', bytes: this.leds });
-      this.leds = [];
-      for (const s of Object.values(this.speel)) {
-        if (s.bundel?.length) this._stuur({ t: 'led', dev: s.dev, bytes: s.bundel });
-        s.bundel = [];
-      }
-    }, BEELD_MS);
+    if (this.ledTimer !== null) return;
+    const wacht = BEELD_MS - (this.klok() - this.beeldUit);
+    // Voorflank: een timer van 0 (na de lopende taak). Een microtaak is gemeten en gaf in Chrome niets
+    // meetbaars extra (druk -> lampje p50 6–8 ms tegen 5–9 ms, onder de ruis), dus de eenvoudigste.
+    this.ledTimer = setTimeout(() => this._bundel(), Math.max(0, wacht));
+  }
+
+  _bundel() {
+    this.ledTimer = null;
+    let iets = false;
+    if (this.leds.length) { this._stuur({ t: 'led', bytes: this.leds }); iets = true; }
+    this.leds = [];
+    for (const s of Object.values(this.speel)) {
+      if (s.bundel?.length) { this._stuur({ t: 'led', dev: s.dev, bytes: s.bundel }); iets = true; }
+      s.bundel = [];
+    }
+    if (iets) this.beeldUit = this.klok();
   }
 
   // ---- de speelapparaten (PROTOCOL §17) ----------------------------------------
@@ -601,21 +620,29 @@ export class HubMidi extends MidiHub {
 
   /**
    * De wachtrij naar de speelapparaten, zoals die van de MidiHub voor de APC:
-   * hooguit PER_TIK berichten per RIJ_MS (CLAUDE.md: alles wat naar buiten gaat).
+   * hooguit PER_TIK berichten in elk schuivend venster van RIJ_MS (CLAUDE.md:
+   * alles wat naar buiten gaat). Een lampje gaat meteen als er plaats is en niets wacht.
    * Lampjes gaan daarna per beeld gebundeld; een scherm gaat meteen.
    */
   _rij(item) {
+    // Een lampje meteen als er plaats is; een scherm altijd via de rij (een nieuwer beeld vervangt het daar).
+    if (item.bytes && !this.uitRij.length && this._speelWacht() <= 0) { this._speelUitRij(item); return; }
     this.uitRij.push(item);
     if (this.uitTikker !== null) return;
     const tik = () => {
-      for (let i = 0; i < PER_TIK && this.uitRij.length; i++) {
-        const x = this.uitRij.shift();
-        const s = this.speel[x.dev];
-        if (x.bytes) { (s.bundel ??= []).push(x.bytes); s.leds++; this._beeld(); }
-        else { this._stuur({ t: 'scherm', dev: x.dev, nr: x.nr, data: x.data }); s.schermen++; }
-      }
-      this.uitTikker = this.uitRij.length ? setTimeout(tik, RIJ_MS) : null;
+      while (this.uitRij.length && this._speelWacht() <= 0) this._speelUitRij(this.uitRij.shift());
+      this.uitTikker = this.uitRij.length ? setTimeout(tik, Math.max(0, this._speelWacht())) : null;
     };
-    this.uitTikker = setTimeout(tik, 0);
+    this.uitTikker = setTimeout(tik, Math.max(0, this._speelWacht()));
+  }
+
+  _speelWacht() { return this.speelT[this.speelI] + RIJ_MS - this.klok(); }
+
+  _speelUitRij(x) {
+    this.speelT[this.speelI] = this.klok();
+    this.speelI = (this.speelI + 1) % PER_TIK;
+    const s = this.speel[x.dev];
+    if (x.bytes) { (s.bundel ??= []).push(x.bytes); s.leds++; this._beeld(); }
+    else { this._stuur({ t: 'scherm', dev: x.dev, nr: x.nr, data: x.data }); s.schermen++; }
   }
 }

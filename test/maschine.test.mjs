@@ -12,7 +12,7 @@ const dicht = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
 
 const { parseMessage, MidiHub, isSpeelapparaat } = await import('../src/control/midi.js');
 const { Noten, leesMasterVolume } = await import('../src/control/noten.js');
-const { Maschine, BRON, FLITS_MS, SCHERM_MS, KANDIDAAT_MS, KEUZES, KLEUREN } = await import('../src/control/maschine.js');
+const { Maschine, BRON, FLITS_MS, SCHERM_MS, SCHERM_SNEL_MS, WEK_MS, KANDIDAAT_MS, KEUZES, KLEUREN } = await import('../src/control/maschine.js');
 const M = await import('../src/control/devices/maschine-mk2.js');
 const S = await import('../src/control/maschine-scherm.js');
 const { PALETTE } = await import('../src/control/devices/apc40mk2.js');
@@ -229,6 +229,29 @@ ok(`… en na het loslaten nog even (minstens ${FLITS_MS} ms: een drumslag duurt
 nu += FLITS_MS + 1;
 b = ms.ledBeeld();
 ok('… daarna weer gedimd', pad(2) === PALETTE[`${KLEUREN.drums}donker`]);
+{
+  // De wektik (14 okt): na een aanslag gaat het lampje er ná het bericht meteen uit, zonder
+  // op de tik van 33 ms te wachten; samengevoegd en niets dubbel.
+  ms.tik(); await Promise.resolve();
+  nu += 100;
+  const l0 = leds.length, w0 = ms.wekTikken;
+  stuur(0x90, 38, 100); stuur(0x80, 38, 0);
+  ok('wek: niets synchroon (eerst het bericht zelf)', leds.length === l0);
+  await Promise.resolve();
+  const fel = leds.slice(l0).filter((x) => x[0] === 0x90 && x[1] === 38);
+  ok('… na de lopende taak één tik: pad 3 fel, zonder ms.tik()', ms.wekTikken === w0 + 1 && fel.length === 1 && fel[0][2] === PALETTE[KLEUREN.drums]);
+  const l1 = leds.length;
+  ms.tik();
+  ok('… niets dubbel: de gewone tik erna stuurt niets', leds.length === l1);
+  stuur(0x90, 38, 100);
+  await Promise.resolve();
+  ok(`… binnen ${WEK_MS} ms na een tik: een timer, geen tweede microtaak`, ms.wekTikken === w0 + 1 && ms._wekker !== null);
+  ms.stop();
+  ok('stop() haalt hem weg', ms._wekker === null);
+  stuur(0x80, 38, 0);
+  ms.stop();
+  nu += FLITS_MS + 1;
+}
 eng.decks.D.buffer = {};            // een nummer op track 4
 b = ms.ledBeeld();
 ok('groepen: instrument = zijn kleur (focus vol, anders gedimd), nummer = wit gedimd, leeg = uit',
@@ -282,13 +305,29 @@ nu += 1000;
 stuur(0xb0, 16, 30);
 ms.tik();
 ok('een knop draaien: het linkerscherm opnieuw (knop 1 staat links), het rechter niet', schermen.length === n0 + 1 && schermen.at(-1).nr === 0);
+// Vlak na invoer mag een scherm sneller (SCHERM_SNEL_MS, 14 okt): de waarde die je draait loopt mee.
 stuur(0xb0, 16, 30);
-nu += SCHERM_MS / 2;
+nu += SCHERM_SNEL_MS / 2;
 ms.tik();
-ok(`binnen ${SCHERM_MS} ms nog eens gedraaid: wacht (tempo begrensd)`, schermen.length === n0 + 1);
+ok(`binnen ${SCHERM_SNEL_MS} ms nog eens gedraaid: wacht (tempo begrensd)`, schermen.length === n0 + 1);
+nu += SCHERM_SNEL_MS / 2;
+ms.tik();
+ok(`… na ${SCHERM_SNEL_MS} ms wel (vlak na invoer, niet pas na ${SCHERM_MS} ms)`, schermen.length === n0 + 2);
+// Zonder invoer (de stand verandert vanzelf) blijft het SCHERM_MS.
+nu += SCHERM_MS * 2;
+eng.inst[eng.speeltrack()].zetParam(2, 0.9);
+ms.tik();
+ok('zonder invoer: een verandering gaat er na SCHERM_MS gewoon uit', schermen.length === n0 + 3);
+eng.inst[eng.speeltrack()].zetParam(2, 0.1);
+nu += SCHERM_SNEL_MS;
+ms.tik();
+ok(`… maar een volgende niet al na ${SCHERM_SNEL_MS} ms (geen invoer: ${SCHERM_MS} ms)`, schermen.length === n0 + 3);
+nu += SCHERM_MS - SCHERM_SNEL_MS;
+ms.tik();
+ok(`… wel na ${SCHERM_MS} ms`, schermen.length === n0 + 4);
+eng.inst[eng.speeltrack()].zetParam(2, 0.5);
 nu += SCHERM_MS;
 ms.tik();
-ok('… daarna wel', schermen.length === n0 + 2);
 const st = ms.stand();
 ok('stand: speeltrack + instrument, acht knoppen met naam, waarde en tekst in eenheden', st.speel.nr === 2 && st.speel.naam === 'Drums' && st.knoppen.length === 8
   && st.knoppen[0].label === 'TOON' && dicht(st.knoppen[0].waarde, 0.56) && st.knoppen[2].tekst === `${Math.round(60 + 0.5 * 17940)} Hz` && st.knoppen[1].tekst === '50%');

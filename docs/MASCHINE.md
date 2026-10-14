@@ -162,6 +162,17 @@ kleur. Gedimd = de "donker"-tint (index + 1, #59xxxx), zoals op de APC.
   afgekapt op een woord, hooguit 10 tekens) en een balk 0..1.
 - Alleen opnieuw als de stand veranderde (en dan alleen het scherm dat anders is), hooguit
   eens per 100 ms per scherm (`SCHERM_MS`). De hub stuurt daarna alleen de stukken die veranderden.
+- Vlak na invoer (draaiknop, pad, knop: tot `SCHERM_MS` daarna) mag een scherm per 40 ms
+  (`SCHERM_SNEL_MS`, 14 okt): de waarde die je draait loopt met ~25 beelden per seconde mee.
+  Gemeten draaien -> scherm p50 15,5 -> 3,9 ms, p99 43 -> 15 ms (`tools/bench/feedback.mjs`,
+  docs/verslagen/2026-10-14/controller-uitvoer.md). Zonder invoer blijft het 100 ms. Niet op het
+  apparaat gemeten: de hub schrijft HID synchroon (proef `ms-scherm` in de hub staat open); vertraagt
+  een scherm daar de pads, zet dan `SCHERM_SNEL_MS` terug op `SCHERM_MS`.
+- **Lampjes meteen** (14 okt): na elk bericht van de Maschine een wektik (`Maschine.wek()`, een
+  microtaak, samengevoegd, hooguit één per 4 ms); de gewone tik van 33 ms blijft daarnaast lopen.
+  Gemeten pad -> lampje (via HubMidi en de bundel) p50 38 -> 2 ms, p99 71 -> 25 ms. De wachtrij
+  in hub.js stuurt een lampje meteen als het schuivende venster (16 per 4 ms) plaats heeft, en de
+  bundel per beeld heeft een voorflank (na stilte meteen, anders 16 ms na de vorige).
 
 ## 5. De stapmodus en de patronen (gebouwd 5 okt, op het patronen-spoor)
 
