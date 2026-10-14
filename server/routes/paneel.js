@@ -36,9 +36,9 @@ export default {
       ctx.json(res, 200, { bytes: s.bytes, vers: s.vers, past: s.past, kijkers: relais.aantal, tab: relais.tab, stats: relais.stats });
     } },
     { methode: 'GET', pad: /^\/api\/paneel\/live$/, handler: (req, res) => {
-      let s = null;
-      try { s = new URL(req.url, 'http://x').searchParams.get('s'); } catch (_) {}
-      relais.kijk(req, res, { scherm: s && SCHERM.test(s) ? s : null });
+      let s = null, k = null;
+      try { const q = new URL(req.url, 'http://x').searchParams; s = q.get('s'); k = q.get('k'); } catch (_) {}
+      relais.kijk(req, res, { scherm: s && SCHERM.test(s) ? s : null, pagina: k && /^[a-z0-9]{8,40}$/.test(k) ? k : null });
     } },
     ...['PUT', 'DELETE', 'PATCH'].map((methode) => ({ methode, pad: /^\/api\/paneel\/van-mixer$/, handler: alleen('POST') })),
     ...['POST', 'PUT', 'DELETE', 'PATCH'].map((methode) => ({ methode, pad: /^\/api\/paneel\/(live|ping|kijkers|stand)$/, handler: alleen('GET') })),

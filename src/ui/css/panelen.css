@@ -98,3 +98,23 @@ body.wp{--deel:#7f7f7f;--deel-tekst:#07090b;overflow:auto;touch-action:manipulat
 .wp-sectie{padding:10px 8px;border-radius:5px;background:var(--panel);color:var(--text);font-size:14px}
 .wp-sectie.hier{background:#e6edf3;color:#07090b}
 .wp-dim{color:var(--dim)}
+
+/* ---- de library als vak (werk.html) ---- */
+.wp-lib-kop{display:flex;gap:8px;padding:4px 0}
+.wp-lib-zoek{flex:1 1 auto;min-width:0;font:inherit;font-size:16px;padding:8px 10px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text)}
+.wp-lib{display:flex;flex-direction:column;gap:3px;max-height:60vh;overflow:auto}
+.wp-lib-rij{display:flex;align-items:center;gap:10px;padding:6px 8px;background:var(--panel);border-radius:4px;font-size:14px}
+.wp-lib-titel{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wp-lib-laad{display:flex;gap:3px;flex:0 0 auto}
+.wp-lib-knop{min-width:28px;min-height:28px;border:1px solid var(--line);border-radius:4px;background:none;color:var(--dim);font:inherit;font-size:12px}
+.wp-lib-knop.vraag{border-color:var(--warn);color:var(--warn)}
+
+/* ---- smal (iPhone in portret): alles over de volle breedte, de xy-pad vierkant ---- */
+@media (max-width:600px){
+  body.wp .wp-vakken{padding:8px}
+  body.wp .vp-items{gap:6px}
+  body.wp .vp-xy{flex:1 1 100%;min-width:0}
+  body.wp .vp-vlak{width:100%;height:auto;aspect-ratio:1}
+  body.wp .wp-kop{gap:8px;padding:6px 8px}
+  body.wp .wp-scherm,body.wp .wp-soort{display:none}
+}

@@ -12,7 +12,7 @@
 //   - de kaart: per apparaat de regels van het open mapje;
 //   - renderloop.meldAan: aanmelden en weer weg (geen Knob blijft achter).
 // Draai met: node test/vrij-paneel.test.mjs
-const { VrijPaneel, varsVoor, vul, OPLICHT_MS } = await import('../src/paneel/vrij.js');
+const { VrijPaneel, varsVoor, vul, OPLICHT_MS, BOUWSTENEN, bouwsteenVan, bouwsteenDef, metRuw } = await import('../src/paneel/vrij.js');
 const { kaartVan, KaartWeergave, MAX_KNOPPEN } = await import('../src/paneel/kaart.js');
 
 const fails = [];
@@ -148,13 +148,19 @@ console.log('\nindrukken en loslaten (per vinger, dezelfde action)');
   bron.vars0 = { focus: '1' }; p.teken();
   bron.waarden['track.1.filter'] = 0.5;
   vuur(p, 'pointerdown', p.items[0].dial, { pointerId: 3, clientY: 200 });
+  vuur(p, 'pointermove', p.items[0].dial, { pointerId: 3, clientY: 180 });
   vuur(p, 'pointermove', p.items[0].dial, { pointerId: 3, clientY: 160 });
+  const voorBeeld = bron.invokes.length;
+  p.teken();
+  ok('waarden gebundeld: twee bewegingen in één beeld = één invoke (de laatste)', bron.invokes.length === voorBeeld + 1);
   ok('draaien: omhoog slepen = groter (160 px = de hele knop)', bron.invokes.at(-1)[0] === 'track.1.filter' && Math.abs(bron.invokes.at(-1)[1] - 0.75) < 1e-9);
   vuur(p, 'pointerup', p.items[0].dial, { pointerId: 3 });
   vuur(p, 'pointerdown', p.items[3].baan, { pointerId: 4, clientX: 40 });
+  p.teken();
   ok('schuif: de plek in de baan', JSON.stringify(bron.invokes.at(-1)) === '["track.1.fader",0.4]');
   vuur(p, 'pointerup', p.items[3].baan, { pointerId: 4 });
   vuur(p, 'pointerdown', p.items[5].vlak, { pointerId: 5, clientX: 20, clientY: 10 });
+  p.teken();
   ok('xy: x en y naar hun eigen action', JSON.stringify(bron.invokes.slice(-2)) === '[["track.1.fx.knob.1",0.2],["track.1.fx.knob.2",0.9]]');
   vuur(p, 'pointerup', p.items[5].vlak, { pointerId: 5 });
   const n = bron.invokes.length;
@@ -199,7 +205,58 @@ console.log('\nin de mixer (het werkvak): de gewone controls');
   vuur(p, 'pointerdown', knop);
   ok('de invoer van draai/schuif/knop doen de controls van de mixer zelf (het paneel niet)', bron.invokes.length === n);
   vuur(p, 'pointerdown', p.items[5].vlak, { clientX: 50, clientY: 50 });
+  vuur(p, 'pointerup', p.items[5].vlak, {});
   ok('xy (geen control in de mixer): het paneel zelf', bron.invokes.length === n + 2);
+}
+
+console.log('\nde xy-pad: y, druk, los (uit de ruwe werkruimte)');
+{
+  const doc = maakDoc();
+  const bron = maakBron();
+  bron.waarden['track.1.send.a'] = 0.1; bron.types['track.1.send.a'] = 'value'; bron.waarden['track.1.fx.knob.1.hold'] = 0;
+  const ruw = { items: [{ soort: 'xy', action: 'track.1.fx.knob.1', y: 'track.1.send.a', druk: 'track.1.fx.knob.1.hold', los: 'terug' }] };
+  const def = metRuw({ items: [{ soort: 'xy', action: 'track.1.fx.knob.1' }] }, ruw);
+  ok('metRuw: y, druk en los komen mee (het model van S3 bewaart ze niet)', def.items[0].y === 'track.1.send.a' && def.items[0].los === 'terug');
+  ok('metRuw: alleen geldige waarden; een ander aantal items = niets', !metRuw({ items: [{ soort: 'xy', action: 'a' }] }, { items: [{ los: 'weg', y: 'x y' }] }).items[0].los
+    && metRuw({ items: [{ soort: 'xy', action: 'a' }] }, { items: [] }).items[0].y === undefined);
+  const p = new VrijPaneel(doc.createElement('div'), def, bron, { id: 'xy' });
+  const it = p.items[0];
+  ok('x en y uit twee eigen actions, het label uit beide', it.actions.join() === 'track.1.fx.knob.1,track.1.send.a' && it.labelEl.textContent.includes('×'));
+  vuur(p, 'pointerdown', it.vlak, { pointerId: 1, clientX: 80, clientY: 20 });
+  ok('aanraken = de druk-action aan', JSON.stringify(bron.invokes[0]) === '["track.1.fx.knob.1.hold",true]');
+  for (let i = 0; i < 10; i++) vuur(p, 'pointermove', it.vlak, { pointerId: 1, clientX: 80 + i, clientY: 20 });
+  p.teken();
+  ok('tien bewegingen in één beeld: één invoke per as', bron.invokes.length === 3);
+  vuur(p, 'pointermove', it.vlak, { pointerId: 1, clientX: 90, clientY: 30 });
+  vuur(p, 'pointerup', it.vlak, { pointerId: 1 });
+  const staart = bron.invokes.slice(-5).map(([a, v]) => `${a}=${v}`).join(' ');
+  ok(`loslaten: eerst de laatste stand, dan terug naar vóór het aanraken, dan de druk los (${staart})`,
+    staart === 'track.1.fx.knob.1=0.9 track.1.send.a=0.7 track.1.fx.knob.1=0.3 track.1.send.a=0.1 track.1.fx.knob.1.hold=false');
+  const p2 = new VrijPaneel(doc.createElement('div'), { items: [{ soort: 'xy', action: 'track.1.fx.knob.{as}', los: 'midden' }] }, bron, { id: 'm' });
+  vuur(p2, 'pointerdown', p2.items[0].vlak, { pointerId: 2, clientX: 10, clientY: 10 });
+  vuur(p2, 'pointerup', p2.items[0].vlak, { pointerId: 2 });
+  ok('los: midden = terugveren naar 0,5', JSON.stringify(bron.invokes.slice(-2)) === '[["track.1.fx.knob.1",0.5],["track.1.fx.knob.2",0.5]]');
+}
+
+console.log('\nde bouwstenen (elk onderdeel als paneel)');
+{
+  ok('fx, strip, mixer, stems, master, sampler', ['fx', 'strip', 'mixer', 'stems', 'master', 'sampler'].every((k) => typeof BOUWSTENEN[k] === 'function'));
+  ok('bouwsteenVan: strip:3 = track 3, fx = de focus, onbekend = null', bouwsteenVan('strip:3').track === '3' && bouwsteenVan('fx').track === '{focus}' && bouwsteenVan('kaart') === null && bouwsteenVan('strip:9') === null);
+  const bron = maakBron();
+  const fx = bouwsteenDef('fx', { bestaat: (a) => !!bron.metaOf(a), vars: { focus: '1' } });
+  ok('een bouwsteen laat weg wat niet bestaat (geen melding, geen grijs)', fx.items.length === 1 && fx.items[0].herhaal.join() === '1,2');
+  const doc = maakDoc();
+  const p = new VrijPaneel(doc.createElement('div'), bouwsteenDef('strip:2'), bron, { id: 'strip' });
+  ok('strip:2 is een gewoon paneel op track 2', p.items.some((i) => i.action === 'track.2.filter') && p.items.every((i) => !i.action || i.action.startsWith('track.2.')));
+  bron.naam = (a) => (a === 'track.1.fx.knob.1' ? 'echo' : null);
+  let ls = 'a'; bron.labelSleutel = () => ls;
+  const pf = new VrijPaneel(doc.createElement('div'), bouwsteenDef('fx:1'), bron, { id: 'fx' });
+  pf.teken();
+  ok('de naam van de plek (wat het rack erop zet) als label', pf.items[0].labelEl.textContent === 'echo');
+  bron.naam = (a) => (a === 'track.1.fx.knob.1' ? 'galm' : null);
+  pf.teken(); ok('… nog niet opnieuw zonder nieuwe labelSleutel', pf.items[0].labelEl.textContent === 'echo');
+  ls = 'b'; pf.teken();
+  ok('… wel na een ander rack (labelSleutel)', pf.items[0].labelEl.textContent === 'galm');
 }
 
 console.log('\nde kaart');

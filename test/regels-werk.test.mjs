@@ -110,9 +110,11 @@ console.log('\nde iPad schrijft niets (W1)');
   const schrijvend = bestanden.filter((f) => /['"`](POST|PUT|PATCH|DELETE)['"`]|method\s*:/.test(code[f]) || /sendBeacon|new\s+WebSocket|XMLHttpRequest/.test(code[f]));
   ok(`geen POST/PUT/PATCH/DELETE, geen method:, geen sendBeacon/WebSocket/XHR${schrijvend.length ? ` (wel in ${schrijvend.join(', ')})` : ''}`, schrijvend.length === 0);
   const paden = bestanden.flatMap((f) => [...code[f].matchAll(/(['"`])(\/api\/[^'"`?$]*)/g)].map((m) => m[2]));
-  ok(`alleen /api/paneel/ping en /api/paneel/live (${[...new Set(paden)].sort().join(' ')})`, paden.every((p) => p === '/api/paneel/ping' || p === '/api/paneel/live'));
-  ok('de ServerVerbinding heeft geen invoke (kanBedienen = false)', /class ServerVerbinding[\s\S]*kanBedienen = false/.test(code['verbinding.js'])
-    && !/class ServerVerbinding[\s\S]*\binvoke\s*\(/.test(code['verbinding.js'].slice(code['verbinding.js'].indexOf('class ServerVerbinding'), code['verbinding.js'].indexOf('export function maakVerbinding'))));
+  ok(`alleen /api/paneel/ping, /api/paneel/live en (lezen) /api/library (${[...new Set(paden)].sort().join(' ')})`, paden.every((p) => ['/api/paneel/ping', '/api/paneel/live', '/api/library'].includes(p)));
+  const sv = code['verbinding.js'].slice(code['verbinding.js'].indexOf('class ServerVerbinding'), code['verbinding.js'].indexOf('export function maakVerbinding'));
+  ok('de ServerVerbinding heeft geen eigen invoke: alleen via zetSchrijver (S8), en kanBedienen begint false',
+    /kanBedienen = false/.test(sv) && !/^\s*invoke\s*\(/m.test(sv) && /zetSchrijver\(fn\)/.test(sv) && /this\.invoke = \(id, v\) => this\._schrijver\(/.test(sv));
+  ok('niemand in src/paneel/ roept zetSchrijver aan (dat doet S8)', !Object.values(code).some((c) => /\.zetSchrijver\(/.test(c)));
   const routes = zonderCommentaar(readFileSync(join(WORTEL, 'server/routes/paneel.js'), 'utf8'));
   const regels = routes.split('\n');
   const posts = regels.filter((r) => /methode:\s*'POST'/.test(r));

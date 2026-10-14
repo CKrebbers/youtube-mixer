@@ -1340,8 +1340,13 @@ een proefwerkruimte in de headless proeven). Wat afwijkt of erbij kwam:
   pas na 3 s stilte en met een stand). `GET /api/paneel/kijkers` en `/api/paneel/stand` erbij (lezen).
 - De klok: `getOutputTimestamp()` + het gemiddelde verschil met `currentTime` (het midden van de
   schommeling per audioblok), 1×/s en meteen bij een sprong > 1 ms (hooguit 10×/s).
-- Gemeten in deze container: zie het verslag (de hoorbare positie op de nep-iPad haalt de 5 ms gemiddeld
-  over een reeks van 50 ms; tegen één losse `hoorbaar()` niet, die schommelt in headless zelf 10,7 ms).
+- Bouwstenen (Clay 14 okt, op W1): `fx`, `strip`, `mixer`, `stems`, `master`, `sampler` (data in vrij.js, met
+  `:<n>` voor een vaste track) en `library` als vak, op elk scherm en in het werkvak. De xy-pad met `y`,
+  `druk` en `los` (uit het ruwe bestand). De berichtvorm voor invoke en `zetSchrijver` liggen klaar voor S8.
+- De relais zegt `weg` als de mixer bewust stopt (en na 70 s stilte); een pagina die opnieuw verbindt
+  vervangt zijn vorige verbinding.
+- Gemeten in deze container: de hoorbare positie op de nep-iPad haalt de 5 ms NIET aantoonbaar (mediaan
+  ~1,3 ms, max 5–28 ms afhankelijk van de load; `currentTime` springt hier zelf 10,7 ms). Op de Mac meten.
 
 ---
 

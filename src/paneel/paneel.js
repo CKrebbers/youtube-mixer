@@ -19,7 +19,7 @@
  * herverbinden bij visibilitychange en online, en een grote rode balk "geen verbinding".
  */
 import { maakVerbinding } from './verbinding.js';
-import { VrijPaneel } from './vrij.js';
+import { VrijPaneel, bouwsteenDef } from './vrij.js';
 import { KaartWeergave } from './kaart.js';
 import { vakSoort } from './protocol.js';
 import { UitlijnWeergave, vakVorm } from '../uitlijn/teken.js';
@@ -79,6 +79,12 @@ function bouwVak(naam, w) {
     const k = new KaartWeergave(el);
     return { naam, el, stap: () => k.toon(verb.kaart()), stop: () => { k.vernietig(); el.remove(); } };
   }
+  if (soort === 'bouwsteen') {
+    const def = bouwsteenDef(naam, { bestaat: (a) => !!verb.metaOf(a), vars: verb.vars() });
+    const p = new VrijPaneel(el, def, verb, { modus: 'los', id: naam });
+    return { naam, el, stap: () => p.teken(), stop: () => { p.vernietig(); el.remove(); }, paneel: p };
+  }
+  if (soort === 'library') return libraryVak(naam, el);
   if (soort === 'stand') return standVak(naam, el);
   if (soort === 'secties') return sectiesVak(naam, el);
   titel(`vak "${naam}" ken ik niet`);
@@ -87,6 +93,66 @@ function bouwVak(naam, w) {
 
 const mmss = (s) => (Number.isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '–');
 const bpmT = (b) => (Number.isFinite(b) ? b.toFixed(2).replace('.', ',') : '–');
+
+/**
+ * De library als vak: zoeken en de lijst (GET /api/library, alleen lezen). Als VENSTER van de mixer
+ * staan er laadknoppen 1–8 bij (via de mixer, met de tweede druk over een spelende track); op de
+ * iPad niet (laden staat in VAST_NOOIT: nooit van buiten de Mac).
+ */
+function libraryVak(naam, el) {
+  const kop = document.createElement('div');
+  kop.className = 'wp-lib-kop';
+  const zoek = document.createElement('input');
+  zoek.type = 'search'; zoek.placeholder = 'zoeken'; zoek.className = 'wp-lib-zoek';
+  kop.appendChild(zoek);
+  el.appendChild(kop);
+  const lijst = document.createElement('div');
+  lijst.className = 'wp-lib';
+  el.appendChild(lijst);
+  let bezig = false, vraag = null, timer = null, gestopt = false;
+  async function haal() {
+    if (bezig || gestopt) return;
+    bezig = true;
+    try {
+      const q = new URLSearchParams({ sorteer: 'toegevoegd', van: '0', aantal: '200' });
+      if (zoek.value.trim()) q.set('zoek', zoek.value.trim());
+      const r = await fetch(`/api/library?${q}`, { cache: 'no-store' });
+      const d = await r.json().catch(() => null);
+      if (!gestopt) teken(r.ok ? d?.tracks ?? [] : []);
+    } catch (_) { /* de rode balk zegt het al */ } finally { bezig = false; }
+  }
+  function teken(tracks) {
+    lijst.replaceChildren();
+    if (!tracks.length) { const p = document.createElement('div'); p.className = 'wp-dim'; p.textContent = 'niets gevonden'; lijst.appendChild(p); return; }
+    for (const t of tracks) {
+      const rij = document.createElement('div');
+      rij.className = 'wp-lib-rij';
+      const titel = document.createElement('span'); titel.className = 'wp-lib-titel';
+      titel.textContent = [t.artiest, t.titel ?? t.title].filter(Boolean).join(' — ') || t.id;
+      const bpm = document.createElement('span'); bpm.className = 'wp-bpm';
+      bpm.textContent = bpmT(t.grid_bpm ?? t.bpm);
+      rij.append(titel, bpm);
+      if (verb.kanBedienen && verb.laad) {
+        const knoppen = document.createElement('span'); knoppen.className = 'wp-lib-laad';
+        for (let n = 1; n <= 8; n++) {
+          const b = document.createElement('button'); b.className = 'wp-lib-knop'; b.textContent = String(n);
+          b.title = `laden op track ${n}`;
+          b.addEventListener('click', () => {
+            const u = verb.laad(n, t);
+            if (u?.vraag) { b.classList.add('vraag'); b.textContent = '?'; clearTimeout(vraag); vraag = setTimeout(() => { b.classList.remove('vraag'); b.textContent = String(n); }, 3000); }
+            else { b.classList.remove('vraag'); b.textContent = String(n); }
+          });
+          knoppen.appendChild(b);
+        }
+        rij.appendChild(knoppen);
+      }
+      lijst.appendChild(rij);
+    }
+  }
+  zoek.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(haal, 250); });
+  haal();
+  return { naam, el, stap() {}, stop: () => { gestopt = true; clearTimeout(timer); clearTimeout(vraag); el.remove(); } };
+}
 
 function standVak(naam, el) {
   const lijst = document.createElement('div');

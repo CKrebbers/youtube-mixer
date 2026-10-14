@@ -148,7 +148,7 @@ try {
   const tStd = Date.now();
   await h.ev(M, "window.werk.kies('standaard').then(() => true)");
   const stil = await h.totdat(I1, "!window.paneel.verb.compleet && document.getElementById('wp-balk').hidden && document.getElementById('wp-status').textContent === '◐'", 8000, 50);
-  ok('de iPad ziet het binnen ~4 s: geen oude stand, wel de server (◐, geen rode balk)', stil !== false, `${((Date.now() - tStd) / 1000).toFixed(1)} s`);
+  ok('de iPad ziet het meteen (de mixer zegt zelf weg): geen oude stand, wel de server (◐, geen rode balk)', stil !== false, `${((Date.now() - tStd) / 1000).toFixed(1)} s`);
   await h.ev(M, "window.werk.kies('proef').then(() => true)");
   ok('weer een werkruimte: de iPad krijgt de stand terug', await h.totdat(I1, 'window.paneel.verb.compleet', 8000) !== false);
 

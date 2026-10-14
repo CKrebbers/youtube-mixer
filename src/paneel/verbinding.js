@@ -19,7 +19,7 @@
  * meteen (hooguit één keer per 500 ms). Elke nieuwe verbinding begint met een LEGE stand en
  * wacht op de volledige stand van de server.
  */
-import { pasToe, legeStand, klokVerschil, ctxOp, PING_RONDJES } from './protocol.js';
+import { pasToe, legeStand, klokVerschil, ctxOp, PING_RONDJES, invokeBericht } from './protocol.js';
 import { positieIn, snelheidOp } from '../engine/stream-kern.js';
 import { hoorbaar } from '../engine/hoorbaar.js';
 import { leesWeg } from '../lib/antwoord.js';
@@ -63,6 +63,10 @@ export class OpenerVerbinding extends Emitter {
   badges(id) { return this.k?.badges(id) ?? []; }
   badgeSleutel() { return this.k?.badgeSleutel?.() ?? null; }
   geraakt(id) { return this.k?.geraakt(id) ?? 0; }
+  naam(id) { return this.k?.naam?.(id) ?? null; }
+  labelSleutel() { return this.k?.labelSleutel?.() ?? null; }
+  /** Een nummer op track nr laden (alleen als venster van de mixer). */
+  laad(nr, track) { return this.k?.laad?.(nr, track) ?? { ok: false }; }
   /** De klok van de mixer (geraakt staat daarop; dit venster heeft een ander nulpunt). */
   nu() { return this.k?.nu?.() ?? globalThis.performance.now(); }
   meld(t) { this.k?.meld?.(t); }
@@ -89,7 +93,11 @@ export class ServerVerbinding extends Emitter {
     clearInterval: ci = (...a) => globalThis.clearInterval(...a) } = {}) {
     super();
     this.soort = 'server';
-    this.kanBedienen = false;   // W1: de iPad kijkt alleen
+    this.kanBedienen = false;   // de iPad kijkt, tot S8 een schrijver zet (zetSchrijver)
+    this._schrijver = null;
+    // Eén id per pagina: verbindt hij opnieuw, dan gooit de server zijn vorige (vaak dode) verbinding weg.
+    this.pagina = Math.random().toString(36).slice(2, 14).padEnd(10, '0');
+    this._seq = 0;
     this.scherm = scherm;
     this.basis = basis;
     this._ES = ES; this._fetch = f; this._nu = nu; this._st = st; this._ct = ct; this._si = si; this._ci = ci;
@@ -147,7 +155,7 @@ export class ServerVerbinding extends Emitter {
     // zodra hij antwoordt.
     if (this.stats.verbindingen > 1) this._herping = true;
     this._laatst = this._nu();
-    const es = new this._ES(`${this.basis}/api/paneel/live?s=${encodeURIComponent(this.scherm)}`);
+    const es = new this._ES(`${this.basis}/api/paneel/live?s=${encodeURIComponent(this.scherm)}&k=${this.pagina}`);
     this._es = es;
     es.onmessage = (e) => { if (this._es === es) this._bericht(e.data); };
     es.onerror = () => {
@@ -232,6 +240,20 @@ export class ServerVerbinding extends Emitter {
   badgeSleutel() { return `${this._versie}`; }
   geraakt(id) { return this._geraakt.get(id) ?? 0; }
   nu() { return this._nu(); }
+  naam(id) { return this._w?.labels?.[id]?.naam ?? null; }
+  labelSleutel() { return `${this._versie}`; }
+
+  /**
+   * Voor S8 (bedienen vanaf de iPad, na W1): `fn(bericht)` krijgt een invoke in de vorm van
+   * protocol.invokeBericht en vervoert hem (de route, de koppelcode, de rem zijn van S8). Zonder
+   * schrijver bestaat `invoke` niet en kijkt het paneel alleen (vrij.js: geen invoke = kijken).
+   */
+  zetSchrijver(fn) {
+    this._schrijver = typeof fn === 'function' ? fn : null;
+    this.kanBedienen = !!this._schrijver;
+    if (this._schrijver) this.invoke = (id, v) => this._schrijver(invokeBericht({ id, v, druk: typeof v === 'boolean' ? (v ? 'aan' : 'los') : null, seq: ++this._seq, scherm: this.scherm }));
+    else delete this.invoke;
+  }
   meld() {}
   werk() { return this._w; }
   /** Alleen de opbouw (werkruimte, deel, versie): focus, mapjes en shift bouwen de vakken niet opnieuw. */

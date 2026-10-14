@@ -127,9 +127,13 @@ export default async function opzet(ctx) {
     if (s === nodigCache.s) return nodigCache.set;
     const set = new Set();
     const vars = varsNu().v;
-    if (P) for (const p of Object.values(w?.def?.panelen ?? {})) {
-      const v = P.varsVoor(vars, p.doel);
-      for (const a of P.actionsVan(p)) { const id = P.vul(a, v); if (id && metaOf(id)) set.add(id); }
+    const neem = (p, doel) => { const v = P.varsVoor(vars, doel); for (const a of P.actionsVan(p)) { const id = P.vul(a, v); if (id && metaOf(id)) set.add(id); } };
+    if (P) {
+      for (const p of Object.values(panelenNu())) neem(p, p.doel);
+      // De bouwstenen die ergens op een scherm staan (fx, strip:3 …), in elk deel.
+      const namen = new Set();
+      for (const d of Object.values(w?.def?.delen ?? {})) for (const sch of Object.values(d?.schermen ?? {})) for (const n of [...(sch.vakken ?? []), sch.werkvak]) if (n) namen.add(n);
+      for (const n of namen) { const b = P.bouwsteenDef(n, { bestaat: (a) => !!metaOf(a), vars }); if (b) neem(b); }
     }
     nodigCache.s = s; nodigCache.set = set;
     return set;
@@ -143,6 +147,14 @@ export default async function opzet(ctx) {
     return kaartCache;
   };
 
+  /** De panelen van de werkruimte, met de extra velden van de xy-pad uit het ruwe bestand (vrij.js metRuw). */
+  function panelenNu() {
+    const w = werk();
+    const uit = {};
+    for (const [n, p] of Object.entries(w?.def?.panelen ?? {})) uit[n] = P ? P.metRuw(p, w?.ruw?.panelen?.[n]) : p;
+    return uit;
+  }
+
   function werkInfo() {
     const w = werk();
     if (!w) return null;
@@ -150,10 +162,21 @@ export default async function opzet(ctx) {
     return { naam: w.naam, titel: w.def?.titel ?? null, deel: w.deel ?? null, versie: w.versie ?? null,
       delen: (w.delen?.() ?? []).map((x) => ({ naam: x.naam, label: x.label, kleur: x.kleur })),
       kleur: d?.kleur ?? null, label: d?.label ?? null,
-      panelen: w.def?.panelen ?? {}, schermen: d?.schermen ?? {}, schermDefs: w.def?.schermen ?? {} };
+      panelen: panelenNu(), schermen: d?.schermen ?? {}, schermDefs: w.def?.schermen ?? {} };
   }
 
   const labelVan = (id) => beschrijf(id)?.kort ?? null;
+  /** De naam die het rack nu op een plek zet (track.N.fx.knob.K, master.fx.knob.K), of null. */
+  const naamVan = (id) => {
+    let m = /^track\.(\d)\.fx\.knob\.(\d)$/.exec(id);
+    if (m) { const d = engine.decks?.[Object.keys(engine.decks)[m[1] - 1]]; return d?.fx?.plekNaam?.(+m[2]) ?? null; }
+    m = /^master\.fx\.knob\.(\d)$/.exec(id);
+    if (m) return engine.master?.fx?.plekNaam?.(+m[1]) ?? null;
+    return null;
+  };
+  /** Verandert als een rack wisselt (de namen van de plekken): per beeld één keer gerekend. */
+  const rackSleutel = (fx) => (fx?.rack ? `${fx.rackNaam}:${fx.rack.macros?.map((m) => m.label ?? '').join(',') ?? ''}` : '');
+  const labelSleutelNu = perBeeld(() => `${Object.values(engine.decks ?? {}).map((d) => rackSleutel(d?.fx)).join('|')}#${rackSleutel(engine.master?.fx)}`);
 
   // ---- de decks ------------------------------------------------------------------------------
   const deckInfo = new Map();   // id -> { sleutel, info }
@@ -189,6 +212,7 @@ export default async function opzet(ctx) {
     return { decks, maatgever: maatgever() };
   }
 
+  let laadVraag = null;
   const open = new Map();   // scherm -> werk-venster (geopend met "open schermen", of aangemeld)
 
   // ---- window.varvePaneel: voor werk.html als venster van de mixer -----------------------------
@@ -199,6 +223,7 @@ export default async function opzet(ctx) {
     badgeSleutel: () => badgesNu(),
     geraakt: (id) => geraakt.get(id) ?? 0,
     nu,
+    naam: naamVan, labelSleutel: labelSleutelNu,
   };
   window.varvePaneel = {
     ...paneelBron,
@@ -213,6 +238,21 @@ export default async function opzet(ctx) {
      * herladen van de mixer dat het er al is (anders laadde window.open met dezelfde naam het opnieuw).
      */
     meldAan: (s, venster) => { if (typeof s === 'string' && venster && !venster.closed) open.set(s, venster); },
+    /**
+     * Een nummer uit de library op track `nr` laden (alleen als VENSTER van de mixer: de iPad laadt
+     * nooit, VAST_NOOIT `*.load*`). Speelt die track: eerst { vraag: true }, een tweede keer binnen 3 s
+     * laadt (zoals de library zelf). Via laden.laadLibrary, dus in het handelingenlog.
+     */
+    laad: (nr, track) => {
+      const id = Object.keys(engine.decks ?? {})[Number(nr) - 1];
+      const d = id && engine.decks[id];
+      if (!d || !track?.id || !ctx.laden?.laadLibrary) return { ok: false };
+      const sleutel = `${nr}:${track.id}`;
+      if (d.playing && !(laadVraag?.s === sleutel && nu() - laadVraag.t < 3000)) { laadVraag = { s: sleutel, t: nu() }; return { vraag: true }; }
+      laadVraag = null;
+      ctx.laden.laadLibrary(id, track).catch((e) => meld?.(`laden: ${e.message}`, 'fout'));
+      return { ok: true };
+    },
     /** De klok van dit venster en de audioklok, voor de proef (werk-ipad.mjs). */
     klok: () => ({ perf: performance.now(), ctx: engine.ctx?.currentTime ?? null }),
   };
@@ -241,13 +281,13 @@ export default async function opzet(ctx) {
       badgesNu();
       for (const id of ids) {
         const m = metaOf(id);
-        labels[id] = { type: m?.type ?? null, label: m?.label ?? null, kort: labelVan(id) };
+        labels[id] = { type: m?.type ?? null, label: m?.label ?? null, kort: labelVan(id), naam: naamVan(id) };
         const b = badgeIndex.get(id);
         if (b) badges[id] = b;
       }
       const k = kaart();
       const inhoud = w ? { ...w, vars: varsNu().v, labels, badges, kaart: k } : null;
-      return { sleutel: `${w?.naam}:${w?.deel}:${w?.versie}:${varsNu().s}:${badgeVersie}:${k?.sleutel}`, w: inhoud };
+      return { sleutel: `${w?.naam}:${w?.deel}:${w?.versie}:${varsNu().s}:${badgeVersie}:${k?.sleutel}:${labelSleutelNu()}`, w: inhoud };
     },
   };
   /** De zender alleen met een werkruimte: met `standaard` geen timer, geen fetch. */
@@ -268,7 +308,8 @@ export default async function opzet(ctx) {
     const w = werk();
     const vaknaam = !naam || naam === 'standaard' || !P ? null : P.vakkenVan(def, 'hoofd')[0] ?? null;
     const { soort, id } = P ? P.vakSoort(vaknaam) : { soort: null, id: null };
-    const pdef = soort === 'paneel' ? w?.def?.panelen?.[id] ?? null : null;
+    const pdef = soort === 'paneel' ? panelenNu()[id] ?? null
+      : soort === 'bouwsteen' ? P.bouwsteenDef(id, { bestaat: (a) => !!metaOf(a), vars: varsNu().v }) : null;
     const sleutel = `${vaknaam}:${pdef ? JSON.stringify(pdef) : ''}`;
     if (vak?.sleutel === sleutel) return;
     vak?.stop();
@@ -280,7 +321,7 @@ export default async function opzet(ctx) {
     if (soort === 'uitlijn') {
       const u = globalThis.varveUitlijn?.toonVak?.(vakEl, vaknaam);
       if (u) stop = () => u.stop();
-    } else if (soort === 'paneel' && pdef) {
+    } else if ((soort === 'paneel' || soort === 'bouwsteen') && pdef) {
       const p = new P.VrijPaneel(vakEl, pdef, mixerBron, { modus: 'mixer', id, knobVan });
       bind(vakEl);
       const weg = ctx.renderloop.stap('werkvak-paneel', () => p.teken());
@@ -299,6 +340,10 @@ export default async function opzet(ctx) {
     vakEl.hidden = false;
     vak = { sleutel, stop };
   }
+  // De pagina gaat weg (sluiten, herladen): de zender zegt de kijkers nog 'weg'.
+  window.addEventListener('pagehide', () => { zender?.stop(); zender = null; });
+  window.addEventListener('pageshow', (e) => { if (e.persisted) volgZender(); });   // terug uit de bfcache
+
   const w0 = werk();
   /** Het werkvak en de zender zoals de werkruimte van NU ze wil (ook als het event al voorbij is). */
   const volg = (naam = werk()?.naam, def = werk()?.deelDef?.()) => {

@@ -226,14 +226,40 @@ export function vakkenVan(deelDef, scherm) {
   return Array.isArray(s.vakken) ? s.vakken : [];
 }
 
-/** Een vaknaam ontleed: { soort: 'uitlijn'|'paneel'|'kaart'|'stand'|'secties'|null, id }. Puur. */
+/** De bouwstenen (vrij.js BOUWSTENEN): hier alleen hun namen, zodat dit bestand puur en zonder imports blijft. */
+export const BOUWSTEEN_NAMEN = ['fx', 'strip', 'mixer', 'stems', 'master', 'sampler'];
+
+/**
+ * Een vaknaam ontleed: { soort: 'uitlijn'|'paneel'|'kaart'|'stand'|'secties'|'library'|'bouwsteen'|null, id }.
+ * Een bouwsteen mag een vaste track hebben: 'strip:3'. Puur.
+ */
 export function vakSoort(naam) {
   if (typeof naam !== 'string') return { soort: null, id: null };
+  const b = /^([a-z]+)(?::[1-8])?$/.exec(naam);
+  if (b && BOUWSTEEN_NAMEN.includes(b[1])) return { soort: 'bouwsteen', id: naam };
   if (naam === 'uitlijn' || naam.startsWith('uitlijn-') || naam.startsWith('uitlijn:')) return { soort: 'uitlijn', id: naam };
   const m = /^paneel:([a-z0-9-]+)$/.exec(naam);
   if (m) return { soort: 'paneel', id: m[1] };
-  if (['kaart', 'stand', 'secties'].includes(naam)) return { soort: naam, id: naam };
+  if (['kaart', 'stand', 'secties', 'library'].includes(naam)) return { soort: naam, id: naam };
   return { soort: null, id: naam };
+}
+
+/**
+ * BEDIENEN VAN BUITEN DE MAC (voor S8, na W1): de vorm van één invoke van een paneel, en wat de
+ * mixer terugzegt. In dit spoor bestaat er GEEN route die dit vervoert (de iPad kijkt); S8 zet
+ * `ServerVerbinding.zetSchrijver(fn)` en een route, en de mixer voert het uit (docs/werkruimte/S7.md §6).
+ *   invoke   { t: 'invoke', id, v, druk: 'aan'|'los'|null, seq, scherm }   v: 0..1 of een boolean (regel 2)
+ *   antwoord { t: 'antwoord', seq, ok, reden? }
+ * `druk`: 'aan' bij indrukken, 'los' bij loslaten (de mixer laat ALLES los wat 'aan' bleef als het
+ * scherm wegvalt); null voor een waarde. `seq` loopt per scherm op (tegen dubbel).
+ */
+export function invokeBericht({ id, v, druk = null, seq, scherm }) {
+  return { t: 'invoke', id, v: typeof v === 'number' ? rond(v) : !!v, druk: druk === 'aan' || druk === 'los' ? druk : null, seq, scherm };
+}
+export function isInvoke(b) {
+  return !!b && b.t === 'invoke' && typeof b.id === 'string' && /^[\w.-]{1,120}$/.test(b.id)
+    && (typeof b.v === 'boolean' || (typeof b.v === 'number' && b.v >= 0 && b.v <= 1))
+    && [null, 'aan', 'los'].includes(b.druk ?? null) && Number.isSafeInteger(b.seq) && typeof b.scherm === 'string';
 }
 
 /** De bytes van een bericht zoals het over de lijn gaat (UTF-8). */

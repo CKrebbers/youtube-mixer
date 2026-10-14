@@ -23,6 +23,7 @@ import { MAX_POST, BUNDEL_MS, KLOK_MS, KLOK_SPRONG_MS, PING_RONDJES, rond, reads
 import { leesWeg } from '../lib/antwoord.js';
 
 export const VRAAG_MS = 1000;
+const encoder = typeof TextEncoder === 'function' ? new TextEncoder() : null;
 export const PING_MS = 10000;
 /** Een klokbericht hooguit zo vaak (alleen als de audioklok verspringt; anders 1×/s). */
 export const KLOK_MIN_MS = 100;
@@ -47,11 +48,12 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
 
   const post = async (berichten) => {
     const body = JSON.stringify({ tab, berichten });
-    if (body.length > MAX_POST) {
+    const bytes = encoder ? encoder.encode(body).length : body.length * 3;   // de server telt bytes (é, emoji)
+    if (bytes > MAX_POST) {
       // De server breekt dit af; elke seconde opnieuw proberen helpt niet. Eén melding.
       stats.teGroot++;
-      if (stats.teGroot === 1) meld?.(`schermen: wat de mixer naar de iPad stuurt is te groot (${Math.round(body.length / 1024)} kB, hooguit ${MAX_POST / 1024} kB): minder panelen of kortere`);
-      throw new Error('te groot');
+      if (stats.teGroot === 1) meld?.(`schermen: wat de mixer naar de iPad stuurt is te groot (${Math.round(bytes / 1024)} kB, hooguit ${MAX_POST / 1024} kB): minder panelen of kortere`);
+      const f2 = new Error('te groot'); f2.teGroot = true; throw f2;
     }
     stats.bytes += body.length;
     const r = await f('/api/paneel/van-mixer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
@@ -179,10 +181,12 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
       kijkers = d.kijkers ?? 0;
       if (d.genegeerd) { kijkers = 0; laatstGevraagd = nu(); }   // een ander tabblad telt nog: terug naar 1×/s vragen
       if (d.vers === false || d.genegeerd) moetStand = true;
-    } catch (_) {
-      // De server is weg (of antwoordt raar): terug naar 1×/s vragen, en straks eerst een stand.
+    } catch (err) {
       stats.fouten++;
       kijkers = 0; moetStand = true; laatstGevraagd = nu();
+      // Te groot: de server is er gewoon; pas over 5 s opnieuw proberen (de melding kwam al).
+      if (err?.teGroot) { laatstGevraagd = nu() + 4000; return; }
+      // De server is weg (of antwoordt raar): terug naar 1×/s vragen, en straks eerst een stand.
       // Een server die terugkomt is een nieuw proces met een eigen klok: eerst opnieuw pingen.
       verschil = null; verstuurd = null;
     } finally { bezig = false; }
@@ -196,6 +200,16 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
     /** Een action liep (bijInvoke): meegeven als hij in een paneel staat (voor het oplichten). */
     geraakt(id) { if (kijkers > 0 && bron.nodig().has(id)) geraakt.add(id); },
     tik,
-    stop() { ci(timer); },
+    /**
+     * Stoppen (terug naar standaard, de pagina gaat weg): als er iemand keek, nog één 'weg', zodat
+     * de iPad de oude stand niet vasthoudt. keepalive: hij gaat ook nog als de pagina sluit.
+     */
+    stop() {
+      ci(timer);
+      if (kijkers > 0 && isEerste()) {
+        try { f('/api/paneel/van-mixer', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tab, berichten: [{ t: 'weg' }] }) }).then(leesWeg, () => {}); } catch (_) {}
+      }
+      kijkers = 0;
+    },
   };
 }

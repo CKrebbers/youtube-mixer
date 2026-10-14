@@ -82,7 +82,26 @@ console.log('het protocol (puur)');
     && P.vakkenVan({ schermen: { ipad: { vakken: ['kaart'] } } }, 'ipad').join() === 'kaart' && P.vakkenVan(null, 'ipad').length === 0);
   const tl = P.tijdlijnKlein({ segId: 3, gridVersie: 1, T: 1, P: 2, R: 1, loop: { start: 1, end: 2, x: 9 }, rem: null, vorig: null, speelt: true, wacht: false, remt: false, rate: 1 });
   ok('tijdlijnKlein: vaste vorm, sleutel op segId/gridVersie/wacht/rem', tl.loop.x === undefined && P.tijdlijnSleutel(tl) === '3:1:0:0');
+  const inv = P.invokeBericht({ id: 'track.1.filter', v: 0.123456, seq: 3, scherm: 'ipad' });
+  ok('invoke voor S8: vorm, afgerond, gecontroleerd', inv.t === 'invoke' && inv.v === 0.1235 && inv.druk === null && P.isInvoke(inv)
+    && P.isInvoke(P.invokeBericht({ id: 'track.1.kill.low', v: true, druk: 'aan', seq: 4, scherm: 'ipad' }))
+    && !P.isInvoke({ ...inv, v: 2 }) && !P.isInvoke({ ...inv, id: 'a b' }) && !P.isInvoke({ ...inv, seq: 1.5 }) && !P.isBericht(inv));
+  ok('vakSoort: bouwstenen en library', P.vakSoort('fx').soort === 'bouwsteen' && P.vakSoort('strip:3').soort === 'bouwsteen' && P.vakSoort('library').soort === 'library' && P.vakSoort('strip:9').soort === null);
   ok('grootte: bytes in UTF-8', P.grootte({ t: '€' }) === JSON.stringify({ t: '€' }).length + 2);
+}
+
+// ---- de verbinding van de iPad: kijken, tot S8 een schrijver zet -----------------------------------
+console.log('\nde ServerVerbinding: zonder schrijver geen invoke');
+{
+  const { ServerVerbinding } = await import('../src/paneel/verbinding.js');
+  const v = new ServerVerbinding({ ES: class {}, fetch: async () => ({ ok: false, json: async () => null }) });
+  ok('zonder schrijver: geen invoke, kanBedienen false (het paneel kijkt)', typeof v.invoke !== 'function' && !v.kanBedienen);
+  const uit = [];
+  v.zetSchrijver((b) => uit.push(b));
+  v.invoke('track.1.kill.low', true); v.invoke('track.1.kill.low', false); v.invoke('track.1.filter', 0.5);
+  ok('met een schrijver (S8): invoke-berichten met druk aan/los en een oplopende seq', v.kanBedienen && uit.map((b) => `${b.druk}:${b.seq}`).join() === 'aan:1,los:2,null:3' && uit.every(P.isInvoke));
+  v.zetSchrijver(null);
+  ok('schrijver weg: weer alleen kijken', typeof v.invoke !== 'function' && !v.kanBedienen);
 }
 
 // ---- 2. de relais ------------------------------------------------------------------------------
@@ -135,12 +154,22 @@ console.log('\nde relais (server/paneel.js) met nep-antwoorden');
   const kw = nepRes();
   rel2.kijk(null, kw);
   rel2.vanMixer({ tab: 'm', berichten: [{ t: 'stand', reads: { a: 1 } }] });
-  klok += 1000; hbFn();
-  ok('de mixer zendt nog (< 3 s): alleen hb', kw.berichten().map((b) => b.t).join() === 'stand,hb' && rel2.vers);
-  klok += 3500; hbFn();
-  ok('de mixer zegt 3 s niets: weg, en niet meer vers', kw.berichten().some((b) => b.t === 'weg') && !rel2.vers);
+  klok += 60000; hbFn();
+  ok('de mixer zegt een minuut niets (een verborgen tabblad: 1 timer per minuut): nog geen weg', kw.berichten().map((b) => b.t).join() === 'stand,hb' && rel2.vers);
+  klok += 11000; hbFn();
+  ok('na 70 s (gecrasht): weg, en niet meer vers', kw.berichten().some((b) => b.t === 'weg') && !rel2.vers);
   hbFn();
   ok('… één keer', kw.berichten().filter((b) => b.t === 'weg').length === 1);
+  rel2.vanMixer({ tab: 'n', berichten: [{ t: 'stand', reads: { a: 2 } }] });
+  rel2.vanMixer({ tab: 'n', berichten: [{ t: 'weg' }] });
+  ok('de mixer zegt zelf weg (standaard, tabblad dicht): meteen door naar de kijkers, niet meer vers', kw.berichten().filter((b) => b.t === 'weg').length === 2 && !rel2.vers);
+  const r5 = rel2.vanMixer({ tab: 'p', berichten: [{ t: 'stand', reads: { a: 3 } }] });
+  ok('… en een ander tabblad mag meteen overnemen', !r5.genegeerd && rel2.tab === 'p');
+  const a1 = nepRes(), a2 = nepRes();
+  rel2.kijk(null, a1, { pagina: 'pagina0001' });
+  const n0 = rel2.aantal;
+  rel2.kijk(null, a2, { pagina: 'pagina0001' });
+  ok('dezelfde pagina verbindt opnieuw: zijn vorige verbinding eruit (geen stapel dode kijkers)', a1.dicht && rel2.aantal === n0);
   rel2.sluit();
 }
 
@@ -219,8 +248,10 @@ console.log('\nde zender van de mixer (live-zender.js) met nep-fetch en nep-time
   const groot = Object.fromEntries(Array.from({ length: 4000 }, (_, i) => [`track.1.iets.lang.genoeg.${i}`, 0.123456]));
   const zt = startLiveZender({ bron: groteBron, isEerste: () => true, tab: 'tab-3', fetch: fetchNep, nu: () => nu, setInterval: () => 3, clearInterval: () => {}, ctx: () => ctx, meld: (t) => meldingen.push(t) });
   const nt = verzoeken.length;
-  for (let i = 0; i < 150; i++) { nu += 20; await zt.tik(); }
-  ok('een stand boven 64 kB: niet verstuurd, één melding', zt.stats.teGroot >= 2 && meldingen.length === 1 && !verzoeken.slice(nt).some((v) => v.methode === 'POST'));
+  for (let i = 0; i < 600; i++) { nu += 20; await zt.tik(); }
+  const pings = verzoeken.slice(nt).filter((v) => v.url.endsWith('/ping')).length;
+  ok(`een stand boven 64 kB: niet verstuurd, één melding, pas na 5 s opnieuw (${zt.stats.teGroot} pogingen in 12 s, ${pings} pings: de gewone 1×/10 s, niet elke seconde)`,
+    zt.stats.teGroot >= 2 && zt.stats.teGroot <= 3 && meldingen.length === 1 && pings <= 16 && !verzoeken.slice(nt).some((v) => v.methode === 'POST'));
   zt.stop();
   // De server valt weg: terug naar 1×/s, en daarna eerst een stand.
   weg = true;
@@ -238,7 +269,12 @@ console.log('\nde zender van de mixer (live-zender.js) met nep-fetch en nep-time
   await tik(100);
   ok('geen kijker meer: geen POST meer', posts().length === n3);
   ok('nooit twee verzoeken tegelijk (bezig)', typeof tikFn === 'function');
+  const nStop = verzoeken.length;
+  kijkers = 1; await tik(60);
   z.stop();
+  await new Promise((r) => setTimeout(r, 10));
+  const laatste = verzoeken.slice(nStop).filter((v) => v.methode === 'POST').at(-1);
+  ok('stop() met een kijker: nog één weg', laatste?.body.berichten.length === 1 && laatste.body.berichten[0].t === 'weg');
 }
 
 // ---- 4. een eigen server --------------------------------------------------------------------

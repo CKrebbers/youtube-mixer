@@ -54,6 +54,10 @@ export const PROEF = {
       'mac-2': { vakken: ['uitlijn', 'paneel:vier'] },
       ipad: { vakken: ['uitlijn', 'secties', 'paneel:vier'] } } },
     kaal: { label: 'KAAL', kleur: 'grijs', schermen: { hoofd: { werkvak: null } } },
+    fx: { label: 'FX', kleur: 'violet', schermen: {
+      hoofd: { werkvak: 'fx' },
+      'mac-2': { vakken: ['paneel:xy', 'fx', 'mixer', 'library'] },
+      ipad: { vakken: ['paneel:xy', 'fx:1', 'master'] } } },
   },
   panelen: {
     vier: { titel: 'VIER', items: [
@@ -63,6 +67,11 @@ export const PROEF = {
       { soort: 'schuif', action: 'track.2.fader' },
       { soort: 'lamp', action: 'track.{focus}.sync' },
       { soort: 'draai', action: 'bestaat.niet' },
+    ] },
+    // VOORBEELD van een xy-pad (Clay kiest zelf de assen): x = plek 1 van het rack, y = de echo-send,
+    // aanraken = plek 1 vol open (worp), loslaten = terug naar de stand van vóór het aanraken.
+    xy: { titel: 'XY (voorbeeld)', items: [
+      { soort: 'xy', action: 'track.{focus}.fx.knob.1', y: 'track.{focus}.send.a', druk: 'track.{focus}.fx.knob.2.hold', los: 'terug' },
     ] },
   },
   schermen: { 'mac-2': { soort: 'venster', plek: 'onthouden' }, ipad: { soort: 'ipad' } },
@@ -299,7 +308,7 @@ async function proef() {
     await h.ev(W, `(() => { const it = window.paneel.vakken[0].paneel.items[0]; window.__w = { it, sinds: null, gezien: null, start: it.waarde, licht: null, uit: null, t0: 0 };
       (function kijk() { const w = window.__w;
         if (w.sinds !== null && w.gezien === null && it.waarde !== w.start) { w.gezien = window.__fr; w.licht = it.el.classList.contains('vp-geraakt'); }
-        if (w.gezien !== null && w.uit === null && !it.el.classList.contains('vp-geraakt')) w.uit = performance.now() - w.t0;
+        if (w.gezien !== null && w.uit === null) { if (!it.el.classList.contains('vp-geraakt')) w.uit = performance.now() - w.t0; else w.nogAan = performance.now() - w.t0; }
         requestAnimationFrame(kijk); })(); return true; })()`);
     const voor = await h.ev(M, "window.varvePaneel.read('track.1.filter')");
     const r1 = await h.ev(W, `(async () => {
@@ -307,10 +316,13 @@ async function proef() {
       o.__apc(0xB0, 48, 64); o.__apc(0xB0, 48, 80); w.sinds = window.__fr; w.t0 = performance.now();
       for (let i = 0; i < 40 && w.gezien === null; i++) await new Promise((r) => requestAnimationFrame(r));
       const t = performance.now(); while (w.uit === null && performance.now() - t < 1500) await new Promise((r) => requestAnimationFrame(r));
-      return { beelden: w.gezien === null ? null : w.gezien - w.sinds, read: o.varvePaneel.read('track.1.filter'), licht: w.licht, uit: w.uit }; })()`);
+      return { beelden: w.gezien === null ? null : w.gezien - w.sinds, read: o.varvePaneel.read('track.1.filter'), licht: w.licht, uit: w.uit, nogAan: w.nogAan }; })()`);
     // __fr telt aan het begin van elk beeld: 0 = zichtbaar in het eerstvolgende beeld, 1 = het beeld daarna.
     ok('een APC-draai is binnen 1 beeld zichtbaar in werk.html', r1.beelden !== null && r1.beelden <= 1, `${r1.beelden === 0 ? 'in het eerstvolgende beeld' : `${r1.beelden} beeld(en) later`}, filter ${voor?.toFixed?.(3)} -> ${r1.read?.toFixed?.(3)}`);
-    ok('oplichten: in hetzelfde beeld aan, na ~300 ms weer uit', r1.licht === true && r1.uit >= 280 && r1.uit < 450, `aan ${r1.licht}, uit na ${r1.uit?.toFixed?.(0)} ms`);
+    // Uit in het eerste beeld na 300 ms: het laatste beeld met licht lag vóór 300 ms (de beelden zelf
+    // kunnen in deze container ver uit elkaar liggen).
+    ok('oplichten: in hetzelfde beeld aan, in het eerste beeld na 300 ms weer uit', r1.licht === true && r1.uit >= 280 && r1.nogAan < 320,
+      `aan ${r1.licht}, laatste beeld met licht ${r1.nogAan?.toFixed?.(0)} ms, uit ${r1.uit?.toFixed?.(0)} ms`);
     const badge = await h.ev(W, "window.paneel.vakken[0].paneel.items[0].badgeEl.textContent");
     ok('badge: welke APC-knob ernaar wijst', /^APC /.test(badge), badge);
     const pBadge = await h.ev(W, "document.querySelector('.vp-badge').textContent");
@@ -319,6 +331,9 @@ async function proef() {
     // Een klik op de knop track.1.kill.low: de read in de mixer, binnen 1 beeld, en in het log.
     await h.ev(M, "(async () => { await window.engine.resume(); if (!window.logboek.log.sessie) { window.varvePaneel.invoke('log.toggle', true); window.varvePaneel.invoke('log.toggle', false); } return true; })()");
     await h.totdat(M, 'window.logboek.log.sessie', 5000);
+    // Wat het handelingenlog schrijft, ook als hij zijn buffer intussen naar de server spoelde.
+    await h.ev(M, `(() => { const l = window.logboek.log; const o = l.neem.bind(l); window.__log = [];
+      l.neem = (a, w, laat) => { window.__log.push(JSON.stringify([a, w ?? null])); return o(a, w, laat); }; return true; })()`);
     const midden = async (sel) => h.ev(W, `(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     const muis = (type, p) => h.cdp('Input.dispatchMouseEvent', { type, x: p.x, y: p.y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1, pointerType: 'mouse' }, W);
     const k1 = await midden('.vp-item:nth-child(2) .vp-knop');
@@ -328,7 +343,7 @@ async function proef() {
     const killNa = await h.ev(W, "({ v: window.opener.varvePaneel.read('track.1.kill.low'), beelden: window.__fr - window.__f0 })");
     await muis('mouseReleased', k1);
     ok('een klik verandert de read in de mixer binnen 1 beeld', killVoor !== killNa.v && killNa.beelden <= 1, `${killVoor} -> ${killNa.v}, ${killNa.beelden} beeld(en)`);
-    const log1 = await h.ev(M, "window.logboek.log.buffer.join('\\n')");
+    const log1 = await h.ev(M, "window.__log.join('\\n')");
     ok('… en staat in het handelingenlog', /"track\.1\.kill\.low",true/.test(log1) && /"track\.1\.kill\.low",false/.test(log1));
 
     // Loslaten naar dezelfde action, ook na een deelwissel en een focuswissel tussendoor.
@@ -340,13 +355,54 @@ async function proef() {
     const focusNu = await h.ev(M, 'window.engine.focus');
     await muis('mouseReleased', k2);
     await wacht(100);
-    const na = await h.ev(M, "({ k1: window.varvePaneel.read('track.1.kill.high'), k2: window.varvePaneel.read('track.2.kill.high'), log: window.logboek.log.buffer.join('\\n'), deel: window.werk.deel })");
+    const na = await h.ev(M, "({ k1: window.varvePaneel.read('track.1.kill.high'), k2: window.varvePaneel.read('track.2.kill.high'), log: window.__log.join('\\n'), deel: window.werk.deel })");
     ok('loslaten na een deel- en focuswissel: naar dezelfde action (track 1), track 2 onaangeroerd',
       tijdens === 1 && focusNu === 'B' && na.deel === 'uitlijn' && na.k1 === 0 && na.k2 === 0
       && /"track\.1\.kill\.high\.hold",true/.test(na.log) && /"track\.1\.kill\.high\.hold",false/.test(na.log) && !/track\.2\.kill\.high\.hold/.test(na.log),
       `tijdens ${tijdens}, focus ${focusNu}, deel ${na.deel}, na ${na.k1}/${na.k2}`);
+    // Nog eens, maar nu verdwijnt het paneel van mac-2 terwijl de knop vastzit (deel kaal: niets op mac-2).
+    await h.ev(M, "window.varvePaneel.invoke('werk.deel.mix', true), window.varvePaneel.invoke('werk.deel.mix', false), true");
+    await h.totdat(W, "document.getElementById('wp-deel').textContent === 'MIX' && document.querySelectorAll('.vp-item').length", 5000);
+    const k3 = await midden('.vp-item:nth-child(3) .vp-knop');
+    await muis('mousePressed', k3);
+    const tijdens3 = await h.ev(M, "window.varvePaneel.read('track.2.kill.high')");
+    await h.ev(M, "window.varvePaneel.invoke('werk.deel.kaal', true), window.varvePaneel.invoke('werk.deel.kaal', false), true");
+    await h.totdat(W, "!document.querySelector('.vp-item')", 5000);
+    const na3 = await h.ev(M, "({ v: window.varvePaneel.read('track.2.kill.high'), log: window.__log.join('\\n') })");
+    await muis('mouseReleased', k3);
+    ok('het paneel verdwijnt van mac-2 terwijl de knop vastzit: hij laat los naar zijn action', tijdens3 === 1 && na3.v === 0 && /"track\.2\.kill\.high\.hold",false/.test(na3.log), `tijdens ${tijdens3}, na ${na3.v}`);
+    await h.ev(M, "window.varvePaneel.invoke('werk.deel.uitlijn', true), window.varvePaneel.invoke('werk.deel.uitlijn', false), true");
     ok('werk.html volgt het deel (uitlijn: de uitlijnweergave)', await h.totdat(W, "document.getElementById('wp-deel').textContent === 'UITLIJN' && document.querySelector('.wp-vak-uitlijn .ul')", 5000) !== false);
     await foto(W, 'werk-scherm-mac2.png');
+
+    // Deel FX: bouwstenen (fx, mixer, library) en een xy-pad met druk en los (de ruwe velden).
+    console.log('\ndeel FX: bouwstenen en de xy-pad');
+    await h.ev(M, "window.varvePaneel.invoke('werk.deel.fx', true), window.varvePaneel.invoke('werk.deel.fx', false), true");
+    ok('het werkvak toont de bouwsteen fx (de knoppen bij de renderloop)', await h.totdat(M, "window.varveSchermen.werkvak()?.startsWith('fx:') && window.varveSchermen.aangemeld().groepen === 1", 6000) !== false,
+      JSON.stringify(await h.ev(M, 'window.varveSchermen.aangemeld()')));
+    ok('mac-2: xy, fx, mixer en library', await h.totdat(W, "document.querySelector('.wp-vak-paneel .vp-xy') && document.querySelectorAll('.wp-vak-bouwsteen').length === 2 && document.querySelector('.wp-vak-library .wp-lib')", 8000) !== false);
+    const nFx = await h.ev(W, "document.querySelector('.wp-vak-bouwsteen .vp').querySelectorAll('.vp-draai').length");
+    ok('fx: de acht plekken en mix (en superknoppen als S4 ze heeft)', nFx >= 9, `${nFx} draaiknoppen`);
+    const lib = await h.ev(W, "document.querySelector('.wp-lib').textContent");
+    ok('library: de lijst (leeg in deze proef) en een zoekveld', /niets gevonden/.test(lib) && !!(await h.ev(W, "!!document.querySelector('.wp-lib-zoek')")));
+    const f = await h.ev(M, 'window.engine.focus === "B" ? 2 : 1');
+    const voorXy = await h.ev(M, `[window.varvePaneel.read('track.${f}.fx.knob.1'), window.varvePaneel.read('track.${f}.send.a')]`);
+    const vlak = await midden('.vp-vlak');
+    await muis('mousePressed', { x: vlak.x - 40, y: vlak.y - 40 });
+    await h.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: vlak.x + 50, y: vlak.y - 50, button: 'left', buttons: 1 }, W);
+    await h.ev(W, 'new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))');
+    const tijdensXy = await h.ev(M, `[window.varvePaneel.read('track.${f}.fx.knob.1'), window.varvePaneel.read('track.${f}.send.a'), window.varvePaneel.read('track.${f}.fx.knob.2.hold')]`);
+    await muis('mouseReleased', { x: vlak.x + 50, y: vlak.y - 50 });
+    await wacht(100);
+    const naXy = await h.ev(M, `[window.varvePaneel.read('track.${f}.fx.knob.1'), window.varvePaneel.read('track.${f}.send.a'), window.varvePaneel.read('track.${f}.fx.knob.2.hold')]`);
+    const logXy = await h.ev(M, "window.__log.join('\\n')");
+    ok('xy: slepen zet x en y (over de bus, in het log), aanraken = de worp aan',
+      Math.abs(tijdensXy[0] - voorXy[0]) > 0.1 && Math.abs(tijdensXy[1] - voorXy[1]) > 0.1 && tijdensXy[2] === 1
+      && new RegExp(`"track\\.${f}\\.fx\\.knob\\.2\\.hold",true`).test(logXy) && new RegExp(`"track\\.${f}\\.send\\.a",`).test(logXy),
+      `${JSON.stringify(voorXy)} -> ${JSON.stringify(tijdensXy)}`);
+    ok('xy: loslaten = terug naar vóór het aanraken, de worp los', Math.abs(naXy[0] - voorXy[0]) < 0.01 && Math.abs(naXy[1] - voorXy[1]) < 0.01 && naXy[2] === 0,
+      JSON.stringify(naXy));
+    await foto(W, 'werk-scherm-fx.png');
 
     // Plaatsing: het venster schrijft zijn plek (elke 2 s), de mixer leest hem bij "open schermen".
     ok('het venster onthoudt zijn plek (localStorage varve.scherm.mac-2)', await h.totdat(M, "JSON.parse(localStorage.getItem('varve.scherm.mac-2') || 'null')?.wW > 0", 5000) !== false);
@@ -420,6 +476,6 @@ async function meet() {
   return uit;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   (process.argv.includes('--meet') ? meet().then(() => process.exit(0)) : proef()).catch((e) => { console.error(e); process.exit(1); });
 }

@@ -52,6 +52,117 @@ export function vul(action, vars) {
   return a.includes('{') ? null : a;
 }
 
+// ---- bouwstenen: elk onderdeel als paneel ------------------------------------------------------
+
+const TRACKS = ['1', '2', '3', '4', '5', '6', '7', '8'];
+const STEMS = ['vocals', 'drums', 'bass', 'other', 'inst'];
+const wie = (t) => (t === '{focus}' ? 'focus' : t);
+/**
+ * De BOUWSTENEN (Clay, 14 okt: "elk onderdeel als paneel op elk scherm"): een vaknaam -> een
+ * paneel als DATA, met dezelfde items als een vrij paneel. Geen tweede weergave: een bouwsteen is
+ * een paneel dat VARVE zelf meebrengt. `:<n>` = een vaste track in plaats van de focus
+ * (`strip:3`). Wat er niet bestaat (geen superknoppen, geen stems) laat `bestaat` weg, zonder melding.
+ * De library is een eigen vak (een lijst, geen knoppen) en de kaart en de uitlijn ook: zie paneel.js.
+ */
+export const BOUWSTENEN = {
+  fx: (t) => ({ titel: `FX ${wie(t)}`, items: [
+    { soort: 'rij', herhaal: TRACKS, item: { soort: 'draai', action: `track.${t}.fx.knob.{k}` } },
+    { soort: 'draai', action: `track.${t}.fx.mix`, label: 'mix' },
+    { soort: 'knop', action: `track.${t}.fx.bypass`, label: 'aan/uit' },
+    { soort: 'knop', action: `track.${t}.rack.prev`, label: '◀ rack' },
+    { soort: 'knop', action: `track.${t}.rack.next`, label: 'rack ▶' },
+    { soort: 'rij', herhaal: TRACKS, item: { soort: 'knop', action: `track.${t}.fx.knob.{k}.hold` } },
+    { soort: 'rij', herhaal: TRACKS, item: { soort: 'draai', action: 'super.{k}' } },
+  ] }),
+  strip: (t) => ({ titel: `STRIP ${wie(t)}`, items: [
+    ...['trim', 'high', 'mid', 'low', 'filter'].map((k) => ({ soort: 'draai', action: `track.${t}.${k}` })),
+    { soort: 'draai', action: `track.${t}.send.a`, label: 'echo' },
+    { soort: 'draai', action: `track.${t}.send.b`, label: 'galm' },
+    { soort: 'schuif', action: `track.${t}.fader` },
+    ...['low', 'mid', 'high'].map((b) => ({ soort: 'knop', action: `track.${t}.kill.${b}` })),
+    { soort: 'knop', action: `track.${t}.play.quant` },
+    { soort: 'knop', action: `track.${t}.sync` },
+    { soort: 'knop', action: `track.${t}.pfl` },
+  ] }),
+  mixer: () => ({ titel: 'MIXER', items: [
+    { soort: 'rij', herhaal: TRACKS, item: { soort: 'draai', action: 'track.{k}.filter' } },
+    { soort: 'rij', herhaal: TRACKS, item: { soort: 'schuif', action: 'track.{k}.fader' } },
+    { soort: 'schuif', action: 'mixer.xfader', label: 'crossfader' },
+    { soort: 'draai', action: 'mixer.master', label: 'master' },
+  ] }),
+  stems: (t) => ({ titel: `STEMS ${wie(t)}`, items: [
+    { soort: 'rij', herhaal: STEMS, item: { soort: 'knop', action: `track.${t}.stem.{k}.kill` } },
+    { soort: 'rij', herhaal: STEMS, item: { soort: 'draai', action: `track.${t}.stem.{k}.filter` } },
+    { soort: 'rij', herhaal: STEMS, item: { soort: 'draai', action: `track.${t}.stem.{k}.send.a` } },
+  ] }),
+  master: () => ({ titel: 'MASTER', items: [
+    { soort: 'rij', herhaal: TRACKS, item: { soort: 'draai', action: 'master.fx.knob.{k}' } },
+    { soort: 'draai', action: 'master.fx.mix', label: 'mix' },
+    { soort: 'knop', action: 'master.fx.bypass', label: 'aan/uit' },
+    { soort: 'knop', action: 'master.rack.prev', label: '◀ rack' },
+    { soort: 'knop', action: 'master.rack.next', label: 'rack ▶' },
+    { soort: 'draai', action: 'mixer.master', label: 'volume' },
+  ] }),
+  sampler: () => ({ titel: 'SAMPLER', items: [
+    { soort: 'rij', herhaal: TRACKS, item: { soort: 'knop', action: 'sampler.{k}' } },
+    { soort: 'knop', action: 'sampler.length.down', label: 'korter' },
+    { soort: 'knop', action: 'sampler.length.up', label: 'langer' },
+    { soort: 'draai', action: 'sampler.volume', label: 'volume' },
+  ] }),
+};
+
+/** 'fx', 'strip:3' … -> { soort, track } (track = '{focus}' of een nummer), of null. Puur. */
+export function bouwsteenVan(naam) {
+  const m = /^([a-z]+)(?::([1-8]))?$/.exec(typeof naam === 'string' ? naam : '');
+  if (!m || !Object.hasOwn(BOUWSTENEN, m[1])) return null;
+  return { soort: m[1], track: m[2] ?? '{focus}' };
+}
+
+/**
+ * Het paneel van een bouwsteen, als data. `bestaat(action)` (met de vars ingevuld) laat items weg
+ * die er niet zijn (geen superknoppen, geen stems op deze track): weglaten, niet grijs, want de
+ * bouwsteen is van VARVE, niet van Clay. Puur.
+ */
+export function bouwsteenDef(naam, { bestaat = null, vars = {} } = {}) {
+  const b = bouwsteenVan(naam);
+  if (!b) return null;
+  const def = BOUWSTENEN[b.soort](b.track);
+  if (!bestaat) return def;
+  const houd = (action) => { const a = vul(action, vars); return !a || bestaat(a); };
+  const items = [];
+  for (const it of def.items) {
+    if (it.soort === 'rij') {
+      const herhaal = it.herhaal.filter((k) => houd(it.item.action.replaceAll('{k}', k)));
+      if (herhaal.length) items.push({ ...it, herhaal });
+    } else if (houd(it.action)) items.push(it);
+  }
+  return { ...def, items };
+}
+
+/** Wat een xy-pad bij loslaten doet: blijven staan, naar het midden, of terug naar vóór het aanraken. */
+export const XY_LOS = ['blijf', 'midden', 'terug'];
+const ACTION = /^[\w.{}-]{1,120}$/;
+/**
+ * Een paneel met de extra velden uit de RUWE werkruimte (het model van S3 bewaart per item alleen
+ * soort, label, action, herhaal, item en tekst). Voor de xy-pad: `y` (de action op de y-as; anders
+ * `{as}` = 1/2), `druk` (een trigger zolang je aanraakt: `.hold` of een S4-druk), `los` (XY_LOS).
+ * Alleen als het model niets weggooide (zelfde aantal items), en alleen geldige waarden. Puur.
+ */
+export function metRuw(def, ruw) {
+  const items = def?.items;
+  const r = ruw?.items;
+  if (!Array.isArray(items) || !Array.isArray(r) || r.length !== items.length) return def;
+  return { ...def, items: items.map((it, i) => {
+    const x = r[i];
+    if (it.soort !== 'xy' || !x || typeof x !== 'object') return it;
+    const o = { ...it };
+    if (typeof x.y === 'string' && ACTION.test(x.y)) o.y = x.y;
+    if (typeof x.druk === 'string' && ACTION.test(x.druk)) o.druk = x.druk;
+    if (XY_LOS.includes(x.los)) o.los = x.los;
+    return o;
+  }) };
+}
+
 /** Een getal van een read: 0..1, of null. Een boolean telt als 0/1. */
 const getal = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'boolean' ? (v ? 1 : 0) : null);
 const klem = (v) => Math.min(1, Math.max(0, v));
@@ -150,7 +261,10 @@ export class VrijPaneel {
     this._varsSleutel = sleutel;
     for (const it of this.items) {
       if (it.soort === 'tekst') continue;
-      const acts = it.soort === 'xy' ? xyActions(it._ruw).map((a) => vul(a, vars)) : [vul(it._ruw, vars)];
+      const acts = it.soort === 'xy'
+        ? (it.y ? [it._ruw, it.y] : xyActions(it._ruw)).map((a) => vul(a, vars))
+        : [vul(it._ruw, vars)];
+      if (it.soort === 'xy') it.drukAction = it.druk ? vul(it.druk, vars) : null;
       const a = acts[0];
       it.actions = acts;
       if (a === it.action && !eerst) continue;
@@ -164,7 +278,7 @@ export class VrijPaneel {
         this.bron?.meld?.(`paneel ${this.id}: ${a ?? it._ruw} bestaat niet (grijs)`);
       }
       it.type = meta?.type ?? null;
-      const label = it.label ?? this.bron?.label?.(a) ?? meta?.label ?? a ?? it._ruw;
+      const label = this._labelVan(it, a, meta);
       if (it.labelEl.textContent !== label) it.labelEl.textContent = label;
       if (it.ctl?.tagName === 'BUTTON' && it.ctl.textContent !== label) it.ctl.textContent = label;
       const kleur = `s-${soortVan(a)}`;
@@ -180,12 +294,37 @@ export class VrijPaneel {
     return true;
   }
 
+  /** Eigen label > de naam van de plek (wat het rack er nu op zet) > beschrijf > meta.label. */
+  _labelVan(it, a, meta = a ? this.bron?.metaOf?.(a) : null) {
+    if (it.label) return it.label;
+    if (it.soort === 'xy') {
+      const n = (x) => (x ? this.bron?.naam?.(x) ?? this.bron?.label?.(x) ?? this.bron?.metaOf?.(x)?.label ?? x : '–');
+      return `${n(it.actions[0])} × ${n(it.actions[1])}`;
+    }
+    return (a && this.bron?.naam?.(a)) ?? this.bron?.label?.(a) ?? meta?.label ?? a ?? it._ruw;
+  }
+
+  /** Namen van plekken veranderen met het rack (een ander rack, een ander effect): alleen dan opnieuw. */
+  _labels() {
+    const s = this.bron?.labelSleutel?.() ?? null;
+    if (s === null || s === this._ls) return;
+    this._ls = s;
+    for (const it of this.items) {
+      if (it.soort === 'tekst' || !it.action) continue;
+      const label = this._labelVan(it, it.action);
+      if (it.labelEl.textContent !== label) it.labelEl.textContent = label;
+      if (it.ctl?.tagName === 'BUTTON' && it.ctl.textContent !== label) it.ctl.textContent = label;
+    }
+  }
+
   /**
    * Elk beeld: volgen (read), badges en oplichten. Alleen wat verandert wordt geschreven.
    * `nu` = de klok van de bron (bron.nu), anders performance.now() van dit document.
    */
   teken(nu = this.bron?.nu?.() ?? this.doc.defaultView?.performance?.now?.() ?? 0) {
     const nieuweActions = this._herlees();
+    this._labels();
+    this._spoel();
     // Badges alleen opnieuw als de bron zegt dat ze veranderden (mapjes, mapping, focus): op
     // mac-2 draait dit in de thread van de mixer, dus niets per beeld wat niet hoeft.
     const bs = this.bron?.badgeSleutel?.() ?? null;
@@ -269,6 +408,11 @@ export class VrijPaneel {
       return;
     }
     if (it.type !== 'value') return;
+    if (it.soort === 'xy') {
+      vast.voor = vast.actions.map((a) => (a ? getal(this.bron.read(a)) : null));
+      // Aanraken = ook een worp (de druk-action zolang de vinger erop staat).
+      if (it.drukAction && this.bron.metaOf?.(it.drukAction)) { vast.druk = it.drukAction; this.bron.invoke(vast.druk, true); }
+    }
     // De maat van het vlak: één keer bij het indrukken (geen opmaak lezen per beweging).
     if (it.soort === 'schuif' || it.soort === 'xy') vast.rect = (it.vlak ?? it.baan ?? it.el).getBoundingClientRect();
     this._vast.set(e.pointerId, vast);
@@ -286,15 +430,29 @@ export class VrijPaneel {
   _zetUit(vast, e) {
     const { it } = vast;
     if (it.soort === 'draai') {
-      const v = klem(vast.v0 + (vast.y0 - e.clientY) / (e.shiftKey ? 600 : 160));
-      this.bron.invoke(vast.action, v);
+      this._stuur(vast.action, klem(vast.v0 + (vast.y0 - e.clientY) / (e.shiftKey ? 600 : 160)));
     } else if (vast.rect && vast.rect.width > 0) {
       const x = klem((e.clientX - vast.rect.left) / vast.rect.width);
-      this.bron.invoke(vast.action, x);
+      this._stuur(vast.action, x);
       if (it.soort === 'xy' && vast.actions[1] && vast.rect.height > 0) {
-        this.bron.invoke(vast.actions[1], klem(1 - (e.clientY - vast.rect.top) / vast.rect.height));
+        this._stuur(vast.actions[1], klem(1 - (e.clientY - vast.rect.top) / vast.rect.height));
       }
     }
+  }
+
+  /**
+   * Waarden gaan hooguit één keer per beeld per action (de laatste wint): een vinger die over een
+   * xy-pad veegt geeft op een iPhone 120 pointermoves per seconde. `_spoel()` in teken() stuurt ze;
+   * loslaten spoelt eerst, dus de laatste stand gaat altijd mee.
+   */
+  _stuur(action, v) {
+    (this._wacht ??= new Map()).set(action, v);
+  }
+
+  _spoel() {
+    if (!this._wacht?.size || this.kijkt) return;
+    for (const [a, v] of this._wacht) this.bron.invoke(a, v);
+    this._wacht.clear();
   }
 
   _laat(e) {
@@ -302,7 +460,15 @@ export class VrijPaneel {
     if (!vast) return;
     this._vast.delete(e.pointerId);
     vast.it.el.classList.remove('vp-in');
+    this._spoel();
     if (vast.it.soort === 'knop') this.bron.invoke(vast.action, false);
+    if (vast.it.soort === 'xy') {
+      // Loslaten: blijven (standaard), naar het midden, of terug naar de stand van vóór het aanraken.
+      const los = vast.it.los ?? 'blijf';
+      if (los === 'midden') vast.actions.forEach((a) => { if (a) this.bron.invoke(a, 0.5); });
+      if (los === 'terug') vast.actions.forEach((a, i) => { if (a && vast.voor[i] !== null) this.bron.invoke(a, vast.voor[i]); });
+      if (vast.druk) this.bron.invoke(vast.druk, false);
+    }
   }
 
   /** Alles wat nog vastzit loslaten (het paneel gaat weg, de verbinding valt weg). */

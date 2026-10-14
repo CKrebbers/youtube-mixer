@@ -18,6 +18,12 @@ import { isBericht, pasToe, legeStand, alsBericht, MAX_STAND, grootte } from '..
  */
 export const HB_MS = 1000;
 export const TAB_STIL_MS = 3000;
+/**
+ * Zegt de mixer zo lang niets, dan is hij weg (gecrasht): 'weg' naar de kijkers. Ruim, want een
+ * verborgen tabblad krijgt van Chrome na 5 min nog maar 1 timer per minuut, en die mixer leeft
+ * gewoon. Een mixer die bewust stopt (terug naar standaard, het tabblad dicht) zegt zelf 'weg'.
+ */
+export const MIXER_WEG_MS = 70000;
 /** Hooguit zoveel kijkers tegelijk (een iPad, een tweede scherm, een proef); meer = de oudste eruit. */
 export const MAX_KIJKERS = 16;
 /** Een kijker die niet meer leest (de buffer loopt vol): weg, in plaats van geheugen vasthouden. */
@@ -59,6 +65,8 @@ export class PaneelRelais {
     this.tab = tab; this.tabT = nu;
     const door = [];
     for (const b of lijst) {
+      // De mixer stopt bewust (terug naar standaard, het tabblad gaat dicht): de stand klopt niet meer.
+      if (b.t === 'weg') { if (this.vers) { this.vers = false; door.push({ t: 'weg' }); } this.tabT = 0; continue; }
       if (!this.vers && b.t !== 'stand') continue;   // eerst een stand, anders klopt er niets
       pasToe(this.stand, b);
       if (b.t === 'stand') this.vers = true;
@@ -77,15 +85,19 @@ export class PaneelRelais {
    * stand als die vers is (anders komt hij zodra de mixer hem stuurt: die hoort in zijn
    * volgende antwoord dat er een kijker is).
    */
-  kijk(req, res, { scherm = null } = {}) {
-    // Vol: de OUDSTE kijker eruit (een iPad die wegviel zonder af te sluiten blijft anders
-    // minuten staan, en na een paar haperingen zou de iPad zelf buitengesloten zijn).
+  kijk(req, res, { scherm = null, pagina = null } = {}) {
+    // Dezelfde pagina die opnieuw verbindt (wifi haperde, de iPad kwam uit de slaap): zijn vorige
+    // verbinding eruit. Die is vaak dood zonder dat de server het weet (geen FIN); zo stapelen de
+    // kijkers niet op. Op de pagina-id, niet op het adres: via tailscale serve is dat altijd 127.0.0.1.
+    if (pagina) for (const k of this.kijkers) if (k.pagina === pagina) { this.kijkers.delete(k); try { k.res.end(); } catch (_) {} }
+    // Nog steeds vol (veel echte kijkers): de oudste eruit.
     while (this.kijkers.size >= MAX_KIJKERS) {
       const oudste = this.kijkers.values().next().value;
       this.kijkers.delete(oudste);
       try { oudste.res.end(); } catch (_) {}
     }
-    // Een dode verbinding (wifi weg, geen FIN) sneller merken.
+    // TCP-keepalive: helpt alleen op een stille socket; met hb elke seconde beslist de
+    // retransmissietime-out van het systeem. De pagina-id hierboven is wat echt opruimt.
     try { req?.socket?.setKeepAlive?.(true, 5000); } catch (_) {}
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -93,7 +105,7 @@ export class PaneelRelais {
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     });
-    const k = { res, scherm, sinds: this.klok() };
+    const k = { res, scherm, pagina, sinds: this.klok() };
     // retry: 1000 ms, zodat de pagina binnen 3 s terug is als de server terugkomt.
     res.write('retry: 1000\n\n');
     this.kijkers.add(k);
@@ -135,9 +147,9 @@ export class PaneelRelais {
     if (this._hb || !this._hbMs) return;
     this._hb = this._si(() => {
       if (!this.kijkers.size) { this._stopHb(); return; }
-      // Zegt de mixer TAB_STIL_MS niets meer (tabblad dicht, herladen, terug naar standaard,
-    // gecrasht), dan is de stand niet meer waar: de kijkers horen 'weg' en wachten op een nieuwe.
-    if (this.vers && this.klok() - this.tabT > TAB_STIL_MS) { this.vers = false; this._stuur([{ t: 'weg' }]); }
+      // Zegt de mixer MIXER_WEG_MS niets meer (gecrasht), dan is de stand niet meer waar: de
+    // kijkers horen 'weg' en wachten op een nieuwe.
+    if (this.vers && this.klok() - this.tabT > MIXER_WEG_MS) { this.vers = false; this._stuur([{ t: 'weg' }]); }
     this._stuur([{ t: 'hb', srvT: this.klok() }]);
     }, this._hbMs);
     this._hb?.unref?.();
