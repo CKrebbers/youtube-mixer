@@ -75,7 +75,16 @@ export class Knob {
 }
 
 
+/** Knoppen die al gebonden zijn: bind(root) van een paneel bindt een knop nooit twee keer. */
+const gebonden = new WeakSet();
+
+/**
+ * Bindt elke knop van soort "button" onder `root`. Geeft per knop een functie terug die hem
+ * loslaat als hij nog ingedrukt is (ontbind in vensters.js: een paneel dat verdwijnt terwijl je
+ * een knop vasthoudt, laat los naar de action van het indrukken; anders bleef hij hangen).
+ */
 export function bindButtons(root) {
+  const lossers = [];
   // ELKE knop van soort "button", ook zonder data-action: de spiegel van de APC
   // krijgt zijn actions pas als de mapping er is (spiegel.js zet), en die
   // wordt hieronder toch pas bij het indrukken gelezen. Met '[data-action]'
@@ -83,6 +92,8 @@ export function bindButtons(root) {
   // op onder de muis en deden niets (Clay, 5 okt: "heel veel knoppen zijn wel
   // in te klikken … maar ze werken niet").
   root.querySelectorAll('[data-kind="button"]').forEach((btn) => {
+    if (gebonden.has(btn)) return;
+    gebonden.add(btn);
     // De action wordt gelezen op het moment van indrukken, niet bij het
     // opstarten: een venster kan intussen een andere track tonen. Loslaten
     // gaat naar dezelfde action als indrukken, ook als het venster tussendoor
@@ -101,5 +112,7 @@ export function bindButtons(root) {
     const los = () => { if (ingedrukt) { invoke(ingedrukt, false); ingedrukt = null; } };
     btn.addEventListener('pointerup', los);
     btn.addEventListener('pointerleave', los);
+    lossers.push(los);
   });
+  return lossers;
 }

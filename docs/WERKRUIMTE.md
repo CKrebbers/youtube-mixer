@@ -1351,6 +1351,26 @@ headless browsercontext zonder opener), `docs/werkruimte/S7.md`.
   geen AudioContext, geen requestMIDIAccess, geen Web Lock; de mixer laadt `src/paneel/` niet.
 - Met `standaard`: `rijen.mjs`, `kijk.mjs`, `bovenbalk` ongewijzigd groen; het werkvak verborgen.
 
+**Gebouwd (14 okt, tak `werk/S7`, `docs/werkruimte/S7.md`, verslag `docs/verslagen/2026-10-14/werk-S7.md`):**
+het mechaniek zoals hierboven, als data; Clay bepaalt de indeling (geen standaardindeling, alleen
+een proefwerkruimte in de headless proeven). Wat afwijkt of erbij kwam:
+- De mixer laadt `src/paneel/` en de zender pas bij een werkruimte (niet `standaard`), dynamisch in de
+  aanhaker `schermen` (`regels-werk.test.mjs`). Zonder werkruimte: geen timer, geen fetch naar `/api/paneel/`.
+- Vakken op mac-2 en de iPad: `uitlijn…`, `paneel:<id>`, `kaart`, `stand`, `secties`; in het werkvak:
+  `uitlijn…`, `paneel:<id>`, `kaart`. `xy` stuurt twee actions via `{as}` (1 = links–rechts, 2 = onder–boven).
+- De server stuurt 1×/s een `hb`; de pagina toont de rode balk na 2,5 s stilte en verbindt zelf opnieuw
+  (één poging per 0,75 s). Een tweede mixer-tabblad wordt ook op de server genegeerd (tab-id; overnemen
+  pas na 3 s stilte en met een stand). `GET /api/paneel/kijkers` en `/api/paneel/stand` erbij (lezen).
+- De klok: `getOutputTimestamp()` + het gemiddelde verschil met `currentTime` (het midden van de
+  schommeling per audioblok), 1×/s en meteen bij een sprong > 1 ms (hooguit 10×/s).
+- Bouwstenen (Clay 14 okt, op W1): `fx`, `strip`, `mixer`, `stems`, `master`, `sampler` (data in vrij.js, met
+  `:<n>` voor een vaste track) en `library` als vak, op elk scherm en in het werkvak. De xy-pad met `y`,
+  `druk` en `los` (uit het ruwe bestand). De berichtvorm voor invoke en `zetSchrijver` liggen klaar voor S8.
+- De relais zegt `weg` als de mixer bewust stopt (en na 70 s stilte); een pagina die opnieuw verbindt
+  vervangt zijn vorige verbinding.
+- Gemeten in deze container: de hoorbare positie op de nep-iPad haalt de 5 ms NIET aantoonbaar (mediaan
+  ~1,3 ms, max 5–28 ms afhankelijk van de load; `currentTime` springt hier zelf 10,7 ms). Op de Mac meten.
+
 ---
 
 #### S8 — Inrichten, iPad bedienen (na W1), totaalmeting, proef en docs (golf 4)
