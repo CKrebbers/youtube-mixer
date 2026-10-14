@@ -258,7 +258,7 @@ export function claysChromeVersie(rijen) {
 /** De omgevingsvariabelen van de server die een PAD zijn: in een proefserver allemaal in de tijdelijke map. */
 export const PROEF_PADEN = ['VARVE_DB', 'VARVE_MEDIA', 'VARVE_OPNAMES', 'VARVE_PATRONEN', 'VARVE_PLANNEN', 'VARVE_PROEF',
   'VARVE_KAART', 'VARVE_KAART_DB', 'VARVE_BACKUPS', 'VARVE_NACHT', 'VARVE_UITZEND_UIT',
-  'VARVE_STANDEN', 'VARVE_HUB_SETS'];
+  'VARVE_STANDEN', 'VARVE_HUB_SETS', 'VARVE_WERKRUIMTES'];
 
 /**
  * De omgeving van een proefserver (ook voor zaalbeeld.mjs): ALLES in `tmp`, ook
@@ -273,7 +273,7 @@ export function proefEnv(tmp, poort, ytdlp, basis = process.env) {
     VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'),
     VARVE_PROEF: join(tmp, 'proef'), VARVE_KAART: join(tmp, 'geen-kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'),
     VARVE_BACKUPS: join(tmp, 'backups'), VARVE_NACHT: join(tmp, 'nacht.json'), VARVE_UITZEND_UIT: join(tmp, 'uitzend-uit'),
-    VARVE_STANDEN: join(tmp, 'standen'), VARVE_HUB_SETS: join(tmp, 'geen-hub-sets'), VARVE_HOSTS: '',
+    VARVE_STANDEN: join(tmp, 'standen'), VARVE_HUB_SETS: join(tmp, 'geen-hub-sets'), VARVE_WERKRUIMTES: join(tmp, 'werkruimtes'), VARVE_HOSTS: '',
     VARVE_YTDLP: ytdlp, VARVE_HERANALYSE: 'uit',
   };
 }

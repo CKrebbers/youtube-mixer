@@ -143,7 +143,7 @@ const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
     VARVE_KAART: join(tmp, 'kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'), VARVE_NACHT: join(tmp, 'nacht.json'),
     // Na de samenvoeging (12 okt): ook standen, hub-sets en de uitzenduitgang in de tijdelijke
     // map, en geen extra hosts (test/sampler-drums.test.mjs bewaakt dat).
-    VARVE_STANDEN: join(tmp, 'standen'), VARVE_HUB_SETS: join(tmp, 'hub-sets'), VARVE_UITZEND_UIT: join(tmp, 'uitzend-uit'), VARVE_HOSTS: '',
+    VARVE_STANDEN: join(tmp, 'standen'), VARVE_WERKRUIMTES: join(tmp, 'werkruimtes'), VARVE_HUB_SETS: join(tmp, 'hub-sets'), VARVE_UITZEND_UIT: join(tmp, 'uitzend-uit'), VARVE_HOSTS: '',
     VARVE_YTDLP: maakNepYtdlp(tmp) },
   stdio: 'ignore',
 });
