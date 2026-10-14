@@ -1947,7 +1947,7 @@ Volledig in `docs/WERKRUIMTE.md` ("Gebouwd") en `docs/werkruimte/S0–S8.md`; vr
   (VARVE_HOSTS) en met een Origin die precies de eigen pagina is; een koppelcode (6 cijfers, 60 s) geeft een HttpOnly-cookie
   (alleen de hash op schijf) per apparaat én scherm. De MIXER beslist (`src/paneel/uitvoer.js`): alleen wat in de panelen
   van DAT scherm in het actieve deel staat, en `waaromNietOpScherm` (model.js): VAST_NOOIT (opnemen, log, mappings,
-  werkruimtes, library, laden) wint altijd, dan `nooit`, dan TIJDKRITISCH (bend, play, cue, nudge, hotcues, loop in/out,
+  werkruimtes, library, laden, auto-DJ, grid, patronen opnemen; op de NAAM) wint altijd, dan `nooit`, dan TIJDKRITISCH (bend, play, cue, nudge, hotcues, loop in/out,
   tap: alleen met `"tijdkritisch": true`), dan `mag`. Rem 120/s per apparaat en scherm (loslaten altijd door), `seq` tegen
   dubbel, wegvallen = binnen 1,5 s alles los wat met `druk: 'aan'` binnenkwam (geen ping met `?k=` of de SSE dicht; de
   mixer ook zelf als zijn kanaal 1,5 s stil is). Het log draagt de bron als vierde kolom (`[t, id, v, { bron: 'ipad' }]`,

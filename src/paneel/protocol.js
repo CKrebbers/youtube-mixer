@@ -265,7 +265,8 @@ export function invokeBericht({ id, v, druk = null, seq, scherm, k = null }) {
 export function isInvoke(b) {
   return !!b && b.t === 'invoke' && typeof b.id === 'string' && /^[\w.-]{1,120}$/.test(b.id)
     && (typeof b.v === 'boolean' || (typeof b.v === 'number' && b.v >= 0 && b.v <= 1))
-    && [null, 'aan', 'los'].includes(b.druk ?? null) && Number.isSafeInteger(b.seq) && typeof b.scherm === 'string';
+    && [null, 'aan', 'los'].includes(b.druk ?? null) && (b.druk == null || typeof b.v === 'boolean')
+    && Number.isSafeInteger(b.seq) && typeof b.scherm === 'string';
 }
 
 /** De bytes van een bericht zoals het over de lijn gaat (UTF-8). */

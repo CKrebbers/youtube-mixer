@@ -35,7 +35,16 @@ export function schrijfweg(ctx) {
     bestand: process.env.VARVE_PANEEL_APPARATEN || (ctx?.MEDIA ? join(ctx.MEDIA, 'paneel-apparaten.json') : null) });
   return schrijf;
 }
-const lokaal = (req, res, ctx) => { if (ctx.vanDezeMac(req)) return true; req.resume?.(); ctx.json(res, 403, { fout: 'alleen op deze Mac (de Controlekamer)' }); return false; };
+// Alleen deze Mac: vanDezeMac (Host localhost, geen proxykop), en ook geen andere proxykop (forwarded,
+// x-forwarded-host) en geen verzoek van een andere site (Sec-Fetch-Site: cross-site, bv. een <img> of een no-cors
+// GET van een andere pagina in dezelfde Chrome: die stuurt geen Origin mee; review S8 ronde 1).
+const lokaal = (req, res, ctx) => {
+  const h = req.headers ?? {};
+  const vreemd = h.forwarded !== undefined || h['x-forwarded-host'] !== undefined || h['x-forwarded-proto'] !== undefined
+    || (h['sec-fetch-site'] !== undefined && h['sec-fetch-site'] !== 'same-origin' && h['sec-fetch-site'] !== 'none');
+  if (ctx.vanDezeMac(req) && !vreemd) return true;
+  req.resume?.(); ctx.json(res, 403, { fout: 'alleen op deze Mac (de Controlekamer)' }); return false;
+};
 const vanBuiten = (req, res, ctx, { origin = true } = {}) => {
   const s = schrijfweg(ctx);
   // Uit: deze routes bestaan niet (zelfde antwoord als een onbekend eindpunt).

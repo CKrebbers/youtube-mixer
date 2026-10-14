@@ -374,12 +374,19 @@ export class PaneelSchrijf {
     const rk = `${a.id}:${b.scherm}`;
     const tijden = this._rem.get(rk) ?? [];
     while (tijden.length && nu - tijden[0] >= 1000) tijden.shift();
-    if (tijden.length >= REM_PER_S && b.druk !== 'los') {
-      this.stats.te_snel++;
-      return Promise.resolve({ status: 429, antwoord: { ok: false, seq: b.seq, reden: `te snel: hooguit ${REM_PER_S} per seconde` } });
+    if (b.druk === 'los') {
+      // Loslaten gaat langs de rem (anders blijft er iets hangen), maar alleen als er voor die pagina iets vastzit
+      // of een 'aan' onderweg is; anders zou een vloed van 'los' de rem omzeilen (review S8 ronde 1, punt 6).
+      const vast = this._vast.get(k)?.ids.has(b.id) || [...this._wacht.values()].some((w) => w.k === k && w.b.id === b.id && w.b.druk === 'aan');
+      if (!vast) return Promise.resolve({ status: 200, antwoord: { t: 'antwoord', seq: b.seq, ok: false, reden: 'niets vast' } });
+    } else {
+      if (tijden.length >= REM_PER_S) {
+        this.stats.te_snel++;
+        return Promise.resolve({ status: 429, antwoord: { ok: false, seq: b.seq, reden: `te snel: hooguit ${REM_PER_S} per seconde` } });
+      }
+      tijden.push(nu);
+      this._rem.set(rk, tijden);
     }
-    tijden.push(nu);
-    this._rem.set(rk, tijden);
     const p = this._stuur(a, b, k);
     seqs.set(b.seq, p);
     if (seqs.size > SEQ_ONTHOUD) seqs.delete(seqs.keys().next().value);
@@ -391,7 +398,10 @@ export class PaneelSchrijf {
     const n = ++this._n;
     return new Promise((klaar) => {
       const timer = this._st(() => {
+        const w = this._wacht.get(n);
         this._wacht.delete(n);
+        // Nog even onthouden: een laat antwoord op een 'aan' moet de server alsnog vasthouden (zie antwoord).
+        if (w) { (this._laat ??= new Map()).set(n, w); if (this._laat.size > 64) this._laat.delete(this._laat.keys().next().value); }
         this.stats.traag++;
         klaar({ status: 504, antwoord: { ok: false, seq: b.seq, reden: 'de mixer antwoordde niet binnen 1 s' } });
       }, ANTWOORD_MS);
@@ -404,7 +414,14 @@ export class PaneelSchrijf {
   /** Het antwoord van de mixer: { n, ok, reden?, read? }. */
   antwoord(d) {
     const w = this._wacht.get(d?.n);
-    if (!w) return false;
+    if (!w) {
+      // Te laat (na de time-out van 1 s): de iPad kreeg 504, maar de mixer voerde het wel uit. Hield hij iets
+      // vast, dan weet de server het nu alsnog: valt de pagina weg, dan gaat het los (review S8 ronde 1, punt 2).
+      const l = this._laat?.get(d?.n);
+      if (l && d.ok === true && l.b.druk === 'aan') this._houd(l.k, l.b.scherm, l.a.id, l.b.id);
+      this._laat?.delete(d?.n);
+      return false;
+    }
     this._wacht.delete(d.n);
     this._ct(w.timer);
     // Hoe lang de mixer erover deed (server -> mixer -> server), de laatste 256: voor de Controlekamer en de proef.
@@ -414,7 +431,7 @@ export class PaneelSchrijf {
     if (!ok) this.stats.geweigerd++;
     // Wat met druk 'aan' binnenkwam en uitgevoerd werd, houdt de pagina vast tot 'los' (of wegvallen).
     if (ok && w.b.druk === 'aan') this._houd(w.k, w.b.scherm, w.a.id, w.b.id);
-    if (w.b.druk === 'los') this._vast.get(w.k)?.ids.delete(w.b.id);
+    if (w.b.druk === 'los' && ok) this._vast.get(w.k)?.ids.delete(w.b.id);
     w.klaar({ status: ok ? 200 : d.status === 409 ? 409 : 403,
       antwoord: { t: 'antwoord', seq: w.b.seq, ok, ...(typeof d.reden === 'string' ? { reden: d.reden.slice(0, 200) } : {}), ...(d.read !== undefined ? { read: d.read } : {}) } });
     return true;
@@ -464,6 +481,16 @@ export class PaneelSchrijf {
 
   /** GET /api/paneel/naar-mixer?tab=: de mixer luistert. Eén tegelijk: de nieuwste wint. */
   mixer(req, res, { tab = null } = {}) {
+    // Eén mixer: hetzelfde tabblad dat opnieuw verbindt vervangt zijn vorige verbinding; een ANDER tabblad
+    // (bv. localhost en 127.0.0.1: twee oorsprongen, elk een eigen Web Lock) wordt geweigerd zolang de eerste
+    // leeft, anders gooien ze elkaar om de 500 ms eruit en komt een 'los' bij de verkeerde (review S8 ronde 1, punt 1).
+    for (const m of this.mixers) {
+      if (m.tab !== tab && !m.res.destroyed && !m.res.writableEnded) {
+        res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ fout: 'een ander tabblad van de mixer luistert al' }));
+        return null;
+      }
+    }
     for (const m of this.mixers) { this.mixers.delete(m); try { m.res.end(); } catch (_) {} }
     try { req?.socket?.setKeepAlive?.(true, 2000); req?.socket?.setNoDelay?.(true); } catch (_) {}
     res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });

@@ -14,6 +14,12 @@
 import { leesWeg } from '../lib/antwoord.js';
 
 export const PING_VAST_MS = 500;
+/**
+ * Een WAARDE per action hooguit eens per WAARDE_MS (de laatste wint, en de laatste gaat altijd): een xy-pad stuurt twee
+ * waarden per beeld, op 120 Hz 240/s, boven de rem van de server (120/s per scherm). Zo blijft hij eronder (twee assen
+ * = 100/s), en een "terug" bij loslaten wordt nooit weggegooid (review S8 ronde 1, punt 3).
+ */
+export const WAARDE_MS = 20;
 
 export function maakSchrijver({ pagina, fetch: f = (...a) => globalThis.fetch(...a), meld = () => {}, nu = () => globalThis.performance.now(),
   setInterval: si = (...a) => globalThis.setInterval(...a), clearInterval: ci = (...a) => globalThis.clearInterval(...a),
@@ -31,7 +37,25 @@ export function maakSchrijver({ pagina, fetch: f = (...a) => globalThis.fetch(..
 
   const post = (body) => f('/api/paneel/invoke', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, credentials: 'same-origin', cache: 'no-store' });
 
-  async function schrijf(b) {
+  const laatsteWaarde = new Map();   // id -> tijd van de laatste verzonden waarde
+  const wachtend = new Map();        // id -> { b, klaar: [resolve] }
+  function schrijf(b) {
+    if (b.druk) return stuur(b);
+    const n = nu(), t = laatsteWaarde.get(b.id) ?? -Infinity;
+    const w = wachtend.get(b.id);
+    if (w) { w.b = b; return new Promise((z) => w.klaar.push(z)); }   // de laatste wint
+    if (n - t >= WAARDE_MS) { laatsteWaarde.set(b.id, n); return stuur(b); }
+    const nieuw = { b, klaar: [] };
+    wachtend.set(b.id, nieuw);
+    st(() => {
+      wachtend.delete(b.id);
+      laatsteWaarde.set(b.id, nu());
+      stuur(nieuw.b).then((r) => { for (const z of nieuw.klaar) z(r); });
+    }, WAARDE_MS - (n - t));
+    return new Promise((z) => nieuw.klaar.push(z));
+  }
+
+  async function stuur(b) {
     if (b.druk === 'aan') { vast.add(b.id); if (!pinger) pinger = si(ping, PING_VAST_MS); }
     if (b.druk === 'los') vast.delete(b.id);
     const body = JSON.stringify(b);
@@ -57,6 +81,7 @@ export function maakSchrijver({ pagina, fetch: f = (...a) => globalThis.fetch(..
   schrijf.stats = stats;
   schrijf.vast = vast;
   schrijf.stop = () => { ci(pinger); pinger = null; vast.clear(); };
+  schrijf.wachtend = wachtend;
   return schrijf;
 }
 

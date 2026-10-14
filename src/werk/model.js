@@ -76,7 +76,10 @@ export const CURVES = Object.freeze(['lin', 'exp', 'log', 's']);   // = CURVES i
  * het log, mappings, werkruimtes kiezen en opslaan, de library en laden. `*` = willekeurige
  * tekens, ook punten (`*.load*` vangt track.3.load.selected).
  */
-export const VAST_NOOIT = Object.freeze(['record.*', 'log.*', 'mapping.*', 'werk.kies', 'werk.opslaan', 'werk.terug', 'werk.vastleggen', 'library.*', '*.load*']);
+export const VAST_NOOIT = Object.freeze(['record.*', 'log.*', 'mapping.*', 'werk.kies', 'werk.opslaan', 'werk.terug', 'werk.vastleggen', 'library.*', '*.load*',
+  // S8 review: ook wat laadt of data van een nummer of de set schrijft: de auto-DJ (laadt uit de library), het grid
+  // (bewaard bij het nummer), patronen opnemen (schrijft naar de server).
+  'auto.*', '*.grid.*', 'patterns.record*']);
 /**
  * Wat op de milliseconde moet kloppen (A5): tussen een vinger op glas en de mixer zitten wifi en
  * aanraking, tientallen ms en onvoorspelbaar. Een scherm buiten de Mac doet dit alleen met

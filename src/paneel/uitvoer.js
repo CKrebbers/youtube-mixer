@@ -30,6 +30,7 @@ export class Uitvoerder {
   constructor({ invoke, read = () => null, metaOf = () => null, werkruimte = () => null, toegestaan = () => new Set() } = {}) {
     Object.assign(this, { _invoke: invoke, _read: read, _metaOf: metaOf, _werk: werkruimte, _toegestaan: toegestaan });
     this.vast = new Map();   // k -> Map(id -> bron)
+    this.losSeq = new Map(); // `${k}|${id}` -> seq van de laatste 'los' (een oudere 'aan' die later binnenkomt telt niet)
     this.stats = { uitgevoerd: 0, geweigerd: 0, losgelaten: 0 };
   }
 
@@ -44,6 +45,7 @@ export class Uitvoerder {
     if (reden) return reden;
     if (!this._toegestaan(b.scherm)?.has(b.id)) return `${b.id} staat niet in een paneel van "${b.scherm}" in dit deel`;
     const type = meta.type ?? meta.meta?.type;
+    if (b.druk && type !== 'trigger') return `${b.id} is geen knop: indrukken en loslaten alleen bij een knop`;
     if (type === 'trigger' && typeof b.v !== 'boolean') return `${b.id} is een knop (true/false)`;
     if (type === 'value' && typeof b.v !== 'number') return `${b.id} is een waarde (0..1)`;
     return null;
@@ -55,6 +57,11 @@ export class Uitvoerder {
     const bron = /^[a-z0-9-]{1,16}$/.test(b?.scherm ?? '') ? b.scherm : 'buiten';
     if (b?.druk === 'los') {
       // Loslaten: alleen wat deze pagina vasthoudt, en altijd (het deel kan intussen gewisseld zijn).
+      const sk = `${k}|${b.id}`;
+      if (Number.isSafeInteger(b.seq) && !(this.losSeq.get(sk) >= b.seq)) {
+        this.losSeq.set(sk, b.seq);
+        if (this.losSeq.size > 512) this.losSeq.delete(this.losSeq.keys().next().value);
+      }
       const v = this.vast.get(k);
       if (!v?.has(b.id)) return { ok: false, reden: 'niets vast' };
       v.delete(b.id);
@@ -64,6 +71,8 @@ export class Uitvoerder {
     }
     const reden = this.waaromNiet(b);
     if (reden) { this.stats.geweigerd++; return { ok: false, reden }; }
+    // Een 'aan' die ná zijn eigen 'los' binnenkomt (twee verbindingen, een herhaling): niet meer indrukken.
+    if (b.druk === 'aan' && Number.isSafeInteger(b.seq) && this.losSeq.get(`${k}|${b.id}`) > b.seq) { this.stats.geweigerd++; return { ok: false, reden: 'al losgelaten' }; }
     // Dezelfde knop nog eens 'aan' terwijl hij al vastzit: niet nog eens (de server zou ook dubbel tellen).
     if (b.druk === 'aan' && this.vast.get(k)?.has(b.id)) return { ok: true, read: this._leesVeilig(b.id), al: true };
     this._invoke(b.id, b.v, { bron });

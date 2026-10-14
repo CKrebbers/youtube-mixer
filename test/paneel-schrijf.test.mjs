@@ -126,6 +126,14 @@ function nepBus() {
   u.voer(b('track.1.fx.knob.2.hold', true, 'aan'));
   const n = u.laatLos('pagina0001');
   ok('de pagina valt weg: alles los wat hij vasthield (met de bron)', n === 1 && bus.reads['track.1.fx.knob.2.hold'] === 0 && bus.log.at(-1).join() === 'track.1.fx.knob.2.hold,false,iphone');
+  // Review ronde 1: druk alleen bij een knop; een 'aan' die ná zijn 'los' binnenkomt telt niet.
+  r = u.voer(b('track.1.fx.knob.1', 0.8, 'aan'));
+  ok('druk "aan" met een getal op een waarde: geweigerd (anders zou loslaten false naar een fader sturen)', !r.ok && /geen knop/.test(r.reden) && u.aantalVast === 0);
+  ok('isInvoke: druk alleen met true/false', !isInvoke({ t: 'invoke', id: 'mixer.master', v: 0.8, druk: 'aan', seq: 1, scherm: 'ipad' }) && isInvoke({ t: 'invoke', id: 'a.b', v: true, druk: 'aan', seq: 1, scherm: 'ipad' }));
+  u.voer({ ...b('track.1.fx.knob.2.hold', false, 'los', 'pagina0003'), seq: 11 });
+  r = u.voer({ ...b('track.1.fx.knob.2.hold', true, 'aan', 'pagina0003'), seq: 10 });
+  ok('een "aan" die na zijn eigen "los" binnenkomt: niet meer indrukken', !r.ok && /al losgelaten/.test(r.reden) && u.aantalVast === 0);
+  ok('VAST_NOOIT ook: de auto-DJ (laadt), het grid, patronen opnemen', ['auto.toggle', 'track.1.grid.here', 'patterns.record'].every((a) => /nooit van buiten/.test(M.waaromNietOpScherm({ schermen: { x: { soort: 'ipad', mag: ['*'], tijdkritisch: true } } }, 'x', a) ?? '')));
   const geen = new Uitvoerder({ ...bus, werkruimte: () => ({ naam: 'standaard' }), toegestaan: () => toe });
   ok('met standaard: niets (geen werkruimte)', !geen.voer(b('track.1.fx.knob.1', 0.3)).ok);
 }
@@ -237,8 +245,49 @@ console.log('\nde server: koppelen, rem, seq, loslaten');
   ok('leesCookie, eigenOrigin, origineGoed', leesCookie('a=1; varve_paneel=abc ; b=2') === 'abc' && eigenOrigin({ headers: { host: 'localhost:8777' } }) === 'http://localhost:8777'
     && eigenOrigin({ headers: { host: 'mac.tail1.ts.net' } }) === 'https://mac.tail1.ts.net' && origineGoed({ headers: { host: 'mac.tail1.ts.net', origin: 'https://mac.tail1.ts.net' } })
     && !origineGoed({ headers: { host: 'mac.tail1.ts.net' } }) && !origineGoed({ headers: { host: 'mac.tail1.ts.net', origin: 'https://ander.ts.net' } }));
+  // Review ronde 1: een los zonder iets vast gaat niet naar de mixer en telt niet in de rem; een laat antwoord houdt alsnog vast;
+  // een tweede mixer van een ander tabblad wordt geweigerd zolang de eerste leeft.
+  s.zetAan(true);
+  const c9 = s.nieuweCode(); const k9 = s.koppel({ code: c9.code, naam: 'x', scherm: 'ipad' }); const a9 = s.apparaatVan(req(k9.token));
+  naarMixer.length = 0;
+  const losLeeg = await s.invoke(a9, inv(900, { id: 'track.1.fx.knob.2.hold', v: false, druk: 'los', k: 'paginabbbbb' }));
+  ok('een los zonder iets vast: niet naar de mixer, niet in de rem', losLeeg.antwoord.reden === 'niets vast' && !naarMixer.length && !(s._rem.get(`${a9.id}:ipad`)?.length));
+  const pl = s.invoke(a9, inv(901, { id: 'track.1.fx.knob.2.hold', v: true, druk: 'aan', k: 'paginabbbbb' }));
+  const n9 = naarMixer.find((x) => x.t === 'invoke').n;
+  timers.at(-1)();                                   // de time-out van 1 s
+  ok('de mixer antwoordt niet op tijd: 504', (await pl).status === 504);
+  s.antwoord({ n: n9, ok: true });                    // het late antwoord: hij hield vast
+  ok('een laat antwoord op een "aan": de server houdt hem alsnog vast (dus los bij wegvallen)', s._vast.get('paginabbbbb')?.ids.has('track.1.fx.knob.2.hold'));
+  nu += LOS_MS + 1; naarMixer.length = 0; s.kijk();
+  ok('… en laat hem na 1,5 s stilte los', naarMixer.some((x) => x.t === 'los' && x.k === 'paginabbbbb'));
+  const m2 = { status: null, writeHead(c) { this.status = c; }, write() {}, end() {}, on() {} };
+  ok('een tweede mixer van een ander tabblad: 409 zolang de eerste leeft', s.mixer({ on() {}, socket: {} }, m2, { tab: 'ander' }) === null && m2.status === 409 && s.mixers.size === 1);
+  const m3 = { writeHead() {}, write() {}, end() {}, on() {} };
+  ok('hetzelfde tabblad opnieuw: vervangt zijn vorige verbinding', s.mixer({ on() {}, socket: {} }, m3, { tab: 't' }) && s.mixers.size === 1 && [...s.mixers][0].res === m3);
   s.sluit();
   rmSync(map, { recursive: true, force: true });
+}
+
+// ---- de schrijver: waarden samenvoegen ----------------------------------------------------------
+console.log('\nde schrijver: waarden per action samengevoegd (onder de rem, de laatste gaat altijd)');
+{
+  const { maakSchrijver, WAARDE_MS } = await import('../src/paneel/schrijver.js');
+  let t = 0; const rij = [];
+  const gestuurd = [];
+  const w = maakSchrijver({ pagina: 'p1', nu: () => t, setTimeout: (f, ms) => rij.push({ t: t + ms, f }), setInterval: () => 0, clearInterval: () => {},
+    fetch: async (u, o) => { gestuurd.push(JSON.parse(o.body)); return { ok: true, status: 200, json: async () => ({ ok: true }) }; } });
+  // Een xy-pad op 120 Hz: per beeld x en y (240/s), 1 s lang; dan loslaten met "terug" (nog twee waarden).
+  for (let i = 0; i < 120; i++) {
+    t = i * (1000 / 120);
+    for (const f of rij.filter((x) => x.t <= t)) { rij.splice(rij.indexOf(f), 1); f.f(); }
+    w({ id: 'x', v: i / 200, druk: null, seq: 2 * i }); w({ id: 'y', v: 1 - i / 200, druk: null, seq: 2 * i + 1 });
+  }
+  w({ id: 'x', v: 0.11, druk: null, seq: 999 }); w({ id: 'y', v: 0.22, druk: null, seq: 1000 });
+  t += 100; for (const f of rij.splice(0)) f.f();
+  await new Promise((z) => setTimeout(z, 10));
+  const perS = gestuurd.length;
+  ok(`240 waarden/s worden ${perS} verzoeken (≤ 2 × 1000 / ${WAARDE_MS} + 2)`, perS <= 2 * (1000 / WAARDE_MS) + 2 && perS > 60, String(perS));
+  ok('de laatste stand (de "terug" van loslaten) gaat altijd', gestuurd.filter((b) => b.id === 'x').at(-1).v === 0.11 && gestuurd.filter((b) => b.id === 'y').at(-1).v === 0.22);
 }
 
 // ---- 5. een eigen server -----------------------------------------------------------------------
