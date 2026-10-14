@@ -483,7 +483,7 @@ docs/
 | Tests | Alle bestanden in `test/` moeten groen blijven: `node test/alles.mjs`. Bij wijzigingen: check toevoegen. Hij draait in een pool (zoveel tegelijk als er kernen zijn, langste eerst uit `test/.duur.json`); een test met een tijdsgrens op de wandklok, een afvalmeting of een vaste poort krijgt bovenaan `// @alleen: <waarom>` en loopt daarna alleen. `--serieel` = alles na elkaar, `--banen N`. |
 | Mocks | Een mock die makkelijker is dan de echte API verbergt bugs. De Web Audio-mock vuurt `onended` asynchroon omdat de browser dat ook doet. |
 | Browser | Chrome. Web MIDI bestaat niet in Safari — geen polyfill-pogingen. |
-| Git | Committen en pushen mag. `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud), en bestanden met " 2" in de naam zijn conflictkopieën (meestal een oude versie): die NOOIT committen. Groter werk per spoor op een eigen tak in een worktree buiten iCloud (`~/Projects/varve-stems/<spoor>`), samenvoegen in `studio/integratie`, naar main met een PR; daarna de worktree weg. Data staat niet in git en hoort in de Bureaublad-map: `media/`, `opnames/`, `patronen/`, `proef/`, `standen/`, `sets/`. Een server die vanuit een worktree draait schrijft patronen, de speellijst, de standen en de sets in die worktree: link `media`/`opnames` en zet de rest terug vóór je de worktree weghaalt. |
+| Git | Committen en pushen mag. `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud), en bestanden met " 2" in de naam zijn conflictkopieën (meestal een oude versie): die NOOIT committen. Groter werk per spoor op een eigen tak in een worktree buiten iCloud (`~/Projects/varve-stems/<spoor>`), samenvoegen in `studio/integratie`, naar main met een PR; daarna de worktree weg. Data staat niet in git en hoort in de Bureaublad-map: `media/`, `opnames/`, `patronen/`, `proef/`, `standen/`, `sets/`, `racks/eigen.json` (eigen sjablonen; `racks/sjablonen.json` hoort WEL in git). Een server die vanuit een worktree draait schrijft patronen, de speellijst, de standen, de sets en de eigen sjablonen in die worktree: link `media`/`opnames` en zet de rest terug vóór je de worktree weghaalt. |
 
 ## Bekende grenzen (niet als bug rapporteren)
 
@@ -2002,7 +2002,7 @@ Volledig in `docs/EFFECTEN-MEER.md` (ontwerp + "Gebouwd"), vragen in VRAGEN blok
   modulators die in de beginstand stilstaan. Nieuw sjabloon: ook `node tools/headless/effecten-meer.mjs`.
 - Eigen sjablonen: `/api/sjablonen` (bewaren met versie, 409 met wat er nu staat; geen naam van een kant-en-klaar
   sjabloon; alleen `vanDezeMac`). In de kiezer achter de kant-en-klare (`_eigen`), dus `s:<nr>` van een
-  kant-en-klaar sjabloon verandert niet. Elke proefserver zet ook `VARVE_SJABLONEN` als hij er een POST naar doet.
+  kant-en-klaar sjabloon verandert niet. Elke proefserver zet ook `VARVE_SJABLONEN` (`harnas()`, set-proef, latentie, sec-plan en sec-auto doen het al), anders schrijft "als sjabloon" in `<worktree>/racks/eigen.json`.
 - De XY-pad van een rack: `track.N.fx.xy.x/.y` (`beginstand: false`, de plek staat al in het log). Bouwsteen
   `sjablonen` in `src/paneel/vrij.js`; bewaren of wissen staat niet op de bus, dus nooit van de iPad.
 - De editor (`rack-editor.js`) tekent nog steeds niet tijdens het slepen: schuiven van modulators en de kromme

@@ -200,7 +200,7 @@ const VOORAF = String.raw`(() => {
 
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const env = { ...process.env, PORT: String(POORT), VARVE_TESTSERVER: '1', VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
-  VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_SETS: join(tmp, 'sets'),
+  VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_SETS: join(tmp, 'sets'), VARVE_SJABLONEN: join(tmp, 'eigen.json'),
   VARVE_STANDEN: join(tmp, 'standen'), VARVE_HERANALYSE: 'uit' };
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], { env, stdio: 'ignore' });
 const chrome = spawn(zoekChrome(), [

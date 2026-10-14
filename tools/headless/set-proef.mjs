@@ -78,7 +78,7 @@ function zoekChrome() {
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   cwd: WORTEL,
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'),
-    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_SETS: join(tmp, 'sets'),
+    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_SETS: join(tmp, 'sets'), VARVE_SJABLONEN: join(tmp, 'eigen.json'),
     VARVE_STANDEN: join(tmp, 'standen'), VARVE_WERKRUIMTES: join(tmp, 'werkruimtes'), VARVE_PROEF: join(tmp, 'proef'), VARVE_BACKUPS: join(tmp, 'backups'),
     VARVE_NACHT: join(tmp, 'nacht.json'), VARVE_KAART: join(tmp, 'geen-kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'), VARVE_HERANALYSE: 'uit' },
   stdio: ['ignore', 'pipe', 'pipe'],
