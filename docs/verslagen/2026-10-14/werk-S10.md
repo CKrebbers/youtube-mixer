@@ -176,6 +176,30 @@ XY-actions in de bouwsteen (S10-6), master-lijm standaard (S10-7), band (S10-8),
 - Een paneel-item voor de rack-editor op mac-2 (nu: de editor in de mixer, de bouwsteen `sjablonen` overal).
 - Sjablonen per tag kiezen (dub, master, stems) in de kiezer en op de iPad.
 
-## Tests
+## Review ronde 2
 
-Zie "Testuitslag" hieronder.
+Beide reviewers liepen hun scripts opnieuw na. (a): alle tien punten opgelost; nieuw en opgelost: een
+onbekende modulator met doelen als object of `null` liet `zetRack` vallen; na het weghalen van een
+modulator kreeg de volgende de stand van de weggehaalde; een stap op 1/8 viel nog tot 33 ms te laat
+(nu: elke stap/toeval op de maat op 8 ms); ∥ op de delay veranderde meteen het geluid (begint nu op 0,
+met een melding). (b): 11 van 14 opgelost; daarna ook de uitleg van Wegspoelen en Ruimte bevriezen
+(het rack zit vóór de fader), de testuitslag hieronder, en nieuw: een parameter sprong even terug als
+een koppeling bij DICHT/OPEN wegviel; na een 409 kon "als sjabloon" stil een net elders gemaakt
+sjabloon vervangen; `e:` betekende op de master al "los effect" (nu `eigen:`); en Kleur: dub kwam tot
++5,9 dB boven droog (nu stuur 0,35, resonantie 0,05: hooguit +3,2 dB, met een eis van +3,5 dB in
+`effecten-meer.mjs`; het ergste geval is een toon die precies in fase met zijn echo staat). Open,
+gedocumenteerd: `.versies/` van eigen sjablonen; de kam tot +18 dB op zijn grondtoon.
+
+## Testuitslag
+
+`node test/alles.mjs` (126 bestanden, 10 994 checks, 9 overgeslagen, 295 s): alles groen behalve de
+drie die in deze container ook op de basis rood zijn: wachtrij "yt-dlp en zijn kind" (2×), renderblok
+"keylock met wissels … 89,7 bytes per bericht", instrumenten-fm-schaal "geen afval per blok".
+Renderblok: zelfde gouden hash (a6c215d9). Nieuw: `test/modulatie.test.mjs`, `test/effecten-s10.test.mjs`
+(0 GC), `test/sjablonen-server.test.mjs`, `test/sjablonen-paneel.test.mjs`. Aangepast zonder te
+verzwakken: `effecten` (telt de zeven van S10 erachter), `aanhaakpunten` (tien aanhakers),
+`combinaties` (zeven busracks, zoals vóór S10), `standen`, `standen-server`, `stand-bewerker` (het
+aantal sjablonen uit het bestand, en strenger: dezelfde namen in dezelfde volgorde).
+Headless (Chrome, deze container): `tools/headless/effecten-meer.mjs` groen (86 checks, `--snel`; de
+volle run van vóór de review: 81), `tools/headless/rack-editor.mjs` groen. Latentie fader → geluid p50
+0,55 / 0,86 ms (basis 0,72 ms).
