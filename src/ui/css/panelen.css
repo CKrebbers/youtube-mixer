@@ -5,8 +5,12 @@
    per beeld verandert is een klasse of een transform op één element, nooit een opmaakwissel. */
 
 /* ---- het werkvak in de mixer (boven de rijen) ---- */
+/* Het werkvak geeft als EERSTE ruimte af (flex-shrink 1000 tegen 1 van #rijen) en scrolt dan zelf:
+   op 1440×790 is er met een rij open geen pixel over (werk.css), en een paneel van 34vh liet de
+   PAGINA 250 px scrollen en #rijen tot 35 px krimpen (integratie S6 + S7, deel FX van twee-handen,
+   tools/headless/werkruimte.mjs). Waar wel ruimte is, verandert er niets. */
 #werkvak[hidden]{display:none}
-#werkvak.wv{flex:0 0 auto;max-height:34vh;overflow:auto;padding:4px 14px;border-top:1px solid var(--line);
+#werkvak.wv{flex:0 1000 auto;min-height:0;max-height:34vh;overflow:auto;padding:4px 14px;border-top:1px solid var(--line);
   background:var(--bg);contain:content}
 
 /* ---- een vrij paneel ---- */

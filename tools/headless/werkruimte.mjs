@@ -205,10 +205,12 @@ try {
       const f = [...document.querySelectorAll('.vfader')].map((e) => e.getBoundingClientRect().height).filter((h) => h > 0);
       const rijen = document.getElementById('rijen');
       const open = [...rijen.children].filter((c) => c.tagName === 'SECTION' && !c.classList.contains('hidden')).map((c) => c.id);
-      klaar({ h: document.documentElement.scrollHeight, v: innerHeight, fader: Math.round(Math.min(...f)), rijen: Math.round(rijen.getBoundingClientRect().height), open });
+      const wv = document.getElementById('werkvak');
+      klaar({ h: document.documentElement.scrollHeight, v: innerHeight, fader: Math.round(Math.min(...f)), rijen: Math.round(rijen.getBoundingClientRect().height), open,
+        werkvak: wv && !wv.hidden ? Math.round(wv.getBoundingClientRect().height) : 0 });
     })))`);
     ok(`1440×790, deel ${deel.toUpperCase()} (${m.open.join(' + ') || 'geen rij'}): de pagina scrolt niet (${m.h} ≤ ${m.v}), faders ${m.fader} ≥ 56`
-      + (m.open.length ? `, #rijen ${m.rijen} ≥ 40` : ''), m.h <= m.v && m.fader >= 56 && (!m.open.length || m.rijen >= 40));
+      + (m.open.length ? `, #rijen ${m.rijen} ≥ 40` : '') + (m.werkvak ? ` (werkvak ${m.werkvak} px)` : ''), m.h <= m.v && m.fader >= 56 && (!m.open.length || m.rijen >= 40));
   }
   await foto('werkruimte-790.png');
   await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
