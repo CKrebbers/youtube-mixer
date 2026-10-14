@@ -20,13 +20,51 @@
 // Gebruik:  VARVE_HUB_REPO=<AV-app-hub> node tools/headless/werk-maschine.mjs
 //   VARVE_KIJK_POORT=8975  de poort van de proefserver   VARVE_CHROME=<pad>  een eigen Chromium
 //   VARVE_VOLGORDE=1000    hoe vaak SOLO + APC-knop
+//
+// Bank (alleen Node, geen hub of Chromium): wat de pads in SPELEN (maschine.ontvang -> noten) en de
+// LED-tik van de Maschine (ledBeeld) kosten, voor en na:
+//   node tools/headless/werk-maschine.mjs --bench <wortel-voor> [<wortel-na>]
+//   (wortel-voor = een uitgepakte git archive van de basis; zonder wortel-na: deze map)
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
+
+if (process.argv[2] === '--bench') {
+  const [voor, na = WORTEL] = process.argv.slice(3);
+  if (!voor) { console.error('gebruik: --bench <wortel-voor> [<wortel-na>]'); process.exit(2); }
+  const bank = async (wortel) => {
+    const imp = (p) => import(pathToFileURL(join(wortel, p)).href);
+    const { Maschine } = await imp('src/control/maschine.js');
+    const { parseMessage } = await imp('src/control/midi.js');
+    const doc = JSON.parse(readFileSync(join(wortel, 'mappings/maschine-mk2.json'), 'utf8'));
+    const inst = { soort: 'drums', naam: 'Drums', params: [], leesParam: () => 0.5, stand: () => ({ pads: Array.from({ length: 16 }, () => ({ gevuld: true })) }) };
+    const eng = { focus: 'A', speeltrack: () => 'A', instrumentOp: (id) => (id === 'A' ? inst : null), deck: () => ({ buffer: null }), patronen: null, sampler: null };
+    let t = 0;
+    const noten = { ontvang: () => true, los() {}, ingedrukt: () => new Set() };
+    const m = new Maschine({ engine: eng, noten, read: () => null, invoke: () => {}, nu: () => t });
+    m.laadMapping(doc);
+    const N = 20000;
+    const pads = Array.from({ length: N }, (_, i) => parseMessage(new Uint8Array(i % 2 ? [0x80, 36 + ((i >> 1) % 16), 0] : [0x90, 36 + ((i >> 1) % 16), 100])));
+    const ronde = (fn, n) => { const t0 = process.hrtime.bigint(); for (let i = 0; i < n; i++) fn(i); return Number(process.hrtime.bigint() - t0) / 1000 / n; };
+    const med = (xs) => [...xs].sort((a, b) => a - b)[xs.length >> 1];
+    const pad = (i) => { t += 1; m.ontvang(pads[i % N]); };
+    const led = () => { t += 33; m.ledBeeld(); };
+    for (let w = 0; w < 3; w++) { ronde(pad, N); ronde(led, 2000); }
+    return { pad: med(Array.from({ length: 9 }, () => ronde(pad, N))), led: med(Array.from({ length: 9 }, () => ronde(led, 2000))) };
+  };
+  // Om en om, vijf keer, zodat de warmte van de machine beide gelijk treft.
+  const r = { voor: [], na: [] };
+  for (let i = 0; i < 5; i++) { r.voor.push(await bank(voor)); r.na.push(await bank(na)); }
+  const m2 = (xs, k) => [...xs.map((x) => x[k])].sort((a, b) => a - b)[2];
+  const v = { pad: m2(r.voor, 'pad'), led: m2(r.voor, 'led') }, n = { pad: m2(r.na, 'pad'), led: m2(r.na, 'led') };
+  console.log(`pad in SPELEN (ontvang -> noten), µs per bericht:  voor ${v.pad.toFixed(3)}  na ${n.pad.toFixed(3)}  (${(n.pad - v.pad >= 0 ? '+' : '')}${((n.pad - v.pad) / 1000).toFixed(5)} ms)`);
+  console.log(`LED-tik van de Maschine (ledBeeld), µs per tik:      voor ${v.led.toFixed(2)}  na ${n.led.toFixed(2)}  (${((n.led / v.led - 1) * 100).toFixed(1)}%)`);
+  process.exit(0);
+}
 const HUB = process.env.VARVE_HUB_REPO || join(WORTEL, '../av-app-hub');
 const POORT = Number(process.env.VARVE_KIJK_POORT) || 8975;
 const KEER = Number(process.env.VARVE_VOLGORDE) || 1000;
