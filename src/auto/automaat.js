@@ -986,13 +986,15 @@ export class Automaat extends Emitter {
   /** Laden door de automaat zelf: dat deck telt niet als "Clay laadde iets". */
   async _laadZelf(deckId, track) {
     this._laadt.add(deckId);
-    try { return await this.laad(deckId, track); } finally {
+    let r;
+    try { r = await this.laad(deckId, track); return r; } finally {
       this._laadt.delete(deckId);
       this._buffers[deckId] = laadSleutel(this.engine.deck(deckId));
       // Laadde Clay intussen zelf iets op dit deck (de laatste laad wint, laden.js), dan is het van hem
-      // (review S9 ronde 2, N3); de aanroeper ziet het aan welkNummer en stopt.
+      // (review S9 ronde 2, N3): te zien aan een ander nummer, of aan laadLibrary die null geeft
+      // (verdrongen; ronde 3: zijn nummer kan er al staan voordat welkNummer het weet).
       const nr = this.welkNummer(deckId);
-      if (nr && nr !== track.id) { this._clayGeladen.add(deckId); this.eigen.delete(deckId); }
+      if (r === null || (nr && nr !== track.id)) { this._clayGeladen.add(deckId); this.eigen.delete(deckId); }
       else this._clayGeladen.delete(deckId);
     }
   }

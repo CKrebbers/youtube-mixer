@@ -136,4 +136,8 @@ de oude code faalt en een stap in de headless-proef met echte gestreamde tracks.
 `node test/alles.mjs` (na ronde 1): 122 bestanden, 10546 checks — rood alleen de bekende fouten van
 deze container: wachtrij "yt-dlp en zijn kind" (2×) en renderblok "keylock met wissels". (Een eerste
 run had ook `ingest` rood: yt-dlp was niet geïnstalleerd; na `pip install yt-dlp` groen.)
-De laatste run na ronde 2 staat in het eindbericht van deze sessie.
+Ronde 3: geen blokkerende of belangrijke punten meer (a en b). Op aanraden van (a) kijkt `_laadZelf`
+ook naar wat de laad teruggeeft (null = verdrongen door Clay). Laatste run (na ronde 2):
+122 bestanden, 10549 checks; rood: de drie bekende (wachtrij 2×, renderblok keylock,
+instrumenten-fm-schaal afval) en `midi` "na één tik is er een hap verstuurd" (niet door S9 geraakt;
+los 3× groen, tijdsgevoelig onder belasting).
