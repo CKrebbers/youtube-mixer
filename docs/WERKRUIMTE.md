@@ -920,6 +920,16 @@ Kijk vóór je `src/engine/tellen.js` nodig hebt of `faseTussen` er al is; zet h
   binnen 0,5 ms; `uitlijn.html` maakt geen AudioContext en vraagt geen MIDI.
 - `regels.test.mjs`: `src/uitlijn/reken.js` zonder DOM en zonder imports uit ui/control/server.
 
+**Gebouwd (14 okt, tak `werk/S2`, `docs/werkruimte/S2.md`).** Wat anders werd dan hierboven:
+- De knop "uitlijn" staat achteraan de transportrij van de focus-track (de bovenbalk had in rust
+  nog 4 px over op 1440 px); tot S3 het werkvak vult opent hij het losse venster.
+- Een werkruimte plaatst de weergave met een VAKNAAM (data): `uitlijn` (pagina), `uitlijn-strook`,
+  `uitlijn-vouw`, of `uitlijn:<vorm>:<maten>` (bv. `uitlijn:pagina:1`). `vakVorm(naam)` in
+  `teken.js`, `varveUitlijn.toonVak(el, naam)` en `varveUitlijn.open(naam)`; `uitlijn.html?vorm=&maten=`.
+- `faseTussen` staat in `reken.js` (`src/engine/tellen.js` had hem niet); de engine is niet geraakt.
+- Een track die STIL staat wordt getekend alsof hij nu zou starten, vastgemaakt aan de speelkop:
+  zo zie je ook in pauze waar zijn tellen vallen.
+
 ---
 
 #### S3 — De werkruimte-kern (golf 2)
