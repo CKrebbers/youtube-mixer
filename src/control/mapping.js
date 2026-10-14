@@ -556,9 +556,7 @@ export class Mapping extends Emitter {
     this.houd = houd;
     this.apparaat = apparaat;
     this.als = null;            // (naam) => boolean: de conditie van een regel met `als` (S3 zet hem)
-    this._lagenMet = () => this._openMetHoud();
     this._lagenOpen = { versie: -1, bron: null, lijst: null };
-    this._varsMet = () => this._varsMetExtra();
     this.vars = vars;
     this.lagen = lagen;
     this.now = now;
@@ -574,6 +572,8 @@ export class Mapping extends Emitter {
     this.extra = new Map();     // bron -> regels die erbij komen maar niet van jou zijn (voegToe)
     this.basis = null;          // de standaard waar je eigen verschil op rust: { doc, vingerafdruk }
     this._latch = new Map();    // regelsleutel|doel -> de stand van vóór (latch en lang)
+    this._drukDoel = new Map(); // doel -> { oud, n }: drukknoppen (druk) die dit doel nu vasthouden
+    this._nietWaarde = new Set(); // doelen waarvan al gemeld is dat druk/latch er niets doet
     this._als = { versie: -1, per: new Map(), namen: [] };
   }
 
@@ -585,7 +585,13 @@ export class Mapping extends Emitter {
    * met, één lijst per stand van het register en van de bron.
    */
   get lagen() { return this._lagenMet; }
-  set lagen(fn) { if (fn !== this._lagenMet) this._lagenBron = fn; }
+  set lagen(fn) {
+    // Een lezer die je hier eerder las, terugzetten (apc-kaart.js: oud = mapping.lagen; …; mapping.lagen = oud)
+    // = zijn eigen bron terug. Elke bron krijgt zijn eigen lezer.
+    const bron = typeof fn === 'function' && fn.bron ? fn.bron : fn;
+    this._lagenBron = bron;
+    this._lagenMet = Object.assign(() => this._openMetHoud(), { bron });
+  }
 
   _openMetHoud() {
     const bron = this._lagenBron();
@@ -605,7 +611,11 @@ export class Mapping extends Emitter {
    * maakt het plan opnieuw als de maatgever wisselt).
    */
   get vars() { return this._varsMet; }
-  set vars(fn) { if (fn !== this._varsMet) this._varsBron = fn; }
+  set vars(fn) {
+    const bron = typeof fn === 'function' && fn.bron ? fn.bron : fn;
+    this._varsBron = bron;
+    this._varsMet = Object.assign(() => this._varsMetExtra(), { bron });
+  }
 
   _varsMetExtra() {
     const v = this._varsBron();
@@ -758,6 +768,8 @@ export class Mapping extends Emitter {
     this._pasExtraToe(rules);
     this.shiftSig = typeof doc.shift === 'string' ? doc.shift : null;
     this.shift = false;
+    // Een houd-knop die nog vastzit krijgt na het laden geen loslaten meer: zijn mapje nu dicht (S4).
+    for (const v of this.vast.values()) if (v.target.startsWith('layer.houd.')) this._doe(v.target, false, v.wie);
     this.vast.clear();
 
     this.name = doc.name || 'naamloos';
@@ -1020,11 +1032,12 @@ export class Mapping extends Emitter {
     const vast = [...this.vast.values()];
     this.vast.clear();
     for (const v of vast) {
-      if (v.rule.mode === 'trigger' || !v.rule.mode) this._doe(v.target, false);
+      if (v.rule.mode === 'trigger' || !v.rule.mode) this._doe(v.target, false, v.wie);
       else if (KNOPMODI.has(v.rule.mode)) this._knopLos(v);   // een drukknop gaat terug, een vastgezette blijft
     }
     // Wat dit apparaat aan houd-mapjes open hield, gaat dicht (houd.js).
     this.houd?.losgekoppeld(this._wie);
+    for (const v of vast) if (v.wie !== this._wie) this.houd?.losgekoppeld(v.wie);
     for (const st of this.state.values()) st.last = null;
     this.resetTakeover();
   }
@@ -1052,7 +1065,7 @@ export class Mapping extends Emitter {
     const vast = los ? eerder : null;
     if (vast) {
       this.vast.delete(msg.sig);
-      if (vast.rule.mode === 'trigger' || !vast.rule.mode) return this._trigger(vast.rule, msg, vast.target);
+      if (vast.rule.mode === 'trigger' || !vast.rule.mode) return this._trigger(vast.rule, msg, vast.target, vast.wie);
       if (KNOPMODI.has(vast.rule.mode)) return this._knopLos(vast);
     }
     // Een CC-knop in een knopmodus die nog vastzit: geen tweede indrukken.
@@ -1063,7 +1076,7 @@ export class Mapping extends Emitter {
 
     const target = resolveTarget(rule.action, this.vars());
     const knop = KNOPMODI.has(rule.mode);
-    if (isNoot ? msg.on : knop && msg.value >= 64) this.vast.set(msg.sig, { rule, target });
+    if (isNoot ? msg.on : knop && msg.value >= 64) this.vast.set(msg.sig, { rule, target, wie: this._wie });
 
     switch (rule.mode) {
       case 'absolute':   return this._absolute(rule, msg, target);
@@ -1077,20 +1090,21 @@ export class Mapping extends Emitter {
     }
   }
 
-  _trigger(rule, msg, target) {
+  _trigger(rule, msg, target, wie) {
     // Noten hebben al een on/off; een knop die CC stuurt gebruikt de halve slag.
     const on = msg.type === 'note' ? msg.on : msg.value >= 64;
-    this._doe(target, on);
+    this._doe(target, on, wie);
     return { rule, target, mode: rule.mode, value: on, taken: true };
   }
 
   /**
    * Een trigger uitvoeren. `layer.houd.<naam>` gaat niet over de bus maar naar
    * het houd-register, met DIT apparaat als eigenaar (S4): zo sluit het
-   * loslaten op de Maschine alleen wat de Maschine opende.
+   * loslaten op de Maschine alleen wat de Maschine opende. Bij loslaten de
+   * eigenaar van het indrukken (`wie`), ook als intussen een andere mapping laadde.
    */
-  _doe(target, on) {
-    if (this.houd && target.startsWith('layer.houd.')) { this.houd.druk(this._wie, target.slice(11), !!on); return; }
+  _doe(target, on, wie = this._wie) {
+    if (this.houd && target.startsWith('layer.houd.')) { this.houd.druk(wie, target.slice(11), !!on); return; }
     this.invoke(target, on);
   }
 
@@ -1105,6 +1119,13 @@ export class Mapping extends Emitter {
     const geen = { rule, target, mode: rule.mode, value: null, taken: false };
     if (!on) return geen;                       // een loslaten zonder indrukken (na laden, losgekoppeld)
     const vast = this.vast.get(msg.sig);
+    // Alleen een value-action (regel 2: naar is 0..1). Een trigger zou bij loslaten false krijgen en blijven staan.
+    const meta = typeof this.metaOf === 'function' ? this.metaOf(target) : undefined;
+    if (meta !== undefined && meta?.type !== 'value') {
+      if (vast) vast.niets = true;
+      if (!this._nietWaarde.has(target)) { this._nietWaarde.add(target); this.emit('geweigerd', [`${rule.in}: "${target}" ${meta ? 'is geen draaiknop' : 'bestaat niet'}: ${rule.mode} doet niets: geweigerd`]); }
+      return geen;
+    }
     const sleutel = `${sleutelVan(rule)}|${target}`;
     const lang = rule.lang === true ? LANG_MS : rule.lang;
     // Vastgezet (latch, of kort gedrukt bij lang): nog eens drukken = terug.
@@ -1117,9 +1138,21 @@ export class Mapping extends Emitter {
         return { rule, target, mode: rule.mode, value: oud, taken: true };
       }
     }
+    // Een druk (zonder lang) op een doel dat al door een andere druk vastgehouden wordt:
+    // de eerste stand telt, terug pas als de laatste loslaat (zoals drukknop() in actions.js).
+    if (rule.mode === 'druk' && !lang) {
+      const al = this._drukDoel.get(target);
+      if (al) {
+        al.n++;
+        if (vast) { vast.oud = al.oud; vast.gedeeld = al; }
+        this.invoke(target, rule.naar);
+        return { rule, target, mode: rule.mode, value: rule.naar, taken: true };
+      }
+    }
     const oud = this.read ? this.read(target) : null;
     if (oud === null || oud === undefined) { if (vast) vast.niets = true; return geen; }
     if (vast) { vast.oud = oud; vast.t0 = this.now(); vast.sleutel = sleutel; vast.lang = lang; }
+    if (rule.mode === 'druk' && !lang && vast) { vast.gedeeld = { oud, n: 1 }; this._drukDoel.set(target, vast.gedeeld); }
     if (rule.mode === 'latch' || lang) this._latch.set(sleutel, oud);
     this.invoke(target, rule.naar);
     return { rule, target, mode: rule.mode, value: rule.naar, taken: true };
@@ -1135,6 +1168,10 @@ export class Mapping extends Emitter {
       if (!this._latch.has(vast.sleutel)) return geen;
       this._latch.delete(vast.sleutel);
     } else if (rule.mode === 'latch') return geen;
+    else if (vast.gedeeld) {
+      if (--vast.gedeeld.n > 0) return geen;       // een andere druk houdt hem nog vast
+      if (this._drukDoel.get(target) === vast.gedeeld) this._drukDoel.delete(target);
+    }
     this.invoke(target, vast.oud);
     return { rule, target, mode: rule.mode, value: vast.oud, taken: true };
   }
@@ -1152,6 +1189,7 @@ export class Mapping extends Emitter {
     if (!n) return { rule, target, mode: rule.mode, value: null, taken: false };
     if (n > MAX_STAPPEN) n = MAX_STAPPEN; else if (n < -MAX_STAPPEN) n = -MAX_STAPPEN;
     const id = `${target}.${n > 0 ? 'fwd' : 'back'}`;
+    if (typeof this.metaOf === 'function' && !this.metaOf(id)) return { rule, target: id, mode: rule.mode, value: null, taken: false };
     for (let i = Math.abs(n); i > 0; i--) { this.invoke(id, true); this.invoke(id, false); }
     return { rule, target: id, mode: rule.mode, value: n, delta: n, taken: true };
   }

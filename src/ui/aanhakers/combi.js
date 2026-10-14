@@ -20,9 +20,13 @@ const schrijf = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
 
 export default async function opzet(ctx) {
   const { engine, meld } = ctx;
+  // Zonder engine of bus (een kale ctx, zoals in test/aanhaakpunten.test.mjs) is er niets om aan te haken.
+  if (!engine || typeof ctx.define !== 'function' || typeof location === 'undefined') return;
   let sjablonen = [];
   const combi = bindCombi({
     engine, define: ctx.define, invoke: ctx.invoke, read: ctx.read, metaOf: ctx.metaOf, meld,
+    // Superknop-links met {focus}, {R}/{tweede}, {speel}, {maatgever}: dezelfde variabelen als de APC-mapping.
+    ...(ctx.mapping?.vars ? { vars: () => ctx.mapping.vars() } : {}),
     racks: () => sjablonen,
     onthoudBus: (bus, naam) => schrijf(busSleutel(bus), naam),
   });

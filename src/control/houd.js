@@ -22,7 +22,7 @@ import { Emitter } from '../lib/emitter.js';
 export class HoudRegister extends Emitter {
   constructor() {
     super();
-    this.open = new Map();    // naam -> apparaat dat hem opende (volgorde = volgorde van openen)
+    this.open = new Map();    // naam -> { apparaat dat hem opende, n: zoveel knoppen van dat apparaat houden hem vast } (volgorde = volgorde van openen)
     this.versie = 0;
     this._lijst = Object.freeze([]);
   }
@@ -37,24 +37,35 @@ export class HoudRegister extends Emitter {
    */
   lijst() { return this._lijst; }
 
-  /** Een houd-knop: indrukken = open (van dit apparaat), loslaten = dicht als het nog de zijne is. */
+  /**
+   * Een houd-knop: indrukken = open (van dit apparaat), loslaten = dicht als het
+   * nog de zijne is. Twee knoppen van hetzelfde apparaat op hetzelfde mapje:
+   * pas dicht als ze allebei los zijn (geteld). Pakt een ander apparaat het
+   * mapje, dan wordt het van dat apparaat (het blijft open; de versie gaat
+   * alleen omhoog als het open of dicht gaat, of vooraan komt).
+   */
   druk(apparaat, naam, on) {
     if (typeof naam !== 'string' || !naam) return false;
+    const was = this.open.get(naam);
     if (on) {
-      if (this.open.get(naam) === apparaat) return false;
+      if (was && was.apparaat === apparaat) { was.n++; return false; }
       this.open.delete(naam);           // opnieuw achteraan: de laatst geopende
-      this.open.set(naam, apparaat);
+      this.open.set(naam, { apparaat, n: 1 });
     } else {
-      if (this.open.get(naam) !== apparaat) return false;
+      if (!was || was.apparaat !== apparaat) return false;
+      if (--was.n > 0) return false;
       this.open.delete(naam);
     }
     this._gewijzigd(naam, !!on);
     return true;
   }
 
+  /** Van welk apparaat is dit open mapje (of null)? */
+  eigenaar(naam) { return this.open.get(naam)?.apparaat ?? null; }
+
   /** Dit apparaat is weg: alles wat het open hield gaat dicht. Geeft hoeveel. */
   losgekoppeld(apparaat) {
-    const weg = [...this.open].filter(([, a]) => a === apparaat).map(([n]) => n);
+    const weg = [...this.open].filter(([, a]) => a.apparaat === apparaat).map(([n]) => n);
     if (!weg.length) return 0;
     for (const n of weg) this.open.delete(n);
     this._gewijzigd(null, false);

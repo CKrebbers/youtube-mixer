@@ -84,9 +84,13 @@ export function maakAls(engine, { hub = false, apparaten = () => [] } = {}) {
   };
 }
 
-/** Een drukknop op een waarde: indrukken = `naar`, loslaten = de stand van vóór. De eerste druk telt. */
-function drukStand(lees, zet, naar = 1) {
-  let vast = null;
+/**
+ * Een drukknop op een waarde: indrukken = `naar`, loslaten = de stand van vóór. De eerste druk telt.
+ * `wie()` (optioneel): waar de stand bij hoort (het rack); is dat bij loslaten iets anders, dan
+ * niet terugzetten (zoals drukknop() in actions.js: een oude stand betekent in een ander rack iets anders).
+ */
+function drukStand(lees, zet, { naar = 1, wie = () => null } = {}) {
+  let vast = null, van = null;
   return {
     fn(on) {
       if (on) {
@@ -94,11 +98,12 @@ function drukStand(lees, zet, naar = 1) {
         const s = lees();
         if (typeof s !== 'number') return;      // niets om naar terug te gaan
         vast = s;
+        van = wie();
         zet(naar);
       } else if (vast !== null) {
         const s = vast;
         vast = null;
-        zet(s);
+        if (wie() === van) zet(s);
       }
     },
     ingedrukt: () => (vast !== null ? 1 : 0),
@@ -122,22 +127,24 @@ export function bindCombi({
       define(`${n}.send.${bus.toLowerCase()}.hold`, 'trigger', druk.fn,
         { label: `Track ${nr} ${bus === 'A' ? 'echo' : 'galm'} vol zolang je drukt (worp)`, read: druk.ingedrukt, overneem: true });
     }
-    const mix = drukStand(() => d.fx?.mix, (v) => d.fx?.setMix(v));
+    const mix = drukStand(() => d.fx?.mix, (v) => d.fx?.setMix(v), { wie: () => d.fx?.rack ?? null });
     define(`${n}.fx.mix.hold`, 'trigger', mix.fn,
       { label: `Track ${nr} FX helemaal nat zolang je drukt`, read: mix.ingedrukt });
 
     // Solo per stem: de andere stems weg via hun .hold (die gaan over de bus, dus in het log).
+    // Geteld per stem: twee solo's tegelijk, dan pas terug als de laatste die hem wegzette loslaat.
+    const wegDoor = {};                    // stem -> hoeveel solo's van deze track hem nu weg houden
     for (const st of STEM_NAMEN) {
       let weg = null;                      // de stems die deze druk wegzette
       define(`${n}.stem.${st}.solo`, 'trigger', (on) => {
         if (on) {
           if (weg || !d.stemBestaat?.(st)) return;
           weg = andereStems(d.stems?.namen, st);
-          for (const o of weg) invoke(`${n}.stem.${o}.hold`, true);
+          for (const o of weg) if ((wegDoor[o] = (wegDoor[o] || 0) + 1) === 1) invoke(`${n}.stem.${o}.hold`, true);
         } else if (weg) {
           const w = weg;
           weg = null;
-          for (const o of w) invoke(`${n}.stem.${o}.hold`, false);
+          for (const o of w) if (--wegDoor[o] === 0) invoke(`${n}.stem.${o}.hold`, false);
         }
       }, { label: `Track ${nr} stem ${STEM_LABELS[st] ?? st} solo zolang je drukt (de andere stems weg)`,
            read: () => (!d.stemBestaat?.(st) ? null : weg ? 1 : 0), log: 'overslaan' });
@@ -210,7 +217,11 @@ export function bindCombi({
   };
 
   // ---- bus-racks ---------------------------------------------------------------
-  const lijstVoor = (bus) => [SEND_RACKS[bus], ...racks()].filter((r) => r && typeof r.name === 'string');
+  // Een bus is helemaal nat (mix 1): een gewoon insert-rack geeft in zijn beginstand het droge
+  // signaal door, en dan werkt de send als volumeknop. Daarom alleen de eigen echo en galm, en
+  // racks die zeggen dat ze voor een bus zijn ("bus": true in racks/sjablonen.json): dat kiest Clay.
+  const lijstVoor = (bus) => [SEND_RACKS[bus], SEND_RACKS[bus === 'A' ? 'B' : 'A'], ...racks().filter((r) => r?.bus === true)]
+    .filter((r) => r && typeof r.name === 'string');
   /** Een rack op de bus op naam (een sjabloon, of de eigen echo/galm). Via zetRack: kruisfade, nooit herbedraden. */
   const zetBusRack = (bus, naam) => {
     const B = String(bus).toUpperCase();
@@ -291,5 +302,6 @@ export function zetStuk(doc, { mapping, voegMapjeToe, herbind = () => {} }) {
 
 /** Variabelen van buiten zetten (mapping.js): {maatgever} = de track die de maat geeft. */
 export function zetMaatgeverVariabele(engine) {
-  zetVariabele('maatgever', () => trackVanDeck(engine.syncMaster?.()?.id) ?? null);
+  // De maatgever die je hoort (zoals de MAAT-badge), niet de terugval van sync: zonder maatgever null.
+  zetVariabele('maatgever', () => trackVanDeck(engine.maatgever?.()?.id) ?? null);
 }

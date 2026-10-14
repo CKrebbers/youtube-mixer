@@ -134,6 +134,16 @@ console.log('mapping: druk, latch, lang, stappen');
   m.handle(cc(24, 0));
   ok('stappen: 0 = niets', gedaan.length === 0);
 
+  // Twee drukknoppen op hetzelfde doel (review 14 okt): de eerste stand telt, terug bij de laatste.
+  m.set('note:0:60', 'track.1.send.a', { mode: 'druk', naar: 1 });
+  m.set('note:0:61', 'track.1.send.a', { mode: 'druk', naar: 0.8 });
+  stand['track.1.send.a'] = 0.5;
+  m.handle(note(60, true)); m.handle(note(61, true)); m.handle(note(60, false));
+  ok('twee drukknoppen op één doel: de eerste loslaten zet niet terug', stand['track.1.send.a'] === 0.8);
+  m.handle(note(61, false));
+  ok('… de laatste wel, naar de stand van vóór de eerste (0,5)', stand['track.1.send.a'] === 0.5);
+  stand['track.1.send.a'] = 0.3;
+
   ok('toJSON: de nieuwe velden gaan mee (naar, lang, codering)', (() => {
     const j = m.toJSON().rules;
     return j.find((r) => r.in === 'note:0:3').lang === 400 && j.find((r) => r.in === 'note:0:2').naar === 0.85
@@ -142,6 +152,43 @@ console.log('mapping: druk, latch, lang, stappen');
   ok('een regel zonder de nieuwe velden: dezelfde sleutel en dezelfde JSON als vroeger',
     sleutelVan({ in: 'note:0:1', shift: true, laag: 'grid.x' }) === 'note:0:1#shift@grid.x'
     && JSON.stringify(M.normaliseer({ rules: [{ in: 'cc:0:1', action: 'a', mode: 'absolute' }] }).doc.rules[0]) === '{"in":"cc:0:1","action":"a","mode":"absolute"}');
+}
+
+// ---- review 14 okt: lagen/vars terugzetten, druk op een trigger, eigenaar van een houd-knop ----
+console.log('\nmapping: wat de review vond');
+{
+  const bron1 = Object.freeze(['grid.hotcues']), bron2 = Object.freeze(['grid.loops']);
+  const { m } = nepMapping({ regels: [], lagen: () => bron1 });
+  const oud = m.lagen;                         // zoals apc-kaart.js: lezen, tijdelijk iets anders, terugzetten
+  m.lagen = () => bron2;
+  const tijdelijk = m.lagen();
+  m.lagen = oud;
+  ok('lagen terugzetten op wat je las (apc-kaart.js): weer de oude bron', tijdelijk === bron2 && m.lagen() === bron1);
+  const v0 = m.vars; m.vars = () => ({ focus: 5 }); m.vars = v0;
+  ok('vars idem', m.vars().focus === 1);
+
+  const metas = { 'track.1.kill.low': { type: 'trigger' }, 'track.1.filter': { type: 'value' } };
+  const t = nepMapping({ regels: [{ in: 'note:0:1', action: 'track.1.kill.low', mode: 'druk', naar: 1 },
+    { in: 'cc:0:9', action: 'track.1.beatjump', mode: 'stappen' }] });
+  t.m.metaOf = (id) => metas[id] ?? null;
+  const gew = [];
+  t.m.on('geweigerd', (l) => gew.push(...l));
+  t.stand['track.1.kill.low'] = 0;
+  t.m.handle(note(1, true)); t.m.handle(note(1, false)); t.m.handle(note(1, true)); t.m.handle(note(1, false));
+  ok('druk op een trigger-action (met metaOf): doet niets, één melding', t.gedaan.length === 0 && gew.length === 1);
+  t.m.handle(cc(9, 2));
+  ok('stappen naar .fwd/.back die niet bestaan (met metaOf): doet niets', t.gedaan.length === 0);
+
+  const houd = new HoudRegister();
+  const a = nepMapping({ houd, apparaat: null, regels: [{ in: 'note:0:1', action: 'layer.houd.x' }, { in: 'note:0:2', action: 'layer.houd.x' }] });
+  a.m.handle(note(1, true)); a.m.handle(note(2, true)); a.m.handle(note(1, false));
+  ok('twee knoppen van één apparaat op hetzelfde houd-mapje: open tot ze allebei los zijn', houd.isOpen('x'));
+  a.m.handle(note(2, false));
+  ok('… en dan dicht', !houd.isOpen('x'));
+  a.m.handle(note(1, true));
+  a.m.load({ name: 'ander', device: 'iets-anders', version: 3, rules: [] });
+  a.m.handle(note(1, false));
+  ok('een andere mapping laden terwijl de houd-knop vastzit: zijn mapje gaat dicht (er komt geen loslaten meer)', !houd.isOpen('x'));
 }
 
 // ---- validatie: de kern ----------------------------------------------------------
@@ -246,7 +293,7 @@ console.log('\nhoud-mapjes over twee nep-apparaten');
   lagen.on('change', (w) => wissels.push(w));
   ok('voegMapjeToe(houd) + herbindLagen: layer.houd.proef op de bus', A.has('layer.houd.proef') && /proef \(houd\)/.test(A.metaOf('layer.houd.proef').label));
   A.invoke('layer.houd.proef', true);
-  ok('via de bus indrukken: open (apparaat "bus"), lampje aan, Lagen meldt het', houd.open.get('proef') === 'bus' && A.read('layer.houd.proef') === 1
+  ok('via de bus indrukken: open (apparaat "bus"), lampje aan, Lagen meldt het', houd.eigenaar('proef') === 'bus' && A.read('layer.houd.proef') === 1
     && wissels.at(-1)?.id === 'houd.proef');
   ok('Lagen.actief() kent de houd-mapjes niet (de Mapping zet ze ervoor)', !lagen.actief().some((l) => l.startsWith('houd.')) && !('houd' in lagen.stand));
   A.invoke('layer.houd.proef', false);
@@ -346,6 +393,17 @@ const { Engine } = await import('../src/engine/engine.js');
   A.invoke('track.1.stem.inst.solo', true);
   ok('solo inst bij vier stems: alleen de zang weg', d.stemGekild('vocals') && !d.stemGekild('drums'));
   A.invoke('track.1.stem.inst.solo', false);
+  A.invoke('track.1.stem.vocals.kill', false);
+  A.invoke('track.1.stem.vocals.solo', true); A.invoke('track.1.stem.drums.solo', true);
+  A.invoke('track.1.stem.vocals.solo', false);
+  ok('twee solo\'s tegelijk (zang en drums), zang los: bas en overig blijven weg zolang drums vastzit', d.stemGekild('bass') && d.stemGekild('other'));
+  A.invoke('track.1.stem.drums.solo', false);
+  ok('… drums ook los: alles terug', !['vocals', 'bass', 'other', 'drums'].some((x) => d.stemGekild(x)));
+  A.invoke('track.1.fx.mix', 0.2); A.invoke('track.1.fx.mix.hold', true);
+  d.fx.zetEffect(d.fx.effectId === 'reverb' ? 'delay' : 'reverb');
+  const mixNieuw = d.fx.mix;
+  A.invoke('track.1.fx.mix.hold', false);
+  ok('fx.mix.hold: een ander rack tijdens het drukken = niet terugzetten (zoals drukknop)', d.fx.mix === mixNieuw);
   ok('solo: log overslaan (de kinderen staan in het log)', A.metaOf('track.1.stem.drums.solo').log === 'overslaan');
   ok('solo op een track zonder stems: read null, doet niets', A.read('track.2.stem.drums.solo') === null
     && (A.invoke('track.2.stem.drums.solo', true), A.read('track.2.stem.drums.solo') === null));
@@ -394,7 +452,10 @@ console.log('\nbus-racks: wissel via de kruisfade, niet meer ketens dan op een t
   const echteTimeout = globalThis.setTimeout;
   globalThis.setTimeout = (fn, ms) => { timers.push({ fn, op: T + ms / 1000 }); return timers.length; };
   try {
-    const racks = JSON.parse(readFileSync(new URL('../racks/sjablonen.json', import.meta.url), 'utf8')).racks;
+    // De kant-en-klare racks als busracks gemarkeerd ("bus": true, Clay kiest welke), plus één zonder: die komt er niet op.
+    const sjablonen = JSON.parse(readFileSync(new URL('../racks/sjablonen.json', import.meta.url), 'utf8')).racks;
+    const racks = sjablonen.slice(1).map((r) => ({ ...r, bus: true }));
+    const aangeboden = [...racks, sjablonen[0]];
     const maakSlot = (rack) => { const s = new InsertSlot(ctx); s.setMix(1); s.zetRack(rack); return s; };
     const bussen = { A: maakSlot(SEND_RACKS.A), B: maakSlot(SEND_RACKS.B) };
     const track = maakSlot(SEND_RACKS.B);
@@ -403,7 +464,7 @@ console.log('\nbus-racks: wissel via de kruisfade, niet meer ketens dan op een t
     const onthouden = [];
     const stub = { ui: { sendA: 0, sendB: 0 }, set() {}, fx: { mix: 0, setMix() {} }, stemBestaat: () => false, stems: null };
     const c = C.bindCombi({ engine: { deck: () => stub, sends: bussen, focus: 'A' }, define, invoke: () => {}, read: () => null,
-      metaOf: () => null, racks: () => racks, onthoudBus: (b, n) => onthouden.push([b, n]) });
+      metaOf: () => null, racks: () => aangeboden, onthoudBus: (b, n) => onthouden.push([b, n]) });
     ok('send.a/b.rack.next/prev bestaan, en worden niet teruggespeeld', ['a', 'b'].every((b) => ['next', 'prev'].every((r) => reg.get(`send.${b}.rack.${r}`)?.meta.log === 'overslaan')));
     const breuk0 = stats.CURVE_BREUK, overlap0 = stats.OVERLAP_FOUTEN;
     const volgorde = [];
@@ -414,11 +475,14 @@ console.log('\nbus-racks: wissel via de kruisfade, niet meer ketens dan op een t
     }
     // Dezelfde tien wissels op een track-insert, op dezelfde momenten.
     T -= 0.04;
-    for (const naam of volgorde) { T += 0.004; track.zetRack(racks.find((r) => r.name === naam) ?? SEND_RACKS.B); }
+    const opNaam = (naam) => [SEND_RACKS.A, SEND_RACKS.B, ...racks].find((r) => r.name === naam);
+    for (const naam of volgorde) { T += 0.004; track.zetRack(opNaam(naam)); }
     ok(`tien keer snel send.b.rack.next: ${bussen.B.nodeAantal} ketens, op een track-insert ${track.nodeAantal}`,
       bussen.B.nodeAantal === track.nodeAantal && bussen.B.nodeAantal === 11);
-    ok('… rondlopend door galm + de kant-en-klare racks', volgorde[0] === racks[0].name && volgorde[racks.length - 1] === racks.at(-1).name
-      && volgorde[racks.length] === 'Galm' && volgorde[racks.length + 1] === racks[0].name);
+    const L = racks.length + 2;   // galm, echo, de busracks
+    ok(`… rondlopend: galm, echo, de ${racks.length} busracks, en weer galm (een rack zonder "bus" komt er niet op)`,
+      volgorde[0] === 'Echo' && volgorde[1] === racks[0].name && volgorde[L - 2] === racks.at(-1).name && volgorde[L - 1] === 'Galm'
+      && !volgorde.includes(sjablonen[0].name));
     ok('… zonder afgebroken curve of overlappende automatisering (CURVE_BREUK = 0)', stats.CURVE_BREUK === breuk0 && stats.OVERLAP_FOUTEN === overlap0);
     ok('… en de keuze wordt onthouden (op naam)', onthouden.length === 10 && onthouden.at(-1).join() === `B,${volgorde.at(-1)}`);
     // De tijd laten verstrijken: opruimen pas na fade plus staart, nooit met signaal.
@@ -433,7 +497,8 @@ console.log('\nbus-racks: wissel via de kruisfade, niet meer ketens dan op een t
     ok('zetBusRack met hetzelfde rack: geen nieuwe keten', (() => { const k = bussen.A.keten; c.zetBusRack('A', racks[1].name); return bussen.A.keten === k; })());
     reg.get('send.a.rack.prev').fn(true);
     ok('send.a.rack.prev: één terug', bussen.A.rackNaam === racks[0].name);
-    ok('busRacks: de eigen echo vooraan, dan de kant-en-klare', c.busRacks('a')[0] === 'Echo' && c.busRacks('a').length === racks.length + 1);
+    ok('busRacks: de eigen echo vooraan, dan galm, dan de busracks', c.busRacks('a').slice(0, 2).join() === 'Echo,Galm' && c.busRacks('a').length === racks.length + 2);
+    ok('een rack zonder "bus": true op naam: geweigerd', c.zetBusRack('A', sjablonen[0].name) === false);
   } finally {
     globalThis.setTimeout = echteTimeout;
   }
