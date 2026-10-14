@@ -48,13 +48,15 @@ export default async function opzet(ctx) {
   // Eén keuze voor beide: kies je in het paneel de Maschine, dan koppelt ook de koppelmodus daar.
   paneel.onApparaat = (naam) => modus.kiesApparaat(naam);
   modus.onApparaat = (naam) => paneel.kiesApparaat(naam);
-  // Het paneel dicht (knop "lijst", MIDI-knop of ×): midi-opzet.js stopt dan alleen het
-  // leren van de APC. Ook dat van het gekozen apparaat stoppen, anders koppelt de volgende
-  // toets of knop stil. Na hun eigen klik-afhandeling (deze luisteraar komt later).
+  // Het paneel dicht, hoe dan ook (knop "lijst", MIDI-knop, ×, of een ander onderpaneel:
+  // toets B, library, rack-editor via sluitOnderpanelen): midi-opzet.js stopt alleen bij
+  // "lijst" het leren van de APC. Ook dat van het gekozen apparaat stoppen, anders koppelt de
+  // volgende toets of knop stil. Een MutationObserver op de klasse van die twee elementen:
+  // vuurt alleen bij openen en sluiten, niet per MIDI-bericht. Niet als de koppelmodus aan staat.
   const midiPaneel = globalThis.document?.getElementById('midi-panel');
   const dicht = () => midiPaneel?.classList.contains('hidden') || paneel.root?.classList.contains('hidden');
-  globalThis.document?.addEventListener('click', (e) => {
-    if (!e.target?.closest?.('.mon-map-knop, .mon-close, #midi-btn')) return;
-    if (dicht() && !modus.actief && paneel.learn.busy) paneel.learn.stop();
-  });
+  if (midiPaneel && paneel.root && typeof globalThis.MutationObserver === 'function') {
+    const kijk = new MutationObserver(() => { if (dicht() && !modus.actief && paneel.learn.busy) paneel.learn.stop(); });
+    for (const el of [midiPaneel, paneel.root]) kijk.observe(el, { attributes: true, attributeFilter: ['class'] });
+  }
 }

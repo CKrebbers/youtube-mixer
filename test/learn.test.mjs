@@ -223,6 +223,16 @@ ok('inclusief de geleerde modus', m2.rules.get('cc:0:20').mode === 'relative-2c'
   ok('magLeren met een reden: doorgegeven, één melding per indrukken, leren loopt door', doorgegeven.join() === 'note:0:9,note:0:9' && niet.join() === 'kan niet' && leer.busy);
   for (let i = 0; i < 20; i++) ding.ontvang(cc(24, 1));
   ok('… een draaiend wiel meldt één keer per leerbeurt (geen schermwerk per MIDI-bericht)', niet.length === 2);
+  // Een knop koppelen en, met die knop nog vast, de volgende action kiezen: zijn loslaten
+  // gaat nog steeds nergens heen (review ronde 2).
+  magHet = true;
+  leer.start('track.1.play');
+  ding.ontvang(note(11, true));
+  leer.start('track.1.cue');
+  doorgegeven.length = 0;
+  ding.ontvang(note(11, false));
+  ok('… knop nog vast terwijl je de volgende action kiest: zijn loslaten wordt niet geleerd en gaat niet door', doorgegeven.length === 0 && md.rules.get('note:0:11')?.action === 'track.1.play' && leer.busy);
+  leer.start('track.1.play');   // terug naar de stand van hierboven: leren aan
   magHet = { sig: 'master-volume', type: 'master-volume', channel: 0, number: -1, value: 64, norm: 0.5 };
   ding.ontvang({ type: 'sysex', channel: -1, sig: 'sysex' });
   ok('magLeren met een bericht: DAT bericht wordt geleerd (de schuif als master-volume, absoluut)', md.rules.get('master-volume')?.mode === 'absolute');

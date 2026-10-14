@@ -236,7 +236,14 @@ try {
   // Paneel dicht terwijl het leren op de toetsen aan staat: dat leren stopt ook (niet alleen dat van de APC).
   await page.click('button[data-doe="leer"][data-action="track.3.focus"]');
   await page.click('.mon-map-knop');
-  ok('paneel dicht tijdens leren op de toetsen: het leren stopt, Q is daarna gewoon play', await page.evaluate(() => !window.mapPanel.learn.busy));
+  ok('paneel dicht tijdens leren op de toetsen: het leren stopt', await page.evaluate(() => !window.mapPanel.learn.busy));
+  // Ook als het paneel dichtgaat door een ander onderpaneel: toets B (library).
+  await page.click('.mon-map-knop');
+  await page.click('button[data-doe="leer"][data-action="track.3.focus"]');
+  const busy = await page.evaluate(() => window.mapPanel.learn.busy);
+  await page.keyboard.press('KeyB');
+  ok('toets B (library) tijdens leren op de toetsen: het MIDI-paneel gaat dicht en het leren stopt', busy && await tot(() => page.evaluate(() => !window.mapPanel.learn.busy)));
+  await page.keyboard.press('KeyB');
   ok('de APC aan het eind byte voor byte wat hij was', (await api('/api/mapping')).tekst === apcVoor);
   ok('de mixer riep nooit requestMIDIAccess aan, geen paginafouten', (await page.evaluate(() => window.__midi)) === 0 && fouten.length === 0, fouten.join(' | '));
   await page.close();

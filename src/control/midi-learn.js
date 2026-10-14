@@ -134,8 +134,9 @@ export function vangLeren(doel, methode, learn, { magLeren = () => true } = {}) 
   const echt = doel[methode];
   const geslikt = new Set();
   let gemeld = null;   // de control die al 'niet' meldde in deze leerbeurt (een CC stuurt er veel)
-  // Een nieuwe leerbeurt: wat nog geslikt stond (de verbinding viel weg vóór het loslaten) telt niet meer.
-  learn.on('armed', () => { geslikt.clear(); gemeld = null; });
+  // Een nieuwe leerbeurt meldt opnieuw. `geslikt` blijft staan: de knop die je net koppelde kan
+  // nog vastzitten, en zijn loslaten hoort nergens heen (een oude stand ruimt `vang` zelf op).
+  learn.on('armed', () => { gemeld = null; });
   const vang = function (msg, ...rest) {
     if (msg && msg.type === 'note' && !msg.on && geslikt.delete(msg.sig)) return true;
     // Gaat dezelfde knop intussen gewoon door (het loslaten van het koppelen kwam nooit,

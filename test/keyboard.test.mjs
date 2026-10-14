@@ -145,6 +145,12 @@ console.log('\nkoppelen met een toets');
   ok('koppelen en lang vasthouden: de herhaalde keydowns en het loslaten doen niets', log.length === 0 && kb.mapping.rules.get(toetsSig('KeyJ'))?.action === 'track.1.hotcue.1');
   tik('KeyJ');
   ok('… en de volgende druk is een gewone druk met los', log.join() === 'track.1.hotcue.1=true,track.1.hotcue.1=false');
+  // Kwam de keyup van het koppelen nooit (onder Cmd), dan is de volgende ECHTE druk gewoon een druk.
+  kb.learn.start('track.3.focus');
+  druk('KeyH');
+  log.length = 0;
+  druk('KeyH'); druk('KeyH', {}, 'keyup');
+  ok('… keyup van het koppelen gemist: de volgende echte druk werkt toch', log.join() === 'track.3.focus=true,track.3.focus=false');
 }
 
 console.log('\njouw toetsen als verschil (/api/mapping/toetsen)');

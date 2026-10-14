@@ -263,7 +263,11 @@ export function attachKeyboard(engine, opts = {}) {
       return;
     }
     // Net gekoppeld en nog vast (auto-repeat): niets doen, zijn keyup gaat ook nergens heen.
-    if (geslikt.has(e.code)) { e.preventDefault(); return; }
+    // Een ECHTE nieuwe druk (de keyup kwam nooit, bv. onder Cmd) is gewoon een druk.
+    if (geslikt.has(e.code)) {
+      if (e.repeat) { e.preventDefault(); return; }
+      geslikt.delete(e.code);
+    }
     const regel = mapping.kies(sig, { shift: e.shiftKey });
     // Een toets is een knop: alleen trigger-regels (een fader op een toets betekent niets).
     if (!regel || (regel.mode && regel.mode !== 'trigger')) return;

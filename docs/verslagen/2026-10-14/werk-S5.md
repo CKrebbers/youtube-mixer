@@ -77,9 +77,25 @@ export VARVE_CHROME=<wrapper: headless_shell --no-sandbox "$@">
   - de dode `.catch`-meldingen zijn weg.
 - Niet veranderd: twee tabbladen die allebei koppelen. Het laatste wint, net als bij de APC.
 
+## Review ronde 2
+
+- **B1:** bevestigd opgelost. Overgenomen: alleen een HERHAALDE keydown wordt ingeslikt. Kwam de
+  keyup van het koppelen nooit (onder Cmd), dan is de volgende echte druk gewoon een druk
+  (`keyboard.test`).
+- **B2:** nog half open. Het MIDI-paneel gaat ook dicht via `sluitOnderpanelen` (toets B,
+  library, rack-editor), en dan stopte niemand het leren. Nu kijkt een MutationObserver op de
+  klasse van `#midi-panel` en de lijst. Die vuurt alleen bij openen en sluiten, niet per
+  MIDI-bericht. Getoetst met toets B in `maschine-ijk.mjs`.
+- **Terugval door mijn N1-fix:** `geslikt` legen bij een nieuwe leerbeurt liet het loslaten
+  van een knop die je nog vasthield toch door (een los zonder druk). Teruggedraaid. De oude
+  stand ruimt `vangLeren` al op bij de volgende gewone druk (`learn.test`).
+
 ## Testuitslag
 
-- **`node test/alles.mjs`** (na de fixes van de review): 105 bestanden, 9253 checks, 2 rood.
+- **`node test/alles.mjs`** (na ronde 2): 105 bestanden, 9255 checks, 3 rood.
+  - `instrumenten-fm-schaal` ("geen afval per blok"): de bekende wisselvallige van main. Na
+    ronde 1 was hij groen.
+- **Na ronde 1:** 9253 checks, 2 rood.
   - `renderblok` ("keylock met wissels: 83,7 bytes per bericht") en `wachtrij` ("yt-dlp en zijn
     kind zijn allebei weg").
   - Allebei op main in deze Linux-container al rood (omgeving). Reviewer (b) draaide ze op de
