@@ -298,5 +298,27 @@ const laatste = (p) => p.events.filter((e) => e[0] === 'setTargetAtTime').at(-1)
   ok(`na 1 s stilte op 128 bpm: +${(s.tellen - voor).toFixed(2)} tellen (de klok zegt +2,13)`, Math.abs(s.tellen - voor - 1 / bl) < 0.01);
 }
 
+{
+  // Review S10 ronde 2: een onbekende modulator met rare doelen laat zetRack niet vallen.
+  staat.NOW = 9;
+  const fx = new InsertSlot(new MockContext());
+  let fout = null;
+  try {
+    fx.zetRack({ name: 'raar', chain: [{ slot: 'a', type: 'filter' }], macros: [], mods: [{ soort: 'wolk', doelen: { a: 1 } }, { soort: 'wolk', doelen: [null, 3] }] });
+    fx.bewerkMods([{ soort: 'wolk', doelen: { a: 1 } }]);
+  } catch (e) { fout = e; }
+  ok('een onbekende modulator met doelen als object of null: geen fout, de keten is gebouwd, en hij gaat ongeschonden terug', !fout && fx.keten && JSON.stringify(fx.naarJSON().mods) === JSON.stringify([{ soort: 'wolk', doelen: { a: 1 } }]), fout?.message);
+  // Een modulator weghalen: die erachter houdt ZIJN stand (niet die van de weggehaalde).
+  const A = { soort: 'lfo', sync: false, hz: 0.25, diepte: 1, doelen: [{ target: 'a.reso', diepte: 0.4 }] };
+  const B = { soort: 'lfo', sync: false, hz: 0.5, diepte: 1, doelen: [{ target: 'a.freq', diepte: 0.4 }] };
+  fx.zetRack({ name: 'twee', chain: [{ slot: 'a', type: 'filter', params: { freq: 0.5, reso: 0.2 } }], macros: [], mods: [A, B] });
+  staat.NOW = 9.5; fx._modTik();
+  const staatB = fx._mods.staten[1];
+  fx.bewerkMods([B], { kaart: [1] });
+  ok('modulator 1 weg: modulator 2 schuift op en houdt zijn eigen stand', fx._mods.staten[0] === staatB);
+  ok('een stap op de maat (ook 1/8) krijgt de fijne tik', (fx.bewerkMods([{ soort: 'stap', deling: '1/8', doelen: [{ target: 'a.reso', diepte: 0.5 }] }]), fx._modTikMs === 8));
+  clearInterval(fx._modTimer);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

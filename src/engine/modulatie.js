@@ -186,14 +186,19 @@ export class ModStaat {
  */
 export class ModBank {
   /** @param vorige  een eerdere bank van hetzelfde rack: een modulator die dezelfde soort bleef houdt zijn stand */
-  constructor(ruw = [], vorige = null) {
+  /** @param kaart  per nieuwe index de index in `vorige` (na weghalen of verschuiven), anders dezelfde */
+  constructor(ruw = [], vorige = null, kaart = null) {
     this.mods = (ruw || []).map(leesMod);
-    this.staten = this.mods.map((m, i) => (m && vorige?.mods?.[i]?.soort === m.soort ? vorige.staten[i] : new ModStaat()));
+    this.staten = this.mods.map((m, i) => {
+      const j = kaart ? kaart[i] : i;
+      return m && Number.isInteger(j) && vorige?.mods?.[j]?.soort === m.soort ? vorige.staten[j] : new ModStaat();
+    });
   }
 
-  /** Is er een modulator op de maat met een periode (of stap) onder de 250 ms bij 120 bpm? Dan een fijnere tik. */
+  /** Een stap of toeval op de maat, of een LFO op de maat sneller dan 1/8, of vrij boven 4 Hz: dan een fijnere tik. */
   get snel() {
-    return this.mods.some((m) => m && m.doelen.length && ((m.sync && (tellenVan(m.deling) ?? 4) < 0.5) || (!m.sync && m.soort !== 'volger' && m.hz > 4)));
+    // Stappen en toeval op de maat altijd (hun waarde springt op de flank; een tik kost een paar µs).
+    return this.mods.some((m) => m && m.doelen.length && ((m.sync && (m.soort === 'stap' || m.soort === 'toeval' || (tellenVan(m.deling) ?? 4) < 0.5)) || (!m.sync && m.soort !== 'volger' && m.hz > 4)));
   }
 
   /** Doet er een iets (een bekende soort met een doel)? */

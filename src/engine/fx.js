@@ -889,7 +889,8 @@ function natSlotsVan(rack) {
   for (const n of rack.chain || []) if (n.meng !== undefined) uit.add(n.slot);
   const doel = (t) => { if (isNatDoel(t)) uit.add(t.slice(0, t.indexOf('.'))); };
   for (const m of rack.macros || []) for (const l of m.links || []) doel(l.target);
-  for (const m of rack.mods || []) for (const d of m?.doelen || []) doel(d.target);
+  // Een onbekende modulator (ongeschonden uit een nieuwere versie) kan doelen in een andere vorm hebben.
+  for (const m of rack.mods || []) if (Array.isArray(m?.doelen)) for (const d of m.doelen) if (typeof d?.target === 'string') doel(d.target);
   return uit;
 }
 
@@ -1028,10 +1029,10 @@ export class InsertSlot {
    * De modulators van dit rack aan (of uit). Een timer van MOD_TIK ms zolang er
    * iets te moduleren is; de waarde komt van de audioklok (regel 3).
    */
-  _zetMods(rack, { behoud = false } = {}) {
+  _zetMods(rack, { behoud = false, kaart = null } = {}) {
     // Bewerken (editor, zetRack met behoudStanden) houdt de stand van elke modulator die dezelfde
     // soort bleef: anders sprong een vrije LFO bij elke schuifbeweging terug naar zijn begin.
-    const bank = rack.mods?.length ? new ModBank(rack.mods, behoud ? this._modsOud ?? this._mods : null) : null;
+    const bank = rack.mods?.length ? new ModBank(rack.mods, behoud ? this._modsOud ?? this._mods : null, kaart) : null;
     this._modsOud = bank;
     this._mods = bank?.actief ? bank : null;
     this._modUit = null;
@@ -1136,14 +1137,14 @@ export class InsertSlot {
    * moet de keten opnieuw: dat zegt de terugwaarde (`opnieuw`), de editor doet
    * dan zetRack met behoudStanden.
    */
-  bewerkMods(mods) {
+  bewerkMods(mods, { kaart = null } = {}) {
     const { rack, fouten } = leesRack({ ...schrijfRack(this.rack), mods },
       { bekendType: (t) => !!effectVan(t) });
     this.rack.mods = rack.mods;
     const nodig = natSlotsVan(this.rack);
     const er = new Set([...(this.keten?.node.slots || new Map())].filter(([, s]) => s.nat).map(([k]) => k));
     const opnieuw = [...nodig].some((k) => !er.has(k) && this.keten?.node.slots?.has(k));
-    this._zetMods(this.rack, { behoud: true });
+    this._zetMods(this.rack, { behoud: true, kaart });
     const vorige = [...this._toegepast.keys()];
     this._toegepast.clear();
     this._pasMacrosToe();

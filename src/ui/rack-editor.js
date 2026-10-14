@@ -359,8 +359,8 @@ export class RackEditor {
   }
 
   /** Modulators veranderd (S10): geen nieuwe keten, tenzij een doel een droog/nat-pad vraagt. */
-  _modsGewijzigd({ tekenen = true } = {}) {
-    const { fouten, opnieuw } = this.fx.bewerkMods(this.kopie.mods || []);
+  _modsGewijzigd({ tekenen = true, kaart = null } = {}) {
+    const { fouten, opnieuw } = this.fx.bewerkMods(this.kopie.mods || [], { kaart });
     if (opnieuw) { this._ketenGewijzigd(); return; }
     this._fouten(fouten);
     this._tekenStatus();
@@ -460,7 +460,7 @@ export class RackEditor {
       // Koppelingen naar dit effect hebben geen doel meer. Opruimen, en zeggen
       // welke knoppen iets kwijt zijn — anders lijkt een knop ineens kapot.
       for (const m of this.kopie.macros) m.links = m.links.filter((x) => !x.target.startsWith(slot + '.'));
-      for (const m of this.kopie.mods || []) if (m?.doelen) m.doelen = m.doelen.filter((x) => !x.target.startsWith(slot + '.'));
+      for (const m of this.kopie.mods || []) if (Array.isArray(m?.doelen)) m.doelen = m.doelen.filter((x) => typeof x?.target !== 'string' || !x.target.startsWith(slot + '.'));
       // Een knop die ALLEEN dit effect stuurde doet nu niets meer: die gaat mee (S10: een nieuw rack
       // begint zo met acht vrije knoppen als je het standaardeffect weghaalt).
       const leeg = this.kopie.macros.filter((m) => geraakt.includes(m.place) && !m.links.length).map((m) => m.place);
@@ -940,13 +940,20 @@ export class RackEditor {
     const keten = this.kopie.chain;
     const i = Number(k.dataset.i);
     if (doe === 'parallel') {
-      if (keten[i].meng === undefined) keten[i].meng = 1;
+      const alleenNat = !!effectVan(keten[i].type)?.alleenNat;
+      if (keten[i].meng === undefined) keten[i].meng = alleenNat ? 0 : 1;
       else {
         delete keten[i].meng;
         for (const m of this.kopie.macros) m.links = m.links.filter((x) => x.target !== `${keten[i].slot}._nat`);
-        for (const m of this.kopie.mods || []) if (m?.doelen) m.doelen = m.doelen.filter((x) => x.target !== `${keten[i].slot}._nat`);
+        for (const m of this.kopie.mods || []) if (Array.isArray(m?.doelen)) m.doelen = m.doelen.filter((x) => x?.target !== `${keten[i].slot}._nat`);
       }
       this._ketenGewijzigd();
+      if (alleenNat && keten[i].meng !== undefined) {
+        // De delay geeft alleen echo: met ∥ wordt "nat" een stuur en blijft het droge vol (een dub-worp).
+        // Begint op 0: wat al in de echo zit rolt uit, en de knop "nat" zet de worp.
+        this.melding = { tekst: 'delay met ∥: het droge blijft vol en "nat" is hoeveel er de echo in gaat (0 = niets erin, de staart rolt door)', goed: true };
+        this._tekenStatus();
+      }
       return true;
     }
     if (doe === 'kopieer') {
@@ -982,16 +989,18 @@ export class RackEditor {
     if (doe === 'mod-weg') {
       const n = Number(k.dataset.mod);
       this.kopie.mods.splice(n, 1);
+      // De modulators erachter schuiven een plek op en houden hun eigen stand (niet die van de weggehaalde).
+      const kaart = this.kopie.mods.map((_, j) => (j < n ? j : j + 1));
       // Wat naar de diepte van een modulator wees, schuift mee (of valt weg).
       const herschrijf = (t) => {
-        if (!isModDoel(t)) return t;
+        if (typeof t !== 'string' || !isModDoel(t)) return t;
         const j = Number(t.split('.')[1]) - 1;
         return j === n ? null : `mod.${j > n ? j : j + 1}.diepte`;
       };
       for (const m of this.kopie.macros) m.links = m.links.map((x) => ({ ...x, target: herschrijf(x.target) })).filter((x) => x.target);
-      for (const m of this.kopie.mods) if (m?.doelen) m.doelen = m.doelen.map((x) => ({ ...x, target: herschrijf(x.target) })).filter((x) => x.target);
+      for (const m of this.kopie.mods) if (Array.isArray(m?.doelen)) m.doelen = m.doelen.map((x) => ({ ...x, target: herschrijf(x?.target) })).filter((x) => x.target);
       this._macrosGewijzigd({ tekenen: false });
-      this._modsGewijzigd();
+      this._modsGewijzigd({ kaart });
       this._tekenMacros();
       return true;
     }
