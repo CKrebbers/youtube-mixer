@@ -158,12 +158,21 @@ function tekenDetail() {
     ${rijen.length ? `<h4>per modus</h4><table>${rijen.join('')}</table>` : ''}`;
 }
 
-/** De houd-mapjes van de mapping (uit een stuk): welke APC-knop wat doet zolang je hem vasthoudt. */
+/**
+ * De houd-mapjes (uit een stuk, ook die van de Maschine: houd.js deelt ze over alle apparaten): welke
+ * APC-knop wat doet zolang je de houd-knop vasthoudt. Een houd-mapje zonder APC-knop staat er ook,
+ * met hoe je er een koppelt.
+ */
 function houdLijst() {
-  const h = houdMapjes(mapping);
-  if (!h.length) return '';
-  return `<section><h3>Vasthouden (houd-mapjes${voorbeeld ? `, werkruimte ${esc(voorbeeld.naam)}` : ''})</h3><table>${h.map(({ naam, regels }) => regels.map((r) =>
-    `<tr data-sig="${esc(r.in)}"><td><i class="stip s-${soortVan(r.action)}"></i>${esc(naam.toUpperCase())} vast + ${esc(naamVan(r.in))}${r.shift ? ' + shift' : ''}</td><td>${esc(tekst(r)?.lang ?? r.action)}</td></tr>`).join('')).join('')}</table></section>`;
+  const perNaam = new Map(houdMapjes(mapping).map((h) => [h.naam, h.regels]));
+  for (const mj of Object.values(voorbeeld?.samenstelling?.apparaten ?? {}).flatMap((a) => a.mapjes)) {
+    if (mj.groep === 'houd' && !perNaam.has(mj.laag)) perNaam.set(mj.laag, []);
+  }
+  if (!perNaam.size) return '';
+  const rij = (naam, r) => `<tr data-sig="${esc(r.in)}"><td><i class="stip s-${soortVan(r.action)}"></i>${esc(naam.toUpperCase())} vast + ${esc(naamVan(r.in))}${r.shift ? ' + shift' : ''}</td><td>${esc(tekst(r)?.lang ?? r.action)}</td></tr>`;
+  return `<section><h3>Vasthouden (houd-mapjes${voorbeeld ? `, werkruimte ${esc(voorbeeld.naam)}` : ''})</h3><table>${[...perNaam].map(([naam, regels]) => (regels.length
+    ? regels.map((r) => rij(naam, r)).join('')
+    : `<tr><td>${esc(naam.toUpperCase())} vast</td><td class="dim">nog geen APC-knop: houd ${esc(naam.toUpperCase())} vast en koppel er een (de regel komt in houd.${esc(naam)})</td></tr>`)).join('')}</table></section>`;
 }
 
 function tekenLijst() {

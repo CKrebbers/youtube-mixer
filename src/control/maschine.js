@@ -734,15 +734,17 @@ export class Maschine extends Emitter {
   }
 
   /**
-   * De acht knoppen van een pagina uit data (laag pagina.<naam>): het label van de regel (of de
-   * korte uitleg van zijn action), de read, en in procenten (bipolair vanuit het midden als de
-   * action dat zegt). Een plek zonder regel: alleen het nummer.
+   * De acht knoppen van een pagina uit data (laag pagina.<naam>): wat elke draaiknop NU doet (de
+   * regel die de mapping kiest: die van de pagina, een houd-mapje dat vastzit, of de regel zonder
+   * laag als de pagina die plek vrij laat), met zijn label (of de korte uitleg van zijn action), de
+   * read, en in procenten (bipolair vanuit het midden als de action dat zegt). Geen regel: alleen
+   * het nummer.
    */
   _dataKnoppen() {
     const vars = this.mapping.vars();
     return Array.from({ length: 8 }, (_, i) => {
-      const r = this.mapping.rules.get(`cc:0:${ENCODER_CC + i}@pagina.${this.pagina}`) ?? null;
-      if (!r) return { label: null, waarde: null, tekst: null };
+      const r = this.mapping.kies(`cc:0:${ENCODER_CC + i}`, { shift: false });
+      if (!r || (r.action.includes('{speel}') && !vars.speel)) return { label: null, waarde: null, tekst: null };
       const id = resolveTarget(r.action, vars);
       let label = r.label ?? null;
       if (!label) { try { label = this.beschrijf?.(id)?.kort ?? null; } catch (_) {} }
