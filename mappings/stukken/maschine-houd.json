@@ -1,0 +1,196 @@
+{
+  "schema": 1,
+  "stuk": "maschine-houd",
+  "titel": "VOORBEELD: houd-knoppen op de Maschine (VOLUME, SOLO) en MUTE",
+  "uitleg": "VOORBEELD van spoor S6 (docs/werkruimte/S6.md, docs/WERKRUIMTE.md A3 'Vasthoudknoppen'), geen standaardindeling. VOLUME vasthouden + draaiknop k = de fader van track k (zo heeft de Maschine toch faders; SHIFT = fijn). SOLO vasthouden + pad 1–4 = zang, drums, bas of overig van de focus-track solo (zolang je drukt). Een houd-mapje is gedeeld over alle apparaten (src/control/houd.js): een APC-knop die je koppelt terwijl je SOLO vasthoudt, komt ook in houd.solo. MUTE = het effect van de focus-track aan/uit. TEMPO, SWING en DUPLICATE: dezelfde vorm (S6.md).",
+  "mapjes": {
+    "nieuw": {
+      "maschine-mk2.houd.volume": {
+        "naam": "VOLUME vast (draaiknop = fader van track 1–8)",
+        "kiesknop": {
+          "in": "note:1:16"
+        }
+      },
+      "maschine-mk2.houd.solo": {
+        "naam": "SOLO vast (pad 1–4 = stem solo)",
+        "kiesknop": {
+          "in": "note:1:46"
+        }
+      }
+    }
+  },
+  "regels": {
+    "maschine-mk2": [
+      {
+        "in": "cc:0:16",
+        "laag": "houd.volume",
+        "action": "track.1.fader",
+        "mode": "relative-2c",
+        "step": 0.001,
+        "label": "VOLUME + draaiknop 1 (fader track 1)"
+      },
+      {
+        "in": "cc:0:16",
+        "laag": "houd.volume",
+        "shift": true,
+        "action": "track.1.fader",
+        "mode": "relative-2c",
+        "step": 0.0002,
+        "label": "VOLUME + SHIFT + draaiknop 1 (fader track 1, fijn)"
+      },
+      {
+        "in": "cc:0:17",
+        "laag": "houd.volume",
+        "action": "track.2.fader",
+        "mode": "relative-2c",
+        "step": 0.001,
+        "label": "VOLUME + draaiknop 2 (fader track 2)"
+      },
+      {
+        "in": "cc:0:17",
+        "laag": "houd.volume",
+        "shift": true,
+        "action": "track.2.fader",
+        "mode": "relative-2c",
+        "step": 0.0002,
+        "label": "VOLUME + SHIFT + draaiknop 2 (fader track 2, fijn)"
+      },
+      {
+        "in": "cc:0:18",
+        "laag": "houd.volume",
+        "action": "track.3.fader",
+        "mode": "relative-2c",
+        "step": 0.001,
+        "label": "VOLUME + draaiknop 3 (fader track 3)"
+      },
+      {
+        "in": "cc:0:18",
+        "laag": "houd.volume",
+        "shift": true,
+        "action": "track.3.fader",
+        "mode": "relative-2c",
+        "step": 0.0002,
+        "label": "VOLUME + SHIFT + draaiknop 3 (fader track 3, fijn)"
+      },
+      {
+        "in": "cc:0:19",
+        "laag": "houd.volume",
+        "action": "track.4.fader",
+        "mode": "relative-2c",
+        "step": 0.001,
+        "label": "VOLUME + draaiknop 4 (fader track 4)"
+      },
+      {
+        "in": "cc:0:19",
+        "laag": "houd.volume",
+        "shift": true,
+        "action": "track.4.fader",
+        "mode": "relative-2c",
+        "step": 0.0002,
+        "label": "VOLUME + SHIFT + draaiknop 4 (fader track 4, fijn)"
+      },
+      {
+        "in": "cc:0:20",
+        "laag": "houd.volume",
+        "action": "track.5.fader",
+        "mode": "relative-2c",
+        "step": 0.001,
+        "label": "VOLUME + draaiknop 5 (fader track 5)"
+      },
+      {
+        "in": "cc:0:20",
+        "laag": "houd.volume",
+        "shift": true,
+        "action": "track.5.fader",
+        "mode": "relative-2c",
+        "step": 0.0002,
+        "label": "VOLUME + SHIFT + draaiknop 5 (fader track 5, fijn)"
+      },
+      {
+        "in": "cc:0:21",
+        "laag": "houd.volume",
+        "action": "track.6.fader",
+        "mode": "relative-2c",
+        "step": 0.001,
+        "label": "VOLUME + draaiknop 6 (fader track 6)"
+      },
+      {
+        "in": "cc:0:21",
+        "laag": "houd.volume",
+        "shift": true,
+        "action": "track.6.fader",
+        "mode": "relative-2c",
+        "step": 0.0002,
+        "label": "VOLUME + SHIFT + draaiknop 6 (fader track 6, fijn)"
+      },
+      {
+        "in": "cc:0:22",
+        "laag": "houd.volume",
+        "action": "track.7.fader",
+        "mode": "relative-2c",
+        "step": 0.001,
+        "label": "VOLUME + draaiknop 7 (fader track 7)"
+      },
+      {
+        "in": "cc:0:22",
+        "laag": "houd.volume",
+        "shift": true,
+        "action": "track.7.fader",
+        "mode": "relative-2c",
+        "step": 0.0002,
+        "label": "VOLUME + SHIFT + draaiknop 7 (fader track 7, fijn)"
+      },
+      {
+        "in": "cc:0:23",
+        "laag": "houd.volume",
+        "action": "track.8.fader",
+        "mode": "relative-2c",
+        "step": 0.001,
+        "label": "VOLUME + draaiknop 8 (fader track 8)"
+      },
+      {
+        "in": "cc:0:23",
+        "laag": "houd.volume",
+        "shift": true,
+        "action": "track.8.fader",
+        "mode": "relative-2c",
+        "step": 0.0002,
+        "label": "VOLUME + SHIFT + draaiknop 8 (fader track 8, fijn)"
+      },
+      {
+        "in": "note:0:36",
+        "laag": "houd.solo",
+        "action": "track.{focus}.stem.vocals.solo",
+        "mode": "trigger",
+        "label": "SOLO + pad 1 (zang solo)"
+      },
+      {
+        "in": "note:0:37",
+        "laag": "houd.solo",
+        "action": "track.{focus}.stem.drums.solo",
+        "mode": "trigger",
+        "label": "SOLO + pad 2 (drums solo)"
+      },
+      {
+        "in": "note:0:38",
+        "laag": "houd.solo",
+        "action": "track.{focus}.stem.bass.solo",
+        "mode": "trigger",
+        "label": "SOLO + pad 3 (bas solo)"
+      },
+      {
+        "in": "note:0:39",
+        "laag": "houd.solo",
+        "action": "track.{focus}.stem.other.solo",
+        "mode": "trigger",
+        "label": "SOLO + pad 4 (overig solo)"
+      },
+      {
+        "in": "note:1:47",
+        "action": "track.{focus}.fx.bypass",
+        "mode": "trigger",
+        "label": "MUTE (effect van de focus-track aan/uit)"
+      }
+    ]
+  }
+}

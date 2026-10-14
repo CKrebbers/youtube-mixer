@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Spiekbrief — VARVE DJ</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* De spiekbrief (spoor S6, docs/werkruimte/S6.md): per werkruimte, per apparaat en per deel één
+     pagina met wat elke knop doet, in de kleur van het deel. Op het scherm donker, op papier wit. */
+  body.spiek{display:block;overflow:auto;user-select:text;-webkit-user-select:text}
+  .s-kop{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:10px 16px;
+    background:var(--panel);border-bottom:1px solid var(--line)}
+  .s-kop .brand em{font-style:normal;color:var(--dim);font-weight:400;letter-spacing:0;margin-left:8px;font-size:11px}
+  .s-kop select,.s-kop button{background:var(--panel2);border:1px solid var(--line);border-radius:5px;color:var(--text);padding:4px 8px;font:inherit;font-size:12px}
+  .s-kop a{margin-left:auto;text-decoration:none}
+  #stand{font-size:11px;color:var(--dim)}
+  #bladen{max-width:1100px;margin:14px auto;padding:0 16px;display:grid;gap:16px}
+  .blad{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .blad header{display:flex;align-items:baseline;gap:14px;padding:8px 14px;background:var(--deel);color:var(--deel-tekst)}
+  .blad header b{font-size:20px;letter-spacing:.06em}
+  .blad header span{font-size:12px;opacity:.85}
+  .blad h3{margin:10px 14px 4px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .blad h4{margin:8px 14px 2px;font-size:12px}
+  .blad table{width:100%;border-collapse:collapse;font-size:12px}
+  .blad td{padding:3px 14px;border-top:1px solid #1a2129;vertical-align:top}
+  .blad td:first-child{white-space:nowrap;font-family:ui-monospace,monospace;font-size:11px;width:22%}
+  .blad td i{color:var(--dim);font-style:normal}
+  @media print {
+    @page { size: A4; margin: 10mm; }
+    body.spiek{background:#fff;color:#000}
+    .s-kop{display:none}
+    #bladen{display:block;max-width:none;margin:0;padding:0}
+    .blad{break-after:page;page-break-after:always;border:1px solid #888;border-radius:0;background:#fff;color:#000;
+      -webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .blad td{border-top:1px solid #ccc;padding:1.5px 8px;font-size:9.5px}
+    .blad td i,.blad h3{color:#444}
+  }
+</style>
+</head>
+<body class="spiek">
+<header class="s-kop">
+  <div class="brand">VARVE<span>DJ</span> <em>spiekbrief</em></div>
+  <label>werkruimte <select id="werk"></select></label>
+  <label>apparaat <select id="apparaat"><option value="">alle</option><option value="apc40mk2">APC40 mkII</option><option value="maschine-mk2">Maschine MK2</option></select></label>
+  <button id="print" type="button">printen</button>
+  <span id="stand">…</span>
+  <a class="ghost" href="/">terug naar de mixer</a>
+</header>
+<main id="bladen"></main>
+<script type="module">
+  import { Mapping } from './src/control/mapping.js';
+  import { beschrijf } from './src/ui/apc-beschrijf.js';
+  import { laadEigen } from './src/ui/mapping-opslag.js';
+  import { maschineMk2 } from './src/control/devices/maschine-mk2.js';
+  import { lijstWerkruimtes, laadVoorbeeld, spiekbrief, spiekHtml } from './src/ui/spiekbrief.js';
+  // De Maschine-helpers uit de kaart (alleen deze pagina en maschine.html laden de Maschine-code).
+  import { maakVoorbeeldMaschine, maschineRijen } from './src/ui/maschine-kaart-plan.js';
+
+  // Leest alleen: geen bus, geen MIDI, geen Web Lock. Je eigen verschil (APC en Maschine) zit erin.
+  const haal = (...a) => fetch(...a);
+  const haalJson = async (url) => { const r = await fetch(url); if (!r.ok) { try { await r.body?.cancel(); } catch (_) {} return null; } return r.json(); };
+  const nieuw = () => new Mapping({ read: () => null, invoke: () => {} });
+  const apcMapping = nieuw();
+  try { await laadEigen(apcMapping, { haal }); } catch (_) { apcMapping.laadStandaard?.(await haalJson('mappings/apc40mk2.json')); }
+  const maschine = nieuw();
+  let maschineDoc = null;
+  try { await laadEigen(maschine, { haal, apparaat: 'maschine-mk2' }); maschineDoc = maschine.toJSON(); } catch (_) { maschineDoc = await haalJson('mappings/maschine-mk2.json'); }
+
+  const werkSel = document.getElementById('werk'), appSel = document.getElementById('apparaat'), stand = document.getElementById('stand');
+  const q = new URLSearchParams(location.search);
+  const lijst = await lijstWerkruimtes(haalJson);
+  werkSel.innerHTML = lijst.map((w) => `<option value="${w.naam}">${w.naam}${w.titel && w.titel !== w.naam ? ` · ${w.titel}` : ''}</option>`).join('');
+  werkSel.value = q.get('werk') && lijst.some((w) => w.naam === q.get('werk')) ? q.get('werk') : 'standaard';
+  appSel.value = q.get('apparaat') ?? '';
+
+  async function teken() {
+    const v = await laadVoorbeeld(werkSel.value, haalJson);
+    const paginas = spiekbrief(v, { apcMapping, maschineDoc, maschine: { maakVoorbeeldMaschine, maschineRijen }, beschrijf, maschineLabel: (s) => maschineMk2.label(s) })
+      .filter((p) => !appSel.value || p.apparaat === appSel.value);
+    document.getElementById('bladen').innerHTML = spiekHtml(paginas, { titel: v.werkruimte?.titel ?? v.naam });
+    stand.textContent = `${paginas.length} pagina's${v.fouten.length ? ` · ${v.fouten.length} fout(en): ${v.fouten[0]}` : ''}`;
+    history.replaceState(null, '', `?werk=${encodeURIComponent(werkSel.value)}${appSel.value ? `&apparaat=${appSel.value}` : ''}`);
+  }
+  werkSel.addEventListener('change', teken);
+  appSel.addEventListener('change', teken);
+  document.getElementById('print').addEventListener('click', () => print());
+  await teken();
+</script>
+</body>
+</html>
