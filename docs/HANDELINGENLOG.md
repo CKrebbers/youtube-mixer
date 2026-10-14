@@ -249,6 +249,10 @@ tekst op byte `van`, niet achter het bestand. Zoals de WAV met `?frame=N`
 - de plek wordt bepaald als het stuk gemaakt wordt, niet als het aankomt: de
   volgorde op schijf is de volgorde van de bus.
 - een crash kost hooguit de laatste seconde.
+- ook het antwoord van een GELUKT stuk wordt gelezen (`leesWeg`, src/lib/antwoord.js):
+  Chrome houdt een ongelezen antwoord vast, en een opname met het log erbij groeide
+  zo 26,6 MB per minuut, ook na GC (14 okt, docs/WINST.md punt 1,
+  `tools/headless/lek.mjs`).
 
 De server keurt elk stuk: alleen afdrukbare ASCII en `\n`, eindigt op `\n`, elke
 regel JSON, hooguit 4 MB, `van` een heel getal ≥ 0 en niet meer dan 256 MB
