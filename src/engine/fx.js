@@ -1264,6 +1264,14 @@ export class InsertSlot {
   zetParam(slot, param, v) {
     const node = this.rack.chain?.find((n) => n.slot === slot);
     if (!node) return false;
+    if (param === '_nat') {
+      // Droog/nat van één effect (S10): staat in `meng` van de keten. Is er nog geen droog/nat-pad,
+      // dan geeft dit false en moet de keten opnieuw (natOntbreekt, de editor doet zetRack).
+      node.meng = clamp(v);
+      this._toegepast.delete(`${slot}._nat`);
+      if (this.keten && !this._waardenNu().has(`${slot}._nat`)) return this.keten.node.zet(`${slot}._nat`, node.meng, this.ctx.currentTime);
+      return !this.natOntbreekt();
+    }
     node.params = { ...(node.params || {}), [param]: clamp(v) };
     const target = `${slot}.${param}`;
     this._toegepast.delete(target);
@@ -1297,6 +1305,19 @@ export class InsertSlot {
       .filter((m) => (m.links || []).some((l) => l.target === target))
       .map((m) => m.place).sort((a, b) => a - b);
     return { plekken, wint: plekken.length ? plekken[plekken.length - 1] : null };
+  }
+
+  /**
+   * Vraagt het rack een droog/nat-pad (S10: `meng`, of een knop of modulator op `<slot>._nat`) dat
+   * de keten van nu niet heeft? Dan moet de keten opnieuw gebouwd worden (zetRack met behoudStanden).
+   */
+  natOntbreekt() {
+    if (!this.keten) return false;
+    for (const k of natSlotsVan(this.rack)) {
+      const s = this.keten.node.slots.get(k);
+      if (s && !s.nat) return true;
+    }
+    return false;
   }
 
   /** Alleen de naam: geen nieuwe keten, geen kruisfade. */
