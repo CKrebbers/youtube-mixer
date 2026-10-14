@@ -1892,6 +1892,9 @@ Werkruimte-kern (S3, `docs/werkruimte/S3.md`): `werkruimtes/<naam>.json` (niet i
 werk-balk `hidden`. Een deelwissel zet ALLEEN mapjes (layer.* via de adapters), rijen, onderpaneel en werkvak
 (event `'werkruimte'`): 0 invokes buiten `layer.*`/`werk.*` (bus-spion in werkruimte.test). Wat een werkruimte
 mag en niet mag staat op één plek: `src/werk/model.js` (de server gebruikt hetzelfde).
+Op 1440×790 is er met een rij open geen pixel over: de werk-balk haalt zijn hoogte van de mixer zelf af
+(`body.werk-balk-aan` in `src/ui/css/werk.css`, alleen bij een wissel gezet), nooit van de pagina;
+`tools/headless/werkruimte.mjs` toetst het per deel. Wie nog iets boven `main` zet: hetzelfde.
 
 ## Werkwijze die hier werkt
 

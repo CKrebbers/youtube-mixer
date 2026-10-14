@@ -987,6 +987,12 @@ Zoals hierboven, met drie verschillen:
   die er niet zijn: een waarschuwing per stuk, de rest werkt.
 - De Maschine-adapter (`registreerApparaat('maschine-mk2', …)`) levert S6; de toets van vereist/terugval
   draait met een nep-adapter.
+- Review ronde 1 (14 okt): de werk-balk (30 px, tot 1000 px hoog 26) gaat NIET van de pagina af. Op
+  1440×790 is er met een rij open geen pixel over (main wordt nooit lager dan het focusdeel); zolang de balk
+  staat zet `werk-balk.js` `body.werk-balk-aan` (alleen bij een wissel) en maakt `werk.css` topbar, main en
+  de kolom rechts in het focusdeel samen 30 px lager. Met `standaard` geldt niets daarvan.
+  `tools/headless/werkruimte.mjs` toetst 1440×790 per deel. Peilen elke 2,5 s (niet 3), zodat "binnen 3 s"
+  ook met de rondgang klopt.
 
 ---
 
