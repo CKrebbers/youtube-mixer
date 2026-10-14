@@ -20,6 +20,11 @@ erger: het echofilter **slikte echte knoppen in**.
 | mapje wisselen -> laatste lampje (p50) | 56 ms | 11 ms |
 | Maschine: pad -> lampje (p50 / p99) | 38 / 71 ms | 2 / 25 ms |
 | Maschine: draaien -> scherm (p50 / p99) | 15,5 / 43 ms | 3,9 / 15 ms |
+| draaiknop heen en terug: verloren tikken van 219 (4 / 8 / 20 ms per tik, knop gelijk met de ring) | 9 / 12 / 28 | 0 / 0 / 0 |
+| idem, een APC die de ring als knopwaarde overneemt (hub-proef V1) | 41 / 40 / 56 | 0 / 0 / 0 |
+
+De twee draaiknop-rijen komen uit review ronde 1 (onder): de eerste versie van deze tak maakte de
+draaiknoppen juist SLECHTER (32 / 24 / 6 verloren van 75). Dat is gerepareerd en nagemeten.
 
 Alles hieronder komt uit commando's die ik draaide; de machine was druk (load average 10–17 op 4
 kernen, andere agenten): de mediaan (p50) is betrouwbaar, de staart (p99, max) is vooral ruis van de
@@ -69,7 +74,7 @@ VARVE_BRON=<wt>/controller-uitvoer-voor … node tools/headless/led-vertraging.m
 | direct: druk -> lampje p50 / p99 ms | 16,6 / 41,2 | 1,2 / 19,2 |
 | direct: ingeslikt (druk of los, ~110 knoppen × 2) | 20 | 0 |
 | direct: echo's die de mapping bereikten | 0 | 0 |
-| direct: mapje wisselen, laatste lampje p50 / max ms | 56,4 / 81,3 | 11,4 / 40,1 |
+| direct: mapje wisselen, laatste lampje p50 / max ms | 56,4 / 81,3 | 11,4 / 40,1 (max: zie review ronde 1) |
 | direct: wachtrij MidiHub max tijdens spelen / bij een mapje | 7 / 24 | 0 / 27 |
 | direct: berichten/s naar de APC (spelen, knipperen, drukken) | 24,1 | 24,1 |
 | APC kaatst ringen terug: druk -> lampje p50 / p99 ms | 17,4 / 68,4 | 1,1 / 7,7 |
@@ -86,9 +91,12 @@ VARVE_BRON=<wt>/controller-uitvoer-voor … node tools/headless/led-vertraging.m
 | Maschine wachtrij hub.js max | 44 | 28 |
 | Maschine stand()+JSON p50 µs / twee schermen tekenen p50 µs | 8,8 / 62,1 | 8,9 / 64,7 |
 
-De tik-p99 van "spelen" is na hoger (2,9 ms tegen 1,5 ms): dat is de machine (in dezelfde run is
-de p99 van rust en loops na juist lager). De tik is per definitie niet duurder geworden: hij doet een
-strikte deelverzameling van het werk (test 1 hieronder eist dezelfde uitkomst).
+De tik-p99 van "spelen" is na hoger (2,9 ms tegen 1,5 ms): dat is vooral de machine (in dezelfde run
+is de p99 van rust en loops na juist lager). Het werk per tik is bijna een deelverzameling van het oude
+(test 1 hieronder eist dezelfde uitkomst), maar niet helemaal: er komt per tik een sleutel bij (een
+string plakken plus `JSON.stringify(vars)`), en bij een andere sleutel een volledige herbouw van het
+plan. Dat is gemeten verwaarloosbaar (de p50 zakte van ~455 naar ~45–60 µs), maar "per definitie niet
+duurder" was te sterk gezegd.
 
 ### Chrome + echte hub (`led-vertraging.mjs`, 120 drukken per run, 3 runs)
 
@@ -117,8 +125,9 @@ invoerpad en de renderloop (ander spoor).
    `[0x90|kanaal, n, 127]`, precies het indrukken, en track select van de maatgever en clip stop van
    een loop knipperen zo op elke tel. Een druk of loslaten binnen 60 ms na zo'n lampje verdween. Een
    ingeslikt loslaten laat een knop hangen (bend, kill vasthouden, een hold). Gemeten: 20 van ~220
-   druk/los in Node (9%), 16 van 240 in Chrome (7%). Een lus kan alleen via een ring (CC); op noten ving het
-   filter nooit een echte echo.
+   druk/los in Node (9%), 16 van 240 in Chrome (7%). Een lus kan alleen via een ring (CC). Dat een
+   lampje (noot) nooit als druk terugkomt, rust op het protocol (in 0x42 zijn alle LED's van de host),
+   niet op een meting aan het apparaat; gemeten is alleen dat het filter op noten echte knoppen ving.
 5. **De tik was duur**: per tik `actieveRegels()` over ~700 regels (per regel `kies()`, `lagen()`,
    strings plakken), `resolveTarget` per regel en ~70 kleurregexen per regel, ook als er niets
    veranderde: ~0,45 ms per tik, ~14 ms per seconde op de hoofdthread (dezelfde thread als de
@@ -137,12 +146,15 @@ invoerpad en de renderloop (ander spoor).
     Per tik alleen de reads. `kleurVoor` onthoudt per action; de tel per track één keer per tik.
     Diffing op gepakte getallen in plaats van strings/arrays.
   - **`wek()`**: één tik na de lopende taak (microtaak), samengevoegd, hooguit één per 4 ms, niets
-    dubbel (de tik stuurt alleen verschillen). `stop()` haalt hem weg.
+    dubbel (de tik stuurt alleen verschillen). Sinds de review ALLEEN LAMPJES: ringen en ringtypes
+    blijven op de gewone tik van 33 ms (zie "Review ronde 1"). `stop()` haalt hem weg (bij `pagehide`).
   - `MAX_PER_TIK` 160 (was 24): een hele verversing in één tik; de wachtrij spreidt.
 - `src/ui/midi-opzet.js`: `wek` op `bijInvoke` (elke action: APC, muis, toetsenbord, auto-DJ) en op
   een ander mapje (`lagen` `change`).
 - `src/control/midi.js`
-  - echofilter **alleen CC** (ook het geheugen van het filter: lampjes vullen het niet meer);
+  - echofilter **alleen CC** (ook het geheugen van het filter: lampjes vullen het niet meer), en een
+    ring op de waarde die de knop ons net zelf stuurde wordt niet onthouden (`_laatsteIn`, behalve 0 en
+    127; zie "Review ronde 1");
   - wachtrij als **schuivend venster**: in elk venster van 4 ms hooguit 16, meteen als er plaats is.
     `this.klok` (HubMidi geeft de zijne, zodat de nep-klok van de test ook de wachtrij stuurt).
 - `src/control/hub.js`: de bundel per beeld met een **voorflank** (na `BEELD_MS` stilte meteen, na de
@@ -153,7 +165,131 @@ invoerpad en de renderloop (ander spoor).
   een scherm per 40 ms (`SCHERM_SNEL_MS`) in plaats van 100.
 - Hub-patch (niet gecommit in de hub, alleen voorgesteld): zie onder.
 
+
+## Review ronde 1 (14 okt): wat de reviewers vonden en wat ik deed
+
+Twee blokkerende punten, allebei over de DRAAIKNOPPEN (endless: track knobs en device knobs). Allebei
+klopten ze. Mijn eerste meting keek alleen naar knoppen en lampjes (druk/los), niet naar draaien.
+
+### Nieuwe meting: knoppen draaien (`tools/bench/feedback.mjs`, sectie 6)
+
+Een endless-knop op cc:0:48 (`track.1.filter`, het filter staat in het midden) via de echte MidiHub,
+Mapping en Feedback, met de wektik op de bus zoals in midi-opzet.js. Per ronde 2–6 tikken heen en 0–6
+terug (een vast zaad), 4, 8 of 20 ms per tik. Verloren = |software − bedoeld| per ronde opgeteld.
+Drie nep-APC's:
+
+- **gelijk**: de knop is onafhankelijk (de ring raakt zijn waarde niet) en staat op de waarde van de ring;
+- **naast**: hetzelfde, maar de ring staat één tik naast de knop. Zo staat hij na het eerste bericht na
+  het richten (`mapping._endless` telt dat niet) en vaak na een focuswissel;
+- **overname**: de knop neemt een ring-CC als zijn waarde over. De hub gaat daarvan uit
+  (`ringen_nemen_waarde_over`, standaard true), maar proef V1 is nog niet op Clay's APC gedraaid.
+
+```
+S=<scratchpad>
+node tools/bench/feedback.mjs --knoppen --rondes 100 --bron <checkout van vóór>   # vóór
+node tools/bench/feedback.mjs --knoppen --rondes 100                             # na
+# de hele bench (alle zes metingen), 3× om en om, dan de mediaan:
+node tools/bench/feedback.mjs --bron <vóór> --json voor1.json ; node tools/bench/feedback.mjs --json na1.json  # …×3
+node tools/bench/feedback-samen.mjs voor1.json,voor2.json,voor3.json na1.json,na2.json,na3.json
+```
+
+Verloren tikken / door het echofilter ingeslikt (100 rondes, 695 berichten, 219 tikken netto):
+
+| knop | vóór de tak (`studio/afmaken`) | de tak zoals gereviewd (5d03269)* | na de reparatie |
+|---|---|---|---|
+| gelijk, 4 / 8 / 20 ms | 9 / 12 / 28 (25 / 48 / 60 ingeslikt) | 32 / 24 / 6 van 75 (48 / 43 / 20) | **0 / 0 / 0 (0 / 0 / 0)** |
+| overname, 4 / 8 / 20 ms | 41 / 40 / 56 (29 / 38 / 64) | 32 / 24 / 6 van 75 (48 / 43 / 20) | **0 / 0 / 0 (0 / 0 / 0)** |
+| naast, 8 ms (4 runs vóór, 5 na) | 19–30, gem. 26 (63–72) | 26 van 75 (58) | 18–42, gem. 30 (85–94) |
+| naast, 20 ms | 36–38, gem. 37 (126–135) | 16 van 75 (47) | 38–44, gem. 41 (137–146) |
+
+\* de tak zoals gereviewd: mediaan van 2 runs van 30 rondes (75 tikken netto), dus de getallen zijn kleiner.
+
+De volledige bench (3 runs per kant, mediaan, `feedback-samen.mjs`) gaf in de andere metingen hetzelfde
+beeld als eerder: druk -> lampje p50 16,3 -> 1,1 ms (p99 39,6 -> 7,1), via de hub 32,4 -> 2,3 ms,
+ingeslikt druk/los 20 -> 0, mapje wisselen p50 52 -> 10,5 ms (max 75,5 -> 17,8), tik in rust p50
+444 -> 52 µs, Maschine pad -> lampje p50 31,8 -> 1,7 ms. In Chrome met de echte hub
+(`led-vertraging.mjs`, één run na de reparatie): p50 5,4 ms, p90 16,1, p99 35,9, 0 ingeslikt.
+
+### Punt 1: de wektik stuurde ook ringen
+
+De reviewer had gelijk: elke knopstap gaf via de wektik meteen een ring-CC terug. Bij een APC die de ring
+als knopwaarde overneemt botst dat met de delta-aanpak van endless (de ring zet de knop terug, de stap
+daarna geeft delta 0). Met de nabouw van de reviewer (`scratchpad/review-uitvoer/sim/knop.mjs`, 30 draaien
+van 3, 90 bedoeld) haalde de tak 45 / 45 / 45 bij 4 / 8 / 50 ms, vóór de tak 60 / 55–57 / 45.
+
+**Gedaan:** de wektik stuurt alleen nog LAMPJES (`tick(max, { lampjes: true })`): ringen en ringtypes
+blijven op de gewone tik van 33 ms, zoals vóór de tak. Een lampjestik zet ook geen ringen uit die hij niet
+berekende. Met dezelfde nabouw nu 60 / 53 / 45: terug op vóór. De winst op knoppen (lampjes) blijft.
+Check: `test/feedback-plan.test.mjs` (de wektik stuurt het lampje en geen CC, de gewone tik erna de ring,
+een lampjestik laat de ringen staan).
+
+De echte oplossing voor een APC met ring-overname ligt in het INVOERpad (dan is `absolute` juist goed, of
+endless moet de ring als nieuwe basis nemen): dat is van het spoor controller-invoer. Eerst hub-proef V1
+op Clay's APC (zie "Alleen op de hardware").
+
+### Punt 2: ringen plus echofilter aten het terugdraaien op
+
+Ook dit klopte: met een ring per bericht stond elke waarde van een draai in het echogeheugen, en
+terugdraaien over die waarden binnen 60 ms werd "echo". De nabouw van de reviewer
+(`scratchpad/rev-meet/draai2.mjs`, een onafhankelijke knop) gaf op de tak 101 / 71 / 31 / 23 verloren bij
+4 / 8 / 20 / 30 ms tegen 14 / 17 / 34 / 27 vóór.
+
+**Gedaan:** (a) punt 1 haalt de snelle ringen weg; daarmee is de nabouw terug op 16 / 21 / 27 / 27
+(vóór, in dezelfde sessie: 13 / 26 / 28 / 29). (b) Het voorstel van de reviewer: een CC wordt NIET in het
+echogeheugen gezet als hij gelijk is aan de laatste waarde die op die control BINNENKWAM (`_laatsteIn` in
+midi.js), behalve 0 en 127 (op de aanslag is hetzelfde bericht doordraaien, dus die blijven bewaakt). Een
+echo van zo'n waarde is onschuldig (endless: delta 0); de lus blijft gevangen, want die begint bij een
+ring op een waarde die de knop NIET stuurde. Een andere invoer wist `_laatsteIn`. Met de nabouw met een
+knop die gelijk staat (`draai2-gelijk.mjs`): vóór 4 / 8 / 8 / 10 verloren, na 0 / 0 / 0 / 0. Checks in
+`test/midi.test.mjs`: 64->65->66->65->64 met de ring er meteen achter komt helemaal aan; een
+teruggekaatste ring na een focuswissel wordt gevangen; op 127 blijft het filter bewaken; een andere
+invoer wist het. Zonder de regel falen de eerste twee checks (gecontroleerd door hem eruit te halen).
+
+**Wat overblijft (eerlijk):** bij "naast" (de ring één tik naast de knop) helpt (b) niet, want de ring is
+nooit gelijk aan wat de knop stuurde, en is het na de reparatie iets slechter dan vóór de tak: gemiddeld
+30 tegen 26 verloren bij 8 ms, 41 tegen 37 bij 20 ms (van 219, de spreiding per run is groot: 18–42). De
+oorzaak heb ik gevonden: de oude wachtrij stuurde ELK bericht via een `setTimeout(0)` (1–4 ms later). Een
+knopbericht dat in die paar ms na de tik binnenkwam, was er vóór de ring in het echogeheugen stond en
+kwam dus door. Met de wachtrij van vóór (alleen die, de rest van de tak gelijk) is "naast" terug op vóór:
+16–28 / 30–39 verloren, 61–68 / 124–131 ingeslikt in 3 runs (`scratchpad/rev-meet/knop-proef.mjs`,
+`OUDE_RIJ=1`). Die vertraging schermde dus toevallig af. Ik heb haar niet teruggezet voor CC: dat zou alle
+lampjes in een tik met een ringwissel ook weer laten wachten. Het blijft een gebrek van het echofilter
+zelf (60 ms, en een ring die net naast de knop staat). De echte oplossing is optie 1 (het filter voor de
+APC uit, na één meting op het apparaat), of in het invoerpad de eerste draai na het richten niet laten
+vallen (dan ontstaat "naast" niet).
+
+### De kleine punten
+
+- **Getallen in comments**: feedback.js, maschine.js en midi-opzet.js noemen geen eigen cijfers meer
+  maar verwijzen naar dit verslag (één bron).
+- **alles.mjs**: zie "Tests" hieronder (run na de reparatie).
+- **"Per definitie niet duurder"**: te sterk gezegd, aangepast (de sleutel per tik en de herbouw kosten
+  iets; gemeten verwaarloosbaar).
+- **Maschine-schermen met 25 beelden/s en HID synchroon in de hub**: bij "Alleen op de hardware".
+- **`Feedback.stop()` en `Maschine.stop()`**: hangen nu aan `pagehide` (midi-opzet.js, speelapparaten.js).
+- **De hub-patch, `zet()` direct zonder `#klaar()`**: nagekeken, geen probleem. `leeg()` lost meteen op
+  als rij en timer leeg zijn; een wachtende bestaat dus alleen zolang er een timer loopt, en dan neemt
+  `zet()` de directe weg niet. Er staat nu een comment bij in de patch; `test/kern.test.js` 9/9.
+- **Echofilter op noten**: "nooit een echte echo" rust op het protocol, niet op een meting. Zo staat het
+  nu in CLAUDE.md en hierboven.
+- **De mapje-meting** telde elk pad-bericht in 250 ms, ook knipperende loop-pads op de tel: het maximum
+  zei niets. Nu telt ze per pad dat door de wissel moet veranderen (gewild vóór tegen gewild meteen erna)
+  het EERSTE bericht, en ze meldt pads die nooit kwamen (0). Mediaan van 3 runs: p50 52 -> 10,5 ms,
+  max 75,5 -> 17,8 ms.
+
 ## Tests (elke wijziging een check)
+
+- Review ronde 1: `test/feedback-plan.test.mjs` (wektik alleen lampjes, de ring op de gewone tik, een
+  lampjestik laat ringen staan) en `test/midi.test.mjs` (draaien en terug komt aan, de lus na een
+  focuswissel blijft gevangen, de aanslag, een andere invoer).
+- `node test/alles.mjs` (VARVE_HUB_REPO gezet), na de reparatie: **95 bestanden, 8846 checks, 2 ROOD**,
+  allebei bekende omgevingsfouten van deze container: renderblok "keylock met wissels: 83,7 bytes per
+  bericht" en wachtrij "yt-dlp en zijn kind zijn allebei weg" (2×). instrumenten-fm-schaal was deze keer
+  groen. De run vóór de review (eerste versie van de tak): 95 bestanden, 8838 checks, 4 ROOD: dezelfde
+  drie plus gridauto ("analyse op de achtergrond duurde 14,9 s", belasting; los gedraaid groen).
+- Gericht na de reparatie, allemaal groen: midi, feedback, feedback-plan, mapping, learn, spiegel, hub,
+  maschine, maschine-kaart, bladeren, maschine-sampler; headless `tools/headless/hub.mjs` (conform
+  PROTOCOL.md) en `led-vertraging.mjs`.
 
 - `test/feedback-plan.test.mjs` (nieuw, echte engine en standaardmapping): wat er brandt is **byte voor
   byte** gelijk aan de oude berekening (letterlijk overgenomen als referentie) in 567 standen: rust,
@@ -210,18 +346,28 @@ invoerpad en de renderloop (ander spoor).
 - Of de APC in 0x42 ooit een ring-CC terugkaatst. Zo niet (`midi.status().echoes` blijft 0 na een
   sessie), dan kan `echoFilter` voor de APC helemaal uit en verdwijnt ook het laatste risico (een knop
   die binnen 60 ms op precies dezelfde waarde terugkomt).
-- De USB-kant: wat de APC en de Maschine doen met de nu snellere lampjes (een ring krijgt nu een bericht
-  per binnenkomend CC in plaats van hooguit 30 per seconde; hoeveel CC een APC-knop per seconde stuurt
-  heb ik niet gemeten, de wachtrij houdt het hoe dan ook onder 16 per 4 ms) en de schermen
-  met 25 beelden per seconde bij draaien (de hub stuurt per scherm alleen de stukken van 8 regels die
-  veranderden, `per_burst` 4).
+- **Hub-proef V1 (ring-overname) op Clay's APC draaien.** De hub gaat ervan uit
+  (`ringen_nemen_waarde_over`, standaard true, kern.js) dat een ring-CC in 0x42 ook de interne waarde
+  van de knop zet. Klopt dat, dan past de delta-aanpak van endless (mapping.js) slecht bij de APC en
+  hoort de echte oplossing in het INVOERpad (dan is `absolute` juist goed). Tot die proef stuurt de
+  wektik geen ringen (Review ronde 1).
+- De USB-kant: wat de APC en de Maschine doen met de nu snellere lampjes (ringen blijven op 30 per
+  seconde, zoals vóór deze tak; de wachtrij houdt alles onder 16 per 4 ms).
+- **Maschine-schermen met 25 beelden per seconde** bij draaien (`SCHERM_SNEL_MS` 40): de hub schrijft
+  HID SYNCHROON (av-app-hub `docs/MASCHINE.md`: is een schermupdate veel meer dan ±20 ms, dan moet het
+  schrijven naar HIDAsync, zodat een scherm de pads niet vertraagt). Die proef (`ms-scherm`) staat in
+  de hub nog open. Tot hij gedraaid is kan sneller schermen in de hub de pads vertragen; terug naar 10
+  per seconde is één getal (`SCHERM_SNEL_MS = SCHERM_MS`). De hub stuurt per scherm alleen de stukken
+  van 8 regels die veranderden (`per_burst` 4).
 - Hoe het voelt: of "laggy" nu weg is, of dat (ook) het invoerpad was (ander spoor).
 
 ## Opties voor een volgende versie
 
 1. **Echofilter voor de APC uit** na een meting op het apparaat. Kosten: 10 minuten met de APC (een set
-   draaien, dan `midi.status().echoes` lezen). Baten: geen enkele ingeslikte beweging meer, ook niet op
-   een ring. Laag risico; terug te zetten met `echoFilter: true` in het profiel.
+   draaien, dan `midi.status().echoes` lezen). Baten: geen enkele ingeslikte beweging meer, ook niet bij
+   een draaiknop waarvan de ring net naast de knop staat (nu nog 30–41 van 219 tikken verloren bij snel
+   heen en terug, "naast" in review ronde 1). Laag risico; terug te zetten met `echoFilter: true` in het
+   profiel.
 2. **Knipperen precies op de tel** in plaats van bemonsterd op de tik van 33 ms: de LED-laag rekent de
    volgende flank van elke knipperende track uit (fase, tellengte, uitgangsvertraging) en zet een wektik
    op dat moment. Kosten: ~een dag (feedback.js, een test met nep-klok). Baten: de lampjes van de
@@ -245,7 +391,7 @@ invoerpad en de renderloop (ander spoor).
   een sessie nodig.
 - Wat voelde laggy: het lampje (dit spoor), of dat de knop zelf laat reageert (het geluid, de fader)?
   Dat laatste is het invoerpad.
-- De ringen volgen je draai nu per bericht in plaats van 30 keer per seconde. Ziet dat er op de APC
-  rustig uit, of flikkert er iets?
+- Mag ik op de APC één keer de hub-proef V1 (ring-overname) draaien? Die beslist of de draaiknoppen
+  in het invoerpad anders moeten (endless of absolute).
 - Op de Maschine loopt het scherm bij draaien nu met ~25 beelden per seconde: prettig, of liever
   rustiger (100 ms zoals eerst)?

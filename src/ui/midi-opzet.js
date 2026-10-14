@@ -89,8 +89,8 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null, hu
   setInterval(() => { if (hub || isEersteTabblad()) feedback.tick(); }, 33);
   // En meteen na elke action (APC, muis, toetsenbord, auto-DJ) en elk ander
   // mapje: een knop licht op zonder op die tik te wachten (feedback.wek: één
-  // microtaak, samengevoegd, alleen verschillen). Gemeten druk -> lampje
-  // p50 ~20 ms naar ~1 ms (tools/bench/feedback.mjs).
+  // microtaak, samengevoegd, alleen verschillen, alleen lampjes). Gemeten:
+  // docs/verslagen/2026-10-14/controller-uitvoer.md (tools/bench/feedback.mjs).
   const wek = () => { if (hub || isEersteTabblad()) feedback.wek(); };
   bijInvoke(wek);
   lagen?.on?.('change', wek);
@@ -99,6 +99,7 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null, hu
   // volgende tik meer, dus dit gaat direct — en alleen wat echt brandt, niet de
   // volledige veegbeurt van 110 berichten.
   window.addEventListener('pagehide', () => {
+    feedback.stop();   // geen wektik meer na het doven
     try { feedback.blackout({ alles: false, direct: true }); } catch (_) {}
   });
 

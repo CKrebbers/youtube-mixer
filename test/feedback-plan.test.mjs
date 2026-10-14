@@ -259,6 +259,27 @@ ok('daarna: niets meer te sturen', fb.tick() === 0 && bus.length === 0);
   fbW.tick(); fbW.wek(); fbW.stop();
   await new Promise((r) => setTimeout(r, WEK_MS + 5));
   ok('… en een timer', fbW.wekTikken === 2 && fbW._wekker === null);
+  // Alleen lampjes (review 14 okt): een ring meteen na elke knopstap botst met een
+  // APC die de ring als knopwaarde overneemt (hub-proef V1). Ringen op de gewone tik.
+  fbW.tick(); busW.length = 0; klok += 100;
+  const filterVoor = A.read('track.1.filter');
+  A.invoke('track.1.filter', filterVoor > 0.5 ? 0.2 : 0.8);   // track knob 1 (cc:0:48): de ring moet mee
+  A.invoke('track.2.play', true);                              // en een lampje
+  fbW.wek(); await Promise.resolve();
+  const isCC = (b) => (b[0] & 0xf0) === 0xb0;
+  ok('wektik: het lampje gaat meteen, geen ring-CC (ringen op de gewone tik)', fbW.wekTikken === 3
+    && busW.some((b) => b[0] === 0x91 && b[1] === 50) && !busW.some(isCC));
+  const ringVoor = busW.length;
+  klok += 40; fbW.tick();
+  const ringen = busW.slice(ringVoor).filter(isCC);
+  ok('… de gewone tik erna stuurt de ring (en geen lampje dubbel)', ringen.length === 1 && ringen[0][1] === 48
+    && ringen[0][2] === Math.round(A.read('track.1.filter') * 127) && busW.slice(ringVoor).every(isCC));
+  // Een lampjestik zet geen ringen uit die hij niet berekende.
+  busW.length = 0; klok += 100;
+  fbW.tick(MAX_PER_TIK, { lampjes: true });
+  ok('een lampjestik laat de ringen staan (niets uit, niets opnieuw)', busW.length === 0 && [...fbW.vorige.values()].some((v) => (v >> 16) === 0xb0));
+  A.invoke('track.1.filter', filterVoor);
+  A.invoke('track.2.play', true);
   A.invoke('track.2.play', true);
 }
 

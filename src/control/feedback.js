@@ -340,8 +340,11 @@ export class Feedback {
     return plan;
   }
 
-  /** Vult `wil` met sig -> gewilde bytes (gepakt). Leest alleen de stand van de engine. */
-  _vul(wil) {
+  /**
+   * Vult `wil` met sig -> gewilde bytes (gepakt). Leest alleen de stand van de
+   * engine. `lampjes`: alleen lampjes, geen ringen (de wektik, zie wek()).
+   */
+  _vul(wil, lampjes = false) {
     const plan = this._planNu();
     const palet = this.device.palette || {};
     const ring = this.device.ring;
@@ -351,6 +354,7 @@ export class Feedback {
       const waarde = this.read ? this.read(e.bron) : null;
       if (waarde === null) continue;
       if (e.soort === 'knob') {
+        if (lampjes) continue;
         wil.set(e.sig, pak(e.b0, e.b1, Math.round(waarde * 127)));
         if (e.typeSig) {
           const m = this.meta ? this.meta(e.doel) : null;
@@ -424,20 +428,23 @@ export class Feedback {
 
   /**
    * Stuurt alleen de verschillen. `max` is een vangnet; het spreiden doet de
-   * wachtrij van de MidiHub (16 per 4 ms), zie MAX_PER_TIK.
+   * wachtrij van de MidiHub (16 per 4 ms), zie MAX_PER_TIK. `lampjes`: alleen
+   * lampjes (noten), ringen en ringtypes blijven voor de gewone tik (wek()).
    */
-  tick(max = MAX_PER_TIK) {
+  tick(max = MAX_PER_TIK, { lampjes = false } = {}) {
     if (this.gepauzeerd || !this.klaar) return 0;
     this.tikken++;
     this._laatsteTik = this.nu();
     const wil = this._wil;
     wil.clear();
-    this._vul(wil);
+    this._vul(wil, lampjes);
     let n = 0;
     // Wat niet meer gewild is (een ander mapje): uit. Anders blijft een pad
-    // branden met de kleur van een mapje dat al dicht is.
+    // branden met de kleur van een mapje dat al dicht is. In een lampjestik
+    // staan de ringen niet in `wil`: die laten we staan (status 0xBn).
     for (const [sig, v] of this.vorige) {
       if (wil.has(sig) || sig.startsWith('type:')) continue;
+      if (lampjes && ((v >> 16) & 0xf0) === 0xb0) continue;
       this.send([v >> 16, (v >> 8) & 0xff, 0]);
       this.vorige.delete(sig);
       if (++n >= max) return n;
@@ -454,8 +461,13 @@ export class Feedback {
 
   /**
    * Zo snel mogelijk een tik, ná wat er nu gebeurt: een knop die je indrukt
-   * licht op zonder op de volgende tik van 33 ms te wachten (gemeten: druk ->
-   * lampje p50 ~20 ms, p99 ~33 ms; met wek ~1 ms). midi-opzet.js roept dit aan
+   * licht op zonder op de volgende tik van 33 ms te wachten (cijfers vóór/na:
+   * docs/verslagen/2026-10-14/controller-uitvoer.md, tools/bench/feedback.mjs).
+   * ALLEEN LAMPJES (review 14 okt): een ring meteen terugsturen na elke
+   * knopstap botst met een APC die de ring als knopwaarde overneemt (hub-proef
+   * V1, nog niet op Clay's APC gedraaid) en vulde het echofilter met elke
+   * waarde van een draai. Ringen blijven op de gewone tik van 33 ms, zoals
+   * vóór 14 okt. midi-opzet.js roept dit aan
    * bij elke action op de bus (bijInvoke draait VÓÓR de action, daarom een
    * microtaak: de tik ziet de nieuwe stand) en bij een ander mapje.
    * Samengevoegd: wat er ook gebeurt in dezelfde taak, één tik; hooguit één
@@ -470,7 +482,7 @@ export class Feedback {
       this._wekker = null;
       if (!this.klaar || this.gepauzeerd) return;
       this.wekTikken++;
-      this.tick();
+      this.tick(MAX_PER_TIK, { lampjes: true });
     };
     const wacht = WEK_MS - (this.nu() - this._laatsteTik);
     if (wacht <= 0) { mijn = {}; this._wekker = mijn; queueMicrotask(doe); }

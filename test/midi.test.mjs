@@ -107,6 +107,30 @@ binnen([0xb0, 0x30, 99]);
 ok('een ring (CC) die terugkaatst wordt nog steeds gevangen', hub2.echoes === echoesVoor + 1 && gehoord.at(-1) === 'note:2:51=0');
 ok('lampjes (noten) vullen het geheugen van het filter niet', [...hub2._verstuurd.keys()].every((k) => k.startsWith('cc:')));
 
+// Een endless-knop draaien en meteen terug (review 14 okt): de ring die wij
+// terugsturen is precies wat de knop net stuurde. Die waarde onthouden maakte
+// bij het terugdraaien elke vorige stap een "echo" (dode zone bij elke
+// richtingswissel). Wat de knop zelf stuurde onthoudt het filter niet meer.
+{
+  const voorE = hub2.echoes, n0 = gehoord.length;
+  for (const v of [64, 65, 66, 65, 64]) {
+    binnen([0xb0, 0x31, v]);           // jij draait (filter, cc:0:49)
+    hub2.send([0xb0, 0x31, v]);        // de ring volgt meteen (de wachtrij is leeg: direct)
+  }
+  ok('draaien 64->65->66->65->64 met de ring er meteen achter: alle vijf komen aan',
+    gehoord.slice(n0).join(' ') === 'cc:0:49=64 cc:0:49=65 cc:0:49=66 cc:0:49=65 cc:0:49=64' && hub2.echoes === voorE);
+  ok('... de ringen van wat de knop zelf stuurde staan niet in het echogeheugen', ![...hub2._verstuurd.keys()].some((k) => k.startsWith('cc:0:49=')));
+  hub2.send([0xb0, 0x31, 20]);         // focuswissel: de ring springt naar een stand die de knop NIET stuurde
+  binnen([0xb0, 0x31, 20]);            // ... en het apparaat kaatst hem terug
+  ok('een teruggekaatste ring na een focuswissel wordt wel gevangen (geen lus)', hub2.echoes === voorE + 1 && gehoord.at(-1) === 'cc:0:49=64');
+  binnen([0xb0, 0x31, 127]);           // op de aanslag
+  hub2.send([0xb0, 0x31, 127]);
+  binnen([0xb0, 0x31, 127]);           // nog eens 127 binnen 60 ms: in endless is dat doordraaien, dus een echo hier zou een stap zijn
+  ok('op de aanslag (127) blijft het filter bewaken, ook als de knop hem zelf stuurde', hub2.echoes === voorE + 2);
+  hub2._lastIn = 'een andere controller'; hub2._sync();   // de invoer wisselt (of komt terug na loskoppelen)
+  ok('een andere invoer: wat de vorige stuurde telt niet meer', hub2._laatsteIn.size === 0);
+}
+
 // ---- uitgaande wachtrij ---------------------------------------------------
 // Een burst van honderd berichten in één lus is voor geen enkele MIDI-stack
 // prettig; Comet legt er zelfs zijn MIDI-service mee om. Alles wat naar buiten

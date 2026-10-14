@@ -951,7 +951,7 @@ export class Maschine extends Emitter {
    * Na invoer zo snel mogelijk een tik (een microtaak, ná het verwerken van het
    * bericht), samengevoegd en hooguit één per WEK_MS. De tik stuurt alleen wat
    * veranderde, dus de gewone tik erna vindt niets dubbel. Gemeten pad ->
-   * lampje (via de hub) p50 26 ms naar ~1 ms (tools/bench/feedback.mjs).
+   * lampje: docs/verslagen/2026-10-14/controller-uitvoer.md (tools/bench/feedback.mjs).
    */
   wek() {
     if (this._wekker !== null) return;

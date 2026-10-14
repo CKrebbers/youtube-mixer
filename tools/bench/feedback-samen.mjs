@@ -35,6 +35,7 @@ for (const [deel, naam] of [['direct', 'direct'], ['kaatst', 'direct, APC kaatst
     rij(`${naam}: echo's die de mapping bereikten`, [deel, 'echo_door']);
     rij(`${naam}: mapje wisselen, laatste lampje p50 ms`, [deel, 'mapje_p50_ms']);
     rij(`${naam}: mapje wisselen, laatste lampje max ms`, [deel, 'mapje_max_ms']);
+    rij(`${naam}: mapje wisselen, lampjes die nooit kwamen`, [deel, 'mapje_lampjes_nooit']);
     rij(`${naam}: wachtrij MidiHub max tijdens spelen`, [deel, 'wachtrij_max']);
     rij(`${naam}: wachtrij MidiHub max bij een mapje`, [deel, 'wachtrij_max_mapje']);
     rij(`${naam}: berichten/s naar de APC`, [deel, 'berichten_per_s']);
@@ -44,3 +45,8 @@ for (const [k, naam] of [['tik_p50_us', 'Maschine tik p50 µs'], ['tik_p99_us', 
   ['schermen_per_s', 'Maschine schermen per s'], ['pad_lampje_p50_ms', 'Maschine pad -> lampje p50 ms'], ['pad_lampje_p99_ms', 'Maschine pad -> lampje p99 ms'],
   ['knop_scherm_p50_ms', 'Maschine draaien -> scherm p50 ms'], ['knop_scherm_p99_ms', 'Maschine draaien -> scherm p99 ms'], ['rij_max', 'Maschine wachtrij hub.js max'],
   ['stand_json_p50_us', 'Maschine stand()+JSON p50 µs'], ['twee_schermen_p50_us', 'Maschine twee schermen tekenen p50 µs']]) rij(naam, ['maschine', k]);
+for (let i = 0; i < (voor[0].knoppen?.length ?? 0); i++) {
+  const k = voor[0].knoppen[i];
+  rij(`knop ${k.soort}, ${k.stap_ms} ms per tik: verloren tikken (van ${k.bedoeld_netto} netto)`, ['knoppen', i, 'tikken_verloren']);
+  rij(`knop ${k.soort}, ${k.stap_ms} ms per tik: ingeslikt als echo (van ${k.berichten})`, ['knoppen', i, 'ingeslikt_als_echo']);
+}

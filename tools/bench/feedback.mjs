@@ -6,10 +6,11 @@
  * MidiHub, HubMidi en Maschine, en nep-poorten die de tijd van elk bericht
  * noteren. Verslag: docs/verslagen/2026-10-14/controller-uitvoer.md.
  *
- * Draai met:  node tools/bench/feedback.mjs [--bron <map>] [--json <bestand>] [--kort]
+ * Draai met:  node tools/bench/feedback.mjs [--bron <map>] [--json <bestand>] [--kort] [--knoppen [--rondes N]]
  *   --bron   een andere checkout (bv. een worktree van vóór een wijziging):
  *            de bron (src/, mappings/) komt dan daarvandaan, het harnas blijft dit bestand.
  *   --kort   minder herhalingen (een rookproef, ~15 s)
+ *   --knoppen alleen meting 6 (knoppen draaien), met --rondes N rondes per stand (standaard 30)
  *
  * Gemeten:
  *   1. tick     Feedback.tick() in µs (p50/p99/max) en berichten per seconde, in vier
@@ -28,6 +29,14 @@
  *   4. mapje    een mapje wisselen: hoe lang tot alle lampjes kloppen (direct).
  *   5. maschine Maschine.tik() in µs, schermen per seconde (gerenderd en verstuurd),
  *               lampjes per seconde, en de wachtrij van hub.js, terwijl er gespeeld wordt.
+ *   6. knoppen  een endless-knop (track knob 1, cc:0:48 = track.1.filter) draaien, heen
+ *               2–6 tikken en terug 0–6, op 4/8/20 ms per tik, via de echte MidiHub, Mapping
+ *               en Feedback (met de wektik op de bus als die bestaat). Drie nep-APC's: een
+ *               onafhankelijke knop (de ring raakt zijn waarde niet) die gelijk loopt met de
+ *               software, dezelfde met de ring één tik ernaast (zo staat hij na het eerste
+ *               bericht na het richten, en vaak na een focuswissel), en een knop die de ring-CC als zijn waarde OVERNEEMT (hub-proef V1,
+ *               config ringen_nemen_waarde_over). Verloren tikken = |software − bedoeld| per
+ *               ronde opgeteld, en wat het echofilter als echo inslikte (review 14 okt).
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -35,6 +44,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const arg = (naam) => { const i = process.argv.indexOf(naam); return i > 0 ? process.argv[i + 1] : null; };
 const KORT = process.argv.includes('--kort');
+const ALLEEN_KNOPPEN = process.argv.includes('--knoppen');
+const RONDES = Number(arg('--rondes')) || (KORT ? 8 : 30);
 const BRON = resolve(arg('--bron') ?? join(dirname(fileURLToPath(import.meta.url)), '..', '..'));
 const imp = (p) => import(pathToFileURL(join(BRON, p)).href);
 const json = (p) => JSON.parse(readFileSync(join(BRON, p), 'utf8'));
@@ -288,19 +299,31 @@ async function direct({ kaats }) {
   res.echo_gevangen = midi.echoes;
   // 4. een mapje wisselen: hoe lang tot het laatste lampje van het nieuwe mapje er is
   const mapjes = [];
+  let mapjesOntbreekt = 0;
   for (const [laag, terug] of [['loops', 'hotcues'], ['klank', 'hotcues'], ['secties', 'hotcues'], ['sampler', 'hotcues']]) {
     for (let k = 0; k < (KORT ? 2 : 6); k++) {
       await wacht(37 + k * 7);
+      // Welke pads moeten door de wissel veranderen (gewild vóór tegen gewild meteen erna), en per
+      // pad het EERSTE bericht erna. Vroeger telde elk pad-bericht in 250 ms mee, ook een
+      // knipperende loop-pad op de tel: dan zei het maximum niets (review 14 okt).
+      const gewild = () => new Map([...o.fb.desired()].filter(([sig]) => /^note:\d+:(\d+)$/.exec(sig)?.[1] < 40).map(([sig, b]) => [+sig.split(':')[2], b[2]]));
+      const voorW = gewild();
       const n0 = apcNep.uit.length, t = performance.now();
       A.invoke(`layer.grid.${laag}`, true); A.invoke(`layer.grid.${laag}`, false);
+      const naW = gewild();
+      const moet = new Set([...naW].filter(([n, v]) => voorW.get(n) !== v).map(([n]) => n));
+      for (const n of voorW.keys()) if (!naW.has(n)) moet.add(n);
       await wacht(250);
-      const na = apcNep.uit.slice(n0).filter((m) => (m.b0 & 0xf0) === 0x90 && m.b1 < 40);
-      mapjes.push(na.length ? na.at(-1).t - t : 0);
+      const eerst = new Map();
+      for (const m of apcNep.uit.slice(n0)) if ((m.b0 & 0xf0) === 0x90 && moet.has(m.b1) && !eerst.has(m.b1)) eerst.set(m.b1, m.t - t);
+      mapjes.push(eerst.size ? Math.max(...eerst.values()) : 0);
+      mapjesOntbreekt += moet.size - eerst.size;
       A.invoke(`layer.grid.${terug}`, true); A.invoke(`layer.grid.${terug}`, false);
       await wacht(250);
     }
   }
   res.mapje_p50_ms = r1(pct(mapjes, 0.5)); res.mapje_max_ms = r1(Math.max(...mapjes));
+  res.mapje_lampjes_nooit = mapjesOntbreekt;   // pads die moesten veranderen maar binnen 250 ms niets kregen
   res.wachtrij_max_mapje = rijMaxMapje;
   o.stop();
   return res;
@@ -419,9 +442,67 @@ async function maschine() {
   return res;
 }
 
+// ---- 6. knoppen draaien ---------------------------------------------------------------------
+/**
+ * Een endless-knop op cc:0:48 (track.1.filter) draaien via de echte MidiHub, Mapping en
+ * Feedback (opzet()). `soort`: 'gelijk' (onafhankelijke knop, de ring staat op zijn waarde),
+ * 'naast' (onafhankelijk, de ring één tik ernaast: zo staat hij na het eerste bericht na het
+ * richten, dat mapping._endless niet telt, en vaak na een focuswissel), 'overname' (de knop
+ * neemt een ring-CC als zijn waarde over: hub-proef V1). Het filter begint in het midden (0,5).
+ */
+async function draaiKnop({ soort, stap_ms, rondes }) {
+  let k = 64;
+  const ingang = { id: 'apc-in', name: 'APC40 mkII', state: 'connected', onmidimessage: null };
+  const uitgang = { id: 'apc-uit', name: 'APC40 mkII', state: 'connected',
+    send(b) { if (soort === 'overname' && b[0] === 0xb0 && b[1] === 48) k = b[2]; } };
+  const midi = new MidiHub();
+  midi.access = { inputs: new Map([[ingang.id, ingang]]), outputs: new Map([[uitgang.id, uitgang]]) };
+  midi.enabled = true; midi.sysex = true; midi.inputId = ingang.id; midi.outputId = uitgang.id;
+  const o = opzet(midi);
+  midi._sync();
+  await wacht(200);
+  const stuur = () => ingang.onmidimessage({ data: Uint8Array.from([0xb0, 48, k]), timeStamp: performance.now() });
+  A.invoke('track.1.filter', 0.5);   // het filter in het midden (de standaard): ring round(63,5) = 64 = de knop
+  await wacht(100);
+  stuur();                      // de eerste draai na het richten telt niet (mapping._endless): vooraf, buiten de meting
+  await wacht(100);
+  if (soort === 'naast') { A.invoke('track.1.filter', 0.5 + 1 / 127); await wacht(100); stuur(); await wacht(100); }
+  const e0 = midi.echoes;
+  let zaad = 11; const r = () => { zaad = (zaad * 1103515245 + 12345) & 0x7fffffff; return zaad / 0x7fffffff; };
+  let verloren = 0, fout = 0, bedoeld = 0, n = 0;
+  for (let ronde = 0; ronde < rondes; ronde++) {
+    const start = A.read('track.1.filter');
+    const heen = 2 + Math.floor(r() * 5), terug = Math.floor(r() * 7);
+    const richting = r() < 0.5 ? 1 : -1;
+    let netto = 0;
+    for (let i = 0; i < heen + terug; i++) {
+      const s = (i < heen ? 1 : -1) * richting;
+      if (k + s < 1 || k + s > 126) continue;   // niet tegen de aanslag (daar geldt een eigen regel)
+      k += s; netto += s; n++;
+      stuur();
+      await wacht(stap_ms);
+    }
+    await wacht(150);
+    const echt = Math.round((A.read('track.1.filter') - start) * 127);
+    bedoeld += Math.abs(netto);
+    if (echt !== netto) { fout++; verloren += Math.abs(echt - netto); }
+  }
+  o.stop();
+  return { soort, stap_ms, berichten: n, bedoeld_netto: bedoeld, tikken_verloren: verloren, rondes_fout: fout, rondes, ingeslikt_als_echo: midi.echoes - e0 };
+}
+
+async function knoppen() {
+  const uit = [];
+  for (const soort of ['gelijk', 'naast', 'overname']) {
+    for (const stap_ms of [4, 8, 20]) uit.push(await draaiKnop({ soort, stap_ms, rondes: RONDES }));
+  }
+  return uit;
+}
+
 // ---- alles ----------------------------------------------------------------------------------
 const uitslag = { bron: BRON, node: process.version, kort: KORT };
 console.log(`bron: ${BRON}${KORT ? ' (kort)' : ''}`);
+if (!ALLEEN_KNOPPEN) {
 console.log('\n1. Feedback.tick (nep-klok, 33 ms per tik)');
 uitslag.tick = tikMeting();
 for (const t of uitslag.tick) console.log(`  ${t.stand.padEnd(40)} p50 ${t.p50_us} µs  p99 ${t.p99_us} µs  max ${t.max_us} µs  ${t.berichten_per_s} berichten/s`);
@@ -439,6 +520,13 @@ console.log('  ', JSON.stringify(uitslag.hub));
 console.log('\n5. Maschine (HubMidi, nep-WebSocket)');
 uitslag.maschine = await maschine();
 console.log('  ', JSON.stringify(uitslag.maschine));
+} else {
+  klokEcht = performance.now() - NOW * 1000;
+  for (const id of IDS) { const d = eng.deck(id); d.seek(5); if (!d.playing) d.play(); }
+}
+console.log('\n6. knoppen draaien (endless, cc:0:48 = track.1.filter): verloren tikken');
+uitslag.knoppen = await knoppen();
+for (const k of uitslag.knoppen) console.log('  ', JSON.stringify(k));
 console.warn = warn;
 const uitBestand = arg('--json');
 if (uitBestand) writeFileSync(uitBestand, JSON.stringify(uitslag, null, 2));

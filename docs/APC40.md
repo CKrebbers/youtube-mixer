@@ -454,8 +454,10 @@ Chrome en de echte hub met een nep-APC); alles in docs/verslagen/2026-10-14/cont
 - **Een knop licht METEEN op.** `Feedback.wek()` na elke action op de bus (`bijInvoke` in
   midi-opzet.js) en elk ander mapje: één tik na de lopende taak (microtaak), samengevoegd, hooguit
   één per 4 ms. De tik stuurt alleen verschillen, dus niets dubbel. De tik van 33 ms blijft voor
-  wat zonder action verandert (de tel, het einde van een nummer). Druk -> lampje: p50 17 -> 1 ms
-  (Node), in Chrome via de hub p50 ~50 -> ~6 ms.
+  wat zonder action verandert (de tel, het einde van een nummer) en voor de RINGEN: de wektik
+  stuurt alleen lampjes (review 14 okt; een APC die een ring als knopwaarde overneemt, hub-proef
+  V1, botst anders met endless). Druk -> lampje: p50 17 -> 1 ms (Node), in Chrome via de hub p50
+  ~50 -> ~6 ms.
 - **De tik is 10× lichter.** Het PLAN (welke regels nu gelden, hun doel-action en kleur) wordt
   alleen opnieuw gemaakt als mapping, shift, open mapjes of focus veranderen; per tik alleen de
   reads. De kleurregexen zijn onthouden per action; de tel per track één keer per tik gelezen.
@@ -466,7 +468,8 @@ Chrome en de echte hub met een nep-APC); alles in docs/verslagen/2026-10-14/cont
   maatgever en clip stop van een loop knipperen zo) precies het indrukken. 15–21 van ~220 druk/los
   verdwenen (Node), 15–17 van 240 in Chrome; een ingeslikt loslaten laat een knop hangen. Nu alleen
   CC (ringen), waar de lus kan ontstaan: 0 ingeslikt, en een APC die ringen terugkaatst geeft nog
-  steeds 0 echo's door.
+  steeds 0 echo's door. Een ring op de waarde die de knop net zelf stuurde onthoudt het filter niet
+  (behalve 0 en 127): anders slikte het bij het terugdraaien van een draaiknop de vorige stap in.
 - **Een mapje in één keer.** Hooguit 160 berichten per tik (was 24: een mapje wisselen kostte twee
   tikken); de wachtrij van de MidiHub spreidt ze. Mapje -> laatste lampje p50 56 -> 11 ms.
 - **De wachtrij is een schuivend venster** (16 in ELK venster van 4 ms) en stuurt meteen als er
@@ -474,4 +477,5 @@ Chrome en de echte hub met een nep-APC); alles in docs/verslagen/2026-10-14/cont
   meteen weer 16 sturen. `test/midi.test.mjs` meet het venster op de echte tijden.
 
 Niet op het apparaat nagelopen: of de APC in 0x42 een ring-CC echt nooit terugkaatst (dan kan
-`echoFilter` voor de APC uit), en hoe het voelt met Clay's handen.
+`echoFilter` voor de APC uit), of een ring de knopwaarde overneemt (hub-proef V1: dan horen de
+draaiknoppen in het invoerpad op `absolute`), en hoe het voelt met Clay's handen.

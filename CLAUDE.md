@@ -1071,7 +1071,10 @@ docs/
 - De hub negeert echo's: een CC die identiek is aan wat wij net stuurden en
   binnen 60 ms terugkomt, bereikt de mapping niet. ALLEEN CC (14 okt): op noten
   slikte hij echte knoppen in (lampje uit = [0x90, n, 0] = het loslaten; een
-  knipperend lampje 127 = het indrukken). Zonder die rem maken de
+  knipperend lampje 127 = het indrukken); dat een lampje nooit als druk terugkomt
+  rust op het protocol, niet op een meting aan het apparaat. Een ring op de waarde
+  die de knop ons net ZELF stuurde wordt niet onthouden (`_laatsteIn`, behalve 0 en
+  127): anders at het filter bij het terugdraaien elke vorige stap op. Zonder die rem maken de
   LED-ringen een lus — wij zetten een ring, het apparaat meldt de stand terug,
   wij verwerken dat als een knopdraai — en loopt de bus vol. Het filter is per
   apparaat uit te zetten (`echoFilter` in het profiel); voor de APC staat het
@@ -1158,7 +1161,9 @@ docs/
 - LED's lopen op een eigen `setInterval`, niet op de renderloop: `requestAnimationFrame`
   staat stil zodra het venster naar de achtergrond gaat, en dan zouden de lampjes
   bevriezen terwijl de muziek doorspeelt. Daarnaast `Feedback.wek()` na elke action op
-  de bus (14 okt): een knop licht meteen op (microtaak, alleen verschillen). De tik
+  de bus (14 okt): een knop licht meteen op (microtaak, alleen verschillen). ALLEEN
+  LAMPJES: ringen blijven op de tik van 33 ms, want een APC die een ring als knopwaarde
+  overneemt (hub-proef V1, niet gemeten) botst met endless bij een ring na elke stap. De tik
   leest per regel alleen nog de read; het PLAN (regels, doelen, kleuren) wordt pas
   opnieuw gemaakt bij een andere mapping, shift, mapjes of focus. Een nieuwe input
   voor wat een regel betekent (naast vars, lagen, shift): zet hem in `_planNu()`.

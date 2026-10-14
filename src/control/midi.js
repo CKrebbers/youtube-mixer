@@ -168,6 +168,7 @@ export class MidiHub extends Emitter {
     this.rxOther = 0;            // verkeer op de rest — zwijgt de gekozene, dan is dit het antwoord
     this.echoes = 0;             // teruggekaatste berichten die we genegeerd hebben
     this._verstuurd = new Map(); // 'sig=waarde' -> tijdstip, voor echodetectie
+    this._laatsteIn = new Map(); // sig -> laatste CC-waarde die de controller ons stuurde (zie _onthoudVerstuurd)
     // Echo's wegfilteren. Per apparaat uit te zetten (device.echoFilter): het
     // filter kan een echte beweging slikken die toevallig gelijk is aan wat
     // wij net stuurden. De app zet dit bij het kiezen van het apparaat.
@@ -278,7 +279,8 @@ export class MidiHub extends Emitter {
     const outNow = this.output() ? this.outputId : null;
 
     this.emit('ports', this.ports());
-    if (inNow !== this._lastIn) { this._lastIn = inNow; this.emit('input', this.input()); }
+    // Een andere (of terugkomende) controller: wat de vorige ons stuurde zegt niets meer.
+    if (inNow !== this._lastIn) { this._lastIn = inNow; this._laatsteIn.clear(); this.emit('input', this.input()); }
     if (outNow !== this._lastOut) { this._lastOut = outNow; this.emit('output', this.output()); }
     this.emit('state');
   }
@@ -350,6 +352,7 @@ export class MidiHub extends Emitter {
     msg.lag = performance.now() - e.timeStamp;
     msg.selected = port.id === this.inputId;
     msg.echo = this._isEcho(msg);
+    if (msg.type === 'cc' && msg.selected) this._laatsteIn.set(msg.sig, msg.value);
     this.rx++;
     if (msg.echo) this.echoes++;
     if (msg.selected) this.rxSelected++; else this.rxOther++;
@@ -374,8 +377,24 @@ export class MidiHub extends Emitter {
     return true;
   }
 
-  /** Oude sporen opruimen; anders groeit die map bij elke LED-update. */
+  /**
+   * Een verstuurde CC onthouden voor het echofilter, en oude sporen opruimen
+   * (anders groeit die map bij elke LED-update).
+   *
+   * NIET onthouden (review 14 okt): een waarde die de controller ons op die
+   * control net zelf stuurde. Een ring van een endless-knop is precies de
+   * waarde die de knop stuurde (softwarestand = vorige + delta); onthouden
+   * maakte bij het terugdraaien van een snelle draai elke vorige stap een
+   * "echo" en slikte hem in (dode zone van ~60 ms bij elke richtingswissel).
+   * Een echo van zo'n waarde is onschuldig: het apparaat staat er al, dus in
+   * endless is de delta 0 en in absolute verandert er niets. De lus blijft
+   * gevangen, want die begint bij een ring op een waarde die de knop NIET
+   * stuurde (focus- of mapjewissel). Behalve op de aanslag (0 en 127): daar is
+   * nog eens hetzelfde bericht in endless doordraaien (mapping._endless), dus
+   * die blijven we bewaken.
+   */
   _onthoudVerstuurd(msg) {
+    if (msg.value !== 0 && msg.value !== 127 && this._laatsteIn.get(msg.sig) === msg.value) return;
     const nu = performance.now();
     this._verstuurd.set(`${msg.sig}=${msg.value}`, nu);
     if (this._verstuurd.size > 256) {
