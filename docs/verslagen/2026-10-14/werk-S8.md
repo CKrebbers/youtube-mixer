@@ -158,6 +158,10 @@ b76373e (zie docs/werkruimte/S8.md §6b, met tests). Review (b): geen onware bew
 C6-budget, de KAAL-meting) en een onvolledige bestandenlijst: hierboven bijgesteld; en ✎ laadt sindsdien lui (met
 `standaard` geen module, geen fetch, geen paneel). Wat bewust blijft: S8.md §6b.
 
+Ronde 2 vond een regressie die ronde 1 zelf maakte (B1: een `los` na een te late `aan` ging verloren en het late ja
+zette de knop vast), plus B2 (de mixer-verbinding moet het tabblad van de relais volgen) en B3 (`*.grid.*` ving ook
+`layer.grid.*`). Gerepareerd met tests (S8.md §6c).
+
 ## 3. Wat niet gedaan is
 
 - **De Maschine in de totaalmeting**: alleen via de AV-app-hub; die kon hier niet geïnstalleerd worden (de

@@ -134,6 +134,8 @@ function nepBus() {
   r = u.voer({ ...b('track.1.fx.knob.2.hold', true, 'aan', 'pagina0003'), seq: 10 });
   ok('een "aan" die na zijn eigen "los" binnenkomt: niet meer indrukken', !r.ok && /al losgelaten/.test(r.reden) && u.aantalVast === 0);
   ok('VAST_NOOIT ook: de auto-DJ (laadt), het grid, patronen opnemen', ['auto.toggle', 'track.1.grid.here', 'patterns.record'].every((a) => /nooit van buiten/.test(M.waaromNietOpScherm({ schermen: { x: { soort: 'ipad', mag: ['*'], tijdkritisch: true } } }, 'x', a) ?? '')));
+  ok('B3: layer.grid.* (een mapje kiezen) valt niet onder het grid; de toonsoort wel onder VAST_NOOIT', (() => { const w = { schermen: { x: { soort: 'ipad', mag: ['*'], tijdkritisch: true } } };
+    return M.waaromNietOpScherm(w, 'x', 'layer.grid.next') === null && /nooit van buiten/.test(M.waaromNietOpScherm(w, 'x', 'track.1.key.up') ?? ''); })());
   const geen = new Uitvoerder({ ...bus, werkruimte: () => ({ naam: 'standaard' }), toegestaan: () => toe });
   ok('met standaard: niets (geen werkruimte)', !geen.voer(b('track.1.fx.knob.1', 0.3)).ok);
 }
@@ -264,6 +266,26 @@ console.log('\nde server: koppelen, rem, seq, loslaten');
   ok('een tweede mixer van een ander tabblad: 409 zolang de eerste leeft', s.mixer({ on() {}, socket: {} }, m2, { tab: 'ander' }) === null && m2.status === 409 && s.mixers.size === 1);
   const m3 = { writeHead() {}, write() {}, end() {}, on() {} };
   ok('hetzelfde tabblad opnieuw: vervangt zijn vorige verbinding', s.mixer({ on() {}, socket: {} }, m3, { tab: 't' }) && s.mixers.size === 1 && [...s.mixers][0].res === m3);
+  // Review ronde 2, B1: een 'aan' die over de time-out ging, en daarna zijn 'los': die 'los' gaat door (niet "niets vast"),
+  // en een laat 'ja' op de 'aan' zet de knop daarna niet alsnog vast.
+  s.mixer({ on() {}, socket: {} }, mres, { tab: 't' });
+  naarMixer.length = 0;
+  const pa = s.invoke(a9, inv(950, { id: 'track.1.fx.knob.3.hold', v: true, druk: 'aan', k: 'paginaccccc' }));
+  const nA = naarMixer.find((x) => x.t === 'invoke' && x.seq === 950).n;
+  timers.at(-1)(); await pa;
+  const pLos = s.invoke(a9, inv(951, { id: 'track.1.fx.knob.3.hold', v: false, druk: 'los', k: 'paginaccccc' }));
+  const losNaar = naarMixer.find((x) => x.t === 'invoke' && x.seq === 951);
+  ok('B1: een los na een "aan" die te laat is: gaat naar de mixer (niet "niets vast")', !!losNaar);
+  s.antwoord({ n: losNaar.n, ok: true }); await pLos;
+  s.antwoord({ n: nA, ok: true });                    // het late ja op de 'aan', ná de los
+  ok('B1: … en het late ja daarna zet hem niet weer vast', !s._vast.get('paginaccccc')?.ids.has('track.1.fx.knob.3.hold'));
+  // B2: het tabblad dat de stand zendt (de relais) wint, ook van een ander tabblad dat al luistert.
+  nu += 10;
+  relais.tab = 'zender'; relais.tabT = nu;
+  const m4 = { status: null, writeHead(c) { this.status = c; }, write() {}, end() {}, on() {} };
+  ok('B2: een tabblad dat niet zendt terwijl de relais een levend tabblad heeft: 409', s.mixer({ on() {}, socket: {} }, m4, { tab: 'ander' }) === null && m4.status === 409);
+  const m5 = { writeHead() {}, write() {}, end() {}, on() {} };
+  ok('B2: het tabblad van de relais neemt het over van een ander tabblad', s.mixer({ on() {}, socket: {} }, m5, { tab: 'zender' }) && [...s.mixers][0].res === m5);
   s.sluit();
   rmSync(map, { recursive: true, force: true });
 }

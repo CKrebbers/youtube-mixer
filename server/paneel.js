@@ -377,8 +377,15 @@ export class PaneelSchrijf {
     if (b.druk === 'los') {
       // Loslaten gaat langs de rem (anders blijft er iets hangen), maar alleen als er voor die pagina iets vastzit
       // of een 'aan' onderweg is; anders zou een vloed van 'los' de rem omzeilen (review S8 ronde 1, punt 6).
-      const vast = this._vast.get(k)?.ids.has(b.id) || [...this._wacht.values()].some((w) => w.k === k && w.b.id === b.id && w.b.druk === 'aan');
+      // Ook een 'aan' waarvan het antwoord te laat kan komen (_laat): anders gaat deze 'los' verloren en zet het late
+      // antwoord de knop daarna alsnog vast (review S8 ronde 2, B1).
+      const zelfde = (w) => w.k === k && w.b.id === b.id && w.b.druk === 'aan';
+      const vast = this._vast.get(k)?.ids.has(b.id) || [...this._wacht.values()].some(zelfde) || [...(this._laat?.values() ?? [])].some(zelfde);
       if (!vast) return Promise.resolve({ status: 200, antwoord: { t: 'antwoord', seq: b.seq, ok: false, reden: 'niets vast' } });
+      // Onthouden: een laat 'ja' op een oudere 'aan' mag hem daarna niet weer vastzetten (review S8 ronde 2, B1).
+      const ls = (this._losSeq ??= new Map());
+      ls.set(`${k}|${b.id}`, b.seq);
+      if (ls.size > 512) ls.delete(ls.keys().next().value);
     } else {
       if (tijden.length >= REM_PER_S) {
         this.stats.te_snel++;
@@ -418,7 +425,9 @@ export class PaneelSchrijf {
       // Te laat (na de time-out van 1 s): de iPad kreeg 504, maar de mixer voerde het wel uit. Hield hij iets
       // vast, dan weet de server het nu alsnog: valt de pagina weg, dan gaat het los (review S8 ronde 1, punt 2).
       const l = this._laat?.get(d?.n);
-      if (l && d.ok === true && l.b.druk === 'aan') this._houd(l.k, l.b.scherm, l.a.id, l.b.id);
+      const losNa = this._losSeq?.get(`${l?.k}|${l?.b.id}`) > l?.b.seq;
+      if (l && d.ok === true && l.b.druk === 'aan' && !losNa) this._houd(l.k, l.b.scherm, l.a.id, l.b.id);
+      if (l && d.ok === true && l.b.druk === 'los') this._vast.get(l.k)?.ids.delete(l.b.id);
       this._laat?.delete(d?.n);
       return false;
     }
@@ -479,13 +488,24 @@ export class PaneelSchrijf {
 
   // ---- het kanaal naar de mixer (SSE, alleen vanaf deze Mac) -----------------------------------
 
-  /** GET /api/paneel/naar-mixer?tab=: de mixer luistert. Eén tegelijk: de nieuwste wint. */
+  /** GET /api/paneel/naar-mixer?tab=: de mixer luistert. Eén tegelijk: het tabblad van de relais, anders de eerste. */
   mixer(req, res, { tab = null } = {}) {
     // Eén mixer: hetzelfde tabblad dat opnieuw verbindt vervangt zijn vorige verbinding; een ANDER tabblad
     // (bv. localhost en 127.0.0.1: twee oorsprongen, elk een eigen Web Lock) wordt geweigerd zolang de eerste
     // leeft, anders gooien ze elkaar om de 500 ms eruit en komt een 'los' bij de verkeerde (review S8 ronde 1, punt 1).
+    // En het tabblad dat de stand zendt (de relais) wint: de iPad ziet de stand van dat tabblad, dus daar horen zijn
+    // invokes ook heen (review S8 ronde 2, B2). Een ander tabblad dat zich meldt terwijl de relais een levend tabblad
+    // heeft, wordt geweigerd; het tabblad van de relais neemt een verbinding van een ander tabblad over.
+    const r = this.relais;
+    const zendt = r?.tab && r.klok() - r.tabT <= TAB_STIL_MS ? r.tab : null;
+    const weiger = () => {
+      res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ fout: 'een ander tabblad van de mixer luistert al' }));
+      return null;
+    };
+    if (zendt && tab !== zendt) return weiger();
     for (const m of this.mixers) {
-      if (m.tab !== tab && !m.res.destroyed && !m.res.writableEnded) {
+      if (m.tab !== tab && m.tab !== null && tab !== zendt && !m.res.destroyed && !m.res.writableEnded) {
         res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify({ fout: 'een ander tabblad van de mixer luistert al' }));
         return null;

@@ -37,6 +37,7 @@ export function maakSchrijver({ pagina, fetch: f = (...a) => globalThis.fetch(..
 
   const post = (body) => f('/api/paneel/invoke', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, credentials: 'same-origin', cache: 'no-store' });
 
+  let gestopt = false;
   const laatsteWaarde = new Map();   // id -> tijd van de laatste verzonden waarde
   const wachtend = new Map();        // id -> { b, klaar: [resolve] }
   function schrijf(b) {
@@ -48,6 +49,7 @@ export function maakSchrijver({ pagina, fetch: f = (...a) => globalThis.fetch(..
     const nieuw = { b, klaar: [] };
     wachtend.set(b.id, nieuw);
     st(() => {
+      if (gestopt || wachtend.get(b.id) !== nieuw) { for (const z of nieuw.klaar) z({ ok: false, reden: 'gestopt' }); return; }
       wachtend.delete(b.id);
       laatsteWaarde.set(b.id, nu());
       stuur(nieuw.b).then((r) => { for (const z of nieuw.klaar) z(r); });
@@ -80,7 +82,7 @@ export function maakSchrijver({ pagina, fetch: f = (...a) => globalThis.fetch(..
   }
   schrijf.stats = stats;
   schrijf.vast = vast;
-  schrijf.stop = () => { ci(pinger); pinger = null; vast.clear(); };
+  schrijf.stop = () => { ci(pinger); pinger = null; vast.clear(); gestopt = true; wachtend.clear(); };
   schrijf.wachtend = wachtend;
   return schrijf;
 }

@@ -26,17 +26,18 @@ export default async function opzet(ctx) {
   // Lui: met `standaard` (of zolang niemand ✎ indrukt) laadt hier niets: geen module, geen fetch, geen paneel.
   // Alleen de knop (de werk-balk is dan hidden) en de action werk.terug (die pas bij gebruik laadt).
   let klaar = null;
-  const laad = () => (klaar ??= bouw(ctx));
-  define('werk.terug', 'trigger', (on) => { if (on) laad().then((x) => x.inrichter.terug()); },
+  // Mislukt het laden, dan de volgende keer opnieuw (geen vastgehouden mislukte belofte) en één melding.
+  const laad = () => (klaar ??= bouw(ctx).catch((err) => { klaar = null; meld?.(`inrichten: ${err?.message || err}`, 'fout'); throw err; }));
+  define('werk.terug', 'trigger', (on) => { if (on) laad().then((x) => x.inrichter.terug()).catch(() => {}); },
     { label: 'Werkruimte: terug naar de vorige inrichting', alleenScherm: true, log: 'overslaan', beginstand: false });
   const knop = document.createElement('button');
   knop.className = 'ghost werk-inrichten';
   knop.textContent = '✎';
   knop.title = 'inrichten zonder JSON: knoppen aanwijzen, panelen maken en op een scherm of een groep knoppen zetten';
-  knop.addEventListener('click', () => laad().then((x) => x.open(x.el.hidden)));
+  knop.addEventListener('click', () => laad().then((x) => x.open(x.el.hidden)).catch(() => {}));
   voegKnopToe(knop);
   window.varveInrichten = { laad };
-  void meld; void werk;
+  void werk;
 }
 
 async function bouw(ctx) {
@@ -218,6 +219,6 @@ async function bouw(ctx) {
 
   // Voor de headless proeven en de console.
   const api = { el, inrichter, open, erbij, zoek: (t) => I.zoek(t, { alle: alleNu(), top40 }), get gekozen() { return gekozen; }, set gekozen(n) { gekozen = n; }, top40: () => top40 };
-  Object.assign(window.varveInrichten, api);
+  Object.defineProperties(window.varveInrichten, Object.getOwnPropertyDescriptors(api));   // met de getter/setter van gekozen
   return api;
 }
