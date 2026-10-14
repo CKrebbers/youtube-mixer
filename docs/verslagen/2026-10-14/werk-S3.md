@@ -171,3 +171,82 @@ faalt die toets 4× (804 > 790); na de fix 33/33 ok.
 **Vraag erbij voor Clay:**
 4. De eerste keer dat je een werkruimte gebruikt staat er "⚠ 74 nieuw" (tegen de standaard, rood boven 12).
    Wil je dat zo (het advies: niet alles op één avond), of moet de eerste keer stil beginnen?
+
+## Review ronde 2 (14 okt)
+
+Hersteller op dezelfde tak. Per punt: opgelost, of weerlegd met bewijs.
+
+**Blokkerend: een herlaad gooide Clay uit een deel waarvan het mapje uit een stuk of uit de werkruimte zelf
+kwam.** Klopte. Nagemaakt in `test/werkruimte.test.mjs` (sectie "herladen houdt je indeling") en in de echte
+browser (`tools/headless/werkruimte.mjs`, eigen werkruimte `proef-dub` met een mapje op ⇧ Device ◀). Op de oude
+code: `deel fx grid fx device rack → deel mix grid hotcues device rack, 1 change door volgt`, UITLIJN
+`device uitlijn → device strip`, twee-handen `device mijndub → device strip`, headless `deel mix, device strip,
+1 wissel door volgt`. Oorzaak zoals de review zei: `_ruimOp` haalt alle mapjes weg, `haalMapjeWeg` zet een open
+mapje naar de standaard buiten `zetMapjes` (dus volgt hoorde het als jouw keuze), en `kiesDeel(…, sla)` sloeg
+daarna de APC over omdat het deel niet veranderde. Opgelost met (a) uit de review:
+- `adapter.stil(fn)` (apparaten.js): `zetten` omhoog rond fn. De luisteraar kijkt `zetten` synchroon na, vóór hij
+  iets in een microtaak zet, dus er komt ook later niets achteraan.
+- `_zetOp` (werkruimte.js): bij een herlaad eerst een momentopname per apparaat; weghalen, opnieuw toevoegen,
+  regels en volgorde binnen `_stil` (alle adapters); daarna per apparaat stil terugzetten wat er stond.
+  `sla(id)` alleen als dat lukte EN het deel voor dat apparaat niet veranderde; anders geldt het deel.
+- (b) uit de review (gelijke mapjes niet weghalen) kan niet zonder het model te raken: `normaliseerWerkruimte`
+  weigert een nieuw mapje dat al in GROEPEN staat ("bestaat al"), en de bekende mapjes komen uit GROEPEN.
+- `onthoud` blijft bij een herlaad voor de delen die niet veranderden (vroeger: alles weg).
+Toetsen (allemaal rood op de oude code, groen nu): FX met grid.fx uit fx-matrix; UITLIJN met device.uitlijn uit
+het stuk; FX met de hand loops; FX → loops → MIX → peil → FX = loops; de peil({ forceer }) na een 409 bij
+vastleggen; twee-handen met mijn dub; en, zoals in ronde 1, dat een deel dat zelf veranderde wel de APC zet.
+Headless: `… Claude verandert een ander deel (BEELD): herladen in 452 ms, deel dub, device mijndub, 0 wissel door volgt`.
+
+**Klein, opgelost:**
+- Het event `'werkruimte'` gaat nu BINNEN `plan()` (het volgende beeld), samen met rijen en onderpaneel; twee
+  wissels in één beeld = één event voor de laatste. Toets: twee deelwissels met een plan-rij, 0 events tot het
+  beeld, dan 1 (rood op de oude code). Staat in S3.md §4.
+- Terugval houdt het deel en het APC-mapje: `controleerAanwezig` kiest de terugval met `behoudDeel` (en de
+  terugval van de terugval ook). Toets: twee-handen in STEMS, Maschine weg → apc-alleen, `deel stems grid stems
+  device strip`, één melding (op de oude code `deel mix grid hotcues`).
+- Peilen stapelt niet meer op: `peil()` start geen tweede verzoek zolang er een loopt (`_peilt`), een antwoord dat
+  pas na een andere keuze komt telt niet (`_laad`/naam nagekeken), en `maakHaler` heeft een tijdgrens van 5 s
+  (`AbortSignal.timeout`, `HAAL_MS`). Toets: een haal die blijft hangen → de tweede peil vraagt niets (1 verzoek).
+- De grens voor de hele server: `server/werkruimtes.js` heeft geen eigen pool meer. `beperkt()` staat nu als
+  functie in `server/standen.js` (Standen._beperkt roept hem aan, gedrag ongewijzigd: `test/standen.test.mjs`
+  groen); werkruimtes leggen hun lopende operaties in `ANDERE_LEZERS`, een Standen telt zijn eigen plus die, de
+  werkruimtes tellen alles (`serverOnderweg`). Samen hooguit 2; een lees die langer dan 2 s loopt = 503 (`WerkFout`,
+  de route geeft de code door), en hangt alles al, dan meteen 503 zonder nieuwe draad. Een Standen telt bewust
+  NIET de andere Standen-exemplaren: in de server is er één, en in standen.test laten proeven hangende promises
+  achter die de volgende proef anders zouden raken. Toetsen (werkruimte-server.test, rood op de oude code):
+  twee hangende werkruimtes (pijpen) → een stand start geen draad (503 "te veel tegelijk", 0× gestart); twee
+  hangende standen → een werkruimte lezen = 503; over HTTP `GET /api/werkruimtes/hangt` = 503 na 2002 ms, de
+  volgende meteen (2 ms), de lijst antwoordt met "hangt" als fout, `/api/standen` antwoordt.
+- Writes (`writeFile`/`rename`) gaan niet meer door de grens, net als bij de standen (alleen lezen kan blijven
+  hangen op een dataless bestand; een schrijver maakt het bestand zelf).
+
+**Klein, niet veranderd (met reden):**
+- `kiesDeel` op het deel dat al actief is doet niets: zo bedoeld (een tab als radioknop; wat je binnen het deel
+  opende blijft). Terug naar de indeling = THUIS, of een ander deel en terug. Staat nu in S3.md §4.
+- W1 en de standen: klopt dat `PUT /api/standen/<naam>` en `…/activeer` niet onder `vanDezeMac` staan (dat was al
+  zo vóór S3, en die routes staan in server/index.js, buiten de grens). Met `werkruimte: { naam }` kan een apparaat
+  via Tailscale dus de indeling bij de VOLGENDE start bepalen (niet live; de mapping kon dat al). Vraag 5 hieronder.
+- Buiten de grens (zelfde als ronde 1, ter herinnering bij het samenvoegen): `test/aanhaakpunten.test.mjs` (de
+  check "routebestanden leeg" werd "elke route hoort bij een spoor en zit onder /api/", "mag leeg" bleef) en
+  `VARVE_WERKRUIMTES` in `tools/headless/sampler-drums*.mjs` en `beeld-lokaal.mjs`. Andere sporen die hun
+  routebestand vullen raken dezelfde check: die is al algemeen, er hoeft niets bij.
+- **rijen.mjs: in ronde 1 stond hij ten onrechte als gehaald.** In deze container 88 ok en dan hangen (ook op de
+  basis); dat is GEEN bewijs dat hij groen is. Alleen op de Mac te bevestigen; zo staat het nu ook in de acceptatie.
+
+**Vraag erbij voor Clay:**
+5. W1 en de standen: `PUT /api/standen/<naam>` en `…/activeer` mogen nu via Tailscale (zoals altijd). Een stand kan
+   sinds S3 ook een werkruimte noemen, dus de iPad kan de indeling van de VOLGENDE start kiezen. Ook die routes
+   alleen vanaf deze Mac (dan raakt het de Controlekamer via Tailscale), of zo laten?
+
+**Toetsen na het herstel (ronde 2):**
+
+| wat | commando | uitkomst |
+|---|---|---|
+| runtime | `node test/werkruimte.test.mjs` | 116 ok (was 103); de nieuwe secties rood op de oude werkruimte.js/apparaten.js (10 FAIL, de peil-toets hangt daar) |
+| server | `node test/werkruimte-server.test.mjs` | groen, met de grens van de hele server en de 503 over HTTP |
+| standen | `node test/standen.test.mjs`, `standen-server` | groen (beperkt als functie, gedrag gelijk) |
+| S0, regels, model | `aanhaakpunten`, `regels`, `werkruimte-model` | groen |
+| headless | `VARVE_TMP=<scratch>/tmp-werk-S3 VARVE_CHROME=<no-sandbox wrapper> node tools/headless/werkruimte.mjs` (8930/8931) | Alles groen (35/35); op de oude code 1 FOUT (de herlaad-toets) |
+| kijk | `VARVE_KIJK_POORT=8934 VARVE_KIJK_DEBUG=8939 node tools/headless/kijk.mjs <uit>` | Alles groen |
+| alles | `node test/alles.mjs` | 106 bestanden, 9430 checks, rood alleen de drie bekende van de container (wachtrij "yt-dlp en zijn kind" 2×, instrumenten-fm-schaal "geen afval per blok", renderblok "keylock met wissels … bytes per bericht") |
+| rijen | niet opnieuw gedraaid | hangt in deze container (ronde 1, ook op de basis): alleen op de Mac te bevestigen |

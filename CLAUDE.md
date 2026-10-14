@@ -247,7 +247,8 @@ server/             draait apart: `node server/index.js`
                     (bestand, rtmp/udp op 127.0.0.1); slot tegen elke dienst; nog geen route of knop (docs/UITZENDEN.md)
   routes/           werkruimte S0: index.js laadt werkruimtes/mapping-apparaat/paneel.js ({ routes, mag }), vlak vóór de 404
   werkruimtes.js    werkruimte S3: werkruimtes/<naam>.json met versie (409 met de huidige inhoud) en .versies/, voorbeelden uit
-                    tools/werkruimtes/voorbeelden/ (een eigen bestand gaat voor), VARVE_WERKRUIMTES; opslaan alleen vanaf deze Mac (W1)
+                    tools/werkruimtes/voorbeelden/ (een eigen bestand gaat voor), VARVE_WERKRUIMTES; opslaan alleen vanaf deze Mac (W1);
+                    lezen onder dezelfde grens als de standen (`beperkt` + ANDERE_LEZERS in standen.js: samen hooguit 2, 503 na 2 s)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     media-verhuis.mjs (media/ buiten iCloud: --droog, --doe; docs/LIBRARY.md "Waar media/ staat"),
                     lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
@@ -1895,6 +1896,10 @@ mag en niet mag staat op één plek: `src/werk/model.js` (de server gebruikt het
 Op 1440×790 is er met een rij open geen pixel over: de werk-balk haalt zijn hoogte van de mixer zelf af
 (`body.werk-balk-aan` in `src/ui/css/werk.css`, alleen bij een wissel gezet), nooit van de pagina;
 `tools/headless/werkruimte.mjs` toetst het per deel. Wie nog iets boven `main` zet: hetzelfde.
+Een HERLAAD (peil, 409, terugval) haalt mapjes weg en zet ze terug: dat gaat STIL (`adapter.stil(fn)`, geen
+volgt-melding) en daarna gaat per apparaat weer open wat er stond. Een nieuwe adapter (S6: de Maschine) geeft
+`stil` mee, anders springt het deel bij elke peil (review ronde 2). Nieuwe fs-lezers in de server: via `beperkt`
+uit server/standen.js met `ANDERE_LEZERS`, nooit een eigen pool (de grens van 2 geldt voor de hele server).
 
 ## Werkwijze die hier werkt
 
