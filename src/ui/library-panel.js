@@ -8,6 +8,7 @@ import {
 } from './library-lijst.js';
 import { IngestStrook } from './ingest-strook.js';
 import { pastBij, pastBijKop, tempoTekst } from './past-bij.js';
+import { leesWeg } from '../lib/antwoord.js';
 
 /** Wat de upload aanneemt; gelijk aan BESTAND_EXT in server/links.js. */
 export const BESTAND_EXT = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'wav', 'mp3', 'flac', 'm4a', 'aiff', 'aif', 'ogg', 'opus'];
@@ -411,7 +412,7 @@ export class LibraryPanel {
       const r = await this.onLaad(deck, track);
       this.melding = { tekst: `${track.titel} staat op track ${this.label(deck)}`
         + (r?.stems ? `, met ${r.stems} stems` : '') + (r?.hint ? ` — ${r.hint}` : ''), goed: true };
-      fetch(`/api/library/${id}/geladen`, { method: 'POST' }).catch(() => {});
+      fetch(`/api/library/${id}/geladen`, { method: 'POST' }).then(leesWeg, () => {});
       // "gespeeld" meteen bijwerken, maar NIET opnieuw sorteren: de lijst
       // springt dan niet onder je muis weg terwijl je de volgende zoekt.
       track.laatst_geladen = Date.now();
@@ -503,6 +504,7 @@ export class LibraryPanel {
       const r = await fetch(`/api/library/${id}/toon`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toon: json }),
       });
+      await leesWeg(r);
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       this._werkBij(track, 'toon', json);
       this.onToon(id, json);
@@ -516,12 +518,20 @@ export class LibraryPanel {
   }
 
   /**
-   * Een track bewaarde een toonsoort die op het deck bewerkt is: de lijst toont
-   * hem ook. Het nummer hoeft niet in beeld te staan: `_track` zoekt in ALLE
+   * Een track bewaarde een grid (of toonsoort, zetToon) dat op het deck bewerkt
+   * is: de lijst toont het ook, en wie het nummer opnieuw laadt krijgt het. Het nummer hoeft niet in beeld te staan: `_track` zoekt in ALLE
    * geladen pagina's (en in wat net binnenkwam). Staat het in geen enkele
    * geladen pagina, dan is er niets bij te werken: die pagina komt later van
    * de server, en die heeft de kaart dan al.
    */
+  zetGrid(id, json) {
+    const t = this._track(id);
+    if (!t) return;
+    t.grid = json;
+    if (this.open) this.tekenRijen();
+  }
+
+  /** Zie zetGrid: hetzelfde voor de toonsoortkaart. */
   zetToon(id, json) {
     const t = this._track(id);
     if (!t) return;
@@ -632,7 +642,7 @@ export class LibraryPanel {
     if (!track) return;
     // Alleen uit de library; de bestanden laat ik staan. Wissen van schijf is
     // onomkeerbaar en hoort een bewuste handeling te zijn, geen klik naast.
-    await fetch(`/api/library/${id}`, { method: 'DELETE' }).catch(() => {});
+    await fetch(`/api/library/${id}`, { method: 'DELETE' }).then(leesWeg, () => {});
     this.melding = { tekst: `${track.titel} uit de lijst (bestanden staan er nog)`, goed: true };
     this.ververs();
   }

@@ -123,8 +123,8 @@ het AFSPELEN gaat via `stems.wav`.
 - **`Splitter`**: welk commando. `VARVE_STEMS_CMD` (één uitvoerbaar bestand, krijgt
   dezelfde argumenten; de tests: het startscript van `maakNepStems`), anders
   `VARVE_STEMS_PY` + splits.py, anders `~/.varve/stems-venv/bin/python`. **Een
-  testserver (`VARVE_MEDIA` gezet) zonder een van beide splitst niet**, met die
-  reden: anders zette elke test die iets binnenhaalt (2 is de standaard) de echte
+  testserver (`VARVE_TESTSERVER=1`; tot 11 okt: `VARVE_MEDIA` gezet) zonder een van
+  beide splitst niet**, met die reden: anders zette elke test die iets binnenhaalt (2 is de standaard) de echte
   Demucs aan. `controleer()` één keer, na 30 s opnieuw als het niet klaar was.
   Draait via `run()` uit ingest.js (SIGINT → 3 s → SIGKILL voor de procesfamilie)
   met `nice -n 10` ervoor; time-out `max(30 min, 10 min + 4 × duur)`.

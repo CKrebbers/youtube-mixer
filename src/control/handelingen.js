@@ -22,6 +22,8 @@
  * browser weet precies waar het volgende stuk begint.
  */
 
+import { leesWeg } from '../lib/antwoord.js';
+
 export const LOG_VERSIE = 1;
 
 /** JSON met alles boven ASCII als \uXXXX. JSON.parse geeft precies hetzelfde terug. */
@@ -206,7 +208,7 @@ export class Handelingenlog {
         const res = await this.haal(`/api/handelingen/${s.id}/stuk`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ van, tekst }),
         });
-        if (res.ok) return;
+        if (res.ok) { await leesWeg(res); return; }   // ook gelukt lezen: anders blijft het in Chrome hangen
         const j = await res.json().catch(() => ({}));
         laatste = j.fout || `${res.status}`;
         if (j.vol) break;                 // een volle schijf wordt niet leger van opnieuw proberen
@@ -286,11 +288,13 @@ export function koppelSectiedruk(engine, tracks, log) {
  * een schakelaar voor de hele engine (quantize, dj-transport: anders snapt
  * een teruggespeelde hotcue anders dan toen). Ook zwart en bevriezen van de
  * beamer (eindbeeld.js): een set die zwart begon, begint teruggespeeld ook
- * zwart. Niet de drukvariant (video.black.hold) en niet de flits: die zijn
- * een gebaar, geen stand. De video-master is een value en gaat vanzelf mee.
+ * zwart. En de clips (video.clips): een set in het zaalbeeld (alleen eigen
+ * beeld) begint teruggespeeld ook zonder deck-video's. Niet de drukvariant
+ * (video.black.hold) en niet de flits: die zijn een gebaar, geen stand. De
+ * video-master is een value en gaat vanzelf mee.
  */
 export const RONDLOPERS = ['mixer.xfader.curve', 'sampler.length', 'video.mode', 'video.fit', 'video.pulse.target', 'transport.quantize',
-  'video.black', 'video.freeze'];
+  'video.black', 'video.freeze', 'video.clips'];
 
 /**
  * Value-actions die NIET in de beginstand staan: positie, tempo en grid

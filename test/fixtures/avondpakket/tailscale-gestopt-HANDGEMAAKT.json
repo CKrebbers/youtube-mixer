@@ -1,0 +1,8 @@
+{
+ "BackendState": "Stopped",
+ "Self": {
+  "HostName": "mac-test",
+  "Online": false
+ },
+ "Peer": {}
+}

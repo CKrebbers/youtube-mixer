@@ -1,0 +1,21 @@
+{
+ "SPBluetoothDataType": [
+  {
+   "controller_properties": {
+    "controller_state": "attrib_on"
+   },
+   "device_connected": [
+    {
+     "AirPods 4": {
+      "device_minorType": "Headphones"
+     }
+    },
+    {
+     "MX Master (test)": {
+      "device_minorType": "Mouse"
+     }
+    }
+   ]
+  }
+ ]
+}

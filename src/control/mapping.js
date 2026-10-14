@@ -61,12 +61,38 @@ export const MODES = ['trigger', 'absolute', 'relative-2c', 'relative-bin', 'end
 /** Sleutel van een regel: dezelfde knop kan met shift en per mapje iets anders doen. */
 export const sleutelVan = (r) => `${r.in}${r.shift ? '#shift' : ''}${r.laag ? `@${r.laag}` : ''}`;
 
-/** Vult {focus} en andere variabelen in. Puur tekst, geen kennis van decks. */
+/** Een action met {variabelen}, eenmalig in stukken: [tekst, naam, tekst, naam, …, tekst]. */
+const SJABLONEN = new Map();
+
+/**
+ * Vult {focus} en andere variabelen in. Puur tekst, geen kennis van decks.
+ * Het sjabloon wordt één keer geknipt (de LED-laag vraagt dit voor elke regel,
+ * dertig keer per seconde; een regex met een terugroepfunctie per keer was
+ * daar het duurste deel van).
+ */
 export function resolveTarget(action, vars) {
-  return action.includes('{')
-    ? action.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m))
-    : action;
+  if (!action.includes('{')) return action;
+  let d = SJABLONEN.get(action);
+  if (!d) {
+    d = action.split(/\{(\w+)\}/);
+    if (SJABLONEN.size > 4096) SJABLONEN.clear();
+    SJABLONEN.set(action, d);
+  }
+  let uit = d[0];
+  for (let i = 1; i < d.length; i += 2) {
+    const k = d[i];
+    uit += (vars && k in vars ? vars[k] : `{${k}}`) + d[i + 1];
+  }
+  return uit;
 }
+
+/** Twee lijsten met dezelfde tekst op dezelfde plek? */
+const zelfdeLijst = (a, b) => {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
 
 /**
  * Mappings van vóór 23 september 2026 (versie 1) spraken in decks:
@@ -409,6 +435,8 @@ export class Mapping extends Emitter {
     this.now = now;
     this.name = 'leeg';
     this.device = 'generic';
+    this._versie = 0;           // telt elke wijziging aan de regels (de caches van kies)
+    this._cache = { versie: -1, lagen: null, kies: [new Map(), new Map()], actief: [null, null] };
     this.rules = new Map();     // sleutel (sig[#shift][@laag]) -> regel
     this.state = new Map();     // sig -> { caught, last, target }
     this.shiftSig = null;       // welke knop shift is, uit de mapping
@@ -416,6 +444,29 @@ export class Mapping extends Emitter {
     this.vast = new Map();      // sig -> { rule, target } van een ingedrukte knop
     this.extra = new Map();     // bron -> regels die erbij komen maar niet van jou zijn (voegToe)
     this.basis = null;          // de standaard waar je eigen verschil op rust: { doc, vingerafdruk }
+  }
+
+  /*
+   * De regels. Een nieuwe Map toewijzen maakt de caches van kies() ongeldig;
+   * wie er iets IN verandert gaat via set/remove/load/voegToe (die tellen ook).
+   */
+  get rules() { return this._rules; }
+  set rules(m) { this._rules = m; this._versie++; }
+
+  /**
+   * Wat kies() en actieveRegels() uitrekenden, geldt zolang de regels en de
+   * open mapjes hetzelfde zijn (shift heeft zijn eigen vak). Per MIDI-bericht
+   * en per LED-tik (700 regels, 30 keer per seconde) is het dan één opzoeking
+   * in plaats van een zoektocht met nieuwe teksten.
+   */
+  _geldig(open) {
+    const c = this._cache;
+    if (c.versie === this._versie && zelfdeLijst(c.lagen, open)) return c;
+    c.versie = this._versie;
+    c.lagen = open ? [...open] : null;
+    c.kies[0].clear(); c.kies[1].clear();
+    c.actief[0] = null; c.actief[1] = null;
+    return c;
   }
 
   // ---- laden en opslaan --------------------------------------------------
@@ -501,6 +552,7 @@ export class Mapping extends Emitter {
   }
 
   _pasExtraToe(rules) {
+    this._versie++;
     for (const lijst of this.extra.values()) {
       for (const r of lijst) { const k = sleutelVan(r); if (!rules.has(k)) rules.set(k, r); }
     }
@@ -541,6 +593,7 @@ export class Mapping extends Emitter {
     }
     const regel = { in: sig, action, mode: opts.mode || 'trigger', ...opts, shift: shift || undefined, laag: laag || undefined };
     this.rules.set(sleutelVan(regel), regel);
+    this._versie++;
     this.state.delete(sig);
     this.emit('change', this);
     return regel;
@@ -550,6 +603,7 @@ export class Mapping extends Emitter {
   remove(sleutel) {
     const was = this.rules.get(sleutel);
     const weg = this.rules.delete(sleutel);
+    this._versie++;
     this.state.delete(sleutel.split(/[#@]/)[0]);
     // Een fragmentregel is niet van jou: hij komt meteen terug (anders pas na
     // herladen, en dan doet weghalen iets anders dan wat je zag). En haal je een
@@ -571,9 +625,17 @@ export class Mapping extends Emitter {
    * exacte signature voor wildcard (`cc:*:16`).
    */
   kies(sig, { shift = this.shift } = {}) {
+    const open = this.lagen();
+    const vak = this._geldig(open).kies[shift ? 1 : 0];
+    let r = vak.get(sig);
+    if (r === undefined) { r = this._zoek(sig, shift, open); vak.set(sig, r); }
+    return r;
+  }
+
+  /** De zoektocht zelf (zie kies): met shift eerst de shift-regels, binnen elk eerst het open mapje. */
+  _zoek(sig, shift, open) {
     const [type, ch, nr] = sig.split(':');
     const sigs = ch === '*' ? [sig] : [sig, `${type}:*:${nr}`];
-    const open = this.lagen();
     for (const s of sigs) {
       for (const sh of shift ? ['#shift', ''] : ['']) {
         for (const l of open) { const r = this.rules.get(`${s}${sh}@${l}`); if (r) return r; }
@@ -592,12 +654,17 @@ export class Mapping extends Emitter {
    * doet valt zonder shift weg en blijft donker.
    */
   actieveRegels({ shift = this.shift } = {}) {
+    const c = this._geldig(this.lagen());
+    const i = shift ? 1 : 0;
+    if (c.actief[i]) return c.actief[i];
     const uit = new Map();
     for (const r of this.rules.values()) {
       if (uit.has(r.in)) continue;
       const k = this.kies(r.in, { shift });
       if (k) uit.set(r.in, k);
     }
+    // Dezelfde Map tot er iets verandert (regels, mapjes): alleen lezen, niet in schrijven.
+    c.actief[i] = uit;
     return uit;
   }
 

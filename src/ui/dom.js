@@ -8,6 +8,19 @@
 export const esc = (t) => String(t ?? '').replace(/[&<>"']/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+/**
+ * Tekst in een element zetten, alleen als hij anders is, en dan in de BESTAANDE
+ * tekstknoop (`data`) in plaats van `textContent` (dat gooit de knoop weg en zet
+ * een nieuwe: elk beeld een knoop eruit en erin, en daarmee opmaak voor die
+ * knoop en wat er een :has() op heeft; controller-invoer, 14 okt).
+ */
+export function zetTekst(el, t) {
+  t = t == null ? '' : String(t); // zoals textContent: undefined/null = leeg, een getal als tekst
+  const n = el.firstChild;
+  if (n && n.nodeType === 3 && !n.nextSibling) { if (n.data !== t) n.data = t; }
+  else if (el.textContent !== t) el.textContent = t;
+}
+
 /** 0..1 als procent. */
 export const pct = (v) => `${Math.round((typeof v === 'number' ? v : 0) * 100)}%`;
 

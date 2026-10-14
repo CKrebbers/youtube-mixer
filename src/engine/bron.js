@@ -433,7 +433,9 @@ export function laadStreamModule(ctx) {
  * Tempo, toon en loop gaan meteen (T = nu), zonder sprong.
  */
 export class StreamBron {
-  constructor(ctx, uitgang, { haal = (url, init) => fetch(url, init), interval = 100 } = {}) {
+  // priority 'high': de pagina's van een deck gaan in Chrome vóór de video's die
+  // over dezelfde host binnenkomen (docs/WINST.md punt 2; halveerde de ergste wachttijd).
+  constructor(ctx, uitgang, { haal = (url, init) => fetch(url, { priority: 'high', ...init }), interval = 100 } = {}) {
     this.ctx = ctx;
     this.uitgang = uitgang;         // één node, of [vier nodes]: per uitgang van de worklet
     this.haal = haal;

@@ -2,11 +2,13 @@
 // Draait een EIGEN server op een eigen poort met een tijdelijke database en
 // opnamemap: je echte library en opnames blijven buiten schot.
 // Draai met: node test/server.test.mjs
+// @alleen: tijdsgrens op de wandklok (Range p95 < 50 ms en < 500 ms tijdens een analyse) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { request } from 'node:http';
+import { stat } from 'node:fs/promises';
 
 const { Library } = await import('../server/library.js');
 const fails = [];
@@ -49,6 +51,9 @@ function wavVan(x) {
 }
 mkdirSync(join(media, 'nummerZ'), { recursive: true });
 writeFileSync(join(media, 'nummerZ', 'audio.wav'), klikWav([{ duur: 360, bpm: 120 }, { duur: 360, bpm: 126 }]));
+// Een "video" van 5 MB (alleen bytes: de server kijkt niet in het bestand), voor de videoknip.
+const VIDEO_GROOT = 5 * 1024 * 1024;
+writeFileSync(join(media, 'nummerZ', 'video.mp4'), Buffer.alloc(VIDEO_GROOT, 7));
 /*
  * En een nummer ZONDER puls: ruis met klappen op willekeurige momenten (vast
  * zaad). Hierop moet de verfijning zeggen dat er niets te verfijnen valt.
@@ -87,7 +92,7 @@ const poort = 20000 + Math.floor(Math.random() * 20000);
 const server = spawn(process.execPath, ['server/index.js'], {
   // Zonder achtergrondanalyse: die meet test/gridauto.test.mjs apart; hier
   // zou hij door de tap-tests heen lopen.
-  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_MEDIA: media,
+  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_OPNAMES: join(map, 'opnames'), VARVE_TESTSERVER: '1', VARVE_MEDIA: media,
     VARVE_HERANALYSE: 'uit', VARVE_PLANNEN: join(map, 'plannen'), VARVE_PROEF: join(map, 'proef'),
     VARVE_HOSTS: 'varve.proef-net.ts.net, https://fout.ts.net' },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -167,6 +172,12 @@ try {
   ok('/controle en /controle.html geven de pagina', (await status('/controle')) === 200 && (await status('/controle.html')) === 200
     && (await (await fetch(`${B}/controle`)).text()).includes('Controlekamer'));
   ok('zijn script en opmaak komen door', (await status('/src/controle/controle.js')) === 200 && (await status('/src/controle/controle.css')) === 200);
+  // De companion (docs/COMPANION.md): dezelfde witte-lijstregels als de Controlekamer.
+  ok('/companion en /companion.html geven de companion', (await status('/companion')) === 200 && (await status('/companion.html')) === 200
+    && (await (await fetch(`${B}/companion`)).text()).includes('/src/companion/companion.js'));
+  ok('/companion.htm en /companion/ niet', (await status('/companion.htm')) === 404 && (await status('/companion/')) === 404);
+  ok('zijn script, opmaak en indeling komen door', (await status('/src/companion/companion.js')) === 200
+    && (await status('/src/companion/companion.css')) === 200 && (await status('/mappings/companion.json')) === 200);
   ok('proef/sessie.json zelf niet (alleen via de API)', (await status('/proef/sessie.json')) === 404);
   const zetPunt = (id, body, type = 'application/json') => fetch(`${B}/api/proef/${id}`, { method: 'PUT', headers: { 'content-type': type }, body: JSON.stringify(body) });
   ok('nog niets: leeg', Object.keys((await (await fetch(`${B}/api/proef`)).json()).items).length === 0);
@@ -188,6 +199,27 @@ try {
   const r2 = await fetch(`${B}/styles.css`, { headers: { Range: 'bytes=-100' } });
   ok('"laatste 100 bytes" is ook echt de laatste 100', r2.status === 206 && (await r2.arrayBuffer()).byteLength === 100);
   ok('voorbij het einde: 416', (await status('/styles.css', { headers: { Range: 'bytes=99999999-' } })) === 416);
+
+  // Video verdringt audio niet (docs/WINST.md punt 2): een OPEN Range op video.mp4
+  // krijgt hooguit 2 MB; een gesloten range, audio.wav en een verzoek zonder Range niet.
+  const MB2 = 2 * 1024 * 1024;
+  const vr = async (pad, range) => {
+    const r = await fetch(`${B}${pad}`, range ? { headers: { Range: range } } : {});
+    return { status: r.status, cr: r.headers.get('content-range'), len: Number(r.headers.get('content-length')), n: (await r.arrayBuffer()).byteLength };
+  };
+  const v0 = await vr('/media/nummerZ/video.mp4', 'bytes=0-');
+  ok('open Range op video.mp4: 206 met precies 2 MB', v0.status === 206 && v0.n === MB2 && v0.len === MB2 && v0.cr === `bytes 0-${MB2 - 1}/${VIDEO_GROOT}`);
+  const v1 = await vr('/media/nummerZ/video.mp4', `bytes=${VIDEO_GROOT - 1000}-`);
+  ok('open Range dicht bij het einde: tot het einde, niet verder', v1.status === 206 && v1.n === 1000 && v1.cr === `bytes ${VIDEO_GROOT - 1000}-${VIDEO_GROOT - 1}/${VIDEO_GROOT}`);
+  const v2 = await vr('/media/nummerZ/video.mp4', `bytes=0-${4 * 1024 * 1024 - 1}`);
+  ok('gesloten Range op video.mp4: niet geknipt', v2.status === 206 && v2.n === 4 * 1024 * 1024);
+  const v3 = await vr('/media/nummerZ/video.mp4', 'bytes=-100');
+  ok('"laatste 100 bytes" van een video: niet geknipt', v3.status === 206 && v3.n === 100);
+  const v4 = await vr('/media/nummerZ/video.mp4');
+  ok('video zonder Range: 200, het hele bestand', v4.status === 200 && v4.n === VIDEO_GROOT);
+  const wavGroot = (await stat(join(media, 'nummerZ', 'audio.wav'))).size;
+  const a0 = await vr('/media/nummerZ/audio.wav', 'bytes=0-');
+  ok('open Range op audio.wav: onveranderd, tot het einde', a0.status === 206 && a0.n === wavGroot && a0.n > MB2);
 
   console.log('\nalleen JSON');
   ok('ingest met text/plain wordt geweigerd', (await status('/api/ingest', {

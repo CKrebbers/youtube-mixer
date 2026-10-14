@@ -162,6 +162,17 @@ kleur. Gedimd = de "donker"-tint (index + 1, #59xxxx), zoals op de APC.
   afgekapt op een woord, hooguit 10 tekens) en een balk 0..1.
 - Alleen opnieuw als de stand veranderde (en dan alleen het scherm dat anders is), hooguit
   eens per 100 ms per scherm (`SCHERM_MS`). De hub stuurt daarna alleen de stukken die veranderden.
+- Vlak na invoer (draaiknop, pad, knop: tot `SCHERM_MS` daarna) mag een scherm per 40 ms
+  (`SCHERM_SNEL_MS`, 14 okt): de waarde die je draait loopt met ~25 beelden per seconde mee.
+  Gemeten draaien -> scherm p50 15,5 -> 3,9 ms, p99 43 -> 15 ms (`tools/bench/feedback.mjs`,
+  docs/verslagen/2026-10-14/controller-uitvoer.md). Zonder invoer blijft het 100 ms. Niet op het
+  apparaat gemeten: de hub schrijft HID synchroon (proef `ms-scherm` in de hub staat open); vertraagt
+  een scherm daar de pads, zet dan `SCHERM_SNEL_MS` terug op `SCHERM_MS`.
+- **Lampjes meteen** (14 okt): na elk bericht van de Maschine een wektik (`Maschine.wek()`, een
+  microtaak, samengevoegd, hooguit één per 4 ms); de gewone tik van 33 ms blijft daarnaast lopen.
+  Gemeten pad -> lampje (via HubMidi en de bundel) p50 38 -> 2 ms, p99 71 -> 25 ms. De wachtrij
+  in hub.js stuurt een lampje meteen als het schuivende venster (16 per 4 ms) plaats heeft, en de
+  bundel per beeld heeft een voorflank (na stilte meteen, anders 16 ms na de vorige).
 
 ## 5. De stapmodus en de patronen (gebouwd 5 okt, op het patronen-spoor)
 
@@ -342,6 +353,9 @@ sampler (zoals de modus sampler op de APC) op de Maschine zit.
   4 tellen; "(T2)" = bewaard; "knipt"; een pad die speelt omgekeerd), onderaan welke sectie een sectie-pad nu pakt;
   rechts draaiknop 5–8 (5 = volume), onderaan "SAMPLING = weer spelen".
 - Bus: `sampler.length.up/down` zijn nieuw (de rest bestond al). De Maschine-kaart kent de padmodus sampler.
+- **Dezelfde pad in de speelmodus** (crossover, 10 okt): na `sampler.N.drums` ligt het stuk van pad 13–16 / 9–12 in
+  SAMPLING op drumpad 13–16 / 9–12 van de Drums, dus op dezelfde fysieke pad in de speelmodus (S1–S4 → 13–16,
+  S5–S8 → 9–12; docs/INSTRUMENTEN.md "Uit de sampler"). Geen vaste Maschine-knop: koppelen met learn.
 - Getest: `test/maschine-sampler.test.mjs` (de pads per rij, SHIFT, loslaten, ◄ ►, draaiknop 5, lampjes, scherm,
   uitleg), `engine.test` (length.up/down), en headless `tools/headless/maschine-sampler.mjs` met de ECHTE sampler
   (knippen, spelen op de tel, stoppen, tellen, volume, leeg). NIET getest: met de echte Maschine.

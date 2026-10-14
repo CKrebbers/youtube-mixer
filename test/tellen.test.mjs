@@ -1,7 +1,7 @@
 // Tellen → tempokaart, en meten of een grid klopt (src/engine/tellen.js).
 // Synthetische tellen met een bekend antwoord, met de ruis die Beat This!
 // echt heeft (frames van 20 ms, zwaartepunt erbij: ~5 ms mediaan).
-const { gridUitTellen, meetGrid, afwijkingBij, vergelijk, RAAK, DRIFT, TWIJFELS } = await import('../src/engine/tellen.js');
+const { gridUitTellen, meetGrid, afwijkingBij, vergelijk, RAAK, DRIFT, TWIJFELS, VERSIE } = await import('../src/engine/tellen.js');
 const { Beatgrid, ZEKER_VANAF } = await import('../src/engine/beatgrid.js');
 
 const fails = [];
@@ -249,7 +249,7 @@ ok('rommel in de invoer wordt overgeslagen', gridUitTellen([NaN, ...tellen(0, 30
   ok('live binnen de marge: het gewone oordeel', oordeelBij(g, 5, null, { mediaan: 0.006, raak: 0.9, n: 16 }).soort === 'zeker');
   const k = gridUitTellen(tellen(0, 60, 120, 0), []);
   const terug = new Beatgrid({ ...k, stukken: k.stukken.map((s) => ({ ...s, twijfel: 'maat', octaaf: 2 })) }).toJSON();
-  ok('methode, versie, twijfel en octaaf blijven bewaard (Beatgrid heen en terug)', terug.methode === 'tellen' && terug.versie === 1
+  ok('methode, versie, twijfel en octaaf blijven bewaard (Beatgrid heen en terug)', terug.methode === 'tellen' && terug.versie === VERSIE
     && terug.stukken[0].twijfel === 'maat' && terug.stukken[0].octaaf === 2);
   ok('een onbekende twijfel valt weg', !new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, twijfel: 'raar' }] }).stukken[0].twijfel);
 }
@@ -262,7 +262,8 @@ ok('rommel in de invoer wordt overgeslagen', gridUitTellen([NaN, ...tellen(0, 30
   const traag = tellen(0, 200, 32, 0);
   const k = gridUitTellen(traag, [], { duur: 200 });
   const g = new Beatgrid(k);
-  ok('32 bpm wordt 64 (de library kent niets onder 40)', Math.abs(k.stukken[0].bpm - 64) < 0.05, k.stukken[0].bpm);
+  // Sinds het dansbereik (14 okt, DANS_MIN..DANS_MAX): niet 64 maar 128.
+  ok('32 bpm wordt 128 (het dansbereik; de library kent niets onder 40)', Math.abs(k.stukken[0].bpm - 128) < 0.1, k.stukken[0].bpm);
   ok('… en elke gevonden tel ligt nog op een lijn', meetGrid(g, traag).totaal.raak > 0.9);
   // Allerlei rommel: de library weigert het grid nooit (6 okt: Sakamoto werd "ongeldig grid").
   let slecht = 0;

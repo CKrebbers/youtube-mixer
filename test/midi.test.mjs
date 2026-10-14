@@ -89,6 +89,48 @@ ok('echofilter uit: een gelijk bericht komt gewoon door', gehoord.at(-1) === 'cc
 hub2.echoFilter = true;
 ok('echofilter staat standaard aan', new MidiHub().echoFilter === true);
 
+// Alleen CC (14 okt): een lampje wordt nooit als druk teruggemeld, en het
+// filter slikte op noten echte knoppen in. Een lampje UIT ([0x90, n, 0]) is
+// precies het loslaten van die knop; een eenkleurig lampje AAN ([0x90|k, n, 127],
+// track select van de maatgever knippert zo) precies het indrukken.
+hub2.send([0x90, 0x32, 0]); await leeg();   // lampje van activator 1 uit
+binnen([0x80, 0x32, 0]);                      // ... en jij laat activator 1 los
+ok('een loslaten vlak na "lampje uit" op dezelfde knop komt door (geen echo)', gehoord.at(-1) === 'note:0:50=0');
+hub2.send([0x92, 0x33, 127]); await leeg();  // track select 3 knippert aan
+binnen([0x92, 0x33, 127]);                    // ... en jij drukt hem in
+ok('een druk vlak na "lampje aan" (127) op dezelfde knop komt door (geen echo)', gehoord.at(-1) === 'note:2:51=127');
+binnen([0x82, 0x33, 0]);
+ok('... en zijn loslaten ook', gehoord.at(-1) === 'note:2:51=0');
+const echoesVoor = hub2.echoes;
+hub2.send([0xb0, 0x30, 99]); await leeg();
+binnen([0xb0, 0x30, 99]);
+ok('een ring (CC) die terugkaatst wordt nog steeds gevangen', hub2.echoes === echoesVoor + 1 && gehoord.at(-1) === 'note:2:51=0');
+ok('lampjes (noten) vullen het geheugen van het filter niet', [...hub2._verstuurd.keys()].every((k) => k.startsWith('cc:')));
+
+// Een endless-knop draaien en meteen terug (review 14 okt): de ring die wij
+// terugsturen is precies wat de knop net stuurde. Die waarde onthouden maakte
+// bij het terugdraaien elke vorige stap een "echo" (dode zone bij elke
+// richtingswissel). Wat de knop zelf stuurde onthoudt het filter niet meer.
+{
+  const voorE = hub2.echoes, n0 = gehoord.length;
+  for (const v of [64, 65, 66, 65, 64]) {
+    binnen([0xb0, 0x31, v]);           // jij draait (filter, cc:0:49)
+    hub2.send([0xb0, 0x31, v]);        // de ring volgt meteen (de wachtrij is leeg: direct)
+  }
+  ok('draaien 64->65->66->65->64 met de ring er meteen achter: alle vijf komen aan',
+    gehoord.slice(n0).join(' ') === 'cc:0:49=64 cc:0:49=65 cc:0:49=66 cc:0:49=65 cc:0:49=64' && hub2.echoes === voorE);
+  ok('... de ringen van wat de knop zelf stuurde staan niet in het echogeheugen', ![...hub2._verstuurd.keys()].some((k) => k.startsWith('cc:0:49=')));
+  hub2.send([0xb0, 0x31, 20]);         // focuswissel: de ring springt naar een stand die de knop NIET stuurde
+  binnen([0xb0, 0x31, 20]);            // ... en het apparaat kaatst hem terug
+  ok('een teruggekaatste ring na een focuswissel wordt wel gevangen (geen lus)', hub2.echoes === voorE + 1 && gehoord.at(-1) === 'cc:0:49=64');
+  binnen([0xb0, 0x31, 127]);           // op de aanslag
+  hub2.send([0xb0, 0x31, 127]);
+  binnen([0xb0, 0x31, 127]);           // nog eens 127 binnen 60 ms: in endless is dat doordraaien, dus een echo hier zou een stap zijn
+  ok('op de aanslag (127) blijft het filter bewaken, ook als de knop hem zelf stuurde', hub2.echoes === voorE + 2);
+  hub2._lastIn = 'een andere controller'; hub2._sync();   // de invoer wisselt (of komt terug na loskoppelen)
+  ok('een andere invoer: wat de vorige stuurde telt niet meer', hub2._laatsteIn.size === 0);
+}
+
 // ---- uitgaande wachtrij ---------------------------------------------------
 // Een burst van honderd berichten in één lus is voor geen enkele MIDI-stack
 // prettig; Comet legt er zelfs zijn MIDI-service mee om. Alles wat naar buiten
@@ -98,27 +140,48 @@ const inn3 = poort('i3', 'APC40 mkII'), uit3 = poort('o3', 'APC40 mkII');
 const hub3 = maakHub([inn3], [uit3]);
 hub3._sync();
 
+// Sinds 14 okt een schuivend venster: wat in een lege wachtrij komt en plaats
+// heeft, gaat meteen (geen setTimeout per lampje); de rest wacht.
+uit3.tijden = [];
+uit3.send = function (b) { this.verzonden.push([...b]); this.tijden.push(performance.now()); };
 for (let i = 0; i < 110; i++) hub3.send([0x90, i, 0]);
-ok('niets gaat er meteen uit', uit3.verzonden.length === 0);
-ok('alles staat in de wachtrij', hub3.status().wachtrij === 110);
+ok('de eerste 16 gaan meteen (er wachtte niets), de rest niet', uit3.verzonden.length === 16);
+ok('de rest staat in de wachtrij', hub3.status().wachtrij === 94);
 
 await new Promise((r) => setTimeout(r, 6));
 const naEenTik = uit3.verzonden.length;
-ok('na één tik is er een hap verstuurd, niet alles', naEenTik > 0 && naEenTik <= 32);
+ok('na één tik is er een hap verstuurd, niet alles', naEenTik > 16 && naEenTik <= 32);
 
 await new Promise((r) => setTimeout(r, 200));
 ok('daarna is de wachtrij leeg', hub3.status().wachtrij === 0 && uit3.verzonden.length === 110);
 ok('en in de juiste volgorde',
   uit3.verzonden[0][1] === 0 && uit3.verzonden[109][1] === 109);
 ok('de teller telt alleen wat echt verstuurd is', hub3.tx === 110);
+{
+  // De Comet-regel (CLAUDE.md): in ELK venster van 4 ms hooguit 16, waar het venster ook begint.
+  const t = uit3.tijden;
+  let meest = 0;
+  for (let i = 0; i < t.length; i++) { let j = i; while (j < t.length && t[j] - t[i] < 4) j++; meest = Math.max(meest, j - i); }
+  ok(`in elk schuivend venster van 4 ms hooguit 16 berichten (gemeten ${meest})`, meest <= 16 && t.length === 110);
+  // Meteen weer een bericht: het venster zit vol, dus het wacht (de volgorde blijft).
+  const n0 = uit3.verzonden.length;
+  for (let i = 0; i < 16; i++) hub3.send([0x90, 1, i]);
+  hub3.send([0x90, 2, 2]);
+  ok('16 meteen, het zeventiende wacht op het venster', uit3.verzonden.length === n0 + 16 && hub3.status().wachtrij === 1);
+  await new Promise((r) => setTimeout(r, 12));
+  ok('... en gaat daarna alsnog', uit3.verzonden.length === n0 + 17 && uit3.tijden.at(-1) - uit3.tijden.at(-17) >= 4);
+  uit3.send = function (b) { this.verzonden.push([...b]); };
+}
 
 uit3.verzonden.length = 0;
 hub3.send([0xb0, 1, 1], { direct: true });
 ok('met direct gaat het er meteen uit', uit3.verzonden.length === 1);
 
+const voorLeeg = uit3.verzonden.length;
 for (let i = 0; i < 50; i++) hub3.send([0x90, i, 1]);
 const weggegooid = hub3.leegWachtrij();
-ok('de wachtrij is te legen', weggegooid === 50 && hub3.status().wachtrij === 0);
+// De eerste 16 waren al weg (schuivend venster), de rest gaat de prullenbak in.
+ok('de wachtrij is te legen', weggegooid === 34 && uit3.verzonden.length - voorLeeg === 16 && hub3.status().wachtrij === 0);
 
 // Echo's worden gemeten vanaf het VERSTUREN, niet vanaf het in de rij zetten.
 uit3.verzonden.length = 0;

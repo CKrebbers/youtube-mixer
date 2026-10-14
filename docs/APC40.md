@@ -48,7 +48,8 @@ knobs `cc:0:16-23` → `track.{focus}.…`, Track Select → focus.
 
 **Niet mogelijk:** geen editor, geen publieke firmware, geen verborgen instellingen
 gevonden, geen scherm, geen motorfaders, geen aanslaggevoeligheid. USB-gevoed:
-direct aansluiten, niet via een zwakke hub. Onze wachtrij (16 berichten / 4 ms) aanhouden.
+direct aansluiten, niet via een hub zonder eigen voeding (onderweg: APC direct in de Mac,
+lader en Scarlett aan een PD-hub; docs/AVONDPAKKET.md §6). Onze wachtrij (16 berichten / 4 ms) aanhouden.
 
 ## Indeling (herzien en GEBOUWD 23 september 2026) — controller eerst
 
@@ -56,7 +57,7 @@ Na het onderzoek in `docs/APC40-onderzoek.md`: de eerste versie met mapjes
 voor alles (B3) voelde niet logisch. Nu: één kolom = één track, de kern nooit
 in een mapje. Fysieke plaatsing volgens de User Guide. Volledig en actueel op
 `apc.html` (leest de mapping zelf); de mapping zelf is `mappings/apc40mk2.json`
-(702 regels, versie 3; tot 25 sep 291, tot 2 okt 374, tot 6 okt 687). Op 25 september kwamen de
+(710 regels, versie 3; tot 25 sep 291, tot 2 okt 374, tot 6 okt 687, tot 14 okt 702). Op 25 september kwamen de
 DJ-functies van ronde 3 erbij, zoals Clay koos ("Voorstel A"): zie hieronder, en de
 tabel "Voorstel A". Op 2 oktober de modus auto (auto-DJ, VRAGEN AU1): zie
 "Modus auto" onderaan. Op 5 oktober de modus stems (VRAGEN N1, 480 regels): zie
@@ -365,8 +366,47 @@ ligt; of het knipperen op de tel goed te zien is).
 In de grid-modus (Shift + Metronome) is **Shift + scene 1 = vast** (pin: de tel hier hoort
 hier; het tempo klopt dan vanaf "tel 1" of de vorige pin, en vanaf hier begint een nieuw
 stuk). Eén regel erbij (`note:0:82#shift@edit.aan`, was vrij), niets bestaands veranderd.
-Terug (↶) staat bewust niet op de APC: Shift + scene 5 blijft klank, Lock (ook met shift)
-blijft het grid-slot; terug gaat met ↶ op het scherm of Cmd+Z.
+Terug (↶) stond toen bewust niet op de APC: Shift + scene 5 blijft klank, Lock (ook met shift)
+blijft het grid-slot. Sinds 14 okt zit ↶ op Detail View in de grid-modus (hieronder).
+
+## Grid-modus: gelijkzetten en controleren (14 oktober 2026, docs/BEATGRID.md §12, niet op het apparaat nagelopen)
+
+In de grid-modus (Shift + Metronome) staat sinds 14 okt alles wat je nodig hebt om een grid
+recht te zetten en te controleren op de APC; vroeger moest je voor ↶, de "1" verschuiven en
+controleren naar het scherm. Acht regels erbij, alleen in de grid-modus (`@edit.aan`):
+
+| knop | in de grid-modus | met shift | lampje |
+|---|---|---|---|
+| Device ◀ | de "1" een tel terug (`grid.bar.back`) | vorige plek om te controleren (`grid.check.prev`) | aan zolang je drukt |
+| Device ▶ | de "1" een tel verder (`grid.bar`) | volgende plek (`grid.check.next`) | idem |
+| On/Off | controleren met de tik aan/uit (`grid.controle`) | ✓ klopt tot hier (`grid.ok`) | aan = de tik loopt (met shift: dit stuk is goedgekeurd) |
+| Clip/Device View | tellen hier: de tel op de klap, de "1" blijft (`grid.align`, nieuw) | (blijft: mapje master) | aan zolang je drukt |
+| Detail View | ↶ de laatste gridbewerking terug (`grid.undo`) | (blijft: mapje beeld) | aan = er is iets terug te zetten |
+
+En twee dingen die al op de APC zaten doen meer:
+- **Scene 1 (tel 1 hier)** brandt in rust **wit als het stuk dat je hoort klopt** (zeker of op
+  slot) en **oranje bij twijfel** (controleer, geen puls, of het grid wijkt live van de gevonden
+  tellen af). Het lampje van de knop, niet wat hij doet (`KLEURSCHEMA` in feedback.js, read 0 / 0,5).
+- **Nudge ±** (5 ms, shift 1 ms) herhaalt als je hem **vasthoudt** (na 350 ms elke 60 ms); het
+  hele vasthouden is één stap terug.
+
+**Wat er daardoor in de grid-modus níet meer kan:** edit staat vooraan in de groepen, dus de
+grid-modus wint van ELK open device-mapje op Device ◀ ▶ en On/Off:
+- strip/rack: een ander rack kiezen (Device ◀ ▶), het effect aan/uit (On/Off), en strip ↔ rack
+  wisselen met Clip/Device View;
+- `device.master` (Shift + Clip/Device View): het master-rack kiezen (Device ◀ ▶) en de master
+  aan/uit (On/Off, `master.fx.bypass`);
+- `device.inst` (een instrumenttrack): vorige/volgende instrument (Device ◀ ▶) en alles stil (On/Off);
+- met `?vormen=1`: het mapje vorm openen met Detail View, en daarin vorm kiezen (Device ◀ ▶) en de
+  laag aan/uit (On/Off).
+De device knobs, Bank en Shift + Clip/Device View / Shift + Detail View (mapje master, mapje beeld
+openen) blijven werken. Let op On/Off: dat is in de grid-modus `grid.controle`, en op een
+STILSTAAND deck zoekt die een plek op en drukt hij op play; zonder koptelefoonuitgang van vier
+kanalen gaat de tik naar de master. Wie uit gewoonte op On/Off drukt (vroeger effect aan/uit)
+laat de zaal dan mogelijk de track en de tik horen. Dat deed de knop op het scherm al; op de APC
+is het nu één greep. Buiten de grid-modus doet elke knop wat hij deed
+(`test/mapping.test.mjs` loopt elke knop na in elk mapje). Dat is een keuze: zie de vraag in
+`docs/verslagen/2026-10-14/beatgrid-bediening.md`.
 
 ## Mapje beeld (6 oktober 2026, spoor beeld, GEBOUWD, niet op het apparaat nagelopen)
 
@@ -443,3 +483,71 @@ rack); een oude volledige kopie van 25 sep wordt tegen zijn voorganger afgezet (
 
 Niet getest: de echte APC (roze naast rood op de scene-kolom, of Shift + Detail View en de
 regie op de scene-knoppen lekker liggen) en de ringen tegen een echte Stroommachine.
+
+## Invoer en vertraging (14 oktober 2026, spoor controller-invoer, GEMETEN zonder apparaat)
+
+Clay: "op veel punten erg laggy". Gemeten in headless Chrome met de echte mixer en een
+nep-APC achter een nep-Web-MIDI (`tools/headless/latentie.mjs`, acht spelende tracks,
+alle rijen open), en zonder browser (`tools/bench/invoer.mjs`, `tools/bench/echo.mjs`).
+Het verslag met alle getallen en hoe je ze herhaalt: `docs/verslagen/2026-10-14/controller-invoer.md`.
+
+Wat er vastligt:
+- **Een MIDI-bericht wacht tot de hoofdthread vrij is.** Het werk per bericht zelf was
+  klein (fader ~0,2 ms in Chrome); de vertraging zat in wat er verder op de hoofdthread
+  draaide. Grootste oorzaak: brede `:has()`-regels in styles.css (`body:has(#rijen > …)
+  .kol .spg-pad`): elke tekstwissel restylede ~256 elementen per beeld. Nu klassen
+  (`src/ui/rij-klassen.js`). Vuistregel: geen `:has()` met body (of een grote rij) als
+  onderwerp.
+- **Wat het scherm na een bericht moet doen, gebeurt bij het volgende beeld**, het
+  geluid meteen: spiegel herberekenen (shift, mapje), de mapje-balk, het oplichten van een
+  aangeraakte knop. Shift en de modusknoppen kostten 2–13 ms in het bericht zelf.
+- **Het echofilter geldt alleen voor CC** (beide sporen vonden het; de uitvoering van spoor uitvoer, hieronder, geldt). Een noot (knop, pad) is nooit een echo: het
+  filter slikte op een knipperende knop (Sends met een loop, de Track Select van de
+  maatgever) ~13% van de drukken en ~12% van het loslaten (synthetisch, `tools/bench/echo.mjs`:
+  een nep-hand op Sends met een loop op 124 bpm; op het apparaat niet gemeten). Daar
+  doet loslaten niets; een kill of bend die bleef hangen is niet aangetoond (hun lampje
+  staat nooit op 0 of 127). Ook voor andere apparaten met `echoFilter` aan worden noten
+  niet meer gefilterd: een apparaat dat noten terugkaatst zou nu een druk dubbel geven
+  (geen bekend apparaat in Clay's set).
+- **De mapping zoekt niet meer per bericht**: `kies()` en `actieveRegels()` uit een cache
+  (ongeldig bij elke wijziging aan regels of mapjes). Ook de LED-laag profiteert (285 → 8 µs
+  per tik aan mapping-werk).
+
+Alleen op het apparaat te bevestigen: hoe het voelt, de echte uitgangsvertraging van de
+Scarlett/het samengestelde apparaat (de MIDI-monitor toont "latency: … in + … audio"), en of
+de APC in 0x42 ringwaarden terugstuurt (`midi.status().echoes` na een sessie).
+
+## De LED-laag: snel en juist (14 oktober 2026, tak `afmaken/controller-uitvoer`)
+
+Clay merkte dat het "op veel punten erg laggy" was. Gemeten met `tools/bench/feedback.mjs` (Node,
+echte mapping en engine met acht tracks, nep-APC) en `tools/headless/led-vertraging.mjs` (echte
+Chrome en de echte hub met een nep-APC); alles in docs/verslagen/2026-10-14/controller-uitvoer.md.
+
+- **Een knop licht METEEN op.** `Feedback.wek()` na elke action op de bus (`bijInvoke` in
+  midi-opzet.js) en elk ander mapje: één tik na de lopende taak (microtaak), samengevoegd, hooguit
+  één per 4 ms. De tik stuurt alleen verschillen, dus niets dubbel. De tik van 33 ms blijft voor
+  wat zonder action verandert (de tel, het einde van een nummer) en voor de RINGEN: de wektik
+  stuurt alleen lampjes (review 14 okt; een APC die een ring als knopwaarde overneemt, hub-proef
+  V1, botst anders met endless). Druk -> lampje: p50 17 -> 1 ms (Node), in Chrome via de hub p50
+  ~50 -> ~6 ms.
+- **De tik is 10× lichter.** Het PLAN (welke regels nu gelden, hun doel-action en kleur) wordt
+  alleen opnieuw gemaakt als mapping, shift, open mapjes of focus veranderen; per tik alleen de
+  reads. De kleurregexen zijn onthouden per action; de tel per track één keer per tik gelezen.
+  p50 454 -> 45 µs in rust, 457 -> 61 µs tijdens spelen (8 tracks, knipperen). `test/feedback-plan.test.mjs`
+  eist dat wat er brandt byte voor byte gelijk is aan de oude berekening (567 standen).
+- **Niets ingeslikt.** Het echofilter (60 ms) keek ook naar NOTEN: een lampje uit (`[0x90, n, 0]`)
+  is precies het loslaten van die knop, en een eenkleurig lampje aan (127, track select van de
+  maatgever en clip stop van een loop knipperen zo) precies het indrukken. 15–21 van ~220 druk/los
+  verdwenen (Node), 15–17 van 240 in Chrome; een ingeslikt loslaten laat een knop hangen. Nu alleen
+  CC (ringen), waar de lus kan ontstaan: 0 ingeslikt, en een APC die ringen terugkaatst geeft nog
+  steeds 0 echo's door. Een ring op de waarde die de knop net zelf stuurde onthoudt het filter niet
+  (behalve 0 en 127): anders slikte het bij het terugdraaien van een draaiknop de vorige stap in.
+- **Een mapje in één keer.** Hooguit 160 berichten per tik (was 24: een mapje wisselen kostte twee
+  tikken); de wachtrij van de MidiHub spreidt ze. Mapje -> laatste lampje p50 56 -> 11 ms.
+- **De wachtrij is een schuivend venster** (16 in ELK venster van 4 ms) en stuurt meteen als er
+  plaats is; vroeger wachtte elk lampje op een setTimeout(0), en een rij die net leeg was kon
+  meteen weer 16 sturen. `test/midi.test.mjs` meet het venster op de echte tijden.
+
+Niet op het apparaat nagelopen: of de APC in 0x42 een ring-CC echt nooit terugkaatst (dan kan
+`echoFilter` voor de APC uit), of een ring de knopwaarde overneemt (hub-proef V1: dan horen de
+draaiknoppen in het invoerpad op `absolute`), en hoe het voelt met Clay's handen.

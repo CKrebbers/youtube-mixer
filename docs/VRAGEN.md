@@ -488,7 +488,40 @@ Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
 - [ ] **BE8. Een relay buiten het LAN mag.** 💬 De hub (`?hub=`) weigert een host buiten deze machine, het LAN en de tailnet zonder `&hub_extern=1`. Het relay-adres typ je zelf in (geen link die iemand je stuurt), en er gaat alleen klok, kenmerken, titels en de crossfader heen. **Advies:** zo laten.
 - [ ] **BE9. Terugspelen stuurt de macro's opnieuw, de regieknoppen niet.** 💬 `beeld.*` staat in het log zoals elke action. Bij terugspelen gaan de macro's opnieuw naar de Stroommachine (als beeld aan staat); de regie (`beeld.regie.*`) wordt overgeslagen, want vasthouden en paniek zijn schakelaars waarvan VARVE de stand niet kent (terugspelen kon ze omgekeerd zetten). **Advies:** zo laten.
 - [ ] **BE10. Scène wisselen op de stand van de crossfader, of op wat je hoort?** 🎧 De Stroommachine wisselt van scène voorbij 0,5. Met een scherpe crossfadercurve (Metronome) hoor je B al bijna helemaal bij 0,1, maar blijft het beeld op A tot 0,5. Alternatief: VARVE stuurt een "effectieve" stand (hoe hard B klinkt t.o.v. A). **Advies:** eerst zo; pas als het met de scherpe curve vreemd voelt.
+- [ ] **BE11. Wanneer is "de Stroommachine op de Mac zelf" goed genoeg?** 🎧👀 (10 okt, docs/BEELD.md §8) Voorstel: op 1920 × 1080 in Licht p50 ≥ 55 en p10 ≥ 30 fps (eigen rAF-meter); 0 hartslaggaten > 15 ms in 120 s in nul, Licht en het zaalbeeld (positieve controle geslaagd); VARVE-rAF p99 hooguit 4 ms boven nul; Stroommachine + relay samen < 1 kern; na 20 min nog steeds, warmte hooguit `fair`. Gemeten wordt met `tools/headless/beeld-lokaal.mjs` (nog niet gedraaid). **Advies:** deze drempels; je beslist na de speelproef met je oren.
+- [ ] **BE12. Wat komt er op het doek, nu en later?** 👀 Nu, één HDMI: het zaalbeeld (vormen zonder clips, `video.clips`; standaard onderweg) of het venster van de Stroommachine (upgrade). Later: de Stroommachine ín het losse venster van Varve, onder de vormen, met `video.black` en in de opname (eerst een meting). **Advies:** zaalbeeld als standaard; "beide in één beeld" als richting, pas na die meting.
+- [ ] **BE13. Welke beamer?** 💬 Model, eigen resolutie (1080p?), Hz (60 graag: 75 Hz via de hub viel thuis zwart) en de HDMI-weg (een USB-C-hub met PD-doorvoer: de Air heeft twee poorten voor beamer, Scarlett, APC en lader). Feiten die de meting en de paklijst nodig hebben.
+- [ ] **BE14. Standaarden voor beeld op één machine (ok = besloten).** 💬 (a) De Stroommachine draait straks in een eigen Chrome-bundel (een kopie van Chrome for Testing in `~/Applications/`), zodat VARVE.app nooit de verkeerde Chrome aanspreekt; (b) eerst een script, na de speelproef een Dock-app "VARVE + beeld"; (c) clips uit is de standaard onderweg zodra er een stand voor is, thuis alles aan; (d) lokaal de stand Licht; (e) v10 van de Stroommachine samenvoegen (jouw repo); (f) `video.window` (venster openen vanaf de APC) niet bouwen: Chrome blokkeert het zonder klik; (g) de fps-meter op het doek alleen tijdens de proef. **Advies:** alles zo, zeg het als je iets anders wilt.
+
 - [ ] **BE15. De klap: de hele mix of alleen de bas?** 👀🎧 (13 okt, docs/BEELD.md §2a) `mix.klap` is de onset van de hele master; op de eerste avond met de pc piekte hij vaak tussen de kicks (hats, snare), en de Stroommachine flitst op het maximum van `mix.klap` en `maat.klap`. Alternatief: de onset alleen op de band laag, of `mix.klap` weglaten zodat alleen de tel flitst. **Advies:** eerst een avond met het nieuwe niveau (laag/midden/hoog/luid pompen nu); pas als de flitsen dan nog tussen de kicks storen.
+
+## U. Uitzenden (10 okt, docs/UITZENDEN.md, tak `visie/uitzenden`)
+
+Zin één: wat uitgezonden wordt is het **mengcanvas van de Mac**, niet wat op de beamer staat als daar de
+Stroommachine draait. En met beeld gaat in v1 nooit iets naar buiten: het mengcanvas bevat de YouTube-clips van
+de decks (I78); naar buiten met beeld = jouw vormen, niet de clips. Gebouwd is alleen stap 1 (`server/uitzend.js`,
+lokaal: bestand, 127.0.0.1-RTMP, udp naar OBS); niets in de mixer of de server roept hem nog aan.
+
+- [ ] **U1a. Een uitgang naar een bestand of 127.0.0.1 valt binnen "geen publieke streaming"?** 💬 Voorgestelde zin onder `CLAUDE.md` r.29-31: *"Een uitgang naar een bestand of naar 127.0.0.1 (een lokale ontvanger, OBS) is geen publieke streaming: wat de master en het mengcanvas samen maken verlaat de machine daarmee niet. De cache (`media/`, `library.db`) verlaat deze machine nooit."* Dit opent niets; het zegt alleen dat de proef- en OBS-doelen binnen de regel vallen (VISIE §4: de regel ging over de cache). Nodig voor stap 1-7. Bij U1a komen ook de drie structuurregels in `CLAUDE.md` erbij (`server/uitzend.js`, `test/uitzend.test.mjs`, `docs/UITZENDEN.md`): stap 1 raakt `CLAUDE.md` bewust niet, dus tot dan kent de "bron van waarheid" deze bestanden niet. **Advies:** ja.
+- [ ] **U1b. In-app naar buiten (stap 8), alleen als OBS te zwaar blijkt?** 💬 Dan laat `toegestaan()` `rtmp(s)://` naar een dienst toe voor een doel dat jij zelf in `uitzend/doelen.json` zet, met een verplicht veld `rechten`, en met beeld alleen als de zaalmodus-schakelaar de clips dooft. Regeltekst: *"Uitzenden van de eigen set mag, als afgeleide van een lopende opname, naar een doel dat Clay zelf in `uitzend/doelen.json` heeft gezet en dat een rechtenregel draagt. Wil een feature de cache zelf naar buiten: eerst melden, niet stilletjes bouwen."* Zolang dit geen "ja" is, zit het slot in de code (een eigen PR opent het, geen instelling). **Advies:** nog niet; eerst de thuisproef via OBS (stap 5b).
+- [ ] **U2. De eerste echte route en de eerste echte uitzending?** 💬 Uit het record van 9 okt (I77), niet nagekeken bij de diensten, geen juridisch advies: (a) **Varve -> OBS -> Twitch via het DJ Program**: het doel staat al in je OBS, het programma regelt de rechten voor muziek van anderen (geen VOD's, clips zonder muziek); (b) **Mixcloud Live**: ≤ 4 per artiest, ≤ 3 achter elkaar, ≤ 3 per release, met tracklist uit het setboek (aanname: betaald account); (c) **eigen kanaal (YouTube/Twitch/Icecast) alleen met eigen werk of CC**, nooit met muziek van anderen (Content ID, drie strikes). Een eigen avond met inkomsten die je zelf streamt: Sena-livestreamlicentie (3 %, min. € 60,25, vooraf). Of voorlopig alleen de thuisproef. **Advies:** als eerste een **eigen-werk-sessie** (klankschaal, instrumenten, sampler, patronen, je eigen zes items, je vormen als beeld) op je eigen kanaal: kan zonder rechtenzorg en is precies de crossover uit VISIE §2. Daarna (a).
+- [ ] **U3. iCloud en de opnamemap?** 💬 `opnames/` staat op het iCloud-Bureaublad. Tijdens een uitzending wil iCloud de opname (~9,5 Mbit/s met beeld) uploaden over dezelfde wifi of hotspot als de stream (2,5-3,5 Mbit/s); een set van 2 uur is ~8,6 GB. De uitzendbestanden zelf staan al buiten iCloud (`~/Movies/VARVE-uitzend/`), en `stand()` waarschuwt. Keuze: (a) iCloud Drive pauzeren tijdens een uitzending (handwerk, checklist); (b) de opnamemap verhuizen naar een `.nosync`-map of `~/Movies` (raakt "opnames blijven in iCloud" en het avondpakket, spoor draagbaar); (c) alleen thuis op wifi uitzenden. **Advies:** (a) nu, (b) als je echt vanaf elke plek wilt.
+
+Standaardkeuzes zonder vraag (zeg het als je het anders wilt; docs/UITZENDEN.md §8): standaardbeeld zwart (golf en een eigen png als variant), 2 fps lokaal en 15 voor een dienst, `kopie` alleen intern, proefbestanden in `~/Movies/VARVE-uitzend/`, `cut` dempt later alleen de stream, een sleutel ooit uit de sleutelhanger, geen iPhone-monitor via HLS.
+
+---
+
+## CX. Crossover (10 okt, docs/INSTRUMENTEN.md "Uit de sampler", PR #26)
+
+Een knip uit de sampler als drumpad op de Drums (`sampler.N.drums`, knoppen `1→13 … 8→12`
+onder de sampler-pads): het stuk krijgt de strip en de cue van een track en speelt in een
+patroon. Proef: het speellijstblok `crossover` (Controlekamer).
+
+- [ ] **CX1. Welke Drums krijgt de knip?** 💬 Gebouwd: de **speeltrack** (waar het toetsenbord en de speelmodus van de Maschine spelen: de focus, anders de laatst gefocuste instrumenttrack) als die de Drums heeft, anders de enige Drums-track; geweigerd alleen als de speeltrack een ander instrument is en er twee of meer Drums zijn. De melding noemt altijd de track. Je knipt met de focus op het nummer, dus met twee Drums beslist de speeltrack zonder dat je de focus verzet. Alternatief (het eerste ontwerp): bij twee Drums altijd weigeren tot je de focus op een Drums zet. **Advies:** zo laten: het stuk landt waar noot 48 ook aankomt.
+- [ ] **CX2. Drumpads bewaren bij de set?** 💬 Nu zijn pads 9–16 na herladen leeg; gebruikt een patroon ze, dan zegt een melding het. Bewaren (stap 2, ~2–2,5 dagen) zet per pad het library-nummer, van–tot, tellen, bpm en de stems in de patronenset, en knipt het stuk bij het laden opnieuw; alleen stukken uit de library (niet de demo of een los bestand). **Advies:** beslissen na de proef: miste je ze na herladen, dan bouwen.
+- [ ] **CX3. Eigen opnames naar de library?** 💬 `CLAUDE.md` zegt "geen upload". Stap 3a gebruikt alleen wat er al is: een kopie van een opname in een kladmap, `node tools/lokaal/importeer.mjs --droog` (alleen lezen), en op je ja echt importeren op een dag zonder set (stems en video uit). Stap 3b zou een knop `record.library` en een route toevoegen; dan zou de regel worden "geen upload van buiten, geen distributie van de cache; eigen opnames en renders naar de eigen library mag", en dan kies je ook hoe een opname genormaliseerd wordt. **Advies:** 3a proberen na de proefavonden; 3b niet bouwen zonder je ja op 3a én op de regel.
+- [ ] **CX4. Wanneer de proef, en dus wanneer mergen?** 💬 Hangt aan keuze 1 uit het verbeterplan van 9 okt ("Tot na avond 2 alleen repareren wat op de proefavond fout gaat?"). **Ja** → PR #26 pas mergen na de verwerking van avond 2, de proef op de avond daarna (bij het mergen gaat het blok `crossover` naar avond 3: titel "Avond 3 · …", achter `beeld-pc`, en de tellingen in `docs/CONTROLEKAMER.md` en `HANDOFF.md` mee). **Nee** → mergen na de verwerking van avond 1, de proef op avond 2 (het blok staat daar al, na de sampler op de Maschine). De crossover is nieuw werk, geen reparatie. **Advies:** volg wat je bij keuze 1 kiest (het verbeterplan raadt ja aan).
+- [ ] **CX5. Leegmaken en het opschrift `1→13`?** 👀 Er is geen knop om een drumpad leeg te maken: een nieuwe `1→13` overschrijft. Het opschrift noemt de sampler-pad en de drumpad (de pads staan 4 × 2, de knoppen 8 × 1). **Advies:** zo laten tot je leegmaken mist; zeg het als `1→13` niet duidelijk is.
 
 ---
 
@@ -508,3 +541,17 @@ Per onderdeel een blok in de speellijst; daar staan de codes hieronder bij.
   `?vormen=1`), óf de hubtoets van de hub wordt een andere (dat raakt alle
   apps, PROTOCOL §5/§7). **Advies:** keylock naar een andere toets; de hubtoets
   is voor elke app hetzelfde.
+
+---
+
+## AP. Avondpakket (10 okt, docs/AVONDPAKKET.md §14, tak `visie/draagbaar`)
+
+De elf open keuzes van het avondpakket (de controle vóór vertrek en bij aankomst) staan met
+de stand van nu in **docs/AVONDPAKKET.md §14**: speaker en koptelefoon, PD-doorvoer van de
+hub, een kopie buiten de laptop, iCloud en `media/`, wat "de speellijst" is, profielen en
+grenzen, fase `auto`, Tailscale serve, stap 7a, stap 8/9, de LPD8.
+
+- [ ] **AP9. Stap 7a (morgenochtend, eerst nodig).** 💬 Mag een agent, met de mixer dicht en
+  de apparaten van de proefavond nog aangesloten, twee alleen-lezen-commando's draaien
+  (`system_profiler … -json`, `ioreg -p IOUSB …`)? Of doe je het zelf: de commando's staan
+  letterlijk in §14 punt 9. **Advies:** een agent, dan zijn de fixtures dezelfde ochtend echt.

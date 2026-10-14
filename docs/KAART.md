@@ -106,6 +106,11 @@ vreemde Origin.
   `wens` (Clay) of `nacht` (door de standaardvolgorde opgepakt; zie §4), `kandidaten`
   het laatste zoekresultaat, `nummer` artiest en titel voor de lijst.
   Status: `wacht` | `zoekt` | `kies` | `bezig` | `klaar` | `mislukt` | `geannuleerd`.
+  **`?licht=1`** (de companion, die elke 5 s peilt; 10 okt): `{ sleutel, status, gevraagd, youtube_id, fout, bron, kandidaten }`,
+  zonder `track` en `nummer`, en `kandidaten` alleen bij `kies` (anders null). Gemeten op de nep-kaart: een klare
+  wens 1379 B gewoon, 143 B licht (`test/companion-server.test.mjs`). Alleen de lichte vorm heeft een `ETag`
+  (sha1 van de JSON, 16 tekens): met een gelijke `If-None-Match` (ook `W/"…"` of in een lijst) `304` zonder
+  body. De gewone vorm (het kaartpaneel) blijft zoals hij was, zonder ETag.
 - `POST /api/kaart/nummer/<sleutel>/zoek` → `{ kandidaten: [{ youtube_id, titel, kanaal, duur, score, reden }], vraag }`,
   beste eerst. 409 als er een deck speelt, 404 onbekende sleutel, 502 `{ fout: "zoeken mislukt: …" }`
   met de regel van yt-dlp erin. Een wens die `wacht` gaat via `zoekt` naar `kies`
@@ -115,14 +120,20 @@ vreemde Origin.
   onzinnige id, 404 onbekende sleutel.
 - `GET /api/nacht` → `{ aan, venster: { van, tot }, perNacht, pauze: { min, max }, vandaagNiet, speeldagen, laatsteRun: { begonnen, klaar, gehaald, mislukt, reden, soort } | null, volgende, bezig, standaardVolgorde, nu }`.
   **Extra:** `nu` (de klok van de server, ISO) en `laatsteRun.soort` (`nacht` | `nu`); `bezig` is
-  `{ id, begonnen, soort, aantal, gehaald, mislukt, huidig }` of null.
+  `{ id, begonnen, soort, aantal, gehaald, mislukt, huidig, alleenWensen }` of null. Sinds 10 okt ook
+  `vandaag` en `nachtDatum` (JJJJ-MM-DD, in de tijdzone van de SERVER, dezelfde regel als `nu()`): een
+  toestel rekent "vandaag" dan niet zelf uit in zijn eigen tijdzone (de companion, docs/COMPANION.md).
 - `POST /api/nacht` (gedeeltelijk: `aan`, `perNacht` 1..1000, `venster`, `pauze` in s,
   `speeldagen` (lijst `JJJJ-MM-DD`), `vandaagNiet` (boolean), `standaardVolgorde`) → de
   nieuwe stand; onzin = 400 `{ fout }`. Opslag `media/nacht.json`.
-- `POST /api/nacht/nu { aantal }` → 202 met de stand (`bezig` gevuld); de run loopt
+- `POST /api/nacht/nu { aantal, alleenWensen? }` → 202 met de stand (`bezig` gevuld); de run loopt
   door op de achtergrond. 409 `{ fout }` als er al een run loopt, een deck speelt
   of vandaag een speeldag is (ook de nacht ná een speeldag, zie §4). `aan` hoeft
-  niet voor `nu`: dat is waar hij voor is (proberen).
+  niet voor `nu`: dat is waar hij voor is (proberen). `alleenWensen: true` (10 okt,
+  de knop "haal de wenslijst nu op" van de companion): alleen wat op de wenslijst
+  wacht, nooit de standaardvolgorde, ook als die aan staat. Zonder de vlag (of
+  `false`) als altijd: een wens die op `kies` eindigt telt niet als gehaald, dus
+  dan vult de run aan uit de standaardvolgorde. Geen boolean = 400.
 - `POST /api/nacht/stop` → `{ ok, …stand }`: stopt na het lopende nummer.
 - **Extra:** `GET /api/nacht/runs` → `{ runs }`, de laatste 30 uit `nacht_runs`.
 
@@ -190,8 +201,11 @@ Standaard **uit**. De zes regels van het contract en hoe ze hier zitten:
    of als `vandaagNiet`.** `magNu()`. Een "nacht" hoort bij een DATUM:
    `nachtDatum` = vóór 12:00 de dag ervóór. Zo is 03:00 op 11 oktober de nacht
    van 10 oktober (de proefavond), en geldt `speeldagen: ["2026-10-10"]` ook voor
-   die nacht. `vandaagNiet` wordt bewaard als die nachtdatum en loopt vanzelf af;
-   om 22:00 aangezet geldt het voor de nacht die komt. Per nacht één run: ook
+   die nacht. `vandaagNiet` geldt voor de KOMENDE nacht (`komendeNacht`: de nacht
+   waar je in zit, anders de eerstvolgende) en wordt bewaard als die nachtdatum;
+   het loopt vanzelf af. Om 22:00, om 14:00 en ook om 10:00 's ochtends aangezet
+   geldt het voor de nacht die komt (tot 10 okt gold het vóór 12:00 voor de nacht
+   die al voorbij was; gevonden in de review van de standen). Per nacht één run: ook
    als die stopte (deck, 403) gaat hij pas de volgende nacht verder. Een
    serverherstart onthoudt dat via `nacht_runs`.
 2. **Eerst de wensen (`wacht`, oudste eerst), dan de standaardvolgorde**:
@@ -373,7 +387,7 @@ Zo start je die proefserver zelf (de regels staan ook bovenin `kaart-echt.mjs`):
 M=<scratchmap>; mkdir -p $M/media; cp media/library.db* $M/media/     # KOPIE
 printf '#!/bin/sh\nexec node "%s/test/nep-ytdlp.mjs" "$@"\n' "$PWD" > $M/nep-yt-dlp; chmod +x $M/nep-yt-dlp
 ffmpeg -f lavfi -i "aevalsrc='0.8*sin(2*PI*900*t)':s=44100:d=12" -ac 2 $M/bron.wav
-PORT=8782 VARVE_DB=$M/media/library.db VARVE_MEDIA=$M/media VARVE_OPNAMES=$M/opnames \
+PORT=8782 VARVE_TESTSERVER=1 VARVE_DB=$M/media/library.db VARVE_MEDIA=$M/media VARVE_OPNAMES=$M/opnames \
 VARVE_PATRONEN=$M/patronen VARVE_PLANNEN=$M/plannen VARVE_PROEF=$M/proef VARVE_BACKUPS=$M/backups \
 VARVE_HERANALYSE=uit VARVE_YTDLP=$M/nep-yt-dlp NEP_LOG=$M/nep.log NEP_BRON=$M/bron.wav NEP_DUUR=300 \
 VARVE_KAART="$HOME/Desktop/3. Resources/Data/Muziekkaart/varve-kaart.json" node server/index.js

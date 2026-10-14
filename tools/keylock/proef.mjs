@@ -39,8 +39,15 @@ function mediaMap() {
   if (process.env.VARVE_MEDIA) return process.env.VARVE_MEDIA;
   try {
     const git = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: HIER, encoding: 'utf8' }).trim();
-    return path.join(path.dirname(git), 'media');
-  } catch (_) { return path.join(HIER, '..', '..', 'media'); }
+    return verhuisd(path.join(path.dirname(git), 'media'));
+  } catch (_) { return verhuisd(path.join(HIER, '..', '..', 'media')); }
+}
+/** Is media/ verhuisd (VI2), dan het pad uit media-VERHUISD.txt ernaast. */
+function verhuisd(m) {
+  if (fs.existsSync(m)) return m;
+  let t = '';
+  try { t = fs.readFileSync(path.join(path.dirname(m), 'media-VERHUISD.txt'), 'utf8'); } catch (_) { /* geen briefje */ }
+  return /^VARVE_MEDIA=(\/.+)$/m.exec(t)?.[1].trim() ?? m;
 }
 const MEDIA = mediaMap();
 

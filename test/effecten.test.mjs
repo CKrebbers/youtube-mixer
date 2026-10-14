@@ -12,6 +12,7 @@
 //   - de rekenkernen van de worklets: toonhoogte gemeten, 0 GC per blok.
 // Het geluid zelf (begrensd, bypass bit voor bit, hoorbaar) meet
 // tools/headless/effecten.mjs in Chrome.
+// @alleen: afvalmeting (GCProfiler, 0 GC) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import v8 from 'node:v8';
 import vm from 'node:vm';
 

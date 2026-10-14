@@ -14,8 +14,14 @@ export function mediaMap() {
   if (process.env.VARVE_MEDIA) return process.env.VARVE_MEDIA;
   try {
     const git = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: ROOT, encoding: 'utf8' }).trim();
-    return path.join(path.dirname(git), 'media');
-  } catch { return path.join(ROOT, 'media'); }
+    return verhuisd(path.join(path.dirname(git), 'media'));
+  } catch { return verhuisd(path.join(ROOT, 'media')); }
+}
+/** Is media/ verhuisd (VI2), dan het pad uit media-VERHUISD.txt ernaast. */
+function verhuisd(m) {
+  if (existsSync(m)) return m;
+  const t = (() => { try { return readFileSync(path.join(path.dirname(m), 'media-VERHUISD.txt'), 'utf8'); } catch { return ''; } })();
+  return /^VARVE_MEDIA=(\/.+)$/m.exec(t)?.[1].trim() ?? m;
 }
 export const MEDIA = mediaMap();
 export const TMP = path.join(tmpdir(), 'varve-beatmeting-rest');

@@ -56,7 +56,31 @@ h2{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
 .knop.hoofd:disabled{background:var(--panel2);border-color:var(--line);color:var(--dim)}
 .knop.klein{padding:4px 10px;font-size:12px}
 .knop.let-op{border-color:var(--warn);color:var(--warn)}
+.knop[hidden]{display:none}
 .openen .uitleg{flex-basis:100%}
+
+/* de opstelling (docs/STANDEN.md): kiezer + twee knoppen, daaronder wat activeren verandert */
+.opstelling{display:grid;gap:8px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.opstelling h3{margin:0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:700}
+.opstelling-rij{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+.opstelling select{font:inherit;font-size:14px;color:var(--text);background:var(--panel2);border:1px solid var(--line);
+  border-radius:6px;padding:7px 10px;min-width:0;max-width:100%;flex:0 1 340px}
+.opstelling select:disabled,.opstelling .knop:disabled{opacity:.55}
+/* de bewerker: per deel een keuzelijst (stand-bewerker.js) */
+.bewerk>summary{list-style:none;width:max-content;font-size:13px;padding:5px 12px}
+.bewerk>summary::-webkit-details-marker{display:none}
+.bewerk[open]>summary{border-color:var(--a)}
+.bw-form{margin-top:10px;display:grid;gap:10px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.bw-velden{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 16px}
+.bw-veld{display:grid;gap:3px;min-width:0;align-content:start}
+.bw-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.bw-hint{font-size:12px;color:var(--klein)}
+.bw-veld select,.bw-veld input,.bw-nieuw{font:inherit;font-size:13px;color:var(--text);background:var(--bg);border:1px solid var(--line);
+  border-radius:4px;padding:5px 7px;min-width:0;width:100%}
+.bw-blijft{grid-column:1/-1;margin:0;font-size:12px;color:var(--klein)}
+.bw-knoppen{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+.bw-nieuw{width:auto;flex:0 1 240px}
+@media (max-width:720px){.opstelling select{flex-basis:100%}.bw-nieuw{flex-basis:100%}}
 
 /* speellijst */
 .lijst-kop{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
@@ -85,12 +109,38 @@ h2{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
 .notitie::placeholder{color:#4a5661}
 .notitie.bewaard{border-color:var(--a)}
 
+/* het avondpakket: de tegel is een knop; de keuze en de lijsten in een <details> onder de tegels */
+.tegel[data-id="avondpakket"]{cursor:pointer}
+.tegel[data-id="avondpakket"]:hover{background:var(--panel2)}
+.avondpakket{margin-top:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:0 14px}
+.avondpakket summary{cursor:pointer;padding:10px 0;font-size:13px;color:var(--klein)}
+.avondpakket[open] summary{border-bottom:1px solid var(--line);margin-bottom:10px}
+.ap-keuze{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:13px;color:var(--klein)}
+.ap-keuze select{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:4px 6px;max-width:100%}
+.ap-keuze label{display:flex;gap:6px;align-items:center;min-width:0;max-width:100%}
+.ap-vakken{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:8px 24px;margin:12px 0}
+.ap-vakken h3{margin:10px 0 4px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:700}
+.ap-vakken ul{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:13px}
+.ap-punten li{display:grid;grid-template-columns:auto minmax(0,9em) minmax(0,1fr);gap:0 6px;align-items:baseline;min-width:0}
+.ap-punten li b{font-weight:600;overflow-wrap:anywhere}
+.ap-waarde{font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere}
+.ap-sub{grid-column:2/-1;color:var(--klein);font-size:12px;overflow-wrap:anywhere}
+.ap-punten li[data-licht="ok"] .led{background:var(--a)}
+.ap-punten li[data-licht="half"] .led{background:var(--warn)}
+.ap-punten li[data-licht="fout"] .led{background:var(--red)}
+.ap-punten li[data-licht="fout"] .ap-waarde{color:var(--red)}
+.ap-paklijst label{display:flex;gap:8px;align-items:baseline;overflow-wrap:anywhere}
+.ap-paklijst label:has(input:checked){color:var(--dim);text-decoration:line-through}
+.ap-tekst li{color:var(--klein);overflow-wrap:anywhere}
+.ap-info{margin:10px 0 0;font-size:12px;color:var(--klein)}
+
 .meldingen{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:grid;gap:6px;z-index:5}
 .melding{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:8px 14px;font-size:13px}
 .melding.fout{border-color:var(--red);color:#ffb3ad}
 
 @media (max-width:720px){
   .punt{grid-template-columns:1fr}
+  .ap-vakken{grid-template-columns:1fr}
   .kop{flex-wrap:wrap}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}

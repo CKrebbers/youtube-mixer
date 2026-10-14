@@ -25,6 +25,11 @@
  * avond 1 begint met de kern van ~45 min: opstarten, luisteren, draaien op de
  * APC, koptelefoon, keylock. Draaien en klank kwamen uit "Eerder werk" naar
  * avond 1. Alleen blokken verschoven: de ids bleven, dus de stand ook.
+ * Erbij (10 okt, crossover, PR #26): het blok "Crossover: een knip als drumpad"
+ * aan het eind van avond 2, na de sampler op de Maschine (docs/INSTRUMENTEN.md "Uit
+ * de sampler", VRAGEN CX). Het moment hangt aan CX4: wordt er pas na avond 2
+ * gemerged, dan gaat het blok bij het mergen naar avond 3 (titel "Avond 3 · …",
+ * achter beeld-pc); de ids blijven.
  * Elk punt: `doe` = wat je doet, `let` = waar je op let.
  */
 export const SPEELLIJST = [
@@ -344,6 +349,21 @@ export const SPEELLIJST = [
       let: 'Komt de sectie die je hoort in die sampler-pad, en start hij op de "1"? Is het verschil tussen de rijen (boven = spelen, onder = sectie pakken) logisch?' },
     { id: 'ms-volume', doe: 'Draai draaiknop 5 (volume), druk SHIFT + een gevulde pad, en druk daarna SAMPLING nog eens.',
       let: 'Is het volume hoorbaar? Is de pad daarna leeg maar bewaard (grijs)? Spelen de pads na SAMPLING weer het instrument? Lijken de violetten op die van de APC (modus sampler)?' },
+  ] },
+  // Crossover (10 okt, PR #26): een knip uit de sampler als drumpad, met de strip en de cue van een
+  // track. Eerst de strip, dan pas een patroon. Zonder hub: schermklavier, Xboard49, learn, en pas
+  // dan de Maschine (docs/INSTRUMENTEN.md "Uit de sampler").
+  { id: 'crossover', titel: 'Avond 2 · Crossover: een knip als drumpad', minuten: 8, punten: [
+    { id: 'cx-zet', doe: 'Track 1 speelt (de SHERELLE-mix, of een ander nummer met een harde kick). Zet de Drums op track 8 (INSTRUMENT-rij met de focus op 8), zet de focus terug op track 1 en knip 2 tellen in sampler-pad 1: de knop naast SAMPLER op 2 tellen, dan pad 1 (gevuld of grijs: eerst shift + klik; op de Maschine pad 13 in SAMPLING). Klik dan 1→13 onder de sampler-pads.',
+      let: 'Zegt de melding "S1 staat op drumpad 13 van track 8 (noot C3 · 48)", met een tempowaarschuwing als de maat niet op het tempo van het stuk staat? Is het opschrift 1→13 duidelijk, en brandt de knop daarna fel violet? Landt het op de track die je verwachtte? (CX1, CX5)' },
+    { id: 'cx-strip', doe: 'Sla het stuk aan: Maschine pad 13 in de speelmodus (SAMPLING uit). Zonder hub: het schermklavier van het instrumentpaneel op C3 (focus op 8), of C3 op de Xboard49. Draai aan het filter en de echo van track 8 en trek zijn fader dicht en open.',
+      let: 'Klinkt het als het stuk op het deck, iets luider (gemeten +2 dB)? Volgen filter, echo en fader van track 8? Is "dezelfde pad" logisch in je vingers: pad 13 knipt in SAMPLING, pad 13 slaat aan in de speelmodus?' },
+    { id: 'cx-pfl', doe: 'Fader van track 8 dicht, PFL (cue) op track 8 aan, en sla drumpad 13 nog eens aan.',
+      let: 'Hoor je het stuk alleen in de koptelefoon en niets in de zaal? (Dat kan de sampler zelf niet.)' },
+    { id: 'cx-stems', doe: 'Een nummer met stems op track 1 (STEMS-rij): zet alles weg behalve de drums, knip in sampler-pad 2 en klik 2→14.',
+      let: 'Zegt de melding "· stems: drums", en klinkt drumpad 14 als alleen de drums?' },
+    { id: 'cx-patroon', doe: 'Als er tijd is: een patroon op track 8 met noot 48 (C3) op stap 1 en 9, en laat het meelopen met track 1. Herlaad daarna het mixer-tabblad.',
+      let: 'Valt het stuk op de tel van de maat? Na herladen: komt de melding dat drumpads 9–16 leeg zijn? Mis je dat ze bewaard bleven? Mis je een knop om een drumpad leeg te maken? (CX2, CX5)' },
   ] },
 
   // ---- Avond 3: beeld (met de Omarchy-pc) ------------------------------------------

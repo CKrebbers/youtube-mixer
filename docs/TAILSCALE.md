@@ -42,11 +42,17 @@ iPad / laptop / telefoon ──(Tailscale, HTTPS)──> Mac: tailscale serve :4
    ```
    pkill -f server/index.js
    cd <projectmap>
-   VARVE_HOSTS=<NAAM> nohup node server/index.js >> ~/.varve-server.log 2>&1 &
+   VARVE_HOSTS=<NAAM> UV_THREADPOOL_SIZE=16 nohup node server/index.js >> ~/.varve-server.log 2>&1 &
    ```
    In het log staat dan `ook via · https://<NAAM>`.
 5. **Op elk ander apparaat**: Tailscale installeren, met hetzelfde account
-   inloggen, en openen: `https://<NAAM>/controle`.
+   inloggen, en openen: `https://<NAAM>/companion` (iPad en iPhone, `docs/COMPANION.md`)
+   of `https://<NAAM>/controle` (de Controlekamer op een groot scherm).
+
+Uitzetten: `tailscale serve reset`. Zet ook een ACL (alleen je eigen apparaten,
+`autogroup:member`, naar de Mac op 443; geen `tag:*`), zie `docs/COMPANION.md`.
+Start je de server via VARVE.app, dan moet `VARVE_HOSTS` in `~/.zprofile` staan;
+zonder zegt de server bij het opstarten `VARVE_HOSTS is leeg: iPad en iPhone krijgen 403`.
 
 ## "Altijd": de Mac moet aan staan
 
@@ -68,6 +74,7 @@ iPad / laptop / telefoon ──(Tailscale, HTTPS)──> Mac: tailscale serve :4
     <key>WorkingDirectory</key><string>/Users/<jij>/src/varve</string>
     <key>EnvironmentVariables</key><dict>
       <key>VARVE_HOSTS</key><string><NAAM></string>
+      <key>UV_THREADPOOL_SIZE</key><string>16</string>
       <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
     <key>RunAtLoad</key><true/>
@@ -77,7 +84,8 @@ iPad / laptop / telefoon ──(Tailscale, HTTPS)──> Mac: tailscale serve :4
   </dict></plist>
   ```
   PATH moet erin: de ingest roept `yt-dlp` en `ffmpeg` aan, en launchd kent
-  Homebrew niet. Een LaunchAgent in een iCloud-map werkt slecht: eerst VARVE
+  Homebrew niet. `UV_THREADPOOL_SIZE` ook (zoals VARVE.app): een paar codebestanden
+  die macOS uit iCloud moet halen leggen anders alle decks stil (docs/WINST.md punt 4). Een LaunchAgent in een iCloud-map werkt slecht: eerst VARVE
   uit iCloud halen.
 
 ## Wat er waar werkt
@@ -89,9 +97,11 @@ iPad / laptop / telefoon ──(Tailscale, HTTPS)──> Mac: tailscale serve :4
   data (720p).
 - **De APC werkt alleen op het apparaat waar hij in zit**, en alleen in Chrome.
   Op iPhone en iPad bestaat Web MIDI niet (elke browser daar is Safari van
-  binnen), en de mixer is daar nooit getest. Daar zijn vooral handig: de
-  Controlekamer, de speellijst, het planvenster, en links plakken in de
-  ingest (de Mac haalt ze binnen).
+  binnen), en de mixer is daar nooit getest. **Hét adres voor iPad en iPhone is
+  `/companion`** (sinds 10 okt, `docs/COMPANION.md`): de kaart met wensen, kiezen
+  en "haal nu", straks wat er speelt. Geen geluid, geen MIDI, geen Web Lock: hij
+  stoort de mixer niet. Verder handig op een groot scherm: de Controlekamer, de
+  speellijst, het planvenster.
 - **Op de Mac zelf: blijf `localhost:8777` gebruiken.** `localhost` en
   `https://<NAAM>` zijn voor Chrome twee verschillende oorsprongen, met elk
   hun eigen Web Lock, BroadcastChannel en localStorage. De bescherming "maar
@@ -103,6 +113,15 @@ iPad / laptop / telefoon ──(Tailscale, HTTPS)──> Mac: tailscale serve :4
   op de server is wel gedeeld.
 - Wie in je Tailscale-netwerk zit, kan erbij. Deel de Mac niet met anderen
   in Tailscale, of zet een ACL.
+- **Onderweg** toont de tegel Avondpakket (docs/AVONDPAKKET.md) of Tailscale draait en
+  of `clayk` online is, direct of via een relay. Alleen bij profiel `beeld` is dat
+  verplicht: Varve zelf speelt zonder netwerk.
+
+## Op locatie (te meten)
+
+Drie situaties, nog niet geprobeerd (proefblok in `docs/COMPANION.md`): (a) thuis-wifi,
+(b) Mac en iPad op de hotspot van de iPhone met mobiele data aan, (c) idem met mobiele
+data uit. Aanname: Tailscale verbindt Mac en iPad dan direct over het hotspot-netwerk.
 
 ## Niet getest
 

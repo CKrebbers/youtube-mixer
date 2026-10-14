@@ -387,8 +387,19 @@ export class Kaart {
 
   wens(sleutel) { return this.db.prepare('SELECT * FROM wensen WHERE sleutel = ?').get(sleutel) ?? null; }
 
-  /** GET /api/kaart/wensen: alles, oudste eerst, met de track als hij binnen is. */
-  wensen() {
+  /**
+   * GET /api/kaart/wensen: alles, oudste eerst, met de track als hij binnen is.
+   * `licht` (?licht=1, de companion die elke 5 s peilt): zonder `track` en
+   * `nummer`, en de kandidaten alleen bij een wens op `kies`. Een klare wens met
+   * zijn track woog op de nep-kaart ~1,4 kB; de lijst groeit met elke nacht.
+   */
+  wensen({ licht = false } = {}) {
+    if (licht) {
+      return this.db.prepare('SELECT * FROM wensen ORDER BY gevraagd, rowid').all().map((w) => ({
+        sleutel: w.sleutel, status: w.status, gevraagd: w.gevraagd, youtube_id: w.youtube_id, fout: w.fout, bron: w.bron,
+        kandidaten: w.status === 'kies' && w.kandidaten ? JSON.parse(w.kandidaten) : null,
+      }));
+    }
     const set = this._binnenSet();
     return this.db.prepare('SELECT * FROM wensen ORDER BY gevraagd, rowid').all().map((w) => ({
       sleutel: w.sleutel, status: w.status, gevraagd: w.gevraagd, youtube_id: w.youtube_id, fout: w.fout, bron: w.bron,

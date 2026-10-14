@@ -133,6 +133,36 @@ export function controleerAdres(invoer) {
   return { ok: true, adres };
 }
 
+/**
+ * De twee relay-adressen die je met één klik kiest (de knopjes in de BEELD-rij):
+ * de relay op deze Mac (beeld op één machine: `zsh tools/beeld-lokaal.sh`,
+ * docs/BEELD.md §8) en die op de Omarchy-pc via Tailscale (§1). De sleutels
+ * liggen vast: het spoor *standen* kan ernaar verwijzen (`lokaal`, `pc`).
+ * Elk adres gaat door controleerAdres zoals een getypt adres.
+ */
+export const BEELD_ADRESSEN = Object.freeze([
+  Object.freeze({ sleutel: 'lokaal', naam: 'deze Mac', adres: 'ws://127.0.0.1:7702/app' }),
+  Object.freeze({ sleutel: 'pc', naam: 'pc', adres: 'ws://clayk:7702/app' }),
+]);
+
+/** Zo lang telt een tweede klik op hetzelfde adresknopje als "ja, wissel" (ms). */
+export const WISSEL_BEVESTIG_MS = 3000;
+
+/**
+ * Vraagt een klik op een adresknopje ("deze Mac" · "pc") eerst een tweede klik?
+ * Alleen als beeld aan staat en verbonden is met een ÁNDER adres: dan verliest de
+ * Stroommachine die nu meekijkt de klok en de kenmerken van VARVE (ze loopt door op
+ * haar eigen klok: niet zwart, geen audio). Midden in een set is één misklik dan te
+ * duur; typen plus Enter blijft wel meteen (dat is al een bewuste handeling). Uit,
+ * zoekend of hetzelfde adres: meteen. Zoals elke destructieve knop: een tweede klik
+ * binnen WISSEL_BEVESTIG_MS (review 2 beeld-een-machine, punt 6).
+ * @param status  BeeldKoppeling.status() (aan, verbonden, adres)
+ * @param adres   het adres van het knopje
+ */
+export function wisselVraagtBevestiging(status, adres) {
+  return !!(status && status.aan && status.verbonden && status.adres !== adres);
+}
+
 /** Extra latentie in hele ms, binnen LATENTIE_MIN … LATENTIE_MAX. Onzin wordt 0. */
 export function klemLatentie(v) {
   const n = typeof v === 'string' ? Number(v.trim().replace(',', '.')) : Number(v);

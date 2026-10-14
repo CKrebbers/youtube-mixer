@@ -14,6 +14,56 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 14 OKT: CONTROLLERS ZONDER LAG, EEN BETER BEATGRID, SNELLE WINST (tak `studio/afmaken`)
+
+- **Waar:** `studio/afmaken` = `studio/integratie` + main + de fix-PR's #33/#34/#39/#40 + vijf sporen
+  (`afmaken/controller-invoer`, `-uitvoer`, `beatgrid-analyse`, `beatgrid-bediening`, `winst-snel`). Elk spoor:
+  nulmeting, reparatie, nameting met hetzelfde commando, twee reviewers (regels en bewijs) die opnieuw maten,
+  herstelrondes tot niets blokkerends. Verslagen met elk commando: `docs/verslagen/2026-10-14/<spoor>.md`.
+- **Lag (invoer):** brede `:has()`-regels lieten elk beeld ~256 elementen restylen; MIDI-berichten wachtten
+  daarop. Stijlwerk in rust 180 → 33 ms/s, fader tot geluid gepland p50 4,2 → 0,8 ms, via de hub 6,6 → 1,2 ms;
+  shift/mapjes 6 → 1,4 ms in het bericht. `tools/headless/latentie.mjs`.
+- **Lag (uitvoer):** druk → lampje via de hub p50 ~51 → ~6 ms; LED-tik 454 → 45 µs; mapje → laatste lampje
+  56 → 11 ms. Echofilter alleen voor CC: 13% van de drukken/loslaten op een knipperende knop viel weg, nu 0.
+  `tools/headless/led-vertraging.mjs`, `tools/bench/feedback.mjs`. Hub-patch (alleen tekst) in het verslag.
+- **Beatgrid-analyse:** benchmark met bekende antwoorden (`tools/beatmeting/synth/`, 21 nummers × 8 soorten
+  Beat This!-fouten). Tellen-route: vals zeker 1 → 0, op het DJ-tempo 52 → 95%, echt octaaf 58 → 85%. Kaart-VERSIE 2:
+  de eerste start rekent automatische grids één keer opnieuw (VRAGEN GA).
+- **Beatgrid-bediening:** vast (pin) bij 0,1% drift goed i.p.v. 579 ms naast; nudge vasthouden herhaalt;
+  ← 1, tellen hier, ✓, ↶ op de APC (grid-modus); druk → grid op de server gemiddeld 707 → 212 ms.
+- **Snelle winst (docs/WINST.md):** opname lekte 26,6 MB/min (nu 0,2 na GC); video verdrong de audio (p90 4,1 s
+  → 0,04 s); UV_THREADPOOL_SIZE=16; Cmd+R vraagt eerst; tests in een pool (533 → 261 s).
+- **Ontwerpen:** `docs/WERKRUIMTE.md` (de werkruimte: APC breed, Maschine diep, acht delen; bouwplan in golven,
+  vragen W1–W3) en `docs/WINST.md` (top-10).
+- **Getest:** `node test/alles.mjs` 102 bestanden, 9061 checks; rood alleen renderblok "keylock met wissels" en
+  wachtrij "yt-dlp en zijn kind" (2×), die in de Linux-container ook op main rood zijn. **Niet getest:** alles op
+  de echte APC, Maschine, Scarlett en Clay's Chrome/M1; het echte Beat This! (container mocht het model niet halen).
+
+## 11 OKT: MEDIA BUITEN ICLOUD EN DE UITGANGEN-ZIN (VI1 + VI2, tak `studio/media-buiten-icloud`)
+
+- **VI1:** `CLAUDE.md` ("Gekozen aanpak") en `docs/ONTBREEKT.md` D1: geen distributie van de cache; een
+  uitgang (bestand, 127.0.0.1, export naar eigen schijf) mag, eigen opnames en renders naar de eigen
+  library ook. Varve zelf naar een dienst blijft dicht (U1b).
+- **VI2:** `VARVE_TESTSERVER=1` is nu de enige "testserver"-vlag (was `VARVE_MEDIA`; alle testservers
+  zetten hem); de server kiest zijn mediamap (`VARVE_MEDIA`, anders `media/`, anders
+  `media-VERHUISD.txt`), zet `library.db` standaard in die map en waarschuwt bij het starten als hij
+  in iCloud ligt; `tools/media-verhuis.mjs` (droog, `--doe`); VARVE.app leest `~/.varve/media-pad`.
+  Alles in `docs/LIBRARY.md` "Waar media/ staat".
+- **Wat Clay doet, ná de merge naar main en een `git pull` in de Bureaublad-map:** server stoppen,
+  `node tools/media-verhuis.mjs` (droog), dan `--doe`, de twee regels die het toont, VARVE.app opnieuw
+  bouwen (`zsh tools/varve-app/maak.sh`), server starten en in het log `[media] …/Varve-media` zien.
+  Niet eerder: de server van vóór VI2 zou met `VARVE_MEDIA` geen stems maken en een lege library
+  beginnen (het tool weigert dan ook).
+- **`VARVE_BACKUPS`:** een kopie BUITEN de laptop vraagt een externe SSD, en die is er nog niet. Tot
+  dan staan de backups van `library.db` naast de library (`~/Varve-media/backups/`) en is er van de
+  media (32 GB) geen tweede kopie; na de verhuizing haalt iCloud `media/` ook uit de cloud. Met een SSD:
+  `VARVE_BACKUPS=/Volumes/<naam>/varve-backups` en vóór elke reis `rsync -a ~/Varve-media/
+  /Volumes/<naam>/Varve-media/`. Het tool meldt dit ook.
+- **Getest:** `node test/alles.mjs` groen (met `test/media-verhuis.test.mjs`); een testserver op 8811
+  logt zijn mediamap; VARVE.app compileert (proefdoel) en de startregel is getoetst met een nep-thuismap.
+  **Niet getest:** de echte verhuizing (rename uit de iCloud-Bureaublad-map), de herbouwde VARVE.app
+  echt gestart, de hub-set (AV-app-hub) met `VARVE_MEDIA`.
+
 ## 10 OKT: DE MUZIEKKAART IN VARVE (tak `studio/kaart`, PR naar `studio/integratie`)
 
 - **Kaart (10 okt).** De hele muziekkaart (`varve-kaart.json`: 18.233 nummers, 29 kratten) als
@@ -214,8 +264,9 @@ Lees in deze volgorde:
     klank, beatgrid (controle op Loving arms en Ciel, de jungle-mix vóór en na ↻, vastzetten),
     stems, master en effecten, secties.
   - **Avond 2, spelen en programmeren** (met de hub: in AV-app-hub `npm start -- studio`,
-    64 punten, ~2,5 uur): FM op de Xboard49 eerst in de koptelefoon, de Maschine, drums, patronen
-    (stappen op de Maschine, een baslijn van de Xboard, starten vanaf de APC, herladen).
+    69 punten, ~2,7 uur): FM op de Xboard49 eerst in de koptelefoon, de Maschine, drums, patronen
+    (stappen op de Maschine, een baslijn van de Xboard, starten vanaf de APC, herladen), en sinds
+    10 okt een knip uit de sampler als drumpad (blok crossover, PR #26; moment: VRAGEN CX4).
   - **Avond 3, beeld** (met de Omarchy-pc, 6 punten, ~25 min): Stroommachine v10, `ws://clayk:7702/app`, ijken op één plek.
   - De open vragen staan bij hun punt (VRAGEN S3–S22 behalve S12, I4, N1–N3, O1–O2): je antwoord in
     de notitie. Het werk van vóór 6 okt staat achteraan ("Eerder werk").

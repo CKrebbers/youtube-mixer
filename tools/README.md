@@ -23,13 +23,42 @@ Draai met `node tools/beatmeting/<script>.mjs` vanuit de projectmap.
 | rest/tel1-synth.mjs `[tempofout]`, rest/tel1-echt.mjs `id:van:duur:bpm` | restpunt 2: "tel 1 hier" met en zonder verfijnen, synthetisch en op echte muziek |
 | rest/gridpast.mjs `[id:van:duur[:nul] ...]` | restpunt 4: past het grid op elk stuk, vóór (12776ba) tegen nu, op 48 fragmenten |
 | rest/gridpast-synth.mjs `[naam ...]` | hetzelfde synthetisch, de echte kicks bekend (`LANGE_MIX=1`: ook een mix van 20 min) |
+| synth/bench.mjs `[namen] [--json f] [--code <checkout>] [--vergelijk a b] [--wav map] [--echt map]` | DE BENCHMARK (14 okt, BEATGRID.md §12): 21 synthetische nummers met bekende tellen en "1"-en (`nummers.mjs`), Beat This!-tellen met zijn fouten (`nep-beatthis.mjs`), de score met vals zeker (`scoor.mjs`); beide analyses zoals de server ze draait. Leest en schrijft alleen in de tijdelijke map. `--wav` + `server/tellen/tellen.py` + `--echt`: het echte model op dezelfde audio |
+| synth/groep.mjs `voor.json na.json ...` | de uitkomst van `bench.mjs --json` per soort fout, en de gewone gevallen (zes soorten; met en zonder vast-72/reggae-75) |
+| synth/opstart.mjs `[--poort 8866] [namen]` | wat een nieuwe kaartversie bij het opstarten kost: een eigen proefserver (VARVE_TESTSERVER=1, tijdelijke map) met grids uit de tellen van versie 1, twee keer gestart (zonder en met `tweede-mening.json`); de `[tellen]`-regels met de tijd per nummer |
 De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking; die in
 `rest/` van 25 september. `rest/` leest geen server maar de bestanden zelf (ook vanuit een
 worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van het systeem.
 
+## avondpakket.mjs
+`node tools/avondpakket.mjs [--profiel apc] [--vertrek|--aankomst] [--streng] [--json] [--poort 8777]`:
+het avondpakket vanaf de opdrachtregel (docs/AVONDPAKKET.md). Leest `/api/avondpakket` als de
+server draait (dan zegt hij hetzelfde als de tegel), meet anders zelf; alleen lezen, opent
+`library.db` nooit. Exit 0 = geen rood, 1 = oranje (alleen met `--streng`), 2 = rood, 3 = fout
+in de aanroep. Met `VARVE_AVONDPAKKET_NEP=test/fixtures/avondpakket` uit fixtures, zonder server.
+
 ## varve-app/
 `VARVE.applescript` + `maak.sh`: de Dock-knop die de server en de AV-app-hub start (zonder hub doet de Maschine niets) en de Controlekamer opent (met `?hub=`)
 (`~/Applications/VARVE.app`). Een losse macOS-app; draait niet in de mixer.
+
+## beeld-lokaal.sh
+Beeld op één machine (docs/BEELD.md §8): `zsh tools/beeld-lokaal.sh [--stand licht|normaal|auto]
+[--stroom <map>] [--poort 7702] [--geen-fps] [--droog] [--stop] [--installeer]`. Start op deze Mac
+de relay uit `~/Projects/stroommachine` (127.0.0.1:7702, log `~/.varve-relay.log`, pid
+`~/.varve-beeld-lokaal.pid`) en de Stroommachine in een EIGEN Chrome-bundel
+(`~/Applications/Stroommachine-Chrome.app`, eigen profiel `~/.varve-stroom-chrome`, debugpoort 9393),
+en drukt de vijf handelingen daarna af. Start de VARVE-server nooit ("klik eerst VARVE.app").
+`--installeer` kopieert Chrome for Testing uit de Playwright-cache naar die bundel (weigert
+`com.google.Chrome`, overschrijft niets). `--droog`: alleen de controles en wat het zou starten, met
+de volledige URL. `--stop`: alleen de relay uit het pid-bestand (als het nog `varve-relay.js` is) en
+de Chrome met het eigen profiel, nooit `pkill`. De test: `test/beeld-lokaal.test.mjs` (een kopie in
+een map met een spatie, nep-relay, nep-`open`, eigen poorten). Nog nooit echt gestart: dat is de
+speelproef (stap 7 van het ontwerp), met Clay erbij.
+
+## standen/
+`voorbeelden/` (apc, alles, maschine, laptop: de vertrekpunten van docs/STANDEN.md, in git) en `activeer.mjs`: een
+opstelling activeren zonder browser (`node tools/standen/activeer.mjs [naam|--terug] [--poort 8777]`; zonder naam de
+lijst). Praat alleen met de server; code 1 bij een fout.
 
 ## git/
 - `test-index.sh` — test precies wat er in de git-index staat (niet de werkmap): pakt de
@@ -60,6 +89,16 @@ worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van h
   bewaking dat het afvalvrij blijft zit niet hier maar in `test/renderblok.test.mjs`.
   Met stems (3 okt): `--stems 2,4` (standaard aan) meet ook 8 decks × 2 en × 4 stems,
   `--ref-stems` de oude kern ernaast; cijfers in `docs/AUDIOPAD.md` ("Stems").
+- `draadpool.mjs [--poort 8884] [--hangend 4]` — kan code die niet lokaal staat (iCloud) de decks
+  stilleggen? Een server uit een KOPIE van server/ en src/ in een tijdelijke map, vier FIFO's als
+  hangende modules (open() hangt zoals bij een uitgeplaatst bestand zonder netwerk), en drie pagina's
+  van een deck ervoor en erna; met de standaardpool (4) en met `UV_THREADPOOL_SIZE=16`. Tabel, exit 1 als
+  het met 16 toch hangt. VARVE.app start de server daarom met 16 (docs/WINST.md punt 4);
+  `test/draadpool.test.mjs` bewaakt beide.
+- `grid-hang.mjs [wortel]` — één grid-POST die blijft hangen: hoeveel POSTs komen er in de 6 s erna
+  nog (elke seconde een bewerking, het vangnet van 1,5 s zoals laden.js)? Met een `wortel` van vóór
+  review ronde 1 (14 okt): 1, nu 6 (de time-out per POST, docs/BEATGRID.md §12). De bewaking zit in
+  `test/grid-bewaren.test.mjs`.
 
 ## lokaal/
 Clay's eigen muziek in de library via de bestaande upload-route (kaart-contract deel 4,
@@ -70,7 +109,27 @@ alleen de tabel; `--library` opent de database alleen-lezen als de server niet d
 keuzelogica staat puur in `kies.mjs` (`test/lokaal-importeer.test.mjs`). Zie `lokaal/LEESMIJ.md`.
 Pas draaien NÁ de proefavond van 10 okt.
 
+## setboek/
+Wat er op een avond KLONK, uit de handelingenlogs (spoor produceren-uit, 10 okt): tracklist
+"hoorbaar (benaderd)", geladen maar niet gehoord, gebruik, verslagblok. Alleen op een KOPIE van
+`opnames/*.acties.jsonl`, nooit tijdens een set. Zie `setboek/LEESMIJ.md`.
+
+## patronen/
+`midi.mjs`: een set patronen (of één track of patroon) als MIDI-bestand voor Logic (type 1, 384 PPQN;
+docs/PATRONEN.md §8). Op een KOPIE van `patronen/<naam>.json`; schrijft nooit over een bestaand
+bestand heen. Zie `patronen/LEESMIJ.md`.
+
 ## headless/
+- `lek.mjs` — lekt de opname geheugen? Een mixer met één stil nummer en een opname van `VARVE_LEK_S`
+  (standaard 300) s; elke 15 s de RSS van de renderer, aan het eind GC (hoofdthread én AudioWorklet).
+  Drukt groei per minuut af, ook na GC. `VARVE_CODE=<checkout>` meet een andere versie met hetzelfde
+  script (vóór/na). Poorten 8881/9381. 14 okt: 26,6 → 2,6 MB/min, na GC 25,8 → 0,2 (docs/WINST.md punt 1).
+- `acht-video.mjs` — verdringen de video's de audio? Acht decks die spelen, het videopaneel open, 30
+  sprongen; wachttijd van de audioverzoeken, sprong → pagina, gat per deck. Media: `VARVE_ACHT_MEDIA=<map
+  met library.db>` (database gekopieerd, nummers gelinkt, er wordt niets in geschreven), anders acht
+  synthetische nummers via de upload-route (duurt). Chrome MET H.264 (`VARVE_CHROME`, Chrome for
+  Testing; de Chromium van Playwright speelt geen mp4). `VARVE_ACHT_VIDEO=open|dicht|geen`,
+  `VARVE_CODE`. Poorten 8883/9383. Cijfers: docs/LIBRARY.md "Video en audio over één host".
 - `kaart.mjs [uitmap]` — de tab kaart (docs/LIBRARY.md "De kaart-tab") op de NEP-server `kaart-nep.mjs`
   (de kaart-API in het geheugen op `test/fixtures/varve-kaart.klein.json`, de rest doorgegeven aan een
   eigen echte server op 8815; nep op 8816): voor ontwikkeling aan de UI zonder de serverkant. 65 checks.
@@ -89,6 +148,8 @@ Pas draaien NÁ de proefavond van 10 okt.
   de bovenbalk met de knop beeld op 1440×790/900 en 1920×1080, de BEELD-rij (velden, geweigerd adres
   = één melding, latentie geklemd), de stand (zoekt · verbonden · beeld-status · na 3 s weer
   "wacht"), het manifest als eerste bericht, de tegel in de Controlekamer, relay weg, uit en herladen,
+  de knopjes "deze Mac · pc" (een echte muisklik, met beeld UIT: niets naar 7702 of de pc; verbonden
+  met de nep-relay: één klik wisselt niet, een tweede binnen 3 s wel, Clay's adressen omgeleid naar 8787; 10 okt),
   opstarten met een onbereikbaar adres (40 s: één info-melding, 0 fouten van onze code), en een tweede
   VARVE-tabblad (zendt niet zolang het eerste open is, neemt het daarna over). Wat Chrome
   zelf logt bij een mislukte WebSocket (Log-domein, niet te onderdrukken) wordt apart geteld.
@@ -99,6 +160,31 @@ Pas draaien NÁ de proefavond van 10 okt.
   de klok · 124.0 BPM"), tracks met hun id, crossfader 0 → 0,8 = dom A → B, een macro van de
   APC-pagina, de Stroommachine herladen (tracks terug), pauze (haar bronnen zakken naar stil), relay weg
   en terug. Weigert als 7702 bezet is.
+- `beeld-lokaal.mjs [uitmap] [--standen …] [--warm 20] [--meet 120] [--zelftest] [--kijk] [--opruimen] [--accu]` —
+  beeld op één machine (docs/BEELD.md §8): de Stroommachine naast VARVE op deze Mac, op Metal, met de relay op
+  7712, een eigen server op 8801 (debug 9391/9392). Per stand fps (eigen rAF-meter, `&fps`), VARVE-rAF, een
+  hartslag-worklet in `engine.ctx` (gaten > 15 ms, positieve controle van 40 ms), CPU/RSS per proces, de top-5
+  van de rest van de Mac aan begin en eind, warmte, lader en accu; `uit/beeld-lokaal.json`. Weigert bij geluid
+  uit de Mac of een ANDER proces > 20 % van een kern (een andere testrun, een achtergebleven headless Chrome).
+  Systeemprocessen (`/System/`, `/usr/libexec/`, `/usr/sbin/`, `/sbin/`, `/Library/Apple/`: mediaanalysisd,
+  fileproviderd, Spotlight) houden hem niet tegen; die staan als `achtergrond` in de JSON.
+  `VARVE_BL_FORCEER=1` (meten ondanks geluid of een druk proces, wordt gelogd) ALLEEN als je zeker weet wat
+  dat proces is en dat het tijdens de run niet verandert (een wees die je niet mag stoppen), nooit terwijl er
+  een andere testrun of Clay's set loopt: dan meet je die mee. `--warm`/`--meet`/`--duur` met iets anders dan
+  een getal ≥ 0: exit 2, er start niets. `--zelftest`: zonder GPU en zonder Stroommachine, ≤ 20 s. `--kijk`:
+  tijdens een echte proef kwInfo() via 9393 en ps naar `uit/kijk-<datum>.jsonl`. Ctrl-C stopt alle kinderen
+  (eigen procesgroep), ruimt de tijdelijke map op en sluit af met 130; wat de lus daarna nog ziet, telt niet
+  (geen FAIL-regel, `isAfgebroken()`). `--opruimen` na een harde stop: alleen eigen processen
+  (de Chromes via hun profiel, de proefserver via `--meting=<tmp>`, de relay op 7712); eerst SIGTERM naar de
+  wortels, na 3 s SIGKILL. NIET op een speeldag. De pure delen: `test/beeld-meting.test.mjs`.
+- `zaalbeeld.mjs [uitmap]` — het zaalbeeld (`video.clips`, docs/BEAMER.md): eigen server op 8806, debug 9406,
+  Chrome for Testing op Metal, ZONDER `--disable-popup-blocking`. Het losse venster met een testvideo, clips uit =
+  zwart en de video stil (geluid door), vormen erbij = beeld, `video.black` werkt, clips terug; de knop video
+  (amber, de bovenbalk schuift niet), het knopje CLIPS (leesbaar in beide standen: contrast ≥ 4,5; uit met een
+  echte muisklik), de statusregel (past op 1440 breed in drie toestanden) en de venstertitel. Eerst: loopt de
+  audioklok (zonder audio-uitgang, bv. met de klep dicht, zeggen de beeldchecks niets). 31 controles, zeven
+  schermafdrukken `zaalbeeld-*.png` (`zaalbeeld-0-*` = CLIPS aan). Ctrl-C ruimt op, zonder FAIL-regel achteraf;
+  `zaalbeeld.mjs --opruimen` na een harde stop.
 - `rijen.mjs [uitmap] [--label voor|na]` — de rijen onder de mixer (stems, koptelefoon, instrument,
   patronen, master, auto, klankschaal, beeld; eigen server op 8863, debug 9463, geen MIDI): op 1440×790 en
   1920×1080 met geen, elke rij apart, drie, alle rijen open, en met de videokolom erbij. Per stand:
@@ -113,6 +199,10 @@ Pas draaien NÁ de proefavond van 10 okt.
 - `tekenen.mjs` — hoeveel VARVE op zijn canvassen tekent (eigen server op 8823, geen MIDI): in rust ~0 Mpx/s
   (zonder de sleutel in waveform.js was het ~29 Mpx/s, en liep Demucs op de helft), een sprong in stilstand
   tekent zoom en overzicht wel opnieuw; plus de duurste functies van de hoofdthread per toestand.
+- `meldingen.mjs` — licht een HERHAALDE melding elke keer opnieuw op (eigen server op 8843, DevTools 8844,
+  geen MIDI)? Telt de animationstart-events van de echte `meld()` (info en fout, zes herhalingen met 500 ms
+  ertussen), eist dat een herhaling geen opmaak uitleest (geen gedwongen opmaak in het MIDI-bericht), en
+  toont ter vergelijking de twee oude vormen: klasse eraf + rAF erop (1 van 6) en offsetWidth (6 van 6).
 - `koptelefoon.mjs` — de koptelefoon (docs/STUDIO.md §3), eigen server op 8799, geen MIDI: de
   KOPTELEFOON-rij (zonder vier kanalen: "geen koptelefoonuitgang", cue-knoppen uit), en de echte
   engine op een OfflineAudioContext van VIER kanalen: track 1 op 440 Hz met de fader dicht, track 2
@@ -168,6 +258,12 @@ Pas draaien NÁ de proefavond van 10 okt.
   dezelfde headless Chromium (Web Lock en BroadcastChannel zoals bij Clay): mixer open/dicht, een tweede mixer
   rood, de knop "mixer openen", wat er in de mixer staat, afvinken en notities na herladen. Eigen server
   (8796), tijdelijke database en speellijst, MIDI eruit vóór elke pagina. Schermafdruk `controle.png`.
+- `standen.mjs` — de opstelling in de Controlekamer (docs/STANDEN.md): tegel, kiezer, activeren en terugzetten met
+  twee klikken, "mixer openen" via de hub (niet geklikt), de bewerker (bewaren, bewaar als, leg vast, 409), 1440 en
+  390 px. Eigen server **8822** (debug **9422**; `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`) met de verzonnen kaart, de
+  nep-yt-dlp en een tijdelijke map; Chromium `--mute-audio`, geen MIDI, **geen mixer-tabblad**. Schermafdrukken
+  `standen-*.png`. Reserve voor een gedempte `controle.mjs` naast deze: **8824/9424**; de rooktest met een kopie van
+  de library: **8821** (docs/STANDEN.md §8). 8823 is van `tekenen.mjs`.
 - `hub.mjs` — de koppeling met de AV-app-hub (`?hub=`, src/control/hub.js) in Chromium via
   playwright-core uit de AV-app-hub (`VARVE_HUB_REPO`, standaard `../av-app-hub`). Zonder vlag:
   Web MIDI zoals altijd, geen WebSocket, hub.js niet geladen. Met vlag: `toetsApp` (de
@@ -225,6 +321,14 @@ Pas draaien NÁ de proefavond van 10 okt.
 - `maschine-sampler.mjs [uitmap]` — de padmodus sampler op de Maschine (docs/MASCHINE.md §5f) met de ECHTE sampler:
   een demotrack met grid op track 1, een nep-Maschine in de mixer (nep-poort, geen hub): SAMPLING, een lege pad
   knipt, nog eens = speelt op de tel, stoppen, ◄ ► tellen, draaiknop 5 volume, SHIFT + pad leeg, lampjes. Poorten 8843/9443.
+- `sampler-drums.mjs [uitmap]` — crossover stap 1 (docs/INSTRUMENTEN.md "Uit de sampler"): een knip uit de sampler
+  als drumpad 13 op de Drums, in de echte Web Audio (OfflineAudioContext, de hele engine). Checks: 1 inhoud (elke
+  aanslag is de sampler-buffer), 1b gelijk aan hetzelfde stuk op een deck (+2,1 dB), 2 fader 0 = stil, 3 een patroon
+  met noot 48 op de tellen van de maatgever, 4 `laadPad` van 90 s (~3 ms), 5 tempo (geknipt op 124, maat 128: niet
+  uitgerekt, de uitkomst zegt het), 6 koptelefoon (PFL: kanaal 3/4, zaal stil), 7 de knoppen 1→13 … 8→12 in de app
+  op 1440×900 (ook met rijen of videopaneel open; muisklik, koppelmodus) en 7b op 1440×790. Alles van de server in
+  een tijdelijke map (ook proef, kaart, nacht, nep-yt-dlp), geen MIDI. Poorten 8797/9397
+  (`VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`). Raakt de geluidsinstellingen van de Mac niet.
 - `bladeren.mjs [uitmap]` — bladeren in de library met de Maschine (docs/MASCHINE.md §5e): twee testnummers door
   de ingest, een nep-Maschine in de mixer (dezelfde klasse, nep-poort, geen hub): BROWSE opent de library, het wiel
   kiest (het paneel licht op), ENTER laadt op de focus-track, over een spelende track pas bij een tweede druk, een
@@ -286,6 +390,18 @@ Pas draaien NÁ de proefavond van 10 okt.
   - `sec-maschine.mjs` (8915/9515, echte hub op 7715 met `opname: false`) — SCENE, pads als HID, scherm bit voor bit.
   - `sec-hub.mjs` (8921/9521, echte hub op 7721 met `opname: false`; `VARVE_HUB_REPO` met PROTOCOL §18, of een oude hub) —
     één `sectie.nieuw` per gehoorde grens, energie en label, herverbinden zonder klap, pauze, een korte loop op de "1".
+
+## media-verhuis.mjs
+`media/` naar een map buiten iCloud (VI2; `docs/LIBRARY.md` "Waar media/ staat"). Standaard een
+droogloop die alleen leest: bron (media/ van de hoofdmap, ook vanuit een worktree), doel
+(`~/Varve-media`), grootte, uitgeplaatste iCloud-bestanden, of de server op 8777 draait, of
+`library.db` alleen relatieve paden heeft, waar de backups staan. `--doe` hernoemt (zelfde schijf,
+nooit kopiëren of wissen) als niets in de weg staat en schrijft `media-VERHUISD.txt`.
+
+```
+node tools/media-verhuis.mjs            # het plan
+node tools/media-verhuis.mjs --doe      # verhuizen (server uit)
+```
 
 ## keylock/
 Proef met Signalsmith Stretch 1.3.2 (keylock en toonsoort verschuiven) op Clay's eigen

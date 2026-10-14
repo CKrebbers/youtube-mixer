@@ -1,0 +1,41 @@
+{
+ "SPUSBHostDataType": [
+  {
+   "_name": "USB 3.1 Bus",
+   "Driver": "AppleT8103USBXHCI",
+   "USBKeyHardwareType": "Built-in",
+   "_items": [
+    {
+     "_name": "APC40 mkII",
+     "USBDeviceKeyVendorID": "0x09e8",
+     "USBDeviceKeyProductID": "0x0029",
+     "USBDeviceKeyVendorName": "Akai Professional"
+    }
+   ]
+  },
+  {
+   "_name": "USB 3.1 Bus",
+   "Driver": "AppleT8103USBXHCI",
+   "USBKeyHardwareType": "Built-in",
+   "_items": [
+    {
+     "_name": "USB2.0 Hub",
+     "USBDeviceKeyVendorID": "0x05e3",
+     "USBDeviceKeyProductID": "0x0610",
+     "_items": [
+      {
+       "_name": "Scarlett 2i2 USB",
+       "vendor_id": "0x1235  (Focusrite-Novation)",
+       "product_id": "0x8210"
+      },
+      {
+       "_name": "Maschine Controller MK2",
+       "Vendor ID": 6092,
+       "Product ID": 4416
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

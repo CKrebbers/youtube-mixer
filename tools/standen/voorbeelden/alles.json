@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "titel": "Avond 2 · APC + Maschine via de hub",
+  "uitleg": "Hub-set studio, mixer via de hub, vannacht niet binnenhalen, master Dub-worp staat klaar.",
+  "delen": {
+    "pakket": { "profiel": "alles" },
+    "nacht": { "vannacht": false },
+    "kaart": { "krat": "slim:proefkrat" },
+    "master": { "sjabloon": "Dub-worp" },
+    "hub": { "set": "studio", "mixerVia": true }
+  }
+}

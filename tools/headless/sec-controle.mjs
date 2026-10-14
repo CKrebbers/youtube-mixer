@@ -79,7 +79,7 @@ const ANDER_GRID = { stukken: [{ van: 0, bpm: 126, anker: 0.1 }], beatsPerBar: 4
 
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   cwd: WORTEL,
-  env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
+  env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'),
     VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_PATRONEN: join(tmp, 'patronen'),
     VARVE_PROEF: join(tmp, 'proef'), VARVE_HERANALYSE: 'uit' },
   stdio: ['ignore', 'pipe', 'pipe'],

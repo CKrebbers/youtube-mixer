@@ -1,7 +1,7 @@
 import { EFFECTEN, effectVan } from '../engine/fx.js';
 import { rackVanEffect } from '../engine/rack.js';
 import { read as readAction } from '../control/actions.js';
-import { esc } from './dom.js';
+import { esc, zetTekst } from './dom.js';
 import { meld } from './meldingen.js';
 import { grTekst, grHoogte, houdGr, kiesWaarde, bewaarVorm, leesBewaard, sjabloonHerkomst, OPSLAG } from './master-weergave.js';
 
@@ -45,7 +45,7 @@ export function opzetMaster({ engine }) {
     '<div class="meter vmeter gr-meter" title="gain reduction van de master-limiter (hoeveel hij afneemt)"><i></i></div>');
   const grMeter = document.querySelector('.gr-meter i');
 
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
   const titel = (el, t) => { if (el.title !== t) el.title = t; };
   const isDicht = () => rij.classList.contains('hidden');
@@ -126,7 +126,9 @@ export function opzetMaster({ engine }) {
     getoond = houdGr(getoond, m.gr(), (nu - vorigeT) / 1000);
     vorigeT = nu;
     const hoogte = `${grHoogte(getoond).toFixed(1)}%`;
-    if (grMeter && grMeter.style.height !== hoogte) grMeter.style.height = hoogte;
+    // De staande meter met transform (geen opmaak per beeld, styles.css .meter.vmeter i).
+    const schaal = `scaleY(${(grHoogte(getoond) / 100).toFixed(3)})`;
+    if (grMeter && grMeter.style.transform !== schaal) grMeter.style.transform = schaal;
     if (isDicht()) return;
 
     if (grBalk.style.width !== hoogte) grBalk.style.width = hoogte;

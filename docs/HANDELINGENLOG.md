@@ -152,6 +152,8 @@ het midden in een set begint. ~10 kB met acht tracks.
   automatische kaart "met de hand" maken), en die kaart hoort bij de library.
 - `rond`: triggers die rondlopen (`RONDLOPERS`): terugzetten = drukken tot de
   read klopt. Ook `transport.quantize` (één schakelaar voor de hele engine).
+  Sinds 10 okt ook `video.clips` (het zaalbeeld, docs/BEAMER.md): een log van
+  daarvóór begint teruggespeeld met de clips aan, zoals ze toen altijd stonden.
 - Sinds ronde 3 (25 sep, dj-transport en dj-klank) per track ook:
   - `kill`: de kill-SCHAKELAARS per band. `track.N.kill.*` zijn toggles op de
     bus: zonder deze stand speelde een log dat met een kill aan begon omgekeerd
@@ -195,6 +197,13 @@ effect, de rack-editor). Inhoud én de live knopstanden op dat moment.
 
 **`grid`**: het grid van een track veranderde (tap, grid-modus, de
 tap-verfijning van de server, "opnieuw analyseren"): `{"t":..,"e":"grid","track":1,"grid":{...}|null}`.
+Nudge in de grid-modus VASTHOUDEN (14 okt, BEATGRID.md §12) herhaalt op een
+eigen timer van de action, niet op de bus: in het log staan alleen het
+indrukken en loslaten, plus de `grid`-gebeurtenissen die `kijk` ertussen ziet
+(elke 100 ms en direct na het loslaten). Bij terugspelen telt de timer van NU
+zijn eigen stappen, dus tijdens het vasthouden kan het grid een paar ms van dat
+van toen afwijken; de `grid`-gebeurtenis na het loslaten zet het eindgrid
+precies goed.
 
 **`hotcues`**: de hotcues van een track veranderden:
 `{"t":..,"e":"hotcues","track":1,"hotcues":[30.5,null,null,null]}`. Vooral voor
@@ -247,6 +256,10 @@ tekst op byte `van`, niet achter het bestand. Zoals de WAV met `?frame=N`
 - de plek wordt bepaald als het stuk gemaakt wordt, niet als het aankomt: de
   volgorde op schijf is de volgorde van de bus.
 - een crash kost hooguit de laatste seconde.
+- ook het antwoord van een GELUKT stuk wordt gelezen (`leesWeg`, src/lib/antwoord.js):
+  Chrome houdt een ongelezen antwoord vast, en een opname met het log erbij groeide
+  zo 26,6 MB per minuut, ook na GC (14 okt, docs/WINST.md punt 1,
+  `tools/headless/lek.mjs`).
 
 De server keurt elk stuk: alleen afdrukbare ASCII en `\n`, eindigt op `\n`, elke
 regel JSON, hooguit 4 MB, `van` een heel getal ≥ 0 en niet meer dan 256 MB
@@ -311,6 +324,10 @@ Wat NIET opnieuw de bus op gaat (`OVERSLAAN`):
   de plaat in de library (TOONSOORT.md §7) en de correctie van toen is toen al
   bewaard; terugspelen laadt de kaart van NU, en er nog eens een kwint bij doen
   zou hem twee keer toepassen. Ze staan wel in het log.
+- `sampler.N.drums` (crossover, 10 okt): zet een stuk uit de sampler op de Drums
+  van NU (docs/INSTRUMENTEN.md "Uit de sampler"). Instrumenten staan niet in het
+  log, dus terugspelen zou de drumpads van nu overschrijven met een stuk dat er
+  toen misschien niet eens lag. Ze staan wel in het log.
 
 Een track zonder zijn nummer van toen (niet meer in de library, een los
 bestand, laden mislukt, of leeg): transport, cues, loops, grid en seek, en
@@ -395,6 +412,19 @@ Een actieregel is ~47 bytes; de beginstand ~10 kB. Ter vergelijking: de WAV van
 dat uur is ~690 MB. In het geheugen staat hooguit één seconde (de buffer gaat
 elke seconde weg). Er wordt niets uitgedund en niets afgerond (behalve de tijd
 op 1 µs).
+
+## Het setboek (lezen achteraf, 10 okt)
+
+`tools/setboek/lees.mjs` leest één of meer logs van een avond (op een KOPIE) en maakt er een
+tracklist "hoorbaar (benaderd)" van, plus wat geladen maar niet gehoord werd en het gebruik.
+Het gebruikt `leesLog` en dezelfde curves als de engine en de puls. Een nummer dat over de
+grens van twee logs speelt (opname aan/uit sluit het log en begint een nieuw), is daar één
+stuk: het nummer in de eerste stand van het nieuwe log is dezelfde laad (op die stand zelf, niet
+op t = 0: de beginstand ligt vaak een stap van de audioklok naast, zie Grenzen), ook als in dat
+log niets aangeraakt werd. `--vanaf` knipt op de klok, ook binnen één log. Wat het log niet ziet (het einde van een nummer, waar sync en beatjump de speelkop
+zetten en welk tempo sync kiest, of een geladen nummer stems heeft, de sampler) staat in
+`tools/setboek/LEESMIJ.md`. Een nieuw soort regel die de hoorbaarheid raakt (een nieuwe
+knop die een track stil kan zetten): ook daar meenemen, met een check in `test/setboek.test.mjs`.
 
 ## Grenzen
 

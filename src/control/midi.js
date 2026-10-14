@@ -118,6 +118,15 @@ const STORE_KEY = 'varve.midi.ports';
  * nieuwe stand, wij verwerken dat als een knopdraai, wij zetten de ring... tot
  * de bus vol staat. 60 ms is ruim voor een USB-retour en te kort om een echte
  * knopbeweging te missen.
+ *
+ * ALLEEN CC (14 okt 2026). Een lus kan alleen via een ring (CC); een lampje
+ * (noot) wordt nooit als druk teruggemeld. Op noten ving het filter echte
+ * knoppen: een lampje UIT is [0x90, n, 0] en dat is precies het loslaten van
+ * die knop (note:0:n=0), en een eenkleurig lampje AAN ([0x90|kanaal, n, 127]
+ * op een knipperende track select of clip stop) is precies het indrukken. Een
+ * druk of loslaten binnen 60 ms na zo'n lampje verdween: gemeten 1–4 op 20 s
+ * drukken (tools/bench/feedback.mjs), en een ingeslikt loslaten laat een
+ * knop hangen (bend, kill vasthouden).
  */
 const ECHO_MS = 60;
 
@@ -132,6 +141,14 @@ const ECHO_MS = 60;
  */
 export const PER_TIK = 16;
 export const TIK_MS = 4;
+
+/**
+ * Hoe de wachtrij die maat houdt (14 okt 2026): een SCHUIVEND venster. Het
+ * zeventiende bericht gaat pas TIK_MS na het eerste van de laatste zestien,
+ * dus in elk venster van 4 ms hooguit 16, waar het ook begint. Is er plaats,
+ * dan gaat een bericht METEEN (vroeger altijd via een setTimeout(0): ~1 ms en
+ * in Chrome soms 4 ms erbij, voor elk lampje).
+ */
 
 export class MidiHub extends Emitter {
   constructor({ preferred = /apc40/i } = {}) {
@@ -151,12 +168,16 @@ export class MidiHub extends Emitter {
     this.rxOther = 0;            // verkeer op de rest — zwijgt de gekozene, dan is dit het antwoord
     this.echoes = 0;             // teruggekaatste berichten die we genegeerd hebben
     this._verstuurd = new Map(); // 'sig=waarde' -> tijdstip, voor echodetectie
+    this._laatsteIn = new Map(); // sig -> laatste CC-waarde die de controller ons stuurde (zie _onthoudVerstuurd)
     // Echo's wegfilteren. Per apparaat uit te zetten (device.echoFilter): het
     // filter kan een echte beweging slikken die toevallig gelijk is aan wat
     // wij net stuurden. De app zet dit bij het kiezen van het apparaat.
     this.echoFilter = true;
     this._wachtrij = [];         // uitgaande bytes, in volgorde
     this._tikker = null;
+    this.klok = () => performance.now();   // ms, voor de wachtrij (HubMidi en de tests geven hun eigen klok)
+    this._uitT = new Float64Array(PER_TIK).fill(-Infinity);   // de tijd van de laatste PER_TIK verzendingen (ring)
+    this._uitI = 0;              // de oudste in de ring
     this.asking = false;         // wachtend op de toestemmingsdialoog van Chrome
     this._pending = null;
     this._lastIn = null;
@@ -258,7 +279,8 @@ export class MidiHub extends Emitter {
     const outNow = this.output() ? this.outputId : null;
 
     this.emit('ports', this.ports());
-    if (inNow !== this._lastIn) { this._lastIn = inNow; this.emit('input', this.input()); }
+    // Een andere (of terugkomende) controller: wat de vorige ons stuurde zegt niets meer.
+    if (inNow !== this._lastIn) { this._lastIn = inNow; this._laatsteIn.clear(); this.emit('input', this.input()); }
     if (outNow !== this._lastOut) { this._lastOut = outNow; this.emit('output', this.output()); }
     this.emit('state');
   }
@@ -330,6 +352,7 @@ export class MidiHub extends Emitter {
     msg.lag = performance.now() - e.timeStamp;
     msg.selected = port.id === this.inputId;
     msg.echo = this._isEcho(msg);
+    if (msg.type === 'cc' && msg.selected) this._laatsteIn.set(msg.sig, msg.value);
     this.rx++;
     if (msg.echo) this.echoes++;
     if (msg.selected) this.rxSelected++; else this.rxOther++;
@@ -344,8 +367,21 @@ export class MidiHub extends Emitter {
     return this.on('message', (m) => { if (m.selected && !m.echo) fn(m); });
   }
 
+  /*
+   * Alleen een CC kan een echo zijn (een LED-ring die als knopdraai terugkomt).
+   * Een NOOT nooit: een LED zetten is een note-on met de kleur als velocity, en
+   * een knop die je indrukt stuurt note-on 127 / note-off. Een lampje op 127
+   * (Lock, Sends, de knipperende Track Select) of uit (0) gevolgd door jouw
+   * druk of loslaten binnen 60 ms werd hier als echo weggegooid: een druk die
+   * niets deed. Gemeten op knoppen die knipperen (Sends met een loop, de Track
+   * Select van de maatgever): ~1 op de 8 drukken (controller-invoer, 14 okt;
+   * tools/bench/echo.mjs, test/midi.test.mjs). Dat een kill of bend daardoor
+   * bleef hangen is NIET aangetoond (hun lampje staat nooit op 0 of 127).
+   * Dit geldt voor elk apparaat: ook bij een ander apparaat met echoFilter aan
+   * worden noten niet meer als echo gefilterd.
+   */
   _isEcho(msg) {
-    if (!this.echoFilter || !this._verstuurd.size) return false;
+    if (!this.echoFilter || msg.type !== 'cc' || !this._verstuurd.size) return false;
     const sleutel = `${msg.sig}=${msg.value}`;
     const t = this._verstuurd.get(sleutel);
     if (t === undefined) return false;
@@ -354,8 +390,24 @@ export class MidiHub extends Emitter {
     return true;
   }
 
-  /** Oude sporen opruimen; anders groeit die map bij elke LED-update. */
+  /**
+   * Een verstuurde CC onthouden voor het echofilter, en oude sporen opruimen
+   * (anders groeit die map bij elke LED-update).
+   *
+   * NIET onthouden (review 14 okt): een waarde die de controller ons op die
+   * control net zelf stuurde. Een ring van een endless-knop is precies de
+   * waarde die de knop stuurde (softwarestand = vorige + delta); onthouden
+   * maakte bij het terugdraaien van een snelle draai elke vorige stap een
+   * "echo" en slikte hem in (dode zone van ~60 ms bij elke richtingswissel).
+   * Een echo van zo'n waarde is onschuldig: het apparaat staat er al, dus in
+   * endless is de delta 0 en in absolute verandert er niets. De lus blijft
+   * gevangen, want die begint bij een ring op een waarde die de knop NIET
+   * stuurde (focus- of mapjewissel). Behalve op de aanslag (0 en 127): daar is
+   * nog eens hetzelfde bericht in endless doordraaien (mapping._endless), dus
+   * die blijven we bewaken.
+   */
   _onthoudVerstuurd(msg) {
+    if (msg.value !== 0 && msg.value !== 127 && this._laatsteIn.get(msg.sig) === msg.value) return;
     const nu = performance.now();
     this._verstuurd.set(`${msg.sig}=${msg.value}`, nu);
     if (this._verstuurd.size > 256) {
@@ -373,21 +425,30 @@ export class MidiHub extends Emitter {
   send(bytes, { direct = false } = {}) {
     if (!this.output()) return false;
     if (direct) return this._verstuur(bytes);
+    // Niets wacht en het venster heeft plaats: meteen. Anders achteraan (de volgorde blijft).
+    if (!this._wachtrij.length && this._wacht() <= 0) { this._uitRij(bytes); return true; }
     this._wachtrij.push(bytes);
     this._start();
     return true;
   }
 
+  /** Over hoeveel ms er weer een bericht mag (<= 0: nu), volgens het schuivende venster. */
+  _wacht() { return this._uitT[this._uitI] + TIK_MS - this.klok(); }
+
+  /** Eén bericht uit de wachtrij de deur uit, en zijn tijd in de ring. */
+  _uitRij(bytes) {
+    this._uitT[this._uitI] = this.klok();
+    this._uitI = (this._uitI + 1) % PER_TIK;
+    this._verstuur(bytes);
+  }
+
   _start() {
     if (this._tikker !== null) return;
     const tik = () => {
-      for (let i = 0; i < PER_TIK && this._wachtrij.length; i++) {
-        this._verstuur(this._wachtrij.shift());
-      }
-      if (this._wachtrij.length) this._tikker = setTimeout(tik, TIK_MS);
-      else this._tikker = null;
+      while (this._wachtrij.length && this._wacht() <= 0) this._uitRij(this._wachtrij.shift());
+      this._tikker = this._wachtrij.length ? setTimeout(tik, Math.max(0, this._wacht())) : null;
     };
-    this._tikker = setTimeout(tik, 0);
+    this._tikker = setTimeout(tik, Math.max(0, this._wacht()));
   }
 
   _verstuur(bytes) {
@@ -397,8 +458,8 @@ export class MidiHub extends Emitter {
     this.tx++;
     const msg = parseMessage(bytes);
     // Pas hier onthouden: de echo komt terug na het VERSTUREN, niet na het
-    // in de wachtrij zetten.
-    if (msg.channel >= 0) this._onthoudVerstuurd(msg);
+    // in de wachtrij zetten. Alleen CC: zie ECHO_MS.
+    if (msg.type === 'cc') this._onthoudVerstuurd(msg);
     msg.out = true;
     msg.port = out.id;
     msg.portName = out.name;

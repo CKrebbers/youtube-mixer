@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 import { bronVan } from './links.js';
 import { TOON_VERSIE, leesToonsoort, toonsoortNaam } from './toon.js';
 import { SECTIE_VERSIE, gridSleutel } from './secties.js';
-import { TWIJFELS } from '../src/engine/beatgrid.js';
+import { TWIJFELS, Beatgrid } from '../src/engine/beatgrid.js';
 
 /**
  * De library: wat er binnengehaald is, en wat erbij hoort.
@@ -656,8 +656,9 @@ export class Library {
       const reden = autoGridWeigert(huidig.grid, opties);
       if (reden) { this.db.exec('ROLLBACK'); return { bewaard: false, grid: huidig.grid, reden }; }
       const g = this.bewaarGrid(trackId, { ...grid, bron: 'auto', slot: false });
+      const samples = huidig.grid && g ? this._samplesNaarOctaaf(trackId, huidig.grid, g) : 0;
       this.db.exec('COMMIT');
-      return { bewaard: true, grid: g };
+      return { bewaard: true, grid: g, ...(samples ? { samples } : {}) };
     } catch (err) {
       try { this.db.exec('ROLLBACK'); } catch {}
       throw err;
@@ -905,6 +906,34 @@ export class Library {
         tellen = excluded.tellen, bpm = excluded.bpm, gemaakt = excluded.gemaakt`)
       .run(trackId, pad, van, tot, tellen, bpm, Date.now());
     return this.samples(trackId).find((x) => x.pad === pad) ?? null;
+  }
+
+  /**
+   * Een nieuw automatisch grid op een ANDER OCTAAF (het DJ-tempo, docs/BEATGRID.md
+   * §12: 77 -> 154): een bewaarde pad weet zijn tellen en bpm van het grid van
+   * toen, en de sampler speelt hem af als `tellen` tellen van de maatgever
+   * (sampler.js _rate). Zonder omrekenen speelde een pad van 4 tellen op 77 na
+   * de herberekening als 4 tellen op 154: dubbel zo snel, een octaaf hoger
+   * (review 14 okt). Per pad: de verhouding van de twee grids midden in het
+   * stuk; is dat een macht van twee (op 2% na), dan tellen en bpm mee. Een
+   * ander tempo (geen octaaf) laat de pad staan: dan is het stuk zelf
+   * misschien anders, en dat zegt de pad bij het terughalen. Binnen de
+   * transactie van bewaarAutoGrid. Geeft het aantal omgerekende pads.
+   */
+  _samplesNaarOctaaf(trackId, oud, nieuw) {
+    const a = new Beatgrid(oud), b = new Beatgrid(nieuw);
+    let n = 0;
+    for (const x of this.samples(trackId)) {
+      if (!(x.tellen > 0) || !(x.tot > x.van)) continue;
+      const midden = (x.van + x.tot) / 2;
+      const r = Math.log2(b.bpmAt(midden) / a.bpmAt(midden)), oct = Math.round(r);
+      if (!oct || Math.abs(r - oct) > 0.03) continue;
+      const f = 2 ** oct;
+      this.db.prepare('UPDATE samples SET tellen = ?, bpm = ? WHERE track_id = ? AND pad = ?')
+        .run(x.tellen * f, x.bpm != null ? x.bpm * f : null, trackId, x.pad);
+      n++;
+    }
+    return n;
   }
 
   verwijderSample(trackId, pad) {

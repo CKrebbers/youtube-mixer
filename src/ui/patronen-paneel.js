@@ -4,6 +4,7 @@ import { meld } from './meldingen.js';
 import { opzetPatronenOpslag } from './patronen-opslag.js';
 import { STANDAARD_LENGTE, MAX_LENGTE } from '../engine/patronen/model.js';
 import { instrumentDef } from '../engine/instrumenten/index.js';
+import { zetTekst } from './dom.js';
 
 /*
  * De PATROON-rij (docs/PATRONEN.md §5): voor de track met focus de vijf
@@ -47,7 +48,7 @@ export function opzetPatronen({ engine, noten }) {
   const hunEl = rij.querySelector('.pt-hun');
   const mijnEl = rij.querySelector('.pt-mijn');
 
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
   const titel = (el, t) => { if (el.title !== t) el.title = t; };
   const isDicht = () => rij.classList.contains('hidden');
@@ -160,7 +161,7 @@ export function opzetPatronen({ engine, noten }) {
     } else {
       const noot = st.laatsteNoot;
       const pad = inst.stand?.().pads?.find((x) => x.noot === 36 + (((noot - 36) % 16) + 16) % 16);
-      tekst(nootEl, `noot ${nootNaam(noot)}${pad ? ` · ${pad.naam}` : ''}`);
+      tekst(nootEl, `noot ${nootNaam(noot)}${pad?.naam ? ` · ${pad.naam}` : ''}`);
       klasse(nootEl, 'leeg', false);
     }
 

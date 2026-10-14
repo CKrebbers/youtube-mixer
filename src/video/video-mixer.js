@@ -225,6 +225,11 @@ export class VideoMixer {
     // zonder WebGL: de knoppen op de bus moeten hun stand kunnen lezen.
     this.eindbeeld = new Eindbeeld();
     this.laatsteEindMs = -Infinity;  // wandklok van het laatst gemaakte eindbeeld (bevriezen)
+    // De deck-video's (clips) aan of uit (video.clips, docs/BEAMER.md "Zaalbeeld"):
+    // uit = alleen eigen beeld. Elke video onzichtbaar en gepauzeerd, de
+    // vormlagen, effecten en noodknoppen lopen door. Voor een zaal: geen clips
+    // van anderen op het doek. Ook zonder WebGL, voor de read op de bus.
+    this.clips = true;
     canvas.width = BREEDTE;
     canvas.height = HOOGTE;
 
@@ -337,6 +342,8 @@ export class VideoMixer {
     this.puls = hoofd.puls;
     this.pulsDoel = hoofd.pulsDoel;
     this.fit = hoofd.fit;
+    // Clips uit in het hoofdvenster = ook hier (anders toonde de beamer ze toch).
+    this.clips = hoofd.clips !== false;
     // De noodknoppen: zonder dit zag de zaal geen zwart zodra het losse venster mengt.
     this.eindbeeld.neemOver(hoofd.eindbeeld);
     this.beeldlagen = hoofd.beeldlagen;
@@ -352,6 +359,8 @@ export class VideoMixer {
   zetPuls(v) { this.puls = Math.max(0, Math.min(1, v)); }
   volgendeFit() { this.fit = FITS[(FITS.indexOf(this.fit) + 1) % FITS.length]; }
   volgendPulsDoel() { this.pulsDoel = PULS_DOELEN[(PULS_DOELEN.indexOf(this.pulsDoel) + 1) % PULS_DOELEN.length]; }
+  /** Deck-video's aan (true) of alleen eigen beeld (false); het volgende beeld pauzeert ze. */
+  zetClips(aan) { this.clips = !!aan; }
 
   // De noodknoppen (eindbeeld.js), op de wandklok: die loopt ook als de
   // AudioContext stilstaat, en is in beide vensters dezelfde.
@@ -527,7 +536,8 @@ export class VideoMixer {
     this.decks.forEach((id, i) => {
       const laag = this.lagen.get(id);
       const d = this.engine.deck(id);
-      const zicht = laag && d.buffer ? zichtbaarheid(d.ui.fader, this.engine.xfadeGain(id)) : 0;
+      // Clips uit (video.clips): elke video telt als onzichtbaar, dus gepauzeerd en zwart.
+      const zicht = this.clips && laag && d.buffer ? zichtbaarheid(d.ui.fader, this.engine.xfadeGain(id)) : 0;
       gl.activeTexture(gl.TEXTURE0 + i);
       if (!laag || zicht < ZICHTBAAR) {
         if (laag && !laag.video.paused) laag.video.pause();
@@ -715,13 +725,13 @@ export class VideoMixer {
     for (const laag of this.lagen.values()) if (!laag.video.paused) laag.video.pause();
   }
 
-  /** Voor het scherm en de tests: wat doet elke laag nu. */
+  /** Voor het scherm en de tests: wat doet elke laag nu (clips: de schakelaar, voor elke laag dezelfde). */
   stand() {
     return this.decks.map((id) => {
       const laag = this.lagen.get(id);
-      if (!laag) return { id, video: false };
+      if (!laag) return { id, video: false, clips: this.clips };
       const d = this.engine.deck(id);
-      return { id, video: true, klaar: laag.klaar, speelt: !laag.video.paused,
+      return { id, video: true, clips: this.clips, klaar: laag.klaar, speelt: !laag.video.paused,
         tijd: laag.video.currentTime, verschil: laag.video.currentTime - d.position, seekDuur: laag.seekDuur };
     });
   }

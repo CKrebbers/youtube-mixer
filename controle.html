@@ -20,12 +20,69 @@
     <h2 id="h-stand">Stand</h2>
     <div class="tegels" id="tegels"></div>
     <div class="spelen" id="spelen" hidden></div>
+    <!-- Het avondpakket (docs/AVONDPAKKET.md): de keuze staat hier vast, buiten #tegels
+         (die worden elke 2 s opnieuw getekend). Alleen lezen; repareert niets. -->
+    <details class="avondpakket" id="avondpakket">
+      <summary>Avondpakket: profiel, fase, punten en paklijst</summary>
+      <div class="ap-keuze">
+        <label>profiel <select id="ap-profiel"><option value="">standaard</option></select></label>
+        <label>fase <select id="ap-fase">
+          <option value="auto">auto (niets aangesloten = vertrek)</option>
+          <option value="vertrek">vertrek</option>
+          <option value="aankomst">aankomst</option>
+        </select></label>
+        <button class="knop klein" id="ap-meet" type="button">opnieuw meten</button>
+      </div>
+      <div class="ap-vakken">
+        <div>
+          <h3>Punten</h3>
+          <ul class="ap-punten" id="ap-punten"></ul>
+          <p class="ap-info" id="ap-info" hidden></p>
+        </div>
+        <div>
+          <h3>Paklijst <span id="ap-paklijst-profiel"></span></h3>
+          <ul class="ap-paklijst" id="ap-paklijst"></ul>
+          <h3>Varve kan</h3><ul class="ap-tekst" id="ap-kan"></ul>
+          <h3>Kan niet</h3><ul class="ap-tekst" id="ap-kanniet"></ul>
+          <h3>Let op</h3><ul class="ap-tekst" id="ap-let"></ul>
+        </div>
+      </div>
+      <p class="uitleg">Klik de tegel om opnieuw te meten. Speelt er een deck, dan meet het pakket niets
+        (<b>bevroren</b>). De vinkjes van de paklijst worden niet bewaard. Zonder server:
+        <code>node tools/avondpakket.mjs</code>.</p>
+    </details>
   </section>
 
   <section class="blok" aria-labelledby="h-open">
     <h2 id="h-open">Openen</h2>
+    <!-- De opstelling van vanavond (docs/STANDEN.md): kiezen, activeren, terugzetten.
+         Buiten #tegels: die wordt elke 2 s opnieuw getekend. Het label komt uit LABEL (stand-tegel.js). -->
+    <div class="opstelling" id="opstelling">
+      <h3 id="h-opstelling">Opstelling</h3>
+      <div class="opstelling-rij">
+        <select id="stand-kies" aria-labelledby="h-opstelling" disabled></select>
+        <button class="knop" id="stand-activeer" disabled>activeer</button>
+        <button class="knop" id="stand-terug" disabled title="zet terug wat de laatste activering veranderde (de mapping en/of de nacht), zoals het daarvóór was; wat die activering niet aanraakte, en een nacht die je daarna zelf veranderde, blijft">vorige terugzetten</button>
+      </div>
+      <p class="uitleg" id="stand-uitleg">Een opstelling zet alleen beginwaarden (de nacht remmen, je mapping, het master-rack klaarzetten); wat je daarna met de hand doet blijft staan.</p>
+      <details class="bewerk" id="stand-bewerk">
+        <summary class="knop">bewerk</summary>
+        <form class="bw-form" id="bw-form" autocomplete="off">
+          <div class="bw-velden" id="bw-velden"></div>
+          <div class="bw-knoppen">
+            <button class="knop" id="bw-bewaar" type="submit">bewaar</button>
+            <input class="bw-nieuw" id="bw-nieuw" type="text" maxlength="60" placeholder="nieuwe naam: kleine letters, cijfers, - en _" aria-label="naam om onder te bewaren">
+            <button class="knop" id="bw-bewaar-als" type="button">bewaar als</button>
+            <button class="knop" id="bw-leg-vast" type="button" title="zet je huidige mapping en de rem van de nacht in deze opstelling (krat, master, hub en avondpakket blijven)">leg vast</button>
+          </div>
+          <p class="uitleg" id="bw-status"></p>
+        </form>
+      </details>
+    </div>
     <div class="openen">
       <button class="knop hoofd" id="mixer-open">mixer openen</button>
+      <!-- Alleen als de opstelling "mixer via de hub" zegt: de uitweg als de hub niet draait (de APC dan direct). -->
+      <button class="knop" id="mixer-open-gewoon" hidden title="de hub draait niet? open de mixer gewoon: de APC gaat dan direct via Web MIDI">zonder hub</button>
       <a class="knop" href="/apc.html" target="_blank" rel="noopener">APC-kaart</a>
       <p class="uitleg" id="mixer-uitleg">Open de mixer altijd hier, zodat er nooit twee tegelijk naar de APC luisteren.
         Planvenster en los venster (beamer) open je vanuit de mixer: knop <b>plan</b> en, in het videopaneel, <b>los venster</b>.</p>

@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "titel": "Alleen de laptop",
+  "uitleg": "Geen controllers, geen hub. De nacht staat uit.",
+  "delen": {
+    "pakket": { "profiel": "laptop" },
+    "nacht": { "aan": false }
+  }
+}

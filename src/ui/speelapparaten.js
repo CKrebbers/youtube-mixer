@@ -33,6 +33,7 @@ export function opzetSpeelapparaten({ engine, midi, noten, library = null }) {
       .catch((err) => meld(`Maschine: de indeling (mappings/maschine-mk2.json) niet geladen (${err.message})`, 'fout'));
     maschine.koppel(ms);
     setInterval(() => { try { maschine.tik(); } catch (err) { console.warn('[maschine]', err); } }, TIK_MS);
+    globalThis.addEventListener?.('pagehide', () => maschine.stop());   // geen wektik meer bij het sluiten
   }
   return { maschine };
 }

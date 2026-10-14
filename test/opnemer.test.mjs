@@ -46,7 +46,13 @@ function maakEngine({ kanHervatten = true } = {}) {
 // ---- nep-haal: de echte serverfuncties, met storingen op bestelling -------
 const map = mkdtempSync(join(tmpdir(), 'varve-opnemer-'));
 const storing = { antwoordKwijt: new Set(), valWeg: new Set(), video: false };
-const antwoord = (r) => ({ ok: r.ok, status: r.ok ? 200 : 400, json: async () => r });
+// Telt per soort (stuk, video, klaar…) hoe vaak een antwoord GELEZEN is:
+// Chrome houdt een ongelezen antwoord vast (docs/WINST.md punt 1).
+const gelezen = { stuk: 0, video: 0, gelukt: { stuk: 0, video: 0 } };
+const antwoord = (r, soort) => {
+  if (r.ok && soort) gelezen.gelukt[soort]++;
+  return { ok: r.ok, status: r.ok ? 200 : 400, json: async () => { if (soort) gelezen[soort]++; return r; } };
+};
 async function haal(url, init) {
   const u = new URL(url, 'http://localhost');
   const getal = (k) => (u.searchParams.has(k) ? Number(u.searchParams.get(k)) : undefined);
@@ -61,12 +67,12 @@ async function haal(url, init) {
     const r = await O.voegToe(map, m[1], body, getal('frame'));
     // De server schreef het wel, maar het antwoord komt nooit aan.
     if (storing.antwoordKwijt.has(nr)) { storing.antwoordKwijt.delete(nr); throw new Error('antwoord kwijt'); }
-    return antwoord(r);
+    return antwoord(r, 'stuk');
   }
   if (m?.[2] === 'klaar') return antwoord(await O.sluit(map, m[1], { frames: getal('frames') }));
   if (m?.[3]) {
     if (storing.video) throw new Error('videostuk onderweg kwijt');
-    return antwoord(await O.voegVideoToe(map, m[1], m[3], Buffer.from(init.body)));
+    return antwoord(await O.voegVideoToe(map, m[1], m[3], Buffer.from(init.body)), 'video');
   }
   throw new Error(`onbekend: ${url}`);
 }
@@ -148,6 +154,30 @@ try {
     storing.video = false;
     ok('verloren videostuk gaat naar onFout', fouten.some((f) => /videostuk kwijt/.test(f)));
     ok('en staat als waarschuwing in het resultaat van stop', r.ok && /videostuk kwijt/.test(r.waarschuwing || ''));
+  }
+
+  // ---- 3b. elk gelukt antwoord wordt gelezen (geheugenlek, WINST.md punt 1) --
+  {
+    gelezen.stuk = gelezen.video = gelezen.gelukt.stuk = gelezen.gelukt.video = 0;
+    const op = new Opnemer({ engine: maakEngine(), haal, wacht: () => Promise.resolve() });
+    op.onFout = () => {};
+    await op.start({ video: { captureStream: () => ({ getVideoTracks: () => [] }) } });
+    const node = nodes.at(-1);
+    for (let n = 0; n < 4; n++) geef(node, n);
+    for (let n = 0; n < 3; n++) recs.at(-1).ondataavailable({ data: { size: 3, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer } });
+    const r = await op.stop();
+    ok('lek: 4 gelukte stukken, 4 keer json() gelezen', r.ok && gelezen.gelukt.stuk === 4 && gelezen.stuk === 4);
+    ok('lek: 3 gelukte videostukken, 3 keer json() gelezen', gelezen.gelukt.video === 3 && gelezen.video === 3);
+  }
+
+  // ---- 3c. leesWeg gooit nooit (antwoord zonder json, kapotte JSON, null) ---
+  {
+    const { leesWeg } = await import('../src/lib/antwoord.js');
+    let goed = true;
+    for (const r of [null, undefined, {}, { json: () => { throw new Error('sync'); } }, { json: async () => { throw new SyntaxError('geen json'); } }, { json: async () => 1 }]) {
+      try { const p = leesWeg(r); if (!(p instanceof Promise)) goed = false; await p; } catch (_) { goed = false; }
+    }
+    ok('leesWeg gooit nooit en geeft altijd een belofte', goed);
   }
 
   // ---- 4. een AudioContext die niet aan wil: duidelijk weigeren, niet hangen

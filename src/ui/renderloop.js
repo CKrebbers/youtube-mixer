@@ -4,6 +4,7 @@ import { BIJNA_EINDE } from './spiegel-plan.js';
 import { bpmTekst } from './grid-strook.js';
 import { focusToon, verschuivingTekst } from './toon-weergave.js';
 import { oordeelBij, afwijkingBij } from '../engine/tellen.js';
+import { zetTekst } from './dom.js';
 
 /**
  * De renderloop: één rAF voor de hele UI. De engine wordt alleen uitgelezen,
@@ -61,7 +62,7 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
   // Alleen schrijven wat verandert: een textContent of classList die elke
   // frame opnieuw gezet wordt, laat Chrome elke frame stijl en opmaak
   // narekenen, ook als er niets verschilt.
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
   const stijl = (el, prop, v) => { if (el.style[prop] !== v) el.style[prop] = v; };
 
@@ -171,7 +172,7 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       else if (e.bpm.title) e.bpm.title = '';
       // Klopt het grid HIER: gemeten aan de tellen, met de reden; ⚠ als het live wegloopt.
       if (e.gridOordeel) {
-        const o = dk.grid ? oordeelBij(dk.grid, d.position, dk.gridMeting, liveVan(dk, id, d.position)) : null;
+        const o = dk.grid ? oordeelBij(dk.grid, d.position, dk.gridMetingBij(performance.now()), liveVan(dk, id, d.position)) : null;
         const controle = s.gridControle === id;
         tekst(e.gridOordeel, o ? (controle ? `${o.kort} controle` : o.kort) : '—');
         for (const soort of ['vast', 'zeker', 'controleer', 'geenpuls', 'wijkt']) klasse(e.gridOordeel, soort, o?.soort === soort);
@@ -281,7 +282,8 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       stappen.video();
     });
     veilig('master', () => {
-      stijl(masterMeter, 'height', (s.masterPeak * 100).toFixed(1) + '%');
+      // transform, geen height: geen opmaak per beeld (styles.css, .meter.vmeter i).
+      stijl(masterMeter, 'transform', `scaleY(${Math.min(1, Math.max(0, s.masterPeak)).toFixed(3)})`);
       klasse(masterMeter, 'clip', s.masterPeak > 0.98);
       tekst(curveBtn, 'curve: ' + s.xfaderCurve);
     });

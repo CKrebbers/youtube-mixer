@@ -6,7 +6,7 @@ de mixer.
 
 ## Wat erop staat
 
-1. **Stand**, acht tegels met een lampje:
+1. **Stand**, tegels met een lampje:
    - **Server** draait, met het aantal nummers in de library. Daaronder (6 okt) een regel
      over de secties (`docs/SECTIES.md` §4, `/api/secties`, `src/controle/server-tegel.js`):
      "secties: 12 nog zonder · 3 verouderd", of "secties: alles actueel". *Nog zonder* = er is
@@ -20,6 +20,9 @@ de mixer.
      (oudere server)"; herstarten lost dat op. Een fout van de server (bv. een library.db met
      de v9 van een andere tak, zonder `secties_json`): "secties: onbekend (fout)". Lege
      library: geen regel.
+   - **Opstelling** (10 okt, `docs/STANDEN.md`, `src/controle/stand-tegel.js`): welke stand
+     actief is en sinds wanneer, oranje bij een waarschuwing, rood bij een fout; daaronder wat je
+     zelf nog doet ("krat proefkrat (kies hem in de kaart) · master Dub-worp: mixer volgt nog niet").
    - **Binnenhalen**: yt-dlp en ffmpeg (`/api/tooling`).
    - **Ingest-rij**: hoeveel er bezig is en wacht (`/api/ingest`).
    - **Stems** (3 okt): wat er gesplitst wordt en wacht, de laatste fout, of de
@@ -28,13 +31,23 @@ de mixer.
      staan en hoe groot (`/api/backups`, `src/controle/backup-tegel.js`). Rood met de
      reden als de laatste poging mislukte. Een oude datum is geen fout: zonder
      wijziging komt er bewust geen nieuwe kopie. Zie docs/LIBRARY.md, "Backup".
+   - **Avondpakket** (10 okt): kan ik met deze tas vertrekken, kan ik hier beginnen
+     (`/api/avondpakket`, `src/controle/avondpakket-tegel.js`, docs/AVONDPAKKET.md).
+     Meet bij het openen, bij een keuze en bij een klik op de tegel, verder hooguit elke
+     5 min; nooit vanzelf als de mixer open is, en de server bevriest zelf zolang er een
+     deck speelt ("bevroren: er speelt een deck · HH:MM"). Profiel, fase, de punten en de
+     paklijst staan in het uitklapblok onder de tegels.
    - **Mixer**: open of niet, uit de Web Lock `varve-mixer` (`src/ui/tabblad.js`).
      Rood als er een tweede mixer-tabblad wacht.
    - **Audio** en **APC40**: uit wat de mixer zelf meldt (zie hieronder). Bij de
      APC staat de echo-teller (ROADMAP 2: is hij na een sessie 0, dan mag het
      echofilter voor de APC uit).
    - Daaronder: wat er in de mixer staat (track, bpm, toonsoort, MAAT, auto, opname).
-2. **Openen**: de knop "mixer openen" staat uit zolang er al een mixer open is.
+2. **Openen**: bovenaan de **opstelling** (`docs/STANDEN.md` §5): kiezen, activeren en
+   "vorige terugzetten" (twee klikken), wat activeren verandert, en "bewerk" om een opstelling
+   zonder JSON in te stellen. Zegt de actieve opstelling `hub.mixerVia`, dan opent "mixer openen"
+   de mixer via de hub (`/?hub=ws://localhost:7700/app`). Daaronder:
+   de knop "mixer openen" staat uit zolang er al een mixer open is.
    Zo komen er nooit twee tabbladen op de APC (Chrome-MIDI kan daar van crashen).
    Planvenster en los venster open je vanuit de mixer: die hebben de mixer als
    `opener` nodig.
@@ -72,8 +85,9 @@ tabel staat (luisteren, secties, de Maschine als DJ-bediening, beeld):
 **Avond 1** (mixen): 76 punten, ~2,5 uur (149 min), zonder hub (de mixer opent de APC
 zelf). De **kern** vooraan is ~45 min (26 punten, 47 min): opstarten, luisteren, draaien
 op de APC, koptelefoon, keylock. De rest van avond 1 als er tijd en zin is.
-**Avond 2** (spelen en programmeren): 64 punten, ~2,5 uur (154 min), met de hub (de
-Maschine kan alleen via de hub).
+**Avond 2** (spelen en programmeren): 69 punten, ~2,7 uur (162 min), met de hub (de
+Maschine kan alleen via de hub). Sinds 10 okt met het blok crossover (5 punten, 8 min, PR #26;
+VRAGEN CX4: wordt er pas na avond 2 gemerged, dan gaat het naar avond 3).
 **Avond 3** (beeld, met de Omarchy-pc): 6 punten, ~25 min.
 **Eerder werk**: 26 punten, ~45 min.
 
@@ -84,7 +98,7 @@ avond 3 vóór "Eerder werk", en de kern vooraan):
   een sectie in de sampler, secties terugspelen.
 - Avond 2: opstarten met de hub, spelen, patronen, planvenster met secties, auto-DJ met
   secties, secties op de Maschine, secties in beeld, secties naar de hub, de Maschine als
-  DJ-bediening, bladeren en sampler op de Maschine.
+  DJ-bediening, bladeren en sampler op de Maschine, crossover (een knip als drumpad).
 - Avond 3: beeld met de Stroommachine.
 - Eerder werk: toonsoort, binnenhalen, auto-DJ, planvenster, klankschaal, beamer, kleine dingen.
 
@@ -125,11 +139,15 @@ avond 3 vóór "Eerder werk", en de kern vooraan):
 - **Vragen aan de server** (`ververs`, elke 2 s): pas een nieuwe ronde als de vorige klaar
   is, en elk verzoek geeft het na 6 s op (`WACHT_MS`; de tooling-controle 60 s). Bij een
   trage of hangende server (een telefoon via het LAN) stapelden de verzoeken zich anders op.
-  De losse routes (`/api/backups`, `/api/stems`, `/api/secties`) worden na een 404 of een
-  fout hooguit eens per minuut opnieuw gevraagd (`RUST_MS`, `haalLos`); intussen blijft het
-  laatste antwoord staan, en komt er niet elke 2 s een rode regel in de console.
+  De losse routes (`/api/backups`, `/api/stems`, `/api/secties`, en `/api/avondpakket`, dat
+  niet elke 2 s gevraagd wordt) worden na een 404 of een fout hooguit eens per minuut opnieuw
+  gevraagd (`RUST_MS`, `haalLos`); intussen blijft het laatste antwoord staan, en komt er niet
+  elke 2 s een rode regel in de console. De rust geldt per route (het pad zonder vraag):
+  `/api/avondpakket?vers=1` omzeilt de rust van `/api/avondpakket` niet.
 - **De backup-stand** (`GET /api/backups`, alleen GET, achter dezelfde Host-controle):
-  `{ laatste: { naam, tijd, bytes } | null, aantal, gekeken, fout, foutTijd, bezig }`.
+  `{ laatste: { naam, tijd, bytes } | null, aantal, gekeken, fout, foutTijd, bezig,
+  gewijzigdSinds }`; `gewijzigdSinds` (het avondpakket) = staat er een wijziging in
+  `library.db` die nog in geen kopie zit: `false`, `true`, of `null` (niet te zien).
   Los opgehaald: een oudere server zonder die route geeft een grijze tegel, geen
   "server weg". De kopieën zelf zijn via HTTP niet te lezen.
 - **De secties-telling** (`GET /api/secties`, alleen GET, achter dezelfde Host-controle):

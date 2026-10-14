@@ -1,0 +1,31 @@
+{
+ "BackendState": "Running",
+ "Self": {
+  "HostName": "mac-test",
+  "DNSName": "mac-test.tailnet-test.ts.net.",
+  "Online": true
+ },
+ "Peer": {
+  "p0": {
+   "HostName": "telefoon",
+   "OS": "iOS",
+   "Online": true,
+   "CurAddr": "",
+   "Relay": "ams"
+  },
+  "p1": {
+   "HostName": "oud-apparaat",
+   "OS": "linux",
+   "Online": false,
+   "CurAddr": "",
+   "Relay": "ams"
+  },
+  "p2": {
+   "HostName": "clayk",
+   "OS": "linux",
+   "Online": true,
+   "CurAddr": "192.0.2.10:41641",
+   "Relay": "ams"
+  }
+ }
+}

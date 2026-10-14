@@ -6,7 +6,8 @@
 import { Beatgrid } from '../src/engine/beatgrid.js';
 import {
   BeeldKoppeling, controleerAdres, klemLatentie, stabieleId, kiesKant, kenmerkenVan,
-  MACROS, REGIE, MACRO_STANDAARD, ADRES_MAX, TIK_MS, ONBEREIKBAAR_MS, BEELD_VERS_MS, OPNIEUW_MS, STIL_MS,
+  MACROS, REGIE, MACRO_STANDAARD, ADRES_MAX, TIK_MS, ONBEREIKBAAR_MS, BEELD_VERS_MS, OPNIEUW_MS, STIL_MS, BEELD_ADRESSEN,
+  WISSEL_BEVESTIG_MS, wisselVraagtBevestiging,
 } from '../src/koppel/beeld.js';
 import { OVERSLAAN } from '../src/control/terugspelen.js';
 import { hoorbareTel, engineTel } from '../src/analysis/maat.js';
@@ -667,6 +668,49 @@ console.log('\nde echte zender op een nep-WebSocket');
   const n = socks[1].uit.length;
   loop(5000);
   ok('uit: geen berichten meer, geen timers, geen nieuwe WebSocket', socks[1].uit.length === n && levend() === 0 && socks.length === 2);
+}
+
+console.log('\nde knopjes "deze Mac · pc" (BEELD_ADRESSEN, spoor beeld-een-machine)');
+{
+  const sleutels = BEELD_ADRESSEN.map((a) => a.sleutel);
+  ok('twee adressen, sleutels lokaal en pc, uniek', sleutels.join() === 'lokaal,pc' && new Set(sleutels).size === sleutels.length);
+  const lokaal = BEELD_ADRESSEN.find((a) => a.sleutel === 'lokaal');
+  ok('lokaal is precies ws://127.0.0.1:7702/app (de relay van tools/beeld-lokaal.sh), met de naam "deze Mac"',
+    lokaal.adres === 'ws://127.0.0.1:7702/app' && lokaal.naam === 'deze Mac');
+  ok('pc is ws://clayk:7702/app (Tailscale, docs/BEELD.md §1)', BEELD_ADRESSEN.find((a) => a.sleutel === 'pc')?.adres === 'ws://clayk:7702/app');
+  ok('elk adres komt ongewijzigd door controleerAdres (het knopje brandt dan ook na herladen)',
+    BEELD_ADRESSEN.every((a) => { const c = controleerAdres(a.adres); return c.ok && c.adres === a.adres; }));
+  const e = maakEngine();
+  const k = new BeeldKoppeling({ engine: e, ids: IDS, luisteraar: nepLuisteraar, maakZender: nepZenderMaker().maak, timers, nu: () => T, mag: false });
+  ok('BeeldKoppeling.zet aanvaardt elk adres (uit: geen verbinding)',
+    BEELD_ADRESSEN.every((a) => k.zet({ adres: a.adres }).ok && k.instellingen.adres === a.adres && !k.loopt));
+  ok('de lijst en de adressen liggen vast (frozen)', Object.isFrozen(BEELD_ADRESSEN) && BEELD_ADRESSEN.every(Object.isFrozen));
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const rij = html.slice(html.indexOf('<section id="beeld"'), html.indexOf('</section>', html.indexOf('<section id="beeld"')));
+  ok('index.html: een plek voor de knopjes (.bd-keuze) direct na het adresveld in de BEELD-rij',
+    /class="bd-adres"[^\n]*<\/label>\s*<span class="bd-keuze"><\/span>/.test(rij));
+
+  // Review 2, punt 6: midden in een set wisselt één misklik niet meteen.
+  const PC = 'ws://clayk:7702/app', MAC = 'ws://127.0.0.1:7702/app';
+  const w = (aan, verbonden, adres, naar) => wisselVraagtBevestiging({ aan, verbonden, adres }, naar);
+  ok('tweede klik nodig: beeld aan en verbonden met de pc, klik op "deze Mac" (en omgekeerd)', w(true, true, PC, MAC) && w(true, true, MAC, PC));
+  ok('meteen: beeld uit (ook met een adres), aan maar nog zoekend, of het knopje van het adres dat al geldt',
+    !w(false, false, PC, MAC) && !w(false, true, PC, MAC) && !w(true, false, PC, MAC) && !w(true, true, MAC, MAC));
+  ok('meteen bij geen of een lege status (geen fout)', !wisselVraagtBevestiging(null, MAC) && !wisselVraagtBevestiging({}, MAC));
+  ok('de tweede klik telt 3 s, zoals elke destructieve knop', WISSEL_BEVESTIG_MS === 3000);
+  // Op de echte koppeling: aan + verbonden komt uit status() (nep-zender die "verbonden" meldt).
+  const zm = nepZenderMaker();
+  const k2 = new BeeldKoppeling({ engine: maakEngine(), ids: IDS, luisteraar: nepLuisteraar, maakZender: zm.maak, timers, nu: () => T });
+  k2.zet({ aan: true, adres: PC });
+  const voor = wisselVraagtBevestiging(k2.status(), MAC);
+  zm.gemaakt.at(-1)?.verbind();
+  const na = wisselVraagtBevestiging(k2.status(), MAC);
+  ok(`op BeeldKoppeling.status(): zoekend meteen (${voor}), verbonden eerst een tweede klik (${na}); hetzelfde adres meteen`,
+    zm.gemaakt.length === 1 && voor === false && na === true && !wisselVraagtBevestiging(k2.status(), PC));
+  k2.zet({ aan: false });
+  const paneel = readFileSync(new URL('../src/ui/beeld-paneel.js', import.meta.url), 'utf8');
+  ok('beeld-paneel.js vraagt het bij elke klik op een knopje, met een melding, en onthoudt welk knopje (sleutel)',
+    /wisselVraagtBevestiging\(beeld\.status\(\), adres\)/.test(paneel) && /zeker\?\.sleutel === sleutel && nu < zeker\.tot/.test(paneel) && /meld\(`beeld: klik binnen/.test(paneel));
 }
 
 if (fails.length) { console.log(`\n${fails.length} FAIL`); process.exit(1); }

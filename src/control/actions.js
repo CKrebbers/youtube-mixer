@@ -15,7 +15,7 @@
  */
 import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/beatgrid.js';
 import { ToonKaart, WIJZER } from '../engine/toonsoort.js';
-import { teControleren, plekkenTeControleren, volgendTeControleren, oordeelStuk } from '../engine/tellen.js';
+import { teControleren, plekkenTeControleren, volgendTeControleren, oordeelStuk, oordeelBij, afwijkingBij } from '../engine/tellen.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
 import { PITCH_BEREIKEN, SPRONG_TELLEN, GLIJ, TOON_MAX } from '../engine/deck.js';
@@ -30,6 +30,7 @@ import { INSTRUMENTEN } from '../engine/instrumenten/index.js';
 import { PLEKKEN, MAX_LENGTE, STANDAARD_LENGTE, TEMPO, SWING, gevuld, volgendeLengte } from '../engine/patronen/model.js';
 import { MACROS as BEELD_MACROS, REGIE as BEELD_REGIE } from '../koppel/beeld.js';
 import { TELLEN as TELLEN_SAMPLER } from '../engine/sampler.js';
+import { DRUMPAD_VAN_SAMPLER, nootNaamDrum } from './drumpads.js';
 
 const registry = new Map();
 
@@ -40,8 +41,51 @@ export const STEM_LABELS = { vocals: 'zang', inst: 'rest', drums: 'drums', bass:
 const RATE_MIN = 0.5;
 const RATE_MAX = 2;
 
+/** Grid-nudge vasthouden: na zoveel ms herhalen, dan elke zoveel ms een stap (14 okt). */
+export const HERHAAL_NA = 350;
+export const HERHAAL_ELKE = 60;
+/** … en hooguit zoveel stappen per keer vasthouden (200 × 5 ms = een seconde schuiven). */
+export const HERHAAL_MAX = 200;
+
 /** Zoveel secties per track op de bus: de 40 pads van het APC-grid (docs/SECTIES.md). */
 export const SECTIE_PADS = 40;
+
+// Sampler-pad → drumpad (crossover): de tabel staat los, zodat apc-beschrijf.js hem
+// kan lezen zonder de engine mee te laden.
+export { DRUMPAD_VAN_SAMPLER } from './drumpads.js';
+const bpmTekst = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
+
+/**
+ * Welke stems er in een knip zitten, voor de melding; leeg als het alle stems
+ * zijn (of het nummer geen stems had). De gewichten zijn wat je hoorde bij het
+ * knippen (deck.knipGewichten: niveau × kill × 1/schaal), dus "alle stems" =
+ * allemaal gelijk en niet 0, niet "allemaal 1" (1/schaal maakt ze groter).
+ */
+export function stemsInKnip(gewichten, namen) {
+  if (!Array.isArray(gewichten) || !gewichten.length) return '';
+  const max = Math.max(...gewichten);
+  if (gewichten.every((g) => g > 0 && Math.abs(g - max) <= 1e-6 * max)) return '';
+  if (!(max > 0)) return 'stems: geen (stil)';
+  const aan = Array.isArray(namen) && namen.length === gewichten.length
+    ? gewichten.map((g, k) => (g > 0 ? STEM_LABELS[namen[k]] ?? namen[k] : null)).filter(Boolean) : null;
+  return aan && aan.length < gewichten.length ? `stems: ${aan.join(', ')}` : 'niet alle stems';
+}
+
+/**
+ * De melding na `sampler.N.drums` (i = N − 1; r = de uitkomst van
+ * engine.samplerNaarDrums): waar het stuk staat met de nootnaam, welke stems
+ * erin zitten als dat niet alle zijn, en een tempowaarschuwing als het stuk
+ * meer dan 0,5 % van de maat afwijkt (een drumpad speelt op snelheid 1).
+ */
+export function drumMelding(i, r) {
+  let t = `S${i + 1} staat op drumpad ${r.pad} van track ${trackVanDeck(r.id)} (noot ${nootNaamDrum(r.noot)} · ${r.noot})`;
+  const stems = stemsInKnip(r.gewichten, r.stemNamen);
+  if (stems) t += ` · ${stems}`;
+  if (r.bpm > 0 && r.maatBpm > 0 && Math.abs(r.bpm / r.maatBpm - 1) > 0.005) {
+    t += `; let op: dit stuk is ${bpmTekst(r.bpm)} bpm, de maat staat op ${bpmTekst(r.maatBpm)}: als drumpad speelt het op ${bpmTekst(r.bpm)} (loops blijven in de sampler)`;
+  }
+  return t;
+}
 
 export function define(id, type, fn, meta = {}) {
   registry.set(id, { id, type, fn, meta });
@@ -235,13 +279,50 @@ export function bindEngine(engine) {
       define(`${n}.grid.${id}`, 'trigger', (on) => { ingedrukt = !!on; doe(on); },
         { label, read: () => (!d.grid ? null : ingedrukt ? 1 : rust()) });
     };
+    // Het OORDEEL over het stuk dat je hoort, voor een lampje (14 okt): 0 =
+    // zeker of op slot, 0,5 = twijfel (controleer, geen puls, of het grid wijkt
+    // hier live van de gevonden tellen af). De scene-knop "tel 1 hier" in de
+    // grid-modus brandt zo wit als het klopt en oranje als je moet kijken.
+    const twijfelHier = () => {
+      const t = hoorbaar();
+      const live = d.tellen && d.playing ? afwijkingBij(d.grid, d.tellen.beats, t) : null;
+      const o = oordeelBij(d.grid, t, d.gridMetingBij(performance.now()), live);
+      return o.soort === 'zeker' || o.soort === 'vast' ? 0 : 0.5;
+    };
     // Tel 1 hier SNAPT naar de dichtstbijzijnde klap binnen 30 ms (de onsets
     // van de analyse, stap C); geen klap of geen analyse: de positie zelf.
-    gridKnop('here', (g, p) => g.ankerHier(snapNaarOnset(d.onsets, p)), `Track ${nr} beat 1 hier (snapt naar een klap)`);
-    define(`${n}.grid.back`, 'trigger', bewerk((g, p) => g.schuif(-0.005, p)), { label: `Track ${nr} grid 5 ms terug` });
-    define(`${n}.grid.fwd`, 'trigger', bewerk((g, p) => g.schuif(0.005, p)), { label: `Track ${nr} grid 5 ms vooruit` });
-    define(`${n}.grid.back.fine`, 'trigger', bewerk((g, p) => g.schuif(-0.001, p)), { label: `Track ${nr} grid 1 ms terug` });
-    define(`${n}.grid.fwd.fine`, 'trigger', bewerk((g, p) => g.schuif(0.001, p)), { label: `Track ${nr} grid 1 ms vooruit` });
+    gridKnop('here', (g, p) => g.ankerHier(snapNaarOnset(d.onsets, p)), `Track ${nr} beat 1 hier (snapt naar een klap)`, twijfelHier);
+    // TELLEN HIER (14 okt): de dichtstbijzijnde tel op de klap die je hoort,
+    // en de "1" blijft waar hij was (Beatgrid.lijnUitOp). Voor een grid dat
+    // een paar ms naast ligt: één druk op ELKE tel, je hoeft niet op de "1" te
+    // wachten en de maat verschuift niet. Snapt zoals tel 1 hier.
+    gridKnop('align', (g, p) => g.lijnUitOp(snapNaarOnset(d.onsets, p)), `Track ${nr} tellen hier: de tel op de klap, de "1" blijft`);
+    // Nudge van het grid: één druk = één stap; VASTHOUDEN herhaalt (na
+    // HERHAAL_NA ms elke HERHAAL_ELKE ms een stap), als één stap terug (↶).
+    // De timer zegt alleen WANNEER; elke stap schuift het grid met vaste ms.
+    const nudge = (id, sec, label) => {
+      let timer = null, ingedrukt = false, grid = null, stappen = 0;
+      const stop = () => { clearTimeout(timer); clearInterval(timer); timer = null; };
+      // Een ander grid (ander nummer, ↶, een analyse die binnenkomt) of HERHAAL_MAX stappen: ophouden.
+      const stap = () => {
+        if (!d.grid || d.grid !== grid || ++stappen > HERHAAL_MAX) { stop(); return; }
+        const p = hoorbaar(); d.grid.schuif(sec, p); d.grid.bevestig(p); d.gridGewijzigd();
+      };
+      define(`${n}.grid.${id}`, 'trigger', (on) => {
+        ingedrukt = !!on;
+        stop();
+        if (!on || !d.grid) return;
+        d.gridVoorBewerking();
+        grid = d.grid; stappen = 0;
+        stap();
+        timer = setTimeout(() => { timer = setInterval(stap, HERHAAL_ELKE); timer?.unref?.(); }, HERHAAL_NA);
+        timer?.unref?.();
+      }, { label, read: () => (!d.grid ? null : ingedrukt ? 1 : 0) });
+    };
+    nudge('back', -0.005, `Track ${nr} grid 5 ms terug (vasthouden: herhalen)`);
+    nudge('fwd', 0.005, `Track ${nr} grid 5 ms vooruit (vasthouden: herhalen)`);
+    nudge('back.fine', -0.001, `Track ${nr} grid 1 ms terug (vasthouden: herhalen)`);
+    nudge('fwd.fine', 0.001, `Track ${nr} grid 1 ms vooruit (vasthouden: herhalen)`);
     gridKnop('double', (g, p) => g.verdubbel(p), `Track ${nr} bpm x2`);
     gridKnop('halve', (g, p) => g.halveer(p), `Track ${nr} bpm /2`);
     gridKnop('halfbeat', (g, p) => g.schuifTel(0.5, p), `Track ${nr} grid een halve tel verschuiven`);
@@ -274,14 +355,19 @@ export function bindEngine(engine) {
     const pin = (t) => {
       if (!d.grid) return;
       const was = d.grid.toJSON();
-      const r = d.grid.pin(snapNaarOnset(d.onsets, t));
+      // De klappen beslissen mee welke tel dit is als het grid hier ver uit de pas ligt (Beatgrid.pin).
+      const r = d.grid.pin(snapNaarOnset(d.onsets, t), { klappen: d.onsets });
       if (!r.ok) { engine.emit('melding', { tekst: `track ${nr}, vastzetten: ${r.reden}`, soort: 'fout' }); return; }
       d.gridVoorBewerking(was);
       d.gridGewijzigd();
       const komma = (x) => x.toFixed(2).replace('.', ',');
-      engine.emit('melding', { soort: 'info', tekst: r.alleenFase
+      // Lag het grid hier ver naast en hielpen geen klappen, dan kan het de buurtel zijn geweest: zeg het.
+      const gok = !r.alleenFase && !r.geteld && Math.abs(r.naast) > 0.25
+        ? ` — LET OP: het grid lag hier ${Math.round(Math.abs(r.naast) * 100)}% van een tel naast; controleer met de tik (↶ = terug)` : '';
+      engine.emit('melding', { soort: gok ? 'fout' : 'info', tekst: r.alleenFase
         ? `track ${nr}: tel gelijkgelegd (te dicht bij het anker voor een tempo: zet "1" eerder, of vast verder weg)`
-        : `track ${nr}: vastgezet — ${komma(r.bpm)} bpm (was ${komma(r.was)}) over ${Math.abs(r.tellen)} tellen; vanaf hier een nieuw stuk` });
+        : `track ${nr}: vastgezet — ${komma(r.bpm)} bpm (was ${komma(r.was)}) over ${Math.abs(r.tellen)} tellen`
+          + `${r.geteld ? ' (geteld op de klappen)' : ''}; vanaf hier een nieuw stuk${gok}` });
     };
     let pinDruk = false;
     define(`${n}.grid.pin`, 'trigger', (on) => { pinDruk = !!on; if (on) pin(hoorbaar()); },
@@ -890,6 +976,7 @@ export function bindEngine(engine) {
   // maken (bewaard blijft bewaard); een lege, bewaarde pad vergeten.
   const sampler = engine.sampler;
   if (sampler) {
+    const zegDrum = (tekst, soort = 'info') => engine.emit('melding', { tekst, soort, duur: 8000 });
     for (let i = 0; i < 8; i++) {
       define(`sampler.${i + 1}`, 'trigger', (on) => {
         if (!on) return;
@@ -935,6 +1022,27 @@ export function bindEngine(engine) {
              if (sectieDruk) return 1;
              const d = engine.focused();
              return sampler.waaromGeenSectie(i, d, d?.sectieHier ?? -1) ? null : 0.5;
+           } });
+      // Dit stuk als drumpad op de Drums (crossover, docs/INSTRUMENTEN.md "Uit de
+      // sampler"): een eigen strip (fader, filter, echo, galm, fx, koptelefoon),
+      // in een patroon op zijn noot, op dezelfde Maschine-pad als in de padmodus
+      // sampler (DRUMPAD_VAN_SAMPLER). Welke Drums: engine.drumsDoel(). Read:
+      // null = kan niet (sampler-pad leeg of geen Drums), 0,5 = kan, 1 = er ligt
+      // een stuk op die drumpad (niet per se de knip van nu: stap 1 vergelijkt niet).
+      const drumpad = DRUMPAD_VAN_SAMPLER[i];
+      define(`sampler.${i + 1}.drums`, 'trigger', (on) => {
+        if (!on) return;
+        const r = engine.samplerNaarDrums(i, { pad: drumpad });
+        // De reden uit de engine noemt de pad zelf al: geen voorvoegsel.
+        if (!r.ok) { zegDrum(r.reden, 'fout'); return; }
+        zegDrum(drumMelding(i, r));
+      }, { label: `Sampler pad ${i + 1} als drumpad ${drumpad} op de Drums (one-shot, door de strip; Maschine-pad ${drumpad})`,
+           read: () => {
+             if (!sampler.pads[i]) return null;
+             const d = engine.drumsDoel?.();
+             const inst = d?.id ? engine.instrumentOp(d.id) : null;
+             if (!inst) return null;
+             return inst.stand?.().pads?.[drumpad - 1]?.gevuld ? 1 : 0.5;
            } });
     }
     define('sampler.length', 'trigger', (on) => { if (on) sampler.volgendeLengte(); },
@@ -1247,6 +1355,11 @@ export function bindVideo(mixer) {
     { label: 'Video: puls op de tel (vol op een nieuwe sectie)', read: () => mixer.puls });
   define('video.pulse.target', 'trigger', (on) => { if (on) mixer.volgendPulsDoel(); },
     { label: 'Video: wat er pulst', read: () => PULS_DOELEN.indexOf(mixer.pulsDoel) / (PULS_DOELEN.length - 1) });
+  // Het zaalbeeld (docs/BEAMER.md "Zaalbeeld"): de deck-video's (clips van
+  // anderen) uit, de vormlagen, effecten en noodknoppen lopen door. Een
+  // schakelaar zoals video.black: read = de stand, dus een LED zegt wat je deed.
+  define('video.clips', 'trigger', (on) => { if (on) mixer.zetClips(!mixer.clips); },
+    { label: 'Video: deck-video\'s (clips) aan/uit — uit = alleen eigen beeld (vormen), voor een zaal', read: () => (mixer.clips ? 1 : 0) });
 
   // De noodknoppen van de beamer (src/video/eindbeeld.js), op het EINDbeeld:
   // de zaal, het losse venster en de video-opname zien hetzelfde.

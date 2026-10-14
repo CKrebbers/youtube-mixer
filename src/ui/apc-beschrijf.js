@@ -1,4 +1,5 @@
 import { GROEPEN, LAAGNAAM } from '../control/lagen.js';
+import { DRUMPAD_VAN_SAMPLER, drumpadNoot, nootNaamDrum } from '../control/drumpads.js';
 
 /**
  * Wat een action betekent, in gewone taal — voor de APC-kaarten (apc.html).
@@ -125,7 +126,7 @@ export function beschrijf(action) {
     if (rest === 'pfl') return r('PFL', 'in de koptelefoon aan/uit: voorbeluisteren vóór de fader, de zaal hoort het niet (lampje rood = je hoort hem; uit = geen koptelefoonuitgang, docs/STUDIO.md §3)');
     if (rest === 'brake') return r('rem', 'rem (vinylstop): in de remtijd naar stilstand, dan pauze; tijdens het remmen nog eens = los');
     if (rest === 'brake.time') return r('remtijd', 'remtijd: 0,1 tot 5 seconden tot stilstand');
-    if (rest === 'grid.here') return r('tel 1 hier', 'tel 1 hier: de tel komt op wat je hoort, gesnapt naar een klap binnen 30 ms, en is de "1" van de maat in dit stuk');
+    if (rest === 'grid.here') return r('tel 1 hier', 'tel 1 hier: de tel komt op wat je hoort, gesnapt naar een klap binnen 30 ms, en is de "1" van de maat in dit stuk. Lampje in de grid-modus: wit = het stuk dat je hoort klopt (zeker of op slot), oranje = twijfel (controleer)');
     if (rest === 'grid.double') return r('bpm ×2', 'bpm ×2 van het gridstuk hier');
     if (rest === 'grid.halve') return r('bpm ½', 'bpm ½ van het gridstuk hier');
     if (rest === 'grid.halfbeat') return r('½ tel', 'grid een halve tel verschuiven (tel op de offbeat)');
@@ -143,7 +144,12 @@ export function beschrijf(action) {
     if (rest === 'grid.here.op') return r('tel 1 op', 'tel 1 op een aangewezen plek (klik in de golfvorm)');
     if (rest === 'grid.bar') return r('1 →', 'de "1" een tel verder: de tellen blijven liggen, de maat begint een tel later');
     if (rest === 'grid.bar.back') return r('← 1', 'de "1" een tel terug');
-    if (rest === 'grid.undo') return r('↶ grid', 'de laatste bewerking van het grid terug (tik, vast, ×2, ‹ ›, tel 1 …)');
+    if (rest === 'grid.undo') return r('↶ grid', 'de laatste bewerking van het grid terug (tik, vast, ×2, ‹ ›, tel 1 …), precies zoals het was; lampje: er is iets terug te zetten');
+    if (rest === 'grid.align') return r('tellen hier', 'tellen hier: de tel die het dichtst bij wat je hoort ligt komt op de klap (gesnapt binnen 30 ms); de "1" en het tempo blijven. Op elke tel, je hoeft niet op de "1" te wachten');
+    if (rest === 'grid.controle') return r('controle', 'grid controleren: een tik op elke gridlijn (hoog = de "1"), in de koptelefoon; nog een keer = uit. Lampje: de tik loopt');
+    if (rest === 'grid.ok') return r('✓ klopt', 'klopt tot hier: het stuk dat je hoorde is goedgekeurd (zeker, ook waar de analyse twijfelde); in de controle door naar de volgende plek, alles goed = op slot');
+    if (rest === 'grid.check.next') return r('plek ▶', 'controleren: naar de volgende plek waar het grid twijfelt');
+    if (rest === 'grid.check.prev') return r('◀ plek', 'controleren: naar de vorige plek waar het grid twijfelt');
     if (rest === 'key') return r('toon', 'toonsoort van de plaat hier: 24 standen in wijzervolgorde (1A 1B … 12B), voor een encoder');
     if (rest === 'key.fifth.up') return r('toon kwint+', 'toonsoort hier een kwint omhoog (Camelot +1): de meest gemaakte fout van de analyse');
     if (rest === 'key.fifth.down') return r('toon kwint−', 'toonsoort hier een kwint omlaag (Camelot −1)');
@@ -166,6 +172,10 @@ export function beschrijf(action) {
   if ((m = /^patterns\.row\.([1-5])$/.exec(action))) return { kort: `rij ${m[1]}`, lang: `patronen: rij ${m[1]} op alle tracks met een instrument, op de maat (een lege plek in die rij: die track stopt); lampje fel = er speelt iets in deze rij, knippert = wacht, donker = gevuld` };
   if ((m = /^sampler\.(\d)$/.exec(action))) return { kort: `pad ${m[1]}`, lang: `sampler-pad ${m[1]}: leeg = pak de laatste tellen van de focus-track, gevuld = start/stop op de tel (een sectie: op de "1"; een sectie van 2 maten of korter op de tel, zoals een gewone pad)` };
   if ((m = /^sampler\.(\d)\.clear$/.exec(action))) return { kort: `leeg ${m[1]}`, lang: `sampler-pad ${m[1]} leegmaken (bewaard blijft bewaard)` };
+  if ((m = /^sampler\.(\d)\.drums$/.exec(action))) {
+    const p = DRUMPAD_VAN_SAMPLER[Number(m[1]) - 1], noot = drumpadNoot(p);
+    return { kort: `→drum ${p}`, lang: `sampler-pad ${m[1]} als drumpad ${p} op de Drums (de speeltrack, of de enige Drums-track): dezelfde pad als in de padmodus sampler van de Maschine; one-shot door de strip van die track (fader, filter, echo, galm, fx, koptelefoon), in een patroon op noot ${nootNaamDrum(noot)} (${noot}). Lampje: fel = er ligt een stuk op drumpad ${p} (niet per se de knip van nu), gedimd = kan, uit = kan niet (sampler-pad leeg of geen Drums)` };
+  }
   if ((m = /^sampler\.(\d)\.section$/.exec(action))) return { kort: `sectie→${m[1]}`, lang: `sampler-pad ${m[1]}: de sectie die je hoort op de focus-track, heel (van haar "1" tot de "1" van de volgende, in hele maten; hooguit 32 maten en 90 s), bewaard bij het nummer; de pad start daarna op de "1" van de maatgever (een sectie van 2 maten of korter: op de tel, zoals een gewone pad). Verspringt de "1" van het grid in de sectie, dan stopt de pad op de "1" ervóór (een melding zegt het). Alleen op een lege pad, anders zegt een melding waarom. Lampje: donker hemelsblauw = kan, uit = kan niet (pad gevuld of bewaard; de focus-track heeft geen secties of grid; onzeker grid; langer dan 32 maten of 90 s)` };
   if ((m = /^send\.a\.knob\.(\d)$/.exec(action))) return { kort: `echo ${SEND_A[m[1] - 1] ?? m[1]}`, lang: `echo-bus: ${SEND_A[m[1] - 1] ?? `knop ${m[1]}`}` };
   if ((m = /^send\.b\.knob\.(\d)$/.exec(action))) return { kort: `galm ${SEND_B[m[1] - 1] ?? m[1]}`, lang: `galm-bus: ${SEND_B[m[1] - 1] ?? `knop ${m[1]}`}` };
@@ -242,6 +252,7 @@ export function beschrijf(action) {
     'video.freeze': ['bevries', 'video: het beeld bevriezen aan/uit (de video\'s lopen door, loslaten = meteen het goede beeld)'],
     'video.master': ['beeld', 'video: master, de helderheid van het eindbeeld (dicht = zwart)'],
     'video.flash': ['flits', 'video: een witte flits die snel uitdooft'],
+    'video.clips': ['clips', 'video: de deck-video\'s aan/uit — uit = alleen eigen beeld (vormen) voor een zaal; vormen, effecten en zwart lopen door (lampje brandt = clips aan)'],
     // Patronen (docs/PATRONEN.md): de modus patronen, Shift + scene 2.
     'patterns.stop': ['pat stop', 'patronen: alles stoppen op de maat'],
     'patterns.stop.now': ['pat stop!', 'patronen: alles meteen stoppen'],

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const { Kaart } = await import('../server/kaart.js');
-const { Nacht, STANDAARD, nachtDatum, inVenster, pasToe, isBlokkade, MAX_OP_EEN_RIJ, datumVan } = await import('../server/nacht.js');
+const { Nacht, STANDAARD, nachtDatum, komendeNacht, inVenster, pasToe, isBlokkade, MAX_OP_EEN_RIJ, datumVan } = await import('../server/nacht.js');
 const { schrijfKaart, NUMMERS } = await import('./nep-kaart.mjs');
 
 const fails = [];
@@ -88,6 +88,36 @@ try {
     nacht.zet({ aan: false });
     ok('uit: volgende null', nacht.volgende() === null && nacht.magNu() === 'staat uit');
     ok('zet: een verkeerde waarde gooit, de stand blijft', (() => { try { nacht.zet({ perNacht: 0 }); return false; } catch (e) { return /perNacht/.test(e.message) && nacht.stand().perNacht === 80; } })());
+  }
+
+  // "vandaag niet" geldt voor de KOMENDE nacht, ook 's ochtends gezet (review standen, 10 okt):
+  // vóór 12:00 is nachtDatum de nacht die net voorbij is; komendeNacht de volgende.
+  console.log('\n"vandaag niet" geldt voor de komende nacht, hoe laat je het ook zet');
+  {
+    const V = STANDAARD.venster;
+    ok('komendeNacht 01:00–07:00: 10:00 en 14:00 en 23:00 op 17 okt = 17 okt', ['10', '14', '23'].every((u) => komendeNacht(new Date(2026, 9, 17, Number(u), 0), V) === '2026-10-17'));
+    ok('… 03:00 op 18 okt (in het venster) = 17 okt; 00:30 op 18 okt = 17 okt; 07:30 op 18 okt = 18 okt',
+      komendeNacht(new Date(2026, 9, 18, 3, 0), V) === '2026-10-17' && komendeNacht(new Date(2026, 9, 18, 0, 30), V) === '2026-10-17' && komendeNacht(new Date(2026, 9, 18, 7, 30), V) === '2026-10-18');
+    ok('… venster over middernacht (23:00–06:00): 22:00 op 17 = 17, 05:00 op 18 = 17, 08:00 op 18 = 18',
+      komendeNacht(new Date(2026, 9, 17, 22, 0), { van: '23:00', tot: '06:00' }) === '2026-10-17' && komendeNacht(new Date(2026, 9, 18, 5, 0), { van: '23:00', tot: '06:00' }) === '2026-10-17'
+      && komendeNacht(new Date(2026, 9, 18, 8, 0), { van: '23:00', tot: '06:00' }) === '2026-10-18');
+    for (const [uur, wanneer] of [[10, 17], [14, 17], [23, 17], [3, 18]]) {
+      const { nacht, zet } = maak({ nu: new Date(2026, 9, wanneer, uur, 0) });
+      nacht.zet({ aan: true });
+      nacht.zet({ vandaagNiet: true });   // wat een stand met nacht.vannacht: false doet, en de knop "vandaag niet"
+      const toen = nacht.stand().vandaagNiet;
+      zet(new Date(2026, 9, 18, wanneer === 18 ? 4 : 2, 0));   // midden in de nacht van 17 op 18 okt
+      ok(`gezet op ${wanneer} okt ${String(uur).padStart(2, '0')}:00: de stand zegt "vandaag niet" (${toen}) en de nacht van 17 op 18 okt remt (${nacht.magNu()})`,
+        toen === true && nacht.magNu() === 'vandaag niet');
+      zet(new Date(2026, 9, 19, 2, 0));
+      ok(`… en de nacht daarna (18 op 19 okt) mag weer (${nacht.magNu()})`, nacht.magNu() === null);
+    }
+    const { nacht, zet } = maak({ nu: new Date(2026, 9, 17, 22, 0) });
+    nacht.zet({ aan: true, vandaagNiet: true });
+    zet(new Date(2026, 9, 18, 9, 0));
+    ok('de ochtend erna (09:00): de rem van de afgelopen nacht telt niet meer, de knop staat weer uit', nacht.stand().vandaagNiet === false);
+    nacht.zet({ vandaagNiet: true });
+    ok('… en nu "vandaag niet" = de nacht van 18 op 19 okt', nacht.instellingen.vandaagNietDatum === '2026-10-18' && nacht.vandaagNiet === true);
   }
 
   // ---- regel 2 ---------------------------------------------------------------------
@@ -235,6 +265,47 @@ try {
     k6.voegWensen(['sp:sp0000000001']);
     const r6 = await n6.run({ aantal: 5, soort: 'nu' });
     ok('zonder zoeker: de wens gaat op kies met uitleg, de run loopt door', k6.wens('sp:sp0000000001').status === 'kies' && r6.reden === 'niets meer te halen');
+  }
+
+  // ---- alleenWensen: "haal de wenslijst nu op" haalt alleen de wenslijst ------------
+  // (review companion ronde 1, fix 1). De standaardvolgorde staat standaard AAN; een
+  // wens die op `kies` eindigt telt niet als gehaald, dus zonder vlag pakte de run
+  // daarna een nummer van de kaart dat niemand wenste.
+  console.log('\nalleenWensen: haal nu met de companion haalt alleen de wenslijst');
+  {
+    const twijfel = async () => ({ kandidaten: [{ youtube_id: 'twijfelig001', score: 0.6, reden: 'titel klopt' }] });
+    const { nacht: n7, kaart: k7, gehaald: g7 } = maak({ nu: new Date(2026, 9, 12, 15, 0), zoek: twijfel });
+    ok('de standaardvolgorde staat aan (zoals standaard)', n7.stand().standaardVolgorde === true);
+    k7.voegWensen(['sp:sp0000000002']);
+    ok('volgendeItem({ alleenWensen }): eerst de wens',
+      n7.volgendeItem({ alleenWensen: true })?.sleutel === 'sp:sp0000000002');
+    const p7 = n7.nu({ aantal: 1, alleenWensen: true });
+    ok('nu({ alleenWensen: true }) staat in bezig', n7.stand().bezig?.alleenWensen === true && n7.stand().bezig?.soort === 'nu');
+    const r7 = await p7;
+    ok(`met alleenWensen: de wens op kies, niets gehaald ("${r7.reden}")`, r7.reden === 'niets meer te halen' && r7.gehaald === 0
+      && g7.length === 0 && k7.wens('sp:sp0000000002').status === 'kies');
+    ok('... en geen wens met bron nacht (niets van de kaart erbij)', k7.wensen().every((w) => w.bron !== 'nacht'));
+    ok('volgendeItem({ alleenWensen }) zonder wachtende wens: null', n7.volgendeItem({ alleenWensen: true }) === null && n7.volgendeItem() !== null);
+
+    const { nacht: n8, kaart: k8, gehaald: g8 } = maak({ nu: new Date(2026, 9, 12, 15, 0), zoek: twijfel });
+    k8.voegWensen(['sp:sp0000000002']);
+    const r8 = await n8.nu({ aantal: 1 });
+    const vanNacht = k8.wensen().filter((w) => w.bron === 'nacht');
+    ok(`zonder vlag het oude gedrag (de nacht zelf verandert niet): één nummer uit de standaardvolgorde (${vanNacht.map((w) => w.sleutel).join()})`,
+      r8.gehaald === 1 && g8.length === 1 && vanNacht.length === 1 && vanNacht[0].status === 'klaar');
+    const { nacht: n9 } = maak({ nu: new Date(2026, 9, 12, 15, 0) });
+    ok('alleenWensen dat geen boolean is: 400', (() => { try { n9.nu({ aantal: 1, alleenWensen: 'ja' }); return false; } catch (e) { return e.code === 400; } })());
+  }
+
+  // ---- de datums van de server in de stand (fix 9) -----------------------------------
+  console.log('\nvandaag en nachtDatum in de stand, volgens de klok van de server');
+  {
+    const { nacht, zet } = maak({ nu: new Date(2026, 9, 11, 3, 0) });
+    const s1 = nacht.stand();
+    ok(`11 okt 03:00: vandaag ${s1.vandaag}, de nacht van ${s1.nachtDatum}`, s1.vandaag === '2026-10-11' && s1.nachtDatum === '2026-10-10');
+    zet(new Date(2026, 9, 11, 15, 0));
+    const s2 = nacht.stand();
+    ok(`11 okt 15:00: vandaag ${s2.vandaag}, nachtDatum ${s2.nachtDatum}`, s2.vandaag === '2026-10-11' && s2.nachtDatum === '2026-10-11');
   }
 
   // ---- opslag -----------------------------------------------------------------------

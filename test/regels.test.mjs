@@ -24,6 +24,23 @@ for (const f of engineBestanden) {
   const dom = /\b(document|window)\./.test(bron.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ''));
   ok(`${f}: raakt geen DOM aan`, !dom);
 }
+// Patronen naar Logic (docs/PATRONEN.md §8): MIDI-BESTANDEN maken gebeurt buiten de engine,
+// in src/export/ met de bytes-laag src/lib/smf.js. Geen bestand in de engine schrijft
+// MIDI-bytes: geen 'MThd', geen 'MTrk', geen noot-aan op kanaal 10 (0x99).
+ok('geen bestand onder src/engine/ bevat MThd, MTrk of 0x99 (MIDI-bestanden staan in src/export/)',
+  engineBestanden.every((f) => !/MThd|MTrk|\b0x99\b/.test(readFileSync(engineMap + f, 'utf8'))));
+{
+  const exportMap = fileURLToPath(new URL('../src/export/', import.meta.url));
+  for (const f of readdirSync(exportMap).filter((x) => x.endsWith('.js'))) {
+    const bron = readFileSync(exportMap + f, 'utf8');
+    const imports = [...bron.matchAll(/^\s*import\s[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1]);
+    ok(`export/${f}: importeert alleen uit engine en lib, raakt geen DOM aan`,
+      imports.every((i) => /^\.\.\/(engine|lib)\//.test(i)) && !/\b(document|window)\./.test(bron.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
+  }
+  const smf = readFileSync(fileURLToPath(new URL('../src/lib/smf.js', import.meta.url)), 'utf8');
+  ok('lib/smf.js: geen imports, geen Buffer, geen DOM (draait in browser, server en test)',
+    !/^\s*import\s/m.test(smf) && !/\bBuffer\b|\b(document|window)\./.test(smf.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
+}
 
 // De koppeling met de Stroommachine (spoor beeld, docs/BEELD.md) staat buiten
 // de engine en buiten het scherm: ze leest de engine alleen en kent geen DOM, zodat

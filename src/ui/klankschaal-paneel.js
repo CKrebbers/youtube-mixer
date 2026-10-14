@@ -1,4 +1,5 @@
 import { meld } from './meldingen.js';
+import { zetTekst } from './dom.js';
 
 /*
  * De KLANKSCHAAL-rij onder de sampler: openen en sluiten (knop in de balk),
@@ -46,7 +47,7 @@ export function opzetKlankschaal({ engine }) {
   knop.addEventListener('click', () => zet(rij.classList.contains('hidden')));
   if (lees(OPEN) === '1') zet(true);
 
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
   const titel = (el, t) => { if (el.title !== t) el.title = t; };
 

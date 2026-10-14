@@ -1,0 +1,5 @@
+ Wattage = 30W
+ Current = 2000mA
+ Voltage = 15000mV
+ AdapterID = 12
+ Family Code = 0xe000400a

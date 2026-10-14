@@ -46,7 +46,7 @@ const poort = 20000 + Math.floor(Math.random() * 20000);
 const nepYtdlp = maakNepYtdlp(map);
 // Een functie: aan het eind wordt de server herstart (zelfde poort, database en media).
 const startServer = () => spawn(process.execPath, ['server/index.js'], {
-  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'),
+  env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_TESTSERVER: '1', VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'),
     VARVE_HERANALYSE: 'uit', VARVE_YTDLP: nepYtdlp, NEP_LOG: log, NEP_BRON: bron },
   stdio: ['ignore', 'pipe', 'pipe'],
 });

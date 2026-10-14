@@ -318,6 +318,43 @@ externe schijf die tijdens een backup wegvalt, en de tegel in een echte browser
 (`tools/headless/controle.mjs` heeft er een check bij, maar is hier niet gedraaid:
 geen Chromium in de container).
 
+## Waar media/ staat (11 oktober 2026, VI2)
+
+`media/` (de nummers, `library.db`, `backups/`, `kaart.db`, `nacht.json`, `stems-rij.json`)
+hoort buiten iCloud: een uitgeplaatst bestand laat de server bij de eerste lezing hangen tot het
+hele bestand binnen is (3,9 GB voor een `stems.wav`; zonder internet nooit), en iCloud is geen
+backup (het synchroniseert ook wissen). Stand 11 okt: 32 GB in de Bureaublad-map, niets
+uitgeplaatst.
+
+- **Welke map** (`server/media-plek.js`, `kiesMedia`): `VARVE_MEDIA`; anders
+  `<projectmap>/media`; is die er niet meer, dan het pad uit `media-VERHUISD.txt` in de projectmap
+  (het briefje dat het verhuistool achterlaat; vangnet, een testserver volgt het nooit).
+- **De library** staat standaard IN die map (`VARVE_DB` verlegt hem nog steeds). Tot 11 okt was
+  dat altijd `<projectmap>/media/library.db`, ook met `VARVE_MEDIA`.
+- **Paden in de database zijn relatief** (`media/<id>/audio.wav`, ook video, peaks, onset en
+  `stems.bestand`): `alsPad()` schrijft ze zo, `opSchijf()` legt ze op `MEDIA`, en de statische
+  route `/media/<id>/…` gaat ook via `opSchijf()`. Verhuizen breekt dus niets. Absoluut in de
+  instellingen staat alleen `kaart_pad` (de muziekkaart, buiten `media/`). Het tool telt het na
+  op de echte database (alleen lezen) en weigert als er een pad niet met `media/` begint.
+- **Bij het starten** logt de server `[media] <map> (waarom); library <pad>`, en een
+  waarschuwing als een van beide binnen iCloud ligt (`~/Library/Mobile Documents`, of `~/Desktop`
+  / `~/Documents` als "Bureaublad- en Documentenmappen" in iCloud aan staat; dat zie je aan
+  `~/Library/Mobile Documents/com~apple~CloudDocs/Desktop`).
+- **Testserver** = `VARVE_TESTSERVER=1` (stems en tellen uit tenzij een nep- of echt commando
+  gezet is). Tot 11 okt las de server dat af aan `VARVE_MEDIA`; met Clay's map buiten iCloud zou
+  zijn eigen server dan geen stems meer maken. Elke testserver in `test/` en `tools/headless/`
+  zet de vlag (`test/media-verhuis.test.mjs` bewaakt dat).
+- **Verhuizen:** `node tools/media-verhuis.mjs` (droogloop: bron, doel, grootte, iCloud, server,
+  paden in de db, backups), dan met de server uit `--doe`: hernoemen naar `~/Varve-media`
+  (zelfde schijf, geen kopie, niets gewist), `media-VERHUISD.txt` waar `media/` stond, en de
+  regels voor `~/.zprofile` en `~/.varve/media-pad`. VARVE.app leest beide (de login-shell leest
+  `.zprofile`; `media-pad` gaat voor). Het plan voor Clay's map: HANDOFF.
+- **Backups buiten de laptop:** `VARVE_BACKUPS` naar een externe SSD, die er nog niet is; tot dan
+  staan de kopieën van `library.db` naast de library en is er van de media zelf geen tweede kopie.
+- **Niet getest:** de verhuizing van de echte map (de rename uit een door iCloud beheerde map),
+  VARVE.app opnieuw gebouwd en echt gestart, `find -flags +dataless` op een echt uitgeplaatst
+  bestand. Niet verhuisd door het tool: `opnames/` (`VARVE_OPNAMES`), `patronen/`, `proef/`.
+
 ## De kaart-tab (10 oktober 2026, tak `studio/kaart-ui`)
 
 De muziekkaart (`~/Projects/muziekkaart`, contract: scratchpad `CONTRACT-KAART.md`)
@@ -466,3 +503,27 @@ gelijkzetten van het tempo (zonder keylock schuift die mee).
   gaat zoals in de gewone lijst, met de tweede klik over een spelende track.
 - Headless: `tools/headless/past-bij.mjs` (eigen server, eigen library, geen MIDI).
 
+
+## Video en audio over één host (14 okt, docs/WINST.md punt 2)
+
+De server spreekt HTTP/1.1, en Chrome opent per host hooguit 6 verbindingen. Een zichtbare `<video>`
+vraagt `bytes=N-` (een OPEN bereik) en houdt die verbinding vast terwijl hij een minuut of meer vooruit
+buffert. De decks halen hun pagina's over dezelfde host, dus met zes of meer zichtbare video's wachtten
+ze op een vrije verbinding: stilte na een sprong.
+
+- `statisch()` in `server/index.js`: een open Range-verzoek op `/media/<id>/video.mp4` krijgt hooguit
+  `VIDEO_KNIP` = 2 MB terug (206, met de echte `Content-Range`). De video vraagt dan zelf het volgende
+  stuk; elke verbinding komt na een paar honderd ms weer vrij. Een gesloten bereik, `bytes=-N`, een
+  verzoek zonder Range en `audio.wav`/`stems.wav` blijven zoals ze waren (de StreamBron vraagt altijd
+  een gesloten bereik). `test/server.test.mjs` toetst alle vijf.
+- De StreamBron haalt met `priority: 'high'` (`src/engine/bron.js`, de standaard-`haal`).
+- Gemeten met `tools/headless/acht-video.mjs` (acht decks, videopaneel open, 30 sprongen; Chrome for
+  Testing 155 in deze container, media uit de proef van WINST.md: acht nummers van 150 s, 3,4 Mbit/s):
+
+  | | audio wacht p90 / max | sprong → pagina p90 / max | gat per deck, max |
+  |---|---|---|---|
+  | vóór (twee ronden) | 4111 / 8600 ms · 4373 / 9890 ms | 3721 / ≥ 5000 ms · 1575 / ≥ 5000 ms | 7690 · 6370 ms |
+  | na (twee ronden) | 38 / 179 ms · 48 / 395 ms | 610 / 900 ms · 966 / 1285 ms | 670 · 890 ms |
+
+  De video's bleven spelen en bufferen vooruit (20–130 s), nu in meer, kleinere verzoeken.
+- Via Tailscale (https, HTTP/2) speelt dit niet: één verbinding met stromen. De knip kan daar niets breken.

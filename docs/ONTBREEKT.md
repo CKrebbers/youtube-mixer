@@ -26,6 +26,10 @@ Wat je bij een live set merkbaar mist of wat je handwerk beschermt. Op belang.
 | A9 | **Vier live-randgevallen (gebouwd 2 okt)** | Een lege hotcue vlak na het laden overschrijft de bewaarde · sync kan terugvallen op een remmende track · na stilstand telt een track nog even als remmend · gate zonder maat start op "nu". | VERBETERINGEN ronde 4 | S |
 | A10 | **Luistertests A2 en A3 (jij)** | Streamen, loops en springen beluisteren (A2), en de keylock-proef (A3). Geen bouwwerk, wel nodig vóór een echte set. | ROADMAP 19 · VRAGEN A2, A3 | — |
 
+Erbij (10 okt, spoor "draagbaar", VISIE §3): het **avondpakket**, één alleen-lezen controle
+vóór vertrek en bij aankomst (media en instellingen lokaal, schijf, accu en lader, apparaten,
+backup, achtergrondwerk), als tegel en als `node tools/avondpakket.mjs` (docs/AVONDPAKKET.md).
+
 ## B. Later
 
 Gewenst of gangbaar, maar een set lukt zonder.
@@ -116,6 +120,11 @@ Botst met een vastgelegde keuze (CLAUDE.md, VRAGEN).
 | D3 | **Booth-uitgang, karaoke, USB-export voor CDJ's** | Past niet bij het doel. | DJ-vergelijking | — |
 | D4 | **De indeling van de blauwdruk (2 decks spiegelbeeldig)** | Acht tracks, één kolom = één track. Ook: beeld-crossfader los van het geluid, vier beeldlagen, tempo-master met de hand, blauwdruk-import. | CLAUDE.md · VRAGEN G4 | — |
 | D5 | **Link als native module, eigen Syphon/NDI-helper, VARVE in TouchDesigner draaien, Link Audio** | GPL of native code in het serverproces, of een tweede beamer over het netwerk. Pas heroverwegen als de goedkope routes tekortschieten. | onderzoek Logic/TD | — |
+
+**D1 verduidelijkt (VI1, 11 okt).** "Niet" betekent: geen distributie van de cache. Een uitgang
+is geen distributie en mag: een bestand, een poort op 127.0.0.1, een export naar je eigen schijf.
+Eigen opnames en renders naar de eigen library mogen ook. Varve zelf naar een streamingdienst
+laten sturen blijft dicht tot een aparte keuze (U1b); zie de regel in `CLAUDE.md` ("Gekozen aanpak").
 
 ## Voorstel voor de volgorde
 

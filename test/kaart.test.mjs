@@ -4,6 +4,7 @@
 // met een ingeprikte zoeker (geen netwerk) en de score; de standaardvolgorde
 // van de nacht met zijn uitsluitingen; en de bewaker: geen cookie-optie in
 // enige yt-dlp-aanroep in server/. Draai met: node test/kaart.test.mjs
+// @alleen: tijdsgrens op de wandklok (laden, sorteren, zoeken van 18 763 rijen) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import { mkdtempSync, rmSync, readFileSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

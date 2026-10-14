@@ -93,6 +93,10 @@ macOS maakt van twee apparaten één, met één klok (regel 3 blijft heel):
 Staan zaal en koptelefoon andersom: de knop **⇄** in de KOPTELEFOON-rij (onthouden,
 werkt na herladen), of de volgorde in stap 2 omdraaien.
 
+Onderweg kijkt de tegel **Avondpakket** (docs/AVONDPAKKET.md) bij aankomst of de
+standaarduitvoer 4 kanalen heeft en geen Bluetooth is, en noemt hij het samengestelde
+apparaat als het bestaat maar niet gekozen is.
+
 **Hoe het klinkt.** Per track een cue-knop. De cue hoort het signaal VÓÓR de fader
 (na trim, EQ, effect en filter), dus ook een track met de fader dicht. De koptelefoon
 mengt cue en zaal (MIX: links alleen cue, rechts alleen de zaal) op een eigen volume

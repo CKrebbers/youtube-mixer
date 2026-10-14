@@ -184,14 +184,16 @@ try {
   // ======================================================================
   console.log('\nwelk commando, en staat het klaar');
   {
-    const c1 = st.stemsCommando({ VARVE_STEMS_CMD: '/x/nep', VARVE_STEMS_PY: '/y/python', VARVE_MEDIA: '/m' });
-    const c2 = st.stemsCommando({ VARVE_STEMS_PY: '/y/python', VARVE_MEDIA: '/m' });
-    const c3 = st.stemsCommando({ VARVE_MEDIA: '/m' });
+    const c1 = st.stemsCommando({ VARVE_STEMS_CMD: '/x/nep', VARVE_STEMS_PY: '/y/python', VARVE_TESTSERVER: '1' });
+    const c2 = st.stemsCommando({ VARVE_STEMS_PY: '/y/python', VARVE_TESTSERVER: '1' });
+    const c3 = st.stemsCommando({ VARVE_TESTSERVER: '1', VARVE_MEDIA: '/m' });
     const c4 = st.stemsCommando({});
+    const c5 = st.stemsCommando({ VARVE_MEDIA: '/Users/clay/Varve-media' });
     ok('VARVE_STEMS_CMD vervangt het hele commando (geen splits.py erbij)', c1.cmd === '/x/nep' && c1.args.length === 0);
     ok('VARVE_STEMS_PY: die Python met server/stems/splits.py', c2.cmd === '/y/python' && c2.args[0].endsWith('server/stems/splits.py'));
-    ok(`een testserver (VARVE_MEDIA) zonder een van beide: uit, met de reden ("${c3.uit?.slice(0, 50)}…")`, !!c3.uit && /VARVE_STEMS_CMD/.test(c3.uit));
+    ok(`een testserver (VARVE_TESTSERVER=1) zonder een van beide: uit, met de reden ("${c3.uit?.slice(0, 50)}…")`, !!c3.uit && /VARVE_STEMS_CMD/.test(c3.uit));
     ok('anders de venv in ~/.varve/stems-venv', c4.cmd === st.STANDAARD_PY && /\.varve\/stems-venv\/bin\/python$/.test(c4.cmd));
+    ok('alleen VARVE_MEDIA (media buiten iCloud, VI2) is GEEN testserver: de stems blijven aan', !c5.uit && c5.cmd === st.STANDAARD_PY);
     ok('redenUit: de laatste regel die geen info: is, zonder "fout: "', st.redenUit('Traceback\nfout: ZeroDivisionError: x\ninfo: 1 s\n', 1) === 'ZeroDivisionError: x'
       && st.redenUit('', 3) === 'de splitter gaf code 3');
     ok('tijdslimiet: minstens 30 min, een uur album ruim (4× + 10 min)', st.tijdslimiet(60) === 30 * 60000 && st.tijdslimiet(3600) === (600 + 14400) * 1000);
@@ -211,7 +213,7 @@ try {
     ok('daarna wel: nu is hij er', (await sp2.controleer({ hercontrole: true })).ok === true);
     const geen = await new st.Splitter({ env: { VARVE_STEMS_PY: join(map, 'bestaat-niet', 'python') } }).controleer();
     ok(`geen Python op dat pad: de reden zegt hoe je de venv maakt ("${geen.reden.slice(0, 60)}…")`, !geen.ok && /venv/.test(geen.reden) && /bestaat-niet/.test(geen.python));
-    const test = await new st.Splitter({ env: { VARVE_MEDIA: map } }).controleer();
+    const test = await new st.Splitter({ env: { VARVE_TESTSERVER: '1', VARVE_MEDIA: map } }).controleer();
     ok('testserver: uit, zonder iets te starten', !test.ok && /testserver/.test(test.reden));
   }
 
@@ -354,7 +356,7 @@ try {
   const poort = 20000 + Math.floor(Math.random() * 20000);
   const B = `http://localhost:${poort}`;
   const startServer = () => spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'),
+    env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_TESTSERVER: '1', VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'),
       VARVE_PLANNEN: join(map, 'plannen'), VARVE_PROEF: join(map, 'proef'), VARVE_HERANALYSE: 'uit',
       VARVE_STEMS_CMD: nepStems, NEP_STEMS_LOG: log, NEP_STEMS_TRAAG_MS: '600',
       VARVE_YTDLP: maakNepYtdlp(map), NEP_LOG: ytLog, NEP_BRON: ytBron, NEP_TRAAG_MS: '40' },

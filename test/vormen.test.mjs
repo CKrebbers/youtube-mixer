@@ -1,6 +1,7 @@
 // Vormlagen: de Vormmachines als beeldlaag over de video. Zonder browser:
 // een nep-canvas voor de systemen en een nep-WebGL voor de mixer.
 // Draai met: node test/vormen.test.mjs
+// @alleen: tijdsgrens per stap (ms per stap van elk systeem) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import { readFileSync } from 'node:fs';
 
 const { SYSTEMEN, SYSTEEM, draaiKnoppen, maakRng, ACHTERGROND, LUTS } = await import('../src/vormen/systemen.js');
@@ -560,10 +561,12 @@ console.log('het mappingfragment voor de APC');
   ok('elke action in het fragment heeft een uitleg voor het scherm en de APC-kaart', kaal.length === 0);
   if (kaal.length) console.log('      zonder uitleg:', kaal.map((r) => r.action).join(', '));
   // Shift + Detail View is sinds 6 okt het mapje beeld (spoor beeld): een shift-regel,
-  // dus Detail View zelf (zonder shift, wat het fragment gebruikt) blijft vrij.
-  ok('Detail View (zonder shift) was vrij in de standaardmapping; met shift is het het mapje beeld',
-    !std.rules.some((r) => r.in === 'note:0:65' && !r.shift)
-    && std.rules.filter((r) => r.in === 'note:0:65').every((r) => r.shift && !r.laag && r.action === 'layer.device.beeld'));
+  // dus Detail View zelf (zonder shift, wat het fragment gebruikt) blijft vrij. Alleen in
+  // de grid-modus is hij sinds 14 okt ↶ (docs/BEATGRID.md §12): daar wint het open mapje edit.
+  ok('Detail View (zonder shift) was vrij in de standaardmapping buiten de grid-modus; met shift het mapje beeld, in de grid-modus ↶',
+    !std.rules.some((r) => r.in === 'note:0:65' && !r.shift && r.laag !== 'edit.aan')
+    && std.rules.filter((r) => r.in === 'note:0:65' && r.laag !== 'edit.aan').every((r) => r.shift && !r.laag && r.action === 'layer.device.beeld')
+    && std.rules.filter((r) => r.in === 'note:0:65' && r.laag === 'edit.aan').map((r) => r.action).join() === 'track.{focus}.grid.undo');
   ok('device knobs 1–6 = vorm, 7 = dekking, endless (geen overpakken)',
     [16, 17, 18, 19, 20, 21].every((cc, i) => frag.rules.some((r) => r.in === `cc:0:${cc}` && r.action === `video.layer.knob.${i + 1}` && r.mode === 'endless'))
     && frag.rules.some((r) => r.in === 'cc:0:22' && r.action === 'video.layer.opacity' && r.mode === 'endless'));

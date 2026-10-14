@@ -86,7 +86,7 @@ function stukVan(s) {
 }
 
 /** De redenen van twijfel die een stuk kan hebben (tellen.js, TWIJFEL_TEKST). */
-export const TWIJFELS = ['geen puls', 'rubato', 'drift', 'los', 'maat', 'oneens'];
+export const TWIJFELS = ['geen puls', 'rubato', 'drift', 'los', 'maat', 'oneens', 'tel'];
 
 export class Beatgrid {
   /**
@@ -540,15 +540,32 @@ export class Beatgrid {
    * anker: alleen de fase (lijnUitOp), een tempo valt daar niet uit te halen.
    * @returns {{ ok: boolean, reden?: string, bpm?: number, was?: number, tellen?: number, naast?: number, alleenFase?: boolean }}
    */
-  pin(t, { minTellen = 4, maxAfwijking = 0.04 } = {}) {
+  pin(t, { minTellen = 4, maxAfwijking = 0.04, klappen = null } = {}) {
     if (!eindig(t)) return { ok: false, reden: 'geen plek' };
     const i = this._i(t), s = this._stukken[i];
     const L = 60 / s.bpm;
-    const naast = (t - this._roosterTel(s, t)) / L;          // in tellen: hoe ver het grid hier ernaast ligt
-    if (Math.abs(naast) > 0.4) {
+    let naast = (t - this._roosterTel(s, t)) / L;            // in tellen: hoe ver het grid hier ernaast ligt
+    let tellen = Math.round((t - s.anker) / L);
+    // DE KLAPPEN TELLEN MEE (14 okt, BEATGRID.md §12): is het grid hier meer
+    // dan een kwart tel uit de pas, dan kan "de tel hier" ook de buurtel zijn.
+    // Een plaat 0,1% sneller dan het grid ligt na 5 minuten 0,63 tel achter:
+    // dat lijkt 0,37 tel VÓÓR de volgende tel, en vroeger koos vast die, zette
+    // het tempo de verkeerde kant op en meldde "vastgezet". Met klappen
+    // (deck.onsets) kiezen we het aantal tellen waarbij de tellen ertussen op
+    // de klappen vallen, als dat duidelijk beter is; anders het dichtstbij.
+    let geteld = null;
+    if (klappen && klappen.length && Math.abs(naast) > 0.25 && Math.abs(tellen) >= minTellen) {
+      const kandidaten = [tellen - 1, tellen, tellen + 1].filter((n) => n !== 0 && Math.sign(n) === Math.sign(tellen));
+      const scores = kandidaten.map((n) => ({ n, score: raakDeel(klappen, s.anker, (t - s.anker) / n, n) }));
+      scores.sort((a, b) => b.score - a.score);
+      if (scores[0].score >= 0.5 && scores[0].score - (scores[1]?.score ?? 0) >= 0.25) {
+        geteld = scores[0];
+        if (geteld.n !== tellen) { naast += tellen - geteld.n; tellen = geteld.n; }
+      }
+    }
+    if (Math.abs(naast) > 0.4 && !geteld) {
       return { ok: false, naast, reden: `het grid ligt hier ${Math.round(Math.abs(naast) * 100)}% van een tel naast: dan is niet te zeggen welke tel dit is. Zet eerst een pin dichterbij, of schuif met ‹ ›` };
     }
-    const tellen = Math.round((t - s.anker) / L);
     if (Math.abs(tellen) < minTellen) {
       this.lijnUitOp(t);
       this.bevestig(t);
@@ -570,7 +587,7 @@ export class Beatgrid {
     if (t > this._stukken[i].van + EPS && this.splits(t)) {
       this._pas(this.stukIndex(t), (st) => { const d = t - this._roosterTel(st, t); st.anker = t; if (eindig(st.maat)) st.maat += d; delete st.zekerheid; });
     }
-    return { ok: true, bpm: klem(bpm), was, tellen, naast };
+    return { ok: true, bpm: klem(bpm), was, tellen, naast, geteld: geteld ? +geteld.score.toFixed(2) : null };
   }
 
   /**
@@ -641,6 +658,31 @@ export class Beatgrid {
  * de analyse weet waar hij echt zit.
  */
 export const SNAP_VENSTER = 0.03;
+
+/** Zo dicht (s) moet een klap bij een tel liggen om bij vastzetten als "raak" te tellen. */
+export const RAAK_KLAP = 0.015;
+
+/**
+ * Welk deel van de tellen anker + j·L (j = 1 … n−1, hooguit 256 gelijk
+ * verdeeld) heeft een klap binnen RAAK_KLAP? Voor pin(): het juiste aantal
+ * tellen legt ze op de kicks, een tel te veel of te weinig laat ze langzaam
+ * over de maat wegdrijven (en raakt alleen waar ze toevallig een hi-hat treffen).
+ */
+function raakDeel(klappen, anker, L, n) {
+  const m = Math.abs(n);
+  if (m < 2) return 0;
+  const stap = Math.max(1, Math.floor((m - 1) / 256));
+  let raak = 0, totaal = 0;
+  for (let j = 1; j < m; j += stap) {
+    const t = anker + j * Math.sign(n) * L;
+    totaal++;
+    let lo = 0, hi = klappen.length - 1;
+    while (lo < hi) { const k = (lo + hi) >> 1; if (klappen[k] < t) lo = k + 1; else hi = k; }
+    const d = Math.min(Math.abs(klappen[lo] - t), lo > 0 ? Math.abs(klappen[lo - 1] - t) : Infinity);
+    if (d <= RAAK_KLAP) raak++;
+  }
+  return totaal ? raak / totaal : 0;
+}
 export function snapNaarOnset(onsets, t, venster = SNAP_VENSTER) {
   if (!onsets || !onsets.length || !eindig(t)) return t;
   let lo = 0, hi = onsets.length - 1;

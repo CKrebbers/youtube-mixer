@@ -77,12 +77,16 @@ function koppel(nieuw) {
 }
 
 let laatsteKlacht = 0;
+const TITEL = document.title;
 function frame() {
   try {
     const nu = leesApp();
     if (nu !== app) koppel(nu);
     if (app && mixer) {
       mixer.neemOver(app.videoMixer);
+      // Clips uit (het zaalbeeld) in de venstertitel, niet op het doek: daar kijkt de zaal.
+      const titel = mixer.clips === false ? `${TITEL} · alleen eigen beeld` : TITEL;
+      if (document.title !== titel) document.title = titel;
       let rol = app.rolLos(window);
       // Inlopen: eigen video's bijsturen; het beeld zet het hoofdvenster erop.
       // In de pas (of te lang bezig)? Dan meteen zelf mengen.

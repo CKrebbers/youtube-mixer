@@ -1,8 +1,9 @@
 import { createServer } from 'node:http';
 import { createReadStream, createWriteStream, readFileSync, writeFileSync, renameSync } from 'node:fs';
-import { stat, rm } from 'node:fs/promises';
+import { stat, rm, readFile, readdir } from 'node:fs/promises';
 import { join, extname, resolve, relative, isAbsolute, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
 import { ingest, ingestBestand, onderzoek, werkmap, controleerTooling, stappenVoor, YTDLP_GETEST_OP, GEANNULEERD } from './ingest.js';
 import { bekijkLink, ontsmetNaam, BESTAND_EXT } from './links.js';
@@ -11,22 +12,27 @@ import {
   Library, normaliseerGrid, normaliseerToon, moetAnalyse, moetToonAnalyse, autoGridWeigert,
   SORTERING, isSortering, MAX_PER_PAGINA, MAX_HOTCUES,
 } from './library.js';
-import { ZEKER_VANAF } from './analyze.js';
+import { ZEKER_VANAF, OUDE_ANALYSE_VERSIE } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon, maakSecties } from './analyze.js';
 import { toonSamenvatting } from './toon.js';
 import { sectieSamenvatting, SECTIE_VERSIE } from './secties.js';
+import { kiesMedia, iCloudReden, VERHUISD_BESTAND } from './media-plek.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
 import { Patronen, NAAM as SETNAAM } from './patronen.js';
 import { Proef } from './proef.js';
+import { MixerStand, isMelding, vanDezeMac, MAX_BYTES as MIXER_MAX } from './mixer-melding.js';
 import { Splitter, StemsRij, maakStems, wisStemsBestanden, isAantal, isStemsKeuze, STEMS_STANDAARD } from './stems.js';
-import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, TELLEN_BESTAND, TELLEN_VERSIE } from './tellen.js';
+import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, leesTweede, bewaarTweede, TELLEN_BESTAND, TELLEN_VERSIE } from './tellen.js';
 import { gridUitTellen, vergelijk, meetGrid, VERSIE as KAART_VERSIE } from '../src/engine/tellen.js';
 import { Beatgrid } from '../src/engine/beatgrid.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
 import { Kaart, KaartFout, STANDAARD_PAD as KAART_STANDAARD_PAD } from './kaart.js';
-import { Nacht } from './nacht.js';
+import { Nacht, pasToe as nachtPasToe, STANDAARD as NACHT_STANDAARD } from './nacht.js';
+import { Standen, StandFout } from './standen.js';
+import { naamGeldig as standNaamGeldig, NAAM_UITLEG as STAND_NAAM_UITLEG, MAX_BYTES as STAND_MAX_BYTES } from '../src/standen/stand-model.js';
+import { maakAvondpakket, extraPaden } from './avondpakket-meet.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -38,10 +44,15 @@ import { Nacht } from './nacht.js';
 
 const WORTEL = fileURLToPath(new URL('..', import.meta.url));
 const POORT = Number(process.env.PORT) || 8777;
-// Instelbaar voor de tests: zo komt een testserver nooit aan Clay's media/
-// (ook het opruimen van .bezig-mappen bij het opstarten niet — dat wiste
-// anders de werkmap van een ingest die op de echte server liep).
-const MEDIA = process.env.VARVE_MEDIA || join(WORTEL, 'media');
+// De mediamap: VARVE_MEDIA, anders <projectmap>/media, anders (als die na een
+// verhuizing weg is) het pad uit media-VERHUISD.txt (server/media-plek.js, VI2).
+// VARVE_MEDIA mag Clay's map buiten iCloud zijn (~/Varve-media) én de map van
+// een testserver: zo komt een testserver nooit aan Clay's media/ (ook het
+// opruimen van .bezig-mappen bij het opstarten niet — dat wiste anders de
+// werkmap van een ingest die op de echte server liep). Of het een testserver
+// is, zegt alleen VARVE_TESTSERVER=1.
+const MEDIA_KEUZE = kiesMedia({ wortel: WORTEL });
+const MEDIA = MEDIA_KEUZE.map;
 // Opnames en handelingenlogs. Ook de statische /opnames/-paden komen hieruit,
 // anders las een testserver (of een andere opnamemap) uit de projectmap.
 const OPNAMES = process.env.VARVE_OPNAMES || join(WORTEL, 'opnames');
@@ -49,6 +60,8 @@ const OPNAMES = process.env.VARVE_OPNAMES || join(WORTEL, 'opnames');
 const PLANNEN = process.env.VARVE_PLANNEN || join(WORTEL, 'plannen');
 // De speellijst van de Controlekamer (proef/sessie.json, docs/CONTROLEKAMER.md).
 const PROEF = process.env.VARVE_PROEF || join(WORTEL, 'proef');
+// Standen (docs/STANDEN.md): Clay's eigen opstellingen, buiten git. VARVE_STANDEN = een map buiten iCloud.
+const STANDEN = process.env.VARVE_STANDEN || join(WORTEL, 'standen');
 const plannen = new Plannen(PLANNEN);
 /** Patronen per set (docs/PATRONEN.md). Eigen map voor de tests: VARVE_PATRONEN. */
 const patronen = new Patronen(process.env.VARVE_PATRONEN || join(WORTEL, 'patronen'));
@@ -92,7 +105,10 @@ const SERVER_RUN = randomUUID();
  * staat, de stems komen erna.
  */
 // Instelbaar voor de tests: een eigen database en opnamemap, niet de jouwe.
-const DB = process.env.VARVE_DB || join(WORTEL, 'media', 'library.db');
+// Standaard IN de mediamap (tot 11 okt: altijd <projectmap>/media/library.db):
+// zo verhuist de library mee met VARVE_MEDIA, en daarmee ook backups/,
+// kaart.db, nacht.json en stems-rij.json (die staan naast de database).
+const DB = process.env.VARVE_DB || join(MEDIA, 'library.db');
 const splitter = new Splitter();
 // De tellen (Beat This!) en de stems (Demucs) gebruiken allebei de GPU: om de beurt (server/tellen.js).
 const gpu = new GpuSlot();
@@ -161,11 +177,66 @@ let laatstGestreamd = 0;
 const SPEELT_MS = 30 * 1000;
 const speeltDeck = () => Date.now() - laatstGestreamd < SPEELT_MS;
 
+/** De laatste melding van de mixer (docs/COMPANION.md stap 2): alleen in het geheugen. */
+const mixer = new MixerStand();
 const nacht = new Nacht({
   pad: process.env.VARVE_NACHT || join(dirname(DB), 'nacht.json'),
   kaart, speeltDeck,
   haal: (wens) => haalKaartNummer(wens),
   zoek: (sleutel) => kaart.zoek(sleutel),
+});
+
+/*
+ * STANDEN (docs/STANDEN.md; "Opstelling" in de Controlekamer): één bestand per
+ * situatie met beginwaarden. Activeren zet wat de server bezit (mapping, de rem
+ * van de nacht), kijkt na wat hij kan zien (krat, profiel, hub-set) en legt
+ * het master-rack vast voor de mixer. De routes voor mapping en nacht zelf
+ * blijven zoals ze zijn. Lezen van racks/sjablonen.json, de standaardmapping,
+ * avondpakket/profielen.json en de hub-sets gebeurt pas als het nodig is.
+ */
+const standen = new Standen({
+  map: STANDEN, voorbeelden: join(WORTEL, 'tools', 'standen', 'voorbeelden'),
+  lib, nacht, kaart, speeltDeck,
+  valideerNacht: (deel) => nachtPasToe(NACHT_STANDAARD, deel),
+  sjablonen: async () => JSON.parse(await readFile(join(WORTEL, 'racks', 'sjablonen.json'), 'utf8')).racks ?? [],
+  standaardMapping: async () => JSON.parse(await readFile(join(WORTEL, 'mappings', 'apc40mk2.json'), 'utf8')),
+  // null = het avondpakket (spoor draagbaar) is er nog niet; kapotte JSON gooit (dan een waarschuwing).
+  profielen: async () => {
+    let tekst;
+    try { tekst = await readFile(join(WORTEL, 'avondpakket', 'profielen.json'), 'utf8'); } catch (err) { if (err.code === 'ENOENT') return null; throw err; }
+    const j = JSON.parse(tekst);
+    return j?.profielen && typeof j.profielen === 'object' ? j.profielen : {};
+  },
+  // De namen in AV-app-hub/sets (alleen lezen; paden*.json zijn geen sets). null = geen hub op deze machine.
+  hubSets: async () => {
+    try {
+      const map = process.env.VARVE_HUB_SETS || join(homedir(), 'Projects', 'AV-app-hub', 'sets');
+      return (await readdir(map)).filter((f) => f.endsWith('.json') && !f.startsWith('paden')).map((f) => f.slice(0, -5)).sort();
+    } catch { return null; }
+  },
+});
+
+/*
+ * HET AVONDPAKKET (docs/AVONDPAKKET.md): GET /api/avondpakket, "kan ik met deze
+ * tas vertrekken, kan ik hier beginnen". Alleen lezen. De commando's draaien in
+ * kindprocessen met een time-out (server/avondpakket-meet.js); media/ wordt in
+ * dit proces nooit gelezen (find in een kind). Speelt er een deck, dan komt de
+ * laatste stand terug met `bevroren` en wordt er niets duurs gemeten.
+ * VARVE_AVONDPAKKET_NEP=<map>: fixtures in plaats van commando's (tests).
+ */
+const avondpakket = maakAvondpakket({
+  paden: {
+    media: MEDIA, wortel: WORTEL, db: DB, backups: BACKUPS,
+    extra: () => extraPaden({ wortel: WORTEL, kaart: process.env.VARVE_KAART || lib.haal('kaart_pad', null) || KAART_STANDAARD_PAD }),
+  },
+  profielenPad: join(WORTEL, 'avondpakket', 'profielen.json'),
+  backupStand: () => backups.stand(),
+  rijen: () => ({ ingest: wachtrij.lijst(), stems: stemsRij.lijst(), nacht: nacht.stand() }),
+  // De verwachte bestanden alleen opnieuw uit de database als die veranderde (zoals sectieTelling).
+  library: () => ({ sleutel: `${lib.wijzigingen()}:${lib.db.prepare('PRAGMA data_version').get().data_version}`, tracks: () => lib.tracks({}) }),
+  speellijst: () => proef.lees(),   // alleen info: "speellijst 12 van 40" (niet in het oordeel)
+  speeltDeck,
+  nep: process.env.VARVE_AVONDPAKKET_NEP || null,
 });
 
 /**
@@ -188,6 +259,25 @@ const ISOLATIE = {
 const json = (res, code, data) => {
   const body = JSON.stringify(data);
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...ISOLATIE });
+  res.end(body);
+};
+
+/**
+ * JSON met een ETag (sha1 van de body, 16 tekens), en 304 zonder body als de
+ * vrager die ETag al heeft (If-None-Match, ook `W/"…"`, een lijst of `*`).
+ * Voor wat een ander apparaat vaak peilt en zelden verandert: de lichte
+ * wenslijst die de companion elke 5 s vraagt (docs/COMPANION.md). Een gewone
+ * GET zonder If-None-Match krijgt precies wat `json` geeft, plus de ETag.
+ */
+const jsonMetEtag = (req, res, data) => {
+  const body = JSON.stringify(data);
+  const etag = `"${createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
+  const vraag = String(req.headers['if-none-match'] ?? '');
+  if (vraag && vraag.split(',').some((e) => { const x = e.trim().replace(/^W\//, ''); return x === etag || x === '*'; })) {
+    res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-store', ...ISOLATIE });
+    return res.end();
+  }
+  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ETag: etag, ...ISOLATIE });
   res.end(body);
 };
 
@@ -380,12 +470,17 @@ const pct = (x) => (x == null ? '–' : `${Math.round(x * 100)}%`);
  * Het grid uit de tellen van een nummer (tellen.json moet er zijn): de
  * tempokaart (gridUitTellen), getoetst aan een tweede mening (de oude
  * analyse: het grid dat er staat als dat er een van de oude analyse is,
- * anders nu uitgerekend), en bewaard als het mag (autoGridWeigert: nooit over
- * een grid op slot of met de hand bewerkt, tenzij `overHand`/`overSlot`, de
- * knop ↻). Mag het niet, dan meten we het grid dat er staat en zeggen hoe
- * het op de tellen valt. Geeft { ok, kaart?, bewaard?, grid?, reden?, fout? }.
+ * anders de BEWAARDE (tweede-mening.json, zelfde OUDE_ANALYSE_VERSIE),
+ * anders nu uitgerekend en bewaard), en bewaard als het mag
+ * (autoGridWeigert: nooit over een grid op slot of met de hand bewerkt,
+ * tenzij `overHand`/`overSlot`, de knop ↻). Mag het niet, dan meten we het
+ * grid dat er staat en zeggen hoe het op de tellen valt.
+ * `vers`: de oude analyse altijd opnieuw (↻). `achtergrond`: moet de oude
+ * analyse gerekend worden (0,7-4 s per nummer van 3 min, ffmpeg op media/),
+ * dan eerst wachten tot er geen deck meer speelt.
+ * Geeft { ok, kaart?, bewaard?, grid?, reden?, fout?, tweede? }.
  */
-async function pasTellenToe(id, { overHand = false, overSlot = false } = {}) {
+async function pasTellenToe(id, { overHand = false, overSlot = false, vers = false, achtergrond = false } = {}) {
   const track = lib.track(id);
   if (!track) return { ok: false, fout: 'onbekend nummer' };
   const t = await leesTellen(MEDIA, id);
@@ -394,21 +489,42 @@ async function pasTellenToe(id, { overHand = false, overSlot = false } = {}) {
   // Mag het grid toch niet vervangen worden (met de hand, op slot)? Dan geen
   // tweede mening uitrekenen (minuten voor een lange mix): alleen meten.
   const mag = !autoGridWeigert(track.grid, { overHand, overSlot });
-  let ander = null;
-  if (mag && track.grid?.bron === 'auto' && track.grid.methode !== 'tellen') ander = new Beatgrid(track.grid);
+  const t0 = Date.now();
+  let ander = null, tweede = null;
+  if (mag && track.grid?.bron === 'auto' && track.grid.methode !== 'tellen') {
+    // Het grid van de oude analyse dat er stond (bij de ingest gemaakt): ook bewaren, anders rekent een
+    // volgende kaartversie hem opnieuw uit. Niet per se van deze OUDE_ANALYSE_VERSIE: precies het grid
+    // waar vergelijk nu mee werkt, dus dezelfde uitkomst (`uit: 'grid'` in het bestand zegt het).
+    ander = new Beatgrid(track.grid); tweede = 'het grid dat er stond';
+    await bewaarTweede(MEDIA, id, track.grid, OUDE_ANALYSE_VERSIE, { uit: 'grid' });
+  }
   else if (mag) {
-    const a = await analyseer(track);
-    if (a.ok) ander = new Beatgrid(a.grid);
+    const bewaard = vers ? null : await leesTweede(MEDIA, id, OUDE_ANALYSE_VERSIE);
+    if (bewaard) { ander = new Beatgrid(bewaard); tweede = 'bewaard'; }
+    else {
+      if (achtergrond) await zolangErEenDeckSpeelt();
+      const a = await analyseer(lib.track(id) ?? track);
+      if (a.ok) { ander = new Beatgrid(a.grid); tweede = 'uitgerekend'; await bewaarTweede(MEDIA, id, a.grid, OUDE_ANALYSE_VERSIE); }
+    }
   }
   vergelijk(kaart, t.beats, ander);
   const b = lib.bewaarAutoGrid(id, kaart, { overHand, overSlot });
-  if (b.bewaard) console.log(`[tellen] ${track.titel}: ${gridSamenvatting(b.grid)}`);
+  const duur = `${((Date.now() - t0) / 1000).toFixed(1)} s, tweede mening ${tweede ?? 'geen'}`;
+  if (b.bewaard) console.log(`[tellen] ${track.titel}: ${gridSamenvatting(b.grid)}${b.samples ? ` (${b.samples} sampler-pad${b.samples === 1 ? '' : 's'} naar het nieuwe octaaf)` : ''} — ${duur}`);
   else if (track.grid) {
     const m = meetGrid(new Beatgrid(track.grid), t.beats, t.downbeats).totaal;
     console.log(`[tellen] ${track.titel}: niet bewaard (${b.reden}); het grid dat er staat: `
       + `${pct(m.raak)} van de tellen raak, slechtste blok ${ms(m.afwijking)}, "1" ${pct(m.een)}`);
   }
-  return { ok: true, kaart, bewaard: b.bewaard, grid: b.grid, ...(b.reden ? { reden: b.reden } : {}) };
+  return { ok: true, kaart, bewaard: b.bewaard, grid: b.grid, ...(b.reden ? { reden: b.reden } : {}), ...(tweede ? { tweede } : {}) };
+}
+
+/** Wachten (per 2 s kijken) zolang er een deck speelt: werk op de achtergrond mag de decks geen pagina's kosten. */
+let wachtMelding = 0;
+async function zolangErEenDeckSpeelt() {
+  if (!speeltDeck()) return;
+  if (Date.now() - wachtMelding > 60_000) { wachtMelding = Date.now(); console.log('[tellen] er speelt een deck: de oude analyse (tweede mening) wacht'); }
+  while (speeltDeck()) await new Promise((z) => setTimeout(z, 2000));
 }
 
 /*
@@ -464,24 +580,50 @@ const wilTellenGrid = (grid) => !grid
 
 /**
  * Op de achtergrond: elk nummer zonder (actuele) tellen.json de rij in, het
- * laatst geladen eerst (daar speel je mee). Waar de tellen er al zijn maar
- * het grid nog van de oude analyse (of een oudere methode) is: alleen het
- * grid opnieuw, zonder GPU. Met de hand gezette grids en grids op slot
- * blijven staan; die worden alleen gemeten (pasTellenToe zegt hoe ze vallen).
+ * laatst geladen eerst (daar speel je mee). Geeft de nummers waar de tellen
+ * er al zijn maar het grid nog van de oude analyse (of een oudere methode of
+ * kaartversie) is: voor gridsUitTellen. Met de hand gezette grids en grids
+ * op slot blijven staan; die worden alleen gemeten (pasTellenToe zegt hoe ze vallen).
  */
 async function tellenOpAchtergrond() {
   const z = await tellenzoeker.controleer();
-  if (!z.ok) return;
+  if (!z.ok) return [];
   const ids = lib.alleIds({ volgorde: 'laatst_geladen' });
-  let rij = 0, grids = 0;
+  let rij = 0;
+  const grids = [];
   for (const id of ids) {
     const track = lib.track(id);
     if (!track?.audio) continue;
     const t = await leesTellen(MEDIA, id);
     if (!t || t.versie < TELLEN_VERSIE) { tellenRij.voegToe(id); rij++; continue; }
-    if (wilTellenGrid(track.grid)) { await pasTellenToe(id).catch((err) => console.error(`[tellen] ${id}:`, err?.message || err)); grids++; }
+    if (wilTellenGrid(track.grid)) grids.push(id);
   }
-  if (rij || grids) console.log(`[tellen] ${rij} nummer${rij === 1 ? '' : 's'} in de rij, ${grids} grid${grids === 1 ? '' : 's'} uit bestaande tellen`);
+  if (rij || grids.length) console.log(`[tellen] ${rij} nummer${rij === 1 ? '' : 's'} in de rij, ${grids.length} grid${grids.length === 1 ? '' : 's'} uit bestaande tellen`);
+  return grids;
+}
+
+/**
+ * Alleen het grid opnieuw uit tellen.json, zonder GPU, één nummer tegelijk.
+ * Los van de GPU (die gaat meteen open): de oude analyse als tweede mening
+ * komt uit tweede-mening.json, en moet hij gerekend worden (de eerste keer,
+ * of na een OUDE_ANALYSE_VERSIE), dan wacht hij zolang er een deck speelt.
+ */
+async function gridsUitTellen(ids) {
+  const t0 = Date.now();
+  let n = 0;
+  // Eerst wat alleen rekenwerk is (de tweede mening ligt er al): die wachten niet op een deck dat speelt.
+  const goedkoop = new Set();
+  for (const id of ids) {
+    const g = lib.track(id)?.grid;
+    if ((g?.bron === 'auto' && g.methode !== 'tellen') || await leesTweede(MEDIA, id, OUDE_ANALYSE_VERSIE)) goedkoop.add(id);
+  }
+  for (const id of [...ids.filter((x) => goedkoop.has(x)), ...ids.filter((x) => !goedkoop.has(x))]) {
+    const track = lib.track(id);
+    if (!track?.audio || !wilTellenGrid(track.grid)) continue;             // intussen met de hand gezet, of weg
+    await pasTellenToe(id, { achtergrond: true }).catch((err) => console.error(`[tellen] ${id}:`, err?.message || err));
+    n++;
+  }
+  if (n) console.log(`[tellen] ${n} grid${n === 1 ? '' : 's'} uit bestaande tellen klaar — ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
 
 /**
@@ -854,7 +996,7 @@ async function heranalyseOpAchtergrond() {
  * Wat de browser mag ophalen. Een witte lijst in plaats van "alles in de
  * projectmap": anders kon /.git/config of /media/library.db gewoon mee.
  */
-const MAG = [/^\/$/, /^\/(index|video|apc|maschine|plan|controle)\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
+const MAG = [/^\/$/, /^\/(index|video|apc|maschine|plan|controle)\.html$/, /^\/companion\.html$/, /^\/styles\.css$/, /^\/src\//, /^\/mappings\//,
   /^\/racks\//, /^\/media\/[\w-]+\/(audio\.wav|video\.mp4|peaks\.bin|onset\.bin|stems\.wav)$/, /^\/opnames\/set-[\w-]+\.(wav|mp4|webm)$/,
   /^\/plannen\/[\w-]+\.json$/, /^\/favicon\.ico$/];
 
@@ -880,6 +1022,10 @@ function schoonPad(pad) {
   const schoon = '/' + rel.split(sep).join('/') + (d.endsWith('/') && rel ? '/' : '');
   return MAG.some((r) => r.test(schoon)) ? schoon : null;
 }
+
+/** Open Range-verzoeken op een video: hooguit zoveel bytes per antwoord (zie statisch). */
+const VIDEO_KNIP = 2 * 1024 * 1024;
+const VIDEO_PAD = /^\/media\/[\w-]+\/video\.mp4$/;
 
 async function statisch(req, res, pad) {
   const schoon = schoonPad(pad);
@@ -911,6 +1057,14 @@ async function statisch(req, res, pad) {
       let start, eind;
       if (!m[1]) { start = Math.max(0, info.size - parseInt(m[2], 10)); eind = info.size - 1; }   // "de laatste N bytes"
       else { start = parseInt(m[1], 10); eind = m[2] ? Math.min(parseInt(m[2], 10), info.size - 1) : info.size - 1; }
+      // Een OPEN verzoek op een video (bytes=N-) krijgt hooguit VIDEO_KNIP terug
+      // (docs/WINST.md punt 2). Chrome opent hooguit 6 verbindingen per host
+      // (HTTP/1.1), en een <video> die een minuut vooruit buffert houdt er een
+      // vast: met zes zichtbare video's wachtten de audiopagina's van de decks
+      // tot 17 s (stilte). Met de knip vraagt de video zelf het volgende stuk
+      // en komt de verbinding steeds vrij. audio.wav en stems.wav niet: de
+      // StreamBron vraagt altijd een gesloten bereik.
+      if (m[1] && !m[2] && VIDEO_PAD.test(schoon)) eind = Math.min(eind, start + VIDEO_KNIP - 1);
       if (start >= info.size || eind < start) {
         res.writeHead(416, { ...kop, 'Content-Range': `bytes */${info.size}` });
         res.end();
@@ -1118,11 +1272,23 @@ const server = createServer(async (req, res) => {
       return json(res, 405, { fout: 'GET of PUT' });
     }
 
+    // ---- standen (docs/STANDEN.md) ------------------------------------------
+    if (pad === '/api/standen' || pad.startsWith('/api/standen/')) return await standenRoute(req, res, pad, mediatype);
+
     // ---- speellijst van de Controlekamer (docs/CONTROLEKAMER.md) ----------
     // GET /api/backups: wanneer de laatste backup van library.db was, hoeveel er
     // staan, een fout (server/backup.js). Alleen de stand; de kopieën zelf zijn
     // via HTTP nooit te lezen.
     if (pad === '/api/backups' && req.method === 'GET') return json(res, 200, backups.stand());
+    // GET /api/avondpakket?profiel=apc&fase=vertrek|aankomst&vers=1 (docs/AVONDPAKKET.md):
+    // het rapport. Zonder fase: auto. Een onbekend profiel is 200 met het standaardprofiel
+    // en `profielOnbekend` (nooit 400: de Controlekamer rust dan een minuut). `vers=1` (een
+    // klik): opnieuw meten, behalve binnen 2 s; speelt er een deck, dan alleen het goedkope.
+    // `auto=1` (de Controlekamer elke 5 min): uit de cache of alleen het goedkope, nooit meer.
+    if (pad === '/api/avondpakket' && req.method === 'GET') {
+      const q = url.searchParams;
+      return json(res, 200, await avondpakket.rapport({ profiel: q.get('profiel'), fase: q.get('fase'), vers: q.get('vers') === '1', auto: q.get('auto') === '1' }));
+    }
     // GET /api/secties: { totaal, zonder, verouderd, versie }: hoeveel nummers (nog)
     // geen actuele secties hebben (Library.sectieTelling, docs/SECTIES.md §4). De
     // Controlekamer vraagt het elke 2 s; zonder wijziging in de database is het
@@ -1290,7 +1456,7 @@ const server = createServer(async (req, res) => {
       const overSlot = body?.forceer === true;
       // Met tellen (Beat This!) het grid daaruit; zonder de oude analyse, en de tellen vooraan in de rij.
       if (await leesTellen(MEDIA, track.id)) {
-        const t = await pasTellenToe(track.id, { overHand: true, overSlot });
+        const t = await pasTellenToe(track.id, { overHand: true, overSlot, vers: true });
         if (!t.ok) return json(res, 500, { fout: t.fout });
         return json(res, 200, { voorstel: t.kaart, bewaard: t.bewaard, grid: t.grid, methode: 'tellen', ...(t.reden ? { reden: t.reden } : {}) });
       }
@@ -1532,6 +1698,20 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ---- de mixer meldt zich (docs/COMPANION.md stap 2) ----------------
+    // Het tabblad met de Web Lock POST hooguit eens per 900 ms zijn stand; iPad en
+    // iPhone lezen hem. Alleen in het geheugen; schrijven alleen vanaf deze Mac.
+    if (pad === '/api/mixer' && req.method === 'POST') {
+      if (!vanDezeMac(req, POORT)) return json(res, 403, { fout: 'alleen de mixer op deze Mac meldt zich' });
+      // Vóór het lezen: een te grote melding komt er niet in (de vorige blijft staan).
+      if (Number(req.headers['content-length']) > MIXER_MAX) return json(res, 413, { fout: `een melding is hooguit ${MIXER_MAX} bytes` });
+      const body = await leesJson(req, MIXER_MAX);
+      if (!isMelding(body)) return json(res, 400, { fout: 'geen melding van de mixer' });
+      mixer.zet(body, Date.now());
+      return json(res, 200, { ok: true });
+    }
+    if (pad === '/api/mixer' && req.method === 'GET') return json(res, 200, { ...mixer.lees(Date.now()), speelt: speeltDeck() });
+
     // ---- de muziekkaart (docs/KAART.md) ---------------------------------
     if (pad.startsWith('/api/kaart') || pad.startsWith('/api/nacht')) {
       const r = await kaartRoute(req, res, url, pad);
@@ -1540,7 +1720,7 @@ const server = createServer(async (req, res) => {
 
     if (pad.startsWith('/api/')) return json(res, 404, { fout: 'onbekend eindpunt' });
 
-    await statisch(req, res, pad === '/' ? 'index.html' : pad === '/controle' ? 'controle.html' : pad);
+    await statisch(req, res, pad === '/' ? 'index.html' : pad === '/controle' ? 'controle.html' : pad === '/companion' ? 'companion.html' : pad);
   } catch (err) {
     // Eén kapot verzoek mag de server niet meenemen.
     try { json(res, 500, { fout: String(err?.message || err) }); } catch {}
@@ -1571,7 +1751,11 @@ async function kaartRoute(req, res, url, padRuw) {
       }));
     }
 
-    if (pad === '/api/kaart/wensen' && req.method === 'GET') return json(res, 200, { wensen: kaart.wensen() });
+    if (pad === '/api/kaart/wensen' && req.method === 'GET') {
+      // ?licht=1 (de companion, elke 5 s): met ETag, en 304 zolang er niets veranderde (review ronde 2, fix 4).
+      if (url.searchParams.get('licht') === '1') return jsonMetEtag(req, res, { wensen: kaart.wensen({ licht: true }) });
+      return json(res, 200, { wensen: kaart.wensen() });
+    }
 
     if (pad === '/api/kaart/wens' && req.method === 'POST') {
       const body = await leesJson(req, 256 * 1024);
@@ -1625,7 +1809,8 @@ async function kaartRoute(req, res, url, padRuw) {
     if (pad === '/api/nacht/nu' && req.method === 'POST') {
       const body = await leesJson(req);
       try {
-        const run = nacht.nu({ aantal: body?.aantal ?? 1 });
+        // alleenWensen (de companion): alleen de wenslijst, nooit de standaardvolgorde (docs/KAART.md §3).
+        const run = nacht.nu({ aantal: body?.aantal ?? 1, alleenWensen: body?.alleenWensen ?? false });
         // Niet wachten tot hij af is (dat kan uren duren): de stand, met bezig.
         run.catch(() => {});
         return json(res, 202, nacht.stand());
@@ -1636,6 +1821,68 @@ async function kaartRoute(req, res, url, padRuw) {
     return undefined;
   } catch (err) {
     if (err instanceof KaartFout) return json(res, err.code, err.antwoord());
+    throw err;
+  }
+}
+
+/**
+ * De routes van de standen (docs/STANDEN.md). Vaste namen (actief, keuzes,
+ * terug) gaan vóór <naam>; geen stand mag zo heten. Er is geen DELETE: een
+ * stand weghalen = het bestand met de hand verplaatsen (niets weggooien).
+ *   GET  /api/standen                     { standen, actief, label }
+ *   GET  /api/standen/actief              { naam: null } of de actieve stand met het verslag
+ *   GET  /api/standen/keuzes              waaruit de bewerker kiest
+ *   POST /api/standen/terug               de vorige mapping en nacht-rem terug
+ *   GET  /api/standen/<naam>              { stand, versie, bron, fouten, waarschuwingen }
+ *   PUT  /api/standen/<naam>              { stand, versie } → 200 / 400 / 409 / 415
+ *   GET  /api/standen/<naam>/verschil     wat activeren zou veranderen
+ *   POST /api/standen/<naam>/activeer     { ok, naam, sinds, verslag }
+ *   POST /api/standen/<naam>/vastleggen   { versie, behoud? }
+ */
+async function standenRoute(req, res, pad, mediatype) {
+  const alleen = (methode) => json(res, 405, { fout: methode });
+  try {
+    if (pad === '/api/standen') return req.method === 'GET' ? json(res, 200, await standen.overzicht()) : alleen('GET');
+    if (pad === '/api/standen/actief') return req.method === 'GET' ? json(res, 200, await standen.actief()) : alleen('GET');
+    if (pad === '/api/standen/keuzes') return req.method === 'GET' ? json(res, 200, await standen.keuzes()) : alleen('GET');
+    if (pad === '/api/standen/terug') return req.method === 'POST' ? json(res, 200, await standen.terug()) : alleen('POST');
+    const m = /^\/api\/standen\/([^/]+)(?:\/(activeer|verschil|vastleggen))?$/.exec(pad);
+    if (!m) return json(res, 404, { fout: 'onbekend eindpunt' });
+    let naam;
+    try { naam = decodeURIComponent(m[1]); } catch { return json(res, 400, { fout: 'onleesbare naam' }); }
+    if (!standNaamGeldig(naam)) return json(res, 400, { fout: STAND_NAAM_UITLEG });
+    switch (m[2]) {
+      case undefined:
+        if (req.method === 'GET') {
+          const g = await standen.lees(naam);
+          return g ? json(res, 200, g) : json(res, 404, { fout: `geen stand "${naam}"` });
+        }
+        if (req.method === 'PUT') {
+          if (mediatype !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
+          // Te groot volgens de kop: meteen 413 (leesJson zou de verbinding verbreken in plaats van te antwoorden).
+          if (Number(req.headers['content-length']) > STAND_MAX_BYTES + 1024) return json(res, 413, { fout: 'stand te groot (meer dan 64 KiB)' });
+          const body = await leesJson(req, STAND_MAX_BYTES + 1024);
+          if (!body || typeof body !== 'object' || Array.isArray(body) || !body.stand) return json(res, 400, { fout: 'stuur { stand, versie } als JSON (hooguit 64 KiB)' });
+          const r = await standen.schrijf(naam, body.stand, typeof body.versie === 'string' ? body.versie : null);
+          return json(res, r.code, r.antwoord);
+        }
+        return alleen('GET of PUT');
+      case 'activeer':
+        if (req.method !== 'POST') return alleen('POST');
+        return json(res, 200, { ok: true, ...await standen.activeer(naam) });
+      case 'verschil':
+        return req.method === 'GET' ? json(res, 200, await standen.verschil(naam)) : alleen('GET');
+      case 'vastleggen': {
+        if (req.method !== 'POST') return alleen('POST');
+        const body = await leesJson(req, 16 * 1024);
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return json(res, 400, { fout: 'stuur { versie, behoud? } als JSON' });
+        const r = await standen.vastleggen(naam, typeof body.versie === 'string' ? body.versie : null, body.behoud);
+        return json(res, r.code, r.antwoord);
+      }
+    }
+    return json(res, 404, { fout: 'onbekend eindpunt' });
+  } catch (err) {
+    if (err instanceof StandFout) return json(res, err.code, err.antwoord());
     throw err;
   }
 }
@@ -1671,13 +1918,33 @@ for (const sig of ['SIGTERM', 'SIGINT']) {
 // Werkmappen van een ingest of een split die nooit afkwam (server gestopt
 // midden in een download, .bezig-stems-* van een onderbroken split): opruimen.
 // Een goede track of een goede set stems staat nooit in zo'n map. Alleen
-// binnen MEDIA (VARVE_MEDIA voor een testserver).
+// binnen MEDIA (VARVE_MEDIA: Clay's map buiten iCloud, of die van een testserver).
 try {
   const { readdir, rm: weg } = await import('node:fs/promises');
   for (const n of await readdir(MEDIA).catch(() => [])) {
     if (n.startsWith('.bezig-')) await weg(join(MEDIA, n), { recursive: true, force: true });
   }
 } catch (_) {}
+
+// Waar de media en de library staan, en of dat binnen iCloud is (VI2): een
+// uitgeplaatst bestand laat de server bij de eerste lezing hangen tot het hele
+// bestand binnen is (gemeten: 3,9 GB voor een stems.wav; zonder internet nooit).
+{
+  const waarom = {
+    VARVE_MEDIA: 'VARVE_MEDIA',
+    standaard: 'standaard: de projectmap',
+    [VERHUISD_BESTAND]: `uit ${VERHUISD_BESTAND}; zet VARVE_MEDIA`,
+  }[MEDIA_KEUZE.bron];
+  console.log(`[media] ${MEDIA} (${waarom}); library ${DB}`);
+  const plekken = [...new Set([MEDIA, dirname(DB)])];
+  for (const plek of plekken) {
+    const reden = iCloudReden(plek);
+    if (reden) {
+      console.warn(`[media] LET OP: ${plek} ligt binnen iCloud (${reden}). Een uitgeplaatst bestand laat de server `
+        + 'hangen tot het binnen is. Verhuizen: node tools/media-verhuis.mjs (docs/LIBRARY.md "Waar media/ staat")');
+    }
+  }
+}
 
 const tooling = await controleerTooling();
 if (!tooling.ok) console.warn(`[server] LET OP: ${tooling.ontbreekt.join(', ')} ontbreekt — ingest werkt niet`);
@@ -1705,6 +1972,8 @@ await herstelStemsRij().catch((err) => console.error('[stems] de rij van voor de
 server.listen(POORT, '127.0.0.1', () => {
   console.log(`VARVE DJ  ·  http://localhost:${POORT}`);
   for (const naam of EXTRA_HOSTS) console.log(`ook via  ·  https://${naam}  (Tailscale, docs/TAILSCALE.md)`);
+  // Zonder VARVE_HOSTS krijgen iPad en iPhone (Tailscale) een 403: zeg dat hier, anders zie je het pas op de telefoon.
+  if (!EXTRA_HOSTS.size) console.log('alleen op deze Mac  ·  VARVE_HOSTS is leeg: iPad en iPhone krijgen 403 (docs/COMPANION.md)');
   console.log(`library: ${lib.aantalTracks()} nummers  ·  schema v${lib.versie}`);
   console.log(`yt-dlp ${tooling.ytdlp}  ·  ffmpeg ${tooling.ffmpeg ? 'ok' : 'ONTBREEKT'}`);
   // Meteen een backup (in een worker; gooit nooit), daarna elk uur als er iets veranderde.
@@ -1717,7 +1986,9 @@ server.listen(POORT, '127.0.0.1', () => {
   if (her !== 'uit') {
     setTimeout(() => {
       heranalyseOpAchtergrond().catch((err) => console.error('[analyse] achtergrond:', err?.message || err));
-      tellenOpAchtergrond().catch((err) => console.error('[tellen] achtergrond:', err?.message || err))
+      tellenOpAchtergrond()
+        .then((ids) => { gridsUitTellen(ids).catch((err) => console.error('[tellen] grids:', err?.message || err)); })
+        .catch((err) => console.error('[tellen] achtergrond:', err?.message || err))
         .finally(() => gpu.open());
     }, Number.isFinite(Number(her)) && her !== '' && her !== undefined ? Number(her) : 5000);
   }

@@ -1,0 +1,21 @@
+{
+  "versie": 1,
+  "doelen": [
+    { "naam": "proef", "soort": "bestand", "bron": "audio", "beeld": "zwart", "fps": 2,
+      "omschrijving": "geluid + zwart beeld naar ~/Movies/VARVE-uitzend/set-<id>.uitzend.mp4: kijk wat een kijker zou horen" },
+    { "naam": "proef-alles-thuis", "soort": "bestand", "bron": "video", "inhoud": "alles", "bitrate": "2500k",
+      "omschrijving": "mengcanvas + geluid, gehercodeerd zoals voor een dienst (2,5 Mbit/s, keyframe per 2 s)",
+      "waarschuwing": "deck-clips van anderen: alleen thuis (stappenplan I78)" },
+    { "naam": "obs-geluid", "soort": "udp", "bron": "audio", "beeld": "zwart", "fps": 2,
+      "url": "udp://127.0.0.1:25595?pkt_size=1316",
+      "omschrijving": "master na de limiter naar OBS (mediabron, netwerk, deze url); OBS doet beeld, camera en de dienst",
+      "waarschuwing": "OBS kan hiermee naar buiten: rechten zijn dan jouw zaak (docs/UITZENDEN.md §5), setboek na de set" },
+    { "naam": "obs-beeld", "soort": "udp", "bron": "video", "inhoud": "alles", "bitrate": "4000k",
+      "url": "udp://127.0.0.1:25596?pkt_size=1316",
+      "omschrijving": "mengcanvas + geluid naar OBS als laag",
+      "waarschuwing": "deck-clips van anderen: alleen thuis (I78); naar buiten pas met vormen zonder clips (G8)" },
+    { "naam": "lokaal-rtmp", "soort": "rtmp", "bron": "audio", "beeld": "golf",
+      "url": "rtmp://127.0.0.1:1935/live/test",
+      "omschrijving": "naar een ffmpeg -listen 1 op deze Mac: hetzelfde pad als een dienst (zie docs/UITZENDEN.md §6)" }
+  ]
+}

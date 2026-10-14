@@ -22,7 +22,7 @@ const sub = readdirSync(join(cache, shell)).find((d) => existsSync(join(cache, s
 const chromePad = join(cache, shell, sub, 'chrome-headless-shell');
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], { cwd: WORTEL,
-  env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'), VARVE_OPNAMES: join(tmp, 'opn'), VARVE_HERANALYSE: 'uit', VARVE_PATRONEN: join(tmp, 'pat') }, stdio: 'ignore' });
+  env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'), VARVE_OPNAMES: join(tmp, 'opn'), VARVE_HERANALYSE: 'uit', VARVE_PATRONEN: join(tmp, 'pat') }, stdio: 'ignore' });
 const browser = spawn(chromePad, [`--remote-debugging-port=${DEBUG}`, `--user-data-dir=${join(tmp, 'profiel')}`, '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--window-size=1440,900', '--autoplay-policy=no-user-gesture-required',
   // Headless knijpt requestAnimationFrame als de pagina nauwelijks verandert; een zichtbaar tabblad
   // loopt op de schermfrequentie. Zonder deze vlaggen meet je de headless-planner, niet VARVE.

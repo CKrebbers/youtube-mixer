@@ -1,5 +1,5 @@
 import { Engine, DECK_IDS } from '../engine/engine.js';
-import { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, bindBeeld, bindLibrary, invoke, bijInvoke } from '../control/actions.js';
+import { bindEngine, bindVideo, bindApp, bindLagen, bindAuto, bindBeeld, bindLibrary, invoke, bijInvoke, read } from '../control/actions.js';
 import { BLADER_PAGINA } from './library-lijst.js';
 import { Lagen } from '../control/lagen.js';
 import { opzetMapjeBalk } from './mapje-balk.js';
@@ -7,6 +7,7 @@ import { attachKeyboard } from '../control/keyboard.js';
 import { meld, koppelMeldingen } from './meldingen.js';
 import { opzetVideo } from './video-paneel.js';
 import { opzetOpname } from './opname-knop.js';
+import { bewaakVertrek } from './vertrek.js';
 import { opzetLogboek } from './logboek.js';
 import { opzetVensters } from './vensters.js';
 import { opzetSpiegel } from './spiegel.js';
@@ -29,9 +30,10 @@ import { opzetOnderpanelen } from './onderpanelen.js';
 import { opzetMidi } from './midi-opzet.js';
 import { startRenderloop } from './renderloop.js';
 import { tabblad } from './tabblad.js';
-import { startStatusZender } from './status-zender.js';
+import { startStatusZender, eindUitActions } from './status-zender.js';
 import { vormenAan, hubAdres, hubGeweigerd } from './vlag.js';
 import { opzetBovenbalk } from './bovenbalk.js';
+import { opzetRijKlassen } from './rij-klassen.js';
 
 /**
  * Het instappunt van de schermlaag: maakt de engine en zet de modules in
@@ -222,6 +224,8 @@ document.addEventListener('pointerdown', () => { if (engine.ctx.state !== 'runni
 
 // De bovenbalk scrollt opzij als hij tijdens het spelen niet past (bovenbalk.js).
 opzetBovenbalk();
+// De klassen die eerst :has() in styles.css waren (elke tekstwissel restylede ~256 elementen).
+opzetRijKlassen();
 
 const help = document.getElementById('help');
 const toggleHelp = () => help.classList.toggle('hidden');
@@ -311,9 +315,16 @@ beeldMag();
 // Terug uit de bfcache (pagehide stopte de zender): weer starten als het mag.
 window.addEventListener('pageshow', (e) => { if (e.persisted) { beeldMag(); beeld.zet({}, { vanzelf: true }); } });
 
+// Cmd+R of Cmd+W midden in een set: eerst vragen zolang er een track speelt,
+// wacht of laadt, de auto-DJ aan staat of er opgenomen wordt (vertrek.js).
+bewaakVertrek(() => ({ decks: DECK_IDS.map((id) => engine.deck(id)), auto: auto.aan, opname: !!opname.opnemer.bezig }));
+
+// Ook naar de server (POST /api/mixer, hooguit 1 per 900 ms) voor iPad en iPhone (docs/COMPANION.md stap 2).
+const TAB_ID = globalThis.crypto?.randomUUID?.() ?? `tab-${Math.random().toString(36).slice(2, 12)}`;
 startStatusZender({
-  isEerste: statusVanMij,
+  isEerste: statusVanMij, naarServer: true,
   lees: () => ({ snap: engine.snapshot(), midi: midiDelen.midi.status(), audio: engine.ctx.state,
+                 tab: TAB_ID, eind: eindUitActions(read),
                  auto: auto.aan, opname: !!opname.opnemer.bezig, beeld: beeld.status() }),
 });
 

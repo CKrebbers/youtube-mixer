@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VARVE">
+<meta name="theme-color" content="#07090b">
+<title>VARVE companion</title>
+<link rel="stylesheet" href="/src/companion/companion.css">
+</head>
+<body data-tab="nu">
+<!-- De companion (/companion, docs/COMPANION.md): iPad en iPhone naast de laptop.
+     Alleen de server: geen geluid, geen MIDI, geen tabblad-slot. De mixer op de
+     laptop blijft de enige die met de APC praat. -->
+<header class="kop">
+  <span class="brand">VARVE<b>DJ</b></span>
+  <span class="kop-naam">companion</span>
+  <span class="verbinding" id="verbinding" aria-live="polite">verbinden…</span>
+</header>
+
+<main>
+  <section class="paneel" id="kaart" aria-labelledby="h-kaart">
+    <h2 id="h-kaart">Kaart</h2>
+    <div class="wenslijst" id="wenslijst">
+      <p class="wens-kop"><b>wenslijst</b> <span id="wens-telling">…</span></p>
+      <p class="klein" id="nacht-stand"></p>
+      <div class="wens-knoppen">
+        <button class="knop" id="haal-nu" disabled>haal nu</button>
+        <button class="knop let-op" id="speeldag" hidden>vandaag speeldag</button>
+      </div>
+    </div>
+    <div class="zoekbalk">
+      <input class="zoek" id="zoek" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off"
+        spellcheck="false" placeholder="zoek artiest of titel" aria-label="zoek op de kaart">
+      <div class="krat-rij">
+        <select class="krat" id="krat" aria-label="krat"></select>
+        <button class="knop ster" id="ster" aria-pressed="false" title="deze krat bovenaan zetten (op dit apparaat)" disabled>☆</button>
+      </div>
+      <div class="filters" id="filters"></div>
+    </div>
+    <p class="klein" id="lijst-stand"></p>
+    <ul class="lijst" id="lijst"></ul>
+    <div class="lijst-onder">
+      <button class="knop" id="meer" hidden>meer</button>
+      <button class="knop" id="opnieuw" hidden>opnieuw</button>
+    </div>
+  </section>
+
+  <!-- Breed (iPad liggend): nu en beeld samen rechts, en ze blijven staan als de kaart scrolt. Smal: display:contents. -->
+  <div class="rechts">
+    <section class="paneel" id="nu" aria-labelledby="h-nu">
+      <h2 id="h-nu">Nu</h2>
+      <div id="nu-inhoud"><p class="nu-regel">even kijken…</p></div>
+    </section>
+
+    <section class="paneel" id="beeld" aria-labelledby="h-beeld">
+      <h2 id="h-beeld">Beeld</h2>
+      <div id="beeld-inhoud"></div>
+    </section>
+  </div>
+</main>
+
+<nav class="onderbalk" aria-label="tabbladen">
+  <button data-tab="nu" aria-current="page">nu</button>
+  <button data-tab="kaart">kaart</button>
+  <button data-tab="beeld">beeld</button>
+</nav>
+
+<div class="meldingen" id="meldingen" aria-live="polite"></div>
+<script>if (!Object.hasOwn || !('AbortController' in window)) document.body.textContent = 'dit apparaat is te oud: iOS 15.4 of nieuwer nodig';</script>
+<script type="module" src="/src/companion/companion.js"></script>
+</body>
+</html>

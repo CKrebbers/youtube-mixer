@@ -17,8 +17,8 @@ export function backupTegel(b, nu = new Date()) {
     sub: `${n} kopie${n === 1 ? '' : 'ën'}${b.laatste.bytes ? ` · ${(b.laatste.bytes / 1e6).toFixed(1).replace('.', ',')} MB` : ''}` };
 }
 
-/** "14:05" vandaag, "gisteren 22:10", anders "28 sep 22:10". */
-function wanneer(ms, nu) {
+/** "14:05" vandaag, "gisteren 22:10", anders "28 sep 22:10". Ook voor de tegel Avondpakket. */
+export function wanneer(ms, nu) {
   if (!Number.isFinite(ms)) return 'onbekend';
   const d = new Date(ms);
   const tijd = d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });

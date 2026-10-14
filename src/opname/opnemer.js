@@ -18,6 +18,8 @@
  * lossless versie van het geluid.
  */
 
+import { leesWeg } from '../lib/antwoord.js';
+
 /** Wat Chrome kan opnemen, beste eerst. mp4 speelt overal; webm is het vangnet. */
 const VIDEO_TYPES = [
   'video/mp4;codecs=avc1.640028,mp4a.40.2',
@@ -138,6 +140,7 @@ export class Opnemer {
             method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: await data.arrayBuffer(),
           });
           if (!res.ok) throw new Error((await res.json().catch(() => ({}))).fout || `${res.status}`);
+          await leesWeg(res);               // ook gelukt: een ongelezen antwoord blijft in Chrome hangen (WINST.md punt 1)
           this.videoBytes += data.size;
         } catch (err) {
           this.fout = `videostuk kwijt: ${err.message}`;
@@ -180,7 +183,9 @@ export class Opnemer {
           const res = await this.haal(`/api/opname/${id}/stuk?frame=${frame}`, {
             method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: data,
           });
-          if (res.ok) { this.bytes += data.byteLength; return; }
+          // Ook het antwoord van een gelukt stuk lezen: Chrome houdt een ongelezen
+          // antwoord vast, ~400 kB per stuk, dus ~23 MB per minuut opnemen (WINST.md punt 1).
+          if (res.ok) { await leesWeg(res); this.bytes += data.byteLength; return; }
           const j = await res.json().catch(() => ({}));
           laatste = j.fout || `${res.status}`;
           if (j.vol) break;                 // opnieuw proberen helpt niet bij een volle schijf
