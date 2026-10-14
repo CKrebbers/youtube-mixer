@@ -14,6 +14,31 @@ Lees in deze volgorde:
 6. Details van 25 sep (metingen, afwegingen, waarom iets niet hersteld is):
    `docs/verslagen/2026-09-25/` (README = index per spoor).
 
+## 14 OKT: CONTROLLERS ZONDER LAG, EEN BETER BEATGRID, SNELLE WINST (tak `studio/afmaken`)
+
+- **Waar:** `studio/afmaken` = `studio/integratie` + main + de fix-PR's #33/#34/#39/#40 + vijf sporen
+  (`afmaken/controller-invoer`, `-uitvoer`, `beatgrid-analyse`, `beatgrid-bediening`, `winst-snel`). Elk spoor:
+  nulmeting, reparatie, nameting met hetzelfde commando, twee reviewers (regels en bewijs) die opnieuw maten,
+  herstelrondes tot niets blokkerends. Verslagen met elk commando: `docs/verslagen/2026-10-14/<spoor>.md`.
+- **Lag (invoer):** brede `:has()`-regels lieten elk beeld ~256 elementen restylen; MIDI-berichten wachtten
+  daarop. Stijlwerk in rust 180 → 33 ms/s, fader tot geluid gepland p50 4,2 → 0,8 ms, via de hub 6,6 → 1,2 ms;
+  shift/mapjes 6 → 1,4 ms in het bericht. `tools/headless/latentie.mjs`.
+- **Lag (uitvoer):** druk → lampje via de hub p50 ~51 → ~6 ms; LED-tik 454 → 45 µs; mapje → laatste lampje
+  56 → 11 ms. Echofilter alleen voor CC: 13% van de drukken/loslaten op een knipperende knop viel weg, nu 0.
+  `tools/headless/led-vertraging.mjs`, `tools/bench/feedback.mjs`. Hub-patch (alleen tekst) in het verslag.
+- **Beatgrid-analyse:** benchmark met bekende antwoorden (`tools/beatmeting/synth/`, 21 nummers × 8 soorten
+  Beat This!-fouten). Tellen-route: vals zeker 1 → 0, op het DJ-tempo 52 → 95%, echt octaaf 58 → 85%. Kaart-VERSIE 2:
+  de eerste start rekent automatische grids één keer opnieuw (VRAGEN GA).
+- **Beatgrid-bediening:** vast (pin) bij 0,1% drift goed i.p.v. 579 ms naast; nudge vasthouden herhaalt;
+  ← 1, tellen hier, ✓, ↶ op de APC (grid-modus); druk → grid op de server gemiddeld 707 → 212 ms.
+- **Snelle winst (docs/WINST.md):** opname lekte 26,6 MB/min (nu 0,2 na GC); video verdrong de audio (p90 4,1 s
+  → 0,04 s); UV_THREADPOOL_SIZE=16; Cmd+R vraagt eerst; tests in een pool (533 → 261 s).
+- **Ontwerpen:** `docs/WERKRUIMTE.md` (de werkruimte: APC breed, Maschine diep, acht delen; bouwplan in golven,
+  vragen W1–W3) en `docs/WINST.md` (top-10).
+- **Getest:** `node test/alles.mjs` 102 bestanden, 9061 checks; rood alleen renderblok "keylock met wissels" en
+  wachtrij "yt-dlp en zijn kind" (2×), die in de Linux-container ook op main rood zijn. **Niet getest:** alles op
+  de echte APC, Maschine, Scarlett en Clay's Chrome/M1; het echte Beat This! (container mocht het model niet halen).
+
 ## 11 OKT: MEDIA BUITEN ICLOUD EN DE UITGANGEN-ZIN (VI1 + VI2, tak `studio/media-buiten-icloud`)
 
 - **VI1:** `CLAUDE.md` ("Gekozen aanpak") en `docs/ONTBREEKT.md` D1: geen distributie van de cache; een
