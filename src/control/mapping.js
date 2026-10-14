@@ -135,6 +135,12 @@ export function controleerRegel(r) {
  * De combi-aanhaker zet `maatgever` (engine.syncMaster()). Een variabele die
  * de aanroeper zelf meegeeft (vars) gaat altijd voor.
  */
+/**
+ * Drukknoppen (mode druk) die een doel nu vasthouden, GEDEELD door alle Mappings (APC en
+ * Maschine op hetzelfde doel): de eerste stand telt, terug pas bij de laatste loslating.
+ */
+const DRUK_DOEL = new Map();
+
 const VARIABELEN = new Map();
 let variabelenVersie = 0;
 export function zetVariabele(naam, fn) {
@@ -572,7 +578,7 @@ export class Mapping extends Emitter {
     this.extra = new Map();     // bron -> regels die erbij komen maar niet van jou zijn (voegToe)
     this.basis = null;          // de standaard waar je eigen verschil op rust: { doc, vingerafdruk }
     this._latch = new Map();    // regelsleutel|doel -> de stand van vóór (latch en lang)
-    this._drukDoel = new Map(); // doel -> { oud, n }: drukknoppen (druk) die dit doel nu vasthouden
+    this._drukDoel = DRUK_DOEL; // doel -> { oud, n }: drukknoppen (druk) die dit doel nu vasthouden, over alle Mappings
     this._nietWaarde = new Set(); // doelen waarvan al gemeld is dat druk/latch er niets doet
     this._als = { versie: -1, per: new Map(), namen: [] };
   }
@@ -769,7 +775,11 @@ export class Mapping extends Emitter {
     this.shiftSig = typeof doc.shift === 'string' ? doc.shift : null;
     this.shift = false;
     // Een houd-knop die nog vastzit krijgt na het laden geen loslaten meer: zijn mapje nu dicht (S4).
-    for (const v of this.vast.values()) if (v.target.startsWith('layer.houd.')) this._doe(v.target, false, v.wie);
+    // Idem een drukknop: terug naar zijn stand (anders blijft de telling op dat doel voorgoed staan).
+    for (const v of [...this.vast.values()]) {
+      if (v.target.startsWith('layer.houd.')) this._doe(v.target, false, v.wie);
+      else if (KNOPMODI.has(v.rule.mode)) this._knopLos(v);
+    }
     this.vast.clear();
 
     this.name = doc.name || 'naamloos';

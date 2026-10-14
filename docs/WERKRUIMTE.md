@@ -1043,6 +1043,28 @@ gevallen), `docs/werkruimte/S4.md`.
 - Stukken: 0 botsingen met de standaard; elke action bestaat en heeft een uitleg; zonder deze
   velden is elke bestaande mappingtest groen.
 
+**Gebouwd (14 okt, tak `werk/S4`, `docs/werkruimte/S4.md`).** Clay koos (14 okt): hij bepaalt zelf
+welke effecten, worpen, superknoppen en racks er zijn; S4 bouwde het mechaniek, met per soort
+hooguit één voorbeeld. Wat anders werd dan hierboven:
+- Geen grote standaardindeling: het enige voorbeeld is superknop 1 "dub (voorbeeld)" (zonder knop
+  erop) en de twee stukken zoals beschreven. Zonder werkruimte (of `?stukken=` voor één pagina)
+  verandert er aan de knoppen niets.
+- `mapping.lagen`/`mapping.vars` zijn een getter/setter geworden (de houd-mapjes ervoor, de
+  variabelen van buiten erbij); een lezer terugzetten zet zijn bron terug (apc-kaart.js).
+  `{maatgever}` = `engine.maatgever()` (wat je hoort), niet `syncMaster()`; hij staat alleen in
+  `vars()` van een mapping die hem gebruikt.
+- Druk/latch alleen op een value-action (met `metaOf`); twee drukknoppen op één doel: de eerste
+  stand telt. Stappen naar een `.fwd`/`.back` die niet bestaat doet niets.
+- Houd-register telt per apparaat en mapje (twee knoppen van één apparaat); de eigenaar staat bij
+  het indrukken vast; een andere mapping laden sluit wat die mapping vasthield.
+- Bus-racks: alleen de eigen echo en galm, plus racks met `"bus": true` in `racks/sjablonen.json`
+  (een gewoon insert-rack klinkt op een natte bus droog). Nog geen enkel sjabloon heeft dat: Clay kiest.
+- Solo per stem telt per stem; `fx.mix.hold` zet niet terug na een rackwissel (zoals drukknop()).
+- `zetStuk(doc, { mapping, voegMapjeToe, herbind })` in acties-combi.js zet één stuk (mapjes, dan
+  het fragment `stuk:<naam>`); S3 kan hem gebruiken of zijn eigen doen.
+- Open voor anderen: feedback.js kent de condities van `als` niet in de sleutel van het LED-plan
+  (één regel, `m._alsStand?.()`); regels.test.mjs kent `control/houd.js` nog niet als pure module.
+
 ---
 
 #### S5 — Mapping per apparaat, koppelen overal, toetsenbord als data, Maschine-ijkproef (golf 2)

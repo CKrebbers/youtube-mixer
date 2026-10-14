@@ -142,6 +142,13 @@ console.log('mapping: druk, latch, lang, stappen');
   ok('twee drukknoppen op één doel: de eerste loslaten zet niet terug', stand['track.1.send.a'] === 0.8);
   m.handle(note(61, false));
   ok('… de laatste wel, naar de stand van vóór de eerste (0,5)', stand['track.1.send.a'] === 0.5);
+  // Een andere mapping laden terwijl een drukknop vastzit (review ronde 2): terug, en de telling leeg.
+  const regelsNu = m.toJSON();
+  m.handle(note(60, true));
+  m.load(regelsNu);
+  ok('load() terwijl een drukknop vastzit: het doel gaat terug', stand['track.1.send.a'] === 0.5);
+  m.handle(note(60, true)); m.handle(note(60, false));
+  ok('… en daarna werkt de drukknop weer gewoon (geen telling die blijft hangen)', stand['track.1.send.a'] === 0.5);
   stand['track.1.send.a'] = 0.3;
 
   ok('toJSON: de nieuwe velden gaan mee (naar, lang, codering)', (() => {
