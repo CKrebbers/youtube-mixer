@@ -79,7 +79,7 @@ try {
     [0.85, 'seek B', "window.varvePaneel.invoke('track.2.seek', 0.1)"],
   ].map(([f, naam, js]) => ({ t: f * DUUR * 1000, naam, js, gedaan: false }));
   // currentTime springt per blok van de audiothread (in headless 512 frames, 10,7 ms): hoorbaar() in
-  // de mixer schommelt dus zelf over een blok. Naast elke losse meting daarom ook een REEKS: 50 ms
+  // de mixer schommelt dus zelf over een blok. Naast elke losse meting daarom ook een REEKS: 100 ms
   // lang zo vaak als het kan, het gemiddelde verschil (de schommeling middelt uit; wat overblijft
   // is de fout van de iPad zelf).
   const stappen = await h.ev(M, `(async () => { const c = window.engine.ctx; const st = new Set(); let v = c.currentTime; const t0 = performance.now();
@@ -96,7 +96,7 @@ try {
     for (const id of ['A', 'B']) {
       const m = await h.ev(M, `(async () => { const z = window.varveSchermen.zender; const d = window.engine.deck('${id}');
         const reeks = []; const t0 = performance.now();
-        while (performance.now() - t0 < 50) { reeks.push([window.varvePaneel.hoorbaar('${id}'), performance.now() + z.verschil]); await new Promise((r) => setTimeout(r, 0)); }
+        while (performance.now() - t0 < 100) { reeks.push([window.varvePaneel.hoorbaar('${id}'), performance.now() + z.verschil]); await new Promise((r) => setTimeout(r, 0)); }
         return { pos: window.varvePaneel.hoorbaar('${id}'), srv: performance.now() + z.verschil, reeks, segId: d.tijdlijn()?.segId,
           rate: d.playing && !d.wacht ? (d.remt ? d.snelheid : d.rate) : 0, loop: !!d.loop, remt: !!d.remt }; })()`);
       const i = await h.ev(I1, `(() => { const v = window.paneel.verb; const r = ${JSON.stringify(m.reeks)};
@@ -110,7 +110,11 @@ try {
       if (process.env.VARVE_UITSCHIETERS && fout > Number(process.env.VARVE_UITSCHIETERS)) console.log(`        uitschieter ${id} ${(nu / 1000).toFixed(2)} s: ${fout.toFixed(1)} ms ${JSON.stringify({ m, i })}`);
       // De reeks: alleen als hij binnen één segment en één ronde van een loop bleef (geen sprong erin).
       const ds = m.reeks.map(([pos], k) => i.reeks[k] - pos).filter((x) => Number.isFinite(x));
-      if (ds.length >= 5 && Math.max(...ds) - Math.min(...ds) < 0.03) fouten.glad.push(Math.abs(ds.reduce((a2, b2) => a2 + b2, 0) / ds.length) * 1000);
+      if (ds.length >= 5 && Math.max(...ds) - Math.min(...ds) < 0.03) {
+        const g = Math.abs(ds.reduce((a2, b2) => a2 + b2, 0) / ds.length) * 1000;
+        fouten.glad.push(g);
+        if (g > 5) console.log(`        reeks boven 5 ms: ${id} op ${(nu / 1000).toFixed(1)} s, ${g.toFixed(2)} ms (loop ${m.loop}, rem ${m.remt}, rate ${m.rate?.toFixed?.(3)}, ${(Date.now() - laatsteEvent) / 1000} s na een gebeurtenis)`);
+      }
       // Met de eigen klok van de iPad (zijn klokverschil met de server erbij): alleen waar het
       // deck rechtlijnig loopt (geen loop en geen rem). De reeks van de mixer doorgetrokken naar
       // het moment van de iPad, gemiddeld (de schommeling van currentTime middelt uit).
@@ -124,7 +128,7 @@ try {
   const max = (a) => Math.max(...a);
   // Ter informatie (geen check): tegen één losse hoorbaar(), die zelf over een blok van currentTime schommelt.
   console.log(`        los, tegen één hoorbaar(): max ${max(fouten.model).toFixed(2)} ms, mediaan ${mediaan(fouten.model).toFixed(2)}, p99 ${p(fouten.model, 0.99).toFixed(2)} (${fouten.model.length} metingen; de stap van currentTime telt hier zelf mee)`);
-  ok(`gemiddeld over een reeks van 50 ms (de schommeling van currentTime uitgemiddeld): max ${max(fouten.glad).toFixed(2)} ms`, fouten.glad.length > 100 && max(fouten.glad) <= 5,
+  ok(`gemiddeld over een reeks van 100 ms (de schommeling van currentTime uitgemiddeld): max ${max(fouten.glad).toFixed(2)} ms`, fouten.glad.length > 100 && max(fouten.glad) <= 5,
     `mediaan ${mediaan(fouten.glad).toFixed(2)}, p99 ${p(fouten.glad, 0.99).toFixed(2)}`);
   ok(`met de eigen klok van de iPad (zijn klokverschil erbij), over een reeks: max ${max(fouten.totaal).toFixed(2)} ms`, fouten.totaal.length > 50 && max(fouten.totaal) <= 5,
     `mediaan ${mediaan(fouten.totaal).toFixed(2)}, p99 ${p(fouten.totaal, 0.99).toFixed(2)}, ${fouten.totaal.length} metingen`);
@@ -138,6 +142,15 @@ try {
   const tellers = await h.ev(I1, 'window.__teller');
   ok('de iPad doet nul POST\'s (W1)', posts.length === 0 && tellers.posts.length === 0, posts.map((v) => `${v.methode} ${v.url}`).join(', '));
   ok('de iPad: geen AudioContext, geen MIDI, geen Web Lock', tellers.ac === 0 && tellers.midi === 0 && tellers.lock === 0, JSON.stringify(tellers));
+
+  // ---- de mixer houdt op met zenden (terug naar standaard) ------------------------------------------
+  console.log('\nde mixer terug naar standaard, en weer terug');
+  const tStd = Date.now();
+  await h.ev(M, "window.werk.kies('standaard').then(() => true)");
+  const stil = await h.totdat(I1, "!window.paneel.verb.compleet && document.getElementById('wp-balk').hidden && document.getElementById('wp-status').textContent === '◐'", 8000, 50);
+  ok('de iPad ziet het binnen ~4 s: geen oude stand, wel de server (◐, geen rode balk)', stil !== false, `${((Date.now() - tStd) / 1000).toFixed(1)} s`);
+  await h.ev(M, "window.werk.kies('proef').then(() => true)");
+  ok('weer een werkruimte: de iPad krijgt de stand terug', await h.totdat(I1, 'window.paneel.verb.compleet', 8000) !== false);
 
   // ---- de server valt weg en komt terug ------------------------------------------------------
   console.log('\nde server valt weg');

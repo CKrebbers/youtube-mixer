@@ -51,7 +51,9 @@ export function bind(root) {
   const knobs = [], faders = [];
   root.querySelectorAll('.knob').forEach((el) => { if (!knobVan.has(el)) knobs.push(new Knob(el)); else knobs.push(knobVan.get(el)); });
   const lossers = bindButtons(root);
-  root.querySelectorAll('input[type=range][data-action]').forEach((el) => {
+  // Ook een fader van een paneel die (nog) geen action heeft (een {maatgever} zonder maatgever):
+  // hij krijgt er later een en leest hem bij elke beweging opnieuw.
+  root.querySelectorAll('input[type=range][data-action], input[type=range].vp-fader').forEach((el) => {
     if (el.dataset.gebonden) { faders.push(el); return; }
     el.dataset.gebonden = '1';
     bindFader(el);

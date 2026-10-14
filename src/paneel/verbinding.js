@@ -189,6 +189,7 @@ export class ServerVerbinding extends Emitter {
     if (this._herping) { this._herping = false; this.ping().catch(() => {}); }
     if (b?.t) this.stats.soorten[b.t] = (this.stats.soorten[b.t] ?? 0) + 1;
     if (b?.t === 'hb') { if (this.compleet) this._zetVerbonden(true); return; }
+    if (b?.t === 'weg') { this.stand = legeStand(); this.compleet = false; this._zetVerbonden(false); return; }
     if (b?.t === 'stand') this.stats.standBytes = data.length;
     if (b?.t === 'tijdlijn' && this.stats.tijdlijnen.length < 500) this.stats.tijdlijnen.push(`${b.deck}:${b.tl?.segId}:${b.tl?.gridVersie}:${b.tl?.wacht ? 1 : 0}:${b.tl?.remt ? 1 : 0}`);
     if (b?.t === 'stand') { this.compleet = true; this.stats.standen++; }
@@ -233,7 +234,8 @@ export class ServerVerbinding extends Emitter {
   nu() { return this._nu(); }
   meld() {}
   werk() { return this._w; }
-  werkSleutel() { return `${this._versie}`; }
+  /** Alleen de opbouw (werkruimte, deel, versie): focus, mapjes en shift bouwen de vakken niet opnieuw. */
+  werkSleutel() { const w = this._w; return w ? `${w.naam}:${w.deel}:${w.versie}:${this.stats.standen}` : ''; }
   kaart() { return this._w?.kaart ?? null; }
 
   /** Wat je NU van deck `id` hoort (tracktijd), op serverklok `srv`: hoorbaar.js op het segment. */

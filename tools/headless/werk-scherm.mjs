@@ -13,6 +13,7 @@
 // een EIGEN server met VARVE_TESTSERVER=1 en alle data in een tijdelijke map.
 //
 // Gebruik:  node tools/headless/werk-scherm.mjs [uitmap]
+//           node tools/headless/werk-scherm.mjs --meet [--sec 6]   (wat S7 de mixer kost, vier standen)
 // Poorten:  VARVE_KIJK_POORT (server, standaard 8960) en VARVE_KIJK_DEBUG (DevTools, 8961).
 // Chrome:   VARVE_CHROME (als root: een wrapper met --no-sandbox), anders de headless shell van Playwright.
 import { spawn, execFileSync } from 'node:child_process';
@@ -347,6 +348,15 @@ async function proef() {
     ok('werk.html volgt het deel (uitlijn: de uitlijnweergave)', await h.totdat(W, "document.getElementById('wp-deel').textContent === 'UITLIJN' && document.querySelector('.wp-vak-uitlijn .ul')", 5000) !== false);
     await foto(W, 'werk-scherm-mac2.png');
 
+    // Plaatsing: het venster schrijft zijn plek (elke 2 s), de mixer leest hem bij "open schermen".
+    ok('het venster onthoudt zijn plek (localStorage varve.scherm.mac-2)', await h.totdat(M, "JSON.parse(localStorage.getItem('varve.scherm.mac-2') || 'null')?.wW > 0", 5000) !== false);
+    const voorOpen = [...h.sessies.values()].filter((x) => x.url.includes('werk.html')).length;
+    await h.ev(M, "window.varveSchermen.openScherm('mac-2').then(() => true)");
+    await wacht(800);
+    const naOpen = [...h.sessies.values()].filter((x) => x.url.includes('werk.html')).length;
+    ok('"open schermen" met het venster al open: geen tweede venster', naOpen === voorOpen, `${voorOpen} -> ${naOpen}`);
+    ok('de knop "open schermen" staat op de werk-balk', await h.ev(M, "!!document.querySelector('#werk-balk .werk-schermen')"));
+
     // Geen geluid, geen MIDI, geen Web Lock in werk.html; nul POST's van werk.html zelf.
     const t = await h.ev(W, 'window.__teller');
     ok('werk.html: geen AudioContext, geen requestMIDIAccess, geen Web Lock', t.ac === 0 && t.midi === 0 && t.lock === 0, JSON.stringify({ ac: t.ac, midi: t.midi, lock: t.lock }));
@@ -364,4 +374,52 @@ async function proef() {
   process.exit(fout.length ? 1 : 0);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) proef().catch((e) => { console.error(e); process.exit(1); });
+/**
+ * --meet: wat S7 de mixer kost (hoofdthread, Performance.getMetrics, ms per s), acht tracks spelend,
+ * in vier standen na elkaar: standaard · proef met een paneel in het werkvak · + mac-2 als venster
+ * (dezelfde thread) · + een iPad-kijker (de zender zendt). Elke stand `sec` seconden, na 2 s inlopen.
+ */
+async function meet() {
+  const poort = Number(process.env.VARVE_KIJK_POORT) || 8960, debug = Number(process.env.VARVE_KIJK_DEBUG) || 8961;
+  const sec = Number(process.argv[process.argv.indexOf('--sec') + 1]) || 6;
+  const h = await harnas({ poort, debug, naam: 'werk-meet' });
+  const uit = [];
+  try {
+    const M = await h.nieuwePagina(`${h.basis}/?werk=standaard`);
+    await mixerKlaar(h, M, { tracks: 2, spelen: false });
+    await h.ev(M, `(async () => { const e = window.engine; const { renderDemoTrack } = await import('/src/analysis/demo-track.js');
+      const ids = 'CDEFGH'; for (let k = 0; k < 6; k++) { const d = e.deck(ids[k]); await d.laadGeheugen(renderDemoTrack(e.ctx, { bpm: 124, bars: 64, seed: k + 2 }), 'demo ' + (k + 3));
+        d.setGrid({ stukken: [{ van: 0, bpm: 124, anker: 0, zekerheid: 0.9 }], slot: true }); }
+      for (const id of 'ABCDEFGH') e.deck(id).play(); return true; })()`);
+    const metriek = async () => Object.fromEntries((await h.cdp('Performance.getMetrics', {}, M)).metrics.map((m) => [m.name, m.value]));
+    const stand = async (naam) => {
+      await wacht(2000);
+      const a = await metriek(); const t0 = Date.now();
+      await wacht(sec * 1000);
+      const b = await metriek(); const dt = (Date.now() - t0) / 1000;
+      const r = (k) => (((b[k] - a[k]) * 1000) / dt);
+      const rij = { naam, taak: r('TaskDuration'), script: r('ScriptDuration'), stijl: r('RecalcStyleDuration'), opmaak: r('LayoutDuration') };
+      uit.push(rij);
+      console.log(`| ${naam} | ${rij.taak.toFixed(1)} | ${rij.script.toFixed(1)} | ${rij.stijl.toFixed(1)} | ${rij.opmaak.toFixed(1)} |`);
+    };
+    console.log(`| stand (8 tracks spelend, ${sec} s) | taak ms/s | script ms/s | stijl ms/s | opmaak ms/s |\n|---|---|---|---|---|`);
+    await stand('standaard');
+    await h.ev(M, "window.werk.kies('proef').then(() => true)");
+    await h.totdat(M, "window.varveSchermen.werkvak()?.startsWith('paneel:vier')", 8000);
+    await stand('proef: paneel in het werkvak');
+    await h.ev(M, "window.open('werk.html?s=mac-2', 'varve-werk-mac-2', 'popup,width=1280,height=760') && true");
+    const W = await h.sessieVan('werk.html');
+    await h.totdat(W, "document.querySelectorAll('.vp-item').length", 10000);
+    await stand('+ mac-2 (paneel, kaart, stand)');
+    const I = await h.nieuwePagina(`http://127.0.0.1:${poort}/werk.html?s=ipad`, { context: true, breed: 1024, hoog: 1366, mobiel: true });
+    await h.totdat(I, 'window.paneel?.verb?.compleet', 10000);
+    await stand('+ een iPad-kijker (de zender zendt)');
+    const z = await h.ev(M, 'window.varveSchermen.zender.stats');
+    console.log(`zender: ${JSON.stringify(z)}`);
+  } finally { await h.stop(); }
+  return uit;
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  (process.argv.includes('--meet') ? meet().then(() => process.exit(0)) : proef()).catch((e) => { console.error(e); process.exit(1); });
+}

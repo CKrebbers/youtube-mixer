@@ -235,6 +235,8 @@ async function schermLabel() {
 let plekSleutel = '';
 async function onthoudPlek() {
   if (verb.soort !== 'opener') return;
+  // Bij de mixer aanmelden (na het herladen van de mixer weet "open schermen" zo dat dit venster er is).
+  try { window.opener?.varvePaneel?.meldAan?.(scherm, window); } catch (_) {}
   const s = window.screen;
   const plek = { x: window.screenX, y: window.screenY, wW: window.outerWidth, wH: window.outerHeight,
     left: s.availLeft ?? 0, top: s.availTop ?? 0, w: s.width, h: s.height };

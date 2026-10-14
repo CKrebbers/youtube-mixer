@@ -19,7 +19,7 @@
  *
  * Regel 3: de timer zegt alleen WANNEER er gekeken wordt; posities gaan als segment mee.
  */
-import { BUNDEL_MS, KLOK_MS, KLOK_SPRONG_MS, PING_RONDJES, rond, readsVerschil, tijdlijnKlein, tijdlijnSleutel, besteMeting, klokVerschil } from '../paneel/protocol.js';
+import { MAX_POST, BUNDEL_MS, KLOK_MS, KLOK_SPRONG_MS, PING_RONDJES, rond, readsVerschil, tijdlijnKlein, tijdlijnSleutel, besteMeting, klokVerschil } from '../paneel/protocol.js';
 import { leesWeg } from '../lib/antwoord.js';
 
 export const VRAAG_MS = 1000;
@@ -30,8 +30,8 @@ const WERK_MS = 250;
 
 export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => globalThis.fetch(...a),
   nu = () => globalThis.performance.now(), setInterval: si = (...a) => globalThis.setInterval(...a),
-  clearInterval: ci = (...a) => globalThis.clearInterval(...a), ctx = null } = {}) {
-  const stats = { posts: 0, vragen: 0, berichten: 0, tijdlijnen: 0, standen: 0, fouten: 0, bytes: 0 };
+  clearInterval: ci = (...a) => globalThis.clearInterval(...a), ctx = null, meld = null } = {}) {
+  const stats = { teGroot: 0, posts: 0, vragen: 0, berichten: 0, tijdlijnen: 0, standen: 0, fouten: 0, bytes: 0 };
   let kijkers = 0;
   let moetStand = true;
   let bezig = false;
@@ -47,6 +47,12 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
 
   const post = async (berichten) => {
     const body = JSON.stringify({ tab, berichten });
+    if (body.length > MAX_POST) {
+      // De server breekt dit af; elke seconde opnieuw proberen helpt niet. Eén melding.
+      stats.teGroot++;
+      if (stats.teGroot === 1) meld?.(`schermen: wat de mixer naar de iPad stuurt is te groot (${Math.round(body.length / 1024)} kB, hooguit ${MAX_POST / 1024} kB): minder panelen of kortere`);
+      throw new Error('te groot');
+    }
     stats.bytes += body.length;
     const r = await f('/api/paneel/van-mixer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
     stats.posts++;
@@ -162,10 +168,7 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
       // Een meting van de klok per tik (voor de beste van de laatste seconde).
       const c = ctx?.();
       if (c) {
-        const ctxT = c.currentTime, perf = nu();
-        const o = c.getOutputTimestamp?.();
-        const uit = o && o.performanceTime > 0 ? o.contextTime + (perf - o.performanceTime) / 1000 : null;
-        metingen.push({ ctx: ctxT, perf, uit });
+        metingen.push({ ctx: c.currentTime, perf: nu() });
         if (metingen.length > 50) metingen.shift();
       }
       if (n - laatstePing >= PING_MS) { laatstePing = n; await ping(); }
@@ -174,6 +177,7 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
       stats.berichten += lijst.length;
       const d = await post(lijst);
       kijkers = d.kijkers ?? 0;
+      if (d.genegeerd) { kijkers = 0; laatstGevraagd = nu(); }   // een ander tabblad telt nog: terug naar 1×/s vragen
       if (d.vers === false || d.genegeerd) moetStand = true;
     } catch (_) {
       // De server is weg (of antwoordt raar): terug naar 1×/s vragen, en straks eerst een stand.

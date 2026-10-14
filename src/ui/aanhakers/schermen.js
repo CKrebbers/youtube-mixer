@@ -89,7 +89,7 @@ export default async function opzet(ctx) {
     const lijst = apparaten();
     const vs = varsNu().s;
     let anders = badgeSleutels.length !== lijst.length + 1 || badgeSleutels[0] !== vs;
-    const maps = lijst.map((a) => a.mapping.actieveRegels());
+    const maps = lijst.map((a) => a.mapping.actieveRegels({ shift: false }));   // shift wisselt bij elke druk: niet elke keer opnieuw
     if (!anders) for (let i = 0; i < maps.length; i++) if (badgeSleutels[i + 1] !== maps[i]) { anders = true; break; }
     if (!anders) return badgeVersie;
     badgeSleutels.length = 0; badgeSleutels.push(vs, ...maps);
@@ -189,6 +189,8 @@ export default async function opzet(ctx) {
     return { decks, maatgever: maatgever() };
   }
 
+  const open = new Map();   // scherm -> werk-venster (geopend met "open schermen", of aangemeld)
+
   // ---- window.varvePaneel: voor werk.html als venster van de mixer -----------------------------
   const paneelBron = {
     read, invoke, metaOf, label: labelVan, meld: (t) => meld?.(t, 'fout'),
@@ -206,6 +208,11 @@ export default async function opzet(ctx) {
     invoer: () => globalThis.varveUitlijn?.invoer?.() ?? null,
     decks: decksNu,
     hoorbaar: (id) => { const d = engine.decks?.[id]; return d ? hoorbaar(d, uitgangsVertraging(engine.ctx)) : null; },
+    /**
+     * Een werk-venster meldt zich (elke 2 s, paneel.js): zo weet "open schermen" ook na het
+     * herladen van de mixer dat het er al is (anders laadde window.open met dezelfde naam het opnieuw).
+     */
+    meldAan: (s, venster) => { if (typeof s === 'string' && venster && !venster.closed) open.set(s, venster); },
     /** De klok van dit venster en de audioklok, voor de proef (werk-ipad.mjs). */
     klok: () => ({ perf: performance.now(), ctx: engine.ctx?.currentTime ?? null }),
   };
@@ -249,7 +256,7 @@ export default async function opzet(ctx) {
     const aan = !!w && w.naam !== 'standaard';
     if (aan && !zender) {
       await laadPaneel();
-      if (!zender && werk()?.naam !== 'standaard') zender = P.startLiveZender({ bron: zenderBron, isEerste, tab: TAB, ctx: () => engine.ctx });
+      if (!zender && werk()?.naam !== 'standaard') zender = P.startLiveZender({ bron: zenderBron, isEerste, tab: TAB, ctx: () => engine.ctx, meld: (t) => meld?.(t, 'fout') });
     } else if (!aan && zender) { zender.stop(); zender = null; }
   }
 
@@ -310,7 +317,6 @@ export default async function opzet(ctx) {
   Promise.resolve(globalThis.werkStart).then(() => volg()).catch(() => {});
 
   // ---- schermen openen en plaatsen ----------------------------------------------------------
-  const open = new Map();   // scherm -> venster
   async function schermDetails() {
     if (typeof window.getScreenDetails !== 'function') return null;
     try { return await window.getScreenDetails(); } catch (_) { return null; }

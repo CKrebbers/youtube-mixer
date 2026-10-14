@@ -55,9 +55,10 @@ console.log('het protocol (puur)');
   }
   const best = P.besteMeting(metingen);
   const midden = (perf) => perf / 1000 - 0.5 + L - stap / 2;
-  ok('klok met getOutputTimestamp: het midden van de schommeling van currentTime (< 1 ms)', best && Math.abs(best.ctxT - midden(best.perf)) < 0.001);
-  const zonder = P.besteMeting(metingen.map(({ ctx, perf }) => ({ ctx, perf })));
-  ok('klok zonder: de kleinste min de halve spreiding (< 2 ms)', zonder && Math.abs(zonder.ctxT - midden(zonder.perf)) < 0.002 && zonder.spreiding > 8);
+  ok('klok: het midden van de schommeling van currentTime (< 1 ms)', best && Math.abs(best.ctxT - midden(best.perf)) < 0.001 && best.spreiding > 8);
+  const haper = metingen.map((m, i) => (i === 35 ? { ...m, ctx: m.ctx - 0.05 } : m));
+  const b2 = P.besteMeting(haper);
+  ok('één meting tijdens een haper (50 ms achter): de mediaan laat hem liggen', Math.abs(b2.ctxT - midden(b2.perf)) < 0.001);
   ok('ctxOp: doortrekken op de serverklok; stil = vast', bij(P.ctxOp({ ctxT: 10, srvT: 5000 }, 6000), 11, 1e-9) && P.ctxOp({ ctxT: 10, srvT: 5000, loopt: false }, 9000) === 10 && P.ctxOp(null, 1) === null);
 
   const s = P.legeStand();
@@ -125,9 +126,22 @@ console.log('\nde relais (server/paneel.js) met nep-antwoorden');
   ok('alle kijkers weg: kijkers 0, niet meer vers (de volgende kijker wacht op een nieuwe stand)', rel.aantal === 0 && !rel.vers);
   const kn = [];
   for (let i = 0; i < 17; i++) { const r = nepRes(); rel.kijk(null, r); kn.push(r); }
-  ok('hooguit 16 kijkers (de 17e krijgt 503)', rel.aantal === 16 && kn[16].kop.c === 503);
+  ok('hooguit 16 kijkers: de 17e komt erin, de OUDSTE gaat eruit (een dode iPad sluit niemand buiten)', rel.aantal === 16 && kn[16].kop.c === 200 && kn[0].dicht && !kn[1].dicht);
   rel.sluit();
-  ok('sluit: alles dicht', rel.aantal === 0 && kn[0].dicht);
+  ok('sluit: alles dicht', rel.aantal === 0 && kn[1].dicht);
+  // De mixer valt stil (tabblad dicht, terug naar standaard): de kijkers horen 'weg'.
+  let hbFn = null;
+  const rel2 = new PaneelRelais({ klok: () => klok, hbMs: 1000, setInterval: (f) => { hbFn = f; return 1; }, clearInterval: () => {} });
+  const kw = nepRes();
+  rel2.kijk(null, kw);
+  rel2.vanMixer({ tab: 'm', berichten: [{ t: 'stand', reads: { a: 1 } }] });
+  klok += 1000; hbFn();
+  ok('de mixer zendt nog (< 3 s): alleen hb', kw.berichten().map((b) => b.t).join() === 'stand,hb' && rel2.vers);
+  klok += 3500; hbFn();
+  ok('de mixer zegt 3 s niets: weg, en niet meer vers', kw.berichten().some((b) => b.t === 'weg') && !rel2.vers);
+  hbFn();
+  ok('… één keer', kw.berichten().filter((b) => b.t === 'weg').length === 1);
+  rel2.sluit();
 }
 
 // ---- 3. de zender ----------------------------------------------------------------------------
@@ -189,6 +203,25 @@ console.log('\nde zender van de mixer (live-zender.js) met nep-fetch en nep-time
   eerste = true;
   await tik(60);
   ok('weer de lockhouder: opnieuw met een volledige stand', verzoeken.slice(n0).some((v) => v.methode === 'POST' && v.body.berichten[0].t === 'stand'));
+  // Een ander tabblad telt nog op de server (genegeerd): terug naar 1×/s vragen, niet elke 20 ms een stand.
+  const vanMixerEcht = fetchNep;
+  let genegeerd = true;
+  const fetchG = async (url, o = {}) => (url.endsWith('/van-mixer') && genegeerd ? (verzoeken.push({ url, methode: 'POST', body: JSON.parse(o.body) }), antwoord({ kijkers: 1, vers: false, genegeerd: true })) : vanMixerEcht(url, o));
+  const zg = startLiveZender({ bron, isEerste: () => true, tab: 'tab-2', fetch: fetchG, nu: () => nu, setInterval: () => 2, clearInterval: () => {}, ctx: () => ctx });
+  const ng = verzoeken.length;
+  for (let i = 0; i < 100; i++) { nu += 20; await zg.tik(); }
+  const pg = verzoeken.slice(ng).filter((v) => v.methode === 'POST').length;
+  ok(`genegeerd (een ander tabblad telt nog): hooguit 1 stand per s (${pg} in 2 s)`, pg <= 3 && pg >= 1);
+  zg.stop();
+  // Te groot: één melding, niet elke seconde opnieuw een stand van 64 kB over de lijn.
+  const meldingen = [];
+  const groteBron = { ...bron, nodig: () => new Set(Object.keys(groot)), read: (id) => groot[id] };
+  const groot = Object.fromEntries(Array.from({ length: 4000 }, (_, i) => [`track.1.iets.lang.genoeg.${i}`, 0.123456]));
+  const zt = startLiveZender({ bron: groteBron, isEerste: () => true, tab: 'tab-3', fetch: fetchNep, nu: () => nu, setInterval: () => 3, clearInterval: () => {}, ctx: () => ctx, meld: (t) => meldingen.push(t) });
+  const nt = verzoeken.length;
+  for (let i = 0; i < 150; i++) { nu += 20; await zt.tik(); }
+  ok('een stand boven 64 kB: niet verstuurd, één melding', zt.stats.teGroot >= 2 && meldingen.length === 1 && !verzoeken.slice(nt).some((v) => v.methode === 'POST'));
+  zt.stop();
   // De server valt weg: terug naar 1×/s, en daarna eerst een stand.
   weg = true;
   const n1 = verzoeken.length;

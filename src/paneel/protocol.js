@@ -14,6 +14,7 @@
  *   maatgever   { t, id }                   wie de maat geeft (syncMaster)
  *   werkruimte  { t, w }                    naam, deel, delen, panelen, schermen, vars, labels, kaart
  *   hb          { t, srvT }                 de server, 1×/s (de pagina ziet zo dat hij er nog is)
+ *   weg         { t }                       de server: de mixer zegt al 3 s niets, de stand klopt niet meer
  *
  * REGEL 3 OVER HET NETWERK: posities gaan nooit per beeld over de lijn. De pagina rekent
  * de positie zelf uit het segment ({T, P, R}, `positieIn` in stream-kern.js) op zijn
@@ -21,7 +22,7 @@
  * de uitgangsvertraging V af zoals hoorbaar.js.
  */
 
-export const SOORTEN = ['stand', 'verschil', 'tijdlijn', 'deck', 'klok', 'maatgever', 'werkruimte', 'hb'];
+export const SOORTEN = ['stand', 'verschil', 'tijdlijn', 'deck', 'klok', 'maatgever', 'werkruimte', 'hb', 'weg'];
 /** Bundelen: de mixer stuurt hooguit één POST per BUNDEL_MS. */
 export const BUNDEL_MS = 20;
 /** Een read hooguit zo vaak per seconde (een fader die je sleept: 10 stappen per seconde is genoeg om te KIJKEN). */
@@ -155,36 +156,25 @@ export const ctxOp = (klok, srvNu) => (klok && Number.isFinite(klok.ctxT)
   ? (klok.loopt === false ? klok.ctxT : klok.ctxT + (srvNu - klok.srvT) / 1000) : null);
 
 /**
- * Hoe de mixer zijn klokbericht maakt uit metingen { ctx, perf, uit } (op hetzelfde moment gelezen:
- * currentTime in s, performance.now() in ms, en `uit` = de audioklok aan de uitgang op dat moment
- * volgens getOutputTimestamp(), doorgetrokken naar `perf`; of null).
+ * Hoe de mixer zijn klokbericht maakt uit metingen { ctx, perf } (op hetzelfde moment gelezen:
+ * currentTime in s, performance.now() in ms).
  *
  * currentTime springt per blok van de audiothread vooruit (in Chrome headless 512 frames, 10,7 ms)
  * en staat daartussen stil; wat de mixer zelf leest (hoorbaar.js) schommelt dus over één blok. Het
- * beste wat een ander apparaat kan doen is het MIDDEN van die schommeling volgen:
- *   met getOutputTimestamp (glad, Chrome): de klok aan de uitgang + het GEMIDDELDE verschil met
- *     currentTime over de metingen;
- *   zonder: de meting met het kleinste (perf − ctx·1000) (vlak na een sprong, het bovenste randje) min de halve spreiding.
- * Geeft { ctxT, perf, spreiding } (ctxT hoort bij `perf`) of null.
+ * beste wat een ander apparaat kan doen is het MIDDEN van die schommeling volgen: de MEDIAAN van
+ * (ctx − perf) over de laatste `recent` metingen (op willekeurige momenten genomen ligt die in het
+ * midden van een blok; de mediaan laat een meting tijdens een haper van de audiothread links liggen).
+ * De audioklok loopt op een paar ppm na even snel als performance.now(): over ~0,6 s verwaarloosbaar.
+ * Geeft { ctxT, perf, spreiding } (ctxT hoort bij `perf`, de laatste meting) of null.
  */
 export function besteMeting(metingen, { recent = 32 } = {}) {
-  let best = null, bx = Infinity, mx = -Infinity, som = 0, n = 0, laatste = null;
-  const lijst = metingen ?? [];
-  // Het verschil met de uitgangsklok alleen over de laatste `recent` metingen: na een haper van
-  // het audioapparaat verschuift het, en een oud gemiddelde trekt dan een seconde scheef.
-  const vanaf = Math.max(0, lijst.length - recent);
-  for (let i = 0; i < lijst.length; i++) {
-    const m = lijst[i];
-    if (!Number.isFinite(m?.ctx) || !Number.isFinite(m?.perf)) continue;
-    const x = m.perf - m.ctx * 1000;
-    if (x < bx) { bx = x; best = m; }
-    if (x > mx) mx = x;
-    if (i >= vanaf && Number.isFinite(m.uit)) { som += m.ctx - m.uit; n++; laatste = m; }
-  }
-  if (!best) return null;
-  const spreiding = mx - bx;
-  if (n >= 4) return { ctxT: laatste.uit + som / n, perf: laatste.perf, spreiding };
-  return { ctxT: best.ctx - spreiding / 2000, perf: best.perf, spreiding };
+  const lijst = (metingen ?? []).filter((m) => Number.isFinite(m?.ctx) && Number.isFinite(m?.perf)).slice(-recent);
+  if (!lijst.length) return null;
+  const d = lijst.map((m) => m.ctx - m.perf / 1000).sort((x, y) => x - y);
+  const h = d.length >> 1;
+  const mediaan = d.length % 2 ? d[h] : (d[h - 1] + d[h]) / 2;
+  const laatste = lijst[lijst.length - 1];
+  return { ctxT: laatste.perf / 1000 + mediaan, perf: laatste.perf, spreiding: (d[d.length - 1] - d[0]) * 1000 };
 }
 
 /**
