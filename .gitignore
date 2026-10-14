@@ -2,7 +2,7 @@ media/
 media-VERHUISD.txt
 opnames/
 uitzend/doelen.json
-proef/
+/proef/
 *.db
 *.db-wal
 *.db-shm
