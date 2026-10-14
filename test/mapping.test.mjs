@@ -1787,5 +1787,33 @@ console.log('\nmapje beeld');
   ok('resolveTarget: tweede keer (uit de cache) nog steeds goed, met andere waarden', resolveTarget('track.{focus}.fx.knob.1', { focus: 6 }) === 'track.6.fx.knob.1');
 }
 
+// ---- combinaties (werkruimte S4, docs/werkruimte/S4.md): zonder de nieuwe velden alles zoals vroeger ----
+{
+  const { HoudRegister } = await import('../src/control/houd.js');
+  const { maakVerschil, pasVerschilToe } = await import('../src/control/mapping.js');
+  const lijst = Object.freeze(['device.strip', 'grid.hotcues']);
+  const varsObj = { focus: 2 };
+  const houd = new HoudRegister();
+  const m4 = new Mapping({ read: () => null, invoke: () => {}, lagen: () => lijst, vars: () => varsObj, houd });
+  ok('S4: zonder open houd-mapje geeft lagen() precies de lijst van de bron (dezelfde)', m4.lagen() === lijst);
+  ok('S4: zonder variabelen van buiten geeft vars() precies het object van de bron', m4.vars() === varsObj);
+  houd.druk('maschine-mk2', 'solo', true);
+  ok('S4: met een open houd-mapje staat het vooraan, de rest erachter', m4.lagen().join() === 'houd.solo,device.strip,grid.hotcues' && m4.lagen() === m4.lagen());
+  houd.druk('maschine-mk2', 'solo', false);
+  ok('S4: weer dicht = weer de lijst van de bron', m4.lagen() === lijst);
+  // Een verschil met de nieuwe velden: heen en terug.
+  const basis = { name: 'b', device: 'apc40mk2', version: 3, rules: [{ in: 'note:0:1', action: 'track.1.send.a', mode: 'trigger' }] };
+  const eigen = { ...basis, rules: [...basis.rules,
+    { in: 'note:0:2', action: 'track.1.send.a', mode: 'druk', naar: 1 },
+    { in: 'note:0:3', action: 'track.1.filter', mode: 'latch', naar: 0.85, lang: 400 },
+    { in: 'cc:0:24', action: 'track.{focus}.jog', mode: 'stappen', codering: 'bin' },
+    { in: 'note:0:1', action: 'track.{focus}.inst.stil', mode: 'trigger', als: 'focus.instrument' },
+    { in: 'note:0:4', action: 'track.1.fader', mode: 'absolute', laag: 'houd.vol' }] };
+  const v = maakVerschil(basis, eigen);
+  const terug = pasVerschilToe(basis, v);
+  ok('S4: een verschil met druk, latch, lang, stappen, als en een houd-regel: heen en terug gelijk',
+    v.rules.length === 5 && terug.fouten.length === 0 && JSON.stringify(terug.doc.rules) === JSON.stringify(normaliseer(eigen).doc.rules));
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
