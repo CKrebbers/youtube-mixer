@@ -1,1 +1,100 @@
-/* panelen: leeg (werkruimte S0). Alleen het spoor van dit bestand vult het; styles.css blijft zoals hij is. */
+/* panelen (werkruimte S7, docs/werkruimte/S7.md): het werkvak in de mixer, de vrije panelen (.vp),
+   de kaart (.wk-kaart) en de paneelpagina werk.html (body.wp). Alleen dit spoor vult dit bestand;
+   styles.css blijft zoals hij is. Alles hangt onder #werkvak.wv, .vp, .wk-kaart of body.wp: in de
+   mixer zonder werkruimte raakt het niets. Geen :has() (docs/APC40.md "Invoer en vertraging"). Wat
+   per beeld verandert is een klasse of een transform op één element, nooit een opmaakwissel. */
+
+/* ---- het werkvak in de mixer (boven de rijen) ---- */
+#werkvak[hidden]{display:none}
+#werkvak.wv{flex:0 0 auto;max-height:34vh;overflow:auto;padding:4px 14px;border-top:1px solid var(--line);
+  background:var(--bg);contain:content}
+
+/* ---- een vrij paneel ---- */
+.vp{display:flex;flex-direction:column;gap:6px;min-width:0}
+.vp-kop{display:flex;gap:10px;align-items:baseline;font-size:11px;letter-spacing:.08em;color:var(--klein);text-transform:uppercase}
+.vp-titel{color:var(--text);font-weight:600}
+.vp-badge{color:var(--dim);text-transform:none;letter-spacing:0}
+.vp-items{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+:where(.vp-item){--kl:#3a444e}
+.vp-item{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  min-width:74px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
+  touch-action:none;user-select:none;-webkit-user-select:none;transition:box-shadow .08s}
+.vp-label{font-size:11px;color:var(--text);text-align:center;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vp-ibadge{font-size:10px;color:var(--klein);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vp-ibadge:empty{display:none}
+.vp-item.vp-grijs{opacity:.35;filter:grayscale(1)}
+.vp-item.vp-geraakt{box-shadow:0 0 0 2px var(--kl),0 0 14px color-mix(in srgb,var(--kl) 60%,transparent)}
+.vp-item.vp-in{border-color:var(--kl)}
+/* draai (los: eigen wijzer; mixer: de .knob van controls.js) */
+.vp-dial{position:relative;width:44px;height:44px;border-radius:50%;background:var(--panel2);border:2px solid var(--kl)}
+.vp-ind{position:absolute;left:50%;top:4px;width:3px;height:16px;margin-left:-1.5px;background:var(--kl);border-radius:2px;
+  transform-origin:50% 18px;will-change:transform}
+.vp-item.vp-leeg .vp-ind{opacity:.25}
+/* schuif */
+.vp-schuif{min-width:140px}
+.vp-baan{position:relative;width:120px;height:22px;border-radius:4px;background:var(--panel2);overflow:hidden}
+.vp-vul{position:absolute;inset:0;background:var(--kl);transform-origin:0 50%;transform:scaleX(0);will-change:transform}
+.vp-fader{width:120px}
+/* De kleur per soort (--kl) komt van .s-<soort> in styles.css; :where() hierboven houdt de standaard zwakker. */
+/* knop en lamp: 1 = aan, tussenin = gedimd, 0 = uit (zoals de LED's) */
+.vp-knop{min-width:64px;min-height:40px;border:1px solid var(--kl);border-radius:6px;background:none;color:var(--kl);
+  font:inherit;font-size:12px;font-weight:600;touch-action:none}
+.vp-knop + .vp-label{display:none}
+.vp-aan .vp-knop{background:var(--kl);color:#07090b}
+.vp-half .vp-knop{background:color-mix(in srgb,var(--kl) 35%,transparent);color:var(--text)}
+.vp-lampje{width:22px;height:22px;border-radius:50%;background:var(--panel2);border:1px solid var(--kl)}
+.vp-aan .vp-lampje{background:var(--kl)}
+.vp-half .vp-lampje{background:color-mix(in srgb,var(--kl) 40%,transparent)}
+/* xy */
+.vp-xy{min-width:150px}
+.vp-vlak{position:relative;width:130px;height:110px;border-radius:5px;background:var(--panel2);border:1px solid var(--kl);overflow:hidden;touch-action:none}
+.vp-punt{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;will-change:transform}
+.vp-punt::after{content:"";position:absolute;left:-7px;top:-7px;width:14px;height:14px;border-radius:50%;background:var(--kl)}
+/* tekst */
+.vp-tekst{min-width:0;border-style:dashed;color:var(--dim);font-size:12px}
+/* De iPad kijkt alleen (W1): geen aanwijzer die iets belooft. */
+.vp-kijkt .vp-item{cursor:default}
+.vp-kijkt .vp-knop{pointer-events:none}
+
+/* ---- de kaart ---- */
+.wk-kaart{display:flex;flex-direction:column;gap:10px;color:#ffd23c}
+.wk-kaart-kop{display:flex;gap:12px;align-items:baseline}
+.wk-kaart-naam{font-size:15px;font-weight:700;letter-spacing:.08em}
+.wk-kaart-mapjes{font-size:12px;color:var(--klein)}
+.wk-kaart-knoppen{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+:where(.wk-kaart-knop){--kl:#3a444e}
+.wk-kaart-knop{display:flex;flex-direction:column;padding:6px 8px;border-left:3px solid var(--kl);background:var(--panel);border-radius:4px}
+.wk-kaart-control{font-size:11px;color:var(--klein)}
+.wk-kaart-doet{font-size:16px;font-weight:600;color:#ffd23c}
+.wk-kaart-leeg,.wk-kaart-meer{color:var(--dim);font-size:12px}
+
+/* ---- werk.html (body.wp) ---- */
+body.wp{--deel:#7f7f7f;--deel-tekst:#07090b;overflow:auto;touch-action:manipulation;-webkit-touch-callout:none;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.wp-kop{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);border-bottom:3px solid var(--deel);flex:0 0 auto}
+.wp-deel{padding:2px 12px;border-radius:5px;background:var(--deel);color:var(--deel-tekst);font-weight:700;letter-spacing:.08em;font-size:16px}
+.wp-naam{color:var(--text);font-size:14px}
+.wp-vul{flex:1 1 auto}
+.wp-scherm,.wp-soort{color:var(--klein);font-size:12px}
+.wp-status{color:var(--a)}
+.wp-weg .wp-status{color:var(--red)}
+.wp-balk[hidden]{display:none}
+.wp-balk{position:sticky;top:0;z-index:10;padding:18px 14px;background:var(--red);color:#fff;font-size:22px;font-weight:700;text-align:center;letter-spacing:.04em}
+.wp-vakken{display:flex;flex-direction:column;gap:12px;padding:10px 14px}
+.wp-vak{background:var(--bg);min-width:0}
+.wp-vak-kop{color:var(--dim);font-size:12px;padding:6px 0}
+.wp-leeg[hidden]{display:none}
+.wp-leeg{color:var(--dim);padding:24px 14px;font-size:14px}
+.wp-weg .wp-vakken{opacity:.45}
+.wp-stand{display:flex;flex-direction:column;gap:4px;font-variant-numeric:tabular-nums}
+.wp-stand-rij{display:grid;grid-template-columns:34px minmax(0,1fr) 70px 110px;gap:10px;align-items:baseline;padding:6px 8px;background:var(--panel);border-radius:4px;font-size:16px}
+.wp-stand-rij.speelt .wp-nr{background:var(--a);color:#05110f}
+.wp-stand-rij.wacht .wp-nr{outline:2px dashed var(--a)}
+.wp-stand-rij.mg .wp-titel::after{content:" · maat";color:var(--a);font-size:12px}
+.wp-nr{text-align:center;border-radius:3px;background:var(--panel2)}
+.wp-titel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wp-bpm,.wp-tijd{color:var(--klein);text-align:right}
+.wp-secties{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px}
+.wp-sectie{padding:10px 8px;border-radius:5px;background:var(--panel);color:var(--text);font-size:14px}
+.wp-sectie.hier{background:#e6edf3;color:#07090b}
+.wp-dim{color:var(--dim)}

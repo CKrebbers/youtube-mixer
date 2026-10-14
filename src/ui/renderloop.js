@@ -16,8 +16,30 @@ import { zetTekst } from './dom.js';
  */
 const ONZEKER_TITEL = 'grid hier onzeker — tik het tempo of zet het grid op slot';
 
+/**
+ * Wat er NA het opstarten bij komt (werkruimte S7, docs/werkruimte/S7.md): een paneel dat
+ * verschijnt (het werkvak, een vrij paneel) meldt zijn Knobs en faders hier aan, en haalt ze
+ * weer weg als het verdwijnt (`bind(root)`/`ontbind(root)` in vensters.js). De renderloop
+ * volgt ze elk beeld zoals de vaste knoppen. Een Set van groepen: aanmelden en afmelden kosten
+ * niets per beeld, en zonder paneel is de lus precies de oude.
+ */
+const extra = new Set();
+export function meldAan({ knobs = [], faders = [] } = {}) {
+  const groep = { knobs, faders };
+  extra.add(groep);
+  return () => extra.delete(groep);
+}
+/** Hoeveel Knobs en faders er bij de renderloop aangemeld zijn (de vaste plus de panelen; voor de test). */
+export function aangemeld() {
+  let knobs = vast.knobs.length, faders = vast.faders.length;
+  for (const g of extra) { knobs += g.knobs.length; faders += g.faders.length; }
+  return { knobs, faders, groepen: extra.size };
+}
+const vast = { knobs: [], faders: [] };
+
 export function startRenderloop({ engine, staat, views, knobs, faders, stappen }) {
   const { venster, analysis } = staat;
+  vast.knobs = knobs; vast.faders = faders;
 
   const r = views.root;
   const e = {
@@ -73,17 +95,25 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
    * er MIDI bij is gekomen is de muis niet meer de enige bron. Een knop die je
    * vasthoudt laten we met rust, anders vecht de renderloop met je vinger.
    */
-  function volgEngine() {
-    for (const k of knobs) {
+  function volgKnobs(lijst) {
+    for (const k of lijst) {
       if (k.dragging || !k.action) continue;
       const v = readAction(k.action);
       if (v !== null && Math.abs(v - k.value) > 0.0005) k.set(v, true);
     }
-    for (const el of faders) {
+  }
+  function volgFaders(lijst) {
+    for (const el of lijst) {
       if (el === document.activeElement) continue;
       const v = readAction(el.dataset.action);
       if (v !== null && Math.abs(parseFloat(el.value) - v) > 0.0005) el.value = v;
     }
+  }
+  function volgEngine() {
+    volgKnobs(knobs);
+    volgFaders(faders);
+    // De panelen die er later bij kwamen (bind(root) in vensters.js).
+    for (const g of extra) { volgKnobs(g.knobs); volgFaders(g.faders); }
   }
 
   /**
