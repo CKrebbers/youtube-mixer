@@ -19,7 +19,7 @@
  *
  * Regel 3: de timer zegt alleen WANNEER er gekeken wordt; posities gaan als segment mee.
  */
-import { MAX_POST, BUNDEL_MS, KLOK_MS, KLOK_SPRONG_MS, PING_RONDJES, rond, readsVerschil, tijdlijnKlein, tijdlijnSleutel, besteMeting, klokVerschil } from '../paneel/protocol.js';
+import { MAX_POST, MAX_STAND, grootte, BUNDEL_MS, KLOK_MS, KLOK_SPRONG_MS, PING_RONDJES, rond, readsVerschil, tijdlijnKlein, tijdlijnSleutel, besteMeting, klokVerschil } from '../paneel/protocol.js';
 import { leesWeg } from '../lib/antwoord.js';
 
 export const VRAAG_MS = 1000;
@@ -32,7 +32,10 @@ const WERK_MS = 250;
 export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => globalThis.fetch(...a),
   nu = () => globalThis.performance.now(), setInterval: si = (...a) => globalThis.setInterval(...a),
   clearInterval: ci = (...a) => globalThis.clearInterval(...a), ctx = null, meld = null } = {}) {
-  const stats = { teGroot: 0, posts: 0, vragen: 0, berichten: 0, tijdlijnen: 0, standen: 0, fouten: 0, bytes: 0 };
+  // Eén id per start: na een 'weg' neemt de server van deze sessie niets meer aan (een stand die nog
+  // onderweg was komt dan niet ná het 'weg' binnen en laat de iPad een oude stand vasthouden).
+  const sessie = Math.random().toString(36).slice(2, 12);
+  const stats = { standGroot: 0, teGroot: 0, posts: 0, vragen: 0, berichten: 0, tijdlijnen: 0, standen: 0, fouten: 0, bytes: 0 };
   let kijkers = 0;
   let moetStand = true;
   let bezig = false;
@@ -47,7 +50,7 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
   const geraakt = new Set();
 
   const post = async (berichten) => {
-    const body = JSON.stringify({ tab, berichten });
+    const body = JSON.stringify({ tab, sessie, berichten });
     const bytes = encoder ? encoder.encode(body).length : body.length * 3;   // de server telt bytes (é, emoji)
     if (bytes > MAX_POST) {
       // De server breekt dit af; elke seconde opnieuw proberen helpt niet. Eén melding.
@@ -128,7 +131,14 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
   };
 
   const berichtenNu = (n) => {
-    if (moetStand) { moetStand = false; stats.standen++; return [standBericht(n)]; }
+    if (moetStand) {
+      moetStand = false; stats.standen++;
+      const s = standBericht(n);
+      // MAX_STAND is een doel, geen muur: groter gaat wel (tot MAX_POST), maar één melding zegt het.
+      const g = grootte(s);
+      if (g > MAX_STAND && !stats.standGroot++) meld?.(`schermen: de volledige stand is ${Math.round(g / 1024)} kB (doel ${MAX_STAND / 1024} kB): minder bouwstenen of panelen in dit deel maakt het verbinden sneller`, 'info');
+      return [s];
+    }
     const uit = [];
     const reads = {};
     for (const id of bron.nodig()) reads[id] = rond(bron.read(id));
@@ -207,7 +217,7 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
     stop() {
       ci(timer);
       if (kijkers > 0 && isEerste()) {
-        try { f('/api/paneel/van-mixer', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tab, berichten: [{ t: 'weg' }] }) }).then(leesWeg, () => {}); } catch (_) {}
+        try { f('/api/paneel/van-mixer', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tab, sessie, berichten: [{ t: 'weg' }] }) }).then(leesWeg, () => {}); } catch (_) {}
       }
       kijkers = 0;
     },

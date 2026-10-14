@@ -160,8 +160,10 @@ console.log('\nde relais (server/paneel.js) met nep-antwoorden');
   ok('na 70 s (gecrasht): weg, en niet meer vers', kw.berichten().some((b) => b.t === 'weg') && !rel2.vers);
   hbFn();
   ok('… één keer', kw.berichten().filter((b) => b.t === 'weg').length === 1);
-  rel2.vanMixer({ tab: 'n', berichten: [{ t: 'stand', reads: { a: 2 } }] });
-  rel2.vanMixer({ tab: 'n', berichten: [{ t: 'weg' }] });
+  rel2.vanMixer({ tab: 'n', sessie: 's1', berichten: [{ t: 'stand', reads: { a: 2 } }] });
+  rel2.vanMixer({ tab: 'n', sessie: 's1', berichten: [{ t: 'weg' }] });
+  const laat = rel2.vanMixer({ tab: 'n', sessie: 's1', berichten: [{ t: 'stand', reads: { a: 9 } }] });
+  ok('een stand van dezelfde sessie die NA het weg binnenkomt: genegeerd (de iPad houdt geen oude stand vast)', laat.genegeerd && !rel2.vers);
   ok('de mixer zegt zelf weg (standaard, tabblad dicht): meteen door naar de kijkers, niet meer vers', kw.berichten().filter((b) => b.t === 'weg').length === 2 && !rel2.vers);
   const r5 = rel2.vanMixer({ tab: 'p', berichten: [{ t: 'stand', reads: { a: 3 } }] });
   ok('… en een ander tabblad mag meteen overnemen', !r5.genegeerd && rel2.tab === 'p');
@@ -251,7 +253,7 @@ console.log('\nde zender van de mixer (live-zender.js) met nep-fetch en nep-time
   for (let i = 0; i < 600; i++) { nu += 20; await zt.tik(); }
   const pings = verzoeken.slice(nt).filter((v) => v.url.endsWith('/ping')).length;
   ok(`een stand boven 64 kB: niet verstuurd, één melding, pas na 5 s opnieuw (${zt.stats.teGroot} pogingen in 12 s, ${pings} pings: de gewone 1×/10 s, niet elke seconde)`,
-    zt.stats.teGroot >= 2 && zt.stats.teGroot <= 3 && meldingen.length === 1 && pings <= 16 && !verzoeken.slice(nt).some((v) => v.methode === 'POST'));
+    zt.stats.teGroot >= 2 && zt.stats.teGroot <= 3 && meldingen.filter((m) => m.includes('te groot')).length === 1 && meldingen.filter((m) => m.includes('doel 16 kB')).length === 1 && pings <= 16 && !verzoeken.slice(nt).some((v) => v.methode === 'POST'));
   zt.stop();
   // De server valt weg: terug naar 1×/s, en daarna eerst een stand.
   weg = true;

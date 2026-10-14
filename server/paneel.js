@@ -36,6 +36,7 @@ export class PaneelRelais {
     this.vers = false;          // is de stand bijgehouden sinds er een kijker kwam?
     this.kijkers = new Set();
     this.tab = null;            // het tabblad van de mixer dat nu telt
+    this._gestopt = new Set();  // tab:sessie die 'weg' zeiden (hooguit 64)
     this.tabT = 0;
     this.stats = { berichten: 0, genegeerd: 0, posts: 0, naarKijkers: 0, bytes: 0, standBytes: 0 };
     this._hbMs = hbMs; this._si = si; this._ci = ci; this._hb = null;
@@ -51,6 +52,9 @@ export class PaneelRelais {
   vanMixer(body) {
     this.stats.posts++;
     const tab = typeof body?.tab === 'string' ? body.tab.slice(0, 64) : null;
+    // Een sessie van de zender die al 'weg' zei: wat er nog onderweg was, telt niet meer.
+    const sessie = typeof body?.sessie === 'string' ? `${tab}:${body.sessie.slice(0, 32)}` : null;
+    if (sessie && this._gestopt.has(sessie)) { this.stats.genegeerd++; return { kijkers: this.aantal, vers: false, genegeerd: true }; }
     const lijst = Array.isArray(body?.berichten) ? body.berichten.filter(isBericht) : [];
     const nu = this.klok();
     const heeftStand = lijst.some((b) => b.t === 'stand');
@@ -66,7 +70,12 @@ export class PaneelRelais {
     const door = [];
     for (const b of lijst) {
       // De mixer stopt bewust (terug naar standaard, het tabblad gaat dicht): de stand klopt niet meer.
-      if (b.t === 'weg') { if (this.vers) { this.vers = false; door.push({ t: 'weg' }); } this.tabT = 0; continue; }
+      if (b.t === 'weg') {
+        if (this.vers) { this.vers = false; door.push({ t: 'weg' }); }
+        this.tabT = 0;
+        if (sessie) { this._gestopt.add(sessie); if (this._gestopt.size > 64) this._gestopt.delete(this._gestopt.values().next().value); }
+        continue;
+      }
       if (!this.vers && b.t !== 'stand') continue;   // eerst een stand, anders klopt er niets
       pasToe(this.stand, b);
       if (b.t === 'stand') this.vers = true;

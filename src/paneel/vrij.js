@@ -411,7 +411,8 @@ export class VrijPaneel {
     if (it.soort === 'xy') {
       vast.voor = vast.actions.map((a) => (a ? getal(this.bron.read(a)) : null));
       // Aanraken = ook een worp (de druk-action zolang de vinger erop staat).
-      if (it.drukAction && this.bron.metaOf?.(it.drukAction)) { vast.druk = it.drukAction; this.bron.invoke(vast.druk, true); }
+      // Alleen een trigger (regel 2: true/false naar een value-action zou hem op 0 of 1 zetten).
+      if (it.drukAction && this.bron.metaOf?.(it.drukAction)?.type === 'trigger') { vast.druk = it.drukAction; this.bron.invoke(vast.druk, true); }
     }
     // De maat van het vlak: één keer bij het indrukken (geen opmaak lezen per beweging).
     if (it.soort === 'schuif' || it.soort === 'xy') vast.rect = (it.vlak ?? it.baan ?? it.el).getBoundingClientRect();

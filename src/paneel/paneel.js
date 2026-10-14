@@ -109,17 +109,23 @@ function libraryVak(naam, el) {
   const lijst = document.createElement('div');
   lijst.className = 'wp-lib';
   el.appendChild(lijst);
-  let bezig = false, vraag = null, timer = null, gestopt = false;
+  let bezig = false, vraag = null, timer = null, gestopt = false, gehaald = null;
   async function haal() {
     if (bezig || gestopt) return;
     bezig = true;
+    const z = zoek.value.trim();
+    gehaald = z;
     try {
       const q = new URLSearchParams({ sorteer: 'toegevoegd', van: '0', aantal: '200' });
-      if (zoek.value.trim()) q.set('zoek', zoek.value.trim());
+      if (z) q.set('zoek', z);
       const r = await fetch(`/api/library?${q}`, { cache: 'no-store' });
       const d = await r.json().catch(() => null);
       if (!gestopt) teken(r.ok ? d?.tracks ?? [] : []);
-    } catch (_) { /* de rode balk zegt het al */ } finally { bezig = false; }
+    } catch (_) { /* de rode balk zegt het al */ } finally {
+      bezig = false;
+      // Intussen verder getypt: nog eens, met de zoekvraag van nu.
+      if (!gestopt && zoek.value.trim() !== gehaald) haal();
+    }
   }
   function teken(tracks) {
     lijst.replaceChildren();

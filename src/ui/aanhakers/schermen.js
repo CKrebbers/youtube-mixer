@@ -123,16 +123,17 @@ export default async function opzet(ctx) {
   /** De actions die de panelen van de werkruimte lezen (ingevuld met de vars van nu). */
   function nodig() {
     const w = werk();
-    const s = `${w?.naam}:${w?.versie}:${varsNu().s}:${P ? 1 : 0}`;
+    const s = `${w?.naam}:${w?.deel}:${w?.versie}:${varsNu().s}:${P ? 1 : 0}`;
     if (s === nodigCache.s) return nodigCache.set;
     const set = new Set();
     const vars = varsNu().v;
     const neem = (p, doel) => { const v = P.varsVoor(vars, doel); for (const a of P.actionsVan(p)) { const id = P.vul(a, v); if (id && metaOf(id)) set.add(id); } };
     if (P) {
       for (const p of Object.values(panelenNu())) neem(p, p.doel);
-      // De bouwstenen die ergens op een scherm staan (fx, strip:3 …), in elk deel.
+      // De bouwstenen op een scherm in het deel van NU (fx, strip:3 …): niet die van alle delen, anders
+      // wordt de stand te groot en leest elke tik honderden actions. Een deelwissel = een nieuwe set.
       const namen = new Set();
-      for (const d of Object.values(w?.def?.delen ?? {})) for (const sch of Object.values(d?.schermen ?? {})) for (const n of [...(sch.vakken ?? []), sch.werkvak]) if (n) namen.add(n);
+      for (const sch of Object.values(w?.deelDef?.()?.schermen ?? {})) for (const n of [...(sch.vakken ?? []), sch.werkvak]) if (n) namen.add(n);
       for (const n of namen) { const b = P.bouwsteenDef(n, { bestaat: (a) => !!metaOf(a), vars }); if (b) neem(b); }
     }
     nodigCache.s = s; nodigCache.set = set;
@@ -245,12 +246,14 @@ export default async function opzet(ctx) {
      */
     laad: (nr, track) => {
       const id = Object.keys(engine.decks ?? {})[Number(nr) - 1];
-      const d = id && engine.decks[id];
-      if (!d || !track?.id || !ctx.laden?.laadLibrary) return { ok: false };
+      const lib = ctx.laden?.library;
+      if (!id || !track?.id || !lib?.laadTrack) return { ok: false };
+      // Dezelfde vraag als de library (laden.js `stand`): een track die speelt, OF een instrument dat
+      // klinkt, vraagt een tweede druk; en laden gaat door het paneel van de library, zoals de kaart-tab.
       const sleutel = `${nr}:${track.id}`;
-      if (d.playing && !(laadVraag?.s === sleutel && nu() - laadVraag.t < 3000)) { laadVraag = { s: sleutel, t: nu() }; return { vraag: true }; }
+      if (lib.stand?.(id) === 'speelt' && !(laadVraag?.s === sleutel && nu() - laadVraag.t < 3000)) { laadVraag = { s: sleutel, t: nu() }; return { vraag: true }; }
       laadVraag = null;
-      ctx.laden.laadLibrary(id, track).catch((e) => meld?.(`laden: ${e.message}`, 'fout'));
+      Promise.resolve(lib.laadTrack(track, id)).catch((e) => meld?.(`laden: ${e.message}`, 'fout'));
       return { ok: true };
     },
     /** De klok van dit venster en de audioklok, voor de proef (werk-ipad.mjs). */

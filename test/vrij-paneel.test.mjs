@@ -236,6 +236,11 @@ console.log('\nde xy-pad: y, druk, los (uit de ruwe werkruimte)');
   vuur(p2, 'pointerdown', p2.items[0].vlak, { pointerId: 2, clientX: 10, clientY: 10 });
   vuur(p2, 'pointerup', p2.items[0].vlak, { pointerId: 2 });
   ok('los: midden = terugveren naar 0,5', JSON.stringify(bron.invokes.slice(-2)) === '[["track.1.fx.knob.1",0.5],["track.1.fx.knob.2",0.5]]');
+  const p3 = new VrijPaneel(doc.createElement('div'), { items: [{ soort: 'xy', action: 'track.1.fx.knob.1', druk: 'track.1.fader' }] }, bron, { id: 'v' });
+  const n3 = bron.invokes.length;
+  vuur(p3, 'pointerdown', p3.items[0].vlak, { pointerId: 3, clientX: 10, clientY: 10 });
+  vuur(p3, 'pointerup', p3.items[0].vlak, { pointerId: 3 });
+  ok('druk naar een value-action (de fader): genegeerd (regel 2)', !bron.invokes.slice(n3).some(([a2]) => a2 === 'track.1.fader'));
 }
 
 console.log('\nde bouwstenen (elk onderdeel als paneel)');
