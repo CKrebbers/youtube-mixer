@@ -353,8 +353,8 @@ try {
   const binnen = await postMixer({ tab: 'x', berichten: [] });
   ok('van deze Mac: 200 met { kijkers, vers }', binnen.status === 200 && JSON.parse(binnen.tekst).kijkers === 0);
 
-  // Geen schrijfweg van de iPad (W1): geen invoke-route, geen andere methodes.
-  ok('POST /api/paneel/invoke bestaat niet (404): de iPad kijkt alleen', (await ruw('POST', '/api/paneel/invoke', { headers: { 'content-type': 'application/json' }, body: '{"id":"track.1.play","v":true}' })).status === 404);
+  // De schrijfweg (S8) staat standaard uit: dan bestaat invoke niet (404), zoals in S7.
+  ok('POST /api/paneel/invoke zolang de schrijfweg uit staat: 404', (await ruw('POST', '/api/paneel/invoke', { headers: { 'content-type': 'application/json' }, body: '{"id":"track.1.play","v":true}' })).status === 404);
   ok('POST op live/ping: 405', (await ruw('POST', '/api/paneel/live', { headers: { 'content-type': 'application/json' }, body: '{}' })).status === 405
     && (await ruw('POST', '/api/paneel/ping', { headers: { 'content-type': 'application/json' }, body: '{}' })).status === 405);
   ok('PUT op van-mixer: 405', (await ruw('PUT', '/api/paneel/van-mixer', { headers: { 'content-type': 'application/json' }, body: '{}' })).status === 405);

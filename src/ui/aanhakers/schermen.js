@@ -34,7 +34,8 @@ let laden = null;
 export function laadPaneel() {
   laden ??= Promise.all([
     import('../../paneel/protocol.js'), import('../../paneel/vrij.js'), import('../../paneel/kaart.js'), import('../live-zender.js'),
-  ]).then(([protocol, vrij, kaart, zender]) => { P = { ...protocol, ...vrij, ...kaart, ...zender }; return P; });
+    import('../../paneel/uitvoer.js'),
+  ]).then(([protocol, vrij, kaart, zender, uitvoer]) => { P = { ...protocol, ...vrij, ...kaart, ...zender, ...uitvoer }; return P; });
   return laden;
 }
 
@@ -137,6 +138,33 @@ export default async function opzet(ctx) {
       for (const n of namen) { const b = P.bouwsteenDef(n, { bestaat: (a) => !!metaOf(a), vars }); if (b) neem(b); }
     }
     nodigCache.s = s; nodigCache.set = set;
+    return set;
+  }
+
+  /**
+   * S8: de actions die scherm `s` mag bedienen = wat in de panelen en bouwstenen staat die de
+   * werkruimte in het deel van NU op dat scherm zet, ingevuld met de vars van nu. Alleen op een
+   * invoke van de iPad/iPhone gevraagd (niet per beeld); een cache op werkruimte, deel, versie en vars.
+   */
+  const toeCache = new Map();
+  function toegestaan(scherm) {
+    const w = werk();
+    const s = `${w?.naam}:${w?.deel}:${w?.versie}:${varsNu().s}`;
+    const c = toeCache.get(scherm);
+    if (c?.s === s) return c.set;
+    const set = new Set();
+    if (P && w && w.naam !== 'standaard') {
+      const vars = varsNu().v;
+      const panelen = panelenNu();
+      const neem = (p, doel) => { const v = P.varsVoor(vars, doel); for (const a of P.actionsVan(p)) { const id = P.vul(a, v); if (id) set.add(id); } };
+      for (const naam of P.vakkenVan(w.deelDef?.() ?? null, scherm)) {
+        const { soort, id } = P.vakSoort(naam);
+        if (soort === 'paneel' && panelen[id]) neem(panelen[id], panelen[id].doel);
+        else if (soort === 'bouwsteen') { const b = P.bouwsteenDef(id, { bestaat: (a) => !!metaOf(a), vars }); if (b) neem(b); }
+      }
+    }
+    if (toeCache.size > 16) toeCache.clear();
+    toeCache.set(scherm, { s, set });
     return set;
   }
 
@@ -294,13 +322,21 @@ export default async function opzet(ctx) {
     },
   };
   /** De zender alleen met een werkruimte: met `standaard` geen timer, geen fetch. */
+  let ontvanger = null, uitvoerder = null;
   async function volgZender() {
     const w = werk();
     const aan = !!w && w.naam !== 'standaard';
     if (aan && !zender) {
       await laadPaneel();
-      if (!zender && werk()?.naam !== 'standaard') zender = P.startLiveZender({ bron: zenderBron, isEerste, tab: TAB, ctx: () => engine.ctx, meld: (t) => meld?.(t, 'fout') });
-    } else if (!aan && zender) { zender.stop(); zender = null; }
+      if (!zender && werk()?.naam !== 'standaard') {
+        zender = P.startLiveZender({ bron: zenderBron, isEerste, tab: TAB, ctx: () => engine.ctx, meld: (t) => meld?.(t, 'fout') });
+        // S8: de ontvanger van de iPad en de iPhone. Hij opent zijn kanaal pas als de schrijfweg aan
+        // staat (de zender hoort het van de server) en alleen in het tabblad met de APC.
+        uitvoerder ??= new P.Uitvoerder({ invoke, read, metaOf, werkruimte: () => { const x = werk(); return x ? { ...x.def, naam: x.naam } : null; }, toegestaan });
+        const z = zender;
+        ontvanger = P.startOntvanger({ uitvoerder, aan: () => !!z.schrijf, isEerste, tab: TAB });
+      }
+    } else if (!aan && zender) { ontvanger?.stop(); ontvanger = null; zender.stop(); zender = null; }
   }
 
   // ---- het werkvak ---------------------------------------------------------------------------
@@ -344,7 +380,7 @@ export default async function opzet(ctx) {
     vak = { sleutel, stop };
   }
   // De pagina gaat weg (sluiten, herladen): de zender zegt de kijkers nog 'weg'.
-  window.addEventListener('pagehide', () => { zender?.stop(); zender = null; });
+  window.addEventListener('pagehide', () => { ontvanger?.stop(); ontvanger = null; zender?.stop(); zender = null; });
   window.addEventListener('pageshow', (e) => { if (e.persisted) volgZender(); });   // terug uit de bfcache
 
   const w0 = werk();
@@ -424,7 +460,8 @@ export default async function opzet(ctx) {
 
   // Voor de headless proeven en de console.
   window.varveSchermen = {
-    get zender() { return zender; }, tab: TAB, aangemeld, geladen: () => !!P, nodig: () => [...nodig()], werkvak: () => vak?.sleutel ?? null,
+    get zender() { return zender; }, get ontvanger() { return ontvanger; }, get uitvoerder() { return uitvoerder; },
+    toegestaan: (s) => [...toegestaan(s)], tab: TAB, aangemeld, geladen: () => !!P, nodig: () => [...nodig()], werkvak: () => vak?.sleutel ?? null,
     openScherm: (s) => openScherm(s, null), opBeamerScherm, open,
   };
 }

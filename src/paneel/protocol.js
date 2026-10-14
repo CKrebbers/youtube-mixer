@@ -209,8 +209,11 @@ export function actionsVan(paneel) {
   const uit = [];
   for (const it of plat(paneel)) {
     if (it.soort === 'tekst' || typeof it.action !== 'string') continue;
-    if (it.soort === 'xy') uit.push(...xyActions(it.action).filter(Boolean));
-    else uit.push(it.action);
+    if (it.soort === 'xy') {
+      // `y` (de y-as) en `druk` (de worp zolang je aanraakt) horen bij de pad (S8: anders weigert de mixer ze).
+      uit.push(...(typeof it.y === 'string' ? [it.action, it.y] : xyActions(it.action)).filter(Boolean));
+      if (typeof it.druk === 'string') uit.push(it.druk);
+    } else uit.push(it.action);
   }
   return uit;
 }
@@ -253,8 +256,11 @@ export function vakSoort(naam) {
  * `druk`: 'aan' bij indrukken, 'los' bij loslaten (de mixer laat ALLES los wat 'aan' bleef als het
  * scherm wegvalt); null voor een waarde. `seq` loopt per scherm op (tegen dubbel).
  */
-export function invokeBericht({ id, v, druk = null, seq, scherm }) {
-  return { t: 'invoke', id, v: typeof v === 'number' ? rond(v) : !!v, druk: druk === 'aan' || druk === 'los' ? druk : null, seq, scherm };
+export function invokeBericht({ id, v, druk = null, seq, scherm, k = null }) {
+  const b = { t: 'invoke', id, v: typeof v === 'number' ? rond(v) : !!v, druk: druk === 'aan' || druk === 'los' ? druk : null, seq, scherm };
+  // k = de pagina-id (S8): de server houdt per pagina bij wat er vastzit, en laat het los als die pagina wegvalt.
+  if (typeof k === 'string') b.k = k;
+  return b;
 }
 export function isInvoke(b) {
   return !!b && b.t === 'invoke' && typeof b.id === 'string' && /^[\w.-]{1,120}$/.test(b.id)

@@ -12,6 +12,37 @@
 /** Het MIDI-paneel bedient zichzelf; daar willen we niet koppelen. */
 const BUITEN = '#midi-panel';
 
+/**
+ * Het aanwijs-signaal voor ✎ inrichten (werkruimte S8, src/ui/aanhakers/inrichten.js): zolang er een
+ * aanwijzer is, wordt de volgende klik op een element met `data-action` NIET uitgevoerd maar
+ * doorgegeven: fn({ action, el }). Eén klik, daarna is de aanwijzer weg. Wat buiten telt (het
+ * MIDI-paneel, het inrichtpaneel zelf: `.ir-paneel`) gaat gewoon door. Zonder aanwijzer: niets.
+ */
+let aanwijzer = null;
+let aanwijsLuisteraar = null;
+let geslikt = -Infinity;
+export function zetAanwijzer(fn) {
+  aanwijzer = typeof fn === 'function' ? fn : null;
+  if (aanwijzer && !aanwijsLuisteraar && typeof document !== 'undefined') {
+    aanwijsLuisteraar = (e) => {
+      if (!aanwijzer) return;
+      const el = e.target?.closest?.('[data-action]');
+      if (!el || el.closest(`${BUITEN}, .ir-paneel`)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const fn2 = aanwijzer;
+      aanwijzer = null;
+      geslikt = performance.now();
+      try { fn2({ action: el.dataset.action, el }); } catch (err) { console.warn('[aanwijzen]', err); }
+    };
+    document.addEventListener('pointerdown', aanwijsLuisteraar, true);
+    // De klik die bij die pointerdown hoort ook tegenhouden (een knop zou anders alsnog afgaan).
+    document.addEventListener('click', (e) => { if (performance.now() - geslikt < 600 && e.target?.closest?.('[data-action]')) { e.stopPropagation(); geslikt = -Infinity; } }, true);
+  }
+}
+/** Staat er een aanwijzer klaar? */
+export const aanwijzerKlaar = () => !!aanwijzer;
+
 export class LearnMode {
   constructor({ learn, mapping, device, meta, balk, knop }) {
     this.learn = learn;

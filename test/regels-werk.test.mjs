@@ -2,8 +2,8 @@
 // zoals regels-companion.test.mjs voor de companion:
 //   - werk.html en uitlijn.html: de HELE importboom (ook wat geïmporteerd wordt importeert) zonder
 //     de engine (alleen het pure rekenwerk), zonder AudioContext, requestMIDIAccess of Web Lock;
-//   - de iPad schrijft niets (W1): in src/paneel/ geen POST, geen schrijvende methode, alleen
-//     GET /api/paneel/ping en de SSE van /api/paneel/live; de server heeft geen invoke-route;
+//   - de iPad schrijft alleen via de schrijfweg (S8, W1 = ja): alleen schrijver.js POST, en alleen naar
+//     invoke en koppel; elke schrijvende route op de server is vanDezeMac of vanBuiten (schakelaar, Origin, token);
 //   - de mixer laadt src/paneel/ niet: niet statisch (de boom vanaf app.js en de aanhakers), en
 //     de aanhaker schermen laadt het pas met een werkruimte (niet `standaard`).
 // Draai met: node test/regels-werk.test.mjs
@@ -100,27 +100,37 @@ for (const [pagina, script] of [['werk.html', 'src/paneel/paneel.js'], ['uitlijn
   }
 }
 
-// ---- de iPad schrijft niets (W1) -----------------------------------------------------------------
-console.log('\nde iPad schrijft niets (W1)');
+// ---- de iPad schrijft alleen via de schrijfweg (S8, W1 = ja) --------------------------------------
+console.log('\nde iPad schrijft alleen via de schrijfweg (S8)');
 {
   const map = join(WORTEL, 'src/paneel');
   const bestanden = readdirSync(map).filter((f) => f.endsWith('.js'));
-  ok('src/paneel/: protocol, verbinding, paneel, vrij, kaart', ['protocol.js', 'verbinding.js', 'paneel.js', 'vrij.js', 'kaart.js'].every((f) => bestanden.includes(f)));
+  ok('src/paneel/: protocol, verbinding, paneel, vrij, kaart, schrijver, uitvoer', ['protocol.js', 'verbinding.js', 'paneel.js', 'vrij.js', 'kaart.js', 'schrijver.js', 'uitvoer.js'].every((f) => bestanden.includes(f)));
   const code = Object.fromEntries(bestanden.map((f) => [f, zonderCommentaar(readFileSync(join(map, f), 'utf8'))]));
   const schrijvend = bestanden.filter((f) => /['"`](POST|PUT|PATCH|DELETE)['"`]|method\s*:/.test(code[f]) || /sendBeacon|new\s+WebSocket|XMLHttpRequest/.test(code[f]));
-  ok(`geen POST/PUT/PATCH/DELETE, geen method:, geen sendBeacon/WebSocket/XHR${schrijvend.length ? ` (wel in ${schrijvend.join(', ')})` : ''}`, schrijvend.length === 0);
-  const paden = bestanden.flatMap((f) => [...code[f].matchAll(/(['"`])(\/api\/[^'"`?$]*)/g)].map((m) => m[2]));
-  ok(`alleen /api/paneel/ping, /api/paneel/live en (lezen) /api/library (${[...new Set(paden)].sort().join(' ')})`, paden.every((p) => ['/api/paneel/ping', '/api/paneel/live', '/api/library'].includes(p)));
+  ok(`alleen schrijver.js doet een POST (geen PUT/PATCH/DELETE, geen sendBeacon/WebSocket/XHR)${schrijvend.length ? ` (POST in ${schrijvend.join(', ')})` : ''}`,
+    schrijvend.join() === 'schrijver.js' && !/['"`](PUT|PATCH|DELETE)['"`]|sendBeacon|new\s+WebSocket|XMLHttpRequest/.test(code['schrijver.js']));
+  const paden = bestanden.flatMap((f) => [...code[f].matchAll(/(['"`])(\/api\/[^'"`?$]*)/g)].map((m) => [f, m[2]]));
+  const LEZEN = ['/api/paneel/ping', '/api/paneel/live', '/api/library', '/api/paneel/wie'];
+  const SCHRIJVEN = ['/api/paneel/invoke', '/api/paneel/koppel'];
+  ok(`lezen: ping, live, library, wie; schrijven alleen invoke en koppel, en alleen in schrijver.js (${[...new Set(paden.map((x) => x[1]))].sort().join(' ')})`,
+    paden.every(([f, p]) => LEZEN.includes(p) || (SCHRIJVEN.includes(p) && f === 'schrijver.js')));
+  ok('uitvoer.js (de beslissing van de mixer) importeert alleen het pure model', [...code['uitvoer.js'].matchAll(/from '([^']+)'/g)].map((m) => m[1]).join() === '../werk/model.js');
   const sv = code['verbinding.js'].slice(code['verbinding.js'].indexOf('class ServerVerbinding'), code['verbinding.js'].indexOf('export function maakVerbinding'));
-  ok('de ServerVerbinding heeft geen eigen invoke: alleen via zetSchrijver (S8), en kanBedienen begint false',
+  ok('de ServerVerbinding heeft geen eigen invoke: alleen via zetSchrijver, en kanBedienen begint false',
     /kanBedienen = false/.test(sv) && !/^\s*invoke\s*\(/m.test(sv) && /zetSchrijver\(fn\)/.test(sv) && /this\.invoke = \(id, v\) => this\._schrijver\(/.test(sv));
-  ok('niemand in src/paneel/ roept zetSchrijver aan (dat doet S8)', !Object.values(code).some((c) => /\.zetSchrijver\(/.test(c)));
+  ok('alleen paneel.js zet een schrijver, en alleen na wie() (gekoppeld, schrijfweg aan, het eigen scherm)',
+    Object.entries(code).filter(([, c]) => /\.zetSchrijver\(/.test(c)).map(([f]) => f).join() === 'paneel.js'
+    && /const goed = w\.aan && w\.gekoppeld && w\.scherm === scherm;\s*zetBedienen\(goed\)/.test(code['paneel.js']));
   const routes = zonderCommentaar(readFileSync(join(WORTEL, 'server/routes/paneel.js'), 'utf8'));
   const regels = routes.split('\n');
-  const posts = regels.filter((r) => /methode:\s*'POST'/.test(r));
-  const lijsten = regels.filter((r) => /\[[^\]]*'POST'[^\]]*\]\.map/.test(r));
-  ok(`de server: de enige POST-route is van-mixer, met vanDezeMac; de rest van POST = 405 (${posts.length} + ${lijsten.length})`,
-    posts.length === 1 && /van-mixer/.test(posts[0]) && /vanDezeMac\(req\)/.test(routes) && lijsten.every((r) => /handler:\s*alleen\(/.test(r)) && !/invoke|naar-mixer/.test(routes));
+  const schrijfRoutes = regels.filter((r) => /methode:\s*'(POST|DELETE|PUT|PATCH)',\s*pad:/.test(r));
+  // Elke route die iets verandert: vanDezeMac (de mixer, de Controlekamer) of vanBuiten (schakelaar aan + Origin + token).
+  const blokken = routes.split(/\n\s*\{ methode: /).slice(1);
+  const bewaakt = blokken.filter((b) => /^'(POST|DELETE)'/.test(b)).every((b) => /ctx\.vanDezeMac\(req\)|lokaal\(req, res, ctx\)|vanBuiten\(req, res, ctx\)/.test(b));
+  ok(`de server: elke schrijvende route is vanDezeMac of vanBuiten (${schrijfRoutes.length} routes)`, schrijfRoutes.length >= 6 && bewaakt);
+  ok('vanBuiten: uit = 404, Origin precies de eigen pagina; invoke vraagt een token (401)',
+    /if \(!s\.aan\)[^\n]*404/.test(routes) && /origineGoed\(req\)/.test(routes) && /apparaatVan\(req\)[\s\S]{0,80}401/.test(routes));
 }
 
 // ---- de mixer laadt src/paneel/ niet -------------------------------------------------------------
@@ -135,7 +145,7 @@ console.log('\nde mixer laadt src/paneel/ niet (zonder werkruimte)');
   ok(`statisch: niets uit src/paneel/ en niet de zender (${alles.size} bestanden nagelopen)${paneel.length ? ` (wel ${paneel.join(', ')})` : ''}`, paneel.length === 0);
   const schermen = zonderCommentaar(readFileSync(join(WORTEL, 'src/ui/aanhakers/schermen.js'), 'utf8'));
   const dyn = [...schermen.matchAll(/import\(\s*'([^']+)'\s*\)/g)].map((m) => m[1]);
-  ok('de aanhaker laadt src/paneel/ en de zender alleen dynamisch, in laadPaneel', dyn.filter((d) => /paneel\/|live-zender/.test(d)).length === 4
+  ok('de aanhaker laadt src/paneel/ en de zender alleen dynamisch, in laadPaneel', dyn.filter((d) => /paneel\/|live-zender/.test(d)).length === 5
     && /function laadPaneel\(\)[\s\S]*?import\('\.\.\/\.\.\/paneel\/protocol\.js'\)/.test(schermen));
   const aanroepen = [...schermen.matchAll(/laadPaneel\(\)/g)].map((m) => m.index).filter((i) => !schermen.slice(i - 16, i).includes('function'));
   const bewaakt = aanroepen.every((i) => /standaard/.test(schermen.slice(Math.max(0, i - 260), i)));

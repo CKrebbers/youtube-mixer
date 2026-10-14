@@ -355,7 +355,8 @@ console.log('\nserver: routes/ en de witte lijst');
     '/standen/x.json', '/patronen/set.json', '/.git/config', '/test/alles.mjs', '/tools/proef/../../media/library.db',
     '/werkruimtes/x.json'];
   ok('… en geen witte-lijstregel die data openzet', !nu.mag.some((m) => GEHEIM.some((g) => m.test(g))));
-  ok('… en op de witte lijst alleen de ijkproef van S5', nu.mag.every((m) => m.test('/tools/proef/maschine-ijk.html')));
+  // S8 zet er bewust één bestand bij: de top-40 voor de zoeker van ✎ inrichten (data, geen geheim).
+  ok('… en op de witte lijst alleen de ijkproef van S5 en de top-40 van S8', nu.mag.every((m) => m.test('/tools/proef/maschine-ijk.html') || m.test('/tools/werkruimtes/top40.json')));
   let fout = null;
   try { spoorRoutes([['kapot', { routes: [{ methode: 'GET', pad: '/api/x', handler: () => {} }], mag: [] }]]); } catch (e) { fout = e; }
   ok('een route zonder RegExp: de server start niet (fout met de naam)', /kapot/.test(fout?.message));

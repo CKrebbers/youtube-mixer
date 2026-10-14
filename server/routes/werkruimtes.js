@@ -10,6 +10,7 @@ import { naamGeldig } from '../../src/werk/model.js';
  *   GET /api/werkruimtes/<naam>          { naam, ruw, werkruimte, versie, bron, fouten, waarschuwingen } (ETag: 304)
  *   PUT /api/werkruimtes/<naam>          { werkruimte, versie }: 200, 400 (met reden, niets geschreven), 409 (met wat er nu staat)
  *   GET /api/werkruimtes/<naam>/versies  { versies: [bestandsnamen] } (nieuwste eerst)
+ *   POST /api/werkruimtes/<naam>/terug   { versie }: terug naar de vorige inrichting (S8); 200, 404, 409. Alleen deze Mac.
  *
  * De map: VARVE_WERKRUIMTES (tests), anders <wortel>/werkruimtes. Claude mag het bestand ook
  * direct schrijven: de mixer peilt elke 3 s (met de ETag, dus meestal een 304 zonder body).
@@ -28,6 +29,7 @@ function werkruimtes(ctx) {
 
 const EEN = /^\/api\/werkruimtes\/([^/]+)$/;
 const VERSIES = /^\/api\/werkruimtes\/([^/]+)\/versies$/;
+const TERUG = /^\/api\/werkruimtes\/([^/]+)\/terug$/;
 /** De naam uit het pad, of null (dan is er al geantwoord: 400). */
 function naamUit(req, res, ctx, re) {
   let naam;
@@ -78,8 +80,17 @@ export default {
       const r = await werkruimtes(ctx).schrijf(naam, body.werkruimte, typeof body.versie === 'string' ? body.versie : null);
       return ctx.json(res, r.code, r.antwoord);
     }) },
+    { methode: 'POST', pad: TERUG, handler: metFout(async (req, res, ctx) => {
+      if (!ctx.vanDezeMac(req)) { req.resume(); return ctx.json(res, 403, { fout: 'terugzetten mag alleen op deze Mac' }); }
+      const naam = naamUit(req, res, ctx, TERUG);
+      if (!naam) { req.resume(); return; }
+      const body = await ctx.leesJson(req, 1024);
+      const r = await werkruimtes(ctx).terug(naam, typeof body?.versie === 'string' ? body.versie : null);
+      return ctx.json(res, r.code, r.antwoord);
+    }) },
     ...['POST', 'DELETE', 'PATCH'].map((methode) => ({ methode, pad: EEN, handler: alleen('GET of PUT') })),
     ...['POST', 'PUT', 'DELETE'].map((methode) => ({ methode, pad: /^\/api\/werkruimtes$/, handler: alleen('GET') })),
   ],
-  mag: [],
+  // De top-40 van de handelingen voor de zoeker van ✎ inrichten (S8): alleen dit ene bestand uit tools/.
+  mag: [/^\/tools\/werkruimtes\/top40\.json$/],
 };

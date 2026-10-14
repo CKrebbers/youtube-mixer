@@ -19,6 +19,8 @@
  * herverbinden bij visibilitychange en online, en een grote rode balk "geen verbinding".
  */
 import { maakVerbinding } from './verbinding.js';
+import { maakSchrijver, wie, koppel } from './schrijver.js';
+import { itemVoor } from '../werk/inrichten.js';
 import { VrijPaneel, bouwsteenDef } from './vrij.js';
 import { KaartWeergave } from './kaart.js';
 import { vakSoort } from './protocol.js';
@@ -63,8 +65,9 @@ function bouwVak(naam, w) {
     const weergave = new UitlijnWeergave(plek, {
       vorm: v.vorm, maten: v.maten,
       invoer: () => verb.invoer(),
-      // Slepen = duwen: alleen als venster van de mixer (mac-2). De iPad kijkt (W1).
-      invoke: verb.kanBedienen ? (a, x) => verb.invoke(a, x) : null,
+      // Slepen = duwen: alleen als venster van de mixer (mac-2). Op de iPad is de uitlijn geen paneel:
+      // de mixer zou het weigeren (S8: alleen wat in de panelen van dit scherm staat).
+      invoke: verb.soort === 'opener' ? (a, x) => verb.invoke(a, x) : null,
       metaOf: (a) => verb.metaOf(a), read: (a) => verb.read(a),
     });
     return { naam, el, stap: () => weergave.stap(), stop: () => { weergave.vernietig(); el.remove(); }, weergave };
@@ -243,6 +246,104 @@ function bouw(w) {
       : `in het deel ${w.label ?? w.deel ?? '—'} staat niets op scherm "${scherm}" (delen.${w.deel}.schermen.${scherm}.vakken)`);
 }
 
+// ---- bedienen vanaf de iPad en de iPhone (S8, W1 = ja) ---------------------------------------------
+// Alleen via de server, alleen als de schrijfweg in de Controlekamer aan staat en dit apparaat
+// gekoppeld is (een HttpOnly-cookie: de server zegt het). Anders kijkt de pagina, zoals in S7.
+const koppelEl = $('wp-koppel');
+let schrijver = null;
+function zetBedienen(aan) {
+  if (verb.soort !== 'server' || aan === !!schrijver) return;
+  if (aan) { schrijver = maakSchrijver({ pagina: verb.pagina, meld: (t) => meldKort(t) }); verb.zetSchrijver(schrijver); }
+  else {
+    for (const v of vakken) v.paneel?.laatAllesLos();   // eerst los (nog met de schrijver), dan kijken
+    schrijver.stop(); schrijver = null; verb.zetSchrijver(null);
+  }
+  zet(kop.soort, verb.kanBedienen ? 'bedient' : 'kijkt');
+  document.body.classList.toggle('wp-kijkt', !verb.kanBedienen);
+}
+let meldTimer = null;
+function meldKort(t) {
+  const m = $('wp-melding');
+  if (!m) return;
+  zet(m, t); toon(m, true);
+  clearTimeout(meldTimer); meldTimer = setTimeout(() => toon(m, false), 2500);
+}
+async function kijkKoppeling() {
+  if (verb.soort !== 'server') return;
+  const w = await wie();
+  if (!w) return;                                   // geen verbinding: de rode balk zegt het al
+  const goed = w.aan && w.gekoppeld && w.scherm === scherm;
+  zetBedienen(goed);
+  toon(koppelEl, w.aan && !goed);
+  if (w.aan && w.gekoppeld && w.scherm !== scherm) zet($('wp-koppel-uitleg'), `dit apparaat is gekoppeld als "${w.scherm}": koppel opnieuw voor "${scherm}"`);
+}
+if (verb.soort === 'server' && koppelEl) {
+  $('wp-koppel-knop')?.addEventListener('click', async () => {
+    const code = $('wp-koppel-code').value;
+    const naam = $('wp-koppel-naam').value.trim() || scherm;
+    const r = await koppel({ code, naam, scherm });
+    zet($('wp-koppel-uitleg'), r.ok ? `gekoppeld als ${r.apparaat.naam}` : r.fout);
+    if (r.ok) { $('wp-koppel-code').value = ''; kijkKoppeling(); }
+  });
+  kijkKoppeling();
+  // De schakelaar kan in de Controlekamer omgaan, of het apparaat ingetrokken worden: elke 5 s kijken.
+  setInterval(kijkKoppeling, 5000);
+}
+
+// ---- ✎ inrichten op mac-2 (S8): alleen als venster van de mixer (de iPad richt nooit in) ------------
+// Klik een item van een paneel en binnen 3 s nog eens = weg; de zoeker zet een functie op het eerste
+// paneel van dit scherm (de top-40 bovenaan). Opslaan doet de mixer (met versie; 409 = niets overschreven).
+const ir = (() => { try { return verb.soort === 'opener' ? window.opener?.varveInrichten ?? null : null; } catch (_) { return null; } })();
+if (ir) {
+  const knop = document.createElement('button');
+  knop.className = 'wp-ir-knop'; knop.textContent = '✎'; knop.title = 'inrichten: items weghalen (twee keer klikken) en functies erbij (zoeker)';
+  const zoek = document.createElement('input');
+  zoek.type = 'search'; zoek.placeholder = 'functie erbij (top-40 bovenaan)'; zoek.className = 'wp-ir-zoek'; zoek.hidden = true;
+  const lijst = document.createElement('div'); lijst.className = 'wp-ir-lijst'; lijst.hidden = true;
+  kop.status.before(knop, zoek);
+  document.querySelector('.wp-kop')?.after(lijst);
+  let aan = false, markeer = null;
+  const eerstePaneel = () => vakken.find((v) => v.paneel && /^paneel:/.test(v.naam));
+  const toonLijst = () => {
+    lijst.replaceChildren(...ir.zoek(zoek.value).slice(0, 30).map((x) => {
+      const b = document.createElement('button'); b.className = 'wp-ir-vond'; b.textContent = `${x.top ? `${x.top}. ` : ''}${x.id}`;
+      b.addEventListener('click', async () => {
+        const v = eerstePaneel();
+        if (!v) { meldKort('geen paneel op dit scherm in dit deel: zet er eerst een op (✎ in de mixer)'); return; }
+        const r = await ir.inrichter.voegToe(v.naam.slice(7), itemVoor(x.id, verb.metaOf(x.id.replace('{focus}', verb.vars().focus ?? '1'))));
+        meldKort(r.ok ? `${x.id} staat op ${v.naam}` : r.reden);
+      });
+      return b;
+    }));
+  };
+  zoek.addEventListener('input', toonLijst);
+  knop.addEventListener('click', () => {
+    aan = !aan;
+    knop.classList.toggle('aan', aan); zoek.hidden = !aan; lijst.hidden = !aan;
+    document.body.classList.toggle('wp-inrichten', aan);
+    if (aan) toonLijst();
+  });
+  // In inricht-stand gaat een klik op een item niet af: hij markeert (en de tweede haalt hem weg).
+  vakkenEl.addEventListener('pointerdown', async (e) => {
+    if (!aan) return;
+    const itemEl = e.target.closest?.('.vp-item');
+    const v = vakken.find((x) => x.el.contains(e.target));
+    if (!itemEl || !v?.paneel || !/^paneel:/.test(v.naam)) return;
+    e.preventDefault(); e.stopPropagation();
+    const plat = v.paneel.items.findIndex((it) => it.el === itemEl);
+    // Het nummer in het bestand: een rij telt als één item (weghalen = de hele rij).
+    const def = window.opener.varvePaneel.werk()?.panelen?.[v.naam.slice(7)];
+    let i = -1, n = 0;
+    def?.items?.forEach((it, k) => { const m = it?.soort === 'rij' ? (it.herhaal?.length ?? 0) : 1; if (plat >= n && plat < n + m) i = k; n += m; });
+    if (i < 0) return;
+    if (markeer?.i === i && markeer.v === v.naam && performance.now() - markeer.t < 3000) {
+      markeer = null;
+      const r = await ir.inrichter.haalWeg(v.naam.slice(7), i);
+      meldKort(r.ok ? 'weggehaald' : r.reden);
+    } else { markeer = { i, v: v.naam, t: performance.now() }; itemEl.classList.add('wp-ir-vraag'); setTimeout(() => itemEl.classList.remove('wp-ir-vraag'), 3000); meldKort('nog eens binnen 3 s = weghalen'); }
+  }, true);
+}
+
 // ---- de lus ----------------------------------------------------------------------------------
 let wasStaat = null;
 function beeld() {
@@ -289,7 +390,7 @@ async function wakker() {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   wakker();
-  if (verb.soort === 'server') verb.opnieuw('zichtbaar');
+  if (verb.soort === 'server') { verb.opnieuw('zichtbaar'); kijkKoppeling(); }
 });
 window.addEventListener('online', () => { if (verb.soort === 'server') verb.opnieuw('online'); });
 // Vingers die het scherm verlaten (Begeleide toegang, een melding van iOS): alles los.
@@ -323,6 +424,6 @@ onthoudPlek();
 
 // Voor de headless proeven en de console.
 window.paneel = {
-  verb, scherm, get vakken() { return vakken; },
+  verb, scherm, get vakken() { return vakken; }, get schrijver() { return schrijver; }, kijkKoppeling,
   hoorbaarOp: (id, srv) => verb.hoorbaarOp?.(id, srv) ?? null,
 };

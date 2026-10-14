@@ -64,9 +64,11 @@ export const KIEZEN = Object.freeze(['expliciet', 'volgt']);
 export const RIJEN = Object.freeze(['auto', 'beeld', 'instrument', 'klankschaal', 'koptelefoon', 'master', 'stems', 'patronen']);
 export const ONDERPANELEN = Object.freeze(['library']);
 export const SCHERM_NAAM = /^[a-z0-9-]{1,16}$/;
-export const SCHERM_SOORTEN = Object.freeze(['mixer', 'venster', 'ipad']);
+export const SCHERM_SOORTEN = Object.freeze(['mixer', 'venster', 'ipad', 'iphone']);   // ipad en iphone: buiten de Mac (de schrijfweg van S8)
 export const PANEEL_SOORTEN = Object.freeze(['draai', 'knop', 'schuif', 'lamp', 'xy', 'rij', 'tekst']);
 export const PANEEL_NAAM = /^[a-z0-9-]{1,32}$/;
+/** Wat een xy-pad bij loslaten doet (= XY_LOS in src/paneel/vrij.js; de test vergelijkt). */
+export const XY_LOS = Object.freeze(['blijf', 'midden', 'terug']);
 export const CURVES = Object.freeze(['lin', 'exp', 'log', 's']);   // = CURVES in src/engine/rack.js (de test vergelijkt)
 
 /**
@@ -75,6 +77,14 @@ export const CURVES = Object.freeze(['lin', 'exp', 'log', 's']);   // = CURVES i
  * tekens, ook punten (`*.load*` vangt track.3.load.selected).
  */
 export const VAST_NOOIT = Object.freeze(['record.*', 'log.*', 'mapping.*', 'werk.kies', 'werk.opslaan', 'werk.terug', 'werk.vastleggen', 'library.*', '*.load*']);
+/**
+ * Wat op de milliseconde moet kloppen (A5): tussen een vinger op glas en de mixer zitten wifi en
+ * aanraking, tientallen ms en onvoorspelbaar. Een scherm buiten de Mac doet dit alleen met
+ * `"tijdkritisch": true` in zijn schermdefinitie (standaard uit, S8). "Op de maat", secties,
+ * worpen, draaien en duwen als afstand vallen er niet onder.
+ */
+export const TIJDKRITISCH = Object.freeze(['track.*.bend.*', 'track.*.play', 'track.*.cue', 'track.*.cue.*', 'track.*.nudge.*',
+  'track.*.hotcue.*', 'track.*.loop.in', 'track.*.loop.out', 'track.*.tap']);
 
 /** Velden die nergens mogen: een werkruimte zet mapjes en panelen, geen standen, adressen of uitzetters. */
 export const VERBODEN = Object.freeze(['uit', 'verberg', 'acties', 'pijlers', 'opname', 'knopstanden', 'standen', 'waarden',
@@ -197,10 +207,22 @@ const PATROON = /^[a-z0-9{}*._-]{1,80}$/i;
  * niets. Voor S7/S8 (de iPad); het model zegt het, de mixer handhaaft het.
  */
 export function magOpScherm(werkruimte, scherm, action) {
+  return waaromNietOpScherm(werkruimte, scherm, action) === null;
+}
+
+/**
+ * Waarom een scherm deze action NIET mag (een tekst voor het antwoord aan de iPad), of null als
+ * hij mag. Volgorde: de vaste lijst, `nooit`, tijdkritisch (tenzij het scherm het aanzet), `mag`.
+ */
+export function waaromNietOpScherm(werkruimte, scherm, action) {
   const s = werkruimte?.schermen?.[scherm];
-  if (!s || typeof action !== 'string') return false;
-  if ([...VAST_NOOIT, ...(s.nooit ?? [])].some((p) => patroon(p).test(action))) return false;
-  return (s.mag ?? []).some((p) => patroon(p).test(action));
+  if (typeof action !== 'string') return 'geen action';
+  if (!s) return `scherm "${scherm}" staat niet in de werkruimte`;
+  if (VAST_NOOIT.some((p) => patroon(p).test(action))) return `${action} kan nooit van buiten de Mac`;
+  if ((s.nooit ?? []).some((p) => patroon(p).test(action))) return `${action} staat in "nooit" van ${scherm}`;
+  if (!s.tijdkritisch && TIJDKRITISCH.some((p) => patroon(p).test(action))) return `${action} moet op de ms kloppen: niet vanaf ${scherm} (zet "tijdkritisch": true om het toch toe te laten)`;
+  if (!(s.mag ?? []).some((p) => patroon(p).test(action))) return `${action} staat niet in "mag" van ${scherm}`;
+  return null;
 }
 
 // ---- mapjes ----------------------------------------------------------------------------------
@@ -493,6 +515,18 @@ function leesPanelen(p, { fouten, waarschuwingen, bestaat }) {
     if (typeof it.action !== 'string' || !/^[\w.{}-]{1,120}$/.test(it.action)) { fouten.push(`${w}: action ontbreekt`); return null; }
     o.action = it.action;
     if (bestaat && !it.action.includes('{k}') && !bestaat(it.action)) waarschuwingen.push(`${w}: action ${it.action} bestaat niet (grijs)`);
+    // De xy-pad (S7, S8): `y` = de action op de y-as, `druk` = een trigger zolang je aanraakt, `los` =
+    // wat er bij loslaten gebeurt. Een fout veld valt weg met een fout; het item blijft (alleen x).
+    if (it.soort === 'xy') {
+      for (const k of ['y', 'druk']) {
+        if (it[k] === undefined) continue;
+        if (typeof it[k] === 'string' && /^[\w.{}-]{1,120}$/.test(it[k])) {
+          o[k] = it[k];
+          if (bestaat && !it[k].includes('{k}') && !bestaat(it[k])) waarschuwingen.push(`${w}: ${k}-action ${it[k]} bestaat niet (grijs)`);
+        } else fouten.push(`${w}: ${k} is een action`);
+      }
+      if (it.los !== undefined) { if (XY_LOS.includes(it.los)) o.los = it.los; else fouten.push(`${w}: los is ${XY_LOS.join(', ')}`); }
+    } else for (const k of ['y', 'druk', 'los']) if (k in it) waarschuwingen.push(`${w}: "${k}" telt alleen bij een xy-pad`);
     return o;
   };
   for (const [naam, d] of Object.entries(p)) {
@@ -515,6 +549,7 @@ function leesSchermen(s, { fouten }) {
     if (!SCHERM_SOORTEN.includes(d.soort)) { fouten.push(`scherm ${naam}: soort is ${SCHERM_SOORTEN.join(', ')}`); continue; }
     const o = { soort: d.soort };
     if (d.plek !== undefined) { if (d.plek === 'onthouden' || d.plek === null) o.plek = d.plek; else fouten.push(`scherm ${naam}: plek is "onthouden" (geen positie)`); }
+    if (d.tijdkritisch !== undefined) { if (typeof d.tijdkritisch === 'boolean') { if (d.tijdkritisch) o.tijdkritisch = true; } else fouten.push(`scherm ${naam}: tijdkritisch is true of false`); }
     for (const k of ['mag', 'nooit']) {
       if (d[k] === undefined) continue;
       if (!Array.isArray(d[k]) || d[k].some((p) => typeof p !== 'string' || !PATROON.test(p))) { fouten.push(`scherm ${naam}: ${k} is een lijst patronen (bv. "track.*.section.*")`); continue; }

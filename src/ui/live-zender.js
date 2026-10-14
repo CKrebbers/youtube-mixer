@@ -37,6 +37,7 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
   const sessie = Math.random().toString(36).slice(2, 12);
   const stats = { standGroot: 0, teGroot: 0, posts: 0, vragen: 0, berichten: 0, tijdlijnen: 0, standen: 0, fouten: 0, bytes: 0 };
   let kijkers = 0;
+  let schrijf = false;         // staat de schrijfweg (S8) aan? De server zegt het in elk antwoord.
   let moetStand = true;
   let bezig = false;
   let laatstGevraagd = -Infinity, laatsteKlok = -Infinity, laatstePing = -Infinity, laatsteWerk = -Infinity;
@@ -173,6 +174,7 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
         laatstGevraagd = n;
         const d = await vraag();
         kijkers = d?.kijkers ?? 0;
+        schrijf = d?.schrijf === true;
         if (kijkers > 0) { moetStand = true; metingen.length = 0; }
         if (kijkers > 0 && verschil === null) { await ping(); laatstePing = nu(); }
         return;
@@ -189,6 +191,7 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
       stats.berichten += lijst.length;
       const d = await post(lijst);
       kijkers = d.kijkers ?? 0;
+      schrijf = d.schrijf === true;
       if (d.genegeerd) { kijkers = 0; laatstGevraagd = nu(); }   // een ander tabblad telt nog: terug naar 1×/s vragen
       if (d.vers === false || d.genegeerd) moetStand = true;
     } catch (err) {
@@ -207,6 +210,8 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
     stats,
     get kijkers() { return kijkers; },
     get verschil() { return verschil; },
+    /** Staat de schrijfweg aan (S8)? Pas dan opent de ontvanger zijn kanaal. */
+    get schrijf() { return schrijf; },
     /** Een action liep (bijInvoke): meegeven als hij in een paneel staat (voor het oplichten). */
     geraakt(id) { if (kijkers > 0 && bron.nodig().has(id)) geraakt.add(id); },
     tik,
@@ -221,5 +226,75 @@ export function startLiveZender({ bron, isEerste, tab, fetch: f = (...a) => glob
       }
       kijkers = 0;
     },
+  };
+}
+
+/**
+ * DE ONTVANGER (werkruimte S8, docs/werkruimte/S8.md): invokes van de iPad en de iPhone, via de
+ * server (`GET /api/paneel/naar-mixer`, SSE). Alleen in het tabblad dat de APC heeft (`isEerste`)
+ * en alleen als de schrijfweg aan staat (`aan()`, de zender hoort het van de server): een SSE die
+ * open blijft kost een van de zes verbindingen per host, en die heeft de StreamBron nodig.
+ *
+ * Per bericht:
+ *   invoke  { n, id, v, druk, seq, scherm, k }  -> uitvoerder.voer -> POST /api/paneel/antwoord { n, ok, reden, read }
+ *   los     { k }                                -> uitvoerder.laatLos(k)   (de pagina viel weg)
+ *   uit                                          -> alles los
+ *   hb                                           (elke 250–500 ms)
+ * Hoort hij LOS_MS (1,5 s) niets, dan is de server weg: alles los. Wordt dit tabblad niet meer de
+ * eerste, of gaat de schrijfweg uit: kanaal dicht en alles los.
+ */
+export const ONTVANG_LOS_MS = 1500;
+export function startOntvanger({ uitvoerder, aan, isEerste, tab, ES = globalThis.EventSource,
+  fetch: f = (...a) => globalThis.fetch(...a), nu = () => globalThis.performance.now(),
+  setInterval: si = (...a) => globalThis.setInterval(...a), clearInterval: ci = (...a) => globalThis.clearInterval(...a) } = {}) {
+  const stats = { berichten: 0, invokes: 0, los: 0, verbindingen: 0, stil: 0 };
+  let es = null, laatst = 0;
+  const sluit = (reden) => {
+    if (es) { es.close(); es = null; }
+    const n = uitvoerder.laatAllesLos();
+    if (n) stats.los += n;
+    return reden;
+  };
+  const antwoord = (b) => {
+    try { f('/api/paneel/antwoord', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(leesWeg, () => {}); } catch (_) {}
+  };
+  const open = () => {
+    stats.verbindingen++;
+    laatst = nu();
+    const e = new ES(`/api/paneel/naar-mixer?tab=${encodeURIComponent(tab)}`);
+    es = e;
+    e.onmessage = (m) => {
+      if (es !== e) return;
+      laatst = nu();
+      stats.berichten++;
+      let b;
+      try { b = JSON.parse(m.data); } catch (_) { return; }
+      if (b?.t === 'invoke' && Number.isSafeInteger(b.n)) {
+        stats.invokes++;
+        let r;
+        try { r = uitvoerder.voer(b); } catch (err) { r = { ok: false, reden: String(err?.message || err) }; }
+        antwoord({ n: b.n, ok: !!r.ok, ...(r.reden ? { reden: r.reden } : {}), ...(r.read !== undefined ? { read: r.read } : {}) });
+      } else if (b?.t === 'los' && typeof b.k === 'string') stats.los += uitvoerder.laatLos(b.k);
+      else if (b?.t === 'uit') stats.los += uitvoerder.laatAllesLos();
+    };
+    e.onerror = () => { /* de browser verbindt zelf opnieuw (retry 500); de waakhond hieronder laat los */ };
+  };
+  const waak = () => {
+    const mag = !!aan() && !!isEerste();
+    if (!mag) { if (es) sluit('niet meer'); return; }
+    if (!es) { open(); return; }
+    if (nu() - laatst > ONTVANG_LOS_MS) {
+      // De server zegt 1,5 s niets (weg, herstart): alles los, en een nieuwe verbinding.
+      stats.stil++;
+      sluit('stil');
+      open();
+    }
+  };
+  const timer = si(waak, 250);
+  waak();
+  return {
+    stats,
+    get open() { return !!es; },
+    stop() { ci(timer); sluit('stop'); },
   };
 }

@@ -251,7 +251,7 @@ export class ServerVerbinding extends Emitter {
   zetSchrijver(fn) {
     this._schrijver = typeof fn === 'function' ? fn : null;
     this.kanBedienen = !!this._schrijver;
-    if (this._schrijver) this.invoke = (id, v) => this._schrijver(invokeBericht({ id, v, druk: typeof v === 'boolean' ? (v ? 'aan' : 'los') : null, seq: ++this._seq, scherm: this.scherm }));
+    if (this._schrijver) this.invoke = (id, v) => this._schrijver(invokeBericht({ id, v, druk: typeof v === 'boolean' ? (v ? 'aan' : 'los') : null, seq: ++this._seq, scherm: this.scherm, k: this.pagina }));
     else delete this.invoke;
   }
   meld() {}

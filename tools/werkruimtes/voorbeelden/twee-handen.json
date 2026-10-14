@@ -34,7 +34,8 @@
       "label": "FX", "kleur": "violet",
       "apc40mk2":     { "grid": "fx", "device": "rack" },
       "maschine-mk2": { "pads": "worpen", "pagina": "rack", "wiel": "rack", "scherm": ["rack", "super"] },
-      "schermen": { "hoofd": { "werkvak": "fx", "rijen": ["master"] }, "ipad": { "vakken": ["fx", "kaart"] } }
+      "schermen": { "hoofd": { "werkvak": "fx", "rijen": ["master"] }, "ipad": { "vakken": ["fx", "kaart"] },
+                    "iphone": { "vakken": ["paneel:xy"] } }
     },
     "stems": {
       "label": "STEMS", "kleur": "zeegroen",
@@ -90,6 +91,9 @@
       { "soort": "knop", "action": "track.{focus}.bar.align",  "label": "OP DE 1" },
       { "soort": "draai", "action": "track.{focus}.phase.offset" },
       { "soort": "draai", "action": "super.1" } ] },
+    "xy": { "titel": "XY (voorbeeld)", "items": [
+      { "soort": "xy", "action": "track.{focus}.fx.knob.1", "y": "track.{focus}.send.a",
+        "druk": "track.{focus}.fx.knob.2.hold", "los": "terug" } ] },
     "video-fx": { "titel": "BEELD", "items": [
       { "soort": "rij", "herhaal": ["pixel", "trails", "grain", "mirror", "rgb", "color"],
         "item": { "soort": "knop", "action": "video.fx.{k}.hold" } } ] }
@@ -99,7 +103,10 @@
     "hoofd": { "soort": "mixer" },
     "mac-2": { "soort": "venster", "plek": "onthouden" },
     "ipad":  { "soort": "ipad",
-               "mag":   ["track.*.section.*", "track.*.play.quant", "track.*.phase.offset*", "super.*", "video.fx.*", "werk.deel.*", "track.*.stem.*"],
-               "nooit": ["track.*.play", "track.*.cue", "track.*.bend.*"] }
+               "mag":   ["track.*.section.*", "track.*.play.quant", "track.*.bar.align", "track.*.phase.offset*", "super.*", "video.fx.*", "werk.deel.*",
+                         "track.*.stem.*", "track.*.fx.*", "track.*.rack.*", "track.*.send.*", "track.*.filter", "track.*.kill.*", "master.fx.*", "master.rack.*"],
+               "nooit": ["track.*.play", "track.*.cue", "track.*.bend.*"] },
+    "iphone": { "soort": "iphone",
+               "mag":   ["track.*.fx.*", "track.*.send.*", "track.*.filter", "super.*"] }
   }
 }

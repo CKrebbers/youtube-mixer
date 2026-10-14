@@ -7,7 +7,7 @@
 <!-- De paneelpagina (werkruimte S7, docs/werkruimte/S7.md): werk.html?s=<scherm> toont de vakken
      die de werkruimte in het actieve deel op dit scherm zet, en volgt het deel. Als VENSTER van de
      mixer (mac-2, window.opener, zoals de beamer en plan.html) mag hij bedienen; via de server (de
-     iPad) KIJKT hij alleen. Geen AudioContext, geen MIDI, geen Web Lock. -->
+     iPad) KIJKT hij, tot hij gekoppeld is en bedienen aan staat (S8, docs/werkruimte/S8.md). Geen AudioContext, geen MIDI, geen Web Lock. -->
 <link rel="manifest" href="werk.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="src/ui/css/uitlijn.css">
 <link rel="stylesheet" href="src/ui/css/panelen.css">
+<link rel="stylesheet" href="src/ui/css/inrichten.css">
 </head>
 <body class="wp">
 <div id="wp-balk" class="wp-balk" role="alert" hidden>geen verbinding met de mixer</div>
@@ -28,6 +29,14 @@
   <span id="wp-soort" class="wp-soort"></span>
   <span id="wp-status" class="wp-status">○</span>
 </header>
+<!-- S8: koppelen (alleen op de iPad/iPhone, alleen als bedienen in de Controlekamer aan staat). -->
+<div id="wp-koppel" class="wp-koppel" hidden>
+  <span id="wp-koppel-uitleg">bedienen staat aan: koppel dit scherm met de code uit de Controlekamer</span>
+  <input id="wp-koppel-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="code" aria-label="koppelcode">
+  <input id="wp-koppel-naam" maxlength="32" placeholder="naam (bv. iPad Clay)" aria-label="naam van dit apparaat">
+  <button id="wp-koppel-knop">koppel</button>
+</div>
+<div id="wp-melding" class="wp-melding" role="status" hidden></div>
 <!-- Een div, geen main: styles.css maakt van main het raster van de mixer. -->
 <div id="wp-vakken" class="wp-vakken"></div>
 <div id="wp-leeg" class="wp-leeg" hidden></div>

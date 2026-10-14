@@ -210,6 +210,31 @@ export class Werkruimtes {
     }
   }
 
+  /**
+   * Terug naar de vorige inrichting (S8): de nieuwste bewaarde versie die ANDERS is dan wat er nu
+   * staat, opgeslagen als een gewone opslag (met `versie`: 409 als iemand intussen opsloeg). Wat er
+   * nu staat gaat daarbij zelf naar .versies, dus terug is ook weer terug te draaien.
+   * Geeft { code, antwoord } zoals schrijf.
+   */
+  async terug(naam, versie) {
+    if (!naamGeldig(naam)) return { code: 400, antwoord: { fout: NAAM_UITLEG } };
+    const nu = await this.lees(naam);
+    if (!nu || nu.bron !== 'eigen') return { code: 404, antwoord: { fout: `werkruimte ${naam} heeft nog geen eigen vorige versie` } };
+    if (nu.versie !== versie) return { code: 409, antwoord: { fout: `werkruimte ${naam} is intussen gewijzigd: niets teruggezet`, versie: nu.versie, ruw: nu.ruw } };
+    const map = join(this.map, '.versies', naam);
+    for (const f of await this.versies(naam)) {
+      if (!/^[\w-]+\.json$/.test(f)) continue;
+      const b = await this._leesBestand(join(map, f));
+      if (!b || versieVan(b.buf) === nu.versie) continue;
+      let ruw;
+      try { ruw = JSON.parse(b.buf.toString('utf8')); } catch { continue; }
+      const r = await this.schrijf(naam, ruw, versie);
+      if (r.code === 200) r.antwoord.van = f;
+      return r;
+    }
+    return { code: 404, antwoord: { fout: `werkruimte ${naam}: geen vorige versie om naar terug te gaan` } };
+  }
+
   /** De bewaarde versies (nieuwste eerst), voor "terug naar de vorige inrichting" (S8). */
   async versies(naam) {
     const map = join(this.map, '.versies', naam);
