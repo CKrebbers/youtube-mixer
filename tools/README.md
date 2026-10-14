@@ -23,8 +23,9 @@ Draai met `node tools/beatmeting/<script>.mjs` vanuit de projectmap.
 | rest/tel1-synth.mjs `[tempofout]`, rest/tel1-echt.mjs `id:van:duur:bpm` | restpunt 2: "tel 1 hier" met en zonder verfijnen, synthetisch en op echte muziek |
 | rest/gridpast.mjs `[id:van:duur[:nul] ...]` | restpunt 4: past het grid op elk stuk, vóór (12776ba) tegen nu, op 48 fragmenten |
 | rest/gridpast-synth.mjs `[naam ...]` | hetzelfde synthetisch, de echte kicks bekend (`LANGE_MIX=1`: ook een mix van 20 min) |
-| synth/bench.mjs `[namen] [--json f] [--code <checkout>] [--vergelijk a b] [--wav map] [--echt map]` | DE BENCHMARK (14 okt, BEATGRID.md §12): 19 synthetische nummers met bekende tellen en "1"-en (`nummers.mjs`), Beat This!-tellen met zijn fouten (`nep-beatthis.mjs`), de score met vals zeker (`scoor.mjs`); beide analyses zoals de server ze draait. Leest en schrijft alleen in de tijdelijke map. `--wav` + `server/tellen/tellen.py` + `--echt`: het echte model op dezelfde audio |
-| synth/groep.mjs `voor.json na.json ...` | de uitkomst van `bench.mjs --json` per soort fout, en de 114 gewone gevallen (met en zonder vast-72/reggae-75) |
+| synth/bench.mjs `[namen] [--json f] [--code <checkout>] [--vergelijk a b] [--wav map] [--echt map]` | DE BENCHMARK (14 okt, BEATGRID.md §12): 21 synthetische nummers met bekende tellen en "1"-en (`nummers.mjs`), Beat This!-tellen met zijn fouten (`nep-beatthis.mjs`), de score met vals zeker (`scoor.mjs`); beide analyses zoals de server ze draait. Leest en schrijft alleen in de tijdelijke map. `--wav` + `server/tellen/tellen.py` + `--echt`: het echte model op dezelfde audio |
+| synth/groep.mjs `voor.json na.json ...` | de uitkomst van `bench.mjs --json` per soort fout, en de gewone gevallen (zes soorten; met en zonder vast-72/reggae-75) |
+| synth/opstart.mjs `[--poort 8866] [namen]` | wat een nieuwe kaartversie bij het opstarten kost: een eigen proefserver (VARVE_TESTSERVER=1, tijdelijke map) met grids uit de tellen van versie 1, twee keer gestart (zonder en met `tweede-mening.json`); de `[tellen]`-regels met de tijd per nummer |
 De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking; die in
 `rest/` van 25 september. `rest/` leest geen server maar de bestanden zelf (ook vanuit een
 worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van het systeem.

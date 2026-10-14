@@ -1,4 +1,4 @@
-import { readFile, rm, stat } from 'node:fs/promises';
+import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run, GEANNULEERD } from './ingest.js';
@@ -163,11 +163,46 @@ export async function leesTellen(media, id) {
   return tellen;
 }
 
-/** tellen.json weg (nieuwe audio: de oude tellen kloppen niet meer). */
+/**
+ * DE TWEEDE MENING BEWAARD (review ronde 1, 14 okt): het grid van de oude
+ * analyse (maakGrid) waarmee de tellen vergeleken worden, als
+ * media/<id>/tweede-mening.json { versie, grid }. Een nieuwe kaartversie
+ * (VERSIE in src/engine/tellen.js) rekent dan alleen gridUitTellen en
+ * vergelijk opnieuw (milliseconden), niet de oude analyse (0,7-4 s per
+ * nummer van 3 minuten, met ffmpeg op media/). `versie` =
+ * OUDE_ANALYSE_VERSIE (server/analyze.js): een andere = niet bruikbaar.
+ */
+export const TWEEDE_BESTAND = 'tweede-mening.json';
+
+export async function leesTweede(media, id, versie) {
+  if (!/^[\w-]{1,64}$/.test(String(id))) return null;
+  try {
+    const j = JSON.parse(await readFile(join(media, id, TWEEDE_BESTAND), 'utf8'));
+    return j?.versie === versie && Array.isArray(j.grid?.stukken) && j.grid.stukken.length ? j.grid : null;
+  } catch { return null; }
+}
+
+/**
+ * Bewaren (eerst .tmp, dan hernoemen: een halve schrijf is nooit een tweede mening). Gooit nooit.
+ * `uit`: 'maakGrid' (nu uitgerekend) of 'grid' (het grid van de oude analyse dat in de library stond,
+ * bij de ingest gemaakt: niet per se van deze versie, wel waar vergelijk mee werkte).
+ */
+export async function bewaarTweede(media, id, grid, versie, { uit = 'maakGrid' } = {}) {
+  if (!/^[\w-]{1,64}$/.test(String(id)) || !grid) return false;
+  const pad = join(media, id, TWEEDE_BESTAND);
+  try {
+    await writeFile(pad + '.tmp', JSON.stringify({ versie, uit, grid }));
+    await rename(pad + '.tmp', pad);
+    return true;
+  } catch { return false; }
+}
+
+/** tellen.json weg (nieuwe audio: de oude tellen kloppen niet meer), en de bewaarde tweede mening ook. */
 export async function wisTellen(media, id) {
   if (!/^[\w-]{1,64}$/.test(String(id))) return;
   geheugen.delete(id);
-  await Promise.all([TELLEN_BESTAND, TELLEN_BESTAND + '.tmp'].map((f) => rm(join(media, id, f), { force: true }).catch(() => {})));
+  await Promise.all([TELLEN_BESTAND, TELLEN_BESTAND + '.tmp', TWEEDE_BESTAND, TWEEDE_BESTAND + '.tmp']
+    .map((f) => rm(join(media, id, f), { force: true }).catch(() => {})));
 }
 
 /**

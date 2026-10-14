@@ -17,6 +17,8 @@ const ing = await import('../server/ingest.js');
 const tl = await import('../server/tellen.js');
 const { maakNepTellen } = await import('./nep-tellen.mjs');
 const { maakNepStems } = await import('./nep-stems.mjs');
+const { VERSIE: KAART_VERSIE } = await import('../src/engine/tellen.js');
+const { OUDE_ANALYSE_VERSIE } = await import('../server/analyze.js');
 
 const fails = [];
 const ok = (naam, cond, info = '') => { if (!cond) fails.push(naam); console.log((cond ? '  ok  ' : 'FAIL  ') + naam + (!cond && info ? `  (${info})` : '')); };
@@ -158,10 +160,49 @@ try {
   }
 
   // ======================================================================
+  console.log('\nde bewaarde tweede mening (review ronde 1)');
+  {
+    const media = join(map, 'tweede');
+    mkdirSync(join(media, 'x'), { recursive: true });
+    const g = { stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 }], beatsPerBar: 4 };
+    ok('bewaren en lezen, met de versie', await tl.bewaarTweede(media, 'x', g, 3) && JSON.stringify(await tl.leesTweede(media, 'x', 3)) === JSON.stringify(g)
+      && !existsSync(join(media, 'x', tl.TWEEDE_BESTAND + '.tmp')));
+    ok('een andere versie van de oude analyse: niet bruikbaar', (await tl.leesTweede(media, 'x', 4)) === null);
+    ok('een vreemd id: niets', (await tl.leesTweede(media, '../x', 3)) === null && !(await tl.bewaarTweede(media, '../x', g, 3)));
+    writeFileSync(join(media, 'x', tl.TWEEDE_BESTAND), '{kapot');
+    ok('onleesbaar: niets (en geen fout)', (await tl.leesTweede(media, 'x', 3)) === null);
+    await tl.bewaarTweede(media, 'x', g, 3);
+    await tl.wisTellen(media, 'x');
+    ok('nieuwe audio (wisTellen): de tweede mening ook weg', !existsSync(join(media, 'x', tl.TWEEDE_BESTAND)));
+  }
+
+  // ======================================================================
   console.log('\nde server');
   const db = join(map, 'library.db');
   const media = join(map, 'media');
   const ids = ['autoA', 'handB', 'slotC', 'nummer-traag'];
+  // Een grid uit de tellen van een oudere kaartversie (zoals heel Clay's library na deze tak): opnieuw bij het
+  // opstarten. v1Bewaard heeft een bewaarde tweede mening (geen oude analyse), v1Vers niet (wel, en dan bewaard).
+  // 40 s: de oude analyse weigert onder 15 s.
+  const v1ids = ['v1Bewaard', 'v1Vers'];
+  const langWav = join(map, 'lang.wav');
+  await ing.run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi',
+    '-i', "aevalsrc='0.8*sin(2*PI*900*t)*exp(-60*mod(t,0.5))':s=48000:d=40", '-ac', '2', '-c:a', 'pcm_s16le', langWav]);
+  const tellen40 = { versie: tl.TELLEN_VERSIE, beats: Array.from({ length: 80 }, (_, k) => k * 0.5), downbeats: Array.from({ length: 20 }, (_, k) => k * 2) };
+  const v1Grid = { stukken: [{ van: 0, bpm: 120, anker: 0, maat: 0, zekerheid: 0.97 }], beatsPerBar: 4, bron: 'auto', methode: 'tellen', versie: 1 };
+  {
+    const lib = new Library(db);
+    for (const id of v1ids) {
+      mkdirSync(join(media, id), { recursive: true });
+      copyFileSync(langWav, join(media, id, 'audio.wav'));
+      writeFileSync(join(media, id, tl.TELLEN_BESTAND), JSON.stringify(tellen40));
+      lib.bewaarTrack({ id, url: `https://example.com/${id}`, titel: `titel ${id}`, uploader: 't', duur: 40,
+        audio: `media/${id}/audio.wav`, video: null, thumbnail: null, loudness: {}, doelLoudness: -14, ytdlp: 'x' });
+      lib.bewaarGrid(id, v1Grid);
+    }
+    await tl.bewaarTweede(media, 'v1Bewaard', { stukken: [{ van: 0, bpm: 120, anker: 0, zekerheid: 0.9 }], beatsPerBar: 4, bron: 'auto' }, OUDE_ANALYSE_VERSIE);
+    lib.sluit();
+  }
   {
     const lib = new Library(db);
     for (const id of ids) {
@@ -213,10 +254,23 @@ try {
     sa.find((x) => x.pad === 1)?.tellen === 4 && Math.abs(sa.find((x) => x.pad === 1)?.bpm - 120) < 1e-9
     && sa.find((x) => x.pad === 1)?.van === 1 && sa.find((x) => x.pad === 2)?.tellen === null, JSON.stringify(sa));
   ok('… en het logboek zegt het', /titel autoA: .*1 sampler-pad naar het nieuwe octaaf/.test(uit), uit.slice(-600));
+  ok('het grid van de oude analyse dat er stond is als tweede mening bewaard (een volgende kaartversie rekent hem niet opnieuw)',
+    (await tl.leesTweede(media, 'autoA', OUDE_ANALYSE_VERSIE))?.stukken?.[0]?.bpm === 240
+    && JSON.parse(readFileSync(join(media, 'autoA', tl.TWEEDE_BESTAND), 'utf8')).uit === 'grid');
   const gB = await grid('handB'), gC = await grid('slotC');
   ok('een met de hand gezet grid blijft staan', gB.bron === 'hand' && gB.stukken[0].bpm === 121 && !gB.methode);
   ok('een grid op slot ook', gC.slot === true && gC.stukken[0].bpm === 119);
   ok('… en wordt gemeten (in het logboek)', /\[tellen\] titel handB: niet bewaard .*van de tellen raak/.test(uit), uit.slice(-600));
+
+  console.log('een grid van een oudere kaartversie');
+  ok(`een tellen-grid van versie 1 wordt bij het opstarten versie ${KAART_VERSIE}`, await wachtTot(async () => {
+    const g = await Promise.all(v1ids.map(grid));
+    return g.every((x) => x?.methode === 'tellen' && x.versie === KAART_VERSIE);
+  }), JSON.stringify(await Promise.all(v1ids.map(grid))));
+  ok('… met een bewaarde tweede mening: geen oude analyse (in het logboek)', /\[tellen\] titel v1Bewaard: .* — [\d.]+ s, tweede mening bewaard/.test(uit), uit.slice(-900));
+  ok('… zonder: de oude analyse gerekend, en daarna bewaard', /\[tellen\] titel v1Vers: .* — [\d.]+ s, tweede mening uitgerekend/.test(uit)
+    && (await tl.leesTweede(media, 'v1Vers', OUDE_ANALYSE_VERSIE))?.stukken?.length > 0, uit.slice(-900));
+  ok('… en het totaal staat erbij', /\[tellen\] \d+ grids? uit bestaande tellen klaar — [\d.]+ s/.test(uit), uit.slice(-900));
 
   const t = (await json('/api/library/autoA/tellen')).j;
   ok('GET …/tellen: de tellen en downbeats', t?.beats?.length === 24 && t.downbeats.length === 6 && t.versie === 1);
@@ -258,6 +312,34 @@ try {
   const nieuw = up.j?.sleutel;
   ok('na de ingest: tellen, en het grid uit de tellen', await wachtTot(async () => (await grid(nieuw))?.methode === 'tellen', 30000),
     JSON.stringify(await grid(nieuw)));
+
+  console.log('opnieuw opstarten terwijl er een deck speelt');
+  server.kill('SIGTERM'); await new Promise((z) => { server.on('exit', z); setTimeout(z, 3000); });
+  {
+    const lib = new Library(db);
+    for (const id of v1ids) lib.bewaarGrid(id, v1Grid);
+    lib.sluit();
+    rmSync(join(media, 'v1Vers', tl.TWEEDE_BESTAND), { force: true });
+  }
+  uit = '';
+  server = spawn(process.execPath, ['server/index.js'], {
+    env: { ...process.env, PORT: String(poort), VARVE_DB: db, VARVE_TESTSERVER: '1', VARVE_MEDIA: media, VARVE_OPNAMES: join(map, 'opnames'),
+      VARVE_PLANNEN: join(map, 'plannen'), VARVE_PROEF: join(map, 'proef'), VARVE_HERANALYSE: '1500',
+      VARVE_TELLEN_CMD: nepTellen, NEP_TELLEN_LOG: tLog, VARVE_STEMS_CMD: nepStems, NEP_STEMS_LOG: sLog },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  server.stdout.on('data', (d) => { uit += d; });
+  server.stderr.on('data', (d) => { uit += d; });
+  ok('de server start opnieuw', await wachtTot(() => fetch(`${B}/api/stems`).then((r) => r.ok).catch(() => false)));
+  // Een deck streamt (een Range-verzoek op audio.wav), vóór de achtergrond begint (1,5 s na het starten).
+  const r = await fetch(`${B}/media/autoA/audio.wav`, { headers: { Range: 'bytes=0-65535' } });
+  await r.arrayBuffer();
+  ok('… een deck streamt', r.status === 206);
+  ok('met een bewaarde tweede mening: meteen opnieuw, ook als er een deck speelt (alleen rekenwerk)',
+    await wachtTot(async () => (await grid('v1Bewaard'))?.versie === KAART_VERSIE, 8000), uit.slice(-600));
+  ok('zonder: de oude analyse wacht tot er geen deck meer speelt (en zegt dat)', await wachtTot(() => /er speelt een deck: de oude analyse \(tweede mening\) wacht/.test(uit), 8000), uit.slice(-600));
+  await wacht(1500);
+  ok('… en het grid staat er nog van versie 1', (await grid('v1Vers'))?.versie === 1 && !existsSync(join(media, 'v1Vers', tl.TWEEDE_BESTAND)));
 } finally {
   if (server) { server.kill('SIGTERM'); await new Promise((z) => { server.on('exit', z); setTimeout(z, 3000); }); }
   rmSync(map, { recursive: true, force: true });

@@ -48,8 +48,13 @@ export const MIN_TELLEN = 8;
  * in server/index.js). 2 (14 okt): het DJ-tempo (dansOctaven), het begin van
  * een stuk na extra tellen (beginPeriode), een tempo dat het oude rooster
  * kruist (staartKnip), tellen boven 300 bpm (MIN_L). Bij het opstarten
- * rekent de server zo elk automatisch grid uit de tellen opnieuw (uit
- * tellen.json, zonder GPU: milliseconden per nummer).
+ * rekent de server zo elk automatisch grid uit de tellen opnieuw, zonder
+ * GPU: gridUitTellen + vergelijk zijn milliseconden, maar de TWEEDE MENING
+ * (de oude analyse, maakGrid met ffmpeg) kost 0,7-4 s per nummer van drie
+ * minuten (gemeten 14 okt) zolang hij niet bewaard is (tweede-mening.json,
+ * server/tellen.js; sinds review ronde 1). Die wacht zolang er een deck
+ * speelt (gridsUitTellen in server/index.js). Een volgende VERSIE met een
+ * bewaarde tweede mening: milliseconden.
  */
 export const VERSIE = 2;
 
@@ -428,10 +433,14 @@ export function dansFactor(bpm) {
  * Het tempo van het nummer: het octaaf waarin de meeste tellen in het bereik
  * vallen; hoort meer dan een vijfde van het nummer (in dezelfde puls) het
  * hogere octaaf, dan dat (Beat This! hoort vaker de halve tel dan de dubbele).
- * Halveren (de tellen van het netwerk zijn achtsten) kan alleen als de "1"
- * zegt welke van de twee de tel is (`kanHalveren`), of moet boven MAX_BPM.
+ * Halveren alleen als het MOET: boven MAX_BPM (300) telt het netwerk de
+ * achtsten. Daaronder blijft het tempo van het netwerk staan, ook boven
+ * DANS_MAX (review ronde 1, 14 okt: jungle, dnb en hardcore op 181-300 die
+ * Beat This! goed telt werden gehalveerd en onzeker). Telt het netwerk daar
+ * toch het dubbele, dan halveert pas vergelijk(), als de tweede mening het
+ * halve tempo hoort in de fase van de downbeats (gridUitTellen: `halveer`).
  * Een wals (3 per maat) wordt niet verdubbeld: die tel je in zijn tel.
- * @param {{ bpm: number, gewicht: number, kanHalveren: boolean }[]} delen
+ * @param {{ bpm: number, gewicht: number }[]} delen
  * @param {number} per  tellen per maat van Beat This!
  * @returns {number[]} de factor per deel
  */
@@ -439,10 +448,10 @@ export function dansOctaven(delen, per = 4) {
   if (!delen.length) return [];
   const toegestaan = (d, f) => {
     if (f > 1 && (per === 3) && d.bpm * f / 2 >= MIN_BPM) return false;
-    if (f < 1 && !d.kanHalveren && d.bpm * f * 2 <= MAX_BPM) return false;
+    if (f < 1 && d.bpm * f * 2 <= MAX_BPM) return false;
     return d.bpm * f >= MIN_BPM && d.bpm * f <= MAX_BPM;
   };
-  // Wat het bereik zegt, per deel (zonder halveren als het niet mag).
+  // Wat het bereik zegt, per deel (zonder halveren als het niet moet).
   const eigen = delen.map((d) => {
     let f = dansFactor(d.bpm);
     while (f < 1 && !toegestaan(d, f)) f *= 2;
@@ -499,7 +508,10 @@ const DANS_BIJ = Math.log2(1.06);
  * ('drift') of het tempo beweegt ('rubato'). Waar geen puls is: een stuk met
  * zekerheid 0 dat het rooster van zijn buur doortrekt (sync en beat-loops
  * weigeren daar). vergelijk() kan de zekerheid daarna nog omlaag halen, en
- * een GEHALVEERD stuk (twijfel 'tel', `halvering`) alleen zij weer zeker maken.
+ * een GEHALVEERD stuk (twijfel 'tel', `halvering`, alleen boven MAX_BPM) alleen
+ * zij weer zeker maken. Een stuk boven DANS_MAX met downbeats krijgt een
+ * voorstel `halveer` ({ bpm, anker, raak }); alleen vergelijk() voert het uit
+ * (en haalt het weg). De library bewaart geen van beide.
  * @param {ArrayLike<number>} beats
  * @param {ArrayLike<number>} [downbeats]
  * @param {{ duur?: number|null }} [opties]
@@ -577,16 +589,28 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
   // Het DJ-tempo (dansOctaven): ×2 houdt anker en "1" (elke tel van het
   // netwerk blijft een lijn); ½ houdt de tellen die op de "1" vallen.
   const echte = stukken.filter((st) => !extra.get(st).geen);
-  const factoren = dansOctaven(echte.map((st) => ({ bpm: st.bpm, gewicht: extra.get(st).gewicht, kanHalveren: extra.get(st).kanHalveren })), perBT);
+  const factoren = dansOctaven(echte.map((st) => ({ bpm: st.bpm, gewicht: extra.get(st).gewicht })), perBT);
+  const halfVanaf = (st, L2) => st.maat + Math.ceil((st.anker - st.maat) / L2 - 1e-9) * L2;
   echte.forEach((st, i) => {
     const f = factoren[i];
-    extra.get(st).f = f;
+    const x = extra.get(st);
+    x.f = f;
+    // Boven het dansbereik maar onder MAX_BPM: het tempo van het netwerk blijft
+    // staan (echte 181-300). Een VOORSTEL om te halveren, op de tellen die op de
+    // "1" vallen, alleen als de downbeats het eens zijn EN om de 8 (of 6) tellen
+    // van het netwerk vallen: twee maten van 4 (3) per maat, dus het netwerk
+    // telt het dubbele. Bij echte 186 vallen ze om de 4; daar zei de oude
+    // analyse op 93, met een "1" een tel te laat, toevallig hetzelfde, en werd
+    // 186 93 (vast-186/eenfout). Alleen vergelijk() voert het uit, als de
+    // tweede mening het halve tempo in die fase hoort (review ronde 1, 14 okt).
+    if (f === 1 && x.kanHalveren && (perBT === 8 || perBT === 6) && st.bpm > DANS_MAX && st.bpm / 2 >= MIN_BPM) {
+      x.voorstel = { bpm: st.bpm / 2, anker: halfVanaf(st, 120 / st.bpm) };
+    }
     if (f === 1) return;
     st.bpm *= f;
     if (f < 1) {
-      const L2 = 60 / st.bpm;
-      st.anker = st.maat + Math.ceil((st.anker - st.maat) / L2 - 1e-9) * L2;
-      extra.get(st).half = true;
+      st.anker = halfVanaf(st, 60 / st.bpm);
+      x.half = true;
     }
   });
   for (const st of stukken) {
@@ -603,6 +627,11 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
   // Meten op het grid zelf: zo is de zekerheid wat er op het scherm staat.
   const grid = new Beatgrid({ stukken: stukken.map(({ van, bpm, anker, maat }) => ({ van, bpm, anker, maat })), beatsPerBar });
   const meting = meetGrid(grid, B);
+  // En het grid met de voorstellen uitgevoerd: zo weet vergelijk() hoe raak het gehalveerde stuk is.
+  const voorstellen = stukken.some((s) => extra.get(s)?.voorstel);
+  const metingHalf = voorstellen ? meetGrid(new Beatgrid({
+    stukken: stukken.map((s) => ({ van: s.van, maat: s.maat, ...(extra.get(s)?.voorstel ?? { bpm: s.bpm, anker: s.anker }) })), beatsPerBar,
+  }), B) : null;
   stukken.forEach((s, i) => {
     const x = extra.get(s);
     if (!x || x.geen) return;
@@ -621,6 +650,12 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
       s.zekerheid = Math.min(s.zekerheid, ONZEKER);
     } else if (x.maatTwijfel) s.twijfel = 'maat';
     if (s.zekerheid < ZEKER_VANAF && !s.twijfel) s.twijfel = 'los';
+    // Het voorstel alleen voor een stuk dat zelf in orde is (anders is halveren geen verbetering).
+    // (Een voorstel heeft downbeats die het eens zijn, dus nooit twijfel 'maat'.)
+    if (x.voorstel && !s.twijfel) {
+      const mh = metingHalf.stukken[i];
+      s.halveer = { bpm: rond(x.voorstel.bpm, 1e4), anker: rond(x.voorstel.anker, 1e5), raak: mh.raak != null ? rond(mh.raak) : 0 };
+    }
   });
   // Getallen netjes (de JSON staat in de library): 0,1 ms voor tijden, 1e-4 voor bpm.
   for (const s of stukken) { s.van = rond(s.van, 1e4); s.anker = rond(s.anker, 1e5); s.maat = rond(s.maat, 1e5); s.bpm = rond(s.bpm, 1e4); }
@@ -773,6 +808,8 @@ export function afwijkingBij(grid, beats, t, n = VENSTER) {
 export function vergelijk(kaart, beats, ander) {
   if (!ander) return kaart;
   kaart.stukken.forEach((st, i) => {
+    const voorstel = st.halveer;
+    delete st.halveer;
     if (st.twijfel === 'geen puls') return;
     const van = st.van, tot = i + 1 < kaart.stukken.length ? kaart.stukken[i + 1].van : Infinity;
     const hier = beats.filter((b) => b >= van && b < tot);
@@ -790,6 +827,7 @@ export function vergelijk(kaart, beats, ander) {
     }
     if (!oneens) {
       if (octaaf !== 1) st.octaaf = octaaf;
+      if (voorstel && octaaf === 0.5) voerHalverenUit(st, hier, ander, voorstel);
       return;
     }
     // Rubato zegt al genoeg (dan is een tweede mening geen nieuws).
@@ -859,6 +897,32 @@ function bevestigHalvering(st, hier, ander, octaaf) {
   st.anker = rond(st.anker + L / 2, 1e5);
   if (Number.isFinite(st.maat)) st.maat = rond(st.maat + L / 2, 1e5);
 }
+/**
+ * Het VOORSTEL om te halveren (gridUitTellen, `halveer`: een stuk boven
+ * DANS_MAX met downbeats die het eens zijn) als de tweede mening het halve
+ * tempo hoort: de lijnen van het gehalveerde stuk (op de "1") in de tel van
+ * de ander, grid tegen grid. Dezelfde tel: halveren, zeker op wat het
+ * gehalveerde grid raak meet (twee bronnen eens: downbeats en de ander).
+ * Anders (de andere tel, daartussen, geen stem) blijft het tempo van het
+ * netwerk staan, met het octaaf genoteerd, zoals vóór 14 okt. NIET 'oneens':
+ * wie gelijk heeft over het TEMPO weten we dan niet. Telt Beat This! goed
+ * (echte 186) en hoort de oude analyse 93, dan kiest die zijn fase op een
+ * vier-op-de-vloer willekeurig (gemeten: vast-186 lag een halve tel van de
+ * downbeats), en dan werd een goed stuk onzeker. Een stuk waar de ander
+ * hetzelfde tempo hoort komt hier niet: dat blijft zoals het is.
+ */
+function voerHalverenUit(st, hier, ander, h) {
+  const L = 60 / h.bpm;
+  const lijnen = [];
+  for (let k = Math.ceil((hier[0] - h.anker) / L); h.anker + k * L <= hier[hier.length - 1]; k++) lijnen.push(h.anker + k * L);
+  const naast = faseTegen(ander, lijnen, 1);
+  if (naast === null || naast > HALF_EENS) return;
+  Object.assign(st, { bpm: h.bpm, anker: h.anker, zekerheid: h.raak });
+  delete st.octaaf;
+  if (st.zekerheid < ZEKER_VANAF) st.twijfel = 'los';
+  else delete st.twijfel;
+}
+
 /** Wat een twijfel betekent, voor op het scherm. */
 export const TWIJFEL_TEKST = {
   'geen puls': 'hier hoort de analyse geen puls: geen sync of beat-loops',

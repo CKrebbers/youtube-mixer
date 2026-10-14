@@ -70,14 +70,22 @@ ok('… gemiddeld ≥ 95% op het DJ-tempo', gem('dj') >= 0.95, pct(gem('dj')));
   ok(`gehalveerd zonder tweede mening (${gehalveerd.length} gevallen): nooit zeker, twijfel 'tel'`, gehalveerd.length >= 10 && zekerZonder.length === 0
     && gehalveerd.every(([, x]) => x.kaart.stukken.filter((st) => st.halvering).every((st) => st.twijfel === 'tel' || st.twijfel === 'drift' || st.twijfel === 'rubato')),
   zekerZonder.map(([k]) => k).join(', '));
-  const laat = alleMeningen.filter(([k]) => /\/dubbel-laat\/goed$/.test(k) && ['house-124', 'vast-140', 'vast-160', 'jungle-172', 'wals-150'].includes(k.split('/')[0]));
-  ok('downbeats op de "en" (dubbel-laat) tegen een tweede mening die klopt: oneens, niet zeker', laat.length === 5
+  // Boven 300 (het netwerk telt de achtsten, halveren MOET): downbeats op de "en" tegen een tweede mening die klopt = oneens.
+  const laat = alleMeningen.filter(([k]) => /\/dubbel-laat\/goed$/.test(k) && ['vast-160', 'jungle-172', 'vast-178', 'vast-186'].includes(k.split('/')[0]));
+  ok('boven 300: downbeats op de "en" (dubbel-laat) tegen een tweede mening die klopt: oneens, niet zeker', laat.length === 4
     && laat.every(([, x]) => x.s.zekerSec === 0 && x.kaart.stukken.some((st) => st.twijfel === 'oneens')), laat.map(([k, x]) => `${k} ${x.s.zekerSec} s`).join(', '));
+  // Onder 300 halveert alleen een BEVESTIGING (review ronde 1): zijn downbeats en tweede mening het oneens over de tel,
+  // dan blijft het tempo van het netwerk (zoals vóór 14 okt): elke echte tel is een lijn, dus niet vals; het octaaf
+  // staat erbij. De prijs: de "1" kan op de "en" staan (hieronder geteld, niet geëist).
+  const onder = alleMeningen.filter(([k]) => /\/(dubbel-laat\/goed|dubbel\/tegen)$/.test(k) && ['house-124', 'vast-140', 'wals-150'].includes(k.split('/')[0]));
+  ok('onder 300, downbeats en tweede mening oneens over de tel: niet gehalveerd, het octaaf genoteerd, niets vals zeker', onder.length === 6
+    && onder.every(([, x]) => !x.s.valsZeker && x.kaart.stukken.filter((st) => st.zekerheid >= ZEKER_VANAF).every((st) => st.bpm > 200 && st.octaaf === 0.5)),
+  onder.map(([k, x]) => `${k} ${x.kaart.stukken[0].bpm} "1" ${pct(x.s.een ?? 0)}`).join(', '));
   const kaal = ['vast-160', 'vast-178', 'jungle-172'].map((naam) => [naam, alleMeningen.find(([k]) => k === `${naam}/dubbel-kaal/goed`)[1]]);
   ok('boven 300 bpm zonder downbeats, het netwerk begint op de "en": de tweede mening schuift het grid op de tel, maar het blijft onzeker',
     kaal.every(([, x]) => x.s.zekerSec === 0 && x.s.naast <= 0.02 && x.kaart.stukken[0].twijfel === 'tel'), kaal.map(([k, x]) => `${k} naast ${pct(x.s.naast)}`).join(', '));
-  const tegen = ['house-124', 'vast-160', 'jungle-172'].map((naam) => [naam, alleMeningen.find(([k]) => k === `${naam}/dubbel/tegen`)[1]]);
-  ok('downbeats goed, de tweede mening hoort de offbeat: oneens, niet zeker', tegen.every(([, x]) => x.s.zekerSec === 0), tegen.map(([k, x]) => `${k} ${x.s.zekerSec} s`).join(', '));
+  const tegen = ['vast-160', 'jungle-172', 'vast-186'].map((naam) => [naam, alleMeningen.find(([k]) => k === `${naam}/dubbel/tegen`)[1]]);
+  ok('boven 300: downbeats goed, de tweede mening hoort de offbeat: oneens, niet zeker', tegen.every(([, x]) => x.s.zekerSec === 0), tegen.map(([k, x]) => `${k} ${x.s.zekerSec} s`).join(', '));
 }
 
 // Het DJ-tempo: wat Beat This! als halve of dubbele tel hoort, komt in het dansbereik.
@@ -92,6 +100,34 @@ for (const [k, wat] of [['jungle-172/bt', 'jungle: Beat This! hoort 86, het grid
 // met minder dan vier eigen downbeats: daar is maar één bron voor de fase, en die blijven onzeker ('tel').
 for (const [k, min] of [['jungle-172/dubbel', 0.95], ['vast-178/dubbel', 0.95], ['indie-154/dubbel', 0.85]]) {
   ok(`${k}: boven 300 bpm toch een grid, zeker (≥ ${pct(min)}) en op het DJ-tempo`, uit[k].s.dekking >= min && uit[k].s.dj >= 0.95, `dekking ${pct(uit[k].s.dekking)}, dj ${pct(uit[k].s.dj)}`);
+}
+// Boven het dansbereik maar onder 300 (review ronde 1, 14 okt): wat Beat This! goed telt blijft staan, zeker,
+// met of zonder tweede mening (was: gehalveerd naar 93/96 en onzeker 'tel'). Halveren daar alleen als de
+// tweede mening het halve tempo hoort in de fase van de downbeats; zonder blijft het netwerktempo (de prijs).
+{
+  const zelf = (naam, v, wie) => alleMeningen.find(([k]) => k === `${naam}/${v}/${wie}`)[1];
+  const schoon = ['vast-186', 'vast-192'].flatMap((naam) => ['geen', 'goed'].map((wie) => [`${naam}/bt/${wie}`, zelf(naam, 'bt', wie)]));
+  ok('schoon 186 en 192 met downbeats (Beat This! telt goed): zeker op het echte tempo, met en zonder tweede mening',
+    schoon.every(([, x]) => x.s.dj >= 0.95 && x.s.dekking >= 0.95 && x.kaart.stukken.every((st) => !st.twijfel && st.bpm > 180)),
+    schoon.map(([k, x]) => `${k} dj ${pct(x.s.dj)} dekking ${pct(x.s.dekking)} ${x.kaart.stukken.map((st) => `${st.bpm} ${st.twijfel ?? ''}`).join('/')}`).join(', '));
+  const geen = zelf('house-124', 'dubbel', 'geen'), goed = zelf('house-124', 'dubbel', 'goed');
+  ok('house dubbel geteld (248) zonder tweede mening: niet gehalveerd (geen tweede bron), niet vals; met een die 124 hoort: 124, zeker',
+    Math.abs(geen.kaart.stukken[0].bpm - 248) < 0.01 && !geen.s.valsZeker && Math.abs(goed.kaart.stukken[0].bpm - 124) < 0.01 && goed.s.dekking >= 0.95,
+    `${geen.kaart.stukken[0].bpm} / ${goed.kaart.stukken[0].bpm} ${pct(goed.s.dekking)}`);
+  const n186 = nummer('vast-186', { audio: false });
+  const t186 = nepTellen(n186, 'bt');
+  ok('echte 186: de downbeats om de 4 tellen van het netwerk, dus geen voorstel om te halveren',
+    gridUitTellen(t186.beats, t186.downbeats, { duur: n186.duur }).stukken.every((st) => !st.halveer));
+  const n = nummer('house-124', { audio: false });
+  const t = nepTellen(n, 'dubbel');
+  const k = gridUitTellen(t.beats, t.downbeats, { duur: n.duur });
+  const vh = k.stukken[0].halveer;
+  ok('248 met de downbeats om de 8 (het netwerk telt dubbel): een voorstel om te halveren (op de "1"), de kaart zelf blijft 248',
+    Math.abs(k.stukken[0].bpm - 248) < 0.01 && vh && Math.abs(vh.bpm - 124) < 0.01 && Math.abs(((vh.anker - k.stukken[0].maat) / (60 / 124)) % 1) < 1e-3, JSON.stringify(k.stukken[0]));
+  const na = vergelijk(structuredClone(k), t.beats, null);
+  const { normaliseerGrid } = await import('../server/library.js');
+  ok('… zonder tweede mening voert niemand het uit, en de library bewaart `halveer` niet',
+    Math.abs(na.stukken[0].bpm - 248) < 0.01 && normaliseerGrid(k).stukken.every((st) => !('halveer' in st)));
 }
 // Een nieuw tempo dat het oude rooster kruist (124 -> 131) hoorde nog 4,5 s bij het oude stuk, zeker.
 ok('mix 124 -> 131 met ruis: de grens binnen een seconde, niets vals zeker', uit['wissel-124-131/ruis'].s.grens < 1 && !uit['wissel-124-131/ruis'].s.valsZeker,
@@ -127,6 +163,8 @@ ok('het bereik: 88 en 180 blijven staan', dansFactor(DANS_MIN) === 1 && dansFact
   ok('een tempo dat rond 88 drijft springt niet halverwege naar 174', new Set(dansOctaven([d(89, 3), d(87.5, 3), d(88.4, 2)]).map((f, i) => Math.round([89, 87.5, 88.4][i] * f / 10))).size === 1);
   ok('Beat This! hoort even de halve tel: dat stuk naar het tempo van de rest', dansOctaven([d(172, 5), d(86, 1)]).join() === '1,2');
   ok('zonder "1" niet halveren (welke van de twee is de tel?), boven MAX_BPM wel', dansOctaven([d(248, 1, false)]).join() === '1' && dansOctaven([d(344, 1, false)]).join() === '0.5');
+  ok('onder MAX_BPM ook MET "1" niet halveren (echte 181-300 blijft; review ronde 1): 186, 192, 248 ×1',
+    dansOctaven([d(186)]).join() === '1' && dansOctaven([d(192)]).join() === '1' && dansOctaven([d(248)]).join() === '1' && dansOctaven([d(344)]).join() === '0.5');
   ok('een wals wordt niet verdubbeld (die tel je in zijn tel), alleen onder MIN_BPM', dansOctaven([d(75)], 3).join() === '1' && dansOctaven([d(30)], 3).join() === '2');
   ok('een eigen stuk op 95 in een mix op 175 blijft 95 (190 is 8,6% van het tempo van het nummer), 87,5 daar wel 175',
     dansOctaven([d(175, 10), d(95, 1)]).join() === '1,1' && dansOctaven([d(175, 10), d(87.5, 1)]).join() === '1,2');
@@ -222,6 +260,20 @@ try {
       const t = nepTellen(n, v);
       const kaart = vergelijk(gridUitTellen(t.beats, t.downbeats, { duur: n.duur }), t.beats, go && new Beatgrid(go));
       echt.push([`${naam}/${v}`, scoor(kaart, n)]);
+    }
+  }
+  // En wat Beat This! goed telt boven 180 (review ronde 1): de echte oude analyse hoort hetzelfde (of 93 x2),
+  // dus het blijft op het echte tempo en zeker. Vóór de herstelling: 93,0 en 96,0, onzeker ('tel').
+  for (const naam of ['vast-186', 'vast-192']) {
+    const n = nummer(naam);
+    const go = await oud(naam, wavVan(n.x));
+    // eenfout: elke "1" een tel te laat; dan viel de oude analyse op 93 (vast-186) in dezelfde fase en werd 186 93.
+    for (const v of ['bt', 'ruis', 'eenfout']) {
+      const t = nepTellen(n, v);
+      const kaart = vergelijk(gridUitTellen(t.beats, t.downbeats, { duur: n.duur }), t.beats, go && new Beatgrid(go));
+      const x = scoor(kaart, n);
+      ok(`echte oude analyse, ${naam}/${v} goed geteld: blijft ${naam.slice(5)}, zeker`, go && x.dj >= 0.95 && x.dekking >= 0.95 && !x.valsZeker,
+        `oud ${go && go.stukken.map((st) => st.bpm.toFixed(1)).join('/')}, kaart ${kaart.stukken.map((st) => `${st.bpm} z${st.zekerheid} ${st.twijfel ?? ''}`).join('/')}`);
     }
   }
   const e = Object.fromEntries(echt);

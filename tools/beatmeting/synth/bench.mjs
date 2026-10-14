@@ -73,7 +73,8 @@ const tellenMod = await import(path.join(code, 'src/engine/tellen.js'));
 const { Beatgrid } = await import(path.join(code, 'src/engine/beatgrid.js'));
 const analyze = await import(path.join(code, 'server/analyze.js'));
 const hashVan = (...xs) => { const h = createHash('sha1'); for (const x of xs) h.update(x); return h.digest('hex').slice(0, 16); };
-const oudeCode = hashVan(readFileSync(path.join(code, 'server/detect.js')), readFileSync(path.join(code, 'server/analyze.js')));
+// tellen.js hoort erbij: maakGrid haalt daar het DJ-tempo (dansOctaven) vandaan (review ronde 1).
+const oudeCode = hashVan(...['server/detect.js', 'server/analyze.js', 'src/engine/tellen.js'].map((f) => readFileSync(path.join(code, f))));
 
 /** De oude analyse op de wav, zoals de server: onset, dan het grid. Onthouden per (code, audio). */
 async function oudeAnalyse(naam, wav) {

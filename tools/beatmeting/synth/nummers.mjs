@@ -156,6 +156,13 @@ export const NUMMERS = {
     stukken: [{ tellen: vast(160, 0.2, 150), patroon: rock }] }),
   'vast-178': () => bouw({ naam: 'vast-178', beschrijving: '178, vier op de vloer', duur: 150, zaad: 16,
     stukken: [{ tellen: vast(178, 0.05, 150), patroon: vierKwart() }] }),
+  // Boven het dansbereik (180) maar echt zo snel: blijft wat het is (review ronde 1, 14 okt).
+  // (Precies de twee van de reviewer. Met een rock-patroon hoort de oude analyse op 192 het tempo 144 (3/2):
+  // dan is het oneens, vóór en na deze tak; dat is een zwakte van de oude analyse, niet van het halveren.)
+  'vast-186': () => bouw({ naam: 'vast-186', beschrijving: '186 (jungle/hardcore), vier op de vloer', duur: 150, zaad: 18,
+    stukken: [{ tellen: vast(186, 0.05, 150), patroon: vierKwart() }] }),
+  'vast-192': () => bouw({ naam: 'vast-192', beschrijving: '192, vier op de vloer', duur: 150, zaad: 17,
+    stukken: [{ tellen: vast(192, 0.05, 150), patroon: vierKwart() }] }),
 
   // Swing/shuffle: hats op 0 en 2/3 van de tel.
   'swing-118': () => bouw({ naam: 'swing-118', beschrijving: 'shuffle 118: kick 1 en 3, snare 2 en 4, hats op de geswingde achtsten', duur: 160, zaad: 21,

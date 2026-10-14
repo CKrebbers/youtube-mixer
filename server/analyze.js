@@ -364,6 +364,15 @@ async function juisteOffset(envRate, tijdOffset) {
   return Math.abs(envRate - ONSET_RATE / ONSET_HOP) < 1e-6 ? onsetVertraging(ONSET_RATE, ONSET_WIN, ONSET_HOP) : tijdOffset;
 }
 
+/**
+ * De versie van wat maakGrid geeft, voor de BEWAARDE TWEEDE MENING
+ * (tweede-mening.json naast tellen.json, server/tellen.js). Verhoog hem als
+ * analyseerGrid, maakGrid of het DJ-tempo daarin iets anders gaan geven:
+ * anders vergelijkt de server de tellen met een oude uitkomst. 1 = 14 okt
+ * (blokDrift, kantelOpPieken, alleen verdubbelen).
+ */
+export const OUDE_ANALYSE_VERSIE = 1;
+
 async function maakGridHier(onsetBestand, envRate, tijdOffset, audio) {
   let env;
   try { env = await leesEnvelope(onsetBestand); } catch (err) {
