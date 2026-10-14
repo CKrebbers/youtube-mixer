@@ -41,7 +41,7 @@ const teken = (x) => (x > 0 ? '+' : x < 0 ? '−' : '');
 const db = (d) => `${teken(Math.round(d * 10))}${komma(Math.abs(d), 1)} dB`;
 /** De andere parameter van hetzelfde effect, voor eenheden die ervan afhangen. */
 const andere = (lees, p, std) => clamp(lees?.(p) ?? std);
-const mengNaar = (doel, t, droog, nat, now) => {
+export const mengNaar = (doel, t, droog, nat, now) => {
   doel(droog.gain, Math.cos(t * Math.PI / 2), now);
   doel(nat.gain, Math.sin(t * Math.PI / 2), now);
 };
@@ -49,7 +49,7 @@ const mengNaar = (doel, t, droog, nat, now) => {
 // ---- hulpstukken -------------------------------------------------------------
 
 /** Lineair naar `naar` in `duur`, na startDrempel. Twee paden met (bijna) hetzelfde signaal: lineair telt op tot 1. */
-function lineair(param, naar, ctx, duur) {
+export function lineair(param, naar, ctx, duur) {
   const nu = ctx.currentTime, wacht = startDrempel(ctx);
   try { zetHellingen(param, (van) => [van, naar], nu, duur, wacht); }
   catch (_) { try { param.setTargetAtTime(naar, nu, duur / 3); } catch (__) { try { param.value = naar; } catch (___) {} } }
@@ -57,7 +57,7 @@ function lineair(param, naar, ctx, duur) {
 }
 
 /** Direct zetten (een pad dat niet klinkt), zonder een lopende overgang te laten winnen. */
-function direct(param, v, nu) {
+export function direct(param, v, nu) {
   try { param.cancelScheduledValues?.(nu); param.setValueAtTime(v, nu); } catch (_) { try { param.value = v; } catch (__) {} }
 }
 
@@ -67,7 +67,7 @@ function direct(param, v, nu) {
  * sample klinkt zoals zijn knoppen staan in plaats van vanaf de standaard
  * van Web Audio (een lowpass begint op 350 Hz) naar zijn stand te glijden.
  */
-function zetter(ctx) {
+export function zetter(ctx) {
   const gebouwd = ctx.currentTime;
   return (param, v, now) => {
     if (ctx.currentTime <= gebouwd) direct(param, v, now);
@@ -91,7 +91,7 @@ function zetter(ctx) {
  * @param zetPad    (pad, stand, nu) => void: de stand direct op een (stil) pad zetten
  * @param gelijk    (a, b) => boolean
  */
-function wisselaar(ctx, paden, zetPad, gelijk, fade = KOP_FADE) {
+export function wisselaar(ctx, paden, zetPad, gelijk, fade = KOP_FADE) {
   let actief = 0, klaarOm = -Infinity, wachtend = null, timer = null, weg = false;
   const stand = [null, null];
   const gebouwd = ctx.currentTime;
@@ -140,7 +140,7 @@ function wisselaar(ctx, paden, zetPad, gelijk, fade = KOP_FADE) {
  * seconden op delayTime komt. Een nieuwe basis of diepte gaat op de stille
  * kop: zo glijdt de toonhoogte nooit door het verzetten zelf, alleen door de LFO.
  */
-function tweeKoppen(ctx, ingang, uitgang, { max = 0.1, mod = null } = {}) {
+export function tweeKoppen(ctx, ingang, uitgang, { max = 0.1, mod = null } = {}) {
   const koppen = [0, 1].map(() => {
     const d = ctx.createDelay(max);
     const g = ctx.createGain();
@@ -168,7 +168,7 @@ function tweeKoppen(ctx, ingang, uitgang, { max = 0.1, mod = null } = {}) {
 }
 
 /** Een LFO als oscillator (vrij lopend, chorus/flanger/vibrato: de fase doet er niet toe). */
-function oscillator(ctx, type, f) {
+export function oscillator(ctx, type, f) {
   const o = ctx.createOscillator();
   o.type = type;
   o.frequency.value = f;
@@ -181,7 +181,7 @@ function oscillator(ctx, type, f) {
  * bouwKeten zet daarna wat het rack wil; zonder dit stond een effect dat los
  * gebouwd werd op de waarden van Web Audio (gain 1, een lowpass op 350 Hz).
  */
-function opStandaard(effect, ctx, inst) {
+export function opStandaard(effect, ctx, inst) {
   for (const p of effect.params) inst.zet(p, effect.standaard[p], ctx.currentTime);
   return inst;
 }
@@ -217,7 +217,7 @@ export function laadFxWorklet(ctx) {
  * dan (en als het nooit lukt) blijft het wat het zonder is. Wordt het effect
  * intussen opgeruimd, dan komt er geen node meer.
  */
-function metWorklet(ctx, naam, opties, klaar) {
+export function metWorklet(ctx, naam, opties, klaar) {
   const w = { node: null, weg: false };
   const maak = (meteen) => {
     if (w.weg || w.node) return;
@@ -259,7 +259,7 @@ export const SOORTEN = ['zacht', 'hard', 'fuzz', 'vouw'];
 const soortVan = (t) => SOORTEN[Math.min(SOORTEN.length - 1, Math.max(0, Math.round(clamp(t) * (SOORTEN.length - 1))))];
 /** Driehoeksvouw tussen −1 en 1 (filter app: 'fold'). */
 const vouw = (u) => { const v = (((u + 1) % 4) + 4) % 4; return v < 2 ? v - 1 : 3 - v; };
-const VORMFN = {
+export const VORMFN = {
   zacht: Math.tanh,
   hard: (u) => Math.max(-1, Math.min(1, u)),
   fuzz: (u) => Math.sign(u) * (1 - Math.exp(-Math.abs(u))),
@@ -274,10 +274,10 @@ const voorVan = (soort, t) => 1 + DRIVE_MAX[soort] * clamp(t);
  * glijdt in plaats van een nieuwe curve per knopstap (een curve vervangen is
  * een sprong). 16385 punten: 0 valt precies op een punt.
  */
-const BEREIK = 128;
+export const BEREIK = 128;
 const CURVE_N = 16385;
 const curves = new Map();
-function curveVan(soort) {
+export function curveVan(soort) {
   if (!curves.has(soort)) {
     const f = VORMFN[soort], c = new Float32Array(CURVE_N);
     for (let i = 0; i < CURVE_N; i++) c[i] = f(BEREIK * (2 * i / (CURVE_N - 1) - 1));

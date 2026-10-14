@@ -178,8 +178,9 @@ const L = await import('../src/engine/fx-lfo.js');
 const NIEUW = M.MEER_EFFECTEN.map((e) => e.id);
 
 console.log('contract');
+// Daarachter de zeven van spoor S10 (fx-s10.js): getoetst in test/effecten-s10.test.mjs.
 ok(`tien effecten uit de filter app, achter de zeven van fx.js (${NIEUW.join(', ')})`,
-  NIEUW.length === 10 && EFFECTEN.length === 17 && EFFECTEN.slice(7).every((e, k) => e === M.MEER_EFFECTEN[k]));
+  NIEUW.length === 10 && EFFECTEN.length >= 17 && EFFECTEN.slice(7, 17).every((e, k) => e === M.MEER_EFFECTEN[k]));
 ok('ids uniek over alle effecten, ook met de oude', new Set(EFFECTEN.map((e) => e.id)).size === EFFECTEN.length);
 for (const e of M.MEER_EFFECTEN) {
   const goed = typeof e.naam === 'string' && e.naam && Array.isArray(e.params) && e.params.length >= 1 && e.params.length <= 8
@@ -824,7 +825,9 @@ globalThis.AudioWorkletProcessor = class { constructor() { this.port = { onmessa
 const PROC = {};
 globalThis.registerProcessor = (naam, klasse) => { PROC[naam] = klasse; };
 await import('../src/engine/fx-worklet.js');
-ok('de worklet registreert twee processors', Object.keys(PROC).sort().join() === 'varve-fx-omhullende,varve-fx-toonhoogte');
+// En de drie van spoor S10 (kam, freqschuif, aanslag): getoetst in test/effecten-s10.test.mjs.
+ok('de worklet registreert de omhullende en de toonhoogte (en de drie van S10)', Object.keys(PROC).sort().join()
+  === 'varve-fx-aanslag,varve-fx-freqschuif,varve-fx-kam,varve-fx-omhullende,varve-fx-toonhoogte');
 {
   const toon = new PROC['varve-fx-toonhoogte'](), omh = new PROC['varve-fx-omhullende']();
   // Invoer: 64 blokken ruis + toon, vooraf gemaakt (het harnas zelf mag ook niets aanmaken).

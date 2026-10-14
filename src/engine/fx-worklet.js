@@ -9,7 +9,7 @@
  * browser de node mag opruimen. Een processor die true blijft geven, houdt
  * zichzelf in leven, ook als niets er meer aan hangt.
  */
-import { Omhullende, Toonhoogte } from './fx-kern.js';
+import { Omhullende, Toonhoogte, Kam, Freqschuif, Aanslag } from './fx-kern.js';
 
 class OmhullendeProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
@@ -62,6 +62,47 @@ class ToonhoogteProcessor extends AudioWorkletProcessor {
     return this.levend;
   }
 }
+
+/**
+ * De stereo-kernen van spoor S10 (Kam, Freqschuif, Aanslag) in één vorm: per
+ * blok de k-rate parameters als veld op de kern, dan render(). `velden` noemt
+ * welke parameter op welk veld van de kern komt.
+ */
+function stereoProcessor(Kern, descriptors) {
+  return class extends AudioWorkletProcessor {
+    static get parameterDescriptors() { return descriptors; }
+    constructor() {
+      super();
+      this.kern = new Kern(sampleRate);
+      this.levend = true;
+      this.port.onmessage = (e) => { if (e.data === 'stop') this.levend = false; };
+    }
+    process(ins, outs, p) {
+      const uit = outs[0];
+      const L = uit[0], R = uit.length > 1 ? uit[1] : uit[0];
+      const inp = ins[0];
+      const k = inp.length;
+      for (let i = 0; i < descriptors.length; i++) this.kern[descriptors[i].name] = p[descriptors[i].name][0];
+      if (k === 0) this.kern.render(L, L, 0, L, R, L.length);
+      else this.kern.render(inp[0], k > 1 ? inp[1] : inp[0], 1, L, R, L.length);
+      return this.levend;
+    }
+  };
+}
+
+const K = 'k-rate';
+registerProcessor('varve-fx-kam', stereoProcessor(Kam, [
+  { name: 'toon', defaultValue: 220, minValue: 10, maxValue: 4000, automationRate: K },
+  { name: 'fb', defaultValue: 0.5, minValue: -0.97, maxValue: 0.97, automationRate: K },
+  { name: 'demping', defaultValue: 8000, minValue: 100, maxValue: 24000, automationRate: K },
+]));
+registerProcessor('varve-fx-freqschuif', stereoProcessor(Freqschuif, [
+  { name: 'hz', defaultValue: 0, minValue: -2000, maxValue: 2000, automationRate: K },
+]));
+registerProcessor('varve-fx-aanslag', stereoProcessor(Aanslag, [
+  { name: 'aanval', defaultValue: 0, minValue: -1, maxValue: 1, automationRate: K },
+  { name: 'sustain', defaultValue: 0, minValue: -1, maxValue: 1, automationRate: K },
+]));
 
 registerProcessor('varve-fx-omhullende', OmhullendeProcessor);
 registerProcessor('varve-fx-toonhoogte', ToonhoogteProcessor);

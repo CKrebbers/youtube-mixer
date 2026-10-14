@@ -43,6 +43,13 @@ export const LFO_VORMEN = ['sinus', 'driehoek', 'blok', 'zaag'];
 export const vormVan = (t) => LFO_VORMEN[Math.min(LFO_VORMEN.length - 1,
   Math.max(0, Math.round(clamp(t) * (LFO_VORMEN.length - 1))))];
 
+/**
+ * De golven van de duiker (spoor S10): herstel kort, middel, lang (τ als deel van
+ * de cyclus). Geen deel van LFO_VORMEN: de vorm-knop van tremolo en autopan
+ * blijft vier trappen.
+ */
+export const DUIK_TAU = { duik1: 0.06, duik2: 0.15, duik3: 0.3 };
+
 /** Samples per cyclus in de buffer. */
 export const LFO_N = 4096;
 /** Randen van blok en zaag: dit deel van de periode, een halve cosinus. Hard is een tik. */
@@ -72,6 +79,12 @@ export function vormSamples(vorm, n = LFO_N) {
       else v = rand(-1, 1, (f - (1 - w)) / w);
     } else if (vorm === 'zaag') {
       v = f < 1 - w ? 1 - 2 * f / (1 - w) : rand(-1, 1, (f - (1 - w)) / w);
+    } else if (DUIK_TAU[vorm]) {
+      // De duiker (S10, fx-s10.js): −1 op de tel, herstelt met e^(−f/τ) naar +1,
+      // en zakt in de laatste LFO_RAND zacht terug naar −1 (hard is een tik).
+      const tau = DUIK_TAU[vorm];
+      const herstel = (x) => 1 - 2 * Math.exp(-x / tau);
+      v = f < 1 - w ? herstel(f) : rand(herstel(1 - w), -1, (f - (1 - w)) / w);
     } else v = Math.cos(2 * Math.PI * f);
     d[i] = v;
   }
