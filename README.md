@@ -13,7 +13,7 @@ of opent hem. Begin daar; *mixer openen* opent de mixer. De bron van de app staa
 Terugval, met de hand:
 
 ```bash
-cd ~/Desktop/"1. Projects/Youtube mixer" && node server/index.js
+cd ~/Desktop/"1. Projects/Youtube mixer" && UV_THREADPOOL_SIZE=16 node server/index.js
 ```
 
 en open **http://localhost:8777/controle** in **Chrome** (Web MIDI werkt niet in Safari).

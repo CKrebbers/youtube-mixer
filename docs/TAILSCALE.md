@@ -42,7 +42,7 @@ iPad / laptop / telefoon ──(Tailscale, HTTPS)──> Mac: tailscale serve :4
    ```
    pkill -f server/index.js
    cd <projectmap>
-   VARVE_HOSTS=<NAAM> nohup node server/index.js >> ~/.varve-server.log 2>&1 &
+   VARVE_HOSTS=<NAAM> UV_THREADPOOL_SIZE=16 nohup node server/index.js >> ~/.varve-server.log 2>&1 &
    ```
    In het log staat dan `ook via · https://<NAAM>`.
 5. **Op elk ander apparaat**: Tailscale installeren, met hetzelfde account
@@ -74,6 +74,7 @@ zonder zegt de server bij het opstarten `VARVE_HOSTS is leeg: iPad en iPhone kri
     <key>WorkingDirectory</key><string>/Users/<jij>/src/varve</string>
     <key>EnvironmentVariables</key><dict>
       <key>VARVE_HOSTS</key><string><NAAM></string>
+      <key>UV_THREADPOOL_SIZE</key><string>16</string>
       <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
     <key>RunAtLoad</key><true/>
@@ -83,7 +84,8 @@ zonder zegt de server bij het opstarten `VARVE_HOSTS is leeg: iPad en iPhone kri
   </dict></plist>
   ```
   PATH moet erin: de ingest roept `yt-dlp` en `ffmpeg` aan, en launchd kent
-  Homebrew niet. Een LaunchAgent in een iCloud-map werkt slecht: eerst VARVE
+  Homebrew niet. `UV_THREADPOOL_SIZE` ook (zoals VARVE.app): een paar codebestanden
+  die macOS uit iCloud moet halen leggen anders alle decks stil (docs/WINST.md punt 4). Een LaunchAgent in een iCloud-map werkt slecht: eerst VARVE
   uit iCloud halen.
 
 ## Wat er waar werkt
