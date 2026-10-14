@@ -286,12 +286,15 @@ export class Engine extends Emitter {
       this.off('change', this._duoVolg);
       for (const k of DECK_IDS) this.decks[k].off('change', this._duoVolg);
       this.duoKlik.stop();
+      this.gridKlik.volg = this.duoKlik.volg = false;
       if (this._duoZetteControle && this._controle?.id === oud) this.gridControle(null);
     }
     if (id && this.decks[id]) {
       this._duoZetteControle = this._controle?.id !== id;   // stond hij al aan, dan laat uit hem staan
       this._duo = id;
       this.gridControle(id);
+      // Een duw moet je meteen horen als flam: beide klikken plannen opnieuw na elke verschuiving.
+      this.gridKlik.volg = this.duoKlik.volg = true;
       this.on('change', this._duoVolg);
       for (const k of DECK_IDS) this.decks[k].on('change', this._duoVolg);
       this._volgDuo();

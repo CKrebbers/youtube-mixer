@@ -3,7 +3,7 @@
   "stuk": "uitlijn",
   "titel": "Voorbeeld: acht fasemeters op de device knobs",
   "voorbeeld": true,
-  "_uitleg": "VOORBEELD van spoor S1, geen vaste indeling: Clay maakt zelf welke knop wat doet (docs/verslagen/2026-10-14/werk-S1.md, \"Zelf invullen\"). Kopieer dit bestand of pas het aan; alleen data, geen code. Werkruimte S1 (docs/werkruimte/S1.md, WERKRUIMTE.md B4). Alleen op vrije sleutels van mappings/apc40mk2.json en in het nieuwe mapje device.uitlijn. Zolang S3 de stukken niet laadt: alleen met ?uitlijn=1 (src/ui/aanhakers/precisie.js). Komt BIJ de mapping (vervangFragment stuk:uitlijn), nooit in je eigen bewaarde mapping; een eigen regel op dezelfde plek wint.",
+  "_uitleg": "VOORBEELD van spoor S1, geen vaste indeling: Clay maakt zelf welke knop wat doet (docs/verslagen/2026-10-14/werk-S1.md, \"Zelf invullen\"). Kopieer dit bestand of pas het aan; alleen data, geen code. Werkruimte S1 (docs/werkruimte/S1.md, WERKRUIMTE.md B4). Alleen op vrije sleutels van mappings/apc40mk2.json en in het nieuwe mapje device.uitlijn. Zolang S3 de stukken niet laadt: alleen met ?uitlijn=1 (src/ui/aanhakers/precisie.js). Komt BIJ de mapping (vervangFragment stuk:uitlijn), nooit in je eigen bewaarde mapping; een eigen regel op dezelfde plek wint. De draaiknoppen hebben bewust GEEN takeover-veld (de standaard 0,02 van endless): verzet iets anders de fase (jog, sync, op de 1), dan wordt de eerste tik daarna alleen onthouden, nooit een sprong (Review ronde 1). ⇧ Lock in de grid-modus blijft slot (de regel met laag edit.aan).",
   "mapjes": {
     "nieuw": {
       "apc40mk2.device.uitlijn": {
@@ -26,11 +26,18 @@
         "label": "⇧ Lock: mapje uitlijn"
       },
       {
+        "in": "note:0:63",
+        "shift": true,
+        "laag": "edit.aan",
+        "action": "track.{focus}.grid.lock",
+        "mode": "trigger",
+        "label": "⇧ Lock in de grid-modus: blijft slot (zoals zonder dit stuk)"
+      },
+      {
         "in": "cc:0:16",
         "laag": "device.uitlijn",
         "action": "track.1.phase.offset",
         "mode": "endless",
-        "takeover": 1,
         "label": "device knob 1: fase track 1"
       },
       {
@@ -39,7 +46,6 @@
         "shift": true,
         "action": "track.1.phase.offset.fine",
         "mode": "endless",
-        "takeover": 1,
         "label": "⇧ device knob 1: fase fijn track 1"
       },
       {
@@ -47,7 +53,6 @@
         "laag": "device.uitlijn",
         "action": "track.2.phase.offset",
         "mode": "endless",
-        "takeover": 1,
         "label": "device knob 2: fase track 2"
       },
       {
@@ -56,7 +61,6 @@
         "shift": true,
         "action": "track.2.phase.offset.fine",
         "mode": "endless",
-        "takeover": 1,
         "label": "⇧ device knob 2: fase fijn track 2"
       },
       {
@@ -64,7 +68,6 @@
         "laag": "device.uitlijn",
         "action": "track.3.phase.offset",
         "mode": "endless",
-        "takeover": 1,
         "label": "device knob 3: fase track 3"
       },
       {
@@ -73,7 +76,6 @@
         "shift": true,
         "action": "track.3.phase.offset.fine",
         "mode": "endless",
-        "takeover": 1,
         "label": "⇧ device knob 3: fase fijn track 3"
       },
       {
@@ -81,7 +83,6 @@
         "laag": "device.uitlijn",
         "action": "track.4.phase.offset",
         "mode": "endless",
-        "takeover": 1,
         "label": "device knob 4: fase track 4"
       },
       {
@@ -90,7 +91,6 @@
         "shift": true,
         "action": "track.4.phase.offset.fine",
         "mode": "endless",
-        "takeover": 1,
         "label": "⇧ device knob 4: fase fijn track 4"
       },
       {
@@ -98,7 +98,6 @@
         "laag": "device.uitlijn",
         "action": "track.5.phase.offset",
         "mode": "endless",
-        "takeover": 1,
         "label": "device knob 5: fase track 5"
       },
       {
@@ -107,7 +106,6 @@
         "shift": true,
         "action": "track.5.phase.offset.fine",
         "mode": "endless",
-        "takeover": 1,
         "label": "⇧ device knob 5: fase fijn track 5"
       },
       {
@@ -115,7 +113,6 @@
         "laag": "device.uitlijn",
         "action": "track.6.phase.offset",
         "mode": "endless",
-        "takeover": 1,
         "label": "device knob 6: fase track 6"
       },
       {
@@ -124,7 +121,6 @@
         "shift": true,
         "action": "track.6.phase.offset.fine",
         "mode": "endless",
-        "takeover": 1,
         "label": "⇧ device knob 6: fase fijn track 6"
       },
       {
@@ -132,7 +128,6 @@
         "laag": "device.uitlijn",
         "action": "track.7.phase.offset",
         "mode": "endless",
-        "takeover": 1,
         "label": "device knob 7: fase track 7"
       },
       {
@@ -141,7 +136,6 @@
         "shift": true,
         "action": "track.7.phase.offset.fine",
         "mode": "endless",
-        "takeover": 1,
         "label": "⇧ device knob 7: fase fijn track 7"
       },
       {
@@ -149,7 +143,6 @@
         "laag": "device.uitlijn",
         "action": "track.8.phase.offset",
         "mode": "endless",
-        "takeover": 1,
         "label": "device knob 8: fase track 8"
       },
       {
@@ -158,7 +151,6 @@
         "shift": true,
         "action": "track.8.phase.offset.fine",
         "mode": "endless",
-        "takeover": 1,
         "label": "⇧ device knob 8: fase fijn track 8"
       },
       {

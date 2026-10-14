@@ -250,8 +250,8 @@ try {
     return { actie: r?.action, bron: r?.bron, open, knop: knop?.action, regels, bestaat: !!bus.metaOf('track.8.phase.offset.fine'),
       lees: bus.read('track.1.phase.offset') };
   })()`);
-  ok('met ?uitlijn=1: 20 regels van stuk:uitlijn, ⇧ Lock opent het mapje, knop 2 = fase van track 2', met.gestart.includes('precisie') && !met.mislukt.length
-    && st.actie === 'track.1.phase.offset' && st.bron === 'stuk:uitlijn' && st.regels === 20 && st.open === 'uitlijn' && st.knop === 'track.2.phase.offset' && st.bestaat,
+  ok('met ?uitlijn=1: 21 regels van stuk:uitlijn, ⇧ Lock opent het mapje, knop 2 = fase van track 2', met.gestart.includes('precisie') && !met.mislukt.length
+    && st.actie === 'track.1.phase.offset' && st.bron === 'stuk:uitlijn' && st.regels === 21 && st.open === 'uitlijn' && st.knop === 'track.2.phase.offset' && st.bestaat,
     JSON.stringify(st));
   await wacht(600);
   await foto('precisie-uitlijn.png');

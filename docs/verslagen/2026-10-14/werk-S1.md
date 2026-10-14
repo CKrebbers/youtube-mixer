@@ -35,7 +35,8 @@ een eerlijker sync-lampje. Op de APC als het stuk `uitlijn` (⇧ Lock = acht fas
 10. Docs: `docs/werkruimte/S1.md`, WERKRUIMTE.md S1 "Gebouwd", CLAUDE.md drie structuurregels en
     twee zinnen in het blok "Werkruimte: aanhaakpunten".
 
-Buiten de grens: niets. (De grens noemde `docs/werkruimte/S1.md`; dit verslag en de regels in
+Buiten de grens: in ronde 1 één aanhaker in `src/control/terugspelen.js` (`nummerNodig`, zie
+"Review ronde 1"); verder niets. (De grens noemde `docs/werkruimte/S1.md`; dit verslag en de regels in
 WERKRUIMTE.md en CLAUDE.md vroeg de opdracht van de werkstroom.)
 
 ## Afspraak met Clay: het stuk is een VOORBEELD
@@ -61,7 +62,8 @@ Kopieer `mappings/stukken/uitlijn.json` naar bv. `mappings/stukken/mijn-uitlijn.
 - In `mapjes.nieuw` het mapje (naam, kleur, kiesknop). Wil je geen nieuw mapje, laat `mapjes` weg
   en zet je regels zonder `laag` op knoppen die in de standaard nog vrij zijn.
 - In `regels.apc40mk2` per knop één regel: `in` (de knop, zie `docs/APC40.md`), `action`, `mode`.
-  Draaiknoppen `endless` met `takeover: 1`; drukknoppen `trigger`. `shift: true` = met Shift.
+  Draaiknoppen `endless` (zonder `takeover`-veld: zie "Review ronde 1"); drukknoppen `trigger`.
+  `shift: true` = met Shift.
 
 Voorbeeld (een aanpassing van `uitlijn.json`, dus in het mapje `device.uitlijn` van dat bestand):
 met Shift doen Device ◀ ▶ fijn joggen, en knop 1 wordt de bend-sterkte van de focus-track. Vervang
@@ -72,7 +74,7 @@ zetten: één regel per knop per mapje, met en zonder Shift):
 [
     { "in": "note:0:58", "laag": "device.uitlijn", "action": "track.{focus}.jog.fine.back", "mode": "trigger", "shift": true },
     { "in": "note:0:59", "laag": "device.uitlijn", "action": "track.{focus}.jog.fine.fwd",  "mode": "trigger", "shift": true },
-    { "in": "cc:0:16",   "laag": "device.uitlijn", "action": "track.{focus}.bend.amount",  "mode": "endless", "takeover": 1 }
+    { "in": "cc:0:16",   "laag": "device.uitlijn", "action": "track.{focus}.bend.amount",  "mode": "endless" }
 ]
 ```
 
@@ -111,6 +113,10 @@ naar `scratchpad/chrome-shell.sh` (`exec …/headless_shell --no-sandbox "$@"`).
 
 ## Alleen op de hardware te bevestigen
 
+- Zet de APC in 0x42 zijn interne knopstand gelijk aan de ring die wij sturen? (mapping.js weet
+  het niet.) Na ronde 1 geeft geen van beide gevallen een sprong, maar proef het: jog ▶ (Device ▶
+  in het mapje uitlijn), dan één tik aan knop 2: 3,81 ms of niets, nooit ~30 ms.
+
 - Is de pan-ring van de APC leesbaar als fasemeter (15 lampjes: grof ~32 ms, fijn ~4 ms per
   lampje)? Gaat het rond draaien over de rand goed onder de vinger?
 - Hoor je een duw van 0,48 ms, en klinkt een duw van 3,81 ms met 4 ms overvloei als niets?
@@ -143,3 +149,66 @@ naar `scratchpad/chrome-shell.sh` (`exec …/headless_shell --no-sandbox "$@"`).
 - "Buig precies d seconden" als segment (bend met een eindpunt) in plaats van springen.
 - De ring van de fasemeter in twee snelheden (grof/fijn) automatisch, naar hoe dicht je bij 0 zit.
 - Sync-lock: de fase vasthouden over een tempowissel van de maatgever.
+
+## Review ronde 1 (14 okt)
+
+Twee blokkerende punten, beide opgelost; van de kleine punten vier opgelost, de rest weerlegd of als
+grens vastgelegd.
+
+**B1. Terugspelen sloeg de nieuwe transport-actions niet over op een track zonder zijn nummer.**
+Klopte: `NUMMER_NODIG` ving alleen `nudge.fine.*`. Opgelost met een meta-vlag, zoals S0 het voor
+`log: 'overslaan'` deed: `nummer: true` in de define() van `phase.offset(.fine)`, `jog.*`,
+`jog.fine.*`, `nudge.fine.*`, `beatjump.quarter|half|beat.*` en `bar.align`, en in
+`src/control/terugspelen.js` een aanhaker `nummerNodig(a, metaOf)` = `NUMMER_NODIG.test(a) ||
+meta.nummer === true`, gebruikt waar `NUMMER_NODIG` stond (één regel in `_doe`). **Buiten de grens
+van S1** (terugspelen.js is van S0): 9 regels erbij, NUMMER_NODIG zelf niet veranderd. Wie samenvoegt:
+het is een toevoeging naast `slaOver`, botst met niets. Check: een Terugspeler met `zonder: [2]` en
+alle elf soorten op track 2 slaat ze alle elf over; `track.2.fader` en `track.1.jog.fwd` gaan door.
+`bend.amount` en `duoklik` horen bij de track en hebben de vlag niet.
+
+**B2. `takeover: 1` op de fasemeters gaf een sprong na een jog of sync.** Klopte, nagemeten met het
+script van de reviewer: +30,48 ms na jog ▶ en −41,91 ms na een sync (de reviewer mat −34,29; het
+hangt af van waar de fase stond), in plaats van 3,81. Opgelost: `takeover` weg uit de 16 regels
+(standaard 0,02 van `_endless`). Nieuwe checks in precisie.test, via de echte Mapping en het stuk,
+in twee gevallen (de APC zet zijn knopstand gelijk aan de ring, of niet): jog ▶ = 30,24 ms, de
+eerste tik daarna 0,00 ms (alleen onthouden), de volgende 3,81 ms; na een sync hetzelfde. Met
+`takeover: 1` terug falen ze (nagegaan). Drift kost nu hooguit één tik per 0,02 (≈ 10 ms; fijn
+≈ 1,2 ms). Of de APC zijn knopstand gelijkzet staat nu bij "Alleen op de hardware".
+
+**Kleine punten:**
+- ⇧ Lock in de grid-modus: klopte (viel terug op de regel van `edit.aan`, dus slot; met het stuk
+  opende hij uitlijn). Opgelost met een 21e regel in het stuk: `note:0:63` shift `laag: edit.aan`
+  = `track.{focus}.grid.lock`. Check: met en zonder stuk slot in de grid-modus, erbuiten opent hij
+  uitlijn. 0 botsingen.
+- takeover en de gelijkzet-vraag: zie B2.
+- De rand van de ring (0,999 + 1/127 = 1: 0,001 tel): klopt, niet opgelost. De action krijgt de
+  geklemde waarde en weet niet hoe groot de tik bedoeld was; een uitzondering op v = 1 zou de muis
+  (slepen tot 1) verkeerd laten duwen. Daar sta je een halve tel naast: jog of beatjump ¼. In S1.md
+  bij "Wat niet getest is".
+- De Duwer in een verborgen tabblad: opgelost voor het geval dat ertoe doet (pauze): verborgen en de
+  track staat stil = elke duw meteen, zonder timer (een seek in pauze is goedkoop). Spelend blijft
+  het via de timer (een hoorbaar tabblad wordt niet geknepen). De eerste tik direct uitvoeren en
+  daarna samenvoegen is NIET gedaan: dat geeft 8 sprongen in 100 ms en breekt de eis ≤ 7. Check:
+  `verborgen: () => true` → twee duwen, 0 timers, 5,000 ms; zichtbaar: via de timer.
+- phase.offset als absolute stand in het log: klopt, zo is het log (waarden, geen verschillen).
+  Vastgelegd als grens in S1.md; getest is het stabiele geval.
+- De flam van de duoklik kwam ~150 ms te laat: opgelost. Zolang de duoklik aan staat hebben beide
+  GridKliks `volg = true`: na elke `change` wordt een tik die klaarstaat maar niet meer op
+  `ctxTimeOf` van zijn tel valt (> 0,5 ms) gestopt en opnieuw gepland. De controleklik alleen houdt
+  `volg = false` en gedraagt zich precies als voorheen (check: een klaarstaande tik blijft staan).
+  Check: na een duw van 5 ms staat de hoge tik meteen 5,000 ms eerder, op `ctxTimeOf`.
+- Het stuk niet binnen gaf "aanhaker precisie niet gestart": opgelost, de aanhaker vangt het zelf
+  en meldt "het stuk … kwam niet binnen (HTTP 404). De precisie-actions werken wel". Check met een
+  nep-fetch.
+- Duwen op een remmende track doet niets: bewust (een sprong haalt de rem eraf). De knop meldt het
+  al bij de druk (`nietNu`: "remt: eerst los"); alleen als de rem begint in de 15 ms tussen tik en
+  timer is hij stil. Niet veranderd.
+
+**Gemeten na ronde 1:**
+
+| wat | commando | uitkomst |
+|---|---|---|
+| precisie | `node test/precisie.test.mjs` | 90 ok (was 73) |
+| headless | `VARVE_CHROME=…/scratchpad/chrome-shell.sh VARVE_PRECISIE_TMP=…/scratchpad/tmp-werk-S1 node tools/headless/precisie.mjs …/scratchpad/tmp-werk-S1/uit` | 14 ok; in de app nu 21 regels `stuk:uitlijn`; de rest gelijk (−0,145 ms na 15 fijne tikken, knik 0,2545 tegen 0,2897, duoklik ≤ 0,84 sample) |
+| los | handelingenlog, engine, mapping, aanhaakpunten, grid-bediening, secties-log, auto, spiegel, feedback, regels, learn | alle groen |
+| alles | `node test/alles.mjs` | 104 bestanden, 9237 checks, 266 s. Rood alleen de bekende drie van deze container: renderblok "keylock met wissels … 83,7 bytes per bericht" (gouden hash `9dfaeb73` en 0 GC groen), wachtrij "yt-dlp en zijn kind" 2×, instrumenten-fm-schaal "geen afval per blok". midi.test deze keer groen |

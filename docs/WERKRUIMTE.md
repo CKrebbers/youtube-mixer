@@ -861,6 +861,12 @@ sync-drempel), `mappings/stukken/uitlijn.json` (nieuw), `test/precisie.test.mjs`
   de sprong als de grootste tweede afgeleide tegen dezelfde muziek zonder duwen.
 - Het stuk `uitlijn.json` is een VOORBEELD (`"voorbeeld": true`, afspraak met Clay 14 okt: hij maakt
   de knoppenverdeling zelf); hoe hij het invult: `docs/verslagen/2026-10-14/werk-S1.md` "Zelf invullen".
+- Review ronde 1: de fasemeters hebben GEEN `takeover: 1` (de standaard 0,02 van endless): met 1 gaf
+  de eerste tik na een jog of sync een sprong van ~30 ms als de APC zijn knopstand gelijkzet met de
+  ring. Het stuk heeft een 21e regel: ⇧ Lock in de grid-modus (`edit.aan`) blijft slot.
+- Terugspelen: `nummer: true` in de meta (terugspelen.js `nummerNodig`, een aanhaker naast
+  NUMMER_NODIG, zoals `log: 'overslaan'` naast OVERSLAAN): duwen, jog, op de 1 en de vaste beatjumps
+  op een track zonder zijn nummer van toen worden overgeslagen.
 
 ---
 

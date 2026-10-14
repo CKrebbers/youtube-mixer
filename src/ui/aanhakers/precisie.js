@@ -58,9 +58,17 @@ export default async function opzet(ctx) {
   // Voor de headless meting (tools/headless/precisie.mjs) en om in de console te kijken.
   globalThis.varvePrecisie = { duwer };
   if (!uitlijnAan()) return;
-  const res = await fetch('mappings/stukken/uitlijn.json');
-  if (!res.ok) { await res.arrayBuffer().catch(() => {}); throw new Error(`stuk uitlijn: ${res.status}`); }
-  const stuk = await res.json();
-  if (ctx.mapping) zetStukOp(ctx.mapping, stuk);
+  // Mislukt het stuk, dan zeggen we DAT (de actions staan er al): gooien gaf de
+  // melding "aanhaker precisie niet gestart", en dat klopte niet (Review ronde 1).
+  let stuk;
+  try {
+    const res = await fetch('mappings/stukken/uitlijn.json');
+    if (!res.ok) { await res.arrayBuffer().catch(() => {}); throw new Error(`HTTP ${res.status}`); }
+    stuk = await res.json();
+    if (ctx.mapping) zetStukOp(ctx.mapping, stuk);
+  } catch (err) {
+    ctx.meld?.(`uitlijn (proef): het stuk mappings/stukken/uitlijn.json kwam niet binnen (${err?.message || err}). De precisie-actions werken wel; ⇧ Lock doet niets nieuws.`, 'fout');
+    return;
+  }
   ctx.meld?.('uitlijn (proef): ⇧ Lock = acht fasemeters op de device knobs (⇧ = fijn), Device ◀ ▶ = jog, On/Off = op de 1. Uit met ?uitlijn=0.', 'info');
 }

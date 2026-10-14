@@ -84,6 +84,15 @@ export function slaOver(a, metaOf = busMeta) {
  */
 export const NUMMER_NODIG = /^track\.\d+\.(play|cue|sync|tap|hotcue\.|beatloop\.|loop\.|nudge\.|grid\.|stem\.|section\.|seek$|beatjump\.(back|fwd)$|brake$)/;
 
+/**
+ * Hoort deze action bij het nummer? NUMMER_NODIG hierboven, OF de action zegt
+ * het zelf: `meta.nummer === true` in zijn define() (14 okt, werkruimte S1: jog,
+ * fase duwen, op de 1, de vaste beatjumps), net als `meta.log` bij slaOver.
+ */
+export function nummerNodig(a, metaOf = busMeta) {
+  return NUMMER_NODIG.test(a) || metaOf?.(a)?.nummer === true;
+}
+
 /** Het tracknummer van een action (`track.3.fader` -> 3), of null. */
 export function trackVanActie(a) {
   const m = /^track\.(\d+)\./.exec(a);
@@ -248,7 +257,7 @@ export class Terugspeler {
     // in zijn rij, de rest loopt door.
     const rij = this.laadt.get(ALLES) ?? (x.track !== null ? this.laadt.get(x.track) : undefined);
     if (rij) { rij.push(x); return; }
-    if (this.zonder.has(x.track) && (x.soort === 'actie' ? NUMMER_NODIG.test(x.a) : NUMMER_GEBEURTENIS.has(x.soort))) {
+    if (this.zonder.has(x.track) && (x.soort === 'actie' ? nummerNodig(x.a) : NUMMER_GEBEURTENIS.has(x.soort))) {
       this.stats.overgeslagen++;
       return;
     }

@@ -60,6 +60,11 @@ export class GridKlik {
     this._laatste = null;     // het telnummer van de laatst ingeplande tik
     this._versie = -1;        // deck.gridVersie toen er gepland werd
     this.aantal = 0;          // hoeveel tikken er sinds het maken zijn ingepland (voor de tests)
+    // VOLGEN (14 okt, werkruimte S1, alleen zolang de duoklik aan staat): na een
+    // 'change' ook opnieuw plannen als een tik die al klaarstaat niet meer op
+    // ctxTimeOf van zijn tel valt (een duw, jog, sync). Anders hoorde je een duw
+    // pas na VOORUIT (~0,15 s). Uit = de controleklik precies zoals hij was.
+    this.volg = false;
   }
 
   get aan() { return this.deck !== null; }
@@ -72,7 +77,11 @@ export class GridKlik {
     // sprong), niet pas bij de volgende tik van de timer: tikken die al op het
     // oude grid ingepland stonden gaan er dan in dezelfde taak af (14 okt; was
     // tot PLAN_MS = 30 ms later, en tot dan klonk de tik nog op het oude grid).
-    this._opChange = () => { if (this.deck === deck && deck.gridVersie !== this._versie) this._plan(); };
+    this._opChange = () => {
+      if (this.deck !== deck) return;
+      if (deck.gridVersie !== this._versie) this._plan();
+      else if (this.volg && this._verschoven()) { this._wis(); this._plan(); }
+    };
     deck.on?.('change', this._opChange);
     this._timer = setInterval(() => this._plan(), PLAN_MS);
     this._timer?.unref?.();
@@ -96,6 +105,17 @@ export class GridKlik {
     this._laatste = null;
   }
 
+  /** Valt een tik die nog moet klinken niet meer op zijn tel (> 0,5 ms)? */
+  _verschoven() {
+    const d = this.deck, nu = this.ctx.currentTime;
+    for (const g of this._gepland) {
+      if (g.op <= nu) continue;
+      const op = d.ctxTimeOf(g.tijd);
+      if (op !== null && Number.isFinite(op) && Math.abs(op - g.op) > 0.0005) return true;
+    }
+    return false;
+  }
+
   _plan() {
     const d = this.deck;
     if (!d?.grid || !d.playing) { if (this._laatste !== null) this._wis(); return; }
@@ -116,7 +136,7 @@ export class GridKlik {
       bron.buffer = b.maatbegin ? this._een : this._tel;
       bron.connect(this.uit);
       bron.start(op);
-      this._gepland.push({ bron, op });
+      this._gepland.push({ bron, op, tijd: b.tijd });
       this._laatste = b.beat;
       this.aantal++;
     }

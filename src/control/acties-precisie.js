@@ -19,6 +19,10 @@
  *
  * De engine kent niets van dit bestand (regel 1): hij krijgt alleen
  * deck.bendSterkte (een getal), een lengte bij beatjump en engine.duoklik().
+ *
+ * Alles wat het NUMMER verschuift (duwen, jog, ±1 ms, vaste beatjumps, op de 1)
+ * heeft `nummer: true` in zijn meta: terugspelen slaat het dan over op een track
+ * waar het nummer van toen niet op staat (terugspelen.js nummerNodig).
  */
 import { define, TRACKS } from './actions.js';
 import { ONZEKER } from '../engine/engine.js';
@@ -75,12 +79,15 @@ const SPRONG_MELDING = {
  * pas als die is ingegaan). Rekent op het moment dat hij springt, niet bij de druk.
  *
  * `na` is de timer (een test geeft een nep-klok); de timer zegt alleen
- * WANNEER, de positie komt van het deck.
+ * WANNEER, de positie komt van het deck. In een VERBORGEN tabblad op een
+ * stilstaande track wacht een duw niet op de timer (`verborgen`, Review ronde 1).
  */
 export class Duwer {
-  constructor(engine, { na = (fn, ms) => setTimeout(fn, ms), samen = SAMEN_MS } = {}) {
+  constructor(engine, { na = (fn, ms) => setTimeout(fn, ms), samen = SAMEN_MS,
+    verborgen = () => globalThis.document?.hidden === true } = {}) {
     this.engine = engine;
     this._na = na;
+    this._verborgen = verborgen;
     this.samen = samen;
     this._st = new Map();     // deckId -> { sec, loop, timer, sprongen, onderweg }
     this.uitgevoerd = 0;      // hoeveel nudge/seek er werkelijk gingen (voor de tests en de meting)
@@ -115,6 +122,10 @@ export class Duwer {
     const s = this._stand(id);
     s.sec += sec;
     if (binnenLoop) s.loop = true;
+    // Verborgen tabblad en de track staat stil: Chrome knijpt de timers daar tot
+    // ~1 per seconde (zie hub.js), dus jog in pauze kwam tot een seconde te laat.
+    // Dan meteen: een seek in pauze is goedkoop en er klinkt niets dat kan tikken.
+    if (s.timer === null && !this.engine.deck(id).playing && this._verborgen()) { this._voer(id); return; }
     this._plan(id, s, this.samen);
   }
 
@@ -245,14 +256,14 @@ export function bindPrecisie(engine, { duwer = new Duwer(engine), zeg } = {}) {
       if (f === null) return;
       duwTel(omtrek(klem(v) - (0.5 + f)));
     }, { label: `Track ${nr} fase t.o.v. de maatgever (draaien = duwen, midden = gelijk, ±½ tel)`,
-         bipolar: true, beginstand: false, overneem: true,
+         bipolar: true, beginstand: false, overneem: true, nummer: true,
          read: () => { const f = fase(); return f === null ? null : 0.5 + f; } });
     define(`${n}.phase.offset.fine`, 'value', (v) => {
       const f = fase();
       if (f === null) return;
       duwTel((klem(v) - klem(0.5 + FIJN * f)) / FIJN);
     }, { label: `Track ${nr} fase fijn (±1/16 tel, midden = gelijk)`,
-         bipolar: true, beginstand: false, overneem: true,
+         bipolar: true, beginstand: false, overneem: true, nummer: true,
          read: () => { const f = fase(); return f === null ? null : klem(0.5 + FIJN * f); } });
 
     // ---- jog en ±1 ms -------------------------------------------------------
@@ -267,17 +278,17 @@ export function bindPrecisie(engine, { duwer = new Duwer(engine), zeg } = {}) {
     };
     for (const [richting, naam, tekst] of [[-1, 'back', 'terug'], [1, 'fwd', 'vooruit']]) {
       define(`${n}.jog.${naam}`, 'trigger', jog(richting, JOG_TEL, JOG_ZONDER_GRID),
-        { label: `Track ${nr} jog ${tekst} (1/16 tel; zonder grid 5 ms; ook in pauze)`, overneem: true,
+        { label: `Track ${nr} jog ${tekst} (1/16 tel; zonder grid 5 ms; ook in pauze)`, overneem: true, nummer: true,
           read: () => (d.buffer ? 0 : null) });
       define(`${n}.jog.fine.${naam}`, 'trigger', jog(richting, JOG_FIJN_TEL, JOG_FIJN_ZONDER_GRID),
-        { label: `Track ${nr} jog fijn ${tekst} (1/64 tel; zonder grid 1 ms)`, overneem: true,
+        { label: `Track ${nr} jog fijn ${tekst} (1/64 tel; zonder grid 1 ms)`, overneem: true, nummer: true,
           read: () => (d.buffer ? 0 : null) });
       define(`${n}.nudge.fine.${naam}`, 'trigger', (on) => {
         if (!on) return;
         const r = nietNu();
         if (r) { melding(r); return; }
         duwer.duw(id, richting * DUW_FIJN * d.rate, { binnenLoop: true });
-      }, { label: `Track ${nr} 1 ms ${tekst} duwen`, overneem: true, read: () => (d.buffer ? 0 : null) });
+      }, { label: `Track ${nr} 1 ms ${tekst} duwen`, overneem: true, nummer: true, read: () => (d.buffer ? 0 : null) });
     }
 
     // ---- vaste beatjumps ----------------------------------------------------
@@ -297,7 +308,7 @@ export function bindPrecisie(engine, { duwer = new Duwer(engine), zeg } = {}) {
           if (!on) return;
           if (!d.buffer || d.remt) { melding(nietNu()); return; }
           duwer.sprong(id, () => spring(richting, tellen));
-        }, { label: `Track ${nr} beatjump ${tekst} ${wat}`, overneem: true,
+        }, { label: `Track ${nr} beatjump ${tekst} ${wat}`, overneem: true, nummer: true,
              read: () => (!d.buffer || !d.grid || d.gridZekerHier === false ? null : ingedrukt ? 1 : 0) });
       }
     }
@@ -321,7 +332,7 @@ export function bindPrecisie(engine, { duwer = new Duwer(engine), zeg } = {}) {
         if (!b || b.n === 0) return;
         spring(Math.sign(b.n), Math.abs(b.n));
       });
-    }, { label: `Track ${nr} op de 1: −2…+2 tellen naar de "1" van de maatgever (lampje = staat goed)`, overneem: true,
+    }, { label: `Track ${nr} op de 1: −2…+2 tellen naar de "1" van de maatgever (lampje = staat goed)`, overneem: true, nummer: true,
          read: () => {
            const m = maatgever();
            if (!d.buffer || !d.grid || !m?.grid) return null;

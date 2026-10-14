@@ -204,6 +204,21 @@ console.log('\njog en ±1 ms');
   const p1 = dB.position;
   invoke('track.2.jog.fine.back', true); tik(20);
   ok(`jog fijn terug: 1/64 tel (${MS(p1 - dB.position).toFixed(3)} ms)`, Math.abs(MS(p1 - dB.position) - MS(TEL / 64)) < 0.01);
+  // Verborgen tabblad (Review ronde 1): Chrome knijpt de timers, dus in pauze meteen.
+  {
+    const wacht = [];
+    const dv = new P.Duwer(eng, { na: (fn, ms) => { wacht.push(fn); return {}; }, verborgen: () => true });
+    const q0 = dB.position;
+    dv.duw('B', 0.002); dv.duw('B', 0.003);
+    ok(`verborgen en in pauze: elke duw meteen, zonder timer (${MS(dB.position - q0).toFixed(3)} ms, ${wacht.length} timers)`,
+      Math.abs(MS(dB.position - q0) - 5) < 1e-6 && wacht.length === 0 && dv.uitgevoerd === 2);
+    dv.duw('B', -0.005);
+    const dz = new P.Duwer(eng, { na: (fn, ms) => { wacht.push(fn); return {}; }, verborgen: () => false });
+    dz.duw('B', 0.002);
+    ok('zichtbaar: via de samenvoegtimer zoals altijd', wacht.length === 1 && dz.uitgevoerd === 0);
+    wacht.pop()();
+    dB.seek(q0);
+  }
   dB.play(); tik(10);
   eng.sync('B'); tik(20);
   // Tijdens spelen in een loop: fasebehoudend en binnen de loop.
@@ -358,8 +373,36 @@ console.log('\nduoklik');
     && zelfde(eng.gridKlik._een, vers._een) && zelfde(eng.gridKlik._tel, vers._tel));
   ok('de duoklik klinkt lager (880/587 Hz)', DUO_TONEN.een < KLIK_TONEN.een && DUO_TONEN.tel < KLIK_TONEN.tel && !zelfde(eng.duoKlik._een, vers._een));
   ok('meta: terugspelen slaat hem over, niet in de beginstand', T.slaOver('track.2.duoklik') && metaOf('track.2.duoklik').beginstand === false);
+  // Een duw hoor je METEEN als flam (Review ronde 1): de hoge tikken die al klaarstonden
+  // plannen opnieuw op de nieuwe fase. Zonder duoklik blijft de controleklik zoals hij was.
+  {
+    eng.gridKlik._plan();
+    const toekomst = () => eng.gridKlik._gepland.filter((g) => g.op > NOW);
+    // Zorg dat er een tik klaarstaat: tot vlak voor de volgende tel.
+    while (!toekomst().length) { NOW += 0.01; eng.gridKlik._plan(); }
+    const voor = toekomst()[0];
+    dB.nudge(0.005);
+    const nieuw = toekomst();
+    const tel = nieuw.length ? nieuw[0] : null;
+    ok(`duoklik aan: na een duw van 5 ms staat de hoge tik meteen op de nieuwe fase (${tel ? MS(voor.op - tel.op).toFixed(3) : '–'} ms eerder)`,
+      eng.gridKlik.volg && voor.bron._gestopt === true && tel && Math.abs(MS(voor.op - tel.op) - 5 / dB.rate) < 0.01
+      && Math.abs(tel.op - dB.ctxTimeOf(tel.tijd)) < 1e-9);
+    dB.nudge(-0.005);
+  }
   invoke('track.2.duoklik', true);
   ok('nog eens: uit, en de controleklik ook', eng.duoklikDeck === null && eng.gridControleDeck === null && !eng.duoKlik.aan && !eng.gridKlik.aan && read('track.2.duoklik') === 0);
+  {
+    // De controleklik alleen (zonder duoklik): volgt een duw niet, precies zoals voorheen.
+    eng.gridControle('B');
+    ok('zonder duoklik: de controleklik volgt niet (volg uit)', eng.gridKlik.volg === false);
+    const toekomst = () => eng.gridKlik._gepland.filter((g) => g.op > NOW);
+    while (!toekomst().length) { NOW += 0.01; eng.gridKlik._plan(); }
+    const voor = toekomst()[0];
+    dB.nudge(0.005);
+    ok('… een tik die klaarstond blijft staan', toekomst()[0] === voor && !voor.bron._gestopt);
+    dB.nudge(-0.005);
+    eng.gridControle(null);
+  }
   eng.gridControle('B');
   invoke('track.2.duoklik', true); invoke('track.2.duoklik', true);
   ok('stond de controleklik al aan, dan laat de duoklik hem bij uit staan', eng.duoklikDeck === null && eng.gridControleDeck === 'B' && eng.gridKlik.aan);
@@ -390,6 +433,25 @@ console.log('\nhandelingenlog en auto-DJ');
   const nu = eng.faseVerschil('B') - g0;
   ok(`duwen speelt terug als dezelfde duw (${MS(toen).toFixed(3)} en ${MS(nu).toFixed(3)} ms)`, Math.abs(MS(toen - nu)) < 0.01 && !T.slaOver('track.2.phase.offset'));
   const st = H.leesStand({ engine: eng, tracks: bus.TRACKS, herkomst: () => null, acties: list(), lees: read });
+  // Op een track waar het nummer van toen niet staat (Review ronde 1): alles wat
+  // het nummer verschuift overgeslagen, de fader gaat door.
+  const verschuift = ['jog.fwd', 'jog.back', 'jog.fine.fwd', 'jog.fine.back', 'nudge.fine.fwd', 'phase.offset', 'phase.offset.fine',
+    'bar.align', 'beatjump.quarter.fwd', 'beatjump.half.back', 'beatjump.beat.back'].map((a) => `track.2.${a}`);
+  ok('meta.nummer op alles wat het nummer verschuift (terugspelen nummerNodig)', verschuift.every((a) => metaOf(a).nummer === true && T.nummerNodig(a))
+    && !T.nummerNodig('track.2.bend.amount') && !T.nummerNodig('track.2.duoklik') && !T.nummerNodig('track.2.fader'));
+  {
+    const gedaan = [];
+    let kt = 0;
+    const sp = new T.Terugspeler({ klok: () => kt, invoke: (a, v) => gedaan.push(`${a}=${v}`), elke: () => ({}), stopElke: () => {},
+      doe: { stand: async () => ({ zonder: [2] }), laad: async () => true, rack() {}, grid() {}, hotcues() {}, focus() {}, pads() {} } });
+    const regels = [...verschuift.map((a, i) => [0.01 * (i + 1), a, a.includes('phase') ? 0.6 : true]), [0.5, 'track.2.fader', 0.3], [0.6, 'track.1.jog.fwd', true]];
+    await sp.start({ stand: { tracks: [] }, regels });
+    kt = 1; sp._tik();
+    ok(`terugspelen op een track zonder zijn nummer: ${sp.stats.overgeslagen} overgeslagen, door: ${gedaan.join(', ')}`,
+      sp.stats.overgeslagen === verschuift.length && gedaan[0] === 'track.2.fader=0.3' && gedaan[1] === 'track.1.jog.fwd=true'
+      && gedaan.slice(2).every((x) => x === 'track.1.jog.fwd=false'));   // aan het eind laat terugspelen los wat nog ingedrukt is
+    sp.stop();
+  }
   ok('phase.offset (en .fine) staat niet in de beginstand; bend.amount wel', !('track.2.phase.offset' in st.waarden)
     && !('track.2.phase.offset.fine' in st.waarden) && 'track.2.bend.amount' in st.waarden);
 }
@@ -402,16 +464,18 @@ console.log('\nhet stuk mappings/stukken/uitlijn.json');
   const bezet = new Set(std.rules.map(sleutelVan));
   const regels = stuk.regels.apc40mk2;
   const botsing = regels.filter((r) => bezet.has(sleutelVan(r)));
-  ok(`0 botsingen met apc40mk2.json (${regels.length} regels)`, botsing.length === 0 && regels.length === 20);
+  ok(`0 botsingen met apc40mk2.json (${regels.length} regels)`, botsing.length === 0 && regels.length === 21);
   ok('formaat B4: schema 1, stuk uitlijn, mapje device.uitlijn op ⇧ Lock, groen',
     stuk.schema === 1 && stuk.stuk === 'uitlijn' && stuk.mapjes.nieuw['apc40mk2.device.uitlijn'].kleur === 'groen'
     && stuk.mapjes.nieuw['apc40mk2.device.uitlijn'].kiesknop.in === 'note:0:63' && stuk.mapjes.nieuw['apc40mk2.device.uitlijn'].kiesknop.shift === true);
   // Afspraak met Clay (14 okt): hij maakt de knoppenverdeling zelf; wat wij leveren is een voorbeeld.
   ok('het stuk is gemarkeerd als voorbeeld (voorbeeld: true, titel en _uitleg zeggen het)',
     stuk.voorbeeld === true && /^Voorbeeld/.test(stuk.titel) && /^VOORBEELD/.test(stuk._uitleg));
-  ok('16 knopregels endless met takeover 1, knop k = track k (⇧ = fijn)', [1, 2, 3, 4, 5, 6, 7, 8].every((k) =>
-    regels.some((r) => r.in === `cc:0:${15 + k}` && r.laag === 'device.uitlijn' && !r.shift && r.action === `track.${k}.phase.offset` && r.mode === 'endless' && r.takeover === 1)
-    && regels.some((r) => r.in === `cc:0:${15 + k}` && r.laag === 'device.uitlijn' && r.shift && r.action === `track.${k}.phase.offset.fine` && r.mode === 'endless' && r.takeover === 1)));
+  // Bewust ZONDER takeover-veld (Review ronde 1): de standaard-eps van endless
+  // (0,02) beschermt tegen een sprong na een verschuiving van buiten; zie hieronder.
+  ok('16 knopregels endless zonder takeover-veld, knop k = track k (⇧ = fijn)', [1, 2, 3, 4, 5, 6, 7, 8].every((k) =>
+    regels.some((r) => r.in === `cc:0:${15 + k}` && r.laag === 'device.uitlijn' && !r.shift && r.action === `track.${k}.phase.offset` && r.mode === 'endless' && !('takeover' in r))
+    && regels.some((r) => r.in === `cc:0:${15 + k}` && r.laag === 'device.uitlijn' && r.shift && r.action === `track.${k}.phase.offset.fine` && r.mode === 'endless' && !('takeover' in r))));
   // Het mapje en de regels in een echte Mapping, zoals de aanhaker het doet.
   const m = new Mapping({ read, invoke, vars: () => ({ focus: 2 }), lagen: () => ['device.uitlijn'], metaOf });
   m.load(std);
@@ -421,8 +485,8 @@ console.log('\nhet stuk mappings/stukken/uitlijn.json');
   const r1 = zetStukOp(m, stuk);
   const na1 = m.rules.size;
   zetStukOp(m, stuk);
-  ok(`zetStukOp: mapje erbij, 20 regels; twee keer = één keer (${voor} → ${na1} → ${m.rules.size})`, r1.mapjes === 1 && r1.regels === 20
-    && na1 === voor + 20 && m.rules.size === na1 && L.LAAGNAAM['device.uitlijn']?.startsWith('uitlijn') && L.MAPJE_KLEUR['device.uitlijn'] === 'groen');
+  ok(`zetStukOp: mapje erbij, 21 regels; twee keer = één keer (${voor} → ${na1} → ${m.rules.size})`, r1.mapjes === 1 && r1.regels === 21
+    && na1 === voor + 21 && m.rules.size === na1 && L.LAAGNAAM['device.uitlijn']?.startsWith('uitlijn') && L.MAPJE_KLEUR['device.uitlijn'] === 'groen');
   invoke('layer.device.uitlijn', true); invoke('layer.device.uitlijn', false);
   ok('layer.device.uitlijn bestaat op de bus (herbindLagen) en opent het mapje', !!metaOf('layer.device.uitlijn') && lagen.stand.device === 'uitlijn'
     && m.kies('note:0:63', { shift: true })?.action === 'layer.device.uitlijn' && m.kies('note:0:63', { shift: false })?.action === 'transport.quantize');
@@ -457,11 +521,78 @@ console.log('\nhet stuk mappings/stukken/uitlijn.json');
   tik(20);
   m.shift = false;
   ok(`⇧ + knop 2, één tik: ${MS(eng.faseVerschil('B') - g0).toFixed(3)} ms (0,48)`, Math.abs(MS(eng.faseVerschil('B') - g0) - MS(TEL / 1016)) < 0.05);
+
+  // JOG of SYNC en dan één tik (Review ronde 1): nooit een sprong, of de APC zijn
+  // interne knopstand nu gelijkzet met de ring die wij sturen of niet. Met
+  // takeover: 1 telde de tik na een jog alles mee (+30,48 ms i.p.v. +3,81).
+  {
+    const ms = () => MS(eng.faseVerschil('B'));
+    const ring = () => Math.round(read('track.2.phase.offset') * 127);
+    const tikKnop = (waarde) => { m.handle({ type: 'cc', sig: 'cc:0:17', value: waarde, norm: waarde / 127 }); tik(20); };
+    const jogVooruit = () => { m.handle({ type: 'note', sig: 'note:0:59', on: true, value: 127, norm: 1 }); m.handle({ type: 'note', sig: 'note:0:59', on: false, value: 0, norm: 0 }); tik(20); };
+    ok('Device ▶ in het mapje uitlijn = jog vooruit van de focus-track', m.kies('note:0:59')?.action === 'track.{focus}.jog.fwd');
+    for (const [naam, volgtRing] of [['de APC volgt de ring', true], ['de APC volgt de ring niet', false]]) {
+      eng.sync('B'); tik(20);
+      let knop = ring();
+      tikKnop(knop); tikKnop(++knop);                   // de knop is "warm"
+      const a0 = ms();
+      tikKnop(++knop);
+      const gewoon = ms() - a0;
+      jogVooruit();
+      const b0 = ms();
+      ok(`${naam}: jog ▶ = 1/16 tel (${(b0 - a0 - gewoon).toFixed(2)} ms)`, Math.abs(b0 - a0 - gewoon - MS(TEL / 16)) < 0.05);
+      if (volgtRing) knop = ring();
+      tikKnop(++knop);                                  // eerste tik na de jog: onthouden, geen sprong
+      const na1 = ms() - b0;
+      tikKnop(++knop);
+      const na2 = ms() - b0;
+      ok(`${naam}: één tik na de jog is geen sprong (${na1.toFixed(2)} ms; de volgende ${(na2 - na1).toFixed(2)} ms = 3,81)`,
+        Math.abs(na1) <= MS(TEL / 127) + 0.05 && Math.abs(na2 - na1 - MS(TEL / 127)) < 0.05);
+      // En na een sync (die de fase terugzet naar 0).
+      eng.sync('B'); tik(20);
+      const c0 = ms();
+      if (volgtRing) knop = ring();
+      tikKnop(++knop);
+      const s1 = ms() - c0;
+      tikKnop(++knop);
+      const s2 = ms() - c0;
+      ok(`${naam}: één tik na een sync is geen sprong (${s1.toFixed(2)} ms; de volgende ${(s2 - s1).toFixed(2)} ms)`,
+        Math.abs(s1) <= MS(TEL / 127) + 0.05 && Math.abs(s2 - s1 - MS(TEL / 127)) < 0.05);
+    }
+  }
+  // ⇧ Lock in de grid-modus blijft slot (zonder het stuk viel hij terug op de regel van edit.aan).
+  {
+    const mg = new Mapping({ read, invoke, vars: () => ({ focus: 2 }), lagen: () => ['edit.aan'], metaOf });
+    mg.load(std);
+    const zonder = mg.kies('note:0:63', { shift: true })?.action;
+    zetStukOp(mg, stuk);
+    ok(`⇧ Lock in de grid-modus: slot, met en zonder het stuk (${zonder} → ${mg.kies('note:0:63', { shift: true })?.action})`,
+      zonder === 'track.{focus}.grid.lock' && mg.kies('note:0:63', { shift: true })?.action === 'track.{focus}.grid.lock'
+      && mg.kies('note:0:63', { shift: false })?.action === 'track.{focus}.grid.lock');
+    const mn = new Mapping({ read, invoke, vars: () => ({ focus: 2 }), lagen: () => [], metaOf });
+    mn.load(std); zetStukOp(mn, stuk);
+    ok('… en erbuiten opent ⇧ Lock het mapje uitlijn', mn.kies('note:0:63', { shift: true })?.action === 'layer.device.uitlijn');
+  }
   ok('de vlag ?uitlijn=1 / 0 / onthouden', (() => {
     const o = new Map(); const opslag = { getItem: (k) => o.get(k) ?? null, setItem: (k, v) => o.set(k, v), removeItem: (k) => o.delete(k) };
     return !uitlijnAan('http://x/', opslag) && uitlijnAan('http://x/?uitlijn=1', opslag) && uitlijnAan('http://x/', opslag)
       && !uitlijnAan('http://x/?uitlijn=0', opslag) && !uitlijnAan('http://x/', opslag);
   })());
+}
+
+// ---- 11. de aanhaker: het stuk komt niet binnen -----------------------------------------------
+{
+  // Review ronde 1: gooien gaf "aanhaker precisie niet gestart", terwijl de actions er al stonden.
+  const opzet = (await import(WORTEL + 'src/ui/aanhakers/precisie.js')).default;
+  const oudFetch = globalThis.fetch, oudLoc = globalThis.location;
+  globalThis.fetch = async () => ({ ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) });
+  globalThis.location = { href: 'http://x/?uitlijn=1' };
+  const gemeld = [];
+  let gooide = false;
+  try { await opzet({ engine: eng, meld: (t, s) => gemeld.push([t, s]) }); } catch (_) { gooide = true; }
+  globalThis.fetch = oudFetch; globalThis.location = oudLoc;
+  ok(`stuk niet binnen: geen worp, één eigen melding (${gemeld[0]?.[0]?.slice(0, 60)}…)`, !gooide && gemeld.length === 1 && gemeld[0][1] === 'fout'
+    && /uitlijn\.json kwam niet binnen \(HTTP 404\)/.test(gemeld[0][0]) && !!metaOf('track.2.jog.fwd'));
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT:\n  ${fails.join('\n  ')}` : '\nAlle checks groen.');

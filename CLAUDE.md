@@ -1878,7 +1878,10 @@ Duwer (hooguit één nudge/seek per 15 ms, met keylock nooit twee geplande spron
 `tools/headless/precisie.mjs`. Een spoor van de werkruimte raakt ALLEEN zijn eigen stub:
 `src/ui/aanhakers/<spoor>.js`, `src/ui/beschrijf/<spoor>.js`, `src/ui/css/<spoor>.css`,
 `server/routes/<spoor>.js`. Uitzonderingen in de meta van de action, niet in een regex:
-`log: 'overslaan'`, `beginstand: false`, `overneem: true`, `alleenScherm: true`. Mapjes van buiten:
+`log: 'overslaan'`, `beginstand: false`, `overneem: true`, `alleenScherm: true`, `nummer: true` (hoort
+bij het nummer: terugspelen slaat hem over op een track zonder zijn nummer van toen, `nummerNodig`). Een
+fasemeter op een endless-knop krijgt GEEN `takeover: 1`: dan geeft de eerste tik na een jog of sync een
+sprong (docs/werkruimte/S1.md). Mapjes van buiten:
 `voegMapjeToe`/`haalMapjeWeg`/`zetVolgorde` (lagen.js) en daarna `herbindLagen()`; regels van buiten:
 `mapping.vervangFragment(bron, doc)`/`haalWeg(bron)` (een eigen regel wint altijd).
 
