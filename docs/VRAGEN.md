@@ -45,7 +45,8 @@ De proefavonden staan in de Controlekamer (blokken "Werkruimte · E0 … D").
 - [ ] **W9. Standen (`PUT /api/standen`, `…/activeer`) ook alleen vanaf de Mac?** 💬 Nu kan de Controlekamer via Tailscale
   een stand activeren. **Advies:** ja, alleen vanaf de Mac (een kleine wijziging in server/index.js, nog niet gedaan).
 - [ ] **W10. Vertraging op de echte iPhone.** 🎧 Headless (loopback, software-GL): POST -> mixer p50 13 ms, p99 38 ms; met
-  het tekenen van de pagina erbij p50 ~30 ms. **Advies:** meten op avond D (proefpunt wd-xy); voelt het traag, dan een
+  het tekenen van de pagina erbij p50 ~30 ms, maar een staart tot ~700 ms (aan de kant van de headless pagina met
+  software-GL). **Advies:** meten op avond D (proefpunt wd-xy); voelt het traag, dan een
   WebSocket in plaats van POST (volgende versie).
 - [ ] **W11. Twee vingers op één xy-pad?** 👀 Nu: één vinger per pad (twee pads = twee vingers). **Advies:** zo laten.
 - [ ] **W12. De positie op de iPad binnen 5 ms** is hier niet aan te tonen (de headless audioklok hapert). 🎧 **Advies:**
@@ -55,7 +56,9 @@ De proefavonden staan in de Controlekamer (blokken "Werkruimte · E0 … D").
 
 **Inrichten (S8)**
 - [ ] **W14. Toewijzen in een eigen mapje per paneel (`p-<paneel>`) dat het deel openzet: goed?** 💬 Zo raakt het nooit de
-  standaard en doet het alleen in dat deel iets. **Advies:** zo laten; na de proef kan wat bevalt naar de standaard.
+  standaard en doet het alleen in dat deel iets. Let op: het VERVANGT het mapje van dat deel voor die groep (in
+  twee-handen FX wordt de Maschine-pagina dan p-dub in plaats van rack; ◄ ► bladert nog naar rack). Aanwijzen door een
+  control te bewegen voert die control ook uit (een klik op het scherm niet). **Advies:** zo laten; na de proef kan wat bevalt naar de standaard.
 - [ ] **W15. F1–F8 als groep voor een paneel** kan alleen in een werkruimte zonder het stuk maschine-delen (anders kiezen
   F1–F8 het deel). 💬 **Advies:** zo laten.
 

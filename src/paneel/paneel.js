@@ -302,22 +302,24 @@ if (ir) {
   const lijst = document.createElement('div'); lijst.className = 'wp-ir-lijst'; lijst.hidden = true;
   kop.status.before(knop, zoek);
   document.querySelector('.wp-kop')?.after(lijst);
-  let aan = false, markeer = null;
+  let aan = false, markeer = null, api = null;   // api: de inrichter van de mixer, pas geladen bij de eerste ✎
   const eerstePaneel = () => vakken.find((v) => v.paneel && /^paneel:/.test(v.naam));
   const toonLijst = () => {
-    lijst.replaceChildren(...ir.zoek(zoek.value).slice(0, 30).map((x) => {
+    if (!api) return;
+    lijst.replaceChildren(...api.zoek(zoek.value).slice(0, 30).map((x) => {
       const b = document.createElement('button'); b.className = 'wp-ir-vond'; b.textContent = `${x.top ? `${x.top}. ` : ''}${x.id}`;
       b.addEventListener('click', async () => {
         const v = eerstePaneel();
         if (!v) { meldKort('geen paneel op dit scherm in dit deel: zet er eerst een op (✎ in de mixer)'); return; }
-        const r = await ir.inrichter.voegToe(v.naam.slice(7), itemVoor(x.id, verb.metaOf(x.id.replace('{focus}', verb.vars().focus ?? '1'))));
+        const r = await api.inrichter.voegToe(v.naam.slice(7), itemVoor(x.id, verb.metaOf(x.id.replace('{focus}', verb.vars().focus ?? '1'))));
         meldKort(r.ok ? `${x.id} staat op ${v.naam}` : r.reden);
       });
       return b;
     }));
   };
   zoek.addEventListener('input', toonLijst);
-  knop.addEventListener('click', () => {
+  knop.addEventListener('click', async () => {
+    try { api ??= await ir.laad(); } catch (_) { meldKort('inrichten laadt niet in de mixer'); return; }
     aan = !aan;
     knop.classList.toggle('aan', aan); zoek.hidden = !aan; lijst.hidden = !aan;
     document.body.classList.toggle('wp-inrichten', aan);
@@ -338,7 +340,7 @@ if (ir) {
     if (i < 0) return;
     if (markeer?.i === i && markeer.v === v.naam && performance.now() - markeer.t < 3000) {
       markeer = null;
-      const r = await ir.inrichter.haalWeg(v.naam.slice(7), i);
+      const r = await api.inrichter.haalWeg(v.naam.slice(7), i);
       meldKort(r.ok ? 'weggehaald' : r.reden);
     } else { markeer = { i, v: v.naam, t: performance.now() }; itemEl.classList.add('wp-ir-vraag'); setTimeout(() => itemEl.classList.remove('wp-ir-vraag'), 3000); meldKort('nog eens binnen 3 s = weghalen'); }
   }, true);

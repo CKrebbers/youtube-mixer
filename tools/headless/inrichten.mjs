@@ -18,6 +18,7 @@ try {
   const M = await h.nieuwePagina(`${h.basis}/?werk=proef`);
   await mixerKlaar(h, M, { tracks: 2 });
   await h.totdat(M, "window.varveInrichten && window.werk.naam === 'proef'", 15000);
+  ok('lui: zolang niemand ✎ indrukt is er geen inrichtpaneel en geen inrichten.js', await h.ev(M, "!document.querySelector('.ir-paneel') && !performance.getEntriesByType('resource').some((r) => /werk\\/inrichten\\.js|top40\\.json/.test(r.name))"));
   ok('✎ staat op de werk-balk', await h.ev(M, "!!document.querySelector('#werk-balk .werk-inrichten')"));
   await h.ev(M, "document.querySelector('#werk-balk .werk-inrichten').click(), true");
   ok('het inrichtpaneel gaat open, met de panelen van de werkruimte', await h.totdat(M, "!document.querySelector('.ir-paneel').hidden && [...document.querySelectorAll('.ir-paneel-kies option')].some((o) => o.value === 'vier')", 5000) !== false);
@@ -62,7 +63,7 @@ try {
   // Terug: de vorige inrichting (zonder het iphone-scherm).
   await h.ev(M, "document.querySelector('.ir-terug').click(), true");
   ok('↶ terug: de vorige inrichting (het iphone-scherm weer weg)', await h.totdat(M, '!window.werk.ruw.delen.mix.schermen.iphone', 8000) !== false);
-  ok('werk.terug staat op de bus, alleen voor het scherm', await h.ev(M, "(() => { const m = window.varvePaneel.metaOf('werk.terug'); return !!m && m.alleenScherm === true && m.log === 'overslaan'; })()"));
+  ok('werk.terug staat op de bus (ook zonder ✎), alleen voor het scherm', await h.ev(M, "(() => { const m = window.varvePaneel.metaOf('werk.terug'); return !!m && m.alleenScherm === true && m.log === 'overslaan'; })()"));
   const fout = [...h.sessies.values()].flatMap((s) => s.fouten).filter((f) => !/ERR_CONNECTION|favicon|net::|Failed to load resource/.test(f));
   ok('geen fouten in de console', fout.length === 0, fout.slice(0, 3).join(' | '));
 } catch (e) {

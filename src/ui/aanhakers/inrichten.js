@@ -22,7 +22,25 @@ import { leesWeg } from '../../lib/antwoord.js';
 
 export default async function opzet(ctx) {
   if (!ctx?.werk || typeof document === 'undefined') return;
-  const { werk, define, meld, metaOf, midi } = ctx;
+  const { werk, define, meld } = ctx;
+  // Lui: met `standaard` (of zolang niemand ✎ indrukt) laadt hier niets: geen module, geen fetch, geen paneel.
+  // Alleen de knop (de werk-balk is dan hidden) en de action werk.terug (die pas bij gebruik laadt).
+  let klaar = null;
+  const laad = () => (klaar ??= bouw(ctx));
+  define('werk.terug', 'trigger', (on) => { if (on) laad().then((x) => x.inrichter.terug()); },
+    { label: 'Werkruimte: terug naar de vorige inrichting', alleenScherm: true, log: 'overslaan', beginstand: false });
+  const knop = document.createElement('button');
+  knop.className = 'ghost werk-inrichten';
+  knop.textContent = '✎';
+  knop.title = 'inrichten zonder JSON: knoppen aanwijzen, panelen maken en op een scherm of een groep knoppen zetten';
+  knop.addEventListener('click', () => laad().then((x) => x.open(x.el.hidden)));
+  voegKnopToe(knop);
+  window.varveInrichten = { laad };
+  void meld; void werk;
+}
+
+async function bouw(ctx) {
+  const { werk, meld, metaOf, midi } = ctx;
   const I = await import('../../werk/inrichten.js');
 
   const bewaar = async (naam, ruw, versie) => {
@@ -38,10 +56,6 @@ export default async function opzet(ctx) {
     return { ok: r.ok, status: r.status, versie: d?.versie, fout: d?.fout };
   };
   const inrichter = new I.Inrichter({ werk, bewaar, terugApi, meld: (t, s) => meld?.(t, s) });
-
-  // werk.terug: alleen op het scherm (een mapping weigert hem op een knop), en nooit van buiten de Mac (VAST_NOOIT).
-  define('werk.terug', 'trigger', (on) => { if (on) inrichter.terug(); },
-    { label: 'Werkruimte: terug naar de vorige inrichting', alleenScherm: true, log: 'overslaan', beginstand: false });
 
   let top40 = [];
   try { const r = await fetch('tools/werkruimtes/top40.json'); if (r.ok) top40 = (await r.json())?.top40 ?? []; else await leesWeg(r); } catch (_) {}
@@ -74,9 +88,7 @@ export default async function opzet(ctx) {
     rij('zet op scherm', schermen), rij('wijs toe aan', doelen), rij('', terug), stand);
   document.body.appendChild(el);
 
-  const knop = maak('button', 'ghost werk-inrichten', '✎');
-  knop.title = 'inrichten zonder JSON: knoppen aanwijzen, panelen maken en op een scherm of een groep knoppen zetten';
-  voegKnopToe(knop);
+  const knop = document.querySelector('#werk-balk .werk-inrichten') ?? maak('button');
 
   let gekozen = null;
   let markeer = null;   // { i, t } eerste klik op een item
@@ -201,10 +213,11 @@ export default async function opzet(ctx) {
     else zegStand('');
     ververs();
   };
-  knop.addEventListener('click', () => open(el.hidden));
   dicht.addEventListener('click', () => open(false));
   werk.on?.('change', () => { if (!el.hidden) ververs(); });
 
   // Voor de headless proeven en de console.
-  window.varveInrichten = { inrichter, open, erbij, zoek: (t) => I.zoek(t, { alle: alleNu(), top40 }), get gekozen() { return gekozen; }, set gekozen(n) { gekozen = n; }, top40: () => top40 };
+  const api = { el, inrichter, open, erbij, zoek: (t) => I.zoek(t, { alle: alleNu(), top40 }), get gekozen() { return gekozen; }, set gekozen(n) { gekozen = n; }, top40: () => top40 };
+  Object.assign(window.varveInrichten, api);
+  return api;
 }

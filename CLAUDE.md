@@ -203,11 +203,13 @@ src/
                     stand-tegel.js  de tegel "Opstelling", het adres van "mixer openen", de tekst onder de kiezer (docs/STANDEN.md). Puur.
                     stand-bewerker.js een opstelling instellen zonder JSON: keuzelijsten → stand. Puur.
                     avondpakket-tegel.js  de tegel "Avondpakket" (vertrek/aankomst, docs/AVONDPAKKET.md). Puur.
+                    bedienen-tegel.js  het blok "Bedienen vanaf iPad en iPhone" (S8): aan/uit, koppelcode, apparaten, intrekken
   standen/          stand-model.js  het formaat van een stand (schema 1): witte lijst van delen, de nacht alleen remmen,
                                     normaliseerStand. Puur, geen DOM, geen imports; ook door de server gebruikt
                                     (server/standen.js importeert dit en src/control/mapping.js, allebei puur)
   werk/             model.js        de werkruimte als data (schema 1): normaliseerWerkruimte/-Stuk (fouten en waarschuwingen apart), samenstellen,
-                                    kern, telNieuwePlekken, kleurControle. Puur, geen imports; ook de server (docs/werkruimte/S3.md)
+                                    kern, telNieuwePlekken, kleurControle; S8: waaromNietOpScherm, VAST_NOOIT, TIJDKRITISCH, xy y/druk/los.
+                                    Puur, geen imports; ook de server (docs/werkruimte/S3.md)
                     werkruimte.js   de werkruimte in de mixer: deel, wie koos, onthoud, volgt, THUIS, vereist/terugval, vastleggen, peilen
                     apparaten.js    registreerApparaat(id, { zetMapjes, mapjes, aanwezig }); de APC-adapter (layer.* over de bus)
                     kleuren.js      deel -> paletnaam (MIX wit … LIBRARY grijs). Puur.
@@ -266,6 +268,7 @@ server/             draait apart: `node server/index.js`
                     token-cookie (alleen de hash op schijf), Origin, rem 120/s, seq, het kanaal naar de mixer, loslaten na 1,5 s
   werkruimtes.js    werkruimte S3: werkruimtes/<naam>.json met versie (409 met de huidige inhoud) en .versies/, voorbeelden uit
                     tools/werkruimtes/voorbeelden/ (een eigen bestand gaat voor), VARVE_WERKRUIMTES; opslaan alleen vanaf deze Mac (W1);
+                    S8: POST …/terug (de vorige versie, 409); tools/werkruimtes/top40.json op de witte lijst (de zoeker van ✎);
                     lezen onder dezelfde grens als de standen (`beperkt` + ANDERE_LEZERS in standen.js: samen hooguit 2, 503 na 2 s)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     media-verhuis.mjs (media/ buiten iCloud: --droog, --doe; docs/LIBRARY.md "Waar media/ staat"),

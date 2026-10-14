@@ -35,7 +35,12 @@ per onderdeel anders), een iPhone als xy-pad, Clay maakt zelf de indeling, W3: n
 7. **Docs**: `docs/werkruimte/S8.md`, `docs/WERKRUIMTE.md` "Gebouwd", `docs/VRAGEN.md` blok W, CLAUDE.md sectie
    "Werkruimte" en de structuurlijst, `docs/HANDOFF.md`.
 
-Buiten de lijst van D2 aangeraakt (klein, nodig): `src/control/handelingen.js` (de bron in het log, drie regels;
+Buiten de bestandenlijst van de opdracht (sporen.json "grens") aangeraakt, nodig voor Clay's extra eisen van 14 okt:
+`src/werk/model.js` (xy-velden, schermsoort iphone, TIJDKRITISCH, waaromNietOpScherm, VAST_NOOIT uitgebreid, een
+cache in patroon), `src/paneel/protocol.js` (invokeBericht met k, isInvoke strenger, actionsVan met y/druk),
+`src/ui/aanhakers/schermen.js` (de stub van S7: toegestaan per scherm en de ontvanger opzetten), de nieuwe
+`src/paneel/uitvoer.js` en `src/paneel/schrijver.js`, `werk.html` (het koppelformulier en de css-link),
+`test/nep-mixer.mjs` (een hulpproces voor de test). Verder: `src/control/handelingen.js` (de bron in het log, drie regels;
 `busNaarLog` geeft `o.bron` door), `server/werkruimtes.js` + `server/routes/werkruimtes.js` (terug, en de top-40
 op de witte lijst), `src/ui/beschrijf/index.js` (de uitleg van `werk.terug`), de verwachtingen van drie tests
 die de S7-regel "de iPad schrijft niets" vastlegden (`regels-werk`, `paneel-server`: nu de strengere S8-regel)
@@ -87,12 +92,19 @@ En met `--deel kaal` (alles aan, maar geen werkvak; 2 rondes): nul 473 ms/s, 35 
 beelden/s · alles zonder mac-2 455 ms/s, 34 beelden/s: **niets meetbaar** (let op: in KAAL staat de xy-pad niet op de
 iPhone, dus zijn 20 invokes/s komen wel binnen, worden getoetst en geweigerd, maar bewegen niets; mac-2 toont er niets).
 
+**Kort: het C6-budget is in deze omgeving NIET aangetoond.** Wat wel: de hoofdthreadtijd stijgt nauwelijks en in rust
+wordt er niets getekend. Wat niet: de beeldsnelheid zakt, en twee budgetten zijn hier te ruisig om te beslissen.
+
 Oordeel per budget:
-- **≤ +2 ms per beeld in hoofdthreadtijd**: ✓ (Δtaak / 60 = +0,72 ms; eerdere runs +1,20 en −0,17 ms).
+- **≤ +2 ms per beeld in hoofdthreadtijd** (Δtaak / 60): +0,72 ms (eerdere runs +1,20 en −0,17; review: +0,87). Dit is
+  één lezing van "per beeld"; gemeten als taak / beelden kost alles samen in run 3 **+11,1 ms** (zonder mac-2 +8,3 ms):
+  ✗.
 - **Beelden per seconde**: in deel MIX zakt headless van ~33 naar ~23 (zonder mac-2) en ~20 (met mac-2) beelden/s
-  bij nagenoeg gelijke hoofdthreadtijd; in deel KAAL niet. Het is dus het tekenen van de uitlijnstrook in het
-  werkvak en de uitlijnweergave op mac-2 (S2/S7), met software-GL, niet de schrijfweg of de zender. Gemeten als
-  taak/beelden is dat +8 ms per beeld: ✗ hier. **Op de M1 met GPU opnieuw meten** (proef A); tot dan: zet de
+  bij nagenoeg gelijke hoofdthreadtijd; in deel KAAL niet. Dat wijst op het tekenen van de uitlijnstrook in het
+  werkvak en de uitlijnweergave op mac-2 (S2/S7), met software-GL. Maar KAAL bewijst het maar half: daar worden de
+  invokes van de iPhone geweigerd (de xy-pad staat niet op zijn scherm) en toont mac-2 niets; de 5 FAILs van die run
+  zijn daar het gevolg van (de check "de ontvanger voert de iPhone uit"). Dat de schrijfweg zelf de beelden niet
+  drukt, is dus niet bewezen; alleen dat hij weinig hoofdthreadtijd kost. **Op de M1 met GPU opnieuw meten** (proef A); tot dan: zet de
   uitlijnstrook alleen in een deel waar je hem gebruikt (zoals twee-handen en apc-alleen doen).
 - **Geen lange taak > 50 ms**: ✗ in de letterlijke zin, maar de nulmeting heeft ze evengoed (1–2 per 8 s, 50–80 ms,
   de omgeving: GC en de nep-audioklok); met alles aan niet meer dan zonder.
@@ -103,6 +115,8 @@ Oordeel per budget:
 - In rust kost alles 441 tegen 261 ms/s: dat is de iPhone die doorgaat met 20 invokes/s (de echo-send beweegt,
   het scherm volgt) en mac-2; zonder de stroom (run 1): 200 tegen 158 ms/s.
 - De stijl bleef 18–50 ms/s (S7: 18–41), nergens richting 180.
+- De nep-iPhone krijgt bij elke wissel nul → alles ~20 keer 503 ("de mixer luistert niet"): de ontvanger opent zijn
+  kanaal pas na de volgende melding van de zender (≤ 1 s). De check telt alleen 200 en 429; dit staat hier eerlijk bij.
 
 **latentie.mjs vóór en na** — `VARVE_CHROME=… VARVE_WORTEL=<basis> node tools/headless/latentie.mjs --label voor
 --uit voor.json`, dan zonder VARVE_WORTEL `--label na --uit na.json`, en `--vergelijk voor.json na.json`
@@ -123,8 +137,8 @@ uitgepakt, `VARVE_WORTEL`), p50 / p99:
 | ringen · device | taak ms/s | 973 · 939 | 876 · 848 |
 | xfader · pads | werk per bericht p50 | 0,23 · 0,31 | 0,22 · 0,32 |
 
-Werk per bericht is gelijk (0,06–0,32 ms); de rest schommelt in beide richtingen met de container (de sweep slechter,
-ringen en device beter). Geen aanwijzing dat S8 iets kost zonder werkruimte; dat klopt met het ontwerp (de mixer laadt
+Werk per bericht is gelijk (0,06–0,32 ms); de rest schommelt in beide richtingen met de container (de sweep en de
+fader slechter: fader taak 695 → 747 ms/s, +7,5%; ringen en device beter). Geen aanwijzing dat S8 iets kost zonder werkruimte; dat klopt met het ontwerp (de mixer laadt
 zonder werkruimte niets van `src/paneel/`, en de patroon-cache en de extra kolom in het log raken het hete pad niet).
 Voor een hard oordeel: meerdere rondes (`--vergelijk a1,a2 b1,b2`) op een rustige machine.
 
@@ -136,6 +150,14 @@ afval per blok"), zoals op main in deze container; en ingest (10 fouten: yt-dlp 
 geweigerd; `node test/ingest.test.mjs` op de uitgepakte basis faalt precies even vaak). Overgeslagen en gemeld: o.a.
 de hub (geen av-app-hub), de Stroommachine, en de p99 < 5 ms van de schrijfweg (§2).
 
+## 2d. Reviews
+
+Twee reviewers (veiligheid/correctheid, acceptatie/bewijs). Ronde 1 vond geen gat in de toegang zelf (CSRF, token,
+Origin, VAST_NOOIT via de naam: niet weerlegd), wel echte fouten in loslaten, de rem en het kanaal: gerepareerd in
+b76373e (zie docs/werkruimte/S8.md §6b, met tests). Review (b): geen onware beweringen, wel te gunstig samengevat (het
+C6-budget, de KAAL-meting) en een onvolledige bestandenlijst: hierboven bijgesteld; en ✎ laadt sindsdien lui (met
+`standaard` geen module, geen fetch, geen paneel). Wat bewust blijft: S8.md §6b.
+
 ## 3. Wat niet gedaan is
 
 - **De Maschine in de totaalmeting**: alleen via de AV-app-hub; die kon hier niet geïnstalleerd worden (de
@@ -145,6 +167,8 @@ de hub (geen av-app-hub), de Stroommachine, en de p99 < 5 ms van de schrijfweg (
 - **iPad-UI voor "delen kiezen"**: `werk.deel.*` mag in `mag` staan, maar werk.html heeft er geen knoppen voor;
   wie het wil zet `werk.deel.fx` als knop in een paneel.
 - **De standen via Tailscale alleen-lezen** (VRAGEN W9): voorgelegd, niet gebouwd (server/index.js).
+- **Toewijzen "werkt na herladen"** is getoetst tot in de samengestelde mapping van de Maschine (de regels staan in
+  pagina.p-dub), niet met een draaiknop die daarna echt iets doet (de Maschine gaat alleen via de hub).
 - **Laden vanaf de iPad met een tweede druk**: bewust niet; laden staat in VAST_NOOIT (strenger dan de acceptatie).
 
 ## 4. Alleen op de echte iPad, iPhone of Mac te bevestigen

@@ -294,10 +294,27 @@ async function bedienen(M) {
   ok('de iPad: het paneel vier staat er', await h.totdat(I1, "document.querySelectorAll('.wp-vak-paneel .vp-item').length === 6 && window.paneel.verb.compleet", 8000) !== false);
   await wacht(500);
   const midden = async (sel) => h.ev(I1, `(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
-  const klik = async (sel, los = true) => { const q = await midden(sel); await h.cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: q.x, y: q.y, button: 'left', buttons: 1, clickCount: 1 }, I1); if (los) await h.cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: q.x, y: q.y, button: 'left', buttons: 0, clickCount: 1 }, I1); };
+  // De opmaak van de iPad-pagina kan nog verschuiven (de vakken boven het paneel groeien als de stand binnenkomt):
+  // klik tot de pagina echt iets verstuurt, hooguit drie keer, en zeg hoe vaak het nodig was.
+  let pogingen = 0;
+  const klik = async (sel, los = true) => {
+    for (let i = 0; i < 3; i++) {
+      pogingen++;
+      const voor = await h.ev(I1, 'window.paneel.schrijver?.stats.verstuurd ?? 0');
+      const q = await midden(sel);
+      await h.cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: q.x, y: q.y, button: 'left', buttons: 1, clickCount: 1 }, I1);
+      const raak = await h.totdat(I1, `(window.paneel.schrijver?.stats.verstuurd ?? 0) > ${voor}`, 800, 20) !== false;
+      if (los || !raak) await h.cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: q.x, y: q.y, button: 'left', buttons: 0, clickCount: 1 }, I1);
+      if (raak) return true;
+      await wacht(300);
+    }
+    return false;
+  };
   const killVoor = await h.ev(M, "window.varvePaneel.read('track.1.kill.low')");
   await klik('.wp-vak-paneel .vp-item:nth-child(2) .vp-knop');
-  ok('een knop die in het paneel én in mag staat: uitgevoerd', await h.totdat(M, `window.varvePaneel.read('track.1.kill.low') !== ${killVoor}`, 3000) !== false);
+  const killOk = await h.totdat(M, `window.varvePaneel.read('track.1.kill.low') !== ${killVoor}`, 3000) !== false;
+  ok('een knop die in het paneel én in mag staat: uitgevoerd', killOk, killOk ? '' : JSON.stringify(await h.ev(I1, "({ s: window.paneel.schrijver?.stats && { ...window.paneel.schrijver.stats, rondreis: undefined }, deel: window.paneel.verb.werk()?.deel, items: document.querySelectorAll('.wp-vak-paneel .vp-item').length, melding: document.getElementById('wp-melding').textContent, knop: document.querySelector('.wp-vak-paneel .vp-item:nth-child(2)')?.className })"))
+    + JSON.stringify(await h.ev(M, "({ uit: window.varveSchermen.uitvoerder?.stats, deel: window.werk.deel, toe: window.varveSchermen.toegestaan('ipad') })")));
   const filterVoor = await h.ev(M, "window.varvePaneel.read('track.1.filter')");
   const d = await midden('.wp-vak-paneel .vp-item:nth-child(1) .vp-dial');
   await h.cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: d.x, y: d.y, button: 'left', buttons: 1, clickCount: 1 }, I1);
@@ -308,7 +325,7 @@ async function bedienen(M) {
     await h.ev(M, "window.varvePaneel.read('track.1.filter')") === filterVoor && await h.ev(I1, "!document.getElementById('wp-melding').hidden && /mag/.test(document.getElementById('wp-melding').textContent)"));
   // Een .hold vast, dan valt de iPad weg (de pagina gaat dicht): los binnen 1,5 s.
   await klik('.wp-vak-paneel .vp-item:nth-child(3) .vp-knop', false);
-  ok('HOOG WEG vast vanaf de iPad', await h.totdat(M, "window.varvePaneel.read('track.1.kill.high') === 1", 3000) !== false);
+  ok(`HOOG WEG vast vanaf de iPad (klikken nodig tot hier: ${pogingen})`, await h.totdat(M, "window.varvePaneel.read('track.1.kill.high') === 1", 3000) !== false);
   // REC en play in het deel KAAL: geweigerd (VAST_NOOIT en tijdkritisch).
   const tDicht = Date.now();
   await h.cdp('Target.closeTarget', { targetId: h.sessies.get(I1).targetId });
