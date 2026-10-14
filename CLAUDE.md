@@ -54,6 +54,7 @@ als een feature erom lijkt te vragen, is dat bijna altijd een ontwerpfout elders
 ```
 index.html          geen build-stap, plain ES-modules
 plan.html           het planvenster: de programmering zien, inrichten, live volgen (src/plan/plan-venster.js)
+uitlijn.html        de uitlijnweergave als los venster (window.opener.varveUitlijn): alle tracks in tellen van de maatgever (docs/werkruimte/S2.md)
 apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze doen (src/ui/apc-kaart.js)
 maschine.html       de Maschine-kaart: wat elke knop nu doet (uitleg van de Maschine zelf), live vanuit de mixer (src/ui/maschine-kaart.js)
 companion.html      de companion (/companion) voor iPad en iPhone: kaart met wens/kies/haal nu, nu, beeld. Geen geluid, MIDI of Web Lock (docs/COMPANION.md)
@@ -184,6 +185,10 @@ src/
                     beamer-venster.js video.html: het losse venster mengt ZELF (eigen <video>'s, WebGL, lus)
                     fouten.js       video ontbreekt of laadt niet: tekst en wachtregel. Puur.
                     eindbeeld.js    beeld-noodknoppen: zwart, bevriezen, master, flits (laatste stap). Puur.
+  uitlijn/          reken.js        de uitlijnweergave, puur: as in tellen van de maatgever zoals je hem hoort, banen uit Deck.tijdlijn(),
+                                    grid Δ, muziek Δ (faseTussen), drift, maat, vouw, tekensleutel; invoer { decks, maatgever, V, nu }
+                    teken.js        pagina · vouw · strook: tegels in tracktijd, tekenen alleen bij een nieuwe sleutel; vaknamen (vakVorm)
+                    venster.js      uitlijn.html (geen AudioContext, MIDI of Web Lock); docs/werkruimte/S2.md
   plan/             plan-model.js   het setplan als data: formaat v2, normaliseerPlan, bewerk, verschil. Puur (ook door de server gebruikt)
                     tijdlijn.js     voorspel: set-tijden en de overgang die de app echt kiest. Puur.
                     plan-venster.js het planvenster (plan.html): lijst, strook, bewerken, opslaan met versie, live via opener
