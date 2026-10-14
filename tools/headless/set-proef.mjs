@@ -210,6 +210,8 @@ async function mixer() {
   ok(`... het plan "vrijdag" is actief met de stappen van de set (${na.plan}: ${na.stappen})`, na.plan === 'vrijdag' && na.stappen === voor.stappen);
   ok(`... de patronen van de set (tempo ${na.tempo})`, na.tempo === 126);
   ok('... en er speelt niets', na.tracks.every((t) => !t.speelt));
+  await wacht(4500);
+  ok('... en de patronen botsen niet (de mixer nam de set over, review S9 b6)', await ev('!(window.patronenPaneel?.opslag?.stand?.().botsing)'));
 
   console.log('\n3. over een spelende track: de tweede druk');
   await inv('track.1.play', true);

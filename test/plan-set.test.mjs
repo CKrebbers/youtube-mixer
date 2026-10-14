@@ -36,6 +36,8 @@ console.log('het formaat: tracks, go, lagen');
   ok('een laag op een track van de automaat: deck weg (kiest zelf), met een fout', l[3].deck === null && fouten.some((f) => /van de automaat/.test(f)));
   ok('rommel weg met een fout (soort, geen pad, patroon op een automaat-track)', fouten.filter((f) => /laag \d: .*weggelaten/.test(f)).length === 3);
   ok('nog eens normaliseren verandert niets', JSON.stringify(M.normaliseerPlan(plan).plan) === JSON.stringify(plan));
+  const een = M.normaliseerPlan({ tracks: { auto: [1] }, stappen: [{ track: 'a' }] });
+  ok('één track voor de automaat kan niet (hij moet ergens heen kunnen): weg, met een fout', !een.plan.tracks && een.fouten.some((f) => /minstens twee/.test(f)));
   const oud = M.normaliseerPlan({ stappen: [{ track: 'a' }] }).plan;
   ok('een plan zonder de nieuwe velden heeft ze niet (v2 blijft v2)', !('tracks' in oud) && !('go' in oud.stappen[0]) && !('lagen' in oud.stappen[0]) && oud.versie === 2);
   const zonder = M.bewerk(plan, { soort: 'zet', id: plan.stappen[0].id, velden: { go: null, lagen: [] } });
@@ -103,6 +105,9 @@ console.log('\nsnel klaarzetten: lengte');
   ok('eindtijd 23:30 om 22:00 = 90 min', K.secondenTot('23:30', nu) === 90 * 60);
   ok('eindtijd 01:30 om 22:00 = morgen, 3,5 uur', K.secondenTot('1:30', nu) === 3.5 * 3600);
   ok('geen tijd: null', K.secondenTot('half twee', nu) === null && K.secondenTot('25:00', nu) === null);
+  ok('duur: 90 = minuten, 1,5 en 2u = uren, 01:30 = eindtijd, leeg = null, onzin = undefined (review S9 b7)',
+    K.leesDuur('90', nu) === 5400 && K.leesDuur('1,5', nu) === 5400 && K.leesDuur('2u', nu) === 7200 && K.leesDuur('01:30', nu) === 3.5 * 3600
+    && K.leesDuur('', nu) === null && K.leesDuur('veel', nu) === undefined && K.leesDuur('0', nu) === undefined);
 }
 
 console.log('\nsnel klaarzetten: een "past bij"-keten');
@@ -129,6 +134,14 @@ console.log('\nde live-stand');
   ok(`eindtijd = rest van NU + de rest van het plan na de overlap (${s.tekst.eind})`, Math.abs(s.eind.sec - verwacht) < 1e-6 && /^klaar ~2\d:\d\d/.test(s.tekst.eind));
   const uit = L.liveStand({ stand: { aan: false, fase: 'uit', plan: { index: 0 } }, plan, voorspelling: v, nuMs });
   ok('uit: geen NU, wel de verwachte duur van het hele plan', !uit.nu && uit.eind?.voorspeld && Math.abs(uit.eind.sec - v.totaal) < 1e-6);
+}
+
+console.log('\nde iPad (VAST_NOOIT)');
+{
+  const W = await import('../src/werk/model.js');
+  const w = { schermen: { ipad: { soort: 'ipad', mag: ['plan.*', 'set.*'] } } };
+  ok('plan.go en set.next mogen als mag ze noemt', W.magOpScherm(w, 'ipad', 'plan.go') && W.magOpScherm(w, 'ipad', 'set.next'));
+  ok('set.bewaar en set.terugladen nooit van buiten de Mac', !W.magOpScherm(w, 'ipad', 'set.bewaar') && !W.magOpScherm(w, 'ipad', 'set.terugladen'));
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT:\n  ${fails.join('\n  ')}` : '\nAlle checks groen.');

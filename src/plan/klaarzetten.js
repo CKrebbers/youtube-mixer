@@ -161,6 +161,21 @@ export function secondenTot(tijd, nu = new Date()) {
 }
 
 /**
+ * De duur van een set: "90" = 90 minuten, "1,5" of "2u" = uren (een set van minder dan 10 minuten
+ * bestaat niet, review S9 b7), "01:30" = tot half twee (een eindtijd); leeg = null; onzin = undefined.
+ */
+export function leesDuur(t, nu = new Date()) {
+  const x = String(t ?? '').trim().toLowerCase();
+  if (!x) return null;
+  if (/^\d{1,2}[:.]\d{2}$/.test(x)) return secondenTot(x, nu) ?? undefined;
+  const u = /^(\d+(?:[.,]\d+)?)\s*(u|uur|h)$/.exec(x);
+  if (u) { const h = Number(u[1].replace(',', '.')); return h > 0 ? Math.round(h * 3600) : undefined; }
+  const m = Number(x.replace(',', '.'));
+  if (!(m > 0)) return undefined;
+  return Math.round(m < 10 ? m * 3600 : m * 60);
+}
+
+/**
  * De set: een plan uit `tracks` (library-nummers), in een voorgestelde volgorde, passend in
  * `duur` (s, of null = zo lang als hij is).
  *

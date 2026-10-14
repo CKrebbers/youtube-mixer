@@ -107,6 +107,8 @@ const LAAG_FADE_MATEN = 4, LAAG_FADE_SEC = 8;
 export const LAAG_NIVEAU = 0.8;
 /** Een GO-stap gaat zonder GO toch op dit moment (s tracktijd vóór het einde, bovenop de lengte van de overgang). */
 const GO_MARGE = 8;
+/** Actions op een track die hem niet "in gebruik" maken: kijken en luisteren. */
+const KIJKEN = /^track\.\d\.(focus|select|pfl|show|stem\.\w+\.pfl)$/;
 const nrVan = (id) => DECK_IDS.indexOf(id) + 1;
 const deckVanNr = (nr) => DECK_IDS[nr - 1];
 const eindig = (x) => typeof x === 'number' && Number.isFinite(x);
@@ -157,6 +159,9 @@ export class Automaat extends Emitter {
     this._clay = {};              // deckId -> ctx-tijd waarop Clay de track het laatst aanraakte (niet de automaat)
     this.lagen = [];              // de lagen van de stap die nu klinkt: [{ ...laag, stapId, status, deckId, t, … }]
     this._laagDecks = new Set();  // tracks waar een laag op ligt of lag (van Clay: de automaat laadt er geen stap op)
+    this._clayGeladen = new Set(); // tracks waar Clay zelf iets op laadde (gezien aan een ander nummer, _kijkLaden)
+    this._buffers = {};           // deckId -> het nummer (buffer) dat er bij de vorige tik op stond
+    this._laadt = new Set();      // decks waar de automaat NU zelf op laadt
     this._los = bijInvoke((id) => this._bijBus(id));
   }
 
@@ -178,6 +183,8 @@ export class Automaat extends Emitter {
       return;
     }
     this.planIndex = 0;
+    // Wat er nu op de decks staat telt niet als "Clay laadde het" (pas wat daarna verandert).
+    for (const id of DECK_IDS) this._buffers[id] = this.engine.deck(id)?.buffer ?? null;
     if (!this.tracks.length) { this._meld('de library is leeg', 'fout'); this._stop(); return; }
     this.hoofd = this._luidste();
     if (this.hoofd) {
@@ -289,6 +296,7 @@ export class Automaat extends Emitter {
    */
   go() {
     const v = this.volgende;
+    if (this.fase === 'laden' || (this.fase === 'wacht' && !v)) { this._goStraks = true; this._meld('GO: zodra de volgende klaarstaat'); return; }
     if (!v || this.fase !== 'klaar') { this._meld(this.fase === 'bezig' ? 'de overgang loopt al' : 'er staat nog niets klaar'); return; }
     v.goGegeven = true;
     v.bevestigd = true;
@@ -327,6 +335,8 @@ export class Automaat extends Emitter {
     this.buitenPlan = false;
     this._buitenNaOvergang = false;
     if (!was) return;
+    // De overgang loopt nog (buiten werd pas na de overgang): gewoon doorlaten (review S9 a-B2).
+    if (this.fase === 'bezig') { this._meld('terug naar het plan: de overgang loopt door'); this.emit('change'); return; }
     const id = this._luidste({ alle: true });
     this.volgende = null;
     if (id) {
@@ -334,6 +344,7 @@ export class Automaat extends Emitter {
       this.hoofd = id;
       this.eigen.add(id);
       this._laagDecks.delete(id);
+      this._clayGeladen.delete(id);
       this.eind = Math.min(d.duration - 6, d.position + SPEELDUUR * d.rate);
       this.hoofdVan = d.position;
       const nr = this.welkNummer(id);
@@ -375,7 +386,8 @@ export class Automaat extends Emitter {
     if (this._zelf || !this.aan) return;
     // Welke track gebruikt Clay (docs/PLAN-SET.md §4): elke action op een track telt, niet alleen OVERNEEM.
     const t = /^track\.(\d)\./.exec(id);
-    if (t && deckVanNr(Number(t[1]))) {
+    // Kijken en luisteren is geen gebruiken: focus (Track Select), PFL, een venster tonen (review S9 b5).
+    if (t && deckVanNr(Number(t[1])) && !KIJKEN.test(id)) {
       const dk = deckVanNr(Number(t[1]));
       this._clay[dk] = this.engine.ctx?.currentTime ?? 0;
       // Een laag op die track is nu van Clay: de automaat raakt hem niet meer aan.
@@ -419,6 +431,7 @@ export class Automaat extends Emitter {
   }
 
   _tik() {
+    this._kijkLaden();
     if (this.fase === 'buiten') return;
     if (this.fase === 'overgenomen') { this._naOvername(); return; }
     const d = this.hoofd ? this.engine.deck(this.hoofd) : null;
@@ -448,8 +461,10 @@ export class Automaat extends Emitter {
       // De sectiekaart tegelijk met het laden ophalen: laden.js haalt hem
       // ook, maar pas NA het laden en zonder te wachten (de race).
       const kaartP = this._haalKaart(deckId, keuze.track.id);
-      await this.laad(deckId, keuze.track);
+      await this._laadZelf(deckId, keuze.track);
       if (!this.aan) return;
+      // Intussen buiten het plan gegaan (review S9 a-B1): geladen laten staan, verder niets.
+      if (this.buitenPlan) { this.nummers[deckId] = keuze.track; this.eigen.add(deckId); this.fase = 'buiten'; return; }
       const nd = this.engine.deck(deckId);
       if (!nd.buffer) throw new Error(`${keuze.track.titel} laadde niet`);
       this.nummers[deckId] = keuze.track;
@@ -482,6 +497,7 @@ export class Automaat extends Emitter {
         kaart = await binnen(kaartP, 0);
       }
       if (!this.aan) return;
+      if (this.buitenPlan) { this.fase = 'buiten'; return; }
       const f = kaart ? fragment(keuze.track, { ...keuze.stuk, rnd: this.rnd, secties: sectiesVan(kaart), inSectie: keuze.in }) : f0;
       const van = opMaat(f);
       this._doe(`track.${nrVan(deckId)}.seek`, nd.duration ? van / nd.duration : 0);
@@ -492,9 +508,11 @@ export class Automaat extends Emitter {
       this._sprong = null;
       this._planOvergang(keuze.overgang);
       this.fase = 'klaar';
+      // GO kwam terwijl hij nog laadde (review S9 a-K6): nu alsnog.
+      if (this._goStraks) { this._goStraks = false; this.volgende.goGegeven = true; this.volgende.bevestigd = true; this.nu(); }
     } catch (err) {
       this._meld(`laden mislukt: ${err.message}`, 'fout');
-      this.fase = 'wacht';
+      this.fase = this.buitenPlan ? 'buiten' : 'wacht';
     } finally {
       this._bezigLaden = false;
       this.emit('change');
@@ -915,9 +933,10 @@ export class Automaat extends Emitter {
     // Nooit een track met een instrument (docs/INSTRUMENTEN.md §6): laden zou het eraf halen.
     // De tracks van de automaat als het plan ze noemt; anders nooit een track van Clay (een laag, of
     // een track waar hij net iets aan deed) (docs/PLAN-SET.md §4).
-    const mijn = this._mijn();
+    const mijn = this._mijn?.() ?? null;
+    const vanClay = (id) => !!this._laagDecks?.has(id) || !!this._vanClay?.(id);
     const vrij = DECK_IDS.filter((id) => id !== this.hoofd && !this.engine.deck(id).playing && !this.engine.deck(id).wacht
-      && !this.engine.instrumentOp?.(id) && (mijn ? mijn.has(id) : !this._laagDecks.has(id) && !this._vanClay(id)));
+      && !this.engine.instrumentOp?.(id) && (mijn ? mijn.has(id) : !vanClay(id)));
     return vrij.find((id) => this.eigen.has(id))
       || vrij.find((id) => !this.engine.deck(id).buffer)
       || vrij[vrij.length - 1] || null;
@@ -931,8 +950,36 @@ export class Automaat extends Emitter {
 
   /** Is dit een track van Clay: niet van de automaat, en hij deed er kort geleden iets aan. */
   _vanClay(id) {
-    const t = this._clay[id];
-    return !this.eigen.has(id) && t != null && (this.engine.ctx?.currentTime ?? 0) - t < CLAY_RECENT;
+    if (this._clayGeladen?.has(id)) return true;
+    // Ook een track die de automaat eerder gebruikte (review S9 a-I1): raakte Clay hem aan buiten een
+    // overgang om, dan is hij van Clay. De hoofdtrack en de klaarstaande tellen niet (OVERNEEM regelt die).
+    if (id === this.hoofd || id === this.volgende?.deckId) return false;
+    const t = this._clay?.[id];
+    return t != null && (this.engine.ctx?.currentTime ?? 0) - t < CLAY_RECENT;
+  }
+
+  /**
+   * Laden gaat niet over de bus (laden.laadLibrary): een nummer dat Clay op een track zet, zie je
+   * alleen aan een ANDER nummer op dat deck. Elke tik vergelijken (acht decks, goedkoop): wat de
+   * automaat niet zelf laadde, is van Clay, tot hij het met "terug" teruggeeft (review S9 b1).
+   */
+  _kijkLaden() {
+    for (const id of DECK_IDS) {
+      const b = this.engine.deck(id)?.buffer ?? null;
+      if (b === this._buffers[id] || this._laadt.has(id)) continue;
+      this._buffers[id] = b;
+      if (b) { this._clayGeladen.add(id); this.eigen.delete(id); }
+    }
+  }
+
+  /** Laden door de automaat zelf: dat deck telt niet als "Clay laadde iets". */
+  async _laadZelf(deckId, track) {
+    this._laadt.add(deckId);
+    try { return await this.laad(deckId, track); } finally {
+      this._laadt.delete(deckId);
+      this._buffers[deckId] = this.engine.deck(deckId)?.buffer ?? null;
+      this._clayGeladen.delete(deckId);
+    }
   }
 
   /** Tot welke positie (tracktijd van de uitgaande) een GO-stap op GO wacht. */
@@ -950,13 +997,15 @@ export class Automaat extends Emitter {
    */
   _zetLagen({ behoud = false } = {}) {
     const stap = this._stap(this.hoofdStap);
-    const oud = new Map(this.lagen.map((l) => [l.id, l]));
+    const oud = new Map(this.lagen.map((l) => [`${l.stapId}:${l.id}`, l]));
     const nieuw = (stap?.lagen || []).map((l) => {
-      const o = behoud ? oud.get(l.id) : null;
+      const o = behoud ? oud.get(`${stap.id}:${l.id}`) : null;
       if (o && o.status !== 'wacht') return o;
       return { ...l, stapId: stap.id, status: 'wacht', deckId: null, t: null };
     });
-    this.lagen = nieuw;
+    // Een laag die nog speelt (van een vorige stap) gaat mee tot hij dicht is (review S9 a-I2).
+    const mee = this.lagen.filter((l) => l.status === 'speelt' && !nieuw.includes(l));
+    this.lagen = [...mee, ...nieuw];
   }
 
   /** Waar (tracktijd van de hoofdtrack) een laag begint, of null. Regel 3: dat is een POSITIE. */
@@ -976,7 +1025,7 @@ export class Automaat extends Emitter {
   _laagDeck(l) {
     const mijn = this._mijn();
     const bezet = (id) => id === this.hoofd || id === this.volgende?.deckId || this.eigen.has(id) || mijn?.has(id);
-    const inGebruik = (id) => { const d = this.engine.deck(id); return d.playing || d.wacht || !!this.engine.instrumentOp?.(id); };
+    const inGebruik = (id) => { const d = this.engine.deck(id); return d.playing || d.wacht || !!this.engine.instrumentOp?.(id) || this._clayGeladen.has(id); };
     if (l.deck) {
       const id = deckVanNr(l.deck);
       if (!id) return { fout: `track ${l.deck} bestaat niet` };
@@ -1020,7 +1069,8 @@ export class Automaat extends Emitter {
     const n = nrVan(keuze.id);
     try {
       this._doe(`track.${n}.fader`, 0);
-      await this.laad(keuze.id, track);
+      await this._laadZelf(keuze.id, track);
+      this._laagDecks.add(keuze.id);
       if (!this.aan || l.status !== 'laden') return;
       const nd = this.engine.deck(keuze.id);
       if (!nd.buffer) throw new Error('laadde niet');
@@ -1057,15 +1107,25 @@ export class Automaat extends Emitter {
       const n = nrVan(l.deckId);
       // Op de maat als beide grids daar zeker zijn (zoals een blend); anders meteen.
       const opMaat = !!nd.grid?.zekerBij(nd.position) && !!d.grid?.zekerBij(d.position);
-      if (opMaat) { this._doe(`track.${n}.sync`, true); this._doe(`track.${n}.play.quant`, true); }
-      else if (!nd.playing) this._doe(`track.${n}.play`, true);
+      // Zonder zeker grid (van de laag of de hoofdtrack) start hij NIET vanzelf: een acapella naast
+      // het tempo over de mix is erger dan geen laag (PLAN-SET.md §8). Hij staat klaar voor Clay.
+      if (!opMaat) {
+        l.status = 'jij';
+        this._meld(`laag ${l.id}: het grid is daar niet zeker, dus ik start hem niet: hij staat klaar op track ${n}, start hem zelf`);
+        this.emit('change');
+        return;
+      }
+      this._doe(`track.${n}.sync`, true);
+      this._doe(`track.${n}.play.quant`, true);
+      // Vanaf hier rekent de laag op de POSITIE VAN ZIJN EIGEN TRACK (regel 3): zo loopt hij door
+      // als de hoofdtrack wisselt (een nieuwe stap), en gaat hij toch op tijd dicht.
       l.status = 'speelt';
-      l.start0 = d.position;
-      const maat = d.grid ? d.grid.beatLengthAt(d.position) * d.grid.beatsPerBar : null;
-      l.fade = maat && opMaat ? LAAG_FADE_MATEN * maat : LAAG_FADE_SEC * d.rate;
-      l.eindPos = eindig(l.duur) ? d.position + l.duur * d.rate : null;
+      l.start0 = nd.position;
+      const maat = nd.grid ? nd.grid.beatLengthAt(nd.position) * nd.grid.beatsPerBar : null;
+      l.fade = maat ? LAAG_FADE_MATEN * maat : LAAG_FADE_SEC;
+      l.eindPos = eindig(l.duur) ? nd.position + l.duur * (d.rate || 1) : null;
       // Een korte laag: open en dicht passen er allebei in.
-      if (l.eindPos != null) l.fade = Math.min(l.fade, (l.eindPos - d.position) / 2);
+      if (l.eindPos != null) l.fade = Math.min(l.fade, (l.eindPos - nd.position) / 2);
       l.glij = null;
     } else if (l.soort === 'sampler') {
       const pad = this.engine.sampler?.pads?.[l.pad - 1];
@@ -1088,12 +1148,14 @@ export class Automaat extends Emitter {
     const n = nrVan(l.deckId);
     const nd = this.engine.deck(l.deckId);
     if (!nd.playing && !nd.wacht) { if (l.dicht) { l.status = 'klaar-gezet'; this.emit('change'); } return; }
+    if (nd.wacht) return;          // op de maat: hij klinkt nog niet
     if (l.glij && nu < l.glij - HERRICHT) return;
     let doel;
-    const ver = GLIJ * d.rate;
-    if (l.eindPos != null && d.position + ver >= l.eindPos - l.fade) {
-      doel = LAAG_NIVEAU * Math.max(0, Math.min(1, (l.eindPos - d.position - ver) / l.fade));
-      if (doel <= 0 && d.position >= l.eindPos) {
+    const ver = GLIJ * (nd.rate || 1);
+    const pos = nd.position;
+    if (l.eindPos != null && pos + ver >= l.eindPos - l.fade) {
+      doel = LAAG_NIVEAU * Math.max(0, Math.min(1, (l.eindPos - pos - ver) / l.fade));
+      if (doel <= 0 && pos >= l.eindPos) {
         this._doe(`track.${n}.fader`, 0);
         if (nd.playing) this._doe(`track.${n}.play`, true);
         l.dicht = true;
@@ -1102,7 +1164,7 @@ export class Automaat extends Emitter {
         return;
       }
     } else {
-      doel = LAAG_NIVEAU * Math.max(0, Math.min(1, (d.position + ver - l.start0) / l.fade));
+      doel = LAAG_NIVEAU * Math.max(0, Math.min(1, (pos + ver - l.start0) / l.fade));
     }
     if (Math.abs(doel - (nd.ui.fader ?? 0)) < 1e-4) return;
     this._doe(`track.${n}.fader.glide`, doel);

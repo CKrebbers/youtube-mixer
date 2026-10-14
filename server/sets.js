@@ -116,16 +116,26 @@ export class Sets {
     return this.schrijf(naar, { ...nu.set, gemaakt: new Date().toISOString() }, null);
   }
 
-  /** Hernoemen: met de versie van `naam` (409 als die intussen veranderde), `naar` mag nog niet bestaan. */
+  /**
+   * Hernoemen: met de versie van `naam` (409 als die intussen veranderde), `naar` mag nog niet bestaan.
+   * Nooit twee sloten tegelijk (review S9 a-K1: a→b en b→a tegelijk hield ze allebei vast): eerst
+   * lezen, dan `naar` schrijven onder zijn eigen slot, dan onder het slot van `naam` nakijken dat
+   * die niet veranderde en hem weghalen. Veranderde hij toch: de kopie weer weg, 409.
+   */
   async hernoem(naam, naar, versie) {
     if (!naamGeldig(naar)) return { code: 400, antwoord: { fout: 'ongeldige nieuwe naam' } };
     if (naar === naam) return { code: 400, antwoord: { fout: 'dezelfde naam' } };
+    const nu = await this.lees(naam);
+    if (!nu?.set) return { code: 404, antwoord: { fout: `geen set "${naam}"` } };
+    if (nu.versie !== versie) return { code: 409, antwoord: { fout: 'de set is intussen gewijzigd', versie: nu.versie, set: nu.set } };
+    const r = await this.schrijf(naar, nu.set, null);
+    if (r.code !== 200) return r;
     return this._alleen(naam, async () => {
-      const nu = await this.lees(naam);
-      if (!nu?.set) return { code: 404, antwoord: { fout: `geen set "${naam}"` } };
-      if (nu.versie !== versie) return { code: 409, antwoord: { fout: 'de set is intussen gewijzigd', versie: nu.versie, set: nu.set } };
-      const r = await this.schrijf(naar, nu.set, null);
-      if (r.code !== 200) return r;
+      const nog = await this.lees(naam);
+      if (!nog?.set || nog.versie !== versie) {
+        await this._alleen(naar, () => this._draad(`${naar}:weg`, () => rm(this.pad(naar), { force: true })));
+        return { code: 409, antwoord: { fout: 'de set is intussen gewijzigd', versie: nog?.versie ?? null, set: nog?.set ?? null } };
+      }
       await this._draad(`${naam}:weg`, async () => { await this._bewaarOud(naam); await rm(this.pad(naam), { force: true }); });
       return { code: 200, antwoord: { ...r.antwoord, naam: naar, oud: naam } };
     });

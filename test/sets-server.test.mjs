@@ -105,6 +105,16 @@ try {
     ok('hernoemen: de nieuwe bestaat, de oude niet (en staat in .versies)', h.status === 200 && (await get('/api/sets/zondag')).status === 200
       && (await get('/api/sets/zaterdag')).status === 404 && versies('zaterdag') === 1);
 
+    // Kruisend hernoemen (review S9 a-K1): a→b en b→a tegelijk mag niet vastlopen.
+    await zend('PUT', '/api/sets/kruis-a', { set: set({ uitleg: 'a' }), versie: null });
+    await zend('PUT', '/api/sets/kruis-b', { set: set({ uitleg: 'b' }), versie: null });
+    const va = (await get('/api/sets/kruis-a')).j.versie, vb = (await get('/api/sets/kruis-b')).j.versie;
+    const tijd = (p, ms) => Promise.race([p, new Promise((z) => setTimeout(() => z({ status: 'hangt' }), ms))]);
+    const [x, y] = await Promise.all([tijd(zend('POST', '/api/sets/kruis-a/hernoem', { naar: 'kruis-b', versie: va }), 4000),
+      tijd(zend('POST', '/api/sets/kruis-b/hernoem', { naar: 'kruis-a', versie: vb }), 4000)]);
+    ok(`kruisend hernoemen hangt niet (${x.status}, ${y.status}: allebei 409, de doelnaam bestaat)`, x.status === 409 && y.status === 409);
+    ok('... en daarna gaat opslaan gewoon', (await zend('PUT', '/api/sets/kruis-a', { set: set({ uitleg: 'na' }), versie: va })).status === 200);
+
     // Een oud of vreemd bestand, door Claude of een oudere versie geschreven.
     writeFileSync(join(setsMap, 'oud.json'), JSON.stringify({ schema: 7, naam: 'oud', plan: { stappen: [{ track: 'a' }, { geen: 1 }] },
       momentopname: { tracks: [{ track: 9 }, { track: 1, bron: 'library', nummer: 'a', speelt: true }] }, onbekend: true }));

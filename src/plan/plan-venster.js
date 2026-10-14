@@ -1,5 +1,5 @@
 import { normaliseerPlan, bewerk, verschil, SECTIE_VELDEN, KENT, normaliseerTracks } from './plan-model.js';
-import { maakSet, pastBijKeten, secondenTot } from './klaarzetten.js';
+import { maakSet, pastBijKeten, leesDuur } from './klaarzetten.js';
 import { voorspel, toonKleur } from './tijdlijn.js';
 import { LABEL_TEKST } from '../engine/secties.js';
 import { tekenStrook as tekenOp, mmss } from './strook.js';
@@ -435,7 +435,10 @@ function vulBieb() {
     vink.className = 'pl-vink';
     vink.checked = staat.selectie.has(t.id);
     vink.title = 'in de selectie (voor "maak set van de selectie")';
-    vink.addEventListener('change', () => { if (vink.checked) staat.selectie.add(t.id); else staat.selectie.delete(t.id); $('.pl-sel-tel').textContent = `selectie: ${staat.selectie.size}`; });
+    vink.addEventListener('change', () => {
+      if (vink.checked) { staat.selectie.add(t.id); staat.laatstAangevinkt = t.id; } else staat.selectie.delete(t.id);
+      $('.pl-sel-tel').textContent = `selectie: ${staat.selectie.size}`;
+    });
     rij.append(vink);
     const b = document.createElement('button');
     const toon = t.toon?.stukken?.[0]?.toonsoort ?? '–';
@@ -721,15 +724,6 @@ $('.pl-krat').addEventListener('change', async (e) => {
 $('.pl-sel-alles').addEventListener('click', () => { for (const t of staat.bieb) staat.selectie.add(t.id); staat.selectieVolgorde = null; vulBieb(); });
 $('.pl-sel-geen').addEventListener('click', () => { staat.selectie.clear(); staat.selectieVolgorde = null; vulBieb(); });
 
-/** "90" = 90 minuten, "01:30" = tot half twee; leeg = null; onzin = undefined. */
-function leesDuur(t) {
-  const x = String(t ?? '').trim();
-  if (!x) return null;
-  if (/[:.]\d{2}$/.test(x)) return secondenTot(x) ?? undefined;
-  const m = Number(x.replace(',', '.'));
-  return m > 0 ? Math.round(m * 60) : undefined;
-}
-
 $('.pl-maakset').addEventListener('click', () => {
   const bron = $('.pl-bron').value;
   let tracks = [];
@@ -738,14 +732,17 @@ $('.pl-maakset').addEventListener('click', () => {
     const rest = staat.bieb.map((t) => t.id).filter((id) => staat.selectie.has(id) && !volg.includes(id));
     tracks = [...volg, ...rest].map((id) => staat.tracks.get(id)).filter(Boolean);
   } else if (bron === 'pastbij') {
-    const s0 = staat.plan.stappen.find((x) => x.id === staat.gekozen) ?? staat.plan.stappen[0];
-    const start = s0 ? staat.tracks.get(s0.track) : null;
-    if (!start) { melding('kies eerst een stap (of zet een nummer in het plan): de keten begint daar'); return; }
+    // Vanaf de gekozen stap; anders wat er op de focus-track van de mixer staat; anders stap 1.
+    const k = koppeling();
+    const focusId = k?.auto?.welkNummer?.(k.engine?.focus) ?? null;
+    const s0 = staat.plan.stappen.find((x) => x.id === staat.gekozen);
+    const start = staat.tracks.get(s0?.track) ?? staat.tracks.get(focusId) ?? staat.tracks.get(staat.plan.stappen[0]?.track) ?? null;
+    if (!start) { melding('kies eerst een stap, of laad een nummer op de focus-track: de keten begint daar'); return; }
     tracks = pastBijKeten(start, staat.bieb, { aantal: 12 });
   } else tracks = staat.bieb;
   if (!tracks.length) { melding(bron === 'selectie' ? 'de selectie is leeg: vink rechts nummers aan of kies een krat' : 'geen nummers'); return; }
   const duur = leesDuur($('.pl-duur-set').value);
-  if (duur === undefined) { melding('duur: minuten (90) of een eindtijd (01:30)'); return; }
+  if (duur === undefined) { melding('duur: minuten (90), uren (1,5 of 2u) of een eindtijd (01:30)'); return; }
   const r = maakSet(tracks, { vorm: $('.pl-vorm').value, duur, naam: staat.plan.naam, door: 'clay',
     tracks: staat.plan.tracks ?? null, bron: { selectie: 'uit de selectie', pastbij: '"past bij"-keten', library: 'de hele library' }[bron] });
   wijzig(() => ({ ...staat.plan, uitleg: staat.plan.uitleg || r.plan.uitleg, stappen: r.plan.stappen }));
@@ -781,6 +778,8 @@ $('.pl-laag-erbij').addEventListener('click', () => {
   let op;
   if (/^\d{1,2}$/.test(opT)) {
     const k = Number(opT), x = staat.secties.get(s0.track)?.stukken?.[k - 1];
+    // Een los getal is een SECTIE; zonder kaart (of zo'n sectie) zeggen we dat (een tijd is m:ss).
+    if (!x) { melding(`laag: dit nummer heeft geen sectie ${k}${staat.secties.get(s0.track) ? '' : ' (geen sectiekaart)'}; een tijd schrijf je als m:ss (bv. 0:32)`); return; }
     op = { sectie: k, label: x?.label ?? null, groep: x?.groep ?? null, ...(x ? { sec: Math.max(0, x.van - (s0.van ?? 0)) } : {}) };
   } else {
     const t = leesTijd(opT);
@@ -792,7 +791,8 @@ $('.pl-laag-erbij').addEventListener('click', () => {
   const duur = Number(String($('.pl-laag-duur').value).replace(',', '.')) || null;
   let laag;
   if (soort === 'nummer') {
-    const gekozen = [...staat.selectie].at(-1);
+    // Het nummer dat je het LAATST aanvinkte (niet het laatste van een krat of "alles": review S9 b).
+    const gekozen = staat.laatstAangevinkt && staat.selectie.has(staat.laatstAangevinkt) ? staat.laatstAangevinkt : null;
     if (!gekozen) { melding('laag: vink rechts het nummer aan dat erbij moet (het laatst aangevinkte telt)'); return; }
     laag = { soort, track: gekozen, op, deck, stem: $('.pl-laag-stem').value || null, duur, start: $('.pl-laag-start').value };
   } else if (soort === 'sampler') laag = { soort, pad: nr, op };

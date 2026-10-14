@@ -92,11 +92,14 @@ export function normaliseerSectie(x) {
   };
 }
 
-/** Tracks van de automaat: { auto: [1..8] } uniek en oplopend, of null (geen of leeg). */
+/**
+ * Tracks van de automaat: { auto: [1..8] } uniek en oplopend, minstens TWEE (met één track kan hij
+ * nooit overgaan: hij laadt nooit op wat klinkt; review S9 a-K2), of null.
+ */
 export function normaliseerTracks(t) {
   if (!t || typeof t !== 'object' || !Array.isArray(t.auto)) return null;
   const auto = [...new Set(t.auto.filter((n) => Number.isInteger(n) && n >= 1 && n <= 8))].sort((a, b) => a - b);
-  return auto.length ? { auto } : null;
+  return auto.length >= 2 ? { auto } : null;
 }
 
 /**
@@ -174,7 +177,7 @@ export function normaliseerPlan(invoer, { trackIds = null } = {}) {
   if (!Array.isArray(d.stappen)) fouten.push('geen stappen');
   if (ruw.length > MAX_STAPPEN) fouten.push(`meer dan ${MAX_STAPPEN} stappen: de rest is weggelaten`);
   const tracks = normaliseerTracks(d.tracks);
-  if (d.tracks != null && !tracks) fouten.push('"tracks" is geen { auto: [1..8] } (weggelaten)');
+  if (d.tracks != null && !tracks) fouten.push('"tracks" is geen { auto: [1..8] } met minstens twee tracks (weggelaten)');
   const autoTracks = tracks ? new Set(tracks.auto) : null;
   const bezet = new Set();
   const stappen = [];

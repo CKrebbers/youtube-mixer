@@ -82,9 +82,10 @@ export const VAST_NOOIT = Object.freeze(['record.*', 'log.*', 'mapping.*', 'werk
   // De toonsoort van een nummer (track.N.key*) wordt bewaard als 'hand'. Niet `*.grid.*`: dat raakte ook layer.grid.*
   // (de grid-modus van de APC kiezen, bewaart niets; review S8 ronde 2, B3).
   'auto.*', 'track.*.grid.*', 'track.*.key', 'track.*.key.*', 'patterns.record*',
-  // S9: een set bewaren schrijft naar de server (zoals werk.opslaan). GO, buiten/terug, lagen en
-  // terugladen (met de tweede druk) mogen wel, als `mag` ze noemt (docs/PLAN-SET.md §7).
-  'set.bewaar*']);
+  // S9: een set bewaren schrijft naar de server (zoals werk.opslaan); terugladen kiest een
+  // werkruimte, laadt nummers en schrijft plan en patronen (review S9 a-I4): beide nooit van buiten.
+  // GO, buiten/terug, lagen en een set KIEZEN mogen wel, als `mag` ze noemt (docs/PLAN-SET.md §7).
+  'set.bewaar*', 'set.terugladen*']);
 /**
  * Wat op de milliseconde moet kloppen (A5): tussen een vinger op glas en de mixer zitten wifi en
  * aanraking, tientallen ms en onvoorspelbaar. Een scherm buiten de Mac doet dit alleen met

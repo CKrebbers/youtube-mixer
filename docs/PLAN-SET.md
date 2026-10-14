@@ -49,8 +49,11 @@ of met de stap gekozen de toetsen 1 auto · 2 blend · 3 filter · 4 overvloeien
 **Claude** blijft het plan schrijven (PUT met versie, 409, docs/PLAN.md §3). De nieuwe velden
 (§5) staan in `kent`, zodat een oud venster ze niet wist (zelfde mechaniek als in/uit).
 
-Handelingen voor een set van 12 nummers uit een krat: krat kiezen (1), "maak set" (2), "gebruik
-dit plan" (3, slaat ook op), auto aan (4). Gemeten in §9.
+Handelingen voor een set van 12 nummers uit een krat, vanuit de mixer: "plan" openen (1), krat
+kiezen (2), "maak set" (3), "gebruik dit plan" (4, slaat ook op), "auto" aan in het venster (5).
+Gemeten in §9 (headless: 3 tot het plan op de server staat). Let op: "maak set" vervangt de stappen
+van het plan dat open staat (ctrl+z = terug); voor een nieuw plan kies je eerst "+ nieuw plan" en
+een naam (twee handelingen meer).
 
 ## 3. Klaar voor de set
 
@@ -138,7 +141,8 @@ Een SET (`src/sets/model.js`, puur, ook op de server):
   set dupliceert). **Momentopname** = de beginstand van het handelingenlog (`leesStand`): welk nummer
   op welke track (tracks.id), positie, cue, hotcues, loop, EQ/filter/fader/sends (de waarden op de
   bus), racks met herkomst, kant, kills, stem-kills, instrumenten, sampler-pads (alleen WAAR het stuk
-  zit), patronen. Geen audio, geen library.
+  zit), patronen. Geen audio, geen library. (Welk instrument er op een track staat zit in de
+  patronenset, niet in de momentopname.)
 - **Opslaan**: `PUT /api/sets/<naam> { set, versie }`, versie = hash van de inhoud, 409 met de
   huidige inhoud, elke opslag bewaart de vorige in `sets/.versies/<naam>/` (laatste 50), atomisch.
   `POST /api/sets/<naam>/kopie { naar }` (dupliceren), `POST /api/sets/<naam>/hernoem { naar,
@@ -171,10 +175,11 @@ Geen enkele mapping verandert (Clay verdeelt de knoppen zelf). Elke action heeft
 (niet geladen tenzij je hem noemt, `?stukken=set-voorbeeld`).
 
 **iPad.** Twee bouwstenen in het paneelregister (S7): `plan` (live-stand + GO, buiten/terug, laag
-nu/overslaan) en `sets` (de lijst + terugladen). Ze gaan over de schrijfweg van S8: alleen als de
-werkruimte ze op dat scherm zet én `mag` ze noemt (`plan.*`, `set.*`). `set.bewaar` staat in
-VAST_NOOIT (schrijft naar de server, zoals `werk.opslaan`); terugladen mag dus alleen als Clay het
-expliciet in `mag` zet, en ook dan met de tweede druk.
+nu/overslaan) en `sets` (de lijst, kiezen, met/zonder mixer, terugladen). Ze gaan over de schrijfweg
+van S8: alleen als de werkruimte ze op dat scherm zet én `mag` ze noemt (`plan.*`, `set.*`).
+`set.bewaar*` en `set.terugladen*` staan in VAST_NOOIT (review ronde 1: terugladen kiest een
+werkruimte, laadt nummers en schrijft plan en patronen, precies wat VAST_NOOIT verbiedt): op de
+iPad kies je een set en zie je de stand; terugladen gaat op de Mac (of mac-2). Open: VRAGEN S9-4.
 
 ## 8. Tegen de regels getoetst
 
@@ -232,3 +237,30 @@ terugladen, tweede druk, ontbrekend nummer, grid van NU).
 - Na een overname gaat de automaat verder zodra er ÉÉN van zijn tracks klinkt; klinkt er helemaal
   niets meer (ook niet bij Clay), dan meteen de volgende stap. `plan.terug` werkt ook vanuit "jij mixt".
 - Een set kiezen in de Controlekamer is niet gebouwd (VRAGEN S9-7).
+- `set.terugladen` staat in VAST_NOOIT (niet "met mag": zie §7).
+
+**Review ronde 1** (twee agenten, 14 okt) en wat er veranderde:
+- buiten het plan tijdens het laden mixte hij door → na het laden blijft hij buiten;
+- buiten + terug tijdens een overgang liet hem half staan → de overgang loopt door;
+- een track waar Clay zelf iets op LAADDE (niet over de bus) zag de automaat niet → hij vergelijkt
+  elke tik welk nummer er op een deck staat (`_kijkLaden`); wat hij niet zelf laadde is van Clay;
+- een oude automaat-track die Clay aanraakte bleef "van de automaat" → nu niet meer (behalve de
+  hoofdtrack en de klaarstaande, daar geldt OVERNEEM);
+- een laag met duur ging na een stapwissel niet dicht → de laag rekent op de positie van zijn eigen
+  track en gaat mee over de wissel;
+- een laag zonder zeker grid startte ongesynct → hij start niet, staat klaar voor Clay, met melding;
+- focus en PFL op de laagtrack namen de laag over → kijken en luisteren tellen niet;
+- terugladen terwijl de auto-DJ speelt startte iets in de stilte → tweede druk, de auto-DJ gaat uit
+  (met de mixer), spelende patronen en pads tellen mee, de stand gaat in het handelingenlog, en de
+  patronen-opslag van de mixer neemt de set over (geen botsing meer);
+- een mislukte laad maakte een terugspeel-track → die track blijft leeg;
+- kruisend hernoemen hield twee sloten vast → nooit twee sloten tegelijk;
+- `tracks.auto` met één track liep vast → minstens twee;
+- GO tijdens het laden ging verloren → hij gaat zodra de volgende klaarstaat;
+- "1,5" als duur werd 90 s → onder de 10 = uren (`leesDuur`, ook "2u");
+- een laag kreeg het laatste nummer van een krat → het laatst AANGEVINKTE; "past bij" begint bij
+  de gekozen stap, anders de focus-track van de mixer.
+Bewust zo gelaten: het uiterste moment van GO rekent tot het einde van het nummer (niet de speelduur
+van het plan); `go()`/`terug()` rekenen kort in de action (licht, zoals `auto.nu`); "maak klaar"
+toetst de speeldag en het deck bij het verzoek (de stems-rij zelf gaat zoals altijd); een set die
+`auto-plan` heet vervangt bij terugladen het standaardplan (met versie, de vorige in `.versies`).

@@ -99,6 +99,34 @@ console.log('\nterugladen met de mixer');
   ok('niets speelt: meteen', (await sets.terugladen('vrijdag', { metMoment: true })).ok && !!gezet);
 }
 
+console.log('\nreview S9: de auto-DJ, patronen en pads, het log, de patronen-opslag');
+{
+  const S2 = nepServer();
+  S2.db.sets.x = { set: { naam: 'x', plan: { stappen: [{ id: 's1', track: 'a' }] }, patronen: { naam: 'set', set: { tempo: 100 } },
+    momentopname: { tracks: [{ track: 1, bron: 'library', nummer: 'a' }] } }, versie: 'x1' };
+  let aan = true, gestopt = 0, stand = 0, kijk = 0, hun = 0, klok2 = 0, anders = [];
+  const opslag = { kijk: async () => { kijk++; }, stand: () => ({ botsing: true }), hunVersie: () => { hun++; } };
+  const s2 = maakSets({ haal: S2.haal, meld: () => {}, nu: () => klok2, plan: () => ({ naam: () => 'auto-plan', gebruik: async () => {} }), werk: () => null,
+    patronenNaam: () => 'set', speelt: () => false, anders: () => anders, autoAan: () => aan, stopAuto: () => { gestopt++; aan = false; },
+    naStand: () => { stand++; }, patronenOpslag: () => opslag, zetMoment: async () => ({ zonder: [] }), library: async () => [{ id: 'a' }], wacht: async () => {} });
+  const r1 = await s2.terugladen('x');
+  ok('zonder mixer, maar de auto-DJ speelt: toch de tweede druk (zijn plan wordt vervangen)', r1.vraag && gestopt === 0);
+  klok2 += 1000;
+  const r2 = await s2.terugladen('x');
+  ok('tweede druk: zonder mixer blijft de auto-DJ aan (het plan gaat live naar hem)', r2.ok && gestopt === 0 && aan);
+  klok2 += 10000;
+  anders = ['de patronen'];
+  aan = false;
+  const r3 = await s2.terugladen('x', { metMoment: true });
+  ok('met mixer en spelende patronen (geen track speelt): ook de tweede druk', r3.vraag);
+  aan = true;
+  klok2 += 1000;
+  const r4 = await s2.terugladen('x', { metMoment: true });
+  ok('tweede druk met de mixer: de auto-DJ gaat uit (anders start hij in de stilte)', r4.ok && gestopt === 1 && !aan);
+  ok('... de stand gaat in het handelingenlog', stand === 1);
+  ok('... en de mixer neemt de patronen over (bij een botsing: hun versie = de set)', kijk >= 1 && hun >= 1);
+}
+
 console.log('\nmaakZetMoment: nummers uit de library, de stand met het grid van NU');
 {
   const grid = (b) => ({ toJSON: () => ({ stukken: [{ van: 0, bpm: b, anker: 0 }] }) });

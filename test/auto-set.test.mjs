@@ -206,7 +206,7 @@ console.log('\nlagen');
   const pos = H.position;
   ok(`op zijn moment start hij (positie ${pos.toFixed(2)} ≈ 32, op de maat)`, eng.deck('E').playing && pos >= 32 - 0.1 && pos < 34.5);
   let max = 0;
-  await loop(6, 0.05, () => { max = Math.max(max, eng.deck('E').ui.fader); return false; });
+  await loop(9, 0.05, () => { max = Math.max(max, eng.deck('E').ui.fader); return false; });
   ok(`de fader gaat open tot ${max.toFixed(2)} (≈ 0,8)`, Math.abs(max - 0.8) < 0.03);
   ok('sampler-pad 2 is leeg: die laag is overgeslagen', a.lagen[2].status === 'weg');
   await loop(10, 0.05, () => !eng.deck('E').playing);
@@ -236,6 +236,97 @@ console.log('\nlagen: overslaan, en een track die in gebruik is');
   await loop(30, 0.05, () => a.lagen[1].status !== 'wacht');
   ok(`laag 2 op track 4 die Clay gebruikt: overgeslagen (${a.lagen[1].status}, ${a.melding?.tekst})`, a.lagen[1].status === 'weg' && /in gebruik/.test(a.melding?.tekst ?? ''));
   ok('track 6 bleef leeg en onaangeraakt', !vanAuto.some((id) => id.startsWith('track.6.')));
+  a.vernietig();
+}
+
+console.log('\nlagen: Clay laadde zelf iets, een onzeker grid, kijken en luisteren (review S9 b)');
+{
+  for (const id of ['C', 'D', 'E', 'F', 'G']) { const d = eng.deck(id); if (d.playing) d.pause(); }
+  const onzeker = { ...lib[4], id: 'onz', grid: { stukken: [{ van: 0, bpm: 124, anker: 0, zekerheid: 0.1 }] } };
+  lib.push(onzeker);
+  const a = maak({ tracks: { auto: [1, 2] }, stappen: [{ id: 's1', track: 'een', lagen: [
+    { id: 'l1', soort: 'nummer', track: 'acap', op: { sec: 33 }, deck: 5 },
+    { id: 'l2', soort: 'nummer', track: 'onz', op: { sec: 34 }, deck: 6 },
+    { id: 'l3', soort: 'nummer', track: 'acap', op: { sec: 35 }, deck: 7 } ] }, { id: 's2', track: 'twee' }] });
+  await start(a);
+  // Clay zet zelf iets klaar op track 5 (laden gaat NIET over de bus) en raakt het niet aan.
+  await laad('E', lib[3]);
+  await loop(0.2);
+  await loop(15, 0.05, () => a.lagen[0].status !== 'wacht');
+  ok(`track 5 die Clay zelf laadde: de laag gaat er niet overheen (${a.lagen[0].status}, op 5: ${opDeck.E})`, a.lagen[0].status === 'weg' && opDeck.E === 'vier');
+  await loop(45, 0.05, () => a.lagen[1].status !== 'wacht' && a.lagen[1].status !== 'laden' && a.lagen[1].status !== 'klaar');
+  ok(`een laag met een onzeker grid start niet vanzelf: hij staat klaar voor Clay (${a.lagen[1].status})`, a.lagen[1].status === 'jij' && !eng.deck('F').playing && opDeck.F === 'onz');
+  await loop(1, 0.05, () => a.lagen[2].status === 'klaar');
+  bus('track.7.pfl', true); bus('track.7.focus', true);
+  ok(`PFL en focus op de laagtrack: de laag blijft van de automaat (${a.lagen[2].status})`, a.lagen[2].status === 'klaar' || a.lagen[2].status === 'speelt');
+  a.vernietig();
+}
+
+console.log('\nreview S9 (a): buiten tijdens het laden, terug tijdens een overgang, GO tijdens het laden');
+{
+  const traag = (a) => { const echt = a.laad; a.laad = async (...x) => { await new Promise((r) => setTimeout(r, 30)); return echt(...x); }; };
+  const a = maak({ tracks: { auto: [1, 2] }, stappen: [{ id: 's1', track: 'een' }, { id: 's2', track: 'twee' }, { id: 's3', track: 'drie' }] });
+  await start(a);
+  await loop(5, 0.05, () => a.fase === 'klaar');
+  traag(a);
+  a.overslaan();
+  a.tik();
+  ok(`de volgende laadt (${a.fase})`, a.fase === 'laden');
+  bus('plan.buiten', true);
+  const voor = vanAuto.length;
+  await new Promise((r) => setTimeout(r, 80));
+  await loop(60);
+  ok(`buiten tijdens het laden: na het laden blijft hij buiten en doet niets (${a.fase}, ${vanAuto.length - voor} actions)`, a.fase === 'buiten' && vanAuto.length === voor);
+  a.vernietig();
+}
+{
+  for (const id of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) { const d = eng.deck(id); if (d.playing) d.pause(); }
+  const a = maak({ tracks: { auto: [1, 2] }, stappen: [{ id: 's1', track: 'een' }, { id: 's2', track: 'twee' }, { id: 's3', track: 'drie' }] });
+  await start(a);
+  await loop(20, 0.05, () => a.fase === 'klaar');
+  bus('plan.go', true);
+  await loop(60, 0.05, () => a.fase === 'bezig' && a.stand().volgende?.voortgang > 0.3);
+  const inn = a.volgende?.deckId;
+  bus('plan.buiten', true);
+  bus('plan.terug', true);
+  ok('buiten en meteen terug tijdens een overgang: de overgang loopt door', a.fase === 'bezig' && a.volgende?.deckId === inn);
+  await loop(60, 0.05, () => a.hoofd === inn && a.fase !== 'bezig');
+  const spelend = ['A', 'B'].filter((id) => eng.deck(id).playing);
+  ok(`... en eindigt netjes: alleen de nieuwe klinkt, fader 1, bas open (${spelend.join()})`, a.hoofd === inn && spelend.length === 1 && spelend[0] === inn
+    && eng.deck(inn).ui.fader === 1 && eng.deck(inn).ui.low === 0.5);
+  // GO terwijl hij laadt: daarna alsnog.
+  await loop(5, 0.05, () => a.fase === 'laden' || a.fase === 'klaar');
+  if (a.fase === 'klaar') { a.overslaan(); a.tik(); }
+  if (a.fase === 'laden') {
+    bus('plan.go', true);
+    await new Promise((r) => setTimeout(r, 80));
+    await loop(1, 0.05, () => a.fase === 'klaar');
+    ok('GO tijdens het laden: zodra hij klaarstaat, gaat hij (nu)', a.volgende?.goGegeven === true && a.volgende?.nu === true);
+  } else ok('GO tijdens het laden: (kon de laadfase niet vangen)', false);
+  a.vernietig();
+}
+
+console.log('\nreview S9 (a): een oude automaat-track die Clay aanraakt, een laag over een stapwissel');
+{
+  for (const id of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) { const d = eng.deck(id); if (d.playing) d.pause(); }
+  const b = maak({ tracks: { auto: [1, 2] }, stappen: [{ id: 's1', track: 'een', speelduur: 40, lagen: [{ id: 'l1', soort: 'nummer', track: 'acap', op: { sec: 20 }, deck: 8, duur: 40 }] },
+    { id: 's2', track: 'twee' }] });
+  await start(b);
+  await loop(80, 0.05, () => b.hoofdStap === 's2');
+  ok(`s2 klinkt, de laag van s1 speelt nog (zijn duur is nog niet om): ${b.hoofdStap}, 8 speelt ${eng.deck('H').playing}`, b.hoofdStap === 's2' && eng.deck('H').playing);
+  await loop(60, 0.05, () => !eng.deck('H').playing);
+  ok(`een laag met duur gaat ook na de stapwissel dicht (track 8 stil: ${!eng.deck('H').playing}, fader ${eng.deck('H').ui.fader.toFixed(2)})`, !eng.deck('H').playing && eng.deck('H').ui.fader === 0);
+  b.vernietig();
+  for (const id of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) { const d = eng.deck(id); if (d.playing) d.pause(); }
+  const a = maak({ stappen: [{ id: 's1', track: 'een' }, { id: 's2', track: 'twee' }, { id: 's3', track: 'drie' }] });
+  await start(a);
+  const eerste = a.hoofd;
+  await loop(200, 0.05, () => a.hoofdStap === 's2');
+  // Clay pakt de eerste track (van de automaat geweest) en doet er iets mee: daar laadt hij s3 niet.
+  const nr = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].indexOf(eerste) + 1;
+  bus(`track.${nr}.filter`, 0.3);
+  await loop(10, 0.05, () => a.fase === 'klaar');
+  ok(`een oude automaat-track waar Clay net aan draaide: s3 komt ergens anders (${a.volgende?.deckId}, niet ${eerste})`, a.volgende && a.volgende.deckId !== eerste);
   a.vernietig();
 }
 

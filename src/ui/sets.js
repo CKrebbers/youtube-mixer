@@ -23,7 +23,8 @@ export const ZEKER_MS = 3000;
 
 export function maakSets({ haal = (...a) => fetch(...a), meld = () => {}, nu = () => performance.now(),
   plan = () => globalThis.window?.varvePlan ?? null, werk = () => null, patronenNaam = () => 'set',
-  speelt = () => false, moment = () => null, zetMoment = async () => ({ zonder: [] }), library = async () => [] } = {}) {
+  speelt = () => false, moment = () => null, zetMoment = async () => ({ zonder: [] }), library = async () => [],
+  anders = () => [], autoAan = () => false, stopAuto = () => {}, naStand = () => {}, patronenOpslag = () => null, wacht = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
   const st = { lijst: [], gekozen: null, versies: {}, metMoment: false, zekerTot: 0, bezig: false, laatst: null };
 
   const json = async (r) => { const d = await r.json().catch(() => null); return d; };
@@ -103,12 +104,14 @@ export function maakSets({ haal = (...a) => fetch(...a), meld = () => {}, nu = (
     st.versies[naam] = r.d.versie;
     const mo = metMoment ? set.momentopname : null;
     if (metMoment && !mo) meld(`set "${naam}" heeft geen momentopname van de mixer: alleen plan, patronen en werkruimte`, 'info');
-    // De tweede druk: alleen als de momentopname een spelende track zou raken.
-    const geraakt = mo ? overSpelend(mo, speelt) : [];
+    // De tweede druk (review S9 a-I5): de momentopname raakt een spelende track, spelende patronen
+    // of pads, of de auto-DJ; zonder momentopname vervangt hij een plan dat de auto-DJ nu speelt.
+    const geraakt = mo ? [...overSpelend(mo, speelt).map((n) => `track ${n}`), ...anders(), ...(autoAan() ? ['de auto-DJ'] : [])]
+      : autoAan() ? ['de auto-DJ (zijn plan wordt vervangen)'] : [];
     if (geraakt.length && !(nu() < st.zekerTot && st.laatst === naam)) {
       st.zekerTot = nu() + ZEKER_MS;
       st.laatst = naam;
-      meld(`track ${geraakt.join(', ')} speelt: druk nog eens (binnen 3 s) om set "${naam}" met de mixer terug te laden`, 'info');
+      meld(`${geraakt.join(', ')} ${geraakt.length === 1 ? 'speelt' : 'spelen'}: druk nog eens (binnen 3 s) om set "${naam}"${mo ? ' met de mixer' : ''} terug te laden`, 'info');
       return { ok: false, vraag: true };
     }
     st.zekerTot = 0;
@@ -127,12 +130,18 @@ export function maakSets({ haal = (...a) => fetch(...a), meld = () => {}, nu = (
         if (p.ok) { await plan()?.gebruik?.(pn); plan()?.bewaard?.(p.d.plan, p.d.versie, pn); }
         else meld(`set "${naam}": het plan niet gezet (${p.d?.fout ?? p.status})`, 'fout');
       }
-      // De patronen: naar de set die de mixer gebruikt, met versie.
+      // Met de mixer: eerst de auto-DJ uit, anders start hij in de stilte die de momentopname maakt.
+      if (mo && autoAan()) { await stopAuto(); meld(`set "${naam}": de auto-DJ staat uit (zet hem aan als je wilt beginnen)`, 'info'); }
+      // De patronen: naar de set die de mixer gebruikt, met versie (één keer opnieuw als de mixer net zelf bewaarde).
       if (set.patronen) {
         const pt = patronenNaam();
-        const g = await vraag(`/api/patronen/${encodeURIComponent(pt)}`);
-        const p = await put(`/api/patronen/${encodeURIComponent(pt)}`, { set: set.patronen.set, versie: g.ok ? g.d?.versie ?? null : null });
+        let p = null;
+        for (let poging = 0; poging < 2 && !p?.ok; poging++) {
+          const g = await vraag(`/api/patronen/${encodeURIComponent(pt)}`);
+          p = await put(`/api/patronen/${encodeURIComponent(pt)}`, { set: set.patronen.set, versie: g.ok ? g.d?.versie ?? null : null });
+        }
         if (!p.ok) meld(`set "${naam}": de patronen niet gezet (${p.d?.fout ?? p.status})`, 'fout');
+        else await neemPatronenOver();
       }
       // De werkruimte op naam.
       if (set.werkruimte) {
@@ -145,12 +154,30 @@ export function maakSets({ haal = (...a) => fetch(...a), meld = () => {}, nu = (
         const m = { ...mo, tracks: mo.tracks.map((t) => (t.bron === 'library' && ontbreekt.includes(t.nummer) ? { track: t.track, bron: 'leeg' } : t)) };
         const u = await zetMoment(m, tracks);
         zonder = u?.zonder ?? [];
+        // De stand ging buiten de bus om: in het handelingenlog als `stand` (review S9 a-I6).
+        try { naStand(); } catch (_) {}
+        // Wat de momentopname aan de patronen deed (stoppen, instrumenten) mag de set niet laten botsen.
+        await neemPatronenOver();
+        wacht(4000).then(neemPatronenOver).catch(() => {});
       }
       meld(`set "${naam}" teruggeladen${mo ? ' (met de mixer, er speelt niets)' : ''}${ontbreekt.length ? `; ${ontbreekt.length} nummer${ontbreekt.length === 1 ? '' : 's'} ontbreken` : ''}`, 'info');
       return { ok: true, ontbreekt, zonder };
     } finally {
       st.bezig = false;
     }
+  }
+
+  /**
+   * De mixer de patronen van de server laten overnemen (patronen-opslag.js): meteen kijken, en
+   * staat er een botsing (de mixer bewaarde net zelf iets, review S9 b6), dan hun versie = de set.
+   */
+  async function neemPatronenOver() {
+    const o = patronenOpslag();
+    if (!o) return;
+    try {
+      await o.kijk?.();
+      if (o.stand?.().botsing) o.hunVersie?.();
+    } catch (_) { /* niet erg: de mixer kijkt zelf elke 3 s */ }
   }
 
   async function kopie(naam, naar) {
@@ -199,7 +226,8 @@ export function maakZetMoment({ engine, tracks: TRACKS, laadLibrary, uitvoerder,
     const st = { ...m, tracks: m.tracks.map((t) => {
       if (t.bron !== 'library') return t;
       const d = engine.deck(deckVan(t.track));
-      if (!d?.buffer) return { track: t.track, bron: 'leeg' };
+      // Mislukt of niet te vinden: leeg, zodat stand() hem NIET via terugspelen laadt (review S9 a-K4).
+      if (!d?.buffer || zonder.includes(t.track)) return { track: t.track, bron: 'leeg' };
       const uit = { ...t, speelt: false, wacht: false, grid: d.grid ? d.grid.toJSON() : null };
       if (d.sectieKaart) uit.secties = d.sectieKaart.toJSON(); else delete uit.secties;
       return uit;

@@ -55,6 +55,19 @@ export default async function opzet(ctx) {
     zetMoment: maakZetMoment({ engine, tracks: TRACKS, laadLibrary: (id, t) => laden.laadLibrary(id, t), uitvoerder,
       herkomst: (id) => staat.deckHerkomst[id] ?? null, meld }),
     library: heleLibrary,
+    // Wat er verder klinkt en wat de momentopname zou stoppen (review S9 a-I5): patronen, sampler-pads.
+    anders: () => [
+      ...(engine.patronen?.spelend?.().length ? ['de patronen'] : []),
+      ...((engine.sampler?.pads || []).some((p) => p?.speelt) ? ['de sampler'] : []),
+    ],
+    autoAan: () => !!auto.aan,
+    stopAuto: () => auto.zetAan(false),
+    // De stand van de set ging buiten de bus om: in het lopende handelingenlog (zoals Terugspeler.onStand).
+    naStand: () => {
+      const log = window.logboek?.log;
+      if (log?.bezig) log.gebeurtenis('stand', leesStand({ engine, tracks: TRACKS, herkomst: (id) => staat.deckHerkomst[id], acties: list(), lees: read }));
+    },
+    patronenOpslag: () => window.patronenPaneel?.opslag ?? null,
   });
   sets.ververs().catch(() => {});
 
