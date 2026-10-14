@@ -22,6 +22,13 @@
  *            LIGGEN (pad 1 linksonder, 13–16 bovenaan), die je hoort of
  *            indrukt omgekeerd (wit vlak); onderaan wat er op de "1" komt
  *
+ * WERKRUIMTE (spoor S6, docs/werkruimte/S6.md): staat er een werkruimte met delen (stand.delen),
+ *   dan staan bovenaan de acht deelnamen (F1–F4 links, F5–F8 rechts, recht onder de knoppen), het
+ *   actieve deel omgekeerd (`tekenDeelLabels`); de rest van het scherm schuift 9 px omlaag en de
+ *   onderregel valt weg. Een deel kan per scherm de fasescoop (`tekenFasescoop`) of de getallen
+ *   van de uitlijnweergave (`tekenGetallen`, src/uitlijn/reken.js) kiezen (stand.scherm).
+ *   Zonder werkruimte: elk scherm bit voor bit zoals hierboven.
+ *
  * Het lettertype is een klassiek 5×7-font (kolom voor kolom, onderste bit =
  * bovenste pixel), ASCII 32–126 plus ±. Wat er niet in staat wordt eerst
  * vereenvoudigd (é -> e, − -> -, × -> x, → -> >), anders een vraagteken.
@@ -401,12 +408,143 @@ function tekenBladeren(buf, s, nr) {
  * @returns Uint8Array(2048)
  */
 export function tekenScherm(stand, nr) {
-  const buf = leegScherm();
   const s = stand || {};
-  // ---- uitleg (CONTROL vast): gaat voor alles ----
-  if (s.uitleg) return tekenUitleg(buf, s, nr);
+  // ---- uitleg (CONTROL vast): gaat voor alles, ook voor de deelnamen ----
+  if (s.uitleg) return tekenUitleg(leegScherm(), s, nr);
+  const buf = tekenInhoud(s, nr);
+  return s.delen ? metDeelLabels(buf, s.delen, nr) : buf;
+}
+
+/** Hoe hoog de regel met de deelnamen is (een letter + een pixel erboven en eronder). */
+export const LABEL_H = 9;
+
+/**
+ * De deelnamen bovenaan (F1–F8 staan recht boven de schermen: F1–F4 boven het linker, F5–F8 boven
+ * het rechter, elk 64 px breed). Het actieve deel omgekeerd: een vol vlak met de letters uit.
+ * Puur: tekent op `buf` (standaard een leeg scherm) in de rijen 0 .. LABEL_H − 1 en geeft hem terug.
+ *
+ * @param delen   [label, …] (hooguit 8; een lege plek = geen deel)
+ * @param actief  index 0..7 van het deel van nu, of -1
+ * @param nr      0 = links (deel 1–4), 1 = rechts (deel 5–8)
+ */
+export function tekenDeelLabels(delen, actief, { nr = 0, buf = leegScherm() } = {}) {
+  for (let y = 0; y < LABEL_H; y++) for (let x = 0; x < BREED; x++) wisPixel(buf, x, y);
+  for (let j = 0; j < 4; j++) {
+    const i = nr * 4 + j, x = j * KOLOM;
+    const label = delen?.[i];
+    if (j > 0) staander(buf, x - 1, 0, LABEL_H - 2, true);
+    if (typeof label !== 'string' || !label) continue;
+    const t = pasIn(label);
+    const tx = x + Math.max(1, Math.floor((KOLOM - 1 - tekstBreedte(t)) / 2));
+    if (i === actief) { vul(buf, x, 0, KOLOM - 1, LABEL_H - 1); tekst(buf, tx, 1, t, 1, true); }
+    else tekst(buf, tx, 1, t);
+  }
+  lijn(buf, 0, BREED - 1, LABEL_H - 1, true);
+  return buf;
+}
+
+/** De inhoud 9 px omlaag (de onderste 9 rijen vallen weg) en de deelnamen erboven. */
+function metDeelLabels(buf, delen, nr) {
+  const uit = leegScherm();
+  uit.set(buf.subarray(0, 32 * (HOOG - LABEL_H)), 32 * LABEL_H);
+  return tekenDeelLabels(delen.labels, delen.actief ?? -1, { nr, buf: uit });
+}
+
+/** Zo breed is de fasescoop: ± BEREIK_MS over de hele breedte (4 px per ms). */
+export const SCOOP_MS = 32;
+const scoopX = (ms) => Math.round(BREED / 2 + (ms / SCOOP_MS) * (BREED / 2));
+
+/**
+ * De fasescoop van de focus-track (src/uitlijn/reken.js `vouw`): elke gehoorde tel van de track
+ * als een stip op zijn fase tegen de maatgever (midden = gelijk, rechts = de track loopt VOOR,
+ * 4 px per ms, ±32 ms), de nieuwste bovenaan, één rij per tel. Gelijk = een smalle staander in het
+ * midden, drift = een schuine lijn, een flam = twee staanders. Onderin streepjes voor de tellen van
+ * de maatgever zelf (het ijkpunt). Wat buiten ±32 ms valt, staat als pijl op de rand.
+ *
+ * @param vouw  { bron, punten: [{ ms, k, wie }] } of null
+ * @param buf   het scherm om op te tekenen (standaard leeg); rijen y0 .. y0 + h − 1
+ */
+export function tekenFasescoop(vouw, { buf = leegScherm(), y0 = 0, h = HOOG } = {}) {
+  const midden = BREED / 2;
+  for (let y = y0; y < y0 + h; y += 2) zetPixel(buf, midden, y);
+  for (const ms of [-20, -10, 10, 20]) { const x = scoopX(ms); zetPixel(buf, x, y0); zetPixel(buf, x, y0 + h - 1); }
+  const punten = vouw?.punten ?? [];
+  const rijen = h - 6;
+  for (const p of punten) {
+    if (typeof p.ms !== 'number' || !Number.isFinite(p.ms)) continue;
+    const buiten = Math.abs(p.ms) > SCOOP_MS;
+    const x = buiten ? (p.ms > 0 ? BREED - 2 : 1) : scoopX(p.ms);
+    if (p.wie === 'maatgever') {
+      if (p.k < 8) for (let y = y0 + h - 4; y < y0 + h - 1; y++) zetPixel(buf, x, y);
+      continue;
+    }
+    if (!(p.k >= 0) || p.k >= rijen) continue;
+    const y = y0 + 1 + p.k;
+    zetPixel(buf, x, y); zetPixel(buf, x - 1, y); zetPixel(buf, x + 1, y);
+    if (buiten) zetPixel(buf, x + (p.ms > 0 ? -2 : 2), y);
+  }
+  return buf;
+}
+
+/** Een getal in ms met teken en komma ("+2,3 ms"), of "-". */
+const msTekst = (ms) => (typeof ms !== 'number' || !Number.isFinite(ms) ? '-' : `${ms > 0 ? '+' : ms < 0 ? '-' : ''}${komma(Math.abs(ms).toFixed(1))} ms`);
+const komma = (t) => t.replace('.', ',');
+
+/**
+ * De getallen van de uitlijnweergave voor de focus-track (src/uitlijn/reken.js `getallen`): grid Δ,
+ * muziek Δ, drift per 16 tellen en de maat, één per regel; een ! als het grid naast zijn muziek ligt.
+ * Puur: tekent op `buf` vanaf rij y0 (vier regels van 8 px) en geeft hem terug.
+ */
+export function tekenGetallen(getallen, { buf = leegScherm(), y0 = 0 } = {}) {
+  const g = getallen;
+  if (!g) { tekst(buf, 2, y0, 'geen maatgever of geen grid'); return buf; }
+  if (g.maatgever) {
+    tekst(buf, 2, y0, 'deze track geeft de maat');
+    if (g.afwijking !== null && g.afwijking !== undefined) tekst(buf, 2, y0 + 8, pasIn(`! grid naast muziek ${msTekst(g.afwijking)}`, 42));
+    return buf;
+  }
+  const maat = g.maat === null || g.maat === undefined ? '-' : g.maat === 0 ? 'op de 1' : `${g.maat > 0 ? '+' : ''}${g.maat} tel`;
+  const rijen = [['grid', msTekst(g.grid)], ['muziek', msTekst(g.muziek)], ['drift', `${msTekst(g.drift)}/16`], ['maat', maat]];
+  rijen.forEach(([naam, w], i) => { tekst(buf, 2, y0 + i * 8, naam); tekst(buf, 50, y0 + i * 8, pasIn(w, 22)); });
+  if (g.afwijking !== null && g.afwijking !== undefined) tekst(buf, 160, y0, '! grid');
+  if (g.wacht !== null && g.wacht !== undefined) tekst(buf, 160, y0 + 8, pasIn(`valt in ${komma(String(g.wacht))}`, 15));
+  return buf;
+}
+
+/** De fasescoop als heel scherm: kop (track en hoe ver hij naast ligt), de scoop, onderregel. */
+function tekenScoopScherm(buf, s) {
+  const u = s.uitlijn ?? {};
+  const eigen = (u.vouw?.punten ?? []).filter((p) => p.wie !== 'maatgever' && p.k < 8 && Number.isFinite(p.ms)).map((p) => p.ms).sort((a, b) => a - b);
+  const mediaan = eigen.length ? eigen[eigen.length >> 1] : null;
+  tekst(buf, 2, 1, pasIn(`T${u.nr ?? '?'} fase ${mediaan === null ? '' : msTekst(mediaan)}`, 26));
+  if (u.getallen?.bpm) { const b = `${komma(u.getallen.bpm.toFixed(2))} BPM`; tekst(buf, BREED - 2 - tekstBreedte(b), 1, b); }
+  lijn(buf, 0, BREED - 1, 9);
+  if (!u.vouw) tekst(buf, 2, 24, 'geen maatgever, of geen grid');
+  else tekenFasescoop(u.vouw, { buf, y0: 11, h: 42 });
+  lijn(buf, 0, BREED - 1, 53, true);
+  tekst(buf, 2, 56, pasIn(u.vouw ? 'midden = gelijk, rechts = voor (4 px/ms)' : 'groep A-H: focus', REGEL));
+  return buf;
+}
+
+/** De getallen als heel scherm. */
+function tekenGetallenScherm(buf, s) {
+  const u = s.uitlijn ?? {};
+  kop(buf, 2, 1, `T${u.nr ?? '?'} uitlijn`, BREED - 4);
+  lijn(buf, 0, BREED - 1, 17);
+  tekenGetallen(u.getallen, { buf, y0: 20 });
+  lijn(buf, 0, BREED - 1, 53, true);
+  tekst(buf, 2, 56, pasIn('grid = wat het grid zegt, muziek = de kicks', REGEL));
+  return buf;
+}
+
+/** De inhoud van een scherm (zonder uitleg en zonder deelnamen). */
+function tekenInhoud(s, nr) {
+  const buf = leegScherm();
   // ---- bladeren (de library open): de lijst en het gekozen nummer ----
   if (s.bladeren) return tekenBladeren(buf, s, nr);
+  // ---- een deel kiest voor dit scherm de fasescoop of de getallen ----
+  if (s.scherm?.[nr] === 'fasescoop') return tekenScoopScherm(buf, s);
+  if (s.scherm?.[nr] === 'getallen') return tekenGetallenScherm(buf, s);
   // ---- de pagina's Strip en Rack: de focus-track en zijn knoppen ----
   if (s.dj && !((s.patroonVast || s.modus === 'stappen' || s.modus === 'secties' || s.modus === 'sampler') && nr === 0)) return tekenDj(buf, s, nr);
   // Links in de padmodus sampler: de acht pads in plaats van knop 1–4.
