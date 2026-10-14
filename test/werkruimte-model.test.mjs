@@ -271,6 +271,38 @@ const pasToe = (m, s) => { for (const f of s.apparaten.apc40mk2?.fragmenten ?? [
   ok('twee-handen: 0 botsingen met de standaard', s.botsingen.length === 0);
 }
 
+console.log('\nde velden van S4 in een stuk (samenvoegen golf 2)');
+{
+  // Het model en mapping.js (S4) moeten dezelfde regels aannemen: een stuk dat met ?stukken= werkt,
+  // werkt ook in een werkruimte. Gevonden bij het samenvoegen: codering viel weg, lang: true werd
+  // geweigerd en twee regels met en zonder `als` op één knop heetten dubbel.
+  const st = (regels) => M.normaliseerStuk({ schema: 1, stuk: 'proef-s4', regels: { apc40mk2: regels } }, { standaarden });
+  const a = st([{ in: 'cc:9:47', action: 'track.{focus}.beatjump', mode: 'stappen', codering: 'bin' }]);
+  ok('stappen: codering "bin" blijft staan', a.fouten.length === 0 && a.stuk.regels.apc40mk2[0].codering === 'bin');
+  ok('codering bij een andere modus: fout', st([{ in: 'cc:9:48', action: 'track.1.filter', mode: 'absolute', codering: 'bin' }]).fouten.length === 1);
+  const b = st([{ in: 'note:9:90', action: 'track.1.send.a', mode: 'latch', naar: 1, lang: true }]);
+  ok('lang: true mag (= 400 ms, zoals in mapping.js)', b.fouten.length === 0 && b.stuk.regels.apc40mk2[0].lang === true);
+  const c = st([{ in: 'note:9:91', action: 'track.1.send.a', mode: 'druk', naar: 1, als: 'focus.instrument' },
+    { in: 'note:9:91', action: 'track.1.send.b', mode: 'druk', naar: 1 }]);
+  ok('één knop met en zonder als: twee regels, niet dubbel', c.fouten.length === 0 && c.stuk.regels.apc40mk2.length === 2);
+  const std = standaarden.apc40mk2.rules.find((r) => !r.shift && !r.laag && !M.isKern('apc40mk2', r.in, false));
+  const d = st([{ in: std.in, action: 'track.1.send.a', mode: 'trigger', als: 'focus.instrument' }]);
+  ok('een regel met als op een plek van de standaard: nog steeds bezet', !std || (d.fouten.length === 1 && /bezet/.test(d.fouten[0])));
+  // En de mapping leest de uitkomst zoals hij hem kreeg: dezelfde sleutels.
+  const m = new Mapping({ read: () => 0, invoke: () => {} });
+  m.load({ device: 'apc40mk2', version: 3, rules: [...a.stuk.regels.apc40mk2, ...b.stuk.regels.apc40mk2, ...c.stuk.regels.apc40mk2] });
+  ok('mapping.js neemt ze aan (4 regels, codering en als mee)', m.rules.size === 4 && [...m.rules.values()].some((r) => r.codering === 'bin')
+    && [...m.rules.keys()].includes(sleutelVan(c.stuk.regels.apc40mk2[0])));
+  // Een houd-mapje (lagen.js, groep houd van S4) in een stuk: kiesknop = layer.houd.<naam>, regels in het mapje.
+  const h = M.normaliseerStuk({ schema: 1, stuk: 'proef-houd', mapjes: { nieuw: { 'houd.solo': { naam: 'solo', kiesknop: { in: 'note:9:92' } } } },
+    regels: { apc40mk2: [{ in: 'note:9:93', laag: 'houd.solo', action: 'track.1.send.a', mode: 'trigger' }] } }, { standaarden });
+  ok('een houd-mapje in een stuk: geen fout, de regel blijft', h.fouten.length === 0 && h.waarschuwingen.length === 0 && h.stuk.regels.apc40mk2?.length === 1);
+  const sh = M.samenstellen(standaarden, { 'proef-houd': { schema: 1, stuk: 'proef-houd', mapjes: { nieuw: { 'houd.solo': { naam: 'solo', kiesknop: { in: 'note:9:92' } } } },
+    regels: { apc40mk2: [{ in: 'note:9:93', laag: 'houd.solo', action: 'track.1.send.a', mode: 'trigger' }] } } }, { naam: 'x', stukken: ['proef-houd'] });
+  const regelsH = sh.apparaten.apc40mk2?.fragmenten.flatMap((f) => f.doc.rules) ?? [];
+  ok('… samengesteld: de kiesknop wordt layer.houd.solo', regelsH.some((r) => r.in === 'note:9:92' && r.action === 'layer.houd.solo') && sh.fouten.length === 0);
+}
+
 console.log('\nhulpjes');
 ok('mapjesVanDeel rekent de conditie uit', (() => {
   const t = norm(voorbeeld('twee-handen')).werkruimte.delen.spelen;

@@ -110,6 +110,9 @@ export const STANDAARD_MAPJES = Object.freeze({
     device: { standaard: 'strip', mapjes: m(['strip', 'rack', 'inst', 'master', 'beeld', 'vorm']) },
     grid: { standaard: 'hotcues', mapjes: m(['hotcues', 'loops', 'sampler', 'video', 'klank', 'auto', 'stems', 'patronen', 'secties']),
       volgorde: ['hotcues', 'loops', 'sampler', 'video', 'klank', 'auto', 'stems', 'patronen', 'secties'] },
+    // De houd-mapjes van S4 (lagen.js, groep houd): geen stand en geen eigen mapjes; een stuk of
+    // werkruimte zet ze erbij (NIEUW_GROEPEN), met de kiesknop = het mapje zelf.
+    houd: { standaard: null, mapjes: {} },
   },
   'maschine-mk2': {
     pads: { standaard: 'spelen', mapjes: m(['spelen', 'transport', 'uitlijn', 'worpen', 'stems', 'secties', 'sampler', 'beeld', 'laden', 'stap']) },
@@ -178,7 +181,10 @@ export const BESCHERMD = /^(track\.[^.]+\.(play|cue|play\.quant|hotcue\..+|load\
 const isObject = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
 const bytes = (s) => new TextEncoder().encode(s).length;
 const SIG = /^([a-z]+:(\*|\d+):\d+|[a-z-]+)$/;
-const sleutel = (r) => `${r.in}${r.shift ? '#shift' : ''}${r.laag ? `@${r.laag}` : ''}`;   // = sleutelVan in mapping.js
+// = sleutelVan in mapping.js, ook met de conditie (`?als`, S4): op één knop mag een regel met en een zonder `als`.
+const sleutel = (r) => `${r.in}${r.shift ? '#shift' : ''}${r.laag ? `@${r.laag}` : ''}${r.als ? `?${r.als}` : ''}`;
+/** De plek zonder conditie: een regel met `als` op een plek van de standaard verandert de standaard (B1). */
+const plek = (r) => `${r.in}${r.shift ? '#shift' : ''}${r.laag ? `@${r.laag}` : ''}`;
 
 /** Een patroon met `*` (willekeurige tekens) als RegExp. */
 export function patroon(p) {
@@ -289,10 +295,16 @@ export function leesRegels(lijst, { apparaat, waar, standaardSleutels = null, ei
       regel.naar = r.naar;
     } else if ('naar' in r) { waarschuwingen.push(`${w}: "naar" telt alleen bij druk of latch`); }
     if ('lang' in r) {
-      if (!(Number.isFinite(r.lang) && r.lang >= 100 && r.lang <= 2000) || (mode !== 'druk' && mode !== 'latch')) {
-        fouten.push(`${w}: "lang" is 100..2000 ms, bij druk of latch`); return;
+      // true = de 400 ms van mapping.js (LANG_MS), zoals een regel in de mapping het ook mag zeggen.
+      if (!(r.lang === true || (Number.isFinite(r.lang) && r.lang >= 100 && r.lang <= 2000)) || (mode !== 'druk' && mode !== 'latch')) {
+        fouten.push(`${w}: "lang" is 100..2000 ms (of true = 400), bij druk of latch`); return;
       }
       regel.lang = r.lang;
+    }
+    if ('codering' in r) {
+      // Stappen (S4): tweecomplement (standaard) of binary offset. Zonder dit veld las een "bin"-encoder verkeerd om.
+      if (mode !== 'stappen' || !['2c', 'bin'].includes(r.codering)) { fouten.push(`${w}: "codering" is "2c" of "bin", alleen bij stappen`); return; }
+      regel.codering = r.codering;
     }
     if ('als' in r) {
       if (!CONDITIES.includes(r.als)) { fouten.push(`${w}: conditie "${r.als}" staat niet op de lijst (${CONDITIES.join(', ')})`); return; }
@@ -314,7 +326,7 @@ export function leesRegels(lijst, { apparaat, waar, standaardSleutels = null, ei
     const k = sleutel(regel);
     if (gezien.has(k)) { fouten.push(`${w}: "${k}" staat er twee keer in`); return; }
     // Alleen vrije plekken of eigen/nieuwe mapjes (B1: de standaard blijft bit voor bit).
-    if (standaardSleutels?.has(k)) { fouten.push(`${w}: "${k}" is al bezet in de standaardmapping; een stuk of werkruimte gebruikt alleen vrije plekken`); return; }
+    if (standaardSleutels?.has(plek(regel))) { fouten.push(`${w}: "${k}" is al bezet in de standaardmapping; een stuk of werkruimte gebruikt alleen vrije plekken`); return; }
     if (regel.laag && !eigenMapjes.has(regel.laag)) {
       const [g, l] = regel.laag.split('.');
       if (bekend && !bekend[apparaat]?.[g]?.mapjes?.[l]) { waarschuwingen.push(`${w}: onbekend mapje ${regel.laag}: overgeslagen`); return; }
@@ -779,7 +791,7 @@ export function samenstellen(standaarden = {}, stukken = {}, werkruimte = null, 
       const bz = bezetVan(app);
       for (const r of lijst) {
         const k = sleutel(r);
-        if (bz.has(k)) { botsingen.push({ apparaat: app, sleutel: k, bron, met: bz.get(k) }); continue; }
+        if (bz.has(k) || (r.als && bz.get(plek(r)) === 'standaard')) { botsingen.push({ apparaat: app, sleutel: k, bron, met: bz.get(k) ?? bz.get(plek(r)) }); continue; }
         bz.set(k, bron);
         goed.push({ ...r });
       }
