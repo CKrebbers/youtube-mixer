@@ -159,7 +159,7 @@ ze na (zie §6).
 - **∥** op een effectkaart: droog/nat van dat ene effect; er komt een knop **nat** bij (te koppelen
   zoals elke parameter, ook met DICHT/OPEN). Nog eens = weer helemaal in de keten. Bij de delay is
   "nat" een stuur: hoeveel er de echo in gaat (de dub-worp: dicht = de staart rolt door).
-- Een eigen sjabloon heet in de kiezer `e:<naam>` (niet een nummer): wissen of bijzetten verschuift
+- Een eigen sjabloon heet in de kiezer `eigen:<naam>` (niet een nummer): wissen of bijzetten verschuift
   niets op een andere track (na review). "als sjabloon" over een ANDER eigen sjabloon heen vraagt een
   tweede klik; een nieuw sjabloon vanaf een ander erft zijn uitleg niet.
 - **kopie** op een kaart, dan in "+ effect…" bovenaan **plak: …** (ook in een ander rack of op een

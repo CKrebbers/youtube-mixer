@@ -564,12 +564,13 @@ try {
     const z = [];
     for (const v of [0, 0.25, 0.5, 0.75, 1]) z.push(await evalueer(`window.__fx.sjabloonKnop(${JSON.stringify(zuiver)}, 1, ${v})`));
     ok(`droog/nat van een open filter van 0 naar 1: ${z.map((x) => (x >= 0 ? '+' : '') + f2(x)).join(' ')} dB (lineair: geen bult)`, z.every((x) => Math.abs(x) < 0.2));
-    // De Kleur-sjablonen: alleen melden. Daar komt bewust iets bij (echo, galm, vervorming) of gaat er iets af (filter).
+    // De Kleur-sjablonen: echo, galm of vervorming komt er bewust bij (of het filter haalt iets weg).
     for (const naam of ['Kleur: crush', 'Kleur: dub', 'Kleur: ruimte']) {
       const rack = alle.find((r) => r.name === naam);
       const r = [];
       for (const v of [0, 0.15, 0.3, 0.4, 0.5, 0.6, 0.7, 0.85, 1]) r.push(await evalueer(`window.__fx.sjabloonKnop(${JSON.stringify(rack)}, 1, ${v})`));
-      console.log(`      ${naam}: knop 1 van 0 naar 1: ${r.map((x) => (x >= 0 ? '+' : '') + f1(x)).join(' ')} dB t.o.v. droog (geen eis)`);
+      // Er komt echo, galm of vervorming bij, maar een kwartslag Color FX mag de master niet +6 dB geven (review S10).
+      ok(`${naam}: knop 1 van 0 naar 1: ${r.map((x) => (x >= 0 ? '+' : '') + f1(x)).join(' ')} dB t.o.v. droog, nergens meer dan +3 dB`, Math.max(...r) < 3);
     }
     // De dub-worp: knop 1 open en weer dicht, het droge blijft vol (de delay krijgt een stuur).
     const dub = alle.find((r) => r.name === 'Dub-echo');

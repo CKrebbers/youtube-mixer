@@ -1986,7 +1986,7 @@ Volledig in `docs/EFFECTEN-MEER.md` (ontwerp + "Gebouwd"), vragen in VRAGEN blok
 - Knop → knop (`stuurPlekken`) is één niveau diep: elke knop rekent met zijn EIGEN stand. `resolveMacros` laat
   `plek.*` en `mod.*` buiten de keten; een nieuwe plek die macro's oplost: gebruik `_waardenNu()` in InsertSlot.
 - Droog/nat per effect is LINEAIR (`zetNat`); een effect met `alleenNat: true` (de delay) krijgt een STUUR vóór
-  het effect (droog vol, de staart rolt door). Een eigen sjabloon heeft herkomst `e:<naam>`, een kant-en-klaar
+  het effect (droog vol, de staart rolt door). Een eigen sjabloon heeft herkomst `eigen:<naam>` (niet `e:`: dat is op de master "los effect"), een kant-en-klaar
   `s:<nr>`. Weghalen van een modulator of koppeling: `_herstelLos` zet de parameter terug; bewerken houdt de
   `ModStaat` van een modulator met dezelfde soort (`new ModBank(mods, vorige)`).
 - Een nieuw doel `<slot>._nat` op een effect zonder droog/nat-pad vraagt een nieuwe keten: `natOntbreekt()` /

@@ -962,7 +962,7 @@
         "ambient",
         "galm"
       ],
-      "uitleg": "Het nummer lost op in galm en echo terwijl de bas wegzakt (highpass). Knop 1 doet alles tegelijk, knop 2 maakt de ruimte langer, knop 3 bevriest de galm: zet hem aan met knop 1 open en de wolk blijft hangen terwijl je het nummer eronder (fader of crossfader) wisselt. Knop 1 terug haalt ook de wolk weg.",
+      "uitleg": "Het nummer lost op in galm en echo terwijl de bas wegzakt (highpass). Knop 1 doet alles tegelijk, knop 2 maakt de ruimte langer, knop 3 bevriest de galm: zet hem aan met knop 1 open en de wolk blijft hangen, ook als je in het nummer springt (een hotcue, een loop). Het rack zit vóór de fader: fader en crossfader van deze track nemen de wolk mee, en knop 1 terug haalt hem weg.",
       "chain": [
         {
           "slot": "a",
@@ -1456,7 +1456,7 @@
             {
               "target": "b._nat",
               "from": 0,
-              "to": 0.85,
+              "to": 0.45,
               "kromme": [
                 1,
                 0.55,
@@ -1713,7 +1713,7 @@
         "galm",
         "live"
       ],
-      "uitleg": "Galm als instrument: knop 1 zet hem erin, knop 3 bevriest hem (de invoer gaat dicht, de wolk blijft). Dan kun je het nummer eronder wisselen.",
+      "uitleg": "Galm als instrument: knop 1 zet hem erin, knop 3 bevriest hem (de invoer gaat dicht, de wolk blijft), ook als je in het nummer springt. Het rack zit vóór de fader: fader en crossfader van deze track nemen de wolk mee.",
       "chain": [
         {
           "slot": "a",

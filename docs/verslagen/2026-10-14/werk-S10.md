@@ -127,7 +127,7 @@ spreiding).
 (a) correctheid en geluid, (b) bruikbaarheid en bewijs; elk met scratch-scripts en eigen runs.
 Opgelost (met een test erbij):
 - **(b1, blokkerend)** een eigen sjabloon wissen verschoof de herkomst `s:<nr>` van andere tracks, en
-  een tweede "wis" wiste dan het verkeerde. Nu heet een eigen sjabloon `e:<naam>`.
+  een tweede "wis" wiste dan het verkeerde. Nu heet een eigen sjabloon `eigen:<naam>`.
 - **(a1, b2)** een modulator of doel weghalen liet de parameter op zijn laatste gemoduleerde stand
   (het scherm zei iets anders). Nu `_herstelLos` (ook bij het weghalen van een koppeling, wat al vóór
   S10 zo was).

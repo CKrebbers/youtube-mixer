@@ -98,12 +98,12 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
   let sjablonen = [];
   let ingebouwd = [], eigen = [], eigenVersie = null;
   // Een kant-en-klaar sjabloon heet "s:<nr>" (vast: de kant-en-klare staan vooraan en veranderen niet
-  // tijdens een sessie); een eigen sjabloon "e:<naam>" (S10): wissen of bijzetten verschuift de nummers
+  // tijdens een sessie); een eigen sjabloon "eigen:<naam>" (niet "e:": dat is op de master al "los effect") (S10): wissen of bijzetten verschuift de nummers
   // van de eigen, en dan wees de herkomst van een andere track naar het verkeerde sjabloon.
-  const herkomstVan = (r, i) => (r._eigen ? `e:${r.name}` : `s:${i}`);
+  const herkomstVan = (r, i) => (r._eigen ? `eigen:${r.name}` : `s:${i}`);
   const sjabloonVan = (h) => {
     if (typeof h !== 'string') return null;
-    if (h.startsWith('e:')) return sjablonen.find((r) => r._eigen && r.name === h.slice(2)) ?? null;
+    if (h.startsWith('eigen:')) return sjablonen.find((r) => r._eigen && r.name === h.slice(6)) ?? null;
     if (h.startsWith('s:')) { const r = sjablonen[Number(h.slice(2))]; return r && !r._eigen ? r : null; }
     return null;
   };
@@ -141,11 +141,17 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
     let r = await zend();
     let j = await r.json().catch(() => null);
     // Intussen ergens anders veranderd (een tweede venster, Claude): de lijst van nu, en één keer opnieuw.
-    if (r.status === 409 && j?.racks) { eigen = j.racks; eigenVersie = j.versie ?? null; zetLijst(); if (!/kant-en-klaar/.test(j.fout || '')) { r = await zend(); j = await r.json().catch(() => null); } }
+    if (r.status === 409 && j?.racks) {
+      eigen = j.racks; eigenVersie = j.versie ?? null; zetLijst();
+      // Is er intussen (elders: een ander venster, Claude) een sjabloon met DEZE naam gekomen, dan
+      // niet stil overschrijven: de editor vraagt bij de volgende klik (review S10, ronde 2).
+      if (eigen.some((x) => x?.name === rack.name)) throw new Error(`er is intussen een eigen sjabloon "${rack.name}": klik nog eens om het te vervangen`);
+      if (!/kant-en-klaar/.test(j.fout || '')) { r = await zend(); j = await r.json().catch(() => null); }
+    }
     if (!r.ok) throw new Error(j?.fout || `${r.status}`);
     eigen = j.racks || []; eigenVersie = j.versie ?? null;
     zetLijst();
-    if (sjablonen.some((x) => x._eigen && x.name === rack.name)) { fx.herkomst = `e:${rack.name}`; fx.hernoem(rack.name); volgRackKiezer(deckId); }
+    if (sjablonen.some((x) => x._eigen && x.name === rack.name)) { fx.herkomst = `eigen:${rack.name}`; fx.hernoem(rack.name); volgRackKiezer(deckId); }
     return { naam: rack.name };
   }
 
@@ -157,7 +163,7 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
     if (!r.ok) { if (j?.racks) { eigen = j.racks; eigenVersie = j.versie ?? null; zetLijst(); } throw new Error(j?.fout || `${r.status}`); }
     for (const id of DECK_IDS) {
       const fx = engine.deck(id).fx;
-      if (fx.herkomst === `e:${naam}`) fx.herkomst = null;
+      if (fx.herkomst === `eigen:${naam}`) fx.herkomst = null;
     }
     eigen = j.racks || []; eigenVersie = j.versie ?? null;
     zetLijst();
@@ -166,7 +172,7 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
   /** Is wat er op deze track klinkt een eigen sjabloon? Dan zijn naam, anders null. */
   const eigenSjabloon = (deckId) => {
     const h = engine.deck(deckId).fx.herkomst;
-    return typeof h === 'string' && h.startsWith('e:') && sjabloonVan(h) ? h.slice(2) : null;
+    return typeof h === 'string' && h.startsWith('eigen:') && sjabloonVan(h) ? h.slice(6) : null;
   };
 
   function volgRackKiezer(deckId) {
@@ -209,7 +215,7 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
     const kiezer = rij.querySelector('.fx-rack');
     kiezer.addEventListener('change', () => {
       const id = engine.focus;
-      if (kiezer.value.startsWith('s:') || kiezer.value.startsWith('e:')) {
+      if (kiezer.value.startsWith('s:') || kiezer.value.startsWith('eigen:')) {
         const sjabloon = sjabloonVan(kiezer.value);
         if (sjabloon) engine.deck(id).fx.zetRack(sjabloon, { herkomst: kiezer.value }).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
         naRack(id);

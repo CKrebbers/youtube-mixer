@@ -275,10 +275,11 @@ export class RackEditor {
     if (!m) return;
     const target = `${slot}.${param}`;
     const r = neemOp(m, target, this.modus.kant, v, this.fx.paramWaarde(slot, param));
-    const { fouten } = this.fx.bewerkMacros(this.kopie.macros);
-    // Koppeling verdwenen omdat beide kanten gelijk werden: de parameter
-    // houdt die waarde als eigen stand, anders verspringt hij.
+    // Koppeling verdwenen omdat beide kanten gelijk werden: de parameter houdt die waarde als eigen
+    // stand, anders verspringt hij. EERST zetten, dan pas de macro's: anders zette _herstelLos hem
+    // even terug op de oude eigen stand (bij de delay een kopwissel naar de verkeerde tijd).
     if (r.weg) this._paramGedraaid(slot, param, r.basis);
+    const { fouten } = this.fx.bewerkMacros(this.kopie.macros);
     this._fouten(fouten);
     this._tekenStatus();
     this._tekenBeschrijvingen();
