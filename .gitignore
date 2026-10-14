@@ -24,3 +24,6 @@ test/.duur.json
 
 # Clay's eigen sets (docs/PLAN-SET.md); met de slash: src/sets/ hoort WEL in git
 /sets/
+
+# Clay's eigen sjablonen (spoor S10, docs/EFFECTEN-MEER.md); racks/sjablonen.json hoort WEL in git
+/racks/eigen.json

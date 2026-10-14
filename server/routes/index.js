@@ -2,6 +2,7 @@ import werkruimtes from './werkruimtes.js';
 import mappingApparaat from './mapping-apparaat.js';
 import paneel from './paneel.js';
 import sets from './sets.js';
+import sjablonen from './sjablonen.js';
 
 /**
  * De routes van de sporen van de werkruimte (14 okt, werkruimte S0,
@@ -19,7 +20,7 @@ import sets from './sets.js';
  * Een bestand dat niet aan de vorm voldoet, laat de server niet starten: dat
  * merk je meteen, niet midden in een set.
  */
-export const SPOREN = [['werkruimtes', werkruimtes], ['mapping-apparaat', mappingApparaat], ['paneel', paneel], ['sets', sets]];
+export const SPOREN = [['werkruimtes', werkruimtes], ['mapping-apparaat', mappingApparaat], ['paneel', paneel], ['sets', sets], ['sjablonen', sjablonen]];
 
 /** Alle routes en witte-lijstregels, gecontroleerd. */
 export function spoorRoutes(sporen = SPOREN) {

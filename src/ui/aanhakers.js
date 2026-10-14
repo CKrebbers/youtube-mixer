@@ -21,7 +21,7 @@
  *                maakte (alleen met ?hub=), anders null,
  * }
  */
-export const AANHAKERS = ['precisie', 'uitlijn', 'werk', 'combi', 'apparaten', 'maschine', 'schermen', 'inrichten', 'set'];
+export const AANHAKERS = ['precisie', 'uitlijn', 'werk', 'combi', 'apparaten', 'maschine', 'schermen', 'inrichten', 'set', 'effecten'];
 
 /**
  * Alle aanhakers in volgorde. Geeft { gestart: [namen], mislukt: [{ naam, fout }] }.

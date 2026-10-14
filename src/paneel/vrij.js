@@ -74,6 +74,17 @@ export const BOUWSTENEN = {
     { soort: 'rij', herhaal: TRACKS, item: { soort: 'knop', action: `track.${t}.fx.knob.{k}.hold` } },
     { soort: 'rij', herhaal: TRACKS, item: { soort: 'draai', action: 'super.{k}' } },
   ] }),
+  // Spoor S10 (docs/EFFECTEN-MEER.md): een sjabloon kiezen en spelen, ook op de iPad. De XY-pad
+  // speelt de twee knoppen die het rack daarvoor kiest (`xy` in racks/sjablonen.json). Bewaren en
+  // wissen van een rack of sjabloon staan niet op de bus: die blijven in de rack-editor op de Mac.
+  sjablonen: (t) => ({ titel: `SJABLONEN ${wie(t)}`, items: [
+    { soort: 'knop', action: `track.${t}.rack.prev`, label: '◀ sjabloon' },
+    { soort: 'knop', action: `track.${t}.rack.next`, label: 'sjabloon ▶' },
+    { soort: 'xy', action: `track.${t}.fx.xy.x`, y: `track.${t}.fx.xy.y`, los: 'blijf' },
+    { soort: 'rij', herhaal: TRACKS, item: { soort: 'draai', action: `track.${t}.fx.knob.{k}` } },
+    { soort: 'draai', action: `track.${t}.fx.mix`, label: 'mix' },
+    { soort: 'knop', action: `track.${t}.fx.bypass`, label: 'aan/uit' },
+  ] }),
   strip: (t) => ({ titel: `STRIP ${wie(t)}`, items: [
     ...['trim', 'high', 'mid', 'low', 'filter'].map((k) => ({ soort: 'draai', action: `track.${t}.${k}` })),
     { soort: 'draai', action: `track.${t}.send.a`, label: 'echo' },

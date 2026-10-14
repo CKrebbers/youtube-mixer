@@ -287,7 +287,7 @@ console.log('\nDeck.tijdlijn()');
 console.log('\naanhakers, rijen en uitleg');
 {
   const { startAanhakers, maakRenderloop, AANHAKERS } = await import('../src/ui/aanhakers.js');
-  ok('negen aanhakers in de vaste volgorde (S9: set)', gelijk(AANHAKERS, ['precisie', 'uitlijn', 'werk', 'combi', 'apparaten', 'maschine', 'schermen', 'inrichten', 'set']));
+  ok('tien aanhakers in de vaste volgorde (S9: set, S10: effecten)', gelijk(AANHAKERS, ['precisie', 'uitlijn', 'werk', 'combi', 'apparaten', 'maschine', 'schermen', 'inrichten', 'set', 'effecten']));
   const meldingen = [];
   const ctx = { meld: (t, s) => meldingen.push([t, s]) };
   const warn = console.warn;

@@ -11,6 +11,7 @@
 //     'werkruimte' van S3. Met `standaard` blijft het hidden;
 //   - "open schermen" op de werk-balk: de vensters van de werkruimte op hun eigen scherm
 //     (Window Management API), met een waarschuwing als het beamervenster daar ook staat.
+import { xyVan } from '../../control/acties-effecten.js';
 import { resolveTarget } from '../../control/mapping.js';
 import { bijInvoke } from '../../control/actions.js';
 import { beschrijf } from '../apc-beschrijf.js';
@@ -201,10 +202,16 @@ export default async function opzet(ctx) {
     if (m) { const d = engine.decks?.[Object.keys(engine.decks)[m[1] - 1]]; return d?.fx?.plekNaam?.(+m[2]) ?? null; }
     m = /^master\.fx\.knob\.(\d)$/.exec(id);
     if (m) return engine.master?.fx?.plekNaam?.(+m[1]) ?? null;
+    // De XY-pad van een rack (spoor S10): de naam van de knop die het rack op die as zet.
+    m = /^(?:track\.(\d)|master)\.fx\.xy\.(x|y)$/.exec(id);
+    if (m) {
+      const fx = m[1] ? engine.decks?.[Object.keys(engine.decks)[m[1] - 1]]?.fx : engine.master?.fx;
+      return fx?.plekNaam?.(xyVan(fx)[m[2] === 'x' ? 0 : 1]) ?? null;
+    }
     return null;
   };
   /** Verandert als een rack wisselt (de namen van de plekken): per beeld één keer gerekend. */
-  const rackSleutel = (fx) => (fx?.rack ? `${fx.rackNaam}:${fx.rack.macros?.map((m) => m.label ?? '').join(',') ?? ''}` : '');
+  const rackSleutel = (fx) => (fx?.rack ? `${fx.rackNaam}:${fx.rack.macros?.map((m) => m.label ?? '').join(',') ?? ''}:${fx.rack.xy ?? ''}` : '');
   const labelSleutelNu = perBeeld(() => `${Object.values(engine.decks ?? {}).map((d) => rackSleutel(d?.fx)).join('|')}#${rackSleutel(engine.master?.fx)}`);
 
   // ---- de decks ------------------------------------------------------------------------------
