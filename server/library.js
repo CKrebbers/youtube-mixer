@@ -5,6 +5,8 @@ import { bronVan } from './links.js';
 import { TOON_VERSIE, leesToonsoort, toonsoortNaam } from './toon.js';
 import { SECTIE_VERSIE, gridSleutel } from './secties.js';
 import { TWIJFELS, Beatgrid } from '../src/engine/beatgrid.js';
+import { gridKenmerk, toonKenmerk, energieKenmerk } from '../src/library/indeling.js';
+import { Indeling, IndelingFout } from './indeling.js';
 
 /**
  * De library: wat er binnengehaald is, en wat erbij hoort.
@@ -149,6 +151,55 @@ export const SCHEMA = [
   `
   ALTER TABLE tracks ADD COLUMN secties_json TEXT;
   `,
+  // versie 10 — de INDELING (spoor S11, docs/LIBRARY-TAGS.md): tags en categorieën (gewoon = een
+  // eigen bak met volgorde, slim = een bewaard filter in `regel`). Plus drie AFGELEIDE kolommen om
+  // op 20.000 nummers in SQL te filteren: k_grid (gridStatus), k_toon (de hoofdtoonsoort van de
+  // plaat, 0..23) en k_energie (de energie van de secties, gewogen naar lengte). Ze worden gezet waar
+  // grid, toon en secties bewaard worden, met de formules van de lijst (src/library/indeling.js).
+  `
+  CREATE TABLE tags (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    naam          TEXT NOT NULL,                 -- zoals hij geschreven is
+    sleutel       TEXT NOT NULL UNIQUE,          -- kleine letters, zonder accenten (sleutelVan)
+    kleur         TEXT,
+    gemaakt       INTEGER NOT NULL
+  );
+  CREATE TABLE nummer_tags (
+    track_id      TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    tag_id        INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    gezet         INTEGER NOT NULL,
+    PRIMARY KEY (track_id, tag_id)
+  );
+  CREATE INDEX nummer_tags_tag ON nummer_tags(tag_id, track_id);
+  CREATE TABLE categorieen (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    naam          TEXT NOT NULL,
+    sleutel       TEXT NOT NULL UNIQUE,
+    soort         TEXT NOT NULL,                 -- 'gewoon' | 'slim'
+    regel         TEXT,                          -- slim: het filter als JSON (tags bij sleutel, categorie bij id)
+    kleur         TEXT,
+    volgorde      INTEGER NOT NULL,
+    gemaakt       INTEGER NOT NULL,
+    gewijzigd     INTEGER NOT NULL
+  );
+  CREATE TABLE categorie_nummers (
+    categorie_id  INTEGER NOT NULL REFERENCES categorieen(id) ON DELETE CASCADE,
+    track_id      TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    plek          REAL NOT NULL,                 -- de volgorde in de categorie (tussenvoegen = een getal ertussen)
+    gezet         INTEGER NOT NULL,
+    PRIMARY KEY (categorie_id, track_id)
+  );
+  CREATE INDEX categorie_nummers_plek ON categorie_nummers(categorie_id, plek);
+  CREATE INDEX categorie_nummers_track ON categorie_nummers(track_id);
+  ALTER TABLE tracks ADD COLUMN k_grid TEXT;
+  ALTER TABLE tracks ADD COLUMN k_toon INTEGER;
+  ALTER TABLE tracks ADD COLUMN k_energie REAL;
+  UPDATE tracks SET k_grid = gridkenmerk(grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar, duur),
+    k_toon = toonkenmerk(toon_json, duur), k_energie = energiekenmerk(secties_json, duur);
+  CREATE INDEX tracks_k_grid ON tracks(k_grid);
+  CREATE INDEX tracks_k_toon ON tracks(k_toon);
+  CREATE INDEX tracks_k_energie ON tracks(k_energie);
+  `,
 ];
 
 /** Zoveel hotcues per nummer neemt de library aan; het deck gebruikt er nu 4. */
@@ -189,9 +240,13 @@ function volgorde(sorteer, richting, t = '') {
   return `${t}${s.sql} ${heen} NULLS LAST, ${t}toegevoegd ${terug}, ${t}rowid ${terug}`;
 }
 
-/** Een track met wat de lijst er meteen bij wil: aantal racks en de peaks. */
+/**
+ * Een track met wat de lijst er meteen bij wil: aantal racks, de peaks en de tags (namen, op
+ * sleutel; een naam bevat nooit een komma: geldigeNaam).
+ */
 const RIJ = `SELECT t.*, t.rowid AS _rij,
     (SELECT COUNT(*) FROM racks r WHERE r.track_id = t.id) AS _racks,
+    (SELECT group_concat(g.naam, ',' ORDER BY g.sleutel) FROM nummer_tags nt JOIN tags g ON g.id = nt.tag_id WHERE nt.track_id = t.id) AS _tags,
     p.bestand AS _p_bestand, p.buckets AS _p_buckets, p.per_bucket AS _p_per
   FROM tracks t LEFT JOIN peaks p ON p.track_id = t.id`;
 
@@ -449,6 +504,8 @@ export function normaliseerStems(s) {
   return { aantal, namen: [...namen], schaal, bestand };
 }
 
+export { IndelingFout };
+
 export class Library {
   constructor(pad) {
     mkdirSync(dirname(pad), { recursive: true });
@@ -456,8 +513,22 @@ export class Library {
     this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec('PRAGMA foreign_keys = ON');
     this.db.function('sorteertitel', { deterministic: true }, sorteertitel);
+    // De afgeleide kolommen van schema v10 (k_grid, k_toon, k_energie): dezelfde formules als de lijst.
+    this.db.function('gridkenmerk', { deterministic: true }, (json, bpm, eerste, maat, duur) =>
+      gridKenmerk(this._grid({ grid_json: json, grid_bpm: bpm, grid_first_beat: eerste, grid_beats_per_bar: maat }), duur));
+    this.db.function('toonkenmerk', { deterministic: true }, (json, duur) =>
+      toonKenmerk(json != null ? normaliseerToon(veiligJson(json, null)) : null, duur));
+    this.db.function('energiekenmerk', { deterministic: true }, (json, duur) =>
+      energieKenmerk(json != null ? normaliseerSecties(veiligJson(json, null)) : null, duur));
     this._stmts = new Map();
     this._migreer();
+    this.indeling = new Indeling(this);
+  }
+
+  /** De afgeleide kolommen van één nummer opnieuw (na een nieuw grid, toon, secties of duur). */
+  _kenmerken(trackId) {
+    this._q(`UPDATE tracks SET k_grid = gridkenmerk(grid_json, grid_bpm, grid_first_beat, grid_beats_per_bar, duur),
+      k_toon = toonkenmerk(toon_json, duur), k_energie = energiekenmerk(secties_json, duur) WHERE id = ?`).run(trackId);
   }
 
   /** Schema-versie in de database zelf, zodat een uitbreiding later geen gok is. */
@@ -518,6 +589,7 @@ export class Library {
       t.loudness?.LRA ?? null, t.loudness?.drempel ?? null, t.loudness?.offset ?? null,
       t.doelLoudness ?? null, t.ytdlp || null, nu, sorteertitel(t.titel),
     );
+    this._kenmerken(t.id);   // een nieuwe duur verschuift de wegingen
     return this.track(t.id);
   }
 
@@ -533,14 +605,8 @@ export class Library {
    * dat iemand het merkte: nummer 201 bestond gewoon niet.
    * Onbekende sortering gooit (de route zegt dan 400).
    */
-  tracks({ zoek = '', sorteer = 'toegevoegd', richting = null, van = 0, aantal = null } = {}) {
-    if (!isSortering(sorteer)) throw new Error(`onbekende sortering: ${sorteer}`);
-    const { waar, args } = zoekFilter(zoek);
-    // Alles (de meet-tools): één query, er valt niets over te slaan.
-    if (aantal == null) {
-      return this.db.prepare(`${RIJ} WHERE t.rowid IN (SELECT rowid FROM tracks ${waar}) ORDER BY ${volgorde(sorteer, richting, 't.')}`)
-        .all(...args).map((r) => this._verrijk(r));
-    }
+  tracks({ zoek = '', filter = null, sorteer = 'toegevoegd', richting = null, van = 0, aantal = null } = {}) {
+    const { waar, args, join, orde } = this._lijstSql({ zoek, filter, sorteer, richting });
     // In twee stappen: eerst alleen de rowids in de goede volgorde (smal, uit
     // de index), dan de hele rijen van die ene pagina. Alles in één keer
     // sleepte elke brede rij door de sorteerder, ook de 4900 die je overslaat.
@@ -549,13 +615,36 @@ export class Library {
     // Hele getallen vanaf 0, maar NIET met `| 0`: dat rekent in 32 bits, en
     // van = 2^32 + 1 werd dan rij 1 in plaats van een lege pagina.
     const heel = (x) => Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.trunc(Number(x)) || 0));
-    const ids = this._q(`SELECT rowid AS r FROM tracks ${waar} ORDER BY ${volgorde(sorteer, richting)} LIMIT ? OFFSET ?`)
-      .all(...args, heel(aantal), heel(van))
+    // Zonder `aantal` alles (de meet-tools): LIMIT -1 is in SQLite "geen grens".
+    const ids = this._q(`SELECT t.rowid AS r FROM tracks t ${join} ${waar} ORDER BY ${orde} LIMIT ? OFFSET ?`)
+      .all(...args, aantal == null ? -1 : heel(aantal), heel(van))
       .map((x) => x.r);
     if (!ids.length) return [];
-    const perId = new Map(this.db.prepare(`${RIJ} WHERE t.rowid IN (${ids.map(() => '?').join(',')})`)
-      .all(...ids).map((r) => [r._rij, r]));
+    const perId = new Map();
+    for (let i = 0; i < ids.length; i += 500) {
+      const deel = ids.slice(i, i + 500);
+      for (const r of this.db.prepare(`${RIJ} WHERE t.rowid IN (${deel.map(() => '?').join(',')})`).all(...deel)) perId.set(r._rij, r);
+    }
     return ids.map((r) => this._verrijk(perId.get(r)));
+  }
+
+  /**
+   * Het WHERE-deel, de JOIN en de ORDER BY van de lijst. `zoek` (de oude vraag) en `filter`
+   * (spoor S11, normaliseerFilter) samen; `sorteer: 'plek'` = de volgorde van een gewone
+   * categorie (alleen met een categorie in het filter, anders gooit hij). Onbekende sortering gooit.
+   */
+  _lijstSql({ zoek = '', filter = null, sorteer = 'toegevoegd', richting = null } = {}) {
+    const f = { ...(filter ?? {}) };
+    if (zoek) f.zoek = f.zoek ? `${zoek} ${f.zoek}` : zoek;
+    if (sorteer !== 'plek' && !isSortering(sorteer)) throw new Error(`onbekende sortering: ${sorteer}`);
+    const { waar, args, gewoon } = this.indeling.sql(f);
+    if (sorteer === 'plek') {
+      if (gewoon == null) throw new IndelingFout(400, 'sorteer=plek alleen in een gewone categorie');
+      const af = richting === 'af';
+      return { waar, args: [gewoon, ...args], join: 'JOIN categorie_nummers c ON c.track_id = t.id AND c.categorie_id = ?',
+        orde: `c.plek ${af ? 'DESC' : 'ASC'}, t.rowid ${af ? 'DESC' : 'ASC'}` };
+    }
+    return { waar, args, join: '', orde: volgorde(sorteer, richting, 't.') };
   }
 
   /**
@@ -570,9 +659,9 @@ export class Library {
   }
 
   /** Hoeveel nummers er zijn, of hoeveel op de zoekterm lijken. */
-  aantalTracks({ zoek = '' } = {}) {
-    const { waar, args } = zoekFilter(zoek);
-    return this._q(`SELECT COUNT(*) AS n FROM tracks ${waar}`).get(...args).n;
+  aantalTracks({ zoek = '', filter = null } = {}) {
+    const { waar, args } = this._lijstSql({ zoek, filter });
+    return this._q(`SELECT COUNT(*) AS n FROM tracks t ${waar}`).get(...args).n;
   }
 
   /**
@@ -580,14 +669,16 @@ export class Library {
    * rij (één query per pagina in plaats van twee per nummer): het aantal
    * racks wil je in het paneel zien zonder tweede vraag.
    */
-  _verrijk({ titel_sleutel: _s, _rij, _racks, _p_bestand, _p_buckets, _p_per, stems_json, secties_json: _sec, ...r }) {
+  _verrijk({ titel_sleutel: _s, _rij, _racks, _tags, _p_bestand, _p_buckets, _p_per, stems_json, secties_json: _sec,
+    k_grid: _kg, k_toon: _kt, k_energie: energie, ...r }) {
     const grid = this._grid(r);
     const onset = r.onset_bestand
       ? { bestand: r.onset_bestand, frames: r.onset_frames, envRate: r.onset_rate, tijdOffset: r.onset_offset }
       : null;
     // bron: 'youtube' | 'tiktok' | 'bestand' | 'web' — het label in de lijst.
     // stems: alleen wat de app nodig heeft; de hele stems.json staat in stems_json.
-    return { ...r, racks: _racks, grid, toon: this._toon(r), onset, bron: bronVan(r.url),
+    // tags: de tags van het nummer (namen, spoor S11); energie: k_energie (de lijst en het filter).
+    return { ...r, racks: _racks, tags: _tags ? _tags.split(',') : [], energie: energie ?? null, grid, toon: this._toon(r), onset, bron: bronVan(r.url),
       stems: stems_json != null ? normaliseerStems(veiligJson(stems_json, null)) : null,
       peaks: _p_bestand != null ? { bestand: _p_bestand, buckets: _p_buckets, perBucket: _p_per } : null };
   }
@@ -640,6 +731,7 @@ export class Library {
       g ? g.beatsPerBar : null,
       trackId,
     );
+    this._kenmerken(trackId);
     return this.track(trackId)?.grid ?? null;
   }
 
@@ -685,6 +777,7 @@ export class Library {
     const t = toon == null ? null : normaliseerToon(toon);
     if (toon != null && !t) throw new Error('ongeldige toonsoort');
     this.db.prepare('UPDATE tracks SET toon_json = ? WHERE id = ?').run(t ? JSON.stringify(t) : null, trackId);
+    this._kenmerken(trackId);
     return this.track(trackId)?.toon ?? null;
   }
 
@@ -732,6 +825,7 @@ export class Library {
     const n = k == null ? null : normaliseerSecties(k);
     if (k != null && !n) throw new Error('ongeldige secties');
     this._q('UPDATE tracks SET secties_json = ? WHERE id = ?').run(n ? JSON.stringify(n) : null, trackId);
+    this._kenmerken(trackId);
     return this.secties(trackId);
   }
 
@@ -986,13 +1080,6 @@ export class Library {
     const r = this.db.prepare('SELECT waarde FROM instellingen WHERE sleutel = ?').get(sleutel);
     return r ? veiligJson(r.waarde, standaard) : standaard;
   }
-}
-
-/** WHERE-deel voor de zoekterm. % en _ zijn gewone tekens: "100%" zoekt 100%. */
-function zoekFilter(zoek) {
-  if (!zoek) return { waar: '', args: [] };
-  const z = `%${String(zoek).replace(/[\\%_]/g, (c) => '\\' + c)}%`;
-  return { waar: "WHERE titel LIKE ? ESCAPE '\\' OR uploader LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\'", args: [z, z, z] };
 }
 
 const veiligJson = (tekst, val = {}) => { try { return JSON.parse(tekst); } catch { return val; } };

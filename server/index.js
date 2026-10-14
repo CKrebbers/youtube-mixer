@@ -10,7 +10,7 @@ import { bekijkLink, ontsmetNaam, BESTAND_EXT } from './links.js';
 import { Wachtrij, isOpen } from './wachtrij.js';
 import {
   Library, normaliseerGrid, normaliseerToon, moetAnalyse, moetToonAnalyse, autoGridWeigert,
-  SORTERING, isSortering, MAX_PER_PAGINA, MAX_HOTCUES,
+  SORTERING, isSortering, MAX_PER_PAGINA, MAX_HOTCUES, IndelingFout,
 } from './library.js';
 import { ZEKER_VANAF, OUDE_ANALYSE_VERSIE } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon, maakSecties } from './analyze.js';
@@ -34,6 +34,7 @@ import { Standen, StandFout } from './standen.js';
 import { naamGeldig as standNaamGeldig, NAAM_UITLEG as STAND_NAAM_UITLEG, MAX_BYTES as STAND_MAX_BYTES } from '../src/standen/stand-model.js';
 import { maakAvondpakket, extraPaden } from './avondpakket-meet.js';
 import { spoorRoutes, zoekRoute } from './routes/index.js';
+import { queryNaarFilter } from '../src/library/indeling.js';
 
 /**
  * Kleine server, geen framework. Doet drie dingen: statische bestanden
@@ -1140,6 +1141,8 @@ const spoorCtx = {
   // Spoor S9 (server/routes/sets.js, "maak klaar"): de BESTAANDE rijen voor stems en secties, en de
   // nacht voor de speeldagen. Alleen deze vier; de routes beslissen zelf wanneer (nooit met een deck aan).
   nacht, stemsRij, nieuweStems: (id, aantal) => nieuweStems(id, aantal, { hercontrole: true }), analyseerSecties,
+  // Spoor S11 (server/routes/indeling.js): een krat van de kaart overnemen als categorie (alleen lezen).
+  kaart,
 };
 
 const server = createServer(async (req, res) => {
@@ -1343,7 +1346,12 @@ const server = createServer(async (req, res) => {
       const q = url.searchParams;
       const zoek = q.get('zoek') || '';
       const sorteer = q.get('sorteer') || 'toegevoegd';
-      if (!isSortering(sorteer)) return json(res, 400, { fout: `sorteer op ${Object.keys(SORTERING).join(', ')}` });
+      // Spoor S11 (docs/LIBRARY-TAGS.md): sorteer=plek = de volgorde van een gewone categorie (cat=).
+      if (!isSortering(sorteer) && sorteer !== 'plek') return json(res, 400, { fout: `sorteer op ${Object.keys(SORTERING).join(', ')} (of plek, met cat)` });
+      // Het filter: cat, tag, of, niet, bpm, toon, grid, stems, energie (queryNaarFilter). Zonder: zoals altijd.
+      const { filter, fouten } = queryNaarFilter(q);
+      delete filter.zoek;   // zoek heeft zijn eigen veld hieronder
+      if (fouten.length) return json(res, 400, { fout: fouten.join('; ') });
       const richting = q.get('richting');
       if (richting !== null && richting !== 'op' && richting !== 'af') return json(res, 400, { fout: 'richting is op of af' });
       const heel = (k) => (q.has(k) ? Number(q.get(k)) : null);
@@ -1352,10 +1360,15 @@ const server = createServer(async (req, res) => {
       if (aantal !== null && !(Number.isInteger(aantal) && aantal >= 1 && aantal <= MAX_PER_PAGINA)) {
         return json(res, 400, { fout: `aantal is 1..${MAX_PER_PAGINA}` });
       }
-      return json(res, 200, {
-        tracks: lib.tracks({ zoek, sorteer, richting, van, aantal }),
-        totaal: lib.aantalTracks({ zoek }), van,
-      });
+      try {
+        return json(res, 200, {
+          tracks: lib.tracks({ zoek, filter, sorteer, richting, van, aantal }),
+          totaal: lib.aantalTracks({ zoek, filter }), van,
+        });
+      } catch (err) {
+        if (err instanceof IndelingFout) return json(res, err.code, { fout: err.message, ...err.extra });
+        throw err;
+      }
     }
 
     const mTrack = /^\/api\/library\/([\w-]+)$/.exec(pad);
