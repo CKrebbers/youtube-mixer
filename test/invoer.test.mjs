@@ -69,6 +69,11 @@ const { zetTekst } = await import('../src/ui/dom.js');
   const leeg = { firstChild: null, _t: '', get textContent() { return this._t; }, set textContent(t) { this._t = t; vervangen++; } };
   zetTekst(leeg, 'a'); zetTekst(leeg, 'a');
   ok('zetTekst: zonder tekstknoop via textContent, en alleen als het anders is', leeg._t === 'a' && vervangen === 1);
+  // Zoals textContent: undefined/null wordt leeg, niet de tekst 'undefined' (review ronde 1).
+  zetTekst(el, undefined);
+  const leegNa = knoop.data;
+  zetTekst(el, 120);
+  ok('zetTekst: undefined wordt leeg en een getal tekst, zoals textContent', leegNa === '' && knoop.data === '120' && vervangen === 1);
 }
 const elfPanelen = ['renderloop', 'spiegel', 'auto-paneel', 'master-paneel', 'stems-paneel', 'klankschaal-paneel', 'beeld-paneel',
   'koptelefoon-paneel', 'instrument-paneel', 'patronen-paneel', 'logboek'];

@@ -15,6 +15,7 @@ export const esc = (t) => String(t ?? '').replace(/[&<>"']/g,
  * knoop en wat er een :has() op heeft; controller-invoer, 14 okt).
  */
 export function zetTekst(el, t) {
+  t = t == null ? '' : String(t); // zoals textContent: undefined/null = leeg, een getal als tekst
   const n = el.firstChild;
   if (n && n.nodeType === 3 && !n.nextSibling) { if (n.data !== t) n.data = t; }
   else if (el.textContent !== t) el.textContent = t;

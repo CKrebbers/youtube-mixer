@@ -464,8 +464,11 @@ Wat er vastligt:
   aangeraakte knop. Shift en de modusknoppen kostten 2–13 ms in het bericht zelf.
 - **Het echofilter geldt alleen voor CC.** Een noot (knop, pad) is nooit een echo: het
   filter slikte op een knipperende knop (Sends met een loop, de Track Select van de
-  maatgever) ~13% van de drukken en ~12% van het loslaten. Een gemist loslaten = een kill
-  of bend die blijft hangen.
+  maatgever) ~13% van de drukken en ~12% van het loslaten (`tools/bench/echo.mjs`). Daar
+  doet loslaten niets; een kill of bend die bleef hangen is niet aangetoond (hun lampje
+  staat nooit op 0 of 127). Ook voor andere apparaten met `echoFilter` aan worden noten
+  niet meer gefilterd: een apparaat dat noten terugkaatst zou nu een druk dubbel geven
+  (geen bekend apparaat in Clay's set).
 - **De mapping zoekt niet meer per bericht**: `kies()` en `actieveRegels()` uit een cache
   (ongeldig bij elke wijziging aan regels of mapjes). Ook de LED-laag profiteert (285 → 8 µs
   per tik aan mapping-werk).

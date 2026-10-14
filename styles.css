@@ -1007,8 +1007,11 @@ div.rijen.open{min-height:35px}
 .melding-x{pointer-events:auto;cursor:pointer;margin-left:10px;padding:0 4px;border:0;background:none;color:var(--klein);font:inherit}
 .melding-x:hover{color:var(--text)}
 .melding.weg{opacity:0}
+/* Twee namen voor dezelfde flits: meld() wisselt ze af, zodat elke herhaling opnieuw oplicht. */
 .melding.flits{animation:melding-flits .35s ease-out}
+.melding.flits2{animation:melding-flits2 .35s ease-out}
 @keyframes melding-flits{from{background:var(--line)}to{background:var(--panel2)}}
+@keyframes melding-flits2{from{background:var(--line)}to{background:var(--panel2)}}
 /* Een rij onderaan open: de meldingen erboven, niet over de knoppen van de rij.
    Tot 6 okt een vaste afstand per rij (58 of 150 px); nu 16 px boven het gebied
    met de rijen, hoeveel er ook open staan (CSS anchor positioning). Is dat gebied

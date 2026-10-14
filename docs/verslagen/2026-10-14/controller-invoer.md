@@ -23,8 +23,9 @@ bevestigen is, staat apart.
    **166 → 31 ms/s**, hoofdthread in rust **713 → 457 ms/s**.
 3. **Een echte fout op de controller: het echofilter slikte drukken.** Op een knop die
    knippert (Sends met een loop, de Track Select van de maatgever) viel **13% van de drukken
-   en 12% van het loslaten** weg. Een gemist loslaten = een kill of bend die blijft hangen.
-   Nu **0%**.
+   en 12% van het loslaten** weg: een druk die niets deed (focus op de maatgever, de
+   loop-knoppen). Nu **0%**. Dat een kill of bend daardoor bleef hangen is niet aangetoond:
+   hun lampje staat nooit op 0 of 127, dus daar sloeg het filter niet aan.
 4. Shift en de modusknoppen deden 2–13 ms schermwerk midden in hun MIDI-bericht (en alles
    erachter wachtte). Nu bij het volgende beeld: werk per bericht p99 **5,5 → 1,8 ms** (shift),
    **7,0 → 2,3 ms** (mapjes).
@@ -33,7 +34,7 @@ bevestigen is, staat apart.
 
 ## Hoe gemeten (herhaalbaar)
 
-Drie instrumenten, alle drie nieuw in deze tak:
+Vier instrumenten, alle vier nieuw in deze tak:
 
 - `tools/headless/latentie.mjs` — de echte mixer in headless Chrome. `navigator.requestMIDIAccess`
   is nep vóór de pagina laadt (één invoer- en uitvoerpoort "APC40 mkII"); de mixer kiest die
@@ -55,6 +56,8 @@ Drie instrumenten, alle drie nieuw in deze tak:
 - `tools/bench/echo.mjs` — de echte MidiHub (echofilter aan), Mapping en Feedback op een nep-klok:
   een track op 124 bpm met een loop, de LED-tik elke 33 ms, een "hand" die 4000 keer op willekeurige
   momenten drukt en 60–200 ms later loslaat (vast zaad). Telt wat de mapping niet bereikte.
+- `tools/headless/meldingen.mjs` (review ronde 1) — de echte `meld()` in de mixer: licht een herhaalde
+  melding elke keer op (animationstart geteld) en leest `meld()` daarbij geen opmaak uit.
 
 Commando's (de vóór-versie is `git archive studio/afmaken` uitgepakt in `$VOOR`):
 
@@ -69,6 +72,8 @@ node tools/headless/latentie.mjs --vergelijk voor-1.json,voor-2.json,voor-3.json
 VARVE_HUB_REPO=<hub-kopie> node tools/headless/latentie.mjs --hub --scenario fader,sweep,ringen,pads,shift
 # waar de stijltijd vandaan komt
 node tools/headless/latentie.mjs --scenario rust --duur 2000 --spoor rust --uit spoor.json
+# een herhaalde melding licht elke keer op (animationstart geteld), zonder opmaak te lezen
+VARVE_CHROME=<headless_shell> node tools/headless/meldingen.mjs
 # zonder browser
 node --expose-gc tools/bench/invoer.mjs --vergelijk $VOOR
 node tools/bench/echo.mjs $VOOR ; node tools/bench/echo.mjs
@@ -112,6 +117,10 @@ Tijden in ms, `p50 / p99`; "hoofdthread" in ms threadtijd per seconde.
 | | hoofdthread: stijl | 269 | 85 |
 | mapje (grid-modus wisselen 4/s + pads) | werk per bericht | 0,87 / **6,97** | 0,13 / **2,29** |
 | | tot geluid gepland | 9,03 / 16,48 | 3,41 / 9,22 |
+
+**"Tot scherm" claim ik NIET als verbetering.** De reviewer kreeg hem niet terug (twee rondes:
+11,97 / 20,04 vóór, 14,7 / 21,56 na); de vóór-p99 van ~50 ms hierboven komt waarschijnlijk van de
+belasting op de machine tijdens mijn rondes. De andere getallen kwamen bij hem in dezelfde richting terug.
 
 `device` p99 is na iets slechter (14,4 → 19,6) en de frame-interval p99 ook; bij `device` en
 `xfader` zie ik dat terug in één ronde met een hoge belasting. Ik reken het tot ruis, maar het is
@@ -188,7 +197,8 @@ elementen, 805 ms; erna 58 van elk **9** elementen, 96 ms. De top van de redenen
   `markeer()` onthoudt alleen tot wanneer een element oplicht, `teken()` zet en haalt de klasse;
   sectie-pad en `lampOm` één keer per regel uitgerekend, niet per beeld per knop.
 - `src/ui/mapje-balk.js`: de uitleg van een mapje bij het volgende beeld (de laatste wissel telt).
-- `src/ui/meldingen.js`: opnieuw laten oplichten zonder `offsetWidth`.
+- `src/ui/meldingen.js`: opnieuw laten oplichten zonder `offsetWidth`: om de beurt twee klassen met elk
+  een eigen keyframes-naam (na review ronde 1; eerst klasse eraf + rAF erop, en dat lichtte maar één keer op).
 - `src/ui/bovenbalk.js`: ResizeObserver (na de opmaak van een beeld) i.p.v. een timer.
 - Meters: `transform: scaleY()` (styles.css `.meter.vmeter i`, spiegel, renderloop, master-paneel);
   de gradient hoort bij het element, dus het beeld is hetzelfde.
@@ -232,7 +242,7 @@ wachten op het volgende beeld.
 - Of de APC in 0x42 ringwaarden terugstuurt: na een sessie `midi.status().echoes` in de console. Zegt
   hij 0, dan mag het filter voor de APC helemaal uit (`echoFilter: false` in `devices/apc40mk2.js`).
 - Of knipperende knoppen (Sends, Clip Stop met een loop, de Track Select van de maatgever) nu elke druk
-  pakken, en of een kill-pad nooit meer blijft hangen.
+  pakken.
 - Via de hub: wat de hub toevoegt bij hoge snelheid (mijn meting was daar niet goed genoeg).
 
 ## Opties voor een volgende versie
@@ -276,3 +286,46 @@ wachten op het volgende beeld.
 renderblok "keylock met wissels … bytes per bericht", instrumenten-fm-schaal "geen afval per blok",
 wachtrij "yt-dlp en zijn kind zijn allebei weg" (2×). Nieuw groen: `test/invoer.test.mjs`, en de
 extra checks in `test/mapping.test.mjs` en `test/midi.test.mjs`.
+
+## Review ronde 1 (14 okt)
+
+**Blokkerend: een herhaalde melding lichtte maar één keer op.** Klopte. `remove('flits')` en de
+klasse er in een `requestAnimationFrame` weer op start de CSS-animatie niet opnieuw: tussen de taak
+en die rAF rekent Chrome geen stijl, dus de klasse is voor de stijlberekening nooit weg geweest.
+Nu wisselt `meld()` om de beurt twee klassen (`flits`, `flits2`) met elk een eigen, gelijke
+keyframes-naam (`melding-flits`, `melding-flits2`): een andere `animation-name` is voor Chrome een
+nieuwe animatie, bij de eerstvolgende stijlberekening, zonder dat wij die afdwingen en zonder rAF
+(werkt dus ook als het beeld stilstaat). Nieuwe gedragscheck `tools/headless/meldingen.mjs` (echte
+mixer, `?vormen=0`, zes herhalingen met 500 ms ertussen, animationstart geteld; plus een teller op
+offsetWidth/clientWidth/getBoundingClientRect/getComputedStyle tijdens `meld()`):
+
+```
+VARVE_CHROME=/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell node tools/headless/meldingen.mjs
+```
+
+| code | info: oplichten | fout: oplichten | opmaak gelezen in meld() |
+|---|---|---|---|
+| vóór 7e178ff (offsetWidth) | 6 van 6 | 6 van 6 | **1** (FAIL) |
+| 7e178ff (klasse eraf, rAF erop) | **1 van 6** (FAIL) | **1 van 6** (FAIL) | 0 |
+| nu (twee namen om de beurt) | 6 van 6 | 6 van 6 | 0 |
+
+Ter vergelijking meet het hulpmiddel ook de twee oude vormen op een los element (rAF 1 van 6,
+offsetWidth 6 van 6): zo is te zien dat de meting zelf onderscheid maakt.
+
+Kleine punten:
+- Echofilter alleen voor CC, ook voor andere apparaten: één zin erbij in midi.js en APC40.md
+  (een apparaat dat noten terugkaatst zou nu een druk dubbel geven; geen bekend apparaat in Clay's set).
+- "Een gemist loslaten = een kill of bend die blijft hangen": niet aangetoond, aangepast in het
+  verslag, het midi.js-commentaar en APC40.md. Het gemeten effect is een druk die wegvalt (13%) op
+  knipperende knoppen.
+- "Tot scherm": niet als verbetering geclaimd (zie de opmerking onder de tabel).
+- `zetTekst`: `undefined`/`null` wordt nu leeg en een getal tekst, zoals `textContent`; check in
+  `test/invoer.test.mjs`.
+- `test/invoer.test.mjs` is voor een groot deel regex op de broncode en dus broos bij een andere naam.
+  Laten staan (hij vangt het terugkomen van een brede `:has()` of `offsetWidth` goedkoop), maar het
+  gedrag zelf toetsen rijen.mjs, latentie.mjs, meldingen.mjs en de spiegel-/mapping-tests. Een
+  gedragstest in Node voor de CSS-specificiteit zou een CSS-parser vragen (een dependency): niet gedaan.
+
+Na review ronde 1 opnieuw: `node test/alles.mjs` (met `VARVE_HUB_REPO` naar de hub-kopie): 95 bestanden,
+8847 checks (één erbij: zetTekst), 3 rood, dezelfde drie als op main in deze container.
+`node tools/headless/meldingen.mjs`: 5 van 5 groen.
