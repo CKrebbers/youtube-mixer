@@ -12,7 +12,7 @@ import {
   Library, normaliseerGrid, normaliseerToon, moetAnalyse, moetToonAnalyse, autoGridWeigert,
   SORTERING, isSortering, MAX_PER_PAGINA, MAX_HOTCUES,
 } from './library.js';
-import { ZEKER_VANAF } from './analyze.js';
+import { ZEKER_VANAF, OUDE_ANALYSE_VERSIE } from './analyze.js';
 import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon, maakSecties } from './analyze.js';
 import { toonSamenvatting } from './toon.js';
 import { sectieSamenvatting, SECTIE_VERSIE } from './secties.js';
@@ -24,7 +24,7 @@ import { Patronen, NAAM as SETNAAM } from './patronen.js';
 import { Proef } from './proef.js';
 import { MixerStand, isMelding, vanDezeMac, MAX_BYTES as MIXER_MAX } from './mixer-melding.js';
 import { Splitter, StemsRij, maakStems, wisStemsBestanden, isAantal, isStemsKeuze, STEMS_STANDAARD } from './stems.js';
-import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, TELLEN_BESTAND, TELLEN_VERSIE } from './tellen.js';
+import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, leesTweede, bewaarTweede, TELLEN_BESTAND, TELLEN_VERSIE } from './tellen.js';
 import { gridUitTellen, vergelijk, meetGrid, VERSIE as KAART_VERSIE } from '../src/engine/tellen.js';
 import { Beatgrid } from '../src/engine/beatgrid.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
@@ -470,12 +470,17 @@ const pct = (x) => (x == null ? '–' : `${Math.round(x * 100)}%`);
  * Het grid uit de tellen van een nummer (tellen.json moet er zijn): de
  * tempokaart (gridUitTellen), getoetst aan een tweede mening (de oude
  * analyse: het grid dat er staat als dat er een van de oude analyse is,
- * anders nu uitgerekend), en bewaard als het mag (autoGridWeigert: nooit over
- * een grid op slot of met de hand bewerkt, tenzij `overHand`/`overSlot`, de
- * knop ↻). Mag het niet, dan meten we het grid dat er staat en zeggen hoe
- * het op de tellen valt. Geeft { ok, kaart?, bewaard?, grid?, reden?, fout? }.
+ * anders de BEWAARDE (tweede-mening.json, zelfde OUDE_ANALYSE_VERSIE),
+ * anders nu uitgerekend en bewaard), en bewaard als het mag
+ * (autoGridWeigert: nooit over een grid op slot of met de hand bewerkt,
+ * tenzij `overHand`/`overSlot`, de knop ↻). Mag het niet, dan meten we het
+ * grid dat er staat en zeggen hoe het op de tellen valt.
+ * `vers`: de oude analyse altijd opnieuw (↻). `achtergrond`: moet de oude
+ * analyse gerekend worden (0,7-4 s per nummer van 3 min, ffmpeg op media/),
+ * dan eerst wachten tot er geen deck meer speelt.
+ * Geeft { ok, kaart?, bewaard?, grid?, reden?, fout?, tweede? }.
  */
-async function pasTellenToe(id, { overHand = false, overSlot = false } = {}) {
+async function pasTellenToe(id, { overHand = false, overSlot = false, vers = false, achtergrond = false } = {}) {
   const track = lib.track(id);
   if (!track) return { ok: false, fout: 'onbekend nummer' };
   const t = await leesTellen(MEDIA, id);
@@ -484,21 +489,42 @@ async function pasTellenToe(id, { overHand = false, overSlot = false } = {}) {
   // Mag het grid toch niet vervangen worden (met de hand, op slot)? Dan geen
   // tweede mening uitrekenen (minuten voor een lange mix): alleen meten.
   const mag = !autoGridWeigert(track.grid, { overHand, overSlot });
-  let ander = null;
-  if (mag && track.grid?.bron === 'auto' && track.grid.methode !== 'tellen') ander = new Beatgrid(track.grid);
+  const t0 = Date.now();
+  let ander = null, tweede = null;
+  if (mag && track.grid?.bron === 'auto' && track.grid.methode !== 'tellen') {
+    // Het grid van de oude analyse dat er stond (bij de ingest gemaakt): ook bewaren, anders rekent een
+    // volgende kaartversie hem opnieuw uit. Niet per se van deze OUDE_ANALYSE_VERSIE: precies het grid
+    // waar vergelijk nu mee werkt, dus dezelfde uitkomst (`uit: 'grid'` in het bestand zegt het).
+    ander = new Beatgrid(track.grid); tweede = 'het grid dat er stond';
+    await bewaarTweede(MEDIA, id, track.grid, OUDE_ANALYSE_VERSIE, { uit: 'grid' });
+  }
   else if (mag) {
-    const a = await analyseer(track);
-    if (a.ok) ander = new Beatgrid(a.grid);
+    const bewaard = vers ? null : await leesTweede(MEDIA, id, OUDE_ANALYSE_VERSIE);
+    if (bewaard) { ander = new Beatgrid(bewaard); tweede = 'bewaard'; }
+    else {
+      if (achtergrond) await zolangErEenDeckSpeelt();
+      const a = await analyseer(lib.track(id) ?? track);
+      if (a.ok) { ander = new Beatgrid(a.grid); tweede = 'uitgerekend'; await bewaarTweede(MEDIA, id, a.grid, OUDE_ANALYSE_VERSIE); }
+    }
   }
   vergelijk(kaart, t.beats, ander);
   const b = lib.bewaarAutoGrid(id, kaart, { overHand, overSlot });
-  if (b.bewaard) console.log(`[tellen] ${track.titel}: ${gridSamenvatting(b.grid)}`);
+  const duur = `${((Date.now() - t0) / 1000).toFixed(1)} s, tweede mening ${tweede ?? 'geen'}`;
+  if (b.bewaard) console.log(`[tellen] ${track.titel}: ${gridSamenvatting(b.grid)}${b.samples ? ` (${b.samples} sampler-pad${b.samples === 1 ? '' : 's'} naar het nieuwe octaaf)` : ''} — ${duur}`);
   else if (track.grid) {
     const m = meetGrid(new Beatgrid(track.grid), t.beats, t.downbeats).totaal;
     console.log(`[tellen] ${track.titel}: niet bewaard (${b.reden}); het grid dat er staat: `
       + `${pct(m.raak)} van de tellen raak, slechtste blok ${ms(m.afwijking)}, "1" ${pct(m.een)}`);
   }
-  return { ok: true, kaart, bewaard: b.bewaard, grid: b.grid, ...(b.reden ? { reden: b.reden } : {}) };
+  return { ok: true, kaart, bewaard: b.bewaard, grid: b.grid, ...(b.reden ? { reden: b.reden } : {}), ...(tweede ? { tweede } : {}) };
+}
+
+/** Wachten (per 2 s kijken) zolang er een deck speelt: werk op de achtergrond mag de decks geen pagina's kosten. */
+let wachtMelding = 0;
+async function zolangErEenDeckSpeelt() {
+  if (!speeltDeck()) return;
+  if (Date.now() - wachtMelding > 60_000) { wachtMelding = Date.now(); console.log('[tellen] er speelt een deck: de oude analyse (tweede mening) wacht'); }
+  while (speeltDeck()) await new Promise((z) => setTimeout(z, 2000));
 }
 
 /*
@@ -554,24 +580,50 @@ const wilTellenGrid = (grid) => !grid
 
 /**
  * Op de achtergrond: elk nummer zonder (actuele) tellen.json de rij in, het
- * laatst geladen eerst (daar speel je mee). Waar de tellen er al zijn maar
- * het grid nog van de oude analyse (of een oudere methode) is: alleen het
- * grid opnieuw, zonder GPU. Met de hand gezette grids en grids op slot
- * blijven staan; die worden alleen gemeten (pasTellenToe zegt hoe ze vallen).
+ * laatst geladen eerst (daar speel je mee). Geeft de nummers waar de tellen
+ * er al zijn maar het grid nog van de oude analyse (of een oudere methode of
+ * kaartversie) is: voor gridsUitTellen. Met de hand gezette grids en grids
+ * op slot blijven staan; die worden alleen gemeten (pasTellenToe zegt hoe ze vallen).
  */
 async function tellenOpAchtergrond() {
   const z = await tellenzoeker.controleer();
-  if (!z.ok) return;
+  if (!z.ok) return [];
   const ids = lib.alleIds({ volgorde: 'laatst_geladen' });
-  let rij = 0, grids = 0;
+  let rij = 0;
+  const grids = [];
   for (const id of ids) {
     const track = lib.track(id);
     if (!track?.audio) continue;
     const t = await leesTellen(MEDIA, id);
     if (!t || t.versie < TELLEN_VERSIE) { tellenRij.voegToe(id); rij++; continue; }
-    if (wilTellenGrid(track.grid)) { await pasTellenToe(id).catch((err) => console.error(`[tellen] ${id}:`, err?.message || err)); grids++; }
+    if (wilTellenGrid(track.grid)) grids.push(id);
   }
-  if (rij || grids) console.log(`[tellen] ${rij} nummer${rij === 1 ? '' : 's'} in de rij, ${grids} grid${grids === 1 ? '' : 's'} uit bestaande tellen`);
+  if (rij || grids.length) console.log(`[tellen] ${rij} nummer${rij === 1 ? '' : 's'} in de rij, ${grids.length} grid${grids.length === 1 ? '' : 's'} uit bestaande tellen`);
+  return grids;
+}
+
+/**
+ * Alleen het grid opnieuw uit tellen.json, zonder GPU, één nummer tegelijk.
+ * Los van de GPU (die gaat meteen open): de oude analyse als tweede mening
+ * komt uit tweede-mening.json, en moet hij gerekend worden (de eerste keer,
+ * of na een OUDE_ANALYSE_VERSIE), dan wacht hij zolang er een deck speelt.
+ */
+async function gridsUitTellen(ids) {
+  const t0 = Date.now();
+  let n = 0;
+  // Eerst wat alleen rekenwerk is (de tweede mening ligt er al): die wachten niet op een deck dat speelt.
+  const goedkoop = new Set();
+  for (const id of ids) {
+    const g = lib.track(id)?.grid;
+    if ((g?.bron === 'auto' && g.methode !== 'tellen') || await leesTweede(MEDIA, id, OUDE_ANALYSE_VERSIE)) goedkoop.add(id);
+  }
+  for (const id of [...ids.filter((x) => goedkoop.has(x)), ...ids.filter((x) => !goedkoop.has(x))]) {
+    const track = lib.track(id);
+    if (!track?.audio || !wilTellenGrid(track.grid)) continue;             // intussen met de hand gezet, of weg
+    await pasTellenToe(id, { achtergrond: true }).catch((err) => console.error(`[tellen] ${id}:`, err?.message || err));
+    n++;
+  }
+  if (n) console.log(`[tellen] ${n} grid${n === 1 ? '' : 's'} uit bestaande tellen klaar — ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
 
 /**
@@ -1404,7 +1456,7 @@ const server = createServer(async (req, res) => {
       const overSlot = body?.forceer === true;
       // Met tellen (Beat This!) het grid daaruit; zonder de oude analyse, en de tellen vooraan in de rij.
       if (await leesTellen(MEDIA, track.id)) {
-        const t = await pasTellenToe(track.id, { overHand: true, overSlot });
+        const t = await pasTellenToe(track.id, { overHand: true, overSlot, vers: true });
         if (!t.ok) return json(res, 500, { fout: t.fout });
         return json(res, 200, { voorstel: t.kaart, bewaard: t.bewaard, grid: t.grid, methode: 'tellen', ...(t.reden ? { reden: t.reden } : {}) });
       }
@@ -1934,7 +1986,9 @@ server.listen(POORT, '127.0.0.1', () => {
   if (her !== 'uit') {
     setTimeout(() => {
       heranalyseOpAchtergrond().catch((err) => console.error('[analyse] achtergrond:', err?.message || err));
-      tellenOpAchtergrond().catch((err) => console.error('[tellen] achtergrond:', err?.message || err))
+      tellenOpAchtergrond()
+        .then((ids) => { gridsUitTellen(ids).catch((err) => console.error('[tellen] grids:', err?.message || err)); })
+        .catch((err) => console.error('[tellen] achtergrond:', err?.message || err))
         .finally(() => gpu.open());
     }, Number.isFinite(Number(her)) && her !== '' && her !== undefined ? Number(her) : 5000);
   }

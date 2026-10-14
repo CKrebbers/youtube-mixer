@@ -86,7 +86,7 @@ function stukVan(s) {
 }
 
 /** De redenen van twijfel die een stuk kan hebben (tellen.js, TWIJFEL_TEKST). */
-export const TWIJFELS = ['geen puls', 'rubato', 'drift', 'los', 'maat', 'oneens'];
+export const TWIJFELS = ['geen puls', 'rubato', 'drift', 'los', 'maat', 'oneens', 'tel'];
 
 export class Beatgrid {
   /**

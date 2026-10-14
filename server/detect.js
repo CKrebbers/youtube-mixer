@@ -1503,6 +1503,77 @@ export function verfijnGrens(env, envRate, tijdOffset, L, R, van, tot,
 }
 
 /**
+ * LOOPT HET GRID WEG VAN DE KLAPPEN? (14 okt, docs/BEATGRID.md §12) De
+ * zekerheid van analyseerGrid is de fase-STABILITEIT per venster van 12 s
+ * plus "past één grid" (stukPast): een tempo dat golft (een band zonder klik,
+ * ±1-2%) middelen de vensters weg, en dan staat er een zeker stuk dat
+ * tientallen ms naast de muziek ligt (benchmark: live band, 64% van de tellen
+ * meer dan 0,1 tel naast, toch zeker). Dit meet het grid zelf aan de
+ * onset-pieken, zoals meetGrid het aan de tellen van Beat This! doet: per
+ * blok van DRIFT_BLOK pieken binnen 0,2 tel van een gridlijn de mediaan van
+ * de afwijking. Een blok verder dan DRIFT_TEL tel = het grid ligt hier
+ * systematisch naast. Ruim gekozen (synthetisch: schoon hooguit 0,03 tel,
+ * weglopend 0,1-0,17): een zeker stuk wordt alleen onzeker als het echt
+ * wegloopt; de echte tel is een paar ms, de pieken van de envelope ±15 ms.
+ * @param {ArrayLike<number>} pieken  onset-pieken in tracktijd (onsetPieken), gesorteerd
+ * @param {{ van: number, bpm: number, anker: number }} stuk
+ * @param {number} tot  waar het stuk eindigt
+ * @returns {{ n: number, afwijking: number|null }} afwijking = grootste |blokmediaan| in tellen
+ */
+export const DRIFT_BLOK = 16;
+export const DRIFT_TEL = 0.08;
+export function blokDrift(pieken, stuk, tot) {
+  const L = 60 / stuk.bpm;
+  const e = [];
+  for (const p of pieken) {
+    if (p < stuk.van || p >= tot) continue;
+    const x = (p - stuk.anker) / L;
+    const f = x - Math.round(x);
+    if (Math.abs(f) <= 0.2) e.push(f);
+  }
+  if (e.length < DRIFT_BLOK) return { n: e.length, afwijking: null };
+  let max = 0;
+  for (let j = 0; j + DRIFT_BLOK <= e.length; j += DRIFT_BLOK >> 1) {
+    const b = e.slice(j, j + DRIFT_BLOK).sort((a, c) => a - c);
+    const m = Math.abs((b[(DRIFT_BLOK >> 1) - 1] + b[DRIFT_BLOK >> 1]) / 2);
+    if (m > max) max = m;
+  }
+  return { n: e.length, afwijking: max };
+}
+
+/**
+ * Het tempo van een stuk bijstellen op de onset-pieken, met de lijn bij
+ * `spil` (tracktijd: waar fijneFase de fase op de voorflank zette) op zijn
+ * plek: een rechte lijn door de pieken binnen 0,2 tel van een gridlijn (twee
+ * keer: de tweede keer zonder wat verder dan 0,1 tel naast de eerste lijn
+ * lag). Een klik van acht minuten op 128 kreeg 128,024: aan het eind 0,11 tel
+ * naast (benchmark 14 okt). Geeft { bpm, anker } of null (te weinig pieken,
+ * of meer dan 0,5% anders: dan is het geen kleine tempofout).
+ */
+export function kantelOpPieken(pieken, stuk, tot, spil) {
+  let L = 60 / stuk.bpm, a = stuk.anker;
+  for (const ruim of [0.2, 0.1]) {
+    let n = 0, sk = 0, st = 0, skk = 0, skt = 0;
+    const k0 = Math.round((spil - a) / L), t0 = a + k0 * L;
+    for (const p of pieken) {
+      if (p < stuk.van || p >= tot) continue;
+      const x = (p - a) / L, k = Math.round(x);
+      if (Math.abs(x - k) > ruim) continue;
+      const u = k - k0, v = p - t0;
+      n++; sk += u; st += v; skk += u * u; skt += u * v;
+    }
+    const d = n * skk - sk * sk;
+    if (n < 2 * DRIFT_BLOK || d <= 0) return null;
+    const L2 = (n * skt - sk * st) / d;        // de helling: s per tel
+    // De spil blijft liggen: de lijn bij spil op dezelfde tijd, het nieuwe tempo eromheen.
+    a = t0 - k0 * L2;
+    L = L2;
+  }
+  if (Math.abs(L * stuk.bpm / 60 - 1) > 0.005) return null;
+  return { bpm: 60 / L, anker: a };
+}
+
+/**
  * Een grid-voorstel voor een hele track: een lijst stukken in tracktijd,
  * [{ van, tot, bpm, anker, zekerheid }], aaneengesloten van 0 tot het einde.
  *
