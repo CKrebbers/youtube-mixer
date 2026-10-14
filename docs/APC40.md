@@ -390,9 +390,21 @@ En twee dingen die al op de APC zaten doen meer:
 - **Nudge ±** (5 ms, shift 1 ms) herhaalt als je hem **vasthoudt** (na 350 ms elke 60 ms); het
   hele vasthouden is één stap terug.
 
-**Wat er daardoor in de grid-modus níet meer kan:** strip ↔ rack wisselen met Clip/Device View,
-een ander rack kiezen met Device ◀ ▶, het effect aan/uit met On/Off, en met `?vormen=1` het
-mapje vorm met Detail View. Buiten de grid-modus doet elke knop wat hij deed
+**Wat er daardoor in de grid-modus níet meer kan:** edit staat vooraan in de groepen, dus de
+grid-modus wint van ELK open device-mapje op Device ◀ ▶ en On/Off:
+- strip/rack: een ander rack kiezen (Device ◀ ▶), het effect aan/uit (On/Off), en strip ↔ rack
+  wisselen met Clip/Device View;
+- `device.master` (Shift + Clip/Device View): het master-rack kiezen (Device ◀ ▶) en de master
+  aan/uit (On/Off, `master.fx.bypass`);
+- `device.inst` (een instrumenttrack): vorige/volgende instrument (Device ◀ ▶) en alles stil (On/Off);
+- met `?vormen=1`: het mapje vorm openen met Detail View, en daarin vorm kiezen (Device ◀ ▶) en de
+  laag aan/uit (On/Off).
+De device knobs, Bank en Shift + Clip/Device View / Shift + Detail View (mapje master, mapje beeld
+openen) blijven werken. Let op On/Off: dat is in de grid-modus `grid.controle`, en op een
+STILSTAAND deck zoekt die een plek op en drukt hij op play; zonder koptelefoonuitgang van vier
+kanalen gaat de tik naar de master. Wie uit gewoonte op On/Off drukt (vroeger effect aan/uit)
+laat de zaal dan mogelijk de track en de tik horen. Dat deed de knop op het scherm al; op de APC
+is het nu één greep. Buiten de grid-modus doet elke knop wat hij deed
 (`test/mapping.test.mjs` loopt elke knop na in elk mapje). Dat is een keuze: zie de vraag in
 `docs/verslagen/2026-10-14/beatgrid-bediening.md`.
 

@@ -1894,5 +1894,7 @@ Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag misse
   Sinds 14 okt (BEATGRID.md §12) ook: Device ◀ ▶ de "1" ∓ een tel (shift: plek ◀ ▶), On/Off controle
   (shift: ✓), Clip/Device View tellen hier (`grid.align`), Detail View ↶; scene 1 brandt oranje bij twijfel.
   `grid.undo` zet PRECIES terug (geen bron 'hand'); pin krijgt `klappen` (deck.onsets) en telt daarop
-  als het grid > ¼ tel uit de pas ligt. Bewaren: `src/ui/grid-bewaren.js` (250 ms na een bewerking),
-  daarna de library-rij en andere tracks met dat nummer. Weergave leest `deck.gridMetingBij(nu)`.
+  als het grid > ¼ tel uit de pas ligt. Bewaren: `src/ui/grid-bewaren.js` (250 ms na een bewerking,
+  leesWeg ook bij een fout, time-out 5 s), na elke POST de library-rij, pas na de REEKS andere tracks
+  met dat nummer (`naReeks`). Een geladen grid als bewaard markeren: `grids.alsBewaard(id)`, niet
+  `gridBewaard[id]` zelf zetten. Weergave leest `deck.gridMetingBij(nu)`.

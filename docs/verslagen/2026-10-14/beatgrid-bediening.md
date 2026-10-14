@@ -24,6 +24,10 @@ uitvoerpad van de controllers ook. De volledige uitleg staat in `docs/BEATGRID.m
    controleren.** Dat zit er nu op, met een lampje dat zegt of het klopt.
 5. **Lag**: de grid-actions zelf zijn snel (0,01–0,05 ms). Wat traag was: bewaren (een timer
    van 1,5 s), en de weergave die bij elke encodertik een uur aan tellen opnieuw mat.
+6. **Bewaren is robuust** (review ronde 1): elk antwoord gelezen (`leesWeg`, ook bij een fout),
+   een hangende POST afgebroken na 5 s, de library-rij ook als de track intussen iets anders
+   laadde, en andere tracks met hetzelfde nummer pas na de reeks. *Was: 0 van 3 antwoorden
+   gelezen, en één hangende POST = 1 POST in 6 s; nu 3 van 3, en 6 POSTs.*
 
 ## Wat ik mat, en hoe je het herhaalt
 
@@ -37,6 +41,10 @@ VARVE_WORTEL=<basis> VARVE_GRID_UIT=voor.json node test/grid-bediening.test.mjs 
 VARVE_CHROME=/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell \
   node tools/headless/grid-bediening.mjs na.json                        # echte server + app
 VARVE_WORTEL=<basis> VARVE_CHROME=… node tools/headless/grid-bediening.mjs voor.json
+node test/grid-bewaren.test.mjs                                          # bewaren op een nep-klok (ronde 1)
+git worktree add --detach <tip> 3c6aabf                                  # de tak vóór review ronde 1
+node tools/bench/grid-hang.mjs; node tools/bench/grid-hang.mjs <tip>     # één hangende POST: na / vóór
+VARVE_WORTEL=<tip> node test/grid-bediening.test.mjs | grep bewaarGelezen   # gelezen antwoorden vóór ronde 1
 ```
 
 `test/grid-bediening.test.mjs`: een plaat van 6 minuten op 124,317 bpm, een bekend fout
@@ -85,18 +93,20 @@ zeker. Een route die een knop nodig heeft die op de basis niet op de APC zit, st
 | na ✓: sync en beat-loop mogen | ja (via de bus) | ja (ook op de APC) |
 | vast zonder klappen ver uit de pas: waarschuwing | nee | "LET OP … controleer met de tik" |
 | MIDI → grid per knop, mediaan / p95 (Node, CPU) | 0,012–0,054 / ≤ 0,21 ms | 0,003–0,049 / ≤ 0,13 ms |
-| druk → POST (Node, nep-fetch) | timer van 1500 ms: 0–1500 | 250 ms |
+| druk → POST (Node, nep-fetch) | timer van 1500 ms: 0–1500 | 250 ms (gemeten 251–252) |
+| antwoorden van de grid-POST gelezen (`bewaarGelezen`) | 0 van 3 (tip `3c6aabf`, vóór ronde 1) | 3 van 3 |
+| één POST blijft hangen: POSTs in de 6 s erna, met elke seconde een bewerking (`hang-meting.mjs`, hieronder) | 1 (alles erna blijft liggen) | 6 |
 | draaien aan de bpm, 30 tikken/s, met de tellen van een uur: metingen in 3 s | 91 | 20 |
-| … rekenen voor de weergave per seconde (twee runs) | 154–310 ms | 36–49 ms |
+| … rekenen voor de weergave per seconde | 154–310 ms (twee runs) | rond de 50: 37 · 40 · 48 · 70 ms (vier runs) |
 
 ### In echte Chrome tegen de echte server (`tools/headless/grid-bediening.mjs`)
 
 | wat | vóór | na |
 |---|---|---|
-| druk → server heeft het grid (6 keer, verspreid over de 1,5 s van de oude timer) | 849 · 714 · 380 · 103 · 1263 · 932 ms, gemiddeld **707** | 282 · 271 · 426 · 280 · 259 · 263 ms, gemiddeld **297** (een eerdere run: 279) |
+| druk → server heeft het grid (6 keer, verspreid over de 1,5 s van de oude timer) | 849 · 714 · 380 · 103 · 1263 · 932 ms, gemiddeld **707** | na ronde 1: 271 · 134 · 255 · 87 · 258 · 268 ms, gemiddeld **212**, max 271 (eerdere runs: gemiddeld 297 en 279). 250 ms is de bovengrens plus de weg naar de server; waarden eronder (87, 134) komen van het vangnet van 1,5 s dat toevallig eerder was |
 | hetzelfde nummer daarna op track 2 | **124,33 bpm** (het grid van vóór de bewerking; track 1 stond op 248,65) | 248,65: hetzelfde |
 | daarna nog een bewerking op track 1: volgt track 2? | nee | ja |
-| één gridversie (bewerken + meetGrid) met de tellen van een uur | 5,66 ms mediaan | 5,66 ms (dat is meetGrid zelf; het gaat nu minder vaak) |
+| één gridversie (bewerken + meetGrid) met de tellen van een uur | 5,66 ms mediaan | 5,66 ms; de run na ronde 1 8,27 ms (dezelfde code, een drukkere container). Dat is meetGrid zelf; het gaat nu minder vaak |
 
 Beeldduren heb ik NIET gemeten: in deze container met software-rendering duurt elk beeld
 van de app al ~300 ms, ook in rust. Dat getal zegt niets over een Mac.
@@ -133,19 +143,27 @@ van de app al ~300 ms, ook in rust. Dat getal zegt niets over een Mac.
 - `mappings/apc40mk2.json`: 8 regels in `edit.aan` (710 regels), `tools/mapping/eerder.mjs` gedraaid.
 - `src/ui/apc-beschrijf.js`: uitleg voor align, controle, ok, check.next/prev (en het lampje van tel 1 hier).
 - `src/ui/grid-bewaren.js` (nieuw): bewaren 250 ms na een bewerking, elke seconde tijdens een lange reeks;
-  `laden.js` gebruikt hem en werkt daarna de library-rij (`library.zetGrid`, nieuw) en andere tracks met
-  hetzelfde nummer bij (alleen als die zelf niets bewerkten).
+  elk antwoord gelezen (`leesWeg`), een time-out van 5 s per POST (`TIJDSLIMIET_MS`); na elke POST
+  `naBewaard` (de library-rij, `library.zetGrid`, nieuw, ook als de track intussen iets anders laadde),
+  en pas als de reeks klaar is `naReeks`: dan krijgen andere tracks met hetzelfde nummer het grid (alleen
+  als die zelf niets bewerkten), één keer. Klok en wekker zijn in te spuiten (de test draait op een nep-klok).
+  `laden.js` gebruikt hem; elke plek die een geladen grid als bewaard markeert gaat via `grids.alsBewaard`.
 - `index.html`: knop ≡ (tellen hier) naast "1"; de tooltips noemen de APC-knoppen.
-- Tests: `test/grid-bediening.test.mjs` (nieuw, 16 checks over 21 routes), `test/beatgrid.test.mjs` (pin met klappen, 5
-  checks), `test/mapping.test.mjs` (de acht nieuwe sleutels in de "niets bestaands veranderd"-checks).
-- Docs: `docs/BEATGRID.md` §12, `docs/APC40.md`, één alinea in CLAUDE.md (Beatgrid).
+- Tests: `test/grid-bediening.test.mjs` (nieuw, 17 checks over 21 routes, `// @alleen:` want hij toetst op de
+  wandklok), `test/grid-bewaren.test.mjs` (nieuw, 15 checks, nep-klok en nep-wekker), `test/beatgrid.test.mjs`
+  (pin met klappen, 5 checks), `test/mapping.test.mjs` (de acht nieuwe sleutels in de "niets bestaands
+  veranderd"-checks).
+- Docs: `docs/BEATGRID.md` §12, `docs/APC40.md`, `docs/HANDELINGENLOG.md` (vasthouden en terugspelen),
+  één alinea in CLAUDE.md (Beatgrid).
 
 ## Tests
 
-`node test/alles.mjs`: 95 bestanden, 8817 checks, 3 rood, precies de drie die in deze container
-ook op main rood zijn (renderblok "keylock met wissels … bytes per bericht", instrumenten-fm-schaal
-"geen afval per blok", wachtrij "yt-dlp en zijn kind zijn allebei weg" 2×). grid-bediening 16 ok,
-beatgrid 165 ok, mapping 307 ok, engine 826 ok.
+Na review ronde 1 (samengevoegd met `studio/afmaken` 849af2d, dus in de pool):
+`node test/alles.mjs`: 98 bestanden, 8864 checks, 8 overgeslagen, 3 rood, precies de drie die in
+deze container ook op main rood zijn (renderblok "keylock met wissels … bytes per bericht",
+instrumenten-fm-schaal "geen afval per blok", wachtrij "yt-dlp en zijn kind zijn allebei weg" 2×).
+grid-bediening 17 ok (alleen, na de pool), grid-bewaren 15 ok, beatgrid 165 ok, mapping 307 ok,
+engine 826 ok. Vóór ronde 1: 95 bestanden, 8817 checks, dezelfde drie rood.
 
 ## Wat ik niet veranderde
 
@@ -178,14 +196,63 @@ beatgrid 165 ok, mapping 307 ok, engine 826 ok.
 | E. **Meten per stuk** (meetGrid alleen opnieuw voor het stuk dat veranderde) | 2 u, in het analyse-spoor | de weergave en de controle altijd vers, zonder de 150 ms van nu, ook op lange live sets |
 | F. **Tikken op de tel middelt de fase** (zonder het tempo te veranderen): 4× drukken op de tel = de fase uit het gemiddelde, voor muziek zonder klappen | 2 u | ambient zonder menselijke fout: nu blijft daar 12 ms in |
 
+## Review ronde 1
+
+**Blokkerend: de tak botste met `studio/afmaken`, en `grid-bewaren.js` las zijn antwoord niet.**
+- Samengevoegd: `studio/afmaken` (849af2d) in de tak (merge-commit). Het conflict in `laden.js`
+  opgelost met het nieuwe bewaren, en de import van `leesWeg` blijft (bewaarToon gebruikt hem).
+  `mappings/` veranderde op `studio/afmaken` niet (`git diff 7debab6 studio/afmaken -- mappings/`
+  is leeg), dus `eerder.mjs` hoefde niet opnieuw.
+- `grid-bewaren.js` leest elk antwoord met `await leesWeg(res)` vóór de controle op `res.ok`, dus
+  ook bij een fout. Gemeten met de nep-fetch van `grid-bediening.test` (die telt elke `json()`):
+  vóór (tip `3c6aabf`) **0 van 3** gelezen, na **3 van 3**. `grid-bewaren.test` toetst het ook op
+  het foutpad (een 500: gelezen, geen library-rij, het vangnet doet hem opnieuw).
+- `grid-bediening.test.mjs` heeft bovenaan `// @alleen: tijdsgrenzen op de wandklok (…)`: hij loopt
+  in `alles.mjs` na de pool, alleen.
+
+**Kleine punten:**
+- *Vraag 1 onvolledig*: klopt. Nagelopen op de mapping: Device ◀ ▶ en On/Off hebben ook regels in
+  `device.inst` en `device.master`, en het vormfragment in `device.vorm`; `edit` staat vooraan, dus de
+  grid-modus wint. Vraag 1 en `docs/APC40.md` noemen ze nu allemaal.
+- *On/Off start de controle op een stilstaand deck*: klopt (dat gedrag bestond al op het scherm).
+  Niet veranderd, wel genoemd: nieuwe vraag 2 met twee voorstellen, en in `docs/APC40.md`.
+- *naGridBewaard alleen als de track het nummer nog draagt*: opgelost. `naBewaard` (de library-rij)
+  draait na elke geslaagde POST, los van het deck. Check: "ander nummer geladen tijdens de POST".
+- *Tussenstanden naar andere tracks*: opgelost zoals voorgesteld ("pas na de reeks"). Andere tracks
+  met hetzelfde nummer krijgen het grid via `naReeks`: als er 250 ms geen bewerking was en alles
+  bewaard is, één keer. Check: 2 s draaien = 2 POSTs en 0 tussenstanden, daarna één `naReeks` met het
+  eindgrid, 250 ms na de laatste tik. Dat het geen lus A → B → A wordt, toetst de laatste check
+  (`laden.js` markeert het overgenomen grid als bewaard vóór `setGrid`). Of een SPELENDE track het
+  dan ook moet krijgen, blijft vraag 3.
+- *Eén hangende fetch legt alles stil*: opgelost met `AbortSignal.timeout(5000)` per POST. Gemeten met
+  `tools/bench/grid-hang.mjs` (time-out daar 300 ms): vóór **1** POST in 6 s, na **6**.
+- *Vasthouden bij terugspelen*: beschreven in `docs/HANDELINGENLOG.md` (`grid`) en BEATGRID §12.
+- *Getal draaien*: nu "rond de 50" (vier runs: 37 · 40 · 48 · 70 ms per seconde).
+- *Getal headless*: opnieuw gemeten na ronde 1: 271 · 134 · 255 · 87 · 258 · 268 ms, gemiddeld 212.
+  250 ms is de bovengrens (plus de weg naar de server); 87 en 134 komen van het vangnet.
+- *Maschine en toetsenbord*: niet gebouwd, staat in "wat niet" en optie A.
+- *Wandklok in grid-bediening.test*: `// @alleen:` erbij; het nieuwe `grid-bewaren.test` draait op een
+  nep-klok en een nep-wekker (de klok en de timers zijn in te spuiten), alleen de time-out van
+  `AbortSignal` is echte tijd (60 ms, met 200 ms wachten).
+
 ## Vragen voor Clay
 
 1. In de grid-modus doen Device ◀ ▶, On/Off, Clip/Device View en Detail View nu iets met het grid
-   (de "1", controle/✓, tellen hier, ↶). Daar kon je eerst het rack kiezen, het effect aan/uit
-   zetten en strip ↔ rack wisselen (de device knobs blijven trim/EQ/sends). Is dat goed, of wil je
-   die liever op een andere plek?
-2. Staat hetzelfde nummer op twee tracks, dan krijgt de andere track het bewerkte grid ook (als hij
-   zelf niets bewerkte), ook als hij in de zaal speelt. Zo hoort het grid bij het nummer; maar wil je
-   dat ook midden in een set?
-3. Oranje op "tel 1 hier" = twijfel. Is dat genoeg, of wil je bij "geen puls" liever uit of rood?
-4. Tap tempo zet na vier tikken het HELE grid op slot (al van vóór dit spoor). Zo laten?
+   (de "1", controle/✓, tellen hier, ↶). De grid-modus wint dan van ELK open device-mapje: in
+   strip/rack het rack kiezen, het effect aan/uit en strip ↔ rack; in het mapje master het
+   master-rack kiezen en de master aan/uit; in het mapje inst vorige/volgende instrument en alles
+   stil; met `?vormen=1` het mapje vorm openen (Detail View) en daarin vorm kiezen en de laag
+   aan/uit. De device knobs (trim/EQ/sends), Bank en de shift-varianten die een mapje openen
+   blijven werken. Is dat goed, of wil je die liever op een andere plek?
+2. On/Off is in de grid-modus "controleren". Op een STILSTAAND deck zoekt die een plek op en
+   drukt hij op play, en zonder koptelefoonuitgang van vier kanalen gaat de tik naar de master.
+   Wie uit gewoonte op On/Off drukt (vroeger: effect aan/uit) laat de zaal dan de track en de tik
+   horen. Op het scherm deed de knop dat al; op de APC is het nu één greep. Zal ik controleren op
+   een stilstaand deck alleen laten klaarzetten (plek opzoeken, tik aan, niet starten), of zonder
+   koptelefoon weigeren met een melding?
+3. Staat hetzelfde nummer op twee tracks, dan krijgt de andere track het bewerkte grid ook (als hij
+   zelf niets bewerkte), ook als hij in de zaal speelt. Sinds review ronde 1 pas als je klaar bent
+   (250 ms geen bewerking), één keer, niet elke seconde een tussenstand van de encoder. Zo hoort het
+   grid bij het nummer; maar wil je dat ook midden in een set, of alleen op tracks die niet spelen?
+4. Oranje op "tel 1 hier" = twijfel. Is dat genoeg, of wil je bij "geen puls" liever uit of rood?
+5. Tap tempo zet na vier tikken het HELE grid op slot (al van vóór dit spoor). Zo laten?

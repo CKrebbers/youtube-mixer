@@ -1,3 +1,4 @@
+// @alleen: tijdsgrenzen op de wandklok (vasthouden 600 ms, bewaren < 400 ms, p95 < 5 ms per bericht)
 // Het beatgrid gelijkzetten op de APC (docs/BEATGRID.md §12): de gewone fouten
 // als scenario's, afgespeeld als MIDI-berichten op de standaardmapping, op de
 // echte engine (Web Audio-mock zoals engine.test), met de echte lagen en de
@@ -460,8 +461,11 @@ const drukOfBus = (rest) => {
     const posts = [];
     const deckTrack = { A: 'nummer-1', B: null, C: null, D: null, E: null, F: null, G: null, H: null };
     const na = [];
-    const g = mod.maakGridBewaarder({ engine, decks: ['A'], deckTrack, haal: async (url, init) => { posts.push({ t: performance.now(), url, body: init.body }); return { ok: true }; },
-      naBewaard: (id, json) => na.push(id) });
+    let gelezen = 0;   // elk antwoord moet gelezen worden (leesWeg): Chrome houdt een ongelezen antwoord vast
+    const g = mod.maakGridBewaarder({ engine, decks: ['A'], deckTrack, haal: async (url, init) => {
+      posts.push({ t: performance.now(), url, body: init.body });
+      return { ok: true, status: 200, json: async () => { gelezen++; return {}; } };
+    }, naBewaard: (id, json) => na.push(id) });
     D.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: WAAR_BPM, anker: T0, maat: T0 }] }));
     g.alsBewaard('A');
     lagen.zet('edit', 'aan');
@@ -479,6 +483,8 @@ const drukOfBus = (rest) => {
     await slaap(400);
     extra.bewaarReeks = { posts: posts.length, duur: Math.round(performance.now() - t1),
       laatsteKlopt: posts.length > 0 && JSON.parse(posts.at(-1).body).grid.stukken.at(-1).bpm === D.grid.toJSON().stukken.at(-1).bpm };
+    await slaap(50);
+    extra.bewaarGelezen = { posts: posts.length + 1, gelezen };   // + 1: de POST van de enkele druk hierboven
     D.stop?.();
   } else {
     extra.bewaarMs = 'interval 1500 ms (laden.js setInterval): 0–1500, gemiddeld 750';
@@ -560,6 +566,7 @@ if (W === EIGEN) {
   ok('vasthouden: na 600 ms 5 stappen (1 + 4 herhaald), loslaten stopt, en ↶ zet alles in één keer terug',
     extra.vasthouden.stappen600ms >= 4 && extra.vasthouden.stappen600ms <= 6 && extra.vasthouden.stoptBijLoslaten && extra.vasthouden.nietDoorgelopen, JSON.stringify(extra.vasthouden));
   ok('bewaren: de POST gaat binnen 400 ms na de druk, met het nieuwe grid', extra.bewaarJuist && extra.bewaarMs < 400, `${extra.bewaarMs} ms`);
+  ok('bewaren: elk antwoord van de grid-POST is gelezen (leesWeg)', extra.bewaarGelezen?.gelezen === extra.bewaarGelezen?.posts, JSON.stringify(extra.bewaarGelezen));
   ok('bewaren tijdens 2 s draaien: 2 of 3 keer, en het laatste is het eindgrid', extra.bewaarReeks.posts >= 2 && extra.bewaarReeks.posts <= 4 && extra.bewaarReeks.laatsteKlopt,
     JSON.stringify(extra.bewaarReeks));
 }

@@ -475,23 +475,33 @@ Uitkomsten (drukken inclusief "grid-modus aan"; de cijfers in het verslag van 14
   (dan kwam het grid uit de tellen er nooit meer overheen).
 - **Nudge vasthouden** herhaalt (`HERHAAL_NA` 350 ms, dan elke `HERHAAL_ELKE` 60 ms, hooguit
   200 stappen); loslaten stopt, een ander grid stopt ook, en het hele vasthouden is één ↶.
+  Terugspelen: de herhaling loopt op de timer van NU, dus tijdens het vasthouden kan het grid
+  een paar ms afwijken van toen; de `grid`-gebeurtenis van het log na het loslaten zet het
+  eindgrid precies goed (docs/HANDELINGENLOG.md, `grid`).
 - **Het lampje van "tel 1 hier"**: wit = het stuk dat je hoort klopt, oranje = twijfel. Je
   ziet op de APC zelf of je klaar bent.
 - **De controletik** plant meteen opnieuw als het grid verandert (een 'change' van het deck),
   niet pas bij de volgende tik van zijn timer (tot 30 ms tik op het oude grid).
 - **Bewaren** (`src/ui/grid-bewaren.js`): 250 ms na de laatste bewerking (tijdens een lange
-  reeks toch elke seconde), niet op een timer van 1,5 s. Gemeten in Chrome tegen de echte
-  server: gemiddeld 707 ms (103–1263) → 297 ms (259–426) van de druk tot de server hem heeft.
-- **De library-rij en andere tracks**: na een geslaagde POST weet de library-rij het nieuwe
-  grid (`library.zetGrid`), en een andere track met hetzelfde nummer die zelf niets bewerkte
-  krijgt het ook. Vroeger kreeg wie het nummer na een bewerking opnieuw laadde het grid van
+  reeks toch elke seconde), niet op een timer van 1,5 s. 250 ms is de bovengrens; het vangnet
+  van 1,5 s (dat een mislukte POST opnieuw doet) kan er toevallig eerder zijn. Gemeten in
+  Chrome tegen de echte server: gemiddeld 707 ms (103–1263) → rond de 250 ms van de druk tot de
+  server hem heeft (verslag 14 okt). Elk antwoord wordt gelezen (`leesWeg`, ook bij een fout),
+  en een POST die na 5 s (`TIJDSLIMIET_MS`) niets zei wordt afgebroken: er loopt één ronde
+  tegelijk, en één hangend verzoek legde anders het bewaren stil (gemeten: 1 POST in 6 s,
+  nu 6). `test/grid-bewaren.test.mjs` draait op een nep-klok en een nep-wekker.
+- **De library-rij en andere tracks**: na elke geslaagde POST weet de library-rij het nieuwe
+  grid (`library.zetGrid`), ook als de track intussen een ander nummer laadde (de rij hoort
+  bij het nummer). Een andere track met hetzelfde nummer die zelf niets bewerkte krijgt het
+  pas als de REEKS klaar is (250 ms geen bewerking en alles bewaard, `naReeks`), één keer,
+  niet elke seconde een tussenstand van een encoder die nog draait. Vroeger kreeg wie het nummer na een bewerking opnieuw laadde het grid van
   VÓÓR de bewerking (gemeten: track 1 248,65 bpm, track 2 kreeg 124,33), en bewerkte hij
   dat, dan overschreef hij de jouwe.
 - **De weergave meet minder vaak**: het oordeel naast de bpm (elke frame) en het lampje
   (elke LED-tik) meten het grid tijdens een reeks bewerkingen hooguit eens per 150 ms aan de
   tellen (`deck.gridMetingBij`); wie beslist (controle, ✓) leest `gridMeting`, altijd vers.
   Met de tellen van een uur muziek kost één meting in Chrome ~5,7 ms; draaien aan de bpm
-  (30 tikken/s) kostte daardoor 154–310 ms rekenen per seconde, nu 36–49.
+  (30 tikken/s) kostte daardoor 154–310 ms rekenen per seconde, nu rond de 50 (37–70 over vier runs).
 
 ### Wat niet veranderd is, en waarom
 

@@ -45,9 +45,10 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
   const nieuweLaad = (id) => ++laadTeller[id];
   const nogDeLaatste = (id, nr) => laadTeller[id] === nr;
   // Het grid bewaren bij het nummer, kort na elke bewerking (grid-bewaren.js, 14 okt).
-  // Daarna ook in de library-rij en op andere tracks met hetzelfde nummer.
+  // Na elke POST in de library-rij; als de reeks klaar is ook op andere tracks met hetzelfde nummer.
   const grids = maakGridBewaarder({ engine, decks: DECK_IDS, deckTrack, terugspeelDecks,
-    naBewaard: (trackId, json, vanId) => naGridBewaard(trackId, json, vanId) });
+    naBewaard: (trackId, json) => library.zetGrid(trackId, json),
+    naReeks: (trackId, json, vanId) => naGridReeks(trackId, json, vanId) });
   const gridBewaard = grids.bewaard;
   // Wat er van de toonsoortkaart per track het laatst bewaard (of geladen) is.
   const toonBewaard = perDeck(() => null);
@@ -133,20 +134,24 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
   }
 
   /**
-   * Het beatgrid hoort bij de link: na een geslaagde POST weet de library-rij
+   * Het beatgrid hoort bij de link: na elke geslaagde POST weet de library-rij
    * het ook (vroeger niet: wie het nummer daarna opnieuw laadde, op deze of een
    * andere track, kreeg het grid van VÓÓR de bewerking, en bewerkte hij dat,
-   * dan overschreef hij de jouwe). Een andere track met hetzelfde nummer die
-   * zijn grid sinds het laden niet zelf bewerkte, krijgt het nieuwe grid ook.
+   * dan overschreef hij de jouwe). Is de reeks bewerkingen klaar, dan krijgt
+   * een andere track met hetzelfde nummer die zijn grid sinds het laden niet
+   * zelf bewerkte, het nieuwe grid ook: één keer, geen tussenstanden.
    */
-  function naGridBewaard(trackId, json, vanId) {
-    library.zetGrid(trackId, json);
+  function naGridReeks(trackId, json, vanId) {
+    const tekst = JSON.stringify(json);
     for (const id of DECK_IDS) {
       if (id === vanId || deckTrack[id] !== trackId || terugspeelDecks.has(id)) continue;
       const d = engine.deck(id);
-      if ((d.grid ? JSON.stringify(d.grid.toJSON()) : 'null') !== gridBewaard[id]) continue;   // zelf bewerkt: niet overschrijven
+      const nu = d.grid ? JSON.stringify(d.grid.toJSON()) : 'null';
+      if (nu === tekst) continue;                     // heeft hem al (ook: geen lus terug naar vanId)
+      if (nu !== gridBewaard[id]) continue;           // zelf bewerkt: niet overschrijven
+      gridBewaard[id] = tekst;                        // vóór setGrid: dit is geen bewerking die terug moet
       d.setGrid(json);
-      gridBewaard[id] = JSON.stringify(d.grid?.toJSON() ?? null);
+      grids.alsBewaard(id);
     }
   }
 
@@ -322,7 +327,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
         if (!nogDeLaatste(deckId, mijnLaad) || d.grid?.bron !== 'auto') return;
         if (g?.methode === 'tellen') {
           d.setGrid(g);
-          gridBewaard[deckId] = JSON.stringify(d.grid?.toJSON() ?? null);
+          grids.alsBewaard(deckId);
           meld(`track ${trackVanDeck(deckId)}: het grid komt nu uit de gevonden tellen`, 'info');
           return;
         }
@@ -413,7 +418,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     // maat-anker krijgt bij het inlezen een `maat` per stuk, en dat is geen
     // reden om bij elk laden te schrijven. Pas bij een echte bewerking.
     // (Bij terugspelen bewaart de lus sowieso niets: terugspeelDecks.)
-    gridBewaard[deckId] = JSON.stringify(engine.deck(deckId).grid?.toJSON() ?? null);
+    grids.alsBewaard(deckId);
     // De toonsoort van de plaat (TOONSOORT.md §3), zoals /api/library hem geeft.
     // Ook bij terugspelen: de kaart hoort bij de plaat van NU (correcties van
     // toen staan er al in); bewaarToon slaat terugspeelDecks over.
@@ -490,7 +495,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
       for (const id of DECK_IDS) {
         if (deckTrack[id] !== trackId) continue;
         engine.deck(id).setGrid(grid);
-        gridBewaard[id] = grid ? JSON.stringify(engine.deck(id).grid?.toJSON() ?? null) : 'null';
+        grids.alsBewaard(id);
       }
     },
     // De kiezer in de lijst: staat dat nummer op een track, dan krijgt die de

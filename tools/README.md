@@ -92,6 +92,10 @@ lijst). Praat alleen met de server; code 1 bij een fout.
   van een deck ervoor en erna; met de standaardpool (4) en met `UV_THREADPOOL_SIZE=16`. Tabel, exit 1 als
   het met 16 toch hangt. VARVE.app start de server daarom met 16 (docs/WINST.md punt 4);
   `test/draadpool.test.mjs` bewaakt beide.
+- `grid-hang.mjs [wortel]` — één grid-POST die blijft hangen: hoeveel POSTs komen er in de 6 s erna
+  nog (elke seconde een bewerking, het vangnet van 1,5 s zoals laden.js)? Met een `wortel` van vóór
+  review ronde 1 (14 okt): 1, nu 6 (de time-out per POST, docs/BEATGRID.md §12). De bewaking zit in
+  `test/grid-bewaren.test.mjs`.
 
 ## lokaal/
 Clay's eigen muziek in de library via de bestaande upload-route (kaart-contract deel 4,
