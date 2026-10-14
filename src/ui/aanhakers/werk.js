@@ -3,7 +3,7 @@
 //
 // Zet op: de APC-adapter (src/werk/apparaten.js), de Werkruimte (src/werk/werkruimte.js), de
 // actions (src/control/acties-werk.js), de werk-balk (src/ui/werk-balk.js) en het peilen (elke
-// 3 s, met de ETag: meestal een 304). Welke werkruimte bij het opstarten: ?werk=<naam> (onthouden),
+// 2,5 s, met de ETag: meestal een 304). Welke werkruimte bij het opstarten: ?werk=<naam> (onthouden),
 // anders een stand die net geactiveerd is (/api/standen/actief: mixer.werkruimte, één keer per
 // activering), anders de laatst gekozen (localStorage 'varve.werkruimte'), anders 'standaard'.
 //
@@ -20,7 +20,9 @@ import { leesWeg } from '../../lib/antwoord.js';
 export const SLEUTEL = 'varve.werkruimte';
 export const STAND_SLEUTEL = 'varve.werkruimte.stand';
 const GEZIEN = 'varve.werkruimte.gezien.';
-export const PEIL_MS = 3000;
+/** 2,5 s, niet 3: met de rondgang naar de server erbij staat een bestand dat Claude schrijft zo
+ *  altijd binnen 3 s in de mixer (met 3 s werd het in het slechtste geval net meer; review ronde 1). */
+export const PEIL_MS = 2500;
 /** Hoe lang het opstarten wacht op een apparaat dat de werkruimte vereist, vóór de terugval. */
 export const WACHT_MS = 4000;
 
@@ -120,8 +122,14 @@ export default async function opzet(ctx) {
     return (await r.json()).werkruimtes ?? [];
   };
   const balk = opzetWerkBalk({ el: document.getElementById('werk-balk'), werk, invoke: ctx.invoke, lijst, namen: (n) => { namen = n; }, plan });
-  // De keuze onthouden (de laatst gekozen werkruimte komt bij het opstarten terug).
-  werk.on('change', (s) => { if (!werk.terug && s.naam) opslag.zet(SLEUTEL, s.naam); });
+  // De keuze onthouden (de laatst gekozen werkruimte komt bij het opstarten terug). Alleen als de
+  // NAAM verandert: 'change' komt ook bij elke deelwissel, en die kan uit een MIDI-bericht komen.
+  let onthouden = opslag.lees(SLEUTEL);
+  werk.on('change', (s) => {
+    if (werk.terug || !s.naam || s.naam === onthouden) return;
+    onthouden = s.naam;
+    opslag.zet(SLEUTEL, s.naam);
+  });
 
   ctx.werk = werk;
   window.werk = werk;
@@ -152,7 +160,7 @@ export default async function opzet(ctx) {
     try { namen = (await lijst()).map((x) => x.naam); } catch (_) {}
   })();
 
-  // Elke 3 s kijken of het bestand veranderde (Claude schreef het, een ander venster sloeg op).
+  // Elke 2,5 s kijken of het bestand veranderde (Claude schreef het, een ander venster sloeg op).
   setInterval(() => { if (werk.naam !== 'standaard') werk.peil().catch(() => {}); }, PEIL_MS);
 }
 

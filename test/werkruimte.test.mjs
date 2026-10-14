@@ -289,6 +289,26 @@ try {
   ok('twee-handen kiezen zonder Maschine: apc-alleen, één melding', werk.naam === 'apc-alleen' && meldingen.length === 1 && /er niet/.test(meldingen[0].tekst));
   ok('… elke change van de terugval zegt al dat het een terugval is (dan onthoudt de mixer twee-handen, niet apc-alleen)',
     tijdensTerugval.length > 0 && tijdensTerugval.every(([n, t]) => n !== 'apc-alleen' || t));
+  {
+    // Valt de Maschine weg TERWIJL er geladen wordt (kies wacht op de stukken), dan kijkt hij erna
+    // alsnog (review ronde 1: vroeger pas bij het volgende 'state'-event).
+    maschineEr = true;
+    await werk.kies('twee-handen');
+    const echteStuk = werk.haalStuk;
+    let open; const poort = new Promise((z) => { open = z; });
+    werk.haalStuk = async (n) => { await poort; return echteStuk(n); };
+    const p = werk.kies('twee-handen');
+    await microtaak();
+    meldingen.length = 0;
+    maschineEr = false;
+    werk.controleerAanwezig();
+    const tijdens = werk.naam === 'twee-handen' && !werk.terug;
+    open(); await p;
+    for (let i = 0; i < 6; i++) await microtaak();
+    werk.haalStuk = echteStuk;
+    ok('Maschine weg tijdens het laden: eerst niets (bezig), daarna alsnog apc-alleen met één melding', tijdens
+      && werk.naam === 'apc-alleen' && werk.terug?.naam === 'twee-handen' && meldingen.filter((m) => / weg|er niet/.test(m.tekst)).length === 1 && meldingen.some((m) => /Maschine is weg/.test(m.tekst)));
+  }
   afMaschine();
   maschineEr = true;
 
@@ -310,6 +330,20 @@ try {
   ok('… de andere delen niet aangeraakt', JSON.stringify(b?.ruw.delen.stems) === JSON.stringify(lees('tools/werkruimtes/voorbeelden/apc-alleen.json').delen.stems));
   ok('… werk.versie is de nieuwe', werk.versie === 'v1' && werk.bron === 'eigen');
   rijOpen.set('koptelefoon', false);
+  {
+    // Een conditie blijft een conditie (review ronde 1): SPELEN device = { als: focus.instrument, … }.
+    focusInstrument = false;
+    druk('werk.deel.spelen');
+    nuMs = 20000; druk('werk.vastleggen'); await microtaak();
+    nuMs = 20500; druk('werk.vastleggen'); await microtaak(); await microtaak();
+    const c = bewaard.at(-1)?.ruw.delen.spelen.apc40mk2;
+    ok('vastleggen in SPELEN zonder iets te veranderen: device blijft de conditie (niet de letterlijke strip)', bewaard.length === 2
+      && c?.device?.als === 'focus.instrument' && c.device.dan === 'inst' && c.device.anders === 'strip' && c.grid === 'patronen');
+    druk('layer.device.view'); await microtaak();   // Clip/Device View: strip → rack
+    nuMs = 30000; druk('werk.vastleggen'); await microtaak();
+    nuMs = 30500; druk('werk.vastleggen'); await microtaak(); await microtaak();
+    ok('… opende je zelf een ander mapje (rack), dan wordt dat het deel', bewaard.length === 3 && bewaard.at(-1).ruw.delen.spelen.apc40mk2.device === 'rack');
+  }
 
   console.log('\npeilen (een bestand dat Claude schrijft)');
   {
@@ -322,7 +356,19 @@ try {
     ok('peil: nieuwe versie = opnieuw opgezet, het deel blijft STEMS', r === true && werk.versie === 'claude-1' && werk.deel === 'stems' && werk.deelDef().label === 'STAM');
     ok('… 0 invokes buiten layer.*/werk.*', buiten(spion).length === 0);
     ok('peil: dezelfde versie = niets', (await werk.peil()) === false);
+    // Een mapje dat je binnen het deel met de hand opende, blijft bij een herlaad open zolang het deel
+    // zelf niet veranderde (review ronde 1); verandert het deel voor de APC, dan geldt het nieuwe.
+    druk('werk.deel.mix'); druk('layer.grid.loops'); await microtaak();
+    const ruw2 = JSON.parse(JSON.stringify(ruw)); ruw2.delen.stems.label = 'STEM';
+    eigen.set('apc-alleen', { werkruimte: ruw2, versie: 'claude-2', bron: 'eigen' });
+    await werk.peil();
+    ok('peil, MIX zelf ongewijzigd: loops (met de hand geopend) blijft open', werk.versie === 'claude-2' && werk.deel === 'mix' && lagen.stand.grid === 'loops');
+    const ruw3 = JSON.parse(JSON.stringify(ruw2)); ruw3.delen.mix.apc40mk2.grid = 'sampler';
+    eigen.set('apc-alleen', { werkruimte: ruw3, versie: 'claude-3', bron: 'eigen' });
+    await werk.peil();
+    ok('peil, MIX kreeg grid sampler: de APC volgt het nieuwe deel', werk.versie === 'claude-3' && werk.deel === 'mix' && lagen.stand.grid === 'sampler');
     eigen.delete('apc-alleen');
+    druk('werk.deel.stems');
   }
   {
     // De haler: ETag en 304 (zoals de mixer elke 3 s vraagt).

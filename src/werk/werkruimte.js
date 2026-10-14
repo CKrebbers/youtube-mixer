@@ -65,6 +65,7 @@ export class Werkruimte extends Emitter {
     this._onderOpen = null;
     this._laad = 0;
     this._vastleggen = null;        // tijdstip van de eerste druk
+    this._nogEens = false;          // een poortwissel tijdens kies/peil: daarna controleerAanwezig
     this._volgers = new Map();      // apparaat -> afmelden van zijn bij()
     for (const [id, a] of apparaten()) this._luisterNaar(id, a);
     this._afApparaten = bijApparaten((id) => { this._luisterNaar(id, apparaat(id)); this.controleerAanwezig(); });
@@ -128,12 +129,20 @@ export class Werkruimte extends Emitter {
       this._zetOp(naam, ruw, gehaald, stukken, { behoudDeel });
       this.emit('change', this.stand());
       return { naam };
-    } finally { if (nr === this._laad) this._bezig = false; }
+    } finally { if (nr === this._laad) { this._bezig = false; this._klaar(); } }
+  }
+
+  /** Na kies/peil: een poortwissel die intussen kwam alsnog bekijken (in een volgende taak). */
+  _klaar() {
+    if (!this._nogEens) return;
+    this._nogEens = false;
+    Promise.resolve().then(() => { if (!this._bezig) this.controleerAanwezig(); else this._nogEens = true; });
   }
 
   /** Synchroon: de vorige weg, de nieuwe erop. */
   _zetOp(naam, ruw, gehaald, stukken, { behoudDeel }) {
     const vorigDeel = this.deel;
+    const vorigeDef = vorigDeel ? this.def?.delen?.[vorigDeel] ?? null : null;
     this._ruimOp();
     const bekend = bekendUitGroepen(GROEPEN);
     const { werkruimte, fouten, waarschuwingen } = normaliseerWerkruimte(ruw, { standaarden: this.standaarden, stukken, bekend });
@@ -182,7 +191,11 @@ export class Werkruimte extends Emitter {
     // Het deel: bij herladen (Claude schreef het bestand) blijft het deel staan als het er nog is.
     const start = behoudDeel && vorigDeel && w.delen[vorigDeel] ? vorigDeel : w.deel.start;
     this.deel = null;
-    if (start) this.kiesDeel(start, { door: behoudDeel && start === vorigDeel ? this.door : 'start', stil: true, herlaad: behoudDeel && start === vorigDeel });
+    const herlaad = behoudDeel && start === vorigDeel;
+    // Herladen met hetzelfde deel: alleen de apparaten waarvoor het deel echt veranderde krijgen hun
+    // mapjes opnieuw; een mapje dat je binnen het deel met de hand opende blijft dan open.
+    const zelfde = herlaad ? (id) => JSON.stringify(vorigeDef?.[id] ?? null) === JSON.stringify(w.delen[start]?.[id] ?? null) : null;
+    if (start) this.kiesDeel(start, { door: herlaad ? this.door : 'start', stil: true, herlaad, sla: zelfde });
     else { this.door = null; this._planScherm(); }
   }
 
@@ -203,7 +216,7 @@ export class Werkruimte extends Emitter {
    * `vanApparaat`: de wissel komt uit volgt van dit apparaat; zijn mapjes zetten we NIET opnieuw
    * (geen lus, en wat jij net opende blijft open). Geeft false als het deel niet bestaat.
    */
-  kiesDeel(naam, { door = 'scherm', vanApparaat = null, vorige = null, stil = false, herlaad = false } = {}) {
+  kiesDeel(naam, { door = 'scherm', vanApparaat = null, vorige = null, stil = false, herlaad = false, sla = null } = {}) {
     const d = this.def.delen[naam];
     if (!d) { if (!stil) this.meld(`geen deel "${naam}" in werkruimte ${this.naam}`, 'info'); return false; }
     if (naam === this.deel && !herlaad) {
@@ -220,7 +233,7 @@ export class Werkruimte extends Emitter {
     this.door = door;
     const bewaard = this.onthouden.get(naam);
     for (const [id, a] of apparaten()) {
-      if (id === vanApparaat) continue;
+      if (id === vanApparaat || sla?.(id)) continue;
       const doel = bewaard?.[id] ?? mapjesVanDeel(d, id, (c) => this.conditie(c));
       if (!Object.keys(doel).length) continue;
       try { a.zetMapjes(doel); } catch (err) { console.warn(`[werk] ${id}.zetMapjes`, err); }
@@ -328,7 +341,9 @@ export class Werkruimte extends Emitter {
 
   /** Na elke poortwissel (midi 'state', een adapter erbij of weg). */
   controleerAanwezig() {
-    if (this._bezig) return;
+    // Bezig (kies of peil): niet weggooien, maar daarna nog eens kijken (_klaar). Anders zag een
+    // apparaat dat precies tijdens het laden wegviel pas het volgende 'state'-event (review ronde 1).
+    if (this._bezig) { this._nogEens = true; return; }
     if (this.terug) {
       const alles = (this.terug.vereist ?? []).every((a) => aanwezigVan(a, this.midi));
       if (alles && !this.terug.mag) {
@@ -377,7 +392,15 @@ export class Werkruimte extends Emitter {
     for (const [app, groepen] of Object.entries(DEEL_GROEPEN)) {
       if (!s[app]) continue;
       const m = {};
-      for (const g of groepen) if (typeof s[app][g] === 'string') m[g] = s[app][g];
+      // Een conditie ({ als, dan, anders }) blijft een conditie zolang ze NU precies het open mapje
+      // geeft: wie vastlegt wat de conditie al zette, bedoelt geen letterlijke stand (review ronde 1).
+      const nuDef = mapjesVanDeel(this.def.delen[deel], app, (c) => this.conditie(c));
+      const bestaand = isObj(d[app]) ? d[app] : {};
+      for (const g of groepen) {
+        if (typeof s[app][g] !== 'string') continue;
+        if (isObj(bestaand[g]) && 'als' in bestaand[g] && nuDef[g] === s[app][g]) continue;
+        m[g] = s[app][g];
+      }
       if (Object.keys(m).length) d[app] = { ...(isObj(d[app]) ? d[app] : {}), ...m };
     }
     if (this.rijen) {
@@ -428,7 +451,7 @@ export class Werkruimte extends Emitter {
       this.meld(`werkruimte ${this.naam} bijgewerkt`, 'info');
       this.emit('change', this.stand());
       return true;
-    } finally { this._bezig = false; }
+    } finally { this._bezig = false; this._klaar(); }
   }
 
   /** Alles wat de werk-balk en de schermen willen weten, in één object. */

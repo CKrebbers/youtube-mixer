@@ -349,6 +349,9 @@ console.log('\nserver: routes/ en de witte lijst');
   const leeg = spoorRoutes();
   ok('de routebestanden laden; elke route hoort bij een spoor en zit onder /api/',
     leeg.routes.every((r) => SPOREN.some(([n]) => n === r.spoor) && r.pad.source.startsWith('^\\/api\\/')));
+  // De andere helft van de oude check blijft: geen spoor zet iets op de witte lijst van statische
+  // bestanden (S3 heeft `mag: []`). Heeft een spoor er echt een nodig, dan verandert het DEZE regel bewust.
+  ok('… en geen witte-lijstregels (mag is leeg)', !leeg.mag.length);
   let fout = null;
   try { spoorRoutes([['kapot', { routes: [{ methode: 'GET', pad: '/api/x', handler: () => {} }], mag: [] }]]); } catch (e) { fout = e; }
   ok('een route zonder RegExp: de server start niet (fout met de naam)', /kapot/.test(fout?.message));
