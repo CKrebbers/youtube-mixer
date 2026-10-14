@@ -124,6 +124,9 @@ src/
                     onderpanelen, midi-opzet, opname-knop, video-paneel,
                     renderloop, mapje-balk — elk een opzet…()-functie
                     vertrek.js      Cmd+R/Cmd+W: eerst vragen zolang er iets speelt, wacht, laadt, de auto-DJ aan staat of er opgenomen wordt (één plek)
+                    aanhakers.js    werkruimte S0: startAanhakers(ctx) laadt aanhakers/<spoor>.js (precisie … inrichten) na alle opzet; renderloop.stap
+                    aanhakers/, beschrijf/, css/  per spoor één eigen bestand (opzet · uitleg van zijn actions · stijl); docs/werkruimte/S0.md
+                    rijen.js        rijenregister: de acht rijen melden zich aan met hun eigen zet (registreerRij, rij, rijNamen)
                     vlag.js + vorm-paneel.js: ?vormen=1 en de VORM-rij (paneel pas geladen als de vlag aan staat)
                     vlag.js ook ?hub=ws://… (hubAdres): dan laadt app.js control/hub.js, anders niet
                     bovenbalk.js    past de balk niet (tijdens het spelen), dan scrollt het rechterdeel opzij: vervaging, wiel
@@ -237,6 +240,7 @@ server/             draait apart: `node server/index.js`
                     server (MAX_DRADEN: iCloud mag de threadpool niet vullen, de andere 2 draden blijven voor de audio)
   uitzend.js        uitzenden stap 1: een UITGANG, geen bron. Volgt de opname die al groeit en duwt hem via ffmpeg naar een LOKAAL doel
                     (bestand, rtmp/udp op 127.0.0.1); slot tegen elke dienst; nog geen route of knop (docs/UITZENDEN.md)
+  routes/           werkruimte S0: index.js laadt werkruimtes/mapping-apparaat/paneel.js ({ routes, mag }), vlak vóór de 404
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     media-verhuis.mjs (media/ buiten iCloud: --droog, --doe; docs/LIBRARY.md "Waar media/ staat"),
                     lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
@@ -374,6 +378,7 @@ test/
                     (VARVE_TEST_ECHTETIJD=1: ook in echte tijd, ~2 min; niet tijdens een speelavond)
   nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
   media-verhuis.test.mjs  media buiten iCloud: iCloud-herkenning, het briefje, droogloop/--doe op een nepmap, VARVE_TESTSERVER-bewaker
+  aanhaakpunten.test.mjs  werkruimte S0: mapjes erbij/weg/volgorde, fragmenten, meta-vlaggen, alleenScherm, Deck.tijdlijn, aanhakers, routes (kopie-server)
   alles.mjs         alle tests in één keer met overzicht
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
@@ -412,6 +417,7 @@ docs/
   AVONDPAKKET.md    één controle vóór vertrek en bij aankomst (10 okt): profielen, fase, oordeel, paklijst, ritueel, tegel en CLI
   KAART.md          de muziekkaart in Varve (10 okt): het bestand, de API (+ §3b de afspraken met de UI), de nachtregels, "er speelt een deck",
                     §9 gemeten op het echte bestand, §10 na de proefavond, wat niet getest is
+  werkruimte/       per spoor van de werkruimte wat het bouwde (S0.md: de aanhaakpunten); het ontwerp staat in WERKRUIMTE.md
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -1861,6 +1867,15 @@ Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag misse
   (`kiesMedia`); een testserver nooit.
 - Verhuizen gaat met `tools/media-verhuis.mjs` (droog standaard; `--doe` hernoemt alleen, met de
   server uit). VARVE.app leest `~/.varve/media-pad` en, via de login-shell, `~/.zprofile`.
+
+## Werkruimte: aanhaakpunten (14 okt, spoor S0)
+
+Volledig in `docs/werkruimte/S0.md`. Een spoor van de werkruimte raakt ALLEEN zijn eigen stub:
+`src/ui/aanhakers/<spoor>.js`, `src/ui/beschrijf/<spoor>.js`, `src/ui/css/<spoor>.css`,
+`server/routes/<spoor>.js`. Uitzonderingen in de meta van de action, niet in een regex:
+`log: 'overslaan'`, `beginstand: false`, `overneem: true`, `alleenScherm: true`. Mapjes van buiten:
+`voegMapjeToe`/`haalMapjeWeg`/`zetVolgorde` (lagen.js) en daarna `herbindLagen()`; regels van buiten:
+`mapping.vervangFragment(bron, doc)`/`haalWeg(bron)` (een eigen regel wint altijd).
 
 ## Werkwijze die hier werkt
 
