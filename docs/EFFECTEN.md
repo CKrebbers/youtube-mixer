@@ -17,6 +17,17 @@ Bewaking: `test/effecten.test.mjs` (Node, in `test/alles.mjs`) en
 `tools/headless/effecten.mjs` (echte Chrome, OfflineAudioContext, geen MIDI, geen
 app; `VARVE_KIJK_POORT`/`VARVE_KIJK_DEBUG`, `--snel` = 6 s in plaats van 20 s).
 
+## Sinds 14 okt: meer effecten en meer mogelijkheden (spoor S10)
+
+Volledig in `docs/EFFECTEN-MEER.md`. Kort: zeven effecten erbij achter deze tien (`src/engine/fx-s10.js`:
+kam, klinker, frequentieschuif, band, kanteling, aanslag, duiker), 25 sjablonen erbij in
+`racks/sjablonen.json` (met uitleg en `xy`), en in een rack modulators (lfo, stappen, volger, toeval;
+`src/engine/modulatie.js`), droog/nat per effect, knoppen die knoppen sturen, een eigen kromme, A/B,
+muteren met zaad en eigen sjablonen (`/api/sjablonen`). De regels hieronder gelden ook daar; de
+metingen staan in `tools/headless/effecten-meer.mjs` en `test/effecten-s10.test.mjs`.
+`test/effecten.test.mjs` toetst nog steeds alleen deze tien (zijn telling zegt nu "achter de zeven
+van fx.js, en daarachter die van S10").
+
 ## Kort
 
 | effect | herkomst (filter app) | parameters | staart |

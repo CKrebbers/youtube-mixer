@@ -516,7 +516,7 @@ try {
   {
     const { standen } = maak({ profielen: async () => ({ laptop: {}, apc: {}, maschine: {}, alles: {} }) });
     const k = await standen.keuzes();
-    ok(`keuzes(): 8 sjablonen (${k.sjablonen.length}), de kratten van de nep-kaart (${k.kratten.length})`, k.sjablonen.length === 8 && k.sjablonen.includes('Dub-worp') && k.kratten.length === 8 && k.kratten.some((x) => x.id === 'slim:proefkrat' && x.aantal === 0));
+    ok(`keuzes(): alle ${SJABLONEN.length} sjablonen (${k.sjablonen.length}), de kratten van de nep-kaart (${k.kratten.length})`, k.sjablonen.length === SJABLONEN.length && k.sjablonen.join() === SJABLONEN.map((r) => r.name).join() && k.sjablonen.includes('Dub-worp') && k.kratten.length === 8 && k.kratten.some((x) => x.id === 'slim:proefkrat' && x.aantal === 0));
     ok('… profielen en hub-sets, mapping nu "eigen (4 regels)"', k.profielen.join() === 'laptop,apc,maschine,alles' && k.hubSets.join() === 'dj,studio' && k.mappingNu === 'eigen (4 regels)');
   }
   {

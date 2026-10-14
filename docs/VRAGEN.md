@@ -675,3 +675,33 @@ grenzen, fase `auto`, Tailscale serve, stap 7a, stap 8/9, de LPD8.
   actions. Wil je hem ook als tegel in de Controlekamer?
 - [ ] **S9-8 👂 Live te bevestigen**: een laag op de maat (sync + op de maat) met echte nummers, GO
   op de APC (het voorbeeldstuk `set-voorbeeld`), terugladen van een set met acht tracks op de M1.
+
+## S10. Meer effecten en meer mogelijkheden bij het maken (14 okt, docs/EFFECTEN-MEER.md, tak `werk/S10`)
+
+- [ ] **S10-1 👂 De sjablonen.** 25 nieuwe (de lijst met één zin per stuk: `docs/verslagen/2026-10-14/werk-S10.md`).
+  Alles is gemeten (droog in de beginstand, begrensd, klikvrij), niets beluisterd. Welke houd je, welke
+  gaan weg, en liggen de knoppen op het gehoor goed? Een sjabloon aanpassen kan in de editor en dan
+  "als sjabloon" (een eigen sjabloon), of in `racks/sjablonen.json`.
+- [ ] **S10-2 💬 Modulators als besturing.** Een modulator rekent elke 33 ms op de audioklok en het
+  effect glijdt (vrij hooguit 8 Hz). Genoeg, of wil je een LFO op audiosnelheid op elke parameter
+  (dan moet elk effect zijn schaling in een worklet doen: een groot werk)? **Advies:** zo laten; voor
+  snel zijn tremolo, autopan, vibrato en chorus er.
+- [ ] **S10-3 👂 De kam glijdt.** Een nieuwe toon schuift in 20 ms (het hele naklinken gaat mee
+  omhoog of omlaag), anders dan de delay (twee koppen, nooit glijden). Klinkt dat als een instrument,
+  of liever springen met overvloeien?
+- [ ] **S10-4 👂 De klinker.** Make-up ×1,2·Q, hooguit ×8: op Q 20 is hij 12 dB zachter dan droog, en
+  een toon precies op een formant kan +18 dB komen. Liever even luid (en meer risico op pieken), of zo?
+- [ ] **S10-5 💬 Eigen sjablonen vanaf de iPad.** Kiezen (sjabloon ◀ ▶), de knoppen en de XY-pad mag
+  van de iPad (bouwsteen `sjablonen`, als `mag` het noemt). Bewaren en wissen niet: dat staat niet op
+  de bus en de editor is alleen in de mixer. **Advies:** zo laten (een rack bewaren schrijft naar de
+  server, zoals werk.opslaan dat nooit van buiten mag).
+- [ ] **S10-6 💬 De XY-pad van een sjabloon.** Elk sjabloon zegt welke twee knoppen samen op de XY-pad
+  passen (`xy`), en `track.N.fx.xy.x/.y` volgen dat. Wil je dat de bouwsteen `sjablonen` (of jouw
+  xy-paneel) standaard die actions gebruikt in plaats van knop 1 en 2?
+- [ ] **S10-7 💬 Master-lijm op de master.** Het sjabloon staat in de lijst van de master-racks (zoals
+  alle sjablonen). In de beginstand pakt hij alleen pieken boven −9 dB; MIX begint op 0. Wil je hem
+  standaard op de master, of alleen als je hem kiest?
+- [ ] **S10-8 💬 Band is het zwaarste nieuwe effect** (6,7% van een kern voor acht, gemeten in deze
+  container; twee vibrato-trappen). Goed, of liever één trap (alleen wow)?
+- [ ] **S10-9 💬 Volgende stap**: echte parallelle ketens (twee ketens naast elkaar met elk een mix),
+  een stutter/korrel-effect binnen het rack, of eerst de sjablonen op het gehoor afmaken?

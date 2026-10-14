@@ -31,7 +31,8 @@ function waardenUit(html) {
 
 console.log('de HTML');
 const h = bewerkerHtml(APC, KEUZES);
-ok(`alle 8 sjablonen staan erin (${SJABLONEN.join(', ')})`, SJABLONEN.length === 8 && SJABLONEN.every((n) => h.includes(`<option value="${n}"`)));
+// Sinds spoor S10 (14 okt) 33 sjablonen in plaats van 8: het aantal komt uit het bestand.
+ok(`alle ${SJABLONEN.length} sjablonen staan erin (${SJABLONEN.join(', ')})`, SJABLONEN.length >= 8 && SJABLONEN.every((n) => h.includes(`<option value="${n}"`)));
 ok('de kratten van de kaart, met hun aantal', h.includes('<option value="slim:vertrouwd">vertrouwd (835)</option>') && h.includes('proefkrat (15)'));
 ok('de hub-sets en de profielen (uit de voorbeelden: avondpakket nog niet samengevoegd)', h.includes('<option value="studio">') && h.includes('<option value="maschine">')
   && h.includes('avondpakket nog niet samengevoegd'));

@@ -130,6 +130,68 @@ ze na (zie §6).
   verzetten midden in een toon, effect wisselen), staart (stil na `staart()`), luidheid (beginstand
   vs droog), elke sjabloon in beginstand en open, CPU per effect (acht tegelijk).
 
-## Gebouwd
+## Gebouwd (14 okt, tak `werk/S10`)
 
-(zie onderaan dit bestand, bijgewerkt bij het afronden)
+### Code
+
+| bestand | wat |
+|---|---|
+| `src/engine/rack.js` | het formaat: `kromme`, doelen `plek.K` / `mod.N.diepte` / `<slot>._nat`, `meng` per effect, `mods`, `xy`, `uitleg`, onbekende velden blijven; `stuurPlekken` (knop → knop, één niveau), `pasKromme`, `muteer` + `reeksVan` (zaad) |
+| `src/engine/modulatie.js` | de modulators, puur: `leesMod`, `ModStaat.waarde(m, t, klok, niveau)`, `ModBank.bereken` (offsets per doel), `golf`, `toevalVan` |
+| `src/engine/fx.js` | `bouwKeten` met droog/nat per effect (alleen als het rack erom vraagt); `InsertSlot`: modulatietimer (33 ms, alleen met modulators), meter op de ingang (alleen met een volger), `bewerkMods`, `natOntbreekt`, `andereDoelen`, `modStanden` |
+| `src/engine/fx-s10.js` | de zeven effecten |
+| `src/engine/fx-kern.js`, `fx-worklet.js` | `Kam`, `Freqschuif`, `Aanslag` en hun processors (`varve-fx-kam`, `-freqschuif`, `-aanslag`) |
+| `src/engine/fx-lfo.js` | de golven van de duiker (`DUIK_TAU`, niet in `LFO_VORMEN`) |
+| `src/control/acties-effecten.js` | `track.N.fx.xy.x/.y`, `master.fx.xy.x/.y` (`beginstand: false`) |
+| `src/ui/aanhakers/effecten.js`, `src/ui/beschrijf/effecten.js`, `src/ui/css/effecten.css` | de stubs van dit spoor (S0) |
+| `src/ui/rack-editor.js`, `src/ui/racks.js` | de editor (zie "Bediening") en de eigen sjablonen in de kiezer |
+| `src/paneel/vrij.js` | bouwsteen `sjablonen` (`sjablonen:<n>`): sjabloon ◀ ▶, XY-pad, acht plekken, mix, aan/uit |
+| `server/sjablonen.js`, `server/routes/sjablonen.js` | `/api/sjablonen`: eigen sjablonen in `racks/eigen.json` (`VARVE_SJABLONEN`), versie + 409, alleen deze Mac |
+| `racks/sjablonen.json` | 25 nieuwe sjablonen (33 in totaal) |
+
+### Bediening (rack-editor)
+
+- **∥** op een effectkaart: droog/nat van dat ene effect; er komt een knop **nat** bij (te koppelen
+  zoals elke parameter, ook met DICHT/OPEN). Nog eens = weer helemaal in de keten.
+- **kopie** op een kaart, dan in "+ effect…" bovenaan **plak: …** (ook in een ander rack of op een
+  andere track; onthouden in deze browser).
+- In "stuurt" (achter ▸ bij een koppeling): naast de parameters ook **knop K** en **diepte M N**.
+- **verloop → eigen kromme**: vijf punten om met de muis te trekken (begint op de curve die er stond).
+- **Modulators** onder de keten: "+ modulator…" (LFO, stappen, volger, toeval), per modulator de
+  klok (op de maat + deling, of vrij in Hz), vorm/stappen/zaad/glad of aanzet/verval/gevoel, een
+  diepte, en doelen met elk een eigen diepte (−100..+100%). Een meter laat zien wat hij doet.
+- Bovenaan: **A / B** (de eerste klik bewaart wat er is als A en maakt een kopie B), **muteer**
+  (±15%), **willekeurig** (±100%), het **zaad** (hetzelfde getal = hetzelfde resultaat; elke klik telt
+  op), **als sjabloon** (de naam uit het naamveld; een andere naam = een kopie) en **wis sjabloon**
+  (alleen bij een eigen sjabloon, tweede klik binnen 3 s).
+- Haal je een effect weg, dan gaan knoppen die alleen dat effect stuurden mee (een nieuw rack begint
+  zo met acht vrije knoppen).
+
+### Gemeten
+
+- Node: `test/modulatie.test.mjs`, `test/effecten-s10.test.mjs` (0 GC per blok voor de drie kernen,
+  256 bytes heapgroei; frequentieschuif: spiegelbeeld −49 dB op 1 kHz, −44 dB op 60 Hz),
+  `test/rack.test.mjs` (alle 33 sjablonen), `test/sjablonen-server.test.mjs`, `test/sjablonen-paneel.test.mjs`.
+- Chrome: `tools/headless/effecten-meer.mjs` (81 checks: begrensd, bypass bit voor bit, hoorbaar,
+  luidheid, staart, klikvrij, CPU, elk sjabloon) en `tools/headless/rack-editor.mjs` (de editor met
+  de muis: 8 handelingen voor een nieuw effect met één knop als sjabloon; de keten tekent niet
+  tijdens het slepen).
+- CPU per effect, acht tegelijk, offline in headless Chrome op deze container (niet op de M1):
+  kam 2,4% · klinker 3,3% · frequentieschuif 4,3% · band 6,7% · kanteling 1,7% · aanslag 3,4% ·
+  duiker 1,0% van een kern (filter 2,7%, delay 3,3%, galm 19% ter vergelijking).
+- Renderblok: dezelfde gouden hash (a6c215d9) en dezelfde CPU als de basis; latentie fader → geluid
+  p50 0,55 / 0,86 ms (basis 0,72 ms; de spreiding is de container).
+
+### Grenzen (bewust)
+
+- Modulators zijn een besturing (33 ms, het effect glijdt 20 ms): vrij hooguit 8 Hz. Een delaytijd
+  moduleren wordt een reeks kruisfades (geen doppler), elke ~90 ms.
+- Een modulator in het handelingenlog: het rack (met `mods`) staat erin, de stand van de modulator
+  niet. Terugspelen geeft dezelfde vorm en hetzelfde zaad, maar een vrije LFO begint bij het laden
+  van het rack opnieuw; op de maat ligt hij weer op de maat.
+- Droog/nat per effect heeft geen vertragingscompensatie: compressor (6 ms), pitch (45 ms), band
+  (een paar ms) zijn half nat een kam. Voor parallel comprimeren: de eigen `meng` van de compressor.
+- De kam glijdt bij een nieuwe toon (20 ms), bewust (keuze 10). Feedback en demping glijden per
+  sample (10 ms): per blok gaf een tik (×781 gemeten).
+- De klinker heeft make-up ×1,2·Q (hooguit ×8): op Q 20 is hij 12 dB zachter dan droog, en een toon
+  precies op een formant kan tot +18 dB boven zichzelf komen (de limiter vangt het).

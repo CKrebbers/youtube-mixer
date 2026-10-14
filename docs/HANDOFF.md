@@ -1,5 +1,17 @@
 # Overdracht — waar we staan (7 oktober 2026)
 
+## Stand 14 okt (nacht): S10 — meer effecten, sjablonen en mogelijkheden bij het maken (tak `werk/S10`)
+
+- **Gebouwd** (`docs/EFFECTEN-MEER.md` "Gebouwd"): 25 nieuwe sjablonen (33 in totaal, elk met uitleg
+  en `xy`), zeven effecten (kam, klinker, frequentieschuif, band, kanteling, aanslag, duiker), in een
+  rack modulators (lfo, stappen, volger, toeval) als offset op de audioklok, droog/nat per effect,
+  knop → knop en knop → modulatordiepte, een eigen kromme, A/B, muteren/willekeurig met zaad, eigen
+  sjablonen (`/api/sjablonen`, `racks/eigen.json`, alleen deze Mac), kopie/plak van een effect, de
+  XY-pad van een rack op de bus (`track.N.fx.xy.*`) en de bouwsteen `sjablonen` voor werk.html en de iPad.
+- **Ongecommit**: niets; alles op `werk/S10` (gepusht), nog samen te voegen in `werkruimte/integratie`.
+- **Niet getest**: met de oren (alles is gemeten, niets beluisterd), op de M1 (CPU), op de APC en de
+  iPad. Vragen: `docs/VRAGEN.md` blok S10. Verslag: `docs/verslagen/2026-10-14/werk-S10.md`.
+
 ## Stand 14 okt (laat): S9 — een set klaarzetten, live bijmixen, sets (tak `werk/S9`)
 
 - **Gebouwd** (`docs/PLAN-SET.md` §9): in het planvenster een set uit de selectie, een krat of een

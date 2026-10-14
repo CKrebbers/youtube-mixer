@@ -461,7 +461,8 @@ console.log('\nbus-racks: wissel via de kruisfade, niet meer ketens dan op een t
   try {
     // De kant-en-klare racks als busracks gemarkeerd ("bus": true, Clay kiest welke), plus één zonder: die komt er niet op.
     const sjablonen = JSON.parse(readFileSync(new URL('../racks/sjablonen.json', import.meta.url), 'utf8')).racks;
-    const racks = sjablonen.slice(1).map((r) => ({ ...r, bus: true }));
+    // Zeven busracks (zoveel kant-en-klare waren er tot spoor S10): tien keer drukken gaat dan precies één keer rond.
+    const racks = sjablonen.slice(1, 8).map((r) => ({ ...r, bus: true }));
     const aangeboden = [...racks, sjablonen[0]];
     const maakSlot = (rack) => { const s = new InsertSlot(ctx); s.setMix(1); s.zetRack(rack); return s; };
     const bussen = { A: maakSlot(SEND_RACKS.A), B: maakSlot(SEND_RACKS.B) };

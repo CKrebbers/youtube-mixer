@@ -1066,7 +1066,7 @@
         "house",
         "riser"
       ],
-      "uitleg": "Een riser over een paar maten: highpass omhoog, flanger erin, galm erbij, en een resonantie die elke halve maat aanzwelt (modulator op de maat, ook met knop 1). Knop 2 = spanning (resonantie), knop 3 = ruimte. Na de drop knop 1 in één beweging terug.",
+      "uitleg": "Een riser over een paar maten: highpass omhoog, flanger erin, galm erbij, en een flanger die elke halve maat versnelt (modulator op de maat; knop 1 zet hem erin). Knop 2 = spanning (resonantie), knop 3 = ruimte. Na de drop knop 1 in één beweging terug.",
       "chain": [
         {
           "slot": "a",

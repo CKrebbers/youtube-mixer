@@ -5,7 +5,7 @@
 // en wat een herstart overleeft. De routes voor mapping en nacht zelf
 // blijven werken zoals ze werkten.
 // Draai met: node test/standen-server.test.mjs
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -59,7 +59,9 @@ try {
   ok(`GET /api/standen: 200, vier voorbeelden, label Opstelling, actief null`, l.status === 200 && l.j.standen.length === 4 && l.j.label === 'Opstelling' && l.j.actief === null);
   ok('GET /api/standen/actief: { naam: null }', (await get('/api/standen/actief')).j?.naam === null);
   const k = await get('/api/standen/keuzes');
-  ok(`GET /api/standen/keuzes: 8 sjablonen, 8 kratten, hub-sets dj en studio (paden niet), profielen uit avondpakket/profielen.json (samengevoegd met draagbaar)`, k.status === 200 && k.j.sjablonen.length === 8
+  // Het aantal sjablonen komt uit het bestand (spoor S10: 33 in plaats van 8).
+  const SJABLONEN = JSON.parse(readFileSync(new URL('../racks/sjablonen.json', import.meta.url), 'utf8')).racks.map((r) => r.name);
+  ok(`GET /api/standen/keuzes: alle ${SJABLONEN.length} sjablonen, 8 kratten, hub-sets dj en studio (paden niet), profielen uit avondpakket/profielen.json (samengevoegd met draagbaar)`, k.status === 200 && k.j.sjablonen.join() === SJABLONEN.join()
     && k.j.kratten.length === 8 && k.j.hubSets.join() === 'dj,studio' && Array.isArray(k.j.profielen)
     && ['apc', 'alles', 'maschine', 'laptop'].every((n) => k.j.profielen.includes(n)) && k.j.mappingNu === 'standaard');
   const apc = await get('/api/standen/apc');

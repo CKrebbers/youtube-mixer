@@ -77,6 +77,8 @@ src/
                     fx-lfo.js       LFO van tremolo/autopan: vrij of op de maat (buffer + playbackRate, fase op de audioklok)
                     fx-kern.js      rekenkernen van de effect-worklets (toonhoogte, omhullende), afvalvrij. Puur.
                     fx-worklet.js   de AudioWorklet eromheen (laadt pas bij gebruik, één keer per context)
+                    fx-s10.js       zeven effecten van spoor S10 (kam … duiker), in EFFECTEN achter fx-meer.js (docs/EFFECTEN-MEER.md)
+                    modulatie.js    modulators van een rack (lfo, stap, volger, toeval): offsets op de audioklok. Puur.
                     rack.js         racks als data: macro's, curves, migratie
                     deck.js         transport, cues, loops, beatjump, quantize, rem, beatgrid, stems + stemkanalen (geluid zit in bron.js)
                     sampler.js      acht pads: knippen op het grid, loopen op de maat van wat je hoort
@@ -99,6 +101,7 @@ src/
                     limiter-kern.js de limiter als rekenwerk: vooruitblik 1,5 ms, −1 dBTP (4×), gekoppeld, afvalvrij. Puur.
                     limiter-worklet.js  de AudioWorklet eromheen (uitgang 1 = de gain, voor de gain reduction)
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
+                    acties-effecten.js  spoor S10: track.N.fx.xy.x/.y en master.fx.xy.* (de twee knoppen die het rack in `xy` noemt)
                     acties-precisie.js  werkruimte S1: fase duwen, jog, ±1 ms, beatjump ¼/½/1, op de 1, bend-sterkte, duoklik; Duwer (15 ms samenvoegen) (docs/werkruimte/S1.md)
                     keyboard.js     toetsen -> actions
                     midi.js         Web MIDI: poorten, parsen, sysex. Kent geen actions.
@@ -254,6 +257,7 @@ server/             draait apart: `node server/index.js`
   proef.js          de speellijst van de Controlekamer: proef/sessie.json, per punt, atomisch; archief per ronde
   mixer-melding.js  de melding van de mixer voor de companion (POST/GET /api/mixer): isMelding, vanDezeMac, MixerStand (alleen geheugen). Puur.
   handelingen.js    handelingenlogs naast de opnames: stukken op hun plek, lijst, lezen
+  sjablonen.js      spoor S10: eigen sjablonen (racks/eigen.json, VARVE_SJABLONEN), versie + 409, alleen deze Mac (routes/sjablonen.js)
   stems.js          de stems-rij: Demucs starten (nice), één tegelijk, annuleren, werkmap, nalopen, verhuizen
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
   kaart.js          de muziekkaart als zoeklaag: varve-kaart.json in het geheugen (zoeken/filteren/sorteren/pagineren), binnen = tracks.id,
@@ -351,6 +355,8 @@ test/
   beatgrid.test.mjs beatrekenen, grid bewerken, tap tempo met een misser erin
   detect.test.mjs   beatdetectie op materiaal waarvan het antwoord bekend is
   rack.test.mjs     macro-resolutie met een gouden bestand, migratie, onbekende effecten
+  modulatie.test.mjs, effecten-s10.test.mjs, sjablonen-server.test.mjs, sjablonen-paneel.test.mjs  spoor S10: modulators, rackformaat,
+                    muteren; de zeven effecten en hun kernen (0 GC); /api/sjablonen; de bouwsteen sjablonen en de XY-actions (nep-fx.mjs = de mock)
   effecten.test.mjs de effecten uit de filter app: contract, eenheden = zet(), lussen, inloop, twee koppen, LFO op de maat, worklets, 0 GC
   stream.test.mjs   streamkern tegen ffmpeg (bit voor bit), pagina-plan, StreamBron
   video.test.mjs    video volgt audio: bijsturen, springen, zichtbaarheid
@@ -1964,6 +1970,39 @@ Volledig in `docs/WERKRUIMTE.md` ("Gebouwd") en `docs/werkruimte/S0–S8.md`; vr
 - **✎ inrichten** (`src/werk/inrichten.js`): elke bewerking = één opslag met versie, het model toetst vooraf; toewijzen aan
   een groep knoppen gaat in een eigen mapje `p-<paneel>` dat het deel openzet; terug = `POST /api/werkruimtes/<naam>/terug` (409).
 - **Totaalmeting**: `tools/headless/werk-alles.mjs` (C6). Wie iets per beeld toevoegt aan de mixer of mac-2: opnieuw meten.
+
+## Meer effecten, sjablonen en modulators (14 okt, spoor S10)
+
+Volledig in `docs/EFFECTEN-MEER.md` (ontwerp + "Gebouwd"), vragen in VRAGEN blok S10. Wat een bouwer niet mag missen:
+- Het rackformaat blijft SCHEMA 1; alles is optioneel: `mods`, `xy`, `uitleg`, `meng` per effect, `kromme` per
+  koppeling, doelen `plek.K`, `mod.N.diepte` en `<slot>._nat`. Een rack zonder die velden laadt, klinkt en schrijft
+  bit voor bit als voorheen (`bouwKeten` maakt alleen een droog/nat-pad als het rack erom vraagt). `schrijfRack`
+  bewaart onbekende velden op het hoogste niveau (behalve `_…`), en een onbekende modulator blijft als ruwe JSON.
+- Modulators (`src/engine/modulatie.js`) zijn een BESTURING: InsertSlot rekent elke 33 ms (`MOD_TIK`, alleen als het
+  rack modulators met een doel heeft) op `ctx.currentTime` en de klok van het deck; staat die stil, dan gebeurt er
+  niets. Ze geven een OFFSET: `leesPlek` (knopstand, soft-takeover, LED-ring) beweegt niet mee, `paramWaarde` wel.
+  Een parameter met `trappen` krijgt alleen een nieuwe stand als hij een trap verder is (`_opTrap`). De volger leest
+  een AnalyserNode op `slot.in` die pas bestaat als er een volger is. Nooit Math.random: toeval komt uit een zaad.
+- Knop → knop (`stuurPlekken`) is één niveau diep: elke knop rekent met zijn EIGEN stand. `resolveMacros` laat
+  `plek.*` en `mod.*` buiten de keten; een nieuwe plek die macro's oplost: gebruik `_waardenNu()` in InsertSlot.
+- Een nieuw doel `<slot>._nat` op een effect zonder droog/nat-pad vraagt een nieuwe keten: `natOntbreekt()` /
+  `bewerkMods().opnieuw`, en de editor doet dan `zetRack(…, { behoudStanden: true })` (kruisfade).
+- De drie nieuwe kernen (`Kam`, `Freqschuif`, `Aanslag` in fx-kern.js) volgen het audiopad: 0 GC, gemeten in
+  `test/effecten-s10.test.mjs`. Twee dingen die hier al misgingen: een keyed store van een double
+  (`this.kern[naam] = …` in de processor) en een module-constante in de lus (de grens van de aanslag) maakten
+  per blok afval; geef de processor een `zet(kern, p)` met namen en lees een grens in een veld. Niemitalo's
+  Hilbert-tabel geeft a, de trap rekent met a². Parameters die per blok binnenkomen en een lus versterken
+  (feedback van de kam) glijden per SAMPLE in de kern.
+- Een sjabloon met `uitleg` (die van S10) moet in `rack.test` ook: knopnamen, `xy` op twee knoppen, een DROGE
+  beginstand (wat een echo, galm, kam, frequentieschuif … erin mengt staat dicht; een delay via `_nat`), en
+  modulators die in de beginstand stilstaan. Nieuw sjabloon: ook `node tools/headless/effecten-meer.mjs`.
+- Eigen sjablonen: `/api/sjablonen` (bewaren met versie, 409 met wat er nu staat; geen naam van een kant-en-klaar
+  sjabloon; alleen `vanDezeMac`). In de kiezer achter de kant-en-klare (`_eigen`), dus `s:<nr>` van een
+  kant-en-klaar sjabloon verandert niet. Elke proefserver zet ook `VARVE_SJABLONEN` als hij er een POST naar doet.
+- De XY-pad van een rack: `track.N.fx.xy.x/.y` (`beginstand: false`, de plek staat al in het log). Bouwsteen
+  `sjablonen` in `src/paneel/vrij.js`; bewaren of wissen staat niet op de bus, dus nooit van de iPad.
+- De editor (`rack-editor.js`) tekent nog steeds niet tijdens het slepen: schuiven van modulators en de kromme
+  veranderen alleen getallen en hun eigen canvas (`tools/headless/rack-editor.mjs` meet het met een MutationObserver).
 
 ## Werkwijze die hier werkt
 
