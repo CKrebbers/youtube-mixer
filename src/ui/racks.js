@@ -4,6 +4,7 @@ import { trackVanDeck } from '../control/actions.js';
 import { esc } from './dom.js';
 import { meld, meldOpKnop } from './meldingen.js';
 import { RackEditor } from './rack-editor.js';
+import { leesWeg } from '../lib/antwoord.js';
 
 /**
  * Effect-racks per link: ophalen, de kiezer in de RACK-rij van het focusdeel,
@@ -201,7 +202,7 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
     rackCache[id].forEach((x) => { x.actief = x === rack; });
     engine.deck(id).fx.zetRack(rack.data, { herkomst: rack.id }).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
     naRack(id);
-    fetch(`/api/library/${deckTrack[id]}/racks/${rack.id}`, { method: 'POST' }).catch(() => {});
+    fetch(`/api/library/${deckTrack[id]}/racks/${rack.id}`, { method: 'POST' }).then(leesWeg, () => {});
   }
 
   // Door de racks bladeren (APC): eerst die van het nummer, dan de kant-en-klare.

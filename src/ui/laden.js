@@ -7,6 +7,7 @@ import { computePeaks, rmsDb, laadPeaks } from '../analysis/peaks.js';
 import { renderDemoTrack } from '../analysis/demo-track.js';
 import { meld } from './meldingen.js';
 import { aantalOpBus } from './stems-weergave.js';
+import { leesWeg } from '../lib/antwoord.js';
 
 /**
  * Laden en wat bij het geladen nummer hoort: de demotrack en losse bestanden
@@ -149,6 +150,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
           // fetch gooit niet bij een 404. Zonder deze controle denkt hij dat het
           // gelukt is en probeert hij het nooit meer.
           if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+          await leesWeg(res);
         } catch (err) {
           gridBewaard[id] = null;              // volgende ronde opnieuw proberen
           console.warn('[grid] niet bewaard:', err.message);
@@ -178,6 +180,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ toon: kaart ? kaart.toJSON() : null }),
         });
+        await leesWeg(res);
         if (res.status >= 400 && res.status < 500) {
           meld(`toonsoort van track ${trackVanDeck(id)} niet bewaard: ${res.status} ${res.statusText}`, 'fout');
           continue;

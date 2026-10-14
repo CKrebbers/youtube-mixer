@@ -1,4 +1,5 @@
 import { isVerschil, normaliseer, verschilVanKopie, MAPPING_VERSIE } from '../control/mapping.js';
+import { leesWeg } from '../lib/antwoord.js';
 
 /**
  * Waar je eigen MIDI-mapping staat, en in welke vorm (ROADMAP 13, 25 sep 2026).
@@ -110,7 +111,7 @@ export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => 
     clearTimeout(timer);
     const stuur = () => {
       bezig = haal('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mapping: doc }) })
-        .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return true; })
+        .then((r) => { leesWeg(r); if (!r.ok) throw new Error(`${r.status}`); return true; })
         .catch((err) => { meld(`mapping niet op de server bewaard (${err.message}) — staat wel in deze browser`, 'fout'); return false; });
       return bezig;
     };

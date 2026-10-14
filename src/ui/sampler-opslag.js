@@ -1,6 +1,7 @@
 import { DECK_IDS } from '../engine/engine.js';
 import { trackVanDeck } from '../control/actions.js';
 import { meld } from './meldingen.js';
+import { leesWeg } from '../lib/antwoord.js';
 
 /*
  * Sampler-pads bij het nummer. Laad je een nummer, dan komen zijn bewaarde
@@ -43,14 +44,14 @@ export function opzetSamplerOpslag({ engine, staat }) {
     fetch(`/api/library/${trackId}/samples`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pad: n + 1, van: info.van, tot: info.tot, tellen: info.tellen, bpm: info.bpm }),
-    }).then((r) => { if (!r.ok) throw new Error(`${r.status}`); })
+    }).then((r) => { leesWeg(r); if (!r.ok) throw new Error(`${r.status}`); })
       .catch((err) => meld(`pad ${n + 1} niet bewaard (${err.message})`, 'fout'));
   };
   sampler.onVergeet = (n, h) => {
     const trackId = deckTrack[h.deckId];
     if (!trackId || nietBewaren(h.deckId)) return;
     fetch(`/api/library/${trackId}/samples/${n + 1}`, { method: 'DELETE' })
-      .then((r) => { if (!r.ok) throw new Error(`${r.status}`); meld(`pad ${n + 1} vergeten`); })
+      .then((r) => { leesWeg(r); if (!r.ok) throw new Error(`${r.status}`); meld(`pad ${n + 1} vergeten`); })
       .catch((err) => meld(`pad ${n + 1} niet vergeten (${err.message})`, 'fout'));
   };
 
