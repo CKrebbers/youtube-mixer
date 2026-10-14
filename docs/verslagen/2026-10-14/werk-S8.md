@@ -84,7 +84,8 @@ op hun eigen apparaat). Derde run (gemiddeld over 3 rondes):
 | in rust (gestopt): nul / alles | 261 / 441 | 60 / 60 | | | | 0 / 0 |
 
 En met `--deel kaal` (alles aan, maar geen werkvak; 2 rondes): nul 473 ms/s, 35 beelden/s · alles 468 ms/s, 32
-beelden/s · alles zonder mac-2 455 ms/s, 34 beelden/s: **niets meetbaar**.
+beelden/s · alles zonder mac-2 455 ms/s, 34 beelden/s: **niets meetbaar** (let op: in KAAL staat de xy-pad niet op de
+iPhone, dus zijn 20 invokes/s komen wel binnen, worden getoetst en geweigerd, maar bewegen niets; mac-2 toont er niets).
 
 Oordeel per budget:
 - **≤ +2 ms per beeld in hoofdthreadtijd**: ✓ (Δtaak / 60 = +0,72 ms; eerdere runs +1,20 en −0,17 ms).
