@@ -1,4 +1,5 @@
 import { Emitter } from '../lib/emitter.js';
+import { houd as gedeeldHoud } from './houd.js';
 
 /**
  * Mapjes (lagen): dezelfde fysieke knoppen doen iets anders naargelang het
@@ -62,6 +63,15 @@ import { Emitter } from '../lib/emitter.js';
  *           dezelfde knop wint de grid-modus, want de mapping zoekt in de
  *           volgorde van `actief()`.
  *
+ *   houd    (14 okt, werkruimte S4, docs/werkruimte/S4.md) HOUD-MAPJES: open
+ *           zolang je een knop vasthoudt, meer tegelijk, gedeeld over alle
+ *           apparaten. Geen stand in deze groep: het register in houd.js weet
+ *           wat open is (en van welk apparaat). Leeg tot iemand er een
+ *           declareert met voegMapjeToe('houd', naam, …); dan maakt
+ *           herbindLagen() de knop `layer.houd.<naam>` op de bus (indrukken =
+ *           open, loslaten = dicht). Een Mapping zet de open houd-mapjes vóór
+ *           zijn eigen mapjes (mapping.js); actief() hieronder kent ze niet.
+ *
  * Een KIESKNOP opent een mapje. Kort drukken zet het vast. Vasthouden is
  * "even gluren": laat je los, dan ben je terug waar je was. Zit er meer dan
  * één mapje onder dezelfde kiesknop (Clip/Device View: strip, dan rack), dan loopt nog
@@ -89,6 +99,11 @@ export const GROEPEN = {
     naam: 'grid', standaard: 'hotcues',
     knoppen: { hotcues: ['hotcues'], loops: ['loops'], sampler: ['sampler'], video: ['video'], klank: ['klank'], auto: ['auto'], stems: ['stems'], patronen: ['patronen'], secties: ['secties'] },
     volgorde: ['hotcues', 'loops', 'sampler', 'video', 'klank', 'auto', 'stems', 'patronen', 'secties'],
+  },
+  // Houd-mapjes (S4): geen stand, geen standaard; elke kiesknop heeft precies zijn eigen mapje.
+  houd: {
+    naam: 'houd-mapjes', houd: true,
+    knoppen: {},
   },
 };
 
@@ -171,6 +186,8 @@ export function voegMapjeToe(groep, laag, { naam, kiesknop = laag, kleur, opAanv
   const g = GROEPEN[groep];
   if (!g) throw new Error(`mapje ${groep}.${laag}: de groep "${groep}" bestaat niet`);
   if (g.schakel) throw new Error(`mapje ${groep}.${laag}: ${g.naam} is een schakelaar, geen groep met mapjes`);
+  // Een houd-knop opent precies zijn eigen mapje (geen rondlopen, geen gluren).
+  if (g.houd && kiesknop !== laag) throw new Error(`houd-mapje ${laag}: de kiesknop is het mapje zelf (layer.houd.${laag})`);
   if (typeof laag !== 'string' || !/^[a-z0-9-]{1,32}$/.test(laag)) throw new Error(`mapje ${groep}.${laag}: geen geldige naam`);
   if (kiesknop !== null && (typeof kiesknop !== 'string' || !/^[a-z0-9-]{1,32}$/.test(kiesknop) || kiesknop === 'next' || kiesknop === 'prev')) {
     throw new Error(`mapje ${groep}.${laag}: "${kiesknop}" is geen kiesknop`);
@@ -208,7 +225,10 @@ export function haalMapjeWeg(groep, laag) {
   if (t.naamWas === undefined) delete LAAGNAAM[id]; else LAAGNAAM[id] = t.naamWas;
   delete MAPJE_KLEUR[id];
   OP_AANVRAAG.delete(id);
-  for (const l of ALLE_LAGEN) if (l.stand[groep] === laag) l.zet(groep, g.standaard);
+  for (const l of ALLE_LAGEN) {
+    if (g.houd) l.houd?.sluit(laag);
+    else if (l.stand[groep] === laag) l.zet(groep, g.standaard);
+  }
   return true;
 }
 
@@ -248,6 +268,7 @@ export const LAAGNAAM = {
   'grid.stems': 'stems (zang · rest · drums · bas · overig weg)',
   'grid.patronen': 'patronen (pad = plek per track · scene = rij op alle tracks · shift = meteen)',
   'grid.secties': 'secties van de focus-track (pad = sectie, valt in op de maat · shift = als loop)',
+  'houd.dicht': 'losgelaten (de knoppen doen weer wat ze deden)',
 };
 
 export class Lagen extends Emitter {
@@ -256,12 +277,22 @@ export class Lagen extends Emitter {
    *                     nu mee met rondlopen? Standaard nee (app.js: alleen
    *                     met een instrument op de focus-track).
    */
-  constructor({ now = () => (globalThis.performance?.now() ?? Date.now()), beschikbaar = () => false } = {}) {
+  /**
+   * @param houd  het register van de houd-mapjes (houd.js); standaard het gedeelde.
+   *              Verandert het, dan meldt deze Lagen een 'change' (groep 'houd'),
+   *              zodat scherm en mapje-balk het zien zoals een gewoon mapje.
+   */
+  constructor({ now = () => (globalThis.performance?.now() ?? Date.now()), beschikbaar = () => false, houd = gedeeldHoud } = {}) {
     super();
     this.now = now;
     this.beschikbaar = beschikbaar;
-    this.stand = Object.fromEntries(Object.entries(GROEPEN).map(([g, d]) => [g, d.standaard]));
+    this.houd = houd;
+    // De houd-groep heeft geen stand: wat open is, staat in het register.
+    this.stand = Object.fromEntries(Object.entries(GROEPEN).filter(([, d]) => !d.houd).map(([g, d]) => [g, d.standaard]));
     this.ingedrukt = {};      // groep -> { knop, vorige, t0 }
+    // Dicht (loslaten, losgekoppeld) meldt zich als 'houd.dicht': de mapje-balk zegt dan niet de naam van wat net wegging.
+    houd?.on('change', ({ naam, open }) => this.emit('change', open ? { groep: 'houd', laag: naam, id: `houd.${naam}`, open }
+      : { groep: 'houd', laag: 'dicht', id: 'houd.dicht', open: false, naam }));
     ALLE_LAGEN.add(this);
   }
 
@@ -285,11 +316,14 @@ export class Lagen extends Emitter {
     return lijst;
   }
 
-  /** Staat dit mapje (of een mapje onder deze kiesknop) open? */
-  isOpen(groep, knop) { return (GROEPEN[groep]?.knoppen[knop] || []).includes(this.stand[groep]); }
+  /** Staat dit mapje (of een mapje onder deze kiesknop) open? Een houd-mapje: in het register. */
+  isOpen(groep, knop) {
+    if (GROEPEN[groep]?.houd) return !!this.houd?.isOpen(knop);
+    return (GROEPEN[groep]?.knoppen[knop] || []).includes(this.stand[groep]);
+  }
 
   zet(groep, laag) {
-    if (!GROEPEN[groep] || this.stand[groep] === laag) return;
+    if (!GROEPEN[groep] || GROEPEN[groep].houd || this.stand[groep] === laag) return;
     this.stand[groep] = laag;
     this.emit('change', { groep, laag, id: `${groep}.${laag}` });
   }
@@ -299,6 +333,12 @@ export class Lagen extends Emitter {
     const g = GROEPEN[groep];
     const lijst = g?.knoppen[knop];
     if (!lijst) return;
+    if (g.houd) {
+      // Over de bus (scherm, toetsenbord): het apparaat heet 'bus'. Een Mapping
+      // stuurt layer.houd.* zelf naar het register, met zijn eigen apparaat.
+      this.houd?.druk('bus', lijst[0], !!on);
+      return;
+    }
     if (g.schakel) {
       // Schakelaar: bij het indrukken om, loslaten doet niets.
       if (on) this.zet(groep, this.stand[groep] === lijst[0] ? g.standaard : lijst[0]);

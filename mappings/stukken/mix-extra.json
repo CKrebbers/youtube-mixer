@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "stuk": "mix-extra",
+  "titel": "Shift + A|B = thru",
+  "uitleg": "Spoor S4 (docs/werkruimte/S4.md). Shift + de A|B-knop van een track zet hem meteen op thru (los van de crossfader), zonder langs A of B te gaan.",
+  "regels": {
+    "apc40mk2": [
+      {"in": "note:0:66", "shift": true, "action": "track.1.xfade.thru", "mode": "trigger", "label": "shift + A|B 1 (crossfader: thru)"},
+      {"in": "note:1:66", "shift": true, "action": "track.2.xfade.thru", "mode": "trigger", "label": "shift + A|B 2 (crossfader: thru)"},
+      {"in": "note:2:66", "shift": true, "action": "track.3.xfade.thru", "mode": "trigger", "label": "shift + A|B 3 (crossfader: thru)"},
+      {"in": "note:3:66", "shift": true, "action": "track.4.xfade.thru", "mode": "trigger", "label": "shift + A|B 4 (crossfader: thru)"},
+      {"in": "note:4:66", "shift": true, "action": "track.5.xfade.thru", "mode": "trigger", "label": "shift + A|B 5 (crossfader: thru)"},
+      {"in": "note:5:66", "shift": true, "action": "track.6.xfade.thru", "mode": "trigger", "label": "shift + A|B 6 (crossfader: thru)"},
+      {"in": "note:6:66", "shift": true, "action": "track.7.xfade.thru", "mode": "trigger", "label": "shift + A|B 7 (crossfader: thru)"},
+      {"in": "note:7:66", "shift": true, "action": "track.8.xfade.thru", "mode": "trigger", "label": "shift + A|B 8 (crossfader: thru)"}
+    ]
+  }
+}
