@@ -287,25 +287,25 @@ console.log('\nDeck.tijdlijn()');
 console.log('\naanhakers, rijen en uitleg');
 {
   const { startAanhakers, maakRenderloop, AANHAKERS } = await import('../src/ui/aanhakers.js');
-  ok('acht aanhakers in de vaste volgorde', gelijk(AANHAKERS, ['precisie', 'uitlijn', 'werk', 'combi', 'apparaten', 'maschine', 'schermen', 'inrichten']));
+  ok('negen aanhakers in de vaste volgorde (S9: set)', gelijk(AANHAKERS, ['precisie', 'uitlijn', 'werk', 'combi', 'apparaten', 'maschine', 'schermen', 'inrichten', 'set']));
   const meldingen = [];
   const ctx = { meld: (t, s) => meldingen.push([t, s]) };
   const warn = console.warn;
   console.warn = () => {};    // de aanhakers schrijven hun fout ook naar de console; hier telt de melding
   const echt = await startAanhakers(ctx);
-  ok('de acht lege aanhakers laden en starten, zonder melding', gelijk(echt.gestart, AANHAKERS) && !echt.mislukt.length && !meldingen.length);
+  ok('de lege aanhakers laden en starten, zonder melding', gelijk(echt.gestart, AANHAKERS) && !echt.mislukt.length && !meldingen.length);
   const volgorde = [];
   const nep = await startAanhakers(ctx, { laad: async (naam) => ({
     default: async () => { volgorde.push(naam); if (naam === 'combi') throw new Error('kapot'); if (naam === 'schermen') await new Promise((r) => setTimeout(r, 5)); },
   }) });
   ok('een aanhaker die gooit: één melding, de rest start (in volgorde)', meldingen.length === 1 && /combi/.test(meldingen[0][0])
-    && meldingen[0][1] === 'fout' && gelijk(volgorde, AANHAKERS) && nep.gestart.length === 7 && nep.mislukt[0].naam === 'combi');
+    && meldingen[0][1] === 'fout' && gelijk(volgorde, AANHAKERS) && nep.gestart.length === AANHAKERS.length - 1 && nep.mislukt[0].naam === 'combi');
   meldingen.length = 0;
   const kapot = await startAanhakers(ctx, { laad: async (naam) => { if (naam === 'uitlijn') throw new Error('syntaxfout'); return { default: async () => {} }; } });
-  ok('een module die niet laadt: ook één melding', meldingen.length === 1 && kapot.gestart.length === 7);
+  ok('een module die niet laadt: ook één melding', meldingen.length === 1 && kapot.gestart.length === AANHAKERS.length - 1);
   meldingen.length = 0;
   const zonder = await startAanhakers(ctx, { laad: async () => ({}) });
-  ok('een module zonder opzetfunctie: een melding per aanhaker', meldingen.length === 8 && !zonder.gestart.length);
+  ok('een module zonder opzetfunctie: een melding per aanhaker', meldingen.length === AANHAKERS.length && !zonder.gestart.length);
 
   const wacht = [];
   const rl = maakRenderloop({ raf: (f) => wacht.push(f), meld: (t) => meldingen.push([t]) });

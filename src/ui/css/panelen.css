@@ -122,3 +122,9 @@ body.wp{--deel:#7f7f7f;--deel-tekst:#07090b;overflow:auto;touch-action:manipulat
   body.wp .wp-kop{gap:8px;padding:6px 8px}
   body.wp .wp-scherm,body.wp .wp-soort{display:none}
 }
+/* Spoor S9 (docs/PLAN-SET.md §4): de live-stand van de set boven de knoppen van de bouwstenen plan en sets. */
+.wp-set{display:flex;flex-direction:column;gap:3px;padding:6px 8px;background:var(--panel);border-radius:4px;font-size:16px;margin-bottom:6px}
+.wp-set div:empty{display:none}
+.wp-set-nu{color:var(--a);font-weight:600}
+.wp-set-buiten{color:var(--warn);font-weight:700}
+.wp-set-daarna,.wp-set-laag,.wp-set-eind,.wp-set-lijst{color:var(--klein);font-size:13px}

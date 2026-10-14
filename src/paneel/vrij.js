@@ -109,6 +109,22 @@ export const BOUWSTENEN = {
     { soort: 'knop', action: 'sampler.length.up', label: 'langer' },
     { soort: 'draai', action: 'sampler.volume', label: 'volume' },
   ] }),
+  // Spoor S9 (docs/PLAN-SET.md §7): de set live. Boven de knoppen zet paneel.js de live-stand
+  // (NU / VOLGENDE / DAARNA, de eindtijd; de lijst van sets). Van buiten de Mac alleen als de
+  // werkruimte ze op dat scherm zet én `mag` ze noemt (plan.*, set.*); set.bewaar nooit.
+  plan: () => ({ titel: 'SET', items: [
+    { soort: 'knop', action: 'plan.go', label: 'GO' },
+    { soort: 'knop', action: 'plan.buiten', label: 'buiten plan' },
+    { soort: 'knop', action: 'plan.terug', label: 'terug' },
+    { soort: 'knop', action: 'plan.laag.nu', label: 'laag nu' },
+    { soort: 'knop', action: 'plan.laag.skip', label: 'laag weg' },
+  ] }),
+  sets: () => ({ titel: 'SETS', items: [
+    { soort: 'knop', action: 'set.prev', label: '◀ set' },
+    { soort: 'knop', action: 'set.next', label: 'set ▶' },
+    { soort: 'knop', action: 'set.moment', label: 'met mixer' },
+    { soort: 'knop', action: 'set.terugladen', label: 'laad set' },
+  ] }),
 };
 
 /** 'fx', 'strip:3' … -> { soort, track } (track = '{focus}' of een nummer), of null. Puur. */

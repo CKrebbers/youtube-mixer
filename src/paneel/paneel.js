@@ -83,9 +83,11 @@ function bouwVak(naam, w) {
     return { naam, el, stap: () => k.toon(verb.kaart()), stop: () => { k.vernietig(); el.remove(); } };
   }
   if (soort === 'bouwsteen') {
+    // Spoor S9: de set (plan, sets) krijgt de live-stand boven zijn knoppen.
+    const set = /^(plan|sets)$/.test(naam) ? setVak(naam, el) : null;
     const def = bouwsteenDef(naam, { bestaat: (a) => !!verb.metaOf(a), vars: verb.vars() });
     const p = new VrijPaneel(el, def, verb, { modus: 'los', id: naam });
-    return { naam, el, stap: () => p.teken(), stop: () => { p.vernietig(); el.remove(); }, paneel: p };
+    return { naam, el, stap: () => { set?.stap(); p.teken(); }, stop: () => { set?.stop(); p.vernietig(); el.remove(); }, paneel: p };
   }
   if (soort === 'library') return libraryVak(naam, el);
   if (soort === 'stand') return standVak(naam, el);
@@ -161,6 +163,49 @@ function libraryVak(naam, el) {
   zoek.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(haal, 250); });
   haal();
   return { naam, el, stap() {}, stop: () => { gestopt = true; clearTimeout(timer); clearTimeout(vraag); el.remove(); } };
+}
+
+/**
+ * De live-stand van de set (spoor S9, docs/PLAN-SET.md §4) boven de knoppen van de bouwsteen
+ * `plan` of `sets`. Als venster van de mixer (mac-2) van window.opener.varveSets.live(); op de
+ * iPad van GET /api/set/live (de mixer zendt hem zolang er iemand kijkt). Hooguit 2× per seconde,
+ * alleen tekst die verandert.
+ */
+function setVak(naam, el) {
+  const blok = document.createElement('div');
+  blok.className = 'wp-set';
+  el.appendChild(blok);
+  const regels = naam === 'plan' ? ['buiten', 'nu', 'volgende', 'daarna', 'laag', 'eind'] : ['gekozen', 'lijst'];
+  const r = Object.fromEntries(regels.map((k) => { const d = document.createElement('div'); d.className = `wp-set-${k}`; blok.appendChild(d); return [k, d]; }));
+  let t = 0, bezig = false, gestopt = false;
+  const toonPlan = (l) => {
+    zet(r.buiten, l?.buiten ? 'BUITEN PLAN' : '');
+    for (const k of ['nu', 'volgende', 'daarna', 'laag', 'eind']) zet(r[k], l?.tekst?.[k] ?? '');
+    if (!l) zet(r.nu, 'nog geen stand van de mixer');
+  };
+  const toonSets = (s) => {
+    zet(r.gekozen, s?.gekozen ? `gekozen: ${s.gekozen}${s.metMoment ? ' · met mixer' : ''}${s.vraag ? ' · nog eens = zeker' : ''}` : 'nog geen sets');
+    zet(r.lijst, (s?.lijst ?? []).map((x) => `${x.naam === s.gekozen ? '▶ ' : ''}${x.naam} (${x.nummers})`).join(' · '));
+  };
+  async function haal() {
+    if (bezig || gestopt) return;
+    bezig = true;
+    try {
+      let l = null;
+      if (verb.soort === 'opener') {
+        const v = window.opener?.varveSets;
+        l = v ? { ...(await v.live()), sets: v.stand() } : null;
+      } else {
+        const res = await fetch('/api/set/live', { cache: 'no-store' });
+        l = res.ok ? (await res.json()).stand : null;
+      }
+      if (!gestopt) { if (naam === 'plan') toonPlan(l); else toonSets(l?.sets ?? null); }
+    } catch (_) { /* de rode balk zegt het al */ } finally { bezig = false; }
+  }
+  return {
+    stap() { const n = performance.now(); if (n - t > 500) { t = n; haal(); } },
+    stop() { gestopt = true; blok.remove(); },
+  };
 }
 
 function standVak(naam, el) {

@@ -60,3 +60,21 @@ export function liveStand({ stand, plan = null, voorspelling = null, titelVan = 
   };
   return { aan: !!s.aan, fase: s.fase ?? 'uit', buiten: !!s.buiten, nu, volgende, daarna, laag, eind, tekst };
 }
+
+/**
+ * Een lezer van de live-stand van een automaat: () => liveStand(…). De voorspelling wordt alleen
+ * opnieuw gerekend als het plan (het object) of de library verandert, niet per beeld.
+ */
+export function maakLiveLezer(auto, { voorspel: vs = null } = {}) {
+  let planVan = null, tracksVan = null, v = null, kaart = new Map();
+  return async function lees(nuMs = Date.now()) {
+    if (auto.plan !== planVan || auto.tracks !== tracksVan) {
+      planVan = auto.plan;
+      tracksVan = auto.tracks;
+      kaart = new Map((auto.tracks || []).map((t) => [t.id, t]));
+      const f = vs ?? (await import('./tijdlijn.js')).voorspel;
+      try { v = auto.plan ? f(auto.plan, kaart) : null; } catch { v = null; }
+    }
+    return liveStand({ stand: auto.stand(), plan: auto.plan, voorspelling: v, titelVan: (id) => kaart.get(id)?.titel ?? id, nuMs });
+  };
+}

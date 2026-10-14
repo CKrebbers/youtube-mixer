@@ -111,7 +111,8 @@ console.log('\nde iPad schrijft alleen via de schrijfweg (S8)');
   ok(`alleen schrijver.js doet een POST (geen PUT/PATCH/DELETE, geen sendBeacon/WebSocket/XHR)${schrijvend.length ? ` (POST in ${schrijvend.join(', ')})` : ''}`,
     schrijvend.join() === 'schrijver.js' && !/['"`](PUT|PATCH|DELETE)['"`]|sendBeacon|new\s+WebSocket|XMLHttpRequest/.test(code['schrijver.js']));
   const paden = bestanden.flatMap((f) => [...code[f].matchAll(/(['"`])(\/api\/[^'"`?$]*)/g)].map((m) => [f, m[2]]));
-  const LEZEN = ['/api/paneel/ping', '/api/paneel/live', '/api/library', '/api/paneel/wie'];
+  // /api/set/live (S9): de live-stand van de set voor het vak plan/sets, alleen GET.
+  const LEZEN = ['/api/paneel/ping', '/api/paneel/live', '/api/library', '/api/paneel/wie', '/api/set/live'];
   const SCHRIJVEN = ['/api/paneel/invoke', '/api/paneel/koppel'];
   ok(`lezen: ping, live, library, wie; schrijven alleen invoke en koppel, en alleen in schrijver.js (${[...new Set(paden.map((x) => x[1]))].sort().join(' ')})`,
     paden.every(([f, p]) => LEZEN.includes(p) || (SCHRIJVEN.includes(p) && f === 'schrijver.js')));
