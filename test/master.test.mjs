@@ -4,6 +4,7 @@
 // nep-Web Audio (bedrading, de wissel van compressor naar worklet, actions,
 // reads), wat je hoort (hoorbaar.js), het scherm (puur) en de APC.
 // Draai met: node test/master.test.mjs
+// @alleen: afvalmeting (GCProfiler, 0 GC in de limiter) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import v8 from 'node:v8';
 /** De jonge ruimtes van V8: daar landt afval per blok (zie de afvalmetingen hieronder). */
 const JONG = ['new_space', 'new_large_object_space'];

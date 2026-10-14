@@ -1,6 +1,7 @@
 // De klankschaal: stemming (puur), het geluid (de kern, zonder browser), de
 // klasse met een nep-worklet, en de actions op een engine met een nep-Web Audio.
 // Draai met: node test/klankschaal.test.mjs
+// @alleen: afvalmeting (GCProfiler, 0 GC) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import v8 from 'node:v8';
 import vm from 'node:vm';
 

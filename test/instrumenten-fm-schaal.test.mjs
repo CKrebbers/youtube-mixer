@@ -12,6 +12,7 @@
 // De metingen in Chrome (440 Hz, LUFS, uitklinken) staan in
 // tools/headless/instrumenten.mjs.
 // Draai met: node test/instrumenten-fm-schaal.test.mjs
+// @alleen: afvalmeting (0 GC per blok) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import v8 from 'node:v8';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';

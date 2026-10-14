@@ -3,6 +3,7 @@
 // herhaalbaar, vult het doek, luistert naar g.kwaliteit, en blijft binnen een
 // beeld (16 ms) per stap.
 // Draai met: node test/vormen-zwaar.test.mjs
+// @alleen: tijdsgrens per stap (hooguit 16 ms per stap) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import { readFileSync } from 'node:fs';
 
 const { SYSTEMEN_ZWAAR, kwaliteit, HALF_ONDER, SP_MAX_OMVAL, ROOSTER, sinT } = await import('../src/vormen/systemen-zwaar.js');

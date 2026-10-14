@@ -14,6 +14,7 @@
 // haalt in GEEN venster de drempel (12 000 blokken × ≥ 12 bytes = 140 kB).
 //
 // Draai met: node test/renderblok.test.mjs
+// @alleen: afvalmeting (0 GC over 12 000 blokken) en een gouden hash; telt bytes per bericht (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import v8 from 'node:v8';
 import vm from 'node:vm';
 

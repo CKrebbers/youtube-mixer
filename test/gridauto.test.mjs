@@ -3,6 +3,7 @@
 // library. Eigen server op een eigen poort met een tijdelijke database en
 // mediamap: je echte library blijft buiten schot.
 // Draai met: node test/gridauto.test.mjs
+// @alleen: tijdsgrens op de wandklok (Range p95 < 50 ms tijdens de achtergrondanalyse) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,0 +1,22 @@
+# De hele testsuite op een Mac (docs/WINST.md punt 8). KLAARGEZET, NIET AAN: hij draait
+# alleen met de hand (Actions → test → Run workflow). Aanzetten op elke PR is een keuze
+# van Clay: zet dan `pull_request:` (en eventueel `push: { branches: [main] }`) onder `on:`.
+#
+# Alleen code: geen media, geen library, geen netwerk naar YouTube (de tests gebruiken
+# nep-yt-dlp en nep-stems). Dat past bij "persoonlijk instrument": er gaat niets naar buiten.
+name: test
+on:
+  workflow_dispatch:
+jobs:
+  alles:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.8.2'
+      - name: ffmpeg
+        run: brew install ffmpeg
+      - name: tests (pool, langste eerst; @alleen-tests daarna)
+        run: node test/alles.mjs

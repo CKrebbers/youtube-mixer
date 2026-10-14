@@ -1,6 +1,7 @@
 // Vormlagen: de Vormmachines als beeldlaag over de video. Zonder browser:
 // een nep-canvas voor de systemen en een nep-WebGL voor de mixer.
 // Draai met: node test/vormen.test.mjs
+// @alleen: tijdsgrens per stap (ms per stap van elk systeem) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import { readFileSync } from 'node:fs';
 
 const { SYSTEMEN, SYSTEEM, draaiKnoppen, maakRng, ACHTERGROND, LUTS } = await import('../src/vormen/systemen.js');

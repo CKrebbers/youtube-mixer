@@ -4,6 +4,7 @@
 // de app (640 × 360, ROADMAP 7): het hele doek, niets uitgerekt, en het
 // geluid precies als op het oude vierkant.
 // Draai met: node test/vormen-isomorf.test.mjs
+// @alleen: tijdsgrens per stap (ms per stap) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import { readFileSync } from 'node:fs';
 
 const { SYSTEMEN_ISOMORF, beeldKnoppen, klinkt, modalBuffer, drumCache, luchtCache, LUCHT_C, LUCHT_MODI, LUCHT_GESCHIEDENIS, fourier, epShape, midiFrom, mtof, nname } =
