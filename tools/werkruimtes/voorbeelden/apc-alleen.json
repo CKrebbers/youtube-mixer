@@ -21,7 +21,7 @@
     "fx": {
       "label": "FX", "kleur": "violet",
       "apc40mk2": { "grid": "fx", "device": "rack" },
-      "schermen": { "hoofd": { "werkvak": "paneel:super", "rijen": ["master"] } }
+      "schermen": { "hoofd": { "werkvak": "fx", "rijen": ["master"] } }
     },
     "stems": {
       "label": "STEMS", "kleur": "zeegroen",

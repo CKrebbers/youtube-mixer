@@ -248,6 +248,29 @@ try {
   const fx = wissel.filter((w) => w.deel === 'FX').map((w) => w.kleurMs);
   ok('FX: de grid in de kleur van het deel (fx-matrix violet), elke ronde', fx.every((x) => x !== null), fx.map((x) => (x === null ? 'geen' : ms(x))).join(', '));
 
+  // ---- het werkvak van S7 volgt het deel dat de Maschine kiest ----------------------------------
+  // (integratie S6 + S7: F1–F8 gaan over de bus naar werk.kiesDeel, het event 'werkruimte' komt in het
+  // volgende beeld, en schermen.js zet het vak van schermen.hoofd.werkvak; zonder vak verborgen.)
+  console.log('\nhet werkvak (S7) volgt het deel van de Maschine');
+  const vakNu = () => doe(() => {
+    const el = document.getElementById('werkvak');
+    const fout = [...document.querySelectorAll('#meldingen > *')].map((m) => m.textContent).filter((t) => t.includes('werkvak'));
+    return { verborgen: !el || el.hidden, paneel: !!el?.querySelector('.vp'), knoppen: el?.querySelectorAll('[data-action]').length ?? 0,
+      kinderen: el?.children.length ?? 0, fout };
+  });
+  const vakVoor = {};
+  for (const [f, naam] of [['f3', 'fx'], ['f4', 'stems'], ['f1', 'mix'], ['f3', 'fx']]) {
+    m.tik(f);
+    await tot(() => doe((n) => window.werk.deel === n, naam), 3000);
+    await wacht(150);
+    vakVoor[`${naam}${vakVoor[naam] ? '2' : ''}`] = await vakNu();
+  }
+  ok('F3 (FX, werkvak "fx"): het werkvak toont het paneel met de knoppen van het rack', !vakVoor.fx.verborgen && vakVoor.fx.paneel && vakVoor.fx.knoppen > 0,
+    JSON.stringify(vakVoor.fx));
+  ok('F4 (STEMS, geen werkvak): het werkvak verborgen', vakVoor.stems.verborgen, JSON.stringify(vakVoor.stems));
+  ok('F1 (MIX, werkvak "uitlijn-strook"): het werkvak toont de uitlijn', !vakVoor.mix.verborgen && vakVoor.mix.kinderen > 0, JSON.stringify(vakVoor.mix));
+  ok('terug naar F3: het paneel opnieuw, en geen melding "werkvak … ken ik niet"', vakVoor.fx2.paneel && !vakVoor.fx2.fout.length, JSON.stringify(vakVoor.fx2.fout));
+
   // ---- wat de Maschine per tik kost, per deel ----------------------------------------------------
   console.log('\nwat een tik van de Maschine kost (lampjes + schermen, de schermen elke keer opnieuw), per deel');
   const kosten = await doe(async () => {

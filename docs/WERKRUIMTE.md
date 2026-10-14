@@ -312,7 +312,7 @@ overschrijven, zoals plannen en patronen.
       "label": "FX", "kleur": "violet",
       "apc40mk2":     { "grid": "fx", "device": "rack" },
       "maschine-mk2": { "pads": "worpen", "pagina": "rack", "wiel": "rack", "scherm": ["rack", "super"] },
-      "schermen": { "hoofd": { "werkvak": "paneel:super", "rijen": ["master"] }, "ipad": { "vakken": ["paneel:super", "kaart"] } }
+      "schermen": { "hoofd": { "werkvak": "fx", "rijen": ["master"] }, "ipad": { "vakken": ["fx", "kaart"] } }
     },
     "stems": {
       "label": "STEMS", "kleur": "zeegroen",
