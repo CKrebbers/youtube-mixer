@@ -241,8 +241,13 @@ export function leesRack(data, { bekendType = () => true } = {}) {
 
   // Modulators (S10, src/engine/modulatie.js). Een soort die deze versie niet kent blijft
   // als ruwe JSON staan en doet niets (zoals een onbekend effect).
-  rack.mods = (Array.isArray(d.mods) ? d.mods : []).filter((x) => x && typeof x === 'object').slice(0, MAX_MODS)
+  const ruweMods = (Array.isArray(d.mods) ? d.mods : []).filter((x) => x && typeof x === 'object');
+  if (ruweMods.length > MAX_MODS) fouten.push(`${ruweMods.length} modulators: alleen de eerste ${MAX_MODS} tellen`);
+  rack.mods = ruweMods.slice(0, MAX_MODS)
     .map((x, i) => {
+      // Een soort die deze versie niet kent: helemaal ongeschonden laten (ook zijn doelen).
+      if (!MOD_SOORT_BEKEND.includes(x.soort)) return x;
+      if (Array.isArray(x.doelen) && x.doelen.length > MAX_DOELEN) fouten.push(`modulator ${i + 1}: ${x.doelen.length} doelen, alleen de eerste ${MAX_DOELEN} tellen`);
       const doelen = (Array.isArray(x.doelen) ? x.doelen : []).filter((dl) => {
         if (!dl || typeof dl.target !== 'string') { fouten.push(`modulator ${i + 1}: doel zonder target`); return false; }
         if (isPlekDoel(dl.target)) return true;
@@ -269,6 +274,8 @@ export function leesRack(data, { bekendType = () => true } = {}) {
   return { rack, fouten };
 }
 
+/** De soorten modulators die deze versie kent (zelfde lijst als MOD_SOORTEN in modulatie.js; rack.js blijft zonder imports). */
+const MOD_SOORT_BEKEND = ['lfo', 'stap', 'volger', 'toeval'];
 /** Hooguit zoveel modulators per rack, en zoveel doelen per modulator. */
 export const MAX_MODS = 4, MAX_DOELEN = 8;
 

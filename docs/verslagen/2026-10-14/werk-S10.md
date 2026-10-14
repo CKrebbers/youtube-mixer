@@ -99,7 +99,9 @@ spreiding).
 4. Klik op een vrije knop bovenaan (bijv. 1) en op **knop 1 gebruiken**: hij staat meteen op **OPEN**.
 5. Draai aan de effecten tot het klinkt zoals het moet als de knop open staat (bijv. kam-meng en
    galm-meng omhoog). Klik **DICHT** en draai wat er moet gebeuren bij een dichte knop. Klik nog eens om
-   te stoppen. (Gemeten: 8 handelingen voor één knop op twee effecten, tot en met bewaren.)
+   te stoppen. (Gemeten met de muis: 15 handelingen voor één knop op twee effecten, open én dicht
+   ingesteld, tot en met bewaren; een keuzelijst telt als twee klikken. Plus één per effect dat je
+   eerst weghaalt.)
 6. Geef de knop een naam rechts ("Zingen"), en eventueel bij "meer" (▸) een eigen kromme of een
    venster.
 7. Optioneel: **+ modulator…** onder de keten (bijv. LFO, op de maat, 1/1, doel "Kam toon",
@@ -119,6 +121,36 @@ spreiding).
   glijden (×1,9). Staart tot 10 s (30 Hz op 97% = 7,6 s), frequentieschuif 0,25 s.
 - Klinker: was 10–18 dB zachter dan droog; nu −3 dB op de standaard (Q 20: −12 dB, begrensd).
 - Master-lijm: de make-up-knop stond in de beginstand op +3 dB (knop 0,5 op een bereik 0,5 → 0,75).
+
+## Review (twee agenten, één ronde) en wat er veranderde
+
+(a) correctheid en geluid, (b) bruikbaarheid en bewijs; elk met scratch-scripts en eigen runs.
+Opgelost (met een test erbij):
+- **(b1, blokkerend)** een eigen sjabloon wissen verschoof de herkomst `s:<nr>` van andere tracks, en
+  een tweede "wis" wiste dan het verkeerde. Nu heet een eigen sjabloon `e:<naam>`.
+- **(a1, b2)** een modulator of doel weghalen liet de parameter op zijn laatste gemoduleerde stand
+  (het scherm zei iets anders). Nu `_herstelLos` (ook bij het weghalen van een koppeling, wat al vóór
+  S10 zo was).
+- **(a2, b3)** elke schuifbeweging in de editor zette een vrije LFO terug naar zijn begin. Nu houdt een
+  modulator die dezelfde soort blijft zijn stand.
+- **(b5, b6, a10)** droog/nat per effect was equal-power: halverwege tot +4 dB bij crush/filter, en
+  bij de delay haalde het het droge weg en kapte de staart af (Dub-echo was geen worp). Nu lineair,
+  en bij de delay een stuur vóór de echo.
+- **(a3)** snelle modulators op de maat (1/16, 1/32) vouwden op 30 Hz en stappen vielen tot 33 ms te
+  laat: tik 8 ms voor die modulators.
+- **(a4)** de (onzichtbare) "link erbij" kon het droog/nat kiezen; gefilterd.
+- **(a5)** een hapering van meer dan een halve maat liet de tellenteller teruglopen.
+- **(a7)** een onbekende modulator verloor zijn doelen; nu helemaal ongeschonden, en afkappen meldt het.
+- **(a9)** de duiker duikt op 1/2 en 1/1 nu op de "1".
+- **(b4, b7)** de uitleg van Wegspoelen klopte niet; Band zakt weg was in de beginstand niet droog
+  (nu meng 0, knop 1 zet hem erin); Master-lijm zegt nu dat hij voor de master is (6 ms vooruitblik).
+- **(b8)** de telling van de handelingen trok vast 3 af en sloeg DICHT over; nu eerlijk (15), en het
+  bewaarde sjabloon moet droog zijn in de beginstand.
+- **(b9–b14)** hoofdletters bij een kant-en-klare naam, overschrijven van een ander eigen sjabloon
+  (tweede klik), de uitleg die meeging, "verandert niets" bij de kromme, de ontbrekende testuitslag,
+  tijdelijke mappen van de proef.
+Niet opgelost, gedocumenteerd: de kam kan +18 dB geven op zijn grondtoon (a8); `.versies/` van eigen
+sjablonen (b10, optie); modulators staan stil in een verborgen tabblad (de timer).
 
 ## Wat alleen met de oren te beoordelen is
 

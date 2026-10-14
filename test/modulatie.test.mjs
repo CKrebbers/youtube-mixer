@@ -133,6 +133,10 @@ const RACK = {
     macros: [{ place: 1, links: [{ target: 'a.freq', kromme: [5] }] }] }, { bekendType: bekend });
   ok(`klaagt over een fout xy, een doel zonder slot, een modulator op zichzelf, een kapotte kromme (${fout.fouten.length})`,
     fout.fouten.length === 4 && !fout.rack.xy && fout.rack.mods[0].doelen.length === 0 && !fout.rack.macros[0].links[0].kromme);
+  const toekomst = R.leesRack({ ...RACK, mods: [{ soort: 'wolk', doelen: [{ target: 'z.bestaat.niet', snelheid: 3 }, { target: 'mod.9.hz' }], extra: 1 }] }, { bekendType: bekend });
+  ok('een onbekende soort modulator blijft helemaal ongeschonden, ook zijn doelen', JSON.stringify(R.schrijfRack(toekomst.rack).mods[0]) === JSON.stringify({ soort: 'wolk', doelen: [{ target: 'z.bestaat.niet', snelheid: 3 }, { target: 'mod.9.hz' }], extra: 1 }));
+  const teveel = R.leesRack({ ...RACK, mods: Array.from({ length: 6 }, () => ({ soort: 'lfo', doelen: [] })) }, { bekendType: bekend });
+  ok('meer dan vier modulators: afgekapt MET een melding', teveel.rack.mods.length === 4 && teveel.fouten.some((f) => /6 modulators/.test(f)));
   const oud = R.leesRack({ name: 'oud', chain: [{ slot: 'a', type: 'delay' }], macros: [] }, { bekendType: bekend });
   const oudUit = R.schrijfRack(oud.rack);
   ok('een rack zonder de nieuwe velden schrijft ze ook niet', !('mods' in oudUit) && !('xy' in oudUit) && !('uitleg' in oudUit) && !('meng' in oudUit.chain[0]));
@@ -227,12 +231,20 @@ const laatste = (p) => p.events.filter((e) => e[0] === 'setTargetAtTime').at(-1)
   const oud = fx.keten.node;
   const ketenIn = oud.in;
   ok('zonder meng: de ingang gaat recht het effect in (oude bedrading)', ketenIn.naar.length === 1);
-  fx.zetRack({ name: 'nat', chain: [{ slot: 'a', type: 'delay', meng: 0.25 }], macros: [{ place: 1, default: 0, links: [{ target: 'a._nat', from: 0.25, to: 1 }] }] });
+  fx.zetRack({ name: 'nat', chain: [{ slot: 'a', type: 'filter', meng: 0.25 }], macros: [{ place: 1, default: 0, links: [{ target: 'a._nat', from: 0.25, to: 1 }] }] });
   const s = fx.keten.node.slots.get('a');
-  ok('met meng: droog en nat equal-power (0,25)', s.nat && bij(s.nat.droog.gain.value, Math.cos(0.25 * Math.PI / 2)) && bij(s.nat.nat.gain.value, Math.sin(0.25 * Math.PI / 2)));
+  ok('met meng: droog en nat LINEAIR (0,25: 0,75 / 0,25; equal-power gaf +3 dB halverwege bij een effect dat op zijn ingang lijkt)', s.nat && bij(s.nat.droog.gain.value, 0.75) && bij(s.nat.nat.gain.value, 0.25) && !s.nat.stuur);
   fx.setPlek(1, 1);
   ok('een knop op a._nat zet hem helemaal nat (glijdend)', bij(laatste(s.nat.nat.gain), 1) && bij(laatste(s.nat.droog.gain), 0, 1e-12));
-  ok('het droge pad loopt van de ingang van het effect naar de som', bereikbaar(fx.keten.node.in).has(s.nat.droog));
+  fx.zetRack({ name: 'stuur', chain: [{ slot: 'a', type: 'delay', meng: 0 }], macros: [{ place: 1, default: 0, links: [{ target: 'a._nat', from: 0, to: 1 }] }] });
+  const sd = fx.keten.node.slots.get('a');
+  ok('de delay (alleen nat): droog/nat is een STUUR vóór de echo, droog blijft vol, de uitgang van de echo blijft open',
+    sd.nat.stuur && sd.nat.droog.gain.value === 1 && sd.nat.nat.gain.value === 1 && sd.nat.stuur.gain.value === 0
+    && fx.keten.node.in.naar.some((v) => v.doel === sd.nat.stuur) && sd.nat.stuur.naar.some((v) => v.doel === sd.inst.in));
+  fx.setPlek(1, 1); fx.setPlek(1, 0);
+  ok('… knop terug: het stuur dicht, de staart rolt door (uitgang nog open)', bij(laatste(sd.nat.stuur.gain), 0, 1e-12) && sd.nat.nat.gain.value === 1 && sd.nat.droog.gain.value === 1);
+  fx.zetRack({ name: 'nat', chain: [{ slot: 'a', type: 'filter', meng: 0.25 }], macros: [{ place: 1, default: 0, links: [{ target: 'a._nat', from: 0.25, to: 1 }] }] });
+  ok('het droge pad loopt van de ingang van het effect naar de som', bereikbaar(fx.keten.node.in).has(fx.keten.node.slots.get('a').nat.droog));
   ok('de editor kan naar _nat, knoppen en modulators wijzen', fx.doelen().some((d) => d.target === 'a._nat')
     && fx.andereDoelen(1).length === 0 && fx.andereDoelen(2).some((d) => d.target === 'plek.1'));
 }
@@ -245,6 +257,45 @@ const laatste = (p) => p.events.filter((e) => e[0] === 'setTargetAtTime').at(-1)
   const r2 = fx.bewerkMods([{ soort: 'lfo', sync: false, hz: 1, doelen: [{ target: 'a._nat', diepte: 0.2 }] }]);
   ok('bewerkMods: naar een parameter = geen nieuwe keten; naar _nat zonder droog/nat-pad = wel', !r1.opnieuw && r2.opnieuw);
   clearInterval(fx._modTimer);
+}
+
+{
+  // Review S10: een modulator weghalen zet het doel terug op zijn eigen stand.
+  staat.NOW = 7;
+  const fx = new InsertSlot(new MockContext());
+  fx.zetRack({ name: 'x', chain: [{ slot: 'a', type: 'filter', params: { freq: 0.5, reso: 0.2 } }], macros: [],
+    mods: [{ soort: 'lfo', sync: false, hz: 1, diepte: 1, doelen: [{ target: 'a.reso', diepte: 0.5 }] }] });
+  const lp = fx.keten.node.slots.get('a').inst;
+  ok('met de LFO: reso 0,7 naar het effect', bij(fx._toegepast.get('a.reso'), 0.7));
+  const zetten = [];
+  const echt = fx.keten.node.zet;
+  fx.keten.node.zet = (t, v, n) => { zetten.push([t, v]); return echt(t, v, n); };
+  fx.bewerkMods([]);
+  ok('modulator weg: reso krijgt zijn eigen stand terug (0,2), en het scherm zegt hetzelfde', zetten.some(([t, v]) => t === 'a.reso' && bij(v, 0.2)) && bij(fx.paramWaarde('a', 'reso'), 0.2));
+  void lp;
+  // De stand van een modulator blijft bij bewerken (een schuif in de editor), als de soort gelijk blijft.
+  fx.bewerkMods([{ soort: 'lfo', sync: false, hz: 1, diepte: 1, doelen: [{ target: 'a.reso', diepte: 0.5 }] }]);
+  staat.NOW = 7.25; fx._modTik();
+  const voor = fx._mods.staten[0];
+  fx.bewerkMods([{ soort: 'lfo', sync: false, hz: 1, diepte: 0.9, doelen: [{ target: 'a.reso', diepte: 0.5 }] }]);
+  staat.NOW = 7.5; fx._modTik();
+  ok(`bewerken houdt de fase: na een halve periode staat de sinus op −1 (reso ${fx._toegepast.get('a.reso')?.toFixed(3)})`, fx._mods.staten[0] === voor && bij(fx._toegepast.get('a.reso'), 0));   // zonder: opnieuw vanaf 0 → cos(π/2) = 0 → 0,2
+  fx.bewerkMods([{ soort: 'toeval', sync: false, hz: 1, doelen: [{ target: 'a.reso', diepte: 0.5 }] }]);
+  ok('een andere soort begint opnieuw', fx._mods.staten[0] !== voor);
+  ok('snelle modulator op de maat (1/16): fijne tik (8 ms); traag: 33 ms', (fx.bewerkMods([{ soort: 'stap', deling: '1/16', doelen: [{ target: 'a.reso', diepte: 0.5 }] }]), fx._modTikMs === 8)
+    && (fx.bewerkMods([{ soort: 'lfo', sync: true, deling: '1/1', doelen: [{ target: 'a.reso', diepte: 0.5 }] }]), fx._modTikMs === 33));
+  clearInterval(fx._modTimer);
+}
+{
+  // Review S10: een hapering van meer dan een halve maat laat de teller niet teruglopen.
+  const m = Mo.leesMod({ soort: 'lfo', sync: true, deling: '2/1', vorm: 'zaag' });
+  const s = new Mo.ModStaat();
+  const bl = 60 / 128;
+  const k = (t) => { const n = Math.ceil(t / bl - 1e-9); return { beatLengte: bl, ankerCtx: n * bl, tellenTotEen: (4 - (n % 4)) % 4 || 4, perMaat: 4 }; };
+  s.waarde(m, 1, k(1));
+  const voor = s.tellen;
+  s.waarde(m, 2, k(2));
+  ok(`na 1 s stilte op 128 bpm: +${(s.tellen - voor).toFixed(2)} tellen (de klok zegt +2,13)`, Math.abs(s.tellen - voor - 1 / bl) < 0.01);
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

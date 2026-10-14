@@ -81,7 +81,8 @@ export class Sjablonen {
       if (!naamGeldig(naam)) throw new SjabloonFout(400, 'een sjabloon heeft een naam nodig (1–60 tekens)');
       const ernstig = fouten.filter((f) => !/ken ik niet/.test(f));
       if (ernstig.length) throw new SjabloonFout(400, `rack klopt niet: ${ernstig.join('; ')}`);
-      if ((await this.ingebouwd()).includes(naam)) throw new SjabloonFout(409, `"${naam}" is al een kant-en-klaar sjabloon: kies een andere naam`);
+      const klein = naam.toLocaleLowerCase('nl');
+      if ((await this.ingebouwd()).some((n) => String(n).toLocaleLowerCase('nl') === klein)) throw new SjabloonFout(409, `"${naam}" is al een kant-en-klaar sjabloon: kies een andere naam`);
       const nu = await this.lees();
       if ((nu.versie ?? null) !== (versie ?? null)) throw new SjabloonFout(409, 'de eigen sjablonen zijn intussen veranderd', { racks: nu.racks, versie: nu.versie });
       const schoon = { ...schrijfRack(r), name: naam };

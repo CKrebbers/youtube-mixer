@@ -8,7 +8,7 @@
 import { harnas, wacht } from './werk-scherm.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
 const arg = (n, std) => { const i = process.argv.indexOf(`--${n}`); return i > 0 ? Number(process.argv[i + 1]) : std; };
@@ -32,9 +32,10 @@ async function klik(sel, { tel = true } = {}) {
   if (tel) handelingen++;
   await wacht(60);
 }
+/** Een keuzelijst: telt als TWEE handelingen (openklikken en kiezen). */
 async function kies(sel, waarde, { tel = true } = {}) {
   await ev(s, `(() => { const e = document.querySelector(${JSON.stringify(sel)}); e.value = ${JSON.stringify(waarde)}; e.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  if (tel) handelingen++;
+  if (tel) handelingen += 2;
   await wacht(80);
 }
 /** Een knop draaien: indrukken, omhoog slepen (dy px), loslaten. Telt of de editor intussen opnieuw tekende. */
@@ -64,8 +65,9 @@ try {
   handelingen = 0;
   await klik('.fx-bewerk');
   ok('de editor gaat open', await ev(s, '!document.querySelector("#rack-editor").classList.contains("hidden")'));
-  // Leeg beginnen: alle effecten van het standaardrack weg.
-  while (await ev(s, 'document.querySelectorAll("#rack-editor .re-kaart").length')) await klik('#rack-editor [data-doe="weg"]');
+  // Leeg beginnen: alle effecten van het standaardrack weg (elke klik telt).
+  let weg = 0;
+  while (await ev(s, 'document.querySelectorAll("#rack-editor .re-kaart").length')) { await klik('#rack-editor [data-doe="weg"]'); weg++; }
   await kies('#rack-editor [data-doe="effect-erbij"]', 'kam');
   await kies('#rack-editor [data-doe="effect-erbij"]', 'reverb');
   ok('twee effecten in de keten (kam → galm)', (await ev(s, '[...document.querySelectorAll("#rack-editor .re-effect")].map((e) => e.textContent).join(",")')) === 'Kam,Reverb');
@@ -76,19 +78,24 @@ try {
   const tekende1 = await draai('#rack-editor .re-param[data-slot="a"][data-param="meng"] .knob', 60);
   const tekende2 = await draai('#rack-editor .re-param[data-slot="b"][data-param="meng"] .knob', 50);
   ok(`tijdens het slepen tekent de keten niet opnieuw (${tekende1} + ${tekende2} keer)`, tekende1 === 0 && tekende2 === 0);
-  await klik('#rack-editor .re-kant[data-kant="open"]');
+  // DICHT: knop dicht = droog (beide meng helemaal omlaag), dan nog eens DICHT om te stoppen.
+  await klik('#rack-editor .re-kant[data-kant="dicht"]');
+  await draai('#rack-editor .re-param[data-slot="a"][data-param="meng"] .knob', -200);
+  await draai('#rack-editor .re-param[data-slot="b"][data-param="meng"] .knob', -200);
+  await klik('#rack-editor .re-kant[data-kant="dicht"]');
   const links = await ev(s, 'window.engine.deck(window.engine.focus).fx.rack.macros[0]?.links.map((l) => `${l.target}:${l.from.toFixed(2)}→${l.to.toFixed(2)}`).join(" ")');
-  ok(`knop 1 stuurt nu kam-meng en galm-meng (${links})`, /a\.meng:0\.\d+→/.test(links) && /b\.meng:/.test(links));
+  ok(`knop 1 stuurt nu kam-meng en galm-meng, dicht = droog (${links})`, /a\.meng:0\.00→0\.\d+/.test(links) && /b\.meng:0\.00→0\.\d+/.test(links));
   await ev(s, 'const n = document.querySelector("#rack-editor .re-naam"); n.value = "Zingende ruimte"; n.dispatchEvent(new Event("input", { bubbles: true }))');
   handelingen++;
   await klik('#rack-editor [data-doe="als-sjabloon"]');
   ok('bewaard als eigen sjabloon (POST /api/sjablonen)', !!(await totdat(s, '/als eigen sjabloon/.test(document.querySelector("#rack-editor .re-status").textContent)', 5000)),
     await ev(s, 'document.querySelector("#rack-editor .re-status").textContent'));
   const opSchijf = JSON.parse(readFileSync(join(sjabloonMap, 'eigen.json'), 'utf8'));
-  ok('op schijf: het sjabloon met zijn keten en knop', opSchijf.racks[0]?.name === 'Zingende ruimte' && opSchijf.racks[0].chain.length === 2 && opSchijf.racks[0].macros[0].links.length === 2);
+  ok('op schijf: het sjabloon met zijn keten en knop, droog in de beginstand (knop 1 op 0, beide meng 0)', opSchijf.racks[0]?.name === 'Zingende ruimte' && opSchijf.racks[0].chain.length === 2
+    && opSchijf.racks[0].macros[0].links.length === 2 && opSchijf.racks[0].macros[0].default === 0 && opSchijf.racks[0].macros[0].links.every((l) => l.from === 0));
   ok('in de kiezer onder "eigen sjablonen", en de kiezer staat erop', await ev(s, `(() => { const g = [...document.querySelectorAll('.fx-rack optgroup')].find((x) => x.label === 'eigen sjablonen'); const sel = document.querySelector('.fx-rack'); return !!g && g.textContent.includes('Zingende ruimte') && sel.selectedOptions[0]?.textContent === 'Zingende ruimte'; })()`));
-  console.log(`  ..  handelingen: ${handelingen} (bewerk, 3× effect weg, kam, galm, knop 1, gebruiken, 2× draaien, OPEN uit, naam, als sjabloon)`);
-  ok(`een nieuw effect met één knop, als sjabloon bewaard, in ${handelingen - 3} handelingen (zonder het opruimen van het standaardrack)`, handelingen - 3 <= 12);
+  console.log(`  ..  handelingen: ${handelingen} = bewerk 1 · ${weg}× effect weg · 2 keuzelijsten (2 klikken elk) · knop 1 + gebruiken 2 · 2× draaien (OPEN) · DICHT, 2× draaien, DICHT uit 4 · naam 1 · als sjabloon 1`);
+  ok(`een nieuw effect met één knop (open en dicht ingesteld), als sjabloon bewaard: ${handelingen - weg} handelingen, plus ${weg} om het standaardrack leeg te maken`, handelingen - weg <= 16);
 
   console.log('\nmodulators');
   await kies('#rack-editor [data-doe="mod-erbij"]', 'lfo', { tel: false });
@@ -159,6 +166,7 @@ try {
   ok(`geen uitzondering (${err.message})`, false);
 } finally {
   await h.stop?.();
+  rmSync(sjabloonMap, { recursive: true, force: true });
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

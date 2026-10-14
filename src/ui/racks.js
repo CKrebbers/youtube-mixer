@@ -81,7 +81,7 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
         || '<option disabled>nog geen</option>'}</optgroup>`
       : '';
     const groep = (label, filter) => {
-      const opties = sjablonen.map((r, i) => (filter(r) ? `<option value="s:${i}">${esc(r.name)}</option>` : '')).join('');
+      const opties = sjablonen.map((r, i) => (filter(r) ? `<option value="${esc(herkomstVan(r, i))}">${esc(r.name)}</option>` : '')).join('');
       return opties ? `<optgroup label="${label}">${opties}</optgroup>` : '';
     };
     const kant = groep('kant-en-klaar', (r) => !r._eigen) + groep('eigen sjablonen', (r) => r._eigen);
@@ -97,6 +97,16 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
    */
   let sjablonen = [];
   let ingebouwd = [], eigen = [], eigenVersie = null;
+  // Een kant-en-klaar sjabloon heet "s:<nr>" (vast: de kant-en-klare staan vooraan en veranderen niet
+  // tijdens een sessie); een eigen sjabloon "e:<naam>" (S10): wissen of bijzetten verschuift de nummers
+  // van de eigen, en dan wees de herkomst van een andere track naar het verkeerde sjabloon.
+  const herkomstVan = (r, i) => (r._eigen ? `e:${r.name}` : `s:${i}`);
+  const sjabloonVan = (h) => {
+    if (typeof h !== 'string') return null;
+    if (h.startsWith('e:')) return sjablonen.find((r) => r._eigen && r.name === h.slice(2)) ?? null;
+    if (h.startsWith('s:')) { const r = sjablonen[Number(h.slice(2))]; return r && !r._eigen ? r : null; }
+    return null;
+  };
   // Eigen sjablonen (spoor S10, /api/sjablonen) staan achter de kant-en-klare, in dezelfde lijst:
   // zo blijft "s:<nr>" van een kant-en-klaar sjabloon hetzelfde, en bladert de APC ook door de eigen.
   const zetLijst = () => { sjablonen = [...ingebouwd, ...eigen.map((r) => ({ ...r, _eigen: true }))]; vulRackKiezer(engine.focus); };
@@ -123,6 +133,9 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
   async function bewaarSjabloon(deckId, naam) {
     const fx = engine.deck(deckId).fx;
     const rack = { ...fx.naarJSON(), name: String(naam || fx.rackNaam || '').trim() };
+    // Een nieuw sjabloon vanaf een ander erft zijn uitleg niet: die beschrijft het andere (review S10).
+    const bron = sjabloonVan(fx.herkomst);
+    if (bron && bron.name !== rack.name && rack.uitleg === bron.uitleg) delete rack.uitleg;
     const zend = () => fetch('/api/sjablonen', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rack, versie: eigenVersie }) });
     let r = await zend();
@@ -132,8 +145,7 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
     if (!r.ok) throw new Error(j?.fout || `${r.status}`);
     eigen = j.racks || []; eigenVersie = j.versie ?? null;
     zetLijst();
-    const i = sjablonen.findIndex((x) => x._eigen && x.name === rack.name);
-    if (i >= 0) { fx.herkomst = `s:${i}`; fx.hernoem(rack.name); volgRackKiezer(deckId); }
+    if (sjablonen.some((x) => x._eigen && x.name === rack.name)) { fx.herkomst = `e:${rack.name}`; fx.hernoem(rack.name); volgRackKiezer(deckId); }
     return { naam: rack.name };
   }
 
@@ -145,7 +157,7 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
     if (!r.ok) { if (j?.racks) { eigen = j.racks; eigenVersie = j.versie ?? null; zetLijst(); } throw new Error(j?.fout || `${r.status}`); }
     for (const id of DECK_IDS) {
       const fx = engine.deck(id).fx;
-      if (typeof fx.herkomst === 'string' && sjablonen[Number(fx.herkomst.slice(2))]?.name === naam) fx.herkomst = null;
+      if (fx.herkomst === `e:${naam}`) fx.herkomst = null;
     }
     eigen = j.racks || []; eigenVersie = j.versie ?? null;
     zetLijst();
@@ -154,8 +166,7 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
   /** Is wat er op deze track klinkt een eigen sjabloon? Dan zijn naam, anders null. */
   const eigenSjabloon = (deckId) => {
     const h = engine.deck(deckId).fx.herkomst;
-    const r = typeof h === 'string' && h.startsWith('s:') ? sjablonen[Number(h.slice(2))] : null;
-    return r?._eigen ? r.name : null;
+    return typeof h === 'string' && h.startsWith('e:') && sjabloonVan(h) ? h.slice(2) : null;
   };
 
   function volgRackKiezer(deckId) {
@@ -198,8 +209,8 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
     const kiezer = rij.querySelector('.fx-rack');
     kiezer.addEventListener('change', () => {
       const id = engine.focus;
-      if (kiezer.value.startsWith('s:')) {
-        const sjabloon = sjablonen[Number(kiezer.value.slice(2))];
+      if (kiezer.value.startsWith('s:') || kiezer.value.startsWith('e:')) {
+        const sjabloon = sjabloonVan(kiezer.value);
         if (sjabloon) engine.deck(id).fx.zetRack(sjabloon, { herkomst: kiezer.value }).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
         naRack(id);
         kiezer.blur();
@@ -248,6 +259,7 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
     kanBewaren: (id) => !!deckTrack[id],
     onBewaar: async ({ deckId, naam, alsNieuw }) => bewaarRack(deckId, { naam, alsNieuw }),
     onBewaarSjabloon: ({ deckId, naam }) => bewaarSjabloon(deckId, naam),
+    eigenNamen: () => eigen.map((r) => r.name),
     onWisSjabloon: (naam) => wisSjabloon(naam),
     eigenSjabloon,
     sjabloonNamen: () => sjablonen.map((r) => r.name),
@@ -271,7 +283,7 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
   // Door de racks bladeren (APC): eerst die van het nummer, dan de kant-en-klare.
   function rackStap(id, stap) {
     const lijst = [...rackCache[id].map((r) => ({ herkomst: r.id, zet: () => zetRackVan(id, r) })),
-      ...sjablonen.map((r, i) => ({ herkomst: `s:${i}`, zet: () => { engine.deck(id).fx.zetRack(r, { herkomst: `s:${i}` }); naRack(id); } }))];
+      ...sjablonen.map((r, i) => ({ herkomst: herkomstVan(r, i), zet: () => { engine.deck(id).fx.zetRack(r, { herkomst: herkomstVan(r, i) }); naRack(id); } }))];
     if (!lijst.length) return;
     const nu = lijst.findIndex((x) => x.herkomst === engine.deck(id).fx.herkomst);
     lijst[(nu + stap + lijst.length) % lijst.length].zet();

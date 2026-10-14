@@ -962,7 +962,7 @@
         "ambient",
         "galm"
       ],
-      "uitleg": "Het nummer lost op in galm en echo terwijl de bas wegzakt (highpass). Knop 1 doet alles tegelijk, knop 2 maakt de ruimte langer, knop 3 bevriest hem. Laat knop 3 aan en draai knop 1 terug: dan hangt er een wolk.",
+      "uitleg": "Het nummer lost op in galm en echo terwijl de bas wegzakt (highpass). Knop 1 doet alles tegelijk, knop 2 maakt de ruimte langer, knop 3 bevriest de galm: zet hem aan met knop 1 open en de wolk blijft hangen terwijl je het nummer eronder (fader of crossfader) wisselt. Knop 1 terug haalt ook de wolk weg.",
       "chain": [
         {
           "slot": "a",
@@ -1193,7 +1193,7 @@
         "tape",
         "overgang"
       ],
-      "uitleg": "Een bandmachine die het opgeeft: zwalken (wow), trillen (flutter), dof en vuil, en een lowpass die dichtgaat. In de beginstand bijna onhoorbaar (een paar ms vertraging).",
+      "uitleg": "Een bandmachine die het opgeeft: zwalken (wow), trillen (flutter), dof en vuil, en een lowpass die dichtgaat. In de beginstand droog; het eerste stukje van knop 1 zet de band erin (een paar ms later dan droog: halverwege dat stukje een zachte kam).",
       "chain": [
         {
           "slot": "a",
@@ -1204,7 +1204,7 @@
             "snelheid": 0.35,
             "flutter": 0.1,
             "toon": 0.9,
-            "meng": 1
+            "meng": 0
           }
         },
         {
@@ -1222,6 +1222,15 @@
           "label": "Wegzakken",
           "default": 0,
           "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 1,
+              "in": [
+                0,
+                0.1
+              ]
+            },
             {
               "target": "a.wow",
               "from": 0,
@@ -1988,7 +1997,7 @@
         "lijm",
         "compressor"
       ],
-      "uitleg": "Voor de master: een rustige compressor (2:1, 30 ms) die de mix samenbindt, een kanteling en wat breedte. Knop 1 = hoeveel lijm (de drempel van −9 naar −24 dB), knop 2 = make-up (0 tot +6 dB). In de beginstand pakt hij alleen de pieken.",
+      "uitleg": "Voor de master: een rustige compressor (2:1, 30 ms) die de mix samenbindt, een kanteling en wat breedte. Knop 1 = hoeveel lijm (de drempel van −9 naar −24 dB), knop 2 = make-up (0 tot +6 dB). In de beginstand pakt hij alleen pieken boven −9 dB. Niet voor een track: de compressor van Chrome kijkt 6 ms vooruit, dan loopt die track 6 ms achter de rest.",
       "chain": [
         {
           "slot": "a",

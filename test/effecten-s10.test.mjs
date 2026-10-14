@@ -173,6 +173,15 @@ console.log('\nde duiker: op de tel');
   d.zet('herstel', 1, staat.NOW);
   ok('ander herstel: een nieuwe bron (andere golf)', ctx.bronnen.length === voor + 1);
   d.vernietig();
+  // Op 1/1 duikt hij op de "1": anker op tel 3 van de maat (nog 2 tellen tot de "1") → de cyclus staat daar op 2/4.
+  const ctx2 = new MockContext();
+  staat.NOW = 300;
+  const d1 = S.S10_EFFECTEN.find((x) => x.id === 'duiker').bouw(ctx2, { klok: () => ({ beatLengte: 0.5, ankerCtx: 300.5, tellenTotEen: 2, perMaat: 4 }) });
+  d1.zet('deling', 0, staat.NOW);
+  const bron = ctx2.bronnen.filter((b) => b.soort === 'src').at(-1);
+  const faseOpAnker = (bron.offset / bron.buffer.duration + (300.5 - bron.gestart) * bron.playbackRate.value / bron.buffer.duration) % 1;
+  ok(`1/1 duikt op de "1": op tel 3 van de maat staat de cyclus op 2/4 (${faseOpAnker.toFixed(3)})`, Math.abs(faseOpAnker - 0.5) < 1e-6);
+  d1.vernietig();
   ok('tremolo houdt vier vormen (de duikgolven staan er niet tussen)', L.LFO_VORMEN.length === 4);
 }
 

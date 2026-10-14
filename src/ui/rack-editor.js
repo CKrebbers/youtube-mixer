@@ -77,7 +77,8 @@ const CURVENAAM = { lin: 'gelijkmatig', exp: 'traag → snel', log: 'snel → tr
 export class RackEditor {
   constructor({ root, engine, effecten, onBewaar, naamVan = (id) => `deck ${id}`,
     trackVan = () => 1, kanBewaren = () => true,
-    onBewaarSjabloon = null, onWisSjabloon = null, eigenSjabloon = () => null }) {
+    onBewaarSjabloon = null, onWisSjabloon = null, eigenSjabloon = () => null, eigenNamen = () => [] }) {
+    this.eigenNamen = eigenNamen;
     this.onBewaarSjabloon = onBewaarSjabloon;
     this.onWisSjabloon = onWisSjabloon;
     this.eigenSjabloon = eigenSjabloon;
@@ -423,7 +424,8 @@ export class RackEditor {
 
   /** Een doel dat nog door geen enkele knop gestuurd wordt; anders het eerste. */
   _vrijDoel(uitsluiten = []) {
-    const doelen = this.fx.doelen().filter((d) => !d.uit);
+    // Niet het droog/nat van een effect (S10): dat haalde een effect half weg bij "link erbij".
+    const doelen = this.fx.doelen().filter((d) => !d.uit && d.soort !== 'nat');
     const bezet = new Set(this.kopie.macros.flatMap((m) => m.links.map((l) => l.target)));
     return doelen.find((d) => !bezet.has(d.target) && !uitsluiten.includes(d.target))
       || doelen.find((d) => !uitsluiten.includes(d.target)) || null;
@@ -533,7 +535,7 @@ export class RackEditor {
     else if (doe === 'curve') {
       const link = m.links[l];
       if (k.value === 'eigen') {
-        // Vijf punten op de curve die er stond: dan verandert er nog niets hoorbaars.
+        // Vijf punten op de curve die er stond: dan verandert er bijna niets (een rechte tussen de punten: tot 0,035 naast s).
         link.kromme = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(pasCurve(t, link.curve) * 1000) / 1000);
         delete link.curve;
       } else { delete link.kromme; link.curve = k.value; }
@@ -1080,7 +1082,16 @@ export class RackEditor {
     if (!this.onBewaarSjabloon) return;
     const naam = (this.el.naam.value || '').trim();
     if (!naam) { this.melding = { tekst: 'geef het sjabloon eerst een naam (het veld bovenaan)', goed: false }; this._tekenStatus(); this.el.naam.focus(); return; }
-    // Wat er klinkt moet gelijk zijn aan de kopie: de naam staat al op het deck (hernoem bij typen).
+    // Over een ANDER eigen sjabloon heen: eerst vragen (tweede klik binnen 3 s), zoals wissen.
+    const bestaat = this.eigenNamen().includes(naam) && this.eigenSjabloon(this.deckId) !== naam;
+    if (bestaat && this._zekerOver !== naam) {
+      this._zekerOver = naam;
+      setTimeout(() => { if (this._zekerOver === naam) this._zekerOver = null; }, 3000);
+      this.melding = { tekst: `er is al een eigen sjabloon "${naam}": klik nog eens om het te vervangen (of kies een andere naam)`, goed: false };
+      this._tekenStatus();
+      return;
+    }
+    this._zekerOver = null;
     try {
       const { naam: n } = await this.onBewaarSjabloon({ deckId: this.deckId, naam });
       this._rackRef = this.fx.rack;

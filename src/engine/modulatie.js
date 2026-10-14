@@ -120,8 +120,11 @@ export class ModStaat {
       const pos = ankerIdx - (k.ankerCtx - t) / k.beatLengte;
       if (this.tellen === null) this.tellen = pos;
       else {
+        // Het verschil modulo de maat, zo dicht mogelijk bij wat de klok sinds de vorige keer
+        // zegt (d0): na een hapering van meer dan een halve maat liep de teller anders terug.
+        const d0 = this.t !== null && t > this.t ? (t - this.t) / k.beatLengte : 0;
         let d = pos - this.tellen;
-        d -= per * Math.round(d / per);       // kleinste verschil modulo de maat
+        d -= per * Math.round((d - d0) / per);
         this.tellen += d;
       }
     } else if (this.tellen === null) {
@@ -182,9 +185,15 @@ export class ModStaat {
  * `mod.N.diepte`): die tellen op, één niveau diep.
  */
 export class ModBank {
-  constructor(ruw = []) {
+  /** @param vorige  een eerdere bank van hetzelfde rack: een modulator die dezelfde soort bleef houdt zijn stand */
+  constructor(ruw = [], vorige = null) {
     this.mods = (ruw || []).map(leesMod);
-    this.staten = this.mods.map(() => new ModStaat());
+    this.staten = this.mods.map((m, i) => (m && vorige?.mods?.[i]?.soort === m.soort ? vorige.staten[i] : new ModStaat()));
+  }
+
+  /** Is er een modulator op de maat met een periode (of stap) onder de 250 ms bij 120 bpm? Dan een fijnere tik. */
+  get snel() {
+    return this.mods.some((m) => m && m.doelen.length && ((m.sync && (tellenVan(m.deling) ?? 4) < 0.5) || (!m.sync && m.soort !== 'volger' && m.hz > 4)));
   }
 
   /** Doet er een iets (een bekende soort met een doel)? */

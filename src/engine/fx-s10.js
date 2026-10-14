@@ -420,7 +420,8 @@ const duiker = {
     const ingang = ctx.createGain(), uitgang = ctx.createGain();
     const poort = ctx.createGain(), diep = ctx.createGain();
     ingang.connect(poort).connect(uitgang);
-    const lfo = new Lfo(ctx, { klok });
+    // Op 1/2 en 1/1 duikt hij op de "1" (en de 3), niet op een willekeurige tel (review S10).
+    const lfo = new Lfo(ctx, { klok, opDeEen: true });
     lfo.uit.connect(diep).connect(poort.gain);
     const staat = { deling: '1/4', herstel: 1 };
     const pasToe = () => lfo.zet({ sync: true, tellen: LFO_DELINGEN.find((d) => d.id === staat.deling).tellen, vorm: `duik${staat.herstel + 1}` });

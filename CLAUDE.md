@@ -1979,12 +1979,16 @@ Volledig in `docs/EFFECTEN-MEER.md` (ontwerp + "Gebouwd"), vragen in VRAGEN blok
   bit voor bit als voorheen (`bouwKeten` maakt alleen een droog/nat-pad als het rack erom vraagt). `schrijfRack`
   bewaart onbekende velden op het hoogste niveau (behalve `_…`), en een onbekende modulator blijft als ruwe JSON.
 - Modulators (`src/engine/modulatie.js`) zijn een BESTURING: InsertSlot rekent elke 33 ms (`MOD_TIK`, alleen als het
-  rack modulators met een doel heeft) op `ctx.currentTime` en de klok van het deck; staat die stil, dan gebeurt er
+  rack modulators met een doel heeft; 8 ms `MOD_TIK_FIJN` met een snelle op de maat) op `ctx.currentTime` en de klok van het deck; staat die stil, dan gebeurt er
   niets. Ze geven een OFFSET: `leesPlek` (knopstand, soft-takeover, LED-ring) beweegt niet mee, `paramWaarde` wel.
   Een parameter met `trappen` krijgt alleen een nieuwe stand als hij een trap verder is (`_opTrap`). De volger leest
   een AnalyserNode op `slot.in` die pas bestaat als er een volger is. Nooit Math.random: toeval komt uit een zaad.
 - Knop → knop (`stuurPlekken`) is één niveau diep: elke knop rekent met zijn EIGEN stand. `resolveMacros` laat
   `plek.*` en `mod.*` buiten de keten; een nieuwe plek die macro's oplost: gebruik `_waardenNu()` in InsertSlot.
+- Droog/nat per effect is LINEAIR (`zetNat`); een effect met `alleenNat: true` (de delay) krijgt een STUUR vóór
+  het effect (droog vol, de staart rolt door). Een eigen sjabloon heeft herkomst `e:<naam>`, een kant-en-klaar
+  `s:<nr>`. Weghalen van een modulator of koppeling: `_herstelLos` zet de parameter terug; bewerken houdt de
+  `ModStaat` van een modulator met dezelfde soort (`new ModBank(mods, vorige)`).
 - Een nieuw doel `<slot>._nat` op een effect zonder droog/nat-pad vraagt een nieuwe keten: `natOntbreekt()` /
   `bewerkMods().opnieuw`, en de editor doet dan `zetRack(…, { behoudStanden: true })` (kruisfade).
 - De drie nieuwe kernen (`Kam`, `Freqschuif`, `Aanslag` in fx-kern.js) volgen het audiopad: 0 GC, gemeten in

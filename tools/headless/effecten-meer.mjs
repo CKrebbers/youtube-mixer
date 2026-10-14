@@ -359,6 +359,13 @@ const PAGINA = String.raw`(async () => {
     for (let i = 1; i < m.length; i++) { const f = i * SR / 32768, h = f / F; if (Math.abs(h - Math.round(h)) * F < 20) harm += m[i]; else rest += m[i]; }
     return 10 * Math.log10(rest / harm);
   }
+  /** Luidheid t.o.v. droog met ALLEEN knop plek op v (de rest op hun beginstand). */
+  async function sjabloonKnop(rack, plek, v) {
+    const { ctx, inb } = await opzet(2.5, null, { slot: (s) => { s.zetRack(rack); s.setMix(1); s.setPlek(plek, v, { direct: true }); } });
+    const b = await ctx.startRendering();
+    const [L, R] = kanalen(b);
+    return db(Math.hypot(rms(L, SR), rms(R, SR))) - db(Math.hypot(rms(inb.getChannelData(0), SR), rms(inb.getChannelData(1), SR)));
+  }
   async function sjabloon(rack, knop) {
     const { ctx, inb } = await opzet(4, null, { slot: (s) => { s.zetRack(rack); s.setMix(1); for (const m of rack.macros) s.setPlek(m.place, knop ?? m.default ?? 0); } });
     const b = await ctx.startRendering();
@@ -428,7 +435,7 @@ const PAGINA = String.raw`(async () => {
   }
 
   window.__fx = { NIEUW, params: Object.fromEntries(s10.S10_EFFECTEN.map((e) => [e.id, e.params])), standaard: Object.fromEntries(s10.S10_EFFECTEN.map((e) => [e.id, e.standaard])),
-    begrensd, bypass, hoorbaar, staart, klikParam, klikWissel, klikHeranker, sjabloon, spectrum, zwaartepunt, formant, luidheid, cpu };
+    begrensd, bypass, hoorbaar, staart, klikParam, klikWissel, klikHeranker, sjabloon, sjabloonKnop, spectrum, zwaartepunt, formant, luidheid, cpu };
   return NIEUW;
 })()`;
 
@@ -546,6 +553,21 @@ try {
   }
   // Licht = acht tegelijk onder 10% van een kern (in deze meting de helft van de galm van fx.js).
   ok('elk nieuw effect: acht tegelijk onder 10% van een kern', NIEUW.every((id) => CPU[id] / 10 < 10), NIEUW.map((id) => `${id} ${f2(CPU[id] / 10)}%`).join(', '));
+
+  console.log('\n7b. droog/nat per effect: een sweep van knop 1 zonder bult (review S10: equal-power gaf +4 dB)');
+  {
+    const alle = JSON.parse((await import('node:fs')).readFileSync(join(WORTEL, 'racks/sjablonen.json'), 'utf8')).racks;
+    for (const naam of ['Kleur: crush', 'Kleur: dub', 'Kleur: ruimte']) {
+      const rack = alle.find((r) => r.name === naam);
+      const r = [];
+      for (const v of [0, 0.15, 0.3, 0.4, 0.5, 0.6, 0.7, 0.85, 1]) r.push(await evalueer(`window.__fx.sjabloonKnop(${JSON.stringify(rack)}, 1, ${v})`));
+      ok(`${naam}: knop 1 van 0 naar 1: ${r.map((x) => (x >= 0 ? '+' : '') + f1(x)).join(' ')} dB, nergens meer dan +1,5 dB boven droog`, Math.max(...r) < 1.5);
+    }
+    // De dub-worp: knop 1 open en weer dicht, het droge blijft vol (de delay krijgt een stuur).
+    const dub = alle.find((r) => r.name === 'Dub-echo');
+    const vol = await evalueer(`window.__fx.sjabloonKnop(${JSON.stringify(dub)}, 1, 1)`);
+    ok(`Dub-echo knop 1 vol: ${vol >= 0 ? '+' : ''}${f1(vol)} dB t.o.v. droog (het nummer blijft, de echo komt erbij)`, vol > -1 && vol < 6);
+  }
 
   console.log('\n8. sjablonen: beginstand (droog) en alle knoppen open');
   const { readFileSync } = await import('node:fs');

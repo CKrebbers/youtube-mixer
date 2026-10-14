@@ -60,6 +60,8 @@ try {
   ok('zelfde naam = overschrijven op zijn plek', over.status === 200 && over.j.racks.length === 2 && over.j.racks[0].uitleg === 'nieuw');
   const ingebouwd = await post('/api/sjablonen', { rack: rack('Dub-echo'), versie: over.j.versie });
   ok(`een naam van een kant-en-klaar sjabloon: 409 (${ingebouwd.status})`, ingebouwd.status === 409 && /kant-en-klaar/.test(ingebouwd.j.fout));
+  const klein = await post('/api/sjablonen', { rack: rack('dub-echo'), versie: over.j.versie });
+  ok(`alleen in hoofdletters anders dan een kant-en-klaar sjabloon: ook 409 (${klein.status})`, klein.status === 409);
   const zonderNaam = await post('/api/sjablonen', { rack: rack('  '), versie: over.j.versie });
   ok('zonder naam: 400', zonderNaam.status === 400);
   const kapot = await post('/api/sjablonen', { rack: rack('Kapot', { xy: [9, 9] }), versie: over.j.versie });

@@ -109,8 +109,10 @@ const frac = (x) => x - Math.floor(x);
 
 export class Lfo {
   /** @param klok  () => { beatLengte, ankerCtx } | null, zoals fxKlok() */
-  constructor(ctx, { klok = () => null } = {}) {
+  /** @param opDeEen  een golf van meer tellen begint op de "1" van de maat als de klok die kent (de duiker, S10) */
+  constructor(ctx, { klok = () => null, opDeEen = false } = {}) {
     this.ctx = ctx;
+    this.opDeEen = opDeEen;
     this.klok = klok;
     this.uit = ctx.createGain();
     this.bron = null;                // { src, g, start }: de bron die klinkt (of straks gaat klinken)
@@ -184,7 +186,11 @@ export class Lfo {
       // van de cyclus: waar de oude golf daar zou zijn, op de tel afgerond.
       const T = this.stand.tellen;
       let faseA = 0;
-      if (T > 1 && this.seg) faseA = (Math.round(frac(this.fase(k.ankerCtx)) * T) % T) / T;
+      const per = k.perMaat, tot = k.tellenTotEen;
+      if (T > 1 && this.opDeEen && per > 0 && Number.isInteger(tot) && T <= per) {
+        // De tel van het anker in de maat (0 = de "1"); de cyclus begint op de "1".
+        faseA = ((((per - tot) % per) + per) % per % T) / T;
+      } else if (T > 1 && this.seg) faseA = (Math.round(frac(this.fase(k.ankerCtx)) * T) % T) / T;
       seg = { t0: k.ankerCtx, fase0: faseA, periode: P };
     } else {
       seg = { t0: s, fase0: this.seg ? frac(this.fase(s)) : 0, periode: P };

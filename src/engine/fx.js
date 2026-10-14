@@ -183,6 +183,8 @@ export const EFFECTEN = [
   {
     id: 'delay',
     naam: 'Delay',
+    // Zijn uitgang is alleen de echo: droog/nat per effect wordt dan een stuur (S10, zetNat).
+    alleenNat: true,
     params: ['tijd', 'feedback', 'toon', 'sync'],
     standaard: { tijd: 0.35, feedback: 0.45, toon: 0.6, sync: 0 },
     eenheid: {
@@ -810,9 +812,11 @@ export function bouwKeten(ctx, chain, klok = GEEN_KLOK, { natSlots = null } = {}
     if (spec.meng !== undefined || natSlots?.has(spec.slot)) {
       const som = ctx.createGain(), droog = ctx.createGain(), natG = ctx.createGain();
       vorige.connect(droog).connect(som);
-      vorige.connect(inst.in);
+      let stuur = null;
+      if (effect.alleenNat) { stuur = ctx.createGain(); vorige.connect(stuur).connect(inst.in); }
+      else vorige.connect(inst.in);
       inst.out.connect(natG).connect(som);
-      nat = { droog, nat: natG, stand: null };
+      nat = { droog, nat: natG, stuur, stand: null };
       zetNat(nat, spec.meng ?? 1, ctx, true);
       vorige = som;
     } else {
@@ -868,9 +872,15 @@ function zetNat(n, v, ctx, direct) {
   const m = clamp(v);
   if (n.stand !== null && Math.abs(n.stand - m) < 1e-6) return;
   n.stand = m;
-  const d = Math.cos(m * Math.PI / 2), w = Math.sin(m * Math.PI / 2);
-  if (direct) { n.droog.gain.value = d; n.nat.gain.value = w; }
-  else { zetDoel(n.droog.gain, d, ctx); zetDoel(n.nat.gain, w, ctx); }
+  // Een effect dat alleen nat geluid geeft (de delay: `alleenNat`) krijgt een STUUR: hoeveel er
+  // de echo in gaat, het droge blijft vol en wat er al in de echo zit rolt door (een dub-worp).
+  // De andere: LINEAIR, geen equal-power. Hun uitgang lijkt op de ingang (filter, kanteling, crush):
+  // equal-power gaf daar halverwege tot +4 dB (gemeten in review S10); lineair is daar vlak, en
+  // hooguit −3 dB halverwege bij een effect dat er niet op lijkt.
+  const d = n.stuur ? 1 : 1 - m, w = m;
+  const doel = n.stuur ?? n.nat;
+  if (direct) { n.droog.gain.value = d; doel.gain.value = w; }
+  else { zetDoel(n.droog.gain, d, ctx); zetDoel(doel.gain, w, ctx); }
 }
 
 /** Welke slots een droog/nat-pad nodig hebben: `meng` in de keten, of een doel `<slot>._nat`. */
@@ -883,8 +893,8 @@ function natSlotsVan(rack) {
   return uit;
 }
 
-/** Hoe vaak modulators doorgerekend worden (ms): dezelfde tik als glijden. */
-export const MOD_TIK = 33;
+/** Hoe vaak modulators doorgerekend worden (ms): dezelfde tik als glijden; 8 ms voor snelle op de maat. */
+export const MOD_TIK = 33, MOD_TIK_FIJN = 8;
 
 // ---- de slot ---------------------------------------------------------------
 
@@ -956,6 +966,7 @@ export class InsertSlot {
    * kruisfaden, en de oude pas opruimen na fade plus staarttijd.
    */
   zetRack(data, { behoudStanden = false, herkomst } = {}) {
+    if (!behoudStanden) this._modsOud = null;
     const { rack, fouten } = leesRack(data, { bekendType: (t) => !!effectVan(t) });
     this.rack = rack;
     // Bewerken (behoudStanden) is hetzelfde rack, dus dezelfde herkomst.
@@ -978,7 +989,7 @@ export class InsertSlot {
     }
 
     const nieuw = bouwKeten(this.ctx, rack.chain, () => this.klok(), { natSlots: natSlotsVan(rack) });
-    this._zetMods(rack);
+    this._zetMods(rack, { behoud: behoudStanden });
     const gain = this.ctx.createGain();
     gain.gain.value = 0;
     this.in.connect(nieuw.in);
@@ -1017,8 +1028,11 @@ export class InsertSlot {
    * De modulators van dit rack aan (of uit). Een timer van MOD_TIK ms zolang er
    * iets te moduleren is; de waarde komt van de audioklok (regel 3).
    */
-  _zetMods(rack) {
-    const bank = rack.mods?.length ? new ModBank(rack.mods) : null;
+  _zetMods(rack, { behoud = false } = {}) {
+    // Bewerken (editor, zetRack met behoudStanden) houdt de stand van elke modulator die dezelfde
+    // soort bleef: anders sprong een vrije LFO bij elke schuifbeweging terug naar zijn begin.
+    const bank = rack.mods?.length ? new ModBank(rack.mods, behoud ? this._modsOud ?? this._mods : null) : null;
+    this._modsOud = bank;
     this._mods = bank?.actief ? bank : null;
     this._modUit = null;
     if (this._mods?.volgt && !this._meter) {
@@ -1027,11 +1041,13 @@ export class InsertSlot {
       this._meterBuf = new Float32Array(this._meter.fftSize);
       this.in.connect(this._meter);
     }
+    // Snelle modulators op de maat (een periode of stap korter dan 250 ms): een fijnere tik, anders
+    // vouwt een 1/32-LFO (17 Hz op 128 bpm) op 30 Hz bemonstering en vallen stappen tot 33 ms te laat.
+    const tik = this._mods?.snel ? MOD_TIK_FIJN : MOD_TIK;
+    if (this._modTimer && (!this._mods || this._modTikMs !== tik)) { clearInterval(this._modTimer); this._modTimer = null; }
     if (this._mods && !this._modTimer) {
-      this._modTimer = setInterval(() => this._modTik(), MOD_TIK);
-    } else if (!this._mods && this._modTimer) {
-      clearInterval(this._modTimer);
-      this._modTimer = null;
+      this._modTikMs = tik;
+      this._modTimer = setInterval(() => this._modTik(), tik);
     }
   }
 
@@ -1089,10 +1105,29 @@ export class InsertSlot {
       if (!rack.macros.some((m) => m.place === Number(k))) { delete this.standen[k]; delete this.glijden[k]; }
     }
     // Koppelingen veranderd: wat we eerder doorgaven zegt niets meer over
-    // wat de effecten nu hebben. Alles opnieuw.
+    // wat de effecten nu hebben. Alles opnieuw, en wat niet meer gestuurd wordt
+    // terug naar zijn eigen stand (anders bleef het op de laatste gestuurde waarde).
+    const vorige = [...this._toegepast.keys()];
     this._toegepast.clear();
     this._pasMacrosToe();
+    this._herstelLos(vorige);
     return { fouten };
+  }
+
+  /**
+   * Doelen die net nog gestuurd werden (door een knop of modulator) en nu niet meer: hun eigen
+   * stand terug naar het effect. Zonder dit bleef een parameter na het weghalen van een
+   * modulator op zijn laatste gemoduleerde waarde staan, terwijl het scherm de eigen stand toonde
+   * (review S10). Bestond vóór S10 al bij het weghalen van een koppeling.
+   */
+  _herstelLos(vorige) {
+    if (!this.keten) return;
+    const nu = this._waardenNu();
+    for (const t of vorige) {
+      if (nu.has(t)) continue;
+      const v = this._eigenStand(t);
+      if (v !== null) this.keten.node.zet(t, this._opTrap(t, clamp(v)), this.ctx.currentTime);
+    }
   }
 
   /**
@@ -1108,9 +1143,11 @@ export class InsertSlot {
     const nodig = natSlotsVan(this.rack);
     const er = new Set([...(this.keten?.node.slots || new Map())].filter(([, s]) => s.nat).map(([k]) => k));
     const opnieuw = [...nodig].some((k) => !er.has(k) && this.keten?.node.slots?.has(k));
-    this._zetMods(this.rack);
+    this._zetMods(this.rack, { behoud: true });
+    const vorige = [...this._toegepast.keys()];
     this._toegepast.clear();
     this._pasMacrosToe();
+    this._herstelLos(vorige);
     return { fouten, opnieuw };
   }
 

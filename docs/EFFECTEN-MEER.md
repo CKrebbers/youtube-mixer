@@ -28,7 +28,9 @@ Stand van de bouw: zie **Gebouwd** onderaan. Het verslag met metingen staat in
    schaling omzeilen (regel 2). Dus: elke 33 ms (dezelfde timer als glijden) de waarde van de
    modulator op `ctx.currentTime` uitrekenen, als OFFSET op de basis (knopstand of eigen stand), en
    alleen doorgeven wat veranderde; het effect glijdt zelf (τ 20 ms). De timer zegt alleen WANNEER,
-   de waarde komt van de klok (regel 3). Op de maat via `fxKlok()` van het deck (tel en maat).
+   de waarde komt van de klok (regel 3). Op de maat via `fxKlok()` van het deck (tel en maat). Een
+   modulator op de maat met een periode of stap onder een halve tel (1/16, 1/32 …) zet de tik op 8 ms
+   (na review: op 33 ms vouwde een 1/32-LFO en vielen stappen tot 33 ms te laat).
    Gevolg: een modulator is een besturing, geen audiosnelheid-LFO. Tot ~8 Hz klinkt het als een
    LFO; sneller wordt het een trap (daarom vrij hooguit 8 Hz). Voor snelle modulatie zijn er de
    effecten zelf (tremolo, autopan, vibrato, chorus).
@@ -39,8 +41,11 @@ Stand van de bouw: zie **Gebouwd** onderaan. Het verslag met metingen staat in
    een andere wordt gestuurd stuurt zelf geen knoppen door (geen lussen, voorspelbaar). Botsen: de
    hoogste plek wint, zoals bij parameters.
 5. **Droog/nat per effect** (`chain[i].meng`, doel `<slot>._nat`): een effect half in de keten.
-   Afwezig = de oude bedrading, bit voor bit. Let op: de compressor (6 ms) en pitch (45 ms) lopen
-   achter; half nat is dan een kam. Dat staat in de editor bij die effecten.
+   Afwezig = de oude bedrading, bit voor bit. LINEAIR gemengd (na review: equal-power gaf bij een
+   effect dat op zijn ingang lijkt, zoals crush of filter, halverwege tot +4 dB). Een effect dat alleen
+   nat geluid geeft (de delay, `alleenNat`) krijgt in plaats daarvan een STUUR vóór het effect: het
+   droge blijft vol en wat al in de echo zit rolt door (een dub-worp). Let op: compressor (6 ms),
+   pitch (45 ms) en band (een paar ms) lopen achter; half nat is dan een kam.
 6. **Eigen kromme** per koppeling (`kromme: [5 punten]`), met de muis te trekken. Gaat voor `curve`.
 7. **A/B, willekeurig en muteren met zaad** zijn pure functies in `rack.js` (`muteer`): hetzelfde
    zaad = hetzelfde resultaat. De filterfrequentie raakt muteren niet (een dicht filter is stilte).
@@ -152,7 +157,11 @@ ze na (zie §6).
 ### Bediening (rack-editor)
 
 - **∥** op een effectkaart: droog/nat van dat ene effect; er komt een knop **nat** bij (te koppelen
-  zoals elke parameter, ook met DICHT/OPEN). Nog eens = weer helemaal in de keten.
+  zoals elke parameter, ook met DICHT/OPEN). Nog eens = weer helemaal in de keten. Bij de delay is
+  "nat" een stuur: hoeveel er de echo in gaat (de dub-worp: dicht = de staart rolt door).
+- Een eigen sjabloon heet in de kiezer `e:<naam>` (niet een nummer): wissen of bijzetten verschuift
+  niets op een andere track (na review). "als sjabloon" over een ANDER eigen sjabloon heen vraagt een
+  tweede klik; een nieuw sjabloon vanaf een ander erft zijn uitleg niet.
 - **kopie** op een kaart, dan in "+ effect…" bovenaan **plak: …** (ook in een ander rack of op een
   andere track; onthouden in deze browser).
 - In "stuurt" (achter ▸ bij een koppeling): naast de parameters ook **knop K** en **diepte M N**.
@@ -174,8 +183,9 @@ ze na (zie §6).
   `test/rack.test.mjs` (alle 33 sjablonen), `test/sjablonen-server.test.mjs`, `test/sjablonen-paneel.test.mjs`.
 - Chrome: `tools/headless/effecten-meer.mjs` (81 checks: begrensd, bypass bit voor bit, hoorbaar,
   luidheid, staart, klikvrij, CPU, elk sjabloon) en `tools/headless/rack-editor.mjs` (de editor met
-  de muis: 8 handelingen voor een nieuw effect met één knop als sjabloon; de keten tekent niet
-  tijdens het slepen).
+  de muis: 15 handelingen voor een nieuw effect met één knop, open én dicht ingesteld, als sjabloon
+  bewaard, plus één om het standaardrack leeg te maken; een keuzelijst telt als twee; de keten tekent
+  niet tijdens het slepen).
 - CPU per effect, acht tegelijk, offline in headless Chrome op deze container (niet op de M1):
   kam 2,4% · klinker 3,3% · frequentieschuif 4,3% · band 6,7% · kanteling 1,7% · aanslag 3,4% ·
   duiker 1,0% van een kern (filter 2,7%, delay 3,3%, galm 19% ter vergelijking).
@@ -184,12 +194,21 @@ ze na (zie §6).
 
 ### Grenzen (bewust)
 
-- Modulators zijn een besturing (33 ms, het effect glijdt 20 ms): vrij hooguit 8 Hz. Een delaytijd
-  moduleren wordt een reeks kruisfades (geen doppler), elke ~90 ms.
+- Modulators zijn een besturing (33 ms, of 8 ms voor snelle op de maat; het effect glijdt 20 ms): vrij
+  hooguit 8 Hz; een stap valt 0–8 ms na zijn tel. Een delaytijd moduleren wordt een reeks kruisfades
+  (geen doppler), elke ~90 ms. In een VERBORGEN tabblad knijpt Chrome de timer (1×/s): daar staan
+  modulators (en glijden) dan bijna stil; met het tabblad vooraan niet.
+- Bewerken in de editor houdt de stand van een modulator die dezelfde soort blijft; een modulator of
+  doel weghalen zet de parameter terug op zijn eigen stand (na review).
+- De kam kan op een toon precies op zijn grondtoon +18 dB geven (feedback 97%; standaard +7 dB), net
+  als de klinker: de limiter vangt het.
+- Master-lijm hoort op de master: op een track loopt die track 6 ms achter (de vooruitblik van Chrome).
+- De duiker duikt op 1/2 en 1/1 op de "1" (en de 3) van de maat als de klok die kent (`opDeEen` in de LFO).
 - Een modulator in het handelingenlog: het rack (met `mods`) staat erin, de stand van de modulator
   niet. Terugspelen geeft dezelfde vorm en hetzelfde zaad, maar een vrije LFO begint bij het laden
   van het rack opnieuw; op de maat ligt hij weer op de maat.
-- Droog/nat per effect heeft geen vertragingscompensatie: compressor (6 ms), pitch (45 ms), band
+- Droog/nat per effect is lineair (halverwege hooguit −3 dB bij een effect dat niet op zijn ingang
+  lijkt); bij de delay is het een stuur. Het heeft geen vertragingscompensatie: compressor (6 ms), pitch (45 ms), band
   (een paar ms) zijn half nat een kam. Voor parallel comprimeren: de eigen `meng` van de compressor.
 - De kam glijdt bij een nieuwe toon (20 ms), bewust (keuze 10). Feedback en demping glijden per
   sample (10 ms): per blok gaf een tik (×781 gemeten).
