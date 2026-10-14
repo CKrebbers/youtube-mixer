@@ -49,7 +49,9 @@ node test/alles.mjs
   beeld, hoofdvenster verliest 0,29 b/s met uitlijn.html open, strook in de mixer +0,18 Mpx/s,
   DOM tegen `engine.faseVerschil` 0,000 ms op zeven tracks, transportrij en focusdeck niet hoger op
   1440×900 en 1440×790, geen consolefouten.
-- `node test/alles.mjs`: zie de samenvatting onder "Tests".
+- `node test/alles.mjs`: 104 bestanden, 9264 checks; `uitlijn.test.mjs` 115 ok, `regels.test.mjs` 103 ok.
+  Rood alleen de drie bekende van de omgeving (ook op main in deze container): renderblok "keylock met
+  wissels … bytes per bericht", wachtrij "yt-dlp en zijn kind" (2×), instrumenten-fm-schaal "geen afval per blok".
 
 ## Wat niet gedaan is
 
