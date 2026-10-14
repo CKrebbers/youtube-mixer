@@ -474,8 +474,11 @@ export function dansOctaven(delen, per = 4) {
   klassen.sort((a, b) => b.t - a.t);
   const hoog = klassen.find((k) => k.g >= 0.2 * totaal) ?? klassen.sort((a, b) => b.g - a.g)[0];
   const doel = 2 ** (hoog.t / 1000);
+  // Alleen naar het tempo van het nummer als het daar ook echt bij hoort
+  // (binnen DANS_BIJ): een eigen stuk op 95 in een mix op 175 blijft 95 (190
+  // lag "dichter bij" en werd het, review 14 okt); anders wat het bereik zegt.
   return delen.map((d, i) => {
-    let beste = eigen[i], afstand = Infinity;
+    let beste = eigen[i], afstand = DANS_BIJ;
     for (const f of [0.25, 0.5, 1, 2, 4]) {
       const b = d.bpm * f;
       if (b < DANS_RUIM_MIN || b > DANS_RUIM_MAX || !toegestaan(d, f)) continue;
@@ -485,6 +488,8 @@ export function dansOctaven(delen, per = 4) {
     return beste;
   });
 }
+/** Zo dicht (log2: 6%, de tempogrens van de auto-DJ) moet een stuk bij het tempo van het nummer liggen om zijn octaaf te volgen. */
+const DANS_BIJ = Math.log2(1.06);
 
 /**
  * Een tempokaart uit gevonden tellen en downbeats (tracktijden, s).
@@ -493,7 +498,8 @@ export function dansOctaven(delen, per = 4) {
  * onder ZEKER_VANAF als het grid ergens systematisch naast de tellen ligt
  * ('drift') of het tempo beweegt ('rubato'). Waar geen puls is: een stuk met
  * zekerheid 0 dat het rooster van zijn buur doortrekt (sync en beat-loops
- * weigeren daar). vergelijk() kan de zekerheid daarna nog omlaag halen.
+ * weigeren daar). vergelijk() kan de zekerheid daarna nog omlaag halen, en
+ * een GEHALVEERD stuk (twijfel 'tel', `halvering`) alleen zij weer zeker maken.
  * @param {ArrayLike<number>} beats
  * @param {ArrayLike<number>} [downbeats]
  * @param {{ duur?: number|null }} [opties]
@@ -580,6 +586,7 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
     if (f < 1) {
       const L2 = 60 / st.bpm;
       st.anker = st.maat + Math.ceil((st.anker - st.maat) / L2 - 1e-9) * L2;
+      extra.get(st).half = true;
     }
   });
   for (const st of stukken) {
@@ -603,7 +610,16 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
     s.zekerheid = m.raak != null ? rond(m.raak) : 0;
     if (x.rubato) { s.twijfel = 'rubato'; s.zekerheid = Math.min(s.zekerheid, ONZEKER); }
     else if (m.afwijking != null && m.afwijking > DRIFT) { s.twijfel = 'drift'; s.zekerheid = Math.min(s.zekerheid, ONZEKER); }
-    else if (x.maatTwijfel) s.twijfel = 'maat';
+    else if (x.half) {
+      // GEHALVEERD (review 14 okt): de tellen liggen om en om op de tel en de
+      // halve tel, dus ZIJ zeggen niet welke van de twee de tel is; dat deden
+      // de downbeats (of, zonder, de eerste tel: een gok). Raak meten ze
+      // allebei (fijner). Zeker pas als een tweede mening de fase bevestigt
+      // (vergelijk, grid tegen grid); tot dan onzeker met de reden 'tel'.
+      s.halvering = { raak: s.zekerheid, downbeats: x.kanHalveren, maatTwijfel: x.maatTwijfel };
+      s.twijfel = 'tel';
+      s.zekerheid = Math.min(s.zekerheid, ONZEKER);
+    } else if (x.maatTwijfel) s.twijfel = 'maat';
     if (s.zekerheid < ZEKER_VANAF && !s.twijfel) s.twijfel = 'los';
   });
   // Getallen netjes (de JSON staat in de library): 0,1 ms voor tijden, 1e-4 voor bpm.
@@ -617,13 +633,28 @@ export function gridUitTellen(beats, downbeats = [], { duur = null } = {}) {
  * het DJ-tempo het grid). Niet hetzelfde als een grid dat een halve tel naast
  * ligt: daar liggen de tellen een HELE tel uit elkaar, allemaal op de halve.
  * Ook niet een stuk met een fasesprong: daar liggen ze per blok op één plek.
+ * En de lijnen moeten de MEERDERHEID dragen (review 14 okt): telt Beat This!
+ * maar in een deel van het stuk ook de achtsten, dan liggen bij een grid dat
+ * een halve tel naast ligt de meeste tellen op de halve lijnen; vouwen maakte
+ * dat 100% raak. Bij een goed grid liggen alle echte tellen op de lijnen en
+ * alleen de extra's op de helften; telt het netwerk overal dubbel, dan is het
+ * gelijk op (en zeggen de tellen niet welke van de twee de tel is: dat is
+ * waarom een gehalveerd stuk een tweede mening nodig heeft, vergelijk).
+ * `grid`: om de lijnen te vinden (timeOf/beatAt); `L`: de tel daar (s).
  */
-function fijner(bs, L) {
+function fijner(bs, L, grid) {
   if (bs.length < MIN_TELLEN) return false;
   let half = 0;
   for (let j = 1; j < bs.length; j++) if (Math.abs((bs[j] - bs[j - 1]) / L - 0.5) <= 0.12) half++;
-  return half >= 0.3 * (bs.length - 1);
+  if (half < 0.3 * (bs.length - 1)) return false;
+  let opLijn = 0, opHelft = 0;
+  for (const b of bs) {
+    if (Math.abs(b - grid.timeOf(Math.round(grid.beatAt(b)))) <= L / 4) opLijn++; else opHelft++;
+  }
+  return opLijn >= LIJN_MEERDERHEID * opHelft;
 }
+/** Zoveel keer de tellen op de halve lijnen moeten er minstens op de lijnen liggen om te vouwen (ruis bij "gelijk op"). */
+const LIJN_MEERDERHEID = 0.8;
 /** Een fout op de halve tel (bij tellen die fijner zijn dan het grid) naar de halve lijn. */
 const vouwHalf = (e, L, fijn) => (fijn && Math.abs(e) > L / 4 ? e - Math.sign(e) * L / 2 : e);
 
@@ -645,7 +676,7 @@ export function meetGrid(grid, beats, downbeats = null) {
   // de tellen op de halve tel erbij (fijner): per stuk eerst kijken, dan meten.
   const perStuk = grid.stukken.map(() => []);
   for (const b of beats) perStuk[grid.stukIndex(b)].push(b);
-  const fijn = perStuk.map((bs, i) => fijner(bs, 60 / grid.stukken[i].bpm));
+  const fijn = perStuk.map((bs, i) => fijner(bs, 60 / grid.stukken[i].bpm, grid));
   for (const b of beats) {
     const k = Math.round(grid.beatAt(b));
     const L = 60 / grid.bpmAt(b);
@@ -685,7 +716,9 @@ export function meetGrid(grid, beats, downbeats = null) {
     offbeat: x.n ? x.offN / x.n : null,
     een: x.eenN ? x.eenOk / x.eenN : null,
   });
-  const stukken = per.map((x) => ({ van: x.van, ...af(x) }));
+  // fijn: Beat This! telt hier het dubbele (de tellen op de halve tel tellen mee als raak), dus de tellen
+  // zeggen niet welke van de twee de tel is (oordeelStuk zegt het erbij).
+  const stukken = per.map((x, i) => ({ van: x.van, ...af(x), ...(fijn[i] ? { fijn: true } : {}) }));
   // Het totaal: de grootste afwijking van alle stukken (over een grens heen meten mengt twee roosters).
   const totaal = af(tot);
   const afw = stukken.map((s) => s.afwijking).filter((x) => x !== null);
@@ -708,7 +741,7 @@ export function afwijkingBij(grid, beats, t, n = VENSTER) {
   for (let i = lo; i >= 0 && hier.length < n && t - beats[i] < 20; i--) hier.push(beats[i]);
   if (hier.length < Math.min(MIN_TELLEN, n)) return null;
   hier.reverse();
-  const L = 60 / grid.bpmAt(t), fijn = fijner(hier, L);
+  const L = 60 / grid.bpmAt(t), fijn = fijner(hier, L, grid);
   const fouten = [];
   let raak = 0;
   for (const b of hier) {
@@ -734,6 +767,7 @@ export function afwijkingBij(grid, beats, t, n = VENSTER) {
  *     geen stem.
  * Een stuk waar de ander zelf niet zeker was, of met te weinig tellen, stemt
  * ook niet. Oneens: `twijfel: 'oneens'` en een zekerheid onder ZEKER_VANAF.
+ * Een gehalveerd stuk gaat anders: grid tegen grid (bevestigHalvering).
  * Verandert `kaart` en geeft hem terug.
  */
 export function vergelijk(kaart, beats, ander) {
@@ -747,27 +781,12 @@ export function vergelijk(kaart, beats, ander) {
     if (ander.zekerheidBij && ander.zekerheidBij(midden) !== 'zeker') return;   // de ander weet het hier zelf niet
     const r = Math.log2(ander.bpmAt(midden) / st.bpm);
     const octaaf = Math.abs(r) < OCTAAF_MARGE ? 1 : Math.abs(r - 1) < OCTAAF_MARGE ? 2 : Math.abs(r + 1) < OCTAAF_MARGE ? 0.5 : null;
+    if (octaaf !== null && st.halvering) { bevestigHalvering(st, hier, ander, octaaf); return; }
     let oneens = octaaf === null;
     if (!oneens) {
       // Bij ½ is de ander grover: een gevonden tel valt op zijn tel of precies ertussen; tel die twee als één.
-      const f = octaaf === 0.5 ? 2 : 1;
-      let X = 0, Y = 0, blokken = 0;
-      for (let j = 0; j + MIN_TELLEN <= hier.length; j += FASE_BLOK) {
-        let x = 0, y = 0, n = 0;
-        for (const b of hier.slice(j, j + FASE_BLOK)) {
-          const fase = 2 * Math.PI * f * ander.beatAt(b);
-          x += Math.cos(fase); y += Math.sin(fase); n++;
-        }
-        const R = Math.hypot(x, y);
-        if (R / n < FASE_STABIEL) continue;                     // binnen dit blok al verspreid: geen stem
-        X += x / R; Y += y / R; blokken++;
-      }
-      // Draait de fase van blok tot blok, dan schuift de ander langs de tellen: geen stem.
-      if (blokken && Math.hypot(X, Y) / blokken >= FASE_SAMEN) {
-        // Hoe ver naast, in tellen van de fijnste van de twee (met f = 2 bij ½ zijn dat de gevonden tellen).
-        const naast = Math.abs(Math.atan2(Y, X)) / (2 * Math.PI);
-        oneens = naast > FASE_ANDERE_TEL;
-      }
+      const naast = faseTegen(ander, hier, octaaf === 0.5 ? 2 : 1);
+      oneens = naast !== null && naast > FASE_ANDERE_TEL;
     }
     if (!oneens) {
       if (octaaf !== 1) st.octaaf = octaaf;
@@ -779,6 +798,67 @@ export function vergelijk(kaart, beats, ander) {
   });
   return kaart;
 }
+
+/**
+ * Waar vallen deze tijden (gesorteerd) in de tel van de ander (× f: bij f = 2
+ * in zijn halve tel)? Per blok van FASE_BLOK een gemiddelde fase. Liggen de
+ * blokken samen (FASE_SAMEN), dan hoe ver naast 0, in delen van een tel van
+ * de fijnste van de twee (0 .. 0,5); draait de fase van blok tot blok (de
+ * ander volgt een tempo dat beweegt minder fijn) of is een blok al verspreid:
+ * null, geen stem.
+ */
+function faseTegen(ander, tijden, f) {
+  let X = 0, Y = 0, blokken = 0;
+  for (let j = 0; j + MIN_TELLEN <= tijden.length; j += FASE_BLOK) {
+    let x = 0, y = 0, n = 0;
+    for (const b of tijden.slice(j, j + FASE_BLOK)) {
+      const fase = 2 * Math.PI * f * ander.beatAt(b);
+      x += Math.cos(fase); y += Math.sin(fase); n++;
+    }
+    const R = Math.hypot(x, y);
+    if (R / n < FASE_STABIEL) continue;                     // binnen dit blok al verspreid: geen stem
+    X += x / R; Y += y / R; blokken++;
+  }
+  if (!blokken || Math.hypot(X, Y) / blokken < FASE_SAMEN) return null;
+  return Math.abs(Math.atan2(Y, X)) / (2 * Math.PI);
+}
+
+/** Bij een gehalveerd stuk: zoveel (deel van een tel) naast de ander is dezelfde tel, vanaf HALF_ANDER de andere. */
+const HALF_EENS = 0.2, HALF_ANDER = 0.3;
+
+/**
+ * Een GEHALVEERD stuk (gridUitTellen, `halvering`) tegen de ander, GRID TEGEN
+ * GRID: de lijnen van het stuk (niet de tellen: die liggen om en om op de tel
+ * en de halve tel en heffen elkaar op) in de tel van de ander. Hoort de ander
+ * hetzelfde tempo of het halve, dan zegt hij welke van de twee de tel is; het
+ * dubbele (zoals de tellen) zegt niets. Zeker alleen als twee bronnen het eens
+ * zijn: de downbeats van Beat This! en de ander. Zonder downbeats was de fase
+ * een gok: dan kiest de ander (een halve tel opschuiven als hij de andere
+ * hoort), maar het stuk blijft onzeker. Zijn downbeats en ander het oneens:
+ * 'oneens'. Geen stem: blijft 'tel'.
+ */
+function bevestigHalvering(st, hier, ander, octaaf) {
+  const h = st.halvering;
+  if (octaaf === 2) { st.octaaf = 2; return; }                // de ander telt wat de tellen tellen: geen stem
+  const L = 60 / st.bpm;
+  const lijnen = [];
+  for (let k = Math.ceil((hier[0] - st.anker) / L); st.anker + k * L <= hier[hier.length - 1]; k++) lijnen.push(st.anker + k * L);
+  const naast = faseTegen(ander, lijnen, octaaf === 0.5 ? 2 : 1);
+  if (naast === null || (naast > HALF_EENS && naast < HALF_ANDER)) return;
+  if (octaaf !== 1) st.octaaf = octaaf;
+  if (naast <= HALF_EENS) {
+    if (!h.downbeats) return;                                   // één bron: de fase klopt waarschijnlijk, maar onzeker
+    st.zekerheid = h.raak;
+    if (h.maatTwijfel) st.twijfel = 'maat';
+    else if (st.zekerheid < ZEKER_VANAF) st.twijfel = 'los';
+    else delete st.twijfel;
+    return;
+  }
+  if (h.downbeats) { st.twijfel = 'oneens'; return; }         // downbeats en de ander kiezen een andere tel
+  // Zonder downbeats: de tel van de ander, een halve tel verder (de "1" schuift mee: ook een gok).
+  st.anker = rond(st.anker + L / 2, 1e5);
+  if (Number.isFinite(st.maat)) st.maat = rond(st.maat + L / 2, 1e5);
+}
 /** Wat een twijfel betekent, voor op het scherm. */
 export const TWIJFEL_TEKST = {
   'geen puls': 'hier hoort de analyse geen puls: geen sync of beat-loops',
@@ -787,6 +867,7 @@ export const TWIJFEL_TEKST = {
   los: 'veel tellen vallen hier naast het grid',
   maat: 'de "1" is niet zeker: de downbeats zijn het onderling oneens',
   oneens: 'twee analyses zijn het hier oneens: controleer even',
+  tel: 'Beat This! telt hier het dubbele tempo: welke van de twee de tel is, is niet bevestigd (controleer, of ½ tel opschuiven)',
 };
 export { TWIJFELS };
 
@@ -796,6 +877,7 @@ export { TWIJFELS };
 export const LIVE_DRIFT = 0.015;
 
 const procent = (x) => `${Math.round(x * 100)}%`;
+const FIJN_TEKST = ' (Beat This! telt hier het dubbele tempo: welke van de twee de tel is, zeggen de tellen niet)';
 const OCTAAF_TEKST = { 2: ' (de oude analyse hoorde het dubbele tempo)', 0.5: ' (de oude analyse hoorde het halve tempo)' };
 
 /**
@@ -811,7 +893,9 @@ const OCTAAF_TEKST = { 2: ' (de oude analyse hoorde het dubbele tempo)', 0.5: ' 
  */
 export function oordeelStuk(stuk, m = null, slot = false) {
   const gemeten = !!m && m.n >= MIN_TELLEN && m.raak != null;
-  const raak = gemeten ? `${procent(m.raak)} van de gevonden tellen valt op het grid` : null;
+  // Telt Beat This! hier het dubbele (m.fijn), dan valt elke halve tel ook "raak": zeg erbij dat de
+  // tellen dan niet zeggen welke van de twee de tel is (een grid een halve tel naast scoort net zo).
+  const raak = gemeten ? `${procent(m.raak)} van de gevonden tellen valt op het grid${m.fijn ? FIJN_TEKST : ''}` : null;
   const naast = gemeten && m.afwijking != null && m.afwijking > DRIFT ? `, en een stuk ligt ${Math.round(m.afwijking * 1000)} ms naast de tellen` : '';
   const klopt = gemeten && m.raak >= ZEKER_VANAF && !naast;
   const octaaf = OCTAAF_TEKST[stuk.octaaf] ?? '';

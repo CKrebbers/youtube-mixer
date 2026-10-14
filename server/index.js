@@ -492,7 +492,7 @@ async function pasTellenToe(id, { overHand = false, overSlot = false } = {}) {
   }
   vergelijk(kaart, t.beats, ander);
   const b = lib.bewaarAutoGrid(id, kaart, { overHand, overSlot });
-  if (b.bewaard) console.log(`[tellen] ${track.titel}: ${gridSamenvatting(b.grid)}`);
+  if (b.bewaard) console.log(`[tellen] ${track.titel}: ${gridSamenvatting(b.grid)}${b.samples ? ` (${b.samples} sampler-pad${b.samples === 1 ? '' : 's'} naar het nieuwe octaaf)` : ''}`);
   else if (track.grid) {
     const m = meetGrid(new Beatgrid(track.grid), t.beats, t.downbeats).totaal;
     console.log(`[tellen] ${track.titel}: niet bewaard (${b.reden}); het grid dat er staat: `

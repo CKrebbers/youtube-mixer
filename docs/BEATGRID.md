@@ -435,7 +435,9 @@ elke "1" exact bekend is, voor beide analyses. Verslag met alle cijfers:
 - `nep-beatthis.mjs`: de tellen zoals Beat This! ze geeft, met zijn soorten fouten: `bt` (σ 6 ms,
   3% gemist, 2% extra, 4% van de downbeats verschoven, het octaaf dat het netwerk waarschijnlijk
   kiest: 86 voor jungle, 77 voor Ciel, 70 voor half-time), `ruis` (σ 10 ms, 10% gemist, 6% extra),
-  `half`, `dubbel`, `wissel` (halverwege het halve tempo), `eenfout` (elke "1" een tel te laat).
+  `half`, `dubbel`, `wissel` (halverwege het halve tempo), `eenfout` (elke "1" een tel te laat), en
+  twee om het halveren te laten mislukken (review 14 okt): `dubbel-laat` (dubbel, elke downbeat op de
+  "en") en `dubbel-kaal` (dubbel zonder downbeats, de eerste tel gemist: het netwerk begint op de "en").
 - `scoor.mjs`: dekking (zeker op de duidelijke tellen), tempo (het echte octaaf), DJ-tempo, fase,
   naast (> 0,1 tel), de "1", en **vals zeker**: op de tijd, over het hele nummer, waar het grid
   zeker zegt en > 0,1 tel naast ligt of een ander tempo heeft (VALS = > 2% en ≥ 2 s).
@@ -452,13 +454,16 @@ node tools/beatmeting/synth/bench.mjs --echt <map>     # <map>/<naam>.json = tel
 Beat This! zelf draaide hier NIET (de container mag download.pytorch.org en cloud.cp.jku.at niet
 bereiken: geen torch, geen checkpoint). Met `--wav` en `--echt` kan het op Clay's Mac.
 
-### Gemeten (vóór = studio/afmaken 7debab6, na = deze tak)
+### Gemeten (vóór = studio/afmaken 7debab6, na = deze tak na review ronde 1)
 
 | | vóór | na |
 |---|---|---|
-| tellen-route, 114 gevallen: vals zeker | 1 (mix 124 → 131 met ruis: 4,5 s zeker op het oude tempo) | 0 |
-| … dekking (zeker op de duidelijke tellen) | 93% | 98% |
+| tellen-route, 152 gevallen (8 soorten fouten): vals zeker | 1 (mix 124 → 131 met ruis: 4,5 s zeker op het oude tempo) | 0 (de eerste versie van deze tak: 20, alle bij het halveren) |
+| de 114 gewone gevallen (6 soorten): vals zeker | 1 | 0 |
+| … dekking (zeker op de duidelijke tellen) | 93% | 96% |
+| … tempo (het echte octaaf) | 57% | 87% |
 | … op het DJ-tempo | 50% | 98% |
+| … op het DJ-tempo zonder vast-72 en reggae-75 (daar is het DJ-tempo een keuze: 144/150) | 54% | 98% |
 | … > 0,1 tel naast | 4% | 0% |
 | … de "1" goed | 80% | 83% |
 | oude analyse, 19 nummers: op het DJ-tempo | 84% | 91% |
@@ -470,12 +475,17 @@ bereiken: geen torch, geen checkpoint). Met `--wav` en `--echt` kan het op Clay'
 1. **Het DJ-tempo** (`dansOctaven`, `DANS_MIN` 88 – `DANS_MAX` 180 in `src/engine/tellen.js`). Beat
    This! kiest zelf welk octaaf het telt (77 waar Clay 153 tikt). Elk stuk komt nu in het bereik
    88–180, zo dicht mogelijk bij het tempo van het nummer (een nummer dat rond 88 drijft springt niet
-   heen en weer; een stuk waar het netwerk even de halve tel hoort valt terug op de rest). Hoort meer
+   heen en weer; een stuk waar het netwerk even de halve tel hoort valt terug op de rest, maar alleen
+   als het dan binnen 6% van het tempo van het nummer komt: een eigen stuk op 95 in een mix op 175
+   blijft 95, review 14 okt). Hoort meer
    dan een vijfde van het nummer het hogere octaaf, dan dat. ×2 houdt anker en "1"; ½ alleen als de
    downbeats zeggen welke tel de tel is (anders blijft het staan, behalve boven 300). Een wals wordt
    niet verdubbeld. De oude analyse krijgt hetzelfde bereik (alleen ×2: hij kent geen "1").
    **De prijs**: wat echt op 70–87 telt (reggae, downtempo, trip-hop) krijgt het dubbele. ×2/½ in
-   grid-modus zet het terug, en dat is met de hand: de analyse komt er niet meer overheen.
+   grid-modus zet het terug, en dat is met de hand: de analyse komt er niet meer overheen. Bij ×2 blijft
+   de maat 4 tellen op het dubbele tempo: elke "1" van Beat This! blijft een "1", maar elke tweede "1"
+   van het grid is erbij verzonnen; secties, frasegrenzen van de auto-DJ, beatjump en loops in tellen
+   zijn in seconden half zo lang (bedoeld: zo telt een DJ op 154).
 2. **Sneller dan 300 bpm** (het netwerk telt de achtsten) was "geen puls": jungle op 344 verloor zijn
    hele grid. Nu tot 500 (`MIN_L`), en het DJ-tempo halveert.
 3. **Het begin van een stuk** (`beginPeriode`): de mediaan van de afstanden werd met twee extra
@@ -486,21 +496,53 @@ bereiken: geen torch, geen checkpoint). Met `--wav` en `--echt` kan het op Clay'
    klein). Als een stuk stopt omdat drie tellen los liggen, gaat de staart eraf als die samen een
    ander tempo heeft en meer dan 20 ms naast de rest ligt. Grens 4,5 → 0,4 s.
 5. **Meten als het netwerk fijner telt dan het grid** (`fijner` in meetGrid en afwijkingBij): na ½
-   liggen de tellen om en om op de tel en de halve tel; die tellen dan als raak. Een grid dat een
-   halve tel naast ligt (alle tellen op de halve) of een sprong van een halve tel blijven naast.
+   liggen de tellen om en om op de tel en de halve tel; die tellen dan als raak, maar alleen als de
+   lijnen de meerderheid dragen (minstens 0,8 × zoveel tellen op de lijnen als op de helften). Zonder
+   die regel werd een grid op slot dat een halve tel naast ligt "100% raak" zodra het netwerk in 20%
+   van het stuk de achtsten telde (review 14 okt). Een grid dat een halve tel naast ligt of een sprong
+   van een halve tel blijven zo naast. Telt het netwerk OVERAL dubbel, dan zeggen de tellen niet welke
+   van de twee de tel is; dan staat `fijn: true` in de meting en zegt het oordeel dat erbij.
 6. **De oude analyse loopt weg van de klappen** (`blokDrift`, `kantelOpPieken` in detect.js, in
    `maakGridHier`): per blok van 16 onset-pieken binnen 0,2 tel de mediaan van de afwijking. Ligt een
    blok verder dan 0,04 tel, dan eerst het tempo bijstellen op de pieken met de fase in het midden
    (fijneFase) op zijn plek; ligt het daarna nog verder dan 0,08 tel, dan `twijfel: 'drift'` en
    onzeker. Schone nummers: hooguit 0,03 tel, dus niets anders.
+7. **Halveren is een gok, tot een tweede mening hem bevestigt** (review 14 okt, `halvering`,
+   `bevestigHalvering` in tellen.js). Telt Beat This! het dubbele tempo, dan liggen zijn tellen om en
+   om op de tel en de halve tel: welke van de twee de tel is zeggen ze niet. De eerste versie koos met
+   de downbeats (of, boven 300 zonder, de eerste tel) en zette het stuk op zeker: met de downbeats op de
+   "en" werd dat VALS ZEKER over het hele nummer (16 van 19 nummers), en `vergelijk` zag het niet (de
+   tellen heffen elkaar op in de fase van de ander). Nu: een gehalveerd stuk is onzeker met
+   `twijfel: 'tel'`. `vergelijk` zet de LIJNEN van het stuk in de tel van de oude analyse (grid tegen
+   grid; bij een ander op het halve tempo in zijn halve tel; een ander op het dubbele zegt niets).
+   Zeker alleen als twee bronnen het eens zijn: de downbeats en de oude analyse. Zonder downbeats kiest
+   de oude analyse de fase (een halve tel opschuiven als hij de andere hoort), maar het blijft onzeker.
+   Oneens: `'oneens'`. **De prijs**: waar de oude analyse zelf niet zeker is (een band zonder klik, een
+   versnelling) blijft een gehalveerd stuk onzeker, ook als het goed ligt (live-drift/dubbel 100 → 23%,
+   oplopend/dubbel 100 → 0%, indie-154/dubbel 100 → 35% dekking; vóór de tak waren die zeker op 240,
+   alle lijnen op een tel, maar sync tegen een nummer op 120 speelde dan op halve snelheid).
+8. **Een octaafwissel neemt de sampler-pads mee** (`_samplesNaarOctaaf` in library.js, in de
+   transactie van `bewaarAutoGrid`): een pad bewaart tellen en bpm van het grid van toen, en de sampler
+   speelt `tellen` tellen van de maatgever. Een pad van 4 tellen op 77 zou na de herberekening (154) dubbel
+   zo snel spelen; nu wordt hij 8 tellen op 154. Alleen bij een macht van twee (op 2% na).
 
 `VERSIE` van de tellen-kaart is 2: bij het opstarten rekent de server elk AUTOMATISCH grid uit de
 tellen opnieuw (uit tellen.json, geen GPU). Op slot of met de hand gezet blijft staan (wilTellenGrid).
 Wat dat in Clay's library doet: nummers die Beat This! op 70–87 hoorde (Ciel, het album, ...) krijgen
 het dubbele tempo; de sectiekaart wordt bij het volgende laden opnieuw berekend (een ander grid).
-Grids van de oude analyse met `bron: 'auto'` veranderen pas na ↻ (zoals altijd).
+Ook een automatisch grid van de OUDE analyse wordt vervangen zodra er een tellen.json is
+(`methode !== 'tellen'`, dat deed `wilTellenGrid` al vóór deze tak): ook die nummers kunnen van octaaf
+wisselen. Bewaarde sampler-pads gaan mee (punt 8). Wat niet meegaat: lengtes in het setplan in
+`{ maten }` (in seconden half zo lang na ×2) en hotcues (tijden, die blijven kloppen).
+Een nummer ZONDER tellen.json houdt zijn grid van de oude analyse (die heeft geen versie en wordt niet
+opnieuw gedaan): zo'n nummer kan op 70–87 staan terwijl nieuwe ingests op 140–174 komen. Voor de auto-DJ
+(tempo ≤ 6%) en "past bij" liggen die een octaaf uit elkaar tot er tellen zijn of je ↻ drukt.
 
 ### Wat niet opgelost is
+
+- **De blinde combinatie**: Beat This! telt dubbel, zijn downbeats liggen op de "en", én de oude analyse
+  hoort ook de offbeat. Twee bronnen die elkaar bevestigen in dezelfde fout; de tellen zelf zijn
+  symmetrisch. Dan zeker en een halve tel naast (beatbench houdt dat geval apart, al het andere schoon).
 
 - Een consequent verkeerde "1" van Beat This! (`eenfout`): uit tellen alleen niet te zien (0%).
 - De oude analyse heeft geen downbeats ("1" 8–26% op wals, reggae, live band) en kiest bij 178 nog 89.

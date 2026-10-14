@@ -1873,8 +1873,13 @@ Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag misse
 - HET DJ-TEMPO (14 okt, BEATGRID.md §12): elk automatisch grid (tellen én oude analyse) komt in
   88–180 bpm (`dansOctaven`, `DANS_MIN`/`DANS_MAX` in tellen.js): Beat This! hoort vaak de halve tel
   (77 waar Clay 153 tikt). ½ alleen met downbeats (of boven 300), een wals niet ×2. Prijs: wat echt
-  op 70–87 telt krijgt het dubbele. Een grid ander octaaf meten kan: meetGrid/afwijkingBij tellen
-  tellen op de halve tel mee als ze om en om vallen (`fijner`). De oude analyse controleert zijn
+  op 70–87 telt krijgt het dubbele. HALVEREN IS EEN GOK over welke van de twee tellen de tel is: een
+  gehalveerd stuk is onzeker (`twijfel: 'tel'`) tot `vergelijk` het GRID TEGEN GRID bevestigt (de lijnen
+  in de tel van de oude analyse) én de downbeats het zeggen; zonder downbeats kiest de oude analyse de
+  fase, maar het blijft onzeker. Een grid ander octaaf meten kan: meetGrid/afwijkingBij tellen
+  tellen op de halve tel mee als ze om en om vallen én de lijnen de meerderheid dragen (`fijner`;
+  anders werd een slot-grid een halve tel naast "100% raak"). Een octaafwissel van een auto-grid
+  rekent de bewaarde sampler-pads mee om (`_samplesNaarOctaaf`, library.js). De oude analyse controleert zijn
   zekere stukken op de onset-pieken (`blokDrift`, `kantelOpPieken`): wegloopt = `twijfel: 'drift'`.
   Verander je de analyse: `node tools/beatmeting/synth/bench.mjs` (vóór/na met `--code`, `--vergelijk`)
   en `node test/beatbench.test.mjs` (nergens vals zeker). Kaart-VERSIE omhoog = alle auto-grids uit de tellen opnieuw.

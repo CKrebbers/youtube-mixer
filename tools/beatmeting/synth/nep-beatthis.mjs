@@ -13,8 +13,12 @@
 //   half     het halve tempo (elke tweede tel), downbeats om de vier van ZIJN tellen;
 //   dubbel   het dubbele tempo (een tel ertussen);
 //   wissel   het octaaf wisselt halverwege (eerst het hele tempo, dan het halve, wat bt.oct ook is);
-//   eenfout  alle downbeats een tel te laat (een consequent verkeerde "1").
-export const VARIANTEN = ['bt', 'ruis', 'half', 'dubbel', 'wissel', 'eenfout'];
+//   eenfout  alle downbeats een tel te laat (een consequent verkeerde "1");
+//   dubbel-laat  het dubbele tempo, en elke downbeat een tel VAN HET NETWERK te laat (een halve echte
+//            tel: op de "en"; review 14 okt). De tellen alleen zeggen dan niet welke van de twee de tel is;
+//   dubbel-kaal  het dubbele tempo zonder downbeats, en de eerste tel gemist: het netwerk begint op de "en".
+// De laatste twee zijn gemaakt om het halveren naar het DJ-tempo te laten mislukken: nergens vals zeker.
+export const VARIANTEN = ['bt', 'ruis', 'half', 'dubbel', 'wissel', 'eenfout', 'dubbel-laat', 'dubbel-kaal'];
 
 function rndMet(z) { let s = z >>> 0 || 1; return () => ((s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 4294967296); }
 const gauss = (rnd) => { let u = 0; for (let i = 0; i < 6; i++) u += rnd(); return (u - 3) / Math.SQRT2; };
@@ -57,7 +61,8 @@ export function nepTellen(nummer, variant = 'bt', zaad = 1) {
     return { beats: B.filter((t) => t >= 0 && t < nummer.duur).sort((a, b) => a - b), downbeats: [] };
   }
 
-  const oct = variant === 'half' ? 0.5 : variant === 'dubbel' ? 2 : variant === 'wissel' ? 1 : nummer.bt?.oct ?? 1;
+  const dubbel = variant === 'dubbel' || variant === 'dubbel-laat' || variant === 'dubbel-kaal';
+  const oct = variant === 'half' ? 0.5 : dubbel ? 2 : variant === 'wissel' ? 1 : nummer.bt?.oct ?? 1;
   if (oct === 0.5) ({ T, E } = halveer(T, E, per));
   if (oct === 2) {
     const D = [];
@@ -71,6 +76,11 @@ export function nepTellen(nummer, variant = 'bt', zaad = 1) {
     T = [...voor, ...h.T];
     E = [...E.filter((t) => t < mid), ...h.E];
   }
+  if (variant === 'dubbel-laat') {
+    const idx = new Map(T.map((t, i) => [t, i]));
+    E = E.map((e) => T[(idx.get(e) ?? -1) + 1]).filter((t) => t !== undefined);
+  }
+  if (variant === 'dubbel-kaal') { T = T.slice(1); E = []; }
   if (variant === 'eenfout') {
     const idx = new Map(T.map((t, i) => [t, i]));
     E = E.map((e) => T[(idx.get(e) ?? -1) + 1]).filter((t) => t !== undefined);

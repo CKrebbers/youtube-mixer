@@ -172,6 +172,9 @@ try {
     }
     // autoA: een automatisch grid van de oude analyse, een octaaf te hoog en een halve tel naast.
     lib.bewaarGrid('autoA', { stukken: [{ van: 0, bpm: 240, anker: 0.5, zekerheid: 0.9 }], bron: 'auto' });
+    // Een sampler-pad van 8 tellen op dat grid (2 s), en een van 3 s zonder grid (tellen null).
+    lib.bewaarSample('autoA', { pad: 1, van: 1, tot: 3, tellen: 8, bpm: 240 });
+    lib.bewaarSample('autoA', { pad: 2, van: 4, tot: 7 });
     lib.bewaarGrid('handB', { stukken: [{ van: 0, bpm: 121, anker: 0.3 }], bron: 'hand' });
     lib.bewaarGrid('slotC', { stukken: [{ van: 0, bpm: 119, anker: 0.2 }], bron: 'hand', slot: true });
     lib.bewaarGrid('nummer-traag', { stukken: [{ van: 0, bpm: 100, anker: 0 }], bron: 'auto', zekerheid: 0.9 });
@@ -203,6 +206,13 @@ try {
   ok('… op het tempo van de tellen (120), met de "1" op een downbeat, zeker', Math.abs(gA.stukken[0].bpm - 120) < 0.01
     && Math.abs(gA.stukken[0].maat - 0.25) < 0.002 && gA.stukken[0].zekerheid >= 0.65 && gA.bron === 'auto' && gA.versie >= 1, JSON.stringify(gA));
   ok('… het octaaf van de oude analyse genoteerd? nee: die lag een halve tel naast, dat is oneens', gA.stukken[0].twijfel === undefined || gA.stukken[0].twijfel === 'oneens');
+  // Het nieuwe grid staat een octaaf lager (240 -> 120): een pad van 8 tellen op 240 is 4 tellen op 120.
+  // Anders speelde de sampler hem als 8 tellen van de maatgever: half zo snel, een octaaf lager (review 14 okt).
+  const sa = (await json('/api/library/autoA/samples')).j?.samples ?? [];
+  ok('een bewaarde sampler-pad gaat mee naar het nieuwe octaaf (8 tellen op 240 = 4 op 120), een pad zonder grid niet',
+    sa.find((x) => x.pad === 1)?.tellen === 4 && Math.abs(sa.find((x) => x.pad === 1)?.bpm - 120) < 1e-9
+    && sa.find((x) => x.pad === 1)?.van === 1 && sa.find((x) => x.pad === 2)?.tellen === null, JSON.stringify(sa));
+  ok('… en het logboek zegt het', /titel autoA: .*1 sampler-pad naar het nieuwe octaaf/.test(uit), uit.slice(-600));
   const gB = await grid('handB'), gC = await grid('slotC');
   ok('een met de hand gezet grid blijft staan', gB.bron === 'hand' && gB.stukken[0].bpm === 121 && !gB.methode);
   ok('een grid op slot ook', gC.slot === true && gC.stukken[0].bpm === 119);
