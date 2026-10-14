@@ -1,4 +1,5 @@
 // Licht een HERHAALDE melding elke keer opnieuw op? (controller-invoer, review ronde 1, 14 okt)
+// En: volgt de bovenbalk een knop die groeit (ResizeObserver, geen timer)? Zie deel 3 onderaan.
 // meld() met een tekst die al staat stapelt niet, maar laat de melding opnieuw oplichten: het
 // enige teken dat je druk (een pad die steeds "geen secties" zegt) aankwam. Zonder `offsetWidth`
 // (gedwongen opmaak midden in het MIDI-bericht) moet de CSS-animatie toch elke keer opnieuw starten.
@@ -91,6 +92,23 @@ try {
   await ev('(window.__los.remove(), true)');
   console.log(`      ter vergelijking: klasse eraf + rAF erop ${raf} van ${HERHAAL}; offsetWidth (gedwongen opmaak) ${offset} van ${HERHAAL}`);
   ok('de meting zelf onderscheidt: offsetWidth start elke keer, klasse eraf + rAF niet', offset === HERHAAL && raf < HERHAAL, `rAF ${raf}, offsetWidth ${offset}`);
+  // 3. De bovenbalk (review ronde 1, klein punt): een tekst die groeit in een KLEINKIND van .topbar-right (in
+  // .opname-groep, naast de log-knop, zoals "◉ log 0:02 · 12 kB" tijdens het spelen) moet de vervaging 'meer'
+  // zetten, zonder resize-event en binnen 150 ms (de oude timer keek pas na 1 s), en weer weghalen als hij krimpt.
+  // Een eigen <span> en niet de log-knop zelf: logboek.js zet de tekst van die knop zelf terug.
+  const balk = (code) => ev(`(async () => { const b = document.querySelector('.topbar-right'), g = b.querySelector('.opname-groep');
+    let k = document.getElementById('proef-groei'); if (!k) { k = document.createElement('span'); k.id = 'proef-groei'; g.append(k); }
+    const beeld = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); ${code} })()`);
+  const rust = await balk(`return { meer: b.classList.contains('meer'), past: b.scrollWidth <= b.clientWidth + 1 };`);
+  const groot = await balk(`window.__resizes = 0; window.addEventListener('resize', () => window.__resizes++);
+    k.textContent = '◉ log 0:02 · 12 kB · '.repeat(12); await beeld(); await new Promise((r) => setTimeout(r, 100));
+    return { meer: b.classList.contains('meer'), past: b.scrollWidth <= b.clientWidth + 1, resizes: window.__resizes };`);
+  const terug = await balk(`k.textContent = ''; await beeld(); await new Promise((r) => setTimeout(r, 100));
+    return { meer: b.classList.contains('meer'), past: b.scrollWidth <= b.clientWidth + 1 };`);
+  ok('bovenbalk: in rust past hij en staat er geen vervaging', rust.past && !rust.meer, JSON.stringify(rust));
+  ok('bovenbalk: een groeiende tekst in .opname-groep (kleinkind) zet de vervaging binnen 150 ms, zonder resize-event',
+    !groot.past && groot.meer && groot.resizes === 0, JSON.stringify(groot));
+  ok('bovenbalk: krimpt hij weer, dan gaat de vervaging weg', terug.past && !terug.meer, JSON.stringify(terug));
 } catch (e) { console.error(e); uitkomst.push(['script', false]); } finally { try { ws?.close(); } catch {} browser.kill('SIGKILL'); server.kill('SIGINT'); await wacht(300); try { rmSync(tmp, { recursive: true, force: true }); } catch {} }
 const mis = uitkomst.filter(([, g]) => !g);
 console.log(mis.length ? `\n${mis.length} FOUT(EN): ${mis.map(([n]) => n).join(', ')}` : `\nAlle ${uitkomst.length} checks groen.`);

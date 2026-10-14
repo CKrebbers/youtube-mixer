@@ -24,6 +24,7 @@
 //
 // Gebruik:  VARVE_CHROME=<headless_shell> node tools/headless/latentie.mjs [--label voor] [--uit pad.json]
 //           [--duur 3000] [--scenario fader,sweep,...] [--profiel rust,sweep] [--rijen 0] [--video 1]
+//           [--zaad 1] [--jitter 0]   (het berichtenplan: latentie-plan.mjs; zelfde zaad = zelfde plan)
 //           node tools/headless/latentie.mjs --vergelijk voor.json na.json      (of voor1.json,voor2.json na1.json,na2.json: mediaan)
 // Andere app (vóór/na): VARVE_WORTEL=<map met een uitgepakte versie> (de server en de pagina komen dan daarvandaan).
 // Poorten: VARVE_LAT_POORT (server, 8841), VARVE_LAT_DEBUG (DevTools, 8842), VARVE_LAT_HUB (hub, 7741).
@@ -38,6 +39,7 @@ import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSyn
 import { tmpdir, homedir, loadavg } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { maakPlan, UITLEG } from './latentie-plan.mjs';
 
 const args = process.argv.slice(2);
 const optie = (naam, standaard = null) => { const i = args.indexOf(`--${naam}`); return i >= 0 ? args[i + 1] : standaard; };
@@ -47,8 +49,10 @@ const vlag = (naam) => args.includes(`--${naam}`);
 if (vlag('vergelijk')) {
   const i = args.indexOf('--vergelijk');
   // Per kant één bestand of een komma-lijst (meerdere rondes): dan de MEDIAAN van elk getal over de rondes.
-  const [a, b] = [args[i + 1], args[i + 2]].map((lijst) => samen(lijst.split(',').map((p) => JSON.parse(readFileSync(p, 'utf8')))));
-  console.log(vergelijk(a, b));
+  const [ra, rb] = [args[i + 1], args[i + 2]].map((lijst) => lijst.split(',').map((p) => JSON.parse(readFileSync(p, 'utf8'))));
+  console.log(vergelijk(samen(ra), samen(rb)));
+  // Met meerdere rondes ook het BEREIK per ronde (min–max), zodat te zien is of de twee kanten overlappen.
+  if (ra.length > 1 || rb.length > 1) console.log('\n' + bereik(ra, rb));
   process.exit(0);
 }
 
@@ -82,67 +86,13 @@ function zoekChrome() {
   return join(map, sub, 'chrome-headless-shell');
 }
 
-/*
- * De scenario's. Elk is een plan van [ms, status, data1, data2] dat de Worker
- * op tijd verstuurt (status 0 = alleen een ping: meet de wacht, raakt niets).
- * APC40 mkII in 0x42 (devices/apc40mk2.js): kanaalfader = cc 7 op het kanaal
- * van de strip, track knob = cc 48–55 (kanaal 0), device knob = cc 16–23,
- * crossfader cc 15, shift = noot 98, scene 1–5 = noot 82–86, pads noot 0–39.
- */
-const SCENARIOS = {
-  rust: { uitleg: 'spelend, niets aanraken (pings van 100/s meten de event-loop)', plan: () => reeks(100, () => [[0, 0, 0]]) },
-  fader: { uitleg: 'één kanaalfader, 120 berichten/s', plan: () => sweep([0], (k) => [0xb0 | k, 7], 120) },
-  sweep: { uitleg: 'acht kanaalfaders tegelijk, elk 120/s (960/s)', plan: () => sweep([0, 1, 2, 3, 4, 5, 6, 7], (k) => [0xb0 | k, 7], 120) },
-  ringen: { uitleg: 'acht track knobs (endless, filter), elk 120/s', plan: () => sweep([0, 1, 2, 3, 4, 5, 6, 7], (k) => [0xb0, 48 + k], 120) },
-  device: { uitleg: 'acht device knobs (strip van de focus), elk 120/s', plan: () => sweep([0, 1, 2, 3, 4, 5, 6, 7], (k) => [0xb0, 16 + k], 120) },
-  xfader: { uitleg: 'crossfader, 120/s', plan: () => sweep([0], () => [0xb0, 15], 120) },
-  pads: { uitleg: 'hotcue-pads indrukken en loslaten, 16/s', plan: () => pads([32, 33, 34, 35], 16) },
-  shift: { uitleg: 'shift indrukken en loslaten, 8/s, met een fader erdoor (120/s)', plan: () => mix(knop(98, 8), sweep([0], (k) => [0xb0 | k, 7], 120)) },
-  mapje: { uitleg: 'grid-modus wisselen (scene 1–4 met shift, 4/s) en pads in het mapje', plan: () => mapjes() },
-};
-
-function reeks(perS, maak) {
-  const uit = [], n = Math.round(DUUR * perS / 1000);
-  for (let i = 0; i < n; i++) for (const b of maak(i)) uit.push([i * 1000 / perS, ...b]);
-  return uit;
-}
-/** Een sweep op en neer (0 -> 127 -> 0 ...), per control verschoven in de tijd en in de fase. */
-function sweep(ks, sig, perS) {
-  const uit = [], n = Math.round(DUUR * perS / 1000);
-  ks.forEach((k, j) => {
-    for (let i = 0; i < n; i++) {
-      const f = (i + j * 7) % 254, v = f < 127 ? f + 1 : 254 - f;
-      uit.push([i * 1000 / perS + j * 1000 / perS / ks.length, ...sig(k), v]);
-    }
-  });
-  return uit.sort((a, b) => a[0] - b[0]);
-}
-function pads(noten, perS) {
-  const uit = [], n = Math.round(DUUR * perS / 1000);
-  for (let i = 0; i < n; i++) {
-    const t = i * 1000 / perS, nr = noten[i % noten.length];
-    uit.push([t, 0x90, nr, 127], [t + 1000 / perS / 2, 0x80, nr, 0]);
-  }
-  return uit;
-}
-function knop(nr, perS) {
-  const uit = [], n = Math.round(DUUR * perS / 1000);
-  for (let i = 0; i < n; i++) { const t = i * 1000 / perS; uit.push([t, 0x90, nr, 127], [t + 1000 / perS / 2, 0x80, nr, 0]); }
-  return uit;
-}
-const mix = (...plannen) => plannen.flat().sort((a, b) => a[0] - b[0]);
-function mapjes() {
-  // Shift + scene 1..4 (secties, patronen, stems, auto) om de beurt, daarna terug naar hotcues (scene 1 zonder shift),
-  // met tussendoor een pad in het open mapje.
-  const uit = [], n = Math.round(DUUR * 4 / 1000);
-  for (let i = 0; i < n; i++) {
-    const t = i * 250, scene = 82 + (i % 4);
-    uit.push([t, 0x90, 98, 127], [t + 5, 0x90, scene, 127], [t + 30, 0x80, scene, 0], [t + 35, 0x80, 98, 0]);
-    uit.push([t + 100, 0x90, 82, 127], [t + 130, 0x80, 82, 0]);   // terug: hotcues
-    uit.push([t + 180, 0x90, 32, 127], [t + 210, 0x80, 32, 0]);   // een pad
-  }
-  return uit;
-}
+// De plannen (wat er wanneer verstuurd wordt) staan in latentie-plan.mjs, puur en getest
+// (test/latentie-plan.test.mjs). JITTER (review ronde 1): elke ronde een eigen beginfase en elk bericht
+// een eigen verschuiving, uit een vast zaad (--zaad, standaard 1); --jitter 0 = het oude vaste rooster.
+// Draai vóór en na met hetzelfde zaad in dezelfde ronde: dan krijgen ze exact dezelfde berichten.
+const ZAAD = Number(optie('zaad', '1')) >>> 0;
+const JITTER = optie('jitter', '1') !== '0';
+const SCENARIOS = Object.fromEntries(Object.entries(UITLEG).map(([naam, uitleg]) => [naam, { uitleg }]));
 
 // ---- in de pagina, vóór alles: nep-MIDI en de meters ------------------------
 const VOORAF = String.raw`(() => {
@@ -353,7 +303,7 @@ function zelftijd(profiel, top = 25) {
   return { totaalMs: r2(totaal), bezigMs: r2(totaal - idle - (tel.get('(program) ') || 0)), top: lijst.slice(0, top).map(([k, ms]) => [k, r2(ms)]) };
 }
 
-const uitkomst = { label: LABEL, wortel: WORTEL, duurMs: DUUR, rijen: RIJEN, video: VIDEO, hub: HUBMODUS, scenarios: {}, omgeving: {} };
+const uitkomst = { label: LABEL, wortel: WORTEL, duurMs: DUUR, rijen: RIJEN, video: VIDEO, hub: HUBMODUS, zaad: ZAAD, jitter: JITTER, scenarios: {}, omgeving: {} };
 try {
   let doelen = null;
   for (let i = 0; i < 60 && !doelen; i++) {
@@ -428,7 +378,7 @@ try {
   for (const naam of namen) {
     const sc = SCENARIOS[naam];
     if (!sc) throw new Error(`onbekend scenario ${naam}`);
-    const plan = sc.plan();
+    const plan = maakPlan(naam, { duur: DUUR, zaad: ZAAD, jitter: JITTER });
     await evalueer(`(() => { const T = window.__lat; T.berichten = []; T.raf = {}; T.frames = []; T.longtasks = []; T.scherm = []; T.wachtScherm.clear(); T.meet = true; })()`);
     const prof = PROFIEL.includes(naam);
     const spoor = SPOOR.includes(naam);
@@ -576,5 +526,35 @@ function vergelijk(a, b) {
     const n = (z) => (z.hoofdthreadMsPerS?.stijlN != null ? `${z.hoofdthreadMsPerS.stijlN} · ${z.hoofdthreadMsPerS.opmaakN}` : '—');
     regels.push(`| ${naam} | stijl- · opmaakberekeningen per s | ${n(x)} | ${n(y)} |`);
   }
+  return regels.join('\n');
+}
+
+/** Per scenario en maat: mediaan [min–max] over de rondes, voor p50 en p99, en of de bereiken overlappen. */
+function bereik(ra, rb) {
+  const [la, lb] = [ra[0].label, rb[0].label];
+  const regels = [`| scenario | maat | ${la} p50 | ${lb} p50 | ${la} p99 | ${lb} p99 |`, '|---|---|---|---|---|---|'];
+  const getal = (x) => (x == null ? '—' : String(x).replace('.', ','));
+  const rij = (xs) => {
+    const s = xs.filter((x) => typeof x === 'number').sort((p, q) => p - q);
+    return s.length ? { med: s[s.length >> 1], min: s[0], max: s[s.length - 1] } : null;
+  };
+  const toon = (r) => (r ? `${getal(r.med)} [${getal(r.min)}–${getal(r.max)}]` : '—');
+  const overlap = (x, y) => (x && y && x.min <= y.max && y.min <= x.max ? ' (overlapt)' : '');
+  const maten = [['wacht', 'wacht'], ['werk', 'werk per bericht'], ['totGeluid', 'tot geluid gepland'], ['totScherm', 'tot scherm']];
+  for (const naam of Object.keys(ra[0].scenarios)) {
+    if (!rb[0].scenarios[naam]) continue;
+    for (const [m, label] of maten) {
+      const pa50 = rij(ra.map((r) => r.scenarios[naam]?.[m]?.p50)), pb50 = rij(rb.map((r) => r.scenarios[naam]?.[m]?.p50));
+      const pa99 = rij(ra.map((r) => r.scenarios[naam]?.[m]?.p99)), pb99 = rij(rb.map((r) => r.scenarios[naam]?.[m]?.p99));
+      if (!pa50 && !pb50) continue;
+      regels.push(`| ${naam} | ${label} | ${toon(pa50)} | ${toon(pb50)}${overlap(pa50, pb50)} | ${toon(pa99)} | ${toon(pb99)}${overlap(pa99, pb99)} |`);
+    }
+    for (const k of ['taak', 'stijl']) {
+      const ha = rij(ra.map((r) => r.scenarios[naam]?.hoofdthreadMsPerS?.[k])), hb = rij(rb.map((r) => r.scenarios[naam]?.hoofdthreadMsPerS?.[k]));
+      if (ha || hb) regels.push(`| ${naam} | hoofdthread ${k} ms/s | ${toon(ha)} | ${toon(hb)}${overlap(ha, hb)} | | |`);
+    }
+  }
+  const bel = (rs) => rij(rs.flatMap((r) => Object.values(r.scenarios).map((x) => x.belasting)));
+  regels.push('', `belasting (loadavg 1 min) tijdens de rondes: ${toon(bel(ra))} · ${toon(bel(rb))}; zaden ${ra.map((r) => r.zaad ?? '-').join(',')} · ${rb.map((r) => r.zaad ?? '-').join(',')}`);
   return regels.join('\n');
 }

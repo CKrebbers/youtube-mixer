@@ -13,24 +13,42 @@ bevestigen is, staat apart.
 
 ## Kort
 
-1. **Een MIDI-bericht kost zelf weinig; het WACHT.** Een faderbericht deed ~0,2 ms werk (parse,
-   mapping, bus, engine, AudioParam). Maar het moest wachten tot de hoofdthread klaar was met
-   de rest, en die was in rust (acht tracks spelend, rijen open) **71% van de tijd bezig**
-   (713 ms per seconde threadtijd), waarvan 166 ms/s stijlberekening.
-2. **De grootste oorzaak: brede `:has()`-regels in styles.css.** `body:has(#rijen > section:not(.hidden)) .kol .spg-pad`
-   en negen andere: elke tekstwissel ergens op de pagina (elk beeld: tijden, bpm) liet Chrome
-   ~**256 elementen per beeld** opnieuw stylen (trace: "Affected by :has()"). Nu klassen. Stijl
-   **166 → 31 ms/s**, hoofdthread in rust **713 → 457 ms/s**.
-3. **Een echte fout op de controller: het echofilter slikte drukken.** Op een knop die
-   knippert (Sends met een loop, de Track Select van de maatgever) viel **13% van de drukken
-   en 12% van het loslaten** weg: een druk die niets deed (focus op de maatgever, de
-   loop-knoppen). Nu **0%**. Dat een kill of bend daardoor bleef hangen is niet aangetoond:
-   hun lampje staat nooit op 0 of 127, dus daar sloeg het filter niet aan.
-4. Shift en de modusknoppen deden 2–13 ms schermwerk midden in hun MIDI-bericht (en alles
-   erachter wachtte). Nu bij het volgende beeld: werk per bericht p99 **5,5 → 1,8 ms** (shift),
-   **7,0 → 2,3 ms** (mapjes).
-5. Netto, fader (120 berichten/s), van bericht tot het geluid gepland is: **p50 7,4 → 1,9 ms,
-   p99 37,6 → 11,9 ms**. Fader-sweep (acht faders, 960/s): **p50 8,5 → 2,8, p99 40,6 → 18,3 ms**.
+Vóór = `339310b` (de basis van deze tak; `studio/afmaken` is intussen verder), na = deze tak.
+Eerst wat bij herhalen exact terugkomt (threadtijd, tellingen, benches); de wandklok-latentie
+daarna, als bereik over 8 rondes, want die schommelt met de belasting van de machine.
+
+1. **Een MIDI-bericht kost zelf weinig; het WACHT.** Een faderbericht doet ~0,2 ms werk (parse,
+   mapping, bus, engine, AudioParam). Maar het moet wachten tot de hoofdthread klaar is met de
+   rest, en die was in rust (acht tracks spelend, rijen open) **~75% van de tijd bezig**.
+2. **Hoofdthread in threadtijd** (CDP, telt andere processen niet mee; 8 rondes, mediaan
+   [min–max]): stijlberekening in rust **180 [166–189] → 33 [29–34] ms/s**, de hele hoofdthread
+   **751 [714–794] → 467 [428–485] ms/s**; bij de fader-sweep stijl **172 → 23**, taak **819 → 623**.
+   De reviewer kreeg in rust 185 → 33 en 765 → 478. Oorzaak: brede `:has()`-regels in styles.css
+   (`body:has(#rijen > section:not(.hidden)) .kol .spg-pad` en negen andere): elke tekstwissel (elk
+   beeld: tijden, bpm) liet Chrome ~**256 elementen per beeld** opnieuw stylen (trace: "Affected by
+   :has()"). Nu klassen.
+3. **Een echte fout op de controller: het echofilter slikte drukken** (synthetisch,
+   `tools/bench/echo.mjs`: een nep-hand op Sends met een loop op 124 bpm). Op een knop die knippert
+   viel **13% van de drukken en 12% van het loslaten** weg (519 en 480 van 4000; de reviewer kreeg
+   exact dezelfde tellingen); nu **0**. Dat een kill of bend daardoor bleef hangen is niet
+   aangetoond: hun lampje staat nooit op 0 of 127.
+4. **Werk IN het bericht bij shift en mapjes** (schermwerk naar het volgende beeld), p99 over 8
+   rondes: shift **6,0 [5,1–6,6] → 1,4 [0,9–1,6] ms**, mapje wisselen **6,5 [5,9–7,2] → 2,8
+   [1,5–3,8] ms**; de bereiken raken elkaar niet. Zonder browser (`tools/bench/invoer.mjs`): de
+   mapping per LED-tik **~290 → ~8 µs** (285 → 8,1 en, bij herhalen in review ronde 1, 307 → 7,7), per
+   faderbericht 1,8 → 0,6 µs (1,7 → 0,7).
+5. **Wandklok, van bericht tot het geluid gepland is** (8 rondes, met jitter op het rooster, zie
+   "Review ronde 1, tweede herstel"), mediaan [min–max] per ronde:
+   - één fader (120/s): p50 **4,2 [3,0–6,3] → 0,8 [0,3–1,3] ms**, p99 **17,9 [13,3–53,4] → 11,3
+     [9,8–12,5] ms**: geen overlap. De reviewer (6 rondes, vast rooster) kreeg p50 ~2,6 → ~1,4 en
+     p99 ~17 → ~11,4. De richting is zeker, **de factor op p50 niet** (hangt van het meten af); p99
+     **~17 → ~11 ms** kwam bij allebei terug.
+   - acht faders (sweep, 960/s): p50 4,6 → 2,2 ms (geen overlap), maar **p99 18,8 → 14,1 met
+     overlappende bereiken [16,1–22,4] en [12,3–22,5]: NIET aangetoond** (bij de reviewer ook niet).
+   - shift met een fader erdoor: p99 37,6 → 25,5 hier zonder overlap, maar bij de reviewer (vast
+     rooster) gelijk (34,7 → 37,4): **niet eenduidig**.
+   De eerste versie van dit verslag noemde fader 7,4 / 37,6 → 1,9 / 11,9 en sweep-p99 40,6 → 18,3.
+   Die getallen (3 rondes, vast rooster, belasting tot 8,7) waren niet te herhalen en zijn vervangen.
 
 ## Hoe gemeten (herhaalbaar)
 
@@ -41,7 +59,9 @@ Vier instrumenten, alle vier nieuw in deze tak:
   zelf, dus elk bericht gaat door het ECHTE pad: `onmidimessage → MidiHub._onMessage → monitor →
   onInput → mapping.handle → invoke → engine` plus spiegel en wat er verder per bericht gebeurt.
   De berichten komen uit een Worker op hun eigen tijd (Atomics.wait), elk als eigen taak, zoals
-  Chrome MIDI aflevert; hun `timeStamp` is het moment van versturen. Acht tracks met de demotrack
+  Chrome MIDI aflevert; hun `timeStamp` is het moment van versturen. Wanneer welk bericht gaat staat in
+  `tools/headless/latentie-plan.mjs`: met jitter uit een vast zaad (`--zaad`), zodat de fase ten opzichte van
+  rAF niet een hele ronde vastzit (review ronde 1). Acht tracks met de demotrack
   (eigen zaad, grid op slot), spelend, alle acht rijen open, videopaneel dicht (zie "Wat niet").
   Per scenario: **wacht** (versturen → handler begint), **werk** (de handler), **tot geluid**
   (versturen → eerste AudioParam- of worklet-aanroep), **tot scherm** (versturen → de fader op het
@@ -59,15 +79,19 @@ Vier instrumenten, alle vier nieuw in deze tak:
 - `tools/headless/meldingen.mjs` (review ronde 1) — de echte `meld()` in de mixer: licht een herhaalde
   melding elke keer op (animationstart geteld) en leest `meld()` daarbij geen opmaak uit.
 
-Commando's (de vóór-versie is `git archive studio/afmaken` uitgepakt in `$VOOR`):
+Commando's (de vóór-versie is de basiscommit van deze tak: `git archive 339310b | tar -x -C $VOOR`;
+NIET de huidige `studio/afmaken`, die is intussen verder):
 
 ```sh
-# headless, vóór en na om de beurt, 3 rondes (zo zijn de tabellen hieronder gemaakt)
+# headless, vóór en na om de beurt, 8 rondes, de volgorde wisselt per ronde, zaad = ronde (zo is de
+# tabel hieronder gemaakt; ~17 min). Hetzelfde zaad = exact hetzelfde berichtenplan voor vóór en na.
 export VARVE_CHROME=/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell VARVE_TMP=<tmp>
-VARVE_WORTEL=$VOOR node tools/headless/latentie.mjs --label voor --duur 4000 --uit voor-1.json
-node tools/headless/latentie.mjs --label na --duur 4000 --uit na-1.json
-#   … rondes 2 en 3, dan:
-node tools/headless/latentie.mjs --vergelijk voor-1.json,voor-2.json,voor-3.json na-1.json,na-2.json,na-3.json
+for r in 1 2 3 4 5 6 7 8; do
+  VARVE_WORTEL=$VOOR node tools/headless/latentie.mjs --label voor --duur 5000 --zaad $r --uit voor-$r.json
+  node tools/headless/latentie.mjs --label na --duur 5000 --zaad $r --uit na-$r.json   # (even rondes: na eerst)
+done
+# mediaan van elk getal, en daaronder per maat mediaan [min–max] over de rondes met "(overlapt)":
+node tools/headless/latentie.mjs --vergelijk voor-1.json,…,voor-8.json na-1.json,…,na-8.json
 # via de hub (een kopie van AV-app-hub MET node_modules)
 VARVE_HUB_REPO=<hub-kopie> node tools/headless/latentie.mjs --hub --scenario fader,sweep,ringen,pads,shift
 # waar de stijltijd vandaan komt
@@ -85,54 +109,59 @@ headless-tools) at de GPU-process drie van de vier kernen op en zakten de beelde
 `--disable-gpu --disable-gpu-compositing` (60 beelden/s, software); `VARVE_LAT_GPU=swiftshader`
 zet het terug. Software-rendering zet canvastekenen op de hoofdthread: absolute getallen zijn
 dus pessimistischer dan op een M1, de verhoudingen niet. Wandkloktijden (wacht, tot geluid)
-schommelen met de belasting van de machine (andere agenten draaiden tests); daarom drie rondes
-om de beurt en de mediaan. Threadtijden (taak, stijl, opmaak) zijn daar ongevoelig voor.
+schommelen met de belasting van de machine (andere agenten draaiden tests); daarom acht rondes
+om de beurt, en per getal het bereik over de rondes: alleen wat NIET overlapt noem ik een
+verbetering. Threadtijden (taak, stijl, opmaak) zijn daar ongevoelig voor.
 
 ## Nulmeting en nameting
 
-Mediaan van drie rondes elk, vóór en na om de beurt (belasting tijdens de rondes 2,4–8,7).
-Tijden in ms, `p50 / p99`; "hoofdthread" in ms threadtijd per seconde.
+Vóór = `339310b`, na = deze tak. 8 rondes van 5 s per scenario, vóór en na om de beurt (de
+volgorde wisselt per ronde), zaad = ronde, jitter aan (review ronde 1, tweede herstel); belasting tijdens de rondes
+0,9–3,6. Per maat de **mediaan [min–max] over de 8 rondes** van de p50 en de p99 binnen een ronde;
+**vet** = de bereiken van vóór en na raken elkaar niet. Tijden in ms; "hoofdthread" in ms
+threadtijd per seconde. Uit `--vergelijk` (onderste tabel).
 
-| scenario | maat | vóór | na |
-|---|---|---|---|
-| rust (spelend, niets aanraken; pings 100/s) | wacht | 7,39 / 28,76 | **0,29 / 9,86** |
-| | frame-interval | 17,33 / 42,76 | 16,73 / 21,25 |
-| | hoofdthread: taak · script · stijl · opmaak | 713 · 152 · 166 · 81 | **457** · 145 · **31** · **29** |
-| fader (één, 120/s) | wacht | 6,75 / 36,12 | 1,61 / 11,62 |
-| | werk per bericht | 0,18 / 1,72 | 0,18 / 1,04 |
-| | **tot geluid gepland** | 7,37 / 37,63 | **1,87 / 11,88** |
-| | tot scherm | 13,74 / 50,87 | 12,78 / 20,67 |
-| | lange taken (> 50 ms) | 1 (50 ms) | 0 |
-| sweep (acht faders, elk 120/s) | tot geluid gepland | 8,49 / 40,57 | **2,78 / 18,30** |
-| | tot scherm | 14,78 / 48,34 | 11,42 / 25,57 |
-| | hoofdthread: taak · stijl | 707 · 137 | 626 · 23 |
-| ringen (acht track knobs, endless, 120/s) | tot geluid gepland | 4,16 / 23,86 | 1,91 / 14,04 |
-| | hoofdthread: stijl | 148 | 9 |
-| device (acht device knobs, 120/s) | tot geluid gepland | 3,34 / 14,38 | 2,24 / 19,57 |
-| | hoofdthread: taak · stijl | 743 · 158 | 582 · 10 |
-| xfader (120/s) | tot geluid gepland | 3,83 / 15,70 | 2,28 / 10,36 |
-| pads (hotcue-pads, 16/s) | tot geluid gepland | 2,16 / 16,05 | 1,16 / 12,42 |
-| shift (8/s, met een fader erdoor) | werk per bericht | 0,16 / **5,52** | 0,17 / **1,75** |
-| | tot geluid gepland | 8,49 / 31,48 | 6,34 / 27,62 |
-| | hoofdthread: stijl | 269 | 85 |
-| mapje (grid-modus wisselen 4/s + pads) | werk per bericht | 0,87 / **6,97** | 0,13 / **2,29** |
-| | tot geluid gepland | 9,03 / 16,48 | 3,41 / 9,22 |
+| scenario | maat | vóór p50 | na p50 | vóór p99 | na p99 |
+|---|---|---|---|---|---|
+| rust (pings 100/s) | wacht | 3,8 [2,7–4,4] | **0,3 [0,2–0,6]** | 16,3 [15,1–19,6] | **9,9 [8,9–11,7]** |
+| | hoofdthread taak · stijl | 751 · 180 | **467 · 33** | | |
+| fader (één, 120/s) | tot geluid gepland | 4,2 [3,0–6,3] | **0,8 [0,3–1,3]** | 17,9 [13,3–53,4] | **11,3 [9,8–12,5]** |
+| | werk per bericht | 0,21 | 0,20 (overlapt) | 0,8 | 0,8 (overlapt) |
+| | tot scherm | 11,2 | 11,1 (overlapt) | 22,5 | 20,8 (overlapt) |
+| | hoofdthread taak · stijl | 790 · 180 | **525 · 31** | | |
+| sweep (acht faders, 960/s) | tot geluid gepland | 4,6 [3,9–6,2] | **2,2 [1,1–3,1]** | 18,8 [16,1–22,4] | 14,1 [12,3–22,5] (overlapt) |
+| | tot scherm | 11,8 | 11,3 (overlapt) | 25,6 | 22,9 (overlapt) |
+| | hoofdthread taak · stijl | 819 · 172 | **623 · 23** | | |
+| ringen (acht track knobs, 960/s) | tot geluid gepland | 5,2 [4,3–7,0] | **2,3 [1,7–3,4]** | 19,1 [16,5–26,1] | 14,4 [11,7–17,5] (overlapt) |
+| device (acht device knobs, 960/s) | tot geluid gepland | 5,3 [3,8–6,0] | **1,6 [0,6–2,1]** | 18,4 [15,5–31,2] | **12,0 [10,3–13,4]** |
+| xfader (120/s) | tot geluid gepland | 4,4 [3,0–7,6] | **0,6 [0,4–1,2]** | 18,1 [13,5–32,8] | **12,6 [10,6–13,4]** |
+| pads (hotcues, 16/s) | tot geluid gepland | 4,9 [3,6–8,1] | 2,3 [0,7–3,9] (overlapt) | 19,2 [15,4–25,2] | 13,7 [10,5–21,1] (overlapt) |
+| shift (8/s + een fader) | werk per bericht | 0,16 | 0,15 (overlapt) | 6,0 [5,1–6,6] | **1,4 [0,9–1,6]** |
+| | tot geluid gepland | 9,6 [8,4–11,7] | **5,6 [3,7–6,6]** | 37,6 [32,1–154,5] | **25,5 [23,0–30,6]** |
+| | tot scherm | 17,0 [15,7–20,4] | **13,7 [11,6–14,3]** | 58,0 [42,0–269,1] | **33,5 [28,6–39,5]** |
+| | hoofdthread stijl | 250 | **91** | | |
+| mapje (grid-modus 4/s + pads) | werk per bericht | 0,75 [0,50–0,80] | **0,12 [0,11–0,13]** | 6,5 [5,9–7,2] | **2,8 [1,5–3,8]** |
+| | tot geluid gepland | 7,0 [4,9–9,6] | 5,6 [1,5–7,7] (overlapt) | 19,2 [12,2–33,8] | 14,4 [8,1–21,5] (overlapt) |
 
-**"Tot scherm" claim ik NIET als verbetering.** De reviewer kreeg hem niet terug (twee rondes:
-11,97 / 20,04 vóór, 14,7 / 21,56 na); de vóór-p99 van ~50 ms hierboven komt waarschijnlijk van de
-belasting op de machine tijdens mijn rondes. De andere getallen kwamen bij hem in dezelfde richting terug.
+Wat ik daaruit wel en niet claim:
+- **Wel**: threadtijd (overal, met grote marge), werk per bericht bij shift en mapjes, en de
+  wachttijd in rust en bij één fader, crossfader en de device knobs (p50 én p99).
+- **Niet**: de p99 van de sweep, de ringen, de pads en het mapje (bereiken overlappen); "tot scherm"
+  bij fader en sweep (de reviewer kreeg hem ook niet terug). Shift wel hier, niet bij de reviewer
+  met het vaste rooster (34,7 → 37,4): niet eenduidig.
+- De p50-factor bij één fader (hier ~5×, bij de reviewer ~2×) hangt van het meten af; de p99
+  ~17 → ~11 ms kwam bij allebei terug.
 
-`device` p99 is na iets slechter (14,4 → 19,6) en de frame-interval p99 ook; bij `device` en
-`xfader` zie ik dat terug in één ronde met een hoge belasting. Ik reken het tot ruis, maar het is
-een getal dat ik niet weg kan verklaren met de metingen die er zijn.
-
-Via de echte hub (2 rondes, `--hub`): fader tot geluid **6,75 / 32,75 → 3,37 / 17,52**, shift
-22,26 / 56,33 → 10,74 / 44,40, pads 3,86 / 22,72 → 2,86 / 21,53; stijl op de hoofdthread
-177 → 33 ms/s. Sweep en ringen via de hub NIET beter in wandkloktijd (10,4 / 42,6 → 11,2 / 55,3):
-daar draait de nep-APC in hetzelfde Node-proces als de hub en de afleverlus houdt een kern bezig
-(960 berichten/s, draaiend wachten op de laatste 2 ms). Voor hoge snelheden via de hub is dit
-meetinstrument dus niet goed genoeg; de threadtijd op de hoofdthread daalde wel (stijl 161 → 22).
-De hub zelf voegt bij 120/s ~1–2 ms p50 toe (vergelijk fader direct en via de hub, na).
+Via de echte hub (`--hub`, 6 rondes van 5 s, om de beurt, zaad = ronde, jitter aan; alleen fader, pads
+en shift), tot geluid gepland, mediaan [min–max]: fader p50 **6,6 [3,8–8,1] → 1,2 [1,0–2,1]**, p99
+**31,9 [29,6–37,0] → 11,4 [10,7–19,1]**; shift p50 **21,1 [18,9–28,2] → 6,8 [5,0–8,0]**, p99 **60,2
+[49,9–70,7] → 33,7 [30,4–41,3]**; pads p50 5,5 → 2,0 en p99 26,9 → 15,1, maar beide overlappend.
+Stijl op de hoofdthread 186 → 32 ms/s (fader). Commando: zoals hierboven met `--hub --scenario
+fader,pads,shift`, `VARVE_HUB_REPO=<kopie van AV-app-hub MET node_modules>`, poorten
+`VARVE_LAT_POORT=8847 VARVE_LAT_DEBUG=8848 VARVE_LAT_HUB=7741`. Sweep en ringen via de hub heb ik
+niet opnieuw gemeten: daar draait de nep-APC in hetzelfde Node-proces als de hub en houdt de
+afleverlus (960 berichten/s) een kern bezig; voor hoge snelheden via de hub is dit meetinstrument
+niet goed genoeg (optie 5).
 
 Zonder browser (`tools/bench/invoer.mjs --vergelijk`, µs en bytes per bericht):
 
@@ -329,3 +358,67 @@ Kleine punten:
 Na review ronde 1 opnieuw: `node test/alles.mjs` (met `VARVE_HUB_REPO` naar de hub-kopie): 95 bestanden,
 8847 checks (één erbij: zetTekst), 3 rood, dezelfde drie als op main in deze container.
 `node tools/headless/meldingen.mjs`: 5 van 5 groen.
+
+## Review ronde 1, tweede herstel (14 okt): de wandklok-getallen
+
+**Blokkerend: de wandklok-koppen in "Kort" waren niet te herhalen op de grootte die er stond; de
+p99 van de sweep helemaal niet.** Klopte. De reviewer draaide het commando zelf (6 rondes, vóór =
+`339310b`) en kreeg sweep-p99 vóór 22,6–38,0 en na 17,1–33,4 (overlap), fader p50 ~2,6 → ~1,4 en
+p99 ~17 → ~11,4 in plaats van 7,4 / 37,6 → 1,9 / 11,9. Wat ik deed:
+
+1. **De oorzaak in het meetinstrument gerepareerd: jitter op het rooster.** De Worker verstuurde op
+   een vast rooster (`i * 1000 / 120`): de fase ten opzichte van rAF bleef een hele ronde gelijk en de
+   p50 per ronde sprong mee (identieke vóór-code gaf bij de reviewer fader-p50 0,45 en 5,28 ms). De
+   plannen staan nu in `tools/headless/latentie-plan.mjs` (puur): elke reeks een eigen beginfase
+   (0..1 beeld) en elk bericht een eigen verschuiving (een stroom 0..1 interval, knoppen 0..½), uit
+   mulberry32 met een vast zaad (`--zaad`, standaard 1; `--jitter 0` = het oude rooster, bit voor
+   bit). Zelfde zaad = exact hetzelfde plan, dus vóór en na krijgen in een ronde dezelfde berichten.
+   Een eerste versie schoof elk bericht maar 0..½ interval: bij 120/s viel dat binnen een ronde op
+   de helft van een beeld (de test hieronder ving het: twee lege achtsten); verbeterd vóór de meting.
+   Effect, zichtbaar in de vóór-reeks: fader-p50 per ronde nu 3,0–6,3 ms (was 0,45–5,3 bij identieke
+   code), p99 13,3–20,6 op één uitschieter na (53,4).
+2. **Opnieuw gemeten: 8 rondes, vóór en na om de beurt, de volgorde wisselend, zaad = ronde**, met
+   vóór = `339310b` (genoemd in "Kort" en bij de commando's). `--vergelijk` met meerdere rondes geeft
+   nu onder de mediaan-tabel per maat ook mediaan [min–max] en "(overlapt)".
+3. **"Kort" herschreven**: eerst wat exact terugkomt (threadtijd: stijl 180 → 33 en taak 751 → 467
+   ms/s in rust, de reviewer 185 → 33 en 765 → 478; het echofilter 519/480 van 4000 → 0, bij de
+   reviewer bit voor bit gelijk; werk per bericht bij shift en mapjes; de mapping-bench), daarna de
+   wandklok als bereik. De sweep-p99 staat er expliciet als **niet aangetoond**; de fader-p99 als
+   ~17 → ~11 ms met de cijfers van de reviewer erbij; shift als niet eenduidig.
+4. **De oude tabel (3 rondes, vast rooster) is vervangen** door de tabel van 8 rondes met bereiken.
+   De oude opmerking "device p99 na iets slechter (14,4 → 19,6)" is daarmee ook weg: met jitter is
+   device p99 18,4 [15,5–31,2] → 12,0 [10,3–13,4], zonder overlap. Dat het oude getal ruis was, past
+   daarbij, maar bewezen is het niet.
+
+Check: `test/latentie-plan.test.mjs` (nieuw, 27 checks): zelfde zaad = zelfde plan en een ander
+zaad andere tijden (alle 9 scenario's); zonder jitter het oude rooster bit voor bit (fader, pads);
+met jitter per control dezelfde berichten in dezelfde volgorde; een loslaten vóór de volgende druk
+(20 zaden); zonder jitter alle faderberichten op 0 of ½ beeld, met jitter in elk achtste van een
+beeld ≥ 5%; de beginfase spreidt over > 10 ms van een beeld (16 zaden); latentie.mjs gebruikt de
+module en schrijft zaad en jitter in de uitkomst.
+
+Kleine punten:
+- **CLAUDE.md en APC40.md**: bij "13% van de drukken / 12% van het loslaten" staat nu "synthetisch,
+  `tools/bench/echo.mjs`: een nep-hand op Sends met een loop op 124 bpm; niet op het apparaat gemeten".
+- **De bovenbalk gedragsmatig getoetst** (was alleen een regex): `tools/headless/meldingen.mjs`
+  deel 3 laat een tekst in `.opname-groep` (een kleinkind van `.topbar-right`, naast de log-knop)
+  groeien en eist dat de vervaging `meer` binnen 150 ms komt (de oude timer keek pas na 1 s), zonder
+  resize-event, en weer weggaat als hij krimpt. Met de ResizeObserver tijdelijk uitgezet (alleen de
+  timer, zoals vroeger) faalt die check: `{"meer":false,"past":false}`. Nu 8 van 8 groen.
+- **Echofilter alleen voor CC, ook voor andere apparaten**: stond al in het verslag en in midi.js;
+  een apparaat of MIDI-thru-lus die NOTEN terugkaatst, zou nu een druk met de LED-kleur als
+  velocity geven (een mogelijke lus). Geen apparaat in Clay's set doet dat. Ongewijzigd.
+- **Spiegel en mapje-balk bij het volgende beeld** (bekend, verwaarloosbaar, geen regelbreuk): klik
+  je binnen ~16 ms na shift of een modusknop op de APC met de MUIS op een spiegelknop, dan pakt die
+  de action van vóór de wissel; indrukken en loslaten blijven gepaard (controls.js onthoudt
+  'ingedrukt'), er blijft niets hangen. In een verborgen tabblad wacht de uitleg van de mapje-balk
+  in de rAF-rij en verschijnt hij bij terugkomen even met een oude wissel. Niet veranderd.
+- Wat de reviewer nakeek en in orde vond (cache-invalidatie, loslaten naar de action van het
+  indrukken, soft-takeover, wachtrij, log, engine en audiopad niet aangeraakt, specificiteit van de
+  :has()-vervangers, geen mapping-JSON of action veranderd): niets aan gedaan.
+
+Na dit herstel: `node test/alles.mjs` (met `VARVE_HUB_REPO` naar de hub-kopie): 96 bestanden, 8874 checks
+(27 erbij: `test/latentie-plan.test.mjs`), 3 rood, dezelfde drie als op main in deze container
+(renderblok "keylock met wissels … bytes per bericht", instrumenten-fm-schaal "geen afval per blok",
+wachtrij "yt-dlp en zijn kind zijn allebei weg" 2×). `node tools/headless/meldingen.mjs`: 8 van 8 groen.
+`node test/latentie-plan.test.mjs`, `invoer`, `mapping`, `midi`: groen.

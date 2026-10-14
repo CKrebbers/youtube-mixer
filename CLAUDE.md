@@ -1075,7 +1075,8 @@ docs/
   nog AAN tot gemeten is dat hij in 0x42 niets terugkaatst (`hub.status().echoes`
   na een sessie nog 0 → mag uit). ALLEEN CC (14 okt): een noot is nooit een echo
   (een LED is note-on met de kleur als velocity); het slikte 13% van de drukken
-  en 12% van het loslaten op een knipperende knop (`tools/bench/echo.mjs`).
+  en 12% van het loslaten op een knipperende knop (synthetisch, `tools/bench/echo.mjs`:
+  een nep-hand op Sends met een loop op 124 bpm; niet op het apparaat gemeten).
 - MAPJES (lagen) en SHIFT op de controller (Clay, 23 sep, VRAGEN B3). Een regel
   kan `"shift": true` en/of `"laag": "device.rack"` hebben; de sleutel is
   `sig[#shift][@laag]`, dus één knop heeft meerdere regels. `mapping.kies()`
