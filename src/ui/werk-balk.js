@@ -32,6 +32,7 @@ export function voegKnopToe(el) {
  */
 export function opzetWerkBalk({ el, werk, invoke, lijst = async () => [], namen = () => {}, plan = (fn) => requestAnimationFrame(fn) }) {
   if (!el) return null;
+  const body = el.ownerDocument?.body ?? null;
   el.classList.add('werk-balk');
   el.setAttribute('role', 'toolbar');
   el.setAttribute('aria-label', 'werkruimte');
@@ -109,8 +110,12 @@ export function opzetWerkBalk({ el, werk, invoke, lijst = async () => [], namen 
 
   function teken() {
     const s = werk.stand();
-    el.hidden = !s.delen.length;
-    if (el.hidden) return;
+    const weg = !s.delen.length;
+    // De klas op body alleen bij een WISSEL (een paar keer per avond): werk.css maakt de mixer er
+    // op een laptop 30 px lager mee, zodat de balk niet van de faders of de rijen afgaat.
+    if (el.hidden !== weg) el.hidden = weg;
+    if (body && body.classList.contains('werk-balk-aan') === weg) body.classList.toggle('werk-balk-aan', !weg);
+    if (weg) return;
     const sleutel = `${s.naam}|${s.versie}|${s.delen.map((d) => `${d.naam}:${d.label}:${d.kleur}`).join(',')}`;
     if (sleutel !== gebouwdVoor) { gebouwdVoor = sleutel; bouwTabs(s); ververs(); }
     for (const [naam, b] of tabEls) {

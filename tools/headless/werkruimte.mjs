@@ -7,7 +7,7 @@
 //
 // Veiligheid zoals kijk.mjs: navigator.requestMIDIAccess gaat eruit vóór de pagina laadt (dit
 // tabblad ziet geen echte APC), een EIGEN server met VARVE_TESTSERVER=1 en alle data in een
-// tijdelijke map (VARVE_WERKRUIMTES ook).
+// tijdelijke map (VARVE_WERKRUIMTES, de kaart, de hub-sets en uitzenden ook).
 //
 // Gebruik:  node tools/headless/werkruimte.mjs [uitmap]
 // Poorten:  VARVE_KIJK_POORT (server, standaard 8930) en VARVE_KIJK_DEBUG (DevTools, 8931).
@@ -40,7 +40,8 @@ const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'),
     VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_STANDEN: join(tmp, 'standen'),
     VARVE_PROEF: join(tmp, 'proef'), VARVE_BACKUPS: join(tmp, 'backups'), VARVE_NACHT: join(tmp, 'nacht.json'), VARVE_WERKRUIMTES: werkMap,
-    VARVE_HERANALYSE: 'uit' },
+    VARVE_KAART: join(tmp, 'geen-kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'), VARVE_HUB_SETS: join(tmp, 'hub-sets'),
+    VARVE_UITZEND_UIT: join(tmp, 'uitzend'), VARVE_HERANALYSE: 'uit' },
   stdio: 'ignore',
 });
 const chrome = spawn(zoekChrome(), [
@@ -111,7 +112,7 @@ try {
   await open('/?werk=standaard');
   await opgestart();
   ok('de mixer start, zonder MIDI in dit tabblad', await evalueer('!!window.engine && !navigator.requestMIDIAccess && window.werk.naam === "standaard"'));
-  ok('werk-balk verborgen (hidden, 0 px)', await evalueer("document.getElementById('werk-balk').hidden && document.getElementById('werk-balk').getBoundingClientRect().height === 0"));
+  ok('werk-balk verborgen (hidden, 0 px), geen body.werk-balk-aan', await evalueer("document.getElementById('werk-balk').hidden && document.getElementById('werk-balk').getBoundingClientRect().height === 0 && !document.body.classList.contains('werk-balk-aan')"));
   ok(`de mapping is precies de standaard (${STANDAARD} regels, geen fragment)`, await evalueer(`window.mapping.rules.size === ${STANDAARD} && window.mapping.extra.size === 0`),
     String(await evalueer('window.mapping.rules.size')));
   ok('⇧ master-knop = beeld zwart (zoals vandaag; THUIS komt pas met het stuk basis)', await evalueer("window.mapping.kies('note:0:80', { shift: true })?.action === 'video.black'"));
@@ -129,6 +130,7 @@ try {
     && document.querySelector('#werk-balk .werk-tab.aan')?.textContent === 'MIX'`, 5000));
   const hoogte = await evalueer("document.getElementById('werk-balk').getBoundingClientRect().height");
   ok(`werk-balk is één regel (${hoogte} px ≤ 31)`, hoogte <= 31);
+  ok('… en body.werk-balk-aan staat (werk.css maakt de mixer er tot 1000 px hoog 30 px lager mee)', await evalueer("document.body.classList.contains('werk-balk-aan')"));
   ok('de tabs hebben de kleur van hun deel (STEMS zeegroen #00FF99)', await evalueer("[...document.querySelectorAll('#werk-balk .werk-tab')].find((b) => b.textContent === 'STEMS').style.getPropertyValue('--k') === '#00FF99'"));
   ok('⇧ master-knop = werk.thuis (stuk basis)', await evalueer("window.mapping.kies('note:0:80', { shift: true })?.action === 'werk.thuis' && window.mapping.kies('note:0:80')?.action === 'video.black'"));
   ok('de werkruimte kiezen staat op de balk (met de drie voorbeelden)', await totDat("document.querySelectorAll('#werk-balk .werk-kies option').length >= 3", 3000));
@@ -171,7 +173,7 @@ try {
   t = Date.now();
   writeFileSync(join(werkMap, 'apc-alleen.json'), JSON.stringify(ruw, null, 2));
   const binnen = await totDat("[...document.querySelectorAll('#werk-balk .werk-tab')].some((b) => b.textContent === 'STAM')", 6000);
-  ok('een bestand dat Claude schrijft staat binnen 3 s in de mixer (peilen elke 3 s)', binnen !== false && Date.now() - t <= 3500, `${Date.now() - t} ms`);
+  ok('een bestand dat Claude schrijft staat binnen 3 s in de mixer (peilen elke 2,5 s)', binnen !== false && Date.now() - t <= 3000, `${Date.now() - t} ms`);
   ok('… het deel bleef MIX', await evalueer("window.werk.deel === 'mix'"));
 
   // Leg vast: twee keer drukken; het bestand krijgt het deel zoals het nu staat.
@@ -192,9 +194,28 @@ try {
   ok(`de mixer past met de werk-balk op 1440×900 (${pas.h} ≤ ${pas.v})`, pas.h <= pas.v);
   await foto('werkruimte-mix.png');
 
+  // Clay's MacBook (1440×790 in Chrome, zie rijen.mjs): de delen zetten rijen open (FX master, STEMS
+  // stems, SPELEN instrument + patronen). Dan mag de pagina NIET scrollen en blijven de faders ≥ 56 px:
+  // de 30 px van de balk gaan van de mixer af (werk.css), niet van de pagina (review ronde 1: 804 > 790).
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 790, deviceScaleFactor: 1, mobile: false });
+  for (const deel of ['mix', 'stems', 'fx', 'spelen', 'beeld']) {
+    await evalueer(`(() => { __act.invoke('werk.deel.${deel}', true); __act.invoke('werk.deel.${deel}', false); })()`);
+    await totDat(`window.werk.deel === '${deel}'`, 2000);
+    const m = await evalueer(`new Promise((klaar) => requestAnimationFrame(() => requestAnimationFrame(() => {
+      const f = [...document.querySelectorAll('.vfader')].map((e) => e.getBoundingClientRect().height).filter((h) => h > 0);
+      const rijen = document.getElementById('rijen');
+      const open = [...rijen.children].filter((c) => c.tagName === 'SECTION' && !c.classList.contains('hidden')).map((c) => c.id);
+      klaar({ h: document.documentElement.scrollHeight, v: innerHeight, fader: Math.round(Math.min(...f)), rijen: Math.round(rijen.getBoundingClientRect().height), open });
+    })))`);
+    ok(`1440×790, deel ${deel.toUpperCase()} (${m.open.join(' + ') || 'geen rij'}): de pagina scrolt niet (${m.h} ≤ ${m.v}), faders ${m.fader} ≥ 56`
+      + (m.open.length ? `, #rijen ${m.rijen} ≥ 40` : ''), m.h <= m.v && m.fader >= 56 && (!m.open.length || m.rijen >= 40));
+  }
+  await foto('werkruimte-790.png');
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+
   // Terug naar standaard via de kiezer: de balk weg, de mapping weer de standaard.
   await evalueer(`(() => { const k = document.querySelector('#werk-balk .werk-kies'); k.value = 'standaard'; k.dispatchEvent(new Event('change')); })()`);
-  ok('de kiezer: standaard = de werk-balk weg, de mapping weer precies de standaard', await totDat(`window.werk.naam === 'standaard' && document.getElementById('werk-balk').hidden
+  ok('de kiezer: standaard = de werk-balk weg (en body.werk-balk-aan), de mapping weer precies de standaard', await totDat(`window.werk.naam === 'standaard' && document.getElementById('werk-balk').hidden && !document.body.classList.contains('werk-balk-aan')
     && window.mapping.rules.size === ${STANDAARD} && window.mapping.extra.size === 0`, 3000));
   ok('geen fouten in de app', meldingen.length === 0, meldingen.join(' | '));
 } catch (err) {
