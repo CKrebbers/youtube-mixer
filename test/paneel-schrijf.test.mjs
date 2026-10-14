@@ -19,7 +19,7 @@ import { request } from 'node:http';
 const WORTEL = join(dirname(fileURLToPath(import.meta.url)), '..');
 process.chdir(WORTEL);
 let fouten = 0;
-const ok = (naam, cond, extra = '') => { console.log(`${cond ? '  ✓' : '  ✗'} ${naam}${extra ? ` ${extra}` : ''}`); if (!cond) fouten++; };
+const ok = (naam, cond, extra = '') => { console.log(`${cond ? '  ok  ' : 'FAIL  '}${naam}${extra ? ` (${extra})` : ''}`); if (!cond) fouten++; };
 const wacht = (ms) => new Promise((z) => setTimeout(z, ms));
 
 const M = await import('../src/werk/model.js');
