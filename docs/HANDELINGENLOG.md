@@ -197,6 +197,13 @@ effect, de rack-editor). Inhoud én de live knopstanden op dat moment.
 
 **`grid`**: het grid van een track veranderde (tap, grid-modus, de
 tap-verfijning van de server, "opnieuw analyseren"): `{"t":..,"e":"grid","track":1,"grid":{...}|null}`.
+Nudge in de grid-modus VASTHOUDEN (14 okt, BEATGRID.md §12) herhaalt op een
+eigen timer van de action, niet op de bus: in het log staan alleen het
+indrukken en loslaten, plus de `grid`-gebeurtenissen die `kijk` ertussen ziet
+(elke 100 ms en direct na het loslaten). Bij terugspelen telt de timer van NU
+zijn eigen stappen, dus tijdens het vasthouden kan het grid een paar ms van dat
+van toen afwijken; de `grid`-gebeurtenis na het loslaten zet het eindgrid
+precies goed.
 
 **`hotcues`**: de hotcues van een track veranderden:
 `{"t":..,"e":"hotcues","track":1,"hotcues":[30.5,null,null,null]}`. Vooral voor

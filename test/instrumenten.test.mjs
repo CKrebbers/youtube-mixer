@@ -660,13 +660,16 @@ console.log('\nhet mapje inst op de APC');
   // keylock/toon (Shift + Tap, Shift + Nudge ±; docs/KEYLOCK.md), de grid-modus secties
   // (Shift + scene 1, 6 okt; docs/SECTIES.md), rij 3 van de modus sampler (een sectie
   // in een pad, 6 okt, studio/sec-sampler: note 16–23, die was in die modus leeg) en het
-  // mapje beeld (Shift + Detail View, 6 okt, spoor beeld; docs/BEELD.md).
+  // mapje beeld (Shift + Detail View, 6 okt, spoor beeld; docs/BEELD.md), en de acht
+  // gridknoppen in de grid-modus (14 okt, docs/BEATGRID.md §12).
   const erbij = [...nu.keys()].filter((k) => !oud.has(k));
-  ok(`de vorige standaard (a067b3f2-397) is een voorganger: geen enkele bestaande regel veranderd of weg; erbij de 11 van inst (en van master, stems, patronen, keylock, secties, de sampler en beeld: ${erbij.length - 11})`,
+  ok(`de vorige standaard (a067b3f2-397) is een voorganger: geen enkele bestaande regel veranderd of weg; erbij de 11 van inst (en van master, stems, patronen, keylock, secties, de sampler, beeld en de grid-modus: ${erbij.length - 11})`,
     vorige?.rules.length === 397 && [...oud].every(([k, t]) => nu.get(k) === t)
     && erbij.filter((k) => k.endsWith('@device.inst')).length === 11
     && erbij.every((k) => /@(device\.(inst|master|beeld)|grid\.(stems|patronen|secties))$/.test(k) || /^note:0:(1[6-9]|2[0-3])@grid\.sampler$/.test(k) || ['note:0:64#shift', 'note:0:84#shift', 'note:0:84#shift@edit.aan', 'note:0:83#shift', 'note:0:83#shift@edit.aan',
-      'note:0:99#shift', 'note:0:100#shift', 'note:0:101#shift', 'note:0:82#shift@edit.aan', 'note:0:82#shift', 'note:0:65#shift'].includes(k)));
+      'note:0:99#shift', 'note:0:100#shift', 'note:0:101#shift', 'note:0:82#shift@edit.aan', 'note:0:82#shift', 'note:0:65#shift',
+      'note:0:58@edit.aan', 'note:0:59@edit.aan', 'note:0:58#shift@edit.aan', 'note:0:59#shift@edit.aan',
+      'note:0:62@edit.aan', 'note:0:62#shift@edit.aan', 'note:0:64@edit.aan', 'note:0:65@edit.aan'].includes(k)));
   const lg = new Lagen({ beschikbaar: () => true });
   const m = new Mapping({ read: () => null, invoke: () => {}, vars: () => ({ focus: 3 }), lagen: () => lg.actief() });
   m.load(doc);

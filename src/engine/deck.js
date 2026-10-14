@@ -33,6 +33,9 @@ export const EQ_BANDEN = ['low', 'mid', 'high'];
 export const BEND = 0.04;
 /** Toonverschuiving: halve tonen, ±12 (K5, docs/KEYLOCK.md). */
 export const TOON_MAX = 12;
+/** Weergave: hooguit eens per zoveel ms het grid opnieuw aan de tellen meten tijdens een reeks bewerkingen (gridMetingBij). */
+export const METING_RUST = 150;
+
 /** Zoveel bewerkingen van het grid kunnen terug (deck.gridTerug). */
 export const GRID_TERUG = 30;
 /** Beatjump-lengtes in tellen, te halveren en te verdubbelen. Standaard 4. */
@@ -965,6 +968,24 @@ export class Deck extends Emitter {
   }
 
   /**
+   * Hetzelfde voor WEERGAVE (het oordeel naast de bpm elke frame, het lampje
+   * van "tel 1 hier" elke LED-tik), met `nu` (ms) van de aanroeper: tijdens een
+   * reeks bewerkingen (een encoder die draait, 30 tikken per seconde) wordt er
+   * hooguit eens per `rust` ms opnieuw gemeten; daartussen de vorige meting, als
+   * het grid evenveel stukken heeft en de tellen dezelfde zijn. Een uur aan
+   * tellen meten kost in Chrome ~5 ms (gemeten 14 okt), en dat was elke tik.
+   * Wie op de meting BESLIST (controle, ✓) leest `gridMeting`: altijd vers.
+   */
+  gridMetingBij(nu, rust = METING_RUST) {
+    const k = this._meting;
+    if (k && this.grid && this.tellen && k.tellen === this.tellen && k.versie !== this.gridVersie
+      && k.meting.stukken.length === this.grid.aantalStukken && nu - k.nu < rust) return k.meting;
+    const m = this.gridMeting;
+    if (this._meting && this._meting !== k) this._meting.nu = nu;
+    return m;
+  }
+
+  /**
    * TERUG (5 okt): vóór een bewerking met de hand het grid zoals het was
    * (of `stand`, een toJSON van vlak ervoor), zodat een verkeerde tik, pin of
    * ×2 terug kan. Hooguit GRID_TERUG stappen; leeg bij een nieuw nummer.
@@ -981,8 +1002,14 @@ export class Deck extends Emitter {
   gridTerug() {
     if (!this._gridTerug.length) return false;
     const vorig = this._gridTerug.pop();
+    // PRECIES terug (14 okt): ook `bron`, `methode` en `zekerheid` van toen.
+    // Via gridGewijzigd werd een teruggezet voorstel van de analyse 'hand',
+    // dus bewaarde de app het als met de hand gezet (en kwam het grid uit de
+    // gevonden tellen er daarna niet meer overheen).
     this.grid = vorig ? new Beatgrid(vorig) : null;
-    this.gridGewijzigd();
+    this.gridVersie++;
+    this._heranker();
+    this.emit('change', this);
     return true;
   }
 

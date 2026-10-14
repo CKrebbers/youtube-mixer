@@ -172,7 +172,7 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       else if (e.bpm.title) e.bpm.title = '';
       // Klopt het grid HIER: gemeten aan de tellen, met de reden; ⚠ als het live wegloopt.
       if (e.gridOordeel) {
-        const o = dk.grid ? oordeelBij(dk.grid, d.position, dk.gridMeting, liveVan(dk, id, d.position)) : null;
+        const o = dk.grid ? oordeelBij(dk.grid, d.position, dk.gridMetingBij(performance.now()), liveVan(dk, id, d.position)) : null;
         const controle = s.gridControle === id;
         tekst(e.gridOordeel, o ? (controle ? `${o.kort} controle` : o.kort) : '—');
         for (const soort of ['vast', 'zeker', 'controleer', 'geenpuls', 'wijkt']) klasse(e.gridOordeel, soort, o?.soort === soort);

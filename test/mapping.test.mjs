@@ -1432,21 +1432,26 @@ console.log('\nmodus auto (auto-DJ)');
     // Beeld (6 okt, spoor beeld, docs/BEELD.md): Shift + Detail View opent het mapje beeld,
     // daarin device knob 1–8 = de acht macro's, scene 1–5 en Stop All Clips = de regie.
     'note:0:65#shift', ...[16, 17, 18, 19, 20, 21, 22, 23].map((n) => `cc:0:${n}@device.beeld`),
-    ...[81, 82, 83, 84, 85, 86].map((n) => `note:0:${n}@device.beeld`)].sort();
-  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4, scene 4 met shift in de grid-modus, de vijf beeld-noodknoppen, de acht koptelefoonknoppen, de elf van het mapje inst, het mapje master, de modus stems, de modus patronen, keylock/toon, vast in de grid-modus, de modus secties, rij 3 van de sampler en het mapje beeld (${nieuw.length} regels)`,
+    ...[81, 82, 83, 84, 85, 86].map((n) => `note:0:${n}@device.beeld`),
+    // Beatgrid gelijkzetten (14 okt, docs/BEATGRID.md §12): in de grid-modus Device ◀ ▶ = de "1"
+    // een tel terug/verder (shift: vorige/volgende plek), On/Off = controle (shift: ✓ klopt),
+    // Clip/Device View = tellen hier, Detail View = ↶ terug. Daar golden strip/rack-dingen.
+    'note:0:58@edit.aan', 'note:0:59@edit.aan', 'note:0:58#shift@edit.aan', 'note:0:59#shift@edit.aan',
+    'note:0:62@edit.aan', 'note:0:62#shift@edit.aan', 'note:0:64@edit.aan', 'note:0:65@edit.aan'].sort();
+  ok(`erbij: precies de vijf pads, Shift + scene 4, het lampje van scene 4, scene 4 met shift in de grid-modus, de vijf beeld-noodknoppen, de acht koptelefoonknoppen, de elf van het mapje inst, het mapje master, de modus stems, de modus patronen, keylock/toon, vast in de grid-modus, de modus secties, rij 3 van de sampler, het mapje beeld en de acht gridknoppen van 14 okt (${nieuw.length} regels)`,
     JSON.stringify(nieuw) === JSON.stringify(wilNieuw));
   const tel = (d) => { const c = {}; for (const r of d.rules) { const k = `${r.laag ?? '-'}${r.shift ? '#shift' : ''}`; c[k] = (c[k] || 0) + 1; } return c; };
   const voor = vorige ? tel(vorige) : {}, na = tel(doc);
   const anders = Object.keys({ ...voor, ...na }).filter((k) => voor[k] !== na[k]).sort();
-  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1), stems (40 + 1, 40 met shift), patronen (45 + 1, 41 met shift) en secties (40 + 1, 40 met shift) erbij, negen shift-regels zonder mapje (auto, master, stems, patronen, secties, keylock, toon −/+, beeld) en vier in de grid-modus, de noodknoppen (1 zonder mapje, 4 in video), de koptelefoon (8 zonder mapje), het mapje inst (11), het mapje master (11 + 1 met shift), rij 3 van de sampler (8) en het mapje beeld (14) (${anders.join(' ')})`,
-    anders.join() === '-,-#shift,device.beeld,device.inst,device.master,device.master#shift,edit.aan#shift,grid.auto,grid.patronen,grid.patronen#shift,grid.sampler,grid.sampler#shift,grid.secties,grid.secties#shift,grid.stems,grid.stems#shift,grid.video,grid.video#shift'
+  ok(`aantal regels per bestaande modus gelijk; alleen auto (5 + 1), stems (40 + 1, 40 met shift), patronen (45 + 1, 41 met shift) en secties (40 + 1, 40 met shift) erbij, negen shift-regels zonder mapje (auto, master, stems, patronen, secties, keylock, toon −/+, beeld) en vier in de grid-modus, de noodknoppen (1 zonder mapje, 4 in video), de koptelefoon (8 zonder mapje), het mapje inst (11), het mapje master (11 + 1 met shift), rij 3 van de sampler (8), het mapje beeld (14) en de grid-modus van 14 okt (5 + 3 met shift) (${anders.join(' ')})`,
+    anders.join() === '-,-#shift,device.beeld,device.inst,device.master,device.master#shift,edit.aan,edit.aan#shift,grid.auto,grid.patronen,grid.patronen#shift,grid.sampler,grid.sampler#shift,grid.secties,grid.secties#shift,grid.stems,grid.stems#shift,grid.video,grid.video#shift'
     && na['grid.auto'] === 6 && na['grid.stems'] === 41 && na['grid.stems#shift'] === 40 && na['grid.patronen'] === 46 && na['grid.patronen#shift'] === 41
     && na['grid.secties'] === 41 && na['grid.secties#shift'] === 40
     && na['-#shift'] === voor['-#shift'] + 9
     && na['device.inst'] === 11 && !voor['device.inst'] && na['device.master'] === 11 && na['device.master#shift'] === 1
     && na['device.beeld'] === 14 && !voor['device.beeld'] && !na['device.beeld#shift']
     && na['grid.sampler#shift'] === 1 && na['grid.video#shift'] === 1 && na['grid.sampler'] === voor['grid.sampler'] + 8
-    && na['edit.aan#shift'] === voor['edit.aan#shift'] + 4 && na['-'] === voor['-'] + 1 + 8 && na['grid.video'] === voor['grid.video'] + 4
+    && na['edit.aan#shift'] === voor['edit.aan#shift'] + 4 + 3 && na['edit.aan'] === voor['edit.aan'] + 5 && na['-'] === voor['-'] + 1 + 8 && na['grid.video'] === voor['grid.video'] + 4
     && ['grid.hotcues', 'grid.loops', 'grid.klank', 'device.strip', 'device.rack']
       .every((k) => voor[k] === na[k] && voor[k] > 0));
 
@@ -1471,9 +1476,9 @@ console.log('\nmodus auto (auto-DJ)');
   const kopie25 = JSON.parse(JSON.stringify(vorige));
   for (const r of kopie25.rules) if (r.laag === 'device.rack' && VIDEO_KNOPPEN[r.in]) { r.action = VIDEO_KNOPPEN[r.in]; r.mode = 'absolute'; }
   const vk = verschilVanKopie(doc, kopie25);
-  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 328 x "weggehaald": 13 + 8 koptelefoonknoppen + 2 Cue Level-regels in een grid-modus + 11 van het mapje inst + 13 van het mapje master + 83 van de modus stems + 89 van de modus patronen + 3 van keylock en toon + 1 van vast + 82 van de modus secties + 8 van rij 3 van de sampler + 15 van het mapje beeld)',
+  ok('een volledige kopie van 25 sep: afgezet tegen e2bef131-374, 4 eigen, niets weggehaald (anders 328 x "weggehaald": 13 + 8 koptelefoonknoppen + 2 Cue Level-regels in een grid-modus + 11 van het mapje inst + 13 van het mapje master + 83 van de modus stems + 89 van de modus patronen + 3 van keylock en toon + 1 van vast + 82 van de modus secties + 8 van rij 3 van de sampler + 15 van het mapje beeld + 8 gridknoppen van 14 okt)',
     vk.basis === 'e2bef131-374' && vk.verschil.rules.length === 4 && vk.verschil.removed.length === 0
-    && maakVerschil(doc, kopie25).removed.length === 328);
+    && maakVerschil(doc, kopie25).removed.length === 336);
   lg.zet('grid', 'hotcues');
 
   // Beeld-noodknoppen (2 okt, ONTBREEKT A4): de master-knop (Track Select boven
@@ -1572,9 +1577,9 @@ console.log('\nmapje beeld');
   ok('beeld is een mapje van de device-groep met een eigen naam (en een eigen kiesknop, zoals master)',
     GROEPEN.device.knoppen.beeld?.join() === 'beeld' && /Stroommachine/.test(LAAGNAAM['device.beeld'])
     && GROEPEN.device.knoppen.view.join() === 'strip,rack,inst' && GROEPEN.device.knoppen.master?.join() === 'master');
-  ok('Shift + Detail View = layer.device.beeld; Detail View zonder shift doet in de standaard niets',
+  ok('Shift + Detail View = layer.device.beeld; Detail View zonder shift doet buiten de grid-modus niets (erin: ↶, 14 okt)',
     actie('note:0:65', true) === 'layer.device.beeld' && actie('note:0:65') === null
-    && doc.rules.filter((r) => r.in === 'note:0:65').length === 1);
+    && doc.rules.filter((r) => r.in === 'note:0:65' && r.laag !== 'edit.aan').length === 1);
   const regels = doc.rules.filter((r) => r.laag === 'device.beeld');
   ok('15 regels erbij: Shift + Detail View en 14 in het mapje (8 knoppen endless, 6 drukknoppen), geen enkele met shift',
     regels.length === 14 && regels.every((r) => !r.shift)
@@ -1662,9 +1667,12 @@ console.log('\nmapje beeld');
   // elke knop wat hij in de vorige standaard deed. Alleen Shift + Detail View is nieuw.
   const vorige = eerdereStandaarden(doc).find((e) => e.vingerafdruk === 'a4d5af2f-687');
   const vorigeE = doc.eerder.find((e) => e.vingerafdruk === 'a4d5af2f-687');
-  ok('de standaard van vóór het mapje beeld (a4d5af2f-687) is een voorganger: 0 regels anders, alleen de 15 nieuwe sleutels "weggehaald"',
-    vorige?.doc.rules.length === 687 && vorigeE?.rules.length === 0 && vorigeE.removed.length === 15
-    && vorigeE.removed.every((k) => k === 'note:0:65#shift' || k.endsWith('@device.beeld')));
+  // De acht gridknoppen van 14 okt (BEATGRID.md §12) kwamen daarna, alleen in de grid-modus.
+  const GRID14 = new Set(['note:0:58@edit.aan', 'note:0:59@edit.aan', 'note:0:58#shift@edit.aan', 'note:0:59#shift@edit.aan',
+    'note:0:62@edit.aan', 'note:0:62#shift@edit.aan', 'note:0:64@edit.aan', 'note:0:65@edit.aan']);
+  ok('de standaard van vóór het mapje beeld (a4d5af2f-687) is een voorganger: 0 regels anders, alleen de 15 nieuwe sleutels (en de 8 gridknoppen van 14 okt) "weggehaald"',
+    vorige?.doc.rules.length === 687 && vorigeE?.rules.length === 0 && vorigeE.removed.length === 15 + 8
+    && vorigeE.removed.every((k) => k === 'note:0:65#shift' || k.endsWith('@device.beeld') || GRID14.has(k)));
   const vm = new Mapping({ read: () => 0, invoke: () => {}, lagen: () => lg.actief() });
   vm.load(vorige.doc);
   const sigs = [...new Set(doc.rules.map((r) => r.in))];
@@ -1676,6 +1684,7 @@ console.log('\nmapje beeld');
         for (const sig of sigs) {
           for (const sh of [false, true]) {
             if (sig === 'note:0:65' && sh) continue;
+            if (edit === 'aan' && GRID14.has(`${sig}${sh ? '#shift' : ''}@edit.aan`)) continue;   // 14 okt: in de grid-modus nieuw
             const a = bm.kies(sig, { shift: sh }), b = vm.kies(sig, { shift: sh });
             if ((a?.action ?? null) !== (b?.action ?? null) || (a?.mode ?? null) !== (b?.mode ?? null)) anders.push(`${dev}/${modus}/${edit}/${sig}${sh ? '#shift' : ''}`);
           }

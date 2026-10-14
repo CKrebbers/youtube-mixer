@@ -35,7 +35,11 @@ const KLEURSCHEMA = [
   // Grid-modus (stap D): de scene-knoppen WIT, zodat je de grid-modus niet
   // voor een grid-mapje aanziet (die zijn geel/cyaan/violet/blauw). Cyaan
   // zolang je drukt: je ziet dat hij het deed.
-  [/\.grid\.(here|double|halve|halfbeat|split)$/, { aan: 'cyaan', half: 'wit', uit: 'wit' }],
+  // "Tel 1 hier" zegt in rust ook of het stuk dat je hoort klopt (14 okt,
+  // BEATGRID.md §12): wit = zeker of op slot, ORANJE = twijfel (controleer,
+  // geen puls, of het grid wijkt live af). Read 0 / 0,5 (actions.js, twijfelHier).
+  [/\.grid\.here$/, { aan: 'cyaan', half: 'oranje', uit: 'wit' }],
+  [/\.grid\.(double|halve|halfbeat|split|align)$/, { aan: 'cyaan', half: 'wit', uit: 'wit' }],
   [/\.hotcue\.\d+$/, { aan: 'geel', half: 'geeldonker', uit: 'donkergrijs' }],
   [/\.loop\.exit$/,  { aan: 'rood', uit: 'uit' }],
   [/\.loop\./,       { aan: 'cyaan', half: 'cyaandonker', uit: 'donkergrijs', tel: 'aan' }],

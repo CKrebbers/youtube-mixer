@@ -592,3 +592,97 @@ opnieuw gedaan): zo'n nummer kan op 70–87 staan terwijl nieuwe ingests op 140�
   "oneens", dus onzeker. Eerlijk, maar het grid zou 178 moeten zijn.
 - De fase van de tellen-route (0,1–0,4 ms) is te mooi: de nep-tellen hebben ruis zonder vaste
   afwijking per instrument. Op echte muziek ligt het netwerk ~5 ms naast (§11).
+
+## 13. Gelijkzetten op de controller, gemeten (14 oktober 2026)
+
+Clay: *"Alles eerst is het belangrijk dat het op de juiste manier met de controllers werkt
+… erg laggy … de beatgrid moet ook beter."* Dit hoofdstuk gaat over de BEDIENING: hoe
+snel en zeker je een fout grid rechtzet, op de APC (grid-modus, Shift + Metronome). De
+analyse (welk grid er binnenkomt) staat in §11 en is een ander spoor.
+
+### Hoe het gemeten is
+
+`test/grid-bediening.test.mjs` speelt de gewone fouten als **scenario's** af: een plaat op
+124,317 bpm (geen veelvoud van 0,01) van 6 minuten, een bekend fout grid, en een
+"gebruiker" die op de APC drukt (MIDI-berichten op de standaardmapping, met de echte
+lagen, de echte engine op de Web Audio-mock en de echte LED-laag) als hij de klap hoort,
+12 ms te laat. Daarna wordt het grid over het HELE nummer nagelopen: elke tel ≤ 2 ms, het
+tempo ≤ 0,01%, elke "1" goed, alles zeker. Dezelfde test draait op een oudere checkout:
+
+```
+node test/grid-bediening.test.mjs                                  # deze boom (de test)
+VARVE_WORTEL=<checkout> VARVE_GRID_UIT=voor.json node test/grid-bediening.test.mjs   # de nulmeting
+VARVE_CHROME=<chromium> node tools/headless/grid-bediening.mjs     # echte server en app (bewaren, opnieuw laden)
+```
+
+Uitkomsten (drukken inclusief "grid-modus aan"; de cijfers in het verslag van 14 okt):
+
+| fout | route op de APC | vóór 14 okt | nu |
+|---|---|---|---|
+| octaaf (½ of ×2) | scene 2 / scene 3 | 2, goed | 2, goed |
+| de "1" een tel verschoven | tel 1 hier op een echte "1" (snapt) | 2, goed (maar zonder klappen 12 ms naast) | idem |
+| | **Device ◀** (← 1), waar dan ook, ook zonder klappen | kon niet op de APC | 2, goed |
+| fase 12 ms naast | **Clip/Device View** (tellen hier) op ELKE tel | kon niet op de APC | 2, goed |
+| fase 47 ms naast | nudge | 12 drukken | 12, of **4 met vasthouden** |
+| tempo 0,1% naast (0,7 tel na 6 min) | vast op 2:30 | 2, goed | 2, goed |
+| | vast pas op 5:00 (0,63 tel uit de pas) | **stil fout**: 124,12 bpm, de verkeerde kant op | 2, goed (geteld op de klappen) |
+| | encoder (0,01 per tik) | 5 ms naast na 6 min | idem (de resolutie) |
+| tempowissel midden in het nummer | nieuw stuk, tel 1 hier, vast | 4, goed | 4, goed |
+| geen grid | 8× tap, tel 1 hier, vast | 11, goed | 11, goed |
+| op slot maar fout | tel 1 hier, of tellen hier + ← 1 | 2 | 2 of 3 |
+| klopt, maar onzeker | Lock, of **Shift + On/Off** (✓) | Lock alleen | beide |
+
+### Wat er veranderd is
+
+- **Acht knoppen in de grid-modus** (`docs/APC40.md` "Grid-modus: gelijkzetten"): de "1"
+  verschuiven, tellen hier, ↶, controleren met de tik, ✓ en de plekken langs.
+- **Tellen hier** (`track.N.grid.align`, `Beatgrid.lijnUitOp`): de tel die het dichtst bij
+  wat je hoort ligt komt op de klap (gesnapt binnen 30 ms), de "1" en het tempo blijven.
+  "Tel 1 hier" zet ook de "1", dus daarvoor moest je op de "1" wachten.
+- **Vast telt op de klappen** (`Beatgrid.pin(t, { klappen })`): ligt het grid hier meer dan
+  een kwart tel uit de pas, dan kan "de tel hier" ook de buurtel zijn. Pin probeert n−1, n en
+  n+1 tellen en kiest het aantal waarbij de tellen ertussen op de klappen vallen (≥ 50% raak
+  binnen 15 ms, en 25 procentpunt beter dan de rest); anders het oude gedrag, en dan zegt de
+  melding "LET OP … controleer met de tik". Gemeten: kicks op elke tel, ook met hi-hats op
+  elke zestiende ertussen.
+- **↶ zet precies terug**: ook `bron`, `methode`, `zekerheid` en `twijfel`. Vroeger ging
+  terug via `gridGewijzigd()` en werd een teruggezet voorstel van de analyse `bron: 'hand'`
+  (dan kwam het grid uit de tellen er nooit meer overheen).
+- **Nudge vasthouden** herhaalt (`HERHAAL_NA` 350 ms, dan elke `HERHAAL_ELKE` 60 ms, hooguit
+  200 stappen); loslaten stopt, een ander grid stopt ook, en het hele vasthouden is één ↶.
+  Terugspelen: de herhaling loopt op de timer van NU, dus tijdens het vasthouden kan het grid
+  een paar ms afwijken van toen; de `grid`-gebeurtenis van het log na het loslaten zet het
+  eindgrid precies goed (docs/HANDELINGENLOG.md, `grid`).
+- **Het lampje van "tel 1 hier"**: wit = het stuk dat je hoort klopt, oranje = twijfel. Je
+  ziet op de APC zelf of je klaar bent.
+- **De controletik** plant meteen opnieuw als het grid verandert (een 'change' van het deck),
+  niet pas bij de volgende tik van zijn timer (tot 30 ms tik op het oude grid).
+- **Bewaren** (`src/ui/grid-bewaren.js`): 250 ms na de laatste bewerking (tijdens een lange
+  reeks toch elke seconde), niet op een timer van 1,5 s. 250 ms is de bovengrens; het vangnet
+  van 1,5 s (dat een mislukte POST opnieuw doet) kan er toevallig eerder zijn. Gemeten in
+  Chrome tegen de echte server: gemiddeld 707 ms (103–1263) → rond de 250 ms van de druk tot de
+  server hem heeft (verslag 14 okt). Elk antwoord wordt gelezen (`leesWeg`, ook bij een fout),
+  en een POST die na 5 s (`TIJDSLIMIET_MS`) niets zei wordt afgebroken: er loopt één ronde
+  tegelijk, en één hangend verzoek legde anders het bewaren stil (gemeten: 1 POST in 6 s,
+  nu 6). `test/grid-bewaren.test.mjs` draait op een nep-klok en een nep-wekker.
+- **De library-rij en andere tracks**: na elke geslaagde POST weet de library-rij het nieuwe
+  grid (`library.zetGrid`), ook als de track intussen een ander nummer laadde (de rij hoort
+  bij het nummer). Een andere track met hetzelfde nummer die zelf niets bewerkte krijgt het
+  pas als de REEKS klaar is (250 ms geen bewerking en alles bewaard, `naReeks`), één keer,
+  niet elke seconde een tussenstand van een encoder die nog draait. Vroeger kreeg wie het nummer na een bewerking opnieuw laadde het grid van
+  VÓÓR de bewerking (gemeten: track 1 248,65 bpm, track 2 kreeg 124,33), en bewerkte hij
+  dat, dan overschreef hij de jouwe.
+- **De weergave meet minder vaak**: het oordeel naast de bpm (elke frame) en het lampje
+  (elke LED-tik) meten het grid tijdens een reeks bewerkingen hooguit eens per 150 ms aan de
+  tellen (`deck.gridMetingBij`); wie beslist (controle, ✓) leest `gridMeting`, altijd vers.
+  Met de tellen van een uur muziek kost één meting in Chrome ~5,7 ms; draaien aan de bpm
+  (30 tikken/s) kostte daardoor 154–310 ms rekenen per seconde, nu rond de 50 (37–70 over vier runs).
+
+### Wat niet veranderd is, en waarom
+
+- MIDI → grid duurt 0,01–0,05 ms (mediaan per knop, p95 < 0,2 ms): de vertraging zit niet
+  in de grid-actions. Het lampje volgt bij de volgende tik van de LED-laag (33 ms, het spoor
+  van de controller-uitvoer).
+- De bpm-encoder blijft 0,01 per tik (shift 0,1): exact komt het tempo pas met **vast**.
+- Een ringknop voor de bpm in de grid-modus is niet gebouwd: de device knobs sturen absolute
+  waarden (127 stappen per slag) en `grid.bpm` loopt over 40–300 bpm: 2 bpm per tik.

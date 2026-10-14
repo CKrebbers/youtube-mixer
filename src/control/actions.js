@@ -15,7 +15,7 @@
  */
 import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/beatgrid.js';
 import { ToonKaart, WIJZER } from '../engine/toonsoort.js';
-import { teControleren, plekkenTeControleren, volgendTeControleren, oordeelStuk } from '../engine/tellen.js';
+import { teControleren, plekkenTeControleren, volgendTeControleren, oordeelStuk, oordeelBij, afwijkingBij } from '../engine/tellen.js';
 import { EFFECTEN } from '../engine/fx.js';
 import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
 import { PITCH_BEREIKEN, SPRONG_TELLEN, GLIJ, TOON_MAX } from '../engine/deck.js';
@@ -40,6 +40,12 @@ export const STEM_LABELS = { vocals: 'zang', inst: 'rest', drums: 'drums', bass:
 /** Het rate-bereik van `track.N.tempo`; gelijk aan de klem in deck.setRate. */
 const RATE_MIN = 0.5;
 const RATE_MAX = 2;
+
+/** Grid-nudge vasthouden: na zoveel ms herhalen, dan elke zoveel ms een stap (14 okt). */
+export const HERHAAL_NA = 350;
+export const HERHAAL_ELKE = 60;
+/** … en hooguit zoveel stappen per keer vasthouden (200 × 5 ms = een seconde schuiven). */
+export const HERHAAL_MAX = 200;
 
 /** Zoveel secties per track op de bus: de 40 pads van het APC-grid (docs/SECTIES.md). */
 export const SECTIE_PADS = 40;
@@ -273,13 +279,50 @@ export function bindEngine(engine) {
       define(`${n}.grid.${id}`, 'trigger', (on) => { ingedrukt = !!on; doe(on); },
         { label, read: () => (!d.grid ? null : ingedrukt ? 1 : rust()) });
     };
+    // Het OORDEEL over het stuk dat je hoort, voor een lampje (14 okt): 0 =
+    // zeker of op slot, 0,5 = twijfel (controleer, geen puls, of het grid wijkt
+    // hier live van de gevonden tellen af). De scene-knop "tel 1 hier" in de
+    // grid-modus brandt zo wit als het klopt en oranje als je moet kijken.
+    const twijfelHier = () => {
+      const t = hoorbaar();
+      const live = d.tellen && d.playing ? afwijkingBij(d.grid, d.tellen.beats, t) : null;
+      const o = oordeelBij(d.grid, t, d.gridMetingBij(performance.now()), live);
+      return o.soort === 'zeker' || o.soort === 'vast' ? 0 : 0.5;
+    };
     // Tel 1 hier SNAPT naar de dichtstbijzijnde klap binnen 30 ms (de onsets
     // van de analyse, stap C); geen klap of geen analyse: de positie zelf.
-    gridKnop('here', (g, p) => g.ankerHier(snapNaarOnset(d.onsets, p)), `Track ${nr} beat 1 hier (snapt naar een klap)`);
-    define(`${n}.grid.back`, 'trigger', bewerk((g, p) => g.schuif(-0.005, p)), { label: `Track ${nr} grid 5 ms terug` });
-    define(`${n}.grid.fwd`, 'trigger', bewerk((g, p) => g.schuif(0.005, p)), { label: `Track ${nr} grid 5 ms vooruit` });
-    define(`${n}.grid.back.fine`, 'trigger', bewerk((g, p) => g.schuif(-0.001, p)), { label: `Track ${nr} grid 1 ms terug` });
-    define(`${n}.grid.fwd.fine`, 'trigger', bewerk((g, p) => g.schuif(0.001, p)), { label: `Track ${nr} grid 1 ms vooruit` });
+    gridKnop('here', (g, p) => g.ankerHier(snapNaarOnset(d.onsets, p)), `Track ${nr} beat 1 hier (snapt naar een klap)`, twijfelHier);
+    // TELLEN HIER (14 okt): de dichtstbijzijnde tel op de klap die je hoort,
+    // en de "1" blijft waar hij was (Beatgrid.lijnUitOp). Voor een grid dat
+    // een paar ms naast ligt: één druk op ELKE tel, je hoeft niet op de "1" te
+    // wachten en de maat verschuift niet. Snapt zoals tel 1 hier.
+    gridKnop('align', (g, p) => g.lijnUitOp(snapNaarOnset(d.onsets, p)), `Track ${nr} tellen hier: de tel op de klap, de "1" blijft`);
+    // Nudge van het grid: één druk = één stap; VASTHOUDEN herhaalt (na
+    // HERHAAL_NA ms elke HERHAAL_ELKE ms een stap), als één stap terug (↶).
+    // De timer zegt alleen WANNEER; elke stap schuift het grid met vaste ms.
+    const nudge = (id, sec, label) => {
+      let timer = null, ingedrukt = false, grid = null, stappen = 0;
+      const stop = () => { clearTimeout(timer); clearInterval(timer); timer = null; };
+      // Een ander grid (ander nummer, ↶, een analyse die binnenkomt) of HERHAAL_MAX stappen: ophouden.
+      const stap = () => {
+        if (!d.grid || d.grid !== grid || ++stappen > HERHAAL_MAX) { stop(); return; }
+        const p = hoorbaar(); d.grid.schuif(sec, p); d.grid.bevestig(p); d.gridGewijzigd();
+      };
+      define(`${n}.grid.${id}`, 'trigger', (on) => {
+        ingedrukt = !!on;
+        stop();
+        if (!on || !d.grid) return;
+        d.gridVoorBewerking();
+        grid = d.grid; stappen = 0;
+        stap();
+        timer = setTimeout(() => { timer = setInterval(stap, HERHAAL_ELKE); timer?.unref?.(); }, HERHAAL_NA);
+        timer?.unref?.();
+      }, { label, read: () => (!d.grid ? null : ingedrukt ? 1 : 0) });
+    };
+    nudge('back', -0.005, `Track ${nr} grid 5 ms terug (vasthouden: herhalen)`);
+    nudge('fwd', 0.005, `Track ${nr} grid 5 ms vooruit (vasthouden: herhalen)`);
+    nudge('back.fine', -0.001, `Track ${nr} grid 1 ms terug (vasthouden: herhalen)`);
+    nudge('fwd.fine', 0.001, `Track ${nr} grid 1 ms vooruit (vasthouden: herhalen)`);
     gridKnop('double', (g, p) => g.verdubbel(p), `Track ${nr} bpm x2`);
     gridKnop('halve', (g, p) => g.halveer(p), `Track ${nr} bpm /2`);
     gridKnop('halfbeat', (g, p) => g.schuifTel(0.5, p), `Track ${nr} grid een halve tel verschuiven`);
@@ -312,14 +355,19 @@ export function bindEngine(engine) {
     const pin = (t) => {
       if (!d.grid) return;
       const was = d.grid.toJSON();
-      const r = d.grid.pin(snapNaarOnset(d.onsets, t));
+      // De klappen beslissen mee welke tel dit is als het grid hier ver uit de pas ligt (Beatgrid.pin).
+      const r = d.grid.pin(snapNaarOnset(d.onsets, t), { klappen: d.onsets });
       if (!r.ok) { engine.emit('melding', { tekst: `track ${nr}, vastzetten: ${r.reden}`, soort: 'fout' }); return; }
       d.gridVoorBewerking(was);
       d.gridGewijzigd();
       const komma = (x) => x.toFixed(2).replace('.', ',');
-      engine.emit('melding', { soort: 'info', tekst: r.alleenFase
+      // Lag het grid hier ver naast en hielpen geen klappen, dan kan het de buurtel zijn geweest: zeg het.
+      const gok = !r.alleenFase && !r.geteld && Math.abs(r.naast) > 0.25
+        ? ` — LET OP: het grid lag hier ${Math.round(Math.abs(r.naast) * 100)}% van een tel naast; controleer met de tik (↶ = terug)` : '';
+      engine.emit('melding', { soort: gok ? 'fout' : 'info', tekst: r.alleenFase
         ? `track ${nr}: tel gelijkgelegd (te dicht bij het anker voor een tempo: zet "1" eerder, of vast verder weg)`
-        : `track ${nr}: vastgezet — ${komma(r.bpm)} bpm (was ${komma(r.was)}) over ${Math.abs(r.tellen)} tellen; vanaf hier een nieuw stuk` });
+        : `track ${nr}: vastgezet — ${komma(r.bpm)} bpm (was ${komma(r.was)}) over ${Math.abs(r.tellen)} tellen`
+          + `${r.geteld ? ' (geteld op de klappen)' : ''}; vanaf hier een nieuw stuk${gok}` });
     };
     let pinDruk = false;
     define(`${n}.grid.pin`, 'trigger', (on) => { pinDruk = !!on; if (on) pin(hoorbaar()); },

@@ -449,5 +449,34 @@ console.log('\nbevestigen, maat, vastzetten');
     geweigerd === 0 && slechtste < 0.005);
 }
 
+// 14 okt (BEATGRID.md §12): vastzetten waar het grid ver uit de pas ligt. Een
+// plaat op 124,317 met een grid op 124,19: na 620 tellen ligt het grid 0,63 tel
+// achter, dus 0,37 tel VÓÓR de volgende tel. Zonder klappen kiest pin die (619
+// tellen) en zet het tempo de verkeerde kant op; met de klappen kiest hij 620.
+{
+  const waar = 124.317, T0 = 0.35, L = 60 / waar;
+  const t620 = T0 + 620 * L;
+  const kicks = Float64Array.from({ length: 700 }, (_, i) => T0 + i * L);
+  // Kicks op de tel en hi-hats op elke zestiende: ook dan wint het juiste aantal.
+  const druk = Float64Array.from({ length: 2800 }, (_, i) => T0 + i * L / 4);
+  const zonder = new Beatgrid({ stukken: [{ van: 0, bpm: 124.19, anker: T0, maat: T0 }] });
+  const rz = zonder.pin(t620);
+  ok(`pin op 0,63 tel drift ZONDER klappen: kiest de buurtel (619, ${rz.bpm?.toFixed(3)} bpm), zoals vroeger`, rz.ok && rz.tellen === 619 && !rz.geteld);
+  const met = new Beatgrid({ stukken: [{ van: 0, bpm: 124.19, anker: T0, maat: T0 }] });
+  const rm = met.pin(t620, { klappen: kicks });
+  ok(`… MET klappen: 620 tellen, ${rm.bpm?.toFixed(4)} bpm (geteld op de klappen: ${rm.geteld})`, rm.ok && rm.tellen === 620 && Math.abs(rm.bpm - waar) < 1e-6 && rm.geteld >= 0.99);
+  const hats = new Beatgrid({ stukken: [{ van: 0, bpm: 124.19, anker: T0, maat: T0 }] });
+  const rh = hats.pin(t620, { klappen: druk });
+  ok('… ook met hi-hats op elke zestiende tussen de kicks', rh.ok && rh.tellen === 620 && Math.abs(rh.bpm - waar) < 1e-6);
+  // Dicht genoeg bij (0,1 tel): de klappen veranderen niets aan wat vroeger al goed ging.
+  const dichtbij = new Beatgrid({ stukken: [{ van: 0, bpm: 124.19, anker: T0, maat: T0 }] });
+  const rd = dichtbij.pin(T0 + 100 * L, { klappen: kicks });
+  ok('… dichtbij (0,1 tel naast): hetzelfde als zonder klappen', rd.ok && rd.tellen === 100 && rd.geteld === null && Math.abs(rd.bpm - waar) < 1e-6);
+  // Klappen die nergens op vallen (ambient): geen keuze, dan het oude gedrag.
+  const vaag = new Beatgrid({ stukken: [{ van: 0, bpm: 124.19, anker: T0, maat: T0 }] });
+  const rv = vaag.pin(t620, { klappen: Float64Array.from({ length: 50 }, (_, i) => 1.234 + i * 7.1) });
+  ok('… met klappen die niets zeggen: het oude gedrag (619)', rv.ok && rv.tellen === 619 && !rv.geteld);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);
