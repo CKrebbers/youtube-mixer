@@ -55,6 +55,7 @@ const laad = async (deckId, track) => {
   d.setGrid(track.grid);
   d.setToonKaart(ToonKaart.van(track.toon));
   opDeck[deckId] = track.id;
+  return {};              // zoals laden.laadLibrary: gelukt = een object, null = verdrongen
 };
 const wacht = () => new Promise((r) => setTimeout(r, 0));
 const vanAuto = [];       // wat de automaat zelf over de bus stuurde

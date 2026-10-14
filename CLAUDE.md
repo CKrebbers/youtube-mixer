@@ -477,7 +477,7 @@ docs/
 | Tests | Alle bestanden in `test/` moeten groen blijven: `node test/alles.mjs`. Bij wijzigingen: check toevoegen. Hij draait in een pool (zoveel tegelijk als er kernen zijn, langste eerst uit `test/.duur.json`); een test met een tijdsgrens op de wandklok, een afvalmeting of een vaste poort krijgt bovenaan `// @alleen: <waarom>` en loopt daarna alleen. `--serieel` = alles na elkaar, `--banen N`. |
 | Mocks | Een mock die makkelijker is dan de echte API verbergt bugs. De Web Audio-mock vuurt `onended` asynchroon omdat de browser dat ook doet. |
 | Browser | Chrome. Web MIDI bestaat niet in Safari — geen polyfill-pogingen. |
-| Git | Committen en pushen mag. `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud), en bestanden met " 2" in de naam zijn conflictkopieën (meestal een oude versie): die NOOIT committen. Groter werk per spoor op een eigen tak in een worktree buiten iCloud (`~/Projects/varve-stems/<spoor>`), samenvoegen in `studio/integratie`, naar main met een PR; daarna de worktree weg. Data staat niet in git en hoort in de Bureaublad-map: `media/`, `opnames/`, `patronen/`, `proef/`, `standen/`. Een server die vanuit een worktree draait schrijft patronen, de speellijst en de standen in die worktree: link `media`/`opnames` en zet de rest terug vóór je de worktree weghaalt. |
+| Git | Committen en pushen mag. `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud), en bestanden met " 2" in de naam zijn conflictkopieën (meestal een oude versie): die NOOIT committen. Groter werk per spoor op een eigen tak in een worktree buiten iCloud (`~/Projects/varve-stems/<spoor>`), samenvoegen in `studio/integratie`, naar main met een PR; daarna de worktree weg. Data staat niet in git en hoort in de Bureaublad-map: `media/`, `opnames/`, `patronen/`, `proef/`, `standen/`, `sets/`. Een server die vanuit een worktree draait schrijft patronen, de speellijst, de standen en de sets in die worktree: link `media`/`opnames` en zet de rest terug vóór je de worktree weghaalt. |
 
 ## Bekende grenzen (niet als bug rapporteren)
 
@@ -1990,11 +1990,13 @@ Volledig in `docs/PLAN-SET.md`. Wat een bouwer niet mag missen:
   het noemt.
 - Laden gaat niet over de bus: de automaat ziet wat Clay laadde aan een ANDER nummer op het deck
   (`_kijkLaden`, elke tik, met `laadSleutel` = `bron.bestand`; NOOIT `deck.buffer` vergelijken: de
-  StreamBron geeft daar elke keer een nieuw object); zelf laden gaat via `_laadZelf`. Een laag rekent op de positie van zijn
+  StreamBron geeft daar elke keer een nieuw object); zelf laden gaat via `_laadZelf`, en die leest null van
+  `laadLibrary` als "verdrongen door Clay": een GELUKTE laad geeft daarom altijd een object (`{}`), nooit null
+  (integratie S9: met null telde elke laad van de auto-DJ als een laad van Clay; set-proef stap 4). Een laag rekent op de positie van zijn
   eigen track en loopt mee over een stapwissel; zonder zeker grid start hij niet vanzelf.
 - Een SET (`src/sets/model.js`, puur, ook de server): plan en patronen als KOPIE, werkruimte op
   NAAM, momentopname = `leesStand()` met speelt/wacht/pads/patronen UIT. `sets/<naam>.json` (niet in
-  git, `VARVE_SETS`), versie + 409 + `.versies`, elke fs-operatie via `beperkt` (server/sets.js).
+  git: `/sets/` in .gitignore; `VARVE_SETS`, ook in elke proefserver), versie + 409 + `.versies`, elke fs-operatie via `beperkt` (server/sets.js).
   Terugladen laadt nummers gewoon uit de library (grid van NU) en zet dan de stand
   (`maakZetMoment`); over een spelende track pas bij de tweede druk binnen 3 s; er start niets.
 - `/api/set/klaarmaken` weigert (409) als er een deck speelt of op een speeldag (de speeldagen van

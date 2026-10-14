@@ -21,3 +21,6 @@ test/.duur.json
 
 # Clay's eigen werkruimtes (docs/WERKRUIMTE.md B2); met de slash: src/werk/ en tools/werkruimtes/voorbeelden/ horen WEL in git
 /werkruimtes/
+
+# Clay's eigen sets (docs/PLAN-SET.md); met de slash: src/sets/ hoort WEL in git
+/sets/

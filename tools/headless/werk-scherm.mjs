@@ -105,7 +105,7 @@ export async function harnas({ poort, debug, naam = 'werk', extraEnv = {}, werkr
   mkdirSync(werkMap, { recursive: true });
   for (const w of werkruimtes) writeFileSync(join(werkMap, `${w.naam}.json`), JSON.stringify(w, null, 2));
   const env = { ...process.env, PORT: String(poort), VARVE_TESTSERVER: '1', VARVE_DB: join(tmp, 'lib.db'), VARVE_MEDIA: join(tmp, 'media'),
-    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_STANDEN: join(tmp, 'standen'),
+    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_SETS: join(tmp, 'sets'), VARVE_STANDEN: join(tmp, 'standen'),
     VARVE_PROEF: join(tmp, 'proef'), VARVE_BACKUPS: join(tmp, 'backups'), VARVE_NACHT: join(tmp, 'nacht.json'), VARVE_WERKRUIMTES: werkMap,
     VARVE_KAART: join(tmp, 'geen-kaart.json'), VARVE_KAART_DB: join(tmp, 'kaart.db'), VARVE_HUB_SETS: join(tmp, 'hub-sets'),
     VARVE_UITZEND_UIT: join(tmp, 'uitzend'), VARVE_HERANALYSE: 'uit', VARVE_STEMS: 'uit', ...extraEnv };

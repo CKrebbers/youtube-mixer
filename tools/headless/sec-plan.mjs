@@ -17,6 +17,7 @@ import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Library } from '../../server/library.js';
+import { KENT } from '../../src/plan/plan-model.js';
 
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
 const UIT = process.argv[2] || join(WORTEL, 'tools/headless/uit');
@@ -76,7 +77,7 @@ const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], {
   cwd: WORTEL,
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'),
-    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_HERANALYSE: 'uit', VARVE_PLANNEN: join(tmp, 'plannen') },
+    VARVE_OPNAMES: join(tmp, 'opnames'), VARVE_PATRONEN: join(tmp, 'patronen'), VARVE_HERANALYSE: 'uit', VARVE_PLANNEN: join(tmp, 'plannen'), VARVE_SETS: join(tmp, 'sets') },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let serverLog = '';
@@ -206,7 +207,9 @@ async function doorloop() {
   const schijf = opSchijf();
   ok('op schijf: in en uit, en van = het begin van de drop', schijf.stappen[1].in?.sectie === 3 && Math.abs(schijf.stappen[1].van - beginDrop) < 1e-9
     && schijf.stappen[0].uit?.sectie === 4 && Math.abs(schijf.stappen[0].uit.van - KAARTEN.een.stukken[3].van) < 1e-9 && !schijf.stappen[2].in && !schijf.stappen[2].uit);
-  ok('de PUT zegt dat het venster in/uit kent', await ev("window.__bodies.some((b) => JSON.stringify(b.kent) === JSON.stringify(['in', 'uit']))"));
+  // Sinds S9 noemt het venster ook go, lagen en tracks (KENT): in en uit moeten erin staan, en de rest van KENT ook.
+  ok('de PUT zegt dat het venster in/uit kent', KENT.includes('in') && KENT.includes('uit')
+    && await ev(`window.__bodies.some((b) => JSON.stringify(b.kent) === ${JSON.stringify(JSON.stringify(KENT))})`));
   await cdp('Page.reload');
   ok('herladen', await tot("window.varvePlanVenster && document.querySelectorAll('.pl-rij').length === 3 && window.varvePlanVenster.secties.get('twee')", 15000));
   await tot(`${rij(1)}.querySelector('.pl-in')?.value === '3'`, 5000);

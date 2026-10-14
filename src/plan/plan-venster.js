@@ -138,7 +138,6 @@ async function opslaan({ versie = staat.versie } = {}) {
   const plan = { ...staat.plan, naam };
   const r = await fetch(`/api/plannen/${encodeURIComponent(naam)}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    // `kent`: dit venster kent in/uit; zonder zet de server ze terug (een oud venster, server/plannen.js).
     // `kent`: dit venster kent in/uit, go, lagen en tracks; zonder zet de server ze terug (een oud venster, server/plannen.js).
     body: JSON.stringify({ plan, versie: nieuweNaam ? null : versie, kent: KENT }),
   });

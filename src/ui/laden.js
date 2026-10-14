@@ -345,6 +345,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
    * en wordt er niets bewaard. `sectiesUitLog`: de sectiekaart ook niet (de
    * beginstand of een 'secties'-gebeurtenis zet hem); anders zou de kaart van
    * nu, misschien opnieuw gerekend op een ander grid, die van toen overschrijven.
+   * Geeft een object als het lukte ({ hint?, stems? }), null als een nieuwere laad op dit deck won.
    */
   async function laadLibrary(deckId, track, { terugspelen = false, grid, sectiesUitLog = false } = {}) {
     const begon = performance.now();
@@ -439,7 +440,10 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
     if (engine.ctx.state !== 'running') {
       return { hint: 'druk op "audio starten" om geluid te krijgen', stems: metStems };
     }
-    return metStems ? { stems: metStems } : null;
+    // Gelukt is ALTIJD een object: null betekent "verdrongen door een nieuwere laad" (hierboven), en
+    // de automaat leest dat zo (`_laadZelf`, review S9 ronde 3). Met null hier telde elke geslaagde
+    // laad van de auto-DJ als een laad van Clay (integratie S9, set-proef stap 4).
+    return metStems ? { stems: metStems } : {};
   }
 
   /**
