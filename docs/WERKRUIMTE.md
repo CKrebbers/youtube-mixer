@@ -757,6 +757,23 @@ bestanden aanraken. Geen gedrag verandert.
   aanhaker die gooit geeft één melding en de rest start.
 - `renderblok.test.mjs`: gouden hash en 0 GC ongewijzigd.
 
+**Gebouwd (14 okt, tak `werk/S0`, `docs/werkruimte/S0.md`).** Wat anders werd dan hierboven:
+- `Deck.tijdlijn()` geeft ook `vorig` (het segment dat tot een geplande sprong met keylock nog
+  speelt; zonder klopt `positieIn` dan niet). Op een BufferBron (de reserve) `null`.
+- `ctx.renderloop` is `{ stap(naam, fn) }`: een eigen requestAnimationFrame in `aanhakers.js`,
+  naast `renderloop.js` (dat is van S7), die alleen loopt als er een stap is.
+- De acht panelen: twee regels elk (de import van `rijen.js` en de aanmelding).
+- `alleenScherm` werkt in een Mapping met `metaOf`; app.js zet die op de APC-, Maschine- en
+  Xboard-mapping, en na de aanhakers loopt `weigerAlleenScherm()` alles nog eens langs (hun
+  actions bestaan pas na het laden). `set()` geeft dan null.
+- `voegMapjeToe` alleen in een bestaande groep met mapjes (`device`, `grid`). Een NIEUWE groep
+  (`houd` uit B5, Maschine `pads`/`pagina`) kan nog niet: de stand per groep rekent de
+  constructor van Lagen uit. Dat hoort bij S4 (lagen.js in golf 2) of S6.
+- `meta.overneem` zonder track in de id (bv. `super.1`) telt als "raakt elke overgang", zoals de
+  crossfader.
+- terugspelen.js en automaat.js lezen de meta via `metaOf` uit actions.js (als standaard; een
+  test kan een eigen meegeven: `maakPlan(regels, { metaOf })`, `new Automaat({ metaOf })`).
+
 ---
 
 #### S1 — Precisie (golf 2)
