@@ -1137,6 +1137,9 @@ const spoorCtx = {
   json, jsonMetEtag, leesJson, lib, WORTEL, MEDIA, POORT,
   vanDezeMac: (req) => vanDezeMac(req, POORT), speeltDeck,
   testserver: isTestserver(),
+  // Spoor S9 (server/routes/sets.js, "maak klaar"): de BESTAANDE rijen voor stems en secties, en de
+  // nacht voor de speeldagen. Alleen deze vier; de routes beslissen zelf wanneer (nooit met een deck aan).
+  nacht, stemsRij, nieuweStems: (id, aantal) => nieuweStems(id, aantal, { hercontrole: true }), analyseerSecties,
 };
 
 const server = createServer(async (req, res) => {

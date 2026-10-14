@@ -377,7 +377,7 @@ export class Automaat extends Emitter {
     const t = /^track\.(\d)\./.exec(id);
     if (t && deckVanNr(Number(t[1]))) {
       const dk = deckVanNr(Number(t[1]));
-      this._clay[dk] = this.engine.ctx.currentTime;
+      this._clay[dk] = this.engine.ctx?.currentTime ?? 0;
       // Een laag op die track is nu van Clay: de automaat raakt hem niet meer aan.
       for (const l of this.lagen) {
         if (l.deckId === dk && (l.status === 'klaar' || l.status === 'speelt' || l.status === 'laden')) {
@@ -932,7 +932,7 @@ export class Automaat extends Emitter {
   /** Is dit een track van Clay: niet van de automaat, en hij deed er kort geleden iets aan. */
   _vanClay(id) {
     const t = this._clay[id];
-    return !this.eigen.has(id) && t != null && this.engine.ctx.currentTime - t < CLAY_RECENT;
+    return !this.eigen.has(id) && t != null && (this.engine.ctx?.currentTime ?? 0) - t < CLAY_RECENT;
   }
 
   /** Tot welke positie (tracktijd van de uitgaande) een GO-stap op GO wacht. */
