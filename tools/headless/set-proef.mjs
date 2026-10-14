@@ -224,6 +224,14 @@ async function mixer() {
   await inv('set.terugladen', true); await inv('set.terugladen', false);
   ok('tweede druk binnen 3 s: teruggeladen, er speelt niets', await tot("!window.engine.deck('A').playing && !window.varveSets.stand().bezig", 15000));
   await foto('set-mixer.png');
+
+  console.log('\n4. de auto-DJ op gestreamde tracks (review S9 ronde 2: deck.buffer is elke keer een nieuw object)');
+  await inv('auto.aan', true);
+  ok('auto aan: de eerste stap speelt, de volgende staat klaar', await tot("window.auto.fase === 'klaar' && window.auto.volgende", 40000));
+  const au = await ev(`(() => { const a = window.auto; return { hoofd: a.hoofd, volgende: a.volgende?.deckId, eigen: [...a.eigen], clay: [...a._clayGeladen] }; })()`);
+  ok(`zijn eigen gestreamde tracks zijn van hem, niet "door Clay geladen" (${JSON.stringify(au)})`,
+    au.eigen.includes(au.hoofd) && !au.clay.includes(au.hoofd) && !au.clay.includes(au.volgende) && ["A", "B"].includes(au.volgende));
+  await inv('auto.aan', true);
 }
 
 try {

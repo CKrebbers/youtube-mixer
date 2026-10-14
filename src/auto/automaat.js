@@ -107,6 +107,16 @@ const LAAG_FADE_MATEN = 4, LAAG_FADE_SEC = 8;
 export const LAAG_NIVEAU = 0.8;
 /** Een GO-stap gaat zonder GO toch op dit moment (s tracktijd vóór het einde, bovenop de lengte van de overgang). */
 const GO_MARGE = 8;
+/**
+ * Wat er op een deck geladen is, als een waarde die alleen bij een NIEUWE laad verandert. Niet
+ * `deck.buffer`: de StreamBron (alles in de app streamt) geeft daar bij elke lezing een nieuw object
+ * (review S9 ronde 2). `bron.bestand` is één object per laad; de BufferBron heeft een vaste buffer.
+ */
+function laadSleutel(d) {
+  const b = d?.bron;
+  if (!b) return d?.buffer ?? null;
+  return b.bestand ?? (b.buffer && !b.buffer.stream ? b.buffer : null) ?? null;
+}
 /** Actions op een track die hem niet "in gebruik" maken: kijken en luisteren. */
 const KIJKEN = /^track\.\d\.(focus|select|pfl|show|stem\.\w+\.pfl)$/;
 const nrVan = (id) => DECK_IDS.indexOf(id) + 1;
@@ -184,7 +194,7 @@ export class Automaat extends Emitter {
     }
     this.planIndex = 0;
     // Wat er nu op de decks staat telt niet als "Clay laadde het" (pas wat daarna verandert).
-    for (const id of DECK_IDS) this._buffers[id] = this.engine.deck(id)?.buffer ?? null;
+    for (const id of DECK_IDS) this._buffers[id] = laadSleutel(this.engine.deck(id));
     if (!this.tracks.length) { this._meld('de library is leeg', 'fout'); this._stop(); return; }
     this.hoofd = this._luidste();
     if (this.hoofd) {
@@ -463,6 +473,7 @@ export class Automaat extends Emitter {
       const kaartP = this._haalKaart(deckId, keuze.track.id);
       await this._laadZelf(deckId, keuze.track);
       if (!this.aan) return;
+      if (this._clayGeladen.has(deckId)) throw new Error(`op track ${nrVan(deckId)} laadde jij intussen iets anders`);
       // Intussen buiten het plan gegaan (review S9 a-B1): geladen laten staan, verder niets.
       if (this.buitenPlan) { this.nummers[deckId] = keuze.track; this.eigen.add(deckId); this.fase = 'buiten'; return; }
       const nd = this.engine.deck(deckId);
@@ -965,7 +976,7 @@ export class Automaat extends Emitter {
    */
   _kijkLaden() {
     for (const id of DECK_IDS) {
-      const b = this.engine.deck(id)?.buffer ?? null;
+      const b = laadSleutel(this.engine.deck(id));
       if (b === this._buffers[id] || this._laadt.has(id)) continue;
       this._buffers[id] = b;
       if (b) { this._clayGeladen.add(id); this.eigen.delete(id); }
@@ -977,8 +988,12 @@ export class Automaat extends Emitter {
     this._laadt.add(deckId);
     try { return await this.laad(deckId, track); } finally {
       this._laadt.delete(deckId);
-      this._buffers[deckId] = this.engine.deck(deckId)?.buffer ?? null;
-      this._clayGeladen.delete(deckId);
+      this._buffers[deckId] = laadSleutel(this.engine.deck(deckId));
+      // Laadde Clay intussen zelf iets op dit deck (de laatste laad wint, laden.js), dan is het van hem
+      // (review S9 ronde 2, N3); de aanroeper ziet het aan welkNummer en stopt.
+      const nr = this.welkNummer(deckId);
+      if (nr && nr !== track.id) { this._clayGeladen.add(deckId); this.eigen.delete(deckId); }
+      else this._clayGeladen.delete(deckId);
     }
   }
 
@@ -1025,7 +1040,10 @@ export class Automaat extends Emitter {
   _laagDeck(l) {
     const mijn = this._mijn();
     const bezet = (id) => id === this.hoofd || id === this.volgende?.deckId || this.eigen.has(id) || mijn?.has(id);
-    const inGebruik = (id) => { const d = this.engine.deck(id); return d.playing || d.wacht || !!this.engine.instrumentOp?.(id) || this._clayGeladen.has(id); };
+    // Een laag gaat nooit over iets dat geladen is en niet van een laag van de automaat komt: ook wat
+    // Clay klaarzette vóór "auto aan" (review S9 ronde 2, b1/N4).
+    const inGebruik = (id) => { const d = this.engine.deck(id);
+      return d.playing || d.wacht || !!this.engine.instrumentOp?.(id) || this._clayGeladen.has(id) || (!!d.buffer && !this._laagDecks.has(id)); };
     if (l.deck) {
       const id = deckVanNr(l.deck);
       if (!id) return { fout: `track ${l.deck} bestaat niet` };
@@ -1034,7 +1052,7 @@ export class Automaat extends Emitter {
       return { id };
     }
     const id = DECK_IDS.find((x) => !bezet(x) && !inGebruik(x) && !this._vanClay(x) && !this.engine.deck(x).buffer)
-      ?? DECK_IDS.find((x) => !bezet(x) && !inGebruik(x) && !this._vanClay(x));
+      ?? DECK_IDS.find((x) => !bezet(x) && !inGebruik(x) && !this._vanClay(x) && this._laagDecks.has(x));
     return id ? { id } : { fout: 'geen vrije track van jou' };
   }
 
@@ -1070,6 +1088,7 @@ export class Automaat extends Emitter {
     try {
       this._doe(`track.${n}.fader`, 0);
       await this._laadZelf(keuze.id, track);
+      if (this._clayGeladen.has(keuze.id)) throw new Error(`op track ${nrVan(keuze.id)} laadde jij intussen iets anders`);
       this._laagDecks.add(keuze.id);
       if (!this.aan || l.status !== 'laden') return;
       const nd = this.engine.deck(keuze.id);
@@ -1147,7 +1166,8 @@ export class Automaat extends Emitter {
   _laagFade(l, d, nu) {
     const n = nrVan(l.deckId);
     const nd = this.engine.deck(l.deckId);
-    if (!nd.playing && !nd.wacht) { if (l.dicht) { l.status = 'klaar-gezet'; this.emit('change'); } return; }
+    // Afgelopen of door iemand gestopt: klaar (review S9 ronde 2, N2: anders bleef hij eeuwig "speelt").
+    if (!nd.playing && !nd.wacht) { l.status = 'klaar-gezet'; this.emit('change'); return; }
     if (nd.wacht) return;          // op de maat: hij klinkt nog niet
     if (l.glij && nu < l.glij - HERRICHT) return;
     let doel;

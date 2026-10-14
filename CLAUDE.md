@@ -1989,7 +1989,8 @@ Volledig in `docs/PLAN-SET.md`. Wat een bouwer niet mag missen:
   `set.terugladen*` staan in VAST_NOOIT (src/werk/model.js). De rest mag van de iPad alleen als `mag`
   het noemt.
 - Laden gaat niet over de bus: de automaat ziet wat Clay laadde aan een ANDER nummer op het deck
-  (`_kijkLaden`, elke tik); zelf laden gaat via `_laadZelf`. Een laag rekent op de positie van zijn
+  (`_kijkLaden`, elke tik, met `laadSleutel` = `bron.bestand`; NOOIT `deck.buffer` vergelijken: de
+  StreamBron geeft daar elke keer een nieuw object); zelf laden gaat via `_laadZelf`. Een laag rekent op de positie van zijn
   eigen track en loopt mee over een stapwissel; zonder zeker grid start hij niet vanzelf.
 - Een SET (`src/sets/model.js`, puur, ook de server): plan en patronen als KOPIE, werkruimte op
   NAAM, momentopname = `leesStand()` met speelt/wacht/pads/patronen UIT. `sets/<naam>.json` (niet in

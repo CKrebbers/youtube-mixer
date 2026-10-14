@@ -260,7 +260,18 @@ terugladen, tweede druk, ontbrekend nummer, grid van NU).
 - "1,5" als duur werd 90 s → onder de 10 = uren (`leesDuur`, ook "2u");
 - een laag kreeg het laatste nummer van een krat → het laatst AANGEVINKTE; "past bij" begint bij
   de gekozen stap, anders de focus-track van de mixer.
+**Review ronde 2**: de reparatie van "Clay laadde zelf iets" vergeleek `deck.buffer`, en de StreamBron
+geeft daar elke keer een nieuw object: elke gestreamde track werd "van Clay" en de automaat liep na een
+paar overgangen vast (in de tests niet te zien: die laden met een BufferBron). Nu vergelijkt hij wat er
+geladen is (`laadSleutel`: `bron.bestand`, één object per laad), met een test die de stream nabootst
+(faalt op de oude code) en een stap in de headless-proef met echte gestreamde tracks. Verder: een laag
+die vanzelf afloopt telt als klaar; laadt Clay tijdens de laad van de automaat op hetzelfde deck, dan
+wint Clay; een laag gaat nooit over een geladen track die niet van een laag komt (ook wat Clay vóór
+"auto aan" klaarzette). Wat vóór "auto aan" op een deck stond telt voor de STAPPEN niet als van Clay
+(niet te zien wie het laadde): zet daarvoor "tracks auto" in het plan.
 Bewust zo gelaten: het uiterste moment van GO rekent tot het einde van het nummer (niet de speelduur
 van het plan); `go()`/`terug()` rekenen kort in de action (licht, zoals `auto.nu`); "maak klaar"
 toetst de speeldag en het deck bij het verzoek (de stems-rij zelf gaat zoals altijd); een set die
-`auto-plan` heet vervangt bij terugladen het standaardplan (met versie, de vorige in `.versies`).
+`auto-plan` heet vervangt bij terugladen het standaardplan (met versie, de vorige in `.versies`);
+botst de patronen-opslag van de mixer na terugladen, dan wint de set (na de tweede druk: ongedaan te
+maken via `.versies`).

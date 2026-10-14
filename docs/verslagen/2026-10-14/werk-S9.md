@@ -121,7 +121,15 @@ Zie `docs/VRAGEN.md` blok S9:
 - Een energiecurve uit de secties (alle stukken, niet alleen de luidste) en een golf met twee pieken.
 - Een eindtijd die de automaat bewaakt: stukken onderweg korter maken als de set uitloopt.
 
-## 8. Testuitslag
+## 8. Reviews en testuitslag
 
-Na de merge van `werkruimte/integratie` en S9 (ronde 1 van de review verwerkt): `node test/alles.mjs` →
-zie het commitbericht van de laatste commit en §8b hieronder.
+Twee agenten reviewden in rondes (a: correctheid en regels, b: bruikbaarheid en bewijs); wat ze vonden
+en wat er veranderde staat in `docs/PLAN-SET.md` §9. Ronde 1: 2 blokkerend (a), 2 blokkerend (b),
+een rij belangrijke en kleine punten, alle verwerkt of als bewuste keuze gedocumenteerd. Ronde 2:
+één nieuwe blokkerende fout in een reparatie (de StreamBron, zie §9), verwerkt met een test die op
+de oude code faalt en een stap in de headless-proef met echte gestreamde tracks.
+
+`node test/alles.mjs` (na ronde 1): 122 bestanden, 10546 checks — rood alleen de bekende fouten van
+deze container: wachtrij "yt-dlp en zijn kind" (2×) en renderblok "keylock met wissels". (Een eerste
+run had ook `ingest` rood: yt-dlp was niet geïnstalleerd; na `pip install yt-dlp` groen.)
+De laatste run na ronde 2 staat in het eindbericht van deze sessie.
