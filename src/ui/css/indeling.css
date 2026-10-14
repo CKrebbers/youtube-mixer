@@ -66,7 +66,7 @@
 /* In de rij: de titel en dan de tags (de titel kort in, de tags niet). */
 .lib-rij .lib-titel{display:flex;align-items:center;gap:4px}
 .lib-titeltekst{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.ik-rijtags{display:inline-flex;gap:2px;flex:none}
+.ik-rijtags{display:inline-flex;gap:2px;flex:none;font-style:normal}
 .ik-rijtags .ik-chip{font-size:9px;line-height:12px;padding:0 4px}
 .ik-rijtags i{font-style:normal;color:var(--dim);font-size:9px}
 /* Gekozen (cmd-klik, shift-klik) en een plek om naartoe te slepen. */

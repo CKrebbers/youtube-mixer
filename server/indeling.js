@@ -224,8 +224,19 @@ export class Indeling {
     });
   }
 
-  /** Alles wat het paneel nodig heeft in één keer. */
-  stand() { return { tags: this.tags(), categorieen: this.categorieen(), snel: this.snel() }; }
+  /**
+   * Alles wat het paneel nodig heeft in één keer. Onthouden op de stand van de database (total_changes
+   * van deze verbinding plus data_version, zoals sectieTelling): de aantallen van de slimme categorieën
+   * kosten op 20.000 nummers ~2–3 ms per stuk, en werk.html, het planvenster en het paneel vragen hem
+   * vaak zonder dat er iets veranderde. Midden in een transactie niet onthouden.
+   */
+  stand() {
+    const sleutel = `${this.lib.wijzigingen()}:${this._q('PRAGMA data_version').get().data_version}`;
+    if (this._stand?.sleutel === sleutel) return this._stand.waarde;
+    const waarde = { tags: this.tags(), categorieen: this.categorieen(), snel: this.snel() };
+    if (!this.db.isTransaction) this._stand = { sleutel, waarde };
+    return waarde;
+  }
 
   /**
    * Een regel controleren voor in de database: `categorie` (naam of id) moet een GEWONE categorie
@@ -423,8 +434,10 @@ export class Indeling {
     if (f.bpm) { delen.push('t.grid_bpm BETWEEN ? AND ?'); args.push(f.bpm[0], f.bpm[1]); }
     if (f.energie) { delen.push('t.k_energie BETWEEN ? AND ?'); args.push(f.energie[0], f.energie[1]); }
     if (f.toon?.length) { delen.push(`t.k_toon IN (${f.toon.map(() => '?').join(',')})`); args.push(...f.toon); }
-    if (f.grid === 'zeker') delen.push(`t.k_grid IN (${GRID_ZEKER.map((x) => `'${x}'`).join(',')})`);
-    else if (f.grid === 'onzeker') delen.push("t.k_grid IN ('onzeker','geenpuls')");
+    // `+t.k_grid`: niet via de index. Zes waarden is geen selectieve index; zonder `+` liep SQLite
+    // eerst alle zekere nummers af en daarna pas de tag (een slimme telling op 20.000: 5,5 → 2,4 ms).
+    if (f.grid === 'zeker') delen.push(`+t.k_grid IN (${GRID_ZEKER.map((x) => `'${x}'`).join(',')})`);
+    else if (f.grid === 'onzeker') delen.push("+t.k_grid IN ('onzeker','geenpuls')");
     else if (f.grid === 'geen') delen.push('t.k_grid IS NULL');
     if (f.stems === 'ja') delen.push('t.stems_json IS NOT NULL');
     else if (f.stems === 'nee') delen.push('t.stems_json IS NULL');

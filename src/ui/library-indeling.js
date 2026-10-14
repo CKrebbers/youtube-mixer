@@ -54,7 +54,7 @@ export function rijChipsHtml(t, kleuren, max = 3) {
   const tags = t?.tags ?? [];
   if (!tags.length) return '';
   const chip = (n) => `<button class="ik-chip ik-${esc(kleuren?.get(sleutelVan(n)) ?? 'grijs')}" data-tagchip="${esc(n)}" tabindex="-1" title="#${esc(n)}: filter hierop (alt: niet); shift: van dit nummer af">${esc(n)}</button>`;
-  return `<span class="ik-rijtags">${tags.slice(0, max).map(chip).join('')}${tags.length > max ? `<i title="${esc(tags.slice(max).join(', '))}">+${tags.length - max}</i>` : ''}</span>`;
+  return `<i class="ik-rijtags">${tags.slice(0, max).map(chip).join('')}${tags.length > max ? `<i title="${esc(tags.slice(max).join(', '))}">+${tags.length - max}</i>` : ''}</i>`;
 }
 
 const json = async (url, body) => {

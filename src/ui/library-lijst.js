@@ -285,7 +285,7 @@ export const KOLOMMEN = [
     id: 'titel', kop: 'titel', breedte: 'minmax(160px, 1fr)', sorteer: 'titel', klasse: 'lib-titel',
     hint: (t) => t.url,
     // De tags (spoor S11) als chips achter de titel: geen kolom erbij, de lijst past zo op 1440.
-    cel: (t, nu, staat) => `<i class="lib-bron ${esc(t.bron || 'web')}">${esc(BRON_LABEL[t.bron] || 'web')}</i><span class="lib-titeltekst">${esc(t.titel)}</span>${rijChipsHtml(t, staat?.tagKleuren)}`,
+    cel: (t, nu, staat) => `<i class="lib-bron ${esc(t.bron || 'web')}">${esc(BRON_LABEL[t.bron] || 'web')}</i><bdi class="lib-titeltekst">${esc(t.titel)}</bdi>${rijChipsHtml(t, staat?.tagKleuren)}`,
   },
   { id: 'uploader', kop: 'artiest', breedte: '130px', klasse: 'lib-uploader', cel: (t) => esc(t.uploader || '') },
   { id: 'duur', kop: 'duur', breedte: '52px', sorteer: 'duur', klasse: 'lib-duur', cel: (t) => esc(fmtTime(t.duur || 0).replace(/\.\d+$/, '')) },
