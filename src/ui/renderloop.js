@@ -4,6 +4,7 @@ import { BIJNA_EINDE } from './spiegel-plan.js';
 import { bpmTekst } from './grid-strook.js';
 import { focusToon, verschuivingTekst } from './toon-weergave.js';
 import { oordeelBij, afwijkingBij } from '../engine/tellen.js';
+import { zetTekst } from './dom.js';
 
 /**
  * De renderloop: één rAF voor de hele UI. De engine wordt alleen uitgelezen,
@@ -61,7 +62,7 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
   // Alleen schrijven wat verandert: een textContent of classList die elke
   // frame opnieuw gezet wordt, laat Chrome elke frame stijl en opmaak
   // narekenen, ook als er niets verschilt.
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
   const stijl = (el, prop, v) => { if (el.style[prop] !== v) el.style[prop] = v; };
 
@@ -281,7 +282,8 @@ export function startRenderloop({ engine, staat, views, knobs, faders, stappen }
       stappen.video();
     });
     veilig('master', () => {
-      stijl(masterMeter, 'height', (s.masterPeak * 100).toFixed(1) + '%');
+      // transform, geen height: geen opmaak per beeld (styles.css, .meter.vmeter i).
+      stijl(masterMeter, 'transform', `scaleY(${Math.min(1, Math.max(0, s.masterPeak)).toFixed(3)})`);
       klasse(masterMeter, 'clip', s.masterPeak > 0.98);
       tekst(curveBtn, 'curve: ' + s.xfaderCurve);
     });

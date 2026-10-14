@@ -672,7 +672,9 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
    van VOL in de klankschaal-rij (7 okt, rijen.mjs). Met een muis neemt hij zelf
    ruimte; de rijen rekken mee, dus die 8 px kosten niets. */
 .rijen{flex:0 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;anchor-name:--rijen;padding-right:8px}
-.rijen:has(> section:not(.hidden)){min-height:35px}
+/* .open = er staat een rij open (was :has(), zie src/ui/rij-klassen.js). De selectors die :has()
+   vervangen houden dezelfde specificiteit (div. / herhaalde klasse / :not(#rij-x)): er wint niets anders. */
+div.rijen.open{min-height:35px}
 
 /* ---- auto-dj ---- */
 .auto-rij{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 10px 10px;min-width:0}
@@ -752,19 +754,19 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .st-legenda .e{background:var(--m-loops)}
 .st-legenda .g{background:var(--m-sampler)}
 .st-legenda .t{background:var(--text)}
-.stems-rij:has(.st-stemmen.hidden) .st-legenda{display:none}
-@media (max-width:1699px){ .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-legenda{display:none} }
+.stems-rij.zonder-stemmen.zonder-stemmen .st-legenda{display:none}
+@media (max-width:1699px){ .stems-rij.vier-stems.vier-stems.vier-stems .st-legenda{display:none} }
 /* Vier stems op een laptop (vijf strips, elk met vier knoppen sinds de toon
    per stem, 6 okt): het getal naast de toonknop alleen als de stem verschoven
    is, en alles iets krapper, anders valt de cue van elke strip af. */
 @media (max-width:1699px){
-  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-toonw:not(.on){display:none}
-  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-stemmen{gap:8px}
-  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-stem{gap:2px;padding:0 4px}
-  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-stem.groep{margin-left:6px}
-  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .st-niveau{min-width:30px}
-  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .knob.sm.st-knop .knob-dial{width:20px;height:20px}
-  .stems-rij:has(.st-stem[data-stem="drums"]:not(.hidden)) .knob.sm.st-knop .knob-ind{height:7px;transform-origin:50% 8px}
+  .stems-rij.vier-stems.vier-stems.vier-stems .st-toonw:not(.on){display:none}
+  .stems-rij.vier-stems.vier-stems.vier-stems .st-stemmen{gap:8px}
+  .stems-rij.vier-stems.vier-stems.vier-stems .st-stem{gap:2px;padding:0 4px}
+  .stems-rij.vier-stems.vier-stems.vier-stems .st-stem.groep{margin-left:6px}
+  .stems-rij.vier-stems.vier-stems.vier-stems .st-niveau{min-width:30px}
+  .stems-rij.vier-stems.vier-stems.vier-stems .knob.sm.st-knop .knob-dial{width:20px;height:20px}
+  .stems-rij.vier-stems.vier-stems.vier-stems .knob.sm.st-knop .knob-ind{height:7px;transform-origin:50% 8px}
 }
 .st-geen{flex:1 1 0;display:flex;align-items:center;gap:10px;min-width:0;min-height:30px}   /* even hoog als de strips: geen sprong bij een focuswissel */
 .st-geen.hidden,.st-splitsen.hidden,.st-balk.hidden,.st-x.hidden{display:none}
@@ -869,6 +871,7 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .ms-soort.oud{color:var(--warn)}
 /* naast de mastermeter in het focusdeel: gain reduction van boven naar beneden */
 .meter.vmeter.gr-meter{width:4px;align-items:flex-start}
+.meter.vmeter.gr-meter i{transform-origin:50% 0}
 .meter.vmeter.gr-meter i{background:var(--red)}
 
 /* ---- beeld (de Stroommachine op de pc, docs/BEELD.md) ----
@@ -1004,8 +1007,11 @@ main:has(> .video-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 390px 
 .melding-x{pointer-events:auto;cursor:pointer;margin-left:10px;padding:0 4px;border:0;background:none;color:var(--klein);font:inherit}
 .melding-x:hover{color:var(--text)}
 .melding.weg{opacity:0}
+/* Twee namen voor dezelfde flits: meld() wisselt ze af, zodat elke herhaling opnieuw oplicht. */
 .melding.flits{animation:melding-flits .35s ease-out}
+.melding.flits2{animation:melding-flits2 .35s ease-out}
 @keyframes melding-flits{from{background:var(--line)}to{background:var(--panel2)}}
+@keyframes melding-flits2{from{background:var(--line)}to{background:var(--panel2)}}
 /* Een rij onderaan open: de meldingen erboven, niet over de knoppen van de rij.
    Tot 6 okt een vaste afstand per rij (58 of 150 px); nu 16 px boven het gebied
    met de rijen, hoeveel er ook open staan (CSS anchor positioning). Is dat gebied
@@ -1165,7 +1171,11 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
 .kol-onder{display:flex;justify-content:center;align-items:stretch;gap:6px;flex:1 1 56px;min-height:56px;max-height:200px}
 .kol-onder .vfader{flex:0 0 26px;height:100%;min-height:0}
 .meter.vmeter{width:6px;height:100%;display:flex;align-items:flex-end}
-.meter.vmeter i{width:100%;height:0;transition:height .04s linear;
+/* De staande meters bewegen met transform (scaleY), niet met height: een hoogte
+   die elk beeld verandert (en een transition op height) liet Chrome elk beeld
+   de opmaak opnieuw doen, op de hoofdthread waar ook de MIDI binnenkomt. De
+   gradient hoort bij het element zelf, dus het beeld is hetzelfde. */
+.meter.vmeter i{width:100%;height:100%;transform:scaleY(0);transform-origin:50% 100%;transition:transform .04s linear;will-change:transform;
   background:linear-gradient(0deg,var(--a),#8ee06a 70%,var(--warn) 88%,var(--red))}
 .kol-voet{text-align:center;font-size:11px;color:var(--klein)}
 .kol.focused .kol-voet b{color:var(--a)}
@@ -1255,27 +1265,28 @@ button.spg.geraakt,input.spg.geraakt{box-shadow:0 0 0 2px #fff,0 0 12px var(--kl
 .focus-deck .deck-title{min-width:180px}
 /* tekst in een kolom krimpt nooit onder zijn eigen hoogte; alleen de fader geeft mee */
 .kol > :not(.kol-onder){flex-shrink:0}
-/* met de rij auto, klankschaal of stems open: het focusdeck wat lager, zodat de faders blijven */
-body:has(#auto:not(.hidden)) .wave-zoom,body:has(#klankschaal:not(.hidden)) .wave-zoom,body:has(#stems:not(.hidden)) .wave-zoom{height:52px}
-body:has(#auto:not(.hidden)) .baan,body:has(#klankschaal:not(.hidden)) .baan,body:has(#stems:not(.hidden)) .baan{height:15px}
-body:has(#auto:not(.hidden)) .baan canvas,body:has(#klankschaal:not(.hidden)) .baan canvas,body:has(#stems:not(.hidden)) .baan canvas{height:11px}
-body:has(#auto:not(.hidden)) .focusdeel .sampler-rij .pad,body:has(#klankschaal:not(.hidden)) .focusdeel .sampler-rij .pad,
-body:has(#stems:not(.hidden)) .focusdeel .sampler-rij .pad{height:22px}
+/* met de rij auto, klankschaal of stems open: het focusdeck wat lager, zodat de faders blijven.
+   body.rij-hoog:not(#rij-x) en html body.rij-open:not(#rij-x) waren body:has(...): dat liet elke tekstwissel op de pagina
+   ~256 elementen opnieuw stylen (src/ui/rij-klassen.js houdt ze nu bij). */
+body.rij-hoog:not(#rij-x) .wave-zoom{height:52px}
+body.rij-hoog:not(#rij-x) .baan{height:15px}
+body.rij-hoog:not(#rij-x) .baan canvas{height:11px}
+body.rij-hoog:not(#rij-x) .focusdeel .sampler-rij .pad{height:22px}
 /* Laptopmaat (6 okt) met welke rij ook open: hetzelfde voor de rijen die later
    kwamen (koptelefoon, instrument, patronen, master), en de knoppen in de
    kolommen 2 px lager (18 px samen), het focusdeck en het focusdeel wat
    dichter op elkaar (8 en 10 px). Anders past op 1440×790 geen rij van 54 px
    helemaal onder de faders en de sampler. */
 @media (max-height:900px){
-  body:has(#rijen > section:not(.hidden)) .focus-deck{gap:4px}
-  body:has(#rijen > section:not(.hidden)) .wave-zoom{height:52px}
-  body:has(#rijen > section:not(.hidden)) .baan{height:15px}
-  body:has(#rijen > section:not(.hidden)) .baan canvas{height:11px}
-  body:has(#rijen > section:not(.hidden)) .focusdeel .sampler-rij .pad{height:22px}
-  body:has(#rijen > section:not(.hidden)) .kol .spg-pad{height:17px}
-  body:has(#rijen > section:not(.hidden)) .kol .spg-knop{min-height:19px}
-  body:has(#rijen > section:not(.hidden)) .kol .spg-mini{height:17px}
-  body:has(#rijen > section:not(.hidden)) .fd-rechts{gap:6px}
+  html body.rij-open:not(#rij-x) .focus-deck{gap:4px}
+  html body.rij-open:not(#rij-x) .wave-zoom{height:52px}
+  html body.rij-open:not(#rij-x) .baan{height:15px}
+  html body.rij-open:not(#rij-x) .baan canvas{height:11px}
+  html body.rij-open:not(#rij-x) .focusdeel .sampler-rij .pad{height:22px}
+  html body.rij-open:not(#rij-x) .kol .spg-pad{height:17px}
+  html body.rij-open:not(#rij-x) .kol .spg-knop{min-height:19px}
+  html body.rij-open:not(#rij-x) .kol .spg-mini{height:17px}
+  html body.rij-open:not(#rij-x) .fd-rechts{gap:6px}
 }
 /* het focusdeel scrolt zelf als het echt niet past (nooit het hele scherm) */
 .focusdeel{min-height:0;overflow-y:auto}

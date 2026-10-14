@@ -2,6 +2,7 @@ import { read as readAction, invoke, trackVanDeck } from '../control/actions.js'
 import { Noten } from '../control/noten.js';
 import { knobVan } from './controls.js';
 import { meld } from './meldingen.js';
+import { zetTekst } from './dom.js';
 
 /*
  * De INSTRUMENT-rij (docs/INSTRUMENTEN.md §6): voor de track met focus het
@@ -47,7 +48,7 @@ export function opzetInstrument({ engine, midi, lagen }) {
   const klavier = rij.querySelector('.in-klavier');
   const keyboardEl = rij.querySelector('.in-keyboard');
 
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
   const titel = (el, t) => { if (el.title !== t) el.title = t; };
   const isDicht = () => rij.classList.contains('hidden');

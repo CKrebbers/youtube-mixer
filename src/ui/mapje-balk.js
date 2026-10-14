@@ -82,8 +82,22 @@ export function opzetMapjeBalk({ lagen, mapping, vars }) {
   };
   const naDuur = () => { if (gridAan()) toonGrid(); else el.classList.add('hidden'); };
 
+  /*
+   * Een mapje-wissel bouwt de uitleg pas bij het volgende beeld (alleen de
+   * laatste wissel telt): ~700 regels filteren, sorteren en een stuk HTML
+   * zetten kostte tot ~8 ms midden in het MIDI-bericht van de modusknop, en wat
+   * erachter in de rij stond wachtte zolang (controller-invoer, 14 okt).
+   */
+  let straks = null;      // { groep, id } van de laatste wissel, nog niet getoond
+  const toonStraks = () => {
+    const w = straks;
+    straks = null;
+    if (w) toonMapje(w.groep, w.id);
+  };
+
   lagen.on('change', ({ groep, id }) => {
     if (groep === 'edit') {
+      straks = null;
       const aan = gridAan();
       document.body.classList.toggle('gridmodus', aan);
       clearTimeout(timer);
@@ -100,6 +114,11 @@ export function opzetMapjeBalk({ lagen, mapping, vars }) {
       }
       return;
     }
+    if (!straks) requestAnimationFrame(toonStraks);
+    straks = { groep, id };
+  });
+
+  function toonMapje(groep, id) {
     const g = GROEPEN[groep];
     // De regels van dit mapje, in de volgorde van de knoppen op het apparaat.
     const regels = [...mapping.rules.values()]
@@ -132,6 +151,6 @@ export function opzetMapjeBalk({ lagen, mapping, vars }) {
     el.classList.remove('hidden');
     clearTimeout(timer);
     timer = setTimeout(() => { timer = null; naDuur(); }, DUUR);
-  });
+  }
   return { el };
 }

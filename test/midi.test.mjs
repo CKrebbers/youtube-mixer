@@ -89,6 +89,17 @@ ok('echofilter uit: een gelijk bericht komt gewoon door', gehoord.at(-1) === 'cc
 hub2.echoFilter = true;
 ok('echofilter staat standaard aan', new MidiHub().echoFilter === true);
 
+// Een NOOT is nooit een echo (controller-invoer, 14 okt): een lampje op 127 (Lock, Sends, een
+// knipperende Track Select) of uit, en meteen daarna jouw druk of loslaten op die knop, kwam
+// vroeger niet aan: de druk deed niets, of het loslaten bleef weg (een kill die bleef hangen).
+hub2.send([0x90, 63, 127]); await leeg();     // het lampje van Lock gaat aan
+binnen([0x90, 63, 127]);                       // en jij drukt Lock in, binnen 60 ms
+ok('noot: een druk vlak na een lampje op dezelfde waarde komt door (geen echo)', gehoord.at(-1) === 'note:0:63=127');
+hub2.send([0x90, 63, 0]); await leeg();       // het lampje gaat uit (note-on 0 = note-off)
+binnen([0x80, 63, 0]);                         // en jij laat los
+ok('noot: het loslaten vlak na een lampje uit komt door', gehoord.at(-1) === 'note:0:63=0');
+ok('noot: geen van beide geteld als echo', hub2.echoes === 1);
+
 // ---- uitgaande wachtrij ---------------------------------------------------
 // Een burst van honderd berichten in één lus is voor geen enkele MIDI-stack
 // prettig; Comet legt er zelfs zijn MIDI-service mee om. Alles wat naar buiten

@@ -619,7 +619,10 @@ docs/
   klankschaal) staan samen in `#rijen`, dat zelf scrolt: main wordt nooit lager
   dan zijn inhoud met de faders op 56 px (`min-height:min-content`), dus faders
   en sampler blijven heel met welke rijen ook open (6 okt, `tools/headless/rijen.mjs`).
-  Een nieuwe rij hoort in `#rijen`. `#rijen` houdt rechts 8 px vrij: met alleen een
+  Een nieuwe rij hoort in `#rijen`. GEEN brede `:has()` in styles.css (14 okt): `body:has(#rijen …) .kol …`
+  liet elke tekstwissel (elk beeld) ~256 elementen restylen; zo'n voorwaarde wordt een klasse
+  (`src/ui/rij-klassen.js`, MutationObserver), en wat per MIDI-bericht op het scherm moet (spiegel,
+  mapje-balk, oplichten) gebeurt bij het volgende beeld, het geluid meteen (`tools/headless/latentie.mjs`). `#rijen` houdt rechts 8 px vrij: met alleen een
   trackpad zweeft de schuifbalk van macOS over de inhoud (een muis: hij neemt zelf 15 px);
   rijen.mjs toetst beide standen, los van wat er aan de Mac hangt. Per kolom bovenaan resterende
   tijd (14 px, rood onder 30 s als hij speelt) en BPM, groot genoeg voor de
@@ -1083,7 +1086,10 @@ docs/
   wij verwerken dat als een knopdraai — en loopt de bus vol. Het filter is per
   apparaat uit te zetten (`echoFilter` in het profiel); voor de APC staat het
   nog AAN tot gemeten is dat hij in 0x42 niets terugkaatst (`hub.status().echoes`
-  na een sessie nog 0 → mag uit).
+  na een sessie nog 0 → mag uit). ALLEEN CC (14 okt): een noot is nooit een echo
+  (een LED is note-on met de kleur als velocity); het slikte 13% van de drukken
+  en 12% van het loslaten op een knipperende knop (synthetisch, `tools/bench/echo.mjs`:
+  een nep-hand op Sends met een loop op 124 bpm; niet op het apparaat gemeten).
 - MAPJES (lagen) en SHIFT op de controller (Clay, 23 sep, VRAGEN B3). Een regel
   kan `"shift": true` en/of `"laag": "device.rack"` hebben; de sleutel is
   `sig[#shift][@laag]`, dus één knop heeft meerdere regels. `mapping.kies()`

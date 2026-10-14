@@ -33,6 +33,7 @@ import { tabblad } from './tabblad.js';
 import { startStatusZender, eindUitActions } from './status-zender.js';
 import { vormenAan, hubAdres, hubGeweigerd } from './vlag.js';
 import { opzetBovenbalk } from './bovenbalk.js';
+import { opzetRijKlassen } from './rij-klassen.js';
 
 /**
  * Het instappunt van de schermlaag: maakt de engine en zet de modules in
@@ -223,6 +224,8 @@ document.addEventListener('pointerdown', () => { if (engine.ctx.state !== 'runni
 
 // De bovenbalk scrollt opzij als hij tijdens het spelen niet past (bovenbalk.js).
 opzetBovenbalk();
+// De klassen die eerst :has() in styles.css waren (elke tekstwissel restylede ~256 elementen).
+opzetRijKlassen();
 
 const help = document.getElementById('help');
 const toggleHelp = () => help.classList.toggle('hidden');

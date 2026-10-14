@@ -444,3 +444,36 @@ rack); een oude volledige kopie van 25 sep wordt tegen zijn voorganger afgezet (
 
 Niet getest: de echte APC (roze naast rood op de scene-kolom, of Shift + Detail View en de
 regie op de scene-knoppen lekker liggen) en de ringen tegen een echte Stroommachine.
+
+## Invoer en vertraging (14 oktober 2026, spoor controller-invoer, GEMETEN zonder apparaat)
+
+Clay: "op veel punten erg laggy". Gemeten in headless Chrome met de echte mixer en een
+nep-APC achter een nep-Web-MIDI (`tools/headless/latentie.mjs`, acht spelende tracks,
+alle rijen open), en zonder browser (`tools/bench/invoer.mjs`, `tools/bench/echo.mjs`).
+Het verslag met alle getallen en hoe je ze herhaalt: `docs/verslagen/2026-10-14/controller-invoer.md`.
+
+Wat er vastligt:
+- **Een MIDI-bericht wacht tot de hoofdthread vrij is.** Het werk per bericht zelf was
+  klein (fader ~0,2 ms in Chrome); de vertraging zat in wat er verder op de hoofdthread
+  draaide. Grootste oorzaak: brede `:has()`-regels in styles.css (`body:has(#rijen > …)
+  .kol .spg-pad`): elke tekstwissel restylede ~256 elementen per beeld. Nu klassen
+  (`src/ui/rij-klassen.js`). Vuistregel: geen `:has()` met body (of een grote rij) als
+  onderwerp.
+- **Wat het scherm na een bericht moet doen, gebeurt bij het volgende beeld**, het
+  geluid meteen: spiegel herberekenen (shift, mapje), de mapje-balk, het oplichten van een
+  aangeraakte knop. Shift en de modusknoppen kostten 2–13 ms in het bericht zelf.
+- **Het echofilter geldt alleen voor CC.** Een noot (knop, pad) is nooit een echo: het
+  filter slikte op een knipperende knop (Sends met een loop, de Track Select van de
+  maatgever) ~13% van de drukken en ~12% van het loslaten (synthetisch, `tools/bench/echo.mjs`:
+  een nep-hand op Sends met een loop op 124 bpm; op het apparaat niet gemeten). Daar
+  doet loslaten niets; een kill of bend die bleef hangen is niet aangetoond (hun lampje
+  staat nooit op 0 of 127). Ook voor andere apparaten met `echoFilter` aan worden noten
+  niet meer gefilterd: een apparaat dat noten terugkaatst zou nu een druk dubbel geven
+  (geen bekend apparaat in Clay's set).
+- **De mapping zoekt niet meer per bericht**: `kies()` en `actieveRegels()` uit een cache
+  (ongeldig bij elke wijziging aan regels of mapjes). Ook de LED-laag profiteert (285 → 8 µs
+  per tik aan mapping-werk).
+
+Alleen op het apparaat te bevestigen: hoe het voelt, de echte uitgangsvertraging van de
+Scarlett/het samengestelde apparaat (de MIDI-monitor toont "latency: … in + … audio"), en of
+de APC in 0x42 ringwaarden terugstuurt (`midi.status().echoes` na een sessie).

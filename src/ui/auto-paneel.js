@@ -3,6 +3,7 @@
  * overslaan / langer / nu. Openen met de knop "auto" in de balk (onthouden).
  * De knoppen gaan over de bus (data-action), de tekst leest automaat.stand().
  */
+import { zetTekst } from './dom.js';
 const OPEN = 'varve.auto.open';
 const lees = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
 const schrijf = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
@@ -28,7 +29,7 @@ export function opzetAuto({ auto }) {
   knop.addEventListener('click', () => zet(rij.classList.contains('hidden')));
   if (lees(OPEN) === '1') zet(true);
 
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
   const titel = (el, t) => { if (el.title !== t) el.title = t; };
 

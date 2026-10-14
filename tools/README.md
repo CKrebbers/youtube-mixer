@@ -192,6 +192,10 @@ bestand heen. Zie `patronen/LEESMIJ.md`.
 - `tekenen.mjs` — hoeveel VARVE op zijn canvassen tekent (eigen server op 8823, geen MIDI): in rust ~0 Mpx/s
   (zonder de sleutel in waveform.js was het ~29 Mpx/s, en liep Demucs op de helft), een sprong in stilstand
   tekent zoom en overzicht wel opnieuw; plus de duurste functies van de hoofdthread per toestand.
+- `meldingen.mjs` — licht een HERHAALDE melding elke keer opnieuw op (eigen server op 8843, DevTools 8844,
+  geen MIDI)? Telt de animationstart-events van de echte `meld()` (info en fout, zes herhalingen met 500 ms
+  ertussen), eist dat een herhaling geen opmaak uitleest (geen gedwongen opmaak in het MIDI-bericht), en
+  toont ter vergelijking de twee oude vormen: klasse eraf + rAF erop (1 van 6) en offsetWidth (6 van 6).
 - `koptelefoon.mjs` — de koptelefoon (docs/STUDIO.md §3), eigen server op 8799, geen MIDI: de
   KOPTELEFOON-rij (zonder vier kanalen: "geen koptelefoonuitgang", cue-knoppen uit), en de echte
   engine op een OfflineAudioContext van VIER kanalen: track 1 op 440 Hz met de fader dicht, track 2

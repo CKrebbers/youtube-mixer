@@ -1,5 +1,6 @@
 import { read as readAction } from '../control/actions.js';
 import { meld } from './meldingen.js';
+import { zetTekst } from './dom.js';
 
 /*
  * De KOPTELEFOON-rij (docs/STUDIO.md §3): per track een cue-knop, het
@@ -36,7 +37,7 @@ export function opzetKoptelefoon({ engine }) {
   const cueKnoppen = [...rij.querySelectorAll('.kp-pfl')];
   const wisselKnop = rij.querySelector('.kp-wissel');
 
-  const tekst = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)
   const klasse = (el, naam, aan) => { if (el.classList.contains(naam) !== aan) el.classList.toggle(naam, aan); };
   const titel = (el, t) => { if (el.title !== t) el.title = t; };
   const isDicht = () => rij.classList.contains('hidden');

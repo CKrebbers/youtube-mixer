@@ -30,9 +30,18 @@ export function meld(tekst, soort = 'info', duur = 5000) {
   if (al) {
     // Dezelfde melding staat er al (dezelfde knop nog eens, een stream die blijft
     // haperen): niet stapelen, maar hem opnieuw laten oplichten en (info) langer laten staan.
-    al.classList.remove('flits');
-    void al.offsetWidth;
-    al.classList.add('flits');
+    // Opnieuw laten oplichten zonder `offsetWidth`: dat dwong Chrome de opmaak van de
+    // hele pagina METEEN uit te rekenen, midden in het MIDI-bericht dat de melding gaf
+    // (tot ~12 ms; een pad die steeds "geen secties" zegt; controller-invoer, 14 okt).
+    // Klasse eraf en bij het volgende beeld er weer op start hem NIET opnieuw (review 14 okt:
+    // tussen de taak en die rAF rekent Chrome geen stijl, dus hij ziet de klasse nooit weg;
+    // 1 van 6 herhalingen flitste). Daarom om de beurt twee klassen met elk een EIGEN
+    // (gelijke) keyframes-naam: een andere animation-name is voor Chrome een nieuwe animatie,
+    // bij de eerstvolgende stijlberekening, zonder dat wij die afdwingen
+    // (tools/headless/meldingen.mjs telt de animationstart-events).
+    const nu = al.classList.contains('flits') ? 'flits2' : 'flits';
+    al.classList.remove('flits', 'flits2');
+    al.classList.add(nu);
     if (soort !== 'fout') { clearTimeout(al._weg); al._weg = setTimeout(() => weg(al), duur); }
     return al;
   }
