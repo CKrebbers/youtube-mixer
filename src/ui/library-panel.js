@@ -149,11 +149,11 @@ export class LibraryPanel {
       meld: (tekst, goed) => { this.melding = { tekst, goed }; this.tekenStatus(); },
       bevestigd: (soort, sleutel) => this._bevestigd(soort, sleutel),
       naIndeling: () => this._naIndeling(),
+      vraagSleutel: () => this._vraagSleutel(),
       plekAan: () => this._plekNu(),
       naKolom: () => this._zetKolommen(),
       zetPlek: (aan) => { this.plek = !!aan; this._kolomGekozen = !aan; this.tekenKop(); this.ververs({ bovenaan: true }); },
     } });
-    this._filterSleutel = '';
     // Sneltoetsen zolang het paneel open is: alt+T = het tagveld, alt+1…8 = snel-tag (keyboard.js
     // negeert alles met alt, dus geen botsing met de DJ-toetsen).
     globalThis.addEventListener?.('keydown', (e) => {
@@ -321,13 +321,14 @@ export class LibraryPanel {
     this.ververs({ bovenaan: true });
   }
 
-  /** De stand van de indeling kwam binnen: een @categorie in het veld betekent nu misschien iets. */
+  /**
+   * De stand van de indeling kwam binnen en het filter betekent nu iets anders (een @categorie in het
+   * veld die nu bestaat, of niet meer): opnieuw, bovenaan. Alleen dan: een nieuwe stand na elke
+   * tag-wijziging mag de lijst niet laten verspringen.
+   */
   _naIndeling() {
-    const s = this._vraagSleutel();
-    if (s !== this._filterSleutel) {
-      if (this.plek === false && this.indeling.lees(this.zoek).filter.categorie != null && !this._kolomGekozen) this.plek = true;
-      this.ververs({ bovenaan: true });
-    }
+    if (this.plek === false && this.indeling.lees(this.zoek).filter.categorie != null && !this._kolomGekozen) this.plek = true;
+    this.ververs({ bovenaan: true });
   }
 
   /** Het filter van nu (uit het zoekveld). */
@@ -902,7 +903,6 @@ export class LibraryPanel {
     if (bovenaan) { this.el.rijen.scrollTop = 0; this.kiezer = null; this.gekozen = 0; this.gekozenId = null; this.selectie.clear(); this._anker = null; }
     const { van, tot } = this._venster(Math.max(this.cache.totaal, 1));
     const vraag = this._vraag();
-    this._filterSleutel = JSON.stringify(vraag);
     try {
       if (!(await this.cache.ververs(vraag, van, tot))) return;
     } catch (err) {

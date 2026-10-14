@@ -26,7 +26,7 @@ Keuzes:
   wisselt, is in een set een verrassing. Nog eens overnemen voegt alleen toe wat erbij kwam.
 - **Tags van nummers en tags van racks zijn twee dingen.** Racks hebben `tags` in hun eigen JSON
   (rack.js, S10 "sjablonen per tag"). Die van nummers staan in de library en heten in de API
-  `/api/library/…/tags`; ze delen geen lijst. Een rack-tag "dub" en een nummer-tag "dub" mogen
+  `/api/indeling/…`; ze delen geen lijst. Een rack-tag "dub" en een nummer-tag "dub" mogen
   bestaan zonder elkaar te raken. Bewust niet één begrip: een rack hoort bij geen nummer.
 - **Een tag heeft een naam en een sleutel.** De sleutel is de naam in kleine letters, zonder accenten
   en met enkele spaties (`sorteertitel`-achtig): "Dub" en "dub" zijn dezelfde tag. Verboden in een
@@ -150,7 +150,7 @@ Een nummer weghalen haalt zijn tags en plekken mee weg (cascade). Backups (`VACU
 kopie nemen alles vanzelf mee; er komt geen bestand naast de database bij, dus geen nieuwe
 VARVE_*-variabele. Ids in de database blijven `tracks.id`; geen paden.
 
-**Export/import** (`GET/POST /api/library/indeling`): `{ soort: 'varve-indeling', schema: 1, tags:
+**Export/import** (`GET/POST /api/indeling`): `{ soort: 'varve-indeling', schema: 1, tags:
 [{ naam, kleur }], categorieen: [{ naam, soort, kleur, regel?, nummers? }], snel: [8] }`. Importeren
 VOEGT SAMEN en wist nooit: nieuwe tags en categorieën komen erbij, een gewone categorie met dezelfde
 naam krijgt de ontbrekende nummers achteraan, een slimme met dezelfde naam krijgt de nieuwe regel.
@@ -159,21 +159,25 @@ een indeling schrijven zonder iets kapot te maken.
 
 ## 5. Routes (server/routes/indeling.js, in SPOREN)
 
+Onder `/api/indeling`, niet onder `/api/library/<x>`: daar is `<x>` een nummer (GET /api/library/<id>).
+
 | | |
 |---|---|
-| `GET /api/library?…&cat=&tag=&of=&niet=&bpm=&toon=&grid=&stems=&energie=&sorteer=plek` | de lijst, gefilterd (zelfde pagina's, totaal = treffers) |
-| `GET /api/library/indeling/stand` | `{ tags: [{naam, kleur, aantal}], categorieen: [{id, naam, soort, kleur, regel, aantal}], snel }` |
-| `POST /api/library/tags/zet` | `{ ids, tags, aan }`: taggen in één keer (≤ 5000 ids, ≤ 20 tags) |
-| `POST /api/library/tags/tag` | `{ naam, nieuw?, kleur?, samenvoegen? }`: hernoemen (op een bestaande: 409 tenzij samenvoegen), kleur |
-| `POST /api/library/tags/wis` | `{ naam }` |
-| `POST /api/library/tags/snel` | `{ snel: [8 namen of null] }` |
-| `POST /api/library/categorie` | `{ id?, naam, soort, regel?, kleur? }`: maken of bijwerken |
-| `POST /api/library/categorie/wis` | `{ id }` |
-| `POST /api/library/categorie/nummers` | `{ id, ids, aan, voor? }`: erin (achteraan, of vóór `voor`), eruit |
-| `POST /api/library/categorie/van-kaart` | `{ krat, naam? }`: een kaartkrat overnemen |
-| `GET/POST /api/library/indeling` | export / import (`?droog=1`) |
+| `GET /api/library?…&cat=&tag=&of=&niet=&bpm=&toon=&grid=&stems=&energie=&sorteer=plek` | de lijst, gefilterd (zelfde pagina's, totaal = treffers); een fout filter = 400 met de reden, een onbekende categorie 404 |
+| `GET /api/indeling/stand` | `{ tags: [{naam, sleutel, kleur, aantal}], categorieen: [{id, naam, soort, kleur, volgorde, regel, aantal}], snel }` |
+| `GET /api/indeling` | de export (namen, geen ids) |
+| `POST /api/indeling[?droog=1]` | importeren: samenvoegen, nooit wissen; het verslag |
+| `POST /api/indeling/tags/zet` | `{ ids, tags, aan }`: taggen in één keer (≤ 5000 ids, ≤ 20 tags) |
+| `POST /api/indeling/tags/tag` | `{ naam, nieuw?, kleur?, samenvoegen? }`: hernoemen (op een bestaande: 409 met `bestaat`, tenzij samenvoegen), kleur |
+| `POST /api/indeling/tags/wis` | `{ naam, forceer? }` (in een regel: 409 met `gebruikt`, tenzij forceer) |
+| `POST /api/indeling/tags/snel` | `{ snel: [8 namen of null] }` |
+| `POST /api/indeling/categorie` | `{ id?, naam, soort, regel?, kleur? }`: maken of bijwerken (dezelfde naam: 409) |
+| `POST /api/indeling/categorie/wis` | `{ id, forceer? }` (een slimme zoekt erin: 409 met `gebruikt`, tenzij forceer) |
+| `POST /api/indeling/categorie/nummers` | `{ id, ids, aan, voor?, naarEind? }`: erin (achteraan, of vóór `voor`), eruit |
+| `POST /api/indeling/categorie/volgorde` | `{ ids }`: de volgorde van de categorieën zelf |
+| `POST /api/indeling/categorie/van-kaart` | `{ krat, naam? }`: een kaartkrat overnemen |
 
-Alle POST: alleen deze Mac (403), alleen JSON (de algemene regel), Host/Origin zoals altijd.
+Alle POST: alleen deze Mac (403), alleen JSON (de algemene regel, 415), Host/Origin zoals altijd.
 
 ## 6. Tegen de drie regels
 

@@ -170,11 +170,14 @@ export class IndelingPaneel {
 
   async ververs() {
     const gen = ++this._gen;
+    let voor = null;
     try {
       const r = await fetch('/api/indeling/stand', { cache: 'no-store' });
       const j = await r.json().catch(() => null);
       if (!r.ok || !j) throw new Error(j?.fout || `${r.status}`);
       if (gen !== this._gen) return;
+      // Wat de lijst nu vraagt, vóór de nieuwe stand: een @categorie in het veld kan nu iets anders betekenen.
+      voor = this.p.vraagSleutel?.() ?? null;
       this.stand = j;
       this.kleuren = new Map(j.tags.map((t) => [t.sleutel, t.kleur]));
     } catch (err) {
@@ -182,7 +185,7 @@ export class IndelingPaneel {
     }
     this.naVerversen?.();
     this.teken();
-    this.p.naIndeling?.();
+    if (voor !== null && this.p.vraagSleutel?.() !== voor) this.p.naIndeling?.();
   }
 
   /**

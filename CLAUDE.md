@@ -153,7 +153,8 @@ src/
                     maschine-kaart.js  maschine.html: plaat, schermen, live volgen via window.opener.maschine. Stuurt niets.
                     maschine-kaart-plan.js  plaatsing + wat een control doet = legUit() van de Maschine (label, soort). Puur.
                     toon-weergave.js toonsoort als tekst: kolomkop, focus, library, tooltip. Puur.
-                    library-lijst.js de library als virtuele lijst: kolommen, cellen, pagina-cache. Puur.
+                    library-lijst.js de library als virtuele lijst: kolommen, cellen, pagina-cache (de vraag draagt het filter). Puur.
+                    library-indeling.js S11: de kolom CATEGORIEËN/TAGS, de tagbalk, taggen, slepen, snel-tags (docs/LIBRARY-TAGS.md)
                     past-bij.js     "past bij": wat mixt met de focus-track (regels van de auto-DJ, docs/LIBRARY.md). Puur.
                     kaart-lijst.js  de muziekkaart als lijst (tab kaart): kolommen, badges, stand → knop, filters, kratten, nachtteksten. Puur.
                     kaart-panel.js  de tab kaart in het library-paneel: zoeken, kratten, haal binnen/zoek, wenslijst, nachtwachtrij (docs/LIBRARY.md "De kaart-tab")
@@ -213,6 +214,8 @@ src/
   standen/          stand-model.js  het formaat van een stand (schema 1): witte lijst van delen, de nacht alleen remmen,
                                     normaliseerStand. Puur, geen DOM, geen imports; ook door de server gebruikt
                                     (server/standen.js importeert dit en src/control/mapping.js, allebei puur)
+  library/          indeling.js     spoor S11: het filter (cat, tags en/of/niet, bpm, toon, grid, stems, energie), de zoekregel
+                                    (#tag -#tag @categorie bpm:70-90 …), namen/sleutels, plekken, import; k_grid/k_toon/k_energie. Puur, ook de server
   werk/             model.js        de werkruimte als data (schema 1): normaliseerWerkruimte/-Stuk (fouten en waarschuwingen apart), samenstellen,
                                     kern, telNieuwePlekken, kleurControle; S8: waaromNietOpScherm, VAST_NOOIT, TIJDKRITISCH, xy y/druk/los.
                                     Puur, geen imports; ook de server (docs/werkruimte/S3.md)
@@ -242,7 +245,8 @@ server/             draait apart: `node server/index.js`
   ingest.js         yt-dlp (of een eigen bestand) -> ffmpeg -> media/<id>/. Gooit nooit.
   links.js          links netjes maken (TikTok), bron van een nummer, id's, bestandsnamen
   media-plek.js     waar media/ staat: VARVE_MEDIA, media-VERHUISD.txt, binnen iCloud?, isTestserver (VARVE_TESTSERVER=1)
-  library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren), peaks, racks, grid, toonsoort, hotcues, stems.
+  library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren, filter), peaks, racks, grid, toonsoort, hotcues, stems.
+  indeling.js       S11: tags, categorieën (gewoon/slim), snel-tags, het filter als SQL, kaartkrat overnemen, export/import (lib.indeling)
   backup.js         backups van library.db: wanneer, hoeveel, opruimen; het werk in backup-werker.js (worker)
   avondpakket.js    het avondpakket: parsers (pmset, ioreg, df, system_profiler, tailscale, find), profielen, fase, oordeel. Puur
   avondpakket-meet.js  de sondes in kindprocessen met time-outs (nooit fs op media/), cache, bevroren als er een deck speelt, NEP-fixtures
@@ -270,7 +274,8 @@ server/             draait apart: `node server/index.js`
                     server (MAX_DRADEN: iCloud mag de threadpool niet vullen, de andere 2 draden blijven voor de audio)
   uitzend.js        uitzenden stap 1: een UITGANG, geen bron. Volgt de opname die al groeit en duwt hem via ffmpeg naar een LOKAAL doel
                     (bestand, rtmp/udp op 127.0.0.1); slot tegen elke dienst; nog geen route of knop (docs/UITZENDEN.md)
-  routes/           werkruimte S0: index.js laadt werkruimtes/mapping-apparaat/paneel.js ({ routes, mag }), vlak vóór de 404
+  routes/           werkruimte S0: index.js laadt werkruimtes/mapping-apparaat/paneel/sets/sjablonen/indeling.js ({ routes, mag }), vlak vóór de 404;
+                    indeling.js = /api/indeling/* (S11, elke POST alleen deze Mac)
   paneel.js         S7 PaneelRelais (de stand naar de kijkers, SSE) + S8 PaneelSchrijf: schakelaar (standaard uit = 404), koppelcode,
                     token-cookie (alleen de hash op schijf), Origin, rem 120/s, seq, het kanaal naar de mixer, loslaten na 1,5 s
   werkruimtes.js    werkruimte S3: werkruimtes/<naam>.json met versie (409 met de huidige inhoud) en .versies/, voorbeelden uit
@@ -338,6 +343,8 @@ test/
   avondpakket-meet.test.mjs  sondes met een nep-exec (time-outs 50 ms), cache en bevriezing, de CLI via spawnSync (nooit een server)
   avondpakket-server.test.mjs  GET /api/avondpakket op een eigen server: compleet, onbekend profiel, bevroren na een Range-verzoek, schrijft niets
   library-lijst.test.mjs  virtuele lijst, pagina-cache (ook de race bij een nieuwe sortering), kolommen
+  indeling.test.mjs, indeling-server.test.mjs, indeling-ui.test.mjs  S11: model en zoekregel, schema v10 + migratie met data, filter-SQL,
+                    volgorde, slim, hernoemen/samenvoegen/wissen, export/import; de routes (403 van buiten, 409, kaartkrat); URL, race bij een nieuw filter, bus
   past-bij.test.mjs  "past bij": goed/bijna per paar, toon na de sync, half tempo, volgorde, meetpunt (t, eind, zeker deel)
   kaart-lijst.test.mjs  de tab kaart als rekenwerk, en de nep-server (tools/headless/kaart-nep.mjs) tegen het contract van de kaart-API
   ingest.test.mjs   pipeline zonder netwerk; ffmpeg maakt zijn eigen testmateriaal
@@ -440,7 +447,8 @@ docs/
   TOONSOORT.md      toonsoort per nummer: meting, ontwerp, en wat gebouwd is (§13)
   KEYLOCK.md        keylock en toon verschuiven met Signalsmith: meting, ontwerp, gebouwd (§9)
   MAPPING-VERSCHIL.md  eigen mapping als verschil: vorm, gedrag, Clay's echte verschil
-  LIBRARY.md        library: pagina's, sorteren, hotcues per nummer, schema v6/v7
+  LIBRARY.md        library: pagina's, sorteren, hotcues per nummer, schema v6/v7; S11 kort
+  LIBRARY-TAGS.md   categorieën, slimme categorieën en tags (S11): begrippen, filter en zoekregel, bediening, opslag v10, routes
   BEAMER.md         het losse venster mengt zelf: wie mengt, opname, herladen, rVFC-meting
   HANDELINGENLOG.md formaat, keuzes en grenzen van het handelingenlog
   AUDIOPAD.md       audiopad zonder afval: waar het zat, de regels, cijfers vóór/na
@@ -2118,3 +2126,29 @@ Volledig in `docs/PLAN-SET.md`. Wat een bouwer niet mag missen:
   leesWeg ook bij een fout, time-out 5 s), na elke POST de library-rij, pas na de REEKS andere tracks
   met dat nummer (`naReeks`). Een geladen grid als bewaard markeren: `grids.alsBewaard(id)`, niet
   `gridBewaard[id]` zelf zetten. Weergave leest `deck.gridMetingBij(nu)`.
+
+## Categorieën en tags in de library (14 okt, spoor S11)
+
+Volledig in `docs/LIBRARY-TAGS.md`, vragen in VRAGEN blok S11. Wat een bouwer niet mag missen:
+- Begrippen: *categorie* (eigen bak met volgorde, plat), *slimme categorie* (bewaard filter, de server rekent hem bij
+  elke vraag), *tag* (label + kleur), *snel-tag 1–8* (een PLEK die naar een tag wijst: de bus kent geen namen). Een
+  *krat* is van de kaart; "→ categorie" maakt er een KOPIE van. Tags van nummers zijn niet `rack.tags`.
+- Schema v10: `tags`, `nummer_tags`, `categorieen`, `categorie_nummers` (`plek` REAL, tussenvoegen = een getal ertussen,
+  te klein = opnieuw nummeren) en de afgeleide kolommen `k_grid`/`k_toon`/`k_energie`. Een nieuwe plek die grid, toon,
+  secties of duur schrijft: `this._kenmerken(id)` erachter (anders klopt het filter niet). Formules alleen uit
+  `src/library/indeling.js` (die gridStatus en ToonKaart gebruikt), nooit een tweede.
+- Het filter is ÉÉN object (`normaliseerFilter`), in de URL via `filterNaarQuery`/`queryNaarFilter`, in het zoekveld als
+  zoekregel (`leesZoekregel`/`zoekregelVan`). In de UI is de tekst van het zoekveld de enige bron: een klik op een
+  categorie of tag schrijft die tekst om. Tags in een regel staan bij SLEUTEL; hernoemen/samenvoegen schrijft de regels
+  en snel-tags mee om (één transactie). Slim in slim kan niet; een slimme mag binnen één gewone zoeken.
+- `GET /api/library` zonder de nieuwe parameters = precies de oude lijst. `sorteer=plek` alleen met een gewone categorie
+  (400). Een filterkolom met weinig waarden (k_grid) gaat NIET via de index (`+t.k_grid`): dat maakte een slimme
+  telling twee keer zo duur. `stand()` is onthouden op total_changes + data_version.
+- Schrijven: `/api/indeling/*`, elke POST `vanDezeMac` (403). Op de bus alleen kiezen en taggen
+  (`library.category.*`, `library.quicktag/quickfilter.K`, `track.N.tag.K`), alle met `log: 'overslaan'` en
+  `beginstand: false`; wissen, hernoemen, categorieën maken nooit op de bus. `library.*` blijft VAST_NOOIT;
+  `track.*.tag.*` mag van de iPad als `mag` het noemt (bouwsteen `tags`).
+- Met de kolom open vallen LUFS en racks uit de lijst (`SMAL_WEG` in library-panel.js): zo past hij op 1440. Een kolom
+  erbij in de library: meet het opnieuw (tools/headless/indeling.mjs controleert de breedte).
+- Toetsen: `test/indeling*.test.mjs`, `tools/headless/indeling.mjs` (echte Chrome, 5000 nummers),
+  `tools/bench/indeling.mjs` (5.000 en 20.000).

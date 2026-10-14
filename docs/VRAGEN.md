@@ -705,3 +705,34 @@ grenzen, fase `auto`, Tailscale serve, stap 7a, stap 8/9, de LPD8.
   container; twee vibrato-trappen). Goed, of liever één trap (alleen wow)?
 - [ ] **S10-9 💬 Volgende stap**: echte parallelle ketens (twee ketens naast elkaar met elk een mix),
   een stutter/korrel-effect binnen het rack, of eerst de sjablonen op het gehoor afmaken?
+
+## S11. Categorieën en tags in de library (14 okt, docs/LIBRARY-TAGS.md, tak `werk/S11`)
+
+- [ ] **S11-1 💬 Plat, geen mappen in mappen.** Een categorie is een eigen bak met een volgorde; een
+  nummer kan in veel categorieën staan. Wat je met mappen zou doen ("dub › traag") is een slimme
+  categorie (`#dub bpm:60-90`). **Advies:** zo laten; een boom maakt "waar staat hij?" onbeantwoordbaar
+  en past niet op het scherm van de Maschine.
+- [ ] **S11-2 💬 Een krat van de kaart overnemen = een kopie.** "→ categorie" in de kaart-tab neemt wat
+  binnen is, in kratvolgorde; nog eens = wat erbij kwam. Hij volgt de krat niet vanzelf (de kaart is van
+  buiten en verandert stil). Wil je ook een gekoppelde (die meeloopt met de krat), of is kopiëren goed?
+- [ ] **S11-3 💬 De kolom links kost ruimte.** Met CATEGORIEËN/TAGS open vallen LUFS en racks uit de
+  lijst, zodat de acht laadknoppen op 1440 passen; ☰ indeling = dicht en alles terug (onthouden). Goed,
+  of liever een andere kolom eruit, of de kolom standaard dicht?
+- [ ] **S11-4 💬 Taggen vanaf de iPad: alleen het nummer op een track.** De bouwsteen `tags` zet de
+  acht snel-tags op het nummer van de focus-track (of een vaste track), via de schrijfweg van S8 als
+  `mag` `track.*.tag.*` noemt. Een rij in de lijst taggen kan van de iPad niet: de bus kent geen
+  nummer-id. Genoeg, of wil je een "gekozen nummer" dat de iPad zelf aanwijst (dan een nieuw veld op de
+  schrijfweg)?
+- [ ] **S11-5 💬 Welke acht snel-tags?** Je zet ze in de library (⋯ bij een tag, "snel 1–8"). Ze staan
+  op geen knop; de sneltoetsen zijn alt+1…8 (en alt+T = het tagveld). Wil je ze op de APC of de
+  Maschine, en waar?
+- [ ] **S11-6 💬 De Maschine bij BROWSE.** Het voorbeeld `?stukken=indeling-voorbeeld` zet SHIFT + ◄ ►
+  op de categorie en SHIFT + ENTER op "filter leeg". Overnemen in je mapping, of liever andere knoppen?
+- [ ] **S11-7 💬 Wat is "energie" van een nummer?** Nu: de energie van de secties gewogen naar hun
+  lengte (`energie:hoog` = ≥ 0,66). De set-klaarzetter (S9) rekent met de LUIDSTE sectie. Zelfde regel
+  voor allebei? Welke?
+- [ ] **S11-8 💬 Zoeken vindt ook tags.** "dub" in het zoekveld vindt ook nummers met #dub (naast titel
+  en artiest). Handig, of liever alleen met `#`?
+- [ ] **S11-9 💬 Wissen.** Een categorie of tag wissen kan alleen in het paneel op de Mac (tweede klik;
+  gebruikt een slimme hem, dan nog een klik). Niet op de bus, niet van de iPad, zoals gevraagd. Een
+  categorie bewaart geen "prullenbak": weg is weg (de backup van het uur ervoor heeft hem nog). Goed?
