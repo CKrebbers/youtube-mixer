@@ -554,14 +554,22 @@ try {
   // Licht = acht tegelijk onder 10% van een kern (in deze meting de helft van de galm van fx.js).
   ok('elk nieuw effect: acht tegelijk onder 10% van een kern', NIEUW.every((id) => CPU[id] / 10 < 10), NIEUW.map((id) => `${id} ${f2(CPU[id] / 10)}%`).join(', '));
 
-  console.log('\n7b. droog/nat per effect: een sweep van knop 1 zonder bult (review S10: equal-power gaf +4 dB)');
+  console.log('\n7b. droog/nat per effect: lineair, geen bult (review S10: equal-power gaf tot +4 dB)');
   {
     const alle = JSON.parse((await import('node:fs')).readFileSync(join(WORTEL, 'racks/sjablonen.json'), 'utf8')).racks;
+    // De menging zelf: een OPEN filter (de uitgang = de ingang) met droog/nat op knop 1. Lineair = overal 0 dB;
+    // equal-power gaf hier halverwege +3 dB.
+    const zuiver = { name: 'menging', chain: [{ slot: 'a', type: 'filter', params: { freq: 0.5, reso: 0 }, meng: 0 }],
+      macros: [{ place: 1, label: 'nat', default: 0, links: [{ target: 'a._nat', from: 0, to: 1 }] }] };
+    const z = [];
+    for (const v of [0, 0.25, 0.5, 0.75, 1]) z.push(await evalueer(`window.__fx.sjabloonKnop(${JSON.stringify(zuiver)}, 1, ${v})`));
+    ok(`droog/nat van een open filter van 0 naar 1: ${z.map((x) => (x >= 0 ? '+' : '') + f2(x)).join(' ')} dB (lineair: geen bult)`, z.every((x) => Math.abs(x) < 0.2));
+    // De Kleur-sjablonen: alleen melden. Daar komt bewust iets bij (echo, galm, vervorming) of gaat er iets af (filter).
     for (const naam of ['Kleur: crush', 'Kleur: dub', 'Kleur: ruimte']) {
       const rack = alle.find((r) => r.name === naam);
       const r = [];
       for (const v of [0, 0.15, 0.3, 0.4, 0.5, 0.6, 0.7, 0.85, 1]) r.push(await evalueer(`window.__fx.sjabloonKnop(${JSON.stringify(rack)}, 1, ${v})`));
-      ok(`${naam}: knop 1 van 0 naar 1: ${r.map((x) => (x >= 0 ? '+' : '') + f1(x)).join(' ')} dB, nergens meer dan +1,5 dB boven droog`, Math.max(...r) < 1.5);
+      console.log(`      ${naam}: knop 1 van 0 naar 1: ${r.map((x) => (x >= 0 ? '+' : '') + f1(x)).join(' ')} dB t.o.v. droog (geen eis)`);
     }
     // De dub-worp: knop 1 open en weer dicht, het droge blijft vol (de delay krijgt een stuur).
     const dub = alle.find((r) => r.name === 'Dub-echo');
