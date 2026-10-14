@@ -18,3 +18,6 @@ tools/keylock/pakket/
 /standen/
 # de duur per testbestand (test/alles.mjs, langste eerst): per machine
 test/.duur.json
+
+# Clay's eigen werkruimtes (docs/WERKRUIMTE.md B2); met de slash: src/werk/ en tools/werkruimtes/voorbeelden/ horen WEL in git
+/werkruimtes/

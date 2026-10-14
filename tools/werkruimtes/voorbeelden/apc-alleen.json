@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "naam": "apc-alleen",
+  "titel": "Alleen de APC (onderweg)",
+  "uitleg": "Alles van vandaag, plus de fx-matrix (⇧ On/Off), de fasemeters (⇧ Lock), ⇧ A|B = thru en THUIS (⇧ master-knop). Het deel volgt de grid-modus; even vasthouden om te gluren wisselt het deel niet.",
+  "stukken": ["basis", "uitlijn", "fx-matrix", "mix-extra"],
+
+  "deel": { "start": "mix", "kiezen": "volgt", "onthoud": true },
+
+  "delen": {
+    "mix": {
+      "label": "MIX", "kleur": "wit",
+      "apc40mk2": { "grid": "hotcues", "device": "strip" },
+      "schermen": { "hoofd": { "rijen": [] } }
+    },
+    "uitlijn": {
+      "label": "UITLIJN", "kleur": "groen",
+      "apc40mk2": { "device": "uitlijn" },
+      "schermen": { "hoofd": { "werkvak": "uitlijn" } }
+    },
+    "fx": {
+      "label": "FX", "kleur": "violet",
+      "apc40mk2": { "grid": "fx", "device": "rack" },
+      "schermen": { "hoofd": { "werkvak": "paneel:super", "rijen": ["master"] } }
+    },
+    "stems": {
+      "label": "STEMS", "kleur": "zeegroen",
+      "apc40mk2": { "grid": "stems" },
+      "schermen": { "hoofd": { "rijen": ["stems"] } }
+    },
+    "secties": {
+      "label": "SECTIES", "kleur": "hemelsblauw",
+      "apc40mk2": { "grid": "secties" }
+    },
+    "spelen": {
+      "label": "SPELEN", "kleur": "oranje",
+      "apc40mk2": { "grid": "patronen", "device": { "als": "focus.instrument", "dan": "inst", "anders": "strip" } },
+      "schermen": { "hoofd": { "rijen": ["instrument", "patronen"] } }
+    },
+    "beeld": {
+      "label": "BEELD", "kleur": "geel",
+      "apc40mk2": { "grid": "video", "device": "beeld" },
+      "schermen": { "hoofd": { "rijen": ["beeld"] } }
+    },
+    "bladeren": {
+      "label": "LIBRARY", "kleur": "grijs",
+      "schermen": { "hoofd": { "onderpaneel": "library" } }
+    }
+  },
+
+  "volgt": [
+    { "apparaat": "apc40mk2", "mapje": "grid.hotcues",  "deel": "mix" },
+    { "apparaat": "apc40mk2", "mapje": "device.uitlijn", "deel": "uitlijn" },
+    { "apparaat": "apc40mk2", "mapje": "grid.fx",       "deel": "fx" },
+    { "apparaat": "apc40mk2", "mapje": "grid.stems",    "deel": "stems" },
+    { "apparaat": "apc40mk2", "mapje": "grid.secties",  "deel": "secties" },
+    { "apparaat": "apc40mk2", "mapje": "grid.patronen", "deel": "spelen" },
+    { "apparaat": "apc40mk2", "mapje": "grid.video",    "deel": "beeld" }
+  ]
+}

@@ -203,6 +203,11 @@ src/
   standen/          stand-model.js  het formaat van een stand (schema 1): witte lijst van delen, de nacht alleen remmen,
                                     normaliseerStand. Puur, geen DOM, geen imports; ook door de server gebruikt
                                     (server/standen.js importeert dit en src/control/mapping.js, allebei puur)
+  werk/             model.js        de werkruimte als data (schema 1): normaliseerWerkruimte/-Stuk (fouten en waarschuwingen apart), samenstellen,
+                                    kern, telNieuwePlekken, kleurControle. Puur, geen imports; ook de server (docs/werkruimte/S3.md)
+                    werkruimte.js   de werkruimte in de mixer: deel, wie koos, onthoud, volgt, THUIS, vereist/terugval, vastleggen, peilen
+                    apparaten.js    registreerApparaat(id, { zetMapjes, mapjes, aanwezig }); de APC-adapter (layer.* over de bus)
+                    kleuren.js      deel -> paletnaam (MIX wit … LIBRARY grijs). Puur.
   auto/             planner.js      de auto-DJ, puur: welk fragment, welke overgang (bewakers), wanneer (frasegrens), de curves
                     automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
@@ -247,6 +252,9 @@ server/             draait apart: `node server/index.js`
   uitzend.js        uitzenden stap 1: een UITGANG, geen bron. Volgt de opname die al groeit en duwt hem via ffmpeg naar een LOKAAL doel
                     (bestand, rtmp/udp op 127.0.0.1); slot tegen elke dienst; nog geen route of knop (docs/UITZENDEN.md)
   routes/           werkruimte S0: index.js laadt werkruimtes/mapping-apparaat/paneel.js ({ routes, mag }), vlak vóór de 404
+  werkruimtes.js    werkruimte S3: werkruimtes/<naam>.json met versie (409 met de huidige inhoud) en .versies/, voorbeelden uit
+                    tools/werkruimtes/voorbeelden/ (een eigen bestand gaat voor), VARVE_WERKRUIMTES; opslaan alleen vanaf deze Mac (W1);
+                    lezen onder dezelfde grens als de standen (`beperkt` + ANDERE_LEZERS in standen.js: samen hooguit 2, 503 na 2 s)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     media-verhuis.mjs (media/ buiten iCloud: --droog, --doe; docs/LIBRARY.md "Waar media/ staat"),
                     lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
@@ -281,7 +289,8 @@ mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
   generic.json      leeg startpunt
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
-  stukken/          werkruimte (WERKRUIMTE.md B4): uitlijn.json = mapje device.uitlijn op ⇧ Lock, acht fasemeters (S1; tot S3 ze laadt alleen met ?uitlijn=1)
+  stukken/          stukken van de werkruimte (WERKRUIMTE.md B4: fragmenten per apparaat, alleen VRIJE plekken); basis.json = ⇧ master-knop THUIS (S3);
+                    uitlijn.json = mapje device.uitlijn op ⇧ Lock, acht fasemeters (S1; ook los met ?uitlijn=1)
   xboard49.json     E-MU Xboard49: knop 1–8 -> instrument, 9–16 -> FX, schuif -> fader van de speeltrack (AANNAME, te controleren met een proef)
   maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn), transport van de patronen ({plek}); laag pagina.strip / pagina.rack = de knoppagina's van de focus-track
 racks/
@@ -387,6 +396,8 @@ test/
   media-verhuis.test.mjs  media buiten iCloud: iCloud-herkenning, het briefje, droogloop/--doe op een nepmap, VARVE_TESTSERVER-bewaker
   aanhaakpunten.test.mjs  werkruimte S0: mapjes erbij/weg/volgorde, fragmenten, meta-vlaggen, alleenScherm, Deck.tijdlijn, aanhakers, routes (kopie-server)
   precisie.test.mjs werkruimte S1: duwen (3,81/0,48 ms per tik), samenvoegen, keylock, jog, op de 1 (stukgrens), duoklik, sync-lampje, het stuk uitlijn
+  werkruimte-model.test.mjs, werkruimte.test.mjs, werkruimte-server.test.mjs  werkruimte S3: het model (weigeren/waarschuwen, samenstellen =
+                    de mapping van vandaag), de runtime (bus-spion, volgt, onthoud, THUIS, terugval, LED-tik), /api/werkruimtes (409, W1)
   alles.mjs         alle tests in één keer met overzicht
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
@@ -1889,6 +1900,19 @@ fasemeter op een endless-knop krijgt GEEN `takeover: 1`: dan geeft de eerste tik
 sprong (docs/werkruimte/S1.md). Mapjes van buiten:
 `voegMapjeToe`/`haalMapjeWeg`/`zetVolgorde` (lagen.js) en daarna `herbindLagen()`; regels van buiten:
 `mapping.vervangFragment(bron, doc)`/`haalWeg(bron)` (een eigen regel wint altijd).
+
+Werkruimte-kern (S3, `docs/werkruimte/S3.md`): `werkruimtes/<naam>.json` (niet in git) of een voorbeeld uit
+`tools/werkruimtes/voorbeelden/`; zonder werkruimte (`standaard`) is de mapping bit voor bit die van vandaag en de
+werk-balk `hidden`. Een deelwissel zet ALLEEN mapjes (layer.* via de adapters), rijen, onderpaneel en werkvak
+(event `'werkruimte'`): 0 invokes buiten `layer.*`/`werk.*` (bus-spion in werkruimte.test). Wat een werkruimte
+mag en niet mag staat op één plek: `src/werk/model.js` (de server gebruikt hetzelfde).
+Op 1440×790 is er met een rij open geen pixel over: de werk-balk haalt zijn hoogte van de mixer zelf af
+(`body.werk-balk-aan` in `src/ui/css/werk.css`, alleen bij een wissel gezet), nooit van de pagina;
+`tools/headless/werkruimte.mjs` toetst het per deel. Wie nog iets boven `main` zet: hetzelfde.
+Een HERLAAD (peil, 409, terugval) haalt mapjes weg en zet ze terug: dat gaat STIL (`adapter.stil(fn)`, geen
+volgt-melding) en daarna gaat per apparaat weer open wat er stond. Een nieuwe adapter (S6: de Maschine) geeft
+`stil` mee, anders springt het deel bij elke peil (review ronde 2). Nieuwe fs-lezers in de server: via `beperkt`
+uit server/standen.js met `ANDERE_LEZERS`, nooit een eigen pool (de grens van 2 geldt voor de hele server).
 
 ## Werkwijze die hier werkt
 

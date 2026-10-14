@@ -1010,6 +1010,23 @@ voorbeelden (punt 1 en 6).
   werk-balk zichtbaar met `apc-alleen`, verborgen met `standaard`; ⇧ scene 3 → STEMS-rij open;
   `rijen.mjs` en `kijk.mjs` met `standaard` ongewijzigd groen.
 
+**Gebouwd (14 okt, tak `werk/S3`; `docs/werkruimte/S3.md`, verslag `docs/verslagen/2026-10-14/werk-S3.md`).**
+Zoals hierboven, met drie verschillen:
+- W1 (iPad kijkt alleen): `PUT /api/werkruimtes/<naam>` mag alleen vanaf deze Mac (`ctx.vanDezeMac`, zoals
+  `/api/mixer`); via Tailscale of met een proxykop 403. Lezen mag zoals de rest.
+- Afspraak met Clay (14 okt): de indeling maakt hij zelf. De drie bestanden in
+  `tools/werkruimtes/voorbeelden/` zijn VOORBEELDEN (de kiezer zet er "(voorbeeld)" achter); S3 levert
+  één echt stuk (`basis`: THUIS). `apc-alleen` en `twee-handen` noemen stukken van andere sporen; zolang
+  die er niet zijn: een waarschuwing per stuk, de rest werkt.
+- De Maschine-adapter (`registreerApparaat('maschine-mk2', …)`) levert S6; de toets van vereist/terugval
+  draait met een nep-adapter.
+- Review ronde 1 (14 okt): de werk-balk (30 px, tot 1000 px hoog 26) gaat NIET van de pagina af. Op
+  1440×790 is er met een rij open geen pixel over (main wordt nooit lager dan het focusdeel); zolang de balk
+  staat zet `werk-balk.js` `body.werk-balk-aan` (alleen bij een wissel) en maakt `werk.css` topbar, main en
+  de kolom rechts in het focusdeel samen 30 px lager. Met `standaard` geldt niets daarvan.
+  `tools/headless/werkruimte.mjs` toetst 1440×790 per deel. Peilen elke 2,5 s (niet 3), zodat "binnen 3 s"
+  ook met de rondgang klopt.
+
 ---
 
 #### S4 — Combinaties en effecten (golf 2)
