@@ -1259,6 +1259,29 @@ profiel zonder de uitkomst.
   (hub.test).
 - Spiekbrief: één pagina per apparaat × deel, elke regel met tekst.
 
+**Gebouwd (14 okt, tak `werk/S6`; `docs/werkruimte/S6.md`, verslag `docs/verslagen/2026-10-14/werk-S6.md`).**
+Clay koos (14 okt): hij maakt zelf de knoppenverdeling, ook op de Maschine. Dus het mechaniek, en per
+soort één klein voorbeeld. Wat anders werd dan hierboven:
+- De stukken zijn VOORBEELDEN, geen indeling: `maschine-delen` = F1–F8, SHIFT + F1, één padmodus
+  (`worpen`), één pagina (`uitlijn`), één wiel (`jog`); `maschine-houd` = VOLUME en SOLO als houd-knop,
+  MUTE = bypass. Transport, stems, beeld, laden, super, de wielen rack/sectie/mengvorm en TEMPO, SWING
+  en DUPLICATE staan als recept in S6.md §3, niet als regels.
+- Padmodi, pagina's en wielen "uit data" = elke regel met laag `pads.<x>`, `pagina.<x>` of `wiel.<x>`
+  (geen aparte declaratie nodig voor de namen die het model kent; een nieuwe naam als mapje melden).
+  Een houd-regel op een pad wint van elke padmodus, ook SAMPLING en spelen.
+- Het wiel: `stappen` (mapping.js) roept alleen `.fwd`/`.back` aan, dus `rack.next/prev`,
+  `section.next/prev` en `video.mode` kunnen nog geen wielregel zijn (vraag in het verslag).
+- SHIFT + pad in SCENE = als loop alleen in een werkruimte (zonder werkruimte bit voor bit als vroeger).
+- `tekenDeelLabels(delen, actief, { nr, buf })`, `tekenFasescoop(vouw, { buf, y0, h })`,
+  `tekenGetallen(getallen, { buf, y0 })`; met delen schuift elk scherm 9 px omlaag (de onderregel valt weg).
+- De pure helpers voor kaarten en spiekbrief staan in `src/ui/spiekbrief.js`; wat de Maschine nodig
+  heeft (`maakVoorbeeldMaschine`, `maschineRijen`) in `maschine-kaart-plan.js` (hub.test: de
+  Maschine-code blijft in haar eigen keten).
+- "De Maschine weg": de hub meldt een lease-app niet dat één speelapparaat wegviel; de terugval werkt
+  zodra de nep-poort `disconnected` wordt (nu alleen als de hub wegvalt). De proef zet de poort zelf.
+- Gemeten: zonder stukken 0 verschillen op 20 000 berichten; volgorde SOLO + APC 1000/1000, scheefheid
+  p99 17,8 ms; pads in SPELEN en de LED-tik van de Maschine gelijk (± 2%).
+
 ---
 
 #### S7 — Schermen en de iPad (kijken) (golf 3)

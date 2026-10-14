@@ -5,7 +5,7 @@
 // Wat hier staat:
 //   layer.pads.<x>, layer.pagina.<x>, layer.wiel.<x>   kiesknoppen die een stuk op de Maschine zet
 //                                                       (de Maschine doet ze zelf, niet de bus)
-//   track.N.jog, .jog.fine, .rack, .section             de basis van een regel met mode `stappen`
+//   track.N.jog, track.N.jog.fine                      de basis van een regel met mode `stappen`
 //                                                       (het wiel: per klik <action>.fwd of .back)
 
 const TRACK = /^track\.(\d+)\.(.+)$/;
@@ -14,8 +14,6 @@ const TRACK = /^track\.(\d+)\.(.+)$/;
 const STAPPEN = {
   jog: ['jog', 'jog: per klik 1/16 tel vooruit of terug, fasebehoudend en ook in pauze (het cuepunt blijft staan)'],
   'jog.fine': ['jog fijn', 'jog fijn: per klik 1/64 tel vooruit of terug'],
-  rack: ['rack ◀▶', 'per klik het volgende of vorige rack'],
-  section: ['sectie ◀▶', 'per klik de volgende of vorige sectie, valt in op de volgende "1"'],
 };
 
 export default function beschrijfMaschine(action) {
