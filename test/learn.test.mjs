@@ -191,5 +191,81 @@ ok('inclusief de geleerde modus', m2.rules.get('cc:0:20').mode === 'relative-2c'
   lg.zet('grid', 'hotcues');
 }
 
+// ---- koppelen op een apparaat dat zelf afhandelt (werkruimte S5) ---------------
+// De Maschine en de MIDI-keyboards hebben hun eigen Mapping en ontvang(): vangLeren
+// zet het leren ervóór. Wat de mapping nooit bereikt (pads, het wiel, paginaknoppen,
+// pedaal) is niet te koppelen en wordt gemeld; alles wat geleerd wordt komt in de
+// mapping van DAT apparaat.
+{
+  const { vangLeren, maschineMagLeren, keyboardMagLeren } = await import('../src/control/midi-learn.js');
+  const MS = await import('../src/control/devices/maschine-mk2.js');
+  const doorgegeven = [];
+  const ding = { ontvang(msg) { doorgegeven.push(msg.sig); return 'echt'; } };
+  const md = maak();
+  const leer = new MidiLearn({ mapping: md, device: null, now: () => 0 });
+  let magHet = true;
+  const los = vangLeren(ding, 'ontvang', leer, { magLeren: () => magHet });
+  ok('vangLeren: zonder leren gaat alles door', ding.ontvang(note(5, true)) === 'echt' && doorgegeven.join() === 'note:0:5');
+  leer.start('track.1.play');
+  doorgegeven.length = 0;
+  ding.ontvang(note(7, true));
+  ok('… tijdens leren: het bericht wordt geleerd, niet doorgegeven', md.rules.get('note:0:7')?.action === 'track.1.play' && doorgegeven.length === 0 && !leer.busy);
+  ding.ontvang(note(7, false));
+  ok('… en het loslaten van die knop ook niet (de nieuwe action krijgt geen los zonder druk)', doorgegeven.length === 0);
+  ding.ontvang(note(7, true)); ding.ontvang(note(7, false));
+  ok('… daarna gaat hij gewoon door', doorgegeven.join() === 'note:0:7,note:0:7');
+  const niet = [];
+  leer.on('niet', (x) => niet.push(x.reden));
+  leer.start('track.1.play');
+  magHet = 'kan niet';
+  doorgegeven.length = 0;
+  ding.ontvang(note(9, true)); ding.ontvang(note(9, false));
+  ok('magLeren met een reden: doorgegeven, één melding per indrukken, leren loopt door', doorgegeven.join() === 'note:0:9,note:0:9' && niet.join() === 'kan niet' && leer.busy);
+  for (let i = 0; i < 20; i++) ding.ontvang(cc(24, 1));
+  ok('… een draaiend wiel meldt één keer per leerbeurt (geen schermwerk per MIDI-bericht)', niet.length === 2);
+  // Een knop koppelen en, met die knop nog vast, de volgende action kiezen: zijn loslaten
+  // gaat nog steeds nergens heen (review ronde 2).
+  magHet = true;
+  leer.start('track.1.play');
+  ding.ontvang(note(11, true));
+  leer.start('track.1.cue');
+  doorgegeven.length = 0;
+  ding.ontvang(note(11, false));
+  ok('… knop nog vast terwijl je de volgende action kiest: zijn loslaten wordt niet geleerd en gaat niet door', doorgegeven.length === 0 && md.rules.get('note:0:11')?.action === 'track.1.play' && leer.busy);
+  leer.start('track.1.play');   // terug naar de stand van hierboven: leren aan
+  magHet = { sig: 'master-volume', type: 'master-volume', channel: 0, number: -1, value: 64, norm: 0.5 };
+  ding.ontvang({ type: 'sysex', channel: -1, sig: 'sysex' });
+  ok('magLeren met een bericht: DAT bericht wordt geleerd (de schuif als master-volume, absoluut)', md.rules.get('master-volume')?.mode === 'absolute');
+  los();
+  doorgegeven.length = 0;
+  ok('de onderschepping weer weg: ook met leren aan gaat alles weer door', leer.busy && ding.ontvang(note(1, true)) === 'echt' && doorgegeven.join() === 'note:0:1');
+  leer.stop();
+
+  // De Maschine: alleen met CONTROL (maschine.uitleg), niets van de Maschine zelf.
+  const masch = { uitleg: null };
+  const lm = { sig: null };
+  const knop = (k, aan = true) => ({ ...note(MS.knopNoot(k), aan, MS.KNOP_KANAAL), sig: MS.knopSig(k) });
+  ok('Maschine: zonder CONTROL niets', maschineMagLeren(masch, lm, knop('f1'), MS) === false);
+  masch.uitleg = { wat: null };
+  ok('Maschine: CONTROL + F1 = koppelen; het loslaten niet', maschineMagLeren(masch, lm, knop('f1'), MS) === true && maschineMagLeren(masch, lm, knop('f1', false), MS) === false);
+  ok('Maschine: CONTROL zelf gaat altijd door (de uitleg moet aan en uit)', maschineMagLeren(masch, lm, knop('control'), MS) === false);
+  ok('Maschine: pads, het wiel, SHIFT, STEP, ◄ ► van de pagina: niet te koppelen', ['shift', 'step', 'browseL', 'wiel', 'enter'].every((k) => typeof maschineMagLeren(masch, lm, knop(k), MS) === 'string')
+    && typeof maschineMagLeren(masch, lm, { ...note(MS.padNoot(3), true), sig: MS.padSig(3) }, MS) === 'string'
+    && typeof maschineMagLeren(masch, lm, { ...cc(MS.WIEL_CC, 1), sig: MS.WIEL_SIG }, MS) === 'string');
+  ok('Maschine: CONTROL + draaiknop = koppelen', maschineMagLeren(masch, lm, cc(MS.ENCODER_CC + 2, 1), MS) === true);
+  masch.uitleg = null; lm.sig = `cc:0:${MS.ENCODER_CC + 2}`;
+  ok('Maschine: dezelfde draaiknop doordraaien mag zonder CONTROL (het type herkennen), een andere niet',
+    maschineMagLeren(masch, lm, cc(MS.ENCODER_CC + 2, 127), MS) === true && maschineMagLeren(masch, lm, cc(MS.ENCODER_CC + 3, 1), MS) === false);
+
+  // Een MIDI-keyboard: de APC hoort er niet bij, pedaal en modwiel zijn van het instrument.
+  const nep = { isApc: (n) => /APC/.test(n || '') };
+  ok('keyboard: een CC van het keyboard = koppelen', keyboardMagLeren(nep, { ...cc(40, 3), portName: 'Xboard49 (hub)' }) === true);
+  ok('keyboard: de APC nooit', keyboardMagLeren(nep, { ...cc(40, 3), portName: 'APC40 mkII' }) === false);
+  ok('keyboard: pedaal, modwiel, paniek niet (met reden); noten gaan door', [64, 1, 120, 123].every((n) => typeof keyboardMagLeren(nep, { ...cc(n, 127), portName: 'x' }) === 'string')
+    && keyboardMagLeren(nep, { ...note(60, true), portName: 'x' }) === false);
+  const sv = keyboardMagLeren(nep, { type: 'sysex', channel: -1, sig: 'sysex', portName: 'x', raw: Uint8Array.from([0xf0, 0x7f, 0x7f, 0x04, 0x01, 0x00, 0x40, 0xf7]) });
+  ok('keyboard: de schuif (SysEx Master Volume) wordt een "master-volume"-bericht met kanaal 0', sv?.sig === 'master-volume' && sv.channel === 0 && sv.value === 64);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

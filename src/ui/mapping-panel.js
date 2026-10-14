@@ -24,6 +24,11 @@ export class MappingPanel {
     this.onReset = onReset;
     this.filter = '';
     this.vuil = true;
+    // Per apparaat een eigen mapping (werkruimte S5): zolang er maar één is (de APC),
+    // is er geen kiezer en is alles zoals vroeger.
+    this.apparaten = new Map();     // naam -> { titel, mapping, learn, device, onReset }
+    this.apparaat = null;           // de naam van wat er nu getoond wordt (null = alleen de APC)
+    this.onApparaat = null;         // (naam) -> void: de gebruiker koos hier een ander apparaat
 
     this.el = {
       rows: root.querySelector('.map-rows'),
@@ -62,23 +67,91 @@ export class MappingPanel {
       setTimeout(() => { this.el.reset.textContent = 'standaard herstellen'; }, 3000);
     });
 
-    mapping.on('change', () => { this.vuil = true; });
-    learn.on('armed', () => { this.vuil = true; });
-    learn.on('done', () => { this.vuil = true; });
+    this._luister(mapping, learn);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && this.learn.busy) { this.learn.stop(); this.vuil = true; }
+    });
+  }
+
+  /**
+   * Luisteren naar een mapping en zijn leren. Alleen wat bij het GETOONDE apparaat
+   * hoort telt (na een wissel blijven de oude luisteraars hangen, maar zwijgen).
+   */
+  _luister(mapping, learn) {
+    const hier = () => this.mapping === mapping && this.learn === learn;
+    mapping.on('change', () => { if (hier()) this.vuil = true; });
+    learn.on('armed', () => { if (hier()) this.vuil = true; });
+    learn.on('done', () => { if (hier()) this.vuil = true; });
     learn.on('bound', (b) => {
+      if (!hier()) return;
       this.melding = b.overschrijft
         ? `${b.sig} gekoppeld aan ${b.action} — stond eerst op ${b.overschrijft}`
         : `${b.sig} gekoppeld aan ${b.action} (${MODUSNAAM[b.mode] || b.mode})`;
       this.vuil = true;
     });
     learn.on('forgotten', (f) => {
+      if (!hier()) return;
       this.melding = f.sigs.length ? `${f.action} losgekoppeld` : `${f.action} had geen koppeling`;
       this.vuil = true;
     });
-
-    window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && this.learn.busy) { this.learn.stop(); this.vuil = true; }
+    learn.on('niet', (n) => {
+      if (!hier()) return;
+      this.melding = `${this.device?.label?.(n.sig) || n.sig}: ${n.reden}`;
+      this.vuil = true;
     });
+  }
+
+  /**
+   * Een apparaat erbij in de kiezer (APC · Maschine · Xboard · toetsen). Het eerste
+   * dat erbij komt, maakt van wat het paneel al toonde (de APC) een keuze `eersteNaam`.
+   * Elk apparaat heeft zijn eigen mapping, leren en "standaard herstellen": wat je
+   * hier op de Maschine koppelt of herstelt, raakt de APC niet.
+   */
+  voegApparaatToe(naam, { titel, mapping, learn, device = null, onReset = null }, { eersteNaam = 'apc40mk2', eersteTitel = 'APC' } = {}) {
+    if (!this.apparaten.size) {
+      this.apparaten.set(eersteNaam, { titel: eersteTitel, mapping: this.mapping, learn: this.learn, device: this.device, onReset: this.onReset });
+      this.apparaat = eersteNaam;
+    }
+    if (this.apparaten.has(naam)) return;
+    this.apparaten.set(naam, { titel: titel || naam, mapping, learn, device, onReset });
+    this._luister(mapping, learn);
+    this._kiezer();
+  }
+
+  /** Dit apparaat tonen (en daar leren). Een lopende leerbeurt op het vorige stopt. */
+  kiesApparaat(naam) {
+    const a = this.apparaten.get(naam);
+    if (!a || naam === this.apparaat) return !!a;
+    this.learn.stop();
+    Object.assign(this, { mapping: a.mapping, learn: a.learn, device: a.device, onReset: a.onReset, apparaat: naam });
+    this.melding = null;
+    this._zekerReset = 0;
+    if (this.el.reset) this.el.reset.textContent = 'standaard herstellen';
+    this._kiezer();
+    this.vuil = true;
+    return true;
+  }
+
+  /** De kiezer bovenin het paneel: één knop per apparaat, de getoonde staat aan. */
+  _kiezer() {
+    if (this.apparaten.size < 2) return;
+    let rij = this.root.querySelector('.map-apparaten');
+    if (!rij) {
+      rij = document.createElement('div');
+      rij.className = 'map-apparaten';
+      // styles.css is van niemand in de werkruimte (WERKRUIMTE.md D2): de paar regels hier.
+      rij.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:11px;color:var(--dim);border-bottom:1px solid var(--line)';
+      rij.title = 'welk apparaat je koppelt: elk heeft zijn eigen mapping (standaard + wat jij koppelde)';
+      rij.addEventListener('click', (e) => {
+        const knop = e.target.closest('button[data-apparaat]');
+        if (!knop || !this.kiesApparaat(knop.dataset.apparaat)) return;
+        this.onApparaat?.(knop.dataset.apparaat);
+      });
+      this.root.prepend(rij);
+    }
+    rij.innerHTML = `koppelen op: ${[...this.apparaten].map(([naam, a]) =>
+      `<button class="btn sm${naam === this.apparaat ? ' on' : ''}" data-apparaat="${esc(naam)}">${esc(a.titel)}</button>`).join(' ')}`;
   }
 
   /** Alleen tekenen als er iets veranderd is en het paneel open staat. */
@@ -97,8 +170,9 @@ export class MappingPanel {
     // de standaard), de rest volgt de standaard, ook als die verandert.
     const v = this.mapping.verschil?.();
     const eigen = v ? v.rules.length + v.removed.length + Object.keys(v.top).length : null;
+    const titel = this.apparaat ? `${esc(this.apparaten.get(this.apparaat)?.titel ?? this.apparaat)}: ` : '';
     return (this.melding ? `<b class="good">${esc(this.melding)}</b> &nbsp;·&nbsp; ` : '')
-      + `${esc(this.mapping.name)} · ${n} koppeling${n === 1 ? '' : 'en'}`
+      + `${titel}${esc(this.mapping.name)} · ${n} koppeling${n === 1 ? '' : 'en'}`
       + (eigen === null ? '' : eigen ? ` · ${eigen} eigen (de rest volgt de standaard)` : ' · precies de standaard');
   }
 
@@ -150,7 +224,17 @@ export class MappingPanel {
   async importeer(bestand) {
     if (!bestand) return;
     try {
-      const { aantal, fouten, gemigreerd } = this.mapping.load(await bestand.text());
+      const tekst = await bestand.text();
+      // Een bestand voor een ander apparaat hoort niet in de Maschine, de Xboard of de toetsen
+      // (de APC laat alles toe, zoals altijd: daar komt ook een generieke controller in).
+      const voor = this.apparaat && this.apparaat !== 'apc40mk2' ? (JSON.parse(tekst)?.device || 'generic') : null;
+      if (voor !== null && voor !== this.apparaat) {
+        this.melding = `${bestand.name} is een mapping voor "${voor}", niet voor ${this.apparaten.get(this.apparaat)?.titel ?? this.apparaat}: niet geladen`;
+        this.el.importeer.value = '';
+        this.vuil = true;
+        return;
+      }
+      const { aantal, fouten, gemigreerd } = this.mapping.load(tekst);
       this.melding = `${bestand.name}: ${aantal} regels geladen`
         + (gemigreerd ? ` — ${gemigreerd} omgezet van deck naar track` : '')
         + (fouten.length ? ` — ${fouten.length} genegeerd` : '');

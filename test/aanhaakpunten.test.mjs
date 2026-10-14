@@ -343,15 +343,19 @@ console.log('\nserver: routes/ en de witte lijst');
 {
   const { spoorRoutes, zoekRoute } = await import('../server/routes/index.js');
   // Golf 1 had hier "de drie routebestanden zijn leeg". Een spoor vult zijn eigen bestand (S3:
-  // werkruimtes, 14 okt); wat blijft gelden: ze laden in de vaste volgorde, elke route hoort bij
-  // een spoor van SPOREN en zit onder /api/ (de witte lijst mag een spoor zelf aanvullen).
+  // werkruimtes, S5: mapping-apparaat, 14 okt); wat blijft gelden: ze laden in de vaste volgorde,
+  // elke route hoort bij een spoor van SPOREN en zit onder /api/.
   const { SPOREN } = await import('../server/routes/index.js');
-  const leeg = spoorRoutes();
+  const nu = spoorRoutes();
   ok('de routebestanden laden; elke route hoort bij een spoor en zit onder /api/',
-    leeg.routes.every((r) => SPOREN.some(([n]) => n === r.spoor) && r.pad.source.startsWith('^\\/api\\/')));
-  // De andere helft van de oude check blijft: geen spoor zet iets op de witte lijst van statische
-  // bestanden (S3 heeft `mag: []`). Heeft een spoor er echt een nodig, dan verandert het DEZE regel bewust.
-  ok('… en geen witte-lijstregels (mag is leeg)', !leeg.mag.length);
+    nu.routes.every((r) => SPOREN.some(([n]) => n === r.spoor) && r.pad.source.startsWith('^\\/api\\/')));
+  // De witte lijst: S3 had "mag is leeg"; S5 zet er bewust één pagina op (de Maschine-ijkproef,
+  // tools/proef/maschine-ijk.html). Wat altijd moet gelden: geen witte-lijstregel zet data open.
+  const GEHEIM = ['/media/library.db', '/media/kaart.db', '/server/index.js', '/opnames/set-1.acties.jsonl', '/proef/sessie.json',
+    '/standen/x.json', '/patronen/set.json', '/.git/config', '/test/alles.mjs', '/tools/proef/../../media/library.db',
+    '/werkruimtes/x.json'];
+  ok('… en geen witte-lijstregel die data openzet', !nu.mag.some((m) => GEHEIM.some((g) => m.test(g))));
+  ok('… en op de witte lijst alleen de ijkproef van S5', nu.mag.every((m) => m.test('/tools/proef/maschine-ijk.html')));
   let fout = null;
   try { spoorRoutes([['kapot', { routes: [{ methode: 'GET', pad: '/api/x', handler: () => {} }], mag: [] }]]); } catch (e) { fout = e; }
   ok('een route zonder RegExp: de server start niet (fout met de naam)', /kapot/.test(fout?.message));

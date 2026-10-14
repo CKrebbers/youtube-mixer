@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maschine-ijkproef</title>
+<!--
+  De Maschine-ijkproef (poort M, werkruimte S5, docs/werkruimte/S5.md). Open met
+  ?hub=ws://localhost:7700/app terwijl de hub draait en de Maschine eraan hangt.
+
+  - Leest mee via de hub als eigen lease-app ("varve-ijk", speelt alleen de Maschine).
+    Geen requestMIDIAccess, geen AudioContext, geen Web Lock.
+  - Stuurt NIETS naar de Maschine, behalve het testpatroon (schermen en lampjes)
+    als je op de knop drukt, en "alles uit" als je daarop drukt.
+  - Raak elke pad, knop, draaiknop (beide kanten op) en het wiel (beide kanten op)
+    aan. Per control: wat het profiel (src/control/devices/maschine-mk2.js)
+    verwacht, wat er binnenkwam, en "klopt" of niet.
+  - "bewaar als JSON" geeft de uitkomst als bestand (niets naar de server).
+-->
+<style>
+  :root { --bg:#07090b; --panel:#10151a; --line:#232c35; --text:#dfe7ee; --dim:#7b8794; --a:#4ad9c4; --goed:#5fd068; --half:#e0b341; --fout:#ff6b6b; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f6f7f8; --panel:#fff; --line:#d6dbe0; --text:#1a2026; --dim:#5d6875; --a:#0f8f7f; --goed:#23873a; --half:#a7790a; --fout:#c62828; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .dim { color: var(--dim); }
+  .balk { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--dim); }
+  .stand { padding: 4px 8px; border: 1px solid var(--line); border-radius: 5px; }
+  .stand.aan { border-color: var(--goed); color: var(--goed); }
+  .stand.uit { border-color: var(--fout); color: var(--fout); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
+  section h2 { font-size: 13px; margin: 0 0 8px; letter-spacing: .04em; }
+  .raster { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .pads { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 640px; }
+  .c { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0; }
+  .c b { display: block; }
+  .c .v, .c .o { font-size: 11px; overflow-wrap: anywhere; }
+  .c .v { color: var(--dim); }
+  .c.klopt { border-color: var(--goed); }
+  .c.klopt .u { color: var(--goed); }
+  .c.half { border-color: var(--half); }
+  .c.half .u { color: var(--half); }
+  .c.vers { box-shadow: 0 0 0 2px var(--a); }
+  .u { font-size: 11px; font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  td, th { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  textarea { width: 100%; min-height: 120px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 5px; font: 11px/1.3 ui-monospace, monospace; }
+  .fout { color: var(--fout); }
+</style>
+</head>
+<body>
+<h1>Maschine-ijkproef</h1>
+<div class="dim">Klopt het profiel van VARVE met wat de hub van jouw Maschine doorgeeft? Raak alles één keer aan. Sluit VARVE eerst, of geef deze pagina de focus met de hubtoets: de hub geeft de Maschine aan één app tegelijk.</div>
+
+<div class="balk">
+  <span id="verbinding" class="stand uit">geen hub</span>
+  <span id="teller" class="stand">0 / 0 klopt</span>
+  <button id="patroon" title="zet het testpatroon op de schermen en de lampjes (het enige wat deze pagina ooit stuurt)">testpatroon op schermen en lampjes</button>
+  <button id="uit" title="schermen leeg en lampjes uit">alles uit</button>
+  <button id="bewaar">bewaar als JSON</button>
+  <button id="wis">opnieuw beginnen</button>
+</div>
+
+<section>
+  <h2>Schermen: staan F1–F8 onder hun label?</h2>
+  <div class="dim">Na "testpatroon": op elk scherm vier vakken met F1–F4 (links) en F5–F8 (rechts) bovenin, en draaiknop 1–8 onderin. Staat elk label recht boven (of onder) zijn knop?</div>
+  <div class="balk">
+    <button data-labels="ja">ja, ze staan goed</button>
+    <button data-labels="nee">nee, ze staan scheef</button>
+    <span id="labels" class="dim">nog niet beantwoord</span>
+  </div>
+</section>
+
+<section><h2>Pads (zoals op het apparaat: 13–16 boven, 1–4 onder)</h2><div id="pads" class="raster pads"></div></section>
+<section><h2>Draaiknoppen en masterwiel (beide kanten op draaien)</h2><div id="draai" class="raster"></div></section>
+<section><h2>Knoppen (indrukken en loslaten)</h2><div id="knoppen" class="raster"></div></section>
+<section><h2>Onverwacht (geen control van het profiel)</h2><table><thead><tr><th>signature</th><th>aantal</th><th>laatste bytes</th></tr></thead><tbody id="onverwacht"><tr><td colspan="3" class="dim">niets</td></tr></tbody></table></section>
+<section><h2>Uitkomst</h2><textarea id="json" readonly></textarea></section>
+
+<script type="module">
+import profiel, { padNoot, knopSig, KNOPPEN, WIEL_SIG, KNOP_LABEL } from '../../src/control/devices/maschine-mk2.js';
+import { parseMessage } from '../../src/control/midi.js';
+import { leegScherm, tekst, tekstBreedte, lijn, zetPixel, BREED, HOOG } from '../../src/control/maschine-scherm.js';
+import { hubAdres, hubGeweigerd } from '../../src/ui/vlag.js';
+
+const APP = 'varve-ijk';
+const $ = (id) => document.getElementById(id);
+
+// ---- verwacht: elke control van het profiel ------------------------------------
+const controls = [...profiel.controls.values()].map((c) => ({
+  sig: c.sig, label: c.label, soort: c.sig === WIEL_SIG ? 'wiel' : c.kind,
+  verwacht: c.kind === 'pad' ? `${c.sig}: noot aan (snelheid > 0) en noot uit`
+    : c.kind === 'button' ? `${c.sig}: noot aan 127 en noot uit`
+      : c.sig === WIEL_SIG ? `${c.sig}: relatief ±1 per klik, beide kanten op`
+        : `${c.sig}: relatief (tweecomplement), beide kanten op`,
+}));
+const PER_SIG = new Map(controls.map((c) => [c.sig, c]));
+
+let ontvangen, onverwacht, labelsOnderF = null, laatste = null;
+function wis() {
+  ontvangen = new Map(controls.map((c) => [c.sig, { aan: 0, uit: 0, snelheid: [], druk: 0, plus: 0, min: 0, maxStap: 0, minStap: Infinity, berichten: 0 }]));
+  onverwacht = new Map();
+  laatste = null;
+  teken();
+}
+
+/** De uitslag van één control: 'klopt', 'half' (iets, nog niet alles) of 'nog niet'. */
+function uitslagVan(c) {
+  const o = ontvangen.get(c.sig);
+  if (!o.berichten) return 'nog niet';
+  if (c.soort === 'pad') return o.aan && o.uit && o.snelheid.every((v) => v > 0) ? 'klopt' : 'half';
+  if (c.soort === 'button') return o.aan && o.uit && o.snelheid.every((v) => v === 127) ? 'klopt' : 'half';
+  if (c.soort === 'wiel') return o.plus && o.min && o.minStap === 1 ? 'klopt' : 'half';
+  return o.plus && o.min ? 'klopt' : 'half';
+}
+const ontvangenTekst = (c) => {
+  const o = ontvangen.get(c.sig);
+  if (!o.berichten) return '—';
+  if (c.soort === 'pad' || c.soort === 'button') {
+    const v = o.snelheid.length ? ` (snelheid ${Math.min(...o.snelheid)}–${Math.max(...o.snelheid)})` : '';
+    return `aan ${o.aan}× · uit ${o.uit}×${v}${o.druk ? ` · druk ${o.druk}×` : ''}`;
+  }
+  return `+${o.plus} · −${o.min} · stap ${o.minStap === Infinity ? '?' : o.minStap}–${o.maxStap}`;
+};
+
+// ---- ontvangen ------------------------------------------------------------------
+function ontvang(bytes) {
+  const m = parseMessage(bytes);
+  if (m.channel < 0) return;
+  // Polyfone druk hoort bij de pad (dezelfde noot).
+  const sig = m.type === 'poly' ? `note:${m.channel}:${m.number}` : m.sig;
+  const c = PER_SIG.get(sig);
+  if (!c || (m.type !== 'note' && m.type !== 'poly' && m.type !== 'cc') || (m.type === 'cc' && c.soort !== 'encoder' && c.soort !== 'wiel')
+    || (m.type !== 'cc' && (c.soort === 'encoder' || c.soort === 'wiel'))) {
+    const o = onverwacht.get(m.sig) ?? { aantal: 0, laatste: null };
+    o.aantal++; o.laatste = [...bytes];
+    onverwacht.set(m.sig, o);
+  } else {
+    const o = ontvangen.get(sig);
+    o.berichten++;
+    if (m.type === 'poly') o.druk++;
+    else if (m.type === 'note') { if (m.on) { o.aan++; o.snelheid.push(m.value); } else o.uit++; }
+    else {
+      const d = m.value >= 64 ? m.value - 128 : m.value;   // tweecomplement
+      if (d > 0) o.plus++; else if (d < 0) o.min++;
+      if (d) { o.maxStap = Math.max(o.maxStap, Math.abs(d)); o.minStap = Math.min(o.minStap, Math.abs(d)); }
+    }
+    laatste = sig;
+  }
+  vraagTeken();
+}
+
+// ---- tonen ------------------------------------------------------------------------
+let gevraagd = false;
+const vraagTeken = () => { if (!gevraagd) { gevraagd = true; requestAnimationFrame(() => { gevraagd = false; teken(); }); } };
+const esc = (s) => String(s).replace(/[&<>"]/g, (t) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[t]);
+const kaart = (c) => {
+  const u = uitslagVan(c);
+  return `<div class="c ${u === 'klopt' ? 'klopt' : u === 'half' ? 'half' : ''}${c.sig === laatste ? ' vers' : ''}" title="${esc(c.verwacht)}">
+    <b>${esc(c.label)}</b><div class="v">${esc(c.verwacht)}</div><div class="o">${esc(ontvangenTekst(c))}</div><div class="u">${u}</div></div>`;
+};
+function teken() {
+  const pads = [13, 14, 15, 16, 9, 10, 11, 12, 5, 6, 7, 8, 1, 2, 3, 4].map((p) => PER_SIG.get(`note:0:${padNoot(p)}`));
+  $('pads').innerHTML = pads.map(kaart).join('');
+  $('draai').innerHTML = controls.filter((c) => c.soort === 'encoder' || c.soort === 'wiel').map(kaart).join('');
+  $('knoppen').innerHTML = KNOPPEN.map((k) => PER_SIG.get(knopSig(k))).map(kaart).join('');
+  $('onverwacht').innerHTML = onverwacht.size ? [...onverwacht].map(([sig, o]) => `<tr><td>${esc(sig)}</td><td>${o.aantal}</td><td>${esc(o.laatste.join(' '))}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="dim">niets</td></tr>';
+  const n = controls.filter((c) => uitslagVan(c) === 'klopt').length;
+  $('teller').textContent = `${n} / ${controls.length} klopt${onverwacht.size ? ` · ${onverwacht.size} onverwacht` : ''}`;
+  $('labels').textContent = labelsOnderF === null ? 'nog niet beantwoord' : labelsOnderF ? 'ja: F1–F8 staan onder hun label' : 'nee: de labels staan scheef';
+  $('json').value = JSON.stringify(uitslag(), null, 1);
+}
+
+function uitslag() {
+  const lijst = controls.map((c) => ({ label: c.label, sig: c.sig, soort: c.soort, verwacht: c.verwacht, ontvangen: { ...ontvangen.get(c.sig), minStap: ontvangen.get(c.sig).minStap === Infinity ? null : ontvangen.get(c.sig).minStap }, uitslag: uitslagVan(c) }));
+  return {
+    proef: 'maschine-ijk', versie: 1, datum: new Date().toISOString(), hub: hub ?? null,
+    profiel: 'src/control/devices/maschine-mk2.js',
+    samen: { klopt: lijst.filter((x) => x.uitslag === 'klopt').length, totaal: lijst.length, onverwacht: onverwacht.size, labelsOnderF },
+    controls: lijst,
+    onverwacht: [...onverwacht].map(([sig, o]) => ({ sig, ...o })),
+  };
+}
+
+// ---- het testpatroon (alleen na een klik) ----------------------------------------
+/** Scherm nr (0 = links, 1 = rechts): vier vakken van 64 px, bovenin F1–F4 / F5–F8, onderin draaiknop 1–4 / 5–8. */
+function testbeeld(nr) {
+  const b = leegScherm();
+  for (let x = 0; x < BREED; x++) { zetPixel(b, x, 0); zetPixel(b, x, HOOG - 1); }
+  for (let k = 0; k <= 4; k++) { const x = Math.min(BREED - 1, k * 64); for (let y = 0; y < HOOG; y++) { zetPixel(b, x, y); if (k > 0 && k < 4) zetPixel(b, x - 1, y); } }
+  for (let k = 0; k < 4; k++) {
+    const midden = k * 64 + 32;
+    const f = `F${nr * 4 + k + 1}`;
+    tekst(b, midden - Math.floor(tekstBreedte(f, 2) / 2), 4, f, 2);
+    lijn(b, midden - 1, midden + 1, 21); lijn(b, midden, midden, 20);    // pijltje omhoog onder het label
+    const d = `knop ${nr * 4 + k + 1}`;
+    tekst(b, midden - Math.floor(tekstBreedte(d) / 2), HOOG - 11, d);
+  }
+  const m = nr ? 'RECHTS' : 'LINKS';
+  tekst(b, Math.floor((BREED - tekstBreedte(m)) / 2), 30, m);
+  return b;
+}
+const KLEUREN = [5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 3, 1];   // APC-palet: rood … wit
+function testLampjes() {
+  const led = [];
+  for (let p = 1; p <= 16; p++) led.push([0x90, padNoot(p), KLEUREN[p - 1]]);
+  KNOPPEN.forEach((k, i) => { if (k !== 'wiel') led.push([0x91, i, k.startsWith('groep') ? KLEUREN[(i - 24) * 2] : 127]); });
+  return led;
+}
+const base64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s); };
+
+// ---- de hub (lease-app, speelt alleen de Maschine) ---------------------------------
+const hub = hubAdres();
+let ws = null, open = false, focus = false, rx = 0, hb = null;
+const stuur = (b) => { if (open) ws.send(JSON.stringify(b)); };
+function verbind() {
+  ws = new WebSocket(hub);
+  ws.onopen = () => {
+    open = true;
+    stuur({ t: 'hallo', app: APP, inst: Math.random().toString(36).slice(2, 10), v: 1 });
+    stuur({ t: 'manifest', manifest: { v: 1, app: APP, naam: 'Maschine-ijkproef', kleur: '#e0b341', truth: 'app', hb_s: 1, lease: true, speelt: ['maschine-mk2'], params: [] } });
+    hb = setInterval(() => stuur({ t: 'hb' }), 500);
+    status();
+  };
+  ws.onmessage = (e) => {
+    let b; try { b = JSON.parse(e.data); } catch (_) { return; }
+    if (b.t === 'midi' && b.dev === 'maschine-mk2' && Array.isArray(b.bytes)) { rx++; ontvang(b.bytes); }
+    else if (b.t === 'focus') focus = b.aan === true;
+    else if (b.t === 'fout') console.warn('[hub]', b.reden);
+    status();
+  };
+  ws.onclose = () => { open = false; clearInterval(hb); status(); setTimeout(verbind, 1000); };
+  ws.onerror = () => {};
+}
+function status() {
+  const el = $('verbinding');
+  el.className = `stand ${open ? 'aan' : 'uit'}`;
+  el.textContent = !hub ? (hubGeweigerd() ? `?hub= niet lokaal: ${hubGeweigerd()} (met &hub_extern=1 wel)` : 'open met ?hub=ws://localhost:7700/app')
+    : open ? `hub verbonden${focus ? ' · focus' : ''} · ${rx} berichten van de Maschine${rx ? '' : ' (speelt VARVE hem? sluit VARVE of geef deze pagina de focus)'}` : 'hub: verbinden…';
+}
+
+$('patroon').addEventListener('click', () => {
+  stuur({ t: 'led', dev: 'maschine-mk2', bytes: testLampjes() });
+  for (const nr of [0, 1]) stuur({ t: 'scherm', dev: 'maschine-mk2', nr, data: base64(testbeeld(nr)) });
+});
+$('uit').addEventListener('click', () => {
+  stuur({ t: 'led', dev: 'maschine-mk2', bytes: testLampjes().map(([s, n]) => [s, n, 0]) });
+  for (const nr of [0, 1]) stuur({ t: 'scherm', dev: 'maschine-mk2', nr, data: base64(leegScherm()) });
+});
+$('bewaar').addEventListener('click', () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(uitslag(), null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `maschine-ijk-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+$('wis').addEventListener('click', wis);
+document.querySelectorAll('[data-labels]').forEach((k) => k.addEventListener('click', () => { labelsOnderF = k.dataset.labels === 'ja'; teken(); }));
+
+wis();
+status();
+if (hub) verbind();
+// Voor de headless proef (tools/proef/maschine-ijk.mjs): alleen lezen.
+window.ijk = { uitslag, testbeeld, get rx() { return rx; }, get open() { return open; }, labels: KNOP_LABEL };
+</script>
+</body>
+</html>
