@@ -1,4 +1,5 @@
 import { DECK_IDS } from '../engine/engine.js';
+import { leesWeg } from '../lib/antwoord.js';
 
 /**
  * Hoe lang (ms) een hotcue-druk vóór het terugzetten nog "vers" is: komt de
@@ -64,6 +65,7 @@ export function opzetHotcueOpslag({ engine, meld = () => {}, haal = (...a) => fe
           : await haal(pad(trackId), {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nr, tijd }),
           });
+        await leesWeg(r);
         if (!r.ok) throw new Error(`${r.status}`);
       } catch (err) {
         meld(`hotcue ${nr} niet ${tijd === null ? 'gewist' : 'bewaard'} bij het nummer (${err.message})`, 'fout');

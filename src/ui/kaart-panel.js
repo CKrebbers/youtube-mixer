@@ -5,6 +5,7 @@ import {
   wisselFilter, filterKnoppenHtml, standCelHtml, kratOptiesHtml, kratVan, moetBevestigen, bevestigingsTekst, wensUitkomst,
   zekereKandidaat, kieslijstHtml, wensTelling, wensTellingTekst, laatsteRunTekst, nachtStandTekst, nachtWijziging, speeldagenTekst, SPEELT_UITLEG,
 } from './kaart-lijst.js';
+import { leesWeg } from '../lib/antwoord.js';
 
 /**
  * De tab "kaart" in het library-paneel: de muziekkaart als zoeklaag
@@ -368,6 +369,7 @@ export class KaartPanel {
   async wensWeg(sleutel) {
     try {
       const r = await fetch(`/api/kaart/wens/${encodeURIComponent(sleutel)}`, { method: 'DELETE' });
+      await leesWeg(r);
       if (!r.ok) throw new Error(`${r.status}`);
       const n = this._nummer(sleutel);
       if (n) n.wens = null;

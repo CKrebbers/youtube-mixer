@@ -7,6 +7,7 @@ import { attachKeyboard } from '../control/keyboard.js';
 import { meld, koppelMeldingen } from './meldingen.js';
 import { opzetVideo } from './video-paneel.js';
 import { opzetOpname } from './opname-knop.js';
+import { bewaakVertrek } from './vertrek.js';
 import { opzetLogboek } from './logboek.js';
 import { opzetVensters } from './vensters.js';
 import { opzetSpiegel } from './spiegel.js';
@@ -310,6 +311,10 @@ setInterval(beeldMag, 1000);
 beeldMag();
 // Terug uit de bfcache (pagehide stopte de zender): weer starten als het mag.
 window.addEventListener('pageshow', (e) => { if (e.persisted) { beeldMag(); beeld.zet({}, { vanzelf: true }); } });
+
+// Cmd+R of Cmd+W midden in een set: eerst vragen zolang er een track speelt,
+// wacht of laadt, de auto-DJ aan staat of er opgenomen wordt (vertrek.js).
+bewaakVertrek(() => ({ decks: DECK_IDS.map((id) => engine.deck(id)), auto: auto.aan, opname: !!opname.opnemer.bezig }));
 
 // Ook naar de server (POST /api/mixer, hooguit 1 per 900 ms) voor iPad en iPhone (docs/COMPANION.md stap 2).
 const TAB_ID = globalThis.crypto?.randomUUID?.() ?? `tab-${Math.random().toString(36).slice(2, 12)}`;

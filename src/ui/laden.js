@@ -8,6 +8,7 @@ import { renderDemoTrack } from '../analysis/demo-track.js';
 import { meld } from './meldingen.js';
 import { aantalOpBus } from './stems-weergave.js';
 import { maakGridBewaarder } from './grid-bewaren.js';
+import { leesWeg } from '../lib/antwoord.js';
 
 /**
  * Laden en wat bij het geladen nummer hoort: de demotrack en losse bestanden
@@ -170,6 +171,7 @@ export function opzetLaden({ engine, staat, videoMixer, racks, haalSamples, haal
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ toon: kaart ? kaart.toJSON() : null }),
         });
+        await leesWeg(res);
         if (res.status >= 400 && res.status < 500) {
           meld(`toonsoort van track ${trackVanDeck(id)} niet bewaard: ${res.status} ${res.statusText}`, 'fout');
           continue;

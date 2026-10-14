@@ -17,6 +17,7 @@
  * los, en wat hij ook doet (gooien, afwijzen, hangen) komt niet in de mixer.
  */
 import { beeldBericht } from './beeld-weergave.js';
+import { leesWeg } from '../lib/antwoord.js';
 
 export const KANAAL = 'varve-status';
 
@@ -110,6 +111,7 @@ export function startStatusZender({ lees, isEerste = () => true, interval = 1000
         body: JSON.stringify(bericht), cache: 'no-store', signal: ac?.signal }));
     } catch (err) { p = Promise.reject(err); }
     p.then((r) => {
+      leesWeg(r);                         // elke 900 ms een antwoord: ongelezen blijft het in Chrome hangen
       if (r?.ok) return;
       rustTot = klok() + (r?.status >= 400 && r?.status < 500 ? RUST_WEIGER_MS : RUST_FOUT_MS);
     }, (err) => {

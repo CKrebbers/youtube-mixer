@@ -8,6 +8,7 @@ import {
 } from './library-lijst.js';
 import { IngestStrook } from './ingest-strook.js';
 import { pastBij, pastBijKop, tempoTekst } from './past-bij.js';
+import { leesWeg } from '../lib/antwoord.js';
 
 /** Wat de upload aanneemt; gelijk aan BESTAND_EXT in server/links.js. */
 export const BESTAND_EXT = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'wav', 'mp3', 'flac', 'm4a', 'aiff', 'aif', 'ogg', 'opus'];
@@ -411,7 +412,7 @@ export class LibraryPanel {
       const r = await this.onLaad(deck, track);
       this.melding = { tekst: `${track.titel} staat op track ${this.label(deck)}`
         + (r?.stems ? `, met ${r.stems} stems` : '') + (r?.hint ? ` — ${r.hint}` : ''), goed: true };
-      fetch(`/api/library/${id}/geladen`, { method: 'POST' }).catch(() => {});
+      fetch(`/api/library/${id}/geladen`, { method: 'POST' }).then(leesWeg, () => {});
       // "gespeeld" meteen bijwerken, maar NIET opnieuw sorteren: de lijst
       // springt dan niet onder je muis weg terwijl je de volgende zoekt.
       track.laatst_geladen = Date.now();
@@ -503,6 +504,7 @@ export class LibraryPanel {
       const r = await fetch(`/api/library/${id}/toon`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toon: json }),
       });
+      await leesWeg(r);
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       this._werkBij(track, 'toon', json);
       this.onToon(id, json);
@@ -640,7 +642,7 @@ export class LibraryPanel {
     if (!track) return;
     // Alleen uit de library; de bestanden laat ik staan. Wissen van schijf is
     // onomkeerbaar en hoort een bewuste handeling te zijn, geen klik naast.
-    await fetch(`/api/library/${id}`, { method: 'DELETE' }).catch(() => {});
+    await fetch(`/api/library/${id}`, { method: 'DELETE' }).then(leesWeg, () => {});
     this.melding = { tekst: `${track.titel} uit de lijst (bestanden staan er nog)`, goed: true };
     this.ververs();
   }

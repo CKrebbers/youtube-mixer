@@ -16,3 +16,5 @@ tools/keylock/uit/
 tools/keylock/pakket/
 # Clay's eigen standen (docs/STANDEN.md); met de slash: src/standen/ en tools/standen/ horen WEL in git
 /standen/
+# de duur per testbestand (test/alles.mjs, langste eerst): per machine
+test/.duur.json

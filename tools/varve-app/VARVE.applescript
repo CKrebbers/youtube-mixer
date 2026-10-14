@@ -93,9 +93,12 @@ end luistert
 -- ~/.zprofile). ~/.varve/media-pad (één regel: het pad) gaat voor. nohup en & met alle
 -- uitvoer naar het log: do shell script wacht dan niet op de server. false = niet gestart
 -- (de map is er niet; de reden staat in het log).
+-- UV_THREADPOOL_SIZE=16: statische bestanden en de pagina's van de decks delen de libuv-draadpool
+-- (standaard 4). Hangen er vier codebestanden die macOS uit iCloud moet halen, dan krijgt anders
+-- geen enkel deck nog een pagina (docs/WINST.md punt 4, tools/bench/draadpool.mjs).
 on startServer()
 	set mediaPad to "if [ -s ~/.varve/media-pad ]; then export VARVE_MEDIA=\"$(head -n 1 ~/.varve/media-pad)\"; fi"
-	set opdracht to "echo \"--- $(date '+%d-%m %H:%M:%S') gestart door VARVE.app\" && cd ~/" & quoted form of map & " && " & mediaPad & " && nohup node server/index.js &"
+	set opdracht to "echo \"--- $(date '+%d-%m %H:%M:%S') gestart door VARVE.app\" && cd ~/" & quoted form of map & " && " & mediaPad & " && export UV_THREADPOOL_SIZE=16 && nohup node server/index.js &"
 	try
 		do shell script "/bin/zsh -lc " & quoted form of opdracht & " < /dev/null >> " & logboek & " 2>&1"
 		return true

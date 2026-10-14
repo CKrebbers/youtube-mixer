@@ -123,6 +123,7 @@ src/
                     vensters, laden, racks, sampler-opslag, meldingen,
                     onderpanelen, midi-opzet, opname-knop, video-paneel,
                     renderloop, mapje-balk — elk een opzet…()-functie
+                    vertrek.js      Cmd+R/Cmd+W: eerst vragen zolang er iets speelt, wacht, laadt, de auto-DJ aan staat of er opgenomen wordt (één plek)
                     vlag.js + vorm-paneel.js: ?vormen=1 en de VORM-rij (paneel pas geladen als de vlag aan staat)
                     vlag.js ook ?hub=ws://… (hubAdres): dan laadt app.js control/hub.js, anders niet
                     bovenbalk.js    past de balk niet (tijdens het spelen), dan scrollt het rechterdeel opzij: vervaging, wiel
@@ -202,6 +203,7 @@ src/
                     niveau.js       laag/midden/hoog/luid voor de zender op de schaal van wat er nu klinkt (8 s, p10–p95, ≥ 6 dB). Puur.
   export/           patronen-smf.js patronen/set <-> Standard MIDI File (type 1, 384 PPQN) voor Logic; buiten de engine (docs/PATRONEN.md §8). Puur.
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
+                    antwoord.js     leesWeg(res): het antwoord van een fetch lezen, ook als het gelukt is (anders lekt Chrome)
                     smf.js          een MIDI-bestand als bytes: schrijven (zonder running status) en lezen (ook running status). Geen imports.
 server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
@@ -254,7 +256,8 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     sampler-drums-stems.mjs: hetzelfde met een GESTREAMD library-nummer met vier stems (synthetisch, tijdelijke db),
                     kills, knip, drumpad 13, Goertzel per stem, deck-vergelijking met de crossfaderkant erin (proefpunt cx-stems);
                     hub.mjs, speelapparaten.mjs, sec-maschine.mjs en sec-hub.mjs: met de echte hub, nep-APC/LPD8/Xboard/Maschine), bench/ (renderblok.mjs:
-                    CPU en afval), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
+                    CPU en afval; draadpool.mjs: hangende iCloud-bestanden tegen de decks, standaard vs UV_THREADPOOL_SIZE=16),
+                    headless/lek.mjs (groeit de renderer tijdens een opname?) en headless/acht-video.mjs (acht decks + acht video's: wacht de audio?), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden), varve-app/ (de Dock-app VARVE: start de server, opent de Controlekamer),
                     setboek/ (lees.mjs: wat er op een avond KLONK uit de handelingenlogs, puur; gebruik.mjs: de teller;
@@ -419,7 +422,7 @@ docs/
 | Dependencies | Nul in de frontend. Elke toevoeging eerst voorleggen met reden. |
 | Nieuwe functie | Eerst `define()` in `actions.js`, daarna pas UI en mapping. |
 | Formatting | 2 spaties, single quotes, semicolons. Volg de bestaande stijl. |
-| Tests | Alle bestanden in `test/` moeten groen blijven: `node test/alles.mjs`. Bij wijzigingen: check toevoegen. |
+| Tests | Alle bestanden in `test/` moeten groen blijven: `node test/alles.mjs`. Bij wijzigingen: check toevoegen. Hij draait in een pool (zoveel tegelijk als er kernen zijn, langste eerst uit `test/.duur.json`); een test met een tijdsgrens op de wandklok, een afvalmeting of een vaste poort krijgt bovenaan `// @alleen: <waarom>` en loopt daarna alleen. `--serieel` = alles na elkaar, `--banen N`. |
 | Mocks | Een mock die makkelijker is dan de echte API verbergt bugs. De Web Audio-mock vuurt `onended` asynchroon omdat de browser dat ook doet. |
 | Browser | Chrome. Web MIDI bestaat niet in Safari — geen polyfill-pogingen. |
 | Git | Committen en pushen mag. `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud), en bestanden met " 2" in de naam zijn conflictkopieën (meestal een oude versie): die NOOIT committen. Groter werk per spoor op een eigen tak in een worktree buiten iCloud (`~/Projects/varve-stems/<spoor>`), samenvoegen in `studio/integratie`, naar main met een PR; daarna de worktree weg. Data staat niet in git en hoort in de Bureaublad-map: `media/`, `opnames/`, `patronen/`, `proef/`, `standen/`. Een server die vanuit een worktree draait schrijft patronen, de speellijst en de standen in die worktree: link `media`/`opnames` en zet de rest terug vóór je de worktree weghaalt. |
@@ -775,6 +778,12 @@ docs/
   Clay zag loops en sprongen op 23 september 2026 netjes meelopen, dus de GOP
   blijft zoals hij is. Hapert het ooit alsnog: kortere GOP bij de ingest
   (-g 30), niet slimmer springen.
+- Een OPEN Range-verzoek op `video.mp4` (`bytes=N-`) krijgt hooguit 2 MB terug
+  (`VIDEO_KNIP` in `statisch()`, 14 okt, docs/LIBRARY.md "Video en audio over
+  één host"): over HTTP/1.1 opent Chrome 6 verbindingen per host, en acht
+  video's die vooruit bufferen lieten de audiopagina's tot 10 s wachten
+  (stilte). audio.wav/stems.wav vragen altijd een gesloten bereik en blijven
+  zoals ze waren; de StreamBron haalt met `priority: 'high'`.
 - Het videobeeld gaat in drie shaderstappen: mengen (mengvorm) -> effecten
   (met het VORIGE eindbeeld voor sporen, twee buffers om de beurt) -> tonen.
   Vast op 1280×720. Het paneel is een inklapbare kolom rechts in `main`, naast
@@ -809,6 +818,10 @@ docs/
   4 GB (~6,2 uur) `ds64` wordt: RF64 (ffmpeg las 7 uur volledig). Oude koppen
   worden geklemd met een waarschuwing. Starten via de APC zet de AudioContext
   aan of weigert duidelijk; verloren videostukken gaan naar `onFout` (scherm).
+  ELKE fetch leest zijn antwoord, ook als het gelukt is (`leesWeg`,
+  src/lib/antwoord.js): een ongelezen antwoord houdt Chrome vast, en de opname
+  groeide zo 26,6 MB per minuut, ook na GC (14 okt, `tools/headless/lek.mjs`;
+  na de fix 0,2 MB/min). Geldt voor elke POST die vaker dan af en toe gaat.
 - Met video erbij: naast de WAV een set-<id>.mp4 (H.264, 1280×720, 30 fps,
   8 Mbit/s — ~3,6 GB per uur) met eigen geluidsspoor, via MediaRecorder op
   het mixer-canvas. mp4 als Chrome het kan, anders webm. Ook per seconde

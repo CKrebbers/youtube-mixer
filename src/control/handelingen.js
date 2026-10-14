@@ -22,6 +22,8 @@
  * browser weet precies waar het volgende stuk begint.
  */
 
+import { leesWeg } from '../lib/antwoord.js';
+
 export const LOG_VERSIE = 1;
 
 /** JSON met alles boven ASCII als \uXXXX. JSON.parse geeft precies hetzelfde terug. */
@@ -206,7 +208,7 @@ export class Handelingenlog {
         const res = await this.haal(`/api/handelingen/${s.id}/stuk`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ van, tekst }),
         });
-        if (res.ok) return;
+        if (res.ok) { await leesWeg(res); return; }   // ook gelukt lezen: anders blijft het in Chrome hangen
         const j = await res.json().catch(() => ({}));
         laatste = j.fout || `${res.status}`;
         if (j.vol) break;                 // een volle schijf wordt niet leger van opnieuw proberen

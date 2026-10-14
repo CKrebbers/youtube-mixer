@@ -19,9 +19,9 @@ export function opzetOpname({ engine, videoCanvas }) {
   // app.js zet window.opnemer; het videopaneel leest die om te weten of het
   // tijdens een video-opname moet doorrenderen, en uit welk venster.
 
-  // De tab sluiten of herladen tijdens een opname: eerst vragen. De audio staat
-  // grotendeels veilig op schijf, maar de laatste seconde en de video niet.
-  window.addEventListener('beforeunload', (e) => { if (opnemer.bezig) { e.preventDefault(); e.returnValue = ''; } });
+  // De tab sluiten of herladen tijdens een opname: eerst vragen (de laatste
+  // seconde en de video staan nog niet op schijf). Dat staat nu op één plek
+  // voor de hele mixer: vertrek.js, aangezet in app.js.
   const opnameKnop = document.getElementById('opname-btn');
   const opnameSoort = document.getElementById('opname-soort');
   // Je laatste keuze onthouden: gemak per browser, geen gegevens die ertoe doen.

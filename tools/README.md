@@ -86,6 +86,12 @@ lijst). Praat alleen met de server; code 1 bij een fout.
   bewaking dat het afvalvrij blijft zit niet hier maar in `test/renderblok.test.mjs`.
   Met stems (3 okt): `--stems 2,4` (standaard aan) meet ook 8 decks × 2 en × 4 stems,
   `--ref-stems` de oude kern ernaast; cijfers in `docs/AUDIOPAD.md` ("Stems").
+- `draadpool.mjs [--poort 8884] [--hangend 4]` — kan code die niet lokaal staat (iCloud) de decks
+  stilleggen? Een server uit een KOPIE van server/ en src/ in een tijdelijke map, vier FIFO's als
+  hangende modules (open() hangt zoals bij een uitgeplaatst bestand zonder netwerk), en drie pagina's
+  van een deck ervoor en erna; met de standaardpool (4) en met `UV_THREADPOOL_SIZE=16`. Tabel, exit 1 als
+  het met 16 toch hangt. VARVE.app start de server daarom met 16 (docs/WINST.md punt 4);
+  `test/draadpool.test.mjs` bewaakt beide.
 
 ## lokaal/
 Clay's eigen muziek in de library via de bestaande upload-route (kaart-contract deel 4,
@@ -107,6 +113,16 @@ docs/PATRONEN.md §8). Op een KOPIE van `patronen/<naam>.json`; schrijft nooit o
 bestand heen. Zie `patronen/LEESMIJ.md`.
 
 ## headless/
+- `lek.mjs` — lekt de opname geheugen? Een mixer met één stil nummer en een opname van `VARVE_LEK_S`
+  (standaard 300) s; elke 15 s de RSS van de renderer, aan het eind GC (hoofdthread én AudioWorklet).
+  Drukt groei per minuut af, ook na GC. `VARVE_CODE=<checkout>` meet een andere versie met hetzelfde
+  script (vóór/na). Poorten 8881/9381. 14 okt: 26,6 → 2,6 MB/min, na GC 25,8 → 0,2 (docs/WINST.md punt 1).
+- `acht-video.mjs` — verdringen de video's de audio? Acht decks die spelen, het videopaneel open, 30
+  sprongen; wachttijd van de audioverzoeken, sprong → pagina, gat per deck. Media: `VARVE_ACHT_MEDIA=<map
+  met library.db>` (database gekopieerd, nummers gelinkt, er wordt niets in geschreven), anders acht
+  synthetische nummers via de upload-route (duurt). Chrome MET H.264 (`VARVE_CHROME`, Chrome for
+  Testing; de Chromium van Playwright speelt geen mp4). `VARVE_ACHT_VIDEO=open|dicht|geen`,
+  `VARVE_CODE`. Poorten 8883/9383. Cijfers: docs/LIBRARY.md "Video en audio over één host".
 - `kaart.mjs [uitmap]` — de tab kaart (docs/LIBRARY.md "De kaart-tab") op de NEP-server `kaart-nep.mjs`
   (de kaart-API in het geheugen op `test/fixtures/varve-kaart.klein.json`, de rest doorgegeven aan een
   eigen echte server op 8815; nep op 8816): voor ontwikkeling aan de UI zonder de serverkant. 65 checks.

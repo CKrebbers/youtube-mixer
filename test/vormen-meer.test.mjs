@@ -2,6 +2,7 @@
 // Zonder browser: een nep-canvas dat tekenaanroepen telt, en de systemen
 // direct aangeroepen met een zelfgebouwd g-object (zoals VormLaag.zetSysteem).
 // Draai met: node test/vormen-meer.test.mjs
+// @alleen: tijdsgrens per stap (ms per stap) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
 import { readFileSync } from 'node:fs';
 
 const { SYSTEMEN_MEER } = await import('../src/vormen/systemen-meer.js');
