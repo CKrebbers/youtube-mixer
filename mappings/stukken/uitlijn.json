@@ -1,8 +1,9 @@
 {
   "schema": 1,
   "stuk": "uitlijn",
-  "titel": "Acht fasemeters op de device knobs",
-  "_uitleg": "Werkruimte S1 (docs/werkruimte/S1.md, WERKRUIMTE.md B4). Alleen op vrije sleutels van mappings/apc40mk2.json en in het nieuwe mapje device.uitlijn. Zolang S3 de stukken niet laadt: alleen met ?uitlijn=1 (src/ui/aanhakers/precisie.js). Komt BIJ de mapping (vervangFragment stuk:uitlijn), nooit in je eigen bewaarde mapping; een eigen regel op dezelfde plek wint.",
+  "titel": "Voorbeeld: acht fasemeters op de device knobs",
+  "voorbeeld": true,
+  "_uitleg": "VOORBEELD van spoor S1, geen vaste indeling: Clay maakt zelf welke knop wat doet (docs/verslagen/2026-10-14/werk-S1.md, \"Zelf invullen\"). Kopieer dit bestand of pas het aan; alleen data, geen code. Werkruimte S1 (docs/werkruimte/S1.md, WERKRUIMTE.md B4). Alleen op vrije sleutels van mappings/apc40mk2.json en in het nieuwe mapje device.uitlijn. Zolang S3 de stukken niet laadt: alleen met ?uitlijn=1 (src/ui/aanhakers/precisie.js). Komt BIJ de mapping (vervangFragment stuk:uitlijn), nooit in je eigen bewaarde mapping; een eigen regel op dezelfde plek wint.",
   "mapjes": {
     "nieuw": {
       "apc40mk2.device.uitlijn": {

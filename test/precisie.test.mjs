@@ -406,6 +406,9 @@ console.log('\nhet stuk mappings/stukken/uitlijn.json');
   ok('formaat B4: schema 1, stuk uitlijn, mapje device.uitlijn op ⇧ Lock, groen',
     stuk.schema === 1 && stuk.stuk === 'uitlijn' && stuk.mapjes.nieuw['apc40mk2.device.uitlijn'].kleur === 'groen'
     && stuk.mapjes.nieuw['apc40mk2.device.uitlijn'].kiesknop.in === 'note:0:63' && stuk.mapjes.nieuw['apc40mk2.device.uitlijn'].kiesknop.shift === true);
+  // Afspraak met Clay (14 okt): hij maakt de knoppenverdeling zelf; wat wij leveren is een voorbeeld.
+  ok('het stuk is gemarkeerd als voorbeeld (voorbeeld: true, titel en _uitleg zeggen het)',
+    stuk.voorbeeld === true && /^Voorbeeld/.test(stuk.titel) && /^VOORBEELD/.test(stuk._uitleg));
   ok('16 knopregels endless met takeover 1, knop k = track k (⇧ = fijn)', [1, 2, 3, 4, 5, 6, 7, 8].every((k) =>
     regels.some((r) => r.in === `cc:0:${15 + k}` && r.laag === 'device.uitlijn' && !r.shift && r.action === `track.${k}.phase.offset` && r.mode === 'endless' && r.takeover === 1)
     && regels.some((r) => r.in === `cc:0:${15 + k}` && r.laag === 'device.uitlijn' && r.shift && r.action === `track.${k}.phase.offset.fine` && r.mode === 'endless' && r.takeover === 1)));

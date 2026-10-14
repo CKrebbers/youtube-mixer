@@ -859,6 +859,8 @@ sync-drempel), `mappings/stukken/uitlijn.json` (nieuw), `test/precisie.test.mjs`
   opdracht hierboven; A6 zei het omgekeerd). Een ander deck controleren zet hem uit.
 - De headless meting rendert offline (OfflineAudioContext) met per deck een eigen kanaal, en meet
   de sprong als de grootste tweede afgeleide tegen dezelfde muziek zonder duwen.
+- Het stuk `uitlijn.json` is een VOORBEELD (`"voorbeeld": true`, afspraak met Clay 14 okt: hij maakt
+  de knoppenverdeling zelf); hoe hij het invult: `docs/verslagen/2026-10-14/werk-S1.md` "Zelf invullen".
 
 ---
 
