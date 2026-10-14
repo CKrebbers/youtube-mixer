@@ -1,7 +1,7 @@
 import { readFile, writeFile, rename, mkdir, readdir, stat, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { normaliseerPlan, herstelSecties } from '../src/plan/plan-model.js';
+import { normaliseerPlan, herstelVelden } from '../src/plan/plan-model.js';
 
 /**
  * Setplannen op schijf: plannen/<naam>.json. Eén bestand per plan, zodat Claude
@@ -79,7 +79,7 @@ export class Plannen {
       return { code: 400, antwoord: { fout: 'geen enkele bruikbare stap', fouten } };
     }
     if (nu?.plan) {
-      const h = herstelSecties(nu.plan, invoer, plan, { kent });
+      const h = herstelVelden(nu.plan, invoer, plan, { kent });
       plan = h.plan;
       fouten = [...fouten, ...h.hersteld];
     }
