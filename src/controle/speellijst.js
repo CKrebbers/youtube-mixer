@@ -248,11 +248,30 @@ export const SPEELLIJST = [
   ] },
 
   // ---- Avond 2: spelen en programmeren (met de hub) -------------------------------
-  // Afmaken (14 okt): eerst twee proeven van de hub zelf, die de apparaten alleen openen als de hub NIET draait.
+  // Hub-middag (11 okt, tak visie/handen, docs/HANDEN.md §2): de F0-proef en de proef speelapparaten van
+  // de AV-app-hub als eigen dagdeel VÓÓR avond 2, overdag en zonder muziek. Ze kunnen niet naast een
+  // draaiende hub of een Varve-tab met de APC, en avond 2 kan niet zonder hub: dus eerst dit blok. Het
+  // draaiboek blijft in de hub-repo (docs/HARDWARE-AVOND.md blok 1, 2, 8 en 6); hier alleen afvinken.
+  { id: 'hub-f0', titel: 'Avond 2 · Hub-middag: de F0-proef (zonder Varve)', minuten: 80, punten: [
+    { id: 'hf-dicht', doe: 'Overdag, zonder muziek. Sluit het mixer-tabblad (en elk tabblad van Varve of av-kern zonder ?hub=), Logic en Ableton. Er draait geen hub: in Terminal geeft lsof -i :7700 niets terug. De APC40 rechtstreeks in de Mac; Maschine, LPD8 en Xboard49 via de PD-hub.',
+      let: 'Praat er nu niets met de APC? Anders vechten straks de lampjes en weet je niet wat de hub doet. (HA2)' },
+    { id: 'hf-doctor', doe: 'In de map AV-app-hub: git pull, npm install, en dan node src/cli.js doctor.',
+      let: 'MIDI werkt, de APC40 en de LPD8 gevonden, onder Speelapparaten de Xboard49 en de Maschine (17cc:1140), poort 7700 vrij, Maschine 2 en Controller Editor dicht?' },
+    { id: 'hf-proef', doe: 'node src/cli.js proef: de F0-proef, 26 stappen, 35–45 min (Enter = klopt, n + notitie = klopt niet, o = overslaan; docs/HARDWARE-AVOND.md blok 2).',
+      let: 'Krijgen de vijf open vragen van de hub een antwoord: V1 nemen de ringen de waarde over, V2 knipperen op de klok, V3 een pad vasthouden, V4 faderstanden bij de start, V5 welke LPD8? Doet Bank vast + Track Select 3 (stap 12) wat de proef zegt?' },
+    { id: 'hf-speel', doe: 'node src/cli.js proef speelapparaten: 21 stappen, 25–30 min (docs/HARDWARE-AVOND.md blok 8). Bij de Xboard49 draai je knop 1 tot en met 16 om de beurt een stukje.',
+      let: 'Leert de proef de CC\'s van de 16 Xboard-knoppen (Varve gaat nu uit van een aanname: 21–28 en 31–38)? Welke Maschine-pad is linksboven? Vraagt macOS om Invoermonitoring? Branden de lampjes, zie je beide schermen?' },
+    { id: 'hf-push', doe: 'In de map AV-app-hub: git add proef/, git add lpd8-profiel.json en apart git add xboard49-profiel.json (elk alleen als hij er is; samen in één git add faalt alles als er één ontbreekt), git status, git commit -m "proef f0-hardware" en git push (blok 6).',
+      let: 'Staat er onder "Changes to be committed" minstens één proef/…jsonl? Daarvan maakt Claude golden tests, en de echte Xboard-CC\'s gaan naar mappings/xboard49.json.' },
+    { id: 'hf-check', doe: 'npm run check -- studio in de map AV-app-hub, met dezelfde stekkers erin. Als het avondpakket er al is: de twee alleen-lezen-commando\'s van 7a in dezelfde minuut.',
+      let: 'Alleen ✓ en !, geen ✗? Dan begint avond 2 met het blok Opstarten met de hub. (HA2, HA3)' },
+  ] },
+  // Afmaken (14 okt): twee proeven van de hub zelf, die de apparaten alleen openen als de hub NIET draait.
+  // Ze zitten ook in de hub-middag hierboven (hf-proef stap 14, hf-speel ms-scherm): dan alleen het antwoord overnemen.
   { id: 'ga-proef', titel: 'Avond 2 · Vóór de hub: proef V1 en de schermen', minuten: 10, punten: [
-    { id: 'ga-v1', doe: 'Hub uit, mixer-tabblad dicht, APC aangesloten. In Terminal in de map AV-app-hub: node src/cli.js proef. Sla met o + Enter door tot stap 14 ("Nemen de knoppen een waarde van de hub over? (V1)"), draai twee knoppen een klein tikje, daarna Ctrl-C.',
+    { id: 'ga-v1', doe: 'Deed je de hub-middag al, neem dan het antwoord van stap 14 (V1) van hf-proef over. Anders: hub uit, mixer-tabblad dicht, APC aangesloten. In Terminal in de map AV-app-hub: node src/cli.js proef. Sla met o + Enter door tot stap 14 ("Nemen de knoppen een waarde van de hub over? (V1)"), draai twee knoppen een klein tikje, daarna Ctrl-C.',
       let: 'Wat zegt de proef: telt de knop verder vanaf de ring die de hub zette (ja of nee)? Dat beslist of de draaiknoppen endless blijven. (GA17)' },
-    { id: 'ga-msscherm', doe: 'Nog steeds zonder hub, Maschine aangesloten: node src/cli.js proef speelapparaten, en loop de stap "Maschine: de twee schermen" (ms-scherm); de rest met o + Enter.',
+    { id: 'ga-msscherm', doe: 'Deed je de hub-middag al, neem dan de tijd van de stap ms-scherm uit hf-speel over. Anders, nog steeds zonder hub, Maschine aangesloten: node src/cli.js proef speelapparaten, en loop de stap "Maschine: de twee schermen" (ms-scherm); de rest met o + Enter.',
       let: 'Hoe lang duurt het schrijven van twee volle schermen? Veel meer dan ±20 ms betekent dat een druk scherm de pads kan vertragen: schrijf het getal in de notitie.' },
   ] },
   { id: 'hub', titel: 'Avond 2 · Opstarten met de hub', minuten: 5, punten: [

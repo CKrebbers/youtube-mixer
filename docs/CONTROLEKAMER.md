@@ -74,6 +74,7 @@ De Controlekamer kent geen avonden: de bloktitel groepeert ("Avond 1 · …").
 | Avond 1 · Beatgrid | 9 | 18 | BEATGRID §10–11: oordeel, streepjes, controle (Loving arms, Ciel), jungle-mix vóór en na ↻, klik in de golfvorm, ↶, vastzetten | S21, S20 |
 | Avond 1 · Stems | 9 | 14 | STEMS §5: zang weg, grid-modus stems, filter/echo/galm/toon per stem, alleen de bas in de koptelefoon, splitsen tijdens het mixen | N1, N2, N3, S5, S6, S23, S24 |
 | Avond 1 · Master en effecten | 6 | 12 | MASTER (mapje master, limiter), EFFECTEN (sjablonen, distortion, vertraging) | S9, S10, S11, S13 |
+| Avond 2 · Hub-middag: de F0-proef (zonder Varve) | 6 | 80 | sinds 11 okt (`visie/handen`, docs/HANDEN.md §2): overdag, zonder muziek, vóór de avond; `doctor`, F0-proef, proef speelapparaten, pushen, `check -- studio` in AV-app-hub (draaiboek: hub `docs/HARDWARE-AVOND.md` blok 1, 2, 8, 6) | HA2, HA3 |
 | Avond 2 · Opstarten met de hub | 2 | 5 | `npm start -- studio` in AV-app-hub, LPD8 K1 | O1 |
 | Avond 2 · Spelen | 15 | 30 | INSTRUMENTEN, MASCHINE, STUDIO S3: FM op de Xboard eerst in de koptelefoon, aanslag, toets → geluid, Maschine (wiel, pads, kleuren, draaiknoppen, schermen), drums, Schaal, mapje inst | S4, S7, S8, S14, S18, S19 |
 | Avond 2 · Patronen | 8 | 22 | PATRONEN §7, MASCHINE §5, STUDIO S4: stappen op de Maschine, baslijn van de Xboard, starten vanaf de APC, mixen, sprong, herladen | S15, S16, S17 |
@@ -85,9 +86,14 @@ tabel staat (luisteren, secties, de Maschine als DJ-bediening, beeld):
 **Avond 1** (mixen): 76 punten, ~2,5 uur (149 min), zonder hub (de mixer opent de APC
 zelf). De **kern** vooraan is ~45 min (26 punten, 47 min): opstarten, luisteren, draaien
 op de APC, koptelefoon, keylock. De rest van avond 1 als er tijd en zin is.
-**Avond 2** (spelen en programmeren): 69 punten, ~2,7 uur (162 min), met de hub (de
+**Avond 2** (spelen en programmeren): 80 punten, ~4,3 uur (260 min), met de hub (de
 Maschine kan alleen via de hub). Sinds 10 okt met het blok crossover (5 punten, 8 min, PR #26;
 VRAGEN CX4: wordt er pas na avond 2 gemerged, dan gaat het naar avond 3).
+Sinds 11 okt (`visie/handen`) staat de **hub-middag** als eerste blok van avond 2 (6 punten,
+80 min): eigenlijk een eigen dagdeel ("2a", overdag), want de F0-proef kan niet naast een draaiende
+hub of een Varve-tab met de APC. Avond 2 zelf ("2b", 74 punten, 180 min) begint daarna met
+`npm run check -- studio`. Het blok `ga-proef` (14 okt) vraagt twee antwoorden die de hub-middag al
+geeft; wie die deed, neemt ze over.
 **Avond 3** (beeld, met de Omarchy-pc): 6 punten, ~25 min.
 **Eerder werk**: 26 punten, ~45 min.
 

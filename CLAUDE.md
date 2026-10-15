@@ -233,6 +233,8 @@ src/
                     paneel.js, vrij.js, kaart.js  werk.html: de vakken, het vrije paneel en de bouwstenen, de kaart (S7); koppelen en ✎ (S8)
                     schrijver.js    de iPad/iPhone: POST invoke (seq, één herhaling), ping met ?k= zolang iets vastzit, wie/koppel (S8)
                     uitvoer.js      in de mixer: de Uitvoerder beslist (panelen van DAT scherm, waaromNietOpScherm), loslaten, bron in het log (S8)
+  handen/           kaart.js        de handenkaart: wat elke control doet, vrije plekken, voorstel per nieuwe actie (docs/HANDEN.md). Puur
+                    telling.js      de telling van de handelingenlogs: normaliseren, groepen, top. Puur. apc-controls.js: de 148 APC-controls van de hub (kopie)
   auto/             planner.js      de auto-DJ, puur: welk fragment, welke overgang (bewakers), wanneer (frasegrens), de curves
                     automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
@@ -332,6 +334,8 @@ mappings/
                     uitlijn.json = mapje device.uitlijn op ⇧ Lock, acht fasemeters (S1; ook los met ?uitlijn=1)
   xboard49.json     E-MU Xboard49: knop 1–8 -> instrument, 9–16 -> FX, schuif -> fader van de speeltrack (AANNAME, te controleren met een proef)
   maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn), transport van de patronen ({plek}); laag pagina.strip / pagina.rack = de knoppagina's van de focus-track
+handen/
+  voorstel.json     per actie zonder plek op een controller het voorstel of "bewust geen" (docs/HANDEN.md); de mixer leest het niet
 racks/
   sjablonen.json    kant-en-klare racks voor elk nummer (data, geen code)
 plannen/
@@ -446,6 +450,7 @@ test/
   paneel-schrijf.test.mjs  werkruimte S8: de schrijfweg (model, Uitvoerder, de bron in het log, PaneelSchrijf met nepklok, een eigen server
                     met nep-mixer nep-mixer.mjs (geen test zelf): 404/401/403, invoke -> read, 429, seq, los binnen 1,5 s), de tegel
   inrichten.test.mjs  werkruimte S8: ✎ inrichten (bewerkingen, toewijzen: het model beslist, de zoeker, de Inrichter, terug met 409 op een eigen server)
+  handen.test.mjs   de handenkaart: controls, register, vrije plekken (exact), voorstel/uitzonderingen, puur, de telling, blok hub-f0, VRAGEN HA
   gezondheid.test.mjs  src/ui/gezondheid.js: suspend, resume bij invoer, klok stil, geen alarm vóór de start
   meldingen.test.mjs  de meldingen met een sleutel (één die meegroeit) op een nagebouwd document
   notatie.test.mjs, server-lus.test.mjs, node-versie.test.mjs  src/lib/notatie.js; de herstartlus met een nep-node; de Node-waarschuwing van alles.mjs
