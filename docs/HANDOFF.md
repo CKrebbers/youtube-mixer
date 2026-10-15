@@ -1,6 +1,16 @@
 # Overdracht — waar we staan (15 oktober 2026)
 
-## 16 OKT (nog later): AR21, VARVE.APP START DE HUB ALLEEN ALS DE OPSTELLING HET ZEGT (tak `studio/ar21`)
+## 16 OKT (avond): ÉÉN CONTROLEKAMER, EN DE TEGEL VERSIE (tak `studio/controle-een`)
+
+Clay: "waarom zijn er twee controle kamers? laten we die zo goed mogelijk samenvoegen" en "hoe kan ik snel en
+makkelijk zien dat ik in de juist laatste versie zit?". Het artifact "Varve Controlekamer" (claude.ai, 15 okt,
+236 punten, eigen opslag, leeg) is opgegaan in `/controle`: per deel, één punt tegelijk, alleen de kern, het
+verslag, de hulp (docs/CONTROLEKAMER.md bovenaan). Nieuwe tegel **Versie** (eerste tegel): groen = de server
+draait wat op schijf staat = main = GitHub; anders staat er wat eerst moet. Nieuw punt `ver-tegel` in Vooraf, na
+ar-app. Niet getest op de Mac: git op macOS en GitHub vanaf de Mac (hier: een kale repo als "GitHub" en de
+proxy van deze container).
+
+## 16 OKT (nog later): AR21, VARVE.APP START DE HUB ALLEEN ALS DE OPSTELLING HET ZEGT (tak `studio/ar21`, nu in `studio/controle-een`)
 
 `tools/varve-app/hub-nodig.mjs` vraagt `GET /api/standen/actief` en zegt `ja`/`nee …`/`onbekend …` met dezelfde regel
 als de knop "mixer openen" (`mixerAdres`). VARVE.app start de hub alleen bij `ja`; zonder hub haalt hij `?hub=` van een

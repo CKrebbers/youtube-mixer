@@ -211,6 +211,8 @@ src/
   controle/         controle.js     de Controlekamer: tegels (server, ingest, mixer via de Web Lock, APC via het kanaal), speellijst
                     speellijst.js   de punten van een proefsessie, in blokken. Puur data; de stand staat in proef/sessie.json
                     backup-tegel.js de tegel "Backup" (laatste kopie, of de fout). Puur.
+                    versie-tegel.js de tegel "Versie": draait = op schijf = main = GitHub? Anders wat eerst moet. Puur.
+                    speellijst-weergave.js de speellijst per deel: één punt tegelijk, kern, verslag (het oude artifact). Puur.
                     server-tegel.js de tegel "Server": draait hij, de herstarts van de lus (AR9, uit /api/leeft), de secties. Puur.
                     stand-tegel.js  de tegel "Opstelling", het adres van "mixer openen", de tekst onder de kiezer (docs/STANDEN.md). Puur.
                     stand-bewerker.js een opstelling instellen zonder JSON: keuzelijsten → stand. Puur.
@@ -283,6 +285,7 @@ server/             draait apart: `node server/index.js`
                     lezen uit het geheugen zolang stat niets nieuws zegt, één lees per pad en hooguit 2 tegelijk voor de hele
                     server (MAX_DRADEN: iCloud mag de threadpool niet vullen, de andere 2 draden blijven voor de audio)
   poort.js          poortBezet(poort): vóór alles kijken of de poort vrij is (AR20); index.js stopt dan met exit 3 zonder iets aan te raken
+  versie.js         welke commit draait, staat er op schijf, heeft main op GitHub (git in een kindproces, caches 15 s / 10 min); GET /api/versie
   lus.js            leesLus(env): wat de herstartlus meegaf (VARVE_LUS_SINDS/_AANTAL/_HERSTARTS) voor GET /api/leeft (AR9). Puur
   uitzend.js        uitzenden stap 1: een UITGANG, geen bron. Volgt de opname die al groeit en duwt hem via ffmpeg naar een LOKAAL doel
                     (bestand, rtmp/udp op 127.0.0.1); slot tegen elke dienst; nog geen route of knop (docs/UITZENDEN.md)
@@ -468,6 +471,7 @@ test/
   server-poort.test.mjs  AR20: een tweede server op een bezette poort stopt met exit 3 vóór hij .bezig-*, de stems-rij of library.db aanraakt
   herstart.test.mjs AR9: leesLus, de herstartregel en de tegel Server (puur), en /api/leeft van een echte server met de omgeving van de lus
   notatie.test.mjs, server-lus.test.mjs, node-versie.test.mjs  src/lib/notatie.js; de herstartlus met een nep-node (ook de wachter: SIGSTOP); de Node-waarschuwing van alles.mjs
+  versie.test.mjs, speellijst-weergave.test.mjs  de tegel Versie op echte git-mappen en /api/versie; de speellijst per deel (één punt, kern, verslag)
   hub-nodig.test.mjs  AR21: VARVE.app start de hub alleen met hub.mixerVia (de regel van mixer openen), een nep-server en de AppleScript-tekst
   alles.mjs         alle tests in één keer met overzicht (een andere Node dan .node-version: waarschuwing boven en onder, niets overgeslagen)
 docs/

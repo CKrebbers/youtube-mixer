@@ -19,6 +19,7 @@ import { sectieSamenvatting, SECTIE_VERSIE } from './secties.js';
 import { kiesMedia, iCloudReden, VERHUISD_BESTAND, isTestserver } from './media-plek.js';
 import { poortBezet } from './poort.js';
 import { leesLus } from './lus.js';
+import { Versie } from './versie.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
@@ -114,6 +115,10 @@ const SERVER_RUN = randomUUID();
 // Wanneer deze server startte, en wat de herstartlus hem meegaf (AR9): één keer gelezen, daarna uit het geheugen.
 const GESTART = Date.now();
 const LUS = leesLus();
+// Welke commit draait er (de tegel Versie, server/versie.js): git in een kindproces, meteen bij het starten,
+// zodat "draait" de code van NU is en niet die van na een latere git pull. Wacht nergens op.
+const versie = new Versie({ map: WORTEL });
+versie.start();
 /*
  * Stems (docs/STEMS.md): een eigen rij naast de ingest, ook één tegelijk. De
  * ingest-rij wacht er nooit op: een nummer is speelbaar zodra audio.wav er
@@ -1187,6 +1192,13 @@ const server = createServer(async (req, res) => {
     if (pad === '/api/leeft') return json(res, 200, { ok: true, server: SERVER_RUN, pid: process.pid, gestart: GESTART, lus: LUS });
 
     // De splitter erbij: { ok, reden?, python? } (plus apparaat en versies als hij er is).
+    // Welke versie draait er, staat er nieuwere op schijf, en is GitHub verder? (server/versie.js.) ?github=0 = niet
+    // naar GitHub (de laatst bekende blijft erin), ?vers=1 = niet uit het geheugen.
+    if (pad === '/api/versie') {
+      if (req.method !== 'GET') return json(res, 405, { fout: 'alleen GET' });
+      return json(res, 200, await versie.stand({ github: url.searchParams.get('github') !== '0', vers: url.searchParams.get('vers') === '1' }));
+    }
+
     if (pad === '/api/tooling') {
       const [t, s, z] = await Promise.all([controleerTooling(), splitter.controleer({ hercontrole: true }),
         tellenzoeker.controleer({ hercontrole: true })]);
