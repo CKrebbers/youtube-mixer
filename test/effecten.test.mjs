@@ -179,8 +179,20 @@ const NIEUW = M.MEER_EFFECTEN.map((e) => e.id);
 
 console.log('contract');
 // Daarachter de zeven van spoor S10 (fx-s10.js): getoetst in test/effecten-s10.test.mjs.
-ok(`tien effecten uit de filter app, achter de zeven van fx.js (${NIEUW.join(', ')})`,
-  NIEUW.length === 10 && EFFECTEN.length >= 17 && EFFECTEN.slice(7, 17).every((e, k) => e === M.MEER_EFFECTEN[k]));
+// Op id, niet op hun plek in de lijst: een effect erbij in fx.js mag deze test niet breken. Wel de
+// volgorde, want die is die van de kiezer en van fx.next/prev: eerst die van fx.js zelf, dan de tien
+// aaneengesloten in hun eigen volgorde, dan de rest (S10).
+const plekVan = (e) => EFFECTEN.findIndex((x) => x.id === e.id);
+const plekken = M.MEER_EFFECTEN.map(plekVan);
+const S10_IDS = new Set((await import('../src/engine/fx-s10.js')).S10_EFFECTEN.map((e) => e.id));
+const eigen = EFFECTEN.map((e, i) => [e, i]).filter(([e]) => !NIEUW.includes(e.id) && !S10_IDS.has(e.id)).map(([, i]) => i);
+ok(`tien effecten uit de filter app (${NIEUW.join(', ')})`, NIEUW.length === 10);
+ok('elk staat in EFFECTEN, op id en als hetzelfde object (effectVan vindt het)',
+  M.MEER_EFFECTEN.every((e, k) => plekken[k] >= 0 && EFFECTEN[plekken[k]] === e && effectVan(e.id) === e),
+  M.MEER_EFFECTEN.filter((e, k) => plekken[k] < 0).map((e) => e.id).join(', '));
+ok('aaneengesloten en in hun eigen volgorde (de kiezer)', plekken.every((p, k) => k === 0 || p === plekken[k - 1] + 1));
+ok(`achter de ${eigen.length} van fx.js zelf`, eigen.length >= 1 && eigen.every((i) => i < plekken[0]));
+ok('vóór de effecten van S10', EFFECTEN.every((e, i) => !S10_IDS.has(e.id) || i > plekken[plekken.length - 1]));
 ok('ids uniek over alle effecten, ook met de oude', new Set(EFFECTEN.map((e) => e.id)).size === EFFECTEN.length);
 for (const e of M.MEER_EFFECTEN) {
   const goed = typeof e.naam === 'string' && e.naam && Array.isArray(e.params) && e.params.length >= 1 && e.params.length <= 8

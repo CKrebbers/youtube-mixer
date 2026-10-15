@@ -1,4 +1,5 @@
 import { ToonKaart, camelot, kortNaam, volleNaam, transponeer, isMineur, WIJZER } from '../engine/toonsoort.js';
+import { komma } from '../lib/notatie.js';
 
 /**
  * De toonsoort op het scherm (docs/TOONSOORT.md §5, besluiten T2–T5). Puur
@@ -25,7 +26,6 @@ const MIN = '−';
 export const centTekst = (c) => `${Math.round(c) < 0 ? MIN : '+'}${Math.abs(Math.round(c))} ct`;
 /** `+1`, `−2`, of leeg bij 0. */
 export const verschuivingTekst = (n) => (n > 0 ? `+${n}` : n < 0 ? `${MIN}${-n}` : '');
-const komma = (x) => x.toFixed(2).replace('.', ',');
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const halveTonen = (n) => `${Math.abs(n)} halve ${Math.abs(n) === 1 ? 'toon' : 'tonen'}`;
 
@@ -53,7 +53,7 @@ export function toonTitel(t) {
     regels.push(`geen duidelijke toonsoort (best passend: ${kandidaten(t.k, t.tweede)})`);
   } else {
     regels.push(`je hoort ${t.camelot} ${t.naam}`
-      + (t.soort === 'onzeker' ? ` — onzeker${Number.isFinite(t.zekerheid) ? ` (zekerheid ${komma(t.zekerheid)})` : ''}`
+      + (t.soort === 'onzeker' ? ` — onzeker${Number.isFinite(t.zekerheid) ? ` (zekerheid ${komma(t.zekerheid, 2)})` : ''}`
         + (t.tweede !== null && t.tweede !== t.k ? `, of ${kortNaam(t.tweede)}` : '') : ''));
   }
   if (t.k !== null) {
@@ -124,7 +124,7 @@ export function libraryToon(json, duur = null) {
   } else {
     uit = { tekst: `${camelot(h.k)} ${kortNaam(h.k)}${h.soort === 'onzeker' ? '?' : ''}${h.anderen ? ` +${h.anderen}` : ''}`, soort: h.soort, k: h.k };
     regels.push(`${camelot(h.k)} ${volleNaam(h.k)}`
-      + (h.soort === 'onzeker' && Number.isFinite(h.zekerheid) ? ` — onzeker (zekerheid ${komma(h.zekerheid)})` : '')
+      + (h.soort === 'onzeker' && Number.isFinite(h.zekerheid) ? ` — onzeker (zekerheid ${komma(h.zekerheid, 2)})` : '')
       + (h.soort === 'onzeker' && h.tweede !== null && h.tweede !== h.k ? `, of ${kortNaam(h.tweede)}` : '')
       + (kaart.aantalStukken > 1 ? `, ${Math.round(h.aandeel * 100)}% van de tijd` : ''));
     if (Math.abs(h.stemming) >= CENT_TONEN) regels.push(`stemming ${centTekst(h.stemming)}`);
@@ -134,7 +134,7 @@ export function libraryToon(json, duur = null) {
     const lijst = stukken.slice(0, 24).map((s, i) => {
       const t = kaart.stukAt(s.van);
       const naam = t.k === null ? (Number.isFinite(t.zekerheid) ? 'stilte' : 'geen') : `${camelot(t.k)} ${kortNaam(t.k)}`;
-      const z = Number.isFinite(t.zekerheid) ? ` (${komma(t.zekerheid)})` : '';
+      const z = Number.isFinite(t.zekerheid) ? ` (${komma(t.zekerheid, 2)})` : '';
       return `${mmss(i === 0 ? 0 : s.van)}  ${t.soort === 'geen' && t.k !== null ? `~ ${naam}` : naam}${z}`;
     });
     if (stukken.length > 24) lijst.push(`… en nog ${stukken.length - 24}`);

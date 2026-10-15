@@ -1,4 +1,5 @@
 import { clamp, expMap, dbToGain } from '../lib/emitter.js';
+import { komma, hz, pct, ms, teken, db } from '../lib/notatie.js';
 import { startDrempel, zetHellingen } from './overgang.js';
 import { Lfo, lfoDelingVan, vormVan, LFO_VORMEN } from './fx-lfo.js';
 
@@ -26,19 +27,13 @@ import { Lfo, lfoDelingVan, vormVan, LFO_VORMEN } from './fx-lfo.js';
 const TAU = 0.02;
 /** Twee koppen of twee vormen: zo lang vloeien ze in elkaar over (na startDrempel). */
 const KOP_FADE = 0.05;
-/** Een worklet die later binnenkomt, vloeit zo lang in. */
-const WORKLET_FADE = 0.05;
+/** Een worklet die later binnenkomt, vloeit zo lang in (ook in fx-s10.js: één getal). */
+export const WORKLET_FADE = 0.05;
 
 // ---- eenheden ----------------------------------------------------------------
-// Zelfde stijl als fx.js: komma, kHz boven 1000, een echte min.
+// Zelfde stijl als fx.js: komma, kHz boven 1000, een echte min (src/lib/notatie.js).
 
-const komma = (x, n) => x.toFixed(n).replace('.', ',');
-const hz = (f) => (f >= 1000 ? `${komma(f / 1000, f >= 10000 ? 0 : 1)} kHz` : `${Math.round(f)} Hz`);
 const hzLfo = (f) => (f < 10 ? `${komma(f, 2)} Hz` : `${komma(f, 1)} Hz`);
-const pct = (v) => `${Math.round(v * 100)}%`;
-const ms = (s) => (s < 0.1 ? `${komma(s * 1000, 1)} ms` : `${Math.round(s * 1000)} ms`);
-const teken = (x) => (x > 0 ? '+' : x < 0 ? '−' : '');
-const db = (d) => `${teken(Math.round(d * 10))}${komma(Math.abs(d), 1)} dB`;
 /** De andere parameter van hetzelfde effect, voor eenheden die ervan afhangen. */
 const andere = (lees, p, std) => clamp(lees?.(p) ?? std);
 export const mengNaar = (doel, t, droog, nat, now) => {

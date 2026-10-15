@@ -1,4 +1,5 @@
 import { clamp, expMap } from '../../lib/emitter.js';
+import { komma } from '../../lib/notatie.js';
 import { zetHellingen, startDrempel } from '../overgang.js';
 import { stemming, STANDAARD_TOON } from '../klankschaal.js';
 import { KLANKEN } from '../klankschaal-kern.js';
@@ -42,7 +43,6 @@ const VOORDEMP = 0.02;
 const BUIG = 200;
 const WRIJF_TOEREN = 1.1;
 
-const komma = (x, d = 1) => x.toFixed(d).replace('.', ',');
 const pct = (v) => `${Math.round(clamp(v) * 100)}%`;
 const tijd = (s) => (s < 1 ? `${Math.round(s * 1000)} ms` : `${komma(s, s < 10 ? 1 : 0)} s`);
 
