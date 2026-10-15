@@ -1,0 +1,5 @@
+/sys/class/power_supply/hidpp_battery_0/uevent:POWER_SUPPLY_NAME=hidpp_battery_0
+/sys/class/power_supply/hidpp_battery_0/uevent:POWER_SUPPLY_TYPE=Battery
+/sys/class/power_supply/hidpp_battery_0/uevent:POWER_SUPPLY_SCOPE=Device
+/sys/class/power_supply/hidpp_battery_0/uevent:POWER_SUPPLY_STATUS=Discharging
+/sys/class/power_supply/hidpp_battery_0/uevent:POWER_SUPPLY_CAPACITY=55

@@ -1,0 +1,9 @@
+4096 /tmp/varve-linux/media/backups/library-2026-10-15_08-00-00.db
+480 /tmp/varve-linux/media/nr00_test/onset.bin
+960 /tmp/varve-linux/media/nr00_test/peaks.bin
+2048 /tmp/varve-linux/media/nr00_test/video.mp4
+4800 /tmp/varve-linux/media/nr00_test/audio.wav
+960 /tmp/varve-linux/media/nr01_test/peaks.bin
+0 /tmp/varve-linux/media/nr01_test/audio.wav
+9600 /tmp/varve-linux/media/lokaal-0a1b2c3d4e5f/audio.wav
+4096 /tmp/varve-linux/media/library.db

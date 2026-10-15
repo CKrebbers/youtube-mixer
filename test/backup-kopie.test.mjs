@@ -30,8 +30,13 @@ const staat = join(varve, 'staat');
 const bin = join(tmp, 'bin');
 const rsyncLog = join(tmp, 'rsync.log');
 
-/** Alleen wat de tools nodig hebben: geen VARVE_* van buiten, HOME = de tijdelijke map. */
-const env = (extra = {}) => ({ PATH: process.env.PATH, HOME: thuis, TMPDIR: process.env.TMPDIR || tmpdir(), ...extra });
+/**
+ * Alleen wat de tools nodig hebben: geen VARVE_* van buiten, HOME = de tijdelijke map.
+ * NODE_NO_WARNINGS: Node 22 schrijft "ExperimentalWarning: SQLite …" op stderr (Node 26 niet),
+ * en `uit` telt stdout + stderr: zonder dit was "één regel" op de pc rood (spoor C2). De tools
+ * zelf geven geen Node-waarschuwingen (geen emitWarning); groep "Node-waarschuwingen" toetst het.
+ */
+const env = (extra = {}) => ({ PATH: process.env.PATH, HOME: thuis, TMPDIR: process.env.TMPDIR || tmpdir(), NODE_NO_WARNINGS: '1', ...extra });
 const draai = (script, args, extra) => {
   const r = spawnSync(process.execPath, [join(WORTEL, 'tools/backup', script), ...args], { encoding: 'utf8', env: env(extra), cwd: WORTEL });
   return { code: r.status, uit: (r.stdout || '') + (r.stderr || '') };
@@ -125,6 +130,12 @@ try {
     ok('geen library in de bron: exit 2', g.code === 2 && /geen library/.test(g.uit));
     const s = draai('kopie.mjs', ['--doel', join(tmp, 'niet-aangesloten'), '--bron', bron, '--overslaan-zonder-doel'], VK);
     ok('--overslaan-zonder-doel zonder doel: exit 0, één regel, niets gemaakt', s.code === 0 && s.uit.trim().split('\n').length === 1 && !existsSync(join(tmp, 'niet-aangesloten')));
+    // Node-waarschuwingen: NODE_NO_WARNINGS haalt alleen de waarschuwing van Node zelf weg, niets
+    // van de tool. Zonder: dezelfde uitvoer plus hooguit de twee regels van de ExperimentalWarning.
+    const metW = draai('kopie.mjs', ['--doel', join(tmp, 'niet-aangesloten'), '--bron', bron, '--overslaan-zonder-doel'], { ...VK, NODE_NO_WARNINGS: '' });
+    const zonderNode = metW.uit.split('\n').filter((r) => !/ExperimentalWarning|--trace-warnings/.test(r)).join('\n');
+    ok(`Node-waarschuwingen: zonder NODE_NO_WARNINGS dezelfde uitvoer, plus alleen de waarschuwing van Node (${metW.uit.split('\n').length - s.uit.split('\n').length} regels)`,
+      metW.code === s.code && zonderNode === s.uit);
     const i = draai('kopie.mjs', ['--doel', join(bron, 'media', 'kopie'), '--bron', bron, '--zelfde-schijf'], VK);
     ok('een doel binnen de bron: exit 2', i.code === 2 && !existsSync(join(bron, 'media', 'kopie')));
     // Via een symlink (of een alias-pad zoals iCloud → ~/Desktop): resolve() ziet het niet, het echte pad wel.

@@ -112,7 +112,8 @@ async function main() {
     const n = nep ? maakNep(nep) : null;
     const paden = { media: MEDIA, wortel: WORTEL, db: DB, extra: extraPaden({ wortel: WORTEL, env }), ...(n?.paden || {}) };
     const t0 = Date.now();
-    const metingen = await meet({ exec: n ? n.exec : voerUit, verbind: n ? n.verbind : poortOpen, paden });
+    // Het platform: dat van de fixtures (nep.json "platform"), anders dit (docs/AVONDPAKKET.md "Op Linux").
+    const metingen = await meet({ exec: n ? n.exec : voerUit, verbind: n ? n.verbind : poortOpen, paden, platform: n?.platform ?? process.platform });
     metingen.backup = n ? (n.backups ? backupUitNamen(n.backups) : { onbekend: 'geen fixture (backups)' })
       : await readdir(BACKUPS).then(backupUitNamen, (err) => (err.code === 'ENOENT' ? backupUitNamen([]) : { onbekend: 'backupmap niet leesbaar' }));
     metingen.achtergrond = { onbekend: 'alleen via de server' };

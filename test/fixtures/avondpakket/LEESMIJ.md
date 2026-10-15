@@ -75,3 +75,34 @@ een rij teruggeeft: `audio`, `video` (als niet null), `peaks.bestand`, `onset.be
 aan de projectmap (`media/<id>/audio.wav`); het pakket vergelijkt `<id>/<bestand>` met de
 lijst van `find … -exec stat` (geen `fs.stat` per bestand). Een thumbnail is een URL en
 telt niet mee.
+
+## `linux/`: de sondes van Linux (spoor C, 15 okt 2026)
+
+`server/avondpakket-meet.js` kiest de sondes per platform (`metersVoor`, docs/AVONDPAKKET.md
+"Op Linux"). `linux/nep.json` heeft `"platform": "linux"` (de map hierboven `"darwin"`): zo
+meten de tests met de juiste sondes, op welk platform ze ook draaien.
+
+**Echt** (de container van 15 okt: Ubuntu 24.04, GNU findutils 4.9.0, coreutils 9.4,
+`LC_ALL=C`), op een kladmediamap `/tmp/varve-linux/media` van negen bestanden:
+
+| bestand | commando | wat erin staat |
+|---|---|---|
+| `find-stat-9.txt` | `find -H <media> -type f -exec stat -c '%s %n' {} +` | negen bestanden; `nr01_test/audio.wav` is 0 bytes |
+| `df-k.txt` | `df -k <media>` | 22 GiB vrij van 252 |
+| `power-supply-leeg.txt` | `find -L /sys/class/power_supply -mindepth 2 -maxdepth 2 -name uevent -type f -exec grep -H '' {} +` | leeg: geen accu (zoals een vaste pc) |
+| `find-flags-stderr.txt` | `find -H <media> -type f -flags +dataless` (de Mac-opdracht) | `find: unknown predicate '-flags'`, exit 1: de oude sonde nam dat als geslaagd |
+| `stat-f-stderr.txt`, `stat-f-stdout.txt` | `find … -exec stat -f '%z %N' {} +` (de Mac-opdracht) | GNU stat leest `-f` als "bestandssysteem": geen enkele regel `<bytes> <pad>`, exit 1 |
+| `sys-usb-ontbreekt-stderr.txt` | `find -L /sys/bus/usb/devices …` | de map bestaat niet in de container |
+
+`lsusb` en `tailscale` zijn er niet (ENOENT): in `nep.json` als `{ "fout": "… niet gevonden" }`.
+
+**HANDGEMAAKT** (niet gezien; de vorm uit de kernel-documentatie en usbutils, de waarden verzonnen):
+
+| bestand | wat | aanname |
+|---|---|---|
+| `power-supply-laptop-ac-HANDGEMAAKT.txt` | BAT0 72 % laden, AC online, een USB-PD-bron van 20 V × 3,25 A (65 W), een muisaccu met `SCOPE=Device` (9 %) | het vermogen uit `VOLTAGE_MAX × CURRENT_MAX` van `ucsi-source-psy-*` |
+| `power-supply-laptop-accu-HANDGEMAAKT.txt` | op de accu, 18 %, `CHARGE_*` in plaats van `ENERGY_*`, `CYCLE_COUNT=0` | 0 cycli = "niet ondersteund" |
+| `power-supply-pc-muis-HANDGEMAAKT.txt` | alleen een muisaccu (`SCOPE=Device`) | een vaste pc: geen accu |
+| `lsusb-apc-scarlett-maschine-HANDGEMAAKT.txt` | Maschine (17cc:1140), Scarlett (1235:8210), een hub, de APC zonder naam (09e8:0029), root hubs | usb.ids kent de APC misschien niet: dan herkent de id hem |
+| `lsusb-leeg-HANDGEMAAKT.txt` | alleen root hubs en een muisontvanger | |
+| `sys-usb-apc-scarlett-HANDGEMAAKT.txt` | `grep -H ''` op idVendor/idProduct/product/manufacturer: APC, Scarlett, een hub, de root hub | |
