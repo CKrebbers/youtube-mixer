@@ -49,6 +49,14 @@
  *   { type: 'pagina', i, data }     Int16Array, overgedragen, niet gekopieerd;
  *                                   `kanalen` samples per frame, interleaved
  *   { type: 'weg', i }              pagina mag weg
+ *   { type: 'stop' }                de bron is vernietigd (StreamBron.vernietig):
+ *                                   alles los, en process() geeft daarna false,
+ *                                   zodat de browser de node (met zijn
+ *                                   stretchers) mag opruimen. Een processor die
+ *                                   true blijft geven houdt zichzelf in leven,
+ *                                   ook als niets er meer aan hangt (Web Audio,
+ *                                   "active source"). NOOIT bij een herlaad: die
+ *                                   gebruikt dezelfde node opnieuw ('bron').
  * Berichten eruit:
  *   { type: 'einde' }               trackeinde bereikt (één keer per segment),
  *                                   van paar 0: alle paren eindigen samen
@@ -106,10 +114,26 @@ class StreamLezer extends AudioWorkletProcessor {
       else if (m.type === 'pagina') this.paginas.set(m.i, m.data);
       else if (m.type === 'weg') this.paginas.delete(m.i);
       else if (m.type === 'bron') this._bron(m);
+      else if (m.type === 'stop') this._stop();
     };
     // (Klein houden: deze functie krijgt ELK bericht, ook elke segmentwissel.
     // Toen het bijladen van stretchers hier in stond, kostte elk bericht 7
     // bytes meer afval: test/renderblok, 6 okt.)
+  }
+
+  /**
+   * Vernietigd: alles los wat geheugen houdt (pagina's, stretchers) en geen
+   * berichten meer. `blok` null is het teken voor process() (geen veld erbij:
+   * een veld meer op elke worklet maakte de afvaltest per bericht wisselvallig,
+   * zie _meerRek).
+   */
+  _stop() {
+    this.port.onmessage = null;
+    this.paginas.clear();
+    this.seg = STIL; this.vorig = null;
+    this.rek = null; this.rekLaadt = true;          // een stretcher die nog laadt, komt er niet meer bij
+    this.inB = false; this.naarB = false;
+    this.blok = null;
   }
 
   /** Een nieuw bestand (de kop): alles terug, de stretchers verdeeld over zijn paren. */
@@ -266,6 +290,7 @@ class StreamLezer extends AudioWorkletProcessor {
   }
 
   process(_, outputs) {
+    if (this.blok === null) return false;          // gestopt (_stop): de browser mag hem opruimen
     const uit = outputs[0];
     if (uit.length < 2) return true;
     const t0 = currentFrame / sampleRate, frames = uit[0].length;

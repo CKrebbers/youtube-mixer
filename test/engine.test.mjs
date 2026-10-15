@@ -35,8 +35,9 @@ const node = (type) => ({
   connect(n){ return n; }, disconnect(){},
   getByteTimeDomainData(b){ b.fill(128); },
 });
-globalThis.AudioContext = class {
-  constructor(){ this.sampleRate=48000; this.state='running'; this.baseLatency=0.005; this.destination=node('dest'); }
+// Een EventTarget, zoals de echte (worklet-fouten komen als event op de context, worklet-fout.js).
+globalThis.AudioContext = class extends EventTarget {
+  constructor(){ super(); this.sampleRate=48000; this.state='running'; this.baseLatency=0.005; this.destination=node('dest'); }
   get currentTime(){ return NOW; }
   createGain(){ return node('gain'); }
   createBiquadFilter(){ return node('biquad'); }
@@ -79,7 +80,7 @@ const nepWorkletNode = (nodes = []) => class {
     this.outputChannelCount = opties.outputChannelCount ?? Array(this.numberOfOutputs).fill(1);
     this.verbindingen = [];
     const berichten = [];
-    this.port = { berichten, postMessage: (m) => berichten.push(m), onmessage: null };
+    this.port = { berichten, dicht: false, postMessage(m) { if (!this.dicht) berichten.push(m); }, onmessage: null, close() { this.dicht = true; } };
     nodes.push(this);
   }
   connect(doel, uitgang = 0) {
@@ -3852,6 +3853,23 @@ console.log('\nstemkanalen');
 
   ok('geen overlappende automatisering en geen afgebroken curve in de stemkanalen', OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
   NOW = NOW0;
+}
+
+// Een worklet-fout (spoor A, 15 okt) komt als event op de context en wordt een melding van de engine, met een sleutel.
+{
+  console.log('\nworklet-fout -> melding');
+  const { meldWorkletFout, WORKLET_FOUT } = await import('../src/engine/worklet-fout.js');
+  const eng = new Engine();
+  const m = [];
+  eng.on('melding', (x) => m.push(x));
+  meldWorkletFout(eng.ctx, 'effect kam', { reden: 'RangeError: nep', hint: 'het effect is stil; kies het opnieuw' });
+  ok(`een worklet-fout op de context = één fout-melding met sleutel ("${m[0]?.tekst}")`, m.length === 1 && m[0].soort === 'fout'
+    && m[0].sleutel === 'worklet:effect kam' && /effect kam liep vast/.test(m[0].tekst) && /RangeError: nep/.test(m[0].tekst) && /kies het opnieuw/.test(m[0].tekst));
+  eng.ctx.dispatchEvent(new CustomEvent(WORKLET_FOUT, { detail: { wat: 'effect kam' } }));
+  ok('dezelfde soort nog eens: dezelfde sleutel (de schermlaag vervangt, stapelt niet)', m.length === 2 && m[1].sleutel === m[0].sleutel);
+  meldWorkletFout({}, 'x');
+  meldWorkletFout(null, 'x');
+  ok('meldWorkletFout op iets zonder dispatchEvent: gooit niet, doet niets', m.length === 2);
 }
 
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);

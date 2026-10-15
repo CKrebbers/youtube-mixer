@@ -223,6 +223,8 @@ export function metWorklet(ctx, naam, opties, klaar) {
     if (w.weg || w.node) return;
     let node;
     try { node = new AudioWorkletNode(ctx, naam, opties); } catch (_) { return; }
+    // Een fout in de worklet = stil effect: melden via de context (worklet-fout.js, WORKLET_FOUT; spoor A).
+    node.onprocessorerror = (e) => { try { ctx.dispatchEvent?.(new CustomEvent('varve-workletfout', { detail: { wat: `effect ${String(naam).replace(/^varve-fx-/, '')}`, reden: String(e?.message || ''), hint: 'het effect is stil; kies het opnieuw' } })); } catch (_) {} };
     w.node = node;
     try { klaar(node, meteen); } catch (_) {}
   };

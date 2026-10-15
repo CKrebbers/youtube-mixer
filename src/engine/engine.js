@@ -9,6 +9,7 @@ import { Klankschaal } from './klankschaal.js';
 import { Koptelefoon } from './koptelefoon.js';
 import { GridKlik, DUO_TONEN } from './grid-klik.js';
 import { PatroonSpeler, maatVan } from './patronen/speler.js';
+import { WORKLET_FOUT, workletFoutTekst } from './worklet-fout.js';
 
 /**
  * Acht tracks, één per fader van de APC40 mkII. De engine noemt ze A t/m H;
@@ -120,6 +121,13 @@ export class Engine extends Emitter {
     } catch (_) {
       this.ctx = new AudioContext({ latencyHint: 'interactive' });
     }
+    // Een fout IN een worklet (effect, klankschaal, instrument, limiter) komt als
+    // event op de context (worklet-fout.js) en wordt hier een melding: anders
+    // was het stil geluid zonder dat iemand het zag. Eén sleutel per soort.
+    this.ctx.addEventListener?.(WORKLET_FOUT, (e) => {
+      const d = e?.detail || {};
+      this.emit('melding', { tekst: workletFoutTekst(d), soort: 'fout', sleutel: `worklet:${d.wat || '?'}` });
+    });
     // De koptelefoon eerst: hij bepaalt waar de zaal heen gaat (kanaal 1/2 van
     // vier, of zonder vier kanalen gewoon de uitgang, zoals altijd).
     this.koptelefoon = new Koptelefoon(this.ctx, opties.koptelefoon);

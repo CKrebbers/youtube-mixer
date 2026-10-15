@@ -1,3 +1,4 @@
+import { meldWorkletFout, foutReden } from './worklet-fout.js';
 import { clamp } from '../lib/emitter.js';
 import { faderGain } from './audio-graph.js';
 import { SPELLING, isMineur, tonica, relatief, kortNaam } from './toonsoort.js';
@@ -210,6 +211,7 @@ export class Klankschaal {
     if (!this._start) {
       this._start = laadModule(this.ctx).then(() => {
         const node = new AudioWorkletNode(this.ctx, 'varve-klankschaal', { numberOfInputs: 0, outputChannelCount: [2] });
+        node.onprocessorerror = (e) => this._workletFout(node, e);
         node.connect(this.vol);
         this.node = node;
         this._sleutel = null;
@@ -218,6 +220,20 @@ export class Klankschaal {
       }).catch((err) => { this._start = null; throw err; });
     }
     return this._start;
+  }
+
+  /**
+   * De worklet gooide een fout: vanaf nu stilte. Los, melden, en de volgende
+   * aanslag bouwt hem opnieuw (start() vanaf nul).
+   */
+  _workletFout(node, e) {
+    if (node !== this.node) return;
+    try { node.disconnect(); } catch (_) {}
+    node.onprocessorerror = null;
+    try { node.port.close(); } catch (_) {}
+    this.node = null;
+    this._start = null;
+    meldWorkletFout(this.ctx, 'de klankschaal', { reden: foutReden(e), hint: 'de volgende aanslag bouwt hem opnieuw' });
   }
 
   _doe(fn) {

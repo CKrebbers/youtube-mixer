@@ -2,6 +2,7 @@ import { InsertSlot } from './fx.js';
 import { startDrempel, zetHellingen } from './overgang.js';
 import { zetGraafVertraging } from './hoorbaar.js';
 import { PLAFOND_DB, VOORUIT, RELEASE, MARGE_DB, vertragingFrames } from './limiter-kern.js';
+import { meldWorkletFout } from './worklet-fout.js';
 
 /**
  * De master (docs/MASTER.md, ROADMAP 27 S2a):
@@ -119,6 +120,7 @@ export class Master {
         numberOfInputs: 1, numberOfOutputs: 2, outputChannelCount: [2, 1],
         processorOptions: { ...this.opties },
       });
+      node.onprocessorerror = (e) => this._limiterFout(node, e);
       this._neemOver(node);
       return true;
     } catch (err) {
@@ -162,6 +164,45 @@ export class Master {
     };
     const t = setTimeout(ruimOp, (klaarOp - nu) * 1000 + 20);
     t?.unref?.();
+  }
+
+  /**
+   * De limiter-worklet gooide een fout: vanaf nu geeft hij stilte, en dan is
+   * de hele master stil. Terug naar de compressor van vroeger (het pad dat er
+   * was voor de worklet laadde) en melden. Er is niets om uit te vloeien (de
+   * worklet zwijgt al): het compressorpad komt erin met de kruisfade van
+   * LIMITER_FADE vanaf nul.
+   */
+  _limiterFout(node, e) {
+    if (node !== this.limiterNode) return;
+    const ctx = this.ctx;
+    try { this.fx.out.disconnect(node); } catch (_) {}
+    try { node.disconnect(); } catch (_) {}
+    node.onprocessorerror = null;
+    try { node.port.close(); } catch (_) {}
+    try { this._wl?.disconnect(); } catch (_) {}
+    this.limiterNode = null;
+    this._wl = null; this._gr = null; this._grBuf = null;
+    const loopt = ctx.state === 'running', nu = ctx.currentTime;
+    if (this._compUit) {
+      // Nog midden in de kruisfade naar de worklet: de compressor blijft, en gaat terug naar vol.
+      this._compUit.gain.cancelScheduledValues(0);
+      if (loopt) zetHellingen(this._compUit.gain, (van) => ePunten(van, 1), nu, LIMITER_FADE, startDrempel(ctx));
+      else this._compUit.gain.value = 1;
+    } else {
+      const g = ctx.createGain();
+      g.gain.value = loopt ? 0 : 1;
+      this.fx.out.connect(this.compressor);
+      this.compressor.connect(g);
+      g.connect(this.limiter);
+      this._compUit = g;
+      if (loopt) zetHellingen(g.gain, (van) => ePunten(van, 1), nu, LIMITER_FADE, startDrempel(ctx));
+    }
+    const reden = e?.message || e?.error?.message || '';
+    this.soort = 'compressor';
+    this.fout = `de limiter-worklet liep vast${reden ? ` (${reden})` : ''}`;
+    zetGraafVertraging(ctx, this.vertraging);
+    meldWorkletFout(ctx, 'de master-limiter', { reden, hint: 'de compressor van vroeger doet het werk weer' });
   }
 
   /** Het compressorpad los (alleen als er niets meer doorheen klinkt). */

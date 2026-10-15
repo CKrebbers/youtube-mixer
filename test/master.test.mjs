@@ -273,6 +273,9 @@ console.log('\nde worklet');
     if (w.gcs === 0 && w.bytes < 1024) break;
   }
   ok(`de worklet: 12 000 blokken, ${beste.gcs} GC, ${beste.bytes} bytes in de jonge ruimte`, beste.gcs === 0 && beste.bytes < 1024);
+  // 'stop' (zoals fx-worklet.js): daarna false, zodat de browser hem mag opruimen.
+  p.port.onmessage({ data: 'stop' });
+  ok("na 'stop' geeft process() false en luistert hij niet meer", p.process(invoer[0], uit) === false && p.port.onmessage === null);
   delete globalThis.AudioWorkletProcessor;
   delete globalThis.registerProcessor;
 }
@@ -296,8 +299,9 @@ const node = (type) => verbind({
 const heeft = (van, naar, uit) => LIJNEN.some((l) => l[0] === van && l[1] === naar && (uit === undefined || l[2] === uit));
 const uitVan = (van) => LIJNEN.filter((l) => l[0] === van);
 let STAAT = 'suspended', MODULES = [], LAAD = async () => {};
-globalThis.AudioContext = class {
-  constructor() { this.sampleRate = SR; this.baseLatency = 0.005; this.destination = node('dest');
+// Een EventTarget, zoals de echte: worklet-fouten komen als event op de context (worklet-fout.js).
+globalThis.AudioContext = class extends EventTarget {
+  constructor() { super(); this.sampleRate = SR; this.baseLatency = 0.005; this.destination = node('dest');
     this.audioWorklet = { addModule: async (u) => { MODULES.push(String(u)); await LAAD(); } }; }
   get state() { return STAAT; }
   get currentTime() { return NOW; }
@@ -315,7 +319,7 @@ globalThis.AudioWorkletNode = class {
     this.naam = naam; this.opties = opties;
     this.numberOfOutputs = opties.numberOfOutputs ?? 1;
     if (opties.outputChannelCount && opties.outputChannelCount.length !== this.numberOfOutputs) throw new Error('IndexSizeError');
-    this.port = { postMessage() {}, onmessage: null };
+    this.port = { postMessage() {}, onmessage: null, close() {} };
     verbind(this);
     const connect = this.connect;
     // Zoals de echte: een uitgang die er niet is gooit IndexSizeError.
@@ -410,6 +414,32 @@ const { startDrempel } = await import('../src/engine/overgang.js');
   const m4 = new Master(ctx4, ctx4.destination);
   ok('zonder AudioWorkletNode (een oude browser, de mock van engine.test): de compressor, zonder fout', (await m4.klaar) === false && m4.fout === null);
   globalThis.AudioWorkletNode = NodeWas;
+
+  // e. De worklet gooit een fout (processorerror; spoor A, 15 okt): vanaf dan stilte, dus de hele master
+  // stil. Terug naar de compressor, vanaf nul ingevloeid (de worklet zwijgt al), en een melding op de context.
+  const meldingen = [];
+  ctx2.addEventListener('varve-workletfout', (e) => meldingen.push(e.detail));
+  const wl2 = m2.limiterNode;
+  NOW = 20;
+  wl2.onprocessorerror({ message: 'nep: kapot' });
+  const terug = m2._compUit?.gain, tt = NOW + startDrempel(ctx2);
+  ok('worklet-fout (audio loopt): de worklet los, het compressorpad terug (fx -> compressor -> limiter-uitgang)',
+    m2.limiterNode === null && !heeft(m2.fx.out, wl2) && uitVan(wl2).length === 0 && heeft(m2.fx.out, m2.compressor)
+    && heeft(m2.compressor, m2._compUit) && heeft(m2._compUit, m2.limiter) && m2._wl === null && m2._gr === null);
+  ok(`… vloeit in van 0 naar 1 in ${LIMITER_FADE * 1000} ms na de startdrempel, met hellingen (geen curve)`,
+    terug.waarde(NOW) === 0 && terug.waarde(tt + LIMITER_FADE) === 1 && terug.n.curve === 0 && TL.CURVE_BREUK === 0);
+  ok('… soort compressor, vertraging 6 ms in wat je hoort, de reden in limiterStand', m2.soort === 'compressor'
+    && ctx2.graafVertraging === COMPRESSOR_VERTRAGING && /vast/.test(m2.limiterStand().fout) && /kapot/.test(m2.limiterStand().fout));
+  ok('… één melding op de context (de engine maakt er een melding van)', meldingen.length === 1 && meldingen[0].wat === 'de master-limiter' && /kapot/.test(meldingen[0].reden));
+  wl2.onprocessorerror?.({});
+  ok('een tweede event van dezelfde (oude) node doet niets', meldingen.length === 1);
+  // Op een stilstaande context: meteen vol, geen helling.
+  STAAT = 'suspended';
+  const ctx5 = new AudioContext();
+  const m5 = new Master(ctx5, ctx5.destination);
+  await m5.klaar;
+  m5.limiterNode.onprocessorerror({});
+  ok('worklet-fout op een stilstaande context: het compressorpad meteen op 1', m5.soort === 'compressor' && m5._compUit.gain.value === 1 && heeft(m5.fx.out, m5.compressor));
   NOW = 0;
 }
 

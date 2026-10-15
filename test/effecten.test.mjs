@@ -116,7 +116,7 @@ globalThis.AudioWorkletNode = class {
     if (!PARAMS_VAN[naam]) throw new Error(`InvalidStateError: ${naam} niet geregistreerd`);
     const n = node(ctx, 'worklet', [], { naam, opties, berichten: [] });
     n.parameters = new Map(PARAMS_VAN[naam].map(([p, v]) => [p, param(n, p, v)]));
-    n.port = { postMessage: (m) => n.berichten.push(m) };
+    n.port = { postMessage: (m) => n.berichten.push(m), onmessage: null, close() {} };
     WORKLET_NODES.push(n);
     return n;
   }
